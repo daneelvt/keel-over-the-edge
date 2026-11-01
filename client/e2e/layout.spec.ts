@@ -96,7 +96,8 @@ async function parts(page: Page): Promise<{
       one('the menu button', '.menu-button'),
       one('the helm', '[data-control=helm]'),
       one('the sheet', '[data-control=sheet]'),
-      one('the autopilot', '.pilot-head, .pilot-button'),
+      one('the autopilot', '.pilot-head'),
+      one('the autopilot button', '.pilot-button'),
       ...[...hud.querySelectorAll('.hud-top > .panel:not(.case)')].map((e) =>
         box(`the line “${(e as HTMLElement).innerText}”`, [e]),
       ),

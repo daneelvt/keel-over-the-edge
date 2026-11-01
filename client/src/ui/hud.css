@@ -37,6 +37,8 @@
   --head-gap: 4px;
   --head-pad: 2px;
   --head: calc(2 * var(--key) + var(--head-gap) + 2 * var(--head-pad) + 2px);
+  /* The autopilot's button, open: the head's tab. */
+  --pilot-tab: 66px;
   --edge-top: max(12px, env(safe-area-inset-top));
   --edge-right: max(12px, env(safe-area-inset-right));
   --edge-bottom: max(12px, env(safe-area-inset-bottom));
@@ -84,20 +86,42 @@
 }
 
 /* The instruments' case: one panel, as big as its dial and no bigger, its
-   complications joined to it by a fine engraved seam, never panels of
-   their own; its pushers on its edges, their stems standing out of it. */
+   complications hanging from it under the compass, as wide as they are,
+   joined to it by a fine engraved seam, never panels of their own; its
+   pushers on its edges, their stems standing out of it. */
 .case {
   --seam: rgb(232 180 80 / 28%);
   position: relative;
   display: flex;
   flex-direction: column;
+}
+
+.hud .case {
+  border: 0;
+  background: none;
+  box-shadow: none;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+.case-top,
+.complications {
   border: 1px solid rgb(232 180 80 / 32%);
+  background: var(--panel);
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+  box-shadow: 0 2px 10px rgb(0 0 0 / 18%);
 }
 
 .case-top {
   position: relative;
   display: flex;
   align-items: stretch;
+  border-radius: 12px;
+}
+
+.case:has(.complications:not([hidden])) .case-top {
+  border-bottom-left-radius: 0;
 }
 
 .case-face {
@@ -298,13 +322,16 @@
 }
 
 /* The complications slide down out of the case, under the compass, side
-   by side beneath the readouts: on a phone held sideways the mast rises
-   beside the case, so it grows down, not out. The case takes its size at
-   once; the complication is uncovered. */
+   by side: on a phone held sideways the mast rises beside the case, so it
+   grows down, not out. The case takes its size at once; the complication
+   is uncovered. */
 .complications {
   display: flex;
+  align-self: flex-start;
   align-items: stretch;
-  border-top: 1px solid var(--seam);
+  margin-top: -1px;
+  border-top-color: var(--seam);
+  border-radius: 0 0 12px 12px;
 }
 
 .complications[hidden],
@@ -376,41 +403,12 @@
 }
 
 /* Held upright, the boat stands in the middle of the screen: the case's
-   face across the top, small, and its complications in a column under
-   the compass, beside the boat. */
+   face across the top, small, and its complications in a column, no
+   wider than the compass, beside the boat. */
 @media (orientation: portrait) {
-  .hud .case {
-    border: 0;
-    background: none;
-    box-shadow: none;
-    -webkit-backdrop-filter: none;
-    backdrop-filter: none;
-  }
-
-  .case-top,
   .complications {
-    border: 1px solid rgb(232 180 80 / 32%);
-    background: var(--panel);
-    -webkit-backdrop-filter: blur(6px);
-    backdrop-filter: blur(6px);
-    box-shadow: 0 2px 10px rgb(0 0 0 / 18%);
-  }
-
-  .case-top {
-    border-radius: 12px;
-  }
-
-  .case:has(.complications:not([hidden])) .case-top {
-    border-bottom-left-radius: 0;
-  }
-
-  .complications {
-    align-self: flex-start;
     flex-direction: column;
     max-width: 96px;
-    margin-top: -1px;
-    border-top-color: var(--seam);
-    border-radius: 0 0 12px 12px;
   }
 
   .complication {
@@ -469,7 +467,7 @@
   .complication.folding,
   .pusher.rising,
   .pusher.sinking,
-  .drum-text {
+  .pilot-head .drum-text {
     animation: none;
   }
 }
@@ -1097,8 +1095,9 @@
 
 /* The autopilot. Folded, a button between the helm and the sheet, saying
    what it holds, a brass hinge on its top edge; open, a control head of
-   the period, two rows of keys: between the helm and the sheet held
-   sideways, above the helm held upright. Lacquered dark and framed in the
+   the period, two rows of keys: between the button and the sheet held
+   sideways, above the helm held upright, the button staying as its tab,
+   its folded size, to fold it. Lacquered dark and framed in the
    barometer's brass; labelled, and marked by shape as well as colour. */
 .pilot-button {
   position: absolute;
@@ -1120,6 +1119,21 @@
 
 .hud .pilot-button.on {
   border: 2px solid var(--gold);
+}
+
+/* Open, the head's tab, its folded size: one width, so the head beside
+   it never moves. */
+.pilot-button.open {
+  width: min(
+    var(--pilot-tab),
+    calc(100vw - var(--edge-left) - var(--edge-right) - 190px - 64px - 16px)
+  );
+}
+
+.pilot-button .decal {
+  width: 18px;
+  height: 18px;
+  color: var(--faint);
 }
 
 .pilot-hinge {
@@ -1151,8 +1165,11 @@
 .pilot-head {
   position: absolute;
   bottom: var(--edge-bottom);
-  left: calc(var(--edge-left) + 190px + 8px);
-  width: min(380px, calc(100vw - var(--edge-left) - var(--edge-right) - 190px - 64px - 16px));
+  left: calc(var(--edge-left) + 190px + 8px + var(--pilot-tab) + 8px);
+  width: min(
+    380px,
+    calc(100vw - var(--edge-left) - var(--edge-right) - 190px - var(--pilot-tab) - 64px - 24px)
+  );
   display: flex;
   flex-direction: column;
   gap: var(--head-gap);
@@ -1216,9 +1233,8 @@
   cursor: default;
 }
 
-.head-key.fold {
-  margin-left: auto;
-  color: var(--faint);
+.head-key.turn {
+  flex: 1 1 auto;
 }
 
 .head-key .decal,
