@@ -421,7 +421,7 @@
   /* Tall enough that the barometer's pusher and the board's, under it,
      are 44-pixel targets apart. */
   .case-face {
-    gap: 8px;
+    gap: 6px;
     padding: 9px 6px;
   }
 

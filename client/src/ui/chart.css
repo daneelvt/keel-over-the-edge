@@ -640,8 +640,8 @@
    pusher in its bottom edge beneath the caption. */
 @media (orientation: portrait) {
   .pocket-chart canvas {
-    width: 92px;
-    height: 69px;
+    width: 88px;
+    height: 66px;
   }
 
   .pocket-caption {
