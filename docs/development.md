@@ -950,7 +950,7 @@ to their rule: a squall's tower before its 10-knot gust front at every
 place and by five minutes or more at 95%, a storm's cloud before its
 20-knot wind at every place and by ten minutes or more at 95%, and a front's
 cirrus forty minutes or more before its line (three weeks on a half-mile
-grid in CI; a hundred on a quarter-mile nightly, side by side).
+grid in CI; a hundred nightly, side by side).
 
 ## Fog, visibility and lightning
 
