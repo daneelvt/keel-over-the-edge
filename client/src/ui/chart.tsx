@@ -689,6 +689,9 @@ export function ChartScreen({ sea, end = null }: { sea: ChartSea; end?: Countdow
   );
 }
 
+/** The longest the pocket chart's caption says: the farthest edge, and a week to a new world. */
+const POCKET_SIZES = ['edge 99.9 NM', 'new world 6d 23h'];
+
 /** Whether the screen is held upright, kept as it turns. */
 function useUpright(): boolean {
   const query = '(orientation: portrait)';
@@ -757,6 +760,12 @@ export function PocketChart({
         >
           <canvas ref={canvas} width={240} height={180} />
           <span class="pocket-caption" data-readout="pocket">
+            {/* As wide as the longest each line says, so the chart keeps its size. */}
+            {POCKET_SIZES.map((z) => (
+              <span key={z} class="pocket-size" aria-hidden="true">
+                {z}
+              </span>
+            ))}
             {caption.lines.map((l, i) => (
               <span
                 key={i}

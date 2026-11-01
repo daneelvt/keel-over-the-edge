@@ -114,7 +114,7 @@ test.describe('the chart', () => {
   }) => {
     await openScene(page, 'world=1', true);
     await page.evaluate(() => globalThis.keel.thaw());
-    const caption = page.locator('.pocket-caption');
+    const caption = page.locator('.pocket-line').first();
     await expect(caption).toHaveText(/^edge \d\.\d NM$/);
     await page.locator('.pocket-chart').click();
     expect(await page.evaluate(() => globalThis.keel.chartInfo().open)).toBe(true);

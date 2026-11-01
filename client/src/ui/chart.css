@@ -388,6 +388,13 @@
   color: var(--ink);
 }
 
+.pocket-size {
+  height: 0;
+  overflow: hidden;
+  visibility: hidden;
+  white-space: nowrap;
+}
+
 .pocket-line {
   max-width: 100%;
   min-height: 1.25em;
