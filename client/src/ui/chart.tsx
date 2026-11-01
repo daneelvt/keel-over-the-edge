@@ -741,7 +741,7 @@ export function PocketChart({
           onClick={() => sea.chart.show('chart')}
           aria-label={caption.name}
         >
-          <canvas ref={canvas} width={240} height={180} />
+          <canvas ref={canvas} width={240} height={156} />
           <span class="pocket-caption" data-readout="pocket">
             {/* As wide as the longest each line says, so the chart keeps its size. */}
             {POCKET_SIZES.map((z) => (
@@ -802,7 +802,9 @@ export function drawPocket(
   }
   const w = c.width;
   const h = c.height;
-  const k = (w * 0.46) / sea.lip;
+  // The disk nearly the canvas's width, room left at the rim for the
+  // boat's mark; the canvas cut to the disk's shape.
+  const k = (w * 0.48) / sea.lip;
   const tilt = 0.62;
   const x = (east: number) => w / 2 + east * k;
   const y = (north: number) => h / 2 - north * k * tilt;
