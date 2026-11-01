@@ -44,7 +44,8 @@ export function disclosure(
 /**
  * The case's last line: the autopilot where no control on the screen says
  * what it holds (a boat watched has none), else the boat's tack while the
- * right-of-way overlay is on, else nothing; its place is kept either way.
+ * right-of-way overlay is on, else nothing. Its place is kept on a boat
+ * watched and while the overlay is on, so the case keeps its size.
  */
 export function caseLine(pilot: string, tack: string, controls: boolean): string {
   if (pilot !== '' && !controls) {

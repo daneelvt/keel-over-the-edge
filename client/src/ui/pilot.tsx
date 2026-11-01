@@ -6,11 +6,13 @@
 // row steps what it holds, ten degrees and one either way, about a drum
 // that shows what it holds ("Wind 45° S", "Heading 270°", "Tacking",
 // "Tack stalled"), which a drag along turns, a degree for every few
-// pixels; its second, the power and the mode as two-way levers, Tack,
-// Gybe and the tab that folds it. Folded, it is one button saying what the
-// autopilot holds: tapped while off it switches the autopilot on at the
-// boat's angle to the wind and unfolds the head; tapped while on it
-// unfolds it. Open or folded is kept on the device, so a head left open is
+// pixels; its second, the power and the mode as two-way levers, Tack and
+// Gybe. One button opens and folds it, and stays where it is either way:
+// folded, it says what the autopilot holds, and tapped while off it
+// switches the autopilot on at the boat's angle to the wind and unfolds
+// the head; tapped while on it unfolds it; open, it is the head's tab,
+// beside it held sideways, beside the helm under it held upright, and
+// folds it. Open or folded is kept on the device, so a head left open is
 // open the next voyage; nothing else folds it, not a tap on the sea, not
 // the helm, which takes the autopilot off and leaves the head showing it.
 
@@ -89,6 +91,9 @@ function Drum({
 }) {
   const drag = useRef<{ id: number; x: number; turned: number } | null>(null);
   const on = actions.pilot.on;
+  // What it holds and its figures apart: a narrow drum shows the figures
+  // alone, the mode lever beside it saying which, or "stalled" alone.
+  const word = /^(Heading|Wind|Tack|Gybe) (\d.*|stalled)$/.exec(text);
   return (
     <div
       class={`drum${on ? '' : ' idle'}`}
@@ -124,7 +129,14 @@ function Drum({
       {on ? <Pictogram actions={actions} /> : null}
       <span class="drum-window">
         <span key={text} class="drum-text" data-readout="pilot-drum">
-          {text}
+          {word === null ? (
+            text
+          ) : (
+            <>
+              <span class="drum-word">{word[1]} </span>
+              {word[2]}
+            </>
+          )}
         </span>
       </span>
     </div>
@@ -185,15 +197,10 @@ interface Half {
   symbol: ComponentChildren;
 }
 
-function Head({
-  actions,
-  model,
-  fold,
-}: {
-  actions: PilotActions;
-  model: HudModel;
-  fold: () => void;
-}) {
+/** The head's id, which its button controls. */
+const HEAD_ID = 'pilot-head';
+
+function Head({ actions, model }: { actions: PilotActions; model: HudModel }) {
   const p = actions.pilot;
   const on = p.on;
   // What the keys change shows at once, not at the next frame.
@@ -204,7 +211,7 @@ function Head({
   };
   const state = model.pilot.value;
   return (
-    <section class="panel pilot-head" aria-label="Autopilot" data-pilot="head">
+    <section id={HEAD_ID} class="panel pilot-head" aria-label="Autopilot" data-pilot="head">
       <div class="head-row">
         <Step degrees={-10} actions={actions} redraw={redraw} on={on} />
         <Step degrees={-1} actions={actions} redraw={redraw} on={on} />
@@ -278,16 +285,6 @@ function Head({
             <GybeDecal />
           </span>
         </button>
-        <button
-          type="button"
-          class="head-key fold"
-          data-pilot="fold"
-          aria-label="Fold the autopilot"
-          aria-expanded={true}
-          onClick={fold}
-        >
-          <FoldDecal />
-        </button>
       </div>
     </section>
   );
@@ -305,29 +302,38 @@ export function Pilot({
   const open = settings.value.value.pilotHead;
   const setOpen = (pilotHead: boolean) => settings.set({ pilotHead });
   const state = model.pilot.value;
-  if (open) {
-    return <Head actions={actions} model={model} fold={() => setOpen(false)} />;
-  }
   return (
-    <button
-      type="button"
-      class={`pilot-button${actions.pilot.on ? ' on' : ''}`}
-      aria-expanded={false}
-      aria-label={`Autopilot: ${state === '' ? 'off' : state}`}
-      data-pilot="button"
-      onClick={() => {
-        if (!actions.pilot.on) {
-          actions.togglePilot();
-          model.flush();
-        }
-        setOpen(true);
-      }}
-    >
-      <span class="pilot-hinge" aria-hidden="true" />
-      <span class="pilot-name">Autopilot</span>
-      <span class="pilot-text" data-readout="pilot-button">
-        {state === '' ? 'Off' : state}
-      </span>
-    </button>
+    <>
+      {open ? <Head actions={actions} model={model} /> : null}
+      <button
+        type="button"
+        class={`pilot-button${actions.pilot.on ? ' on' : ''}${open ? ' open' : ''}`}
+        aria-expanded={open}
+        aria-controls={open ? HEAD_ID : undefined}
+        aria-label={`Autopilot: ${state === '' ? 'off' : state}`}
+        data-pilot="button"
+        onClick={() => {
+          if (open) {
+            setOpen(false);
+            return;
+          }
+          if (!actions.pilot.on) {
+            actions.togglePilot();
+            model.flush();
+          }
+          setOpen(true);
+        }}
+      >
+        <span class="pilot-hinge" aria-hidden="true" />
+        <span class="pilot-name">Autopilot</span>
+        {open ? (
+          <FoldDecal />
+        ) : (
+          <span class="pilot-text" data-readout="pilot-button">
+            {state === '' ? 'Off' : state}
+          </span>
+        )}
+      </button>
+    </>
   );
 }

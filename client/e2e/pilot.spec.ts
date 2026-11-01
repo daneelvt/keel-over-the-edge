@@ -4,7 +4,7 @@
 // its button switches it on at the boat's angle to the wind and unfolds the
 // control head, which steps the target, switches the mode and turns it off,
 // and stays open after a tap on the sea and across a reload, as it stays
-// folded; a drag along its drum turns the target by its pixels; on it the
+// folded; the button stays beside the open head and folds it; a drag along its drum turns the target by its pixels; on it the
 // boat tacks through the wind; the keys work it; a thumb on the helm takes
 // the helm back where it left it; and its course on the water is drawn with
 // the factory's material.
@@ -82,8 +82,11 @@ test('the head stays open, or folded, across a reload', async ({ page }) => {
   await expect(page.locator('[data-pilot=head]')).toBeVisible();
   await reaching(page);
   await expect(page.locator('[data-pilot=head]')).toBeVisible();
-  await page.locator('[data-pilot=fold]').click();
+  // The button stays while the head is open, and folds it.
+  await expect(page.locator('[data-pilot=button]')).toHaveAttribute('aria-expanded', 'true');
+  await page.locator('[data-pilot=button]').click();
   await expect(page.locator('[data-pilot=head]')).toHaveCount(0);
+  await expect(page.locator('[data-pilot=button]')).toHaveAttribute('aria-expanded', 'false');
   await expect(page.locator('[data-pilot=button]')).toBeVisible();
   await reaching(page);
   await expect(page.locator('[data-pilot=head]')).toHaveCount(0);
