@@ -2416,7 +2416,7 @@ teleports a boat to see a feature (`POST /owner/api/place {"boat": …,
 `worldgen-nightly.yaml` runs at 03:17 UTC and by hand: five jobs of 200
 seeds, a different thousand each night keyed by the date, and seeds 1 to 8
 on their first attempt. Each job's tally is in the run's summary; it fails
-on a seed that passes no attempt or on more than 12% failing their first.
+on a seed that passes no attempt or on more than 25% failing their first.
 To make a failing seed's world again:
 
 ```sh

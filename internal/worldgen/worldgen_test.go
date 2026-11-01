@@ -883,6 +883,26 @@ func TestFailedAttempts(t *testing.T) {
 	}
 }
 
+// TestAttemptWithoutHarbour makes an attempt whose Port Royal has no
+// harbour, and so no town: its ports still fly their flags, and it fails
+// its rules instead of stopping the next attempt.
+func TestAttemptWithoutHarbour(t *testing.T) {
+	if testing.Short() {
+		t.Skip("makes a whole world")
+	}
+	cat := testCatalog(t)
+	cat.World.Validator.Attempts = 1
+	b, err := Generate(20757477, cat)
+	if !errors.Is(err, ErrInvalid) || !slices.Contains(b.Report.Attempts[0].Failed, "main port's harbour") {
+		t.Fatalf("an attempt without Port Royal's harbour: %v, failing %v", err, b.Report.Attempts[0].Failed)
+	}
+	for _, tn := range b.Towns {
+		if tn.Kind == townMain {
+			t.Error("Port Royal has a town without its harbour")
+		}
+	}
+}
+
 func TestWholeWorld(t *testing.T) {
 	c, b := wholeWorld(t)
 	if f := failedRules(b.Report.Rules); len(f) > 0 {
