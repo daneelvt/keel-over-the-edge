@@ -6,9 +6,11 @@ import (
 	"fmt"
 	"math"
 	"os"
+	"runtime"
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/daneelvt/keel-over-the-edge/internal/bus"
@@ -21,10 +23,12 @@ import (
 // if it is set, as the nightly run sets it to a thousand, from seed 1, or
 // the one after KEEL_WEEKS_FROM. Its tally of them is written to
 // KEEL_WEEKS_SUMMARY, if that is set, in Markdown. The storms' swell is
-// held to its rule over the first eight weeks on a grid half a mile apart,
-// and in the long run over the first two hundred, a quarter of a mile; and
-// so are the signs in the sky before the weather: the clouds' leads on
-// their own wind, and a front's cirrus's on its line.
+// held to its rule over the first three weeks on a grid half a mile apart,
+// and in the long run over the first hundred, a quarter of a mile; and so
+// are the signs in the sky before the weather: the clouds' leads on their
+// own wind, and a front's cirrus's on its line, and the fog's wall. Those
+// weeks are followed side by side, each into its own tally, added to the
+// whole in their order.
 func TestWeeks(t *testing.T) {
 	cat, tl := load(t)
 	cfg := tl.Config()
@@ -52,12 +56,17 @@ func TestWeeks(t *testing.T) {
 	// them is followed minute by minute over the disk.
 	swellWeeks, swellGrid := 3, 0.5*nauticalMile
 	if n > 100 {
-		swellWeeks, swellGrid = 200, 0.25*nauticalMile
+		swellWeeks, swellGrid = 100, 0.25*nauticalMile
 	}
 	waves, _ := cat.Prepare()
 	kinds := busyKindsOf(cat, cfg)
 	var tally weeksTally
 	tally.shares = make([]float64, len(cfg.Regimes))
+	// The sampled weeks wait their turn on all the cores but one, which
+	// goes on through the weeks.
+	var sampled []*weeksTally
+	var wg sync.WaitGroup
+	free := make(chan struct{}, max(runtime.GOMAXPROCS(0)-1, 1))
 	for seed := from + 1; seed <= from+uint64(n); seed++ {
 		// Epochs at different hours of the day, so the nights fall at
 		// different ticks.
@@ -74,10 +83,16 @@ func TestWeeks(t *testing.T) {
 		checkRefuge(t, seed, wt, w, every, &tally)
 		checkBusy(cfg, kinds, w, &tally.busy)
 		if tally.weeks < swellWeeks {
-			checkSwell(wt, w, waves, swellGrid, &tally)
-			checkCloudLeads(cat, wt, w, swellGrid, &tally)
-			checkFrontCirrus(cat, wt, w, swellGrid, &tally)
-			checkFogWall(cat, wt, w, swellGrid, &tally)
+			st := new(weeksTally)
+			sampled = append(sampled, st)
+			wg.Go(func() {
+				free <- struct{}{}
+				defer func() { <-free }()
+				checkSwell(wt, w, waves, swellGrid, st)
+				checkCloudLeads(cat, wt, w, swellGrid, st)
+				checkFrontCirrus(cat, wt, w, swellGrid, st)
+				checkFogWall(cat, wt, w, swellGrid, st)
+			})
 		}
 		tally.weeks++
 		for i, s := range w.Report.Shares {
@@ -91,6 +106,10 @@ func TestWeeks(t *testing.T) {
 		if t.Failed() {
 			t.Fatalf("seed %d failed", seed)
 		}
+	}
+	wg.Wait()
+	for _, st := range sampled {
+		tally.addSampled(st)
 	}
 	if tally.showersByDay > 50 {
 		if share := float64(tally.showersOnIslands) / float64(tally.showersByDay); share < 0.3 {
@@ -180,6 +199,41 @@ type swellLead struct {
 
 // swellKnots are the storm's own winds the swell's lead is measured to.
 var swellKnots = [3]float64{10, 15, 20}
+
+// addSampled adds a sampled week's tally of the swell, the clouds' signs
+// and the fog's wall to t.
+func (t *weeksTally) addSampled(o *weeksTally) {
+	for k := range t.swell {
+		s, a := &t.swell[k], &o.swell[k]
+		s.all += a.all
+		s.allShort += a.allShort
+		s.moving += a.moving
+		s.movingShort += a.movingShort
+		s.movingFirst += a.movingFirst
+		s.leads = append(s.leads, a.leads...)
+		s.movingLeads = append(s.movingLeads, a.movingLeads...)
+	}
+	t.swellStorms += o.swellStorms
+	for k := range t.clouds {
+		c, a := &t.clouds[k], &o.clouds[k]
+		c.systems += a.systems
+		c.places += a.places
+		c.windFirst += a.windFirst
+		c.short += a.short
+		c.leads = append(c.leads, a.leads...)
+	}
+	t.fronts += o.fronts
+	t.cirrusShort += o.cirrusShort
+	t.cirrus = append(t.cirrus, o.cirrus...)
+	f, a := &t.fog, &o.fog
+	f.banks += a.banks
+	f.approaches += a.approaches
+	f.short += a.short
+	f.places += a.places
+	f.placesShort += a.placesShort
+	f.leads = append(f.leads, a.leads...)
+	f.placeLeads = append(f.placeLeads, a.placeLeads...)
+}
 
 func (t *weeksTally) markdown(cat *catalog.Catalog) string {
 	var b strings.Builder

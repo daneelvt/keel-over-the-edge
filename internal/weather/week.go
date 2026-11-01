@@ -37,8 +37,10 @@ import (
 // Version is the week's generator's version: raised whenever a change makes
 // any seed's week differ. It is stored with each week. 2: the systems'
 // wobble slowed to periods of hours. 3: storms in every spell but settled,
-// lows, squall lines and troughs, warm fronts, more of everything.
-const Version = 3
+// lows, squall lines and troughs, warm fronts, more of everything. 4: fog
+// and light air born only where the wind is light at the quarter metre
+// their records are born at.
+const Version = 4
 
 // streamWeek keys the week's stream, which the terrain's keys never are.
 const streamWeek uint64 = 0x7765656b << 32
@@ -1298,9 +1300,13 @@ func (g *gen) system(rate *Rate, born int64, i int, ch *chain, spells []physics.
 			return r, false
 		}
 	}
-	// Light winds only: the spells' mean wind there.
-	if kind.CalmBelow > 0 && !(MeanWind(c.Prepared, spells, born, x, y) < kind.CalmBelow) {
-		return r, false
+	// Light winds only: the spells' mean wind there, to the quarter metre
+	// its record is born at.
+	if kind.CalmBelow > 0 {
+		bx, by := float64(math.Round(float64(quarterMetres*x))/quarterMetres), float64(math.Round(float64(quarterMetres*y))/quarterMetres)
+		if !(MeanWind(c.Prepared, spells, born, bx, by) < kind.CalmBelow) {
+			return r, false
+		}
 	}
 	if kind.Night {
 		if g.sunAt(born, x, y) >= 0 {
