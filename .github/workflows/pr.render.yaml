@@ -1,7 +1,8 @@
 # SPDX-License-Identifier: AGPL-3.0-only
-# The game in a real browser: Playwright on Chromium, on the WebGL 2 back end
-# and, where the runner's Chromium offers an adapter through SwiftShader, on
-# WebGPU. The game's page steps the physics module, so it is built first;
+# The game in a real browser: Playwright on Chromium, on the WebGL 2 back end,
+# drawn on Mesa's lavapipe, the CPU's Vulkan, and on WebGPU, which Chromium
+# draws on SwiftShader (client/e2e/gpu.ts); a step before the tests checks
+# that each draws there. The game's page steps the physics module, so it is built first;
 # keel serves the page's API (tools/e2e builds it) from a PostgreSQL service.
 # Runs only when a file the browser tests depend on changed.
 #
@@ -115,6 +116,11 @@ jobs:
       - name: Chromium's headless shell for Playwright
         working-directory: client
         run: npx --no-install playwright install --with-deps --only-shell chromium
+      - name: Mesa's lavapipe, the CPU's Vulkan, for WebGL 2 (e2e/gpu.ts)
+        run: sudo apt-get install -y --no-install-recommends mesa-vulkan-drivers
+      - name: The page draws on lavapipe (WebGL 2) and SwiftShader (WebGPU)
+        working-directory: client
+        run: node e2e/gpu.ts >> "$GITHUB_STEP_SUMMARY"
       - name: The game on ${{ matrix.project }}, the ${{ matrix.tests }} tests, part ${{ matrix.shard }} of ${{ matrix.shards }}
         working-directory: client
         env:
@@ -229,6 +235,9 @@ jobs:
         if: steps.netem.outputs.ok == 'true'
         working-directory: client
         run: npx --no-install playwright install --with-deps --only-shell chromium
+      - name: Mesa's lavapipe, the CPU's Vulkan, for WebGL 2 (e2e/gpu.ts)
+        if: steps.netem.outputs.ok == 'true'
+        run: sudo apt-get install -y --no-install-recommends mesa-vulkan-drivers
       - name: 100 ms each way and 2% loss on keel's play port only
         if: steps.netem.outputs.ok == 'true'
         # A fourth band, which no traffic uses by default, holds netem; only
