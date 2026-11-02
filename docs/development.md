@@ -135,7 +135,7 @@ credentials.
 |----------|------|------|---------|
 | `ci.yaml` | Every pull request (each part only when its files changed); every push to `main`, called by `release.yaml` | Go tests on amd64 and arm64, each with a PostgreSQL service: in their short forms with the race detector, then at full length without it (the physics, simulation, sky and world generator tests also built with `GOAMD64=v3`), the tick's benchmarks as a smoke test, short fuzzes of the catalog decoder, the input log's reader, the sailor name check, the decoding of what a game client sends and of the other boats' views (Go's and the page's), the physics module built and its golden tests run in WebAssembly, client tests, the client build (which fails on a bundled package with a licence not in `tools/licences/allowed.txt`) and the size of its first download, the one command started from scratch, its database container included, and checked over HTTPS with a sailor made with a passkey and read back, its game connection, and a second player seeing the first's boat; and the image built on amd64 and arm64 (not pushed), checked to be for its runner's machine, to run as 65532 with no shell, `keel help` to run and the page to be in it, its size in the job's summary | `go run ./tools/dev -db` once, then `go test -race -short ./...` and `go test ./...`, `go run ./tools/physics` then `npm test` in `client/`, `go run ./tools/dev -smoke`, `docker buildx build .` |
 | `pr.lint.yaml` | Pull requests, not drafts, that change its files | gofmt, go vet, staticcheck, the store's queries compiled against the migrations and their generated code current (`sqlc compile`, `sqlc diff`), the look-alike table current, Biome and tsc (the client and `art/`) | `go run ./tools/dev -lint` |
-| `pr.render.yaml` | Pull requests, not drafts, that change its files | The physics module built; the browser tests on Chromium, against `keel` and a PostgreSQL service, on WebGL 2 and, where the runner offers an adapter, WebGPU, in four jobs side by side: each back end's `@long` tests and the rest; each job's runner (its CPU and a fixed work's time), its tests' outcomes and its ten slowest in its summary | `go run ./tools/physics`, `npx playwright test` in `client/` |
+| `pr.render.yaml` | Pull requests, not drafts, that change its files | The physics module built; the browser tests on Chromium, against `keel` and a PostgreSQL service, on WebGL 2 (drawn on lavapipe, which a step checks first) and WebGPU (on SwiftShader), in four jobs side by side: each back end's `@long` tests and the rest; each job's runner (its CPU and a fixed work's time), its tests' outcomes and its ten slowest in its summary | `go run ./tools/physics`, `npx playwright test` in `client/` |
 | `pr.licences.yaml` | Pull requests, not drafts, that change its files | The licence header in every source file (and the art header in `art/`'s scripts and sound recipes); licences of Go packages linked into `keel` | `go run ./tools/licences` |
 | `pr.catalog.yaml` | Pull requests, not drafts, that change its files | The catalog against its schema, unique ids, art present, generated files current, no kind's id used as a string in code | `go run ./tools/catalog -check` |
 | `pr.physics.yaml` | Pull requests, not drafts, that change its files | The physics package's rules (imports, `math` functions, no fused multiply-add in the source or the compiled code for arm64 and amd64, nor in the simulation's), the world generator's float rules, its layout files current, and the module built with no heap allocation and within its size budget; each boat's polar against its original's measured data, the trimmed sail against ORC's mainsail, and the polar in a breeze's sea and a gale's, printed and not checked | `go run ./tools/physics -check`, `go run ./tools/polar -check`, `go run ./tools/polar -sail`, `go run ./tools/polar -sea 12` |
@@ -6506,8 +6506,8 @@ on, the page plays no sound.
 ## Browser tests
 
 `client/e2e` holds Playwright tests that run the game in Chromium, on the
-WebGL 2 back end and on WebGPU where the browser offers an adapter (on Linux
-through SwiftShader; without an adapter the WebGPU tests are skipped). The
+WebGL 2 back end and on WebGPU where the browser offers an adapter (without
+one the WebGPU tests are skipped). The
 page loads the physics module, so build it first (`go run ./tools/physics`).
 Playwright starts four servers: `keel`, which `go run ./tools/e2e` builds from
 the tree and serves on a database of its own on the test database's server
@@ -6594,9 +6594,20 @@ rendering's "Sea states" and "Close aboard" views. The `compat` project
 (`--project compat`) runs `sea.spec.ts` and `look.spec.ts` on a WebGPU
 device held to compatibility mode's limits.
 
-On CI's software GPU (SwiftShader, on Linux) every pixel and compute pass
-is the CPU's, and the sea's best tiers take seconds a frame there. So the
-pages there open on the low tier (`?tier=low`), which is what the tests of
+On Linux, as on CI's runners, there is no GPU: the browser draws on a
+software one, the CPU's Vulkan (`client/e2e/gpu.ts`). The WebGL 2 tests
+draw on Mesa's lavapipe (`sudo apt-get install mesa-vulkan-drivers`), as
+three.js's own do: a frame of the sea at 960 × 600 takes 22 to 36 ms there
+on a runner, against 105 to 162 on Chrome's SwiftShader, which Chrome has
+deprecated for WebGL. `SOFTWARE_GPU=swiftshader` draws them on SwiftShader
+instead, to compare. The WebGPU tests draw on SwiftShader: Chromium offers
+WebGPU no other CPU adapter, whatever the flags, and under lavapipe's
+flags its pictures are composited differently for no time saved. Without
+lavapipe's driver Chromium does not fall back to SwiftShader, it runs with
+no WebGL at all, so the workflows run `node e2e/gpu.ts` first: it prints
+what each back end draws on, and fails if it is not where it should be.
+Every pixel and compute pass is the CPU's there, and the sea's best tiers
+take seconds a frame. So the pages there open on the low tier (`?tier=low`), which is what the tests of
 geometry, hulls, sailing and the network need; `look.spec.ts` keeps the best
 tier for the device, the transform, the rungs and the memory, and runs its
 pixel probes and pictures on WebGL 2 alone. On the Mac every page opens on
@@ -6622,9 +6633,16 @@ The reference pictures are kept per back end and platform in
 `client/e2e/pictures/<back end>-<platform>/`, and are changed only by hand,
 after looking at the new ones: `npx playwright test --update-snapshots`
 writes this machine's. CI runs on Linux; a failing picture test uploads the
-pictures it took (the `playwright-<back end>-short` artifact of `pr.render`;
-`-long` for the sky's, which are taken in one `@long` test), and those are
-what to commit for `linux` once judged right.
+pictures it took in the `playwright-*` artifacts of `pr.render`, beside each
+a `-diff.png` of where it differs. `go run ./tools/pictures -run <run id>`
+downloads them (through your `gh` login), writes the last try's picture of
+every test that failed at a picture over the expected one in
+`client/e2e/pictures/<project>-linux/`, and lists each with the share of its
+pixels that differed; `-n` lists them and writes nothing, `-dir` takes
+artifacts already downloaded. Look at them, then commit. A dependency
+update that changes the pictures (three.js's releases do) is fixed so. A
+test that draws more than one picture without `expect.soft` stops at the
+first that differs: run the tool again on the next run.
 
 A test that takes minutes on CI's SwiftShader is tagged `@long`
 (`test(title, { tag: '@long' }, ...)`); `pr.render` runs each back end's
