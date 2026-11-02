@@ -34,7 +34,11 @@ interface Feature {
 interface Records {
   islands: { biome: string; x: number; y: number; across: number }[];
   features: Feature[];
-  start: { places: [number, number][]; headings?: number[] };
+  start: {
+    places: [number, number][];
+    headings?: number[];
+    mooringPlaces?: { x: number; y: number; heading: number }[];
+  };
 }
 
 /** The world file's records, read as the page reads them. */
@@ -129,6 +133,9 @@ test('the same plants, birds and spouts at the same world time on two pages', as
     await openScene(page, 'world=1&wind=8,90');
     await page.evaluate((c) => globalThis.keel.placeBoat(c.sightX, c.sightY, 0), colony as Feature);
     await landed(page, true);
+    // The wind the plants sway in is asked of the module again after 300
+    // ms: one asked before its shelter was held must not be the one drawn.
+    await page.waitForTimeout(400);
     await page.evaluate(() => {
       const k = globalThis.keel;
       k.freezeTick(3000);
@@ -200,9 +207,10 @@ test.describe('pictures of the features from the sea', () => {
       await expect.soft(page.locator('canvas.scene')).toHaveScreenshot(`features-${v.name}.png`);
     });
   }
-  // Each biome's widest island but the start's, from offshore on the side
+  // Each biome's widest island but Port Royal's, from offshore on the side
   // of the world's middle, facing it.
-  const [sx, sy] = r.start.places[0] ?? [0, 0];
+  const m = r.start.mooringPlaces?.[0];
+  const [sx, sy] = m === undefined ? [0, 0] : [m.x, m.y];
   for (const biome of biomes) {
     const island = r.islands
       .filter((i) => i.biome === biome && Math.hypot(i.x - sx, i.y - sy) > i.across / 2)
@@ -237,8 +245,9 @@ test.describe('pictures of the features from the sea', () => {
     });
   }
   test('Port Royal’s woods @long', async ({ page }) => {
-    // From the start's mooring, the island across the basin.
-    const [e, n] = r.start.places[0] ?? [0, 0];
+    // From the first mooring, the island across the basin.
+    const m = r.start.mooringPlaces?.[0];
+    const [e, n] = m === undefined ? [0, 0] : [m.x, m.y];
     await openScene(page, 'world=1&wind=6,90');
     await page.evaluate(
       ([e, n]) => {
