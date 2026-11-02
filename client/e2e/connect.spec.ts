@@ -47,7 +47,9 @@ function cleanAir(c: { corrections: number; shadowed: number; largest: number })
   expect(c.largest).toBeLessThan(0.001);
 }
 
-test('a sail predicted with no correction', async ({ page, context }) => {
+// Timed: three pages at once on four cores, an input of the page's reached
+// keel a tick late now and then, and was corrected.
+test('a sail predicted with no correction', { tag: '@alone' }, async ({ page, context }) => {
   await sailor(context);
   await sail(page);
   // In clean air: away from the boats of the tests sailing beside it.

@@ -11,7 +11,8 @@
 // a page that draws nothing (?draw=off): no GPU, so three run at a time
 // against the one keel, and those tagged @world, which change what every
 // sailor shares (the wind, the weather, the world's end and life, keel
-// itself), run after the rest, one at a time. No test is retried: a test
+// itself), or @alone, which time the page and keel and need the machine to
+// themselves, run after the rest, one at a time. No test is retried: a test
 // that fails on a pull request is a fault to fix, in the test or the game.
 //
 // Four servers: keel, built from this tree and serving a database of its
@@ -146,7 +147,7 @@ export default defineConfig({
     {
       name: 'page',
       testMatch: pageFiles,
-      grepInvert: /@world/,
+      grepInvert: /@world|@alone/,
       fullyParallel: true,
       workers: 3,
       use: {
@@ -159,7 +160,7 @@ export default defineConfig({
     {
       name: 'page-serial',
       testMatch: pageFiles,
-      grep: /@world/,
+      grep: /@world|@alone/,
       workers: 1,
       dependencies: ['page'],
       use: {
