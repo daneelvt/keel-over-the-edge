@@ -47,10 +47,9 @@ jobs:
           - { name: "long (the page)", project: page-serial, grep: --grep, shard: 1, shards: 1, repeat: 1, browser: chromium }
           - { name: "compat", project: compat, grep: --grep-invert, shard: 1, shards: 1, repeat: 1, browser: chromium }
           - { name: "hunt (the page) ×5", project: page-serial, grep: --grep-invert, shard: 1, shards: 1, repeat: 5, browser: chromium }
-          - { name: "hunt (webgl2, 1 of 4) ×5", project: webgl2, grep: --grep-invert, shard: 1, shards: 4, repeat: 5, browser: chromium }
-          - { name: "hunt (webgl2, 2 of 4) ×5", project: webgl2, grep: --grep-invert, shard: 2, shards: 4, repeat: 5, browser: chromium }
-          - { name: "hunt (webgl2, 3 of 4) ×5", project: webgl2, grep: --grep-invert, shard: 3, shards: 4, repeat: 5, browser: chromium }
-          - { name: "hunt (webgl2, 4 of 4) ×5", project: webgl2, grep: --grep-invert, shard: 4, shards: 4, repeat: 5, browser: chromium }
+          - { name: "hunt (webgl2, 1 of 3) ×5", project: webgl2, grep: --grep-invert, shard: 1, shards: 3, repeat: 5, browser: chromium }
+          - { name: "hunt (webgl2, 2 of 3) ×5", project: webgl2, grep: --grep-invert, shard: 2, shards: 3, repeat: 5, browser: chromium }
+          - { name: "hunt (webgl2, 3 of 3) ×5", project: webgl2, grep: --grep-invert, shard: 3, shards: 3, repeat: 5, browser: chromium }
           - { name: "hunt (webkit) ×5", project: webkit, grep: --grep-invert, shard: 1, shards: 1, repeat: 5, browser: webkit }
     runs-on: ubuntu-26.04
     timeout-minutes: 120
@@ -81,7 +80,8 @@ jobs:
       - uses: ./.github/actions/setup
       - name: The runner's CPU and speed, on the job's summary
         working-directory: client
-        run: node e2e/runner.ts >> "$GITHUB_STEP_SUMMARY"
+        shell: bash
+        run: node e2e/runner.ts | tee -a "$GITHUB_STEP_SUMMARY"
       - name: Build the physics module (the game's page steps it)
         run: go run ./tools/physics
       - name: Seed 1's world, for the sandbox's land and its chart
@@ -158,7 +158,8 @@ jobs:
       - name: The runner's CPU and speed, on the job's summary
         if: steps.netem.outputs.ok == 'true'
         working-directory: client
-        run: node e2e/runner.ts >> "$GITHUB_STEP_SUMMARY"
+        shell: bash
+        run: node e2e/runner.ts | tee -a "$GITHUB_STEP_SUMMARY"
       - name: Build the physics module (the game's page steps it)
         if: steps.netem.outputs.ok == 'true'
         run: go run ./tools/physics

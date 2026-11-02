@@ -75,36 +75,17 @@ export const pageFiles = [
 // tests' times on CI's runners (Playwright's own --shard splits by the
 // number of tests, and these files take from seconds to minutes).
 export const shardFiles: Record<string, string[][]> = {
+  // About 5.4 minutes each on lavapipe, 16 in all (November 2026).
   webgl2: [
-    [
-      'connect',
-      'encounter',
-      'features',
-      'lag',
-      'land',
-      'machine-mark',
-      'oauth-approve',
-      'passkeys',
-    ],
-    ['lights', 'roam', 'sail', 'sky', 'stopped', 'tapstorm', 'weather', 'wind'],
-    ['edge', 'fleet', 'forecast', 'freecam', 'start', 'together', 'towns', 'world-hand'],
-    ['discover', 'fog', 'layout', 'look', 'owner', 'watch', 'weatherchart', 'worker'],
+    ['ending', 'features', 'forecast', 'freecam', 'look', 'machine-mark'],
+    ['edge', 'lights', 'sea', 'sighting', 'weatherchart', 'wind'],
   ],
+  // About 7 minutes each on SwiftShader, 34.5 in all.
   webgpu: [
-    [
-      'edge',
-      'ending',
-      'forecast',
-      'freecam',
-      'land',
-      'layout',
-      'machine-mark',
-      'pilot',
-      'sail',
-      'tapstorm',
-      'weather',
-      'wind',
-    ],
+    ['freecam', 'lights', 'machine-mark', 'sea'],
+    ['forecast', 'wind'],
+    ['edge', 'features', 'sail', 'sky'],
+    ['fog', 'look', 'pilot', 'weather'],
   ],
 };
 

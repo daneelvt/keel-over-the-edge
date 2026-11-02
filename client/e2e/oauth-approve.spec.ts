@@ -5,8 +5,7 @@
 // endpoint with PKCE; the approval page shows where the sign-in returns,
 // takes the player's passkey on the browser's prompt (Playwright's virtual
 // authenticator), makes a machine sailor, and approves; and the browser is
-// sent back to the app with the code, its state and the issuer. A form
-// draws nothing, so one back end is enough.
+// sent back to the app with the code, its state and the issuer.
 
 import { createHash, randomBytes } from 'node:crypto';
 import { type APIRequestContext, expect, test } from '@playwright/test';

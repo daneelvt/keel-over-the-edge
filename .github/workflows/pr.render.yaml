@@ -129,7 +129,8 @@ jobs:
       - uses: ./.github/actions/setup
       - name: The runner's CPU and speed, on the job's summary
         working-directory: client
-        run: node e2e/runner.ts >> "$GITHUB_STEP_SUMMARY"
+        shell: bash
+        run: node e2e/runner.ts | tee -a "$GITHUB_STEP_SUMMARY"
       - name: Build the physics module (the game's page steps it)
         run: go run ./tools/physics
       - name: Seed 1's world, for its chart (discover.spec.ts)
@@ -165,13 +166,14 @@ jobs:
       # runs every other scene file, so a new file always runs.
       matrix:
         include:
-          - { project: webgl2, shard: 1, shards: 4 }
-          - { project: webgl2, shard: 2, shards: 4 }
-          - { project: webgl2, shard: 3, shards: 4 }
-          - { project: webgl2, shard: 4, shards: 4 }
-          - { project: webgpu, shard: 1, shards: 3 }
-          - { project: webgpu, shard: 2, shards: 3 }
-          - { project: webgpu, shard: 3, shards: 3 }
+          - { project: webgl2, shard: 1, shards: 3 }
+          - { project: webgl2, shard: 2, shards: 3 }
+          - { project: webgl2, shard: 3, shards: 3 }
+          - { project: webgpu, shard: 1, shards: 5 }
+          - { project: webgpu, shard: 2, shards: 5 }
+          - { project: webgpu, shard: 3, shards: 5 }
+          - { project: webgpu, shard: 4, shards: 5 }
+          - { project: webgpu, shard: 5, shards: 5 }
     runs-on: ubuntu-26.04
     timeout-minutes: 20
     permissions:
@@ -201,7 +203,8 @@ jobs:
       - uses: ./.github/actions/setup
       - name: The runner's CPU and speed, on the job's summary
         working-directory: client
-        run: node e2e/runner.ts >> "$GITHUB_STEP_SUMMARY"
+        shell: bash
+        run: node e2e/runner.ts | tee -a "$GITHUB_STEP_SUMMARY"
       - name: Build the physics module (the sandbox steps it)
         run: go run ./tools/physics
       - name: Seed 1's world, for the sandbox's land (land.spec.ts)
@@ -260,7 +263,8 @@ jobs:
       - uses: ./.github/actions/setup
       - name: The runner's CPU and speed, on the job's summary
         working-directory: client
-        run: node e2e/runner.ts >> "$GITHUB_STEP_SUMMARY"
+        shell: bash
+        run: node e2e/runner.ts | tee -a "$GITHUB_STEP_SUMMARY"
       - name: Build the physics module (the game's page steps it)
         run: go run ./tools/physics
       - name: Seed 1's world, for the sandbox's harbour (layout.spec.ts)

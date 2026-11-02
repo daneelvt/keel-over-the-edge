@@ -10,7 +10,7 @@
 // so the spec's name sorts it after the others that sail it.
 
 import { type BrowserContext, expect, type Page, test } from '@playwright/test';
-import { sailor as newSailor, sail, sailBeside } from './helpers';
+import { sailor as newSailor, sail } from './helpers';
 
 const internal = 'http://127.0.0.1:19090';
 const control = 'http://127.0.0.1:19099';
@@ -32,18 +32,12 @@ async function endIn(page: Page, seconds: number): Promise<number> {
   return ((await res.json()) as { ends: number }).ends;
 }
 
-/**
- * A player sailing in a context of its own, its page small for CI's
- * renderer; beside another's page, that one's drawing held while it starts.
- */
-async function sailor(browser: import('@playwright/test').Browser, name: string, beside?: Page) {
-  const c: BrowserContext = await browser.newContext({
-    baseURL: 'http://localhost:5181',
-    viewport: { width: 320, height: 200 },
-  });
+/** A player sailing in a context of its own. */
+async function sailor(browser: import('@playwright/test').Browser, name: string) {
+  const c: BrowserContext = await browser.newContext({ baseURL: 'http://localhost:5181' });
   await newSailor(c, name);
   const p = await c.newPage();
-  await (beside === undefined ? sail(p) : sailBeside(p, beside));
+  await sail(p);
   return { c, p };
 }
 
@@ -55,7 +49,7 @@ test('@long a world ends on stage, and a new one begins with a blank chart', {
   const ends = await endIn(opener, 75);
   await opener.close();
   const ann = await sailor(browser, 'Ann');
-  const bob = await sailor(browser, 'Bob', ann.p);
+  const bob = await sailor(browser, 'Bob');
   const before = await ending(ann.p);
   expect(before.ends).toBe(ends);
   expect((await ending(bob.p)).world).toBe(before.world);
@@ -84,9 +78,8 @@ test('@long a world ends on stage, and a new one begins with a blank chart', {
   await expect
     .poll(async () => (await ending(ann.p)).now, { timeout: 90_000 })
     .toBeGreaterThan(ends - 10_000);
-  // Each page draws a frame and reads its stage in one go: the stage is
-  // set as a frame is drawn, and two pages on CI's renderer draw one only
-  // every second or so.
+  // Each page makes a frame and reads its stage in one go: the stage is
+  // set as a frame is made.
   const drawn = (p: Page): Promise<Ending> =>
     p.evaluate(() => {
       globalThis.keel.render();

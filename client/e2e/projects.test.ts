@@ -23,6 +23,5 @@ describe('the spec files', () => {
       expect(named.filter((f) => pageFiles.includes(f))).toEqual([]);
       expect(named.filter((f, i) => named.indexOf(f) !== i)).toEqual([]);
     });
-
   }
 });

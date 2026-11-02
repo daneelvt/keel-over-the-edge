@@ -4,10 +4,11 @@
 // inside the lip by /debug/place is carried over it by the drain, on the
 // page as on the server; a sailor near it sees it fall and vanish; it is
 // back at the start five seconds later; and the server counts the fall and
-// writes its events. One back end is enough: the drawing is not under test.
+// writes its events. The pages draw nothing (?draw=off): the drawing is not
+// under test.
 
 import { expect, type Page, test } from '@playwright/test';
-import { sail, sailBeside, sailor, steady } from './helpers';
+import { sail, sailor } from './helpers';
 
 const internal = 'http://127.0.0.1:19090';
 
@@ -87,9 +88,7 @@ test('carried over the lip, seen falling, and back at the start', async ({ brows
   test.setTimeout(150_000);
   const falls = await metric(request, 'keel_falls_total');
   const events = await metric(request, 'keel_persist_events_total');
-  // Small pages, so CI's software renderer draws two of them often enough.
-  const small = { viewport: { width: 320, height: 200 } };
-  const contexts = [await browser.newContext(small), await browser.newContext(small)];
+  const contexts = [await browser.newContext(), await browser.newContext()];
   const [ann, bob] = await Promise.all(contexts.map((c) => c.newPage()));
   if (ann === undefined || bob === undefined) {
     throw new Error('no pages');
@@ -97,19 +96,16 @@ test('carried over the lip, seen falling, and back at the start', async ({ brows
   await sailor(contexts[0] as import('@playwright/test').BrowserContext, 'Ann');
   await sailor(contexts[1] as import('@playwright/test').BrowserContext, 'Bob');
   await sail(ann);
-  await sailBeside(bob, ann);
-  await steady(ann, bob);
+  await sail(bob);
   await watch(ann);
   await watch(bob);
   // Both in sight of the lip first, clear of the drain's pull, until both
-  // pages have made what they draw there: a page doing so on CI's software
-  // GPU answers nothing for a quarter of a minute.
+  // pages have them there.
   await place(request, bob, 100, LIP - 150, 270);
   await place(request, ann, -300, LIP - 150, 270);
   for (const p of [ann, bob]) {
     await expect.poll(() => out(p), { timeout: 40_000 }).toBeGreaterThan(LIP - 200);
   }
-  await steady(ann, bob);
   // Bob lies 100 m off, along the lip; Ann half a metre inside it.
   await place(request, bob, 100, LIP - 60, 270);
   await place(request, ann, 0, LIP - 0.5, 90);

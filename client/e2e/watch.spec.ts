@@ -5,9 +5,8 @@
 // its owner's start screen; the bar over it says whose boat it is, with
 // the cog, and nothing on the screen steers it; the Inputs the page sends
 // while it watches carry no controls (the worker's count); and Sail gives
-// the player a boat of their own at the start. One sea page only: a second
-// beside it is slow on CI's software GPU. The AI app is the test's own,
-// through the server's routes.
+// the player a boat of their own at the start. The pages draw nothing
+// (?draw=off). The AI app is the test's own, through the server's routes.
 //
 // Then the list of sailors to watch: two machine sailors at sea, put in
 // order of how near the edge they are, one's card opened, followed and
@@ -17,7 +16,7 @@
 
 import { type BrowserContext, expect, type Page, test } from '@playwright/test';
 import data from '../src/catalog/catalog.gen.json' with { type: 'json' };
-import { drained, GAME, holdPasskeys, type Made, sailor, setSail } from './helpers';
+import { GAME, holdPasskeys, type Made, sailor, setSail } from './helpers';
 import { assertPasskey } from './passkey';
 
 /** A machine sailor made through the server's route, its look the catalog's first; its id. */
@@ -166,8 +165,8 @@ test('a machine sailor watched from its owner’s start screen: whose boat, noth
   expect(b.state.y).toBeLessThan(0);
   expect(Math.abs(b.state.heading - Math.PI / 2)).toBeLessThan(0.5);
   // Now the helm steers again, and its controls go, as the other online
-  // specs steer: through the hook, which a slow software renderer's frames
-  // cannot miss as they can a short key press.
+  // specs steer: through the hook, which no frame can miss as it can a
+  // short key press.
   await page.evaluate(() => globalThis.keel.setControls(1, 0.5));
   await expect
     .poll(async () => (await watch(page)).controls, {
@@ -279,13 +278,10 @@ test('a human sailor comes to Set sail on entry; watchable only once they tick t
   context,
   page,
 }) => {
-  test.setTimeout(300_000);
-  // Two pages on CI's one software GPU, where a full-size sea's frames run
-  // some 20 s behind the page and the other page waits for them, and the
-  // watcher's start screen draws a sea that cannot be held: small pages,
-  // the watcher's a phone's. The sailor to be watched, on a page of their own.
+  // The watcher on a phone's page; the sailor to be watched, on a page of
+  // their own.
   await page.setViewportSize({ width: 360, height: 640 });
-  const other = await browser.newContext({ viewport: { width: 320, height: 200 } });
+  const other = await browser.newContext();
   const seen = await other.newPage();
   try {
     const them = await sailor(other, 'Seen');
@@ -299,9 +295,6 @@ test('a human sailor comes to Set sail on entry; watchable only once they tick t
     await seen.waitForFunction(() => globalThis.keel?.net().status === 'sailing', null, {
       timeout: 60_000,
     });
-    // The watcher's page starts beside the sea on CI's one software GPU:
-    // the sea held meanwhile, as a hidden tab is, the boat sailing on.
-    await seen.evaluate(() => globalThis.keel.hold(true));
 
     // Unticked: the watcher, on the start screen, does not find them.
     const made = await sailor(context, 'Watcher');
@@ -316,7 +309,6 @@ test('a human sailor comes to Set sail on entry; watchable only once they tick t
 
     // Back at the Set sail screen after a reload, the boat still at sea:
     // the box is the voyage's, unticked; ticked, the voyage can be watched.
-    await drained(seen);
     await seen.reload();
     await expect(yours).toContainText('at sea', { timeout: 90_000 });
     await expect(box).not.toBeChecked();
@@ -327,17 +319,11 @@ test('a human sailor comes to Set sail on entry; watchable only once they tick t
     const row = page.locator(`.watch-row[data-sailor="${them.name}"]`);
     await expect(row).toBeVisible({ timeout: 40_000 });
     await expect(row.getByRole('img', { name: 'machine sailor' })).toHaveCount(0);
-    // The watcher's sea starts beside a page drawing it: that one held meanwhile.
-    await seen.evaluate(() => globalThis.keel.hold(true));
-    try {
-      await row.getByRole('button', { name: 'Watch', exact: true }).click();
-      await page.waitForFunction(() => globalThis.keel !== undefined, null, { timeout: 90_000 });
-      await page.waitForFunction((n) => globalThis.keel.watch().watching?.sailor === n, them.name, {
-        timeout: 60_000,
-      });
-    } finally {
-      await seen.evaluate(() => globalThis.keel.hold(false));
-    }
+    await row.getByRole('button', { name: 'Watch', exact: true }).click();
+    await page.waitForFunction(() => globalThis.keel !== undefined, null, { timeout: 90_000 });
+    await page.waitForFunction((n) => globalThis.keel.watch().watching?.sailor === n, them.name, {
+      timeout: 60_000,
+    });
     expect((await watch(page)).watching).toEqual({
       sailor: them.name,
       machine: false,

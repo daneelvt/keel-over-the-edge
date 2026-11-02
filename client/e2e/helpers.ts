@@ -31,11 +31,6 @@ export const softwareGPU = process.platform === 'linux' || process.env.SOFTWARE_
  */
 export const GAME = '/?test&draw=off';
 
-/** Whether the page draws: false for one opened with ?draw=off. */
-async function draws(page: Page): Promise<boolean> {
-  return page.evaluate(() => globalThis.keel.info().backend !== 'none');
-}
-
 /**
  * Opens the offline sandbox on the project's back end with the test hooks,
  * waits for the boat, freezes time and puts the boat back at the start, at
@@ -240,8 +235,7 @@ export async function holdPasskeys(context: BrowserContext, ...keys: Passkey[]):
 /**
  * Sets sail from the player's own sailor, which a page with a session
  * shows before every voyage (after a reload too): taps "Set sail as" the
- * sailor, and waits for the sea. The start screen can take half a minute
- * and more to show on CI's software GPU, the renderer starting beside it.
+ * sailor, and waits for the sea.
  */
 export async function setSail(page: Page): Promise<void> {
   await page.getByRole('button', { name: /^Set sail/ }).click({ timeout: 90_000 });
@@ -260,85 +254,7 @@ export async function sail(page: Page, base = ''): Promise<void> {
     timeout: 30_000,
   });
   expect(errors).toEqual([]);
-  expect(await draws(page), 'a page opened by sail() draws nothing').toBe(false);
-}
-
-/**
- * Opens a second page as sail() does, the first page's drawing held
- * meanwhile, or every one of the pages before it that draws: on CI's one
- * software GPU, a page starting beside one that draws the sea takes most
- * of a minute, and stalls the other for seconds at a time.
- */
-export async function sailBeside(page: Page, first: Page | Page[], base = ''): Promise<void> {
-  const pages = Array.isArray(first) ? first : [first];
-  const held = (await Promise.all(pages.map(async (p) => ((await draws(p)) ? p : null)))).filter(
-    (p) => p !== null,
-  );
-  await Promise.all(held.map((p) => p.evaluate(() => globalThis.keel.hold(true))));
-  try {
-    await sail(page, base);
-  } finally {
-    await Promise.all(held.map((p) => p.evaluate(() => globalThis.keel.hold(false))));
-  }
-}
-
-/**
- * Stops the page drawing, as hold does, and waits until the GPU has
- * finished what it was given. Call it before a reload. CI's software GPU
- * runs seconds behind the page, and a page reloaded while that backlog
- * remains took most of a minute to show its start screen again. The page
- * after the reload draws again by itself. Nothing for a page that draws
- * nothing.
- */
-export async function drained(page: Page): Promise<void> {
-  if (!(await draws(page))) {
-    return;
-  }
-  await page.evaluate(async () => {
-    globalThis.keel.hold(true);
-    await globalThis.keel.show();
-  });
-}
-
-/**
- * Waits until each page that draws has animation frames with no gap of a
- * second and a half for three seconds. The pages share CI's one software
- * GPU process: a page still making what it draws (after its start, a
- * reload, or a move to somewhere new) stalls its own frames and the
- * others' for seconds, and its main thread with them.
- */
-export async function steady(...pages: Page[]): Promise<void> {
-  const drawing = (await Promise.all(pages.map(async (p) => ((await draws(p)) ? p : null)))).filter(
-    (p) => p !== null,
-  );
-  await Promise.all(
-    drawing.map((page) =>
-      expect
-        .poll(
-          () =>
-            page.evaluate(
-              () =>
-                new Promise<number>((resolve) => {
-                  const start = performance.now();
-                  let last = start;
-                  let worst = 0;
-                  const step = (t: number) => {
-                    worst = Math.max(worst, t - last);
-                    last = t;
-                    if (t - start < 3000) {
-                      requestAnimationFrame(step);
-                    } else {
-                      resolve(worst);
-                    }
-                  };
-                  requestAnimationFrame(step);
-                }),
-            ),
-          { timeout: 60_000 },
-        )
-        .toBeLessThan(1500),
-    ),
-  );
+  expect(await page.evaluate(() => globalThis.keel.info().backend)).toBe('none');
 }
 
 /** keel's internal listener, as tools/e2e serves it: its developer commands. */
@@ -374,10 +290,13 @@ export async function alone(page: Page): Promise<{ east: number; north: number }
   await expect
     .poll(
       () =>
-        page.evaluate(([e, n]) => {
-          const s = globalThis.keel.boat().state;
-          return Math.hypot(s.x - e, s.y - n);
-        }, [east, north] as const),
+        page.evaluate(
+          ([e, n]) => {
+            const s = globalThis.keel.boat().state;
+            return Math.hypot(s.x - e, s.y - n);
+          },
+          [east, north] as const,
+        ),
       { timeout: 15_000 },
     )
     .toBeLessThan(30);

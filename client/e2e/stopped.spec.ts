@@ -7,9 +7,8 @@
 // while stopped, started again, and deleted with its name typed again. At
 // sea: stopped through the owner's routes, its page says so and goes back
 // to the start screen, where its passkey is refused in the player's words
-// until it is started again; then deleted. A second page beside the sea
-// takes over a minute to load on CI's software GPU: the test at sea works
-// the owner's routes with requests, no world page opened.
+// until it is started again; then deleted. The test at sea works the
+// owner's routes with requests, no world page opened.
 
 import {
   type APIRequestContext,
@@ -193,8 +192,7 @@ test('stopped at sea: put ashore, refused at sign-in, started again, signed in, 
   expect(id).not.toBeNull();
   const account = id ?? '';
 
-  // Stopped: the page says so, then goes back to the start screen, which
-  // takes half a minute and more on CI's software GPU.
+  // Stopped: the page says so, then goes back to the start screen.
   await owned(request, 'stop', { account, reason: 'a test at sea' });
   await expect(page.getByText('This sailor has been stopped.').first()).toBeVisible({
     timeout: 30_000,

@@ -5,12 +5,12 @@
 // it; each page's chart then holds both, each credited to the player who
 // charted it, with the island's model; each player is told of their own
 // with a notice; the news has both; the world page lists both by whom; and
-// a third player, joining after, is sent the whole chart at once. One back
-// end is enough: the drawing is not under test.
+// a third player, joining after, is sent the whole chart at once. The
+// pages draw nothing (?draw=off): the drawing is not under test.
 
 import { existsSync, readFileSync } from 'node:fs';
 import { type BrowserContext, expect, type Page, test } from '@playwright/test';
-import { sail, sailBeside, sailor, steady } from './helpers';
+import { sail, sailor } from './helpers';
 
 const direct = 'http://localhost:5181';
 const internal = 'http://127.0.0.1:19090';
@@ -53,19 +53,12 @@ function islands(charted: Set<string>): [Entry, Entry] {
   return [a, b];
 }
 
-/**
- * A player sailing in a small page of its own; beside others' pages, their
- * drawing held while it starts.
- */
-async function player(
-  browser: import('@playwright/test').Browser,
-  name: string,
-  beside?: Page | Page[],
-) {
-  const c = await browser.newContext({ baseURL: direct, viewport: { width: 320, height: 200 } });
+/** A player sailing in a page of its own. */
+async function player(browser: import('@playwright/test').Browser, name: string) {
+  const c = await browser.newContext({ baseURL: direct });
   await sailor(c, name);
   const p = await c.newPage();
-  await (beside === undefined ? sail(p, direct) : sailBeside(p, beside, direct));
+  await sail(p, direct);
   const me = (await (await c.request.get('/api/me')).json()) as { name: string };
   return { context: c, page: p, name: me.name };
 }
@@ -93,9 +86,8 @@ test('two players discover a world: the chart fills in for both, with the credit
     new Set((await before).charted.map((c) => `${c.subject}:${c.number}`)),
   );
   const ann = await player(browser, 'Ann');
-  const bob = await player(browser, 'Bob', ann.page);
+  const bob = await player(browser, 'Bob');
   const contexts: BrowserContext[] = [ann.context, bob.context];
-  await steady(ann.page, bob.page);
   // Port Royal's island is known from the start, to everyone.
   for (const p of [ann.page, bob.page]) {
     await expect
@@ -142,7 +134,7 @@ test('two players discover a world: the chart fills in for both, with the credit
     owner.charted.filter((c) => c.by === ann.name || c.by === bob.name).length,
   ).toBeGreaterThanOrEqual(2);
   // A third, joining after, is sent the whole chart at once.
-  const carol = await player(browser, 'Carol', [ann.page, bob.page]);
+  const carol = await player(browser, 'Carol');
   contexts.push(carol.context);
   await expect
     .poll(() => credits(carol.page), { timeout: 10_000 })

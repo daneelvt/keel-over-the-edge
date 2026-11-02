@@ -5,7 +5,8 @@
 // boat staying where it was; Bob's is not offered, and a Roam his page
 // sends anyway is refused. Ann's boat is teleported beside Bob: he sees it
 // leave his view and arrive; hidden, he no longer sees it. Each control is
-// counted. One back end is enough: the drawing is not under test.
+// counted. The pages draw nothing (?draw=off): the drawing is not under
+// test.
 
 import {
   type APIRequestContext,
@@ -14,7 +15,7 @@ import {
   type Page,
   test,
 } from '@playwright/test';
-import { alone, sail, sailBeside, sailor, steady } from './helpers';
+import { alone, sail, sailor } from './helpers';
 
 const internal = 'http://127.0.0.1:19090';
 
@@ -67,12 +68,7 @@ test('the owner roams and teleports; another sailor can do neither', async ({
 }) => {
   const placed = await metric(request, 'keel_owner_actions_total{action="place"}');
   const refused = await metric(request, 'keel_owner_refused_total{what="roam"}');
-  // Small pages, so CI's software renderer draws two of them often enough.
-  const small = { viewport: { width: 320, height: 200 } };
-  const contexts: BrowserContext[] = [
-    await browser.newContext(small),
-    await browser.newContext(small),
-  ];
+  const contexts: BrowserContext[] = [await browser.newContext(), await browser.newContext()];
   const [ann, bob] = await Promise.all(contexts.map((c) => c.newPage()));
   if (ann === undefined || bob === undefined) {
     throw new Error('no pages');
@@ -80,8 +76,7 @@ test('the owner roams and teleports; another sailor can do neither', async ({
   await sailor(contexts[0] as BrowserContext, 'Ann');
   await sailor(contexts[1] as BrowserContext, 'Bob');
   await sail(ann);
-  await sailBeside(bob, ann);
-  await steady(ann, bob);
+  await sail(bob);
   // Room beside Bob's boat for Ann's, away from the other tests' boats.
   await alone(bob);
   const annBoat = await ann.evaluate(() => globalThis.keel.net().boat);

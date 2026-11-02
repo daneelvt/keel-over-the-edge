@@ -162,9 +162,8 @@ test('the account page: a passkey added and one removed, signed out, and the sai
   await passkeys.first().getByRole('button', { name: 'Remove' }).click();
   await expect(page.locator('.account-status')).toHaveText('Passkey removed.');
   await expect(passkeys).toHaveCount(1);
-  // The other devices sign in through the routes, no page opened: a second
-  // page beside the sea takes over a minute to load on CI's software GPU.
-  // The removed passkey signs in no more.
+  // The other devices sign in through the routes, no page opened. The
+  // removed passkey signs in no more.
   const gone = await browser.newContext();
   const refused = await signInWith(gone, made.passkey);
   expect(refused.status()).toBe(404);
@@ -199,8 +198,7 @@ test('the account page: a passkey added and one removed, signed out, and the sai
   await expect(page.getByRole('heading', { name: `Delete ${made.name} for good?` })).toBeVisible();
   await page.locator('input[name="delete-name"]').fill(made.name.toLowerCase());
   await page.getByRole('button', { name: 'Delete this sailor' }).click();
-  // The page reloads to it: the renderer starting beside the start screen
-  // holds CI's software GPU half a minute.
+  // The page reloads to it.
   await expect(page.getByRole('heading', { name: 'Keel Over the Edge' })).toBeVisible({
     timeout: 90_000,
   });

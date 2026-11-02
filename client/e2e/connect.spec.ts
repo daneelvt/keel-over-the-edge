@@ -5,19 +5,14 @@
 // with no correction; a wind changed on the server reaches the boat; a
 // reload within the grace finds the same boat; a restart of keel rings the
 // harbourmaster's bell and the same boat is there after; and a second
-// device takes the boat, and is taken back from. One back end is enough: the drawing is not under test.
+// device takes the boat, and is taken back from. The pages draw nothing
+// (?draw=off): the drawing is not under test.
 
 import { expect, type Page, test } from '@playwright/test';
-import { alone, drained, heldRegime, sail, sailor, steady } from './helpers';
+import { alone, heldRegime, sail, sailor } from './helpers';
 
 const internal = 'http://127.0.0.1:19090';
 const control = 'http://127.0.0.1:19099';
-
-// Where the connection is the test, not the picture or the screen, a small
-// page. CI's software GPU runs a full-size sea's frames some 20 s behind the
-// page, and the next page, a reload or the next test's, waits for them; a
-// small one's, half.
-const small = { width: 320, height: 200 };
 
 function net(page: Page) {
   return page.evaluate(() => globalThis.keel.net());
@@ -53,7 +48,6 @@ function cleanAir(c: { corrections: number; shadowed: number; largest: number })
 }
 
 test('a sail predicted with no correction', async ({ page, context }) => {
-  await page.setViewportSize(small);
   await sailor(context);
   await sail(page);
   // In clean air: away from the boats of the tests sailing beside it.
@@ -74,7 +68,6 @@ test('a wind changed on the server reaches the boat', { tag: '@world' }, async (
   context,
   request,
 }) => {
-  await page.setViewportSize(small);
   await sailor(context);
   await sail(page);
   const res = await request.post(`${internal}/debug/wind?knots=15&from=90`);
@@ -100,14 +93,9 @@ test('a wind changed on the server reaches the boat', { tag: '@world' }, async (
 });
 
 test('a reload within the grace finds the same boat', async ({ page, context }) => {
-  await page.setViewportSize(small);
   await sailor(context);
   await sail(page);
   await page.evaluate(() => globalThis.keel.setControls(0.3, 0.4));
-  // Reloaded while CI's software GPU is still making what the page draws,
-  // the page's next load can hang there.
-  await steady(page);
-  await drained(page);
   const before = await net(page);
   const at = (await page.evaluate(() => globalThis.keel.boat())).state;
   await sail(page);
@@ -121,7 +109,6 @@ test('a reload within the grace finds the same boat', async ({ page, context }) 
 test('a restart of keel rings the bell, and the boat waits for its sailor', {
   tag: '@world',
 }, async ({ page, context, request }) => {
-  await page.setViewportSize(small);
   await sailor(context);
   await sail(page);
   const before = await net(page);
@@ -140,19 +127,11 @@ test('a restart of keel rings the bell, and the boat waits for its sailor', {
 });
 
 test('another device takes the boat, and Take over takes it back', async ({ page, browser }) => {
-  // Two pages load the game, one while the other sails: on CI's software
-  // GPU that alone has taken most of the 90 s a test is given. Small pages,
-  // as together.spec.ts's, so the second loads beside the first.
-  test.setTimeout(180_000);
-  await page.setViewportSize(small);
   const context = page.context();
   await sailor(context);
   await sail(page);
   const boat = (await net(page)).boat;
-  const other = await browser.newContext({
-    storageState: await context.storageState(),
-    viewport: small,
-  });
+  const other = await browser.newContext({ storageState: await context.storageState() });
   const second = await other.newPage();
   await sail(second);
   expect((await net(second)).boat).toBe(boat);

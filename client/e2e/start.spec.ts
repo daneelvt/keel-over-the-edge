@@ -5,7 +5,7 @@
 // virtual authenticator standing in for the browser's prompt), its recovery
 // code shown once, Set sail with the voyage watched, its cookie, and the
 // sailor kept across a reload, where its Set sail shows that voyage's
-// choice. A form draws nothing, so one back end is enough.
+// choice. The page draws nothing (?draw=off): a form is the test.
 
 import { type BrowserContext, expect, type Page, test } from '@playwright/test';
 import data from '../src/catalog/catalog.gen.json' with { type: 'json' };

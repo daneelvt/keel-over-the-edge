@@ -4,8 +4,8 @@
 // the whole disk and its layers, the islands' list, the boats at sea; the
 // owner flags their account from the page, clicks a point on the map and
 // their page's boat is there within a second; the page reads nothing while
-// its tab is hidden. One back end is enough: the game's drawing is not under
-// test.
+// its tab is hidden. The game's page draws nothing (?draw=off): its drawing
+// is not under test.
 
 import { type APIRequestContext, expect, type Page, test } from '@playwright/test';
 import { sailor as newSailor, sail } from './helpers';
