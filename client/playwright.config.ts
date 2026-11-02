@@ -19,7 +19,7 @@
 // cookie without a certificate.
 
 import { defineConfig, devices } from '@playwright/test';
-import { chromiumArgs, chromiumEnv } from './e2e/gpu';
+import { chromiumArgs, chromiumEnv, softwareGPUOf } from './e2e/gpu';
 
 const port = 5181;
 // A second Vite, whose game traffic goes through tools/e2e's lag proxy.
@@ -94,9 +94,14 @@ function shardOf(project: string): { testMatch?: string[]; testIgnore?: string[]
   }
   return shard < shards ? { testMatch: groups[shard - 1] ?? [] } : { testIgnore: groups.flat() };
 }
-// On Linux, the software GPU e2e/gpu.ts names: lavapipe, or SwiftShader.
-const args = chromiumArgs(linux);
-const env = { ...process.env, ...chromiumEnv(linux) } as Record<string, string>;
+/** Chromium's launch, on the software GPU e2e/gpu.ts gives the project on Linux. */
+function launch(project: string): { args: string[]; env: Record<string, string> } {
+  const gpu = softwareGPUOf(project);
+  return {
+    args: chromiumArgs(linux, gpu),
+    env: { ...process.env, ...chromiumEnv(linux, gpu) } as Record<string, string>,
+  };
+}
 
 export default defineConfig({
   testDir: 'e2e',
@@ -128,7 +133,7 @@ export default defineConfig({
         viewport: { width: 960, height: 600 },
         deviceScaleFactor: 1,
         ...(process.env.PW_CHANNEL ? { channel: process.env.PW_CHANNEL } : {}),
-        launchOptions: { args, env },
+        launchOptions: launch(name),
       },
     })),
     {
@@ -139,7 +144,7 @@ export default defineConfig({
         viewport: { width: 960, height: 600 },
         deviceScaleFactor: 1,
         ...(process.env.PW_CHANNEL ? { channel: process.env.PW_CHANNEL } : {}),
-        launchOptions: { args, env },
+        launchOptions: launch('compat'),
       },
     },
     // The upgrade from a worker on WebKit, Safari's engine, the account's

@@ -2,33 +2,41 @@
 
 // The GPU the browser tests draw on. On Linux, CI's runners have none: the
 // browser draws on a software GPU, the CPU's Vulkan, which WebGL 2 reaches
-// through ANGLE and WebGPU through Dawn. WebGL 2 draws on Mesa's lavapipe by
-// default (mesa-vulkan-drivers), as three.js's own tests do, or on
-// Chrome's SwiftShader with SOFTWARE_GPU=swiftshader, to compare. WebGPU
-// draws on SwiftShader either way: Chromium offers WebGPU no CPU adapter but
-// its own, whatever the flags, headless or not. On the Mac, the Mac's GPU.
+// through ANGLE and WebGPU through Dawn. On the Mac, the Mac's GPU.
+//
+// The webgl2 project draws on Mesa's lavapipe (mesa-vulkan-drivers), as
+// three.js's own tests do: its frames take a fifth of SwiftShader's on CI's
+// runners, and Chrome has deprecated SwiftShader for WebGL. SOFTWARE_GPU=
+// swiftshader draws it on Chrome's SwiftShader instead, to compare. The
+// webgpu and compat projects draw on SwiftShader: Chromium offers WebGPU no
+// CPU adapter but its own, whatever the flags, headless or not, and with
+// lavapipe's flags its pictures are composited differently, for no time
+// saved.
 //
 // Without lavapipe's driver installed Chromium does not fall back to
-// SwiftShader: it runs with no WebGL at all; and the WebGPU project skips
-// its tests where there is no adapter. So pr.render checks, before its
-// tests, that both back ends draw on the GPU asked for:
+// SwiftShader: it runs with no WebGL at all; and the WebGPU projects skip
+// their tests where there is no adapter. So the workflows check, before the
+// tests, that each back end draws where it should:
 //
-//	node e2e/gpu.ts    print what each back end draws on; fail if it is not the one asked for
+//	node e2e/gpu.ts    print what each back end draws on; fail if not where it should
 
 import { readdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
 export type SoftwareGPU = 'lavapipe' | 'swiftshader';
 
-/** The software GPU asked for: SOFTWARE_GPU=swiftshader, or lavapipe. */
-export function softwareGPUAsked(): SoftwareGPU {
-  return process.env.SOFTWARE_GPU === 'swiftshader' ? 'swiftshader' : 'lavapipe';
+/** The software GPU a project draws on, on Linux. */
+export function softwareGPUOf(project: string): SoftwareGPU {
+  if (project !== 'webgl2' || process.env.SOFTWARE_GPU === 'swiftshader') {
+    return 'swiftshader';
+  }
+  return 'lavapipe';
 }
 
 /**
  * Mesa's lavapipe's driver file, as Ubuntu's mesa-vulkan-drivers installs
  * it (lvp_icd.json on 24.04, lvp_icd.x86_64.json on some releases); the
- * folder's first name if none is there, so that the check says so.
+ * plain name if none is there, so that the check says so.
  */
 function lavapipeICD(): string {
   const dir = '/usr/share/vulkan/icd.d';
@@ -41,8 +49,8 @@ function lavapipeICD(): string {
   return `${dir}/${names.find((n) => /^lvp_icd.*\.json$/.test(n)) ?? 'lvp_icd.json'}`;
 }
 
-/** Chromium's arguments, for the platform. */
-export function chromiumArgs(linux: boolean, gpu = softwareGPUAsked()): string[] {
+/** Chromium's arguments, for the platform and the software GPU. */
+export function chromiumArgs(linux: boolean, gpu: SoftwareGPU): string[] {
   const args = ['--enable-unsafe-webgpu', '--ignore-gpu-blocklist'];
   if (!linux) {
     return args;
@@ -68,7 +76,7 @@ export function chromiumArgs(linux: boolean, gpu = softwareGPUAsked()): string[]
 }
 
 /** The environment Chromium needs for the GPU: lavapipe's driver, and no other. */
-export function chromiumEnv(linux: boolean, gpu = softwareGPUAsked()): Record<string, string> {
+export function chromiumEnv(linux: boolean, gpu: SoftwareGPU): Record<string, string> {
   return linux && gpu === 'lavapipe' ? { VK_DRIVER_FILES: lavapipeICD() } : {};
 }
 
@@ -78,18 +86,10 @@ export interface Drawn {
   webgpu: string;
 }
 
-/** Whether what a page draws on is what the software GPU asked for gives. */
-export function drawsOn(drawn: Drawn, gpu: SoftwareGPU): { webgl2: boolean; webgpu: boolean } {
-  const webgl2 = gpu === 'lavapipe' ? /llvmpipe/i : /swiftshader/i;
-  return { webgl2: webgl2.test(drawn.webgl2), webgpu: /swiftshader/i.test(drawn.webgpu) };
-}
-
-async function check(): Promise<void> {
+/** What a page draws on, in a Chromium given the software GPU's arguments. */
+async function drawnOn(gpu: SoftwareGPU, linux: boolean): Promise<Drawn> {
   const { chromium } = await import('@playwright/test');
-  const linux = process.platform === 'linux';
-  const gpu = softwareGPUAsked();
   const browser = await chromium.launch({
-    headless: process.env.HEADED === undefined,
     args: chromiumArgs(linux, gpu),
     env: { ...process.env, ...chromiumEnv(linux, gpu) },
     ...(process.env.PW_CHANNEL ? { channel: process.env.PW_CHANNEL } : {}),
@@ -101,7 +101,7 @@ async function check(): Promise<void> {
       r.fulfill({ contentType: 'text/html', body: '<!doctype html>' }),
     );
     await page.goto('http://localhost/');
-    const drawn: Drawn = await page.evaluate(async () => {
+    return await page.evaluate(async () => {
       const gl = document.createElement('canvas').getContext('webgl2');
       const ext = gl?.getExtension('WEBGL_debug_renderer_info');
       const webgl2 =
@@ -126,21 +126,27 @@ async function check(): Promise<void> {
               .join(', ');
       return { webgl2, webgpu };
     });
-    process.stdout.write(
-      `**The GPU:** ${linux ? gpu : 'the machine’s own'}. WebGL 2 draws on ${drawn.webgl2}; WebGPU on ${drawn.webgpu}.\n\n`,
-    );
-    if (linux) {
-      // The WebGPU project skips its tests where there is no adapter: one
-      // missing here would skip them all.
-      const ok = drawsOn(drawn, gpu);
-      if (!ok.webgl2 || !ok.webgpu) {
-        throw new Error(
-          `the page does not draw where ${gpu} should: WebGL 2 on ${drawn.webgl2}, WebGPU on ${drawn.webgpu}`,
-        );
-      }
-    }
   } finally {
     await browser.close();
+  }
+}
+
+async function check(): Promise<void> {
+  const linux = process.platform === 'linux';
+  const webgl2 = softwareGPUOf('webgl2');
+  const onWebGL2 = (await drawnOn(webgl2, linux)).webgl2;
+  const onWebGPU = (await drawnOn(softwareGPUOf('webgpu'), linux)).webgpu;
+  process.stdout.write(`**The GPU:** WebGL 2 draws on ${onWebGL2}; WebGPU on ${onWebGPU}.\n\n`);
+  if (!linux) {
+    return;
+  }
+  // The WebGPU projects skip their tests where there is no adapter: one
+  // missing here would skip them all.
+  const wantWebGL2 = webgl2 === 'lavapipe' ? /llvmpipe/i : /swiftshader/i;
+  if (!wantWebGL2.test(onWebGL2) || !/swiftshader/i.test(onWebGPU)) {
+    throw new Error(
+      `WebGL 2 should draw on ${webgl2} and WebGPU on SwiftShader: WebGL 2 draws on ${onWebGL2}, WebGPU on ${onWebGPU}`,
+    );
   }
 }
 

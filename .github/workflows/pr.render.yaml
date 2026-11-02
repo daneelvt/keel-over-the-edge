@@ -120,7 +120,9 @@ jobs:
         run: sudo apt-get install -y --no-install-recommends mesa-vulkan-drivers
       - name: The page draws on lavapipe (WebGL 2) and SwiftShader (WebGPU)
         working-directory: client
-        run: node e2e/gpu.ts >> "$GITHUB_STEP_SUMMARY"
+        # bash as named, so that the pipe fails when the check does.
+        shell: bash
+        run: node e2e/gpu.ts | tee -a "$GITHUB_STEP_SUMMARY"
       - name: The game on ${{ matrix.project }}, the ${{ matrix.tests }} tests, part ${{ matrix.shard }} of ${{ matrix.shards }}
         working-directory: client
         env:
