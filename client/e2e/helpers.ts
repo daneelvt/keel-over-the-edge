@@ -182,13 +182,32 @@ export interface Made {
   recoveryCode: string;
 }
 
+let lastStamp = -1;
+
+/**
+ * Seven digits for a name no other test has taken: the clock's, in
+ * hundredths of a second (the same again after nearly three hours), and
+ * last the worker's own digit, as the workers start tests at the same
+ * moment. Within a test only.
+ */
+export function stamp(): string {
+  let n = Math.floor(Date.now() / 10) % 1_000_000;
+  if (n === lastStamp) {
+    // A second name within the same hundredth, in this worker.
+    n = (n + 1) % 1_000_000;
+  }
+  lastStamp = n;
+  const worker = test.info().parallelIndex % 10;
+  return String(n * 10 + worker).padStart(7, '0');
+}
+
 /**
  * Makes a sailor in the context, as the start screen does, through the
  * server's routes, with a passkey of the test's own: its session's cookie
  * is the context's.
  */
 export async function sailor(context: BrowserContext, word = 'Sailor'): Promise<Made> {
-  const name = `${word} ${Date.now() % 10_000_000}`;
+  const name = `${word} ${stamp()}`;
   const begun = await context.request.post('/account/begin', {
     data: { name, look: data.sailors[0]?.id ?? '' },
   });

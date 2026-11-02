@@ -14,7 +14,7 @@
 
 import { type BrowserContext, expect, type Page, test } from '@playwright/test';
 import data from '../src/catalog/catalog.gen.json' with { type: 'json' };
-import { GAME, holdPasskeys, sailor, setSail, signInWith } from './helpers';
+import { GAME, holdPasskeys, sailor, setSail, signInWith, stamp } from './helpers';
 
 const look = data.sailors[0]?.id ?? '';
 
@@ -231,7 +231,7 @@ test('Chrome’s own authenticator: a passkey made and used at localhost, forgot
     (await cdp.send('WebAuthn.getCredentials', { authenticatorId })).credentials;
 
   await openStart(page);
-  const name = `Chrome ${Date.now() % 10_000_000}`;
+  const name = `Chrome ${stamp()}`;
   await page.getByLabel('Your sailor’s name').fill(name);
   await page.getByRole('button', { name: 'Set sail' }).click();
   await expect(page.getByRole('heading', { name: 'Keep your recovery code' })).toBeVisible({

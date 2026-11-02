@@ -17,7 +17,7 @@
 import { createHash, randomBytes } from 'node:crypto';
 import { type BrowserContext, expect, type Page, test } from '@playwright/test';
 import data from '../src/catalog/catalog.gen.json' with { type: 'json' };
-import { GAME, holdPasskeys, type Made, sailor, setSail } from './helpers';
+import { GAME, holdPasskeys, type Made, sailor, setSail, stamp } from './helpers';
 import { assertPasskey } from './passkey';
 
 /**
@@ -149,7 +149,7 @@ test('a new sailor’s machine sailor: the choice, the form, how to connect, and
   await context.credentials.install();
   await page.goto(GAME);
   // A name of the most letters a sailor may have, which wraps on a phone.
-  const player = `Wavecrestmak ${String(Date.now() % 10_000_000).padStart(7, '0')}`;
+  const player = `Wavecrestmak ${stamp()}`;
   await page.getByLabel('Your sailor’s name').fill(player);
   await page.getByRole('button', { name: 'Set sail' }).click();
   await page.getByRole('button', { name: 'I’ve written it down' }).click({ timeout: 30_000 });
@@ -174,7 +174,7 @@ test('a new sailor’s machine sailor: the choice, the form, how to connect, and
   await page.getByLabel('Its name').fill(taken.name);
   await page.getByRole('button', { name: 'Make it' }).click();
   await expect(page.locator('#machine-problem')).toHaveText(/is taken/);
-  const name = `Brassy ${Date.now() % 10_000_000}`;
+  const name = `Brassy ${stamp()}`;
   await page.getByLabel('Its name').fill(name);
   await page.getByRole('button', { name: 'Make it' }).click();
 
@@ -221,7 +221,7 @@ test('every entry shows the machine sailors before the sea, the boat still in th
   // A name of the most letters a sailor may have, which wraps on a phone.
   const made = await sailor(context, 'Wavecrestmak');
   const player = made.name;
-  const name = `Brassy ${Date.now() % 10_000_000}`;
+  const name = `Brassy ${stamp()}`;
   await machine(context, name);
   await page.goto(GAME);
   await twoPanels(page, player, name);
@@ -246,7 +246,7 @@ test('the account page: an app revoked, a connection token made once and revoked
   test.setTimeout(150_000);
   // A name of the most letters a sailor may have, which wraps on a phone.
   const made = await sailor(context, 'Wavecrestmar');
-  const name = `Cog ${Date.now() % 10_000_000}`;
+  const name = `Cog ${stamp()}`;
   const id = await machine(context, name);
   await approveApp(context, made, id);
   await holdPasskeys(context, made.passkey);

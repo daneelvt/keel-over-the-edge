@@ -16,7 +16,7 @@
 
 import { type BrowserContext, expect, type Page, test } from '@playwright/test';
 import data from '../src/catalog/catalog.gen.json' with { type: 'json' };
-import { GAME, holdPasskeys, type Made, sailor, setSail } from './helpers';
+import { GAME, holdPasskeys, type Made, sailor, setSail, stamp } from './helpers';
 import { assertPasskey } from './passkey';
 
 /** A machine sailor made through the server's route, its look the catalog's first; its id. */
@@ -85,7 +85,7 @@ test('a machine sailor watched from its owner’s start screen: whose boat, noth
 }) => {
   test.setTimeout(240_000);
   const made = await sailor(context, 'Owner');
-  const name = `Watched ${Date.now() % 10_000_000}`;
+  const name = `Watched ${stamp()}`;
   const id = await machine(context, name);
   const bearer = await token(context, made, id);
   // The machine sailor to sea, as its AI app takes it there.
@@ -203,8 +203,8 @@ test('two machine sailors at sea: the list in order of the edge, a card, Follow,
   // Two owners, a machine sailor each (an account may have only so
   // many), and a watcher with none: no sailor of the watcher's own comes
   // first.
-  const stamp = Date.now() % 10_000_000;
-  const names = [`Ahead ${stamp}`, `Astern ${stamp}`];
+  const digits = stamp();
+  const names = [`Ahead ${digits}`, `Astern ${digits}`];
   for (const n of names) {
     const owner = await browser.newContext();
     try {
@@ -221,7 +221,7 @@ test('two machine sailors at sea: the list in order of the edge, a card, Follow,
   await openList(page);
 
   // Only these two: the shared world has others' machine sailors at sea.
-  await page.getByRole('searchbox', { name: 'Part of a name' }).fill(String(stamp));
+  await page.getByRole('searchbox', { name: 'Part of a name' }).fill(digits);
   await page.getByRole('button', { name: 'Nearest the edge' }).click();
   await expect(page.getByRole('button', { name: 'Nearest the edge' })).toHaveAttribute(
     'aria-pressed',

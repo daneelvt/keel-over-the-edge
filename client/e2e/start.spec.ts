@@ -9,16 +9,16 @@
 
 import { type BrowserContext, expect, type Page, test } from '@playwright/test';
 import data from '../src/catalog/catalog.gen.json' with { type: 'json' };
-import { GAME, sailor, setSail } from './helpers';
+import { GAME, sailor, setSail, stamp } from './helpers';
 
 test.beforeEach(async ({ context }) => {
   // The browser's prompt, answered by Playwright: it holds no passkey yet.
   await context.credentials.install();
 });
 
-/** A name no other test has taken: a word and digits from the clock. */
+/** A name no other test has taken: a word and stamp()'s digits. */
 function freshName(word: string): string {
-  return `${word} ${Date.now() % 10_000_000}`;
+  return `${word} ${stamp()}`;
 }
 
 async function openStart(page: Page): Promise<void> {
