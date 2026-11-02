@@ -17,7 +17,7 @@
 
 import { type BrowserContext, expect, type Page, test } from '@playwright/test';
 import data from '../src/catalog/catalog.gen.json' with { type: 'json' };
-import { holdPasskeys, type Made, sailor, setSail, softwareGPU } from './helpers';
+import { drained, holdPasskeys, type Made, sailor, setSail, softwareGPU } from './helpers';
 import { assertPasskey } from './passkey';
 
 test.beforeEach(() => {
@@ -287,8 +287,12 @@ test('a human sailor comes to Set sail on entry; watchable only once they tick t
   page,
 }) => {
   test.setTimeout(300_000);
-  // The sailor to be watched, on a page of their own.
-  const other = await browser.newContext();
+  // Two pages on CI's one software GPU, where a full-size sea's frames run
+  // some 20 s behind the page and the other page waits for them, and the
+  // watcher's start screen draws a sea that cannot be held: small pages,
+  // the watcher's a phone's. The sailor to be watched, on a page of their own.
+  await page.setViewportSize({ width: 360, height: 640 });
+  const other = await browser.newContext({ viewport: { width: 320, height: 200 } });
   const seen = await other.newPage();
   try {
     const them = await sailor(other, 'Seen');
@@ -302,6 +306,9 @@ test('a human sailor comes to Set sail on entry; watchable only once they tick t
     await seen.waitForFunction(() => globalThis.keel?.net().status === 'sailing', null, {
       timeout: 60_000,
     });
+    // The watcher's page starts beside the sea on CI's one software GPU:
+    // the sea held meanwhile, as a hidden tab is, the boat sailing on.
+    await seen.evaluate(() => globalThis.keel.hold(true));
 
     // Unticked: the watcher, on the start screen, does not find them.
     const made = await sailor(context, 'Watcher');
@@ -316,6 +323,7 @@ test('a human sailor comes to Set sail on entry; watchable only once they tick t
 
     // Back at the Set sail screen after a reload, the boat still at sea:
     // the box is the voyage's, unticked; ticked, the voyage can be watched.
+    await drained(seen);
     await seen.reload();
     await expect(yours).toContainText('at sea', { timeout: 90_000 });
     await expect(box).not.toBeChecked();

@@ -17,16 +17,14 @@ import {
   momentOf,
   type SceneLook,
   sampleScene,
-  type TimeMode,
   useMoment,
   type WeatherScene,
   type WeatherSource,
 } from './weather';
 import { paintWeather, type WeatherLook } from './weatherpaint';
 
-/** The slider and the switches, as the chart holds them: its way, its minutes from now, the layers. */
+/** The slider and the switches, as the chart holds them: its minutes from now, the layers. */
 export interface WeatherChoice {
-  mode: TimeMode;
   minutes: number;
   layers: Layers;
 }
@@ -93,7 +91,7 @@ export class ChartWeather {
   /** The moment the slider shows now. */
   moment(): Moment {
     const c = this.#choice();
-    return momentOf(c.mode, c.minutes, this.#src);
+    return momentOf(c.minutes, this.#src);
   }
 
   /** Brings the weather to the slider's moment; true if it was painted afresh. */
@@ -103,7 +101,7 @@ export class ChartWeather {
       return false;
     }
     const c = this.#choice();
-    const m = momentOf(c.mode, c.minutes, this.#src);
+    const m = momentOf(c.minutes, this.#src);
     const layers = Object.entries(c.layers)
       .map(([k, v]) => (v ? k : ''))
       .join();

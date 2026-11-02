@@ -7,13 +7,10 @@ import { describe, expect, test } from 'vitest';
 import { clockText, momentClock, momentText } from './chartweather';
 
 describe('the slider’s lettering', () => {
-  test('now, a minute ahead or a minute behind, with the time of day', () => {
+  test('now, or a minute ahead with the time of day', () => {
     expect(momentText({ kind: 'now', tick: 0, minutes: 0, issue: null }, '4:20 PM')).toBe('Now');
     expect(momentText({ kind: 'ahead', tick: 0, minutes: 40, issue: null }, '4:20 PM')).toBe(
       'In 40 min · 4:20 PM',
-    );
-    expect(momentText({ kind: 'past', tick: 0, minutes: -40, issue: null }, '3:40 PM')).toBe(
-      '40 min ago · 3:40 PM',
     );
   });
 

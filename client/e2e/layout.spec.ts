@@ -21,6 +21,11 @@
 // above it: there the case's face and its pushers alone may stand over the
 // masthead. Its complications, hanging under the compass, may not.
 //
+// The chart's strip and its weather's case are one row each on every
+// screen, the countdown beside or under the strip, and the layers' sheet
+// and the key, open, stand on the case within the screen, covering
+// neither it nor the strip.
+//
 // Then the list of sailors to watch and the card about one, on the start
 // screen, at the same screens: full rows and a full card, the server's
 // answers stood in for, with a twenty-letter name. Watch is in view, no
@@ -719,6 +724,101 @@ async function inView(page: Page, sel: string): Promise<boolean> {
       return ok;
     });
 }
+
+/** The chart's controls' boxes: its strip, its countdown, the weather's case and what is open on it. */
+async function chartParts(page: Page): Promise<Box[]> {
+  return page.evaluate(() => {
+    const parts: [string, string][] = [
+      ['the strip', '.chart-strip'],
+      ['the countdown', '.chart-falls'],
+      ['the weather’s case', '.chart-time'],
+      ['the layers', '.chart-layers'],
+      ['the key', '.chart-key'],
+    ];
+    return parts.flatMap(([name, sel]) => {
+      const e = document.querySelector(sel);
+      if (e === null) {
+        return [];
+      }
+      const r = e.getBoundingClientRect();
+      return [{ name, left: r.left, top: r.top, right: r.right, bottom: r.bottom }];
+    });
+  });
+}
+
+/** The tallest the chart's strip and its weather's case may be, px: a row of keys in a frame. */
+const STRIP = 48;
+const TIME_CASE = 56;
+
+test('the chart’s strip and its weather’s case are one row each on every screen, and what opens on them stays on it', async ({
+  page,
+}) => {
+  test.skip(test.info().project.name === 'webgpu', 'the controls are the same on either back end');
+  await page.setViewportSize({ width: SCREENS[0].width, height: SCREENS[0].height });
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await openScene(page, 'world=1', true);
+  const now = Date.now();
+  await page.evaluate(
+    ({ now }) => {
+      const k = globalThis.keel;
+      // In the world's last days, its countdown at the chart's rim.
+      k.setWorldEnd({
+        epoch: now - 5 * 86_400_000,
+        ends: now + 2 * 86_400_000,
+        closing: now - 86_400_000,
+      });
+      k.issueForecast();
+      k.openChart('chart');
+      k.fitChart();
+      k.render();
+    },
+    { now },
+  );
+  const found: string[] = [];
+  for (const s of SCREENS) {
+    await page.setViewportSize({ width: s.width, height: s.height });
+    await page.waitForFunction(
+      ({ width, height }) => innerWidth === width && innerHeight === height,
+      { width: s.width, height: s.height },
+    );
+    for (const open of ['', 'Layers', 'Key']) {
+      const button = page.getByRole('button', { name: open, exact: true });
+      if (open !== '') {
+        await button.click();
+      }
+      const parts = await chartParts(page);
+      for (const p of parts) {
+        if (p.left < -0.5 || p.top < -0.5 || p.right > s.width + 0.5 || p.bottom > s.height + 0.5) {
+          found.push(
+            `${s.name}, ${open || 'nothing'} open: ${p.name} is off the screen at ${edges(p)}`,
+          );
+        }
+      }
+      for (let i = 0; i < parts.length; i++) {
+        for (let j = i + 1; j < parts.length; j++) {
+          const [a, b] = [parts[i] as Box, parts[j] as Box];
+          if (overlap(a, b)) {
+            found.push(`${s.name}, ${open || 'nothing'} open: ${a.name} covers ${b.name}`);
+          }
+        }
+      }
+      const tall = (name: string, most: number) => {
+        const p = parts.find((x) => x.name === name);
+        if (p === undefined) {
+          found.push(`${s.name}: no ${name}`);
+        } else if (p.bottom - p.top > most) {
+          found.push(`${s.name}: ${name} is ${Math.round(p.bottom - p.top)} px tall`);
+        }
+      };
+      tall('the strip', STRIP);
+      tall('the weather’s case', TIME_CASE);
+      if (open !== '') {
+        await button.click();
+      }
+    }
+  }
+  expect(found).toEqual([]);
+});
 
 test('the list of sailors to watch and the card fit every screen, Watch in view', async ({
   context,
