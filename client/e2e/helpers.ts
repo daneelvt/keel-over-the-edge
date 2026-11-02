@@ -12,7 +12,7 @@ declare global {
 }
 
 /**
- * Whether the browser draws on CI's software GPU (SwiftShader, on Linux),
+ * Whether the browser draws on CI's software GPU (on Linux, e2e/gpu.ts),
  * where every pixel and every compute pass is the CPU's. There the pages
  * open on the cheapest rung of their ladder, unless a test asks for the
  * best: what the tests of geometry, sailing and the network check does not
@@ -20,7 +20,7 @@ declare global {
  * every page opens on the best rung.
  */
 // SOFTWARE_GPU=1 takes the same paths on any machine, to try them.
-export const softwareGPU = process.platform === 'linux' || process.env.SOFTWARE_GPU === '1';
+export const softwareGPU = process.platform === 'linux' || (process.env.SOFTWARE_GPU ?? '') !== '';
 
 /**
  * Opens the offline sandbox on the project's back end with the test hooks,
