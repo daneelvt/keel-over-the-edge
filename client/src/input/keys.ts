@@ -84,6 +84,9 @@ export class KeyInput {
         break;
       case 'trim':
       case 'ease':
+        if (!this.#held[a]) {
+          this.#sheet.take();
+        }
         this.#held[a] = true;
         break;
       case 'pilot':

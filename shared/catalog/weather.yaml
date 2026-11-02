@@ -60,13 +60,15 @@ weather:
     speedCentre: 0.65
     speedRim: 1.35
     rim: 4.2 # nautical miles: the mist band
-    # The refuge at the centre: within refugeInner its limits hold in full,
-    # beyond refugeOuter not at all, and between them they blend. The mean
-    # wind above its knee is passed through knee + soft × tanh((v − knee) /
-    # soft), soft the limit less the knee, so that it nears the limit and
-    # never passes it; then the wind with its gusts the same way.
-    refugeInner: 1 # nautical miles: the refuge's own radius
-    refugeOuter: 1.4 # nautical miles
+    # The refuge is Port Royal's harbour, its basin and its narrows: within
+    # refugeInner of them its limits hold in full, beyond refugeOuter not at
+    # all, and between them they blend, so the refuge reaches a little out
+    # of the mouth. The mean wind above its knee is passed through knee +
+    # soft × tanh((v − knee) / soft), soft the limit less the knee, so that
+    # it nears the limit and never passes it; then the wind with its gusts
+    # the same way.
+    refugeInner: 0 # m beyond the harbour
+    refugeOuter: 150 # m beyond the harbour
     refugeMeanKnee: 10 # knots
     refugeMean: 14 # knots: Beaufort 4
     refugeWindKnee: 14 # knots
@@ -75,6 +77,21 @@ weather:
     # waters raise no more at the quay than one did.
     refugeSwellKnee: 0.7 # m
     refugeSwell: 1 # m
+    # The start's breeze: about Port Royal, outside its harbour, the mean
+    # wind below breezeKnee is passed through knee − soft × tanh((knee − v)
+    # / soft), soft the knee less the floor, so that a calm there is a light
+    # breeze, Beaufort 2, in which a boat starting in the roads sails away:
+    # 0 knots becomes 5, 3 becomes 5.2, 6 becomes 6.3, and above the knee
+    # nothing changes. It is applied after the land's shelter, so the
+    # island's lee cannot take it away. It holds in full within
+    # breezeWithin of the centre and not at all beyond breezeFade; in the
+    # harbour it fades from the mouth to nothing breezeInside in, so the
+    # basin keeps its calm.
+    breezeWithin: 0.8 # nautical miles
+    breezeFade: 1.2 # nautical miles
+    breezeKnee: 8 # knots
+    breezeFloor: 5 # knots: a light breeze
+    breezeInside: 100 # m
     # Gusts are stronger in the outer waters: the gust factor's excess over
     # 1 grows by this share from rimGustsFrom to the rim.
     rimGusts: 0.3

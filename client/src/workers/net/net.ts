@@ -13,7 +13,7 @@
 import type { FromWorker, HelloVersions, Status, ToWorker, Traffic } from '../../net/messages';
 import { FLEET_RECORD_BYTES, writeRecord } from '../../net/view';
 import { afterClose } from './policy';
-import { lightSeen, Session } from './session';
+import { harbourOf, lightSeen, Session } from './session';
 
 /** The part of a WebSocket the worker uses. */
 export interface Socket {
@@ -256,6 +256,7 @@ export class NetWorker {
             circulation: w.circulation,
             tools: w.tools,
             light: w.light === undefined ? null : lightSeen(w.light),
+            harbour: w.harbour === undefined ? null : harbourOf(w.harbour),
             endsUs: Number(w.endsUs),
             closingUs: Number(w.closingUs),
             zone: w.zone,

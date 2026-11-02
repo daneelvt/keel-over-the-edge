@@ -370,7 +370,9 @@ func (o *Owner) place(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		x, y = hx, hy
-		if t.Kind == "main" {
+		if t.Kind == "main" && len(b.Start.Moorings) > 0 {
+			heading = b.Start.Moorings[0].Heading
+		} else if t.Kind == "main" {
 			heading = b.Start.HeadingOf(0)
 		} else if math.Hypot(t.X-x, t.Y-y) > 1 {
 			heading = math.Atan2(t.X-x, t.Y-y)

@@ -274,4 +274,122 @@ describe('the chase camera', () => {
     expect(cam.tilt).toBe(0);
     expect(cam.view.elevation).toBeCloseTo(CHASE.elevation, 2);
   });
+
+  /** The camera's bearing from the boat and the way it looks, as bearings clockwise from north, for a boat at (east, north). */
+  const seen = (cam: ChaseCamera, east: number, north: number) => {
+    const p = new Vector3();
+    const t = new Vector3();
+    // The scene's x is east and its z south.
+    cam.place3(east, 0, -north, p, t);
+    return {
+      from: Math.atan2(p.x - east, -(p.z + north)),
+      looks: Math.atan2(t.x - p.x, -(t.z - p.z)),
+    };
+  };
+
+  describe('a new boat’s opening view', () => {
+    const mouth = { east: -300, north: 800 };
+
+    test('stands beyond the boat from the harbour’s mouth, at the resting height and distance, looking at it', () => {
+      for (const [east, north, heading] of [
+        [200, -400, 0],
+        [-900, 100, 2.5],
+        [-300, -700, -1.2],
+        [600, 1300, Math.PI],
+      ] as const) {
+        const cam = new ChaseCamera();
+        cam.place(CHASE, heading);
+        cam.drag(80, -40, 0);
+        cam.zoom(1.6, 0);
+        cam.open(east, north, mouth.east, mouth.north);
+        expect(cam.opening).toBe(true);
+        const toBoat = Math.atan2(east - mouth.east, north - mouth.north);
+        const s = seen(cam, east, north);
+        expect(Math.abs(angleDiff(s.from, toBoat))).toBeLessThan(1e-9);
+        expect(Math.abs(angleDiff(s.looks, toBoat + Math.PI))).toBeLessThan(1e-9);
+        expect(cam.view.azimuth).toBeCloseTo(angleDiff(toBoat - heading - Math.PI, 0), 12);
+        expect(cam.view.elevation).toBe(CHASE.elevation);
+        expect(cam.view.distance).toBe(CHASE.distance);
+        expect(cam.tilt).toBe(0);
+      }
+    });
+
+    test('holds, whichever way the boat turns, until the first touch', () => {
+      const cam = new ChaseCamera();
+      cam.place(CHASE, 0.4);
+      cam.open(200, -400, mouth.east, mouth.north);
+      const toBoat = Math.atan2(200 - mouth.east, -400 - mouth.north);
+      let t = 0;
+      for (let i = 0; i < (60 * 3 * EASE_BACK_AFTER) / 1000; i++) {
+        t += 1000 / 60;
+        // The boat swings about as it lies.
+        cam.update(1 / 60, 0.4 + 0.8 * Math.sin(t / 1500), t);
+      }
+      expect(cam.opening).toBe(true);
+      expect(Math.abs(angleDiff(seen(cam, 200, -400).from, toBoat))).toBeLessThan(1e-9);
+    });
+
+    /** Runs the camera for seconds behind a boat heading 0.4; returns the time at the end. */
+    const run = (cam: ChaseCamera, t: number, seconds: number) => {
+      for (let i = 0; i < seconds * 60; i++) {
+        t += 1000 / 60;
+        cam.update(1 / 60, 0.4, t);
+      }
+      return t;
+    };
+    const opened = () => {
+      const cam = new ChaseCamera();
+      cam.place(CHASE, 0.4);
+      cam.open(200, -400, mouth.east, mouth.north);
+      return { cam, t: run(cam, 0, 1) };
+    };
+    const behind = (cam: ChaseCamera) =>
+      Math.abs(angleDiff(cam.view.azimuth, CHASE.azimuth)) < 0.01 &&
+      Math.abs(cam.view.elevation - CHASE.elevation) < 0.01;
+
+    test('a touch of the helm, the sheet or the autopilot eases it behind the boat at once', () => {
+      const { cam, t } = opened();
+      expect(behind(cam)).toBe(false);
+      cam.controlsTouched();
+      expect(cam.opening).toBe(false);
+      run(cam, t, 5);
+      expect(behind(cam)).toBe(true);
+    });
+
+    test('a look round lets it go, easing back five seconds after the last touch', () => {
+      for (const touch of ['drag', 'pinch', 'hold'] as const) {
+        const { cam, t } = opened();
+        if (touch === 'drag') {
+          cam.drag(-30, 0, t);
+        } else if (touch === 'pinch') {
+          cam.zoom(1.2, t);
+        } else {
+          cam.holding = true;
+          cam.update(1 / 60, 0.4, t);
+          cam.holding = false;
+        }
+        expect(cam.opening).toBe(false);
+        const looked = cam.view.azimuth;
+        let at = run(cam, t, (EASE_BACK_AFTER - 500) / 1000);
+        expect(cam.view.azimuth).toBe(looked);
+        at = run(cam, at, 6);
+        expect(behind(cam)).toBe(true);
+      }
+    });
+
+    test('Behind the boat, a placed view or another’s boat watched lets it go', () => {
+      for (const end of ['behind', 'place', 'watch'] as const) {
+        const { cam, t } = opened();
+        if (end === 'behind') {
+          cam.behind();
+        } else if (end === 'place') {
+          cam.place(CHASE, 0.4);
+        } else {
+          cam.easesBack = false;
+        }
+        run(cam, t, 0.1);
+        expect(cam.opening).toBe(false);
+      }
+    });
+  });
 });

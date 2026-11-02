@@ -133,6 +133,12 @@ export interface Boat {
    * How high its lookout's eye is above the sea, in m: what it sees over the horizon.
    */
   lookout: number;
+  /**
+   * Its sheet for a start from rest: pairs of an angle off the wind, in degrees, and the sheet there, from 0 hauled in to 1 let fly, by rising angle, read linearly between them.
+   *
+   * @minItems 1
+   */
+  startSheet: [[number, number], ...[number, number][]];
   physics: BoatPhysics;
   art: BoatArt;
 }
@@ -997,11 +1003,11 @@ export interface WeatherDisk {
    */
   rim: number;
   /**
-   * Within this the refuge's limits hold in full, in nautical miles.
+   * Within this of Port Royal's harbour the refuge's limits hold in full, in m.
    */
   refugeInner: number;
   /**
-   * Beyond this the refuge's limits do not hold, in nautical miles.
+   * Beyond this of Port Royal's harbour the refuge's limits do not hold, in m.
    */
   refugeOuter: number;
   /**
@@ -1028,6 +1034,26 @@ export interface WeatherDisk {
    * The swell the refuge holds to, in m: above its knee.
    */
   refugeSwell: number;
+  /**
+   * Within this of the centre the start's breeze holds in full, in nautical miles.
+   */
+  breezeWithin: number;
+  /**
+   * Beyond this of the centre the start's breeze does not hold, in nautical miles.
+   */
+  breezeFade: number;
+  /**
+   * The start's breeze lifts the mean wind below this, in knots.
+   */
+  breezeKnee: number;
+  /**
+   * The mean wind the start's breeze lifts toward, in knots: below its knee.
+   */
+  breezeFloor: number;
+  /**
+   * Inside Port Royal's harbour the start's breeze fades to nothing this far from the mouth, in m.
+   */
+  breezeInside: number;
   /**
    * The gust factor's excess over 1 grows by this share toward the rim.
    */
@@ -3357,7 +3383,7 @@ export interface WorldShelter {
   offsets: [number, number, number, number];
 }
 /**
- * Where boats start: moored in Port Royal's basin, then the roads off its coast with the most room.
+ * Where boats start: in the roads off Port Royal's harbour mouth, then the roads off its coast with the most room. Port Royal's basin has moorings, for boats that come in.
  *
  * This interface was referenced by `Catalog`'s JSON-Schema
  * via the `definition` "WorldStart".
@@ -3404,6 +3430,7 @@ export interface WorldStart {
    */
   places: number;
   moorings: StartMoorings;
+  fan: StartFan;
 }
 /**
  * The moorings across Port Royal's basin.
@@ -3421,6 +3448,31 @@ export interface StartMoorings {
    * At least this many.
    */
   least: number;
+}
+/**
+ * The start's places in the roads off Port Royal's harbour mouth, nearest it first, each in sight of it.
+ */
+export interface StartFan {
+  /**
+   * Places lie within this of the mouth, in m.
+   */
+  reach: number;
+  /**
+   * And no nearer it than this, in m.
+   */
+  nearest: number;
+  /**
+   * Clear of a fairway this wide running straight out of the narrows, in m.
+   */
+  fairway: number;
+  /**
+   * At least this many places lie in the fan, the first of the start.
+   */
+  first: number;
+  /**
+   * Those within this of the mouth, in m.
+   */
+  firstWithin: number;
 }
 /**
  * A boat aground.
@@ -6410,4 +6462,4 @@ export interface NewsColumn {
 }
 
 /** The catalog version (tools/catalog). */
-export const CATALOG_VERSION = 'abcc37dafb1e927d';
+export const CATALOG_VERSION = 'de5e6f7cacacb033';

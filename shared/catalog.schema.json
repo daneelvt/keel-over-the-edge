@@ -86,19 +86,24 @@
       "description": "The wind over the disk: how its speed rises toward the rim, the refuge at the centre, the stronger gusts of the outer waters and the turning of the difference across the disk.",
       "type": "object",
       "additionalProperties": false,
-      "required": ["speedCentre", "speedRim", "rim", "refugeInner", "refugeOuter", "refugeMeanKnee", "refugeMean", "refugeWindKnee", "refugeWind", "refugeSwellKnee", "refugeSwell", "rimGusts", "rimGustsFrom", "acrossTurn", "edge", "fallDraftFrom", "fallDraft"],
+      "required": ["speedCentre", "speedRim", "rim", "refugeInner", "refugeOuter", "refugeMeanKnee", "refugeMean", "refugeWindKnee", "refugeWind", "refugeSwellKnee", "refugeSwell", "breezeWithin", "breezeFade", "breezeKnee", "breezeFloor", "breezeInside", "rimGusts", "rimGustsFrom", "acrossTurn", "edge", "fallDraftFrom", "fallDraft"],
       "properties": {
         "speedCentre": { "description": "The wind's speed at the centre, as a share of a spell's wind at mid-disk.", "type": "number", "minimum": 0, "maximum": 2 },
         "speedRim": { "description": "The wind's speed at the rim, as a share of a spell's wind at mid-disk.", "type": "number", "minimum": 0, "maximum": 2 },
         "rim": { "description": "Where the speed reaches its share at the rim: the mist band, in nautical miles.", "type": "number", "exclusiveMinimum": 0, "maximum": 10 },
-        "refugeInner": { "description": "Within this the refuge's limits hold in full, in nautical miles.", "type": "number", "minimum": 0, "maximum": 10 },
-        "refugeOuter": { "description": "Beyond this the refuge's limits do not hold, in nautical miles.", "type": "number", "exclusiveMinimum": 0, "maximum": 10 },
+        "refugeInner": { "description": "Within this of Port Royal's harbour the refuge's limits hold in full, in m.", "type": "number", "minimum": 0, "maximum": 2000 },
+        "refugeOuter": { "description": "Beyond this of Port Royal's harbour the refuge's limits do not hold, in m.", "type": "number", "exclusiveMinimum": 0, "maximum": 2000 },
         "refugeMeanKnee": { "description": "The refuge softens the mean wind above this, in knots.", "type": "number", "minimum": 0, "maximum": 100 },
         "refugeMean": { "description": "The mean wind the refuge holds to, in knots.", "type": "number", "exclusiveMinimum": 0, "maximum": 100 },
         "refugeWindKnee": { "description": "The refuge softens the wind with its gusts above this, in knots.", "type": "number", "minimum": 0, "maximum": 100 },
         "refugeWind": { "description": "The wind with its gusts the refuge holds to, in knots.", "type": "number", "exclusiveMinimum": 0, "maximum": 100 },
         "refugeSwellKnee": { "description": "The refuge softens the storms' swell above this, in m.", "type": "number", "minimum": 0, "maximum": 10 },
         "refugeSwell": { "description": "The swell the refuge holds to, in m: above its knee.", "type": "number", "exclusiveMinimum": 0, "maximum": 10 },
+        "breezeWithin": { "description": "Within this of the centre the start's breeze holds in full, in nautical miles.", "type": "number", "minimum": 0, "maximum": 10 },
+        "breezeFade": { "description": "Beyond this of the centre the start's breeze does not hold, in nautical miles.", "type": "number", "exclusiveMinimum": 0, "maximum": 10 },
+        "breezeKnee": { "description": "The start's breeze lifts the mean wind below this, in knots.", "type": "number", "minimum": 0, "maximum": 100 },
+        "breezeFloor": { "description": "The mean wind the start's breeze lifts toward, in knots: below its knee.", "type": "number", "minimum": 0, "maximum": 100 },
+        "breezeInside": { "description": "Inside Port Royal's harbour the start's breeze fades to nothing this far from the mouth, in m.", "type": "number", "minimum": 0, "maximum": 2000 },
         "rimGusts": { "description": "The gust factor's excess over 1 grows by this share toward the rim.", "type": "number", "minimum": 0, "maximum": 2 },
         "rimGustsFrom": { "description": "From here to the rim, in nautical miles.", "type": "number", "minimum": 0, "maximum": 10 },
         "acrossTurn": { "description": "The shortest and longest time the axis of the wind's difference across the disk takes to turn once, in hours.", "type": "array", "minItems": 2, "maxItems": 2, "items": { "type": "number", "minimum": 0.1, "maximum": 1000 } },
@@ -773,7 +778,7 @@
     "Boat": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["id", "name", "description", "capacity", "lengthOverall", "beam", "lights", "lookout", "physics", "art"],
+      "required": ["id", "name", "description", "capacity", "lengthOverall", "beam", "lights", "lookout", "startSheet", "physics", "art"],
       "properties": {
         "id": { "$ref": "#/$defs/Id" },
         "name": { "description": "Display name.", "type": "string", "minLength": 1 },
@@ -783,6 +788,17 @@
         "beam": { "description": "Greatest width of the hull, in metres.", "type": "number", "exclusiveMinimum": 0, "maximum": 30 },
         "lights": { "description": "The navigation lights the boat shows by night. Together their arcs make the full circle once.", "type": "array", "minItems": 1, "uniqueItems": true, "items": { "$ref": "#/$defs/Light" } },
         "lookout": { "description": "How high its lookout's eye is above the sea, in m: what it sees over the horizon.", "type": "number", "exclusiveMinimum": 0, "maximum": 60 },
+        "startSheet": {
+          "description": "Its sheet for a start from rest: pairs of an angle off the wind, in degrees, and the sheet there, from 0 hauled in to 1 let fly, by rising angle, read linearly between them.",
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "array",
+            "minItems": 2,
+            "maxItems": 2,
+            "items": { "type": "number", "minimum": 0, "maximum": 180 }
+          }
+        },
         "physics": { "$ref": "#/$defs/BoatPhysics" },
         "art": { "$ref": "#/$defs/BoatArt" }
       }
@@ -3271,10 +3287,10 @@
     },
     "WorldStart": {
       "title": "WorldStart",
-      "description": "Where boats start: moored in Port Royal's basin, then the roads off its coast with the most room.",
+      "description": "Where boats start: in the roads off Port Royal's harbour mouth, then the roads off its coast with the most room. Port Royal's basin has moorings, for boats that come in.",
       "type": "object",
       "additionalProperties": false,
-      "required": ["within", "depth", "clear", "shoalDepth", "shoalClear", "joinDepth", "openDepth", "spacing", "row", "places", "moorings"],
+      "required": ["within", "depth", "clear", "shoalDepth", "shoalClear", "joinDepth", "openDepth", "spacing", "row", "places", "moorings", "fan"],
       "properties": {
         "within": {
           "description": "The start area begins within this of the coast, in m.",
@@ -3346,6 +3362,20 @@
             "spacing": { "description": "Moorings are this far apart, in m.", "type": "number", "minimum": 4, "maximum": 100 },
             "clear": { "description": "And this far from land, quays and piers, in m.", "type": "number", "minimum": 0, "maximum": 100 },
             "least": { "description": "At least this many.", "type": "integer", "minimum": 0, "maximum": 4096 }
+          }
+        },
+        "fan": {
+          "title": "StartFan",
+          "description": "The start's places in the roads off Port Royal's harbour mouth, nearest it first, each in sight of it.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["reach", "nearest", "fairway", "first", "firstWithin"],
+          "properties": {
+            "reach": { "description": "Places lie within this of the mouth, in m.", "type": "number", "exclusiveMinimum": 0, "maximum": 5000 },
+            "nearest": { "description": "And no nearer it than this, in m.", "type": "number", "minimum": 0, "maximum": 1000 },
+            "fairway": { "description": "Clear of a fairway this wide running straight out of the narrows, in m.", "type": "number", "minimum": 0, "maximum": 500 },
+            "first": { "description": "At least this many places lie in the fan, the first of the start.", "type": "integer", "minimum": 1, "maximum": 4096 },
+            "firstWithin": { "description": "Those within this of the mouth, in m.", "type": "number", "exclusiveMinimum": 0, "maximum": 5000 }
           }
         }
       }

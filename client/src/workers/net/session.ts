@@ -23,6 +23,7 @@ import {
   BumpPart,
   type ChartEntry as ChartEntryWire,
   ChartSubject,
+  type Harbour as HarbourTold,
   Lamp,
   type Light,
   type Place,
@@ -53,6 +54,7 @@ import {
   pastTold,
   spellRecord,
 } from '../../net/weather';
+import type { Harbour } from '../../predict/physics';
 import type { WatchEndWhy } from '../../ui/watchwords';
 
 export const BURST_PINGS = 8;
@@ -557,6 +559,22 @@ export function lightSeen(l: Light): LightSeen {
     phase: Number(l.phase),
     range: l.range,
     fogSignal: l.fogSignal,
+  };
+}
+
+/**
+ * A world's harbour as the page holds it, in metres: each field the
+ * decimetres sent over ten, as the server makes them, so the prediction's
+ * wind is the server's to the bit.
+ */
+export function harbourOf(h: HarbourTold): Harbour {
+  return {
+    x: h.east / 10,
+    y: h.north / 10,
+    radius: h.radius / 10,
+    mouthX: h.mouthEast / 10,
+    mouthY: h.mouthNorth / 10,
+    narrows: h.narrows / 10,
   };
 }
 

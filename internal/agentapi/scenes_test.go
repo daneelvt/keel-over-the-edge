@@ -226,10 +226,11 @@ func (sc *scene) namedAlso(name string, charted map[int32]bool) bool {
 	return false
 }
 
-// start is the first place of the world's start, in Port Royal's basin.
+// start is Port Royal's first mooring, in its basin, facing the narrows.
 func (sc *scene) start() physics.State {
 	b, _ := seed1()
-	return b.Terrain(sc.cat.PrepareGround()).Start[0]
+	m := b.Start.Moorings[0]
+	return physics.State{X: m.X, Y: m.Y, Heading: m.Heading}
 }
 
 func TestSceneACrossing(t *testing.T) {
@@ -332,11 +333,11 @@ func TestSceneOffAnIsland(t *testing.T) {
 	sc.parity(me, text)
 }
 
-// roads is the first place of the world's start in the roads, after the
-// moorings.
+// roads is the first place of the world's start, in the roads off Port
+// Royal's harbour mouth.
 func (sc *scene) roads() physics.State {
 	b, _ := seed1()
-	return b.Terrain(sc.cat.PrepareGround()).Start[b.Start.Moorings]
+	return b.Terrain(sc.cat.PrepareGround()).Start[0]
 }
 
 // A boat at rest in the roads in light air: its brief report has no
@@ -351,6 +352,33 @@ func TestSceneTheRoads(t *testing.T) {
 	}
 	golden(t, "roads", text)
 	sc.parity(me, text)
+}
+
+// A machine sailor's report says how its sail draws once it has for a
+// second and a half, as the phone's sheet does, with what to do: luffing
+// with the sheet let fly on a close reach, stalled with it hauled in hard
+// on a broad one.
+func TestSceneTheSailsState(t *testing.T) {
+	sc := newScene(t, 8, 0)
+	me := sc.boat(sc.roads(), true)
+	sc.steer(me, -60, 85)
+	sc.sail(5 * time.Second)
+	text, r := sc.reportOf(me, detailBrief)
+	if r.Pilot == nil || r.Pilot.Sail != "luffing: trim in" {
+		t.Errorf("the sheet let fly on a close reach:\n%s", text)
+	}
+	golden(t, "luffing", text)
+	// Another on a broad reach, under way, its sheet hauled in hard.
+	st := sc.roads()
+	st.X, st.Heading, st.Surge = st.X+40, 130*math.Pi/180, 2
+	other := sc.boat(st, true)
+	sc.steer(other, -130, 4)
+	sc.sail(5 * time.Second)
+	text, r = sc.reportOf(other, detailBrief)
+	if r.Pilot == nil || r.Pilot.Sail != "stalled: ease" {
+		t.Errorf("the sheet hauled in hard on a broad reach:\n%s", text)
+	}
+	golden(t, "stalled", text)
 }
 
 // A boat moored in Port Royal's basin: its brief report.

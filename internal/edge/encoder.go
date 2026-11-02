@@ -363,7 +363,7 @@ func (c *conn) welcome(f *bus.Frame) bool {
 	ok := c.send(&pb.ServerMessage{Body: &pb.ServerMessage_Welcome{Welcome: &pb.Welcome{
 		World: e.cfg.World, Tick: f.Tick, WorldTimeUs: wt.Microseconds(),
 		Boat: c.boat, Kind: uint32(f.Kind[s]), Rejoined: c.rejoined,
-		EpochUs: e.cfg.Epoch.UnixMicro(), Land: e.cfg.Land, Circulation: e.cfg.Circulation,
+		EpochUs: e.cfg.Epoch.UnixMicro(), Land: e.cfg.Land, Circulation: e.cfg.Circulation, Harbour: e.cfg.Harbour,
 		Tools: c.tools.Load(), Light: e.cfg.MainLight, EndsUs: e.endsUs.Load(), ClosingUs: e.closingUs.Load(), Zone: e.cfg.Zone,
 	}}}, outWelcome)
 	ok = ok && c.firstChart()

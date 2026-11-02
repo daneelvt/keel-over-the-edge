@@ -287,7 +287,32 @@ type Instruments struct {
 	SpeedOverGround  float32 // m/s
 	CourseOverGround float32 // rad clockwise from north
 	Depth            float32 // under the daggerboard, m; negative over land
+	// Sail is the sail's state as its agent is told it, the phone's sheet
+	// shows it: SailDrawing, or what the step says of it (physics.Out's
+	// Sail) once it has held SailHold ticks, until it has drawn again
+	// SailClear. SailRaw is what the last step said, and SailFor how many
+	// steps in a row it has said so.
+	Sail    uint8
+	SailRaw uint8
+	SailFor int32
 }
+
+// The sail's states, for Instruments.Sail: the physics'.
+const (
+	SailDrawing = physics.SailDrawing
+	SailLuffing = physics.SailLuffing
+	SailStalled = physics.SailStalled
+	SailAback   = physics.SailAback
+)
+
+// SailHold is how many ticks a sail must luff, stall or lie aback before
+// its state is told: a second and a half, so that a gust's flutter is not.
+// SailClear is how long it must draw again before the state clears: a
+// second. The phone's sheet control holds its word as long.
+const (
+	SailHold  = 45
+	SailClear = 30
+)
 
 // WeatherHistory is the most developer's weathers a frame keeps.
 const WeatherHistory = 8

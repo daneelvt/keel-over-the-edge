@@ -257,7 +257,7 @@ func tackOf(c *physics.Course) string {
 func pilotOf(f *bus.Frame, sl int32) *pilotFacts {
 	st := &f.State[sl]
 	pw := f.Pilot[sl]
-	p := &pilotFacts{Boom: degrees(math.Abs(st.Boom)), Sheet: degrees(st.SheetLimit), Rudder: degrees(math.Abs(st.Rudder)), Sail: sailOf(f.Sail[sl])}
+	p := &pilotFacts{Boom: degrees(math.Abs(st.Boom)), Sheet: degrees(st.SheetLimit), Rudder: degrees(math.Abs(st.Rudder)), Sail: sailOf(f, sl)}
 	if p.Rudder > 0 {
 		p.RudTo = side(st.Rudder)
 	}
@@ -283,16 +283,26 @@ func pilotOf(f *bus.Frame, sl int32) *pilotFacts {
 	return p
 }
 
-// sailOf is the sail's flow, from the sail byte: drawing, luffing,
-// stalled or aback, the foot's and the head's when they differ.
-func sailOf(b uint8) string {
+// sailOf is how the sail of the boat in slot sl draws. A machine boat's is
+// its state as the phone's sheet shows it, held a moment so a gust's
+// flutter is not told, with what to do: drawing; luffing: trim in;
+// stalled: ease; or aback. Another's is its flow as the last step left
+// it, from the sail byte, the foot's and the head's when they differ.
+func sailOf(f *bus.Frame, sl int32) string {
+	if f.Machine[sl] {
+		return sailWords[f.Instruments[sl].Sail]
+	}
 	words := [...]string{physics.FlowLuffing: "luffing", physics.FlowAttached: "drawing", physics.FlowStalled: "stalled", physics.FlowAback: "aback"}
+	b := f.Sail[sl]
 	foot, head := (b>>4)&3, (b>>6)&3
 	if foot == head {
 		return words[foot]
 	}
 	return words[foot] + ", " + words[head] + " at the head"
 }
+
+// sailWords are a held sail state's words, by bus.Instruments.Sail.
+var sailWords = [...]string{bus.SailDrawing: "drawing", bus.SailLuffing: "luffing: trim in", bus.SailStalled: "stalled: ease", bus.SailAback: "aback"}
 
 // seaOf is the sea at the boat: its sea area's waves, swell and current.
 func seaOf(s *Sea, f *bus.Frame, x, y float64) *seaFacts {

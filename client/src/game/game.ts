@@ -159,6 +159,7 @@ export class Game implements PilotActions {
     };
     this.#halfLength = world.kind.physics.hull.waterlineLength / 2;
     this.helm.onTake = () => this.takeHelm();
+    this.sheet.onTake = () => this.controlsTouched();
     this.sheet.target = 0.5;
     world.tick = (dt, now) => this.#frame(dt, now);
     effect(() => {
@@ -430,6 +431,11 @@ export class Game implements PilotActions {
     this.loop.stepOnce();
   }
 
+  /** The sailor's hands on the helm, the sheet or the autopilot: the camera's opening view gives way. */
+  controlsTouched(): void {
+    this.world.camera.controlsTouched();
+  }
+
   togglePilot(): void {
     if (this.pilot.on) {
       this.takeHelm();
@@ -439,6 +445,7 @@ export class Game implements PilotActions {
   }
 
   engagePilot(mode: number): void {
+    this.controlsTouched();
     const d = this.driver;
     if (d === null) {
       return;
@@ -447,6 +454,7 @@ export class Game implements PilotActions {
   }
 
   takeHelm(): void {
+    this.controlsTouched();
     if (!this.pilot.on) {
       return;
     }
@@ -459,10 +467,12 @@ export class Game implements PilotActions {
   }
 
   pilotTack(): void {
+    this.controlsTouched();
     this.pilot.tack(this.driver?.wind.meanFrom ?? 0, this.#stalledLeft());
   }
 
   pilotGybe(): void {
+    this.controlsTouched();
     this.pilot.gybe(this.driver?.wind.meanFrom ?? 0, this.#stalledLeft());
   }
 
@@ -477,6 +487,7 @@ export class Game implements PilotActions {
   }
 
   pilotAdjust(degrees: number): void {
+    this.controlsTouched();
     this.pilot.adjust(degrees);
   }
 

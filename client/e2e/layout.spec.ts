@@ -14,7 +14,10 @@
 // upright both stand out of its bottom edge beneath the readouts, and an
 // open barometer stays open. The pocket chart's caption
 // is two lines within its frame, the weather's pusher set in the frame.
-// The menu, open, stands over everything and within the screen.
+// The menu, open, stands over everything and within the screen. The
+// sheet's legend at its longest, the sail luffing or stalled, stands
+// within the sheet's frame, clear of its ends, the end lit with its arrow
+// within it too.
 //
 // Held upright, the chase camera puts the boat's masthead within a sixth
 // of the screen's height of its top, where no case of instruments fits
@@ -328,6 +331,93 @@ async function caseFaults(page: Page, upright: boolean): Promise<string[]> {
   return found;
 }
 
+/** What is wrong with the sheet's legend as the sail luffs, stalls or is aback: its words out of the frame, or over the ends. */
+async function sheetFaults(page: Page): Promise<string[]> {
+  const found: string[] = [];
+  for (const [state, legend, lit] of [
+    ['luffing', 'Luffing', 'trim'],
+    ['stalled', 'Stalled', 'ease'],
+    ['aback', 'Aback', null],
+  ] as const) {
+    found.push(
+      ...(await page.evaluate(
+        async ({ state, legend, lit }) => {
+          globalThis.keel.sail(state);
+          globalThis.keel.render();
+          await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+          const out: string[] = [];
+          const sheet = document.querySelector('[data-control=sheet]');
+          const label = sheet?.querySelector('.control-label');
+          if (sheet === null || sheet === undefined || label === null || label === undefined) {
+            return [`${state}: no sheet`];
+          }
+          if (label.textContent !== legend) {
+            out.push(`${state}: the sheet’s legend says “${label.textContent}”`);
+          }
+          // Within the frame's border, by the words as they are drawn.
+          const s = sheet.getBoundingClientRect();
+          const st = getComputedStyle(sheet);
+          const inner = {
+            left: s.left + parseFloat(st.borderLeftWidth),
+            right: s.right - parseFloat(st.borderRightWidth),
+            top: s.top + parseFloat(st.borderTopWidth),
+            bottom: s.bottom - parseFloat(st.borderBottomWidth),
+          };
+          const drawn = (e: Element) => {
+            const range = document.createRange();
+            range.selectNodeContents(e);
+            return range.getBoundingClientRect();
+          };
+          const within = (r: DOMRect) =>
+            r.left >= inner.left - 0.5 &&
+            r.right <= inner.right + 0.5 &&
+            r.top >= inner.top - 0.5 &&
+            r.bottom <= inner.bottom + 0.5;
+          const words = drawn(label);
+          if (!within(words)) {
+            out.push(
+              `${state}: “${legend}” runs out of the sheet (${[words.left, words.right].map(Math.round)} in ${[inner.left, inner.right].map(Math.round)})`,
+            );
+          }
+          for (const end of sheet.querySelectorAll('.sheet-end')) {
+            const e = drawn(end);
+            const name = end.getAttribute('data-end');
+            if (
+              Math.min(e.right, words.right) - Math.max(e.left, words.left) > 0.5 &&
+              Math.min(e.bottom, words.bottom) - Math.max(e.top, words.top) > 0.5
+            ) {
+              out.push(`${state}: “${legend}” covers ${name}`);
+            }
+            if (!within(e)) {
+              out.push(`${state}: ${name} runs out of the sheet`);
+            }
+            const on = end.classList.contains('lit');
+            if (on !== (name === lit)) {
+              out.push(`${state}: ${name} is ${on ? '' : 'not '}lit`);
+            }
+            if (on && end.querySelector('.sheet-arrow') === null) {
+              out.push(`${state}: ${name} is lit without its arrow`);
+            }
+          }
+          const valuetext = sheet.getAttribute('aria-valuetext') ?? '';
+          if (!valuetext.includes(state)) {
+            out.push(`${state}: the sheet’s value says “${valuetext}”`);
+          }
+          return out;
+        },
+        { state, legend, lit },
+      )),
+    );
+  }
+  // What the sail says no more; the readouts as they were held.
+  await page.evaluate(async () => {
+    globalThis.keel.sail('');
+    globalThis.keel.render();
+    await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+  });
+  return found;
+}
+
 /** What is wrong with the harbour board, open: any of its frame off the screen. */
 async function boardFaults(page: Page): Promise<string[]> {
   await page.locator('[data-pusher=board]').click();
@@ -566,6 +656,9 @@ test('no part of the screen at sea covers the boat or another part, with everyth
         Math.abs(folded.bottom - seen.helm.bottom) > 0.5)
     ) {
       found.push(`${s.name}: the helm moves as the head folds`);
+    }
+    for (const f of await sheetFaults(page)) {
+      found.push(`${s.name}: ${f}`);
     }
     for (const f of await menuFaults(page)) {
       found.push(`${s.name}: ${f}`);

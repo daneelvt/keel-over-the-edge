@@ -214,6 +214,7 @@ describe('watching online', () => {
     circulation: 0,
     tools: false,
     light: null,
+    harbour: null,
     endsUs: 0,
     closingUs: 0,
     zone: '',

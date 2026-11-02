@@ -27,6 +27,11 @@ boats:
     lights: [tricolour]
     # Her lookout is the sailor seated on her deck, the eye 2 m above the sea.
     lookout: 2
+    # Her sheet for a start from rest, by the angle off the wind: from
+    # tools/polar's sweep from rest (-start), each within 85% of the best
+    # sheet's speed after 20 s in 3, 5 and 8 knots. Half the wind's angle,
+    # a rule of thumb, luffs her once she moves.
+    startSheet: [[90, 0.2], [110, 0.25], [130, 0.4]]
     art:
       model: boats/jolly-boat.glb
       far: boats/jolly-boat.far.glb

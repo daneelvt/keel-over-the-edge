@@ -164,18 +164,29 @@ func shelterHas(ch *physics.ShelterChunk, i int32) bool {
 }
 
 // Start is where boats start: their places, in order, and the heading they
-// face: the moorings in Port Royal's basin first, each facing the narrows,
-// then the roads outside, facing Heading.
+// face: the fan in the roads off Port Royal's harbour mouth first, each
+// facing out from the mouth, then the roads off the coast, facing Heading.
 type Start struct {
 	Heading float64      `json:"heading"`
 	Places  [][2]float64 `json:"places"`
-	// Out is the direction the start area lies in from the main port's
-	// centre, rad clockwise from north.
+	// Out is the direction the roads off the coast lie in from the main
+	// port's centre, rad clockwise from north.
 	Out float64 `json:"out"`
-	// Moorings is how many of the first places are moorings, and Headings
-	// the heading each of them faces.
-	Moorings int       `json:"moorings,omitempty"`
+	// Fan is how many of the first places lie in the fan off the mouth,
+	// and Headings the heading each of them faces.
+	Fan      int       `json:"fan,omitempty"`
 	Headings []float64 `json:"headings,omitempty"`
+	// Moorings are the moorings across Port Royal's basin, for boats that
+	// come in: no boat starts on one.
+	Moorings []Mooring `json:"mooringPlaces,omitempty"`
+}
+
+// Mooring is a mooring in Port Royal's basin: where it is, and the heading
+// a boat on it faces, toward the narrows.
+type Mooring struct {
+	X       float64 `json:"x"`
+	Y       float64 `json:"y"`
+	Heading float64 `json:"heading"`
 }
 
 // HeadingOf is the heading place i faces.
@@ -186,26 +197,86 @@ func (s *Start) HeadingOf(i int) float64 {
 	return s.Heading
 }
 
-// withMoorings puts the moorings before the roads' places: in rows across
-// Port Royal's basin, spacing apart, clear of land, quays and piers and
-// outside the turning circle, nearest the narrows first, each facing the
-// narrows' inner end, so that a beginner's first course is out to sea;
-// then the roads, to as many places as the start had, less those the
-// town's quays and piers have come too near since they were chosen.
-func (c *config) withMoorings(g *physics.Ground, port *made, roads Start) Start {
+// AwayOf is the way from place i away from Port Royal's coast, rad
+// clockwise from north: out from the mouth in the fan, else the roads'.
+func (s *Start) AwayOf(i int) float64 {
+	if i < s.Fan {
+		return s.HeadingOf(i)
+	}
+	return s.Out
+}
+
+// startPlaces lays the start out after the towns, whose quays and piers
+// stand on the ground and whose harbours' water is in port: the fan off
+// Port Royal's harbour mouth, then the roads, to as many places as the
+// roads had, less those the towns have come too near since they were
+// chosen, and those on the fan's; and the moorings across the basin. No
+// place is in port.
+func (c *config) startPlaces(g *physics.Ground, port *made, roads Start, towns []Town) Start {
+	inPort := func(x, y float64) bool {
+		for i := range towns {
+			if inDiscs(towns[i].Harbour, x, y) {
+				return true
+			}
+		}
+		return false
+	}
 	total := len(roads.Places)
+	out := Start{Heading: roads.Heading, Out: roads.Out}
+	h := port.harbour
+	if h != nil {
+		out.Moorings = c.mooringsOf(g, h)
+		for _, p := range c.fanOf(g, h, total, inPort) {
+			out.Places = append(out.Places, p)
+			heading := physics.Atan2(p[0]-h.mouthX(), p[1]-h.mouthY())
+			if heading >= math.Pi {
+				heading -= 2 * math.Pi
+			}
+			out.Headings = append(out.Headings, heading)
+		}
+		out.Fan = len(out.Places)
+	}
+	// The roads' places, each its spacing from every place of the fan's,
+	// found by the cell of a grid spacing across.
+	sp := c.start.Spacing
+	cell := func(x, y float64) [2]int32 {
+		return [2]int32{toInt32(math.Floor(x / sp)), toInt32(math.Floor(y / sp))}
+	}
+	fanAt := map[[2]int32][]int{}
+	for i, p := range out.Places {
+		k := cell(p[0], p[1])
+		fanAt[k] = append(fanAt[k], i)
+	}
+	taken := func(x, y float64) bool {
+		k := cell(x, y)
+		for a := k[0] - 1; a <= k[0]+1; a++ {
+			for b := k[1] - 1; b <= k[1]+1; b++ {
+				for _, i := range fanAt[[2]int32{a, b}] {
+					if q := out.Places[i]; hypot(q[0]-x, q[1]-y) < sp {
+						return true
+					}
+				}
+			}
+		}
+		return false
+	}
 	joins := map[int32]int8{}
-	fits := roads.Places[:0:0]
 	for _, p := range roads.Places {
-		if c.placeFits(g, p[0], p[1]) && c.joined(g, p[0], p[1], joins) {
-			fits = append(fits, p)
+		if len(out.Places) == total {
+			break
+		}
+		if c.placeFits(g, p[0], p[1]) && c.joined(g, p[0], p[1], joins) && !taken(p[0], p[1]) && !inPort(p[0], p[1]) {
+			out.Places = append(out.Places, p)
 		}
 	}
-	roads.Places = fits
-	h := port.harbour
-	if h == nil {
-		return roads
-	}
+	return out
+}
+
+// mooringsOf is the moorings across Port Royal's basin h: in rows across
+// it, spacing apart, clear of land, quays and piers and outside the
+// turning circle, nearest the narrows first, each facing the narrows'
+// inner end.
+func (c *config) mooringsOf(g *physics.Ground, h *harbour) []Mooring {
 	mo := &c.moorings
 	type mooring struct {
 		x, y  float64
@@ -241,26 +312,79 @@ func (c *config) withMoorings(g *physics.Ground, port *made, roads Start) Start 
 		}
 		return cmpAsc(p.side, q.side)
 	})
-	out := Start{Heading: roads.Heading, Out: roads.Out, Moorings: len(ms)}
+	out := make([]Mooring, 0, len(ms))
 	for _, m := range ms {
-		if len(out.Places) == total {
-			break
-		}
-		out.Places = append(out.Places, [2]float64{m.x, m.y})
 		heading := physics.Atan2(ex-m.x, ey-m.y)
 		if heading >= math.Pi {
 			heading -= 2 * math.Pi
 		}
-		out.Headings = append(out.Headings, heading)
-	}
-	out.Moorings = len(out.Places)
-	for _, p := range roads.Places {
-		if len(out.Places) == total {
-			break
-		}
-		out.Places = append(out.Places, p)
+		out = append(out, Mooring{X: m.x, Y: m.y, Heading: heading})
 	}
 	return out
+}
+
+// fanOf is the fan of places in the roads off the mouth of Port Royal's
+// harbour h, at most most of them: on a lattice of rows across the way
+// out, spacing apart, every place that fits within the fan's reach of the
+// mouth and no nearer it than its nearest, outside the fairway straight
+// out of the narrows and out of port, its water led out to open water and
+// the mouth in sight from it across no land; nearest the mouth first.
+func (c *config) fanOf(g *physics.Ground, h *harbour, most int, inPort func(x, y float64) bool) [][2]float64 {
+	fan, sp := &c.start.Fan, c.start.Spacing
+	mx, my := h.mouthX(), h.mouthY()
+	type place struct {
+		x, y         float64
+		dist, across float64
+	}
+	var ps []place
+	joins := map[int32]int8{}
+	rowStep := float64(sp * 0.8660254037844386)
+	rows := toInt32(fan.Reach/rowStep) + 1
+	cols := toInt32(fan.Reach/sp) + 1
+	for a := -rows; a <= rows; a++ {
+		for b := -cols; b <= cols; b++ {
+			along := float64(float64(a) * rowStep)
+			side := float64(float64(b) * sp)
+			if a&1 != 0 {
+				side += float64(sp / 2)
+			}
+			d := hypot(along, side)
+			if d < fan.Nearest || d > fan.Reach || along > 0 && math.Abs(side) < float64(fan.Fairway/2) {
+				continue
+			}
+			x := mx + float64(along*h.sin) + float64(side*h.cos)
+			y := my + float64(along*h.cos) - float64(side*h.sin)
+			if inPort(x, y) || !c.placeFits(g, x, y) || !c.inSight(g, x, y, mx, my) || !c.joined(g, x, y, joins) {
+				continue
+			}
+			ps = append(ps, place{x, y, d, side})
+		}
+	}
+	slices.SortStableFunc(ps, func(p, q place) int {
+		if p.dist != q.dist {
+			return cmpAsc(p.dist, q.dist)
+		}
+		return cmpAsc(p.across, q.across)
+	})
+	out := make([][2]float64, 0, min(len(ps), most))
+	for _, p := range ps[:min(len(ps), most)] {
+		out = append(out, [2]float64{p.x, p.y})
+	}
+	return out
+}
+
+// inSight reports whether (x, y) and (tx, ty) see each other across no
+// land: every point between them, a hexagon apart, is water.
+func (c *config) inSight(g *physics.Ground, x, y, tx, ty float64) bool {
+	d := hypot(tx-x, ty-y)
+	n := toInt32(d/physics.HexAcross) + 1
+	for i := int32(1); i < n; i++ {
+		f := float64(i) / float64(n)
+		if landAt(g, x+float64(f*(tx-x)), y+float64(f*(ty-y))) {
+			return false
+		}
+	}
+	return true
 }
 
 // startOf finds the start area: of the stretches of water off the main

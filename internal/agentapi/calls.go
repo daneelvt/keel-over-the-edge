@@ -252,7 +252,11 @@ func (h *helm) holding() string {
 	}
 	p := pilotOf(f, sl)
 	word, _ := held(s, f, sl)
-	return fmt.Sprintf("%s, boom out to %d°", p.Holds, int(math.Round(boomOf(s.boat(f.Kind[sl]), word.SheetIndex()))))
+	line := fmt.Sprintf("%s, boom out to %d°", p.Holds, int(math.Round(boomOf(s.boat(f.Kind[sl]), word.SheetIndex()))))
+	if sail := f.Instruments[sl].Sail; f.Machine[sl] && sail != bus.SailDrawing {
+		line += ", " + sailWords[sail]
+	}
+	return line
 }
 
 // where is the world and where the helm's boat is, if it is at sea; else

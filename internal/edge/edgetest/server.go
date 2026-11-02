@@ -28,6 +28,7 @@ import (
 	"github.com/daneelvt/keel-over-the-edge/internal/obs"
 	"github.com/daneelvt/keel-over-the-edge/internal/physics"
 	"github.com/daneelvt/keel-over-the-edge/internal/protocol"
+	"github.com/daneelvt/keel-over-the-edge/internal/protocol/pb"
 	"github.com/daneelvt/keel-over-the-edge/internal/sim"
 	"github.com/daneelvt/keel-over-the-edge/internal/sim/loop"
 	"github.com/daneelvt/keel-over-the-edge/internal/store"
@@ -58,6 +59,9 @@ type Config struct {
 	// prepared for; the catalog's if Kinds is nil.
 	Kinds []physics.Prepared
 	Waves *physics.Waves
+	// StartSheets are each kind's sheet for a start from rest; the
+	// catalog's if nil.
+	StartSheets [][][2]float64
 	// Weather is the world's own weather; nil is a steady wind
 	// (sim.DefaultSpell).
 	Weather *weather.Timeline
@@ -122,6 +126,15 @@ type Server struct {
 // survived 20 m back out of the mist band.
 var CatalogEdge = sim.Edge{Fall: 150, Clear: 20}
 
+// harbourOf is the harbour of a world of terrain t, as a Welcome carries
+// it.
+func harbourOf(t *sim.Terrain) *pb.Harbour {
+	if t == nil {
+		return nil
+	}
+	return protocol.WireHarbour(t.Harbour)
+}
+
 // circulation is the way round the disk of a world of terrain t.
 func circulation(t *sim.Terrain) int32 {
 	if t == nil {
@@ -153,12 +166,18 @@ func NewServer(t testing.TB, cfg Config) *Server {
 	if cfg.Weather == nil {
 		cfg.Weather = weather.Fixed(sim.DefaultSpell)
 	}
+	if cfg.Terrain != nil && cfg.Terrain.Harbour != nil {
+		cfg.Weather = cfg.Weather.InHarbour(cfg.Terrain.Harbour)
+	}
+	cat, err := catalog.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
 	if cfg.Encounters == nil {
-		cat, err := catalog.Load()
-		if err != nil {
-			t.Fatal(err)
-		}
 		cfg.Encounters = cat.PrepareEncounters()
+	}
+	if cfg.StartSheets == nil {
+		cfg.StartSheets = cat.StartSheets()
 	}
 	if cfg.Edge == nil {
 		cfg.Edge = &CatalogEdge
@@ -177,7 +196,7 @@ func NewServer(t testing.TB, cfg Config) *Server {
 func (s *Server) newWorld(t testing.TB) *sim.World {
 	t.Helper()
 	cfg := s.cfg
-	w, err := sim.New(sim.Config{Capacity: cfg.Capacity, Kinds: cfg.Kinds, Waves: cfg.Waves, Encounters: cfg.Encounters, Workers: 1,
+	w, err := sim.New(sim.Config{Capacity: cfg.Capacity, Kinds: cfg.Kinds, StartSheets: cfg.StartSheets, Waves: cfg.Waves, Encounters: cfg.Encounters, Workers: 1,
 		Tick: loop.TickAt(time.Now(), Epoch), Grace: cfg.Grace, Limit: cfg.Limit, Weather: cfg.Weather, Terrain: cfg.Terrain, Edge: cfg.Edge})
 	if err != nil {
 		t.Fatal(err)
@@ -196,7 +215,7 @@ func (s *Server) start(t testing.TB, w *sim.World) {
 		Bus: w.Bus(), World: WorldID, Epoch: Epoch, Ends: cfg.Ends, Clock: s.Loop,
 		Protocol: protocol.Version, Catalog: catalog.Version, Layout: physics.LayoutVersion,
 		Origin: PlayOrigin, Log: log, Metrics: m, Fail: api.WriteError, Limits: cfg.Limits, Encoders: cfg.Encoders,
-		Land: cfg.Terrain != nil, Chunks: cfg.Chunks, Circulation: circulation(cfg.Terrain),
+		Land: cfg.Terrain != nil, Chunks: cfg.Chunks, Circulation: circulation(cfg.Terrain), Harbour: harbourOf(cfg.Terrain),
 		Lip: cfg.Weather.Prepared().Edge(), RoamChunks: cfg.RoamChunks, Forecast: cfg.Forecast,
 		Stopped: cfg.Stopped, Seen: cfg.Seen, LongAfter: cfg.LongAfter,
 		Watch: s.Sessions.Target, SpectatorLimit: cfg.SpectatorLimit,

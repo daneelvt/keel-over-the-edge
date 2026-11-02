@@ -479,6 +479,16 @@ world:
   # of them; then the roads, the stretch of water off its coast with the
   # most room, its rows along the coast.
   start:
+    # Boats start in the roads off Port Royal's harbour mouth, where the
+    # start's breeze blows: every place that fits within the fan's reach of
+    # the mouth, no nearer it than nearest, clear of a fairway straight out
+    # of the narrows, and in sight of the mouth across no land, nearest it
+    # first, so the first sailors start close in and later ones fan out.
+    # Where too few fit, the roads off the coast with the most room take
+    # the rest. At least the first of them lie in the fan, within
+    # firstWithin of the mouth. The basin's moorings are for boats that
+    # come in: no boat starts on one.
+    fan: { reach: 1200, nearest: 80, fairway: 60, first: 256, firstWithin: 500 }
     moorings: { spacing: 20, clear: 10, least: 60 }
     within: 400 # m: the start area begins within this of the coast
     depth: 2 # m of water at a place, at least

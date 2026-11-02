@@ -103,8 +103,12 @@ type Weather struct {
 	From   int64 // the tick it takes effect from: the simulation sets it
 	Mode   WeatherMode
 	Regime uint16 // WeatherHeld: the regime's index in the catalog
-	Speed  uint32 // WeatherSteady: the wind 10 m up, in steps of physics.SeaSpeedStep
-	Dir    uint32 // WeatherSteady: the direction it comes from, in steps of a turn / physics.TurnSteps
+	// WeatherSteady: the wind 10 m up, in steps of physics.SeaSpeedStep,
+	// and the direction it comes from, in steps of a turn /
+	// physics.TurnSteps. WeatherHeld: the same of its spell's wind at
+	// mid-disk, or 0 for the spell's own.
+	Speed uint32
+	Dir   uint32
 	// WeatherSystem: the kind's index in the catalog, the point the system
 	// reaches, in quarter metres east and north of the centre, and how many
 	// ticks after it is placed it reaches it, at its strongest.

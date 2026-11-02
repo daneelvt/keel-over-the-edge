@@ -735,13 +735,15 @@ func TestTowns(t *testing.T) {
 		t.Fatalf("a town not there: %d", code)
 	}
 	town := 0
+	// The town's middle is its harbour's point: the boat keeps its heading.
+	before := r.w.Latest().State[0].Heading
 	if code, body := r.do(t, "POST", "/owner/api/place", PlaceRequest{Boat: ann, Town: &town}); code != 200 {
 		t.Fatalf("to the town's harbour: %d %s", code, body)
 	}
 	r.w.Tick()
 	st := r.w.Latest().State[0]
 	h := list.Towns[0].Harbour
-	if math.Hypot(st.X-h[0], st.Y-h[1]) > 0.5 || math.Abs(math.Remainder(st.Heading-math.Pi/2, 2*math.Pi)) > 0.05 {
+	if math.Hypot(st.X-h[0], st.Y-h[1]) > 0.5 || math.Abs(math.Remainder(st.Heading-before, 2*math.Pi)) > 0.05 {
 		t.Fatalf("in the harbour at %+v, heading %v", st, st.Heading)
 	}
 }

@@ -12,6 +12,8 @@ export const SHEET_TRAVEL = 160;
 export class SheetInput {
   /** The sheet the player asks for, 0 hauled in … 1 let fly. */
   target = 0.5;
+  /** Called when the player takes the sheet: a thumb lands, or a sheet key goes down. */
+  onTake: (() => void) | null = null;
 
   readonly #drag = new Drag();
 
@@ -24,8 +26,14 @@ export class SheetInput {
     if (this.#drag.pointer !== null) {
       return false;
     }
+    this.take();
     this.#drag.begin(pointer, y, this.target, t);
     return true;
+  }
+
+  /** The player takes the sheet. */
+  take(): void {
+    this.onTake?.();
   }
 
   /** Dragging down eases the sheet. */

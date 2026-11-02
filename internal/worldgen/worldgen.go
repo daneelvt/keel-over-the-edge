@@ -32,7 +32,7 @@ import (
 
 // Version is the generator's version. Raise it whenever a change to the
 // generator or to the catalog's world values changes any seed's world.
-const Version = 6
+const Version = 7
 
 // Island is an island of a made world.
 type Island struct {
@@ -262,8 +262,8 @@ func (c *config) generate(seed uint64) *Bundle {
 	lap("towns")
 	b.Buildings = append(b.Buildings, c.layRuins(seed, b.Ground, pw, lights, b.Buildings)...)
 	lap("ruins")
-	b.Start = c.withMoorings(b.Ground, islands[0], b.Start)
-	lap("moorings")
+	b.Start = c.startPlaces(b.Ground, islands[0], b.Start, b.Towns)
+	lap("start")
 	b.Features, b.Parts = c.featureRecords(pw)
 	lap("sighting")
 

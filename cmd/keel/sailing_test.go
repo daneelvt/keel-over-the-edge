@@ -306,8 +306,9 @@ func helmsmanSails(t *testing.T, world *worldgen.Bundle, target string, best, fr
 }
 
 // TestTheHelmsmanLeavesTheRoads: the helmsman, started in the roads off
-// Port Royal in 3 knots, reads the Shoal line clear of the banks and
-// sails to a charted place without running aground, in seed 1's world.
+// Port Royal in a settled spell of 3 knots, which the start's breeze lifts
+// there, reads the Shoal line clear of the banks and sails to a charted
+// place without running aground, in seed 1's world.
 func TestTheHelmsmanLeavesTheRoads(t *testing.T) {
 	if testing.Short() {
 		t.Skip("makes a whole world")
@@ -321,7 +322,7 @@ func TestTheHelmsmanLeavesTheRoads(t *testing.T) {
 		t.Fatal(err)
 	}
 	cw := chart.Build(world, cat)
-	roads := world.Start.Places[world.Start.Moorings]
+	roads := world.Start.Places[0]
 	target := ""
 	best, toward := math.Inf(1), 0.0
 	for _, s := range cw.Subjects {
@@ -346,10 +347,10 @@ func TestTheHelmsmanLeavesTheRoads(t *testing.T) {
 			res.Body.Close()
 			return res
 		}
-		// Light air across the way to the place.
+		// Light air across the way to the place, before the breeze.
 		for range 120 {
 			time.Sleep(time.Second)
-			if post(fmt.Sprintf("/debug/wind?knots=3&from=%.0f", math.Mod(toward+270, 360)), "") != nil {
+			if post(fmt.Sprintf("/debug/wind?knots=3&from=%.0f&regime=settled", math.Mod(toward+270, 360)), "") != nil {
 				break
 			}
 		}
@@ -362,7 +363,7 @@ func TestTheHelmsmanLeavesTheRoads(t *testing.T) {
 		token, id := d.machine("Iron Mary", "Ann Bonny", false)
 		cs := agentSession(t, s, token)
 		callTool(t, cs, "observe", nil)
-		res := post(fmt.Sprintf("/debug/place?account=%x&east=%.1f&north=%.1f&heading=%.1f", id[:], roads[0], roads[1], world.Start.Heading*180/math.Pi), "")
+		res := post(fmt.Sprintf("/debug/place?account=%x&east=%.1f&north=%.1f&heading=%.1f", id[:], roads[0], roads[1], world.Start.HeadingOf(0)*180/math.Pi), "")
 		if res == nil || res.StatusCode != http.StatusOK {
 			t.Fatalf("placing the boat in the roads: %v", res)
 		}

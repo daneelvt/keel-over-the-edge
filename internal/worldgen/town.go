@@ -59,6 +59,11 @@ type Town struct {
 	// town with no basin.
 	Mouth   *[2]float64 `json:"mouth,omitempty"`
 	Opening float64     `json:"opening,omitempty"`
+	// Basin is Port Royal's basin, a circle at its widest radius, and
+	// Narrows the narrows' width at the mouth; nil and 0 for a town with
+	// no basin, or a world made before they were kept.
+	Basin   *Disc   `json:"basin,omitempty"`
+	Narrows float64 `json:"narrows,omitempty"`
 	// Square is its square's middle, if it has one.
 	Square *[2]float64 `json:"square,omitempty"`
 	// Buildings is how many it has, props not counted; Counts each kind's,

@@ -651,8 +651,13 @@ func ownerTools(c ownerConfig) *owner.Owner {
 	for i, r := range c.cat.Weather.Regimes {
 		regimes[i] = string(r.ID)
 	}
+	// The world's own wind, in its harbour, where it has a week.
+	prepared := c.wcfg.Prepared
+	if c.timeline != nil {
+		prepared = c.timeline.Prepared()
+	}
 	cfg := owner.Config{
-		Bundle: c.bundle, Weather: c.wcfg.Prepared, Timeline: c.timeline, SystemKinds: systemKindNames(c.cat), Waves: waves,
+		Bundle: c.bundle, Weather: prepared, Timeline: c.timeline, SystemKinds: systemKindNames(c.cat), Waves: waves,
 		Kinds: kinds, Regimes: regimes, Sky: c.cat.PrepareSky(),
 		World:    owner.World{Number: c.sailed.Number, ID: c.sailed.ID, Epoch: c.sailed.Epoch, Made: c.made},
 		Calm:     c.cat.World.MainPort.Calm * 1852,
@@ -920,6 +925,9 @@ func encounterRoute(ctx context.Context, b *bus.Bus, cat *catalog.Catalog, log *
 // system is born at the first keyframe from then.
 //
 //	POST /debug/wind?knots=…&from=…   a steady wind of knots 10 m up, from the given degrees
+//	POST /debug/wind?knots=…&from=…&regime=…
+//	                                  one endless spell of the catalog's regime of that id, its wind knots at mid-disk
+//	                                  from the given degrees, with its gusts, the refuge and the start's breeze
 //	POST /debug/weather?regime=…      one endless spell of the catalog's regime of that id
 //	POST /debug/weather?front[=…]     a front now, an endless spell of that regime, or the first frontal one, behind it
 //	POST /debug/weather?system=…&in=5m[&east=…&north=…|&at=boat]
@@ -981,6 +989,14 @@ func weatherRoute(b *bus.Bus, cat *catalog.Catalog) http.Handler {
 			}
 			rad := math.Mod(math.Mod(from, 360)+360, 360) * math.Pi / 180
 			wx = weather.Steady(knots*1852/3600, rad)
+			if q.Has("regime") {
+				i := weather.RegimeIndex(cat, q.Get("regime"))
+				if i < 0 {
+					http.Error(w, "regime, the id of one of the catalog's regimes", http.StatusBadRequest)
+					return
+				}
+				wx = weather.Held(i, knots*1852/3600, rad)
+			}
 		case q.Has("auto"):
 			wx = bus.Weather{Mode: bus.WeatherAuto}
 		default:

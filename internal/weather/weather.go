@@ -94,7 +94,7 @@ func FixedIn(p *physics.WeatherPrepared, s physics.Spell) *Timeline {
 // one sample a tick, with a time constant so short that the wind at each
 // tick is the whole of it.
 var fixedParams = physics.WeatherParams{
-	Rim: 4.2, RefugeInner: 1, RefugeOuter: 1.4, RimGustsFrom: 3, Edge: 4.5, FallDraftFrom: 4.2,
+	Rim: 4.2, RefugeInner: 0, RefugeOuter: 150, RimGustsFrom: 3, Edge: 4.5, FallDraftFrom: 4.2,
 	GustAlong: 300, GustAcross: 200, GustLife: 240,
 	WaveTimeConstant: 1e-9, WaveSample: 1.0 / physics.StepsPerSecond, WaveSamples: 1,
 	TroughAhead: 1.1, TroughBehind: 0.35, Blend: 0.12, GustsBehind: 1, InwardTo: 3, Cut: 4,
@@ -116,6 +116,17 @@ func FromCatalog(c *catalog.Catalog) (*Timeline, error) {
 		return nil, err
 	}
 	return New(cfg, Generate(cfg, 1, SampleEpoch, SampleEpoch+SampleWeek, nil))
+}
+
+// InHarbour is the timeline of the same week in a world with a harbour,
+// where the refuge holds and the start's breeze does not: its wind is
+// computed with a copy of the wind's constants that has it.
+func (t *Timeline) InHarbour(h *physics.Harbour) *Timeline {
+	c := *t
+	p := *t.prepared
+	p.SetHarbour(h)
+	c.prepared = &p
+	return &c
 }
 
 // Prepared is the wind's constants the timeline's spells are computed with.
@@ -160,6 +171,15 @@ func (t *Timeline) Fixed(s physics.Spell) *Timeline {
 func Steady(speed, from float64) bus.Weather {
 	s := physics.SteadySpell(speed, from, 0)
 	return bus.Weather{Mode: bus.WeatherSteady, Speed: uint32(s.Speed), Dir: uint32(s.From)}
+}
+
+// Held is a developer's weather of one endless spell of the regime of
+// index regime, its wind at mid-disk speed m/s from from, rad clockwise
+// from north: a spell of the world's kind, with its shifts and gusts, the
+// refuge and the start's breeze.
+func Held(regime int, speed, from float64) bus.Weather {
+	s := physics.SteadySpell(speed, from, 0)
+	return bus.Weather{Mode: bus.WeatherHeld, Regime: uint16(regime), Speed: uint32(max(s.Speed, 1)), Dir: uint32(s.From)}
 }
 
 // floorDiv is a / b rounded down, for b > 0.
@@ -252,8 +272,8 @@ func (t *Timeline) regime(i uint16) (*Regime, int) {
 }
 
 // held is a developer's held regime from a tick: one endless spell of it,
-// with no drift, from a direction of its own, its pressure the middle of
-// its regime's.
+// with no drift, from a direction of its own, or with the speed and the
+// direction asked for, its pressure the middle of its regime's.
 func (t *Timeline) held(w bus.Weather) physics.Spell {
 	from := float64(w.From)
 	reg, r := t.regime(w.Regime)
@@ -262,6 +282,9 @@ func (t *Timeline) held(w bus.Weather) physics.Spell {
 	physics.DrawSpell(t.prepared, &reg.Wind, number, t.cfg.HeldSeed, &s)
 	s.Drift = 0
 	s.From = float64(mix(number^t.cfg.HeldSeed) % turn)
+	if w.Speed != 0 {
+		s.Speed, s.From = float64(w.Speed), float64(w.Dir%turn)
+	}
 	s.Pressure = math.Round(float64(50 * (reg.Pressure[0] + reg.Pressure[1])))
 	s.Still = 1
 	return s

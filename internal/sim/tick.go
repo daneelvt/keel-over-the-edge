@@ -209,12 +209,18 @@ func (w *World) stepSlots(slots []int32, o *physics.Out, src *physics.Sources) {
 		if f.Machine[s] {
 			// What a phone reads from its own prediction, a machine
 			// boat's agent is told: the step worked it out.
-			f.Instruments[s] = bus.Instruments{
+			var before bus.Instruments
+			if w.cur.Occupied[s] && w.cur.Boat[s] == f.Boat[s] {
+				before = w.cur.Instruments[s]
+			}
+			in := bus.Instruments{
 				WindSpeed: float32(e.WindSpeed), WindFrom: float32(e.WindFrom),
 				ApparentSpeed: float32(o.ApparentWindSpeed), ApparentAngle: float32(o.ApparentWindAngle),
 				SpeedOverGround: float32(o.SpeedOverGround), CourseOverGround: float32(o.CourseOverGround),
 				Depth: float32(o.Depth),
 			}
+			in.Sail, in.SailRaw, in.SailFor = sailHeld(&before, o)
+			f.Instruments[s] = in
 		}
 		w.settle(f, s)
 		if w.enc != nil {

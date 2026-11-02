@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 // The towns in a real browser, in the sandbox on seed 1's world (the file
-// go run ./tools/dev -world 1 writes): the boat starts moored in Port
-// Royal's basin, facing the narrows; the town is drawn in the factory's
+// go run ./tools/dev -world 1 writes): the boat starts in the roads off
+// Port Royal's harbour mouth, facing away from it, and the basin has its
+// moorings; the town is drawn in the factory's
 // materials within its budget of draws and triangles, and a town behind
 // the horizon is not; chimney smoke is where world time puts it, the same
 // on every page; the lanterns ashore are lit after sunset and not by day;
@@ -22,7 +23,13 @@ const DRAWS = 15;
 const TRIANGLES = 60_000;
 
 interface Records {
-  start: { heading: number; places: [number, number][]; headings?: number[]; moorings?: number };
+  start: {
+    heading: number;
+    places: [number, number][];
+    headings?: number[];
+    fan?: number;
+    mooringPlaces?: { x: number; y: number; heading: number }[];
+  };
   towns: { name: string; kind: string; x: number; y: number }[];
 }
 
@@ -48,7 +55,7 @@ async function landed(page: Page): Promise<void> {
   );
 }
 
-test('the boat starts moored in Port Royal’s basin, facing the narrows; the town is drawn within its budget', async ({
+test('the boat starts off Port Royal’s mouth, facing away from it; the town is drawn within its budget', async ({
   page,
 }) => {
   test.slow(softwareGPU);
@@ -60,12 +67,16 @@ test('the boat starts moored in Port Royal’s basin, facing the narrows; the to
   expect(Math.hypot(s.x - x, s.y - y)).toBeLessThan(2);
   const off = s.heading - (r.start.headings?.[0] ?? Number.NaN);
   expect(Math.abs(Math.atan2(Math.sin(off), Math.cos(off)))).toBeLessThan(0.05);
-  expect(r.start.moorings ?? 0).toBeGreaterThanOrEqual(60);
-  // From above the basin, looking at the town: every building near drawn.
-  await page.evaluate(() => {
+  expect(r.start.fan ?? 0).toBeGreaterThanOrEqual(256);
+  expect(r.start.mooringPlaces?.length ?? 0).toBeGreaterThanOrEqual(60);
+  // From the first mooring, above the basin, looking at the town: every
+  // building near drawn.
+  const m = r.start.mooringPlaces?.[0] ?? { x: 0, y: 0, heading: 0 };
+  await page.evaluate((m) => {
+    globalThis.keel.placeBoat(m.x, m.y, m.heading);
     globalThis.keel.setSky(12);
     globalThis.keel.render();
-  });
+  }, m);
   await landed(page);
   const t = await page.evaluate(() => globalThis.keel.towns());
   expect(t?.held).toBeGreaterThan(150);

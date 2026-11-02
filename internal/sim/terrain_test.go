@@ -70,19 +70,22 @@ func TestGroundingReplays(t *testing.T) {
 			t.Fatalf("a boat started at (%v, %v), not in the start area", st.X, st.Y)
 		}
 	}
-	// Each boat runs east before the wind (10 knots from the north, steady
-	// by default), onto the beach.
+	// Each boat steers east, across the wind (10 knots from the north,
+	// steady by default), onto the beach, from the reach it starts on.
 	input := func(f *bus.Frame) Input {
 		var in Input
 		for _, s := range f.Live {
-			in.Changed = append(in.Changed, bus.SlotWord{Slot: s, Word: bus.Pack(uint32(f.Tick+1), bus.Steps/2, bus.Steps*3/4, f.Gen[s])})
+			st := &f.State[s]
+			helm := max(-1, min(1, 2*math.Remainder(math.Pi/2-st.Heading, 2*math.Pi)-0.8*st.YawRate))
+			word := bus.Pack(uint32(f.Tick+1), uint16(math.Round((helm+1)*bus.Steps/2)), bus.Steps*3/4, f.Gen[s])
+			in.Changed = append(in.Changed, bus.SlotWord{Slot: s, Word: word})
 		}
 		return in
 	}
 	var snapshot []byte
 	var inputs []Input
 	aground := false
-	for range 30 * 90 {
+	for range 30 * 150 {
 		in := input(a.Latest())
 		if snapshot != nil {
 			inputs = append(inputs, in)

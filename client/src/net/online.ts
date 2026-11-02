@@ -17,6 +17,11 @@
 // no controls are sent. A Welcome begins each watch, and another brings
 // the own boat back, its prediction started afresh; what the connection
 // was handed before (the chart, the land, the lights and caps) stands.
+//
+// A new boat in the water near the harbour's mouth opens on a view past it
+// at the mouth: the Welcome says the boat is new and where the harbour is,
+// and its first snapshot where the boat lies. A boat rejoined, one back
+// from the edge and a watch open behind the boat.
 
 import { computed, signal } from '@preact/signals';
 import { catalog } from '../catalog';
@@ -28,6 +33,7 @@ import { WatchDriver } from '../game/watch';
 import { type PilotControl, PilotInput } from '../input/pilot';
 import { quantiseHelm, quantiseSheet } from '../input/quantise';
 import { RECORDS } from '../predict/layout.gen';
+import type { Harbour } from '../predict/physics';
 import {
   helmIndex,
   helmOf,
@@ -119,6 +125,8 @@ const OWN_KEPT = 64;
 const FRAME_EVERY = 2_000_000;
 /** A line about the connection that goes by itself shows this long, µs. */
 const NOTICE_FOR = 6_000_000;
+/** A new boat within this of the harbour's mouth, m, opens on the view past it at the mouth. */
+export const OPENING_RANGE = 1500;
 
 export class Online {
   readonly status = signal<Status>('connecting');
@@ -167,6 +175,9 @@ export class Online {
   onEpoch: ((epochUs: number) => void) | null = null;
   /** Told of each bump the server tells of: the game knocks, shakes and says the verdict. */
   onBump: ((b: BumpTold) => void) | null = null;
+  /** Told of a new boat lying within OPENING_RANGE of the harbour's mouth: where it lies and where the mouth is, m. */
+  onOpening: ((east: number, north: number, mouthEast: number, mouthNorth: number) => void) | null =
+    null;
   /** Told of each Welcome's world, and whether its land is sailed. */
   onWorld: ((world: string, land: boolean) => void) | null = null;
   /** The world of the latest Welcome, and its end, ms of UTC, 0 for none known. */
@@ -217,6 +228,8 @@ export class Online {
   readonly #sentPilot = new PilotInput();
   #fresh = false;
   #hadBoat = false;
+  /** A new boat's Welcome named its world's harbour: its first snapshot may open on the mouth. */
+  #opening: Harbour | null = null;
   /** A watch began, or the connection was idle, since the own boat's last Welcome. */
   #away = false;
   /** The bell rang: the server is restarting, and the boat waits. */
@@ -398,6 +411,9 @@ export class Online {
         this.tools.value = m.on;
         break;
       case 'welcome':
+        // A new boat in the water at the start, not one back from the edge.
+        this.#opening =
+          m.watching === null && !m.rejoined && (this.#away || !this.#hadBoat) ? m.harbour : null;
         if (m.watching !== null) {
           if (this.#bell) {
             this.notice.value = null;
@@ -438,6 +454,7 @@ export class Online {
         }
         this.tools.value = m.tools;
         this.#predictor.setCirculation(m.circulation);
+        this.#predictor.setHarbour(m.harbour);
         this.watching.value = m.watching;
         this.#lamp.value = null;
         this.ended.value = null;
@@ -536,6 +553,13 @@ export class Online {
       this.#helmsman.helm.target = helmOf(sn.helm);
       this.#helmsman.sheet.target = sheetOf(sn.sheet);
       this.#helmsman.pilot.set(sn);
+      const h = this.#opening;
+      this.#opening = null;
+      const east = sn.state[RECORDS.state.x] ?? 0;
+      const north = sn.state[RECORDS.state.y] ?? 0;
+      if (h !== null && Math.hypot(east - h.mouthX, north - h.mouthY) <= OPENING_RANGE) {
+        this.onOpening?.(east, north, h.mouthX, h.mouthY);
+      }
     }
     const o = this.#predictor.snapshot(sn);
     this.#latest.tick = sn.tick;

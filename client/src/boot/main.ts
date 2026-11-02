@@ -422,6 +422,9 @@ async function start(): Promise<void> {
     }
   };
   online.onBump = (b) => game.bump(b, performance.now(), online.watching.value?.sailor ?? null);
+  // A new boat near the harbour's mouth first looks past it at the harbour.
+  online.onOpening = (east, north, mouthEast, mouthNorth) =>
+    world.camera.open(east, north, mouthEast, mouthNorth);
   // The land: its chunks fetched and built off the page's thread.
   const land = new Land(
     new Worker(new URL('../workers/mesh/worker.ts', import.meta.url), { type: 'module' }),
@@ -652,6 +655,7 @@ function steerByChart(
     if (d === null) {
       return;
     }
+    game.controlsTouched();
     game.pilot.engage(PILOT_HEADING, heading, d.wind.meanFrom);
     game.hud.flush();
   };

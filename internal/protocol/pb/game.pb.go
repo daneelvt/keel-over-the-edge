@@ -4104,7 +4104,13 @@ type Welcome struct {
 	// and kind are the watched boat's, and so are the snapshots. A Welcome
 	// comes again at each new watch, and for the connection's own boat when
 	// it sails again.
-	Watching      *Watching `protobuf:"bytes,15,opt,name=watching,proto3" json:"watching,omitempty"`
+	Watching *Watching `protobuf:"bytes,15,opt,name=watching,proto3" json:"watching,omitempty"`
+	// The world's harbour, where the refuge holds the wind and the start's
+	// breeze does not; none in a world without land, whose refuge and
+	// breeze are about the world's centre. The client computes the wind
+	// with it, as the server does, and a new boat's first view looks past
+	// the boat at its mouth.
+	Harbour       *Harbour `protobuf:"bytes,16,opt,name=harbour,proto3" json:"harbour,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -4244,6 +4250,101 @@ func (x *Welcome) GetWatching() *Watching {
 	return nil
 }
 
+func (x *Welcome) GetHarbour() *Harbour {
+	if x != nil {
+		return x.Harbour
+	}
+	return nil
+}
+
+// Harbour is a world's harbour, in decimetres east and north of the
+// world's centre: its basin, a circle at its widest radius; and its narrows,
+// from the basin's centre out to the mouth, where they open to the sea,
+// and their width there.
+type Harbour struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	East          int32                  `protobuf:"zigzag32,1,opt,name=east,proto3" json:"east,omitempty"`
+	North         int32                  `protobuf:"zigzag32,2,opt,name=north,proto3" json:"north,omitempty"`
+	Radius        uint32                 `protobuf:"varint,3,opt,name=radius,proto3" json:"radius,omitempty"`
+	MouthEast     int32                  `protobuf:"zigzag32,4,opt,name=mouth_east,json=mouthEast,proto3" json:"mouth_east,omitempty"`
+	MouthNorth    int32                  `protobuf:"zigzag32,5,opt,name=mouth_north,json=mouthNorth,proto3" json:"mouth_north,omitempty"`
+	Narrows       uint32                 `protobuf:"varint,6,opt,name=narrows,proto3" json:"narrows,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *Harbour) Reset() {
+	*x = Harbour{}
+	mi := &file_keel_v1_game_proto_msgTypes[39]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *Harbour) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*Harbour) ProtoMessage() {}
+
+func (x *Harbour) ProtoReflect() protoreflect.Message {
+	mi := &file_keel_v1_game_proto_msgTypes[39]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use Harbour.ProtoReflect.Descriptor instead.
+func (*Harbour) Descriptor() ([]byte, []int) {
+	return file_keel_v1_game_proto_rawDescGZIP(), []int{39}
+}
+
+func (x *Harbour) GetEast() int32 {
+	if x != nil {
+		return x.East
+	}
+	return 0
+}
+
+func (x *Harbour) GetNorth() int32 {
+	if x != nil {
+		return x.North
+	}
+	return 0
+}
+
+func (x *Harbour) GetRadius() uint32 {
+	if x != nil {
+		return x.Radius
+	}
+	return 0
+}
+
+func (x *Harbour) GetMouthEast() int32 {
+	if x != nil {
+		return x.MouthEast
+	}
+	return 0
+}
+
+func (x *Harbour) GetMouthNorth() int32 {
+	if x != nil {
+		return x.MouthNorth
+	}
+	return 0
+}
+
+func (x *Harbour) GetNarrows() uint32 {
+	if x != nil {
+		return x.Narrows
+	}
+	return 0
+}
+
 // Watching is whose boat a connection watches.
 type Watching struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
@@ -4258,7 +4359,7 @@ type Watching struct {
 
 func (x *Watching) Reset() {
 	*x = Watching{}
-	mi := &file_keel_v1_game_proto_msgTypes[39]
+	mi := &file_keel_v1_game_proto_msgTypes[40]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4270,7 +4371,7 @@ func (x *Watching) String() string {
 func (*Watching) ProtoMessage() {}
 
 func (x *Watching) ProtoReflect() protoreflect.Message {
-	mi := &file_keel_v1_game_proto_msgTypes[39]
+	mi := &file_keel_v1_game_proto_msgTypes[40]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4283,7 +4384,7 @@ func (x *Watching) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Watching.ProtoReflect.Descriptor instead.
 func (*Watching) Descriptor() ([]byte, []int) {
-	return file_keel_v1_game_proto_rawDescGZIP(), []int{39}
+	return file_keel_v1_game_proto_rawDescGZIP(), []int{40}
 }
 
 func (x *Watching) GetSailor() string {
@@ -4320,7 +4421,7 @@ type Pong struct {
 
 func (x *Pong) Reset() {
 	*x = Pong{}
-	mi := &file_keel_v1_game_proto_msgTypes[40]
+	mi := &file_keel_v1_game_proto_msgTypes[41]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4332,7 +4433,7 @@ func (x *Pong) String() string {
 func (*Pong) ProtoMessage() {}
 
 func (x *Pong) ProtoReflect() protoreflect.Message {
-	mi := &file_keel_v1_game_proto_msgTypes[40]
+	mi := &file_keel_v1_game_proto_msgTypes[41]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4345,7 +4446,7 @@ func (x *Pong) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Pong.ProtoReflect.Descriptor instead.
 func (*Pong) Descriptor() ([]byte, []int) {
-	return file_keel_v1_game_proto_rawDescGZIP(), []int{40}
+	return file_keel_v1_game_proto_rawDescGZIP(), []int{41}
 }
 
 func (x *Pong) GetClientTimeUs() int64 {
@@ -4658,7 +4759,7 @@ const file_keel_v1_game_proto_rawDesc = "" +
 	"\awaiting\x18\x02 \x01(\rR\awaiting\x12\x1e\n" +
 	"\n" +
 	"spectators\x18\x03 \x01(\bR\n" +
-	"spectators\"\xa3\x03\n" +
+	"spectators\"\xcf\x03\n" +
 	"\aWelcome\x12\x14\n" +
 	"\x05world\x18\x01 \x01(\tR\x05world\x12\x12\n" +
 	"\x04tick\x18\x02 \x01(\x03R\x04tick\x12\"\n" +
@@ -4676,7 +4777,17 @@ const file_keel_v1_game_proto_rawDesc = "" +
 	"\n" +
 	"closing_us\x18\r \x01(\x03R\tclosingUs\x12\x12\n" +
 	"\x04zone\x18\x0e \x01(\tR\x04zone\x12-\n" +
-	"\bwatching\x18\x0f \x01(\v2\x11.keel.v1.WatchingR\bwatching\"P\n" +
+	"\bwatching\x18\x0f \x01(\v2\x11.keel.v1.WatchingR\bwatching\x12*\n" +
+	"\aharbour\x18\x10 \x01(\v2\x10.keel.v1.HarbourR\aharbour\"\xa5\x01\n" +
+	"\aHarbour\x12\x12\n" +
+	"\x04east\x18\x01 \x01(\x11R\x04east\x12\x14\n" +
+	"\x05north\x18\x02 \x01(\x11R\x05north\x12\x16\n" +
+	"\x06radius\x18\x03 \x01(\rR\x06radius\x12\x1d\n" +
+	"\n" +
+	"mouth_east\x18\x04 \x01(\x11R\tmouthEast\x12\x1f\n" +
+	"\vmouth_north\x18\x05 \x01(\x11R\n" +
+	"mouthNorth\x12\x18\n" +
+	"\anarrows\x18\x06 \x01(\rR\anarrows\"P\n" +
 	"\bWatching\x12\x16\n" +
 	"\x06sailor\x18\x01 \x01(\tR\x06sailor\x12\x18\n" +
 	"\amachine\x18\x02 \x01(\bR\amachine\x12\x12\n" +
@@ -4723,7 +4834,7 @@ func file_keel_v1_game_proto_rawDescGZIP() []byte {
 }
 
 var file_keel_v1_game_proto_enumTypes = make([]protoimpl.EnumInfo, 4)
-var file_keel_v1_game_proto_msgTypes = make([]protoimpl.MessageInfo, 41)
+var file_keel_v1_game_proto_msgTypes = make([]protoimpl.MessageInfo, 42)
 var file_keel_v1_game_proto_goTypes = []any{
 	(WatchEnd)(0),          // 0: keel.v1.WatchEnd
 	(Lamp)(0),              // 1: keel.v1.Lamp
@@ -4768,8 +4879,9 @@ var file_keel_v1_game_proto_goTypes = []any{
 	(*Restart)(nil),        // 40: keel.v1.Restart
 	(*Queued)(nil),         // 41: keel.v1.Queued
 	(*Welcome)(nil),        // 42: keel.v1.Welcome
-	(*Watching)(nil),       // 43: keel.v1.Watching
-	(*Pong)(nil),           // 44: keel.v1.Pong
+	(*Harbour)(nil),        // 43: keel.v1.Harbour
+	(*Watching)(nil),       // 44: keel.v1.Watching
+	(*Pong)(nil),           // 45: keel.v1.Pong
 }
 var file_keel_v1_game_proto_depIdxs = []int32{
 	5,  // 0: keel.v1.ClientMessage.hello:type_name -> keel.v1.Hello
@@ -4782,7 +4894,7 @@ var file_keel_v1_game_proto_depIdxs = []int32{
 	10, // 7: keel.v1.Command.sail:type_name -> keel.v1.Sail
 	11, // 8: keel.v1.Command.unwatch:type_name -> keel.v1.Unwatch
 	42, // 9: keel.v1.ServerMessage.welcome:type_name -> keel.v1.Welcome
-	44, // 10: keel.v1.ServerMessage.pong:type_name -> keel.v1.Pong
+	45, // 10: keel.v1.ServerMessage.pong:type_name -> keel.v1.Pong
 	41, // 11: keel.v1.ServerMessage.queued:type_name -> keel.v1.Queued
 	40, // 12: keel.v1.ServerMessage.restart:type_name -> keel.v1.Restart
 	39, // 13: keel.v1.ServerMessage.sea_areas:type_name -> keel.v1.SeaAreas
@@ -4822,12 +4934,13 @@ var file_keel_v1_game_proto_depIdxs = []int32{
 	35, // 47: keel.v1.IslandCaps.caps:type_name -> keel.v1.IslandCap
 	37, // 48: keel.v1.Keyframe.systems:type_name -> keel.v1.SystemKey
 	28, // 49: keel.v1.Welcome.light:type_name -> keel.v1.Light
-	43, // 50: keel.v1.Welcome.watching:type_name -> keel.v1.Watching
-	51, // [51:51] is the sub-list for method output_type
-	51, // [51:51] is the sub-list for method input_type
-	51, // [51:51] is the sub-list for extension type_name
-	51, // [51:51] is the sub-list for extension extendee
-	0,  // [0:51] is the sub-list for field type_name
+	44, // 50: keel.v1.Welcome.watching:type_name -> keel.v1.Watching
+	43, // 51: keel.v1.Welcome.harbour:type_name -> keel.v1.Harbour
+	52, // [52:52] is the sub-list for method output_type
+	52, // [52:52] is the sub-list for method input_type
+	52, // [52:52] is the sub-list for extension type_name
+	52, // [52:52] is the sub-list for extension extendee
+	0,  // [0:52] is the sub-list for field type_name
 }
 
 func init() { file_keel_v1_game_proto_init() }
@@ -4874,7 +4987,7 @@ func file_keel_v1_game_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_keel_v1_game_proto_rawDesc), len(file_keel_v1_game_proto_rawDesc)),
 			NumEnums:      4,
-			NumMessages:   41,
+			NumMessages:   42,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

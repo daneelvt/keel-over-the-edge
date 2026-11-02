@@ -788,6 +788,25 @@ message Welcome {
   // comes again at each new watch, and for the connection's own boat when
   // it sails again.
   Watching watching = 15;
+  // The world's harbour, where the refuge holds the wind and the start's
+  // breeze does not; none in a world without land, whose refuge and
+  // breeze are about the world's centre. The client computes the wind
+  // with it, as the server does, and a new boat's first view looks past
+  // the boat at its mouth.
+  Harbour harbour = 16;
+}
+
+// Harbour is a world's harbour, in decimetres east and north of the
+// world's centre: its basin, a circle at its widest radius; and its narrows,
+// from the basin's centre out to the mouth, where they open to the sea,
+// and their width there.
+message Harbour {
+  sint32 east = 1;
+  sint32 north = 2;
+  uint32 radius = 3;
+  sint32 mouth_east = 4;
+  sint32 mouth_north = 5;
+  uint32 narrows = 6;
 }
 
 // Watching is whose boat a connection watches.

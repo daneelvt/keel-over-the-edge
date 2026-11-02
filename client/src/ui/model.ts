@@ -119,6 +119,110 @@ export class WindWindow {
   }
 }
 
+/** What the sheet's legend says of the sail: nothing while it draws. */
+export type SailState = '' | 'luffing' | 'stalled' | 'aback';
+
+/** What the sail wants of its sheet, as Out.Sail says it (internal/physics/records.go). */
+const SAIL_DRAWING = 0;
+const SAIL_WORDS: Readonly<Record<number, SailState>> = {
+  0: '',
+  1: 'luffing',
+  2: 'stalled',
+  3: 'aback',
+};
+
+/** A state other than drawing shows once it has held this long, in seconds of world time. */
+export const SAIL_SHOW = 1.5;
+/** What shows clears once the sail has drawn this long, in seconds. */
+export const SAIL_CLEAR = 1;
+/**
+ * The sail's state as the sheet's legend says it: what the step says of it
+ * (Out.Sail: luffing, stalled or aback, or drawing, which a boat at rest
+ * head to wind is) once it has said so for SAIL_SHOW, cleared after
+ * SAIL_CLEAR of drawing, so a gust or a lull does not make it flicker.
+ * Another state than the one shown replaces it once it too has held
+ * SAIL_SHOW. The server holds a machine sailor's the same. It allocates
+ * nothing.
+ */
+export class SailHold {
+  /** What shows. */
+  shown: SailState = '';
+  #state = SAIL_DRAWING;
+  #since = Number.NaN;
+  #last = Number.NaN;
+
+  /**
+   * Takes the sail at time (s of world time) from the step's out, for a
+   * sailor in the boat or not, and sets what shows.
+   */
+  add(time: number, out: Float64Array, aboard: boolean): void {
+    if (!(time >= this.#last)) {
+      // The first look, or time went back: begin again.
+      this.shown = '';
+      this.#state = SAIL_DRAWING;
+      this.#since = time;
+    }
+    this.#last = time;
+    let state = out[RECORDS.out.sail] ?? SAIL_DRAWING;
+    if (!aboard) {
+      // Nobody at the sheet: nothing to say, and nothing held.
+      this.shown = '';
+      state = SAIL_DRAWING;
+    }
+    if (state !== this.#state) {
+      this.#state = state;
+      this.#since = time;
+    }
+    const held = time - this.#since;
+    if (state === SAIL_DRAWING) {
+      if (held >= SAIL_CLEAR) {
+        this.shown = '';
+      }
+    } else if (held >= SAIL_SHOW) {
+      this.shown = SAIL_WORDS[state] ?? '';
+    }
+  }
+}
+
+/** The sheet's words for assistive technology: its setting, and what the sail wants. */
+export function sheetText(sheet: number, sail: SailState): string {
+  const v = `Sheet ${Math.round(sheet * 100)}%`;
+  switch (sail) {
+    case 'luffing':
+      return `${v}, luffing: trim in`;
+    case 'stalled':
+      return `${v}, stalled: ease`;
+    case 'aback':
+      return `${v}, aback`;
+    default:
+      return v;
+  }
+}
+
+/** The sheet's aria-valuetext, written only when the whole percent or the sail's word changes. */
+export class SheetText {
+  el: HTMLElement | SVGElement | null = null;
+  #percent = -1;
+  #sail: SailState | null = null;
+
+  set(sheet: number, sail: SailState): void {
+    const percent = Math.round(sheet * 100);
+    if (this.el === null || (percent === this.#percent && sail === this.#sail)) {
+      return;
+    }
+    this.#percent = percent;
+    this.#sail = sail;
+    this.el.setAttribute('aria-valuetext', sheetText(sheet, sail));
+  }
+
+  /** Forgets what was written (a new element was attached). */
+  attach(el: HTMLElement | SVGElement | null): void {
+    this.el = el;
+    this.#percent = -1;
+    this.#sail = null;
+  }
+}
+
 /** The helm's knob travels along an arc of this many degrees each side of the top. */
 export const HELM_ARC = 55;
 
@@ -140,6 +244,9 @@ export class HudModel {
   readonly tack = signal('');
   /** The autopilot: what it holds, or that it is turning; empty while off. */
   readonly pilot = signal('');
+  /** What the sail is doing wrong, on the sheet's legend: luffing, stalled, aback, or nothing. */
+  readonly sail = signal<SailState>('');
+  readonly sailHold = new SailHold();
   #bumpUntil = 0;
   /** How many times the signals were written. */
   writes = 0;
@@ -163,6 +270,7 @@ export class HudModel {
   /** The controls' values, for assistive technology. */
   readonly helmValue = new Moved((el, v) => el.setAttribute('aria-valuenow', v.toFixed(2)), 0.01);
   readonly sheetValue = new Moved((el, v) => el.setAttribute('aria-valuenow', v.toFixed(2)), 0.01);
+  readonly sheetText = new SheetText();
   /** The clinometer's needle. */
   readonly clinometer = new Moved(rotate, 0.1);
 
@@ -216,6 +324,9 @@ export class HudModel {
     this.sheetActual.set(sheetOut);
     this.helmValue.set(helm);
     this.sheetValue.set(sheet);
+    // The sail by world time, so a frame's length makes no difference.
+    this.sailHold.add(time, out, pose.sailorMode === 0);
+    this.sheetText.set(sheet, this.sail.peek());
     this.clinometer.set((pose.heel * 180) / Math.PI);
     if (this.held || now - this.#lastWrite < SIGNAL_INTERVAL) {
       return;
@@ -233,6 +344,7 @@ export class HudModel {
     this.sailor.value =
       pose.sailorMode === 0 && aground !== 0 ? AGROUND : (SAILOR_LINES[pose.sailorMode] ?? '');
     this.pilot.value = pilotText(pilot, way, watch, left);
+    this.sail.value = this.sailHold.shown;
     if (this.bump.value !== '' && now >= this.#bumpUntil) {
       this.bump.value = '';
     }

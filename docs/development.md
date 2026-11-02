@@ -602,12 +602,28 @@ with all sixteen in reach, on the Mac). From the spell:
   wind is kept, and `rim` rising from 1 at 3 NM to 1.3 at the rim. The
   strongest gust veers the wind by 8° and the deepest lull backs it by 4°.
   Near a squall's core and behind a front's line the gust factor is greater.
-- **The refuge.** Within 1 NM of the centre the mean wind above 10 knots is
-  passed through `knee + soft × tanh((v − knee) ÷ soft)`, which nears 14
-  knots and never passes it, and the wind with its gusts the same way from
-  14 knots toward 18; the limits fade out by 1.4 NM. So a beginner at the
-  centre never meets more than a force 4 with gusts into 5, whatever blows
-  outside.
+- **The refuge.** In Port Royal's harbour, its basin and its narrows
+  (`physics.Harbour`, the world's, from its basin's circle at its widest
+  and its narrows to the mouth), the mean wind above 10 knots is passed
+  through `knee + soft × tanh((v − knee) ÷ soft)`, which nears 14 knots and
+  never passes it, and the wind with its gusts the same way from 14 knots
+  toward 18; the limits fade out 150 m beyond the harbour. So a boat in the
+  harbour never meets more than a force 4 with gusts into 5, whatever blows
+  outside. The swell, set a sea area at a time, is held the same way in
+  the areas the harbour reaches into.
+- **The start's breeze.** About Port Royal, outside its harbour, the mean
+  wind below 8 knots is passed through `knee − soft × tanh((knee − v) ÷
+  soft)` toward a floor of 5 knots: a calm there is a light breeze, 3 knots
+  becomes 5.2 and 6 becomes 6.3, and above the knee nothing changes. It
+  holds in full within 0.8 NM of the centre and fades out by 1.2 NM, and in
+  the harbour it fades from the mouth to nothing 100 m in, so the basin
+  keeps its calm. It lifts the mean the sea follows, and after the land's
+  shelter the wind with its gusts, the mean and the typical gust, each once,
+  so the island's lee cannot take it away. A world with no harbour (the
+  sandbox, a test's) has one of no size at the centre. The world's harbour
+  reaches the phone in the Welcome, in decimetres, so its wind is the
+  server's to the bit; on the server each world's timeline carries its own
+  copy of the wind's constants with its harbour (`Timeline.InHarbour`).
 
 A **steady** spell is one wind everywhere with none of this: what a
 developer's `/debug/wind` sets, what the tests of other things sail in, and
@@ -1520,10 +1536,11 @@ scrub, reef; the first is the open sea's bed). The **shelter** has cells of
 5. **Derived** (`derived.go`): each sea area's **fetch** for a wind from
    each of 16 directions (nine radials 3° apart, upwind to the first land,
    capped at `weather.sea.fetchCap`; the rim ends nothing); the **shelter**
-   (below); the **start area**: of 16 directions from Port Royal's centre,
-   the stretch of water off its coast where the spawn grid's rows, laid
-   along the coast, hold all 4,096 places in the fewest rows, each place in
-   2 m of water and 10 m from land.
+   (below); the **roads**: of 16 directions from Port Royal's centre, the
+   stretch of water off its coast where the spawn grid's rows, laid along
+   the coast, hold all 4,096 places in the fewest rows, each place in 2 m
+   of water and 10 m from land. The start itself is laid after the towns
+   (below).
 6. **Names** (`names.go`), from the names in `namelist.go` (below).
 7. **The validator** (`validate.go`): Port Royal's width, height, cliffs
    (at least a third of its coast) and the centre on it; no other land in
@@ -2241,9 +2258,31 @@ flag, a lantern by its door, its top's height).
 
 ### The start and in port
 
-New boats start **moored** in rows across Port Royal's basin, outside the
-turning circle, each facing the narrows (`Start.Moorings` and `Headings`);
-then the roads outside, as before, to 4,096 places. A town's **harbour**
+New boats start in the **roads off Port Royal's harbour mouth**: a fan of
+places 20 m apart within 1.2 km of the mouth and no nearer it than 80 m,
+outside a fairway 60 m wide straight out of the narrows and out of port,
+each in sight of the mouth across no land, nearest the mouth first
+(`Start.Fan` places, each facing away from it, `Headings`); then the roads
+above to 4,096 places. A new boat takes the place of its slot, so the
+first sailors start close in and later ones fan out; the validator holds
+the first 256 within 500 m of the mouth. The **moorings** across the basin,
+outside the turning circle and facing the narrows (`Start.Moorings`), are
+for boats that come in: no boat starts on one.
+
+A new boat starts **ready to sail** (`internal/sim/start.go`): at rest on a
+reach 110° off the mean wind at its place, on the side with the more open
+water ahead out to 150 m, on that reach and on the close reach its weather
+helm rounds it up to, then on the side leading away from the coast; its
+sheet its kind's start sheet for the angle (`boats[].startSheet`, chosen by
+`go run ./tools/polar -start`), its helm centred, its autopilot off. A boat
+back from the edge, or restored onto land, starts the same way, and the
+phone takes the controls from the Welcome that follows. A world with no
+start area (open sea, or its land sailed off) starts boats on the spawn
+grid as they are. `TestUntouchedSailorsSailAway` sails nobody at the helm
+from the first 64 places of seeds 1 and 2 (`KEEL_UNTOUCHED_SEEDS=8` for
+1–8), from eight directions in a calm and a breeze: each is making 1.5
+knots or more 20 s on, and afloat a minute on. The phone's first view of a new boat looks past it at the harbour's
+mouth until the sailor's first touch. A town's **harbour**
 is kept as discs of water (`Town.Harbour`): `Bundle.InPort` answers "in
 port?" from them and the ground, and the phone answers it the same from the
 discs its chunks carry.

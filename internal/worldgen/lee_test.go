@@ -57,10 +57,12 @@ func TestBasinIsCalm(t *testing.T) {
 		t.Fatal(err)
 	}
 	waves, _ := cat.Prepare()
-	if b.Start.Moorings == 0 {
+	ms := b.Start.Moorings
+	if len(ms) == 0 {
 		t.Fatal("seed 1 has no moorings")
 	}
-	for _, m := range [][2]float64{b.Start.Places[0], b.Start.Places[b.Start.Moorings/2], b.Start.Places[b.Start.Moorings-1]} {
+	for _, mo := range []Mooring{ms[0], ms[len(ms)/2], ms[len(ms)-1]} {
+		m := [2]float64{mo.X, mo.Y}
 		calm := 0
 		var factors []float64
 		for k := range physics.ShelterDirections {

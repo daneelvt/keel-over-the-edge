@@ -51,6 +51,10 @@ type Config struct {
 	// Kinds are the kinds of boat, prepared; a slot's Kind indexes them. A
 	// new boat is of the first kind.
 	Kinds []physics.Prepared
+	// StartSheets are each kind's sheet for a start from rest, by its
+	// index, as a StartSheet's pairs; a kind with none starts with the
+	// sheet at half.
+	StartSheets [][][2]float64
 	// Waves are the sea's waves, prepared, with which the kinds were
 	// prepared too; nil is a world of flat water.
 	Waves *physics.Waves
@@ -92,11 +96,18 @@ type Terrain struct {
 	// physics.SeaAreaCentre numbers them; nil is open water's everywhere.
 	Fetch []physics.Fetch
 	// Start is the start area's places, in order: where new boats appear.
-	// None is the spawn grid south of the centre.
+	// None is the spawn grid south of the centre. Away is the way from
+	// each away from the coast, rad clockwise from north: a new boat
+	// starts on the reach that leads that way.
 	Start []physics.State
+	Away  []float64
 	// Circulation is the world's way round the disk for its current: 1
 	// clockwise seen from above, −1 the other way, 0 none.
 	Circulation float64
+	// Harbour is the world's harbour, where the refuge holds and the
+	// start's breeze does not; nil for none. The world's timeline must be
+	// in it (weather.Timeline.InHarbour), as every game connection is told.
+	Harbour *physics.Harbour
 }
 
 // A Phase is a part of a tick.
@@ -151,6 +162,7 @@ type World struct {
 	capacity  int
 	limit     int
 	kinds     []physics.Prepared
+	sheets    [][][2]float64
 	sea       sea
 	timeline  *weather.Timeline
 	keyMemo   keyMemo
@@ -169,10 +181,11 @@ type World struct {
 	workers workers
 
 	// The land: the ground and the shelter a step reads, nil for none, and
-	// the start area's places.
+	// the start area's places, with the way from each away from the coast.
 	ground  *physics.Ground
 	shelter *physics.Shelter
 	start   []physics.State
+	away    []float64
 
 	// The edge, or nil for none: the width of the mist band inside the lip
 	// and that plus the edge's clear distance, m; the boats that started
@@ -237,6 +250,7 @@ func New(cfg Config) (*World, error) {
 		capacity: cfg.Capacity,
 		limit:    cfg.Limit,
 		kinds:    cfg.Kinds,
+		sheets:   cfg.StartSheets,
 		grace:    cfg.Grace,
 		timeline: cfg.Weather,
 		ctx:      context.Background(),
@@ -252,6 +266,9 @@ func New(cfg Config) (*World, error) {
 	}
 	if t := cfg.Terrain; t != nil {
 		w.ground, w.shelter, w.start, w.circulation = t.Ground, t.Shelter, t.Start, t.Circulation
+		if len(t.Away) == len(t.Start) {
+			w.away = t.Away
+		}
 		if t.Fetch != nil && len(t.Fetch) != seaAreas {
 			return nil, fmt.Errorf("sim: a fetch for %d sea areas; the world has %d", len(t.Fetch), seaAreas)
 		}
@@ -283,6 +300,9 @@ func New(cfg Config) (*World, error) {
 	f.Weathers = f.Weathers[:0]
 	w.spells(f)
 	w.sea.under(&f.Sea, f.Tick, devOf(f))
+	// The wind at the empty world's tick, which turns a boat that joins
+	// on the first tick onto its reach.
+	w.weatherAt(f)
 	f.NextBoat = 1
 	w.workers.start(w, max(cfg.Workers, 1))
 	return w, nil
@@ -433,12 +453,20 @@ func (w *World) placeAt(p int64) physics.State {
 
 // spawn is where a new boat in slot s of f appears: the first place of the
 // start from its slot's, along the row then the next, with no hull within
-// spawnClear, so that no boat appears inside another. In a world of
-// ghosts, its slot's place.
+// spawnClear, so that no boat appears inside another; in a world of
+// ghosts, its slot's place. It faces a reach off the wind there (onReach).
 func (w *World) spawn(f *bus.Frame, s int32) physics.State {
+	p := w.placeOf(f, s)
+	st := w.placeAt(p)
+	w.onReach(&st, p)
+	return st
+}
+
+// placeOf is the place of the start a new boat in slot s of f appears at.
+func (w *World) placeOf(f *bus.Frame, s int32) int64 {
 	p := int64(s)
 	if w.enc == nil {
-		return w.placeAt(p)
+		return p
 	}
 	for end := p + int64(w.capacity); p < end; p++ {
 		st := w.placeAt(p)
@@ -450,8 +478,8 @@ func (w *World) spawn(f *bus.Frame, s int32) physics.State {
 			}
 		}
 		if free {
-			return st
+			return p
 		}
 	}
-	return w.placeAt(int64(s))
+	return int64(s)
 }

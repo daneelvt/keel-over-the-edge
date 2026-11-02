@@ -66,6 +66,20 @@ func (c *Catalog) PrepareSky() *sky.Prepared {
 	return s
 }
 
+// StartSheets are each boat's sheet for a start from rest, by its index:
+// pairs of an angle off the wind, degrees, and the sheet there.
+func (c *Catalog) StartSheets() [][][2]float64 {
+	out := make([][][2]float64, len(c.Boats))
+	for i, b := range c.Boats {
+		for _, p := range b.StartSheet {
+			if len(p) == 2 {
+				out[i] = append(out[i], [2]float64{p[0], p[1]})
+			}
+		}
+	}
+	return out
+}
+
 // PrepareWeather readies the catalog's wind for the physics.
 func (c *Catalog) PrepareWeather() *physics.WeatherPrepared {
 	p := WeatherParams(c)

@@ -58,6 +58,7 @@ func (w *World) Restore(snapshot []byte, now int64) (Restored, error) {
 			if f.Voyage[s].Falling() {
 				f.Voyage[s] = bus.Voyage{}
 				f.State[s] = w.spawn(f, s)
+				w.readyControls(f, s)
 				f.Course[s] = physics.Course{}
 				r.Fallen++
 			}
@@ -66,6 +67,7 @@ func (w *World) Restore(snapshot []byte, now int64) (Restored, error) {
 			for _, s := range f.Live {
 				if e, _ := w.ground.At(f.State[s].X, f.State[s].Y); e > 0 {
 					f.State[s] = w.spawn(f, s)
+					w.readyControls(f, s)
 					r.Ashore++
 				}
 			}

@@ -224,6 +224,7 @@ describe('pacing online', () => {
       circulation: 0,
       tools: false,
       light: null,
+      harbour: null,
       endsUs: 0,
       closingUs: 0,
       zone: '',
@@ -332,6 +333,7 @@ describe('the queue and the fleet online', () => {
       circulation: 0,
       tools: false,
       light: null,
+      harbour: null,
       endsUs: 0,
       closingUs: 0,
       zone: '',
@@ -364,6 +366,7 @@ describe('the queue and the fleet online', () => {
       circulation: 0,
       tools: false,
       light: null,
+      harbour: null,
       endsUs: 0,
       closingUs: 0,
       zone: '',
@@ -404,6 +407,7 @@ describe('the bell online', () => {
       circulation: 0,
       tools: false,
       light: null,
+      harbour: null,
       endsUs: 0,
       closingUs: 0,
       zone: '',
@@ -437,6 +441,7 @@ describe('the bell online', () => {
       circulation: 0,
       tools: false,
       light: null,
+      harbour: null,
       endsUs: 0,
       closingUs: 0,
       zone: '',
@@ -466,6 +471,7 @@ describe('the bell online', () => {
       circulation: 0,
       tools: false,
       light: null,
+      harbour: null,
       endsUs: 0,
       closingUs: 0,
       zone: '',
@@ -488,5 +494,89 @@ describe('the reload after 4002', () => {
     expect(reloadForVersion(marks, 1_000_000 + RELOAD_EVERY - 1)).toBe(false);
     expect(reloadForVersion(marks, 1_000_000 + RELOAD_EVERY)).toBe(true);
     expect(reloadForVersion(null, Date.now())).toBe(true);
+  });
+});
+
+describe('a new boat’s first view', () => {
+  const harbour = { x: 400, y: -900, radius: 380, mouthX: 650, mouthY: -1250, narrows: 90 };
+  type Welcome = Extract<FromWorker, { type: 'welcome' }>;
+  const welcome = (change: Partial<Welcome>): Welcome => ({
+    type: 'welcome',
+    boat: 1,
+    rejoined: false,
+    kind: 0,
+    tick: 100,
+    epochUs: 0,
+    world: '',
+    land: true,
+    circulation: 0,
+    tools: false,
+    light: null,
+    harbour,
+    endsUs: 0,
+    closingUs: 0,
+    zone: '',
+    watching: null,
+    first: true,
+    ...change,
+  });
+  async function connection() {
+    const port = new FakePort();
+    const o = new Online(port, await predictor(), {
+      helm: { target: 0 },
+      sheet: { target: 0.5 },
+      pilot: new PilotInput(),
+      beforeStep: null,
+      clock: { steps: 0, alpha: 0 },
+    });
+    const opened: number[][] = [];
+    o.onOpening = (...at) => opened.push(at);
+    /** A Welcome, then its first snapshot with the boat at (east, north). */
+    const meet = (w: Partial<Welcome>, east: number, north: number) => {
+      port.deliver(welcome(w));
+      const sn = start(100);
+      sn.state[S.x] = east;
+      sn.state[S.y] = north;
+      o.reconcile(sn, 0);
+    };
+    return { o, opened, meet };
+  }
+
+  test('opens on the harbour’s mouth for a new boat in the roads off it, once', async () => {
+    const { o, opened, meet } = await connection();
+    meet({}, 900, -1900);
+    expect(opened).toEqual([[900, -1900, 650, -1250]]);
+    // The next snapshot is no new boat.
+    const sn = start(101);
+    sn.state[S.x] = 900;
+    sn.state[S.y] = -1900;
+    o.reconcile(sn, 0);
+    expect(opened).toHaveLength(1);
+  });
+
+  test('not for a boat rejoined, back from the edge, far from the mouth, or in a world without a harbour', async () => {
+    for (const [w, east, north] of [
+      [{ rejoined: true }, 900, -1900],
+      [{ harbour: null }, 900, -1900],
+      [{}, 650 + 1200, -1250 - 1000],
+    ] as const) {
+      const { opened, meet } = await connection();
+      meet(w, east, north);
+      expect(opened).toEqual([]);
+    }
+    // The boat back from the edge, a new boat on the same connection.
+    const { opened, meet } = await connection();
+    meet({}, 900, -1900);
+    meet({ boat: 2, first: false }, 900, -1900);
+    expect(opened).toHaveLength(1);
+  });
+
+  test('not for a watch; for a new boat after one', async () => {
+    const { opened, meet } = await connection();
+    const watching = { sailor: 'Iron Mary', machine: true, mine: false };
+    meet({ watching, boat: 7 }, 900, -1900);
+    expect(opened).toEqual([]);
+    meet({ boat: 2, first: false }, 900, -1900);
+    expect(opened).toHaveLength(1);
   });
 });

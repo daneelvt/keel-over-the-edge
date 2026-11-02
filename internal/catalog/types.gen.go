@@ -154,6 +154,11 @@ type Boat struct {
 
 	// Physics corresponds to the JSON schema field "physics".
 	Physics BoatPhysics `json:"physics"`
+
+	// Its sheet for a start from rest: pairs of an angle off the wind, in degrees,
+	// and the sheet there, from 0 hauled in to 1 let fly, by rising angle, read
+	// linearly between them.
+	StartSheet [][]float64 `json:"startSheet"`
 }
 
 // A boat's art. Every art object's values are paths under art/, checked to exist.
@@ -2466,6 +2471,25 @@ const StandsStreet Stands = "street"
 const StandsSummit Stands = "summit"
 const StandsWater Stands = "water"
 
+// The start's places in the roads off Port Royal's harbour mouth, nearest it
+// first, each in sight of it.
+type StartFan struct {
+	// Clear of a fairway this wide running straight out of the narrows, in m.
+	Fairway float64 `json:"fairway"`
+
+	// At least this many places lie in the fan, the first of the start.
+	First int `json:"first"`
+
+	// Those within this of the mouth, in m.
+	FirstWithin float64 `json:"firstWithin"`
+
+	// And no nearer it than this, in m.
+	Nearest float64 `json:"nearest"`
+
+	// Places lie within this of the mouth, in m.
+	Reach float64 `json:"reach"`
+}
+
 // The moorings across Port Royal's basin.
 type StartMoorings struct {
 	// And this far from land, quays and piers, in m.
@@ -3162,6 +3186,22 @@ type WeatherDisk struct {
 	// takes to turn once, in hours.
 	AcrossTurn []float64 `json:"acrossTurn"`
 
+	// Beyond this of the centre the start's breeze does not hold, in nautical miles.
+	BreezeFade float64 `json:"breezeFade"`
+
+	// The mean wind the start's breeze lifts toward, in knots: below its knee.
+	BreezeFloor float64 `json:"breezeFloor"`
+
+	// Inside Port Royal's harbour the start's breeze fades to nothing this far from
+	// the mouth, in m.
+	BreezeInside float64 `json:"breezeInside"`
+
+	// The start's breeze lifts the mean wind below this, in knots.
+	BreezeKnee float64 `json:"breezeKnee"`
+
+	// Within this of the centre the start's breeze holds in full, in nautical miles.
+	BreezeWithin float64 `json:"breezeWithin"`
+
 	// The lip of the falls: the disk's radius, in nautical miles.
 	Edge float64 `json:"edge"`
 
@@ -3171,7 +3211,7 @@ type WeatherDisk struct {
 	// The falls draw the air toward the lip from here, in nautical miles.
 	FallDraftFrom float64 `json:"fallDraftFrom"`
 
-	// Within this the refuge's limits hold in full, in nautical miles.
+	// Within this of Port Royal's harbour the refuge's limits hold in full, in m.
 	RefugeInner float64 `json:"refugeInner"`
 
 	// The mean wind the refuge holds to, in knots.
@@ -3180,7 +3220,7 @@ type WeatherDisk struct {
 	// The refuge softens the mean wind above this, in knots.
 	RefugeMeanKnee float64 `json:"refugeMeanKnee"`
 
-	// Beyond this the refuge's limits do not hold, in nautical miles.
+	// Beyond this of Port Royal's harbour the refuge's limits do not hold, in m.
 	RefugeOuter float64 `json:"refugeOuter"`
 
 	// The swell the refuge holds to, in m: above its knee.
@@ -4266,14 +4306,19 @@ type WorldSize struct {
 	Worth float64 `json:"worth"`
 }
 
-// Where boats start: moored in Port Royal's basin, then the roads off its coast
-// with the most room.
+// Where boats start: in the roads off Port Royal's harbour mouth, then the roads
+// off its coast with the most room. Port Royal's basin has moorings, for boats
+// that come in.
 type WorldStart struct {
 	// And no land within this, in m.
 	Clear float64 `json:"clear"`
 
 	// A place has at least this much water, in m.
 	Depth float64 `json:"depth"`
+
+	// The start's places in the roads off Port Royal's harbour mouth, nearest it
+	// first, each in sight of it.
+	Fan StartFan `json:"fan"`
 
 	// From every place in the roads, water at least this deep, in m, leads out to
 	// open water.
@@ -4381,4 +4426,4 @@ type WorldZones struct {
 }
 
 // Version is the catalog version (tools/catalog).
-const Version = "abcc37dafb1e927d"
+const Version = "de5e6f7cacacb033"

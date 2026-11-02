@@ -171,19 +171,19 @@ const (
 // 1 NM, where the steps' table has 0.72.
 func TestSpeedFactor(t *testing.T) {
 	p := testWeather(t)
-	s := Spell{Steady: 0, Speed: 500, Gust: 1000}
+	s := Spell{Steady: 0, Speed: 700, Gust: 1000}
 	w := weatherOf(p, s)
 	for _, c := range []struct{ nm, want, within float64 }{
 		{0, 0.65, 1e-12}, {1, 0.7499, 0.001}, {2.1, 1, 1e-12}, {3, 1.2, 0.01}, {4.2, 1.35, 1e-12}, {4.5, 1.35, 1e-12},
 	} {
-		// 5 m/s at mid-disk is under the refuge's knee at the centre, so
-		// the refuge leaves it alone.
+		// 7 m/s at mid-disk is 8.8 knots at the centre: above the start's
+		// breeze's knee and under the refuge's, so neither touches it.
 		// The sea's wind: without the falls' draft, which blows in the
 		// mist band.
 		var at WeatherTick
 		WeatherAt(w, &at, worldTick)
 		mean, _ := MeanWindAt(&at, 0, c.nm*nm)
-		got := mean / 5
+		got := mean / 7
 		if math.Abs(got-c.want) > c.within*c.want {
 			t.Errorf("%g NM: the speed factor is %.4f, want %.4f", c.nm, got, c.want)
 		}
@@ -384,7 +384,7 @@ func TestPhasesExact(t *testing.T) {
 // sampled every minute on a 50 m grid through stormy spells; beyond its
 // blend the refuge changes nothing.
 func TestRefuge(t *testing.T) {
-	p := testWeather(t)
+	p := harbourWeather(t)
 	params, _ := weatherOnce()
 	spells := 20
 	minutes := 30
@@ -392,7 +392,7 @@ func TestRefuge(t *testing.T) {
 		spells, minutes = 4, 10
 	}
 	rng := rand.New(rand.NewPCG(5, 5))
-	var meanMost, windMost float64
+	var meanMost, windMost, offMost float64
 	for n := range spells {
 		s := spellOfRegime(t, p, "stormy", uint32(n), 360*rng.Float64(), 0, 2*hourOfTicks)
 		w := weatherOf(p, s)
@@ -400,32 +400,155 @@ func TestRefuge(t *testing.T) {
 			tick := float64(rng.IntN(2*hourOfTicks)) + worldTick
 			var at WeatherTick
 			WeatherAt(w, &at, tick)
-			for x := -nm; x <= nm; x += 50 {
-				for y := -nm; y <= nm; y += 50 {
-					if x*x+y*y > nm*nm {
-						continue
-					}
+			for x := -nm; x <= nm; x += 25 {
+				for y := -nm; y <= nm; y += 25 {
 					var pt WindPoint
 					WindPointAt(&at, x, y, &pt, nil)
-					meanMost, windMost = max(meanMost, pt.MeanSpeed), max(windMost, pt.Speed)
+					if outside, _ := p.harbourAt(x, y); outside <= 0 {
+						meanMost, windMost = max(meanMost, pt.MeanSpeed), max(windMost, pt.Speed)
+					}
 				}
 			}
+			// Off the mouth, beyond the refuge's blend.
+			off := windAt(w, testHarbour.MouthX, testHarbour.MouthY-300, tick)
+			offMost = max(offMost, off.MeanSpeed)
 		}
 	}
-	t.Logf("within a mile: the mean wind at most %.2f knots, the wind %.2f", meanMost/knot, windMost/knot)
+	t.Logf("in the harbour: the mean wind at most %.2f knots, the wind %.2f; 300 m off its mouth the mean %.2f",
+		meanMost/knot, windMost/knot, offMost/knot)
 	if meanMost >= params.RefugeMean*knot || windMost >= params.RefugeWind*knot {
-		t.Errorf("within a mile the mean wind reached %.2f knots and the wind %.2f", meanMost/knot, windMost/knot)
+		t.Errorf("in the harbour the mean wind reached %.2f knots and the wind %.2f", meanMost/knot, windMost/knot)
 	}
 	if meanMost < 12*knot || windMost < 15*knot {
-		t.Errorf("a stormy spell's wind within a mile is only %.2f knots, %.2f with gusts", meanMost/knot, windMost/knot)
+		t.Errorf("a stormy spell's wind in the harbour is only %.2f knots, %.2f with gusts", meanMost/knot, windMost/knot)
 	}
-	// Outside the refuge's blend, its limits are not felt.
+	if offMost <= params.RefugeMean*knot {
+		t.Errorf("300 m off the mouth a stormy spell's mean wind is held to %.2f knots, as in the refuge", offMost/knot)
+	}
+	// Outside the refuge's blend and the start's breeze, its limits are
+	// not felt.
 	s := spellOfRegime(t, p, "stormy", 1, 0, 0, 0)
 	w := weatherOf(p, s)
 	pt := windAt(w, 0, 1.5*nm, worldTick)
 	factor := p.speedCentre + p.speedSpan*smooth(1.5*nm/p.rim)
 	if math.Abs(pt.MeanSpeed-s.Speed*SeaSpeedStep*factor) > 1e-9 {
 		t.Errorf("at 1.5 NM the mean wind is %.3f m/s, not the spell's %.3f", pt.MeanSpeed, s.Speed*SeaSpeedStep*factor)
+	}
+}
+
+// testHarbour is a harbour like seed 1's Port Royal's: a basin 130 m
+// across its mean radius a little off the disk's centre, its narrows
+// running south to the mouth.
+var testHarbour = Harbour{X: -40, Y: 70, Radius: 130, MouthX: -40, MouthY: -150, Narrows: 50}
+
+// harbourWeather is the catalog's wind about testHarbour.
+func harbourWeather(t testing.TB) *WeatherPrepared {
+	p := testWeather(t)
+	p.SetHarbour(&testHarbour)
+	return p
+}
+
+// The start's breeze lifts the mean wind softly toward a light breeze:
+// 0 knots to 5.0, 3 to 5.2, 6 to 6.3, smoothly through its knee and
+// nothing above it.
+func TestBreezeFloor(t *testing.T) {
+	p := testWeather(t)
+	for _, c := range []struct{ in, want float64 }{{0, 5.03}, {3, 5.21}, {6, 6.25}, {7.99, 7.99}, {8, 8}, {12, 12}} {
+		if got := lift(c.in*knot, p.breezeKnee, p.breezeSoft) / knot; math.Abs(got-c.want) > 0.006 {
+			t.Errorf("%.2f knots lifted is %.3f, want %.2f", c.in, got, c.want)
+		}
+	}
+	prev := 0.0
+	for v := 0.0; v <= 10*knot; v += 0.001 {
+		got := lift(v, p.breezeKnee, p.breezeSoft)
+		if got < prev || got < v || got > max(v, p.breezeKnee) {
+			t.Fatalf("%.3f m/s is lifted to %.4f, after %.4f", v, got, prev)
+		}
+		prev = got
+	}
+}
+
+// The start's breeze holds a calm up to a light breeze about Port Royal,
+// outside its harbour; not in the basin, nor beyond its fade; and after
+// the land's shelter, the gusty wind as the mean.
+func TestStartBreeze(t *testing.T) {
+	p := harbourWeather(t)
+	params, _ := weatherOnce()
+	calm := spellOfRegime(t, p, "settled", 2, 120, 0, 2*hourOfTicks)
+	calm.Speed = 10 // a fifth of a knot at mid-disk
+	calm.Gust = 1300
+	w := weatherOf(p, calm)
+	var at WeatherTick
+	WeatherAt(w, &at, worldTick)
+	floor := params.BreezeFloor * knot
+	// In the roads off the mouth, and anywhere within its radius outside
+	// the harbour.
+	for _, pt := range [][2]float64{{-40, -250}, {-40, -1200}, {800, 0}, {0, 0.8 * nm}, {-0.55 * nm, -0.55 * nm}} {
+		var wp WindPoint
+		WindPointAt(&at, pt[0], pt[1], &wp, nil)
+		mean, _ := MeanWindAt(&at, pt[0], pt[1])
+		_, _, typical, _ := TypicalAt(&at, pt[0], pt[1])
+		for _, v := range []float64{wp.Speed, wp.MeanSpeed, mean, typical} {
+			if v < floor-1e-9 {
+				t.Errorf("at (%.0f, %.0f) a calm blows %.2f knots, under the breeze's %.1f", pt[0], pt[1], v/knot, params.BreezeFloor)
+			}
+		}
+	}
+	// In the basin, and far out, the calm is its own.
+	for _, pt := range [][2]float64{{-40, 70}, {-40, 150}, {0, 1.3 * nm}, {1.5 * nm, 0}} {
+		var wp WindPoint
+		WindPointAt(&at, pt[0], pt[1], &wp, nil)
+		if wp.Speed > 0.5*knot {
+			t.Errorf("at (%.0f, %.0f) a calm blows %.2f knots", pt[0], pt[1], wp.Speed/knot)
+		}
+	}
+	// Faded in between: never more than the floor, and falling outward.
+	prev := math.Inf(1)
+	for r := 0.8 * nm; r <= 1.2*nm; r += 10 {
+		var wp WindPoint
+		WindPointAt(&at, r, 0, &wp, nil)
+		if wp.MeanSpeed > prev+1e-9 || wp.MeanSpeed > floor+0.1*knot {
+			t.Fatalf("at %.0f m the breeze is %.3f knots, after %.3f", r, wp.MeanSpeed/knot, prev/knot)
+		}
+		prev = wp.MeanSpeed
+	}
+	// A steady wind, the developer's, is left alone.
+	steady := weatherOf(p, SteadySpell(0.5, 0, 0))
+	if wp := windAt(steady, -40, -250, worldTick); wp.Speed > 0.5+1e-9 {
+		t.Errorf("a steady half a metre a second is %.3f m/s in the roads", wp.Speed)
+	}
+}
+
+// The refuge's share is 1 in the basin and the narrows and fades to
+// nothing 150 m beyond them; the breeze's is nothing in the basin and
+// whole off the mouth; with no harbour both are about the disk's centre.
+func TestHarbourShares(t *testing.T) {
+	p := harbourWeather(t)
+	for _, c := range []struct {
+		x, y           float64
+		refuge, breeze float64
+	}{
+		{-40, 70, 1, 0},     // the basin's middle
+		{-40, -100, 1, 0.5}, // the narrows, 50 m in from the mouth
+		{-40, -60, 1, 0.03}, // and 90 m in
+		{-40, -150, 1, 1},   // the mouth
+		{-40, -325, 0, 1},   // 150 m beyond the narrows' end
+		{-40, -230, 0.7, 1}, // 80 m off the mouth
+		{300, 600, 0, 1},    // open water about the centre
+		{0, 1.3 * nm, 0, 0}, // beyond the breeze
+	} {
+		r := math.Sqrt(c.x*c.x + c.y*c.y)
+		refuge, breeze := p.shares(c.x, c.y, r)
+		if math.Abs(refuge-c.refuge) > 0.06 || math.Abs(breeze-c.breeze) > 0.06 {
+			t.Errorf("at (%.0f, %.0f): the refuge %.3f, the breeze %.3f; want %.2f and %.2f", c.x, c.y, refuge, breeze, c.refuge, c.breeze)
+		}
+	}
+	none := testWeather(t)
+	if refuge, _ := none.shares(0, 0, 0); refuge != 1 {
+		t.Errorf("with no harbour the refuge at the centre is %.3f", refuge)
+	}
+	if refuge, breeze := none.shares(0, 400, 400); refuge != 0 || breeze != 1 {
+		t.Errorf("with no harbour, 400 m out: the refuge %.3f, the breeze %.3f", refuge, breeze)
 	}
 }
 

@@ -192,6 +192,8 @@ type Config struct {
 	// Forecast, if not nil, is the world's forecast: its latest issue sent
 	// after the Welcome with what has been, then each issue as it is made.
 	Forecast ForecastSource
+	// Harbour is the world's harbour, sent in each Welcome; nil for none.
+	Harbour *pb.Harbour
 	// Circulation is the world's way round the disk for its current, as
 	// the Welcome tells the client: 1, −1 or 0 for none.
 	Circulation int32

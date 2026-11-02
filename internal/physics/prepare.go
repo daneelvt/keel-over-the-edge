@@ -49,6 +49,9 @@ type Prepared struct {
 	liftDrag           float64 // induced and quadratic drag per lift coefficient squared
 	maxLift            float64
 	stallAngle         float64
+	trimBelow          float64 // rad: below this angle of attack the sail luffs, for Out.Sail
+	easeAbove          float64 // rad: past this, with its flow separated, it stalls
+	letFly             float64 // rad: a sheet let out past this cannot be eased
 	invStallAngle      float64
 	invStallWidth      float64
 	sailDrag           float64
@@ -200,6 +203,12 @@ func Prepare(p *Params, w *Waves, b *Prepared) {
 	b.maxLift = p.MaxLift
 	b.stallAngle = float64(p.StallAngle * degree)
 	b.invStallAngle = 1 / b.stallAngle
+	// The sail luffs, for the sailor, below half its stall angle: a boat
+	// there makes half the speed of its best trim or less, which lies
+	// within a few degrees of the stall angle on every point of sailing
+	// but a run; it stalls past 1.75 times it.
+	b.trimBelow = float64(0.5 * b.stallAngle)
+	b.easeAbove = float64(1.75 * b.stallAngle)
 	b.invStallWidth = 1 / (p.StallWidth * degree)
 	b.sailDrag = p.SailDrag
 	b.invLuffAngle = 1 / (p.LuffAngle * degree)
@@ -220,6 +229,8 @@ func Prepare(p *Params, w *Waves, b *Prepared) {
 	b.invHeadBackedWidth = 1 / (p.HeadBackedWidth * degree)
 	b.boomIn = float64(p.BoomIn * degree)
 	b.boomOut = float64(p.BoomOut * degree)
+	// Let fly: within a twentieth of the sheet's travel of all the way out.
+	b.letFly = b.boomOut - float64(0.05*(b.boomOut-b.boomIn))
 	b.boomInertia = p.BoomInertia
 	b.invBoomInertia = 1 / p.BoomInertia
 	b.boomMoment = p.BoomMoment

@@ -138,11 +138,11 @@ func Town(b *worldgen.Bundle, n int, look TownLook) ([]byte, error) {
 	}
 	// Port Royal's moorings.
 	if t.Kind == "main" {
-		for i, p := range b.Start.Places[:b.Start.Moorings] {
-			cx, cy := px(p[0], p[1])
+		for _, m := range b.Start.Moorings {
+			cx, cy := px(m.X, m.Y)
 			fmt.Fprintf(&s, `<circle cx="%.1f" cy="%.1f" r="5" fill="#ffffff" stroke="#000"/>`, cx, cy)
-			hd := b.Start.HeadingOf(i)
-			ex, ey := px(p[0]+float64(8*math.Sin(hd)), p[1]+float64(8*math.Cos(hd)))
+			hd := m.Heading
+			ex, ey := px(m.X+float64(8*math.Sin(hd)), m.Y+float64(8*math.Cos(hd)))
 			fmt.Fprintf(&s, `<line x1="%.1f" y1="%.1f" x2="%.1f" y2="%.1f" stroke="#fff" stroke-width="2"/>`+"\n", cx, cy, ex, ey)
 		}
 	}
