@@ -33,7 +33,7 @@ interface Entry {
  * Two great islands of seed 1 far apart, not yet charted: not known from
  * the start, and not sighted by a boat of another test.
  */
-function islands(charted: Set<string>): [Entry, Entry] {
+function islands(charted: Set<string>): [Entry, Entry] | null {
   const c = JSON.parse(readFileSync(chartFile, 'utf8')) as { entries: Entry[]; known: number[] };
   const great = c.entries
     .filter(
@@ -48,7 +48,7 @@ function islands(charted: Set<string>): [Entry, Entry] {
   const a = great[0];
   const b = great[great.length - 1];
   if (a === undefined || b === undefined || a === b) {
-    throw new Error('seed 1 has not two great islands left to chart');
+    return null;
   }
   return [a, b];
 }
@@ -82,9 +82,11 @@ test('two players discover a world: the chart fills in for both, with the credit
   ).json() as Promise<{
     charted: { subject: string; number: number }[];
   }>;
-  const [isleA, isleB] = islands(
-    new Set((await before).charted.map((c) => `${c.subject}:${c.number}`)),
-  );
+  const isles = islands(new Set((await before).charted.map((c) => `${c.subject}:${c.number}`)));
+  // Each run charts two: run again and again on one world (the nightly's
+  // --repeat-each), it charts them all.
+  test.skip(isles === null, 'seed 1 has not two great islands left to chart in this world');
+  const [isleA, isleB] = isles as [Entry, Entry];
   const ann = await player(browser, 'Ann');
   const bob = await player(browser, 'Bob');
   const contexts: BrowserContext[] = [ann.context, bob.context];
