@@ -10,8 +10,9 @@
 #   the net worker's upgrade, the passkeys and the screen's layout on
 #   WebKit;
 # - the scene's (webgl2 and webgpu): the sea, the sky, the land and their
-#   pictures on the offline sandbox, on the WebGL 2 back end and on WebGPU,
-#   both drawn on a software GPU, split over runners by spec file.
+#   pictures on the offline sandbox, on the WebGL 2 back end, drawn on
+#   Mesa's lavapipe, and on WebGPU, drawn on SwiftShader (client/e2e/gpu.ts;
+#   a step checks each draws there first), split over runners by spec file.
 #
 # No test is retried: a test that fails here is a fault, in the test or the
 # game. The tests tagged @long or @nightly, the compatibility-mode device,
@@ -212,6 +213,13 @@ jobs:
       - name: Chromium's headless shell for Playwright
         working-directory: client
         run: npx --no-install playwright install --with-deps --only-shell chromium
+      - name: Mesa's lavapipe, the CPU's Vulkan, for WebGL 2 (e2e/gpu.ts)
+        run: sudo apt-get install -y --no-install-recommends mesa-vulkan-drivers
+      - name: The page draws on lavapipe (WebGL 2) and SwiftShader (WebGPU)
+        working-directory: client
+        # bash as named, so that the pipe fails when the check does.
+        shell: bash
+        run: node e2e/gpu.ts | tee -a "$GITHUB_STEP_SUMMARY"
       - name: The scene on ${{ matrix.project }}, part ${{ matrix.shard }} of ${{ matrix.shards }}
         working-directory: client
         env:

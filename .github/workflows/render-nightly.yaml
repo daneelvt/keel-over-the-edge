@@ -90,6 +90,14 @@ jobs:
         if: matrix.browser == 'chromium'
         working-directory: client
         run: npx --no-install playwright install --with-deps --only-shell chromium
+      - name: Mesa's lavapipe, the CPU's Vulkan, for WebGL 2 (e2e/gpu.ts)
+        if: matrix.browser == 'chromium'
+        run: sudo apt-get install -y --no-install-recommends mesa-vulkan-drivers
+      - name: The page draws on lavapipe (WebGL 2) and SwiftShader (WebGPU)
+        if: matrix.browser == 'chromium'
+        working-directory: client
+        shell: bash
+        run: node e2e/gpu.ts | tee -a "$GITHUB_STEP_SUMMARY"
       - name: WebKit for Playwright
         if: matrix.browser == 'webkit'
         working-directory: client

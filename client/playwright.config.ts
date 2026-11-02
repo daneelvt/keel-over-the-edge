@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 // The browser tests: the scene in Chromium, on the WebGL 2 back end and, where
-// the browser offers an adapter, on WebGPU. On Linux runners WebGPU goes
-// through SwiftShader, the CPU's Vulkan. Locally, PW_CHANNEL=chrome uses the
+// the browser offers an adapter, on WebGPU. On Linux runners both draw on a
+// software GPU, the CPU's Vulkan (e2e/gpu.ts). Locally, PW_CHANNEL=chrome uses the
 // installed Chrome instead of downloading Chromium.
 //
 // Two kinds of test. The scene's (the webgl2 and webgpu projects) draw: the
@@ -28,6 +28,7 @@
 // cookie without a certificate.
 
 import { defineConfig, devices } from '@playwright/test';
+import { chromiumArgs, chromiumEnv, softwareGPUOf } from './e2e/gpu';
 
 const port = 5181;
 // A second Vite, whose game traffic goes through tools/e2e's lag proxy.
@@ -106,14 +107,13 @@ function shardOf(project: string): { testMatch?: string[]; testIgnore: string[] 
     ? { testMatch: groups[shard - 1] ?? [], testIgnore: pageFiles }
     : { testIgnore: [...groups.flat(), ...pageFiles] };
 }
-const args = ['--enable-unsafe-webgpu', '--ignore-gpu-blocklist'];
-if (linux) {
-  args.push(
-    '--enable-features=Vulkan',
-    '--use-vulkan=swiftshader',
-    '--use-webgpu-adapter=swiftshader',
-    '--use-angle=swiftshader',
-  );
+/** Chromium's launch, on the software GPU e2e/gpu.ts gives the project on Linux. */
+function launch(project: string): { args: string[]; env: Record<string, string> } {
+  const gpu = softwareGPUOf(project);
+  return {
+    args: chromiumArgs(linux, gpu),
+    env: { ...process.env, ...chromiumEnv(linux, gpu) } as Record<string, string>,
+  };
 }
 
 export default defineConfig({
@@ -178,7 +178,7 @@ export default defineConfig({
         viewport: { width: 960, height: 600 },
         deviceScaleFactor: 1,
         ...(process.env.PW_CHANNEL ? { channel: process.env.PW_CHANNEL } : {}),
-        launchOptions: { args },
+        launchOptions: launch(name),
       },
     })),
     {
@@ -190,7 +190,7 @@ export default defineConfig({
         viewport: { width: 960, height: 600 },
         deviceScaleFactor: 1,
         ...(process.env.PW_CHANNEL ? { channel: process.env.PW_CHANNEL } : {}),
-        launchOptions: { args },
+        launchOptions: launch('compat'),
       },
     },
     // The upgrade from a worker on WebKit, Safari's engine, the account's
