@@ -262,7 +262,9 @@ const internal = 'http://127.0.0.1:19090';
 
 /**
  * Puts the page's boat at rest in water of its own, and waits until the
- * page has it there. Every new boat starts in the same roads, beside the
+ * page has it there: on its heading, or off degrees off the mean wind
+ * (positive with the wind over starboard), whichever way the world's wind
+ * blows at the hour the test runs. Every new boat starts in the same roads, beside the
  * boats of the tests before in their grace, and the page project sails
  * three tests at once against one keel: a test that needs clean air, or
  * room beside its boat, moves it first. The spot is 1.2 to 2.1 km from the
@@ -270,11 +272,17 @@ const internal = 'http://127.0.0.1:19090';
  * so no two tests' boats are put near each other; and within 6 km of the
  * world's centre, well inside the lip.
  */
-export async function alone(page: Page): Promise<{ east: number; north: number }> {
+export async function alone(page: Page, off?: number): Promise<{ east: number; north: number }> {
   const at = await page.evaluate(() => {
     const k = globalThis.keel;
-    const s = k.boat().state;
-    return { boat: k.net().boat, x: s.x, y: s.y };
+    const b = k.boat();
+    return {
+      boat: k.net().boat,
+      x: b.state.x,
+      y: b.state.y,
+      heading: b.state.heading,
+      wind: b.wind.meanFrom,
+    };
   });
   let turn = at.boat * 2.399963;
   const r = 1200 + (at.boat % 7) * 150;
@@ -283,8 +291,10 @@ export async function alone(page: Page): Promise<{ east: number; north: number }
     turn += Math.PI;
   }
   const [east, north] = spot().map(Math.round) as [number, number];
+  const rad = off === undefined ? at.heading : at.wind - (off * Math.PI) / 180;
+  const heading = Math.round(((((rad * 180) / Math.PI) % 360) + 360) % 360);
   const res = await page.request.post(
-    `${internal}/debug/place?east=${east}&north=${north}&heading=0&boat=${at.boat}`,
+    `${internal}/debug/place?east=${east}&north=${north}&heading=${heading}&boat=${at.boat}`,
   );
   expect(res.status(), await res.text()).toBe(200);
   await expect

@@ -1588,6 +1588,7 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
       for (const k of Object.keys(p.counts) as (keyof typeof p.counts)[]) {
         p.counts[k] = 0;
       }
+      p.sizes.length = 0;
     },
 
     /** The game connection: where it stands and what prediction has seen. */

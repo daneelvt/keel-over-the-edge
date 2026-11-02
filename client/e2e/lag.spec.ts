@@ -9,7 +9,7 @@
 // correction and one knock, one shake and the verdict.
 
 import { expect, test } from '@playwright/test';
-import { heldRegime, sail, sailor } from './helpers';
+import { alone, heldRegime, sail, sailor } from './helpers';
 
 // CI's netem job sends the page's traffic through the kernel's own delay
 // and loss instead, by the direct Vite.
@@ -19,7 +19,12 @@ test('at 200 ms and 2% loss: no correction over the snap thresholds', async ({ p
   test.setTimeout(120_000);
   await sailor(context, 'Lagged');
   await sail(page, lagged);
-  await page.evaluate(() => globalThis.keel.script('wiggle'));
+  // In clean air: away from the boats of the tests sailing beside it.
+  await alone(page);
+  await page.evaluate(() => {
+    globalThis.keel.countAfresh();
+    globalThis.keel.script('wiggle');
+  });
   await page.waitForTimeout(40_000);
   const n = await page.evaluate(() => globalThis.keel.net());
   const measured = `${n.counts.snapshots} snapshots, ${n.counts.corrections} corrections (largest ${n.counts.largest.toFixed(3)} m, 95th percentile ${n.p95.toFixed(3)} m), ${n.counts.resets} resets, ${n.counts.stale} stale, m ${n.m}, round trip ${n.rtt.toFixed(0)} ms, ${n.traffic.bytesIn} B in, ${n.traffic.bytesOut} B out`;
@@ -37,14 +42,27 @@ test('at 200 ms and 2% loss: a tack or a gybe on the autopilot, with no correcti
   test.setTimeout(120_000);
   await sailor(context, 'Autopilot');
   await sail(page, lagged);
-  await page.evaluate(() => globalThis.keel.setControls(0, 0.3));
-  await page.waitForTimeout(5_000);
-  // On at the boat's angle to the wind, then the turn that suits it.
+  // Room to turn, away from the boats of the tests sailing beside it, on a
+  // broad reach held by the autopilot, whatever way the hour's wind blows:
+  // from rest close to the wind the boat gathered too little way to turn,
+  // and the turn stalled.
+  await alone(page, 110);
+  await page.evaluate(() => {
+    globalThis.keel.countAfresh();
+    globalThis.keel.setControls(0, 0.3);
+  });
+  // On at the boat's angle to the wind; way gathered; then the turn that
+  // suits it.
   await page.keyboard.press('p');
-  await page.waitForTimeout(5_000);
+  await page.waitForTimeout(10_000);
   const before = await page.evaluate(() => globalThis.keel.boat().pilot);
   expect(before.mode).toBe(1);
   await page.keyboard.press(Math.abs(before.degrees) < 90 ? 't' : 'g');
+  // The turn under way, then done: the page sees the order before the
+  // boat's state shows the turn.
+  await page.waitForFunction(() => globalThis.keel.boat().state.pilotWay !== 0, null, {
+    timeout: 10_000,
+  });
   await page.waitForFunction(
     () => {
       const b = globalThis.keel.boat();
