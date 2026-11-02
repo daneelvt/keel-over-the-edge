@@ -99,7 +99,7 @@ func (c *config) townRules(w *world) []Rule {
 	// the mouth, the last of them near enough it.
 	fan := &c.start.Fan
 	within := math.Inf(1)
-	if main != nil && main.Mouth != nil && w.start.Fan >= fan.First {
+	if main != nil && main.Mouth != nil && w.start.Fan >= fan.First && len(w.start.Places) >= fan.First {
 		p := w.start.Places[fan.First-1]
 		within = hypot(p[0]-main.Mouth[0], p[1]-main.Mouth[1])
 	}

@@ -173,6 +173,15 @@ func Steady(speed, from float64) bus.Weather {
 	return bus.Weather{Mode: bus.WeatherSteady, Speed: uint32(s.Speed), Dir: uint32(s.From)}
 }
 
+// Held is a developer's weather of one endless spell of the regime of
+// index regime, its wind at mid-disk speed m/s from from, rad clockwise
+// from north: a spell of the world's kind, with its shifts and gusts, the
+// refuge and the start's breeze.
+func Held(regime int, speed, from float64) bus.Weather {
+	s := physics.SteadySpell(speed, from, 0)
+	return bus.Weather{Mode: bus.WeatherHeld, Regime: uint16(regime), Speed: uint32(max(s.Speed, 1)), Dir: uint32(s.From)}
+}
+
 // floorDiv is a / b rounded down, for b > 0.
 func floorDiv(a, b int64) int64 {
 	q := a / b
@@ -263,8 +272,8 @@ func (t *Timeline) regime(i uint16) (*Regime, int) {
 }
 
 // held is a developer's held regime from a tick: one endless spell of it,
-// with no drift, from a direction of its own, its pressure the middle of
-// its regime's.
+// with no drift, from a direction of its own, or with the speed and the
+// direction asked for, its pressure the middle of its regime's.
 func (t *Timeline) held(w bus.Weather) physics.Spell {
 	from := float64(w.From)
 	reg, r := t.regime(w.Regime)
@@ -273,6 +282,9 @@ func (t *Timeline) held(w bus.Weather) physics.Spell {
 	physics.DrawSpell(t.prepared, &reg.Wind, number, t.cfg.HeldSeed, &s)
 	s.Drift = 0
 	s.From = float64(mix(number^t.cfg.HeldSeed) % turn)
+	if w.Speed != 0 {
+		s.Speed, s.From = float64(w.Speed), float64(w.Dir%turn)
+	}
 	s.Pressure = math.Round(float64(50 * (reg.Pressure[0] + reg.Pressure[1])))
 	s.Still = 1
 	return s
