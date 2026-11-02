@@ -2279,9 +2279,9 @@ back from the edge, or restored onto land, starts the same way, and the
 phone takes the controls from the Welcome that follows. A world with no
 start area (open sea, or its land sailed off) starts boats on the spawn
 grid as they are. `TestUntouchedSailorsSailAway` sails nobody at the helm
-from the first 64 places of seeds 1–8, from eight directions in a calm and
-a breeze: each is making 1.5 knots or more 20 s on, and afloat a minute
-on. The phone's first view of a new boat looks past it at the harbour's
+from the first 64 places of seeds 1 and 2 (`KEEL_UNTOUCHED_SEEDS=8` for
+1–8), from eight directions in a calm and a breeze: each is making 1.5
+knots or more 20 s on, and afloat a minute on. The phone's first view of a new boat looks past it at the harbour's
 mouth until the sailor's first touch. A town's **harbour**
 is kept as discs of water (`Town.Harbour`): `Bundle.InPort` answers "in
 port?" from them and the ground, and the phone answers it the same from the

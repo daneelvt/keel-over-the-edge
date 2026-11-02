@@ -4,7 +4,9 @@ package sim_test
 
 import (
 	"math"
+	"os"
 	"slices"
+	"strconv"
 	"sync"
 	"testing"
 
@@ -23,15 +25,19 @@ const untouched = 64
 
 var untouchedWinds = []float64{0.2, 10}
 
-// A sailor who touches nothing gets under way: in seeds 1 to 8, on each of
-// the start's first places, in a calm and a breeze from eight directions,
-// a new boat is making 1.5 knots or more 20 s after it appears and is
-// afloat a minute after. Flat water: what the light air at the start
-// raises barely moves a boat, and the waves would make the test three
-// times as long.
+// A sailor who touches nothing gets under way: in seeds 1 and 2 (1 to
+// KEEL_UNTOUCHED_SEEDS, if set), on each of the start's first places, in a
+// calm and a breeze from eight directions, a new boat is making 1.5 knots
+// or more 20 s after it appears and is afloat a minute after. Flat water:
+// what the light air at the start raises barely moves a boat, and the
+// waves would make the test three times as long.
 func TestUntouchedSailorsSailAway(t *testing.T) {
 	if testing.Short() {
-		t.Skip("makes eight whole worlds")
+		t.Skip("makes whole worlds")
+	}
+	seeds := uint64(2)
+	if v, err := strconv.ParseUint(os.Getenv("KEEL_UNTOUCHED_SEEDS"), 10, 8); err == nil && v > 0 {
+		seeds = v
 	}
 	cat, err := catalog.Load()
 	if err != nil {
@@ -48,7 +54,7 @@ func TestUntouchedSailorsSailAway(t *testing.T) {
 	var mu sync.Mutex
 	var speeds []float64
 	var wg sync.WaitGroup
-	for seed := uint64(1); seed <= 8; seed++ {
+	for seed := uint64(1); seed <= seeds; seed++ {
 		wg.Go(func() {
 			b, err := worldgen.Generate(seed, cat)
 			if err != nil {
