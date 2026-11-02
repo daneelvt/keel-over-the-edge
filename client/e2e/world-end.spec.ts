@@ -142,12 +142,15 @@ test('@long a world’s end missed while keel was down is switched as it starts'
   const ann = await sailor(browser, 'Ann');
   const ends = await endIn(ann.p, 15);
   const before = await ending(ann.p);
-  // Down across the end: the page cannot reach keel meanwhile.
-  const restart = request.post(`${control}/restart?down=25s`, { timeout: 120_000 });
+  // Down across the end: the page cannot reach keel meanwhile. tools/e2e
+  // stops keel (up to 20 s), keeps it down 25 s and waits up to 120 s for it
+  // to make the next world and be ready; a 500 says why it was not.
+  const restart = request.post(`${control}/restart?down=25s`, { timeout: 180_000 });
   await expect
     .poll(() => ann.p.evaluate(() => globalThis.keel.net().status), { timeout: 20_000 })
     .not.toBe('sailing');
-  expect((await restart).status()).toBe(204);
+  const restarted = await restart;
+  expect(restarted.status(), await restarted.text()).toBe(204);
   await expect
     .poll(async () => (await ending(ann.p)).world, { timeout: 60_000 })
     .not.toBe(before.world);

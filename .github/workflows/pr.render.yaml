@@ -13,6 +13,9 @@
 # The game connection's upgrade from a worker is also tried on WebKit; and,
 # where the runner's kernel has sch_netem, the slow-network tests run once
 # through real TCP loss as well as through tools/lag's model of it.
+# Each job writes its runner's CPU and speed, its tests' outcomes and its
+# slowest tests to its summary on the run's page (e2e/runner.ts,
+# e2e/summary.ts).
 name: pr.render
 
 on:
@@ -108,6 +111,9 @@ jobs:
         with:
           persist-credentials: false
       - uses: ./.github/actions/setup
+      - name: The runner's CPU and speed, on the job's summary
+        working-directory: client
+        run: node e2e/runner.ts >> "$GITHUB_STEP_SUMMARY"
       - name: Build the physics module (the game's page steps it)
         run: go run ./tools/physics
       - name: Seed 1's world, for the sandbox's land (land.spec.ts)
@@ -118,6 +124,7 @@ jobs:
       - name: The game on ${{ matrix.project }}, the ${{ matrix.tests }} tests, part ${{ matrix.shard }} of ${{ matrix.shards }}
         working-directory: client
         env:
+          SUMMARY_TITLE: browser (${{ matrix.project }}, ${{ matrix.tests }}, ${{ matrix.shard }} of ${{ matrix.shards }})
           PROJECT: ${{ matrix.project }}
           GREP: ${{ matrix.tests == 'long' && '--grep' || '--grep-invert' }}
           # playwright.config.ts reads these, with PROJECT, for the files
@@ -163,6 +170,9 @@ jobs:
         with:
           persist-credentials: false
       - uses: ./.github/actions/setup
+      - name: The runner's CPU and speed, on the job's summary
+        working-directory: client
+        run: node e2e/runner.ts >> "$GITHUB_STEP_SUMMARY"
       - name: Build the physics module (the game's page steps it)
         run: go run ./tools/physics
       - name: Seed 1's world, for the sandbox's harbour (layout.spec.ts)
@@ -172,6 +182,8 @@ jobs:
         run: npx --no-install playwright install --with-deps webkit
       - name: The net worker's upgrade, the account's passkeys and the screen's layout on WebKit
         working-directory: client
+        env:
+          SUMMARY_TITLE: browser (webkit)
         run: npx --no-install playwright test --project webkit
       - name: The pictures and traces of a failure
         if: failure()
@@ -222,6 +234,10 @@ jobs:
           persist-credentials: false
       - uses: ./.github/actions/setup
         if: steps.netem.outputs.ok == 'true'
+      - name: The runner's CPU and speed, on the job's summary
+        if: steps.netem.outputs.ok == 'true'
+        working-directory: client
+        run: node e2e/runner.ts >> "$GITHUB_STEP_SUMMARY"
       - name: Build the physics module (the game's page steps it)
         if: steps.netem.outputs.ok == 'true'
         run: go run ./tools/physics
@@ -243,6 +259,7 @@ jobs:
         working-directory: client
         env:
           KEEL_LAG_BASE: http://localhost:5181
+          SUMMARY_TITLE: browser (real TCP loss)
         run: npx --no-install playwright test e2e/lag.spec.ts e2e/together.spec.ts --project webgl2
       - name: The traces of a failure
         if: failure() && steps.netem.outputs.ok == 'true'
