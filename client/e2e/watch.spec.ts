@@ -221,6 +221,14 @@ test('two machine sailors at sea: the list in order of the edge, a card, Follow,
   await openList(page);
 
   // Only these two: the shared world has others' machine sailors at sea.
+  const ordered = page.waitForResponse((r) => {
+    const u = new URL(r.url());
+    return (
+      u.pathname === '/api/watch' &&
+      u.searchParams.get('sort') === 'edge' &&
+      u.searchParams.get('q') === digits
+    );
+  });
   await page.getByRole('searchbox', { name: 'Part of a name' }).fill(digits);
   await page.getByRole('button', { name: 'Nearest the edge' }).click();
   await expect(page.getByRole('button', { name: 'Nearest the edge' })).toHaveAttribute(
@@ -232,14 +240,17 @@ test('two machine sailors at sea: the list in order of the edge, a card, Follow,
   // Each row: the sky in words, the cog, how far from the edge; nearest first.
   await expect(rows.first().locator('.watch-sky')).toHaveAttribute('role', 'img');
   await expect(rows.first().getByRole('img', { name: 'machine sailor' })).toBeVisible();
-  const edge = async (i: number) =>
-    Number(
-      /([0-9.]+) NM from the edge/.exec((await rows.nth(i).innerText()) ?? '')?.[1] ?? Number.NaN,
-    );
-  const near = await edge(0);
-  expect(near).toBeLessThanOrEqual(await edge(1));
-  const first = (await rows.first().getAttribute('data-sailor')) ?? '';
-  expect(names).toContain(first);
+  await expect(rows.nth(1)).toContainText('NM from the edge');
+  // Nearest first by the answer the list was ordered by: the rows' facts
+  // are read again every 10 seconds and changed in place, never
+  // reordered, and the two sail from the same start.
+  const sent = ((await (await ordered).json()) as { sailors: { name: string; edgeNM: number }[] })
+    .sailors;
+  expect(sent.map((s) => s.name).toSorted()).toEqual(names.toSorted());
+  expect(sent[0]?.edgeNM).toBeLessThanOrEqual(sent[1]?.edgeNM ?? Number.NaN);
+  const shown = await rows.evaluateAll((els) => els.map((e) => e.getAttribute('data-sailor')));
+  expect(shown).toEqual(sent.map((s) => s.name));
+  const first = shown[0] ?? '';
 
   // Its card: the weather, where, and Follow.
   await rows
