@@ -229,8 +229,47 @@ func (b *Prepared) substep(s *State, wind, sinW, cosW, dt float64, v *wave, bd *
 		o.WaveHeight, o.WaveSlopeAhead, o.WaveSlopeAcross = v.height, v.ahead, v.across
 		tu, tv := s.Surge-m.waterX, s.Sway-m.waterY
 		o.SpeedThroughWater = math.Sqrt(float64(tu*tu) + float64(tv*tv))
+		o.Sail = b.sailState(s, o)
 	}
 }
+
+// sailState is what the sail wants of its sheet, for Out.Sail, as a sailor
+// watching it would say: aback, the wind on its back with the boom to
+// windward; luffing, its foot's angle of attack under trimBelow, so little
+// that the boat barely moves, the sheet too far out for the angle;
+// stalled, past easeAbove, the sheet hauled in past where it draws and
+// able to go out; or drawing. At rest head to wind, luffing or aback, it
+// is drawing: the boat's speed and its autopilot say what is wrong, and no
+// sheet mends it. With nobody in the boat to trim, it is drawing too.
+func (b *Prepared) sailState(s *State, o *Out) float64 {
+	a := math.Abs(o.FootAttack)
+	still := o.SpeedThroughWater < sailRestSpeed
+	switch {
+	case s.SailorMode != Sailing:
+		return SailDrawing
+	case o.FootFlow == FlowAback && float64(s.Boom*o.ApparentWindAngle) > 0:
+		if still {
+			return SailDrawing
+		}
+		return SailAback
+	case o.FootFlow == FlowLuffing || a < b.trimBelow:
+		if still && math.Abs(o.ApparentWindAngle) < sailHeadToWind {
+			return SailDrawing
+		}
+		return SailLuffing
+	case a > b.easeAbove && s.SheetLimit < b.letFly:
+		return SailStalled
+	}
+	return SailDrawing
+}
+
+// A sail is at rest head to wind slower than sailRestSpeed through the
+// water, m/s, with the apparent wind within sailHeadToWind of the bow,
+// rad.
+const (
+	sailRestSpeed  = 0.25
+	sailHeadToWind = 35 * degree
+)
 
 // boomStop stops a boom that has swung past the sheet's limit dead, and
 // passes its momentum to the hull: a crash gybe slews and rolls the boat.

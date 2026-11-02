@@ -45,8 +45,10 @@ func (t StartSheet) At(off float64) float64 {
 }
 
 // onReach turns a boat at place p of the start to face startOffWind off
-// the mean wind there, on the side that leads away from the coast. With
-// no wind, it keeps the place's heading.
+// the mean wind there, on the side with the more open water ahead, both on
+// that reach and on the close reach the boat rounds up to; or, as open on
+// both, on the side that leads away from the coast. With no wind, it keeps
+// the place's heading.
 func (w *World) onReach(st *physics.State, p int64) {
 	if len(w.start) == 0 {
 		return
@@ -59,15 +61,45 @@ func (w *World) onReach(st *physics.State, p int64) {
 	if n := int64(len(w.away)); n > 0 {
 		away = w.away[p%n]
 	}
-	best, most := st.Heading, math.Inf(-1)
+	best, open, most := st.Heading, -1.0, math.Inf(-1)
 	for _, side := range [2]float64{1, -1} {
 		h := headingOf(e.MeanFrom + float64(side*startOffWind))
-		if _, c := physics.SinCos(h - away); c > most {
-			best, most = h, c
+		up := headingOf(e.MeanFrom + float64(side*roundedUp))
+		clear := min(w.openAhead(st.X, st.Y, h), w.openAhead(st.X, st.Y, up))
+		if _, c := physics.SinCos(h - away); clear > open || clear == open && c > most {
+			best, open, most = h, clear, c
 		}
 	}
 	st.Heading = best
 }
+
+// roundedUp is how far off the wind an untouched boat started on its reach
+// comes to sail, its weather helm having rounded it up, rad: 60°.
+const roundedUp = 60 * math.Pi / 180
+
+// openAhead is how far from (x, y) along heading the water stays deep
+// enough for a boat, m, looked for out to openReach.
+func (w *World) openAhead(x, y, heading float64) float64 {
+	if w.ground == nil {
+		return openReach
+	}
+	sin, cos := physics.SinCos(heading)
+	for d := float64(openStep); d < openReach; d += openStep {
+		if e, _ := w.ground.At(x+float64(d*sin), y+float64(d*cos)); e > -openDepth {
+			return d
+		}
+	}
+	return openReach
+}
+
+// A new boat's course is looked along for land and shoal water this far,
+// in steps this long, m, and water this deep is open: as far as an
+// untouched boat sails in a minute and a little more.
+const (
+	openReach = 150
+	openStep  = 4
+	openDepth = 1
+)
 
 // headingOf is an angle as a state's heading holds it, in [−π, π).
 func headingOf(a float64) float64 {
@@ -112,32 +144,12 @@ func (w *World) readyControls(f *bus.Frame, s int32) {
 	}
 }
 
-// At rest head to wind a sail luffs or lies aback whatever its sheet: the
-// boat's speed and its autopilot say so, and the sail's state does not.
-const (
-	restSpeed  = 0.25               // m/s through the water: at rest, half a knot
-	headToWind = 35 * math.Pi / 180 // rad off the bow: head to wind
-)
-
 // sailHeld is the sail's state an agent is told after a step that left
-// out, the boat's instruments before it being before: its foot's flow
-// once it has held bus.SailHold steps, until it has drawn bus.SailClear.
+// out, the boat's instruments before it being before: what the step says
+// of the sail once it has said so bus.SailHold steps, until it has drawn
+// bus.SailClear.
 func sailHeld(before *bus.Instruments, o *physics.Out) (state, raw uint8, run int32) {
-	raw = bus.SailDrawing
-	switch uint8(o.FootFlow) {
-	case physics.FlowLuffing:
-		raw = bus.SailLuffing
-		if o.SpeedThroughWater < restSpeed && math.Abs(o.ApparentWindAngle) < headToWind {
-			raw = bus.SailDrawing
-		}
-	case physics.FlowStalled:
-		raw = bus.SailStalled
-	case physics.FlowAback:
-		raw = bus.SailAback
-		if o.SpeedThroughWater < restSpeed {
-			raw = bus.SailDrawing
-		}
-	}
+	raw = uint8(o.Sail)
 	run = 1
 	if raw == before.SailRaw {
 		run = before.SailFor + 1

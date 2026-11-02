@@ -52,6 +52,18 @@ type windCase struct {
 	// pressure at each point, as bits.
 	Keys     []windKey `json:"keys,omitempty"`
 	Pressure []string  `json:"pressure"`
+	// Harbour, if not nil, is the world's harbour the wind is computed in.
+	Harbour *windHarbour `json:"harbour,omitempty"`
+}
+
+// windHarbour is a Harbour as the file holds it.
+type windHarbour struct {
+	X       float64 `json:"x"`
+	Y       float64 `json:"y"`
+	Radius  float64 `json:"radius"`
+	MouthX  float64 `json:"mouthX"`
+	MouthY  float64 `json:"mouthY"`
+	Narrows float64 `json:"narrows"`
 }
 
 type windKey struct {
@@ -115,6 +127,17 @@ func windCases(t *testing.T, p *WeatherPrepared) ([]windCase, [][]Spell) {
 	}
 	front := frontSpell(t, p, now)
 	spells = append(spells, []Spell{trade}, []Spell{trade, front})
+	// About a harbour: a calm off its mouth and in it, lifted outside it
+	// by the start's breeze; the breeze's fade; a storm held in it.
+	h := &windHarbour{X: testHarbour.X, Y: testHarbour.Y, Radius: testHarbour.Radius,
+		MouthX: testHarbour.MouthX, MouthY: testHarbour.MouthY, Narrows: testHarbour.Narrows}
+	still := spell("settled", 11, 140, now-hourOfTicks, 2*hourOfTicks)
+	still.Speed = 30
+	cases = append(cases,
+		windCase{Name: "a calm off the mouth", Tick: now, Origin: [2]float64{-40, -150}, Harbour: h},
+		windCase{Name: "a calm where the breeze fades", Tick: now, Origin: [2]float64{-1300, -1300}, Harbour: h},
+		windCase{Name: "stormy in the harbour", Tick: now, Origin: [2]float64{-40, 20}, Harbour: h})
+	spells = append(spells, []Spell{still}, []Spell{still}, []Spell{stormy})
 	return cases, spells
 }
 
@@ -216,7 +239,13 @@ func TestWindFile(t *testing.T) {
 	}
 	gusty := 0
 	for i := range cases {
-		w := weatherOf(p, spells[i]...)
+		cp := p
+		if h := cases[i].Harbour; h != nil {
+			q := *p
+			q.SetHarbour(&Harbour{X: h.X, Y: h.Y, Radius: h.Radius, MouthX: h.MouthX, MouthY: h.MouthY, Narrows: h.Narrows})
+			cp = &q
+		}
+		w := weatherOf(cp, spells[i]...)
 		w.SetKeys(windSystems(t, kinds, cases[i].Name, cases[i].Tick))
 		fillWindCase(&cases[i], w)
 		for _, v := range cases[i].Values {

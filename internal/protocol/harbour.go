@@ -29,5 +29,17 @@ func HarbourOf(w *pb.Harbour) *physics.Harbour {
 		MouthX: float64(w.GetMouthEast()) / 10, MouthY: float64(w.GetMouthNorth()) / 10, Narrows: float64(w.GetNarrows()) / 10}
 }
 
-// decimetres is a length in m to the nearest decimetre.
-func decimetres(v float64) int32 { return int32(math.Floor(float64(v*10) + 0.5)) }
+// decimetres is a length in m to the nearest decimetre, within an int32's
+// range, as the world generator rounds it.
+func decimetres(v float64) int32 {
+	d := math.Floor(float64(v*10) + 0.5)
+	switch {
+	case d != d:
+		return 0
+	case d >= math.MaxInt32:
+		return math.MaxInt32
+	case d <= math.MinInt32:
+		return math.MinInt32
+	}
+	return int32(d)
+}

@@ -300,6 +300,9 @@ func New(cfg Config) (*World, error) {
 	f.Weathers = f.Weathers[:0]
 	w.spells(f)
 	w.sea.under(&f.Sea, f.Tick, devOf(f))
+	// The wind at the empty world's tick, which turns a boat that joins
+	// on the first tick onto its reach.
+	w.weatherAt(f)
 	f.NextBoat = 1
 	w.workers.start(w, max(cfg.Workers, 1))
 	return w, nil

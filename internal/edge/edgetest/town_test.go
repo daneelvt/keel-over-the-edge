@@ -19,13 +19,14 @@ import (
 	"github.com/daneelvt/keel-over-the-edge/internal/client"
 	"github.com/daneelvt/keel-over-the-edge/internal/edge"
 	"github.com/daneelvt/keel-over-the-edge/internal/physics"
+	"github.com/daneelvt/keel-over-the-edge/internal/sim"
 	"github.com/daneelvt/keel-over-the-edge/internal/store"
 	"github.com/daneelvt/keel-over-the-edge/internal/worldgen"
 )
 
-// TestTownHanded: a town travels in its land's chunks. A boat starting
-// moored by it, facing the way out, is handed its chunk, buildings and
-// harbour in it; a boat starting far off is handed no chunk of it.
+// TestTownHanded: a town travels in its land's chunks. A boat starting by
+// it, on a reach, is handed its chunk, buildings and harbour in it; a boat
+// starting far off is handed no chunk of it.
 func TestTownHanded(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		cfg := landWorld(t)
@@ -70,7 +71,7 @@ func TestTownHanded(t *testing.T) {
 		}
 		cfg.Chunks = edge.NewHandout(g, served.Paths(), rule).WithTops(tops)
 		cfg.Payloads = served
-		// The first place a mooring, facing the way out; the second far off.
+		// The first place by the town; the second far off.
 		cfg.Terrain.Start = []physics.State{{X: -40, Y: -300, Heading: 2.5}, {X: -40, Y: -6000, Heading: 0}}
 		// The first state each boat is seen in.
 		var mu sync.Mutex
@@ -102,24 +103,26 @@ func TestTownHanded(t *testing.T) {
 		}
 		ann := handed("Ann")
 		if !slices.Contains(ann, uint32(at)) {
-			t.Fatalf("the boat moored by the town was handed %v, not its chunk %d", ann, at)
+			t.Fatalf("the boat starting by the town was handed %v, not its chunk %d", ann, at)
 		}
 		_, _, read, err := worldgen.DecodeChunkOf(payloads[at], at, id, worldgen.Version)
 		if err != nil || read == nil || len(read.Buildings) != 2 || len(read.Harbour) != 1 {
 			t.Fatalf("the town's chunk reads %+v, %v", read, err)
 		}
-		// Moored facing the way out.
+		// Started at its place, on a reach 110° off the wind.
 		time.Sleep(time.Second)
 		mu.Lock()
-		moored := false
+		started := false
+		from := sim.DefaultSpell.From * 2 * math.Pi / physics.TurnSteps
 		for _, st := range first {
-			if math.Hypot(st.X+40, st.Y+300) < 1 && math.Abs(st.Heading-2.5) < 0.01 {
-				moored = true
+			off := math.Abs(math.Remainder(st.Heading-from, 2*math.Pi))
+			if math.Hypot(st.X+40, st.Y+300) < 1 && math.Abs(off-110*math.Pi/180) < 0.01 {
+				started = true
 			}
 		}
 		mu.Unlock()
-		if !moored {
-			t.Errorf("no boat started at the mooring, facing its way: %+v", first)
+		if !started {
+			t.Errorf("no boat started at its place, on a reach: %+v", first)
 		}
 		bob := handed("Bob")
 		if slices.Contains(bob, uint32(at)) {

@@ -29,6 +29,7 @@ func main() {
 	manoeuvres := flag.Bool("manoeuvres", false, "tack and gybe, and find where an accidental gybe comes")
 	sea := flag.Float64("sea", 0, "the polar in this wind, in knots at sail height, in the sea it raises, beside flat water")
 	edge := flag.Bool("edge", false, "the line of no return at the lip, in each regime's spells and in flat water")
+	start := flag.Bool("start", false, "starts from rest, untouched, by the sheet: what a boat's start sheet is chosen by")
 	out := flag.String("out", ".dev/polar", "folder for the polar's JSON and SVG")
 	flag.Parse()
 
@@ -44,6 +45,8 @@ func main() {
 		switch {
 		case *edge:
 			err = runEdge(&b, waves, cat)
+		case *start:
+			err = runStart(&b, boat.Name, boat.StartSheet)
 		case *sea != 0:
 			err = runSea(&b, waves, *sea)
 		case *check:

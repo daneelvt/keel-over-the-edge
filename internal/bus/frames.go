@@ -288,21 +288,21 @@ type Instruments struct {
 	CourseOverGround float32 // rad clockwise from north
 	Depth            float32 // under the daggerboard, m; negative over land
 	// Sail is the sail's state as its agent is told it, the phone's sheet
-	// shows it: SailDrawing, or the foot's flow once it has held SailHold
-	// ticks, until it has drawn again SailClear. SailRaw is the foot's
-	// flow the last step left, at rest head to wind counted as drawing,
-	// and SailFor how many steps in a row it has been so.
+	// shows it: SailDrawing, or what the step says of it (physics.Out's
+	// Sail) once it has held SailHold ticks, until it has drawn again
+	// SailClear. SailRaw is what the last step said, and SailFor how many
+	// steps in a row it has said so.
 	Sail    uint8
 	SailRaw uint8
 	SailFor int32
 }
 
-// The sail's states, for Instruments.Sail.
+// The sail's states, for Instruments.Sail: the physics'.
 const (
-	SailDrawing = iota
-	SailLuffing
-	SailStalled
-	SailAback
+	SailDrawing = physics.SailDrawing
+	SailLuffing = physics.SailLuffing
+	SailStalled = physics.SailStalled
+	SailAback   = physics.SailAback
 )
 
 // SailHold is how many ticks a sail must luff, stall or lie aback before

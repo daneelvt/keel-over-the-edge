@@ -2295,7 +2295,7 @@ export const WelcomeSchema: GenMessage<Welcome> = /*@__PURE__*/
 
 /**
  * Harbour is a world's harbour, in decimetres east and north of the
- * world's centre: its basin, a circle at its mean radius; and its narrows,
+ * world's centre: its basin, a circle at its widest radius; and its narrows,
  * from the basin's centre out to the mouth, where they open to the sea,
  * and their width there.
  *

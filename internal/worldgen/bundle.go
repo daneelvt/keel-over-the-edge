@@ -672,7 +672,7 @@ func (b *Bundle) Harbour() (physics.Harbour, bool) {
 	if t.Kind != townMain || t.Basin == nil || t.Mouth == nil {
 		return physics.Harbour{}, false
 	}
-	dm := func(v float64) float64 { return float64(int32(math.Floor(float64(v*10)+0.5))) / 10 }
+	dm := func(v float64) float64 { return float64(toInt32(math.Floor(float64(v*10)+0.5))) / 10 }
 	return physics.Harbour{X: dm(t.Basin.X), Y: dm(t.Basin.Y), Radius: dm(t.Basin.R),
 		MouthX: dm(t.Mouth[0]), MouthY: dm(t.Mouth[1]), Narrows: dm(t.Narrows)}, true
 }

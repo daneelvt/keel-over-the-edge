@@ -21,8 +21,6 @@ import {
 import {
   HudModel,
   SAIL_CLEAR,
-  SAIL_REST_ANGLE,
-  SAIL_REST_SPEED,
   SAIL_SHOW,
   SailHold,
   type SailState,
@@ -316,19 +314,17 @@ describe('the queue', () => {
   });
 });
 
-/** The flows of Out.FootFlow. */
-const LUFFING = 0;
-const ATTACHED = 1;
+/** The sail's states of Out.Sail. */
+const ATTACHED = 0;
+const LUFFING = 1;
 const STALLED = 2;
 const ABACK = 3;
 
 describe('the sail on the sheet', () => {
-  /** A step's out with the sail's flow, the speed through the water and the apparent wind's angle. */
-  const outOf = (flow: number, speed = 2, angle = 60 * DEG): Float64Array => {
+  /** A step's out with what it says of the sail. */
+  const outOf = (state: number): Float64Array => {
     const out = new Float64Array(SIZES.out);
-    out[RECORDS.out.footFlow] = flow;
-    out[RECORDS.out.speedThroughWater] = speed;
-    out[RECORDS.out.apparentWindAngle] = angle;
+    out[RECORDS.out.sail] = state;
     return out;
   };
   /** Sails from t for seconds at 60 frames a second with the out given; returns the time at the end and what showed at each frame. */
@@ -386,26 +382,6 @@ describe('the sail on the sheet', () => {
     expect(h.shown).toBe('');
     r = sail(h, r.t, 1, outOf(LUFFING));
     expect(r.shown.every((s) => s === '')).toBe(true);
-  });
-
-  test('at rest head to wind it says nothing; luffing at rest on a reach it does', () => {
-    const slow = SAIL_REST_SPEED * 0.4;
-    const still = new SailHold();
-    let r = sail(still, 0, 4, outOf(ABACK, slow, 170 * DEG));
-    expect(r.shown.every((s) => s === '')).toBe(true);
-    r = sail(still, r.t, 4, outOf(LUFFING, slow, 0.5 * SAIL_REST_ANGLE));
-    expect(r.shown.every((s) => s === '')).toBe(true);
-    r = sail(still, r.t, 4, outOf(LUFFING, slow, -0.5 * SAIL_REST_ANGLE));
-    expect(r.shown.every((s) => s === '')).toBe(true);
-    // 0.1 kn, the sheet out to half on a close reach: luffing.
-    r = sail(still, r.t, 2, outOf(LUFFING, 0.05, 55 * DEG));
-    expect(still.shown).toBe('luffing');
-    // Under way, aback and luffing close to the wind show.
-    const going = new SailHold();
-    r = sail(going, 0, 2, outOf(ABACK, 1, 10 * DEG));
-    expect(going.shown).toBe('aback');
-    r = sail(going, r.t, 2, outOf(LUFFING, 1, 10 * DEG));
-    expect(going.shown).toBe('luffing');
   });
 
   test('says nothing while the sailor is out of the boat, and begins again when time goes back', () => {

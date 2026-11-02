@@ -8,7 +8,7 @@
 
 import { type RecordValues, setRecord, spellOf, toHex } from './golden';
 import { ARRAYS, RECORDS, SIZES } from './layout.gen';
-import { type Keyframe, type Physics, WIND_VALUES } from './physics';
+import { type Harbour, type Keyframe, type Physics, WIND_VALUES } from './physics';
 
 /** One weather of the file: the spells, where and when, and what Go computed there. */
 export interface WindCase {
@@ -33,6 +33,8 @@ export interface WindCase {
   keys?: { tick: number; systems: Record<string, RecordValues> }[];
   /** The pressure at each point, hPa, as bits. */
   pressure: string[];
+  /** The world's harbour the wind is computed in, if any. */
+  harbour?: Harbour;
 }
 
 export interface WindFile {
@@ -47,6 +49,7 @@ export interface WindReport {
 
 /** Puts a case's spells and keyframes in play in the module, and its tick for drawing. */
 export function loadWindCase(physics: Physics, c: WindCase): void {
+  physics.harbour(c.harbour ?? null);
   physics.setSpells(c.spells.map(spellOf));
   physics.setKeyframes(
     (c.keys ?? []).map((k): Keyframe => {

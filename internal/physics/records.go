@@ -251,6 +251,7 @@ type Out struct {
 	HeadAttack        float64 // the upper strip's, rad
 	FootFlow          float64 // the lower strip's flow: FlowLuffing, FlowAttached, FlowStalled or FlowAback
 	HeadFlow          float64 // the upper strip's
+	Sail              float64 // what the sail wants of its sheet, as a sailor would say: SailDrawing, SailLuffing, SailStalled or SailAback
 	Drive             float64 // the sail's force ahead, N
 	SideForce         float64 // the sail's level force to starboard, N
 	BoardLift         float64 // the daggerboard's level force to starboard, N
@@ -303,6 +304,15 @@ type ShelterParams struct {
 	Turn    float64    // the most land on one side turns the wind, degrees
 	Offsets [4]float64 // how far beside the path land is looked for, m
 }
+
+// What the sail wants of its sheet, in Out.Sail: nothing; trimming in;
+// easing; or the wind off its back.
+const (
+	SailDrawing = 0
+	SailLuffing = 1
+	SailStalled = 2
+	SailAback   = 3
+)
 
 // The flow over a sail strip, in Out.FootFlow and Out.HeadFlow.
 const (

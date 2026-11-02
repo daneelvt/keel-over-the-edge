@@ -64,6 +64,15 @@ func (h *harbour) radiusAt(a float64) float64 {
 	return float64(h.radius * f)
 }
 
+// widest is the basin's widest radius, of every degree's.
+func (h *harbour) widest() float64 {
+	r := h.radius
+	for d := range 360 {
+		r = max(r, h.radiusAt(float64(float64(d)*(math.Pi/180))))
+	}
+	return r
+}
+
 // inBasin reports whether (x, y) is in the basin.
 func (h *harbour) inBasin(x, y float64) bool {
 	dx, dy := x-h.x, y-h.y

@@ -122,41 +122,32 @@ export class WindWindow {
 /** What the sheet's legend says of the sail: nothing while it draws. */
 export type SailState = '' | 'luffing' | 'stalled' | 'aback';
 
-/** The flows of Out.FootFlow, the lower strip of the sail (internal/physics/records.go). */
-const FLOW_LUFFING = 0;
-const FLOW_ATTACHED = 1;
-const FLOW_STALLED = 2;
-const FLOW_ABACK = 3;
+/** What the sail wants of its sheet, as Out.Sail says it (internal/physics/records.go). */
+const SAIL_DRAWING = 0;
 const SAIL_WORDS: Readonly<Record<number, SailState>> = {
-  [FLOW_LUFFING]: 'luffing',
-  [FLOW_ATTACHED]: '',
-  [FLOW_STALLED]: 'stalled',
-  [FLOW_ABACK]: 'aback',
+  0: '',
+  1: 'luffing',
+  2: 'stalled',
+  3: 'aback',
 };
 
-/** A flow other than drawing shows once it has held this long, in seconds of world time. */
+/** A state other than drawing shows once it has held this long, in seconds of world time. */
 export const SAIL_SHOW = 1.5;
 /** What shows clears once the sail has drawn this long, in seconds. */
 export const SAIL_CLEAR = 1;
 /**
- * At rest head to wind the sail says nothing: slower through the water
- * than this, m/s, a sail aback, or luffing with the wind within
- * SAIL_REST_ANGLE of the bow, radians, is the boat stopped head to wind,
- * which the speed and the autopilot already tell.
- */
-export const SAIL_REST_SPEED = 0.25;
-export const SAIL_REST_ANGLE = (35 * Math.PI) / 180;
-
-/**
- * The sail's flow as the sheet's legend says it: a flow other than drawing
- * once it has held SAIL_SHOW, cleared after SAIL_CLEAR of drawing, so a
- * gust or a lull does not make it flicker. Another flow than the one shown
- * replaces it once it too has held SAIL_SHOW. It allocates nothing.
+ * The sail's state as the sheet's legend says it: what the step says of it
+ * (Out.Sail: luffing, stalled or aback, or drawing, which a boat at rest
+ * head to wind is) once it has said so for SAIL_SHOW, cleared after
+ * SAIL_CLEAR of drawing, so a gust or a lull does not make it flicker.
+ * Another state than the one shown replaces it once it too has held
+ * SAIL_SHOW. The server holds a machine sailor's the same. It allocates
+ * nothing.
  */
 export class SailHold {
   /** What shows. */
   shown: SailState = '';
-  #flow = FLOW_ATTACHED;
+  #state = SAIL_DRAWING;
   #since = Number.NaN;
   #last = Number.NaN;
 
@@ -168,32 +159,27 @@ export class SailHold {
     if (!(time >= this.#last)) {
       // The first look, or time went back: begin again.
       this.shown = '';
-      this.#flow = FLOW_ATTACHED;
+      this.#state = SAIL_DRAWING;
       this.#since = time;
     }
     this.#last = time;
-    let flow = out[RECORDS.out.footFlow] ?? FLOW_ATTACHED;
+    let state = out[RECORDS.out.sail] ?? SAIL_DRAWING;
     if (!aboard) {
       // Nobody at the sheet: nothing to say, and nothing held.
       this.shown = '';
-      flow = FLOW_ATTACHED;
-    } else if ((out[RECORDS.out.speedThroughWater] ?? 0) < SAIL_REST_SPEED) {
-      const off = Math.abs(out[RECORDS.out.apparentWindAngle] ?? 0);
-      if (flow === FLOW_ABACK || (flow === FLOW_LUFFING && off < SAIL_REST_ANGLE)) {
-        flow = FLOW_ATTACHED;
-      }
+      state = SAIL_DRAWING;
     }
-    if (flow !== this.#flow) {
-      this.#flow = flow;
+    if (state !== this.#state) {
+      this.#state = state;
       this.#since = time;
     }
     const held = time - this.#since;
-    if (flow === FLOW_ATTACHED) {
+    if (state === SAIL_DRAWING) {
       if (held >= SAIL_CLEAR) {
         this.shown = '';
       }
     } else if (held >= SAIL_SHOW) {
-      this.shown = SAIL_WORDS[flow] ?? '';
+      this.shown = SAIL_WORDS[state] ?? '';
     }
   }
 }

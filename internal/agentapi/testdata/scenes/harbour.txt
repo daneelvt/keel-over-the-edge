@@ -1,28 +1,28 @@
-# about 532 tokens
+# about 524 tokens
 tick 1102 · seq 0
-Boat: Jolly boat · sailing · heading 156° · 0.6 kn · heel 0° · port tack
-Pilot: hand · boom 50° (sheet out to 50°) · rudder 0° · sail stalled
-Wind: 041° NE 5 kn F2 · 115° off the bow, port side · apparent 4 kn 108° · in the lee of land to the NE
-Shoal: under 1.5 m 160°–250°, 45–60 m · 270°–315°, 250–300 m · 340°–025°, 60–120 m · 045°–090°, 35–80 m · clear 115°–135°
-Sea: waves 0.0 m from 045° · current slack
+Boat: Jolly boat · sailing · heading 046° · astern 0.2 kn · no steerage · 3.5 m under you · heel 0° · port tack
+Pilot: hand · boom 0° (sheet out to 50°) · rudder 0° · sail drawing
+Wind: 047° NE 9 kn F3 · 1° off the bow, starboard side · apparent 8 kn 2°
+Shoal: under 1.5 m 225°–250°, 140–150 m · 270°–340°, 60–130 m · clear 000°–205°
+Sea: waves 0.2 m from 045° · current slack
 Weather: 1013 hPa, steady · visibility good
-Where: 88°56′N 094°21′ · edge 4.4 NM
+Where: 88°10′N 089°44′ · edge 4.3 NM
 In sight:
- B1 human · 000° 25 m · port tack, heading 160°, stopped
- B2 machine · 045° 35 m · port tack, heading 160°, stopped
- B3 human · 315° 35 m · port tack, heading 160°, stopped
- B4 machine · 295° 60 m · port tack, heading 160°, stopped
- B5 machine · 335° 60 m · port tack, heading 165°, stopped
- B6 human · 025° 60 m · port tack, heading 165°, stopped
- B7 human · 065° 60 m · port tack, heading 165°, stopped
- B8 human · 315° 70 m · port tack, heading 160°, stopped
- B9 machine · 045° 70 m · port tack, heading 165°, stopped
- B10 machine · 000° 80 m · port tack, heading 165°, stopped
- B11 human · 340° 80 m · port tack, heading 165°, stopped
- B12 human · 020° 80 m · port tack, heading 165°, stopped
+ B1 human · 000° 25 m · port tack, heading 045°, stopped
+ B2 machine · 045° 35 m · port tack, heading 045°, ~1 kn · you are in its wind shadow
+ B3 human · 315° 35 m · port tack, heading 045°, stopped
+ B4 human · 065° 60 m · port tack, heading 045°, ~1 kn
+ B5 human · 025° 60 m · port tack, heading 045°, stopped
+ B6 machine · 335° 60 m · port tack, heading 045°, stopped
+ B7 machine · 295° 60 m · port tack, heading 045°, stopped
+ B8 machine · 045° 70 m · port tack, heading 045°, ~1 kn
+ B9 human · 315° 70 m · port tack, heading 045°, stopped
+ B10 machine · 000° 70 m · port tack, heading 045°, stopped
+ B11 human · 020° 80 m · port tack, heading 045°, stopped
+ B12 human · 340° 80 m · port tack, heading 045°, stopped
  and 7 more boats
- Port Royal · 290° 0.1 NM · known
- Table Head Light · 298° 0.2 NM · light Fl(3) W 15s · known
- a light Fl(4) W 15s (uncharted) · 235° ~1.6 NM
- a light Fl(5) W 20s (uncharted) · 165° ~1.9 NM
- a light Mo(D) W 15s (uncharted) · 035° ~2.5 NM
+ Port Royal · 280° 0.2 NM · known
+ Table Head Light · 289° 0.3 NM · light Fl(3) W 15s · known
+ a light Fl(4) W 15s (uncharted) · 235° ~1.7 NM
+ a light Fl(5) W 20s (uncharted) · 170° ~1.9 NM
+ a light Mo(D) W 15s (uncharted) · 035° ~2.4 NM

@@ -9,22 +9,22 @@ import "math"
 // centre, the start's breeze softly holds the mean wind up to a light
 // breeze, so that a boat starting in the roads off the harbour's mouth
 // can sail away in any spell. The harbour is the world's, from its land:
-// a basin, a circle at its mean radius, and the narrows, from the basin's
+// a basin, a circle at its widest radius, and the narrows, from the basin's
 // centre out to the mouth at the coast. A world with no harbour has one
 // of no size at the disk's centre.
 
 // Harbour is a world's harbour, m east and north of the disk's centre.
 type Harbour struct {
 	X, Y           float64 // the basin's centre
-	Radius         float64 // its mean radius
+	Radius         float64 // its widest radius
 	MouthX, MouthY float64 // where the narrows open to the sea
 	Narrows        float64 // the narrows' width at the mouth
 }
 
-// harbourShore is how far the basin's shore wanders beyond its mean
-// radius at most, m: within it, outside the circle, the harbour's water
-// gives way to the open sea's.
-const harbourShore = 40
+// harbourShore is how far beyond the harbour's basin and narrows the open
+// sea's wind takes over from the harbour's, m: its shore, so that the
+// wind has no step there.
+const harbourShore = 10
 
 // harbourPrepared is the harbour as the wind is computed with it.
 type harbourPrepared struct {

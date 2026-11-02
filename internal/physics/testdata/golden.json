@@ -1,10 +1,10 @@
 {
  "comment": "Written by go test ./internal/physics -run Golden -update. Floats are their IEEE 754 bits in hexadecimal.",
- "layout": "0xa85980c9",
+ "layout": "0xe380759e",
  "scenarios": [
   {
    "name": "beat",
-   "digest": "030165c2304fa6f2d94674d61a7cbeb35fa2e40f74def71e0828b47dc7bf3337",
+   "digest": "ef1bf9a44f700aab9f7039b3642e77b5e61d2c62b18aaf8e400c69ac3916bde2",
    "checkpoints": [
     {
      "step": 600,
@@ -208,7 +208,7 @@
   },
   {
    "name": "reach",
-   "digest": "e769d69f93b7f5195de9449edd3e1a21235e90cfe86656777dd62344560e3656",
+   "digest": "e66f9be051dfc0089419bdbd33ae90dd2c021200ae65f19a883d5c4ea64f5800",
    "checkpoints": [
     {
      "step": 600,
@@ -412,7 +412,7 @@
   },
   {
    "name": "run",
-   "digest": "a214718b8b0824f7ed80e2915d062952a403719df75be9be3e80b21686ed6813",
+   "digest": "c76ace8941f69384563491429e4d0e7378cdbacc90d5cebd27d4c449f89c2213",
    "checkpoints": [
     {
      "step": 600,
@@ -616,7 +616,7 @@
   },
   {
    "name": "tacks",
-   "digest": "eca951e2c056c1de9324741b0acc7ea0da6c1a63586734c07c1df38a2695b235",
+   "digest": "a2525e01a91cc24a55bdfbeae42feae59f52c078be9119d7ad07d84faf877b36",
    "checkpoints": [
     {
      "step": 600,
@@ -952,7 +952,7 @@
   },
   {
    "name": "gybes",
-   "digest": "a26e8eaa8ebbb839946a3e4b3e3115c922fbe4c544b9edc11505c9f625fab41f",
+   "digest": "97ec302c998cffd2124726ce870c8429cbf130bdeb1717bac46eac97a443310c",
    "checkpoints": [
     {
      "step": 600,
@@ -1288,7 +1288,7 @@
   },
   {
    "name": "by-the-lee",
-   "digest": "e370e22ffc2009086b1e7b0a729b9a7f720dab07a556276a143b1e42eef3064d",
+   "digest": "e5a886c1c2cc122ff9b5ed687b8d3529b6b11efad1c7ecea52b51ad66464b98e",
    "checkpoints": [
     {
      "step": 600,
@@ -1393,7 +1393,7 @@
   },
   {
    "name": "capsize",
-   "digest": "0a21a1413ebecc4c270f821b72cc6ee81447eef7f139505a506627a6b5e3f167",
+   "digest": "437f5d2e329a53f2de247fb87a6e9b491ec686521b5a5f20e3a9be8fd8339e68",
    "checkpoints": [
     {
      "step": 600,
@@ -1597,7 +1597,7 @@
   },
   {
    "name": "death-roll",
-   "digest": "12c12bf29a9678a155d24211b3c42303be7dcd1bad31a3fd62032651cb88895d",
+   "digest": "099d9217fa6dbeb6fd5453f6a6bf332b8cae48f28e199a6bcaf74e698c17ab9e",
    "checkpoints": [
     {
      "step": 600,
@@ -1801,7 +1801,7 @@
   },
   {
    "name": "irons",
-   "digest": "05ce120b580b43a40036cf862f80a0877e2540c5fd98d8643fe333acf09e17dc",
+   "digest": "68d4f1803a8d61c6ad640f26b3e739f9e10f6a1e6976fb298fe320fa64667e72",
    "checkpoints": [
     {
      "step": 600,
@@ -1906,7 +1906,7 @@
   },
   {
    "name": "gusts",
-   "digest": "8d8d6d6da486f7d041d47a80337eec04083138f2726c5ee9546dd4576336901d",
+   "digest": "1446fff92d07da1dbdb20de2fd5d3c0fb06badc6206e3d52e78f9daa6d662cee",
    "checkpoints": [
     {
      "step": 600,
@@ -2242,7 +2242,7 @@
   },
   {
    "name": "calm",
-   "digest": "36453a14f768dd61fe83bb4f920338063af5ebb3df313610fa9df225d9297cbf",
+   "digest": "d1e5f2454b862533c2b518a77545f67b511f8eb607c777d3d06b32bc347c30c7",
    "checkpoints": [
     {
      "step": 600,
@@ -2314,7 +2314,7 @@
   },
   {
    "name": "storm",
-   "digest": "d863016a0fe59cf2316ec33665d58006c087e6e8e13f783a670b3e041b6fdb3a",
+   "digest": "ada84b538a79686ec1d1015085b33d6296fe34fad54a4144f7a484b8faa1da1f",
    "checkpoints": [
     {
      "step": 600,
@@ -2518,7 +2518,7 @@
   },
   {
    "name": "random",
-   "digest": "675fc8a86357b586b949a000a926287def72bd5478b22bd8c7353e4e2d9b039d",
+   "digest": "0449a3a84f7578d8f988861bbe25eee3179af47dd1865c1e1a743317c84911a8",
    "checkpoints": [
     {
      "step": 600,
@@ -3085,7 +3085,7 @@
   },
   {
    "name": "beat-breeze",
-   "digest": "3cee09f279ed454b2d75839cb9edd042e3acf5072f66b70841b7b67be5604025",
+   "digest": "6c27c329d23610d374428a7ffb8acbdad77d29ee4c53ef44bb9bc30bb4a70e65",
    "checkpoints": [
     {
      "step": 600,
@@ -3289,7 +3289,7 @@
   },
   {
    "name": "reach-fresh",
-   "digest": "469416517ac0c1e31a2eaec9f82b947ec6f1971c1032d2a55ebe9b13f34b2dcd",
+   "digest": "d1cf2e18b1ba20aaf7cc995ca58eafd43b2df46b55d1c5a35435271c91e60eaa",
    "checkpoints": [
     {
      "step": 600,
@@ -3493,7 +3493,7 @@
   },
   {
    "name": "swell-reach",
-   "digest": "0d561f32cadaac91fee30e67211cd8096f3ca34cb69cc97535cd583acff5d1e5",
+   "digest": "84fdea718c044d58d165367f875ab3bde9066b7adcc1a61e9f8487fa0e3d050c",
    "checkpoints": [
     {
      "step": 600,
@@ -3697,7 +3697,7 @@
   },
   {
    "name": "run-gale",
-   "digest": "dc6123f6b02d7b7b4e169ea00b0fc8e764d4c84a4cb2810bb91777dd3474d998",
+   "digest": "64fe1c92e966941ec026b081b8f9d73eaf2461caf4888a9d506573a66c403e66",
    "checkpoints": [
     {
      "step": 600,
@@ -3901,7 +3901,7 @@
   },
   {
    "name": "capsize-gale",
-   "digest": "c41339a7c144a9e668b36d33407472d47f5f385b7878ef582053df28fa60488c",
+   "digest": "4461f0363bb01c6db41f78423da0426dff588f0f83fed2f4443eccb79be74ee7",
    "checkpoints": [
     {
      "step": 600,
@@ -4105,7 +4105,7 @@
   },
   {
    "name": "border",
-   "digest": "3abae225d134a0c64c9dae2750e74c788a06be1f36e8b8ab7184f29dcce5d8d0",
+   "digest": "749c9c9bef8bfa292992bf506dcb4ae6cf5913c5a537f6aafc641ec6eaaff675",
    "checkpoints": [
     {
      "step": 600,
@@ -4309,7 +4309,7 @@
   },
   {
    "name": "rim-late",
-   "digest": "29e1823984c5f74a4ce4e87548710faaeb65394587fa62dee31b53cbb7e2af9e",
+   "digest": "be4ae752f24e4a50fd98efd883e92f4ad5d2714d2b5150c73bcfa962dec8c11b",
    "checkpoints": [
     {
      "step": 600,
@@ -4414,7 +4414,7 @@
   },
   {
    "name": "random-sea",
-   "digest": "0c8248610c815257695ca5d1516a98542bd2b88bc93923f48d1b481eefb3d4b3",
+   "digest": "346c635c874ce54e7041fb4e98d41fd79bc37555110d8f33f7960e187185cee3",
    "checkpoints": [
     {
      "step": 600,
@@ -4981,7 +4981,7 @@
   },
   {
    "name": "gusty-beat",
-   "digest": "f6685361a115e5c675492e0db04048f8836f8575d1bb6adb926e4a5ddb2a710b",
+   "digest": "881de353c461748f69800d7eaf0ea9a6fa2e7db4edfd5ab37705f96a75a1d52d",
    "checkpoints": [
     {
      "step": 600,
@@ -5185,7 +5185,7 @@
   },
   {
    "name": "shifty-reach",
-   "digest": "f41d0205efae3693a9f61114007fd25394eb2e669a397c99987e56e43e07f25a",
+   "digest": "0b864afaa7d3c98480514ce066385e92b9dffd2fa6b1e864194a00e0054b4002",
    "checkpoints": [
     {
      "step": 600,
@@ -5389,7 +5389,7 @@
   },
   {
    "name": "change",
-   "digest": "7fc126554ae1d351c95f9a8d3dac3dfd9aa760a0491ab721dd681843af237af6",
+   "digest": "865268340bd0f314f4571df3201064d6e8fe00cbfb39ac496ebfb0f8c5e6bf87",
    "checkpoints": [
     {
      "step": 600,
@@ -5593,7 +5593,7 @@
   },
   {
    "name": "refuge",
-   "digest": "b41d43105e48cde7823f1ab10cc18340100f2ade72b3ac3648005d457832500f",
+   "digest": "237fa0512d401164daf5b964f1cd7d72e67fd7dba913f0179320d6556973d89c",
    "checkpoints": [
     {
      "step": 600,
@@ -5797,7 +5797,7 @@
   },
   {
    "name": "rim-gusts",
-   "digest": "e680cb4b86b3cb43b2f0d2cb32e4affa5a0e8ab8841661c7850c7636a9090c18",
+   "digest": "cef826f6c5804419480d16d25bc3275f35efe2f691274526bf6fc93dd79ad440",
    "checkpoints": [
     {
      "step": 600,
@@ -5902,7 +5902,7 @@
   },
   {
    "name": "random-weather",
-   "digest": "7915031a1afac9f3a2aea24158ae82193a588f10af9b9293e99e2a7d82fc5ccb",
+   "digest": "a45fbe572040b487b0554054962dd10d800b279ee6073ebbc848c8e34ee216a0",
    "checkpoints": [
     {
      "step": 600,
@@ -6469,7 +6469,7 @@
   },
   {
    "name": "pilot-hold",
-   "digest": "c8ed09e06eb658bc8936e3c06c7e5b0cc70cd23844b85b14b0b6e89ee5b95713",
+   "digest": "1cd2ba5d30f20fe833b4300e7fcc94feae8f858ba586589c499f6cb2d44c1373",
    "checkpoints": [
     {
      "step": 600,
@@ -6673,7 +6673,7 @@
   },
   {
    "name": "pilot-shifts",
-   "digest": "e7f1361acb11c6701fd778c849ce87e738dd6164f68a568ca567576f0cd7a866",
+   "digest": "59252308157095ff169477f42695f288838a95a976d1e5d6181c54f2ee0ab842",
    "checkpoints": [
     {
      "step": 600,
@@ -6976,7 +6976,7 @@
   },
   {
    "name": "pilot-tack",
-   "digest": "f4e6152e7c912789153b737dc73ae2dd126b6fe40e836ab246cf51f09bbec43a",
+   "digest": "cbefe3de96e245d5cf1dbc366e98b94a82f6be1650aa8896c9565fe42b53565c",
    "checkpoints": [
     {
      "step": 600,
@@ -7114,7 +7114,7 @@
   },
   {
    "name": "pilot-astern",
-   "digest": "e64f5316a1af433a34be59b876be40a145a2fc59673435355f329759834122b6",
+   "digest": "d47f9c7a23f9a52904455596632b27adecfb9943403c51d433b0937df9613322",
    "checkpoints": [
     {
      "step": 600,
@@ -7186,7 +7186,7 @@
   },
   {
    "name": "pilot-stall",
-   "digest": "259e425d6e72e39df703d37f8b304f9bfb964f3fea898a499dd37ab2743a6395",
+   "digest": "1bb9512e2b68e3e6f13a4a1d5e8a7f07af0bc904bb6da03390460877174830f1",
    "checkpoints": [
     {
      "step": 600,
@@ -7456,7 +7456,7 @@
   },
   {
    "name": "pilot-gybe",
-   "digest": "2afa7a61f0b82efc4f9146b5debaa0d0bfebf5412c3151fd8ff23b838cd2fac3",
+   "digest": "12d7deeef731f7c7cced2ef16b456e8f702a85e025070c82b299455c0b7352cb",
    "checkpoints": [
     {
      "step": 600,
@@ -7627,7 +7627,7 @@
   },
   {
    "name": "pilot-heading",
-   "digest": "b580e88f35af666922bf54eaa2a722ef579485c07adaae6d96087ff8b16e5577",
+   "digest": "56dee65bb5e5e9ce9ead942928636e9f3b1c075840fe5972aeb57d660abe5d05",
    "checkpoints": [
     {
      "step": 600,
@@ -7831,7 +7831,7 @@
   },
   {
    "name": "ground-beach",
-   "digest": "85dc29a07d68e9bb3c23d34e5d0f2e42a5475d0d0e8979d0dc356da1623fc8ac",
+   "digest": "9ed34d1adb109acf7e86038a017bc951f08bea825ce75902bde11663a1fcf260",
    "checkpoints": [
     {
      "step": 600,
@@ -8002,7 +8002,7 @@
   },
   {
    "name": "ground-reef",
-   "digest": "c1fa4fc412fca3273064946e4f916d0cb941969efe03ef90cb30aff0b528b68d",
+   "digest": "2ed363ca9ed043facc1bc74501bac549ca9c23545a158ce5189f090b32ee0b80",
    "checkpoints": [
     {
      "step": 600,
@@ -8173,7 +8173,7 @@
   },
   {
    "name": "ground-cliff",
-   "digest": "44adeb826fb4f12edd6065c4cf141d1b6caac5de17162b0650a4f73058838f0a",
+   "digest": "2eb5d9e247da2e317037cafece47225c9d885368d85dbc65394b746ccc5f169f",
    "checkpoints": [
     {
      "step": 600,
@@ -8245,7 +8245,7 @@
   },
   {
    "name": "ground-pier",
-   "digest": "535724834780b3e943f219c9549f6147016dbf204dc4d45f64c175bc9a2ff454",
+   "digest": "4e25656e170aef0d623c5bce59ed53609515a60da9a5ce5e6c9c00fa2ff48f67",
    "checkpoints": [
     {
      "step": 600,
@@ -8317,7 +8317,7 @@
   },
   {
    "name": "ground-quay",
-   "digest": "a92d52317ac8f7dfc00403d17992dc8e543b6416059bbcb1405d8e298978ea15",
+   "digest": "4e3e5f93ad08fb3284577c46aaaab805b103c1eff13564670e0ab41d96fb5bce",
    "checkpoints": [
     {
      "step": 600,
@@ -8389,7 +8389,7 @@
   },
   {
    "name": "ground-arch",
-   "digest": "217331cce85c5c18031462bf340daa8dec7834ae5774e209b228359e0932f6eb",
+   "digest": "96132de3a4b023c332aa113f5d02cbcb23aec561e664a50708c39e4e467f072c",
    "checkpoints": [
     {
      "step": 600,
@@ -8461,7 +8461,7 @@
   },
   {
    "name": "ground-pushoff",
-   "digest": "f5a698231f88e0d1902c9b2e9d4542e046bffd91d7354031c553c44f80c1f18c",
+   "digest": "5f5174a8367689e59bb1890888217cefb2cd0c212703880eb63c2add9d7b5c87",
    "checkpoints": [
     {
      "step": 600,
@@ -8566,7 +8566,7 @@
   },
   {
    "name": "lee",
-   "digest": "610a01886db77330d349b8ebc7b1820627c827d3342a4f5bd5e859f9b191c076",
+   "digest": "2fc81c08cf80141e1444c796edc09da127599b2b34ee615a8b0d60bf962f011d",
    "checkpoints": [
     {
      "step": 600,
@@ -8671,7 +8671,7 @@
   },
   {
    "name": "lee-sea",
-   "digest": "be82f658f434701c604c2e16b98a2f4802612fac1dddf74b223304ad8617f365",
+   "digest": "97d80552a73b82bc1aa5e0b94e936f91aa7fafc1f4a2d685d2bb8a4af46e712d",
    "checkpoints": [
     {
      "step": 600,
@@ -8776,7 +8776,7 @@
   },
   {
    "name": "shoal",
-   "digest": "0187a5904a5e4d29be8172a7cd4ff237ecf13a229942943348a6270d2b4d1914",
+   "digest": "3a9a57520a3b130db26f43223a189657091b38692ebbc21a0316e1027b5437bb",
    "checkpoints": [
     {
      "step": 600,
@@ -8914,7 +8914,7 @@
   },
   {
    "name": "drift",
-   "digest": "33db479dca3b96af94ede81b8049048698a5f6ef92c3065b2a79fb812e8a308f",
+   "digest": "a76c49e2e9089a1684c63504f6016cd10e87375ab3f94ac57fd3f859d68889b5",
    "checkpoints": [
     {
      "step": 600,
@@ -9085,7 +9085,7 @@
   },
   {
    "name": "edge",
-   "digest": "67d11d0ae190e11925ddd976165358651c485df02f618e9d3d5d5a7cee953482",
+   "digest": "74cfb3877c49eaa6074e991117817a1ea86feaf3a37b3b17252349428c321f87",
    "checkpoints": [
     {
      "step": 600,
