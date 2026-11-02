@@ -1329,8 +1329,9 @@ curl -X POST 'http://127.0.0.1:9090/debug/wind?knots=12&from=0'
 curl -X POST 'http://127.0.0.1:9090/debug/encounter?situation=port-starboard'
 ```
 
-places a scripted boat to meet the first sailing player's boat, held on its
-course and trim for half a minute: `port-starboard` (10), `windward-leeward`
+places a scripted boat to meet the first sailing player's boat (or the
+boat given, with `&boat=…`), held on its course and trim for half a
+minute: `port-starboard` (10), `windward-leeward`
 (11), `overtaking` (12), `tacking` (13), `luffing` (15) and `capsized` (22).
 It answers with where it put the boat and the Article the bump should be
 judged by; hold your course. The developer panel (`?dev`) shows the wind

@@ -15,8 +15,8 @@ import (
 	"github.com/daneelvt/keel-over-the-edge/internal/physics"
 )
 
-// Encounters a developer stages: a scripted boat placed to meet the first
-// sailing player's boat in one of the situations the Articles are tested
+// Encounters a developer stages: a scripted boat placed to meet a sailing
+// player's boat in one of the situations the Articles are tested
 // with, held on its course by its autopilot's compass heading and on its
 // trim, so that one person on a phone can feel
 // each Article without a second player. The boat sails as any other, in
@@ -50,7 +50,8 @@ var EncounterAccount = Account(1 << 40)
 // HoldFor is how long the staged boat sails before it leaves.
 const HoldFor = 30 * time.Second
 
-// ErrNoPlayer is a world with no sailing player's boat to meet.
+// ErrNoPlayer is a world with no sailing player's boat to meet, or not the
+// one asked for.
 var ErrNoPlayer = errors.New("scripted: no player's boat is sailing")
 
 // EncounterConfig sets up a staged encounter.
@@ -81,10 +82,10 @@ type plan struct {
 	course func(t float64) float64
 }
 
-// Encounter stages situation against the first sailing player's boat, and
-// sails the staged boat until HoldFor has passed or ctx ends, on a
-// goroutine of its own.
-func Encounter(ctx context.Context, cfg EncounterConfig, situation string) (Staged, error) {
+// Encounter stages situation against the player's boat given, or the first
+// sailing player's boat with boat 0, and sails the staged boat until HoldFor
+// has passed or ctx ends, on a goroutine of its own.
+func Encounter(ctx context.Context, cfg EncounterConfig, situation string, boat uint64) (Staged, error) {
 	article, ok := Situations[situation]
 	if !ok {
 		return Staged{}, fmt.Errorf("scripted: no situation %q", situation)
@@ -92,7 +93,8 @@ func Encounter(ctx context.Context, cfg EncounterConfig, situation string) (Stag
 	f := cfg.Bus.Frames.Acquire()
 	player := int32(-1)
 	for _, s := range f.Live {
-		if f.Conn[s] != 0 && f.Grace[s] == 0 && f.State[s].SailorMode == physics.Sailing && !scriptedAccount(f.Owner[s]) {
+		if f.Conn[s] != 0 && f.Grace[s] == 0 && f.State[s].SailorMode == physics.Sailing && !scriptedAccount(f.Owner[s]) &&
+			(boat == 0 || f.Boat[s] == boat) {
 			player = s
 			break
 		}
@@ -111,18 +113,18 @@ func Encounter(ctx context.Context, cfg EncounterConfig, situation string) (Stag
 	wind := physics.WindAt(&wt, h.X, h.Y, nil)
 
 	p := stage(situation, &h, wind.WindFrom, cfg.Length)
-	slot, gen, boat, err := joinStaged(ctx, cfg.Bus)
+	slot, gen, staged, err := joinStaged(ctx, cfg.Bus)
 	if err != nil {
 		return Staged{}, err
 	}
 	dev := cfg.Bus.Commands.Developer()
-	if err := dev.TrySend(bus.Command{Op: bus.Place, Boat: boat, State: p.state}); err != nil {
+	if err := dev.TrySend(bus.Command{Op: bus.Place, Boat: staged, State: p.state}); err != nil {
 		return Staged{}, err
 	}
-	cfg.Log.Info("an encounter staged", "situation", situation, "boat", boat, "player", playerBoat)
-	go sailStaged(ctx, cfg.Bus, slot, gen, boat, p)
+	cfg.Log.Info("an encounter staged", "situation", situation, "boat", staged, "player", playerBoat)
+	go sailStaged(ctx, cfg.Bus, slot, gen, staged, p)
 	return Staged{
-		Situation: situation, Article: article, Boat: boat, Player: playerBoat,
+		Situation: situation, Article: article, Boat: staged, Player: playerBoat,
 		East: p.state.X, North: p.state.Y, Heading: p.state.Heading * 180 / math.Pi,
 	}, nil
 }

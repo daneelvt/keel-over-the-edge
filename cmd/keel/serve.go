@@ -120,8 +120,9 @@ Configured from the environment:
                        (charted, credited to no one),
                        POST /debug/weather?regime=… (a regime held),
                        POST /debug/weather?auto (the world's own) and
-                       POST /debug/encounter?situation=… (a scripted boat
-                       meeting the first sailing player's) (default 0)
+                       POST /debug/encounter?situation=…[&boat=…] (a scripted
+                       boat meeting that player's, or the first sailing
+                       player's) (default 0)
 `
 
 func serve(ctx context.Context, args []string, getenv func(string) string, stdout, stderr io.Writer) error {
@@ -891,12 +892,13 @@ func placeRoute(b *bus.Bus, log *slog.Logger) http.Handler {
 }
 
 // encounterRoute stages an encounter, on the internal listener only, with
-// KEEL_DEV_COMMANDS=1: a scripted boat placed to meet the first sailing
-// player's boat in one of the situations the Articles are tested with,
-// held on its course and trim for half a minute. It answers with where the
-// boat was put, and the Article the bump should be judged by.
+// KEEL_DEV_COMMANDS=1: a scripted boat placed to meet the player's boat
+// given, or the first sailing player's, in one of the situations the
+// Articles are tested with, held on its course and trim for half a minute.
+// It answers with where the boat was put, and the Article the bump should
+// be judged by.
 //
-//	POST /debug/encounter?situation=port-starboard|windward-leeward|overtaking|tacking|luffing|capsized
+//	POST /debug/encounter?situation=port-starboard|windward-leeward|overtaking|tacking|luffing|capsized[&boat=…]
 func encounterRoute(ctx context.Context, b *bus.Bus, cat *catalog.Catalog, log *slog.Logger) http.Handler {
 	cfg := scripted.EncounterConfig{Bus: b, Weather: cat.PrepareWeather(), Length: cat.Boats[0].LengthOverall, Log: log}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -905,7 +907,16 @@ func encounterRoute(ctx context.Context, b *bus.Bus, cat *catalog.Catalog, log *
 			http.Error(w, "situation, one of "+strings.Join(scripted.SituationNames(), ", ")+", is required", http.StatusBadRequest)
 			return
 		}
-		staged, err := scripted.Encounter(ctx, cfg, situation)
+		var boat uint64
+		if q := r.URL.Query(); q.Has("boat") {
+			n, err := strconv.ParseUint(q.Get("boat"), 10, 64)
+			if err != nil || n == 0 {
+				http.Error(w, "boat is not a boat's id", http.StatusBadRequest)
+				return
+			}
+			boat = n
+		}
+		staged, err := scripted.Encounter(ctx, cfg, situation, boat)
 		switch {
 		case errors.Is(err, scripted.ErrNoPlayer):
 			http.Error(w, err.Error(), http.StatusConflict)

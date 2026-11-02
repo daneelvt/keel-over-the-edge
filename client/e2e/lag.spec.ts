@@ -103,6 +103,11 @@ test('a bump at 200 ms: one correction, one knock and shake, the verdict', {
   test.setTimeout(120_000);
   await sailor(context, 'Bumped');
   await sail(page, lagged);
+  // Out of the roads, where the boats of the tests before sail: one of
+  // them could hit the staged boat first. The move is no correction to
+  // count.
+  await alone(page);
+  await page.evaluate(() => globalThis.keel.countAfresh());
   // A steady breeze on the beam, so the boat has way on whatever the
   // world's weather is at this hour: in a calm the capsized boat staged
   // ahead is not reached.
@@ -111,14 +116,23 @@ test('a bump at 200 ms: one correction, one knock and shake, the verdict', {
   const internal = 'http://127.0.0.1:19090';
   expect((await request.post(`${internal}/debug/wind?knots=12&from=${from}`)).status()).toBe(204);
   try {
-    // Hold the course, as a sailor would while a boat is staged in their path.
+    // Hold the course, as a sailor would while a boat is staged in their
+    // path, with way on: from rest a slow boat wanders off it, and passes
+    // beside the boat staged ahead.
     await page.evaluate((h) => globalThis.keel.script('steer', h), heading);
-    await page.waitForTimeout(8_000);
-    const res = await request.post(`${internal}/debug/encounter?situation=capsized`);
+    await page.waitForFunction(() => globalThis.keel.boat().out.speedOverGround > 2, null, {
+      timeout: 30_000,
+    });
+    await page.waitForTimeout(3_000);
+    // Ahead of this boat: the machine sailors other tests put to sea are
+    // still sailing, and may be the world's first.
+    const boat = await page.evaluate(() => globalThis.keel.net().boat);
+    const res = await request.post(`${internal}/debug/encounter?situation=capsized&boat=${boat}`);
     expect(res.status()).toBe(200);
     const staged = (await res.json()) as { article: string };
     expect(staged.article).toBe('22');
-    await page.waitForFunction(() => globalThis.keel.encounters().bumps > 0, null, {
+    // This boat's bump, with its verdict: not one only seen.
+    await page.waitForFunction(() => globalThis.keel.encounters().bump !== '', null, {
       timeout: 20_000,
     });
     const e = await page.evaluate(() => globalThis.keel.encounters());
