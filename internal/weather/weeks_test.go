@@ -26,9 +26,9 @@ import (
 // held to its rule over the first three weeks on a grid half a mile apart,
 // and in the long run over the first hundred; and so are the signs in the
 // sky before the weather: the clouds' leads on their own wind, and a
-// front's cirrus's on its line, and the fog's wall. The weeks are made and
-// checked side by side, each into its own tally, added to the whole in
-// their order; none is begun once one has failed.
+// front's cirrus's on its line, and the fog's wall. The long run's weeks are
+// made and checked side by side, each into its own tally, added to the
+// whole in their order; none is begun once one has failed.
 func TestWeeks(t *testing.T) {
 	cat, tl := load(t)
 	cfg := tl.Config()
@@ -58,11 +58,18 @@ func TestWeeks(t *testing.T) {
 	if n > 100 {
 		swellWeeks = 100
 	}
+	// The long run has the machine to itself and makes a week on every
+	// core; the short run shares it with every other package's tests, some
+	// of them timed, and makes one at a time.
+	workers := 1
+	if n > 100 {
+		workers = runtime.GOMAXPROCS(0)
+	}
 	waves, _ := cat.Prepare()
 	kinds := busyKindsOf(cat, cfg)
 	tallies := make([]*weeksTally, n)
 	var wg sync.WaitGroup
-	free := make(chan struct{}, runtime.GOMAXPROCS(0))
+	free := make(chan struct{}, workers)
 	for i := range n {
 		free <- struct{}{}
 		if t.Failed() {
