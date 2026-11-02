@@ -806,6 +806,15 @@ func windAt(tick float64) {
 //go:wasmexport circulation
 func circulation(w float64) { way = w }
 
+// harbour sets the world's harbour, where the refuge holds and the start's
+// breeze does not: its basin's centre and mean radius, its mouth and the
+// narrows' width there, m. All of nothing is a world with none.
+//
+//go:wasmexport harbour
+func harbour(x, y, radius, mouthX, mouthY, narrows float64) {
+	weatherPrepared.SetHarbour(&physics.Harbour{X: x, Y: y, Radius: radius, MouthX: mouthX, MouthY: mouthY, Narrows: narrows})
+}
+
 // current writes to currentValues the current at (x, y), on the ground the
 // module holds while groundUse is on.
 //

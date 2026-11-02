@@ -53,7 +53,7 @@ func townsList(cfg *Config) []byte {
 				tj.Piers = append(tj.Piers, p.Length)
 			}
 			if t.Kind == "main" {
-				tj.Moorings = b.Start.Moorings
+				tj.Moorings = len(b.Start.Moorings)
 			}
 			if x, y, ok := harbourPoint(cfg, t); ok {
 				tj.Harbour = &[2]float64{round2(x), round2(y)}
@@ -73,9 +73,9 @@ func townsList(cfg *Config) []byte {
 // in water deep enough, the nearest its quay first.
 func harbourPoint(cfg *Config, t *worldgen.Town) (float64, float64, bool) {
 	b := cfg.Bundle
-	if t.Kind == "main" && b.Start.Moorings > 0 {
-		p := b.Start.Places[0]
-		return p[0], p[1], true
+	if t.Kind == "main" && len(b.Start.Moorings) > 0 {
+		m := b.Start.Moorings[0]
+		return m.X, m.Y, true
 	}
 	best, bx, by := math.Inf(1), 0.0, 0.0
 	for _, d := range t.Harbour {

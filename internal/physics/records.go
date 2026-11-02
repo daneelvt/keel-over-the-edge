@@ -321,14 +321,19 @@ type WeatherParams struct {
 	SpeedCentre     float64    // the wind's speed at the centre, as a share of a spell's
 	SpeedRim        float64    // and at the rim
 	Rim             float64    // where the share reaches SpeedRim: the mist band, nautical miles
-	RefugeInner     float64    // within this the refuge's limits hold in full, nautical miles
-	RefugeOuter     float64    // and beyond this not at all, nautical miles
+	RefugeInner     float64    // within this of the harbour the refuge's limits hold in full, m
+	RefugeOuter     float64    // and beyond this not at all, m
 	RefugeMeanKnee  float64    // the refuge softens the mean wind above this, knots
 	RefugeMean      float64    // toward this, knots
 	RefugeWindKnee  float64    // and the wind with its gusts above this, knots
 	RefugeWind      float64    // toward this, knots
 	RefugeSwellKnee float64    // and the swell above this, m
 	RefugeSwell     float64    // toward this, m
+	BreezeWithin    float64    // within this of the centre the start's breeze holds in full, nautical miles
+	BreezeFade      float64    // and beyond this not at all, nautical miles
+	BreezeKnee      float64    // it lifts the mean wind below this, knots
+	BreezeFloor     float64    // toward this, knots
+	BreezeInside    float64    // inside the harbour it fades to nothing this far from the mouth, m
 	RimGusts        float64    // the gust factor's excess grows by this share toward the rim
 	RimGustsFrom    float64    // from here to the rim, nautical miles
 	AcrossTurn      [2]float64 // the shortest and longest time the axis of the difference across the disk takes to turn once, hours

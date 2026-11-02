@@ -98,6 +98,7 @@ import { KNOT, type Sandbox, SEA_STATES } from '../sandbox/sandbox';
 import { hourAt, moonAgeAt, skyPeriods } from '../sky/skytime';
 import type { Barometer } from '../ui/barometer';
 import type { Countdown } from '../ui/countdown';
+import type { SailState } from '../ui/model';
 import type { Settings } from '../ui/settings';
 import {
   cellHex,
@@ -1530,6 +1531,18 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
       h.wind.value = long ? 'WNW 88 kn · F12' : 'N 0 kn · F0';
       h.pilot.value = long ? 'Wind 135° P' : '';
       h.tack.value = long ? 'Starboard tack' : '';
+    },
+    /**
+     * Holds the sheet's legend at what the sail is doing, '' for nothing,
+     * the readouts held with it; null lets them all follow the boat again.
+     */
+    sail(state: SailState | null): void {
+      const h = game.hud;
+      h.held = state !== null;
+      h.sail.value = state ?? '';
+      if (state === null) {
+        h.flush();
+      }
     },
     /** The audio context's state: 'none' before the first gesture. */
     soundState(): string {

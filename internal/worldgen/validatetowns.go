@@ -75,14 +75,13 @@ func (c *config) townRules(w *world) []Rule {
 		"at least %.0f m wide, %.0f m deep along its middle third", hc.Narrows[0], hc.Channel)
 	// The moorings' water reaches the roads': out through the narrows.
 	out := false
-	if w.start.Moorings > 0 && w.pw != nil {
-		p := w.start.Places[0]
-		out = w.pw.reached(p[0], p[1])
+	if len(w.start.Moorings) > 0 && w.pw != nil {
+		m := w.start.Moorings[0]
+		out = w.pw.reached(m.X, m.Y)
 	}
-	add("moorings", w.start.Moorings >= c.moorings.Least && out,
-		fmt.Sprintf("%d, %s", w.start.Moorings, map[bool]string{true: "out to the roads", false: "shut in"}[out]),
-		"at least %d, before the roads, their water out to the roads' in %.1f m", c.moorings.Least, c.validator.ReachDepth)
-
+	add("moorings", len(w.start.Moorings) >= c.moorings.Least && out,
+		fmt.Sprintf("%d, %s", len(w.start.Moorings), map[bool]string{true: "out to the roads", false: "shut in"}[out]),
+		"at least %d, their water out to the roads' in %.1f m", c.moorings.Least, c.validator.ReachDepth)
 	// The towns.
 	var main *Town
 	var ports, villages []*Town
@@ -96,6 +95,18 @@ func (c *config) townRules(w *world) []Rule {
 			villages = append(villages, t)
 		}
 	}
+	// The start off the mouth: its first places in the fan, in sight of
+	// the mouth, the last of them near enough it.
+	fan := &c.start.Fan
+	within := math.Inf(1)
+	if main != nil && main.Mouth != nil && w.start.Fan >= fan.First {
+		p := w.start.Places[fan.First-1]
+		within = hypot(p[0]-main.Mouth[0], p[1]-main.Mouth[1])
+	}
+	add("start off the mouth", within <= fan.FirstWithin,
+		fmt.Sprintf("%d places in the fan, the %dth %.0f m from the mouth", w.start.Fan, fan.First, within),
+		"at least %d, the last within %.0f m", fan.First, fan.FirstWithin)
+
 	has := func(t *Town, st catalog.Stands) int {
 		n := 0
 		for _, k := range c.standing(st) {

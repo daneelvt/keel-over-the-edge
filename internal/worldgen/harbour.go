@@ -92,6 +92,10 @@ func (h *harbour) inNarrows(x, y float64) bool {
 // inHarbour reports whether (x, y) is the harbour's water.
 func (h *harbour) inHarbour(x, y float64) bool { return h.inBasin(x, y) || h.inNarrows(x, y) }
 
+// mouthX and mouthY are where the narrows open to the sea, at the coast.
+func (h *harbour) mouthX() float64 { return h.x + float64(h.mouth*h.sin) }
+func (h *harbour) mouthY() float64 { return h.y + float64(h.mouth*h.cos) }
+
 // inTown reports whether the bearing a from the basin's centre is on the
 // shore the town stands on, opposite the narrows.
 func (h *harbour) inTown(a float64) bool {

@@ -21,7 +21,7 @@ import { catalog } from '../catalog';
 import type { PilotControl } from '../input/pilot';
 import { loadPhysics } from '../predict/physics';
 import { Predictor } from '../predict/predictor';
-import { Session } from '../workers/net/session';
+import { harbourOf, Session } from '../workers/net/session';
 import { newSnapshot, type OwnSnapshot, readSnapshot } from './snapshot';
 import {
   FLEET_RECORD_BYTES,
@@ -161,6 +161,8 @@ async function replay(trace: Trace): Promise<{
       }
       if (r.kind === 'welcome') {
         predictor.setCirculation(r.welcome.circulation);
+        const h = r.welcome.harbour;
+        predictor.setHarbour(h === undefined ? null : harbourOf(h));
       }
       if (r.kind === 'sea') {
         predictor.seas.receive(r.sea);

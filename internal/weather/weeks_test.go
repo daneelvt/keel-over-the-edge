@@ -545,18 +545,19 @@ func stormOnly(tl *Timeline, tick int64, slot int) *physics.WeatherTick {
 	return &at
 }
 
-// checkRefuge holds the refuge to its limits: within its radius the mean
-// wind never over 14 knots and the wind with its gusts never over 18,
-// whatever the week brings, sampled every few minutes on a grid a tenth of
-// a mile apart.
+// checkRefuge holds the refuge to its limits: in a harbour the mean wind
+// never over 14 knots and the wind with its gusts never over 18, whatever
+// the week brings, sampled every few minutes on a grid 20 m apart.
 func checkRefuge(t *testing.T, seed uint64, tl *Timeline, w *Week, every int64, tally *weeksTally) {
 	t.Helper()
-	const step = 0.1 * nauticalMile
+	tl = tl.InHarbour(&weeksHarbour)
+	prep := tl.Prepared()
+	const step = 20
 	for tick := int64(0); tick < w.Until; tick += every * ticksPerMinute {
 		_, at := weatherAt(tl, tick, nil)
-		for x := -nauticalMile; x <= nauticalMile; x += step {
-			for y := -nauticalMile; y <= nauticalMile; y += step {
-				if x*x+y*y > nauticalMile*nauticalMile {
+		for x := -400.0; x <= 400; x += step {
+			for y := -400.0; y <= 400; y += step {
+				if prep.RefugeShare(x, y, 0) < 1 {
 					continue
 				}
 				var p physics.WindPoint
@@ -571,6 +572,10 @@ func checkRefuge(t *testing.T, seed uint64, tl *Timeline, w *Week, every int64, 
 		}
 	}
 }
+
+// weeksHarbour is a harbour like seed 1's Port Royal's, in which the
+// refuge is looked at.
+var weeksHarbour = physics.Harbour{X: -40, Y: 70, Radius: 130, MouthX: -40, MouthY: -150, Narrows: 50}
 
 // The least and the most the wind veers across a front's line, 0.3 NM
 // either side of it: the spells' veer, 40–90°, less or more their shifts,

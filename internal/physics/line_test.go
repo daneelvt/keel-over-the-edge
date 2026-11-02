@@ -63,6 +63,9 @@ func TestLineIsADomeAlongItsLength(t *testing.T) {
 // all along its length.
 func TestLineBuysBallot(t *testing.T) {
 	p, kinds := testSystems(t)
+	// The line's own wind: without the start's breeze, which holds a still
+	// spell up about the centre whatever the pressure.
+	p.breezeFade = 0
 	line := lineAt(kinds["squall-line"], 500, -300, 40, 0.15*nm, 2.4*nm, 15, 3)
 	w := withSystem(p, worldTick, line, still(0))
 	var at WeatherTick

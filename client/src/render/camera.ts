@@ -20,6 +20,14 @@
 //
 // Watching another sailor's boat, it never eases back by itself: the
 // player looks where they choose, and "Behind the boat" brings it back.
+//
+// A new boat's first view looks past it at the harbour's mouth: the camera
+// stands beyond the boat from the mouth, seaward, at its resting height
+// and distance, so the boat, the mole, the narrows and the town beyond are
+// in the frame. It holds there, whichever way the boat turns, until the
+// sailor's first touch: a touch of the helm, the sheet or the autopilot
+// eases it behind the boat at once, and a touch of the sea is a look round
+// like any other, easing back five seconds after the last.
 
 /** A view of the boat: azimuth from astern (radians, toward the port quarter positive), elevation above the horizon, distance in metres. */
 export interface CameraView {
@@ -130,6 +138,8 @@ export class ChaseCamera {
   #touched = Number.NEGATIVE_INFINITY;
   /** Easing back to the resting view as asked, until a touch or it is there. */
   #homing = false;
+  /** The opening view's bearing from the boat, radians clockwise from north, until the first touch; null after. */
+  #opening: number | null = null;
 
   /**
    * Puts the camera at a view, behind a boat heading this way and heaved
@@ -145,6 +155,47 @@ export class ChaseCamera {
     this.lift = heave;
     this.sea = sea;
     this.#touched = Number.NEGATIVE_INFINITY;
+    this.#opening = null;
+  }
+
+  /**
+   * Opens on a new boat at (east, north), m, looking past it at the
+   * harbour's mouth at (mouthEast, mouthNorth): from beyond the boat, on
+   * the bearing from the mouth to the boat, at the resting elevation and
+   * distance. It holds there until the first touch.
+   */
+  open(east: number, north: number, mouthEast: number, mouthNorth: number): void {
+    const bearing = Math.atan2(east - mouthEast, north - mouthNorth);
+    this.#opening = Number.isFinite(bearing) ? bearing : null;
+    if (this.#opening === null) {
+      return;
+    }
+    this.view.elevation = this.rest.elevation;
+    this.view.distance = this.rest.distance;
+    this.tilt = 0;
+    this.#homing = false;
+    this.#face();
+  }
+
+  /** Whether the opening view holds, untouched. */
+  get opening(): boolean {
+    return this.#opening !== null;
+  }
+
+  /** The sailor took the helm, the sheet or the autopilot: the opening view eases behind the boat. */
+  controlsTouched(): void {
+    if (this.#opening !== null) {
+      this.#opening = null;
+      this.#homing = true;
+    }
+  }
+
+  /** The azimuth that puts the camera on the opening's bearing from the boat, whatever its yaw. */
+  #face(): void {
+    if (this.#opening !== null) {
+      // Astern is the yaw's bearing turned half round.
+      this.view.azimuth = angleDiff(this.#opening - this.yaw - Math.PI, 0);
+    }
   }
 
   /**
@@ -162,12 +213,14 @@ export class ChaseCamera {
     this.tilt = Math.max(MIN_ELEVATION - at, 0);
     this.#touched = now;
     this.#homing = false;
+    this.#opening = null;
   }
 
   /** Eases back to the resting view behind the boat, at once, whether or not it would by itself. */
   behind(): void {
     this.tilt = 0;
     this.#homing = true;
+    this.#opening = null;
   }
 
   /** Whether the camera looks above the horizon. */
@@ -181,6 +234,7 @@ export class ChaseCamera {
       this.view.distance = clamp(this.view.distance * factor, MIN_DISTANCE, MAX_DISTANCE);
     }
     this.#touched = now;
+    this.#opening = null;
   }
 
   /**
@@ -206,6 +260,16 @@ export class ChaseCamera {
     this.yawRate = (v - w * c) * k;
     this.yaw = angleDiff(heading + e1, 0);
 
+    if (this.#opening !== null) {
+      if (this.holding || !this.easesBack) {
+        // A finger on the sea, or another's boat watched: a look round from here.
+        this.#opening = null;
+        this.#touched = now;
+      } else {
+        this.#face();
+        return;
+      }
+    }
     const untouched = this.easesBack && now - this.#touched > EASE_BACK_AFTER;
     if (!this.holding && !this.looksUp && (untouched || this.#homing)) {
       // Looking at the boat again, the tilt goes with the rest.

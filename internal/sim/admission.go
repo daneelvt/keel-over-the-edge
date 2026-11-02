@@ -179,9 +179,9 @@ func (w *World) newBoat(account bus.Account, conn uint64, machine, priority bool
 	f.Grace[s] = 0
 	f.Kind[s] = 0
 	f.Machine[s], f.Priority[s] = machine, priority
-	f.Control[s] = bus.Centred(gen)
-	f.Pilot[s] = bus.PilotOffWord(gen)
 	f.State[s] = w.spawn(f, s)
+	f.Control[s] = bus.Pack(0, bus.Steps/2, w.startSheet(f, s), gen)
+	f.Pilot[s] = bus.PilotOffWord(gen)
 	f.Course[s] = physics.Course{}
 	f.Voyage[s] = bus.Voyage{}
 	f.Stay[s], f.Unseen[s] = false, false

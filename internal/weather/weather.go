@@ -94,7 +94,7 @@ func FixedIn(p *physics.WeatherPrepared, s physics.Spell) *Timeline {
 // one sample a tick, with a time constant so short that the wind at each
 // tick is the whole of it.
 var fixedParams = physics.WeatherParams{
-	Rim: 4.2, RefugeInner: 1, RefugeOuter: 1.4, RimGustsFrom: 3, Edge: 4.5, FallDraftFrom: 4.2,
+	Rim: 4.2, RefugeInner: 0, RefugeOuter: 150, RimGustsFrom: 3, Edge: 4.5, FallDraftFrom: 4.2,
 	GustAlong: 300, GustAcross: 200, GustLife: 240,
 	WaveTimeConstant: 1e-9, WaveSample: 1.0 / physics.StepsPerSecond, WaveSamples: 1,
 	TroughAhead: 1.1, TroughBehind: 0.35, Blend: 0.12, GustsBehind: 1, InwardTo: 3, Cut: 4,
@@ -116,6 +116,17 @@ func FromCatalog(c *catalog.Catalog) (*Timeline, error) {
 		return nil, err
 	}
 	return New(cfg, Generate(cfg, 1, SampleEpoch, SampleEpoch+SampleWeek, nil))
+}
+
+// InHarbour is the timeline of the same week in a world with a harbour,
+// where the refuge holds and the start's breeze does not: its wind is
+// computed with a copy of the wind's constants that has it.
+func (t *Timeline) InHarbour(h *physics.Harbour) *Timeline {
+	c := *t
+	p := *t.prepared
+	p.SetHarbour(h)
+	c.prepared = &p
+	return &c
 }
 
 // Prepared is the wind's constants the timeline's spells are computed with.

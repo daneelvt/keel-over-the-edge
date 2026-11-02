@@ -148,41 +148,79 @@ func TestTowns(t *testing.T) {
 	if len(turns) < 100 || float64(len(distinct)) < float64(0.5*float64(len(turns))) {
 		t.Errorf("%d houses on the streets, facing %d ways", len(turns), len(distinct))
 	}
-	// The start: its moorings first, in the basin, clear of land, facing
-	// the narrows.
+	// The moorings, in the basin, clear of land, facing the narrows.
 	h := w.islands[0].harbour
 	st := b.Start
-	if st.Moorings < c.moorings.Least || len(st.Places) != c.start.Places {
-		t.Fatalf("%d moorings of %d places", st.Moorings, len(st.Places))
+	if len(st.Moorings) < c.moorings.Least || len(st.Places) != c.start.Places {
+		t.Fatalf("%d moorings, %d places", len(st.Moorings), len(st.Places))
 	}
 	ex, ey := h.x+h.edge*h.sin, h.y+h.edge*h.cos
-	for i, p := range st.Places[:st.Moorings] {
-		if !h.inBasin(p[0], p[1]) || c.landNear(b.Ground, p[0], p[1], c.moorings.Clear) || hypot(p[0]-h.x, p[1]-h.y) < h.turning {
-			t.Errorf("mooring %d at (%.0f, %.0f) is not clear in the basin", i, p[0], p[1])
+	for i, m := range st.Moorings {
+		if !h.inBasin(m.X, m.Y) || c.landNear(b.Ground, m.X, m.Y, c.moorings.Clear) || hypot(m.X-h.x, m.Y-h.y) < h.turning {
+			t.Errorf("mooring %d at (%.0f, %.0f) is not clear in the basin", i, m.X, m.Y)
 		}
-		want := physics.Atan2(ex-p[0], ey-p[1])
-		if math.Abs(angleBetween(st.HeadingOf(i), want)) > 1e-9 {
-			t.Errorf("mooring %d faces %.2f, not the narrows' %.2f", i, st.HeadingOf(i), want)
+		want := physics.Atan2(ex-m.X, ey-m.Y)
+		if math.Abs(angleBetween(m.Heading, want)) > 1e-9 {
+			t.Errorf("mooring %d faces %.2f, not the narrows' %.2f", i, m.Heading, want)
+		}
+		// In port.
+		if b.InPort(m.X, m.Y) != 0 {
+			t.Errorf("a mooring at (%.0f, %.0f) is not in Port Royal's harbour", m.X, m.Y)
 		}
 	}
-	// In port: the moorings are, the open sea and the land are not.
-	for _, p := range st.Places[:st.Moorings] {
-		if b.InPort(p[0], p[1]) != 0 {
-			t.Errorf("a mooring at (%.0f, %.0f) is not in Port Royal's harbour", p[0], p[1])
+	// The start: in the fan off the mouth first, nearest it first, none in
+	// the fairway or in port, each in sight of the mouth and facing away
+	// from it; the first of them close in.
+	fan := &c.start.Fan
+	mx, my := h.mouthX(), h.mouthY()
+	if st.Fan < fan.First {
+		t.Fatalf("%d places in the fan", st.Fan)
+	}
+	last := 0.0
+	for i, p := range st.Places[:st.Fan] {
+		dx, dy := p[0]-mx, p[1]-my
+		d := hypot(dx, dy)
+		along, across := dx*h.sin+dy*h.cos, dx*h.cos-dy*h.sin
+		switch {
+		case d < last-1e-9:
+			t.Errorf("place %d is %.1f m from the mouth, after %.1f", i, d, last)
+		case d < fan.Nearest || d > fan.Reach:
+			t.Errorf("place %d is %.1f m from the mouth", i, d)
+		case along > 0 && math.Abs(across) < fan.Fairway/2-1e-6:
+			t.Errorf("place %d at (%.0f, %.0f) is in the fairway", i, p[0], p[1])
+		case !c.inSight(b.Ground, p[0], p[1], mx, my):
+			t.Errorf("place %d at (%.0f, %.0f) is out of sight of the mouth", i, p[0], p[1])
+		case math.Abs(angleBetween(st.HeadingOf(i), physics.Atan2(dx, dy))) > 1e-9:
+			t.Errorf("place %d faces %.2f, not away from the mouth", i, st.HeadingOf(i))
 		}
+		last = d
+	}
+	for i, p := range st.Places {
+		if b.InPort(p[0], p[1]) != -1 {
+			t.Errorf("place %d at (%.0f, %.0f) is in port", i, p[0], p[1])
+		}
+	}
+	for _, n := range []int{1, 50, 256, 1000} {
+		if n <= len(st.Places) {
+			p := st.Places[n-1]
+			t.Logf("place %d is %.0f m from the mouth", n, hypot(p[0]-mx, p[1]-my))
+		}
+	}
+	if p := st.Places[fan.First-1]; hypot(p[0]-mx, p[1]-my) > fan.FirstWithin {
+		t.Errorf("place %d is %.0f m from the mouth", fan.First, hypot(p[0]-mx, p[1]-my))
 	}
 	if b.InPort(0, -3000) != -1 || b.InPort(w.islands[0].hx, w.islands[0].hy) != -1 {
 		t.Error("the open sea or the land is in port")
 	}
 	t.Logf("Port Royal: %d buildings, %d hexagons of street, %d piers, %d moorings; %d towns, %d buildings and props in all",
-		main.Buildings, main.Streets, len(main.Piers), st.Moorings, len(b.Towns), len(b.Buildings))
+		main.Buildings, main.Streets, len(main.Piers), len(st.Moorings), len(b.Towns), len(b.Buildings))
 }
 
 // TestTownsTime holds the harbour and the towns to their budget: under a
 // second added to a world's making.
 func TestTownsTime(t *testing.T) {
 	_, b := wholeWorld(t)
-	ms := b.Report.Millis["towns"] + b.Report.Millis["moorings"]
+	ms := b.Report.Millis["towns"] + b.Report.Millis["start"]
 	t.Logf("towns %.0f ms, moorings %.0f ms, the world %.0f ms", b.Report.Millis["towns"], b.Report.Millis["moorings"], float64(b.Generated().Milliseconds()))
 	if ms > 1000 {
 		t.Errorf("the towns took %.0f ms", ms)

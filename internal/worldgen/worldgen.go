@@ -262,8 +262,8 @@ func (c *config) generate(seed uint64) *Bundle {
 	lap("towns")
 	b.Buildings = append(b.Buildings, c.layRuins(seed, b.Ground, pw, lights, b.Buildings)...)
 	lap("ruins")
-	b.Start = c.withMoorings(b.Ground, islands[0], b.Start)
-	lap("moorings")
+	b.Start = c.startPlaces(b.Ground, islands[0], b.Start, b.Towns)
+	lap("start")
 	b.Features, b.Parts = c.featureRecords(pw)
 	lap("sighting")
 

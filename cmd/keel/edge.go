@@ -7,6 +7,8 @@ import (
 
 	"github.com/daneelvt/keel-over-the-edge/internal/catalog"
 	"github.com/daneelvt/keel-over-the-edge/internal/physics"
+	"github.com/daneelvt/keel-over-the-edge/internal/protocol"
+	"github.com/daneelvt/keel-over-the-edge/internal/protocol/pb"
 	"github.com/daneelvt/keel-over-the-edge/internal/sim"
 )
 
@@ -16,6 +18,15 @@ import (
 func edgeOf(cat *catalog.Catalog) *sim.Edge {
 	e := &cat.World.Edge
 	return &sim.Edge{Fall: int64(math.Round(e.Fall * physics.StepsPerSecond)), Clear: e.Clear}
+}
+
+// harbourOf is the world's harbour as a game connection is sent it, from
+// its terrain: nil for none.
+func harbourOf(t *sim.Terrain) *pb.Harbour {
+	if t == nil {
+		return nil
+	}
+	return protocol.WireHarbour(t.Harbour)
 }
 
 // circulationOf is the world's way round the disk, as its terrain gives it:

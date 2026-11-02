@@ -6,6 +6,7 @@
 // not copied; the page hands each back once it has read it, and the worker
 // fills it again, so neither side allocates per snapshot.
 
+import type { Harbour } from '../predict/physics';
 import type { WatchEndWhy } from '../ui/watchwords';
 import type { ClockState } from './clock';
 
@@ -319,6 +320,8 @@ export type FromWorker =
       tools: boolean;
       /** The main port's light, seen from everywhere; null in a world without land. */
       light: LightSeen | null;
+      /** The world's harbour, m east and north of the centre; null in a world without land. */
+      harbour: Harbour | null;
       /** When the world ends and its last days begin, µs of UTC since 1970; 0 for no end known. */
       endsUs: number;
       closingUs: number;

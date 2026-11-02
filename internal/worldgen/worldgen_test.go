@@ -819,7 +819,8 @@ func TestEachRuleFails(t *testing.T) {
 			h.inner = 10
 			w.islands[0].harbour = &h
 		}},
-		{"moorings", func(w *world) { w.start.Moorings = 3 }},
+		{"moorings", func(w *world) { w.start.Moorings = w.start.Moorings[:3] }},
+		{"start off the mouth", func(w *world) { w.start.Fan = 10 }},
 		{"main port's town", func(w *world) {
 			w.towns = slices.Clone(w.towns)
 			w.towns[0].Buildings = 12

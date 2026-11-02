@@ -8,11 +8,15 @@
 // they follow at the rates a sailor's hands move them. While the sailor is
 // out of the boat both are dimmed, and still take the player's setting for
 // when the sailor is back.
+//
+// The sheet's legend says when the sail is luffing, stalled or aback, and
+// the end to move it toward lights in gold with an arrow: Trim while it
+// luffs, Ease while it stalls. Aback, no sheeting helps, and neither lights.
 
 import type { PointerEventHandler as Handler } from 'preact';
 import type { HelmInput } from '../input/helm';
 import type { SheetInput } from '../input/sheet';
-import { HELM_ARC, type HudModel } from './model';
+import { HELM_ARC, type HudModel, type SailState } from './model';
 
 type PointerHandler = Handler<HTMLDivElement>;
 
@@ -86,8 +90,19 @@ export function Helm({ input, model }: { input: HelmInput; model: HudModel }) {
   );
 }
 
+/** The sheet's legend for what the sail is doing: its own name while the sail draws. */
+const SAIL_LEGENDS: Record<SailState, string> = {
+  '': 'Sheet',
+  luffing: 'Luffing',
+  stalled: 'Stalled',
+  aback: 'Aback',
+};
+
 export function Sheet({ input, model }: { input: SheetInput; model: HudModel }) {
   const dimmed = model.sailor.value !== '';
+  const sail = model.sail.value;
+  const trim = sail === 'luffing';
+  const ease = sail === 'stalled';
   return (
     <div
       class={`control sheet${dimmed ? ' dimmed' : ''}`}
@@ -97,11 +112,22 @@ export function Sheet({ input, model }: { input: SheetInput; model: HudModel }) 
       aria-valuemax={1}
       aria-valuenow={0.5}
       tabIndex={0}
-      ref={(el) => model.sheetValue.attach(el)}
+      ref={(el) => {
+        model.sheetValue.attach(el);
+        model.sheetText.attach(el);
+      }}
       data-control="sheet"
+      data-sail={sail === '' ? undefined : sail}
       {...handlers(input, 'y')}
     >
-      <span class="sheet-end">Trim</span>
+      <span class={`sheet-end${trim ? ' lit' : ''}`} data-end="trim">
+        {trim && (
+          <span class="sheet-arrow" aria-hidden="true">
+            ▲
+          </span>
+        )}
+        Trim
+      </span>
       <div class="sheet-track">
         <div class="sheet-travel actual" ref={(el) => model.sheetActual.attach(el)}>
           <span class="knob" />
@@ -110,8 +136,15 @@ export function Sheet({ input, model }: { input: SheetInput; model: HudModel }) 
           <span class="knob" />
         </div>
       </div>
-      <span class="sheet-end">Ease</span>
-      <span class="control-label">Sheet</span>
+      <span class={`sheet-end${ease ? ' lit' : ''}`} data-end="ease">
+        Ease
+        {ease && (
+          <span class="sheet-arrow" aria-hidden="true">
+            ▼
+          </span>
+        )}
+      </span>
+      <span class={`control-label${sail === '' ? '' : ' sail'}`}>{SAIL_LEGENDS[sail]}</span>
     </div>
   );
 }

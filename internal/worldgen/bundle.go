@@ -643,15 +643,38 @@ func ReadFile(data []byte) (*Bundle, error) {
 
 // Terrain is the bundle as the simulation sails it: its ground, read with
 // the catalog's grounding, its shelter and fetch, its start area's places,
-// each a boat at rest facing the start's heading, and its circulation.
+// each a boat at rest facing the start's heading, and the way from each
+// away from Port Royal's coast; its circulation, and its harbour.
 func (b *Bundle) Terrain(ground *physics.GroundPrepared) *sim.Terrain {
 	g := *b.Ground
 	g.Prepared = ground
 	start := make([]physics.State, len(b.Start.Places))
+	away := make([]float64, len(b.Start.Places))
 	for i, p := range b.Start.Places {
 		start[i] = physics.State{X: p[0], Y: p[1], Heading: b.Start.HeadingOf(i)}
+		away[i] = b.Start.AwayOf(i)
 	}
-	return &sim.Terrain{Ground: &g, Shelter: b.Shelter, Fetch: b.Fetch, Start: start, Circulation: float64(b.Circulation)}
+	t := &sim.Terrain{Ground: &g, Shelter: b.Shelter, Fetch: b.Fetch, Start: start, Away: away, Circulation: float64(b.Circulation)}
+	if h, ok := b.Harbour(); ok {
+		t.Harbour = &h
+	}
+	return t
+}
+
+// Harbour is the world's harbour, Port Royal's, as the wind is computed
+// with it, each value to a decimetre as a game connection is sent it; and
+// false for a world with none, or made before its basin was kept.
+func (b *Bundle) Harbour() (physics.Harbour, bool) {
+	if len(b.Towns) == 0 {
+		return physics.Harbour{}, false
+	}
+	t := &b.Towns[0]
+	if t.Kind != townMain || t.Basin == nil || t.Mouth == nil {
+		return physics.Harbour{}, false
+	}
+	dm := func(v float64) float64 { return float64(int32(math.Floor(float64(v*10)+0.5))) / 10 }
+	return physics.Harbour{X: dm(t.Basin.X), Y: dm(t.Basin.Y), Radius: dm(t.Basin.R),
+		MouthX: dm(t.Mouth[0]), MouthY: dm(t.Mouth[1]), Narrows: dm(t.Narrows)}, true
 }
 
 // encodeChunk is chunk n's payload as the bundle's format writes it: of the

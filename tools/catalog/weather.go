@@ -97,9 +97,10 @@ func checkWindParams(wind, regime, clouds []physicsField) error {
 }
 
 // checkWeather checks what the schema cannot: that ranges run from low to
-// high, that the kinds of system fit the module, that the refuge's and the
-// rim's limits lie in order, that every regime named exists, and that the
-// sequence keeps each regime's share and changes only as the regimes allow.
+// high, that the kinds of system fit the module, that the refuge's, the
+// start's breeze's and the rim's limits lie in order, that every regime
+// named exists, and that the sequence keeps each regime's share and
+// changes only as the regimes allow.
 func checkWeather(doc map[string]any) error {
 	w, _ := doc["weather"].(map[string]any)
 	var problems []string
@@ -135,6 +136,8 @@ func checkWeather(doc map[string]any) error {
 	ordered("weather.disk", "refugeInner", "refugeOuter", disk)
 	ordered("weather.disk", "refugeMeanKnee", "refugeMean", disk)
 	ordered("weather.disk", "refugeWindKnee", "refugeWind", disk)
+	ordered("weather.disk", "breezeFloor", "breezeKnee", disk)
+	ordered("weather.disk", "breezeWithin", "breezeFade", disk)
 	ordered("weather.disk", "rimGustsFrom", "rim", disk)
 	if lo, hi := pair(disk["acrossTurn"]); !(lo <= hi) {
 		bad("weather.disk.acrossTurn: %v is not from low to high", disk["acrossTurn"])

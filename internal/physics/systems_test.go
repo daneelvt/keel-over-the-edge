@@ -224,19 +224,20 @@ func TestInwardWeakening(t *testing.T) {
 }
 
 // The refuge holds whatever comes: a storm at full strength driven over the
-// centre, a squall at the refuge's edge, and a trade spell's wind with
-// them, never blow over its limits within its radius.
+// centre, a squall at the harbour's mouth, and a stormy spell's wind with
+// them, never blow over its limits in the harbour.
 func TestRefugeHoldsUnderSystems(t *testing.T) {
 	p, kinds := testSystems(t)
+	p.SetHarbour(&testHarbour)
 	stormy := spellOfRegime(t, p, "stormy", 3, 200, 0, 4*hourOfTicks)
 	for _, s := range []System{
 		systemAt(kinds["storm"], 0.5*nm, 0, 0, 2.5*nm, 26, 20),
-		systemAt(kinds["squall"], 0.9*nm, 0, 270, 0.6*nm, 18, 4),
+		systemAt(kinds["squall"], testHarbour.MouthX, testHarbour.MouthY, 270, 0.6*nm, 18, 4),
 	} {
 		w := withSystem(p, worldTick, s, stormy)
-		for x := -1.0 * nm; x <= 1.0*nm; x += 25 {
-			for y := -1.0 * nm; y <= 1.0*nm; y += 25 {
-				if x*x+y*y > nm*nm {
+		for x := -400.0; x <= 400; x += 10 {
+			for y := -400.0; y <= 400; y += 10 {
+				if outside, _ := p.harbourAt(x, y); outside > 0 {
 					continue
 				}
 				wp := windAt(w, x, y, worldTick)

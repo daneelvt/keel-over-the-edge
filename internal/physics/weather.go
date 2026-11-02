@@ -54,6 +54,12 @@ type WeatherPrepared struct {
 	meanKnee, meanSoft     float64 // m/s
 	windKnee, windSoft     float64 // m/s
 	swellKnee, swellSoft   float64 // m
+	breezeWithin           float64 // m
+	invBreezeSpan          float64 // 1/m
+	breezeFade             float64 // m
+	breezeKnee, breezeSoft float64 // m/s
+	invBreezeInside        float64 // 1/m
+	harbour                harbourPrepared
 	rimGusts               float64
 	rimGustsFrom           float64 // m
 	invRimGustsSpan        float64 // 1/m
@@ -130,14 +136,26 @@ func PrepareWeather(p *WeatherParams, w *WeatherPrepared) {
 	w.speedSpan = p.SpeedRim - p.SpeedCentre
 	w.rim = float64(p.Rim * nauticalMile)
 	w.invRim = 1 / w.rim
-	w.refugeOuter = float64(p.RefugeOuter * nauticalMile)
-	w.invRefugeBlend = 1 / float64((p.RefugeOuter-p.RefugeInner)*nauticalMile)
+	w.refugeOuter = p.RefugeOuter
+	w.invRefugeBlend = 1 / (p.RefugeOuter - p.RefugeInner)
 	w.meanKnee = float64(p.RefugeMeanKnee * knotSpeed)
 	w.meanSoft = float64((p.RefugeMean - p.RefugeMeanKnee) * knotSpeed)
 	w.windKnee = float64(p.RefugeWindKnee * knotSpeed)
 	w.windSoft = float64((p.RefugeWind - p.RefugeWindKnee) * knotSpeed)
 	w.swellKnee = p.RefugeSwellKnee
 	w.swellSoft = p.RefugeSwell - p.RefugeSwellKnee
+	w.breezeWithin = float64(p.BreezeWithin * nauticalMile)
+	w.breezeFade = float64(p.BreezeFade * nauticalMile)
+	w.invBreezeSpan = 0
+	if span := w.breezeFade - w.breezeWithin; span > 0 {
+		w.invBreezeSpan = 1 / span
+	}
+	w.breezeKnee = float64(p.BreezeKnee * knotSpeed)
+	w.breezeSoft = float64((p.BreezeKnee - p.BreezeFloor) * knotSpeed)
+	w.invBreezeInside = 0
+	if p.BreezeInside > 0 {
+		w.invBreezeInside = 1 / p.BreezeInside
+	}
 	w.rimGusts = p.RimGusts
 	w.rimGustsFrom = float64(p.RimGustsFrom * nauticalMile)
 	w.invRimGustsSpan = 1 / float64((p.Rim-p.RimGustsFrom)*nauticalMile)
@@ -606,8 +624,10 @@ func MeanWindAt(t *WeatherTick, x, y float64) (speed, from float64) {
 // point computes the wind at (x, y) into p, as much of it as what asks.
 // The spells' mean wind, mixed, with the front's and the systems' added
 // and the patches' taken away, is held by the refuge; then come the gusts,
-// the land's shelter, the refuge's hold on the gusty wind, the veer and
-// the fall draft.
+// the land's shelter, the refuge's hold on the gusty wind, the start's
+// breeze, the veer and the fall draft. The breeze lifts the mean the sea
+// follows, and the wind after the shelter, once each, so that the land's
+// lee cannot take it away.
 func (t *WeatherTick) point(x, y float64, p *WindPoint, what int32, sh *Shelter) {
 	*p = WindPoint{Factor: 1}
 	if t.n == 0 {
@@ -628,7 +648,7 @@ func (t *WeatherTick) point(x, y float64, p *WindPoint, what int32, sh *Shelter)
 	}
 	w := t.p
 	r := math.Sqrt(float64(x*x) + float64(y*y))
-	refuge := smooth(float64((w.refugeOuter - r) * w.invRefugeBlend))
+	refuge, breeze := w.shares(x, y, r)
 	b := t.base(x, y, r, what)
 	dir, speed, excess, gust, gusty, limited := b.dir, b.speed, b.excess, b.gust, b.gusty, b.limited
 	p.DriftEast, p.DriftNorth = b.driftEast, b.driftNorth
@@ -662,8 +682,10 @@ func (t *WeatherTick) point(x, y float64, p *WindPoint, what int32, sh *Shelter)
 	if refuge > 0 && limited > 0 {
 		speed += float64(float64(refuge*limited) * (soften(speed, w.meanKnee, w.meanSoft) - speed))
 	}
+	breeze = float64(breeze * limited)
 	p.MeanSpeed, p.MeanFrom, p.Gust = speed, wrapAngle(dir), gust
 	if what == pointMean {
+		p.MeanSpeed = w.lifted(speed, breeze)
 		return
 	}
 
@@ -691,6 +713,11 @@ func (t *WeatherTick) point(x, y float64, p *WindPoint, what int32, sh *Shelter)
 	if refuge > 0 {
 		p.Speed += float64(float64(refuge*limited) * (soften(v, w.windKnee, w.windSoft) - v))
 		p.Typical += float64(float64(refuge*limited) * (soften(p.Typical, w.windKnee, w.windSoft) - p.Typical))
+	}
+	if breeze > 0 {
+		p.MeanSpeed = w.lifted(p.MeanSpeed, breeze)
+		p.Speed = w.lifted(p.Speed, breeze)
+		p.Typical = w.lifted(p.Typical, breeze)
 	}
 	if what == pointTypical {
 		return
@@ -849,6 +876,14 @@ func (st *spellTick) mean(w *WeatherPrepared, x, y, factor float64, gusts bool) 
 		n = st.field(&w.gustCells, x, y)
 	}
 	return dir, speed, s.excess, n
+}
+
+// lifted is a speed v as the start's breeze holds it up, by its share.
+func (w *WeatherPrepared) lifted(v, share float64) float64 {
+	if !(share > 0) {
+		return v
+	}
+	return v + float64(share*(lift(v, w.breezeKnee, w.breezeSoft)-v))
 }
 
 // soften passes a speed above knee through knee + soft × tanh((v − knee) /

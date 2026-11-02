@@ -61,6 +61,9 @@ type Predictor struct {
 	// Circulation is the world's way round the disk, from the Welcome,
 	// for the current the boat is stepped in.
 	Circulation float64
+	// shared is the wind's constants the predictor was made with, which
+	// SetHarbour copies.
+	shared *physics.WeatherPrepared
 	// Over is the tick the boat went over the lip, 0 while it is afloat:
 	// it is held where it went over, not stepped, until a snapshot puts
 	// it back at the start.
@@ -76,7 +79,20 @@ type Predictor struct {
 // in flat water. Until the server sends its spells of weather, there is no
 // wind.
 func NewPredictor(kind *physics.Prepared, waves *physics.Waves, weather *physics.WeatherPrepared) *Predictor {
-	return &Predictor{kind: kind, Seas: NewSeas(waves, weather), Weather: physics.Weather{Prepared: weather}}
+	return &Predictor{kind: kind, Seas: NewSeas(waves, weather), Weather: physics.Weather{Prepared: weather}, shared: weather}
+}
+
+// SetHarbour sets the world's harbour, from the Welcome: the wind is
+// computed in it, as the server computes it; nil is none.
+func (p *Predictor) SetHarbour(h *pb.Harbour) {
+	var in physics.Harbour
+	if ph := protocol.HarbourOf(h); ph != nil {
+		in = *ph
+	}
+	w := *p.shared
+	w.SetHarbour(&in)
+	p.Weather.Prepared = &w
+	p.Weather.Set(p.Weather.Spells[:p.Weather.Count])
 }
 
 // ReceiveWeather takes a WeatherSystems: its spells replace those held,

@@ -1058,6 +1058,25 @@
   bottom: 4px;
 }
 
+/* The sail luffing, stalled or aback: its word in the legend's place, in
+   the ink, and the end to move the sheet toward lit in gold with an arrow
+   pointing to it. The word says it without the colour. */
+.sheet .control-label.sail {
+  color: var(--ink);
+  white-space: nowrap;
+}
+
+.sheet-end.lit {
+  color: var(--gold);
+  text-shadow: 0 0 6px rgb(232 180 80 / 45%);
+}
+
+.sheet-arrow {
+  margin: 0 2px;
+  font-size: 9px;
+  vertical-align: 1px;
+}
+
 .overlay-labels {
   position: absolute;
   inset: 0;

@@ -224,7 +224,7 @@ func (p *process) loadWorld(ctx context.Context, row store.World) (*readyWorld, 
 	} else {
 		p.log.Warn("land is off: the world's terrain is sailed as open sea")
 	}
-	rw.timeline = p.shownWeek(ctx, row)
+	rw.timeline = p.shownWeek(ctx, row, rw.terrain)
 	// What can be charted, and the islands' models: the world's, whether
 	// its land is sailed or not.
 	made := time.Now()
@@ -299,7 +299,7 @@ func (p *process) openWorld(ctx context.Context, rw *readyWorld) (*worldHalf, er
 	rw.timeline = timeline
 	sighting := rw.charts.sight(cat, epoch)
 	world, err := sim.New(sim.Config{
-		Kinds: p.kinds, Waves: p.waves, Weather: timeline, Encounters: cat.PrepareEncounters(), Workers: p.opt.workers,
+		Kinds: p.kinds, StartSheets: cat.StartSheets(), Waves: p.waves, Weather: timeline, Encounters: cat.PrepareEncounters(), Workers: p.opt.workers,
 		Tick: loop.TickAt(time.Now(), epoch), Limit: cfg.BoatLimit, Terrain: rw.terrain, Edge: edgeOf(cat), Sight: sighting,
 	})
 	if err != nil {
@@ -338,7 +338,7 @@ func (p *process) openWorld(ctx context.Context, rw *readyWorld) (*worldHalf, er
 		Bus: b, World: store.AccountID(row.ID).String(), Epoch: epoch, Ends: row.EndsAt, Closing: closingOf(row, cfg), Zone: zoneOf(cfg), Clock: h.loop,
 		Protocol: protocol.Version, Catalog: catalog.Version, Layout: physics.LayoutVersion,
 		Origin: cfg.PlayOrigin, Log: p.log, Metrics: p.metrics, Fail: api.WriteError,
-		Land: cfg.Land, Chunks: rw.handout, Circulation: circulationOf(rw.terrain),
+		Land: cfg.Land, Chunks: rw.handout, Circulation: circulationOf(rw.terrain), Harbour: harbourOf(rw.terrain),
 		Lip: p.wcfg.Prepared.Edge(), RoamChunks: rw.roamHandout, MainLight: rw.mainLight, Chart: rw.charts.model,
 		Forecast: h.forecasts,
 		Stopped:  func(a bus.Account) bool { return p.hand.Stopped().Has(store.AccountID(a)) },

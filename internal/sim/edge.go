@@ -140,12 +140,13 @@ func (w *World) fallsEnd() {
 	}
 }
 
-// startAgain puts boat s at the world's start, at rest, on a new voyage:
-// what its autopilot remembered, its time aground and its course are
-// cleared, and its pairs begin afresh. Its controls are those it held.
+// startAgain puts boat s at the world's start, at rest, on a new voyage,
+// ready to sail as a new boat is: what its autopilot remembered, its time
+// aground and its course are cleared, and its pairs begin afresh.
 func (w *World) startAgain(f *bus.Frame, s int32) {
 	f.Voyage[s] = bus.Voyage{}
 	f.State[s] = w.spawn(f, s)
+	w.readyControls(f, s)
 	f.Course[s] = physics.Course{}
 	w.restarted = append(w.restarted, s)
 }

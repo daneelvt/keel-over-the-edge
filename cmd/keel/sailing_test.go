@@ -321,7 +321,7 @@ func TestTheHelmsmanLeavesTheRoads(t *testing.T) {
 		t.Fatal(err)
 	}
 	cw := chart.Build(world, cat)
-	roads := world.Start.Places[world.Start.Moorings]
+	roads := world.Start.Places[0]
 	target := ""
 	best, toward := math.Inf(1), 0.0
 	for _, s := range cw.Subjects {

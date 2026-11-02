@@ -37,7 +37,7 @@ import {
   writeSeaParams,
   writeWeatherParams,
 } from './params.gen';
-import type { Physics } from './physics';
+import type { Harbour, Physics } from './physics';
 import { Seas } from './seas';
 import { Wakes } from './wakes';
 import {
@@ -209,6 +209,11 @@ export class Predictor implements BoatDriver {
   setCirculation(way: number): void {
     this.#physics.circulation(way);
     this.seas.recirculate();
+  }
+
+  /** Sets the world's harbour, from the Welcome, for the wind the boat is stepped in; null for none. */
+  setHarbour(h: Harbour | null): void {
+    this.#physics.harbour(h);
   }
 
   /** The boat at a snapshot's state, what was predicted forgotten. */

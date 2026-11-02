@@ -1,9 +1,12 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
+import type { ComponentChildren, VNode } from 'preact';
 import { describe, expect, test } from 'vitest';
+import { SheetInput } from '../input/sheet';
 import { newPose } from '../predict/blend';
 import { RECORDS, SIZES } from '../predict/layout.gen';
 import { type BoatWind, newBoatWind } from '../predict/weather';
+import { Sheet } from './controls';
 import {
   beaufortForce,
   compassPoint,
@@ -15,7 +18,18 @@ import {
   wholeDegrees,
   windText,
 } from './format';
-import { HudModel, SIGNAL_INTERVAL, WindWindow } from './model';
+import {
+  HudModel,
+  SAIL_CLEAR,
+  SAIL_REST_ANGLE,
+  SAIL_REST_SPEED,
+  SAIL_SHOW,
+  SailHold,
+  type SailState,
+  SIGNAL_INTERVAL,
+  sheetText,
+  WindWindow,
+} from './model';
 import { ordinal, queueLines } from './queue';
 import { DEFAULTS, loadSettings, type Store, saveSettings } from './settings';
 
@@ -299,5 +313,203 @@ describe('the queue', () => {
       'The sea is full. You are next in line.',
       '1 sailor waiting.',
     ]);
+  });
+});
+
+/** The flows of Out.FootFlow. */
+const LUFFING = 0;
+const ATTACHED = 1;
+const STALLED = 2;
+const ABACK = 3;
+
+describe('the sail on the sheet', () => {
+  /** A step's out with the sail's flow, the speed through the water and the apparent wind's angle. */
+  const outOf = (flow: number, speed = 2, angle = 60 * DEG): Float64Array => {
+    const out = new Float64Array(SIZES.out);
+    out[RECORDS.out.footFlow] = flow;
+    out[RECORDS.out.speedThroughWater] = speed;
+    out[RECORDS.out.apparentWindAngle] = angle;
+    return out;
+  };
+  /** Sails from t for seconds at 60 frames a second with the out given; returns the time at the end and what showed at each frame. */
+  const sail = (h: SailHold, t: number, seconds: number, out: Float64Array, aboard = true) => {
+    const shown: SailState[] = [];
+    const end = t + seconds;
+    for (; t < end - 1e-9; t += 1 / 60) {
+      h.add(t, out, aboard);
+      shown.push(h.shown);
+    }
+    return { t, shown };
+  };
+  /** When, in seconds from the start of a run, what shows first became this; −1 never. */
+  const at = (shown: SailState[], s: SailState): number => {
+    const i = shown.indexOf(s);
+    return i < 0 ? -1 : i / 60;
+  };
+
+  test('a flow shows once it has held 1.5 s, and clears after 1 s of drawing', () => {
+    for (const [flow, word] of [
+      [LUFFING, 'luffing'],
+      [STALLED, 'stalled'],
+      [ABACK, 'aback'],
+    ] as const) {
+      const h = new SailHold();
+      let r = sail(h, 0, 2, outOf(ATTACHED));
+      expect(r.shown.every((s) => s === '')).toBe(true);
+      r = sail(h, r.t, 3, outOf(flow));
+      expect(at(r.shown, word)).toBeCloseTo(SAIL_SHOW, 1);
+      expect(r.shown.at(-1)).toBe(word);
+      r = sail(h, r.t, 2, outOf(ATTACHED));
+      expect(at(r.shown, '')).toBeCloseTo(SAIL_CLEAR, 1);
+      expect(r.shown.at(-1)).toBe('');
+    }
+  });
+
+  test('does not flicker: a half-second gust of drawing, or a flow held less than 1.5 s, changes nothing', () => {
+    const h = new SailHold();
+    let r = sail(h, 0, 2, outOf(LUFFING));
+    expect(h.shown).toBe('luffing');
+    for (let i = 0; i < 4; i++) {
+      r = sail(h, r.t, 0.5, outOf(ATTACHED));
+      expect(r.shown.every((s) => s === 'luffing')).toBe(true);
+      r = sail(h, r.t, 1, outOf(LUFFING));
+      expect(r.shown.every((s) => s === 'luffing')).toBe(true);
+    }
+    // A stall of a second does not replace it; one of 1.5 s does.
+    r = sail(h, r.t, 1, outOf(STALLED));
+    expect(r.shown.every((s) => s === 'luffing')).toBe(true);
+    r = sail(h, r.t, 0.2, outOf(LUFFING));
+    r = sail(h, r.t, 2, outOf(STALLED));
+    expect(at(r.shown, 'stalled')).toBeCloseTo(SAIL_SHOW, 1);
+    // Drawing, a luff of a second shows nothing.
+    r = sail(h, r.t, 2, outOf(ATTACHED));
+    expect(h.shown).toBe('');
+    r = sail(h, r.t, 1, outOf(LUFFING));
+    expect(r.shown.every((s) => s === '')).toBe(true);
+  });
+
+  test('at rest head to wind it says nothing; luffing at rest on a reach it does', () => {
+    const slow = SAIL_REST_SPEED * 0.4;
+    const still = new SailHold();
+    let r = sail(still, 0, 4, outOf(ABACK, slow, 170 * DEG));
+    expect(r.shown.every((s) => s === '')).toBe(true);
+    r = sail(still, r.t, 4, outOf(LUFFING, slow, 0.5 * SAIL_REST_ANGLE));
+    expect(r.shown.every((s) => s === '')).toBe(true);
+    r = sail(still, r.t, 4, outOf(LUFFING, slow, -0.5 * SAIL_REST_ANGLE));
+    expect(r.shown.every((s) => s === '')).toBe(true);
+    // 0.1 kn, the sheet out to half on a close reach: luffing.
+    r = sail(still, r.t, 2, outOf(LUFFING, 0.05, 55 * DEG));
+    expect(still.shown).toBe('luffing');
+    // Under way, aback and luffing close to the wind show.
+    const going = new SailHold();
+    r = sail(going, 0, 2, outOf(ABACK, 1, 10 * DEG));
+    expect(going.shown).toBe('aback');
+    r = sail(going, r.t, 2, outOf(LUFFING, 1, 10 * DEG));
+    expect(going.shown).toBe('luffing');
+  });
+
+  test('says nothing while the sailor is out of the boat, and begins again when time goes back', () => {
+    const h = new SailHold();
+    let r = sail(h, 0, 2, outOf(STALLED));
+    expect(h.shown).toBe('stalled');
+    r = sail(h, r.t, 0.1, outOf(STALLED), false);
+    expect(h.shown).toBe('');
+    r = sail(h, r.t, 3, outOf(STALLED), false);
+    expect(r.shown.every((s) => s === '')).toBe(true);
+    r = sail(h, r.t, 2, outOf(STALLED));
+    expect(at(r.shown, 'stalled')).toBeCloseTo(SAIL_SHOW, 1);
+    // Back in time, the hold begins again.
+    sail(h, 0, 1, outOf(STALLED));
+    expect(h.shown).toBe('');
+  });
+
+  test('the instruments show it, by world time', () => {
+    const model = new HudModel();
+    const pose = newPose();
+    const w = wind(5, 0);
+    const out = outOf(STALLED);
+    // At 30 frames a second of the page, but world time running at half speed.
+    for (let i = 0; i <= 84; i++) {
+      model.frame(i * (1000 / 30), i / 60, pose, out, w, 0, 0.5, 0, 0.5);
+    }
+    expect(model.sail.value).toBe('');
+    for (let i = 85; i <= 120; i++) {
+      model.frame(i * (1000 / 30), i / 60, pose, out, w, 0, 0.5, 0, 0.5);
+    }
+    expect(model.sail.value).toBe('stalled');
+  });
+
+  /** Every element of a tree, as written. */
+  const elements = (node: ComponentChildren): VNode<Record<string, unknown>>[] => {
+    if (Array.isArray(node)) {
+      return node.flatMap(elements);
+    }
+    if (node === null || typeof node !== 'object' || !('type' in node)) {
+      return [];
+    }
+    const v = node as VNode<{ children?: ComponentChildren } & Record<string, unknown>>;
+    return [v, ...elements(v.props.children)];
+  };
+  const words = (node: ComponentChildren): string => {
+    if (Array.isArray(node)) {
+      return node.map(words).join('');
+    }
+    if (typeof node === 'string') {
+      return node;
+    }
+    if (node === null || typeof node !== 'object' || !('props' in node)) {
+      return '';
+    }
+    return words((node as VNode<{ children?: ComponentChildren }>).props.children);
+  };
+
+  test('the legend says the word, and the end to move toward lights with its arrow', () => {
+    const model = new HudModel();
+    const drawn = (s: SailState) => {
+      model.sail.value = s;
+      const all = elements(Sheet({ input: new SheetInput(), model }));
+      const cls = (v: VNode<Record<string, unknown>>) => String(v.props.class ?? '');
+      const legend = all.find((v) => cls(v).split(' ').includes('control-label'));
+      const end = (name: string) => all.find((v) => v.props['data-end'] === name);
+      const lit = (name: string) => {
+        const e = end(name);
+        return e !== undefined && cls(e).split(' ').includes('lit') ? words(e) : null;
+      };
+      return { legend: words(legend), trim: lit('trim'), ease: lit('ease') };
+    };
+    expect(drawn('')).toEqual({ legend: 'Sheet', trim: null, ease: null });
+    expect(drawn('luffing')).toEqual({ legend: 'Luffing', trim: '▲Trim', ease: null });
+    expect(drawn('stalled')).toEqual({ legend: 'Stalled', trim: null, ease: 'Ease▼' });
+    expect(drawn('aback')).toEqual({ legend: 'Aback', trim: null, ease: null });
+  });
+
+  test('the slider’s words for assistive technology, kept as the sheet moves', () => {
+    expect(sheetText(0.5, '')).toBe('Sheet 50%');
+    expect(sheetText(0.5, 'luffing')).toBe('Sheet 50%, luffing: trim in');
+    expect(sheetText(0.5, 'stalled')).toBe('Sheet 50%, stalled: ease');
+    expect(sheetText(0.5, 'aback')).toBe('Sheet 50%, aback');
+    const model = new HudModel();
+    const written: string[] = [];
+    const el = {
+      setAttribute(name: string, v: string) {
+        if (name === 'aria-valuetext') {
+          written.push(v);
+        }
+      },
+    } as unknown as HTMLElement;
+    model.sheetText.attach(el);
+    const pose = newPose();
+    const out = outOf(LUFFING);
+    let t = 0;
+    for (const sheet of [0.5, 0.501, 0.502, 0.6, 0.6]) {
+      t += 1 / 60;
+      model.frame(t * 1000, t, pose, out, wind(5, 0), 0, sheet, 0, sheet);
+    }
+    expect(written).toEqual(['Sheet 50%', 'Sheet 60%']);
+    // The word follows what the legend says.
+    for (; t < 2; t += 1 / 60) {
+      model.frame(t * 1000, t, pose, out, wind(5, 0), 0, 0.6, 0, 0.6);
+    }
+    expect(written.at(-1)).toBe('Sheet 60%, luffing: trim in');
   });
 });

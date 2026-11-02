@@ -165,6 +165,14 @@ interface Exports {
   seaFactor(slot: number, n: number): void;
   factorValues(): number;
   circulation(way: number): void;
+  harbour(
+    x: number,
+    y: number,
+    radius: number,
+    mouthX: number,
+    mouthY: number,
+    narrows: number,
+  ): void;
   current(x: number, y: number): void;
   currentValues(): number;
   over(): number;
@@ -339,6 +347,7 @@ const functionExports = [
   'seaFactor',
   'factorValues',
   'circulation',
+  'harbour',
   'current',
   'currentValues',
   'over',
@@ -395,6 +404,19 @@ const functionExports = [
   'typicalSample',
   'tendency',
 ] as const satisfies readonly (keyof Exports)[];
+
+/**
+ * A world's harbour, m east and north of the disk's centre (the Welcome's):
+ * its basin's centre and mean radius, its mouth, and the narrows' width there.
+ */
+export interface Harbour {
+  x: number;
+  y: number;
+  radius: number;
+  mouthX: number;
+  mouthY: number;
+  narrows: number;
+}
 
 /** A chunk of the ground as the module holds it: views of its memory. */
 export interface GroundChunk {
@@ -1363,6 +1385,18 @@ export class Physics {
   /** Sets the world's way round the disk for its current: 1 clockwise seen from above, −1 the other way, 0 none. */
   circulation(way: number): void {
     this.#x.circulation(way);
+  }
+
+  /** Sets the world's harbour, where the refuge holds and the start's breeze does not; null is none. */
+  harbour(h: Harbour | null): void {
+    this.#x.harbour(
+      h?.x ?? 0,
+      h?.y ?? 0,
+      h?.radius ?? 0,
+      h?.mouthX ?? 0,
+      h?.mouthY ?? 0,
+      h?.narrows ?? 0,
+    );
   }
 
   /**

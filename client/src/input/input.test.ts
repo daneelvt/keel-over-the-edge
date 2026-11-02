@@ -128,6 +128,26 @@ describe('the keyboard', () => {
     expect(k.down('KeyZ')).toBe(false);
   });
 
+  test('the sheet is taken as a thumb lands on it or a sheet key goes down, once a hold', () => {
+    const h = new HelmInput();
+    const s = new SheetInput();
+    let taken = 0;
+    s.onTake = () => taken++;
+    const k = new KeyInput(h, s);
+    expect(s.down(1, 100, 0)).toBe(true);
+    s.move(1, 120);
+    s.up(1, 50);
+    expect(taken).toBe(1);
+    k.down('KeyW');
+    k.down('KeyW');
+    expect(taken).toBe(2);
+    k.up('KeyW');
+    k.down('KeyS');
+    expect(taken).toBe(3);
+    k.down('ArrowLeft');
+    expect(taken).toBe(3);
+  });
+
   test('C centres the helm; the release setting applies to the keys', () => {
     const h = new HelmInput();
     const k = new KeyInput(h, new SheetInput());

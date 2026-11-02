@@ -16,6 +16,7 @@ import (
 
 	"github.com/daneelvt/keel-over-the-edge/internal/catalog"
 	"github.com/daneelvt/keel-over-the-edge/internal/physics"
+	"github.com/daneelvt/keel-over-the-edge/internal/sim"
 	"github.com/daneelvt/keel-over-the-edge/internal/store"
 	"github.com/daneelvt/keel-over-the-edge/internal/weather"
 	"github.com/daneelvt/keel-over-the-edge/internal/worldgen"
@@ -124,12 +125,27 @@ func (p *process) weekFor(ctx context.Context, rw *readyWorld) (*weather.Timelin
 			return nil, err
 		}
 	}
-	return weather.New(p.wcfg, w)
+	tl, err := weather.New(p.wcfg, w)
+	if err != nil {
+		return nil, err
+	}
+	return harboured(tl, rw.terrain), nil
+}
+
+// harboured is a world's timeline in its harbour, Port Royal's, if its
+// land is sailed and has one: where the refuge holds and the start's
+// breeze does not.
+func harboured(tl *weather.Timeline, t *sim.Terrain) *weather.Timeline {
+	if tl == nil || t == nil || t.Harbour == nil {
+		return tl
+	}
+	return tl.InHarbour(t.Harbour)
 }
 
 // shownWeek is a world's timeline for the world page before it opens: its
-// week as stored, made for when it is planned to begin, or nil.
-func (p *process) shownWeek(ctx context.Context, row store.World) *weather.Timeline {
+// week as stored, made for when it is planned to begin, in its terrain's
+// harbour; or nil.
+func (p *process) shownWeek(ctx context.Context, row store.World, t *sim.Terrain) *weather.Timeline {
 	w, _, err := p.storedWeek(ctx, row)
 	if err != nil || w == nil {
 		if err != nil {
@@ -141,7 +157,7 @@ func (p *process) shownWeek(ctx context.Context, row store.World) *weather.Timel
 	if err != nil {
 		return nil
 	}
-	return tl
+	return harboured(tl, t)
 }
 
 // weatherMain prints a world's week of weather: its spells, fronts and

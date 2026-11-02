@@ -332,11 +332,11 @@ func TestSceneOffAnIsland(t *testing.T) {
 	sc.parity(me, text)
 }
 
-// roads is the first place of the world's start in the roads, after the
-// moorings.
+// roads is the first place of the world's start, in the roads off Port
+// Royal's harbour mouth.
 func (sc *scene) roads() physics.State {
 	b, _ := seed1()
-	return b.Terrain(sc.cat.PrepareGround()).Start[b.Start.Moorings]
+	return b.Terrain(sc.cat.PrepareGround()).Start[0]
 }
 
 // A boat at rest in the roads in light air: its brief report has no

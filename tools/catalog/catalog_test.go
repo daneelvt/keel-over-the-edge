@@ -22,6 +22,7 @@ var validBoats = `boats:
     beam: 1.2
     lights: [tricolour]
     lookout: 2
+    startSheet: [[110, 0.25]]
     art:
       model: boats/test-boat/model.glb
       far: boats/test-boat/far.glb
@@ -212,6 +213,9 @@ func checkAll(root string) error {
 		return err
 	}
 	if err := checkWorld(doc); err != nil {
+		return err
+	}
+	if err := checkBoats(doc); err != nil {
 		return err
 	}
 	return checkIDsNotInCode(root, ids(doc))
@@ -522,6 +526,7 @@ func TestCanonicalJSONIgnoresFileOrderAndLayout(t *testing.T) {
     lights:
       - tricolour
     lookout: 2.0
+    startSheet: [[110, 0.25]]
     id: test-boat
 ` + realPhysics()
 	b := fixture(t, map[string]string{"shared/catalog/boats.yaml": reordered})

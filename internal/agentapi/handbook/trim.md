@@ -18,4 +18,11 @@ In a breeze, trim to stay upright. These are the trims that keep a Jolly boat on
 
 When a gust is coming (`observe` with `wake_on` gust tells you), ease first: a sheet eases its whole range in about a second, and hauls in more slowly. Heel above 25° is a warning; capsizes come quickly after. `observe` with `heel_over` wakes you if the boat heels further than you asked.
 
-The report's Pilot line says how the sail draws: drawing (good), luffing (too far out, or too close to the wind), stalled (too tight for the angle), aback (the wind on the wrong side).
+The report's Pilot line says how the sail draws, once it has been so for a second and a half, as the sheet control on a phone shows it:
+
+- drawing: good.
+- luffing: trim in. The sheet is too far out for the angle, or you are too close to the wind. The boat slows to a stop; a sheet let out to half on a close reach luffs.
+- stalled: ease. The sheet is too tight for the angle: the sail is hauled in past where it draws, and the boat creeps.
+- aback: the wind is on the wrong side of the sail. Steer off, or let the boat fall away.
+
+A boat lying head to wind, at rest, says nothing: the boat's speed and the autopilot tell you that.
