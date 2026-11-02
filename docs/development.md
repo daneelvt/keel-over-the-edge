@@ -6519,7 +6519,29 @@ restarts `keel`; Vite on `http://localhost:5181` in front of it; a second
 Vite on `http://localhost:5182` whose traffic goes through the lag proxy;
 and a third on `https://localhost:5183` with a throwaway certificate, for
 WebKit; and the world page's Vite on `http://localhost:5184/owner/`, in
-front of keel's internal listener. `owner.spec.ts` opens the world page:
+front of keel's internal listener.
+
+The tests are of two kinds. The page's (the `page` and `page-serial`
+projects, the files `pageFiles` in `playwright.config.ts` names) check
+keel, the account and the screen's words on the game's page opened with
+`?test&draw=off` (`GAME` in `e2e/helpers.ts`), which draws nothing: no
+renderer and no canvas, the scene updated every animation frame (the
+game's tick, the camera, the boats, the words) and never drawn, and
+`keel.info().backend` is `none`. They need no GPU, so three run at a time
+against the one keel (`npx playwright test --project page`); those tagged
+`@world` change what every sailor shares (the wind, the weather, the
+world's end and life, keel itself) and run after the rest, one at a time
+(`--project page-serial` runs `page` first; `--no-deps` runs them alone).
+Every new boat starts in the same roads, beside the boats of the tests
+sailing at the same time: a test that needs clean air or room beside its
+boat puts it in water of its own first (`alone(page)`). The scene's (the
+`webgl2` and `webgpu` projects) are every other file, on the offline
+sandbox (`?sandbox`), drawing. A page under test that draws updates every
+frame but draws only what a test asks for (`keel.render()`, `keel.show()`)
+until it is thawed (`keel.thaw()`): a test of the loop itself (adaptive
+quality, the frame's allocations, the bake) thaws first.
+
+`owner.spec.ts` opens the world page:
 its layers switching, an island in the list, the owner flagging their
 account from a boat's row and their page's boat put where they click, the
 page reading nothing while its tab is hidden, and a request with another
@@ -6550,7 +6572,7 @@ none by day and none beyond the horizon; 64 boats by night within 150 draw
 calls; and pictures of the hours. `worker.spec.ts`,
 on Chromium and WebKit (`--project webkit`, `npx playwright install
 webkit`), opens `e2e/net.html`, which runs the net worker alone. The scene's tests open `?sandbox`.
-`start.spec.ts`, on WebGL 2 alone, makes a new sailor: the start screen
+`start.spec.ts` makes a new sailor: the start screen
 and its autofill request, names refused in words before any passkey (too
 short, a symbol, a reserved name, mixed scripts, a name taken and
 look-alikes of it), a sailor made with a passkey by Playwright's
@@ -6645,17 +6667,34 @@ update that changes the pictures (three.js's releases do) is fixed so. A
 test that draws more than one picture without `expect.soft` stops at the
 first that differs: run the tool again on the next run.
 
-A test that takes minutes on CI's SwiftShader is tagged `@long`
-(`test(title, { tag: '@long' }, ...)`); `pr.render` runs each back end's
-`@long` tests in a job of their own, beside the rest. The short tests are
-split over runners by spec file, five for WebGL 2 and two for WebGPU: each
-shard but the last runs the files `shardFiles` in `playwright.config.ts`
-names for it, and the last every other file, so a new file always runs.
-The groups are chosen by the files' measured times on CI. To balance them
-again, move files between the groups, and change the number of shards in
-`pr.render.yaml`'s matrix with the number of groups;
-`PROJECT=webgl2 SHARD=2 SHARDS=5 npx playwright test --project webgl2 --list`
-shows a shard.
+A test that takes minutes on CI's software GPU is tagged `@long`
+(`test(title, { tag: '@long' }, ...)`), and one that is short but belongs
+to the night `@nightly`: `pr.render`, which blocks a merge, leaves both to
+`render-nightly`, which runs them every night on `main` with the compat
+device, the real TCP loss and the flake hunt (`pr.render`'s suite five
+times over), and on a pull request labelled `render`. No test is retried,
+in either. A test that passes in one run and fails in another is a flake,
+and a fault like any other: fixed within the week, or else tagged
+`@nightly` with an issue naming its fault, no more than three tests at
+once. Each job writes its runner's CPU and speed, its tests' outcomes, the
+ten slowest, every flaky or failed test and each file's time to its
+summary on the run's page (`e2e/runner.ts`, `e2e/summary.ts`).
+
+The scene's tests are split over runners by spec file, three for WebGL 2
+and five for WebGPU: each shard but the last runs the files `shardFiles`
+in `playwright.config.ts` names for it, and the last every other scene
+file, so a new file always runs; a new file that draws nothing goes in
+`pageFiles` instead (`e2e/projects.test.ts` checks that each name is a
+file, in one place). The groups are chosen by the files' measured times on
+CI, which the jobs' summaries list. To balance them again, move files
+between the groups, and change the number of shards in `pr.render.yaml`'s
+and `render-nightly.yaml`'s matrices with the number of groups;
+`PROJECT=webgl2 SHARD=2 SHARDS=3 npx playwright test --project webgl2 --list`
+shows a shard. `pr.render` runs the page's tests and the scene's each only
+when a file they read changed: a change to the server alone runs the
+page's, to the shaders alone the scene's (`tools/e2e/filters_test.go` holds
+the two filters to what each reads). A new folder under `client/src` is
+both kinds', unless it only draws or only keel's pages use it.
 
 ## Commits
 
