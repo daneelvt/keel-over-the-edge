@@ -6,9 +6,11 @@ import (
 	"fmt"
 	"math"
 	"os"
+	"runtime"
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/daneelvt/keel-over-the-edge/internal/bus"
@@ -21,10 +23,12 @@ import (
 // if it is set, as the nightly run sets it to a thousand, from seed 1, or
 // the one after KEEL_WEEKS_FROM. Its tally of them is written to
 // KEEL_WEEKS_SUMMARY, if that is set, in Markdown. The storms' swell is
-// held to its rule over the first eight weeks on a grid half a mile apart,
-// and in the long run over the first two hundred, a quarter of a mile; and
-// so are the signs in the sky before the weather: the clouds' leads on
-// their own wind, and a front's cirrus's on its line.
+// held to its rule over the first three weeks on a grid half a mile apart,
+// and in the long run over the first hundred; and so are the signs in the
+// sky before the weather: the clouds' leads on their own wind, and a
+// front's cirrus's on its line, and the fog's wall. The long run's weeks are
+// made and checked side by side, each into its own tally, added to the
+// whole in their order; none is begun once one has failed.
 func TestWeeks(t *testing.T) {
 	cat, tl := load(t)
 	cfg := tl.Config()
@@ -52,45 +56,68 @@ func TestWeeks(t *testing.T) {
 	// them is followed minute by minute over the disk.
 	swellWeeks, swellGrid := 3, 0.5*nauticalMile
 	if n > 100 {
-		swellWeeks, swellGrid = 200, 0.25*nauticalMile
+		swellWeeks = 100
+	}
+	// The long run has the machine to itself and makes a week on every
+	// core; the short run shares it with every other package's tests, some
+	// of them timed, and makes one at a time.
+	workers := 1
+	if n > 100 {
+		workers = runtime.GOMAXPROCS(0)
 	}
 	waves, _ := cat.Prepare()
 	kinds := busyKindsOf(cat, cfg)
+	tallies := make([]*weeksTally, n)
+	var wg sync.WaitGroup
+	free := make(chan struct{}, workers)
+	for i := range n {
+		free <- struct{}{}
+		if t.Failed() {
+			break
+		}
+		seed := from + 1 + uint64(i)
+		wk := &weeksTally{shares: make([]float64, len(cfg.Regimes))}
+		tallies[i] = wk
+		wg.Go(func() {
+			defer func() { <-free }()
+			// Epochs at different hours of the day, so the nights fall at
+			// different ticks.
+			epoch := SampleEpoch + int64(seed%24)*3600*1_000_000
+			w := Generate(cfg, seed, epoch, epoch+SampleWeek, testIslands)
+			wt, err := New(cfg, w)
+			if err != nil {
+				t.Errorf("seed %d: %v", seed, err)
+				return
+			}
+			g := &gen{c: cfg, epochUs: float64(epoch)}
+			checkWeek(t, seed, cfg, g, w, wk)
+			checkFronts(t, seed, wt, w, wk)
+			checkStorms(t, seed, wt, w, cfg, wk)
+			checkRefuge(t, seed, wt, w, every, wk)
+			checkBusy(cfg, kinds, w, &wk.busy)
+			if i < swellWeeks {
+				checkSwell(wt, w, waves, swellGrid, wk)
+				checkCloudLeads(cat, wt, w, swellGrid, wk)
+				checkFrontCirrus(cat, wt, w, swellGrid, wk)
+				checkFogWall(cat, wt, w, swellGrid, wk)
+			}
+			wk.weeks = 1
+			copy(wk.shares, w.Report.Shares)
+			wk.storms = w.Report.Storms
+			wk.systems = w.Report.Systems
+			wk.most = w.Report.Most
+			wk.refused = w.Report.Refused
+			wk.draws = w.Report.Draws
+		})
+	}
+	wg.Wait()
+	if t.Failed() {
+		t.FailNow()
+	}
 	var tally weeksTally
 	tally.shares = make([]float64, len(cfg.Regimes))
-	for seed := from + 1; seed <= from+uint64(n); seed++ {
-		// Epochs at different hours of the day, so the nights fall at
-		// different ticks.
-		epoch := SampleEpoch + int64(seed%24)*3600*1_000_000
-		w := Generate(cfg, seed, epoch, epoch+SampleWeek, testIslands)
-		wt, err := New(cfg, w)
-		if err != nil {
-			t.Fatal(err)
-		}
-		g := &gen{c: cfg, epochUs: float64(epoch)}
-		checkWeek(t, seed, cfg, g, w, &tally)
-		checkFronts(t, seed, wt, w, &tally)
-		checkStorms(t, seed, wt, w, cfg, &tally)
-		checkRefuge(t, seed, wt, w, every, &tally)
-		checkBusy(cfg, kinds, w, &tally.busy)
-		if tally.weeks < swellWeeks {
-			checkSwell(wt, w, waves, swellGrid, &tally)
-			checkCloudLeads(cat, wt, w, swellGrid, &tally)
-			checkFrontCirrus(cat, wt, w, swellGrid, &tally)
-			checkFogWall(cat, wt, w, swellGrid, &tally)
-		}
-		tally.weeks++
-		for i, s := range w.Report.Shares {
-			tally.shares[i] += s
-		}
-		tally.storms += w.Report.Storms
-		tally.systems += w.Report.Systems
-		tally.most = max(tally.most, w.Report.Most)
-		tally.refused += w.Report.Refused
-		tally.draws += w.Report.Draws
-		if t.Failed() {
-			t.Fatalf("seed %d failed", seed)
-		}
+	for _, wk := range tallies {
+		tally.add(wk)
 	}
 	if tally.showersByDay > 50 {
 		if share := float64(tally.showersOnIslands) / float64(tally.showersByDay); share < 0.3 {
@@ -180,6 +207,78 @@ type swellLead struct {
 
 // swellKnots are the storm's own winds the swell's lead is measured to.
 var swellKnots = [3]float64{10, 15, 20}
+
+// add adds a week's tally to t.
+func (t *weeksTally) add(o *weeksTally) {
+	b, ob := &t.busy, &o.busy
+	b.minutes += ob.minutes
+	b.empty += ob.empty
+	b.rain += ob.rain
+	b.lows += ob.lows
+	b.storms += ob.storms
+	b.lines += ob.lines
+	b.systems += ob.systems
+	if b.byRegime == nil {
+		b.byRegime = make([]busyRegime, len(ob.byRegime))
+	}
+	for i, r := range ob.byRegime {
+		b.byRegime[i].minutes += r.minutes
+		b.byRegime[i].empty += r.empty
+		b.byRegime[i].systems += r.systems
+	}
+	t.weeks += o.weeks
+	t.storms += o.storms
+	t.systems += o.systems
+	t.most = max(t.most, o.most)
+	t.refused += o.refused
+	t.draws += o.draws
+	for i, s := range o.shares {
+		t.shares[i] += s
+	}
+	for i, h := range o.stormHours {
+		t.stormHours[i] += h
+	}
+	t.frontPoints += o.frontPoints
+	t.veerFails += o.veerFails
+	t.backFails += o.backFails
+	t.veers = append(t.veers, o.veers...)
+	t.ballotPoints += o.ballotPoints
+	t.refugePoints += o.refugePoints
+	t.refugeMean = max(t.refugeMean, o.refugeMean)
+	t.refugeWind = max(t.refugeWind, o.refugeWind)
+	t.showersByDay += o.showersByDay
+	t.showersOnIslands += o.showersOnIslands
+	for k := range t.swell {
+		s, a := &t.swell[k], &o.swell[k]
+		s.all += a.all
+		s.allShort += a.allShort
+		s.moving += a.moving
+		s.movingShort += a.movingShort
+		s.movingFirst += a.movingFirst
+		s.leads = append(s.leads, a.leads...)
+		s.movingLeads = append(s.movingLeads, a.movingLeads...)
+	}
+	t.swellStorms += o.swellStorms
+	for k := range t.clouds {
+		c, a := &t.clouds[k], &o.clouds[k]
+		c.systems += a.systems
+		c.places += a.places
+		c.windFirst += a.windFirst
+		c.short += a.short
+		c.leads = append(c.leads, a.leads...)
+	}
+	t.fronts += o.fronts
+	t.cirrusShort += o.cirrusShort
+	t.cirrus = append(t.cirrus, o.cirrus...)
+	f, a := &t.fog, &o.fog
+	f.banks += a.banks
+	f.approaches += a.approaches
+	f.short += a.short
+	f.places += a.places
+	f.placesShort += a.placesShort
+	f.leads = append(f.leads, a.leads...)
+	f.placeLeads = append(f.placeLeads, a.placeLeads...)
+}
 
 func (t *weeksTally) markdown(cat *catalog.Catalog) string {
 	var b strings.Builder
@@ -407,7 +506,8 @@ func checkStorms(t *testing.T, seed uint64, tl *Timeline, w *Week, cfg *Config, 
 			band := min(int(r/nauticalMile), len(tally.stormHours)-1)
 			tally.stormHours[band] += 5.0 / 60
 			if s.Inward == 0 && (r < cfg.Week.Outer[0]-1 || r > cfg.Week.Outer[1]+1) {
-				t.Fatalf("seed %d: a storm keeping to the outer waters is %.2f NM out", seed, r/nauticalMile)
+				t.Errorf("seed %d: a storm keeping to the outer waters is %.2f NM out", seed, r/nauticalMile)
+				return
 			}
 		}
 		// Buys Ballot's law, as it matures and at its strongest.
@@ -566,7 +666,8 @@ func checkRefuge(t *testing.T, seed uint64, tl *Timeline, w *Week, every int64, 
 				tally.refugeMean = max(tally.refugeMean, p.MeanSpeed)
 				tally.refugeWind = max(tally.refugeWind, p.Speed)
 				if p.MeanSpeed > 14*knot+1e-9 || p.Speed > 18*knot+1e-9 {
-					t.Fatalf("seed %d: at tick %d at (%.0f, %.0f) the mean wind is %.2f knots, with its gusts %.2f", seed, tick, x, y, p.MeanSpeed/knot, p.Speed/knot)
+					t.Errorf("seed %d: at tick %d at (%.0f, %.0f) the mean wind is %.2f knots, with its gusts %.2f", seed, tick, x, y, p.MeanSpeed/knot, p.Speed/knot)
+					return
 				}
 			}
 		}

@@ -513,6 +513,9 @@ func (c *config) buildTowns(seed uint64, g *physics.Ground, islands []*made, pw 
 		towns = append(towns, *tw.town)
 		buildings = append(buildings, tw.buildings...)
 	}
+	// The ports' flags are drawn in turn after Port Royal's town, or from
+	// the first in an attempt without its harbour.
+	first := len(towns)
 	for k, si := range pw.sites {
 		if si.rule != catalog.SiteHarbour && si.rule != catalog.SiteVillage {
 			continue
@@ -522,7 +525,7 @@ func (c *config) buildTowns(seed uint64, g *physics.Ground, islands []*made, pw 
 		var tw *townWork
 		number := int32(len(towns))
 		if si.rule == catalog.SiteHarbour {
-			flag := uint8(flags[int(number-1)%len(flags)] + 1)
+			flag := uint8(flags[(int(number)-first)%len(flags)] + 1)
 			tw = c.portTown(ts, g, m, si, lights, number, flag)
 		} else {
 			tw = c.villageTown(ts, g, m, si, lights, number)
