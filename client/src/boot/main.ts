@@ -110,6 +110,7 @@ import { showQueue } from '../ui/queue';
 import { settingsSignal } from '../ui/settings';
 import { loadWatch, type WatchView } from '../ui/watchlazy';
 import { watchFromQuery } from '../ui/watchwords';
+import { browserEnv, fullScreen } from './fullscreen';
 import { harbourWater, watchHarbour } from './harbour';
 
 async function start(): Promise<void> {
@@ -120,6 +121,7 @@ async function start(): Promise<void> {
   document.body.replaceChildren(container);
 
   const settings = settingsSignal();
+  const full = fullScreen(browserEnv(), settings);
   let store: Storage | null = null;
   try {
     store = localStorage;
@@ -326,6 +328,7 @@ async function start(): Promise<void> {
       sheet: game.sheet,
       pilot: game,
       labels: (el) => world.attachLabels(el),
+      fullScreen: full,
       sailor: null,
       connection: null,
       end: countdown,
@@ -362,6 +365,7 @@ async function start(): Promise<void> {
       const { exposeHooks } = await import('../dev/hooks');
       exposeHooks(world, game, {
         sandbox,
+        fullScreen: full,
         chart: parts,
         forecast: issuer,
         barometer: baro.barometer,
@@ -600,6 +604,7 @@ async function start(): Promise<void> {
     sheet: game.sheet,
     pilot: game,
     labels: (el) => world.attachLabels(el),
+    fullScreen: full,
     sailor: me.name,
     connection: { notice: online.notice, rtt: online.rtt, takeOver: () => online.takeOver() },
     fly: {
@@ -631,7 +636,13 @@ async function start(): Promise<void> {
   }
   if (query.has('test')) {
     const { exposeHooks } = await import('../dev/hooks');
-    exposeHooks(world, game, { online, predictor, chart: parts, barometer: baro.barometer });
+    exposeHooks(world, game, {
+      online,
+      predictor,
+      chart: parts,
+      barometer: baro.barometer,
+      fullScreen: full,
+    });
   }
 }
 

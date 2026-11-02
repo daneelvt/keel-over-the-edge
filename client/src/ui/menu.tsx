@@ -5,12 +5,15 @@
 // the change behind the menu as the slider moves; the frame rate (60, or 30
 // to save battery), how much the sea is drawn with (as much as the device
 // runs well, or the least), sound, the beginners' overlays, and whether
-// the helm returns to the centre when let go. Online, a sailor to watch,
+// the helm returns to the centre when let go. The full screen where the
+// page can take it, with how to install the game where that gives more of
+// the screen. Online, a sailor to watch,
 // and who may watch the player's own boat. It stands over everything at
 // sea, within the screen held either way, its head and its close at the
 // top while the rest scrolls; a tap beside it closes it.
 
 import { useLayoutEffect } from 'preact/hooks';
+import type { FullScreen } from '../boot/fullscreen';
 import type { ChartMode } from '../chart/chart';
 import { NoticeSwitches } from './chart';
 import { type ConnectionView, RoundTrip } from './connection';
@@ -103,6 +106,44 @@ function NightLight({ settings }: { settings: SettingsSignal }) {
   );
 }
 
+/** How to install the game from Chrome's menu on Android, where it then opens full screen every time. */
+export const INSTALL_CHROME = 'Every time, without the bars: ⋮ → Add to home screen → Install.';
+
+/** How to add the game to an iPhone's Home Screen, where it opens without Safari's bars. */
+export const INSTALL_HOME_SCREEN =
+  'Tap Share, then Add to Home Screen; keep Open as Web App on; open Keel from its icon. Your sailor comes with you; this phone’s settings start fresh.';
+
+/**
+ * The full screen: the switch where the page can take it, and how to
+ * install the game where that gives more; on an iPhone, which has no
+ * switch, the steps to the Home Screen, folded under their row.
+ */
+function FullScreenRows({ full }: { full: FullScreen }) {
+  const { offer } = full;
+  if (offer.switch) {
+    return (
+      <>
+        <Toggle name="full-screen" label="Full screen" on={full.on.value} set={full.turn} />
+        {offer.install === 'chrome' ? <p class="menu-note">{INSTALL_CHROME}</p> : null}
+      </>
+    );
+  }
+  if (offer.install === 'home-screen') {
+    return (
+      <details class="menu-steps">
+        <summary class="menu-row">
+          <span>Full screen</span>
+          <span class="menu-steps-mark" aria-hidden="true">
+            ›
+          </span>
+        </summary>
+        <p class="menu-note">{INSTALL_HOME_SCREEN}</p>
+      </details>
+    );
+  }
+  return null;
+}
+
 /** "Sailing as" and the sailor's name; nothing in the offline sandbox. */
 export function SailingAs({ sailor }: { sailor: string | null }) {
   return sailor === null ? null : (
@@ -124,6 +165,7 @@ export function Menu({
   account = null,
   machines = null,
   watch = null,
+  fullScreen = null,
 }: {
   settings: SettingsSignal;
   sailor: string | null;
@@ -143,6 +185,8 @@ export function Menu({
   machines?: (() => void) | null;
   /** Watching another sailor's boat; null in the offline sandbox. */
   watch?: WatchView | null;
+  /** The full screen's switch; null where it is not run. */
+  fullScreen?: FullScreen | null;
 }) {
   const s = settings.value.value;
   return (
@@ -224,6 +268,7 @@ export function Menu({
             </div>
           ) : null}
           <h3>On this device</h3>
+          {fullScreen !== null ? <FullScreenRows full={fullScreen} /> : null}
           <NightLight settings={settings} />
           <Toggle
             name="battery"

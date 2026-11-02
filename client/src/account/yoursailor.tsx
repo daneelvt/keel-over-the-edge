@@ -12,6 +12,7 @@
 // made with its named sailor on the first form, so none reaches this
 // screen without one.
 
+import { sailFullScreen } from '../boot/fullscreen';
 import { STILL_AT_SEA, WATCH_ANOTHER_SAILOR } from '../ui/watchwords';
 import { LetWatch, type Voyage } from './letwatch';
 import type { Me } from './me';
@@ -54,7 +55,15 @@ export function YourSailor({
         </p>
       ) : null}
       <LetWatch voyage={voyage} />
-      <button type="button" class="start-go your-sailor-go" onClick={() => void voyage.sail(sail)}>
+      <button
+        type="button"
+        class="start-go your-sailor-go"
+        onClick={() => {
+          // In the tap itself: the browser allows the full screen only there.
+          sailFullScreen();
+          void voyage.sail(sail);
+        }}
+      >
         {setSailAs(me.name)}
       </button>
       <button

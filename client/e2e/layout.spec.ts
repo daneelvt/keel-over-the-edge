@@ -2,7 +2,8 @@
 
 // The screen at sea laid out on phones held either way and on the browser
 // tests' screen, in the offline sandbox: with the barometer out of the
-// case, the autopilot's control head open, the right-of-way overlay on (so
+// case, the autopilot's control head open, the key that brings the full
+// screen back shown, the right-of-way overlay on (so
 // the case's last line has its place), the readouts at their longest and
 // the boat in Port Royal's harbour, no part of the screen covers
 // another, or the boat as drawn with a margin about it, and every part is
@@ -41,9 +42,12 @@ import { openScene, sailor } from './helpers';
 const SCREENS = [
   { name: 'iPhone SE upright', width: 375, height: 667, upright: true },
   { name: 'small Android phone upright', width: 360, height: 640, upright: true },
+  // The same phone with the whole screen: no address bar, status bar or navigation bar.
+  { name: 'small Android phone full screen upright', width: 360, height: 780, upright: true },
   { name: 'iPhone 16 upright', width: 393, height: 852, upright: true },
   { name: 'iPhone 16 sideways', width: 852, height: 393, upright: false },
   { name: 'small Android phone sideways', width: 640, height: 360, upright: false },
+  { name: 'small Android phone full screen sideways', width: 780, height: 360, upright: false },
   { name: 'the tests’ screen', width: 960, height: 600, upright: false },
 ] as const;
 
@@ -103,6 +107,7 @@ async function parts(page: Page): Promise<{
       one('the pocket chart', '.pocket-frame'),
       ...pushers,
       one('the menu button', '.menu-button'),
+      one('the full screen key', '.fullscreen-key'),
       one('the helm', '[data-control=helm]'),
       one('the sheet', '[data-control=sheet]'),
       one('the autopilot', '.pilot-head'),
@@ -552,10 +557,12 @@ test('no part of the screen at sea covers the boat or another part, with everyth
         Math.abs(globalThis.keel.world.stage.camera.aspect - width / height) < 1e-6,
       { width: s.width, height: s.height },
     );
-    // Every complication out, the head open.
+    // Every complication out, the head open, the full screen's key shown
+    // (the menu, opened on the screen before, put it away).
     await page.evaluate(() => {
       const k = globalThis.keel;
       k.settings({ barometer: true, pilotHead: true, rightOfWay: true });
+      k.fullScreenKey(true);
       k.render();
     });
     await page.waitForTimeout(200);

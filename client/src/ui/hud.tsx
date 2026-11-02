@@ -4,7 +4,8 @@
 // readouts, the barometer sliding out of it), the sailor's state when they
 // are out of the boat beneath it, the pocket chart top right with the time
 // until a new world, the helm bottom left, the sheet bottom right, the
-// autopilot's control head between them, and the menu. Laid out within
+// autopilot's control head between them, and the menu, with the key that
+// brings the full screen back beside its button. Laid out within
 // the safe area, in portrait and landscape, no part over another or over
 // the boat. Watching another sailor's boat, every control that acts is
 // gone (the helm, the sheet, the autopilot, the free camera, taking the
@@ -17,6 +18,7 @@ import type { ReadonlySignal } from '@preact/signals';
 import { render } from 'preact';
 import { useState } from 'preact/hooks';
 import { AccountPanel, MachinesPanel } from '../account/account';
+import type { FullScreen } from '../boot/fullscreen';
 import type { HelmInput } from '../input/helm';
 import type { PilotActions } from '../input/pilot';
 import type { SheetInput } from '../input/sheet';
@@ -41,6 +43,17 @@ function BumpLine({ model }: { model: HudModel }) {
     <p class="panel bump-line" role="status" data-readout="bump">
       {text}
     </p>
+  );
+}
+
+/** The key that brings the full screen back after the phone was away: four corners. */
+function FullScreenKey({ resume }: { resume: () => void }) {
+  return (
+    <button type="button" class="round fullscreen-key" aria-label="Full screen" onClick={resume}>
+      <svg viewBox="0 0 20 20" width="20" height="20" aria-hidden="true">
+        <path d="M2 7V2h5M13 2h5v5M18 13v5h-5M7 18H2v-5" />
+      </svg>
+    </button>
   );
 }
 
@@ -174,6 +187,8 @@ export interface ScreenProps {
   watch?: WatchView | null;
   /** The running light of the own machine sailor's AI, while watching it; null in the offline sandbox. */
   lamp?: ReadonlySignal<Lamp> | null;
+  /** The full screen's switch and key; null where it is not run. */
+  fullScreen?: FullScreen | null;
 }
 
 /** The free camera as the screen sees it. */
@@ -198,6 +213,7 @@ function Screen(props: ScreenProps) {
   const notices = props.notices ?? null;
   const end = props.end ?? null;
   const watch = props.watch ?? null;
+  const full = props.fullScreen ?? null;
   // Nothing steers a boat watched.
   const steer = watch === null || !watch.spectating.value;
   if (sea?.chart.open.value) {
@@ -261,10 +277,16 @@ function Screen(props: ScreenProps) {
         class="round menu-button"
         aria-label="Menu"
         aria-expanded={menu}
-        onClick={() => setMenu(!menu)}
+        onClick={() => {
+          if (!menu) {
+            full?.menuOpened();
+          }
+          setMenu(!menu);
+        }}
       >
         ☰
       </button>
+      {full?.key.value === true && !menu ? <FullScreenKey resume={full.resume} /> : null}
       {account === 'account' ? <AccountPanel close={() => setAccount('')} /> : null}
       {account === 'machines' ? <MachinesPanel close={() => setAccount('')} /> : null}
       {menu && account === '' ? (
@@ -308,6 +330,7 @@ function Screen(props: ScreenProps) {
               : null
           }
           watch={watch}
+          fullScreen={full}
         />
       ) : null}
       {watch !== null ? <LazyWatch watch={watch} part="over" /> : null}

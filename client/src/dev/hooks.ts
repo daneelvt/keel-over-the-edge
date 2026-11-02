@@ -42,6 +42,7 @@ import {
 } from 'three/tsl';
 import type { Node } from 'three/webgpu';
 import { MeshBasicNodeMaterial, QuadMesh, type WebGPURenderer } from 'three/webgpu';
+import type { FullScreen } from '../boot/fullscreen';
 import { harbourWater } from '../boot/harbour';
 import { catalog } from '../catalog';
 import type { ChartMode } from '../chart/chart';
@@ -242,6 +243,8 @@ export type Sailing = (
   readBarometer?: () => void;
   /** The countdown to the world's end, which the sandbox's tests set. */
   countdown?: Countdown;
+  /** The full screen's switch and key. */
+  fullScreen?: FullScreen;
 };
 
 /** Puts the hooks on globalThis.keel. */
@@ -1512,6 +1515,12 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
     },
     settings(change: Partial<Settings>): void {
       game.settings.set(change);
+    },
+    /** Shows or puts away the key that brings the full screen back, as after the phone was away. */
+    fullScreenKey(shown: boolean): void {
+      if (sailing.fullScreen !== undefined) {
+        sailing.fullScreen.key.value = shown;
+      }
     },
     /**
      * Holds the case's readouts at the shortest or the longest they say, or

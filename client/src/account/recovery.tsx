@@ -8,6 +8,7 @@
 // next sign-in is told it was used, in case it was not the player.
 
 import { useState } from 'preact/hooks';
+import { sailFullScreen } from '../boot/fullscreen';
 import { LetWatch, type Voyage } from './letwatch';
 import type { Me } from './me';
 import { addPasskey, type Reach, signOut } from './passkeys';
@@ -108,7 +109,15 @@ export function SetSailOrMake({
         yours sails, and speaks as, beside you or while you are away.
       </p>
       <LetWatch voyage={voyage} />
-      <button type="button" class="start-go your-sailor-go" onClick={() => void voyage.sail(sail)}>
+      <button
+        type="button"
+        class="start-go your-sailor-go"
+        onClick={() => {
+          // In the tap itself: the browser allows the full screen only there.
+          sailFullScreen();
+          void voyage.sail(sail);
+        }}
+      >
         {setSailAs(name)}
       </button>
       <button type="button" class="start-sign-in" onClick={make}>

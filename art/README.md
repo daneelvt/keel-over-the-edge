@@ -30,6 +30,10 @@ built files are committed; the catalog's `art.model` names them, and
 - `sailors/stand-in/build.ts`: the stand-in sailor, a plain figure.
 - `town/lib/kit.ts` and `town/<biome>/build.ts`: each biome's kit of town
   buildings and props, `town/<biome>.glb`.
+- `icon/icon.ts` and `icon/build.ts`: the game's icon, drawn as shapes and
+  rasterised to the PNGs a phone asks for, written to `client/public/`
+  beside the web app manifest. `client/build/icons.test.ts` fails if a PNG
+  is not the drawing.
 
 A model's nodes are named, and the client finds its parts by those names:
 `hull`, `mast`, `boom` (its origin at the gooseneck), `sail` and `telltales`
