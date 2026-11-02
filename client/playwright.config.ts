@@ -105,6 +105,8 @@ function launch(project: string): { args: string[]; env: Record<string, string> 
 
 export default defineConfig({
   testDir: 'e2e',
+  // The specs; e2e's *.test.ts are Vitest's, of the harness itself.
+  testMatch: '*.spec.ts',
   timeout: 90_000,
   expect: {
     // On Linux the browser draws on SwiftShader, the CPU's: a stable
@@ -115,7 +117,8 @@ export default defineConfig({
   fullyParallel: false,
   workers: 1,
   retries: process.env.CI ? 1 : 0,
-  reporter: process.env.CI ? [['list'], ['html', { open: 'never' }]] : 'list',
+  // On CI, a summary on the job's page too (e2e/summary.ts).
+  reporter: process.env.CI ? [['list'], ['html', { open: 'never' }], ['./e2e/summary.ts']] : 'list',
   // Reference pictures, kept per back end and platform, changed only by hand.
   snapshotPathTemplate: '{testDir}/pictures/{projectName}-{platform}/{arg}{ext}',
   use: {

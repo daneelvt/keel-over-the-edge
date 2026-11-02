@@ -127,7 +127,7 @@ test('a restart of keel rings the bell, and the boat waits for its sailor', asyn
     expect(line).toHaveText(/harbourmaster rings the bell/, { timeout: 30_000 }),
     request.post(`${control}/restart`, { timeout: 60_000 }),
   ]);
-  expect(restart.status()).toBe(204);
+  expect(restart.status(), await restart.text()).toBe(204);
   await page.waitForFunction(() => globalThis.keel.net().status === 'sailing', null, {
     timeout: 30_000,
   });
