@@ -141,10 +141,19 @@ jobs:
         run: npx --no-install playwright install --with-deps --only-shell chromium
       - name: The page's tests, three at a time, then those that change the world
         working-directory: client
-        env:
-          SUMMARY_TITLE: browser (the page, no drawing)
-        # page-serial runs after page, on which it depends.
-        run: npx --no-install playwright test --project page-serial --grep-invert '@long|@nightly'
+        # Apart, not page-serial with its dependency: Playwright filters no
+        # dependency by --grep, and skips the dependent if it fails.
+        shell: bash
+        run: |
+          status=0
+          # Each its own results and report, which the other would clear.
+          SUMMARY_TITLE="browser (the page, no drawing)" PLAYWRIGHT_HTML_OUTPUT_DIR=playwright-report/page \
+            npx --no-install playwright test --project page --grep-invert '@long|@nightly' \
+            --output test-results/page || status=$?
+          SUMMARY_TITLE="browser (the page, the tests that change the world)" PLAYWRIGHT_HTML_OUTPUT_DIR=playwright-report/page-serial \
+            npx --no-install playwright test --project page-serial --no-deps --grep-invert '@long|@nightly' \
+            --output test-results/page-serial || status=$?
+          exit "$status"
       - name: The traces of a failure
         if: failure()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2

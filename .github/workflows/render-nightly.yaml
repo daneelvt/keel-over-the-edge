@@ -44,9 +44,11 @@ jobs:
         include:
           - { name: "long (webgl2)", project: webgl2, grep: --grep, shard: 1, shards: 1, repeat: 1, browser: chromium }
           - { name: "long (webgpu)", project: webgpu, grep: --grep, shard: 1, shards: 1, repeat: 1, browser: chromium }
-          - { name: "long (the page)", project: page-serial, grep: --grep, shard: 1, shards: 1, repeat: 1, browser: chromium }
+          - { name: "long (the page)", project: page, grep: --grep, shard: 1, shards: 1, repeat: 1, browser: chromium }
+          - { name: "long (the page, the world)", project: page-serial, grep: --grep, shard: 1, shards: 1, repeat: 1, browser: chromium }
           - { name: "compat", project: compat, grep: --grep-invert, shard: 1, shards: 1, repeat: 1, browser: chromium }
-          - { name: "hunt (the page) ×5", project: page-serial, grep: --grep-invert, shard: 1, shards: 1, repeat: 5, browser: chromium }
+          - { name: "hunt (the page) ×5", project: page, grep: --grep-invert, shard: 1, shards: 1, repeat: 5, browser: chromium }
+          - { name: "hunt (the page, the world) ×5", project: page-serial, grep: --grep-invert, shard: 1, shards: 1, repeat: 5, browser: chromium }
           - { name: "hunt (webgl2, 1 of 3) ×5", project: webgl2, grep: --grep-invert, shard: 1, shards: 3, repeat: 5, browser: chromium }
           - { name: "hunt (webgl2, 2 of 3) ×5", project: webgl2, grep: --grep-invert, shard: 2, shards: 3, repeat: 5, browser: chromium }
           - { name: "hunt (webgl2, 3 of 3) ×5", project: webgl2, grep: --grep-invert, shard: 3, shards: 3, repeat: 5, browser: chromium }
@@ -113,7 +115,9 @@ jobs:
           # a shard runs.
           SHARD: ${{ matrix.shard }}
           SHARDS: ${{ matrix.shards }}
-        run: npx --no-install playwright test --project "$PROJECT" "$GREP" '@long|@nightly' --repeat-each "$REPEAT" --fail-on-flaky-tests
+        # --no-deps: page-serial apart from page, each filtered (Playwright
+        # filters no dependency by --grep).
+        run: npx --no-install playwright test --project "$PROJECT" --no-deps "$GREP" '@long|@nightly' --repeat-each "$REPEAT" --fail-on-flaky-tests
       - name: The pictures and traces of a failure
         if: failure()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -190,7 +194,16 @@ jobs:
         env:
           KEEL_LAG_BASE: http://localhost:5181
           SUMMARY_TITLE: render-nightly, real TCP loss
-        run: npx --no-install playwright test e2e/lag.spec.ts e2e/together.spec.ts --project page-serial
+        shell: bash
+        run: |
+          status=0
+          PLAYWRIGHT_HTML_OUTPUT_DIR=playwright-report/page \
+            npx --no-install playwright test e2e/lag.spec.ts e2e/together.spec.ts --project page \
+            --output test-results/page || status=$?
+          PLAYWRIGHT_HTML_OUTPUT_DIR=playwright-report/page-serial \
+            npx --no-install playwright test e2e/lag.spec.ts --project page-serial --no-deps \
+            --output test-results/page-serial || status=$?
+          exit "$status"
       - name: The traces of a failure
         if: failure() && steps.netem.outputs.ok == 'true'
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2

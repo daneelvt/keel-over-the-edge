@@ -6531,7 +6531,8 @@ game's tick, the camera, the boats, the words) and never drawn, and
 against the one keel (`npx playwright test --project page`); those tagged
 `@world` change what every sailor shares (the wind, the weather, the
 world's end and life, keel itself) and run after the rest, one at a time
-(`--project page-serial` runs `page` first; `--no-deps` runs them alone).
+(`--project page-serial` runs `page` first, which `--grep` does not
+filter; `--no-deps` runs them alone, as the workflows do).
 Every new boat starts in the same roads, beside the boats of the tests
 sailing at the same time: a test that needs clean air or room beside its
 boat puts it in water of its own first (`alone(page)`). The scene's (the

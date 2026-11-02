@@ -262,7 +262,7 @@ const internal = 'http://127.0.0.1:19090';
 
 /**
  * Puts the page's boat at rest in water of its own, and waits until the
- * page has it there: on its heading, or off degrees off the mean wind
+ * page has it there and the move's corrections have stopped: on its heading, or off degrees off the mean wind
  * (positive with the wind over starboard), whichever way the world's wind
  * blows at the hour the test runs. Every new boat starts in the same roads, beside the
  * boats of the tests before in their grace, and the page project sails
@@ -310,6 +310,19 @@ export async function alone(page: Page, off?: number): Promise<{ east: number; n
       { timeout: 15_000 },
     )
     .toBeLessThan(30);
+  // Settled: the move's own corrections, in flight with the snapshots,
+  // all come before a test counts its own.
+  await expect
+    .poll(
+      () =>
+        page.evaluate(async () => {
+          const was = globalThis.keel.net().counts.corrections;
+          await new Promise((r) => setTimeout(r, 1000));
+          return globalThis.keel.net().counts.corrections - was;
+        }),
+      { timeout: 15_000 },
+    )
+    .toBe(0);
   return { east, north };
 }
 
