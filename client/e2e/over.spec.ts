@@ -14,10 +14,6 @@ const internal = 'http://127.0.0.1:19090';
 /** The lip, metres from the centre. */
 const LIP = 8334;
 
-test.beforeEach(() => {
-  test.skip(test.info().project.name !== 'webgl2', 'the connection: one back end is enough');
-});
-
 /** A metric's value from keel's internal listener, or 0 if it has none yet. */
 async function metric(
   request: import('@playwright/test').APIRequestContext,

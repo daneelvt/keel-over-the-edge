@@ -17,12 +17,8 @@
 import { createHash, randomBytes } from 'node:crypto';
 import { type BrowserContext, expect, type Page, test } from '@playwright/test';
 import data from '../src/catalog/catalog.gen.json' with { type: 'json' };
-import { drained, holdPasskeys, type Made, sailor, setSail, steady } from './helpers';
+import { drained, GAME, holdPasskeys, type Made, sailor, setSail, steady } from './helpers';
 import { assertPasskey } from './passkey';
-
-test.beforeEach(() => {
-  test.skip(test.info().project.name !== 'webgl2', 'forms: one back end is enough');
-});
 
 /**
  * The start screen with machine sailors: the player's own sailor by name
@@ -151,7 +147,7 @@ test('a new sailor’s machine sailor: the choice, the form, how to connect, and
   page,
 }) => {
   await context.credentials.install();
-  await page.goto('/?test&backend=webgl2&tier=low');
+  await page.goto(GAME);
   // A name of the most letters a sailor may have, which wraps on a phone.
   const player = `Wavecrestmak ${String(Date.now() % 10_000_000).padStart(7, '0')}`;
   await page.getByLabel('Your sailor’s name').fill(player);
@@ -231,7 +227,7 @@ test('every entry shows the machine sailors before the sea, the boat still in th
   const player = made.name;
   const name = `Brassy ${Date.now() % 10_000_000}`;
   await machine(context, name);
-  await page.goto('/?test&backend=webgl2&tier=low');
+  await page.goto(GAME);
   await twoPanels(page, player, name);
   await setSail(page);
 
@@ -264,7 +260,7 @@ test('the account page: an app revoked, a connection token made once and revoked
   await holdPasskeys(context, made.passkey);
 
   // Signed in, the start screen with machine sailors, the player's own first.
-  await page.goto('/?test&backend=webgl2&tier=low');
+  await page.goto(GAME);
   await twoPanels(page, made.name, name);
   await laidOut(page, made.name);
   await setSail(page);

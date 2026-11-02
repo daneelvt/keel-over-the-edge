@@ -9,10 +9,9 @@
 
 import { type BrowserContext, expect, type Page, test } from '@playwright/test';
 import data from '../src/catalog/catalog.gen.json' with { type: 'json' };
-import { sailor, setSail } from './helpers';
+import { GAME, sailor, setSail } from './helpers';
 
 test.beforeEach(async ({ context }) => {
-  test.skip(test.info().project.name !== 'webgl2', 'a form: one back end is enough');
   // The browser's prompt, answered by Playwright: it holds no passkey yet.
   await context.credentials.install();
 });
@@ -23,7 +22,7 @@ function freshName(word: string): string {
 }
 
 async function openStart(page: Page): Promise<void> {
-  await page.goto('/?backend=webgl2');
+  await page.goto(GAME);
   await expect(page.getByRole('heading', { name: 'Keel Over the Edge' })).toBeVisible({
     timeout: 30_000,
   });

@@ -15,10 +15,6 @@ import { sail, sailBeside, sailor, steady } from './helpers';
 const direct = 'http://localhost:5181';
 const lagged = process.env.KEEL_LAG_BASE ?? 'http://localhost:5182';
 
-test.beforeEach(() => {
-  test.skip(test.info().project.name !== 'webgl2', 'the connection: one back end is enough');
-});
-
 /**
  * Two players, each sailing in a context of its own, the second started
  * with the first's drawing held, and both drawing steadily before they are

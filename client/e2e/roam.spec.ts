@@ -14,13 +14,9 @@ import {
   type Page,
   test,
 } from '@playwright/test';
-import { sail, sailBeside, sailor, steady } from './helpers';
+import { alone, sail, sailBeside, sailor, steady } from './helpers';
 
 const internal = 'http://127.0.0.1:19090';
-
-test.beforeEach(() => {
-  test.skip(test.info().project.name !== 'webgl2', 'the connection: one back end is enough');
-});
 
 async function metric(request: APIRequestContext, line: string): Promise<number> {
   const text = await (await request.get(`${internal}/metrics`)).text();
@@ -86,6 +82,8 @@ test('the owner roams and teleports; another sailor can do neither', async ({
   await sail(ann);
   await sailBeside(bob, ann);
   await steady(ann, bob);
+  // Room beside Bob's boat for Ann's, away from the other tests' boats.
+  await alone(bob);
   const annBoat = await ann.evaluate(() => globalThis.keel.net().boat);
   const bobBoat = await bob.evaluate(() => globalThis.keel.net().boat);
   await control(request, 'flag', { account: await accountOf(request, annBoat), on: true });

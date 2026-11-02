@@ -23,6 +23,20 @@ declare global {
 export const softwareGPU = process.platform === 'linux' || process.env.SOFTWARE_GPU === '1';
 
 /**
+ * The game's page with the test hooks, drawing nothing (?draw=off): no
+ * renderer, no canvas, the scene updated every frame and never drawn. For
+ * the tests of the connection, the account and the screen's words, which
+ * check no picture: on CI's software GPU a page that draws takes most of a
+ * minute to start beside another, and leaves the next page its backlog.
+ */
+export const GAME = '/?test&draw=off';
+
+/** Whether the page draws: false for one opened with ?draw=off. */
+async function draws(page: Page): Promise<boolean> {
+  return page.evaluate(() => globalThis.keel.info().backend !== 'none');
+}
+
+/**
  * Opens the offline sandbox on the project's back end with the test hooks,
  * waits for the boat, freezes time and puts the boat back at the start, at
  * rest, on the best rung of its ladder (on a software GPU the low tier's,
@@ -235,27 +249,31 @@ export async function setSail(page: Page): Promise<void> {
   await expect(page.locator('.your-sailor')).toHaveCount(0);
 }
 
-/** Opens the game with the test hooks, sets sail, and waits until it sails. */
+/** Opens the game with the test hooks, drawing nothing, sets sail, and waits until it sails. */
 export async function sail(page: Page, base = ''): Promise<void> {
   const errors: string[] = [];
   page.on('pageerror', (e) => errors.push(e.message));
-  await page.goto(`${base}/?test&backend=webgl2${softwareGPU ? '&tier=low' : ''}`);
+  await page.goto(`${base}${GAME}`);
   await setSail(page);
   await page.waitForFunction(() => globalThis.keel !== undefined, null, { timeout: 60_000 });
   await page.waitForFunction(() => globalThis.keel.net().status === 'sailing', null, {
     timeout: 30_000,
   });
   expect(errors).toEqual([]);
+  expect(await draws(page), 'a page opened by sail() draws nothing').toBe(false);
 }
 
 /**
  * Opens a second page as sail() does, the first page's drawing held
- * meanwhile, or every one of the pages before it: on CI's one software
- * GPU, a page starting beside one that draws the sea takes most of a
- * minute, and stalls the other for seconds at a time.
+ * meanwhile, or every one of the pages before it that draws: on CI's one
+ * software GPU, a page starting beside one that draws the sea takes most
+ * of a minute, and stalls the other for seconds at a time.
  */
 export async function sailBeside(page: Page, first: Page | Page[], base = ''): Promise<void> {
-  const held = Array.isArray(first) ? first : [first];
+  const pages = Array.isArray(first) ? first : [first];
+  const held = (await Promise.all(pages.map(async (p) => ((await draws(p)) ? p : null)))).filter(
+    (p) => p !== null,
+  );
   await Promise.all(held.map((p) => p.evaluate(() => globalThis.keel.hold(true))));
   try {
     await sail(page, base);
@@ -269,9 +287,13 @@ export async function sailBeside(page: Page, first: Page | Page[], base = ''): P
  * finished what it was given. Call it before a reload. CI's software GPU
  * runs seconds behind the page, and a page reloaded while that backlog
  * remains took most of a minute to show its start screen again. The page
- * after the reload draws again by itself.
+ * after the reload draws again by itself. Nothing for a page that draws
+ * nothing.
  */
 export async function drained(page: Page): Promise<void> {
+  if (!(await draws(page))) {
+    return;
+  }
   await page.evaluate(async () => {
     globalThis.keel.hold(true);
     await globalThis.keel.show();
@@ -279,15 +301,18 @@ export async function drained(page: Page): Promise<void> {
 }
 
 /**
- * Waits until each page's animation frames come with no gap of a second
- * and a half for three seconds. The pages share CI's one software GPU
- * process: a page still making what it draws (after its start, a reload,
- * or a move to somewhere new) stalls its own frames and the others' for
- * seconds, and its main thread with them.
+ * Waits until each page that draws has animation frames with no gap of a
+ * second and a half for three seconds. The pages share CI's one software
+ * GPU process: a page still making what it draws (after its start, a
+ * reload, or a move to somewhere new) stalls its own frames and the
+ * others' for seconds, and its main thread with them.
  */
 export async function steady(...pages: Page[]): Promise<void> {
+  const drawing = (await Promise.all(pages.map(async (p) => ((await draws(p)) ? p : null)))).filter(
+    (p) => p !== null,
+  );
   await Promise.all(
-    pages.map((page) =>
+    drawing.map((page) =>
       expect
         .poll(
           () =>
@@ -314,6 +339,49 @@ export async function steady(...pages: Page[]): Promise<void> {
         .toBeLessThan(1500),
     ),
   );
+}
+
+/** keel's internal listener, as tools/e2e serves it: its developer commands. */
+const internal = 'http://127.0.0.1:19090';
+
+/**
+ * Puts the page's boat at rest in water of its own, and waits until the
+ * page has it there. Every new boat starts in the same roads, beside the
+ * boats of the tests before in their grace, and the page project sails
+ * three tests at once against one keel: a test that needs clean air, or
+ * room beside its boat, moves it first. The spot is 1.2 to 2.1 km from the
+ * boat, in a direction of its own (its number turned by the golden angle),
+ * so no two tests' boats are put near each other; and within 6 km of the
+ * world's centre, well inside the lip.
+ */
+export async function alone(page: Page): Promise<{ east: number; north: number }> {
+  const at = await page.evaluate(() => {
+    const k = globalThis.keel;
+    const s = k.boat().state;
+    return { boat: k.net().boat, x: s.x, y: s.y };
+  });
+  let turn = at.boat * 2.399963;
+  const r = 1200 + (at.boat % 7) * 150;
+  const spot = () => [at.x + r * Math.sin(turn), at.y + r * Math.cos(turn)] as const;
+  if (Math.hypot(...spot()) > 6000) {
+    turn += Math.PI;
+  }
+  const [east, north] = spot().map(Math.round) as [number, number];
+  const res = await page.request.post(
+    `${internal}/debug/place?east=${east}&north=${north}&heading=0&boat=${at.boat}`,
+  );
+  expect(res.status(), await res.text()).toBe(200);
+  await expect
+    .poll(
+      () =>
+        page.evaluate(([e, n]) => {
+          const s = globalThis.keel.boat().state;
+          return Math.hypot(s.x - e, s.y - n);
+        }, [east, north] as const),
+      { timeout: 15_000 },
+    )
+    .toBeLessThan(30);
+  return { east, north };
 }
 
 /**

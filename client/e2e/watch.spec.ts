@@ -17,12 +17,8 @@
 
 import { type BrowserContext, expect, type Page, test } from '@playwright/test';
 import data from '../src/catalog/catalog.gen.json' with { type: 'json' };
-import { drained, holdPasskeys, type Made, sailor, setSail, softwareGPU } from './helpers';
+import { drained, GAME, holdPasskeys, type Made, sailor, setSail } from './helpers';
 import { assertPasskey } from './passkey';
-
-test.beforeEach(() => {
-  test.skip(test.info().project.name !== 'webgl2', 'watching: one back end is enough');
-});
 
 /** A machine sailor made through the server's route, its look the catalog's first; its id. */
 async function machine(context: BrowserContext, name: string): Promise<string> {
@@ -102,7 +98,7 @@ test('a machine sailor watched from its owner’s start screen: whose boat, noth
   // The start screen with machine sailors: Watch beside the one at sea.
   const errors: string[] = [];
   page.on('pageerror', (e) => errors.push(e.message));
-  await page.goto(`/?test&backend=webgl2${softwareGPU ? '&tier=low' : ''}`);
+  await page.goto(GAME);
   const row = page.locator('.machine-list li', { hasText: name });
   await expect(row).toContainText('at sea', { timeout: 30_000 });
   await row.getByRole('button', { name: 'Watch', exact: true }).click();
@@ -181,9 +177,6 @@ test('a machine sailor watched from its owner’s start screen: whose boat, noth
     .toBeGreaterThan(0);
   expect(errors).toEqual([]);
 });
-
-/** The game's address with the test hooks, on the project's back end. */
-const GAME = `/?test&backend=webgl2${softwareGPU ? '&tier=low' : ''}`;
 
 /** A machine sailor made, given a connection token and taken to sea by its AI app. */
 async function toSea(context: BrowserContext, made: Made, name: string): Promise<void> {

@@ -15,10 +15,6 @@ import { sailor as newSailor, sail, sailBeside } from './helpers';
 const internal = 'http://127.0.0.1:19090';
 const control = 'http://127.0.0.1:19099';
 
-test.beforeEach(() => {
-  test.skip(test.info().project.name !== 'webgl2', 'the world’s life: one back end is enough');
-});
-
 type Ending = {
   world: string;
   ends: number;
@@ -51,10 +47,9 @@ async function sailor(browser: import('@playwright/test').Browser, name: string,
   return { c, p };
 }
 
-test('@long a world ends on stage, and a new one begins with a blank chart', async ({
-  browser,
-  request,
-}) => {
+test('@long a world ends on stage, and a new one begins with a blank chart', {
+  tag: '@world',
+}, async ({ browser, request }) => {
   test.setTimeout(240_000);
   const opener = await browser.newPage();
   const ends = await endIn(opener, 75);
@@ -134,10 +129,9 @@ test('@long a world ends on stage, and a new one begins with a blank chart', asy
   await bob.c.close();
 });
 
-test('@long a world’s end missed while keel was down is switched as it starts', async ({
-  browser,
-  request,
-}) => {
+test('@long a world’s end missed while keel was down is switched as it starts', {
+  tag: '@world',
+}, async ({ browser, request }) => {
   test.setTimeout(240_000);
   const ann = await sailor(browser, 'Ann');
   const ends = await endIn(ann.p, 15);

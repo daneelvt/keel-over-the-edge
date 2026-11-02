@@ -25,10 +25,6 @@ const owner = 'http://localhost:5184/owner/';
 
 const STOPPED = 'This sailor has been stopped. It cannot sign in or sail.';
 
-test.beforeEach(() => {
-  test.skip(test.info().project.name !== 'webgl2', 'the world page: one back end is enough');
-});
-
 /** The account of a sailor, by its name, as the owner's search finds it. */
 async function accountOf(request: APIRequestContext, name: string): Promise<string | null> {
   const res = await request.post(`${internal}/owner/api/accounts/search`, {

@@ -1,0 +1,193 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# The browser tests that pr.render does not run, every night on main: the
+# tests tagged @long (minutes each on a software GPU: the frame's
+# allocations, three hundred steps in a gale, adaptive quality, a world's
+# end) and @nightly, on both back ends; the sea's tests on a WebGPU device
+# held to compatibility mode's limits; the slow-network tests through real
+# TCP loss, where the runner's kernel has sch_netem; and the flake hunt:
+# pr.render's suite five times over (the page's, the scene's on WebGL 2,
+# WebKit's), so that a test that passes in one run and fails in another is
+# found on main by night, not on a pull request by day. Each job writes its
+# runner, its tests' outcomes, its flaky tests and each file's time to the
+# run's summary (e2e/summary.ts).
+#
+# A failed night is a fault to fix before the next phase's pull request:
+# a flaky test within the week, or tagged @nightly with an issue naming its
+# fault, no more than three at once. GitHub mails a failed scheduled run to
+# whoever last changed its cron. Also by hand on any branch, and on a pull
+# request labelled render (again on each push while the label stays). It is
+# not a required check.
+name: render-nightly
+
+on:
+  schedule:
+    - cron: "17 4 * * *"
+  workflow_dispatch:
+  pull_request:
+    types: [labeled, opened, synchronize, reopened, ready_for_review]
+
+permissions: {}
+
+# A pull request's newer run replaces its older one; a night waits for the
+# night before.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.ref || 'nightly' }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  suite:
+    name: ${{ matrix.name }}
+    if: github.event_name != 'pull_request' || (github.event.pull_request.draft == false && contains(github.event.pull_request.labels.*.name, 'render'))
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { name: "long (webgl2)", project: webgl2, grep: --grep, shard: 1, shards: 1, repeat: 1, browser: chromium }
+          - { name: "long (webgpu)", project: webgpu, grep: --grep, shard: 1, shards: 1, repeat: 1, browser: chromium }
+          - { name: "long (the page)", project: page-serial, grep: --grep, shard: 1, shards: 1, repeat: 1, browser: chromium }
+          - { name: "compat", project: compat, grep: --grep-invert, shard: 1, shards: 1, repeat: 1, browser: chromium }
+          - { name: "hunt (the page) ×5", project: page-serial, grep: --grep-invert, shard: 1, shards: 1, repeat: 5, browser: chromium }
+          - { name: "hunt (webgl2, 1 of 4) ×5", project: webgl2, grep: --grep-invert, shard: 1, shards: 4, repeat: 5, browser: chromium }
+          - { name: "hunt (webgl2, 2 of 4) ×5", project: webgl2, grep: --grep-invert, shard: 2, shards: 4, repeat: 5, browser: chromium }
+          - { name: "hunt (webgl2, 3 of 4) ×5", project: webgl2, grep: --grep-invert, shard: 3, shards: 4, repeat: 5, browser: chromium }
+          - { name: "hunt (webgl2, 4 of 4) ×5", project: webgl2, grep: --grep-invert, shard: 4, shards: 4, repeat: 5, browser: chromium }
+          - { name: "hunt (webkit) ×5", project: webkit, grep: --grep-invert, shard: 1, shards: 1, repeat: 5, browser: webkit }
+    runs-on: ubuntu-26.04
+    timeout-minutes: 120
+    permissions:
+      contents: read
+    # PostgreSQL for keel, on the image and version tools/dev runs locally;
+    # the password is the throwaway service's own.
+    services:
+      postgres:
+        image: postgres:18.6@sha256:edb0c08dc33befd0262ab3b5cf1c4f3f8cfd8b09e88c05b45adee29d6761ddb6
+        env:
+          POSTGRES_USER: keel
+          POSTGRES_PASSWORD: keel
+          POSTGRES_DB: keel
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready --host 127.0.0.1 --username keel --dbname keel"
+          --health-interval 2s
+          --health-timeout 5s
+          --health-retries 30
+    env:
+      KEEL_TEST_DATABASE_URL: postgres://keel:keel@127.0.0.1:5432/postgres?sslmode=disable
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup
+      - name: The runner's CPU and speed, on the job's summary
+        working-directory: client
+        run: node e2e/runner.ts >> "$GITHUB_STEP_SUMMARY"
+      - name: Build the physics module (the game's page steps it)
+        run: go run ./tools/physics
+      - name: Seed 1's world, for the sandbox's land and its chart
+        run: go run ./tools/dev -world 1
+      - name: Chromium's headless shell for Playwright
+        if: matrix.browser == 'chromium'
+        working-directory: client
+        run: npx --no-install playwright install --with-deps --only-shell chromium
+      - name: WebKit for Playwright
+        if: matrix.browser == 'webkit'
+        working-directory: client
+        run: npx --no-install playwright install --with-deps webkit
+      - name: The tests
+        working-directory: client
+        env:
+          SUMMARY_TITLE: render-nightly, ${{ matrix.name }}
+          PROJECT: ${{ matrix.project }}
+          GREP: ${{ matrix.grep }}
+          REPEAT: ${{ matrix.repeat }}
+          # playwright.config.ts reads these, with PROJECT, for the files
+          # a shard runs.
+          SHARD: ${{ matrix.shard }}
+          SHARDS: ${{ matrix.shards }}
+        run: npx --no-install playwright test --project "$PROJECT" "$GREP" '@long|@nightly' --repeat-each "$REPEAT" --fail-on-flaky-tests
+      - name: The pictures and traces of a failure
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: playwright-nightly-${{ matrix.project }}-${{ matrix.grep == '--grep' && 'long' || 'short' }}-${{ matrix.shard }}
+          path: |
+            client/test-results
+            client/playwright-report
+          retention-days: 14
+
+  netem:
+    name: real TCP loss, where netem is
+    if: github.event_name != 'pull_request' || (github.event.pull_request.draft == false && contains(github.event.pull_request.labels.*.name, 'render'))
+    runs-on: ubuntu-26.04
+    timeout-minutes: 60
+    permissions:
+      contents: read
+    services:
+      postgres:
+        image: postgres:18.6@sha256:edb0c08dc33befd0262ab3b5cf1c4f3f8cfd8b09e88c05b45adee29d6761ddb6
+        env:
+          POSTGRES_USER: keel
+          POSTGRES_PASSWORD: keel
+          POSTGRES_DB: keel
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready --host 127.0.0.1 --username keel --dbname keel"
+          --health-interval 2s
+          --health-timeout 5s
+          --health-retries 30
+    env:
+      KEEL_TEST_DATABASE_URL: postgres://keel:keel@127.0.0.1:5432/postgres?sslmode=disable
+    steps:
+      - name: Can the kernel delay and drop packets (sch_netem)?
+        id: netem
+        run: |
+          if sudo modprobe sch_netem; then
+            echo "ok=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::notice::sch_netem is not available on this runner: the slow network is tried through tools/lag's model only"
+            echo "ok=false" >> "$GITHUB_OUTPUT"
+          fi
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        if: steps.netem.outputs.ok == 'true'
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup
+        if: steps.netem.outputs.ok == 'true'
+      - name: The runner's CPU and speed, on the job's summary
+        if: steps.netem.outputs.ok == 'true'
+        working-directory: client
+        run: node e2e/runner.ts >> "$GITHUB_STEP_SUMMARY"
+      - name: Build the physics module (the game's page steps it)
+        if: steps.netem.outputs.ok == 'true'
+        run: go run ./tools/physics
+      - name: Chromium's headless shell for Playwright
+        if: steps.netem.outputs.ok == 'true'
+        working-directory: client
+        run: npx --no-install playwright install --with-deps --only-shell chromium
+      - name: 100 ms each way and 2% loss on keel's play port only
+        if: steps.netem.outputs.ok == 'true'
+        # A fourth band, which no traffic uses by default, holds netem; only
+        # packets to or from port 18080 are sent to it.
+        run: |
+          sudo tc qdisc add dev lo root handle 1: prio bands 4
+          sudo tc qdisc add dev lo parent 1:4 handle 40: netem delay 100ms loss 2%
+          sudo tc filter add dev lo protocol ip parent 1:0 prio 1 u32 match ip dport 18080 0xffff flowid 1:4
+          sudo tc filter add dev lo protocol ip parent 1:0 prio 1 u32 match ip sport 18080 0xffff flowid 1:4
+      - name: The slow-network tests, through netem
+        if: steps.netem.outputs.ok == 'true'
+        working-directory: client
+        env:
+          KEEL_LAG_BASE: http://localhost:5181
+          SUMMARY_TITLE: render-nightly, real TCP loss
+        run: npx --no-install playwright test e2e/lag.spec.ts e2e/together.spec.ts --project page-serial
+      - name: The traces of a failure
+        if: failure() && steps.netem.outputs.ok == 'true'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: playwright-nightly-netem
+          path: |
+            client/test-results
+            client/playwright-report
+          retention-days: 14

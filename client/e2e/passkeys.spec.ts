@@ -14,19 +14,14 @@
 
 import { type BrowserContext, expect, type Page, test } from '@playwright/test';
 import data from '../src/catalog/catalog.gen.json' with { type: 'json' };
-import { holdPasskeys, sailor, setSail, signInWith } from './helpers';
+import { GAME, holdPasskeys, sailor, setSail, signInWith } from './helpers';
 
 const look = data.sailors[0]?.id ?? '';
 
-const chromium = () => test.info().project.name === 'webgl2';
-
-test.beforeEach(() => {
-  const p = test.info().project.name;
-  test.skip(p !== 'webgl2' && p !== 'webkit', 'Chromium and WebKit');
-});
+const chromium = () => test.info().project.name !== 'webkit';
 
 async function openStart(page: Page): Promise<void> {
-  await page.goto('/?backend=webgl2');
+  await page.goto(GAME);
   await expect(page.getByRole('heading', { name: 'Keel Over the Edge' })).toBeVisible({
     timeout: 30_000,
   });
@@ -94,7 +89,7 @@ test('signed in on another device by the browser’s prompt, and by autofill', a
   const conditional = page3.waitForRequest((r) =>
     r.url().endsWith('/signin/finish?mediation=conditional'),
   );
-  await page3.goto('/?backend=webgl2');
+  await page3.goto(GAME);
   await conditional;
   await signedIn(page3, third);
   if (chromium()) {
@@ -152,7 +147,7 @@ test('the account page: a passkey added and one removed, signed out, and the sai
   // does not hold: its prompt makes the second passkey.
   const made = await sailor(context, 'Account');
   await context.credentials.install();
-  await page.goto('/?test&backend=webgl2&tier=low');
+  await page.goto(GAME);
   await setSail(page);
   await openAccount(page);
   const passkeys = page.locator('.account-passkeys li');

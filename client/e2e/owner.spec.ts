@@ -13,10 +13,6 @@ import { sailor as newSailor, sail } from './helpers';
 const internal = 'http://127.0.0.1:19090';
 const owner = 'http://localhost:5184/owner/';
 
-test.beforeEach(() => {
-  test.skip(test.info().project.name !== 'webgl2', 'the world page: one back end is enough');
-});
-
 /** The world as keel's internal listener has it. */
 async function world(request: APIRequestContext) {
   const res = await request.get(`${internal}/owner/api/world.json`);

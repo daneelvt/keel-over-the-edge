@@ -8,14 +8,10 @@
 // device takes the boat, and is taken back from. One back end is enough: the drawing is not under test.
 
 import { expect, type Page, test } from '@playwright/test';
-import { drained, heldRegime, sail, sailor, steady } from './helpers';
+import { alone, drained, heldRegime, sail, sailor, steady } from './helpers';
 
 const internal = 'http://127.0.0.1:19090';
 const control = 'http://127.0.0.1:19099';
-
-test.beforeEach(() => {
-  test.skip(test.info().project.name !== 'webgl2', 'the connection: one back end is enough');
-});
 
 // Where the connection is the test, not the picture or the screen, a small
 // page. CI's software GPU runs a full-size sea's frames some 20 s behind the
@@ -60,7 +56,12 @@ test('a sail predicted with no correction', async ({ page, context }) => {
   await page.setViewportSize(small);
   await sailor(context);
   await sail(page);
-  await page.evaluate(() => globalThis.keel.script('wiggle'));
+  // In clean air: away from the boats of the tests sailing beside it.
+  await alone(page);
+  await page.evaluate(() => {
+    globalThis.keel.countAfresh();
+    globalThis.keel.script('wiggle');
+  });
   await page.waitForTimeout(15_000);
   const n = await net(page);
   expect(n.counts.snapshots).toBeGreaterThan(150);
@@ -68,7 +69,11 @@ test('a sail predicted with no correction', async ({ page, context }) => {
   expect(n.traffic.messagesOut).toBeGreaterThan(100);
 });
 
-test('a wind changed on the server reaches the boat', async ({ page, context, request }) => {
+test('a wind changed on the server reaches the boat', { tag: '@world' }, async ({
+  page,
+  context,
+  request,
+}) => {
   await page.setViewportSize(small);
   await sailor(context);
   await sail(page);
@@ -113,11 +118,9 @@ test('a reload within the grace finds the same boat', async ({ page, context }) 
   expect(Math.hypot(now.x - at.x, now.y - at.y)).toBeLessThan(40);
 });
 
-test('a restart of keel rings the bell, and the boat waits for its sailor', async ({
-  page,
-  context,
-  request,
-}) => {
+test('a restart of keel rings the bell, and the boat waits for its sailor', {
+  tag: '@world',
+}, async ({ page, context, request }) => {
   await page.setViewportSize(small);
   await sailor(context);
   await sail(page);

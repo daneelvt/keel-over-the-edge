@@ -17,7 +17,6 @@ const internal = 'http://127.0.0.1:19090';
 const chartFile = new URL('../../.dev/worlds/1.chart', import.meta.url);
 
 test.beforeEach(() => {
-  test.skip(test.info().project.name !== 'webgl2', 'the connection: one back end is enough');
   test.skip(!existsSync(chartFile), 'no chart for seed 1: run go run ./tools/dev -world 1');
 });
 

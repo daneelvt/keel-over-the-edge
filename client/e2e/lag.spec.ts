@@ -15,10 +15,6 @@ import { heldRegime, sail, sailor } from './helpers';
 // and loss instead, by the direct Vite.
 const lagged = process.env.KEEL_LAG_BASE ?? 'http://localhost:5182';
 
-test.beforeEach(() => {
-  test.skip(test.info().project.name !== 'webgl2', 'the connection: one back end is enough');
-});
-
 test('at 200 ms and 2% loss: no correction over the snap thresholds', async ({ page, context }) => {
   test.setTimeout(120_000);
   await sailor(context, 'Lagged');
@@ -83,11 +79,9 @@ test('the boat answers the helm on the frame it is moved', async ({ page, contex
   expect(after).not.toBe(before);
 });
 
-test('a bump at 200 ms: one correction, one knock and shake, the verdict', async ({
-  page,
-  context,
-  request,
-}) => {
+test('a bump at 200 ms: one correction, one knock and shake, the verdict', {
+  tag: '@world',
+}, async ({ page, context, request }) => {
   test.setTimeout(120_000);
   await sailor(context, 'Bumped');
   await sail(page, lagged);

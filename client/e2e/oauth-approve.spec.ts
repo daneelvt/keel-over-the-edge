@@ -12,10 +12,6 @@ import { createHash, randomBytes } from 'node:crypto';
 import { type APIRequestContext, expect, test } from '@playwright/test';
 import { holdPasskeys, sailor } from './helpers';
 
-test.beforeEach(() => {
-  test.skip(test.info().project.name !== 'webgl2', 'a form: one back end is enough');
-});
-
 /** The app's redirect, on this computer: nothing listens there, the test answers it. */
 const redirect = 'http://localhost:47615/callback';
 
