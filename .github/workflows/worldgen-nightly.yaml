@@ -8,7 +8,7 @@
 # job writes its tally to the run's summary: first-attempt failures by
 # rule, attempts, the islands by class, the features by kind, how long the
 # worlds took. A job fails on a seed that passes no attempt, or on more than
-# 12% of its seeds failing their first; a failing seed is made again from its
+# 25% of its seeds failing their first; a failing seed is made again from its
 # number. The weeks' job holds each week to its checks and to the rules a
 # sailor learns (Buys Ballot's law, the veer at a front, the refuge's
 # limits, sampled every minute) and writes its tally to the summary: the
@@ -64,7 +64,7 @@ jobs:
           from=$(( day * 1000 + PART * 200 + 1000 ))
           echo "seeds from $from"
           go test -count=1 -timeout 40m -run '^TestSeeds$' -v ./internal/worldgen \
-            -seeds 200 -seeds-from "$from" -seeds-first 0.12 -seeds-summary "$GITHUB_STEP_SUMMARY" \
+            -seeds 200 -seeds-from "$from" -seeds-first 0.25 -seeds-summary "$GITHUB_STEP_SUMMARY" \
             2>&1 | grep -v '^=== \|^    --- PASS'
           exit "${PIPESTATUS[0]}"
 

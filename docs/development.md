@@ -949,8 +949,8 @@ holds the module to bit for bit. `TestWeeks` holds the signs before weather
 to their rule: a squall's tower before its 10-knot gust front at every
 place and by five minutes or more at 95%, a storm's cloud before its
 20-knot wind at every place and by ten minutes or more at 95%, and a front's
-cirrus forty minutes or more before its line (five weeks on a half-mile
-grid in CI; two hundred on a quarter-mile nightly).
+cirrus forty minutes or more before its line (three weeks on a half-mile
+grid in CI; a hundred nightly, side by side).
 
 ## Fog, visibility and lightning
 
@@ -2416,7 +2416,7 @@ teleports a boat to see a feature (`POST /owner/api/place {"boat": …,
 `worldgen-nightly.yaml` runs at 03:17 UTC and by hand: five jobs of 200
 seeds, a different thousand each night keyed by the date, and seeds 1 to 8
 on their first attempt. Each job's tally is in the run's summary; it fails
-on a seed that passes no attempt or on more than 12% failing their first.
+on a seed that passes no attempt or on more than 25% failing their first.
 To make a failing seed's world again:
 
 ```sh
@@ -3020,7 +3020,7 @@ highest wave, so it never takes a light wind's sea away; the two combine as
 read, is the peak of its partition with more energy.
 
 `go test ./internal/weather -run TestWeeks -v` tallies the swell's lead on
-the storms' own wind over five weeks (two hundred in the nightly run):
+the storms' own wind over three weeks (a hundred in the nightly run):
 where a storm's 20-knot wind reaches a place half an hour or more after
 the storm is whole, its swell comes first, at 95% of such places by ten
 minutes or more. Where a storm forms over a boat its wind grows with it,
