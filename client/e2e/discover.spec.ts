@@ -105,11 +105,20 @@ test('two players discover a world: the chart fills in for both, with the credit
   }
   // Told of their own: the first, and the rest folded in. A page that
   // reconnects meanwhile, as a slow one may, is sent the chart whole,
-  // which tells of nothing: at least one of the two was told.
-  const told = await Promise.all(
-    [ann.page, bob.page].map((p) => p.evaluate(() => globalThis.keel.noticesShown())),
-  );
-  expect(told.some((shown) => shown.some((t) => t.startsWith('You charted')))).toBe(true);
+  // which tells of nothing: at least one of the two was told. Each notice
+  // stays some seconds and the rest wait behind it (the other's great
+  // discovery, a gale warning), so the own may come a while after the
+  // credit.
+  const told = () =>
+    Promise.all([ann.page, bob.page].map((p) => p.evaluate(() => globalThis.keel.noticesShown())));
+  await expect
+    .poll(
+      async () => (await told()).some((shown) => shown.some((t) => t.startsWith('You charted'))),
+      {
+        timeout: 30_000,
+      },
+    )
+    .toBe(true);
   // The islands' models, on the chart.
   await ann.page.evaluate(() => globalThis.keel.openChart('chart'));
   await expect

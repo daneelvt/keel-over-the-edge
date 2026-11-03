@@ -86,14 +86,23 @@ test('the boat answers the helm on the frame it is moved', async ({ page, contex
   await page.evaluate(() => globalThis.keel.setControls(0, 0.5));
   await page.waitForTimeout(1_000);
   const before = await page.evaluate(() => globalThis.keel.boat().state.rudder);
-  await page.evaluate(async () => {
-    globalThis.keel.setControls(1, 0.5);
-    // A step is taken every thirtieth of a second: at 60 frames a second,
-    // one of the next two frames takes it.
-    await globalThis.keel.frames(2);
+  const waited = await page.evaluate(async () => {
+    const k = globalThis.keel;
+    const from = k.boat().steps;
+    k.setControls(1, 0.5);
+    // A step is taken every thirtieth of a second: the next, a frame or
+    // two on (two frames at 60 a second may fall just short of it), and
+    // well inside a round trip.
+    let frames = 0;
+    while (k.boat().steps === from && frames < 6) {
+      await k.frames(1);
+      frames++;
+    }
+    return frames;
   });
   // The step taken within a tick turned the rudder: no round trip.
   const after = await page.evaluate(() => globalThis.keel.boat().state.rudder);
+  expect(waited).toBeLessThan(6);
   expect(after).not.toBe(before);
 });
 
