@@ -323,7 +323,10 @@ from:
 
 ```sh
 go run ./tools/polar               # the polar at 6 to 20 knots: a table, and .dev/polar/<boat>.json and .svg
-go run ./tools/polar -check        # against internal/physics/testdata/reference.json; fails outside its tolerances
+go run ./tools/polar -check        # against internal/physics/testdata/reference.json; fails outside its tolerances,
+                                   # unless the sail says drawing at its fastest sheet, or unless the
+                                   # machine sailors' handbook's trim table is the polar's
+go run ./tools/polar -handbook     # that trim table, for internal/agentapi/handbook/trim.md
 go run ./tools/polar -sail         # the trimmed sail against ORC's mainsail
 go run ./tools/polar -manoeuvres   # tacks and gybes at 6, 12 and 18 knots, and where an accidental gybe comes
 go run ./tools/polar -sea 12       # the polar in 12 knots and the sea it raises over open water, beside flat water
@@ -4137,9 +4140,14 @@ its TypeScript twin to a file of cases in `internal/lookout/testdata`; the
 chart's list in `internal/chart/list.go`). Other boats come from the
 view's rule (`internal/view`, the edge's own), those whose masts show over
 the horizon; land, places and lights from the sighting's own `Look`,
-charted or not, named only when charted. Its golden scenes are in
-`testdata/scenes` (seed 1, `-update` rewrites them), each checked for
-parity: nothing its phone would not be sent.
+charted or not, named only when charted. Its Sky line (`sky.go`) reads
+the sky package and the weather at the boat; the Hear line begins with the
+boat's own sounds (`lookout.BoatSounds`, the twin of the phone's voices,
+held to `boatsounds.json`, the sea's whitecaps to `whitecaps.json`). A
+brief report tells the Sky line and the boat's sounds when they change,
+and always the place the last wait watched. Its golden scenes are in
+`testdata/scenes` (seed 1 with the world's sky, `-update` rewrites them),
+each checked for parity: nothing its phone would not be sent.
 
 **`seq`** is the world's tick of the latest event told: it survives keel's
 restarts, as a count kept in memory would not. `observe` tells the events
@@ -4149,14 +4157,20 @@ after its last answer; `since` tells them again.
 `wake_on` happens, or capsizes, groundings, bumps, the falls, a restart,
 an admission or the world's end; a second wait ends the first
 ("superseded"); a closed stream ends it (counted in
-`keel_agent_wait_cut_seconds` by app). The call's write deadline moves to
+`keel_agent_wait_cut_seconds` by app), and the next report says so, once.
+The hub also tells the day's moments as events (`sky.go`): sunrise,
+sunset and a light in sight lit or put out (`wake_on` sky), rain, fog and
+the wind's force held a minute (`wake_on` weather), and the first watcher
+coming and the last going (the edge's count, waking no one). The call's write deadline moves to
 the wait and 15 s, and a client that sent a progress token is told every 10
 s. As keel stops, every wait answers at once with the restart's words.
 
 **Orders** (`orders.go`) write the control slot stamped for the next tick.
 They are targets: an order the boat holds answers "already"; a tack or a
 gybe raises the autopilot's order count only when the side changes and no
-turn is under way or waiting, so a retried tack turns once. `trim`'s
+turn is under way or waiting, so a retried tack turns once. A new mode or
+target ends a stalled turn (`physics.PilotHeld`), so the answer tells the
+order, not the stall; a turn's answer says how far round it goes. `trim`'s
 degrees map to the sheet by the catalog's boom range.
 
 **Limits** (`limits.go`): orders 2 a second (burst 5), looks 4 a second
