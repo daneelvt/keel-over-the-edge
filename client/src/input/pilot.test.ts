@@ -141,6 +141,20 @@ describe('the autopilot’s control', () => {
     expect(p.degrees).toBe(315);
   });
 
+  test('after a turn stalled, the dial turns from the angle held, on its side', () => {
+    const p = new PilotInput();
+    p.engage(PILOT_WIND, -45 * DEG, 0);
+    p.tack(0);
+    expect(p.degrees).toBe(-45);
+    // Stalled and held at 47° on starboard: bearing away 10° (to port) holds 57° there.
+    p.adjust(-10, 0, 47 * DEG);
+    expect([p.degrees, p.order, p.way]).toEqual([57, 1, WAY_TACK]);
+    // In heading mode, held 47° off a wind from 000° on starboard (313°): 10° to port is 303°.
+    p.engage(PILOT_HEADING, 45 * DEG, 0);
+    p.adjust(-10, 0, 47 * DEG);
+    expect(p.degrees).toBe(303);
+  });
+
   test('it follows the boat onto the tack it holds after it gybed by itself', () => {
     const p = new PilotInput();
     p.engage(PILOT_WIND, -165 * DEG, 0);

@@ -238,9 +238,12 @@ func (b *Prepared) substep(s *State, wind, sinW, cosW, dt float64, v *wave, bd *
 // windward; luffing, its foot's angle of attack under trimBelow, so little
 // that the boat barely moves, the sheet too far out for the angle;
 // stalled, past easeAbove, the sheet hauled in past where it draws and
-// able to go out; or drawing. At rest head to wind, luffing or aback, it
-// is drawing: the boat's speed and its autopilot say what is wrong, and no
-// sheet mends it. With nobody in the boat to trim, it is drawing too.
+// able to go out; or drawing. On a run, with the apparent wind abaft
+// sailRunFrom, the flow is stalled at the best sheet, the sail square to
+// the wind: there it is stalled only past sailSquare, hauled in well past
+// square. At rest head to wind, luffing or aback, it is drawing: the
+// boat's speed and its autopilot say what is wrong, and no sheet mends it.
+// With nobody in the boat to trim, it is drawing too.
 func (b *Prepared) sailState(s *State, o *Out) float64 {
 	a := math.Abs(o.FootAttack)
 	still := o.SpeedThroughWater < sailRestSpeed
@@ -257,7 +260,8 @@ func (b *Prepared) sailState(s *State, o *Out) float64 {
 			return SailDrawing
 		}
 		return SailLuffing
-	case a > b.easeAbove && s.SheetLimit < b.letFly:
+	case a > b.easeAbove && s.SheetLimit < b.letFly &&
+		(math.Abs(o.ApparentWindAngle) < sailRunFrom || a > sailSquare):
 		return SailStalled
 	}
 	return SailDrawing
@@ -266,9 +270,15 @@ func (b *Prepared) sailState(s *State, o *Out) float64 {
 // A sail is at rest head to wind slower than sailRestSpeed through the
 // water, m/s, with the apparent wind within sailHeadToWind of the bow,
 // rad.
+//
+// A sail is on a run with the apparent wind abaft sailRunFrom, and hauled
+// in past square there when its foot's angle of attack passes sailSquare,
+// rad: at its fastest sheet on a run (tools/polar) the angle is 65° to 95°.
 const (
 	sailRestSpeed  = 0.25
 	sailHeadToWind = 35 * degree
+	sailRunFrom    = 120 * degree
+	sailSquare     = 100 * degree
 )
 
 // boomStop stops a boom that has swung past the sheet's limit dead, and
