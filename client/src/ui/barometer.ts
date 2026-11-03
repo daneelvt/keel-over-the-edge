@@ -28,6 +28,20 @@ export interface BarometerLook {
 /** The dial's sweep, degrees either side of straight up. */
 export const SWEEP = 135;
 
+/** What the set hand reads, in words: "1012 hPa a quarter of an hour ago"; "" before a reading. */
+export function setWords(hPa: number, minutes: number): string {
+  if (!Number.isFinite(hPa)) {
+    return '';
+  }
+  const ago =
+    minutes === 15
+      ? 'a quarter of an hour ago'
+      : minutes === 60
+        ? 'an hour ago'
+        : `${minutes} minutes ago`;
+  return `${Math.round(hPa)} hPa ${ago}`;
+}
+
 /** A pressure's angle on the dial, degrees clockwise from straight up. */
 export function dialAngle(hPa: number, look: BarometerLook): number {
   const [lo, hi] = look.range;
@@ -38,6 +52,8 @@ export function dialAngle(hPa: number, look: BarometerLook): number {
 export class Barometer {
   /** The reading and its tendency: "1009 hPa, falling quickly"; empty before the first. */
   readonly words = signal('');
+  /** The set hand's reading in words, for the dial enlarged: "1012 hPa a quarter of an hour ago". */
+  readonly setWords = signal('');
   readonly hand = new Moved(rotate, 0.05);
   readonly setHand = new Moved(rotate, 0.05);
   /** The last reading and the set hand's, hPa. */
@@ -106,6 +122,7 @@ export class Barometer {
     this.now = now;
     this.set = quarter ?? now;
     this.words.value = barometerWords(now, before ?? now, quarter ?? now);
+    this.setWords.value = setWords(this.set, this.look.set);
     this.hand.set(dialAngle(now, this.look));
     this.setHand.set(dialAngle(this.set, this.look));
   }

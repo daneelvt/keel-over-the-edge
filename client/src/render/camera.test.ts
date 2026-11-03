@@ -84,10 +84,10 @@ describe('the chase camera', () => {
     expect(Math.abs(cam.view.elevation - CHASE.elevation)).toBeLessThan(0.01);
   });
 
-  test('watching another’s boat it does not ease back by itself; Behind the boat brings it back', () => {
+  test('watching another’s boat it does not ease back by itself; Back to the boat brings it back', () => {
     const cam = new ChaseCamera();
     cam.place(CHASE, 0);
-    cam.easesBack = false;
+    cam.watching = true;
     cam.drag(-200, -400, 1000);
     const swung = cam.view.azimuth;
     expect(cam.looksUp).toBe(true);
@@ -377,7 +377,7 @@ describe('the chase camera', () => {
       }
     });
 
-    test('Behind the boat, a placed view or another’s boat watched lets it go', () => {
+    test('Back to the boat, a placed view or another’s boat watched lets it go', () => {
       for (const end of ['behind', 'place', 'watch'] as const) {
         const { cam, t } = opened();
         if (end === 'behind') {
@@ -385,11 +385,173 @@ describe('the chase camera', () => {
         } else if (end === 'place') {
           cam.place(CHASE, 0.4);
         } else {
-          cam.easesBack = false;
+          cam.watching = true;
         }
         run(cam, t, 0.1);
         expect(cam.opening).toBe(false);
       }
+    });
+  });
+  describe('Back to the boat', () => {
+    /** Runs the camera for seconds behind a boat heading 0; returns the time at the end. */
+    const run = (cam: ChaseCamera, t: number, seconds: number) => {
+      for (let i = 0; i < seconds * 60; i++) {
+        t += 1000 / 60;
+        cam.update(1 / 60, 0, t);
+      }
+      return t;
+    };
+
+    test('brings the camera behind the boat at its resting view and distance, the tilt and opening gone', () => {
+      for (const watching of [false, true]) {
+        const cam = new ChaseCamera();
+        cam.place(CHASE, 0);
+        cam.watching = watching;
+        cam.open(200, -400, -300, 800);
+        cam.zoom(5, 0);
+        cam.drag(-150, -500, 0);
+        expect(cam.view.distance).toBe(MAX_DISTANCE);
+        expect(cam.looksUp).toBe(true);
+        expect(cam.resting).toBe(false);
+        cam.behind();
+        expect(cam.opening).toBe(false);
+        expect(cam.tilt).toBe(0);
+        run(cam, 0, 6);
+        expect(Math.abs(angleDiff(cam.view.azimuth, CHASE.azimuth))).toBeLessThan(0.01);
+        expect(Math.abs(cam.view.elevation - CHASE.elevation)).toBeLessThan(0.01);
+        expect(Math.abs(cam.view.distance - CHASE.distance)).toBeLessThan(0.05);
+        expect(cam.resting).toBe(true);
+      }
+    });
+
+    test('easing back by itself keeps a pinch’s distance', () => {
+      const cam = new ChaseCamera();
+      cam.place(CHASE, 0);
+      cam.zoom(2, 0);
+      cam.drag(-100, 0, 0);
+      run(cam, 0, (EASE_BACK_AFTER + 6000) / 1000);
+      expect(Math.abs(angleDiff(cam.view.azimuth, CHASE.azimuth))).toBeLessThan(0.01);
+      expect(cam.view.distance).toBe(CHASE.distance * 2);
+      expect(cam.resting).toBe(false);
+    });
+
+    test('rests behind the boat once placed, not while it opens on the harbour or looks round', () => {
+      const cam = new ChaseCamera();
+      cam.place(CHASE, 0);
+      expect(cam.resting).toBe(true);
+      cam.drag(-40, 0, 0);
+      expect(cam.resting).toBe(false);
+      cam.place(CHASE, 0);
+      cam.open(200, -400, -300, 800);
+      expect(cam.resting).toBe(false);
+    });
+  });
+
+  describe('the ease back turned off', () => {
+    test('the own boat’s camera stays where it was left, turning with the boat, until Back to the boat', () => {
+      const cam = new ChaseCamera();
+      cam.place(CHASE, 0);
+      cam.easesBack = false;
+      cam.drag(-200, 0, 0);
+      const left = cam.view.azimuth;
+      let t = 0;
+      for (let i = 0; i < 60 * 30; i++) {
+        t += 1000 / 60;
+        cam.update(1 / 60, 1, t);
+      }
+      expect(cam.view.azimuth).toBe(left);
+      // It turns with the boat: its yaw follows the heading.
+      expect(Math.abs(angleDiff(cam.yaw, 1))).toBeLessThan(0.01);
+      cam.behind();
+      for (let i = 0; i < 60 * 6; i++) {
+        t += 1000 / 60;
+        cam.update(1 / 60, 1, t);
+      }
+      expect(cam.resting).toBe(true);
+    });
+
+    test('the opening view still holds until the first touch', () => {
+      const cam = new ChaseCamera();
+      cam.place(CHASE, 0.4);
+      cam.easesBack = false;
+      cam.open(200, -400, -300, 800);
+      let t = 0;
+      for (let i = 0; i < 60 * 10; i++) {
+        t += 1000 / 60;
+        cam.update(1 / 60, 0.4, t);
+      }
+      expect(cam.opening).toBe(true);
+    });
+  });
+
+  describe('the descent into the first view', () => {
+    test('comes down from twice the height and distance into the view, over the time asked', () => {
+      const cam = new ChaseCamera();
+      cam.place(CHASE, 0);
+      const target = new Vector3();
+      const at = new Vector3();
+      cam.place3(0, 0, 0, at, target);
+      const rest = at.clone();
+      cam.descend(2.5);
+      cam.place3(0, 0, 0, at, target);
+      expect(at.distanceTo(target)).toBeCloseTo(rest.distanceTo(target) * 2, 6);
+      let t = 0;
+      let last = Number.POSITIVE_INFINITY;
+      for (let i = 0; i < 60 * 2.4; i++) {
+        t += 1000 / 60;
+        cam.update(1 / 60, 0, t);
+        cam.place3(0, 0, 0, at, target);
+        const d = at.distanceTo(target);
+        expect(d).toBeLessThanOrEqual(last);
+        last = d;
+      }
+      expect(cam.descending).toBe(true);
+      expect(cam.resting).toBe(false);
+      for (let i = 0; i < 12; i++) {
+        t += 1000 / 60;
+        cam.update(1 / 60, 0, t);
+      }
+      expect(cam.descending).toBe(false);
+      cam.place3(0, 0, 0, at, target);
+      expect(at.distanceTo(rest)).toBeLessThan(1e-9);
+      expect(cam.resting).toBe(true);
+    });
+
+    test('a touch ends it where it is', () => {
+      for (const touch of ['drag', 'pinch', 'hold'] as const) {
+        const cam = new ChaseCamera();
+        cam.place(CHASE, 0);
+        cam.descend(2.5);
+        for (let i = 0; i < 30; i++) {
+          cam.update(1 / 60, 0, (i * 1000) / 60);
+        }
+        const target = new Vector3();
+        const at = new Vector3();
+        cam.place3(0, 0, 0, at, target);
+        const before = at.distanceTo(target);
+        if (touch === 'drag') {
+          cam.drag(0, 0, 500);
+        } else if (touch === 'pinch') {
+          cam.zoom(1, 500);
+        } else {
+          cam.holding = true;
+          cam.update(1 / 60, 0, 500);
+        }
+        expect(cam.descending).toBe(false);
+        cam.place3(0, 0, 0, at, target);
+        expect(at.distanceTo(target)).toBeCloseTo(before, 1);
+      }
+    });
+
+    test('a boat set down elsewhere keeps the view, the camera swung to it at once', () => {
+      const cam = new ChaseCamera();
+      cam.place(CHASE, 0);
+      cam.open(200, -400, -300, 800);
+      cam.settle(2, 0.3, 0.1);
+      expect(cam.yaw).toBe(2);
+      expect(cam.yawRate).toBe(0);
+      expect(cam.lift).toBe(0.3);
+      expect(cam.opening).toBe(true);
     });
   });
 });

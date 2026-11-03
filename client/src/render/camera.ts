@@ -6,7 +6,9 @@
 // critically damped spring, so a tack swings it round smoothly and never
 // past. One finger (or the mouse) on the open sea swings it round and up or
 // down; a pinch (or the wheel) sets its distance. Five seconds after the
-// last touch it eases back to its resting view. It rises and falls with the
+// last touch it eases back to its resting view, unless the player has
+// turned that off; it keeps a pinch's distance. Back to the boat brings
+// it behind the boat at once, at its resting distance too. It rises and falls with the
 // boat on the waves, smoothly, so the boat stays in the frame in a gale, but
 // ignores the boat's heel and pitch: a camera that pitched with a dinghy in
 // a seaway would be hard to watch. It never goes below 1.6 m above the sea
@@ -19,7 +21,10 @@
 // above the horizon it does not ease back by itself.
 //
 // Watching another sailor's boat, it never eases back by itself: the
-// player looks where they choose, and "Behind the boat" brings it back.
+// player looks where they choose, and Back to the boat brings it back.
+//
+// As the world is shown it comes down into its first view, from twice its
+// height and distance, and a touch ends the descent where it is.
 //
 // A new boat's first view looks past it at the harbour's mouth: the camera
 // stands beyond the boat from the mouth, seaward, at its resting height
@@ -71,8 +76,14 @@ export const YAW_OMEGA_REDUCED = 12;
 export const EASE_BACK_AFTER = 5000;
 /** The easing back's time constant, in seconds. */
 const EASE_BACK_TIME = 0.8;
-/** Within this of its resting view, radians, the camera asked back behind the boat is there. */
+/** Within this of its resting view, radians, the camera asked back behind the boat is there; and of its distance, m. */
 const HOME = 0.001;
+const HOME_DISTANCE = 0.01;
+/** Within this of its resting view, radians, and of its distance, m, the camera rests behind the boat. */
+const RESTING = 0.02;
+const RESTING_DISTANCE = 0.1;
+/** The descent into the first view starts this many times as high and as far. */
+export const DESCENT_FROM = 2;
 /** Radians a CSS pixel of drag swings the camera. */
 const DRAG_SCALE = 0.006;
 
@@ -127,8 +138,10 @@ export class ChaseCamera {
   /** The boat's heave as the camera has followed it, and the sea's height under the boat, metres. */
   lift = 0;
   sea = 0;
-  /** Whether it eases back to its resting view untouched: not while watching another's boat. */
+  /** Whether it eases back to its resting view untouched, as the player chooses. */
   easesBack = true;
+  /** Another's boat watched: it never eases back by itself, and there is no opening view. */
+  watching = false;
   /** Where the camera holds, in the scene, looking at the boat wherever it goes: going over the lip. */
   held: { x: number; y: number; z: number } | null = null;
   /** A bump's shake: its size, metres, when it began and the frame's time, ms. */
@@ -140,6 +153,8 @@ export class ChaseCamera {
   #homing = false;
   /** The opening view's bearing from the boat, radians clockwise from north, until the first touch; null after. */
   #opening: number | null = null;
+  /** The descent into the first view: how far through it, and how long it takes, s; null when none. */
+  #descent: { at: number; time: number } | null = null;
 
   /**
    * Puts the camera at a view, behind a boat heading this way and heaved
@@ -156,6 +171,51 @@ export class ChaseCamera {
     this.sea = sea;
     this.#touched = Number.NEGATIVE_INFINITY;
     this.#opening = null;
+    this.#descent = null;
+  }
+
+  /**
+   * Brings the camera to a boat heading this way, heaved this far, on a
+   * sea this high under it, at once, keeping its view: after the boat is
+   * set down somewhere new, so the camera does not swing round to it.
+   */
+  settle(heading: number, heave = 0, sea = 0): void {
+    this.yaw = heading;
+    this.yawRate = 0;
+    this.lift = heave;
+    this.sea = sea;
+  }
+
+  /**
+   * Comes down into the view from DESCENT_FROM times its height and
+   * distance over seconds, eased; none for 0.
+   */
+  descend(seconds: number): void {
+    this.#descent = seconds > 0 ? { at: 0, time: seconds } : null;
+  }
+
+  /** Whether it is coming down into its first view. */
+  get descending(): boolean {
+    return this.#descent !== null;
+  }
+
+  /** How many times its view's distance the camera stands now: more than 1 while it comes down. */
+  get #scale(): number {
+    const d = this.#descent;
+    if (d === null) {
+      return 1;
+    }
+    const u = Math.min(d.at / d.time, 1);
+    // Eased out: fast at first, settling into the view.
+    return 1 + (DESCENT_FROM - 1) * (1 - u) ** 3;
+  }
+
+  /** Ends the descent where it is: the distance it stands at becomes the view's. */
+  #stopDescent(): void {
+    if (this.#descent !== null) {
+      this.view.distance = clamp(this.view.distance * this.#scale, MIN_DISTANCE, MAX_DISTANCE);
+      this.#descent = null;
+    }
   }
 
   /**
@@ -204,6 +264,7 @@ export class ChaseCamera {
    * then on into the tilt toward the zenith.
    */
   drag(dx: number, dy: number, now: number): void {
+    this.#stopDescent();
     this.view.azimuth = angleDiff(this.view.azimuth - dx * DRAG_SCALE, 0);
     // Below the lowest view, the path's position is the tilt, counted down.
     const along = this.view.elevation - this.tilt + dy * DRAG_SCALE;
@@ -216,11 +277,29 @@ export class ChaseCamera {
     this.#opening = null;
   }
 
-  /** Eases back to the resting view behind the boat, at once, whether or not it would by itself. */
+  /**
+   * Eases back to the resting view behind the boat, at its resting
+   * distance, at once, whether or not it would by itself.
+   */
   behind(): void {
+    this.#stopDescent();
     this.tilt = 0;
     this.#homing = true;
     this.#opening = null;
+  }
+
+  /** Whether it rests behind the boat, at its resting view and distance, looking at it. */
+  get resting(): boolean {
+    const v = this.view;
+    const r = this.rest;
+    return (
+      this.#opening === null &&
+      this.#descent === null &&
+      this.tilt === 0 &&
+      Math.abs(angleDiff(r.azimuth, v.azimuth)) < RESTING &&
+      Math.abs(r.elevation - v.elevation) < RESTING &&
+      Math.abs(r.distance - v.distance) < RESTING_DISTANCE
+    );
   }
 
   /** Whether the camera looks above the horizon. */
@@ -230,6 +309,8 @@ export class ChaseCamera {
 
   /** Scales the distance (a pinch or the wheel) at time now (ms). */
   zoom(factor: number, now: number): void {
+    this.#stopDescent();
+    this.#homing = false;
     if (factor > 0 && Number.isFinite(factor)) {
       this.view.distance = clamp(this.view.distance * factor, MIN_DISTANCE, MAX_DISTANCE);
     }
@@ -259,9 +340,19 @@ export class ChaseCamera {
     const e1 = (e + c) * k;
     this.yawRate = (v - w * c) * k;
     this.yaw = angleDiff(heading + e1, 0);
+    if (this.holding) {
+      this.#stopDescent();
+    }
+    const d = this.#descent;
+    if (d !== null) {
+      d.at += dt;
+      if (d.at >= d.time) {
+        this.#descent = null;
+      }
+    }
 
     if (this.#opening !== null) {
-      if (this.holding || !this.easesBack) {
+      if (this.holding || this.watching) {
         // A finger on the sea, or another's boat watched: a look round from here.
         this.#opening = null;
         this.#touched = now;
@@ -270,16 +361,22 @@ export class ChaseCamera {
         return;
       }
     }
-    const untouched = this.easesBack && now - this.#touched > EASE_BACK_AFTER;
+    const untouched = this.easesBack && !this.watching && now - this.#touched > EASE_BACK_AFTER;
     if (!this.holding && !this.looksUp && (untouched || this.#homing)) {
       // Looking at the boat again, the tilt goes with the rest.
       this.tilt = 0;
       const f = 1 - Math.exp(-dt / EASE_BACK_TIME);
       this.view.azimuth += angleDiff(this.rest.azimuth, this.view.azimuth) * f;
       this.view.elevation += (this.rest.elevation - this.view.elevation) * f;
+      // Asked back, it comes to its resting distance too; by itself it
+      // keeps a pinch's.
+      if (this.#homing) {
+        this.view.distance += (this.rest.distance - this.view.distance) * f;
+      }
       if (
         Math.abs(angleDiff(this.rest.azimuth, this.view.azimuth)) < HOME &&
-        Math.abs(this.rest.elevation - this.view.elevation) < HOME
+        Math.abs(this.rest.elevation - this.view.elevation) < HOME &&
+        Math.abs(this.rest.distance - this.view.distance) < HOME_DISTANCE
       ) {
         this.#homing = false;
       }
@@ -309,6 +406,7 @@ export class ChaseCamera {
    */
   place3(x: number, y: number, z: number, position: Vec3Like, target: Vec3Like): void {
     const v = this.view;
+    const distance = v.distance * this.#scale;
     // The stern's direction in the scene's x–z plane is the heading plus a
     // quarter turn (x east, z south, both turning clockwise from above).
     const a = this.yaw + Math.PI / 2 + v.azimuth;
@@ -321,9 +419,9 @@ export class ChaseCamera {
       position.set(this.held.x, this.held.y, this.held.z);
       return;
     }
-    const py = Math.max(ty + Math.sin(v.elevation) * v.distance, y + this.sea + MIN_HEIGHT);
-    const px = tx + Math.cos(a) * ce * v.distance;
-    const pz = tz + Math.sin(a) * ce * v.distance;
+    const py = Math.max(ty + Math.sin(v.elevation) * distance, y + this.sea + MIN_HEIGHT);
+    const px = tx + Math.cos(a) * ce * distance;
+    const pz = tz + Math.sin(a) * ce * distance;
     // A bump's shake moves the camera across the line to the boat and up.
     const s = this.shakeAt(this.#now);
     position.set(px - Math.sin(a) * s, py + 0.6 * s, pz + Math.cos(a) * s);

@@ -31,8 +31,6 @@ export interface WatchView {
   watch(sailor: string): void;
   sail(): void;
   unwatch(): void;
-  /** The camera back behind the boat watched. */
-  behind(): void;
 }
 
 /** Whether the own boat sails on this connection: watching takes it out of the water. */

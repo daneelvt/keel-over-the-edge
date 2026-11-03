@@ -10,7 +10,11 @@
 // moon and the stars stand from the focus at that time, lights everything
 // by the hour, and draws it. The focus is the boat; or, while the free
 // camera flies, the point beneath it, and the boat is drawn where it is.
+//
+// Nothing is drawn until the world is ready under the page's cover: its
+// frames update the scene alone until the page lets them draw.
 
+import { signal } from '@preact/signals';
 import { type Color, type Vector2, Vector3, type Vector4 } from 'three';
 import { exp, float, fog, length, max, mix, positionView, positionWorld } from 'three/tsl';
 import type { WebGPURenderer } from 'three/webgpu';
@@ -234,6 +238,14 @@ export class SeaScene {
   cover: Cover | null = null;
   /** Called after each frame is placed (the panel's statistics, the tests). */
   onFrame: (() => void) | null = null;
+  /** Called after each frame is drawn, with the main thread's work on it, ms. */
+  onDrawn: ((work: number) => void) | null = null;
+  /** Whether the camera rests behind the boat, at its resting view and distance. */
+  readonly resting = signal(true);
+  /** The clear view: the screen bare, and with it the overlays on the sea. */
+  clearView = false;
+  /** A page under test: it draws only what its tests ask for, until it is thawed. */
+  readonly underTest: boolean;
   /** The seconds left to the world's end by the world clock, Infinity for none known: the staged end. */
   endIn: (() => number) | null = null;
   /** The staged end at this frame. */
@@ -293,7 +305,10 @@ export class SeaScene {
         this.#frame(gfx, info.dt, info.now);
         return undefined;
       },
-      drawn: (gfx, work) => this.stats.drawn(gfx, work),
+      drawn: (gfx, work) => {
+        this.stats.drawn(gfx, work);
+        this.onDrawn?.(work);
+      },
       attached: (gfx) => this.#attached(gfx),
       resumed: () => {
         // Hidden, nothing was drawn: the frames either side say nothing.
@@ -303,8 +318,10 @@ export class SeaScene {
       },
     });
     this.stage.compat = wantsCompat(options.query);
-    // A page under test draws what its tests ask for, until it is thawed.
-    this.stage.loopDraws = !options.query.has('test');
+    // Nothing is drawn until the world is ready; and a page under test
+    // draws what its tests ask for, until it is thawed.
+    this.underTest = options.query.has('test');
+    this.stage.loopDraws = false;
     this.stats.gpuTiming = true;
     this.stats.onWindow = (now, st) => this.#window(now, st);
     const scene = this.stage.scene;
@@ -378,6 +395,9 @@ export class SeaScene {
     await this.stage.start();
     this.placeCamera(CAMERA_PRESETS.chase as CameraView);
     const [, stars] = await Promise.all([this.loadBoat(), table]);
+    // The boat's, the sea's and the sky's shaders made while the page is
+    // covered, so the first frame shown does not wait for them.
+    void this.stage.compile(this.stage.scene).catch(() => undefined);
     this.stars.load(stars, catalog.sky.stars);
     // A device in WebGPU's compatibility mode draws the brighter stars only.
     if (this.stage.gfx?.compat === true) {
@@ -470,6 +490,26 @@ export class SeaScene {
     this.camera.place(v, this.pose.heading, this.pose.heave, this.#seaUnderBoat());
     this.#updateBoatScene();
     this.#placeCamera();
+  }
+
+  /**
+   * The first view of a boat just set down: the view past it at the
+   * harbour's mouth where it opens on one, the camera swung to it at once;
+   * otherwise behind it, resting.
+   */
+  placeFirstView(): void {
+    if (this.camera.opening) {
+      this.camera.settle(this.pose.heading, this.pose.heave, this.#seaUnderBoat());
+      this.#updateBoatScene();
+      this.#placeCamera();
+    } else {
+      this.placeCamera(this.camera.rest);
+    }
+  }
+
+  /** Whether the frame loop is to draw once the world is ready: not on a page under test, nor one without a renderer. */
+  get drawsWhenReady(): boolean {
+    return !this.underTest && this.stage.wanted !== 'none';
   }
 
   /** Holds the camera where it is, looking at the boat wherever it goes. */
@@ -1153,6 +1193,10 @@ export class SeaScene {
     this.camera.update(dt, this.pose.heading, now, this.pose.heave, this.#seaUnderBoat());
     this.#placeCamera();
     const camera = this.stage.camera;
+    const resting = !this.freeCam.on && this.camera.resting;
+    if (resting !== this.resting.peek()) {
+      this.resting.value = resting;
+    }
 
     this.#placeHulls();
     const focus = this.focus;
@@ -1202,8 +1246,9 @@ export class SeaScene {
     this.stars.placeLabel(camera, view.width, view.height, now);
     const o = this.overlays;
     const rings = this.gustRings;
-    // The free camera's picture has no overlays: the interface is hidden.
-    const free = this.freeCam.on;
+    // The free camera's picture has no overlays, nor the clear view: the
+    // interface is hidden.
+    const free = this.freeCam.on || this.clearView;
     o.world.visible = !free;
     this.dirtyAir.group.visible = !free;
     this.rightOfWay.group.visible = !free;

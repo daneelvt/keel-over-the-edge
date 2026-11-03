@@ -7,7 +7,7 @@
 
 import { readFileSync } from 'node:fs';
 import { describe, expect, test } from 'vitest';
-import { FRAMES, rasterise, readPng } from '../../art/icon/icon.ts';
+import { FRAMES, rasterise, readPng, SLATE } from '../../art/icon/icon.ts';
 
 const pub = (name: string) => new URL(`../public/${name}`, import.meta.url);
 
@@ -34,11 +34,14 @@ describe('the web app manifest', () => {
       display: 'fullscreen',
     });
     expect(manifest).not.toHaveProperty('orientation');
-    // The page's own colour, behind the start screen.
+    // One colour from the icon on: the splash a phone draws from the
+    // manifest, the page's first paint, its cover and the icon's slate.
     const page = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
     const theme = /<meta name="theme-color" content="(#[0-9a-f]{6})"/.exec(page)?.[1];
+    expect(theme).toBe(SLATE);
     expect(manifest.theme_color).toBe(theme);
     expect(manifest.background_color).toBe(theme);
+    expect(page).toContain(`background: ${theme};`);
   });
 
   test('names Chrome’s icons, 192 and 512, and a maskable one, each at the size it states', () => {

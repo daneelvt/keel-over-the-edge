@@ -211,6 +211,10 @@ export class Online {
   };
   /** Resolves with the first snapshot: the sea can be shown. */
   readonly ready: Promise<void>;
+  /** How many boats have arrived: counted at the first snapshot after each Welcome, own or watched. */
+  readonly arrived = signal(0);
+  /** How many times the own boat has been returned to port. */
+  readonly returned = signal(0);
 
   readonly #port: Port;
   readonly #predictor: Predictor;
@@ -235,6 +239,8 @@ export class Online {
   /** The bell rang: the server is restarting, and the boat waits. */
   #bell = false;
   #ready: () => void = () => {};
+  /** A Welcome came, and its boat's first snapshot has not. */
+  #arriving = false;
   readonly #frames = new Float64Array(120);
   #frameN = 0;
   #frameSent = 0;
@@ -297,6 +303,14 @@ export class Online {
     if (this.watching.value !== null) {
       this.watching.value = null;
       this.#away = true;
+    }
+  }
+
+  /** The first snapshot after a Welcome: its boat has arrived. */
+  #arrive(): void {
+    if (this.#arriving) {
+      this.#arriving = false;
+      this.arrived.value++;
     }
   }
 
@@ -424,6 +438,7 @@ export class Online {
           this.say(BOAT_IN_THE_WATER);
         } else if (this.#hadBoat && !m.rejoined) {
           this.say('Your boat has returned to port.');
+          this.returned.value++;
         } else if (this.#bell) {
           this.notice.value = null;
         }
@@ -474,6 +489,7 @@ export class Online {
           this.#use(this.#predictor);
         }
         this.#fresh = true;
+        this.#arriving = true;
         // A snapshot still waiting for a frame is the last connection's:
         // its controls are not this boat's.
         this.#queued.length = 0;
@@ -581,6 +597,7 @@ export class Online {
     this.#ownNext = (this.#ownNext + 1) % OWN_KEPT;
     if (this.#predictor.started) {
       this.#ready();
+      this.#arrive();
     }
     return o;
   }
@@ -595,6 +612,7 @@ export class Online {
       if (this.watched) {
         this.#watcher.receive(this.#scratch);
         this.#ready();
+        this.#arrive();
       } else {
         this.reconcile(this.#scratch, now);
       }

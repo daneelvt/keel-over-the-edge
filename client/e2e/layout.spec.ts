@@ -30,6 +30,15 @@
 // and the key, open, stand on the case within the screen, covering
 // neither it nor the strip.
 //
+// The menu's button heads a column of keys under the pocket chart, Back
+// to the boat, the clear view's and the full screen's, 8 pixels apart; on
+// a screen 420 pixels tall or less they run left from it in a row. The
+// barometer, tapped, grows within the screen and shrinks on a second tap.
+// The clear view leaves its own key and Back to the boat where they stood,
+// and nothing else. Watching a boat (the sandbox's screen as it is then),
+// the plate is one row at the foot of the screen, covering nothing, and
+// the case stays where it is when sailing.
+//
 // Then the list of sailors to watch and the card about one, on the start
 // screen, at the same screens: full rows and a full card, the server's
 // answers stood in for, with a twenty-letter name. Watch is in view, no
@@ -107,6 +116,8 @@ async function parts(page: Page): Promise<{
       one('the pocket chart', '.pocket-frame'),
       ...pushers,
       one('the menu button', '.menu-button'),
+      one('Back to the boat', '.back-key'),
+      one('the clear view’s key', '.clear-key'),
       one('the full screen key', '.fullscreen-key'),
       one('the helm', '[data-control=helm]'),
       one('the sheet', '[data-control=sheet]'),
@@ -500,6 +511,207 @@ async function menuFaults(page: Page): Promise<string[]> {
   return found;
 }
 
+/** The keys under the pocket chart: a column headed by the menu's button, or a row run left from it on a short screen. */
+async function keyFaults(page: Page, short: boolean): Promise<string[]> {
+  return page.evaluate((short) => {
+    const out: string[] = [];
+    const keys = ['.menu-button', '.back-key', '.clear-key', '.fullscreen-key'].map((sel) =>
+      document.querySelector(sel)?.getBoundingClientRect(),
+    );
+    const pocket = document.querySelector('.pocket-frame')?.getBoundingClientRect();
+    if (keys.some((k) => k === undefined) || pocket === undefined) {
+      return ['a key or the pocket chart is missing'];
+    }
+    const [menu] = keys as DOMRect[];
+    for (const k of keys as DOMRect[]) {
+      if (Math.abs(k.width - 44) > 0.5 || Math.abs(k.height - 44) > 0.5) {
+        out.push(`a key is ${k.width} × ${k.height}`);
+      }
+    }
+    // The pocket's pusher may hang below its frame, held upright.
+    const foot = Math.max(
+      pocket.bottom,
+      document.querySelector('.pocket')?.getBoundingClientRect().bottom ?? 0,
+    );
+    if (menu === undefined || Math.abs(menu.top - foot - 12) > 0.5) {
+      out.push(`the menu’s button’s top at ${menu?.top}, the pocket chart’s foot at ${foot}`);
+    }
+    for (let i = 1; i < keys.length; i++) {
+      const a = keys[i - 1] as DOMRect;
+      const b = keys[i] as DOMRect;
+      const ok = short
+        ? Math.abs(a.left - b.right - 8) < 0.5 && Math.abs(a.top - b.top) < 0.5
+        : Math.abs(b.top - a.bottom - 8) < 0.5 && Math.abs(a.right - b.right) < 0.5;
+      if (!ok) {
+        out.push(`key ${i + 1} is not ${short ? 'left of' : 'under'} key ${i}, 8 pixels apart`);
+      }
+    }
+    return out;
+  }, short);
+}
+
+/** The barometer tapped: within the screen, its dial its size; a second tap shrinks it, and so does Escape. */
+async function bigBarometerFaults(page: Page): Promise<string[]> {
+  const found: string[] = [];
+  const baro = page.getByRole('button', { name: 'Barometer, larger' });
+  await baro.click();
+  await expect(baro).toHaveAttribute('aria-expanded', 'true');
+  found.push(
+    ...(await page.evaluate(() => {
+      const out: string[] = [];
+      const big = document.querySelector('.barometer.big')?.getBoundingClientRect();
+      const dial = document.querySelector('.barometer.big svg')?.getBoundingClientRect();
+      if (big === undefined || dial === undefined) {
+        return ['the barometer did not grow'];
+      }
+      if (
+        big.left < 11.5 ||
+        big.top < 11.5 ||
+        big.right > innerWidth - 11.5 ||
+        big.bottom > innerHeight - 11.5
+      ) {
+        out.push(
+          `the enlarged barometer is off the screen (${[big.left, big.top, big.right, big.bottom].map(Math.round)})`,
+        );
+      }
+      const want = Math.min(240, Math.min(innerWidth, innerHeight) - 120);
+      if (Math.abs(dial.width - want) > 0.5) {
+        out.push(`the enlarged dial is ${dial.width} px across, not ${want}`);
+      }
+      const set = document.querySelector('[data-readout=barometer-set]')?.textContent ?? '';
+      if (!/^\d{3,4} hPa a quarter of an hour ago$/.test(set)) {
+        out.push(`the set hand’s words: “${set}”`);
+      }
+      // Under the menu: its scrim is above it.
+      return out;
+    })),
+  );
+  await baro.click();
+  await expect(baro).toHaveAttribute('aria-expanded', 'false');
+  await baro.click();
+  await page.keyboard.press('Escape');
+  await expect(baro).toHaveAttribute('aria-expanded', 'false');
+  return found;
+}
+
+/** The clear view: its key and Back to the boat where they stood, nothing else seen; and everything back. */
+async function clearFaults(page: Page): Promise<string[]> {
+  const keys = () =>
+    page.evaluate(() =>
+      ['.back-key', '.clear-key'].map((sel) => {
+        const r = document.querySelector(sel)?.getBoundingClientRect();
+        return r === undefined ? null : [r.left, r.top];
+      }),
+    );
+  const before = await keys();
+  await page.getByRole('button', { name: 'Clear view' }).click();
+  await expect(page.getByRole('button', { name: 'Show the instruments' })).toBeVisible();
+  const found = await page.evaluate(() => {
+    const hud = document.querySelector('.hud');
+    if (hud === null) {
+      return ['no screen at sea'];
+    }
+    // Every element seen, with a size, outside the two keys.
+    return [...hud.querySelectorAll('*')]
+      .filter((e) => {
+        const r = e.getBoundingClientRect();
+        return (
+          r.width > 0 &&
+          r.height > 0 &&
+          e.checkVisibility({ visibilityProperty: true, opacityProperty: true }) &&
+          e.closest('.back-key, .clear-key') === null &&
+          !e.matches('.hud-right, .sea-keys')
+        );
+      })
+      .map((e) => `${e.tagName.toLowerCase()}.${e.className} is seen in the clear view`);
+  });
+  if (JSON.stringify(await keys()) !== JSON.stringify(before)) {
+    found.push(
+      `the keys moved as the screen cleared: ${JSON.stringify(before)} to ${JSON.stringify(await keys())}`,
+    );
+  }
+  await page.getByRole('button', { name: 'Show the instruments' }).click();
+  await expect(page.locator('.case-top')).toBeVisible();
+  return found;
+}
+
+/** Watching: the plate one row at the foot of the screen, over nothing, the case where it is when sailing. */
+async function plateFaults(page: Page, boat: Box | null): Promise<string[]> {
+  const caseTop = () =>
+    page.evaluate(() => document.querySelector('.case-top')?.getBoundingClientRect().top ?? null);
+  const sailing = await caseTop();
+  await page.evaluate((name) => globalThis.keel.watchPlate(name), LONG);
+  const plate = page.locator('.watch-plate');
+  await expect(plate).toBeVisible();
+  await expect(plate).toHaveAttribute('aria-label', `Watching ${LONG}`);
+  await page.evaluate(() => globalThis.keel.render());
+  const found = await page.evaluate(
+    ({ boat, sailing }) => {
+      const out: string[] = [];
+      const p = document.querySelector('.watch-plate')?.getBoundingClientRect();
+      if (p === undefined) {
+        return ['no plate'];
+      }
+      if (p.height > 56) {
+        out.push(`the plate is ${p.height} px tall: more than a row`);
+      }
+      if (
+        Math.abs(innerHeight - 12 - p.bottom) > 0.5 ||
+        p.left < 11.5 ||
+        p.right > innerWidth - 11.5
+      ) {
+        out.push(
+          `the plate is not at the foot of the screen (${[p.left, p.top, p.right, p.bottom].map(Math.round)})`,
+        );
+      }
+      const covers = (r: DOMRect | { left: number; top: number; right: number; bottom: number }) =>
+        Math.min(p.right, r.right) - Math.max(p.left, r.left) > 0.5 &&
+        Math.min(p.bottom, r.bottom) - Math.max(p.top, r.top) > 0.5;
+      for (const [name, sel] of [
+        ['the pocket chart', '.pocket-frame'],
+        ['the case', '.case-top'],
+        ['the barometer', '[data-complication=barometer]'],
+        ['the keys', '.sea-keys'],
+      ]) {
+        const r = document.querySelector(sel as string)?.getBoundingClientRect();
+        if (r !== undefined && covers(r)) {
+          out.push(`the plate covers ${name}`);
+        }
+      }
+      if (boat !== null && covers(boat)) {
+        out.push('the plate covers the boat');
+      }
+      const top = document.querySelector('.case-top')?.getBoundingClientRect().top ?? null;
+      if (top !== sailing) {
+        out.push(`the case’s top at ${top} watching, ${sailing} sailing`);
+      }
+      for (const b of document.querySelectorAll('.watch-plate button')) {
+        const r = b.getBoundingClientRect();
+        if (r.width < 43.5 || r.height < 43.5) {
+          out.push(
+            `“${(b as HTMLElement).innerText}” is ${Math.round(r.width)} × ${Math.round(r.height)}`,
+          );
+        }
+        if (r.top < p.top - 0.5 || r.bottom > p.bottom + 0.5 || r.right > p.right + 0.5) {
+          out.push(`“${(b as HTMLElement).innerText}” spills out of the plate`);
+        }
+      }
+      if (
+        document.querySelector(
+          '[data-control=helm], [data-control=sheet], .pilot-head, .pilot-button',
+        ) !== null
+      ) {
+        out.push('a control that steers shows while watching');
+      }
+      return out;
+    },
+    { boat, sailing },
+  );
+  await page.evaluate(() => globalThis.keel.watchPlate(null));
+  await expect(plate).toHaveCount(0);
+  return found;
+}
+
 /** A box's edges, left, top, right and bottom, in whole pixels. */
 function edges(b: Box): string {
   return [b.left, b.top, b.right, b.bottom].map(Math.round).join(', ');
@@ -672,6 +884,32 @@ test('no part of the screen at sea covers the boat or another part, with everyth
     }
     for (const f of await boardFaults(page)) {
       found.push(`${s.name}: ${f}`);
+    }
+    // The menu, opened, put the full screen's key away.
+    await page.evaluate(() => globalThis.keel.fullScreenKey(true));
+    for (const f of await keyFaults(page, s.height <= 420)) {
+      found.push(`${s.name}: ${f}`);
+    }
+    for (const f of await bigBarometerFaults(page)) {
+      found.push(`${s.name}: ${f}`);
+    }
+    for (const f of await clearFaults(page)) {
+      found.push(`${s.name}: ${f}`);
+    }
+    for (const f of await plateFaults(page, seen.boat)) {
+      found.push(`${s.name}: ${f}`);
+    }
+    if (s.upright) {
+      await test.info().attach(`${s.name} watching.png`, {
+        body: await (async () => {
+          await page.evaluate((name) => globalThis.keel.watchPlate(name), LONG);
+          await expect(page.locator('.watch-plate')).toBeVisible();
+          const shot = await page.screenshot();
+          await page.evaluate(() => globalThis.keel.watchPlate(null));
+          return shot;
+        })(),
+        contentType: 'image/png',
+      });
     }
   }
   expect(found).toEqual([]);

@@ -8,12 +8,11 @@
 // next sign-in is told it was used, in case it was not the player.
 
 import { useState } from 'preact/hooks';
-import { sailFullScreen } from '../boot/fullscreen';
 import { LetWatch, type Voyage } from './letwatch';
 import type { Me } from './me';
 import { addPasskey, type Reach, signOut } from './passkeys';
 import { reasonText } from './reasons';
-import { setSailAs } from './yoursailor';
+import { SetSail } from './yoursailor';
 
 /** A date as the player reads it: 23 October, or 23 October 2025 in another year. */
 export function dayOf(ms: number, now = Date.now()): string {
@@ -109,17 +108,7 @@ export function SetSailOrMake({
         yours sails, and speaks as, beside you or while you are away.
       </p>
       <LetWatch voyage={voyage} />
-      <button
-        type="button"
-        class="start-go your-sailor-go"
-        onClick={() => {
-          // In the tap itself: the browser allows the full screen only there.
-          sailFullScreen();
-          void voyage.sail(sail);
-        }}
-      >
-        {setSailAs(name)}
-      </button>
+      <SetSail name={name} voyage={voyage} sail={sail} />
       <button type="button" class="start-sign-in" onClick={make}>
         Make a machine sailor first
       </button>

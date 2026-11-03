@@ -6,7 +6,8 @@
 // Fair", Weems & Plath), its main hand at the pressure where the boat is
 // and its set hand at its reading of a quarter of an hour before, both
 // moved by transforms; and beside it, its reading in words, which a screen
-// reader is given.
+// reader is given. A tap on it enlarges it, its figures readable and a
+// third line saying what the set hand reads; a tap shrinks it.
 
 import { type Barometer, dialAngle, SWEEP } from './barometer';
 
@@ -25,9 +26,15 @@ export interface DialWord {
 export function BarometerDial({
   barometer,
   words,
+  big = false,
+  press = null,
 }: {
   barometer: Barometer;
   words: readonly DialWord[];
+  /** Enlarged: its set hand's reading in words beneath the rest. */
+  big?: boolean;
+  /** A tap's work, enlarging or shrinking it; null for a dial that is not a button. */
+  press?: (() => void) | null;
 }) {
   const look = barometer.look;
   const [lo, hi] = look.range;
@@ -37,8 +44,8 @@ export function BarometerDial({
   }
   const [ax, ay] = at(40, -SWEEP);
   const [bx, by] = at(40, SWEEP);
-  return (
-    <section class="barometer" aria-label="Barometer">
+  const face = (
+    <>
       <svg viewBox="-50 -50 100 100" aria-hidden="true">
         <defs>
           <radialGradient id="brass" cx="35%" cy="30%" r="80%">
@@ -82,9 +89,32 @@ export function BarometerDial({
         </g>
         <circle class="baro-boss" r="3" />
       </svg>
-      <span class="baro-words" data-readout="barometer">
-        {barometer.words}
+      <span class="baro-reading">
+        <span class="baro-words" id="baro-words" data-readout="barometer">
+          {barometer.words}
+        </span>
+        {big ? (
+          <span class="baro-words baro-set-words" data-readout="barometer-set">
+            {barometer.setWords}
+          </span>
+        ) : null}
       </span>
+    </>
+  );
+  return press === null ? (
+    <section class="barometer" aria-label="Barometer">
+      {face}
     </section>
+  ) : (
+    <button
+      type="button"
+      class={`barometer${big ? ' big' : ''}`}
+      aria-label="Barometer, larger"
+      aria-describedby="baro-words"
+      aria-expanded={big}
+      onClick={press}
+    >
+      {face}
+    </button>
   );
 }

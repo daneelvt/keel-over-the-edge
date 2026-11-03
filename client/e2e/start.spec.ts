@@ -6,10 +6,15 @@
 // code shown once, Set sail with the voyage watched, its cookie, and the
 // sailor kept across a reload, where its Set sail shows that voyage's
 // choice. The page draws nothing (?draw=off): a form is the test.
+//
+// And the way to sea: the page's cover over everything from its first
+// frame, the start screen on it, Set sail answered at once, and the screen
+// at sea seen only once the cover has gone, with the world's sky, the
+// boat's first snapshot and its first view in place.
 
 import { type BrowserContext, expect, type Page, test } from '@playwright/test';
 import data from '../src/catalog/catalog.gen.json' with { type: 'json' };
-import { GAME, sailor, setSail, stamp } from './helpers';
+import { GAME, holdPasskeys, sailor, setSail, stamp } from './helpers';
 
 test.beforeEach(async ({ context }) => {
   // The browser's prompt, answered by Playwright: it holds no passkey yet.
@@ -200,4 +205,60 @@ test('a second browser cannot take the same name', async ({ page, browser }) => 
   await makeAs(page, name.toLowerCase());
   await expect(page.locator('#start-problem')).toHaveText(/is taken/);
   expect(await sessionCookie(page.context())).toBeUndefined();
+});
+
+test('the cover from the first frame until the world is ready, then the world revealed', async ({
+  context,
+  page,
+}) => {
+  const made = await sailor(context, 'Covered');
+  await holdPasskeys(context, made.passkey);
+  // Each animation frame from the page's first: whether the cover is over
+  // the page, whether the screen at sea is seen, and every line the cover
+  // says.
+  await page.addInitScript(() => {
+    const seen: { cover: boolean; sea: boolean }[] = [];
+    const lines: string[] = [];
+    Object.assign(globalThis, { coverSeen: { seen, lines } });
+    const look = () => {
+      const c = document.getElementById('cover');
+      const hud = document.querySelector('.hud:not(.watch-waiting)');
+      seen.push({
+        cover: c !== null && !c.hidden && getComputedStyle(c).opacity === '1',
+        sea: hud !== null && getComputedStyle(hud).opacity !== '0',
+      });
+      const line = c?.querySelector('.cover-line')?.textContent ?? '';
+      if (line !== '' && lines[lines.length - 1] !== line) {
+        lines.push(line);
+      }
+      requestAnimationFrame(look);
+    };
+    requestAnimationFrame(look);
+  });
+  await page.goto(GAME);
+  await expect(page.locator('.your-sailor')).toBeVisible({ timeout: 90_000 });
+  await setSail(page);
+  await page.waitForFunction(() => globalThis.keel?.revealed() != null, null, { timeout: 30_000 });
+  const { seen, lines } = await page.evaluate(
+    () =>
+      (
+        globalThis as unknown as {
+          coverSeen: { seen: { cover: boolean; sea: boolean }[]; lines: string[] };
+        }
+      ).coverSeen,
+  );
+  expect(seen[0]).toEqual({ cover: true, sea: false });
+  const first = seen.findIndex((f) => f.sea);
+  expect(first).toBeGreaterThan(0);
+  // Never the screen at sea and the cover together, nor neither before it.
+  expect(seen.slice(0, first).every((f) => f.cover)).toBe(true);
+  expect(seen.slice(first).some((f) => f.cover)).toBe(false);
+  // Set sail answered at once.
+  expect(lines[0]).toBe('Setting sail…');
+  const r = await page.evaluate(() => globalThis.keel.revealed());
+  expect(r).toMatchObject({ epoch: true, view: true, drawn: 0, timedOut: false });
+  expect(r?.arrived).toBeGreaterThanOrEqual(1);
+  expect(r?.waits[0]?.waiting).toBe('boat');
+  expect(r?.waits[r.waits.length - 1]?.waiting).toBe('ready');
+  expect(await page.evaluate(() => globalThis.keel.covered())).toBe(false);
 });

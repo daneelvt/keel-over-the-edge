@@ -5,7 +5,7 @@
 // change for the sandbox, and its past filled from the truth after a load.
 
 import { describe, expect, test } from 'vitest';
-import { Barometer, dialAngle, SWEEP } from './barometer';
+import { Barometer, dialAngle, SWEEP, setWords } from './barometer';
 
 const SECOND = 30;
 const MINUTE = 60 * SECOND;
@@ -81,5 +81,23 @@ describe('the barometer', () => {
     );
     expect(b.readingAt(20 * MINUTE, () => null)).toBeNull();
     expect(b.words.value).toBe('1010 hPa, steady');
+  });
+  test('enlarged, it says in words what its set hand reads', () => {
+    expect(setWords(1012.4, 15)).toBe('1012 hPa a quarter of an hour ago');
+    expect(setWords(1008, 60)).toBe('1008 hPa an hour ago');
+    expect(setWords(1008, 5)).toBe('1008 hPa 5 minutes ago');
+    expect(setWords(Number.NaN, 15)).toBe('');
+    const b = new Barometer(LOOK);
+    expect(b.setWords.value).toBe('');
+    // Falling a tenth of an hPa a minute, read for twenty minutes.
+    for (let t = 0; t <= 20 * MINUTE; t += SECOND) {
+      b.update(
+        t,
+        () => 1013 - (0.1 * t) / MINUTE,
+        () => null,
+      );
+    }
+    expect(b.set).toBeCloseTo(1013 - 0.1 * 5, 6);
+    expect(b.setWords.value).toBe('1013 hPa a quarter of an hour ago');
   });
 });

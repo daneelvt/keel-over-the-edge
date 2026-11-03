@@ -10,7 +10,7 @@
 // server cannot be asked, the player sails anyway, unwatched, and is told
 // so at sea. In the game's first download, with the panel it is on.
 
-import { type Signal, signal } from '@preact/signals';
+import { type ReadonlySignal, type Signal, signal } from '@preact/signals';
 import type { Fetch, Me } from './me';
 import { call } from './passkeys';
 
@@ -28,6 +28,8 @@ export interface Voyage {
   set(on: boolean): void;
   /** Sends the voyage's choice first where it must be, then goes, watched or not. */
   sail(go: () => void): Promise<void>;
+  /** Set sail was tapped: the voyage is under way. */
+  going: ReadonlySignal<boolean>;
 }
 
 /** POST /api/me/spectators: whether the server took it. */
@@ -38,10 +40,12 @@ const allow = async (f: Fetch, on: boolean) =>
 export function voyage(me: Me, f: Fetch = fetch): Voyage {
   const atSea = me.atSea === true;
   const on = signal(atSea && me.spectators === 'voyage');
+  const going = signal(false);
   let busy = false;
   let sent: Promise<unknown> = Promise.resolve();
   return {
     on,
+    going,
     set(v) {
       on.value = v;
       if (atSea) {
@@ -57,6 +61,7 @@ export function voyage(me: Me, f: Fetch = fetch): Voyage {
         return;
       }
       busy = true;
+      going.value = true;
       await sent;
       // Unticked, a choice made elsewhere for a boat that never sailed is
       // taken back: the box is what the player sees.

@@ -26,6 +26,8 @@ export interface Settings {
   rightOfWay: boolean;
   /** Return the helm to the centre when the thumb lifts or the key comes up. */
   centreHelm: boolean;
+  /** Bring the camera back behind the own boat a few seconds after it was last moved. */
+  cameraBack: boolean;
   /** How much the sea is drawn with: as much as the device runs well, or the least, to save battery. */
   detail: 'auto' | 'low';
   /** The barometer out of the instruments' case. */
@@ -53,6 +55,7 @@ export const DEFAULTS: Settings = {
   forcesOverlay: false,
   rightOfWay: false,
   centreHelm: false,
+  cameraBack: true,
   detail: 'auto',
   barometer: false,
   nightLight: 2 / 3,
@@ -114,6 +117,7 @@ export function loadSettings(store: Store | null = defaultStore()): Settings {
     'forcesOverlay',
     'rightOfWay',
     'centreHelm',
+    'cameraBack',
     'barometer',
     'pilotHead',
     'pocketWeather',

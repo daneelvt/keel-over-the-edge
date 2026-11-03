@@ -2,7 +2,9 @@
 
 // The game's page: the player's boat at sea, sailed with two thumbs (or the
 // keyboard), the physics module stepping it in the page ahead of the
-// server. While the scene and the physics module load, the page asks the
+// server. The page's cover, painted first from its HTML, stays over it
+// until the world under it is ready (gate.ts), and the start screen stands
+// on it. While the scene and the physics module load, the page asks the
 // server whose session this browser holds: a returning player goes
 // straight to sea (one with machine sailors is shown them first), a new
 // one gets the start screen first, and while the server cannot answer the
@@ -12,7 +14,9 @@
 // connection is poor or lost. A page opened with ?watch=Iron%20Mary, or a
 // sailor chosen to watch on the start screen, watches that sailor's boat
 // instead, from its own place: nothing steers it, and the player may
-// watch another or sail from there.
+// watch another or sail from there. Each change of boat goes through the
+// cover again: down over the screen, the world changed under it, and up
+// once the new boat's world is ready.
 //
 // Query strings, for development:
 //   ?sandbox          the offline sandbox alone: no server, no account
@@ -46,6 +50,7 @@ import { effect, signal } from '@preact/signals';
 import { NOT_WATCHED, watchRefused } from '../account/letwatch';
 import { type Me, resolveSailor } from '../account/me';
 import { backSoon, showAddPasskey, showSailor, showStartScreen } from '../account/start';
+import { SETTING_SAIL } from '../account/yoursailor';
 import { CATALOG_VERSION, catalog } from '../catalog';
 import { Forecasting } from '../chart/forecasting';
 import { GaleNotices } from '../chart/gales';
@@ -103,22 +108,111 @@ import { sandboxEpochUs, skyFromQuery, skyPeriods, skyTimeFor } from '../sky/sky
 import { Barometer } from '../ui/barometer';
 import type { DialWord } from '../ui/barometerdial';
 import { serverNews } from '../ui/chart';
+import { ClearView, type Needed, needed } from '../ui/clearview';
 import { Countdown, EndNotices, localShown } from '../ui/countdown';
-import { mountScreen } from '../ui/hud';
+import { mountScreen, type ScreenProps } from '../ui/hud';
+import { AGROUND } from '../ui/model';
 import { saveNoticesOff } from '../ui/notices';
 import { showQueue } from '../ui/queue';
 import { settingsSignal } from '../ui/settings';
 import { loadWatch, type WatchView } from '../ui/watchlazy';
 import { watchFromQuery } from '../ui/watchwords';
+import { type Cover, DROP, LIFT, LIFT_REDUCED, QUIET, takeCover } from './cover';
 import { browserEnv, fullScreen } from './fullscreen';
+import { Gate, type Revealed, WAITING_WORDS, type Waiting } from './gate';
 import { harbourWater, watchHarbour } from './harbour';
+
+/** How long the camera comes down into the first view, s: at the start, and after a change of boat. */
+const DESCENT = 2.5;
+const DESCENT_CHANGE = 1.5;
+
+/** Whether the reader asks for less motion. */
+function reducedMotion(): boolean {
+  return globalThis.matchMedia?.('(prefers-reduced-motion: reduce)').matches === true;
+}
+
+/** Resolves after n animation frames: the scene's update has run since. */
+function frames(n: number): Promise<void> {
+  return new Promise((resolve) => {
+    const next = (left: number) =>
+      left <= 0 ? resolve() : requestAnimationFrame(() => next(left - 1));
+    next(n);
+  });
+}
+
+/**
+ * Waits on the gate, from start (ms), the cover saying what it waits for
+ * once the wait passes a second; the frame loop draws once the frames are
+ * waited for. Resolves with what it waited for, and when.
+ */
+async function untilReady(
+  gate: Gate,
+  world: SeaScene,
+  cover: Cover,
+  start: number,
+): Promise<Pick<Revealed, 'waits' | 'at' | 'timedOut' | 'drawn'>> {
+  const waits: { waiting: Waiting; at: number }[] = [];
+  let drawn = 0;
+  world.onDrawn = (work) => {
+    drawn++;
+    gate.drawn(work);
+  };
+  for (;;) {
+    const now = performance.now();
+    const w = gate.step(now);
+    if (waits[waits.length - 1]?.waiting !== w) {
+      waits.push({ waiting: w, at: Math.round(now - start) });
+    }
+    if (w === 'ready') {
+      break;
+    }
+    if (w === 'sail' && world.drawsWhenReady) {
+      world.stage.loopDraws = true;
+    }
+    if (now - start >= QUIET) {
+      cover.say(WAITING_WORDS[w]);
+    }
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+  world.onDrawn = null;
+  if (world.drawsWhenReady) {
+    world.stage.loopDraws = true;
+  }
+  return { waits, at: Math.round(performance.now() - start), timedOut: gate.timedOut, drawn };
+}
+
+/**
+ * The world revealed: the cover fades out as the camera comes down into
+ * the first view over descent seconds, the screen at sea coming in after
+ * it. With less motion asked for, a short fade and no descent; on a page
+ * under test, at once.
+ */
+function reveal(world: SeaScene, cover: Cover, descent: number): void {
+  if (world.underTest) {
+    void cover.lift(0);
+    return;
+  }
+  const reduced = reducedMotion();
+  world.camera.descend(reduced ? 0 : descent);
+  void cover.lift(reduced ? LIFT_REDUCED : LIFT);
+}
+
+/** The clear view, the scene's overlays hidden with the screen. */
+function clearView(world: SeaScene): ClearView {
+  const clear = new ClearView();
+  clear.onChange = (on) => {
+    world.clearView = on;
+  };
+  return clear;
+}
 
 async function start(): Promise<void> {
   const query = new URLSearchParams(location.search);
   const backend = chooseBackend(query, 'gpu' in navigator);
+  const cover = takeCover(document);
   const container = document.createElement('div');
   container.className = 'stage';
-  document.body.replaceChildren(container);
+  document.body.replaceChildren(container, cover.el);
 
   const settings = settingsSignal();
   const full = fullScreen(browserEnv(), settings);
@@ -136,6 +230,12 @@ async function start(): Promise<void> {
   const dev = query.has('dev');
 
   const game = new Game(world, settings);
+  // The camera comes back behind the own boat by itself, as the player chooses.
+  effect(() => {
+    world.camera.easesBack = settings.value.value.cameraBack;
+  });
+  const camera = { resting: world.resting, behind: () => world.camera.behind() };
+  const clear = clearView(world);
 
   const view = CAMERA_PRESETS[query.get('view') ?? ''];
   if (query.has('sandbox')) {
@@ -321,7 +421,16 @@ async function start(): Promise<void> {
     // the tests.
     const countdown = new Countdown(() => Date.now());
     setInterval(() => countdown.tick(), 1000);
-    mountScreen(document.body, {
+    // The screen comes back by itself when the sailor goes in the water.
+    let was = false;
+    effect(() => {
+      const now = overboard(game.hud.sailor.value);
+      if (now && !was) {
+        clear.show();
+      }
+      was = now;
+    });
+    const screen: ScreenProps = {
       model: game.hud,
       settings: game.settings,
       helm: game.helm,
@@ -347,11 +456,28 @@ async function start(): Promise<void> {
         src: forecasting,
         store: parts.chart.store,
       },
-    });
+      camera,
+      clear,
+    };
+    let unmount = mountScreen(document.body, screen);
     game.listen(document, container);
+    // The boat set down, then the world shown.
+    await frames(2);
     if (view !== undefined) {
       world.placeCamera(view);
+    } else {
+      world.placeFirstView();
     }
+    const start = performance.now();
+    const ready = untilReady(
+      new Gate(
+        { epoch: () => true, boat: () => true, view: () => true, land: () => true },
+        { start, draws: world.drawsWhenReady },
+      ),
+      world,
+      cover,
+      start,
+    );
     if (dev) {
       const { openPanel } = await import('../dev/panel');
       openPanel(world, game, sandbox, document.body, {
@@ -371,8 +497,15 @@ async function start(): Promise<void> {
         barometer: baro.barometer,
         readBarometer: baro.read,
         countdown,
+        // The screen again, with a watch's parts or without: the layout's tests.
+        remount: (watch) => {
+          unmount();
+          unmount = mountScreen(document.body, watch === null ? screen : { ...screen, watch });
+        },
       });
     }
+    await ready;
+    reveal(world, cover, view === undefined ? DESCENT : 0);
     return;
   }
 
@@ -383,6 +516,14 @@ async function start(): Promise<void> {
   // watch.
   const notice = backSoon(document.body);
   const linked = watchFromQuery(query);
+  // The wait begins at the tap that sets sail, or at once with no screen
+  // to tap; the cover answers the tap at once.
+  let tapped = performance.now();
+  const set = (me: Me): Me => {
+    tapped = performance.now();
+    cover.say(SETTING_SAIL);
+    return me;
+  };
   const [, physics, me] = await Promise.all([
     world.start(),
     loadPhysics(fetch(wasmUrl)),
@@ -391,9 +532,9 @@ async function start(): Promise<void> {
         showStartScreen(document.body, {
           sailors: catalog.sailors,
           ...(linked === '' ? {} : { panel: false }),
-        }),
+        }).then(set),
       addPasskey: (me) => showAddPasskey(document.body, me),
-      ...(linked === '' ? { sailor: (me: Me) => showSailor(document.body, me) } : {}),
+      ...(linked === '' ? { sailor: (me: Me) => showSailor(document.body, me).then(set) } : {}),
       backSoon: notice,
     }),
   ]);
@@ -429,13 +570,15 @@ async function start(): Promise<void> {
   // A new boat near the harbour's mouth first looks past it at the harbour.
   online.onOpening = (east, north, mouthEast, mouthNorth) =>
     world.camera.open(east, north, mouthEast, mouthNorth);
-  // The land: its chunks fetched and built off the page's thread.
+  // The land: its chunks fetched and built off the page's thread, and
+  // whether it is built about the boat drawn.
   const land = new Land(
     new Worker(new URL('../workers/mesh/worker.ts', import.meta.url), { type: 'module' }),
     catalog.world,
     catalog.weather.sea.breaking,
   );
   world.useLand(land);
+  const landNear = () => land.ready(world.pose.east, world.pose.north, NEAR_LAND);
   game.bedFriction = (east, north) => land.frictionAt(east, north);
   world.freeCam.ground = (east, north) => land.heightAt(east, north);
   // The free camera is the owner's alone: the server hears it from no other;
@@ -527,6 +670,62 @@ async function start(): Promise<void> {
     countdown.tick();
     endNotices.tick(performance.now());
   }, 250);
+  // A change of boat at sea: the cover down over the screen, the boat
+  // asked for under it, and the cover up again once the new boat's world
+  // is ready; at once if none comes (a watch refused, a queue). One at a
+  // time: the cover takes the taps meanwhile.
+  let atSea = false;
+  let changing = false;
+  const changeBoat = async (act: () => void): Promise<void> => {
+    if (!atSea) {
+      act();
+      return;
+    }
+    if (changing) {
+      return;
+    }
+    changing = true;
+    const n = online.arrived.value;
+    const ended = online.ended.value;
+    clear.show();
+    const start = performance.now();
+    await cover.drop(world.underTest || reducedMotion() ? 0 : DROP);
+    if (world.drawsWhenReady) {
+      world.stage.loopDraws = false;
+    }
+    act();
+    let placed = false;
+    const arrived = () => online.arrived.value > n;
+    const gate = new Gate(
+      {
+        epoch: () => true,
+        boat: arrived,
+        view: () => placed,
+        land: landNear,
+        abandoned: () =>
+          !arrived() &&
+          (online.ended.value !== ended ||
+            online.watchPlace.value !== null ||
+            online.place.value !== null),
+      },
+      { start, draws: world.drawsWhenReady },
+    );
+    const ready = untilReady(gate, world, cover, start);
+    // A boat that comes after the wait was given up is not this change's.
+    let waiting = true;
+    void whenArrived(online, n).then(async () => {
+      if (!waiting) {
+        return;
+      }
+      await frames(2);
+      world.placeFirstView();
+      placed = true;
+    });
+    await ready;
+    waiting = false;
+    reveal(world, cover, arrived() ? DESCENT_CHANGE : 0);
+    changing = false;
+  };
   // Watching, as the screens see it.
   const watchView: WatchView = {
     watching: online.watching,
@@ -537,7 +736,7 @@ async function start(): Promise<void> {
     boatPlace: online.place,
     watchers: online.watchers,
     list: signal(false),
-    watch: (sailor) => online.watch(sailor),
+    watch: (sailor) => void changeBoat(() => online.watch(sailor)),
     sail: () => {
       // A reload from now on sails, not watches the sailor linked.
       if (query.has('watch')) {
@@ -545,16 +744,31 @@ async function start(): Promise<void> {
         const q = query.toString();
         history.replaceState(history.state, '', `${location.pathname}${q === '' ? '' : `?${q}`}`);
       }
-      online.sail();
+      void changeBoat(() => online.sail());
     },
     unwatch: () => online.unwatch(),
-    behind: () => world.camera.behind(),
   };
   // A boat watched: the camera stays where the player puts it, and a
   // machine sailor's sail carries its mark.
   effect(() => {
-    world.camera.easesBack = !online.spectating.value;
+    world.camera.watching = online.spectating.value;
     world.boat?.setMachine(online.spectating.value && online.watching.value?.machine === true);
+  });
+  // The screen comes back by itself when the player is needed.
+  const neededNow = (): Needed => ({
+    overboard: !online.spectating.value && overboard(game.hud.sailor.value),
+    takeover: online.notice.value?.takeover === true,
+    returned: online.returned.value,
+    ended: online.ended.value,
+    queued: online.watchPlace.value !== null || online.place.value !== null,
+  });
+  let was = neededNow();
+  effect(() => {
+    const now = neededNow();
+    if (needed(was, now)) {
+      clear.show();
+    }
+    was = now;
   });
   connect(online);
   // "Back soon" while the first connection cannot be made, and the queue
@@ -582,10 +796,22 @@ async function start(): Promise<void> {
       });
     }
   });
+  // The world under the cover until it is ready: the sky at the world's
+  // hour, the boat in its place and its first view, the land about it, and
+  // the first frames drawn.
+  let boatIn = false;
+  let placed = false;
+  const gate = new Gate(
+    {
+      epoch: () => world.skyTime !== null,
+      boat: () => boatIn,
+      view: () => placed,
+      land: landNear,
+    },
+    { start: tapped, draws: world.drawsWhenReady },
+  );
+  const ready = untilReady(gate, world, cover, tapped);
   await online.ready;
-  // The land about the boat is drawn before the sea is shown, or the sea
-  // shows after three seconds whatever has come.
-  await nearLand(land, predictor, NEAR_LAND, NEAR_LAND_WAIT);
   waiting();
   queue();
   notice(false);
@@ -596,6 +822,11 @@ async function start(): Promise<void> {
   game.setDriver(online.driver);
   online.onDriver = (d) => game.setDriver(d);
   game.pacer = online;
+  boatIn = true;
+  // The boat set down, then its first view.
+  await frames(2);
+  world.placeFirstView();
+  placed = true;
   const baro = startBarometer(world, predictor.physics, forecasting);
   mountScreen(document.body, {
     model: game.hud,
@@ -625,11 +856,14 @@ async function start(): Promise<void> {
     },
     watch: watchView,
     lamp: online.lamp,
+    camera,
+    clear,
   });
   game.listen(document, container);
   if (view !== undefined) {
     world.placeCamera(view);
   }
+  let revealed: Revealed | null = null;
   if (dev) {
     const { openNetPanel } = await import('../dev/panel');
     openNetPanel(world, online, predictor, document.body);
@@ -642,8 +876,35 @@ async function start(): Promise<void> {
       chart: parts,
       barometer: baro.barometer,
       fullScreen: full,
+      revealed: () => revealed,
     });
   }
+  const waited = await ready;
+  revealed = {
+    ...waited,
+    epoch: world.skyTime !== null,
+    arrived: online.arrived.value,
+    view: placed,
+  };
+  atSea = true;
+  reveal(world, cover, view === undefined ? DESCENT : 0);
+}
+
+/** Whether the sailor is out of the boat, or the boat over: the sailor's line says so, but for aground. */
+function overboard(line: string): boolean {
+  return line !== '' && line !== AGROUND;
+}
+
+/** Resolves once a boat has arrived after the n-th. */
+function whenArrived(online: Online, n: number): Promise<void> {
+  let stop = (): void => {};
+  return new Promise<void>((resolve) => {
+    stop = effect(() => {
+      if (online.arrived.value > n) {
+        resolve();
+      }
+    });
+  }).finally(() => stop());
 }
 
 /**
@@ -733,26 +994,8 @@ function startBarometer(
   return { barometer, words: b.words, read };
 }
 
-/** The start screen waits for the chunks handed within this of the boat, m, or this long, ms. */
+/** The cover waits for the chunks handed within this of the boat, m; gate.ts says how long. */
 const NEAR_LAND = 300;
-const NEAR_LAND_WAIT = 3000;
-
-/** Resolves once the land within reach of the predicted boat has been had, or after wait ms. */
-async function nearLand(
-  land: Land,
-  predictor: Predictor,
-  reach: number,
-  wait: number,
-): Promise<void> {
-  const until = performance.now() + wait;
-  const s = predictor.records.state;
-  while (
-    performance.now() < until &&
-    !land.ready(s[RECORDS.state.x] ?? 0, s[RECORDS.state.y] ?? 0, reach)
-  ) {
-    await new Promise((resolve) => setTimeout(resolve, 50));
-  }
-}
 
 /** With ?sky, draws the sky at the hour and moon asked for, from now on: the developer's sky alone. */
 function chooseSky(world: SeaScene, query: URLSearchParams): void {

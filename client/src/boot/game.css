@@ -5,8 +5,29 @@ body {
   margin: 0;
   height: 100%;
   overflow: hidden;
-  background: #c7dbe4;
+  background: #1a242c;
   overscroll-behavior: none;
+}
+
+/* The screen at sea stays out of sight while the cover is over the page,
+   and comes in over the cover's last moments as it lifts. */
+.hud {
+  transition: opacity 0.4s ease-out 0.4s;
+}
+
+html.covered .hud:not(.watch-waiting) {
+  opacity: 0;
+  transition: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hud {
+    transition: opacity 0.2s;
+  }
+}
+
+html.at-once .hud {
+  transition: none;
 }
 
 .stage {
@@ -50,7 +71,7 @@ body {
   font:
     16px / 1.5 system-ui,
     sans-serif;
-  color: #2b2118;
+  color: #f2efe7;
 }
 
 /* The world's end: the screen faded to the mist, and its words. */

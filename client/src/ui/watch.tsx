@@ -2,10 +2,10 @@
 
 // Watching another sailor's boat, the screens' parts of it: the list of
 // sailors one may watch now, and the card about one (watchcard.tsx); the
-// question before the own boat leaves the water to watch; the bar over a
-// boat watched, "Watching Iron Mary ⚙" with Watch another and Sail, which
-// says instead why a watch ended or the place in the spectators' queue;
-// the button that brings the camera back behind the boat; and the switch
+// question before the own boat leaves the water to watch; the plate at
+// the foot of the screen while a boat is watched, "Watching" engraved over
+// "Iron Mary ⚙" with Watch another and Sail as its keys, which says instead
+// why a watch ended or the place in the spectators' queue; and the switch
 // that lets others watch the voyage under way.
 //
 // The list is in an order chosen above it (the liveliest first, unless
@@ -64,7 +64,6 @@ import {
   WHOS,
 } from './watchlistwords';
 import {
-  BEHIND_THE_BOAT,
   CLOSE,
   endedText,
   LEAVE,
@@ -679,9 +678,12 @@ export function WatchList({
 }
 
 /**
- * The bar over the boat watched: whose it is, Watch another and Sail; or,
- * with none watched, why the last watch ended or the place in the
- * spectators' queue, with the same. Nothing while the own boat sails.
+ * The plate at the foot of the screen while a boat is watched, where the
+ * controls are while sailing, one row in the control head's brass: whose
+ * boat it is, Watch another and Sail; or, with none watched, why the last
+ * watch ended or the place in the spectators' queue, with the same.
+ * Nothing while the own boat sails. A long name ends in an ellipsis, and
+ * the plate's label says it whole.
  */
 export function WatchBar({ view }: { view: WatchView }) {
   const w = view.watching.value;
@@ -692,54 +694,51 @@ export function WatchBar({ view }: { view: WatchView }) {
     return null;
   }
   const another = (
-    <button type="button" onClick={() => (view.list.value = true)}>
+    <button type="button" class="head-key" onClick={() => (view.list.value = true)}>
       {WATCH_ANOTHER}
     </button>
   );
   const sail =
     boat === null ? (
-      <button type="button" class="watch-go" onClick={() => view.sail()}>
+      <button type="button" class="head-key watch-go" onClick={() => view.sail()}>
         {SAIL}
       </button>
     ) : null;
   return (
-    <section class="panel watch-bar" aria-label={WATCHING} data-readout="watching">
-      {w !== null ? (
-        <p class="watch-whose">
-          {WATCHING}{' '}
-          <strong>
-            <PlayerText text={w.sailor} />
-          </strong>
-          {w.machine ? <Cog /> : null}
-        </p>
-      ) : place !== null ? (
-        <p class="watch-whose" role="status">
-          {spectatorQueueLine(place)}
-        </p>
-      ) : ended !== null ? (
-        <p class="watch-whose" role="status">
-          {endedText(ended.why, ended.sailor)}
-        </p>
-      ) : null}
-      {boat !== null ? (
-        <p class="watch-faint" role="status">
-          {queueLines(boat)[0]}
-        </p>
-      ) : null}
-      <div class="watch-buttons">
-        {another}
-        {sail}
+    <section
+      class="watch-plate"
+      aria-label={w === null ? WATCHING : `${WATCHING} ${w.sailor}`}
+      data-readout="watching"
+    >
+      <div class="watch-plate-words">
+        {w !== null ? (
+          <p class="watch-whose">
+            <span class="watch-plate-label">{WATCHING}</span>{' '}
+            <span class="watch-plate-name">
+              <strong>
+                <PlayerText text={w.sailor} />
+              </strong>
+              {w.machine ? <Cog /> : null}
+            </span>
+          </p>
+        ) : place !== null ? (
+          <p class="watch-whose" role="status">
+            {spectatorQueueLine(place)}
+          </p>
+        ) : ended !== null ? (
+          <p class="watch-whose" role="status">
+            {endedText(ended.why, ended.sailor)}
+          </p>
+        ) : null}
+        {boat !== null ? (
+          <p class="watch-faint" role="status">
+            {queueLines(boat)[0]}
+          </p>
+        ) : null}
       </div>
+      {another}
+      {sail}
     </section>
-  );
-}
-
-/** Brings the camera back behind the boat watched, which it does not by itself. */
-export function BehindTheBoat({ view }: { view: WatchView }) {
-  return view.watching.value === null ? null : (
-    <button type="button" class="panel watch-behind" onClick={() => view.behind()}>
-      {BEHIND_THE_BOAT}
-    </button>
   );
 }
 
@@ -754,12 +753,11 @@ export function SeaWatchList({ view }: { view: WatchView }) {
   ) : null;
 }
 
-/** What the screen at sea shows of watching: the bar, the button behind the boat, and the list while it is open. */
+/** What the screen shows of watching before the sea: the plate, and the list while it is open. */
 export function WatchParts({ view }: { view: WatchView }) {
   return (
     <>
       <WatchBar view={view} />
-      <BehindTheBoat view={view} />
       <SeaWatchList view={view} />
     </>
   );
