@@ -116,6 +116,69 @@ func TestEncounters(t *testing.T) {
 	}
 }
 
+// TestEncounterStagedAgain stages twice, 20 seconds apart: the second sails
+// the first's boat, which stays when the first's HoldFor ends, and leaves
+// when the second's does.
+func TestEncounterStagedAgain(t *testing.T) {
+	cat, err := catalog.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	waves, kinds := cat.Prepare()
+	synctest.Test(t, func(t *testing.T) {
+		w, err := sim.New(sim.Config{Capacity: 8, Kinds: kinds[:1], Waves: waves, Workers: 1, Encounters: cat.PrepareEncounters()})
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer w.Close()
+		ctx, cancel := context.WithCancel(t.Context())
+		var wg sync.WaitGroup
+		defer wg.Wait()
+		defer cancel()
+		wg.Go(func() {
+			for ctx.Err() == nil {
+				time.Sleep(time.Second / 30)
+				w.Tick()
+			}
+		})
+		cfg := EncounterConfig{Bus: w.Bus(), Weather: w.Timeline().Prepared(), Length: cat.Boats[0].LengthOverall, Log: slog.New(slog.DiscardHandler)}
+		reply := make(chan bus.Reply, 1)
+		w.Bus().Commands.Players().TrySend(bus.Command{Op: bus.Join, Account: bus.Account{1}, Conn: 7, Reply: reply})
+		<-reply
+		time.Sleep(time.Second)
+		in := func(boat uint64) bool {
+			f := w.Bus().Frames.Acquire()
+			defer f.Release()
+			for _, s := range f.Live {
+				if f.Boat[s] == boat {
+					return true
+				}
+			}
+			return false
+		}
+		first, err := Encounter(ctx, cfg, "capsized", 0)
+		if err != nil {
+			t.Fatal(err)
+		}
+		time.Sleep(20 * time.Second)
+		second, err := Encounter(ctx, cfg, "capsized", 0)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if second.Boat != first.Boat {
+			t.Fatalf("staged again with boat %d, not the first's %d", second.Boat, first.Boat)
+		}
+		time.Sleep(HoldFor - 20*time.Second + 2*time.Second)
+		if !in(second.Boat) {
+			t.Fatal("the boat left when the first staging's time was up")
+		}
+		time.Sleep(20 * time.Second)
+		if in(second.Boat) {
+			t.Fatal("the boat stayed after the second staging's time was up")
+		}
+	})
+}
+
 // hold is a sailor's heading-hold: the helm toward target, damped by the
 // yaw rate.
 func hold(target float64, s *physics.State) float64 {

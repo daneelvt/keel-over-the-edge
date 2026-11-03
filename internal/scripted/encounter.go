@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"math"
 	"slices"
+	"sync/atomic"
 	"time"
 
 	"github.com/daneelvt/keel-over-the-edge/internal/bus"
@@ -49,6 +50,11 @@ var EncounterAccount = Account(1 << 40)
 
 // HoldFor is how long the staged boat sails before it leaves.
 const HoldFor = 30 * time.Second
+
+// stagings counts the encounters staged. The staged boat is one account's,
+// so a staging within HoldFor of the last sails the same boat: the last
+// staging's goroutine alone steers it, and makes it leave.
+var stagings atomic.Uint64
 
 // ErrNoPlayer is a world with no sailing player's boat to meet, or not the
 // one asked for.
@@ -113,16 +119,20 @@ func Encounter(ctx context.Context, cfg EncounterConfig, situation string, boat 
 	wind := physics.WindAt(&wt, h.X, h.Y, nil)
 
 	p := stage(situation, &h, wind.WindFrom, cfg.Length)
+	// Before the join: an earlier staging's boat, which the join may give
+	// again, is not made to leave now.
+	n := stagings.Add(1)
 	slot, gen, staged, err := joinStaged(ctx, cfg.Bus)
 	if err != nil {
 		return Staged{}, err
 	}
 	dev := cfg.Bus.Commands.Developer()
 	if err := dev.TrySend(bus.Command{Op: bus.Place, Boat: staged, State: p.state}); err != nil {
+		_ = dev.TrySend(bus.Command{Op: bus.Leave, Boat: staged})
 		return Staged{}, err
 	}
 	cfg.Log.Info("an encounter staged", "situation", situation, "boat", staged, "player", playerBoat)
-	go sailStaged(ctx, cfg.Bus, slot, gen, staged, p)
+	go sailStaged(ctx, cfg.Bus, slot, gen, staged, p, n)
 	return Staged{
 		Situation: situation, Article: article, Boat: staged, Player: playerBoat,
 		East: p.state.X, North: p.state.Y, Heading: p.state.Heading * 180 / math.Pi,
@@ -153,9 +163,14 @@ func joinStaged(ctx context.Context, b *bus.Bus) (slot int32, gen uint16, boat u
 }
 
 // sailStaged holds the staged boat's controls, a tick at a time, then
-// takes it out of the world. Its autopilot steers.
-func sailStaged(ctx context.Context, b *bus.Bus, slot int32, gen uint16, boat uint64, p plan) {
-	defer b.Commands.Developer().TrySend(bus.Command{Op: bus.Leave, Boat: boat})
+// takes it out of the world, unless it is staged again meanwhile (staging n
+// is no longer the last). Its autopilot steers.
+func sailStaged(ctx context.Context, b *bus.Bus, slot int32, gen uint16, boat uint64, p plan, n uint64) {
+	defer func() {
+		if stagings.Load() == n {
+			b.Commands.Developer().TrySend(bus.Command{Op: bus.Leave, Boat: boat})
+		}
+	}()
 	start := time.Now()
 	tick := time.NewTicker(time.Second / physics.StepsPerSecond)
 	defer tick.Stop()
@@ -165,6 +180,10 @@ func sailStaged(ctx context.Context, b *bus.Bus, slot int32, gen uint16, boat ui
 		case <-ctx.Done():
 			return
 		case <-tick.C:
+		}
+		if stagings.Load() != n {
+			// Staged again: the boat is the later staging's to sail.
+			return
 		}
 		f := b.Frames.Acquire()
 		if !f.Occupied[slot] || f.Boat[slot] != boat {

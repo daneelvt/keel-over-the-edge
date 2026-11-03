@@ -103,22 +103,29 @@ test('a bump at 200 ms: one correction, one knock and shake, the verdict', {
   test.setTimeout(120_000);
   await sailor(context, 'Bumped');
   await sail(page, lagged);
-  // Out of the roads, where the boats of the tests before sail: one of
-  // them could hit the staged boat first. The move is no correction to
-  // count.
-  await alone(page);
-  await page.evaluate(() => globalThis.keel.countAfresh());
-  // A steady breeze on the beam, so the boat has way on whatever the
+  // A steady breeze from the north, so the boat has way on whatever the
   // world's weather is at this hour: in a calm the capsized boat staged
   // ahead is not reached.
-  const heading = await page.evaluate(() => globalThis.keel.boat().state.heading);
-  const from = Math.round(((((heading * 180) / Math.PI + 90) % 360) + 360) % 360);
   const internal = 'http://127.0.0.1:19090';
-  expect((await request.post(`${internal}/debug/wind?knots=12&from=${from}`)).status()).toBe(204);
+  expect((await request.post(`${internal}/debug/wind?knots=12&from=0`)).status()).toBe(204);
   try {
+    await page.waitForFunction(() => Math.cos(globalThis.keel.boat().wind.meanFrom) > 0.99, null, {
+      timeout: 10_000,
+    });
+    // Out of the roads, where the boats of the tests before sail (one of
+    // them could hit the staged boat first), at rest on a beam reach in
+    // that breeze, the sail set: put at rest at any other angle, the boat
+    // could fall into the wind and stall. The move is no correction to
+    // count.
+    await alone(page, 90);
+    await page.evaluate(() => {
+      globalThis.keel.countAfresh();
+      globalThis.keel.setControls(0, 0.3);
+    });
     // Hold the course, as a sailor would while a boat is staged in their
     // path, with way on: from rest a slow boat wanders off it, and passes
     // beside the boat staged ahead.
+    const heading = await page.evaluate(() => globalThis.keel.boat().state.heading);
     await page.evaluate((h) => globalThis.keel.script('steer', h), heading);
     await page.waitForFunction(() => globalThis.keel.boat().out.speedOverGround > 2, null, {
       timeout: 30_000,
