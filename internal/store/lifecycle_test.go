@@ -325,15 +325,25 @@ func TestDropWorld(t *testing.T) {
 		t.Fatalf("the detach is not pending: %v %v", pending, err)
 	}
 
-	// The new world's writes go on while the old one is dropped.
+	// The new world's writes go on while the old one is dropped: none
+	// waits 100 ms on a lock. (By the clock alone a write on CI's runners
+	// may take longer than that, with no lock in its way.)
+	writer, err := pool.Acquire(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer writer.Release()
+	if _, err := writer.Exec(ctx, "SET lock_timeout = 100"); err != nil {
+		t.Fatal(err)
+	}
 	var worst atomic.Int64
 	var stop atomic.Bool
 	var wg sync.WaitGroup
 	wg.Go(func() {
 		for i := 0; !stop.Load(); i++ {
 			start := time.Now()
-			if _, err := pool.Exec(ctx, "INSERT INTO event (world_id, tick, kind, account_id, boat) VALUES ($1, $2, 'launched', $3, 1)", next.ID, i, [16]byte{2}); err != nil {
-				t.Error(err)
+			if _, err := writer.Exec(ctx, "INSERT INTO event (world_id, tick, kind, account_id, boat) VALUES ($1, $2, 'launched', $3, 1)", next.ID, i, [16]byte{2}); err != nil {
+				t.Errorf("a write while the world was dropped: %v", err)
 				return
 			}
 			if d := time.Since(start); d.Nanoseconds() > worst.Load() {
@@ -347,9 +357,7 @@ func TestDropWorld(t *testing.T) {
 	}
 	stop.Store(true)
 	wg.Wait()
-	if d := time.Duration(worst.Load()); d > 100*time.Millisecond {
-		t.Errorf("a write waited %v while the world was dropped", d)
-	}
+	t.Logf("the longest write while the world was dropped: %v", time.Duration(worst.Load()))
 	if got := partitionsOf(t, pool, 1); len(got) != 0 {
 		t.Fatalf("partitions left: %v", got)
 	}
