@@ -4,4 +4,4 @@ day 12:03 · seq 1276
 Boat: sailing · heading 301° · 0.2 kn · no steerage · heel 0° · starboard tack · Pilot: wind 75° starboard · boom 30° (sheet out to 30°) · sail luffing: trim in
 Wind: 000° N 3 kn F1 · 59° off the bow, starboard side · apparent 3 kn 57°
 In sight:
- land (uncharted) · island rising 15 m, wooded, palms, mangroves, beaches · 80 m across · 030° ~350 m
+ land (uncharted) · island rising 15 m, woods, palms, mangroves, beaches · 80 m across · 030° ~350 m

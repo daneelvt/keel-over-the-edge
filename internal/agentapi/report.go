@@ -927,7 +927,7 @@ func (r *report) json() string {
 }
 
 // landWords are an island's trees and shore as a lookout sees them, from
-// its biome's surfaces and their plants: "wooded", "scrub" or "bare" by
+// its biome's surfaces and their plants: woods, low scrub or bare by
 // the canopy of its high ground; "palms" where palms grow on it;
 // "beaches" or "mangroves" on its shore.
 func (s *Sea) landWords(biome string) []string {
@@ -967,9 +967,9 @@ func (s *Sea) landWords(biome string) []string {
 	switch {
 	case high == nil:
 	case high.Canopy >= woodedFrom:
-		out = append(out, "wooded")
+		out = append(out, "woods")
 	case high.Canopy > 0:
-		out = append(out, "scrub")
+		out = append(out, "low scrub")
 	default:
 		out = append(out, "bare")
 	}

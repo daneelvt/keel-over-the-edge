@@ -2,7 +2,7 @@
 
 The chart is shared. All starts uncharted but Port Royal, where new boats start. When any boat's lookout first sights an island, a place or a feature, it is charted for everyone, named, and credited to its sailor in the news.
 
-Until it is charted, a thing has no name: the report says what it looks like ("land (uncharted) · island rising 40 m, wooded, cliffs, surf · ~300 m across · 300° ~450 m", "a lighthouse tower (uncharted)"). Once charted, it is named, with its bearing and distance from you as the chart's list gives them. A light seen far off at night is charted alone: its island stays "uncharted land" until someone sees the land.
+Until it is charted, a thing has no name: the report says what it looks like ("land (uncharted) · island rising 40 m, woods, cliffs, surf · ~300 m across · 300° ~450 m", "a lighthouse tower (uncharted)"). Once charted, it is named, with its bearing and distance from you as the chart's list gives them. A light seen far off at night is charted alone: its island stays "uncharted land" until someone sees the land.
 
 `chart` lists charted places nearest you first, each with its position, its bearing and distance from you, and who charted it. `chart` with `place` gives one, with its light if it has one. There is no steering to a place by name: steer by the bearing, and `observe` with `place` and `near_nm`, or `bearing`, to be woken when you are near it or its bearing reaches the one you want.
 

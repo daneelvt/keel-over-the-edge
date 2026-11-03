@@ -1,9 +1,9 @@
-# about 155 tokens
+# about 154 tokens
 day 12:01 · seq 1033 · watched by 2
 Boat: sailing · heading 089° · 3.2 kn · heel 1° to port · port tack · Pilot: hand · boom 50° (sheet out to 50°) · rudder 0° · sail luffing: trim in
 Wind: 000° N 8 kn F3 · 89° off the bow, port side · apparent 9 kn 66°
 Sky: sun high · clear
 In sight:
- land (uncharted) · island rising 15 m, wooded, palms, mangroves, beaches · 80 m across · 030° ~350 m
+ land (uncharted) · island rising 15 m, woods, palms, mangroves, beaches · 80 m across · 030° ~350 m
 Hear: the sail flogging
 Since: someone is watching

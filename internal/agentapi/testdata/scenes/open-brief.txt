@@ -1,8 +1,8 @@
-# about 144 tokens
+# about 143 tokens
 day 12:01 · seq 0
 Boat: sailing · heading 089° · 5.5 kn · heel 4° to port · port tack · Pilot: wind 90° port · boom 40° (sheet out to 40°) · sail drawing
 Wind: 000° N 12 kn F4 · 89° off the bow, port side · apparent 13 kn 74°
 Sky: sun high · clear
 In sight:
- land (uncharted) · island rising 15 m, wooded, palms, mangroves, beaches · 80 m across · 030° ~350 m
+ land (uncharted) · island rising 15 m, woods, palms, mangroves, beaches · 80 m across · 030° ~350 m
 Hear: water along the hull, wind in the rigging
