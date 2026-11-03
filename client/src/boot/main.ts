@@ -50,6 +50,7 @@ import { effect, signal } from '@preact/signals';
 import { NOT_WATCHED, watchRefused } from '../account/letwatch';
 import { type Me, resolveSailor } from '../account/me';
 import { backSoon, showAddPasskey, showSailor, showStartScreen } from '../account/start';
+import { SETTING_SAIL } from '../account/yoursailor';
 import { CATALOG_VERSION, catalog } from '../catalog';
 import { Forecasting } from '../chart/forecasting';
 import { GaleNotices } from '../chart/gales';
@@ -124,8 +125,6 @@ import { harbourWater, watchHarbour } from './harbour';
 /** How long the camera comes down into the first view, s: at the start, and after a change of boat. */
 const DESCENT = 2.5;
 const DESCENT_CHANGE = 1.5;
-/** What the cover says the moment Set sail is tapped. */
-const SETTING_SAIL = 'Setting sail…';
 
 /** Whether the reader asks for less motion. */
 function reducedMotion(): boolean {

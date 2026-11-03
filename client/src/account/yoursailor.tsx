@@ -6,12 +6,14 @@
 // sail is the only thing there the player does as themselves; their machine
 // sailors, when they have any, stand apart beside it. In the game's first
 // download, so the screen shows it at once, alone or while the machine
-// sailors' module loads.
+// sailors' module loads. Set sail answers its tap at once: pressed, it says
+// it is setting sail until the page's cover takes over.
 //
 // The name is shown, never asked for or changed here: every account is
 // made with its named sailor on the first form, so none reaches this
 // screen without one.
 
+import { useState } from 'preact/hooks';
 import { sailFullScreen } from '../boot/fullscreen';
 import { STILL_AT_SEA, WATCH_ANOTHER_SAILOR } from '../ui/watchwords';
 import { LetWatch, type Voyage } from './letwatch';
@@ -20,6 +22,37 @@ import type { Me } from './me';
 /** The button that sails the player's own sailor, by its name. */
 export function setSailAs(name: string): string {
   return `Set sail as ${name}`;
+}
+
+/** What Set sail says once tapped, and the page's cover after it. */
+export const SETTING_SAIL = 'Setting sail…';
+
+/** Set sail as a sailor: pressed at once, saying so, while the voyage's choice is sent. */
+export function SetSail({
+  name,
+  voyage,
+  sail,
+}: {
+  name: string;
+  voyage: Voyage;
+  sail: () => void;
+}) {
+  const [going, setGoing] = useState(false);
+  return (
+    <button
+      type="button"
+      class="start-go your-sailor-go"
+      disabled={going}
+      onClick={() => {
+        // In the tap itself: the browser allows the full screen only there.
+        sailFullScreen();
+        setGoing(true);
+        void voyage.sail(sail);
+      }}
+    >
+      {going ? SETTING_SAIL : setSailAs(name)}
+    </button>
+  );
 }
 
 /**
@@ -55,17 +88,7 @@ export function YourSailor({
         </p>
       ) : null}
       <LetWatch voyage={voyage} />
-      <button
-        type="button"
-        class="start-go your-sailor-go"
-        onClick={() => {
-          // In the tap itself: the browser allows the full screen only there.
-          sailFullScreen();
-          void voyage.sail(sail);
-        }}
-      >
-        {setSailAs(me.name)}
-      </button>
+      <SetSail name={me.name} voyage={voyage} sail={sail} />
       <button
         type="button"
         class="start-sign-in"
