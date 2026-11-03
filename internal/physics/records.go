@@ -47,8 +47,9 @@ type State struct {
 	// In a tack or a gybe, PilotWatch is the seconds since the turn last
 	// gained on its course and PilotMark how far off it the boat was then,
 	// rad; after the turn stalls, the seconds since, up to the stall's
-	// time. PilotLeft is the angle off the wind the turn began from, rad,
-	// positive with the wind over starboard.
+	// time, and the mode and target it stalled on, as one number. PilotLeft
+	// is the angle off the wind the turn began from, rad, positive with the
+	// wind over starboard.
 	PilotWatch float64
 	PilotMark  float64
 	PilotLeft  float64

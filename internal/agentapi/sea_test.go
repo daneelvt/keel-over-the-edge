@@ -252,9 +252,14 @@ func TestACutWaitLosesNothing(t *testing.T) {
 		ctx, cancel := context.WithTimeout(t.Context(), 3*time.Second)
 		defer cancel()
 		h.callCtx(t, ctx, a, "observe", map[string]any{"wait": 30})
-		// The helm is free again at once, and its boat sails on.
-		if text, refused := h.call(t, a, "observe", nil); refused || !strings.Contains(text, "Boat: sailing") {
+		// The helm is free again at once, and its boat sails on; the next
+		// report says the wait was cut, once.
+		text, refused := h.call(t, a, "observe", nil)
+		if refused || !strings.Contains(text, "Boat: sailing") || !strings.Contains(text, " · last wait cut after 3 s; nothing lost\n") {
 			t.Fatalf("after a cut wait: %v %q", refused, text)
+		}
+		if text, _ := h.call(t, a, "observe", nil); strings.Contains(text, "cut") {
+			t.Fatalf("the report after: %q", text)
 		}
 	})
 }

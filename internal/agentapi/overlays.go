@@ -294,6 +294,40 @@ func (h *helm) hearLines(s *Sea, f *bus.Frame, sl int32) []string {
 	return out
 }
 
+// boatHeard are the boat's own sounds in slot sl, by the phone's rules:
+// its loudest one or two, "water along the hull".
+func boatHeard(s *Sea, f *bus.Frame, sl int32) string {
+	st := &f.State[sl]
+	in := &f.Instruments[sl]
+	e := &f.Wind[sl]
+	sin, cos := physics.SinCos(st.Heading)
+	ahead := st.Surge - (e.CurrentEast*sin + e.CurrentNorth*cos)
+	across := st.Sway - (e.CurrentEast*cos - e.CurrentNorth*sin)
+	b := f.Sail[sl]
+	luffing := 0
+	for _, flow := range [...]uint8{(b >> 4) & 3, (b >> 6) & 3} {
+		if flow == physics.FlowLuffing {
+			luffing++
+		}
+	}
+	heard := lookout.BoatHeard{ApparentWind: float64(in.ApparentSpeed), Speed: float64(in.SpeedOverGround),
+		ThroughWater: math.Sqrt(ahead*ahead + across*across), Luffing: luffing, Seconds: float64(f.Tick) / physics.StepsPerSecond}
+	if sea := seaOf(s, f, st.X, st.Y); sea != nil {
+		heard.SeaHeight = sea.Waves
+	}
+	if len(f.Sea.Now) > 0 {
+		col := min(max(physics.SeaAreaOf(st.X), 0), physics.SeaAreas-1)
+		row := min(max(physics.SeaAreaOf(st.Y), 0), physics.SeaAreas-1)
+		wind := float64(f.Sea.Now[row*physics.SeaAreas+col].Speed) * physics.SeaSpeedStep
+		heard.Whitecaps = lookout.Whitecaps(knots(wind))
+	}
+	if wt := s.weatherAt(f); wt != nil && wt.Prepared() != nil {
+		heard.Rain = physics.RainAt(wt, st.X, st.Y)
+	}
+	l := lookout.BoatSounds(&heard)
+	return l.Words()
+}
+
 // countdown is the time left as the phone's countdown reads it: "4d 6h",
 // "5h 3m", "9m 12s".
 func countdown(d time.Duration) string { return lookout.Countdown(d) }

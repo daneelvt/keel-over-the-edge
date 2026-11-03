@@ -62,8 +62,9 @@ func startFromRest(t *testing.T, knots, off, sheet float64) float64 {
 // The sail says what it wants of its sheet as a sailor would, the course
 // held: luffing with the sheet let out to half on a close reach, from rest
 // or under way, and nothing once it is trimmed; stalled hauled in hard on
-// a reach; nothing let fly on a run, where no easing helps, nor lying head
-// to wind at rest.
+// a reach; nothing let fly on a run, where no easing helps, nor at a run's
+// fastest sheet, the sail square to the wind and its flow stalled, nor
+// lying head to wind at rest; stalled on a run hauled in well past square.
 func TestSailState(t *testing.T) {
 	for _, c := range []struct {
 		knots, off, sheet float64
@@ -79,6 +80,10 @@ func TestSailState(t *testing.T) {
 		{10, 130, 0, false, SailStalled},
 		{6, 110, 0, false, SailStalled},
 		{10, 175, 1, false, SailDrawing},
+		{6, 170, 0.81, false, SailDrawing},
+		{10, 155, 0.68, false, SailDrawing},
+		{10, 180, 0.88, false, SailDrawing},
+		{10, 170, 0.2, false, SailStalled},
 		{3, 5, 0.5, true, SailDrawing},
 	} {
 		m := newSim(t, c.knots*knot, c.off, c.sheet)

@@ -1,11 +1,10 @@
-# about 210 tokens
-tick 1032 · seq 0
+# about 172 tokens
+day 12:00 · seq 0
 Boat: sailing · heading 047° · 0.1 kn · no steerage · 3.5 m under you · heel 0° · port tack · Pilot: hand · boom 19° (sheet out to 50°) · rudder 0° · sail drawing
 Wind: 000° N 3 kn F1 · 47° off the bow, port side · apparent 3 kn 47°
 Shoal: under 1.5 m 225°–250°, 140–150 m · 270°–340°, 60–130 m · clear 000°–205°
+Sky: sun high · clear
 In sight:
  Port Royal · 280° 0.2 NM · known
  Table Head Light · 289° 0.3 NM · light Fl(3) W 15s · known
- a light Fl(4) W 15s (uncharted) · 235° ~1.7 NM
- a light Fl(5) W 20s (uncharted) · 170° ~1.9 NM
- a light Mo(D) W 15s (uncharted) · 035° ~2.4 NM
+Hear: quiet

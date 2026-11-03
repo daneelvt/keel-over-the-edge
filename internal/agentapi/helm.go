@@ -394,6 +394,20 @@ type helm struct {
 	landSeen map[int32]bool
 	// turning is the autopilot's turn under way at the hub's last look.
 	turning uint8
+	// goal is the charted place the agent's last wait watched, by its
+	// subject index, while hasGoal: a brief report always tells it.
+	goal    int32
+	hasGoal bool
+	// cut is how long the last wait ran before its app cut the call, 0
+	// once the next report has told it.
+	cut time.Duration
+	// days are the moments of the day at the boat, as last looked at;
+	// skyTold the Sky line's words the last report told.
+	days    moments
+	skyTold string
+	// heardTold is the loudest of the boat's own sounds the last report
+	// told.
+	heardTold string
 	// The lookout's room: the view's candidates, and its last view by
 	// slot.
 	cands []view.Candidate

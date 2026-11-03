@@ -19,14 +19,18 @@ beforeAll(() => {
 
 describe('loadPhysics', () => {
   test('streams a module served as application/wasm', async () => {
-    const res = new Response(bytes, { headers: { 'Content-Type': 'application/wasm' } });
+    const res = new Response(bytes, {
+      headers: { 'Content-Type': 'application/wasm' },
+    });
     const physics = await loadPhysics(res);
     expect(physics.records.state.length).toBe(SIZES.state);
     expect(physics.records.params.length).toBe(SIZES.params);
   });
 
   test('compiles a module served with another type', async () => {
-    const res = new Response(bytes, { headers: { 'Content-Type': 'application/octet-stream' } });
+    const res = new Response(bytes, {
+      headers: { 'Content-Type': 'application/octet-stream' },
+    });
     await expect(loadPhysics(Promise.resolve(res))).resolves.toBeInstanceOf(Physics);
   });
 
@@ -86,6 +90,41 @@ describe('Physics', () => {
     expect(state[RECORDS.state.boom]).toBeLessThan(0);
     expect(out[RECORDS.out.apparentWindAngle]).toBeGreaterThan(0);
     expect(out[RECORDS.out.drive]).toBeGreaterThan(0);
+  });
+
+  test('on a run, the sail square to the wind draws; hauled in, it stalls', async () => {
+    const physics = await loadPhysics(bytes);
+    const r = physics.records;
+    writeParams(r.params, catalog.boats[0].physics);
+    physics.prepare();
+    /** Sails 170° off a 6 m/s wind from the north for 30 s with the sheet; the sail's words over the last 10 s. */
+    const run = (sheet: number): number[] => {
+      r.state.fill(0);
+      const course = Math.PI - (10 * Math.PI) / 180;
+      r.state[RECORDS.state.heading] = course;
+      r.state[RECORDS.state.surge] = 1.5;
+      r.state[RECORDS.state.sheetLimit] = (Math.PI / 2) * sheet;
+      r.env[RECORDS.env.windSpeed] = 6;
+      r.env[RECORDS.env.windFrom] = 0;
+      r.control[RECORDS.control.sheet] = sheet;
+      const words = [0, 0, 0, 0];
+      for (let i = 0; i < 30 * 60; i++) {
+        const s = physics.records.state;
+        const off = course - (s[RECORDS.state.heading] ?? 0);
+        const helm = 2 * off - 0.8 * (s[RECORDS.state.yawRate] ?? 0);
+        physics.records.control[RECORDS.control.helm] = Math.max(-1, Math.min(1, helm));
+        physics.step();
+        if (i >= 20 * 60) {
+          const w = physics.records.out[RECORDS.out.sail] ?? 0;
+          words[w] = (words[w] ?? 0) + 1;
+        }
+      }
+      return words;
+    };
+    // The fastest sheet on a run (tools/polar): drawing, though its flow is stalled.
+    expect(run(0.81)[0]).toBeGreaterThan(500);
+    // Hauled in to a boom of about 18°: stalled, ease.
+    expect(run(0.2)[2]).toBeGreaterThan(500);
   });
 
   test('evaluates more values than one batch holds', async () => {

@@ -1,0 +1,437 @@
+{
+  "comment": "Written by go test ./internal/lookout -run BoatSoundsFile -update: boats as their own voices hear them, the apparent wind, m/s, the speed over the ground and through the water, m/s, the sea's significant height, m, and whitecaps, 0 to 1, the sail's strips luffing, world time, s, and the rain, mm an hour; the voices' levels, gains, as the phone sets them, and the words for what the boat sounds like.",
+  "cases": [
+    {
+      "name": "at rest in a calm",
+      "input": {
+        "apparentWind": 0,
+        "speed": 0,
+        "throughWater": 0,
+        "seaHeight": 0,
+        "whitecaps": 0,
+        "luffing": 0,
+        "time": 0,
+        "rain": 0
+      },
+      "levels": {
+        "windLevel": 0,
+        "rigLevel": 0,
+        "flogLevel": 0,
+        "waterLevel": 0,
+        "hissLevel": 0,
+        "seaLevel": 0,
+        "rainLevel": 0,
+        "drumLevel": 0
+      },
+      "words": "quiet"
+    },
+    {
+      "name": "at rest in a light air",
+      "input": {
+        "apparentWind": 2.057777777777778,
+        "speed": 0,
+        "throughWater": 0,
+        "seaHeight": 0.05,
+        "whitecaps": 0,
+        "luffing": 0,
+        "time": 0,
+        "rain": 0
+      },
+      "levels": {
+        "windLevel": 0.012632389815899798,
+        "rigLevel": 0,
+        "flogLevel": 0,
+        "waterLevel": 0,
+        "hissLevel": 0,
+        "seaLevel": 0,
+        "rainLevel": 0,
+        "drumLevel": 0
+      },
+      "words": "quiet"
+    },
+    {
+      "name": "drifting at a knot in 4 kn of wind",
+      "input": {
+        "apparentWind": 2.315,
+        "speed": 0.5144444444444445,
+        "throughWater": 0.5144444444444445,
+        "seaHeight": 0.05,
+        "whitecaps": 0,
+        "luffing": 0,
+        "time": 0,
+        "rain": 0
+      },
+      "levels": {
+        "windLevel": 0.016389564640331585,
+        "rigLevel": 0,
+        "flogLevel": 0,
+        "waterLevel": 0.011467383537477071,
+        "hissLevel": 0,
+        "seaLevel": 0,
+        "rainLevel": 0,
+        "drumLevel": 0
+      },
+      "words": "quiet"
+    },
+    {
+      "name": "ghosting at 2 kn in 5 kn of wind",
+      "input": {
+        "apparentWind": 3.0866666666666664,
+        "speed": 1.028888888888889,
+        "throughWater": 1.028888888888889,
+        "seaHeight": 0.1,
+        "whitecaps": 0,
+        "luffing": 0,
+        "time": 0,
+        "rain": 0
+      },
+      "levels": {
+        "windLevel": 0.030139042778441625,
+        "rigLevel": 0.000009262386954948892,
+        "flogLevel": 0,
+        "waterLevel": 0.046141385357899176,
+        "hissLevel": 0,
+        "seaLevel": 0.000030510370682227535,
+        "rainLevel": 0,
+        "drumLevel": 0
+      },
+      "words": "water along the hull"
+    },
+    {
+      "name": "a reach at 4 kn in 6 kn of wind",
+      "input": {
+        "apparentWind": 3.7039999999999997,
+        "speed": 2.057777777777778,
+        "throughWater": 2.057777777777778,
+        "seaHeight": 0.15,
+        "whitecaps": 0,
+        "luffing": 0,
+        "time": 1234.5,
+        "rain": 0
+      },
+      "levels": {
+        "windLevel": 0.04353040947697844,
+        "rigLevel": 0.0005881855999999995,
+        "flogLevel": 0,
+        "waterLevel": 0.15373383436966653,
+        "hissLevel": 0,
+        "seaLevel": 0.00043728580572041344,
+        "rainLevel": 0,
+        "drumLevel": 0
+      },
+      "words": "water along the hull"
+    },
+    {
+      "name": "a reach at 6 kn in 12 kn of wind",
+      "input": {
+        "apparentWind": 7.716666666666667,
+        "speed": 3.0866666666666664,
+        "throughWater": 3.0866666666666664,
+        "seaHeight": 0.4,
+        "whitecaps": 0.2,
+        "luffing": 0,
+        "time": 0,
+        "rain": 0
+      },
+      "levels": {
+        "windLevel": 0.16217681105106763,
+        "rigLevel": 0.019695203759356655,
+        "flogLevel": 0,
+        "waterLevel": 0.25929940507298155,
+        "hissLevel": 0.037031275843837815,
+        "seaLevel": 0.01068277002717657,
+        "rainLevel": 0,
+        "drumLevel": 0
+      },
+      "words": "water along the hull, wind in the rigging"
+    },
+    {
+      "name": "a reach at 7 kn in 14 kn of wind",
+      "input": {
+        "apparentWind": 8.745555555555555,
+        "speed": 3.601111111111111,
+        "throughWater": 3.601111111111111,
+        "seaHeight": 0.6,
+        "whitecaps": 0.35,
+        "luffing": 0,
+        "time": 0,
+        "rain": 0
+      },
+      "levels": {
+        "windLevel": 0.19550831260186097,
+        "rigLevel": 0.026673129997969697,
+        "flogLevel": 0,
+        "waterLevel": 0.2914398090078384,
+        "hissLevel": 0.09099923751338507,
+        "seaLevel": 0.02911989505542017,
+        "rainLevel": 0,
+        "drumLevel": 0
+      },
+      "words": "surging, water along the hull"
+    },
+    {
+      "name": "planing at 9 kn in 18 kn of wind",
+      "input": {
+        "apparentWind": 10.28888888888889,
+        "speed": 4.63,
+        "throughWater": 4.63,
+        "seaHeight": 0.8,
+        "whitecaps": 0.6,
+        "luffing": 0,
+        "time": 0,
+        "rain": 0
+      },
+      "levels": {
+        "windLevel": 0.24246533271224546,
+        "rigLevel": 0.03676686712034126,
+        "flogLevel": 0,
+        "waterLevel": 0.3,
+        "hissLevel": 0.16,
+        "seaLevel": 0.05781975724927289,
+        "rainLevel": 0,
+        "drumLevel": 0
+      },
+      "words": "surging"
+    },
+    {
+      "name": "head to wind in 10 kn, the sail luffing",
+      "input": {
+        "apparentWind": 5.144444444444445,
+        "speed": 0,
+        "throughWater": 0,
+        "seaHeight": 0.3,
+        "whitecaps": 0.05,
+        "luffing": 2,
+        "time": 0,
+        "rain": 0
+      },
+      "levels": {
+        "windLevel": 0.08135507122868439,
+        "rigLevel": 0.004959884324316527,
+        "flogLevel": 0.17082239426934,
+        "waterLevel": 0,
+        "hissLevel": 0,
+        "seaLevel": 0.0033379702707604254,
+        "rainLevel": 0,
+        "drumLevel": 0
+      },
+      "words": "the sail flogging"
+    },
+    {
+      "name": "a reach at 4 kn in 10 kn, the head luffing",
+      "input": {
+        "apparentWind": 6.173333333333333,
+        "speed": 2.057777777777778,
+        "throughWater": 2.057777777777778,
+        "seaHeight": 0.3,
+        "whitecaps": 0.1,
+        "luffing": 1,
+        "time": 0,
+        "rain": 0
+      },
+      "levels": {
+        "windLevel": 0.11243105995757928,
+        "rigLevel": 0.01008265406683919,
+        "flogLevel": 0.17802861030282469,
+        "waterLevel": 0.15373383436966653,
+        "hissLevel": 0,
+        "seaLevel": 0.004291416695302098,
+        "rainLevel": 0,
+        "drumLevel": 0
+      },
+      "words": "the sail flogging"
+    },
+    {
+      "name": "beating at 5 kn in 20 kn apparent",
+      "input": {
+        "apparentWind": 10.28888888888889,
+        "speed": 2.5722222222222224,
+        "throughWater": 2.5722222222222224,
+        "seaHeight": 0.5,
+        "whitecaps": 0.3,
+        "luffing": 0,
+        "time": 0,
+        "rain": 0
+      },
+      "levels": {
+        "windLevel": 0.24246533271224546,
+        "rigLevel": 0.03676686712034126,
+        "flogLevel": 0,
+        "waterLevel": 0.21074643992010686,
+        "hissLevel": 0.0027880220426899425,
+        "seaLevel": 0.01712396637950078,
+        "rainLevel": 0,
+        "drumLevel": 0
+      },
+      "words": "wind in the rigging, water along the hull"
+    },
+    {
+      "name": "hove to in 25 kn",
+      "input": {
+        "apparentWind": 12.86111111111111,
+        "speed": 0.25722222222222224,
+        "throughWater": 0.5144444444444445,
+        "seaHeight": 0.9,
+        "whitecaps": 0.85,
+        "luffing": 0,
+        "time": 0,
+        "rain": 0
+      },
+      "levels": {
+        "windLevel": 0.3016473021590459,
+        "rigLevel": 0.04850305002633209,
+        "flogLevel": 0,
+        "waterLevel": 0.0023903411575793595,
+        "hissLevel": 0,
+        "seaLevel": 0.053327357220426475,
+        "rainLevel": 0,
+        "drumLevel": 0
+      },
+      "words": "wind in the rigging, the hull slapping"
+    },
+    {
+      "name": "light rain at a knot",
+      "input": {
+        "apparentWind": 2.057777777777778,
+        "speed": 0.5144444444444445,
+        "throughWater": 0.5144444444444445,
+        "seaHeight": 0,
+        "whitecaps": 0,
+        "luffing": 0,
+        "time": 0,
+        "rain": 1
+      },
+      "levels": {
+        "windLevel": 0.012632389815899798,
+        "rigLevel": 0,
+        "flogLevel": 0,
+        "waterLevel": 0.011467383537477071,
+        "hissLevel": 0,
+        "seaLevel": 0,
+        "rainLevel": 0.08151257688916881,
+        "drumLevel": 0
+      },
+      "words": "rain on the deck"
+    },
+    {
+      "name": "heavy rain at 3 kn",
+      "input": {
+        "apparentWind": 4.115555555555556,
+        "speed": 1.5433333333333332,
+        "throughWater": 1.5433333333333332,
+        "seaHeight": 0.2,
+        "whitecaps": 0,
+        "luffing": 0,
+        "time": 0,
+        "rain": 30
+      },
+      "levels": {
+        "windLevel": 0.053485501042504165,
+        "rigLevel": 0.001438421510895096,
+        "flogLevel": 0,
+        "waterLevel": 0.09621450924211311,
+        "hissLevel": 0,
+        "seaLevel": 0.0011532905772734762,
+        "rainLevel": 0.2019165367391308,
+        "drumLevel": 0.09183857273077288
+      },
+      "words": "rain on the deck"
+    },
+    {
+      "name": "rain on a reach at 5 kn",
+      "input": {
+        "apparentWind": 6.173333333333333,
+        "speed": 2.5722222222222224,
+        "throughWater": 2.5722222222222224,
+        "seaHeight": 0.3,
+        "whitecaps": 0.1,
+        "luffing": 0,
+        "time": 0,
+        "rain": 6
+      },
+      "levels": {
+        "windLevel": 0.11243105995757928,
+        "rigLevel": 0.01008265406683919,
+        "flogLevel": 0,
+        "waterLevel": 0.21074643992010686,
+        "hissLevel": 0.0027880220426899425,
+        "seaLevel": 0.004678015570246353,
+        "rainLevel": 0.1449416905174684,
+        "drumLevel": 0
+      },
+      "words": "water along the hull, rain on the deck"
+    },
+    {
+      "name": "running at 5 kn in a 1 m sea with whitecaps",
+      "input": {
+        "apparentWind": 7.202222222222222,
+        "speed": 2.5722222222222224,
+        "throughWater": 2.5722222222222224,
+        "seaHeight": 1,
+        "whitecaps": 0.7,
+        "luffing": 0,
+        "time": 0,
+        "rain": 0
+      },
+      "levels": {
+        "windLevel": 0.14539677384978586,
+        "rigLevel": 0.016315733978083044,
+        "flogLevel": 0,
+        "waterLevel": 0.21074643992010686,
+        "hissLevel": 0.0027880220426899425,
+        "seaLevel": 0.07691566170625695,
+        "rainLevel": 0,
+        "drumLevel": 0
+      },
+      "words": "the hull slapping, water along the hull"
+    },
+    {
+      "name": "running at 8 kn in a 2 m sea",
+      "input": {
+        "apparentWind": 9.26,
+        "speed": 4.115555555555556,
+        "throughWater": 3.601111111111111,
+        "seaHeight": 2,
+        "whitecaps": 0.95,
+        "luffing": 0,
+        "time": 0,
+        "rain": 0
+      },
+      "levels": {
+        "windLevel": 0.211730603606522,
+        "rigLevel": 0.03014883726521413,
+        "flogLevel": 0,
+        "waterLevel": 0.3,
+        "hissLevel": 0.14014206903232926,
+        "seaLevel": 0.2231497528109869,
+        "rainLevel": 0,
+        "drumLevel": 0
+      },
+      "words": "the hull slapping, surging"
+    },
+    {
+      "name": "sternway in a short sea",
+      "input": {
+        "apparentWind": 4.63,
+        "speed": 0.7716666666666666,
+        "throughWater": -1.028888888888889,
+        "seaHeight": 0.6,
+        "whitecaps": 0.1,
+        "luffing": 0,
+        "time": 0,
+        "rain": 0
+      },
+      "levels": {
+        "windLevel": 0.06693719048154226,
+        "rigLevel": 0.0029683022539444023,
+        "flogLevel": 0,
+        "waterLevel": 0.026382436638435845,
+        "hissLevel": 0,
+        "seaLevel": 0.01826742142584536,
+        "rainLevel": 0,
+        "drumLevel": 0
+      },
+      "words": "the hull slapping, wind in the rigging"
+    }
+  ]
+}

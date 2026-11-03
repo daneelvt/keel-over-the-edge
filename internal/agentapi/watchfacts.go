@@ -82,7 +82,10 @@ func (s *Sea) Card(f *bus.Frame, sl int32) watch.Card {
 		out.Weather.Waves = sea.Waves
 	}
 	w := weatherOf(s, f, st.X, st.Y)
-	out.Weather.Barometer, out.Weather.Visibility, out.Weather.Rain, out.Weather.Clouds = w.Barometer, w.Visibility, w.Rain, w.Clouds
+	out.Weather.Barometer, out.Weather.Visibility, out.Weather.Rain = w.Barometer, w.Visibility, w.Rain
+	if wt := s.weatherAt(f); wt != nil {
+		out.Weather.Clouds = aboutOf(physics.NearAt(wt, st.X, st.Y))
+	}
 	out.Where.Island = s.nearestIsland(st.X, st.Y)
 	for _, l := range s.landLines(f, sl) {
 		out.Where.InSight = append(out.Where.InSight, l.text)

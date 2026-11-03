@@ -1,0 +1,9 @@
+# about 147 tokens
+day 05:37 · seq 1273
+Boat: sailing · heading 091° · 4.7 kn · heel 0° · port tack · Pilot: wind 90° port · boom 30° (sheet out to 30°) · sail drawing
+Wind: 001° N 8 kn F3 · 90° off the bow, port side · apparent 9 kn 58°
+Sky: sun rising E · clear
+In sight:
+ land (uncharted) · island rising 15 m, woods, palms, mangroves, beaches · 80 m across · 005° ~300 m
+ and 2 more in sight (full)
+Since: sunrise, the sun rising E

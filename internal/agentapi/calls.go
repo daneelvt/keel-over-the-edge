@@ -457,7 +457,10 @@ func (c *Core) observe(ctx context.Context, h *helm, req *mcp.CallToolRequest, o
 				f.Release()
 				return "", nil, refuse(refusedPlace, fmt.Sprintf("No charted place called %q: bearing and near watch a charted place. Call chart for their names.", o.Place))
 			}
-			place = &placeOf{name: titleOf(e.sub), x: e.sub.X, y: e.sub.Y}
+			place = &placeOf{name: titleOf(e.sub), subject: e.subject, x: e.sub.X, y: e.sub.Y}
+			h.mu.Lock()
+			h.goal, h.hasGoal = e.subject, true
+			h.mu.Unlock()
 		}
 		f.Release()
 		why, r := c.wait(ctx, h, req, o, place, wait, taken)
@@ -500,6 +503,10 @@ func (c *Core) observe(ctx context.Context, h *helm, req *mcp.CallToolRequest, o
 	}
 	rep := h.reportFor(s, f, h.slot, detail, since)
 	rep.Woke, rep.Notices = woke, notices
+	if h.cut > 0 {
+		rep.Cut = int(h.cut.Round(time.Second) / time.Second)
+		h.cut = 0
+	}
 	h.seq = rep.Seq
 	text := rep.text()
 	if m := c.cfg.Metrics; m != nil {
@@ -571,6 +578,11 @@ func (c *Core) wait(ctx context.Context, h *helm, req *mcp.CallToolRequest, o *o
 	}
 	h.unwait(w)
 	waited := time.Since(start)
+	if why == wokeCut {
+		h.mu.Lock()
+		h.cut = waited
+		h.mu.Unlock()
+	}
 	if m != nil {
 		m.AgentWaits.WithLabelValues(wakeLabel(why)).Inc()
 		m.AgentWaitSeconds.WithLabelValues("served").Observe(waited.Seconds())
@@ -603,6 +615,9 @@ func (c *Core) wait(ctx context.Context, h *helm, req *mcp.CallToolRequest, o *o
 		return why, refuse(refusedEnded, wordsEnded)
 	}
 	if err := h.take(ctx); err != nil {
+		h.mu.Lock()
+		h.cut = waited
+		h.mu.Unlock()
 		return wokeCut, nil
 	}
 	*taken = true

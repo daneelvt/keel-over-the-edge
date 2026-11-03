@@ -3,8 +3,10 @@
 package chart
 
 import (
+	"strings"
 	"testing"
 
+	"github.com/daneelvt/keel-over-the-edge/internal/bus"
 	"github.com/daneelvt/keel-over-the-edge/internal/store"
 )
 
@@ -43,5 +45,34 @@ func TestForget(t *testing.T) {
 	m.Forget([16]byte{9})
 	if m.Load() != after {
 		t.Fatal("published again for an account with no credits")
+	}
+}
+
+// TestNewsNamesAChartedIsland: the news of a light charted names its
+// island only once the island is charted; before, it is uncharted land.
+func TestNewsNamesAChartedIsland(t *testing.T) {
+	b, cat := world1(t)
+	w := Build(b, cat)
+	m := NewModel(w, cat, nil)
+	light := int32(-1)
+	for i, s := range w.Subjects {
+		if s.Light >= 0 && s.Island >= 0 && w.Subjects[s.Island].Name != "" {
+			light = int32(i)
+			break
+		}
+	}
+	if light < 0 {
+		t.Fatal("no lighthouse on a named island")
+	}
+	island := &w.Subjects[w.Subjects[light].Island]
+	news := func() string {
+		return m.Charting(&bus.Charted{Subject: light, Slot: 0, Boat: 1, With: -1}).News.What
+	}
+	if got := news(); !strings.HasSuffix(got, " on uncharted land") || strings.Contains(got, island.Name) {
+		t.Errorf("before its island is charted: %q", got)
+	}
+	m.Add([]store.Charting{{Subject: KindWord(island.Kind), Number: island.Number}})
+	if got := news(); !strings.HasSuffix(got, " on "+island.Name) {
+		t.Errorf("after its island is charted: %q, want it on %s", got, island.Name)
 	}
 }

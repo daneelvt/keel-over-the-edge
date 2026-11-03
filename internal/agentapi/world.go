@@ -114,6 +114,9 @@ func chartList(s *Sea, a *chartArgs, x, y float64, atSea bool) (string, *refusal
 			if e.sub.Kind == sight.Island {
 				size = " · " + acrossWords(e.sub)
 			}
+			if u := s.unchartedLand(e.sub); u != "" {
+				size += " · " + u
+			}
 			fmt.Fprintf(&b, " %s · %s%s · %s\n", titleOf(e.sub), where, size, creditWords(e.row))
 			shown++
 		}
@@ -152,6 +155,9 @@ func chartPlace(s *Sea, entries []chartEntry, name string, x, y float64, atSea b
 	if l := s.lightOf(e.sub); l != "" {
 		b.WriteString(" · light " + l)
 	}
+	if u := s.unchartedLand(e.sub); u != "" {
+		b.WriteString(" · " + u)
+	}
 	if e.sub.Kind == sight.Island {
 		if atSea {
 			if c := coastOf(s.Ground, e.sub, x, y); c != "" {
@@ -165,6 +171,21 @@ func chartPlace(s *Sea, entries []chartEntry, name string, x, y float64, atSea b
 	}
 	b.WriteString(" · " + creditWords(e.row))
 	return b.String(), nil
+}
+
+// unchartedLand is "on uncharted land" for a charted place on an island
+// not yet charted, as a light seen far off is: the chart names an island
+// only once it is charted. "" otherwise.
+func (s *Sea) unchartedLand(sub *chart.Subject) string {
+	if sub.Kind != sight.Place || sub.Island < 0 || s.Chart == nil {
+		return ""
+	}
+	for _, c := range s.Chart.Load().Subjects {
+		if c == sub.Island {
+			return ""
+		}
+	}
+	return "on uncharted land"
 }
 
 // acrossWords is a charted island's size, as the chart draws it: "~600 m

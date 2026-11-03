@@ -51,20 +51,28 @@ func runPolar(b *physics.Prepared, id, name, out string) error {
 	return nil
 }
 
+// sailWords are the sail's words for its sheet, by Out.Sail.
+var sailWords = [...]string{
+	physics.SailDrawing: "drawing",
+	physics.SailLuffing: "luffing",
+	physics.SailStalled: "stalled",
+	physics.SailAback:   "aback",
+}
+
 // table lists every point: speed, VMG, heel, rudder, leeway, boom and angle
 // of attack, then the best VMGs.
 func table(polars []polar) string {
 	var b strings.Builder
 	for _, p := range polars {
 		fmt.Fprintf(&b, "\n%g knots of wind at sail height (%.1f knots 10 m up)\n", p.Wind, wind10(p.Wind)/knot)
-		fmt.Fprintln(&b, "  TWA  speed    VMG  heel rudder leeway  boom attack sailor  flat sheet")
+		fmt.Fprintln(&b, "  TWA  speed    VMG  heel rudder leeway  boom attack sailor  flat sheet   AWA  sail")
 		for _, pt := range p.Points {
 			if !pt.OK {
 				fmt.Fprintf(&b, "  %3.0f  capsizes at every sheet\n", pt.TWA)
 				continue
 			}
-			fmt.Fprintf(&b, "  %3.0f %6.2f %6.2f %5.1f %6.1f %6.1f %5.1f %6.1f %6.2f %5.2f %5.2f\n",
-				pt.TWA, pt.Speed, pt.VMG, pt.Heel, pt.Rudder, pt.Leeway, pt.Boom, pt.Attack, pt.Sailor, pt.Flat, pt.Sheet)
+			fmt.Fprintf(&b, "  %3.0f %6.2f %6.2f %5.1f %6.1f %6.1f %5.1f %6.1f %6.2f %5.2f %5.2f %5.0f  %s\n",
+				pt.TWA, pt.Speed, pt.VMG, pt.Heel, pt.Rudder, pt.Leeway, pt.Boom, pt.Attack, pt.Sailor, pt.Flat, pt.Sheet, pt.Apparent, sailWords[pt.Word])
 		}
 		up, upA, down, downA := vmg(p)
 		fmt.Fprintf(&b, "  best VMG upwind %.2f knots at %g°, downwind %.2f knots at %g°\n", up, upA, down, downA)

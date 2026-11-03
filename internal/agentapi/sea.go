@@ -71,6 +71,8 @@ type Sea struct {
 	SystemKinds []string
 	// Start is the place new boats start at: "Port Royal".
 	Start string
+	// Watchers, if not nil, is how many watch an account's boat now.
+	Watchers func(bus.Account) int
 	// Catalog, Kinds and Encounters are what the phone's overlays and
 	// sounds are worked out from: the catalog, the kinds of boat prepared,
 	// and how boats meet; nil for none.
