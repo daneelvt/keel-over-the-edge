@@ -226,6 +226,9 @@ type serveOptions struct {
 	// dbRetry, if not zero, is the first wait between attempts to reach
 	// the database.
 	dbRetry time.Duration
+	// leasePoll, if not zero, is how often a process waiting for the
+	// simulation's lease asks for it.
+	leasePoll time.Duration
 	// afterTick runs after each tick, within it.
 	afterTick func(tick int64)
 	// stopping runs as the server begins to stop, once it is no longer
@@ -371,6 +374,7 @@ func runServer(ctx context.Context, getenv func(string) string, stdout io.Writer
 		Holder: holder, Log: log, Beat: health.Beat,
 		Waiting: func(h string) { health.Waiting("the simulation lease (held by " + h + ")") },
 		Lost:    func(outcome string) { metrics.LeaseLost.WithLabelValues(outcome).Inc() },
+		Poll:    opt.leasePoll,
 	})
 	if err != nil {
 		return stopEarly(side, flight, err)
