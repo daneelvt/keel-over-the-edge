@@ -19,6 +19,7 @@ import (
 	"github.com/daneelvt/keel-over-the-edge/internal/physics"
 	"github.com/daneelvt/keel-over-the-edge/internal/sight"
 	"github.com/daneelvt/keel-over-the-edge/internal/sim"
+	"github.com/daneelvt/keel-over-the-edge/internal/sky"
 	"github.com/daneelvt/keel-over-the-edge/internal/store"
 	"github.com/daneelvt/keel-over-the-edge/internal/view"
 	"github.com/daneelvt/keel-over-the-edge/internal/weather"
@@ -84,7 +85,8 @@ func newSceneOf(t testing.TB, capacity int, knots, from float64) *scene {
 		known = append(known, store.Charting{Subject: chart.KindWord(sub.Kind), Number: sub.Number, At: time.Date(2026, 10, 20, 12, 0, 0, 0, time.UTC)})
 	}
 	model.Add(known)
-	sg := &sim.Sight{Table: cw.Table, Every: int64(cat.World.Chart.Sight.Every), Lookouts: cw.Lookouts}
+	sg := &sim.Sight{Table: cw.Table, Every: int64(cat.World.Chart.Sight.Every), Lookouts: cw.Lookouts,
+		Sky: cat.PrepareSky(), Epoch: sceneEpoch.UnixMicro(), Night: cat.World.Lights.Threshold, Day: cat.World.Lights.DayThreshold}
 	enc := cat.PrepareEncounters()
 	terrain := b.Terrain(cat.PrepareGround())
 	w, err := sim.New(sim.Config{Capacity: capacity, Kinds: kinds, Waves: waves, Weather: tl, Encounters: enc, Terrain: terrain, Sight: sg, Tick: 1000})
@@ -93,9 +95,15 @@ func newSceneOf(t testing.TB, capacity int, knots, from float64) *scene {
 	}
 	w.SetCharted(cw.Known)
 	t.Cleanup(w.Close)
-	s := &Sea{Number: 1, Bus: w.Bus(), Boats: cat.Boats, Limit: capacity, Timeline: tl, Waves: waves, Ground: terrain.Ground, Shelter: terrain.Shelter,
+	s := &Sea{Number: 1, Epoch: sceneEpoch, Bus: w.Bus(), Boats: cat.Boats, Limit: capacity, Timeline: tl, Waves: waves, Ground: terrain.Ground, Shelter: terrain.Shelter,
 		Bundle: b, Chart: model, Sight: sg, Words: weather.WordsOf(cat), Catalog: cat, Kinds: kinds, Encounters: enc,
-		Biomes: map[string]string{}}
+		Biomes: map[string]string{}, Sky: cat.PrepareSky()}
+	for _, is := range b.Islands {
+		if is.Kind == worldgen.KindMain {
+			s.Start = is.Name
+			break
+		}
+	}
 	for _, bm := range cat.World.Biomes {
 		s.Biomes[string(bm.ID)] = strings.ReplaceAll(string(bm.ID), "-", " ")
 	}
@@ -107,6 +115,30 @@ func newSceneOf(t testing.TB, capacity int, knots, from float64) *scene {
 	}
 	copy(s.RainWords[:], cat.Weather.Clouds.RainWords)
 	return &scene{t: t, cat: cat, w: w, sea: s, core: NewCore(CoreConfig{}), cw: cw}
+}
+
+// sceneEpoch is the scenes' world's epoch: its tick 1000 is by day at
+// Port Royal.
+var sceneEpoch = time.Date(2026, 11, 3, 11, 19, 30, 0, time.UTC)
+
+// at sets the scene's epoch so that the sun stands at alt degrees at (x,
+// y) on the world's tick now, rising or setting, to five seconds.
+func (sc *scene) at(x, y, alt float64, rising bool) {
+	sc.t.Helper()
+	tick := float64(sc.w.Latest().Tick)
+	sun := func(e time.Time) float64 {
+		t := sky.Time(sc.sea.Sky, float64(e.UnixMicro()), float64(int64(tick*1e6/physics.StepsPerSecond)))
+		return deg(sky.SunAltitude(sc.sea.Sky, t, x, y))
+	}
+	day := time.Duration(sc.sea.Sky.Day()) * time.Microsecond
+	for e := sceneEpoch; e.Before(sceneEpoch.Add(day)); e = e.Add(5 * time.Second) {
+		now, next := sun(e), sun(e.Add(5*time.Second))
+		if (next > now) == rising && math.Abs(now-alt) < 0.3 {
+			sc.sea.Epoch, sc.sea.Sight.Epoch = e, e.UnixMicro()
+			return
+		}
+	}
+	sc.t.Fatalf("the sun is never at %v° there", alt)
 }
 
 // boat puts a boat in the world at st, a machine sailor's or a human's,
@@ -424,7 +456,7 @@ func TestSceneOnABank(t *testing.T) {
 }
 
 // In open water the brief report has no Shoal line, and no more than it
-// had.
+// had; the one after it tells only what changed.
 func TestSceneOpenSeaBrief(t *testing.T) {
 	sc := newScene(t, 12, 0)
 	own := sc.start()
@@ -437,6 +469,17 @@ func TestSceneOpenSeaBrief(t *testing.T) {
 		t.Errorf("open water, sailing:\n%s", text)
 	}
 	golden(t, "open-brief", text)
+	// The next, nothing having changed, tells neither the sky nor the
+	// boat's sounds again.
+	sc.sail(time.Second)
+	f := sc.w.Latest()
+	h := sc.core.helmOf(sailor(byte(me)+1, "Iron Mary"))
+	h.mu.Lock()
+	again := h.reportFor(sc.sea, f, me, detailBrief, 0)
+	h.mu.Unlock()
+	if again.Sky != nil || len(again.Hear) > 0 || estimateTokens(again.text()) > estimateTokens(text) {
+		t.Errorf("the quiet brief report after:\n%s", again.text())
+	}
 }
 
 // Going astern, the Boat line says so.

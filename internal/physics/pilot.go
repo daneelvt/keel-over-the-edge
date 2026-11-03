@@ -52,7 +52,7 @@ const (
 	WayGybe = 2 // through dead downwind
 	// A tack or a gybe that stalled: the autopilot holds the angle the
 	// boat turned from, in State.PilotLeft, until the next order, and
-	// State.PilotMark is the order it stalled on (pilotOrder). Never an
+	// State.PilotMark is the order it stalled on (PilotHeld). Never an
 	// order's way.
 	WayTackStalled = 3
 	WayGybeStalled = 4
@@ -130,7 +130,7 @@ func (b *Prepared) pilot(s *State, c *Control, e *Env, o *Out) float64 {
 		}
 	}
 	steps := control(c.Target, 0, TurnSteps)
-	held := pilotOrder(c.Pilot, steps)
+	held := PilotHeld(c.Pilot, steps)
 	stalled := s.PilotWay == WayTackStalled || s.PilotWay == WayGybeStalled
 	if stalled && s.PilotMark != held {
 		// A new mode or target after a stall is an order on the side the
@@ -250,8 +250,8 @@ func (b *Prepared) watchTurn(s *State, o *Out, off, ahead float64, turn, across 
 	o.PilotStalled = 1
 }
 
-// pilotOrder is a mode and a target in whole steps as one number, which a
+// PilotHeld is a mode and a target in whole steps as one number, which a
 // stalled turn keeps in State.PilotMark: any other is a new order.
-func pilotOrder(mode, steps float64) float64 {
+func PilotHeld(mode, steps float64) float64 {
 	return float64(mode*(TurnSteps+1)) + steps
 }

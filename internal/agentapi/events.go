@@ -38,6 +38,18 @@ const (
 	evGybed     // the autopilot followed an accidental gybe
 	evWorldEnded
 	evStalled // the autopilot's tack or gybe stalled
+	// The moments of the day at the boat (sky.go).
+	evSunrise
+	evSunset
+	evLightLit
+	evLightOut
+	evRain
+	evRainEnds
+	evFog
+	evFogLifts
+	evForce
+	evWatched   // the first to watch the boat came
+	evUnwatched // the last went
 )
 
 // always are the events that end any wait: a sailor would notice them
@@ -60,6 +72,10 @@ func (k evKind) wake() string {
 		return wakeSighting
 	case evAfloat, evRighted:
 		return wakeBoat
+	case evSunrise, evSunset, evLightLit, evLightOut:
+		return wakeSky
+	case evRain, evRainEnds, evFog, evFogLifts, evForce:
+		return wakeWeather
 	}
 	return ""
 }
@@ -101,6 +117,26 @@ func (k evKind) word() string {
 		return "pilot"
 	case evWorldEnded:
 		return "the world ended"
+	case evSunrise:
+		return "sunrise"
+	case evSunset:
+		return "sunset"
+	case evLightLit:
+		return "a light lit"
+	case evLightOut:
+		return "a light put out"
+	case evRain:
+		return "rain"
+	case evRainEnds:
+		return "the rain stopped"
+	case evFog:
+		return "fog"
+	case evFogLifts:
+		return "the fog lifting"
+	case evForce:
+		return "the wind's force"
+	case evWatched, evUnwatched:
+		return "watchers"
 	}
 	return "event"
 }

@@ -1,0 +1,366 @@
+[
+ {
+  "knots": 0,
+  "whitecaps": 0
+ },
+ {
+  "knots": 0.5,
+  "whitecaps": 0
+ },
+ {
+  "knots": 1,
+  "whitecaps": 0
+ },
+ {
+  "knots": 1.5,
+  "whitecaps": 0
+ },
+ {
+  "knots": 2,
+  "whitecaps": 0
+ },
+ {
+  "knots": 2.5,
+  "whitecaps": 0
+ },
+ {
+  "knots": 3,
+  "whitecaps": 0
+ },
+ {
+  "knots": 3.5,
+  "whitecaps": 0
+ },
+ {
+  "knots": 4,
+  "whitecaps": 0
+ },
+ {
+  "knots": 4.5,
+  "whitecaps": 0
+ },
+ {
+  "knots": 5,
+  "whitecaps": 0
+ },
+ {
+  "knots": 5.5,
+  "whitecaps": 0
+ },
+ {
+  "knots": 6,
+  "whitecaps": 0
+ },
+ {
+  "knots": 6.5,
+  "whitecaps": 0
+ },
+ {
+  "knots": 7,
+  "whitecaps": 0
+ },
+ {
+  "knots": 7.5,
+  "whitecaps": 0.02666666666666667
+ },
+ {
+  "knots": 8,
+  "whitecaps": 0.05333333333333334
+ },
+ {
+  "knots": 8.5,
+  "whitecaps": 0.08
+ },
+ {
+  "knots": 9,
+  "whitecaps": 0.097
+ },
+ {
+  "knots": 9.5,
+  "whitecaps": 0.11399999999999999
+ },
+ {
+  "knots": 10,
+  "whitecaps": 0.131
+ },
+ {
+  "knots": 10.5,
+  "whitecaps": 0.148
+ },
+ {
+  "knots": 11,
+  "whitecaps": 0.16499999999999998
+ },
+ {
+  "knots": 11.5,
+  "whitecaps": 0.182
+ },
+ {
+  "knots": 12,
+  "whitecaps": 0.19899999999999998
+ },
+ {
+  "knots": 12.5,
+  "whitecaps": 0.21599999999999997
+ },
+ {
+  "knots": 13,
+  "whitecaps": 0.23299999999999998
+ },
+ {
+  "knots": 13.5,
+  "whitecaps": 0.25
+ },
+ {
+  "knots": 14,
+  "whitecaps": 0.2909090909090909
+ },
+ {
+  "knots": 14.5,
+  "whitecaps": 0.3318181818181818
+ },
+ {
+  "knots": 15,
+  "whitecaps": 0.3727272727272727
+ },
+ {
+  "knots": 15.5,
+  "whitecaps": 0.41363636363636364
+ },
+ {
+  "knots": 16,
+  "whitecaps": 0.45454545454545453
+ },
+ {
+  "knots": 16.5,
+  "whitecaps": 0.4954545454545454
+ },
+ {
+  "knots": 17,
+  "whitecaps": 0.5363636363636364
+ },
+ {
+  "knots": 17.5,
+  "whitecaps": 0.5772727272727273
+ },
+ {
+  "knots": 18,
+  "whitecaps": 0.6181818181818182
+ },
+ {
+  "knots": 18.5,
+  "whitecaps": 0.6590909090909091
+ },
+ {
+  "knots": 19,
+  "whitecaps": 0.7
+ },
+ {
+  "knots": 19.5,
+  "whitecaps": 0.7136363636363636
+ },
+ {
+  "knots": 20,
+  "whitecaps": 0.7272727272727272
+ },
+ {
+  "knots": 20.5,
+  "whitecaps": 0.7409090909090909
+ },
+ {
+  "knots": 21,
+  "whitecaps": 0.7545454545454545
+ },
+ {
+  "knots": 21.5,
+  "whitecaps": 0.7681818181818182
+ },
+ {
+  "knots": 22,
+  "whitecaps": 0.7818181818181817
+ },
+ {
+  "knots": 22.5,
+  "whitecaps": 0.7954545454545454
+ },
+ {
+  "knots": 23,
+  "whitecaps": 0.8090909090909091
+ },
+ {
+  "knots": 23.5,
+  "whitecaps": 0.8227272727272728
+ },
+ {
+  "knots": 24,
+  "whitecaps": 0.8363636363636363
+ },
+ {
+  "knots": 24.5,
+  "whitecaps": 0.85
+ },
+ {
+  "knots": 25,
+  "whitecaps": 0.8583333333333333
+ },
+ {
+  "knots": 25.5,
+  "whitecaps": 0.8666666666666667
+ },
+ {
+  "knots": 26,
+  "whitecaps": 0.875
+ },
+ {
+  "knots": 26.5,
+  "whitecaps": 0.8833333333333333
+ },
+ {
+  "knots": 27,
+  "whitecaps": 0.8916666666666666
+ },
+ {
+  "knots": 27.5,
+  "whitecaps": 0.8999999999999999
+ },
+ {
+  "knots": 28,
+  "whitecaps": 0.9083333333333333
+ },
+ {
+  "knots": 28.5,
+  "whitecaps": 0.9166666666666666
+ },
+ {
+  "knots": 29,
+  "whitecaps": 0.9249999999999999
+ },
+ {
+  "knots": 29.5,
+  "whitecaps": 0.9333333333333333
+ },
+ {
+  "knots": 30,
+  "whitecaps": 0.9416666666666667
+ },
+ {
+  "knots": 30.5,
+  "whitecaps": 0.95
+ },
+ {
+  "knots": 31,
+  "whitecaps": 0.9571428571428571
+ },
+ {
+  "knots": 31.5,
+  "whitecaps": 0.9642857142857143
+ },
+ {
+  "knots": 32,
+  "whitecaps": 0.9714285714285714
+ },
+ {
+  "knots": 32.5,
+  "whitecaps": 0.9785714285714285
+ },
+ {
+  "knots": 33,
+  "whitecaps": 0.9857142857142857
+ },
+ {
+  "knots": 33.5,
+  "whitecaps": 0.9928571428571429
+ },
+ {
+  "knots": 34,
+  "whitecaps": 1
+ },
+ {
+  "knots": 34.5,
+  "whitecaps": 1
+ },
+ {
+  "knots": 35,
+  "whitecaps": 1
+ },
+ {
+  "knots": 35.5,
+  "whitecaps": 1
+ },
+ {
+  "knots": 36,
+  "whitecaps": 1
+ },
+ {
+  "knots": 36.5,
+  "whitecaps": 1
+ },
+ {
+  "knots": 37,
+  "whitecaps": 1
+ },
+ {
+  "knots": 37.5,
+  "whitecaps": 1
+ },
+ {
+  "knots": 38,
+  "whitecaps": 1
+ },
+ {
+  "knots": 38.5,
+  "whitecaps": 1
+ },
+ {
+  "knots": 39,
+  "whitecaps": 1
+ },
+ {
+  "knots": 39.5,
+  "whitecaps": 1
+ },
+ {
+  "knots": 40,
+  "whitecaps": 1
+ },
+ {
+  "knots": 40.5,
+  "whitecaps": 1
+ },
+ {
+  "knots": 41,
+  "whitecaps": 1
+ },
+ {
+  "knots": 41.5,
+  "whitecaps": 1
+ },
+ {
+  "knots": 42,
+  "whitecaps": 1
+ },
+ {
+  "knots": 42.5,
+  "whitecaps": 1
+ },
+ {
+  "knots": 43,
+  "whitecaps": 1
+ },
+ {
+  "knots": 43.5,
+  "whitecaps": 1
+ },
+ {
+  "knots": 44,
+  "whitecaps": 1
+ },
+ {
+  "knots": 44.5,
+  "whitecaps": 1
+ },
+ {
+  "knots": 45,
+  "whitecaps": 1
+ }
+]

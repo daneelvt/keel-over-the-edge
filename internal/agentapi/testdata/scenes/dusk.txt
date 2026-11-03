@@ -1,0 +1,17 @@
+# about 297 tokens
+night 18:12 · seq 2503
+Boat: Jolly boat · sailing · heading 116° · 1.4 kn · heel 0° · port tack
+Pilot: hand · boom 50° (sheet out to 50°) · rudder 0° · sail drawing
+Wind: 359° N 2 kn F1 · 117° off the bow, port side · apparent 2 kn 80° · in the lee of land to the N
+Shoal: under 1.5 m 180°–270°, 45–60 m · 295°–315°, 250–300 m · 340°–045°, 45–50 m · clear 070°–160°
+Sky: no moon · dusk · clear
+Sea: waves 0.1 m from 000° · current slack
+Weather: 1013 hPa, steady · visibility good
+Where: 88°41′N 100°17′ · Port Royal 293° 0.2 NM · edge 4.4 NM
+In sight:
+ Port Royal · 293° 0.2 NM · known
+ Table Head Light · 298° 0.2 NM · light Fl(3) W 15s · known
+ a light Fl(5) W 20s (uncharted) · 170° ~1.9 NM
+ a light Mo(D) W 15s (uncharted) · 035° ~2.5 NM
+Hear: quiet
+Since: sunset, the sun gone down in the W · Table Head Light lit

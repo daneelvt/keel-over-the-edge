@@ -236,9 +236,10 @@ func (m *Model) Charting(c *bus.Charted) store.Charting {
 }
 
 // what is what a subject is, as the news says it: "an island of the rim",
-// "a lighthouse on Gannet Holm", "a reef of the middle waters".
+// "a lighthouse on Gannet Holm", "a reef of the middle waters". An island
+// is named only once it is charted: before, "a lighthouse on uncharted
+// land".
 func (m *Model) what(s *Subject) string {
-	w := m.world
 	zone := zoneWords(s.Zone)
 	switch s.Kind {
 	case sight.Island:
@@ -249,14 +250,26 @@ func (m *Model) what(s *Subject) string {
 	case sight.Place:
 		kind := article(m.cat.World.Places.Kinds[s.Sort].Name)
 		if s.Island >= 0 {
-			return kind + " on " + w.Subjects[s.Island].Name
+			return kind + " on " + m.islandWords(s.Island)
 		}
 		return kind + " " + zone
 	}
 	if s.Island >= 0 {
-		return "on " + w.Subjects[s.Island].Name
+		return "on " + m.islandWords(s.Island)
 	}
 	return zone
+}
+
+// islandWords is the island of subject index i as the news names it: its
+// name once charted, else "uncharted land".
+func (m *Model) islandWords(i int32) string {
+	m.mu.Lock()
+	charted := int(i) < len(m.charted) && m.charted[i]
+	m.mu.Unlock()
+	if !charted {
+		return "uncharted land"
+	}
+	return m.world.Subjects[i].Name
 }
 
 // zoneWords is a zone as the news says where a subject is.

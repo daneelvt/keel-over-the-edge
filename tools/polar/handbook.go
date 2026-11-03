@@ -22,22 +22,13 @@ var (
 	trimAngles = []float64{40, 60, 90, 120, 150, 170, 180}
 )
 
-// trimTable is the handbook's table, in Markdown, from polars that include
-// trimWinds.
+// trimTable is the handbook's table, a line for each angle with the boom
+// in each of trimWinds, "- 40°: 4, 4, 10", from polars that include them.
 func trimTable(polars []polar) (string, error) {
 	var b strings.Builder
-	b.WriteString("| Off the wind |")
-	for _, w := range trimWinds {
-		fmt.Fprintf(&b, " %g knots |", w)
-	}
-	b.WriteString("\n|---|")
-	for range trimWinds {
-		b.WriteString("---|")
-	}
-	b.WriteString("\n")
 	for _, a := range trimAngles {
-		fmt.Fprintf(&b, "| %g° |", a)
-		for _, w := range trimWinds {
+		fmt.Fprintf(&b, "- %g°:", a)
+		for i, w := range trimWinds {
 			p, ok := polarAt(polars, w)
 			if !ok {
 				return "", fmt.Errorf("no polar for %g knots", w)
@@ -46,7 +37,11 @@ func trimTable(polars []polar) (string, error) {
 			if !pt.OK {
 				return "", fmt.Errorf("the boat capsizes at %g° in %g knots", a, w)
 			}
-			fmt.Fprintf(&b, " %d |", boomRounded(pt.Boom))
+			sep := ","
+			if i == 0 {
+				sep = ""
+			}
+			fmt.Fprintf(&b, "%s %d", sep, boomRounded(pt.Boom))
 		}
 		b.WriteString("\n")
 	}

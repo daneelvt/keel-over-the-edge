@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/daneelvt/keel-over-the-edge/internal/bus"
+	"github.com/daneelvt/keel-over-the-edge/internal/catalog"
 	"github.com/daneelvt/keel-over-the-edge/internal/chart"
 	"github.com/daneelvt/keel-over-the-edge/internal/lookout"
 	"github.com/daneelvt/keel-over-the-edge/internal/physics"
@@ -44,13 +45,18 @@ const mostContacts = 12
 
 // report is a lookout report's facts.
 type report struct {
-	Clock   string        `json:"clock"`
-	Seq     int64         `json:"seq"`
-	Woke    string        `json:"woke,omitempty"`
+	Clock string `json:"clock"`
+	Seq   int64  `json:"seq"`
+	Woke  string `json:"woke,omitempty"`
+	// Cut is how long the last wait ran, s, before the app cut its call;
+	// Watched how many watch the boat.
+	Cut     int           `json:"lastWaitCutAfter,omitempty"`
+	Watched int           `json:"watchedBy,omitempty"`
 	Notices []string      `json:"notices,omitempty"`
 	Boat    *boatFacts    `json:"boat,omitempty"`
 	Wind    *windFacts    `json:"wind,omitempty"`
 	Shoal   *shoalFacts   `json:"shoal,omitempty"`
+	Sky     *skyFacts     `json:"sky,omitempty"`
 	Pilot   *pilotFacts   `json:"pilot,omitempty"`
 	Sea     *seaFacts     `json:"sea,omitempty"`
 	Weather *weatherFacts `json:"weather,omitempty"`
@@ -114,13 +120,17 @@ type weatherFacts struct {
 	Barometer  string `json:"barometer"`
 	Visibility string `json:"visibility"`
 	Rain       string `json:"rain,omitempty"`
-	Clouds     string `json:"clouds,omitempty"`
 }
 
 type whereFacts struct {
-	Position string  `json:"position"`
-	Edge     float64 `json:"edgeNM"`
-	Ends     string  `json:"fallsIn,omitempty"`
+	Position string `json:"position"`
+	// From is the start's harbour, its bearing from the boat and its
+	// distance, as the chart's list gives them.
+	From        string  `json:"from,omitempty"`
+	FromBearing int     `json:"fromBearing,omitempty"`
+	FromNM      float64 `json:"fromNM,omitempty"`
+	Edge        float64 `json:"edgeNM"`
+	Ends        string  `json:"fallsIn,omitempty"`
 }
 
 type sinceFacts struct {
@@ -143,7 +153,7 @@ func (h *helm) reportFor(s *Sea, f *bus.Frame, sl int32, detail string, since in
 	if b.Heel > 0 {
 		b.HeelTo = side(st.Heel)
 	}
-	b.Tack = tackOf(&f.Course[sl])
+	b.Tack = ownTack(f, sl)
 	if d := float64(in.Depth); d < shoalUnder {
 		d = math.Floor(max(d, 0)*10+0.5) / 10
 		b.Depth = &d
@@ -179,6 +189,17 @@ func (h *helm) reportFor(s *Sea, f *bus.Frame, sl int32, detail string, since in
 	// The autopilot or the hand on the tiller, and the sail.
 	r.Pilot = pilotOf(f, sl)
 
+	// The sky: in the brief report when its words change.
+	if k := skyOf(s, f, st.X, st.Y); k != nil {
+		if !r.brief || k.key != h.skyTold {
+			r.Sky = k
+		}
+		h.skyTold = k.key
+	}
+	if s.Watchers != nil {
+		r.Watched = s.Watchers(bus.Account(h.account))
+	}
+
 	// What happened since.
 	evs, lost := h.ring.after(since)
 	if len(evs) > 0 || lost > 0 {
@@ -193,11 +214,20 @@ func (h *helm) reportFor(s *Sea, f *bus.Frame, sl int32, detail string, since in
 	// What is in sight.
 	r.InSight, r.More = h.sightLines(s, f, sl, r.brief)
 
+	// The boat's own sounds first: in the brief report when the loudest
+	// changes.
+	own := boatHeard(s, f, sl)
+	loudest, _, _ := strings.Cut(own, ", ")
+	if !r.brief || loudest != h.heardTold {
+		r.Hear = []string{own}
+	}
+	h.heardTold = loudest
 	if !r.brief {
 		r.Sea = seaOf(s, f, st.X, st.Y)
 		r.Weather = weatherOf(s, f, st.X, st.Y)
 		r.Where = whereOf(s, f, st.X, st.Y)
-		r.Hear = h.hearLines(s, f, sl)
+		r.Where.from(s, st.X, st.Y)
+		r.Hear = append(r.Hear, h.hearLines(s, f, sl)...)
 	}
 	r.Gust = h.gustLines(s, f, sl)
 	return r
@@ -252,6 +282,22 @@ func tackOf(c *physics.Course) string {
 	}
 	return "head to wind"
 }
+
+// ownTack is the side the wind is over the boat in slot sl, as its sailor
+// says it: the tack its Articles keep, or head to wind within headToWind
+// of the mean wind. A turn under way is the autopilot's line's to tell.
+func ownTack(f *bus.Frame, sl int32) string {
+	if math.Abs(wrap(f.Wind[sl].MeanFrom-f.State[sl].Heading)) < headToWind {
+		return "head to wind"
+	}
+	if f.Course[sl].Tack < 0 {
+		return "port tack"
+	}
+	return "starboard tack"
+}
+
+// headToWind is how near the wind the Boat line says head to wind, rad.
+const headToWind = 15 * math.Pi / 180
 
 // pilotOf is what holds the boat's course, and its sail.
 func pilotOf(f *bus.Frame, sl int32) *pilotFacts {
@@ -337,7 +383,7 @@ func seaOf(s *Sea, f *bus.Frame, x, y float64) *seaFacts {
 
 // weatherOf is the weather at the boat: the barometer and its tendency
 // over a quarter of an hour, as the phone's dial reads it; the
-// visibility's word; the rain; and what clouds are about.
+// visibility's word; and the rain. The clouds are the Sky line's.
 func weatherOf(s *Sea, f *bus.Frame, x, y float64) *weatherFacts {
 	wt := s.weatherAt(f)
 	now := physics.PressureAt(wt, x, y)
@@ -348,23 +394,6 @@ func weatherOf(s *Sea, f *bus.Frame, x, y float64) *weatherFacts {
 	out.Visibility = "visibility " + [...]string{"good", "moderate", "poor", "very poor"}[weather.VisibilityWord(vis, &s.Words)]
 	if rain := physics.RainAt(wt, x, y); rain > 0.05 {
 		out.Rain = rainWords(rain, s.RainWords)
-	}
-	near := physics.NearAt(wt, x, y)
-	var about []string
-	if near&weather.NearStorm != 0 {
-		about = append(about, "a thunderstorm")
-	}
-	if near&weather.NearSquall != 0 {
-		about = append(about, "a squall")
-	}
-	if near&weather.NearShower != 0 {
-		about = append(about, "showers")
-	}
-	if near&weather.NearFog != 0 {
-		about = append(about, "fog banks")
-	}
-	if len(about) > 0 {
-		out.Clouds = strings.Join(about, ", ") + " about"
 	}
 	return out
 }
@@ -393,6 +422,22 @@ func whereOf(s *Sea, f *bus.Frame, x, y float64) *whereFacts {
 		out.Ends = countdown(time.Until(end))
 	}
 	return out
+}
+
+// from adds the start's harbour to where the boat at (x, y) is, as the
+// chart's list gives it, while it is charted.
+func (w *whereFacts) from(s *Sea, x, y float64) {
+	if s.Start == "" {
+		return
+	}
+	e, ok := placeNamed(charted(s), s.Start)
+	if !ok {
+		return
+	}
+	dx, dy := e.sub.X-x, e.sub.Y-y
+	d := math.Sqrt(dx*dx + dy*dy)
+	w.From, w.FromBearing = titleOf(e.sub), degrees(physics.Atan2(dx, dy))
+	w.FromNM = math.Floor(d/nm*10+0.5) / 10
 }
 
 // The water under a boat the Boat line tells, m: under this it is shoal.
@@ -487,7 +532,10 @@ func (h *helm) sightLines(s *Sea, f *bus.Frame, sl int32, brief bool) (lines []s
 	left := 0
 	for _, l := range land {
 		h.landSeen[l.subject] = true
-		if brief && was[l.subject] && l.d > landNear {
+		// The place the agent's wait watched is always told: it is what
+		// the boat steers for.
+		goal := h.hasGoal && l.subject == h.goal
+		if brief && was[l.subject] && l.d > landNear && !goal {
 			left++
 			continue
 		}
@@ -581,6 +629,21 @@ func (s *Sea) landLines(f *bus.Frame, sl int32) []landLine {
 	st := &f.State[sl]
 	w := s.Chart.World()
 	c := s.Chart.Load()
+	// Surf breaks on the shores in a sea of surfFrom or more.
+	surf := false
+	if sea := seaOf(s, f, st.X, st.Y); sea != nil {
+		surf = sea.Waves >= surfFrom
+	}
+	// The lights lit, by their lighthouse's subject: one unlit is seen by
+	// its tower.
+	lit := map[int32]bool{}
+	if t := s.Sight.Table; t != nil {
+		on, _ := s.lights(f)
+		for i := range t.Lights() {
+			_, _, sub := t.LightAt(i)
+			lit[sub] = on[i]
+		}
+	}
 	charted := map[int32]int{}
 	for i, sub := range c.Subjects {
 		charted[sub] = i
@@ -611,10 +674,13 @@ func (s *Sea) landLines(f *bus.Frame, sl int32) []landLine {
 			if l := s.lightOf(sub); l != "" {
 				line += " · light " + l
 			}
+			if u := s.unchartedLand(sub); u != "" {
+				line += " · " + u
+			}
 			out = append(out, landLine{x.Subject, d, line + " · " + creditWords(&c.Rows[i])})
 			continue
 		}
-		out = append(out, landLine{x.Subject, d, s.lookOf(sub) + " · " + three(bearing5(bear)) + " " + rangeWords(d)})
+		out = append(out, landLine{x.Subject, d, s.lookOf(sub, surf && nearestOf(sub, st.X, st.Y) <= surfSeen, lit[x.Subject]) + " · " + three(bearing5(bear)) + " " + rangeWords(d)})
 	}
 	return out
 }
@@ -631,31 +697,57 @@ func (s *Sea) lightOf(sub *chart.Subject) string {
 	return ls[sub.Light].Notation
 }
 
+// The surf an uncharted island's line tells: the sea breaking on its
+// shore, in a sea of surfFrom m or more, within surfSeen m of the boat,
+// where the phone draws the shallows and their surf.
+const (
+	surfFrom = 0.5
+	surfSeen = 400.0
+)
+
+// nearestOf is how far (x, y) is from a subject's bounds, m.
+func nearestOf(sub *chart.Subject, x, y float64) float64 {
+	dx := max(sub.Bounds[0]-x, 0, x-sub.Bounds[2])
+	dy := max(sub.Bounds[1]-y, 0, y-sub.Bounds[3])
+	return math.Sqrt(dx*dx + dy*dy)
+}
+
+// The island heights the look tells, m: under lowIsland it is low.
+const lowIsland = 10.0
+
 // lookOf is an uncharted subject as a lookout sees it: an island by its
-// size, its land and its cliffs; a place or a feature by its kind.
-func (s *Sea) lookOf(sub *chart.Subject) string {
+// height, its trees and shore, its cliffs and the surf on it when surf,
+// and its size; a lighthouse by its light while lit, else its tower; a
+// place or a feature by its kind.
+func (s *Sea) lookOf(sub *chart.Subject, surf, lit bool) string {
 	switch sub.Kind {
 	case sight.Island:
 		across := max(sub.Bounds[2]-sub.Bounds[0], sub.Bounds[3]-sub.Bounds[1])
-		look := "island"
+		look := []string{"low island"}
+		if sub.Highest >= lowIsland {
+			look[0] = fmt.Sprintf("island rising %d m", 5*int(math.Round(sub.Highest/5)))
+		}
 		if b := s.Bundle; b != nil {
 			for i := range b.Islands {
 				is := &b.Islands[i]
 				if is.Number != sub.Number {
 					continue
 				}
-				if name := s.Biomes[is.Biome]; name != "" {
-					look = name + " island"
-				}
+				look = append(look, s.landWords(is.Biome)...)
 				if is.Cliffs > 0.25 {
-					look += ", cliffs"
+					look = append(look, "cliffs")
 				}
 			}
 		}
-		return fmt.Sprintf("land (uncharted) · %s %s across", look, rangeWords(across))
+		if surf {
+			look = append(look, "surf")
+		}
+		return fmt.Sprintf("land (uncharted) · %s · %s across", strings.Join(look, ", "), rangeWords(across))
 	case sight.Place:
-		if l := s.lightOf(sub); l != "" {
+		if l := s.lightOf(sub); l != "" && lit {
 			return "a light " + l + " (uncharted)"
+		} else if l != "" {
+			return "a lighthouse tower (uncharted)"
 		}
 		if sub.Sort >= 0 && sub.Sort < len(s.PlaceKinds) {
 			return article(s.PlaceKinds[sub.Sort]) + " (uncharted)"
@@ -715,6 +807,12 @@ func (r *report) text() string {
 	if r.Woke != "" {
 		b.WriteString(" · " + r.Woke)
 	}
+	if r.Watched > 0 {
+		fmt.Fprintf(&b, " · watched by %d", r.Watched)
+	}
+	if r.Cut > 0 {
+		fmt.Fprintf(&b, " · last wait cut after %d s; nothing lost", r.Cut)
+	}
 	b.WriteByte('\n')
 	for _, n := range r.Notices {
 		b.WriteString(n + "\n")
@@ -766,6 +864,9 @@ func (r *report) text() string {
 	if s := r.Shoal; s != nil {
 		b.WriteString("Shoal: " + s.text() + "\n")
 	}
+	if k := r.Sky; k != nil {
+		b.WriteString("Sky: " + k.text() + "\n")
+	}
 	if s := r.Sea; s != nil {
 		fmt.Fprintf(&b, "Sea: waves %.1f m from %s", s.Waves, three(s.From))
 		if s.Swell > 0 {
@@ -778,13 +879,14 @@ func (r *report) text() string {
 		if w.Rain != "" {
 			parts = append(parts, w.Rain)
 		}
-		if w.Clouds != "" {
-			parts = append(parts, w.Clouds)
-		}
 		b.WriteString("Weather: " + strings.Join(parts, " · ") + "\n")
 	}
 	if w := r.Where; w != nil {
-		fmt.Fprintf(&b, "Where: %s · edge %.1f NM", w.Position, w.Edge)
+		fmt.Fprintf(&b, "Where: %s", w.Position)
+		if w.From != "" {
+			fmt.Fprintf(&b, " · %s %s %.1f NM", w.From, three(w.FromBearing), w.FromNM)
+		}
+		fmt.Fprintf(&b, " · edge %.1f NM", w.Edge)
 		if w.Ends != "" {
 			b.WriteString(" · the falls take this world in " + w.Ends)
 		}
@@ -823,3 +925,65 @@ func (r *report) json() string {
 	b, _ := json.Marshal(r)
 	return string(b)
 }
+
+// landWords are an island's trees and shore as a lookout sees them, from
+// its biome's surfaces and their plants: "wooded", "scrub" or "bare" by
+// the canopy of its high ground; "palms" where palms grow on it;
+// "beaches" or "mangroves" on its shore.
+func (s *Sea) landWords(biome string) []string {
+	cat := s.Catalog
+	if cat == nil {
+		return nil
+	}
+	var bm *catalog.Biome
+	for i := range cat.World.Biomes {
+		if string(cat.World.Biomes[i].ID) == biome {
+			bm = &cat.World.Biomes[i]
+		}
+	}
+	if bm == nil {
+		return nil
+	}
+	surface := func(id catalog.ID) *catalog.Surface {
+		for i := range cat.World.Surfaces {
+			if cat.World.Surfaces[i].ID == id {
+				return &cat.World.Surfaces[i]
+			}
+		}
+		return nil
+	}
+	palm := func(sf *catalog.Surface) bool {
+		for _, c := range sf.Cover {
+			for _, k := range cat.World.Flora.Kinds {
+				if k.ID == c.Plant && k.Form == catalog.FormPalm {
+					return true
+				}
+			}
+		}
+		return false
+	}
+	var out []string
+	high, low := surface(bm.Surfaces.High), surface(bm.Surfaces.Low)
+	switch {
+	case high == nil:
+	case high.Canopy >= woodedFrom:
+		out = append(out, "wooded")
+	case high.Canopy > 0:
+		out = append(out, "scrub")
+	default:
+		out = append(out, "bare")
+	}
+	if high != nil && palm(high) || low != nil && palm(low) {
+		out = append(out, "palms")
+	}
+	if bm.Mangroves {
+		out = append(out, "mangroves")
+	}
+	if bm.Beach > 0 {
+		out = append(out, "beaches")
+	}
+	return out
+}
+
+// woodedFrom is the canopy, m, from which high ground is wooded.
+const woodedFrom = 8.0
