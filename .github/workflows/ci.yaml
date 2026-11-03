@@ -128,9 +128,21 @@ jobs:
       # package, so a slow runner is not a failed test, nor a release not
       # made.
       - run: go test -race -short -timeout 20m ./...
+      # On amd64 the physics, simulation, sky and world generator run at
+      # their full length in the next step, built for fused multiply-add,
+      # and not here as well: beside every other package at once on the
+      # runner's four cores, the simulation's took up to Go's ten minutes
+      # for a package, and over (alone, in the next step, under seven).
       - name: Every test at its full length, and those the short run skips, without the race detector
-        run: go test ./...
-      - name: The physics, simulation, sky and world generator tests again, built for amd64 with fused multiply-add available
+        shell: bash
+        run: |
+          if [ "$RUNNER_ARCH" = X64 ]; then
+            mapfile -t packages < <(go list ./... | grep -vxE '.*/internal/(physics|sim|sky|worldgen)')
+            go test "${packages[@]}"
+          else
+            go test ./...
+          fi
+      - name: The physics, simulation, sky and world generator tests at their full length, built for amd64 with fused multiply-add available
         if: runner.arch == 'X64'
         env:
           GOAMD64: v3
