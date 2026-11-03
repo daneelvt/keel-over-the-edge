@@ -259,9 +259,10 @@ export class Ocean {
    * frame's world time, the band's phases at the origin then, the tile
    * field on the tile under the boat, the far sea's reach for the camera's
    * height; then the sea under the boat, the detail band and the wakes.
-   * Then runs the tile pass.
+   * Then runs the tile pass. Without a renderer (a frame not drawn) the
+   * GPU's passes are left: the detail band, the wakes, the tile pass.
    */
-  update(renderer: WebGPURenderer, origin: FloatingOrigin, f: SeaFrame): void {
+  update(renderer: WebGPURenderer | null, origin: FloatingOrigin, f: SeaFrame): void {
     this.#layOut(f.tick);
     this.band.update(origin.world.x, origin.world.y, f.tick);
     this.uniforms.sync();
@@ -323,6 +324,9 @@ export class Ocean {
     frame.boatNorth = f.boatNorth;
     frame.time = f.tick / STEPS_PER_SECOND;
     frame.dt = f.dt;
+    if (renderer === null) {
+      return;
+    }
     this.detail.update(renderer, frame);
     this.wakes.update(renderer, {
       originEast: origin.world.x,

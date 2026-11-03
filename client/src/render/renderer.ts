@@ -20,8 +20,18 @@ import { WebGPURenderer } from 'three/webgpu';
 
 export type Backend = 'webgpu' | 'webgl2';
 
-/** The back end asked for: WebGL 2 when forced with ?backend=webgl2 or without WebGPU. */
-export function chooseBackend(query: URLSearchParams, hasWebGPU: boolean): Backend {
+/** A back end, or none: a page under test that draws nothing (?test&draw=off). */
+export type Wanted = Backend | 'none';
+
+/**
+ * The back end asked for: WebGL 2 when forced with ?backend=webgl2 or
+ * without WebGPU; none for a page under test told not to draw, whose tests
+ * check the connection, the account and the screen's words, no picture.
+ */
+export function chooseBackend(query: URLSearchParams, hasWebGPU: boolean): Wanted {
+  if (query.has('test') && query.get('draw') === 'off') {
+    return 'none';
+  }
   if (query.get('backend') === 'webgl2' || !hasWebGPU) {
     return 'webgl2';
   }

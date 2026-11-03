@@ -62,7 +62,7 @@ import {
   type Tier,
   type TierName,
 } from './quality';
-import { type Backend, type Gfx, wantsCompat } from './renderer';
+import { type Gfx, type Wanted, wantsCompat } from './renderer';
 import { RightOfWay, type Seen } from './rightofway';
 import { Shadows } from './shadows';
 import { StormCones } from './signals';
@@ -112,10 +112,13 @@ export interface FleetSource {
 /** No boats: the fleet before the game is online. */
 const NO_BOATS: readonly DrawnBoat[] = [];
 
-/** What can cover the sea, drawn by the same renderer in its place while it is open. */
+/**
+ * What can cover the sea, drawn by the same renderer in its place while it
+ * is open; brought up to date without one on a page that draws nothing.
+ */
 export interface Cover {
   readonly open: boolean;
-  draw(renderer: WebGPURenderer, dt: number, now: number): void;
+  draw(renderer: WebGPURenderer | null, dt: number, now: number): void;
 }
 
 export class SeaScene {
@@ -270,7 +273,7 @@ export class SeaScene {
 
   constructor(
     container: HTMLElement,
-    backend: Backend,
+    backend: Wanted,
     options: SceneOptions = { query: new URLSearchParams(), store: null, detail: 'auto' },
   ) {
     this.#query = options.query;
@@ -284,7 +287,7 @@ export class SeaScene {
           // not drawn.
           this.stats.gap();
           this.tick?.(info.dt, info.now);
-          cover.draw(gfx.renderer, info.dt, info.now);
+          cover.draw(gfx?.renderer ?? null, info.dt, info.now);
           return false;
         }
         this.#frame(gfx, info.dt, info.now);
@@ -300,6 +303,8 @@ export class SeaScene {
       },
     });
     this.stage.compat = wantsCompat(options.query);
+    // A page under test draws what its tests ask for, until it is thawed.
+    this.stage.loopDraws = !options.query.has('test');
     this.stats.gpuTiming = true;
     this.stats.onWindow = (now, st) => this.#window(now, st);
     const scene = this.stage.scene;
@@ -929,7 +934,7 @@ export class SeaScene {
   }
 
   /** The lanterns of the player's boat and of the others, each lit by the sun at its own boat. */
-  #drawLanterns(gfx: Gfx, camera: Vector3): void {
+  #drawLanterns(height: number, camera: Vector3): void {
     const l = this.lanterns;
     l.begin();
     const sun = SKY.sun + BODY.altitude;
@@ -966,7 +971,7 @@ export class SeaScene {
         l.addAshore(t.east - o.x, t.top, -(t.north - o.y), lit);
       }
     }
-    l.commit(this.stage.camera.fov, gfx.canvas.clientHeight);
+    l.commit(this.stage.camera.fov, height);
   }
 
   /**
@@ -1084,7 +1089,7 @@ export class SeaScene {
   };
 
   /** The lighthouses' towers and lights, each light lit by the sun at its lighthouse or by fog. */
-  #drawLights(gfx: Gfx, camera: Vector3, now: number): void {
+  #drawLights(height: number, camera: Vector3, now: number): void {
     const sun = SKY.sun + BODY.altitude;
     const own = this.sky.now.sunHeight;
     const source = this.ocean.source;
@@ -1104,12 +1109,17 @@ export class SeaScene {
       mist: this.edge.mist,
       dome: [this.focusScene.x, this.focusScene.z],
       fovY: this.stage.camera.fov,
-      height: gfx.canvas.clientHeight,
+      height,
       on: this.drawSky,
     });
   }
 
-  #frame(gfx: Gfx, dt: number, now: number): void {
+  /**
+   * A frame: the scene brought to the frame's time, and with gfx what is
+   * drawn with the renderer before the scene's render. Without, the frame
+   * is not drawn: the update runs alone.
+   */
+  #frame(gfx: Gfx | null, dt: number, now: number): void {
     const cap = this.stage.cap;
     if (cap.probed !== this.#probed) {
       // The display was probed: nothing was drawn meanwhile, on purpose.
@@ -1121,7 +1131,17 @@ export class SeaScene {
     }
     this.stats.window =
       this.windowMs ?? (now - this.#started < BENCHMARK ? BENCHMARK_WINDOW : WINDOW);
-    this.stats.frame(now, gfx);
+    if (gfx === null) {
+      // Not drawn: the frames either side of it say nothing of the GPU.
+      this.stats.gap();
+    } else {
+      this.stats.frame(now, gfx);
+    }
+    // The picture's size on the page, in CSS pixels.
+    const view =
+      gfx === null
+        ? this.stage.size()
+        : { width: gfx.canvas.clientWidth, height: gfx.canvas.clientHeight };
     this.tick?.(dt, now);
     this.freeCam.update(dt);
     this.#updateBoatScene();
@@ -1146,7 +1166,7 @@ export class SeaScene {
       this.pose.east,
       this.pose.north,
     );
-    this.ocean.update(gfx.renderer, this.origin, {
+    this.ocean.update(gfx?.renderer ?? null, this.origin, {
       tick: this.ticks,
       dt: this.timeStep,
       boatEast: focus.east,
@@ -1172,13 +1192,14 @@ export class SeaScene {
       );
     }
     this.#drawTowns(camera.position, now);
-    this.#drawLanterns(gfx, camera.position);
-    this.#drawLights(gfx, camera.position, now);
+    this.#drawLanterns(view.height, camera.position);
+    this.#drawLights(view.height, camera.position, now);
     this.wrecks.frame(this.origin);
-    const canvas = gfx.canvas;
-    this.stars.resize(canvas.width, canvas.height);
+    if (gfx !== null) {
+      this.stars.resize(gfx.canvas.width, gfx.canvas.height);
+    }
     this.stars.mesh.visible = this.drawSky && this.stars.total > 0;
-    this.stars.placeLabel(camera, canvas.clientWidth, canvas.clientHeight, now);
+    this.stars.placeLabel(camera, view.width, view.height, now);
     const o = this.overlays;
     const rings = this.gustRings;
     // The free camera's picture has no overlays: the interface is hidden.
@@ -1223,15 +1244,14 @@ export class SeaScene {
     row.update(physics, now, this.ticks, own, drawn, count, ow.x, ow.y, camera);
     if (row.on) {
       row.group.updateMatrixWorld();
-      row.placeLabels(camera, gfx.canvas.clientWidth, gfx.canvas.clientHeight);
+      row.placeLabels(camera, view.width, view.height);
     }
     if ((o.wind || o.forces) && !free) {
       o.update(bs.x, bs.z, this.pose, this.wind, this.out);
       // The overlays ride the boat: their world matrices must be current to place their labels.
       this.boat?.root.updateMatrixWorld();
       o.world.updateMatrixWorld();
-      const size = gfx.canvas;
-      o.placeLabels(camera, size.clientWidth, size.clientHeight);
+      o.placeLabels(camera, view.width, view.height);
     }
     this.#spray();
     this.onFrame?.();

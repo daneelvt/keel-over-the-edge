@@ -5,23 +5,14 @@
 // with no correction; a wind changed on the server reaches the boat; a
 // reload within the grace finds the same boat; a restart of keel rings the
 // harbourmaster's bell and the same boat is there after; and a second
-// device takes the boat, and is taken back from. One back end is enough: the drawing is not under test.
+// device takes the boat, and is taken back from. The pages draw nothing
+// (?draw=off): the drawing is not under test.
 
 import { expect, type Page, test } from '@playwright/test';
-import { drained, heldRegime, sail, sailor, steady } from './helpers';
+import { alone, heldRegime, sail, sailor } from './helpers';
 
 const internal = 'http://127.0.0.1:19090';
 const control = 'http://127.0.0.1:19099';
-
-test.beforeEach(() => {
-  test.skip(test.info().project.name !== 'webgl2', 'the connection: one back end is enough');
-});
-
-// Where the connection is the test, not the picture or the screen, a small
-// page. CI's software GPU runs a full-size sea's frames some 20 s behind the
-// page, and the next page, a reload or the next test's, waits for them; a
-// small one's, half.
-const small = { width: 320, height: 200 };
 
 function net(page: Page) {
   return page.evaluate(() => globalThis.keel.net());
@@ -56,11 +47,17 @@ function cleanAir(c: { corrections: number; shadowed: number; largest: number })
   expect(c.largest).toBeLessThan(0.001);
 }
 
-test('a sail predicted with no correction', async ({ page, context }) => {
-  await page.setViewportSize(small);
+// Timed: three pages at once on four cores, an input of the page's reached
+// keel a tick late now and then, and was corrected.
+test('a sail predicted with no correction', { tag: '@alone' }, async ({ page, context }) => {
   await sailor(context);
   await sail(page);
-  await page.evaluate(() => globalThis.keel.script('wiggle'));
+  // In clean air: away from the boats of the tests sailing beside it.
+  await alone(page);
+  await page.evaluate(() => {
+    globalThis.keel.countAfresh();
+    globalThis.keel.script('wiggle');
+  });
   await page.waitForTimeout(15_000);
   const n = await net(page);
   expect(n.counts.snapshots).toBeGreaterThan(150);
@@ -68,8 +65,11 @@ test('a sail predicted with no correction', async ({ page, context }) => {
   expect(n.traffic.messagesOut).toBeGreaterThan(100);
 });
 
-test('a wind changed on the server reaches the boat', async ({ page, context, request }) => {
-  await page.setViewportSize(small);
+test('a wind changed on the server reaches the boat', { tag: '@world' }, async ({
+  page,
+  context,
+  request,
+}) => {
   await sailor(context);
   await sail(page);
   const res = await request.post(`${internal}/debug/wind?knots=15&from=90`);
@@ -95,14 +95,9 @@ test('a wind changed on the server reaches the boat', async ({ page, context, re
 });
 
 test('a reload within the grace finds the same boat', async ({ page, context }) => {
-  await page.setViewportSize(small);
   await sailor(context);
   await sail(page);
   await page.evaluate(() => globalThis.keel.setControls(0.3, 0.4));
-  // Reloaded while CI's software GPU is still making what the page draws,
-  // the page's next load can hang there.
-  await steady(page);
-  await drained(page);
   const before = await net(page);
   const at = (await page.evaluate(() => globalThis.keel.boat())).state;
   await sail(page);
@@ -113,12 +108,9 @@ test('a reload within the grace finds the same boat', async ({ page, context }) 
   expect(Math.hypot(now.x - at.x, now.y - at.y)).toBeLessThan(40);
 });
 
-test('a restart of keel rings the bell, and the boat waits for its sailor', async ({
-  page,
-  context,
-  request,
-}) => {
-  await page.setViewportSize(small);
+test('a restart of keel rings the bell, and the boat waits for its sailor', {
+  tag: '@world',
+}, async ({ page, context, request }) => {
   await sailor(context);
   await sail(page);
   const before = await net(page);
@@ -127,7 +119,7 @@ test('a restart of keel rings the bell, and the boat waits for its sailor', asyn
     expect(line).toHaveText(/harbourmaster rings the bell/, { timeout: 30_000 }),
     request.post(`${control}/restart`, { timeout: 60_000 }),
   ]);
-  expect(restart.status()).toBe(204);
+  expect(restart.status(), await restart.text()).toBe(204);
   await page.waitForFunction(() => globalThis.keel.net().status === 'sailing', null, {
     timeout: 30_000,
   });
@@ -137,19 +129,11 @@ test('a restart of keel rings the bell, and the boat waits for its sailor', asyn
 });
 
 test('another device takes the boat, and Take over takes it back', async ({ page, browser }) => {
-  // Two pages load the game, one while the other sails: on CI's software
-  // GPU that alone has taken most of the 90 s a test is given. Small pages,
-  // as together.spec.ts's, so the second loads beside the first.
-  test.setTimeout(180_000);
-  await page.setViewportSize(small);
   const context = page.context();
   await sailor(context);
   await sail(page);
   const boat = (await net(page)).boat;
-  const other = await browser.newContext({
-    storageState: await context.storageState(),
-    viewport: small,
-  });
+  const other = await browser.newContext({ storageState: await context.storageState() });
   const second = await other.newPage();
   await sail(second);
   expect((await net(second)).boat).toBe(boat);

@@ -17,7 +17,8 @@
 // 127.0.0.1:19099, POST /restart[?down=30s], which stops keel as a
 // deployment does and starts it again, after down if given, for the tests
 // of a restart (with no bell: KEEL_BELL=0s) and of a world's end missed
-// while keel was down. WebKit sends a Secure cookie
+// while keel was down. It answers once keel is ready again, or with a 500
+// that says why not: what /readyz last answered and keel's last words. WebKit sends a Secure cookie
 // to https only, even on localhost, so its tests reach keel through a Vite
 // serving https with the certificate -tls writes.
 package main
@@ -34,6 +35,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"math/big"
 	"net"
 	"net/http"
@@ -41,6 +43,7 @@ import (
 	"os/exec"
 	"os/signal"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"syscall"
@@ -50,6 +53,12 @@ import (
 	"github.com/daneelvt/keel-over-the-edge/internal/client"
 	"github.com/daneelvt/keel-over-the-edge/internal/store/storetest"
 )
+
+// readyWait is how long a restart waits for keel to be ready again. Across a
+// missed world's end keel makes the next world as it starts, which took 29 s
+// on one runner: the runners vary 2.5× in speed, so the wait is four times
+// that.
+const readyWait = 120 * time.Second
 
 // The addresses keel serves the browser tests on, and the page's origin:
 // Vite's, on loopback, where browsers allow a Secure cookie over http.
@@ -150,7 +159,7 @@ func run() error {
 	}
 	go client.Proxy(ctx, ln, playAddr, lag)
 
-	k := &keelProc{path: keel, env: env}
+	k := &keelProc{path: keel, env: env, ready: "http://" + internalAddr + "/readyz", wait: readyWait}
 	if err := k.start(); err != nil {
 		return err
 	}
@@ -223,10 +232,17 @@ func holdWeather(ctx context.Context) {
 type keelProc struct {
 	path string
 	env  []string
+	// ready is keel's /readyz, and wait how long a restart waits for it.
+	ready string
+	wait  time.Duration
+	// said keeps keel's last lines of output, for a restart that fails.
+	said tail
 
-	mu   sync.Mutex
-	cmd  *exec.Cmd
-	done chan error
+	mu  sync.Mutex
+	cmd *exec.Cmd
+	// done is closed when cmd has exited, its error then in err.
+	done chan struct{}
+	err  error
 	// died is told when keel exits other than by stop or restart.
 	died chan error
 }
@@ -238,18 +254,21 @@ func (k *keelProc) start() error {
 		k.died = make(chan error, 1)
 	}
 	cmd := exec.Command(k.path, "serve")
-	cmd.Env, cmd.Stdout, cmd.Stderr = k.env, os.Stdout, os.Stderr
+	cmd.Env = k.env
+	cmd.Stdout = io.MultiWriter(os.Stdout, &k.said)
+	cmd.Stderr = io.MultiWriter(os.Stderr, &k.said)
 	if err := cmd.Start(); err != nil {
 		return err
 	}
-	done := make(chan error, 1)
+	done := make(chan struct{})
 	k.cmd, k.done = cmd, done
 	go func() {
 		err := cmd.Wait()
-		done <- err
 		k.mu.Lock()
+		k.err = err
 		current := k.cmd == cmd
 		k.mu.Unlock()
+		close(done)
 		if current {
 			k.died <- err
 		}
@@ -280,24 +299,106 @@ func (k *keelProc) stop() {
 }
 
 // restart stops keel and starts it again after down, and waits until it
-// is ready.
+// is ready. If it is not ready within the wait, or exits meanwhile, the
+// error says what /readyz last answered and what keel last said.
 func (k *keelProc) restart(down time.Duration) error {
 	k.stop()
 	time.Sleep(down)
+	k.said.reset()
 	if err := k.start(); err != nil {
 		return err
 	}
-	for range 300 {
-		res, err := http.Get("http://" + internalAddr + "/readyz")
-		if err == nil {
+	k.mu.Lock()
+	done := k.done
+	k.mu.Unlock()
+	err := waitReady(k.ready, k.wait, done)
+	if errors.Is(err, errExited) {
+		k.mu.Lock()
+		err = fmt.Errorf("%w (%v)", err, k.err)
+		k.mu.Unlock()
+	}
+	if err == nil {
+		return nil
+	}
+	if words := k.said.lines(); len(words) > 0 {
+		return fmt.Errorf("%w; keel's last words:\n%s", err, strings.Join(words, "\n"))
+	}
+	return err
+}
+
+// errExited is waitReady's error when keel exits before it is ready.
+var errExited = errors.New("keel exited before it was ready")
+
+// waitReady polls url every 100 ms until it answers 200, for up to wait, or
+// until exited is closed: the error says which, and what url last answered.
+func waitReady(url string, wait time.Duration, exited <-chan struct{}) error {
+	start := time.Now()
+	last := "nothing"
+	for time.Since(start) < wait {
+		res, err := http.Get(url)
+		if err != nil {
+			last = err.Error()
+		} else {
+			body, _ := io.ReadAll(io.LimitReader(res.Body, 1024))
 			res.Body.Close()
 			if res.StatusCode == http.StatusOK {
 				return nil
 			}
+			last = fmt.Sprintf("%d %q", res.StatusCode, strings.TrimSpace(string(body)))
 		}
-		time.Sleep(100 * time.Millisecond)
+		select {
+		case <-exited:
+			return fmt.Errorf("%w, after %s: /readyz last answered %s",
+				errExited, time.Since(start).Round(100*time.Millisecond), last)
+		case <-time.After(100 * time.Millisecond):
+		}
 	}
-	return errors.New("keel was not ready again within 30 s")
+	return fmt.Errorf("keel was not ready again within %s: /readyz last answered %s", wait, last)
+}
+
+// tail keeps the last lines written to it.
+type tail struct {
+	mu      sync.Mutex
+	partial []byte
+	kept    []string
+}
+
+// tailLines is how many lines a tail keeps.
+const tailLines = 20
+
+func (t *tail) Write(p []byte) (int, error) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.partial = append(t.partial, p...)
+	for {
+		i := slices.Index(t.partial, '\n')
+		if i < 0 {
+			break
+		}
+		t.kept = append(t.kept, string(t.partial[:i]))
+		t.partial = t.partial[i+1:]
+	}
+	if n := len(t.kept) - tailLines; n > 0 {
+		t.kept = slices.Delete(t.kept, 0, n)
+	}
+	return len(p), nil
+}
+
+// lines is what was kept, and any line not yet ended.
+func (t *tail) lines() []string {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	out := slices.Clone(t.kept)
+	if len(t.partial) > 0 {
+		out = append(out, string(t.partial))
+	}
+	return out
+}
+
+func (t *tail) reset() {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.partial, t.kept = nil, nil
 }
 
 // writeCert writes a self-signed certificate for localhost and 127.0.0.1,

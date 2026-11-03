@@ -7,11 +7,6 @@
 import { expect, test } from '@playwright/test';
 import { sailor } from './helpers';
 
-test.beforeEach(() => {
-  const p = test.info().project.name;
-  test.skip(p !== 'webgl2' && p !== 'webkit', 'Chromium and WebKit');
-});
-
 test('the net worker connects with the page’s cookie', async ({ page, context }) => {
   await sailor(context, 'Worker');
   await page.goto('/e2e/net.html');

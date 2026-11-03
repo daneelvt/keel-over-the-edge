@@ -372,10 +372,10 @@ export class ChartView {
   }
 
   /** Draws the chart, if it is due and something has changed. */
-  draw(renderer: WebGPURenderer, dt: number, now: number): void {
-    const canvas = renderer.domElement;
-    const w = canvas.clientWidth || 1;
-    const h = canvas.clientHeight || 1;
+  draw(renderer: WebGPURenderer | null, dt: number, now: number): void {
+    const canvas = renderer?.domElement;
+    const w = canvas?.clientWidth || this.#width;
+    const h = canvas?.clientHeight || this.#height;
     if (w !== this.#width || h !== this.#height) {
       this.#width = w;
       this.#height = h;
@@ -389,7 +389,9 @@ export class ChartView {
     const step = Math.min((now - this.#last) / 1000, 0.25);
     this.#last = now;
     this.#update(now, Number.isFinite(step) ? step : dt);
-    if (!this.#dirty) {
+    // Without a renderer (a page under test that draws nothing) the chart
+    // is brought up to date, and not drawn.
+    if (!this.#dirty || renderer === null) {
       return;
     }
     this.#dirty = false;

@@ -271,6 +271,8 @@ test('the low tier’s loop is made behind the scene, a few milliseconds a frame
   const r = await page.evaluate(async () => {
     const k = globalThis.keel;
     await k.ready(false);
+    // The loop drawing, as a page not under test draws it.
+    k.thaw();
     let frames = 0;
     while (!k.detail().baked && frames < 600) {
       await k.frames(1);
@@ -709,9 +711,12 @@ test('spray is thrown into a gale, in one draw call', async ({ page }) => {
   await openLook(page, 'sea=gale');
   const r = await page.evaluate(async () => {
     const k = globalThis.keel;
-    k.setState({ heading: 0.3, surge: 4, sheetLimit: 0.4 });
+    // On a close reach into the gale's seas, where the boat keeps its way:
+    // close to the wind it stalls in a second or two, and whether a frame
+    // caught its bow plunging before then was the frame rate's doing.
+    k.setState({ heading: 0.9, surge: 4, sheetLimit: 0.4 });
     k.setControls(0, 0.2);
-    k.script('steer', 0.3);
+    k.script('steer', 0.9);
     k.thaw();
     let most = 0;
     for (let i = 0; i < 40 && most === 0; i++) {

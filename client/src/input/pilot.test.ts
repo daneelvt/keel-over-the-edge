@@ -146,20 +146,35 @@ describe('the autopilot’s control', () => {
     p.engage(PILOT_WIND, -165 * DEG, 0);
     expect(p.degrees).toBe(165);
     // The step held 165° on port: the heading 165° east of the wind.
-    expect(p.follow(165 * DEG, 0, false)).toBe(true);
+    expect(p.follow(165 * DEG, 0, false, 0)).toBe(true);
     expect(p.degrees).toBe(-165);
     expect(p.order).toBe(0);
     // Holding what it was asked: nothing changes; nor during a turn.
-    expect(p.follow(165 * DEG, 0, false)).toBe(false);
+    expect(p.follow(165 * DEG, 0, false, 0)).toBe(false);
     p.tack(0);
-    expect(p.follow(-165 * DEG, 0, true)).toBe(false);
+    expect(p.follow(-165 * DEG, 0, true, 1)).toBe(false);
     // In heading mode: a heading held mirrored about the wind.
     p.engage(PILOT_HEADING, 170 * DEG, 0);
-    expect(p.follow(190 * DEG, 0, false)).toBe(true);
+    expect(p.follow(190 * DEG, 0, false, 1)).toBe(true);
     expect(p.degrees).toBe(190);
     // A heading reached through the wind is not followed.
     p.engage(PILOT_HEADING, 100 * DEG, 0);
-    expect(p.follow(150 * DEG, 0, false)).toBe(false);
+    expect(p.follow(150 * DEG, 0, false, 1)).toBe(false);
+  });
+
+  test('a turn ordered is not undone before the boat takes the order', () => {
+    // A frame drawn between the key and the next step: the step still
+    // steered for 112° to starboard, the target is the gybe's, 112° to
+    // port. Followed, the gybe would be undone before it began.
+    const p = new PilotInput();
+    p.engage(PILOT_WIND, -112 * DEG, 0);
+    p.gybe(0);
+    expect(p.degrees).toBe(-112);
+    expect(p.follow(-112 * DEG, 0, false, 0)).toBe(false);
+    expect(p.degrees).toBe(-112);
+    // Taken, and under way: nothing follows either.
+    expect(p.follow(-112 * DEG, 0, true, 1)).toBe(false);
+    expect(p.degrees).toBe(-112);
   });
 
   test('a target is whole steps of a turn, and back', () => {

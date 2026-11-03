@@ -14,19 +14,14 @@
 
 import { type BrowserContext, expect, type Page, test } from '@playwright/test';
 import data from '../src/catalog/catalog.gen.json' with { type: 'json' };
-import { holdPasskeys, sailor, setSail, signInWith } from './helpers';
+import { GAME, holdPasskeys, sailor, setSail, signInWith, stamp } from './helpers';
 
 const look = data.sailors[0]?.id ?? '';
 
-const chromium = () => test.info().project.name === 'webgl2';
-
-test.beforeEach(() => {
-  const p = test.info().project.name;
-  test.skip(p !== 'webgl2' && p !== 'webkit', 'Chromium and WebKit');
-});
+const chromium = () => test.info().project.name !== 'webkit';
 
 async function openStart(page: Page): Promise<void> {
-  await page.goto('/?backend=webgl2');
+  await page.goto(GAME);
   await expect(page.getByRole('heading', { name: 'Keel Over the Edge' })).toBeVisible({
     timeout: 30_000,
   });
@@ -94,7 +89,7 @@ test('signed in on another device by the browser’s prompt, and by autofill', a
   const conditional = page3.waitForRequest((r) =>
     r.url().endsWith('/signin/finish?mediation=conditional'),
   );
-  await page3.goto('/?backend=webgl2');
+  await page3.goto(GAME);
   await conditional;
   await signedIn(page3, third);
   if (chromium()) {
@@ -152,7 +147,7 @@ test('the account page: a passkey added and one removed, signed out, and the sai
   // does not hold: its prompt makes the second passkey.
   const made = await sailor(context, 'Account');
   await context.credentials.install();
-  await page.goto('/?test&backend=webgl2&tier=low');
+  await page.goto(GAME);
   await setSail(page);
   await openAccount(page);
   const passkeys = page.locator('.account-passkeys li');
@@ -167,9 +162,8 @@ test('the account page: a passkey added and one removed, signed out, and the sai
   await passkeys.first().getByRole('button', { name: 'Remove' }).click();
   await expect(page.locator('.account-status')).toHaveText('Passkey removed.');
   await expect(passkeys).toHaveCount(1);
-  // The other devices sign in through the routes, no page opened: a second
-  // page beside the sea takes over a minute to load on CI's software GPU.
-  // The removed passkey signs in no more.
+  // The other devices sign in through the routes, no page opened. The
+  // removed passkey signs in no more.
   const gone = await browser.newContext();
   const refused = await signInWith(gone, made.passkey);
   expect(refused.status()).toBe(404);
@@ -204,8 +198,7 @@ test('the account page: a passkey added and one removed, signed out, and the sai
   await expect(page.getByRole('heading', { name: `Delete ${made.name} for good?` })).toBeVisible();
   await page.locator('input[name="delete-name"]').fill(made.name.toLowerCase());
   await page.getByRole('button', { name: 'Delete this sailor' }).click();
-  // The page reloads to it: the renderer starting beside the start screen
-  // holds CI's software GPU half a minute.
+  // The page reloads to it.
   await expect(page.getByRole('heading', { name: 'Keel Over the Edge' })).toBeVisible({
     timeout: 90_000,
   });
@@ -238,7 +231,7 @@ test('Chrome’s own authenticator: a passkey made and used at localhost, forgot
     (await cdp.send('WebAuthn.getCredentials', { authenticatorId })).credentials;
 
   await openStart(page);
-  const name = `Chrome ${Date.now() % 10_000_000}`;
+  const name = `Chrome ${stamp()}`;
   await page.getByLabel('Your sailor’s name').fill(name);
   await page.getByRole('button', { name: 'Set sail' }).click();
   await expect(page.getByRole('heading', { name: 'Keep your recovery code' })).toBeVisible({

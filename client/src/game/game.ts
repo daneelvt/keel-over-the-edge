@@ -523,8 +523,14 @@ export class Game implements PilotActions {
       if (this.pilot.on) {
         // Held on the boat's new tack after it gybed by itself: what the
         // player holds follows; not while a turn is under way or stalled.
-        const turning = (d.states.current[RECORDS.state.pilotWay] ?? 0) !== WAY_HOLD;
-        this.pilot.follow(d.out[RECORDS.out.pilotHeading] ?? 0, d.wind.meanFrom, turning);
+        const s = d.states.current;
+        const turning = (s[RECORDS.state.pilotWay] ?? 0) !== WAY_HOLD;
+        this.pilot.follow(
+          d.out[RECORDS.out.pilotHeading] ?? 0,
+          d.wind.meanFrom,
+          turning,
+          s[RECORDS.state.pilotOrder] ?? 0,
+        );
       }
     }
     if (d !== null) {

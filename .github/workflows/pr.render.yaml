@@ -1,18 +1,26 @@
 # SPDX-License-Identifier: AGPL-3.0-only
-# The game in a real browser: Playwright on Chromium, on the WebGL 2 back end
-# and, where the runner's Chromium offers an adapter through SwiftShader, on
-# WebGPU. The game's page steps the physics module, so it is built first;
-# keel serves the page's API (tools/e2e builds it) from a PostgreSQL service.
-# Runs only when a file the browser tests depend on changed.
+# The game in a real browser, the merge-blocking suite: Playwright on
+# Chromium. Two kinds of test, each run only when a file it depends on
+# changed:
 #
-# Each back end runs in jobs of its own, and the tests tagged @long (minutes
-# each on SwiftShader) apart from the rest, the short tests split over
-# runners by spec file (five for WebGL 2, two for WebGPU), so ten jobs run
-# side by side; one of them runs the sea's short tests on a WebGPU device
-# held to compatibility mode's limits.
-# The game connection's upgrade from a worker is also tried on WebKit; and,
-# where the runner's kernel has sch_netem, the slow-network tests run once
-# through real TCP loss as well as through tools/lag's model of it.
+# - the page's (page and page-serial in playwright.config.ts): keel, the
+#   account and the screen's words, against keel (tools/e2e builds it) and
+#   a PostgreSQL service, on pages that draw nothing (?draw=off), three at a
+#   time, then the tests that change the shared world one at a time; and
+#   the net worker's upgrade, the passkeys and the screen's layout on
+#   WebKit;
+# - the scene's (webgl2 and webgpu): the sea, the sky, the land and their
+#   pictures on the offline sandbox, on the WebGL 2 back end, drawn on
+#   Mesa's lavapipe, and on WebGPU, drawn on SwiftShader (client/e2e/gpu.ts;
+#   a step checks each draws there first), split over runners by spec file.
+#
+# No test is retried: a test that fails here is a fault, in the test or the
+# game. The tests tagged @long or @nightly, the compatibility-mode device,
+# the real TCP loss and five runs of this suite run every night on main
+# instead (render-nightly.yaml), and on a pull request labelled render.
+# Each job writes its runner's CPU and speed, its tests' outcomes, its
+# slowest tests and each file's time to its summary on the run's page
+# (e2e/runner.ts, e2e/summary.ts).
 name: pr.render
 
 on:
@@ -26,6 +34,13 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # What each kind of test depends on (tools/e2e/filters_test.go checks the
+  # two together cover what either can read). The page's: keel, and the
+  # client but the parts that only draw. The scene's: the client but keel's
+  # own pages, its art, the physics module, the catalog and seed 1's world.
+  # The toolchains, the tests and this file: both. A new folder under
+  # client/src is both kinds', unless it only draws or only keel's pages use
+  # it.
   changes:
     name: changes
     if: github.event.pull_request.draft == false
@@ -33,60 +48,65 @@ jobs:
     permissions:
       pull-requests: read # list the pull request's changed files
     outputs:
-      render: ${{ steps.filter.outputs.render }}
+      page: ${{ steps.both.outputs.page == 'true' || steps.client.outputs.page == 'true' }}
+      scene: ${{ steps.both.outputs.scene == 'true' || steps.client.outputs.scene == 'true' }}
     steps:
-      - id: filter
+      - id: both
         uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
         with:
           filters: |
-            render:
+            common: &common
               - '.github/workflows/pr.render.yaml'
               - '.github/actions/setup/**'
               - '.nvmrc'
               - 'go.mod'
               - 'go.sum'
-              - 'client/**'
+              - 'client/*'
+              - 'client/build/**'
+              - 'client/e2e/**'
+              - 'client/src/*'
               - 'art/**'
-              - 'cmd/**'
-              - 'internal/**'
               - 'shared/**'
-              - 'tools/e2e/**'
+              - 'internal/catalog/**'
+              - 'internal/physics/**'
+              - 'internal/sky/**'
               - 'tools/dev/**'
               - 'tools/internal/**'
               - 'tools/physics/**'
               - 'tools/licences/allowed.txt'
+            page:
+              - *common
+              - 'cmd/**'
+              - 'internal/**'
+              - 'tools/e2e/**'
+              - 'client/approve/**'
+            scene:
+              - *common
+              - 'internal/worldgen/**'
+              - 'internal/chart/**'
+      # Within client/src, folder by folder.
+      - id: client
+        uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
+        with:
+          predicate-quantifier: every
+          filters: |
+            page:
+              - 'client/src/*/**'
+              - '!client/src/{ocean,sky,land,edge,lights,sandbox}/**'
+            scene:
+              - 'client/src/*/**'
+              - '!client/src/{owner,account,net}/**'
 
-  browser:
-    name: browser (${{ matrix.project }}, ${{ matrix.tests }}${{ matrix.shards > 1 && format(', {0} of {1}', matrix.shard, matrix.shards) || '' }})
+  page:
+    name: browser (the page, no drawing)
     needs: [changes]
-    if: needs.changes.outputs.render == 'true'
-    strategy:
-      fail-fast: false
-      # The short tests of each back end are split over runners by spec
-      # file, so that no job takes much longer than the long ones: the files
-      # of each shard but the last are named in playwright.config.ts, chosen
-      # by the files' measured times, and the last shard runs every other
-      # file, so a new file always runs. The long tests are a few long ones,
-      # each job's time mostly one test's. The sea's tests run once more on
-      # a WebGPU device held to compatibility mode's limits.
-      matrix:
-        include:
-          - { project: webgl2, tests: short, shard: 1, shards: 5 }
-          - { project: webgl2, tests: short, shard: 2, shards: 5 }
-          - { project: webgl2, tests: short, shard: 3, shards: 5 }
-          - { project: webgl2, tests: short, shard: 4, shards: 5 }
-          - { project: webgl2, tests: short, shard: 5, shards: 5 }
-          - { project: webgpu, tests: short, shard: 1, shards: 2 }
-          - { project: webgpu, tests: short, shard: 2, shards: 2 }
-          - { project: webgl2, tests: long, shard: 1, shards: 1 }
-          - { project: webgpu, tests: long, shard: 1, shards: 1 }
-          - { project: compat, tests: short, shard: 1, shards: 1 }
+    if: needs.changes.outputs.page == 'true'
     runs-on: ubuntu-26.04
+    timeout-minutes: 20
     permissions:
       contents: read
-    # PostgreSQL for the tests that need a database, on the image and
-    # version tools/dev runs locally; the password is the throwaway
-    # service's own.
+    # PostgreSQL for keel, on the image and version tools/dev runs locally;
+    # the password is the throwaway service's own.
     services:
       postgres:
         image: postgres:18.6@sha256:edb0c08dc33befd0262ab3b5cf1c4f3f8cfd8b09e88c05b45adee29d6761ddb6
@@ -108,28 +128,122 @@ jobs:
         with:
           persist-credentials: false
       - uses: ./.github/actions/setup
+      - name: The runner's CPU and speed, on the job's summary
+        working-directory: client
+        shell: bash
+        run: node e2e/runner.ts | tee -a "$GITHUB_STEP_SUMMARY"
       - name: Build the physics module (the game's page steps it)
+        run: go run ./tools/physics
+      - name: Seed 1's world, for its chart (discover.spec.ts)
+        run: go run ./tools/dev -world 1
+      - name: Chromium's headless shell for Playwright
+        working-directory: client
+        run: npx --no-install playwright install --with-deps --only-shell chromium
+      - name: The page's tests, three at a time, then those that change the world
+        working-directory: client
+        # Apart, not page-serial with its dependency: Playwright filters no
+        # dependency by --grep, and skips the dependent if it fails.
+        shell: bash
+        run: |
+          status=0
+          # Each its own results and report, which the other would clear.
+          SUMMARY_TITLE="browser (the page, no drawing)" PLAYWRIGHT_HTML_OUTPUT_DIR=playwright-report/page \
+            npx --no-install playwright test --project page --grep-invert '@long|@nightly' \
+            --output test-results/page || status=$?
+          SUMMARY_TITLE="browser (the page, the tests that change the world)" PLAYWRIGHT_HTML_OUTPUT_DIR=playwright-report/page-serial \
+            npx --no-install playwright test --project page-serial --no-deps --grep-invert '@long|@nightly' \
+            --output test-results/page-serial || status=$?
+          exit "$status"
+      - name: The traces of a failure
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: playwright-page
+          path: |
+            client/test-results
+            client/playwright-report
+          retention-days: 14
+
+  scene:
+    name: browser (${{ matrix.project }}, the scene, ${{ matrix.shard }} of ${{ matrix.shards }})
+    needs: [changes]
+    if: needs.changes.outputs.scene == 'true'
+    strategy:
+      fail-fast: false
+      # Split over runners by spec file: the files of each shard but the
+      # last are named in playwright.config.ts, chosen by the files'
+      # measured times (each job's summary lists them), and the last shard
+      # runs every other scene file, so a new file always runs.
+      matrix:
+        include:
+          - { project: webgl2, shard: 1, shards: 3 }
+          - { project: webgl2, shard: 2, shards: 3 }
+          - { project: webgl2, shard: 3, shards: 3 }
+          - { project: webgpu, shard: 1, shards: 5 }
+          - { project: webgpu, shard: 2, shards: 5 }
+          - { project: webgpu, shard: 3, shards: 5 }
+          - { project: webgpu, shard: 4, shards: 5 }
+          - { project: webgpu, shard: 5, shards: 5 }
+    runs-on: ubuntu-26.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    # PostgreSQL for keel, which Playwright starts for every project; the
+    # scene's tests do not use it.
+    services:
+      postgres:
+        image: postgres:18.6@sha256:edb0c08dc33befd0262ab3b5cf1c4f3f8cfd8b09e88c05b45adee29d6761ddb6
+        env:
+          POSTGRES_USER: keel
+          POSTGRES_PASSWORD: keel
+          POSTGRES_DB: keel
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready --host 127.0.0.1 --username keel --dbname keel"
+          --health-interval 2s
+          --health-timeout 5s
+          --health-retries 30
+    env:
+      KEEL_TEST_DATABASE_URL: postgres://keel:keel@127.0.0.1:5432/postgres?sslmode=disable
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup
+      - name: The runner's CPU and speed, on the job's summary
+        working-directory: client
+        shell: bash
+        run: node e2e/runner.ts | tee -a "$GITHUB_STEP_SUMMARY"
+      - name: Build the physics module (the sandbox steps it)
         run: go run ./tools/physics
       - name: Seed 1's world, for the sandbox's land (land.spec.ts)
         run: go run ./tools/dev -world 1
       - name: Chromium's headless shell for Playwright
         working-directory: client
         run: npx --no-install playwright install --with-deps --only-shell chromium
-      - name: The game on ${{ matrix.project }}, the ${{ matrix.tests }} tests, part ${{ matrix.shard }} of ${{ matrix.shards }}
+      - name: Mesa's lavapipe, the CPU's Vulkan, for WebGL 2 (e2e/gpu.ts)
+        run: sudo apt-get install -y --no-install-recommends mesa-vulkan-drivers
+      - name: The page draws on lavapipe (WebGL 2) and SwiftShader (WebGPU)
+        working-directory: client
+        # bash as named, so that the pipe fails when the check does.
+        shell: bash
+        run: node e2e/gpu.ts | tee -a "$GITHUB_STEP_SUMMARY"
+      - name: The scene on ${{ matrix.project }}, part ${{ matrix.shard }} of ${{ matrix.shards }}
         working-directory: client
         env:
+          SUMMARY_TITLE: browser (${{ matrix.project }}, the scene, ${{ matrix.shard }} of ${{ matrix.shards }})
           PROJECT: ${{ matrix.project }}
-          GREP: ${{ matrix.tests == 'long' && '--grep' || '--grep-invert' }}
           # playwright.config.ts reads these, with PROJECT, for the files
           # this shard runs.
           SHARD: ${{ matrix.shard }}
           SHARDS: ${{ matrix.shards }}
-        run: npx --no-install playwright test --project "$PROJECT" "$GREP" @long
+        run: npx --no-install playwright test --project "$PROJECT" --grep-invert '@long|@nightly'
       - name: The pictures and traces of a failure
         if: failure()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: playwright-${{ matrix.project }}-${{ matrix.tests }}-${{ matrix.shard }}
+          name: playwright-${{ matrix.project }}-scene-${{ matrix.shard }}
           path: |
             client/test-results
             client/playwright-report
@@ -138,8 +252,9 @@ jobs:
   webkit:
     name: browser (webkit, the net worker)
     needs: [changes]
-    if: needs.changes.outputs.render == 'true'
+    if: needs.changes.outputs.page == 'true'
     runs-on: ubuntu-26.04
+    timeout-minutes: 20
     permissions:
       contents: read
     services:
@@ -163,6 +278,10 @@ jobs:
         with:
           persist-credentials: false
       - uses: ./.github/actions/setup
+      - name: The runner's CPU and speed, on the job's summary
+        working-directory: client
+        shell: bash
+        run: node e2e/runner.ts | tee -a "$GITHUB_STEP_SUMMARY"
       - name: Build the physics module (the game's page steps it)
         run: go run ./tools/physics
       - name: Seed 1's world, for the sandbox's harbour (layout.spec.ts)
@@ -172,7 +291,9 @@ jobs:
         run: npx --no-install playwright install --with-deps webkit
       - name: The net worker's upgrade, the account's passkeys and the screen's layout on WebKit
         working-directory: client
-        run: npx --no-install playwright test --project webkit
+        env:
+          SUMMARY_TITLE: browser (webkit)
+        run: npx --no-install playwright test --project webkit --grep-invert '@long|@nightly'
       - name: The pictures and traces of a failure
         if: failure()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -183,81 +304,10 @@ jobs:
             client/playwright-report
           retention-days: 14
 
-  netem:
-    name: browser (real TCP loss, where netem is)
-    needs: [changes]
-    if: needs.changes.outputs.render == 'true'
-    runs-on: ubuntu-26.04
-    permissions:
-      contents: read
-    services:
-      postgres:
-        image: postgres:18.6@sha256:edb0c08dc33befd0262ab3b5cf1c4f3f8cfd8b09e88c05b45adee29d6761ddb6
-        env:
-          POSTGRES_USER: keel
-          POSTGRES_PASSWORD: keel
-          POSTGRES_DB: keel
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd "pg_isready --host 127.0.0.1 --username keel --dbname keel"
-          --health-interval 2s
-          --health-timeout 5s
-          --health-retries 30
-    env:
-      KEEL_TEST_DATABASE_URL: postgres://keel:keel@127.0.0.1:5432/postgres?sslmode=disable
-    steps:
-      - name: Can the kernel delay and drop packets (sch_netem)?
-        id: netem
-        run: |
-          if sudo modprobe sch_netem; then
-            echo "ok=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "::notice::sch_netem is not available on this runner: the slow network is tried through tools/lag's model only"
-            echo "ok=false" >> "$GITHUB_OUTPUT"
-          fi
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        if: steps.netem.outputs.ok == 'true'
-        with:
-          persist-credentials: false
-      - uses: ./.github/actions/setup
-        if: steps.netem.outputs.ok == 'true'
-      - name: Build the physics module (the game's page steps it)
-        if: steps.netem.outputs.ok == 'true'
-        run: go run ./tools/physics
-      - name: Chromium's headless shell for Playwright
-        if: steps.netem.outputs.ok == 'true'
-        working-directory: client
-        run: npx --no-install playwright install --with-deps --only-shell chromium
-      - name: 100 ms each way and 2% loss on keel's play port only
-        if: steps.netem.outputs.ok == 'true'
-        # A fourth band, which no traffic uses by default, holds netem; only
-        # packets to or from port 18080 are sent to it.
-        run: |
-          sudo tc qdisc add dev lo root handle 1: prio bands 4
-          sudo tc qdisc add dev lo parent 1:4 handle 40: netem delay 100ms loss 2%
-          sudo tc filter add dev lo protocol ip parent 1:0 prio 1 u32 match ip dport 18080 0xffff flowid 1:4
-          sudo tc filter add dev lo protocol ip parent 1:0 prio 1 u32 match ip sport 18080 0xffff flowid 1:4
-      - name: The slow-network tests, through netem
-        if: steps.netem.outputs.ok == 'true'
-        working-directory: client
-        env:
-          KEEL_LAG_BASE: http://localhost:5181
-        run: npx --no-install playwright test e2e/lag.spec.ts e2e/together.spec.ts --project webgl2
-      - name: The traces of a failure
-        if: failure() && steps.netem.outputs.ok == 'true'
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        with:
-          name: playwright-netem
-          path: |
-            client/test-results
-            client/playwright-report
-          retention-days: 14
-
   pr-render:
     name: pr-render
     if: always()
-    needs: [changes, browser, webkit, netem]
+    needs: [changes, page, scene, webkit]
     runs-on: ubuntu-slim
     permissions: {}
     steps:

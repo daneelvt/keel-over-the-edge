@@ -7,7 +7,7 @@
 import { readFileSync } from 'node:fs';
 import { expect, test } from '@playwright/test';
 import { fromHex } from '../src/predict/golden';
-import { openScene, picture, pictureDifference } from './helpers';
+import { openScene, picture, pictureDifference, softwareGPU } from './helpers';
 
 /** The sea as Go computed it: internal/physics/testdata/sea.json. */
 interface SeaCase {
@@ -390,4 +390,25 @@ test.describe('pictures', () => {
       }
     });
   }
+});
+
+test('a page under test draws only what a test asks for, until it is thawed', async ({ page }) => {
+  test.skip(test.info().project.name !== 'webgl2', 'the stage, not a back end, is under test');
+  await page.goto(`/?sandbox&test&backend=webgl2${softwareGPU ? '&tier=low' : ''}`);
+  await page.waitForFunction(() => globalThis.keel !== undefined, null, { timeout: 30_000 });
+  const r = await page.evaluate(async () => {
+    const k = globalThis.keel;
+    await k.ready();
+    // Frames come, and update the scene: none is drawn.
+    await k.frames(10);
+    const held = k.info().drawCalls;
+    await k.show();
+    const shown = k.info().drawCalls;
+    k.thaw();
+    await k.frames(10);
+    return { held, shown, thawed: k.info().drawCalls };
+  });
+  expect(r.held).toBe(0);
+  expect(r.shown).toBeGreaterThan(0);
+  expect(r.thawed).toBeGreaterThan(0);
 });

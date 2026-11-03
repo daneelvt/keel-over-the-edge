@@ -146,6 +146,6 @@ export default defineConfig({
     }),
   ],
   test: {
-    include: ['src/**/*.test.ts', 'build/**/*.test.ts', 'approve/**/*.test.ts'],
+    include: ['src/**/*.test.ts', 'build/**/*.test.ts', 'approve/**/*.test.ts', 'e2e/**/*.test.ts'],
   },
 });
