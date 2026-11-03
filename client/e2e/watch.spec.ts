@@ -221,13 +221,19 @@ test('two machine sailors at sea: the list in order of the edge, a card, Follow,
   await openList(page);
 
   // Only these two: the shared world has others' machine sailors at sea.
-  const ordered = page.waitForResponse((r) => {
+  // The answer the list is ordered by is the first with both: one before
+  // they are listed is empty, and the list asks again every 10 seconds
+  // while it shows none.
+  const ordered = page.waitForResponse(async (r) => {
     const u = new URL(r.url());
-    return (
-      u.pathname === '/api/watch' &&
-      u.searchParams.get('sort') === 'edge' &&
-      u.searchParams.get('q') === digits
-    );
+    if (
+      u.pathname !== '/api/watch' ||
+      u.searchParams.get('sort') !== 'edge' ||
+      u.searchParams.get('q') !== digits
+    ) {
+      return false;
+    }
+    return ((await r.json()) as { sailors?: unknown[] }).sailors?.length === 2;
   });
   await page.getByRole('searchbox', { name: 'Part of a name' }).fill(digits);
   await page.getByRole('button', { name: 'Nearest the edge' }).click();
