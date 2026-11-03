@@ -25,28 +25,30 @@ const (
 
 // contentTypes are the types the page's files are served as, by extension,
 // whatever the machine's own table says. Browsers compile WebAssembly while
-// it downloads only when it comes as application/wasm.
+// it downloads only when it comes as application/wasm; the web app manifest
+// has a type of its own.
 var contentTypes = map[string]string{
-	".html":  "text/html; charset=utf-8",
-	".js":    "text/javascript; charset=utf-8",
-	".mjs":   "text/javascript; charset=utf-8",
-	".css":   "text/css; charset=utf-8",
-	".json":  "application/json",
-	".txt":   "text/plain; charset=utf-8",
-	".wasm":  "application/wasm",
-	".glb":   "model/gltf-binary",
-	".woff2": "font/woff2",
-	".woff":  "font/woff",
-	".ttf":   "font/ttf",
-	".otf":   "font/otf",
-	".svg":   "image/svg+xml",
-	".png":   "image/png",
-	".webp":  "image/webp",
-	".avif":  "image/avif",
-	".jpg":   "image/jpeg",
-	".ogg":   "audio/ogg",
-	".opus":  "audio/ogg",
-	".mp3":   "audio/mpeg",
+	".html":        "text/html; charset=utf-8",
+	".js":          "text/javascript; charset=utf-8",
+	".mjs":         "text/javascript; charset=utf-8",
+	".css":         "text/css; charset=utf-8",
+	".json":        "application/json",
+	".webmanifest": "application/manifest+json",
+	".txt":         "text/plain; charset=utf-8",
+	".wasm":        "application/wasm",
+	".glb":         "model/gltf-binary",
+	".woff2":       "font/woff2",
+	".woff":        "font/woff",
+	".ttf":         "font/ttf",
+	".otf":         "font/otf",
+	".svg":         "image/svg+xml",
+	".png":         "image/png",
+	".webp":        "image/webp",
+	".avif":        "image/avif",
+	".jpg":         "image/jpeg",
+	".ogg":         "audio/ogg",
+	".opus":        "audio/ogg",
+	".mp3":         "audio/mpeg",
 }
 
 // Page is the game's built page, read whole from a directory when the

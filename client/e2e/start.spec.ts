@@ -158,7 +158,17 @@ test('a sailor made: the passkey, the recovery code once, the sea, the cookie, a
 
   // Back again: the sailor's own Set sail, the start screen's form never
   // shown; the boat still in the water, the box shows the voyage's choice,
-  // and a change is sent at once.
+  // and a change is sent at once. The full screen's switch left on, Set
+  // sail takes the whole screen, in its tap, before the voyage is sent.
+  await page.evaluate(() =>
+    localStorage.setItem(
+      'keel.settings',
+      JSON.stringify({
+        ...JSON.parse(localStorage.getItem('keel.settings') ?? '{}'),
+        fullScreen: true,
+      }),
+    ),
+  );
   let startShown = false;
   page.on('response', async (res) => {
     if (res.url().endsWith('/api/me') && res.status() === 401) {
@@ -173,6 +183,7 @@ test('a sailor made: the passkey, the recovery code once, the sea, the cookie, a
   await box.uncheck();
   await expect.poll(() => spectators(page)).toBe('no');
   await setSail(page);
+  await page.waitForFunction(() => document.fullscreenElement === document.documentElement);
   await atSea(page);
   expect(startShown).toBe(false);
   expect(await sailingAs(page)).toBe(name);

@@ -42,6 +42,8 @@ export interface Settings {
   /** The list of sailors to watch: its order, and whom it shows. */
   watchSort: WatchSort;
   watchWho: WatchWho;
+  /** The whole screen, without the browser's bars or the phone's: entered by the menu, and by Set sail. */
+  fullScreen: boolean;
 }
 
 export const DEFAULTS: Settings = {
@@ -58,6 +60,7 @@ export const DEFAULTS: Settings = {
   pocketWeather: true,
   watchSort: 'liveliest',
   watchWho: 'all',
+  fullScreen: false,
 };
 
 const KEY = 'keel.settings';
@@ -114,6 +117,7 @@ export function loadSettings(store: Store | null = defaultStore()): Settings {
     'barometer',
     'pilotHead',
     'pocketWeather',
+    'fullScreen',
   ] as const) {
     if (typeof r[k] === 'boolean') {
       out[k] = r[k];

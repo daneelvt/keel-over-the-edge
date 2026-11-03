@@ -26,6 +26,8 @@ func builtPage(t *testing.T) string {
 		"index.html":                   "<!doctype html><title>Keel Over the Edge</title>",
 		"dev.html":                     "<!doctype html><title>dev</title>",
 		"third-party-licences.txt":     "licences",
+		"manifest.webmanifest":         `{"name":"Keel Over the Edge"}`,
+		"icon-192.png":                 "\x89PNG",
 		".hidden":                      "secret",
 		"assets/main-D6eWoT1T.js":      "console.log(1)",
 		"assets/main-CfmwCcCx.css":     "body{}",
@@ -105,6 +107,10 @@ func TestPageServesItsFiles(t *testing.T) {
 		{"/index.html", "text/html; charset=utf-8", "no-cache", "<!doctype html><title>Keel Over the Edge</title>"},
 		{"/dev.html", "text/html; charset=utf-8", "no-cache", "<!doctype html><title>dev</title>"},
 		{"/third-party-licences.txt", "text/plain; charset=utf-8", "no-cache", "licences"},
+		// The web app manifest and its icons keep their names, which an
+		// installed app's manifest link needs: asked about each time.
+		{"/manifest.webmanifest", "application/manifest+json", "no-cache", `{"name":"Keel Over the Edge"}`},
+		{"/icon-192.png", "image/png", "no-cache", "\x89PNG"},
 		{"/assets/main-D6eWoT1T.js", "text/javascript; charset=utf-8", "public, max-age=31536000, immutable", "console.log(1)"},
 		{"/assets/main-CfmwCcCx.css", "text/css; charset=utf-8", "public, max-age=31536000, immutable", "body{}"},
 		{"/assets/physics-207F3rPv.wasm", "application/wasm", "public, max-age=31536000, immutable", "\x00asm\x01\x00\x00\x00"},

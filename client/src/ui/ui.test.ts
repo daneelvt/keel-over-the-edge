@@ -177,6 +177,15 @@ describe('settings', () => {
       expect(loadSettings(m).nightLight).toBeCloseTo(read, 9);
     }
   });
+
+  test('the full screen is off until asked for, and the choice is kept', () => {
+    expect(DEFAULTS.fullScreen).toBe(false);
+    const m = memory();
+    saveSettings({ ...DEFAULTS, fullScreen: true }, m);
+    expect(loadSettings(m).fullScreen).toBe(true);
+    m.data.set('keel.settings', '{"fullScreen": "yes"}');
+    expect(loadSettings(m).fullScreen).toBe(false);
+  });
 });
 
 /** A wind at the boat with no gust in it. */

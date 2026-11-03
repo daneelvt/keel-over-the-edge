@@ -676,6 +676,34 @@
   transform: translateY(-50%);
 }
 
+/* The key that brings the full screen back, after the phone was away:
+   beside the menu's button, to its left held sideways, above it held
+   upright, where the boat's column leaves room. */
+.fullscreen-key {
+  position: absolute;
+  right: calc(var(--edge-right) + 52px);
+  top: 50%;
+  transform: translateY(-50%);
+  display: grid;
+  place-items: center;
+  padding: 0;
+}
+
+.fullscreen-key svg {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+@media (orientation: portrait) {
+  .fullscreen-key {
+    right: var(--edge-right);
+    transform: translateY(calc(-50% - 52px));
+  }
+}
+
 /* The menu stands over everything at sea, the instruments, the pocket
    chart and the controls, with a dim scrim behind it; the harbour board
    is under it, the chart screen in place of it all. Held sideways it is
@@ -850,6 +878,33 @@
   width: 22px;
   height: 22px;
   accent-color: var(--gold);
+}
+
+/* A line under a row that says more of it; on an iPhone the steps to the
+   Home Screen, folded under their row. */
+.menu-note {
+  margin: -4px 0 8px;
+  color: var(--faint);
+  font-size: 14px;
+  line-height: 1.35;
+}
+
+.menu-steps summary {
+  cursor: pointer;
+  list-style: none;
+}
+
+.menu-steps summary::-webkit-details-marker {
+  display: none;
+}
+
+.menu-steps-mark {
+  font-size: 20px;
+  transition: rotate 0.15s;
+}
+
+.menu-steps[open] .menu-steps-mark {
+  rotate: 90deg;
 }
 
 .menu-fly,
@@ -1099,7 +1154,8 @@
 @media (max-height: 420px) {
   /* Under the pocket chart, its caption two lines in the world's last
      days, above the sheet. */
-  .menu-button {
+  .menu-button,
+  .fullscreen-key {
     top: calc(var(--edge-top) + 120px);
     transform: none;
   }
