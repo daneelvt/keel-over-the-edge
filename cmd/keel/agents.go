@@ -97,6 +97,9 @@ func (p *process) seaOf(h *worldHalf, rw *readyWorld, sighting *sim.Sight) *agen
 		Forecast: h.forecasts, Words: weather.WordsOf(cat), Catalog: cat, Kinds: p.kinds, Encounters: cat.PrepareEncounters(),
 		News: news{db: p.db, world: h.row.ID}.News, Columns: map[string]string{}, Biomes: map[string]string{},
 	}
+	if h.game != nil {
+		s.Watchers = h.game.Watchers
+	}
 	if t := rw.terrain; t != nil {
 		s.Ground, s.Shelter = t.Ground, t.Shelter
 	}

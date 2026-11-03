@@ -28,7 +28,8 @@ import "math"
 // sail fills, where a helm reversed with each change would hold it lying
 // there. A tack or gybe that has no steerage and gains too little on its
 // course stalls: the autopilot gives it up and holds the angle the boat
-// turned from, on its old side, until the next order.
+// turned from, on its old side, until the next order: a turn ordered
+// again, or a new mode or target, which it then steers for.
 //
 // Everything it remembers is in the State, so a replay from the server's
 // state steers as the server did.
@@ -50,8 +51,9 @@ const (
 	WayTack = 1 // through head to wind
 	WayGybe = 2 // through dead downwind
 	// A tack or a gybe that stalled: the autopilot holds the angle the
-	// boat turned from, in State.PilotLeft, until the next order. Never
-	// an order's way.
+	// boat turned from, in State.PilotLeft, until the next order, and
+	// State.PilotMark is the order it stalled on (PilotHeld). Never an
+	// order's way.
 	WayTackStalled = 3
 	WayGybeStalled = 4
 )
@@ -127,11 +129,19 @@ func (b *Prepared) pilot(s *State, c *Control, e *Env, o *Out) float64 {
 			s.PilotWay, s.PilotLeft, turn = c.Way, angle, true
 		}
 	}
-	target := float64(control(c.Target, 0, TurnSteps) * turnStep)
+	steps := control(c.Target, 0, TurnSteps)
+	held := PilotHeld(c.Pilot, steps)
+	stalled := s.PilotWay == WayTackStalled || s.PilotWay == WayGybeStalled
+	if stalled && s.PilotMark != held {
+		// A new mode or target after a stall is an order on the side the
+		// boat is on: it is steered for, the short way.
+		s.PilotWay, s.PilotWatch, s.PilotMark = WayHold, 0, 0
+		stalled = false
+	}
+	target := float64(steps * turnStep)
 	if c.Pilot == PilotHeading {
 		target = wind - target
 	}
-	stalled := s.PilotWay == WayTackStalled || s.PilotWay == WayGybeStalled
 	if stalled {
 		target = s.PilotLeft
 	}
@@ -203,7 +213,7 @@ func (b *Prepared) pilot(s *State, c *Control, e *Env, o *Out) float64 {
 			sinH, cosH := SinCos(s.Heading)
 			ahead -= float64(e.CurrentEast*sinH) + float64(e.CurrentNorth*cosH)
 		}
-		b.watchTurn(s, o, off, ahead, turn, side >= 0)
+		b.watchTurn(s, o, off, ahead, turn, side >= 0, held)
 	}
 	if s.PilotWay == WayHold && math.Abs(off) < b.trimBand {
 		grow := float64(float64(tack*b.pilotIntegral) * float64(off*Dt))
@@ -218,9 +228,9 @@ func (b *Prepared) pilot(s *State, c *Control, e *Env, o *Out) float64 {
 // less in stallTime with no steerage, the turn stalls. Past head to wind,
 // or dead downwind, on its target's side, the boat has come round, if
 // slowly, and the turn is over; short of it the autopilot holds the angle
-// the boat turned from, and the seconds count on from the stall for a
-// while.
-func (b *Prepared) watchTurn(s *State, o *Out, off, ahead float64, turn, across bool) {
+// the boat turned from, remembers the order it stalled on, held, and the
+// seconds count on from the stall for a while.
+func (b *Prepared) watchTurn(s *State, o *Out, off, ahead float64, turn, across bool, held float64) {
 	off = math.Abs(off)
 	if turn || s.PilotMark-off >= b.stallGain {
 		s.PilotWatch, s.PilotMark = 0, off
@@ -236,5 +246,12 @@ func (b *Prepared) watchTurn(s *State, o *Out, off, ahead float64, turn, across 
 		return
 	}
 	s.PilotWay += WayTackStalled - WayTack
+	s.PilotMark = held
 	o.PilotStalled = 1
+}
+
+// PilotHeld is a mode and a target in whole steps as one number, which a
+// stalled turn keeps in State.PilotMark: any other is a new order.
+func PilotHeld(mode, steps float64) float64 {
+	return float64(mode*(TurnSteps+1)) + steps
 }

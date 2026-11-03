@@ -77,7 +77,7 @@ func tools() []toolDef {
 			Annotations: hints("Observe", true, false, false), Meta: alwaysLoad(),
 			InputSchema: schema(`{"type":"object","properties":{` +
 				`"wait":{"type":"integer","minimum":0,"maximum":50,"description":"Seconds to rest until something happens; 0 answers now. 25 is safe in every app."},` +
-				`"wake_on":{"type":"array","items":{"type":"string","enum":["gust","boat","land","sighting","heel","wind_shift","bearing","near","chat","race","pilot"]},"description":"What ends the wait. Default all but heel, wind_shift, bearing and near, which need a value."},` +
+				`"wake_on":{"type":"array","items":{"type":"string","enum":["gust","boat","land","sighting","heel","wind_shift","bearing","near","chat","race","pilot","sky","weather"]},"description":"What ends the wait. Default all but heel, wind_shift, bearing and near, which need a value."},` +
 				`"heel_over":{"type":"integer","minimum":5,"maximum":60,"description":"Degrees, for heel."},` +
 				`"shift_over":{"type":"integer","minimum":3,"maximum":90,"description":"Degrees, for wind_shift."},` +
 				`"place":{"type":"string","description":"A charted place, for bearing and near."},` +

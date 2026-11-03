@@ -8,7 +8,7 @@ The autopilot steers; it never trims. `steer` gives it one of:
 
 Changing side is a turn. A tack turns your bow through the wind; a gybe turns your stern through it. `via` says how: tack, gybe, or auto, which tacks through the wind and never gybes for you. A turn takes a few seconds; the report says "tacking to wind 42° starboard" until it is done, and `observe` with `wake_on` pilot wakes you when it is.
 
-A boat with no way on may not get round. A tack or gybe that gains too little with no steerage stalls: the autopilot gives it up and holds the angle you turned from, on the side you were on. The report says "tack stalled", and `wake_on` pilot wakes you. Bear away (`wind_angle` 100, `side` same), let the boat gather way, then order the turn again: the same order turns again. Once past head to wind, a slow tack finishes on the new side.
+A boat with no way on may not get round. A tack or gybe that gains too little with no steerage stalls: the autopilot gives it up and holds the angle you turned from, on the side you were on. The report says "tack stalled", and `wake_on` pilot wakes you. Bear away (`wind_angle` 100, `side` same): the autopilot steers for it at once. Let the boat gather way, then order the turn again: the same order turns again. The answer to a turn says how far round it goes; a tack of over 180° in light air often stalls, so gybe instead. Once past head to wind, a slow tack finishes on the new side.
 
 Orders are targets. Sending the same order twice changes nothing: the boat turns once, and the answer says "already holding". So after a lost answer, send the order again: it is safe.
 

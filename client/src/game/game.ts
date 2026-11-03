@@ -488,7 +488,7 @@ export class Game implements PilotActions {
 
   pilotAdjust(degrees: number): void {
     this.controlsTouched();
-    this.pilot.adjust(degrees);
+    this.pilot.adjust(degrees, this.driver?.wind.meanFrom ?? 0, this.#stalledLeft());
   }
 
   /** Switches the autopilot between holding an angle to the wind and a heading, at what the boat does now. */

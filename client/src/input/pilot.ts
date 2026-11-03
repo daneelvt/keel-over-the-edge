@@ -9,7 +9,8 @@
 // heading. A tack or a gybe mirrors what it holds onto the other tack and
 // counts an order, which the step takes once. A turn that stalls leaves the
 // boat held on its old tack, its target still on the other: ordered again,
-// it tries for that target.
+// it tries for that target; turned on the dial, it steers from where it is
+// held.
 
 /** The autopilot's modes and ways, as the physics module's control has them. */
 export const PILOT_OFF = 0;
@@ -54,7 +55,12 @@ export interface PilotControl {
 }
 
 /** A pilot control that is off. */
-export const PILOT_IDLE: PilotControl = { mode: PILOT_OFF, target: 0, order: 0, way: WAY_HOLD };
+export const PILOT_IDLE: PilotControl = {
+  mode: PILOT_OFF,
+  target: 0,
+  order: 0,
+  way: WAY_HOLD,
+};
 
 export class PilotInput implements PilotControl {
   mode = PILOT_OFF;
@@ -107,9 +113,15 @@ export class PilotInput implements PilotControl {
   /**
    * Turns what it holds by degrees of heading: positive to starboard. In
    * wind mode the angle stays on its side, from the least the dial sets to
-   * dead downwind.
+   * dead downwind. After a turn stalled, left is the angle off the wind the
+   * step holds instead (State.PilotLeft), and the turn is from there, on
+   * the boat's side: a new target, which ends the stall. meanFrom is the
+   * mean wind, for heading mode.
    */
-  adjust(degrees: number): void {
+  adjust(degrees: number, meanFrom = 0, left: number | null = null): void {
+    if (left !== null && this.mode !== PILOT_OFF) {
+      this.target = this.mode === PILOT_WIND ? stepsOf(left) : stepsOf(wrapAngle(meanFrom - left));
+    }
     if (this.mode === PILOT_HEADING) {
       this.target = stepsOf(angleOf(this.target) + degrees * DEG);
     } else if (this.mode === PILOT_WIND) {

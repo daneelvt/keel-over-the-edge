@@ -48,6 +48,9 @@ type written struct {
 	// holds.
 	already bool
 	turning string // "tack" or "gybe" for an order that turns the boat
+	// by is how far a turn ordered takes the bow round, degrees; gybeBy,
+	// for a tack over half a turn ordered via auto, how far a gybe would.
+	by, gybeBy int
 }
 
 // sheetOf is the sheet's index in the control's steps for a boom let out
@@ -114,6 +117,14 @@ func stalled(st *physics.State) string {
 		return ""
 	}
 	return fmt.Sprintf("wind %d° %s, %s stalled", degrees(math.Abs(st.PilotLeft)), side(st.PilotLeft), turn)
+}
+
+// stillStalled reports whether the autopilot of a boat in state st holds
+// where its turn stalled under the pilot word pw: the stall ends with the
+// next order, a turn or a new mode or target, as the step will take it.
+func stillStalled(st *physics.State, pw bus.PilotWord) bool {
+	return stalled(st) != "" && pw.Mode() != bus.PilotOff && float64(pw.Order()) == st.PilotOrder &&
+		physics.PilotHeld(float64(pw.Mode()), float64(pw.Target())) == st.PilotMark
 }
 
 // presentSide is the side the wind is over the boat in slot sl, by the
@@ -197,7 +208,7 @@ func (h *helm) steer(s *Sea, f *bus.Frame, sl int32, o *steerOrder) (w written, 
 			return written{already: true, turning: pendingTurn(f, sl, pw)}, ""
 		}
 		s.Bus.Controls.Store(sl, bus.Pack(seq, bus.Steps/2, sheet, gen), bus.PackPilot(seq, bus.PilotWind, way, order, target, gen))
-		return written{turning: turn}, ""
+		return turnWritten(f, sl, turn, float64(a), o.Via), ""
 	case o.Heading != nil:
 		hd := *o.Heading
 		if hd < 0 || hd > 359 {
@@ -226,9 +237,30 @@ func (h *helm) steer(s *Sea, f *bus.Frame, sl int32, o *steerOrder) (w written, 
 			return written{already: true, turning: pendingTurn(f, sl, pw)}, ""
 		}
 		s.Bus.Controls.Store(sl, bus.Pack(seq, bus.Steps/2, sheet, gen), bus.PackPilot(seq, bus.PilotHeading, way, order, target, gen))
-		return written{turning: turn}, ""
+		return turnWritten(f, sl, turn, deg(math.Abs(off)), o.Via), ""
 	}
 	return w, ""
+}
+
+// turnWritten is what an order that turns the boat in slot sl, by turn,
+// onto angle degrees off the wind on the other side, wrote: how far the
+// bow goes round through the wind or dead downwind, and, for a tack over
+// half a turn the agent left to auto, how far the gybe would have been.
+func turnWritten(f *bus.Frame, sl int32, turn string, angle float64, via string) written {
+	w := written{turning: turn}
+	if turn == "" {
+		return w
+	}
+	now := deg(math.Abs(wrap(f.Wind[sl].MeanFrom - f.State[sl].Heading)))
+	tack, gybe := int(math.Round(now+angle)), int(math.Round(360-now-angle))
+	w.by = tack
+	if turn == viaGybe {
+		w.by = gybe
+	}
+	if turn == viaTack && (via == "" || via == viaAuto) && tack > 180 {
+		w.gybeBy = gybe
+	}
+	return w
 }
 
 // pendingTurn is the turn the boat in slot sl is making or has yet to
@@ -332,9 +364,18 @@ func orderLine(s *Sea, f *bus.Frame, sl int32, w written) string {
 	switch {
 	case w.turning == viaTack || uint8(st.PilotWay) == physics.WayTack:
 		what = "tacking to " + what
+		if w.by > 0 {
+			what += fmt.Sprintf(", %d° round through the wind", w.by)
+		}
+		if w.gybeBy > 0 {
+			what += fmt.Sprintf(" (via gybe would be %d°)", w.gybeBy)
+		}
 	case w.turning == viaGybe || uint8(st.PilotWay) == physics.WayGybe:
 		what = "gybing to " + what
-	case stalled(st) != "" && pw.Mode() != bus.PilotOff:
+		if w.by > 0 {
+			what += fmt.Sprintf(", %d° round through dead downwind", w.by)
+		}
+	case stillStalled(st, pw):
 		what = "holding " + stalled(st)
 	default:
 		what = "holding " + what

@@ -101,8 +101,10 @@ func (p refPoint) label() string {
 }
 
 // runCheck sails the polar at the reference's winds and angles and fails
-// outside the tolerances.
-func runCheck(b *physics.Prepared, id string) error {
+// outside the tolerances, then at the chart's winds, and fails unless the
+// sail says drawing at the fastest sheet and, for the boat of the handbook,
+// unless its trim table is the polar's.
+func runCheck(b *physics.Prepared, id string, handbook bool) error {
 	r, err := readReference()
 	if err != nil {
 		return err
@@ -137,6 +139,13 @@ func runCheck(b *physics.Prepared, id string) error {
 	}
 	if len(failed) > 0 {
 		return errors.New("outside the reference's tolerances:\n  " + strings.Join(failed, "\n  "))
+	}
+	all := sailPolars(b, chartWinds, chartAngles)
+	if err := checkWords(all); err != nil {
+		return err
+	}
+	if handbook {
+		return checkHandbook(all)
 	}
 	return nil
 }

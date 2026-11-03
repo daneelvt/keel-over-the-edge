@@ -412,7 +412,7 @@
   },
   {
    "name": "run",
-   "digest": "c76ace8941f69384563491429e4d0e7378cdbacc90d5cebd27d4c449f89c2213",
+   "digest": "82588ea5108d3b8de7eebe72f89b08c88f2c9d8f8effab83d5c54807d577d212",
    "checkpoints": [
     {
      "step": 600,
@@ -952,7 +952,7 @@
   },
   {
    "name": "gybes",
-   "digest": "97ec302c998cffd2124726ce870c8429cbf130bdeb1717bac46eac97a443310c",
+   "digest": "17f7463f2d1a9ec42aa5c6532edf16bfe114d2fe2246a55bb9c65c860ddd9d70",
    "checkpoints": [
     {
      "step": 600,
@@ -1288,7 +1288,7 @@
   },
   {
    "name": "by-the-lee",
-   "digest": "e5a886c1c2cc122ff9b5ed687b8d3529b6b11efad1c7ecea52b51ad66464b98e",
+   "digest": "0d3e12cef02d4e1b6e32c4b6feeeeedcf0c69a421f3b8d5b5e28e292d4a603ac",
    "checkpoints": [
     {
      "step": 600,
@@ -2518,7 +2518,7 @@
   },
   {
    "name": "random",
-   "digest": "0449a3a84f7578d8f988861bbe25eee3179af47dd1865c1e1a743317c84911a8",
+   "digest": "324f641b4307c7ac6f2a0a6894c7bdb2e4771e8d2911f9fd1db09cb594ed5f06",
    "checkpoints": [
     {
      "step": 600,
@@ -3697,7 +3697,7 @@
   },
   {
    "name": "run-gale",
-   "digest": "64fe1c92e966941ec026b081b8f9d73eaf2461caf4888a9d506573a66c403e66",
+   "digest": "6ec7fd543194ee7584c52c0d6da4358ab06e2bc37f6774a09608ad6f4bbdb314",
    "checkpoints": [
     {
      "step": 600,
@@ -3901,7 +3901,7 @@
   },
   {
    "name": "capsize-gale",
-   "digest": "4461f0363bb01c6db41f78423da0426dff588f0f83fed2f4443eccb79be74ee7",
+   "digest": "7eb804acd35db4976753e67ac4b1060b6af1dc9172a9155c185f0e2cce50549a",
    "checkpoints": [
     {
      "step": 600,
@@ -4414,7 +4414,7 @@
   },
   {
    "name": "random-sea",
-   "digest": "346c635c874ce54e7041fb4e98d41fd79bc37555110d8f33f7960e187185cee3",
+   "digest": "91bd0f64e204812d26ed1263fbfe01554064c5eaa739b31060a7a9fb5e704fe8",
    "checkpoints": [
     {
      "step": 600,
@@ -5593,7 +5593,7 @@
   },
   {
    "name": "refuge",
-   "digest": "237fa0512d401164daf5b964f1cd7d72e67fd7dba913f0179320d6556973d89c",
+   "digest": "3ce119496e4ce389d032bc719140e3961779aa3d8b7012406ff34a2005c59552",
    "checkpoints": [
     {
      "step": 600,
@@ -5902,7 +5902,7 @@
   },
   {
    "name": "random-weather",
-   "digest": "a45fbe572040b487b0554054962dd10d800b279ee6073ebbc848c8e34ee216a0",
+   "digest": "b50939575ff00325830671ad8296fba5b87ca22e0428a59ecb3d09fce063598c",
    "checkpoints": [
     {
      "step": 600,
@@ -6673,7 +6673,7 @@
   },
   {
    "name": "pilot-shifts",
-   "digest": "59252308157095ff169477f42695f288838a95a976d1e5d6181c54f2ee0ab842",
+   "digest": "9a900c0bfc5b8841b29402936d292ed95e973beb92df4dd251e028949bed7231",
    "checkpoints": [
     {
      "step": 600,
@@ -7186,7 +7186,7 @@
   },
   {
    "name": "pilot-stall",
-   "digest": "1bb9512e2b68e3e6f13a4a1d5e8a7f07af0bc904bb6da03390460877174830f1",
+   "digest": "b12d64670d7d7ca01dadbecfccc691ca9f8dd67bbfd20f684bd4c97e97f5ba73",
    "checkpoints": [
     {
      "step": 600,
@@ -7201,7 +7201,7 @@
       "heaveRate": "0x0000000000000000",
       "heel": "0xbf31ff63c621ba7e",
       "pilotLeft": "0x3fe92e951f6ffab5",
-      "pilotMark": "0x0000000000000000",
+      "pilotMark": "0x40fe001000000000",
       "pilotOrder": "0x3ff0000000000000",
       "pilotTrim": "0x3f310c7cd995f452",
       "pilotWatch": "0x4020000000000000",
@@ -7234,7 +7234,7 @@
       "heaveRate": "0x0000000000000000",
       "heel": "0x3efbee4c3910f543",
       "pilotLeft": "0x3fe92e951f6ffab5",
-      "pilotMark": "0x0000000000000000",
+      "pilotMark": "0x40fe001000000000",
       "pilotOrder": "0x3ff0000000000000",
       "pilotTrim": "0x3f310c7cd995f452",
       "pilotWatch": "0x4020000000000000",
@@ -7267,7 +7267,7 @@
       "heaveRate": "0x0000000000000000",
       "heel": "0xbf3f73b1be14ce8b",
       "pilotLeft": "0x3fe92e951f6ffab5",
-      "pilotMark": "0x0000000000000000",
+      "pilotMark": "0x40fe001000000000",
       "pilotOrder": "0x3ff0000000000000",
       "pilotTrim": "0x3f310c7cd995f452",
       "pilotWatch": "0x4020000000000000",
@@ -7300,7 +7300,7 @@
       "heaveRate": "0x0000000000000000",
       "heel": "0xbf00ee99ade7a2ed",
       "pilotLeft": "0x3fe92e951f6ffab5",
-      "pilotMark": "0x0000000000000000",
+      "pilotMark": "0x40fe001000000000",
       "pilotOrder": "0x3ff0000000000000",
       "pilotTrim": "0x3f310c7cd995f452",
       "pilotWatch": "0x4020000000000000",
@@ -7333,7 +7333,7 @@
       "heaveRate": "0x0000000000000000",
       "heel": "0xbec85dfde87be30a",
       "pilotLeft": "0x3fe92e951f6ffab5",
-      "pilotMark": "0x0000000000000000",
+      "pilotMark": "0x40fe001000000000",
       "pilotOrder": "0x3ff0000000000000",
       "pilotTrim": "0x3f310c7cd995f452",
       "pilotWatch": "0x4020000000000000",
@@ -7455,8 +7455,278 @@
    ]
   },
   {
+   "name": "pilot-stall-bear",
+   "digest": "f1f44c71984b4cf5907517d873c33fa5ccb5170d21a72645a8ed795eca8a71f9",
+   "checkpoints": [
+    {
+     "step": 600,
+     "state": {
+      "boom": "0xbfe17b3116c59b62",
+      "boomRate": "0x0000000000000000",
+      "deepX": "0x0000000000000000",
+      "deepY": "0x0000000000000000",
+      "groundTimer": "0x0000000000000000",
+      "heading": "0xbfe5c7b57d5a12a3",
+      "heave": "0x0000000000000000",
+      "heaveRate": "0x0000000000000000",
+      "heel": "0xbf31ff63c621ba7e",
+      "pilotLeft": "0x3fe92e951f6ffab5",
+      "pilotMark": "0x40fe001000000000",
+      "pilotOrder": "0x3ff0000000000000",
+      "pilotTrim": "0x3f310c7cd995f452",
+      "pilotWatch": "0x4020000000000000",
+      "pilotWay": "0x4008000000000000",
+      "pitch": "0x0000000000000000",
+      "pitchRate": "0x0000000000000000",
+      "rollRate": "0xbed2acafa48b8bab",
+      "rudder": "0xbfc2a3eedf0e0e0e",
+      "sailor": "0x3f4172ec299f9d35",
+      "sailorMode": "0x0000000000000000",
+      "sailorTimer": "0x0000000000000000",
+      "sheetLimit": "0x3fe17b3116c59b62",
+      "surge": "0xbfb3faebb4d927ef",
+      "sway": "0xbfae440054f244c1",
+      "x": "0xbfec2d49c6e3a810",
+      "y": "0xbfef25002818a1af",
+      "yawRate": "0xbf7522dda198b675"
+     }
+    },
+    {
+     "step": 1200,
+     "state": {
+      "boom": "0xbfc319d37d7b7e6e",
+      "boomRate": "0x0000000000000000",
+      "deepX": "0x0000000000000000",
+      "deepY": "0x0000000000000000",
+      "groundTimer": "0x0000000000000000",
+      "heading": "0xbfe527e073a69bd5",
+      "heave": "0x0000000000000000",
+      "heaveRate": "0x0000000000000000",
+      "heel": "0x3efbee4c3910f543",
+      "pilotLeft": "0x3fe92e951f6ffab5",
+      "pilotMark": "0x40fe001000000000",
+      "pilotOrder": "0x3ff0000000000000",
+      "pilotTrim": "0x3f310c7cd995f452",
+      "pilotWatch": "0x4020000000000000",
+      "pilotWay": "0x4008000000000000",
+      "pitch": "0x0000000000000000",
+      "pitchRate": "0x0000000000000000",
+      "rollRate": "0x3f079f5dd916fd6e",
+      "rudder": "0xbfc7343accee504c",
+      "sailor": "0x3fabac4908c93e77",
+      "sailorMode": "0x0000000000000000",
+      "sailorTimer": "0x0000000000000000",
+      "sheetLimit": "0x3fc319d37d7b7e6e",
+      "surge": "0x3fccfc6a7c14380a",
+      "sway": "0xbfc52617365e69d1",
+      "x": "0xc005c649bfdf7385",
+      "y": "0xc002b803b4d3fe3d",
+      "yawRate": "0x3f87036ebb02277e"
+     }
+    },
+    {
+     "step": 1800,
+     "state": {
+      "boom": "0xbfc319d37d7b7e6e",
+      "boomRate": "0x0000000000000000",
+      "deepX": "0x0000000000000000",
+      "deepY": "0x0000000000000000",
+      "groundTimer": "0x0000000000000000",
+      "heading": "0xbfe8d37e590bc0bc",
+      "heave": "0x0000000000000000",
+      "heaveRate": "0x0000000000000000",
+      "heel": "0xbf3f73b1be14ce8b",
+      "pilotLeft": "0x3fe92e951f6ffab5",
+      "pilotMark": "0x40fe001000000000",
+      "pilotOrder": "0x3ff0000000000000",
+      "pilotTrim": "0x3f310c7cd995f452",
+      "pilotWatch": "0x4020000000000000",
+      "pilotWay": "0x4008000000000000",
+      "pitch": "0x0000000000000000",
+      "pitchRate": "0x0000000000000000",
+      "rollRate": "0x3f15274ff6935aab",
+      "rudder": "0xbf8c5082e6f2c56b",
+      "sailor": "0x3fb733f07c9418c9",
+      "sailorMode": "0x0000000000000000",
+      "sailorTimer": "0x0000000000000000",
+      "sheetLimit": "0x3fc319d37d7b7e6e",
+      "surge": "0x3fe612a74a033e93",
+      "sway": "0xbfa5d3ae1131e059",
+      "x": "0xc023798d2ea8fbb9",
+      "y": "0x40074f012b6b6394",
+      "yawRate": "0xbf68094fe3fae075"
+     }
+    },
+    {
+     "step": 2400,
+     "state": {
+      "boom": "0xbfc319d37d7b7e6e",
+      "boomRate": "0x0000000000000000",
+      "deepX": "0x0000000000000000",
+      "deepY": "0x0000000000000000",
+      "groundTimer": "0x0000000000000000",
+      "heading": "0xbfe920c8b088b891",
+      "heave": "0x0000000000000000",
+      "heaveRate": "0x0000000000000000",
+      "heel": "0xbf00ee99ade7a2ed",
+      "pilotLeft": "0x3fe92e951f6ffab5",
+      "pilotMark": "0x40fe001000000000",
+      "pilotOrder": "0x3ff0000000000000",
+      "pilotTrim": "0x3f310c7cd995f452",
+      "pilotWatch": "0x4020000000000000",
+      "pilotWay": "0x4008000000000000",
+      "pitch": "0x0000000000000000",
+      "pitchRate": "0x0000000000000000",
+      "rollRate": "0x3ed0a3ff371f201d",
+      "rudder": "0xbf61b22f59852be3",
+      "sailor": "0x3fb96806b5dc79f6",
+      "sailorMode": "0x0000000000000000",
+      "sailorTimer": "0x0000000000000000",
+      "sheetLimit": "0x3fc319d37d7b7e6e",
+      "surge": "0x3fecec22cbd63470",
+      "sway": "0xbfa33125732463b8",
+      "x": "0xc03609e96cb3bac7",
+      "y": "0x402c46726b00b44d",
+      "yawRate": "0xbef48c89341e7b7b"
+     }
+    },
+    {
+     "step": 3000,
+     "state": {
+      "boom": "0xbfc319d37d7b7e6e",
+      "boomRate": "0x0000000000000000",
+      "deepX": "0x0000000000000000",
+      "deepY": "0x0000000000000000",
+      "groundTimer": "0x0000000000000000",
+      "heading": "0xbfe921e93172e652",
+      "heave": "0x0000000000000000",
+      "heaveRate": "0x0000000000000000",
+      "heel": "0xbec85dfde87be30a",
+      "pilotLeft": "0x3fe92e951f6ffab5",
+      "pilotMark": "0x40fe001000000000",
+      "pilotOrder": "0x3ff0000000000000",
+      "pilotTrim": "0x3f310c7cd995f452",
+      "pilotWatch": "0x4020000000000000",
+      "pilotWay": "0x4008000000000000",
+      "pitch": "0x0000000000000000",
+      "pitchRate": "0x0000000000000000",
+      "rollRate": "0x3e9745d6079145b7",
+      "rudder": "0xbf6032d3bd521173",
+      "sailor": "0x3fb99371032e8482",
+      "sailorMode": "0x0000000000000000",
+      "sailorTimer": "0x0000000000000000",
+      "sheetLimit": "0x3fc319d37d7b7e6e",
+      "surge": "0x3feda5f56e6a0c03",
+      "sway": "0xbfa2e1982c74bc39",
+      "x": "0xc041c806057d5ac8",
+      "y": "0x403a9d47cdbed72a",
+      "yawRate": "0xbeba22d0c48dcba4"
+     }
+    },
+    {
+     "step": 3600,
+     "state": {
+      "boom": "0xbfdde14a17621edb",
+      "boomRate": "0x0000000000000000",
+      "deepX": "0x0000000000000000",
+      "deepY": "0x0000000000000000",
+      "groundTimer": "0x0000000000000000",
+      "heading": "0xbff521a55e15feda",
+      "heave": "0x0000000000000000",
+      "heaveRate": "0x0000000000000000",
+      "heel": "0x3f10a778e06c92c2",
+      "pilotLeft": "0x3fe92e951f6ffab5",
+      "pilotMark": "0x0000000000000000",
+      "pilotOrder": "0x3ff0000000000000",
+      "pilotTrim": "0xbf9acc3514872f6d",
+      "pilotWatch": "0x0000000000000000",
+      "pilotWay": "0x0000000000000000",
+      "pitch": "0x0000000000000000",
+      "pitchRate": "0x0000000000000000",
+      "rollRate": "0xbed7541e511cbc5d",
+      "rudder": "0xbf65661de6bf6e99",
+      "sailor": "0x3fae47d0a65b2c7d",
+      "sailorMode": "0x0000000000000000",
+      "sailorTimer": "0x0000000000000000",
+      "sheetLimit": "0x3fdde14a17621edb",
+      "surge": "0x3ff1295f679dc157",
+      "sway": "0xbf94735cbee9b4e5",
+      "x": "0xc04ac54680eefb5c",
+      "y": "0x404027e0d563a3f2",
+      "yawRate": "0x3f561b7a0f0ba565"
+     }
+    },
+    {
+     "step": 4200,
+     "state": {
+      "boom": "0xbfdde14a17621edb",
+      "boomRate": "0x0000000000000000",
+      "deepX": "0x0000000000000000",
+      "deepY": "0x0000000000000000",
+      "groundTimer": "0x0000000000000000",
+      "heading": "0xbff4f4f8bb24f2b1",
+      "heave": "0x0000000000000000",
+      "heaveRate": "0x0000000000000000",
+      "heel": "0x3ec7cd528a035e9e",
+      "pilotLeft": "0x3fe92e951f6ffab5",
+      "pilotMark": "0x0000000000000000",
+      "pilotOrder": "0x3ff0000000000000",
+      "pilotTrim": "0xbf826f167ee1fac4",
+      "pilotWatch": "0x0000000000000000",
+      "pilotWay": "0x0000000000000000",
+      "pitch": "0x0000000000000000",
+      "pitchRate": "0x0000000000000000",
+      "rollRate": "0xbea07f9b6c573710",
+      "rudder": "0xbf752f0f9d3dbf65",
+      "sailor": "0x3fadad43dd335518",
+      "sailorMode": "0x0000000000000000",
+      "sailorTimer": "0x0000000000000000",
+      "sheetLimit": "0x3fdde14a17621edb",
+      "surge": "0x3ff13f4c1d3bf76a",
+      "sway": "0xbf93623144e7e898",
+      "x": "0xc052a02bec10b521",
+      "y": "0x4042b7acf911d329",
+      "yawRate": "0x3f1ecec4bfc52bd8"
+     }
+    },
+    {
+     "step": 4800,
+     "state": {
+      "boom": "0xbfdde14a17621edb",
+      "boomRate": "0x0000000000000000",
+      "deepX": "0x0000000000000000",
+      "deepY": "0x0000000000000000",
+      "groundTimer": "0x0000000000000000",
+      "heading": "0xbff4f1b7975a6440",
+      "heave": "0x0000000000000000",
+      "heaveRate": "0x0000000000000000",
+      "heel": "0x3e7429ac64abaff7",
+      "pilotLeft": "0x3fe92e951f6ffab5",
+      "pilotMark": "0x0000000000000000",
+      "pilotOrder": "0x3ff0000000000000",
+      "pilotTrim": "0xbf8021edc2ad6178",
+      "pilotWatch": "0x0000000000000000",
+      "pilotWay": "0x0000000000000000",
+      "pitch": "0x0000000000000000",
+      "pitchRate": "0x0000000000000000",
+      "rollRate": "0xbe4e8d51a1a43a53",
+      "rudder": "0xbf76443af31793f6",
+      "sailor": "0x3fada7df9d9f4080",
+      "sailorMode": "0x0000000000000000",
+      "sailorTimer": "0x0000000000000000",
+      "sheetLimit": "0x3fdde14a17621edb",
+      "surge": "0x3ff138adb9c4f336",
+      "sway": "0xbf93549852b7fc1b",
+      "x": "0xc057d9f320e736e4",
+      "y": "0x404551cfea6be58c",
+      "yawRate": "0x3edd831f1c61200e"
+     }
+    }
+   ]
+  },
+  {
    "name": "pilot-gybe",
-   "digest": "12d7deeef731f7c7cced2ef16b456e8f702a85e025070c82b299455c0b7352cb",
+   "digest": "9e528f39a237ed09d957460e7de1b6b6c3b37281ced73f739f58d44e76e34165",
    "checkpoints": [
     {
      "step": 600,
@@ -7627,7 +7897,7 @@
   },
   {
    "name": "pilot-heading",
-   "digest": "56dee65bb5e5e9ce9ead942928636e9f3b1c075840fe5972aeb57d660abe5d05",
+   "digest": "167e7adba0a560185c128311998d1faef37e2ae31b3f764069daf4b703d13c11",
    "checkpoints": [
     {
      "step": 600,
@@ -8776,7 +9046,7 @@
   },
   {
    "name": "shoal",
-   "digest": "3a9a57520a3b130db26f43223a189657091b38692ebbc21a0316e1027b5437bb",
+   "digest": "39675cffdf74fc690dbfeaf2d86890d9d5dce25e66db83572aa54965d7e14055",
    "checkpoints": [
     {
      "step": 600,

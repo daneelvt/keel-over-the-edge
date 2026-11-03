@@ -4,7 +4,10 @@
 // strength, with the best sheet, and compares the result with measured data.
 //
 //	go run ./tools/polar               the polar: .dev/polar/<boat>.json, .svg, and a table
-//	go run ./tools/polar -check        fail unless the polar is within the reference data's tolerances
+//	go run ./tools/polar -check        fail unless the polar is within the reference data's tolerances,
+//	                                   the sail says drawing at its fastest sheet, and the handbook's
+//	                                   trim table is the polar's
+//	go run ./tools/polar -handbook     the handbook's trim table
 //	go run ./tools/polar -sail         the trimmed sail against ORC's mainsail coefficients
 //	go run ./tools/polar -manoeuvres   tacks and gybes, and where an accidental gybe comes
 //	go run ./tools/polar -sea 12       the polar in 12 knots and the sea it raises, beside flat water
@@ -30,6 +33,7 @@ func main() {
 	sea := flag.Float64("sea", 0, "the polar in this wind, in knots at sail height, in the sea it raises, beside flat water")
 	edge := flag.Bool("edge", false, "the line of no return at the lip, in each regime's spells and in flat water")
 	start := flag.Bool("start", false, "starts from rest, untouched, by the sheet: what a boat's start sheet is chosen by")
+	handbook := flag.Bool("handbook", false, "the machine sailors' handbook's trim table, for "+handbookPath)
 	out := flag.String("out", ".dev/polar", "folder for the polar's JSON and SVG")
 	flag.Parse()
 
@@ -49,8 +53,13 @@ func main() {
 			err = runStart(&b, boat.Name, boat.StartSheet)
 		case *sea != 0:
 			err = runSea(&b, waves, *sea)
+		case *handbook:
+			// The handbook is the first boat's, which a machine sailor sails.
+			if i == 0 {
+				err = runHandbook(&b)
+			}
 		case *check:
-			err = runCheck(&b, string(boat.ID))
+			err = runCheck(&b, string(boat.ID), i == 0)
 		case *sailFlag:
 			err = runSail(&b, &params)
 		case *manoeuvres:

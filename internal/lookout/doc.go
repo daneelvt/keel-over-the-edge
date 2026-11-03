@@ -66,5 +66,14 @@
 //   - Flashes, the lightning of the last minute: physics.Flashes for each
 //     of its slots.
 //
+// BoatSounds takes a BoatHeard: ApparentWind, Speed and ThroughWater, the
+// boat's physics.Out (ApparentWindSpeed, SpeedOverGround and
+// SpeedThroughWater); Luffing, how many of Out.FootFlow and Out.HeadFlow
+// are physics.FlowLuffing; SeaHeight, physics.SeaSample's Hs at the boat,
+// in the land's lee and with the ground; Whitecaps, the foam's whitecaps
+// the phone reads by Beaufort force (client/src/ocean/look.ts, foamAt) at
+// the wave wind at the boat, in knots; Seconds, world time in s; and Rain,
+// physics.RainAt at the boat.
+//
 // The chart's list is the chart package's (chart.List).
 package lookout

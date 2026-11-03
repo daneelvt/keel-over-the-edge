@@ -64,3 +64,11 @@ func TestChartIsSVG(t *testing.T) {
 		}
 	}
 }
+
+func TestBoomRounded(t *testing.T) {
+	for deg, want := range map[float64]int{4: 4, 4.4: 4, 4.9: 5, 12.2: 10, 12.6: 15, 77.7: 80, 84.1: 85} {
+		if got := boomRounded(deg); got != want {
+			t.Errorf("boomRounded(%v) = %d, want %d", deg, got, want)
+		}
+	}
+}

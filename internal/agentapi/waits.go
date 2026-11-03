@@ -33,14 +33,17 @@ const (
 	wakeChat      = "chat"
 	wakeRace      = "race"
 	wakePilot     = "pilot"
+	wakeSky       = "sky"
+	wakeWeather   = "weather"
 )
 
 // wakeWords lists wake_on's words, in their order.
-var wakeWords = []string{wakeGust, wakeBoat, wakeLand, wakeSighting, wakeHeel, wakeWindShift, wakeBearing, wakeNear, wakeChat, wakeRace, wakePilot}
+var wakeWords = []string{wakeGust, wakeBoat, wakeLand, wakeSighting, wakeHeel, wakeWindShift, wakeBearing, wakeNear, wakeChat, wakeRace, wakePilot,
+	wakeSky, wakeWeather}
 
 // wakeDefault are what a wait wakes on when wake_on is not given: all but
 // those that need a value.
-var wakeDefault = []string{wakeGust, wakeBoat, wakeLand, wakeSighting, wakeChat, wakeRace, wakePilot}
+var wakeDefault = []string{wakeGust, wakeBoat, wakeLand, wakeSighting, wakeChat, wakeRace, wakePilot, wakeSky, wakeWeather}
 
 // The limits of a wait.
 const (
@@ -108,10 +111,12 @@ type waiter struct {
 	once sync.Once
 }
 
-// placeOf is a charted place a wait watches: its name and where it is.
+// placeOf is a charted place a wait watches: its name, its subject index
+// and where it is.
 type placeOf struct {
-	name string
-	x, y float64
+	name    string
+	subject int32
+	x, y    float64
 }
 
 // track is a boat's bearing and range at a look, and some seconds before.
@@ -178,12 +183,16 @@ func (h *helm) look(s *Sea, f *bus.Frame, sight bool) {
 	in := &f.Instruments[sl]
 	h.readout.Add(float64(f.Tick)*1000/physics.StepsPerSecond, float64(in.WindSpeed), float64(in.WindFrom))
 	turned := h.turnDone(f, sl)
+	moments := h.moments(s, f, sl, sight)
 	w := h.waiter
 	why := ""
 	if w != nil {
 		why = h.watch(s, f, sl, w, sight)
 	}
 	h.mu.Unlock()
+	for _, e := range moments {
+		h.event(e)
+	}
 	switch turned {
 	case WayTackDone, WayGybeDone:
 		turn := "tack"
@@ -191,6 +200,13 @@ func (h *helm) look(s *Sea, f *bus.Frame, sight bool) {
 			turn = "gybe"
 		}
 		words := "the autopilot finished its " + turn
+		if turned == WayGybeDone {
+			// Where the boom went, so a boat settling on her new side is
+			// not taken for one aback.
+			if b := f.State[sl].Boom; b != 0 {
+				words += "; boom to " + side(b)
+			}
+		}
 		// A turn that came round with no steerage ends short of its
 		// course: the autopilot steers on for it from there.
 		if off := offCourse(f, sl); off > shortOfCourse {

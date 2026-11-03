@@ -79,7 +79,9 @@
               "near",
               "chat",
               "race",
-              "pilot"
+              "pilot",
+              "sky",
+              "weather"
             ],
             "type": "string"
           },

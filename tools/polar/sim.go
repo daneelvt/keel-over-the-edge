@@ -88,7 +88,12 @@ type point struct {
 	Attack float64 `json:"attack"` // the lower strip's angle of attack, degrees
 	Sailor float64 `json:"sailor"` // m out to windward
 	Flat   float64 `json:"flat"`   // the sailor's flattening
-	OK     bool    `json:"ok"`     // false if the boat capsized or never settled
+	// Apparent is the apparent wind's angle off the bow at the masthead,
+	// degrees; Word the sail's word for its sheet (Out.Sail) most often
+	// in the measured time.
+	Apparent float64 `json:"apparent"`
+	Word     int     `json:"word"`
+	OK       bool    `json:"ok"` // false if the boat capsized or never settled
 }
 
 const (
@@ -106,6 +111,7 @@ func sail(b *physics.Prepared, windKnots, twa, sheet float64) point {
 	n := int((settle + measure) * physics.StepsPerSecond)
 	start := int(settle * physics.StepsPerSecond)
 	var sum point
+	var words [4]int
 	y0 := 0.0
 	for i := range n {
 		bt.c.Helm = h.helm(&bt.s)
@@ -122,6 +128,8 @@ func sail(b *physics.Prepared, windKnots, twa, sheet float64) point {
 			sum.Attack += bt.o.FootAttack
 			sum.Sailor += bt.s.Sailor
 			sum.Flat += bt.o.Flattening
+			sum.Apparent += math.Abs(bt.o.ApparentWindAngle)
+			words[int(bt.o.Sail)]++
 		}
 	}
 	k := 1 / float64(n-start)
@@ -140,7 +148,14 @@ func sail(b *physics.Prepared, windKnots, twa, sheet float64) point {
 		Attack: sum.Attack * k / deg,
 		Sailor: -sum.Sailor * k,
 		Flat:   sum.Flat * k,
-		OK:     !bt.capsized,
+		// The mean apparent angle and the commonest word.
+		Apparent: sum.Apparent * k / deg,
+		OK:       !bt.capsized,
+	}
+	for w, n := range words {
+		if n > words[p.Word] {
+			p.Word = w
+		}
 	}
 	return p
 }

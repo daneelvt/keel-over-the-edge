@@ -350,7 +350,8 @@ func TestPilotSameHelmAstern(t *testing.T) {
 // A tack begun at rest in 3 knots, the sheet eased, has no steerage:
 // within 10 s it stalls, the autopilot giving it up, and holds the angle
 // it turned from on its old side. With the sheet hauled in she gathers
-// way there, and the same tack ordered again comes about. A tack from rest
+// way there, and the same tack ordered again comes about; ordered instead
+// to bear away on her side, she does. A tack from rest
 // that crawls past head to wind is not given up: it ends on the new side.
 func TestPilotStalledTack(t *testing.T) {
 	m := inLightAir(t, 3, 45, 0.3, 0)
@@ -376,6 +377,29 @@ func TestPilotStalledTack(t *testing.T) {
 	t.Logf("the same tack with way on: %.1f° off the wind, way %v", m.angle()/deg, m.s.PilotWay)
 	if m.s.PilotWay != WayHold || math.Abs(m.angle()/deg+45) > 10 {
 		t.Errorf("a tack with way on: %.1f° off the wind, way %v", m.angle()/deg, m.s.PilotWay)
+	}
+
+	// Stalled, and gathering way where she is held, then ordered to bear
+	// away on the side she is on: the autopilot steers for the new angle
+	// at once, and holds it.
+	m = inLightAir(t, 3, 45, 0.3, 0)
+	m.c.Target = pilotTarget(-45)
+	m.c.Order, m.c.Way = 1, WayTack
+	m.run(10, nil)
+	m.c.Sheet = 0.05
+	m.run(60, nil)
+	if m.s.PilotWay != WayTackStalled {
+		t.Fatalf("a stalled tack, nothing ordered: way %v", m.s.PilotWay)
+	}
+	m.c.Target, m.c.Sheet = pilotTarget(75), 0.25
+	m.run(Dt, nil)
+	if m.s.PilotWay != WayHold || math.Abs(wrapAngle(-m.o.PilotHeading)/deg-75) > 0.5 {
+		t.Fatalf("bearing away after the stall: way %v, steering for %.1f° off the wind", m.s.PilotWay, wrapAngle(-m.o.PilotHeading)/deg)
+	}
+	m.run(30, nil)
+	t.Logf("bearing away after the stall: 30 s on, %.1f° off the wind at %.2f knots", m.angle()/deg, m.speed()/knot)
+	if math.Abs(m.angle()/deg-75) > 10 || m.s.PilotWay != WayHold {
+		t.Errorf("bearing away after the stall: %.1f° off the wind, way %v", m.angle()/deg, m.s.PilotWay)
 	}
 
 	m = inLightAir(t, 3, 45, 0.05, 0)
