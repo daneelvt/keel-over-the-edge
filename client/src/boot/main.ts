@@ -711,12 +711,18 @@ async function start(): Promise<void> {
       { start, draws: world.drawsWhenReady },
     );
     const ready = untilReady(gate, world, cover, start);
+    // A boat that comes after the wait was given up is not this change's.
+    let waiting = true;
     void whenArrived(online, n).then(async () => {
+      if (!waiting) {
+        return;
+      }
       await frames(2);
       world.placeFirstView();
       placed = true;
     });
     await ready;
+    waiting = false;
     reveal(world, cover, arrived() ? DESCENT_CHANGE : 0);
     changing = false;
   };
