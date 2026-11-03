@@ -13,7 +13,6 @@
 // made with its named sailor on the first form, so none reaches this
 // screen without one.
 
-import { useState } from 'preact/hooks';
 import { sailFullScreen } from '../boot/fullscreen';
 import { STILL_AT_SEA, WATCH_ANOTHER_SAILOR } from '../ui/watchwords';
 import { LetWatch, type Voyage } from './letwatch';
@@ -37,7 +36,7 @@ export function SetSail({
   voyage: Voyage;
   sail: () => void;
 }) {
-  const [going, setGoing] = useState(false);
+  const going = voyage.going.value;
   return (
     <button
       type="button"
@@ -46,7 +45,6 @@ export function SetSail({
       onClick={() => {
         // In the tap itself: the browser allows the full screen only there.
         sailFullScreen();
-        setGoing(true);
         void voyage.sail(sail);
       }}
     >

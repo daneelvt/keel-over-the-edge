@@ -448,8 +448,10 @@ describe('Set sail with the box', () => {
     const props = (tag: string) => findAll(draw(), tag)[0]?.props as unknown as Props;
     props('input').onChange({ currentTarget: { checked: true } });
     expect(findAll(draw(), 'input')[0]?.props).toMatchObject({ checked: true });
-    // A second tap while the server is asked does nothing.
+    // A second tap while the server is asked does nothing; the first is
+    // answered at once.
     props('button').onClick();
+    expect(findAll(draw(), 'button')[0]?.props).toMatchObject({ disabled: true });
     props('button').onClick();
     await expect.poll(() => log).toEqual(['POST /api/me/spectators {"allow":"voyage"}', 'to sea']);
   });
