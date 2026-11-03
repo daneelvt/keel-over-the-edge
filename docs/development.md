@@ -135,7 +135,8 @@ credentials.
 |----------|------|------|---------|
 | `ci.yaml` | Every pull request (each part only when its files changed); every push to `main`, called by `release.yaml` | Go tests on amd64 and arm64, each with a PostgreSQL service: in their short forms with the race detector, then at full length without it (the physics, simulation, sky and world generator tests also built with `GOAMD64=v3`), the tick's benchmarks as a smoke test, short fuzzes of the catalog decoder, the input log's reader, the sailor name check, the decoding of what a game client sends and of the other boats' views (Go's and the page's), the physics module built and its golden tests run in WebAssembly, client tests, the client build (which fails on a bundled package with a licence not in `tools/licences/allowed.txt`) and the size of its first download, the one command started from scratch, its database container included, and checked over HTTPS with a sailor made with a passkey and read back, its game connection, and a second player seeing the first's boat; and the image built on amd64 and arm64 (not pushed), checked to be for its runner's machine, to run as 65532 with no shell, `keel help` to run and the page to be in it, its size in the job's summary | `go run ./tools/dev -db` once, then `go test -race -short ./...` and `go test ./...`, `go run ./tools/physics` then `npm test` in `client/`, `go run ./tools/dev -smoke`, `docker buildx build .` |
 | `pr.lint.yaml` | Pull requests, not drafts, that change its files | gofmt, go vet, staticcheck, the store's queries compiled against the migrations and their generated code current (`sqlc compile`, `sqlc diff`), the look-alike table current, Biome and tsc (the client and `art/`) | `go run ./tools/dev -lint` |
-| `pr.render.yaml` | Pull requests, not drafts, that change its files | The physics module built; the browser tests on Chromium, against `keel` and a PostgreSQL service, on WebGL 2 (drawn on lavapipe, which a step checks first) and WebGPU (on SwiftShader), in four jobs side by side: each back end's `@long` tests and the rest; each job's runner (its CPU and a fixed work's time), its tests' outcomes and its ten slowest in its summary | `go run ./tools/physics`, `npx playwright test` in `client/` |
+| `pr.render.yaml` | Pull requests, not drafts, that change its files: the page's tests and the scene's each when theirs did (`tools/e2e/filters_test.go`) | The browser tests that block a merge, none retried. The page's: keel, the account and the screen's words, on Chromium pages that draw nothing (`?draw=off`), three at a time and then those that change the shared world one at a time, against `keel` and a PostgreSQL service; and the net worker, the passkeys and the layout on WebKit. The scene's: the sea, the sky, the land and their pictures on the offline sandbox, on WebGL 2 (drawn on lavapipe, which a step checks first) in three jobs and WebGPU (on SwiftShader) in five. Each job's runner (its CPU and a fixed work's time), its tests' outcomes, its ten slowest and each file's time in its summary | `go run ./tools/physics`, then in `client/` `npx playwright test --project page-serial` and `--project webgl2` |
+| `render-nightly.yaml` | Every night at 04:17 UTC on `main`; by hand; pull requests labelled `render`, on each push while the label stays | What `pr.render` leaves: the `@long` and `@nightly` tests on both back ends and the page's, the sea's tests on a WebGPU device held to compatibility mode's limits, the slow-network tests through real TCP loss where the runner has netem, and the flake hunt: `pr.render`'s suite five times over (the page's, the scene's on WebGL 2, WebKit's), a test that passed in one run and failed in another named flaky in the summary. Not a required check; GitHub mails a failed night | the same, with `--grep '@long\|@nightly'` or `--repeat-each 5` |
 | `pr.licences.yaml` | Pull requests, not drafts, that change its files | The licence header in every source file (and the art header in `art/`'s scripts and sound recipes); licences of Go packages linked into `keel` | `go run ./tools/licences` |
 | `pr.catalog.yaml` | Pull requests, not drafts, that change its files | The catalog against its schema, unique ids, art present, generated files current, no kind's id used as a string in code | `go run ./tools/catalog -check` |
 | `pr.physics.yaml` | Pull requests, not drafts, that change its files | The physics package's rules (imports, `math` functions, no fused multiply-add in the source or the compiled code for arm64 and amd64, nor in the simulation's), the world generator's float rules, its layout files current, and the module built with no heap allocation and within its size budget; each boat's polar against its original's measured data, the trimmed sail against ORC's mainsail, and the polar in a breeze's sea and a gale's, printed and not checked | `go run ./tools/physics -check`, `go run ./tools/polar -check`, `go run ./tools/polar -sail`, `go run ./tools/polar -sea 12` |
@@ -1328,8 +1329,9 @@ curl -X POST 'http://127.0.0.1:9090/debug/wind?knots=12&from=0'
 curl -X POST 'http://127.0.0.1:9090/debug/encounter?situation=port-starboard'
 ```
 
-places a scripted boat to meet the first sailing player's boat, held on its
-course and trim for half a minute: `port-starboard` (10), `windward-leeward`
+places a scripted boat to meet the first sailing player's boat (or the
+boat given, with `&boat=…`), held on its course and trim for half a
+minute: `port-starboard` (10), `windward-leeward`
 (11), `overtaking` (12), `tacking` (13), `luffing` (15) and `capsized` (22).
 It answers with where it put the boat and the Article the bump should be
 judged by; hold your course. The developer panel (`?dev`) shows the wind
@@ -6518,7 +6520,32 @@ restarts `keel`; Vite on `http://localhost:5181` in front of it; a second
 Vite on `http://localhost:5182` whose traffic goes through the lag proxy;
 and a third on `https://localhost:5183` with a throwaway certificate, for
 WebKit; and the world page's Vite on `http://localhost:5184/owner/`, in
-front of keel's internal listener. `owner.spec.ts` opens the world page:
+front of keel's internal listener.
+
+The tests are of two kinds. The page's (the `page` and `page-serial`
+projects, the files `pageFiles` in `playwright.config.ts` names) check
+keel, the account and the screen's words on the game's page opened with
+`?test&draw=off` (`GAME` in `e2e/helpers.ts`), which draws nothing: no
+renderer and no canvas, the scene updated every animation frame (the
+game's tick, the camera, the boats, the words) and never drawn, and
+`keel.info().backend` is `none`. They need no GPU, so three run at a time
+against the one keel (`npx playwright test --project page`); those tagged
+`@world` change what every sailor shares (the wind, the weather, the
+world's end and life, keel itself), and those tagged `@alone` time the
+page and keel and need the machine to themselves: both run after the
+rest, one at a time, against a keel of their own (`--project page-serial`
+runs `page` first, which `--grep` does not filter; `--no-deps` runs them
+alone, as the workflows do).
+Every new boat starts in the same roads, beside the boats of the tests
+sailing at the same time: a test that needs clean air or room beside its
+boat puts it in water of its own first (`alone(page)`). The scene's (the
+`webgl2` and `webgpu` projects) are every other file, on the offline
+sandbox (`?sandbox`), drawing. A page under test that draws updates every
+frame but draws only what a test asks for (`keel.render()`, `keel.show()`)
+until it is thawed (`keel.thaw()`): a test of the loop itself (adaptive
+quality, the frame's allocations, the bake) thaws first.
+
+`owner.spec.ts` opens the world page:
 its layers switching, an island in the list, the owner flagging their
 account from a boat's row and their page's boat put where they click, the
 page reading nothing while its tab is hidden, and a request with another
@@ -6549,7 +6576,7 @@ none by day and none beyond the horizon; 64 boats by night within 150 draw
 calls; and pictures of the hours. `worker.spec.ts`,
 on Chromium and WebKit (`--project webkit`, `npx playwright install
 webkit`), opens `e2e/net.html`, which runs the net worker alone. The scene's tests open `?sandbox`.
-`start.spec.ts`, on WebGL 2 alone, makes a new sailor: the start screen
+`start.spec.ts` makes a new sailor: the start screen
 and its autofill request, names refused in words before any passkey (too
 short, a symbol, a reserved name, mixed scripts, a name taken and
 look-alikes of it), a sailor made with a passkey by Playwright's
@@ -6644,17 +6671,34 @@ update that changes the pictures (three.js's releases do) is fixed so. A
 test that draws more than one picture without `expect.soft` stops at the
 first that differs: run the tool again on the next run.
 
-A test that takes minutes on CI's SwiftShader is tagged `@long`
-(`test(title, { tag: '@long' }, ...)`); `pr.render` runs each back end's
-`@long` tests in a job of their own, beside the rest. The short tests are
-split over runners by spec file, five for WebGL 2 and two for WebGPU: each
-shard but the last runs the files `shardFiles` in `playwright.config.ts`
-names for it, and the last every other file, so a new file always runs.
-The groups are chosen by the files' measured times on CI. To balance them
-again, move files between the groups, and change the number of shards in
-`pr.render.yaml`'s matrix with the number of groups;
-`PROJECT=webgl2 SHARD=2 SHARDS=5 npx playwright test --project webgl2 --list`
-shows a shard.
+A test that takes minutes on CI's software GPU is tagged `@long`
+(`test(title, { tag: '@long' }, ...)`), and one that is short but belongs
+to the night `@nightly`: `pr.render`, which blocks a merge, leaves both to
+`render-nightly`, which runs them every night on `main` with the compat
+device, the real TCP loss and the flake hunt (`pr.render`'s suite five
+times over), and on a pull request labelled `render`. No test is retried,
+in either. A test that passes in one run and fails in another is a flake,
+and a fault like any other: fixed within the week, or else tagged
+`@nightly` with an issue naming its fault, no more than three tests at
+once. Each job writes its runner's CPU and speed, its tests' outcomes, the
+ten slowest, every flaky or failed test and each file's time to its
+summary on the run's page (`e2e/runner.ts`, `e2e/summary.ts`).
+
+The scene's tests are split over runners by spec file, three for WebGL 2
+and five for WebGPU: each shard but the last runs the files `shardFiles`
+in `playwright.config.ts` names for it, and the last every other scene
+file, so a new file always runs; a new file that draws nothing goes in
+`pageFiles` instead (`e2e/projects.test.ts` checks that each name is a
+file, in one place). The groups are chosen by the files' measured times on
+CI, which the jobs' summaries list. To balance them again, move files
+between the groups, and change the number of shards in `pr.render.yaml`'s
+and `render-nightly.yaml`'s matrices with the number of groups;
+`PROJECT=webgl2 SHARD=2 SHARDS=3 npx playwright test --project webgl2 --list`
+shows a shard. `pr.render` runs the page's tests and the scene's each only
+when a file they read changed: a change to the server alone runs the
+page's, to the shaders alone the scene's (`tools/e2e/filters_test.go` holds
+the two filters to what each reads). A new folder under `client/src` is
+both kinds', unless it only draws or only keel's pages use it.
 
 ## Commits
 

@@ -121,6 +121,17 @@ change says they are as the repository says. The rest is checked here.
       `bypassGovernance`; the master key used for nothing between
       sessions
 
+## Labels: Issues → Labels
+
+The labels that run a workflow on a pull request carrying one, again on
+each push while it stays.
+
+- [ ] `machine`: the whole playbook on a fresh runner (`machine-test.yaml`)
+- [ ] `worldgen`: a hundred seeds of the world generator (`pr.worldgen.yaml`)
+- [ ] `render`: the browser tests that `pr.render` leaves to the night
+      (`render-nightly.yaml`). Not a required check: of the browser tests
+      the `main` ruleset requires `pr-render` alone.
+
 ## Not available to this repository
 
 A public repository on a personal account cannot have these at any price:

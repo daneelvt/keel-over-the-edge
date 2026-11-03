@@ -139,10 +139,14 @@ export class PilotInput implements PilotControl {
    * downwind is held mirrored. steering is the heading the step steered
    * for (Out's pilotHeading), turning whether a turn it was ordered is
    * still under way or stalled, when the step holds something other than
-   * the target. Returns whether the target changed.
+   * the target; seen the order the boat's state last took. An order the
+   * boat has yet to take (a frame drawn before the next step) is not
+   * followed: its target is the turn's, mirrored from what the last step
+   * steered for, and following it would undo the turn. Returns whether the
+   * target changed.
    */
-  follow(steering: number, meanFrom: number, turning: boolean): boolean {
-    if (this.mode === PILOT_OFF || turning) {
+  follow(steering: number, meanFrom: number, turning: boolean, seen: number): boolean {
+    if (this.mode === PILOT_OFF || turning || seen !== this.order) {
       return false;
     }
     if (this.mode === PILOT_WIND) {

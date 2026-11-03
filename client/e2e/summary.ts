@@ -29,24 +29,68 @@ export function minutes(ms: number): string {
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
 }
 
+/** A test as the summary counts it: its runs (under --repeat-each) as one. */
+interface Test extends Row {
+  /** How many times it ran, and passed. */
+  runs: number;
+  passed: number;
+}
+
+/**
+ * Each test's rows as one. A test that passed in one run and failed in
+ * another, or passed only on a retry, is flaky.
+ */
+function tests(rows: Row[]): Test[] {
+  const groups = new Map<string, Row[]>();
+  for (const r of rows) {
+    const key = `${r.project} ${r.where} ${r.title}`;
+    groups.set(key, [...(groups.get(key) ?? []), r]);
+  }
+  return [...groups.values()].map((g) => {
+    const ran = g.filter((r) => r.outcome !== 'skipped');
+    const failed = ran.filter((r) => r.outcome === 'unexpected').length;
+    const passed = ran.length - failed;
+    const outcome: Row['outcome'] =
+      ran.length === 0
+        ? 'skipped'
+        : g.some((r) => r.outcome === 'flaky') || (passed > 0 && failed > 0)
+          ? 'flaky'
+          : failed > 0
+            ? 'unexpected'
+            : 'expected';
+    const first = g[0] as Row;
+    return {
+      ...first,
+      outcome,
+      tries: g.flatMap((r) => r.tries),
+      errors: g.flatMap((r) => r.errors),
+      runs: ran.length,
+      passed,
+    };
+  });
+}
+
 /** The summary of a run of rows that took wall milliseconds, in Markdown. */
 export function summarize(title: string, rows: Row[], wall: number, status: string): string {
-  const count = (o: Row['outcome']) => rows.filter((r) => r.outcome === o).length;
+  const all = tests(rows);
+  const count = (o: Row['outcome']) => all.filter((t) => t.outcome === o).length;
   const total = (r: Row) => r.tries.reduce((a, b) => a + b, 0);
   const cell = (s: string) => s.replaceAll('|', '\\|');
+  const repeats = Math.max(1, ...all.map((t) => t.runs));
   const out = [
     `### ${title}`,
     '',
-    `${rows.length} tests in ${minutes(wall)}, ${status}: ${count('expected')} passed, ` +
-      `${count('flaky')} flaky, ${count('unexpected')} failed, ${count('skipped')} skipped.`,
+    `${all.length} tests${repeats > 1 ? `, each run up to ${repeats} times,` : ''} in ${minutes(wall)}, ` +
+      `${status}: ${count('expected')} passed, ${count('flaky')} flaky, ${count('unexpected')} failed, ` +
+      `${count('skipped')} skipped.`,
     '',
   ];
-  const ran = rows.filter((r) => r.outcome !== 'skipped').sort((a, b) => total(b) - total(a));
+  const ran = all.filter((t) => t.outcome !== 'skipped').sort((a, b) => total(b) - total(a));
   if (ran.length > 0) {
     out.push('| Slowest | Project | Time | Tries |', '|---|---|---|---|');
-    for (const r of ran.slice(0, 10)) {
+    for (const t of ran.slice(0, 10)) {
       out.push(
-        `| ${cell(`${r.where} ${r.title}`)} | ${r.project} | ${minutes(total(r))} | ${r.tries.length} |`,
+        `| ${cell(`${t.where} ${t.title}`)} | ${t.project} | ${minutes(total(t))} | ${t.tries.length} |`,
       );
     }
     out.push('');
@@ -55,17 +99,33 @@ export function summarize(title: string, rows: Row[], wall: number, status: stri
     ['Flaky', 'flaky'],
     ['Failed', 'unexpected'],
   ] as const) {
-    const these = rows.filter((r) => r.outcome === outcome);
+    const these = all.filter((t) => t.outcome === outcome);
     if (these.length === 0) {
       continue;
     }
     out.push(`**${word}:**`, '');
-    for (const r of these) {
-      const tries = r.tries.map(minutes).join(', ');
-      const why = r.errors[0] === undefined ? '' : `: ${r.errors[0]}`;
-      out.push(`- ${r.where} ${r.title} (${r.project}; tries ${tries})${why}`);
+    for (const t of these) {
+      const how =
+        t.runs > 1
+          ? `passed ${t.passed} of ${t.runs} runs`
+          : `tries ${t.tries.map(minutes).join(', ')}`;
+      const why = t.errors[0] === undefined ? '' : `: ${t.errors[0]}`;
+      out.push(`- ${t.where} ${t.title} (${t.project}; ${how})${why}`);
     }
     out.push('');
+  }
+  // Each file's time, for the shards' groups (playwright.config.ts).
+  const files = new Map<string, number>();
+  for (const t of ran) {
+    const file = t.where.replace(/:\d+$/, '');
+    files.set(file, (files.get(file) ?? 0) + total(t));
+  }
+  if (files.size > 1) {
+    out.push('<details><summary>Time by file</summary>', '', '| File | Time |', '|---|---|');
+    for (const [file, ms] of [...files].sort((a, b) => b[1] - a[1])) {
+      out.push(`| ${file} | ${minutes(ms)} |`);
+    }
+    out.push('', '</details>', '');
   }
   return `${out.join('\n')}\n`;
 }

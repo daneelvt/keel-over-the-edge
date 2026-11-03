@@ -5,16 +5,11 @@
 // endpoint with PKCE; the approval page shows where the sign-in returns,
 // takes the player's passkey on the browser's prompt (Playwright's virtual
 // authenticator), makes a machine sailor, and approves; and the browser is
-// sent back to the app with the code, its state and the issuer. A form
-// draws nothing, so one back end is enough.
+// sent back to the app with the code, its state and the issuer.
 
 import { createHash, randomBytes } from 'node:crypto';
 import { type APIRequestContext, expect, test } from '@playwright/test';
-import { holdPasskeys, sailor } from './helpers';
-
-test.beforeEach(() => {
-  test.skip(test.info().project.name !== 'webgl2', 'a form: one back end is enough');
-});
+import { holdPasskeys, sailor, stamp } from './helpers';
 
 /** The app's redirect, on this computer: nothing listens there, the test answers it. */
 const redirect = 'http://localhost:47615/callback';
@@ -77,7 +72,7 @@ test('an AI app approved: the passkey, a machine sailor made, and back to the ap
   await expect(page.getByText(`Signed in as ${made.name}`)).toBeVisible();
 
   // No machine sailor yet: the form, its look drawn already.
-  const name = `Tin ${Date.now() % 10_000_000}`;
+  const name = `Tin ${stamp()}`;
   await expect(page.getByRole('radio', { name: 'Make a machine sailor' })).toBeChecked();
   await expect(page.getByRole('button', { name: 'Draw another' })).toBeVisible();
   // A name too short is refused in words, beside the field.

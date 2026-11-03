@@ -5,9 +5,8 @@
 // its owner's start screen; the bar over it says whose boat it is, with
 // the cog, and nothing on the screen steers it; the Inputs the page sends
 // while it watches carry no controls (the worker's count); and Sail gives
-// the player a boat of their own at the start. One sea page only: a second
-// beside it is slow on CI's software GPU. The AI app is the test's own,
-// through the server's routes.
+// the player a boat of their own at the start. The pages draw nothing
+// (?draw=off). The AI app is the test's own, through the server's routes.
 //
 // Then the list of sailors to watch: two machine sailors at sea, put in
 // order of how near the edge they are, one's card opened, followed and
@@ -17,12 +16,8 @@
 
 import { type BrowserContext, expect, type Page, test } from '@playwright/test';
 import data from '../src/catalog/catalog.gen.json' with { type: 'json' };
-import { drained, holdPasskeys, type Made, sailor, setSail, softwareGPU } from './helpers';
+import { GAME, holdPasskeys, type Made, sailor, setSail, stamp } from './helpers';
 import { assertPasskey } from './passkey';
-
-test.beforeEach(() => {
-  test.skip(test.info().project.name !== 'webgl2', 'watching: one back end is enough');
-});
 
 /** A machine sailor made through the server's route, its look the catalog's first; its id. */
 async function machine(context: BrowserContext, name: string): Promise<string> {
@@ -90,7 +85,7 @@ test('a machine sailor watched from its owner’s start screen: whose boat, noth
 }) => {
   test.setTimeout(240_000);
   const made = await sailor(context, 'Owner');
-  const name = `Watched ${Date.now() % 10_000_000}`;
+  const name = `Watched ${stamp()}`;
   const id = await machine(context, name);
   const bearer = await token(context, made, id);
   // The machine sailor to sea, as its AI app takes it there.
@@ -102,7 +97,7 @@ test('a machine sailor watched from its owner’s start screen: whose boat, noth
   // The start screen with machine sailors: Watch beside the one at sea.
   const errors: string[] = [];
   page.on('pageerror', (e) => errors.push(e.message));
-  await page.goto(`/?test&backend=webgl2${softwareGPU ? '&tier=low' : ''}`);
+  await page.goto(GAME);
   const row = page.locator('.machine-list li', { hasText: name });
   await expect(row).toContainText('at sea', { timeout: 30_000 });
   await row.getByRole('button', { name: 'Watch', exact: true }).click();
@@ -170,8 +165,8 @@ test('a machine sailor watched from its owner’s start screen: whose boat, noth
   expect(b.state.y).toBeLessThan(0);
   expect(Math.abs(b.state.heading - Math.PI / 2)).toBeLessThan(0.5);
   // Now the helm steers again, and its controls go, as the other online
-  // specs steer: through the hook, which a slow software renderer's frames
-  // cannot miss as they can a short key press.
+  // specs steer: through the hook, which no frame can miss as it can a
+  // short key press.
   await page.evaluate(() => globalThis.keel.setControls(1, 0.5));
   await expect
     .poll(async () => (await watch(page)).controls, {
@@ -181,9 +176,6 @@ test('a machine sailor watched from its owner’s start screen: whose boat, noth
     .toBeGreaterThan(0);
   expect(errors).toEqual([]);
 });
-
-/** The game's address with the test hooks, on the project's back end. */
-const GAME = `/?test&backend=webgl2${softwareGPU ? '&tier=low' : ''}`;
 
 /** A machine sailor made, given a connection token and taken to sea by its AI app. */
 async function toSea(context: BrowserContext, made: Made, name: string): Promise<void> {
@@ -211,8 +203,8 @@ test('two machine sailors at sea: the list in order of the edge, a card, Follow,
   // Two owners, a machine sailor each (an account may have only so
   // many), and a watcher with none: no sailor of the watcher's own comes
   // first.
-  const stamp = Date.now() % 10_000_000;
-  const names = [`Ahead ${stamp}`, `Astern ${stamp}`];
+  const digits = stamp();
+  const names = [`Ahead ${digits}`, `Astern ${digits}`];
   for (const n of names) {
     const owner = await browser.newContext();
     try {
@@ -229,7 +221,21 @@ test('two machine sailors at sea: the list in order of the edge, a card, Follow,
   await openList(page);
 
   // Only these two: the shared world has others' machine sailors at sea.
-  await page.getByRole('searchbox', { name: 'Part of a name' }).fill(String(stamp));
+  // The answer the list is ordered by is the first with both: one before
+  // they are listed is empty, and the list asks again every 10 seconds
+  // while it shows none.
+  const ordered = page.waitForResponse(async (r) => {
+    const u = new URL(r.url());
+    if (
+      u.pathname !== '/api/watch' ||
+      u.searchParams.get('sort') !== 'edge' ||
+      u.searchParams.get('q') !== digits
+    ) {
+      return false;
+    }
+    return ((await r.json()) as { sailors?: unknown[] }).sailors?.length === 2;
+  });
+  await page.getByRole('searchbox', { name: 'Part of a name' }).fill(digits);
   await page.getByRole('button', { name: 'Nearest the edge' }).click();
   await expect(page.getByRole('button', { name: 'Nearest the edge' })).toHaveAttribute(
     'aria-pressed',
@@ -240,14 +246,17 @@ test('two machine sailors at sea: the list in order of the edge, a card, Follow,
   // Each row: the sky in words, the cog, how far from the edge; nearest first.
   await expect(rows.first().locator('.watch-sky')).toHaveAttribute('role', 'img');
   await expect(rows.first().getByRole('img', { name: 'machine sailor' })).toBeVisible();
-  const edge = async (i: number) =>
-    Number(
-      /([0-9.]+) NM from the edge/.exec((await rows.nth(i).innerText()) ?? '')?.[1] ?? Number.NaN,
-    );
-  const near = await edge(0);
-  expect(near).toBeLessThanOrEqual(await edge(1));
-  const first = (await rows.first().getAttribute('data-sailor')) ?? '';
-  expect(names).toContain(first);
+  await expect(rows.nth(1)).toContainText('NM from the edge');
+  // Nearest first by the answer the list was ordered by: the rows' facts
+  // are read again every 10 seconds and changed in place, never
+  // reordered, and the two sail from the same start.
+  const sent = ((await (await ordered).json()) as { sailors: { name: string; edgeNM: number }[] })
+    .sailors;
+  expect(sent.map((s) => s.name).toSorted()).toEqual(names.toSorted());
+  expect(sent[0]?.edgeNM).toBeLessThanOrEqual(sent[1]?.edgeNM ?? Number.NaN);
+  const shown = await rows.evaluateAll((els) => els.map((e) => e.getAttribute('data-sailor')));
+  expect(shown).toEqual(sent.map((s) => s.name));
+  const first = shown[0] ?? '';
 
   // Its card: the weather, where, and Follow.
   await rows
@@ -286,13 +295,10 @@ test('a human sailor comes to Set sail on entry; watchable only once they tick t
   context,
   page,
 }) => {
-  test.setTimeout(300_000);
-  // Two pages on CI's one software GPU, where a full-size sea's frames run
-  // some 20 s behind the page and the other page waits for them, and the
-  // watcher's start screen draws a sea that cannot be held: small pages,
-  // the watcher's a phone's. The sailor to be watched, on a page of their own.
+  // The watcher on a phone's page; the sailor to be watched, on a page of
+  // their own.
   await page.setViewportSize({ width: 360, height: 640 });
-  const other = await browser.newContext({ viewport: { width: 320, height: 200 } });
+  const other = await browser.newContext();
   const seen = await other.newPage();
   try {
     const them = await sailor(other, 'Seen');
@@ -306,9 +312,6 @@ test('a human sailor comes to Set sail on entry; watchable only once they tick t
     await seen.waitForFunction(() => globalThis.keel?.net().status === 'sailing', null, {
       timeout: 60_000,
     });
-    // The watcher's page starts beside the sea on CI's one software GPU:
-    // the sea held meanwhile, as a hidden tab is, the boat sailing on.
-    await seen.evaluate(() => globalThis.keel.hold(true));
 
     // Unticked: the watcher, on the start screen, does not find them.
     const made = await sailor(context, 'Watcher');
@@ -323,7 +326,6 @@ test('a human sailor comes to Set sail on entry; watchable only once they tick t
 
     // Back at the Set sail screen after a reload, the boat still at sea:
     // the box is the voyage's, unticked; ticked, the voyage can be watched.
-    await drained(seen);
     await seen.reload();
     await expect(yours).toContainText('at sea', { timeout: 90_000 });
     await expect(box).not.toBeChecked();
@@ -334,17 +336,11 @@ test('a human sailor comes to Set sail on entry; watchable only once they tick t
     const row = page.locator(`.watch-row[data-sailor="${them.name}"]`);
     await expect(row).toBeVisible({ timeout: 40_000 });
     await expect(row.getByRole('img', { name: 'machine sailor' })).toHaveCount(0);
-    // The watcher's sea starts beside a page drawing it: that one held meanwhile.
-    await seen.evaluate(() => globalThis.keel.hold(true));
-    try {
-      await row.getByRole('button', { name: 'Watch', exact: true }).click();
-      await page.waitForFunction(() => globalThis.keel !== undefined, null, { timeout: 90_000 });
-      await page.waitForFunction((n) => globalThis.keel.watch().watching?.sailor === n, them.name, {
-        timeout: 60_000,
-      });
-    } finally {
-      await seen.evaluate(() => globalThis.keel.hold(false));
-    }
+    await row.getByRole('button', { name: 'Watch', exact: true }).click();
+    await page.waitForFunction(() => globalThis.keel !== undefined, null, { timeout: 90_000 });
+    await page.waitForFunction((n) => globalThis.keel.watch().watching?.sailor === n, them.name, {
+      timeout: 60_000,
+    });
     expect((await watch(page)).watching).toEqual({
       sailor: them.name,
       machine: false,

@@ -5,25 +5,24 @@
 // virtual authenticator standing in for the browser's prompt), its recovery
 // code shown once, Set sail with the voyage watched, its cookie, and the
 // sailor kept across a reload, where its Set sail shows that voyage's
-// choice. A form draws nothing, so one back end is enough.
+// choice. The page draws nothing (?draw=off): a form is the test.
 
 import { type BrowserContext, expect, type Page, test } from '@playwright/test';
 import data from '../src/catalog/catalog.gen.json' with { type: 'json' };
-import { sailor, setSail } from './helpers';
+import { GAME, sailor, setSail, stamp } from './helpers';
 
 test.beforeEach(async ({ context }) => {
-  test.skip(test.info().project.name !== 'webgl2', 'a form: one back end is enough');
   // The browser's prompt, answered by Playwright: it holds no passkey yet.
   await context.credentials.install();
 });
 
-/** A name no other test has taken: a word and digits from the clock. */
+/** A name no other test has taken: a word and stamp()'s digits. */
 function freshName(word: string): string {
-  return `${word} ${Date.now() % 10_000_000}`;
+  return `${word} ${stamp()}`;
 }
 
 async function openStart(page: Page): Promise<void> {
-  await page.goto('/?backend=webgl2');
+  await page.goto(GAME);
   await expect(page.getByRole('heading', { name: 'Keel Over the Edge' })).toBeVisible({
     timeout: 30_000,
   });

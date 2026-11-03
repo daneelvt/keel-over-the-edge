@@ -9,21 +9,22 @@
 // correction and one knock, one shake and the verdict.
 
 import { expect, test } from '@playwright/test';
-import { heldRegime, sail, sailor } from './helpers';
+import { alone, heldRegime, sail, sailor } from './helpers';
 
 // CI's netem job sends the page's traffic through the kernel's own delay
 // and loss instead, by the direct Vite.
 const lagged = process.env.KEEL_LAG_BASE ?? 'http://localhost:5182';
 
-test.beforeEach(() => {
-  test.skip(test.info().project.name !== 'webgl2', 'the connection: one back end is enough');
-});
-
 test('at 200 ms and 2% loss: no correction over the snap thresholds', async ({ page, context }) => {
   test.setTimeout(120_000);
   await sailor(context, 'Lagged');
   await sail(page, lagged);
-  await page.evaluate(() => globalThis.keel.script('wiggle'));
+  // In clean air: away from the boats of the tests sailing beside it.
+  await alone(page);
+  await page.evaluate(() => {
+    globalThis.keel.countAfresh();
+    globalThis.keel.script('wiggle');
+  });
   await page.waitForTimeout(40_000);
   const n = await page.evaluate(() => globalThis.keel.net());
   const measured = `${n.counts.snapshots} snapshots, ${n.counts.corrections} corrections (largest ${n.counts.largest.toFixed(3)} m, 95th percentile ${n.p95.toFixed(3)} m), ${n.counts.resets} resets, ${n.counts.stale} stale, m ${n.m}, round trip ${n.rtt.toFixed(0)} ms, ${n.traffic.bytesIn} B in, ${n.traffic.bytesOut} B out`;
@@ -41,14 +42,27 @@ test('at 200 ms and 2% loss: a tack or a gybe on the autopilot, with no correcti
   test.setTimeout(120_000);
   await sailor(context, 'Autopilot');
   await sail(page, lagged);
-  await page.evaluate(() => globalThis.keel.setControls(0, 0.3));
-  await page.waitForTimeout(5_000);
-  // On at the boat's angle to the wind, then the turn that suits it.
+  // Room to turn, away from the boats of the tests sailing beside it, on a
+  // broad reach held by the autopilot, whatever way the hour's wind blows:
+  // from rest close to the wind the boat gathered too little way to turn,
+  // and the turn stalled.
+  await alone(page, 110);
+  await page.evaluate(() => {
+    globalThis.keel.countAfresh();
+    globalThis.keel.setControls(0, 0.3);
+  });
+  // On at the boat's angle to the wind; way gathered; then the turn that
+  // suits it.
   await page.keyboard.press('p');
-  await page.waitForTimeout(5_000);
+  await page.waitForTimeout(10_000);
   const before = await page.evaluate(() => globalThis.keel.boat().pilot);
   expect(before.mode).toBe(1);
   await page.keyboard.press(Math.abs(before.degrees) < 90 ? 't' : 'g');
+  // The turn under way, then done: the page sees the order before the
+  // boat's state shows the turn.
+  await page.waitForFunction(() => globalThis.keel.boat().state.pilotWay !== 0, null, {
+    timeout: 10_000,
+  });
   await page.waitForFunction(
     () => {
       const b = globalThis.keel.boat();
@@ -72,41 +86,69 @@ test('the boat answers the helm on the frame it is moved', async ({ page, contex
   await page.evaluate(() => globalThis.keel.setControls(0, 0.5));
   await page.waitForTimeout(1_000);
   const before = await page.evaluate(() => globalThis.keel.boat().state.rudder);
-  await page.evaluate(async () => {
-    globalThis.keel.setControls(1, 0.5);
-    // A step is taken every thirtieth of a second: at 60 frames a second,
-    // one of the next two frames takes it.
-    await globalThis.keel.frames(2);
+  const waited = await page.evaluate(async () => {
+    const k = globalThis.keel;
+    const from = k.boat().steps;
+    k.setControls(1, 0.5);
+    // A step is taken every thirtieth of a second: the next, a frame or
+    // two on (two frames at 60 a second may fall just short of it), and
+    // well inside a round trip.
+    let frames = 0;
+    while (k.boat().steps === from && frames < 6) {
+      await k.frames(1);
+      frames++;
+    }
+    return frames;
   });
   // The step taken within a tick turned the rudder: no round trip.
   const after = await page.evaluate(() => globalThis.keel.boat().state.rudder);
+  expect(waited).toBeLessThan(6);
   expect(after).not.toBe(before);
 });
 
-test('a bump at 200 ms: one correction, one knock and shake, the verdict', async ({
-  page,
-  context,
-  request,
-}) => {
+test('a bump at 200 ms: one correction, one knock and shake, the verdict', {
+  tag: '@world',
+}, async ({ page, context, request }) => {
   test.setTimeout(120_000);
   await sailor(context, 'Bumped');
   await sail(page, lagged);
-  // A steady breeze on the beam, so the boat has way on whatever the
+  // A steady breeze from the north, so the boat has way on whatever the
   // world's weather is at this hour: in a calm the capsized boat staged
   // ahead is not reached.
-  const heading = await page.evaluate(() => globalThis.keel.boat().state.heading);
-  const from = Math.round(((((heading * 180) / Math.PI + 90) % 360) + 360) % 360);
   const internal = 'http://127.0.0.1:19090';
-  expect((await request.post(`${internal}/debug/wind?knots=12&from=${from}`)).status()).toBe(204);
+  expect((await request.post(`${internal}/debug/wind?knots=12&from=0`)).status()).toBe(204);
   try {
-    // Hold the course, as a sailor would while a boat is staged in their path.
+    await page.waitForFunction(() => Math.cos(globalThis.keel.boat().wind.meanFrom) > 0.99, null, {
+      timeout: 10_000,
+    });
+    // Out of the roads, where the boats of the tests before sail (one of
+    // them could hit the staged boat first), at rest on a beam reach in
+    // that breeze, the sail set: put at rest at any other angle, the boat
+    // could fall into the wind and stall. The move is no correction to
+    // count.
+    await alone(page, 90);
+    await page.evaluate(() => {
+      globalThis.keel.countAfresh();
+      globalThis.keel.setControls(0, 0.3);
+    });
+    // Hold the course, as a sailor would while a boat is staged in their
+    // path, with way on: from rest a slow boat wanders off it, and passes
+    // beside the boat staged ahead.
+    const heading = await page.evaluate(() => globalThis.keel.boat().state.heading);
     await page.evaluate((h) => globalThis.keel.script('steer', h), heading);
-    await page.waitForTimeout(8_000);
-    const res = await request.post(`${internal}/debug/encounter?situation=capsized`);
+    await page.waitForFunction(() => globalThis.keel.boat().out.speedOverGround > 2, null, {
+      timeout: 30_000,
+    });
+    await page.waitForTimeout(3_000);
+    // Ahead of this boat: the machine sailors other tests put to sea are
+    // still sailing, and may be the world's first.
+    const boat = await page.evaluate(() => globalThis.keel.net().boat);
+    const res = await request.post(`${internal}/debug/encounter?situation=capsized&boat=${boat}`);
     expect(res.status()).toBe(200);
     const staged = (await res.json()) as { article: string };
     expect(staged.article).toBe('22');
-    await page.waitForFunction(() => globalThis.keel.encounters().bumps > 0, null, {
+    // This boat's bump, with its verdict: not one only seen.
+    await page.waitForFunction(() => globalThis.keel.encounters().bump !== '', null, {
       timeout: 20_000,
     });
     const e = await page.evaluate(() => globalThis.keel.encounters());

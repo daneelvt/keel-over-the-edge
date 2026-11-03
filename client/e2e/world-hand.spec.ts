@@ -19,10 +19,6 @@ const owner = 'http://localhost:5184/owner/';
 
 test.use({ timezoneId: 'Pacific/Auckland' });
 
-test.beforeEach(() => {
-  test.skip(test.info().project.name !== 'webgl2', 'the world page: one back end is enough');
-});
-
 type Next = { number: number; seed: string; created: number; stored: boolean };
 
 type Life = {
@@ -125,10 +121,9 @@ function seconds(countdown: string): number {
   return ((d * 24 + h) * 60 + mi) * 60 + s;
 }
 
-test('a new next world: cancelled, nothing; confirmed, made, and made again', async ({
-  page,
-  request,
-}) => {
+test('a new next world: cancelled, nothing; confirmed, made, and made again', {
+  tag: '@world',
+}, async ({ page, request }) => {
   test.setTimeout(420_000);
   const before = await settled(request);
   skipLate(before);
@@ -167,10 +162,9 @@ test('a new next world: cancelled, nothing; confirmed, made, and made again', as
   expect(again.created).toBeGreaterThan(made.created);
 });
 
-test('the beginning’s confirmation names the end in three zones and counts down by keel’s clock', async ({
-  page,
-  request,
-}) => {
+test('the beginning’s confirmation names the end in three zones and counts down by keel’s clock', {
+  tag: '@world',
+}, async ({ page, request }) => {
   test.setTimeout(240_000);
   const l = await settled(request);
   skipLate(l);
@@ -211,7 +205,7 @@ test('the beginning’s confirmation names the end in three zones and counts dow
   expect((await life(request)).world).toBe(l.world);
 });
 
-test('a confirmation left open across a switch is refused, and says so', async ({
+test('a confirmation left open across a switch is refused, and says so', { tag: '@world' }, async ({
   page,
   request,
 }) => {
@@ -240,10 +234,9 @@ test('a confirmation left open across a switch is refused, and says so', async (
   expect((await life(request)).world).toBe(w + 1);
 });
 
-test('the whole world charted: cancelled, nothing; confirmed, every subject', async ({
-  page,
-  request,
-}) => {
+test('the whole world charted: cancelled, nothing; confirmed, every subject', {
+  tag: '@world',
+}, async ({ page, request }) => {
   test.setTimeout(300_000);
   let l = await settled(request);
   let c = await charted(request);

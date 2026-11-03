@@ -11,18 +11,14 @@
 // connection token made (shown once, after the passkey) and revoked, and
 // a machine sailor deleted. Playwright's virtual authenticator stands in
 // for the browser's prompt. The other devices and the AI app are the
-// test's own, through the server's routes: a second page beside the sea is
-// slow on CI's software GPU.
+// test's own, through the server's routes. The pages draw nothing
+// (?draw=off).
 
 import { createHash, randomBytes } from 'node:crypto';
 import { type BrowserContext, expect, type Page, test } from '@playwright/test';
 import data from '../src/catalog/catalog.gen.json' with { type: 'json' };
-import { drained, holdPasskeys, type Made, sailor, setSail, steady } from './helpers';
+import { GAME, holdPasskeys, type Made, sailor, setSail, stamp } from './helpers';
 import { assertPasskey } from './passkey';
-
-test.beforeEach(() => {
-  test.skip(test.info().project.name !== 'webgl2', 'forms: one back end is enough');
-});
 
 /**
  * The start screen with machine sailors: the player's own sailor by name
@@ -151,9 +147,9 @@ test('a new sailor’s machine sailor: the choice, the form, how to connect, and
   page,
 }) => {
   await context.credentials.install();
-  await page.goto('/?test&backend=webgl2&tier=low');
+  await page.goto(GAME);
   // A name of the most letters a sailor may have, which wraps on a phone.
-  const player = `Wavecrestmak ${String(Date.now() % 10_000_000).padStart(7, '0')}`;
+  const player = `Wavecrestmak ${stamp()}`;
   await page.getByLabel('Your sailor’s name').fill(player);
   await page.getByRole('button', { name: 'Set sail' }).click();
   await page.getByRole('button', { name: 'I’ve written it down' }).click({ timeout: 30_000 });
@@ -178,7 +174,7 @@ test('a new sailor’s machine sailor: the choice, the form, how to connect, and
   await page.getByLabel('Its name').fill(taken.name);
   await page.getByRole('button', { name: 'Make it' }).click();
   await expect(page.locator('#machine-problem')).toHaveText(/is taken/);
-  const name = `Brassy ${Date.now() % 10_000_000}`;
+  const name = `Brassy ${stamp()}`;
   await page.getByLabel('Its name').fill(name);
   await page.getByRole('button', { name: 'Make it' }).click();
 
@@ -222,25 +218,17 @@ test('every entry shows the machine sailors before the sea, the boat still in th
   context,
   page,
 }) => {
-  // A small page but where the phones' layouts are checked: CI's software
-  // GPU runs a full-size sea's frames some 20 s behind the page, and the
-  // reload waits for them; a small one's, half.
-  await page.setViewportSize({ width: 320, height: 200 });
   // A name of the most letters a sailor may have, which wraps on a phone.
   const made = await sailor(context, 'Wavecrestmak');
   const player = made.name;
-  const name = `Brassy ${Date.now() % 10_000_000}`;
+  const name = `Brassy ${stamp()}`;
   await machine(context, name);
-  await page.goto('/?test&backend=webgl2&tier=low');
+  await page.goto(GAME);
   await twoPanels(page, player, name);
   await setSail(page);
 
-  // Reloaded only once the page draws steadily and the GPU is done with
-  // it: on CI's software GPU a reload amid its start can hang. The boat
-  // still in the water: the player's panel at its tallest, the longest
-  // name, the note that the boat is at sea, and the box.
-  await steady(page);
-  await drained(page);
+  // Reloaded, the boat still in the water: the player's panel at its
+  // tallest, the longest name, the note that the boat is at sea, and the box.
   await page.reload();
   await twoPanels(page, player, name);
   const yours = page.locator('.your-sailor');
@@ -258,13 +246,13 @@ test('the account page: an app revoked, a connection token made once and revoked
   test.setTimeout(150_000);
   // A name of the most letters a sailor may have, which wraps on a phone.
   const made = await sailor(context, 'Wavecrestmar');
-  const name = `Cog ${Date.now() % 10_000_000}`;
+  const name = `Cog ${stamp()}`;
   const id = await machine(context, name);
   await approveApp(context, made, id);
   await holdPasskeys(context, made.passkey);
 
   // Signed in, the start screen with machine sailors, the player's own first.
-  await page.goto('/?test&backend=webgl2&tier=low');
+  await page.goto(GAME);
   await twoPanels(page, made.name, name);
   await laidOut(page, made.name);
   await setSail(page);

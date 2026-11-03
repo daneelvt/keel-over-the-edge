@@ -5,19 +5,18 @@
 // it; each page's chart then holds both, each credited to the player who
 // charted it, with the island's model; each player is told of their own
 // with a notice; the news has both; the world page lists both by whom; and
-// a third player, joining after, is sent the whole chart at once. One back
-// end is enough: the drawing is not under test.
+// a third player, joining after, is sent the whole chart at once. The
+// pages draw nothing (?draw=off): the drawing is not under test.
 
 import { existsSync, readFileSync } from 'node:fs';
 import { type BrowserContext, expect, type Page, test } from '@playwright/test';
-import { sail, sailBeside, sailor, steady } from './helpers';
+import { sail, sailor } from './helpers';
 
 const direct = 'http://localhost:5181';
 const internal = 'http://127.0.0.1:19090';
 const chartFile = new URL('../../.dev/worlds/1.chart', import.meta.url);
 
 test.beforeEach(() => {
-  test.skip(test.info().project.name !== 'webgl2', 'the connection: one back end is enough');
   test.skip(!existsSync(chartFile), 'no chart for seed 1: run go run ./tools/dev -world 1');
 });
 
@@ -34,7 +33,7 @@ interface Entry {
  * Two great islands of seed 1 far apart, not yet charted: not known from
  * the start, and not sighted by a boat of another test.
  */
-function islands(charted: Set<string>): [Entry, Entry] {
+function islands(charted: Set<string>): [Entry, Entry] | null {
   const c = JSON.parse(readFileSync(chartFile, 'utf8')) as { entries: Entry[]; known: number[] };
   const great = c.entries
     .filter(
@@ -49,24 +48,17 @@ function islands(charted: Set<string>): [Entry, Entry] {
   const a = great[0];
   const b = great[great.length - 1];
   if (a === undefined || b === undefined || a === b) {
-    throw new Error('seed 1 has not two great islands left to chart');
+    return null;
   }
   return [a, b];
 }
 
-/**
- * A player sailing in a small page of its own; beside others' pages, their
- * drawing held while it starts.
- */
-async function player(
-  browser: import('@playwright/test').Browser,
-  name: string,
-  beside?: Page | Page[],
-) {
-  const c = await browser.newContext({ baseURL: direct, viewport: { width: 320, height: 200 } });
+/** A player sailing in a page of its own. */
+async function player(browser: import('@playwright/test').Browser, name: string) {
+  const c = await browser.newContext({ baseURL: direct });
   await sailor(c, name);
   const p = await c.newPage();
-  await (beside === undefined ? sail(p, direct) : sailBeside(p, beside, direct));
+  await sail(p, direct);
   const me = (await (await c.request.get('/api/me')).json()) as { name: string };
   return { context: c, page: p, name: me.name };
 }
@@ -90,13 +82,14 @@ test('two players discover a world: the chart fills in for both, with the credit
   ).json() as Promise<{
     charted: { subject: string; number: number }[];
   }>;
-  const [isleA, isleB] = islands(
-    new Set((await before).charted.map((c) => `${c.subject}:${c.number}`)),
-  );
+  const isles = islands(new Set((await before).charted.map((c) => `${c.subject}:${c.number}`)));
+  // Each run charts two: run again and again on one world (the nightly's
+  // --repeat-each), it charts them all.
+  test.skip(isles === null, 'seed 1 has not two great islands left to chart in this world');
+  const [isleA, isleB] = isles as [Entry, Entry];
   const ann = await player(browser, 'Ann');
-  const bob = await player(browser, 'Bob', ann.page);
+  const bob = await player(browser, 'Bob');
   const contexts: BrowserContext[] = [ann.context, bob.context];
-  await steady(ann.page, bob.page);
   // Port Royal's island is known from the start, to everyone.
   for (const p of [ann.page, bob.page]) {
     await expect
@@ -112,11 +105,20 @@ test('two players discover a world: the chart fills in for both, with the credit
   }
   // Told of their own: the first, and the rest folded in. A page that
   // reconnects meanwhile, as a slow one may, is sent the chart whole,
-  // which tells of nothing: at least one of the two was told.
-  const told = await Promise.all(
-    [ann.page, bob.page].map((p) => p.evaluate(() => globalThis.keel.noticesShown())),
-  );
-  expect(told.some((shown) => shown.some((t) => t.startsWith('You charted')))).toBe(true);
+  // which tells of nothing: at least one of the two was told. Each notice
+  // stays some seconds and the rest wait behind it (the other's great
+  // discovery, a gale warning), so the own may come a while after the
+  // credit.
+  const told = () =>
+    Promise.all([ann.page, bob.page].map((p) => p.evaluate(() => globalThis.keel.noticesShown())));
+  await expect
+    .poll(
+      async () => (await told()).some((shown) => shown.some((t) => t.startsWith('You charted'))),
+      {
+        timeout: 30_000,
+      },
+    )
+    .toBe(true);
   // The islands' models, on the chart.
   await ann.page.evaluate(() => globalThis.keel.openChart('chart'));
   await expect
@@ -143,7 +145,7 @@ test('two players discover a world: the chart fills in for both, with the credit
     owner.charted.filter((c) => c.by === ann.name || c.by === bob.name).length,
   ).toBeGreaterThanOrEqual(2);
   // A third, joining after, is sent the whole chart at once.
-  const carol = await player(browser, 'Carol', [ann.page, bob.page]);
+  const carol = await player(browser, 'Carol');
   contexts.push(carol.context);
   await expect
     .poll(() => credits(carol.page), { timeout: 10_000 })

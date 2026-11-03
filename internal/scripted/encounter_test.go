@@ -47,14 +47,21 @@ func TestEncounters(t *testing.T) {
 					}
 				})
 				cfg := EncounterConfig{Bus: w.Bus(), Weather: w.Timeline().Prepared(), Length: cat.Boats[0].LengthOverall, Log: slog.New(slog.DiscardHandler)}
-				if _, err := Encounter(ctx, cfg, situation); !errors.Is(err, ErrNoPlayer) {
+				if _, err := Encounter(ctx, cfg, situation, 0); !errors.Is(err, ErrNoPlayer) {
 					t.Fatalf("with no player: %v", err)
 				}
+				// Another player first, the first sailing: the encounter is
+				// staged for the player's boat asked for.
+				reply := make(chan bus.Reply, 1)
+				w.Bus().Commands.Players().TrySend(bus.Command{Op: bus.Join, Account: bus.Account{2}, Conn: 8, Reply: reply})
+				first := <-reply
 				// The player: a boat sailed through a connection, let to
 				// settle on its course.
-				reply := make(chan bus.Reply, 1)
 				w.Bus().Commands.Players().TrySend(bus.Command{Op: bus.Join, Account: bus.Account{1}, Conn: 7, Reply: reply})
 				player := <-reply
+				if first.Slot > player.Slot {
+					t.Fatalf("the other player in slot %d, after the player's %d", first.Slot, player.Slot)
+				}
 				// The player holds a beam reach east in the north wind, as a
 				// sailor on a phone would hold a course.
 				wg.Go(func() {
@@ -69,7 +76,10 @@ func TestEncounters(t *testing.T) {
 					}
 				})
 				time.Sleep(15 * time.Second)
-				staged, err := Encounter(ctx, cfg, situation)
+				if _, err := Encounter(ctx, cfg, situation, player.Boat+1000); !errors.Is(err, ErrNoPlayer) {
+					t.Fatalf("for a boat not sailing: %v", err)
+				}
+				staged, err := Encounter(ctx, cfg, situation, player.Boat)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -104,6 +114,69 @@ func TestEncounters(t *testing.T) {
 			})
 		})
 	}
+}
+
+// TestEncounterStagedAgain stages twice, 20 seconds apart: the second sails
+// the first's boat, which stays when the first's HoldFor ends, and leaves
+// when the second's does.
+func TestEncounterStagedAgain(t *testing.T) {
+	cat, err := catalog.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	waves, kinds := cat.Prepare()
+	synctest.Test(t, func(t *testing.T) {
+		w, err := sim.New(sim.Config{Capacity: 8, Kinds: kinds[:1], Waves: waves, Workers: 1, Encounters: cat.PrepareEncounters()})
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer w.Close()
+		ctx, cancel := context.WithCancel(t.Context())
+		var wg sync.WaitGroup
+		defer wg.Wait()
+		defer cancel()
+		wg.Go(func() {
+			for ctx.Err() == nil {
+				time.Sleep(time.Second / 30)
+				w.Tick()
+			}
+		})
+		cfg := EncounterConfig{Bus: w.Bus(), Weather: w.Timeline().Prepared(), Length: cat.Boats[0].LengthOverall, Log: slog.New(slog.DiscardHandler)}
+		reply := make(chan bus.Reply, 1)
+		w.Bus().Commands.Players().TrySend(bus.Command{Op: bus.Join, Account: bus.Account{1}, Conn: 7, Reply: reply})
+		<-reply
+		time.Sleep(time.Second)
+		in := func(boat uint64) bool {
+			f := w.Bus().Frames.Acquire()
+			defer f.Release()
+			for _, s := range f.Live {
+				if f.Boat[s] == boat {
+					return true
+				}
+			}
+			return false
+		}
+		first, err := Encounter(ctx, cfg, "capsized", 0)
+		if err != nil {
+			t.Fatal(err)
+		}
+		time.Sleep(20 * time.Second)
+		second, err := Encounter(ctx, cfg, "capsized", 0)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if second.Boat != first.Boat {
+			t.Fatalf("staged again with boat %d, not the first's %d", second.Boat, first.Boat)
+		}
+		time.Sleep(HoldFor - 20*time.Second + 2*time.Second)
+		if !in(second.Boat) {
+			t.Fatal("the boat left when the first staging's time was up")
+		}
+		time.Sleep(20 * time.Second)
+		if in(second.Boat) {
+			t.Fatal("the boat stayed after the second staging's time was up")
+		}
+	})
 }
 
 // hold is a sailor's heading-hold: the helm toward target, damped by the

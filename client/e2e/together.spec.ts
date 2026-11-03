@@ -10,35 +10,24 @@
 // frames, and no correction of another boat is drawn at once.
 
 import { type BrowserContext, expect, type Page, test } from '@playwright/test';
-import { sail, sailBeside, sailor, steady } from './helpers';
+import { sail, sailor } from './helpers';
 
 const direct = 'http://localhost:5181';
 const lagged = process.env.KEEL_LAG_BASE ?? 'http://localhost:5182';
 
-test.beforeEach(() => {
-  test.skip(test.info().project.name !== 'webgl2', 'the connection: one back end is enough');
-});
-
-/**
- * Two players, each sailing in a context of its own, the second started
- * with the first's drawing held, and both drawing steadily before they are
- * watched.
- */
+/** Two players, each sailing in a context of its own. */
 async function two(browser: import('@playwright/test').Browser, base = direct) {
   const contexts: BrowserContext[] = [];
   const pages: Page[] = [];
   for (const name of ['Ann', 'Bob']) {
-    // Small pages, so CI's software renderer draws two of them often enough.
-    const c = await browser.newContext({ baseURL: base, viewport: { width: 320, height: 200 } });
+    const c = await browser.newContext({ baseURL: base });
     await sailor(c, name);
     const p = await c.newPage();
-    const first = pages[0];
-    await (first === undefined ? sail(p, base) : sailBeside(p, first, base));
+    await sail(p, base);
     contexts.push(c);
     pages.push(p);
   }
   const [a, b] = pages as [Page, Page];
-  await steady(a, b);
   return { contexts, a, b };
 }
 

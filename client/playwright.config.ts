@@ -5,6 +5,16 @@
 // software GPU, the CPU's Vulkan (e2e/gpu.ts). Locally, PW_CHANNEL=chrome uses the
 // installed Chrome instead of downloading Chromium.
 //
+// Two kinds of test. The scene's (the webgl2 and webgpu projects) draw: the
+// sea, the sky, the land, the pictures, on the offline sandbox. The page's
+// (page and page-serial) check keel, the account and the screen's words on
+// a page that draws nothing (?draw=off): no GPU, so three run at a time
+// against the one keel, and those tagged @world, which change what every
+// sailor shares (the wind, the weather, the world's end and life, keel
+// itself), or @alone, which time the page and keel and need the machine to
+// themselves, run after the rest, one at a time. No test is retried: a test
+// that fails on a pull request is a fault to fix, in the test or the game.
+//
 // Four servers: keel, built from this tree and serving a database of its
 // own on the test database's server (tools/e2e), and Vite in front of it, as
 // in development; a second Vite whose traffic to keel goes through the
@@ -37,53 +47,55 @@ const keelReady = 'http://127.0.0.1:19090/readyz';
 // The world page, on its own Vite, its data from keel's internal listener.
 const ownerPort = 5184;
 const linux = process.platform === 'linux';
-// pr.render splits a back end's short tests over runners by spec file:
+// The page's files: keel, the account, the screen's words; no picture. Every
+// other file is the scene's. A new file that draws nothing belongs here.
+// connect.spec.ts's sail predicted with no correction must start before
+// keel's world is a minute old: it is the page project's first file.
+export const pageFiles = [
+  'connect',
+  'discover',
+  'lag',
+  'machines',
+  'oauth-approve',
+  'over',
+  'owner',
+  'passkeys',
+  'roam',
+  'start',
+  'stopped',
+  'together',
+  'watch',
+  'worker',
+  'world-end',
+  'world-hand',
+].map((n) => `${n}.spec.ts`);
+
+// pr.render splits a back end's scene tests over runners by spec file:
 // shard n of SHARDS (PROJECT's) runs the files named n-th for that back end
-// here, and the last shard every file not named, so a new file always runs.
-// Unset, all of them. The groups are chosen by the files' short tests'
-// times on CI's runners, each about 18 minutes for webgl2 and 16 for webgpu
-// (Playwright's own --shard splits by the number of tests, and these files
-// take from seconds to ten minutes). connect.spec.ts must run first in its
-// shard, which the files' alphabetical order gives.
-const shardFiles: Record<string, string[][]> = {
+// here, and the last shard every scene file not named, so a new file always
+// runs. Unset, all of them. The groups are chosen by the files' short
+// tests' times on CI's runners (Playwright's own --shard splits by the
+// number of tests, and these files take from seconds to minutes).
+export const shardFiles: Record<string, string[][]> = {
+  // About 5.4 minutes each on lavapipe, 16 in all (November 2026).
   webgl2: [
-    [
-      'connect',
-      'encounter',
-      'features',
-      'lag',
-      'land',
-      'machine-mark',
-      'oauth-approve',
-      'passkeys',
-    ],
-    ['lights', 'roam', 'sail', 'sky', 'stopped', 'tapstorm', 'weather', 'wind'],
-    ['edge', 'fleet', 'forecast', 'freecam', 'start', 'together', 'towns', 'world-hand'],
-    ['discover', 'fog', 'layout', 'look', 'owner', 'watch', 'weatherchart', 'worker'],
+    ['ending', 'features', 'forecast', 'freecam', 'look', 'machine-mark'],
+    ['edge', 'lights', 'sea', 'sighting', 'weatherchart', 'wind'],
   ],
+  // About 7 minutes each on SwiftShader, 34.5 in all.
   webgpu: [
-    [
-      'edge',
-      'ending',
-      'forecast',
-      'freecam',
-      'land',
-      'layout',
-      'machine-mark',
-      'pilot',
-      'sail',
-      'tapstorm',
-      'weather',
-      'wind',
-    ],
+    ['freecam', 'lights', 'machine-mark', 'sea'],
+    ['forecast', 'wind'],
+    ['edge', 'features', 'sail', 'sky'],
+    ['fog', 'look', 'pilot', 'weather'],
   ],
 };
 
-/** The files a project's shard runs, as the project's testMatch or testIgnore. */
-function shardOf(project: string): { testMatch?: string[]; testIgnore?: string[] } {
+/** The files a scene project's shard runs, as the project's testMatch or testIgnore. */
+function shardOf(project: string): { testMatch?: string[]; testIgnore: string[] } {
   const shards = Number(process.env.SHARDS ?? '1');
   if (shards <= 1 || process.env.PROJECT !== project) {
-    return {};
+    return { testIgnore: pageFiles };
   }
   const groups = (shardFiles[project] ?? []).map((g) => g.map((n) => `${n}.spec.ts`));
   const shard = Number(process.env.SHARD);
@@ -92,7 +104,9 @@ function shardOf(project: string): { testMatch?: string[]; testIgnore?: string[]
       `${project}'s short tests are in ${groups.length + 1} shards in playwright.config.ts; SHARD ${process.env.SHARD} of ${shards} is not one`,
     );
   }
-  return shard < shards ? { testMatch: groups[shard - 1] ?? [] } : { testIgnore: groups.flat() };
+  return shard < shards
+    ? { testMatch: groups[shard - 1] ?? [], testIgnore: pageFiles }
+    : { testIgnore: [...groups.flat(), ...pageFiles] };
 }
 /** Chromium's launch, on the software GPU e2e/gpu.ts gives the project on Linux. */
 function launch(project: string): { args: string[]; env: Record<string, string> } {
@@ -115,8 +129,10 @@ export default defineConfig({
     toHaveScreenshot: { maxDiffPixelRatio: 0.02, threshold: 0.25 },
   },
   fullyParallel: false,
-  workers: 1,
-  retries: process.env.CI ? 1 : 0,
+  // The page's tests run three at a time; the scene's one at a time, each
+  // project held to its own (workers below).
+  workers: 3,
+  retries: 0,
   // On CI, a summary on the job's page too (e2e/summary.ts).
   reporter: process.env.CI ? [['list'], ['html', { open: 'never' }], ['./e2e/summary.ts']] : 'list',
   // Reference pictures, kept per back end and platform, changed only by hand.
@@ -128,9 +144,36 @@ export default defineConfig({
     trace: 'retain-on-failure',
   },
   projects: [
+    {
+      name: 'page',
+      testMatch: pageFiles,
+      grepInvert: /@world|@alone/,
+      fullyParallel: true,
+      workers: 3,
+      use: {
+        ...devices['Desktop Chrome'],
+        viewport: { width: 960, height: 600 },
+        deviceScaleFactor: 1,
+        ...(process.env.PW_CHANNEL ? { channel: process.env.PW_CHANNEL } : {}),
+      },
+    },
+    {
+      name: 'page-serial',
+      testMatch: pageFiles,
+      grep: /@world|@alone/,
+      workers: 1,
+      dependencies: ['page'],
+      use: {
+        ...devices['Desktop Chrome'],
+        viewport: { width: 960, height: 600 },
+        deviceScaleFactor: 1,
+        ...(process.env.PW_CHANNEL ? { channel: process.env.PW_CHANNEL } : {}),
+      },
+    },
     ...['webgl2', 'webgpu'].map((name) => ({
       name,
       ...shardOf(name),
+      workers: 1,
       use: {
         ...devices['Desktop Chrome'],
         viewport: { width: 960, height: 600 },
@@ -142,6 +185,7 @@ export default defineConfig({
     {
       name: 'compat',
       testMatch: ['sea.spec.ts', 'look.spec.ts'],
+      workers: 1,
       use: {
         ...devices['Desktop Chrome'],
         viewport: { width: 960, height: 600 },
@@ -155,6 +199,7 @@ export default defineConfig({
     {
       name: 'webkit',
       testMatch: ['worker.spec.ts', 'passkeys.spec.ts', 'layout.spec.ts'],
+      workers: 1,
       use: {
         ...devices['Desktop Safari'],
         baseURL: `https://localhost:${securePort}`,

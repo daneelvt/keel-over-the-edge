@@ -35,7 +35,7 @@
 // part covers another, and every button is 44 pixels or more.
 
 import { expect, type Page, test } from '@playwright/test';
-import { openScene, sailor } from './helpers';
+import { GAME, openScene, sailor } from './helpers';
 
 /** The screens: phones in CSS pixels, upright and sideways, and the tests' own. */
 const SCREENS = [
@@ -923,7 +923,7 @@ test('the list of sailors to watch and the card fit every screen, Watch in view'
   await standIn(page);
   await page.setViewportSize({ width: SCREENS[0].width, height: SCREENS[0].height });
   await page.emulateMedia({ reducedMotion: 'reduce' });
-  await page.goto('/?test&backend=webgl2&tier=low');
+  await page.goto(GAME);
   await page
     .locator('.your-sailor')
     .getByRole('button', { name: 'Watch another sailor' })

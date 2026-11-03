@@ -271,6 +271,8 @@ test('the low tier’s loop is made behind the scene, a few milliseconds a frame
   const r = await page.evaluate(async () => {
     const k = globalThis.keel;
     await k.ready(false);
+    // The loop drawing, as a page not under test draws it.
+    k.thaw();
     let frames = 0;
     while (!k.detail().baked && frames < 600) {
       await k.frames(1);

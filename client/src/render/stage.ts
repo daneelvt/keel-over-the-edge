@@ -5,6 +5,12 @@
 // SMAA, since MSAA is off in compatibility mode), follows the window's size
 // and pixel ratio, and when the GPU device or WebGL context is lost builds a
 // new renderer and carries on with the same scene.
+//
+// Each frame is the scene's update (the game's tick, the camera, the boats,
+// the words on the screen) and then its draw. A page under test that checks
+// no picture runs with no renderer at all (?test&draw=off): the update runs
+// every animation frame, and nothing is drawn. A page under test that draws
+// updates every frame but draws only when a test asks, until it is thawed.
 
 import { NoToneMapping, type Object3D, PerspectiveCamera, Scene } from 'three';
 import { fxaa } from 'three/addons/tsl/display/FXAANode.js';
@@ -12,7 +18,7 @@ import { smaa } from 'three/addons/tsl/display/SMAANode.js';
 import { pass, renderOutput } from 'three/tsl';
 import { type PassNode, RenderPipeline, type WebGPURenderer } from 'three/webgpu';
 import { FrameCap } from '../game/cap';
-import { type Backend, createGfx, type Gfx } from './renderer';
+import { type Backend, createGfx, type Gfx, type Wanted } from './renderer';
 
 export type Antialias = 'fxaa' | 'smaa' | 'none';
 
@@ -34,10 +40,12 @@ export interface FrameInfo {
 
 export interface StageHooks {
   /**
-   * Before each frame's scene render: update uniforms, run the tile pass.
-   * False says the hook drew the frame itself, and the scene is not drawn.
+   * Each frame's update, and with gfx what it draws before the scene's
+   * render (uniforms, the tile pass); gfx is null for a frame not drawn,
+   * which updates the scene alone. False says the hook drew the frame
+   * itself, and the scene is not drawn.
    */
-  frame(gfx: Gfx, info: FrameInfo): boolean | undefined;
+  frame(gfx: Gfx | null, info: FrameInfo): boolean | undefined;
   /** After each frame is drawn, with the main thread's work on it in milliseconds. */
   drawn?(gfx: Gfx, work: number): void;
   /** After a new renderer is made (at start and after a loss). */
@@ -64,16 +72,21 @@ export class Stage {
   /** How many times the renderer was rebuilt after a loss. */
   recoveries = 0;
   lastLoss = '';
+  /**
+   * Whether the frame loop draws, or only updates the scene: a page under
+   * test draws only what a test asks for (renderOnce) until it is thawed.
+   */
+  loopDraws = true;
 
   readonly #container: HTMLElement;
-  readonly #wanted: Backend;
+  readonly #wanted: Wanted;
   readonly #hooks: StageHooks;
   #pipeline: RenderPipeline | null = null;
   #scenePass: PassNode | null = null;
   #last = 0;
   #frozen = false;
 
-  constructor(container: HTMLElement, wanted: Backend, hooks: StageHooks) {
+  constructor(container: HTMLElement, wanted: Wanted, hooks: StageHooks) {
     this.#container = container;
     this.#wanted = wanted;
     this.#hooks = hooks;
@@ -81,10 +94,30 @@ export class Stage {
     window.addEventListener('resize', () => this.resize());
   }
 
+  /** The back end asked for, or none: a page that draws nothing. */
+  get wanted(): Wanted {
+    return this.#wanted;
+  }
+
   async start(): Promise<void> {
+    if (this.#wanted === 'none') {
+      // No renderer: animation frames update the scene, and draw nothing.
+      this.resize();
+      this.#last = performance.now();
+      const loop = (now: number): void => {
+        this.#frame(now);
+        requestAnimationFrame(loop);
+      };
+      requestAnimationFrame(loop);
+      return;
+    }
+    await this.#startGfx(this.#wanted);
+  }
+
+  async #startGfx(wanted: Backend): Promise<void> {
     const gfx = await createGfx(
       this.#container,
-      this.#wanted,
+      wanted,
       (reason) => {
         void this.#recover(reason);
       },
@@ -119,9 +152,9 @@ export class Stage {
     this.#hooks.resumed?.();
   }
 
-  /** Draws one frame now, at time now. */
+  /** Updates and draws one frame now, at time now; updates it alone without a renderer. */
   renderOnce(now: number): void {
-    this.#draw(now, 1 / 60);
+    this.#draw(now, 1 / 60, true);
   }
 
   setAntialias(a: Antialias): void {
@@ -156,6 +189,14 @@ export class Stage {
     return done.then(() => undefined);
   }
 
+  /** The stage's size on the page, in CSS pixels. */
+  size(): { width: number; height: number } {
+    return {
+      width: this.#container.clientWidth || window.innerWidth,
+      height: this.#container.clientHeight || window.innerHeight,
+    };
+  }
+
   /** The pixel ratio in use. */
   pixelRatio(): number {
     const g = this.gfx;
@@ -167,8 +208,7 @@ export class Stage {
 
   resize(): void {
     const g = this.gfx;
-    const w = this.#container.clientWidth || window.innerWidth;
-    const h = this.#container.clientHeight || window.innerHeight;
+    const { width: w, height: h } = this.size();
     this.camera.aspect = w / h;
     this.camera.updateProjectionMatrix();
     if (g !== null) {
@@ -208,10 +248,15 @@ export class Stage {
     }
     const dt = Math.min((now - this.#last) / 1000, 0.25);
     this.#last = now;
-    this.#draw(now, dt);
+    this.#draw(now, dt, this.loopDraws);
   }
 
-  #draw(now: number, dt: number): void {
+  /** The frame's update, then, if draw is set and there is a renderer, its draw. */
+  #draw(now: number, dt: number, draw: boolean): void {
+    if (this.#wanted === 'none' || !draw) {
+      this.#hooks.frame(null, { dt, now });
+      return;
+    }
     const g = this.gfx;
     if (g === null || this.#pipeline === null) {
       return;

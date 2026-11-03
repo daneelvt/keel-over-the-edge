@@ -551,11 +551,14 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
   const hooks = {
     world,
 
-    /** What the scene is drawing with; backend is empty while a lost renderer is rebuilt. */
+    /**
+     * What the scene is drawing with; backend is empty while a lost renderer
+     * is rebuilt, and none on a page that draws nothing (?draw=off).
+     */
     info(): Info {
       const g = stage.gfx;
       return {
-        backend: g?.backend ?? '',
+        backend: stage.wanted === 'none' ? 'none' : (g?.backend ?? ''),
         compat: g?.compat ?? false,
         workgroup: g?.workgroup ?? 0,
         vertexStorageTextures: g?.vertexStorageTextures ?? 0,
@@ -598,8 +601,10 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
       floatBoat();
     },
 
+    /** Lets world time run and the frame loop draw again, as a page not under test does. */
     thaw(): void {
       game.thaw();
+      stage.loopDraws = true;
       stage.freeze(false);
     },
 
@@ -616,7 +621,7 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
       }
     },
 
-    /** Draws one frame now, with the screen's words up to date. */
+    /** Draws one frame now, with the screen's words up to date; on a page that draws nothing, updates it. */
     render(): void {
       game.hud.flush();
       stage.renderOnce(performance.now());
@@ -1572,6 +1577,18 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
           veil: s.veil,
         },
       };
+    },
+
+    /** Counts prediction's snapshots and corrections afresh: a boat put elsewhere first is not one. */
+    countAfresh(): void {
+      const p = sailing.predictor;
+      if (p === undefined) {
+        throw new Error('the boat is sailed offline');
+      }
+      for (const k of Object.keys(p.counts) as (keyof typeof p.counts)[]) {
+        p.counts[k] = 0;
+      }
+      p.sizes.length = 0;
     },
 
     /** The game connection: where it stands and what prediction has seen. */

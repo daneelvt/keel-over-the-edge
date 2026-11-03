@@ -56,4 +56,27 @@ describe('the run summary', () => {
     );
     expect(md).toContain('**Failed:**\n\n- x.spec.ts:1 c (webgl2; tries 0:05): expect(received)');
   });
+
+  it('counts a test run again and again as one, flaky if it passed in some runs and not others', () => {
+    const md = summarize(
+      'hunt',
+      [
+        ...Array.from({ length: 4 }, () => row('steady', 'expected', [1000])),
+        row('steady', 'unexpected', [90_000], ['Test timeout of 90000ms exceeded.']),
+        ...Array.from({ length: 5 }, () => ({
+          ...row('fine', 'expected', [2000]),
+          where: 'y.spec.ts:3',
+        })),
+      ],
+      200_000,
+      'failed',
+    );
+    expect(md).toContain(
+      '2 tests, each run up to 5 times, in 3:20, failed: 1 passed, 1 flaky, 0 failed, 0 skipped.',
+    );
+    expect(md).toContain(
+      '- x.spec.ts:1 steady (webgl2; passed 4 of 5 runs): Test timeout of 90000ms exceeded.',
+    );
+    expect(md).toContain('| x.spec.ts | 1:34 |\n| y.spec.ts | 0:10 |');
+  });
 });
