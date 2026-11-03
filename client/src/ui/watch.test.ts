@@ -22,7 +22,6 @@ import { Menu } from './menu';
 import { HudModel } from './model';
 import { DEFAULTS, loadSettings, type Store, saveWatchChoice, settingsSignal } from './settings';
 import {
-  BehindTheBoat,
   Choices,
   EmptyList,
   kindName,
@@ -52,7 +51,6 @@ import {
   windWords,
 } from './watchlistwords';
 import {
-  BEHIND_THE_BOAT,
   bumpedLine,
   endedText,
   SAIL,
@@ -180,7 +178,6 @@ function view(
     watch: () => {},
     sail: () => {},
     unwatch: () => {},
-    behind: () => {},
   };
 }
 
@@ -216,11 +213,11 @@ describe('the screen on a boat watched', () => {
     const bar = expand(WatchBar({ view: v }));
     expect(text(bar)).toContain('Watching Iron Mary⚙');
     expect(buttons(bar)).toEqual([WATCH_ANOTHER, SAIL]);
-    expect(text(expand(BehindTheBoat({ view: v })))).toBe(BEHIND_THE_BOAT);
-    // The own boat at sea: no bar, nothing behind.
+    // Its label says the name whole, however the plate cuts it short.
+    expect((bar as VNode<{ 'aria-label': string }>).props['aria-label']).toBe('Watching Iron Mary');
+    // The own boat at sea: no plate.
     const own = view(null, false, 'sailing');
     expect(WatchBar({ view: own })).toBeNull();
-    expect(BehindTheBoat({ view: own })).toBeNull();
   });
 
   test('a watch ended: why, and the way to another or to sea', () => {

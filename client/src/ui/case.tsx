@@ -18,6 +18,12 @@
 // decals, not words. Watching one's own machine sailor, a running light
 // set into the case's top edge says its AI is at the helm (lit) or has
 // gone quiet (hollow).
+//
+// A tap on the barometer enlarges it from its place, over whatever is
+// under it but the menu, kept within the screen: down from its place
+// where it fits, otherwise risen so its foot is at the screen's foot. A
+// tap on it, Escape, its pusher folding it, the chart or the clear view
+// shrinks it; it is never remembered.
 
 import type { ReadonlySignal } from '@preact/signals';
 import type { ComponentChildren } from 'preact';
@@ -49,6 +55,8 @@ const GLOW = 150;
 /** How far the pushers' stems stand out of the case, px; and the room kept before the pocket chart. */
 const STEM = 6;
 const CLEAR = 8;
+/** The room the enlarged barometer keeps from the screen's edges, px. */
+const SCREEN_EDGE = 12;
 
 /** Whether the reader asks for less motion. */
 function reducedMotion(): boolean {
@@ -326,9 +334,19 @@ export interface CaseProps {
   harbour: HarbourView | null;
   /** The running light; null where there is none. */
   lamp: ReadonlySignal<Lamp> | null;
+  /** The screen cleared: the barometer shrinks. */
+  clear?: boolean;
 }
 
-export function Case({ model, settings, controls, barometer, harbour, lamp }: CaseProps) {
+export function Case({
+  model,
+  settings,
+  controls,
+  barometer,
+  harbour,
+  lamp,
+  clear = false,
+}: CaseProps) {
   const el = useRef<HTMLElement>(null);
   const s = settings.value.value;
   const out: Record<Complication, boolean> = {
@@ -409,6 +427,52 @@ export function Case({ model, settings, controls, barometer, harbour, lamp }: Ca
       setBoardOpen(false);
     }
   }, [port]);
+  // The barometer enlarged, and the size its place keeps meanwhile.
+  const [big, setBig] = useState<{ width: number; height: number } | null>(null);
+  const place = useRef<HTMLDivElement>(null);
+  const grow = () => {
+    const r = place.current?.getBoundingClientRect();
+    setBig(big !== null || r === undefined ? null : { width: r.width, height: r.height });
+  };
+  useEffect(() => {
+    if (!out.barometer || clear) {
+      setBig(null);
+    }
+  }, [out.barometer, clear]);
+  useEffect(() => {
+    if (big === null) {
+      return;
+    }
+    const key = (e: KeyboardEvent) => {
+      if (e.code === 'Escape') {
+        setBig(null);
+        e.preventDefault();
+      }
+    };
+    const turned = () => setBig(null);
+    document.addEventListener('keydown', key);
+    globalThis.addEventListener('resize', turned);
+    return () => {
+      document.removeEventListener('keydown', key);
+      globalThis.removeEventListener('resize', turned);
+    };
+  }, [big !== null]);
+  useLayoutEffect(() => {
+    const b = place.current?.querySelector<HTMLElement>('.barometer.big');
+    if (b === undefined || b === null) {
+      return;
+    }
+    b.style.left = '0px';
+    b.style.top = '0px';
+    const r = b.getBoundingClientRect();
+    const w = globalThis.innerWidth;
+    const h = globalThis.innerHeight;
+    const dx = Math.max(Math.min(0, w - SCREEN_EDGE - r.right), SCREEN_EDGE - r.left);
+    const dy =
+      r.bottom > h - SCREEN_EDGE ? Math.max(h - SCREEN_EDGE - r.bottom, SCREEN_EDGE - r.top) : 0;
+    b.style.left = `${dx}px`;
+    b.style.top = `${dy}px`;
+  });
   const upright = useUpright();
   const light = lamp?.value ?? '';
   const board = harbour !== null && rise !== 'in';
@@ -462,12 +526,19 @@ export function Case({ model, settings, controls, barometer, harbour, lamp }: Ca
         <div class="complications" hidden={LAID.every((k) => slides[k] === 'in')}>
           {barometer !== null ? (
             <div
+              ref={place}
               class={`complication${slides.barometer === 'folding' ? ' folding' : ''}`}
               id={IDS.barometer}
               data-complication="barometer"
               hidden={slides.barometer === 'in'}
+              style={big === null ? undefined : { width: big.width, height: big.height }}
             >
-              <BarometerDial barometer={barometer.barometer} words={barometer.words} />
+              <BarometerDial
+                barometer={barometer.barometer}
+                words={barometer.words}
+                big={big !== null}
+                press={grow}
+              />
             </div>
           ) : null}
         </div>

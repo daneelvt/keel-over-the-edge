@@ -4,19 +4,25 @@
 // readouts, the barometer sliding out of it), the sailor's state when they
 // are out of the boat beneath it, the pocket chart top right with the time
 // until a new world, the helm bottom left, the sheet bottom right, the
-// autopilot's control head between them, and the menu, with the key that
-// brings the full screen back beside its button. Laid out within
-// the safe area, in portrait and landscape, no part over another or over
-// the boat. Watching another sailor's boat, every control that acts is
-// gone (the helm, the sheet, the autopilot, the free camera, taking the
-// boat over): the instruments read the boat watched, and the bar over it
-// says whose it is.
+// autopilot's control head between them, and the keys in a column under
+// the pocket chart (a row beside it on a short screen): the menu's button,
+// Back to the boat, the clear view's, and the key that brings the full
+// screen back. Laid out within the safe area, in portrait and landscape,
+// no part over another or over the boat. Watching another sailor's boat,
+// every control that acts is gone (the helm, the sheet, the autopilot,
+// the free camera, taking the boat over): the instruments read the boat
+// watched, and a plate where the controls were says whose it is.
+//
+// The clear view hides every part but Back to the boat and its own key,
+// which stay in their places, and shows each notice alone at the top as it
+// comes. B brings the camera back to the boat; H clears the screen and
+// brings it back.
 
 import { ConnectionLine, type ConnectionView } from './connection';
 import './hud.css';
 import type { ReadonlySignal } from '@preact/signals';
 import { render } from 'preact';
-import { useState } from 'preact/hooks';
+import { useEffect, useState } from 'preact/hooks';
 import { AccountPanel, MachinesPanel } from '../account/account';
 import type { FullScreen } from '../boot/fullscreen';
 import type { HelmInput } from '../input/helm';
@@ -27,12 +33,14 @@ import type { DialWord } from './barometerdial';
 import type { HarbourView } from './board';
 import { Case, type Lamp } from './case';
 import { ChartScreen, type ChartSea, NoticeLine, PocketChart } from './chart';
+import type { ClearView } from './clearview';
 import { Helm, Sheet } from './controls';
 import type { Countdown } from './countdown';
 import { Menu } from './menu';
 import type { HudModel } from './model';
 import type { Notices } from './notices';
 import { Pilot } from './pilot';
+import { type CameraKeys, SeaKeys } from './seakeys';
 import type { SettingsSignal } from './settings';
 import { useWatch, type WatchView } from './watchlazy';
 import { watchersText } from './watchwords';
@@ -43,17 +51,6 @@ function BumpLine({ model }: { model: HudModel }) {
     <p class="panel bump-line" role="status" data-readout="bump">
       {text}
     </p>
-  );
-}
-
-/** The key that brings the full screen back after the phone was away: four corners. */
-function FullScreenKey({ resume }: { resume: () => void }) {
-  return (
-    <button type="button" class="round fullscreen-key" aria-label="Full screen" onClick={resume}>
-      <svg viewBox="0 0 20 20" width="20" height="20" aria-hidden="true">
-        <path d="M2 7V2h5M13 2h5v5M18 13v5h-5M7 18H2v-5" />
-      </svg>
-    </button>
   );
 }
 
@@ -87,22 +84,14 @@ function watchShown(w: WatchView): boolean {
   );
 }
 
-/** The bar over a boat watched, in the column at the top; or the button behind it and the list, over the rest. */
-function LazyWatch({ watch, part }: { watch: WatchView; part: 'bar' | 'over' }) {
+/** The plate over a boat watched, at the foot of the screen; or the list, over the rest. */
+function LazyWatch({ watch, part }: { watch: WatchView; part: 'plate' | 'list' }) {
   const shown = watchShown(watch);
   const m = useWatch(shown);
   if (m === null || !shown) {
     return null;
   }
-  if (part === 'bar') {
-    return <m.WatchBar view={watch} />;
-  }
-  return (
-    <>
-      <m.BehindTheBoat view={watch} />
-      <m.SeaWatchList view={watch} />
-    </>
-  );
+  return part === 'plate' ? <m.WatchBar view={watch} /> : <m.SeaWatchList view={watch} />;
 }
 
 /** The controls that act on the boat: the helm, the autopilot and the sheet; none on a boat watched. */
@@ -189,6 +178,20 @@ export interface ScreenProps {
   lamp?: ReadonlySignal<Lamp> | null;
   /** The full screen's switch and key; null where it is not run. */
   fullScreen?: FullScreen | null;
+  /** The camera, for Back to the boat; null without the key. */
+  camera?: CameraKeys | null;
+  /** The clear view; null without the key. */
+  clear?: ClearView | null;
+}
+
+/** Whether a key press is the player's, not typing in a field. */
+function typing(e: KeyboardEvent): boolean {
+  const t = e.target;
+  return (
+    t instanceof HTMLInputElement ||
+    t instanceof HTMLSelectElement ||
+    t instanceof HTMLTextAreaElement
+  );
 }
 
 /** The free camera as the screen sees it. */
@@ -214,9 +217,34 @@ function Screen(props: ScreenProps) {
   const end = props.end ?? null;
   const watch = props.watch ?? null;
   const full = props.fullScreen ?? null;
+  const camera = props.camera ?? null;
+  const clear = props.clear ?? null;
+  const cleared = clear?.on.value === true;
+  const flying = fly?.flying.value === true;
+  const charted = sea?.chart.open.value === true;
+  // B: back to the boat; H: the clear view, and back.
+  useEffect(() => {
+    if (flying || charted) {
+      return;
+    }
+    const key = (e: KeyboardEvent) => {
+      if (typing(e) || e.repeat || e.metaKey || e.ctrlKey || e.altKey) {
+        return;
+      }
+      if (e.code === 'KeyB' && camera !== null) {
+        camera.behind();
+        e.preventDefault();
+      } else if (e.code === 'KeyH' && clear !== null) {
+        clear.toggle();
+        e.preventDefault();
+      }
+    };
+    document.addEventListener('keydown', key);
+    return () => document.removeEventListener('keydown', key);
+  }, [flying, charted, camera, clear]);
   // Nothing steers a boat watched.
   const steer = watch === null || !watch.spectating.value;
-  if (sea?.chart.open.value) {
+  if (charted && sea !== null) {
     // The chart covers the screen; the boat sails on under it.
     return (
       <>
@@ -229,7 +257,7 @@ function Screen(props: ScreenProps) {
       </>
     );
   }
-  if (fly?.flying.value === true) {
+  if (flying && fly !== null) {
     // The free camera's picture is clean; a tap shows the way back a moment.
     return (
       <button
@@ -242,11 +270,12 @@ function Screen(props: ScreenProps) {
       </button>
     );
   }
+  // Cleared, every part stays laid out but unseen, so the two keys left
+  // stand where they stood; the overlays' labels go with the overlays.
   return (
-    <>
-      <div class="overlay-labels" ref={props.labels} aria-hidden="true" />
+    <div class={`hud-screen${cleared ? ' clear' : ''}`}>
+      {cleared ? null : <div class="overlay-labels" ref={props.labels} aria-hidden="true" />}
       <div class="hud-top">
-        {watch !== null ? <LazyWatch watch={watch} part="bar" /> : null}
         <Case
           model={model}
           settings={settings}
@@ -254,39 +283,46 @@ function Screen(props: ScreenProps) {
           barometer={props.barometer ?? null}
           harbour={props.harbour ?? null}
           lamp={props.lamp ?? null}
+          clear={cleared}
         />
         <SailorLine model={model} />
         {watch !== null && steer ? <WatchersLine watch={watch} /> : null}
         <BumpLine model={model} />
-        {notices !== null ? <NoticeLine notices={notices} /> : null}
+        {notices !== null && !cleared ? <NoticeLine notices={notices} /> : null}
         {props.connection !== null ? (
           <ConnectionLine view={props.connection} takeover={steer} />
         ) : null}
         {s.forcesOverlay ? <Clinometer model={model} /> : null}
       </div>
-      {sea !== null ? (
-        <PocketChart
-          sea={sea}
-          end={end}
-          weather={s.pocketWeather}
-          setWeather={(pocketWeather) => settings.set({ pocketWeather })}
-        />
+      {notices !== null && cleared ? (
+        <div class="clear-notices">
+          <NoticeLine notices={notices} />
+        </div>
       ) : null}
-      <button
-        type="button"
-        class="round menu-button"
-        aria-label="Menu"
-        aria-expanded={menu}
-        onClick={() => {
-          if (!menu) {
-            full?.menuOpened();
-          }
-          setMenu(!menu);
-        }}
-      >
-        ☰
-      </button>
-      {full?.key.value === true && !menu ? <FullScreenKey resume={full.resume} /> : null}
+      <div class="hud-right">
+        {sea !== null ? (
+          <PocketChart
+            sea={sea}
+            end={end}
+            weather={s.pocketWeather}
+            setWeather={(pocketWeather) => settings.set({ pocketWeather })}
+          />
+        ) : null}
+        <SeaKeys
+          menu={{
+            open: menu,
+            press: () => {
+              if (!menu) {
+                full?.menuOpened();
+              }
+              setMenu(!menu);
+            },
+          }}
+          camera={camera}
+          clear={clear}
+          full={full?.key.value === true && !menu ? full.resume : null}
+        />
+      </div>
       {account === 'account' ? <AccountPanel close={() => setAccount('')} /> : null}
       {account === 'machines' ? <MachinesPanel close={() => setAccount('')} /> : null}
       {menu && account === '' ? (
@@ -333,7 +369,8 @@ function Screen(props: ScreenProps) {
           fullScreen={full}
         />
       ) : null}
-      {watch !== null ? <LazyWatch watch={watch} part="over" /> : null}
+      {watch !== null ? <LazyWatch watch={watch} part="plate" /> : null}
+      {watch !== null ? <LazyWatch watch={watch} part="list" /> : null}
       <SeaControls
         steer={steer}
         helm={props.helm}
@@ -342,14 +379,18 @@ function Screen(props: ScreenProps) {
         model={model}
         settings={settings}
       />
-    </>
+    </div>
   );
 }
 
-/** Draws the screen at sea into parent. */
-export function mountScreen(parent: HTMLElement, props: ScreenProps): void {
+/** Draws the screen at sea into parent; the result takes it away. */
+export function mountScreen(parent: HTMLElement, props: ScreenProps): () => void {
   const root = document.createElement('div');
   root.className = 'hud';
   parent.append(root);
   render(<Screen {...props} />, root);
+  return () => {
+    render(null, root);
+    root.remove();
+  };
 }

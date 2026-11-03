@@ -18,7 +18,6 @@ export const SAIL = 'Sail';
 export const SPECTATORS = 'spectators';
 export const COPY_WATCH_LINK = 'Copy a link to watch';
 export const COPIED = 'Copied';
-export const BEHIND_THE_BOAT = 'Behind the boat';
 export const MORE = 'More';
 export const CLOSE = 'Close';
 export const SEARCH = 'Part of a name';

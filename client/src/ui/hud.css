@@ -340,6 +340,7 @@
 }
 
 .complication {
+  position: relative;
   display: flex;
   align-items: center;
   padding: 8px 12px 10px;
@@ -657,51 +658,125 @@
   stroke-linecap: round;
 }
 
+/* The screen at sea's parts, laid out against the screen, not this. */
+.hud-screen {
+  display: contents;
+}
+
+/* The right-hand column: the pocket chart, and the keys under it. */
+.hud-right {
+  position: absolute;
+  top: var(--edge-top);
+  right: var(--edge-right);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 12px;
+}
+
+.hud-right .pocket {
+  position: relative;
+  top: auto;
+  right: auto;
+}
+
+/* The keys: the menu's button heads a column of them, 8 pixels apart:
+   Back to the boat, the clear view's, and the full screen's while it is
+   wanted. On a short screen they run left from it in a row. */
+.sea-keys {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+@media (max-height: 420px) {
+  .sea-keys {
+    flex-direction: row-reverse;
+  }
+}
+
+/* One set of keys, as the case's pushers' faces: a dark lacquer face in a
+   thin brass bezel, the glyph in pale brass. */
 .round {
   width: 44px;
   height: 44px;
-  border: 1px solid rgb(255 255 255 / 25%);
   border-radius: 50%;
-  background: var(--panel);
-  color: var(--ink);
-  font-size: 20px;
-  line-height: 1;
   cursor: pointer;
 }
 
-.menu-button {
-  position: absolute;
-  right: var(--edge-right);
-  top: 50%;
-  transform: translateY(-50%);
-}
-
-/* The key that brings the full screen back, after the phone was away:
-   beside the menu's button, to its left held sideways, above it held
-   upright, where the boat's column leaves room. */
-.fullscreen-key {
-  position: absolute;
-  right: calc(var(--edge-right) + 52px);
-  top: 50%;
-  transform: translateY(-50%);
+.hud .sea-key {
   display: grid;
   place-items: center;
   padding: 0;
+  border: 1.5px solid var(--brass-dark);
+  background: radial-gradient(circle at 40% 35%, #26323b, #0b1216);
+  box-shadow:
+    inset 0 0 0 1px rgb(243 223 160 / 22%),
+    inset 0 1px 3px rgb(0 0 0 / 60%),
+    0 2px 6px rgb(0 0 0 / 35%);
+  color: var(--brass-light);
+  -webkit-tap-highlight-color: transparent;
+  transition: opacity 0.2s;
 }
 
-.fullscreen-key svg {
+.hud .sea-key:active {
+  box-shadow:
+    inset 0 0 0 1px rgb(243 223 160 / 22%),
+    inset 0 2px 5px rgb(0 0 0 / 85%);
+}
+
+.hud .sea-key:focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: 2px;
+}
+
+.sea-key svg {
   fill: none;
   stroke: currentColor;
-  stroke-width: 2;
+  stroke-width: 1.8;
   stroke-linecap: round;
   stroke-linejoin: round;
 }
 
-@media (orientation: portrait) {
-  .fullscreen-key {
-    right: var(--edge-right);
-    transform: translateY(calc(-50% - 52px));
-  }
+.sea-key .key-dot {
+  fill: currentColor;
+  stroke: none;
+}
+
+.sea-key .key-dot.hollow {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.4;
+}
+
+.hud .clear-key[aria-pressed="true"],
+.hud .menu-button[aria-expanded="true"] {
+  color: var(--gold);
+}
+
+/* The clear view: every part laid out as it was, unseen, but Back to the
+   boat and the clear view's key, faint until touched; and the notices
+   alone at the top as they come. */
+.hud-screen.clear > :not(.hud-right, .clear-notices),
+.hud-screen.clear .hud-right > :not(.sea-keys),
+.hud-screen.clear .sea-key:not(.back-key, .clear-key) {
+  visibility: hidden;
+}
+
+.hud-screen.clear .sea-key {
+  opacity: 0.6;
+}
+
+.hud-screen.clear .sea-key:is(:hover, :active, :focus-visible) {
+  opacity: 1;
+}
+
+.clear-notices {
+  position: absolute;
+  top: var(--edge-top);
+  left: 50%;
+  transform: translateX(-50%);
+  max-width: calc(100vw - var(--edge-left) - var(--edge-right) - 112px);
 }
 
 /* The menu stands over everything at sea, the instruments, the pocket
@@ -1152,14 +1227,6 @@
 }
 
 @media (max-height: 420px) {
-  /* Under the pocket chart, its caption two lines in the world's last
-     days, above the sheet. */
-  .menu-button,
-  .fullscreen-key {
-    top: calc(var(--edge-top) + 120px);
-    transform: none;
-  }
-
   .sheet {
     height: 160px;
   }
@@ -1563,6 +1630,103 @@
   max-width: 110px;
   font-size: 13px;
   text-align: center;
+}
+
+/* The reading in words, and enlarged the set hand's beneath it. */
+.baro-reading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+/* The barometer is a button: a tap enlarges it. */
+.hud button.barometer {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.hud button.barometer:focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: 2px;
+  border-radius: 8px;
+}
+
+/* Enlarged from its place, in the control head's lacquer and brass, over
+   everything at sea but the menu: the dial 240 pixels across, or the
+   screen's short side less 120; its words readable, and the set hand's
+   reading beneath them. On a short screen its words stand beside it. */
+.hud-top:has(.barometer.big) {
+  z-index: 5;
+}
+
+.hud button.barometer.big {
+  position: absolute;
+  z-index: 1;
+  gap: 8px;
+  padding: 16px;
+  border: 1px solid var(--brass-dark);
+  border-radius: 14px;
+  background: linear-gradient(rgb(34 44 52 / 96%), rgb(14 20 25 / 96%));
+  box-shadow:
+    inset 0 0 0 1px rgb(243 223 160 / 18%),
+    0 4px 18px rgb(0 0 0 / 40%);
+  transform-origin: top left;
+  animation: baro-grow 0.18s ease-out;
+}
+
+.barometer.big svg {
+  width: min(240px, calc(100vmin - 120px));
+  height: min(240px, calc(100vmin - 120px));
+}
+
+.barometer.big .baro-words {
+  max-width: min(240px, calc(100vmin - 120px));
+  font-size: 18px;
+  line-height: 1.3;
+}
+
+.barometer.big .baro-set-words {
+  color: var(--faint);
+}
+
+@media (max-height: 499px) {
+  .hud button.barometer.big {
+    flex-direction: row;
+    gap: 16px;
+  }
+
+  .barometer.big svg {
+    width: min(240px, calc(100vmin - 120px));
+    height: min(240px, calc(100vmin - 120px));
+  }
+
+  .barometer.big .baro-reading {
+    align-items: flex-start;
+  }
+
+  .barometer.big .baro-words {
+    max-width: 180px;
+    text-align: left;
+  }
+}
+
+@keyframes baro-grow {
+  from {
+    opacity: 0.4;
+    transform: scale(0.3);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hud button.barometer.big {
+    animation: none;
+  }
 }
 
 /* The harbourmaster's board, painted as a board, over the sea: in port

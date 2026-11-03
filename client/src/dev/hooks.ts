@@ -10,6 +10,7 @@
 // where the GPU draws each named star beside where the module's rule puts
 // it.
 
+import { signal } from '@preact/signals';
 import {
   DataTexture,
   FloatType,
@@ -43,6 +44,7 @@ import {
 import type { Node } from 'three/webgpu';
 import { MeshBasicNodeMaterial, QuadMesh, type WebGPURenderer } from 'three/webgpu';
 import type { FullScreen } from '../boot/fullscreen';
+import type { Revealed } from '../boot/gate';
 import { harbourWater } from '../boot/harbour';
 import { catalog } from '../catalog';
 import type { ChartMode } from '../chart/chart';
@@ -101,6 +103,7 @@ import type { Barometer } from '../ui/barometer';
 import type { Countdown } from '../ui/countdown';
 import type { SailState } from '../ui/model';
 import type { Settings } from '../ui/settings';
+import type { WatchView } from '../ui/watchlazy';
 import {
   cellHex,
   chunkCorner,
@@ -245,6 +248,10 @@ export type Sailing = (
   countdown?: Countdown;
   /** The full screen's switch and key. */
   fullScreen?: FullScreen;
+  /** The sandbox's screen drawn again, with a watch's parts or without. */
+  remount?: (watch: WatchView | null) => void;
+  /** What the page did from the tap to the world's reveal; null before it. */
+  revealed?: () => Revealed | null;
 };
 
 /** Puts the hooks on globalThis.keel. */
@@ -1520,6 +1527,39 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
     },
     settings(change: Partial<Settings>): void {
       game.settings.set(change);
+    },
+    /**
+     * The sandbox's screen as it is while a boat is watched (the plate at
+     * its foot, nothing that steers), that sailor's, a machine sailor's
+     * with the cog; null as it is while sailing.
+     */
+    watchPlate(sailor: string | null, machine = true): void {
+      sailing.remount?.(
+        sailor === null
+          ? null
+          : {
+              watching: signal({ sailor, machine, mine: false }),
+              spectating: signal(true),
+              status: signal('sailing'),
+              ended: signal(null),
+              place: signal(null),
+              boatPlace: signal(null),
+              watchers: signal(0),
+              list: signal(false),
+              watch: () => {},
+              sail: () => {},
+              unwatch: () => {},
+            },
+      );
+    },
+    /** What the page did from the tap to the world's reveal; null before it, or in the sandbox. */
+    revealed(): Revealed | null {
+      return sailing.revealed?.() ?? null;
+    },
+    /** Whether the cover is over the page: shown, and not lifting. */
+    covered(): boolean {
+      const c = document.getElementById('cover');
+      return c !== null && !c.hidden && !c.classList.contains('lifting');
     },
     /** Shows or puts away the key that brings the full screen back, as after the phone was away. */
     fullScreenKey(shown: boolean): void {

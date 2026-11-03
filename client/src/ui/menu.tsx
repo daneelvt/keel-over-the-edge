@@ -4,8 +4,9 @@
 // device's settings. How light the night is drawn, first, the sea showing
 // the change behind the menu as the slider moves; the frame rate (60, or 30
 // to save battery), how much the sea is drawn with (as much as the device
-// runs well, or the least), sound, the beginners' overlays, and whether
-// the helm returns to the centre when let go. The full screen where the
+// runs well, or the least), sound, the beginners' overlays, whether
+// the helm returns to the centre when let go, and whether the camera comes
+// back behind the boat by itself. The full screen where the
 // page can take it, with how to install the game where that gives more of
 // the screen. Online, a sailor to watch,
 // and who may watch the player's own boat. It stands over everything at
@@ -318,6 +319,12 @@ export function Menu({
             label="Centre the helm when let go"
             on={s.centreHelm}
             set={(centreHelm) => settings.set({ centreHelm })}
+          />
+          <Toggle
+            name="camera-back"
+            label="Bring the camera back behind the boat"
+            on={s.cameraBack}
+            set={(cameraBack) => settings.set({ cameraBack })}
           />
           {notices !== null ? <NoticeSwitches notices={notices} /> : null}
           {watch !== null ? <LazySpectators /> : null}
