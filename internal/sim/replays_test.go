@@ -301,7 +301,9 @@ func sailLive(t *testing.T, sailors, capacity, limit int, d time.Duration, stall
 				}
 			}
 		}()
-		time.Sleep(d)
+		// Half a tick past d: the loop's tick due at d and the end both
+		// come at d otherwise, and its select takes either first.
+		time.Sleep(d + time.Second/60)
 		cancel()
 		<-done
 		<-done
