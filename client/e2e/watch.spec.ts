@@ -2,11 +2,13 @@
 
 // Watching a boat, against keel and its database: a machine sailor made
 // and sailed through the MCP address with a connection token, watched from
-// its owner's start screen; the bar over it says whose boat it is, with
-// the cog, and nothing on the screen steers it; the Inputs the page sends
-// while it watches carry no controls (the worker's count); and Sail gives
-// the player a boat of their own at the start. The pages draw nothing
-// (?draw=off). The AI app is the test's own, through the server's routes.
+// its owner's start screen; the plate at the foot of the screen says whose
+// boat it is, with the cog, and nothing on the screen steers it; Back to
+// the boat brings the camera behind it at its resting distance; the Inputs
+// the page sends while it watches carry no controls (the worker's count);
+// and Sail gives the player a boat of their own at the start, through the
+// cover. The pages draw nothing (?draw=off). The AI app is the test's own,
+// through the server's routes.
 //
 // Then the list of sailors to watch: two machine sailors at sea, put in
 // order of how near the edge they are, one's card opened, followed and
@@ -112,7 +114,32 @@ test('a machine sailor watched from its owner’s start screen: whose boat, noth
   await expect(bar.getByRole('img', { name: 'machine sailor' })).toBeVisible();
   await expect(bar.getByRole('button', { name: 'Watch another' })).toBeVisible();
   await expect(bar.getByRole('button', { name: 'Sail' })).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Behind the boat' })).toBeVisible();
+  // The plate at the foot of the screen, where the controls are while sailing.
+  const plate = await bar.boundingBox();
+  const size = page.viewportSize();
+  expect(
+    Math.abs((plate?.y ?? 0) + (plate?.height ?? 0) - ((size?.height ?? 0) - 12)),
+  ).toBeLessThan(1);
+  // Back to the boat, in place of the old button: the camera looked round
+  // and pinched out, then behind the boat at its resting distance.
+  await expect(page.getByRole('button', { name: 'Behind the boat' })).toHaveCount(0);
+  await page.evaluate(() => {
+    const c = globalThis.keel.world.camera;
+    c.zoom(3, performance.now());
+    c.drag(-200, 0, performance.now());
+  });
+  await page.waitForFunction(() => !globalThis.keel.world.resting.value);
+  const back = page.getByRole('button', { name: 'Back to the boat' });
+  await expect(back).toHaveAttribute('data-resting', 'false');
+  await back.click();
+  await page.waitForFunction(() => globalThis.keel.world.resting.value, null, { timeout: 10_000 });
+  await expect(back).toHaveAttribute('data-resting', 'true');
+  expect(
+    await page.evaluate(() => {
+      const c = globalThis.keel.world.camera;
+      return Math.abs(c.view.distance - c.rest.distance);
+    }),
+  ).toBeLessThan(0.2);
   const w = await watch(page);
   expect(w.watching).toEqual({ sailor: name, machine: true, mine: true });
   expect(w.spectating).toBe(true);
@@ -144,7 +171,17 @@ test('a machine sailor watched from its owner’s start screen: whose boat, noth
   const t0 = (await watch(page)).ticks;
   await expect.poll(async () => (await watch(page)).ticks, { timeout: 10_000 }).toBeGreaterThan(t0);
 
-  // Sail: a boat of the player's own, at the start, and the controls back.
+  // Sail: a boat of the player's own, at the start, and the controls back,
+  // the cover over the screen while the boat changes.
+  await page.evaluate(() => {
+    const seen: boolean[] = [];
+    Object.assign(globalThis, { coverSeen: seen });
+    const look = () => {
+      seen.push(globalThis.keel.covered());
+      requestAnimationFrame(look);
+    };
+    requestAnimationFrame(look);
+  });
   await bar.getByRole('button', { name: 'Sail' }).click();
   await page.waitForFunction(
     () => globalThis.keel.watch().watching === null && !globalThis.keel.watch().spectating,
@@ -156,6 +193,12 @@ test('a machine sailor watched from its owner’s start screen: whose boat, noth
   );
   await expect(page.getByRole('slider', { name: 'Helm' })).toBeVisible();
   await expect(bar).toHaveCount(0);
+  await page.waitForFunction(() => !globalThis.keel.covered(), null, { timeout: 15_000 });
+  expect(
+    await page.evaluate(() =>
+      (globalThis as unknown as { coverSeen: boolean[] }).coverSeen.includes(true),
+    ),
+  ).toBe(true);
   await expect.poll(() => page.evaluate(() => globalThis.keel.net().status)).toBe('sailing');
   // The boat starts on the server's grid, south of the centre, heading east.
   await expect

@@ -1668,6 +1668,8 @@
 .hud button.barometer.big {
   position: absolute;
   z-index: 1;
+  /* As wide as it is, not as its place in the case. */
+  width: max-content;
   gap: 8px;
   padding: 16px;
   border: 1px solid var(--brass-dark);

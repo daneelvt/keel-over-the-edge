@@ -439,12 +439,12 @@ export function Case({
       setBig(null);
     }
   }, [out.barometer, clear]);
+  // Escape, or the screen turned, shrinks it: heard from the first tap on.
+  const enlarged = useRef(false);
+  enlarged.current = big !== null;
   useEffect(() => {
-    if (big === null) {
-      return;
-    }
     const key = (e: KeyboardEvent) => {
-      if (e.code === 'Escape') {
+      if (enlarged.current && e.code === 'Escape') {
         setBig(null);
         e.preventDefault();
       }
@@ -456,7 +456,7 @@ export function Case({
       document.removeEventListener('keydown', key);
       globalThis.removeEventListener('resize', turned);
     };
-  }, [big !== null]);
+  }, []);
   useLayoutEffect(() => {
     const b = place.current?.querySelector<HTMLElement>('.barometer.big');
     if (b === undefined || b === null) {
