@@ -1,7 +1,9 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 # Security updates install themselves every day, Ubuntu's and Tailscale's.
-# The machine never reboots by itself: the machine workflow reboots it
-# when asked, and the cluster's own upgrades are k3s's.
+# unattended-upgrades never reboots the machine: Kured does, in its window,
+# or the machine workflow when asked; the cluster's own upgrades are k3s's.
+# A new kernel is installed but not booted until it has been tried
+# (kernel.yaml).
 
 - name: Fetch the package lists and install updates every day
   ansible.builtin.copy:
@@ -48,3 +50,6 @@
     that: updates_origins.stdout is search('origin=Tailscale,codename=')
     quiet: true
   when: not ansible_check_mode
+
+- name: Boot the kernel named, not the newest
+  ansible.builtin.import_tasks: kernel.yaml

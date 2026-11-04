@@ -41,3 +41,25 @@ tests:
               summary: "Security updates have waited three days."
             exp_annotations:
               description: "4 wait: unattended-upgrades did not install them. Its log is in the journal, in VictoriaLogs."
+  - name: a newer kernel has waited two weeks
+    interval: 5m
+    input_series:
+      - series: 'keel_machine_kernel_waiting_since_timestamp_seconds{kernel="7.0.0-42-generic",booted="7.0.0-38-generic"}'
+        values: 946684800x4300
+    alert_rule_test:
+      - eval_time: 13d
+        groupname: machine
+        alertname: KernelWaiting
+        exp_alerts: []
+      - eval_time: 14d1h
+        groupname: machine
+        alertname: KernelWaiting
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              component: machine
+              summary: "A newer kernel has waited two weeks to be tried."
+              kernel: 7.0.0-42-generic
+              booted: 7.0.0-38-generic
+            exp_annotations:
+              description: "7.0.0-42-generic is installed; the machine boots 7.0.0-38-generic, the updates role's updates_kernel. Try it on the local cluster's VM as the role says, then name it and apply with reboot ticked."

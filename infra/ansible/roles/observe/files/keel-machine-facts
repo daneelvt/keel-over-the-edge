@@ -1,10 +1,10 @@
 #!/bin/bash
 # Written by the observe role. Writes the machine's facts that no exporter
 # knows, as metrics node-exporter's textfile collector reads: whether a
-# reboot is required and since when, the security updates waiting, when
-# unattended-upgrades last ran, what AIDE's last check found, the size of
-# auditd's log, and whether the units that keep the machine running are
-# active. Run every five minutes by keel-machine-facts.timer.
+# reboot is required and since when, a newer kernel than the one booted
+# and since when, the security updates waiting, when unattended-upgrades
+# last ran, what AIDE's last check found, the size of auditd's log, and
+# whether the units that keep the machine running are active. Run every five minutes by keel-machine-facts.timer.
 #
 #   keel-machine-facts <folder> <unit>...
 set -euo pipefail
@@ -25,6 +25,17 @@ metric() { # name, help, value, labels
     metric keel_machine_reboot_required_since_timestamp_seconds "When a reboot was first required, in Unix seconds." "$(stat -c %Y /var/run/reboot-required)"
   else
     metric keel_machine_reboot_required "Whether an installed update needs a reboot." 0
+  fi
+
+  # The updates role boots the kernel it names: a newer one installed
+  # waits until it has been tried. Since when is when dpkg installed it.
+  booted=$(uname -r)
+  newest=$(find /boot -maxdepth 1 -name 'vmlinuz-*' -printf '%f\n' | sed 's/^vmlinuz-//' | sort -V | tail -1)
+  if [ -n "$newest" ] && [ "$newest" != "$booted" ] && [ "$(printf '%s\n%s\n' "$booted" "$newest" | sort -V | tail -1)" = "$newest" ]; then
+    metric keel_machine_kernel_waiting "Whether a kernel newer than the one booted is installed." 1 "{kernel=\"$newest\",booted=\"$booted\"}"
+    metric keel_machine_kernel_waiting_since_timestamp_seconds "When the newer kernel was installed, in Unix seconds." "$(stat -c %Y "/var/lib/dpkg/info/linux-image-$newest.list" 2>/dev/null || stat -c %Y "/boot/vmlinuz-$newest")" "{kernel=\"$newest\",booted=\"$booted\"}"
+  else
+    metric keel_machine_kernel_waiting "Whether a kernel newer than the one booted is installed." 0
   fi
 
   # What a simulated upgrade would install from a security pocket.

@@ -1,0 +1,71 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# GRUB boots updates_kernel, not the newest installed: a kernel the
+# updates bring waits until it has been tried. A reboot by Kured, or by
+# the provider, comes back on the one named.
+
+- name: Install the kernel named
+  ansible.builtin.apt:
+    name:
+      - linux-image-{{ updates_kernel }}
+      - linux-modules-{{ updates_kernel }}
+    state: present
+
+# unattended-upgrades removes the kernels apt installed on its own once
+# newer ones are in; a kernel marked as installed by hand stays.
+- name: Read whether its packages are marked as installed by hand
+  ansible.builtin.command:
+    cmd: apt-mark showmanual linux-image-{{ updates_kernel }} linux-modules-{{ updates_kernel }}
+  register: updates_kernel_manual
+  changed_when: false
+  check_mode: false
+
+- name: Mark them so
+  ansible.builtin.command:
+    cmd: apt-mark manual linux-image-{{ updates_kernel }} linux-modules-{{ updates_kernel }}
+  when: updates_kernel_manual.stdout_lines | length != 2
+  changed_when: true
+
+- name: Boot the kernel named
+  ansible.builtin.copy:
+    dest: /etc/default/grub.d/98-keel-kernel.cfg
+    content: |
+      # Written by the updates role: the kernel GRUB boots (updates_kernel).
+      GRUB_DEFAULT="{{ updates_grub_default }}"
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Read GRUB's configuration
+  ansible.builtin.slurp:
+    src: /boot/grub/grub.cfg
+  register: updates_grub
+
+# What GRUB boots is read, not remembered, as the hardening role does.
+- name: Bring GRUB up to date
+  ansible.builtin.command:
+    cmd: update-grub
+  when: ('set default="' ~ updates_grub_default ~ '"') not in (updates_grub.content | b64decode)
+  changed_when: true
+
+- name: Read GRUB's configuration again
+  ansible.builtin.slurp:
+    src: /boot/grub/grub.cfg
+  register: updates_grub
+  when: not ansible_check_mode
+
+# GRUB boots its first entry, the newest kernel, when its default names
+# no entry it has.
+- name: Check GRUB has the kernel, and boots it
+  vars:
+    updates_grub_cfg: "{{ updates_grub.content | b64decode }}"
+  ansible.builtin.assert:
+    that:
+      - ("menuentry 'Ubuntu, with Linux " ~ updates_kernel ~ "'") in updates_grub_cfg
+      - ('set default="' ~ updates_grub_default ~ '"') in updates_grub_cfg
+    quiet: true
+  when: not ansible_check_mode
+
+- name: Another kernel running takes effect at the next reboot
+  ansible.builtin.set_fact:
+    updates_reboot_reasons: "{{ ['the machine runs the kernel ' ~ ansible_facts.kernel ~ ', not ' ~ updates_kernel] }}"
+  when: ansible_facts.kernel != updates_kernel

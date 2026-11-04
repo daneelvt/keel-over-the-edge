@@ -43,6 +43,11 @@ jobs:
         run: go build -o .dev/bin/machine ./tools/machine
       - name: Ansible, from hashed requirements
         run: .dev/bin/machine -ansible
+      # Ubuntu, and so the machine, boots with /tmp in memory; the runner's
+      # image masks it. Left on disk, the playbook would mount /tmp over
+      # the files Ansible's module runs from, and lose the module's result.
+      - name: /tmp in memory, as Ubuntu has it
+        run: sudo systemctl unmask tmp.mount && sudo systemctl start tmp.mount
       - name: The playbook on this runner, the first time
         run: .dev/bin/machine -run apply -local
       - name: The playbook again, which must change nothing

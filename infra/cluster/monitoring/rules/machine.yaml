@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 # The machine's alerts, from node-exporter and from the facts the playbook
-# writes for it (keel_machine_*: AIDE's last check, a reboot required,
-# security updates waiting). Starting values.
+# writes for it (keel_machine_*: AIDE's last check, a reboot required, a
+# newer kernel waiting, security updates waiting). Starting values.
 apiVersion: operator.victoriametrics.com/v1beta1
 kind: VMRule
 metadata:
@@ -85,6 +85,14 @@ spec:
             summary: "An update has waited a week for a reboot."
           annotations:
             description: "Kured has not rebooted the machine in its window: something else fired, or a drain did not finish. Reboot it with the machine workflow, reboot ticked."
+        - alert: KernelWaiting
+          expr: time() - keel_machine_kernel_waiting_since_timestamp_seconds > 14 * 86400
+          labels:
+            severity: warning
+            component: machine
+            summary: "A newer kernel has waited two weeks to be tried."
+          annotations:
+            description: "{{ $labels.kernel }} is installed; the machine boots {{ $labels.booted }}, the updates role's updates_kernel. Try it on the local cluster's VM as the role says, then name it and apply with reboot ticked."
         - alert: UpdatesPending
           expr: keel_machine_security_updates > 0
           for: 3d

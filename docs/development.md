@@ -5299,8 +5299,9 @@ keeps its place across a restart, and retries while the cluster is down.
 And `keel-machine-facts`, every five minutes, writes what no exporter
 knows to `/var/lib/node-exporter/textfile/keel_machine.prom`, whole or not
 at all, which node-exporter reads: whether a reboot is required and since
-when, the security updates waiting, unattended-upgrades' last run, what
-AIDE's last check found, the size of auditd's log, and whether each unit
+when, a kernel newer than the one booted and since when, the security
+updates waiting, unattended-upgrades' last run, what AIDE's last check
+found, the size of auditd's log, and whether each unit
 the machine needs is active (k3s, tailscaled, hostfw, chrony, auditd, the
 upload). `sysstat` is purged: node-exporter records what it did.
 
@@ -6163,7 +6164,7 @@ In the folder **Keel**, written for this game (`infra/cluster/monitoring/dashboa
 |---|---|
 | Overview | Is anything wrong? What fires, how severe, and when each alert fired in the last day; boats, connections and the tick; the database, and the last WAL, base backup, dump and restore test; the machine's CPU, steal, memory and disk, a pending reboot or update; Flux; scrape targets down |
 | Game | How the simulation does: the tick and its phases, ticks late and skipped, boats, connections, joins and closes, the queue's wait, bytes a player a second, phones' round trip and frame time, persistence's oldest unwritten change and inbox, checkpoints, the lease, keel's CPU, throttling and memory, restarts and restores, its warnings and errors |
-| Machine | The VM: CPU by mode, pressure, memory, the clock; the root filesystem, what grows on it and when it would be full; disk latency; the network and the month's transfer at today's rate; its upkeep (a reboot required, updates waiting, AIDE, the units, auditd's log); the journal's warnings; each pod against what it asked for |
+| Machine | The VM: CPU by mode, pressure, memory, the clock; the root filesystem, what grows on it and when it would be full; disk latency; the network and the month's transfer at today's rate; its upkeep (a reboot required, updates waiting, a newer kernel waiting, AIDE, the units, auditd's log); the journal's warnings; each pod against what it asked for |
 | Database | PostgreSQL: connections, transactions, locks, the oldest transaction; tables, dead rows and vacuums; WAL, checkpoints and I/O; keel's pool and its queries' times; the statements that cost the most, and the slow ones with their plans |
 | Backups | How far back a restore can go: the last WAL archived, segments archived and failed, WAL waiting on the machine, WAL written a day, the base backups, the dump's and the restore test's runs and results, the archiver's log |
 | Edge | What players meet: the tunnel's connections, Traefik's requests by route and responses by code, the limits' 429s, open connections, request times, cloudflared's log, keel's refusals |
@@ -6244,6 +6245,7 @@ itself is down. The rules are beside what they watch
 | ClockOffset | the clock is over 50 ms off | `chronyc tracking` on the machine |
 | RebootPending | a reboot has been due for a week | `machine` with `apply` and **reboot** |
 | UpdatesPending | security updates have waited 3 days | unattended-upgrades' log, in the journal |
+| KernelWaiting | a kernel newer than the one booted has waited 14 days | Try it, then move `updates_kernel` ([Reboots and upgrades](#reboots-and-upgrades)) |
 | IntegrityChanged | AIDE found files changed | Its report in the journal; an update explains most |
 | PodRestarting | a container restarted more than three times in 15 minutes | Its logs; `kubectl describe` |
 | JobFailing | one of keel's jobs has failed for half an hour with no run that succeeded | Its runs on the world page, each failure's reason |
@@ -6286,8 +6288,8 @@ evening in New York and days from its end. Both are in production alone.
 
 **Kured**, Wednesdays 08:00 to 10:00: when an update left
 `/var/run/reboot-required`, and no alert fires but `Watchdog`,
-`RebootPending` and `UpdatesPending`, it drains the node and reboots the
-machine. It asks the metrics store, for the series `ALERTS` that vmalert
+`RebootPending`, `UpdatesPending` and `KernelWaiting`, it drains the node
+and reboots the machine. It asks the metrics store, for the series `ALERTS` that vmalert
 writes there; an answer it cannot get counts as an alert. The drain stops
 keel as a deploy does, with its bell and its last checkpoint, and the
 database after it. The game is away for about two minutes (2 min 9 s on
@@ -6301,6 +6303,26 @@ for a week, so through a whole window; why is in Kured's log
 **reboot** ticked. To hold reboots for a while (an event), remove the
 day from `--reboot-days` in a commit
 (`infra/cluster/infrastructure/controllers/kured/kustomization.yaml`).
+
+**The kernel** a reboot comes back on is the one the playbook's updates
+role names (`updates_kernel`, in
+`infra/ansible/roles/updates/defaults/main.yaml`), not the newest
+installed: GRUB is pinned to it. A newer kernel installs itself and
+waits. On 2026-11-04 Kured rebooted into 7.0.0-42, whose AppArmor
+refused every signal a container sent, even to itself; Postgres's
+connections hung and the game was away for 24 minutes. `KernelWaiting`
+fires when a newer kernel has waited two weeks. To move to it, boot it
+once on the local cluster's VM and check a container can signal itself:
+
+```sh
+limactl shell keel-local -- sudo grub-reboot 'Advanced options for Ubuntu>Ubuntu, with Linux 7.0.0-42-generic'
+limactl shell keel-local -- sudo reboot
+kubectl run sig --rm -i --restart=Never --image=busybox -- sh -c 'kill -URG $$ && echo ok'
+```
+
+`grub-reboot` boots it once; the next reboot comes back on the VM's
+default. Then name it in `updates_kernel` in a commit and run `machine`,
+`apply`, **reboot** ticked.
 
 **The system-upgrade controller**, Thursdays 08:00 to 10:00: a `Plan`
 (`infra/cluster/clusters/prod/configs/upgrade-plan.yaml`) names the k3s

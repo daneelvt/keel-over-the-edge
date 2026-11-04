@@ -11,6 +11,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/daneelvt/keel-over-the-edge/tools/internal/actions"
@@ -109,8 +110,13 @@ func (execCommands) run(ctx context.Context, c cmd) ([]byte, error) {
 	x.Stdin, x.Dir = c.stdin, c.dir
 	var stdout, stderr strings.Builder
 	if c.out != nil {
-		x.Stdout = io.MultiWriter(c.out, &stdout)
-		x.Stderr = c.out
+		// The two pipes are copied at once, each by a goroutine of its own:
+		// out takes them one write at a time. Without it a bytes.Buffer's
+		// ReadFrom, which copying stderr calls, cut what stdout wrote
+		// meanwhile back off when stderr closed.
+		out := &oneAtATime{w: c.out}
+		x.Stdout = io.MultiWriter(out, &stdout)
+		x.Stderr = out
 	} else {
 		x.Stdout, x.Stderr = &stdout, &stderr
 	}
@@ -122,6 +128,18 @@ func (execCommands) run(ctx context.Context, c cmd) ([]byte, error) {
 		return []byte(stdout.String()), fmt.Errorf("%s: %w", name, err)
 	}
 	return []byte(stdout.String()), nil
+}
+
+// oneAtATime passes writes to w one at a time.
+type oneAtATime struct {
+	mu sync.Mutex
+	w  io.Writer
+}
+
+func (o *oneAtATime) Write(p []byte) (int, error) {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	return o.w.Write(p)
 }
 
 func (execCommands) start(c cmd) error {
