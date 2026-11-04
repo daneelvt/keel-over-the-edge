@@ -48,6 +48,12 @@ jobs:
       # the files Ansible's module runs from, and lose the module's result.
       - name: /tmp in memory, as Ubuntu has it
         run: sudo systemctl unmask tmp.mount && sudo systemctl start tmp.mount
+      # The runner's image has Firefox, which the machine has not: a stub
+      # that pre-depends on snapd. The updates role starts apt's daily
+      # upgrade, which upgrades it and brings back the snapd the base role
+      # purged, restarting systemd's services under the playbook.
+      - name: Firefox, the image's and not the machine's, goes
+        run: sudo apt-get purge --yes --quiet firefox
       - name: The playbook on this runner, the first time
         run: .dev/bin/machine -run apply -local
       - name: The playbook again, which must change nothing
@@ -62,7 +68,7 @@ jobs:
       - name: On a failure, what apt, systemd and Flux did
         if: failure()
         run: |
-          sudo grep -v '^Upgrade:' /var/log/apt/history.log || true
+          sudo cut -c1-400 /var/log/apt/history.log || true
           sudo journalctl --no-pager -o short-precise --since '-30min' \
             | grep -iE 'systemd\[1\]|dbus|reexec|unattended|apt' | tail -200 || true
           if command -v k3s >/dev/null; then
