@@ -151,6 +151,7 @@
           echo "timer=$(systemctl is-active keel-machine-facts.timer)"
           echo "mode=$(stat -c '%a %U' "$facts")"
           echo "reboot=$(grep -c '^keel_machine_reboot_required [01]$' "$facts")"
+          echo "kernel=$(grep -c '^keel_machine_kernel_waiting\({.*}\)\? [01]$' "$facts")"
           echo "updates=$(grep -c '^keel_machine_security_updates [0-9]\+$' "$facts")"
           echo "audit=$(grep -c '^keel_machine_audit_log_bytes [0-9]\+$' "$facts")"
           echo "units=$(grep -c '^keel_machine_unit_active{unit="[a-z0-9-]\+\.service"} [01]$' "$facts")"
@@ -171,11 +172,36 @@
           - verify.timer == 'active'
           - verify.mode == '644 root'
           - verify.reboot == '1'
+          - verify.kernel == '1'
           - verify.updates == '1'
           - verify.audit == '1'
           - verify.units == '7'
           - verify.sysstat == 'not-installed'
         fail_msg: "{{ verify_observe.stdout }}"
+        quiet: true
+
+    # 7.0.0-42 gave containers the AppArmor label
+    # cri-containerd.apparmor.d//&unconfined, which containerd's profile
+    # lets no signal reach: CoreDNS's is read as any container's.
+    - name: Read the kernel booted, the one GRUB boots, and a container's AppArmor label
+      ansible.builtin.shell:
+        cmd: |
+          set -o pipefail
+          echo "booted=$(uname -r)"
+          echo "grub=$(sed -n 's/^GRUB_DEFAULT=".*, with Linux \(.*\)"$/\1/p' /etc/default/grub.d/98-keel-kernel.cfg)"
+          echo "label=$(cat /proc/"$(pgrep -o -x coredns)"/attr/apparmor/current)"
+        executable: /bin/bash
+      register: verify_kernel
+      changed_when: false
+
+    - name: Check the machine runs the kernel GRUB boots, and containers keep the label signals reach
+      vars:
+        verify: "{{ dict(verify_kernel.stdout_lines | map('split', '=', 1)) }}"
+      ansible.builtin.assert:
+        that:
+          - verify.booted == verify.grub
+          - verify.label == 'cri-containerd.apparmor.d (enforce)'
+        fail_msg: "{{ verify_kernel.stdout }}"
         quiet: true
 
     - name: Read k3s's node, its encryption, and its audit log

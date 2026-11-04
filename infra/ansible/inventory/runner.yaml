@@ -9,3 +9,6 @@ all:
       # The runner is not the machine: its OpenSSH, its tailnet login and
       # its own accounts are left alone.
       machine_runner: true
+      # It boots Azure's kernel, which the updates role pins as it would
+      # the machine's.
+      updates_kernel: "{{ ansible_kernel }}"

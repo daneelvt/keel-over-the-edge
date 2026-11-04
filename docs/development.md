@@ -6244,6 +6244,7 @@ itself is down. The rules are beside what they watch
 | ClockOffset | the clock is over 50 ms off | `chronyc tracking` on the machine |
 | RebootPending | a reboot has been due for a week | `machine` with `apply` and **reboot** |
 | UpdatesPending | security updates have waited 3 days | unattended-upgrades' log, in the journal |
+| KernelWaiting | a kernel newer than the one booted has waited 14 days | Try it, then move `updates_kernel` ([Reboots and upgrades](#reboots-and-upgrades)) |
 | IntegrityChanged | AIDE found files changed | Its report in the journal; an update explains most |
 | PodRestarting | a container restarted more than three times in 15 minutes | Its logs; `kubectl describe` |
 | JobFailing | one of keel's jobs has failed for half an hour with no run that succeeded | Its runs on the world page, each failure's reason |
@@ -6286,8 +6287,8 @@ evening in New York and days from its end. Both are in production alone.
 
 **Kured**, Wednesdays 08:00 to 10:00: when an update left
 `/var/run/reboot-required`, and no alert fires but `Watchdog`,
-`RebootPending` and `UpdatesPending`, it drains the node and reboots the
-machine. It asks the metrics store, for the series `ALERTS` that vmalert
+`RebootPending`, `UpdatesPending` and `KernelWaiting`, it drains the node
+and reboots the machine. It asks the metrics store, for the series `ALERTS` that vmalert
 writes there; an answer it cannot get counts as an alert. The drain stops
 keel as a deploy does, with its bell and its last checkpoint, and the
 database after it. The game is away for about two minutes (2 min 9 s on
@@ -6301,6 +6302,26 @@ for a week, so through a whole window; why is in Kured's log
 **reboot** ticked. To hold reboots for a while (an event), remove the
 day from `--reboot-days` in a commit
 (`infra/cluster/infrastructure/controllers/kured/kustomization.yaml`).
+
+**The kernel** a reboot comes back on is the one the playbook's updates
+role names (`updates_kernel`, in
+`infra/ansible/roles/updates/defaults/main.yaml`), not the newest
+installed: GRUB is pinned to it. A newer kernel installs itself and
+waits. On 2026-11-04 Kured rebooted into 7.0.0-42, whose AppArmor
+refused every signal a container sent, even to itself; Postgres's
+connections hung and the game was away for 24 minutes. `KernelWaiting`
+fires when a newer kernel has waited two weeks. To move to it, boot it
+once on the local cluster's VM and check a container can signal itself:
+
+```sh
+limactl shell keel-local -- sudo grub-reboot 'Advanced options for Ubuntu>Ubuntu, with Linux 7.0.0-42-generic'
+limactl shell keel-local -- sudo reboot
+kubectl run sig --rm -i --restart=Never --image=busybox -- sh -c 'kill -URG $$ && echo ok'
+```
+
+`grub-reboot` boots it once; the next reboot comes back on the VM's
+default. Then name it in `updates_kernel` in a commit and run `machine`,
+`apply`, **reboot** ticked.
 
 **The system-upgrade controller**, Thursdays 08:00 to 10:00: a `Plan`
 (`infra/cluster/clusters/prod/configs/upgrade-plan.yaml`) names the k3s
