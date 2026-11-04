@@ -614,3 +614,21 @@ func TestPingPathHidesTheAddress(t *testing.T) {
 		}
 	}
 }
+
+// TestRunKeepsBothStreams: a program's output written to a bytes.Buffer
+// keeps what stdout wrote while stderr stayed open and empty. state.yaml's
+// line was lost so on the runner, and every run there stopped.
+func TestRunKeepsBothStreams(t *testing.T) {
+	for range 5 {
+		var out bytes.Buffer
+		c := cmd{argv: []string{"sh", "-c", "echo one; sleep 0.05; echo two; echo three >&2"}, out: &out}
+		if _, err := (execCommands{}).run(context.Background(), c); err != nil {
+			t.Fatal(err)
+		}
+		for _, want := range []string{"one\n", "two\n", "three\n"} {
+			if !strings.Contains(out.String(), want) {
+				t.Fatalf("the output lost %q: %q", want, out.String())
+			}
+		}
+	}
+}
