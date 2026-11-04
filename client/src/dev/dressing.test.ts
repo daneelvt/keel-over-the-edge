@@ -35,7 +35,7 @@ describe('the room’s hash', () => {
 
   test('writes only what differs from the view’s defaults, and reads back the same', () => {
     expect(writeRoom(readRoom('#sailors&view=deck'))).toBe('#sailors&view=deck');
-    const hash = '#sailors&view=lineup&clip=helm-idle&side=back&hair=C9AC7E&phone=1&t=1';
+    const hash = '#sailors&view=lineup&clip=helm-idle&side=back&hair=C9AC7E&mask=1&phone=1&t=1';
     expect(writeRoom(readRoom(hash))).toBe(hash);
   });
 });

@@ -18,7 +18,8 @@
 // Everything is in the hash, so a view can be linked to and a test can ask
 // for it: view, light (noon, dusk, night, morning), level (close, deck,
 // far), clip (one of the look's, or rest), side (front, back), main, skin
-// and hair (#RRGGBB without the #), black (the silhouettes in black), phone
+// and hair (#RRGGBB without the #), black (the silhouettes in black), mask
+// (the mask in place of the colours: red main, green skin, blue hair), phone
 // (the stage at a phone's 360 × 640), t (the clips held at that many
 // seconds, for pictures), who. The back end is the game's choice, and
 // ?backend=webgl2 or ?compat as in the game.
@@ -43,7 +44,7 @@ import {
   Vector3,
 } from 'three';
 import { clone as cloneSkinned } from 'three/addons/utils/SkeletonUtils.js';
-import { exp, float, fog, length, positionView } from 'three/tsl';
+import { exp, float, fog, length, positionView, texture } from 'three/tsl';
 import { catalog } from '../catalog';
 import { newPose } from '../predict/blend';
 import { SIZES } from '../predict/layout.gen';
@@ -108,6 +109,8 @@ export interface Room {
   skin: string;
   hair: string;
   black: boolean;
+  /** The mask drawn in place of the sailors' colours: red main, green skin, blue hair. */
+  mask: boolean;
   phone: boolean;
   /** The clips held at this time, in seconds; null to play. */
   t: number | null;
@@ -125,6 +128,7 @@ const DEFAULTS: Room = {
   skin: 'B2815F',
   hair: '413129',
   black: false,
+  mask: false,
   phone: false,
   t: null,
   who: 0,
@@ -175,6 +179,7 @@ export function readRoom(hash: string): Room {
     skin: colour('skin'),
     hair: colour('hair'),
     black: q.get('black') === '1',
+    mask: q.get('mask') === '1',
     phone: q.get('phone') === '1',
     t: q.has('t') && Number.isFinite(t) ? t : null,
     who: Math.max(0, Math.floor(Number(q.get('who')) || 0)),
@@ -193,6 +198,7 @@ export function writeRoom(r: Room): string {
     if (r[c] !== DEFAULTS[c]) q.set(c, r[c]);
   }
   if (r.black) q.set('black', '1');
+  if (r.mask) q.set('mask', '1');
   if (r.phone) q.set('phone', '1');
   if (r.t !== null) q.set('t', String(r.t));
   if (r.who !== 0) q.set('who', String(r.who));
@@ -330,6 +336,8 @@ export class DressingRoom {
   readonly #quay: Mesh;
   readonly #disc: Mesh;
   readonly #black = basicMaterial({ color: 0x000000, side: DoubleSide });
+  /** Each model's mask, drawn as colour. */
+  readonly #masks = new Map<SailorModel, Material>();
   readonly #orbit: Orbit = { target: new Vector3(), azimuth: 0, elevation: 0.1, distance: 6 };
   readonly #out = new Float64Array(SIZES.out);
   /** The dome's centre, and the point the camera looks at, dropped by it. */
@@ -697,12 +705,19 @@ export class DressingRoom {
     return b;
   }
 
-  /** Every figure's meshes in the sailor material, or black. */
+  /** Every figure's meshes in the sailor material, or black, or its mask. */
   #materials(): void {
     for (const f of this.#figures) {
-      const made = f.model.meshes[0]?.material as Material | undefined;
+      const made = f.model.meshes[0]?.material as Material;
+      let mask = this.#masks.get(f.model);
+      if (mask === undefined) {
+        const m = basicMaterial({ side: DoubleSide });
+        m.colorNode = texture(f.model.mask);
+        mask = m;
+        this.#masks.set(f.model, m);
+      }
       for (const m of f.meshes) {
-        m.material = this.room.black ? this.#black : (made as Material);
+        m.material = this.room.black ? this.#black : this.room.mask ? mask : made;
       }
     }
   }
@@ -963,6 +978,7 @@ export class DressingRoom {
     ]);
     group('Show', [
       ['black', r.black, () => this.#toggle('black')],
+      ['mask', r.mask, () => this.#toggle('mask')],
       ['phone', r.phone, () => this.#toggle('phone')],
       ['held', r.t !== null, () => void this.set({ t: r.t === null ? 1 : null })],
     ]);
@@ -978,10 +994,10 @@ export class DressingRoom {
     this.#panelFor();
   }
 
-  #toggle(what: 'black' | 'phone'): void {
+  #toggle(what: 'black' | 'mask' | 'phone'): void {
     this.room = { ...this.room, [what]: !this.room[what] };
     history.replaceState(null, '', writeRoom(this.room));
-    if (what === 'black') {
+    if (what !== 'phone') {
       this.#materials();
     } else {
       this.#container.classList.toggle('phone', this.room.phone);
