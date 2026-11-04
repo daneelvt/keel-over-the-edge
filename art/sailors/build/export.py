@@ -12,6 +12,13 @@ helper icosphere once was). Blender writes it, this module adds the mask,
 gltfpack compresses it (the geometry by meshopt, the colour by ETC1S, the
 mask by UASTC), and both files are read back and checked. In the file the
 figure faces +z with y up, its origin on the ground between its feet.
+
+Where a pose seats the figure in the game's dinghy goes in the file as an
+empty named node (add_places): its transform takes the figure's own space
+to the boat model's, as build/motion.py placed it, so the game seats it
+where it was judged. The far level has one, `place`, for the pose it is
+made in; the clips file one a clip, `place-<clip>`, the identity for a
+clip not placed in the boat.
 """
 
 import json
@@ -44,8 +51,9 @@ def material(base_png):
     return m
 
 
-def write(path, meshes, arm, mat, mask_png, gltfpack, work):
-    """Writes a level: meshes (and the skeleton arm, when not None)."""
+def write(path, meshes, arm, mat, mask_png, gltfpack, work, places=None):
+    """Writes a level: meshes (and the skeleton arm, when not None), and
+    the places by name (add_places)."""
     for o in meshes:
         o.data.materials.clear()
         o.data.materials.append(mat)
@@ -66,6 +74,7 @@ def write(path, meshes, arm, mat, mask_png, gltfpack, work):
     gltf, binary = read(raw)
     check(raw, gltf, names, bones, textures=1)
     binary = add_mask(gltf, binary, mask_png)
+    add_places(gltf, places or {})
     with_mask = raw.replace(".raw.glb", ".mask.glb")
     write_glb(with_mask, gltf, binary)
     subprocess.run([gltfpack, "-i", with_mask, "-o", path, "-c", "-kn", "-km", "-noq", "-tc", "-tu", "A"],
@@ -123,6 +132,29 @@ def add_mask(gltf, binary, mask_png):
     (mat,) = gltf["materials"]
     mat["occlusionTexture"] = {"index": len(gltf["textures"]) - 1}
     return binary + png
+
+
+def add_places(gltf, places):
+    """Adds each place, a matrix in Blender's boat space (z up), as an
+    empty node of its name in the scene, in glTF's axes (y up): gltfpack
+    keeps a named node (-kn)."""
+    for name, m in sorted(places.items()):
+        # Blender's (x, y, z) is glTF's (x, z, -y): the same turn on both
+        # sides of the matrix.
+        c = ((1, 0, 0), (0, 0, 1), (0, -1, 0))
+        r = [[sum(c[i][k] * m[k][l] * c[j][l] for k in range(3) for l in range(3)) for j in range(3)]
+             for i in range(3)]
+        t = [sum(c[i][k] * m[k][3] for k in range(3)) for i in range(3)]
+        # Column-major, as glTF has it.
+        matrix = [r[0][0], r[1][0], r[2][0], 0, r[0][1], r[1][1], r[2][1], 0,
+                  r[0][2], r[1][2], r[2][2], 0, t[0], t[1], t[2], 1]
+        gltf["nodes"].append({"name": name, "matrix": [round(float(x), 6) + 0.0 for x in matrix]})
+        gltf["scenes"][gltf.get("scene", 0)]["nodes"].append(len(gltf["nodes"]) - 1)
+
+
+def place_names(gltf):
+    """The places a file holds, by name: each node's local matrix, column-major."""
+    return {n["name"]: n.get("matrix") for n in gltf.get("nodes", []) if n.get("name", "").startswith("place")}
 
 
 def check(path, gltf, meshes, bones, textures):

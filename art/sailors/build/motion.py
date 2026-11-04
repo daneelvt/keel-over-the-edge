@@ -36,6 +36,9 @@ import numpy as np
 from bpy_extras import anim_utils
 from mathutils import Matrix, Quaternion, Vector
 
+# The export's file helpers; this module's own export() writes the clips.
+import export as files
+
 # The two-bone chains IK moves, by the bone at their end.
 EFFECTORS = {
     "hand_l": ("upperarm_l", "lowerarm_l", "hand_l"),
@@ -785,9 +788,10 @@ def stop(arm):
         pb.matrix_basis.identity()
 
 
-def export(path, arm, actions, gltfpack, work):
+def export(path, arm, actions, gltfpack, work, places=None):
     """The clips with the skeleton alone, packed: rotations and the
-    pelvis's translation, at 30 frames a second."""
+    pelvis's translation, at 30 frames a second; and where each clip is
+    placed, by name (export.add_places)."""
     stop(arm)
     keep = {a.name for a, _ in actions}
     for a in list(bpy.data.actions):
@@ -806,6 +810,9 @@ def export(path, arm, actions, gltfpack, work):
         export_animations=True, export_animation_mode="ACTIONS", export_force_sampling=True, export_frame_step=1,
         export_optimize_animation_size=False, export_reset_pose_bones=True, export_extras=False)
     arm.matrix_world = saved
+    gltf, binary = files.read(raw)
+    files.add_places(gltf, places or {})
+    files.write_glb(raw, gltf, binary)
     subprocess.run([gltfpack, "-i", raw, "-o", path, "-c", "-kn", "-af", "30", "-ar", "12"],
                    check=True, capture_output=True)
     return raw
