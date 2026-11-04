@@ -84,8 +84,7 @@ def dress(job, v, human, arm, marks, work):
         return (spec.get("params") or {}).get("layer", spec["family"])
 
     for spec in look.get("garments") or []:
-        params = dict(spec.get("params") or {})
-        params.update(spec.get(v) or {})
+        params = version_params(spec, v)
         if spec["family"] not in FAMILIES:
             raise ValueError(f"{spec['id']}: no garment family {spec['family']!r}")
         path = os.path.join(garments_dir(job), f"{spec['id']}.{v}.mhclo")
@@ -97,13 +96,31 @@ def dress(job, v, human, arm, marks, work):
         # The fit is within a millimetre of the cut, unevenly: made its own
         # mirror again.
         mirror(obj)
+        for poly in obj.data.polygons:
+            poly.use_smooth = True
         obj.data.materials.clear()
         colour = atlas.linear(spec["colour"]) if spec["region"] == "fixed" else None
-        obj.data.materials.append(atlas.part(bpy.data.materials.new(spec["id"]), colour, spec["region"]))
+        mat = atlas.part(bpy.data.materials.new(spec["id"]), colour, spec["region"])
+        if spec["region"] != "fixed" and params.get("shade"):
+            # A shade of the chosen colour: a facing, a lining.
+            mat["part_colour"] = [atlas.NEUTRAL * params["shade"]] * 3
+        obj.data.materials.append(mat)
         if params.get("skirt"):
             skirt_weights(obj, arm, marks)
         out.append(Worn(obj, "garment", spec, path))
     return out
+
+
+def version_params(spec, v):
+    """A part's parameters for a version: its own, with the version's
+    (given beside them or among them) over them."""
+    params = dict(spec.get("params") or {})
+    mine = params.pop(v, None) or {}
+    for other in ("female", "male"):
+        params.pop(other, None)
+    params.update(mine)
+    params.update(spec.get(v) or {})
+    return params
 
 
 def garments_dir(job):
@@ -121,8 +138,9 @@ def key(spec, v, params, job, look):
     version = look["versions"][v]
     h.update(json.dumps([spec, v, params, job["tables"]["ease"], job["bases"][version["base"]], version],
                         sort_keys=True).encode())
-    for f in (make, source, cut, keep_parts, ease_off, relax, band, rim, cover, loft, pleats, vent, _classes,
-              _section_radii, symmetrize, _mirrors, Mirror) + tuple(FAMILIES.values()):
+    for f in (make, source, cut, keep_parts, ease_off, relax, band, rim, cover, loft, pleats, vent, opening,
+              shoulder, sleeves, _hull_radii, _radial, _classes, _section_radii, symmetrize, _mirrors, Mirror, _forearm, _strip, _blob) \
+            + tuple(FAMILIES.values()) + tuple(AFTER.values()):
         h.update(inspect.getsource(f).encode())
     h.update(mpfbx.version().encode())
     return h.hexdigest()[:16]
@@ -139,14 +157,25 @@ def make(human, marks, spec, params, ease, path, k, under=0.0):
     layer = params.get("layer", spec["family"])
     if layer not in ease:
         raise ValueError(f"{spec['id']}: no ease for the layer {layer!r}")
-    if spec["family"] != "skirt":
-        ease_off(bm, skin, ease[layer], pairs)
-        relax(bm, skin, ease[layer], params.get("relax", 3), pairs)
+    # The garment's own ease, if it says, may be less than its layer's
+    # (which orders the layers): a coat close on the body, closer on the
+    # sleeves.
+    own = params.get("ease", ease[layer])
+    if spec["family"] not in SHAPED:
+        ease_off(bm, skin, own, pairs)
+        relax(bm, skin, own, params.get("relax", 3), pairs)
+        if params.get("arm-ease") is not None:
+            sleeves(bm, skin, params["arm-ease"], pairs)
+    if params.get("shoulder"):
+        shoulder(bm, skin, marks, params["shoulder"], own, pairs, params.get("arm-ease", own))
+    if spec["family"] in AFTER:
+        AFTER[spec["family"]](bm, skin, marks, params, own)
+        pairs.apply(bm)
     for b in params.get("bands", []):
-        band(bm, skin, b, ease[layer])
+        band(bm, skin, b, own)
         pairs.apply(bm)
     # The rim turns in no further than halfway to what is under it.
-    rim(bm, min(params.get("rim", 0.004), (ease[layer] - under) / 2))
+    rim(bm, min(params.get("rim", 0.004), max(own - under, 0.002) / 2))
     symmetrize(bm)
     bmesh.ops.triangulate(bm, faces=bm.faces[:])
 
@@ -157,6 +186,9 @@ def make(human, marks, spec, params, ease, path, k, under=0.0):
     bpy.context.scene.collection.objects.link(obj)
     for layer_uv in list(me.uv_layers)[1:]:
         me.uv_layers.remove(layer_uv)
+    if params.get("triangles"):
+        lod.decimate(obj, params["triangles"])
+        me = obj.data
     # A vertex matches only within the base mesh's group of the same name.
     group = "helper-skirt" if spec["family"] == "skirt" else "helper-tights"
     obj.vertex_groups.new(name=group).add(range(len(me.vertices)), 1.0, "REPLACE")
@@ -276,14 +308,16 @@ def source(human, group):
     return bm
 
 
-def cut(bm, point, normal, parts=None):
+def cut(bm, point, normal, parts=None, side=0):
     """Cuts the faces of the given parts (all, if None) by a plane, keeping
-    the side the normal points to."""
+    the side the normal points to; only the faces on one side of the body
+    if side is 1 (its left, +x) or -1."""
     layer = bm.verts.layers.int["part"]
     point, normal = Vector(point), Vector(normal).normalized()
 
     def ours(f):
-        return parts is None or all(v[layer] in parts for v in f.verts)
+        return ((parts is None or all(v[layer] in parts for v in f.verts))
+                and (side == 0 or all(v.co.x * side > 0 for v in f.verts)))
 
     faces = [f for f in bm.faces if ours(f)]
     geom = list({e for f in faces for e in f.edges}) + faces + list({v for f in faces for v in f.verts})
@@ -340,12 +374,32 @@ def skirt(human, marks, p):
     hip = m["heights"]["hip"]
     rows = p.get("rows", 10)
     columns = p.get("columns", 48)
-    ease = p.get("ease", 0.024)
+    full = p.get("ease", 0.024)
+    # Its top tucked under the body it hangs from: the ease grows from
+    # top-ease at the top to the full by the hips.
+    top_ease = p.get("top-ease", full)
     sections = []
+    follow = p.get("follow", 0.0)
+    hung_mid, hung = _section_radii(marks, hip, columns)
+    back = np.maximum(-np.cos(2 * np.pi * np.arange(columns) / columns), 0)
     for i in range(rows + 1):
-        z = top + (hem - top) * i / rows
-        # Below the hips it hangs from the widest section above it.
-        mid, radii = _section_radii(marks, max(z, hip), columns)
+        # Rows closer together toward the top, where the body curves.
+        z = top + (hem - top) * (i / rows) ** p.get("bias", 1.0)
+        if z >= hip:
+            mid, radii = _section_radii(marks, z, columns)
+        else:
+            # Below the hips it hangs from the widest section above it; at
+            # the back, if it follows, it comes in under the seat toward the
+            # figure (the thighs' outline) by follow a metre of drop, and
+            # then falls close.
+            mid = hung_mid
+            body = _hull_radii(marks, z, columns, mid)
+            inward = np.maximum(body, hung - follow * (hip - z))
+            radii = hung * (1 - back) + inward * back
+        t = float(np.clip((top - z) / max(top - hip, 1e-3), 0, 1))
+        ease = top_ease + (full - top_ease) * t * t * (3 - 2 * t)
+        # Closer at the back if asked, below what is under it there.
+        ease = ease + (p.get("back-ease", ease) - ease) * back * t
         sections.append((z, (mid, radii + ease), max(0.0, hip - z)))
     flare = p.get("flare", {"front": 0.05, "side": 0.25, "back": 0.2})
     bm = loft(sections, columns, flare)
@@ -353,10 +407,212 @@ def skirt(human, marks, p):
         pleats(bm, **p["pleats"])
     if p.get("vent"):
         vent(bm, **p["vent"])
+    for o in p["open"] if isinstance(p.get("open"), list) else [p["open"]] if p.get("open") else []:
+        opening(bm, **o)
     return bm
 
 
-FAMILIES = {"shirt": shirt, "breeches": breeches, "skirt": skirt}
+def stockings(human, marks, p):
+    """Stockings: the feet and legs, to above the knee (gartered under the
+    breeches)."""
+    bm = source(human, "helper-tights")
+    keep_parts(bm, (PARTS["leg"],))
+    knee = max(marks.joint("l-knee")[2], marks.joint("r-knee")[2])
+    cut(bm, (0, 0, knee + p.get("above-knee", 0.07)), (0, 0, -1))
+    return bm
+
+
+def shoes(human, marks, p):
+    """Shoes: the feet below a line that rises from the heel to a tongue
+    over the instep; the sole made flat (AFTER)."""
+    bm = source(human, "helper-tights")
+    keep_parts(bm, (PARTS["leg"],))
+    ankle = marks.joint("l-ankle")
+    k = p.get("rise", 0.45)
+    cut(bm, (0, ankle[1], ankle[2] + p.get("at", -0.015)), (0, k, -1))
+    return bm
+
+
+def _shoes_after(bm, skin, marks, p, ease):
+    """The sole flat and a little under the foot, the toe squared."""
+    sole = p.get("sole", 0.006)
+    flat = p.get("flat", 0.018)
+    for v in bm.verts:
+        if v.co.z < flat:
+            t = max(v.co.z, 0.0) / flat
+            v.co.z = -sole + (flat + sole) * t ** 2.2
+
+
+def bodice(human, marks, p):
+    """A body: the torso from a neckline (lower at the front by its slope)
+    to a little below the waist, with sleeves to a share of the forearm or
+    armholes; open down the front if asked (the opening's half width at the
+    neck and at the hem)."""
+    bm = source(human, "helper-tights")
+    m = marks.measure()
+    parts = (PARTS["torso"], PARTS["arm"]) if p.get("sleeve") else (PARTS["torso"],)
+    keep_parts(bm, parts)
+    neck = marks.joint("neck")[2]
+    cut(bm, (0, marks.joint("neck")[1], neck - p.get("neck", 0.015)), (0, p.get("neck-slope", 0.3), -1),
+        parts=(PARTS["torso"],))
+    cut(bm, (0, 0, m["heights"]["waist"] - p.get("below-waist", 0.03)), (0, 0, 1), parts=(PARTS["torso"],))
+    if p.get("sleeve"):
+        for side in ("l", "r"):
+            elbow, wrist = _forearm(marks, side)
+            at = elbow + (wrist - elbow) * p["sleeve"]
+            cut(bm, at, elbow - wrist, parts=(PARTS["arm"],))
+    if p.get("open"):
+        o = p["open"]
+        top, low = neck, m["heights"]["waist"] - p.get("below-waist", 0.03)
+        layer = bm.verts.layers.int["part"]
+        gone = []
+        for f in bm.faces:
+            c = f.calc_center_median()
+            t = float(np.clip((top - c.z) / (top - low), 0, 1))
+            half = o["neck"] + (o["hem"] - o["neck"]) * t
+            if c.y < marks.near(c.z)[1] and abs(c.x) < half and all(v[layer] == PARTS["torso"] for v in f.verts):
+                gone.append(f)
+        bmesh.ops.delete(bm, geom=gone, context="FACES")
+        bmesh.ops.delete(bm, geom=[v for v in bm.verts if not v.link_faces], context="VERTS")
+    return bm
+
+
+def _forearm(marks, side):
+    return Vector(marks.joint(f"{side}-elbow")), Vector(marks.joint(f"{side}-hand"))
+
+
+def cuffs(human, marks, p):
+    """Turned-back cuffs: a ring of the sleeve between two shares of the
+    forearm, deeper at the back; flared toward its top (AFTER)."""
+    bm = source(human, "helper-tights")
+    keep_parts(bm, (PARTS["arm"],))
+    for side, sign in (("l", 1), ("r", -1)):
+        elbow, wrist = _forearm(marks, side)
+        d = (wrist - elbow).normalized()
+        lo = elbow + (wrist - elbow) * p.get("to", 0.85)
+        hi = elbow + (wrist - elbow) * p.get("from", 0.5)
+        # The top tipped so the back of the cuff stands higher.
+        tip = Vector((0, p.get("back", 0.25), 0))
+        cut(bm, lo, -d, parts=(PARTS["arm"],), side=sign)
+        cut(bm, hi, (d + tip).normalized(), parts=(PARTS["arm"],), side=sign)
+    # What is left of the hands' side is not a cuff: only rings round the
+    # forearms remain.
+    return bm
+
+
+def _cuffs_after(bm, skin, marks, p, ease):
+    """Stands each cuff further out toward its top, as a turned-back cuff
+    does."""
+    flare = p.get("flare", 0.012)
+    for v in bm.verts:
+        side = "l" if v.co.x > 0 else "r"
+        elbow, wrist = _forearm(marks, side)
+        t = float(np.clip((v.co - elbow).dot((wrist - elbow).normalized()) / (wrist - elbow).length, 0, 1))
+        top, bottom = p.get("from", 0.5), p.get("to", 0.85)
+        share = float(np.clip((bottom - t) / max(bottom - top, 1e-3), 0, 1))
+        loc, n, _ = skin.nearest(v.co)
+        if loc is not None:
+            v.co = loc + n * (ease + flare * share)
+
+
+def neckcloth(human, marks, p):
+    """A neckcloth: a band wound round the neck (open at the back, under
+    the hair, if asked), a knot at the throat if asked, and its two ends
+    falling over the chest."""
+    columns = p.get("columns", 24)
+    ease = p.get("ease", 0.005)
+    neck = marks.joint("neck")[2]
+    lo, hi = neck - p.get("below", 0.005), neck + p.get("height", 0.045)
+    # The neck's own sections, each row's; what reaches past the neck's
+    # middle radius (half way up it) by more than a quarter is the
+    # shoulders' or the jaw's, and cut back.
+    _, middle = _section_radii(marks, neck + 0.015, columns)
+    most = np.median(middle) * 1.25
+    sections = []
+    for i in range(4):
+        z = lo + (hi - lo) * i / 3
+        mid, radii = _section_radii(marks, z, columns)
+        sections.append((z, (mid, np.minimum(radii, most) + ease), 0.0))
+    bm = loft(sections, columns, {"front": 0, "side": 0, "back": 0})
+    if p.get("open-back"):
+        # Its ends tucked in under the hair at the back.
+        opening(bm, azimuth=180, width=p["open-back"])
+    skin = Skin(human)
+    front_mid, front_r = _section_radii(marks, lo + 0.01, columns)
+    throat = Vector((0, front_mid[1] - front_r[0] - ease, lo + 0.008))
+    if p.get("knot"):
+        k = p["knot"]
+        _blob(bm, throat + Vector((0, -k[1] * 0.4, 0)), k)
+    ends = dict(p.get("ends", {"length": 0.1, "width": 0.026, "spread": 0.006, "off": 0.02}))
+    # From the band, standing out to their height over their first rows.
+    ends["from"] = ease
+    # One end laid on the chest, the other its mirror.
+    right = _strip(bm, skin, throat, 1, ends)
+    left = [[bm.verts.new((-v.co.x, v.co.y, v.co.z)) for v in row] for row in right]
+    part = bm.verts.layers.int["part"]
+    uv = bm.loops.layers.uv.active
+    rows = len(left) - 1
+    for r, (a, b) in enumerate(zip(left, left[1:])):
+        f = bm.faces.new((a[1], a[0], b[0], b[1]))
+        for v in f.verts:
+            v[part] = PARTS["torso"]
+        for lp in f.loops:
+            col = 0 if lp.vert in (a[0], b[0]) else 1
+            row = r if lp.vert in a else r + 1
+            lp[uv].uv = (4 + col * ends["width"] / ends["length"], row / rows)
+    return bm
+
+
+def _blob(bm, centre, size, rings=4, sides=8):
+    out = bmesh.ops.create_uvsphere(bm, u_segments=sides, v_segments=rings, radius=1.0, calc_uvs=True)
+    layer = bm.verts.layers.int["part"]
+    uv = bm.loops.layers.uv.active
+    for f in {f for v in out["verts"] for f in v.link_faces}:
+        for lp in f.loops:
+            lp[uv].uv = (lp[uv].uv.x + 3, lp[uv].uv.y)
+    for v in out["verts"]:
+        v.co = centre + Vector((v.co.x * size[0], v.co.y * size[1], v.co.z * size[2]))
+        v[layer] = PARTS["torso"]
+
+
+def _strip(bm, skin, top, sign, e, rows=6):
+    """One of a neckcloth's ends: a strip from top falling down the chest,
+    off the skin by e["off"], to one side of the middle by spread and
+    widening a little."""
+    layer = bm.verts.layers.int["part"]
+    grid = []
+    for r in range(rows + 1):
+        t = r / rows
+        z = top.z - e["length"] * t
+        x = sign * (e["spread"] + e["width"] * 0.5 * (0.8 + 0.4 * t))
+        row = []
+        for u in (-0.5, 0.5):
+            px = x + u * e["width"] * (0.8 + 0.4 * t)
+            loc, n, _ = skin.nearest(Vector((px, top.y + 0.05, z)))
+            off = e.get("from", e["off"]) + (e["off"] - e.get("from", e["off"])) * min(1.0, r / 2)
+            hit = loc + n * off
+            v = bm.verts.new((px, hit.y, z))
+            v[layer] = PARTS["torso"]
+            row.append(v)
+        grid.append(row)
+    uv = bm.loops.layers.uv.active
+    for r, (a, b) in enumerate(zip(grid, grid[1:])):
+        f = bm.faces.new((a[0], a[1], b[1], b[0]) if sign > 0 else (a[1], a[0], b[0], b[1]))
+        for lp in f.loops:
+            col = 0 if lp.vert in (a[0], b[0]) else 1
+            row = r if lp.vert in a else r + 1
+            lp[uv].uv = (5 + sign + col * e["width"] / e["length"], row / rows)
+    return grid
+
+
+FAMILIES = {"shirt": shirt, "breeches": breeches, "skirt": skirt, "stockings": stockings, "shoes": shoes,
+            "bodice": bodice, "cuffs": cuffs, "neckcloth": neckcloth}
+
+# The families that shape themselves, not eased off the skin by make.
+SHAPED = {"skirt", "neckcloth"}
+
+# What a family does after it is eased off the body.
+AFTER = {"shoes": _shoes_after, "cuffs": _cuffs_after}
 
 
 def _section_radii(marks, z, columns):
@@ -364,18 +620,48 @@ def _section_radii(marks, z, columns):
     azimuths about its middle (0 the front, turning to the figure's left)."""
     o = marks.section.outline(z, marks.near(z))
     mid = np.array(marks.near(z))
-    radii = []
+    return mid, _radial(o, mid, columns)
+
+
+def _hull_radii(marks, z, columns, mid):
+    """The radius at each of columns azimuths about mid of everything the
+    body's section at z holds (both thighs, below the seat)."""
+    pts = [o for o in marks.section.outlines(z)]
+    if not pts:
+        return np.zeros(columns)
+    return _radial(np.concatenate(pts), np.asarray(mid), columns)
+
+
+def _radial(points, mid, columns):
+    """How far points reach from mid along each of columns azimuths: the
+    furthest within each azimuth's sector (not the furthest along its
+    direction, which at an angle to a flat back reaches round to the
+    side), the sectors none falls in filled from their neighbours."""
+    if len(points) == 0:
+        return np.full(columns, 0.1)
+    d = points - mid
+    a = np.arctan2(d[:, 0], -d[:, 1]) % (2 * np.pi)
+    r = np.hypot(d[:, 0], d[:, 1])
+    sector = 2 * np.pi / columns
+    out = np.full(columns, np.nan)
     for c in range(columns):
-        a = 2 * np.pi * c / columns
-        d = np.array([np.sin(a), -np.cos(a)])
-        radii.append(float(max((o - mid) @ d)) if len(o) else 0.1)
-    return mid, np.array(radii)
+        off = np.abs((a - c * sector + np.pi) % (2 * np.pi) - np.pi)
+        inside = off <= sector * 0.75
+        if inside.any():
+            out[c] = r[inside].max()
+    known = np.flatnonzero(~np.isnan(out))
+    if len(known) < columns:
+        idx = np.arange(columns)
+        out = np.interp(idx, known, out[known], period=columns)
+    # The body is its own mirror; a point on a sector's edge may fall in
+    # on one side and not the other: the radii made their own mirror too.
+    return (out + np.roll(out[::-1], 1)) / 2
 
 
 def loft(sections, columns, flare):
     """A tube through sections, each (z, (middle, radii), drop below the
     widest), its radii flared by azimuth in proportion to the drop, with a
-    UV grid."""
+    UV grid, its faces facing out."""
     bm = bmesh.new()
     part = bm.verts.layers.int.new("part")
     uv = bm.loops.layers.uv.new("UVMap")
@@ -394,8 +680,9 @@ def loft(sections, columns, flare):
     for r in range(len(rings) - 1):
         for c in range(columns):
             n = (c + 1) % columns
-            f = bm.faces.new((rings[r][c], rings[r][n], rings[r + 1][n], rings[r + 1][c]))
-            for loop, (u, w) in zip(f.loops, ((c, r), (c + 1, r), (c + 1, r + 1), (c, r + 1))):
+            # Wound so the faces' normals point out from the body.
+            f = bm.faces.new((rings[r][c], rings[r + 1][c], rings[r + 1][n], rings[r][n]))
+            for loop, (u, w) in zip(f.loops, ((c, r), (c, r + 1), (c + 1, r + 1), (c + 1, r))):
                 loop[uv].uv = (u / columns, 1 - w / (len(rings) - 1))
     bm.normal_update()
     return bm
@@ -441,6 +728,69 @@ def vent(bm, azimuth=180.0, start=0.4, lap=0.01):
                                                   - target + np.pi) % (2 * np.pi)) - np.pi for f in v.link_faces)])
             if side > 0:
                 v.co += Vector((v.co.x, v.co.y, 0)).normalized() * lap
+
+
+def opening(bm, azimuth=0.0, width=0.04, start=0.0):
+    """Opens a skirt down its front (or at azimuth, degrees): drops its
+    faces within half the width (metres, at the skirt's top) either side,
+    from a share of its length down."""
+    zs = [v.co.z for v in bm.verts]
+    top, hem = max(zs), min(zs)
+    below = top - start * (top - hem) + 1e-6
+    target = np.radians(azimuth)
+    top_r = np.mean([np.hypot(v.co.x, v.co.y) for v in bm.verts if v.co.z > top - 1e-4])
+    half = width / 2 / max(top_r, 1e-3)
+    gone = []
+    for f in bm.faces:
+        c = f.calc_center_median()
+        a = (np.arctan2(c.x, -c.y) - target + np.pi) % (2 * np.pi) - np.pi
+        if abs(a) < half and c.z <= below:
+            gone.append(f)
+    bmesh.ops.delete(bm, geom=gone, context="FACES")
+    bmesh.ops.delete(bm, geom=[v for v in bm.verts if not v.link_faces], context="VERTS")
+
+
+def sleeves(bm, skin, ease, pairs=None):
+    """Lays the sleeves (the arm's part) at their own ease, then smooths
+    them a little."""
+    part = bm.verts.layers.int["part"]
+    arm = [v for v in bm.verts if v[part] == PARTS["arm"]]
+    for _ in range(2):
+        for v in arm:
+            loc, n, _ = skin.nearest(v.co)
+            if loc is not None:
+                v.co = loc + n * ease
+        if pairs is not None:
+            pairs.apply(bm)
+        bmesh.ops.smooth_vert(bm, verts=arm, factor=0.4, use_axis_x=True, use_axis_y=True, use_axis_z=True)
+    ease_off(bm, skin, min(ease, 0.004), pairs)
+
+
+def shoulder(bm, skin, marks, spec, ease, pairs=None, arm_ease=None):
+    """A set-in sleeve: within reach of each shoulder's joint, above the
+    armpit, the cloth laid on the skin at the shoulder's own ease, easing
+    back to the garment's (the sleeve's, on the arm) over the outer half of
+    the reach, so the sleeve's cap sits on the deltoid and the top follows
+    the shoulder's line."""
+    reach, tight = spec["reach"], spec["ease"]
+    part = bm.verts.layers.int["part"]
+    for v in bm.verts:
+        side = "l" if v.co.x > 0 else "r"
+        j = Vector(marks.joint(f"{side}-shoulder"))
+        d = (v.co - j).length
+        if d >= reach or v.co.z < j.z - spec.get("below", 0.04):
+            continue
+        t = float(np.clip((d - reach / 2) / (reach / 2), 0, 1))
+        t = t * t * (3 - 2 * t)
+        far = arm_ease if arm_ease is not None and v[part] == PARTS["arm"] else ease
+        loc, n, _ = skin.nearest(v.co)
+        if loc is not None:
+            v.co = loc + n * (tight + (far - tight) * t)
+    if pairs is not None:
+        pairs.apply(bm)
+    # Smoothed only a little: more lifts it out of the hollows by the neck.
+    bmesh.ops.smooth_vert(bm, verts=bm.verts[:], factor=0.15, use_axis_x=True, use_axis_y=True, use_axis_z=True)
+    ease_off(bm, skin, min(tight, ease), pairs)
 
 
 # --- Fitting it to the body ---------------------------------------------
@@ -682,24 +1032,64 @@ def bury_all(skin, worn, ease):
 
     if garments:
         out["body"] = bury(skin, [w.obj for w in garments], max(reach(w) for w in garments), BURY["body"])
+    # The scalp under the hair and the hat.
+    over_head = [w.obj for w in worn if w.kind in ("hair", "hat")]
+    if over_head:
+        out["body under hair"] = bury(skin, over_head, 0.03, BURY["body"])
     for i, inner in enumerate(garments):
-        outer = garments[i + 1:]
+        # A cuff is turned back over the sleeve's end: what is under it
+        # stays, so it rests on something.
+        outer = [w for w in garments[i + 1:] if w.spec["family"] != "cuffs"]
         if outer:
             out[inner.obj.name] = bury(inner.obj, [w.obj for w in outer], COVER, BURY["garment"])
+    # What burying leaves of a garment in specks, apart from it.
+    for w in garments:
+        out[w.obj.name + " specks"] = drop_fragments(w.obj)
     return out
 
 
-def mirror(obj):
-    """symmetrize, on a fitted mesh: within the fit's few millimetres."""
+def drop_fragments(obj, fewest=12):
+    """Drops the islands of fewer than fewest faces, but for the largest."""
     bm = bmesh.new()
     bm.from_mesh(obj.data)
-    symmetrize(bm, 0.005)
+    seen, islands = set(), []
+    for f in bm.faces:
+        if f in seen:
+            continue
+        stack, isl = [f], []
+        seen.add(f)
+        while stack:
+            g = stack.pop()
+            isl.append(g)
+            for e in g.edges:
+                for h in e.link_faces:
+                    if h not in seen:
+                        seen.add(h)
+                        stack.append(h)
+        islands.append(isl)
+    islands.sort(key=len, reverse=True)
+    gone = [f for isl in islands[1:] if len(isl) < fewest for f in isl]
+    if gone:
+        bmesh.ops.delete(bm, geom=gone, context="FACES")
+        bmesh.ops.delete(bm, geom=[v for v in bm.verts if not v.link_faces], context="VERTS")
+        bm.to_mesh(obj.data)
+        obj.data.update()
+    bm.free()
+    return len(gone)
+
+
+def mirror(obj, within=0.005, greedy=False):
+    """symmetrize, on a fitted mesh: within the fit's few millimetres, or
+    as far as asked (a coarse collapse, greedily)."""
+    bm = bmesh.new()
+    bm.from_mesh(obj.data)
+    symmetrize(bm, within, greedy)
     bm.to_mesh(obj.data)
     bm.free()
     obj.data.update()
 
 
-def settle(fig, lib, poses, worn, ease, gap=0.004, rounds=4, most=0.03):
+def settle(fig, lib, poses, worn, ease, gap=0.004, rounds=8, most=0.05):
     """Draws in what is under a garment wherever, in any of the poses (and
     at rest), it would come through what is over it: each vertex that does
     is moved in at rest by as much as it came through and gap more, along
@@ -711,6 +1101,8 @@ def settle(fig, lib, poses, worn, ease, gap=0.004, rounds=4, most=0.03):
     lay = metrics.layers(worn, ease)
     arm = fig.arm
     moved = set()
+    # How far each vertex has gone, over every round: never more than most.
+    total = {}
     for _ in range(rounds):
         fig.reset()
         pairs = metrics.under_pairs(fig.meshes, lay)
@@ -733,6 +1125,10 @@ def settle(fig, lib, poses, worn, ease, gap=0.004, rounds=4, most=0.03):
                 m = sum(g.weight * skin[names[g.group]] for g in o.data.vertices[i].groups if names[g.group] in skin)
                 d = -(np.array(inv @ Vector(normal))) * min(depth + gap, most)
                 rest = np.linalg.solve(m, d)
+                # A skinning nearly singular would carry it far: no further
+                # at rest than as posed.
+                if np.linalg.norm(rest) > most:
+                    rest *= most / np.linalg.norm(rest)
                 if np.linalg.norm(rest) > np.linalg.norm(push.get((mesh, i), np.zeros(3))):
                     push[(mesh, i)] = rest
         fig.reset()
@@ -741,7 +1137,7 @@ def settle(fig, lib, poses, worn, ease, gap=0.004, rounds=4, most=0.03):
         # Each move made on both sides, so the figure stays its own mirror.
         for mesh in {m for m, _ in push}:
             o = next(m for m in fig.meshes if m.name == mesh)
-            pair = _mirrors(body.coords(o))
+            pair = _mirrors(body.coords(o), 0.005)
             both = {}
             for (m, i), d in push.items():
                 if m != mesh:
@@ -753,21 +1149,44 @@ def settle(fig, lib, poses, worn, ease, gap=0.004, rounds=4, most=0.03):
                     if np.linalg.norm(dj) > np.linalg.norm(both.get(j, np.zeros(3))):
                         both[j] = dj
             for j, d in both.items():
+                gone = total.get((mesh, j), np.zeros(3))
+                after = gone + d
+                if np.linalg.norm(after) > most:
+                    after *= most / np.linalg.norm(after)
+                    d = after - gone
+                total[(mesh, j)] = after
                 o.data.vertices[j].co += Vector(d)
                 moved.add((mesh, j))
             o.data.update()
     return len(moved)
 
 
-def symmetrize(bm, within=0.003):
+def symmetrize(bm, within=0.003, greedy=False):
     """Makes the cloth its own mirror: each vertex and its mirror moved to
     their mean, the middle's onto it."""
     co = np.array([tuple(v.co) for v in bm.verts])
     pair = _mirrors(co, within)
+    # Only mutual pairs: two vertices on one side may both find the same
+    # one on the other.
+    pair = np.where(pair[pair] == np.arange(len(pair)), pair, np.arange(len(pair)))
+    # Then, after a coarse collapse, those left, greedily, nearest first.
+    alone_r = [i for i in range(len(co)) if greedy and pair[i] == i and co[i, 0] > 0.004]
+    alone_l = [i for i in range(len(co)) if pair[i] == i and co[i, 0] < -0.004]
+    if alone_r and alone_l:
+        cand = sorted((float(np.linalg.norm(co[i] * np.array([-1, 1, 1]) - co[j])), i, j)
+                      for i in alone_r for j in alone_l)
+        used = set()
+        for d, i, j in cand:
+            if d > within:
+                break
+            if i in used or j in used:
+                continue
+            pair[i], pair[j] = j, i
+            used.update((i, j))
     verts = list(bm.verts)
     for i, v in enumerate(verts):
         j = pair[i]
-        if abs(co[i, 0]) < 1e-4 or j == i and abs(co[i, 0]) < within:
+        if abs(co[i, 0]) < 1e-4 or j == i and abs(co[i, 0]) < min(within, 0.004):
             v.co.x = 0.0
         elif j != i and co[i, 0] > 0:
             m = (co[i] + co[j] * np.array([-1, 1, 1])) / 2
@@ -794,8 +1213,11 @@ def skirt_weights(obj, arm, marks):
             continue
         a = np.arctan2(v.co.x, -v.co.y)
         near = sorted(azimuth, key=lambda n: apart(a, azimuth[n]))[:2]
-        d = [apart(a, azimuth[n]) for n in near]
-        share = [d[1] / (d[0] + d[1] + 1e-9), d[0] / (d[0] + d[1] + 1e-9)]
+        # Mostly the nearer chain's: two chains turned far apart (a front
+        # panel over the thighs, a side spread on the seat) averaged evenly
+        # would fold the cloth between them in on itself.
+        d = [apart(a, azimuth[n]) ** 3 for n in near]
+        share = [d[1] / (d[0] + d[1] + 1e-12), d[0] / (d[0] + d[1] + 1e-12)]
         first = arm.data.bones[near[0] + "_01"]
         lower = float(np.clip((first.head_local.z - v.co.z) / max(first.length, 1e-3) - 0.5, 0, 1))
         for n, w in zip(near, share):

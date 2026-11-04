@@ -5,6 +5,12 @@
 # these, and its targets are added to them (a look's value replaces the
 # base's for the same target). "lr-" names a target for both sides.
 #
+# face is how the face is painted (build/face.py): the eyes' colours, the
+# lashes, and the paint on the skin, each colour taken relative to the
+# reference skin (the tone it was chosen on), so it holds at every tone;
+# the brows' three points (inner end, peak, tail) as (out from the eye's
+# middle, up from it, thickness), in metres.
+#
 # measure is what every build of the body asserts: its height in metres,
 # its height in heads (crown to chin), and the ratios of its widths in the
 # front view at rest (landmarks.py: the shoulders across the deltoids'
@@ -82,6 +88,29 @@ female:
     lr-upperleg-muscle-incr: 0.15
     lr-upperarm-fat-decr: 0.45
     lr-lowerarm-fat-decr: 0.3
+  face:
+    reference: "#D9AE90"
+    eyes:
+      iris-inner: "#7A8A52"
+      iris-outer: "#3B4A2C"
+      limbal: "#120A05"
+      sclera: "#E2D9CF"
+      sclera-edge: "#A88A7C"
+      iris: 0.42
+      pupil: 0.15
+      catchlight: [-0.2, 0.22, 0.07]
+    lip: { colour: "#A85A52", amount: 0.8 }
+    blush: { colour: "#CF8573", amount: 0.25, out: 0.006, down: -0.024, size: 0.016, nose: 0.5 }
+    lid: { colour: "#9A7262", amount: 0.2 }
+    lash-line: { amount: 1.0, width: 0.0022, flare: 0.9, lower: 0.35, value: 0.05 }
+    # Thin, arched and set high.
+    brow:
+      inner: [-0.013, 0.016, 0.0034]
+      peak: [0.008, 0.0205, 0.0026]
+      tail: [0.020, 0.0135, 0.0010]
+      soft: 0.4
+      value: 0.85
+      inner-density: 0.6
   measure:
     height: [1.59, 1.63]
     # Crown to chin she measures 8.2: her head was made a little smaller
@@ -140,6 +169,29 @@ male:
     lr-lowerarm-muscle-incr: 0.05
     upperlegs-height-incr: 0.2
     lowerlegs-height-incr: 0.15
+  face:
+    reference: "#C99A7C"
+    eyes:
+      iris-inner: "#8A9A8C"
+      iris-outer: "#4B6170"
+      limbal: "#1C2730"
+      sclera: "#E2D9CF"
+      sclera-edge: "#A88A7C"
+      iris: 0.42
+      pupil: 0.15
+      catchlight: [-0.2, 0.22, 0.07]
+    lip: { colour: "#B4806F", amount: 0.6 }
+    blush: { colour: "#C97462", amount: 0.18, out: 0.006, down: -0.026, size: 0.018, nose: 0.6 }
+    lid: { colour: "#B78A72", amount: 0.15 }
+    lash-line: { amount: 0.6, width: 0.0013, flare: 0.3, lower: 0.3, value: 0.2 }
+    # Lower and straighter, fuller.
+    brow:
+      inner: [-0.014, 0.0135, 0.0050]
+      peak: [0.006, 0.0155, 0.0042]
+      tail: [0.021, 0.0115, 0.0022]
+      soft: 0.45
+      value: 0.8
+      inner-density: 0.7
   measure:
     height: [1.74, 1.78]
     heads: [7.5, 8.0]

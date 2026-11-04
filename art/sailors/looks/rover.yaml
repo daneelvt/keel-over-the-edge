@@ -1,0 +1,296 @@
+# SPDX-License-Identifier: LicenseRef-All-Rights-Reserved
+#
+# The Rover: a sailor of about 1700 in a cocked hat and a long coat over a
+# long waistcoat, breeches, stockings and buckled shoes. From behind and
+# above: the hat's triangle, the coat's flared skirt with its vent and
+# side pleats, the deep cuffs; his short queue, her long braid down the
+# back. The coat is the main colour.
+id: rover
+name: Rover
+committed: true
+versions:
+  female:
+    base: female
+    targets:
+      # A confident half smile, the left corner a little higher.
+      mouth-angles-up: 0.4
+      asym-mouth-1-l: 0.25
+    # Combed back from the face and braided, the braid down the back to
+    # below the shoulder blades, tied at its end.
+    hair:
+      id: braid
+      family: hair
+      region: hair
+      params:
+        shell: cap
+        comb: back
+        nape: 0.026
+        volume: 0.007
+        taper: 0.02
+        length: 0.22
+        strands: 360
+        thickness: 0.0035
+        gather: [0, 0.09, -0.025]
+        tail:
+          {
+            kind: braid,
+            length: 0.3,
+            width: 0.04,
+            taper: 0.5,
+            lean: 0.15,
+            lobes: 9,
+            clear: 0.046,
+            share: 0.4,
+          }
+        ribbon: { colour: "#141414", at: 0.88, width: 0.012 }
+        # A plait is not its own mirror.
+        asymmetric: true
+        deck-weight: 1.5
+  male:
+    base: male
+    targets:
+      # A straight, strong nose and a defined jaw; the hint of a smile, one
+      # brow a little higher.
+      nose-greek-incr: 0.2
+      mouth-angles-up: 0.25
+      asym-brown-1-l: 0.4
+    # Combed back and tied at the nape in a short queue with a black
+    # ribbon, its ends hanging.
+    hair:
+      id: queue
+      family: hair
+      region: hair
+      params:
+        shell: cap
+        comb: back
+        nape: 0.026
+        volume: 0.006
+        taper: 0.015
+        length: 0.2
+        strands: 320
+        thickness: 0.0035
+        gather: [0, 0.09, -0.05]
+        tail:
+          {
+            kind: queue,
+            length: 0.14,
+            width: 0.026,
+            taper: 0.45,
+            lean: 0.12,
+            clear: 0.04,
+            share: 0.25,
+          }
+        ribbon: { colour: "#141414", at: 0.05, width: 0.014, ends: 0.06 }
+garments:
+  # Linen, to the hips under the waistcoat, its full sleeves gathered into
+  # bands at the wrists, ruffled where they show below the coat's cuffs.
+  - id: shirt
+    family: shirt
+    region: fixed
+    colour: "#ECE6D8"
+    params:
+      sleeve: 0.98
+      neck: 0.06
+      triangles: 1400
+      female: { shoulder: { reach: 0.12, ease: 0.003 } }
+      male: { shoulder: { reach: 0.18, ease: 0.003 } }
+      bands:
+        - { at: ends, height: 0.03, out: 0.012 }
+  # Dark wool to below the knee, over the stockings.
+  - id: breeches
+    family: breeches
+    region: fixed
+    colour: "#2A2420"
+    params:
+      triangles: 1000
+      deck-weight: 2.0
+      bands:
+        - { at: top, height: 0.035, out: -0.001 }
+        - { at: bottom, height: 0.03, out: 0.004 }
+  # Off-white, gartered below the knee under the breeches' band.
+  - id: stockings
+    family: stockings
+    region: fixed
+    colour: "#DCD5C6"
+    params: { above-knee: -0.05, triangles: 600, deck-weight: 2.0 }
+  # Black leather, square-toed, a tongue over the instep; buckled (trims).
+  - id: shoes
+    family: shoes
+    region: fixed
+    colour: "#1A1614"
+    params: { rise: 0.45, at: -0.012, sole: 0.006, triangles: 380, deck-weight: 2.5 }
+  # Linen wound round the neck, its ends falling from the throat over
+  # the waistcoat.
+  - id: neckcloth
+    family: neckcloth
+    region: fixed
+    colour: "#F1ECE0"
+    params:
+      layer: neckcloth
+      ease: 0.005
+      columns: 20
+      # On the neck, from its joint up, under where the hair ends; open
+      # at the back, where the hair covers it.
+      below: 0.0
+      height: 0.018
+      open-back: 0.18
+      deck-weight: 2.0
+      ends: { length: 0.07, width: 0.022, spread: 0.003, off: 0.022 }
+  # The long waistcoat: buttoned down the middle to the waist (trims), its
+  # skirts open below, to the upper thigh.
+  - id: waistcoat
+    family: bodice
+    region: fixed
+    colour: "#C9B48A"
+    params:
+      layer: waistcoat
+      # Its neckline under the coat's, a centimetre lower at the back.
+      neck: 0.04
+      neck-slope: 0.15
+      below-waist: 0.005
+      fitted: true
+      triangles: 1000
+      female: { shoulder: { reach: 0.12, ease: 0.005 } }
+      male: { shoulder: { reach: 0.18, ease: 0.005 } }
+  - id: waistcoat-skirt
+    family: skirt
+    region: fixed
+    colour: "#C9B48A"
+    params:
+      layer: waistcoat
+      skirt: true
+      rise: -0.015
+      length: 0.24
+      ease: 0.014
+      rows: 5
+      columns: 40
+      follow: 0.3
+      flare: { front: 0.02, side: 0.06, back: 0.04 }
+      # Its back is under the coat: only the front and sides are made.
+      open: [{ width: 0.06 }, { azimuth: 180, width: 0.3 }]
+  # The coat, in the main colour: fitted to the waist, collarless, open
+  # down the front, a set-in sleeve to the forearm under a deep cuff.
+  - id: coat
+    family: bodice
+    region: main
+    params:
+      layer: coat
+      ease: 0.02
+      arm-ease: 0.0095
+      sleeve: 0.8
+      # Its neckline under the neckcloth's band at the back.
+      neck: 0.03
+      neck-slope: 0.15
+      below-waist: 0.02
+      open: { neck: 0.02, hem: 0.035 }
+      fitted: true
+      triangles: 1700
+      female: { shoulder: { reach: 0.13, ease: 0.0065 } }
+      male: { shoulder: { reach: 0.21, ease: 0.0065 } }
+  # Its skirts to the knee: close at the hips, the fullness in fan pleats
+  # at the side seams and a lapped vent at the back, open at the front.
+  - id: coat-skirt
+    family: skirt
+    region: main
+    params:
+      layer: coat
+      skirt: true
+      # The vent's left side laps over its right.
+      asymmetric: true
+      rise: 0.01
+      length: 0.5
+      ease: 0.02
+      top-ease: 0.019
+      back-ease: 0.015
+      rows: 10
+      bias: 1.5
+      columns: 48
+      follow: 0.35
+      flare: { front: 0.03, side: 0.32, back: 0.16 }
+      pleats: { azimuths: [92, -92], count: 5, depth: 0.022, spread: 0.6, apex: 0.08 }
+      vent: { azimuth: 180, start: 0.12, lap: 0.004 }
+      open: { width: 0.085 }
+      female: { top-ease: 0.021, ease: 0.023 }
+      male: { length: 0.56 }
+  # Deep turned-back cuffs, a darker facing of the coat's colour: hers
+  # slimmer and shallower, his deeper at the back.
+  - id: cuffs
+    family: cuffs
+    region: main
+    params:
+      layer: cuff
+      ease: 0.011
+      shade: 0.72
+      to: 0.78
+      triangles: 400
+      female: { from: 0.52, back: 0.2, flare: 0.008 }
+      male: { from: 0.36, back: 0.35, flare: 0.014 }
+trims:
+  - {
+      kind: buttons,
+      on: coat,
+      along: edge,
+      side: right,
+      count: 11,
+      from: 0.03,
+      to: 0.02,
+      inset: 0.012,
+      radius: 0.0065,
+      colour: "#C29A4E",
+    }
+  - {
+      kind: buttons,
+      on: waistcoat,
+      along: middle,
+      count: 8,
+      from: 0.09,
+      to: 0.02,
+      radius: 0.0045,
+      colour: "#C29A4E",
+    }
+  - {
+      kind: flaps,
+      on: coat-skirt,
+      region: main,
+      shade: 0.95,
+      azimuth: 50,
+      below: 0.07,
+      width: 0.13,
+      height: 0.055,
+      scallops: 3,
+      buttons: 3,
+      radius: 0.0055,
+      button-colour: "#C29A4E",
+    }
+  - { kind: buckles, on: shoes, width: 0.032, height: 0.026, colour: "#B9B1A2" }
+hat:
+  id: cocked-hat
+  family: hat
+  region: fixed
+  colour: "#1E1E1E"
+  params:
+    seat: -0.004
+    tilt: 6
+    segments: 28
+    crown: [[1.0, 0.0], [1.02, 0.035], [0.98, 0.062], [0.86, 0.082], [0.55, 0.092], [0.2, 0.095]]
+    # Cocked on three sides, a corner forward: the sides stand against the
+    # crown, the corners point out and up.
+    brim:
+      width: 0.11
+      outline: polygon
+      corners: 3
+      round: 0.04
+      lift: cocked
+      height: 0.085
+      lean: 0.3
+      corner-drop: 0.55
+      thickness: 0.004
+      steps: 3
+      binding: { colour: "#C8B27A", width: 0.008 }
+palette:
+  main: "#9B2226"
+  skin: "#CDA385"
+  hair: "#654A37"
+# The motion lab's clips the dressing room shows the look in; its own
+# habit comes with the sailing clips.
+clips: [helm-idle, standing-idle, treading-water]

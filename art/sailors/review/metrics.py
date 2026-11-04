@@ -17,12 +17,14 @@ millimetre of cloth under the skin.
   one over it, at rest and in every test pose (rays in along the normals
   of what is under, against what is over);
 - seat: nothing through the boat in the poses seated in it (the line from
-  each vertex's bone to it, and the skeleton from above, cross nothing);
+  each vertex's nearest bone to it, and the skeleton from above, cross
+  nothing; cloth the seat lift lays on the boat is under no top of the
+  deck or hull);
 - float: every part within 3 mm of another (a hat of the head or hair, a
   garment's band of the garment), at the close and deck levels;
 - figure: the dressed figure within reach of the bare one (the waist, the
-  shoulders, the rear in profile, the shoulders' top line; under a
-  woman's bust, a fitted garment returning);
+  shoulders, the rear in profile, the shoulders' top line as the front
+  view sees it; under a woman's bust, a fitted garment returning);
 - symmetry: each mesh its own mirror within 1 mm, unless declared not, at
   the close and deck levels (the far is posed);
 - atlas: the UVs inside the square, no two triangles on one texel (but
@@ -136,8 +138,8 @@ def skeleton(gates, level, gltf, order):
 
 def layers(worn, ease):
     """Each mesh's place in the stack, and how far off what is under it it
-    stands: the body under everything, the hair on it, the garments by
-    their ease, a hat over all."""
+    stands: the body under everything, the garments by their ease, the
+    hair over them (a braid lies on the coat), a hat over all."""
     out = {"body": (0.0, 0.0)}
     for w in worn:
         if w.kind == "garment":
@@ -145,7 +147,7 @@ def layers(worn, ease):
             e = ease[p.get("layer", w.spec["family"])]
             out[w.obj.name] = (e, e)
         elif w.kind == "hair":
-            out[w.obj.name] = (0.001, 0.01)
+            out[w.obj.name] = (0.5, 0.01)
         elif w.kind == "hat":
             out[w.obj.name] = (1.0, 0.01)
     return out
@@ -192,11 +194,17 @@ def poke(fig, pairs, depths=None):
             if hit[0] is not None:
                 n += 1
                 hits.setdefault(u.name, []).append(int(i))
+                through = poke.through.setdefault(u.name, set())
+                through.add(g.name)
                 if depths is not None:
                     key = (u.name, int(i))
                     if hit[3] > depths.get(key, (0.0, None))[0]:
                         depths[key] = (hit[3], no[i])
     return n, hits
+
+
+# What each under mesh came through, by its name, since the last poses().
+poke.through = {}
 
 
 def poses(gates, level, fig, lib, worn, ease, names):
@@ -211,12 +219,13 @@ def poses(gates, level, fig, lib, worn, ease, names):
             fig.reset()
         else:
             fig.pose(lib.poses[name])
+        poke.through = {}
         n, hits = poke(fig, pairs)
         maps[name] = hits
         where = {}
         for mesh, idx in hits.items():
             co = motion.coords_posed(next(o for o in fig.meshes if o.name == mesh))[0][idx]
-            where[mesh] = [len(idx)] + [round(float(x), 3) for x in co.mean(0)]
+            where[mesh] = [len(idx)] + [round(float(x), 3) for x in co.mean(0)] + sorted(poke.through.get(mesh, ()))
         gates.add(level, f"poke {name}", n, 0, n == 0, at=where)
     fig.reset()
     return maps
@@ -259,11 +268,25 @@ def through_boat(fig, meshes):
     a = np.array([np.array(s[0]) for s in segs])
     b = np.array([np.array(s[1]) for s in segs])
     hits = {}
+    examples = []
     for o in meshes:
         co, _ = motion.coords_posed(o)
+        if motion.SEAT_GROUP in o.vertex_groups:
+            # Cloth laid on the boat (a skirt on the seat): through it if,
+            # straight up, it is under the top of the deck or hull. A line
+            # from the thigh beside it, which drops into the cockpit, would
+            # cross the deck's edge under cloth lying on the deck.
+            hits[o.name] = [i for i, p in enumerate(co) if stage.under(p)]
+            continue
         anchors = _nearest_on_segments(co, a, b)
         hits[o.name] = stage.crossed(anchors, co)
-    return {"vertices": sum(len(h) for h in hits.values()), "bones": len(crossed), "crossed": crossed}, hits
+        for i in hits[o.name][:2]:
+            d = Vector(co[i]) - Vector(anchors[i])
+            hit = stage.tree.ray_cast(Vector(anchors[i]), d.normalized(), d.length)[0]
+            examples.append({"mesh": o.name, "from": [round(float(x), 3) for x in anchors[i]],
+                             "to": [round(float(x), 3) for x in co[i]], "meets": [round(float(x), 3) for x in hit]})
+    return {"vertices": sum(len(h) for h in hits.values()), "bones": len(crossed), "crossed": crossed,
+            "lines": examples}, hits
 
 
 def keep_off_boat(fig, pose, obj):
@@ -383,29 +406,45 @@ def figure(gates, marks, human, meshes, worn, ease, version):
     # The rear in profile: the back of the dressed figure against the
     # bare, from the crotch to the waist.
     whole = Section.of_many(meshes)
-    worst = 0.0
+    worst, where = 0.0, None
     for z in np.arange(marks.crotch() + 0.01, waist_z, 0.01):
         near = marks.near(z)
         b, d = marks.section.outline(z, near), whole.outline(z, near)
-        if len(b) and len(d):
-            worst = max(worst, float(d[:, 1].max() - b[:, 1].max()))
-    gates.add("close", "figure rear", worst, REAR_OVER, worst <= REAR_OVER)
+        if len(b) and len(d) and float(d[:, 1].max() - b[:, 1].max()) > worst:
+            worst = float(d[:, 1].max() - b[:, 1].max())
+            where = round(float(z), 3)
+    gates.add("close", "figure rear", worst, REAR_OVER, worst <= REAR_OVER, at=where,
+              by=_outermost(meshes, where, (0.0, 1.0)) if where is not None else None)
 
     skin = _skin_tree(human)
     cloth = _tree_of([(motion.coords_posed(w.obj)[0], [list(f.vertices) for f in w.obj.data.polygons])
                       for w in garments]) if garments else None
     # The shoulders' top line: from the neck to the shoulder's point,
     # the cloth's top over the skin's.
-    worst = 0.0
+    # The shoulders' top line, as the front view sees it: at each x from
+    # beside the neck to past the shoulder's point, the highest the skin
+    # comes and the highest the cloth comes, over the shoulder's depth.
+    worst, where = 0.0, None
+    sh = marks.joint("l-shoulder")
+    depth = np.linspace(sh[1] - 0.07, sh[1] + 0.07, 15)
+
+    def highest(tree, x):
+        zs = [z for z in (_down(tree, x, y) for y in depth) if z is not None]
+        return max(zs) if zs else None
+
     if cloth is not None:
-        sh = marks.joint("l-shoulder")
         for x in np.linspace(0.07, sh[0] + 0.03, 12):
             for sign in (1, -1):
-                top = _down(skin, sign * x, sh[1])
-                over = _down(cloth, sign * x, sh[1])
-                if top is not None and over is not None:
-                    worst = max(worst, over - top)
-    gates.add("close", "figure top line", worst, TOP_LINE, worst <= TOP_LINE)
+                top = highest(skin, sign * x)
+                over = highest(cloth, sign * x)
+                if top is not None and over is not None and over - top > worst:
+                    worst, where = over - top, round(float(sign * x), 3)
+    top_by = None
+    if where is not None:
+        tops = {w.obj.name: highest(_tree_of([(motion.coords_posed(w.obj)[0], [list(f.vertices) for f in w.obj.data.polygons])]),
+                                    where) for w in garments}
+        top_by = max((k for k in tops if tops[k] is not None), key=lambda k: tops[k], default=None)
+    gates.add("close", "figure top line", worst, TOP_LINE, worst <= TOP_LINE, at=where, by=top_by)
 
     # Under the bust: a woman's fitted garment comes back toward her.
     fitted = [w for w in garments if (w.spec.get("params") or {}).get("fitted")]
@@ -422,6 +461,20 @@ def figure(gates, marks, human, meshes, worn, ease, version):
                 least = min(least, max(below) - at_bust)
         gates.add("close", "figure under the bust", least, BUST_RETURN, least >= BUST_RETURN)
     return bare, dressed
+
+
+def _outermost(meshes, z, direction):
+    """Of the meshes, the one whose section at z comes furthest along
+    direction (x, y)."""
+    from landmarks import Section
+
+    best, far = None, -math.inf
+    for o in meshes:
+        for out in Section.of_many([o]).outlines(z):
+            d = float(max(out @ np.array(direction)))
+            if d > far:
+                best, far = o.name, d
+    return best
 
 
 def _skin_tree(human):

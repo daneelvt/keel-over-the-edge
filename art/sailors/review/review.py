@@ -301,7 +301,7 @@ def upscale(img, k):
     return np.repeat(np.repeat(img, k, axis=0), k, axis=1)
 
 
-def views(r, fig, look, size=PANEL):
+def views(r, fig, look, size=PANEL * 3 // 2):
     """The look at rest from its named sides, and the face close."""
     fig.reset()
     centre, extent = bounds(figure_points(fig))
@@ -314,6 +314,20 @@ def views(r, fig, look, size=PANEL):
     head = fig.world("head").lerp(fig.world("head", "tail"), 0.5)
     r.look_at(head + Vector((0, -0.02, 0.0)), (0.25, -1, 0.05), 0.34, size)
     out.append(("face", r.render("TEXTURE")))
+    return out
+
+
+def faces(r, fig, look, size=2 * PANEL):
+    """The head close from the front, three-quarter and in profile, with
+    its hair and hat: what the picker and the portraits show."""
+    fig.reset()
+    look.use(look.look)
+    head = fig.world("head").lerp(fig.world("head", "tail"), 0.45)
+    out = []
+    for name, d in (("face front", (0, -1, 0)), ("face three-quarter", (0.6, -1, 0.08)),
+                    ("face profile", (1, 0, 0)), ("head behind", (0.35, 1, 0.25))):
+        r.look_at(head + Vector((0, -0.01, -0.01)), d, 0.3, size)
+        out.append((name, r.render("TEXTURE")))
     return out
 
 

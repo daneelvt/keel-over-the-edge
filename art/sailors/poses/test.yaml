@@ -4,7 +4,9 @@
 # through the clothes in any of them, and nothing through the boat in the
 # ones seated in it. They are a sailor's extremes, not its clips: standing,
 # seated at the helm, hiking, an arm raised, and the capsize's three
-# modes.
+# modes. Where the thighs lift, the skirt chains are keyed with them, as
+# the clips will key them: a coat's front panels over the thighs, its back
+# laid on the deck.
 #
 # A pose is turns of bones about the figure's own axes (x to its left, y
 # back, z up), in degrees, applied root first, each bone turning about its
@@ -42,6 +44,15 @@ poses:
       - [neck_01, z, -10]
       - [head, z, -18]
       - [head, x, -6]
+      # A coat's skirts: the front panels over the thighs, the sides
+      # spread on the deck fore and aft of the hips, the back laid on the
+      # deck behind.
+      - [skirt_front_l_01, x, -78]
+      - [skirt_front_r_01, x, -78]
+      - [skirt_side_l_01, y, 80]
+      - [skirt_side_r_01, y, -80]
+      - [skirt_back_l_01, x, 82]
+      - [skirt_back_r_01, x, 82]
     ik:
       hand_l: { at: tiller }
       hand_r: { at: sheet }
@@ -64,6 +75,12 @@ poses:
       - [neck_01, x, 14]
       - [head, x, 10]
       - [head, z, -20]
+      - [skirt_front_l_01, x, -82]
+      - [skirt_front_r_01, x, -82]
+      - [skirt_side_l_01, y, 80]
+      - [skirt_side_r_01, y, -80]
+      - [skirt_back_l_01, x, 70]
+      - [skirt_back_r_01, x, 70]
     ik:
       hand_l: { at: tiller-hiking }
       hand_r: { at: sheet-hiking }
@@ -94,6 +111,8 @@ poses:
       - [lowerarm_l, x, -20]
       - [lowerarm_r, x, -20]
       - [head, x, -10]
+      - [skirt_front_l_01, x, -30]
+      - [skirt_front_r_01, x, -14]
 
   on-board:
     turn:
@@ -126,6 +145,9 @@ poses:
       - [lowerarm_l, x, -30]
       - [lowerarm_r, x, -30]
       - [head, x, -20]
+      - [skirt_front_l_01, x, -100]
+      - [skirt_side_l_01, x, -45]
+      - [skirt_front_r_01, x, -8]
 
   # The far level's pose (build/lod.py): seated at the helm. Its seat is
   # judged on the boat like the others'.

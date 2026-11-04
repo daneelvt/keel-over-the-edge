@@ -39,15 +39,18 @@ PROXIES = os.path.join(os.path.dirname(HERE), "proxies")
 # Each proxy's triangles, and how strongly each region of the body keeps
 # its own (1 keeps all, 0 none): the face most, the head and hands next,
 # the feet least.
+# The lips and lids are kept whole: collapsed, the lips' inner curl
+# opened the mouth into a slit and the lids stood off the eyes.
 PROXY = {
-    "close": {"triangles": 5000, "keep": {"face": 0.9, "head": 0.6, "hands": 0.45, "body": 0.25, "feet": 0.0}},
+    "close": {"triangles": 6500, "keep": {"mouth": 1.0, "lids": 1.0, "face": 0.9, "head": 0.6, "hands": 0.45,
+                                          "body": 0.25, "feet": 0.0}},
 }
 
 # How much further the far level's cloth stands off the body.
 FAR_EASE = 0.01
 
 # How strongly the deck level keeps each region of the body.
-DECK_KEEP = {"face": 0.7, "head": 0.45, "hands": 0.2, "body": 0.2, "feet": 0.0}
+DECK_KEEP = {"mouth": 0.9, "lids": 0.9, "face": 0.7, "head": 0.45, "hands": 0.2, "body": 0.2, "feet": 0.0}
 
 # What a proxy's fit may be off the shape it was made in, in metres: its
 # file keeps four decimals.
@@ -104,8 +107,8 @@ def ensure_proxies():
 
 
 def regions(co, joint):
-    """Each vertex's region of a body: face, head, hands, feet or body, by
-    where MPFB's joint markers are (joint(name) gives one)."""
+    """Each vertex's region of a body: mouth, lids, face, head, hands, feet
+    or body, by where MPFB's joint markers are (joint(name) gives one)."""
     neck = joint("neck")[2]
     head = joint("head")
     eyes = (joint("l-eye") + joint("r-eye")) / 2
@@ -119,6 +122,14 @@ def regions(co, joint):
     # The face: in front of the head's joint, from the chin to the brow.
     face = (co[:, 2] > neck + 0.03) & (co[:, 1] < head[1] - 0.03) & (co[:, 2] < eyes[2] + 0.05)
     out[face] = "face"
+    # The lips: on the face's front, about 6.5 cm below the eyes (MPFB's
+    # mouth joint is the jaw's pivot, inside the head).
+    lips_z = eyes[2] - 0.065
+    middle = face & (np.abs(co[:, 0]) < 0.004) & (np.abs(co[:, 2] - lips_z) < 0.01)
+    lips = np.array([0.0, co[middle, 1].min() if middle.any() else eyes[1] - 0.03, lips_z])
+    out[face & (np.linalg.norm(co - lips, axis=1) < 0.024)] = "mouth"
+    for side in ("l", "r"):
+        out[face & (np.linalg.norm(co - joint(f"{side}-eye"), axis=1) < 0.019)] = "lids"
     return out
 
 
@@ -219,6 +230,22 @@ def decimate(obj, triangles_wanted, keep=None):
     apply(obj, mod)
     if keep is not None:
         obj.vertex_groups.remove(obj.vertex_groups["keep"])
+    clean(obj)
+
+
+def clean(obj):
+    """Drops what a collapse leaves of no area: faces, edges and vertices
+    with nothing to hold."""
+    bm = bmesh.new()
+    bm.from_mesh(obj.data)
+    bmesh.ops.dissolve_degenerate(bm, dist=1e-5, edges=bm.edges[:])
+    bmesh.ops.triangulate(bm, faces=[f for f in bm.faces if len(f.verts) > 3])
+    bmesh.ops.delete(bm, geom=[f for f in bm.faces if f.calc_area() < 1e-9], context="FACES")
+    bmesh.ops.delete(bm, geom=[e for e in bm.edges if not e.link_faces], context="EDGES")
+    bmesh.ops.delete(bm, geom=[v for v in bm.verts if not v.link_faces], context="VERTS")
+    bm.to_mesh(obj.data)
+    bm.free()
+    obj.data.update()
 
 
 def decimate_to(obj, mod, triangles_wanted):
@@ -263,16 +290,31 @@ def far(meshes, arm, triangles_wanted, posing, cloth=()):
     # Each collapse lands near its share, not on it; and leaves nothing
     # loose.
     decimate(obj, triangles_wanted)
-    bm = bmesh.new()
-    bm.from_mesh(obj.data)
-    bmesh.ops.delete(bm, geom=[e for e in bm.edges if not e.link_faces], context="EDGES")
-    bmesh.ops.delete(bm, geom=[v for v in bm.verts if not v.link_faces], context="VERTS")
-    bm.to_mesh(obj.data)
-    bm.free()
+    manifold(obj)
     for pb in arm.pose.bones:
         pb.matrix_basis.identity()
     arm.matrix_world.identity()
     return obj
+
+
+def manifold(obj):
+    """Where three faces share an edge, the smallest of them goes; and what
+    is left with no face."""
+    bm = bmesh.new()
+    bm.from_mesh(obj.data)
+    for _ in range(4):
+        over = [e for e in bm.edges if len(e.link_faces) > 2]
+        if not over:
+            break
+        for e in over:
+            if e.is_valid and len(e.link_faces) > 2:
+                extra = sorted(e.link_faces, key=lambda f: f.calc_area())[:len(e.link_faces) - 2]
+                bmesh.ops.delete(bm, geom=extra, context="FACES_ONLY")
+    bmesh.ops.delete(bm, geom=[e for e in bm.edges if not e.link_faces], context="EDGES")
+    bmesh.ops.delete(bm, geom=[v for v in bm.verts if not v.link_faces], context="VERTS")
+    bm.to_mesh(obj.data)
+    bm.free()
+    obj.data.update()
 
 
 def triangles(obj, evaluated=False, only=None):

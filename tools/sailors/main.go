@@ -7,6 +7,8 @@
 //
 //	go run ./tools/sailors              build every look
 //	go run ./tools/sailors -look test   build one look
+//	go run ./tools/sailors -look test -version female
+//	                                    build one version of it, while working on it
 //	go run ./tools/sailors -setup       check Blender, install MPFB and gltfpack, build nothing
 //	go run ./tools/sailors -vendor UAL1.glb -into quaternius -pack "..." -clips Idle_Loop,...
 //	                                    copy clips out of an animation library into vendor/
@@ -27,6 +29,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 
@@ -48,6 +51,7 @@ const (
 
 func main() {
 	look := flag.String("look", "", "build only this look (its file's name in "+looksDir+", without .yaml)")
+	only := flag.String("version", "", "with -look: build only this version ("+strings.Join(versions, " or ")+")")
 	setup := flag.Bool("setup", false, "check Blender and install MPFB and gltfpack, build nothing")
 	verbose := flag.Bool("v", false, "show everything Blender and MPFB print")
 	pack := flag.String("vendor", "", "copy clips out of this animation library's glTF binary into "+sailorsDir+"/"+vendorDir+", and build nothing")
@@ -70,13 +74,17 @@ func main() {
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer stop()
-	if err := run(ctx, *look, *setup, *verbose); err != nil {
+	if *only != "" && (*look == "" || !slices.Contains(versions, *only)) {
+		fmt.Fprintln(os.Stderr, "sailors: -version needs -look, and is "+strings.Join(versions, " or "))
+		os.Exit(2)
+	}
+	if err := run(ctx, *look, *only, *setup, *verbose); err != nil {
 		fmt.Fprintln(os.Stderr, "sailors:", err)
 		os.Exit(1)
 	}
 }
 
-func run(ctx context.Context, only string, setupOnly, verbose bool) error {
+func run(ctx context.Context, only, oneVersion string, setupOnly, verbose bool) error {
 	blender, err := findBlender(ctx)
 	if err != nil {
 		return err
@@ -123,6 +131,9 @@ func run(ctx context.Context, only string, setupOnly, verbose bool) error {
 		return err
 	}
 	for _, l := range looks {
+		if oneVersion != "" {
+			l.Versions = map[string]version{oneVersion: l.Versions[oneVersion]}
+		}
 		start := time.Now()
 		job := newJob(root, l, tables, sources, poses, gltfpack)
 		file, err := job.write(filepath.Join(workDir, "jobs"))

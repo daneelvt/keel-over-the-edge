@@ -89,12 +89,13 @@ function darkest(p: Picture, at: { x: number; y: number }): number {
 
 test('the test sailor stands and sits, skinned and posed on the GPU', async ({ page }) => {
   test.setTimeout(240_000);
-  await openRoom(page, 'view=lineup&black=1&t=1&clip=rest');
+  await openRoom(page, 'view=lineup&black=1&t=1&clip=rest&look=test');
 
   const figures = await page.evaluate(() => globalThis.dressing.figures());
   expect(figures.map((f) => `${f.look} ${f.version}`)).toEqual(['test female', 'test male']);
   for (const f of figures) {
-    expect(f).toMatchObject({ level: 'close', skinned: true, bones: 85, meshes: 3, inBoat: false });
+    // The body, its eyes, the shirt and the breeches.
+    expect(f).toMatchObject({ level: 'close', skinned: true, bones: 85, meshes: 4, inBoat: false });
   }
   expect(await page.evaluate(() => globalThis.dressing.problems())).toEqual([]);
 
@@ -160,7 +161,7 @@ test('the test sailor stands and sits, skinned and posed on the GPU', async ({ p
 
 test('the atlas takes the colours chosen, on the dome', async ({ page }) => {
   test.setTimeout(240_000);
-  await openRoom(page, 'view=lineup&t=1&main=9B2226');
+  await openRoom(page, 'view=lineup&t=1&main=9B2226&look=test');
   // The room 4.5 m down the dome, as in the first test: the sailor's own
   // material bends too.
   await page.evaluate(() => globalThis.dressing.dome(150, 0));
@@ -179,4 +180,37 @@ test('the atlas takes the colours chosen, on the dome', async ({ page }) => {
   expect(r).toBeGreaterThan(2 * g);
   const [r2 = 0, g2 = 0] = pixel(await show(page, { main: '2E7D6B' }));
   expect(g2).toBeGreaterThan(r2 + 30);
+});
+
+test('the Rover stands and sits in both versions, dressed, skinned and posed', async ({ page }) => {
+  test.setTimeout(240_000);
+  await openRoom(page, 'view=lineup&black=1&t=1&clip=rest&look=rover');
+
+  const figures = await page.evaluate(() => globalThis.dressing.figures());
+  expect(figures.map((f) => `${f.look} ${f.version}`)).toEqual(['rover female', 'rover male']);
+  for (const f of figures) {
+    // The body and eyes, hair and hat, ten garments, and the trims.
+    expect(f).toMatchObject({
+      level: 'close',
+      skinned: true,
+      bones: 85,
+      meshes: 15,
+      inBoat: false,
+    });
+  }
+  expect(await page.evaluate(() => globalThis.dressing.problems())).toEqual([]);
+  const parts = ['head', 'pelvis', 'hand_l', 'hand_r'];
+  for (const clip of ['rest', 'standing-idle']) {
+    const picture = await show(page, { clip });
+    for (const [name, at] of Object.entries(await bones(page, parts))) {
+      expect(darkest(picture, at), `${name}, ${clip}`).toBeLessThanOrEqual(DARK);
+    }
+  }
+  const helm = await show(page, { clip: 'helm-idle', t: 1 });
+  expect((await page.evaluate(() => globalThis.dressing.figures())).every((f) => f.inBoat)).toBe(
+    true,
+  );
+  for (const [name, at] of Object.entries(await bones(page, parts))) {
+    expect(darkest(helm, at), `${name} at the helm`).toBeLessThanOrEqual(DARK);
+  }
 });
