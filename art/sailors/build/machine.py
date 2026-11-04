@@ -1170,8 +1170,10 @@ def over_coat(job, v, arm, marks, worn):
     part = Part("plates", mats)
     shoulder_plates(part, arm, marks, tree, p["shoulders"], mats)
     part.mirror_left()
-    lantern(part, arm, marks, tree, p["lantern"], mats)
+    glass = lantern(part, arm, marks, tree, p["lantern"], mats)
     obj = part.object(arm)
+    # Where the lantern's light is: the game hangs its glow there.
+    obj["lantern"] = tuple(glass)
     return garment.Worn(obj, "plate", {"id": "plates", "region": "skin", "params": {}}, None)
 
 
@@ -1222,7 +1224,8 @@ def shoulder_plates(part, arm, marks, coat, s, mats):
 def lantern(part, arm, marks, coat, c, mats):
     """A lantern at the nape, standing on the coat's collar: one solid, its
     base and roof metal, posts of dark iron at its corners and panes of
-    glass between them, glowing; its top above the shoulder line."""
+    glass between them, glowing; its top above the shoulder line. Returns
+    the glass's middle."""
     nb = arm.data.bones["neck_01"]
     h = nb.head_local
     at = Vector((0, h.y + c["back"], h.z + c["up"]))
@@ -1260,6 +1263,7 @@ def lantern(part, arm, marks, coat, c, mats):
             part.face([rings[k - 1][i], rings[k - 1][j], rings[k][j], rings[k][i]], mat)
     part.fan(rings[0], at - Vector((0, 0, 0.006)), mats.metal, bone, flip=True)
     part.fan(rings[-1], at + Vector((0, 0, height + c["roof"])), mats.metal, bone)
+    return at + Vector((0, 0, height / 2))
 
 
 class _Rods:

@@ -16,6 +16,8 @@ versions:
     base: male
     machine:
       head:
+        # His face is broader: more of it to carve.
+        triangles: 820
         cap:
           strips: 5
           spread: 40

@@ -11,7 +11,7 @@ import time
 
 import bpy
 import numpy as np
-from mathutils import Matrix
+from mathutils import Matrix, Vector
 
 import atlas
 import body
@@ -311,8 +311,14 @@ def build_version(job, v, run):
             fig.reset()
         lap(f"{level} level")
         path = os.path.join(out, f"{v}{'' if level == 'close' else '.' + level}.glb")
+        places = {"place": far_place} if level == "far" else None
+        if machine and level != "far":
+            # Where the machine's lantern is, at rest: the game hangs its
+            # glow there.
+            lamp = next(o for o in meshes if "lantern" in o)
+            places = {"place-lantern": Matrix.Translation(Vector(lamp["lantern"]))}
         tris = export.write(path, meshes, arm if level != "far" else None, export.material(base_png), mask_png,
-                            job["gltfpack"], work, {"place": far_place} if level == "far" else None)
+                            job["gltfpack"], work, places)
         levels[level] = {"triangles": tris, "figure": sum(tris.values()), "bytes": os.path.getsize(path)}
         gltf, _ = export.read(path)
         lap("export")

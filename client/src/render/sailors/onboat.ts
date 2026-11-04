@@ -16,6 +16,7 @@ import {
   BufferAttribute,
   BufferGeometry,
   type Color,
+  DoubleSide,
   type Group,
   Matrix4,
   Mesh,
@@ -27,9 +28,11 @@ import type { WebGPURenderer } from 'three/webgpu';
 import type { Boat as BoatKind } from '../../catalog';
 import type { BoatPose } from '../../predict/blend';
 import { RECORDS } from '../../predict/layout.gen';
-import { litMaterial } from '../materials';
+import { dot, float, mix, saturate, uniform, uv, vec3, vec4 } from 'three/tsl';
+import type { Node } from 'three/webgpu';
+import { fallToEdge, glowMaterial, litMaterial } from '../materials';
 import { Clip } from './clips';
-import { sailorColours } from './material';
+import { sailorColours, sailorLight } from './material';
 import { loadClips, loadSailor, type SailorModel } from './model';
 import { bonesFor, Rig } from './rig';
 import { type SailorBoat, type SailorMoment, SailorRuntime } from './runtime';
@@ -86,6 +89,12 @@ export class BoatSailor {
   readonly #ropePoints = [new Vector3(), new Vector3(), new Vector3()];
   readonly #still: boolean;
   readonly #machine: boolean;
+  /** A machine's lantern's glow, where its file puts the lantern; and the lantern at rest against its bone. */
+  readonly #glow: Mesh | null = null;
+  readonly #glowStrength = uniform(1);
+  readonly #lantern = new Vector3();
+  readonly #lanternBone: number = -1;
+  readonly #lanternRest = new Matrix4();
   #time = 0;
 
   private constructor(
@@ -115,6 +124,20 @@ export class BoatSailor {
     model.add(deck.root);
     this.#rope = rope();
     model.add(this.#rope);
+    const lantern = deck.places.get('place-lantern');
+    if (machine && lantern !== undefined) {
+      // The lantern's place against its bone (the back's) at rest: it
+      // moves with the bone.
+      this.#lanternBone = rig.bone(LANTERN_BONE);
+      rig.reset();
+      rig.fk();
+      this.#lanternRest
+        .fromArray(rig.world, 16 * this.#lanternBone)
+        .invert()
+        .multiply(lantern);
+      this.#glow = lanternGlow(deck.meshes[0]?.userData.hair as Color, this.#glowStrength);
+      model.add(this.#glow);
+    }
     this.#still =
       typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
     this.#moment = {
@@ -217,6 +240,9 @@ export class BoatSailor {
   set shown(on: boolean) {
     this.#shown = on;
     this.#rope.visible = on;
+    if (this.#glow !== null) {
+      this.#glow.visible = on;
+    }
     this.#levels();
   }
 
@@ -269,6 +295,12 @@ export class BoatSailor {
     const rt = this.runtime;
     rt.update(mo);
     if (this.#machine) {
+      this.#glowStrength.value = rt.glow;
+      if (this.#glow !== null) {
+        // The bone now, times the lantern against it, into the model.
+        m.fromArray(this.rig.world, 16 * this.#lanternBone).multiply(this.#lanternRest);
+        this.#glow.position.setFromMatrixPosition(m).applyMatrix4(rt.root);
+      }
       for (const m of this.#deck.meshes) {
         m.userData.glow = rt.glow;
       }
@@ -320,6 +352,63 @@ export class BoatSailor {
     }
     tube(this.#rope.geometry, this.#ropePoints, ROPE_RADIUS);
   }
+}
+
+/** The bone a machine's lantern rides on. */
+const LANTERN_BONE = 'spine_03';
+/** The lantern's glow: its size, metres, and its strength by day and by night. */
+const GLOW_SIZE = 0.3;
+const GLOW_DAY = 0.12;
+const GLOW_NIGHT = 0.9;
+/** The main light's brightness at and above which it is full day. */
+const DAYLIGHT = 1.5;
+
+/**
+ * A lantern's glow: three squares crossed at its middle, so it shows from
+ * every side, each a soft disc added to the picture (the factory's glow:
+ * no fog), in the lamps' light, as strong as strength (their pulse), and
+ * stronger by night.
+ */
+function lanternGlow(colour: Color, strength: Node<'float'>): Mesh {
+  const g = new BufferGeometry();
+  const h = GLOW_SIZE / 2;
+  const pos: number[] = [];
+  const uvs: number[] = [];
+  const index: number[] = [];
+  const corners = [
+    [-1, -1],
+    [1, -1],
+    [1, 1],
+    [-1, 1],
+  ] as const;
+  for (let k = 0; k < 3; k++) {
+    const base = pos.length / 3;
+    for (const [a, b] of corners) {
+      const [u, v] = [a * h, b * h];
+      // The squares across x, y and z.
+      pos.push(...(k === 0 ? [0, u, v] : k === 1 ? [u, 0, v] : [u, v, 0]));
+      uvs.push((a + 1) / 2, (b + 1) / 2);
+    }
+    index.push(base, base + 1, base + 2, base, base + 2, base + 3);
+  }
+  g.setAttribute('position', new BufferAttribute(new Float32Array(pos), 3));
+  g.setAttribute('uv', new BufferAttribute(new Float32Array(uvs), 2));
+  g.setIndex(index);
+  const m = glowMaterial();
+  m.name = 'machine lantern';
+  m.side = DoubleSide;
+  const at = uv().sub(0.5).mul(2);
+  const main = sailorLight.main as unknown as Node<'vec3'>;
+  const day = saturate(dot(main, vec3(0.2126, 0.7152, 0.0722)).div(DAYLIGHT));
+  const k = strength
+    .mul(mix(float(GLOW_NIGHT), float(GLOW_DAY), day))
+    .mul(fallToEdge(dot(at, at), 4));
+  m.fragmentNode = vec4(vec3(colour.r, colour.g, colour.b).mul(k), 1) as unknown as Node<'vec4'>;
+  const mesh = new Mesh(g, m);
+  mesh.name = 'machine lantern';
+  mesh.frustumCulled = false;
+  mesh.renderOrder = 1;
+  return mesh;
 }
 
 /** Where a node is in the model's frame, from the local transforms between them. */
