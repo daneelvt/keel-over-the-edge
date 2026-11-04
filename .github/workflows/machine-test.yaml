@@ -43,6 +43,15 @@ jobs:
         run: go build -o .dev/bin/machine ./tools/machine
       - name: Ansible, from hashed requirements
         run: .dev/bin/machine -ansible
+      - name: DEBUG state.yaml by hand
+        working-directory: infra/ansible
+        run: |
+          set -x
+          ls -la . inventory | head -30
+          sudo env ANSIBLE_CONFIG=$PWD/ansible.cfg ANSIBLE_NOCOLOR=1 ANSIBLE_FORCE_COLOR=0 ../../.dev/ansible/bin/ansible-playbook state.yaml --inventory inventory/runner.yaml -vvv < /dev/null 2>&1 | tail -60; echo "rc=${PIPESTATUS[0]}"
+          sudo env ANSIBLE_CONFIG=$PWD/ansible.cfg ../../.dev/ansible/bin/ansible-playbook --version 2>&1; echo rc=$?
+          head -3 ../../.dev/ansible/bin/ansible-playbook; sudo -V | head -2
+        continue-on-error: true
       - name: The playbook on this runner, the first time
         run: .dev/bin/machine -run apply -local
       - name: The playbook again, which must change nothing
