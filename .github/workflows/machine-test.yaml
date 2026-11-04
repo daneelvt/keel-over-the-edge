@@ -48,6 +48,12 @@ jobs:
       # the files Ansible's module runs from, and lose the module's result.
       - name: /tmp in memory, as Ubuntu has it
         run: sudo systemctl unmask tmp.mount && sudo systemctl start tmp.mount
+      # The runner's image has Firefox, which the machine has not: a stub
+      # that pre-depends on snapd. The updates role starts apt's daily
+      # upgrade, which upgrades it and brings back the snapd the base role
+      # purged, restarting systemd's services under the playbook.
+      - name: Firefox, the image's and not the machine's, goes
+        run: sudo apt-get purge --yes --quiet firefox
       - name: The playbook on this runner, the first time
         run: .dev/bin/machine -run apply -local
       - name: The playbook again, which must change nothing
@@ -56,3 +62,17 @@ jobs:
         run: .dev/bin/machine -verify -local
       - name: Lynis, with no warning not accepted; kube-bench, a report
         run: .dev/bin/machine -audit -local
+      # The runner runs apt's daily update and upgrade alongside the
+      # playbook, and a failure can hang on what they did meanwhile; verify
+      # waits on Flux, which says what it waits on.
+      - name: On a failure, what apt, systemd and Flux did
+        if: failure()
+        run: |
+          sudo cut -c1-400 /var/log/apt/history.log || true
+          sudo journalctl --no-pager -o short-precise --since '-30min' \
+            | grep -iE 'systemd\[1\]|dbus|reexec|unattended|apt' | tail -200 || true
+          if command -v k3s >/dev/null; then
+            sudo k3s kubectl get kustomizations,helmreleases -A || true
+            sudo k3s kubectl get pods -A | grep -vE 'Running|Completed' || true
+            sudo k3s kubectl get events -A --sort-by=.lastTimestamp | tail -40 || true
+          fi

@@ -4,3 +4,10 @@
     name: systemd-journal-upload
     state: restarted
     daemon_reload: true
+
+# A changed program's facts at once, not at the timer's next turn: verify
+# reads the file straight after apply.
+- name: Gather the facts again  # noqa: command-instead-of-module (a oneshot: started by the module, it would change on every run)
+  ansible.builtin.command:
+    cmd: systemctl start keel-machine-facts.service
+  changed_when: true
