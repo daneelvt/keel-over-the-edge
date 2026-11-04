@@ -50,14 +50,17 @@ jobs:
         run: sudo systemctl unmask tmp.mount && sudo systemctl start tmp.mount
       - name: The playbook on this runner, the first time
         run: .dev/bin/machine -run apply -local
-      - name: DEBUG journal
-        if: failure()
-        run: |
-          sudo cat /var/log/apt/history.log | grep -v '^Upgrade:' || true
-          sudo journalctl --no-pager -o short-precise --since '-4min' | grep -iE 'systemd\[1\]|dbus|reexec|reload|journal-upload|unattended|apt' | tail -120 || true
       - name: The playbook again, which must change nothing
         run: .dev/bin/machine -run apply -local -unchanged
       - name: The runner is as the playbook leaves it; Flux follows the real prod
         run: .dev/bin/machine -verify -local
       - name: Lynis, with no warning not accepted; kube-bench, a report
         run: .dev/bin/machine -audit -local
+      # The runner runs apt's daily update and upgrade alongside the
+      # playbook, and a failure can hang on what they did meanwhile.
+      - name: On a failure, what apt and systemd did
+        if: failure()
+        run: |
+          sudo grep -v '^Upgrade:' /var/log/apt/history.log || true
+          sudo journalctl --no-pager -o short-precise --since '-30min' \
+            | grep -iE 'systemd\[1\]|dbus|reexec|unattended|apt' | tail -200 || true
