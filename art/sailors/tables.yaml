@@ -1,0 +1,43 @@
+# SPDX-License-Identifier: LicenseRef-All-Rights-Reserved
+#
+# The tables every sailor is built by, so that twenty of them are alike
+# where they should be: one ease table, one budget table, one atlas.
+
+# How far each layer of clothing stands off what is under it, in metres,
+# when it is pushed out from the body.
+ease:
+  shirt: 0.008
+  breeches: 0.010
+  waistcoat: 0.016
+  coat: 0.024
+  sash: 0.030
+
+# The most triangles a mesh may have at each level: the body, each
+# garment, the hair and the hat; and the whole figure. The close body is
+# its proxy with what the clothes cover taken out; the deck level is the
+# close one collapsed mesh by mesh; the far level is one rigid mesh.
+budgets:
+  close:
+    body: 5000
+    garment: 4000
+    hair: 1000
+    hat: 1000
+    figure: 9000
+  deck:
+    body: 1300
+    garment: 350
+    hair: 250
+    hat: 250
+    figure: 2100
+  far:
+    figure: 300
+
+# The atlas: its size at each level, the margin round its islands in
+# pixels at the close level, and the share of what its islands cover that
+# the face and head take.
+atlas:
+  close: 1024
+  deck: 512
+  far: 128
+  margin: 6
+  head: 0.37

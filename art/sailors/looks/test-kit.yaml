@@ -1,0 +1,64 @@
+# SPDX-License-Identifier: LicenseRef-All-Rights-Reserved
+#
+# The build's second check: what the plain test sailor does not wear, made
+# by the same machinery a look's will be. A cocked hat from the hat
+# profiles (a crown and a three-cornered brim turned up), hair from the
+# generator (combed back and gathered into a short queue on the spring
+# joints), and tails hung from the waist (a loft flared to the sides and
+# back, fan pleats at the sides, a back vent, on the skirt chains). Not a
+# look the game offers, and nothing about it is the period's cut: built
+# into .dev.
+id: test-kit
+name: Test kit
+committed: false
+versions:
+  female:
+    base: female
+garments:
+  - id: tails
+    family: skirt
+    region: fixed
+    colour: "#1F3A63"
+    params:
+      layer: coat
+      skirt: true
+      rise: -0.02
+      length: 0.42
+      flare: { front: 0.02, side: 0.25, back: 0.2 }
+      pleats: { azimuths: [90, -90], count: 4, depth: 0.012, spread: 0.5, apex: 0.25 }
+      vent: { azimuth: 180, start: 0.35, lap: 0.008 }
+hair:
+  id: queue
+  family: hair
+  region: hair
+  params:
+    comb: back
+    volume: 0.012
+    length: 0.16
+    gather: [0, 0.09, -0.06]
+    tail: 0.12
+    strands: 140
+    thickness: 0.014
+hat:
+  id: cocked-hat
+  family: hat
+  region: fixed
+  colour: "#1E1E1E"
+  params:
+    seat: 0.035
+    crown: [[1.0, 0.0], [1.03, 0.05], [0.95, 0.09], [0.55, 0.12]]
+    brim:
+      {
+        width: 0.08,
+        outline: polygon,
+        corners: 3,
+        round: 0.3,
+        lift: up,
+        height: 0.07,
+        power: 1.5,
+        pull: 0.5,
+      }
+palette:
+  main: "#E6DCC3"
+  skin: "#946145"
+  hair: "#251E1C"

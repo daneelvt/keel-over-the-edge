@@ -46,7 +46,65 @@ along each ribbon) in their texture coordinates, and the client shapes them
 on the GPU.
 
 A sailor's nodes are `body`, `head`, `arm-left` and `arm-right`; its origin
-is at the hips, where it sits, facing +x.
+is at the hips, where it sits, facing +x. (That is the stand-in's; the
+sailors made in Blender, below, are not yet drawn.)
+
+## Sailors in Blender
+
+The sailors are people, so they are made from a human body that deforms,
+not from tubes: MPFB's human (CC0, in Blender), shaped, rigged, dressed and
+packed by Python under `blender -b`, by script and nothing by hand:
+
+```sh
+go run ./tools/sailors              # or: cd client && npm run art:sailors
+go run ./tools/sailors -look test   # one look
+go run ./tools/sailors -setup       # check Blender, install MPFB and gltfpack
+```
+
+It needs Blender 5.2 LTS installed; the first run installs the pinned MPFB
+into `.dev/blender` (a Blender profile of the build's own) and the pinned
+gltfpack into `.dev`. CI does not run it: what it builds is committed.
+
+- `looks/<look>.yaml`: a look in both versions, a woman and a man: each
+  version's base and its own macros and targets, the garments, hair and
+  hat with their parameters, the colours it is shown in. `committed:
+  false` marks the build's own checks (`test`, `test-kit`), built into
+  `.dev/sailors`.
+- `bases.yaml`: the two bodies every look varies, with the measurements
+  every build asserts (height, heads, the widths' ratios).
+- `tables.yaml`: the ease of each layer of clothing, the triangle budgets
+  of each mesh and level, the atlas.
+- `build/`: the build. `main.py` is what Blender runs; `sailor.py` makes a
+  look; `mpfbx.py` calls MPFB and keeps the order (shape, rig, bones,
+  proxy, garments, export, never refit); `body.py`, `landmarks.py`,
+  `rig.py`, `lod.py`, `garment.py`, `hair.py`, `profiles.py` (hats),
+  `atlas.py`, `export.py`; `inputs.py` refuses an input not in
+  `SOURCES.md`.
+- `proxies/`, `garments/<look>/`: what the build makes once and keeps (the
+  close body and each garment as MPFB's `.proxy` and `.mhclo`, with their
+  `.obj`): matching them to the body takes tens of seconds, fitting them
+  a fraction of one. Each names in its header what it was made from, and
+  is made again when that changes.
+- `SOURCES.md`: every input not the game's own, with its licence and
+  SHA-256; `vendor/` the files among them. Only CC0.
+- `snippets.md`: Blender 5.2's API as it was found to work.
+
+A look's files are `<version>.glb` (close: the picker, the portraits and
+the own boat near the camera), `<version>.deck.glb` (the boats near) and
+`<version>.far.glb` (the fleet far off). Close and deck are skinned to one
+skeleton of 85 bones, the same in every file and order (`rig.py`: MPFB's
+game_engine bones in Unreal's names, a jaw, eyes and lids, a corrector at
+each hip that turns half as far as the thigh, a twist bone in each
+forearm, `pendant` at the breastbone, six two-bone `skirt_*` chains and
+eight `spring_*` joints), four weights a vertex, no morph targets; the
+far level is one rigid mesh, posed seated. Each mesh is named (`body` and
+each garment's, hair's and hat's id). One material, `sailor`: its base
+colour the atlas, the parts a sailor chooses the colour of stored as
+neutral grey (0.5, linear) to be multiplied by twice the colour chosen;
+its occlusion texture the mask, red the main colour's region, green the
+skin's, blue the hair's, alpha metal (read as the mask, never as
+occlusion). The figure faces +z, y up, its origin on the ground between
+its feet, in metres.
 
 ## Towns
 

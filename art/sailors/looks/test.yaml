@@ -1,0 +1,36 @@
+# SPDX-License-Identifier: LicenseRef-All-Rights-Reserved
+#
+# The test sailor: a bald body in a plain shirt and breeches, both
+# versions on their bases. The build's own check, not a look the game
+# offers, so it is built into .dev, not beside the art.
+id: test
+name: Test sailor
+committed: false
+versions:
+  female:
+    base: female
+  male:
+    base: male
+garments:
+  # Linen, in the main colour: to the hips, tucked in, the sleeves to the
+  # wrist with a band.
+  - id: shirt
+    family: shirt
+    region: main
+    params:
+      sleeve: 0.92
+      bands:
+        - { at: ends, height: 0.035, out: 0.004 }
+  # Brown wool over the shirt, a waistband and bands below the knee.
+  - id: breeches
+    family: breeches
+    region: fixed
+    colour: "#4A3B2E"
+    params:
+      bands:
+        - { at: top, height: 0.035, out: 0.004 }
+        - { at: bottom, height: 0.03, out: 0.004 }
+palette:
+  main: "#E6DCC3"
+  skin: "#B2815F"
+  hair: "#413129"
