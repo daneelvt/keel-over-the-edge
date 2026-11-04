@@ -798,6 +798,7 @@ export interface SailorColours {
  * via the `definition` "Machine".
  */
 export interface Machine {
+  drawn: SailorArt1;
   /**
    * The machine's versions.
    *
@@ -816,6 +817,28 @@ export interface Machine {
    * @minItems 1
    */
   colours: [MachineChoice, ...MachineChoice[]];
+}
+/**
+ * A sailor's art.
+ */
+export interface SailorArt1 {
+  /**
+   * The sailor's deck level: a glTF binary of skinned meshes on the shared skeleton, with its atlas and mask, drawn on the boat in view.
+   */
+  model: string;
+  /**
+   * The sailor's far level: one rigid figure posed seated at the helm, with the place node that seats it in the boat model; drawn in the fleet.
+   */
+  far: string;
+  /**
+   * The sailor's close level, drawn on the boat in view when the camera is near.
+   */
+  close: string;
+  /**
+   * The sailor's clips: the skeleton with its animations, and a place node for each clip seated in the boat.
+   */
+  clips: string;
+  colours: SailorColours;
 }
 /**
  * This interface was referenced by `Catalog`'s JSON-Schema
@@ -6488,4 +6511,4 @@ export interface SailorColours1 {
 }
 
 /** The catalog version (tools/catalog). */
-export const CATALOG_VERSION = '893c3124859fc482';
+export const CATALOG_VERSION = 'b439e6e4bd45b787';

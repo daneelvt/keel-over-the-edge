@@ -22,6 +22,7 @@ import hair
 import inputs
 import landmarks
 import lod
+import machine as machines
 import metrics
 import motion
 import mpfbx
@@ -114,38 +115,52 @@ def build_version(job, v, run):
     arm = rig.make(human, work, order)
     rig.add_bones(human, arm, order)
 
-    # The close body, and the clothes over it.
-    order.step("proxy")
-    skin = lod.fit(human, "close", rigged=True)
-    skin.name = skin.data.name = "body"
-    garment.mirror(skin)
-    order.step("garments")
-    worn = garment.dress(job, v, human, arm, marks, work)
-    hidden = garment.hide(human, skin, worn)
-    # The hair and the hat, over the rest.
-    hair_spec = version.get("hair") or look.get("hair")
-    if hair_spec:
-        # Under a hat the hair is pressed flat, so the hat fits the head.
-        under_hat = profiles.seat(human, marks, look["hat"]["params"].get("seat", 0.0)) if look.get("hat") else None
-        h = hair.make(hair_spec, human, marks, arm, budgets["close"]["hair"], under_hat, skin)
-        worn.append(garment.Worn(h, "hair", hair_spec, None))
-    if look.get("hat"):
-        h = profiles.make(look["hat"], human, marks, arm)
-        worn.append(garment.Worn(h, "hat", look["hat"], None))
-    # The trims on the fitted garments.
-    if look.get("trims"):
-        t, mirrored = trims.make(look["trims"], worn, arm, marks)
-        worn.append(garment.Worn(t, "prop", {"id": "trims", "region": "fixed",
-                                             "params": {"asymmetric": not mirrored}}, None))
-    # The eyes and lashes; the skin's paint is given with its material.
-    looks_face = _merged(base.get("face") or {}, version.get("face") or {})
-    parts, eyes_at = face.make(looks_face, human, arm, budgets["close"].get("face", 0))
-    for o in parts:
-        worn.append(garment.Worn(o, "face", {"id": o.name, "region": "fixed"}, None))
-    face.paint_skin_uv(skin)
-    lap("body, rig, garments")
+    machine = bool(look.get("machine"))
+    if machine:
+        # A machine: its plates, frame and head on the skeleton, its coat
+        # over them and what lies on the coat.
+        order.step("proxy")
+        skin, worn = machines.make(job, v, human, arm, marks)
+        order.step("garments")
+        worn += garment.dress(job, v, human, arm, marks, work)
+        worn.append(machines.over_coat(job, v, arm, marks, worn))
+        hidden = 0
+        looks_face = {}
+        lap("body, rig, garments")
+    else:
+        # The close body, and the clothes over it.
+        order.step("proxy")
+        skin = lod.fit(human, "close", rigged=True)
+        skin.name = skin.data.name = "body"
+        garment.mirror(skin)
+        order.step("garments")
+        worn = garment.dress(job, v, human, arm, marks, work)
+        hidden = garment.hide(human, skin, worn)
+        # The hair and the hat, over the rest.
+        hair_spec = version.get("hair") or look.get("hair")
+        if hair_spec:
+            # Under a hat the hair is pressed flat, so the hat fits the head.
+            under_hat = profiles.seat(human, marks, look["hat"]["params"].get("seat", 0.0)) if look.get("hat") else None
+            h = hair.make(hair_spec, human, marks, arm, budgets["close"]["hair"], under_hat, skin)
+            worn.append(garment.Worn(h, "hair", hair_spec, None))
+        if look.get("hat"):
+            h = profiles.make(look["hat"], human, marks, arm)
+            worn.append(garment.Worn(h, "hat", look["hat"], None))
+        # The trims on the fitted garments.
+        if look.get("trims"):
+            t, mirrored = trims.make(look["trims"], worn, arm, marks)
+            worn.append(garment.Worn(t, "prop", {"id": "trims", "region": "fixed",
+                                                 "params": {"asymmetric": not mirrored}}, None))
+        # The eyes and lashes; the skin's paint is given with its material.
+        looks_face = _merged(base.get("face") or {}, version.get("face") or {})
+        parts, eyes_at = face.make(looks_face, human, arm, budgets["close"].get("face", 0))
+        for o in parts:
+            worn.append(garment.Worn(o, "face", {"id": o.name, "region": "fixed"}, None))
+        face.paint_skin_uv(skin)
+        lap("body, rig, garments")
     # What cannot be seen, buried; and the dressed figure measured.
-    buried = {"close": garment.bury_all(skin, worn, tables["ease"])}
+    bury = machines.bury if machine else garment.bury_all
+    buried = {"close": bury(skin, worn, tables["ease"])}
     # Nothing hidden may darken the bake: the base mesh is not drawn.
     human.hide_render = True
     meshes = [skin] + [g.obj for g in worn]
@@ -154,23 +169,26 @@ def build_version(job, v, run):
     # The atlas.
     size = tables["atlas"]["close"]
     margin = tables["atlas"]["margin"]
-    # The mouth's inside, hidden by the closed lips, goes.
-    face.lips_at(skin, marks)
-    face.close_mouth(skin)
-    region = lod.regions(body.coords(skin), marks.joint)
-    head_faces = {skin: _faces_in(skin, np.isin(region, ("mouth", "lids", "face", "head")))}
+    head_faces = {}
+    if not machine:
+        # The mouth's inside, hidden by the closed lips, goes.
+        face.lips_at(skin, marks)
+        face.close_mouth(skin)
+        region = lod.regions(body.coords(skin), marks.joint)
+        head_faces[skin] = _faces_in(skin, np.isin(region, ("mouth", "lids", "face", "head")))
     for w in worn:
-        if w.kind == "face":
+        if w.kind in ("face", "head"):
             head_faces[w.obj] = np.ones(len(w.obj.data.polygons), bool)
     unfolded = {}
     for o in meshes:
         atlas.prepare(o)
         unfolded[o.name] = atlas.untangle(o)
 
-    skin.data.materials.clear()
-    skin.data.materials.append(atlas.part(bpy.data.materials.new("skin"), region="skin"))
-    face.paint_skin(skin.data.materials[0], eyes_at, looks_face)
-    share = atlas.layout(meshes, head_faces, tables["atlas"]["head"], margin / size)
+    if not machine:
+        skin.data.materials.clear()
+        skin.data.materials.append(atlas.part(bpy.data.materials.new("skin"), region="skin"))
+        face.paint_skin(skin.data.materials[0], eyes_at, looks_face)
+    share = atlas.layout(meshes, head_faces, look.get("atlas-head", tables["atlas"]["head"]), margin / size)
     base_px, mask_px = atlas.bake(meshes, size, margin)
     hair.drop_details()
 
@@ -224,7 +242,7 @@ def build_version(job, v, run):
             # Shared by what each mesh had, the hat and hair counting for
             # more (they make the silhouette at a distance), each within its
             # own kind's and never so few it loses its shape.
-            weight = {"hat": 1.8, "hair": 1.5, "face": 0.5}
+            weight = {"hat": 1.8, "hair": 1.5, "face": 0.5, "plate": 1.8, "head": 1.2}
             def deck_weight(kind, spec=None):
                 return weight.get(kind, 1.0) * ((spec or {}).get("params") or {}).get("deck-weight", 1.0)
 
@@ -247,8 +265,17 @@ def build_version(job, v, run):
                 bpy.data.objects.remove(g.obj, do_unlink=True)
             fig.meshes = meshes
             for g in worn:
-                lod.decimate(g.obj, deck_share(g.obj, g.kind, g.spec))
-            buried["deck"] = garment.bury_all(skin, worn, tables["ease"])
+                # A machine's head keeps its face as a body keeps its own.
+                at = (np.vectorize(lod.DECK_KEEP.get)(lod.regions(body.coords(g.obj), marks.joint))
+                      if g.kind == "head" else machines.deck_keep(g.obj) if g.kind == "plate" else None)
+                lod.decimate(g.obj, deck_share(g.obj, g.kind, g.spec), at)
+            if machine:
+                # A machine's small fittings, collapsed this far, are specks
+                # apart from what they were on: they go.
+                for o in meshes:
+                    if o is not skin:
+                        garment.drop_fragments(o, 16)
+            buried["deck"] = bury(skin, worn, tables["ease"])
             for o in meshes:
                 rig.limit_weights(o, rig.bone_names(arm))
                 unfolded[o.name + " deck"] = atlas.untangle(o)
@@ -259,6 +286,10 @@ def build_version(job, v, run):
             for o in meshes:
                 if o.name not in declared:
                     garment.mirror(o, 0.03, greedy=True)
+                if machine:
+                    # A collapse of a machine's parts touching may join
+                    # three faces on an edge.
+                    lod.manifold(o)
         if level == "far":
             # The eyes are nothing at that distance.
             far = lod.far([o for o in meshes if kinds.get(o.name) != "face"], arm, budgets["far"]["figure"],
@@ -304,7 +335,7 @@ def build_version(job, v, run):
             metrics.floating(gates, level, meshes, kinds)
         sizes[level] = metrics.file(gates, level, path, gltf, [o.name for o in meshes], skeleton,
                                     tables["sizes"]["close"] if level == "close" else None)
-        if level == "close":
+        if level == "close" and not machine:
             metrics.figure(gates, marks, human, meshes, worn, tables["ease"], v)
         if level != "far":
             maps = metrics.poses(gates, level, fig, lib, worn, tables["ease"], POSES)
@@ -374,14 +405,21 @@ def build_version(job, v, run):
 def make_clips(job, v, fig, lib, kinds, gates, renderer, lookmat, work):
     """The look's clips, made or retargeted on this version, judged, drawn
     and exported together. Returns each clip's measures."""
-    # A clip made on both sides is two.
+    # A clip made on both sides is two; each is written under the name the
+    # game asks for it by.
     names = [n for c in job["look"].get("clips") or [] for n in (c, c + motion.PORT) if n in lib.clips or n == c]
+    called = job["look"].get("names") or {}
+
+    def as_(n):
+        base = n[:-len(motion.PORT)] if n.endswith(motion.PORT) else n
+        return called.get(base, base) + n[len(base):]
+
     if not names:
         return {}
     judge = _motion_gate()
     m = lib.motion
     fig.reset()
-    proxies = judge.proxies(fig, kinds)
+    proxies = judge.proxies(fig, kinds, ("pelvis",) if job["look"].get("machine") else ())
     out = {}
     actions = []
     places = {}
@@ -392,10 +430,10 @@ def make_clips(job, v, fig, lib, kinds, gates, renderer, lookmat, work):
         else:
             clip = retarget.retarget(fig, name, lib.retargets[name], m["fps"])
         made = time.time() - start
-        act, slot = motion.write_action(fig.arm, name, clip.frames, clip.fps)
+        act, slot = motion.write_action(fig.arm, as_(name), clip.frames, clip.fps)
         actions.append((act, slot))
         fig.made[name] = (act, slot, clip)
-        places[f"place-{name}"] = clip.place.copy()
+        places[f"place-{as_(name)}"] = clip.place.copy()
         fig.quiet()
         measures, track = judge.check(fig, clip, act, slot, m["gate"], m["ranges"], proxies)
         fig.quiet(False)
@@ -411,7 +449,7 @@ def make_clips(job, v, fig, lib, kinds, gates, renderer, lookmat, work):
     motion.export(path, fig.arm, actions, job["gltfpack"], work, places)
     clip_seat(gates, "close", fig, out)
     gltf, _ = export.read(path)
-    metrics.file(gates, "clips", path, gltf, [], job["tables"]["skeleton"], None, clips=names)
+    metrics.file(gates, "clips", path, gltf, [], job["tables"]["skeleton"], None, clips=[as_(n) for n in names])
     metrics.skeleton(gates, "clips", gltf, job["tables"]["skeleton"])
     return out
 

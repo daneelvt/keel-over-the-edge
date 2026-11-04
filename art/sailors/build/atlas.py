@@ -13,9 +13,18 @@ whether it is metal (part()); the bake writes, through the atlas map:
   survive any colour; times the ambient occlusion, as base × (0.55 +
   0.45 × occlusion);
 - the mask: red the main colour's region, green the skin's, blue the
-  hair's, alpha the metal.
+  hair's, alpha the metal. A machine has no hair: its blue is where its
+  lamps glow, their glass kept in its own colour.
 
 Both are written as PNG, the base colour in sRGB, the mask as data.
+
+A part may be a swatch (part(swatch=True)): a colour with no texture of
+its own, every face of it on one small patch of the atlas painted in its
+colour. A machine's frame, glass and small fittings are: given islands of
+their own, its hundreds of small parts would not pack. A swatch's faces
+are each smaller than a texel and cover no texel's middle, so they share
+the patch without lying on one another's texels; the packed islands leave
+a strip at the atlas's right for the patches.
 """
 
 import os
@@ -25,10 +34,19 @@ import bpy
 import numpy as np
 
 ATLAS = "atlas"
-REGIONS = ("main", "skin", "hair", "fixed")
+REGIONS = ("main", "skin", "hair", "fixed", "glow")
+# The regions that keep their own colour in the atlas.
+OWN_COLOUR = ("fixed", "glow")
 NEUTRAL = 0.5
 # A second map a painter reads (face.PAINT), kept until the bake.
 PAINT = "paint"
+# The strip the swatches' patches take at the atlas's right, a share of
+# its width; and each patch's radius, a share of it.
+SWATCH_STRIP = 0.07
+SWATCH_RADIUS = 0.022
+# Where each swatch's patch is, by its material's name (layout sets it for
+# the bake).
+_swatches = {}
 
 # The painters of parts painted by shader rather than in one colour, by
 # the name a material gives in "part_painter": each takes the bake
@@ -37,17 +55,27 @@ PAINT = "paint"
 PAINTERS = {}
 
 
-def part(material, colour=None, region="fixed", metal=False):
+def part(material, colour=None, region="fixed", metal=False, swatch=False):
     """Marks a material slot as a part of the atlas: its colour (linear
-    RGB, for a fixed part), its region, and whether it is metal."""
+    RGB, for a fixed part), its region, whether it is metal, and whether
+    it is a swatch."""
     if region not in REGIONS:
         raise ValueError(f"no region {region!r}")
-    if region == "fixed" and colour is None:
-        raise ValueError(f"{material.name}: a fixed part has its own colour")
-    material["part_colour"] = list(colour) if colour is not None else [NEUTRAL] * 3
+    if region in OWN_COLOUR and colour is None:
+        raise ValueError(f"{material.name}: a fixed or glowing part has its own colour")
+    material["part_colour"] = list(colour) if region in OWN_COLOUR else [NEUTRAL] * 3
     material["part_region"] = region
     material["part_metal"] = bool(metal)
+    material["part_swatch"] = bool(swatch)
     return material
+
+
+def _swatch_faces(obj):
+    """A mask of the mesh's faces in swatch parts."""
+    sw = [bool(m.get("part_swatch")) if m else False for m in obj.data.materials]
+    idx = np.empty(len(obj.data.polygons), np.int32)
+    obj.data.polygons.foreach_get("material_index", idx)
+    return np.array(sw + [False])[np.minimum(idx, len(sw))] if sw else np.zeros(len(idx), bool)
 
 
 def linear(hex_colour):
@@ -164,10 +192,13 @@ def area(obj, faces=None):
 
 def layout(objs, head_faces, share, margin):
     """Packs every mesh's islands into the square, the head's grown until
-    they take share of what the islands cover. head_faces maps an object
-    to a mask of its faces in the head. Returns the share reached."""
+    they take share of what the islands cover; and the swatches' faces
+    onto their patches. head_faces maps an object to a mask of its faces
+    in the head. Returns the share reached."""
+    swatched = {o: _swatch_faces(o) for o in objs}
+    any_swatch = any(m.any() for m in swatched.values())
     _edit(objs)
-    bpy.ops.mesh.select_all(action="SELECT")
+    _select_faces(objs, swatched)
     bpy.ops.uv.average_islands_scale()
     bpy.ops.object.mode_set(mode="OBJECT")
     factor = 1.0
@@ -184,16 +215,107 @@ def layout(objs, head_faces, share, margin):
         for o in objs:
             if o in head_faces:
                 grow(o, head_faces[o], step)
+    # Islands grown past the square would be packed into tiles of their
+    # own: all brought into it first, their sizes kept.
+    uvs = [_uvs(o) for o in objs]
+    lo = min(u.min() for u in uvs)
+    hi = max(u.max() for u in uvs)
+    if lo < 0 or hi > 1:
+        for o, u in zip(objs, uvs):
+            _set_uvs(o, (u - lo) / (hi - lo))
     _edit(objs)
-    bpy.ops.mesh.select_all(action="SELECT")
+    _select_faces(objs, swatched)
     bpy.ops.uv.pack_islands(udim_source="CLOSEST_UDIM", rotate=True, rotate_method="ANY", scale=True,
                             merge_overlap=False, margin_method="FRACTION", margin=margin, shape_method="CONCAVE")
     bpy.ops.object.mode_set(mode="OBJECT")
+    if any_swatch:
+        # A face whose UVs lie on another's (a fold the unrolling made) is
+        # given to its swatch, where a mesh has one of its kind.
+        for o in objs:
+            swatched[o] |= _to_swatch(o, _overlapping(o, objs, swatched))
+        _place_swatches(objs, swatched, margin)
     for o in objs:
         uv = _uvs(o)
         if uv.min() < -1e-4 or uv.max() > 1 + 1e-4:
             raise AssertionError(f"{o.name}: UVs outside the atlas after packing")
     return reached
+
+
+def _overlapping(obj, objs, swatched, size=1024):
+    """Faces of obj on a texel another face (of any mesh) covers too."""
+    count = np.zeros((size, size), np.int32)
+    tris = []
+    for o in objs:
+        uv = _uvs(o)
+        start, total = _face_loops(o)
+        for f in np.flatnonzero(~swatched[o]):
+            for k in range(1, total[f] - 1):
+                t = uv[[start[f], start[f] + k, start[f] + k + 1]] * size
+                cells = _texels(t, size)
+                if cells is not None:
+                    count[cells] += 1
+                    if o is obj:
+                        tris.append((f, cells))
+    return {f for f, cells in tris if (count[cells] > 1).any()}
+
+
+def _to_swatch(obj, faces):
+    """Moves the faces to the swatch of their region and metal, where the
+    mesh has one. Returns the mesh's mask of faces now swatches."""
+    out = np.zeros(len(obj.data.polygons), bool)
+    mats = obj.data.materials
+    for f in faces:
+        p = obj.data.polygons[f]
+        m = mats[p.material_index]
+        for i, s in enumerate(mats):
+            if s.get("part_swatch") and s["part_region"] == m["part_region"] and s["part_metal"] == m["part_metal"]:
+                p.material_index = i
+                out[f] = True
+                break
+    return out
+
+
+def _select_faces(objs, swatched):
+    """In edit mode: every face selected but the swatches'."""
+    bpy.ops.mesh.select_all(action="DESELECT")
+    bpy.ops.object.mode_set(mode="OBJECT")
+    for o in objs:
+        sel = ~swatched[o]
+        o.data.polygons.foreach_set("select", sel)
+    bpy.ops.object.mode_set(mode="EDIT")
+
+
+def _place_swatches(objs, swatched, margin):
+    """The packed islands drawn left into the square less the strip; each
+    swatch's faces made tiny on its patch in the strip."""
+    _swatches.clear()
+    names = []
+    for o in objs:
+        for m in o.data.materials:
+            if m and m.get("part_swatch") and m.name not in names:
+                names.append(m.name)
+    step = 1.0 / (len(names) + 1)
+    for k, n in enumerate(names):
+        _swatches[n] = (1.0 - SWATCH_STRIP / 2, step * (k + 1))
+    texel = 1.0 / 1024
+    for o in objs:
+        uv = _uvs(o)
+        start, total = _face_loops(o)
+        sw = swatched[o]
+        kept = np.ones(len(uv), bool)
+        for f in np.flatnonzero(sw):
+            kept[start[f]:start[f] + total[f]] = False
+        uv[kept] *= (1.0 - SWATCH_STRIP - margin)
+        for f in np.flatnonzero(sw):
+            c = np.array(_swatches[o.data.materials[o.data.polygons[f].material_index].name])
+            # A corner of the texel at the patch's middle: the face covers
+            # no texel's middle, and is under a texel in area.
+            corner = (np.floor(c / texel) + 0.1) * texel
+            n = total[f]
+            for i in range(n):
+                a = 2 * np.pi * i / n
+                uv[start[f] + i] = corner + texel * (0.2 + 0.15 * np.array([np.cos(a), np.sin(a)]))
+        _set_uvs(o, uv)
 
 
 def _edit(objs):
@@ -254,6 +376,18 @@ def bake(objs, size, margin_px, samples=32):
     mask = np.ones((size, size, 4), np.float32)
     mask[..., :3] = np.clip(out["mask"][..., :3], 0, 1)
     mask[..., 3] = np.clip(out["metal"][..., 0], 0, 1)
+    # Each swatch's patch, painted in its colour (the image's rows run
+    # from the bottom, as v does).
+    ys, xs = np.mgrid[0:size, 0:size]
+    for name, (u, v) in _swatches.items():
+        m = bpy.data.materials.get(name)
+        if m is None:
+            continue
+        inside = (xs + 0.5 - u * size) ** 2 + (ys + 0.5 - v * size) ** 2 <= (SWATCH_RADIUS * size) ** 2
+        region = m["part_region"]
+        base[inside, :3] = _srgb(np.clip(np.array(m["part_colour"]), 0, 1))
+        mask[inside, :3] = [float(region == "main"), float(region == "skin"), float(region in ("hair", "glow"))]
+        mask[inside, 3] = float(m["part_metal"])
     return base, mask
 
 
@@ -277,7 +411,7 @@ def _bake_material(m, what, img):
         if what == "colour":
             c = m["part_colour"]
         elif what == "mask":
-            c = [float(region == r) for r in ("main", "skin", "hair")]
+            c = [float(region == r) for r in ("main", "skin")] + [float(region in ("hair", "glow"))]
         else:
             c = [float(m["part_metal"])] * 3
         emit.inputs["Color"].default_value = (*c, 1)

@@ -139,7 +139,8 @@ def skeleton(gates, level, gltf, order):
 def layers(worn, ease):
     """Each mesh's place in the stack, and how far off what is under it it
     stands: the body under everything, the garments by their ease, the
-    hair over them (a braid lies on the coat), a hat over all."""
+    hair over them (a braid lies on the coat), a machine's plates on its
+    coat, a hat over all."""
     out = {"body": (0.0, 0.0)}
     for w in worn:
         if w.kind == "garment":
@@ -150,6 +151,9 @@ def layers(worn, ease):
             out[w.obj.name] = (0.5, 0.01)
         elif w.kind == "hat":
             out[w.obj.name] = (1.0, 0.01)
+        elif w.kind == "plate":
+            # A machine's plates lie on its coat.
+            out[w.obj.name] = (0.9, 0.01)
     return out
 
 

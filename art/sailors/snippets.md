@@ -139,6 +139,25 @@ run headless (`blender -b`) on 5.2.0 LTS with MPFB 2.0.18.
 - A wireframe for a render: a `WIREFRAME` modifier with `use_replace =
   False` and `material_offset = 1`, a dark second material slot.
 
+## Hard surfaces (the machines)
+
+- `bmesh.ops.convex_hull(bm, input=verts)` returns `geom_interior` and
+  `geom_unused`: delete both, then the vertices left without faces, then
+  `recalc_face_normals`. A hull of a symmetric point set comes out only
+  roughly symmetric after a collapse or a bisect: cut it at x = 0
+  (`bisect_plane(..., clear_outer=True)`), mirror the half with
+  `duplicate` and `reverse_faces`, `remove_doubles` on the cut, then
+  `dissolve_degenerate` (the cut leaves slivers of no area).
+- `uv.pack_islands` with a margin of 24 px in 1024 cannot fit hundreds of
+  islands: it packs them into tiles past the square (UVs up to 3 or 4)
+  without saying so. Smart projection gave a machine 1,100 islands; give
+  big plates one island each (unrolled round their bone) and small parts
+  a swatch (atlas.part(swatch=True)).
+- `pack_islands` packs the selected faces only (with UV sync selection):
+  deselect what is placed by hand.
+- `bmesh.ops.duplicate` returns `vert_map` and `face_map` (source to
+  copy); per-face data of one's own follows the copy through them.
+
 ## Export
 
 - `export_scene.gltf(use_selection=True, ...)` of an explicit selection,

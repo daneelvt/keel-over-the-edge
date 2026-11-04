@@ -302,7 +302,7 @@ def manifold(obj):
     is left with no face."""
     bm = bmesh.new()
     bm.from_mesh(obj.data)
-    for _ in range(4):
+    for _ in range(16):
         over = [e for e in bm.edges if len(e.link_faces) > 2]
         if not over:
             break

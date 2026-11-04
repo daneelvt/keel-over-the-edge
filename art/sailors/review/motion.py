@@ -284,16 +284,17 @@ def check(fig, clip, act, slot, gate, ranges, proxies):
     return out, tr
 
 
-def proxies(fig, kinds):
+def proxies(fig, kinds, skip=()):
     """What the hands keep clear of, each part in its bone's rest space:
-    the skin of the head, neck and torso, and the hair and hat on the
-    head."""
+    the skin of the head, neck and torso (a machine's head and plates),
+    and the hair and hat on the head; not the bones skipped (a machine's
+    hips, its breeches, as a sailor's hips are always under theirs)."""
     import bpy
 
     by_bone = {b: ([], []) for b in CLEAR_OF + (HAT,)}
     for o in fig.meshes:
         k = kinds.get(o.name, "body")
-        if k not in ("body", "hair", "hat"):
+        if k not in ("body", "hair", "hat", "head"):
             continue
         me = o.data
         names = {g.index: g.name for g in o.vertex_groups}
@@ -306,6 +307,8 @@ def proxies(fig, kinds):
             if len(owners) != 1:
                 continue
             (b,) = owners
+            if b in skip:
+                continue
             if k == "hair":
                 b = "head"
             elif k == "hat":
