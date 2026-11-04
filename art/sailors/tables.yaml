@@ -41,3 +41,199 @@ atlas:
   far: 128
   margin: 6
   head: 0.37
+
+# What a level's file may weigh, gzipped, in bytes (the deck and far levels
+# together, as they load together).
+sizes:
+  close: 307200
+  deck-far: 153600
+
+# The boat a sailor is judged and moved in (build/stage.py): the game's
+# dinghy, the hips this far out from the centreline on its side deck, the
+# feet this far inboard of them on the cockpit's floor, hiking the hips
+# this far inboard of the gunwale; and the places the
+# hands go that the model has no node for yet, forward, inboard and up
+# from the seat, in metres.
+stage:
+  boat: boats/jolly-boat.glb
+  seat: { out: 0.6 }
+  hike: { in: 0.05 }
+  floor: { in: 0.45 }
+  points:
+    tiller: [-0.24, 0.2, 0.24]
+    sheet: [0.3, 0.3, 0.3]
+    tiller-hiking: [-0.3, 0.05, 0.22]
+    sheet-hiking: [0.3, 0.12, 0.28]
+
+# The motion lab (build/motion.py) and its gate (review/motion.py).
+motion:
+  fps: 30
+  # A ramp between two key poses lasts base seconds, per-degree more for
+  # the largest turn in it and per-metre for the furthest a target moves.
+  ramp: { base: 0.35, per-degree: 0.02, per-metre: 1.5 }
+  # Each bone follows its ramps through a second-order filter: lightly
+  # underdamped, the more so down the chain (delays over 2), so the ends
+  # follow through. Its delay in frames, by the start of its name: the
+  # hips first and the hands last, each joint of a chain after the one
+  # before; the torso's reversed when the head leads.
+  filter:
+    hz: 2.2
+    zeta: { proximal: 0.85, distal: 0.6 }
+  delays:
+    pelvis: 0
+    spine_01: 1
+    spine_02: 2
+    spine_03: 3
+    neck_01: 5
+    head: 7
+    clavicle: 1
+    upperarm: 1
+    lowerarm: 4
+    hand: 7
+    thumb: 9
+    index: 9
+    middle: 9
+    ring: 9
+    pinky: 9
+    thigh: 1
+    calf: 4
+    foot: 7
+    ball: 7
+    # The IK targets of the hands and feet, which move the upper arm and
+    # forearm together; and the wrist leading a falling hand.
+    effector: 4
+    hand-leads: 0
+  # Holds drift, so a held pose is never still: degrees, and the slowest
+  # period in seconds.
+  drift: { degrees: 0.5, head: 3.5, period: 2.2 }
+  # IK targets are kept within this share of the arm's reach (a straight
+  # arm pops), and of the leg's (a leg stands straight).
+  reach: { arm: 0.85, leg: 0.999 }
+  # The gate, from the motion study's measurements.
+  gate:
+    head-jerk-idle: 30
+    hand-jerk: 200
+    elbow-speed: 1.2
+    reach: 0.9
+    contact: 0.001
+    ankle-drift: 0.005
+    hand-clearance: 0.03
+    range-share: 0.8
+    loop-degrees: 0.5
+    loop-speed: 2.0
+    head-peak-to-median: [2.5, 6.0]
+  # The range of each joint, in degrees of turn from the rest pose (MPFB's
+  # A-pose, the forearms bent about 40°), from the usual ranges of motion:
+  # the hip flexes 120–135° with the knee bent (at 120, a man sitting on the
+  # dinghy's low side deck, an ordinary seat at about 100°, is past 80% of
+  # it), the knee 135°, the shoulder 180°, the elbow 150°, the neck turns
+  # 80°.
+  ranges:
+    pelvis: 60
+    spine_01: 35
+    spine_02: 35
+    spine_03: 35
+    neck_01: 55
+    head: 70
+    clavicle: 30
+    upperarm: 150
+    lowerarm: 120
+    hand: 80
+    thumb: 70
+    index: 90
+    middle: 90
+    ring: 90
+    pinky: 90
+    thigh: 135
+    calf: 135
+    foot: 50
+    ball: 40
+
+# The skeleton every sailor and clip file shares: its joints, in the
+# order the files list them (the order the game's bone texture keeps).
+skeleton:
+  - Root
+  - pelvis
+  - skirt_back_l_01
+  - skirt_back_l_02
+  - skirt_back_r_01
+  - skirt_back_r_02
+  - skirt_front_l_01
+  - skirt_front_l_02
+  - skirt_front_r_01
+  - skirt_front_r_02
+  - skirt_side_l_01
+  - skirt_side_l_02
+  - skirt_side_r_01
+  - skirt_side_r_02
+  - spine_01
+  - spine_02
+  - spine_03
+  - clavicle_l
+  - upperarm_l
+  - lowerarm_l
+  - hand_l
+  - index_01_l
+  - index_02_l
+  - index_03_l
+  - middle_01_l
+  - middle_02_l
+  - middle_03_l
+  - pinky_01_l
+  - pinky_02_l
+  - pinky_03_l
+  - ring_01_l
+  - ring_02_l
+  - ring_03_l
+  - thumb_01_l
+  - thumb_02_l
+  - thumb_03_l
+  - lowerarm_twist_l
+  - clavicle_r
+  - upperarm_r
+  - lowerarm_r
+  - hand_r
+  - index_01_r
+  - index_02_r
+  - index_03_r
+  - middle_01_r
+  - middle_02_r
+  - middle_03_r
+  - pinky_01_r
+  - pinky_02_r
+  - pinky_03_r
+  - ring_01_r
+  - ring_02_r
+  - ring_03_r
+  - thumb_01_r
+  - thumb_02_r
+  - thumb_03_r
+  - lowerarm_twist_r
+  - neck_01
+  - head
+  - eye_l
+  - eye_r
+  - jaw
+  - lid_lower_l
+  - lid_lower_r
+  - lid_upper_l
+  - lid_upper_r
+  - spring_01
+  - spring_02
+  - spring_03
+  - spring_04
+  - pendant
+  - spring_05
+  - spring_06
+  - spring_07
+  - spring_08
+  - thigh_corrector_l
+  - thigh_corrector_r
+  - thigh_l
+  - calf_l
+  - foot_l
+  - ball_l
+  - thigh_r
+  - calf_r
+  - foot_r
+  - ball_r

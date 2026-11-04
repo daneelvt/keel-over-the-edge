@@ -24,7 +24,14 @@ The cut:
   flared by azimuth, fan pleats and a vent, and weights on the skeleton's
   skirt chains, never the legs';
 - the delete group: the skin the garment covers, by rays out along the
-  skin's normals, less one ring at its edges, which the body then drops.
+  skin's normals, less one ring at its edges, which the body then drops;
+- the cloth made its own mirror.
+
+Once fitted, what cannot be seen is buried at every level (bury): the
+skin under the clothes, a garment under another, each but for a band at
+its edges; and what is left under a garment is drawn in wherever a pose
+the sailors are judged in would bring it through (settle), so that
+nothing hidden comes through when the figure moves.
 """
 
 import hashlib
@@ -39,6 +46,7 @@ import bpy
 import numpy as np
 from mathutils import Vector
 from mathutils.bvhtree import BVHTree
+from mathutils.kdtree import KDTree
 
 import atlas
 import body
@@ -59,6 +67,11 @@ TORSO = ("pelvis", "spine", "neck", "head")
 # skin still count as covered.
 COVER = 0.02
 
+# What is kept of a buried surface beside what shows, in metres: of the
+# skin, so a cuff seen into shows no gap; of a garment under another (a
+# shirt tucked into breeches), its tuck.
+BURY = {"body": 0.01, "garment": 0.025}
+
 
 def dress(job, v, human, arm, marks, work):
     """Fits the look's garments to the human, making each first if what it
@@ -66,16 +79,24 @@ def dress(job, v, human, arm, marks, work):
     look = job["look"]
     ease = job["tables"]["ease"]
     out = []
+
+    def layer(spec):
+        return (spec.get("params") or {}).get("layer", spec["family"])
+
     for spec in look.get("garments") or []:
         params = dict(spec.get("params") or {})
         params.update(spec.get(v) or {})
         if spec["family"] not in FAMILIES:
             raise ValueError(f"{spec['id']}: no garment family {spec['family']!r}")
         path = os.path.join(garments_dir(job), f"{spec['id']}.{v}.mhclo")
+        under = max([ease[layer(o)] for o in look["garments"] if ease[layer(o)] < ease[layer(spec)]] + [0.0])
         k = key(spec, v, params, job, look)
         if lod.made_from(path) != k:
-            make(human, marks, spec, params, ease, path, k)
+            make(human, marks, spec, params, ease, path, k, under)
         obj = fit(human, path, spec["id"])
+        # The fit is within a millimetre of the cut, unevenly: made its own
+        # mirror again.
+        mirror(obj)
         obj.data.materials.clear()
         colour = atlas.linear(spec["colour"]) if spec["region"] == "fixed" else None
         obj.data.materials.append(atlas.part(bpy.data.materials.new(spec["id"]), colour, spec["region"]))
@@ -101,26 +122,32 @@ def key(spec, v, params, job, look):
     h.update(json.dumps([spec, v, params, job["tables"]["ease"], job["bases"][version["base"]], version],
                         sort_keys=True).encode())
     for f in (make, source, cut, keep_parts, ease_off, relax, band, rim, cover, loft, pleats, vent, _classes,
-              _section_radii) + tuple(FAMILIES.values()):
+              _section_radii, symmetrize, _mirrors, Mirror) + tuple(FAMILIES.values()):
         h.update(inspect.getsource(f).encode())
     h.update(mpfbx.version().encode())
     return h.hexdigest()[:16]
 
 
-def make(human, marks, spec, params, ease, path, k):
+def make(human, marks, spec, params, ease, path, k, under=0.0):
     name = os.path.basename(path)
     print(f"build: making {name}, once")
     skin = Skin(human)
     bm = FAMILIES[spec["family"]](human, marks, params)
+    # The cut is its own mirror; every step after keeps it so (the nearest
+    # skin between the legs may be either leg's).
+    pairs = Mirror(bm)
     layer = params.get("layer", spec["family"])
     if layer not in ease:
         raise ValueError(f"{spec['id']}: no ease for the layer {layer!r}")
     if spec["family"] != "skirt":
-        ease_off(bm, skin, ease[layer])
-        relax(bm, skin, ease[layer], params.get("relax", 3))
+        ease_off(bm, skin, ease[layer], pairs)
+        relax(bm, skin, ease[layer], params.get("relax", 3), pairs)
     for b in params.get("bands", []):
         band(bm, skin, b, ease[layer])
-    rim(bm, params.get("rim", 0.004))
+        pairs.apply(bm)
+    # The rim turns in no further than halfway to what is under it.
+    rim(bm, min(params.get("rim", 0.004), (ease[layer] - under) / 2))
+    symmetrize(bm)
     bmesh.ops.triangulate(bm, faces=bm.faces[:])
 
     me = bpy.data.meshes.new(spec["id"])
@@ -419,22 +446,46 @@ def vent(bm, azimuth=180.0, start=0.4, lap=0.01):
 # --- Fitting it to the body ---------------------------------------------
 
 
-def ease_off(bm, skin, ease):
+def ease_off(bm, skin, ease, pairs=None):
     """Sets every vertex nearer the skin than the ease out to it, along the
-    skin's normal at its nearest point."""
+    skin's normal at its nearest point; the pairs, if given, kept mirrored."""
     for v in bm.verts:
         loc, normal, _ = skin.nearest(v.co)
         if loc is not None and (v.co - loc).dot(normal) < ease:
             v.co = loc + normal * ease
+    if pairs is not None:
+        pairs.apply(bm)
 
 
-def relax(bm, skin, ease, passes):
+def relax(bm, skin, ease, passes, pairs=None):
     """Smooths the cloth and sets it back off the skin, passes times: the
     helper's creases go, the ease stays."""
     for _ in range(passes):
         bmesh.ops.smooth_vert(bm, verts=bm.verts[:], factor=0.5, use_axis_x=True, use_axis_y=True, use_axis_z=True)
-        ease_off(bm, skin, ease)
+        ease_off(bm, skin, ease, pairs)
     bm.normal_update()
+
+
+class Mirror:
+    """A mesh's vertices paired with their mirrors across x, as it is cut
+    (exactly: MPFB's mesh is its own mirror); apply sets each pair's
+    left-hand vertex (x < 0) to the mirror of its right, and the middle's
+    onto it."""
+
+    def __init__(self, bm):
+        bm.verts.ensure_lookup_table()
+        co = np.array([tuple(v.co) for v in bm.verts])
+        pair = _mirrors(co, 1e-5)
+        self.pairs = [(i, int(j)) for i, j in enumerate(pair) if co[i, 0] > 1e-6 and j != i]
+        self.middle = [i for i in range(len(co)) if abs(co[i, 0]) <= 1e-6]
+
+    def apply(self, bm):
+        bm.verts.ensure_lookup_table()
+        for i, j in self.pairs:
+            c = bm.verts[i].co
+            bm.verts[j].co = Vector((-c.x, c.y, c.z))
+        for i in self.middle:
+            bm.verts[i].co.x = 0.0
 
 
 def _boundary_loops(bm):
@@ -549,46 +600,179 @@ def hide(human, skin, worn):
     return len(gone)
 
 
-def trim(worn, ease):
-    """Drops the faces of an inner garment that one over it always covers
-    (a shirt tucked into breeches), less one ring at the edge: they can
-    only show through it. Returns how many went."""
-    worn = [w for w in worn if w.kind == "garment"]
-    layers = sorted(worn, key=lambda w: ease[w.spec.get("params", {}).get("layer", w.spec["family"])])
-    gone = 0
-    for i, inner in enumerate(layers):
-        outer = layers[i + 1:]
-        if not outer:
-            continue
-        trees = []
-        for w in outer:
-            bm = bmesh.new()
-            bm.from_mesh(w.obj.data)
-            trees.append(BVHTree.FromBMesh(bm))
-            bm.free()
-        me = inner.obj.data
-        covered = np.zeros(len(me.vertices), bool)
-        for v in me.vertices:
-            for t in trees:
-                if t.ray_cast(v.co + v.normal * 0.0005, v.normal, COVER)[0] is not None:
-                    covered[v.index] = True
-                    break
-        edge = np.zeros_like(covered)
-        for e in me.edges:
-            a, b = e.vertices
-            if covered[a] != covered[b]:
-                edge[a] = edge[b] = True
-        covered &= ~edge
+def bury(under, overs, reach, keep):
+    """Drops the faces of under that the meshes over it hide, but for a
+    band keep metres wide beside what shows. A vertex is hidden when a ray
+    out along its normal meets one of overs within reach, or the nearest
+    point of one is within reach and not at its open edge (so the skin in
+    a crease is found, where the ray misses, and the skin past a hem is
+    not); and only with its mirror, so both sides lose the same. Returns
+    how many faces went."""
+    me = under.data
+    if not overs or not me.polygons:
+        return 0
+    co = body.coords(under)
+    no = np.empty(len(me.vertices) * 3)
+    me.vertices.foreach_get("normal", no)
+    no = no.reshape(-1, 3)
+    parts = []
+    for o in overs:
         bm = bmesh.new()
-        bm.from_mesh(me)
-        faces = [f for f in bm.faces if all(covered[v.index] for v in f.verts)]
-        bmesh.ops.delete(bm, geom=faces, context="FACES")
-        bmesh.ops.delete(bm, geom=[v for v in bm.verts if not v.link_faces], context="VERTS")
-        bm.to_mesh(me)
+        bm.from_mesh(o.data)
+        edge = {v.index for v in bm.verts if v.is_boundary}
+        rim_faces = {f.index for f in bm.faces if any(v.index in edge for v in f.verts)}
+        parts.append((BVHTree.FromBMesh(bm), rim_faces))
         bm.free()
-        me.update()
-        gone += len(faces)
-    return gone
+    hidden = np.zeros(len(co), bool)
+    for i, (p, n) in enumerate(zip(co, no)):
+        p, n = Vector(p), Vector(n)
+        for tree, rim_faces in parts:
+            if tree.ray_cast(p + n * 1e-4, n, reach)[0] is not None:
+                hidden[i] = True
+                break
+            loc, _, face, d = tree.find_nearest(p, reach)
+            if loc is not None and face not in rim_faces:
+                hidden[i] = True
+                break
+    hidden &= hidden[_mirrors(co)]
+    shown = ~hidden
+    if shown.any() and keep > 0:
+        tree = KDTree(int(shown.sum()))
+        for i in np.flatnonzero(shown):
+            tree.insert(co[i], int(i))
+        tree.balance()
+        for i in np.flatnonzero(hidden):
+            if tree.find(co[i])[2] <= keep:
+                shown[i] = True
+    bm = bmesh.new()
+    bm.from_mesh(me)
+    gone = [f for f in bm.faces if not any(shown[v.index] for v in f.verts)]
+    bmesh.ops.delete(bm, geom=gone, context="FACES")
+    bmesh.ops.delete(bm, geom=[v for v in bm.verts if not v.link_faces], context="VERTS")
+    bm.to_mesh(me)
+    bm.free()
+    me.update()
+    return len(gone)
+
+
+def _mirrors(co, within=0.002):
+    """Each vertex's mirror across x (itself where it has none)."""
+    tree = KDTree(len(co))
+    for i, p in enumerate(co):
+        tree.insert(p, i)
+    tree.balance()
+    out = np.arange(len(co))
+    for i, p in enumerate(co):
+        _, j, d = tree.find((-p[0], p[1], p[2]))
+        if d <= within:
+            out[i] = j
+    return out
+
+
+def bury_all(skin, worn, ease):
+    """The skin under the garments, and each garment under those over it,
+    dropped but for a band at their edges (BURY). Returns how many faces
+    went, by mesh."""
+    garments = sorted((w for w in worn if w.kind == "garment"),
+                      key=lambda w: ease[(w.spec.get("params") or {}).get("layer", w.spec["family"])])
+    out = {}
+
+    def reach(w):
+        return ease[(w.spec.get("params") or {}).get("layer", w.spec["family"])] + COVER
+
+    if garments:
+        out["body"] = bury(skin, [w.obj for w in garments], max(reach(w) for w in garments), BURY["body"])
+    for i, inner in enumerate(garments):
+        outer = garments[i + 1:]
+        if outer:
+            out[inner.obj.name] = bury(inner.obj, [w.obj for w in outer], COVER, BURY["garment"])
+    return out
+
+
+def mirror(obj):
+    """symmetrize, on a fitted mesh: within the fit's few millimetres."""
+    bm = bmesh.new()
+    bm.from_mesh(obj.data)
+    symmetrize(bm, 0.005)
+    bm.to_mesh(obj.data)
+    bm.free()
+    obj.data.update()
+
+
+def settle(fig, lib, poses, worn, ease, gap=0.004, rounds=4, most=0.03):
+    """Draws in what is under a garment wherever, in any of the poses (and
+    at rest), it would come through what is over it: each vertex that does
+    is moved in at rest by as much as it came through and gap more, along
+    its normal as posed, taken back through its own skinning, and its
+    mirror with it. What moves is hidden in the poses where it would have
+    shown; at most `most`. Returns how many vertices moved."""
+    import metrics
+
+    lay = metrics.layers(worn, ease)
+    arm = fig.arm
+    moved = set()
+    for _ in range(rounds):
+        fig.reset()
+        pairs = metrics.under_pairs(fig.meshes, lay)
+        push = {}
+        for name in ("rest",) + tuple(poses):
+            if name == "rest":
+                fig.reset()
+            else:
+                fig.pose(lib.poses[name])
+            depths = {}
+            metrics.poke(fig, pairs, depths)
+            if not depths:
+                continue
+            inv = arm.matrix_world.inverted().to_3x3()
+            skin = {b.name: np.array((pb.matrix @ b.matrix_local.inverted()).to_3x3())
+                    for b, pb in zip(arm.data.bones, arm.pose.bones)}
+            for (mesh, i), (depth, normal) in depths.items():
+                o = next(m for m in fig.meshes if m.name == mesh)
+                names = {g.index: g.name for g in o.vertex_groups}
+                m = sum(g.weight * skin[names[g.group]] for g in o.data.vertices[i].groups if names[g.group] in skin)
+                d = -(np.array(inv @ Vector(normal))) * min(depth + gap, most)
+                rest = np.linalg.solve(m, d)
+                if np.linalg.norm(rest) > np.linalg.norm(push.get((mesh, i), np.zeros(3))):
+                    push[(mesh, i)] = rest
+        fig.reset()
+        if not push:
+            break
+        # Each move made on both sides, so the figure stays its own mirror.
+        for mesh in {m for m, _ in push}:
+            o = next(m for m in fig.meshes if m.name == mesh)
+            pair = _mirrors(body.coords(o))
+            both = {}
+            for (m, i), d in push.items():
+                if m != mesh:
+                    continue
+                if pair[i] == i:
+                    # On the middle: it stays there.
+                    d = d * np.array([0, 1, 1])
+                for j, dj in ((i, d), (pair[i], d * np.array([-1, 1, 1]))):
+                    if np.linalg.norm(dj) > np.linalg.norm(both.get(j, np.zeros(3))):
+                        both[j] = dj
+            for j, d in both.items():
+                o.data.vertices[j].co += Vector(d)
+                moved.add((mesh, j))
+            o.data.update()
+    return len(moved)
+
+
+def symmetrize(bm, within=0.003):
+    """Makes the cloth its own mirror: each vertex and its mirror moved to
+    their mean, the middle's onto it."""
+    co = np.array([tuple(v.co) for v in bm.verts])
+    pair = _mirrors(co, within)
+    verts = list(bm.verts)
+    for i, v in enumerate(verts):
+        j = pair[i]
+        if abs(co[i, 0]) < 1e-4 or j == i and abs(co[i, 0]) < within:
+            v.co.x = 0.0
+        elif j != i and co[i, 0] > 0:
+            m = (co[i] + co[j] * np.array([-1, 1, 1])) / 2
+            v.co = Vector(m)
+            verts[j].co = Vector((-m[0], m[1], m[2]))
 
 
 def skirt_weights(obj, arm, marks):

@@ -306,3 +306,77 @@ def scaled(pixels, size):
     levels, whose meshes keep the close level's UVs."""
     n = pixels.shape[0] // size
     return pixels.reshape(size, n, size, n, 4).mean(axis=(1, 3))
+
+
+def untangle(obj, passes=40):
+    """Unfolds UV triangles folded over their neighbours, which a collapse
+    leaves at small sharp parts (fingertips, toes, the nose): a face whose
+    UVs wind the other way from most of its island's has each of its UV
+    corners moved to the middle of the corners round it, pass after pass,
+    until none is folded. Returns how many faces were folded, and how many
+    are still."""
+    bm = bmesh.new()
+    bm.from_mesh(obj.data)
+    uvl = bm.loops.layers.uv.active
+    ids = {}
+    corners = []  # per face, its corners' UV vertex ids
+    for f in bm.faces:
+        c = []
+        for lp in f.loops:
+            u = lp[uvl].uv
+            c.append(ids.setdefault((lp.vert.index, round(u.x, 6), round(u.y, 6)), len(ids)))
+        corners.append(c)
+    uv = np.zeros((len(ids), 2))
+    for f, c in zip(bm.faces, corners):
+        for lp, i in zip(f.loops, c):
+            uv[i] = tuple(lp[uvl].uv)
+    # Islands: UV vertices joined by the faces they share.
+    parent = list(range(len(ids)))
+
+    def find(i):
+        while parent[i] != i:
+            parent[i] = parent[parent[i]]
+            i = parent[i]
+        return i
+
+    for c in corners:
+        for i in c[1:]:
+            a, b = find(c[0]), find(i)
+            if a != b:
+                parent[a] = b
+    island = np.array([find(c[0]) for c in corners])
+    near = [set() for _ in ids]
+    for c in corners:
+        for i in c:
+            near[i].update(j for j in c if j != i)
+
+    def areas():
+        a = np.zeros(len(corners))
+        for k, c in enumerate(corners):
+            p = uv[c]
+            a[k] = sum(p[i, 0] * p[(i + 1) % len(c), 1] - p[(i + 1) % len(c), 0] * p[i, 1] for i in range(len(c))) / 2
+        return a
+
+    def folded():
+        a = areas()
+        sign = {}
+        for k, isl in enumerate(island):
+            sign[isl] = sign.get(isl, 0.0) + a[k]
+        return [k for k in range(len(corners)) if a[k] * sign[island[k]] < 0]
+
+    first = bad = folded()
+    for _ in range(passes):
+        if not bad:
+            break
+        move = {i for k in bad for i in corners[k]}
+        new = {i: uv[list(near[i])].mean(0) for i in move if near[i]}
+        for i, p in new.items():
+            uv[i] = p
+        bad = folded()
+    for f, c in zip(bm.faces, corners):
+        for lp, i in zip(f.loops, c):
+            lp[uvl].uv = uv[i]
+    bm.to_mesh(obj.data)
+    bm.free()
+    obj.data.update()
+    return len(first), len(bad)

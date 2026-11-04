@@ -44,6 +44,13 @@ type look struct {
 	// Palette is the options the look is built and shown with by default:
 	// main, skin and hair colours.
 	Palette map[string]string `yaml:"palette" json:"palette"`
+	// Clips are the pose library's clips made on the look and judged with
+	// it.
+	Clips []string `yaml:"clips" json:"clips,omitempty"`
+	// Gates is what a gate that fails does: fail the build (the default),
+	// or only report, for the build's own checks of its machinery, whose
+	// parts are no look's.
+	Gates string `yaml:"gates" json:"gates,omitempty"`
 }
 
 // version is a woman or a man: a base body and the look's changes to it.
@@ -148,6 +155,12 @@ func (l look) check() error {
 			return fmt.Errorf("the palette's %s is %q, not #RRGGBB", r, l.Palette[r])
 		}
 	}
+	switch {
+	case l.Gates != "" && l.Gates != "fail" && l.Gates != "report":
+		return fmt.Errorf("gates %q: a gate that fails either fails the build or is reported", l.Gates)
+	case l.Gates == "report" && l.Committed:
+		return errors.New("a look the game offers fails the build on any gate")
+	}
 	return nil
 }
 
@@ -195,6 +208,7 @@ type job struct {
 	Bases    map[string]any    `json:"bases"`
 	Tables   map[string]any    `json:"tables"`
 	Sources  map[string]source `json:"sources"`
+	Poses    poseLibrary       `json:"poses"`
 	Gltfpack string            `json:"gltfpack"`
 	// Out is where the built files go; Work, what the build keeps for
 	// itself: the reports of each run.
@@ -202,7 +216,7 @@ type job struct {
 	Work string `json:"work"`
 }
 
-func newJob(root string, l look, t tables, sources map[string]source, gltfpack string) job {
+func newJob(root string, l look, t tables, sources map[string]source, poses poseLibrary, gltfpack string) job {
 	out := filepath.Join(root, workDir, l.ID)
 	if l.Committed {
 		out = filepath.Join(root, sailorsDir, l.ID)
@@ -211,7 +225,7 @@ func newJob(root string, l look, t tables, sources map[string]source, gltfpack s
 		gltfpack = filepath.Join(root, gltfpack)
 	}
 	return job{
-		Root: root, Look: l, Bases: t.Bases, Tables: t.Tables, Sources: sources, Gltfpack: gltfpack,
+		Root: root, Look: l, Bases: t.Bases, Tables: t.Tables, Sources: sources, Poses: poses, Gltfpack: gltfpack,
 		Out: out, Work: filepath.Join(root, workDir, "runs", l.ID),
 	}
 }

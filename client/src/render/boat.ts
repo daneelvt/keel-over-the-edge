@@ -44,12 +44,18 @@ import { placeSailor, SAILING, type SailorFrame, type SailorPlace } from './sail
 import { LUFF_OFFSET, sailPoint, sailUniforms } from './sailshape';
 import { FLOW_LUFFING, Telltales } from './telltales';
 
-/** Every model under art/, by its path there, as Vite serves it. */
-const MODELS = import.meta.glob<string>('../../../art/**/*.glb', {
-  query: '?url',
-  import: 'default',
-  eager: true,
-});
+/**
+ * Every model under art/, by its path there, as Vite serves it; not the
+ * sailors' build's inputs (art/sailors/vendor), which the game never loads.
+ */
+const MODELS = import.meta.glob<string>(
+  ['../../../art/**/*.glb', '!../../../art/sailors/vendor/**'],
+  {
+    query: '?url',
+    import: 'default',
+    eager: true,
+  },
+);
 
 /** The URL of an art file named by the catalog. */
 export function artUrl(path: string): string {

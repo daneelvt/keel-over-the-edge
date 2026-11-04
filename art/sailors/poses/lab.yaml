@@ -1,0 +1,94 @@
+# SPDX-License-Identifier: LicenseRef-All-Rights-Reserved
+#
+# The motion lab's first clips: what build/motion.py makes from key poses,
+# judged by review/motion.py. Not yet the game's clips: a helm idle and a
+# habit to prove the transition maker on, and three of Quaternius' clips
+# (CC0) to prove the retargeter on.
+#
+# A pose may start from another (`from`), adding its turns after the
+# other's and replacing its targets. A clip is its keys in order, each a
+# pose held for `hold` seconds; the ramp into it is as long as the largest
+# turn makes it (tables.yaml's motion.ramp), unless it says. A key may ask
+# for anticipation (a small move the other way first, as a share of the
+# move), an arc in the hands' paths (metres out and up at the middle), and
+# which end of the body leads (`lead: head` for a look, the head first and
+# the body after; otherwise the hips first and the hands last); a loop's
+# return to its first key is as that key says. A target
+# may say where its elbow points (`pole`, from the chest along the
+# figure's axes). A clip that loops returns to its first key, and its end
+# is its start.
+poses:
+  seated-luff:
+    from: seated
+    turn:
+      - [spine_03, z, -4]
+      - [neck_01, z, -8]
+      - [head, z, -16]
+      - [head, x, -8]
+
+  seated-windward:
+    from: seated
+    turn:
+      - [spine_03, z, 4]
+      - [neck_01, z, 12]
+      - [head, z, 34]
+      - [head, x, 4]
+
+  # Shading the eyes with the forward hand and scanning the sea: the habit
+  # the study authored, here on the lab's maker. The wrist beside the brow
+  # (the head bone starts at the top of the neck), the hand tilted forward
+  # over it like a visor.
+  seated-shade:
+    from: seated
+    turn:
+      - [spine_02, x, -4]
+      - [head, x, -4]
+      - [hand_r, x, -35]
+    ik:
+      hand_l: { at: tiller }
+      hand_r: { at: bone, bone: head, offset: [-0.14, -0.22, 0.12], pole: [-0.6, -0.1, -0.1] }
+
+  seated-shade-left:
+    from: seated-shade
+    turn:
+      - [spine_03, z, 4]
+      - [neck_01, z, 6]
+      - [head, z, 12]
+
+  seated-shade-right:
+    from: seated-shade
+    turn:
+      - [spine_03, z, -4]
+      - [neck_01, z, -6]
+      - [head, z, -12]
+
+clips:
+  helm-idle:
+    loop: true
+    idle: true
+    keys:
+      - { pose: seated, hold: 1.4, ramp: 1.6, lead: head }
+      - { pose: seated-luff, hold: 1.6, ramp: 1.4, lead: head }
+      - { pose: seated, hold: 1.0, ramp: 1.4, lead: head }
+      - { pose: seated-windward, hold: 1.2, ramp: 1.8, lead: head }
+
+  shade-eyes:
+    keys:
+      - { pose: seated, hold: 0.5 }
+      - { pose: seated-shade, hold: 0.4, anticipate: 0.08, arc: [0.06, 0.05] }
+      - { pose: seated-shade-left, hold: 0.4, ramp: 1.6, lead: head }
+      - { pose: seated-shade-right, hold: 0.4, ramp: 2.0, lead: head }
+      - { pose: seated-shade, hold: 0.2, ramp: 1.4, lead: head }
+      - { pose: seated, hold: 0.6, arc: [0.1, 0.0] }
+
+# Quaternius' clips, retargeted by rotation and checked bone by bone; the
+# feet locked by IK where the clip stands or sits on them.
+retarget:
+  standing-idle:
+    file: vendor/quaternius/Idle_Loop.glb
+    loop: true
+    idle: true
+    lock: [foot_l, foot_r]
+  treading-water:
+    file: vendor/quaternius/Swim_Idle_Loop.glb
+    loop: true

@@ -21,16 +21,20 @@ garments:
       sleeve: 0.92
       bands:
         - { at: ends, height: 0.035, out: 0.004 }
-  # Brown wool over the shirt, a waistband and bands below the knee.
+  # Brown wool over the shirt, a waistband drawn in a millimetre (the
+  # dressed waist within twice the ease of the bare: the ease is along the
+  # skin's normal, which slopes) and bands below the knee.
   - id: breeches
     family: breeches
     region: fixed
     colour: "#4A3B2E"
     params:
       bands:
-        - { at: top, height: 0.035, out: 0.004 }
+        - { at: top, height: 0.035, out: -0.001 }
         - { at: bottom, height: 0.03, out: 0.004 }
 palette:
   main: "#E6DCC3"
   skin: "#B2815F"
   hair: "#413129"
+# The motion lab's clips, made and judged on both versions.
+clips: [helm-idle, shade-eyes, standing-idle, treading-water]

@@ -201,5 +201,9 @@ func shown(line string) bool {
 			return false
 		}
 	}
+	// Every render Workbench makes for the sheets says where it saved.
+	if strings.Contains(line, "render           | Saved: ") {
+		return false
+	}
 	return strings.TrimSpace(line) != ""
 }
