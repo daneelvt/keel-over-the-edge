@@ -5,13 +5,15 @@
 // cosign and the Flux CLI, which sign and publish a release; Tailscale's
 // client, with which a workflow joins the tailnet; kube-bench, which
 // audits a k3s node; OpenTofu, which manages the accounts outside the
-// machine; and vmalert-tool, which tests the cluster's alert rules. Each is downloaded into the repository's .dev folder,
+// machine; vmalert-tool, which tests the cluster's alert rules; and
+// gltfpack, which packs the sailors' models. Each is downloaded into the repository's .dev folder,
 // the way Go fetches the toolchain go.mod names, and checked against the
 // SHA-256 pinned below before anything is unpacked or run.
 package pinned
 
 import (
 	"archive/tar"
+	"archive/zip"
 	"compress/gzip"
 	"context"
 	"crypto/sha256"
@@ -62,6 +64,8 @@ var releases = []release{
 	{"VictoriaMetrics/VictoriaMetrics", "darwin-arm64", "v1.155.0", "30c316c0bfb840962a8b878a451acf6dcdae50294543b3a829d54ca0bb6674e1"},
 	{"VictoriaMetrics/VictoriaMetrics", "linux-amd64", "v1.155.0", "b6181fc16cf19835706ea5d67215eea56c1fe87350fdfd82a5ff803ea2c1a907"},
 	{"VictoriaMetrics/VictoriaMetrics", "linux-arm64", "v1.155.0", "45fa04b8d616dd644c33c00698f22bbe67f9402bc474a1e6df8025f7e649d78f"},
+
+	{"zeux/meshoptimizer", "darwin-arm64", "v1.3", "1002fe6a437aa005eca541502c27b8d2b184f91f4ad0c6d282e3614a1e35e75a"},
 }
 
 // byHand pins what is not a GitHub release, which Renovate cannot follow:
@@ -146,6 +150,15 @@ var (
 		Name: "vmalert-tool", repo: "VictoriaMetrics/VictoriaMetrics", bin: fixed("vmalert-tool-prod"), size: "about 140 MB",
 		asset: func(v, goos, goarch string) string { return "vmutils-" + goos + "-" + goarch + "-v" + v + ".tar.gz" },
 	}
+	// Gltfpack is meshoptimizer's gltfpack built for the machine: the npm
+	// package's WebAssembly build cannot compress textures. Only the Mac
+	// builds the sailors' models, so only the Mac's is pinned.
+	Gltfpack = Tool{
+		Name: "gltfpack", repo: "zeux/meshoptimizer", bin: fixed("gltfpack"), size: "about 2 MB", platforms: []string{"darwin-arm64"},
+		asset: func(_, goos, _ string) string {
+			return "gltfpack-" + map[string]string{"darwin": "macos", "linux": "ubuntu"}[goos] + ".zip"
+		},
+	}
 )
 
 // base is where GitHub's releases are downloaded from, and site where
@@ -178,6 +191,13 @@ func (t Tool) Version() string {
 		}
 	}
 	return ""
+}
+
+// SHA256 is the digest of the tool's file pinned for a platform,
+// GOOS-GOARCH, or "" if it is pinned for none.
+func (t Tool) SHA256(platform string) string {
+	r, _ := t.releaseFor(platform)
+	return r.sha256
 }
 
 // releaseFor is the tool's pin for a platform, GOOS-GOARCH.
@@ -234,9 +254,12 @@ func (t Tool) Ensure(ctx context.Context, dir string, log io.Writer) (string, er
 	if _, err := download.Seek(0, io.SeekStart); err != nil {
 		return "", err
 	}
-	if t.bin == nil {
+	switch {
+	case t.bin == nil:
 		err = writeFile(filepath.Join(tmp, t.Name), download, -1, 0o755)
-	} else {
+	case strings.HasSuffix(url, ".zip"):
+		err = unzip(download, tmp)
+	default:
 		err = untar(download, tmp)
 	}
 	if err != nil {
@@ -362,6 +385,52 @@ func untar(r io.Reader, dir string) error {
 			return fmt.Errorf("%q is neither a folder nor a regular file", h.Name)
 		}
 	}
+}
+
+// unzip unpacks a zip archive into dir, by the same rules as untar.
+func unzip(f *os.File, dir string) error {
+	info, err := f.Stat()
+	if err != nil {
+		return err
+	}
+	zr, err := zip.NewReader(f, info.Size())
+	if err != nil {
+		return err
+	}
+	var total uint64
+	for _, zf := range zr.File {
+		name := filepath.FromSlash(zf.Name)
+		if !filepath.IsLocal(name) {
+			return fmt.Errorf("unsafe path %q", zf.Name)
+		}
+		target := filepath.Join(dir, name)
+		mode := zf.Mode()
+		switch {
+		case mode.IsDir():
+			if err := os.MkdirAll(target, 0o755); err != nil {
+				return err
+			}
+		case mode.IsRegular():
+			if total += zf.UncompressedSize64; total > maxUnpacked {
+				return errors.New("the archive unpacks to more than expected")
+			}
+			if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
+				return err
+			}
+			r, err := zf.Open()
+			if err != nil {
+				return err
+			}
+			err = writeFile(target, r, int64(zf.UncompressedSize64), mode.Perm()&0o755|0o644)
+			r.Close()
+			if err != nil {
+				return err
+			}
+		default:
+			return fmt.Errorf("%q is neither a folder nor a regular file", zf.Name)
+		}
+	}
+	return nil
 }
 
 // writeFile writes size bytes of r to a new file, or all of r when size is

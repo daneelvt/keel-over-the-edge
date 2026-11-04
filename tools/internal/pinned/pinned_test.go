@@ -4,6 +4,7 @@ package pinned
 
 import (
 	"archive/tar"
+	"archive/zip"
 	"bytes"
 	"compress/gzip"
 	"context"
@@ -88,6 +89,79 @@ func TestUntarRefuses(t *testing.T) {
 	}
 }
 
+// zipped is a zip archive of entries, each a regular file unless its name
+// ends in a slash, or a symbolic link when it has a link.
+func zipped(t *testing.T, entries ...entry) []byte {
+	t.Helper()
+	var buf bytes.Buffer
+	zw := zip.NewWriter(&buf)
+	for _, e := range entries {
+		h := &zip.FileHeader{Name: e.name, Method: zip.Deflate}
+		h.SetMode(0o755)
+		if e.link != "" {
+			h.SetMode(os.ModeSymlink | 0o777)
+		}
+		w, err := zw.CreateHeader(h)
+		if err != nil {
+			t.Fatal(err)
+		}
+		body := e.body
+		if e.link != "" {
+			body = e.link
+		}
+		if _, err := w.Write([]byte(body)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := zw.Close(); err != nil {
+		t.Fatal(err)
+	}
+	return buf.Bytes()
+}
+
+func TestUnzip(t *testing.T) {
+	dir := t.TempDir()
+	file := filepath.Join(t.TempDir(), "gltfpack.zip")
+	if err := os.WriteFile(file, zipped(t, entry{name: "bin/"}, entry{name: "bin/gltfpack", body: "#!"}), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	f, err := os.Open(file)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer f.Close()
+	if err := unzip(f, dir); err != nil {
+		t.Fatal(err)
+	}
+	info, err := os.Stat(filepath.Join(dir, "bin", "gltfpack"))
+	if err != nil || info.Mode()&0o100 == 0 {
+		t.Errorf("the binary lost its execute bit: %v %v", info, err)
+	}
+}
+
+func TestUnzipRefuses(t *testing.T) {
+	for name, e := range map[string]entry{
+		"a path outside the folder": {name: "../evil", body: "x"},
+		"an absolute path":          {name: "/tmp/evil", body: "x"},
+		"a symbolic link":           {name: "gltfpack/link", link: "/etc/passwd"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			file := filepath.Join(t.TempDir(), "evil.zip")
+			if err := os.WriteFile(file, zipped(t, e), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			f, err := os.Open(file)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer f.Close()
+			if err := unzip(f, t.TempDir()); err == nil {
+				t.Fatal("unzip accepted it")
+			}
+		})
+	}
+}
+
 func TestCopyChecked(t *testing.T) {
 	body := "tinygo archive"
 	sum := sha256.Sum256([]byte(body))
@@ -108,8 +182,9 @@ func TestCopyChecked(t *testing.T) {
 // the Mac that develops.
 func TestReleasesPinned(t *testing.T) {
 	digest := regexp.MustCompile(`^[0-9a-f]{64}$`)
-	tag := regexp.MustCompile(`^v[0-9]+\.[0-9]+\.[0-9]+$`)
-	for _, tool := range []Tool{TinyGo, Cosign, Flux, Tailscale, KubeBench, OpenTofu, VMAlertTool} {
+	// meshoptimizer's releases have no patch number.
+	tag := regexp.MustCompile(`^v[0-9]+\.[0-9]+(\.[0-9]+)?$`)
+	for _, tool := range []Tool{TinyGo, Cosign, Flux, Tailscale, KubeBench, OpenTofu, VMAlertTool, Gltfpack} {
 		var platforms []string
 		for _, r := range pins() {
 			if r.repo != tool.repo {
@@ -133,7 +208,7 @@ func TestReleasesPinned(t *testing.T) {
 		}
 	}
 	for _, r := range pins() {
-		if !slices.ContainsFunc([]Tool{TinyGo, Cosign, Flux, Tailscale, KubeBench, OpenTofu, VMAlertTool}, func(tool Tool) bool { return tool.repo == r.repo }) {
+		if !slices.ContainsFunc([]Tool{TinyGo, Cosign, Flux, Tailscale, KubeBench, OpenTofu, VMAlertTool, Gltfpack}, func(tool Tool) bool { return tool.repo == r.repo }) {
 			t.Errorf("%s is pinned, but is no tool", r.repo)
 		}
 	}
@@ -145,6 +220,9 @@ func TestReleasesPinned(t *testing.T) {
 		if got := tool.asset(version, "linux", "arm64"); got != want {
 			t.Errorf("%s's file is named %s, want %s", tool.Name, got, want)
 		}
+	}
+	if got := Gltfpack.asset("1.3", "darwin", "arm64"); got != "gltfpack-macos.zip" {
+		t.Errorf("gltfpack's file is named %s, want gltfpack-macos.zip", got)
 	}
 }
 
@@ -205,6 +283,18 @@ func TestEnsure(t *testing.T) {
 		}
 		if got, _ := os.ReadFile(bin); string(got) != "#!flux" || bin != filepath.Join(dir, "flux", "1.2.3", "flux") {
 			t.Errorf("flux at %s: %q", bin, got)
+		}
+	})
+	t.Run("a zip archive", func(t *testing.T) {
+		body := zipped(t, entry{name: "gltfpack", body: "#!gltfpack"})
+		pinFor(t, Gltfpack, body, sum(body))
+		dir := t.TempDir()
+		bin, err := Gltfpack.Ensure(ctx, dir, io.Discard)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got, _ := os.ReadFile(bin); string(got) != "#!gltfpack" || bin != filepath.Join(dir, "gltfpack", "1.2.3", "gltfpack") {
+			t.Errorf("gltfpack at %s: %q", bin, got)
 		}
 	})
 	t.Run("a download whose digest differs", func(t *testing.T) {
