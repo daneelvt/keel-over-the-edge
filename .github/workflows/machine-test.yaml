@@ -52,12 +52,6 @@ jobs:
         run: .dev/bin/machine -run apply -local
       - name: The playbook again, which must change nothing
         run: .dev/bin/machine -run apply -local -unchanged
-      - name: DEBUG apt history
-        if: failure()
-        run: |
-          sudo cat /var/log/apt/history.log || true
-          sudo tail -50 /var/log/unattended-upgrades/unattended-upgrades.log || true
-          systemctl list-units 'apt-daily*' --all --no-pager || true
       - name: The runner is as the playbook leaves it; Flux follows the real prod
         run: .dev/bin/machine -verify -local
       - name: Lynis, with no warning not accepted; kube-bench, a report
