@@ -109,7 +109,8 @@ def weights(gates, level, obj, bones):
     bones = set(bones)
     names = {g.index: g.name for g in obj.vertex_groups}
     bare = over = unnormal = 0
-    foreign = sorted({n for n in names.values() if n not in bones})
+    # The group that lays skirts on the seat is the build's, not a bone's.
+    foreign = sorted({n for n in names.values() if n not in bones and n != motion.SEAT_GROUP})
     for v in obj.data.vertices:
         ws = [g.weight for g in v.groups if g.weight > 0 and names.get(g.group) in bones]
         if not ws:

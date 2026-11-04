@@ -163,6 +163,7 @@ def build_version(job, v, run):
     lib = motion.Library(job)
     fig = motion.Figure(arm, meshes, stage, tables["motion"])
     fig.sitting = [skin] + [w.obj for w in worn if w.kind == "garment" and not (w.spec.get("params") or {}).get("skirt")]
+    fig.lay_on_seat(meshes)
     kinds = {"body": "body", **{w.obj.name: w.kind for w in worn}}
     settled = {"close": garment.settle(fig, lib, POSES, worn, tables["ease"])}
     lap("settle")
@@ -203,6 +204,7 @@ def build_version(job, v, run):
             for o in meshes:
                 rig.limit_weights(o, rig.bone_names(arm))
                 unfolded[o.name + " deck"] = atlas.untangle(o)
+            fig.lay_on_seat(meshes)
             settled["deck"] = garment.settle(fig, lib, POSES, worn, tables["ease"])
             for o in meshes:
                 garment.mirror(o)

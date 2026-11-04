@@ -71,6 +71,8 @@ FINGERS = ("thumb", "index", "middle", "ring", "pinky")
 # how far over the deck they sit, and how far in from its outer edge.
 SEAT_REACH = 0.22
 SEAT_EDGE = 0.03
+# The vertex group and modifier that lay the skirts on the seat.
+SEAT_GROUP = "seat-lift"
 SEAT_CLEAR = 0.006
 # How far short of the far side deck's edge an ankle stays, in the cockpit:
 # the toes reach about 0.17 m past it.
@@ -198,7 +200,49 @@ class Figure:
         for pb in self.bones:
             pb.matrix_basis.identity()
         self.arm.matrix_world.identity()
+        self.on_seat(False)
         self.update()
+
+    def lay_on_seat(self, meshes):
+        """Lays the skirts on the boat whenever the figure is in it, as the
+        game will (springs on the seat's plane up close, the vertex lifted
+        to it further off): each vertex the skirt chains move is lifted,
+        straight up, out of the deck it hangs through, as far as they move
+        it. A modifier after the skeleton's, on while the figure is placed
+        in the boat; the files never carry it."""
+        self.seat_mods = []
+        if self.stage is None:
+            return
+        for o in meshes:
+            names = {g.index: g.name for g in o.vertex_groups}
+            lift = o.vertex_groups.get(SEAT_GROUP) or o.vertex_groups.new(name=SEAT_GROUP)
+            any_ = False
+            for v in o.data.vertices:
+                w = sum(g.weight for g in v.groups if names.get(g.group, "").startswith("skirt_"))
+                if w > 0:
+                    lift.add([v.index], min(w, 1.0), "REPLACE")
+                    any_ = True
+            if not any_:
+                o.vertex_groups.remove(lift)
+                continue
+            m = o.modifiers.get(SEAT_GROUP) or o.modifiers.new(SEAT_GROUP, "SHRINKWRAP")
+            m.target = self.stage.solid[0]
+            m.wrap_method = "PROJECT"
+            m.use_project_z = True
+            m.use_positive_direction = True
+            m.use_negative_direction = False
+            m.wrap_mode = "OUTSIDE_SURFACE"
+            m.offset = SEAT_CLEAR
+            m.project_limit = 0.5
+            m.vertex_group = SEAT_GROUP
+            m.show_viewport = m.show_render = False
+            self.seat_mods.append((o, m.name))
+
+    def on_seat(self, on):
+        for o, name in getattr(self, "seat_mods", []):
+            m = o.modifiers.get(name)
+            if m is not None:
+                m.show_viewport = m.show_render = on
 
     def quiet(self, on=True):
         """Leaves every mesh the skeleton moves out of the scene's
@@ -423,6 +467,7 @@ class Figure:
         rot = self.rotations()
         place = self.placement(pose["place"], side)
         self.arm.matrix_world = place
+        self.on_seat(pose["place"] is not None)
         self.update()
         at = {}
         for eff in EFFECTORS:
