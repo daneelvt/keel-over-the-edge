@@ -28,7 +28,8 @@ versions:
         grille: { above: 0.016, below: 0.032, bars: 4, fill: 0.62, half: 0.032, off: 0.004 }
 machine:
   colours: { frame: "#24252A", glass: "#FFB347", socket: "#B8661A" }
-  plates: { inset: 0.004, gap: 0.009, sharp: 40, triangles: 140, rim: { width: 0.007, proud: 0.0018 } }
+  plates:
+    { inset: 0.004, gap: 0.009, sharp: 40, triangles: 140, rim: { width: 0.007, proud: 0.0018 } }
   bones:
     hand: { gap: 0.004, triangles: 70, rim: null }
     spine: { triangles: 180, inset: 0.008 }
@@ -45,7 +46,15 @@ machine:
     lips: 0.85
     brow: 0.03
     skull-in: 0.003
-    eye: { width: 0.015, height: 0.007, hood: 0.3, lid: 0.0015, steps: [[0.006, 0.85], [0.005, 0.7]], bulge: 0.002 }
+    eye:
+      {
+        width: 0.015,
+        height: 0.007,
+        hood: 0.3,
+        lid: 0.0015,
+        steps: [[0.006, 0.85], [0.005, 0.7]],
+        bulge: 0.002,
+      }
     ear: { radius: 0.026, stand: 0.012, lamp: true }
     cap:
       strips: 7
