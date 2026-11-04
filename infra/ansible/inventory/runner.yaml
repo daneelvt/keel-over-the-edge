@@ -11,4 +11,4 @@ all:
       machine_runner: true
       # It boots Azure's kernel, which the updates role pins as it would
       # the machine's.
-      updates_kernel: "{{ ansible_kernel }}"
+      updates_kernel: "{{ ansible_facts.kernel }}"

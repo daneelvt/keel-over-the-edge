@@ -67,5 +67,5 @@
 
 - name: Another kernel running takes effect at the next reboot
   ansible.builtin.set_fact:
-    updates_reboot_reasons: "{{ ['the machine runs the kernel ' ~ ansible_kernel ~ ', not ' ~ updates_kernel] }}"
-  when: ansible_kernel != updates_kernel
+    updates_reboot_reasons: "{{ ['the machine runs the kernel ' ~ ansible_facts.kernel ~ ', not ' ~ updates_kernel] }}"
+  when: ansible_facts.kernel != updates_kernel
