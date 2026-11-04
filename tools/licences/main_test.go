@@ -12,24 +12,30 @@ import (
 func TestMissingHeaders(t *testing.T) {
 	root := t.TempDir()
 	files := map[string]string{
-		"cmd/ok.go":                   "// " + header + "\n\npackage main\n",
-		"cmd/missing.go":              "package main\n",
-		"client/src/ok.ts":            "// " + header + "\n",
-		"client/src/missing.ts":       "export {};\n",
-		"client/index.html":           "<!doctype html>\n<!-- " + header + " -->\n",
-		"client/src/late.css":         "a{}\nb{}\nc{}\nd{}\ne{}\n/* " + header + " */\n",
-		"client/node_modules/x/y.ts":  "export {};\n",
-		"internal/x/testdata/fix.go":  "package x\n",
-		"README.md":                   "no header needed\n",
-		"client/dist/assets/index.js": "no header needed\n",
-		"art/boats/ok/build.ts":       "// " + artHeader + "\n",
-		"art/boats/agpl/build.ts":     "// " + header + "\n",
-		"art/README.md":               "no header needed\n",
-		"client/src/ui/ok.tsx":        "// " + header + "\n",
-		"client/src/ui/missing.tsx":   "export {};\n",
-		"art/sound/ok.json":           "{\n  \"licence\": \"" + artHeader + "\"\n}\n",
-		"art/sound/missing.json":      "{}\n",
-		"client/src/data.json":        "{}\n",
+		"cmd/ok.go":                      "// " + header + "\n\npackage main\n",
+		"cmd/missing.go":                 "package main\n",
+		"client/src/ok.ts":               "// " + header + "\n",
+		"client/src/missing.ts":          "export {};\n",
+		"client/index.html":              "<!doctype html>\n<!-- " + header + " -->\n",
+		"client/src/late.css":            "a{}\nb{}\nc{}\nd{}\ne{}\n/* " + header + " */\n",
+		"client/node_modules/x/y.ts":     "export {};\n",
+		"internal/x/testdata/fix.go":     "package x\n",
+		"README.md":                      "no header needed\n",
+		"client/dist/assets/index.js":    "no header needed\n",
+		"art/boats/ok/build.ts":          "// " + artHeader + "\n",
+		"art/boats/agpl/build.ts":        "// " + header + "\n",
+		"art/README.md":                  "no header needed\n",
+		"client/src/ui/ok.tsx":           "// " + header + "\n",
+		"client/src/ui/missing.tsx":      "export {};\n",
+		"art/sound/ok.json":              "{\n  \"licence\": \"" + artHeader + "\"\n}\n",
+		"art/sound/missing.json":         "{}\n",
+		"client/src/data.json":           "{}\n",
+		"art/sailors/build/ok.py":        "# " + artHeader + "\n",
+		"art/sailors/build/missing.py":   "import bpy\n",
+		"art/sailors/looks/ok.yaml":      "# " + artHeader + "\nid: ok\n",
+		"art/sailors/looks/missing.yaml": "id: missing\n",
+		"art/sailors/vendor/x/eyes.json": "{}\n",
+		"tools/x/missing.py":             "print()\n",
 	}
 	for p, s := range files {
 		full := filepath.Join(root, p)
@@ -45,8 +51,9 @@ func TestMissingHeaders(t *testing.T) {
 		t.Fatal(err)
 	}
 	want := []string{
-		"art/boats/agpl/build.ts", "art/sound/missing.json", "client/src/late.css",
-		"client/src/missing.ts", "client/src/ui/missing.tsx", "cmd/missing.go",
+		"art/boats/agpl/build.ts", "art/sailors/build/missing.py", "art/sailors/looks/missing.yaml",
+		"art/sound/missing.json", "client/src/late.css", "client/src/missing.ts",
+		"client/src/ui/missing.tsx", "cmd/missing.go", "tools/x/missing.py",
 	}
 	if !slices.Equal(got, want) {
 		t.Fatalf("got %v, want %v", got, want)
