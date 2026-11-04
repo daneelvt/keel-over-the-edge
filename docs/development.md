@@ -5299,8 +5299,9 @@ keeps its place across a restart, and retries while the cluster is down.
 And `keel-machine-facts`, every five minutes, writes what no exporter
 knows to `/var/lib/node-exporter/textfile/keel_machine.prom`, whole or not
 at all, which node-exporter reads: whether a reboot is required and since
-when, the security updates waiting, unattended-upgrades' last run, what
-AIDE's last check found, the size of auditd's log, and whether each unit
+when, a kernel newer than the one booted and since when, the security
+updates waiting, unattended-upgrades' last run, what AIDE's last check
+found, the size of auditd's log, and whether each unit
 the machine needs is active (k3s, tailscaled, hostfw, chrony, auditd, the
 upload). `sysstat` is purged: node-exporter records what it did.
 
@@ -6163,7 +6164,7 @@ In the folder **Keel**, written for this game (`infra/cluster/monitoring/dashboa
 |---|---|
 | Overview | Is anything wrong? What fires, how severe, and when each alert fired in the last day; boats, connections and the tick; the database, and the last WAL, base backup, dump and restore test; the machine's CPU, steal, memory and disk, a pending reboot or update; Flux; scrape targets down |
 | Game | How the simulation does: the tick and its phases, ticks late and skipped, boats, connections, joins and closes, the queue's wait, bytes a player a second, phones' round trip and frame time, persistence's oldest unwritten change and inbox, checkpoints, the lease, keel's CPU, throttling and memory, restarts and restores, its warnings and errors |
-| Machine | The VM: CPU by mode, pressure, memory, the clock; the root filesystem, what grows on it and when it would be full; disk latency; the network and the month's transfer at today's rate; its upkeep (a reboot required, updates waiting, AIDE, the units, auditd's log); the journal's warnings; each pod against what it asked for |
+| Machine | The VM: CPU by mode, pressure, memory, the clock; the root filesystem, what grows on it and when it would be full; disk latency; the network and the month's transfer at today's rate; its upkeep (a reboot required, updates waiting, a newer kernel waiting, AIDE, the units, auditd's log); the journal's warnings; each pod against what it asked for |
 | Database | PostgreSQL: connections, transactions, locks, the oldest transaction; tables, dead rows and vacuums; WAL, checkpoints and I/O; keel's pool and its queries' times; the statements that cost the most, and the slow ones with their plans |
 | Backups | How far back a restore can go: the last WAL archived, segments archived and failed, WAL waiting on the machine, WAL written a day, the base backups, the dump's and the restore test's runs and results, the archiver's log |
 | Edge | What players meet: the tunnel's connections, Traefik's requests by route and responses by code, the limits' 429s, open connections, request times, cloudflared's log, keel's refusals |

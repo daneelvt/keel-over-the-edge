@@ -1583,7 +1583,72 @@
       "gridPos": {
         "x": 0,
         "y": 44,
-        "w": 8,
+        "w": 6,
+        "h": 7
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Newer kernel waiting",
+      "description": "A kernel newer than the one booted, installed by the updates and waiting to be tried, and how long it has waited. The machine boots the playbook's updates_kernel; KernelWaiting fires at two weeks. How to move to it: docs/development.md, Reboots and upgrades.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "VictoriaMetrics"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "max by (kernel) (time() - keel_machine_kernel_waiting_since_timestamp_seconds)",
+          "legendFormat": "{{kernel}}",
+          "editorMode": "code",
+          "range": true,
+          "instant": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "decimals": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "#EAB839",
+                "value": 1209600
+              }
+            ]
+          },
+          "noValue": "none"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "textMode": "value_and_name",
+        "orientation": "auto"
+      },
+      "id": 30,
+      "gridPos": {
+        "x": 6,
+        "y": 44,
+        "w": 4,
         "h": 7
       }
     },
@@ -1639,9 +1704,9 @@
       },
       "id": 25,
       "gridPos": {
-        "x": 8,
+        "x": 10,
         "y": 44,
-        "w": 8,
+        "w": 7,
         "h": 7
       }
     },
@@ -1676,9 +1741,9 @@
       },
       "id": 26,
       "gridPos": {
-        "x": 16,
+        "x": 17,
         "y": 44,
-        "w": 8,
+        "w": 7,
         "h": 7
       }
     },
