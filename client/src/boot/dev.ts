@@ -2,7 +2,8 @@
 
 // The developer page: the game's name, the server and client versions, what
 // this browser offers, and whether the physics module agrees with the server
-// here. Everything is built as nodes and text.
+// here. Everything is built as nodes and text. At #sailors, the dressing
+// room's page (sailors.html) instead.
 
 import './styles.css';
 import { CATALOG_VERSION } from '../catalog';
@@ -87,4 +88,9 @@ async function start(): Promise<void> {
   physics.replaceChildren(...(await physicsRows()));
 }
 
-void start();
+// The dressing room is a page of its own, built apart from the game's.
+if (location.hash.startsWith('#sailors')) {
+  location.replace(`/sailors.html${location.search}${location.hash}`);
+} else {
+  void start();
+}

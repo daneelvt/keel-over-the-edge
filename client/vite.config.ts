@@ -96,6 +96,15 @@ const approvePage: Plugin = {
   },
 };
 
+// The dressing room, built apart in the same way (vite.sailors.config.ts).
+const dressingRoom: Plugin = {
+  name: 'dressing-room',
+  apply: 'build',
+  async closeBundle() {
+    await build({ configFile: 'vite.sailors.config.ts', logLevel: 'warn' });
+  },
+};
+
 export default defineConfig({
   server,
   // The net worker's packages, bundled for the development server from the
@@ -118,6 +127,7 @@ export default defineConfig({
   plugins: [
     devWorlds,
     approvePage,
+    dressingRoom,
     licences({
       allowedFile,
       shared: workerPackages,
@@ -142,6 +152,15 @@ export default defineConfig({
           licence: 'MIT',
           file: 'build/notices/meshoptimizer.txt',
         },
+        // And Basis Universal's transcoder and a Zstandard decoder, which
+        // load the sailors' compressed textures in the dressing room (built
+        // apart, vite.sailors.config.ts).
+        {
+          name: 'Basis Universal (transcoder, in three.js)',
+          licence: 'Apache-2.0',
+          file: 'build/notices/basis-universal.txt',
+        },
+        { name: 'zstddec (in three.js)', licence: 'MIT', file: 'build/notices/zstddec.txt' },
       ],
     }),
   ],

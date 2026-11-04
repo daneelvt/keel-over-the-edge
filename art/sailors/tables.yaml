@@ -34,12 +34,16 @@ budgets:
 
 # The atlas: its size at each level, the margin round its islands in
 # pixels at the close level, and the share of what its islands cover that
-# the face and head take.
+# the face and head take. The margin is wide enough that the mask's mip
+# levels down to an eighth (and the far level's atlas, an eighth of the
+# close's) keep each region its own: at 6 pixels, a third mip level mixed
+# the shirt's region into the skin beside it, and the game drew the main
+# colour on a shin and across the crown's seam.
 atlas:
   close: 1024
   deck: 512
   far: 128
-  margin: 6
+  margin: 24
   head: 0.37
 
 # What a level's file may weigh, gzipped, in bytes (the deck and far levels
