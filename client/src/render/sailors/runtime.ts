@@ -49,6 +49,8 @@ const HIKE_FULL = 0.95;
 /** How far out and up of both ends a change of mode's path bows. */
 const ARC_OUT = 0.35;
 const ARC_UP = 0.6;
+/** Ends this far apart bow fully; nearer, in proportion. */
+const ARC_SPAN = 0.6;
 /** Seconds a change of mode blends over. */
 const CHANGE = 0.7;
 /** A steady boat for this long, the habit may come; between habits at least this long. */
@@ -116,6 +118,9 @@ const p = new Vector3();
 const q = new Quaternion();
 const q2 = new Quaternion();
 const m = new Matrix4();
+const m2 = new Matrix4();
+const m3 = new Matrix4();
+const m4 = new Matrix4();
 const inv = new Matrix4();
 const e = new Euler();
 const ONE = new Vector3(1, 1, 1);
@@ -188,6 +193,7 @@ export class SailorRuntime {
   #nextHabit = 20;
   #effort = 0;
   #high = 1;
+  #rebase = false;
 
   constructor(
     readonly rig: Rig,
@@ -241,6 +247,10 @@ export class SailorRuntime {
     const dt = Math.max(0, Math.min(s.dt, 0.1));
     const mode = s.mode;
     this.#high = s.heel > 0 ? -1 : 1;
+    if (this.#mode < 0 && Math.abs(s.offset) > 0.05) {
+      // The first moment: the sailor is already on its side deck.
+      this.#side = Math.sign(s.offset);
+    }
     if (mode !== this.#mode) {
       this.#begin(mode);
     }
@@ -272,6 +282,14 @@ export class SailorRuntime {
     }
 
     // A change of mode, blended along a path clear of the hull.
+    if (this.#change < 1 && this.#rebase) {
+      // From a clip's end to a pose in the same boat (the climb ends seated
+      // at the helm): the old pose moved into the new place, and blended
+      // there, the root still.
+      this.#rebase = false;
+      this.#rebasePose(this.#from, this.#fromPlace, place);
+      this.#fromPlace.copy(place);
+    }
     if (this.#change < 1) {
       this.#change = Math.min(1, this.#change + dt / CHANGE);
       const f = smooth(this.#change);
@@ -319,10 +337,38 @@ export class SailorRuntime {
       // Climbing in on the side the board was on, the high one.
       this.#side = this.#high;
     }
+    // A climb ends seated at the helm: the pose carries on in the boat.
+    this.#rebase = mode === 0 && this.#mode === CLIMBING;
     this.#cross = null;
     this.#habit = null;
     this.#mode = mode;
     this.#springs.reset();
+  }
+
+  /**
+   * Moves a pose made for one place to another: its hips turned and moved
+   * so that, at the new place, the body is where it was.
+   */
+  #rebasePose(pose: Pose, from: Place, to: Place): void {
+    const rig = this.rig;
+    const hips = this.#bones.pelvis as number;
+    const root = rig.parent[hips] as number;
+    // The hips' parent's frame in the figure's: the base, and the root bone.
+    m.copy(rig.base);
+    if (root >= 0) {
+      m.multiply(
+        m2.compose(v.fromArray(pose.pos, 3 * root), q.fromArray(pose.quat, 4 * root), ONE),
+      );
+    }
+    // K: from the old place's figure space to the new one's.
+    from.matrix(m3);
+    to.matrix(m4).invert().multiply(m3);
+    // L' = M⁻¹ K M L
+    m2.compose(v.fromArray(pose.pos, 3 * hips), q.fromArray(pose.quat, 4 * hips), ONE);
+    m3.copy(m).invert().multiply(m4).multiply(m).multiply(m2);
+    m3.decompose(v, q, w);
+    v.toArray(pose.pos, 3 * hips);
+    q.toArray(pose.quat, 4 * hips);
   }
 
   /** At the helm or hiking, crossing, or the habit: true when seated on a side deck. */
@@ -485,11 +531,13 @@ export class SailorRuntime {
     w.copy(b.at)
       .setY(b.at.y - cog)
       .applyQuaternion(q);
-    // The control point: outboard of both on the side they lie, and above both.
+    // The control point: outboard of both on the side they lie, and above
+    // both; as much as the ends are apart (a place to itself is no move).
     const side = Math.sign(v.x + w.x) || 1;
+    const bow = Math.min(1, v.distanceTo(w) / ARC_SPAN);
     u.set(
-      side * Math.max(side * v.x, side * w.x) + side * ARC_OUT,
-      Math.max(v.y, w.y) + ARC_UP,
+      side * Math.max(side * v.x, side * w.x) + side * ARC_OUT * bow,
+      Math.max(v.y, w.y) + ARC_UP * bow,
       (v.z + w.z) / 2,
     );
     const g = 1 - f;

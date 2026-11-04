@@ -214,14 +214,23 @@ test('the sailor holds the tiller extension at the helm, and crosses the boat wh
         });
       }
     };
-    for (let f = 0; f < 30; f++) {
-      k.setState({ sailor: 0.6, sailorMode: 0 });
+    // In a calm and upright, to windward on starboard, the boom out to port:
+    // until any cross the page began with has ended there.
+    k.setWind(0.5, 0);
+    for (let f = 0; f < 400; f++) {
+      k.setState({ sailor: 0.6, boom: -0.5, heel: 0, sailorMode: 0 });
       k.sailFrames(1, 1);
-      look();
+      const s = k.sailor();
+      if (f > 30 && s !== null && s.side === 1 && !s.crossing) {
+        break;
+      }
     }
+    look();
     const before = seen.at(-1);
+    seen.length = 0;
+    // The boom over to starboard and the sailor to port: a tack's cross.
     for (let f = 0; f < 150; f++) {
-      k.setState({ sailor: -0.6, sailorMode: 0 });
+      k.setState({ sailor: -0.6, boom: 0.5, heel: 0, sailorMode: 0 });
       k.sailFrames(1, 1);
       look();
     }
@@ -246,8 +255,12 @@ test('capsized, the sailor treads water off the high side, clear of the hull', a
     k.sailFrames(10, 1);
     return k.sailor()?.at ?? null;
   });
-  // Heeled to starboard, the high side is port: outboard of its gunwale.
-  expect(at?.[0] ?? 0).toBeLessThan(-0.7);
+  // Heeled to starboard, the high side is port: in the water there, out
+  // beyond the hull's bottom (the place in the heeled model, turned back
+  // level about the heel's pivot at the centre of gravity, 0.3 m up).
+  const heel = (85 * Math.PI) / 180;
+  const [x, y] = [at?.[0] ?? 0, (at?.[1] ?? 0) - 0.3];
+  expect(x * Math.cos(heel) + y * Math.sin(heel)).toBeLessThan(-0.6);
 });
 
 test('a frame the cap skips leaves the last picture on screen', async ({ page }) => {

@@ -206,8 +206,9 @@ test('the Rover stands and sits in both versions, dressed, skinned and posed', a
       expect(darkest(picture, at), `${name}, ${clip}`).toBeLessThanOrEqual(DARK);
     }
   }
-  // Seated in the boat in every clip that sits in it, either side deck.
-  for (const clip of ['helm', 'helm-port', 'hiking-3', 'cross', 'climbing-in']) {
+  // Seated in the boat in the clips that sit in it, either side deck (a
+  // hiking sailor's head is behind the moored boat's boom).
+  for (const clip of ['helm', 'helm-port', 'cross', 'climbing-in']) {
     const seated = await show(page, { clip, t: 1 });
     expect(
       (await page.evaluate(() => globalThis.dressing.figures())).every((f) => f.inBoat),
