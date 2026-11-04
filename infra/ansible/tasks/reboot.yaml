@@ -1,8 +1,8 @@
 # SPDX-License-Identifier: AGPL-3.0-only
-# What takes effect only at boot: a new kernel or library (Ubuntu's
-# reboot-required), the kernel's command line, a module in use, locked
-# audit rules. The machine reboots only when the run was asked to;
-# otherwise the run says a reboot is due.
+# What takes effect only at boot: an update (Ubuntu's reboot-required),
+# the kernel the updates role names, the kernel's command line, a module
+# in use, locked audit rules. The machine reboots only when the run was
+# asked to; otherwise the run says a reboot is due.
 
 - name: Read whether a package asks for a reboot
   ansible.builtin.stat:
@@ -13,6 +13,7 @@
   ansible.builtin.set_fact:
     machine_reboot_reasons: >-
       {{ (hardening_reboot_reasons | default([]))
+         + (updates_reboot_reasons | default([]))
          + (['an updated package asks for it'] if machine_reboot_required.stat.exists else []) }}
 
 - name: Say a reboot is due

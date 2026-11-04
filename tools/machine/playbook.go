@@ -127,7 +127,12 @@ func (m *machine) readState(ctx context.Context, local bool) (clusterState, erro
 	}
 	s := stateLine.FindStringSubmatch(log.String())
 	if s == nil {
-		return clusterState{}, errors.New("state.yaml did not say what Flux follows")
+		// Its output's end says why: a play with no host, a task skipped.
+		out := log.String()
+		if len(out) > 2000 {
+			out = "…" + out[len(out)-2000:]
+		}
+		return clusterState{}, fmt.Errorf("state.yaml did not say what Flux follows:\n%s", out)
 	}
 	return clusterState{path: s[1], archive: s[2]}, nil
 }

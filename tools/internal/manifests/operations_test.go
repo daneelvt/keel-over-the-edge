@@ -458,7 +458,7 @@ func TestQuietWindows(t *testing.T) {
 	}
 	kured := strings.Join(toStrings(List(Containers(PodSpec(Find(controllers, "DaemonSet", "kured")))[0], "command")), " ")
 	for _, want := range []string{"--reboot-days=we", "--start-time=08:00", "--end-time=10:00", "--time-zone=UTC", "--drain-timeout=10m", "--ds-namespace=kured",
-		"--prometheus-url=" + store + " ", "--alert-filter-regexp=^(Watchdog|RebootPending|UpdatesPending)$", "--alert-firing-only=true"} {
+		"--prometheus-url=" + store + " ", "--alert-filter-regexp=^(Watchdog|RebootPending|UpdatesPending|KernelWaiting)$", "--alert-firing-only=true"} {
 		if store == "" || !strings.Contains(kured+" ", want) {
 			t.Errorf("Kured runs without %s: %s", want, kured)
 		}

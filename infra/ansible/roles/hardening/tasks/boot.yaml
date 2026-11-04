@@ -14,7 +14,7 @@
 
 # What GRUB boots is read, not remembered: a run that stopped after the
 # drop-in changed still brings GRUB up to date the next time. The first
-# linux line is the default entry's.
+# linux line is read: every entry has the same command line.
 - name: Bring GRUB up to date
   vars:
     hardening_lines: "{{ (hardening_grub.content | b64decode).splitlines() | map('trim') | select('match', 'linux\\s') | list }}"

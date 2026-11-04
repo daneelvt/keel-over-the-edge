@@ -1,0 +1,13 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# The kernel the machine boots, whatever newer one the updates install
+# beside it. 7.0.0-42 refused every signal a container sent, even to
+# itself: its AppArmor gave containers the label
+# cri-containerd.apparmor.d//&unconfined, which containerd's profile does
+# not let signals reach. Postgres waits on its own processes' signals, so
+# its connections hung and the game stopped.
+#
+# Before moving it, the new kernel is tried on the local cluster's VM:
+# docs/development.md, Reboots and upgrades.
+updates_kernel: 7.0.0-38-generic
+# GRUB's entry for it, by its titles.
+updates_grub_default: "Advanced options for Ubuntu>Ubuntu, with Linux {{ updates_kernel }}"
