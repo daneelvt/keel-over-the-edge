@@ -766,13 +766,30 @@ export interface Sailor {
  */
 export interface SailorArt {
   /**
-   * The sailor's model: a glTF binary with the nodes body, head, arm-left and arm-right, its origin at the hips, facing +x.
+   * The sailor's deck level: a glTF binary of skinned meshes on the shared skeleton, with its atlas and mask, drawn on the boat in view.
    */
   model: string;
   /**
-   * The sailor's far model, drawn in boats seen from afar: the model's nodes, with few segments.
+   * The sailor's far level: one rigid figure posed seated at the helm, with the place node that seats it in the boat model; drawn in the fleet.
    */
   far: string;
+  /**
+   * The sailor's close level, drawn on the boat in view when the camera is near.
+   */
+  close: string;
+  /**
+   * The sailor's clips: the skeleton with its animations, and a place node for each clip seated in the boat.
+   */
+  clips: string;
+  colours: SailorColours;
+}
+/**
+ * The colours it is drawn in until players choose their own: its main colour, skin and hair, sRGB.
+ */
+export interface SailorColours {
+  main: string;
+  skin: string;
+  hair: string;
 }
 /**
  * The look of the machine sailors AI accounts sail as: the choices a player makes one from, a version, a metal finish and a main colour. A machine sailor's sailor keeps the three ids.
@@ -6460,6 +6477,15 @@ export interface NewsColumn {
    */
   of: "charting" | "world";
 }
+/**
+ * This interface was referenced by `Catalog`'s JSON-Schema
+ * via the `definition` "SailorColours".
+ */
+export interface SailorColours1 {
+  main: string;
+  skin: string;
+  hair: string;
+}
 
 /** The catalog version (tools/catalog). */
-export const CATALOG_VERSION = 'de5e6f7cacacb033';
+export const CATALOG_VERSION = '893c3124859fc482';

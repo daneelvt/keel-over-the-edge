@@ -448,8 +448,12 @@ export class SeaScene {
     const boat = new Boat(this.kind);
     await boat.load('17', this.kind.name.slice(0, 1));
     const sailor = catalog.sailors[0];
-    if (sailor !== undefined) {
-      await Promise.all([boat.loadSailor(sailor.art.model), this.fleet.load(sailor.art)]);
+    const renderer = this.stage.renderer;
+    if (sailor !== undefined && renderer !== null) {
+      await Promise.all([
+        boat.loadSailor(sailor.art, renderer),
+        this.fleet.load(sailor.art, renderer),
+      ]);
     }
     boat.model.add(this.overlays.onBoat);
     Shadows.cast(boat.model, this.shadows.on, this.shadows.lit);
@@ -1224,6 +1228,8 @@ export class SeaScene {
     const eye = this.origin.world;
     this.edge.frame(this.origin, camera.position.x + eye.x, -camera.position.z + eye.y, this.time);
     this.boat?.draw(bs, this.pose, this.out, this.time, this.timeStep);
+    // The sailor drawn close when the camera is near it.
+    this.boat?.sailor?.near(camera.position.distanceTo(this.#v.set(bs.x, bs.y + 0.8, bs.z)));
     const fs = this.fleetSource;
     if (this.fleet.loaded) {
       this.fleet.draw(

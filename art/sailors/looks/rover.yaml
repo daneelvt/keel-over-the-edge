@@ -291,6 +291,6 @@ palette:
   main: "#9B2226"
   skin: "#CDA385"
   hair: "#654A37"
-# The motion lab's clips the dressing room shows the look in; its own
-# habit comes with the sailing clips.
-clips: [helm-idle, standing-idle, treading-water]
+# The clips the Rover sails with (poses/sailing.yaml): those made on both
+# side decks are two each; and its habit, settling the cocked hat.
+clips: [helm, hiking-1, hiking-2, hiking-3, cross, habit, habit-standing, standing-idle, treading-water, righting, climbing-in]

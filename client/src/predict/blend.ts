@@ -31,6 +31,10 @@ export interface BoatPose {
   sheetLimit: number;
   /** The sailor's mode, from the newer step. */
   sailorMode: number;
+  /** The seconds left in the sailor's mode (swimming, climbing), from the newer step. */
+  sailorTimer: number;
+  /** The heel's rate, radians a second. */
+  rollRate: number;
 }
 
 export function newPose(): BoatPose {
@@ -46,6 +50,8 @@ export function newPose(): BoatPose {
     sailor: 0,
     sheetLimit: 0,
     sailorMode: 0,
+    sailorTimer: 0,
+    rollRate: 0,
   };
 }
 
@@ -94,6 +100,8 @@ export class StatePair {
     out.sailor = this.#at(S.sailor, alpha);
     out.sheetLimit = this.#at(S.sheetLimit, alpha);
     out.sailorMode = this.current[S.sailorMode] ?? 0;
+    out.sailorTimer = this.current[S.sailorTimer] ?? 0;
+    out.rollRate = this.#at(S.rollRate, alpha);
     return out;
   }
 

@@ -277,6 +277,8 @@ def through_boat(fig, meshes):
             # from the thigh beside it, which drops into the cockpit, would
             # cross the deck's edge under cloth lying on the deck.
             hits[o.name] = [i for i, p in enumerate(co) if stage.under(p)]
+            for i in hits[o.name][:1]:
+                examples.append({"mesh": o.name, "under": [round(float(x), 3) for x in co[i]]})
             continue
         anchors = _nearest_on_segments(co, a, b)
         hits[o.name] = stage.crossed(anchors, co)

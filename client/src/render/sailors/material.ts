@@ -121,11 +121,16 @@ export function sailorColours(main: string, skin: string, hair: string): SailorC
 
 /**
  * A sailor's material: the atlas (sRGB) recoloured by its mask (data), the
- * colours read from each object's userData (SailorColours).
+ * colours read from each object's userData (SailorColours); placed by a
+ * vertex node, if given (the fleet's), else where its skin puts it.
  */
-export function sailorMaterial(atlas: Texture, mask: Texture): MeshStandardNodeMaterial {
+export function sailorMaterial(
+  atlas: Texture,
+  mask: Texture,
+  vertex?: Node<'vec3'>,
+): MeshStandardNodeMaterial {
   // Garments are single surfaces, seen from inside at a cuff or a hem.
-  const m = litMaterial({ roughness: 0.8, metalness: 0, side: DoubleSide });
+  const m = litMaterial({ roughness: 0.8, metalness: 0, side: DoubleSide }, vertex);
   m.name = 'sailor';
   const base = texture(atlas);
   const regions = texture(mask);

@@ -90,7 +90,7 @@ function gltfLoader(renderer: WebGPURenderer): GLTFLoader {
 }
 
 /** The named place nodes under a file's scene, as transforms to their parent's space. */
-function placesOf(root: Object3D): Map<string, Matrix4> {
+export function placesOf(root: Object3D): Map<string, Matrix4> {
   const out = new Map<string, Matrix4>();
   root.traverse((o) => {
     if (o.name.startsWith('place') && !(o instanceof Mesh)) {

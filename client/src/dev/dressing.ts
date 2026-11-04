@@ -140,7 +140,7 @@ const DEFAULTS: Room = {
 const VIEW_CLIP: Record<View, string> = {
   lineup: 'standing-idle',
   face: 'standing-idle',
-  deck: 'helm-idle',
+  deck: 'helm',
   picker: 'standing-idle',
 };
 const VIEWS: View[] = ['lineup', 'face', 'deck', 'picker'];

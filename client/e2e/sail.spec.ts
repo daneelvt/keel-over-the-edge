@@ -194,6 +194,62 @@ test('sheeted hard in on a reach in 20 knots, the boat capsizes and is sailed ag
   await expect(page.locator('[data-control=helm]')).not.toHaveClass(/dimmed/);
 });
 
+test('the sailor holds the tiller extension at the helm, and crosses the boat when its side changes', async ({
+  page,
+}) => {
+  await openScene(page);
+  const r = await page.evaluate(() => {
+    const k = globalThis.keel;
+    const seen: { side: number; crossing: boolean; tiller: boolean; hold: number; ext: number }[] =
+      [];
+    const look = (): void => {
+      const s = k.sailor();
+      if (s !== null) {
+        seen.push({
+          side: s.side,
+          crossing: s.crossing,
+          tiller: s.tiller,
+          hold: s.hold,
+          ext: s.extension,
+        });
+      }
+    };
+    for (let f = 0; f < 30; f++) {
+      k.setState({ sailor: 0.6, sailorMode: 0 });
+      k.sailFrames(1, 1);
+      look();
+    }
+    const before = seen.at(-1);
+    for (let f = 0; f < 150; f++) {
+      k.setState({ sailor: -0.6, sailorMode: 0 });
+      k.sailFrames(1, 1);
+      look();
+    }
+    return { before, after: seen.at(-1), crossed: seen.some((x) => x.crossing), seen };
+  });
+  expect(r.before?.side).toBe(1);
+  expect(r.before?.tiller).toBe(true);
+  expect(r.crossed).toBe(true);
+  expect(r.after?.side).toBe(-1);
+  expect(r.after?.tiller).toBe(true);
+  // The hand on the extension, never beyond its end.
+  for (const s of r.seen.filter((x) => x.tiller)) {
+    expect(s.hold).toBeLessThanOrEqual(s.ext + 1e-3);
+  }
+});
+
+test('capsized, the sailor treads water off the high side, clear of the hull', async ({ page }) => {
+  await openScene(page);
+  const at = await page.evaluate(() => {
+    const k = globalThis.keel;
+    k.setState({ heel: (85 * Math.PI) / 180, sailorMode: 1, sailorTimer: 8 });
+    k.sailFrames(10, 1);
+    return k.sailor()?.at ?? null;
+  });
+  // Heeled to starboard, the high side is port: outboard of its gunwale.
+  expect(at?.[0] ?? 0).toBeLessThan(-0.7);
+});
+
 test('a frame the cap skips leaves the last picture on screen', async ({ page }) => {
   await openScene(page, 'sea=fresh');
   const drawn = await picture(page);

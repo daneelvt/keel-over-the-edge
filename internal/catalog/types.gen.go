@@ -2246,13 +2246,35 @@ type Sailor struct {
 
 // A sailor's art.
 type SailorArt struct {
-	// The sailor's far model, drawn in boats seen from afar: the model's nodes, with
-	// few segments.
+	// The sailor's clips: the skeleton with its animations, and a place node for each
+	// clip seated in the boat.
+	Clips ArtPath `json:"clips"`
+
+	// The sailor's close level, drawn on the boat in view when the camera is near.
+	Close ArtPath `json:"close"`
+
+	// The colours it is drawn in until players choose their own: its main colour,
+	// skin and hair, sRGB.
+	Colours SailorColours `json:"colours"`
+
+	// The sailor's far level: one rigid figure posed seated at the helm, with the
+	// place node that seats it in the boat model; drawn in the fleet.
 	Far ArtPath `json:"far"`
 
-	// The sailor's model: a glTF binary with the nodes body, head, arm-left and
-	// arm-right, its origin at the hips, facing +x.
+	// The sailor's deck level: a glTF binary of skinned meshes on the shared
+	// skeleton, with its atlas and mask, drawn on the boat in view.
 	Model ArtPath `json:"model"`
+}
+
+type SailorColours struct {
+	// Hair corresponds to the JSON schema field "hair".
+	Hair string `json:"hair"`
+
+	// Main corresponds to the JSON schema field "main".
+	Main string `json:"main"`
+
+	// Skin corresponds to the JSON schema field "skin".
+	Skin string `json:"skin"`
 }
 
 // Adjacent scenery, 0 to 5: so much for each island within, and more for each with
@@ -4426,4 +4448,4 @@ type WorldZones struct {
 }
 
 // Version is the catalog version (tools/catalog).
-const Version = "de5e6f7cacacb033"
+const Version = "893c3124859fc482"

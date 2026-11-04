@@ -1,14 +1,18 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 # Sailors: the figures that sail the boats.
 #
-# For now one plain stand-in, which shows where the sailor is and what they
-# are doing without a look of its own.
+# For now one, drawn on every boat until players choose their own: the
+# Rover, female, in the Rover's own colours (madder red, Tone 2, brown).
+# Its id stays the stand-in's, which the store keeps for every sailor.
 sailors:
   - id: stand-in
     name: Stand-in
     art:
-      model: sailors/stand-in.glb
-      far: sailors/stand-in.far.glb
+      model: sailors/rover/female.deck.glb
+      far: sailors/rover/female.far.glb
+      close: sailors/rover/female.glb
+      clips: sailors/rover/female.clips.glb
+      colours: { main: "#9b2226", skin: "#cda385", hair: "#654a37" }
 
 # The machine sailors' look: the choices a player makes their AI account's
 # sailor from. A starting set, until the machines are drawn: the versions,

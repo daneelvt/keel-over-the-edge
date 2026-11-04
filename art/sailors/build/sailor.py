@@ -11,6 +11,7 @@ import time
 
 import bpy
 import numpy as np
+from mathutils import Matrix
 
 import atlas
 import body
@@ -310,6 +311,8 @@ def build_version(job, v, run):
             seats = metrics.seat(gates, level, fig, lib, SEATED)
         else:
             seats = metrics.seat(gates, level, fig, lib, ("far",))
+        if level == "deck":
+            clip_seat(gates, level, fig)
 
         lap("gates")
         # The sheet, and the clips on the close level.
@@ -371,7 +374,8 @@ def build_version(job, v, run):
 def make_clips(job, v, fig, lib, kinds, gates, renderer, lookmat, work):
     """The look's clips, made or retargeted on this version, judged, drawn
     and exported together. Returns each clip's measures."""
-    names = job["look"].get("clips") or []
+    # A clip made on both sides is two.
+    names = [n for c in job["look"].get("clips") or [] for n in (c, c + motion.PORT) if n in lib.clips or n == c]
     if not names:
         return {}
     judge = _motion_gate()
@@ -390,6 +394,7 @@ def make_clips(job, v, fig, lib, kinds, gates, renderer, lookmat, work):
         made = time.time() - start
         act, slot = motion.write_action(fig.arm, name, clip.frames, clip.fps)
         actions.append((act, slot))
+        fig.made[name] = (act, slot, clip)
         places[f"place-{name}"] = clip.place.copy()
         fig.quiet()
         measures, track = judge.check(fig, clip, act, slot, m["gate"], m["ranges"], proxies)
@@ -404,10 +409,48 @@ def make_clips(job, v, fig, lib, kinds, gates, renderer, lookmat, work):
         fig.reset()
     path = os.path.join(job["out"], f"{v}.clips.glb")
     motion.export(path, fig.arm, actions, job["gltfpack"], work, places)
+    clip_seat(gates, "close", fig, out)
     gltf, _ = export.read(path)
     metrics.file(gates, "clips", path, gltf, [], job["tables"]["skeleton"], None, clips=names)
     metrics.skeleton(gates, "clips", gltf, job["tables"]["skeleton"])
     return out
+
+
+def clip_seat(gates, level, fig, measures=None):
+    """Nothing through the boat in any frame of a clip placed in it: the
+    seated, hiking, crossing and climbing ones, at this level. The skirts
+    laid on the seat as the game lays them."""
+    import bpy
+
+    for name, (act, slot, clip) in fig.made.items():
+        if clip.place == Matrix():
+            continue
+        start = time.time()
+        fig.reset()
+        motion.play(fig.arm, act, slot)
+        fig.arm.matrix_world = clip.place
+        fig.on_seat(True)
+        through = []
+        total = 0
+        for f in range(len(clip.frames)):
+            bpy.context.scene.frame_set(f)
+            # The cloth is laid on the seat while the hips are over it, not
+            # while the sailor hangs outside the boat, climbing in.
+            fig.on_seat(fig.world("pelvis").z > fig.stage.seat.z - 0.2)
+            fig.update()
+            t, hits = metrics.through_boat(fig, fig.meshes)
+            k = t["vertices"] + t["bones"]
+            if k:
+                total += k
+                through.append([f, {m: len(h) for m, h in hits.items() if h}] + t["crossed"][:2] + t["lines"][:1])
+        motion.stop(fig.arm)
+        fig.reset()
+        worst = sorted(through, key=lambda f: -sum(f[1].values()))[:3]
+        gates.add(level, f"seat {name} every frame", total, 0, total == 0, frames=through[:3] + worst,
+                  all=[[f[0], sum(f[1].values())] for f in through],
+                  seconds=round(time.time() - start, 1))
+        if measures is not None and name in measures:
+            measures[name]["seat"] = {"value": total, "limit": 0, "ok": total == 0}
 
 
 def _motion_gate():

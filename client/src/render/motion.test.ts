@@ -210,15 +210,23 @@ describe('the pennant', () => {
   });
 });
 
-describe('the stand-in', () => {
-  const frame = { seatZ: 0.35, centreOfGravity: cg, boardZ: -0.45, boardDepth: 0.6 };
+describe('the fleet’s sailor', () => {
+  const frame = {
+    seatOut: 0.6,
+    seatY: 0.32,
+    seatZ: 0.35,
+    centreOfGravity: cg,
+    boardZ: -0.45,
+    boardDepth: 0.6,
+  };
   const place = (): SailorPlace => ({ x: 0, y: 0, z: 0, facing: 0, tilt: 0 });
 
-  test('moves across with the sailor and leans out as it hikes', () => {
+  test('sits on its side deck where its file seats it, and leans out as it hikes', () => {
     const inboard = placeSailor(-0.2, SAILING, 0, frame, -1, place());
     const hiking = placeSailor(-0.95, SAILING, 0, frame, -1, place());
-    expect(inboard.x).toBeCloseTo(-0.2, 12);
-    expect(hiking.x).toBeLessThan(inboard.x);
+    expect(inboard.x).toBeCloseTo(-0.6, 12);
+    expect(inboard.y).toBeCloseTo(0.32, 12);
+    expect(hiking.x).toBeCloseTo(-0.6, 12);
     expect(inboard.tilt).toBe(0);
     // Leaning to port: a turn about z that takes up (+y) toward −x.
     expect(hiking.tilt).toBeGreaterThan(0.5);

@@ -833,6 +833,29 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
     setOrigin(q: number, r: number): void {
       world.origin.moveTo({ q, r });
     },
+    /**
+     * The sailor on the boat in view, as last drawn: its side deck, whether
+     * it is crossing, the level drawn (deck or close), whether the aft hand
+     * holds the tiller extension and how far from its hinge, and where the
+     * figure stands in the boat model.
+     */
+    sailor() {
+      const s = world.boat?.sailor ?? null;
+      if (s === null) {
+        return null;
+      }
+      const rt = s.runtime;
+      return {
+        side: rt.side,
+        crossing: rt.crossing,
+        close: !s.figure.visible,
+        tiller: rt.hands.tiller,
+        sheet: rt.hands.sheet,
+        hold: rt.hands.tillerAt.distanceTo(s.runtime.boat.hinge),
+        extension: s.runtime.boat.extension,
+        at: rt.place.at.toArray(),
+      };
+    },
     /** Puts the camera at a preset, by name, or at a view of its own. */
     camera(name: string | CameraView): void {
       const p = typeof name === 'string' ? CAMERA_PRESETS[name] : name;

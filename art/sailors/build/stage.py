@@ -6,12 +6,16 @@ which holds the hull, the side decks, the cockpit and its floor, and the
 `sailor` node, the station the game seats the sailor at. In Blender's axes
 once imported: x to starboard, y forward, z up, the waterline at z 0.
 
-The places a sailor's hands and feet go are found from the model where it
-has them (the seat on the side deck, the gunwale, the cockpit's floor) and
-otherwise taken from tables.yaml's `stage`, as offsets from the seat (the
-tiller extension's grip, the mainsheet), until the model has nodes for them.
-They are kept in seat space: forward, inboard and up from the seat, so the
-same pose sits on either side.
+The places a sailor's hands and feet go are found from the model (the seat
+on the side deck, the gunwale, the cockpit's floor, the hiking strap's node
+`strap`) or taken from tables.yaml's `stage` as offsets from the seat (where
+the hands hold the tiller extension and the mainsheet). They are kept in seat
+space: forward, inboard and up from the seat, so the same pose sits on either
+side. The aft hand holds the tiller extension, hinged at the tiller's end (its
+node `extension`, its far end `grip`), anywhere along it: a hand's place on
+the tiller is brought within the extension's length of the hinge, as the game
+swings the extension to the hand. The mainsheet comes up from its block on
+the floor to the hand, wherever it is.
 
 The cockpit runs between the side decks' inner edges (`edge` out from the
 centreline). A figure is seated with its face inboard; a vertex is through the boat
@@ -74,11 +78,23 @@ class Stage:
         if floor is None or floor > top - 0.1:
             raise AssertionError(f"{spec['boat']}: no cockpit floor {spec['floor']['in']} m inboard of the seat")
         self.floor = Vector((fx, self.station, floor))
-        # The seat's plane, as the game lifts cloth to it: a wide square at
-        # the side deck's height, for the skirts' lift to find from below.
+        # The tiller extension, hinged at the tiller's end on the centreline
+        # (the rudder amidships): the aft hand holds it anywhere along it.
+        self.hinge = bpy.data.objects["boat-extension"].matrix_world.translation.copy()
+        self.extension = (bpy.data.objects["boat-grip"].matrix_world.translation - self.hinge).length
+        # The hiking strap, on the floor at the seat's station.
+        self.strap = bpy.data.objects["boat-strap"].matrix_world.translation.copy()
+        # The seat's plane, as the game lifts cloth to it: at the side deck's
+        # height, over each side deck and out beyond the gunwale, for the
+        # skirts' lift to find from below; not over the cockpit, where a
+        # sailor crouched on the floor has cloth below it.
         me = bpy.data.meshes.new("seat-plane")
-        r = 4.0
-        me.from_pydata([(-r, -r, top), (r, -r, top), (r, r, top), (-r, r, top)], [], [(0, 1, 2, 3)])
+        y0, y1 = self.station - 1.5, self.station + 1.5
+        far = self.gunwale.x + 0.25
+        verts = []
+        for s in (1, -1):
+            verts += [(s * self.edge, y0, top), (s * far, y0, top), (s * far, y1, top), (s * self.edge, y1, top)]
+        me.from_pydata(verts, [], [(0, 1, 2, 3), (7, 6, 5, 4)])
         self.plane = bpy.data.objects.new("seat-plane", me)
         bpy.context.scene.collection.objects.link(self.plane)
         self.plane.hide_render = True
@@ -98,15 +114,24 @@ class Stage:
 
     def point(self, name, side=1):
         """A named place in boat space: the seat, the gunwale, the floor,
-        or one of the stage's offsets from the seat."""
+        the strap, or one of the stage's offsets from the seat; a place on
+        the tiller (tiller, tiller-hiking) brought onto the extension, within
+        its length of its hinge, as the game swings it to the hand."""
         if name == "seat":
             return self.frame(side) @ Vector((0, 0, 0))
         if name == "gunwale":
             return Vector((side * self.gunwale.x, self.gunwale.y, self.gunwale.z))
         if name == "floor":
             return Vector((side * self.floor.x, self.floor.y, self.floor.z))
+        if name == "strap":
+            return self.strap.copy()
         fwd, inb, up = self.spec["points"][name]
-        return self.frame(side) @ Vector((fwd, inb, up))
+        p = self.frame(side) @ Vector((fwd, inb, up))
+        if name.startswith("tiller"):
+            d = p - self.hinge
+            if d.length > self.extension:
+                p = self.hinge + d.normalized() * self.extension
+        return p
 
     def facing(self, side=1):
         """The figure's turn to face inboard on a side: it faces -y in its
