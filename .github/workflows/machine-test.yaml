@@ -50,6 +50,11 @@ jobs:
         run: sudo systemctl unmask tmp.mount && sudo systemctl start tmp.mount
       - name: The playbook on this runner, the first time
         run: .dev/bin/machine -run apply -local
+      - name: DEBUG journal
+        if: failure()
+        run: |
+          sudo cat /var/log/apt/history.log | grep -v '^Upgrade:' || true
+          sudo journalctl --no-pager -o short-precise --since '-4min' | grep -iE 'systemd\[1\]|dbus|reexec|reload|journal-upload|unattended|apt' | tail -120 || true
       - name: The playbook again, which must change nothing
         run: .dev/bin/machine -run apply -local -unchanged
       - name: The runner is as the playbook leaves it; Flux follows the real prod
