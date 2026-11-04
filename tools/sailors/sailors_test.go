@@ -149,7 +149,7 @@ func TestLookRefused(t *testing.T) {
 		"a machine's parameters on a human": {strings.Replace(good, "base: female", "base: female\n    machine: {cap: swept}", 1),
 			"the look is no machine"},
 		"a name for a clip not made": {good + "clips: [helm]\nnames: {machine-habit: habit}\n", "makes no such clip"},
-		"a name another clip has": {good + "clips: [habit, machine-habit]\nnames: {machine-habit: habit}\n", "which another of its clips is"},
+		"a name another clip has":    {good + "clips: [habit, machine-habit]\nnames: {machine-habit: habit}\n", "which another of its clips is"},
 	} {
 		t.Run(name, func(t *testing.T) {
 			dir := t.TempDir()
