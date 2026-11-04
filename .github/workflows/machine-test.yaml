@@ -43,14 +43,42 @@ jobs:
         run: go build -o .dev/bin/machine ./tools/machine
       - name: Ansible, from hashed requirements
         run: .dev/bin/machine -ansible
-      - name: DEBUG state.yaml by hand
+      - name: DEBUG state.yaml as the tool runs it
         working-directory: infra/ansible
         run: |
-          set -x
-          ls -la . inventory | head -30
-          sudo env ANSIBLE_CONFIG=$PWD/ansible.cfg ANSIBLE_NOCOLOR=1 ANSIBLE_FORCE_COLOR=0 ../../.dev/ansible/bin/ansible-playbook state.yaml --inventory inventory/runner.yaml -vvv < /dev/null 2>&1 | tail -60; echo "rc=${PIPESTATUS[0]}"
-          sudo env ANSIBLE_CONFIG=$PWD/ansible.cfg ../../.dev/ansible/bin/ansible-playbook --version 2>&1; echo rc=$?
-          head -3 ../../.dev/ansible/bin/ansible-playbook; sudo -V | head -2
+          AP=$(realpath ../../.dev/ansible/bin/ansible-playbook)
+          python3 - "$AP" <<'PY'
+          import subprocess as s, sys, os
+          cmd=["sudo","env","ANSIBLE_CONFIG="+os.getcwd()+"/ansible.cfg","ANSIBLE_NOCOLOR=1","ANSIBLE_FORCE_COLOR=0",sys.argv[1],"state.yaml","--inventory","inventory/runner.yaml"]
+          r=s.run(cmd,stdout=s.PIPE,stderr=s.PIPE,stdin=s.DEVNULL)
+          print("py separate", r.returncode, len(r.stdout), len(r.stderr), r.stdout[-300:], r.stderr[-300:])
+          PY
+          mkdir -p /tmp/h && cat > /tmp/h/main.go <<'GO'
+          package main
+
+          import (
+          	"bytes"
+          	"fmt"
+          	"io"
+          	"os"
+          	"os/exec"
+          	"strings"
+          )
+
+          func main() {
+          	x := exec.Command("sudo", "env", "ANSIBLE_CONFIG="+os.Args[2]+"/ansible.cfg", "ANSIBLE_NOCOLOR=1", "ANSIBLE_FORCE_COLOR=0", os.Args[1], "state.yaml", "--inventory", "inventory/runner.yaml")
+          	x.Dir = os.Args[2]
+          	x.Env = os.Environ()
+          	var log bytes.Buffer
+          	var stdout strings.Builder
+          	x.Stdout = io.MultiWriter(&log, &stdout)
+          	x.Stderr = &log
+          	err := x.Run()
+          	fmt.Printf("go: err=%v log=%d stdout=%d\n%s\n", err, log.Len(), stdout.Len(), log.String())
+          }
+          GO
+          (cd /tmp/h && go mod init h >/dev/null 2>&1; go run . "$AP" "$PWD") || true
+          env | grep -iE '^(ANSIBLE|PY|LC_|LANG|TERM|CI)' | sort
         continue-on-error: true
       - name: The playbook on this runner, the first time
         run: .dev/bin/machine -run apply -local
