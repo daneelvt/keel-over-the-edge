@@ -24,12 +24,11 @@ import {
   type Object3D,
   Vector3,
 } from 'three';
-import type { WebGPURenderer } from 'three/webgpu';
+import { dot, float, mix, saturate, uniform, uv, vec3, vec4 } from 'three/tsl';
+import type { Node, WebGPURenderer } from 'three/webgpu';
 import type { Boat as BoatKind } from '../../catalog';
 import type { BoatPose } from '../../predict/blend';
 import { RECORDS } from '../../predict/layout.gen';
-import { dot, float, mix, saturate, uniform, uv, vec3, vec4 } from 'three/tsl';
-import type { Node } from 'three/webgpu';
 import { fallToEdge, glowMaterial, litMaterial } from '../materials';
 import { Clip } from './clips';
 import { sailorColours, sailorLight } from './material';
@@ -92,7 +91,6 @@ export class BoatSailor {
   /** A machine's lantern's glow, where its file puts the lantern; and the lantern at rest against its bone. */
   readonly #glow: Mesh | null = null;
   readonly #glowStrength = uniform(1);
-  readonly #lantern = new Vector3();
   readonly #lanternBone: number = -1;
   readonly #lanternRest = new Matrix4();
   #time = 0;
