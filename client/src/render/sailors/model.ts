@@ -108,12 +108,14 @@ export function placesOf(root: Object3D): Map<string, Matrix4> {
  * Loads a level of a sailor's look from url, its meshes' material made by
  * sailorMaterial and their colours the given ones (shared, so a change to
  * them shows on every mesh). The renderer's GPU decides how the textures
- * are transcoded.
+ * are transcoded. A machine's lamps glow as each mesh's userData glow says
+ * (1 at first).
  */
 export async function loadSailor(
   url: string,
   renderer: WebGPURenderer,
   colours: SailorColours,
+  machine = false,
 ): Promise<SailorModel> {
   const gltf = await gltfLoader(renderer).loadAsync(url);
   const root = gltf.scene;
@@ -136,13 +138,16 @@ export async function loadSailor(
   if (atlas === null || mask === null) {
     throw new Error(`${url}: no atlas and mask`);
   }
-  const material = sailorMaterial(atlas, mask);
+  const material = sailorMaterial(atlas, mask, { machine });
   for (const o of meshes) {
     (o.material as MeshStandardMaterial).dispose();
     o.material = material;
     o.userData.main = colours.main;
     o.userData.skin = colours.skin;
     o.userData.hair = colours.hair;
+    if (machine) {
+      o.userData.glow = 1;
+    }
     // Bones and the bend move the figure beyond its rest pose's bounds.
     o.frustumCulled = false;
   }

@@ -26,7 +26,7 @@ machine:
     far: sailors/machine/female.far.glb
     close: sailors/machine/female.glb
     clips: sailors/machine/female.clips.glb
-    colours: { main: "#2b2a2e", skin: "#c9a04a", hair: "#ffb347" }
+    colours: { main: "#2b2a2e", skin: "#d9a957", hair: "#ffb347" }
   versions:
     - id: female
       name: female
@@ -35,7 +35,7 @@ machine:
   finishes:
     - id: brass
       name: Brass
-      colour: "#c9a04a"
+      colour: "#d9a957"
     - id: copper
       name: Copper
       colour: "#b8673f"

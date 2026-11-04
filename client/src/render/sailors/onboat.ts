@@ -9,7 +9,8 @@
 //
 // The figure is a child of the boat's model, placed by the runtime's root
 // (the clips' places, from the build): what it sits on is the boat model's
-// own deck.
+// own deck. A machine lives by its own layers, and its lamps glow as they
+// say.
 
 import {
   BufferAttribute,
@@ -76,6 +77,7 @@ export class BoatSailor {
   #closeBones: (Object3D | null)[] = [];
   #closeLoading = false;
   #near = false;
+  #shown = true;
   readonly #urls: SailorUrls;
   readonly #renderer: WebGPURenderer;
   readonly #boat: SailorBoat;
@@ -83,6 +85,7 @@ export class BoatSailor {
   readonly #rope: Mesh;
   readonly #ropePoints = [new Vector3(), new Vector3(), new Vector3()];
   readonly #still: boolean;
+  readonly #machine: boolean;
   #time = 0;
 
   private constructor(
@@ -95,15 +98,17 @@ export class BoatSailor {
     urls: SailorUrls,
     renderer: WebGPURenderer,
     seed: number,
+    machine: boolean,
   ) {
     this.#model = model;
+    this.#machine = machine;
     this.#parts = parts;
     this.#deck = deck;
     this.rig = rig;
     this.#boat = boat;
     this.#urls = urls;
     this.#renderer = renderer;
-    this.runtime = new SailorRuntime(rig, clips, boat, seed);
+    this.runtime = new SailorRuntime(rig, clips, boat, seed, machine);
     this.#deckBones = bonesFor(rig, deck.root);
     deck.root.name = 'sailor figure';
     deck.root.matrixAutoUpdate = false;
@@ -130,7 +135,7 @@ export class BoatSailor {
 
   /**
    * Loads the sailor's deck level and clips and seats it in a boat whose
-   * model is loaded (its parts by name).
+   * model is loaded (its parts by name); a machine, if it is one.
    */
   static async load(
     urls: SailorUrls,
@@ -139,11 +144,12 @@ export class BoatSailor {
     parts: Map<string, Object3D>,
     kind: BoatKind,
     seed: number,
+    machine = false,
   ): Promise<BoatSailor> {
     const c = urls.colours;
     const colours = sailorColours(c.main, c.skin, c.hair);
     const [deck, clipFile] = await Promise.all([
-      loadSailor(urls.model, renderer, colours),
+      loadSailor(urls.model, renderer, colours, machine),
       loadClips(urls.clips, renderer),
     ]);
     const rig = Rig.from(deck.root, boneNames(deck.root));
@@ -184,7 +190,7 @@ export class BoatSailor {
       solid,
       climbTime: sailor.climbTime,
     };
-    return new BoatSailor(model, parts, deck, rig, clips, boat, urls, renderer, seed);
+    return new BoatSailor(model, parts, deck, rig, clips, boat, urls, renderer, seed, machine);
   }
 
   /** The figure's root, under the boat's model. */
@@ -200,17 +206,32 @@ export class BoatSailor {
       this.#closeLoading = true;
       void this.#loadClose();
     }
-    const close = near && this.#close !== null;
-    this.#deck.root.visible = !close;
+    this.#levels();
+  }
+
+  /** Whether the sailor is drawn: a boat keeps a person and a machine, and draws the one aboard. */
+  get shown(): boolean {
+    return this.#shown;
+  }
+
+  set shown(on: boolean) {
+    this.#shown = on;
+    this.#rope.visible = on;
+    this.#levels();
+  }
+
+  #levels(): void {
+    const close = this.#near && this.#close !== null;
+    this.#deck.root.visible = this.#shown && !close;
     if (this.#close !== null) {
-      this.#close.root.visible = close;
+      this.#close.root.visible = this.#shown && close;
     }
   }
 
   async #loadClose(): Promise<void> {
     const deckMesh = this.#deck.meshes[0];
     const shared = (deckMesh?.userData ?? {}) as { main: Color; skin: Color; hair: Color };
-    const close = await loadSailor(await this.#urls.close(), this.#renderer, shared);
+    const close = await loadSailor(await this.#urls.close(), this.#renderer, shared, this.#machine);
     close.root.matrixAutoUpdate = false;
     for (const mesh of close.meshes) {
       mesh.castShadow = deckMesh?.castShadow ?? false;
@@ -220,6 +241,7 @@ export class BoatSailor {
     this.#closeBones = bonesFor(this.rig, close.root);
     this.#model.add(close.root);
     this.#close = close;
+    this.#levels();
   }
 
   /** Poses the sailor for the boat's pose and the step's Out; dt in seconds. */
@@ -246,6 +268,16 @@ export class BoatSailor {
     mo.windAngle = out[RECORDS.out.apparentWindAngle] ?? 0;
     const rt = this.runtime;
     rt.update(mo);
+    if (this.#machine) {
+      for (const m of this.#deck.meshes) {
+        m.userData.glow = rt.glow;
+      }
+      if (this.#close !== null) {
+        for (const m of this.#close.meshes) {
+          m.userData.glow = rt.glow;
+        }
+      }
+    }
     this.rig.write(this.#deckBones);
     this.#deck.root.matrix.copy(rt.root);
     this.#deck.root.matrixWorldNeedsUpdate = true;

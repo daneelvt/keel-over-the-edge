@@ -6511,4 +6511,4 @@ export interface SailorColours1 {
 }
 
 /** The catalog version (tools/catalog). */
-export const CATALOG_VERSION = 'b439e6e4bd45b787';
+export const CATALOG_VERSION = '11f6955bbeea83e6';
