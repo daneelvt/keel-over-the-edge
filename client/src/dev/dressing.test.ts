@@ -31,11 +31,14 @@ describe('the room’s hash', () => {
     });
     expect(readRoom('#sailors&view=attic&level=huge').view).toBe('lineup');
     expect(readRoom('#sailors&view=attic&level=huge').level).toBe('close');
+    expect(readRoom('#sailors&look=rover').look).toBe('rover');
+    expect(readRoom('#sailors&look=../x').look).toBe('');
   });
 
   test('writes only what differs from the view’s defaults, and reads back the same', () => {
     expect(writeRoom(readRoom('#sailors&view=deck'))).toBe('#sailors&view=deck');
-    const hash = '#sailors&view=lineup&clip=helm-idle&side=back&hair=C9AC7E&mask=1&phone=1&t=1';
+    const hash =
+      '#sailors&view=lineup&clip=helm-idle&side=back&hair=C9AC7E&mask=1&phone=1&t=1&look=test';
     expect(writeRoom(readRoom(hash))).toBe(hash);
   });
 });

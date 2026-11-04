@@ -54,7 +54,7 @@ hair:
     volume: 0.012
     length: 0.16
     gather: [0, 0.09, -0.06]
-    tail: 0.12
+    tail: { kind: queue, length: 0.12 }
     strands: 140
     thickness: 0.014
 hat:

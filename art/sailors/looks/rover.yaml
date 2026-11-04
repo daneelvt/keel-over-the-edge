@@ -31,7 +31,17 @@ versions:
         strands: 360
         thickness: 0.0035
         gather: [0, 0.09, -0.025]
-        tail: { kind: braid, length: 0.3, width: 0.04, taper: 0.5, lean: 0.15, lobes: 9, clear: 0.046, share: 0.4 }
+        tail:
+          {
+            kind: braid,
+            length: 0.3,
+            width: 0.04,
+            taper: 0.5,
+            lean: 0.15,
+            lobes: 9,
+            clear: 0.046,
+            share: 0.4,
+          }
         ribbon: { colour: "#141414", at: 0.88, width: 0.012 }
         # A plait is not its own mirror.
         asymmetric: true
@@ -60,7 +70,16 @@ versions:
         strands: 320
         thickness: 0.0035
         gather: [0, 0.09, -0.05]
-        tail: { kind: queue, length: 0.14, width: 0.026, taper: 0.45, lean: 0.12, clear: 0.04, share: 0.25 }
+        tail:
+          {
+            kind: queue,
+            length: 0.14,
+            width: 0.026,
+            taper: 0.45,
+            lean: 0.12,
+            clear: 0.04,
+            share: 0.25,
+          }
         ribbon: { colour: "#141414", at: 0.05, width: 0.014, ends: 0.06 }
 garments:
   # Linen, to the hips under the waistcoat, its full sleeves gathered into
@@ -207,9 +226,42 @@ garments:
       female: { from: 0.52, back: 0.2, flare: 0.008 }
       male: { from: 0.36, back: 0.35, flare: 0.014 }
 trims:
-  - { kind: buttons, on: coat, along: edge, side: right, count: 11, from: 0.03, to: 0.02, inset: 0.012, radius: 0.0065, colour: "#C29A4E" }
-  - { kind: buttons, on: waistcoat, along: middle, count: 8, from: 0.09, to: 0.02, radius: 0.0045, colour: "#C29A4E" }
-  - { kind: flaps, on: coat-skirt, region: main, shade: 0.95, azimuth: 50, below: 0.07, width: 0.13, height: 0.055, scallops: 3, buttons: 3, radius: 0.0055, button-colour: "#C29A4E" }
+  - {
+      kind: buttons,
+      on: coat,
+      along: edge,
+      side: right,
+      count: 11,
+      from: 0.03,
+      to: 0.02,
+      inset: 0.012,
+      radius: 0.0065,
+      colour: "#C29A4E",
+    }
+  - {
+      kind: buttons,
+      on: waistcoat,
+      along: middle,
+      count: 8,
+      from: 0.09,
+      to: 0.02,
+      radius: 0.0045,
+      colour: "#C29A4E",
+    }
+  - {
+      kind: flaps,
+      on: coat-skirt,
+      region: main,
+      shade: 0.95,
+      azimuth: 50,
+      below: 0.07,
+      width: 0.13,
+      height: 0.055,
+      scallops: 3,
+      buttons: 3,
+      radius: 0.0055,
+      button-colour: "#C29A4E",
+    }
   - { kind: buckles, on: shoes, width: 0.032, height: 0.026, colour: "#B9B1A2" }
 hat:
   id: cocked-hat

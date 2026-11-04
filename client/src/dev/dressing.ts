@@ -21,7 +21,8 @@
 // and hair (#RRGGBB without the #), black (the silhouettes in black), mask
 // (the mask in place of the colours: red main, green skin, blue hair), phone
 // (the stage at a phone's 360 × 640), t (the clips held at that many
-// seconds, for pictures), who. The back end is the game's choice, and
+// seconds, for pictures), who, look (only that look's versions). The back
+// end is the game's choice, and
 // ?backend=webgl2 or ?compat as in the game.
 //
 // Drag turns the camera about what it looks at, the wheel or a pinch sets
@@ -115,6 +116,8 @@ export interface Room {
   /** The clips held at this time, in seconds; null to play. */
   t: number | null;
   who: number;
+  /** Only this look's versions, or every look's (''). */
+  look: string;
 }
 
 /** The test sailor's colours, and the clip each view starts in. */
@@ -132,6 +135,7 @@ const DEFAULTS: Room = {
   phone: false,
   t: null,
   who: 0,
+  look: '',
 };
 const VIEW_CLIP: Record<View, string> = {
   lineup: 'standing-idle',
@@ -183,6 +187,7 @@ export function readRoom(hash: string): Room {
     phone: q.get('phone') === '1',
     t: q.has('t') && Number.isFinite(t) ? t : null,
     who: Math.max(0, Math.floor(Number(q.get('who')) || 0)),
+    look: /^[a-z][a-z0-9-]*$/.test(q.get('look') ?? '') ? (q.get('look') as string) : '',
   };
 }
 
@@ -202,6 +207,7 @@ export function writeRoom(r: Room): string {
   if (r.phone) q.set('phone', '1');
   if (r.t !== null) q.set('t', String(r.t));
   if (r.who !== 0) q.set('who', String(r.who));
+  if (r.look !== '') q.set('look', r.look);
   return `#sailors&${q.toString()}`;
 }
 
@@ -502,7 +508,7 @@ export class DressingRoom {
       at: number;
     }[] = [];
     const colours = (): SailorColours => sailorColours(`#${r.main}`, `#${r.skin}`, `#${r.hair}`);
-    const row = this.looks.flatMap((l) =>
+    const row = this.#shown().flatMap((l) =>
       [...l.versions.keys()].map((v) => ({ look: l.look, version: v })),
     );
     if (r.view === 'lineup') {
@@ -671,7 +677,13 @@ export class DressingRoom {
     if (r.view !== 'lineup') {
       return 1;
     }
-    return this.looks.reduce((n, l) => n + l.versions.size, 0);
+    return this.#shown().reduce((n, l) => n + l.versions.size, 0);
+  }
+
+  /** The looks the room shows: one, if it says, or all. */
+  #shown(): LookFiles[] {
+    const only = this.looks.filter((l) => l.look === this.room.look);
+    return only.length > 0 ? only : this.looks;
   }
 
   /** Where the figure's pose seats it in the boat model, or null if it stands. */
