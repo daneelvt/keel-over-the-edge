@@ -25,10 +25,20 @@ refuses another series.
 ## Files
 
 Files from others, copied into `vendor/` because the build reads them:
-each with its pack, licence and SHA-256. None yet: the bodies, rig,
-weights and targets the build uses are MPFB's own, inside its pinned
-archive. Eyes, face units and the motion clips come with the faces and
-the motion.
+each with its pack, licence and SHA-256. The bodies, rig, weights and
+targets the build uses are MPFB's own, inside its pinned archive. Eyes and
+face units come with the faces.
 
-| File | Pack | Licence | SHA-256 |
-| ---- | ---- | ------- | ------- |
+The motion clips are Quaternius' Universal Animation Library (CC0), bought
+in its Source edition: only the clips the build uses are copied, each
+into a file of its own with the library's skeleton and nothing else, by
+`go run ./tools/sailors -vendor UAL1.glb -into quaternius -pack "..." -clips
+Idle_Loop,...` from the edition's `Unreal-Godot/UAL1.glb` (SHA-256
+d1cb4537efa4c06a953ca951e5935062f88c2580ac68e45045592d587bddb43d), which
+prints their rows. The library's licence comes with them.
+
+| File                                   | Pack                                                                    | Licence | SHA-256                                                          |
+| -------------------------------------- | ----------------------------------------------------------------------- | ------- | ---------------------------------------------------------------- |
+| `vendor/quaternius/License.txt`        | Quaternius, Universal Animation Library (Source)                        | CC0-1.0 | 6d01f55c6e4c49a2c9963e147e561945ae2c83958c8ca667d90a6bffdbfac061 |
+| `vendor/quaternius/Idle_Loop.glb`      | Quaternius, Universal Animation Library (Source), Unreal-Godot/UAL1.glb | CC0-1.0 | 7384c02bb4349e77206523e0d1b58a17b0f230f8596a6c270270eb5a889558d3 |
+| `vendor/quaternius/Swim_Idle_Loop.glb` | Quaternius, Universal Animation Library (Source), Unreal-Godot/UAL1.glb | CC0-1.0 | 9d1a8d48327c8bb05a9fb56323bf0836ac18e07665bbbf90c4379fb3897ca41e |

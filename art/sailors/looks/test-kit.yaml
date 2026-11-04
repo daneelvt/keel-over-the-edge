@@ -7,10 +7,12 @@
 # joints), and tails hung from the waist (a loft flared to the sides and
 # back, fan pleats at the sides, a back vent, on the skirt chains). Not a
 # look the game offers, and nothing about it is the period's cut: built
-# into .dev.
+# into .dev, its gates reported but not failing the build (they find what
+# the looks' hats, hair and tails will have to mend).
 id: test-kit
 name: Test kit
 committed: false
+gates: report
 versions:
   female:
     base: female

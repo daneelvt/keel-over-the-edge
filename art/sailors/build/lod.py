@@ -16,8 +16,8 @@ seconds); fitting it is not.
 
 The deck level is the close level's meshes collapsed each to its own
 budget, keeping their UVs and weights, so it shares the close level's
-atlas at a smaller size; the far level is the deck level posed seated,
-joined and collapsed again.
+atlas at a smaller size; the far level is the deck level posed seated (the
+pose library's `far`), joined and collapsed again.
 """
 
 import hashlib
@@ -48,21 +48,6 @@ FAR_EASE = 0.01
 
 # How strongly the deck level keeps each region of the body.
 DECK_KEEP = {"face": 0.7, "head": 0.45, "hands": 0.2, "body": 0.2, "feet": 0.0}
-
-# The far level's pose, seated at a helm, as rotations about the
-# armature's own axes (x to the figure's left, y back, z up), in degrees,
-# applied from the root out: each bone turns about its head, carrying its
-# children.
-SEATED = [
-    ("thigh_l", "x", -88), ("thigh_r", "x", -88),
-    ("calf_l", "x", 85), ("calf_r", "x", 85),
-    ("spine_02", "x", -8),
-    # The arms down from the rest pose's, then a little forward, the
-    # forearms forward to the tiller and the sheet.
-    ("upperarm_l", "y", 32), ("upperarm_r", "y", -32),
-    ("upperarm_l", "x", -20), ("upperarm_r", "x", -20),
-    ("lowerarm_l", "x", -30), ("lowerarm_r", "x", -30),
-]
 
 # What a proxy's fit may be off the shape it was made in, in metres: its
 # file keeps four decimals.
@@ -248,26 +233,12 @@ def decimate_to(obj, mod, triangles_wanted):
     mod.ratio = lo
 
 
-def pose(arm, rotations):
-    """Poses the armature by rotations about its own axes (SEATED)."""
-    from mathutils import Matrix
-
-    for pb in arm.pose.bones:
-        pb.rotation_mode = "QUATERNION"
-    for name, axis, degrees in rotations:
-        pb = arm.pose.bones[name]
-        bpy.context.view_layer.update()
-        head = pb.matrix.to_translation()
-        turn = Matrix.Translation(head) @ Matrix.Rotation(np.radians(degrees), 4, axis.upper()) @ Matrix.Translation(-head)
-        pb.matrix = turn @ pb.matrix
-    bpy.context.view_layer.update()
-
-
-def far(meshes, arm, triangles_wanted, cloth=()):
-    """The far level: the meshes posed seated, each collapsed to its share
-    of the budget (by its triangles), the cloth eased out a little more so
-    the coarse body does not come through it, and made one rigid mesh."""
-    pose(arm, SEATED)
+def far(meshes, arm, triangles_wanted, posing, cloth=()):
+    """The far level: the meshes posed seated (posing poses the skeleton:
+    the pose library's far pose), each collapsed to its share of the
+    budget (by its triangles), the cloth eased out a little more so the
+    coarse body does not come through it, and made one rigid mesh."""
+    posing()
     total = sum(triangles(o) for o in meshes)
     bm = bmesh.new()
     for o in meshes:
@@ -280,7 +251,8 @@ def far(meshes, arm, triangles_wanted, cloth=()):
             for v in me.vertices:
                 v.co += v.normal * FAR_EASE
         decimate(p, max(12, int(triangles_wanted * triangles(o) / total)))
-        p.data.transform(o.matrix_world)
+        # In the skeleton's own space, wherever the pose placed it.
+        p.data.transform(arm.matrix_world.inverted() @ o.matrix_world)
         bm.from_mesh(p.data)
         bpy.data.objects.remove(p, do_unlink=True)
     figure = bpy.data.meshes.new("figure")
@@ -288,10 +260,18 @@ def far(meshes, arm, triangles_wanted, cloth=()):
     bm.free()
     obj = bpy.data.objects.new("figure", figure)
     bpy.context.scene.collection.objects.link(obj)
-    # Each collapse lands near its share, not on it.
+    # Each collapse lands near its share, not on it; and leaves nothing
+    # loose.
     decimate(obj, triangles_wanted)
+    bm = bmesh.new()
+    bm.from_mesh(obj.data)
+    bmesh.ops.delete(bm, geom=[e for e in bm.edges if not e.link_faces], context="EDGES")
+    bmesh.ops.delete(bm, geom=[v for v in bm.verts if not v.link_faces], context="VERTS")
+    bm.to_mesh(obj.data)
+    bm.free()
     for pb in arm.pose.bones:
         pb.matrix_basis.identity()
+    arm.matrix_world.identity()
     return obj
 
 

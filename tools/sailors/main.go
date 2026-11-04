@@ -8,6 +8,8 @@
 //	go run ./tools/sailors              build every look
 //	go run ./tools/sailors -look test   build one look
 //	go run ./tools/sailors -setup       check Blender, install MPFB and gltfpack, build nothing
+//	go run ./tools/sailors -vendor UAL1.glb -into quaternius -pack "..." -clips Idle_Loop,...
+//	                                    copy clips out of an animation library into vendor/
 //
 // Blender 5.2 LTS must be installed: in /Applications, on the PATH, or named
 // by BLENDER. The first run installs the pinned MPFB into .dev/blender, a
@@ -48,7 +50,23 @@ func main() {
 	look := flag.String("look", "", "build only this look (its file's name in "+looksDir+", without .yaml)")
 	setup := flag.Bool("setup", false, "check Blender and install MPFB and gltfpack, build nothing")
 	verbose := flag.Bool("v", false, "show everything Blender and MPFB print")
+	pack := flag.String("vendor", "", "copy clips out of this animation library's glTF binary into "+sailorsDir+"/"+vendorDir+", and build nothing")
+	into := flag.String("into", "", "with -vendor: the folder under "+vendorDir+" they go into")
+	pkg := flag.String("pack", "", "with -vendor: the pack's name, for SOURCES.md")
+	clips := flag.String("clips", "", "with -vendor: the clips' names, comma-separated")
 	flag.Parse()
+
+	if *pack != "" {
+		if *into == "" || *pkg == "" || *clips == "" {
+			fmt.Fprintln(os.Stderr, "sailors: -vendor needs -into, -pack and -clips")
+			os.Exit(2)
+		}
+		if err := vendorClips(*pack, *into, *pkg, strings.Split(*clips, ",")); err != nil {
+			fmt.Fprintln(os.Stderr, "sailors:", err)
+			os.Exit(1)
+		}
+		return
+	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer stop()
@@ -91,13 +109,22 @@ func run(ctx context.Context, only string, setupOnly, verbose bool) error {
 	if err != nil {
 		return err
 	}
+	poses, err := readPoses(filepath.Join(sailorsDir, posesDir), tables, sources)
+	if err != nil {
+		return err
+	}
+	for _, l := range looks {
+		if err := checkClips(l, poses); err != nil {
+			return err
+		}
+	}
 	root, err := os.Getwd()
 	if err != nil {
 		return err
 	}
 	for _, l := range looks {
 		start := time.Now()
-		job := newJob(root, l, tables, sources, gltfpack)
+		job := newJob(root, l, tables, sources, poses, gltfpack)
 		file, err := job.write(filepath.Join(workDir, "jobs"))
 		if err != nil {
 			return err

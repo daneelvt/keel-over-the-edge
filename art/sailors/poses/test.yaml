@@ -1,0 +1,133 @@
+# SPDX-License-Identifier: LicenseRef-All-Rights-Reserved
+#
+# The poses every sailor is judged in (review/metrics.py): nothing may come
+# through the clothes in any of them, and nothing through the boat in the
+# ones seated in it. They are a sailor's extremes, not its clips: standing,
+# seated at the helm, hiking, an arm raised, and the capsize's three
+# modes.
+#
+# A pose is turns of bones about the figure's own axes (x to its left, y
+# back, z up), in degrees, applied root first, each bone turning about its
+# head and carrying its children; then, if it is placed in the boat, set
+# there; then its hands and feet to their targets by two-bone IK. Targets
+# are places on the stage (build/stage.py: the seat, the gunwale, the floor
+# and tables.yaml's points), offset forward, inboard and up from them (and,
+# with a reach, moved inboard until the limb is that share of its length
+# from its root, the same on any body), or a bone of the figure's own
+# (head, spine_03), offset along the figure's axes as it stands at rest.
+poses:
+  standing:
+    turn:
+      - [upperarm_l, y, 36]
+      - [upperarm_r, y, -36]
+      - [lowerarm_l, x, 12]
+      - [lowerarm_r, x, 12]
+
+  # At the helm on the starboard side deck, facing inboard: the aft hand
+  # (the left) on the tiller extension, the forward on the mainsheet, the
+  # feet on the cockpit's floor, the legs nearly straight and angled
+  # forward along it (the deck is low: nearer, the knees come up past the
+  # hips' range; straight across, a man's toes meet the far side).
+  seated:
+    place: seat
+    turn:
+      - [thigh_l, x, -80]
+      - [thigh_r, x, -80]
+      - [thigh_l, z, 6]
+      - [thigh_r, z, -6]
+      - [calf_l, x, 70]
+      - [calf_r, x, 70]
+      - [spine_01, x, 6]
+      - [spine_02, x, 4]
+      - [neck_01, z, -10]
+      - [head, z, -18]
+      - [head, x, -6]
+    ik:
+      hand_l: { at: tiller }
+      hand_r: { at: sheet }
+      foot_l: { at: floor, offset: [0.15, 0.0, 0.1], reach: 0.9 }
+      foot_r: { at: floor, offset: [0.45, 0.0, 0.1], reach: 0.9 }
+
+  # Hiking: the hips on the gunwale, the thighs across the side deck, the
+  # feet under the strap on the cockpit's floor by the deck's edge, the
+  # body leaning out.
+  hiking:
+    place: gunwale
+    turn:
+      - [thigh_l, x, -84]
+      - [thigh_r, x, -84]
+      - [calf_l, x, 60]
+      - [calf_r, x, 60]
+      - [spine_01, x, -16]
+      - [spine_02, x, -14]
+      - [spine_03, x, -10]
+      - [neck_01, x, 14]
+      - [head, x, 10]
+      - [head, z, -20]
+    ik:
+      hand_l: { at: tiller-hiking }
+      hand_r: { at: sheet-hiking }
+      foot_l: { at: floor, offset: [-0.1, 0.0, 0.1] }
+      foot_r: { at: floor, offset: [0.1, 0.0, 0.1] }
+
+  arm-raised:
+    turn:
+      - [upperarm_l, y, 36]
+      - [lowerarm_l, x, 12]
+      - [upperarm_r, y, 125]
+      - [upperarm_r, x, -20]
+      - [lowerarm_r, x, -25]
+
+  # The capsize's three modes, judged without the boat (it lies on its
+  # side then): treading water, standing on the board leaning back on the
+  # gunwale, and a knee over the side climbing in.
+  in-water:
+    turn:
+      - [thigh_l, x, -35]
+      - [thigh_r, x, -15]
+      - [calf_l, x, 55]
+      - [calf_r, x, 40]
+      - [upperarm_l, y, -10]
+      - [upperarm_r, y, 10]
+      - [upperarm_l, x, -55]
+      - [upperarm_r, x, -55]
+      - [lowerarm_l, x, -20]
+      - [lowerarm_r, x, -20]
+      - [head, x, -10]
+
+  on-board:
+    turn:
+      - [thigh_l, x, -12]
+      - [thigh_r, x, -12]
+      - [calf_l, x, 18]
+      - [calf_r, x, 18]
+      - [spine_01, x, -8]
+      - [spine_02, x, -6]
+      - [upperarm_l, y, -30]
+      - [upperarm_r, y, 30]
+      - [upperarm_l, x, -60]
+      - [upperarm_r, x, -60]
+      - [head, x, -15]
+
+  climbing:
+    turn:
+      - [thigh_l, x, -100]
+      - [thigh_l, z, 12]
+      - [calf_l, x, 105]
+      - [thigh_r, x, -10]
+      - [calf_r, x, 15]
+      - [spine_01, x, 18]
+      - [spine_02, x, 14]
+      - [spine_03, x, 8]
+      - [upperarm_l, y, 10]
+      - [upperarm_r, y, -10]
+      - [upperarm_l, x, -60]
+      - [upperarm_r, x, -60]
+      - [lowerarm_l, x, -30]
+      - [lowerarm_r, x, -30]
+      - [head, x, -20]
+
+  # The far level's pose (build/lod.py): seated at the helm. Its seat is
+  # judged on the boat like the others'.
+  far:
+    from: seated

@@ -67,19 +67,34 @@ gltfpack into `.dev`. CI does not run it: what it builds is committed.
 
 - `looks/<look>.yaml`: a look in both versions, a woman and a man: each
   version's base and its own macros and targets, the garments, hair and
-  hat with their parameters, the colours it is shown in. `committed:
-  false` marks the build's own checks (`test`, `test-kit`), built into
-  `.dev/sailors`.
+  hat with their parameters, the colours it is shown in, the clips made
+  and judged on it. `committed: false` marks the build's own checks
+  (`test`, `test-kit`), built into `.dev/sailors`; `gates: report`, a check
+  of the machinery whose failed gates are reported, not failing the build.
 - `bases.yaml`: the two bodies every look varies, with the measurements
   every build asserts (height, heads, the widths' ratios).
 - `tables.yaml`: the ease of each layer of clothing, the triangle budgets
-  of each mesh and level, the atlas.
+  of each mesh and level, the atlas, the files' sizes, the boat the
+  sailors are judged in, the motion lab's timing and its gate's
+  thresholds, the joints' ranges, and the skeleton's joints in the files'
+  order.
+- `poses/`: the pose library. `test.yaml`, the poses every sailor is
+  judged in (standing, seated at the helm, hiking, an arm raised, the
+  capsize's three modes) and the far level's; `lab.yaml`, the motion lab's
+  key poses and clips, and the clips retargeted from Quaternius'.
 - `build/`: the build. `main.py` is what Blender runs; `sailor.py` makes a
   look; `mpfbx.py` calls MPFB and keeps the order (shape, rig, bones,
   proxy, garments, export, never refit); `body.py`, `landmarks.py`,
   `rig.py`, `lod.py`, `garment.py`, `hair.py`, `profiles.py` (hats),
   `atlas.py`, `export.py`; `inputs.py` refuses an input not in
-  `SOURCES.md`.
+  `SOURCES.md`; `stage.py` the game's dinghy as the sailors sit in it;
+  `motion.py` the motion lab (key poses, the transition maker, two-bone
+  IK, the bake, the clips' file); `retarget.py` Quaternius' clips onto the
+  skeleton.
+- `review/`: the judges. `metrics.py`, the gates every level of every
+  version passes or the build fails; `motion.py`, the clips' gate;
+  `review.py`, the review sheet and the clips' strips; `rubric.md`, the
+  questions a sheet is judged by.
 - `proxies/`, `garments/<look>/`: what the build makes once and keeps (the
   close body and each garment as MPFB's `.proxy` and `.mhclo`, with their
   `.obj`): matching them to the body takes tens of seconds, fitting them
@@ -97,14 +112,26 @@ game_engine bones in Unreal's names, a jaw, eyes and lids, a corrector at
 each hip that turns half as far as the thigh, a twist bone in each
 forearm, `pendant` at the breastbone, six two-bone `skirt_*` chains and
 eight `spring_*` joints), four weights a vertex, no morph targets; the
-far level is one rigid mesh, posed seated. Each mesh is named (`body` and
+far level is one rigid mesh, posed seated at the helm. Each mesh is named (`body` and
 each garment's, hair's and hat's id). One material, `sailor`: its base
 colour the atlas, the parts a sailor chooses the colour of stored as
 neutral grey (0.5, linear) to be multiplied by twice the colour chosen;
 its occlusion texture the mask, red the main colour's region, green the
 skin's, blue the hair's, alpha metal (read as the mask, never as
 occlusion). The figure faces +z, y up, its origin on the ground between
-its feet, in metres.
+its feet, in metres. A look's clips are `<version>.clips.glb`: the
+skeleton alone and one animation a clip, rotations only but the pelvis's
+translation, at 30 frames a second.
+
+Every build is judged before anyone looks at it: the gates
+(`review/metrics.py`: budgets, clean meshes and weights, nothing through
+the clothes in any judged pose, nothing through the boat seated, the
+figure kept under its clothes, symmetry, the atlas, the files) and the
+clips' gate (`review/motion.py`: jerk, speed, reach, contacts, ranges,
+loops, onsets) write `metrics.json` in the run (`.dev/sailors/runs/<look>/<n>`),
+with what moved since the last run, and fail the build on any; the sheet
+(`sheet.png` a version, `compare.png` beside the last run's) and each
+clip's strips (`clip-<clip>.png`) are drawn there whatever the gates say.
 
 ## Towns
 

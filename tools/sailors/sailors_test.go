@@ -158,12 +158,12 @@ func TestLookRefused(t *testing.T) {
 
 func TestJob(t *testing.T) {
 	l := look{ID: "rover", Committed: true}
-	j := newJob("/repo", l, tables{}, nil, ".dev/gltfpack/1.3/gltfpack")
+	j := newJob("/repo", l, tables{}, nil, poseLibrary{}, ".dev/gltfpack/1.3/gltfpack")
 	if j.Out != "/repo/art/sailors/rover" || j.Work != "/repo/.dev/sailors/runs/rover" || j.Gltfpack != "/repo/.dev/gltfpack/1.3/gltfpack" {
 		t.Errorf("a committed look's job: %+v", j)
 	}
 	l.Committed = false
-	if j := newJob("/repo", l, tables{}, nil, "/bin/gltfpack"); j.Out != "/repo/.dev/sailors/rover" || j.Gltfpack != "/bin/gltfpack" {
+	if j := newJob("/repo", l, tables{}, nil, poseLibrary{}, "/bin/gltfpack"); j.Out != "/repo/.dev/sailors/rover" || j.Gltfpack != "/bin/gltfpack" {
 		t.Errorf("a check's job: %+v", j)
 	}
 	file, err := j.write(t.TempDir())
