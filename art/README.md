@@ -68,9 +68,13 @@ gltfpack into `.dev`. CI does not run it: what it builds is committed.
 - `looks/<look>.yaml`: a look in both versions, a woman and a man: each
   version's base and its own macros and targets, the garments, hair and
   hat with their parameters, the colours it is shown in, the clips made
-  and judged on it. `committed: false` marks the build's own checks
-  (`test`, `test-kit`), built into `.dev/sailors`; `gates: report`, a check
-  of the machinery whose failed gates are reported, not failing the build.
+  and judged on it. A look is built into `art/sailors/<look>/`;
+  `committed: false` marks a check of the build's own (`test-kit`), built
+  into `.dev/sailors`; `gates: report`, a check of the machinery whose
+  failed gates are reported, not failing the build. The plain test sailor
+  (`test`) is committed, for the dressing room (`client/sailors.html`,
+  reached as `dev.html#sailors`), which draws every committed look in the
+  game's renderer; the game itself loads none of them yet.
 - `bases.yaml`: the two bodies every look varies, with the measurements
   every build asserts (height, heads, the widths' ratios).
 - `tables.yaml`: the ease of each layer of clothing, the triangle budgets
@@ -121,7 +125,13 @@ skin's, blue the hair's, alpha metal (read as the mask, never as
 occlusion). The figure faces +z, y up, its origin on the ground between
 its feet, in metres. A look's clips are `<version>.clips.glb`: the
 skeleton alone and one animation a clip, rotations only but the pelvis's
-translation, at 30 frames a second.
+translation, at 30 frames a second. Where a pose seats the figure in the
+dinghy is in the files as an empty named node, its matrix from the
+figure's own space to the boat model's (`art/boats/jolly-boat.glb`): the
+far level's `place`, for the pose it is made in, and in the clips' file
+`place-<clip>` for each clip, the identity for one not placed in the boat.
+The game puts the figure under the boat's model with it, so it sits where
+the gates judged it.
 
 Every build is judged before anyone looks at it: the gates
 (`review/metrics.py`: budgets, clean meshes and weights, nothing through

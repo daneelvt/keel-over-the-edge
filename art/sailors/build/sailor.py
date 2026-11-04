@@ -209,9 +209,9 @@ def build_version(job, v, run):
             for o in meshes:
                 garment.mirror(o)
         if level == "far":
-            meshes = [lod.far(meshes, arm, budgets["far"]["figure"], lambda: fig.pose(lib.poses["far"]),
-                              cloth=[g.obj.name for g in worn])]
-            far = meshes[0]
+            far = lod.far(meshes, arm, budgets["far"]["figure"], lambda: fig.pose(lib.poses["far"]),
+                          cloth=[g.obj.name for g in worn])
+            meshes = [far]
             unfolded["far"] = atlas.untangle(far)
             far.parent = arm
             fig.meshes = fig.sitting = meshes
@@ -219,10 +219,13 @@ def build_version(job, v, run):
             # A collapse this coarse drags a vertex a few centimetres: what
             # it drags through the boat, posed on its seat, is brought back.
             settled["far"] = metrics.keep_off_boat(fig, lib.poses["far"], far)
+            # Where its gates judge it seated: the file carries it.
+            far_place = fig.pose(lib.poses["far"])["place"].copy()
+            fig.reset()
         lap(f"{level} level")
         path = os.path.join(out, f"{v}{'' if level == 'close' else '.' + level}.glb")
         tris = export.write(path, meshes, arm if level != "far" else None, export.material(base_png), mask_png,
-                            job["gltfpack"], work)
+                            job["gltfpack"], work, {"place": far_place} if level == "far" else None)
         levels[level] = {"triangles": tris, "figure": sum(tris.values()), "bytes": os.path.getsize(path)}
         gltf, _ = export.read(path)
         lap("export")
@@ -321,6 +324,7 @@ def make_clips(job, v, fig, lib, kinds, gates, renderer, lookmat, work):
     proxies = judge.proxies(fig, kinds)
     out = {}
     actions = []
+    places = {}
     for name in names:
         start = time.time()
         if name in lib.clips:
@@ -330,6 +334,7 @@ def make_clips(job, v, fig, lib, kinds, gates, renderer, lookmat, work):
         made = time.time() - start
         act, slot = motion.write_action(fig.arm, name, clip.frames, clip.fps)
         actions.append((act, slot))
+        places[f"place-{name}"] = clip.place.copy()
         fig.quiet()
         measures, track = judge.check(fig, clip, act, slot, m["gate"], m["ranges"], proxies)
         fig.quiet(False)
@@ -342,7 +347,7 @@ def make_clips(job, v, fig, lib, kinds, gates, renderer, lookmat, work):
                           judge.CURVES)
         fig.reset()
     path = os.path.join(job["out"], f"{v}.clips.glb")
-    motion.export(path, fig.arm, actions, job["gltfpack"], work)
+    motion.export(path, fig.arm, actions, job["gltfpack"], work, places)
     gltf, _ = export.read(path)
     metrics.file(gates, "clips", path, gltf, [], job["tables"]["skeleton"], None, clips=names)
     metrics.skeleton(gates, "clips", gltf, job["tables"]["skeleton"])

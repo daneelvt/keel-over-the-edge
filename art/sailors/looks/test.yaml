@@ -2,10 +2,11 @@
 #
 # The test sailor: a bald body in a plain shirt and breeches, both
 # versions on their bases. The build's own check, not a look the game
-# offers, so it is built into .dev, not beside the art.
+# offers; committed beside the art for the dressing room
+# (dev.html#sailors), which draws it in the game's renderer.
 id: test
 name: Test sailor
-committed: false
+committed: true
 versions:
   female:
     base: female

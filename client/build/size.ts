@@ -36,13 +36,30 @@ export function eagerAssets(html: string): string[] {
 
 const gzipped = (file: string): number => gzipSync(readFileSync(file), { level: 9 }).length;
 
+/**
+ * The models the game loads as its scene starts: those its first download
+ * names. The developer page's (the dressing room's sailors) are in the
+ * build's assets too, and are not the game's.
+ */
+export function eagerModels(models: string[], scripts: string[]): string[] {
+  return models.filter((m) => scripts.some((s) => s.includes(m)));
+}
+
 function main(): void {
   const dist = 'dist';
   const files = eagerAssets(readFileSync(join(dist, 'index.html'), 'utf8'));
   // The boats' models load as the scene starts, and the net worker as the
   // game connects.
-  for (const f of readdirSync(join(dist, 'assets'))) {
-    if (f.endsWith('.glb') || /^worker-.*\.js$/.test(f)) {
+  const assets = readdirSync(join(dist, 'assets'));
+  const scripts = files
+    .filter((f) => f.endsWith('.js'))
+    .map((f) => readFileSync(join(dist, f), 'utf8'));
+  const models = eagerModels(
+    assets.filter((f) => f.endsWith('.glb')),
+    scripts,
+  );
+  for (const f of assets) {
+    if (models.includes(f) || /^worker-.*\.js$/.test(f)) {
       files.push(`assets/${f}`);
     }
   }

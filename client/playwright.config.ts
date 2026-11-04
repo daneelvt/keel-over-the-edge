@@ -184,7 +184,7 @@ export default defineConfig({
     })),
     {
       name: 'compat',
-      testMatch: ['sea.spec.ts', 'look.spec.ts'],
+      testMatch: ['sea.spec.ts', 'look.spec.ts', 'sailors.spec.ts'],
       workers: 1,
       use: {
         ...devices['Desktop Chrome'],

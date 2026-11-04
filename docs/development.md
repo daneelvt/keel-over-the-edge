@@ -6501,6 +6501,26 @@ each sailor's model has its parts and is under 2,000. A kind's `art.model`
 must name a file that exists (`go run ./tools/catalog -check`). The catalog's
 `sailors` list names the figures; the first is drawn.
 
+The sailors to come are made in Blender by script (`art/README.md`), each
+look into `art/sailors/<look>/`. The game loads none of them yet; the
+**dressing room** draws them in the game's renderer, with its sky, light,
+fog, shadows and material factory: `/dev.html#sailors`, which sends the
+browser on to `/sailors.html`, a page built apart from the game's
+(`client/vite.sailors.config.ts`), so the game's first download does not
+change. Its views: `lineup`, every look and version on a quay, front or
+back, and in a dinghy each when the clip seats them; `face`, a head
+close; `deck`, a fleet at the game's chase camera, the near sailors at the
+deck level and the far at the far one; `picker`, a sailor on a disc of
+planks. The **Room** button opens the rest: the light (noon, morning,
+dusk, night), the level, the clip, the skin, hair and main colour, the
+silhouettes in black, and a phone's 360 × 640. All of it is in the hash
+(`#sailors&view=deck&light=dusk&clip=helm-idle&black=1`), so a view can be
+linked to; `?backend=webgl2` and `?compat` as in the game. Drag turns the
+camera, the wheel or a pinch sets its distance. `e2e/sailors.spec.ts`
+checks the test sailor there on each back end: skinned, posed by the GPU
+where its skeleton says, standing and seated, bent by the dome, and
+recoloured.
+
 ### Sound
 
 Sound is synthesised in the browser with Web Audio; there are no sound
