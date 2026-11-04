@@ -293,4 +293,17 @@ palette:
   hair: "#654A37"
 # The clips the Rover sails with (poses/sailing.yaml): those made on both
 # side decks are two each; and its habit, settling the cocked hat.
-clips: [helm, hiking-1, hiking-2, hiking-3, cross, habit, habit-standing, standing-idle, treading-water, righting, climbing-in]
+clips:
+  [
+    helm,
+    hiking-1,
+    hiking-2,
+    hiking-3,
+    cross,
+    habit,
+    habit-standing,
+    standing-idle,
+    treading-water,
+    righting,
+    climbing-in,
+  ]
