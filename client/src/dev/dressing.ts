@@ -795,7 +795,8 @@ export class DressingRoom {
       if (head !== undefined) {
         f?.root.updateWorldMatrix(true, true);
         head.getWorldPosition(o.target);
-        o.target.y += 0.1;
+        // Between the brow and the mouth, so a hat is in the picture too.
+        o.target.y += 0.05;
       }
     }
     const cam = this.stage.camera;

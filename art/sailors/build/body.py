@@ -53,19 +53,33 @@ def check(macros, targets):
 _targets = None
 
 
-def target_files(name):
-    """The target files a name stands for: both sides for "lr-", and only
-    files of exactly that name (MPFB's own search also takes a prefix)."""
+def target_files(name, macros):
+    """The target files a name stands for, each with the share of its
+    weight it takes: both sides for "lr-"; for "unit-", an expression unit
+    (a resting expression), one file a race, each by the race's weight;
+    and only files of exactly that name (MPFB's own search also takes a
+    prefix)."""
     global _targets
     if _targets is None:
         _targets = {}
-        for path in glob.glob(os.path.join(mpfbx.data("targets"), "**", "*.target.gz"), recursive=True):
-            _targets[os.path.basename(path)[: -len(".target.gz")]] = path
-    names = ["l-" + name[3:], "r-" + name[3:]] if name.startswith("lr-") else [name]
-    missing = [n for n in names if n not in _targets]
+        root = mpfbx.data("targets")
+        for path in glob.glob(os.path.join(root, "**", "*.target.gz"), recursive=True):
+            rel = os.path.relpath(path, root)
+            if rel.startswith(os.path.join("expression", "units")):
+                race = rel.split(os.sep)[2]
+                _targets[f"unit-{os.path.basename(path)[: -len('.target.gz')]}@{race}"] = path
+            else:
+                _targets[os.path.basename(path)[: -len(".target.gz")]] = path
+    if name.startswith("unit-"):
+        names = [(f"{name}@{r}", macros[r]) for r in RACES if macros[r] > 0]
+    elif name.startswith("lr-"):
+        names = [("l-" + name[3:], 1.0), ("r-" + name[3:], 1.0)]
+    else:
+        names = [(name, 1.0)]
+    missing = [n for n, _ in names if n not in _targets]
     if missing:
         raise ValueError(f"no MPFB target {', '.join(missing)}")
-    return [_targets[n] for n in names]
+    return [(_targets[n], share) for n, share in names]
 
 
 def make(name, macros, targets, order):
@@ -80,8 +94,8 @@ def make(name, macros, targets, order):
     body = human.create_human(macro_detail_dict=info, feet_on_ground=False)
     for t, weight in sorted(targets.items()):
         if weight:
-            for path in target_files(t):
-                target.load_target(body, path, weight=weight)
+            for path, share in target_files(t, macros):
+                target.load_target(body, path, weight=weight * share)
     target.bake_targets(body)
     body.name = body.data.name = name
     # The feet on the ground, by the body's own vertices, not its helpers'.

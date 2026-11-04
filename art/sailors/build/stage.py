@@ -74,6 +74,15 @@ class Stage:
         if floor is None or floor > top - 0.1:
             raise AssertionError(f"{spec['boat']}: no cockpit floor {spec['floor']['in']} m inboard of the seat")
         self.floor = Vector((fx, self.station, floor))
+        # The seat's plane, as the game lifts cloth to it: a wide square at
+        # the side deck's height, for the skirts' lift to find from below.
+        me = bpy.data.meshes.new("seat-plane")
+        r = 4.0
+        me.from_pydata([(-r, -r, top), (r, -r, top), (r, r, top), (-r, r, top)], [], [(0, 1, 2, 3)])
+        self.plane = bpy.data.objects.new("seat-plane", me)
+        bpy.context.scene.collection.objects.link(self.plane)
+        self.plane.hide_render = True
+        self.objects.append(self.plane)
 
     def down(self, x, y):
         """The height of the first surface a ray straight down at (x, y)
@@ -107,6 +116,12 @@ class Stage:
     def show(self, shown):
         for o in self.objects:
             o.hide_render = not shown or o not in self.solid
+
+    def under(self, p):
+        """Whether a point is under a top of the boat: straight up, the
+        first surface it meets faces up (it is seen from below)."""
+        hit = self.tree.ray_cast(Vector(p), Vector((0, 0, 1)), 2.0)
+        return hit[0] is not None and hit[1].z > 0
 
     def crossings(self, a, b):
         """How many of the segments a[i] → b[i] cross the boat."""

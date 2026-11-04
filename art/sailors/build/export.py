@@ -9,8 +9,9 @@ occlusion, and gltfpack keeps only the textures a material uses); and, but
 for the far level, the skeleton and the skin. Nothing else: no morph
 targets, no animation, no stray object the exporter picked up (a rig's
 helper icosphere once was). Blender writes it, this module adds the mask,
-gltfpack compresses it (the geometry by meshopt, the colour by ETC1S, the
-mask by UASTC), and both files are read back and checked. In the file the
+gltfpack compresses it (the geometry by meshopt, its normals, UVs and
+weights quantized but its positions kept as floats, so no node takes a
+transform to undo them; the colour by ETC1S, the mask by UASTC), and both files are read back and checked. In the file the
 figure faces +z with y up, its origin on the ground between its feet.
 
 Where a pose seats the figure in the game's dinghy goes in the file as an
@@ -77,7 +78,7 @@ def write(path, meshes, arm, mat, mask_png, gltfpack, work, places=None):
     add_places(gltf, places or {})
     with_mask = raw.replace(".raw.glb", ".mask.glb")
     write_glb(with_mask, gltf, binary)
-    subprocess.run([gltfpack, "-i", with_mask, "-o", path, "-c", "-kn", "-km", "-noq", "-tc", "-tu", "A"],
+    subprocess.run([gltfpack, "-i", with_mask, "-o", path, "-c", "-kn", "-km", "-vpf", "-tc", "-tu", "A"],
                    check=True, capture_output=True)
     gltf, _ = read(path)
     check(path, gltf, names, bones, textures=2)

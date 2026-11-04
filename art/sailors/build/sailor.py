@@ -15,6 +15,7 @@ import numpy as np
 import atlas
 import body
 import export
+import face
 import garment
 import hair
 import inputs
@@ -28,6 +29,7 @@ import retarget
 import review
 import rig
 import stage as stages
+import trims
 
 # The poses every sailor is judged in, and those seated in the boat.
 POSES = ("standing", "seated", "hiking", "arm-raised", "in-water", "on-board", "climbing")
@@ -120,17 +122,26 @@ def build_version(job, v, run):
     worn = garment.dress(job, v, human, arm, marks, work)
     hidden = garment.hide(human, skin, worn)
     # The hair and the hat, over the rest.
-    if look.get("hair"):
-        h = hair.make(look["hair"], human, marks, arm, budgets["close"]["hair"])
-        worn.append(garment.Worn(h, "hair", look["hair"], None))
+    hair_spec = version.get("hair") or look.get("hair")
+    if hair_spec:
+        # Under a hat the hair is pressed flat, so the hat fits the head.
+        under_hat = profiles.seat(human, marks, look["hat"]["params"].get("seat", 0.0)) if look.get("hat") else None
+        h = hair.make(hair_spec, human, marks, arm, budgets["close"]["hair"], under_hat, skin)
+        worn.append(garment.Worn(h, "hair", hair_spec, None))
     if look.get("hat"):
         h = profiles.make(look["hat"], human, marks, arm)
         worn.append(garment.Worn(h, "hat", look["hat"], None))
-    for w in worn:
-        if w.kind != "garment":
-            w.obj.data.materials.clear()
-            colour = atlas.linear(w.spec["colour"]) if w.spec["region"] == "fixed" else None
-            w.obj.data.materials.append(atlas.part(bpy.data.materials.new(w.spec["id"]), colour, w.spec["region"]))
+    # The trims on the fitted garments.
+    if look.get("trims"):
+        t, mirrored = trims.make(look["trims"], worn, arm, marks)
+        worn.append(garment.Worn(t, "prop", {"id": "trims", "region": "fixed",
+                                             "params": {"asymmetric": not mirrored}}, None))
+    # The eyes and lashes; the skin's paint is given with its material.
+    looks_face = _merged(base.get("face") or {}, version.get("face") or {})
+    parts, eyes_at = face.make(looks_face, human, arm, budgets["close"].get("face", 0))
+    for o in parts:
+        worn.append(garment.Worn(o, "face", {"id": o.name, "region": "fixed"}, None))
+    face.paint_skin_uv(skin)
     lap("body, rig, garments")
     # What cannot be seen, buried; and the dressed figure measured.
     buried = {"close": garment.bury_all(skin, worn, tables["ease"])}
@@ -142,16 +153,25 @@ def build_version(job, v, run):
     # The atlas.
     size = tables["atlas"]["close"]
     margin = tables["atlas"]["margin"]
+    # The mouth's inside, hidden by the closed lips, goes.
+    face.lips_at(skin, marks)
+    face.close_mouth(skin)
     region = lod.regions(body.coords(skin), marks.joint)
-    head_faces = {skin: _faces_in(skin, np.isin(region, ("face", "head")))}
+    head_faces = {skin: _faces_in(skin, np.isin(region, ("mouth", "lids", "face", "head")))}
+    for w in worn:
+        if w.kind == "face":
+            head_faces[w.obj] = np.ones(len(w.obj.data.polygons), bool)
     unfolded = {}
     for o in meshes:
         atlas.prepare(o)
         unfolded[o.name] = atlas.untangle(o)
+
     skin.data.materials.clear()
     skin.data.materials.append(atlas.part(bpy.data.materials.new("skin"), region="skin"))
+    face.paint_skin(skin.data.materials[0], eyes_at, looks_face)
     share = atlas.layout(meshes, head_faces, tables["atlas"]["head"], margin / size)
     base_px, mask_px = atlas.bake(meshes, size, margin)
+    hair.drop_details()
 
     lap("atlas")
     order.step("export")
@@ -163,13 +183,21 @@ def build_version(job, v, run):
     lib = motion.Library(job)
     fig = motion.Figure(arm, meshes, stage, tables["motion"])
     fig.sitting = [skin] + [w.obj for w in worn if w.kind == "garment" and not (w.spec.get("params") or {}).get("skirt")]
-    fig.lay_on_seat(meshes)
+    # Laid on the seat, each layer above the one under it.
+    above = {w.obj.name: tables["ease"][(w.spec.get("params") or {}).get("layer", w.spec["family"])]
+             for w in worn if w.kind == "garment"}
+    fig.lay_on_seat(meshes, above)
     kinds = {"body": "body", **{w.obj.name: w.kind for w in worn}}
     settled = {"close": garment.settle(fig, lib, POSES, worn, tables["ease"])}
     lap("settle")
-    for o in meshes:
-        garment.mirror(o)
     declared = {w.obj.name for w in worn if (w.spec.get("params") or {}).get("asymmetric")}
+    # A face given an asymmetry (a smile higher on one side, one brow) is
+    # not its own mirror.
+    if any(t.startswith("asym") for t in targets):
+        declared.add("body")
+    for o in meshes:
+        if o.name not in declared:
+            garment.mirror(o, 0.015, greedy=True)
     closed = {w.obj.name for w in worn if (w.spec.get("params") or {}).get("closed")}
     gates = metrics.Gates(name)
     skeleton = tables["skeleton"]
@@ -190,29 +218,56 @@ def build_version(job, v, run):
         if level == "deck":
             # The figure's triangles shared by what each mesh had, each
             # within its own kind's.
-            close_total = sum(lod.triangles(o) for o in meshes)
             deck = budgets["deck"]
 
-            def deck_share(o, kind):
-                return min(deck[kind], int(deck["figure"] * lod.triangles(o) / close_total))
+            # Shared by what each mesh had, the hat and hair counting for
+            # more (they make the silhouette at a distance), each within its
+            # own kind's and never so few it loses its shape.
+            weight = {"hat": 1.8, "hair": 1.5, "face": 0.5}
+            def deck_weight(kind, spec=None):
+                return weight.get(kind, 1.0) * ((spec or {}).get("params") or {}).get("deck-weight", 1.0)
+
+            # Less the least each mesh is given, shared by the rest.
+            parts = [(skin, "body", None)] + [(g.obj, g.kind, g.spec) for g in worn
+                                              if g.kind != "prop" and g.obj.name != "lashes"]
+            total = sum(lod.triangles(o) * deck_weight(k, sp) for o, k, sp in parts)
+            spare = deck["figure"] - 80 * len(parts)
+
+            def deck_share(o, kind, spec=None):
+                share = 80 + int(spare * lod.triangles(o) * deck_weight(kind, spec) / total)
+                return min(deck[kind], share)
 
             keep = np.vectorize(lod.DECK_KEEP.get)(lod.regions(body.coords(skin), marks.joint))
             lod.decimate(skin, deck_share(skin, "body"), keep)
+            # The lashes and the trims are too fine to see from the deck.
+            for g in [g for g in worn if g.obj.name == "lashes" or g.kind == "prop"]:
+                meshes.remove(g.obj)
+                worn.remove(g)
+                bpy.data.objects.remove(g.obj, do_unlink=True)
+            fig.meshes = meshes
             for g in worn:
-                lod.decimate(g.obj, deck_share(g.obj, g.kind))
+                lod.decimate(g.obj, deck_share(g.obj, g.kind, g.spec))
             buried["deck"] = garment.bury_all(skin, worn, tables["ease"])
             for o in meshes:
                 rig.limit_weights(o, rig.bone_names(arm))
                 unfolded[o.name + " deck"] = atlas.untangle(o)
-            fig.lay_on_seat(meshes)
+                unfolded[o.name + " deck overlapping"] = atlas.drop_overlaps(o, size)
+            fig.lay_on_seat(meshes, above)
             settled["deck"] = garment.settle(fig, lib, POSES, worn, tables["ease"])
+            # A collapse this coarse is its own mirror only roughly.
             for o in meshes:
-                garment.mirror(o)
+                if o.name not in declared:
+                    garment.mirror(o, 0.03, greedy=True)
         if level == "far":
-            far = lod.far(meshes, arm, budgets["far"]["figure"], lambda: fig.pose(lib.poses["far"]),
-                          cloth=[g.obj.name for g in worn])
+            # The eyes are nothing at that distance.
+            far = lod.far([o for o in meshes if kinds.get(o.name) != "face"], arm, budgets["far"]["figure"],
+                          lambda: fig.pose(lib.poses["far"]), cloth=[g.obj.name for g in worn if g.kind == "garment"])
             meshes = [far]
             unfolded["far"] = atlas.untangle(far)
+            # A collapse this coarse folds a few faces' UVs onto another
+            # island's; at that distance a face is a pixel: they go.
+            unfolded["far overlapping"] = atlas.drop_overlaps(far, tables["atlas"]["close"])
+            lod.manifold(far)
             far.parent = arm
             fig.meshes = fig.sitting = meshes
             kinds = {"figure": "figure"}
@@ -261,6 +316,7 @@ def build_version(job, v, run):
         start = time.time()
         if level == "close":
             sheet.row(review.views(renderer, fig, lookmat))
+            sheet.row(review.faces(renderer, fig, lookmat))
             sheet.row(review.technical(renderer, fig, lookmat))
             sheet.row(review.poke_map(renderer, fig, lookmat, lib, maps) +
                       review.poke_map(renderer, fig, lookmat, lib, seats, what="seat") +
@@ -385,6 +441,14 @@ def _beside(a, b):
     pad = np.ones((h, 16, 3), np.float32)
     grow = [np.concatenate([x, np.ones((h - x.shape[0], x.shape[1], 3), np.float32)]) for x in (a, b)]
     return np.concatenate([grow[0], pad, grow[1]], axis=1)
+
+
+def _merged(a, b):
+    """b over a, dictionaries merged all the way down."""
+    out = dict(a)
+    for k, v in b.items():
+        out[k] = _merged(out[k], v) if isinstance(v, dict) and isinstance(out.get(k), dict) else v
+    return out
 
 
 def _faces_in(obj, vertex_mask):

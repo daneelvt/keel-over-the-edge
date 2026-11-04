@@ -6,29 +6,38 @@
 # How far each layer of clothing stands off what is under it, in metres,
 # when it is pushed out from the body.
 ease:
+  stockings: 0.003
+  shoes: 0.006
   shirt: 0.008
   breeches: 0.010
   waistcoat: 0.016
+  neckcloth: 0.020
   coat: 0.024
   sash: 0.030
+  cuff: 0.034
 
 # The most triangles a mesh may have at each level: the body, each
-# garment, the hair and the hat; and the whole figure. The close body is
-# its proxy with what the clothes cover taken out; the deck level is the
-# close one collapsed mesh by mesh; the far level is one rigid mesh.
+# garment, the hair, the hat, each part of the face (the eyes, the lashes)
+# and the trims (buttons, flaps, buckles, which the deck level leaves
+# out); and the whole figure. The close body is its proxy with what the
+# clothes cover taken out; the deck level is the close one collapsed mesh
+# by mesh; the far level is one rigid mesh.
 budgets:
   close:
     body: 5000
     garment: 4000
     hair: 1000
     hat: 1000
-    figure: 9000
+    face: 300
+    prop: 1500
+    figure: 12000
   deck:
     body: 1300
     garment: 350
     hair: 250
     hat: 250
-    figure: 2100
+    face: 80
+    figure: 3300
   far:
     figure: 300
 

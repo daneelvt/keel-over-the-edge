@@ -27,6 +27,14 @@ import numpy as np
 ATLAS = "atlas"
 REGIONS = ("main", "skin", "hair", "fixed")
 NEUTRAL = 0.5
+# A second map a painter reads (face.PAINT), kept until the bake.
+PAINT = "paint"
+
+# The painters of parts painted by shader rather than in one colour, by
+# the name a material gives in "part_painter": each takes the bake
+# material's node tree, the part's material and what is baked ("colour"
+# or "mask") and returns a colour (a face.Col) to emit.
+PAINTERS = {}
 
 
 def part(material, colour=None, region="fixed", metal=False):
@@ -63,7 +71,7 @@ def prepare(obj):
             dst = me.uv_layers.new(name=ATLAS)
             dst.data.foreach_set("uv", uv)
     for layer in list(me.uv_layers):
-        if layer.name != ATLAS:
+        if layer.name not in (ATLAS, PAINT):
             me.uv_layers.remove(layer)
     me.uv_layers[ATLAS].active = True
     me.uv_layers[ATLAS].active_render = True
@@ -235,6 +243,11 @@ def bake(objs, size, margin_px, samples=32):
         if m.name.startswith("bake-") and m.users == 0:
             bpy.data.materials.remove(m)
 
+    # The painters' maps have done their work.
+    for o in objs:
+        if PAINT in o.data.uv_layers:
+            o.data.uv_layers.remove(o.data.uv_layers[PAINT])
+        o.data.uv_layers[ATLAS].active = True
     colour = out["colour"][..., :3] * (0.55 + 0.45 * out["occlusion"][..., :1])
     base = np.ones((size, size, 4), np.float32)
     base[..., :3] = _srgb(np.clip(colour, 0, 1))
@@ -254,6 +267,10 @@ def _bake_material(m, what, img):
         shader = nt.nodes.new("ShaderNodeBsdfDiffuse")
         shader.inputs["Color"].default_value = (0.8, 0.8, 0.8, 1)
         nt.links.new(shader.outputs[0], out.inputs["Surface"])
+    elif what in ("colour", "mask") and m.get("part_painter") in PAINTERS:
+        emit = nt.nodes.new("ShaderNodeEmission")
+        nt.links.new(PAINTERS[m["part_painter"]](nt, m, what).socket(), emit.inputs["Color"])
+        nt.links.new(emit.outputs[0], out.inputs["Surface"])
     else:
         emit = nt.nodes.new("ShaderNodeEmission")
         region = m["part_region"]
@@ -380,3 +397,56 @@ def untangle(obj, passes=40):
     bm.free()
     obj.data.update()
     return len(first), len(bad)
+
+
+def drop_overlaps(obj, size):
+    """Drops the faces whose UVs share a texel (at size) with a face kept
+    before them, the smallest first. Returns how many went."""
+    me = obj.data
+    uv = np.empty(len(me.loops) * 2)
+    me.uv_layers[ATLAS].data.foreach_get("uv", uv)
+    uv = uv.reshape(-1, 2) * size
+    order = sorted(me.polygons, key=lambda p: -p.area)
+    taken = np.zeros((size, size), bool)
+    gone = []
+    for p in order:
+        pts = uv[list(p.loop_indices)]
+        cells = _texels(pts, size)
+        if cells is None:
+            continue
+        if taken[cells].any():
+            gone.append(p.index)
+        else:
+            taken[cells] = True
+    if gone:
+        bm = bmesh.new()
+        bm.from_mesh(me)
+        bm.faces.ensure_lookup_table()
+        bmesh.ops.delete(bm, geom=[bm.faces[i] for i in gone], context="FACES")
+        bmesh.ops.delete(bm, geom=[v for v in bm.verts if not v.link_faces], context="VERTS")
+        bm.to_mesh(me)
+        bm.free()
+        me.update()
+    return len(gone)
+
+
+def _texels(pts, size):
+    """The texels whose middles a polygon of UV points (in texels) covers,
+    as an index into a size × size grid; None if none."""
+    lo = np.clip(np.floor(pts.min(0)).astype(int), 0, size - 1)
+    hi = np.clip(np.ceil(pts.max(0)).astype(int), 0, size)
+    if (hi <= lo).any():
+        return None
+    xs, ys = np.meshgrid(np.arange(lo[0], hi[0]) + 0.5, np.arange(lo[1], hi[1]) + 0.5)
+    inside = np.zeros(xs.shape, bool)
+    for k in range(1, len(pts) - 1):
+        a, b, c = pts[0], pts[k], pts[k + 1]
+
+        def side(p, q):
+            return (q[0] - p[0]) * (ys - p[1]) - (q[1] - p[1]) * (xs - p[0])
+
+        s1, s2, s3 = side(a, b), side(b, c), side(c, a)
+        inside |= ((s1 >= 0) & (s2 >= 0) & (s3 >= 0)) | ((s1 <= 0) & (s2 <= 0) & (s3 <= 0))
+    if not inside.any():
+        return None
+    return (ys[inside].astype(int), xs[inside].astype(int))

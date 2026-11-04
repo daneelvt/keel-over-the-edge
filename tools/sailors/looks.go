@@ -41,6 +41,9 @@ type look struct {
 	Garments  []part             `yaml:"garments" json:"garments"`
 	Hair      *part              `yaml:"hair" json:"hair"`
 	Hat       *part              `yaml:"hat" json:"hat"`
+	// Trims are what is fastened on the garments once they are fitted
+	// (buttons, pocket flaps, buckles), each naming the garment it is on.
+	Trims []map[string]any `yaml:"trims" json:"trims,omitempty"`
 	// Palette is the options the look is built and shown with by default:
 	// main, skin and hair colours.
 	Palette map[string]string `yaml:"palette" json:"palette"`
@@ -53,11 +56,17 @@ type look struct {
 	Gates string `yaml:"gates" json:"gates,omitempty"`
 }
 
-// version is a woman or a man: a base body and the look's changes to it.
+// version is a woman or a man: a base body and the look's changes to it,
+// and what differs between the two that the look's own parts do not say.
 type version struct {
 	Base    string             `yaml:"base" json:"base"`
 	Macros  map[string]float64 `yaml:"macros" json:"macros"`
 	Targets map[string]float64 `yaml:"targets" json:"targets"`
+	// Face is how the face is painted and its eyes coloured, over the
+	// base's.
+	Face map[string]any `yaml:"face" json:"face,omitempty"`
+	// Hair is the version's own, when the two wear it differently.
+	Hair *part `yaml:"hair" json:"hair,omitempty"`
 }
 
 // part is a garment, the hair or a hat: made by a generator of its family
@@ -131,24 +140,34 @@ func (l look) check() error {
 	if l.Hair != nil {
 		parts = append(parts, *l.Hair)
 	}
+	for _, v := range versions {
+		if ver, ok := l.Versions[v]; ok && ver.Hair != nil {
+			if l.Hair != nil {
+				return fmt.Errorf("the %s version has its own hair, and so has the look", v)
+			}
+			if err := checkPart(*ver.Hair); err != nil {
+				return err
+			}
+		}
+	}
 	if l.Hat != nil {
 		parts = append(parts, *l.Hat)
 	}
 	seen := map[string]bool{}
 	for _, p := range parts {
-		switch {
-		case !idPattern.MatchString(p.ID) || seen[p.ID]:
-			return fmt.Errorf("a part's id %q is not a name, or is used twice", p.ID)
-		case p.Family == "":
-			return fmt.Errorf("%s has no family", p.ID)
-		case !slices.Contains(regions, p.Region):
-			return fmt.Errorf("%s: its region %q is none of %s", p.ID, p.Region, strings.Join(regions, ", "))
-		case (p.Region == "fixed") != (p.Colour != ""):
-			return fmt.Errorf("%s: a fixed region has its own colour, and only a fixed one", p.ID)
-		case p.Colour != "" && !hexColour.MatchString(p.Colour):
-			return fmt.Errorf("%s: the colour %q is not #RRGGBB", p.ID, p.Colour)
+		if seen[p.ID] {
+			return fmt.Errorf("a part's id %q is used twice", p.ID)
+		}
+		if err := checkPart(p); err != nil {
+			return err
 		}
 		seen[p.ID] = true
+	}
+	for _, t := range l.Trims {
+		on, _ := t["on"].(string)
+		if !slices.ContainsFunc(l.Garments, func(g part) bool { return g.ID == on }) {
+			return fmt.Errorf("a trim is on %q, which is none of the look's garments", on)
+		}
 	}
 	for _, r := range []string{"main", "skin", "hair"} {
 		if !hexColour.MatchString(l.Palette[r]) {
@@ -160,6 +179,24 @@ func (l look) check() error {
 		return fmt.Errorf("gates %q: a gate that fails either fails the build or is reported", l.Gates)
 	case l.Gates == "report" && l.Committed:
 		return errors.New("a look the game offers fails the build on any gate")
+	}
+	return nil
+}
+
+// checkPart refuses a part without a name, a family or a region, or whose
+// colour does not go with its region.
+func checkPart(p part) error {
+	switch {
+	case !idPattern.MatchString(p.ID):
+		return fmt.Errorf("a part's id %q is not a name", p.ID)
+	case p.Family == "":
+		return fmt.Errorf("%s has no family", p.ID)
+	case !slices.Contains(regions, p.Region):
+		return fmt.Errorf("%s: its region %q is none of %s", p.ID, p.Region, strings.Join(regions, ", "))
+	case (p.Region == "fixed") != (p.Colour != ""):
+		return fmt.Errorf("%s: a fixed region has its own colour, and only a fixed one", p.ID)
+	case p.Colour != "" && !hexColour.MatchString(p.Colour):
+		return fmt.Errorf("%s: the colour %q is not #RRGGBB", p.ID, p.Colour)
 	}
 	return nil
 }

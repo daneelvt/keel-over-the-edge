@@ -206,40 +206,44 @@ class Figure:
         self.on_seat(False)
         self.update()
 
-    def lay_on_seat(self, meshes):
+    def lay_on_seat(self, meshes, above=None):
         """Lays the skirts on the boat whenever the figure is in it, as the
         game will (springs on the seat's plane up close, the vertex lifted
-        to it further off): each vertex the skirt chains move is lifted,
-        straight up, out of the deck it hangs through, as far as they move
-        it. A modifier after the skeleton's, on while the figure is placed
-        in the boat; the files never carry it."""
+        to it further off): each vertex of a mesh the skirt chains move that
+        is below the seat's plane is lifted, straight up, to it, and then
+        onto the deck where the deck, rising with the sheer, is above that;
+        each layer a little higher than the one under it (above, by mesh,
+        how much). Modifiers after the skeleton's, on while the figure is
+        placed in the boat; the files never carry them."""
         self.seat_mods = []
         if self.stage is None:
             return
         for o in meshes:
             names = {g.index: g.name for g in o.vertex_groups}
-            lift = o.vertex_groups.get(SEAT_GROUP) or o.vertex_groups.new(name=SEAT_GROUP)
-            any_ = False
-            for v in o.data.vertices:
-                w = sum(g.weight for g in v.groups if names.get(g.group, "").startswith("skirt_"))
-                if w > 0:
-                    lift.add([v.index], min(w, 1.0), "REPLACE")
-                    any_ = True
-            if not any_:
-                o.vertex_groups.remove(lift)
+            # All of a skirted mesh: above the hips its cloth is the pelvis's,
+            # and seated that is at the deck too. What is above the deck
+            # stays where it is.
+            if not any(names.get(g.group, "").startswith("skirt_") for v in o.data.vertices for g in v.groups):
                 continue
-            m = o.modifiers.get(SEAT_GROUP) or o.modifiers.new(SEAT_GROUP, "SHRINKWRAP")
-            m.target = self.stage.solid[0]
-            m.wrap_method = "PROJECT"
-            m.use_project_z = True
-            m.use_positive_direction = True
-            m.use_negative_direction = False
-            m.wrap_mode = "OUTSIDE_SURFACE"
-            m.offset = SEAT_CLEAR
-            m.project_limit = 0.5
-            m.vertex_group = SEAT_GROUP
-            m.show_viewport = m.show_render = False
-            self.seat_mods.append((o, m.name))
+            lift = o.vertex_groups.get(SEAT_GROUP) or o.vertex_groups.new(name=SEAT_GROUP)
+            lift.add(range(len(o.data.vertices)), 1.0, "REPLACE")
+            for name, target, mode in ((SEAT_GROUP, self.stage.plane, "ABOVE_SURFACE"),
+                                       (SEAT_GROUP + "-deck", self.stage.solid[0], "OUTSIDE_SURFACE")):
+                m = o.modifiers.get(name) or o.modifiers.new(name, "SHRINKWRAP")
+                m.target = target
+                m.wrap_method = "PROJECT"
+                m.use_project_z = True
+                m.use_positive_direction = True
+                m.use_negative_direction = False
+                m.wrap_mode = mode
+                # From under the deck its underside faces the ray: only its
+                # top is found.
+                m.cull_face = "FRONT" if target is not self.stage.plane else "OFF"
+                m.offset = SEAT_CLEAR + (above or {}).get(o.name, 0.0)
+                m.project_limit = 2.0 if target is self.stage.plane else 0.3
+                m.vertex_group = SEAT_GROUP
+                m.show_viewport = m.show_render = False
+                self.seat_mods.append((o, m.name))
 
     def on_seat(self, on):
         for o, name in getattr(self, "seat_mods", []):
