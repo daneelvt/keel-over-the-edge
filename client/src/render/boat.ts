@@ -50,11 +50,11 @@ import { FLOW_LUFFING, Telltales } from './telltales';
  * Every model under art/ the game loads as it starts, by its path there, as
  * Vite serves it: the boats', the towns', and the sailor's deck and far
  * levels and clips; not the sailors' build's inputs (art/sailors/vendor), its
- * test sailor, the looks no boat is drawn with yet, nor the close levels,
- * which load when the camera comes near (CLOSE).
+ * test sailor, the old stand-in, the looks no boat is drawn with yet, nor the
+ * close levels, which load when the camera comes near (CLOSE).
  */
 const MODELS = {
-  ...import.meta.glob<string>(['../../../art/**/*.glb', '!../../../art/sailors/*/**'], {
+  ...import.meta.glob<string>(['../../../art/**/*.glb', '!../../../art/sailors/**'], {
     query: '?url',
     import: 'default',
     eager: true,
