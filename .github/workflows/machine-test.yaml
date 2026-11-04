@@ -43,21 +43,13 @@ jobs:
         run: go build -o .dev/bin/machine ./tools/machine
       - name: Ansible, from hashed requirements
         run: .dev/bin/machine -ansible
-      - name: DEBUG /tmp
-        run: |
-          findmnt /tmp || true
-          ls -la /etc/systemd/system/tmp.mount /usr/lib/systemd/system/tmp.mount || true
-          systemctl status tmp.mount --no-pager || true
-          systemctl is-enabled tmp.mount || true
+      # Ubuntu, and so the machine, boots with /tmp in memory; the runner's
+      # image masks it. Left on disk, the playbook would mount /tmp over
+      # the files Ansible's module runs from, and lose the module's result.
+      - name: /tmp in memory, as Ubuntu has it
+        run: sudo systemctl unmask tmp.mount && sudo systemctl start tmp.mount
       - name: The playbook on this runner, the first time
         run: .dev/bin/machine -run apply -local
-      - name: DEBUG after
-        if: failure()
-        run: |
-          findmnt /tmp || true
-          systemctl status tmp.mount --no-pager || true
-          sudo sh -c 'grep -h -A40 "Mount /tmp now" /root/.dev/junit/*.xml infra/ansible/*.xml $(find / -xdev -name "*.xml" -path "*junit*" -newer .dev/bin/machine 2>/dev/null) 2>/dev/null | head -80' || true
-          sudo find / -xdev -name '*.xml' -newer .dev/bin/machine -path '*unit*' 2>/dev/null | head
       - name: The playbook again, which must change nothing
         run: .dev/bin/machine -run apply -local -unchanged
       - name: The runner is as the playbook leaves it; Flux follows the real prod
