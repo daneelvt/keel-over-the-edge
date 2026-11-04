@@ -57,10 +57,16 @@ jobs:
       - name: Lynis, with no warning not accepted; kube-bench, a report
         run: .dev/bin/machine -audit -local
       # The runner runs apt's daily update and upgrade alongside the
-      # playbook, and a failure can hang on what they did meanwhile.
-      - name: On a failure, what apt and systemd did
+      # playbook, and a failure can hang on what they did meanwhile; verify
+      # waits on Flux, which says what it waits on.
+      - name: On a failure, what apt, systemd and Flux did
         if: failure()
         run: |
           sudo grep -v '^Upgrade:' /var/log/apt/history.log || true
           sudo journalctl --no-pager -o short-precise --since '-30min' \
             | grep -iE 'systemd\[1\]|dbus|reexec|unattended|apt' | tail -200 || true
+          if command -v k3s >/dev/null; then
+            sudo k3s kubectl get kustomizations,helmreleases -A || true
+            sudo k3s kubectl get pods -A | grep -vE 'Running|Completed' || true
+            sudo k3s kubectl get events -A --sort-by=.lastTimestamp | tail -40 || true
+          fi
