@@ -37,9 +37,13 @@ infra/tofu/.terraform/
 /polar
 /protocol
 /release
+/sailors
 /tailnet
 /testsea
 /vendored
+
+# Python's compiled modules, which Blender leaves beside the sailors' build
+__pycache__/
 
 # Editors and systems
 .DS_Store

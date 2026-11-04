@@ -1,0 +1,147 @@
+# SPDX-License-Identifier: LicenseRef-All-Rights-Reserved
+#
+# The two bodies every look varies, a woman and a man: MPFB's macros and
+# targets, shaped completely before the rig. A look's own macros replace
+# these, and its targets are added to them (a look's value replaces the
+# base's for the same target). "lr-" names a target for both sides.
+#
+# measure is what every build of the body asserts: its height in metres,
+# its height in heads (crown to chin), and the ratios of its widths in the
+# front view at rest (landmarks.py: the shoulders across the deltoids'
+# tops, the waist at its narrowest, the hips at their widest).
+
+female:
+  macros:
+    gender: 0.0
+    age: 0.6
+    muscle: 0.62
+    weight: 0.38
+    height: 0.42
+    proportions: 1.0
+    cupsize: 0.63
+    firmness: 0.85
+    african: 0.333
+    asian: 0.333
+    caucasian: 0.334
+  targets:
+    # The face: oval, a little short, the forehead low; high soft
+    # cheekbones; a narrow tapered jaw and small chin; a slim straight nose,
+    # a little turned up; larger almond eyes lifted at the outer corners;
+    # brows set high; full lips with a defined bow.
+    head-oval: 0.6
+    head-scale-horiz-decr: 0.05
+    head-scale-vert-decr: 0.08
+    head-fat-decr: 0.35
+    forehead-temple-decr: 0.2
+    forehead-scale-vert-decr: 0.2
+    chin-width-decr: 0.45
+    chin-prominent-incr: 0.15
+    chin-bones-decr: 0.35
+    chin-height-decr: 0.25
+    lr-cheek-bones-incr: 0.45
+    lr-cheek-trans-up: 0.3
+    nose-scale-horiz-decr: 0.35
+    nose-scale-vert-decr: 0.22
+    nose-point-width-decr: 0.4
+    nose-point-up: 0.3
+    nose-width1-decr: 0.2
+    nose-width2-decr: 0.25
+    nose-flaring-decr: 0.3
+    nose-nostrils-width-decr: 0.25
+    nose-hump-decr: 0.3
+    nose-volume-decr: 0.2
+    lr-eye-scale-incr: 0.6
+    lr-eye-corner2-up: 0.4
+    lr-eye-height2-incr: 0.35
+    lr-eye-bag-decr: 0.4
+    eyebrows-angle-up: 0.35
+    eyebrows-trans-up: 0.15
+    mouth-upperlip-volume-incr: 0.35
+    mouth-lowerlip-volume-incr: 0.5
+    mouth-cupidsbow-incr: 0.5
+    mouth-scale-horiz-decr: 0.15
+    mouth-angles-up: 0.3
+    mouth-philtrum-volume-incr: 0.2
+    # A slender neck, a little longer.
+    neck-scale-horiz-decr: 0.3
+    neck-double-decr: 0.3
+    measure-neck-height-incr: 0.12
+    # Slim and toned: the waist and underbust in, a little more bust and
+    # hip, shoulders a little wider, long legs, slim arms and thighs.
+    measure-waist-circ-decr: 0.45
+    measure-hips-circ-incr: 0.15
+    measure-underbust-circ-decr: 0.2
+    measure-bust-circ-incr: 0.15
+    measure-shoulder-dist-incr: 0.25
+    breast-trans-up: 0.25
+    stomach-pregnant-decr: 0.6
+    buttocks-volume-incr: 0.2
+    upperlegs-height-incr: 0.3
+    lowerlegs-height-incr: 0.25
+    lr-upperleg-fat-decr: 0.3
+    lr-upperleg-muscle-incr: 0.15
+    lr-upperarm-fat-decr: 0.45
+    lr-lowerarm-fat-decr: 0.3
+  measure:
+    height: [1.59, 1.63]
+    # Crown to chin she measures 8.2: her head was made a little smaller
+    # than MPFB's, which read young when larger.
+    heads: [7.5, 8.3]
+    waist-to-hip: [0.55, 0.63]
+    shoulder-to-hip: [1.1, 1.25]
+
+male:
+  macros:
+    gender: 1.0
+    age: 0.62
+    muscle: 0.5
+    weight: 0.42
+    height: 0.5
+    proportions: 1.0
+    cupsize: 0.5
+    firmness: 0.5
+    african: 0.333
+    asian: 0.333
+    caucasian: 0.334
+  targets:
+    # The face: a defined jaw and chin, a straight nose, a clear brow that
+    # is not heavy, open eyes.
+    head-square: 0.25
+    head-scale-vert-decr: 0.05
+    chin-prominent-incr: 0.3
+    chin-width-incr: 0.2
+    chin-height-incr: 0.1
+    lr-cheek-bones-incr: 0.3
+    nose-scale-vert-incr: 0.15
+    nose-scale-horiz-decr: 0.15
+    nose-point-width-decr: 0.1
+    nose-hump-incr: 0.3
+    nose-hump-decr: 0.2
+    eyebrows-trans-down: 0.2
+    lr-eye-scale-incr: 0.2
+    lr-eye-height2-incr: 0.15
+    lr-eye-trans-in: 0.1
+    asym-brown-1-l: 0.3
+    mouth-lowerlip-volume-incr: 0.2
+    mouth-angles-up: 0.15
+    neck-scale-horiz-incr: 0.05
+    # Athletic and lean, never a bodybuilder's: the waist in, the stomach
+    # flat, the chest and arms only a little up, long legs.
+    measure-waist-circ-decr: 0.4
+    measure-hips-circ-decr: 0.05
+    stomach-pregnant-decr: 0.7
+    torso-muscle-pectoral-incr: 0.1
+    # The shoulders narrowed a little, about 3.5 cm across the deltoids:
+    # less V, the shoulder joints in, smaller deltoids.
+    torso-vshape-decr: 0.3
+    measure-shoulder-dist-decr: 0.4
+    lr-upperarm-shoulder-muscle-decr: 0.3
+    lr-upperarm-muscle-incr: 0.05
+    lr-lowerarm-muscle-incr: 0.05
+    upperlegs-height-incr: 0.2
+    lowerlegs-height-incr: 0.15
+  measure:
+    height: [1.74, 1.78]
+    heads: [7.5, 8.0]
+    waist-to-hip: [0.7, 0.8]
+    shoulder-to-hip: [1.35, 1.5]
