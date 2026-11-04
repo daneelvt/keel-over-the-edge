@@ -54,6 +54,13 @@ POLES = {
     "foot_r": ("pelvis", (-0.1, -0.8, 0.0)),
 }
 
+# How the skirt chains follow the thighs, by the share of a thigh's turn
+# (against the hips') each bone of a chain takes, upper then lower:
+# negative, the other way. Seated, the front lies over the lap, the side
+# half way, the back hangs down the buttocks and then lies out along the
+# seat behind.
+SKIRT_FOLLOW = {"front": (0.95, 0.05), "side": (0.55, 0.3), "back": (0.0, -0.9)}
+
 # The torso, root to head: its delays turn round when the head leads.
 TORSO = ("pelvis", "spine_01", "spine_02", "spine_03", "neck_01", "head")
 # Where the holds drift.
@@ -61,9 +68,10 @@ DRIFTS = ("spine_02", "spine_03", "neck_01", "head")
 FINGERS = ("thumb", "index", "middle", "ring", "pinky")
 
 # How far round the pelvis the buttocks are looked for, seating a figure,
-# and how far over the deck they sit.
+# how far over the deck they sit, and how far in from its outer edge.
 SEAT_REACH = 0.22
-SEAT_CLEAR = 0.003
+SEAT_EDGE = 0.03
+SEAT_CLEAR = 0.006
 # How far short of the far side deck's edge an ankle stays, in the cockpit:
 # the toes reach about 0.17 m past it.
 COCKPIT_MARGIN = 0.25
@@ -181,6 +189,8 @@ class Figure:
         for pb in self.bones:
             pb.rotation_mode = "QUATERNION"
         self.clamped = 0
+        # What the figure sits on: all of it, unless told (not its skirts).
+        self.sitting = meshes
 
     # --- Posing --------------------------------------------------------
 
@@ -241,8 +251,10 @@ class Figure:
 
     def placement(self, place, side=1):
         """Where a posed figure stands in the boat: on the seat or the
-        gunwale facing inboard, its lowest dressed point under the hips on
-        the deck; or at the origin."""
+        gunwale facing inboard, its lowest point under the hips on the
+        deck (the body's and its fitted clothes', not a skirt's, which lies
+        on the seat by its chains); seated, wholly on the deck, not over its
+        outer edge; or at the origin."""
         if place is None:
             return Matrix()
         if self.stage is None:
@@ -257,32 +269,41 @@ class Figure:
         else:
             raise ValueError(f"no place {place!r}")
         pelvis = self.bones["pelvis"].head
-        co = self.dressed()
+        co = self.dressed(self.sitting)
         near = np.hypot(co[:, 0] - pelvis.x, co[:, 1] - pelvis.y) < SEAT_REACH
         below = near & (co[:, 2] < pelvis.z)
         # Clear of the deck, not on it: the legs' IK, after, moves the cloth
         # under the thighs a little.
         low = float(co[below, 2].min()) - SEAT_CLEAR
         contact = Vector((pelvis.x, pelvis.y, low))
-        place = Matrix.Translation(at) @ st.facing(side) @ Matrix.Translation(-contact)
+        m = Matrix.Translation(at) @ st.facing(side) @ Matrix.Translation(-contact)
+
+        def boat(points):
+            return points @ np.array(m)[:3, :3].T + np.array(m)[:3, 3]
+
+        if place == "seat":
+            # The buttocks on the deck, not hanging over its outer edge.
+            over = float((side * boat(co[below])[:, 0]).max()) - (st.gunwale.x - SEAT_EDGE)
+            if over > 0:
+                m = Matrix.Translation((-side * over, 0, 0)) @ m
         # The deck is cambered, higher inboard: lifted until nothing lying
         # on the side deck (well in from its edge, where the legs go down)
         # is under it.
-        world = co @ np.array(place)[:3, :3].T + np.array(place)[:3, 3]
         lift = 0.0
-        for x, y, z in world:
+        for x, y, z in boat(co):
             if st.edge + 0.05 <= side * x <= st.gunwale.x:
                 top = st.down(x, y)
                 if top is not None and top - 0.15 < z < top + SEAT_CLEAR:
                     lift = max(lift, top + SEAT_CLEAR - z)
-        return Matrix.Translation((0, 0, lift)) @ place
+        return Matrix.Translation((0, 0, lift)) @ m
 
-    def dressed(self):
-        """Every vertex of the figure as posed, in the armature's space."""
+    def dressed(self, meshes=None):
+        """Every vertex of the figure (or of meshes) as posed, in the
+        armature's space."""
         dg = bpy.context.evaluated_depsgraph_get()
         out = []
         inv = self.arm.matrix_world.inverted()
-        for o in self.meshes:
+        for o in meshes or self.meshes:
             e = o.evaluated_get(dg)
             me = e.to_mesh()
             co = np.empty(len(me.vertices) * 3)
@@ -367,7 +388,12 @@ class Figure:
 
     def derive(self):
         """The bones of our own: the hip correctors half the thighs' turn,
-        the forearm twists half the hands' twist about their length."""
+        the forearm twists half the hands' twist about their length, and
+        the skirt chains after the thighs (SKIRT_FOLLOW): seated, the front
+        over the lap, the back down the buttocks and out along the seat."""
+        bones = self.arm.data.bones
+        self.update()
+        pelvis = (self.bones["pelvis"].matrix.to_quaternion() @ bones["pelvis"].matrix_local.to_quaternion().inverted())
         for s in ("l", "r"):
             thigh = self.bones["thigh_" + s].rotation_quaternion
             self.bones["thigh_corrector_" + s].rotation_quaternion = Quaternion().slerp(thigh, 0.5)
@@ -375,6 +401,16 @@ class Figure:
             twist = Quaternion((hand.w, 0.0, hand.y, 0.0))
             twist = twist.normalized() if twist.magnitude > 1e-9 else Quaternion()
             self.bones["lowerarm_twist_" + s].rotation_quaternion = Quaternion().slerp(twist, 0.5)
+            # The thigh's turn against the hips', in the skeleton's axes.
+            turn = (self.bones["thigh_" + s].matrix.to_quaternion()
+                    @ bones["thigh_" + s].matrix_local.to_quaternion().inverted())
+            turn = pelvis.inverted() @ turn
+            for place, shares in SKIRT_FOLLOW.items():
+                for i, share in enumerate(shares):
+                    name = f"skirt_{place}_{s}_0{i + 1}"
+                    part = Quaternion().slerp(turn if share >= 0 else turn.inverted(), abs(share))
+                    rest = bones[name].matrix_local.to_quaternion()
+                    self.bones[name].rotation_quaternion = rest.inverted() @ part @ rest
         self.update()
 
     # --- A pose, whole -------------------------------------------------

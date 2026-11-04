@@ -162,6 +162,7 @@ def build_version(job, v, run):
     stage = stages.Stage(job["root"], tables["stage"])
     lib = motion.Library(job)
     fig = motion.Figure(arm, meshes, stage, tables["motion"])
+    fig.sitting = [skin] + [w.obj for w in worn if w.kind == "garment" and not (w.spec.get("params") or {}).get("skirt")]
     kinds = {"body": "body", **{w.obj.name: w.kind for w in worn}}
     settled = {"close": garment.settle(fig, lib, POSES, worn, tables["ease"])}
     lap("settle")
@@ -211,7 +212,7 @@ def build_version(job, v, run):
             far = meshes[0]
             unfolded["far"] = atlas.untangle(far)
             far.parent = arm
-            fig.meshes = meshes
+            fig.meshes = fig.sitting = meshes
             kinds = {"figure": "figure"}
             # A collapse this coarse drags a vertex a few centimetres: what
             # it drags through the boat, posed on its seat, is brought back.
@@ -260,6 +261,7 @@ def build_version(job, v, run):
                       review.poke_map(renderer, fig, lookmat, lib, seats, what="seat") +
                       review.posed(renderer, fig, lookmat, lib, POSES[:2]))
             sheet.row(review.posed(renderer, fig, lookmat, lib, POSES[2:]))
+            sheet.row(review.boat_views(renderer, fig, lookmat, lib))
             sheet.seconds += time.time() - start
             lap("sheet")
             clips = make_clips(job, v, fig, lib, kinds, gates, renderer, lookmat, work)

@@ -17,6 +17,22 @@ versions:
   female:
     base: female
 garments:
+  # The test sailor's shirt and breeches, so the tails hang over clothes.
+  - id: shirt
+    family: shirt
+    region: main
+    params:
+      sleeve: 0.92
+      bands:
+        - { at: ends, height: 0.035, out: 0.004 }
+  - id: breeches
+    family: breeches
+    region: fixed
+    colour: "#4A3B2E"
+    params:
+      bands:
+        - { at: top, height: 0.035, out: -0.001 }
+        - { at: bottom, height: 0.03, out: 0.004 }
   - id: tails
     family: skirt
     region: fixed

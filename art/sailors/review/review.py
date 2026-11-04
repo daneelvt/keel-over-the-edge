@@ -14,6 +14,9 @@ previous run's sheet beside it (compare.png):
 - the poke-through map: what came through the clothes, in red, in the
   pose where most did;
 - the posed set: every test pose, the seated ones in the boat;
+- the whole boat, the figure seated at the helm: abeam, from the quarter,
+  from astern, and the seat close from astern, to see its scale and its
+  seat;
 - the game's camera, behind and above, at 64 pixels;
 - the silhouettes of every look built, in black at that size.
 
@@ -420,6 +423,38 @@ def game(r, fig, look, lib, pose="seated"):
     fig.stage.show(False)
     fig.reset()
     return pic, sil
+
+
+def boat_views(r, fig, look, lib, pose="seated", size=448):
+    """The figure seated at the helm in the whole boat, to see its scale:
+    the boat abeam (from the figure's side) and from the quarter, mast and
+    sail and all; from astern; and the seat close from astern."""
+    fig.pose(lib.poses[pose])
+    shown = [o for o in fig.stage.objects if o.type == "MESH"]
+    for o in shown:
+        o.hide_render = False
+    corners = np.array([np.array(o.matrix_world @ Vector(c)) for o in shown for c in o.bound_box])
+    centre, extent = bounds(np.concatenate([corners, figure_points(fig)]))
+    look.use(look.look)
+    out = []
+    side = 1 if fig.world("pelvis").x > 0 else -1
+    for name, d in (("jolly boat abeam", (side, 0, 0.05)), ("jolly boat from the quarter", (side * 0.7, -0.7, 0.35))):
+        r.look_at(centre, d, extent * 1.05, size)
+        out.append((name, r.render("TEXTURE")))
+    # From astern: the hull's breadth and the figure, the mast cut off.
+    hull = np.array([np.array(fig.stage.solid[0].matrix_world @ Vector(c)) for c in fig.stage.solid[0].bound_box])
+    body = figure_points(fig)
+    lo = np.minimum(hull.min(0), body.min(0))
+    hi = np.maximum(hull.max(0), body.max(0))
+    mid = (lo + hi) / 2
+    r.look_at(mid, (0, -1, 0), float(max(hi[0] - lo[0], hi[2] - lo[2])) * 1.1, size)
+    out.append(("astern", r.render("TEXTURE")))
+    hips = fig.world("pelvis")
+    r.look_at(hips + Vector((0, 0, -0.1)), (0, -1, 0), 0.75, size)
+    out.append(("the seat close, from astern", r.render("TEXTURE")))
+    fig.stage.show(False)
+    fig.reset()
+    return out
 
 
 # --- Strips and curves ----------------------------------------------------
