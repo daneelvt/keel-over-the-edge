@@ -12,24 +12,9 @@ versions:
       # Her waist the narrower, and its plate and the frame under it in.
       bones: { spine_01: { inset: 0.021 } }
       frame: { inset: 0.022 }
-      # Her bust shaped in the plates: each breast its own plate, her own
-      # breast as the front sees it, within across (toward the middle, and
-      # out), above and below of its apex (and depth behind it), in rings;
-      # its rim sunk into the chest.
-      bust: {
-          bone: spine_03,
-          across: [0.09, 0.055],
-          above: 0.08,
-          below: 0.06,
-          depth: 0.08,
-          rings: [0.45, 0.75, 1.0],
-          sides: 14,
-          sink: 0.02,
-          # The dome's rise inside the first ring, of a paraboloid's.
-          dome: 0.8,
-          # Standing off her body, as the plate's thickness does.
-          inset: -0.01,
-        }
+      # Her chest plate a shell over her own body, which has a bust: its
+      # form hers (the cleft, the fold under it), a groove down the middle.
+      shells: { spine_03: { out: 0.003, rim: 0.008, seam: 0.008, triangles: 700 } }
   male:
     base: male
     machine:
@@ -126,9 +111,10 @@ garments:
       open: { neck: 0.04, hem: 0.06 }
       fitted: true
       triangles: 1600
-      # Hers open wide over the bust, which her plates shape.
+      # Hers open over the middle of her chest: its fronts over the outer
+      # part of each breast, shaped by it, the plate between them.
       female:
-        { shoulder: { reach: 0.13, ease: 0.0065 }, open: { neck: 0.07, bust: 0.15, hem: 0.07 } }
+        { shoulder: { reach: 0.13, ease: 0.0065 }, open: { neck: 0.036, bust: 0.068, hem: 0.056 } }
       male: { shoulder: { reach: 0.21, ease: 0.0065 } }
   - id: coat-skirt
     family: skirt
