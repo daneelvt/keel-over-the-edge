@@ -15,10 +15,14 @@ figure by casting onto it, never by eye.
 - sash: a wide band of cloth wound round the waist over the clothes,
   knotted at one hip, its two long ends hanging from the knot down the
   side of the thigh, fringed; laid on the clothes as the strap is, and
-  moving as the cloth under it does.
+  moving as the cloth under it does. Without a knot or ends, and with a
+  buckle at the front, it is a belt;
+- earrings: a ring through each ear's lobe, hanging below it; on the head;
+- book: a small book in a leather cover tucked under a belt at one side
+  of the front, standing up out of it.
 
-The spectacles and dividers are too fine to see from the deck: they are
-props (the deck level leaves them out); the case is seen from far off and
+The spectacles, dividers, earrings and book are too fine to see from the
+deck: they are props (the deck level leaves them out); the case is seen from far off and
 kept at every level, and so is a sash. Each is a swatch of its colours:
 small parts on one painted patch of the atlas.
 """
@@ -44,6 +48,9 @@ SHOULDER = TORSO + ("upperarm_r",)
 # The strap's loop, once a case has laid it: dividers hang from it.
 _strap = []
 
+# A belt's outer face, once a sash has laid it: a book is tucked under it.
+_belt = []
+
 
 def deck(spec):
     """Whether the deck level keeps the gear."""
@@ -61,6 +68,10 @@ def make(spec, human, marks, arm, worn, skin):
         return dividers(spec, p, marks, arm, worn, skin)
     if family == "sash":
         return sash(spec, p, marks, arm, worn, skin)
+    if family == "earrings":
+        return earrings(spec, p, marks, arm, skin)
+    if family == "book":
+        return book(spec, p, marks, arm, worn, skin)
     raise ValueError(f"{spec['id']}: no gear family {family!r}")
 
 
@@ -141,9 +152,10 @@ def _host_tree(meshes, bones):
     return BVHTree.FromPolygons(verts, faces), owner
 
 
-def _weigh_from(obj, hosts, arm):
+def _weigh_from(obj, hosts, arm, at=None):
     """Each vertex takes the weights of the nearest vertex of the hosts
-    (the cloth or skin it lies on)."""
+    (the cloth or skin it lies on); or, given a point at, every vertex the
+    weights of the hosts' nearest to it (a stiff thing)."""
     trees = []
     for h in hosts:
         co = body.coords(h)
@@ -154,8 +166,9 @@ def _weigh_from(obj, hosts, arm):
         trees.append((h, t, {g.index: g.name for g in h.vertex_groups}))
     groups = {}
     for v in obj.data.vertices:
-        h, t, names = min(((h, t, n) for h, t, n in trees), key=lambda x: x[1].find(v.co)[2])
-        _, i, _ = t.find(v.co)
+        q = v.co if at is None else at
+        h, t, names = min(((h, t, n) for h, t, n in trees), key=lambda x: x[1].find(q)[2])
+        _, i, _ = t.find(q)
         ws = [(names[g.group], g.weight) for g in h.data.vertices[i].groups
               if names[g.group] in arm.data.bones]
         total = sum(w for _, w in ws) or 1.0
@@ -481,8 +494,31 @@ def sash(spec, p, marks, arm, worn, skin):
         face((vin[0][k], vin[0][n], vout[0][n], vout[0][k]))
         face((vout[-1][k], vout[-1][n], vin[-1][n], vin[-1][k]))
 
-    # The knot, on the band at its azimuth.
+    # Where a book may be tucked under it: its outer face.
+    _belt[:] = [outer, mid_z, width, thick, columns]
+    obj = None
+    if p.get("buckle"):
+        # A belt's buckle at the front: a square frame on the band.
+        b = p["buckle"]
+        bw, bh, wire = b.get("width", 0.04), b.get("height", 0.035), b.get("wire", 0.003)
+        front = (outer[0][0] + outer[-1][0]) / 2 + Vector((0, -(wire + OFF), 0))
+        frame = [front + Vector((x, 0, z)) for x, z in ((-bw / 2, -bh / 2), (bw / 2, -bh / 2), (bw / 2, bh / 2),
+                                                        (-bw / 2, bh / 2))]
+        ring = []
+        for i in range(4):
+            a, c = frame[i], frame[(i + 1) % 4]
+            ring += [a.lerp(c, t) for t in (0.0, 0.5)]
+        _tube(bm, uv, ring, wire, sides=4, closed=True, slot=2)
     kp = p.get("knot", {})
+    if kp is None:
+        # No knot, and no ends: a belt.
+        obj = _new(spec["id"], bm)
+        colours = p.get("colours", {})
+        _materials(obj, spec, [spec.get("colour", "#3B2A1E"), colours.get("fringe", "#C8A24A"),
+                               colours.get("buckle", "#B9A06A")], [False, False, True])
+        _weigh_from(obj, garments + [skin], arm)
+        return obj
+    # The knot, on the band at its azimuth.
     a0 = np.radians(kp.get("azimuth", 100))
     d0 = outward(0, a0)
     size = kp.get("size", [0.05, 0.03, 0.055])
@@ -555,7 +591,9 @@ def sash(spec, p, marks, arm, worn, skin):
         face(rings[-1], 1)
     obj = _new(spec["id"], bm)
     colours = p.get("colours", {})
-    _materials(obj, spec, [spec.get("colour", "#A3243A"), colours.get("fringe", "#C8A24A")], [False, False])
+    _materials(obj, spec, [spec.get("colour", "#A3243A"), colours.get("fringe", "#C8A24A")]
+               + ([colours.get("buckle", "#B9A06A")] if p.get("buckle") else []),
+               [False, False] + ([True] if p.get("buckle") else []))
     _weigh_from(obj, garments + [skin], arm)
     _hang_on_chains(obj, arm, range(ends_from, len(obj.data.vertices)), top)
     return obj
@@ -598,3 +636,104 @@ def _hang_on_chains(obj, arm, vertices, top, over=0.06):
             group = obj.vertex_groups.get(name) or obj.vertex_groups.new(name=name)
             names[group.index] = name
             group.add([i], w, "REPLACE")
+
+
+# --- Earrings ------------------------------------------------------------
+
+
+def _lobe(skin, marks):
+    """Where a ring goes through the left ear's lobe: a little above the
+    ear's lowest point, half way through it. The ear is what stands out
+    from the side of the head behind the eye, between the jaw and the
+    temple; its lobe its lowest part."""
+    co = body.coords(skin)
+    eye = marks.joint("l-eye")
+    band = co[(co[:, 0] > 0) & (co[:, 1] > eye[1] + 0.03) & (co[:, 1] < eye[1] + 0.16)
+              & (co[:, 2] > eye[2] - 0.08) & (co[:, 2] < eye[2] + 0.02)]
+    if not len(band):
+        raise AssertionError("no ear beside the head")
+    ear = band[band[:, 0] > band[:, 0].max() - 0.012]
+    low = ear[ear[:, 2].argmin()]
+    # Half way through the lobe: the skin's nearest across it, inward.
+    near = band[(np.abs(band[:, 2] - low[2]) < 0.006) & (np.abs(band[:, 1] - low[1]) < 0.008)]
+    inner = float(near[:, 0].min()) if len(near) else low[0] - 0.006
+    return Vector(((low[0] + max(inner, low[0] - 0.008)) / 2, low[1] - 0.001, low[2] + 0.005))
+
+
+def earrings(spec, p, marks, arm, skin):
+    """A ring through each lobe, hanging below it in the plane of the side
+    of the head: a hoop, or a small ring. Its params: radius, wire."""
+    radius, wire = p.get("radius", 0.01), p.get("wire", 0.0012)
+    at = _lobe(skin, marks)
+    bm = bmesh.new()
+    uv = bm.loops.layers.uv.new(atlas.ATLAS)
+    for sign in (1, -1):
+        top = Vector((at.x * sign, at.y, at.z))
+        centre = top - Vector((0, 0, radius))
+        ring = [centre + Vector((0, radius * np.sin(a), radius * np.cos(a)))
+                for a in np.linspace(0, 2 * np.pi, p.get("segments", 14), endpoint=False)]
+        _tube(bm, uv, ring, wire, sides=4, closed=True)
+    obj = _new(spec["id"], bm)
+    _materials(obj, spec, [spec.get("colour", "#C9A65A")], [True])
+    _rigid(obj, arm, "head")
+    return obj
+
+
+# --- A tally book --------------------------------------------------------
+
+
+def book(spec, p, marks, arm, worn, skin):
+    """A small book standing in the belt at an azimuth (degrees from the
+    front, toward the figure's left), its back to the cloth under the belt
+    and the belt across its lower half: its leather cover in its colour,
+    the pages' edges showing at the top and the fore-edge. Its params:
+    azimuth, size [across, up, thick], up (its middle above the belt's)."""
+    if not _belt:
+        raise AssertionError("a book is tucked in a belt: make the belt first")
+    outer, mid_z, width, thick, columns = _belt
+    a = np.radians(p.get("azimuth", 35))
+    across_, up_, th = p.get("size", [0.07, 0.1, 0.016])
+    k = min(range(columns), key=lambda i: abs(((2 * np.pi * i / columns - a + np.pi) % (2 * np.pi)) - np.pi))
+    rows = len(outer)
+    surface = sum((outer[r][k] for r in range(rows)), Vector()) / rows
+    # The band's own direction round the waist there, and out from it.
+    along = (outer[rows // 2][(k + 1) % columns] - outer[rows // 2][(k - 1) % columns]).normalized()
+    out = Vector((0, 0, 1)).cross(along).normalized()
+    if out.dot(Vector((np.sin(a), -np.cos(a), 0))) < 0:
+        out = -out
+    # Its back on the belt's outer face, a little into it, so its corners
+    # touch where the belt curves away round the waist under its flat back.
+    centre = surface + out * (th / 2 - p.get("into", 0.003)) + Vector((0, 0, p.get("up", 0.03)))
+    bm = bmesh.new()
+    uv = bm.loops.layers.uv.new(atlas.ATLAS)
+    up = Vector((0, 0, 1))
+    corners = {}
+    for i in (-1, 1):
+        for j in (-1, 1):
+            for m in (-1, 1):
+                corners[i, j, m] = bm.verts.new(centre + along * (i * across_ / 2) + up * (j * up_ / 2)
+                                                + out * (m * th / 2))
+    c = corners
+    # The spine toward the front (-x side of along, nearer the middle).
+    spine = -1 if (centre + along * 0.01).length > (centre - along * 0.01).length else 1
+    quads = [
+        ((c[-1, -1, 1], c[1, -1, 1], c[1, 1, 1], c[-1, 1, 1]), 0),     # the cover, out
+        ((c[1, -1, -1], c[-1, -1, -1], c[-1, 1, -1], c[1, 1, -1]), 0),  # the back cover
+        ((c[-1, 1, -1], c[-1, 1, 1], c[1, 1, 1], c[1, 1, -1]), 1),      # the pages' top
+        ((c[1, -1, -1], c[1, -1, 1], c[-1, -1, 1], c[-1, -1, -1]), 1),  # the bottom
+        ((c[spine, -1, -1], c[spine, 1, -1], c[spine, 1, 1], c[spine, -1, 1]), 0),     # the spine
+        ((c[-spine, -1, 1], c[-spine, 1, 1], c[-spine, 1, -1], c[-spine, -1, -1]), 1),  # the fore-edge
+    ]
+    for vs, slot in quads:
+        f = bm.faces.new(vs)
+        f.material_index = slot
+        for lp in f.loops:
+            lp[uv].uv = (0.5, 0.5)
+    obj = _new(spec["id"], bm)
+    colours = p.get("colours", {})
+    _materials(obj, spec, [spec.get("colour", "#4A3020"), colours.get("pages", "#E8DFC8")], [False, False])
+    # Stiff: every corner on the weights of the belt's nearest point to its
+    # middle.
+    belt = [w.obj for w in worn if w.kind == "gear" and w.spec["family"] == "sash"]
+    _weigh_from(obj, belt or [w.obj for w in worn if w.kind == "garment"], arm, at=centre)
+    return obj

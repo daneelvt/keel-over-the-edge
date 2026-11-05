@@ -127,6 +127,10 @@ def make(spec, human, marks, arm, budget, under_hat=None, skin=None):
         # they would darken the scarf.
         if p.get("details", True):
             DETAILS.append(strands_on(obj, human, scalp, p, head, nape, gather))
+        else:
+            # Collapsed without strands to shade it, a cap may meet three
+            # faces on an edge: mended before its UVs are laid.
+            lod.manifold(obj)
     elif p.get("shell") != "none":
         obj = grown(spec["id"], human, scalp, p, tree, head, nape, shell_budget)
         off_skin(obj, drawn)

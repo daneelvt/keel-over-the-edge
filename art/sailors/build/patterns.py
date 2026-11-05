@@ -14,6 +14,8 @@ the bands meet at the seam at the back.
   the ground's own colour.
 - stripes: bands down the cloth, in their own colour on the ground's (a
   fixed part), or in the main colour.
+- wound: bands round the cloth, rising by slope (metres a metre round) as
+  they go, as a wrap's turns lie: in their own colour on the ground's.
 
 A pattern's params: kind, period (metres from one band to the next),
 band (the share of the period a band takes), soft (the share its edges
@@ -32,7 +34,7 @@ _PATTERNS = {}
 
 def paint(material, p):
     """Marks a garment's material to be painted with its pattern."""
-    if p.get("kind") not in ("check", "stripes"):
+    if p.get("kind") not in ("check", "stripes", "wound"):
         raise ValueError(f"{material.name}: no pattern {p.get('kind')!r}")
     _PATTERNS[material.name] = p
     material["part_painter"] = "pattern"
@@ -75,6 +77,10 @@ def painter(nt, material, what):
     if p["kind"] == "check":
         across = _bands(ex, z, period, band, soft)
         share = (down + across) * 0.5
+    elif p["kind"] == "wound":
+        # Rising toward the back on both sides, so the cloth is its own
+        # mirror.
+        share = _bands(ex, z + u.abs() * p.get("slope", 0.2), period, band, soft)
     else:
         share = down
     main = p["kind"] == "check" or p.get("colour") is None
