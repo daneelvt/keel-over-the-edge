@@ -88,6 +88,9 @@ export const shardFiles: Record<string, string[][]> = {
     ['forecast', 'wind'],
     ['edge', 'features', 'sail', 'sky'],
     ['fog', 'look', 'pilot', 'weather'],
+    // The sailors' files grow with every look, and the layout's measures
+    // every screen: out of the last shard, which ran past its 20 minutes.
+    ['layout', 'sailors'],
   ],
 };
 
