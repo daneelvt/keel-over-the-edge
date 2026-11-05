@@ -280,7 +280,7 @@ gear:
     colour: "#6B4428"
     params:
       asymmetric: true
-      tube: { radius: 0.034, length: 0.5, cap: 0.06, sides: 10 }
+      tube: { radius: 0.034, length: 0.56, cap: 0.06, sides: 10, down: -0.1 }
       strap: { width: 0.026, thick: 0.003, shoulder: 0.075, side: 0.2, below: 0.04, segments: 32 }
       colours: { strap: "#3B2A1E", caps: "#3A2618" }
   # Brass dividers hanging from the strap at the hip.

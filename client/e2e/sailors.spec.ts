@@ -219,3 +219,33 @@ test('the Rover stands and sits in both versions, dressed, skinned and posed', a
     }
   }
 });
+
+test('the Bosun and the Chartmaker stand, sit and go through their habits', async ({ page }) => {
+  test.setTimeout(240_000);
+  for (const look of ['bosun', 'chartmaker']) {
+    await openRoom(page, `view=lineup&black=1&t=1&clip=rest&look=${look}`);
+    const figures = await page.evaluate(() => globalThis.dressing.figures());
+    expect(figures.map((f) => `${f.look} ${f.version}`)).toEqual([
+      `${look} female`,
+      `${look} male`,
+    ]);
+    for (const f of figures) {
+      expect(f).toMatchObject({ level: 'close', skinned: true, bones: 85, inBoat: false });
+    }
+    expect(await page.evaluate(() => globalThis.dressing.problems())).toEqual([]);
+    const parts = ['head', 'pelvis', 'hand_l', 'hand_r'];
+    // The habit, as the game asks for it, at the helm and standing.
+    for (const clip of ['rest', 'habit', 'habit-port', 'habit-standing']) {
+      const picture = await show(page, { clip, t: 1 });
+      if (clip.startsWith('habit') && clip !== 'habit-standing') {
+        expect(
+          (await page.evaluate(() => globalThis.dressing.figures())).every((f) => f.inBoat),
+          `${look} ${clip}`,
+        ).toBe(true);
+      }
+      for (const [name, at] of Object.entries(await bones(page, parts))) {
+        expect(darkest(picture, at), `${look} ${name}, ${clip}`).toBeLessThanOrEqual(DARK);
+      }
+    }
+  }
+});
