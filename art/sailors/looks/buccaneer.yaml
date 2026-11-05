@@ -206,15 +206,7 @@ scarf:
         lean: 0.12,
         clear: 0.08,
       }
-    pattern:
-      {
-        kind: check,
-        period: 0.03,
-        band: 0.42,
-        soft: 0.2,
-        ground: "#D8D2C2",
-        radius: 0.1,
-      }
+    pattern: { kind: check, period: 0.03, band: 0.42, soft: 0.2, ground: "#D8D2C2", radius: 0.1 }
     asymmetric: true
 # The slouch hat: soft black felt gone brown, its crown creased and pinched,
 # its wide brim hanging down at the front and back, bent unevenly.
