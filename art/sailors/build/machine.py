@@ -116,6 +116,7 @@ def make(job, v, human, arm, marks):
     co = body.coords(src)
 
     plates = Part("body", mats)
+    cups = p.get("bust")
     for bone in sorted(set(owners)):
         if bone in ("head", "neck_01") or bone.endswith("_r") or bone.startswith(FINGERS):
             continue
@@ -126,6 +127,8 @@ def make(job, v, human, arm, marks):
         for prefix, mine in (p.get("bones") or {}).items():
             if bone.startswith(prefix):
                 spec.update(mine)
+        if cups and bone == cups["bone"]:
+            pts = bust(plates, pts, arm.data.bones[bone], marks, cups, spec, mats.metal, _skin_of(src, owners, CHEST))
         plates.hull(pts, arm.data.bones[bone], spec, mats.metal, bone)
     fingers(plates, arm, p["fingers"], mats)
     plates.mirror_left()
@@ -139,6 +142,17 @@ def make(job, v, human, arm, marks):
 
     bpy.data.objects.remove(src, do_unlink=True)
     return obj, [garment.Worn(head_obj, "head", {"id": "head", "region": "skin", "params": {}}, None)]
+
+
+# The bones whose skin a bust is laid on.
+CHEST = ("spine_02", "spine_03")
+
+
+def _skin_of(obj, owners, bones):
+    """The skin the bones carry, as a tree for rays."""
+    co = body.coords(obj)
+    faces = [list(p.vertices) for p in obj.data.polygons if all(owners[i] in bones for i in p.vertices)]
+    return BVHTree.FromPolygons([Vector(q) for q in co], faces)
 
 
 def place_ears(arm, marks, p):
@@ -278,9 +292,12 @@ class Part:
                     ne.smooth = False
         return out
 
-    def hull(self, pts, bone, spec, mat, name):
+    def hull(self, pts, bone, spec, mat, name, left=None):
         """A plate: the solid wrapping the points, drawn in toward the
-        bone's line and shortened at its ends, its sharp edges kept."""
+        bone's line and shortened at its ends, its sharp edges kept. A
+        plate on the left (a name ending _l, or left) is made again on the
+        right; any other is its own mirror."""
+        left = name.endswith("_l") if left is None else left
         h, t = np.array(bone.head_local), np.array(bone.tail_local)
         axis = t - h
         axis /= np.linalg.norm(axis)
@@ -320,7 +337,7 @@ class Part:
                     if n > 1e-6:
                         v.co += Vector(rad / n * rim["proud"])
             bmesh.ops.triangulate(bm, faces=[f for f in bm.faces if len(f.verts) > 3])
-        if not name.endswith("_l"):
+        if not left:
             # A plate on the middle is its own mirror: its left half, and
             # that half's mirror image.
             _mirror_half(bm)
@@ -359,7 +376,7 @@ class Part:
         areas = {f: _area(uv) for f, uv in uvs.items()}
         sign = np.sign(sum(areas.values()))
         uvs = {f: uv for f, uv in uvs.items() if areas[f] * sign > 0}
-        faces = self.add(bm, lambda v: name, lambda f: mat, left=name.endswith("_l"))
+        faces = self.add(bm, lambda v: name, lambda f: mat, left=left)
         for nf, f in zip(faces, [f for f in bm.faces]):
             if f in uvs:
                 self.uvs[nf] = dict(zip(nf.verts, uvs[f]))
@@ -488,6 +505,85 @@ def _collapse(bm, triangles):
     old = obj.data
     bpy.data.objects.remove(obj, do_unlink=True)
     bpy.data.meshes.remove(old)
+
+
+def bust(part, pts, bone, marks, c, spec, mat, skin):
+    """A woman's bust shaped in the plates, as a cuirass shapes it: each
+    breast its own plate, the body's own breast as the front sees it
+    (rings round its apex, across toward the middle and outward, above and
+    below, each point where a ray from the front meets the skin, drawn in
+    by the plates' inset), its rim sunk into the chest's
+    plate; the chest's plate made of the rest of its points, so the bust
+    stands from it with the cleft between and the fold beneath. skin is
+    the chest's skin, for the rays. Returns the chest's points."""
+    z, x, y = marks.bust()
+    inward, outward = c["across"]
+    across = (np.abs(pts[:, 0]) - x) / np.where(np.abs(pts[:, 0]) < x, inward, outward)
+    up = (pts[:, 2] - z) / np.where(pts[:, 2] > z, c["above"], c["below"])
+    breast = (across ** 2 + up ** 2 < 1.0) & (pts[:, 1] < y + c["depth"])
+    sides = c["sides"]
+    inset = c.get("inset", spec["inset"])
+    bm = bmesh.new()
+
+    def on_skin(px, pz, fallback):
+        hit = skin.ray_cast(Vector((px, y - 0.3, pz)), Vector((0, 1, 0)), 0.3 + c["depth"])
+        if hit[0] is None or hit[1].y > -0.2:
+            return fallback
+        return hit[0] - hit[1] * inset
+
+    apex = on_skin(x, z, Vector((x, y + inset, z)))
+    rings = []
+    prev = [apex] * sides
+    for k, rho in enumerate(c["rings"]):
+        ring = []
+        for j in range(sides):
+            a = 2 * math.pi * j / sides
+            dz = math.sin(a) * (c["above"] if math.sin(a) > 0 else c["below"]) * rho
+            px, pz = x + math.cos(a) * (outward if math.cos(a) > 0 else inward) * rho, z + dz
+            ring.append(on_skin(px, pz, Vector((px, prev[j].y, pz))))
+        rings.append(ring)
+        prev = ring
+    # Within the first ring the plate is a smooth dome, not the skin (which
+    # has a nipple): the apex where the first two rings' slope, as a
+    # paraboloid's, carries it; a ring between laid on the same curve.
+    r1, r2 = c["rings"][:2]
+    mid = [sum(r, Vector()) / sides for r in rings[:2]]
+    k = r1 * r1 / (r2 * r2 - r1 * r1) * c.get("dome", 1.0)
+    apex = Vector((mid[0].x, mid[0].y + (mid[0].y - mid[1].y) * k, mid[0].z))
+    inner = c.get("inner", r1 / 2) / r1
+    rings.insert(0, [apex.lerp(p, inner) + Vector((0, (p.y - apex.y) * (inner * inner - inner), 0)) for p in rings[0]])
+    # The rim sunk toward the spine, into the chest's plate; and its back.
+    sunk = [p + Vector((0, c["sink"], 0)) for p in rings[-1]]
+    vs = [[bm.verts.new(p) for p in ring] for ring in rings + [sunk]]
+    top = bm.verts.new(apex)
+    back = bm.verts.new(sum(sunk, Vector()) / sides)
+    front = []
+    for j in range(sides):
+        front.append(bm.faces.new([top, vs[0][j], vs[0][(j + 1) % sides]]))
+    for k in range(len(vs) - 1):
+        for j in range(sides):
+            i = (j + 1) % sides
+            f = bm.faces.new([vs[k][j], vs[k + 1][j], vs[k + 1][i], vs[k][i]])
+            if k < len(vs) - 2:
+                front.append(f)
+    for j in range(sides):
+        bm.faces.new([back, vs[-1][(j + 1) % sides], vs[-1][j]])
+    bmesh.ops.recalc_face_normals(bm, faces=bm.faces[:])
+    for f in bm.faces:
+        f.smooth = f in front
+    for e in bm.edges:
+        if len(e.link_faces) == 2 and (e.link_faces[0] in front) != (e.link_faces[1] in front):
+            e.smooth = False
+    bmesh.ops.triangulate(bm, faces=[f for f in bm.faces if len(f.verts) > 3])
+    bm.normal_update()
+    faces = part.add(bm, lambda v: bone.name, lambda f: mat, left=True)
+    assert len(faces) == len(bm.faces), "a breast's plate lost a face"
+    # Its front its own island, as the front sees it; the rest a swatch.
+    for nf, f in zip(faces, bm.faces):
+        if f.normal.y < -0.2:
+            part.uvs[nf] = {nv: (ov.co.x, ov.co.z) for nv, ov in zip(nf.verts, f.verts)}
+    bm.free()
+    return pts[~breast]
 
 
 def fingers(part, arm, spec, mats):

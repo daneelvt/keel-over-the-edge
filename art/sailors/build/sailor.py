@@ -385,6 +385,8 @@ def build_version(job, v, run):
         if level == "close" and not machine:
             metrics.figure(gates, marks, human, [o for o in meshes if o.name not in carried], worn,
                            tables["ease"], v)
+        elif level == "close" and v == "female":
+            metrics.bust(gates, marks, meshes)
         if level != "far":
             maps = metrics.poses(gates, level, fig, lib, worn, tables["ease"], POSES)
             seats = metrics.seat(gates, level, fig, lib, SEATED)
@@ -407,7 +409,7 @@ def build_version(job, v, run):
             sheet.row(review.boat_views(renderer, fig, lookmat, lib))
             sheet.seconds += time.time() - start
             lap("sheet")
-            clips = make_clips(job, v, fig, lib, kinds, gates, renderer, lookmat, work)
+            clips = make_clips(job, v, fig, lib, kinds, gates, renderer, lookmat, work, worn)
             lap("clips")
             start = time.time()
         if level == "deck":
@@ -450,8 +452,9 @@ def build_version(job, v, run):
     }, gates, sheet
 
 
-def make_clips(job, v, fig, lib, kinds, gates, renderer, lookmat, work):
-    """The look's clips, made or retargeted on this version, judged, drawn
+def make_clips(job, v, fig, lib, kinds, gates, renderer, lookmat, work, worn=()):
+    """The look's clips, made or retargeted on this version, each skirt's
+    chains turned clear of the legs (motion.clear_skirts), judged, drawn
     and exported together. Returns each clip's measures."""
     # A clip made on both sides is two; each is written under the name the
     # game asks for it by.
@@ -468,6 +471,9 @@ def make_clips(job, v, fig, lib, kinds, gates, renderer, lookmat, work):
     m = lib.motion
     fig.reset()
     proxies = judge.proxies(fig, kinds, ("pelvis",) if job["look"].get("machine") else ())
+    pairs = metrics.skirt_pairs(fig.meshes, worn)
+    under = (pairs[0][0], pairs[0][2]) if pairs else None
+    skirts = [s for _, s, _ in pairs]
     out = {}
     actions = []
     places = {}
@@ -478,6 +484,9 @@ def make_clips(job, v, fig, lib, kinds, gates, renderer, lookmat, work):
         else:
             clip = retarget.retarget(fig, name, lib.retargets[name], m["fps"])
         made = time.time() - start
+        # The skirts turned clear of the legs, frame by frame.
+        fig.quiet(False)
+        clip.notes["skirt frames turned"] = motion.clear_skirts(fig, clip, under, skirts)
         act, slot = motion.write_action(fig.arm, as_(name), clip.frames, clip.fps)
         actions.append((act, slot))
         fig.made[name] = (act, slot, clip)
@@ -496,6 +505,7 @@ def make_clips(job, v, fig, lib, kinds, gates, renderer, lookmat, work):
     path = os.path.join(job["out"], f"{v}.clips.glb")
     motion.export(path, fig.arm, actions, job["gltfpack"], work, places)
     clip_seat(gates, "close", fig, out)
+    clip_skirts(gates, fig, worn, out)
     gltf, _ = export.read(path)
     metrics.file(gates, "clips", path, gltf, [], job["tables"]["skeleton"], None, clips=[as_(n) for n in names])
     metrics.skeleton(gates, "clips", gltf, job["tables"]["skeleton"])
@@ -537,6 +547,67 @@ def clip_seat(gates, level, fig, measures=None):
                   seconds=round(time.time() - start, 1))
         if measures is not None and name in measures:
             measures[name]["seat"] = {"value": total, "limit": 0, "ok": total == 0}
+
+
+def clip_skirts(gates, fig, worn, measures):
+    """Nothing of the thighs or knees through a skirt in any frame of a
+    clip that stands, treads water or rights the boat: a thigh swung back
+    in a stride stays under the cloth that hangs over it. Clips placed in
+    the boat are measured the same way: the skirts laid on the seat as the
+    game lays them, and what sits on the seat under that cloth is not
+    through it."""
+    import bpy
+
+    fig.reset()
+    pairs = metrics.skirt_pairs(fig.meshes, worn)
+    if not pairs:
+        return
+    body = pairs[0][0]
+    for name, (act, slot, clip) in fig.made.items():
+        start = time.time()
+        fig.reset()
+        motion.play(fig.arm, act, slot)
+        fig.arm.matrix_world = clip.place
+        seated = clip.place != Matrix()
+        frames = []
+        for f in range(len(clip.frames)):
+            bpy.context.scene.frame_set(f)
+            fig.on_seat(seated and fig.world("pelvis").z > fig.stage.seat.z - 0.2)
+            fig.update()
+            metrics.poke.through = {}
+            n, hits = metrics.poke(fig, pairs, sided=True, above=motion.laid(fig))
+            if n:
+                idx = hits[body.name]
+                co = motion.coords_posed(body)[0][idx].mean(0)
+                bones = sorted({_bone_of(body, i) for i in idx})
+                frames.append([f, n] + [round(float(x), 3) for x in co] + bones)
+        total = sum(fr[1] for fr in frames)
+        worst = sorted(frames, key=lambda fr: -fr[1])[:3]
+        lines = []
+        if worst:
+            # The worst frame's vertices, each with the cloth it is through
+            # and the chain that cloth hangs from.
+            bpy.context.scene.frame_set(worst[0][0])
+            fig.on_seat(seated and fig.world("pelvis").z > fig.stage.seat.z - 0.2)
+            fig.update()
+            lines = motion.skirt_lines(fig, body, pairs[0][2], [s for _, s, _ in pairs])[:8]
+        motion.stop(fig.arm)
+        fig.reset()
+        # Placed in the boat (seated, crossing, climbing in), the hips'
+        # own cloth meets the thighs turned hard into it, which the chains
+        # cannot carry away: measured, not yet held to nothing.
+        held = not seated
+        ok = total == 0 or not held
+        gates.add("clips", f"{name} under the skirt", total, 0 if held else None, ok, frames=len(frames),
+                  worst=worst, lines=lines, measured=not held, seconds=round(time.time() - start, 1))
+        if name in measures:
+            measures[name]["under the skirt"] = {"value": total, "limit": 0 if held else None, "ok": ok}
+
+
+def _bone_of(obj, i):
+    """The bone that weighs most on a vertex."""
+    names = {g.index: g.name for g in obj.vertex_groups}
+    return max((g.weight, names[g.group]) for g in obj.data.vertices[i].groups)[1]
 
 
 def _motion_gate():

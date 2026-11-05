@@ -12,6 +12,22 @@ versions:
       # Her waist the narrower, and its plate and the frame under it in.
       bones: { spine_01: { inset: 0.021 } }
       frame: { inset: 0.022 }
+      # Her bust shaped in the plates: each breast its own plate, her own
+      # breast as the front sees it, within across (toward the middle, and
+      # out), above and below of its apex (and depth behind it), in rings;
+      # its rim sunk into the chest.
+      bust: {
+          bone: spine_03,
+          across: [0.09, 0.055],
+          above: 0.08,
+          below: 0.06,
+          depth: 0.08,
+          rings: [0.45, 0.75, 1.0],
+          sides: 14,
+          sink: 0.02,
+          # The dome's rise inside the first ring, of a paraboloid's.
+          dome: 0.6,
+        }
   male:
     base: male
     machine:
@@ -108,7 +124,9 @@ garments:
       open: { neck: 0.04, hem: 0.06 }
       fitted: true
       triangles: 1600
-      female: { shoulder: { reach: 0.13, ease: 0.0065 } }
+      # Hers open wide over the bust, which her plates shape.
+      female:
+        { shoulder: { reach: 0.13, ease: 0.0065 }, open: { neck: 0.07, bust: 0.15, hem: 0.07 } }
       male: { shoulder: { reach: 0.21, ease: 0.0065 } }
   - id: coat-skirt
     family: skirt
@@ -119,9 +137,13 @@ garments:
       asymmetric: true
       rise: 0.01
       length: 0.5
-      ease: 0.02
-      top-ease: 0.019
-      back-ease: 0.015
+      # Room for the plates under it as the legs move: the chains turn
+      # the cloth clear of the knees, and over the hip joints the cloth
+      # gives with the thighs.
+      ease: 0.035
+      top-ease: 0.03
+      back-ease: 0.03
+      hips: { share: 0.6, band: 0.12 }
       rows: 10
       bias: 1.5
       columns: 48
@@ -130,7 +152,7 @@ garments:
       pleats: { azimuths: [92, -92], count: 5, depth: 0.022, spread: 0.6, apex: 0.08 }
       vent: { azimuth: 180, start: 0.12, lap: 0.004 }
       open: { width: 0.11 }
-      female: { top-ease: 0.021, ease: 0.023 }
+      female: { top-ease: 0.032, ease: 0.038 }
       male: { length: 0.56 }
   - id: cuffs
     family: cuffs
