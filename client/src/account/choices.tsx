@@ -3,7 +3,8 @@
 // A choice among a few, as a radio group: swatches of colour, or chips of
 // words. Each is named; the chosen one is ringed and its name is shown
 // under the group. The arrow keys move the choice, as a radio group's do;
-// Tab reaches the group once.
+// Tab reaches the group once. A swatch's colour is set by script: the
+// approval page, which shows them too, allows no inline style.
 
 import './choices.css';
 
@@ -33,6 +34,20 @@ function step(
   return choices[next] ?? null;
 }
 
+/** A swatch's disc of colour. */
+function SwatchColour({ colour }: { colour: string }) {
+  return (
+    <span
+      class="swatch-colour"
+      ref={(el) => {
+        if (el !== null) {
+          el.style.backgroundColor = colour;
+        }
+      }}
+    />
+  );
+}
+
 /**
  * A radio group of choices, named label: swatches where the choices have
  * colours, else chips of words; the chosen one's name shown under them.
@@ -43,6 +58,7 @@ export function Choices({
   chosen,
   choose,
   name,
+  id: given,
 }: {
   label: string;
   choices: readonly Choice[];
@@ -50,13 +66,15 @@ export function Choices({
   choose: (id: string) => void;
   /** A class for the group, to lay it out. */
   name?: string;
+  /** Its label's id, where two groups of the same label may share a page. */
+  id?: string;
 }) {
   const at = Math.max(
     0,
     choices.findIndex((c) => c.id === chosen),
   );
   const current = choices[at];
-  const id = `choices-${label.toLowerCase().replace(/\W+/g, '-')}`;
+  const id = given ?? `choices-${label.toLowerCase().replace(/\W+/g, '-')}`;
   const swatches = choices.every((c) => c.colour !== undefined);
   return (
     <div class={`choices${name === undefined ? '' : ` ${name}`}`}>
@@ -69,6 +87,7 @@ export function Choices({
         aria-labelledby={id}
       >
         {choices.map((c, i) => (
+          // biome-ignore lint/a11y/useSemanticElements: a swatch is drawn as no native radio can be, so a button takes the radio's role and keys
           <button
             key={c.id}
             type="button"
@@ -85,7 +104,7 @@ export function Choices({
               }
             }}
           >
-            {swatches ? <span class="swatch-colour" style={{ background: c.colour }} /> : c.name}
+            {swatches ? <SwatchColour colour={c.colour ?? ''} /> : c.name}
           </button>
         ))}
       </div>
