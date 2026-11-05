@@ -23,13 +23,18 @@ export const BUDGET = 4 * 1024 * 1024;
  * first comes into view), its close level (when the camera comes near the
  * boat in view), its clips (when a boat with it first comes near); and what
  * the first download carries of sailors: one look's deck, far and clips,
- * the one every boat is drawn with.
+ * the one every boat is drawn with. And its portraits, as files (images
+ * gain nothing by gzip): the colour portrait's base (AVIF) and mask
+ * together, every look and version's together, and the inked portrait.
  */
 export const SAILOR_BUDGETS = {
   deckFar: 150 * 1024,
   close: 300 * 1024,
   clips: 150 * 1024,
   critical: 280 * 1024,
+  portrait: 14 * 1024,
+  portraits: 200 * 1024,
+  ink: 40 * 1024,
 };
 
 /** The approval page's budget, in bytes: the page with what it loads before it runs. */
