@@ -4,18 +4,30 @@ import { readFileSync } from 'node:fs';
 import type { ComponentChildren, VNode } from 'preact';
 import { describe, expect, test } from 'vitest';
 import { catalog } from '../catalog';
+import { MACHINE, lookWords as wordsOf } from '../catalog/looks';
 import { STILL_AT_SEA, WATCH, WATCH_ANOTHER_SAILOR } from '../ui/watchwords';
 import { NOT_WATCHED, voyage, watchRefused } from './letwatch';
-import { drawMachine, endsWords, lookWords, type MachineItem, withPart } from './machineform';
+import {
+  type Draft,
+  drawMachine,
+  endsWords,
+  idsOf,
+  lookWords,
+  MachineFields,
+  type MachineItem,
+  withPart,
+} from './machineform';
 import {
   AI_SAILORS,
   AI_SAILORS_LINE,
   fleetLine,
   MachineList,
   type MachinesPage,
+  picture,
   StartPair,
 } from './machines';
 import { type Fetch, type Me, resolveSailor } from './me';
+import { Portrait, portraitFiles } from './portraits';
 import { MACHINE_REASONS, machineReasonText, REASONS } from './reasons';
 import { recipes, recipeText, STARTER, sailing } from './recipes';
 import { SetSailOrMake } from './recovery';
@@ -63,11 +75,12 @@ describe('a machine sailor’s look', () => {
     }
   });
 
-  test('is written as the server writes it, finish, version, colour', () => {
+  test('is written as the server and the game write any look', () => {
     const d = drawMachine(looks, null, () => 0);
     expect(lookWords(d)).toBe(
-      `${looks.finishes[0].name} · ${looks.versions[0].name} · ${looks.colours[0].name}`,
+      `Machine, ${looks.versions[0].name}, ${looks.finishes[0].name}, ${looks.colours[0].name}`,
     );
+    expect(lookWords(d)).toBe(wordsOf(catalog, { look: MACHINE, ...idsOf(d) }));
     const last = looks.colours[looks.colours.length - 1];
     expect(withPart(looks, d, 'colour', last?.id ?? '').colour).toBe(last);
     expect(withPart(looks, d, 'colour', 'no such colour')).toBe(d);
@@ -276,7 +289,7 @@ describe('the start screen with machine sailors', () => {
       version: 'v',
       finish: 'f',
       colour: 'c',
-      words: 'Iron · female · rust orange',
+      words: 'Machine, female, iron, rust orange',
       srgb: '#b5532a',
     },
     atSea: true,
@@ -368,6 +381,147 @@ describe('the start screen with machine sailors', () => {
     expect(ticked({ ...ann, spectators: 'voyage' })).toBe(false);
     expect(ticked({ ...ann, atSea: true, spectators: 'no' })).toBe(false);
     expect(ticked({ ...ann, atSea: true, spectators: 'voyage' })).toBe(true);
+  });
+});
+
+describe('the machine sailors’ portraits', () => {
+  const looks = machineLooks;
+  const [version, finish, colour] = [looks.versions[0], looks.finishes[1], looks.colours[2]];
+  if (version === undefined || finish === undefined || colour === undefined) {
+    throw new Error('the catalog has no machine look');
+  }
+  const ids = { version: version.id, finish: finish.id, colour: colour.id };
+  const props = (n: Node | undefined) => (n?.props ?? {}) as Record<string, unknown>;
+  const radios = (t: ComponentChildren) =>
+    findAll(t, 'button').filter((b) => props(b).role === 'radio');
+
+  test('the catalog’s, in the look’s colours, decorative beside the words', () => {
+    const p = picture(ids, 40) as VNode<Parameters<typeof Portrait>[0]>;
+    expect(p.type).toBe(Portrait);
+    expect(p.props.look).toEqual({ look: MACHINE, ...ids });
+    expect(p.props.size).toBe(40);
+    expect(p.props.decorative).toBe(true);
+    const canvas = Portrait(p.props) as VNode<Record<string, unknown>>;
+    expect(canvas.props.files).toEqual(portraitFiles(version.art));
+    expect(canvas.props.files).not.toBeNull();
+    expect(canvas.props.colours).toEqual({ main: colour.colour, skin: finish.colour });
+  });
+
+  test('one in each AI sailor’s row, a row’s size, unnamed beside its look in words', () => {
+    const m: MachineItem = {
+      id: 'm1',
+      name: 'AILA',
+      look: { ...ids, words: wordsOf(catalog, { look: MACHINE, ...ids }), srgb: colour.colour },
+      atSea: false,
+      apps: [],
+      token: null,
+    };
+    const page: MachinesPage = {
+      mcp: 'https://keel.example/mcp',
+      cap: 2,
+      machines: [m, { ...m, id: 'm2', name: 'BOLT' }],
+      fleet: {},
+      looks,
+      confirmedUntil: 0,
+    };
+    const t = expand(
+      MachineList({ page, heading: AI_SAILORS, open: '', toggle: () => {}, make: () => {} }),
+    );
+    const rows = findAll(t, 'li');
+    expect(rows).toHaveLength(2);
+    for (const row of rows) {
+      const who = findAll(row, 'span').filter((s) => s.props.class === 'machine-who');
+      expect(who).toHaveLength(1);
+      const canvases = findAll(who, 'canvas');
+      expect(canvases).toHaveLength(1);
+      expect(props(canvases[0]).class).toBe('portrait portrait-40');
+      expect(props(canvases[0])['aria-hidden']).toBe('true');
+      expect(textOf(who)).toContain('Machine, female');
+    }
+  });
+
+  test('the picker: its portrait, the look in words, each part chosen, and Draw another', () => {
+    let d: Draft = drawMachine(looks, null, () => 0);
+    let drew = 0;
+    const form = () =>
+      expand(
+        MachineFields({
+          looks,
+          draft: d,
+          problem: '',
+          id: 'machine',
+          setName: () => {},
+          pick: (part, id) => {
+            d = withPart(looks, d, part, id);
+          },
+          draw: () => {
+            drew++;
+            d = drawMachine(looks, d, () => 0.99);
+          },
+          picture,
+        }),
+      );
+    const words = (t: ComponentChildren) =>
+      findAll(t, 'span').filter((s) => s.props.class === 'machine-look');
+    const groups = (t: ComponentChildren) =>
+      findAll(t, 'div').filter((g) => props(g).role === 'radiogroup');
+    const chosen = (t: ComponentChildren) =>
+      groups(t).map((g) =>
+        radios(g)
+          .filter((b) => props(b)['aria-checked'] === true)
+          .map((b) => props(b)['aria-label']),
+      );
+
+    let t = form();
+    // The portrait, decorative: the words beside it say the look, as it changes.
+    const canvas = findAll(t, 'canvas');
+    expect(canvas).toHaveLength(1);
+    expect(props(canvas[0]).class).toBe('portrait portrait-72');
+    expect(props(canvas[0])['aria-hidden']).toBe('true');
+    expect(props(words(t)[0])['aria-live']).toBe('polite');
+    expect(textOf(words(t))).toBe(lookWords(d));
+
+    // Three groups, each labelled: the versions in words, the finishes and colours as swatches.
+    expect(
+      findAll(t, 'span')
+        .filter((s) => s.props.class === 'choices-label')
+        .map((s) => textOf(s)),
+    ).toEqual(['Version', 'Metal finish', 'Main colour']);
+    const [versions, finishes, colours] = groups(t);
+    expect(radios(versions).map((b) => textOf(b))).toEqual(looks.versions.map((v) => v.name));
+    expect(radios(finishes).map((b) => props(b).class)).toEqual(looks.finishes.map(() => 'swatch'));
+    expect(radios(colours).map((b) => props(b)['aria-label'])).toEqual(
+      looks.colours.map((c) => c.name),
+    );
+    expect(chosen(t)).toEqual([[d.version.name], [d.finish.name], [d.colour.name]]);
+
+    // Each part chosen by its own group.
+    const click = (g: number, i: number) => {
+      const b = radios(groups(t)[g])[i];
+      (props(b).onClick as () => void)();
+      t = form();
+    };
+    click(0, 1);
+    click(1, 1);
+    click(2, 2);
+    expect(idsOf(d)).toEqual({
+      version: looks.versions[1]?.id,
+      finish: finish.id,
+      colour: colour.id,
+    });
+    expect(chosen(t)).toEqual([[looks.versions[1]?.name], [finish.name], [colour.name]]);
+    expect(textOf(words(t))).toBe(
+      `Machine, ${looks.versions[1]?.name}, ${finish.name}, ${colour.name}`,
+    );
+
+    // Draw another: another look, said in words.
+    const before = textOf(words(t));
+    const draw = findAll(t, 'button').find((b) => textOf(b) === 'Draw another');
+    (props(draw).onClick as () => void)();
+    t = form();
+    expect(drew).toBe(1);
+    expect(textOf(words(t))).not.toBe(before);
+    expect(textOf(words(t))).toBe(lookWords(d));
   });
 });
 
