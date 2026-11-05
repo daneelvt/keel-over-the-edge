@@ -14,7 +14,7 @@ import { openScene, picture, pictureDifference } from './helpers';
 
 const DEG = Math.PI / 180;
 /** How far apart the own boat's picture and a fleet boat's at one pose may be, 0 to 255 a channel. */
-const LIKE = 0.32;
+const LIKE = 0.25;
 
 /** A pose: the own boat's state, and the sail's flattening and flows. */
 interface Pose {
