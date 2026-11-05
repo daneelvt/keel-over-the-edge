@@ -478,6 +478,8 @@ export class SeaScene {
   async #loadSailors(boat: Boat): Promise<void> {
     const renderer = this.stage.renderer;
     if (renderer === null) {
+      // A page that draws nothing seats no sailor.
+      this.sailorReady = true;
       return;
     }
     await this.#lookAsked;

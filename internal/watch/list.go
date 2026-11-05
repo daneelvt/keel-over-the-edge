@@ -138,6 +138,7 @@ type boat struct {
 	owner  store.AccountID
 	id     uint64
 	kind   uint16
+	look   uint32
 	unseen bool
 	sailor store.Sailor
 	key    string
@@ -176,6 +177,9 @@ type Item struct {
 	EdgeNM   *float64 `json:"edgeNM,omitempty"`
 	Lively   []Lively `json:"lively,omitempty"`
 	Gone     string   `json:"gone,omitempty"`
+	// Look is the sailor's look code (internal/looks), while its boat is in
+	// the water; none for a sailor gone.
+	Look *uint32 `json:"look,omitempty"`
 }
 
 // Page is a page of the list, whether more follow, how many boats are in
@@ -347,7 +351,8 @@ func (s *Service) entry(b *boat, t Target, viewer store.AccountID, followed, wit
 	mine := t.Mine(viewer)
 	hide := withheld && !mine
 	it := Item{Name: t.Name, Machine: t.Machine(), Mine: mine, Kind: s.kindOf(b.kind), Watchers: watched[bus.Account(b.owner)],
-		Sky: x.Sky, Night: x.Night, Force: x.Force, Knots: x.Knots, State: x.State, Followed: followed, Lively: lively(x, hide)}
+		Sky: x.Sky, Night: x.Night, Force: x.Force, Knots: x.Knots, State: x.State, Followed: followed, Lively: lively(x, hide),
+		Look: &b.look}
 	if !hide && x.Edge >= 0 {
 		e := x.Edge
 		it.EdgeNM = &e
@@ -636,7 +641,7 @@ func (s *Service) read(ctx context.Context) ([]boat, error) {
 	boats := make([]boat, 0, len(f.Live))
 	ids := make([]store.AccountID, 0, len(f.Live))
 	for _, slot := range f.Live {
-		boats = append(boats, boat{owner: store.AccountID(f.Owner[slot]), id: f.Boat[slot], kind: f.Kind[slot], unseen: f.Unseen[slot]})
+		boats = append(boats, boat{owner: store.AccountID(f.Owner[slot]), id: f.Boat[slot], kind: f.Kind[slot], look: f.Look[slot], unseen: f.Unseen[slot]})
 		ids = append(ids, store.AccountID(f.Owner[slot]))
 	}
 	facts := make([]Facts, len(boats))
