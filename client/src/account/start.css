@@ -528,3 +528,11 @@
   background: rgb(26 36 44 / 96%);
   z-index: 1;
 }
+
+/* On a screen held sideways the portrait is a row's, so Set sail stays in view. */
+@media (max-height: 420px) {
+  .your-sailor-who .portrait {
+    width: 40px;
+    height: 50px;
+  }
+}

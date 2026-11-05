@@ -7,7 +7,7 @@
 
 import { expect, type Page, test } from '@playwright/test';
 import data from '../src/catalog/catalog.gen.json' with { type: 'json' };
-import { GAME, sail, setSail, stamp } from './helpers';
+import { GAME, sail, sailor, setSail, stamp } from './helpers';
 
 /** A look's code, as the wire carries it: five fields of 4 bits. */
 function codeOf(l: { look: string; version: string; skin: string; hair: string; colour: string }) {
@@ -99,8 +99,8 @@ test('a new sailor chooses a look in the picker, sails as it, and another page s
 
   // Another sailor's page sees the boat in that look.
   const other = await browser.newContext();
+  await sailor(other, 'Seer');
   const second = await other.newPage();
-  await other.credentials.install();
   await sail(second);
   await expect
     .poll(

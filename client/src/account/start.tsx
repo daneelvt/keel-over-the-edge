@@ -425,7 +425,7 @@ export function StartScreen({ looks, done, random, reach, stage, panel = true }:
           choose={(l) => setPick(chosen(l))}
           shuffle={() => setPick(shuffled(looks, pick, random))}
           undo={pick.before === null ? null : () => setPick(undone(pick))}
-          figure
+          figure={stage !== undefined}
           actions={
             <button type="submit" class="start-go" disabled={busy !== ''}>
               Set sail
