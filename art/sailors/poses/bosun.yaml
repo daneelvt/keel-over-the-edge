@@ -1,0 +1,63 @@
+# SPDX-License-Identifier: LicenseRef-All-Rights-Reserved
+#
+# The Bosun's habit: stretching the back. At the helm the sheet hand goes
+# to the small of the back, the back arches over it and the head tips back,
+# a twist of the shoulders to windward and back, and the hand returns to
+# the sheet; standing, both hands on the small of the back, an arch and a
+# twist each way.
+poses:
+  bosun-arch:
+    from: helm-seated
+    turn:
+      - [spine_03, x, -9]
+      - [neck_01, x, -5]
+      - [head, x, -12]
+    ik:
+      hand_r: { at: bone, bone: pelvis, offset: [-0.17, 0.14, 0.08], pole: [-0.8, 0.5, 0.1] }
+
+  bosun-twist:
+    from: bosun-arch
+    turn:
+      - [neck_01, z, 8]
+      - [head, z, 22]
+
+  bosun-stand-arch:
+    from: stand
+    turn:
+      - [spine_03, x, -9]
+      - [neck_01, x, -4]
+      - [head, x, -12]
+    ik:
+      hand_l: { at: bone, bone: pelvis, offset: [0.17, 0.14, 0.08], pole: [0.8, 0.5, 0.1] }
+      hand_r: { at: bone, bone: pelvis, offset: [-0.17, 0.14, 0.08], pole: [-0.8, 0.5, 0.1] }
+
+  bosun-stand-left:
+    from: bosun-stand-arch
+    turn:
+      - [neck_01, z, 7]
+      - [head, z, 16]
+
+  bosun-stand-right:
+    from: bosun-stand-arch
+    turn:
+      - [neck_01, z, -7]
+      - [head, z, -16]
+
+clips:
+  bosun-habit:
+    sides: true
+    keys:
+      - { pose: helm-seated, hold: 0.3 }
+      - { pose: bosun-arch, hold: 0.6, ramp: 1.3 }
+      - { pose: bosun-twist, hold: 0.5, ramp: 1.0, lead: head }
+      - { pose: bosun-arch, hold: 0.3, ramp: 0.9, lead: head }
+      - { pose: helm-seated, hold: 0.3, ramp: 1.4, lead: head }
+
+  bosun-habit-standing:
+    keys:
+      - { pose: stand, hold: 0.3 }
+      - { pose: bosun-stand-arch, hold: 0.6, ramp: 1.4 }
+      - { pose: bosun-stand-left, hold: 0.4, ramp: 1.0, lead: head }
+      - { pose: bosun-stand-right, hold: 0.4, ramp: 1.4, lead: head }
+      - { pose: bosun-stand-arch, hold: 0.2, ramp: 1.0, lead: head }
+      - { pose: stand, hold: 0.3, ramp: 1.4, lead: head }

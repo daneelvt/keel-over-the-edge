@@ -1,0 +1,218 @@
+# SPDX-License-Identifier: LicenseRef-All-Rights-Reserved
+#
+# The Bosun: the strong hand of the crew, in a red headscarf tied tight
+# over the skull and knotted at the back, its two tails hanging; a short
+# waistcoat over a linen shirt, its sleeves rolled; canvas breeches. From
+# behind and above: the scarf's round dome and its knot and tails, the
+# broad shoulders in their shirt sleeves; his beard from the side, her
+# curls escaping the scarf at the nape. The waistcoat is the main colour.
+id: bosun
+name: Bosun
+committed: true
+versions:
+  female:
+    base: female
+    targets:
+      # Strong: the shoulders and forearms; a wide, open grin, its left
+      # corner the higher; the face a little squarer and its cheeks fuller.
+      measure-shoulder-dist-incr: 0.45
+      lr-lowerarm-muscle-incr: 0.35
+      lr-lowerarm-fat-decr: 0.1
+      lr-upperarm-muscle-incr: 0.15
+      head-square: 0.2
+      chin-width-decr: 0.2
+      chin-height-decr: 0.1
+      lr-cheek-volume-incr: 0.3
+      mouth-scale-horiz-incr: 0.2
+      mouth-angles-up: 0.5
+      asym-mouth-1-l: 0.3
+      asym-brown-1-r: 0.25
+    face:
+      eyes: { iris-inner: "#8A6238", iris-outer: "#3E2716", limbal: "#120A05" }
+  male:
+    base: male
+    macros: { muscle: 0.56 }
+    targets:
+      # Strong: his shoulders left as broad as they are, the neck thicker;
+      # a square jaw under the beard; a broad straight nose, one brow the
+      # higher.
+      torso-vshape-decr: 0.0
+      measure-shoulder-dist-decr: 0.12
+      lr-upperarm-shoulder-muscle-decr: 0.0
+      lr-lowerarm-muscle-incr: 0.25
+      neck-scale-horiz-incr: 0.25
+      head-square: 0.5
+      chin-width-incr: 0.4
+      nose-width2-incr: 0.2
+      nose-hump-decr: 0.4
+      mouth-angles-up: 0.3
+      asym-brown-1-l: 0.0
+      asym-brown-1-r: 0.35
+    face:
+      eyes: { iris-inner: "#7A5636", iris-outer: "#33210F", limbal: "#120A05" }
+# The hair: hers pressed flat under the scarf, curls escaping it at the
+# nape; his head shaved under it, and a full beard.
+hair:
+  id: hair
+  family: hair
+  region: hair
+  params:
+    female:
+      shell: cap
+      comb: back
+      nape: 0.03
+      volume: 0.004
+      taper: 0.012
+      length: 0.15
+      strands: 200
+      thickness: 0.003
+      details: false
+      curls:
+        - {
+            azimuth: 180,
+            spread: 150,
+            z: 0.03,
+            count: 7,
+            length: 0.11,
+            radius: 0.009,
+            pitch: 0.017,
+            thickness: 0.007,
+            clear: 0.045,
+            lean: 0.12,
+            share: 0.5,
+          }
+      deck-weight: 1.5
+    male:
+      shell: none
+      beard:
+        volume: 0.008
+        taper: 0.018
+        cheek: 0.03
+        sideburn: 0.012
+        moustache: 0.017
+        mouth: 0.024
+        lips: 0.0115
+        under: 0.02
+        back: -0.006
+        chin: 0.022
+        share: 1.0
+garments:
+  # Linen, to the hips and tucked in; its sleeves rolled to below the
+  # elbow, a thick roll at their ends.
+  - id: shirt
+    family: shirt
+    region: fixed
+    colour: "#E6DDC8"
+    params:
+      sleeve: 0.16
+      neck: 0.05
+      triangles: 1400
+      female: { shoulder: { reach: 0.12, ease: 0.003 } }
+      male: { shoulder: { reach: 0.18, ease: 0.003 } }
+      bands:
+        - { at: ends, height: 0.045, out: 0.009 }
+  # Canvas, to below the knee.
+  - id: breeches
+    family: breeches
+    region: fixed
+    colour: "#B5A98E"
+    params:
+      triangles: 1000
+      deck-weight: 2.0
+      bands:
+        - { at: top, height: 0.035, out: -0.001 }
+        - { at: bottom, height: 0.03, out: 0.004 }
+  # Grey wool, gartered below the knee under the breeches' band.
+  - id: stockings
+    family: stockings
+    region: fixed
+    colour: "#8D8A83"
+    params: { above-knee: -0.05, triangles: 600, deck-weight: 2.0 }
+  # Plain brown leather, no buckles.
+  - id: shoes
+    family: shoes
+    region: fixed
+    colour: "#2E2016"
+    params: { rise: 0.45, at: -0.012, sole: 0.006, triangles: 380, deck-weight: 2.5 }
+  # The short waistcoat, to the waist, sleeveless, buttoned down the
+  # middle (trims), the main colour.
+  - id: waistcoat
+    family: bodice
+    region: main
+    params:
+      layer: waistcoat
+      neck: 0.05
+      neck-slope: 0.25
+      below-waist: 0.03
+      fitted: true
+      triangles: 1100
+      female: { shoulder: { reach: 0.12, ease: 0.005 } }
+      male: { shoulder: { reach: 0.18, ease: 0.005 } }
+trims:
+  - {
+      kind: buttons,
+      on: waistcoat,
+      along: middle,
+      count: 6,
+      from: 0.09,
+      to: 0.025,
+      radius: 0.005,
+      colour: "#8A7660",
+    }
+# The headscarf, tight to the skull, its knot and two tails at the back
+# (the tails a little unequal, as a knot leaves them).
+hat:
+  id: scarf
+  family: scarf
+  region: fixed
+  colour: "#B3392F"
+  params:
+    volume: 0.0065
+    edge: { front: 0.05, side: 0.05, back: 0.05 }
+    knot: { size: [0.026, 0.018, 0.022], up: 0.012 }
+    tails:
+      {
+        length: [0.24, 0.2],
+        width: 0.04,
+        end: 0.058,
+        thick: 0.004,
+        spread: 0.012,
+        splay: 0.18,
+        lean: 0.12,
+        clear: 0.04,
+      }
+    asymmetric: true
+    female:
+      volume: 0.0075
+      # Over her curls at the nape.
+      tails:
+        {
+          length: [0.24, 0.2],
+          width: 0.04,
+          end: 0.058,
+          thick: 0.004,
+          spread: 0.012,
+          splay: 0.18,
+          lean: 0.12,
+          clear: 0.075,
+        }
+palette:
+  main: "#D9B648"
+  skin: "#734736"
+  hair: "#251E1C"
+# Every sailor's clips, and the Bosun's habit: stretching the back.
+clips:
+  [
+    helm,
+    hiking-1,
+    hiking-2,
+    hiking-3,
+    cross,
+    bosun-habit,
+    bosun-habit-standing,
+    standing-idle,
+    treading-water,
+    righting,
+    climbing-in,
+  ]
+names: { bosun-habit: habit, bosun-habit-standing: habit-standing }

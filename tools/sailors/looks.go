@@ -45,6 +45,10 @@ type look struct {
 	// Trims are what is fastened on the garments once they are fitted
 	// (buttons, pocket flaps, buckles), each naming the garment it is on.
 	Trims []map[string]any `yaml:"trims" json:"trims,omitempty"`
+	// Gear is what a sailor carries that is not worn as cloth (a chart
+	// case on its strap, spectacles, dividers), each made by its family's
+	// generator and placed on the dressed figure.
+	Gear []part `yaml:"gear" json:"gear,omitempty"`
 	// Palette is the options the look is built and shown with by default:
 	// main, skin and hair colours.
 	Palette map[string]string `yaml:"palette" json:"palette"`
@@ -167,6 +171,7 @@ func (l look) check() error {
 	if l.Hat != nil {
 		parts = append(parts, *l.Hat)
 	}
+	parts = append(parts, l.Gear...)
 	seen := map[string]bool{}
 	for _, p := range parts {
 		if seen[p.ID] {
@@ -187,8 +192,8 @@ func (l look) check() error {
 	if l.Machine != nil {
 		// A machine has no hair: its coat's colour and its metal's.
 		options = options[:2]
-		if l.Hair != nil || l.Hat != nil {
-			return errors.New("a machine has no hair or hat: its head is its own")
+		if l.Hair != nil || l.Hat != nil || len(l.Gear) > 0 {
+			return errors.New("a machine has no hair, hat or gear: its head is its own")
 		}
 	}
 	for _, r := range options {

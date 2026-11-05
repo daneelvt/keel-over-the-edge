@@ -112,7 +112,10 @@ def _button_places(host, t, marks):
         for z in np.linspace(top, low, count):
             hit = _cast(tree, (0, -1, z), (0, 1, 0))
             if hit:
-                out.append(hit)
+                # On the middle, square to it: the cloth's triangles there
+                # may tilt the normal a little to one side.
+                n = Vector((0, hit[1].y, hit[1].z)).normalized()
+                out.append((Vector((0, hit[0].y, hit[0].z)), n))
         return out
     # Along an opening's edge on one side: the wearer's right is -x.
     sign = -1 if t.get("side", "right") == "right" else 1

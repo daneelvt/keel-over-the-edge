@@ -1,0 +1,321 @@
+# SPDX-License-Identifier: LicenseRef-All-Rights-Reserved
+#
+# The Chartmaker: the navigator, older, in a tall-crowned soft felt hat, a
+# long straight dark coat over a waistcoat, breeches, stockings and
+# shoes; bridge spectacles; a leather chart case slung across the
+# back on its strap, and brass dividers hanging from the strap at the hip.
+# From behind and above: the tall crown on its narrow brim, the long coat
+# falling straight, the case across the back; her grey bun under the
+# brim, his grey beard from the side. The coat is the main colour.
+id: chartmaker
+name: Chartmaker
+committed: true
+versions:
+  female:
+    base: female
+    macros: { age: 0.7 }
+    targets:
+      # Older and still handsome: a fine, long straight nose, the face a
+      # little narrower, a thoughtful half smile, one brow the higher.
+      nose-scale-vert-decr: 0.0
+      nose-scale-vert-incr: 0.2
+      nose-point-up: 0.1
+      nose-hump-decr: 0.4
+      head-scale-horiz-decr: 0.1
+      lr-eye-corner2-up: 0.2
+      mouth-angles-up: 0.2
+      asym-mouth-1-r: 0.2
+      asym-brown-1-l: 0.3
+    face:
+      eyes: { iris-inner: "#7F9BAA", iris-outer: "#3F5866", limbal: "#141C22" }
+  male:
+    base: male
+    macros: { age: 0.74 }
+    targets:
+      # Dignified: an aquiline nose, a high clear forehead, deep-set eyes
+      # under a level brow; one corner of the mouth the higher.
+      nose-hump-decr: 0.0
+      nose-hump-incr: 0.45
+      nose-point-down: 0.15
+      head-scale-vert-decr: 0.1
+      lr-eye-scale-incr: 0.1
+      eyebrows-trans-down: 0.3
+      asym-brown-1-l: 0.0
+      asym-mouth-1-l: 0.2
+    face:
+      eyes: { iris-inner: "#8E7A4E", iris-outer: "#4A3C22", limbal: "#1A1208" }
+# The hair, grey: hers combed back from the face and pinned in a low bun
+# at the nape, below the hat's brim; his short and combed back under the
+# hat, and a trimmed beard and moustache.
+hair:
+  id: hair
+  family: hair
+  region: hair
+  params:
+    shell: cap
+    comb: back
+    thickness: 0.0032
+    female:
+      nape: 0.026
+      volume: 0.006
+      taper: 0.018
+      length: 0.2
+      strands: 320
+      gather: [0, 0.085, -0.03]
+      tail:
+        { kind: bun, width: 0.06, height: 0.05, depth: 0.034, turns: 1.5, droop: 0.25, share: 0.25 }
+    male:
+      nape: 0.012
+      volume: 0.005
+      taper: 0.015
+      length: 0.14
+      strands: 260
+      beard:
+        volume: 0.006
+        taper: 0.012
+        cheek: 0.036
+        sideburn: 0.01
+        moustache: 0.017
+        mouth: 0.025
+        lips: 0.0115
+        under: 0.006
+        back: -0.008
+        chin: 0.012
+        below-lip: 0.012
+        triangles: 380
+        deck-weight: 3.0
+        share: 0.5
+garments:
+  # Linen, to the hips under the waistcoat, its full sleeves gathered into
+  # bands at the wrists, showing below the coat's cuffs.
+  - id: shirt
+    family: shirt
+    region: fixed
+    colour: "#ECE6D8"
+    params:
+      sleeve: 0.98
+      neck: 0.06
+      triangles: 1100
+      female: { shoulder: { reach: 0.12, ease: 0.003 } }
+      male: { shoulder: { reach: 0.18, ease: 0.003 } }
+      bands:
+        - { at: ends, height: 0.03, out: 0.012 }
+  # Dark wool to below the knee, over the stockings.
+  - id: breeches
+    family: breeches
+    region: fixed
+    colour: "#2A2622"
+    params:
+      triangles: 1000
+      deck-weight: 2.0
+      bands:
+        - { at: top, height: 0.035, out: -0.001 }
+        - { at: bottom, height: 0.03, out: 0.004 }
+  - id: stockings
+    family: stockings
+    region: fixed
+    colour: "#E4DED0"
+    params: { above-knee: -0.05, triangles: 600, deck-weight: 2.0 }
+  - id: shoes
+    family: shoes
+    region: fixed
+    colour: "#1A1410"
+    params: { rise: 0.45, at: -0.012, sole: 0.006, triangles: 380, deck-weight: 2.5 }
+  - id: neckcloth
+    family: neckcloth
+    region: fixed
+    colour: "#F1ECE0"
+    params:
+      layer: neckcloth
+      ease: 0.005
+      columns: 20
+      below: -0.008
+      height: 0.018
+      open-back: 0.24
+      deck-weight: 2.5
+      ends: { length: 0.06, width: 0.02, spread: 0.003, off: 0.022 }
+  # A brown waistcoat to the hips, buttoned down the middle (trims).
+  - id: waistcoat
+    family: bodice
+    region: fixed
+    colour: "#6E5232"
+    params:
+      layer: waistcoat
+      neck: 0.05
+      neck-slope: 0.15
+      below-waist: 0.005
+      fitted: true
+      triangles: 900
+      female: { shoulder: { reach: 0.12, ease: 0.005 } }
+      male: { shoulder: { reach: 0.18, ease: 0.005 } }
+  - id: waistcoat-skirt
+    family: skirt
+    region: fixed
+    colour: "#6E5232"
+    params:
+      layer: waistcoat
+      skirt: true
+      rise: -0.015
+      length: 0.14
+      ease: 0.014
+      rows: 4
+      columns: 40
+      follow: 0.3
+      flare: { front: 0.01, side: 0.03, back: 0.02 }
+      open: [{ width: 0.05 }, { azimuth: 180, width: 0.3 }]
+  # The coat: fitted to the waist, collarless, open down the front, a set-in
+  # sleeve to the forearm under a modest cuff.
+  - id: coat
+    family: bodice
+    region: main
+    params:
+      layer: coat
+      ease: 0.02
+      arm-ease: 0.0095
+      sleeve: 0.8
+      neck: 0.03
+      neck-slope: 0.15
+      below-waist: 0.02
+      # Its fronts straight on the opening's line, as it was built.
+      open: { neck: 0.025, hem: 0.04, straight: true }
+      fitted: true
+      triangles: 1350
+      female: { shoulder: { reach: 0.13, ease: 0.0055 } }
+      male: { shoulder: { reach: 0.21, ease: 0.0065 } }
+  # Its skirts long and straight, to below the knee: close at the hips,
+  # hardly flared, no fan of pleats; a lapped vent at the back, open at
+  # the front.
+  - id: coat-skirt
+    family: skirt
+    region: main
+    params:
+      layer: coat
+      skirt: true
+      asymmetric: true
+      rise: 0.01
+      length: 0.58
+      ease: 0.02
+      top-ease: 0.019
+      back-ease: 0.015
+      rows: 10
+      bias: 1.5
+      columns: 48
+      follow: 0.4
+      flare: { front: 0.02, side: 0.1, back: 0.06 }
+      vent: { azimuth: 180, start: 0.14, lap: 0.004 }
+      open: { width: 0.085 }
+      female: { top-ease: 0.021, ease: 0.023, length: 0.56 }
+      male: { length: 0.6 }
+  # Narrow turned-back cuffs, a darker facing of the coat's colour.
+  - id: cuffs
+    family: cuffs
+    region: main
+    params:
+      layer: cuff
+      ease: 0.0105
+      shade: 0.72
+      to: 0.78
+      triangles: 400
+      female: { from: 0.6, back: 0.12, flare: 0.006 }
+      male: { from: 0.55, back: 0.15, flare: 0.008 }
+trims:
+  - {
+      kind: buttons,
+      on: coat,
+      along: edge,
+      side: right,
+      count: 9,
+      from: 0.03,
+      to: 0.02,
+      inset: 0.012,
+      radius: 0.006,
+      colour: "#8E8A80",
+    }
+  - {
+      kind: buttons,
+      on: waistcoat,
+      along: middle,
+      count: 7,
+      from: 0.08,
+      to: 0.02,
+      radius: 0.0045,
+      colour: "#B39256",
+    }
+# The tall-crowned soft felt hat of the period, a sugarloaf: the crown
+# high and tapering, its top rounded off and a little dented; a brim
+# broader than a cap's, turned a little down all round.
+hat:
+  id: tall-hat
+  family: hat
+  region: fixed
+  colour: "#2B2622"
+  params:
+    seat: 0.004
+    tilt: 4
+    segments: 26
+    crown:
+      [
+        [1.0, 0.0],
+        [1.0, 0.035],
+        [0.94, 0.08],
+        [0.86, 0.12],
+        [0.76, 0.148],
+        [0.55, 0.16],
+        [0.25, 0.163],
+      ]
+    brim:
+      {
+        width: 0.045,
+        outline: round,
+        lift: up,
+        height: -0.014,
+        power: 1.5,
+        thickness: 0.004,
+        steps: 4,
+      }
+    band: { colour: "#4A3626", height: 0.02 }
+    deck-weight: 1.5
+gear:
+  # Bridge spectacles: round rims before the eyes, no side arms.
+  - id: spectacles
+    family: spectacles
+    region: fixed
+    colour: "#6A5E50"
+    params: { deck: false }
+  # The chart case: leather, slung across the back on its strap.
+  - id: chart-case
+    family: case
+    region: fixed
+    colour: "#6B4428"
+    params:
+      asymmetric: true
+      tube: { radius: 0.034, length: 0.56, cap: 0.06, sides: 10, down: -0.1 }
+      strap: { width: 0.026, thick: 0.003, shoulder: 0.075, side: 0.2, below: 0.04, segments: 32 }
+      colours: { strap: "#3B2A1E", caps: "#3A2618" }
+  # Brass dividers hanging from the strap at the hip.
+  - id: dividers
+    family: dividers
+    region: fixed
+    colour: "#B9934E"
+    params: { deck: false, asymmetric: true, length: 0.11, apart: 14 }
+palette:
+  main: "#1F3A63"
+  skin: "#E1C0A9"
+  hair: "#B5AEA6"
+# Every sailor's clips, and the Chartmaker's habit: checking a pocket
+# compass.
+clips:
+  [
+    helm,
+    hiking-1,
+    hiking-2,
+    hiking-3,
+    cross,
+    chartmaker-habit,
+    chartmaker-habit-standing,
+    standing-idle,
+    treading-water,
+    righting,
+    climbing-in,
+  ]
+names: { chartmaker-habit: habit, chartmaker-habit-standing: habit-standing }

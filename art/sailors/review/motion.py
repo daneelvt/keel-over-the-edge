@@ -294,7 +294,7 @@ def proxies(fig, kinds, skip=()):
     by_bone = {b: ([], []) for b in CLEAR_OF + (HAT,)}
     for o in fig.meshes:
         k = kinds.get(o.name, "body")
-        if k not in ("body", "hair", "hat", "head"):
+        if k not in ("body", "hair", "beard", "hat", "head"):
             continue
         me = o.data
         names = {g.index: g.name for g in o.vertex_groups}
@@ -309,7 +309,7 @@ def proxies(fig, kinds, skip=()):
             (b,) = owners
             if b in skip:
                 continue
-            if k == "hair":
+            if k in ("hair", "beard"):
                 b = "head"
             elif k == "hat":
                 b = HAT
