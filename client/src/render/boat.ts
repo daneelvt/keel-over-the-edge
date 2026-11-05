@@ -48,11 +48,9 @@ import { FLOW_LUFFING, Telltales } from './telltales';
 
 /**
  * Every model under art/ the game loads as it starts, by its path there, as
- * Vite serves it: the boats', the towns', and the sailor's and the machine
- * sailors' machine's deck and far levels and clips; not the sailors' build's
- * inputs (art/sailors/vendor), its test sailor, the old stand-in, the looks
- * no boat is drawn with yet, nor the close levels, which load when the
- * camera comes near (CLOSE).
+ * Vite serves it: the boats', the towns', and the sailor every boat is drawn
+ * with: its deck and far levels and its clips. Not the sailors' build's
+ * inputs (art/sailors/vendor), its test sailor, nor the old stand-in.
  */
 const MODELS = {
   ...import.meta.glob<string>(['../../../art/**/*.glb', '!../../../art/sailors/**'], {
@@ -60,27 +58,26 @@ const MODELS = {
     import: 'default',
     eager: true,
   }),
-  ...import.meta.glob<string>(
-    [
-      '../../../art/sailors/rover/female.{deck,far,clips}.glb',
-      '../../../art/sailors/machine/female.{deck,far,clips}.glb',
-    ],
-    {
-      query: '?url',
-      import: 'default',
-      eager: true,
-    },
-  ),
+  ...import.meta.glob<string>(['../../../art/sailors/rover/female.{deck,far,clips}.glb'], {
+    query: '?url',
+    import: 'default',
+    eager: true,
+  }),
 };
-const CLOSE = import.meta.glob<string>(
-  ['../../../art/sailors/rover/female.glb', '../../../art/sailors/machine/female.glb'],
+/**
+ * The sailors' files the game loads only when wanted: the other looks', as
+ * a boat with one comes into view (the fleet's and the machine sailors'),
+ * and every close level, as the camera comes near.
+ */
+const LATER = import.meta.glob<string>(
+  ['../../../art/sailors/*/*.glb', '!../../../art/sailors/{test,vendor}/**'],
   {
     query: '?url',
     import: 'default',
   },
 );
 
-/** The URL of an art file named by the catalog. */
+/** The URL of an art file named by the catalog, one the game loads as it starts. */
 export function artUrl(path: string): string {
   const url = MODELS[`../../../art/${path}`];
   if (url === undefined) {
@@ -89,11 +86,15 @@ export function artUrl(path: string): string {
   return url;
 }
 
-/** The URL of an art file the game loads only when it is wanted. */
+/** The URL of an art file, which the game may load only when it is wanted. */
 export async function lazyArtUrl(path: string): Promise<string> {
-  const load = CLOSE[`../../../art/${path}`];
+  const url = MODELS[`../../../art/${path}`];
+  if (url !== undefined) {
+    return url;
+  }
+  const load = LATER[`../../../art/${path}`];
   if (load === undefined) {
-    return artUrl(path);
+    throw new Error(`no art file ${path}`);
   }
   return load();
 }
@@ -275,12 +276,12 @@ export class Boat {
     seed = 1,
     machine: SailorArt | null = null,
   ): Promise<void> {
-    const load = (a: SailorArt, s: number, isMachine: boolean): Promise<BoatSailor> =>
+    const load = async (a: SailorArt, s: number, isMachine: boolean): Promise<BoatSailor> =>
       BoatSailor.load(
         {
-          model: artUrl(a.model),
+          model: await lazyArtUrl(a.model),
           close: () => lazyArtUrl(a.close),
-          clips: artUrl(a.clips),
+          clips: await lazyArtUrl(a.clips),
           colours: a.colours,
         },
         renderer,

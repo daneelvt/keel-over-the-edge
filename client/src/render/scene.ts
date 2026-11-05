@@ -38,7 +38,7 @@ import { type BoatWind, newBoatWind } from '../predict/weather';
 import { SkyTime } from '../sky/skytime';
 import starsUrl from '../sky/stars.bin?url';
 import { SkyWeather } from '../sky/weather';
-import { Boat } from './boat';
+import { Boat, lazyArtUrl } from './boat';
 import { CAMERA_PRESETS, type CameraView, ChaseCamera } from './camera';
 import { FloatingOrigin, type ScenePoint } from './coords';
 import { DirtyAir } from './dirtyair';
@@ -453,7 +453,7 @@ export class SeaScene {
     if (sailor !== undefined && renderer !== null) {
       await Promise.all([
         boat.loadSailor(sailor.art, renderer, 1, catalog.machine.drawn),
-        this.fleet.load(sailor.art, catalog.machine.drawn, renderer),
+        this.fleet.load(sailor.art, catalog.machine.drawn, renderer, lazyArtUrl),
       ]);
     }
     boat.model.add(this.overlays.onBoat);
@@ -1233,6 +1233,8 @@ export class SeaScene {
     this.boat?.sailor?.near(camera.position.distanceTo(this.#v.set(bs.x, bs.y + 0.8, bs.z)));
     const fs = this.fleetSource;
     if (this.fleet.loaded) {
+      this.fleet.windFrom = this.wind.meanFrom;
+      this.fleet.windSpeed = this.wind.meanSpeed;
       this.fleet.draw(
         fs?.drawn ?? [],
         fs?.count ?? 0,
