@@ -138,10 +138,18 @@ func TestLookRefused(t *testing.T) {
 		"another id":          {strings.Replace(good, "id: x", "id: y", 1), "not its file's name"},
 		"a third version":     {strings.Replace(good, "female:", "child:", 1), "a look's versions"},
 		"a fixed part without its colour": {good + "garments:\n  - {id: coat, family: coat, region: fixed}\n",
-			"a fixed region has its own colour"},
+			"a fixed or glowing region has its own colour"},
 		"a part twice": {good + "garments:\n  - {id: coat, family: coat, region: main}\n  - {id: coat, family: coat, region: main}\n",
 			"used twice"},
 		"a palette not a colour": {strings.Replace(good, "'#000000'", "black", 1), "not #RRGGBB"},
+		"a human's lamp": {good + "garments:\n  - {id: lamp, family: coat, region: glow, colour: '#ffaa00'}\n",
+			"only a machine's lamps glow"},
+		"a machine's hat": {good + "machine: {inset: 0.003}\nhat: {id: hat, family: hat, region: main}\n",
+			"a machine has no hair or hat"},
+		"a machine's parameters on a human": {strings.Replace(good, "base: female", "base: female\n    machine: {cap: swept}", 1),
+			"the look is no machine"},
+		"a name for a clip not made": {good + "clips: [helm]\nnames: {machine-habit: habit}\n", "makes no such clip"},
+		"a name another clip has":    {good + "clips: [habit, machine-habit]\nnames: {machine-habit: habit}\n", "which another of its clips is"},
 	} {
 		t.Run(name, func(t *testing.T) {
 			dir := t.TempDir()

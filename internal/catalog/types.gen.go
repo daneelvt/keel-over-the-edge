@@ -1266,6 +1266,11 @@ type Machine struct {
 	// Its main colours, chosen to stay apart for colour-blind players.
 	Colours []MachineChoice `json:"colours"`
 
+	// What every machine sailor is drawn as, until each is drawn in the version,
+	// finish and colour it keeps: its art, and its colours, the coat's (main), the
+	// metal's (skin) and its lamps' light (hair).
+	Drawn SailorArt `json:"drawn"`
+
 	// The finishes of its metal, each with its colour.
 	Finishes []MachineChoice `json:"finishes"`
 
@@ -4448,4 +4453,4 @@ type WorldZones struct {
 }
 
 // Version is the catalog version (tools/catalog).
-const Version = "893c3124859fc482"
+const Version = "11f6955bbeea83e6"

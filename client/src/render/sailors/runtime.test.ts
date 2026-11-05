@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
-// The sailor runtime on the Rover's clips and the game's dinghy, read from
+// The sailor runtime on the Rover's and the machines' clips and the game's
+// dinghy, read from
 // the committed files: the clips sampled and blended, the aft hand kept on
 // the tiller extension as the rudder swings it, and through a capsize every
 // body capsule outside the hull's solid and the daggerboard in every frame
@@ -37,12 +38,15 @@ function boneNames(scene: Object3D): string[] {
   return out;
 }
 
-async function sailor(version: 'female' | 'male'): Promise<{
+async function sailor(
+  version: 'female' | 'male',
+  look = 'rover',
+): Promise<{
   rig: Rig;
   clips: Map<string, Clip>;
   boat: SailorBoat;
 }> {
-  const gltf = await load(`sailors/rover/${version}.clips.glb`);
+  const gltf = await load(`sailors/${look}/${version}.clips.glb`);
   const places = placesOf(gltf.scene);
   const rig = Rig.from(gltf.scene, boneNames(gltf.scene));
   const clips = new Map<string, Clip>();
@@ -153,9 +157,14 @@ function moment(over: Partial<SailorMoment>): SailorMoment {
   };
 }
 
-describe.each(['female', 'male'] as const)('the Rover, %s', (version) => {
+describe.each([
+  ['rover', 'female'],
+  ['rover', 'male'],
+  ['machine', 'female'],
+  ['machine', 'male'],
+] as const)('the %s, %s', (look, version) => {
   test('has every clip the runtime asks for, each side', async () => {
-    const { clips } = await sailor(version);
+    const { clips } = await sailor(version, look);
     for (const name of [CLIPS.helm, ...CLIPS.hiking, CLIPS.cross, CLIPS.habit, CLIPS.climb]) {
       expect(clips.has(name), name).toBe(true);
       expect(clips.has(`${name}-port`), `${name}-port`).toBe(true);
@@ -169,7 +178,7 @@ describe.each(['female', 'male'] as const)('the Rover, %s', (version) => {
   });
 
   test('a clip sampled is the same pose at its loop’s ends, and blends to itself', async () => {
-    const { rig, clips } = await sailor(version);
+    const { rig, clips } = await sailor(version, look);
     const helm = clips.get(CLIPS.helm) as Clip;
     const p0 = new Pose(rig.names.length).rest(rig);
     const p1 = new Pose(rig.names.length).rest(rig);
@@ -185,7 +194,7 @@ describe.each(['female', 'male'] as const)('the Rover, %s', (version) => {
   });
 
   test('two-bone IK brings a hand to a target within its reach', async () => {
-    const { rig, clips } = await sailor(version);
+    const { rig, clips } = await sailor(version, look);
     const pose = new Pose(rig.names.length).rest(rig);
     (clips.get(CLIPS.helm) as Clip).sample(1, pose);
     pose.to(rig);
@@ -198,8 +207,8 @@ describe.each(['female', 'male'] as const)('the Rover, %s', (version) => {
   });
 
   test('the aft hand stays on the extension as the rudder swings it', async () => {
-    const { rig, clips, boat } = await sailor(version);
-    const rt = new SailorRuntime(rig, clips, boat, 1);
+    const { rig, clips, boat } = await sailor(version, look);
+    const rt = new SailorRuntime(rig, clips, boat, 1, look === 'machine');
     for (const swing of [0, 0.4, -0.4]) {
       // The hinge swung on the rudder's stock, 1.05 m forward of it.
       boat.hinge.set(
@@ -220,8 +229,8 @@ describe.each(['female', 'male'] as const)('the Rover, %s', (version) => {
   });
 
   test('crosses the boat when the side changes, and sits on the other side', async () => {
-    const { rig, clips, boat } = await sailor(version);
-    const rt = new SailorRuntime(rig, clips, boat, 2);
+    const { rig, clips, boat } = await sailor(version, look);
+    const rt = new SailorRuntime(rig, clips, boat, 2, look === 'machine');
     let t = 0;
     for (let f = 0; f < 30; f++, t += 1 / 30) {
       rt.update(moment({ time: t, offset: 0.6 }));
@@ -243,8 +252,8 @@ describe.each(['female', 'male'] as const)('the Rover, %s', (version) => {
   test.each([1, -1])(
     'a capsize to %i is swum, climbed and righted with no limb through the hull or board',
     async (way) => {
-      const { rig, clips, boat } = await sailor(version);
-      const rt = new SailorRuntime(rig, clips, boat, 3);
+      const { rig, clips, boat } = await sailor(version, look);
+      const rt = new SailorRuntime(rig, clips, boat, 3, look === 'machine');
       const deg = Math.PI / 180;
       const bad: string[] = [];
       let t = 0;

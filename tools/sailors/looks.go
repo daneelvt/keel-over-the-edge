@@ -26,8 +26,9 @@ const (
 var versions = []string{"female", "male"}
 
 // regions are what a part of the atlas is coloured by: a sailor's main
-// colour, their skin or their hair, or its own colour, fixed.
-var regions = []string{"main", "skin", "hair", "fixed"}
+// colour, their skin or their hair, or its own colour, fixed; or, on a
+// machine, its own colour lit from within (its lamps).
+var regions = []string{"main", "skin", "hair", "fixed", "glow"}
 
 // look is one file of looks/: a sailor in both versions. The build reads
 // the parameters it does not name here; their meaning is the generators'.
@@ -50,6 +51,17 @@ type look struct {
 	// Clips are the pose library's clips made on the look and judged with
 	// it.
 	Clips []string `yaml:"clips" json:"clips,omitempty"`
+	// Names are the names the game asks for clips by, where a look's own
+	// clip is not named so: a machine's habit is the game's "habit".
+	Names map[string]string `yaml:"names" json:"names,omitempty"`
+	// AtlasHead is the share of the atlas the head takes, where the look's
+	// is not the table's.
+	AtlasHead float64 `yaml:"atlas-head" json:"atlas-head,omitempty"`
+	// Machine makes the look a machine's: no skin, hair or face of its
+	// own, but rigid plates on the skeleton shaped from the body, a frame
+	// between them and lamps; its parameters are the generator's. Its
+	// palette is the coat's colour (main) and the metal's (skin).
+	Machine map[string]any `yaml:"machine" json:"machine,omitempty"`
 	// Gates is what a gate that fails does: fail the build (the default),
 	// or only report, for the build's own checks of its machinery, whose
 	// parts are no look's.
@@ -67,6 +79,8 @@ type version struct {
 	Face map[string]any `yaml:"face" json:"face,omitempty"`
 	// Hair is the version's own, when the two wear it differently.
 	Hair *part `yaml:"hair" json:"hair,omitempty"`
+	// Machine is a machine version's own parameters, over the look's.
+	Machine map[string]any `yaml:"machine" json:"machine,omitempty"`
 }
 
 // part is a garment, the hair or a hat: made by a generator of its family
@@ -169,9 +183,35 @@ func (l look) check() error {
 			return fmt.Errorf("a trim is on %q, which is none of the look's garments", on)
 		}
 	}
-	for _, r := range []string{"main", "skin", "hair"} {
+	options := []string{"main", "skin", "hair"}
+	if l.Machine != nil {
+		// A machine has no hair: its coat's colour and its metal's.
+		options = options[:2]
+		if l.Hair != nil || l.Hat != nil {
+			return errors.New("a machine has no hair or hat: its head is its own")
+		}
+	}
+	for _, r := range options {
 		if !hexColour.MatchString(l.Palette[r]) {
 			return fmt.Errorf("the palette's %s is %q, not #RRGGBB", r, l.Palette[r])
+		}
+	}
+	for _, v := range versions {
+		if ver, ok := l.Versions[v]; ok && ver.Machine != nil && l.Machine == nil {
+			return fmt.Errorf("the %s version has a machine's parameters, and the look is no machine", v)
+		}
+	}
+	for c, as := range l.Names {
+		if !slices.Contains(l.Clips, c) {
+			return fmt.Errorf("the clip %q is named %q, and the look makes no such clip", c, as)
+		}
+		if slices.Contains(l.Clips, as) {
+			return fmt.Errorf("the clip %q is named %q, which another of its clips is", c, as)
+		}
+	}
+	for _, p := range parts {
+		if p.Region == "glow" && l.Machine == nil {
+			return fmt.Errorf("%s glows, and only a machine's lamps glow", p.ID)
 		}
 	}
 	switch {
@@ -193,8 +233,8 @@ func checkPart(p part) error {
 		return fmt.Errorf("%s has no family", p.ID)
 	case !slices.Contains(regions, p.Region):
 		return fmt.Errorf("%s: its region %q is none of %s", p.ID, p.Region, strings.Join(regions, ", "))
-	case (p.Region == "fixed") != (p.Colour != ""):
-		return fmt.Errorf("%s: a fixed region has its own colour, and only a fixed one", p.ID)
+	case (p.Region == "fixed" || p.Region == "glow") != (p.Colour != ""):
+		return fmt.Errorf("%s: a fixed or glowing region has its own colour, and only those", p.ID)
 	case p.Colour != "" && !hexColour.MatchString(p.Colour):
 		return fmt.Errorf("%s: the colour %q is not #RRGGBB", p.ID, p.Colour)
 	}

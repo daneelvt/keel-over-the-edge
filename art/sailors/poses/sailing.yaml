@@ -329,8 +329,11 @@ clips:
     keys:
       - { pose: hike-3, hold: 2.0 }
 
+  # The crouch under the boom takes the hips toward the end of their
+  # range.
   cross:
     sides: true
+    strain: [thigh]
     keys:
       - { pose: helm-seated, hold: 0.1 }
       - { pose: cross-rise, hold: 0.0, ramp: 0.6, anticipate: 0.06 }

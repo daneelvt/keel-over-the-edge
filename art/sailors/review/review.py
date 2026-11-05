@@ -155,12 +155,15 @@ def view(fig, name):
 
 def recoloured(base, mask, palette):
     """The atlas as the game would show it with the palette: each option
-    region × 2 × its colour, in linear light."""
+    region × 2 × its colour, in linear light. A machine's palette has no
+    hair: its blue is its lamps, in their own colour."""
     import atlas
 
     lin = np.where(base[..., :3] <= 0.04045, base[..., :3] / 12.92, ((base[..., :3] + 0.055) / 1.055) ** 2.4)
     out = lin.copy()
     for ch, region in enumerate(("main", "skin", "hair")):
+        if region not in palette:
+            continue
         c = np.array(atlas.linear(palette[region]))
         m = mask[..., ch:ch + 1]
         out = out * (1 - m) + np.clip(lin * 2 * c, 0, 1) * m

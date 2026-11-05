@@ -247,6 +247,44 @@ test('the sailor holds the tiller extension at the helm, and crosses the boat wh
   }
 });
 
+test('a machine sailor’s boat carries its machine, which sails as a sailor does, its lamps pulsing', async ({
+  page,
+}) => {
+  await openScene(page);
+  const r = await page.evaluate(async () => {
+    const k = globalThis.keel;
+    const person = k.sailor();
+    await k.machineAboard(true);
+    k.setWind(0.5, 0);
+    const glow: number[] = [];
+    let crossed = false;
+    for (let f = 0; f < 400; f++) {
+      k.setState({
+        sailor: f < 200 ? 0.6 : -0.6,
+        boom: f < 200 ? -0.5 : 0.5,
+        heel: 0,
+        sailorMode: 0,
+      });
+      k.sailFrames(1, 1);
+      const s = k.sailor();
+      glow.push(s?.glow ?? 0);
+      crossed ||= s?.crossing === true;
+    }
+    const machine = k.sailor();
+    await k.machineAboard(false);
+    return { person, machine, crossed, glow, after: k.sailor() };
+  });
+  expect(r.person?.machine).toBe(false);
+  expect(r.machine?.machine).toBe(true);
+  expect(r.machine?.tiller).toBe(true);
+  expect(r.machine?.side).toBe(-1);
+  expect(r.crossed).toBe(true);
+  expect(Math.min(...r.glow)).toBeGreaterThanOrEqual(0.7);
+  expect(Math.max(...r.glow) - Math.min(...r.glow)).toBeGreaterThan(0.05);
+  // Back to a person's boat, the person is aboard again.
+  expect(r.after?.machine).toBe(false);
+});
+
 test('capsized, the sailor treads water off the high side, clear of the hull', async ({ page }) => {
   await openScene(page);
   const at = await page.evaluate(() => {
@@ -323,6 +361,23 @@ test.describe('pictures', () => {
       await k.show();
     });
     await expect(page.locator('canvas.scene')).toHaveScreenshot('heeled-overlays.png');
+  });
+
+  test('a machine sailor’s boat from astern, at play size', async ({ page }) => {
+    await openScene(page);
+    await page.evaluate(async () => {
+      const k = globalThis.keel;
+      await k.machineAboard(true);
+      k.setSky(12);
+      k.setWind(8, 0);
+      k.setState({ heading: 1.5708, surge: 2, boom: -0.6, sailor: 0.6, heel: 0.1 });
+      k.advance(1);
+      k.setState({ heading: 1.5708, boom: -0.6, sailor: 0.6, heel: 0.1 });
+      k.render();
+      k.camera('chase');
+      await k.show();
+    });
+    await expect(page.locator('canvas.scene')).toHaveScreenshot('machine-astern.png');
   });
 
   test('capsized', async ({ page }) => {

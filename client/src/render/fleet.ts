@@ -12,7 +12,9 @@
 // machine mark too (machinemark.ts): the fleet's cloth is drawn twice in
 // one texture, plain above and marked below, and each instance's flag
 // picks its half in the vertex stage, so the sail's fragments sample the
-// cloth once, as without the mark.
+// cloth once, as without the mark. Its sailor is a machine: each level
+// draws the person and the machine as two meshes over the same instances,
+// each folding its figure to a point on the other's boats.
 //
 // Each frame the fleet's drawn boats are written into the attributes'
 // arrays, which, being dynamic, go to the GPU with each draw; nothing is
@@ -33,6 +35,8 @@ import {
 import {
   float,
   instancedDynamicBufferAttribute,
+  instanceIndex,
+  sin,
   texture,
   uniform,
   uv,
@@ -91,6 +95,10 @@ class Level {
   readonly seat = attr();
   readonly lean = attr();
   count = 0;
+  /** Of the boats drawn, how many are machine sailors'. */
+  machines = 0;
+  #person: InstancedMesh | null = null;
+  #machine: InstancedMesh | null = null;
 
   readonly #nodes: Instances = {
     pose: node(this.pose),
@@ -106,8 +114,8 @@ class Level {
 
   build(
     parts: BoatParts,
-    figure: FleetFigure,
-    colours: SailorColours,
+    figures: { person: FleetFigure; machine: FleetFigure },
+    colours: { person: SailorColours; machine: SailorColours },
     kind: BoatKind,
     cloth: CanvasTexture,
     time: Node<'float'>,
@@ -142,12 +150,30 @@ class Level {
       m.emissiveNode = sailGlow(c);
       this.#add(parts.sail.geometry, m, 'sail');
     }
-    // Every boat's sailor in the same colours, until players choose their own.
-    const m = sailorMaterial(figure.atlas, figure.mask, figureNode(i, cog));
-    const mesh = this.#add(figure.geometry, m, 'sailor');
-    mesh.userData.main = colours.main;
-    mesh.userData.skin = colours.skin;
-    mesh.userData.hair = colours.hair;
+    // Every boat's sailor in the same colours, until players choose their
+    // own: the person on people's boats, the machine on machine sailors'.
+    // Each figure is folded to a point on the other's boats: no triangle
+    // of it covers a pixel there.
+    for (const machine of [false, true]) {
+      const figure = machine ? figures.machine : figures.person;
+      const c = machine ? colours.machine : colours.person;
+      const here = machine ? i.lean.w : float(1).sub(i.lean.w);
+      const m = sailorMaterial(figure.atlas, figure.mask, {
+        vertex: figureNode(i, cog).mul(here),
+        machine,
+        // The lamps pulse slowly, each boat's in its own phase.
+        glow: float(0.86).add(sin(time.add(instanceIndex.toFloat().mul(2.3))).mul(0.14)),
+      });
+      const mesh = this.#add(figure.geometry, m, machine ? 'machine' : 'sailor');
+      mesh.userData.main = c.main;
+      mesh.userData.skin = c.skin;
+      mesh.userData.hair = c.hair;
+      if (machine) {
+        this.#machine = mesh;
+      } else {
+        this.#person = mesh;
+      }
+    }
   }
 
   #add(
@@ -175,6 +201,13 @@ class Level {
   commit(): void {
     for (const m of this.meshes) {
       m.count = this.count;
+    }
+    // A figure no boat in the level has is not drawn at all.
+    if (this.#person !== null && this.machines === this.count) {
+      this.#person.count = 0;
+    }
+    if (this.#machine !== null && this.machines === 0) {
+      this.#machine.count = 0;
     }
     for (const b of [this.pose, this.rig, this.sail, this.seat, this.lean]) {
       b.needsUpdate = true;
@@ -231,34 +264,42 @@ export class FleetView {
   }
 
   /**
-   * Loads both levels' boats and the sailor's far level, which both draw
-   * (the renderer decides how its textures are transcoded).
+   * Loads both levels' boats and the far levels of the sailor and the
+   * machine sailors' machine, which both draw (the renderer decides how
+   * their textures are transcoded).
    */
-  async load(sailor: SailorArt, renderer: WebGPURenderer): Promise<void> {
+  async load(sailor: SailorArt, machine: SailorArt, renderer: WebGPURenderer): Promise<void> {
     const kind = this.#kind;
     const [nearParts, farParts] = await Promise.all([
       loadBoatParts(kind.art.model),
       loadBoatParts(kind.art.far),
     ]);
-    const c = sailor.colours;
-    const colours = sailorColours(c.main, c.skin, c.hair);
+    const coloursOf = (a: SailorArt): SailorColours =>
+      sailorColours(a.colours.main, a.colours.skin, a.colours.hair);
+    const colours = { person: coloursOf(sailor), machine: coloursOf(machine) };
     // Seated about the gunwale, where a hiking sailor leans out from.
-    const figure = await loadFigure(
-      artUrl(sailor.far),
-      renderer,
-      nearParts.gunwale.x,
-      nearParts.gunwale.y,
-      nearParts.seatZ,
-      colours,
-    );
+    const figureOf = (a: SailorArt, c: SailorColours): Promise<FleetFigure> =>
+      loadFigure(
+        artUrl(a.far),
+        renderer,
+        nearParts.gunwale.x,
+        nearParts.gunwale.y,
+        nearParts.seatZ,
+        c,
+      );
+    const [person, machineFigure] = await Promise.all([
+      figureOf(sailor, colours.person),
+      figureOf(machine, colours.machine),
+    ]);
     const { foot, luff } = kind.physics.rig;
     const mark = markPlace(foot, luff, chordAtHalf(nearParts.sail?.geometry));
     const cloth = fleetCloth(kind.name.slice(0, 1), mark);
     this.#frame.seatZ = nearParts.seatZ;
-    this.#frame.seatOut = figure.seatOut;
-    this.#frame.seatY = figure.seatY;
-    this.near.build(nearParts, figure, colours, kind, cloth, this.time);
-    this.far.build(farParts, figure, colours, kind, cloth, this.time);
+    this.#frame.seatOut = person.seatOut;
+    this.#frame.seatY = person.seatY;
+    const figures = { person, machine: machineFigure };
+    this.near.build(nearParts, figures, colours, kind, cloth, this.time);
+    this.far.build(farParts, figures, colours, kind, cloth, this.time);
     this.loaded = true;
   }
 
@@ -304,6 +345,8 @@ export class FleetView {
     }
     this.near.count = 0;
     this.far.count = 0;
+    this.near.machines = 0;
+    this.far.machines = 0;
     const ease = dt > 0 ? 1 - Math.exp(-dt / RIPPLE_EASE) : 0;
     for (let i = 0; i < count; i++) {
       const b = boats[i] as DrawnBoat;
@@ -319,6 +362,9 @@ export class FleetView {
       const level = near ? this.near : this.far;
       if (level.count < FLEET_CAPACITY) {
         this.#write(level, level.count++, b, origin, ease);
+        if (b.machine === 1) {
+          level.machines++;
+        }
       }
     }
     this.near.commit();
@@ -389,6 +435,25 @@ export class FleetView {
     lean[o + 3] = b.machine === 1 ? 1 : 0;
   }
 
+  /** How many boats drawn this frame carry a person, and how many a machine. */
+  figures(): { people: number; machines: number } {
+    const machines = this.near.machines + this.far.machines;
+    return { people: this.near.count + this.far.count - machines, machines };
+  }
+
+  /** The draw calls the fleet's sailors (people and machines) make this frame. */
+  sailorDraws(): number {
+    let n = 0;
+    for (const level of [this.near, this.far]) {
+      for (const m of level.meshes) {
+        if (m.count > 0 && (m.name.endsWith(' sailor') || m.name.endsWith(' machine'))) {
+          n++;
+        }
+      }
+    }
+    return n;
+  }
+
   /** The draw calls and triangles the fleet's meshes make this frame. */
   budget(): { drawCalls: number; triangles: number } {
     let drawCalls = 0;
@@ -398,6 +463,9 @@ export class FleetView {
         continue;
       }
       for (const m of level.meshes) {
+        if (m.count === 0) {
+          continue;
+        }
         drawCalls++;
         const index = m.geometry.index;
         const n = index !== null ? index.count : m.geometry.getAttribute('position').count;

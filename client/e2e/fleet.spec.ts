@@ -147,6 +147,47 @@ test('64 boats keep to 22 draw calls and 200,000 triangles', async ({ page }) =>
   test.info().annotations.push({ type: 'measured', description: JSON.stringify(budget) });
 });
 
+test('a machine sailor’s boat carries a machine, a person’s a person, in at most 4 sailor draws', async ({
+  page,
+}) => {
+  await openScene(page);
+  const r = await page.evaluate(() => {
+    const k = globalThis.keel;
+    const b = k.boat().state;
+    const fleet = (machine: (i: number) => number) => {
+      const boats = [];
+      for (let i = 0; i < 64; i++) {
+        boats.push({
+          east: b.x - 70 + (i % 8) * 20,
+          north: b.y + 20 + Math.floor(i / 8) * 20,
+          heading: 1.5708,
+          boom: 0.6,
+          sail: 15 | (1 << 4) | (1 << 6),
+          machine: machine(i),
+        });
+      }
+      k.setFleet(boats);
+      k.render();
+      return k.fleetBudget();
+    };
+    return {
+      none: fleet(() => 0),
+      half: fleet((i) => i % 2),
+      all: fleet(() => 1),
+    };
+  });
+  test.info().annotations.push({ type: 'measured', description: JSON.stringify(r) });
+  expect([r.none.people, r.none.machines]).toEqual([64, 0]);
+  expect([r.half.people, r.half.machines]).toEqual([32, 32]);
+  expect([r.all.people, r.all.machines]).toEqual([0, 64]);
+  // A figure no boat has is not drawn: one sailor draw a level, two with both.
+  expect(r.none.sailorDraws).toBe(2);
+  expect(r.all.sailorDraws).toBe(2);
+  expect(r.half.sailorDraws).toBe(4);
+  expect(r.half.drawCalls).toBeLessThanOrEqual(24);
+  expect(r.half.triangles).toBeLessThanOrEqual(200_000);
+});
+
 test('every fleet material is the factory’s, with the bend, and dithers', async ({ page }) => {
   await openScene(page);
   const problems = await page.evaluate(() => {

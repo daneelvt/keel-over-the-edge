@@ -44,7 +44,15 @@ export interface LayerInput {
   still: boolean;
 }
 
-export class Layers {
+/** What lives over a sailor's clips: a person's (Layers) or a machine's. */
+export interface SailorLayers {
+  /** Turns the rig's bones (posed by the clips, fk() run) by the layers. */
+  apply(i: LayerInput): void;
+  /** The lamps' strength, 0 to 1, of a figure that has lamps. */
+  readonly glow?: number;
+}
+
+export class Layers implements SailorLayers {
   readonly #rand: () => number;
   readonly #breath: number;
   #breathPhase = 0;
