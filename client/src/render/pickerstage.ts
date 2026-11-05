@@ -34,6 +34,8 @@ const DISC_TOP = 0.4;
 const FOV = 30;
 /** How tall a standing figure is drawn about, hat and all, m. */
 const FIGURE = 1.95;
+/** The height of the stage's buttons below the figure, CSS pixels. */
+const BUTTONS = 56;
 /** Seconds between habits, at the least. */
 const HABIT_EVERY = 9;
 
@@ -60,6 +62,12 @@ export class PickerStage {
   yaw = 0;
   /** Told whether a figure is drawn: the picker shows the portrait till then. */
   onShown: (shown: boolean) => void = () => {};
+  /**
+   * The part of the screen the stage has, in CSS pixels from the top left,
+   * what the screen leaves it beside its panel; null for the whole screen's
+   * upper part held upright, its left held sideways.
+   */
+  area: () => { left: number; top: number; width: number; height: number } | null = () => null;
 
   readonly #sun = new DirectionalLight(new Color(1, 0.93, 0.82), 2.4);
   readonly #sky = new HemisphereLight(
@@ -215,9 +223,17 @@ export class PickerStage {
     cam.aspect = w / h;
     const face = this.view === 'face';
     // The share of the screen's height the figure fills, and where its
-    // middle is drawn, as shares of the width and height from the top left.
-    const fill = face ? 1 : upright ? 0.36 : 0.78;
-    const [cx, cy] = upright ? [0.5, 0.24] : [0.22, 0.5];
+    // middle is drawn, as shares of the width and height from the top left:
+    // in the stage's part of the screen, clear of its buttons below.
+    const a = this.area();
+    let fill = face ? 1 : upright ? 0.36 : 0.78;
+    let [cx, cy] = upright ? [0.5, 0.24] : [0.22, 0.5];
+    if (a !== null && a.width > 0 && a.height > BUTTONS) {
+      const room = a.height - BUTTONS;
+      cx = (a.left + a.width / 2) / w;
+      cy = (a.top + room / 2) / h;
+      fill = ((face ? 1.6 : 0.92) * room) / h;
+    }
     const height = face ? 0.42 : FIGURE;
     const distance = height / fill / (2 * Math.tan(((FOV / 2) * Math.PI) / 180));
     const targetY = face ? DISC_TOP + 1.58 : DISC_TOP + FIGURE / 2;

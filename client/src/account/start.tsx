@@ -409,6 +409,7 @@ export function StartScreen({ looks, done, random, reach, stage, panel = true }:
           spellcheck={false}
           enterkeyhint="go"
           maxLength={MAX_NAME}
+          placeholder={stage === undefined ? undefined : 'Your sailor’s name'}
           value={name}
           aria-invalid={problem !== ''}
           aria-describedby="start-problem"

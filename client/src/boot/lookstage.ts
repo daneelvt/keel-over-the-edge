@@ -20,6 +20,8 @@ const RETRY = 100;
 export function lookStage(world: SeaScene, cover: Cover): LookStage {
   const stage = new PickerStage(lazyArtUrl, () => world.stage.renderer);
   const figure = signal(false);
+  // The figure framed in the part of the screen the stage's buttons mark.
+  stage.area = () => document.querySelector('.stage-front')?.getBoundingClientRect() ?? null;
   stage.onShown = (shown) => {
     figure.value = shown;
   };

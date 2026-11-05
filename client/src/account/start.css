@@ -368,9 +368,23 @@
   padding: 12px 16px 14px;
   gap: 6px;
 }
-.start.picking > .start-panel h1 {
-  font-size: 22px;
-  margin: 0;
+.start.picking > .start-panel h1,
+.start.picking > .start-panel .start-label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+/* Set sail always in view: its row stays at the panel's foot as it scrolls. */
+.start.picking .picker-actions {
+  position: sticky;
+  bottom: -14px;
+  margin: 0 -16px -14px;
+  padding: 8px 16px 14px;
+  background: rgb(26 36 44 / 96%);
+  z-index: 1;
 }
 .stage-front {
   position: relative;

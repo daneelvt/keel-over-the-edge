@@ -163,6 +163,7 @@ export function Picker({
       <p class="picker-words" aria-live="polite">
         {lookWords(looks, look)}
       </p>
+      <p class="picker-note">{PICKER_NOTE}</p>
       <div class="picker-actions">
         <button type="button" class="picker-shuffle" onClick={shuffle}>
           Shuffle
@@ -174,7 +175,6 @@ export function Picker({
         )}
         {actions}
       </div>
-      <p class="picker-note">{PICKER_NOTE}</p>
     </div>
   );
 }
