@@ -1,0 +1,376 @@
+# SPDX-License-Identifier: LicenseRef-All-Rights-Reserved
+#
+# The clips a sailor sails with, every look alike: at the helm on either
+# side deck, hiking out, crossing the boat in a tack, the capsize's modes,
+# and the Rover's habit. A clip made on both sides (sides: true) is written
+# for the starboard side deck, and the build makes its mirror image for the
+# port, named with -port. A key may sit on the other side deck from its
+# clip (side: port): the hips carry the figure there.
+#
+# Seated on the starboard side deck the sailor faces port: the left hand is
+# aft, on the tiller extension; the right forward, on the mainsheet; the
+# figure's left is the boat's stern and its right the bow. The game blends
+# the hiking poses by how far out the physics puts the sailor, plays the
+# cross when the sailor's side changes, the climb by the physics' timer,
+# and brings the aft hand to the extension wherever the rudder puts it.
+poses:
+  # At the helm, looking up at the sail's luff (forward, to the right) and
+  # back over the shoulder to windward.
+  helm-seated:
+    from: seated
+    ik:
+      hand_l: { at: tiller }
+      hand_r: { at: sheet }
+      foot_l: { at: floor, offset: [0.15, 0.0, 0.1], reach: 0.9 }
+      foot_r: { at: floor, offset: [0.45, 0.0, 0.1], reach: 0.9 }
+
+  helm-luff:
+    from: helm-seated
+    turn:
+      - [spine_03, z, -4]
+      - [neck_01, z, -8]
+      - [head, z, -16]
+      - [head, x, -8]
+
+  helm-windward:
+    from: helm-seated
+    turn:
+      - [spine_03, z, 4]
+      - [neck_01, z, 12]
+      - [head, z, 30]
+      - [head, x, 4]
+
+  # Hiking, three depths the game blends by the sailor's offset: the hips at
+  # the deck's edge leaning a little, on the gunwale leaning out, and out
+  # beyond it with the legs nearly straight. The feet under the strap, the
+  # aft one aft of the forward one; the head kept up, looking forward.
+  hike-1:
+    place: gunwale
+    turn:
+      - [thigh_l, x, -84]
+      - [thigh_r, x, -84]
+      - [calf_l, x, 64]
+      - [calf_r, x, 64]
+      - [spine_01, x, -6]
+      - [spine_02, x, -6]
+      - [spine_03, x, -4]
+      - [neck_01, x, 6]
+      - [neck_01, z, -6]
+      - [head, x, 4]
+      - [head, z, -16]
+      - [skirt_front_l_01, x, -82]
+      - [skirt_front_r_01, x, -82]
+      - [skirt_side_l_01, y, 80]
+      - [skirt_side_r_01, y, -80]
+      - [skirt_back_l_01, x, 76]
+      - [skirt_back_r_01, x, 76]
+    # The aft hand at the hip on the extension, the forward one before the
+    # waist on the sheet.
+    ik:
+      hand_l: { at: bone, bone: pelvis, offset: [0.17, -0.2, 0.12], pole: [0.5, 0.4, -0.3] }
+      hand_r: { at: bone, bone: spine_02, offset: [-0.12, -0.3, 0.08], pole: [-0.5, 0.4, -0.3] }
+      # The knees up over the deck's inner edge, the shins down into the
+      # cockpit.
+      foot_l: { at: strap, offset: [-0.08, 0.0, 0.11], pole: [0.1, -0.5, 0.6] }
+      foot_r: { at: strap, offset: [0.08, 0.0, 0.11], pole: [-0.1, -0.5, 0.6] }
+
+  hike-2:
+    from: hike-1
+    turn:
+      - [spine_01, x, -10]
+      - [spine_02, x, -8]
+      - [spine_03, x, -6]
+      - [neck_01, x, 10]
+      - [head, x, 6]
+
+  hike-3:
+    from: hike-2
+    turn:
+      - [spine_01, x, -8]
+      - [spine_02, x, -8]
+      - [spine_03, x, -6]
+      - [neck_01, x, 8]
+      - [head, x, 6]
+    ik:
+      hand_l: { at: bone, bone: pelvis, offset: [0.17, -0.14, 0.24], pole: [0.5, 0.4, -0.3] }
+      hand_r: { at: bone, bone: spine_02, offset: [-0.12, -0.24, 0.14], pole: [-0.5, 0.4, -0.3] }
+
+  # A tack's cross, the roll tack's: the weight forward off the seat,
+  # crouched low on the cockpit's floor facing forward under the boom, the
+  # extension behind the back in the aft hand and the sheet across the
+  # front in the other, and down on the new side deck, where the hands
+  # change.
+  cross-rise:
+    from: helm-seated
+    turn:
+      - [spine_01, x, 14]
+      - [spine_02, x, 10]
+      - [spine_03, x, 6]
+      - [neck_01, x, 8]
+      - [head, x, 6]
+      - [head, z, -20]
+    ik:
+      hand_r: { at: bone, bone: spine_03, offset: [-0.08, -0.32, 0.0] }
+
+  cross-duck:
+    place: cockpit
+    shift: [-0.1, 0, 0]
+    turn:
+      - [thigh_l, x, -72]
+      - [thigh_r, x, -66]
+      - [thigh_l, z, 0]
+      - [thigh_r, z, 0]
+      - [calf_l, x, 64]
+      - [calf_r, x, 60]
+      - [spine_01, x, 28]
+      - [spine_02, x, 20]
+      - [spine_03, x, 12]
+      - [neck_01, x, 10]
+      - [head, x, 10]
+      - [skirt_front_l_01, x, -90]
+      - [skirt_front_r_01, x, -85]
+      - [skirt_side_l_01, y, 60]
+      - [skirt_side_r_01, y, -60]
+      - [skirt_back_l_01, x, 40]
+      - [skirt_back_r_01, x, 40]
+    ik:
+      hand_l: { at: bone, bone: pelvis, offset: [0.26, 0.06, 0.1], pole: [0.5, 0.3, -0.1] }
+      hand_r: { at: bone, bone: spine_03, offset: [-0.02, -0.3, -0.12] }
+      # The feet apart on the floor, the forward one to port.
+      foot_l: { at: floor, planted: true, pole: [0.1, -0.8, 0.2] }
+      foot_r: { at: floor, planted: true, pole: [-0.1, -0.8, 0.2] }
+
+  # The Rover's habit at the helm: the sheet hand up to the hat's front
+  # point, a small settling tug, the hand back to the sheet; then a long
+  # look ahead past the bow.
+  habit-reach:
+    from: helm-seated
+    turn:
+      - [head, x, -4]
+    ik:
+      hand_r: { at: bone, bone: head, offset: [-0.03, -0.27, 0.0], pole: [-0.6, 0.0, -0.4] }
+
+  habit-settle:
+    from: helm-seated
+    turn:
+      - [head, x, 2]
+    ik:
+      hand_r: { at: bone, bone: head, offset: [-0.03, -0.26, -0.015], pole: [-0.6, 0.0, -0.4] }
+
+  habit-ahead:
+    from: helm-seated
+    turn:
+      - [spine_03, z, -6]
+      - [neck_01, z, -12]
+      - [head, z, -18]
+      - [head, x, -4]
+
+  # The habit standing: the right hand to the hat's front point, a tug,
+  # and a look ahead; the left hand stays at the side.
+  stand:
+    turn:
+      - [upperarm_l, y, 36]
+      - [upperarm_r, y, -36]
+      - [lowerarm_l, x, 12]
+      - [lowerarm_r, x, 12]
+    ik:
+      hand_l: { at: bone, bone: pelvis, offset: [0.24, -0.02, -0.16], pole: [0.8, 0.2, 0.0] }
+      # The right hand on the hip.
+      hand_r: { at: bone, bone: pelvis, offset: [-0.2, -0.06, 0.06], pole: [-0.6, 0.4, 0.0] }
+
+  stand-reach:
+    from: stand
+    turn:
+      - [head, x, -4]
+    ik:
+      hand_r: { at: bone, bone: head, offset: [-0.03, -0.28, -0.04], pole: [-0.6, 0.4, 0.0] }
+
+  stand-settle:
+    from: stand
+    turn:
+      - [head, x, 2]
+    ik:
+      hand_r: { at: bone, bone: head, offset: [-0.03, -0.27, -0.055], pole: [-0.6, 0.4, 0.0] }
+
+  stand-ahead:
+    from: stand
+    turn:
+      - [spine_03, z, 4]
+      - [neck_01, z, 8]
+      - [head, z, 20]
+      - [head, x, -6]
+
+  # On the daggerboard of a boat on its side, leaning back on the gunwale
+  # to lever her up: the hands reach up to it (the game brings them there),
+  # and the body sways back further and in again.
+  board-lean:
+    from: on-board
+    turn:
+      - [spine_01, x, -6]
+      - [spine_02, x, -4]
+      - [head, x, -4]
+
+  # Climbing in over the side as the boat comes up: from the board the
+  # chest over the gunwale, the hands on the deck; rising, a knee over the
+  # gunwale; the trailing leg swung out along the hull and over, as a rider
+  # mounts; then down on the side deck, and sitting at the helm.
+  climb-pull:
+    place: outside
+    shift: [0, 0.0, 0.08]
+    turn:
+      - [thigh_l, x, -20]
+      - [thigh_r, x, -10]
+      - [calf_l, x, 75]
+      - [calf_r, x, 40]
+      - [pelvis, x, 8]
+      - [spine_01, x, 20]
+      - [spine_02, x, 16]
+      - [spine_03, x, 10]
+      - [head, x, -14]
+    ik:
+      hand_l: { at: gunwale, offset: [-0.2, 0.06, 0.12], pole: [0.6, -0.1, 0.2] }
+      hand_r: { at: gunwale, offset: [0.22, 0.06, 0.12], pole: [-0.6, -0.1, 0.2] }
+
+  climb-rise:
+    from: climb-pull
+    shift: [0, -0.08, 0.36]
+    turn:
+      - [spine_01, x, 6]
+      - [spine_02, x, 10]
+      - [spine_03, x, 8]
+    ik:
+      hand_l: { at: gunwale, offset: [-0.2, 0.04, 0.2], pole: [0.6, 0.2, 0.2] }
+      hand_r: { at: gunwale, offset: [0.22, 0.04, 0.2], pole: [-0.6, 0.2, 0.2] }
+
+  climb-knee:
+    place: outside
+    shift: [0, -0.08, 0.4]
+    turn:
+      - [thigh_l, x, -80]
+      - [thigh_l, z, 10]
+      - [calf_l, x, 100]
+      - [thigh_r, x, -10]
+      - [calf_r, x, 40]
+      - [pelvis, x, 12]
+      - [spine_01, x, 26]
+      - [spine_02, x, 26]
+      - [spine_03, x, 18]
+      - [head, x, -14]
+      - [skirt_front_l_01, x, -100]
+      - [skirt_side_l_01, x, -45]
+    # The hands pressing down on the gunwale before the chest.
+    ik:
+      hand_l: { at: bone, bone: spine_03, offset: [0.2, -0.28, -0.3], pole: [0.6, 0.2, 0.2] }
+      hand_r: { at: bone, bone: spine_03, offset: [-0.2, -0.28, -0.3], pole: [-0.6, 0.2, 0.2] }
+
+  climb-swing:
+    from: climb-knee
+    turn:
+      - [thigh_r, y, 50]
+      - [calf_r, x, 60]
+
+  climb-over:
+    from: climb-swing
+    shift: [0, 0.0, 0.42]
+    turn:
+      - [thigh_r, x, -60]
+      - [calf_l, x, -40]
+    ik:
+      foot_l: { at: free, planted: true }
+      foot_r: { at: free, planted: true }
+
+  # Down on the side deck, leaning in, the hands on the knees: the legs
+  # come in over the gunwale, lifted clear of it, to the helm's places.
+  climb-roll:
+    from: helm-seated
+    turn:
+      - [spine_01, x, 20]
+      - [spine_02, x, 22]
+      - [spine_03, x, 18]
+      - [neck_01, z, 10]
+      - [head, z, 18]
+      - [head, x, -8]
+    ik:
+      # The hands on the deck beside the hips; the feet coming down to the
+      # floor, still a little above their places at the helm.
+      hand_l: { at: bone, bone: pelvis, offset: [0.22, -0.05, 0.02] }
+      hand_r: { at: bone, bone: pelvis, offset: [-0.22, -0.05, 0.02] }
+      foot_l: { at: floor, offset: [0.15, 0.0, 0.14], reach: 0.9 }
+      foot_r: { at: floor, offset: [0.45, 0.0, 0.14], reach: 0.9 }
+
+clips:
+  helm:
+    loop: true
+    idle: true
+    sides: true
+    keys:
+      - { pose: helm-seated, hold: 1.4, ramp: 1.5, lead: head }
+      - { pose: helm-luff, hold: 1.6, ramp: 1.1, lead: head, anticipate: 0.05 }
+      - { pose: helm-seated, hold: 1.0, ramp: 1.4, lead: head }
+      - { pose: helm-windward, hold: 1.2, ramp: 1.3, lead: head, anticipate: 0.05 }
+
+  # Each hiking depth held, drifting: the game blends them.
+  hiking-1:
+    loop: true
+    sides: true
+    strain: [thigh, calf]
+    keys:
+      - { pose: hike-1, hold: 2.0 }
+  hiking-2:
+    loop: true
+    sides: true
+    strain: [thigh, calf]
+    keys:
+      - { pose: hike-2, hold: 2.0 }
+  hiking-3:
+    loop: true
+    sides: true
+    strain: [thigh, calf]
+    keys:
+      - { pose: hike-3, hold: 2.0 }
+
+  cross:
+    sides: true
+    keys:
+      - { pose: helm-seated, hold: 0.1 }
+      - { pose: cross-rise, hold: 0.0, ramp: 0.6, anticipate: 0.06 }
+      - { pose: cross-duck, hold: 0.1, ramp: 1.2, lead: head, step: 0.04 }
+      - { pose: helm-seated, side: port, hold: 0.3, ramp: 1.7, lead: head }
+
+  habit:
+    sides: true
+    keys:
+      - { pose: helm-seated, hold: 0.2 }
+      - { pose: habit-reach, hold: 0.15, anticipate: 0.08, arc: [0.06, 0.06] }
+      - { pose: habit-settle, hold: 0.25, ramp: 0.45 }
+      - { pose: helm-seated, hold: 0.1, arc: [0.08, 0.0] }
+      - { pose: habit-ahead, hold: 0.7, ramp: 1.9, lead: head, anticipate: 0.04 }
+      - { pose: helm-seated, hold: 0.2, ramp: 1.9, lead: head }
+
+  habit-standing:
+    keys:
+      - { pose: stand, hold: 0.3 }
+      - { pose: stand-reach, hold: 0.15, ramp: 1.5, arc: [0.08, 0.04] }
+      - { pose: stand-settle, hold: 0.25, ramp: 0.5 }
+      - { pose: stand, hold: 0.2, ramp: 1.5, arc: [0.08, 0.0] }
+      - { pose: stand-ahead, hold: 1.0, ramp: 1.8, lead: head }
+      - { pose: stand, hold: 0.3, ramp: 1.8, lead: head }
+
+  righting:
+    loop: true
+    keys:
+      - { pose: on-board, hold: 1.2, ramp: 1.6 }
+      - { pose: board-lean, hold: 1.2, ramp: 1.6 }
+
+  climbing-in:
+    sides: true
+    clear: true
+    strain: [thigh, calf]
+    keys:
+      - { pose: climb-pull, hold: 0.3 }
+      - { pose: climb-rise, hold: 0.0, ramp: 1.0 }
+      - { pose: climb-knee, hold: 0.0, ramp: 1.6, lead: head }
+      - { pose: climb-swing, hold: 0.0, ramp: 0.7 }
+      - { pose: climb-over, hold: 0.0, ramp: 0.8, lead: head }
+      - { pose: climb-roll, hold: 0.1, ramp: 1.3, step: 0.3, lead: head }
+      - { pose: helm-seated, hold: 0.3, ramp: 1.6, lead: head }

@@ -11,7 +11,7 @@ describe('the room’s hash', () => {
       clip: 'standing-idle',
       light: 'noon',
     });
-    expect(readRoom('#sailors&view=deck')).toMatchObject({ clip: 'helm-idle', light: 'noon' });
+    expect(readRoom('#sailors&view=deck')).toMatchObject({ clip: 'helm', light: 'noon' });
     expect(readRoom('#sailors&view=picker')).toMatchObject({ light: 'morning' });
   });
 

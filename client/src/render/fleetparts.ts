@@ -17,9 +17,11 @@ import {
   type BufferGeometry,
   Float32BufferAttribute,
   type Material,
+  Matrix4,
   Mesh,
   type MeshStandardMaterial,
   type Object3D,
+  type Texture,
   Vector3,
 } from 'three';
 import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
@@ -38,8 +40,10 @@ import {
   uv,
   vec3,
 } from 'three/tsl';
-import type { Node } from 'three/webgpu';
+import type { Node, WebGPURenderer } from 'three/webgpu';
 import { artUrl } from './boat';
+import type { SailorColours } from './sailors/material';
+import { loadSailor } from './sailors/model';
 import { LUFF_OFFSET, type SailInputs, sailPoint } from './sailshape';
 
 /** The joints a vertex turns on, in its 'part' attribute. */
@@ -68,6 +72,9 @@ export interface BoatParts {
   sailAt: Vector3;
   /** The seat's station along the boat, metres aft. */
   seatZ: number;
+  /** The starboard gunwale at the seat's station, and the side deck's inner edge out from the centreline. */
+  gunwale: Vector3;
+  seatIn: number;
 }
 
 async function load(path: string): Promise<Object3D> {
@@ -113,6 +120,8 @@ export async function loadBoatParts(path: string): Promise<BoatParts> {
     stock: new Vector3(),
     sailAt: new Vector3(),
     seatZ: 0,
+    gunwale: new Vector3(0.7, 0.3, 0),
+    seatIn: 0.3,
   };
   scene.traverse((o) => {
     switch (o.name) {
@@ -125,6 +134,14 @@ export async function loadBoatParts(path: string): Promise<BoatParts> {
       case 'sailor':
         parts.seatZ = o.position.z;
         break;
+      case 'gunwale':
+        o.getWorldPosition(parts.gunwale);
+        break;
+      case 'hull': {
+        const c = (o.userData as { solid?: { cockpit?: { halfWidth?: number } } }).solid?.cockpit;
+        parts.seatIn = c?.halfWidth ?? parts.seatIn;
+        break;
+      }
     }
     if (!(o instanceof Mesh)) {
       return;
@@ -164,29 +181,76 @@ export async function loadBoatParts(path: string): Promise<BoatParts> {
   return parts;
 }
 
-/** Loads a sailor's model and merges it into one geometry, in the figure's frame. */
+/** The fleet's sailor: one rigid figure, its atlas and mask, and where it sits. */
+export interface FleetFigure {
+  /**
+   * In the frame figureNode places it in: about its seat on the port side
+   * deck, facing starboard (+x), as its file seats it on the starboard
+   * side, turned half round.
+   */
+  geometry: BufferGeometry;
+  atlas: Texture;
+  mask: Texture;
+  /** Its seat: out from the centreline and up, in the boat model's frame. */
+  seatOut: number;
+  seatY: number;
+}
+
+/**
+ * Loads a sailor's far level, posed seated at the helm, as the fleet draws
+ * it: set in the boat model by its place, about its seat (out at the side
+ * deck's middle, up at the deck), turned to face +x; with its atlas and mask
+ * (the renderer decides how they are transcoded).
+ */
 export async function loadFigure(
-  path: string,
-): Promise<{ geometry: BufferGeometry; material: MeshStandardMaterial }> {
-  const scene = await load(path);
+  url: string,
+  renderer: WebGPURenderer,
+  seatOut: number,
+  seatY: number,
+  seatZ: number,
+  colours: SailorColours,
+): Promise<FleetFigure> {
+  const model = await loadSailor(url, renderer, colours);
+  const geometry = seatFigure(
+    model.root,
+    model.meshes,
+    model.places.get('place') ?? null,
+    seatOut,
+    seatY,
+    seatZ,
+  );
+  return { geometry, atlas: model.atlas, mask: model.mask, seatOut, seatY };
+}
+
+/**
+ * A far level's meshes as one geometry in figureNode's frame: set in the
+ * boat model by the file's place (on the starboard side deck, facing port),
+ * then about the seat at (seatOut, seatY, seatZ) turned half round, to face
+ * +x from the port side as figureNode's facing 0 has it.
+ */
+export function seatFigure(
+  root: Object3D,
+  meshes: Mesh[],
+  place: Matrix4 | null,
+  seatOut: number,
+  seatY: number,
+  seatZ: number,
+): BufferGeometry {
+  root.updateMatrixWorld(true);
+  const toSeat = new Matrix4()
+    .makeRotationY(Math.PI)
+    .multiply(new Matrix4().makeTranslation(-seatOut, -seatY, -seatZ))
+    .multiply(place ?? new Matrix4());
   const geometries: BufferGeometry[] = [];
-  let material: MeshStandardMaterial | null = null;
-  scene.traverse((o) => {
-    if (o instanceof Mesh) {
-      geometries.push(
-        keep((o.geometry as BufferGeometry).clone().applyMatrix4(o.matrixWorld), [
-          'position',
-          'normal',
-        ]),
-      );
-      material = o.material as MeshStandardMaterial;
-    }
-  });
-  const merged = mergeGeometries(geometries, false);
-  if (merged === null || material === null) {
-    throw new Error(`the sailor ${path} does not merge`);
+  for (const o of meshes) {
+    const g = keep((o.geometry as BufferGeometry).clone(), ['position', 'normal', 'uv']);
+    geometries.push(g.applyMatrix4(new Matrix4().multiplyMatrices(toSeat, o.matrixWorld)));
   }
-  return { geometry: merged, material };
+  const merged = mergeGeometries(geometries, false);
+  if (merged === null) {
+    throw new Error('the sailor does not merge');
+  }
+  return merged;
 }
 
 /**

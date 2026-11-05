@@ -35,7 +35,7 @@ const (
 
 // The sailors every fixture has unless it gives its own, and their art.
 const (
-	validSailors  = "sailors:\n  - id: test-sailor\n    name: Test sailor\n    art:\n      model: sailors/test.glb\n      far: sailors/test.far.glb\n" + validMachine
+	validSailors  = "sailors:\n  - id: test-sailor\n    name: Test sailor\n    art:\n      model: sailors/test.glb\n      far: sailors/test.far.glb\n      close: sailors/test.close.glb\n      clips: sailors/test.clips.glb\n      colours: { main: \"#9b2226\", skin: \"#cda385\", hair: \"#654a37\" }\n" + validMachine
 	validMachine  = "machine:\n  versions:\n    - {id: test-version, name: version}\n  finishes:\n    - {id: test-finish, name: Finish, colour: \"#808080\"}\n  colours:\n    - {id: test-colour, name: colour, colour: \"#9e2b25\"}\n"
 	sailorArt     = "art/sailors/test.glb"
 	sailorFarArt  = "art/sailors/test.far.glb"
@@ -157,6 +157,8 @@ func fixture(t *testing.T, files map[string]string) string {
 		files[sailorsPath] = validSailors
 		files[sailorArt] = "glTF"
 		files[sailorFarArt] = "glTF"
+		files["art/sailors/test.close.glb"] = "glTF"
+		files["art/sailors/test.clips.glb"] = "glTF"
 	}
 	if _, ok := files[weatherPath]; !ok {
 		files[weatherPath] = realWeather()

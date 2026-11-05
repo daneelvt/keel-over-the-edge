@@ -11,7 +11,9 @@
 // the rudder and tiller turn; the sail is shaped on the GPU for the boom's
 // angle, the twist and the sailor's flattening, and ripples where it
 // luffs; the telltales read each sail strip's flow; the pennant streams in
-// the apparent wind at the masthead. A stand-in figure shows the sailor.
+// the apparent wind at the masthead. The sailor sits at the helm, skinned
+// and posed from the physics (sailors/onboat.ts), the tiller extension in
+// one hand and the mainsheet in the other.
 // Watching a machine sailor's boat, its sail carries the machine mark, as
 // the fleet's do.
 
@@ -30,8 +32,8 @@ import {
 import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { Fn, normalLocal, positionGeometry, uv } from 'three/tsl';
-import type { MeshStandardNodeMaterial, Node } from 'three/webgpu';
-import type { Boat as BoatKind } from '../catalog';
+import type { MeshStandardNodeMaterial, Node, WebGPURenderer } from 'three/webgpu';
+import type { Boat as BoatKind, SailorArt } from '../catalog';
 import { type HullShape, hullShape } from '../ocean/hulls';
 import type { BoatPose } from '../predict/blend';
 import { RECORDS } from '../predict/layout.gen';
@@ -40,19 +42,32 @@ import { chordAtHalf, type MarkPlace, markInk, markPlace, paintMark } from './ma
 import { litMaterial, sailGlow } from './materials';
 import { Pennant } from './pennant';
 import type { Gfx } from './renderer';
-import { placeSailor, SAILING, type SailorFrame, type SailorPlace } from './sailor';
+import { BoatSailor } from './sailors/onboat';
 import { LUFF_OFFSET, sailPoint, sailUniforms } from './sailshape';
 import { FLOW_LUFFING, Telltales } from './telltales';
 
 /**
- * Every model under art/, by its path there, as Vite serves it; not what
- * the sailors' build keeps in folders of its own (art/sailors/<look>/, and
- * its inputs in art/sailors/vendor), which the game does not load yet.
+ * Every model under art/ the game loads as it starts, by its path there, as
+ * Vite serves it: the boats', the towns', and the sailor's deck and far
+ * levels and clips; not the sailors' build's inputs (art/sailors/vendor), its
+ * test sailor, the old stand-in, the looks no boat is drawn with yet, nor the
+ * close levels, which load when the camera comes near (CLOSE).
  */
-const MODELS = import.meta.glob<string>(['../../../art/**/*.glb', '!../../../art/sailors/*/**'], {
+const MODELS = {
+  ...import.meta.glob<string>(['../../../art/**/*.glb', '!../../../art/sailors/**'], {
+    query: '?url',
+    import: 'default',
+    eager: true,
+  }),
+  ...import.meta.glob<string>(['../../../art/sailors/rover/female.{deck,far,clips}.glb'], {
+    query: '?url',
+    import: 'default',
+    eager: true,
+  }),
+};
+const CLOSE = import.meta.glob<string>(['../../../art/sailors/rover/female.glb'], {
   query: '?url',
   import: 'default',
-  eager: true,
 });
 
 /** The URL of an art file named by the catalog. */
@@ -62,6 +77,15 @@ export function artUrl(path: string): string {
     throw new Error(`no art file ${path}`);
   }
   return url;
+}
+
+/** The URL of an art file the game loads only when it is wanted. */
+export async function lazyArtUrl(path: string): Promise<string> {
+  const load = CLOSE[`../../../art/${path}`];
+  if (load === undefined) {
+    return artUrl(path);
+  }
+  return load();
 }
 
 /** The sail's camber at full power, as a fraction of the chord; flattening scales it. */
@@ -112,16 +136,13 @@ export class Boat {
   readonly sail = sailUniforms();
   readonly telltales = new Telltales();
   readonly pennant = new Pennant();
-  /** The stand-in sailor, once loaded. */
-  figure: Object3D | null = null;
+  /** The sailor, once loaded. */
+  sailor: BoatSailor | null = null;
   /** The hull's volume, which the sea is kept out of, from the model; null until loaded. */
   hullShape: HullShape | null = null;
 
   readonly #kind: BoatKind;
-  readonly #frame: SailorFrame;
-  readonly #place: SailorPlace = { x: 0, y: 0, z: 0, facing: 0, tilt: 0 };
   readonly #ripple = new Float64Array(2);
-  #side = -1;
   /** The sail's cloth, what is printed on it, and where the machine mark goes. */
   #cloth: CanvasTexture | null = null;
   #number = '';
@@ -131,7 +152,7 @@ export class Boat {
 
   constructor(kind: BoatKind) {
     this.#kind = kind;
-    const { hull, rig, foils } = kind.physics;
+    const { hull, rig } = kind.physics;
     this.root.name = 'boat';
     this.heel.position.y = hull.centreOfGravity;
     this.model.position.y = -hull.centreOfGravity;
@@ -139,12 +160,6 @@ export class Boat {
     this.heel.add(this.model);
     this.sail.footV.value = rig.footStrip;
     this.sail.headV.value = rig.headStrip;
-    this.#frame = {
-      seatZ: 0,
-      centreOfGravity: hull.centreOfGravity,
-      boardZ: -foils.boardPosition,
-      boardDepth: hull.hullDraught + 0.45 * foils.boardSpan,
-    };
   }
 
   /** Loads the boat's model from the catalog's art path. */
@@ -178,10 +193,6 @@ export class Boat {
       }
     });
     this.model.add(model);
-    const seat = this.parts.get('sailor');
-    if (seat !== undefined) {
-      this.#frame.seatZ = seat.position.z;
-    }
     this.hullShape = hullShape(this.parts.get('hull')?.userData);
   }
 
@@ -200,29 +211,25 @@ export class Boat {
     cloth.needsUpdate = true;
   }
 
-  /** Loads the sailor's figure from an art path and seats it in the boat. */
-  async loadSailor(path: string): Promise<void> {
-    const loader = new GLTFLoader();
-    loader.setMeshoptDecoder(MeshoptDecoder);
-    const gltf = await loader.loadAsync(artUrl(path));
-    const figure = gltf.scene;
-    figure.name = 'sailor figure';
-    figure.rotation.order = 'ZYX';
-    figure.traverse((o) => {
-      if (o instanceof Mesh) {
-        const src = o.material as MeshStandardMaterial;
-        const m = litMaterial({
-          color: (src.color as Color).clone(),
-          roughness: src.roughness,
-          metalness: 0,
-        });
-        m.name = src.name;
-        src.dispose();
-        o.material = m;
-      }
-    });
-    this.figure = figure;
-    this.model.add(figure);
+  /**
+   * Loads the sailor from the catalog's art and seats it in the boat, once
+   * the boat's model is loaded; the renderer decides how its textures are
+   * transcoded. seed sets the sailor's own rhythms.
+   */
+  async loadSailor(art: SailorArt, renderer: WebGPURenderer, seed = 1): Promise<void> {
+    this.sailor = await BoatSailor.load(
+      {
+        model: artUrl(art.model),
+        close: () => lazyArtUrl(art.close),
+        clips: artUrl(art.clips),
+        colours: art.colours,
+      },
+      renderer,
+      this.model,
+      this.parts,
+      this.#kind,
+      seed,
+    );
   }
 
   /**
@@ -269,22 +276,7 @@ export class Boat {
     this.telltales.update(out, pose.boom, dt);
     this.pennant.update(out, dt);
 
-    const figure = this.figure;
-    if (figure !== null) {
-      if (pose.sailorMode === SAILING && Math.abs(pose.sailor) > 0.05) {
-        this.#side = Math.sign(pose.sailor);
-      }
-      const p = placeSailor(
-        pose.sailor,
-        pose.sailorMode,
-        pose.heel,
-        this.#frame,
-        this.#side,
-        this.#place,
-      );
-      figure.position.set(p.x, p.y, p.z);
-      figure.rotation.set(0, p.facing, p.tilt);
-    }
+    this.sailor?.draw(pose, out, dt);
   }
 
   /** After a new renderer: everything is kept on the CPU side and uploaded again by itself. */

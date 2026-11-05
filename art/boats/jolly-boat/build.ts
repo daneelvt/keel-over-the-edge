@@ -333,6 +333,8 @@ const COCKPIT_HALF_WIDTH = 2.5 * PLANK;
 const COCKPIT_FORE = -foils.boardPosition + 0.2;
 const COCKPIT_AFT = COCKPIT_FORE + 1.5;
 const COCKPIT_FLOOR = 0.12;
+/** The sailor's station: on the side deck by the cockpit. */
+const SEAT_Z = COCKPIT_FORE + 0.6;
 const DECK = srgb(0.8, 0.62, 0.4);
 
 function deck(): MeshBuilder {
@@ -783,17 +785,109 @@ function rudder(): MeshBuilder {
   return m;
 }
 
+/** The tiller's end, from the rudder's head, where the extension is hinged. */
+const TILLER_END: Vec3 = [0, 0.08, -1.05];
+
 function tiller(): MeshBuilder {
+  const m = new MeshBuilder('spar');
+  m.tube([[0, 0, 0.02], [0, 0.03, -0.5], TILLER_END], [0.022, 0.019, 0.015], D.small ? 8 : 3);
+  return m;
+}
+
+/**
+ * The tiller extension, hinged at the tiller's end: a light stick the
+ * sailor steers by from the side deck, its grip a turned knob at its far
+ * end. At rest it lies along the tiller, forward; the game swings it on
+ * its hinge to the sailor's aft hand, which holds it anywhere along it.
+ */
+const EXTENSION = 0.95;
+
+function extension(): MeshBuilder {
   const m = new MeshBuilder('spar');
   m.tube(
     [
-      [0, 0, 0.02],
-      [0, 0.03, -0.5],
-      [0, 0.08, -1.05],
+      [0, 0, 0],
+      [0, 0, -EXTENSION],
     ],
-    [0.022, 0.019, 0.015],
-    D.small ? 8 : 3,
+    [0.011, 0.01],
+    6,
   );
+  // The hinge's bronze swivel, and the knob.
+  m.tube(
+    [
+      [0, -0.012, 0.012],
+      [0, 0.012, 0.012],
+    ],
+    [0.014],
+    6,
+    srgb(0.74, 0.5, 0.24),
+  );
+  m.tube(
+    [
+      [0, 0, -EXTENSION + 0.01],
+      [0, 0, -EXTENSION - 0.02],
+    ],
+    [0.016],
+    6,
+  );
+  return m;
+}
+
+/**
+ * Where the mainsheet runs: from a block under the boom down to a block on
+ * the cockpit's floor, and from it to the sailor's forward hand. The
+ * station of both blocks, just forward of the seat.
+ */
+const SHEET_Z = SEAT_Z - 0.05;
+const SHEET_BLOCK_Y = COCKPIT_FLOOR + 0.06;
+
+function sheetBlock(): MeshBuilder {
+  const m = new MeshBuilder('bronze');
+  // The block's cheeks on a little swivel base.
+  m.box([-0.02, -0.03, -0.035], [0.02, 0.03, 0.035]);
+  m.tube(
+    [
+      [0, -0.06, 0],
+      [0, -0.03, 0],
+    ],
+    [0.012],
+    6,
+  );
+  return m;
+}
+
+/**
+ * The hiking strap: a band of webbing along the cockpit's floor on the
+ * centreline, lifted a little at the middle, that a hiking sailor's feet
+ * go under.
+ */
+const STRAP_FORE = COCKPIT_FORE + 0.12;
+const STRAP_AFT = COCKPIT_AFT - 0.25;
+
+function strap(): MeshBuilder {
+  const m = new MeshBuilder('rope');
+  const n = 8;
+  const lower: number[] = [];
+  const upper: number[] = [];
+  for (let i = 0; i <= n; i++) {
+    const t = i / n;
+    // From the strap's node: on the floor at the seat's station.
+    const z = STRAP_FORE + (STRAP_AFT - STRAP_FORE) * t - SEAT_Z;
+    const y = 0.008 + 0.06 * Math.sin(Math.PI * t) ** 0.6;
+    for (const [row, x] of [
+      [lower, -0.025],
+      [upper, 0.025],
+    ] as const) {
+      const k = m.vertex([x, y, z]);
+      m.normal(k, [0, 1, 0]);
+      row.push(k);
+    }
+  }
+  for (let i = 0; i < n; i++) {
+    const [a, b, c, d] = [lower[i], upper[i], upper[i + 1], lower[i + 1]] as number[];
+    m.triFacing(a as number, b as number, c as number, [0, 1, 0]);
+    m.triFacing(a as number, c as number, d as number, [0, 1, 0]);
+  }
   return m;
 }
 
@@ -817,7 +911,9 @@ function fittings(): MeshBuilder {
     [0.018],
     6,
   );
-  // Pintles on the transom, the traveller's eyes, cleats on the cockpit's edge.
+  // Pintles on the transom and the traveller's eyes. No cleats on the
+  // cockpit's edge: the mainsheet runs through its own block, and the side
+  // decks are clear for the sailor to sit and cross on.
   for (const y of [0.0, sheer(0) - 0.05]) {
     m.box([-0.04, y - 0.015, TRANSOM_Z - 0.005], [0.04, y + 0.015, TRANSOM_Z + 0.1]);
   }
@@ -826,9 +922,6 @@ function fittings(): MeshBuilder {
       [s * 0.45 - 0.02, sheer(0) - 0.01, TRANSOM_Z - 0.12],
       [s * 0.45 + 0.02, sheer(0) + 0.04, TRANSOM_Z - 0.06],
     );
-    const x = s * (COCKPIT_HALF_WIDTH + 0.06);
-    const z = COCKPIT_FORE + 0.3;
-    m.box([x - 0.015, deckY(x, uAt(z)), z - 0.06], [x + 0.015, deckY(x, uAt(z)) + 0.03, z + 0.06]);
   }
   return m;
 }
@@ -971,6 +1064,29 @@ function hullVolume(m: MeshBuilder): { stations: number[][]; bilge: number } {
   return { stations, bilge: round(bilge / measured) };
 }
 
+/**
+ * The hull as a solid, for what keeps a sailor out of it: stations from the
+ * transom to the stem, each [z, half-beam at the sheer, the sheer's height,
+ * the keel's depth], whose sections are superellipses of the exponent; the
+ * deck at the sheer; and the cockpit, a box open above its floor.
+ */
+function solid(): Record<string, unknown> {
+  const round = (x: number): number => Math.round(x * 10000) / 10000;
+  return {
+    stations: Array.from({ length: 21 }, (_, i) => {
+      const u = i / 20;
+      return [round(zAt(u)), round(halfBeam(u)), round(sheer(u)), round(keelDepth(u))];
+    }),
+    exponent: SECTION,
+    cockpit: {
+      fore: round(COCKPIT_FORE),
+      aft: round(COCKPIT_AFT),
+      halfWidth: round(COCKPIT_HALF_WIDTH),
+      floor: COCKPIT_FLOOR,
+    },
+  };
+}
+
 /** The boat's nodes at the detail in force. */
 function model(): NodeDef[] {
   const hullMesh = planking();
@@ -996,14 +1112,26 @@ function model(): NodeDef[] {
     {
       name: 'hull',
       primitives: hullParts,
-      extras: { waterline, plan: { deviation: planDeviation() } },
+      extras: { waterline, plan: { deviation: planDeviation() }, solid: solid() },
     },
     { name: 'mast', translation: [0, 0, MAST_Z], primitives: [mast().primitive()] },
     {
       name: 'boom',
       translation: [0, rig.boomHeight, MAST_Z],
       primitives: boomParts,
-      children: [{ name: 'vang', primitives: [vang().primitive()] }],
+      children: [
+        { name: 'vang', primitives: [vang().primitive()] },
+        // The mainsheet's block under the boom, over the one on the floor.
+        ...(D.small
+          ? [
+              {
+                name: 'sheet-boom',
+                translation: [0, -0.06, SHEET_Z - MAST_Z] as Vec3,
+                primitives: [sheetBlock().primitive()],
+              },
+            ]
+          : []),
+      ],
     },
     {
       name: 'sail',
@@ -1043,6 +1171,16 @@ function model(): NodeDef[] {
           name: 'tiller',
           translation: [0, RUDDER_HEAD - 0.02, 0],
           primitives: [tiller().primitive()],
+          children: D.small
+            ? [
+                {
+                  name: 'extension',
+                  translation: TILLER_END,
+                  primitives: [extension().primitive()],
+                  children: [{ name: 'grip', translation: [0, 0, -EXTENSION] }],
+                },
+              ]
+            : [],
         },
       ],
     },
@@ -1054,9 +1192,27 @@ function model(): NodeDef[] {
     // Where the sailor sits: on the side deck by the cockpit, at the seated height.
     {
       name: 'sailor',
-      translation: [0, hull.centreOfGravity + sailor.sailorSeatHeight, COCKPIT_FORE + 0.6],
+      translation: [0, hull.centreOfGravity + sailor.sailorSeatHeight, SEAT_Z],
+    },
+    // What the sailor holds and stands on, on the starboard side (the port
+    // side's are their mirror): the gunwale at the seat's station, and where
+    // the daggerboard leaves the bottom.
+    { name: 'gunwale', translation: [halfBeam(uAt(SEAT_Z)), sheer(uAt(SEAT_Z)), SEAT_Z] },
+    {
+      name: 'board-root',
+      translation: [0, -keelDepth(uAt(-foils.boardPosition)), -foils.boardPosition],
     },
   );
+  if (D.small) {
+    nodes.push(
+      {
+        name: 'sheet',
+        translation: [0, SHEET_BLOCK_Y, SHEET_Z],
+        primitives: [sheetBlock().primitive()],
+      },
+      { name: 'strap', translation: [0, COCKPIT_FLOOR, SEAT_Z], primitives: [strap().primitive()] },
+    );
+  }
   return nodes;
 }
 

@@ -6,7 +6,15 @@
 import data from './catalog.gen.json';
 import type { Catalog } from './types.gen';
 
-export type { Boat, Catalog, EncountersOverlay, Light, NamedStar, Sky } from './types.gen';
+export type {
+  Boat,
+  Catalog,
+  EncountersOverlay,
+  Light,
+  NamedStar,
+  SailorArt,
+  Sky,
+} from './types.gen';
 export { CATALOG_VERSION } from './types.gen';
 
 // The data is the schema's, validated against it by tools/catalog, which

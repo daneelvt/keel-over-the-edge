@@ -39,13 +39,22 @@ import {
   varying,
   vec2,
 } from 'three/tsl';
-import type { Node } from 'three/webgpu';
-import type { Boat as BoatKind } from '../catalog';
+import type { Node, WebGPURenderer } from 'three/webgpu';
+import type { Boat as BoatKind, SailorArt } from '../catalog';
 import type { DrawnBoat } from '../game/fleet';
-import { CLOTH, CLOTH_HEIGHT, CLOTH_WIDTH, clothTexture, FULL_CAMBER, paintCloth } from './boat';
+import {
+  artUrl,
+  CLOTH,
+  CLOTH_HEIGHT,
+  CLOTH_WIDTH,
+  clothTexture,
+  FULL_CAMBER,
+  paintCloth,
+} from './boat';
 import type { FloatingOrigin } from './coords';
 import {
   type BoatParts,
+  type FleetFigure,
   figureNode,
   type Instances,
   loadBoatParts,
@@ -56,6 +65,7 @@ import {
 import { chordAtHalf, type MarkPlace, markInk, markPlace, paintMark } from './machinemark';
 import { litMaterial, sailGlow } from './materials';
 import { placeSailor, SAILING, type SailorFrame, type SailorPlace } from './sailor';
+import { type SailorColours, sailorColours, sailorMaterial } from './sailors/material';
 import { FLOW_LUFFING } from './telltales';
 
 /** The most boats drawn at once: a full view and as many fading out. */
@@ -96,7 +106,8 @@ class Level {
 
   build(
     parts: BoatParts,
-    figure: Awaited<ReturnType<typeof loadFigure>>,
+    figure: FleetFigure,
+    colours: SailorColours,
     kind: BoatKind,
     cloth: CanvasTexture,
     time: Node<'float'>,
@@ -131,19 +142,19 @@ class Level {
       m.emissiveNode = sailGlow(c);
       this.#add(parts.sail.geometry, m, 'sail');
     }
-    const fm = figure.material;
-    const m = litMaterial(
-      { color: (fm.color as Color).clone(), roughness: fm.roughness, metalness: 0 },
-      figureNode(i, cog),
-    );
-    this.#add(figure.geometry, m, 'sailor');
+    // Every boat's sailor in the same colours, until players choose their own.
+    const m = sailorMaterial(figure.atlas, figure.mask, figureNode(i, cog));
+    const mesh = this.#add(figure.geometry, m, 'sailor');
+    mesh.userData.main = colours.main;
+    mesh.userData.skin = colours.skin;
+    mesh.userData.hair = colours.hair;
   }
 
   #add(
     geometry: InstancedMesh['geometry'],
     m: Material & { opacityNode?: unknown },
     name: string,
-  ): void {
+  ): InstancedMesh {
     // Faded boats are dithered: each fragment kept or dropped by a hash
     // against its instance's opacity, in the opaque pass.
     m.alphaHash = true;
@@ -158,6 +169,7 @@ class Level {
     mesh.frustumCulled = false;
     this.meshes.push(mesh);
     this.group.add(mesh);
+    return mesh;
   }
 
   commit(): void {
@@ -209,6 +221,8 @@ export class FleetView {
     this.root.name = 'fleet';
     this.root.add(this.near.group, this.far.group);
     this.#frame = {
+      seatOut: 0,
+      seatY: 0,
       seatZ: 0,
       centreOfGravity: hull.centreOfGravity,
       boardZ: -foils.boardPosition,
@@ -216,21 +230,35 @@ export class FleetView {
     };
   }
 
-  /** Loads both levels' models: the boat's and its sailor's, near and far. */
-  async load(sailor: { model: string; far: string }): Promise<void> {
+  /**
+   * Loads both levels' boats and the sailor's far level, which both draw
+   * (the renderer decides how its textures are transcoded).
+   */
+  async load(sailor: SailorArt, renderer: WebGPURenderer): Promise<void> {
     const kind = this.#kind;
-    const [nearParts, farParts, nearFigure, farFigure] = await Promise.all([
+    const [nearParts, farParts] = await Promise.all([
       loadBoatParts(kind.art.model),
       loadBoatParts(kind.art.far),
-      loadFigure(sailor.model),
-      loadFigure(sailor.far),
     ]);
+    const c = sailor.colours;
+    const colours = sailorColours(c.main, c.skin, c.hair);
+    // Seated about the gunwale, where a hiking sailor leans out from.
+    const figure = await loadFigure(
+      artUrl(sailor.far),
+      renderer,
+      nearParts.gunwale.x,
+      nearParts.gunwale.y,
+      nearParts.seatZ,
+      colours,
+    );
     const { foot, luff } = kind.physics.rig;
     const mark = markPlace(foot, luff, chordAtHalf(nearParts.sail?.geometry));
     const cloth = fleetCloth(kind.name.slice(0, 1), mark);
     this.#frame.seatZ = nearParts.seatZ;
-    this.near.build(nearParts, nearFigure, kind, cloth, this.time);
-    this.far.build(farParts, farFigure, kind, cloth, this.time);
+    this.#frame.seatOut = figure.seatOut;
+    this.#frame.seatY = figure.seatY;
+    this.near.build(nearParts, figure, colours, kind, cloth, this.time);
+    this.far.build(farParts, figure, colours, kind, cloth, this.time);
     this.loaded = true;
   }
 

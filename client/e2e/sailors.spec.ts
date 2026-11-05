@@ -206,11 +206,16 @@ test('the Rover stands and sits in both versions, dressed, skinned and posed', a
       expect(darkest(picture, at), `${name}, ${clip}`).toBeLessThanOrEqual(DARK);
     }
   }
-  const helm = await show(page, { clip: 'helm-idle', t: 1 });
-  expect((await page.evaluate(() => globalThis.dressing.figures())).every((f) => f.inBoat)).toBe(
-    true,
-  );
-  for (const [name, at] of Object.entries(await bones(page, parts))) {
-    expect(darkest(helm, at), `${name} at the helm`).toBeLessThanOrEqual(DARK);
+  // Seated in the boat in the clips that sit in it, either side deck (a
+  // hiking sailor's head is behind the moored boat's boom).
+  for (const clip of ['helm', 'helm-port', 'cross', 'climbing-in']) {
+    const seated = await show(page, { clip, t: 1 });
+    expect(
+      (await page.evaluate(() => globalThis.dressing.figures())).every((f) => f.inBoat),
+      clip,
+    ).toBe(true);
+    for (const [name, at] of Object.entries(await bones(page, parts))) {
+      expect(darkest(seated, at), `${name}, ${clip}`).toBeLessThanOrEqual(DARK);
+    }
   }
 });

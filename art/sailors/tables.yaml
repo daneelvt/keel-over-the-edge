@@ -131,7 +131,12 @@ motion:
     contact: 0.001
     ankle-drift: 0.005
     hand-clearance: 0.03
+    # A hand on the hat, settling it: outside it by at least this.
+    hat-clearance: 0.01
     range-share: 0.8
+    # What a clip strains (hiking, climbing in with a knee to the chest) may
+    # go to the end of its range, never beyond.
+    range-strain: 1.0
     loop-degrees: 0.5
     loop-speed: 2.0
     head-peak-to-median: [2.5, 6.0]

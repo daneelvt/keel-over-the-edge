@@ -58,7 +58,7 @@ func TestPosesRefused(t *testing.T) {
 		"a bone the skeleton has not": {strings.Replace(good, "thigh_l", "tail", 1), `no bone "tail"`},
 		"an axis":                     {strings.Replace(good, ", x,", ", w,", 1), "the axis is x, y or z"},
 		"too far a turn":              {strings.Replace(good, "-80", "-200", 1), "within ±180"},
-		"a place":                     {good + "    place: mast\n", "none of seat and gunwale"},
+		"a place":                     {good + "    place: mast\n", "none of seat, gunwale, cockpit, outside"},
 		"IK on the head":              {strings.Replace(good, "hand_r:", "head:", 1), "only hand_l"},
 		"a target nowhere":            {strings.Replace(good, "at: tiller", "at: moon", 1), "no place on the stage"},
 		"a bone target's bone":        {strings.Replace(good, "at: tiller", "at: bone, bone: tail", 1), "which the skeleton has not"},

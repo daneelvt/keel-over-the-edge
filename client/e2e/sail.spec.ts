@@ -194,6 +194,75 @@ test('sheeted hard in on a reach in 20 knots, the boat capsizes and is sailed ag
   await expect(page.locator('[data-control=helm]')).not.toHaveClass(/dimmed/);
 });
 
+test('the sailor holds the tiller extension at the helm, and crosses the boat when its side changes', async ({
+  page,
+}) => {
+  await openScene(page);
+  const r = await page.evaluate(() => {
+    const k = globalThis.keel;
+    const seen: { side: number; crossing: boolean; tiller: boolean; hold: number; ext: number }[] =
+      [];
+    const look = (): void => {
+      const s = k.sailor();
+      if (s !== null) {
+        seen.push({
+          side: s.side,
+          crossing: s.crossing,
+          tiller: s.tiller,
+          hold: s.hold,
+          ext: s.extension,
+        });
+      }
+    };
+    // In a calm and upright, to windward on starboard, the boom out to port:
+    // until any cross the page began with has ended there.
+    k.setWind(0.5, 0);
+    for (let f = 0; f < 400; f++) {
+      k.setState({ sailor: 0.6, boom: -0.5, heel: 0, sailorMode: 0 });
+      k.sailFrames(1, 1);
+      const s = k.sailor();
+      if (f > 30 && s !== null && s.side === 1 && !s.crossing) {
+        break;
+      }
+    }
+    look();
+    const before = seen.at(-1);
+    seen.length = 0;
+    // The boom over to starboard and the sailor to port: a tack's cross.
+    for (let f = 0; f < 150; f++) {
+      k.setState({ sailor: -0.6, boom: 0.5, heel: 0, sailorMode: 0 });
+      k.sailFrames(1, 1);
+      look();
+    }
+    return { before, after: seen.at(-1), crossed: seen.some((x) => x.crossing), seen };
+  });
+  expect(r.before?.side).toBe(1);
+  expect(r.before?.tiller).toBe(true);
+  expect(r.crossed).toBe(true);
+  expect(r.after?.side).toBe(-1);
+  expect(r.after?.tiller).toBe(true);
+  // The hand on the extension, never beyond its end.
+  for (const s of r.seen.filter((x) => x.tiller)) {
+    expect(s.hold).toBeLessThanOrEqual(s.ext + 1e-3);
+  }
+});
+
+test('capsized, the sailor treads water off the high side, clear of the hull', async ({ page }) => {
+  await openScene(page);
+  const at = await page.evaluate(() => {
+    const k = globalThis.keel;
+    k.setState({ heel: (85 * Math.PI) / 180, sailorMode: 1, sailorTimer: 8 });
+    k.sailFrames(10, 1);
+    return k.sailor()?.at ?? null;
+  });
+  // Heeled to starboard, the high side is port: in the water there, out
+  // beyond the hull's bottom (the place in the heeled model, turned back
+  // level about the heel's pivot at the centre of gravity, 0.3 m up).
+  const heel = (85 * Math.PI) / 180;
+  const [x, y] = [at?.[0] ?? 0, (at?.[1] ?? 0) - 0.3];
+  expect(x * Math.cos(heel) + y * Math.sin(heel)).toBeLessThan(-0.6);
+});
+
 test('a frame the cap skips leaves the last picture on screen', async ({ page }) => {
   await openScene(page, 'sea=fresh');
   const drawn = await picture(page);

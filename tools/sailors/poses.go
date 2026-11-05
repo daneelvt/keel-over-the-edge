@@ -25,8 +25,10 @@ type poseLibrary struct {
 // pose is turns of bones, each [bone, axis, degrees] about the figure's
 // own axes; where it sits in the boat; and its hands' and feet's targets.
 type pose struct {
-	From  string            `yaml:"from" json:"from,omitempty"`
-	Place string            `yaml:"place" json:"place,omitempty"`
+	From  string `yaml:"from" json:"from,omitempty"`
+	Place string `yaml:"place" json:"place,omitempty"`
+	// Shift moves the placed figure forward, inboard and up from its place.
+	Shift []float64         `yaml:"shift" json:"shift,omitempty"`
 	Turn  [][]any           `yaml:"turn" json:"turn,omitempty"`
 	IK    map[string]target `yaml:"ik" json:"ik,omitempty"`
 }
@@ -42,13 +44,30 @@ type target struct {
 	// Reach moves a stage target inboard until the limb is this share of
 	// its length from its root.
 	Reach float64 `yaml:"reach" json:"reach,omitempty"`
+	// Planted puts the target where the pose's own turns put the limb's
+	// end, on the stage's surface it names (a crouch's feet on the floor),
+	// or anywhere (at free: a leg hanging over the side).
+	Planted bool `yaml:"planted" json:"planted,omitempty"`
 }
 
 type clip struct {
-	Loop bool  `yaml:"loop" json:"loop,omitempty"`
-	Idle bool  `yaml:"idle" json:"idle,omitempty"`
-	Keys []key `yaml:"keys" json:"keys"`
+	Loop bool `yaml:"loop" json:"loop,omitempty"`
+	Idle bool `yaml:"idle" json:"idle,omitempty"`
+	// Sides makes the clip on both side decks: as written, on the
+	// starboard, and as its mirror image on the port, named with portSuffix.
+	Sides bool `yaml:"sides" json:"sides,omitempty"`
+	// Clear turns a leg at the hip, frame by frame, until it is clear of
+	// the boat (climbing in over the side).
+	Clear bool `yaml:"clear" json:"clear,omitempty"`
+	// Strain names the kinds of joint (thigh, calf) the clip takes toward
+	// the ends of their ranges, as the hike does; the motion gate gives
+	// them more of it.
+	Strain []string `yaml:"strain" json:"strain,omitempty"`
+	Keys   []key    `yaml:"keys" json:"keys"`
 }
+
+// portSuffix names a clip's port side, made with Sides.
+const portSuffix = "-port"
 
 // key is a pose held in a clip, and how the ramp into it goes.
 type key struct {
@@ -58,6 +77,12 @@ type key struct {
 	Anticipate float64   `yaml:"anticipate" json:"anticipate,omitempty"`
 	Arc        []float64 `yaml:"arc" json:"arc,omitempty"`
 	Lead       string    `yaml:"lead" json:"lead,omitempty"`
+	// Step lifts the feet this far at the middle of the ramp, clear of
+	// the floor between their places.
+	Step float64 `yaml:"step" json:"step,omitempty"`
+	// Side is the side deck the key is on, if not the clip's: port, the
+	// other (a tack's cross ends there).
+	Side string `yaml:"side" json:"side,omitempty"`
 }
 
 // retarget is a clip of someone else's, from a vendored file, and the
@@ -70,9 +95,10 @@ type retarget struct {
 }
 
 var (
-	places     = []string{"", "seat", "gunwale"}
+	places     = []string{"", "seat", "gunwale", "cockpit", "outside"}
 	effectors  = []string{"hand_l", "hand_r", "foot_l", "foot_r"}
-	stageAt    = []string{"seat", "gunwale", "floor"}
+	stageAt    = []string{"seat", "gunwale", "floor", "strap", "free"}
+	keySides   = []string{"", "port", "starboard"}
 	leads      = []string{"", "hips", "head"}
 	turnAxes   = []string{"x", "y", "z"}
 	maxDegrees = 180.0
@@ -145,6 +171,9 @@ func (lib poseLibrary) check(t tables, sources map[string]source) error {
 		if len(c.Keys) == 0 {
 			return fmt.Errorf("the clip %s has no keys", name)
 		}
+		if _, ok := lib.Clips[name+portSuffix]; ok && c.Sides {
+			return fmt.Errorf("the clip %s is made on both sides, but %s is a clip of its own", name, name+portSuffix)
+		}
 		for i, k := range c.Keys {
 			if _, ok := lib.Poses[k.Pose]; !ok {
 				return fmt.Errorf("the clip %s's key %d: no pose %q", name, i, k.Pose)
@@ -158,6 +187,10 @@ func (lib poseLibrary) check(t tables, sources map[string]source) error {
 				return fmt.Errorf("the clip %s's key %d: an arc is [out, up]", name, i)
 			case !slices.Contains(leads, k.Lead):
 				return fmt.Errorf("the clip %s's key %d: lead %q is neither hips nor head", name, i, k.Lead)
+			case k.Step < 0 || k.Step > 0.6:
+				return fmt.Errorf("the clip %s's key %d: a step of %v m is not 0 to 0.6", name, i, k.Step)
+			case !slices.Contains(keySides, k.Side):
+				return fmt.Errorf("the clip %s's key %d: side %q is neither port nor starboard", name, i, k.Side)
 			}
 		}
 	}
@@ -181,7 +214,10 @@ func (p pose) check(bones []string, points map[string]bool, all map[string]pose)
 		}
 	}
 	if !slices.Contains(places, p.Place) {
-		return fmt.Errorf("its place %q is none of seat and gunwale", p.Place)
+		return fmt.Errorf("its place %q is none of %s", p.Place, strings.Join(places[1:], ", "))
+	}
+	if p.Shift != nil && len(p.Shift) != 3 {
+		return fmt.Errorf("its shift %v is not [forward, inboard, up]", p.Shift)
 	}
 	for _, tr := range p.Turn {
 		if len(tr) != 3 {
