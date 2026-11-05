@@ -37,6 +37,7 @@ nothing hidden comes through when the figure moves.
 import hashlib
 import inspect
 import json
+import math
 import os
 import uuid
 from collections import namedtuple
@@ -521,6 +522,13 @@ def bodice(human, marks, p):
                 gone.append(f)
         bmesh.ops.delete(bm, geom=gone, context="FACES")
         bmesh.ops.delete(bm, geom=[v for v in bm.verts if not v.link_faces], context="VERTS")
+        # The fronts' edges laid on the opening's line: straight, not the
+        # stair of the faces cut away.
+        for v in bm.verts:
+            half = float(np.interp(v.co.z, zs, halves))
+            if (v.is_boundary and low + 0.01 < v.co.z < top - 0.01 and v.co.y < marks.near(v.co.z)[1]
+                    and half <= abs(v.co.x) < half + 0.035 and v[layer] == PARTS["torso"]):
+                v.co.x = math.copysign(half, v.co.x)
     return bm
 
 
