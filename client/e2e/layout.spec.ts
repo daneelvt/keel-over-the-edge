@@ -737,6 +737,10 @@ for (const upright of [true, false]) {
     // Laid out as it rests: nothing caught sliding out.
     await page.emulateMedia({ reducedMotion: 'reduce' });
     await openScene(page, 'world=1', true);
+    // In Port Royal's harbour, once the land about it is held.
+    await expect
+      .poll(() => page.evaluate(() => globalThis.keel.toHarbour()), { timeout: 30_000 })
+      .toBe(true);
     const now = Date.now();
     await page.evaluate(
       ({ now }) => {
@@ -747,7 +751,6 @@ for (const upright of [true, false]) {
           ends: now + 2 * 86_400_000,
           closing: now - 86_400_000,
         });
-        k.toHarbour();
         // At rest, the sail sheeted in: the boat drawn the same every time.
         k.setState({ sheetLimit: 0.05, boom: 0, surge: 0 });
         k.setControls(0, 0);
