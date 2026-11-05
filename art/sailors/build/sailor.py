@@ -344,7 +344,7 @@ def build_version(job, v, run):
         if level == "close" and not machine:
             metrics.figure(gates, marks, human, meshes, worn, tables["ease"], v)
         elif level == "close" and v == "female":
-            metrics.bust(gates, marks, meshes)
+            metrics.bust(gates, marks, meshes, worn)
         if level != "far":
             maps = metrics.poses(gates, level, fig, lib, worn, tables["ease"], POSES)
             seats = metrics.seat(gates, level, fig, lib, SEATED)
