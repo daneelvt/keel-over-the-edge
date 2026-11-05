@@ -1,0 +1,90 @@
+# SPDX-License-Identifier: LicenseRef-All-Rights-Reserved
+#
+# The Quartermaster's habit: tallying in a small book. At the helm the
+# sheet hand goes to the book in the belt and comes up before the chest,
+# the head bowed over it; a look across the boat and a nod as each thing
+# is counted, back to the book, and the hand back to the sheet. Standing,
+# the same, the other hand at the side.
+poses:
+  quartermaster-book:
+    from: helm-seated
+    turn:
+      - [head, x, 4]
+    ik:
+      hand_r: { at: bone, bone: pelvis, offset: [-0.12, -0.15, 0.17], pole: [-0.7, 0.3, -0.2] }
+
+  quartermaster-tally:
+    from: helm-seated
+    turn:
+      - [spine_03, x, 5]
+      - [neck_01, x, 9]
+      - [head, x, 17]
+    ik:
+      hand_r: { at: bone, bone: spine_03, offset: [-0.06, -0.26, -0.1], pole: [-0.7, 0.2, -0.3] }
+
+  quartermaster-count:
+    from: quartermaster-tally
+    turn:
+      - [neck_01, x, -7]
+      - [head, x, -14]
+      - [neck_01, z, 5]
+      - [head, z, 16]
+
+  quartermaster-nod:
+    from: quartermaster-count
+    turn:
+      - [head, x, 7]
+      - [head, z, -6]
+
+  quartermaster-stand-book:
+    from: stand
+    turn:
+      - [head, x, 4]
+    ik:
+      hand_r: { at: bone, bone: pelvis, offset: [-0.12, -0.15, 0.17], pole: [-0.7, 0.3, -0.2] }
+
+  quartermaster-stand-tally:
+    from: stand
+    turn:
+      - [neck_01, x, 11]
+      - [head, x, 18]
+    ik:
+      hand_r: { at: bone, bone: spine_03, offset: [-0.06, -0.27, -0.1], pole: [-0.7, 0.2, -0.3] }
+
+  quartermaster-stand-count:
+    from: quartermaster-stand-tally
+    turn:
+      - [neck_01, x, -7]
+      - [head, x, -14]
+      - [neck_01, z, -5]
+      - [head, z, -16]
+
+  quartermaster-stand-nod:
+    from: quartermaster-stand-count
+    turn:
+      - [head, x, 7]
+      - [head, z, 6]
+
+clips:
+  quartermaster-habit:
+    sides: true
+    keys:
+      - { pose: helm-seated, hold: 0.3 }
+      - { pose: quartermaster-book, hold: 0.2, ramp: 1.1, lead: head }
+      - { pose: quartermaster-tally, hold: 0.5, ramp: 1.4, arc: [0.04, 0.02], lead: head }
+      - { pose: quartermaster-count, hold: 0.3, ramp: 1.5, lead: head }
+      - { pose: quartermaster-nod, hold: 0.3, ramp: 1.0, lead: head }
+      - { pose: quartermaster-tally, hold: 0.4, ramp: 1.2, lead: head }
+      - { pose: quartermaster-book, hold: 0.15, ramp: 1.3 }
+      - { pose: helm-seated, hold: 0.3, ramp: 1.2 }
+
+  quartermaster-habit-standing:
+    keys:
+      - { pose: stand, hold: 0.3 }
+      - { pose: quartermaster-stand-book, hold: 0.2, ramp: 1.2, lead: head }
+      - { pose: quartermaster-stand-tally, hold: 0.5, ramp: 1.4, arc: [0.04, 0.02], lead: head }
+      - { pose: quartermaster-stand-count, hold: 0.3, ramp: 1.5, lead: head }
+      - { pose: quartermaster-stand-nod, hold: 0.3, ramp: 1.0, lead: head }
+      - { pose: quartermaster-stand-tally, hold: 0.4, ramp: 1.2, lead: head }
+      - { pose: quartermaster-stand-book, hold: 0.15, ramp: 1.3 }
+      - { pose: stand, hold: 0.3, ramp: 1.2 }
