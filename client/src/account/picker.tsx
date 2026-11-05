@@ -231,6 +231,10 @@ export function StageFront({ looks, look, stage }: { looks: Looks; look: Look; s
     <div
       class="stage-front"
       onPointerDown={(e) => {
+        // A press of a button is the button's, not a drag.
+        if ((e.target as Element).closest('button') !== null) {
+          return;
+        }
         drags.set(e.currentTarget, e.clientX);
         e.currentTarget.setPointerCapture?.(e.pointerId);
       }}
