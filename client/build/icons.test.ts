@@ -7,7 +7,7 @@
 
 import { readFileSync } from 'node:fs';
 import { describe, expect, test } from 'vitest';
-import { FRAMES, rasterise, readPng, SLATE } from '../../art/icon/icon.ts';
+import { FRAMES, rasterise, readPng, SLATE, TILE, TILE_BOAT } from '../../art/icon/icon.ts';
 
 const pub = (name: string) => new URL(`../public/${name}`, import.meta.url);
 
@@ -80,13 +80,28 @@ describe('the icons', () => {
     expect(worst, 'rebuild the icons: node art/icon/build.ts').toBeLessThanOrEqual(1);
   });
 
-  test('the maskable icon keeps the ring within the middle 80%, the slate to the edges', () => {
-    const frame = FRAMES.find((f) => f.file === 'icon-maskable-512.png');
-    expect(frame?.ring).toBeLessThanOrEqual(0.4);
-    const rgba = rasterise(frame as (typeof FRAMES)[number]);
-    // Every corner pixel opaque.
-    for (const at of [0, 511, 511 * 512, 512 * 512 - 1]) {
-      expect(rgba[at * 4 + 3]).toBe(255);
+  test('the home screen icons keep the boat within the middle 80%, sky and sea to the edges', () => {
+    // The circle of radius 0.8 about the middle every launcher's mask keeps.
+    for (const s of TILE_BOAT) {
+      for (const c of s.contours) {
+        for (const [x, y] of c) {
+          expect(Math.hypot(x, y)).toBeLessThanOrEqual(0.8);
+        }
+      }
+    }
+    for (const file of ['icon-maskable-512.png', 'apple-touch-icon.png']) {
+      const frame = FRAMES.find((f) => f.file === file) as (typeof FRAMES)[number];
+      expect(frame.drawing, file).toBe(TILE);
+      expect(frame.unit, file).toBe(0.5);
+      const rgba = rasterise(frame);
+      const n = frame.size;
+      // Every edge pixel opaque, and none of it the slate beneath.
+      for (let i = 0; i < n; i++) {
+        for (const at of [i, (n - 1) * n + i, i * n, i * n + n - 1]) {
+          expect(rgba[at * 4 + 3], file).toBe(255);
+          expect(rgba[at * 4 + 2], file).toBeGreaterThan(0x2c);
+        }
+      }
     }
   });
 });
