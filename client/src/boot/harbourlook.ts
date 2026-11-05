@@ -15,7 +15,7 @@ import type { SeaScene } from '../render/scene';
 import { type HarbourLook, inHarbour } from '../ui/harbourlook';
 
 /** The camera close to the player's own sailor while a look is chosen at sea: over the quarter they sit on. */
-const CLOSE = { azimuth: 0.8, elevation: 0.5, distance: 5.5 };
+const CLOSE = { azimuth: 0.6, elevation: 0.95, distance: 7 };
 
 /**
  * Brings the camera close to the player's sailor, drawn above the picker
@@ -33,7 +33,7 @@ function closeTo(world: SeaScene, on: boolean): void {
   const w = Math.max(innerWidth, 1);
   const h = Math.max(innerHeight, 1);
   if (h >= w) {
-    c.setViewOffset(w, h, 0, 0.24 * h, w, h);
+    c.setViewOffset(w, h, 0, 0.32 * h, w, h);
   } else {
     c.setViewOffset(w, h, 0.24 * w, 0, w, h);
   }

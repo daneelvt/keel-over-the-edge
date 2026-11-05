@@ -1816,7 +1816,7 @@
   top: auto;
   bottom: max(8px, env(safe-area-inset-bottom));
   transform: translateX(-50%);
-  max-height: 58dvh;
+  max-height: 54dvh;
   padding: 10px 14px 12px;
   border-width: 4px;
 }

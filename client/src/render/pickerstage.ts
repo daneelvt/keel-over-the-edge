@@ -226,17 +226,17 @@ export class PickerStage {
     // middle is drawn, as shares of the width and height from the top left:
     // in the stage's part of the screen, clear of its buttons below.
     const a = this.area();
-    let fill = face ? 1 : upright ? 0.36 : 0.78;
+    let fill = upright ? 0.36 : 0.78;
     let [cx, cy] = upright ? [0.5, 0.24] : [0.22, 0.5];
     if (a !== null && a.width > 0 && a.height > BUTTONS) {
       const room = a.height - BUTTONS;
       cx = (a.left + a.width / 2) / w;
       cy = (a.top + room / 2) / h;
-      fill = ((face ? 1.6 : 0.92) * room) / h;
+      fill = (0.92 * room) / h;
     }
-    const height = face ? 0.42 : FIGURE;
+    const height = face ? 0.75 : FIGURE;
     const distance = height / fill / (2 * Math.tan(((FOV / 2) * Math.PI) / 180));
-    const targetY = face ? DISC_TOP + 1.58 : DISC_TOP + FIGURE / 2;
+    const targetY = face ? DISC_TOP + 1.45 : DISC_TOP + FIGURE / 2;
     const azimuth = this.view === 'behind' ? Math.PI : face ? 0.3 : 0.35;
     this.#look.set(0, targetY, 0);
     cam.position.set(
