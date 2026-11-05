@@ -35,7 +35,7 @@ export class LookChooser {
     readonly looks: Looks,
     me: Me,
     readonly stage?: LookStage,
-    readonly fetcher: Fetch = fetch,
+    readonly fetcher: Fetch = (input, init) => fetch(input, init),
     readonly random: () => number = Math.random,
   ) {
     const l = lookFrom(me);

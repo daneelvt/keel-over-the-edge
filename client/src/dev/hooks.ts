@@ -1703,6 +1703,7 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
         tick: p.tick,
         m: o.ahead.m,
         rtt: o.rtt.value,
+        look: o.look.value,
         counts: { ...p.counts },
         p95: p.p95(),
         traffic: { ...o.traffic },

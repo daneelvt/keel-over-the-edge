@@ -8,7 +8,7 @@
 // has sailed out of the harbour meanwhile keeps its look, and is told why.
 
 import type { ReadonlySignal } from '@preact/signals';
-import { useState } from 'preact/hooks';
+import { useEffect, useState } from 'preact/hooks';
 import { chosen, Picker, type PickerState, shuffled, undone } from '../account/picker';
 import type { Look, Looks } from '../catalog/looks';
 import type { Harbour } from '../predict/physics';
@@ -56,6 +56,8 @@ export function HarbourPicker({ look: h, close }: { look: HarbourLook; close: ()
   const [pick, setPick] = useState<PickerState>(() => chosen(h.current()));
   const [problem, setProblem] = useState('');
   const [busy, setBusy] = useState(false);
+  // The camera close to the sailor from the start.
+  useEffect(() => h.preview(h.current()), []);
   const set = (p: PickerState) => {
     setPick(p);
     setProblem('');

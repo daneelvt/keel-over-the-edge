@@ -14,8 +14,31 @@ import type { Online } from '../net/online';
 import type { SeaScene } from '../render/scene';
 import { type HarbourLook, inHarbour } from '../ui/harbourlook';
 
-/** The camera close to the player's own sailor while a look is chosen at sea. */
-const CLOSE = { azimuth: 2.2, elevation: 0.28, distance: 5 };
+/** The camera close to the player's own sailor while a look is chosen at sea: over the quarter they sit on. */
+const CLOSE = { azimuth: 0.8, elevation: 0.5, distance: 5.5 };
+
+/**
+ * Brings the camera close to the player's sailor, drawn above the picker
+ * held upright and to its left held sideways; or, with false, puts it back.
+ */
+function closeTo(world: SeaScene, on: boolean): void {
+  const c = world.stage.camera;
+  if (!on) {
+    c.clearViewOffset();
+    world.placeCamera(world.camera.rest);
+    return;
+  }
+  // Astern of the side the sailor sits on: positive azimuths are to port.
+  world.placeCamera({ ...CLOSE, azimuth: world.pose.sailor > 0 ? -CLOSE.azimuth : CLOSE.azimuth });
+  const w = Math.max(innerWidth, 1);
+  const h = Math.max(innerHeight, 1);
+  if (h >= w) {
+    c.setViewOffset(w, h, 0, 0.24 * h, w, h);
+  } else {
+    c.setViewOffset(w, h, 0.24 * w, 0, w, h);
+  }
+  c.updateProjectionMatrix();
+}
 
 /**
  * The look the board changes: in Port Royal's harbour, the player's own
@@ -36,7 +59,7 @@ export function harbourLook(
     lookOf(catalog, online.look.value ?? 0) ?? (lookOf(catalog, 0) as Look);
   const back = () => {
     void world.showLook(online.look.value ?? 0);
-    world.placeCamera(world.camera.rest);
+    closeTo(world, false);
   };
   return {
     royal,
@@ -48,7 +71,7 @@ export function harbourLook(
         return;
       }
       void world.showLook(codeOf(catalog, l));
-      world.placeCamera(CLOSE);
+      closeTo(world, true);
     },
     async done(l) {
       try {
@@ -96,7 +119,7 @@ export function sandboxHarbourLook(world: SeaScene, code: number): HarbourLook {
   }, 1000);
   const back = () => {
     void world.showLook(own);
-    world.placeCamera(world.camera.rest);
+    closeTo(world, false);
   };
   return {
     royal,
@@ -108,7 +131,7 @@ export function sandboxHarbourLook(world: SeaScene, code: number): HarbourLook {
         return;
       }
       void world.showLook(codeOf(catalog, l));
-      world.placeCamera(CLOSE);
+      closeTo(world, true);
     },
     done(l) {
       own = codeOf(catalog, l);

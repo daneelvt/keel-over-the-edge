@@ -501,3 +501,30 @@
     width: 100%;
   }
 }
+
+/* The first choice's Keep and Choose, or Cancel and Save, always in view:
+   their row stays at the panel's foot as it scrolls. */
+.start.picking .choose-look .picker-actions {
+  position: static;
+  margin: 0;
+  padding: 0;
+  background: none;
+}
+.start.picking .choose-look-actions {
+  position: sticky;
+  bottom: -14px;
+  margin: 0 -16px -14px;
+  padding: 8px 16px 14px;
+  background: rgb(26 36 44 / 96%);
+  z-index: 1;
+}
+
+/* With no stage, the form scrolls the screen: Set sail's row stays at the
+   screen's foot while the form is in view. */
+.start:not(.picking) .picker-actions {
+  position: sticky;
+  bottom: 0;
+  padding: 8px 0;
+  background: rgb(26 36 44 / 96%);
+  z-index: 1;
+}
