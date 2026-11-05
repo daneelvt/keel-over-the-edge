@@ -491,7 +491,8 @@ def bodice(human, marks, p):
     """A body: the torso from a neckline (lower at the front by its slope)
     to a little below the waist, with sleeves to a share of the forearm or
     armholes; open down the front if asked (the opening's half width at the
-    neck, at the bust if given, and at the hem)."""
+    neck, at the bust if given, and at the hem; its edges laid straight on
+    that line if straight)."""
     bm = source(human, "helper-tights")
     m = marks.measure()
     parts = (PARTS["torso"], PARTS["arm"]) if p.get("sleeve") else (PARTS["torso"],)
@@ -522,9 +523,9 @@ def bodice(human, marks, p):
                 gone.append(f)
         bmesh.ops.delete(bm, geom=gone, context="FACES")
         bmesh.ops.delete(bm, geom=[v for v in bm.verts if not v.link_faces], context="VERTS")
-        # The fronts' edges laid on the opening's line: straight, not the
-        # stair of the faces cut away.
-        for v in bm.verts:
+        # The fronts' edges laid on the opening's line if asked (straight):
+        # straight, not the stair of the faces cut away.
+        for v in bm.verts if o.get("straight") else ():
             half = float(np.interp(v.co.z, zs, halves))
             if (v.is_boundary and low + 0.01 < v.co.z < top - 0.01 and v.co.y < marks.near(v.co.z)[1]
                     and half <= abs(v.co.x) < half + 0.035 and v[layer] == PARTS["torso"]):
