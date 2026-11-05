@@ -68,6 +68,11 @@ type CoreConfig struct {
 	// Stopped, if not nil, reports whether a machine sailor is stopped by
 	// the game's operator, or its human is: its calls are refused.
 	Stopped func(store.AccountID) bool
+	// SetLook, if not nil, keeps a machine sailor's look, chosen; and
+	// Forget, if not nil, has the door read its token's grant again, which
+	// carries the look.
+	SetLook func(ctx context.Context, id store.AccountID, l store.Look) error
+	Forget  func(ids ...store.AccountID)
 }
 
 // Core is the machine sailors' side of the game: their helms, the world
@@ -574,7 +579,7 @@ func (h *helm) join(ctx context.Context, s *Sea) (bus.Reply, error) {
 	h.mu.Unlock()
 	var code uint32
 	if s.Looks != nil {
-		code = s.Looks.Code(s.Looks.Resolve(h.account, look))
+		code = s.Looks.Code(machineLook(s.Looks, h.account, look))
 	}
 	reply := make(chan bus.Reply, 1)
 	cmd := bus.Command{Op: bus.Join, Account: bus.Account(h.account), Conn: h.conn, Machine: true, Priority: priority, Look: code, Reply: reply}

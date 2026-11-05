@@ -85,6 +85,13 @@ func (h *harness) call(t *testing.T, a *oauth.Accepted, tool string, args map[st
 }
 
 func (h *harness) callCtx(t *testing.T, ctx context.Context, a *oauth.Accepted, tool string, args map[string]any) (string, bool) {
+	t.Helper()
+	return callCore(t, ctx, h.core, a, tool, args)
+}
+
+// callCore calls a tool of core as sailor a, as the door hands it the
+// call.
+func callCore(t *testing.T, ctx context.Context, core *Core, a *oauth.Accepted, tool string, args map[string]any) (string, bool) {
 	var def toolDef
 	for _, d := range tools() {
 		if d.tool.Name == tool {
@@ -96,7 +103,7 @@ func (h *harness) callCtx(t *testing.T, ctx context.Context, a *oauth.Accepted, 
 		Params: &mcp.CallToolParamsRaw{Name: tool, Arguments: raw},
 		Extra:  &mcp.RequestExtra{TokenInfo: &auth.TokenInfo{Extra: map[string]any{extraAccepted: a}}},
 	}
-	res, err := h.core.handler(def)(ctx, req)
+	res, err := core.handler(def)(ctx, req)
 	if err != nil {
 		t.Errorf("%s: %v", tool, err)
 		return "", true

@@ -76,7 +76,8 @@ func (p *process) newAgents(ctx context.Context, stopped *accounts.Set) (*agents
 		Page: page, AtSea: p.atSea,
 	})
 	a.usage = agentapi.NewUsage(p.db, p.log)
-	a.core = agentapi.NewCore(agentapi.CoreConfig{Log: p.log, Metrics: p.metrics, Silence: p.cfg.AISilence, Stopped: stopped.Has})
+	a.core = agentapi.NewCore(agentapi.CoreConfig{Log: p.log, Metrics: p.metrics, Silence: p.cfg.AISilence, Stopped: stopped.Has,
+		SetLook: p.db.SetLook, Forget: a.grants.ForgetAccounts})
 	a.handler, err = agentapi.Handler(agentapi.Config{
 		Resource: p.cfg.AgentsURL, Issuer: p.cfg.PlayOrigin, Grants: a.grants, Used: a.usage.Used,
 		Build: p.build, Log: p.log, Metrics: p.metrics, Core: a.core,
