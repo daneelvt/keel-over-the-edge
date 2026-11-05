@@ -307,9 +307,9 @@ def build_version(job, v, run):
                       if g.kind == "head" else machines.deck_keep(g.obj) if g.kind == "plate" else None)
                 lod.decimate(g.obj, deck_share(g.obj, g.kind, g.spec), at)
                 if g.kind == "beard":
-                    # A beard's specks under the chin, collapsed too far to
-                    # keep their place, go.
-                    garment.drop_fragments(g.obj, 40)
+                    # Collapsed, a beard's edges lift off the face: turned
+                    # down to the skin again.
+                    hair.edge_to_skin(g.obj, skin)
             if machine:
                 # A machine's small fittings, collapsed this far, are specks
                 # apart from what they were on: they go.

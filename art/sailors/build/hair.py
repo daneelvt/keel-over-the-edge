@@ -902,6 +902,25 @@ def beard_strands(obj, b):
     return d
 
 
+def edge_to_skin(obj, skin):
+    """A shell's open edges brought down to the skin, as when it was made."""
+    bm = bmesh.new()
+    bm.from_mesh(skin.data)
+    bm.normal_update()
+    tree = BVHTree.FromBMesh(bm)
+    bm.free()
+    bm = bmesh.new()
+    bm.from_mesh(obj.data)
+    for v in bm.verts:
+        if v.is_boundary:
+            loc, n, _, _ = tree.find_nearest(v.co)
+            if loc is not None:
+                v.co = loc + n * 0.0005
+    bm.to_mesh(obj.data)
+    bm.free()
+    obj.data.update()
+
+
 def _largest(bm):
     seen, parts = set(), []
     for v in bm.verts:
