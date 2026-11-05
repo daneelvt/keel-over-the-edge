@@ -507,7 +507,10 @@ func (h *worldHalf) start() {
 		if p.cfg.DevSailors == 0 {
 			return
 		}
-		_ = scripted.Run(sailorsCtx, scripted.Config{N: p.cfg.DevSailors, Bus: h.bus, Seed: uint64(time.Now().UnixNano()), Log: p.log})
+		// The developer's sailors, each in a look drawn for it.
+		seed := uint64(time.Now().UnixNano())
+		look := func(i int) uint32 { return p.looks.Code(p.looks.Draw(seed + uint64(i))) }
+		_ = scripted.Run(sailorsCtx, scripted.Config{N: p.cfg.DevSailors, Bus: h.bus, Seed: seed, Log: p.log, Look: look})
 	}()
 	p.replayRoutes.set(h.inputs)
 	if p.devRoutes != nil {

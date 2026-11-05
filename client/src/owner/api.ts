@@ -17,6 +17,8 @@
 // deleted.
 
 /** A boat at sea, as the page shows it. */
+import type { Look } from '../catalog/looks';
+
 export interface Boat {
   boat: number;
   account: string;
@@ -979,14 +981,16 @@ export interface AccountAction {
 /**
  * account.json: an account's card. Times are ms, 0 for never. A human's has
  * its passkeys, sessions, fleet, cap and machine sailors' cards; a machine
- * sailor's its human, its look in words, its apps and its connection
- * token; the card asked for has the record of what was done to it.
+ * sailor's its human, its apps and its connection token. Every card has
+ * its sailor's look, and the look in words; the card asked for has the
+ * record of what was done to it.
  */
 export interface AccountCard {
   id: string;
   kind: 'human' | 'ai';
   name: string;
-  look: string;
+  look: Look;
+  lookWords: string;
   made: number;
   lastActive: string;
   lastActiveAt: number;
@@ -1005,7 +1009,6 @@ export interface AccountCard {
   cap?: number;
   machines?: AccountCard[];
   owner?: { id: string; name: string };
-  lookWords?: string;
   apps?: CardApp[];
   token?: CardToken | null;
   /** One of the owner's own: flagged, or a flagged human's machine sailor. */

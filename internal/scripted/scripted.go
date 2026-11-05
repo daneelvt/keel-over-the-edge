@@ -59,6 +59,17 @@ type Config struct {
 	Min, Max time.Duration // between trims; MinInterval and MaxInterval if zero
 	// Between tacks or gybes; MinTurn and MaxTurn if zero.
 	MinTurn, MaxTurn time.Duration
+	// Look, if not nil, is the look code sailor i is drawn in; else the
+	// first.
+	Look func(i int) uint32
+}
+
+// lookOf is the look code sailor i is drawn in.
+func (c *Config) lookOf(i int) uint32 {
+	if c.Look == nil {
+		return 0
+	}
+	return c.Look(i)
 }
 
 type sailor struct {
@@ -191,7 +202,7 @@ func (s *sailor) leave(cfg Config, boat uint64) {
 		return
 	}
 	reply := make(chan bus.Reply, 1)
-	for sender.TrySend(bus.Command{Op: bus.Join, Account: Account(s.index), Reply: reply}) != nil {
+	for sender.TrySend(bus.Command{Op: bus.Join, Account: Account(s.index), Look: cfg.lookOf(s.index), Reply: reply}) != nil {
 		time.Sleep(time.Second / 30)
 	}
 	s.rejoin, s.aground, s.engaged = reply, time.Time{}, false
@@ -269,7 +280,7 @@ func join(ctx context.Context, cfg Config) ([]sailor, error) {
 	for i := range replies {
 		replies[i] = make(chan bus.Reply, 1)
 		for {
-			err := sender.TrySend(bus.Command{Op: bus.Join, Account: Account(i), Reply: replies[i]})
+			err := sender.TrySend(bus.Command{Op: bus.Join, Account: Account(i), Look: cfg.lookOf(i), Reply: replies[i]})
 			if err == nil {
 				break
 			}
