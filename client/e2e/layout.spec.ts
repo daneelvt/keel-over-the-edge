@@ -725,198 +725,206 @@ function overlap(a: Box, b: Box): boolean {
   );
 }
 
-test('no part of the screen at sea covers the boat or another part, with everything open', async ({
-  page,
-}) => {
-  await page.setViewportSize({ width: SCREENS[0].width, height: SCREENS[0].height });
-  // Laid out as it rests: nothing caught sliding out.
-  await page.emulateMedia({ reducedMotion: 'reduce' });
-  await openScene(page, 'world=1', true);
-  // In Port Royal's harbour, once the land about it is held.
-  await expect
-    .poll(() => page.evaluate(() => globalThis.keel.toHarbour()), { timeout: 30_000 })
-    .toBe(true);
-  const now = Date.now();
-  await page.evaluate(
-    ({ now }) => {
-      const k = globalThis.keel;
-      // In the world's last days.
-      k.setWorldEnd({
-        epoch: now - 5 * 86_400_000,
-        ends: now + 2 * 86_400_000,
-        closing: now - 86_400_000,
-      });
-      // At rest, the sail sheeted in: the boat drawn the same every time.
-      k.setState({ sheetLimit: 0.05, boom: 0, surge: 0 });
-      k.setControls(0, 0);
-      k.advance(30);
-      k.render();
-      // The chase camera behind it again: time is held.
-      k.camera('chase');
-      k.render();
-    },
-    { now },
-  );
-  // The autopilot on, its head open.
-  await page.keyboard.press('p');
-  await expect(page.locator('.board-pusher, [data-pusher=board]')).toBeVisible({ timeout: 15_000 });
-  const found: string[] = [];
-  for (const s of SCREENS) {
-    await page.setViewportSize({ width: s.width, height: s.height });
-    // The camera at the new size before anything is measured: a browser
-    // may tell the page of its resize a frame or more late.
-    await page.waitForFunction(
-      ({ width, height }) =>
-        innerWidth === width &&
-        innerHeight === height &&
-        Math.abs(globalThis.keel.world.stage.camera.aspect - width / height) < 1e-6,
-      { width: s.width, height: s.height },
+// The screens in two halves, upright and sideways, each its own test: all
+// eight in one ran near the limit on a slow runner.
+for (const upright of [true, false]) {
+  const screens = SCREENS.filter((s) => s.upright === upright);
+  const first = screens[0] ?? SCREENS[0];
+  test(`no part of the screen at sea covers the boat or another part, with everything open, ${upright ? 'upright' : 'sideways'}`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: first.width, height: first.height });
+    // Laid out as it rests: nothing caught sliding out.
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await openScene(page, 'world=1', true);
+    // In Port Royal's harbour, once the land about it is held.
+    await expect
+      .poll(() => page.evaluate(() => globalThis.keel.toHarbour()), { timeout: 30_000 })
+      .toBe(true);
+    const now = Date.now();
+    await page.evaluate(
+      ({ now }) => {
+        const k = globalThis.keel;
+        // In the world's last days.
+        k.setWorldEnd({
+          epoch: now - 5 * 86_400_000,
+          ends: now + 2 * 86_400_000,
+          closing: now - 86_400_000,
+        });
+        // At rest, the sail sheeted in: the boat drawn the same every time.
+        k.setState({ sheetLimit: 0.05, boom: 0, surge: 0 });
+        k.setControls(0, 0);
+        k.advance(30);
+        k.render();
+        // The chase camera behind it again: time is held.
+        k.camera('chase');
+        k.render();
+      },
+      { now },
     );
-    // Every complication out, the head open, the full screen's key shown
-    // (the menu, opened on the screen before, put it away).
-    await page.evaluate(() => {
-      const k = globalThis.keel;
-      k.settings({ barometer: true, pilotHead: true, rightOfWay: true });
-      k.fullScreenKey(true);
-      k.render();
+    // The autopilot on, its head open.
+    await page.keyboard.press('p');
+    await expect(page.locator('.board-pusher, [data-pusher=board]')).toBeVisible({
+      timeout: 15_000,
     });
-    await page.waitForTimeout(200);
-    await page.evaluate(() => globalThis.keel.render());
-    for (const f of await caseFaults(page, s.upright)) {
-      found.push(`${s.name}: ${f}`);
-    }
-    // Measured at the longest the readouts say.
-    const seen = await parts(page);
-    await test.info().attach(`${s.name}.png`, {
-      path: await page
-        .screenshot({ path: test.info().outputPath(`${s.name}.png`) })
-        .then(() => test.info().outputPath(`${s.name}.png`)),
-      contentType: 'image/png',
-    });
-    for (const k of seen.spilt) {
-      found.push(`${s.name}: “${k}” spills out of its part`);
-    }
-    for (const w of [...seen.words, ...(await longestCaption(page))]) {
-      found.push(`${s.name}: ${w}`);
-    }
-    // The helm the head's height: held sideways their tops level, held
-    // upright the head standing on the helm, 8 pixels above it.
-    if (seen.helm === null || seen.head === null) {
-      found.push(`${s.name}: no helm or no control head`);
-    } else if (
-      s.upright
-        ? Math.abs(seen.head.bottom + 8 - seen.helm.top) > 0.5
-        : Math.abs(seen.head.top - seen.helm.top) > 0.5
-    ) {
-      found.push(
-        `${s.name}: the helm’s top at ${seen.helm.top}, the head’s ${s.upright ? 'foot' : 'top'} at ${s.upright ? seen.head.bottom : seen.head.top}`,
+    const found: string[] = [];
+    for (const s of screens) {
+      await page.setViewportSize({ width: s.width, height: s.height });
+      // The camera at the new size before anything is measured: a browser
+      // may tell the page of its resize a frame or more late.
+      await page.waitForFunction(
+        ({ width, height }) =>
+          innerWidth === width &&
+          innerHeight === height &&
+          Math.abs(globalThis.keel.world.stage.camera.aspect - width / height) < 1e-6,
+        { width: s.width, height: s.height },
       );
-    } else if (
-      Math.abs(seen.helm.bottom - seen.helm.top - (seen.head.bottom - seen.head.top)) > 0.5
-    ) {
-      found.push(`${s.name}: the helm is not the head’s height`);
-    }
-    const all = seen.boat === null ? seen.parts : [...seen.parts, seen.boat];
-    for (const p of all) {
-      if (p.left < -0.5 || p.top < -0.5 || p.right > s.width + 0.5 || p.bottom > s.height + 0.5) {
-        found.push(`${s.name}: ${p.name} is off the screen`);
+      // Every complication out, the head open, the full screen's key shown
+      // (the menu, opened on the screen before, put it away).
+      await page.evaluate(() => {
+        const k = globalThis.keel;
+        k.settings({ barometer: true, pilotHead: true, rightOfWay: true });
+        k.fullScreenKey(true);
+        k.render();
+      });
+      await page.waitForTimeout(200);
+      await page.evaluate(() => globalThis.keel.render());
+      for (const f of await caseFaults(page, s.upright)) {
+        found.push(`${s.name}: ${f}`);
       }
-    }
-    for (let i = 0; i < all.length; i++) {
-      for (let j = i + 1; j < all.length; j++) {
-        const a = all[i];
-        const b = all[j];
-        const names = [a?.name, b?.name];
-        const inCase = (n?: string) =>
-          n === 'the case' || n === 'the barometer pusher' || n === 'the board pusher';
-        const masthead = s.upright && names.some(inCase) && names.includes('the boat');
-        // A pusher is set in its own part.
-        const own =
-          (names.includes('the case') && names.filter(inCase).length === 2) ||
-          (names.includes('the pocket chart') && names.includes('the weather pusher'));
-        if (a !== undefined && b !== undefined && !masthead && !own && overlap(a, b)) {
-          found.push(`${s.name}: ${a.name} covers ${b.name} (${edges(a)} and ${edges(b)})`);
-        }
-      }
-    }
-    // What is out, and the least room between the boat and any part.
-    const room = (a: Box, b: Box) =>
-      Math.max(a.left - b.right, b.left - a.right, a.top - b.bottom, b.top - a.bottom);
-    const clear =
-      seen.boat === null
-        ? null
-        : Math.min(
-            ...seen.parts
-              .filter(
-                (p) =>
-                  !(
-                    s.upright &&
-                    ['the case', 'the barometer pusher', 'the board pusher'].includes(p.name)
-                  ),
-              )
-              .map((p) => room(p, seen.boat as Box)),
-          );
-    test.info().annotations.push({
-      type: s.name,
-      description: `out of the case: ${seen.out.join(', ') || 'nothing'}; room about the boat’s margin: ${clear === null ? '–' : Math.round(clear)} px; the helm’s top ${seen.helm?.top ?? '–'}, the head’s ${seen.head?.top ?? '–'} to ${seen.head?.bottom ?? '–'}`,
-    });
-    // Folded, the head leaves the helm as it was.
-    const folded = await page.evaluate(async () => {
-      const k = globalThis.keel;
-      k.settings({ pilotHead: false });
-      k.render();
-      await new Promise((r) => setTimeout(r, 100));
-      const r = document.querySelector('[data-control=helm]')?.getBoundingClientRect();
-      k.settings({ pilotHead: true });
-      k.render();
-      return r === undefined ? null : { top: r.top, bottom: r.bottom };
-    });
-    if (
-      seen.helm !== null &&
-      (folded === null ||
-        Math.abs(folded.top - seen.helm.top) > 0.5 ||
-        Math.abs(folded.bottom - seen.helm.bottom) > 0.5)
-    ) {
-      found.push(`${s.name}: the helm moves as the head folds`);
-    }
-    for (const f of await sheetFaults(page)) {
-      found.push(`${s.name}: ${f}`);
-    }
-    for (const f of await menuFaults(page)) {
-      found.push(`${s.name}: ${f}`);
-    }
-    for (const f of await boardFaults(page)) {
-      found.push(`${s.name}: ${f}`);
-    }
-    // The menu, opened, put the full screen's key away.
-    await page.evaluate(() => globalThis.keel.fullScreenKey(true));
-    for (const f of await keyFaults(page, s.height <= 420)) {
-      found.push(`${s.name}: ${f}`);
-    }
-    for (const f of await bigBarometerFaults(page)) {
-      found.push(`${s.name}: ${f}`);
-    }
-    for (const f of await clearFaults(page)) {
-      found.push(`${s.name}: ${f}`);
-    }
-    for (const f of await plateFaults(page, seen.boat)) {
-      found.push(`${s.name}: ${f}`);
-    }
-    if (s.upright) {
-      await test.info().attach(`${s.name} watching.png`, {
-        body: await (async () => {
-          await page.evaluate((name) => globalThis.keel.watchPlate(name), LONG);
-          await expect(page.locator('.watch-plate')).toBeVisible();
-          const shot = await page.screenshot();
-          await page.evaluate(() => globalThis.keel.watchPlate(null));
-          return shot;
-        })(),
+      // Measured at the longest the readouts say.
+      const seen = await parts(page);
+      await test.info().attach(`${s.name}.png`, {
+        path: await page
+          .screenshot({ path: test.info().outputPath(`${s.name}.png`) })
+          .then(() => test.info().outputPath(`${s.name}.png`)),
         contentType: 'image/png',
       });
+      for (const k of seen.spilt) {
+        found.push(`${s.name}: “${k}” spills out of its part`);
+      }
+      for (const w of [...seen.words, ...(await longestCaption(page))]) {
+        found.push(`${s.name}: ${w}`);
+      }
+      // The helm the head's height: held sideways their tops level, held
+      // upright the head standing on the helm, 8 pixels above it.
+      if (seen.helm === null || seen.head === null) {
+        found.push(`${s.name}: no helm or no control head`);
+      } else if (
+        s.upright
+          ? Math.abs(seen.head.bottom + 8 - seen.helm.top) > 0.5
+          : Math.abs(seen.head.top - seen.helm.top) > 0.5
+      ) {
+        found.push(
+          `${s.name}: the helm’s top at ${seen.helm.top}, the head’s ${s.upright ? 'foot' : 'top'} at ${s.upright ? seen.head.bottom : seen.head.top}`,
+        );
+      } else if (
+        Math.abs(seen.helm.bottom - seen.helm.top - (seen.head.bottom - seen.head.top)) > 0.5
+      ) {
+        found.push(`${s.name}: the helm is not the head’s height`);
+      }
+      const all = seen.boat === null ? seen.parts : [...seen.parts, seen.boat];
+      for (const p of all) {
+        if (p.left < -0.5 || p.top < -0.5 || p.right > s.width + 0.5 || p.bottom > s.height + 0.5) {
+          found.push(`${s.name}: ${p.name} is off the screen`);
+        }
+      }
+      for (let i = 0; i < all.length; i++) {
+        for (let j = i + 1; j < all.length; j++) {
+          const a = all[i];
+          const b = all[j];
+          const names = [a?.name, b?.name];
+          const inCase = (n?: string) =>
+            n === 'the case' || n === 'the barometer pusher' || n === 'the board pusher';
+          const masthead = s.upright && names.some(inCase) && names.includes('the boat');
+          // A pusher is set in its own part.
+          const own =
+            (names.includes('the case') && names.filter(inCase).length === 2) ||
+            (names.includes('the pocket chart') && names.includes('the weather pusher'));
+          if (a !== undefined && b !== undefined && !masthead && !own && overlap(a, b)) {
+            found.push(`${s.name}: ${a.name} covers ${b.name} (${edges(a)} and ${edges(b)})`);
+          }
+        }
+      }
+      // What is out, and the least room between the boat and any part.
+      const room = (a: Box, b: Box) =>
+        Math.max(a.left - b.right, b.left - a.right, a.top - b.bottom, b.top - a.bottom);
+      const clear =
+        seen.boat === null
+          ? null
+          : Math.min(
+              ...seen.parts
+                .filter(
+                  (p) =>
+                    !(
+                      s.upright &&
+                      ['the case', 'the barometer pusher', 'the board pusher'].includes(p.name)
+                    ),
+                )
+                .map((p) => room(p, seen.boat as Box)),
+            );
+      test.info().annotations.push({
+        type: s.name,
+        description: `out of the case: ${seen.out.join(', ') || 'nothing'}; room about the boat’s margin: ${clear === null ? '–' : Math.round(clear)} px; the helm’s top ${seen.helm?.top ?? '–'}, the head’s ${seen.head?.top ?? '–'} to ${seen.head?.bottom ?? '–'}`,
+      });
+      // Folded, the head leaves the helm as it was.
+      const folded = await page.evaluate(async () => {
+        const k = globalThis.keel;
+        k.settings({ pilotHead: false });
+        k.render();
+        await new Promise((r) => setTimeout(r, 100));
+        const r = document.querySelector('[data-control=helm]')?.getBoundingClientRect();
+        k.settings({ pilotHead: true });
+        k.render();
+        return r === undefined ? null : { top: r.top, bottom: r.bottom };
+      });
+      if (
+        seen.helm !== null &&
+        (folded === null ||
+          Math.abs(folded.top - seen.helm.top) > 0.5 ||
+          Math.abs(folded.bottom - seen.helm.bottom) > 0.5)
+      ) {
+        found.push(`${s.name}: the helm moves as the head folds`);
+      }
+      for (const f of await sheetFaults(page)) {
+        found.push(`${s.name}: ${f}`);
+      }
+      for (const f of await menuFaults(page)) {
+        found.push(`${s.name}: ${f}`);
+      }
+      for (const f of await boardFaults(page)) {
+        found.push(`${s.name}: ${f}`);
+      }
+      // The menu, opened, put the full screen's key away.
+      await page.evaluate(() => globalThis.keel.fullScreenKey(true));
+      for (const f of await keyFaults(page, s.height <= 420)) {
+        found.push(`${s.name}: ${f}`);
+      }
+      for (const f of await bigBarometerFaults(page)) {
+        found.push(`${s.name}: ${f}`);
+      }
+      for (const f of await clearFaults(page)) {
+        found.push(`${s.name}: ${f}`);
+      }
+      for (const f of await plateFaults(page, seen.boat)) {
+        found.push(`${s.name}: ${f}`);
+      }
+      if (s.upright) {
+        await test.info().attach(`${s.name} watching.png`, {
+          body: await (async () => {
+            await page.evaluate((name) => globalThis.keel.watchPlate(name), LONG);
+            await expect(page.locator('.watch-plate')).toBeVisible();
+            const shot = await page.screenshot();
+            await page.evaluate(() => globalThis.keel.watchPlate(null));
+            return shot;
+          })(),
+          contentType: 'image/png',
+        });
+      }
     }
-  }
-  expect(found).toEqual([]);
-});
+    expect(found).toEqual([]);
+  });
+}
 
 /** A row of the list as full as it gets. */
 function row(name: string, i: number) {
