@@ -122,7 +122,7 @@ func TestDraw(t *testing.T) {
 	if len(looks) != 2*len(cat.Sailors) {
 		t.Fatalf("%d of the looks and versions drawn", len(looks))
 	}
-	if b.Draw(7) != b.Draw(7) {
+	if a, again := b.Draw(7), b.Draw(7); a != again {
 		t.Fatal("a seed drew two looks")
 	}
 	id := store.AccountID{1, 2, 3}
