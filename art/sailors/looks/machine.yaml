@@ -114,7 +114,7 @@ garments:
       # Hers open over the middle of her chest: its fronts over the outer
       # part of each breast, shaped by it, the plate between them.
       female:
-        { shoulder: { reach: 0.13, ease: 0.0065 }, open: { neck: 0.045, bust: 0.085, hem: 0.07 } }
+        { shoulder: { reach: 0.13, ease: 0.0065 }, open: { neck: 0.036, bust: 0.068, hem: 0.056 } }
       male: { shoulder: { reach: 0.21, ease: 0.0065 } }
   - id: coat-skirt
     family: skirt
