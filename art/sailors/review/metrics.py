@@ -27,9 +27,9 @@ millimetre of cloth under the skin.
 - figure: the dressed figure within reach of the bare one (the waist, the
   shoulders, the rear in profile, the shoulders' top line as the front
   view sees it; under a woman's bust, a fitted garment returning);
-- bust: a woman machine's bust shaped in her plates (each apex forward of
-  the cleft between them, the plates returning under it) and seen from
-  the front, the coat open over it;
+- bust: a woman machine's bust as the front sees her, her coat over her
+  plates (each apex forward of the middle, the figure returning under
+  it), and her coat over each breast to in from its apex;
 - symmetry: each mesh its own mirror within 1 mm, unless declared not, at
   the close and deck levels (the far is posed);
 - atlas: the UVs inside the square, no two triangles on one texel (but
@@ -68,9 +68,12 @@ SHOULDER_OVER = 0.02
 REAR_OVER = 0.03
 TOP_LINE = 0.015
 BUST_RETURN = 0.02
-# A woman machine's bust: each apex this far forward of the plates at the
-# middle, at its height.
+# A woman machine's bust: each apex this far forward of the middle, at
+# its height.
 BUST_CLEFT = 0.01
+# Her coat over each breast from outside to this share of the apex's
+# distance from the middle.
+BUST_COVER = 0.75
 
 
 class Gates:
@@ -539,42 +542,36 @@ def _front(tree, x, z):
     return None if hit[0] is None else hit[0].y
 
 
-def bust(gates, marks, meshes):
-    """A woman machine's bust, shaped in her plates and seen: at the bare
-    bust's height, each apex standing forward of the middle (the cleft);
-    the plates coming back under it, as a fitted garment does; and nothing
-    over the apex from the front (the coat open over it)."""
-    plates = next(o for o in meshes if o.name == "body")
-    tree = _tree(plates, motion.coords_posed(plates)[0])
+def bust(gates, marks, meshes, worn):
+    """A woman machine's bust, as the front sees her (her coat over her
+    plates): at the bare bust's height, each apex forward of the middle
+    (the cleft) and the figure coming back under it; and her coat over
+    each breast from outside to in from its apex (BUST_COVER), the plates
+    showing between."""
+    seen = _tree_of([(motion.coords_posed(o)[0], [list(f.vertices) for f in o.data.polygons]) for o in meshes])
+    coat = [w.obj for w in worn if w.kind == "garment" and (w.spec.get("params") or {}).get("fitted")]
+    cloth = _tree_of([(motion.coords_posed(o)[0], [list(f.vertices) for f in o.data.polygons]) for o in coat])
     z, x = _bust(marks)
     cleft = under = math.inf
-    covered = []
-    every = _tree_of([(motion.coords_posed(o)[0], [list(f.vertices) for f in o.data.polygons]) for o in meshes])
+    bare = []
+    middle = _front(seen, 0.0, z)
     for sign in (1, -1):
-        at = _front(tree, sign * x, z)
-        middle = _front(tree, 0.0, z)
-        below = [y for y in (_front(tree, sign * x, h) for h in np.arange(z - 0.03, z - 0.12, -0.005)) if y is not None]
+        at = _front(seen, sign * x, z)
+        below = [y for y in (_front(seen, sign * x, h) for h in np.arange(z - 0.03, z - 0.12, -0.005)) if y is not None]
         if at is None or middle is None or not below:
             cleft = under = -math.inf
             continue
         cleft = min(cleft, middle - at)
         under = min(under, max(below) - at)
-        first = _front(every, sign * x, z)
-        if first is not None and first < at - 1e-4:
-            covered.append(_outermost_at(meshes, sign * x, z))
+        # The coat over the apex, and in from it toward the middle.
+        for k in (1.0, BUST_COVER):
+            over = _front(cloth, sign * x * k, z) if cloth is not None else None
+            first = _front(seen, sign * x * k, z)
+            if over is None or first is None or over > first + 1e-4:
+                bare.append([sign, k])
     gates.add("close", "bust cleft", cleft, BUST_CLEFT, cleft >= BUST_CLEFT, at=[round(x, 3), round(z, 3)])
     gates.add("close", "bust under", under, BUST_RETURN, under >= BUST_RETURN)
-    gates.add("close", "bust seen", len(covered), 0, not covered, by=covered)
-
-
-def _outermost_at(meshes, x, z):
-    """Of the meshes, the one seen first from the front at (x, z)."""
-    best, near = None, math.inf
-    for o in meshes:
-        y = _front(_tree(o, motion.coords_posed(o)[0]), x, z)
-        if y is not None and y < near:
-            best, near = o.name, y
-    return best
+    gates.add("close", "bust covered", len(bare), 0, not bare, sides=bare)
 
 
 def _bust(marks):

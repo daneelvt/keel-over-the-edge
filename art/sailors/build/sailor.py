@@ -256,8 +256,12 @@ def build_version(job, v, run):
                 share = 80 + int(spare * lod.triangles(o) * deck_weight(kind, spec) / total)
                 return min(deck[kind], share)
 
+            swatch = machines.finger_swatch(skin) if machine else None
             keep = np.vectorize(lod.DECK_KEEP.get)(lod.regions(body.coords(skin), marks.joint))
             lod.decimate(skin, deck_share(skin, "body"), keep)
+            if machine:
+                # What the collapse left of a machine's fingers, made whole.
+                machines.deck_fingers(skin, arm, machines.params(look, v)["fingers"], swatch)
             # The lashes and the trims are too fine to see from the deck.
             for g in [g for g in worn if g.obj.name == "lashes" or g.kind == "prop"]:
                 meshes.remove(g.obj)
@@ -344,7 +348,7 @@ def build_version(job, v, run):
         if level == "close" and not machine:
             metrics.figure(gates, marks, human, meshes, worn, tables["ease"], v)
         elif level == "close" and v == "female":
-            metrics.bust(gates, marks, meshes)
+            metrics.bust(gates, marks, meshes, worn)
         if level != "far":
             maps = metrics.poses(gates, level, fig, lib, worn, tables["ease"], POSES)
             seats = metrics.seat(gates, level, fig, lib, SEATED)
