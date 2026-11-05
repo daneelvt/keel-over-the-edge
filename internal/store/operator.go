@@ -466,17 +466,15 @@ func (s *Store) SessionOf(ctx context.Context, hash [32]byte) (AccountID, error)
 // Card is what the world page's card shows of an account: a human's or a
 // machine sailor's.
 type Card struct {
-	ID    AccountID
-	Kind  Kind
-	Owner AccountID
-	Name  string
-	Look  string
-	// Version, Finish and Colour are a machine sailor's look.
-	Version, Finish, Colour string
-	Created                 time.Time
-	LastSeen                time.Time
-	Tools, Priority         bool
-	Cap                     int
+	ID              AccountID
+	Kind            Kind
+	Owner           AccountID
+	Name            string
+	Look            Look
+	Created         time.Time
+	LastSeen        time.Time
+	Tools, Priority bool
+	Cap             int
 	// Stopped is when it was stopped, zero if it is not, and StopReason
 	// why.
 	Stopped    time.Time
@@ -504,8 +502,9 @@ func (s *Store) Card(ctx context.Context, id AccountID) (Card, error) {
 		return Card{}, err
 	}
 	c := Card{
-		ID: r.ID.Bytes, Kind: Kind(r.Kind), Owner: r.OwnerID.Bytes, Name: r.Name, Look: r.Look,
-		Version: r.Version, Finish: r.Finish, Colour: r.Colour, Created: r.CreatedAt, LastSeen: r.LastSeenAt,
+		ID: r.ID.Bytes, Kind: Kind(r.Kind), Owner: r.OwnerID.Bytes, Name: r.Name,
+		Look:    Look{Look: r.Look, Version: r.Version, Skin: r.Skin, Hair: r.Hair, Colour: r.Colour, Finish: r.Finish, Chosen: r.LookChosen},
+		Created: r.CreatedAt, LastSeen: r.LastSeenAt,
 		Tools: r.Tools, Priority: r.Priority, Cap: int(r.MachineCap), Stopped: notEpoch(r.StoppedAt), StopReason: r.StopReason,
 		OwnerName: r.OwnerName, OwnerTools: r.OwnerTools, OwnerStopped: notEpoch(r.OwnerStoppedAt),
 	}

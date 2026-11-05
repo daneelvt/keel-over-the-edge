@@ -145,6 +145,9 @@ func run(root string, check bool, out io.Writer) error {
 	if err := checkBoats(doc); err != nil {
 		return err
 	}
+	if err := checkSailors(doc); err != nil {
+		return err
+	}
 	goPhysics, err := goPhysics(fields, sea, skyNumbers, wind, regime, clouds, encounters)
 	if err != nil {
 		return err

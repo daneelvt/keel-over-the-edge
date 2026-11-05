@@ -182,7 +182,10 @@ type World struct {
 
 	// The land: the ground and the shelter a step reads, nil for none, and
 	// the start area's places, with the way from each away from the coast.
-	ground  *physics.Ground
+	ground *physics.Ground
+	// harbour is Port Royal's, where a sailor at sea may change their
+	// look; nil for a world with none.
+	harbour *physics.Harbour
 	shelter *physics.Shelter
 	start   []physics.State
 	away    []float64
@@ -266,6 +269,7 @@ func New(cfg Config) (*World, error) {
 	}
 	if t := cfg.Terrain; t != nil {
 		w.ground, w.shelter, w.start, w.circulation = t.Ground, t.Shelter, t.Start, t.Circulation
+		w.harbour = t.Harbour
 		if len(t.Away) == len(t.Start) {
 			w.away = t.Away
 		}

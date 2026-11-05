@@ -57,6 +57,8 @@ type Accepted struct {
 	Until      time.Time
 	// Priority: the machine sailor never waits for a boat.
 	Priority bool
+	// Look is the machine sailor's look.
+	Look store.Look
 }
 
 // Refused is a token the door refuses: the result its metric counts, and
@@ -158,7 +160,7 @@ func (g *Grants) Check(ctx context.Context, token string) (a *Accepted, warm boo
 	}
 	return &Accepted{
 		Account: t.Account, Name: t.Name, OwnerName: t.OwnerName, Grant: t.Grant,
-		Connection: connection, ClientName: t.ClientName, Until: until, Priority: t.Priority,
+		Connection: connection, ClientName: t.ClientName, Until: until, Priority: t.Priority, Look: t.Look,
 	}, warm, nil
 }
 

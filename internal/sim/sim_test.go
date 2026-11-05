@@ -462,7 +462,7 @@ func scatteredWorld(t testing.TB) *World {
 	w.Tick()
 	// More join than the limit has room for: some wait.
 	for i := range 45 {
-		q.TrySend(bus.Command{Op: bus.Join, Account: acct(uint64(1000 + i)), Conn: uint64(5000 + i)})
+		q.TrySend(bus.Command{Op: bus.Join, Account: acct(uint64(1000 + i)), Conn: uint64(5000 + i), Look: uint32(i * 37)})
 	}
 	w.Tick()
 	if len(w.Latest().Queue) == 0 {
@@ -488,7 +488,7 @@ func TestSnapshotRoundTrips(t *testing.T) {
 	}
 	for _, s := range f.Live {
 		if g.Boat[s] != f.Boat[s] || g.Owner[s] != f.Owner[s] || g.Conn[s] != f.Conn[s] || g.Grace[s] != f.Grace[s] ||
-			g.Kind[s] != f.Kind[s] || g.Control[s] != f.Control[s] || !sameState(g.State[s], f.State[s]) {
+			g.Kind[s] != f.Kind[s] || g.Control[s] != f.Control[s] || !sameState(g.State[s], f.State[s]) || g.Look[s] != f.Look[s] {
 			t.Fatalf("slot %d differs", s)
 		}
 	}

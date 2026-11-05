@@ -38,7 +38,7 @@ import (
 // Each boat is its slot and ID as uvarints, its owner's 16 bytes, its
 // connection as a uvarint, the tick its grace ends as a varint, its kind as a
 // uvarint, its account's kind as a uvarint of flags (1: a machine sailor's,
-// 2: a priority account's), its control word and its pilot word in 8 bytes each, its state's
+// 2: a priority account's), its sailor's look code as a uvarint, its control word and its pilot word in 8 bytes each, its state's
 // fields in 8 bytes each, then its course's, the same, then its voyage at
 // the edge: the tick it went over the lip as a varint (0 afloat), a uvarint
 // of flags (1: an approach under way, 2: one survived), and for each flag
@@ -46,7 +46,7 @@ import (
 // connection waiting is its account's 16
 // bytes, the connection as a uvarint, the tick it was queued at and the tick
 // its place is given up at (0 while connected) as varints, and its account's
-// kind, the boat's flags. Each pair is its
+// kind, the boat's flags, and its look code. Each pair is its
 // two slots and two boats, its keep-clear boat, Article and whose action as
 // uvarints, and the tick its keep-clear boat changed and the tick it last
 // touched as varints. The boats' winds and wakes follow from their states,
@@ -60,7 +60,7 @@ import (
 // A checkpoint stores this snapshot without the owner's tools' marks
 // (AppendCheckpoint), so a world is restored only by a build that reads its
 // version, and a restart clears them.
-const SnapshotVersion = 13
+const SnapshotVersion = 14
 
 // The owner's tools' marks of a boat, in a snapshot.
 const (
@@ -179,6 +179,7 @@ func AppendCheckpoint(dst []byte, f *bus.Frame) []byte {
 		dst = binary.AppendVarint(dst, f.Grace[s])
 		dst = binary.AppendUvarint(dst, uint64(f.Kind[s]))
 		dst = binary.AppendUvarint(dst, kindFlags(f.Machine[s], f.Priority[s]))
+		dst = binary.AppendUvarint(dst, uint64(f.Look[s]))
 		dst = binary.LittleEndian.AppendUint64(dst, uint64(f.Control[s]))
 		dst = binary.LittleEndian.AppendUint64(dst, uint64(f.Pilot[s]))
 		for _, v := range StateFields(&f.State[s]) {
@@ -196,6 +197,7 @@ func AppendCheckpoint(dst []byte, f *bus.Frame) []byte {
 		dst = binary.AppendVarint(dst, q.Since)
 		dst = binary.AppendVarint(dst, q.Grace)
 		dst = binary.AppendUvarint(dst, kindFlags(q.Machine, q.Priority))
+		dst = binary.AppendUvarint(dst, uint64(q.Look))
 	}
 	dst = binary.AppendUvarint(dst, uint64(len(f.Pairs)))
 	for _, p := range f.Pairs {
@@ -350,13 +352,13 @@ func ReadSnapshot(data []byte, f *bus.Frame) error {
 		boat := r.uvarint()
 		var owner bus.Account
 		r.bytes(owner[:])
-		conn, grace, kind, flags := r.uvarint(), r.varint(), r.uvarint(), r.uvarint()
+		conn, grace, kind, flags, look := r.uvarint(), r.varint(), r.uvarint(), r.uvarint(), r.uvarint()
 		word := bus.Word(r.u64())
 		pilot := bus.PilotWord(r.u64())
 		if r.err != nil {
 			return r.err
 		}
-		if int64(s) <= last || s >= capacity || kind > math.MaxUint16 || boat >= nextBoat || grace < 0 || flags&^kindAll != 0 {
+		if int64(s) <= last || s >= capacity || kind > math.MaxUint16 || boat >= nextBoat || grace < 0 || flags&^kindAll != 0 || look > math.MaxUint32 {
 			return fmt.Errorf("sim: snapshot: boat %d in slot %d", boat, s)
 		}
 		last = int64(s)
@@ -365,6 +367,7 @@ func ReadSnapshot(data []byte, f *bus.Frame) error {
 		f.Boat[s], f.Owner[s], f.Kind[s], f.Control[s], f.Pilot[s] = boat, owner, uint16(kind), word, pilot
 		f.Conn[s], f.Grace[s] = conn, grace
 		f.Machine[s], f.Priority[s] = flags&kindMachine != 0, flags&kindPriority != 0
+		f.Look[s] = uint32(look)
 		for _, v := range StateFields(&f.State[s]) {
 			*v = r.f64()
 		}
@@ -381,11 +384,11 @@ func ReadSnapshot(data []byte, f *bus.Frame) error {
 		var q bus.Waiting
 		r.bytes(q.Account[:])
 		q.Conn, q.Since, q.Grace = r.uvarint(), r.varint(), r.varint()
-		flags := r.uvarint()
-		if r.err == nil && (q.Grace < 0 || q.Conn != 0 && q.Grace != 0 || flags&^kindAll != 0) {
+		flags, look := r.uvarint(), r.uvarint()
+		if r.err == nil && (q.Grace < 0 || q.Conn != 0 && q.Grace != 0 || flags&^kindAll != 0 || look > math.MaxUint32) {
 			return fmt.Errorf("sim: snapshot: a place in the queue with connection %d, grace %d and kind %d", q.Conn, q.Grace, flags)
 		}
-		q.Machine, q.Priority = flags&kindMachine != 0, flags&kindPriority != 0
+		q.Machine, q.Priority, q.Look = flags&kindMachine != 0, flags&kindPriority != 0, uint32(look)
 		f.Queue = append(f.Queue, q)
 	}
 	f.Pairs = f.Pairs[:0]

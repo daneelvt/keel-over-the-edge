@@ -516,6 +516,9 @@ func (noAccounts) DeleteAccount(context.Context, store.AccountID) ([]store.Accou
 	return nil, errNoAccounts
 }
 func (noAccounts) SaveCeremony(context.Context, store.Ceremony) error { return errNoAccounts }
+func (noAccounts) SetLook(context.Context, store.AccountID, store.Look) error {
+	return errNoAccounts
+}
 func (noAccounts) TakeCeremony(context.Context, [32]byte, string) (store.Ceremony, error) {
 	return store.Ceremony{}, store.ErrNotFound
 }

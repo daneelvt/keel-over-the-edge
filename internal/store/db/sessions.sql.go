@@ -119,7 +119,8 @@ func (q *Queries) ReleaseSession(ctx context.Context, arg ReleaseSessionParams) 
 }
 
 const sessionAccount = `-- name: SessionAccount :one
-SELECT a.id, a.kind, a.tools, a.priority, a.notices_off, sl.name, sl.look, s.last_seen_at,
+SELECT a.id, a.kind, a.tools, a.priority, a.notices_off, sl.name, sl.look, coalesce(sl.version, '')::text AS version, coalesce(sl.skin, '')::text AS skin,
+  coalesce(sl.hair, '')::text AS hair, coalesce(sl.colour, '')::text AS colour, coalesce(sl.finish, '')::text AS finish, sl.look_chosen, s.last_seen_at,
   s.held, coalesce(s.confirmed_until, 'epoch')::timestamptz AS confirmed_until
 FROM session s
 JOIN account a ON a.id = s.account_id
@@ -135,6 +136,12 @@ type SessionAccountRow struct {
 	NoticesOff     []string
 	Name           string
 	Look           string
+	Version        string
+	Skin           string
+	Hair           string
+	Colour         string
+	Finish         string
+	LookChosen     bool
 	LastSeenAt     time.Time
 	Held           bool
 	ConfirmedUntil time.Time
@@ -152,6 +159,12 @@ func (q *Queries) SessionAccount(ctx context.Context, tokenHash []byte) (Session
 		&i.NoticesOff,
 		&i.Name,
 		&i.Look,
+		&i.Version,
+		&i.Skin,
+		&i.Hair,
+		&i.Colour,
+		&i.Finish,
+		&i.LookChosen,
 		&i.LastSeenAt,
 		&i.Held,
 		&i.ConfirmedUntil,

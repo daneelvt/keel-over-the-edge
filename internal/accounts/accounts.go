@@ -18,6 +18,7 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/daneelvt/keel-over-the-edge/internal/looks"
 	"github.com/daneelvt/keel-over-the-edge/internal/moderation"
 	"github.com/daneelvt/keel-over-the-edge/internal/oauth"
 	"github.com/daneelvt/keel-over-the-edge/internal/obs"
@@ -107,8 +108,10 @@ type Config struct {
 	World func() World
 	// Lifetime is the grant lifetime now.
 	Lifetime func() time.Duration
-	// Looks are the machine sailors' looks, as the card names them.
+	// Looks are the machine sailors' looks, as their lists name them, and
+	// Book every sailor's, as the card shows them.
 	Looks oauth.MachineLooks
+	Book  *looks.Book
 	// Stopped is the set loaded as keel started.
 	Stopped *Set
 	Log     *slog.Logger

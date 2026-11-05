@@ -9,8 +9,8 @@ VALUES ('human', now(), @user_handle, @recovery_hash, now())
 RETURNING id;
 
 -- name: CreateSailor :exec
-INSERT INTO sailor (account_id, name, name_key, look)
-VALUES (@account_id, @name, @name_key, @look);
+INSERT INTO sailor (account_id, name, name_key, look, version, skin, hair, colour, look_chosen)
+VALUES (@account_id, @name, @name_key, @look, @version, @skin, @hair, @colour, true);
 
 -- name: NameTaken :one
 SELECT EXISTS (SELECT 1 FROM sailor WHERE name_key = @name_key)::boolean;
@@ -33,14 +33,16 @@ WHERE a.id = ANY(@ids::uuid[]);
 -- name: AccountByUserHandle :one
 -- The account a passkey's user handle names, as a sign-in finds it, and
 -- whether it is stopped.
-SELECT a.id, a.kind, a.tools, a.priority, a.notices_off, a.user_handle, sl.name, sl.look,
+SELECT a.id, a.kind, a.tools, a.priority, a.notices_off, a.user_handle, sl.name, sl.look, coalesce(sl.version, '')::text AS version, coalesce(sl.skin, '')::text AS skin,
+  coalesce(sl.hair, '')::text AS hair, coalesce(sl.colour, '')::text AS colour, coalesce(sl.finish, '')::text AS finish, sl.look_chosen,
   (a.stopped_at IS NOT NULL)::boolean AS stopped
 FROM account a
 JOIN sailor sl ON sl.account_id = a.id
 WHERE a.user_handle = @user_handle AND a.kind = 'human';
 
 -- name: AccountByID :one
-SELECT a.id, a.kind, a.tools, a.priority, a.notices_off, coalesce(a.user_handle, '')::bytea AS user_handle, sl.name, sl.look,
+SELECT a.id, a.kind, a.tools, a.priority, a.notices_off, coalesce(a.user_handle, '')::bytea AS user_handle, sl.name, sl.look, coalesce(sl.version, '')::text AS version, coalesce(sl.skin, '')::text AS skin,
+  coalesce(sl.hair, '')::text AS hair, coalesce(sl.colour, '')::text AS colour, coalesce(sl.finish, '')::text AS finish, sl.look_chosen,
   a.created_at, a.recovery_made_at, (a.recovery_hash IS NOT NULL)::boolean AS has_recovery
 FROM account a
 JOIN sailor sl ON sl.account_id = a.id
@@ -201,8 +203,8 @@ ORDER BY a.created_at, a.id;
 
 -- name: AccountCard :one
 -- What the world page's card shows of an account, and of its owner.
-SELECT a.id, a.kind, a.owner_id, sl.name, sl.look, coalesce(sl.version, '')::text AS version, coalesce(sl.finish, '')::text AS finish,
-  coalesce(sl.colour, '')::text AS colour, a.created_at, a.last_seen_at, a.tools, a.priority, a.machine_cap,
+SELECT a.id, a.kind, a.owner_id, sl.name, sl.look, coalesce(sl.version, '')::text AS version, coalesce(sl.skin, '')::text AS skin,
+  coalesce(sl.hair, '')::text AS hair, coalesce(sl.colour, '')::text AS colour, coalesce(sl.finish, '')::text AS finish, sl.look_chosen, a.created_at, a.last_seen_at, a.tools, a.priority, a.machine_cap,
   coalesce(a.stopped_at, 'epoch')::timestamptz AS stopped_at, coalesce(a.stop_reason, '')::text AS stop_reason,
   coalesce(a.recovery_made_at, 'epoch')::timestamptz AS recovery_made_at, (a.recovery_hash IS NOT NULL)::boolean AS has_recovery,
   coalesce(osl.name, '')::text AS owner_name, coalesce(o.tools, false)::boolean AS owner_tools,
@@ -216,3 +218,10 @@ WHERE a.id = @id;
 -- name: SessionsSeen :one
 -- How many sessions an account has, and when the latest was last seen.
 SELECT count(*) AS sessions, coalesce(max(last_seen_at), 'epoch')::timestamptz AS latest FROM session WHERE account_id = @account_id;
+
+-- name: SetSailorLook :execrows
+-- A sailor's look, chosen: a person's look, version and options, or a
+-- machine's version, finish and colour.
+UPDATE sailor SET look = @look, version = @version, skin = nullif(@skin::text, ''), hair = nullif(@hair::text, ''),
+  colour = @colour, finish = nullif(@finish::text, ''), look_chosen = true
+WHERE account_id = @account_id;

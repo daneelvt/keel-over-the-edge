@@ -161,6 +161,7 @@ message ServerMessage {
     WatchEnded watch_ended = 16;
     Watchers watchers = 17;
     AgentLamp agent_lamp = 18;
+    LookChanged look_changed = 19;
   }
 }
 
@@ -201,6 +202,14 @@ enum WatchEnd {
 // most every two seconds; never who.
 message Watchers {
   uint32 count = 1;
+}
+
+// LookChanged says the sailor of the boat the connection sails or watches
+// changed their look, at Port Royal: as of the next snapshot, the boat is
+// drawn in it. Other connections see it as an enter of the boat.
+message LookChanged {
+  // The sailor's look: a look code, as an enter in a snapshot has it.
+  uint32 look = 1;
 }
 
 // AgentLamp says whether the AI agent of the machine sailor a connection
@@ -794,6 +803,9 @@ message Welcome {
   // with it, as the server does, and a new boat's first view looks past
   // the boat at its mouth.
   Harbour harbour = 16;
+  // The look of the boat's sailor, the connection's own or the one it
+  // watches: a look code, as an enter in a snapshot has it.
+  uint32 look = 17;
 }
 
 // Harbour is a world's harbour, in decimetres east and north of the
@@ -816,6 +828,8 @@ message Watching {
   string sailor = 1;
   bool machine = 2;
   bool mine = 3;
+  // The sailor's look: a look code, as an enter in a snapshot has it.
+  uint32 look = 4;
 }
 
 // Pong answers a Ping.

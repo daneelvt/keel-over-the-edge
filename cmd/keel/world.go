@@ -22,6 +22,7 @@ import (
 	"github.com/daneelvt/keel-over-the-edge/internal/edge"
 	"github.com/daneelvt/keel-over-the-edge/internal/forecast"
 	"github.com/daneelvt/keel-over-the-edge/internal/jobs"
+	"github.com/daneelvt/keel-over-the-edge/internal/looks"
 	"github.com/daneelvt/keel-over-the-edge/internal/obs"
 	"github.com/daneelvt/keel-over-the-edge/internal/owner"
 	"github.com/daneelvt/keel-over-the-edge/internal/persist"
@@ -67,7 +68,7 @@ type process struct {
 	wcfg     *weather.Config
 	sessions *auth.Cache
 	passkeys *auth.Passkeys
-	looks    []string
+	looks    *looks.Book
 	page     *api.Page
 	ownPage  *api.Page
 	flight   *obs.Flight
@@ -335,7 +336,8 @@ func (p *process) openWorld(ctx context.Context, rw *readyWorld) (*worldHalf, er
 	h.loop = loop.New(lcfg)
 	h.forecasts = p.forecastsOf(rw, row, timeline)
 	h.game = edge.New(edge.Config{
-		Bus: b, World: store.AccountID(row.ID).String(), Epoch: epoch, Ends: row.EndsAt, Closing: closingOf(row, cfg), Zone: zoneOf(cfg), Clock: h.loop,
+		LookCode: p.lookCode,
+		Bus:      b, World: store.AccountID(row.ID).String(), Epoch: epoch, Ends: row.EndsAt, Closing: closingOf(row, cfg), Zone: zoneOf(cfg), Clock: h.loop,
 		Protocol: protocol.Version, Catalog: catalog.Version, Layout: physics.LayoutVersion,
 		Origin: cfg.PlayOrigin, Log: p.log, Metrics: p.metrics, Fail: api.WriteError,
 		Land: cfg.Land, Chunks: rw.handout, Circulation: circulationOf(rw.terrain), Harbour: harbourOf(rw.terrain),
@@ -369,6 +371,7 @@ func (p *process) openWorld(ctx context.Context, rw *readyWorld) (*worldHalf, er
 		Passkeys:  p.passkeys,
 		Deletions: p.hand,
 		Looks:     p.looks,
+		LookSeat:  lookSeat{p},
 		Game:      h.game,
 		Page:      p.page,
 		Chunks:    rw.chunks,

@@ -159,6 +159,9 @@ func goldens() []golden {
 	v1.Put(2, ptr(boat(300, true, physics.InWater, PositionLimit, -PositionLimit-1, 65535, math.MinInt16, math.MaxInt16, math.MinInt16, -128, 0xff)))
 	v1.Put(5, ptr(boat(1, true, physics.OnBoard, -700_00, 400_00, 32768, math.MaxInt16, 0, 1, -1, 0x31)))
 	v1.Put(63, ptr(boat(65535, false, physics.Climbing, 1, -1, 1, -1, 1, -1, 1, 0x80)))
+	// Sailors in looks: the first, one of a code of three bytes, a machine.
+	v1.Boats[1].Look = 0xFFFFF
+	v1.Boats[2].Look = 0x7012F
 
 	v2 := v1
 	v2.Boats[0] = boat(0, false, 0, 13, -7, 0, 0, 0, 0, 0, 0)                                                     // position only
@@ -166,6 +169,7 @@ func goldens() []golden {
 	v2.Remove(63)
 	v2.Put(2, ptr(boat(2, false, physics.Sailing, 5, 6, 7, 8, 9, 10, 11, 12)))  // replaces
 	v2.Put(40, ptr(boat(0, false, physics.Sailing, -9, -9, 9, 9, -9, 9, 9, 9))) // enters
+	v2.Boats[0].Look = 0x35214                                                  // a look changed: an enter
 	// Slot 5 is far, and not sampled: unchanged.
 
 	v3 := v1
@@ -509,7 +513,8 @@ func TestSnapshotRefusals(t *testing.T) {
 		"update of nothing":     {OpUpdate<<6 | 1, 0},
 		"update of empty slot":  {OpUpdate<<6 | 3, ChangeHeel, 1, 0},
 		"leave of empty slot":   {OpLeave<<6 | 3},
-		"spare boat flags":      {OpUpdate<<6 | 1, ChangeFlags, 32},
+		"spare boat flags":      {OpUpdate<<6 | 1, ChangeFlags, 64},
+		"look over 20 bits":     {OpEnter<<6 | 1, 0, 0x80, 0x80, 0x40, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
 		"overlong varint":       {OpUpdate<<6 | 1, ChangePosition, 0x80, 0x00, 0},
 		"kind above 65535":      {OpEnter<<6 | 1, 0x80, 0x80, 0x04, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
 		"beyond 24 bits":        {OpUpdate<<6 | 2, ChangePosition, 2, 0},

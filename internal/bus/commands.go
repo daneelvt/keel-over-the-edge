@@ -17,7 +17,8 @@ const QueueSize = 4096
 // Op is what a command asks for.
 type Op uint8
 
-// The commands. Join, Leave and Disconnect come from players' connections;
+// The commands. Join, Leave and Disconnect come from players' connections,
+// and SetLook from a player's change of look at Port Royal;
 // SetWeather and Place are for developers only: tests, scripted sailors
 // and replays; Hold is the server's own, from what writes the world to the
 // database, Chart, which marks what the world's chart holds from its
@@ -36,13 +37,14 @@ const (
 	Unseen                   // Boat is in no other connection's view while On, and touches nothing and casts no shadow
 	Chart                    // Subject is charted, credited to no one; with On, every subject
 	End                      // the world ends after tick At, or after this tick if At has passed: the falls take every boat afloat
+	SetLook                  // Account's sailor's look becomes Look: its boat's, if it is in Port Royal's harbour, or its place's in the queue
 	opEnd
 )
 
 // Ops lists every op, in order, for tables keyed by op.
-var Ops = []Op{Join, Leave, SetWeather, Place, Disconnect, Hold, Teleport, Stay, Unseen, Chart, End}
+var Ops = []Op{Join, Leave, SetWeather, Place, Disconnect, Hold, Teleport, Stay, Unseen, Chart, End, SetLook}
 
-var opNames = [...]string{"", "join", "leave", "set_weather", "place", "disconnect", "hold", "teleport", "stay", "unseen", "chart", "end"}
+var opNames = [...]string{"", "join", "leave", "set_weather", "place", "disconnect", "hold", "teleport", "stay", "unseen", "chart", "end", "set_look"}
 
 func (o Op) String() string {
 	if o == 0 || o >= opEnd {
@@ -157,6 +159,9 @@ type Command struct {
 	// never waits for a boat.
 	Machine  bool
 	Priority bool
+	// Look is a Join's account's sailor's look, and a SetLook's new one:
+	// a look code (internal/looks).
+	Look uint32
 	// Reply, if not nil, receives the result. The simulation never waits on
 	// it, so it should have room for one reply.
 	Reply chan<- Reply
@@ -171,20 +176,21 @@ const (
 	Rejoined                   // the account's existing boat
 	Full                       // no free slot, and no room in the queue
 	Left                       // the boat has gone
-	Done                       // SetWeather, Place, Hold, Teleport, Stay, Unseen or End applied; Disconnect's grace begun
-	NoBoat                     // no such boat
+	Done                       // SetWeather, Place, Hold, Teleport, Stay, Unseen, End or SetLook applied; Disconnect's grace begun
+	NoBoat                     // no such boat; for SetLook, no boat afloat nor place in the queue
 	Expired                    // the boat left at the end of its grace: the tick's own doing, not a command's
 	Stale                      // Disconnect from a connection that no longer sails the boat, or waits: ignored
 	Queued                     // the world is at its limit: the connection waits, at Position
 	Admitted                   // a waiting connection got its boat: the tick's own doing, recorded as a Join
 	Dequeued                   // Disconnect from a waiting connection: it waits no more
+	Away                       // SetLook for a boat at sea beyond Port Royal's harbour: its look stays
 	resultEnd
 )
 
 // Results lists every result, in order, for tables keyed by result.
-var Results = []Result{Joined, Rejoined, Full, Left, Done, NoBoat, Expired, Stale, Queued, Admitted, Dequeued}
+var Results = []Result{Joined, Rejoined, Full, Left, Done, NoBoat, Expired, Stale, Queued, Admitted, Dequeued, Away}
 
-var resultNames = [...]string{"", "joined", "rejoined", "full", "left", "done", "no_boat", "expired", "stale", "queued", "admitted", "dequeued"}
+var resultNames = [...]string{"", "joined", "rejoined", "full", "left", "done", "no_boat", "expired", "stale", "queued", "admitted", "dequeued", "away"}
 
 func (r Result) String() string {
 	if r == 0 || r >= resultEnd {
@@ -230,8 +236,8 @@ func NewQueue() *Queue {
 	return &Queue{ch: make(chan Command, QueueSize)}
 }
 
-// Players returns a sender for players' commands: Join, Leave and
-// Disconnect.
+// Players returns a sender for players' commands: Join, Leave,
+// Disconnect and SetLook.
 func (q *Queue) Players() Sender { return Sender{q: q, from: fromPlayers} }
 
 // Developer returns a sender for every command. Only code in the server's own

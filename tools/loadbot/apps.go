@@ -19,6 +19,7 @@ import (
 
 	"github.com/daneelvt/keel-over-the-edge/internal/auth/softkey"
 	"github.com/daneelvt/keel-over-the-edge/internal/catalog"
+	"github.com/daneelvt/keel-over-the-edge/internal/looks"
 )
 
 // The AI apps' load: with -apps, instead of sailing, one sailor approves an
@@ -106,7 +107,7 @@ func runApps(ctx context.Context, hc *http.Client, base, mcp string, approvals, 
 		return err
 	}
 	stamp := time.Now().UnixNano() % 1_000_000
-	opts, err := a.json(ctx, "account", "/account/begin", map[string]string{"name": fmt.Sprintf("Loadbot A %06d", stamp), "look": string(cat.Sailors[0].ID)}, 200)
+	opts, err := a.json(ctx, "account", "/account/begin", looks.Begin(fmt.Sprintf("Loadbot A %06d", stamp), looks.New(cat).Draw(uint64(stamp))), 200)
 	if err != nil {
 		return err
 	}
@@ -128,7 +129,7 @@ func runApps(ctx context.Context, hc *http.Client, base, mcp string, approvals, 
 	_ = json.Unmarshal(reg, &client)
 	m := &cat.Machine
 	makeIt := map[string]any{"make": map[string]string{
-		"name": fmt.Sprintf("Loadbot M %06d", stamp), "version": string(m.Versions[0].ID), "finish": string(m.Finishes[0].ID), "colour": string(m.Colours[0].ID),
+		"name": fmt.Sprintf("Loadbot M %06d", stamp), "version": string(m.Versions[0].ID), "finish": string(m.Finishes[0].ID), "colour": string(cat.SailorOptions.Colours[0].ID),
 	}}
 	var refresh string
 	// The approval page, as keel answers it: 200 when it serves the built
