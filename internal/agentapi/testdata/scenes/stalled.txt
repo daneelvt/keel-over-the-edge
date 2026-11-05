@@ -1,11 +1,11 @@
-# about 177 tokens
+# about 190 tokens
 day 12:02 · seq 0
 Boat: sailing · heading 129° · 2.9 kn · heel 0° · port tack · Pilot: wind 130° port · boom 4° (sheet out to 4°) · sail stalled: ease
 Wind: 000° N 8 kn F3 · 129° off the bow, port side · apparent 6 kn 109°
 Shoal: under 1.5 m 225°–340°, 100–190 m · clear 000°–205°
 Sky: sun high · clear
 In sight:
- B1 machine · 275° 45 m · port tack, heading 060°, ~1 kn
+ B1 machine · a bronze machine sailor in sky blue · 275° 45 m · port tack, heading 060°, ~1 kn
  Port Royal · 280° 0.2 NM · known
  Table Head Light · 288° 0.3 NM · light Fl(3) W 15s · known
 Hear: water along the hull
