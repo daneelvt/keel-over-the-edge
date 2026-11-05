@@ -1,0 +1,77 @@
+# SPDX-License-Identifier: LicenseRef-All-Rights-Reserved
+#
+# The Chartmaker's habit: checking a pocket compass. At the helm the sheet
+# hand goes to the waistcoat's pocket and comes up before the chest, the
+# head bowed over it; a look up at the sail and down again to the
+# compass, and the hand back to the sheet. Standing, the same with the
+# other hand at the side.
+poses:
+  chartmaker-pocket:
+    from: helm-seated
+    turn:
+      - [head, x, 6]
+    ik:
+      hand_r: { at: bone, bone: pelvis, offset: [-0.12, -0.15, 0.18], pole: [-0.7, 0.3, -0.2] }
+
+  chartmaker-read:
+    from: helm-seated
+    turn:
+      - [spine_03, x, 5]
+      - [neck_01, x, 10]
+      - [head, x, 16]
+    ik:
+      hand_r: { at: bone, bone: spine_03, offset: [-0.05, -0.27, -0.08], pole: [-0.7, 0.2, -0.3] }
+
+  chartmaker-sail:
+    from: chartmaker-read
+    turn:
+      - [neck_01, x, -8]
+      - [head, x, -14]
+      - [neck_01, z, -5]
+      - [head, z, -10]
+
+  chartmaker-stand-pocket:
+    from: stand
+    turn:
+      - [head, x, 6]
+    ik:
+      hand_r: { at: bone, bone: pelvis, offset: [-0.12, -0.15, 0.18], pole: [-0.7, 0.3, -0.2] }
+
+  chartmaker-stand-read:
+    from: stand
+    turn:
+      - [spine_03, x, 4]
+      - [neck_01, x, 10]
+      - [head, x, 16]
+    ik:
+      hand_r: { at: bone, bone: spine_03, offset: [-0.05, -0.28, -0.08], pole: [-0.7, 0.2, -0.3] }
+
+  chartmaker-stand-ahead:
+    from: chartmaker-stand-read
+    turn:
+      - [neck_01, x, -8]
+      - [head, x, -14]
+      - [neck_01, z, 5]
+      - [head, z, 10]
+
+clips:
+  chartmaker-habit:
+    sides: true
+    keys:
+      - { pose: helm-seated, hold: 0.3 }
+      - { pose: chartmaker-pocket, hold: 0.2, ramp: 1.1, lead: head }
+      - { pose: chartmaker-read, hold: 0.8, ramp: 1.0, arc: [0.04, 0.02], lead: head }
+      - { pose: chartmaker-sail, hold: 0.6, ramp: 1.6, lead: head }
+      - { pose: chartmaker-read, hold: 0.5, ramp: 1.1, lead: head }
+      - { pose: chartmaker-pocket, hold: 0.15, ramp: 0.9 }
+      - { pose: helm-seated, hold: 0.3, ramp: 1.2 }
+
+  chartmaker-habit-standing:
+    keys:
+      - { pose: stand, hold: 0.3 }
+      - { pose: chartmaker-stand-pocket, hold: 0.2, ramp: 1.2, lead: head }
+      - { pose: chartmaker-stand-read, hold: 0.8, ramp: 1.0, arc: [0.04, 0.02], lead: head }
+      - { pose: chartmaker-stand-ahead, hold: 0.6, ramp: 1.6, lead: head }
+      - { pose: chartmaker-stand-read, hold: 0.5, ramp: 1.1, lead: head }
+      - { pose: chartmaker-stand-pocket, hold: 0.15, ramp: 0.9 }
+      - { pose: stand, hold: 0.3, ramp: 1.2 }
