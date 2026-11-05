@@ -165,6 +165,14 @@ From the posed set, the game camera and the silhouette beside a human's:
 - Does it read as a machine from behind: the lantern at the nape, the
   neck's lames, the crest or swept plates, the metal?
 - Is its silhouette a machine's by its structure, not by its light alone?
+- Is the woman's form her own (side and front): her chest plate a shell
+  over her body's bust, its cleft and the fold under it, never a flat
+  cuirass nor added globes; her coat over the outer part of each breast,
+  shaped by it, modest, the plate showing between?
+- In every clip's strips, does the coat's skirt stay over the thighs and
+  knees (a stride from behind, a knee raised climbing in)? The gate holds
+  it in every frame of a clip that stands and measures the clips placed
+  in the boat; the strips show where the cloth turned away.
 - Is the face carved in planes like a figurehead's, the lamp eyes amber in
   deep sockets, never a skull, a smooth mask or a visor slit?
 - Is it none of the no-go list (green eyes, an all-gold humanoid with a

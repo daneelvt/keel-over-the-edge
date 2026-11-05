@@ -19,6 +19,14 @@ sailors:
 # four metal finishes, and eight main colours that stay apart for
 # colour-blind players.
 machine:
+  # Every machine sailor is drawn as the female machine in brass with a
+  # black coat, its lamps amber, until each is drawn as it chose.
+  drawn:
+    model: sailors/machine/female.deck.glb
+    far: sailors/machine/female.far.glb
+    close: sailors/machine/female.glb
+    clips: sailors/machine/female.clips.glb
+    colours: { main: "#2b2a2e", skin: "#d9a957", hair: "#ffb347" }
   versions:
     - id: female
       name: female
@@ -27,7 +35,7 @@ machine:
   finishes:
     - id: brass
       name: Brass
-      colour: "#c9a04a"
+      colour: "#d9a957"
     - id: copper
       name: Copper
       colour: "#b8673f"

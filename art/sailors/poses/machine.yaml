@@ -1,0 +1,78 @@
+# SPDX-License-Identifier: LicenseRef-All-Rights-Reserved
+#
+# The machines' habit: at the helm, the sensor discs at its ears turned
+# back to the wind, which comes over the side deck it sits on, behind it;
+# the head following them round in small steps, held, and back. Its other
+# clips are every sailor's (sailing.yaml). The discs turn on the lower
+# lids' joints, which a machine places at its ears.
+poses:
+  machine-listen:
+    from: helm-seated
+    turn:
+      - [lid_lower_l, z, 50]
+      - [lid_lower_r, z, -50]
+      - [head, x, -3]
+
+  machine-turn-1:
+    from: machine-listen
+    turn:
+      - [neck_01, z, 4]
+      - [head, z, 9]
+
+  machine-turn-2:
+    from: machine-listen
+    turn:
+      - [neck_01, z, 8]
+      - [head, z, 19]
+
+  machine-turn-3:
+    from: machine-listen
+    turn:
+      - [neck_01, z, 13]
+      - [head, z, 30]
+      - [head, x, 4]
+
+  # Standing: the hands at the sides, the same steps.
+  machine-stand:
+    from: stand
+    ik:
+      hand_r: { at: bone, bone: pelvis, offset: [-0.24, -0.02, -0.16], pole: [-0.8, 0.2, 0.0] }
+
+  machine-stand-listen:
+    from: machine-stand
+    turn:
+      - [lid_lower_l, z, 50]
+      - [lid_lower_r, z, -50]
+      - [head, x, -3]
+
+  machine-stand-turn-1:
+    from: machine-stand-listen
+    turn:
+      - [neck_01, z, 5]
+      - [head, z, 10]
+
+  machine-stand-turn-2:
+    from: machine-stand-listen
+    turn:
+      - [neck_01, z, 10]
+      - [head, z, 22]
+
+clips:
+  machine-habit:
+    sides: true
+    keys:
+      - { pose: helm-seated, hold: 0.3 }
+      - { pose: machine-listen, hold: 0.4, ramp: 0.5 }
+      - { pose: machine-turn-1, hold: 0.25, ramp: 0.55, lead: head }
+      - { pose: machine-turn-2, hold: 0.25, ramp: 0.55, lead: head }
+      - { pose: machine-turn-3, hold: 0.8, ramp: 0.55, lead: head }
+      - { pose: machine-turn-1, hold: 0.3, ramp: 1.1, lead: head }
+      - { pose: helm-seated, hold: 0.4, ramp: 1.0, lead: head }
+
+  machine-habit-standing:
+    keys:
+      - { pose: machine-stand, hold: 0.3 }
+      - { pose: machine-stand-listen, hold: 0.4, ramp: 0.5 }
+      - { pose: machine-stand-turn-1, hold: 0.25, ramp: 0.55, lead: head }
+      - { pose: machine-stand-turn-2, hold: 0.8, ramp: 0.55, lead: head }
+      - { pose: machine-stand, hold: 0.4, ramp: 1.2, lead: head }

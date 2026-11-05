@@ -836,8 +836,9 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
     /**
      * The sailor on the boat in view, as last drawn: its side deck, whether
      * it is crossing, the level drawn (deck or close), whether the aft hand
-     * holds the tiller extension and how far from its hinge, and where the
-     * figure stands in the boat model.
+     * holds the tiller extension and how far from its hinge, where the
+     * figure stands in the boat model, and whether it is a machine (and its
+     * lamps' strength).
      */
     sailor() {
       const s = world.boat?.sailor ?? null;
@@ -854,7 +855,20 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
         hold: rt.hands.tillerAt.distanceTo(s.runtime.boat.hinge),
         extension: s.runtime.boat.extension,
         at: rt.place.at.toArray(),
+        machine: world.boat?.machineAboard ?? false,
+        glow: rt.glow,
       };
+    },
+    /**
+     * Makes the boat in view a machine sailor's, or not, as watching one
+     * does: its machine aboard (once loaded) and the mark on its sail.
+     * Resolves once the machine is aboard.
+     */
+    async machineAboard(on: boolean): Promise<void> {
+      world.boat?.setMachine(on);
+      while (on && world.boat !== null && !world.boat.machineAboard) {
+        await new Promise((r) => setTimeout(r, 50));
+      }
     },
     /** Puts the camera at a preset, by name, or at a view of its own. */
     camera(name: string | CameraView): void {
@@ -2199,6 +2213,8 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
         far: world.fleet.far.count,
         nearMeshes: world.fleet.near.meshes.length,
         farMeshes: world.fleet.far.meshes.length,
+        ...world.fleet.figures(),
+        sailorDraws: world.fleet.sailorDraws(),
       };
     },
     /** The other boats as the page draws them online, with the fleet's numbers. */

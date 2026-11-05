@@ -145,6 +145,16 @@ class Landmarks:
         mid = self.skin[(np.abs(self.skin[:, 0]) < 0.003) & (self.skin[:, 2] < self.joint("spine-3")[2])]
         return float(mid[:, 2].min())
 
+    def bust(self):
+        """The bust's apex: where the chest comes furthest forward between
+        the waist and the shoulders. Its height, its distance from the
+        middle, and how far forward it is (its y)."""
+        skin = self.skin
+        lo, hi = self.measure()["heights"]["waist"], self.joint("l-shoulder")[2]
+        band = skin[(skin[:, 2] > lo) & (skin[:, 2] < hi) & (np.abs(skin[:, 0]) < 0.15)]
+        i = int(np.argmin(band[:, 1]))
+        return float(band[i, 2]), float(abs(band[i, 0])), float(band[i, 1])
+
     def near(self, z):
         """The torso's middle at height z: the spine's joints, interpolated."""
         spine = sorted((self.joint(n) for n in ("pelvis", "spine-3", "spine-2", "spine-1", "neck")), key=lambda p: p[2])

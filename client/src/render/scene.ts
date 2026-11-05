@@ -442,7 +442,8 @@ export class SeaScene {
 
   /**
    * Loads the boat and its sailor. Its sail number and insignia are fixed
-   * until boats can be customised; the sailor is the catalog's first.
+   * until boats can be customised; the sailor is the catalog's first, and a
+   * machine sailor's boat draws the catalog's machine.
    */
   async loadBoat(): Promise<void> {
     const boat = new Boat(this.kind);
@@ -451,8 +452,8 @@ export class SeaScene {
     const renderer = this.stage.renderer;
     if (sailor !== undefined && renderer !== null) {
       await Promise.all([
-        boat.loadSailor(sailor.art, renderer),
-        this.fleet.load(sailor.art, renderer),
+        boat.loadSailor(sailor.art, renderer, 1, catalog.machine.drawn),
+        this.fleet.load(sailor.art, catalog.machine.drawn, renderer),
       ]);
     }
     boat.model.add(this.overlays.onBoat);

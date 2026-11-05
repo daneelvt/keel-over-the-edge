@@ -1,0 +1,178 @@
+# SPDX-License-Identifier: LicenseRef-All-Rights-Reserved
+#
+# The machine sailors: a figure of metal on the sailors' skeleton, of our
+# own lineage, in a long open coat with three-quarter sleeves.
+id: machine
+name: Machine
+committed: true
+versions:
+  female:
+    base: female
+    machine:
+      # Her waist the narrower, and its plate and the frame under it in.
+      bones: { spine_01: { inset: 0.021 } }
+      frame: { inset: 0.022 }
+      # Her chest plate a shell over her own body, which has a bust: its
+      # form hers (the cleft, the fold under it), a groove down the middle.
+      shells: { spine_03: { out: 0.003, rim: 0.008, seam: 0.008, triangles: 700 } }
+  male:
+    base: male
+    machine:
+      head:
+        # His face is broader: more of it to carve.
+        triangles: 820
+        cap:
+          strips: 5
+          spread: 40
+          width: [0.042, 0.03]
+          gather: 1.0
+          boss-radius: 0.0
+          crest: { from: 35, to: 195, base: 0.006, height: 0.028, thick: 0.009, segments: 16 }
+        grille: { above: 0.016, below: 0.032, bars: 4, fill: 0.62, half: 0.032, off: 0.004 }
+machine:
+  colours: { frame: "#24252A", glass: "#FFB347", socket: "#B8661A" }
+  plates:
+    { inset: 0.004, gap: 0.009, sharp: 40, triangles: 140, rim: { width: 0.007, proud: 0.0018 } }
+  bones:
+    hand: { gap: 0.004, triangles: 70, rim: null }
+    spine: { triangles: 180, inset: 0.008 }
+    pelvis: { triangles: 180, inset: 0.014, gap: 0.004 }
+    spine_01: { inset: 0.016, gap: 0.014 }
+    foot: { inset: 0.002, gap: 0.002 }
+    thigh: { inset: 0.004, gap: 0.004, rim: { width: 0.007, proud: 0.001 } }
+  fingers: { width: 0.015, thumb: 0.018, thick: 0.75, gap: 0.0015, tip: 0.55 }
+  frame: { inset: 0.017, triangles: 1100, reach: 0.03, keep: 0.03 }
+  ears: { up: -0.012, back: 0.008 }
+  head:
+    triangles: 680
+    keep: 0.6
+    lips: 0.85
+    brow: 0.03
+    skull-in: 0.003
+    eye:
+      {
+        width: 0.015,
+        height: 0.007,
+        hood: 0.3,
+        lid: 0.0015,
+        steps: [[0.006, 0.85], [0.005, 0.7]],
+        bulge: 0.002,
+      }
+    ear: { radius: 0.026, stand: 0.012, lamp: true }
+    cap:
+      strips: 7
+      spread: 55
+      front: 38
+      boss: -5
+      gather: 0.8
+      segments: 12
+      lift: 0.004
+      layer: 0.0015
+      width: [0.026, 0.01]
+      ridge: 0.002
+      thick: 0.006
+      boss-radius: 0.02
+      below-boss: 0.012
+      dome: [8, 12]
+  neck:
+    lames: 4
+    sides: 16
+    below: 0.01
+    under-jaw: 0.045
+    overlap: 0.006
+    out: 0.002
+    step: 0.002
+    taper: 0.002
+    piston: { x: 0.03, back: 0.035, radius: 0.006 }
+  shoulders:
+    lames: [[-0.05, 0.03, 95], [0.01, 0.08, 90], [0.06, 0.13, 85]]
+    rows: 4
+    columns: 9
+    lift: 0.002
+    stand: 0.022
+    shape: 0.6
+    step: 0.004
+    thick: 0.004
+  lantern: { back: 0.075, up: 0.0, radius: 0.024, height: 0.065, roof: 0.022, post: 0.09 }
+garments:
+  # The coat, in the main colour: fitted to the waist, collarless, open
+  # wide down the front over the plates, three-quarter sleeves.
+  - id: coat
+    family: bodice
+    region: main
+    params:
+      layer: coat
+      ease: 0.02
+      arm-ease: 0.0095
+      sleeve: 0.4
+      neck: 0.03
+      neck-slope: 0.15
+      below-waist: 0.02
+      open: { neck: 0.04, hem: 0.06 }
+      fitted: true
+      triangles: 1600
+      # Hers open over the middle of her chest: its fronts over the outer
+      # part of each breast, shaped by it, the plate between them.
+      female:
+        { shoulder: { reach: 0.13, ease: 0.0065 }, open: { neck: 0.036, bust: 0.068, hem: 0.056 } }
+      male: { shoulder: { reach: 0.21, ease: 0.0065 } }
+  - id: coat-skirt
+    family: skirt
+    region: main
+    params:
+      layer: coat
+      skirt: true
+      asymmetric: true
+      rise: 0.01
+      length: 0.5
+      # Room for the plates under it as the legs move: the chains turn
+      # the cloth clear of the knees, and over the hip joints the cloth
+      # gives with the thighs.
+      ease: 0.035
+      top-ease: 0.03
+      back-ease: 0.03
+      hips: { share: 0.6, band: 0.12 }
+      rows: 10
+      bias: 1.5
+      columns: 48
+      follow: 0.35
+      flare: { front: 0.03, side: 0.32, back: 0.16 }
+      pleats: { azimuths: [92, -92], count: 5, depth: 0.022, spread: 0.6, apex: 0.08 }
+      vent: { azimuth: 180, start: 0.12, lap: 0.004 }
+      open: { width: 0.11 }
+      female: { top-ease: 0.032, ease: 0.038 }
+      male: { length: 0.56 }
+  - id: cuffs
+    family: cuffs
+    region: main
+    params:
+      layer: cuff
+      ease: 0.0105
+      shade: 0.72
+      to: 0.38
+      triangles: 400
+      deck-weight: 2.0
+      female: { from: 0.18, back: 0.2, flare: 0.008 }
+      male: { from: 0.12, back: 0.3, flare: 0.012, ease: 0.0099 }
+palette:
+  main: "#1E1E1E"
+  skin: "#D9A957"
+# The clips the machines sail with: every sailor's, and their own habit,
+# which the game asks for as any sailor's.
+clips:
+  [
+    helm,
+    hiking-1,
+    hiking-2,
+    hiking-3,
+    cross,
+    machine-habit,
+    machine-habit-standing,
+    standing-idle,
+    treading-water,
+    righting,
+    climbing-in,
+  ]
+names: { machine-habit: habit, machine-habit-standing: habit-standing }
+# The head takes less of the atlas: its face is planes of metal.
+atlas-head: 0.3

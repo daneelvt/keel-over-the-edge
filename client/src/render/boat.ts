@@ -48,10 +48,11 @@ import { FLOW_LUFFING, Telltales } from './telltales';
 
 /**
  * Every model under art/ the game loads as it starts, by its path there, as
- * Vite serves it: the boats', the towns', and the sailor's deck and far
- * levels and clips; not the sailors' build's inputs (art/sailors/vendor), its
- * test sailor, the old stand-in, the looks no boat is drawn with yet, nor the
- * close levels, which load when the camera comes near (CLOSE).
+ * Vite serves it: the boats', the towns', and the sailor's and the machine
+ * sailors' machine's deck and far levels and clips; not the sailors' build's
+ * inputs (art/sailors/vendor), its test sailor, the old stand-in, the looks
+ * no boat is drawn with yet, nor the close levels, which load when the
+ * camera comes near (CLOSE).
  */
 const MODELS = {
   ...import.meta.glob<string>(['../../../art/**/*.glb', '!../../../art/sailors/**'], {
@@ -59,16 +60,25 @@ const MODELS = {
     import: 'default',
     eager: true,
   }),
-  ...import.meta.glob<string>(['../../../art/sailors/rover/female.{deck,far,clips}.glb'], {
+  ...import.meta.glob<string>(
+    [
+      '../../../art/sailors/rover/female.{deck,far,clips}.glb',
+      '../../../art/sailors/machine/female.{deck,far,clips}.glb',
+    ],
+    {
+      query: '?url',
+      import: 'default',
+      eager: true,
+    },
+  ),
+};
+const CLOSE = import.meta.glob<string>(
+  ['../../../art/sailors/rover/female.glb', '../../../art/sailors/machine/female.glb'],
+  {
     query: '?url',
     import: 'default',
-    eager: true,
-  }),
-};
-const CLOSE = import.meta.glob<string>(['../../../art/sailors/rover/female.glb'], {
-  query: '?url',
-  import: 'default',
-});
+  },
+);
 
 /** The URL of an art file named by the catalog. */
 export function artUrl(path: string): string {
@@ -136,8 +146,15 @@ export class Boat {
   readonly sail = sailUniforms();
   readonly telltales = new Telltales();
   readonly pennant = new Pennant();
-  /** The sailor, once loaded. */
-  sailor: BoatSailor | null = null;
+  /** The sailor aboard and drawn, once loaded: the person, or a machine sailor's machine. */
+  get sailor(): BoatSailor | null {
+    return this.#machineAboard && this.#machine !== null ? this.#machine : this.#person;
+  }
+
+  /** Whether the boat is a machine sailor's, and draws its machine (once loaded). */
+  get machineAboard(): boolean {
+    return this.#machineAboard && this.#machine !== null;
+  }
   /** The hull's volume, which the sea is kept out of, from the model; null until loaded. */
   hullShape: HullShape | null = null;
 
@@ -149,6 +166,12 @@ export class Boat {
   #insignia = '';
   #mark: MarkPlace | null = null;
   #marked = false;
+  #person: BoatSailor | null = null;
+  #machine: BoatSailor | null = null;
+  #machineAboard = false;
+  /** How to load the machine, when it is first wanted. */
+  #loadMachine: (() => Promise<BoatSailor>) | null = null;
+  #machineLoading = false;
 
   constructor(kind: BoatKind) {
     this.#kind = kind;
@@ -196,8 +219,36 @@ export class Boat {
     this.hullShape = hullShape(this.parts.get('hull')?.userData);
   }
 
-  /** Prints the machine mark on the sail, or takes it off: the boat is a machine sailor's. */
+  /**
+   * The boat is a machine sailor's, or not: its machine drawn aboard in
+   * place of the person (loaded when first wanted), and the machine mark
+   * printed on its sail.
+   */
   setMachine(on: boolean): void {
+    this.#machineAboard = on;
+    if (on && this.#machine === null && this.#loadMachine !== null && !this.#machineLoading) {
+      this.#machineLoading = true;
+      void this.#loadMachine().then((m) => {
+        this.#machine = m;
+        this.#aboard();
+      });
+    }
+    this.#aboard();
+    this.#printMark(on);
+  }
+
+  /** Shows the sailor aboard, and not the other. */
+  #aboard(): void {
+    const drawn = this.sailor;
+    for (const s of [this.#person, this.#machine]) {
+      if (s !== null) {
+        s.shown = s === drawn;
+      }
+    }
+  }
+
+  /** Prints the machine mark on the sail, or takes it off. */
+  #printMark(on: boolean): void {
     const cloth = this.#cloth;
     if (on === this.#marked || cloth === null || this.#mark === null) {
       return;
@@ -214,22 +265,39 @@ export class Boat {
   /**
    * Loads the sailor from the catalog's art and seats it in the boat, once
    * the boat's model is loaded; the renderer decides how its textures are
-   * transcoded. seed sets the sailor's own rhythms.
+   * transcoded. seed sets the sailor's own rhythms. A machine sailor's
+   * machine (machine, its art) is loaded when a boat is first a machine
+   * sailor's.
    */
-  async loadSailor(art: SailorArt, renderer: WebGPURenderer, seed = 1): Promise<void> {
-    this.sailor = await BoatSailor.load(
-      {
-        model: artUrl(art.model),
-        close: () => lazyArtUrl(art.close),
-        clips: artUrl(art.clips),
-        colours: art.colours,
-      },
-      renderer,
-      this.model,
-      this.parts,
-      this.#kind,
-      seed,
-    );
+  async loadSailor(
+    art: SailorArt,
+    renderer: WebGPURenderer,
+    seed = 1,
+    machine: SailorArt | null = null,
+  ): Promise<void> {
+    const load = (a: SailorArt, s: number, isMachine: boolean): Promise<BoatSailor> =>
+      BoatSailor.load(
+        {
+          model: artUrl(a.model),
+          close: () => lazyArtUrl(a.close),
+          clips: artUrl(a.clips),
+          colours: a.colours,
+        },
+        renderer,
+        this.model,
+        this.parts,
+        this.#kind,
+        s,
+        isMachine,
+      );
+    this.#person = await load(art, seed, false);
+    if (machine !== null) {
+      this.#loadMachine = () => load(machine, seed + 1, true);
+      if (this.#machineAboard) {
+        this.setMachine(true);
+      }
+    }
+    this.#aboard();
   }
 
   /**

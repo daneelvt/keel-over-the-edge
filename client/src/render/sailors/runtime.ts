@@ -22,7 +22,8 @@ import { Euler, Matrix4, Quaternion, Vector3 } from 'three';
 import { CLIMBING, IN_WATER, ON_BOARD } from '../sailor';
 import { type Clip, Pose } from './clips';
 import { twoBone } from './ik';
-import { Layers, random } from './layers';
+import { Layers, random, type SailorLayers } from './layers';
+import { MachineLayers } from './machinelayers';
 import type { Rig } from './rig';
 import { type HullSolid, reach } from './solid';
 import { Springs, type SpringWorld } from './springs';
@@ -161,7 +162,7 @@ export class SailorRuntime {
   readonly #scratch: Pose;
   readonly #from: Pose;
   readonly #habitPose: Pose;
-  readonly #layers: Layers;
+  readonly #layers: SailorLayers;
   readonly #springs: Springs;
   readonly #rand: () => number;
   readonly #place = new Place();
@@ -200,6 +201,7 @@ export class SailorRuntime {
     clips: Map<string, Clip>,
     readonly boat: SailorBoat,
     seed: number,
+    machine = false,
   ) {
     this.#clips = clips;
     const n = rig.names.length;
@@ -207,7 +209,8 @@ export class SailorRuntime {
     this.#scratch = new Pose(n).rest(rig);
     this.#from = new Pose(n).rest(rig);
     this.#habitPose = new Pose(n).rest(rig);
-    this.#layers = new Layers(rig, seed);
+    // A machine has its own life: no breath, snapped glances, its lamps.
+    this.#layers = machine ? new MachineLayers(rig, seed) : new Layers(rig, seed);
     this.#springs = new Springs(rig);
     this.#rand = random(seed * 7 + 3);
     this.#helmOffset = 30 * this.#rand();
@@ -230,6 +233,11 @@ export class SailorRuntime {
 
   #clip(name: string, side = 1): Clip | null {
     return this.#clips.get(side < 0 ? name + PORT : name) ?? null;
+  }
+
+  /** A machine's lamps' strength now, 0 to 1 (1 for a person, who has none). */
+  get glow(): number {
+    return this.#layers.glow ?? 1;
   }
 
   /** The sailor's side deck, + starboard, − port. */

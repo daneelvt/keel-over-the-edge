@@ -9,12 +9,14 @@
 //
 // The figure is a child of the boat's model, placed by the runtime's root
 // (the clips' places, from the build): what it sits on is the boat model's
-// own deck.
+// own deck. A machine lives by its own layers, and its lamps glow as they
+// say.
 
 import {
   BufferAttribute,
   BufferGeometry,
   type Color,
+  DoubleSide,
   type Group,
   Matrix4,
   Mesh,
@@ -22,13 +24,14 @@ import {
   type Object3D,
   Vector3,
 } from 'three';
-import type { WebGPURenderer } from 'three/webgpu';
+import { dot, float, mix, saturate, uniform, uv, vec3, vec4 } from 'three/tsl';
+import type { Node, WebGPURenderer } from 'three/webgpu';
 import type { Boat as BoatKind } from '../../catalog';
 import type { BoatPose } from '../../predict/blend';
 import { RECORDS } from '../../predict/layout.gen';
-import { litMaterial } from '../materials';
+import { fallToEdge, glowMaterial, litMaterial } from '../materials';
 import { Clip } from './clips';
-import { sailorColours } from './material';
+import { sailorColours, sailorLight } from './material';
 import { loadClips, loadSailor, type SailorModel } from './model';
 import { bonesFor, Rig } from './rig';
 import { type SailorBoat, type SailorMoment, SailorRuntime } from './runtime';
@@ -76,6 +79,7 @@ export class BoatSailor {
   #closeBones: (Object3D | null)[] = [];
   #closeLoading = false;
   #near = false;
+  #shown = true;
   readonly #urls: SailorUrls;
   readonly #renderer: WebGPURenderer;
   readonly #boat: SailorBoat;
@@ -83,6 +87,12 @@ export class BoatSailor {
   readonly #rope: Mesh;
   readonly #ropePoints = [new Vector3(), new Vector3(), new Vector3()];
   readonly #still: boolean;
+  readonly #machine: boolean;
+  /** A machine's lantern's glow, where its file puts the lantern; and the lantern at rest against its bone. */
+  readonly #glow: Mesh | null = null;
+  readonly #glowStrength = uniform(1);
+  readonly #lanternBone: number = -1;
+  readonly #lanternRest = new Matrix4();
   #time = 0;
 
   private constructor(
@@ -95,21 +105,37 @@ export class BoatSailor {
     urls: SailorUrls,
     renderer: WebGPURenderer,
     seed: number,
+    machine: boolean,
   ) {
     this.#model = model;
+    this.#machine = machine;
     this.#parts = parts;
     this.#deck = deck;
     this.rig = rig;
     this.#boat = boat;
     this.#urls = urls;
     this.#renderer = renderer;
-    this.runtime = new SailorRuntime(rig, clips, boat, seed);
+    this.runtime = new SailorRuntime(rig, clips, boat, seed, machine);
     this.#deckBones = bonesFor(rig, deck.root);
     deck.root.name = 'sailor figure';
     deck.root.matrixAutoUpdate = false;
     model.add(deck.root);
     this.#rope = rope();
     model.add(this.#rope);
+    const lantern = deck.places.get('place-lantern');
+    if (machine && lantern !== undefined) {
+      // The lantern's place against its bone (the back's) at rest: it
+      // moves with the bone.
+      this.#lanternBone = rig.bone(LANTERN_BONE);
+      rig.reset();
+      rig.fk();
+      this.#lanternRest
+        .fromArray(rig.world, 16 * this.#lanternBone)
+        .invert()
+        .multiply(lantern);
+      this.#glow = lanternGlow(deck.meshes[0]?.userData.hair as Color, this.#glowStrength);
+      model.add(this.#glow);
+    }
     this.#still =
       typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
     this.#moment = {
@@ -130,7 +156,7 @@ export class BoatSailor {
 
   /**
    * Loads the sailor's deck level and clips and seats it in a boat whose
-   * model is loaded (its parts by name).
+   * model is loaded (its parts by name); a machine, if it is one.
    */
   static async load(
     urls: SailorUrls,
@@ -139,11 +165,12 @@ export class BoatSailor {
     parts: Map<string, Object3D>,
     kind: BoatKind,
     seed: number,
+    machine = false,
   ): Promise<BoatSailor> {
     const c = urls.colours;
     const colours = sailorColours(c.main, c.skin, c.hair);
     const [deck, clipFile] = await Promise.all([
-      loadSailor(urls.model, renderer, colours),
+      loadSailor(urls.model, renderer, colours, machine),
       loadClips(urls.clips, renderer),
     ]);
     const rig = Rig.from(deck.root, boneNames(deck.root));
@@ -184,7 +211,7 @@ export class BoatSailor {
       solid,
       climbTime: sailor.climbTime,
     };
-    return new BoatSailor(model, parts, deck, rig, clips, boat, urls, renderer, seed);
+    return new BoatSailor(model, parts, deck, rig, clips, boat, urls, renderer, seed, machine);
   }
 
   /** The figure's root, under the boat's model. */
@@ -200,17 +227,35 @@ export class BoatSailor {
       this.#closeLoading = true;
       void this.#loadClose();
     }
-    const close = near && this.#close !== null;
-    this.#deck.root.visible = !close;
+    this.#levels();
+  }
+
+  /** Whether the sailor is drawn: a boat keeps a person and a machine, and draws the one aboard. */
+  get shown(): boolean {
+    return this.#shown;
+  }
+
+  set shown(on: boolean) {
+    this.#shown = on;
+    this.#rope.visible = on;
+    if (this.#glow !== null) {
+      this.#glow.visible = on;
+    }
+    this.#levels();
+  }
+
+  #levels(): void {
+    const close = this.#near && this.#close !== null;
+    this.#deck.root.visible = this.#shown && !close;
     if (this.#close !== null) {
-      this.#close.root.visible = close;
+      this.#close.root.visible = this.#shown && close;
     }
   }
 
   async #loadClose(): Promise<void> {
     const deckMesh = this.#deck.meshes[0];
     const shared = (deckMesh?.userData ?? {}) as { main: Color; skin: Color; hair: Color };
-    const close = await loadSailor(await this.#urls.close(), this.#renderer, shared);
+    const close = await loadSailor(await this.#urls.close(), this.#renderer, shared, this.#machine);
     close.root.matrixAutoUpdate = false;
     for (const mesh of close.meshes) {
       mesh.castShadow = deckMesh?.castShadow ?? false;
@@ -220,6 +265,7 @@ export class BoatSailor {
     this.#closeBones = bonesFor(this.rig, close.root);
     this.#model.add(close.root);
     this.#close = close;
+    this.#levels();
   }
 
   /** Poses the sailor for the boat's pose and the step's Out; dt in seconds. */
@@ -246,6 +292,22 @@ export class BoatSailor {
     mo.windAngle = out[RECORDS.out.apparentWindAngle] ?? 0;
     const rt = this.runtime;
     rt.update(mo);
+    if (this.#machine) {
+      this.#glowStrength.value = rt.glow;
+      if (this.#glow !== null) {
+        // The bone now, times the lantern against it, into the model.
+        m.fromArray(this.rig.world, 16 * this.#lanternBone).multiply(this.#lanternRest);
+        this.#glow.position.setFromMatrixPosition(m).applyMatrix4(rt.root);
+      }
+      for (const m of this.#deck.meshes) {
+        m.userData.glow = rt.glow;
+      }
+      if (this.#close !== null) {
+        for (const m of this.#close.meshes) {
+          m.userData.glow = rt.glow;
+        }
+      }
+    }
     this.rig.write(this.#deckBones);
     this.#deck.root.matrix.copy(rt.root);
     this.#deck.root.matrixWorldNeedsUpdate = true;
@@ -288,6 +350,63 @@ export class BoatSailor {
     }
     tube(this.#rope.geometry, this.#ropePoints, ROPE_RADIUS);
   }
+}
+
+/** The bone a machine's lantern rides on. */
+const LANTERN_BONE = 'spine_03';
+/** The lantern's glow: its size, metres, and its strength by day and by night. */
+const GLOW_SIZE = 0.3;
+const GLOW_DAY = 0.12;
+const GLOW_NIGHT = 0.9;
+/** The main light's brightness at and above which it is full day. */
+const DAYLIGHT = 1.5;
+
+/**
+ * A lantern's glow: three squares crossed at its middle, so it shows from
+ * every side, each a soft disc added to the picture (the factory's glow:
+ * no fog), in the lamps' light, as strong as strength (their pulse), and
+ * stronger by night.
+ */
+function lanternGlow(colour: Color, strength: Node<'float'>): Mesh {
+  const g = new BufferGeometry();
+  const h = GLOW_SIZE / 2;
+  const pos: number[] = [];
+  const uvs: number[] = [];
+  const index: number[] = [];
+  const corners = [
+    [-1, -1],
+    [1, -1],
+    [1, 1],
+    [-1, 1],
+  ] as const;
+  for (let k = 0; k < 3; k++) {
+    const base = pos.length / 3;
+    for (const [a, b] of corners) {
+      const [u, v] = [a * h, b * h];
+      // The squares across x, y and z.
+      pos.push(...(k === 0 ? [0, u, v] : k === 1 ? [u, 0, v] : [u, v, 0]));
+      uvs.push((a + 1) / 2, (b + 1) / 2);
+    }
+    index.push(base, base + 1, base + 2, base, base + 2, base + 3);
+  }
+  g.setAttribute('position', new BufferAttribute(new Float32Array(pos), 3));
+  g.setAttribute('uv', new BufferAttribute(new Float32Array(uvs), 2));
+  g.setIndex(index);
+  const m = glowMaterial();
+  m.name = 'machine lantern';
+  m.side = DoubleSide;
+  const at = uv().sub(0.5).mul(2);
+  const main = sailorLight.main as unknown as Node<'vec3'>;
+  const day = saturate(dot(main, vec3(0.2126, 0.7152, 0.0722)).div(DAYLIGHT));
+  const k = strength
+    .mul(mix(float(GLOW_NIGHT), float(GLOW_DAY), day))
+    .mul(fallToEdge(dot(at, at), 4));
+  m.fragmentNode = vec4(vec3(colour.r, colour.g, colour.b).mul(k), 1) as unknown as Node<'vec4'>;
+  const mesh = new Mesh(g, m);
+  mesh.name = 'machine lantern';
+  mesh.frustumCulled = false;
+  mesh.renderOrder = 1;
+  return mesh;
 }
 
 /** Where a node is in the model's frame, from the local transforms between them. */
