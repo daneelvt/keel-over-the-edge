@@ -26,7 +26,9 @@ versions:
           sides: 14,
           sink: 0.02,
           # The dome's rise inside the first ring, of a paraboloid's.
-          dome: 0.6,
+          dome: 0.8,
+          # Standing off her body, as the plate's thickness does.
+          inset: -0.01,
         }
   male:
     base: male
