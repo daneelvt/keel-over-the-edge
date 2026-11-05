@@ -17,12 +17,12 @@ export type { PortraitSize } from './portraitcanvas';
 /** Every look and version's portrait pictures, by their path under art/, as the build serves them. */
 const FILES = import.meta.glob<string>(
   ['../../../art/sailors/*/*.portrait.{avif,webp}', '../../../art/sailors/*/*.portrait-mask.webp'],
-  { query: '?url', import: 'default', eager: true },
+  { query: '?url&no-inline', import: 'default', eager: true },
 );
 
 /** Every look and version's inked portrait, by its path under art/. */
 const INKS = import.meta.glob<string>('../../../art/sailors/*/*.ink.webp', {
-  query: '?url',
+  query: '?url&no-inline',
   import: 'default',
   eager: true,
 });
