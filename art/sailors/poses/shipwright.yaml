@@ -1,0 +1,75 @@
+# SPDX-License-Identifier: LicenseRef-All-Rights-Reserved
+#
+# The Shipwright's habit: tugging a knotted line taut. At the helm the
+# sheet hand takes a short grip on the sheet, the head turns down to the
+# knot in it, two sharp tugs toward the chest, a look up the sheet, and
+# the hand eases back. Standing, both hands hold the line before the
+# chest and pull it apart in two tugs, the head bowed over the knot.
+poses:
+  shipwright-grip:
+    from: helm-seated
+    turn:
+      - [head, z, -18]
+      - [head, x, 12]
+    ik:
+      hand_r: { at: sheet, offset: [-0.02, -0.05, -0.03] }
+
+  shipwright-tug:
+    from: shipwright-grip
+    turn:
+      - [spine_03, z, 5]
+    ik:
+      hand_r: { at: sheet, offset: [-0.1, -0.15, -0.06] }
+
+  shipwright-look:
+    from: shipwright-grip
+    turn:
+      - [head, x, -14]
+      - [head, z, -8]
+
+  shipwright-stand-hold:
+    from: stand
+    turn:
+      - [neck_01, x, 8]
+      - [head, x, 14]
+    ik:
+      hand_l: { at: bone, bone: spine_03, offset: [0.07, -0.28, -0.08], pole: [0.7, 0.2, -0.3] }
+      hand_r: { at: bone, bone: spine_03, offset: [-0.07, -0.28, -0.08], pole: [-0.7, 0.2, -0.3] }
+
+  shipwright-stand-tug:
+    from: shipwright-stand-hold
+    turn:
+      - [spine_03, x, 3]
+      - [head, x, 4]
+    ik:
+      hand_l: { at: bone, bone: spine_03, offset: [0.17, -0.25, -0.06], pole: [0.8, 0.2, -0.3] }
+      hand_r: { at: bone, bone: spine_03, offset: [-0.17, -0.25, -0.06], pole: [-0.8, 0.2, -0.3] }
+
+  shipwright-stand-look:
+    from: shipwright-stand-hold
+    turn:
+      - [neck_01, x, -6]
+      - [head, x, -12]
+      - [head, z, 8]
+
+clips:
+  shipwright-habit:
+    sides: true
+    keys:
+      - { pose: helm-seated, hold: 0.3 }
+      - { pose: shipwright-grip, hold: 0.25, ramp: 1.0, lead: head }
+      - { pose: shipwright-tug, hold: 0.12, ramp: 0.45 }
+      - { pose: shipwright-grip, hold: 0.1, ramp: 0.45 }
+      - { pose: shipwright-tug, hold: 0.25, ramp: 0.45 }
+      - { pose: shipwright-look, hold: 0.4, ramp: 1.0, lead: head }
+      - { pose: helm-seated, hold: 0.3, ramp: 1.2, lead: head }
+
+  shipwright-habit-standing:
+    keys:
+      - { pose: stand, hold: 0.3 }
+      - { pose: shipwright-stand-hold, hold: 0.25, ramp: 1.2, lead: head }
+      - { pose: shipwright-stand-tug, hold: 0.12, ramp: 0.5 }
+      - { pose: shipwright-stand-hold, hold: 0.1, ramp: 0.45 }
+      - { pose: shipwright-stand-tug, hold: 0.25, ramp: 0.5 }
+      - { pose: shipwright-stand-look, hold: 0.4, ramp: 1.0, lead: head }
+      - { pose: stand, hold: 0.3, ramp: 1.3, lead: head }

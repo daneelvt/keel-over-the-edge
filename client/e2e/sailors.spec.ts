@@ -224,6 +224,7 @@ for (const looks of [
   ['bosun', 'chartmaker'],
   ['lookout', 'cavalier'],
   ['quartermaster', 'oldsalt'],
+  ['shipwright', 'buccaneer'],
 ]) {
   const names = looks.map(
     (l) =>

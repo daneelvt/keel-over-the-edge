@@ -1,0 +1,284 @@
+# SPDX-License-Identifier: LicenseRef-All-Rights-Reserved
+#
+# The Buccaneer: the roughest hand aboard, in a battered slouch hat over a
+# checked headscarf whose tails hang from under its brim; a ragged
+# waistcoat, unbuttoned over a linen shirt; a narrow sash knotted at the
+# hip, half under the waistcoat; dark breeches, stockings and soft boots
+# folded down below the knee. Long curls, two plain braids at the
+# temples; lines from squinting into the sun, a small healed scar, and a
+# grin. From behind and
+# above: the slouched brim drooping front and back, the scarf's tails and
+# the curls on the shoulders. The scarf's check is the main colour and the
+# waistcoat a dark shade of it.
+id: buccaneer
+name: Buccaneer
+committed: true
+versions:
+  female:
+    base: female
+    targets:
+      # A crooked grin, its left corner the higher; the eyes a little
+      # narrowed against the sun; lean cheeks; a nose broken once.
+      unit-mouth-corner-puller: 0.3
+      mouth-angles-up: 0.4
+      asym-mouth-1-l: 0.35
+      unit-eye-left-slit: 0.22
+      unit-eye-right-slit: 0.18
+      lr-cheek-volume-decr: 0.3
+      nose-hump-incr: 0.25
+      asym-brown-1-r: 0.2
+    face:
+      eyes: { iris-inner: "#7A5A2E", iris-outer: "#3A2810", limbal: "#120A04" }
+      squint:
+        lines: [[-24, 0.003, 0.014], [0, 0.004, 0.016], [24, 0.003, 0.013]]
+        width: 0.0011
+        amount: 0.2
+      # Through her left brow, healed pale.
+      scar: { side: left, from: [0.011, 0.031], to: [0.017, 0.012], width: 0.0015, amount: 0.55 }
+  male:
+    base: male
+    targets:
+      # A crooked grin under the moustache; the eyes narrowed against the
+      # sun; lean cheeks, a long jaw; a nose broken once.
+      unit-mouth-corner-puller: 0.3
+      mouth-angles-up: 0.35
+      asym-mouth-1-l: 0.35
+      unit-eye-left-slit: 0.25
+      unit-eye-right-slit: 0.2
+      lr-cheek-volume-decr: 0.35
+      head-rectangular: 0.3
+      nose-hump-incr: 0.3
+      asym-brown-1-l: 0.25
+    face:
+      eyes: { iris-inner: "#6A5A3A", iris-outer: "#33281A", limbal: "#100C06" }
+      squint:
+        lines: [[-26, 0.003, 0.016], [0, 0.004, 0.018], [24, 0.003, 0.015]]
+        width: 0.0012
+        amount: 0.24
+      # Across his left cheekbone, healed pale.
+      scar: { side: left, from: [0.004, -0.02], to: [0.022, -0.036], width: 0.0017, amount: 0.55 }
+# The hair: long curls falling from under the scarf over the shoulders and
+# two plain braids from the temples; his short beard and moustache.
+hair:
+  id: hair
+  family: hair
+  region: hair
+  params:
+    shell: grown
+    comb: fall
+    # Growing only from under the scarf's edge, left loose under it.
+    under: { front: 0.06, side: 0.07, back: -0.06 }
+    press: false
+    thickness: 0.014
+    voxel: 0.005
+    smooth: 5
+    volume: 0.008
+    clear: 0.05
+    splay: 2.0
+    strands: 160
+    length: 0.3
+    coil: { radius: 0.009, pitch: 0.045 }
+    deck-weight: 2.0
+    # Collapsed for the deck, the specks a braid's root leaves go.
+    deck-specks: 8
+    # Collapsed, loose curls are their own mirror only roughly.
+    asymmetric: true
+    # The braids from the temples, among the curls.
+    tail-at: [-0.064, -0.02, 0.085]
+    tail:
+      {
+        kind: braid,
+        pair: true,
+        length: 0.2,
+        width: 0.018,
+        taper: 0.55,
+        lean: -0.05,
+        splay: 0.04,
+        lobes: 5,
+        clear: 0.03,
+        share: 0.19,
+      }
+    male:
+      tail-at: [-0.07, -0.02, 0.1]
+      beard:
+        volume: 0.0055
+        taper: 0.01
+        cheek: 0.034
+        sideburn: 0.012
+        moustache: 0.017
+        mouth: 0.025
+        lips: 0.0115
+        under: 0.008
+        back: -0.008
+        chin: 0.012
+        triangles: 380
+        deck-weight: 3.0
+        share: 0.5
+garments:
+  # Linen, to the hips, open at the throat; full sleeves gathered at the
+  # wrists.
+  - id: shirt
+    family: shirt
+    region: fixed
+    colour: "#DDD3BD"
+    params:
+      sleeve: 0.98
+      neck: 0.05
+      arm-ease: 0.012
+      triangles: 1400
+      female: { shoulder: { reach: 0.12, ease: 0.003 } }
+      male: { shoulder: { reach: 0.18, ease: 0.003 } }
+      bands:
+        - { at: ends, height: 0.03, out: 0.01 }
+  # Dark wool breeches to below the knee.
+  - id: breeches
+    family: breeches
+    region: fixed
+    colour: "#2C2824"
+    params:
+      triangles: 1000
+      below-knee: 0.05
+      deck-weight: 2.0
+      bands:
+        - { at: top, height: 0.035, out: -0.001 }
+        - { at: bottom, height: 0.025, out: 0.004 }
+  # Grey wool stockings, gartered under the breeches.
+  - id: stockings
+    family: stockings
+    region: fixed
+    colour: "#6A655C"
+    params: { above-knee: -0.05, triangles: 600, deck-weight: 1.5 }
+  # Soft leather boots to below the knee, their tops folded down in a
+  # turned cuff.
+  - id: boots
+    family: shoes
+    region: fixed
+    colour: "#4A3424"
+    params:
+      rise: 0.0
+      sole: 0.007
+      triangles: 900
+      deck-weight: 2.5
+      female: { at: 0.29 }
+      male: { at: 0.3 }
+      bands:
+        - { at: ends, height: 0.018, out: 0.007 }
+  # The waistcoat: unbuttoned, open down the front over the shirt, its hem
+  # ragged; a dark shade of the main colour.
+  - id: waistcoat
+    family: bodice
+    region: main
+    params:
+      layer: waistcoat
+      shade: 0.5
+      neck: 0.065
+      neck-slope: 0.3
+      below-waist: 0.05
+      open: { neck: 0.045, hem: 0.07 }
+      fitted: true
+      triangles: 1100
+      deck-weight: 2.0
+      asymmetric: true
+      ragged: { depth: 0.035, teeth: 13, seed: 4, whole: 0.25 }
+      female: { shoulder: { reach: 0.12, ease: 0.005 } }
+      male: { shoulder: { reach: 0.18, ease: 0.005 } }
+# The headscarf, under the hat: a kerchief checked in the main colour on
+# linen, tied at the back, its two tails hanging below the brim.
+scarf:
+  id: headscarf
+  family: scarf
+  region: fixed
+  colour: "#D8D2C2"
+  params:
+    volume: 0.0065
+    columns: 24
+    rows: 7
+    edge: { front: 0.04, side: 0.04, back: 0.05 }
+    knot: { size: [0.026, 0.018, 0.022], up: 0.012 }
+    tails:
+      {
+        length: [0.3, 0.25],
+        width: 0.042,
+        end: 0.06,
+        thick: 0.004,
+        spread: 0.012,
+        splay: 0.16,
+        lean: 0.12,
+        clear: 0.08,
+      }
+    pattern:
+      {
+        kind: check,
+        period: 0.03,
+        band: 0.42,
+        soft: 0.2,
+        ground: "#D8D2C2",
+        radius: 0.1,
+      }
+    asymmetric: true
+# The slouch hat: soft black felt gone brown, its crown creased and pinched,
+# its wide brim hanging down at the front and back, bent unevenly.
+hat:
+  id: slouch-hat
+  family: hat
+  region: fixed
+  colour: "#332A22"
+  params:
+    seat: 0.026
+    # Set close on the scarf.
+    ease: 0.0005
+    tilt: 0
+    segments: 28
+    asymmetric: true
+    crown: [[1.0, 0.0], [1.03, 0.035], [1.0, 0.065], [0.9, 0.088], [0.66, 0.1], [0.3, 0.104]]
+    dents: { crease: 0.012, width: 0.03, pinch: [38, 0.01] }
+    brim:
+      {
+        width: 0.095,
+        outline: round,
+        lift: slouch,
+        droop: { front: 0.022, side: 0.01, back: 0.04 },
+        wave: { count: 5, depth: 0.012, seed: 3 },
+        power: 1.5,
+        thickness: 0.004,
+        steps: 5,
+      }
+    deck-weight: 1.5
+gear:
+  # The sash: narrow faded cloth wound low round the waist, half under the
+  # waistcoat's hem, knotted at the left hip, its ends short.
+  - id: sash
+    family: sash
+    region: fixed
+    colour: "#A87F3A"
+    params:
+      layer: sash
+      asymmetric: true
+      deck-weight: 1.2
+      width: 0.05
+      up: -0.035
+      thick: 0.004
+      columns: 24
+      knot: { azimuth: 70, size: [0.04, 0.026, 0.045] }
+      ends: { length: [0.22, 0.17], width: 0.045, apart: 10, fringe: 0.0 }
+      colours: { fringe: "#A87F3A" }
+palette:
+  main: "#1F3A63"
+  skin: "#CDA385"
+  hair: "#251E1C"
+# Every sailor's clips, and the Buccaneer's habit: thumbs at the belt.
+clips:
+  [
+    helm,
+    hiking-1,
+    hiking-2,
+    hiking-3,
+    cross,
+    buccaneer-habit,
+    buccaneer-habit-standing,
+    standing-idle,
+    treading-water,
+    righting,
+    climbing-in,
+  ]
+names: { buccaneer-habit: habit, buccaneer-habit-standing: habit-standing }
