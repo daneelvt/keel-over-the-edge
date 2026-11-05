@@ -242,6 +242,16 @@ def _skin(ex, q, what):
     # Sparser at the inner end.
     density = ex.smooth(pts[0, 0], pts[1, 0], ax - cx) * (1 - b.get("inner-density", 0.6)) + b.get("inner-density", 0.6)
     brow = brow * along * density * front * b.get("amount", 1.0)
+    # A small healed scar: a short line on one side of the face (from and
+    # to: (out, up) from the eye's middle, metres), a little paler than the
+    # skin, the brow parted where it crosses it.
+    scar = None
+    if p.get("scar"):
+        s = p["scar"]
+        side = x if s.get("side", "left") == "left" else -x
+        scar = _segment(ex, side - cx, z - cz, s["from"], s["to"], s.get("width", 0.0016)) \
+            * (1 - ex.smooth(cy + 0.02, cy + 0.035, y))
+        brow = brow * (1 - scar)
 
     if what == "mask":
         return ex.combine(0, 1 - brow, brow)
@@ -278,6 +288,26 @@ def _skin(ex, q, what):
     line_low = rim * (1 - ex.smooth(cz - 0.003, cz + 0.001, z)) * front * ll.get("lower", 0.35)
     dark = (line_up + line_low).clamp() * ll.get("amount", 0.85)
     col = col * ex.mix(ex.rgb(1, 1, 1), ex.rgb(*[ll.get("value", 0.12)] * 3), dark)
+    # Lines at the eyes' outer corners from years of squinting into the
+    # sun: short creases fanning out from the corner, each [angle up from
+    # level in degrees, from, to: metres out from the corner], a little
+    # darker than the skin; never a shadow round the eye.
+    sq = p.get("squint")
+    if sq:
+        lines = None
+        for angle, d0, d1 in sq["lines"]:
+            a = np.radians(angle)
+            line = _segment(ex, ax - cx - r, z - cz, (d0 * np.cos(a), d0 * np.sin(a)),
+                            (d1 * np.cos(a), d1 * np.sin(a)), sq.get("width", 0.0009))
+            lines = line if lines is None else lines + line
+        # On the face's side, not round toward the ear.
+        back = sq.get("back", 0.02)
+        beside = 1 - ex.smooth(cy + back, cy + back + 0.01, y)
+        crease = (lines * beside).clamp() * sq.get("amount", 0.35)
+        col = col * ex.mix(ex.rgb(1, 1, 1), ex.rgb(*ratio(sq.get("colour", "#9A6E5A"))), crease)
+    if scar is not None:
+        col = col * ex.mix(ex.rgb(1, 1, 1), ex.rgb(*ratio(p["scar"].get("colour", "#E8BBA8"))),
+                           scar * p["scar"].get("amount", 0.6))
     # The lips, by MPFB's mask in the base mesh's UVs.
     lips = ex.image(mpfbx.data("textures", "mpfb_lips.jpg"), PAINT)
     col = col * ex.mix(ex.rgb(1, 1, 1), ex.rgb(*ratio(p["lip"]["colour"])), lips * p["lip"].get("amount", 0.8))
@@ -288,6 +318,19 @@ def _skin(ex, q, what):
 
 def _lin(hex_colour):
     return atlas.linear(hex_colour)
+
+
+def _segment(ex, u, w, a, b, width):
+    """1 on the line from a to b (points in the plane of u and w, metres),
+    falling to 0 within width of it, thinner toward its ends."""
+    (u0, w0), (u1, w1) = a, b
+    length = float(np.hypot(u1 - u0, w1 - w0))
+    cu, cw = (u1 - u0) / length, (w1 - w0) / length
+    du, dw = u - u0, w - w0
+    t = (du * cu + dw * cw) / length
+    across = (du * (-cw) + dw * cu).abs()
+    taper = ex.smooth(-0.05, 0.2, t) * (1 - ex.smooth(0.8, 1.05, t))
+    return (1 - ex.smooth(width * 0.3, width, across)) * taper
 
 
 # --- Shader expressions --------------------------------------------------

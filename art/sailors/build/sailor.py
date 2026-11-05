@@ -150,13 +150,19 @@ def build_version(job, v, run):
             if hair_spec["params"].get("shell") == "none":
                 hair_spec = None
         hat = dict(look["hat"], params=garment.version_params(look["hat"], v)) if look.get("hat") else None
+        # A headscarf may be worn under a hat: tied over the hair, the hat
+        # set on it.
+        tied = look.get("scarf")
+        tied = dict(tied, params=garment.version_params(tied, v)) if tied else None
         scarved = hat is not None and hat["family"] == "scarf"
         hair_obj = None
         if hair_spec:
             # Under a hat the hair is pressed flat, so the hat fits the head;
             # under a scarf, all of what it covers.
             under_hat = None
-            if hat is not None:
+            if tied is not None:
+                under_hat = scarf.band(human, marks, tied["params"])
+            elif hat is not None:
                 under_hat = (scarf.band(human, marks, hat["params"]) if scarved
                              else profiles.seat(human, marks, hat["params"].get("seat", 0.0)))
             hair_obj = hair.make(hair_spec, human, marks, arm, budgets["close"]["hair"], under_hat, skin)
@@ -164,11 +170,19 @@ def build_version(job, v, run):
         if beard:
             b = hair.make_beard(beard, human, marks, arm, budgets["close"]["beard"], skin)
             worn.append(garment.Worn(b, "beard", {"id": "beard", "region": "hair", "params": beard}, None))
+        on_head = [hair_obj] if hair_obj is not None else []
+        if tied is not None:
+            s = scarf.make(tied, human, marks, arm, skin, over=on_head)
+            worn.append(garment.Worn(s, "hat", tied, None))
+            # The hat is set on the scarf, which covers the hair.
+            on_head = [s]
         if hat is not None:
             if scarved:
-                h = scarf.make(hat, human, marks, arm, skin, over=[hair_obj] if hair_obj is not None else [])
+                h = scarf.make(hat, human, marks, arm, skin, over=on_head)
             else:
-                h = profiles.make(hat, human, marks, arm)
+                # Set on the scarf under it; on the head and the hair
+                # pressed flat under it otherwise.
+                h = profiles.make(hat, human, marks, arm, over=on_head if tied is not None else ())
             worn.append(garment.Worn(h, "hat", hat, None))
         # The trims on the fitted garments.
         if look.get("trims"):
@@ -187,7 +201,7 @@ def build_version(job, v, run):
     buried = {"close": bury(skin, worn, tables["ease"])}
     # What the sailor carries, laid on the clothes as they are left: the
     # deck level keeps only what is seen from it.
-    for g in [] if machine else look.get("gear") or []:
+    for g in [] if machine else (look.get("gear") or []) + (version.get("gear") or []):
         g = dict(g, params=garment.version_params(g, v))
         o = gears.make(g, human, marks, arm, worn, skin)
         worn.append(garment.Worn(o, "gear" if gears.deck(g) else "prop", g, None))
@@ -225,6 +239,11 @@ def build_version(job, v, run):
     share = atlas.layout(meshes, head_faces, look.get("atlas-head", tables["atlas"]["head"]), margin / size)
     base_px, mask_px = atlas.bake(meshes, size, margin)
     hair.drop_details()
+    # Merged curls may leave a sliver sharing a texel with its neighbour:
+    # the smaller goes, as at the deck level.
+    for w in worn:
+        if w.kind == "hair":
+            unfolded[w.obj.name + " overlapping"] = atlas.drop_overlaps(w.obj, size)
 
     lap("atlas")
     order.step("export")
@@ -323,6 +342,11 @@ def build_version(job, v, run):
                 rig.limit_weights(o, rig.bone_names(arm))
                 unfolded[o.name + " deck"] = atlas.untangle(o)
                 unfolded[o.name + " deck overlapping"] = atlas.drop_overlaps(o, size)
+            for g in worn:
+                if g.kind == "hair" and (g.spec.get("params") or {}).get("deck-specks"):
+                    # Collapsed this far and its overlaps dropped, a braid's
+                    # root may leave a speck apart from it: it goes.
+                    garment.drop_fragments(g.obj, g.spec["params"]["deck-specks"])
             fig.lay_on_seat(meshes, above)
             settled["deck"] = garment.settle(fig, lib, POSES, worn, tables["ease"])
             # A collapse this coarse is its own mirror only roughly.

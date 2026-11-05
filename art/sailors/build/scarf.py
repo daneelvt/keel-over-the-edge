@@ -274,6 +274,10 @@ def make(spec, human, marks, arm, skin=None, over=()):
         probe = Vector((0, centre.y, z)) + out_d * 0.3
         loc, n, _, _ = shell.ray_cast(probe, -out_d, 0.5)
         if loc is None:
+            # The ray passed under the scarf's edge (lifted off loose hair
+            # under it): the knot on its nearest point.
+            loc = shell.find_nearest(Vector((0, centre.y, z)) + out_d * 0.1)[0]
+        if loc is None:
             raise AssertionError("no scarf to knot")
         size = k["size"]
         knot_at = loc + out_d * size[1] * 0.3

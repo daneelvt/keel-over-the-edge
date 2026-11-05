@@ -15,12 +15,15 @@ tail, in its own colour.
 A style is its parameters:
 
 - comb: where the strands go from their roots: "back" (swept back and
-  down), "down" (falling from the crown) or "side" (from a parting, at
-  parting degrees from the front);
+  down), "down" (falling from the crown), "fall" (back, out to their
+  side and down) or "side" (from a parting, at parting degrees from the
+  front); under: {front, side, back}, a scarf's edge (metres above the
+  head's joint): only roots below it grow strands;
 - volume: how far the hair stands off the head, in metres;
 - length: how far a strand goes, in metres, from its root;
 - gather: a point (x, y, z from the head's joint) the strands are drawn
-  to once behind the head;
+  to once behind the head; tail-at: where a tail hangs from when the
+  strands are drawn to no point (braids among loose hair);
 - tail: what hangs from the gather point: {kind: queue or braid, length,
   width (at its root), taper (its end's share of the width), lean (how
   far it lies back from straight down, as y a metre of fall), clear (how
@@ -34,7 +37,8 @@ A style is its parameters:
 - crown: a cap's extra volume at the top of the head (a thick crown of
   hair standing up), over its top crown-depth metres;
 - clear: long hair falling loose below the nape, kept this far off the
-  back (over the clothes); coil: {radius, pitch} winds each strand below
+  back (over the clothes); splay: how far it spreads out over the
+  shoulders as it falls; coil: {radius, pitch} winds each strand below
   the nape into a ringlet (long curls).
 
 Every strand is grown on the figure's right and mirrored, so the shell is
@@ -93,10 +97,14 @@ def make(spec, human, marks, arm, budget, under_hat=None, skin=None):
         drawn = tree
 
     gather = head + Vector(p["gather"]) if p.get("gather") else None
+    if p.get("tail-at"):
+        # A tail of its own (a pair of braids from the temples), the rest
+        # of the hair combed loose, drawn to no point.
+        gather = head + Vector(p["tail-at"])
     if gather is not None and p.get("shell") == "cap":
         # Gathered at the hair's surface, the nearest to the point asked.
         loc, n, _, _ = drawn.find_nearest(gather)
-        if p["gather"][0] == 0:
+        if (p.get("tail-at") or p["gather"])[0] == 0:
             # On the middle, though the drawn body is not quite its own
             # mirror.
             loc, n = loc.copy(), n.copy()
@@ -134,7 +142,9 @@ def make(spec, human, marks, arm, budget, under_hat=None, skin=None):
     elif p.get("shell") != "none":
         obj = grown(spec["id"], human, scalp, p, tree, head, nape, shell_budget)
         off_skin(obj, drawn)
-        if under_hat is not None:
+        # Loose hair under a scarf may be left as it grew, the scarf tied
+        # over it: pressed flat, a merged solid breaks into shards.
+        if under_hat is not None and p.get("press", True):
             press(obj, drawn, under_hat[0])
     if obj is not None:
         # A collapse is its own mirror only roughly.
@@ -344,6 +354,10 @@ def grown(name, human, scalp, p, tree, head, nape, budget):
         # Roots below the gather point would hang loose beside the neck:
         # the underlayer covers the scalp there.
         right = right[co[right, 2] > head.z + p["gather"][2] + 0.01]
+    if p.get("under"):
+        # Under a scarf: only the roots below its edge grow strands (curls
+        # escaping from under it); the underlayer covers the rest.
+        right = right[co[right, 2] < np.array([_edge(p["under"], head, co[i]) for i in right])]
     roots = rng.choice(right, size=min(p.get("strands", 160) // 2, len(right)), replace=False)
     out = bmesh.new()
     # The underlayer: the scalp, stood off the head a little less than the
@@ -408,6 +422,17 @@ def join(obj, other):
     bpy.data.objects.remove(other, do_unlink=True)
 
 
+def _edge(e, head, at):
+    """A scarf's lower edge (e: front, side and back, metres above the
+    head's joint) at the azimuth of the point at, eased between them."""
+    a = np.arctan2(at[0] - head.x, -(at[1] - head.y))
+    c = np.cos(a)
+    t = 1 - c if c >= 0 else -c
+    t = t * t * (3 - 2 * t)
+    lo, hi = (e["front"], e["side"]) if c >= 0 else (e["side"], e["back"])
+    return head.z + lo + (hi - lo) * t
+
+
 def comb(root, normal, p, tree, head, nape):
     """A strand's path from its root by the comb rule, off the head by the
     volume, and on toward the gather point if any."""
@@ -416,6 +441,9 @@ def comb(root, normal, p, tree, head, nape):
     comb_ = p.get("comb", "back")
     if comb_ == "back":
         want = Vector((0, 1, -0.6))
+    elif comb_ == "fall":
+        # Back and out to its own side, and down: never over the face.
+        want = Vector((0.5 * np.sign(root.x), 0.6, -1.0))
     elif comb_ == "down":
         want = Vector((0, 0, -1))
     else:
@@ -436,7 +464,9 @@ def comb(root, normal, p, tree, head, nape):
             pull = 1.5 if pos.y > head.y else 0.9
             d = (gather - pos).normalized() * pull + d * 0.5
         elif pos.z < nape:
-            d = Vector((0, 0.15, -1))
+            # Falling below the nape, out over the shoulders as far as
+            # splay asks (out a metre of fall, a metre out from the middle).
+            d = Vector((pos.x * p.get("splay", 0.0), 0.15, -1))
         # Along the head's surface: what points into the head is taken out.
     # (Below the nape, long hair is kept off the back by clear: over the
     # clothes, not in them.)
@@ -853,7 +883,8 @@ def beard(name, human, marks, b, drawn, budget):
     upper lip's (a moustache) if asked, stood off the face by its volume,
     thicker and longer at the chin, its edge tapering in to the skin over
     the taper's metres and turned down to it. The lips are left bare. Its
-    params: volume, taper, cheek (the line at the side, below the eyes),
+    params: volume, taper, outer (sideburns alone: only what is further
+    from the middle), cheek (the line at the side, below the eyes),
     moustache (the line over the upper lip, above the lips' middle, or
     false), mouth (the lips' half width left bare), under (how far above
     the neck's joint it ends under the jaw), back (how far in front of the
@@ -891,14 +922,20 @@ def beard(name, human, marks, b, drawn, budget):
     region &= ~lips
     # Clean below the lower lip at the middle, down to the chin's beard.
     region &= ~((np.abs(x) < b.get("below-lip", 0.0)) & (z > lips_z - 0.024) & (z < lips_z) & (y < lips_y + 0.02))
+    # Sideburns alone: what is further out than outer from the middle, one
+    # down each cheek before the ear.
+    outer = b.get("outer")
+    if outer:
+        region &= ax > outer
 
     bm = bmesh.new()
     bm.from_mesh(human.data)
     bmesh.ops.delete(bm, geom=[v for v in bm.verts if not region[v.index]], context="VERTS")
     for g in list(bm.verts.layers.deform):
         bm.verts.layers.deform.remove(g)
-    # Only the largest piece: a speck cut off by the line goes.
-    _largest(bm)
+    # Only the largest piece (one a side, for sideburns): a speck cut off by
+    # the line goes.
+    _largest(bm, 2 if outer else 1)
     edge = [v for v in bm.verts if v.is_boundary]
     dist = {v: 0.0 for v in edge}
     front = list(edge)
@@ -1025,7 +1062,7 @@ def edge_to_skin(obj, skin):
     obj.data.update()
 
 
-def _largest(bm):
+def _largest(bm, keep=1):
     seen, parts = set(), []
     for v in bm.verts:
         if v in seen:
@@ -1042,7 +1079,7 @@ def _largest(bm):
                     stack.append(w)
         parts.append(part)
     parts.sort(key=len, reverse=True)
-    bmesh.ops.delete(bm, geom=[v for part in parts[1:] for v in part], context="VERTS")
+    bmesh.ops.delete(bm, geom=[v for part in parts[keep:] for v in part], context="VERTS")
 
 
 def bun(name, at, t, budget):
