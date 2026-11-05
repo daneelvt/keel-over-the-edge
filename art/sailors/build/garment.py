@@ -106,7 +106,7 @@ def dress(job, v, human, arm, marks, work):
             mat["part_colour"] = [atlas.NEUTRAL * params["shade"]] * 3
         obj.data.materials.append(mat)
         if params.get("skirt"):
-            skirt_weights(obj, arm, marks)
+            skirt_weights(obj, arm, marks, params.get("hips"))
         out.append(Worn(obj, "garment", spec, path))
     return out
 
@@ -447,7 +447,7 @@ def bodice(human, marks, p):
     """A body: the torso from a neckline (lower at the front by its slope)
     to a little below the waist, with sleeves to a share of the forearm or
     armholes; open down the front if asked (the opening's half width at the
-    neck and at the hem)."""
+    neck, at the bust if given, and at the hem)."""
     bm = source(human, "helper-tights")
     m = marks.measure()
     parts = (PARTS["torso"], PARTS["arm"]) if p.get("sleeve") else (PARTS["torso"],)
@@ -464,12 +464,16 @@ def bodice(human, marks, p):
     if p.get("open"):
         o = p["open"]
         top, low = neck, m["heights"]["waist"] - p.get("below-waist", 0.03)
+        # The edge straight from the neck to the hem, or by the bust's
+        # height if it is given there.
+        zs, halves = [low, top], [o["hem"], o["neck"]]
+        if o.get("bust") is not None:
+            zs, halves = [low, marks.bust()[0], top], [o["hem"], o["bust"], o["neck"]]
         layer = bm.verts.layers.int["part"]
         gone = []
         for f in bm.faces:
             c = f.calc_center_median()
-            t = float(np.clip((top - c.z) / (top - low), 0, 1))
-            half = o["neck"] + (o["hem"] - o["neck"]) * t
+            half = float(np.interp(c.z, zs, halves))
             if c.y < marks.near(c.z)[1] and abs(c.x) < half and all(v[layer] == PARTS["torso"] for v in f.verts):
                 gone.append(f)
         bmesh.ops.delete(bm, geom=gone, context="FACES")
@@ -1194,10 +1198,14 @@ def symmetrize(bm, within=0.003, greedy=False):
             verts[j].co = Vector((-m[0], m[1], m[2]))
 
 
-def skirt_weights(obj, arm, marks):
+def skirt_weights(obj, arm, marks, hips=None):
     """Weights a skirt on the skirt chains below the hips, by azimuth (the
     two nearest chains) and height (the upper bone, then the lower), and
-    on the pelvis above them."""
+    on the pelvis above them. With hips ({share, band}), the cloth above
+    the hips at the front and sides is carried in part by the thighs' hip
+    correctors (which turn half as far as the thighs), most at the hips'
+    height and none by band above them: the cloth over the hip joints gives
+    as a thigh turns into it, sitting or with a knee raised."""
     chains = {b.name[: -len("_01")]: b for b in arm.data.bones if b.name.startswith("skirt_") and b.name.endswith("_01")}
     hip = marks.measure()["heights"]["hip"]
     azimuth = {n: np.arctan2(b.head_local.x, -b.head_local.y) for n, b in chains.items()}
@@ -1207,9 +1215,21 @@ def skirt_weights(obj, arm, marks):
     def apart(a, b):
         return abs(((a - b + np.pi) % (2 * np.pi)) - np.pi)
 
+    corr = {s: obj.vertex_groups.new(name="thigh_corrector_" + s) for s in ("l", "r")} if hips else {}
     for v in obj.data.vertices:
         if v.co.z >= hip:
-            groups["pelvis"].add([v.index], 1.0, "REPLACE")
+            share = 0.0
+            if hips:
+                # Front and sides only: behind, the cloth hangs off the
+                # seat, which the thighs turn away from.
+                front = 1 - max(-np.cos(np.arctan2(v.co.x, -v.co.y)), 0.0)
+                share = hips["share"] * max(0.0, 1 - (v.co.z - hip) / hips["band"]) * front
+            groups["pelvis"].add([v.index], 1.0 - share, "REPLACE")
+            if share > 0:
+                left = float(np.clip(0.5 + v.co.x / 0.08, 0, 1))
+                for s, w in (("l", left), ("r", 1 - left)):
+                    if w * share > 1e-4:
+                        corr[s].add([v.index], w * share, "REPLACE")
             continue
         a = np.arctan2(v.co.x, -v.co.y)
         near = sorted(azimuth, key=lambda n: apart(a, azimuth[n]))[:2]

@@ -909,6 +909,212 @@ def make(fig, lib, name):
 PELVIS_AT = "pelvis.location"
 
 
+# --- The skirts clear of the legs ---------------------------------------
+
+# How far out of what it hangs over a skirt is kept, in every frame: the
+# game's springs let it sag toward the legs by about half of this.
+SKIRT_CLEAR = 0.015
+# How far in from a vertex a ray looks for the cloth over it.
+SKIRT_DEPTH = 0.03
+# The most a skirt bone is turned off its clip's pose, and in one step.
+SKIRT_MOST = math.radians(100)
+SKIRT_STEP = math.radians(20)
+# Frames over which a skirt bone's turn is held and eased: a turn made for
+# one frame grows before it and dies after it.
+SKIRT_HOLD = 10
+SKIRT_EASE = 8.0
+# How far over the cloth laid on the seat a part of a leg must be to be
+# judged against it: below, it sits on the cloth, not through it.
+SKIRT_LAID = 0.005
+# The least share of the cloth a skirt bone carries to be turned for it.
+SKIRT_SHARE = 0.25
+# Under this far through the cloth, a part touches it (metrics.TOUCH).
+SKIRT_TOUCH = 0.003
+
+
+def clear_skirts(fig, clip, under, skirts, rounds=16, passes=5):
+    """Turns a clip's skirt chains, frame by frame, out of the way of what
+    they hang over: a thigh swung back in a stride, a knee raised climbing,
+    a leg kicking in the water. Where a ray in from a vertex of the thighs
+    or knees (under: the mesh and its vertices) meets a skirt from outside
+    within SKIRT_CLEAR of it, or inside it, the skirt bone that cloth hangs
+    from is turned about its head to carry the cloth out; each bone's turns
+    held and eased over the frames around, so the cloth moves as cloth
+    does; and again, a few passes, where the easing left a frame short.
+    The skirts laid on the seat as the game lays them. Returns how many
+    frames were changed."""
+    if not under or not skirts:
+        return 0
+    chains = {s.name: _chains_of(s) for s in skirts}
+    seated = clip.place != Matrix()
+    n = len(clip.frames)
+    # A loop's last frame is its first again: the turns wrap round the
+    # frames before it.
+    m = n - 1 if clip.loop else n
+
+    def at(g):
+        return g % m if clip.loop else min(max(g, 0), n - 1)
+
+    span = int(math.ceil(3 * SKIRT_EASE))
+    w = np.exp(-0.5 * (np.arange(-span, span + 1) / SKIRT_EASE) ** 2)
+    changed = set()
+    for _ in range(passes):
+        turns = []
+        for fr in clip.frames[:m]:
+            before = {b: q.copy() for b, q in fr["rot"].items() if b.startswith("skirt_")}
+            turns.append(_solve_frame(fig, clip, fr, under, skirts, chains, seated, rounds))
+            fr["rot"].update(before)
+        names = sorted({c for t in turns for c in t})
+        if not names:
+            break
+        changed |= {f for f, t in enumerate(turns) if t}
+        # Each bone's turn, as a rotation vector in its own space: held over
+        # the frames around, eased.
+        for c in names:
+            turn = np.array([np.array(turns[f].get(c, np.zeros(3)), float) for f in range(m)])
+            size = np.linalg.norm(turn, axis=1)
+            held = np.array([turn[max((at(g) for g in range(f - SKIRT_HOLD, f + SKIRT_HOLD + 1)),
+                                      key=lambda g: size[g])] for f in range(m)])
+            for f in range(m):
+                near = [at(g) for g in range(f - span, f + span + 1)]
+                eased = (held[near] * w[:, None]).sum(0) / w.sum()
+                fr = clip.frames[f]
+                fr["rot"][c] = (fr["rot"][c] @ exp(eased)).normalized()
+    if clip.loop:
+        clip.frames[-1] = {"rot": {b: q.copy() for b, q in clip.frames[0]["rot"].items()},
+                           "pelvis": clip.frames[0]["pelvis"].copy()}
+    fig.reset()
+    return len(changed)
+
+
+def laid(fig):
+    """How high the cloth laid on the seat lies, while the figure sits on
+    it (Figure.lay_on_seat): what of the legs is below it sits on the
+    seat under the cloth. Off the seat, None."""
+    on = [o.modifiers[n] for o, n in getattr(fig, "seat_mods", [])
+          if o.modifiers[n].show_viewport and o.modifiers[n].target is fig.stage.plane]
+    return fig.stage.seat.z + max(m.offset for m in on) + SKIRT_LAID if on else None
+
+
+def skirt_lines(fig, body, idx, skirts):
+    """What of the body is through a skirt as the figure stands: each
+    vertex's bone, where it is, its normal, and the skirt bone the cloth
+    hangs from (or the pelvis) and the cloth's point."""
+    from mathutils.bvhtree import BVHTree
+
+    floor = laid(fig)
+    co, no = coords_posed(body)
+    names = {g.index: g.name for g in body.vertex_groups}
+    out = []
+    for s in skirts:
+        chains = _chains_of(s)
+        sco, _ = coords_posed(s)
+        tree = BVHTree.FromPolygons([Vector(p) for p in sco], [list(f.vertices) for f in s.data.polygons])
+        for i in idx:
+            if floor is not None and co[i][2] < floor:
+                continue
+            n = Vector(no[i])
+            hit = tree.ray_cast(Vector(co[i]) - n * 1e-4, -n, SKIRT_DEPTH)
+            if hit[0] is not None and (Vector(co[i]) - hit[0]).dot(hit[1]) > 0 and hit[3] > SKIRT_TOUCH:
+                bone = max((g.weight, names[g.group]) for g in body.data.vertices[i].groups)[1]
+                out.append([bone, [round(float(x), 3) for x in co[i]], [round(float(x), 2) for x in n],
+                            (chains[hit[2]] or [("pelvis", 1.0)])[0][0], [round(float(x), 3) for x in hit[0]]])
+    return out
+
+
+def _chains_of(obj):
+    """Each face of a skirt's mesh: the skirt bones its cloth hangs from
+    (skirt_back_l_02), each with its share, the most first; empty above
+    them."""
+    names = {g.index: g.name for g in obj.vertex_groups}
+    per = []
+    for v in obj.data.vertices:
+        ws = {}
+        for g in v.groups:
+            n = names.get(g.group, "")
+            if n.startswith("skirt_"):
+                ws[n] = ws.get(n, 0.0) + g.weight
+        per.append(ws)
+    out = []
+    for p in obj.data.polygons:
+        total = {}
+        for i in p.vertices:
+            for c, w in per[i].items():
+                total[c] = total.get(c, 0.0) + w
+        out.append(sorted(((c, w / len(p.vertices)) for c, w in total.items()), key=lambda x: -x[1]))
+    return out
+
+
+def _solve_frame(fig, clip, fr, under, skirts, chains, seated, rounds):
+    """One frame's skirt bones turned clear, in place in the frame: the
+    bone that carries most of the cloth met, about its head (turning the
+    bones below it). Returns each bone turned and its turn, a rotation
+    vector in its own space."""
+    from mathutils.bvhtree import BVHTree
+
+    body, idx = under
+    fig.set_rotations(fr["rot"], fr["pelvis"])
+    fig.arm.matrix_world = clip.place
+    fig.on_seat(seated and fig.world("pelvis").z > fig.stage.seat.z - 0.2)
+    fig.update()
+    start = {}
+    floor = laid(fig)
+    for _ in range(rounds):
+        co, no = coords_posed(body)
+        worst = {}
+        for s in skirts:
+            sco, _ = coords_posed(s)
+            tree = BVHTree.FromPolygons([Vector(p) for p in sco], [list(f.vertices) for f in s.data.polygons])
+            for i in idx:
+                if floor is not None and co[i][2] < floor:
+                    continue
+                n = Vector(no[i])
+                p = Vector(co[i])
+                hit = tree.ray_cast(p + n * SKIRT_CLEAR, -n, SKIRT_DEPTH + SKIRT_CLEAR)
+                # Cloth met from its inner side is beside the part, not
+                # over it.
+                if hit[0] is None or (p + n * SKIRT_CLEAR - hit[0]).dot(hit[1]) <= 0:
+                    continue
+                # Each bone that carries a good share of the cloth there
+                # turned: the cloth between two chains moves with both.
+                carried = [(c, w) for c, w in chains[s.name][hit[2]] if w >= SKIRT_SHARE]
+                total = sum(w for _, w in carried)
+                for c, _ in carried:
+                    need = hit[3] / max(total, SKIRT_SHARE)
+                    if need > worst.get(c, (0.0,))[0]:
+                        worst[c] = (need, hit[0], n)
+        if not worst:
+            break
+        a = fig.arm.matrix_world.to_3x3()
+        for c, (d, q, n) in worst.items():
+            pb = fig.bones[c]
+            start.setdefault(c, pb.rotation_quaternion.copy())
+            h = fig.world(c)
+            r = q - h
+            w = r.cross(n) * ((d + 0.002) / max(r.length_squared, 1e-6))
+            if w.length < 1e-6:
+                continue
+            w = w.normalized() * min(w.length, SKIRT_STEP)
+            # The turn, from the boat into the skeleton's space, about the
+            # bone's head.
+            turn = (a.inverted() @ Quaternion(w.normalized(), w.length).to_matrix() @ a).to_4x4()
+            hl = pb.head.copy()
+            pb.matrix = Matrix.Translation(hl) @ turn @ Matrix.Translation(-hl) @ pb.matrix
+            pb.location = (0.0, 0.0, 0.0)
+            pb.scale = (1.0, 1.0, 1.0)
+            # Never further than the most off the clip's pose.
+            off = start[c].rotation_difference(pb.rotation_quaternion)
+            if off.angle > SKIRT_MOST:
+                pb.rotation_quaternion = start[c].slerp(pb.rotation_quaternion, SKIRT_MOST / off.angle)
+        fig.update()
+    out = {}
+    for c, q in start.items():
+        now = fig.bones[c].rotation_quaternion.copy()
+        fr["rot"][c] = now
+        out[c] = log(q.inverted() @ now)
+    return out
+
+
 def travel(fig, key, place):
     """A key placed elsewhere than the clip, moved there by the hips: its
     pelvis's turn and place in the figure's space so that, with the figure
