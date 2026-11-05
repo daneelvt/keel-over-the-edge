@@ -13,7 +13,7 @@ poses:
       - [head, x, -5]
       - [hand_r, x, -35]
     ik:
-      hand_r: { at: bone, bone: head, offset: [-0.15, -0.24, 0.12], pole: [-0.6, -0.1, -0.1] }
+      hand_r: { at: bone, bone: head, offset: [-0.15, -0.26, 0.13], pole: [-0.6, -0.1, -0.1] }
 
   lookout-scan-ahead:
     from: lookout-shade
@@ -68,7 +68,7 @@ clips:
       - { pose: lookout-scan-ahead, hold: 0.5, ramp: 1.6, lead: head }
       - { pose: lookout-scan-windward, hold: 0.5, ramp: 2.0, lead: head }
       - { pose: lookout-shade, hold: 0.2, ramp: 1.4, lead: head }
-      - { pose: helm-seated, hold: 0.5, arc: [0.14, 0.0] }
+      - { pose: helm-seated, hold: 0.5, arc: [0.1, 0.0] }
 
   lookout-habit-standing:
     keys:

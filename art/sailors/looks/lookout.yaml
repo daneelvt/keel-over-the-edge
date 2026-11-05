@@ -46,8 +46,8 @@ versions:
     face:
       eyes: { iris-inner: "#7A98B4", iris-outer: "#34506E", limbal: "#0E1620" }
 # The hair, bare to the weather: hers parted and combed back into two
-# braids hanging behind the shoulders, tied at their ends; his combed back
-# and tied at the nape in a short tail.
+# braids hanging behind the shoulders, tied at their ends; his thick, its
+# crown standing up, combed back and tied at the nape in a short tail.
 hair:
   id: hair
   family: hair
@@ -72,7 +72,7 @@ hair:
           width: 0.034,
           taper: 0.5,
           lean: 0.12,
-          splay: 0.12,
+          splay: 0.2,
           lobes: 7,
           clear: 0.054,
           root: 0.05,
@@ -80,14 +80,24 @@ hair:
         }
       ribbon: { colour: "#7A2A22", at: 0.88, width: 0.01 }
     male:
-      volume: 0.009
-      taper: 0.016
+      volume: 0.022
+      crown: 0.022
+      crown-depth: 0.1
+      taper: 0.03
       length: 0.2
       strands: 320
-      nape: 0.022
+      nape: 0.03
       gather: [0, 0.09, -0.05]
       tail:
-        { kind: queue, length: 0.12, width: 0.028, taper: 0.5, lean: 0.16, clear: 0.042, share: 0.25 }
+        {
+          kind: queue,
+          length: 0.13,
+          width: 0.03,
+          taper: 0.5,
+          lean: 0.18,
+          clear: 0.056,
+          share: 0.25,
+        }
       ribbon: { colour: "#3A2A1C", at: 0.06, width: 0.012, ends: 0.05 }
 garments:
   # Linen, checked in the main colour on white (a gingham of the period's
@@ -104,7 +114,8 @@ garments:
       male: { shoulder: { reach: 0.18, ease: 0.003 } }
       bands:
         - { at: ends, height: 0.025, out: 0.006 }
-      pattern: { kind: check, period: 0.048, band: 0.42, soft: 0.14, ground: "#EDE8DC", radius: 0.15 }
+      pattern:
+        { kind: check, period: 0.048, band: 0.42, soft: 0.14, ground: "#EDE8DC", radius: 0.15 }
   # Wide slops of striped linen to below the knee, open and full at the
   # hem; a waistband over the shirt.
   - id: slops
@@ -119,7 +130,16 @@ garments:
       bands:
         - { at: top, height: 0.035, out: -0.001 }
       pattern:
-        { kind: stripes, legs: 0.095, period: 0.05, band: 0.3, soft: 0.14, ground: "#DCD3BE", colour: "#6E3328", radius: 0.08 }
+        {
+          kind: stripes,
+          legs: 0.095,
+          period: 0.05,
+          band: 0.3,
+          soft: 0.14,
+          ground: "#DCD3BE",
+          colour: "#6E3328",
+          radius: 0.08,
+        }
   # A neckerchief tied at the throat, its two ends falling over the
   # shirt's opening.
   - id: neckerchief
@@ -128,21 +148,17 @@ garments:
     colour: "#2F3E5C"
     params:
       layer: neckcloth
+      ease: 0.008
       columns: 20
       deck-weight: 2.5
-      # Open at the back under the hair, its ends tucked in there.
-      female:
-        ease: 0.006
-        below: -0.004
-        height: 0.024
-        open-back: 0.14
-        ends: { length: 0.08, width: 0.03, spread: 0.002, off: 0.02 }
+      ends: { length: 0.075, width: 0.026, spread: 0.004, off: 0.02 }
+      # His open at the back, where his hair's tail hangs over it.
+      female: { below: -0.004, height: 0.022 }
       male:
-        ease: 0.005
-        below: -0.008
-        height: 0.02
-        open-back: 0.2
-        ends: { length: 0.065, width: 0.024, spread: 0.003, off: 0.022 }
+        below: -0.004
+        height: 0.018
+        open-back: 0.16
+        ends: { length: 0.07, width: 0.024, spread: 0.003, off: 0.016 }
 palette:
   main: "#8DB4D6"
   skin: "#B2815F"
