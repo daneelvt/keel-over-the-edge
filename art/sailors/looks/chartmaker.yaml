@@ -176,7 +176,8 @@ garments:
       neck: 0.03
       neck-slope: 0.15
       below-waist: 0.02
-      open: { neck: 0.025, hem: 0.04 }
+      # Its fronts straight on the opening's line, as it was built.
+      open: { neck: 0.025, hem: 0.04, straight: true }
       fitted: true
       triangles: 1350
       female: { shoulder: { reach: 0.13, ease: 0.0055 } }

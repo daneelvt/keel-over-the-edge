@@ -12,7 +12,9 @@ poses:
       - [neck_01, x, -2]
       - [head, x, -4]
     ik:
-      hand_r: { at: bone, bone: head, offset: [-0.08, -0.3, 0.02], pole: [-0.6, 0.0, -0.4] }
+      # At the brim's front edge, not into it: on the port side the brim
+      # is pinned up the other way.
+      hand_r: { at: bone, bone: head, offset: [-0.08, -0.315, 0.02], pole: [-0.6, 0.0, -0.4] }
 
   cavalier-sweep:
     from: helm-seated
