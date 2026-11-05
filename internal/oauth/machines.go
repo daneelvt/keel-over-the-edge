@@ -4,6 +4,7 @@ package oauth
 
 import (
 	"context"
+	"strings"
 	"time"
 
 	"github.com/daneelvt/keel-over-the-edge/internal/store"
@@ -45,8 +46,9 @@ func (l MachineLooks) Valid(version, finish, colour string) bool {
 	return v && f && c
 }
 
-// Look is a machine sailor's look: its choices' ids, its words ("Brass ·
-// female · deep red") and its main colour.
+// Look is a machine sailor's look: its choices' ids, its words as the
+// game writes any look's ("Machine, female, brass, madder red") and its
+// main colour.
 type Look struct {
 	Version string `json:"version"`
 	Finish  string `json:"finish"`
@@ -60,7 +62,13 @@ func (l MachineLooks) LookOf(version, finish, colour string) Look {
 	v, _ := find(l.Versions, version)
 	f, _ := find(l.Finishes, finish)
 	c, _ := find(l.Colours, colour)
-	return Look{Version: version, Finish: finish, Colour: colour, Words: f.Name + " · " + v.Name + " · " + c.Name, SRGB: c.Colour}
+	words := []string{"Machine"}
+	for _, n := range []string{v.Name, f.Name, c.Name} {
+		if n != "" {
+			words = append(words, n)
+		}
+	}
+	return Look{Version: version, Finish: finish, Colour: colour, Words: strings.Join(words, ", "), SRGB: c.Colour}
 }
 
 // AppItem is an approved app as the pages list it. Times are ms of the
