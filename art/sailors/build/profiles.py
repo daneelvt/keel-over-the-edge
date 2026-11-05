@@ -9,7 +9,9 @@ and a level brim; a cocked hat a round crown and a brim whose outline is a
 triangle with a corner forward, turned up toward the crown; a pinned brim
 is lifted on one sector only; a tall crown is drawn taller, a cap has no
 brim. The brim has a thickness and may be bound at its edge in another
-colour (a cocked hat's tape); a band may go round the crown's foot.
+colour (a cocked hat's tape); a band may go round the crown's foot. A
+plume may rise from the brim where it is pinned and sweep round the crown,
+falling over the brim's edge behind: a soft, wide feather, its own colour.
 
 Each hat is seated on the head by landmarks, not by eye: its band fits
 the head's section where the crown sits, or the hair's where the hair
@@ -144,6 +146,8 @@ def make(spec, human, marks, arm, over=()):
         lo = around(lambda a: radius + 0.0015, lambda a: 0.001)
         hi = around(lambda a: radius * share + 0.0015, lambda a: h)
         strip(lo, hi, 7.0, 7.0 + h / circumference, material=2)
+    if p.get("plume"):
+        _plume(bm, uv, p["plume"], centre, band_z, radius, crown, brim)
     for f in bm.faces:
         f.smooth = True
     if p.get("tilt"):
@@ -169,6 +173,9 @@ def make(spec, human, marks, arm, over=()):
     me.materials.append(atlas.part(bpy.data.materials.new(spec["id"] + "-band"),
                                    atlas.linear(band["colour"]) if band else colour,
                                    "fixed" if band else spec["region"]))
+    if p.get("plume"):
+        me.materials.append(atlas.part(bpy.data.materials.new(spec["id"] + "-plume"),
+                                       atlas.linear(p["plume"].get("colour", "#EEE9DF")), "fixed"))
     _rigid(obj, arm, "head")
     return obj
 
@@ -217,6 +224,65 @@ def _brim(bm, brim, foot, radius, segments, strip, around, circumference):
     for k in range(len(ts) - 1, 0, -1):
         strip(unders[k], unders[k - 1], 3 + (1 - ts[k]) * scale, 3 + (1 - ts[k - 1]) * scale,
               material=1 if bind > 0 and k == last + 1 else 0)
+
+
+def _plume(bm, uv, q, centre, band_z, radius, crown, brim):
+    """A plume: a wide soft feather along a curve that starts at the brim
+    where it is pinned (azimuth, degrees), rises over the crown's side as
+    it sweeps round toward the back (sweep, degrees), and falls past the
+    brim's edge (droop, metres below the band at its tip); its section a
+    flat oval (width, depth), full in its middle and tapering to both ends,
+    its edges waved like a feather's barbs (waves along it)."""
+    from mathutils import Vector
+
+    a0, sweep = np.radians(q.get("azimuth", 90)), np.radians(q.get("sweep", 110))
+    top = crown[-1][1]
+    width, depth = q.get("width", 0.07), q.get("depth", 0.022)
+    out = q.get("out", (brim or {}).get("width", 0.1) + 0.02)
+    rise = q.get("rise", 0.02)
+    droop = q.get("droop", 0.05)
+    n, sides = q.get("rings", 18), q.get("sides", 8)
+    waves = q.get("waves", 5)
+
+    def point(s):
+        a = a0 + sweep * s
+        r = radius * q.get("start", 0.95) + out * s ** 1.6
+        # Up over the crown's side, then down past the brim.
+        z = top * q.get("from", 0.55) + rise * np.sin(np.pi * min(s / 0.6, 1.0)) \
+            - droop * max(0.0, (s - 0.45) / 0.55) ** 2
+        return Vector((centre[0] + r * np.sin(a), centre[1] - r * np.cos(a), band_z + z))
+
+    path = [point(i / (n - 1)) for i in range(n)]
+    rings = []
+    for i, c in enumerate(path):
+        s = i / (n - 1)
+        ahead = (path[min(i + 1, n - 1)] - path[max(i - 1, 0)]).normalized()
+        # Lying flat: its width level, across the curve.
+        side = ahead.cross(Vector((0, 0, 1))).normalized()
+        up = side.cross(ahead).normalized()
+        if up.z < 0:
+            up = -up
+        full = np.sin(np.pi * (0.12 + 0.78 * s)) ** 0.6
+        wave = 1 + 0.2 * np.sin(waves * 2 * np.pi * s)
+        w, h = width / 2 * full * wave, depth / 2 * (0.4 + 0.6 * full)
+        ring = []
+        for k in range(sides):
+            t = 2 * np.pi * k / sides
+            ring.append(bm.verts.new(c + side * np.cos(t) * w + up * np.sin(t) * h))
+        rings.append(ring)
+    for i in range(n - 1):
+        for k in range(sides):
+            m = (k + 1) % sides
+            f = bm.faces.new((rings[i][k], rings[i][m], rings[i + 1][m], rings[i + 1][k]))
+            f.material_index = 3
+            for lp, c in zip(f.loops, ((k, i), (k + 1, i), (k + 1, i + 1), (k, i + 1))):
+                lp[uv].uv = (9 + c[0] / sides * 0.4, c[1] / (n - 1) * 1.2)
+    for ring, flip in ((rings[0], True), (rings[-1], False)):
+        f = bm.faces.new(list(reversed(ring)) if flip else ring)
+        f.material_index = 3
+        for lp in f.loops:
+            co = lp.vert.co
+            lp[uv].uv = (11 + co.x * 4, co.y * 4 + (0 if flip else 1))
 
 
 def seat(human, marks, above, over=()):

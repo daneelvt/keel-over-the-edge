@@ -409,6 +409,10 @@ class Figure:
         co = self.dressed(self.sitting)
         near = np.hypot(co[:, 0] - pelvis.x, co[:, 1] - pelvis.y) < SEAT_REACH
         below = near & (co[:, 2] < pelvis.z)
+        if not below.any():
+            raise AssertionError(f"nothing below the pelvis {tuple(round(c, 3) for c in pelvis)} within reach: "
+                                 f"{len(co)} vertices, x {co[:, 0].min():.3f}..{co[:, 0].max():.3f}, "
+                                 f"y {co[:, 1].min():.3f}..{co[:, 1].max():.3f}, z {co[:, 2].min():.3f}..{co[:, 2].max():.3f}")
         # Clear of the deck, not on it: the legs' IK, after, moves the cloth
         # under the thighs a little.
         low = float(co[below, 2].min()) - SEAT_CLEAR

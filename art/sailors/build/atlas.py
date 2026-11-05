@@ -84,14 +84,15 @@ def linear(hex_colour):
     return tuple(float(x) for x in np.where(c <= 0.04045, c / 12.92, ((c + 0.055) / 1.055) ** 2.4))
 
 
-def prepare(obj):
+def prepare(obj, angle=1.15):
     """Gives the mesh the atlas map, from its own first map or, without
-    one, a projection, and makes it the only map."""
+    one, a projection (its islands split where faces turn by more than
+    angle, radians), and makes it the only map."""
     me = obj.data
     if ATLAS not in me.uv_layers:
         if len(me.uv_layers) == 0:
             me.uv_layers.new(name=ATLAS)
-            _project(obj)
+            _project(obj, angle)
         else:
             src = me.uv_layers[0]
             uv = np.empty(len(me.loops) * 2)
@@ -105,10 +106,10 @@ def prepare(obj):
     me.uv_layers[ATLAS].active_render = True
 
 
-def _project(obj):
+def _project(obj, angle=1.15):
     _edit([obj])
     bpy.ops.mesh.select_all(action="SELECT")
-    bpy.ops.uv.smart_project(angle_limit=1.15, island_margin=0.0, scale_to_bounds=False)
+    bpy.ops.uv.smart_project(angle_limit=angle, island_margin=0.0, scale_to_bounds=False)
     bpy.ops.object.mode_set(mode="OBJECT")
 
 
