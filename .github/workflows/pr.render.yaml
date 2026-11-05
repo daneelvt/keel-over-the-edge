@@ -179,11 +179,12 @@ jobs:
           - { project: webgl2, shard: 1, shards: 3 }
           - { project: webgl2, shard: 2, shards: 3 }
           - { project: webgl2, shard: 3, shards: 3 }
-          - { project: webgpu, shard: 1, shards: 5 }
-          - { project: webgpu, shard: 2, shards: 5 }
-          - { project: webgpu, shard: 3, shards: 5 }
-          - { project: webgpu, shard: 4, shards: 5 }
-          - { project: webgpu, shard: 5, shards: 5 }
+          - { project: webgpu, shard: 1, shards: 6 }
+          - { project: webgpu, shard: 2, shards: 6 }
+          - { project: webgpu, shard: 3, shards: 6 }
+          - { project: webgpu, shard: 4, shards: 6 }
+          - { project: webgpu, shard: 5, shards: 6 }
+          - { project: webgpu, shard: 6, shards: 6 }
     runs-on: ubuntu-26.04
     timeout-minutes: 20
     permissions:
