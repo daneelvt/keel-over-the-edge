@@ -15,7 +15,7 @@ import { type Matrix4, Quaternion, Vector3 } from 'three';
 import type { Rig } from './rig';
 
 /** The chains, root first; a look moves its spring joints where its hair and tails hang. */
-const CHAINS = [
+export const CHAINS = [
   ['skirt_front_l_01', 'skirt_front_l_02'],
   ['skirt_front_r_01', 'skirt_front_r_02'],
   ['skirt_side_l_01', 'skirt_side_l_02'],

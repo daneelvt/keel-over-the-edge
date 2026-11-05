@@ -44,6 +44,7 @@ import {
   dot,
   Fn,
   float,
+  int,
   max,
   mix,
   normalize,
@@ -140,6 +141,20 @@ export interface SailorMaterialOptions {
   machine?: boolean;
   /** A machine's lamps' strength, 0 to 1 (the fleet's, which pulse together); else each object's userData glow. */
   glow?: Node<'float'>;
+  /**
+   * The fleet's: each instance's own colours, whether it is a machine (1) or
+   * a person (0), and its look's layer of the atlas and mask, which are then
+   * array textures. In place of the object's userData and machine.
+   */
+  instance?: {
+    main: Node<'vec3'>;
+    skin: Node<'vec3'>;
+    hair: Node<'vec3'>;
+    machine: Node<'float'>;
+    layer: Node<'float'>;
+    /** Told of the nodes that sample the atlas and the mask, to give them a new texture when it grows. */
+    users: { atlas: { value: Texture }[]; mask: { value: Texture }[] };
+  };
 }
 
 /**
@@ -152,27 +167,36 @@ export function sailorMaterial(
   mask: Texture,
   options: SailorMaterialOptions = {},
 ): MeshStandardNodeMaterial {
-  const { vertex, machine = false } = options;
+  const { vertex, instance } = options;
   // Garments are single surfaces, seen from inside at a cuff or a hem.
   const m = litMaterial({ roughness: 0.8, metalness: 0, side: DoubleSide }, vertex);
   m.name = 'sailor';
-  const base = texture(atlas);
-  const regions = texture(mask);
-  const main = userData('main', 'color') as unknown as Node<'vec3'>;
-  const skin = userData('skin', 'color') as unknown as Node<'vec3'>;
-  const hair = userData('hair', 'color') as unknown as Node<'vec3'>;
+  let base = texture(atlas);
+  let regions = texture(mask);
+  if (instance !== undefined) {
+    instance.users.atlas.push(base);
+    instance.users.mask.push(regions);
+    const layer = int(instance.layer.add(0.5));
+    base = base.depth(layer);
+    regions = regions.depth(layer);
+  }
+  const main = instance?.main ?? (userData('main', 'color') as unknown as Node<'vec3'>);
+  const skin = instance?.skin ?? (userData('skin', 'color') as unknown as Node<'vec3'>);
+  const hair = instance?.hair ?? (userData('hair', 'color') as unknown as Node<'vec3'>);
+  // 1 for a machine, 0 for a person: the object's, or each instance's.
+  const kind = instance?.machine ?? float(options.machine === true ? 1 : 0);
+  const machine = instance !== undefined || options.machine === true;
+  const person = float(1).sub(kind);
   // Each region's grey times twice its colour; 1 outside the regions. A
   // machine's blue is its lamps, kept in their own colour.
-  let tint = vec3(1)
+  const tint = vec3(1)
     .add(regions.r.mul(main.mul(2).sub(1)))
-    .add(regions.g.mul(skin.mul(2).sub(1)));
-  if (!machine) {
-    tint = tint.add(regions.b.mul(hair.mul(2).sub(1)));
-  }
+    .add(regions.g.mul(skin.mul(2).sub(1)))
+    .add(regions.b.mul(hair.mul(2).sub(1)).mul(person));
   const albedo = base.rgb.mul(tint);
   const metal = regions.a;
   // A machine's "skin" is metal, and takes nothing of skin's light.
-  const isSkin = machine ? float(0) : regions.g;
+  const isSkin = regions.g.mul(person);
   m.colorNode = vec4(albedo, 1);
   m.metalnessNode = metal;
   // Cloth matte; skin's highlight tighter the deeper the tone; metal
@@ -212,7 +236,7 @@ export function sailorMaterial(
     const strength = (options.glow ?? (userData('glow', 'float') as unknown as Node<'float'>)).mul(
       mix(float(LAMP_NIGHT), float(LAMP_DAY), day),
     );
-    const lamp = hair.mul(regions.b).mul(strength);
+    const lamp = hair.mul(regions.b).mul(strength).mul(kind);
     return scatter.add(rim).add(shine).add(lamp);
   })() as unknown as Node<'vec3'>;
   return m;

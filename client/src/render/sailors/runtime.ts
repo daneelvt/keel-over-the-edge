@@ -202,6 +202,8 @@ export class SailorRuntime {
     readonly boat: SailorBoat,
     seed: number,
     machine = false,
+    /** Whether the cloth and hair move on springs (the boat in view's); else as the clips have them. */
+    readonly springs = true,
   ) {
     this.#clips = clips;
     const n = rig.names.length;
@@ -248,6 +250,18 @@ export class SailorRuntime {
   /** Whether the sailor is crossing the boat. */
   get crossing(): boolean {
     return this.#cross !== null;
+  }
+
+  /**
+   * Forgets the moments before: the next one seats the sailor afresh, on
+   * the side its offset says, as a sailor first met (a boat moved at once).
+   */
+  reset(): void {
+    this.#mode = -1;
+    this.#cross = null;
+    this.#habit = null;
+    this.#change = 1;
+    this.#springs.reset();
   }
 
   /** Poses the rig for the moment, and sets root and hands. */
@@ -329,7 +343,9 @@ export class SailorRuntime {
     this.#tillerHand(seated);
 
     // The springs.
-    this.#springStep(s, dt, seated);
+    if (this.springs) {
+      this.#springStep(s, dt, seated);
+    }
     this.#forwardHand(seated);
   }
 

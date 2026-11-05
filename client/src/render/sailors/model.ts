@@ -82,7 +82,8 @@ function ktx2For(renderer: WebGPURenderer): KTX2Loader {
   return ktx2;
 }
 
-function gltfLoader(renderer: WebGPURenderer): GLTFLoader {
+/** A loader for sailors' files: meshopt, and KTX2 transcoded to what the renderer's GPU takes. */
+export function gltfLoader(renderer: WebGPURenderer): GLTFLoader {
   const loader = new GLTFLoader();
   loader.setMeshoptDecoder(MeshoptDecoder);
   loader.setKTX2Loader(ktx2For(renderer));

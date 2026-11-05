@@ -2073,6 +2073,23 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
         });
       }
       world.fleetSource = { drawn, count: drawn.length };
+      // Boats put somewhere at once: their sailors met afresh.
+      world.fleet.nearSailors?.forget();
+    },
+
+    /** Resolves once every look a boat of the fleet has been drawn with has loaded (or failed). */
+    async fleetLoaded(): Promise<void> {
+      const busy = () =>
+        world.fleet.looks?.looks.some((l) => l.state === 'loading' || l.clipsState === 'loading') ??
+        false;
+      while (busy()) {
+        await new Promise((r) => setTimeout(r, 50));
+      }
+    },
+
+    /** Seats the sailor in view afresh at the boat's pose, as the fleet meets a boat's. */
+    settleSailor(): void {
+      world.boat?.sailor?.runtime.reset();
     },
 
     /**
@@ -2215,7 +2232,15 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
         farMeshes: world.fleet.far.meshes.length,
         ...world.fleet.figures(),
         sailorDraws: world.fleet.sailorDraws(),
+        skinned: world.fleet.near.count - world.fleet.near.rigid,
       };
+    },
+    /**
+     * The fleet's work since last asked: frames drawn, the milliseconds its
+     * update took (the near sailors' runs included), and how many runs.
+     */
+    fleetWork() {
+      return world.fleet.work();
     },
     /** The other boats as the page draws them online, with the fleet's numbers. */
     fleet() {

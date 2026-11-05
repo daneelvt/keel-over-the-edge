@@ -17,6 +17,21 @@ import { gzipSync } from 'node:zlib';
 /** The critical download's budget, in bytes. */
 export const BUDGET = 4 * 1024 * 1024;
 
+/**
+ * A sailor's files' budgets, gzipped, in bytes, a look and version: its deck
+ * and far levels together (they load together, when a boat with the look
+ * first comes into view), its close level (when the camera comes near the
+ * boat in view), its clips (when a boat with it first comes near); and what
+ * the first download carries of sailors: one look's deck, far and clips,
+ * the one every boat is drawn with.
+ */
+export const SAILOR_BUDGETS = {
+  deckFar: 150 * 1024,
+  close: 300 * 1024,
+  clips: 150 * 1024,
+  critical: 280 * 1024,
+};
+
 /** The approval page's budget, in bytes: the page with what it loads before it runs. */
 export const APPROVE_BUDGET = 30 * 1024;
 
