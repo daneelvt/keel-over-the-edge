@@ -238,13 +238,6 @@ dd {
   margin: 0;
 }
 
-/* An account's sailor: the portrait beside the look in words. */
-dd.card-look {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
 table {
   width: 100%;
   border-collapse: collapse;
@@ -659,4 +652,11 @@ table.busy td {
 
 .gales li.chosen button {
   color: #d55e00;
+}
+
+/* An account's sailor: the portrait beside the look in words. */
+dd.card-look {
+  display: flex;
+  align-items: center;
+  gap: 10px;
 }

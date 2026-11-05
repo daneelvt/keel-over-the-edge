@@ -9,10 +9,10 @@ import type { Me } from './me';
 import {
   chosen,
   NEXT_LOOK,
-  Picker,
   PICKER_NOTE,
-  placeWords,
+  Picker,
   PREVIOUS_LOOK,
+  placeWords,
   shuffled,
   stepLook,
   undone,
@@ -139,10 +139,11 @@ describe('the picker', () => {
     expect(text(tree)).toContain(PICKER_NOTE);
     // A swatch chooses its option, the arrows the next look.
     const colour = catalog.sailorOptions.colours[3];
-    (radios.find((r) => r.props['aria-label'] === colour?.name)?.props.onClick as () => void)();
+    const swatch = radios.find((r) => r.props['aria-label'] === colour?.name);
+    (swatch?.props.onClick as (() => void) | undefined)?.();
     expect(chose.at(-1)?.colour).toBe(colour?.id);
     const next = findAll(tree, (n) => n.props['aria-label'] === NEXT_LOOK)[0];
-    (next?.props.onClick as () => void)();
+    (next?.props.onClick as (() => void) | undefined)?.();
     expect(chose.at(-1)).toEqual(stepLook(catalog, first(), 1));
     expect(findAll(tree, (n) => n.props['aria-label'] === PREVIOUS_LOOK)).toHaveLength(1);
     // No Undo before a shuffle; the portrait only where the stage draws no figure.
