@@ -29,7 +29,7 @@ millimetre of cloth under the skin.
   view sees it; under a woman's bust, a fitted garment returning);
 - bust: a woman machine's bust as the front sees her, her coat over her
   plates (each apex forward of the middle, the figure returning under
-  it), and her coat over each apex;
+  it), and her coat over each breast to in from its apex;
 - symmetry: each mesh its own mirror within 1 mm, unless declared not, at
   the close and deck levels (the far is posed);
 - atlas: the UVs inside the square, no two triangles on one texel (but
@@ -71,6 +71,9 @@ BUST_RETURN = 0.02
 # A woman machine's bust: each apex this far forward of the middle, at
 # its height.
 BUST_CLEFT = 0.01
+# Her coat over each breast from outside to this share of the apex's
+# distance from the middle.
+BUST_COVER = 0.75
 
 
 class Gates:
@@ -543,7 +546,8 @@ def bust(gates, marks, meshes, worn):
     """A woman machine's bust, as the front sees her (her coat over her
     plates): at the bare bust's height, each apex forward of the middle
     (the cleft) and the figure coming back under it; and her coat over
-    each apex, the plates showing between."""
+    each breast from outside to in from its apex (BUST_COVER), the plates
+    showing between."""
     seen = _tree_of([(motion.coords_posed(o)[0], [list(f.vertices) for f in o.data.polygons]) for o in meshes])
     coat = [w.obj for w in worn if w.kind == "garment" and (w.spec.get("params") or {}).get("fitted")]
     cloth = _tree_of([(motion.coords_posed(o)[0], [list(f.vertices) for f in o.data.polygons]) for o in coat])
@@ -559,9 +563,12 @@ def bust(gates, marks, meshes, worn):
             continue
         cleft = min(cleft, middle - at)
         under = min(under, max(below) - at)
-        over = _front(cloth, sign * x, z) if cloth is not None else None
-        if over is None or over > at + 1e-4:
-            bare.append(sign)
+        # The coat over the apex, and in from it toward the middle.
+        for k in (1.0, BUST_COVER):
+            over = _front(cloth, sign * x * k, z) if cloth is not None else None
+            first = _front(seen, sign * x * k, z)
+            if over is None or first is None or over > first + 1e-4:
+                bare.append([sign, k])
     gates.add("close", "bust cleft", cleft, BUST_CLEFT, cleft >= BUST_CLEFT, at=[round(x, 3), round(z, 3)])
     gates.add("close", "bust under", under, BUST_RETURN, under >= BUST_RETURN)
     gates.add("close", "bust covered", len(bare), 0, not bare, sides=bare)

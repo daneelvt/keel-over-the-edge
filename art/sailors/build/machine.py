@@ -617,6 +617,84 @@ def _largest_piece(bm):
     bmesh.ops.delete(bm, geom=[v for v in bm.verts if not v.link_faces], context="VERTS")
 
 
+def finger_swatch(obj):
+    """The material and the atlas place the close level's fingers are
+    drawn with: their swatch."""
+    names = {g.index: g.name for g in obj.vertex_groups}
+    uvs = obj.data.uv_layers.active.data
+    for f in obj.data.polygons:
+        ws = obj.data.vertices[f.vertices[0]].groups
+        if ws and names[max(ws, key=lambda g: g.weight).group].startswith(FINGERS):
+            return f.material_index, [tuple(uvs[i].uv) for i in f.loop_indices]
+    return 0, [(0.0, 0.0)]
+
+
+def deck_fingers(obj, arm, spec, swatch):
+    """The fingers made again at the deck level, after its collapse, which
+    breaks their joints' small boxes into scattered faces: those go, and
+    each joint is a whole box again, open at its root, on the fingers'
+    swatch (finger_swatch, read before the collapse)."""
+    bm = bmesh.new()
+    bm.from_mesh(obj.data)
+    deform = bm.verts.layers.deform.active
+    uvs = bm.loops.layers.uv.active
+    groups = {g.name: g.index for g in obj.vertex_groups}
+    finger_groups = {i for n, i in groups.items() if n.startswith(FINGERS)}
+
+    def on_finger(v):
+        ws = v[deform]
+        return bool(ws) and max(ws.items(), key=lambda kv: kv[1])[0] in finger_groups
+
+    gone = [f for f in bm.faces if all(on_finger(v) for v in f.verts)]
+    mat, swatch = swatch
+    bmesh.ops.delete(bm, geom=gone, context="FACES")
+    bmesh.ops.delete(bm, geom=[v for v in bm.verts if not v.link_faces], context="VERTS")
+    bones = arm.data.bones
+    flip = Vector((-1, 1, 1))
+    for name in FINGERS:
+        first, second, third = (bones[f"{name}_0{k}_l"] for k in (1, 2, 3))
+        w = spec["thumb" if name == "thumb" else "width"]
+        t = w * spec["thick"]
+        m = first.matrix_local.to_3x3()
+        x, z = m.col[0].normalized(), m.col[2].normalized()
+        for bone, a, e, k in ((first, first.head_local, first.tail_local, 0.9),
+                              (second, second.head_local, second.tail_local, 0.9),
+                              (third, third.head_local, third.tail_local, spec["tip"])):
+            d = e - a
+            a = a + d * (spec["gap"] / d.length)
+            # The tip a little shorter: at this level's collapse a hand on
+            # the gunwale must not reach into it.
+            e = e - d * (spec["gap"] * (3 if bone is third else 1) / d.length)
+            corners = [[at + (x * sx * w / 2 + z * sz * t / 2) * kk for sx, sz in ((-1, -1), (1, -1), (1, 1), (-1, 1))]
+                       for at, kk in ((a, 1.0), (e, k))]
+            # The right hand's the left's mirror, exactly.
+            for side, at_side in (("l", lambda q: q), ("r", lambda q: q * flip)):
+                bone_side = bones[bone.name[:-2] + "_" + side]
+                rings = [[bm.verts.new(at_side(q)) for q in ring] for ring in corners]
+                a_s, e_s = at_side(a), at_side(e)
+                faces = [bm.faces.new([rings[0][i], rings[0][(i + 1) % 4], rings[1][(i + 1) % 4], rings[1][i]])
+                         for i in range(4)]
+                faces.append(bm.faces.new(rings[1]))
+                for v in rings[0] + rings[1]:
+                    v[deform][groups[bone_side.name]] = 1.0
+                bm.normal_update()
+                # Outward from the finger's line: a box's faces face away.
+                mid = (a_s + e_s) / 2
+                if sum((f.calc_center_median() - mid).dot(f.normal) for f in faces) < 0:
+                    bmesh.ops.reverse_faces(bm, faces=faces)
+                for f in faces:
+                    f.material_index = mat
+                    f.smooth = False
+                    # The swatch face's own corners: smaller than a
+                    # texel, they cover no texel's middle.
+                    for i, lp in enumerate(f.loops):
+                        lp[uvs].uv = swatch[i % len(swatch)]
+    bmesh.ops.triangulate(bm, faces=[f for f in bm.faces if len(f.verts) > 3])
+    bm.to_mesh(obj.data)
+    bm.free()
+    obj.data.update()
+
+
 def fingers(part, arm, spec, mats):
     """Each joint of each finger a box along its bone, narrowing to the
     tip, a little short of the next."""
