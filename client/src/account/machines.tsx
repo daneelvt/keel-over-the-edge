@@ -28,6 +28,7 @@ import { catalog } from '../catalog';
 import { MACHINE } from '../catalog/looks';
 import { useWatch } from '../ui/watchlazy';
 import { COPIED, COPY_WATCH_LINK, WATCH, watchersText, watchLink } from '../ui/watchwords';
+import type { LookChooser } from './chooser';
 import { Cog } from './cog';
 import { Connect } from './connect';
 import type { Voyage } from './letwatch';
@@ -398,16 +399,24 @@ export function StartPair({
   sail,
   list,
   children,
+  chooser,
 }: {
   me: Me;
   voyage: Voyage;
   sail: () => void;
   list: () => void;
   children: ComponentChildren;
+  chooser?: LookChooser | undefined;
 }) {
   return (
     <div class="start-pair">
-      <YourSailor me={me} voyage={voyage} sail={sail} watch={list} />
+      <YourSailor
+        me={me}
+        voyage={voyage}
+        sail={sail}
+        watch={list}
+        {...(chooser === undefined ? {} : { chooser })}
+      />
       <div class="start-panel ai-panel">{children}</div>
     </div>
   );
@@ -425,11 +434,14 @@ export function MachineStart({
   done,
   me,
   voyage,
+  chooser,
 }: {
   first: boolean;
   done: (watch?: string) => void;
   me: Me;
   voyage: Voyage;
+  /** The player's look, changed on their own panel. */
+  chooser?: LookChooser;
 }) {
   const { page, setPage, problem } = usePage();
   const [listing, setListing] = useState(false);
@@ -437,7 +449,13 @@ export function MachineStart({
     return <StartWatchList choose={(name) => done(name)} close={() => setListing(false)} />;
   }
   return (
-    <StartPair me={me} voyage={voyage} sail={() => done()} list={() => setListing(true)}>
+    <StartPair
+      me={me}
+      voyage={voyage}
+      sail={() => done()}
+      list={() => setListing(true)}
+      chooser={chooser}
+    >
       {page === null ? (
         <p class="start-text start-faint" aria-live="polite">
           {problem || 'Reading your machine sailors…'}

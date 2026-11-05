@@ -60,6 +60,16 @@ export class Cover {
   }
 
   /**
+   * Stands aside while the picker's stage is drawn in its place, the page
+   * still covered as far as the screen at sea knows; and back.
+   */
+  aside(on: boolean): void {
+    if (this.#up) {
+      this.el.hidden = on;
+    }
+  }
+
+  /**
    * Fades out over seconds, the screen at sea coming in over its last
    * moments; at once for 0. Resolves once it is gone.
    */
