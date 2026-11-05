@@ -12,7 +12,7 @@ poses:
       - [spine_03, x, -4]
       - [head, x, -6]
     ik:
-      hand_r: { at: bone, bone: pelvis, offset: [-0.08, -0.15, 0.12], pole: [-0.8, 0.3, -0.1] }
+      hand_r: { at: bone, bone: pelvis, offset: [-0.15, -0.12, 0.12], pole: [-0.8, 0.3, -0.1] }
 
   buccaneer-round:
     from: buccaneer-belt
@@ -33,8 +33,8 @@ poses:
       - [spine_03, x, -3]
       - [head, x, -4]
     ik:
-      hand_l: { at: bone, bone: pelvis, offset: [0.08, -0.14, 0.12], pole: [0.8, 0.3, -0.1] }
-      hand_r: { at: bone, bone: pelvis, offset: [-0.08, -0.14, 0.12], pole: [-0.8, 0.3, -0.1] }
+      hand_l: { at: bone, bone: pelvis, offset: [0.18, -0.08, 0.11], pole: [0.8, 0.3, -0.1] }
+      hand_r: { at: bone, bone: pelvis, offset: [-0.18, -0.08, 0.11], pole: [-0.8, 0.3, -0.1] }
 
   buccaneer-stand-hip:
     from: buccaneer-stand-belt
