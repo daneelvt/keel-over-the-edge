@@ -190,7 +190,9 @@ def make(spec, human, marks, arm, skin=None, over=()):
     # A knitted cap's brim turned up in a roll, and a wrap's folds where it
     # is wound: on the smoothed cloth.
     if p.get("roll"):
-        pts = _roll(pts, c0, at, columns, p["roll"])
+        # A roll shows its edge: a column the bisection led astray at the
+        # middle of the brow is brought to its neighbours first.
+        pts = _roll(_even(pts), c0, at, columns, p["roll"])
     if p.get("folds"):
         pts = _folds(pts, c0, columns, p["folds"])
     # Its own mirror: the right half's columns mirrored onto the left.
@@ -435,6 +437,20 @@ def _tall(pts, crown, c0, t):
     return out, crown
 
 
+def _even(pts, rows=3, most=0.008):
+    """The lowest rows' points that stand more than most off the median
+    of their neighbours round the head (two each side), brought to the
+    mean of the two beside them."""
+    new = pts.copy()
+    columns = pts.shape[0]
+    for r in range(min(rows, pts.shape[1])):
+        for c in range(columns):
+            near = np.array([pts[(c + k) % columns, r] for k in (-2, -1, 1, 2)])
+            if np.linalg.norm(pts[c, r] - np.median(near, axis=0)) > most:
+                new[c, r] = (pts[(c - 1) % columns, r] + pts[(c + 1) % columns, r]) / 2
+    return new
+
+
 def _roll(pts, c0, at, columns, r):
     """A brim turned up in a roll: the rows from the edge up stood out by
     its out, each by its share (rows), rounding back to the cap above."""
@@ -481,7 +497,8 @@ def _droop(bm, uv, shell, crown, c0, d):
     middle where it folds over, tapering from its base to a rounded tip.
     Its params: azimuth, from and down (the elevations it starts at and
     falls to, degrees, seen from the middle of the cap's round), lift (how far it stands off the cap mid-way), radius
-    [base, tip], rings, sides."""
+    [base, tip], off (how far its tip hangs out beyond the cap, toward the
+    azimuth), rings, sides."""
     a = np.radians(d.get("azimuth", 180))
     out = Vector((np.sin(a), -np.cos(a), 0))
     up = Vector((0, 0, 1))
@@ -501,7 +518,9 @@ def _droop(bm, uv, shell, crown, c0, d):
         if loc is None:
             raise AssertionError("no cap under its drooping top")
         r = r0 + (r1 - r0) * t ** 0.8
-        path.append(loc + n * (r * 0.7 + lift * np.sin(np.pi * t)))
+        # Its base sunk in the cap, the rest standing off it.
+        path.append(loc + n * (r * (0.3 + 0.4 * min(1.0, 4 * t)) + lift * np.sin(np.pi * t))
+                    + out * d.get("off", 0.0) * t ** 1.5)
         radii.append(r)
     rings = []
     for i, c in enumerate(path):
