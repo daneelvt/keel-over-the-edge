@@ -105,6 +105,8 @@ export type Received =
   | { kind: 'watchers'; count: number }
   /** Whether the AI of the own machine sailor watched attends to it. */
   | { kind: 'lamp'; state: LampState }
+  /** The sailor of the boat sailed or watched changed their look: its code. */
+  | { kind: 'look'; look: number }
   /** The server is about to restart, in about inMs. */
   | { kind: 'restart'; inMs: number }
   /** The sea about the boat. */
@@ -247,6 +249,9 @@ export class Session {
       case 'watchers':
         this.#lastHeard = now;
         return { kind: 'watchers', count: m.body.value.count };
+      case 'lookChanged':
+        this.#lastHeard = now;
+        return { kind: 'look', look: m.body.value.look };
       case 'agentLamp': {
         this.#lastHeard = now;
         const state = m.body.value.state;

@@ -27,7 +27,6 @@ built files are committed; the catalog's `art.model` names them, and
 - `lib/gltf.ts`: writes a glTF binary from nodes, meshes and materials.
 - `lib/mesh.ts`: a mesh builder: vertices, faces, normals, tubes and boxes.
 - `boats/jolly-boat/build.ts`: the Jolly boat.
-- `sailors/stand-in/build.ts`: the stand-in sailor, a plain figure.
 - `town/lib/kit.ts` and `town/<biome>/build.ts`: each biome's kit of town
   buildings and props, `town/<biome>.glb`.
 - `icon/icon.ts` and `icon/build.ts`: the game's icon, drawn as shapes and
@@ -44,10 +43,6 @@ centreline at the waterline; the bow points to -z and starboard is +x. The
 sail, telltales and pennant carry their fractions (of the chord and luff,
 along each ribbon) in their texture coordinates, and the client shapes them
 on the GPU.
-
-A sailor's nodes are `body`, `head`, `arm-left` and `arm-right`; its origin
-is at the hips, where it sits, facing +x. (That is the stand-in's; the
-sailors made in Blender, below, are not yet drawn.)
 
 ## Sailors in Blender
 

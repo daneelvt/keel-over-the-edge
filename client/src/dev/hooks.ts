@@ -83,6 +83,7 @@ import { RECORDS, SEA, WEATHER } from '../predict/layout.gen';
 import { BODY, SKY, WIND_VALUE, WIND_VALUES } from '../predict/physics';
 import type { Predictor } from '../predict/predictor';
 import { heldSpell, placedRecord } from '../predict/weather';
+import { MACHINE_DEFAULT, PERSON_DEFAULT } from '../render/fleet';
 import { airLook } from '../render/fog';
 import { flashNear } from '../render/lightning';
 import {
@@ -865,10 +866,19 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
      * Resolves once the machine is aboard.
      */
     async machineAboard(on: boolean): Promise<void> {
-      world.boat?.setMachine(on);
-      while (on && world.boat !== null && !world.boat.machineAboard) {
-        await new Promise((r) => setTimeout(r, 50));
-      }
+      await world.showLook(on ? MACHINE_DEFAULT : PERSON_DEFAULT);
+    },
+    /**
+     * Draws the boat in view's sailor in a look, by its code, as the server
+     * tells it; resolves once it is drawn.
+     */
+    async lookAboard(code: number): Promise<void> {
+      await world.showLook(code);
+    },
+    /** The boat in view's sailor's look as drawn: its art's deck level and whether it is a machine; null for none. */
+    lookDrawn(): { model: string; machine: boolean } | null {
+      const b = world.boat;
+      return b === null ? null : b.drawnLook();
     },
     /** Puts the camera at a preset, by name, or at a view of its own. */
     camera(name: string | CameraView): void {
@@ -1182,13 +1192,15 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
     },
 
     /**
-     * Resolves when the boat's model has loaded. The low tier's loops are
-     * made whole at once, unless told to leave them to the frames.
+     * Resolves when the boat's model and its sailors have loaded (the own
+     * boat's, and the fleet's first look). The low tier's loops are made
+     * whole at once, unless told to leave them to the frames.
      */
     async ready(finish = true): Promise<void> {
       while (world.boat === null) {
         await new Promise((r) => setTimeout(r, 50));
       }
+      await world.sailorsLoaded;
       if (finish) {
         world.ocean.detail.finishBake();
       }
@@ -1575,7 +1587,7 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
         sailor === null
           ? null
           : {
-              watching: signal({ sailor, machine, mine: false }),
+              watching: signal({ sailor, machine, mine: false, look: -1 }),
               spectating: signal(true),
               status: signal('sailing'),
               ended: signal(null),

@@ -154,7 +154,7 @@ describe.each([
 
 test('each near sailor runs 20 times a second, whatever the frames', async () => {
   const kind = catalog.boats[0];
-  const sailor = catalog.sailors[0];
+  const sailor = catalog.sailors[0]?.versions[0];
   if (kind === undefined || sailor === undefined) {
     throw new Error('no boat or sailor');
   }

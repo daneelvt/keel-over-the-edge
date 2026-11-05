@@ -51,7 +51,13 @@ function readGltf(path: string): Gltf {
   return JSON.parse(glb.subarray(20, 20 + length).toString('utf8')) as Gltf;
 }
 
-describe.each(catalog.sailors.map((s) => [s.name, s] as const))('sailor %s', (_, sailor) => {
+/** Every look's versions, the people's and the machine's, by name. */
+const versions = [
+  ...catalog.sailors.flatMap((s) => s.versions.map((v) => [`${s.name} ${v.name}`, v] as const)),
+  ...catalog.machine.versions.map((v) => [`machine ${v.name}`, v] as const),
+];
+
+describe.each(versions)('sailor %s', (_, sailor) => {
   test(`its deck level is skinned, under ${DECK_BUDGET.toLocaleString('en')} triangles`, () => {
     const g = readGltf(sailor.art.model);
     expect(g.nodes.some((n) => n.skin !== undefined)).toBe(true);

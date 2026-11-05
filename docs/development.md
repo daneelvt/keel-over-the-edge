@@ -6420,7 +6420,7 @@ effort, and a clinometer), and the helm's release.
 | `client/src/game/driver.ts`, `client/src/sandbox/` | The boat driver: controls in, states and `Out` to draw. The sandbox is the offline driver |
 | `client/src/game/game.ts` | The frame: keys, steps, the pose, the instruments, the sound. Input events only move targets; the frame reads them. The frame allocates nothing |
 | `client/src/render/camera.ts` | The chase camera: its yaw follows the heading through a critically damped spring (ω = 4 s⁻¹, 12 with reduced motion); it rises and falls with the boat's heave, over half a second, but not with its heel or pitch, and stays 1.6 m above the sea under the boat |
-| `client/src/render/boat.ts`, `sailshape.ts`, `telltales.ts`, `pennant.ts`, `sailor.ts` | The boat from the physics: lifted by its heave, pitched and heeled about its centre of gravity; the boom, rudder and tiller; the sail's twist from `Out.Twist`, camber from `Out.Flattening`, rippling where a strip luffs; the telltales from each strip's flow (attached: both stream aft; luffing: the windward one lifts; stalled: the leeward one droops; aback: both stream forward); the pennant downwind of the apparent wind at the masthead; the stand-in sailor by mode |
+| `client/src/render/boat.ts`, `sailshape.ts`, `telltales.ts`, `pennant.ts`, `sailor.ts` | The boat from the physics: lifted by its heave, pitched and heeled about its centre of gravity; the boom, rudder and tiller; the sail's twist from `Out.Twist`, camber from `Out.Flattening`, rippling where a strip luffs; the telltales from each strip's flow (attached: both stream aft; luffing: the windward one lifts; stalled: the leeward one droops; aback: both stream forward); the pennant downwind of the apparent wind at the masthead; the sailor by mode |
 | `client/src/render/overlays.ts` | The beginners' arrows, each its own shape with a label |
 | `client/src/ui/` | The screen at sea in Preact: instruments, sailor line, helm, sheet, menu. Words and numbers are signals written at most ten times a second; what moves every frame moves by `style.transform` |
 | `client/src/audio/` | Sound, synthesised with Web Audio from the recipes in `art/sound/` (below) |
@@ -6502,8 +6502,8 @@ files carry `SPDX-License-Identifier: LicenseRef-All-Rights-Reserved`, and
 `tools/licences` checks that they do.
 
 A boat is a script that reads its dimensions from the catalog, so the model
-is the boat the physics sails, pennant and telltales included. The sailor is
-a plain stand-in figure, a script of its own:
+is the boat the physics sails, pennant and telltales included. The sailors
+are made in Blender (`art/sailors/`):
 
 ```sh
 go run ./tools/catalog   # after changing a boat's numbers

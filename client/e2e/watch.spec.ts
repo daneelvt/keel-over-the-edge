@@ -28,7 +28,7 @@ async function machine(context: BrowserContext, name: string): Promise<string> {
       name,
       version: data.machine.versions[0]?.id,
       finish: data.machine.finishes[0]?.id,
-      colour: data.machine.colours[0]?.id,
+      colour: data.sailorOptions.colours[0]?.id,
     },
   });
   expect(res.status(), await res.text()).toBe(201);

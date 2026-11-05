@@ -227,6 +227,8 @@ export interface WatchingTold {
   /** A machine sailor, sailed by an AI agent; one of the account's own. */
   machine: boolean;
   mine: boolean;
+  /** The sailor's look code. */
+  look: number;
 }
 
 /** What the net worker's Hello carries besides the protocol version. */
@@ -329,6 +331,8 @@ export type FromWorker =
       zone: string;
       /** The boat watched, whose the boat and kind are; null for the connection's own. */
       watching: WatchingTold | null;
+      /** The look code of the boat's sailor: the connection's own, or the one watched. */
+      look: number;
       /**
        * The connection's first Welcome. A later one, a watch begun or the
        * own boat back, is sent nothing again that the connection was
@@ -348,6 +352,8 @@ export type FromWorker =
   | { type: 'watchers'; count: number }
   /** Whether the AI of the own machine sailor watched attends to it: at the helm, or quiet. */
   | { type: 'lamp'; state: LampState }
+  /** The sailor of the boat sailed or watched changed their look, at Port Royal: its code. */
+  | { type: 'look'; look: number }
   /** The server is about to restart, in about inMs: the bell. */
   | { type: 'restart'; inMs: number }
   /** The sea about the boat, for the prediction and the drawing. */

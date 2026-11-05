@@ -19,6 +19,7 @@ import { type Color, type Vector2, Vector3, type Vector4 } from 'three';
 import { exp, float, fog, length, max, mix, positionView, positionWorld } from 'three/tsl';
 import type { WebGPURenderer } from 'three/webgpu';
 import { catalog } from '../catalog';
+import { artOf, coloursOf, isMachine, type Look, type Looks, lookOf } from '../catalog/looks';
 import { endLook } from '../edge/broken';
 import { EdgeScene } from '../edge/edge';
 import { edgeLook, KOSCHMIEDER } from '../edge/mist';
@@ -38,12 +39,12 @@ import { type BoatWind, newBoatWind } from '../predict/weather';
 import { SkyTime } from '../sky/skytime';
 import starsUrl from '../sky/stars.bin?url';
 import { SkyWeather } from '../sky/weather';
-import { Boat, lazyArtUrl } from './boat';
+import { Boat, lazyArtUrl, type SailorLook } from './boat';
 import { CAMERA_PRESETS, type CameraView, ChaseCamera } from './camera';
 import { FloatingOrigin, type ScenePoint } from './coords';
 import { DirtyAir } from './dirtyair';
 import { type FlagSeen, Flags } from './flags';
-import { FleetView } from './fleet';
+import { FleetView, PERSON_DEFAULT } from './fleet';
 import { AIR_REACH, airLook, depthTo, heldRain, setAirSources } from './fog';
 import { FreeCamera } from './freecam';
 import { GustRings } from './gustring';
@@ -111,6 +112,12 @@ export { CAMERA_PRESETS, type CameraView };
 export interface FleetSource {
   readonly drawn: readonly DrawnBoat[];
   readonly count: number;
+}
+
+/** A look code's look as a sailor is drawn in it: the default person's for a code that names none. */
+export function sailorLookOf(cat: Looks, code: number): SailorLook {
+  const l = lookOf(cat, code) ?? (lookOf(cat, PERSON_DEFAULT) as Look);
+  return { art: artOf(cat, l), colours: coloursOf(cat, l), machine: isMachine(l) };
 }
 
 /** No boats: the fleet before the game is online. */
@@ -441,21 +448,65 @@ export class SeaScene {
   }
 
   /**
-   * Loads the boat and its sailor. Its sail number and insignia are fixed
-   * until boats can be customised; the sailor is the catalog's first, and a
-   * machine sailor's boat draws the catalog's machine.
+   * The player's own sailor's look, a look code: the boat's sailor and the
+   * fleet's first look are loaded in it once it is known, and not before,
+   * so that the first download carries only the player's own look. Later
+   * calls draw the boat's sailor in the look given (showLook), unless once.
+   */
+  sailAs(code: number, once = false): void {
+    if (this.#ownLook === null) {
+      this.#ownLook = code;
+      this.#lookKnown();
+    } else if (!once) {
+      void this.showLook(code);
+    }
+  }
+
+  /** Draws the sailor of the boat in view in a look: the player's own, or the one watched. */
+  showLook(code: number): Promise<void> {
+    return this.boat?.setLook(sailorLookOf(catalog, code)) ?? Promise.resolve();
+  }
+
+  /**
+   * The sailors seated, the own boat's and the fleet's first look, once the
+   * player's look is known; the boat sails without until then.
+   */
+  sailorsLoaded: Promise<void> = Promise.resolve();
+  /** Whether the own boat's sailor is seated. */
+  sailorReady = false;
+
+  async #loadSailors(boat: Boat): Promise<void> {
+    const renderer = this.stage.renderer;
+    if (renderer === null) {
+      return;
+    }
+    await this.#lookAsked;
+    const look = sailorLookOf(catalog, this.#ownLook ?? PERSON_DEFAULT);
+    await Promise.all([
+      boat.loadSailor(look, renderer, 1),
+      this.fleet.loadSailors(catalog, look, renderer, lazyArtUrl),
+    ]);
+    Shadows.cast(boat.model, this.shadows.on, this.shadows.lit);
+    this.sailorReady = true;
+  }
+
+  #ownLook: number | null = null;
+  #lookKnown: () => void = () => {};
+  readonly #lookAsked = new Promise<void>((resolve) => {
+    this.#lookKnown = resolve;
+  });
+
+  /**
+   * Loads the boat, and its sailor once the player's look is known
+   * (sailAs). Its sail number and insignia are fixed until boats can be
+   * customised.
    */
   async loadBoat(): Promise<void> {
     const boat = new Boat(this.kind);
-    await boat.load('17', this.kind.name.slice(0, 1));
-    const sailor = catalog.sailors[0];
-    const renderer = this.stage.renderer;
-    if (sailor !== undefined && renderer !== null) {
-      await Promise.all([
-        boat.loadSailor(sailor.art, renderer, 1, catalog.machine.drawn),
-        this.fleet.load(sailor.art, catalog.machine.drawn, renderer, lazyArtUrl),
-      ]);
-    }
+    await Promise.all([boat.load('17', this.kind.name.slice(0, 1)), this.fleet.load()]);
+    this.sailorsLoaded = this.#loadSailors(boat).catch((e: unknown) => {
+      console.error('the sailors did not load', e);
+    });
     boat.model.add(this.overlays.onBoat);
     Shadows.cast(boat.model, this.shadows.on, this.shadows.lit);
     const light = this.kind.lights[0];

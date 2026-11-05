@@ -182,7 +182,7 @@ function view(
 }
 
 describe('the screen on a boat watched', () => {
-  const mary: WatchingTold = { sailor: 'Iron Mary', machine: true, mine: false };
+  const mary: WatchingTold = { sailor: 'Iron Mary', machine: true, mine: false, look: 0 };
   const controls = (steer: boolean) =>
     SeaControls({
       steer,

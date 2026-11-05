@@ -139,6 +139,8 @@ export class Online {
   readonly tools = signal(false);
   /** The boat watched, from its Welcome; null while the connection sails or is idle. */
   readonly watching = signal<WatchingTold | null>(null);
+  /** The look code of the boat in view's sailor, the own or the one watched, as last told; null before a Welcome. */
+  readonly look = signal<number | null>(null);
   /** The last watch ended or refused, until the next Welcome. */
   readonly ended = signal<WatchEnd | null>(null);
   /** The place in the spectators' queue, while all the places to watch are taken, or null. */
@@ -382,6 +384,9 @@ export class Online {
       case 'watchers':
         this.watchers.value = m.count;
         break;
+      case 'look':
+        this.look.value = m.look;
+        break;
       case 'lamp': {
         const w = this.watching.value;
         this.#lamp.value = w?.machine && w.mine ? { state: m.state, of: w } : null;
@@ -449,6 +454,7 @@ export class Online {
           this.place.value = null;
         }
         this.boat = m.boat;
+        this.look.value = m.look;
         this.epochUs = m.epochUs;
         this.onEpoch?.(m.epochUs);
         this.onWorld?.(m.world, m.land);

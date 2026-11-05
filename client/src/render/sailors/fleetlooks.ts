@@ -40,7 +40,6 @@ import type { SailorArt } from '../../catalog';
 import { seatFigure } from '../fleetparts';
 import { Clip } from './clips';
 import { LayeredTexture } from './layers2d';
-import { type SailorColours, sailorColours } from './material';
 import { gltfLoader, placesOf } from './model';
 import { boneNames } from './onboat';
 import { Rig } from './rig';
@@ -77,17 +76,13 @@ export class FleetLook {
   /** The far figure, seated, in figureNode's frame; uv in the atlas, tag (layer, 0). */
   far: BufferGeometry | null = null;
   clips: Map<string, Clip> | null = null;
-  readonly colours: SailorColours;
 
   constructor(
     /** The look's number among the fleet's. */
     readonly index: number,
     readonly art: SailorArt,
     readonly machine: boolean,
-  ) {
-    const c = art.colours;
-    this.colours = sailorColours(c.main, c.skin, c.hair);
-  }
+  ) {}
 }
 
 /** The URLs of a look's files, which load them when first wanted. */

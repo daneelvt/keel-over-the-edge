@@ -142,6 +142,8 @@ export interface DrawnBoat {
   fall: number;
   /** 1 for a machine sailor's boat, which carries the machine mark; 0 for a human's. */
   machine: number;
+  /** Its sailor's look code; −1 for none given (a test's boat), drawn in the default look. */
+  look: number;
 }
 
 /** A drawn boat at the origin, faded out. */
@@ -168,6 +170,7 @@ export function newDrawnBoat(): DrawnBoat {
     newest: 0,
     fall: -1,
     machine: 0,
+    look: -1,
   };
 }
 
@@ -177,6 +180,8 @@ class Boat {
   kind = 0;
   /** 1 while a machine sailor sails it. */
   machine = 0;
+  /** Its sailor's look code. */
+  look = 0;
   readonly ring = new Float64Array(SAMPLES * FIELDS);
   /** Samples held, and where the next goes. */
   count = 0;
@@ -254,6 +259,7 @@ class Boat {
   pose(rt: number, out: DrawnBoat): number {
     out.kind = this.kind;
     out.machine = this.machine;
+    out.look = this.look;
     out.tick = rt;
     out.fall = rt >= this.fallTick ? (rt - this.fallTick) / TICKS_PER_SECOND : -1;
     const newest = this.at(0, F.tick);
@@ -417,15 +423,19 @@ export class Fleet {
       if (change !== CHANGE.none) {
         this.#entries++;
       }
-      if (change === CHANGE.left || (change === CHANGE.entered && b.present)) {
+      // An enter of the boat the slot holds, its sailor's look changed,
+      // keeps it; any other enter replaces it.
+      const relook = change === CHANGE.entered && b.present && f[o + SLOT.relook] === 1;
+      if (change === CHANGE.left || (change === CHANGE.entered && b.present && !relook)) {
         this.#fadeOut(b);
       }
-      if (change === CHANGE.entered) {
+      if (change === CHANGE.entered && !relook) {
         b.reset(f[o + SLOT.kind] ?? 0);
       }
       // Every record carries whose boat the slot holds, sampled or not.
       if (f[o + SLOT.present] === 1 && b.present) {
         b.machine = f[o + SLOT.machine] === 1 ? 1 : 0;
+        b.look = f[o + SLOT.look] ?? 0;
       }
       if (f[o + SLOT.present] === 1 && f[o + SLOT.sampled] === 1 && b.present) {
         b.add(f, o, tick);
@@ -604,4 +614,5 @@ function copyDrawn(a: DrawnBoat, b: DrawnBoat): void {
   b.newest = a.newest;
   b.fall = a.fall;
   b.machine = a.machine;
+  b.look = a.look;
 }

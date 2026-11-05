@@ -229,6 +229,7 @@ describe('pacing online', () => {
       closingUs: 0,
       zone: '',
       watching: null,
+      look: 0,
       first: true,
     });
     const sn = start(100);
@@ -338,6 +339,7 @@ describe('the queue and the fleet online', () => {
       closingUs: 0,
       zone: '',
       watching: null,
+      look: 0,
       first: true,
     });
     port.deliver({ type: 'status', status: 'sailing', waitMs: 0, reason: '' });
@@ -371,6 +373,7 @@ describe('the queue and the fleet online', () => {
       closingUs: 0,
       zone: '',
       watching: null,
+      look: 0,
       first: true,
     });
     const record = new ArrayBuffer(FLEET_RECORD_BYTES);
@@ -412,6 +415,7 @@ describe('the bell online', () => {
       closingUs: 0,
       zone: '',
       watching: null,
+      look: 0,
       first: true,
     });
     port.deliver({ type: 'status', status: 'sailing', waitMs: 0, reason: '' });
@@ -446,6 +450,7 @@ describe('the bell online', () => {
       closingUs: 0,
       zone: '',
       watching: null,
+      look: 0,
       first: true,
     });
     port.deliver(status('sailing'));
@@ -476,6 +481,7 @@ describe('the bell online', () => {
       closingUs: 0,
       zone: '',
       watching: null,
+      look: 0,
       first: true,
     });
     port.deliver(status('sailing'));
@@ -517,6 +523,7 @@ describe('a new boat’s first view', () => {
     closingUs: 0,
     zone: '',
     watching: null,
+    look: 0,
     first: true,
     ...change,
   });
@@ -573,7 +580,7 @@ describe('a new boat’s first view', () => {
 
   test('not for a watch; for a new boat after one', async () => {
     const { opened, meet } = await connection();
-    const watching = { sailor: 'Iron Mary', machine: true, mine: false };
+    const watching = { sailor: 'Iron Mary', machine: true, mine: false, look: 0 };
     meet({ watching, boat: 7 }, 900, -1900);
     expect(opened).toEqual([]);
     meet({ boat: 2, first: false }, 900, -1900);

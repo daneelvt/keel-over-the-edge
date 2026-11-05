@@ -52,6 +52,7 @@ import { type Me, resolveSailor } from '../account/me';
 import { backSoon, showAddPasskey, showSailor, showStartScreen } from '../account/start';
 import { SETTING_SAIL } from '../account/yoursailor';
 import { CATALOG_VERSION, catalog } from '../catalog';
+import { codeOf, lookFrom } from '../catalog/looks';
 import { Forecasting } from '../chart/forecasting';
 import { GaleNotices } from '../chart/gales';
 import {
@@ -82,6 +83,7 @@ import { loadPhysics, type Physics } from '../predict/physics';
 import wasmUrl from '../predict/physics.wasm?url';
 import { Predictor, prepareEncounters } from '../predict/predictor';
 import { regimeIndex } from '../predict/weather';
+import { PERSON_DEFAULT } from '../render/fleet';
 import { ROAM_HIGH } from '../render/freecam';
 import { flashNear } from '../render/lightning';
 import { chooseBackend } from '../render/renderer';
@@ -274,6 +276,8 @@ async function start(): Promise<void> {
                 : commonestWeather(catalog.weather))),
       ...(frontIn === null ? {} : { frontIn }),
     };
+    // ?look=code: the sailor in a look of the developer's own.
+    world.sailAs(Number(query.get('look') ?? PERSON_DEFAULT) || PERSON_DEFAULT);
     const [, sandbox] = await Promise.all([
       world.start(),
       startSandbox(fetch(wasmUrl), world.kind.physics, catalog.weather, catalog.world, begin),
@@ -519,10 +523,16 @@ async function start(): Promise<void> {
   // The wait begins at the tap that sets sail, or at once with no screen
   // to tap; the cover answers the tap at once.
   let tapped = performance.now();
+  // The player's own sailor is loaded as soon as their look is known: at
+  // their own panel, or as the start screen sets sail.
+  const own = (me: Me): Me => {
+    world.sailAs(codeOf(catalog, lookFrom(me)), true);
+    return me;
+  };
   const set = (me: Me): Me => {
     tapped = performance.now();
     cover.say(SETTING_SAIL);
-    return me;
+    return own(me);
   };
   const [, physics, me] = await Promise.all([
     world.start(),
@@ -530,13 +540,15 @@ async function start(): Promise<void> {
     resolveSailor({
       start: () =>
         showStartScreen(document.body, {
-          sailors: catalog.sailors,
+          looks: catalog,
           ...(linked === '' ? {} : { panel: false }),
         }).then(set),
       addPasskey: (me) => showAddPasskey(document.body, me),
-      ...(linked === '' ? { sailor: (me: Me) => showSailor(document.body, me).then(set) } : {}),
+      ...(linked === ''
+        ? { sailor: (me: Me) => showSailor(document.body, own(me)).then(set) }
+        : {}),
       backSoon: notice,
-    }),
+    }).then(own),
   ]);
   const watchFirst = linked !== '' ? linked : (me.watch ?? '');
   const predictor = new Predictor(
@@ -701,7 +713,7 @@ async function start(): Promise<void> {
         epoch: () => true,
         boat: arrived,
         view: () => placed,
-        land: landNear,
+        land: () => landNear() && world.sailorReady,
         abandoned: () =>
           !arrived() &&
           (online.ended.value !== ended ||
@@ -748,11 +760,17 @@ async function start(): Promise<void> {
     },
     unwatch: () => online.unwatch(),
   };
-  // A boat watched: the camera stays where the player puts it, and a
-  // machine sailor's sail carries its mark.
+  // A boat watched: the camera stays where the player puts it. The boat in
+  // view's sailor is drawn in its look, as the server tells it: a machine
+  // sailor's sail carries its mark.
   effect(() => {
     world.camera.watching = online.spectating.value;
-    world.boat?.setMachine(online.spectating.value && online.watching.value?.machine === true);
+  });
+  effect(() => {
+    const look = online.look.value;
+    if (look !== null) {
+      void world.showLook(look);
+    }
   });
   // The screen comes back by itself when the player is needed.
   const neededNow = (): Needed => ({
@@ -806,7 +824,7 @@ async function start(): Promise<void> {
       epoch: () => world.skyTime !== null,
       boat: () => boatIn,
       view: () => placed,
-      land: landNear,
+      land: () => landNear() && world.sailorReady,
     },
     { start: tapped, draws: world.drawsWhenReady },
   );

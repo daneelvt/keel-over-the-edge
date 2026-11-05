@@ -11,6 +11,7 @@
 // The session cookie is the server's alone (HttpOnly): an answer carries
 // the sailor, and for a new account its recovery code, never a token.
 
+import { type Look, lookFrom } from '../catalog/looks';
 import type { Fetch, Me } from './me';
 
 /** base64url without padding, as WebAuthn's JSON forms write bytes. */
@@ -267,9 +268,17 @@ export async function signalAccepted(a: unknown, pkc = publicKeyCredential()): P
 }
 
 function meOf(body: JSONObject | null): Me {
+  const text = (k: string): string => String(body?.[k] ?? '');
   return {
-    name: String(body?.name ?? ''),
-    look: String(body?.look ?? ''),
+    name: text('name'),
+    ...lookFrom({
+      look: text('look'),
+      version: text('version'),
+      skin: text('skin'),
+      hair: text('hair'),
+      colour: text('colour'),
+    }),
+    lookChosen: body?.lookChosen !== false,
     kind: 'human',
     noticesOff: [],
   };
@@ -287,10 +296,10 @@ export interface Made {
  */
 export async function makeSailor(
   name: string,
-  look: string,
+  look: Look,
   reach: Reach = browserReach(),
 ): Promise<Outcome<Made>> {
-  const begun = await call(reach.fetch, '/account/begin', { name, look });
+  const begun = await call(reach.fetch, '/account/begin', { name, ...look });
   if (begun.status !== 200 || begun.body === null) {
     return { ok: false, reason: reasonOf(begun) };
   }

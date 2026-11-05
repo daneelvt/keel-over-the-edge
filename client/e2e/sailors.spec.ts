@@ -10,6 +10,7 @@
 //
 // The clips are held at a time (t), so every picture is the same.
 
+import { readFileSync } from 'node:fs';
 import { expect, type Page, test } from '@playwright/test';
 import type { DressingHooks, Room } from '../src/dev/dressing';
 import { decodePng, type Picture } from './helpers';
@@ -220,17 +221,17 @@ test('the Rover stands and sits in both versions, dressed, skinned and posed', a
   }
 });
 
-for (const looks of [
-  ['bosun', 'chartmaker'],
-  ['lookout', 'cavalier'],
-  ['quartermaster', 'oldsalt'],
-  ['shipwright', 'buccaneer'],
-]) {
-  const names = looks.map(
-    (l) =>
-      (({ oldsalt: 'Old Salt' }) as Record<string, string>)[l] ??
-      `${l[0]?.toUpperCase()}${l.slice(1)}`,
-  );
+/** The catalog's looks after the Rover, two at a time, by id and name. */
+const LOOKS = (
+  JSON.parse(readFileSync(new URL('../src/catalog/catalog.gen.json', import.meta.url), 'utf8')) as {
+    sailors: { id: string; name: string }[];
+  }
+).sailors.slice(1);
+
+for (let i = 0; i < LOOKS.length; i += 2) {
+  const pair = LOOKS.slice(i, i + 2);
+  const looks = pair.map((l) => l.id);
+  const names = pair.map((l) => l.name);
   test(`the ${names[0]} and the ${names[1]} stand, sit and go through their habits`, async ({
     page,
   }) => {

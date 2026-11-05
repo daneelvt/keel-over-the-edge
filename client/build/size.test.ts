@@ -4,7 +4,7 @@ import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { gzipSync } from 'node:zlib';
 import { describe, expect, test } from 'vitest';
 import { catalog } from '../src/catalog';
-import { eagerAssets, eagerModels, SAILOR_BUDGETS } from './size';
+import { eagerAssets, eagerModels, SAILOR_BUDGETS, transcoderAsset } from './size';
 
 test('the first download is the page’s scripts, preloaded modules and styles', () => {
   const html = `<script type="module" crossorigin src="/assets/main-1.js"></script>
@@ -26,7 +26,7 @@ const bytes = (path: string): number => statSync(new URL(path, ART)).size;
 
 /** Every look's folder under art/sailors with built versions, but the build's test sailor. */
 const looks = readdirSync(new URL('sailors/', ART), { withFileTypes: true })
-  .filter((d) => d.isDirectory() && !['test', 'vendor', 'stand-in'].includes(d.name))
+  .filter((d) => d.isDirectory() && !['test', 'vendor'].includes(d.name))
   .filter((d) => readdirSync(new URL(`sailors/${d.name}/`, ART)).some((f) => f.endsWith('.glb')))
   .map((d) => d.name);
 
@@ -67,20 +67,31 @@ test('every look and version’s colour portrait together keep to their budget',
   expect(all).toBeLessThanOrEqual(SAILOR_BUDGETS.portraits);
 });
 
-test('the first download carries one look, every boat’s, and no other', () => {
-  const art = catalog.sailors[0]?.art;
-  if (art === undefined) {
-    throw new Error('no sailor');
-  }
+test('the first download carries no sailor: the player’s own look loads once it is known', () => {
   // What the boat module loads as it starts: its eager globs.
   const boat = readFileSync(new URL('../src/render/boat.ts', import.meta.url), 'utf8');
-  const eager = [
-    ...boat.matchAll(/'\.\.\/\.\.\/\.\.\/art\/(sailors\/[^']+)'\],\s*\{[^}]*eager: true/g),
-  ].map((m) => m[1]);
-  expect(eager).toEqual(['sailors/rover/female.{deck,far,clips}.glb']);
-  for (const path of [art.model, art.far, art.clips]) {
-    expect(path.startsWith('sailors/rover/female.')).toBe(true);
+  const eager = [...boat.matchAll(/glob<string>\((\[[^\]]*\]),\s*\{[^}]*eager: true/g)].map(
+    (m) => m[1],
+  );
+  expect(eager).toEqual([`['../../../art/**/*.glb', '!../../../art/sailors/**']`]);
+});
+
+test('any person’s look, the player’s own, keeps to the first download’s share', () => {
+  for (const look of catalog.sailors) {
+    for (const v of look.versions) {
+      const size = gzipped(v.art.model) + gzipped(v.art.far) + gzipped(v.art.clips);
+      expect(size, `${look.name} ${v.name}`).toBeLessThanOrEqual(SAILOR_BUDGETS.critical);
+    }
   }
-  const size = gzipped(art.model) + gzipped(art.far) + gzipped(art.clips);
-  expect(size).toBeLessThanOrEqual(SAILOR_BUDGETS.critical);
+});
+
+test('the texture transcoder keeps to its budget, and the build names it', () => {
+  const lib = new URL('../node_modules/three/examples/jsm/libs/basis/', import.meta.url);
+  const size = ['basis_transcoder.js', 'basis_transcoder.wasm']
+    .map((f) => gzipSync(readFileSync(new URL(f, lib)), { level: 9 }).length)
+    .reduce((a, b) => a + b, 0);
+  expect(size).toBeLessThanOrEqual(SAILOR_BUDGETS.transcoder);
+  expect(transcoderAsset('basis_transcoder-Ab12Cd.wasm')).toBe(true);
+  expect(transcoderAsset('basis_transcoder.js')).toBe(true);
+  expect(transcoderAsset('main-1.js')).toBe(false);
 });

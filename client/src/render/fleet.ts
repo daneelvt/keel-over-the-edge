@@ -20,7 +20,7 @@
 // every look in one draw a level. Each boat's sailor is drawn in its own
 // look and colours; a look is loaded when a boat with it first comes into
 // view (sailors/fleetlooks.ts), and until then the boat carries the first
-// look's figure in its own colours.
+// look's figure (the player's own) in its own colours.
 //
 // Each frame the fleet's drawn boats are written into the instances'
 // values, which, being dynamic, go to the GPU with each draw; nothing is
@@ -55,9 +55,26 @@ import {
   vec4,
 } from 'three/tsl';
 import type { Node, WebGPURenderer } from 'three/webgpu';
-import type { Boat as BoatKind, SailorArt } from '../catalog';
+import type { Boat as BoatKind } from '../catalog';
+import {
+  artOf,
+  coloursOf,
+  isMachine,
+  type Look,
+  type Looks,
+  lookOf,
+  MACHINE_MARK,
+} from '../catalog/looks';
 import type { DrawnBoat } from '../game/fleet';
-import { CLOTH, CLOTH_HEIGHT, CLOTH_WIDTH, clothTexture, FULL_CAMBER, paintCloth } from './boat';
+import {
+  CLOTH,
+  CLOTH_HEIGHT,
+  CLOTH_WIDTH,
+  clothTexture,
+  FULL_CAMBER,
+  paintCloth,
+  type SailorLook,
+} from './boat';
 import type { FloatingOrigin } from './coords';
 import { type BoatParts, type Instances, loadBoatParts, sailNode, solidNode } from './fleetparts';
 import { chordAtHalf, type MarkPlace, markInk, markPlace, paintMark } from './machinemark';
@@ -72,7 +89,7 @@ import {
   SailorRows,
   swayOf,
 } from './sailors/fleetsailors';
-import { sailorMaterial } from './sailors/material';
+import { type SailorColours, sailorColours, sailorMaterial } from './sailors/material';
 import { hullSolid } from './sailors/solid';
 import { FLOW_LUFFING } from './telltales';
 
@@ -232,6 +249,20 @@ function node(b: InstancedInterleavedBuffer): Node<'vec4'> {
   return instancedDynamicBufferAttribute(b, 'vec4', 4, 0) as unknown as Node<'vec4'>;
 }
 
+/**
+ * The looks a boat with none given is drawn in: a person's, the first look
+ * in the colours the pictures were taken with, and a machine's, the first
+ * version in the first finish and colour.
+ */
+export const PERSON_DEFAULT = 0x22100;
+export const MACHINE_DEFAULT = MACHINE_MARK;
+
+/** A look code's look as the fleet draws it, and its colours. */
+interface DrawnLook {
+  look: FleetLook;
+  colours: SailorColours;
+}
+
 /** The machines' lamps pulse slowly, each boat's in its own phase. */
 function lampPulse(time: Node<'float'>): Node<'float'> {
   return float(0.86).add(
@@ -254,9 +285,11 @@ export class FleetView {
   /** The wind the sailors' cloth streams in: from (radians) and speed (m/s). */
   windFrom = 0;
   windSpeed = 0;
-  /** The looks every boat is drawn with until boats carry their own: a person's, a machine sailor's. */
-  #person: FleetLook | null = null;
-  #machine: FleetLook | null = null;
+  /** The catalog's looks; the look every boat is drawn with until its own has loaded. */
+  #looks: Looks | null = null;
+  #first: FleetLook | null = null;
+  /** Each look code met: its look and its colours. */
+  readonly #byCode = new Map<number, DrawnLook>();
 
   readonly #kind: BoatKind;
   readonly #frame: SailorFrame;
@@ -270,6 +303,8 @@ export class FleetView {
   readonly #sway = { x: 0, z: 0 };
   #version = -1;
   readonly #cog: number;
+  /** The near boat's parts, which the sailors are seated by. */
+  #parts: BoatParts | null = null;
   #frames = 0;
   #ms = 0;
 
@@ -290,30 +325,16 @@ export class FleetView {
   }
 
   /**
-   * Loads both levels' boats and the sailor every boat is drawn with (its
-   * deck and far levels and clips: the first frame's), and knows the
-   * machine sailors' machine, loaded when one is first in view. files
-   * gives the URL of a sailor's file; the renderer decides how textures
-   * are transcoded.
+   * Loads both levels' boats; their sailors come with loadSailors, once
+   * the player's look is known.
    */
-  async load(
-    sailor: SailorArt,
-    machine: SailorArt,
-    renderer: WebGPURenderer,
-    files: ArtFiles,
-  ): Promise<void> {
+  async load(): Promise<void> {
     const kind = this.#kind;
     const [nearParts, farParts] = await Promise.all([
       loadBoatParts(kind.art.model),
       loadBoatParts(kind.art.far),
     ]);
     const g = nearParts.gunwale;
-    // Seated about the gunwale, where a hiking sailor leans out from.
-    const looks = new FleetLooks(renderer, { out: g.x, y: g.y, z: nearParts.seatZ }, files);
-    this.looks = looks;
-    this.#person = looks.add(sailor, false);
-    this.#machine = looks.add(machine, true);
-    await looks.ready(this.#person, true);
     const { foot, luff } = kind.physics.rig;
     const mark = markPlace(foot, luff, chordAtHalf(nearParts.sail?.geometry));
     const cloth = fleetCloth(kind.name.slice(0, 1), mark);
@@ -322,6 +343,33 @@ export class FleetView {
     this.#frame.seatY = g.y;
     this.near.build(nearParts, kind, cloth, this.time);
     this.far.build(farParts, kind, cloth, this.time);
+    this.#parts = nearParts;
+    this.loaded = true;
+  }
+
+  /**
+   * Loads the boats' sailors: the look every boat is drawn with until its
+   * own has loaded (its deck and far levels and clips: the player's own),
+   * now; every other look when a boat with it is first in view. files
+   * gives the URL of a sailor's file; the renderer decides how textures
+   * are transcoded.
+   */
+  async loadSailors(
+    cat: Looks,
+    first: SailorLook,
+    renderer: WebGPURenderer,
+    files: ArtFiles,
+  ): Promise<void> {
+    const kind = this.#kind;
+    const nearParts = this.#parts;
+    if (nearParts === null) {
+      throw new Error('the fleet’s boats are not loaded');
+    }
+    const g = nearParts.gunwale;
+    // Seated about the gunwale, where a hiking sailor leans out from.
+    const looks = new FleetLooks(renderer, { out: g.x, y: g.y, z: nearParts.seatZ }, files);
+    const firstLook = looks.add(first.art, first.machine);
+    await looks.ready(firstLook, true);
     if (looks.far === null) {
       throw new Error('the fleet’s sailor did not load');
     }
@@ -361,12 +409,34 @@ export class FleetView {
       this.skinned = this.near.add(looks.near, m, 'skinned', n.opacity);
     }
     this.#version = looks.version;
-    this.loaded = true;
+    this.#looks = cat;
+    this.#first = firstLook;
+    this.looks = looks;
   }
 
-  /** The look a boat's sailor is drawn in; null before the fleet is loaded. */
-  lookOf(b: DrawnBoat): FleetLook | null {
-    return b.machine === 1 ? this.#machine : this.#person;
+  /**
+   * The look a boat's sailor is drawn in, and its colours: its look code's,
+   * or for a boat with none given, the default person's or machine's; null
+   * before the fleet is loaded.
+   */
+  lookOf(b: DrawnBoat): DrawnLook | null {
+    const cat = this.#looks;
+    const looks = this.looks;
+    if (cat === null || looks === null) {
+      return null;
+    }
+    const code = b.look >= 0 ? b.look : b.machine === 1 ? MACHINE_DEFAULT : PERSON_DEFAULT;
+    let d = this.#byCode.get(code);
+    if (d === undefined) {
+      const l = lookOf(cat, code) ?? (lookOf(cat, PERSON_DEFAULT) as Look);
+      const c = coloursOf(cat, l);
+      d = {
+        look: looks.add(artOf(cat, l), isMachine(l)),
+        colours: sailorColours(c.main, c.skin, c.hair),
+      };
+      this.#byCode.set(code, d);
+    }
+    return d;
   }
 
   /** Takes the looks' figures anew, when a look has loaded. */
@@ -543,18 +613,19 @@ export class FleetView {
     // Its sailor, in its look: loaded when first seen; until then the
     // first look's figure, in its own colours. Skinned near, once its
     // look's moving figure has loaded; else rigid.
-    const look = this.lookOf(b);
-    if (look === null || this.#person === null) {
+    const d = this.lookOf(b);
+    if (d === null || this.#first === null) {
       return;
     }
+    const look = d.look;
     this.looks?.want(look, near);
-    const drawn = look.layer >= 0 ? look : this.#person;
+    const drawn = look.layer >= 0 ? look : this.#first;
     const ns = near ? this.nearSailors : null;
     const skinned = ns?.write(n, b, look, dt) === true;
     const rows = level.rows;
-    this.#head(rows.data, rows.width * n, n, level, look, drawn, !skinned, false, b);
+    this.#head(rows.data, rows.width * n, n, level, d.colours, drawn, !skinned, false, b);
     if (ns !== null) {
-      this.#head(ns.data, ns.width * n, n, level, look, drawn, false, skinned, b);
+      this.#head(ns.data, ns.width * n, n, level, d.colours, drawn, false, skinned, b);
     }
     if (skinned) {
       level.sailorTriangles += trianglesOf(look.deck?.geometry ?? null);
@@ -566,15 +637,15 @@ export class FleetView {
 
   /**
    * A sailor's row's first texels (fleetsailors.ts), at texel at of d: its
-   * boat's values from instance n of level, its look's colours, the layer
-   * drawn, and whether it is drawn rigid or skinned (with its sway).
+   * boat's values from instance n of level, its sailor's colours, the
+   * layer drawn, and whether it is drawn rigid or skinned (with its sway).
    */
   #head(
     d: Float32Array,
     at: number,
     n: number,
     level: Level,
-    look: FleetLook,
+    c: SailorColours,
     drawn: FleetLook,
     rigid: boolean,
     skinned: boolean,
@@ -582,7 +653,6 @@ export class FleetView {
   ): void {
     const r = 4 * at;
     const o = 4 * n;
-    const c = look.colours;
     for (let k = 0; k < 4; k++) {
       d[r + k] = level.pose.array[o + k] as number;
       d[r + 4 + k] = level.lean.array[o + k] as number;

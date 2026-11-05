@@ -263,7 +263,13 @@ export class NetWorker {
             watching:
               watching === null
                 ? null
-                : { sailor: watching.sailor, machine: watching.machine, mine: watching.mine },
+                : {
+                    sailor: watching.sailor,
+                    machine: watching.machine,
+                    mine: watching.mine,
+                    look: watching.look,
+                  },
+            look: w.look,
             first,
           });
           this.#d.post({ type: 'clock', clock: { ...s.clock.state } });
@@ -324,6 +330,9 @@ export class NetWorker {
         }
         case 'watchers':
           this.#d.post({ type: 'watchers', count: r.count });
+          break;
+        case 'look':
+          this.#d.post({ type: 'look', look: r.look });
           break;
         case 'lamp':
           this.#d.post({ type: 'lamp', state: r.state });
