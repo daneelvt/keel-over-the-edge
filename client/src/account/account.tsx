@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
-// The account page, a panel from the menu: the account's passkeys, where
+// The account page, a panel from the menu: the sailor, by name, in their
+// portrait and as the log draws them; the account's passkeys, where
 // each was made and when it was last used, with one more added on this
 // device or another, or one removed while another stays; the recovery code,
 // made anew; the machine sailors, with their approved apps and connection
@@ -14,6 +15,8 @@
 import './account.css';
 import './start.css';
 import { useEffect, useState } from 'preact/hooks';
+import { catalog } from '../catalog';
+import { lookFrom } from '../catalog/looks';
 import { useWatch } from '../ui/watchlazy';
 import { useMachines } from './lazy';
 import {
@@ -29,6 +32,7 @@ import {
   signOut,
   signOutOthers,
 } from './passkeys';
+import { InkPortrait, Portrait } from './portraits';
 import { reasonText } from './reasons';
 import { dayOf, RecoveryCode } from './recovery';
 
@@ -57,6 +61,22 @@ export function MachinesPanel({ close }: { close: () => void }) {
         Close
       </button>
     </section>
+  );
+}
+
+/** The sailor at the page's head: their portrait beside their name, and their inked portrait under it. */
+export function AccountSailor({ data, now }: { data: AccountData; now?: number }) {
+  const look = lookFrom(data);
+  return (
+    <div class="account-sailor">
+      <Portrait looks={catalog} look={look} size={96} />
+      <div class="account-sailor-words">
+        <p class="menu-sailor">
+          <bdi>{data.name}</bdi>, since {dayOf(data.created, now)}
+        </p>
+        <InkPortrait looks={catalog} look={look} />
+      </div>
+    </div>
   );
 }
 
@@ -186,9 +206,7 @@ export function AccountPanel({
         </p>
       ) : (
         <>
-          <p class="menu-sailor">
-            <bdi>{data.name}</bdi>, since {dayOf(data.created)}
-          </p>
+          <AccountSailor data={data} />
           <h3>Passkeys</h3>
           <ul class="account-passkeys">
             {data.passkeys.map((p) => (

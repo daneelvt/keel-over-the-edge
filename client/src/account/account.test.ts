@@ -4,10 +4,14 @@ import { readFileSync } from 'node:fs';
 import type { ComponentChildren, VNode } from 'preact';
 import { describe, expect, test } from 'vitest';
 import { catalog } from '../catalog';
+import { drawLook as drawSailorLook, lookWords, partsOf } from '../catalog/looks';
 import { SailingAs } from '../ui/menu';
 import { PlayerText } from '../ui/player';
+import { AccountSailor } from './account';
 import { drawLook } from './looks';
 import { checkSession, type Fetch, type Me, resolveSailor, retryDelay } from './me';
+import type { AccountData } from './passkeys';
+import { inkFile } from './portraits';
 import { displayForm, lengthProblem, nameLength, REASONS, reasonText } from './reasons';
 
 // Every code the server answers the account's routes with (internal/api).
@@ -138,6 +142,55 @@ describe("a player's name", () => {
     const menu = expand(SailingAs({ sailor: 'נועה' }));
     expect(findAll(menu, 'bdi')[0]?.props.children).toBe('נועה');
     expect(SailingAs({ sailor: null })).toBeNull();
+  });
+});
+
+describe('the account page’s sailor', () => {
+  test('their portrait beside their name, and the inked one In the log, each named by the look', () => {
+    const look = drawSailorLook(catalog, () => 0.6);
+    const data: AccountData = {
+      name: 'Ann Bonny',
+      ...look,
+      lookChosen: true,
+      created: new Date(2026, 9, 1).getTime(),
+      recoveryMade: 0,
+      passkeys: [],
+      confirmedUntil: 0,
+    };
+    const t = expand(AccountSailor({ data, now: new Date(2026, 10, 6).getTime() }));
+    const words = lookWords(catalog, look);
+    const canvas = findAll(t, 'canvas')[0]?.props as Record<string, unknown> | undefined;
+    expect(canvas?.class).toBe('portrait portrait-96');
+    expect(canvas?.role).toBe('img');
+    expect(canvas?.['aria-label']).toBe(words);
+    expect(findAll(t, 'bdi')[0]?.props.children).toBe('Ann Bonny');
+    const img = findAll(t, 'img')[0]?.props as Record<string, unknown> | undefined;
+    const art = partsOf(catalog, look).version?.art;
+    expect(art).toBeDefined();
+    expect(img?.src).toBe(art === undefined ? null : inkFile(art));
+    expect(img?.src).toEqual(expect.stringContaining(art?.ink ?? '?'));
+    expect(img?.alt).toBe(words);
+    expect(img?.width).toBe(128);
+    expect(findAll(t, 'figcaption')[0]?.props.children).toBe('In the log');
+  });
+
+  test('a look the catalog has not: the frame, no inked portrait', () => {
+    const t = expand(
+      AccountSailor({
+        data: {
+          name: 'Old Tom',
+          look: 'gone',
+          version: 'v',
+          colour: 'c',
+          created: 0,
+          recoveryMade: 0,
+          passkeys: [],
+          confirmedUntil: 0,
+        },
+      }),
+    );
+    expect(findAll(t, 'canvas')).toHaveLength(1);
+    expect(findAll(t, 'img')).toHaveLength(0);
   });
 });
 

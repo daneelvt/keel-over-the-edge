@@ -2,6 +2,25 @@
 
 /* The account page: drawn as the menu is, in its place. */
 
+/* The sailor: their portrait beside their name, the inked one under the name. */
+.account-sailor {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  margin: 0 0 8px;
+}
+
+.account-sailor-words {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.account .account-sailor .menu-sailor {
+  margin: 0;
+}
+
 .account h3 {
   margin: 14px 0 4px;
   font-size: 15px;
