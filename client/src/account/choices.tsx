@@ -6,7 +6,6 @@
 // Tab reaches the group once.
 
 import './choices.css';
-import type { JSX } from 'preact';
 
 /** One of a group's choices: its id, its name in words, and its colour (#rrggbb) for a swatch. */
 export interface Choice {
@@ -16,8 +15,14 @@ export interface Choice {
 }
 
 /** Moves a choice by the arrow keys within a radio group: the next or the previous, round. */
-function step(e: JSX.TargetedKeyboardEvent<HTMLElement>, choices: readonly Choice[], at: number) {
-  const by = { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1 }[e.key];
+function step(
+  e: KeyboardEvent & { currentTarget: HTMLElement },
+  choices: readonly Choice[],
+  at: number,
+) {
+  const by = (
+    { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1 } as Record<string, number>
+  )[e.key];
   if (by === undefined || choices.length === 0) {
     return null;
   }
