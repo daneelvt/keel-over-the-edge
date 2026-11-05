@@ -167,3 +167,20 @@ run headless (`blender -b`) on 5.2.0 LTS with MPFB 2.0.18.
 - gltfpack keeps node names (`-kn`), not mesh names: name meshes by their
   nodes. `-tc -tu A` makes colour textures ETC1S and data textures (the
   occlusion slot) UASTC.
+
+## Shells on the head, and gear on the clothes
+
+- Rays from inside the skull out to the base mesh's skin miss through
+  the eyes' and the mouth's openings: a miss is below a scarf's edge,
+  never above it. An ear's rim or the brow's ridge under the edge throws
+  a ray's hit far out: take each column's and row's median.
+- The proxy (the drawn body) has holes where the clothes hide the skin:
+  find the head on the base mesh's skin, keep off the drawn one.
+- `BVHTree.FromPolygons` takes each face's normal from its winding, and a
+  fitted garment's may face in: measure clearance by unsigned distance.
+- What is laid on the clothes is laid after they are buried (bury_all):
+  a collar or the skin it rested on may go, and leave it floating.
+- A beard is a mesh of its own: as part of the hair it buried the lips
+  and the throat under it (bury_all buries skin under hair within 3 cm).
+- The glTF importer splits vertices at UV seams and between materials:
+  count a mesh's islands on its welded copy (`remove_doubles`).

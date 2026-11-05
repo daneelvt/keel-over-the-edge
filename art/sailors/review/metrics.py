@@ -341,7 +341,7 @@ def floating(gates, level, meshes, kinds):
         if kinds.get(o.name) == "body":
             continue
         islands = sorted(_islands(o), key=lambda isl: -len(isl["verts"]))
-        sits = kinds.get(o.name) in ("hair", "hat", "prop")
+        sits = kinds.get(o.name) in ("hair", "beard", "hat", "prop", "gear")
         worst = 0.0
         where = size = None
         for k, isl in enumerate(islands):

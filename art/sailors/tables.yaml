@@ -17,9 +17,10 @@ ease:
   cuff: 0.034
 
 # The most triangles a mesh may have at each level: the body, each
-# garment, the hair, the hat, each part of the face (the eyes, the lashes)
+# garment, the hair, a beard, the hat, each part of the face (the eyes, the lashes)
 # and the trims (buttons, flaps, buckles, which the deck level leaves
-# out); a machine's head, and its plates over its coat; and the whole
+# out); the gear a sailor carries (a case on its strap; what is too fine
+# for the deck is a prop); a machine's head, and its plates over its coat; and the whole
 # figure. The close body is its proxy with what the
 # clothes cover taken out; the deck level is the close one collapsed mesh
 # by mesh; the far level is one rigid mesh.
@@ -28,9 +29,11 @@ budgets:
     body: 5000
     garment: 4000
     hair: 1000
+    beard: 700
     hat: 1000
     face: 300
     prop: 1500
+    gear: 800
     head: 4000
     plate: 1000
     figure: 12000
@@ -38,8 +41,10 @@ budgets:
     body: 1300
     garment: 350
     hair: 250
+    beard: 260
     hat: 250
     face: 80
+    gear: 160
     head: 700
     plate: 350
     figure: 3300

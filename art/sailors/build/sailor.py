@@ -18,6 +18,7 @@ import body
 import export
 import face
 import garment
+import gear as gears
 import hair
 import inputs
 import landmarks
@@ -30,6 +31,7 @@ import profiles
 import retarget
 import review
 import rig
+import scarf
 import stage as stages
 import trims
 
@@ -136,16 +138,38 @@ def build_version(job, v, run):
         order.step("garments")
         worn = garment.dress(job, v, human, arm, marks, work)
         hidden = garment.hide(human, skin, worn)
-        # The hair and the hat, over the rest.
+        # The hair and the hat, over the rest. A hat's parameters may differ
+        # by version, as a garment's.
         hair_spec = version.get("hair") or look.get("hair")
+        beard = None
         if hair_spec:
-            # Under a hat the hair is pressed flat, so the hat fits the head.
-            under_hat = profiles.seat(human, marks, look["hat"]["params"].get("seat", 0.0)) if look.get("hat") else None
-            h = hair.make(hair_spec, human, marks, arm, budgets["close"]["hair"], under_hat, skin)
-            worn.append(garment.Worn(h, "hair", hair_spec, None))
-        if look.get("hat"):
-            h = profiles.make(look["hat"], human, marks, arm)
-            worn.append(garment.Worn(h, "hat", look["hat"], None))
+            # The look's hair may differ by version in its parameters alone;
+            # a beard is a mesh of its own, and a shaved head has no hair.
+            hair_spec = dict(hair_spec, params=garment.version_params(hair_spec, v))
+            beard = hair_spec["params"].pop("beard", None)
+            if hair_spec["params"].get("shell") == "none":
+                hair_spec = None
+        hat = dict(look["hat"], params=garment.version_params(look["hat"], v)) if look.get("hat") else None
+        scarved = hat is not None and hat["family"] == "scarf"
+        hair_obj = None
+        if hair_spec:
+            # Under a hat the hair is pressed flat, so the hat fits the head;
+            # under a scarf, all of what it covers.
+            under_hat = None
+            if hat is not None:
+                under_hat = (scarf.band(human, marks, hat["params"]) if scarved
+                             else profiles.seat(human, marks, hat["params"].get("seat", 0.0)))
+            hair_obj = hair.make(hair_spec, human, marks, arm, budgets["close"]["hair"], under_hat, skin)
+            worn.append(garment.Worn(hair_obj, "hair", hair_spec, None))
+        if beard:
+            b = hair.make_beard(beard, human, marks, arm, budgets["close"]["beard"], skin)
+            worn.append(garment.Worn(b, "beard", {"id": "beard", "region": "hair", "params": beard}, None))
+        if hat is not None:
+            if scarved:
+                h = scarf.make(hat, human, marks, arm, skin, over=[hair_obj] if hair_obj is not None else [])
+            else:
+                h = profiles.make(hat, human, marks, arm)
+            worn.append(garment.Worn(h, "hat", hat, None))
         # The trims on the fitted garments.
         if look.get("trims"):
             t, mirrored = trims.make(look["trims"], worn, arm, marks)
@@ -161,10 +185,19 @@ def build_version(job, v, run):
     # What cannot be seen, buried; and the dressed figure measured.
     bury = machines.bury if machine else garment.bury_all
     buried = {"close": bury(skin, worn, tables["ease"])}
+    # What the sailor carries, laid on the clothes as they are left: the
+    # deck level keeps only what is seen from it.
+    for g in [] if machine else look.get("gear") or []:
+        g = dict(g, params=garment.version_params(g, v))
+        o = gears.make(g, human, marks, arm, worn, skin)
+        worn.append(garment.Worn(o, "gear" if gears.deck(g) else "prop", g, None))
     # Nothing hidden may darken the bake: the base mesh is not drawn.
     human.hide_render = True
     meshes = [skin] + [g.obj for g in worn]
-    dressed = garment.measure(marks, meshes)
+    # The figure as dressed is measured on the clothes, not on what is
+    # carried over them (a case across the back).
+    carried = {g.obj.name for g in worn if g.kind in ("gear", "prop")}
+    dressed = garment.measure(marks, [o for o in meshes if o.name not in carried])
 
     # The atlas.
     size = tables["atlas"]["close"]
@@ -217,6 +250,10 @@ def build_version(job, v, run):
     for o in meshes:
         if o.name not in declared:
             garment.mirror(o, 0.015, greedy=True)
+        if kinds.get(o.name) == "beard":
+            # Made its own mirror, a beard's fine faces about the lips may
+            # meet three on an edge.
+            lod.manifold(o)
     closed = {w.obj.name for w in worn if (w.spec.get("params") or {}).get("closed")}
     gates = metrics.Gates(name)
     skeleton = tables["skeleton"]
@@ -242,7 +279,7 @@ def build_version(job, v, run):
             # Shared by what each mesh had, the hat and hair counting for
             # more (they make the silhouette at a distance), each within its
             # own kind's and never so few it loses its shape.
-            weight = {"hat": 1.8, "hair": 1.5, "face": 0.5, "plate": 1.8, "head": 1.2}
+            weight = {"hat": 1.8, "hair": 1.5, "beard": 1.0, "face": 0.5, "plate": 1.8, "head": 1.2, "gear": 1.0}
             def deck_weight(kind, spec=None):
                 return weight.get(kind, 1.0) * ((spec or {}).get("params") or {}).get("deck-weight", 1.0)
 
@@ -269,6 +306,10 @@ def build_version(job, v, run):
                 at = (np.vectorize(lod.DECK_KEEP.get)(lod.regions(body.coords(g.obj), marks.joint))
                       if g.kind == "head" else machines.deck_keep(g.obj) if g.kind == "plate" else None)
                 lod.decimate(g.obj, deck_share(g.obj, g.kind, g.spec), at)
+                if g.kind == "beard":
+                    # A beard's specks under the chin, collapsed too far to
+                    # keep their place, go.
+                    garment.drop_fragments(g.obj, 40)
             if machine:
                 # A machine's small fittings, collapsed this far, are specks
                 # apart from what they were on: they go.
@@ -286,9 +327,9 @@ def build_version(job, v, run):
             for o in meshes:
                 if o.name not in declared:
                     garment.mirror(o, 0.03, greedy=True)
-                if machine:
-                    # A collapse of a machine's parts touching may join
-                    # three faces on an edge.
+                if machine or kinds.get(o.name) in ("gear", "beard"):
+                    # A collapse of parts touching (a machine's, or a case
+                    # and its strap) may join three faces on an edge.
                     lod.manifold(o)
         if level == "far":
             # The eyes are nothing at that distance.
@@ -342,7 +383,8 @@ def build_version(job, v, run):
         sizes[level] = metrics.file(gates, level, path, gltf, [o.name for o in meshes], skeleton,
                                     tables["sizes"]["close"] if level == "close" else None)
         if level == "close" and not machine:
-            metrics.figure(gates, marks, human, meshes, worn, tables["ease"], v)
+            metrics.figure(gates, marks, human, [o for o in meshes if o.name not in carried], worn,
+                           tables["ease"], v)
         if level != "far":
             maps = metrics.poses(gates, level, fig, lib, worn, tables["ease"], POSES)
             seats = metrics.seat(gates, level, fig, lib, SEATED)
