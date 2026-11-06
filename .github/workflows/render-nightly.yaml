@@ -90,11 +90,15 @@ jobs:
         run: go run ./tools/dev -world 1
       - name: Chromium's headless shell for Playwright
         if: matrix.browser == 'chromium'
-        working-directory: client
-        run: npx --no-install playwright install --with-deps --only-shell chromium
+        uses: ./.github/actions/install
+        with:
+          working-directory: client
+          command: npx --no-install playwright install --with-deps --only-shell chromium
       - name: Mesa's lavapipe, the CPU's Vulkan, for WebGL 2 (e2e/gpu.ts)
         if: matrix.browser == 'chromium'
-        run: sudo apt-get install -y --no-install-recommends mesa-vulkan-drivers
+        uses: ./.github/actions/install
+        with:
+          command: sudo apt-get install -y --no-install-recommends mesa-vulkan-drivers
       - name: The page draws on lavapipe (WebGL 2) and SwiftShader (WebGPU)
         if: matrix.browser == 'chromium'
         working-directory: client
@@ -102,8 +106,10 @@ jobs:
         run: node e2e/gpu.ts | tee -a "$GITHUB_STEP_SUMMARY"
       - name: WebKit for Playwright
         if: matrix.browser == 'webkit'
-        working-directory: client
-        run: npx --no-install playwright install --with-deps webkit
+        uses: ./.github/actions/install
+        with:
+          working-directory: client
+          command: npx --no-install playwright install --with-deps webkit
       - name: The tests
         working-directory: client
         env:
@@ -177,8 +183,10 @@ jobs:
         run: go run ./tools/physics
       - name: Chromium's headless shell for Playwright
         if: steps.netem.outputs.ok == 'true'
-        working-directory: client
-        run: npx --no-install playwright install --with-deps --only-shell chromium
+        uses: ./.github/actions/install
+        with:
+          working-directory: client
+          command: npx --no-install playwright install --with-deps --only-shell chromium
       - name: 100 ms each way and 2% loss on keel's play port only
         if: steps.netem.outputs.ok == 'true'
         # A fourth band, which no traffic uses by default, holds netem; only
