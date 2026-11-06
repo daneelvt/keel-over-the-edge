@@ -3,11 +3,13 @@
 // Spray: drops thrown into the air, drawn as sprites in one instanced draw.
 // A boat's bow throws them when the sea rises against it, faster than a
 // walking pace, so a boat that slams into a crest throws a burst and one
-// that rides it throws none; more the faster it sails and the more the sea
-// breaks. In a gale, from force 8, where the Beaufort scale has spray
-// blown from the crests, the wind also tears a thin drift off the breaking
-// crests near the camera. A
-// drop is blown down the wind and falls under gravity for about a second.
+// that rides it throws none; more the faster it sails, the more the sea
+// breaks and the higher it is. From force 7, where the Met Office's
+// Beaufort scale has foam blown from the breaking waves, the wind tears
+// spray off the crests near the camera, from a drop or so a crest a second
+// to sheets of it at force 10; and from force 8 spindrift, low streaks of
+// spray blown along the water at near the wind's speed. A drop is blown
+// down the wind and falls under gravity for about a second.
 //
 // The drops are stepped here, on the CPU, by a seeded generator, so the same
 // sail throws the same spray (the pictures). Nothing is allocated once made.
@@ -31,7 +33,7 @@ import {
   vec3,
 } from 'three/tsl';
 import type { Node } from 'three/webgpu';
-import { beaufort, KNOT, SPRAY } from '../ocean/look';
+import { SPRAY } from '../ocean/look';
 import type { FloatingOrigin } from './coords';
 import { basicMaterial } from './materials';
 
@@ -72,8 +74,14 @@ export interface SprayWeather {
   speed: number;
   east: number;
   north: number;
-  /** The whitecaps' strength, 0 to 1. */
+  /** The whitecaps' strength, from 0. */
   whitecaps: number;
+  /** The sea's significant height under the boat, m. */
+  hs: number;
+  /** Spray torn off the crests: drops a crest a second, 0 for none (look.ts). */
+  crestRate: number;
+  /** Spindrift's strength, 0 for none (look.ts). */
+  spindrift: number;
 }
 
 /** A place near the camera a crest may throw spray from: where it is, and how high the crest stands for its sea. */
@@ -190,7 +198,14 @@ export class SprayDrops {
       if (rise <= SPRAY.rise) {
         continue;
       }
-      this.#owed += (rise - SPRAY.rise) * src.speed * (10 + 30 * weather.whitecaps) * dt * 4;
+      const high = Math.min(SPRAY.most, 0.5 + SPRAY.perHeight * Math.max(weather.hs, 0));
+      this.#owed +=
+        (rise - SPRAY.rise) *
+        src.speed *
+        (10 + 30 * Math.min(weather.whitecaps, 1)) *
+        high *
+        dt *
+        4;
       const fe = Math.sin(src.heading);
       const fn = Math.cos(src.heading);
       while (this.#owed >= 1) {
@@ -211,23 +226,44 @@ export class SprayDrops {
       }
     }
 
-    if (beaufort(weather.speed / KNOT) >= SPRAY.crestForce) {
+    if (weather.crestRate > 0 || weather.spindrift > 0) {
       for (let i = 0; i < crestCount; i++) {
         const c = crests[i] as CrestSample;
-        if (c.crest < 0.9) {
+        if (c.crest < SPRAY.crestFrom) {
           continue;
         }
-        // A thin drift: a drop or so a crest a second, blown off its top.
-        if (this.#rand() < dt * 3 * Math.min(c.crest - 0.9, 1)) {
-          this.#throw(
-            c.east + (this.#rand() - 0.5) * 2,
-            c.north + (this.#rand() - 0.5) * 2,
-            c.height + 0.1,
-            we * 0.5,
-            wn * 0.5,
-            0.8 + this.#rand(),
-            0.08 + 0.1 * this.#rand(),
-          );
+        const top = Math.min(c.crest - SPRAY.crestFrom, 1);
+        // Torn off the crest's top: a drop or so a crest a second at force
+        // 7, and sheets of larger drops by force 10.
+        const sheet = 1 + Math.floor(weather.crestRate / 6);
+        if (this.#rand() < dt * weather.crestRate * top) {
+          for (let j = 0; j < sheet; j++) {
+            this.#throw(
+              c.east + (this.#rand() - 0.5) * 2,
+              c.north + (this.#rand() - 0.5) * 2,
+              c.height + 0.1,
+              we * (0.4 + 0.3 * this.#rand()),
+              wn * (0.4 + 0.3 * this.#rand()),
+              0.8 + 1.6 * this.#rand(),
+              0.08 + 0.1 * this.#rand() + 0.02 * Math.min(sheet, 4),
+            );
+          }
+        }
+        // Spindrift: low and fast along the water, in streaks of small drops.
+        if (this.#rand() < dt * 6 * weather.spindrift * top) {
+          const e = c.east + (this.#rand() - 0.5) * 2;
+          const n = c.north + (this.#rand() - 0.5) * 2;
+          for (let j = 0; j < 4; j++) {
+            this.#throw(
+              e - we * 0.04 * j,
+              n - wn * 0.04 * j,
+              c.height + 0.05 + 0.1 * this.#rand(),
+              we * (0.8 + 0.2 * this.#rand()),
+              wn * (0.8 + 0.2 * this.#rand()),
+              0.3 + 0.4 * this.#rand(),
+              0.04 + 0.04 * this.#rand(),
+            );
+          }
         }
       }
     }

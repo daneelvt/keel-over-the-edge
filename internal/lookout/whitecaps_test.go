@@ -18,7 +18,7 @@ func TestWhitecapsFile(t *testing.T) {
 		Whitecaps float64 `json:"whitecaps"`
 	}
 	var got []point
-	for k := 0.0; k <= 45; k += 0.5 {
+	for k := 0.0; k <= 60; k += 0.5 {
 		got = append(got, point{k, Whitecaps(k)})
 	}
 	if *update {
@@ -46,8 +46,10 @@ func TestWhitecapsFile(t *testing.T) {
 			t.Errorf("%v knots: %v, the file %v", got[i].Knots, got[i].Whitecaps, want[i].Whitecaps)
 		}
 	}
-	// Nothing in a breeze under force 3's beginning; whole in a gale.
-	if Whitecaps(6) != 0 || Whitecaps(40) != 1 || !(Whitecaps(16) > 0.08 && Whitecaps(16) < 0.7) {
-		t.Errorf("6 knots %v, 16 %v, 40 %v", Whitecaps(6), Whitecaps(16), Whitecaps(40))
+	// Nothing in a breeze under force 3's beginning; whole by force 6, and
+	// more in a gale and a storm.
+	if Whitecaps(6) != 0 || Whitecaps(24.5) != 1.1 || !(Whitecaps(16) > 0.08 && Whitecaps(16) < 0.7) ||
+		!(Whitecaps(40) > 1.5 && Whitecaps(55) > Whitecaps(40)) || Whitecaps(60) != Whitecaps(55) {
+		t.Errorf("6 knots %v, 16 %v, 24.5 %v, 40 %v, 55 %v, 60 %v", Whitecaps(6), Whitecaps(16), Whitecaps(24.5), Whitecaps(40), Whitecaps(55), Whitecaps(60))
 	}
 }

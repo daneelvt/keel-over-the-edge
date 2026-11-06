@@ -9,7 +9,7 @@ import type { Mesh, Object3D, Scene } from 'three';
 import type { MeshBasicNodeMaterial, WebGPURenderer } from 'three/webgpu';
 import { catalog } from '../catalog';
 import { STEPS_PER_SECOND } from '../game/clock';
-import { SEA } from '../predict/layout.gen';
+import { RECORDS, SEA } from '../predict/layout.gen';
 import { type Physics, SEA_PARTS } from '../predict/physics';
 import type { Seas } from '../predict/seas';
 import type { FloatingOrigin } from '../render/coords';
@@ -31,7 +31,7 @@ import { type Field, hexCentre, makeField, type Point } from './hex';
 import { FOAM } from './look';
 import { patternTexture } from './pattern';
 import { SeaBand } from './phases';
-import { farLook, type SeaParts, seaTime, tileLook } from './seamaterial';
+import { detailSteep, farLook, type SeaParts, seaTime, tileLook } from './seamaterial';
 import { leeTexture, shore } from './shore';
 import { TilePass } from './tilepass';
 import { Tiles } from './tiles';
@@ -39,6 +39,9 @@ import { fract1, Turned } from './turn';
 import { SeaUnder } from './under';
 import { waterRainAt } from './water';
 import { type BandUniforms, bandUniforms } from './wave';
+
+/** The mean wind about the boat is sampled for the drawn sea this often, in seconds of world time. */
+const LOCAL_EVERY = 0.5;
 
 /**
  * Where the sea drawn comes from: the physics module that steps the boat,
@@ -124,6 +127,11 @@ export class Ocean {
   #pending = 0;
   /** What earlier looks read, to be let go once no material draws with it. */
   readonly #retired: (() => void)[] = [];
+  /** The mean wind at each area's centre, as last sampled, and when and in which window and sea it was. */
+  readonly #local = new Float64Array(SEA.window * SEA.window);
+  #localTick = Number.NEGATIVE_INFINITY;
+  #localSlot = -1;
+  #localVersion = -1;
 
   constructor(scene: Scene, foamMap = 512) {
     this.#scene = scene;
@@ -301,8 +309,10 @@ export class Ocean {
       shore.waves.value.set(leeTexture.a0, leeTexture.b0);
     }
 
+    this.#sampleLocal(f);
     const u = this.under;
     u.update(f.boatEast, f.boatNorth, f.dt);
+    detailSteep.value = u.foam.steep;
     // The pattern is laid over the world: the scene's x runs east and its z south.
     patternOrigin.value.set(
       fract1(origin.world.x / FOAM.patternSpan),
@@ -338,6 +348,49 @@ export class Ocean {
     if (this.#active === this.passTiles) {
       this.pass.render(renderer);
     }
+  }
+
+  /**
+   * Samples the mean wind at the centre of each area of the window drawn,
+   * and at the boat, every LOCAL_EVERY seconds of world time and whenever
+   * the sea changes, for what is drawn of the sea to follow where it blows
+   * harder than the sea has caught up with.
+   */
+  #sampleLocal(f: SeaFrame): void {
+    const src = this.source;
+    const held = src === null || this.slot < 0 ? undefined : src.seas.held[this.slot];
+    if (src === null || !src.weather || held === undefined) {
+      if (this.#localTick !== Number.NEGATIVE_INFINITY) {
+        this.under.clearLocal();
+        this.#localTick = Number.NEGATIVE_INFINITY;
+      }
+      return;
+    }
+    const since = (f.tick - this.#localTick) / STEPS_PER_SECOND;
+    const changed = this.#localSlot !== this.slot || this.#localVersion !== src.seas.version;
+    if (!changed && since >= 0 && since < LOCAL_EVERY) {
+      return;
+    }
+    const p = src.physics;
+    p.windDrawAt(f.tick);
+    const half = SEA.areas >> 1;
+    const local = this.#local;
+    for (let i = 0; i < local.length; i++) {
+      if (i >= held.size * held.size) {
+        local[i] = 0;
+        continue;
+      }
+      const col = held.col + (i % held.size);
+      const row = held.row + Math.floor(i / held.size);
+      const r = p.windPoint((col - half) * SEA.areaSize, (row - half) * SEA.areaSize);
+      local[i] = r[RECORDS.wind.meanSpeed] ?? 0;
+    }
+    const boat = p.windPoint(f.boatEast, f.boatNorth)[RECORDS.wind.meanSpeed] ?? 0;
+    // A change of sea, or of time either way, and it is there at once.
+    this.under.setLocal(local, boat, changed || !(since > 0) ? 0 : since);
+    this.#localTick = f.tick;
+    this.#localSlot = this.slot;
+    this.#localVersion = src.seas.version;
   }
 
   /**

@@ -6,6 +6,7 @@
 // adaptive quality move between each other without a stall.
 
 import { test as base, expect, type Page } from '@playwright/test';
+import { FOAM, foamAt, newFoamLook, whitecapCoverage } from '../src/ocean/look';
 import { openScene, picture, softwareGPU } from './helpers';
 
 /**
@@ -441,7 +442,7 @@ test.describe('foam', () => {
     expect(away).toBe(0);
   });
 
-  test('whitecaps only on high crests; streaks only from force 7, long down the wind', async ({
+  test('whitecaps only on the crests, lower down them the stronger the wind; streaks only from force 7, long down the wind', async ({
     page,
   }) => {
     await openLook(page, 'sea=fresh');
@@ -456,12 +457,19 @@ test.describe('foam', () => {
       globalThis.keel.render();
     });
     const s: Surface = await page.evaluate(() => globalThis.keel.surface(256, 64));
+    // A gale's whitecaps reach down its crests from the top's 0.75 of half
+    // the significant height, by how far their strength is over 1.
+    const strength = foamAt(34, newFoamLook()).whitecaps;
+    const [from] = FOAM.crest;
+    const [per, lowest] = FOAM.crestReach;
+    const begins = Math.max(from - Math.max(strength - 1, 0) * per, lowest);
+    expect(begins).toBeLessThan(from);
     let caps = 0;
     let low = 0;
     for (let p = 0; p < s.tile.length; p++) {
       if ((s.foam[p * 4 + 2] ?? 0) > 1e-3) {
         caps++;
-        if ((s.crest[p * 4] ?? 0) + 0.35 * (s.crest[p * 4 + 1] ?? 0) < 0.75 - 1e-3) {
+        if ((s.crest[p * 4] ?? 0) + FOAM.crestDetail * (s.crest[p * 4 + 1] ?? 0) < begins - 1e-3) {
           low++;
         }
       }
@@ -554,12 +562,13 @@ test.describe('foam', () => {
       shares.push(white / n);
     }
     const knot = 1852 / 3600;
+    const monahan = Object.values(winds).map((kn) => whitecapCoverage(kn * knot));
     test.info().annotations.push({
       type: 'white share',
       description: Object.entries(winds)
         .map(
           ([name, kn], i) =>
-            `${name} (${kn} kn): ${((shares[i] ?? 0) * 100).toFixed(2)}%, Monahan ${(3.84e-4 * (kn * knot) ** 3.41).toFixed(2)}%`,
+            `${name} (${kn} kn): ${((shares[i] ?? 0) * 100).toFixed(2)}%, Monahan ${((monahan[i] ?? 0) * 100).toFixed(2)}%`,
         )
         .join('; '),
     });
@@ -567,7 +576,12 @@ test.describe('foam', () => {
     for (let i = 1; i < shares.length; i++) {
       expect(shares[i]).toBeGreaterThanOrEqual(shares[i - 1] ?? 0);
     }
-    expect(shares[3]).toBeGreaterThan(shares[1] ?? 0);
+    // A fresh breeze's white is a look, a fraction of Monahan and
+    // O'Muircheartaigh's cover; a gale's comes near it.
+    expect((shares[2] ?? 0) / (monahan[2] ?? 1)).toBeLessThan(0.35);
+    expect((shares[3] ?? 0) / (monahan[3] ?? 1)).toBeGreaterThan(0.25);
+    expect((shares[3] ?? 0) / (monahan[3] ?? 1)).toBeLessThan(1.5);
+    expect(shares[3]).toBeGreaterThan(5 * (shares[2] ?? 0));
   });
 });
 

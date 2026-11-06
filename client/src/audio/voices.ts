@@ -70,6 +70,8 @@ export interface SoundInput {
   endNear?: number;
   /** The rain at the boat, mm an hour. */
   rain?: number;
+  /** The wind's gust factor where the boat is: 1 in a steady wind. */
+  gustFactor?: number;
 }
 
 export interface SoundTargets {
@@ -219,12 +221,16 @@ export function edgeInput(
 export function soundTargets(r: Recipes, x: SoundInput, out: SoundTargets): SoundTargets {
   const v = Math.max(0, x.apparentWind);
   const w = r.wind;
+  // The wind breathes as deep as it gusts: not at all in a steady wind.
+  const depth = Math.min(w.breath.most, w.breath.perGust * Math.max((x.gustFactor ?? 1) - 1, 0));
   const breath =
     1 +
-    w.breath.depth *
+    depth *
       Math.sin(2 * Math.PI * w.breath.rate * x.time) *
       Math.sin(2 * Math.PI * w.breath.rate * 0.37 * x.time + 1);
-  out.windCentre = Math.min(w.centre.most, w.centre.atRest + w.centre.perSpeed * v) * breath;
+  // A storm howls: its voice rises higher than a breeze's.
+  const howl = 1 + (w.howl.centre - 1) * ramp(w.howl.from, w.howl.full, v);
+  out.windCentre = Math.min(w.centre.most, w.centre.atRest + w.centre.perSpeed * v) * howl * breath;
   out.windLevel = w.level.most * ramp(w.level.from, w.level.full, v) * breath;
 
   const g = r.rigging;

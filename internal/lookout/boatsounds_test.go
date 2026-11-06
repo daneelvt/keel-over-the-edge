@@ -50,6 +50,7 @@ func boatScenes() []boatScene {
 		{"head to wind in 10 kn, the sail luffing", BoatHeard{ApparentWind: knots(10), SeaHeight: 0.3, Whitecaps: 0.05, Luffing: 2}, "the sail flogging"},
 		{"a reach at 4 kn in 10 kn, the head luffing", BoatHeard{ApparentWind: knots(12), Speed: knots(4), ThroughWater: knots(4), SeaHeight: 0.3, Whitecaps: 0.1, Luffing: 1}, "the sail flogging"},
 		{"beating at 5 kn in 20 kn apparent", BoatHeard{ApparentWind: knots(20), Speed: knots(5), ThroughWater: knots(5), SeaHeight: 0.5, Whitecaps: 0.3}, "wind in the rigging, water along the hull"},
+		{"a reach at 6 kn in a gusty 14 kn", BoatHeard{ApparentWind: knots(16), Speed: knots(6), ThroughWater: knots(6), SeaHeight: 0.45, Whitecaps: 0.3, Seconds: 77, GustFactor: 1.4}, "water along the hull, wind in the rigging"},
 		{"hove to in 25 kn", BoatHeard{ApparentWind: knots(25), Speed: knots(0.5), ThroughWater: knots(1), SeaHeight: 0.9, Whitecaps: 0.85}, "wind in the rigging, the hull slapping"},
 		{"light rain at a knot", BoatHeard{ApparentWind: knots(4), Speed: knots(1), ThroughWater: knots(1), Rain: 1}, "rain on the deck"},
 		{"heavy rain at 3 kn", BoatHeard{ApparentWind: knots(8), Speed: knots(3), ThroughWater: knots(3), SeaHeight: 0.2, Rain: 30}, "rain on the deck"},
@@ -145,7 +146,8 @@ func TestBoatSoundRecipes(t *testing.T) {
 		got, want float64
 	}{
 		{"breath rate", num(wind, "breath", "rate"), windRecipe.breathRate},
-		{"breath depth", num(wind, "breath", "depth"), windRecipe.depth},
+		{"breath per gust", num(wind, "breath", "perGust"), windRecipe.perGust},
+		{"breath most", num(wind, "breath", "most"), windRecipe.deepest},
 		{"sea share", num(sea, "share", "sea"), seaRecipe.sea},
 		{"whitecaps share", num(sea, "share", "whitecaps"), seaRecipe.whitecaps},
 		{"speed share", num(sea, "share", "speed"), seaRecipe.speed},

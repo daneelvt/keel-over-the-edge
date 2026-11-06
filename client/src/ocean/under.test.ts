@@ -2,7 +2,7 @@
 
 import { describe, expect, it } from 'vitest';
 import { SEA, SEA_SPEED_STEP } from '../predict/layout.gen';
-import { KNOT } from './look';
+import { foamAt, KNOT, newFoamLook } from './look';
 import { type AreaInputs, SeaUnder } from './under';
 
 const HALF = SEA.areas >> 1;
@@ -77,13 +77,43 @@ describe('the sea under the boat', () => {
     u.lay(window(6, 34, 3));
     expect(u.areas[0]?.toArray()).toEqual([0, 0, 0, 0]);
     // The wind is held in steps of a hundredth of a metre a second: a hair under 34 knots.
-    expect(u.areas[4]?.x).toBeCloseTo(1, 3);
-    expect(u.areas[4]?.y).toBeCloseTo(0.75, 3);
+    const gale = foamAt(((window(34, 34, 9).speed[0] ?? 0) * SEA_SPEED_STEP) / KNOT, newFoamLook());
+    expect(u.areas[4]?.x).toBeCloseTo(gale.whitecaps, 6);
+    expect(u.areas[4]?.y).toBeCloseTo(gale.streaks, 6);
+    expect(u.areas[4]?.x).toBeGreaterThan(1.5);
     expect(u.areas[4]?.z).toBe(1);
     u.lay(null);
     expect(u.areas.every((a) => a.x === 0 && a.y === 0 && a.z === 0)).toBe(true);
     u.update(0, 0, 1);
     expect(u.speed).toBe(0);
+  });
+
+  it('follows the mean wind where it blows harder than the wave wind, over about ten seconds', () => {
+    const u = new SeaUnder();
+    // A breeze's sea, and a squall's 30 knots over the eastern areas and the boat.
+    u.lay(window(12, 12, 9));
+    u.update(0, 0, 1);
+    const breeze = u.areas[4]?.x ?? 0;
+    const squall = new Float64Array(SEA.window * SEA.window);
+    for (let i = 0; i < squall.length; i++) {
+      squall[i] = i % SEA.window >= 3 ? 30 * KNOT : 5 * KNOT;
+    }
+    u.setLocal(squall, 30 * KNOT, 0);
+    u.update(0, 0, 1);
+    // There at once the first time; the western areas keep their sea's.
+    expect(u.areas[0]?.x).toBeCloseTo(breeze, 9);
+    expect(u.areas[4]?.x).toBeCloseTo(foamAt(30, newFoamLook()).whitecaps, 6);
+    expect(u.speed).toBeCloseTo(30 * KNOT, 6);
+    // Gone, it eases back to the sea's own over about ten seconds.
+    const calm = new Float64Array(SEA.window * SEA.window);
+    u.setLocal(calm, 0, 0.5);
+    expect(u.areas[4]?.x).toBeGreaterThan(breeze);
+    for (let i = 0; i < 120; i++) {
+      u.setLocal(calm, 0, 0.5);
+    }
+    expect(u.areas[4]?.x).toBeCloseTo(breeze, 6);
+    u.update(0, 0, 1);
+    expect(u.speed).toBeCloseTo(12 * KNOT, 2);
   });
 
   it('turns with the wind, the short way', () => {

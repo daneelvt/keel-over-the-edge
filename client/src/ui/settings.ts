@@ -28,6 +28,8 @@ export interface Settings {
   centreHelm: boolean;
   /** Bring the camera back behind the own boat a few seconds after it was last moved. */
   cameraBack: boolean;
+  /** Let a big sea move the view: the chase camera takes a share of the boat's pitch and roll. */
+  seaMotion: boolean;
   /** How much the sea is drawn with: as much as the device runs well, or the least, to save battery. */
   detail: 'auto' | 'low';
   /** The barometer out of the instruments' case. */
@@ -56,6 +58,7 @@ export const DEFAULTS: Settings = {
   rightOfWay: false,
   centreHelm: false,
   cameraBack: true,
+  seaMotion: true,
   detail: 'auto',
   barometer: false,
   nightLight: 2 / 3,
@@ -118,6 +121,7 @@ export function loadSettings(store: Store | null = defaultStore()): Settings {
     'rightOfWay',
     'centreHelm',
     'cameraBack',
+    'seaMotion',
     'barometer',
     'pilotHead',
     'pocketWeather',

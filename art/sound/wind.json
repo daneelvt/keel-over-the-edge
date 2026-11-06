@@ -1,8 +1,9 @@
 {
   "licence": "SPDX-License-Identifier: LicenseRef-All-Rights-Reserved. Art: all rights reserved, not covered by the AGPL. See art/README.md.",
-  "description": "The wind: noise through a band-pass filter whose centre and level rise with the apparent wind at the masthead, so it swells as the gusts do. The breath is a made-up swell on top, at depth 0: off. Speeds in m/s, frequencies in Hz, levels as gains.",
+  "description": "The wind: noise through a band-pass filter whose centre and level rise with the apparent wind at the masthead, so it swells as the gusts do, full at 34 knots. A storm's howl: above howl.from the centre rises further, by howl.centre times at howl.full. The breath is a made-up swell on top, as deep as perGust times the wind's gust factor over 1, at most most: none in a steady wind. Speeds in m/s, frequencies in Hz, levels as gains.",
   "q": 0.7,
   "centre": { "atRest": 220, "perSpeed": 55, "most": 2600 },
-  "level": { "from": 0.3, "full": 15, "most": 0.32 },
-  "breath": { "rate": 0.11, "depth": 0 }
+  "level": { "from": 0.3, "full": 17.5, "most": 0.4 },
+  "howl": { "from": 12, "full": 20, "centre": 1.35 },
+  "breath": { "rate": 0.11, "perGust": 0.6, "most": 0.3 }
 }

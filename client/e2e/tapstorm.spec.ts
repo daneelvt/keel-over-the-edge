@@ -214,11 +214,16 @@ test.describe('sailing to a storm by the chart', () => {
     expect(b.pilot.target).toBe(want < 0 ? want + 65536 : want);
     // The storm comes down the wind, so the course to meet it is often
     // close to dead upwind, which no boat holds; with a steady breeze on
-    // the beam of it, a minute on, the boat heads for it.
-    await page.evaluate(
-      (h) => globalThis.keel.setWind(12, ((((h * 180) / Math.PI + 90) % 360) + 360) % 360),
-      heading,
-    );
+    // the beam of it and the sheet trimmed for a beam reach (the
+    // handbook's 25–30°) and way on her, a minute on, the boat heads for
+    // it. Lying stopped with her sail let fly, a storm's sea would turn her
+    // where it would.
+    await page.evaluate((h) => {
+      const k = globalThis.keel;
+      k.setWind(12, ((((h * 180) / Math.PI + 90) % 360) + 360) % 360);
+      k.game.sheet.target = (28 - 4) / (95 - 4);
+      k.setState({ surge: 2 });
+    }, heading);
     await pass(page, MINUTE);
     const after = await page.evaluate(() => globalThis.keel.boat());
     const off = Math.atan2(

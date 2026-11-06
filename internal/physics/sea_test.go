@@ -154,9 +154,13 @@ func TestAreaHeight(t *testing.T) {
 	lo, hi := math.Sqrt(gravity*2*math.Pi/76), math.Sqrt(gravity*2*math.Pi/8)
 	for _, knots := range []float64{6, 8, 10, 12, 16, 20, 26, 34, 45, 60} {
 		for _, fetchNM := range []float64{1.5, 4, 6, 9} {
-			// The wind as an area holds it, in whole steps.
+			// The wind as an area holds it, in whole steps, and the fetch
+			// stretched as the catalog's licence has it.
 			u := math.Floor(knots*knot/SeaSpeedStep+0.5) * SeaSpeedStep
 			f := math.Floor(fetchNM*nauticalMile + 0.5)
+			if w := testWaves(t); u > w.stretchFrom {
+				f *= math.Min((u/w.stretchFrom)*(u/w.stretchFrom), w.stretchMost)
+			}
 			// Full development, past which the fit does not apply.
 			if gravity*f/(u*u) > fullFetch {
 				continue
@@ -190,20 +194,29 @@ func TestAreaHeight(t *testing.T) {
 	}
 }
 
+// The open sea's wind sea, 6 NM of fetch, by the wave wind: as the fetch
+// allows up to a fresh breeze, and above it growing with the square of the
+// wind, as an open sea does, to about half the Met Office's Beaufort
+// heights for a well-developed sea at forces 6 to 8.
 func TestSeaStates(t *testing.T) {
-	// The four states the look was chosen in, by wind and fetch.
 	for _, st := range []struct {
-		name         string
-		knots, fetch float64
-		hs           float64
-		least, most  int32
+		knots       float64
+		hs, tp      float64 // m, s
+		least, most int32   // waves evaluated
 	}{
-		{"calm", 6, 1.5, 0.00, 0, 30},
-		{"breeze", 12, 4, 0.18, 25, 60},
-		{"fresh", 20, 6.5, 0.60, 50, 100},
-		{"gale", 34, 9, 1.25, 80, 130},
+		{6, 0.07, 2.03, 25, 60},
+		{10, 0.25, 2.40, 35, 70},
+		{12, 0.32, 2.55, 40, 80},
+		{15, 0.42, 2.75, 50, 90},
+		{20, 0.7, 3.5, 70, 110},
+		{25, 1.1, 4.4, 90, 130},
+		{30, 1.6, 5.3, 90, 140},
+		{34, 2.0, 5.7, 90, 140},
+		{35, 2.0, 5.8, 90, 140},
+		{40, 2.3, 6.0, 90, 140},
 	} {
-		win := openSea(t, st.knots, 0, st.fetch).Window
+		win := openSea(t, st.knots, 0, 6).Window
+		tp := 2 * math.Pi / win.Peak[0]
 		var part float64
 		sum, quad := 0.0, 0.0
 		for _, a := range win.Amp {
@@ -213,12 +226,68 @@ func TestSeaStates(t *testing.T) {
 		if quad > 0 {
 			part = sum * sum / quad
 		}
-		t.Logf("%s: Hs %.3f m, peak %.2f s, %d waves evaluated, %.0f effective", st.name, win.Hs[0], 2*math.Pi/win.Peak[0], win.Count, part)
-		if math.Abs(win.Hs[0]-st.hs) > 0.04 {
-			t.Errorf("%s: Hs %.2f m, want about %.2f m", st.name, win.Hs[0], st.hs)
+		t.Logf("%g knots: Hs %.2f m, peak %.2f s (%.0f m), %d waves evaluated, %.0f effective", st.knots, win.Hs[0], tp, gravity*tp*tp/(2*math.Pi), win.Count, part)
+		// At and below a fresh breeze the sea is the fetch's, as it was;
+		// above, within a tenth of the targets.
+		tol := 0.1
+		if st.knots <= 16 {
+			tol = 0.03
+		}
+		if math.Abs(win.Hs[0]/st.hs-1) > tol {
+			t.Errorf("%g knots: Hs %.2f m, want %.2f m within %.0f%%", st.knots, win.Hs[0], st.hs, 100*tol)
+		}
+		if math.Abs(tp/st.tp-1) > tol {
+			t.Errorf("%g knots: peak %.2f s, want %.2f s within %.0f%%", st.knots, tp, st.tp, 100*tol)
 		}
 		if win.Count < st.least || win.Count > st.most {
-			t.Errorf("%s: %d waves evaluated, want %d to %d", st.name, win.Count, st.least, st.most)
+			t.Errorf("%g knots: %d waves evaluated, want %d to %d", st.knots, win.Count, st.least, st.most)
+		}
+	}
+}
+
+// At and below the stretch's start the sea is the fetch's own, bit for
+// bit: the amplitudes and the lee's factors are those of a sea that is
+// never stretched.
+func TestNoStretchBelowAFreshBreeze(t *testing.T) {
+	w := testWaves(t)
+	plain := *w
+	plain.stretchFrom = math.Inf(1)
+	for speed := uint32(0); float64(speed)*SeaSpeedStep <= w.stretchFrom; speed += 7 {
+		for _, fetch := range []uint32{300, 2000, 5556, uint32(w.fetchCap)} {
+			in := SeaInput{Speed: speed, From: 12345, Fetch: fetch}
+			a, b := newWindow(0, 0, 1), newWindow(0, 0, 1)
+			SeaArea(w, a, 0, in)
+			SeaArea(&plain, b, 0, in)
+			for i := range a.Amp {
+				if a.Amp[i] != b.Amp[i] {
+					t.Fatalf("%.2f m/s over %d m: wave %d is %g, unstretched %g", float64(speed)*SeaSpeedStep, fetch, i, a.Amp[i], b.Amp[i])
+				}
+			}
+			if a.Parts[0] != b.Parts[0] {
+				t.Fatalf("%.2f m/s over %d m: parts %+v, unstretched %+v", float64(speed)*SeaSpeedStep, fetch, a.Parts[0], b.Parts[0])
+			}
+			u := float64(speed) * SeaSpeedStep
+			for f := 0.0; f <= 1016; f += 4 {
+				if x, y := w.leeVariance(u, f), plain.leeVariance(u, f); x != y {
+					t.Fatalf("%.2f m/s over %g m of short water: %g, unstretched %g", u, f, x, y)
+				}
+			}
+		}
+	}
+	// Above it the sea is higher, and the lee keeps the share of it the
+	// short water raises: the stretch is the same on both fetches.
+	u := float64(30 * knot)
+	m := w.stretch(u)
+	if !(m > 1) || m > w.stretchMost {
+		t.Fatalf("30 knots: stretched %g times", m)
+	}
+	alpha, peak := jonswapFit(u, w.fetchCap*m)
+	band := w.bandVariance(alpha*gravity*gravity, peak)
+	for _, f := range []float64{100, 200, 400, 800, 1000} {
+		alpha, peak := jonswapFit(u, f*m)
+		want := math.Sqrt(w.bandVariance(alpha*gravity*gravity, peak) / band)
+		if got := math.Sqrt(w.leeVariance(u, f) / band); math.Abs(got-want) > 0.005 {
+			t.Errorf("30 knots over %g m of short water: the lee keeps %.4f of the open sea, the stretched fetch %.4f", f, got, want)
 		}
 	}
 }

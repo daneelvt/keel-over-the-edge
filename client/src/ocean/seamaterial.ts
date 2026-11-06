@@ -71,7 +71,7 @@ import {
 import { GUST_LOOK } from './gusts';
 import { TILE_APOTHEM } from './hex';
 import { hulls } from './hulls';
-import { FOAM } from './look';
+import { FOAM, RAIN_CUT } from './look';
 import { shallows, surf } from './shore';
 import type { TileVaryings } from './tiles';
 
@@ -100,6 +100,13 @@ export const tileHashNode = /* @__PURE__ */ Fn(([hex]: [Node<'vec2'>]) => {
 /** 1 to draw the detail band; 0 for the boat band alone (the developer panel, the tests). */
 export const detailOn = uniform(1);
 
+/**
+ * How much steeper the detail band and the shimmer are drawn than the
+ * spectrum has them, by the wind's force under the boat (look.ts): the
+ * short sea heaps up in a storm.
+ */
+export const detailSteep = uniform(1);
+
 /** The look's starting values; tuned in play. */
 export const SEA_LOOK = {
   /** Seam: darkening by 40% over this span of the distance from centre to edge. */
@@ -115,6 +122,12 @@ export const SEA_LOOK = {
   shimmerDrift: [7, 4],
   /** How far a crest half the significant height up lightens the water, and how far the detail band's height does. */
   crest: 0.45,
+  /**
+   * The crest's lightening counts its height over half the significant
+   * height, but no less than this many metres: light through a thin crest
+   * is a big wave's sign, and a calm's low crests are faint.
+   */
+  crestLight: 0.6,
   crestDetail: 0.4,
   /** The detail band's slope in the normal: averaged over the tile, and at the fragment. */
   tilt: 1.08,
@@ -142,10 +155,27 @@ interface WaterInput {
 
 /**
  * The boat band's height in half significant heights: a crest is high for
- * its own sea, in a breeze and in a gale alike.
+ * its own sea, in a breeze and in a gale alike. Where the whitecaps sit.
  */
 const crestHeight = (height: Node<'float'>, hs: Node<'float'>): Node<'float'> =>
   height.div(max(hs.mul(0.5), SEA_LOOK.crestFloor)) as unknown as Node<'float'>;
+
+/**
+ * The boat band's height for the light through its crests: over half the
+ * significant height, but never less than SEA_LOOK.crestLight, so a gale's
+ * crests are lit and a calm's are faint.
+ */
+const crestLit = (height: Node<'float'>, hs: Node<'float'>): Node<'float'> =>
+  height.div(max(hs.mul(0.5), SEA_LOOK.crestLight)) as unknown as Node<'float'>;
+
+/**
+ * The whitecaps a sea area keeps under rain of a share: rain takes a
+ * moderate breeze's white horses, and not a gale's (RAIN_CUT).
+ */
+const rainKept = (whitecaps: Node<'float'>, rain: Node<'float'>): Node<'float'> =>
+  whitecaps.mul(
+    float(1).sub(rain.mul(float(1).sub(smoothstep(RAIN_CUT.from, RAIN_CUT.to, whitecaps)))),
+  ) as unknown as Node<'float'>;
 
 /** How far a crest lightens the water: the boat band's height and the detail band's. */
 const lightening = (crest: Node<'float'>, detail: Node<'float'>): Node<'float'> =>
@@ -206,8 +236,9 @@ export interface SeaParts {
 
 /**
  * What rain does to the water, at its fullest: the ripples flatten by flat,
- * the whitecaps go, the colour goes toward its grey by grey, and pocks of
- * drops roughen it within pockReach m of the eye, pock deep.
+ * a breeze's whitecaps go (RAIN_CUT), the colour goes toward its grey by
+ * grey, and pocks of drops roughen it within pockReach m of the eye, pock
+ * deep.
  */
 export const RAIN_LOOK = { flat: 0.55, grey: 0.35, pock: 0.05, pockReach: 60, pockSize: 1.3 };
 
@@ -315,6 +346,9 @@ export function tileLook(v: TileVaryings, parts: SeaParts, probe?: Probe): Node<
     });
     const wakes = (parts.wakes === null ? float(0) : parts.wakes(positionWorld.xz)).toVar();
 
+    // The short sea heaps up with the wind's force.
+    tilt.mulAssign(detailSteep);
+    ripple.mulAssign(detailSteep);
     // A gust is rougher water: the capillary ripples a gust raises are what
     // makes its patch dark, tilting the sight down into the water where
     // smooth water mirrors the sky (American Meteorological Society,
@@ -348,10 +382,10 @@ export function tileLook(v: TileVaryings, parts: SeaParts, probe?: Probe): Node<
       N.assign(normalize(vec3(e.x, 0, e.y)));
     });
     const crest = crestHeight(v.plane.w, v.area.w);
-    const lightened = lightening(crest, lift);
+    const lightened = lightening(crestLit(v.plane.w, v.area.w), lift);
     const foam: FoamParts = {
-      // Rain takes the whitecaps away.
-      area: vec3(v.area.x.mul(lee).mul(float(1).sub(rain)), v.area.yz) as unknown as Node<'vec3'>,
+      // Rain takes a breeze's whitecaps away, not a gale's.
+      area: vec3(rainKept(v.area.x, rain).mul(lee), v.area.yz) as unknown as Node<'vec3'>,
       crest,
       detail: lift,
       lightened,
@@ -473,14 +507,14 @@ export function farLook(v: FarVaryings, parts: SeaParts, probe = false): Node<'v
     }
     const lee = clamp(v.lee, 0, 1.3);
     const rain = rainHere(parts, at);
-    ripple.mulAssign(lee.mul(float(1).sub(rain.mul(RAIN_LOOK.flat))));
+    ripple.mulAssign(lee.mul(float(1).sub(rain.mul(RAIN_LOOK.flat))).mul(detailSteep));
     const slope = plane.yz.add(ripple);
     const N = normalize(vec3(slope.x.negate(), 1, slope.y.negate()));
     const crest = crestHeight(plane.w, area.w);
-    const lightened = lightening(crest, lift);
+    const lightened = lightening(crestLit(plane.w, area.w), lift);
     const g = v.ground;
     const foam: FoamParts = {
-      area: vec3(area.x.mul(lee).mul(float(1).sub(rain)), area.yz) as unknown as Node<'vec3'>,
+      area: vec3(rainKept(area.x, rain).mul(lee), area.yz) as unknown as Node<'vec3'>,
       crest,
       detail: lift,
       lightened,

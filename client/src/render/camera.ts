@@ -9,10 +9,15 @@
 // last touch it eases back to its resting view, unless the player has
 // turned that off; it keeps a pinch's distance. Back to the boat brings
 // it behind the boat at once, at its resting distance too. It rises and falls with the
-// boat on the waves, smoothly, so the boat stays in the frame in a gale, but
-// ignores the boat's heel and pitch: a camera that pitched with a dinghy in
-// a seaway would be hard to watch. It never goes below 1.6 m above the sea
-// under the boat, and with reduced motion its springs are stiffer.
+// boat on the waves, smoothly, so the boat stays in the frame in a gale. In
+// a big sea it takes a share of the boat's pitch and roll too, their swing
+// about their mean, low-passed: a level camera hides the sea's motion, and
+// one that pitched and rolled with a dinghy in a seaway would be hard to
+// watch, so a share, which keeps the boat in the frame and the horizon
+// readable (look.ts, SEA_MOTION). The player may turn it off ("The sea
+// moves the view"), and it is off when the device asks for reduced motion.
+// It never goes below 1.6 m above the sea under the boat, and with reduced
+// motion its springs are stiffer.
 //
 // It can look up. A drag that would take it lower than its lowest goes on
 // into a tilt: the camera stays where it is and lifts its gaze from the
@@ -33,6 +38,8 @@
 // sailor's first touch: a touch of the helm, the sheet or the autopilot
 // eases it behind the boat at once, and a touch of the sea is a look round
 // like any other, easing back five seconds after the last.
+
+import { SEA_MOTION } from '../ocean/look';
 
 /** A view of the boat: azimuth from astern (radians, toward the port quarter positive), elevation above the horizon, distance in metres. */
 export interface CameraView {
@@ -117,6 +124,24 @@ function clamp(v: number, lo: number, hi: number): number {
   return v < lo ? lo : v > hi ? hi : v;
 }
 
+/** v turned by angle radians about the unit axis, right-handed (Rodrigues's formula). */
+function turn(
+  v: [number, number, number],
+  axis: [number, number, number],
+  angle: number,
+): [number, number, number] {
+  const [x, y, z] = v;
+  const [a, b, c] = axis;
+  const cos = Math.cos(angle);
+  const sin = Math.sin(angle);
+  const dot = (a * x + b * y + c * z) * (1 - cos);
+  return [
+    x * cos + (b * z - c * y) * sin + a * dot,
+    y * cos + (c * x - a * z) * sin + b * dot,
+    z * cos + (a * y - b * x) * sin + c * dot,
+  ];
+}
+
 export interface Vec3Like {
   x: number;
   y: number;
@@ -144,6 +169,16 @@ export class ChaseCamera {
   watching = false;
   /** Where the camera holds, in the scene, looking at the boat wherever it goes: going over the lip. */
   held: { x: number; y: number; z: number } | null = null;
+  /** Whether the sea moves the view, as the player chooses: off under reduced motion whatever they choose. */
+  seaMoves = true;
+  /** The share of the boat's pitch and roll the camera takes now, radians, low-passed. */
+  pitch = 0;
+  roll = 0;
+  /** The boat's pitch and heel as the camera takes them about: their means, radians. */
+  #meanPitch = 0;
+  #meanHeel = 0;
+  /** The heading the boat's attitude is taken along, radians clockwise from north. */
+  #heading = 0;
   /** A bump's shake: its size, metres, when it began and the frame's time, ms. */
   shakeSize = 0;
   #shakeAt = Number.NEGATIVE_INFINITY;
@@ -169,9 +204,18 @@ export class ChaseCamera {
     this.tilt = 0;
     this.lift = heave;
     this.sea = sea;
+    this.#level();
     this.#touched = Number.NEGATIVE_INFINITY;
     this.#opening = null;
     this.#descent = null;
+  }
+
+  /** Takes none of the boat's pitch and roll: a boat set down anew starts level. */
+  #level(): void {
+    this.pitch = 0;
+    this.roll = 0;
+    this.#meanPitch = 0;
+    this.#meanHeel = 0;
   }
 
   /**
@@ -184,6 +228,7 @@ export class ChaseCamera {
     this.yawRate = 0;
     this.lift = heave;
     this.sea = sea;
+    this.#level();
   }
 
   /**
@@ -322,14 +367,26 @@ export class ChaseCamera {
    * Follows a boat heading this way, heaved this far, on a sea this high
    * under it, for dt seconds; now in milliseconds.
    */
-  update(dt: number, heading: number, now: number, heave = 0, sea = 0): void {
+  update(
+    dt: number,
+    heading: number,
+    now: number,
+    heave = 0,
+    sea = 0,
+    pitch = 0,
+    heel = 0,
+    hs = 0,
+  ): void {
     this.sea = sea;
     this.#now = now;
+    this.#heading = heading;
     if (dt <= 0) {
       return;
     }
-    const follow = this.reducedMotion ? HEAVE_TIME / 3 : HEAVE_TIME;
+    const big = hs > SEA_MOTION.quick ? SEA_MOTION.heave : HEAVE_TIME;
+    const follow = this.reducedMotion ? HEAVE_TIME / 3 : big;
     this.lift += (heave - this.lift) * (1 - Math.exp(-dt / follow));
+    this.#seaMotion(dt, pitch, heel, hs);
     // The exact step of a critically damped spring, x″ = −ω²x − 2ωx′, on the
     // yaw's error from the heading: it never overshoots from rest.
     const w = this.reducedMotion ? YAW_OMEGA_REDUCED : YAW_OMEGA;
@@ -383,6 +440,27 @@ export class ChaseCamera {
     }
   }
 
+  /**
+   * The share of the boat's pitch and roll the camera takes in a sea of
+   * significant height hs: of their swing about their means, so a boat
+   * heeled steadily by the wind does not tilt the horizon; a capsize's heel
+   * is held to a ship's roll.
+   */
+  #seaMotion(dt: number, pitch: number, heel: number, hs: number): void {
+    const m = SEA_MOTION;
+    const on = this.seaMoves && !this.reducedMotion;
+    const share = on ? clamp((hs - m.from) / (m.full - m.from), 0, 1) : 0;
+    const settle = 1 - Math.exp(-dt / m.mean);
+    this.#meanPitch += (pitch - this.#meanPitch) * settle;
+    this.#meanHeel += (heel - this.#meanHeel) * settle;
+    const swing = (v: number): number => clamp(v, -0.6, 0.6);
+    const toPitch = share * m.pitch * swing(pitch - this.#meanPitch);
+    const toRoll = share * m.roll * swing(heel - this.#meanHeel);
+    const k = 1 - Math.exp(-dt / m.smooth);
+    this.pitch += (toPitch - this.pitch) * k;
+    this.roll += (toRoll - this.roll) * k;
+  }
+
   /** Shakes the camera for a bump the hulls closed at closing m/s, at now (ms). */
   shake(closing: number, now: number): void {
     const size = Math.min(SHAKE_MOST, SHAKE_PER_SPEED * Math.max(0, closing));
@@ -402,9 +480,17 @@ export class ChaseCamera {
 
   /**
    * Writes the camera's position into position and the point it looks at
-   * into target, for a boat at scene (x, y, z).
+   * into target, for a boat at scene (x, y, z); and, given up, which way is
+   * up for it: turned with the share of the boat's pitch and roll it takes.
    */
-  place3(x: number, y: number, z: number, position: Vec3Like, target: Vec3Like): void {
+  place3(
+    x: number,
+    y: number,
+    z: number,
+    position: Vec3Like,
+    target: Vec3Like,
+    up?: Vec3Like,
+  ): void {
     const v = this.view;
     const distance = v.distance * this.#scale;
     // The stern's direction in the scene's x–z plane is the heading plus a
@@ -415,13 +501,34 @@ export class ChaseCamera {
     const ty = y + this.lift + LOOK_HEIGHT;
     const tz = z;
     target.set(tx, ty, tz);
+    up?.set(0, 1, 0);
     if (this.held !== null) {
       position.set(this.held.x, this.held.y, this.held.z);
       return;
     }
-    const py = Math.max(ty + Math.sin(v.elevation) * distance, y + this.sea + MIN_HEIGHT);
-    const px = tx + Math.cos(a) * ce * distance;
-    const pz = tz + Math.sin(a) * ce * distance;
+    let ox = Math.cos(a) * ce * distance;
+    let oy = Math.sin(v.elevation) * distance;
+    let oz = Math.sin(a) * ce * distance;
+    if (this.pitch !== 0 || this.roll !== 0) {
+      // Turned about the boat as the boat turns: by the roll about its
+      // fore-and-aft line, then by the pitch about its athwartships line.
+      // The scene's x runs east and z south: the bow points (sin h, 0,
+      // −cos h) and starboard (cos h, 0, sin h).
+      const h = this.#heading;
+      const fore: [number, number, number] = [Math.sin(h), 0, -Math.cos(h)];
+      const side: [number, number, number] = [Math.cos(h), 0, Math.sin(h)];
+      const o = turn(turn([ox, oy, oz], fore, this.roll), side, this.pitch);
+      ox = o[0];
+      oy = o[1];
+      oz = o[2];
+      if (up !== undefined) {
+        const u = turn(turn([0, 1, 0], fore, this.roll), side, this.pitch);
+        up.set(u[0], u[1], u[2]);
+      }
+    }
+    const py = Math.max(ty + oy, y + this.sea + MIN_HEIGHT);
+    const px = tx + ox;
+    const pz = tz + oz;
     // A bump's shake moves the camera across the line to the boat and up.
     const s = this.shakeAt(this.#now);
     position.set(px - Math.sin(a) * s, py + 0.6 * s, pz + Math.cos(a) * s);
