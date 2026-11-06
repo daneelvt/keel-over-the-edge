@@ -1,0 +1,67 @@
+# SPDX-License-Identifier: LicenseRef-All-Rights-Reserved
+#
+# The Old Salt's habit: squinting at the sky. At the helm, the hands kept
+# on tiller and sheet, the head lifts to the sky to windward, the eyes
+# narrowed against the light, holds there reading the weather, turns
+# slowly ahead along the clouds with a small nod, and comes down to the
+# sail again. Standing, the same, the hand on the hip.
+poses:
+  oldsalt-sky:
+    from: helm-seated
+    turn:
+      - [spine_03, x, -4]
+      - [neck_01, x, -10]
+      - [head, x, -20]
+      - [neck_01, z, 6]
+      - [head, z, 12]
+
+  oldsalt-clouds:
+    from: oldsalt-sky
+    turn:
+      - [neck_01, z, -10]
+      - [head, z, -20]
+      - [head, x, 4]
+
+  oldsalt-nod:
+    from: oldsalt-clouds
+    turn:
+      - [head, x, 6]
+
+  oldsalt-stand-sky:
+    from: stand
+    turn:
+      - [spine_03, x, -4]
+      - [neck_01, x, -10]
+      - [head, x, -20]
+      - [neck_01, z, 6]
+      - [head, z, 12]
+
+  oldsalt-stand-clouds:
+    from: oldsalt-stand-sky
+    turn:
+      - [neck_01, z, -10]
+      - [head, z, -20]
+      - [head, x, 4]
+
+  oldsalt-stand-nod:
+    from: oldsalt-stand-clouds
+    turn:
+      - [head, x, 6]
+
+clips:
+  oldsalt-habit:
+    sides: true
+    keys:
+      - { pose: helm-seated, hold: 0.4 }
+      - { pose: oldsalt-sky, hold: 0.9, ramp: 1.6, lead: head }
+      - { pose: oldsalt-clouds, hold: 0.4, ramp: 1.9, lead: head }
+      - { pose: oldsalt-nod, hold: 0.4, ramp: 0.8, lead: head }
+      - { pose: helm-seated, hold: 0.4, ramp: 1.6, lead: head }
+
+  oldsalt-habit-standing:
+    keys:
+      - { pose: stand, hold: 0.4 }
+      - { pose: oldsalt-stand-sky, hold: 0.9, ramp: 1.6, lead: head }
+      - { pose: oldsalt-stand-clouds, hold: 0.4, ramp: 1.9, lead: head }
+      - { pose: oldsalt-stand-nod, hold: 0.4, ramp: 0.8, lead: head }
+      - { pose: stand, hold: 0.4, ramp: 1.6, lead: head }

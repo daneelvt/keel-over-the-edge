@@ -223,8 +223,13 @@ test('the Rover stands and sits in both versions, dressed, skinned and posed', a
 for (const looks of [
   ['bosun', 'chartmaker'],
   ['lookout', 'cavalier'],
+  ['quartermaster', 'oldsalt'],
 ]) {
-  const names = looks.map((l) => `${l[0]?.toUpperCase()}${l.slice(1)}`);
+  const names = looks.map(
+    (l) =>
+      (({ oldsalt: 'Old Salt' }) as Record<string, string>)[l] ??
+      `${l[0]?.toUpperCase()}${l.slice(1)}`,
+  );
   test(`the ${names[0]} and the ${names[1]} stand, sit and go through their habits`, async ({
     page,
   }) => {
