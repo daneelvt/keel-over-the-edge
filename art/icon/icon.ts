@@ -1,40 +1,33 @@
 // SPDX-License-Identifier: LicenseRef-All-Rights-Reserved
 // Art: all rights reserved, not covered by the AGPL. See art/README.md.
 
-// The game's icon: the Jolly boat under her cream flax sail, on the sea's
-// dark slate, in the brass ring the instruments wear. Drawn as shapes in
-// the ring's own measure (its outer radius 1, its centre the origin, y
-// down), and rasterised here, sixteen samples a pixel, into the PNGs a
-// phone asks for: the same pixels on every machine, as no renderer of SVG
-// promises.
+// The game's icon: the Jolly boat under her cream flax sail, large on sky
+// and sea. One drawing everywhere it is shown: the browser's tab, the
+// cover, the desktop and a phone's home screen, where the launcher cuts its
+// own shape and sets the icon among others drawn edge to edge. Drawn as
+// shapes (y down) and rasterised here,
+// sixteen samples a pixel, into the PNGs a phone asks for: the same pixels
+// on every machine, as no renderer of SVG promises.
 
 import { crc32, deflateSync, inflateSync } from 'node:zlib';
 
 type Point = readonly [number, number];
 
-/** A shape: its outlines, filled by the even-odd rule, and its colour. */
+/** A colour, or a colour shading to another from y0 down to y1. */
+type Paint = string | { readonly from: string; readonly to: string; y0: number; y1: number };
+
+/** A shape: its outlines, filled by the even-odd rule, and its paint. */
 interface Shape {
   contours: readonly (readonly Point[])[];
-  fill: string;
+  fill: Paint;
 }
 
-/** The slate behind the ring. */
+/** The slate beneath the icon, the page's own colour. */
 export const SLATE = '#1a242c';
-const SEA = '#22394a';
-const BRASS = '#c9a24c';
-const BRASS_LIGHT = '#f3dfa0';
-const BRASS_DARK = '#8a6524';
 const FLAX = '#efe6d2';
 const SPAR = '#cc9957';
 const TIMBER = '#7b4a27';
 const PENNANT = '#b81f1a';
-
-function circle(r: number, n = 256): Point[] {
-  return Array.from({ length: n }, (_, i): Point => {
-    const a = (2 * Math.PI * i) / n;
-    return [r * Math.cos(a), r * Math.sin(a)];
-  });
-}
 
 function rect(x0: number, y0: number, x1: number, y1: number): Point[] {
   return [
@@ -44,11 +37,6 @@ function rect(x0: number, y0: number, x1: number, y1: number): Point[] {
     [x0, y1],
   ];
 }
-
-const ring = (r0: number, r1: number, fill: string): Shape => ({
-  contours: [circle(r1), circle(r0)],
-  fill,
-});
 
 /** The sail's chord at fraction v up the luff: a straight leech, bellied by its roach. */
 const chord = (v: number) => 0.62 * (1 - v) + 0.13 * Math.sin(Math.PI * v) * (1 - v) ** 0.3;
@@ -74,48 +62,94 @@ function hull(): Point[] {
   return [[0.5, 0.42], ...bottom, [-0.6, 0.385]];
 }
 
-/** The drawing, back to front, the ring's outer radius 1. */
-export const DRAWING: readonly Shape[] = [
-  { contours: [circle(0.87)], fill: SEA },
-  ring(0.87, 1, BRASS),
-  ring(0.87, 0.905, BRASS_LIGHT),
-  ring(0.965, 1, BRASS_DARK),
-  { contours: [sail()], fill: FLAX },
-  { contours: [rect(-0.255, -0.7, -0.215, 0.4)], fill: SPAR },
-  { contours: [rect(-0.255, 0.3, 0.44, 0.34)], fill: SPAR },
-  {
-    contours: [
-      [
-        [-0.235, -0.7],
-        [-0.06, -0.665],
-        [-0.235, -0.63],
+const SKY_HIGH = '#4a9fcc';
+const SKY_LOW = '#1f6390';
+const DEEP = '#123a56';
+const SWELL = '#2b78a3';
+
+/** The boat's scale in the tile, from her own measure, and where her middle sits. */
+const BOAT = 1.06;
+const BOAT_X = 0.04;
+const BOAT_Y = 0.02;
+/** The waterline, in the tile's measure. */
+const WATER = 0.5;
+
+/** A shape of the boat's measure moved into the tile's. */
+const aboard = (s: Shape): Shape => ({
+  fill: s.fill,
+  contours: s.contours.map((c) => c.map(([x, y]): Point => [BOAT_X + BOAT * x, BOAT_Y + BOAT * y])),
+});
+
+/** The boat's own shapes, her spars stout enough to hold at a home screen's size. */
+export const TILE_BOAT: readonly Shape[] = (
+  [
+    { contours: [sail()], fill: FLAX },
+    { contours: [rect(-0.27, -0.71, -0.21, 0.4)], fill: SPAR },
+    { contours: [rect(-0.27, 0.295, 0.45, 0.35)], fill: SPAR },
+    {
+      contours: [
+        [
+          [-0.24, -0.71],
+          [-0.02, -0.66],
+          [-0.24, -0.61],
+        ],
       ],
-    ],
-    fill: PENNANT,
+      fill: PENNANT,
+    },
+    { contours: [hull()], fill: TIMBER },
+  ] satisfies Shape[]
+).map(aboard);
+
+/**
+ * The tile, back to front, in its own measure: its half-width 1, its
+ * centre the origin. Sky and sea run past the edges; the boat keeps within
+ * the circle of radius 0.8 that every launcher's mask leaves whole.
+ */
+export const TILE: readonly Shape[] = [
+  {
+    contours: [rect(-1, -1, 1, 1)],
+    fill: { from: SKY_HIGH, to: SKY_LOW, y0: -1, y1: WATER },
   },
-  { contours: [hull()], fill: TIMBER },
+  {
+    contours: [rect(-1, WATER, 1, 1)],
+    fill: { from: SWELL, to: DEEP, y0: WATER, y1: 0.9 },
+  },
+  ...TILE_BOAT,
 ];
 
-/** One of the icons: its size in pixels, the ring's outer radius as a fraction of it, and its corners. */
+/** One of the icons: its size in pixels, its drawing and the drawing's unit as a fraction of the size, and its corners. */
 export interface Frame {
   file: string;
   size: number;
-  ring: number;
-  /** The slate's corners' radius as a fraction of the size: 0 for slate to the edges. */
+  drawing: readonly Shape[];
+  unit: number;
+  /** The corners' radius as a fraction of the size: 0 for square to the edges. */
   corner: number;
 }
 
 /**
- * The icons: Chrome's two, a corner left clear about a rounded square of
- * slate; the maskable one, slate to the edges and the ring within the
- * middle 80% that any mask keeps; and the iPhone's, slate to the edges for
- * it rounds the corners itself.
+ * The icons, each the tile: Chrome's two, its corners rounded, a corner
+ * left clear (the favicon and the cover show them too); the maskable one,
+ * square to the edges; and the iPhone's, square, for it rounds the corners
+ * itself.
  */
 export const FRAMES: readonly Frame[] = [
-  { file: 'icon-192.png', size: 192, ring: 0.44, corner: 0.2 },
-  { file: 'icon-512.png', size: 512, ring: 0.44, corner: 0.2 },
-  { file: 'icon-maskable-512.png', size: 512, ring: 0.39, corner: 0 },
-  { file: 'apple-touch-icon.png', size: 180, ring: 0.43, corner: 0 },
+  { file: 'icon-192.png', size: 192, drawing: TILE, unit: 0.5, corner: 0.2 },
+  { file: 'icon-512.png', size: 512, drawing: TILE, unit: 0.5, corner: 0.2 },
+  {
+    file: 'icon-maskable-512.png',
+    size: 512,
+    drawing: TILE,
+    unit: 0.5,
+    corner: 0,
+  },
+  {
+    file: 'apple-touch-icon.png',
+    size: 180,
+    drawing: TILE,
+    unit: 0.5,
+    corner: 0,
+  },
 ];
 
 /** A square of slate with rounded corners, in pixels. */
@@ -150,17 +184,25 @@ function rgb(hex: string): [number, number, number] {
 /** The frame's pixels, RGBA, row by row. */
 export function rasterise(frame: Frame): Uint8Array {
   const { size } = frame;
-  const scale = frame.ring * size;
+  const scale = frame.unit * size;
   const shapes: Shape[] = [
     { contours: [slate(size, frame.corner)], fill: SLATE },
-    ...DRAWING.map((s) => ({
-      fill: s.fill,
+    ...frame.drawing.map((s) => ({
+      fill:
+        typeof s.fill === 'string'
+          ? s.fill
+          : {
+              ...s.fill,
+              y0: size / 2 + s.fill.y0 * scale,
+              y1: size / 2 + s.fill.y1 * scale,
+            },
       contours: s.contours.map((c) =>
         c.map(([x, y]): Point => [size / 2 + x * scale, size / 2 + y * scale]),
       ),
     })),
   ];
-  // Each sample's shape, the topmost: 0 for none, then 1 on.
+  // Each sample's shape, the topmost: 0 for none, then 1 on. The slate,
+  // shape 1, clips the drawing: nothing is drawn past its corners.
   const n = size * SAMPLES;
   const top = new Uint8Array(n * n);
   shapes.forEach((shape, k) => {
@@ -179,11 +221,31 @@ export function rasterise(frame: Frame): Uint8Array {
       for (let i = 0; i + 1 < xs.length; i += 2) {
         const from = Math.max(0, Math.ceil((xs[i] as number) * SAMPLES - 0.5));
         const to = Math.min(n, Math.ceil((xs[i + 1] as number) * SAMPLES - 0.5));
-        top.fill(k + 1, row * n + from, row * n + to);
+        if (k === 0) {
+          top.fill(1, row * n + from, row * n + to);
+        } else {
+          for (let at = row * n + from; at < row * n + to; at++) {
+            if (top[at] !== 0) {
+              top[at] = k + 1;
+            }
+          }
+        }
       }
     }
   });
-  const fills = shapes.map((s) => rgb(s.fill));
+  // Each shape's colour by sample row.
+  const fills = shapes.map((s) => {
+    if (typeof s.fill === 'string') {
+      const c = rgb(s.fill);
+      return () => c;
+    }
+    const { y0, y1 } = s.fill;
+    const [a, b] = [rgb(s.fill.from), rgb(s.fill.to)];
+    return (y: number) => {
+      const t = Math.min(1, Math.max(0, (y - y0) / (y1 - y0)));
+      return a.map((v, i) => v + t * ((b[i] as number) - v)) as [number, number, number];
+    };
+  });
   const out = new Uint8Array(size * size * 4);
   for (let py = 0; py < size; py++) {
     for (let px = 0; px < size; px++) {
@@ -195,7 +257,9 @@ export function rasterise(frame: Frame): Uint8Array {
         for (let sx = 0; sx < SAMPLES; sx++) {
           const k = top[(py * SAMPLES + sy) * n + px * SAMPLES + sx] as number;
           if (k > 0) {
-            const c = fills[k - 1] as [number, number, number];
+            const c = (fills[k - 1] as (y: number) => [number, number, number])(
+              py + (sy + 0.5) / SAMPLES,
+            );
             r += c[0];
             g += c[1];
             b += c[2];
@@ -246,7 +310,11 @@ export function png(size: number, rgba: Uint8Array): Buffer {
 }
 
 /** A PNG's size and RGBA pixels, as png writes them: unfiltered rows. */
-export function readPng(file: Uint8Array): { width: number; height: number; rgba: Uint8Array } {
+export function readPng(file: Uint8Array): {
+  width: number;
+  height: number;
+  rgba: Uint8Array;
+} {
   const b = Buffer.from(file);
   if (!b.subarray(0, 8).equals(SIGNATURE)) {
     throw new Error('not a PNG');
