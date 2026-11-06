@@ -1,0 +1,86 @@
+# SPDX-License-Identifier: LicenseRef-All-Rights-Reserved
+#
+# The Cavalier's habit: sweeping the hat. At the helm the sheet hand rises
+# to the front of the hat's brim, takes it, and sweeps out and down to the
+# side in a wide arc as the head dips in a bow, looking after the hand;
+# then the hand comes back to the sheet. Standing, the same flourish,
+# wider, and the hand back on the hip.
+poses:
+  cavalier-brim:
+    from: helm-seated
+    turn:
+      - [neck_01, x, -2]
+      - [head, x, -4]
+    ik:
+      # At the brim's front edge, not into it: on the port side the brim
+      # is pinned up the other way.
+      hand_r: { at: bone, bone: head, offset: [-0.08, -0.315, 0.02], pole: [-0.6, 0.0, -0.4] }
+
+  cavalier-sweep:
+    from: helm-seated
+    turn:
+      - [spine_03, x, 5]
+      - [neck_01, x, 4]
+      - [head, x, 8]
+      - [neck_01, z, -4]
+      - [head, z, -10]
+    ik:
+      hand_r: { at: bone, bone: spine_03, offset: [-0.5, -0.32, 0.0], pole: [-0.4, 0.7, -0.2] }
+
+  cavalier-stand-brim:
+    from: stand
+    turn:
+      - [neck_01, x, -2]
+      - [head, x, -4]
+    ik:
+      hand_r: { at: bone, bone: head, offset: [-0.08, -0.3, 0.02], pole: [-0.6, 0.4, 0.0] }
+
+  cavalier-stand-sweep:
+    from: stand
+    turn:
+      - [spine_01, x, 3]
+      - [spine_02, x, 3]
+      - [spine_03, x, 5]
+      - [neck_01, x, 4]
+      - [head, x, 8]
+      - [neck_01, z, -4]
+      - [head, z, -10]
+    ik:
+      hand_r: { at: bone, bone: spine_03, offset: [-0.55, -0.35, -0.08], pole: [-0.4, 0.7, -0.2] }
+
+  # The hand down before the waist on its way back to the hip.
+  cavalier-stand-lower:
+    from: stand
+    ik:
+      hand_r: { at: bone, bone: pelvis, offset: [-0.24, -0.2, 0.14], pole: [-0.7, 0.4, 0.0] }
+
+clips:
+  cavalier-habit:
+    sides: true
+    keys:
+      - { pose: helm-seated, hold: 0.3 }
+      - {
+          pose: cavalier-brim,
+          hold: 0.25,
+          ramp: 1.3,
+          anticipate: 0.06,
+          arc: [0.06, 0.06],
+          lead: head,
+        }
+      - { pose: cavalier-sweep, hold: 0.5, ramp: 1.8, arc: [0.12, 0.04], lead: head }
+      - { pose: helm-seated, hold: 0.4, ramp: 1.6, arc: [0.06, 0.02] }
+
+  cavalier-habit-standing:
+    keys:
+      - { pose: stand, hold: 0.3 }
+      - {
+          pose: cavalier-stand-brim,
+          hold: 0.25,
+          ramp: 1.7,
+          anticipate: 0.06,
+          arc: [0.08, 0.05],
+          lead: head,
+        }
+      - { pose: cavalier-stand-sweep, hold: 0.5, ramp: 2.3, arc: [0.14, 0.04], lead: head }
+      - { pose: cavalier-stand-lower, hold: 0.05, ramp: 1.5 }
+      - { pose: stand, hold: 0.4, ramp: 1.2 }

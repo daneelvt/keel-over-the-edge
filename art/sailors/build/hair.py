@@ -25,10 +25,17 @@ A style is its parameters:
   width (at its root), taper (its end's share of the width), lean (how
   far it lies back from straight down, as y a metre of fall), clear (how
   far its line keeps off the skin: the clothes' collar under it and its
-  own half width), lobes (a braid's)};
+  own half width), lobes (a braid's), splay (how far it goes out to its
+  side, as x a metre of fall), pair (true: two, the gather point's and
+  its mirror image's: a pair of braids)};
 - ribbon: {colour, at (a share of the tail's length), width} ties the
   tail; and, for a queue, ends: how long its two ends hang;
-- strands, thickness: how many strands, and how thick at the root.
+- strands, thickness: how many strands, and how thick at the root;
+- crown: a cap's extra volume at the top of the head (a thick crown of
+  hair standing up), over its top crown-depth metres;
+- clear: long hair falling loose below the nape, kept this far off the
+  back (over the clothes); coil: {radius, pitch} winds each strand below
+  the nape into a ringlet (long curls).
 
 Every strand is grown on the figure's right and mirrored, so the shell is
 its own mirror. Its UVs are one island: a projection round the head,
@@ -89,6 +96,12 @@ def make(spec, human, marks, arm, budget, under_hat=None, skin=None):
     if gather is not None and p.get("shell") == "cap":
         # Gathered at the hair's surface, the nearest to the point asked.
         loc, n, _, _ = drawn.find_nearest(gather)
+        if p["gather"][0] == 0:
+            # On the middle, though the drawn body is not quite its own
+            # mirror.
+            loc, n = loc.copy(), n.copy()
+            loc.x = n.x = 0.0
+            n.normalize()
         # Set out by the tail's own half width, so its root is not in the
         # nape.
         gather = loc + n * (p.get("volume", 0.008) * 0.5 + (p.get("tail") or {}).get("width", 0.03) * 0.3)
@@ -101,7 +114,9 @@ def make(spec, human, marks, arm, budget, under_hat=None, skin=None):
     if gather is not None and tail and not bun_:
         tail_path = tail_line(gather, tail, tree, nape)
     tail_budget = int(budget * tail.get("share", 0.4)) if tail_path is not None or (bun_ and gather) else 0
-    ribbon_budget = RIBBON_TRIANGLES if p.get("ribbon") else 0
+    if tail_path is not None and tail.get("pair"):
+        tail_budget *= 2
+    ribbon_budget = RIBBON_TRIANGLES * (2 if tail.get("pair") else 1) if p.get("ribbon") else 0
     curls_budget = int(budget * sum(c.get("share", 0.2) for c in p.get("curls") or []))
     shell_budget = budget - tail_budget - ribbon_budget - curls_budget
 
@@ -120,7 +135,13 @@ def make(spec, human, marks, arm, budget, under_hat=None, skin=None):
     if obj is not None:
         # A collapse is its own mirror only roughly.
         garment.mirror(obj, 0.02, greedy=True)
-        project(obj, head, nape, None)
+        if p.get("clear"):
+            # Long hair lies over itself seen round the head: projected by
+            # its faces' directions, as curls are (uv-angle: finer, so a
+            # wave does not fold an island over itself).
+            atlas.prepare(obj, angle=p.get("uv-angle", 1.15))
+        else:
+            project(obj, head, nape, None)
 
     def add(part):
         nonlocal obj
@@ -135,6 +156,10 @@ def make(spec, human, marks, arm, budget, under_hat=None, skin=None):
         tail_obj = plait(spec["id"] + "-tail", tail_path, tail)
         # Its root on the hair it hangs from, not under it.
         off_skin(tail_obj, drawn, p.get("volume", OFF_SKIN) if p.get("shell") == "cap" else OFF_SKIN)
+        if tail.get("pair"):
+            # Two, one each side: the second the first's mirror image, so
+            # the hair is still its own mirror.
+            add(mirrored(tail_obj))
         add(tail_obj)
     if bun_ and gather is not None:
         b = bun(spec["id"] + "-bun", gather, tail, tail_budget)
@@ -156,11 +181,13 @@ def make(spec, human, marks, arm, budget, under_hat=None, skin=None):
     obj.data.materials.append(atlas.part(bpy.data.materials.new(spec["id"]), None, "hair"))
     if p.get("ribbon") and tail_path is not None:
         ribbon(obj, tail_path, p["ribbon"], tail)
+        if tail.get("pair"):
+            ribbon(obj, [Vector((-c.x, c.y, c.z)) for c in tail_path], p["ribbon"], tail, material=False)
     lod.clean(obj)
-    if p.get("curls"):
-        # Curls merged may meet three faces on an edge.
+    if p.get("curls") or p.get("clear"):
+        # Curls and long hair merged may meet three faces on an edge.
         lod.manifold(obj)
-    weigh(obj, arm, nape, tail_path or lowest_curl)
+    weigh(obj, arm, nape, tail_path or lowest_curl, long_hair=bool(p.get("clear")))
     return obj
 
 
@@ -213,9 +240,14 @@ def cap(name, human, scalp, p, drawn, under_hat, budget, neck_z=0.0):
     for _ in range(2):
         bmesh.ops.smooth_vert(bm, verts=[v for v in bm.verts if not v.is_boundary], factor=0.5,
                               use_axis_x=True, use_axis_y=True, use_axis_z=True)
+    # A crown standing up: more volume toward the top of the head, over
+    # its last crown-depth metres.
+    top = max(v.co.z for v in bm.verts)
+    crown, depth = p.get("crown", 0.0), p.get("crown-depth", 0.08)
     for v in bm.verts:
         t = float(np.clip(dist[v] / taper, 0, 1))
-        off = HAIRLINE + (volume - HAIRLINE) * t * t * (3 - 2 * t)
+        up = float(np.clip((v.co.z - (top - depth)) / depth, 0, 1))
+        off = HAIRLINE + (volume + crown * up * up * (3 - 2 * up) - HAIRLINE) * t * t * (3 - 2 * t)
         loc, n, _, _ = drawn.find_nearest(v.co)
         v.co = loc + n * off
     # The hairline turned down to the skin, so the cap has an edge.
@@ -324,13 +356,21 @@ def grown(name, human, scalp, p, tree, head, nape, budget):
     under.free()
     out.from_mesh(me)
     bpy.data.meshes.remove(me)
+    rng_coil = np.random.default_rng(p.get("seed", 1) + 7)
     for r in roots:
         path = comb(Vector(co[r]), human.data.vertices[r].normal, p, tree, head, nape)
+        if p.get("coil"):
+            path = coil(path, p["coil"], nape, rng_coil)
         tube(out, path, p.get("thickness", 0.012))
         tube(out, [Vector((-c.x, c.y, c.z)) for c in path], p.get("thickness", 0.012))
     obj = merged(name, out, p)
     inner_wall(obj, tree)
-    lod.decimate(obj, budget)
+    # Collapsed as one half and mirrored, so it is its own mirror vertex
+    # for vertex, as a cap is.
+    half(obj)
+    lod.decimate(obj, budget // 2)
+    unhalf(obj)
+    lod.manifold(obj)
     return obj
 
 
@@ -394,19 +434,53 @@ def comb(root, normal, p, tree, head, nape):
         elif pos.z < nape:
             d = Vector((0, 0.15, -1))
         # Along the head's surface: what points into the head is taken out.
+    # (Below the nape, long hair is kept off the back by clear: over the
+    # clothes, not in them.)
         loc, n, _, dist = tree.find_nearest(pos)
         if loc is not None and pos.z >= nape:
             d -= n * d.dot(n)
         d.normalize()
         pos = pos + d * STEP
         loc, n, _, dist = tree.find_nearest(pos)
-        if loc is not None and (pos - loc).dot(n) < volume:
-            pos = loc + n * volume
+        least = volume if pos.z >= nape or not p.get("clear") else p["clear"]
+        if loc is not None and (pos - loc).dot(n) < least:
+            pos = loc + n * least
         path.append(pos.copy())
         walked += STEP
         if gather is not None and (pos - gather).length < 0.012:
             break
     return path
+
+
+def coil(path, c, nape, rng):
+    """A strand's path wound into a ringlet below the nape: a helix of c's
+    radius and pitch round it, growing in over its first centimetres."""
+    out = []
+    phase = rng.uniform(0, 2 * np.pi)
+    r = c.get("radius", 0.01) * rng.uniform(0.8, 1.2)
+    walked = 0.0
+    for i, q in enumerate(path):
+        if i:
+            walked += (q - path[i - 1]).length
+        if q.z >= nape:
+            out.append(q)
+            continue
+        ahead = (path[min(i + 1, len(path) - 1)] - path[max(i - 1, 0)]).normalized()
+        side = ahead.cross(Vector((0, 1, 0)))
+        if side.length < 1e-6:
+            side = Vector((1, 0, 0))
+        side.normalize()
+        up = side.cross(ahead)
+        grow = min(1.0, (nape - q.z) / 0.03)
+        th = phase + 2 * np.pi * walked / c.get("pitch", 0.03)
+        out.append(q + (side * np.cos(th) + up * np.sin(th)) * r * grow)
+    # Finer steps than the comb's, so the helix is round.
+    fine = []
+    for i in range(len(out) - 1):
+        for u in np.linspace(0, 1, 3, endpoint=False):
+            fine.append(out[i].lerp(out[i + 1], u))
+    fine.append(out[-1])
+    return fine
 
 
 def tail_line(gather, t, tree, nape):
@@ -416,17 +490,24 @@ def tail_line(gather, t, tree, nape):
     length = t.get("length", 0.12)
     lean = t.get("lean", 0.15)
     clear = t.get("clear", 0.03)
+    # Out to its own side, as x a metre of fall (a pair of tails, apart).
+    splay = t.get("splay", 0.0) * (1 if gather.x > 0 else -1)
+    # A tail from the middle stays on it, though the body under it is not
+    # quite its own mirror.
+    middle = abs(gather.x) < 1e-6
     pts = [gather.copy()]
     pos = gather.copy()
     walked = 0.0
     while walked < length:
-        pos = pos + Vector((0, lean, -1)).normalized() * STEP
+        pos = pos + Vector((splay, lean, -1)).normalized() * STEP
         # Clear of the neck and back all the way down, eased in from the
         # gather point over its first centimetre and a half.
         want = clear * min(1.0, walked / 0.015)
         loc, n, _, _ = tree.find_nearest(pos)
         if loc is not None and (pos - loc).dot(n) < want:
             pos = loc + n * want
+        if middle:
+            pos.x = 0.0
         pts.append(pos.copy())
         walked += STEP
     return pts
@@ -511,6 +592,22 @@ def plait(name, path, t):
     obj = bpy.data.objects.new(name, me)
     bpy.context.scene.collection.objects.link(obj)
     return obj
+
+
+def mirrored(obj):
+    """A copy of obj mirrored across the figure's middle, its faces turned
+    so they still face out."""
+    me = obj.data.copy()
+    bm = bmesh.new()
+    bm.from_mesh(me)
+    for v in bm.verts:
+        v.co.x = -v.co.x
+    bmesh.ops.reverse_faces(bm, faces=bm.faces[:])
+    bm.to_mesh(me)
+    bm.free()
+    twin = bpy.data.objects.new(obj.name + "-mirror", me)
+    bpy.context.scene.collection.objects.link(twin)
+    return twin
 
 
 def tube(bm, path, thickness, sides=5):
@@ -643,10 +740,11 @@ def project(obj, head, nape, tail_path):
 RIBBON_TRIANGLES = 64
 
 
-def ribbon(obj, path, r, t):
+def ribbon(obj, path, r, t, material=True):
     """A ribbon round the tail at a share of its length, in its own colour,
-    joined to the hair as a second material; a queue's with two ends
-    hanging below it."""
+    joined to the hair as a second material (a second ribbon, of a pair of
+    tails, sharing the first's); a queue's with two ends hanging below
+    it."""
     n = len(path)
     i = min(int(r.get("at", 0.0) * (n - 1)), n - 1)
     ahead, side, up = _frame(path, i)
@@ -685,16 +783,18 @@ def ribbon(obj, path, r, t):
     bmesh.ops.triangulate(bm, faces=faces)
     bm.to_mesh(obj.data)
     bm.free()
-    obj.data.materials.append(atlas.part(bpy.data.materials.new(obj.name + "-ribbon"), atlas.linear(r["colour"]),
-                                         "fixed"))
+    if material:
+        obj.data.materials.append(atlas.part(bpy.data.materials.new(obj.name + "-ribbon"), atlas.linear(r["colour"]),
+                                             "fixed"))
 
 
-def weigh(obj, arm, nape, tail_path):
+def weigh(obj, arm, nape, tail_path, long_hair=False):
     """On the head down to the nape. Below it a queue hangs along the spring
-    joints that hang from the head; a braid long enough to lie on the back
-    goes over to the chest's bone, so it lies where the back is."""
+    joints that hang from the head; a braid long enough to lie on the back,
+    or long hair falling loose on it, goes over to the chest's bone, so it
+    lies where the back is."""
     springs = [arm.data.bones[f"spring_{i:02d}"] for i in range(1, 5)]
-    long_ = tail_path is not None and tail_path[-1].z < nape - 0.2
+    long_ = long_hair or (tail_path is not None and tail_path[-1].z < nape - 0.2)
     groups = {}
 
     def group(name):

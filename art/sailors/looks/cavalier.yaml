@@ -1,0 +1,265 @@
+# SPDX-License-Identifier: LicenseRef-All-Rights-Reserved
+#
+# The Cavalier: the dash of the crew, in a broad felt hat pinned up on one
+# side with a white plume; a full linen shirt, a waistcoat to the hips, a
+# wide bright sash round the waist knotted at the left hip, its long ends
+# hanging; breeches, stockings and buckled shoes, no boots. From behind and
+# above: the broad round brim, turned up on its left and the plume falling
+# over its back; his long curls and her long loose hair over the shoulder
+# blades; the sash's ends at the hip. The waistcoat is the main colour.
+id: cavalier
+name: Cavalier
+committed: true
+versions:
+  female:
+    base: female
+    targets:
+      # A knowing look: arched brows set high, the eyes a little more
+      # lifted at the outer corners, a fine straight nose, fuller lips in a
+      # half smile, its left corner the higher.
+      eyebrows-angle-up: 0.6
+      eyebrows-trans-up: 0.3
+      lr-eye-corner2-up: 0.6
+      nose-greek-incr: 0.3
+      nose-scale-horiz-decr: 0.45
+      mouth-lowerlip-volume-incr: 0.7
+      mouth-upperlip-volume-incr: 0.5
+      mouth-angles-up: 0.35
+      asym-mouth-1-l: 0.35
+    face:
+      eyes: { iris-inner: "#8A6A3A", iris-outer: "#4A3214", limbal: "#140C04" }
+  male:
+    base: male
+    targets:
+      # Dashing: a strong, cleft chin under a defined jaw, a straight nose,
+      # brows arched as if amused, a confident smile, its right corner the
+      # higher.
+      chin-cleft-incr: 0.6
+      chin-prominent-incr: 0.45
+      chin-width-incr: 0.3
+      nose-greek-incr: 0.35
+      eyebrows-angle-up: 0.45
+      lr-eye-corner2-up: 0.2
+      mouth-angles-up: 0.45
+      asym-mouth-1-r: 0.35
+      asym-brown-1-l: 0.25
+    face:
+      eyes: { iris-inner: "#5E7F5A", iris-outer: "#2C4228", limbal: "#0C140A" }
+# The hair under the hat: pressed flat under its band, falling from under
+# the brim over the shoulder blades; his in long curls, hers long and
+# loose, in soft waves. His moustache, a beard of its own.
+hair:
+  id: hair
+  family: hair
+  region: hair
+  params:
+    # Grown from strands combed back under the hat and falling loose
+    # down the back, off the clothes.
+    shell: grown
+    comb: back
+    thickness: 0.016
+    voxel: 0.005
+    smooth: 5
+    clear: 0.04
+    deck-weight: 1.5
+    female:
+      volume: 0.011
+      length: 0.42
+      strands: 200
+      uv-angle: 0.85
+    male:
+      volume: 0.011
+      length: 0.36
+      strands: 180
+      coil: { radius: 0.009, pitch: 0.045 }
+      # Curls are not their own mirror.
+      asymmetric: true
+      beard:
+        volume: 0.0045
+        taper: 0.007
+        cheek: 0.12
+        sideburn: 0.0
+        moustache: 0.02
+        corner: 0.032
+        mouth: 0.026
+        lips: 0.0105
+        under: -0.045
+        jaw: -0.012
+        triangles: 160
+        deck-weight: 2.0
+garments:
+  # Fine linen, its sleeves full to the wrist and ruffled there, tucked
+  # into the breeches.
+  - id: shirt
+    family: shirt
+    region: fixed
+    colour: "#F0EBE0"
+    params:
+      sleeve: 0.98
+      neck: 0.06
+      arm-ease: 0.013
+      triangles: 1500
+      female: { shoulder: { reach: 0.12, ease: 0.003 } }
+      male: { shoulder: { reach: 0.18, ease: 0.003 } }
+      bands:
+        - { at: ends, height: 0.03, out: 0.012 }
+  # Dark wool to below the knee, over the stockings.
+  - id: breeches
+    family: breeches
+    region: fixed
+    colour: "#2B2224"
+    params:
+      triangles: 1000
+      deck-weight: 3.0
+      bands:
+        - { at: top, height: 0.035, out: -0.001 }
+        - { at: bottom, height: 0.03, out: 0.004 }
+  # White silk stockings, gartered below the knee.
+  - id: stockings
+    family: stockings
+    region: fixed
+    colour: "#E8E3D8"
+    params: { above-knee: -0.05, triangles: 600, deck-weight: 3.0, male: { above-knee: -0.035 } }
+  # Black leather, a tongue over the instep; buckled (trims). No boots.
+  - id: shoes
+    family: shoes
+    region: fixed
+    colour: "#17130F"
+    params: { rise: 0.45, at: -0.012, sole: 0.006, triangles: 380, deck-weight: 3.0 }
+  # A falling neckcloth of fine linen.
+  - id: neckcloth
+    family: neckcloth
+    region: fixed
+    colour: "#F4F0E6"
+    params:
+      layer: neckcloth
+      ease: 0.005
+      columns: 20
+      below: 0.0
+      height: 0.018
+      open-back: 0.2
+      deck-weight: 2.0
+      ends: { length: 0.08, width: 0.026, spread: 0.003, off: 0.022 }
+  # The waistcoat, fitted, sleeveless, buttoned down the middle (trims),
+  # its short skirts to the hips: the main colour.
+  - id: waistcoat
+    family: bodice
+    region: main
+    params:
+      layer: waistcoat
+      neck: 0.05
+      neck-slope: 0.2
+      below-waist: 0.005
+      fitted: true
+      triangles: 1100
+      female: { shoulder: { reach: 0.12, ease: 0.005 } }
+      male: { shoulder: { reach: 0.18, ease: 0.005 } }
+  - id: waistcoat-skirt
+    family: skirt
+    region: main
+    params:
+      layer: waistcoat
+      skirt: true
+      rise: -0.015
+      length: 0.13
+      ease: 0.016
+      rows: 4
+      columns: 40
+      follow: 0.3
+      flare: { front: 0.015, side: 0.03, back: 0.02 }
+      # A vent at the back as well as the front.
+      open: [{ width: 0.05 }, { azimuth: 180, width: 0.06 }]
+trims:
+  - {
+      kind: buttons,
+      on: waistcoat,
+      along: middle,
+      count: 6,
+      from: 0.08,
+      to: 0.03,
+      radius: 0.005,
+      colour: "#C9A65A",
+    }
+  - { kind: buckles, on: shoes, width: 0.034, height: 0.028, colour: "#C9A65A" }
+# The broad felt hat, its round brim pinned up against the crown on the
+# left and bound with gold braid; a white plume rising from the fold and
+# sweeping round the crown to fall over the brim behind.
+hat:
+  id: plumed-hat
+  family: hat
+  region: fixed
+  colour: "#211C1A"
+  params:
+    seat: -0.002
+    tilt: 4
+    segments: 24
+    asymmetric: true
+    crown: [[1.0, 0.0], [1.02, 0.035], [0.99, 0.068], [0.88, 0.09], [0.55, 0.1], [0.2, 0.102]]
+    brim:
+      {
+        width: 0.125,
+        outline: round,
+        lift: pinned,
+        sector: [90, 150],
+        height: 0.105,
+        power: 1.3,
+        pull: 0.55,
+        thickness: 0.004,
+        steps: 4,
+        binding: { colour: "#B8963E", width: 0.006 },
+      }
+    band: { colour: "#141110", height: 0.018 }
+    plume:
+      {
+        azimuth: 82,
+        sweep: 125,
+        colour: "#EEE9DF",
+        width: 0.06,
+        depth: 0.04,
+        out: 0.15,
+        rise: 0.045,
+        droop: 0.08,
+        start: 0.85,
+        rings: 12,
+        sides: 6,
+        waves: 4,
+      }
+    deck-weight: 1.5
+gear:
+  # The sash: crimson silk wound round the waist over the waistcoat, knotted
+  # at the left hip, its two long ends hanging, fringed in gold.
+  - id: sash
+    family: sash
+    region: fixed
+    colour: "#B3263A"
+    params:
+      layer: sash
+      asymmetric: true
+      deck-weight: 1.5
+      width: 0.1
+      up: -0.005
+      thick: 0.004
+      columns: 24
+      knot: { azimuth: 100, size: [0.055, 0.032, 0.06] }
+      ends: { length: [0.4, 0.33], width: 0.08, apart: 10, fringe: 0.03 }
+      colours: { fringe: "#C8A24A" }
+palette:
+  main: "#2E7D6B"
+  skin: "#946145"
+  hair: "#834328"
+# Every sailor's clips, and the Cavalier's habit: sweeping the hat.
+clips:
+  [
+    helm,
+    hiking-1,
+    hiking-2,
+    hiking-3,
+    cross,
+    cavalier-habit,
+    cavalier-habit-standing,
+    standing-idle,
+    treading-water,
+    righting,
+    climbing-in,
+  ]
+names: { cavalier-habit: habit, cavalier-habit-standing: habit-standing }

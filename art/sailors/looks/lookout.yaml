@@ -1,0 +1,182 @@
+# SPDX-License-Identifier: LicenseRef-All-Rights-Reserved
+#
+# The Lookout: the youngest of the crew who still reads as a grown sailor,
+# lean and quick, bareheaded, barefoot as seamen went aboard; a checked
+# linen shirt, a neckerchief tied at the throat, and wide slops striped
+# down the leg. From behind and above: the bare head and its hair (his
+# short tail at the nape, her two braids over the shoulder blades), the
+# checked shirt and the striped slops. The shirt's check is the main
+# colour.
+id: lookout
+name: Lookout
+committed: true
+versions:
+  female:
+    base: female
+    targets:
+      # Bright and open: large eyes set a little wide, the nose turned up a
+      # little more, an open smile with dimples, its right corner the
+      # higher; the shoulders a little narrower than the base's.
+      measure-shoulder-dist-incr: 0.12
+      lr-eye-scale-incr: 0.75
+      lr-eye-trans-out: 0.3
+      nose-point-up: 0.5
+      nose-scale-vert-decr: 0.3
+      mouth-angles-up: 0.55
+      mouth-dimples-in: 0.5
+      asym-mouth-1-r: 0.3
+      asym-brown-1-l: 0.2
+    face:
+      eyes: { iris-inner: "#6E9A7E", iris-outer: "#2F5A4A", limbal: "#0E1A14" }
+  male:
+    base: male
+    targets:
+      # Lean and keen: high cheekbones over lean cheeks, a narrow straight
+      # nose, the eyes a little narrowed as against the glare, a quick
+      # half smile, one brow the higher.
+      lr-cheek-bones-incr: 0.55
+      lr-cheek-volume-decr: 0.35
+      head-scale-horiz-decr: 0.1
+      nose-scale-horiz-decr: 0.3
+      nose-point-width-decr: 0.3
+      lr-eye-height2-decr: 0.25
+      mouth-angles-up: 0.35
+      asym-mouth-1-l: 0.25
+      asym-brown-1-r: 0.3
+    face:
+      eyes: { iris-inner: "#7A98B4", iris-outer: "#34506E", limbal: "#0E1620" }
+# The hair, bare to the weather: hers parted and combed back into two
+# braids hanging behind the shoulders, tied at their ends; his thick, its
+# crown standing up, combed back and tied at the nape in a short tail.
+hair:
+  id: hair
+  family: hair
+  region: hair
+  params:
+    shell: cap
+    comb: back
+    thickness: 0.0035
+    deck-weight: 1.5
+    female:
+      volume: 0.008
+      taper: 0.02
+      length: 0.2
+      strands: 360
+      nape: 0.024
+      gather: [-0.055, 0.045, -0.035]
+      tail:
+        {
+          kind: braid,
+          pair: true,
+          length: 0.27,
+          width: 0.034,
+          taper: 0.5,
+          lean: 0.12,
+          splay: 0.2,
+          lobes: 7,
+          clear: 0.054,
+          root: 0.05,
+          share: 0.27,
+        }
+      ribbon: { colour: "#7A2A22", at: 0.88, width: 0.01 }
+    male:
+      volume: 0.022
+      crown: 0.022
+      crown-depth: 0.1
+      taper: 0.03
+      length: 0.2
+      strands: 320
+      nape: 0.03
+      gather: [0, 0.09, -0.05]
+      tail:
+        {
+          kind: queue,
+          length: 0.13,
+          width: 0.03,
+          taper: 0.5,
+          lean: 0.18,
+          clear: 0.056,
+          share: 0.25,
+        }
+      ribbon: { colour: "#3A2A1C", at: 0.06, width: 0.012, ends: 0.05 }
+garments:
+  # Linen, checked in the main colour on white (a gingham of the period's
+  # slop lists), loose at the neck, its sleeves to the wrist; tucked into
+  # the slops.
+  - id: shirt
+    family: shirt
+    region: main
+    params:
+      sleeve: 0.95
+      neck: 0.06
+      triangles: 1500
+      female: { shoulder: { reach: 0.12, ease: 0.003 } }
+      male: { shoulder: { reach: 0.18, ease: 0.003 } }
+      bands:
+        - { at: ends, height: 0.025, out: 0.006 }
+      pattern:
+        { kind: check, period: 0.048, band: 0.42, soft: 0.14, ground: "#EDE8DC", radius: 0.15 }
+  # Wide slops of striped linen to below the knee, open and full at the
+  # hem; a waistband over the shirt.
+  - id: slops
+    family: breeches
+    region: fixed
+    colour: "#DCD3BE"
+    params:
+      triangles: 1300
+      below-knee: 0.08
+      deck-weight: 2.0
+      flare: { out: 0.045, power: 1.2, inner: 0.3 }
+      bands:
+        - { at: top, height: 0.035, out: -0.001 }
+      pattern:
+        {
+          kind: stripes,
+          legs: 0.095,
+          period: 0.05,
+          band: 0.3,
+          soft: 0.14,
+          ground: "#DCD3BE",
+          colour: "#6E3328",
+          radius: 0.08,
+        }
+  # A neckerchief tied at the throat, its two ends falling over the
+  # shirt's opening.
+  - id: neckerchief
+    family: neckcloth
+    region: fixed
+    colour: "#2F3E5C"
+    params:
+      layer: neckcloth
+      ease: 0.008
+      columns: 20
+      deck-weight: 2.5
+      ends: { length: 0.075, width: 0.026, spread: 0.004, off: 0.02 }
+      # His open at the back, where his hair's tail hangs over it.
+      female: { below: -0.004, height: 0.022 }
+      male:
+        below: -0.004
+        height: 0.018
+        open-back: 0.16
+        ends: { length: 0.07, width: 0.024, spread: 0.003, off: 0.016 }
+palette:
+  main: "#8DB4D6"
+  skin: "#B2815F"
+  hair: "#9D7E58"
+# Every sailor's clips, and the Lookout's habit: shading the eyes and
+# scanning the sea.
+clips:
+  [
+    helm,
+    hiking-1,
+    hiking-2,
+    hiking-3,
+    cross,
+    lookout-habit,
+    lookout-habit-standing,
+    standing-idle,
+    treading-water,
+    righting,
+    climbing-in,
+  ]
+names: { lookout-habit: habit, lookout-habit-standing: habit-standing }

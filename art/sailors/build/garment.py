@@ -54,6 +54,7 @@ import body
 import landmarks
 import lod
 import mpfbx
+import patterns
 
 Worn = namedtuple("Worn", "obj kind spec path")
 
@@ -94,6 +95,8 @@ def dress(job, v, human, arm, marks, work):
         if lod.made_from(path) != k:
             make(human, marks, spec, params, ease, path, k, under)
         obj = fit(human, path, spec["id"])
+        if params.get("flare"):
+            flare(obj, marks, params["flare"])
         # The fit is within a millimetre of the cut, unevenly: made its own
         # mirror again.
         mirror(obj)
@@ -105,11 +108,51 @@ def dress(job, v, human, arm, marks, work):
         if spec["region"] != "fixed" and params.get("shade"):
             # A shade of the chosen colour: a facing, a lining.
             mat["part_colour"] = [atlas.NEUTRAL * params["shade"]] * 3
+        if params.get("pattern"):
+            patterns.paint(mat, params["pattern"])
         obj.data.materials.append(mat)
         if params.get("skirt"):
             skirt_weights(obj, arm, marks, params.get("hips"))
         out.append(Worn(obj, "garment", spec, path))
     return out
+
+
+def flare(obj, marks, f):
+    """Wide legs, as slops are: below the crotch each vertex pushed out from
+    its leg's middle, by nothing at the crotch growing to f["out"] at the
+    knee and on below it (as the power f["power"] of the way down), less
+    on the inner side, where the legs face each other (f["inner"], a
+    share). Done on the fitted garment, so it is its body's own."""
+    out, power, inner = f.get("out", 0.04), f.get("power", 1.3), f.get("inner", 0.3)
+    top = marks.crotch()
+    knee = min(marks.joint("l-knee")[2], marks.joint("r-knee")[2])
+    middles = {}
+
+    def middle_of(z, side):
+        # The leg's section at z (the largest on its side: not a hand's).
+        key = (round(z / 0.005), side)
+        if key not in middles:
+            legs = [o for o in marks.section.outlines(key[0] * 0.005) if o[:, 0].mean() * side > 0.02]
+            middles[key] = max(legs, key=len).mean(0) if legs else None
+        return middles[key]
+
+    for v in obj.data.vertices:
+        c = v.co
+        if c.z >= top or abs(c.x) < 1e-4:
+            continue
+        t = min(1.0, (top - c.z) / max(top - knee, 1e-3)) ** power
+        side = 1.0 if c.x > 0 else -1.0
+        middle = middle_of(c.z, side)
+        if middle is None:
+            continue
+        d = Vector((c.x - middle[0], c.y - middle[1], 0.0))
+        if d.length < 1e-6:
+            continue
+        d.normalize()
+        # 1 on the outer side, inner on the inner, between them round it.
+        k = inner + (1 - inner) * (0.5 + 0.5 * d.x * side)
+        v.co = c + d * (out * t * k)
+    obj.data.update()
 
 
 def version_params(spec, v):

@@ -1,0 +1,82 @@
+# SPDX-License-Identifier: LicenseRef-All-Rights-Reserved
+#
+# The Lookout's habit: shading the eyes and scanning the sea. At the helm
+# the sheet hand comes up to the brow, flat over the eyes like a visor, and
+# the head turns slowly across the water ahead, one way and back the
+# other, before the hand goes back to the sheet. Standing, the same, the
+# other hand on the hip.
+poses:
+  lookout-shade:
+    from: helm-seated
+    turn:
+      - [spine_02, x, -3]
+      - [head, x, -5]
+      - [hand_r, x, -35]
+    ik:
+      hand_r: { at: bone, bone: head, offset: [-0.15, -0.26, 0.13], pole: [-0.6, -0.1, -0.1] }
+
+  lookout-scan-ahead:
+    from: lookout-shade
+    turn:
+      - [spine_03, z, -4]
+      - [neck_01, z, -7]
+      - [head, z, -14]
+
+  lookout-scan-windward:
+    from: lookout-shade
+    turn:
+      - [spine_03, z, 4]
+      - [neck_01, z, 6]
+      - [head, z, 12]
+
+  lookout-stand-shade:
+    from: stand
+    turn:
+      - [spine_02, x, -3]
+      - [head, x, -5]
+      - [hand_r, x, -35]
+    ik:
+      hand_r: { at: bone, bone: head, offset: [-0.15, -0.25, 0.12], pole: [-0.6, -0.1, -0.1] }
+
+  # The hand down before the waist on its way to the hip, so the elbow
+  # stays open.
+  lookout-stand-lower:
+    from: stand
+    ik:
+      hand_r: { at: bone, bone: pelvis, offset: [-0.2, -0.2, 0.16], pole: [-0.7, 0.4, 0.0] }
+
+  lookout-stand-left:
+    from: lookout-stand-shade
+    turn:
+      - [spine_03, z, 5]
+      - [neck_01, z, 7]
+      - [head, z, 14]
+
+  lookout-stand-right:
+    from: lookout-stand-shade
+    turn:
+      - [spine_03, z, -5]
+      - [neck_01, z, -7]
+      - [head, z, -14]
+
+clips:
+  lookout-habit:
+    sides: true
+    keys:
+      - { pose: helm-seated, hold: 0.4 }
+      - { pose: lookout-shade, hold: 0.4, anticipate: 0.08, arc: [0.06, 0.05] }
+      - { pose: lookout-scan-ahead, hold: 0.5, ramp: 1.6, lead: head }
+      - { pose: lookout-scan-windward, hold: 0.5, ramp: 2.0, lead: head }
+      - { pose: lookout-shade, hold: 0.2, ramp: 1.4, lead: head }
+      - { pose: helm-seated, hold: 0.5, arc: [0.1, 0.0] }
+
+  lookout-habit-standing:
+    keys:
+      - { pose: stand, hold: 0.4 }
+      - { pose: lookout-stand-lower, hold: 0.05, ramp: 0.9 }
+      - { pose: lookout-stand-shade, hold: 0.4, ramp: 1.2, arc: [0.06, 0.05] }
+      - { pose: lookout-stand-left, hold: 0.5, ramp: 1.9, lead: head }
+      - { pose: lookout-stand-right, hold: 0.5, ramp: 2.0, lead: head }
+      - { pose: lookout-stand-shade, hold: 0.2, ramp: 1.4, lead: head }
+      - { pose: lookout-stand-lower, hold: 0.1, ramp: 1.2 }
+      - { pose: stand, hold: 0.5, ramp: 1.0 }

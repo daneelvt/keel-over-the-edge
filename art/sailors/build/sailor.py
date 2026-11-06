@@ -195,8 +195,9 @@ def build_version(job, v, run):
     human.hide_render = True
     meshes = [skin] + [g.obj for g in worn]
     # The figure as dressed is measured on the clothes, not on what is
-    # carried over them (a case across the back).
-    carried = {g.obj.name for g in worn if g.kind in ("gear", "prop")}
+    # carried over them (a case across the back) nor on the hair (long
+    # hair at the shoulders' height would be taken for them).
+    carried = {g.obj.name for g in worn if g.kind in ("gear", "prop", "hair", "beard")}
     dressed = garment.measure(marks, [o for o in meshes if o.name not in carried])
 
     # The atlas.
@@ -237,7 +238,8 @@ def build_version(job, v, run):
     fig.sitting = [skin] + [w.obj for w in worn if w.kind == "garment" and not (w.spec.get("params") or {}).get("skirt")]
     # Laid on the seat, each layer above the one under it.
     above = {w.obj.name: tables["ease"][(w.spec.get("params") or {}).get("layer", w.spec["family"])]
-             for w in worn if w.kind == "garment"}
+             for w in worn if w.kind == "garment"
+             or (w.kind == "gear" and (w.spec.get("params") or {}).get("layer"))}
     fig.lay_on_seat(meshes, above)
     kinds = {"body": "body", **{w.obj.name: w.kind for w in worn}}
     settled = {"close": garment.settle(fig, lib, POSES, worn, tables["ease"])}
@@ -331,9 +333,9 @@ def build_version(job, v, run):
             for o in meshes:
                 if o.name not in declared:
                     garment.mirror(o, 0.03, greedy=True)
-                if machine or kinds.get(o.name) in ("gear", "beard"):
-                    # A collapse of parts touching (a machine's, or a case
-                    # and its strap) may join three faces on an edge.
+                if machine or kinds.get(o.name) in ("gear", "beard", "hair"):
+                    # A collapse of parts touching (a machine's, a case
+                    # and its strap, long hair) may join three faces on an edge.
                     lod.manifold(o)
         if level == "far":
             # The eyes are nothing at that distance.
