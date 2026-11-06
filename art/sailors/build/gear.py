@@ -19,10 +19,17 @@ figure by casting onto it, never by eye.
   buckle at the front, it is a belt;
 - earrings: a ring through each ear's lobe, hanging below it; on the head;
 - book: a small book in a leather cover tucked under a belt at one side
-  of the front, standing up out of it.
+  of the front, standing up out of it;
+- bib: an apron's bib, a panel of leather over the front of the chest
+  from the waist up, spanning the hollows under it as leather does, and
+  its strap from its top corners round the back of the neck;
+- mallet: a wooden mallet, its handle down the hip outside the belt and
+  its head resting on the belt's top;
+- pencil: a pencil behind one ear, along the side of the head; on the
+  head.
 
-The spectacles, dividers, earrings and book are too fine to see from the
-deck: they are props (the deck level leaves them out); the case is seen from far off and
+The spectacles, dividers, earrings, book and pencil are too fine to see
+from the deck: they are props (the deck level leaves them out); the case is seen from far off and
 kept at every level, and so is a sash. Each is a swatch of its colours:
 small parts on one painted patch of the atlas.
 """
@@ -72,6 +79,12 @@ def make(spec, human, marks, arm, worn, skin):
         return earrings(spec, p, marks, arm, skin)
     if family == "book":
         return book(spec, p, marks, arm, worn, skin)
+    if family == "bib":
+        return bib(spec, p, marks, arm, worn, skin)
+    if family == "mallet":
+        return mallet(spec, p, marks, arm, worn, skin)
+    if family == "pencil":
+        return pencil(spec, p, marks, arm, skin)
     raise ValueError(f"{spec['id']}: no gear family {family!r}")
 
 
@@ -736,4 +749,225 @@ def book(spec, p, marks, arm, worn, skin):
     # middle.
     belt = [w.obj for w in worn if w.kind == "gear" and w.spec["family"] == "sash"]
     _weigh_from(obj, belt or [w.obj for w in worn if w.kind == "garment"], arm, at=centre)
+    return obj
+
+
+# --- An apron's bib ------------------------------------------------------
+
+
+def _front_hull(xs, ys):
+    """The front-most convex envelope of a row of points (x, y, -y
+    forward): the line a stiff panel laid across them takes, spanning the
+    hollows between what stands out. Returns y at each x."""
+    pts = sorted(zip(xs, ys))
+    hull = []
+    for q in pts:
+        # Keep the hull convex toward -y.
+        while len(hull) >= 2:
+            (x1, y1), (x2, y2) = hull[-2], hull[-1]
+            if (x2 - x1) * (q[1] - y1) - (y2 - y1) * (q[0] - x1) <= 0:
+                hull.pop()
+            else:
+                break
+        hull.append(q)
+    hx, hy = zip(*hull)
+    return np.interp(xs, hx, hy)
+
+
+def bib(spec, p, marks, arm, worn, skin):
+    """The bib: a grid over the front of the chest, its rows cast onto the
+    clothes from the front and laid across what stands out (_front_hull),
+    a thickness of leather, from below the waist (under the ties) up to
+    top metres above the bust's apex; narrower at its top (width: [top,
+    bottom]). Its strap (strap: {width, thick, neck, back}) from the top
+    corners up over the shoulders beside the neck and round the back of
+    the neck, laid on what is under it."""
+    # What it lies on and moves with: the torso's clothes, not a skirt's
+    # (an apron's, hanging from under it, swings).
+    garments = [w.obj for w in worn if w.kind == "garment" and not (w.spec.get("params") or {}).get("skirt")]
+    host, owner = _host_tree(garments + [skin], TORSO)
+    m = marks.measure()
+    bust_z = marks.bust()[0]
+    lo = m["heights"]["waist"] - p.get("below", 0.02)
+    hi = bust_z + p.get("top", 0.07)
+    w_top, w_bottom = p.get("width", [0.22, 0.3])
+    thick = p.get("thick", 0.003)
+    cols, rows = p.get("columns", 9), p.get("rows", 8)
+    grid = []
+    for r in range(rows + 1):
+        z = lo + (hi - lo) * r / rows
+        half = (w_bottom + (w_top - w_bottom) * r / rows) / 2
+        xs = [-half + 2 * half * c / cols for c in range(cols + 1)]
+        ys = []
+        for x in xs:
+            loc = host.ray_cast(Vector((x, -0.6, z)), Vector((0, 1, 0)), 1.2)[0]
+            ys.append(loc.y if loc is not None else None)
+        known = [i for i, y in enumerate(ys) if y is not None]
+        if not known:
+            raise AssertionError("no clothes under the bib")
+        ys = np.interp(range(len(xs)), known, [ys[i] for i in known])
+        ys = _front_hull(xs, ys)
+        # Its own mirror.
+        ys = np.minimum(ys, ys[::-1])
+        grid.append([Vector((x, y - OFF, z)) for x, y in zip(xs, ys)])
+    bm = bmesh.new()
+    uv = bm.loops.layers.uv.new(atlas.ATLAS)
+
+    def face(vs, slot=0):
+        f = bm.faces.new(vs)
+        f.material_index = slot
+        for lp in f.loops:
+            lp[uv].uv = (0.5, 0.5)
+
+    back = [[bm.verts.new(c) for c in row] for row in grid]
+    front = [[bm.verts.new(c - Vector((0, thick, 0))) for c in row] for row in grid]
+    for r in range(rows):
+        for c in range(cols):
+            face((front[r][c], front[r][c + 1], front[r + 1][c + 1], front[r + 1][c]))
+            face((back[r][c + 1], back[r][c], back[r + 1][c], back[r + 1][c + 1]))
+    edge = ([(r, 0) for r in range(rows + 1)] + [(rows, c) for c in range(1, cols + 1)]
+            + [(r, cols) for r in range(rows - 1, -1, -1)] + [(0, c) for c in range(cols - 1, 0, -1)])
+    for (r0, c0), (r1, c1) in zip(edge, edge[1:] + edge[:1]):
+        face((front[r0][c0], back[r0][c0], back[r1][c1], front[r1][c1]))
+
+    # The strap: through the top corners, beside the neck over the
+    # shoulders, and the back of the neck, laid on what is under it.
+    st = p.get("strap", {})
+    sw, st_thick = st.get("width", 0.018), st.get("thick", 0.003)
+    neck = Vector(marks.joint("neck"))
+    inset = st.get("inset", 0.012)
+    corner = (grid[-1][0] + Vector((inset, 0, -0.01)), grid[-1][-1] + Vector((-inset, 0, -0.01)))
+    side = st.get("neck", 0.065)
+    nape = neck + Vector((0, st.get("back", 0.06), st.get("down", -0.02)))
+    beside = [Vector((-side, neck.y + st.get("ahead", -0.01), neck.z + st.get("up", -0.005))),
+              Vector((side, neck.y + st.get("ahead", -0.01), neck.z + st.get("up", -0.005)))]
+    keys = [corner[0], beside[0], nape, beside[1], corner[1]]
+    path = []
+    count = st.get("segments", 40)
+    for i in range(count + 1):
+        u = i / count * (len(keys) - 1)
+        k = min(int(u), len(keys) - 2)
+        t = u - k
+        p0, p1, p2, p3 = keys[max(k - 1, 0)], keys[k], keys[k + 1], keys[min(k + 2, len(keys) - 1)]
+        q = 0.5 * (2 * p1 + (-p0 + p2) * t + (2 * p0 - 5 * p1 + 4 * p2 - p3) * t * t
+                   + (-p0 + 3 * p1 - 3 * p2 + p3) * t * t * t)
+        loc, n, _, _ = host.find_nearest(q)
+        path.append((loc + n * OFF, n))
+    rings = []
+    for i, (c, n) in enumerate(path):
+        ahead = (path[min(i + 1, len(path) - 1)][0] - path[max(i - 1, 0)][0]).normalized()
+        across = ahead.cross(n).normalized()
+        rings.append([bm.verts.new(c - across * sw / 2), bm.verts.new(c + across * sw / 2),
+                      bm.verts.new(c + across * sw / 2 + n * st_thick), bm.verts.new(c - across * sw / 2 + n * st_thick)])
+    for a, b in zip(rings, rings[1:]):
+        for j in range(4):
+            k = (j + 1) % 4
+            face((a[j], a[k], b[k], b[j]), 1)
+    face(rings[0][::-1], 1)
+    face(rings[-1], 1)
+    obj = _new(spec["id"], bm)
+    colours = p.get("colours", {})
+    _materials(obj, spec, [spec.get("colour", "#6B4A2E"), colours.get("strap", "#4A321E")], [False, False])
+    _weigh_from(obj, garments + [skin], arm)
+    return obj
+
+
+# --- A mallet in the belt ------------------------------------------------
+
+
+def mallet(spec, p, marks, arm, worn, skin):
+    """A wooden mallet hung at the belt at an azimuth (degrees from the
+    front, toward the figure's left): its head a short round block lying
+    along the belt's top, its handle down from it outside the belt, kept
+    off what is below the belt. Its params: azimuth, head [length,
+    radius], handle [length, radius]; rigid on the belt's weights."""
+    if not _belt:
+        raise AssertionError("a mallet hangs at a belt: make the belt first")
+    outer, mid_z, width, thick, columns = _belt
+    a = np.radians(p.get("azimuth", -100))
+    head_len, head_r = p.get("head", [0.09, 0.024])
+    handle_len, handle_r = p.get("handle", [0.15, 0.011])
+    k = min(range(columns), key=lambda i: abs(((2 * np.pi * i / columns - a + np.pi) % (2 * np.pi)) - np.pi))
+    rows = len(outer)
+    surface = sum((outer[r][k] for r in range(rows)), Vector()) / rows
+    along = (outer[rows // 2][(k + 1) % columns] - outer[rows // 2][(k - 1) % columns]).normalized()
+    out = Vector((0, 0, 1)).cross(along).normalized()
+    if out.dot(Vector((np.sin(a), -np.cos(a), 0))) < 0:
+        out = -out
+    top_z = max(outer[r][k].z for r in range(rows))
+    # The handle: its top at the belt's top, outside it; down from there,
+    # pushed out wherever what is below the belt stands further out.
+    garments = [w.obj for w in worn if w.kind == "garment"]
+    host, _ = _host_tree(garments + [skin], TORSO + ("skirt", "thigh"))
+    clear = handle_r + OFF
+    # Out from the belt so the head over it clears the cloth above it.
+    top = surface + out * max(handle_r + OFF, head_r * 0.7) + Vector((0, 0, top_z - surface.z))
+    bottom = top + Vector((0, 0, -handle_len))
+    for _ in range(3):
+        need = 0.0
+        for t in np.linspace(0.3, 1.0, 8):
+            q = top.lerp(bottom, t)
+            loc, n, _, d = host.find_nearest(q)
+            if loc is not None and (q - loc).dot(out) < clear:
+                need = max(need, (clear - (q - loc).dot(out)) / t)
+        bottom = bottom + out * need
+    bm = bmesh.new()
+    uv = bm.loops.layers.uv.new(atlas.ATLAS)
+    axis = (bottom - top).normalized()
+    # The handle down from the belt's top; the head across its top, along
+    # the belt, its lowest line on the handle's end.
+    path = [top + axis * (handle_len * t) for t in np.linspace(0, 1, 4)]
+    _tube(bm, uv, path, [handle_r, handle_r, handle_r * 1.05, handle_r * 1.15], sides=6, slot=0)
+    centre = top + Vector((0, 0, head_r))
+    ends = [centre - along * head_len / 2, centre + along * head_len / 2]
+    hp = [ends[0], ends[0] + along * 0.006, centre, ends[1] - along * 0.006, ends[1]]
+    # Eight sides, a corner straight down onto the handle's end.
+    _tube(bm, uv, hp, [head_r * 0.93, head_r, head_r, head_r, head_r * 0.93], sides=8, slot=1)
+    obj = _new(spec["id"], bm)
+    colours = p.get("colours", {})
+    _materials(obj, spec, [spec.get("colour", "#8A6440"), colours.get("head", "#A27C52")], [False, False])
+    belt = [w.obj for w in worn if w.kind == "gear" and w.spec["family"] == "sash"]
+    _weigh_from(obj, belt or garments, arm, at=surface)
+    return obj
+
+
+# --- A pencil behind the ear ---------------------------------------------
+
+
+def _ear_top(skin, marks):
+    """The top of the left ear where it leaves the head: the highest point
+    of what stands out from the side of the head behind the eye."""
+    co = body.coords(skin)
+    eye = marks.joint("l-eye")
+    band = co[(co[:, 0] > 0) & (co[:, 1] > eye[1] + 0.03) & (co[:, 1] < eye[1] + 0.16)
+              & (co[:, 2] > eye[2] - 0.08) & (co[:, 2] < eye[2] + 0.05)]
+    if not len(band):
+        raise AssertionError("no ear beside the head")
+    ear = band[band[:, 0] > band[:, 0].max() - 0.012]
+    return Vector(ear[ear[:, 2].argmax()])
+
+
+def pencil(spec, p, marks, arm, skin):
+    """A pencil behind one ear (side: left or right), lying in the fold
+    between the ear's top and the head, its point forward and a little
+    down; rigid on the head. Its params: length, radius, back (how far
+    behind the ear's top its middle is), in (how far in from the ear's
+    rim), tip (its sharpened point's length)."""
+    top = _ear_top(skin, marks)
+    sign = 1 if p.get("side", "right") == "left" else -1
+    length, radius = p.get("length", 0.09), p.get("radius", 0.0036)
+    mid = Vector((sign * (top.x - p.get("in", 0.007)), top.y + p.get("back", 0.0), top.z + p.get("up", 0.002)))
+    tilt = np.radians(p.get("tilt", 12))
+    d = Vector((0, -np.cos(tilt), -np.sin(tilt)))
+    tip = p.get("tip", 0.018)
+    a, b = mid - d * length / 2, mid + d * length / 2
+    bm = bmesh.new()
+    uv = bm.loops.layers.uv.new(atlas.ATLAS)
+    body_end = b - d * tip
+    _tube(bm, uv, [a, a.lerp(body_end, 0.5), body_end], radius, sides=6, slot=0)
+    _tube(bm, uv, [body_end, body_end + d * tip * 0.8, b], [radius, radius * 0.35, radius * 0.08], sides=6, slot=1)
+    obj = _new(spec["id"], bm)
+    colours = p.get("colours", {})
+    _materials(obj, spec, [spec.get("colour", "#B8894E"), colours.get("point", "#D8C3A0")], [False, False])
+    _rigid(obj, arm, "head")
     return obj

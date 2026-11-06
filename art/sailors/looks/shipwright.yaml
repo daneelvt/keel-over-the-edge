@@ -1,0 +1,240 @@
+# SPDX-License-Identifier: LicenseRef-All-Rights-Reserved
+#
+# The Shipwright: who mends the boat, in a narrow-brimmed round felt hat
+# pushed back on the head; a leather apron from the chest to the knee over
+# a linen shirt, its sleeves rolled, the apron's strap round the back of
+# the neck and its ties knotted at the back of the waist; canvas breeches,
+# stockings and shoes; a mallet at the right hip. From behind and above:
+# the round hat tipped back, the strap at the neck and the knotted ties
+# hanging at the small of the back, the mallet's head at the hip. Her short
+# hair and a pencil behind her ear; his sideburns. The shirt is the main
+# colour.
+id: shipwright
+name: Shipwright
+committed: true
+versions:
+  female:
+    base: female
+    targets:
+      # Frank and practical: a wide, ready mouth in a half smile, its right
+      # corner the higher; cheekbones high; a low forehead under the hat;
+      # a slim nose; one brow the higher.
+      mouth-scale-horiz-incr: 0.15
+      lr-cheek-bones-incr: 0.3
+      forehead-scale-vert-decr: 0.12
+      nose-scale-horiz-decr: 0.15
+      mouth-angles-up: 0.4
+      asym-mouth-1-r: 0.25
+      asym-brown-1-l: 0.2
+    face:
+      eyes: { iris-inner: "#6E7F94", iris-outer: "#34465A", limbal: "#0E141C" }
+    # A pencil behind her right ear.
+    gear:
+      - id: pencil
+        family: pencil
+        region: fixed
+        colour: "#B8894E"
+        params: { deck: false, asymmetric: true, side: right }
+  male:
+    base: male
+    targets:
+      # Steady: a broad, straight nose, a wide mouth, level brows, the
+      # cheeks lean; a half smile, one brow the higher.
+      nose-width2-incr: 0.25
+      nose-scale-horiz-incr: 0.15
+      mouth-scale-horiz-incr: 0.25
+      eyebrows-angle-down: 0.3
+      lr-cheek-volume-decr: 0.25
+      mouth-angles-up: 0.3
+      asym-mouth-1-l: 0.2
+      asym-brown-1-r: 0.25
+    face:
+      eyes: { iris-inner: "#6A5434", iris-outer: "#33260F", limbal: "#120A05" }
+# The hair: hers cut short, close under the hat, showing round the ears and
+# at the nape; his short under it, and sideburns down before the ears.
+hair:
+  id: hair
+  family: hair
+  region: hair
+  params:
+    shell: cap
+    comb: back
+    thickness: 0.0032
+    deck-weight: 1.5
+    female:
+      nape: 0.0
+      volume: 0.012
+      taper: 0.01
+      length: 0.12
+      strands: 300
+    male:
+      # Under the hat, no strands to shade it.
+      details: false
+      nape: 0.008
+      volume: 0.006
+      taper: 0.012
+      length: 0.1
+      strands: 260
+      beard:
+        outer: 0.058
+        volume: 0.0045
+        taper: 0.006
+        cheek: 0.03
+        sideburn: 0.016
+        moustache: false
+        back: -0.006
+        jaw: 0.032
+        triangles: 160
+        deck-weight: 2.0
+        share: 0.3
+garments:
+  # Linen in the main colour, to the hips and tucked in; the sleeves rolled
+  # to the middle of the forearm, a thick roll at their ends.
+  - id: shirt
+    family: shirt
+    region: main
+    params:
+      sleeve: 0.45
+      neck: 0.05
+      triangles: 1400
+      female: { shoulder: { reach: 0.12, ease: 0.003 } }
+      male: { shoulder: { reach: 0.18, ease: 0.003 } }
+      bands:
+        - { at: ends, height: 0.045, out: 0.009 }
+  # Brown canvas, to below the knee.
+  - id: breeches
+    family: breeches
+    region: fixed
+    colour: "#5E4E3C"
+    params:
+      triangles: 1000
+      deck-weight: 2.0
+      bands:
+        - { at: top, height: 0.035, out: -0.001 }
+        - { at: bottom, height: 0.03, out: 0.004 }
+  # Undyed wool, gartered below the knee under the breeches' band.
+  - id: stockings
+    family: stockings
+    region: fixed
+    colour: "#B7AC95"
+    params: { above-knee: -0.05, triangles: 600, deck-weight: 2.0 }
+  # Plain brown leather, no buckles.
+  - id: shoes
+    family: shoes
+    region: fixed
+    colour: "#3A2818"
+    params: { rise: 0.45, at: -0.012, sole: 0.006, triangles: 380, deck-weight: 2.5 }
+  # The apron's lower part: heavy leather hung from the waist to the knee
+  # over the front of the thighs, open behind; it lies on the lap seated.
+  - id: apron
+    family: skirt
+    region: fixed
+    colour: "#7A5232"
+    params:
+      layer: coat
+      skirt: true
+      rise: -0.01
+      length: 0.5
+      ease: 0.03
+      top-ease: 0.02
+      rows: 8
+      columns: 40
+      follow: 0.0
+      flare: { front: 0.0, side: 0.04, back: 0.0 }
+      female: { open: [{ azimuth: 180, width: 0.44 }] }
+      male: { open: [{ azimuth: 180, width: 0.52 }] }
+# The hat: brown felt, a low round crown and a narrow brim, pushed back on
+# the head so the brim rises over the brow and lies down at the nape.
+hat:
+  id: round-hat
+  family: hat
+  region: fixed
+  colour: "#6B5843"
+  params:
+    seat: 0.02
+    tilt: -30
+    segments: 26
+    # Collapsed for the deck, the hat is its own mirror only roughly.
+    asymmetric: true
+    crown: [[1.0, 0.0], [1.0, 0.048], [0.96, 0.09], [0.86, 0.112], [0.55, 0.122], [0.2, 0.124]]
+    brim:
+      {
+        width: 0.034,
+        outline: round,
+        lift: up,
+        height: 0.008,
+        power: 2.0,
+        thickness: 0.004,
+        steps: 4,
+      }
+    band: { colour: "#3A2C20", height: 0.016 }
+    deck-weight: 1.5
+gear:
+  # The bib: the apron's leather over the chest from the waist, its strap
+  # round the back of the neck.
+  - id: bib
+    family: bib
+    region: fixed
+    colour: "#7A5232"
+    params:
+      deck-weight: 1.5
+      # Collapsed for the deck, its own mirror only roughly.
+      asymmetric: true
+      top: 0.06
+      below: 0.03
+      thick: 0.003
+      female: { width: [0.2, 0.27], strap: { width: 0.018, neck: 0.06, back: 0.055 } }
+      male: { width: [0.22, 0.3], strap: { width: 0.02, neck: 0.068, back: 0.06 } }
+      colours: { strap: "#4A321E" }
+  # The ties: a narrow leather thong round the waist over the apron's top,
+  # knotted at the back, its ends hanging.
+  - id: ties
+    family: sash
+    region: fixed
+    colour: "#4A321E"
+    params:
+      layer: sash
+      asymmetric: true
+      deck-weight: 1.0
+      width: 0.02
+      up: -0.01
+      thick: 0.003
+      columns: 24
+      knot: { azimuth: 180, size: [0.032, 0.02, 0.026] }
+      ends: { length: [0.24, 0.19], width: 0.018, apart: 16, fringe: 0.0 }
+      colours: { fringe: "#4A321E" }
+  # The mallet at the right hip, its head on the ties.
+  - id: mallet
+    family: mallet
+    region: fixed
+    colour: "#8A6440"
+    params:
+      asymmetric: true
+      # Kept whole at the deck level: collapsed, its head parts from its
+      # handle.
+      deck-weight: 3.0
+      azimuth: -105
+      head: [0.1, 0.024]
+      handle: [0.14, 0.011]
+      colours: { head: "#A27C52" }
+palette:
+  main: "#E6DCC3"
+  skin: "#946145"
+  hair: "#834328"
+# Every sailor's clips, and the Shipwright's habit: tugging a knotted line
+# taut.
+clips:
+  [
+    helm,
+    hiking-1,
+    hiking-2,
+    hiking-3,
+    cross,
+    shipwright-habit,
+    shipwright-habit-standing,
+    standing-idle,
+    treading-water,
+    righting,
+    climbing-in,
+  ]
+names: { shipwright-habit: habit, shipwright-habit-standing: habit-standing }

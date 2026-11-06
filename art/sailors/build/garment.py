@@ -100,6 +100,8 @@ def dress(job, v, human, arm, marks, work):
         # The fit is within a millimetre of the cut, unevenly: made its own
         # mirror again.
         mirror(obj)
+        if params.get("ragged"):
+            ragged(obj, params["ragged"])
         for poly in obj.data.polygons:
             poly.use_smooth = True
         obj.data.materials.clear()
@@ -153,6 +155,39 @@ def flare(obj, marks, f):
         k = inner + (1 - inner) * (0.5 + 0.5 * d.x * side)
         v.co = c + d * (out * t * k)
     obj.data.update()
+
+
+def ragged(obj, r):
+    """A worn hem: torn back unevenly from its lowest edge. Round the
+    garment the hem is cut back by up to depth metres, by a profile drawn
+    at random (the same every build) over teeth pieces, some whole; the
+    faces below it go. Done on the fitted garment, so its .mhclo is as it
+    was made; not its own mirror (asymmetric)."""
+    depth, teeth = r.get("depth", 0.03), r.get("teeth", 14)
+    rng = np.random.default_rng(r.get("seed", 1))
+    cuts = rng.uniform(0.0, 1.0, teeth) ** r.get("power", 1.5)
+    cuts[rng.uniform(0, 1, teeth) < r.get("whole", 0.3)] = 0.0
+    co = body.coords(obj)
+    hem = float(co[:, 2].min())
+    me = obj.data
+    bm = bmesh.new()
+    bm.from_mesh(me)
+    gone = []
+    for f in bm.faces:
+        c = f.calc_center_median()
+        a = (np.arctan2(c.x, -c.y) / (2 * np.pi)) % 1.0 * teeth
+        i = int(a)
+        t = a - i
+        # A tooth's edge: from one cut to the next, a jagged line.
+        cut = cuts[i] * (1 - t) + cuts[(i + 1) % teeth] * t
+        cut += 0.35 * abs(np.sin(np.pi * a * 2.0)) * max(cuts[i], cuts[(i + 1) % teeth])
+        if c.z < hem + depth * cut:
+            gone.append(f)
+    bmesh.ops.delete(bm, geom=gone, context="FACES")
+    bmesh.ops.delete(bm, geom=[v for v in bm.verts if not v.link_faces], context="VERTS")
+    bm.to_mesh(me)
+    bm.free()
+    me.update()
 
 
 def version_params(spec, v):
@@ -1061,6 +1096,32 @@ def bury(under, overs, reach, keep):
     return len(gone)
 
 
+def bury_above(under, z, keep):
+    """Drops the faces of under wholly above the height z (inside a hat's
+    crown), but for a band keep metres wide beside what shows. Returns how
+    many faces went."""
+    me = under.data
+    co = body.coords(under)
+    shown = co[:, 2] <= z
+    if shown.any() and keep > 0:
+        tree = KDTree(int(shown.sum()))
+        for i in np.flatnonzero(shown):
+            tree.insert(co[i], int(i))
+        tree.balance()
+        for i in np.flatnonzero(~shown):
+            if tree.find(co[i])[2] <= keep:
+                shown[i] = True
+    bm = bmesh.new()
+    bm.from_mesh(me)
+    gone = [f for f in bm.faces if not any(shown[v.index] for v in f.verts)]
+    bmesh.ops.delete(bm, geom=gone, context="FACES")
+    bmesh.ops.delete(bm, geom=[v for v in bm.verts if not v.link_faces], context="VERTS")
+    bm.to_mesh(me)
+    bm.free()
+    me.update()
+    return len(gone)
+
+
 def _mirrors(co, within=0.002):
     """Each vertex's mirror across x (itself where it has none)."""
     tree = KDTree(len(co))
@@ -1092,6 +1153,10 @@ def bury_all(skin, worn, ease):
     over_head = [w.obj for w in worn if w.kind in ("hair", "hat")]
     if over_head:
         out["body under hair"] = bury(skin, over_head, 0.03, BURY["body"])
+    # A headscarf under a hat: what the crown covers, above its band.
+    hats = [w.obj for w in worn if w.kind == "hat"]
+    if len(hats) > 1 and "band" in hats[-1]:
+        out[hats[0].name] = bury_above(hats[0], hats[-1]["band"] + 0.004, BURY["garment"])
     for i, inner in enumerate(garments):
         # A cuff is turned back over the sleeve's end: what is under it
         # stays, so it rests on something.

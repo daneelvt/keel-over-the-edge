@@ -42,6 +42,9 @@ type look struct {
 	Garments  []part             `yaml:"garments" json:"garments"`
 	Hair      *part              `yaml:"hair" json:"hair"`
 	Hat       *part              `yaml:"hat" json:"hat"`
+	// Scarf is a headscarf tied over the hair under the hat, the hat set
+	// on it.
+	Scarf *part `yaml:"scarf" json:"scarf,omitempty"`
 	// Trims are what is fastened on the garments once they are fitted
 	// (buttons, pocket flaps, buckles), each naming the garment it is on.
 	Trims []map[string]any `yaml:"trims" json:"trims,omitempty"`
@@ -85,6 +88,8 @@ type version struct {
 	Hair *part `yaml:"hair" json:"hair,omitempty"`
 	// Machine is a machine version's own parameters, over the look's.
 	Machine map[string]any `yaml:"machine" json:"machine,omitempty"`
+	// Gear is what the version alone carries, besides the look's.
+	Gear []part `yaml:"gear" json:"gear,omitempty"`
 }
 
 // part is a garment, the hair or a hat: made by a generator of its family
@@ -171,6 +176,12 @@ func (l look) check() error {
 	if l.Hat != nil {
 		parts = append(parts, *l.Hat)
 	}
+	if l.Scarf != nil {
+		if l.Hat == nil {
+			return errors.New("a scarf is worn under a hat, and the look has none")
+		}
+		parts = append(parts, *l.Scarf)
+	}
 	parts = append(parts, l.Gear...)
 	seen := map[string]bool{}
 	for _, p := range parts {
@@ -182,6 +193,16 @@ func (l look) check() error {
 		}
 		seen[p.ID] = true
 	}
+	for _, v := range versions {
+		for _, p := range l.Versions[v].Gear {
+			if seen[p.ID] {
+				return fmt.Errorf("the %s version's gear %q is the look's too", v, p.ID)
+			}
+			if err := checkPart(p); err != nil {
+				return err
+			}
+		}
+	}
 	for _, t := range l.Trims {
 		on, _ := t["on"].(string)
 		if !slices.ContainsFunc(l.Garments, func(g part) bool { return g.ID == on }) {
@@ -192,7 +213,11 @@ func (l look) check() error {
 	if l.Machine != nil {
 		// A machine has no hair: its coat's colour and its metal's.
 		options = options[:2]
-		if l.Hair != nil || l.Hat != nil || len(l.Gear) > 0 {
+		gear := len(l.Gear)
+		for _, ver := range l.Versions {
+			gear += len(ver.Gear)
+		}
+		if l.Hair != nil || l.Hat != nil || l.Scarf != nil || gear > 0 {
 			return errors.New("a machine has no hair, hat or gear: its head is its own")
 		}
 	}

@@ -148,6 +148,10 @@ func TestLookRefused(t *testing.T) {
 			"a machine has no hair, hat or gear"},
 		"gear twice as a garment": {good + "garments:\n  - {id: case, family: bodice, region: main}\ngear:\n  - {id: case, family: case, region: fixed, colour: '#3a2a1e'}\n",
 			"used twice"},
+		"a scarf with no hat over it": {good + "scarf: {id: scarf, family: scarf, region: main}\n",
+			"worn under a hat"},
+		"a version's gear the look's too": {strings.Replace(good, "base: female", "base: female\n    gear:\n      - {id: belt, family: sash, region: fixed, colour: '#3a2a1e'}", 1) +
+			"gear:\n  - {id: belt, family: sash, region: fixed, colour: '#3a2a1e'}\n", "the look's too"},
 		"a machine's parameters on a human": {strings.Replace(good, "base: female", "base: female\n    machine: {cap: swept}", 1),
 			"the look is no machine"},
 		"a name for a clip not made": {good + "clips: [helm]\nnames: {machine-habit: habit}\n", "makes no such clip"},
