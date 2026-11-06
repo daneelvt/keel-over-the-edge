@@ -279,7 +279,8 @@
    chronograph's pusher at two o'clock; the clock's on the top edge beside
    it, over the speed's empty end, at one; in port the harbour board's out
    of the bottom edge beneath them, at four. The clock's is the case's own,
-   outside the others' row held upright. */
+   outside the others' row held upright, where it stands at the top right
+   over the speed's empty end. */
 .case-pushers {
   display: contents;
 }
@@ -297,17 +298,11 @@
 }
 
 .case .pusher.top {
+  /* A short stem, its face high in the case, clear of the wind's line. */
+  --stem: 12px;
   position: absolute;
   top: -6px;
   right: 38px;
-}
-
-/* Held upright, the clock's stands out of the left edge under the compass,
-   at eight o'clock, clear of the column the complications hang in. */
-.case .pusher.left {
-  position: absolute;
-  left: -6px;
-  bottom: 0;
 }
 
 /* The harbour's pusher rises out of the case in port and sinks as the
@@ -514,6 +509,10 @@
     position: relative;
     right: auto;
     bottom: auto;
+  }
+
+  .case .pusher.top {
+    right: 3px;
   }
 }
 
