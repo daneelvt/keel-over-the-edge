@@ -116,7 +116,7 @@ func (a *api) finishSignIn(w http.ResponseWriter, r *http.Request) {
 	a.cfg.Sessions.Add(hash, store.Session{Account: holder.Account})
 	http.SetCookie(w, auth.SessionCookie(token))
 	writeJSON(w, http.StatusOK, sailorResponse{
-		Name: holder.Name, Look: holder.Look, Recovered: ms(recovered), Accepted: a.cfg.Passkeys.Accepted(u),
+		Name: holder.Name, lookShown: a.shown(holder.ID, holder.Look), Recovered: ms(recovered), Accepted: a.cfg.Passkeys.Accepted(u),
 	})
 }
 
@@ -174,7 +174,7 @@ func (a *api) recover(w http.ResponseWriter, r *http.Request) {
 	a.cfg.Sessions.ForgetAccount(acc.ID)
 	a.cfg.Sessions.Add(hash, store.Session{Account: acc, Held: true})
 	http.SetCookie(w, auth.SessionCookie(token))
-	writeJSON(w, http.StatusOK, sailorResponse{Name: acc.Name, Look: acc.Look, AddPasskey: true})
+	writeJSON(w, http.StatusOK, sailorResponse{Name: acc.Name, lookShown: a.shown(acc.ID, acc.Look), AddPasskey: true})
 }
 
 // logout answers POST /logout, behind auth.Signed: this session ends, and

@@ -62,7 +62,7 @@ func TestMachineRoutes(t *testing.T) {
 	}
 	// The machine sailor's name is taken for a human too.
 	other := h.browser()
-	if status, out := other.post("/account/begin", `{"name":"iron  mary","look":"figure"}`); status != 422 || out != `{"error":"taken"}` {
+	if status, out := other.post("/account/begin", `{"name":"iron  mary","look":"rover","version":"female","skin":"tone-2","hair":"brown","colour":"madder-red"}`); status != 422 || out != `{"error":"taken"}` {
 		t.Fatalf("a human named as the machine sailor: %d %s", status, out)
 	}
 	id := p.Machines[0].ID
@@ -102,7 +102,7 @@ func TestMachineRoutes(t *testing.T) {
 		!strings.Contains(out, `"fleet":{"`+boatKind+`":2}`) {
 		t.Fatalf("deleted: %d %s", status, out)
 	}
-	if status, out := other.post("/account/begin", `{"name":"Iron Mary","look":"figure"}`); status != 200 {
+	if status, out := other.post("/account/begin", `{"name":"Iron Mary","look":"rover","version":"female","skin":"tone-2","hair":"brown","colour":"madder-red"}`); status != 200 {
 		t.Fatalf("the name free: %d %s", status, out)
 	}
 	// Deleting the account deletes its machine sailors first.

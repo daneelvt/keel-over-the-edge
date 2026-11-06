@@ -152,6 +152,9 @@ type Clock interface {
 // Config sets up an edge.
 type Config struct {
 	Bus *bus.Bus
+	// LookCode, if not nil, is an account's sailor's look as the world
+	// holds it, a look code, which its boat is drawn in; else the first.
+	LookCode func(store.Account) uint32
 	// World is the world's ID, as Welcome names it, and Epoch the moment
 	// its time counts from, which Welcome carries too.
 	World string
@@ -385,6 +388,9 @@ func (e *Edge) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	c := newConn(e, ws, hj.conn, bus.Account(acc.ID), acc.Tools, acc.Priority, obs.RequestID(r.Context()))
+	if e.cfg.LookCode != nil {
+		c.look = e.cfg.LookCode(acc)
+	}
 	if cur, ok := auth.SessionFromContext(r.Context()); ok {
 		c.session = cur.Hash
 	}

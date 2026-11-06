@@ -219,9 +219,10 @@ describe('watching online', () => {
     closingUs: 0,
     zone: '',
     watching,
+    look: 0,
     first,
   });
-  const mary: WatchingTold = { sailor: 'Iron Mary', machine: true, mine: true };
+  const mary: WatchingTold = { sailor: 'Iron Mary', machine: true, mine: true, look: 0 };
   const record = (sn: OwnSnapshot): ArrayBuffer => {
     const r = new ArrayBuffer(FLEET_RECORD_BYTES);
     writeSnapshot(sn, new DataView(r));
@@ -343,7 +344,7 @@ describe('watching online', () => {
     port.deliver(welcome({ ...mary, mine: false }, false));
     port.deliver({ type: 'lamp', state: 'helm' });
     expect(o.lamp.value).toBe('');
-    port.deliver(welcome({ sailor: 'Ann Bonny', machine: false, mine: false }, false));
+    port.deliver(welcome({ sailor: 'Ann Bonny', machine: false, mine: false, look: 0 }, false));
     port.deliver({ type: 'lamp', state: 'helm' });
     expect(o.lamp.value).toBe('');
     // The watch ended: out.

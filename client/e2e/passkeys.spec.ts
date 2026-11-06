@@ -13,10 +13,7 @@
 // session: its tests do not wait for the sea.
 
 import { type BrowserContext, expect, type Page, test } from '@playwright/test';
-import data from '../src/catalog/catalog.gen.json' with { type: 'json' };
-import { GAME, holdPasskeys, sailor, setSail, signInWith, stamp } from './helpers';
-
-const look = data.sailors[0]?.id ?? '';
+import { aLook, GAME, holdPasskeys, sailor, setSail, signInWith, stamp } from './helpers';
 
 const chromium = () => test.info().project.name !== 'webkit';
 
@@ -205,7 +202,9 @@ test('the account page: a passkey added and one removed, signed out, and the sai
   expect(await session(context)).toBeUndefined();
   // Its name is free at once.
   const next = await browser.newContext();
-  const begun = await next.request.post('/account/begin', { data: { name: made.name, look } });
+  const begun = await next.request.post('/account/begin', {
+    data: { name: made.name, ...aLook() },
+  });
   expect(begun.status()).toBe(200);
   await next.close();
 });

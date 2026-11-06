@@ -22,11 +22,11 @@
 import './start.css';
 import { type JSX, render } from 'preact';
 import { useEffect, useRef, useState } from 'preact/hooks';
+import { drawLook, type Look, type Looks, partsOf } from '../catalog/looks';
 import { useWatch } from '../ui/watchlazy';
 import { type InApp, passkeySupport, type Support } from './inapp';
 import { useMachines } from './lazy';
 import { type Voyage, voyage } from './letwatch';
-import { drawLook, type Look } from './looks';
 import { checkSession, type Me } from './me';
 import {
   codeForm,
@@ -43,13 +43,20 @@ import { AddPasskey, RecoveredNotice, RecoveryCode, SetSailOrMake } from './reco
 import { YourSailor } from './yoursailor';
 
 export interface StartProps {
-  sailors: readonly Look[];
+  /** The catalog's looks, a new sailor's drawn from. */
+  looks: Looks;
   done: (me: Me) => void;
   /** Whether a sailor signed in is shown their own before the sea: not one come by a link to watch. */
   panel?: boolean;
   random?: () => number;
   /** The server and the browser's prompt; the browser's own unless a test stands in. */
   reach?: Reach;
+}
+
+/** A look's name and version, as the form names the sailor drawn. */
+function lookName(looks: Looks, l: Look): string {
+  const p = partsOf(looks, l);
+  return `${p.sailor?.name ?? ''}, ${p.version?.name ?? ''}`;
 }
 
 /** Whether a failed ceremony is passed over in silence: the prompt closed, or autofill turned down. */
@@ -72,12 +79,12 @@ type View =
   | { kind: 'recovered'; me: Me; at: number }
   | { kind: 'add-passkey'; me: Me };
 
-export function StartScreen({ sailors, done, random, reach, panel = true }: StartProps) {
+export function StartScreen({ looks, done, random, reach, panel = true }: StartProps) {
   const [view, setView] = useState<View>({ kind: 'form' });
   const [support, setSupport] = useState<Support | null>(null);
   const [anyway, setAnyway] = useState(false);
   const [name, setName] = useState('');
-  const [look, setLook] = useState(() => drawLook(sailors, null, random));
+  const [look, setLook] = useState<Look>(() => drawLook(looks, random));
   const [problem, setProblem] = useState('');
   const [taken, setTaken] = useState(false);
   const [busy, setBusy] = useState<'' | 'create' | 'sign-in' | 'code'>('');
@@ -195,7 +202,7 @@ export function StartScreen({ sailors, done, random, reach, panel = true }: Star
     setBusy('create');
     setProblem('');
     setTaken(false);
-    const res = await makeSailor(name, look.id, reach);
+    const res = await makeSailor(name, look, reach);
     setBusy('');
     if (res.ok) {
       setView({ kind: 'code', me: res.value.me, code: res.value.recoveryCode });
@@ -388,12 +395,12 @@ export function StartScreen({ sailors, done, random, reach, panel = true }: Star
         </p>
         <div class="start-look">
           <span class="start-label">Your sailor</span>
-          <span class="start-look-name">{look.name}</span>
+          <span class="start-look-name">{lookName(looks, look)}</span>
           <button
             type="button"
             class="start-shuffle"
             aria-label="Draw another sailor"
-            onClick={() => setLook(drawLook(sailors, look, random))}
+            onClick={() => setLook(drawLook(looks, random))}
           >
             ⟳
           </button>

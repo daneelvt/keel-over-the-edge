@@ -45,10 +45,9 @@ const (
 type Account struct {
 	ID   AccountID
 	Kind Kind
-	// Name is the sailor's name as shown, and Look the catalog sailor they
-	// look like.
+	// Name is the sailor's name as shown, and Look how they look.
 	Name string
-	Look string
+	Look Look
 	// Tools is the owner's flag: the account's sailor has the owner's
 	// tools in the game. Only a human account carries it.
 	Tools bool
@@ -60,6 +59,21 @@ type Account struct {
 	NoticesOff []string
 }
 
+// Look is a sailor's look, by the catalog's ids: a person's look, version,
+// skin, hair and main colour; or for a machine sailor, look MachineLook,
+// its version, finish and main colour. Chosen is whether the sailor chose
+// it: a sailor made before looks were chosen has none, and is drawn one by
+// the game until it chooses.
+type Look struct {
+	Look    string `json:"look"`
+	Version string `json:"version"`
+	Skin    string `json:"skin,omitempty"`
+	Hair    string `json:"hair,omitempty"`
+	Colour  string `json:"colour"`
+	Finish  string `json:"finish,omitempty"`
+	Chosen  bool   `json:"-"`
+}
+
 // NewAccount is what makes a human's account, all at once: its sailor, its
 // first passkey, its recovery code's hash and its first session's token
 // hash.
@@ -67,7 +81,7 @@ type NewAccount struct {
 	// Name is the sailor's name in its display form, and NameKey the key
 	// names are compared by: two sailors cannot share a key.
 	Name, NameKey string
-	Look          string
+	Look          Look
 	// UserHandle is the WebAuthn user handle its passkeys carry.
 	UserHandle   []byte
 	Passkey      Passkey
@@ -119,7 +133,8 @@ func (s *Store) CreateAccount(ctx context.Context, a NewAccount) (AccountID, err
 			return err
 		}
 		id = u.Bytes
-		if err := q.CreateSailor(ctx, db.CreateSailorParams{AccountID: u, Name: a.Name, NameKey: a.NameKey, Look: a.Look}); err != nil {
+		if err := q.CreateSailor(ctx, db.CreateSailorParams{AccountID: u, Name: a.Name, NameKey: a.NameKey, Look: a.Look.Look,
+			Version: text(a.Look.Version), Skin: text(a.Look.Skin), Hair: text(a.Look.Hair), Colour: text(a.Look.Colour)}); err != nil {
 			return err
 		}
 		if err := q.CreatePasskey(ctx, passkeyParams(u, &a.Passkey)); err != nil {
@@ -177,7 +192,7 @@ func (s *Store) AccountByUserHandle(ctx context.Context, handle []byte) (Holder,
 		return Holder{}, err
 	}
 	return Holder{
-		Account:    Account{ID: row.ID.Bytes, Kind: Kind(row.Kind), Name: row.Name, Look: row.Look, Tools: row.Tools, Priority: row.Priority, NoticesOff: row.NoticesOff},
+		Account:    Account{ID: row.ID.Bytes, Kind: Kind(row.Kind), Name: row.Name, Look: Look{Look: row.Look, Version: row.Version, Skin: row.Skin, Hair: row.Hair, Colour: row.Colour, Finish: row.Finish, Chosen: row.LookChosen}, Tools: row.Tools, Priority: row.Priority, NoticesOff: row.NoticesOff},
 		UserHandle: row.UserHandle, Passkeys: keys, Stopped: row.Stopped,
 	}, nil
 }
@@ -205,7 +220,7 @@ func (s *Store) Profile(ctx context.Context, id AccountID) (Profile, error) {
 	}
 	p := Profile{
 		Holder: Holder{
-			Account:    Account{ID: row.ID.Bytes, Kind: Kind(row.Kind), Name: row.Name, Look: row.Look, Tools: row.Tools, Priority: row.Priority, NoticesOff: row.NoticesOff},
+			Account:    Account{ID: row.ID.Bytes, Kind: Kind(row.Kind), Name: row.Name, Look: Look{Look: row.Look, Version: row.Version, Skin: row.Skin, Hair: row.Hair, Colour: row.Colour, Finish: row.Finish, Chosen: row.LookChosen}, Tools: row.Tools, Priority: row.Priority, NoticesOff: row.NoticesOff},
 			UserHandle: row.UserHandle, Passkeys: keys,
 		},
 		Created: row.CreatedAt,
@@ -401,4 +416,18 @@ func (s *Store) Accounts(ctx context.Context, ids []AccountID) (map[AccountID]Ac
 		out[r.ID.Bytes] = Account{ID: r.ID.Bytes, Kind: Kind(r.Kind), Name: r.Name, Tools: r.Tools, Priority: r.Priority}
 	}
 	return out, nil
+}
+
+// SetLook sets an account's sailor's look, chosen: ErrNotFound for no
+// such account. A machine look is an AI account's, and only its.
+func (s *Store) SetLook(ctx context.Context, id AccountID, l Look) error {
+	n, err := s.q.SetSailorLook(ctx, db.SetSailorLookParams{AccountID: uuidOf(id), Look: l.Look, Version: text(l.Version),
+		Skin: l.Skin, Hair: l.Hair, Colour: text(l.Colour), Finish: l.Finish})
+	if err != nil {
+		return err
+	}
+	if n == 0 {
+		return ErrNotFound
+	}
+	return nil
 }

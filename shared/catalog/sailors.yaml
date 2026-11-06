@@ -1,72 +1,322 @@
 # SPDX-License-Identifier: AGPL-3.0-only
-# Sailors: the figures that sail the boats.
-#
-# For now one, drawn on every boat until players choose their own: the
-# Rover, female, in the Rover's own colours (madder red, Tone 2, brown).
-# Its id stays the stand-in's, which the store keeps for every sailor.
+# Sailors: the looks the boats are sailed in, in the picker's order. A
+# player chooses a look and its version, and the look's options: a skin,
+# a hair colour (the looks of greying sailors from the greys) and a main
+# colour, from the sets below. Each version has its art: the deck level
+# drawn on the boat in view and near the camera, the far level, the close
+# level for the camera nearest and the picker, the clips, the colour
+# portrait (its base in AVIF, with WebP for browsers without, and its
+# mask) and the inked portrait.
 sailors:
-  - id: stand-in
-    name: Stand-in
-    art:
-      model: sailors/rover/female.deck.glb
-      far: sailors/rover/female.far.glb
-      close: sailors/rover/female.glb
-      clips: sailors/rover/female.clips.glb
-      colours: { main: "#9b2226", skin: "#cda385", hair: "#654a37" }
+  - id: rover
+    name: Rover
+    habit: settles the cocked hat
+    hair: colours
+    versions:
+      - id: female
+        name: female
+        art:
+          model: sailors/rover/female.deck.glb
+          far: sailors/rover/female.far.glb
+          close: sailors/rover/female.glb
+          clips: sailors/rover/female.clips.glb
+          portrait: sailors/rover/female.portrait.avif
+          portraitFallback: sailors/rover/female.portrait.webp
+          portraitMask: sailors/rover/female.portrait-mask.webp
+          ink: sailors/rover/female.ink.webp
+      - id: male
+        name: male
+        art:
+          model: sailors/rover/male.deck.glb
+          far: sailors/rover/male.far.glb
+          close: sailors/rover/male.glb
+          clips: sailors/rover/male.clips.glb
+          portrait: sailors/rover/male.portrait.avif
+          portraitFallback: sailors/rover/male.portrait.webp
+          portraitMask: sailors/rover/male.portrait-mask.webp
+          ink: sailors/rover/male.ink.webp
+  - id: bosun
+    name: Bosun
+    habit: stretches the back
+    hair: colours
+    versions:
+      - id: female
+        name: female
+        art:
+          model: sailors/bosun/female.deck.glb
+          far: sailors/bosun/female.far.glb
+          close: sailors/bosun/female.glb
+          clips: sailors/bosun/female.clips.glb
+          portrait: sailors/bosun/female.portrait.avif
+          portraitFallback: sailors/bosun/female.portrait.webp
+          portraitMask: sailors/bosun/female.portrait-mask.webp
+          ink: sailors/bosun/female.ink.webp
+      - id: male
+        name: male
+        art:
+          model: sailors/bosun/male.deck.glb
+          far: sailors/bosun/male.far.glb
+          close: sailors/bosun/male.glb
+          clips: sailors/bosun/male.clips.glb
+          portrait: sailors/bosun/male.portrait.avif
+          portraitFallback: sailors/bosun/male.portrait.webp
+          portraitMask: sailors/bosun/male.portrait-mask.webp
+          ink: sailors/bosun/male.ink.webp
+  - id: chartmaker
+    name: Chartmaker
+    habit: checks a pocket compass
+    hair: greys
+    versions:
+      - id: female
+        name: female
+        art:
+          model: sailors/chartmaker/female.deck.glb
+          far: sailors/chartmaker/female.far.glb
+          close: sailors/chartmaker/female.glb
+          clips: sailors/chartmaker/female.clips.glb
+          portrait: sailors/chartmaker/female.portrait.avif
+          portraitFallback: sailors/chartmaker/female.portrait.webp
+          portraitMask: sailors/chartmaker/female.portrait-mask.webp
+          ink: sailors/chartmaker/female.ink.webp
+      - id: male
+        name: male
+        art:
+          model: sailors/chartmaker/male.deck.glb
+          far: sailors/chartmaker/male.far.glb
+          close: sailors/chartmaker/male.glb
+          clips: sailors/chartmaker/male.clips.glb
+          portrait: sailors/chartmaker/male.portrait.avif
+          portraitFallback: sailors/chartmaker/male.portrait.webp
+          portraitMask: sailors/chartmaker/male.portrait-mask.webp
+          ink: sailors/chartmaker/male.ink.webp
+  - id: lookout
+    name: Lookout
+    habit: shades the eyes and scans the sea
+    hair: colours
+    versions:
+      - id: female
+        name: female
+        art:
+          model: sailors/lookout/female.deck.glb
+          far: sailors/lookout/female.far.glb
+          close: sailors/lookout/female.glb
+          clips: sailors/lookout/female.clips.glb
+          portrait: sailors/lookout/female.portrait.avif
+          portraitFallback: sailors/lookout/female.portrait.webp
+          portraitMask: sailors/lookout/female.portrait-mask.webp
+          ink: sailors/lookout/female.ink.webp
+      - id: male
+        name: male
+        art:
+          model: sailors/lookout/male.deck.glb
+          far: sailors/lookout/male.far.glb
+          close: sailors/lookout/male.glb
+          clips: sailors/lookout/male.clips.glb
+          portrait: sailors/lookout/male.portrait.avif
+          portraitFallback: sailors/lookout/male.portrait.webp
+          portraitMask: sailors/lookout/male.portrait-mask.webp
+          ink: sailors/lookout/male.ink.webp
+  - id: cavalier
+    name: Cavalier
+    habit: sweeps the hat
+    hair: colours
+    versions:
+      - id: female
+        name: female
+        art:
+          model: sailors/cavalier/female.deck.glb
+          far: sailors/cavalier/female.far.glb
+          close: sailors/cavalier/female.glb
+          clips: sailors/cavalier/female.clips.glb
+          portrait: sailors/cavalier/female.portrait.avif
+          portraitFallback: sailors/cavalier/female.portrait.webp
+          portraitMask: sailors/cavalier/female.portrait-mask.webp
+          ink: sailors/cavalier/female.ink.webp
+      - id: male
+        name: male
+        art:
+          model: sailors/cavalier/male.deck.glb
+          far: sailors/cavalier/male.far.glb
+          close: sailors/cavalier/male.glb
+          clips: sailors/cavalier/male.clips.glb
+          portrait: sailors/cavalier/male.portrait.avif
+          portraitFallback: sailors/cavalier/male.portrait.webp
+          portraitMask: sailors/cavalier/male.portrait-mask.webp
+          ink: sailors/cavalier/male.ink.webp
+  - id: quartermaster
+    name: Quartermaster
+    habit: tallies in a small book
+    hair: colours
+    versions:
+      - id: female
+        name: female
+        art:
+          model: sailors/quartermaster/female.deck.glb
+          far: sailors/quartermaster/female.far.glb
+          close: sailors/quartermaster/female.glb
+          clips: sailors/quartermaster/female.clips.glb
+          portrait: sailors/quartermaster/female.portrait.avif
+          portraitFallback: sailors/quartermaster/female.portrait.webp
+          portraitMask: sailors/quartermaster/female.portrait-mask.webp
+          ink: sailors/quartermaster/female.ink.webp
+      - id: male
+        name: male
+        art:
+          model: sailors/quartermaster/male.deck.glb
+          far: sailors/quartermaster/male.far.glb
+          close: sailors/quartermaster/male.glb
+          clips: sailors/quartermaster/male.clips.glb
+          portrait: sailors/quartermaster/male.portrait.avif
+          portraitFallback: sailors/quartermaster/male.portrait.webp
+          portraitMask: sailors/quartermaster/male.portrait-mask.webp
+          ink: sailors/quartermaster/male.ink.webp
+  - id: oldsalt
+    name: Old Salt
+    habit: squints at the sky
+    hair: greys
+    versions:
+      - id: female
+        name: female
+        art:
+          model: sailors/oldsalt/female.deck.glb
+          far: sailors/oldsalt/female.far.glb
+          close: sailors/oldsalt/female.glb
+          clips: sailors/oldsalt/female.clips.glb
+          portrait: sailors/oldsalt/female.portrait.avif
+          portraitFallback: sailors/oldsalt/female.portrait.webp
+          portraitMask: sailors/oldsalt/female.portrait-mask.webp
+          ink: sailors/oldsalt/female.ink.webp
+      - id: male
+        name: male
+        art:
+          model: sailors/oldsalt/male.deck.glb
+          far: sailors/oldsalt/male.far.glb
+          close: sailors/oldsalt/male.glb
+          clips: sailors/oldsalt/male.clips.glb
+          portrait: sailors/oldsalt/male.portrait.avif
+          portraitFallback: sailors/oldsalt/male.portrait.webp
+          portraitMask: sailors/oldsalt/male.portrait-mask.webp
+          ink: sailors/oldsalt/male.ink.webp
+  - id: shipwright
+    name: Shipwright
+    habit: tugs a knotted line taut
+    hair: colours
+    versions:
+      - id: female
+        name: female
+        art:
+          model: sailors/shipwright/female.deck.glb
+          far: sailors/shipwright/female.far.glb
+          close: sailors/shipwright/female.glb
+          clips: sailors/shipwright/female.clips.glb
+          portrait: sailors/shipwright/female.portrait.avif
+          portraitFallback: sailors/shipwright/female.portrait.webp
+          portraitMask: sailors/shipwright/female.portrait-mask.webp
+          ink: sailors/shipwright/female.ink.webp
+      - id: male
+        name: male
+        art:
+          model: sailors/shipwright/male.deck.glb
+          far: sailors/shipwright/male.far.glb
+          close: sailors/shipwright/male.glb
+          clips: sailors/shipwright/male.clips.glb
+          portrait: sailors/shipwright/male.portrait.avif
+          portraitFallback: sailors/shipwright/male.portrait.webp
+          portraitMask: sailors/shipwright/male.portrait-mask.webp
+          ink: sailors/shipwright/male.ink.webp
+  - id: buccaneer
+    name: Buccaneer
+    habit: hooks the thumbs in the belt
+    hair: colours
+    versions:
+      - id: female
+        name: female
+        art:
+          model: sailors/buccaneer/female.deck.glb
+          far: sailors/buccaneer/female.far.glb
+          close: sailors/buccaneer/female.glb
+          clips: sailors/buccaneer/female.clips.glb
+          portrait: sailors/buccaneer/female.portrait.avif
+          portraitFallback: sailors/buccaneer/female.portrait.webp
+          portraitMask: sailors/buccaneer/female.portrait-mask.webp
+          ink: sailors/buccaneer/female.ink.webp
+      - id: male
+        name: male
+        art:
+          model: sailors/buccaneer/male.deck.glb
+          far: sailors/buccaneer/male.far.glb
+          close: sailors/buccaneer/male.glb
+          clips: sailors/buccaneer/male.clips.glb
+          portrait: sailors/buccaneer/male.portrait.avif
+          portraitFallback: sailors/buccaneer/male.portrait.webp
+          portraitMask: sailors/buccaneer/male.portrait-mask.webp
+          ink: sailors/buccaneer/male.ink.webp
 
-# The machine sailors' look: the choices a player makes their AI account's
-# sailor from. A starting set, until the machines are drawn: the versions,
-# four metal finishes, and eight main colours that stay apart for
-# colour-blind players.
+# The options a sailor's look takes. Six skins, evenly spaced in lightness
+# and warmer as they deepen, lightest first; six hair colours, and four
+# greys and whites for the looks of greying sailors; eight main colours,
+# each a dye of the period, which stay apart for colour-blind players.
+sailorOptions:
+  skins:
+    - { id: tone-1, name: Tone 1, colour: "#e1c0a9" }
+    - { id: tone-2, name: Tone 2, colour: "#cda385" }
+    - { id: tone-3, name: Tone 3, colour: "#b2815f" }
+    - { id: tone-4, name: Tone 4, colour: "#946145" }
+    - { id: tone-5, name: Tone 5, colour: "#734736" }
+    - { id: tone-6, name: Tone 6, colour: "#52342b" }
+  hairs:
+    - { id: black, name: black, colour: "#251e1c" }
+    - { id: dark-brown, name: dark brown, colour: "#413129" }
+    - { id: brown, name: brown, colour: "#654a37" }
+    - { id: auburn, name: auburn, colour: "#834328" }
+    - { id: dark-blond, name: dark blond, colour: "#9d7e58" }
+    - { id: light-blond, name: light blond, colour: "#c9ac7e" }
+  greys:
+    - { id: salt-and-pepper, name: salt and pepper, colour: "#5f5a56" }
+    - { id: iron-grey, name: iron grey, colour: "#817b76" }
+    - { id: silver, name: silver, colour: "#b5aea6" }
+    - { id: white, name: white, colour: "#d2cbc1" }
+  colours:
+    - { id: black, name: black, colour: "#1e1e1e" }
+    - { id: indigo-navy, name: indigo navy, colour: "#1f3a63" }
+    - { id: madder-red, name: madder red, colour: "#9b2226" }
+    - { id: sea-green, name: sea green, colour: "#2e7d6b" }
+    - { id: weld-yellow, name: weld yellow, colour: "#d9b648" }
+    - { id: sky-blue, name: sky blue, colour: "#8db4d6" }
+    - { id: madder-orange, name: madder orange, colour: "#c4622d" }
+    - { id: undyed-linen, name: undyed linen, colour: "#e6dcc3" }
+
+# The machine sailors AI accounts sail as: a version, a finish of its
+# metal, and a main colour, its coat's, from the sailors' colours. Its
+# lamps glow lantern amber.
 machine:
-  # Every machine sailor is drawn as the female machine in brass with a
-  # black coat, its lamps amber, until each is drawn as it chose.
-  drawn:
-    model: sailors/machine/female.deck.glb
-    far: sailors/machine/female.far.glb
-    close: sailors/machine/female.glb
-    clips: sailors/machine/female.clips.glb
-    colours: { main: "#2b2a2e", skin: "#d9a957", hair: "#ffb347" }
+  habit: turns its ear discs to the wind and back
+  lamp: "#ffb347"
   versions:
     - id: female
       name: female
+      art:
+        model: sailors/machine/female.deck.glb
+        far: sailors/machine/female.far.glb
+        close: sailors/machine/female.glb
+        clips: sailors/machine/female.clips.glb
+        portrait: sailors/machine/female.portrait.avif
+        portraitFallback: sailors/machine/female.portrait.webp
+        portraitMask: sailors/machine/female.portrait-mask.webp
+        ink: sailors/machine/female.ink.webp
     - id: male
       name: male
+      art:
+        model: sailors/machine/male.deck.glb
+        far: sailors/machine/male.far.glb
+        close: sailors/machine/male.glb
+        clips: sailors/machine/male.clips.glb
+        portrait: sailors/machine/male.portrait.avif
+        portraitFallback: sailors/machine/male.portrait.webp
+        portraitMask: sailors/machine/male.portrait-mask.webp
+        ink: sailors/machine/male.ink.webp
   finishes:
-    - id: brass
-      name: Brass
-      colour: "#d9a957"
-    - id: copper
-      name: Copper
-      colour: "#b8673f"
-    - id: bronze
-      name: Bronze
-      colour: "#8c6a3c"
-    - id: iron
-      name: Iron
-      colour: "#5d6066"
-  colours:
-    - id: deep-red
-      name: deep red
-      colour: "#9e2b25"
-    - id: navy
-      name: navy blue
-      colour: "#24406b"
-    - id: ochre
-      name: ochre
-      colour: "#c08a2e"
-    - id: sea-green
-      name: sea green
-      colour: "#2f6b5e"
-    - id: sky-blue
-      name: sky blue
-      colour: "#6f9cc4"
-    - id: plum
-      name: plum
-      colour: "#7a3f6e"
-    - id: black
-      name: black
-      colour: "#2b2a2e"
-    - id: rust
-      name: rust orange
-      colour: "#c4622d"
+    - { id: brass, name: brass, colour: "#d9a957" }
+    - { id: copper, name: copper, colour: "#b8673f" }
+    - { id: bronze, name: bronze, colour: "#8c6a3c" }
+    - { id: iron, name: iron, colour: "#5d6066" }

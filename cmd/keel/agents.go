@@ -41,18 +41,19 @@ type agents struct {
 
 // machineLooks are the catalog's choices of a machine sailor's look.
 func machineLooks(cat *catalog.Catalog) oauth.MachineLooks {
-	of := func(cs []catalog.MachineChoice) []oauth.LookOption {
+	of := func(cs []catalog.SailorOption) []oauth.LookOption {
 		out := make([]oauth.LookOption, len(cs))
 		for i, c := range cs {
-			out[i] = oauth.LookOption{ID: string(c.ID), Name: c.Name}
-			if c.Colour != nil {
-				out[i].Colour = *c.Colour
-			}
+			out[i] = oauth.LookOption{ID: string(c.ID), Name: c.Name, Colour: c.Colour}
 		}
 		return out
 	}
 	m := &cat.Machine
-	return oauth.MachineLooks{Versions: of(m.Versions), Finishes: of(m.Finishes), Colours: of(m.Colours)}
+	versions := make([]oauth.LookOption, len(m.Versions))
+	for i, v := range m.Versions {
+		versions[i] = oauth.LookOption{ID: string(v.ID), Name: v.Name}
+	}
+	return oauth.MachineLooks{Versions: versions, Finishes: of(m.Finishes), Colours: of(cat.SailorOptions.Colours)}
 }
 
 // newAgents makes sign-in for AI apps, the lifetime read from the
@@ -94,7 +95,7 @@ func (p *process) seaOf(h *worldHalf, rw *readyWorld, sighting *sim.Sight) *agen
 		Number: h.row.Number, Epoch: h.row.Epoch, Ends: h.ends, Bus: h.bus, Boats: cat.Boats,
 		Limit: h.world.Limit(), AICap: h.world.AICap(), AIReserve: h.world.AIReserve(),
 		Timeline: rw.timeline, Waves: p.waves, Sky: cat.PrepareSky(), Bundle: rw.bundle,
-		Forecast: h.forecasts, Words: weather.WordsOf(cat), Catalog: cat, Kinds: p.kinds, Encounters: cat.PrepareEncounters(),
+		Forecast: h.forecasts, Words: weather.WordsOf(cat), Catalog: cat, Looks: p.looks, Kinds: p.kinds, Encounters: cat.PrepareEncounters(),
 		News: news{db: p.db, world: h.row.ID}.News, Columns: map[string]string{}, Biomes: map[string]string{},
 	}
 	if h.game != nil {

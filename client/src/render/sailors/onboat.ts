@@ -31,7 +31,7 @@ import type { BoatPose } from '../../predict/blend';
 import { RECORDS } from '../../predict/layout.gen';
 import { fallToEdge, glowMaterial, litMaterial } from '../materials';
 import { Clip } from './clips';
-import { sailorColours, sailorLight } from './material';
+import { type SailorColours, sailorColours, sailorLight } from './material';
 import { loadClips, loadSailor, type SailorModel } from './model';
 import { bonesFor, Rig } from './rig';
 import { type SailorBoat, type SailorMoment, SailorRuntime } from './runtime';
@@ -212,6 +212,14 @@ export class BoatSailor {
       climbTime: sailor.climbTime,
     };
     return new BoatSailor(model, parts, deck, rig, clips, boat, urls, renderer, seed, machine);
+  }
+
+  /** Takes new colours, #RRGGBB: its main colour, skin or metal, and hair or lamps' light. */
+  colour(c: { main: string; skin: string; hair: string }): void {
+    const shared = (this.#deck.meshes[0]?.userData ?? {}) as Partial<SailorColours>;
+    shared.main?.set(c.main);
+    shared.skin?.set(c.skin);
+    shared.hair?.set(c.hair);
   }
 
   /** The figure's root, under the boat's model. */

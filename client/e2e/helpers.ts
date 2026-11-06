@@ -201,6 +201,25 @@ export function stamp(): string {
   return String(n * 10 + worker).padStart(7, '0');
 }
 
+/** A look as the start screen sends it: the first look's first version, in the first of each option. */
+export function aLook(): {
+  look: string;
+  version: string;
+  skin: string;
+  hair: string;
+  colour: string;
+} {
+  const s = data.sailors[0];
+  const o = data.sailorOptions;
+  return {
+    look: s?.id ?? '',
+    version: s?.versions[0]?.id ?? '',
+    skin: o.skins[0]?.id ?? '',
+    hair: (s?.hair === 'greys' ? o.greys : o.hairs)[0]?.id ?? '',
+    colour: o.colours[0]?.id ?? '',
+  };
+}
+
 /**
  * Makes a sailor in the context, as the start screen does, through the
  * server's routes, with a passkey of the test's own: its session's cookie
@@ -209,7 +228,7 @@ export function stamp(): string {
 export async function sailor(context: BrowserContext, word = 'Sailor'): Promise<Made> {
   const name = `${word} ${stamp()}`;
   const begun = await context.request.post('/account/begin', {
-    data: { name, look: data.sailors[0]?.id ?? '' },
+    data: { name, ...aLook() },
   });
   expect(begun.status(), await begun.text()).toBe(200);
   const { passkey, answer } = createPasskey(await begun.json(), new URL(begun.url()).origin);

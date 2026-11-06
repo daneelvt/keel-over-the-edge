@@ -79,7 +79,7 @@ test('the start screen: a name to give, a sailor drawn, and signing in beside it
   await expect(field).toHaveAttribute('spellcheck', 'false');
   await expect(field).toHaveAttribute('enterkeyhint', 'go');
   await expect(field).toHaveAttribute('maxlength', '20');
-  const names = data.sailors.map((s) => s.name);
+  const names = data.sailors.flatMap((s) => s.versions.map((v) => `${s.name}, ${v.name}`));
   expect(names).toContain(await page.locator('.start-look-name').textContent());
   await page.getByRole('button', { name: 'Draw another sailor' }).click();
   expect(names).toContain(await page.locator('.start-look-name').textContent());

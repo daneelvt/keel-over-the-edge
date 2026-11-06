@@ -43,6 +43,9 @@ const request = {
   mediation: 'conditional',
 };
 
+/** A look as the form sends it. */
+const LOOK = { look: 'a', version: 'v', skin: 's', hair: 'h', colour: 'c' };
+
 describe('base64url', () => {
   test('both ways, without padding, with - and _', () => {
     expect(toBase64url(bytes(1, 2, 3, 255))).toBe('AQID_w');
@@ -211,20 +214,39 @@ describe('making a sailor', () => {
       {
         '/account/begin': () => answer(200, creation),
         '/account/finish': () =>
-          answer(201, { name: 'Ann Bonny', look: 'a', recoveryCode: '7KQ2-M9XD' }),
+          answer(201, {
+            name: 'Ann Bonny',
+            look: 'a',
+            version: 'v',
+            skin: 's',
+            hair: 'h',
+            colour: 'c',
+            lookChosen: true,
+            recoveryCode: '7KQ2-M9XD',
+          }),
       },
       { create: async () => madeCred },
     );
-    const made = await makeSailor('Ann Bonny', 'a', r);
+    const made = await makeSailor('Ann Bonny', LOOK, r);
     expect(made).toEqual({
       ok: true,
       value: {
-        me: { name: 'Ann Bonny', look: 'a', kind: 'human', noticesOff: [] },
+        me: {
+          name: 'Ann Bonny',
+          look: 'a',
+          version: 'v',
+          skin: 's',
+          hair: 'h',
+          colour: 'c',
+          lookChosen: true,
+          kind: 'human',
+          noticesOff: [],
+        },
         recoveryCode: '7KQ2-M9XD',
       },
     });
     expect(r.asked).toEqual(['/account/begin', '/account/finish']);
-    expect(r.sent).toEqual([{ name: 'Ann Bonny', look: 'a' }, madeCred.toJSON()]);
+    expect(r.sent).toEqual([{ name: 'Ann Bonny', ...LOOK }, madeCred.toJSON()]);
   });
 
   test('a name refused before the prompt; a prompt closed; a name taken meanwhile', async () => {
@@ -238,14 +260,17 @@ describe('making a sailor', () => {
         },
       },
     );
-    expect(await makeSailor('Harbourmaster', 'a', refused)).toEqual({ ok: false, reason: 'words' });
+    expect(await makeSailor('Harbourmaster', LOOK, refused)).toEqual({
+      ok: false,
+      reason: 'words',
+    });
     expect(prompted).toBe(0);
 
     const closed = stand(
       { '/account/begin': () => answer(200, creation) },
       { create: async () => Promise.reject(rejection('NotAllowedError')) },
     );
-    expect(await makeSailor('Ann Bonny', 'a', closed)).toEqual({ ok: false, reason: 'cancelled' });
+    expect(await makeSailor('Ann Bonny', LOOK, closed)).toEqual({ ok: false, reason: 'cancelled' });
     expect(closed.asked).toEqual(['/account/begin']);
 
     const taken = stand(
@@ -256,8 +281,8 @@ describe('making a sailor', () => {
       },
       { create: async () => madeCred },
     );
-    expect(await makeSailor('Ann Bonny', 'a', taken)).toEqual({ ok: false, reason: 'taken' });
-    expect(await makeSailor('Ann', 'a', stand({}, {}))).toEqual({ ok: false, reason: 'offline' });
+    expect(await makeSailor('Ann Bonny', LOOK, taken)).toEqual({ ok: false, reason: 'taken' });
+    expect(await makeSailor('Ann', LOOK, stand({}, {}))).toEqual({ ok: false, reason: 'offline' });
   });
 });
 

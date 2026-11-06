@@ -207,7 +207,7 @@ func (c *Core) helmOf(a *oauth.Accepted) *helm {
 		}
 	}
 	h.mu.Lock()
-	h.name, h.owner, h.priority = a.Name, a.OwnerName, a.Priority
+	h.name, h.owner, h.priority, h.sailor = a.Name, a.OwnerName, a.Priority, a.Look
 	h.mu.Unlock()
 	return h
 }
@@ -351,6 +351,8 @@ type helm struct {
 	name     string
 	owner    string
 	priority bool
+	// sailor is the machine sailor's look, as its token was last checked.
+	sailor   store.Look
 	app      string
 	lastCall time.Time
 	// before is when the agent called before the call being answered.
@@ -568,10 +570,14 @@ func (h *helm) locate(f *bus.Frame) bool {
 // join asks the simulation for the helm's boat, and waits for its answer.
 func (h *helm) join(ctx context.Context, s *Sea) (bus.Reply, error) {
 	h.mu.Lock()
-	priority := h.priority
+	priority, look := h.priority, h.sailor
 	h.mu.Unlock()
+	var code uint32
+	if s.Looks != nil {
+		code = s.Looks.Code(s.Looks.Resolve(h.account, look))
+	}
 	reply := make(chan bus.Reply, 1)
-	cmd := bus.Command{Op: bus.Join, Account: bus.Account(h.account), Conn: h.conn, Machine: true, Priority: priority, Reply: reply}
+	cmd := bus.Command{Op: bus.Join, Account: bus.Account(h.account), Conn: h.conn, Machine: true, Priority: priority, Look: code, Reply: reply}
 	if err := send(ctx, s, cmd); err != nil {
 		return bus.Reply{}, err
 	}

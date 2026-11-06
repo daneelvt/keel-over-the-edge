@@ -502,6 +502,8 @@ type TokenGrant struct {
 	Priority bool
 	// Stopped: the machine sailor, or its owner, is stopped.
 	Stopped bool
+	// Look is the machine sailor's look.
+	Look Look
 }
 
 // TokenGrant finds a token by its hash, with its grant and machine sailor,
@@ -517,7 +519,7 @@ func (s *Store) TokenGrant(ctx context.Context, hash [32]byte) (TokenGrant, erro
 	t := TokenGrant{
 		Kind: r.Kind, Grant: r.GrantID.Bytes, GrantKind: r.GrantKind, Approved: r.ApprovedAt, RevokedWhy: r.RevokedWhy,
 		ClientName: r.ClientName, Account: r.AccountID.Bytes, Name: r.Name, OwnerName: r.OwnerName, Priority: r.Priority,
-		Stopped: r.Stopped,
+		Stopped: r.Stopped, Look: Look{Look: r.Look, Version: r.Version, Finish: r.Finish, Colour: r.Colour, Chosen: true},
 	}
 	if r.ExpiresAt.After(time.Unix(0, 0)) {
 		t.Expires = r.ExpiresAt

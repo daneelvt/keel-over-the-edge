@@ -356,6 +356,7 @@ func (c *conn) welcome(f *bus.Frame) bool {
 	c.steering = true
 	c.wmu.Unlock()
 	c.toldWatchers = 0
+	c.toldLook = f.Look[s]
 	wt, _ := e.cfg.Clock.WorldTime()
 	// Under rmu, so that a Tools for a change of the flag after this one
 	// read it comes after it.
@@ -365,6 +366,7 @@ func (c *conn) welcome(f *bus.Frame) bool {
 		Boat: c.boat, Kind: uint32(f.Kind[s]), Rejoined: c.rejoined,
 		EpochUs: e.cfg.Epoch.UnixMicro(), Land: e.cfg.Land, Circulation: e.cfg.Circulation, Harbour: e.cfg.Harbour,
 		Tools: c.tools.Load(), Light: e.cfg.MainLight, EndsUs: e.endsUs.Load(), ClosingUs: e.closingUs.Load(), Zone: e.cfg.Zone,
+		Look: c.toldLook,
 	}}}, outWelcome)
 	ok = ok && c.firstChart()
 	c.rmu.Unlock()
@@ -427,7 +429,7 @@ func (enc *encoder) encode(c *conn, f *bus.Frame) {
 	}
 	// The weather, the sea, the land's chunks and the bumps first: they are
 	// queued, and what is queued goes out before the snapshot.
-	if !c.weather(f) || !c.seaAreas(f, x, y) || !c.chunks(chunks, x, y) || !c.bumps(f, next, s, boat) {
+	if !c.weather(f) || !c.seaAreas(f, x, y) || !c.chunks(chunks, x, y) || !c.bumps(f, next, s, boat) || !c.lookOf(f, s) {
 		return
 	}
 	b = b[:protocol.MaxHeaderSize]
@@ -453,6 +455,17 @@ func (enc *encoder) encode(c *conn, f *bus.Frame) {
 	if c.box.post(len(b)) {
 		m.replaced.Inc()
 	}
+}
+
+// lookOf tells c that the sailor of the boat in slot s of f, its own or
+// the one it watches, changed their look, if they did since it was last
+// told.
+func (c *conn) lookOf(f *bus.Frame, s int32) bool {
+	if l := f.Look[s]; l != c.toldLook {
+		c.toldLook = l
+		return c.send(&pb.ServerMessage{Body: &pb.ServerMessage_LookChanged{LookChanged: &pb.LookChanged{Look: l}}}, outLook)
+	}
+	return true
 }
 
 // bumps sends c the bumps of f after the last it was sent: with the

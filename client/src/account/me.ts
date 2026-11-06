@@ -8,11 +8,16 @@
 // first; and when the server cannot answer, the page says so and asks
 // again.
 
+import type { Look } from '../catalog/looks';
+
 /** The player's own account, as GET /api/me gives it. */
-export interface Me {
+export interface Me extends Look {
   name: string;
-  /** The catalog sailor the player looks like, by id. */
-  look: string;
+  /**
+   * Whether the player chose their look: false for a sailor made before
+   * looks were chosen, whose look the game drew, asked once to choose.
+   */
+  lookChosen?: boolean;
   kind: string;
   /** A session made by the recovery code, which may only add a passkey until it has. */
   addPasskey?: boolean;

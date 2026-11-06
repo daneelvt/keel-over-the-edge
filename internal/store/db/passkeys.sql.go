@@ -83,8 +83,8 @@ func (q *Queries) DeletePasskey(ctx context.Context, arg DeletePasskeyParams) (i
 }
 
 const insertCeremony = `-- name: InsertCeremony :exec
-INSERT INTO webauthn_ceremony (handle_hash, kind, account_id, name, name_key, look, user_handle, session, build, expires_at)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+INSERT INTO webauthn_ceremony (handle_hash, kind, account_id, name, name_key, look, version, skin, hair, colour, user_handle, session, build, expires_at)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
 `
 
 type InsertCeremonyParams struct {
@@ -94,6 +94,10 @@ type InsertCeremonyParams struct {
 	Name       pgtype.Text
 	NameKey    pgtype.Text
 	Look       pgtype.Text
+	Version    pgtype.Text
+	Skin       pgtype.Text
+	Hair       pgtype.Text
+	Colour     pgtype.Text
 	UserHandle []byte
 	Session    []byte
 	Build      string
@@ -108,6 +112,10 @@ func (q *Queries) InsertCeremony(ctx context.Context, arg InsertCeremonyParams) 
 		arg.Name,
 		arg.NameKey,
 		arg.Look,
+		arg.Version,
+		arg.Skin,
+		arg.Hair,
+		arg.Colour,
 		arg.UserHandle,
 		arg.Session,
 		arg.Build,
@@ -213,7 +221,7 @@ func (q *Queries) PasskeysOf(ctx context.Context, accountID pgtype.UUID) ([]Pass
 
 const takeCeremony = `-- name: TakeCeremony :one
 DELETE FROM webauthn_ceremony WHERE handle_hash = $1 AND kind = $2
-RETURNING account_id, name, name_key, look, user_handle, session, build, expires_at
+RETURNING account_id, name, name_key, look, version, skin, hair, colour, user_handle, session, build, expires_at
 `
 
 type TakeCeremonyParams struct {
@@ -226,6 +234,10 @@ type TakeCeremonyRow struct {
 	Name       pgtype.Text
 	NameKey    pgtype.Text
 	Look       pgtype.Text
+	Version    pgtype.Text
+	Skin       pgtype.Text
+	Hair       pgtype.Text
+	Colour     pgtype.Text
 	UserHandle []byte
 	Session    []byte
 	Build      string
@@ -241,6 +253,10 @@ func (q *Queries) TakeCeremony(ctx context.Context, arg TakeCeremonyParams) (Tak
 		&i.Name,
 		&i.NameKey,
 		&i.Look,
+		&i.Version,
+		&i.Skin,
+		&i.Hair,
+		&i.Colour,
 		&i.UserHandle,
 		&i.Session,
 		&i.Build,

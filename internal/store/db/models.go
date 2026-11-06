@@ -243,14 +243,17 @@ type Place struct {
 }
 
 type Sailor struct {
-	AccountID pgtype.UUID
-	Name      string
-	NameKey   string
-	Look      string
-	CreatedAt time.Time
-	Version   pgtype.Text
-	Finish    pgtype.Text
-	Colour    pgtype.Text
+	AccountID  pgtype.UUID
+	Name       string
+	NameKey    string
+	Look       string
+	CreatedAt  time.Time
+	Version    pgtype.Text
+	Finish     pgtype.Text
+	Colour     pgtype.Text
+	Skin       pgtype.Text
+	Hair       pgtype.Text
+	LookChosen bool
 }
 
 type Session struct {
@@ -287,6 +290,10 @@ type WebauthnCeremony struct {
 	Build      string
 	ExpiresAt  time.Time
 	CreatedAt  time.Time
+	Version    pgtype.Text
+	Skin       pgtype.Text
+	Hair       pgtype.Text
+	Colour     pgtype.Text
 }
 
 type World struct {

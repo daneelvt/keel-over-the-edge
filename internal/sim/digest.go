@@ -86,6 +86,11 @@ func Digest(f *bus.Frame) uint64 {
 		if k := kindFlags(f.Machine[s], f.Priority[s]); k != 0 {
 			h.u64(k << 8)
 		}
+		// A sailor's look once it is not the first, so a world of the
+		// first look hashes as before.
+		if l := f.Look[s]; l != 0 {
+			h.u64(uint64(l) << 16)
+		}
 	}
 	for _, q := range f.Queue {
 		for _, b := range q.Account {
@@ -96,6 +101,9 @@ func Digest(f *bus.Frame) uint64 {
 		h.u64(uint64(q.Grace))
 		if k := kindFlags(q.Machine, q.Priority); k != 0 {
 			h.u64(k << 8)
+		}
+		if q.Look != 0 {
+			h.u64(uint64(q.Look) << 16)
 		}
 	}
 	for _, p := range f.Pairs {

@@ -172,7 +172,7 @@ func sailLive(t *testing.T, sailors, capacity, limit int, d time.Duration, stall
 				// Every third account is a machine sailor's, and every
 				// eleventh a priority account's.
 				players.TrySend(bus.Command{Op: bus.Join, Account: a, Conn: conn, Reply: reply,
-					Machine: a[15]%3 == 0, Priority: a[15]%11 == 0})
+					Machine: a[15]%3 == 0, Priority: a[15]%11 == 0, Look: uint32(a[15]) * 41})
 				select {
 				case rep := <-reply:
 					return rep, true
@@ -287,6 +287,8 @@ func sailLive(t *testing.T, sailors, capacity, limit int, d time.Duration, stall
 					// The chart marked by hand, as a world's start marks
 					// what it knows.
 					w.Bus().Commands.Server().TrySend(bus.Command{Op: bus.Chart, Subject: int32(n % 4), On: n%7 == 0})
+					// A sailor changes their look: at sea, ashore or waiting.
+					players.TrySend(bus.Command{Op: bus.SetLook, Account: account(n/2 + 1), Look: uint32(n)})
 				case len(boats) > 0:
 					// Moved to open water, to the lip to go over, or into
 					// the mist band.

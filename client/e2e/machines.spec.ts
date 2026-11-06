@@ -97,7 +97,7 @@ async function machine(context: BrowserContext, name: string): Promise<string> {
       name,
       version: data.machine.versions[0]?.id,
       finish: data.machine.finishes[0]?.id,
-      colour: data.machine.colours[0]?.id,
+      colour: data.sailorOptions.colours[0]?.id,
     },
   });
   expect(res.status(), await res.text()).toBe(201);
@@ -162,7 +162,7 @@ test('a new sailor’s machine sailor: the choice, the form, how to connect, and
   // The form, its look drawn at random, and drawn again.
   await expect(page.getByRole('heading', { name: 'Make a machine sailor' })).toBeVisible();
   const look = page.locator('.machine-look-row .machine-look');
-  const words = data.machine.colours.map((c) => c.name);
+  const words = data.sailorOptions.colours.map((c) => c.name);
   const before = (await look.textContent()) ?? '';
   expect(words.some((w) => before.endsWith(w))).toBe(true);
   await page.getByRole('button', { name: 'Draw another' }).click();

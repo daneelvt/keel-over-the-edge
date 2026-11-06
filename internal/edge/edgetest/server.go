@@ -24,6 +24,7 @@ import (
 	"github.com/daneelvt/keel-over-the-edge/internal/bus"
 	"github.com/daneelvt/keel-over-the-edge/internal/catalog"
 	"github.com/daneelvt/keel-over-the-edge/internal/edge"
+	"github.com/daneelvt/keel-over-the-edge/internal/looks"
 	"github.com/daneelvt/keel-over-the-edge/internal/moderation"
 	"github.com/daneelvt/keel-over-the-edge/internal/obs"
 	"github.com/daneelvt/keel-over-the-edge/internal/physics"
@@ -212,7 +213,8 @@ func (s *Server) start(t testing.TB, w *sim.World) {
 	s.World = w
 	s.Loop = loop.New(loop.Config{World: w, Epoch: Epoch, Log: log, Metrics: m})
 	s.Edge = edge.New(edge.Config{
-		Bus: w.Bus(), World: WorldID, Epoch: Epoch, Ends: cfg.Ends, Clock: s.Loop,
+		LookCode: lookCode,
+		Bus:      w.Bus(), World: WorldID, Epoch: Epoch, Ends: cfg.Ends, Clock: s.Loop,
 		Protocol: protocol.Version, Catalog: catalog.Version, Layout: physics.LayoutVersion,
 		Origin: PlayOrigin, Log: log, Metrics: m, Fail: api.WriteError, Limits: cfg.Limits, Encoders: cfg.Encoders,
 		Land: cfg.Terrain != nil, Chunks: cfg.Chunks, Circulation: circulation(cfg.Terrain), Harbour: harbourOf(cfg.Terrain),
@@ -424,6 +426,25 @@ func (s *Sessions) add(a store.Account) (token string, id store.AccountID) {
 func (s *Server) Sailor(name string) (token string, id store.AccountID) {
 	return s.Sessions.Add(name, store.Human)
 }
+
+// SailorAs makes a human's account whose sailor has a look, and returns
+// the session's cookie's value.
+func (s *Server) SailorAs(name string, l store.Look) (token string, id store.AccountID) {
+	return s.Sessions.add(store.Account{Kind: store.Human, Name: name, Look: l})
+}
+
+// Book is the catalog's looks.
+var Book = func() *looks.Book {
+	cat, err := catalog.Load()
+	if err != nil {
+		panic(err)
+	}
+	return looks.New(cat)
+}()
+
+// lookCode is an account's sailor's look code: 0, the first, for one made
+// with no look.
+func lookCode(a store.Account) uint32 { return Book.Code(a.Look) }
 
 // Owner makes a human's account that carries the owner's flag.
 func (s *Server) Owner(name string) (token string, id store.AccountID) {

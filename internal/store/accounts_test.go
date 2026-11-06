@@ -28,7 +28,7 @@ func TestAccountAndSession(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := store.Account{ID: id, Kind: store.Human, Name: "Ann Bonny", Look: "figure", NoticesOff: []string{}}
+	want := store.Account{ID: id, Kind: store.Human, Name: "Ann Bonny", Look: storetest.Look, NoticesOff: []string{}}
 	if !reflect.DeepEqual(got.Account, want) || time.Since(got.LastSeen) > time.Minute || got.Held || !got.ConfirmedUntil.Before(time.Now()) {
 		t.Fatalf("got %+v, want %+v", got, want)
 	}

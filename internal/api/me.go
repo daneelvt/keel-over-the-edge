@@ -17,8 +17,8 @@ import (
 // any), or, after the recovery code, to adding a passkey; and the kinds of notice its sailor has switched off, which
 // follow the account from device to device.
 type me struct {
-	Name       string   `json:"name"`
-	Look       string   `json:"look"`
+	Name string `json:"name"`
+	lookShown
 	Kind       string   `json:"kind"`
 	NoticesOff []string `json:"noticesOff"`
 	// AddPasskey is a session held to adding a passkey.
@@ -37,7 +37,7 @@ type me struct {
 // passkey is answered too, so the page knows to ask for one.
 func (a *api) me(w http.ResponseWriter, r *http.Request) {
 	cur, _ := auth.SessionFromContext(r.Context())
-	m := meOf(cur.Account)
+	m := a.meOf(cur.Account)
 	m.AddPasskey = cur.Held
 	if a.cfg.Machines != nil && cur.Kind == store.Human && !cur.Held {
 		list, err := a.cfg.Machines.Machines(r.Context(), cur.ID)
@@ -54,12 +54,12 @@ func (a *api) me(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, m)
 }
 
-func meOf(acc store.Account) me {
+func (a *api) meOf(acc store.Account) me {
 	off := acc.NoticesOff
 	if off == nil {
 		off = []string{}
 	}
-	return me{Name: acc.Name, Look: acc.Look, Kind: string(acc.Kind), NoticesOff: off}
+	return me{Name: acc.Name, lookShown: a.shown(acc.ID, acc.Look), Kind: string(acc.Kind), NoticesOff: off}
 }
 
 // Notices sets an account's notices switched off: the store.
@@ -100,5 +100,5 @@ func (a *api) setNotices(w http.ResponseWriter, r *http.Request) {
 	}
 	a.cfg.Sessions.ForgetAccount(acc.ID)
 	acc.NoticesOff = off
-	writeJSON(w, http.StatusOK, meOf(acc))
+	writeJSON(w, http.StatusOK, a.meOf(acc))
 }

@@ -290,8 +290,12 @@ func migrationsHash() (string, error) {
 	return hex.EncodeToString(h.Sum(nil))[:16], err
 }
 
+// Look is the look a test's account is made with: made-up ids, which the
+// store keeps as they are.
+var Look = store.Look{Look: "figure", Version: "v", Skin: "s", Hair: "h", Colour: "c", Chosen: true}
+
 // NewAccount is what makes an account in a test: a sailor named name, with
-// name key key and the look "figure", a passkey of random bytes that
+// name key key and a look of made-up ids, a passkey of random bytes that
 // signs nothing, and a first session whose token hashes to token.
 func NewAccount(name, key string, token [32]byte) store.NewAccount {
 	handle, cred, pub := make([]byte, 64), make([]byte, 16), make([]byte, 77)
@@ -301,7 +305,7 @@ func NewAccount(name, key string, token [32]byte) store.NewAccount {
 	var recovery [32]byte
 	_, _ = rand.Read(recovery[:])
 	return store.NewAccount{
-		Name: name, NameKey: key, Look: "figure", UserHandle: handle, RecoveryHash: recovery, TokenHash: token,
+		Name: name, NameKey: key, Look: Look, UserHandle: handle, RecoveryHash: recovery, TokenHash: token,
 		Passkey: store.Passkey{CredentialID: cred, PublicKey: pub, Algorithm: -7, Flags: 0x45, AttestationFormat: "none", MadeOn: "Mac · Chrome"},
 	}
 }

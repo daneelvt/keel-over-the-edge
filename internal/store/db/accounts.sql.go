@@ -13,7 +13,8 @@ import (
 )
 
 const accountByID = `-- name: AccountByID :one
-SELECT a.id, a.kind, a.tools, a.priority, a.notices_off, coalesce(a.user_handle, '')::bytea AS user_handle, sl.name, sl.look,
+SELECT a.id, a.kind, a.tools, a.priority, a.notices_off, coalesce(a.user_handle, '')::bytea AS user_handle, sl.name, sl.look, coalesce(sl.version, '')::text AS version, coalesce(sl.skin, '')::text AS skin,
+  coalesce(sl.hair, '')::text AS hair, coalesce(sl.colour, '')::text AS colour, coalesce(sl.finish, '')::text AS finish, sl.look_chosen,
   a.created_at, a.recovery_made_at, (a.recovery_hash IS NOT NULL)::boolean AS has_recovery
 FROM account a
 JOIN sailor sl ON sl.account_id = a.id
@@ -29,6 +30,12 @@ type AccountByIDRow struct {
 	UserHandle     []byte
 	Name           string
 	Look           string
+	Version        string
+	Skin           string
+	Hair           string
+	Colour         string
+	Finish         string
+	LookChosen     bool
 	CreatedAt      time.Time
 	RecoveryMadeAt pgtype.Timestamptz
 	HasRecovery    bool
@@ -46,6 +53,12 @@ func (q *Queries) AccountByID(ctx context.Context, id pgtype.UUID) (AccountByIDR
 		&i.UserHandle,
 		&i.Name,
 		&i.Look,
+		&i.Version,
+		&i.Skin,
+		&i.Hair,
+		&i.Colour,
+		&i.Finish,
+		&i.LookChosen,
 		&i.CreatedAt,
 		&i.RecoveryMadeAt,
 		&i.HasRecovery,
@@ -54,7 +67,8 @@ func (q *Queries) AccountByID(ctx context.Context, id pgtype.UUID) (AccountByIDR
 }
 
 const accountByUserHandle = `-- name: AccountByUserHandle :one
-SELECT a.id, a.kind, a.tools, a.priority, a.notices_off, a.user_handle, sl.name, sl.look,
+SELECT a.id, a.kind, a.tools, a.priority, a.notices_off, a.user_handle, sl.name, sl.look, coalesce(sl.version, '')::text AS version, coalesce(sl.skin, '')::text AS skin,
+  coalesce(sl.hair, '')::text AS hair, coalesce(sl.colour, '')::text AS colour, coalesce(sl.finish, '')::text AS finish, sl.look_chosen,
   (a.stopped_at IS NOT NULL)::boolean AS stopped
 FROM account a
 JOIN sailor sl ON sl.account_id = a.id
@@ -70,6 +84,12 @@ type AccountByUserHandleRow struct {
 	UserHandle []byte
 	Name       string
 	Look       string
+	Version    string
+	Skin       string
+	Hair       string
+	Colour     string
+	Finish     string
+	LookChosen bool
 	Stopped    bool
 }
 
@@ -87,14 +107,20 @@ func (q *Queries) AccountByUserHandle(ctx context.Context, userHandle []byte) (A
 		&i.UserHandle,
 		&i.Name,
 		&i.Look,
+		&i.Version,
+		&i.Skin,
+		&i.Hair,
+		&i.Colour,
+		&i.Finish,
+		&i.LookChosen,
 		&i.Stopped,
 	)
 	return i, err
 }
 
 const accountCard = `-- name: AccountCard :one
-SELECT a.id, a.kind, a.owner_id, sl.name, sl.look, coalesce(sl.version, '')::text AS version, coalesce(sl.finish, '')::text AS finish,
-  coalesce(sl.colour, '')::text AS colour, a.created_at, a.last_seen_at, a.tools, a.priority, a.machine_cap,
+SELECT a.id, a.kind, a.owner_id, sl.name, sl.look, coalesce(sl.version, '')::text AS version, coalesce(sl.skin, '')::text AS skin,
+  coalesce(sl.hair, '')::text AS hair, coalesce(sl.colour, '')::text AS colour, coalesce(sl.finish, '')::text AS finish, sl.look_chosen, a.created_at, a.last_seen_at, a.tools, a.priority, a.machine_cap,
   coalesce(a.stopped_at, 'epoch')::timestamptz AS stopped_at, coalesce(a.stop_reason, '')::text AS stop_reason,
   coalesce(a.recovery_made_at, 'epoch')::timestamptz AS recovery_made_at, (a.recovery_hash IS NOT NULL)::boolean AS has_recovery,
   coalesce(osl.name, '')::text AS owner_name, coalesce(o.tools, false)::boolean AS owner_tools,
@@ -113,8 +139,11 @@ type AccountCardRow struct {
 	Name           string
 	Look           string
 	Version        string
-	Finish         string
+	Skin           string
+	Hair           string
 	Colour         string
+	Finish         string
+	LookChosen     bool
 	CreatedAt      time.Time
 	LastSeenAt     time.Time
 	Tools          bool
@@ -140,8 +169,11 @@ func (q *Queries) AccountCard(ctx context.Context, id pgtype.UUID) (AccountCardR
 		&i.Name,
 		&i.Look,
 		&i.Version,
-		&i.Finish,
+		&i.Skin,
+		&i.Hair,
 		&i.Colour,
+		&i.Finish,
+		&i.LookChosen,
 		&i.CreatedAt,
 		&i.LastSeenAt,
 		&i.Tools,
@@ -355,8 +387,8 @@ func (q *Queries) CreateAccount(ctx context.Context, arg CreateAccountParams) (p
 }
 
 const createSailor = `-- name: CreateSailor :exec
-INSERT INTO sailor (account_id, name, name_key, look)
-VALUES ($1, $2, $3, $4)
+INSERT INTO sailor (account_id, name, name_key, look, version, skin, hair, colour, look_chosen)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, true)
 `
 
 type CreateSailorParams struct {
@@ -364,6 +396,10 @@ type CreateSailorParams struct {
 	Name      string
 	NameKey   string
 	Look      string
+	Version   pgtype.Text
+	Skin      pgtype.Text
+	Hair      pgtype.Text
+	Colour    pgtype.Text
 }
 
 func (q *Queries) CreateSailor(ctx context.Context, arg CreateSailorParams) error {
@@ -372,6 +408,10 @@ func (q *Queries) CreateSailor(ctx context.Context, arg CreateSailorParams) erro
 		arg.Name,
 		arg.NameKey,
 		arg.Look,
+		arg.Version,
+		arg.Skin,
+		arg.Hair,
+		arg.Colour,
 	)
 	return err
 }
@@ -836,6 +876,40 @@ type SetRecoveryCodeParams struct {
 
 func (q *Queries) SetRecoveryCode(ctx context.Context, arg SetRecoveryCodeParams) (int64, error) {
 	result, err := q.db.Exec(ctx, setRecoveryCode, arg.RecoveryHash, arg.ID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const setSailorLook = `-- name: SetSailorLook :execrows
+UPDATE sailor SET look = $1, version = $2, skin = nullif($3::text, ''), hair = nullif($4::text, ''),
+  colour = $5, finish = nullif($6::text, ''), look_chosen = true
+WHERE account_id = $7
+`
+
+type SetSailorLookParams struct {
+	Look      string
+	Version   pgtype.Text
+	Skin      string
+	Hair      string
+	Colour    pgtype.Text
+	Finish    string
+	AccountID pgtype.UUID
+}
+
+// A sailor's look, chosen: a person's look, version and options, or a
+// machine's version, finish and colour.
+func (q *Queries) SetSailorLook(ctx context.Context, arg SetSailorLookParams) (int64, error) {
+	result, err := q.db.Exec(ctx, setSailorLook,
+		arg.Look,
+		arg.Version,
+		arg.Skin,
+		arg.Hair,
+		arg.Colour,
+		arg.Finish,
+		arg.AccountID,
+	)
 	if err != nil {
 		return 0, err
 	}

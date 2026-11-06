@@ -36,7 +36,7 @@ async function load(path: string): Promise<Object3D> {
 }
 
 test('the fleet’s sailor sits on its side deck, sitting or hiking, nothing of it in the hull', async () => {
-  const sailor = catalog.sailors[0];
+  const sailor = catalog.sailors[0]?.versions[0];
   const kind = catalog.boats[0];
   if (sailor === undefined || kind === undefined) {
     throw new Error('no sailor or boat');

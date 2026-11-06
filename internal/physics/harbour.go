@@ -21,6 +21,15 @@ type Harbour struct {
 	Narrows        float64 // the narrows' width at the mouth
 }
 
+// InHarbour reports whether (x, y) is in the harbour h: within its basin
+// or its narrows, out to the mouth.
+func InHarbour(h *Harbour, x, y float64) bool {
+	var p harbourPrepared
+	p.set(h)
+	outside, _ := p.at(x, y)
+	return outside <= 0
+}
+
 // harbourShore is how far beyond the harbour's basin and narrows the open
 // sea's wind takes over from the harbour's, m: its shore, so that the
 // wind has no step there.
@@ -38,8 +47,9 @@ type harbourPrepared struct {
 
 // SetHarbour sets the world's harbour. PrepareWeather leaves it as it was:
 // a world's harbour is its land's, not the catalog's.
-func (w *WeatherPrepared) SetHarbour(h *Harbour) {
-	p := &w.harbour
+func (w *WeatherPrepared) SetHarbour(h *Harbour) { w.harbour.set(h) }
+
+func (p *harbourPrepared) set(h *Harbour) {
 	p.x, p.y, p.radius = h.X, h.Y, max2(h.Radius, 0)
 	p.mx, p.my, p.half = h.MouthX, h.MouthY, max2(float64(0.5*h.Narrows), 0)
 	de, dn := h.MouthX-h.X, h.MouthY-h.Y
@@ -52,8 +62,9 @@ func (w *WeatherPrepared) SetHarbour(h *Harbour) {
 
 // harbourAt is how far (x, y) is outside the harbour, m, negative inside
 // the basin or the narrows; and how far it is from the mouth, m.
-func (w *WeatherPrepared) harbourAt(x, y float64) (outside, mouth float64) {
-	h := &w.harbour
+func (w *WeatherPrepared) harbourAt(x, y float64) (outside, mouth float64) { return w.harbour.at(x, y) }
+
+func (h *harbourPrepared) at(x, y float64) (outside, mouth float64) {
 	dx, dy := x-h.x, y-h.y
 	basin := math.Sqrt(float64(dx*dx)+float64(dy*dy)) - h.radius
 	along := min2(max2(float64(dx*h.ue)+float64(dy*h.un), 0), h.length)

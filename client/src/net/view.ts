@@ -26,17 +26,22 @@ export const Q = {
   rudder: 7,
   sailor: 8,
   sail: 9,
+  /** The sailor's look code, which only an enter carries. */
+  look: 10,
 } as const;
-export const VIEW_STRIDE = 10;
+export const VIEW_STRIDE = 11;
 
 /**
  * A boat's flags: in the far band; the sailor's mode is bits 1–2; falling
- * over the lip; a machine sailor's, sailed by an AI agent.
+ * over the lip; a machine sailor's, sailed by an AI agent; and, in an
+ * enter, the same boat in its sailor's new look.
  */
 export const FAR_BAND = 1;
 export const FALLING = 8;
 export const MACHINE = 16;
-const FLAGS_USED = 31;
+/** In an enter: the boat the slot already holds, its sailor's look changed. */
+export const RELOOK = 32;
+const FLAGS_USED = 63;
 
 /** The steps of the fields: the heading's, heel's, boom's and rudder's, and the position's. */
 export const ANGLE_STEP = (2 * Math.PI) / 65536;
@@ -129,7 +134,7 @@ class Reader {
 
 class EntryError extends Error {}
 
-/** An enter's length after its kind. */
+/** An enter's length after its kind and look. */
 const ENTER_FIELDS = 17;
 
 function int24(v: DataView, at: number): number {
@@ -172,6 +177,10 @@ export function applyEntries(
           if (kind > 65535) {
             return `a boat of kind ${kind}`;
           }
+          const look = r.uvarint();
+          if (look >= 2 ** 20) {
+            return `a sailor's look ${look}`;
+          }
           if (r.left() < ENTER_FIELDS) {
             return 'an entry cut short';
           }
@@ -181,6 +190,7 @@ export function applyEntries(
             return 'a boat with flags it should not have';
           }
           q[o + Q.kind] = kind;
+          q[o + Q.look] = look;
           q[o + Q.flags] = flags;
           q[o + Q.x] = int24(v, b + 1);
           q[o + Q.y] = int24(v, b + 4);
@@ -382,8 +392,12 @@ export const SLOT = {
   falling: 14,
   /** 1 for a machine sailor's boat: it carries the machine mark. */
   machine: 15,
+  /** The sailor's look code. */
+  look: 16,
+  /** 1 when the snapshot's enter is of the boat the slot held, its sailor's look changed. */
+  relook: 17,
 } as const;
-export const SLOT_FIELDS = 16;
+export const SLOT_FIELDS = 18;
 /** A record's length in bytes. */
 export const FLEET_RECORD_BYTES = MAX_HEADER_SIZE + 8 * (META_FIELDS + VIEW_SLOTS * SLOT_FIELDS);
 
@@ -447,6 +461,8 @@ export function writeRecord(
     f[o + SLOT.sail] = q[b + Q.sail] ?? 0;
     f[o + SLOT.falling] = (flagBits & FALLING) !== 0 ? 1 : 0;
     f[o + SLOT.machine] = (flagBits & MACHINE) !== 0 ? 1 : 0;
+    f[o + SLOT.look] = q[b + Q.look] ?? 0;
+    f[o + SLOT.relook] = (flagBits & RELOOK) !== 0 ? 1 : 0;
   }
   f[FLEET_META.boats] = boats;
 }

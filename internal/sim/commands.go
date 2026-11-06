@@ -75,6 +75,8 @@ func (w *World) apply(c *bus.Command) {
 	case bus.End:
 		r = bus.Reply{Result: bus.Done, Slot: -1}
 		w.endAt = max(c.At, f.Tick)
+	case bus.SetLook:
+		r = w.setLook(c.Account, c.Look)
 	default:
 		return
 	}
@@ -91,6 +93,30 @@ func (w *World) apply(c *bus.Command) {
 		default:
 		}
 	}
+}
+
+// setLook changes account's sailor's look, where it may be: its boat's in
+// Port Royal's harbour, or its place's in the queue. A boat at sea beyond
+// the harbour keeps its look (Away); an account with neither has none to
+// change (NoBoat), and is ashore.
+func (w *World) setLook(account bus.Account, look uint32) bus.Reply {
+	f := w.next
+	for _, s := range f.Live {
+		if f.Owner[s] != account {
+			continue
+		}
+		r := bus.Reply{Result: bus.Away, Slot: s, Boat: f.Boat[s], Gen: f.Gen[s]}
+		if st := &f.State[s]; w.harbour != nil && f.Voyage[s].Over == 0 && physics.InHarbour(w.harbour, st.X, st.Y) {
+			f.Look[s] = look
+			r.Result = bus.Done
+		}
+		return r
+	}
+	if i := queued(f, account); i >= 0 {
+		f.Queue[i].Look = look
+		return bus.Reply{Result: bus.Done, Slot: -1}
+	}
+	return bus.Reply{Result: bus.NoBoat, Slot: -1}
 }
 
 // teleport moves the boat in slot s of f as the owner's tools ask: to the
