@@ -126,8 +126,16 @@ jobs:
       # minute where the full test sails five), as Go's own race builders
       # run its tests. The limit is twice Go's own ten minutes for a
       # package, so a slow runner is not a failed test, nor a release not
-      # made.
-      - run: go test -race -short -timeout 20m ./...
+      # made. The game server's own tests (cmd/keel) run after the rest,
+      # alone: beside the simulation, weather and world generator on four
+      # cores they took over the 20 minutes (alone, about five).
+      - name: The tests in their short forms, with the race detector
+        shell: bash
+        run: |
+          mapfile -t packages < <(go list ./... | grep -vx '.*/cmd/keel')
+          go test -race -short -timeout 20m "${packages[@]}"
+      - name: The game server's tests in their short forms, with the race detector, alone
+        run: go test -race -short -timeout 20m ./cmd/keel
       # On amd64 the physics, simulation, sky and world generator run at
       # their full length in the next step, built for fused multiply-add,
       # and not here as well: beside every other package at once on the
