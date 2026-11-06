@@ -15,7 +15,9 @@ millimetre of cloth under the skin.
 - skeleton: the file's joints the skeleton's, in tables.yaml's order;
 - poke: nothing of the body through a garment, nor of a garment through
   one over it, at rest and in every test pose (rays in along the normals
-  of what is under, against what is over);
+  of what is under, against what is over); nothing of the thighs or
+  knees through a skirt in any frame of a clip that stands (measured, not
+  yet held, in the clips placed in the boat);
 - seat: nothing through the boat in the poses seated in it (the line from
   each vertex's nearest bone to it, and the skeleton from above, cross
   nothing; cloth the seat lift lays on the boat is under no top of the
@@ -25,6 +27,9 @@ millimetre of cloth under the skin.
 - figure: the dressed figure within reach of the bare one (the waist, the
   shoulders, the rear in profile, the shoulders' top line as the front
   view sees it; under a woman's bust, a fitted garment returning);
+- bust: a woman machine's bust as the front sees her, her coat over her
+  plates (each apex forward of the middle, the figure returning under
+  it), and her coat over each breast to in from its apex;
 - symmetry: each mesh its own mirror within 1 mm, unless declared not, at
   the close and deck levels (the far is posed);
 - atlas: the UVs inside the square, no two triangles on one texel (but
@@ -63,6 +68,12 @@ SHOULDER_OVER = 0.02
 REAR_OVER = 0.03
 TOP_LINE = 0.015
 BUST_RETURN = 0.02
+# A woman machine's bust: each apex this far forward of the middle, at
+# its height.
+BUST_CLEFT = 0.01
+# Her coat over each breast from outside to this share of the apex's
+# distance from the middle.
+BUST_COVER = 0.75
 
 
 class Gates:
@@ -139,7 +150,8 @@ def skeleton(gates, level, gltf, order):
 def layers(worn, ease):
     """Each mesh's place in the stack, and how far off what is under it it
     stands: the body under everything, the garments by their ease, the
-    hair over them (a braid lies on the coat), a hat over all."""
+    hair over them (a braid lies on the coat), a machine's plates on its
+    coat, a hat over all."""
     out = {"body": (0.0, 0.0)}
     for w in worn:
         if w.kind == "garment":
@@ -150,6 +162,9 @@ def layers(worn, ease):
             out[w.obj.name] = (0.5, 0.01)
         elif w.kind == "hat":
             out[w.obj.name] = (1.0, 0.01)
+        elif w.kind == "plate":
+            # A machine's plates lie on its coat.
+            out[w.obj.name] = (0.9, 0.01)
     return out
 
 
@@ -173,12 +188,16 @@ def under_pairs(meshes, lay):
     return pairs
 
 
-def poke(fig, pairs, depths=None):
+def poke(fig, pairs, depths=None, sided=False, above=None):
     """How many vertices of what is under come through what is over, as
     the figure stands now: a ray in from the vertex, along its normal,
-    meets the garment within POKE_DEPTH. Returns the count and, by mesh,
-    the vertices; and fills depths, if given, with each one's (how far in
-    the garment is, the vertex's normal), by (mesh, vertex)."""
+    meets the garment within POKE_DEPTH (sided: and meets it from its
+    outer side, so a part facing away from cloth beside it is not through
+    it, and further than TOUCH into it; above: only what is above that
+    height). Returns the count and, by
+    mesh, the vertices; and fills depths, if
+    given, with each one's (how far in the garment is, the vertex's
+    normal), by (mesh, vertex)."""
     posed = {}
     hits = {}
     n = 0
@@ -189,9 +208,11 @@ def poke(fig, pairs, depths=None):
         tree = _tree(g, posed[g.name][0])
         co, no = posed[u.name]
         for i in idx:
+            if above is not None and co[i][2] < above:
+                continue
             p, d = Vector(co[i]), -Vector(no[i])
             hit = tree.ray_cast(p + d * 1e-4, d, POKE_DEPTH)
-            if hit[0] is not None:
+            if hit[0] is not None and (not sided or (p - hit[0]).dot(hit[1]) > 0 and hit[3] > TOUCH):
                 n += 1
                 hits.setdefault(u.name, []).append(int(i))
                 through = poke.through.setdefault(u.name, set())
@@ -205,6 +226,27 @@ def poke(fig, pairs, depths=None):
 
 # What each under mesh came through, by its name, since the last poses().
 poke.through = {}
+
+# The bones whose parts a skirt hangs over and they move under it: the
+# hips' own are carried with the cloth at its top, and seated sit on it.
+UNDER_SKIRT = ("thigh", "calf")
+
+
+def skirt_pairs(meshes, worn):
+    """What of the body each skirt hangs over, in any clip: every vertex
+    the thighs and knees carry, wherever it is at rest (a thigh swung back
+    reaches a skirt it was far from)."""
+    body = next((o for o in meshes if o.name == "body"), None)
+    skirts = [w.obj for w in worn if w.kind == "garment" and (w.spec.get("params") or {}).get("skirt")]
+    if body is None or not skirts:
+        return []
+    names = {g.index: g.name for g in body.vertex_groups}
+    idx = []
+    for v in body.data.vertices:
+        ws = [(g.weight, names.get(g.group, "")) for g in v.groups]
+        if ws and motion.kind(max(ws)[1]) in UNDER_SKIRT:
+            idx.append(v.index)
+    return [(body, s, np.array(idx)) for s in skirts] if idx else []
 
 
 def poses(gates, level, fig, lib, worn, ease, names):
@@ -277,6 +319,8 @@ def through_boat(fig, meshes):
             # from the thigh beside it, which drops into the cockpit, would
             # cross the deck's edge under cloth lying on the deck.
             hits[o.name] = [i for i, p in enumerate(co) if stage.under(p)]
+            for i in hits[o.name][:1]:
+                examples.append({"mesh": o.name, "under": [round(float(x), 3) for x in co[i]]})
             continue
         anchors = _nearest_on_segments(co, a, b)
         hits[o.name] = stage.crossed(anchors, co)
@@ -335,7 +379,7 @@ def floating(gates, level, meshes, kinds):
         if kinds.get(o.name) == "body":
             continue
         islands = sorted(_islands(o), key=lambda isl: -len(isl["verts"]))
-        sits = kinds.get(o.name) in ("hair", "hat", "prop")
+        sits = kinds.get(o.name) in ("hair", "beard", "hat", "prop", "gear")
         worst = 0.0
         where = size = None
         for k, isl in enumerate(islands):
@@ -498,15 +542,41 @@ def _front(tree, x, z):
     return None if hit[0] is None else hit[0].y
 
 
+def bust(gates, marks, meshes, worn):
+    """A woman machine's bust, as the front sees her (her coat over her
+    plates): at the bare bust's height, each apex forward of the middle
+    (the cleft) and the figure coming back under it; and her coat over
+    each breast from outside to in from its apex (BUST_COVER), the plates
+    showing between."""
+    seen = _tree_of([(motion.coords_posed(o)[0], [list(f.vertices) for f in o.data.polygons]) for o in meshes])
+    coat = [w.obj for w in worn if w.kind == "garment" and (w.spec.get("params") or {}).get("fitted")]
+    cloth = _tree_of([(motion.coords_posed(o)[0], [list(f.vertices) for f in o.data.polygons]) for o in coat])
+    z, x = _bust(marks)
+    cleft = under = math.inf
+    bare = []
+    middle = _front(seen, 0.0, z)
+    for sign in (1, -1):
+        at = _front(seen, sign * x, z)
+        below = [y for y in (_front(seen, sign * x, h) for h in np.arange(z - 0.03, z - 0.12, -0.005)) if y is not None]
+        if at is None or middle is None or not below:
+            cleft = under = -math.inf
+            continue
+        cleft = min(cleft, middle - at)
+        under = min(under, max(below) - at)
+        # The coat over the apex, and in from it toward the middle.
+        for k in (1.0, BUST_COVER):
+            over = _front(cloth, sign * x * k, z) if cloth is not None else None
+            first = _front(seen, sign * x * k, z)
+            if over is None or first is None or over > first + 1e-4:
+                bare.append([sign, k])
+    gates.add("close", "bust cleft", cleft, BUST_CLEFT, cleft >= BUST_CLEFT, at=[round(x, 3), round(z, 3)])
+    gates.add("close", "bust under", under, BUST_RETURN, under >= BUST_RETURN)
+    gates.add("close", "bust covered", len(bare), 0, not bare, sides=bare)
+
+
 def _bust(marks):
-    """The bust's height and its apex's distance from the middle: where
-    the bare chest comes furthest forward between the waist and the
-    shoulders."""
-    skin = marks.skin
-    lo, hi = marks.measure()["heights"]["waist"], marks.joint("l-shoulder")[2]
-    band = skin[(skin[:, 2] > lo) & (skin[:, 2] < hi) & (np.abs(skin[:, 0]) < 0.15)]
-    i = int(np.argmin(band[:, 1]))
-    return float(band[i, 2]), float(abs(band[i, 0]))
+    """The bust's height and its apex's distance from the middle."""
+    return marks.bust()[:2]
 
 
 # --- Symmetry, the atlas, the file --------------------------------------

@@ -25,6 +25,8 @@ import (
 	"github.com/daneelvt/keel-over-the-edge/internal/api"
 	"github.com/daneelvt/keel-over-the-edge/internal/auth"
 	"github.com/daneelvt/keel-over-the-edge/internal/auth/softkey"
+	"github.com/daneelvt/keel-over-the-edge/internal/catalog"
+	"github.com/daneelvt/keel-over-the-edge/internal/looks"
 	"github.com/daneelvt/keel-over-the-edge/internal/oauth"
 	"github.com/daneelvt/keel-over-the-edge/internal/obs"
 	"github.com/daneelvt/keel-over-the-edge/internal/store"
@@ -42,6 +44,15 @@ const (
 	testOrigin = "http://localhost"
 	boatKind   = "test-boat"
 )
+
+// testBook is the catalog's looks.
+var testBook = func() *looks.Book {
+	cat, err := catalog.Load()
+	if err != nil {
+		panic(err)
+	}
+	return looks.New(cat)
+}()
 
 var testLooks = oauth.MachineLooks{
 	Versions: []oauth.LookOption{{ID: "v1", Name: "first"}, {ID: "v2", Name: "second"}},
@@ -182,7 +193,7 @@ func newHarness(t *testing.T, opt ...harnessOptions) *harness {
 		Metrics: h.metrics, Now: h.now})
 	play := api.Handler(api.Config{
 		Version: api.Version{Build: "test", Catalog: "cat"}, Log: log, Metrics: h.metrics,
-		Accounts: st, Sessions: sessions, Passkeys: passkeys, Looks: []string{"figure"},
+		Accounts: st, Sessions: sessions, Passkeys: passkeys, Looks: testBook,
 		Boat: boatKind, OAuth: server, Grants: h.grants, MCP: h.resource, Lifetime: h.lifetime, MachineLooks: testLooks,
 		Machines: st, Deletions: h.hand,
 	})
@@ -309,7 +320,7 @@ func (b *browser) post(path, body string) (int, string) {
 // sailor makes a player's sailor with a new passkey, signed in.
 func (b *browser) sailor(name string) {
 	b.t.Helper()
-	status, opts := b.post("/account/begin", `{"name":"`+name+`","look":"figure"}`)
+	status, opts := b.post("/account/begin", `{"name":"`+name+`","look":"rover","version":"female","skin":"tone-2","hair":"brown","colour":"madder-red"}`)
 	if status != 200 {
 		b.t.Fatalf("begin: %d %s", status, opts)
 	}

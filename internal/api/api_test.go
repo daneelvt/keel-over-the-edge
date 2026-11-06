@@ -7,6 +7,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"log/slog"
 	"net"
@@ -21,6 +22,8 @@ import (
 
 	"github.com/daneelvt/keel-over-the-edge/internal/accounts"
 	"github.com/daneelvt/keel-over-the-edge/internal/auth"
+	"github.com/daneelvt/keel-over-the-edge/internal/catalog"
+	"github.com/daneelvt/keel-over-the-edge/internal/looks"
 	"github.com/daneelvt/keel-over-the-edge/internal/obs"
 	"github.com/daneelvt/keel-over-the-edge/internal/store"
 )
@@ -30,6 +33,15 @@ type syncBuffer struct {
 	mu sync.Mutex
 	b  bytes.Buffer
 }
+
+// testBook is the catalog's looks.
+var testBook = func() *looks.Book {
+	cat, err := catalog.Load()
+	if err != nil {
+		panic(err)
+	}
+	return looks.New(cat)
+}()
 
 func (b *syncBuffer) Write(p []byte) (int, error) {
 	b.mu.Lock()
@@ -51,6 +63,10 @@ func (noDatabase) Session(context.Context, [32]byte) (store.Session, error) {
 }
 
 func (noDatabase) Touch(context.Context, [32]byte) error { return nil }
+
+func (noDatabase) SetLook(context.Context, store.AccountID, store.Look) error {
+	return errors.New("no database")
+}
 
 type testServer struct {
 	*httptest.Server
@@ -91,7 +107,7 @@ func newTestServer(t *testing.T, db database, change func(*Config)) *testServer 
 		Accounts: db,
 		Sessions: auth.NewCache(db, auth.CacheConfig{Lookups: m.SessionLookups}),
 		Passkeys: testPasskeys(t),
-		Looks:    []string{"figure", "other-figure"},
+		Looks:    testBook,
 	}
 	if st, ok := db.(accounts.Store); ok {
 		cfg.Deletions = accounts.New(accounts.Config{Store: st, Sessions: cfg.Sessions, Metrics: m})
@@ -231,20 +247,20 @@ func TestNewSailorRefusesMalformed(t *testing.T) {
 		code                    string
 	}{
 		{"a form", "application/x-www-form-urlencoded", "name=Ann&look=figure", 415, "content-type"},
-		{"no type", "", `{"name":"Ann","look":"figure"}`, 415, "content-type"},
-		{"an unknown member", "application/json", `{"name":"Ann","look":"figure","admin":true}`, 400, "malformed"},
-		{"a name twice", "application/json", `{"name":"Ann","name":"Admin","look":"figure"}`, 400, "malformed"},
-		{"invalid UTF-8", "application/json", "{\"name\":\"A\xffn\",\"look\":\"figure\"}", 400, "malformed"},
+		{"no type", "", `{"name":"Ann","look":"rover","version":"female","skin":"tone-2","hair":"brown","colour":"madder-red"}`, 415, "content-type"},
+		{"an unknown member", "application/json", `{"name":"Ann","look":"rover","version":"female","skin":"tone-2","hair":"brown","colour":"madder-red","admin":true}`, 400, "malformed"},
+		{"a name twice", "application/json", `{"name":"Ann","name":"Admin","look":"rover","version":"female","skin":"tone-2","hair":"brown","colour":"madder-red"}`, 400, "malformed"},
+		{"invalid UTF-8", "application/json", "{\"name\":\"A\xffn\",\"look\":\"rover\"}", 400, "malformed"},
 		{"not an object", "application/json", `["Ann"]`, 400, "malformed"},
-		{"trailing data", "application/json", `{"name":"Ann","look":"figure"} {}`, 400, "malformed"},
+		{"trailing data", "application/json", `{"name":"Ann","look":"rover","version":"female","skin":"tone-2","hair":"brown","colour":"madder-red"} {}`, 400, "malformed"},
 		{"a look not in the catalog", "application/json", `{"name":"Ann","look":"pirate-king"}`, 400, "look"},
-		{"too large", "application/json", `{"name":"` + strings.Repeat("A", 17<<10) + `","look":"figure"}`, 413, "too-large"},
-		{"a short name", "application/json", `{"name":"Al","look":"figure"}`, 422, "short"},
-		{"no name", "application/json", `{"look":"figure"}`, 422, "short"},
-		{"a long name", "application/json", `{"name":"Abcdefghijklmnopqrstu","look":"figure"}`, 422, "long"},
-		{"a symbol", "application/json", `{"name":"Ann ⚓","look":"figure"}`, 422, "characters"},
-		{"mixed scripts", "application/json", `{"name":"Pаypal","look":"figure"}`, 422, "scripts"},
-		{"a reserved name", "application/json", `{"name":"Harbourmaster","look":"figure"}`, 422, "words"},
+		{"too large", "application/json", `{"name":"` + strings.Repeat("A", 17<<10) + `","look":"rover","version":"female","skin":"tone-2","hair":"brown","colour":"madder-red"}`, 413, "too-large"},
+		{"a short name", "application/json", `{"name":"Al","look":"rover","version":"female","skin":"tone-2","hair":"brown","colour":"madder-red"}`, 422, "short"},
+		{"no name", "application/json", `{"look":"rover","version":"female","skin":"tone-2","hair":"brown","colour":"madder-red"}`, 422, "short"},
+		{"a long name", "application/json", `{"name":"Abcdefghijklmnopqrstu","look":"rover","version":"female","skin":"tone-2","hair":"brown","colour":"madder-red"}`, 422, "long"},
+		{"a symbol", "application/json", `{"name":"Ann ⚓","look":"rover","version":"female","skin":"tone-2","hair":"brown","colour":"madder-red"}`, 422, "characters"},
+		{"mixed scripts", "application/json", `{"name":"Pаypal","look":"rover","version":"female","skin":"tone-2","hair":"brown","colour":"madder-red"}`, 422, "scripts"},
+		{"a reserved name", "application/json", `{"name":"Harbourmaster","look":"rover","version":"female","skin":"tone-2","hair":"brown","colour":"madder-red"}`, 422, "words"},
 	}
 	for _, c := range cases {
 		status, body, res := post(t, nil, srv.URL+"/account/begin", c.contentType, c.body)

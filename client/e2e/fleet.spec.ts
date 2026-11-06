@@ -2,21 +2,27 @@
 
 // The other boats drawn, on each back end: a boat of the fleet at a pose
 // looks as the player's own boat looks at that pose, heeled, gybing,
-// capsized, luffing, with the rudder hard over; the fleet's 64 boats keep
-// to their draw calls and triangles; every fleet material is the factory's,
-// with the bend; faded boats dither and none sorts; and a picture of a
-// fleet at fixed poses, near and far models, matches its reference.
+// capsized, luffing, with the rudder hard over, its sailor a person's or a
+// machine's; the fleet's 64 boats keep to their draw calls and triangles,
+// their sailors, near and far, of every look, to at most 6; every fleet
+// material is the factory's, with the bend; faded boats dither and none
+// sorts; and a picture of a fleet at fixed poses, near and far models,
+// matches its reference.
 
 import { expect, type Page, test } from '@playwright/test';
 import { openScene, picture, pictureDifference } from './helpers';
 
 const DEG = Math.PI / 180;
+/** How far apart the own boat's picture and a fleet boat's at one pose may be, 0 to 255 a channel. */
+const LIKE = 0.25;
 
 /** A pose: the own boat's state, and the sail's flattening and flows. */
 interface Pose {
   name: string;
   state: Record<string, number>;
   wind?: number;
+  /** A machine sailor's boat. */
+  machine?: boolean;
 }
 
 /** A whole pose: every field the poses set, at rest. */
@@ -51,6 +57,16 @@ const poses: Pose[] = [
     name: 'on the board',
     state: { ...rest, heading: 2.4, heel: 70 * DEG, boom: 0.9, sailorMode: 2, sailorTimer: 4 },
   },
+  {
+    name: 'a machine, upright',
+    state: { ...rest, heading: 1.5708, boom: 0.6, sailor: -0.4 },
+    machine: true,
+  },
+  {
+    name: 'a machine, heeled',
+    state: { ...rest, heading: 1.5708, heel: 20 * DEG, boom: 0.75, sailor: -0.9 },
+    machine: true,
+  },
 ];
 
 /**
@@ -59,6 +75,7 @@ const poses: Pose[] = [
  * pennant, which the fleet does not draw, are hidden on the own boat.
  */
 async function both(page: Page, pose: Pose) {
+  await page.evaluate((m) => globalThis.keel.machineAboard(m), pose.machine === true);
   const sail = await page.evaluate((p) => {
     const k = globalThis.keel;
     k.setFleet(null);
@@ -67,6 +84,8 @@ async function both(page: Page, pose: Pose) {
     k.setState(p.state);
     k.advance(1);
     k.setState(p.state);
+    // Its sailor seated afresh at the pose, as the fleet's is when met.
+    k.settleSailor();
     k.render();
     k.camera('chase');
     const o = k.boat().out;
@@ -82,14 +101,18 @@ async function both(page: Page, pose: Pose) {
       rudder: b.rudder,
       sailor: b.sailor,
       mode: b.sailorMode,
+      machine: p.machine === true ? 1 : 0,
     };
   }, pose);
   await page.evaluate(() => globalThis.keel.hideSmallParts(true));
   const own = await picture(page);
-  await page.evaluate((s) => {
+  await page.evaluate(async (s) => {
     const k = globalThis.keel;
     k.showOwnBoat(false);
     k.setFleet([s]);
+    // Its look loaded, if this is its first boat.
+    k.render();
+    await k.fleetLoaded();
     // The camera where it was for the own boat's picture: it eases between
     // frames drawn on real time.
     k.camera('chase');
@@ -102,6 +125,7 @@ async function both(page: Page, pose: Pose) {
     k.showOwnBoat(true);
     k.hideSmallParts(false);
   });
+  await page.evaluate(() => globalThis.keel.machineAboard(false));
   return { own, fleet };
 }
 
@@ -113,8 +137,11 @@ test('a boat of the fleet looks as the own boat does at the same pose', async ({
     diffs[pose.name] = pictureDifference(own, fleet);
   }
   test.info().annotations.push({ type: 'measured', description: JSON.stringify(diffs) });
+  // Both sailors skinned and posed by the same clips; the own boat's cloth
+  // on springs, the fleet's swaying, and each sailor's glances its own:
+  // alike, not the same.
   for (const [name, d] of Object.entries(diffs)) {
-    expect(d, name).toBeLessThan(0.25);
+    expect(d, name).toBeLessThan(LIKE);
   }
 });
 
@@ -143,6 +170,55 @@ test('64 boats keep to 22 draw calls and 200,000 triangles', async ({ page }) =>
   expect(budget.drawCalls).toBeLessThanOrEqual(22);
   expect(budget.triangles).toBeLessThanOrEqual(200_000);
   test.info().annotations.push({ type: 'measured', description: JSON.stringify(budget) });
+});
+
+test('every sailor, near and far, person or machine, in at most 6 draws', async ({ page }) => {
+  await openScene(page);
+  const r = await page.evaluate(async () => {
+    const k = globalThis.keel;
+    const b = k.boat().state;
+    const fleet = async (machine: (i: number) => number) => {
+      const boats = [];
+      for (let i = 0; i < 64; i++) {
+        // A start line, the nearest rows within the near models' range.
+        boats.push({
+          east: b.x - 35 + (i % 8) * 10,
+          north: b.y + 12 + Math.floor(i / 8) * 14,
+          heading: 1.5708,
+          boom: 0.6,
+          sailor: -0.6,
+          sail: 15 | (1 << 4) | (1 << 6),
+          machine: machine(i),
+        });
+      }
+      k.setFleet(boats);
+      k.render();
+      // Each look loaded as its first boat comes into view.
+      await k.fleetLoaded();
+      k.render();
+      return k.fleetBudget();
+    };
+    return {
+      none: await fleet(() => 0),
+      half: await fleet((i) => i % 2),
+      all: await fleet(() => 1),
+    };
+  });
+  test.info().annotations.push({ type: 'measured', description: JSON.stringify(r) });
+  expect([r.none.people, r.none.machines]).toEqual([64, 0]);
+  expect([r.half.people, r.half.machines]).toEqual([32, 32]);
+  expect([r.all.people, r.all.machines]).toEqual([0, 64]);
+  for (const f of [r.none, r.half, r.all]) {
+    // The near ones skinned in one draw, the far ones rigid in another,
+    // whatever their looks.
+    expect(f.near).toBe(12);
+    expect(f.skinned).toBe(12);
+    expect(f.sailorDraws).toBeLessThanOrEqual(6);
+    expect(f.sailorDraws).toBe(2);
+    expect(f.drawCalls).toBeLessThanOrEqual(22);
+    // Twelve near sailors at the deck level, 3,000 triangles each.
+    expect(f.triangles).toBeLessThanOrEqual(220_000);
+  }
 });
 
 test('every fleet material is the factory’s, with the bend, and dithers', async ({ page }) => {

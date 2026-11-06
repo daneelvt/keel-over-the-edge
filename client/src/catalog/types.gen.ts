@@ -84,11 +84,44 @@ export interface Catalog {
    */
   boats: [Boat, ...Boat[]];
   /**
-   * The figures that sail the boats. The first is the one drawn until players choose their own.
+   * The looks sailors choose from, in the picker's order. At most 15: a look code holds a look's place in 4 bits, the 16th place the machine's.
    *
    * @minItems 1
+   * @maxItems 15
    */
-  sailors: [Sailor, ...Sailor[]];
+  sailors:
+    | [Sailor]
+    | [Sailor, Sailor]
+    | [Sailor, Sailor, Sailor]
+    | [Sailor, Sailor, Sailor, Sailor]
+    | [Sailor, Sailor, Sailor, Sailor, Sailor]
+    | [Sailor, Sailor, Sailor, Sailor, Sailor, Sailor]
+    | [Sailor, Sailor, Sailor, Sailor, Sailor, Sailor, Sailor]
+    | [Sailor, Sailor, Sailor, Sailor, Sailor, Sailor, Sailor, Sailor]
+    | [Sailor, Sailor, Sailor, Sailor, Sailor, Sailor, Sailor, Sailor, Sailor]
+    | [Sailor, Sailor, Sailor, Sailor, Sailor, Sailor, Sailor, Sailor, Sailor, Sailor]
+    | [Sailor, Sailor, Sailor, Sailor, Sailor, Sailor, Sailor, Sailor, Sailor, Sailor, Sailor]
+    | [Sailor, Sailor, Sailor, Sailor, Sailor, Sailor, Sailor, Sailor, Sailor, Sailor, Sailor, Sailor]
+    | [Sailor, Sailor, Sailor, Sailor, Sailor, Sailor, Sailor, Sailor, Sailor, Sailor, Sailor, Sailor, Sailor]
+    | [Sailor, Sailor, Sailor, Sailor, Sailor, Sailor, Sailor, Sailor, Sailor, Sailor, Sailor, Sailor, Sailor, Sailor]
+    | [
+        Sailor,
+        Sailor,
+        Sailor,
+        Sailor,
+        Sailor,
+        Sailor,
+        Sailor,
+        Sailor,
+        Sailor,
+        Sailor,
+        Sailor,
+        Sailor,
+        Sailor,
+        Sailor,
+        Sailor
+      ];
+  sailorOptions: SailorOptions;
   machine: Machine;
   weather: Weather;
   sky: Sky;
@@ -747,6 +780,8 @@ export interface BoatArt {
   far: string;
 }
 /**
+ * A look: its name, its habit, which hair colours it takes, and its versions.
+ *
  * This interface was referenced by `Catalog`'s JSON-Schema
  * via the `definition` "Sailor".
  */
@@ -754,6 +789,167 @@ export interface Sailor {
   id: Id;
   /**
    * Display name.
+   */
+  name: string;
+  /**
+   * What its sailor does now and then in a calm, as words after the look's name: "settles the cocked hat".
+   */
+  habit: string;
+  /**
+   * The set its hair colour is chosen from: the options' hairs (colours), or their greys and whites (greys).
+   */
+  hair: "colours" | "greys";
+  /**
+   * Its versions, a woman and a man.
+   *
+   * @minItems 1
+   * @maxItems 16
+   */
+  versions:
+    | [SailorVersion]
+    | [SailorVersion, SailorVersion]
+    | [SailorVersion, SailorVersion, SailorVersion]
+    | [SailorVersion, SailorVersion, SailorVersion, SailorVersion]
+    | [SailorVersion, SailorVersion, SailorVersion, SailorVersion, SailorVersion]
+    | [SailorVersion, SailorVersion, SailorVersion, SailorVersion, SailorVersion, SailorVersion]
+    | [SailorVersion, SailorVersion, SailorVersion, SailorVersion, SailorVersion, SailorVersion, SailorVersion]
+    | [
+        SailorVersion,
+        SailorVersion,
+        SailorVersion,
+        SailorVersion,
+        SailorVersion,
+        SailorVersion,
+        SailorVersion,
+        SailorVersion
+      ]
+    | [
+        SailorVersion,
+        SailorVersion,
+        SailorVersion,
+        SailorVersion,
+        SailorVersion,
+        SailorVersion,
+        SailorVersion,
+        SailorVersion,
+        SailorVersion
+      ]
+    | [
+        SailorVersion,
+        SailorVersion,
+        SailorVersion,
+        SailorVersion,
+        SailorVersion,
+        SailorVersion,
+        SailorVersion,
+        SailorVersion,
+        SailorVersion,
+        SailorVersion
+      ]
+    | [
+        SailorVersion,
+        SailorVersion,
+        SailorVersion,
+        SailorVersion,
+        SailorVersion,
+        SailorVersion,
+        SailorVersion,
+        SailorVersion,
+        SailorVersion,
+        SailorVersion,
+        SailorVersion
+      ]
+    | [
+        SailorVersion,
+        SailorVersion,
+        SailorVersion,
+        SailorVersion,
+        SailorVersion,
+        SailorVersion,
+        SailorVersion,
+        SailorVersion,
+        SailorVersion,
+        SailorVersion,
+        SailorVersion,
+        SailorVersion
+      ]
+    | [
+        SailorVersion,
+        SailorVersion,
+        SailorVersion,
+        SailorVersion,
+        SailorVersion,
+        SailorVersion,
+        SailorVersion,
+        SailorVersion,
+        SailorVersion,
+        SailorVersion,
+        SailorVersion,
+        SailorVersion,
+        SailorVersion
+      ]
+    | [
+        SailorVersion,
+        SailorVersion,
+        SailorVersion,
+        SailorVersion,
+        SailorVersion,
+        SailorVersion,
+        SailorVersion,
+        SailorVersion,
+        SailorVersion,
+        SailorVersion,
+        SailorVersion,
+        SailorVersion,
+        SailorVersion,
+        SailorVersion
+      ]
+    | [
+        SailorVersion,
+        SailorVersion,
+        SailorVersion,
+        SailorVersion,
+        SailorVersion,
+        SailorVersion,
+        SailorVersion,
+        SailorVersion,
+        SailorVersion,
+        SailorVersion,
+        SailorVersion,
+        SailorVersion,
+        SailorVersion,
+        SailorVersion,
+        SailorVersion
+      ]
+    | [
+        SailorVersion,
+        SailorVersion,
+        SailorVersion,
+        SailorVersion,
+        SailorVersion,
+        SailorVersion,
+        SailorVersion,
+        SailorVersion,
+        SailorVersion,
+        SailorVersion,
+        SailorVersion,
+        SailorVersion,
+        SailorVersion,
+        SailorVersion,
+        SailorVersion,
+        SailorVersion
+      ];
+}
+/**
+ * A version of a look, a woman or a man, and its art.
+ *
+ * This interface was referenced by `Catalog`'s JSON-Schema
+ * via the `definition` "SailorVersion".
+ */
+export interface SailorVersion {
+  id: Id;
+  /**
+   * Display name, as the player reads it: lowercase.
    */
   name: string;
   art: SailorArt;
@@ -766,54 +962,871 @@ export interface Sailor {
  */
 export interface SailorArt {
   /**
-   * The sailor's model: a glTF binary with the nodes body, head, arm-left and arm-right, its origin at the hips, facing +x.
+   * The sailor's deck level: a glTF binary of skinned meshes on the shared skeleton, with its atlas and mask, drawn on the boat in view and on the boats near the camera.
    */
   model: string;
   /**
-   * The sailor's far model, drawn in boats seen from afar: the model's nodes, with few segments.
+   * The sailor's far level: one rigid figure posed seated at the helm, with the place node that seats it in the boat model; drawn in the fleet.
    */
   far: string;
+  /**
+   * The sailor's close level, drawn on the boat in view when the camera is near, and on the picker's stage.
+   */
+  close: string;
+  /**
+   * The sailor's clips: the skeleton with its animations, and a place node for each clip seated in the boat.
+   */
+  clips: string;
+  /**
+   * The colour portrait's base, AVIF: head and shoulders, shaded, its option regions in neutral grey.
+   */
+  portrait: string;
+  /**
+   * The colour portrait's base as WebP, for a browser without AVIF.
+   */
+  portraitFallback: string;
+  /**
+   * The colour portrait's mask, lossless WebP: each pixel's share of the main colour (red), the skin or metal (green) and the hair (blue).
+   */
+  portraitMask: string;
+  /**
+   * The inked portrait, for the log: one-bit WebP on the logbook's paper.
+   */
+  ink: string;
 }
 /**
- * The look of the machine sailors AI accounts sail as: the choices a player makes one from, a version, a metal finish and a main colour. A machine sailor's sailor keeps the three ids.
+ * The options a sailor's look takes: skins, hair colours, greys for the looks of greying sailors, and main colours, which the machines' coats take too. At most 16 of each: a look code holds each choice in 4 bits.
+ *
+ * This interface was referenced by `Catalog`'s JSON-Schema
+ * via the `definition` "SailorOptions".
+ */
+export interface SailorOptions {
+  /**
+   * Skin tones, lightest first.
+   *
+   * @minItems 1
+   * @maxItems 16
+   */
+  skins:
+    | [SailorOption]
+    | [SailorOption, SailorOption]
+    | [SailorOption, SailorOption, SailorOption]
+    | [SailorOption, SailorOption, SailorOption, SailorOption]
+    | [SailorOption, SailorOption, SailorOption, SailorOption, SailorOption]
+    | [SailorOption, SailorOption, SailorOption, SailorOption, SailorOption, SailorOption]
+    | [SailorOption, SailorOption, SailorOption, SailorOption, SailorOption, SailorOption, SailorOption]
+    | [SailorOption, SailorOption, SailorOption, SailorOption, SailorOption, SailorOption, SailorOption, SailorOption]
+    | [
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption
+      ]
+    | [
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption
+      ]
+    | [
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption
+      ]
+    | [
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption
+      ]
+    | [
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption
+      ]
+    | [
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption
+      ]
+    | [
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption
+      ]
+    | [
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption
+      ];
+  /**
+   * Hair colours.
+   *
+   * @minItems 1
+   * @maxItems 16
+   */
+  hairs:
+    | [SailorOption]
+    | [SailorOption, SailorOption]
+    | [SailorOption, SailorOption, SailorOption]
+    | [SailorOption, SailorOption, SailorOption, SailorOption]
+    | [SailorOption, SailorOption, SailorOption, SailorOption, SailorOption]
+    | [SailorOption, SailorOption, SailorOption, SailorOption, SailorOption, SailorOption]
+    | [SailorOption, SailorOption, SailorOption, SailorOption, SailorOption, SailorOption, SailorOption]
+    | [SailorOption, SailorOption, SailorOption, SailorOption, SailorOption, SailorOption, SailorOption, SailorOption]
+    | [
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption
+      ]
+    | [
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption
+      ]
+    | [
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption
+      ]
+    | [
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption
+      ]
+    | [
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption
+      ]
+    | [
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption
+      ]
+    | [
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption
+      ]
+    | [
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption
+      ];
+  /**
+   * Greys and whites, for the looks whose hair is greys.
+   *
+   * @minItems 1
+   * @maxItems 16
+   */
+  greys:
+    | [SailorOption]
+    | [SailorOption, SailorOption]
+    | [SailorOption, SailorOption, SailorOption]
+    | [SailorOption, SailorOption, SailorOption, SailorOption]
+    | [SailorOption, SailorOption, SailorOption, SailorOption, SailorOption]
+    | [SailorOption, SailorOption, SailorOption, SailorOption, SailorOption, SailorOption]
+    | [SailorOption, SailorOption, SailorOption, SailorOption, SailorOption, SailorOption, SailorOption]
+    | [SailorOption, SailorOption, SailorOption, SailorOption, SailorOption, SailorOption, SailorOption, SailorOption]
+    | [
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption
+      ]
+    | [
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption
+      ]
+    | [
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption
+      ]
+    | [
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption
+      ]
+    | [
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption
+      ]
+    | [
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption
+      ]
+    | [
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption
+      ]
+    | [
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption
+      ];
+  /**
+   * Main colours, chosen to stay apart for colour-blind players.
+   *
+   * @minItems 1
+   * @maxItems 16
+   */
+  colours:
+    | [SailorOption]
+    | [SailorOption, SailorOption]
+    | [SailorOption, SailorOption, SailorOption]
+    | [SailorOption, SailorOption, SailorOption, SailorOption]
+    | [SailorOption, SailorOption, SailorOption, SailorOption, SailorOption]
+    | [SailorOption, SailorOption, SailorOption, SailorOption, SailorOption, SailorOption]
+    | [SailorOption, SailorOption, SailorOption, SailorOption, SailorOption, SailorOption, SailorOption]
+    | [SailorOption, SailorOption, SailorOption, SailorOption, SailorOption, SailorOption, SailorOption, SailorOption]
+    | [
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption
+      ]
+    | [
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption
+      ]
+    | [
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption
+      ]
+    | [
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption
+      ]
+    | [
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption
+      ]
+    | [
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption
+      ]
+    | [
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption
+      ]
+    | [
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption
+      ];
+}
+/**
+ * This interface was referenced by `Catalog`'s JSON-Schema
+ * via the `definition` "SailorOption".
+ */
+export interface SailorOption {
+  id: Id;
+  /**
+   * Display name, as the player reads it: lowercase but for a name such as "Tone 3".
+   */
+  name: string;
+  /**
+   * Its colour, sRGB, #rrggbb.
+   */
+  colour: string;
+}
+/**
+ * The machine sailors AI accounts sail as: the choices a player makes one from, a version, a metal finish and a main colour (one of the sailors' colours, its coat's). A machine sailor's sailor keeps the three ids.
  *
  * This interface was referenced by `Catalog`'s JSON-Schema
  * via the `definition` "Machine".
  */
 export interface Machine {
   /**
-   * The machine's versions.
+   * What a machine does now and then in a calm, in words.
+   */
+  habit: string;
+  /**
+   * Its lamps' light, sRGB, #rrggbb.
+   */
+  lamp: string;
+  /**
+   * The machine's versions, and their art.
    *
    * @minItems 1
+   * @maxItems 16
    */
-  versions: [MachineChoice, ...MachineChoice[]];
+  versions:
+    | [SailorVersion]
+    | [SailorVersion, SailorVersion]
+    | [SailorVersion, SailorVersion, SailorVersion]
+    | [SailorVersion, SailorVersion, SailorVersion, SailorVersion]
+    | [SailorVersion, SailorVersion, SailorVersion, SailorVersion, SailorVersion]
+    | [SailorVersion, SailorVersion, SailorVersion, SailorVersion, SailorVersion, SailorVersion]
+    | [SailorVersion, SailorVersion, SailorVersion, SailorVersion, SailorVersion, SailorVersion, SailorVersion]
+    | [
+        SailorVersion,
+        SailorVersion,
+        SailorVersion,
+        SailorVersion,
+        SailorVersion,
+        SailorVersion,
+        SailorVersion,
+        SailorVersion
+      ]
+    | [
+        SailorVersion,
+        SailorVersion,
+        SailorVersion,
+        SailorVersion,
+        SailorVersion,
+        SailorVersion,
+        SailorVersion,
+        SailorVersion,
+        SailorVersion
+      ]
+    | [
+        SailorVersion,
+        SailorVersion,
+        SailorVersion,
+        SailorVersion,
+        SailorVersion,
+        SailorVersion,
+        SailorVersion,
+        SailorVersion,
+        SailorVersion,
+        SailorVersion
+      ]
+    | [
+        SailorVersion,
+        SailorVersion,
+        SailorVersion,
+        SailorVersion,
+        SailorVersion,
+        SailorVersion,
+        SailorVersion,
+        SailorVersion,
+        SailorVersion,
+        SailorVersion,
+        SailorVersion
+      ]
+    | [
+        SailorVersion,
+        SailorVersion,
+        SailorVersion,
+        SailorVersion,
+        SailorVersion,
+        SailorVersion,
+        SailorVersion,
+        SailorVersion,
+        SailorVersion,
+        SailorVersion,
+        SailorVersion,
+        SailorVersion
+      ]
+    | [
+        SailorVersion,
+        SailorVersion,
+        SailorVersion,
+        SailorVersion,
+        SailorVersion,
+        SailorVersion,
+        SailorVersion,
+        SailorVersion,
+        SailorVersion,
+        SailorVersion,
+        SailorVersion,
+        SailorVersion,
+        SailorVersion
+      ]
+    | [
+        SailorVersion,
+        SailorVersion,
+        SailorVersion,
+        SailorVersion,
+        SailorVersion,
+        SailorVersion,
+        SailorVersion,
+        SailorVersion,
+        SailorVersion,
+        SailorVersion,
+        SailorVersion,
+        SailorVersion,
+        SailorVersion,
+        SailorVersion
+      ]
+    | [
+        SailorVersion,
+        SailorVersion,
+        SailorVersion,
+        SailorVersion,
+        SailorVersion,
+        SailorVersion,
+        SailorVersion,
+        SailorVersion,
+        SailorVersion,
+        SailorVersion,
+        SailorVersion,
+        SailorVersion,
+        SailorVersion,
+        SailorVersion,
+        SailorVersion
+      ]
+    | [
+        SailorVersion,
+        SailorVersion,
+        SailorVersion,
+        SailorVersion,
+        SailorVersion,
+        SailorVersion,
+        SailorVersion,
+        SailorVersion,
+        SailorVersion,
+        SailorVersion,
+        SailorVersion,
+        SailorVersion,
+        SailorVersion,
+        SailorVersion,
+        SailorVersion,
+        SailorVersion
+      ];
   /**
    * The finishes of its metal, each with its colour.
    *
    * @minItems 1
+   * @maxItems 16
    */
-  finishes: [MachineChoice, ...MachineChoice[]];
-  /**
-   * Its main colours, chosen to stay apart for colour-blind players.
-   *
-   * @minItems 1
-   */
-  colours: [MachineChoice, ...MachineChoice[]];
-}
-/**
- * This interface was referenced by `Catalog`'s JSON-Schema
- * via the `definition` "MachineChoice".
- */
-export interface MachineChoice {
-  id: Id;
-  /**
-   * Display name, as the player reads it: lowercase but where a name is a proper noun.
-   */
-  name: string;
-  /**
-   * Its colour, sRGB, #rrggbb; none for a version.
-   */
-  colour?: string;
+  finishes:
+    | [SailorOption]
+    | [SailorOption, SailorOption]
+    | [SailorOption, SailorOption, SailorOption]
+    | [SailorOption, SailorOption, SailorOption, SailorOption]
+    | [SailorOption, SailorOption, SailorOption, SailorOption, SailorOption]
+    | [SailorOption, SailorOption, SailorOption, SailorOption, SailorOption, SailorOption]
+    | [SailorOption, SailorOption, SailorOption, SailorOption, SailorOption, SailorOption, SailorOption]
+    | [SailorOption, SailorOption, SailorOption, SailorOption, SailorOption, SailorOption, SailorOption, SailorOption]
+    | [
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption
+      ]
+    | [
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption
+      ]
+    | [
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption
+      ]
+    | [
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption
+      ]
+    | [
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption
+      ]
+    | [
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption
+      ]
+    | [
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption
+      ]
+    | [
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption,
+        SailorOption
+      ];
 }
 /**
  * The weather's numbers.
@@ -6462,4 +7475,4 @@ export interface NewsColumn {
 }
 
 /** The catalog version (tools/catalog). */
-export const CATALOG_VERSION = 'de5e6f7cacacb033';
+export const CATALOG_VERSION = 'd2e619e217a0defe';

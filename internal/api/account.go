@@ -21,17 +21,48 @@ import (
 // once.
 const ConfirmFor = 5 * time.Minute
 
-// sailorRequest is POST /account/begin's body.
+// sailorRequest is POST /account/begin's body: the new sailor's name and
+// look, a look of the catalog's with its version and options.
 type sailorRequest struct {
 	Name string `json:"name"`
-	Look string `json:"look"`
+	lookRequest
 }
 
-// sailorResponse is a sailor signed in: the name as it will be shown, and
-// what a passkey manager may be told of the account's passkeys.
+// lookRequest is a person's look as a request gives it, by the catalog's
+// ids.
+type lookRequest struct {
+	Look    string `json:"look"`
+	Version string `json:"version"`
+	Skin    string `json:"skin"`
+	Hair    string `json:"hair"`
+	Colour  string `json:"colour"`
+}
+
+func (l lookRequest) look() store.Look {
+	return store.Look{Look: l.Look, Version: l.Version, Skin: l.Skin, Hair: l.Hair, Colour: l.Colour, Chosen: true}
+}
+
+// lookShown is a sailor's look as the answers give it: its ids, and
+// whether the sailor chose it, or the game drew it for one made before
+// looks were chosen, to be asked once.
+type lookShown struct {
+	store.Look
+	LookChosen bool `json:"lookChosen"`
+}
+
+// shown is an account's look as its answers give it.
+func (a *api) shown(id store.AccountID, l store.Look) lookShown {
+	if a.cfg.Looks != nil {
+		l = a.cfg.Looks.Resolve(id, l)
+	}
+	return lookShown{Look: l, LookChosen: l.Chosen}
+}
+
+// sailorResponse is a sailor signed in: the name as it will be shown, its
+// look, and what a passkey manager may be told of the account's passkeys.
 type sailorResponse struct {
 	Name string `json:"name"`
-	Look string `json:"look"`
+	lookShown
 	// RecoveryCode is a new recovery code, shown once.
 	RecoveryCode string `json:"recoveryCode,omitempty"`
 	// Recovered is when the recovery code was last used, in ms of the Unix
@@ -50,7 +81,8 @@ type sailorResponse struct {
 // not held: a player who closes the prompt leaves nothing behind.
 //
 //	200 options             {"publicKey": …} for navigator.credentials.create()
-//	400 {"error"}           malformed, an unknown member, or a look not in the catalog
+//	400 {"error"}           malformed, an unknown member, or a look not made
+//	                        of the catalog's choices
 //	409 {"error":"session"} the request already has a session
 //	415                     not application/json
 //	422 {"error": reason}   the name is refused: short, long, characters,
@@ -65,7 +97,7 @@ func (a *api) beginAccount(w http.ResponseWriter, r *http.Request) {
 	if !readJSON(w, r, &req) {
 		return
 	}
-	if !a.looks[req.Look] {
+	if l := req.look(); l.Look == store.MachineLook || a.cfg.Looks == nil || !a.cfg.Looks.Valid(l) {
 		writeError(w, http.StatusBadRequest, "look")
 		return
 	}
@@ -88,7 +120,7 @@ func (a *api) beginAccount(w http.ResponseWriter, r *http.Request) {
 		a.unavailable(w, r, "beginning a passkey", err)
 		return
 	}
-	a.begin(w, r, store.Ceremony{Kind: store.CeremonyCreate, Name: name.Display, NameKey: name.Key, Look: req.Look, UserHandle: u.Handle}, b)
+	a.begin(w, r, store.Ceremony{Kind: store.CeremonyCreate, Name: name.Display, NameKey: name.Key, Look: req.look(), UserHandle: u.Handle}, b)
 }
 
 // checkName checks a sailor's name by the game's rules, answering 422 with
@@ -111,7 +143,7 @@ func (a *api) checkName(w http.ResponseWriter, typed string) (moderation.Name, b
 // that passkey, a recovery code and a session, whose cookie the answer
 // sets. The recovery code is in the answer, and nowhere else ever again.
 //
-//	201 {"name", "look", "recoveryCode"}
+//	201 {"name", look…, "recoveryCode"}
 //	400 {"error":"refused"}  the browser's answer is not accepted
 //	409 {"error":"again"}    no ceremony to finish: begin again
 //	409 {"error":"session"}  the request already has a session
@@ -143,7 +175,7 @@ func (a *api) finishAccount(w http.ResponseWriter, r *http.Request) {
 	session, err := auth.Issue(a.cfg.Log, "session", auth.DrawToken, func(d auth.Drawn) error {
 		var err error
 		id, err = a.cfg.Accounts.CreateAccount(r.Context(), store.NewAccount{
-			Name: c.Name, NameKey: c.NameKey, Look: c.Look, UserHandle: c.UserHandle,
+			Name: c.Name, NameKey: c.NameKey, Look: chosen(c.Look), UserHandle: c.UserHandle,
 			Passkey: key, RecoveryHash: recovery, TokenHash: d.Hash, Boat: a.cfg.Boat,
 		})
 		return err
@@ -165,9 +197,15 @@ func (a *api) finishAccount(w http.ResponseWriter, r *http.Request) {
 	a.ceremonyCounted(c.Kind, "finished")
 	a.cfg.Metrics.AccountsCreated.Inc()
 	obs.SetAccount(r.Context(), id.String())
-	a.cfg.Sessions.Add(hash, store.Session{Account: store.Account{ID: id, Kind: store.Human, Name: c.Name, Look: c.Look, NoticesOff: []string{}}})
+	a.cfg.Sessions.Add(hash, store.Session{Account: store.Account{ID: id, Kind: store.Human, Name: c.Name, Look: chosen(c.Look), NoticesOff: []string{}}})
 	http.SetCookie(w, auth.SessionCookie(token))
-	writeJSON(w, http.StatusCreated, sailorResponse{Name: c.Name, Look: c.Look, RecoveryCode: code})
+	writeJSON(w, http.StatusCreated, sailorResponse{Name: c.Name, lookShown: a.shown(id, chosen(c.Look)), RecoveryCode: code})
+}
+
+// chosen is a look the sailor chose.
+func chosen(l store.Look) store.Look {
+	l.Chosen = true
+	return l
 }
 
 func (a *api) refuse(w http.ResponseWriter, reason string) {
@@ -178,7 +216,7 @@ func (a *api) refuse(w http.ResponseWriter, reason string) {
 // accountPage is GET /api/account's answer.
 type accountPage struct {
 	Name string `json:"name"`
-	Look string `json:"look"`
+	lookShown
 	// Created is when the account was made, and RecoveryMade when its
 	// recovery code was, in ms of the Unix epoch; 0 for no code.
 	Created      int64         `json:"created"`
@@ -229,7 +267,7 @@ func (a *api) account(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	page := accountPage{
-		Name: p.Name, Look: p.Look, Created: ms(p.Created), RecoveryMade: ms(p.RecoveryMade),
+		Name: p.Name, lookShown: a.shown(cur.ID, p.Look), Created: ms(p.Created), RecoveryMade: ms(p.RecoveryMade),
 		Passkeys: passkeyItems(p.Passkeys),
 	}
 	if cur.Confirmed(time.Now()) {

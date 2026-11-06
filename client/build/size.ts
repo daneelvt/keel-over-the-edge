@@ -5,8 +5,11 @@
 // the models the scene loads at once, and the net worker, which starts on
 // the way to sea, gzipped. Reported against the
 // 4 MB critical set; enforced from the phase that readies the game for
-// phones. And the approval page's, which AI apps open, often on a phone's
-// data: its page, script and styles, held under 30 KB.
+// phones. Then the player's own sailor, which loads once their look is
+// known, before or beside the first frame: the texture transcoder and the
+// largest look's deck and far levels and clips. And the approval page's,
+// which AI apps open, often on a phone's data: its page, script and
+// styles, held under 30 KB.
 //
 //   node build/size.ts   (after vite build, in client/)
 
@@ -16,6 +19,34 @@ import { gzipSync } from 'node:zlib';
 
 /** The critical download's budget, in bytes. */
 export const BUDGET = 4 * 1024 * 1024;
+
+/**
+ * A sailor's files' budgets, gzipped, in bytes, a look and version: its deck
+ * and far levels together (they load together, when a boat with the look
+ * first comes into view), its close level (when the camera comes near the
+ * boat in view), its clips (when a boat with it first comes near); and what
+ * the first download carries of sailors: one look's deck, far and clips,
+ * the one every boat is drawn with. And its portraits, as files (images
+ * gain nothing by gzip): the colour portrait's base (AVIF) and mask
+ * together, every look and version's together, and the inked portrait.
+ */
+export const SAILOR_BUDGETS = {
+  deckFar: 150 * 1024,
+  close: 300 * 1024,
+  clips: 150 * 1024,
+  /** A person's look's deck, far and clips together: the player's own, the first download's. */
+  critical: 280 * 1024,
+  /** The texture transcoder, which loads with the first sailor. */
+  transcoder: 270 * 1024,
+  portrait: 14 * 1024,
+  portraits: 200 * 1024,
+  ink: 40 * 1024,
+};
+
+/** Whether a built asset is the texture transcoder's, which loads with the first sailor. */
+export function transcoderAsset(name: string): boolean {
+  return /^basis_transcoder[-.]/.test(name);
+}
 
 /** The approval page's budget, in bytes: the page with what it loads before it runs. */
 export const APPROVE_BUDGET = 30 * 1024;
@@ -78,6 +109,14 @@ function main(): void {
     `| **Total** | **${(total / 1024).toFixed(1)} KB**, ${((100 * total) / BUDGET).toFixed(1)}% of 4 MB |`,
     '',
   ];
+  const transcoder = assets
+    .filter(transcoderAsset)
+    .reduce((n, f) => n + gzipped(join(dist, 'assets', f)), 0);
+  const ownLook = largestLook();
+  lines.push(
+    `The player's own sailor, once their look is known: the transcoder **${(transcoder / 1024).toFixed(1)} KB** and the largest look **${(ownLook / 1024).toFixed(1)} KB**, **${((transcoder + ownLook) / 1024).toFixed(1)} KB** in all.`,
+    '',
+  );
   const approveHtml = join(dist, 'approve.html');
   const approve = [
     gzipped(approveHtml),
@@ -96,6 +135,25 @@ function main(): void {
     process.stderr.write('size: the approval page is over its budget\n');
     process.exitCode = 1;
   }
+}
+
+/** The largest person's look's deck and far levels and clips together, gzipped: any player's own. */
+function largestLook(): number {
+  const art = join('..', 'art', 'sailors');
+  let most = 0;
+  for (const look of readdirSync(art, { withFileTypes: true })) {
+    if (!look.isDirectory() || ['test', 'vendor', 'machine'].includes(look.name)) {
+      continue;
+    }
+    for (const f of readdirSync(join(art, look.name))) {
+      const v = /^([a-z]+)\.deck\.glb$/.exec(f)?.[1];
+      if (v !== undefined) {
+        const at = (level: string) => gzipped(join(art, look.name, `${v}${level}.glb`));
+        most = Math.max(most, at('.deck') + at('.far') + at('.clips'));
+      }
+    }
+  }
+  return most;
 }
 
 if (process.argv[1]?.endsWith('size.ts')) {

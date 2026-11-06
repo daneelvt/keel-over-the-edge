@@ -611,7 +611,7 @@ function Card({
         <dt>ID</dt>
         <dd class="small">{card.id}</dd>
         <dt>Look</dt>
-        <dd>{card.lookWords ?? card.look}</dd>
+        <dd>{card.lookWords}</dd>
         <dt>Made</dt>
         <dd>{momentWords(card.made)}</dd>
         <dt>Last active</dt>

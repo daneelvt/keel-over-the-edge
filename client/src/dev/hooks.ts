@@ -83,6 +83,7 @@ import { RECORDS, SEA, WEATHER } from '../predict/layout.gen';
 import { BODY, SKY, WIND_VALUE, WIND_VALUES } from '../predict/physics';
 import type { Predictor } from '../predict/predictor';
 import { heldSpell, placedRecord } from '../predict/weather';
+import { MACHINE_DEFAULT, PERSON_DEFAULT } from '../render/fleet';
 import { airLook } from '../render/fog';
 import { flashNear } from '../render/lightning';
 import {
@@ -833,6 +834,52 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
     setOrigin(q: number, r: number): void {
       world.origin.moveTo({ q, r });
     },
+    /**
+     * The sailor on the boat in view, as last drawn: its side deck, whether
+     * it is crossing, the level drawn (deck or close), whether the aft hand
+     * holds the tiller extension and how far from its hinge, where the
+     * figure stands in the boat model, and whether it is a machine (and its
+     * lamps' strength).
+     */
+    sailor() {
+      const s = world.boat?.sailor ?? null;
+      if (s === null) {
+        return null;
+      }
+      const rt = s.runtime;
+      return {
+        side: rt.side,
+        crossing: rt.crossing,
+        close: !s.figure.visible,
+        tiller: rt.hands.tiller,
+        sheet: rt.hands.sheet,
+        hold: rt.hands.tillerAt.distanceTo(s.runtime.boat.hinge),
+        extension: s.runtime.boat.extension,
+        at: rt.place.at.toArray(),
+        machine: world.boat?.machineAboard ?? false,
+        glow: rt.glow,
+      };
+    },
+    /**
+     * Makes the boat in view a machine sailor's, or not, as watching one
+     * does: its machine aboard (once loaded) and the mark on its sail.
+     * Resolves once the machine is aboard.
+     */
+    async machineAboard(on: boolean): Promise<void> {
+      await world.showLook(on ? MACHINE_DEFAULT : PERSON_DEFAULT);
+    },
+    /**
+     * Draws the boat in view's sailor in a look, by its code, as the server
+     * tells it; resolves once it is drawn.
+     */
+    async lookAboard(code: number): Promise<void> {
+      await world.showLook(code);
+    },
+    /** The boat in view's sailor's look as drawn: its art's deck level and whether it is a machine; null for none. */
+    lookDrawn(): { model: string; machine: boolean } | null {
+      const b = world.boat;
+      return b === null ? null : b.drawnLook();
+    },
     /** Puts the camera at a preset, by name, or at a view of its own. */
     camera(name: string | CameraView): void {
       const p = typeof name === 'string' ? CAMERA_PRESETS[name] : name;
@@ -1145,13 +1192,15 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
     },
 
     /**
-     * Resolves when the boat's model has loaded. The low tier's loops are
-     * made whole at once, unless told to leave them to the frames.
+     * Resolves when the boat's model and its sailors have loaded (the own
+     * boat's, and the fleet's first look). The low tier's loops are made
+     * whole at once, unless told to leave them to the frames.
      */
     async ready(finish = true): Promise<void> {
       while (world.boat === null) {
         await new Promise((r) => setTimeout(r, 50));
       }
+      await world.sailorsLoaded;
       if (finish) {
         world.ocean.detail.finishBake();
       }
@@ -1538,7 +1587,7 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
         sailor === null
           ? null
           : {
-              watching: signal({ sailor, machine, mine: false }),
+              watching: signal({ sailor, machine, mine: false, look: -1 }),
               spectating: signal(true),
               status: signal('sailing'),
               ended: signal(null),
@@ -2036,6 +2085,23 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
         });
       }
       world.fleetSource = { drawn, count: drawn.length };
+      // Boats put somewhere at once: their sailors met afresh.
+      world.fleet.nearSailors?.forget();
+    },
+
+    /** Resolves once every look a boat of the fleet has been drawn with has loaded (or failed). */
+    async fleetLoaded(): Promise<void> {
+      const busy = () =>
+        world.fleet.looks?.looks.some((l) => l.state === 'loading' || l.clipsState === 'loading') ??
+        false;
+      while (busy()) {
+        await new Promise((r) => setTimeout(r, 50));
+      }
+    },
+
+    /** Seats the sailor in view afresh at the boat's pose, as the fleet meets a boat's. */
+    settleSailor(): void {
+      world.boat?.sailor?.runtime.reset();
     },
 
     /**
@@ -2176,7 +2242,17 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
         far: world.fleet.far.count,
         nearMeshes: world.fleet.near.meshes.length,
         farMeshes: world.fleet.far.meshes.length,
+        ...world.fleet.figures(),
+        sailorDraws: world.fleet.sailorDraws(),
+        skinned: world.fleet.near.count - world.fleet.near.rigid,
       };
+    },
+    /**
+     * The fleet's work since last asked: frames drawn, the milliseconds its
+     * update took (the near sailors' runs included), and how many runs.
+     */
+    fleetWork() {
+      return world.fleet.work();
     },
     /** The other boats as the page draws them online, with the fleet's numbers. */
     fleet() {

@@ -30,12 +30,15 @@ func TestBlenderVersion(t *testing.T) {
 
 func TestShown(t *testing.T) {
 	for line, want := range map[string]bool{
-		"[INFO ] mpfb.init ......: MPFB initialization has finished.": false,
-		"OBJ import of 'base.obj' took 5.29 ms":                       false,
-		"Blender 5.2.0 LTS (hash fbe6228777e7)":                       false,
-		"build: test in 13.2 s":                                       true,
-		"Traceback (most recent call last):":                          true,
-		"   ":                                                         false,
+		"[INFO ] mpfb.init ......: MPFB initialization has finished.":      false,
+		"OBJ import of 'base.obj' took 5.29 ms":                            false,
+		"Blender 5.2.0 LTS (hash fbe6228777e7)":                            false,
+		"build: test in 13.2 s":                                            true,
+		"Fra:1 Mem:120.33M (Peak 151.20M) | Time:00:00.21 | Sample 12/128": false,
+		"01:28:14 | INFO: Blender create Mesh node hair":                   false,
+		"portraits: rover female from run 137: avif 5.1 KB":                true,
+		"Traceback (most recent call last):":                               true,
+		"   ":                                                              false,
 	} {
 		if shown(line) != want {
 			t.Errorf("%q shown: %v", line, !want)
@@ -138,10 +141,24 @@ func TestLookRefused(t *testing.T) {
 		"another id":          {strings.Replace(good, "id: x", "id: y", 1), "not its file's name"},
 		"a third version":     {strings.Replace(good, "female:", "child:", 1), "a look's versions"},
 		"a fixed part without its colour": {good + "garments:\n  - {id: coat, family: coat, region: fixed}\n",
-			"a fixed region has its own colour"},
+			"a fixed or glowing region has its own colour"},
 		"a part twice": {good + "garments:\n  - {id: coat, family: coat, region: main}\n  - {id: coat, family: coat, region: main}\n",
 			"used twice"},
 		"a palette not a colour": {strings.Replace(good, "'#000000'", "black", 1), "not #RRGGBB"},
+		"a human's lamp": {good + "garments:\n  - {id: lamp, family: coat, region: glow, colour: '#ffaa00'}\n",
+			"only a machine's lamps glow"},
+		"a machine's hat": {good + "machine: {inset: 0.003}\nhat: {id: hat, family: hat, region: main}\n",
+			"a machine has no hair, hat or gear"},
+		"gear twice as a garment": {good + "garments:\n  - {id: case, family: bodice, region: main}\ngear:\n  - {id: case, family: case, region: fixed, colour: '#3a2a1e'}\n",
+			"used twice"},
+		"a scarf with no hat over it": {good + "scarf: {id: scarf, family: scarf, region: main}\n",
+			"worn under a hat"},
+		"a version's gear the look's too": {strings.Replace(good, "base: female", "base: female\n    gear:\n      - {id: belt, family: sash, region: fixed, colour: '#3a2a1e'}", 1) +
+			"gear:\n  - {id: belt, family: sash, region: fixed, colour: '#3a2a1e'}\n", "the look's too"},
+		"a machine's parameters on a human": {strings.Replace(good, "base: female", "base: female\n    machine: {cap: swept}", 1),
+			"the look is no machine"},
+		"a name for a clip not made": {good + "clips: [helm]\nnames: {machine-habit: habit}\n", "makes no such clip"},
+		"a name another clip has":    {good + "clips: [habit, machine-habit]\nnames: {machine-habit: habit}\n", "which another of its clips is"},
 	} {
 		t.Run(name, func(t *testing.T) {
 			dir := t.TempDir()

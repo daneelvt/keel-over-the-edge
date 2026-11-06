@@ -1,8 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
-// The stand-in sailor's place in the boat. Sailing, the figure sits on the
-// side deck by the cockpit, moves across with the physics' sailor offset
-// and leans out as it hikes. In the water it floats beside the hull on the
+// The fleet's sailor's place in the boat: a rigid figure posed seated at the
+// helm (the far level), drawn in boats other than the one in view, whose
+// sailor is skinned and posed in full (sailors/runtime.ts). Sailing, the
+// figure sits on the side deck it last crossed to, where its own file seats
+// it, and leans out as it hikes. In the water it floats beside the hull on the
 // high side; on the daggerboard it stands on the board, leaning back to lever
 // the boat up; climbing back in, it is half over the gunwale. Positions are
 // in the boat's heeled frame (the model's: x to starboard, y up, z aft), the
@@ -14,13 +16,10 @@ export const IN_WATER = 1;
 export const ON_BOARD = 2;
 export const CLIMBING = 3;
 
-/** Where the hips sit sailing: on the side deck, at most this far out, metres. */
-const SEAT_OUT = 0.6;
-const SEAT_HEIGHT = 0.36;
 /** Hiking beyond this offset leans the body out, fully LEAN_MOST radians at LEAN_FULL. */
-const LEAN_FROM = 0.35;
+const LEAN_FROM = 0.55;
 const LEAN_FULL = 0.95;
-const LEAN_MOST = 1.05;
+const LEAN_MOST = 0.6;
 
 export interface SailorPlace {
   x: number;
@@ -33,6 +32,9 @@ export interface SailorPlace {
 }
 
 export interface SailorFrame {
+  /** Where the figure is seated sailing: out from the centreline, and up, metres. */
+  seatOut: number;
+  seatY: number;
   /** The seat's station along the boat, metres aft of the centre of gravity. */
   seatZ: number;
   /** The centre of gravity's height above the waterline, the heel's pivot. */
@@ -82,8 +84,8 @@ export function placeSailor(
       const lean =
         LEAN_MOST *
         Math.min(1, Math.max(0, (Math.abs(offset) - LEAN_FROM) / (LEAN_FULL - LEAN_FROM)));
-      out.x = s * Math.min(Math.abs(offset), SEAT_OUT);
-      out.y = SEAT_HEIGHT;
+      out.x = s * frame.seatOut;
+      out.y = frame.seatY;
       out.z = frame.seatZ;
       // Seated facing inboard, leaning outboard.
       out.facing = s < 0 ? 0 : Math.PI;

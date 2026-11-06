@@ -20,7 +20,8 @@ type Card struct {
 	ID           string     `json:"id"`
 	Kind         store.Kind `json:"kind"`
 	Name         string     `json:"name"`
-	Look         string     `json:"look"`
+	Look         store.Look `json:"look"`
+	LookWords    string     `json:"lookWords"`
 	Made         int64      `json:"made"`
 	LastActive   string     `json:"lastActive"`
 	LastActiveAt int64      `json:"lastActiveAt"`
@@ -42,10 +43,9 @@ type Card struct {
 	Machines     []Card         `json:"machines,omitempty"`
 
 	// A machine sailor's.
-	Owner     *OwnerCard       `json:"owner,omitempty"`
-	LookWords string           `json:"lookWords,omitempty"`
-	Apps      []oauth.AppItem  `json:"apps,omitempty"`
-	Token     *oauth.TokenItem `json:"token,omitempty"`
+	Owner *OwnerCard       `json:"owner,omitempty"`
+	Apps  []oauth.AppItem  `json:"apps,omitempty"`
+	Token *oauth.TokenItem `json:"token,omitempty"`
 
 	Actions []ActionCard `json:"actions,omitempty"`
 }
@@ -157,9 +157,13 @@ func (a *Accounts) base(c *store.Card) Card {
 	now := a.cfg.Now()
 	machine := c.Kind == store.AI
 	out := Card{
-		ID: c.ID.String(), Kind: c.Kind, Name: c.Name, Look: c.Look, Made: ms(c.Created),
+		ID: c.ID.String(), Kind: c.Kind, Name: c.Name, Made: ms(c.Created),
 		LastActive: LastActive(c.LastSeen, c.Created, machine, now), LastActiveAt: ms(c.LastSeen),
 		Tools: c.Tools, Priority: c.Priority, Own: c.Tools || c.OwnerTools,
+	}
+	if b := a.cfg.Book; b != nil {
+		out.Look = b.Resolve(c.ID, c.Look)
+		out.LookWords = b.Words(out.Look)
 	}
 	if machine && !c.LastSeen.After(c.Created) {
 		out.LastActiveAt = 0
@@ -227,7 +231,6 @@ func (a *Accounts) listMachines(ctx context.Context, owner store.AccountID) ([]o
 func (a *Accounts) machineCard(owner, c *store.Card, items []oauth.MachineItem) Card {
 	out := a.base(c)
 	out.Owner = &OwnerCard{ID: owner.ID.String(), Name: owner.Name}
-	out.LookWords = a.cfg.Looks.LookOf(c.Version, c.Finish, c.Colour).Words
 	out.Apps = []oauth.AppItem{}
 	for _, it := range items {
 		if it.ID == out.ID {

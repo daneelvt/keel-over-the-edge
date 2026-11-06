@@ -6,6 +6,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"errors"
+	"slices"
 	"sync"
 	"testing"
 	"time"
@@ -54,17 +55,105 @@ func TestMachinesMigration(t *testing.T) {
 }
 
 // TestMachineLook: an AI account's sailor has the machine look and all
-// three of its choices; a human's has none of them.
+// three of its choices and no person's options; a human's has a look of
+// its own with all four of its options, or none of them.
 func TestMachineLook(t *testing.T) {
 	pool := storetest.Pool(t)
 	human := uuidOf(t, pool, "INSERT INTO account (kind, saved_at) VALUES ('human', now()) RETURNING id")
 	ai := uuidOf(t, pool, "INSERT INTO account (kind, owner_id, saved_at) VALUES ('ai', $1, now()) RETURNING id", human)
 	refused(t, exec(t, pool, "INSERT INTO sailor (account_id, name, name_key, look) VALUES ($1, 'A', 'a', 'figure')", ai), integrity)
 	refused(t, exec(t, pool, "INSERT INTO sailor (account_id, name, name_key, look, version, finish) VALUES ($1, 'A', 'a', 'machine', 'v', 'f')", ai), "23514")
+	refused(t, exec(t, pool, "INSERT INTO sailor (account_id, name, name_key, look, version, finish, colour, skin) VALUES ($1, 'A', 'a', 'machine', 'v', 'f', 'c', 's')", ai), "23514")
 	refused(t, exec(t, pool, "INSERT INTO sailor (account_id, name, name_key, look, version, finish, colour) VALUES ($1, 'B', 'b', 'machine', 'v', 'f', 'c')", human), integrity)
 	refused(t, exec(t, pool, "INSERT INTO sailor (account_id, name, name_key, look, colour) VALUES ($1, 'B', 'b', 'figure', 'c')", human), "23514")
+	refused(t, exec(t, pool, "INSERT INTO sailor (account_id, name, name_key, look, version, skin, hair, colour, finish) VALUES ($1, 'B', 'b', 'figure', 'v', 's', 'h', 'c', 'f')", human), "23514")
 	must(t, pool, "INSERT INTO sailor (account_id, name, name_key, look, version, finish, colour) VALUES ($1, 'A', 'a', 'machine', 'v', 'f', 'c')", ai)
 	must(t, pool, "INSERT INTO sailor (account_id, name, name_key, look) VALUES ($1, 'B', 'b', 'figure')", human)
+	must(t, pool, "UPDATE sailor SET version = 'v', skin = 's', hair = 'h', colour = 'c' WHERE account_id = $1", human)
+}
+
+// TestSetLook: a sailor's look set is kept, and chosen; a person's look on
+// a machine sailor, or a machine's on a person, is refused.
+func TestSetLook(t *testing.T) {
+	ctx := context.Background()
+	s, _ := storetest.Store(t, store.Options{})
+	hash := sha256.Sum256([]byte("t"))
+	owner, err := s.CreateAccount(ctx, storetest.NewAccount("Ann Bonny", "annbonny", hash))
+	if err != nil {
+		t.Fatal(err)
+	}
+	ai, err := s.CreateMachine(ctx, owner, store.NewMachine{Name: "M", NameKey: "m", Version: "v", Finish: "f", Colour: "c"}, "jolly-boat")
+	if err != nil {
+		t.Fatal(err)
+	}
+	other := store.Look{Look: "other", Version: "w", Skin: "s2", Hair: "h2", Colour: "c2"}
+	if err := s.SetLook(ctx, owner, other); err != nil {
+		t.Fatal(err)
+	}
+	got, err := s.Session(ctx, hash)
+	other.Chosen = true
+	if err != nil || got.Account.Look != other {
+		t.Fatalf("the look set: %+v, %v", got.Account.Look, err)
+	}
+	machine := store.Look{Look: store.MachineLook, Version: "w", Finish: "f2", Colour: "c2"}
+	if err := s.SetLook(ctx, ai, machine); err != nil {
+		t.Fatal(err)
+	}
+	if c, err := s.Card(ctx, ai); err != nil || c.Look != (store.Look{Look: store.MachineLook, Version: "w", Finish: "f2", Colour: "c2", Chosen: true}) {
+		t.Fatalf("the machine's look: %+v, %v", c.Look, err)
+	}
+	if err := s.SetLook(ctx, ai, other); err == nil {
+		t.Fatal("a person's look on a machine sailor")
+	}
+	if err := s.SetLook(ctx, owner, machine); err == nil {
+		t.Fatal("a machine's look on a person")
+	}
+	if err := s.SetLook(ctx, store.AccountID{1}, other); !errors.Is(err, store.ErrNotFound) {
+		t.Fatalf("no such account: %v", err)
+	}
+}
+
+// TestLooksMigration: the sailors made before looks were chosen keep their
+// look and are asked to choose, and a machine sailor's colour becomes the
+// nearest of the people's colours.
+func TestLooksMigration(t *testing.T) {
+	ctx := context.Background()
+	u := storetest.Empty(t)
+	if _, err := store.Migrate(ctx, u, 20); err != nil {
+		t.Fatal(err)
+	}
+	pool := storetest.PoolOn(t, u)
+	human := uuidOf(t, pool, "INSERT INTO account (kind, saved_at) VALUES ('human', now()) RETURNING id")
+	must(t, pool, "INSERT INTO sailor (account_id, name, name_key, look) VALUES ($1, 'A', 'a', 'stand-in')", human)
+	for i, c := range []string{"deep-red", "navy", "ochre", "sea-green", "sky-blue", "plum", "black", "rust"} {
+		ai := uuidOf(t, pool, "INSERT INTO account (kind, owner_id, saved_at) VALUES ('ai', $1, now()) RETURNING id", human)
+		must(t, pool, "INSERT INTO sailor (account_id, name, name_key, look, version, finish, colour) VALUES ($1, $2, $2, 'machine', 'female', 'brass', $3)",
+			ai, string(rune('B'+i)), c)
+	}
+	if _, err := store.Migrate(ctx, u, store.Latest); err != nil {
+		t.Fatal(err)
+	}
+	var chosen bool
+	var version *string
+	if err := pool.QueryRow(ctx, "SELECT look_chosen, version FROM sailor WHERE account_id = $1", human).Scan(&chosen, &version); err != nil || chosen || version != nil {
+		t.Fatalf("the person: chosen %v, version %v, %v", chosen, version, err)
+	}
+	rows, err := pool.Query(ctx, "SELECT colour, look_chosen FROM sailor WHERE look = 'machine' ORDER BY name")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got []string
+	for rows.Next() {
+		var c string
+		if err := rows.Scan(&c, &chosen); err != nil || !chosen {
+			t.Fatalf("a machine: %v, chosen %v", err, chosen)
+		}
+		got = append(got, c)
+	}
+	want := []string{"madder-red", "indigo-navy", "weld-yellow", "sea-green", "sky-blue", "madder-red", "black", "madder-orange"}
+	if !slices.Equal(got, want) {
+		t.Fatalf("the machines' colours %v, want %v", got, want)
+	}
 }
 
 // TestMachineCap: two machine sailors made at once for an account allowed

@@ -166,11 +166,11 @@ func fileSHA256(file string) (string, error) {
 	return hex.EncodeToString(h.Sum(nil)), nil
 }
 
-// build runs the Python build on a job, in the profile, without a window.
-// Blender exits with an error when the script raises. MPFB's own log lines
-// are left out unless verbose.
-func (b blender) build(ctx context.Context, profile, job string, verbose bool) error {
-	cmd := exec.CommandContext(ctx, b.path, "-b", "--python-exit-code", "1", "--python", buildEntry, "--", job)
+// run runs a Python script of the build on a job, in the profile, without
+// a window. Blender exits with an error when the script raises. MPFB's own
+// log lines are left out unless verbose.
+func (b blender) run(ctx context.Context, profile, script, job string, verbose bool) error {
+	cmd := exec.CommandContext(ctx, b.path, "-b", "--python-exit-code", "1", "--python", script, "--", job)
 	cmd.Env = append(os.Environ(), "BLENDER_USER_RESOURCES="+profile)
 	pipe, err := cmd.StdoutPipe()
 	if err != nil {
@@ -201,8 +201,10 @@ func shown(line string) bool {
 			return false
 		}
 	}
-	// Every render Workbench makes for the sheets says where it saved.
-	if strings.Contains(line, "render           | Saved: ") {
+	// Every render Workbench makes for the sheets says where it saved;
+	// Cycles reports its progress through each, and the glTF importer
+	// each node it makes.
+	if strings.Contains(line, "render           | Saved: ") || strings.HasPrefix(line, "Fra:") || strings.Contains(line, " | INFO: ") {
 		return false
 	}
 	return strings.TrimSpace(line) != ""

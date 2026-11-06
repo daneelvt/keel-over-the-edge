@@ -60,6 +60,11 @@ import { Shadows } from '../render/shadows';
 import { Sky, look as skyLook, toLinear } from '../render/sky';
 import { Stage } from '../render/stage';
 
+/** The machines' folder under art/sailors/: their lamps glow, and their metal takes the finish. */
+const MACHINE_LOOK = 'machine';
+/** A machine's lamps' light. */
+const LAMP = '#ffb347';
+
 /** The built looks' files, by their path under art/sailors/. */
 const FILES = import.meta.glob<string>(
   ['../../../art/sailors/*/*.glb', '!../../../art/sailors/vendor/**'],
@@ -109,6 +114,8 @@ export interface Room {
   main: string;
   skin: string;
   hair: string;
+  /** A machine's metal, in place of skin. */
+  finish: string;
   black: boolean;
   /** The mask drawn in place of the sailors' colours: red main, green skin, blue hair. */
   mask: boolean;
@@ -130,6 +137,7 @@ const DEFAULTS: Room = {
   main: 'E6DCC3',
   skin: 'B2815F',
   hair: '413129',
+  finish: 'D9A957',
   black: false,
   mask: false,
   phone: false,
@@ -140,7 +148,7 @@ const DEFAULTS: Room = {
 const VIEW_CLIP: Record<View, string> = {
   lineup: 'standing-idle',
   face: 'standing-idle',
-  deck: 'helm-idle',
+  deck: 'helm',
   picker: 'standing-idle',
 };
 const VIEWS: View[] = ['lineup', 'face', 'deck', 'picker'];
@@ -168,7 +176,7 @@ export function readRoom(hash: string): Room {
     : 'lineup';
   const pick = <T extends string>(name: string, from: readonly T[], fallback: T): T =>
     (from as readonly string[]).includes(q.get(name) ?? '') ? (q.get(name) as T) : fallback;
-  const colour = (name: 'main' | 'skin' | 'hair'): string => {
+  const colour = (name: 'main' | 'skin' | 'hair' | 'finish'): string => {
     const c = q.get(name) ?? '';
     return /^[0-9a-fA-F]{6}$/.test(c) ? c.toUpperCase() : DEFAULTS[name];
   };
@@ -182,6 +190,7 @@ export function readRoom(hash: string): Room {
     main: colour('main'),
     skin: colour('skin'),
     hair: colour('hair'),
+    finish: colour('finish'),
     black: q.get('black') === '1',
     mask: q.get('mask') === '1',
     phone: q.get('phone') === '1',
@@ -199,7 +208,7 @@ export function writeRoom(r: Room): string {
   if (r.level !== 'close') q.set('level', r.level);
   if (r.clip !== VIEW_CLIP[r.view]) q.set('clip', r.clip);
   if (r.side !== 'front') q.set('side', r.side);
-  for (const c of ['main', 'skin', 'hair'] as const) {
+  for (const c of ['main', 'skin', 'hair', 'finish'] as const) {
     if (r[c] !== DEFAULTS[c]) q.set(c, r[c]);
   }
   if (r.black) q.set('black', '1');
@@ -586,9 +595,13 @@ export class DressingRoom {
     if (url === undefined || renderer === null) {
       throw new Error(`no ${level} level of ${look} ${version}`);
     }
+    const machine = look === MACHINE_LOOK;
+    if (machine) {
+      colours = sailorColours(`#${colours.main.getHexString()}`, `#${this.room.finish}`, LAMP);
+    }
     let proto = this.#protos.get(url);
     if (proto === undefined) {
-      proto = loadSailor(url, renderer, colours);
+      proto = loadSailor(url, renderer, colours, machine);
       this.#protos.set(url, proto);
     }
     let clips: Promise<SailorClips> | null = null;
@@ -605,6 +618,7 @@ export class DressingRoom {
         o.userData.main = colours.main;
         o.userData.skin = colours.skin;
         o.userData.hair = colours.hair;
+        o.userData.glow = 1;
         o.castShadow = true;
         o.receiveShadow = true;
         meshes.push(o);

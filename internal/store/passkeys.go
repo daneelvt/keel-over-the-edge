@@ -166,8 +166,9 @@ type Ceremony struct {
 	Account    AccountID
 	HasAccount bool
 	// The sailor an account is being made for, and its user handle.
-	Name, NameKey, Look string
-	UserHandle          []byte
+	Name, NameKey string
+	Look          Look
+	UserHandle    []byte
 	// Session is go-webauthn's SessionData as JSON, and Build the build
 	// that wrote it.
 	Session []byte
@@ -181,7 +182,8 @@ func text(s string) pgtype.Text { return pgtype.Text{String: s, Valid: s != ""} 
 // handle.
 func (s *Store) SaveCeremony(ctx context.Context, c Ceremony) error {
 	p := db.InsertCeremonyParams{
-		HandleHash: c.Hash[:], Kind: c.Kind, Name: text(c.Name), NameKey: text(c.NameKey), Look: text(c.Look),
+		HandleHash: c.Hash[:], Kind: c.Kind, Name: text(c.Name), NameKey: text(c.NameKey), Look: text(c.Look.Look),
+		Version: text(c.Look.Version), Skin: text(c.Look.Skin), Hair: text(c.Look.Hair), Colour: text(c.Look.Colour),
 		UserHandle: c.UserHandle, Session: c.Session, Build: c.Build, ExpiresAt: c.Expires,
 	}
 	if c.HasAccount {
@@ -207,7 +209,8 @@ func (s *Store) TakeCeremony(ctx context.Context, hash [32]byte, kind string) (C
 	}
 	return Ceremony{
 		Hash: hash, Kind: kind, Account: r.AccountID.Bytes, HasAccount: r.AccountID.Valid,
-		Name: r.Name.String, NameKey: r.NameKey.String, Look: r.Look.String, UserHandle: r.UserHandle,
+		Name: r.Name.String, NameKey: r.NameKey.String,
+		Look: Look{Look: r.Look.String, Version: r.Version.String, Skin: r.Skin.String, Hair: r.Hair.String, Colour: r.Colour.String}, UserHandle: r.UserHandle,
 		Session: r.Session, Build: r.Build, Expires: r.ExpiresAt,
 	}, nil
 }

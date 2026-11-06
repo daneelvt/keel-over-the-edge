@@ -43,8 +43,11 @@ describe('when an approval ends', () => {
   });
 });
 
+/** The choices of a machine sailor's look, as the server lists them. */
+const machineLooks = { ...catalog.machine, colours: catalog.sailorOptions.colours };
+
 describe('a machine sailor’s look', () => {
-  const looks = catalog.machine;
+  const looks = machineLooks;
 
   test('is drawn from the catalog’s choices, another each time', () => {
     let d = drawMachine(looks);
@@ -155,7 +158,7 @@ describe('the machine sailors’ words', () => {
 });
 
 describe('every entry with a session', () => {
-  const ann: Me = { name: 'Ann Bonny', look: 'a', kind: 'human' };
+  const ann: Me = { name: 'Ann Bonny', look: 'a', version: 'v', colour: 'c', kind: 'human' };
   const run = async (me: Me, link = false) => {
     const log: string[] = [];
     const fetcher: Fetch = async () => new Response(JSON.stringify(me), { status: 200 });
@@ -258,7 +261,14 @@ function buttons(node: ComponentChildren): { text: string; gold: boolean }[] {
 }
 
 describe('the start screen with machine sailors', () => {
-  const ann: Me = { name: 'Ann Bonny', look: 'a', kind: 'human', machines: 1 };
+  const ann: Me = {
+    name: 'Ann Bonny',
+    look: 'a',
+    version: 'v',
+    colour: 'c',
+    kind: 'human',
+    machines: 1,
+  };
   const aila: MachineItem = {
     id: 'm1',
     name: 'AILA',
@@ -278,7 +288,7 @@ describe('the start screen with machine sailors', () => {
     cap: 2,
     machines: [aila],
     fleet: {},
-    looks: catalog.machine,
+    looks: machineLooks,
     confirmedUntil: 0,
   };
   const draw = (me: Me) => {
@@ -362,7 +372,7 @@ describe('the start screen with machine sailors', () => {
 });
 
 describe('Set sail with the box', () => {
-  const ann: Me = { name: 'Ann Bonny', look: 'a', kind: 'human' };
+  const ann: Me = { name: 'Ann Bonny', look: 'a', version: 'v', colour: 'c', kind: 'human' };
   /** The server as the box sees it: each request logged, answered by answer. */
   const server = (answer: () => Response | Promise<Response>) => {
     const log: string[] = [];
@@ -459,7 +469,7 @@ describe('Set sail with the box', () => {
 
 describe('the choice after the recovery code', () => {
   test('names the sailor just made, with the box, unticked', () => {
-    const me: Me = { name: 'Ann Bonny', look: 'a', kind: 'human' };
+    const me: Me = { name: 'Ann Bonny', look: 'a', version: 'v', colour: 'c', kind: 'human' };
     const tree = expand(
       SetSailOrMake({
         name: me.name,

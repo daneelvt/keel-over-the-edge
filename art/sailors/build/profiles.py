@@ -9,7 +9,9 @@ and a level brim; a cocked hat a round crown and a brim whose outline is a
 triangle with a corner forward, turned up toward the crown; a pinned brim
 is lifted on one sector only; a tall crown is drawn taller, a cap has no
 brim. The brim has a thickness and may be bound at its edge in another
-colour (a cocked hat's tape); a band may go round the crown's foot.
+colour (a cocked hat's tape); a band may go round the crown's foot. A
+plume may rise from the brim where it is pinned and sweep round the crown,
+falling over the brim's edge behind: a soft, wide feather, its own colour.
 
 Each hat is seated on the head by landmarks, not by eye: its band fits
 the head's section where the crown sits, or the hair's where the hair
@@ -84,19 +86,61 @@ def lift(kind, a, t, height, power=2.0, sector=None):
     raise ValueError(f"no brim lift {kind!r}")
 
 
+def slouch(brim, a):
+    """How far a slouched brim hangs down at its edge at azimuth a: its
+    droop at the front, the sides and the back, eased between them, and,
+    if it is battered, an uneven wave about that (wave: {count, depth,
+    seed}: the edge bent up and down at random, the same every build)."""
+    d = brim.get("droop", {})
+    front, side, back = d.get("front", 0.03), d.get("side", 0.015), d.get("back", 0.03)
+    c = np.cos(a)
+    t = 1 - c if c >= 0 else -c
+    t = t * t * (3 - 2 * t)
+    down = front + (side - front) * t if c >= 0 else side + (back - side) * t
+    w = brim.get("wave")
+    if w:
+        rng = np.random.default_rng(w.get("seed", 1))
+        for k in range(2, w.get("count", 5) + 2):
+            amp, phase = rng.uniform(0.4, 1.0) / np.sqrt(k - 1), rng.uniform(0, 2 * np.pi)
+            down += w.get("depth", 0.01) * amp * np.sin(k * a + phase)
+    return down
+
+
+def dent(dents, a, share, h, top, radius):
+    """A crown's dents, a worn felt's: how far in and how far down its
+    ring of radius share at height h is pushed at azimuth a. crease: a
+    fold down the top from front to back, this deep at its middle; pinch:
+    [azimuth, depth] two hollows pinched in at the front, either side of
+    the middle, deepest at the top."""
+    if not dents:
+        return 0.0, 0.0
+    up = (h / top) ** 2 if top > 0 else 0.0
+    x = radius * share * np.sin(a)
+    down = dents.get("crease", 0.0) * np.exp(-(x / dents.get("width", 0.035)) ** 2) * up
+    inward = 0.0
+    if dents.get("pinch"):
+        az, depth = np.radians(dents["pinch"][0]), dents["pinch"][1]
+        for centre in (az, -az):
+            d = (a - centre + np.pi) % (2 * np.pi) - np.pi
+            inward += depth * np.exp(-(d / 0.4) ** 2) * up
+    return inward, down
+
+
 def make(spec, human, marks, arm, over=()):
     """The hat a spec asks for, seated on the head (and over what is in
     over: the hair) and weighted to it. spec's params: crown: [[radius
     share, height], ...] from the band up (the radius a share of the
     band's), brim: {width, outline, corners, round, lift (level, up,
-    pinned or cocked), height, power, pull, sector, lean, corner-drop,
-    thickness, steps, binding: {colour, width}}, band: {colour, height},
-    seat: how far above the brow the band sits, in metres; tilt: how
+    pinned, cocked or slouch), height, power, pull, sector, lean,
+    corner-drop, droop and wave (slouch), thickness, steps, binding:
+    {colour, width}}, band: {colour, height}, dents (dent),
+    seat: how far above the brow the band sits, in metres; ease: how far
+    its band stands off what is under it (EASE); tilt: how
     far it is tipped forward, in degrees; segments: how many round the
     lathe."""
     p = spec["params"]
     segments = p.get("segments", 32)
-    band_z, centre, radius = seat(human, marks, p.get("seat", 0.0), over)
+    band_z, centre, radius = seat(human, marks, p.get("seat", 0.0), over, p.get("ease", EASE))
     bm = bmesh.new()
     uv = bm.loops.layers.uv.new(atlas.ATLAS)
     crown = p["crown"]
@@ -120,14 +164,17 @@ def make(spec, human, marks, arm, over=()):
             for lp, c in zip(f.loops, ((u0, v0), (u1, v0), (u1, v1), (u0, v1))):
                 lp[uv].uv = c
 
-    # The crown, its length up the profile the UVs' v.
-    rings = [around(lambda a, s=s: radius * s, lambda a, h=h: h) for s, h in crown]
+    # The crown, its length up the profile the UVs' v; dented if worn so.
+    dents = p.get("dents")
+    top_h = crown[-1][1]
+    rings = [around(lambda a, s=s, h=h: radius * s - dent(dents, a, s, h, top_h, radius)[0],
+                    lambda a, s=s, h=h: h - dent(dents, a, s, h, top_h, radius)[1]) for s, h in crown]
     lengths = np.concatenate([[0], np.cumsum([np.hypot(radius * (b[0] - a[0]), b[1] - a[1])
                                                for a, b in zip(crown, crown[1:])])])
     for r in range(len(rings) - 1):
         strip(rings[r], rings[r + 1], lengths[r] / circumference, lengths[r + 1] / circumference)
     # The top, closed by a fan, mapped from above.
-    top = bm.verts.new((centre[0], centre[1], band_z + crown[-1][1] + 0.002))
+    top = bm.verts.new((centre[0], centre[1], band_z + crown[-1][1] + 0.002 - (dents or {}).get("crease", 0.0)))
     for s in range(segments):
         n = (s + 1) % segments
         f = bm.faces.new((rings[-1][s], rings[-1][n], top))
@@ -144,6 +191,8 @@ def make(spec, human, marks, arm, over=()):
         lo = around(lambda a: radius + 0.0015, lambda a: 0.001)
         hi = around(lambda a: radius * share + 0.0015, lambda a: h)
         strip(lo, hi, 7.0, 7.0 + h / circumference, material=2)
+    if p.get("plume"):
+        _plume(bm, uv, p["plume"], centre, band_z, radius, crown, brim)
     for f in bm.faces:
         f.smooth = True
     if p.get("tilt"):
@@ -169,7 +218,13 @@ def make(spec, human, marks, arm, over=()):
     me.materials.append(atlas.part(bpy.data.materials.new(spec["id"] + "-band"),
                                    atlas.linear(band["colour"]) if band else colour,
                                    "fixed" if band else spec["region"]))
+    if p.get("plume"):
+        me.materials.append(atlas.part(bpy.data.materials.new(spec["id"] + "-plume"),
+                                       atlas.linear(p["plume"].get("colour", "#EEE9DF")), "fixed"))
     _rigid(obj, arm, "head")
+    # Where its band sits, for what is under it (a scarf) to be buried
+    # above it.
+    obj["band"] = float(band_z)
     return obj
 
 
@@ -189,6 +244,12 @@ def _brim(bm, brim, foot, radius, segments, strip, around, circumference):
             out, up = cocked(w, t, brim["height"] * (1 - drop * cornerness(a, corners)),
                              brim.get("lean", 0.08))
             r = radius + out
+        elif brim.get("lift") == "slouch":
+            # Hanging down from the crown, more toward its edge, and so
+            # reaching less far out.
+            hang = slouch(brim, a) * t ** brim.get("power", 1.6)
+            up = -hang
+            r = radius + np.sqrt(max((w * t) ** 2 - hang * hang * 0.5, 0.0))
         else:
             up = lift(brim.get("lift", "level"), a, t, brim.get("height", 0.0), brim.get("power", 2.0),
                       brim.get("sector"))
@@ -219,7 +280,66 @@ def _brim(bm, brim, foot, radius, segments, strip, around, circumference):
               material=1 if bind > 0 and k == last + 1 else 0)
 
 
-def seat(human, marks, above, over=()):
+def _plume(bm, uv, q, centre, band_z, radius, crown, brim):
+    """A plume: a wide soft feather along a curve that starts at the brim
+    where it is pinned (azimuth, degrees), rises over the crown's side as
+    it sweeps round toward the back (sweep, degrees), and falls past the
+    brim's edge (droop, metres below the band at its tip); its section a
+    flat oval (width, depth), full in its middle and tapering to both ends,
+    its edges waved like a feather's barbs (waves along it)."""
+    from mathutils import Vector
+
+    a0, sweep = np.radians(q.get("azimuth", 90)), np.radians(q.get("sweep", 110))
+    top = crown[-1][1]
+    width, depth = q.get("width", 0.07), q.get("depth", 0.022)
+    out = q.get("out", (brim or {}).get("width", 0.1) + 0.02)
+    rise = q.get("rise", 0.02)
+    droop = q.get("droop", 0.05)
+    n, sides = q.get("rings", 18), q.get("sides", 8)
+    waves = q.get("waves", 5)
+
+    def point(s):
+        a = a0 + sweep * s
+        r = radius * q.get("start", 0.95) + out * s ** 1.6
+        # Up over the crown's side, then down past the brim.
+        z = top * q.get("from", 0.55) + rise * np.sin(np.pi * min(s / 0.6, 1.0)) \
+            - droop * max(0.0, (s - 0.45) / 0.55) ** 2
+        return Vector((centre[0] + r * np.sin(a), centre[1] - r * np.cos(a), band_z + z))
+
+    path = [point(i / (n - 1)) for i in range(n)]
+    rings = []
+    for i, c in enumerate(path):
+        s = i / (n - 1)
+        ahead = (path[min(i + 1, n - 1)] - path[max(i - 1, 0)]).normalized()
+        # Lying flat: its width level, across the curve.
+        side = ahead.cross(Vector((0, 0, 1))).normalized()
+        up = side.cross(ahead).normalized()
+        if up.z < 0:
+            up = -up
+        full = np.sin(np.pi * (0.12 + 0.78 * s)) ** 0.6
+        wave = 1 + 0.2 * np.sin(waves * 2 * np.pi * s)
+        w, h = width / 2 * full * wave, depth / 2 * (0.4 + 0.6 * full)
+        ring = []
+        for k in range(sides):
+            t = 2 * np.pi * k / sides
+            ring.append(bm.verts.new(c + side * np.cos(t) * w + up * np.sin(t) * h))
+        rings.append(ring)
+    for i in range(n - 1):
+        for k in range(sides):
+            m = (k + 1) % sides
+            f = bm.faces.new((rings[i][k], rings[i][m], rings[i + 1][m], rings[i + 1][k]))
+            f.material_index = 3
+            for lp, c in zip(f.loops, ((k, i), (k + 1, i), (k + 1, i + 1), (k, i + 1))):
+                lp[uv].uv = (9 + c[0] / sides * 0.4, c[1] / (n - 1) * 1.2)
+    for ring, flip in ((rings[0], True), (rings[-1], False)):
+        f = bm.faces.new(list(reversed(ring)) if flip else ring)
+        f.material_index = 3
+        for lp in f.loops:
+            co = lp.vert.co
+            lp[uv].uv = (11 + co.x * 4, co.y * 4 + (0 if flip else 1))
+
+
+def seat(human, marks, above, over=(), ease=EASE):
     """Where a hat's band goes: the height above the brow it is asked to sit
     at, the head's middle there, and the radius that clears the head's
     section there, and the hair's, by EASE, so it rests on what is under
@@ -233,12 +353,12 @@ def seat(human, marks, above, over=()):
     if len(o) == 0:
         raise AssertionError("no head's section at the hat's band")
     centre = o.mean(0)
-    radius = float(np.max(np.linalg.norm(o - centre, axis=1))) + EASE
+    radius = float(np.max(np.linalg.norm(o - centre, axis=1))) + ease
     for obj in over:
         for h in landmarks.Section.of(obj).outlines(z):
             # Only what goes round the head: not a tail hanging apart.
             if np.linalg.norm(h.mean(0) - centre) < 0.05:
-                radius = max(radius, float(np.max(np.linalg.norm(h - centre, axis=1))) + EASE)
+                radius = max(radius, float(np.max(np.linalg.norm(h - centre, axis=1))) + ease)
     if z > head[:, 2].max():
         raise AssertionError("the hat's band is above the crown of the head")
     return z, centre, radius

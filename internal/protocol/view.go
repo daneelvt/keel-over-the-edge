@@ -27,7 +27,10 @@ const (
 	modeShift = 1      // the sailor's mode, in bits 1–2
 	Falling   = 1 << 3 // the boat has gone over the lip and is falling
 	Machine   = 1 << 4 // the boat is a machine sailor's, sailed by an AI agent
-	flagsUsed = FarBand | 3<<modeShift | Falling | Machine
+	// Relook marks an enter of the boat the view slot already holds: its
+	// sailor's look changed, and nothing else about it.
+	Relook    = 1 << 5
+	flagsUsed = FarBand | 3<<modeShift | Falling | Machine | Relook
 )
 
 // The steps of a Boat's fields.
@@ -49,8 +52,11 @@ const (
 
 // Boat is a boat in a view, as the wire carries it.
 type Boat struct {
-	Kind    uint16
-	Flags   uint8 // FarBand, the sailor's mode, Falling and Machine
+	Kind uint16
+	// Look is the sailor's look code (internal/looks), which only an enter
+	// carries: a look changed is sent as an enter.
+	Look    uint32
+	Flags   uint8 // FarBand, the sailor's mode, Falling, Machine and Relook
 	X, Y    int32 // cm, east and north
 	Heading uint16
 	Heel    int16
@@ -154,10 +160,10 @@ const (
 	ChangeFlags
 )
 
-// maxEntrySize is the longest entry this package writes: an update of
-// every field, its position changes 4 bytes each; or an enter of a kind of
-// 3 bytes.
-const maxEntrySize = 21
+// maxEntrySize is the longest entry this package writes: an enter of a
+// kind of 3 bytes and a look of 3 (a look code holds 20 bits); an update
+// of every field, its position changes 4 bytes each, is shorter.
+const maxEntrySize = 24
 
 // Entry is one entry of a snapshot.
 type Entry struct {
@@ -209,9 +215,10 @@ func Diff(base, q *Boat) uint8 {
 
 // AppendEntries appends the entries that take a view from base to next,
 // and returns how many it appended: an enter for each slot in enter, which
-// replaces any boat base has there; a leave for each slot base holds and
-// next does not; and, for each other slot both hold that sample names, an
-// update of what changed, if anything did. A slot neither entered nor
+// replaces any boat base has there, and for each slot both hold whose
+// sailor's look changed; a leave for each slot base holds and next does
+// not; and, for each other slot both hold that sample names, an update of
+// what changed, if anything did. A slot neither entered nor
 // sampled must hold the same in both. It allocates nothing when b has room
 // for MaxSnapshotSize.
 func AppendEntries(b []byte, base, next *View, enter, sample uint64) ([]byte, int) {
@@ -219,7 +226,7 @@ func AppendEntries(b []byte, base, next *View, enter, sample uint64) ([]byte, in
 	for slot := range ViewSlots {
 		bit := uint64(1) << slot
 		switch {
-		case next.Used&bit != 0 && enter&bit != 0:
+		case next.Used&bit != 0 && (enter&bit != 0 || base.Used&bit != 0 && next.Boats[slot].Look != base.Boats[slot].Look):
 			b = AppendEntry(b, &Entry{Slot: uint8(slot), Op: OpEnter, Boat: next.Boats[slot]})
 		case next.Used&bit != 0 && base.Used&bit != 0 && sample&bit != 0:
 			q, p := &next.Boats[slot], &base.Boats[slot]
@@ -246,6 +253,7 @@ func AppendEntry(b []byte, e *Entry) []byte {
 	switch e.Op {
 	case OpEnter:
 		b = binary.AppendUvarint(b, uint64(q.Kind))
+		b = binary.AppendUvarint(b, uint64(q.Look))
 		b = append(b, q.Flags)
 		b = appendInt24(b, q.X)
 		b = appendInt24(b, q.Y)
@@ -303,10 +311,18 @@ func ReadEntry(b []byte, e *Entry) ([]byte, error) {
 			return b, fmt.Errorf("protocol: a boat of kind %d", kind)
 		}
 		b = b[n:]
+		look, n, err := uvarint(b)
+		if err != nil {
+			return b, err
+		}
+		if look >= 1<<20 {
+			return b, fmt.Errorf("protocol: a sailor's look %d", look)
+		}
+		b = b[n:]
 		if len(b) < enterFields {
 			return b, ErrEntryShort
 		}
-		q.Kind = uint16(kind)
+		q.Kind, q.Look = uint16(kind), uint32(look)
 		q.Flags = b[0]
 		q.X, q.Y = int24(b[1:]), int24(b[4:])
 		q.Heading = binary.LittleEndian.Uint16(b[7:])
@@ -380,7 +396,7 @@ func ReadEntry(b []byte, e *Entry) ([]byte, error) {
 	return b, nil
 }
 
-// enterFields is the length of an enter's fields after its kind.
+// enterFields is the length of an enter's fields after its kind and look.
 const enterFields = 17
 
 // uvarint reads a uvarint written in as few bytes as it needs, as

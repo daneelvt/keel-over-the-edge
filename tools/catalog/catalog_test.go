@@ -35,10 +35,9 @@ const (
 
 // The sailors every fixture has unless it gives its own, and their art.
 const (
-	validSailors  = "sailors:\n  - id: test-sailor\n    name: Test sailor\n    art:\n      model: sailors/test.glb\n      far: sailors/test.far.glb\n" + validMachine
-	validMachine  = "machine:\n  versions:\n    - {id: test-version, name: version}\n  finishes:\n    - {id: test-finish, name: Finish, colour: \"#808080\"}\n  colours:\n    - {id: test-colour, name: colour, colour: \"#9e2b25\"}\n"
-	sailorArt     = "art/sailors/test.glb"
-	sailorFarArt  = "art/sailors/test.far.glb"
+	validSailors  = "sailors:\n  - id: test-sailor\n    name: Test sailor\n    habit: tests\n    hair: colours\n    versions:\n      - id: test-version\n        name: version\n        art:\n          model: sailors/test.deck.glb\n          far: sailors/test.far.glb\n          close: sailors/test.glb\n          clips: sailors/test.clips.glb\n          portrait: sailors/test.portrait.avif\n          portraitFallback: sailors/test.portrait.webp\n          portraitMask: sailors/test.portrait-mask.webp\n          ink: sailors/test.ink.webp\n" + validOptions + validMachine
+	validOptions  = "sailorOptions:\n  skins:\n    - {id: test-skin, name: skin, colour: \"#cda385\"}\n  hairs:\n    - {id: test-hair, name: hair, colour: \"#654a37\"}\n  greys:\n    - {id: test-grey, name: grey, colour: \"#817b76\"}\n  colours:\n    - {id: test-colour, name: colour, colour: \"#9b2226\"}\n"
+	validMachine  = "machine:\n  habit: tests\n  lamp: \"#ffb347\"\n  versions:\n    - id: test-machine\n      name: version\n      art:\n        model: sailors/m.deck.glb\n        far: sailors/m.far.glb\n        close: sailors/m.glb\n        clips: sailors/m.clips.glb\n        portrait: sailors/m.portrait.avif\n        portraitFallback: sailors/m.portrait.webp\n        portraitMask: sailors/m.portrait-mask.webp\n        ink: sailors/m.ink.webp\n  finishes:\n    - {id: test-finish, name: finish, colour: \"#808080\"}\n"
 	sailorsPath   = "shared/catalog/sailors.yaml"
 	weatherPath   = "shared/catalog/weather.yaml"
 	skyPath       = "shared/catalog/sky.yaml"
@@ -155,8 +154,11 @@ func fixture(t *testing.T, files map[string]string) string {
 	}
 	if _, ok := files[sailorsPath]; !ok {
 		files[sailorsPath] = validSailors
-		files[sailorArt] = "glTF"
-		files[sailorFarArt] = "glTF"
+		for _, who := range []string{"test", "m"} {
+			for _, f := range []string{".deck.glb", ".far.glb", ".glb", ".clips.glb", ".portrait.avif", ".portrait.webp", ".portrait-mask.webp", ".ink.webp"} {
+				files["art/sailors/"+who+f] = "art"
+			}
+		}
 	}
 	if _, ok := files[weatherPath]; !ok {
 		files[weatherPath] = realWeather()
@@ -435,7 +437,7 @@ func TestRejects(t *testing.T) {
 			name: "no sailors",
 			files: map[string]string{
 				"shared/catalog/boats.yaml": validBoats,
-				sailorsPath:                 "sailors: []\n" + validMachine,
+				sailorsPath:                 "sailors: []\n" + validOptions + validMachine,
 			},
 			want: "/sailors: ",
 		},

@@ -22,6 +22,7 @@ import (
 	"github.com/daneelvt/keel-over-the-edge/internal/auth/softkey"
 	"github.com/daneelvt/keel-over-the-edge/internal/catalog"
 	"github.com/daneelvt/keel-over-the-edge/internal/client"
+	"github.com/daneelvt/keel-over-the-edge/internal/looks"
 	"github.com/daneelvt/keel-over-the-edge/internal/protocol/pb"
 )
 
@@ -151,7 +152,7 @@ func SailorNamed(ctx context.Context, client *http.Client, base, name string) (s
 	}
 	c := *client
 	c.Jar = jar
-	body, err := json.Marshal(map[string]string{"name": name, "look": string(cat.Sailors[0].ID)})
+	body, err := json.Marshal(looks.Begin(name, looks.New(cat).Draw(uint64(time.Now().UnixNano()))))
 	if err != nil {
 		return "", nil, nil, err
 	}

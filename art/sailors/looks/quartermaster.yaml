@@ -1,0 +1,271 @@
+# SPDX-License-Identifier: LicenseRef-All-Rights-Reserved
+#
+# The Quartermaster: who keeps the stores and the count, in a tall wrap of
+# indigo cloth wound high over the head, its turns striped in gold; a long
+# waistcoat to mid-thigh over a linen shirt, belted at the waist, a small
+# tally book in the belt; breeches, stockings and buckled shoes; gold
+# rings in the ears. From behind and above: the wrap standing high over
+# the crown, the long waistcoat's skirts, the belt. Her wrap the taller,
+# and hoops in her ears; his a small ring and a trimmed beard. The
+# waistcoat is the main colour.
+id: quartermaster
+name: Quartermaster
+committed: true
+versions:
+  female:
+    base: female
+    targets:
+      # Shrewd and warm: high cheekbones, full lips, almond eyes lifted at
+      # their outer corners, a level, appraising brow, the right one the
+      # higher; a knowing smile. Her shoulders broader than the base's.
+      measure-shoulder-dist-incr: 0.4
+      lr-cheek-bones-incr: 0.6
+      mouth-lowerlip-volume-incr: 0.45
+      mouth-upperlip-volume-incr: 0.3
+      lr-eye-corner2-up: 0.35
+      mouth-angles-up: 0.3
+      asym-brown-1-r: 0.25
+      asym-mouth-1-l: 0.2
+    face:
+      eyes: { iris-inner: "#5A3A22", iris-outer: "#2A1A10", limbal: "#0E0804" }
+  male:
+    base: male
+    targets:
+      # Watchful and level: a long face and a long straight nose, high
+      # cheekbones, a full lower lip under the moustache, one brow the
+      # higher.
+      head-scale-horiz-decr: 0.15
+      nose-scale-vert-incr: 0.3
+      lr-cheek-bones-incr: 0.35
+      mouth-lowerlip-volume-incr: 0.35
+      mouth-angles-up: 0.25
+      asym-brown-1-l: 0.3
+      asym-mouth-1-r: 0.2
+    face:
+      eyes: { iris-inner: "#5A3A22", iris-outer: "#2A1A10", limbal: "#0E0804" }
+# The hair under the wrap: close to the head, coily; hers in small coils at
+# the nape below the wrap's edge. His trimmed beard and moustache.
+hair:
+  id: hair
+  family: hair
+  region: hair
+  params:
+    shell: cap
+    comb: back
+    nape: 0.02
+    volume: 0.004
+    taper: 0.01
+    length: 0.1
+    strands: 160
+    thickness: 0.003
+    details: false
+    deck-weight: 1.2
+    female:
+      curls:
+        - {
+            azimuth: 180,
+            spread: 90,
+            z: 0.028,
+            count: 9,
+            length: 0.045,
+            radius: 0.0045,
+            pitch: 0.008,
+            thickness: 0.0045,
+            clear: 0.03,
+            lean: 0.1,
+            share: 0.45,
+          }
+    male:
+      beard:
+        volume: 0.0045
+        taper: 0.01
+        cheek: 0.034
+        sideburn: 0.012
+        moustache: 0.015
+        mouth: 0.024
+        lips: 0.0115
+        under: 0.006
+        back: -0.008
+        chin: 0.012
+        below-lip: 0.012
+        triangles: 380
+        deck-weight: 3.0
+        share: 0.5
+garments:
+  # Linen, to the hips under the waistcoat, its full sleeves gathered into
+  # bands at the wrists.
+  - id: shirt
+    family: shirt
+    region: fixed
+    colour: "#EDE6D6"
+    params:
+      sleeve: 0.98
+      neck: 0.045
+      arm-ease: 0.012
+      triangles: 1400
+      female: { shoulder: { reach: 0.12, ease: 0.003 } }
+      male: { shoulder: { reach: 0.18, ease: 0.003 } }
+      bands:
+        - { at: ends, height: 0.03, out: 0.01 }
+  # Dark wool to below the knee, over the stockings.
+  - id: breeches
+    family: breeches
+    region: fixed
+    colour: "#3A332C"
+    params:
+      triangles: 1000
+      deck-weight: 2.5
+      bands:
+        - { at: top, height: 0.035, out: -0.001 }
+        - { at: bottom, height: 0.03, out: 0.004 }
+  - id: stockings
+    family: stockings
+    region: fixed
+    colour: "#D8D0BF"
+    params: { above-knee: -0.05, triangles: 600, deck-weight: 2.0 }
+  # Black leather, buckled (trims).
+  - id: shoes
+    family: shoes
+    region: fixed
+    colour: "#1A1410"
+    params: { rise: 0.45, at: -0.012, sole: 0.006, triangles: 380, deck-weight: 2.5 }
+  # The long waistcoat, fitted, sleeveless, buttoned down the middle to the
+  # waist (trims), the main colour; its skirts to mid-thigh, open at the
+  # front below the waist and vented at the sides and open at the back below the seat.
+  - id: waistcoat
+    family: bodice
+    region: main
+    params:
+      layer: waistcoat
+      neck: 0.055
+      neck-slope: 0.2
+      below-waist: 0.02
+      fitted: true
+      triangles: 1100
+      deck-weight: 2.0
+      female: { shoulder: { reach: 0.12, ease: 0.005 } }
+      male: { shoulder: { reach: 0.18, ease: 0.005 } }
+  - id: waistcoat-skirt
+    family: skirt
+    region: main
+    params:
+      layer: waistcoat
+      skirt: true
+      rise: -0.015
+      length: 0.32
+      ease: 0.018
+      rows: 7
+      columns: 40
+      follow: 0.3
+      flare: { front: 0.02, side: 0.07, back: 0.05 }
+      open:
+        - { width: 0.06 }
+        - { azimuth: 90, width: 0.012, start: 0.4 }
+        - { azimuth: -90, width: 0.012, start: 0.4 }
+        - { azimuth: 180, width: 0.05, start: 0.25 }
+      female: { length: 0.31 }
+trims:
+  - {
+      kind: buttons,
+      on: waistcoat,
+      along: middle,
+      count: 7,
+      from: 0.08,
+      to: 0.03,
+      radius: 0.005,
+      colour: "#C9A65A",
+    }
+  - { kind: buckles, on: shoes, width: 0.032, height: 0.026, colour: "#C9A65A" }
+# The wrap: indigo cloth wound high over the head and swelling as it
+# rises, its turns striped in gold, rising toward the back. Hers wound the
+# higher.
+hat:
+  id: wrap
+  family: scarf
+  region: fixed
+  colour: "#2C3E6B"
+  params:
+    volume: 0.009
+    rows: 14
+    columns: 28
+    smooth: 8
+    hem: 0.0015
+    edge: { front: 0.03, side: 0.018, back: 0.045 }
+    tall: { height: 0.095, swell: 0.55, back: 0.085, round: 2.4, blend: 0.22 }
+    folds: { count: 3, depth: 0.004, twist: 0.5, from: 0.15, to: 0.85 }
+    knot: null
+    # Collapsed for the deck, the wrap is its own mirror only roughly.
+    asymmetric: true
+    pattern:
+      {
+        kind: wound,
+        period: 0.045,
+        band: 0.22,
+        soft: 0.2,
+        slope: 0.25,
+        ground: "#2C3E6B",
+        colour: "#D9A441",
+        radius: 0.1,
+      }
+    female:
+      tall: { height: 0.11, swell: 0.45, back: 0.06, round: 2.4, blend: 0.22 }
+gear:
+  # A leather belt over the waistcoat at the waist, a brass buckle at the
+  # front.
+  - id: belt
+    family: sash
+    region: fixed
+    colour: "#3A2618"
+    params:
+      layer: sash
+      deck-weight: 1.0
+      width: 0.035
+      up: 0.0
+      thick: 0.004
+      columns: 24
+      knot: null
+      buckle: { width: 0.042, height: 0.036, wire: 0.003 }
+      colours: { buckle: "#C9A65A" }
+  # The tally book, tucked in the belt at the right of the front.
+  - id: tally-book
+    family: book
+    region: fixed
+    colour: "#5A3A24"
+    params:
+      deck: false
+      asymmetric: true
+      azimuth: -38
+      size: [0.065, 0.095, 0.016]
+      up: 0.03
+      into: 0.005
+      colours: { pages: "#E8DFC8" }
+  # Gold in the ears: her hoops, his small rings.
+  - id: earrings
+    family: earrings
+    region: fixed
+    colour: "#C9A65A"
+    params:
+      deck: false
+      female: { radius: 0.011, wire: 0.0013 }
+      male: { radius: 0.0065, wire: 0.0012 }
+palette:
+  main: "#C4622D"
+  skin: "#52342B"
+  hair: "#251E1C"
+# Every sailor's clips, and the Quartermaster's habit: tallying in a small
+# book.
+clips:
+  [
+    helm,
+    hiking-1,
+    hiking-2,
+    hiking-3,
+    cross,
+    quartermaster-habit,
+    quartermaster-habit-standing,
+    standing-idle,
+    treading-water,
+    righting,
+    climbing-in,
+  ]
+names: { quartermaster-habit: habit, quartermaster-habit-standing: habit-standing }

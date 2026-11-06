@@ -87,9 +87,9 @@ func (a *aoi) find(f *bus.Frame, own int32, x, y float64, base, next *connView, 
 		near := c.D2 <= near2 || wasNear && c.D2 <= nearKeep2
 		next.slot[vs], next.boat[vs] = s, f.Boat[s]
 		// A far boat is sampled on its band's snapshots, and whenever it
-		// enters or crosses into the band; between them it stays as the
-		// client last saw it.
-		if kept && !near && !wasNear && !farTick {
+		// enters or crosses into the band, or its sailor's look changes;
+		// between them it stays as the client last saw it.
+		if kept && !near && !wasNear && !farTick && baseView.Boats[vs].Look == f.Look[s] {
 			next.view.Boats[vs] = baseView.Boats[vs]
 			continue
 		}
@@ -99,6 +99,10 @@ func (a *aoi) find(f *bus.Frame, own int32, x, y float64, base, next *connView, 
 		}
 		if f.Machine[s] {
 			next.view.Boats[vs].Flags |= protocol.Machine
+		}
+		next.view.Boats[vs].Look = f.Look[s]
+		if kept && baseView.Boats[vs].Look != f.Look[s] {
+			next.view.Boats[vs].Flags |= protocol.Relook
 		}
 		sample |= 1 << vs
 	}

@@ -169,7 +169,7 @@ func TestPageLeavesTheOtherRoutes(t *testing.T) {
 	if res, _ := raw(t, srv, "GET", "/ws"); res.StatusCode != http.StatusTeapot {
 		t.Errorf("/ws: %d", res.StatusCode)
 	}
-	status, body, _ := post(t, nil, srv.URL+"/account/begin", "application/json", `{"name":"Al","look":"figure"}`)
+	status, body, _ := post(t, nil, srv.URL+"/account/begin", "application/json", `{"name":"Al","look":"rover","version":"female","skin":"tone-2","hair":"brown","colour":"madder-red"}`)
 	if status != 422 || body != `{"error":"short"}` {
 		t.Errorf("/account/begin: %d %s", status, body)
 	}

@@ -8,7 +8,8 @@ VALUES (@account_id, @token_hash, @held);
 
 -- name: SessionAccount :one
 -- The account a session names; none for a stopped account's.
-SELECT a.id, a.kind, a.tools, a.priority, a.notices_off, sl.name, sl.look, s.last_seen_at,
+SELECT a.id, a.kind, a.tools, a.priority, a.notices_off, sl.name, sl.look, coalesce(sl.version, '')::text AS version, coalesce(sl.skin, '')::text AS skin,
+  coalesce(sl.hair, '')::text AS hair, coalesce(sl.colour, '')::text AS colour, coalesce(sl.finish, '')::text AS finish, sl.look_chosen, s.last_seen_at,
   s.held, coalesce(s.confirmed_until, 'epoch')::timestamptz AS confirmed_until
 FROM session s
 JOIN account a ON a.id = s.account_id

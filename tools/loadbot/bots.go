@@ -28,6 +28,7 @@ import (
 	"github.com/daneelvt/keel-over-the-edge/internal/catalog"
 	"github.com/daneelvt/keel-over-the-edge/internal/client"
 	"github.com/daneelvt/keel-over-the-edge/internal/edge"
+	"github.com/daneelvt/keel-over-the-edge/internal/looks"
 	"github.com/daneelvt/keel-over-the-edge/internal/physics"
 	"github.com/daneelvt/keel-over-the-edge/internal/protocol/pb"
 	"github.com/daneelvt/keel-over-the-edge/internal/scripted"
@@ -487,7 +488,7 @@ func (a *httpAccounts) Create(ctx context.Context, name string) (Bot, error) {
 	if err != nil {
 		return Bot{}, err
 	}
-	body, err := json.Marshal(map[string]string{"name": name, "look": string(cat.Sailors[0].ID)})
+	body, err := json.Marshal(looks.Begin(name, looks.New(cat).Draw(uint64(time.Now().UnixNano()))))
 	if err != nil {
 		return Bot{}, err
 	}

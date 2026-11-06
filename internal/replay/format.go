@@ -46,8 +46,9 @@ import (
 //	S snapshot  tick, then sim's snapshot of the world after it: a segment starts
 //	T tick      tick, ticks skipped before it, the control words applied
 //	            (count, then slot, word and pilot word for each), the commands applied in order with
-//	            their results (count, then each: op, its fields (a Join's account, connection
-//	            and kind: a byte, 1 for a machine sailor's, 2 a priority account's), result, slot, boat, generation,
+//	            their results (count, then each: op, its fields (a Join's account, connection,
+//	            kind: a byte, 1 for a machine sailor's, 2 a priority account's, and look code;
+//	            a SetLook's account and look code), result, slot, boat, generation,
 //	            place in the queue, tick queued at); an account is its 16 bytes; a yes or
 //	            no a byte, 1 or 0; a Teleport its boat, whether to the start and its state;
 //	            a Stay or Unseen its boat and whether on; an End its last tick; a developer's
@@ -60,7 +61,7 @@ import (
 //	            nothing reliable from that tick on
 const (
 	magic         = "KEELLOG\n"
-	formatVersion = 12
+	formatVersion = 13
 
 	kindHeader   = 'H'
 	kindSnapshot = 'S'
@@ -197,6 +198,10 @@ func appendEvent(dst []byte, e *bus.Event) []byte {
 		dst = append(dst, e.Account[:]...)
 		dst = binary.AppendUvarint(dst, e.Conn)
 		dst = append(dst, joinKind(e.Machine, e.Priority))
+		dst = binary.AppendUvarint(dst, uint64(e.Look))
+	case bus.SetLook:
+		dst = append(dst, e.Account[:]...)
+		dst = binary.AppendUvarint(dst, uint64(e.Look))
 	case bus.Leave:
 		dst = binary.AppendUvarint(dst, e.Boat)
 	case bus.Disconnect:
@@ -558,6 +563,10 @@ func (p *payload) event(e *bus.Event) {
 		} else {
 			e.Machine, e.Priority = k&joinMachine != 0, k&joinPriority != 0
 		}
+		e.Look = p.look()
+	case bus.SetLook:
+		p.bytes(e.Account[:])
+		e.Look = p.look()
 	case bus.Leave:
 		e.Boat = p.uvarint()
 	case bus.Disconnect:
@@ -618,6 +627,15 @@ func (p *payload) event(e *bus.Event) {
 	e.Reply.Gen = uint16(p.count(bus.GenMask))
 	e.Reply.Position = int32(p.count(bus.QueueLimit))
 	e.Reply.Since = p.varint()
+}
+
+// look reads a look code.
+func (p *payload) look() uint32 {
+	l := p.uvarint()
+	if p.err == nil && l > math.MaxUint32 {
+		p.err = fmt.Errorf("a look code %d", l)
+	}
+	return uint32(l)
 }
 
 // Commands are the commands of a tick record's events, to apply again:

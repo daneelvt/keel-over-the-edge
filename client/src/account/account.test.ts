@@ -145,7 +145,7 @@ function answer(status: number, body: unknown): Response {
   return new Response(typeof body === 'string' ? body : JSON.stringify(body), { status });
 }
 
-const ann: Me = { name: 'Ann Bonny', look: 'a', kind: 'human' };
+const ann: Me = { name: 'Ann Bonny', look: 'a', version: 'v', colour: 'c', kind: 'human' };
 
 describe('the session check', () => {
   test('a session, none, or a failure', async () => {

@@ -269,8 +269,11 @@ type Catalog struct {
 	// Notices corresponds to the JSON schema field "notices".
 	Notices Notices `json:"notices"`
 
-	// The figures that sail the boats. The first is the one drawn until players
-	// choose their own.
+	// SailorOptions corresponds to the JSON schema field "sailorOptions".
+	SailorOptions SailorOptions `json:"sailorOptions"`
+
+	// The looks sailors choose from, in the picker's order. At most 15: a look code
+	// holds a look's place in 4 bits, the 16th place the machine's.
 	Sailors []Sailor `json:"sailors"`
 
 	// Sky corresponds to the JSON schema field "sky".
@@ -1043,6 +1046,11 @@ const FormShrub Form = "shrub"
 const FormTuft Form = "tuft"
 const FormUmbrella Form = "umbrella"
 
+type Hair string
+
+const HairColours Hair = "colours"
+const HairGreys Hair = "greys"
+
 // An arch, roofed through a headland's neck.
 type HeadlandArch struct {
 	// A neck this many hexagons across or fewer is cut through.
@@ -1259,30 +1267,21 @@ type Lip struct {
 	Tip float64 `json:"tip"`
 }
 
-// The look of the machine sailors AI accounts sail as: the choices a player makes
-// one from, a version, a metal finish and a main colour. A machine sailor's sailor
-// keeps the three ids.
+// The machine sailors AI accounts sail as: the choices a player makes one from, a
+// version, a metal finish and a main colour (one of the sailors' colours, its
+// coat's). A machine sailor's sailor keeps the three ids.
 type Machine struct {
-	// Its main colours, chosen to stay apart for colour-blind players.
-	Colours []MachineChoice `json:"colours"`
-
 	// The finishes of its metal, each with its colour.
-	Finishes []MachineChoice `json:"finishes"`
+	Finishes []SailorOption `json:"finishes"`
 
-	// The machine's versions.
-	Versions []MachineChoice `json:"versions"`
-}
+	// What a machine does now and then in a calm, in words.
+	Habit string `json:"habit"`
 
-type MachineChoice struct {
-	// Its colour, sRGB, #rrggbb; none for a version.
-	Colour *string `json:"colour,omitempty,omitzero"`
+	// Its lamps' light, sRGB, #rrggbb.
+	Lamp string `json:"lamp"`
 
-	// ID corresponds to the JSON schema field "id".
-	ID ID `json:"id"`
-
-	// Display name, as the player reads it: lowercase but where a name is a proper
-	// noun.
-	Name string `json:"name"`
+	// The machine's versions, and their art.
+	Versions []SailorVersion `json:"versions"`
 }
 
 // A feature a name may need, by its word, and what shows it: 0 or false for a test
@@ -2233,26 +2232,99 @@ const RuinBeacon Ruin = "beacon"
 const RuinChapel Ruin = "chapel"
 const RuinHamlet Ruin = "hamlet"
 
+// A look: its name, its habit, which hair colours it takes, and its versions.
 type Sailor struct {
-	// Art corresponds to the JSON schema field "art".
-	Art SailorArt `json:"art"`
+	// What its sailor does now and then in a calm, as words after the look's name:
+	// "settles the cocked hat".
+	Habit string `json:"habit"`
+
+	// The set its hair colour is chosen from: the options' hairs (colours), or their
+	// greys and whites (greys).
+	Hair Hair `json:"hair"`
 
 	// ID corresponds to the JSON schema field "id".
 	ID ID `json:"id"`
 
 	// Display name.
 	Name string `json:"name"`
+
+	// Its versions, a woman and a man.
+	Versions []SailorVersion `json:"versions"`
 }
 
 // A sailor's art.
 type SailorArt struct {
-	// The sailor's far model, drawn in boats seen from afar: the model's nodes, with
-	// few segments.
+	// The sailor's clips: the skeleton with its animations, and a place node for each
+	// clip seated in the boat.
+	Clips ArtPath `json:"clips"`
+
+	// The sailor's close level, drawn on the boat in view when the camera is near,
+	// and on the picker's stage.
+	Close ArtPath `json:"close"`
+
+	// The sailor's far level: one rigid figure posed seated at the helm, with the
+	// place node that seats it in the boat model; drawn in the fleet.
 	Far ArtPath `json:"far"`
 
-	// The sailor's model: a glTF binary with the nodes body, head, arm-left and
-	// arm-right, its origin at the hips, facing +x.
+	// The inked portrait, for the log: one-bit WebP on the logbook's paper.
+	Ink ArtPath `json:"ink"`
+
+	// The sailor's deck level: a glTF binary of skinned meshes on the shared
+	// skeleton, with its atlas and mask, drawn on the boat in view and on the boats
+	// near the camera.
 	Model ArtPath `json:"model"`
+
+	// The colour portrait's base, AVIF: head and shoulders, shaded, its option
+	// regions in neutral grey.
+	Portrait ArtPath `json:"portrait"`
+
+	// The colour portrait's base as WebP, for a browser without AVIF.
+	PortraitFallback ArtPath `json:"portraitFallback"`
+
+	// The colour portrait's mask, lossless WebP: each pixel's share of the main
+	// colour (red), the skin or metal (green) and the hair (blue).
+	PortraitMask ArtPath `json:"portraitMask"`
+}
+
+type SailorOption struct {
+	// Its colour, sRGB, #rrggbb.
+	Colour string `json:"colour"`
+
+	// ID corresponds to the JSON schema field "id".
+	ID ID `json:"id"`
+
+	// Display name, as the player reads it: lowercase but for a name such as "Tone
+	// 3".
+	Name string `json:"name"`
+}
+
+// The options a sailor's look takes: skins, hair colours, greys for the looks of
+// greying sailors, and main colours, which the machines' coats take too. At most
+// 16 of each: a look code holds each choice in 4 bits.
+type SailorOptions struct {
+	// Main colours, chosen to stay apart for colour-blind players.
+	Colours []SailorOption `json:"colours"`
+
+	// Greys and whites, for the looks whose hair is greys.
+	Greys []SailorOption `json:"greys"`
+
+	// Hair colours.
+	Hairs []SailorOption `json:"hairs"`
+
+	// Skin tones, lightest first.
+	Skins []SailorOption `json:"skins"`
+}
+
+// A version of a look, a woman or a man, and its art.
+type SailorVersion struct {
+	// Art corresponds to the JSON schema field "art".
+	Art SailorArt `json:"art"`
+
+	// ID corresponds to the JSON schema field "id".
+	ID ID `json:"id"`
+
+	// Display name, as the player reads it: lowercase.
+	Name string `json:"name"`
 }
 
 // Adjacent scenery, 0 to 5: so much for each island within, and more for each with
@@ -4426,4 +4498,4 @@ type WorldZones struct {
 }
 
 // Version is the catalog version (tools/catalog).
-const Version = "de5e6f7cacacb033"
+const Version = "d2e619e217a0defe"

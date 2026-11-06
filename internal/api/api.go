@@ -12,6 +12,7 @@ import (
 
 	"github.com/daneelvt/keel-over-the-edge/internal/accounts"
 	"github.com/daneelvt/keel-over-the-edge/internal/auth"
+	"github.com/daneelvt/keel-over-the-edge/internal/looks"
 	"github.com/daneelvt/keel-over-the-edge/internal/moderation"
 	"github.com/daneelvt/keel-over-the-edge/internal/oauth"
 	"github.com/daneelvt/keel-over-the-edge/internal/obs"
@@ -49,8 +50,11 @@ type Config struct {
 	// its credits lose its name, and its machine sailors' tokens are
 	// refused at once.
 	Deletions Deletions
-	// Looks are the catalog's sailors a new sailor may choose, by id.
-	Looks []string
+	// Looks are the catalog's looks a sailor may choose, and Port Royal's
+	// place in the world sailed, where a sailor at sea may change it:
+	// nil for none.
+	Looks    *looks.Book
+	LookSeat LookSeat
 	// Boat is the kind of boat each sailor brings to its account's fleet,
 	// the catalog's.
 	Boat string
@@ -135,10 +139,7 @@ func Handler(cfg Config) http.Handler {
 	if cfg.WriteTimeout == 0 {
 		cfg.WriteTimeout = WriteTimeout
 	}
-	a := &api{cfg: cfg, looks: map[string]bool{}}
-	for _, l := range cfg.Looks {
-		a.looks[l] = true
-	}
+	a := &api{cfg: cfg}
 	for _, r := range refusals {
 		cfg.Metrics.NamesRefused.WithLabelValues(r)
 	}
@@ -170,6 +171,9 @@ func Handler(cfg Config) http.Handler {
 	mux.Handle("POST /api/account/recovery", required(a.newRecoveryCode))
 	mux.Handle("POST /api/account/logout-others", required(a.logoutOthers))
 	mux.Handle("POST /api/account/delete", required(a.deleteAccount))
+	if cfg.Looks != nil {
+		mux.Handle("POST /api/sailor/look", required(a.setLook))
+	}
 	if cfg.Machines != nil {
 		mux.Handle("GET /api/machines", required(a.machines))
 		mux.Handle("POST /api/machines", required(a.makeMachine))
@@ -279,8 +283,7 @@ var refusals = []string{
 }
 
 type api struct {
-	cfg   Config
-	looks map[string]bool
+	cfg Config
 }
 
 func versionHandler(v Version) http.Handler {

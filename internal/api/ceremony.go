@@ -38,6 +38,7 @@ type Accounts interface {
 	ConfirmSession(ctx context.Context, id store.AccountID, hash [32]byte, until time.Time) error
 	SaveCeremony(ctx context.Context, c store.Ceremony) error
 	TakeCeremony(ctx context.Context, hash [32]byte, kind string) (store.Ceremony, error)
+	SetLook(ctx context.Context, id store.AccountID, l store.Look) error
 }
 
 // The ceremonies' results, as keel_ceremonies_total labels them: begun;

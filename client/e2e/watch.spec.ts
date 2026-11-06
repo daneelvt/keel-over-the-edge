@@ -28,7 +28,7 @@ async function machine(context: BrowserContext, name: string): Promise<string> {
       name,
       version: data.machine.versions[0]?.id,
       finish: data.machine.finishes[0]?.id,
-      colour: data.machine.colours[0]?.id,
+      colour: data.sailorOptions.colours[0]?.id,
     },
   });
   expect(res.status(), await res.text()).toBe(201);
@@ -141,7 +141,7 @@ test('a machine sailor watched from its owner’s start screen: whose boat, noth
     }),
   ).toBeLessThan(0.2);
   const w = await watch(page);
-  expect(w.watching).toEqual({ sailor: name, machine: true, mine: true });
+  expect(w.watching).toMatchObject({ sailor: name, machine: true, mine: true });
   expect(w.spectating).toBe(true);
 
   // Nothing that steers: no helm, sheet, autopilot or free camera.
@@ -384,7 +384,7 @@ test('a human sailor comes to Set sail on entry; watchable only once they tick t
     await page.waitForFunction((n) => globalThis.keel.watch().watching?.sailor === n, them.name, {
       timeout: 60_000,
     });
-    expect((await watch(page)).watching).toEqual({
+    expect((await watch(page)).watching).toMatchObject({
       sailor: them.name,
       machine: false,
       mine: false,

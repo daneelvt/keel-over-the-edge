@@ -11,14 +11,19 @@ thresholds:
   its length (a straight arm on a target pops);
 - contacts held: a hand on the tiller or sheet, a locked foot, on its
   target; the ankles of a figure planted on the boat not drifting;
-- the hands and fingers clear of the head, the torso and the hat;
-- no joint beyond its share of its range (tables.yaml's motion.ranges);
+- the hands and fingers clear of the head and the torso, and on the hat
+  (which a habit may settle) never inside it;
+- no joint beyond its share of its range (tables.yaml's motion.ranges), but
+  those a clip strains (the hike's, the climb's) within a larger share;
 - a loop's end its start, in pose and in speed (the change of speed across
   the seam beyond what the acceleration either side accounts for);
 - in each ramp, the chain's onsets staggered (the torso hips to head, or
   the head first when it leads; an arm's joints apart);
-- the head's peak speed against its median, on the lab's own clips:
-  neither mechanical nor twitchy.
+- the head's peak speed against its median, on the lab's own clips that
+  move from key to key without going anywhere: neither mechanical nor
+  twitchy;
+- a clip whose hips carry the figure elsewhere (a cross, a climb) judged
+  by its arms' motion against the hips, and the hips' own jerk.
 
 Strips and curves of each clip are review.py's.
 """
@@ -53,6 +58,8 @@ ONSET = 0.2
 # The parts the hands keep clear of, by the bone that carries them.
 CLEAR_OF = ("head", "neck_01", "spine_01", "spine_02", "spine_03", "pelvis")
 FINGER_TIPS = ("thumb_03", "index_03", "middle_03", "ring_03", "pinky_03")
+# The hat, on the head: a hand may settle it, but not pass into it.
+HAT = "hat"
 
 
 class Track:
@@ -87,6 +94,20 @@ class Track:
             self.pos[k] = np.array(self.pos[k])
         motion.stop(fig.arm)
 
+    def hips_frame(self, points):
+        """Points (one a frame) in the hips' own frame: what moves with
+        the body, not with its journey."""
+        out = np.empty_like(points)
+        for f in range(len(points)):
+            inv = self.rot["pelvis"][f].inverted()
+            out[f] = np.array(inv @ Vector(points[f] - self.pos["pelvis"][f]))
+        return out
+
+    def speed_against(self, b, other, fps):
+        """A bone's angular speed against another's, degrees a second."""
+        r = [self.rot[other][i].inverted() @ self.rot[b][i] for i in range(self.n)]
+        return np.array([0.0] + [math.degrees(motion.angle(r[i - 1], r[i])) * fps for i in range(1, self.n)])
+
     def speed(self, b, fps, local=False):
         """A bone's angular speed, degrees a second, per frame: in the
         world, or against its parent (local)."""
@@ -118,10 +139,19 @@ def check(fig, clip, act, slot, gate, ranges, proxies):
     if clip.idle:
         j, f = jerk(head, fps, where=True)
         add("head jerk", j, gate["head-jerk-idle"], j <= gate["head-jerk-idle"], at=f"frame {f}")
-    j = max(max(jerk((tr.pos[f"lowerarm_{s}"] + tr.pos[f"hand_{s}"]) / 2, fps), jerk(tr.pos[f"hand_{s}"], fps))
-            for s in ("l", "r"))
-    add("hand jerk", j, gate["hand-jerk"], j <= gate["hand-jerk"])
-    v = max(float(np.linalg.norm(np.diff(tr.pos[f"lowerarm_{s}"], axis=0), axis=1).max(initial=0.0)) * fps
+    # A clip whose hips carry the figure elsewhere (a tack's cross, a climb)
+    # moves the arms with them: their own motion is against the hips, and
+    # the journey's is the hips'.
+    travels = bool(clip.notes.get("travels"))
+    at = tr.hips_frame if travels else (lambda p: p)
+    j, where = max(max(jerk(at((tr.pos[f"lowerarm_{s}"] + tr.pos[f"hand_{s}"]) / 2), fps, where=True),
+                       jerk(at(tr.pos[f"hand_{s}"]), fps, where=True)) + (s,)
+                   for s in ("l", "r"))[:2]
+    add("hand jerk", j, gate["hand-jerk"], j <= gate["hand-jerk"], at=f"frame {where}")
+    if travels:
+        j = jerk(tr.pos["pelvis"], fps)
+        add("hips jerk", j, gate["hand-jerk"], j <= gate["hand-jerk"])
+    v = max(float(np.linalg.norm(np.diff(at(tr.pos[f"lowerarm_{s}"]), axis=0), axis=1).max(initial=0.0)) * fps
             for s in ("l", "r"))
     add("elbow speed", v, gate["elbow-speed"], v <= gate["elbow-speed"])
     # The reach of the arms IK holds: a straight arm on a target pops.
@@ -135,43 +165,68 @@ def check(fig, clip, act, slot, gate, ranges, proxies):
         add("reach", reach, gate["reach"], reach <= gate["reach"])
 
     # Contacts.
-    worst = 0.0
+    worst, where = 0.0, None
     for f, cs in enumerate(clip.contacts):
         for e, p in cs.items():
             end = tr.pos[motion.EFFECTORS[e][2]][f]
-            worst = max(worst, float(np.linalg.norm(end - np.array(p))))
-    add("contacts", worst, gate["contact"], worst <= gate["contact"], frames=sum(1 for c in clip.contacts if c))
+            d = float(np.linalg.norm(end - np.array(p)))
+            if d > worst:
+                worst, where = d, f"{e} at frame {f}"
+    add("contacts", worst, gate["contact"], worst <= gate["contact"], frames=sum(1 for c in clip.contacts if c),
+        at=where)
     drift = 0.0
     for e in clip.planted:
         p = tr.pos[motion.EFFECTORS[e][2]]
         drift = max(drift, float(np.linalg.norm(p.max(0) - p.min(0))))
     add("ankle drift", drift, gate["ankle-drift"], drift <= gate["ankle-drift"], planted=list(clip.planted))
 
-    # The hands clear of the head, the torso and the hat.
+    # The hands clear of the head and the torso; on the hat, which a hand
+    # may settle, not in it: outside its surface by the hand's own
+    # thickness.
     least, where = math.inf, None
+    hat, at_hat = math.inf, None
     for s in ("l", "r"):
         points = [f"hand_{s}"] + [f"{t}_{s}" for t in FINGER_TIPS] + [f"{t}_{s}.tail" for t in FINGER_TIPS]
         for f in range(tr.n):
             for b, tree in proxies.items():
-                inv = _inverse(tr, b, f, fig)
+                inv = _inverse(tr, "head" if b == HAT else b, f, fig)
                 for pt in points:
                     q = inv @ Vector(tr.pos[pt][f])
                     hit = tree.find_nearest(q)
-                    if hit[0] is not None and hit[3] < least:
+                    if hit[0] is None:
+                        continue
+                    if b == HAT:
+                        # Inside only near its surface: far off, the nearest
+                        # face's side says nothing.
+                        outside = (q - hit[0]).dot(hit[1]) >= 0 or hit[3] > 0.1
+                        d = hit[3] if outside else -hit[3]
+                        if d < hat:
+                            hat, at_hat = d, f"{pt} at frame {f}"
+                    elif hit[3] < least:
                         least, where = hit[3], f"{pt} by the {b} at frame {f}"
     add("hand clearance", least, gate["hand-clearance"], least >= gate["hand-clearance"], at=where)
+    if HAT in proxies:
+        add("hand on hat", hat, gate["hat-clearance"], hat >= gate["hat-clearance"], at=at_hat)
 
-    # Ranges.
+    # Ranges: the hips' turn is not a joint's when they carry the figure
+    # elsewhere.
     worst, where = 0.0, None
+    strained, strain_at = 0.0, None
+    strain = set(clip.notes.get("strain") or [])
     for b, qs in tr.basis.items():
         r = motion.table(ranges, b)
-        if r is None:
+        if r is None or b == "pelvis" and clip.notes.get("travels"):
             continue
         for f, q in enumerate(qs):
             share = math.degrees(motion.angle(Quaternion(), q)) / r
-            if share > worst:
+            if motion.kind(b) in strain:
+                if share > strained:
+                    strained, strain_at = share, f"{b} at frame {f}"
+            elif share > worst:
                 worst, where = share, f"{b} at frame {f}"
     add("range", worst, gate["range-share"], worst <= gate["range-share"], at=where)
+    if strain:
+        add("range strained", strained, gate["range-strain"], strained <= gate["range-strain"], at=strain_at)
 
     # A loop's seam: its pose, and the change of speed across it beyond
     # what the acceleration either side accounts for.
@@ -219,7 +274,9 @@ def check(fig, clip, act, slot, gate, ranges, proxies):
     # maker made it).
     w = tr.speed("head", fps)[1:]
     lo, hi = gate["head-peak-to-median"]
-    if clip.made and len(w) and w.max() >= MOVING:
+    # A journey's head turns with the body the whole way: its jerk and
+    # onsets judge it, not this.
+    if clip.made and clip.ramps and not travels and len(w) and w.max() >= MOVING:
         ratio = float(w.max() / max(np.median(w), 1e-6))
         add("head peak to median", ratio, [lo, hi], lo <= ratio <= hi, peak=float(w.max()), median=float(np.median(w)))
     out["frames"] = tr.n
@@ -227,16 +284,17 @@ def check(fig, clip, act, slot, gate, ranges, proxies):
     return out, tr
 
 
-def proxies(fig, kinds):
+def proxies(fig, kinds, skip=()):
     """What the hands keep clear of, each part in its bone's rest space:
-    the skin of the head, neck and torso, and the hair and hat on the
-    head."""
+    the skin of the head, neck and torso (a machine's head and plates),
+    and the hair and hat on the head; not the bones skipped (a machine's
+    hips, its breeches, as a sailor's hips are always under theirs)."""
     import bpy
 
-    by_bone = {b: ([], []) for b in CLEAR_OF}
+    by_bone = {b: ([], []) for b in CLEAR_OF + (HAT,)}
     for o in fig.meshes:
         k = kinds.get(o.name, "body")
-        if k not in ("body", "hair", "hat"):
+        if k not in ("body", "hair", "beard", "hat", "head"):
             continue
         me = o.data
         names = {g.index: g.name for g in o.vertex_groups}
@@ -249,8 +307,12 @@ def proxies(fig, kinds):
             if len(owners) != 1:
                 continue
             (b,) = owners
-            if k in ("hair", "hat"):
+            if b in skip:
+                continue
+            if k in ("hair", "beard"):
                 b = "head"
+            elif k == "hat":
+                b = HAT
             if b not in by_bone:
                 continue
             verts, faces = by_bone[b]
@@ -261,7 +323,7 @@ def proxies(fig, kinds):
     for b, (verts, faces) in by_bone.items():
         if faces:
             # Into the bone's rest space.
-            inv = fig.arm.data.bones[b].matrix_local.inverted()
+            inv = fig.arm.data.bones["head" if b == HAT else b].matrix_local.inverted()
             out[b] = BVHTree.FromPolygons([inv @ v for v in verts], faces)
     bpy.context.view_layer.update()
     return out

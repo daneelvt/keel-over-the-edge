@@ -2,7 +2,9 @@
 
 // Every boat's model against the catalog: its named parts sit where the
 // physics puts them, within 1 cm, and it is within its triangle budget.
-// Every sailor's model has its parts and is within its own budget.
+// Every sailor's art is the sailors' build's: its deck level skinned and
+// within its budget, its far level one posed figure seated by its place, and
+// its clips every one the runtime sails with.
 
 import { readFileSync } from 'node:fs';
 import { describe, expect, test } from 'vitest';
@@ -10,13 +12,15 @@ import { catalog } from '../catalog';
 
 /** Most triangles in a boat's model (starting value). */
 const BUDGET = 15000;
-/** Most triangles in a sailor's model (starting value). */
-const SAILOR_BUDGET = 2000;
+/** Most triangles in a sailor's deck and far levels (the build's tables.yaml). */
+const DECK_BUDGET = 3300;
+const FAR_BUDGET = 300;
 const CM = 0.01;
 
 interface Gltf {
   nodes: {
     name?: string;
+    skin?: number;
     translation?: number[];
     mesh?: number;
     children?: number[];
@@ -27,6 +31,17 @@ interface Gltf {
   }[];
   materials: { name: string }[];
   accessors: { count: number; min?: number[]; max?: number[] }[];
+  animations?: { name: string }[];
+}
+
+function triangles(g: Gltf): number {
+  let n = 0;
+  for (const m of g.meshes ?? []) {
+    for (const p of m.primitives) {
+      n += (g.accessors[p.indices]?.count ?? 0) / 3;
+    }
+  }
+  return n;
 }
 
 function readGltf(path: string): Gltf {
@@ -36,24 +51,35 @@ function readGltf(path: string): Gltf {
   return JSON.parse(glb.subarray(20, 20 + length).toString('utf8')) as Gltf;
 }
 
-describe.each(catalog.sailors.map((s) => [s.name, s] as const))('sailor %s', (_, sailor) => {
-  const g = readGltf(sailor.art.model);
+/** Every look's versions, the people's and the machine's, by name. */
+const versions = [
+  ...catalog.sailors.flatMap((s) => s.versions.map((v) => [`${s.name} ${v.name}`, v] as const)),
+  ...catalog.machine.versions.map((v) => [`machine ${v.name}`, v] as const),
+];
 
-  test('has its named parts', () => {
-    for (const name of ['body', 'head', 'arm-left', 'arm-right']) {
-      expect(g.nodes.some((n) => n.name === name)).toBe(true);
-    }
+describe.each(versions)('sailor %s', (_, sailor) => {
+  test(`its deck level is skinned, under ${DECK_BUDGET.toLocaleString('en')} triangles`, () => {
+    const g = readGltf(sailor.art.model);
+    expect(g.nodes.some((n) => n.skin !== undefined)).toBe(true);
+    expect(triangles(g)).toBeGreaterThan(1000);
+    expect(triangles(g)).toBeLessThan(DECK_BUDGET);
   });
 
-  test(`is under ${SAILOR_BUDGET.toLocaleString('en')} triangles`, () => {
-    let triangles = 0;
-    for (const m of g.meshes) {
-      for (const p of m.primitives) {
-        triangles += (g.accessors[p.indices]?.count ?? 0) / 3;
-      }
+  test(`its far level is one figure seated by its place, under ${FAR_BUDGET} triangles`, () => {
+    const g = readGltf(sailor.art.far);
+    expect(g.nodes.some((n) => n.name === 'place')).toBe(true);
+    expect(triangles(g)).toBeLessThanOrEqual(FAR_BUDGET);
+  });
+
+  test('its clips are every one the runtime sails with, on both side decks', () => {
+    const names = (readGltf(sailor.art.clips).animations ?? []).map((a) => a.name);
+    for (const c of ['helm', 'hiking-1', 'hiking-2', 'hiking-3', 'cross', 'habit', 'climbing-in']) {
+      expect(names).toContain(c);
+      expect(names).toContain(`${c}-port`);
     }
-    expect(triangles).toBeGreaterThan(100);
-    expect(triangles).toBeLessThan(SAILOR_BUDGET);
+    for (const c of ['treading-water', 'righting', 'standing-idle', 'habit-standing']) {
+      expect(names).toContain(c);
+    }
   });
 });
 
@@ -98,9 +124,30 @@ describe.each(catalog.boats.map((b) => [b.name, b] as const))('%s', (_, boat) =>
       'tiller',
       'daggerboard',
       'sailor',
+      // What the sailor holds, stands on and sits against.
+      'extension',
+      'grip',
+      'sheet',
+      'sheet-boom',
+      'strap',
+      'gunwale',
+      'board-root',
     ]) {
       expect(() => node(name)).not.toThrow();
     }
+  });
+
+  test('its hull is a solid the sailor is kept out of, and its gunwale is the outline’s', () => {
+    const solid = (node('hull') as { extras?: { solid?: { stations: number[][] } } }).extras?.solid;
+    expect(solid?.stations.length ?? 0).toBeGreaterThan(10);
+    const g = at('gunwale');
+    const u = (hull.transom - (g[2] ?? 0)) / boat.lengthOverall;
+    const o = hull.outline;
+    const x = u * (o.length - 1);
+    const i = Math.floor(x);
+    const half = (o[i] ?? 0) + ((o[i + 1] ?? 0) - (o[i] ?? 0)) * (x - i);
+    expect(g[0] ?? 0).toBeCloseTo(half, 2);
+    expect(g[2] ?? 0).toBeCloseTo(at('sailor')[2] ?? 1, 2);
   });
 
   test('its parts sit where the physics puts them', () => {

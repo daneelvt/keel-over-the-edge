@@ -124,11 +124,11 @@ func (w *World) join(c *bus.Command) bus.Reply {
 	}
 	// The newcomer waits at the tail, and gets the next boat at once if
 	// admission would give it to them.
-	f.Queue = append(f.Queue, bus.Waiting{Account: account, Conn: conn, Since: f.Tick, Machine: c.Machine, Priority: c.Priority})
+	f.Queue = append(f.Queue, bus.Waiting{Account: account, Conn: conn, Since: f.Tick, Machine: c.Machine, Priority: c.Priority, Look: c.Look})
 	last := len(f.Queue) - 1
 	if !f.Held && w.nextAdmitted(f, machines(f)) == last {
 		f.Queue = f.Queue[:last]
-		s := w.newBoat(account, conn, c.Machine, c.Priority)
+		s := w.newBoat(account, conn, c.Machine, c.Priority, c.Look)
 		return bus.Reply{Result: bus.Joined, Slot: s, Boat: f.Boat[s], Gen: f.Gen[s]}
 	}
 	pos, _ := bus.QueuePlace(f.Queue, last)
@@ -154,20 +154,21 @@ func (w *World) admit() {
 		}
 		q := f.Queue[i]
 		f.Queue = slices.Delete(f.Queue, i, i+1)
-		s := w.newBoat(q.Account, q.Conn, q.Machine, q.Priority)
+		s := w.newBoat(q.Account, q.Conn, q.Machine, q.Priority, q.Look)
 		if q.Machine {
 			ai++
 		}
 		f.Grace[s] = q.Grace
 		r := bus.Reply{Result: bus.Admitted, Slot: s, Boat: f.Boat[s], Gen: f.Gen[s], Tick: f.Tick, Since: q.Since}
 		f.Events = append(f.Events, bus.Event{Command: bus.Command{Op: bus.Join, Account: q.Account, Conn: q.Conn,
-			Machine: q.Machine, Priority: q.Priority}, Reply: r})
+			Machine: q.Machine, Priority: q.Priority, Look: q.Look}, Reply: r})
 	}
 }
 
-// newBoat puts a new boat for account, of its kind, sailed through conn,
-// in the lowest free slot, and returns the slot. The world must have room.
-func (w *World) newBoat(account bus.Account, conn uint64, machine, priority bool) int32 {
+// newBoat puts a new boat for account, of its kind, its sailor of a look,
+// sailed through conn, in the lowest free slot, and returns the slot. The
+// world must have room.
+func (w *World) newBoat(account bus.Account, conn uint64, machine, priority bool, look uint32) int32 {
 	f := w.next
 	s := int32(slices.Index(f.Occupied, false))
 	gen := f.Gen[s]
@@ -178,7 +179,7 @@ func (w *World) newBoat(account bus.Account, conn uint64, machine, priority bool
 	f.Conn[s] = conn
 	f.Grace[s] = 0
 	f.Kind[s] = 0
-	f.Machine[s], f.Priority[s] = machine, priority
+	f.Machine[s], f.Priority[s], f.Look[s] = machine, priority, look
 	f.State[s] = w.spawn(f, s)
 	f.Control[s] = bus.Pack(0, bus.Steps/2, w.startSheet(f, s), gen)
 	f.Pilot[s] = bus.PilotOffWord(gen)

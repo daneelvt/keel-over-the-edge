@@ -19,6 +19,7 @@ import (
 	"github.com/daneelvt/keel-over-the-edge/internal/auth/softkey"
 	"github.com/daneelvt/keel-over-the-edge/internal/catalog"
 	"github.com/daneelvt/keel-over-the-edge/internal/client"
+	"github.com/daneelvt/keel-over-the-edge/internal/looks"
 	"github.com/daneelvt/keel-over-the-edge/internal/protocol"
 	"github.com/daneelvt/keel-over-the-edge/internal/protocol/pb"
 	"github.com/daneelvt/keel-over-the-edge/internal/store/storetest"
@@ -62,7 +63,7 @@ func realSailor(t *testing.T, s *realServer, name string) string {
 		}
 		return out
 	}
-	body, _ := json.Marshal(map[string]string{"name": name, "look": string(cat.Sailors[0].ID)})
+	body, _ := json.Marshal(looks.Begin(name, looks.New(cat).Draw(1)))
 	opts := post("/account/begin", body)
 	// The page's origin, as the server is configured with it.
 	_, answer, err := softkey.Create(opts, "http://localhost:5181")

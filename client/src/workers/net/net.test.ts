@@ -571,6 +571,7 @@ describe('watching, in the net worker', () => {
       sailor: 'Iron Mary',
       machine: true,
       mine: true,
+      look: 0,
     });
     expect(w?.type === 'welcome' && w.first).toBe(true);
     expect(h.statuses()).toEqual(['connecting', 'sailing']);

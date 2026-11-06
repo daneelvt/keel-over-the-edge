@@ -37,6 +37,7 @@ nothing hidden comes through when the figure moves.
 import hashlib
 import inspect
 import json
+import math
 import os
 import uuid
 from collections import namedtuple
@@ -53,6 +54,7 @@ import body
 import landmarks
 import lod
 import mpfbx
+import patterns
 
 Worn = namedtuple("Worn", "obj kind spec path")
 
@@ -93,9 +95,13 @@ def dress(job, v, human, arm, marks, work):
         if lod.made_from(path) != k:
             make(human, marks, spec, params, ease, path, k, under)
         obj = fit(human, path, spec["id"])
+        if params.get("flare"):
+            flare(obj, marks, params["flare"])
         # The fit is within a millimetre of the cut, unevenly: made its own
         # mirror again.
         mirror(obj)
+        if params.get("ragged"):
+            ragged(obj, params["ragged"])
         for poly in obj.data.polygons:
             poly.use_smooth = True
         obj.data.materials.clear()
@@ -104,11 +110,84 @@ def dress(job, v, human, arm, marks, work):
         if spec["region"] != "fixed" and params.get("shade"):
             # A shade of the chosen colour: a facing, a lining.
             mat["part_colour"] = [atlas.NEUTRAL * params["shade"]] * 3
+        if params.get("pattern"):
+            patterns.paint(mat, params["pattern"])
         obj.data.materials.append(mat)
         if params.get("skirt"):
-            skirt_weights(obj, arm, marks)
+            skirt_weights(obj, arm, marks, params.get("hips"))
         out.append(Worn(obj, "garment", spec, path))
     return out
+
+
+def flare(obj, marks, f):
+    """Wide legs, as slops are: below the crotch each vertex pushed out from
+    its leg's middle, by nothing at the crotch growing to f["out"] at the
+    knee and on below it (as the power f["power"] of the way down), less
+    on the inner side, where the legs face each other (f["inner"], a
+    share). Done on the fitted garment, so it is its body's own."""
+    out, power, inner = f.get("out", 0.04), f.get("power", 1.3), f.get("inner", 0.3)
+    top = marks.crotch()
+    knee = min(marks.joint("l-knee")[2], marks.joint("r-knee")[2])
+    middles = {}
+
+    def middle_of(z, side):
+        # The leg's section at z (the largest on its side: not a hand's).
+        key = (round(z / 0.005), side)
+        if key not in middles:
+            legs = [o for o in marks.section.outlines(key[0] * 0.005) if o[:, 0].mean() * side > 0.02]
+            middles[key] = max(legs, key=len).mean(0) if legs else None
+        return middles[key]
+
+    for v in obj.data.vertices:
+        c = v.co
+        if c.z >= top or abs(c.x) < 1e-4:
+            continue
+        t = min(1.0, (top - c.z) / max(top - knee, 1e-3)) ** power
+        side = 1.0 if c.x > 0 else -1.0
+        middle = middle_of(c.z, side)
+        if middle is None:
+            continue
+        d = Vector((c.x - middle[0], c.y - middle[1], 0.0))
+        if d.length < 1e-6:
+            continue
+        d.normalize()
+        # 1 on the outer side, inner on the inner, between them round it.
+        k = inner + (1 - inner) * (0.5 + 0.5 * d.x * side)
+        v.co = c + d * (out * t * k)
+    obj.data.update()
+
+
+def ragged(obj, r):
+    """A worn hem: torn back unevenly from its lowest edge. Round the
+    garment the hem is cut back by up to depth metres, by a profile drawn
+    at random (the same every build) over teeth pieces, some whole; the
+    faces below it go. Done on the fitted garment, so its .mhclo is as it
+    was made; not its own mirror (asymmetric)."""
+    depth, teeth = r.get("depth", 0.03), r.get("teeth", 14)
+    rng = np.random.default_rng(r.get("seed", 1))
+    cuts = rng.uniform(0.0, 1.0, teeth) ** r.get("power", 1.5)
+    cuts[rng.uniform(0, 1, teeth) < r.get("whole", 0.3)] = 0.0
+    co = body.coords(obj)
+    hem = float(co[:, 2].min())
+    me = obj.data
+    bm = bmesh.new()
+    bm.from_mesh(me)
+    gone = []
+    for f in bm.faces:
+        c = f.calc_center_median()
+        a = (np.arctan2(c.x, -c.y) / (2 * np.pi)) % 1.0 * teeth
+        i = int(a)
+        t = a - i
+        # A tooth's edge: from one cut to the next, a jagged line.
+        cut = cuts[i] * (1 - t) + cuts[(i + 1) % teeth] * t
+        cut += 0.35 * abs(np.sin(np.pi * a * 2.0)) * max(cuts[i], cuts[(i + 1) % teeth])
+        if c.z < hem + depth * cut:
+            gone.append(f)
+    bmesh.ops.delete(bm, geom=gone, context="FACES")
+    bmesh.ops.delete(bm, geom=[v for v in bm.verts if not v.link_faces], context="VERTS")
+    bm.to_mesh(me)
+    bm.free()
+    me.update()
 
 
 def version_params(spec, v):
@@ -447,7 +526,8 @@ def bodice(human, marks, p):
     """A body: the torso from a neckline (lower at the front by its slope)
     to a little below the waist, with sleeves to a share of the forearm or
     armholes; open down the front if asked (the opening's half width at the
-    neck and at the hem)."""
+    neck, at the bust if given, and at the hem; its edges laid straight on
+    that line if straight)."""
     bm = source(human, "helper-tights")
     m = marks.measure()
     parts = (PARTS["torso"], PARTS["arm"]) if p.get("sleeve") else (PARTS["torso"],)
@@ -464,16 +544,27 @@ def bodice(human, marks, p):
     if p.get("open"):
         o = p["open"]
         top, low = neck, m["heights"]["waist"] - p.get("below-waist", 0.03)
+        # The edge straight from the neck to the hem, or by the bust's
+        # height if it is given there.
+        zs, halves = [low, top], [o["hem"], o["neck"]]
+        if o.get("bust") is not None:
+            zs, halves = [low, marks.bust()[0], top], [o["hem"], o["bust"], o["neck"]]
         layer = bm.verts.layers.int["part"]
         gone = []
         for f in bm.faces:
             c = f.calc_center_median()
-            t = float(np.clip((top - c.z) / (top - low), 0, 1))
-            half = o["neck"] + (o["hem"] - o["neck"]) * t
+            half = float(np.interp(c.z, zs, halves))
             if c.y < marks.near(c.z)[1] and abs(c.x) < half and all(v[layer] == PARTS["torso"] for v in f.verts):
                 gone.append(f)
         bmesh.ops.delete(bm, geom=gone, context="FACES")
         bmesh.ops.delete(bm, geom=[v for v in bm.verts if not v.link_faces], context="VERTS")
+        # The fronts' edges laid on the opening's line if asked (straight):
+        # straight, not the stair of the faces cut away.
+        for v in bm.verts if o.get("straight") else ():
+            half = float(np.interp(v.co.z, zs, halves))
+            if (v.is_boundary and low + 0.01 < v.co.z < top - 0.01 and v.co.y < marks.near(v.co.z)[1]
+                    and half <= abs(v.co.x) < half + 0.035 and v[layer] == PARTS["torso"]):
+                v.co.x = math.copysign(half, v.co.x)
     return bm
 
 
@@ -1005,6 +1096,32 @@ def bury(under, overs, reach, keep):
     return len(gone)
 
 
+def bury_above(under, z, keep):
+    """Drops the faces of under wholly above the height z (inside a hat's
+    crown), but for a band keep metres wide beside what shows. Returns how
+    many faces went."""
+    me = under.data
+    co = body.coords(under)
+    shown = co[:, 2] <= z
+    if shown.any() and keep > 0:
+        tree = KDTree(int(shown.sum()))
+        for i in np.flatnonzero(shown):
+            tree.insert(co[i], int(i))
+        tree.balance()
+        for i in np.flatnonzero(~shown):
+            if tree.find(co[i])[2] <= keep:
+                shown[i] = True
+    bm = bmesh.new()
+    bm.from_mesh(me)
+    gone = [f for f in bm.faces if not any(shown[v.index] for v in f.verts)]
+    bmesh.ops.delete(bm, geom=gone, context="FACES")
+    bmesh.ops.delete(bm, geom=[v for v in bm.verts if not v.link_faces], context="VERTS")
+    bm.to_mesh(me)
+    bm.free()
+    me.update()
+    return len(gone)
+
+
 def _mirrors(co, within=0.002):
     """Each vertex's mirror across x (itself where it has none)."""
     tree = KDTree(len(co))
@@ -1036,6 +1153,10 @@ def bury_all(skin, worn, ease):
     over_head = [w.obj for w in worn if w.kind in ("hair", "hat")]
     if over_head:
         out["body under hair"] = bury(skin, over_head, 0.03, BURY["body"])
+    # A headscarf under a hat: what the crown covers, above its band.
+    hats = [w.obj for w in worn if w.kind == "hat"]
+    if len(hats) > 1 and "band" in hats[-1]:
+        out[hats[0].name] = bury_above(hats[0], hats[-1]["band"] + 0.004, BURY["garment"])
     for i, inner in enumerate(garments):
         # A cuff is turned back over the sleeve's end: what is under it
         # stays, so it rests on something.
@@ -1194,10 +1315,14 @@ def symmetrize(bm, within=0.003, greedy=False):
             verts[j].co = Vector((-m[0], m[1], m[2]))
 
 
-def skirt_weights(obj, arm, marks):
+def skirt_weights(obj, arm, marks, hips=None):
     """Weights a skirt on the skirt chains below the hips, by azimuth (the
     two nearest chains) and height (the upper bone, then the lower), and
-    on the pelvis above them."""
+    on the pelvis above them. With hips ({share, band}), the cloth above
+    the hips at the front and sides is carried in part by the thighs' hip
+    correctors (which turn half as far as the thighs), most at the hips'
+    height and none by band above them: the cloth over the hip joints gives
+    as a thigh turns into it, sitting or with a knee raised."""
     chains = {b.name[: -len("_01")]: b for b in arm.data.bones if b.name.startswith("skirt_") and b.name.endswith("_01")}
     hip = marks.measure()["heights"]["hip"]
     azimuth = {n: np.arctan2(b.head_local.x, -b.head_local.y) for n, b in chains.items()}
@@ -1207,9 +1332,21 @@ def skirt_weights(obj, arm, marks):
     def apart(a, b):
         return abs(((a - b + np.pi) % (2 * np.pi)) - np.pi)
 
+    corr = {s: obj.vertex_groups.new(name="thigh_corrector_" + s) for s in ("l", "r")} if hips else {}
     for v in obj.data.vertices:
         if v.co.z >= hip:
-            groups["pelvis"].add([v.index], 1.0, "REPLACE")
+            share = 0.0
+            if hips:
+                # Front and sides only: behind, the cloth hangs off the
+                # seat, which the thighs turn away from.
+                front = 1 - max(-np.cos(np.arctan2(v.co.x, -v.co.y)), 0.0)
+                share = hips["share"] * max(0.0, 1 - (v.co.z - hip) / hips["band"]) * front
+            groups["pelvis"].add([v.index], 1.0 - share, "REPLACE")
+            if share > 0:
+                left = float(np.clip(0.5 + v.co.x / 0.08, 0, 1))
+                for s, w in (("l", left), ("r", 1 - left)):
+                    if w * share > 1e-4:
+                        corr[s].add([v.index], w * share, "REPLACE")
             continue
         a = np.arctan2(v.co.x, -v.co.y)
         near = sorted(azimuth, key=lambda n: apart(a, azimuth[n]))[:2]

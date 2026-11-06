@@ -11,6 +11,7 @@ import (
 	"github.com/daneelvt/keel-over-the-edge/internal/catalog"
 	"github.com/daneelvt/keel-over-the-edge/internal/chart"
 	"github.com/daneelvt/keel-over-the-edge/internal/forecast"
+	sailorlooks "github.com/daneelvt/keel-over-the-edge/internal/looks"
 	"github.com/daneelvt/keel-over-the-edge/internal/physics"
 	"github.com/daneelvt/keel-over-the-edge/internal/sim"
 	"github.com/daneelvt/keel-over-the-edge/internal/sky"
@@ -76,8 +77,11 @@ type Sea struct {
 	// Catalog, Kinds and Encounters are what the phone's overlays and
 	// sounds are worked out from: the catalog, the kinds of boat prepared,
 	// and how boats meet; nil for none.
-	Catalog    *catalog.Catalog
-	Kinds      []physics.Prepared
+	Catalog *catalog.Catalog
+	Kinds   []physics.Prepared
+	// Looks are the catalog's looks, which a boat's look is coded and said
+	// by; nil for none.
+	Looks      *sailorlooks.Book
 	Encounters *physics.EncounterPrepared
 
 	overlays overlays

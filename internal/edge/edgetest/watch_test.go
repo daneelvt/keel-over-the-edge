@@ -41,8 +41,9 @@ type viewer struct {
 	ended    *pb.WatchEnded
 	queued   *pb.Queued
 	watchers *pb.Watchers
-	// lamps are the agent's lamps told, in order.
+	// lamps are the agent's lamps told, in order, and looks the looks.
 	lamps  []pb.Lamp
+	looks  []uint32
 	closed bool
 }
 
@@ -109,6 +110,8 @@ func (v *viewer) take(r client.Received) {
 		v.watchers = m.Watchers
 	case *pb.ServerMessage_AgentLamp:
 		v.lamps = append(v.lamps, m.AgentLamp.GetState())
+	case *pb.ServerMessage_LookChanged:
+		v.looks = append(v.looks, m.LookChanged.GetLook())
 	}
 }
 

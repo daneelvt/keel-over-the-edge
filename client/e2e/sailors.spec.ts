@@ -10,6 +10,7 @@
 //
 // The clips are held at a time (t), so every picture is the same.
 
+import { readFileSync } from 'node:fs';
 import { expect, type Page, test } from '@playwright/test';
 import type { DressingHooks, Room } from '../src/dev/dressing';
 import { decodePng, type Picture } from './helpers';
@@ -206,11 +207,60 @@ test('the Rover stands and sits in both versions, dressed, skinned and posed', a
       expect(darkest(picture, at), `${name}, ${clip}`).toBeLessThanOrEqual(DARK);
     }
   }
-  const helm = await show(page, { clip: 'helm-idle', t: 1 });
-  expect((await page.evaluate(() => globalThis.dressing.figures())).every((f) => f.inBoat)).toBe(
-    true,
-  );
-  for (const [name, at] of Object.entries(await bones(page, parts))) {
-    expect(darkest(helm, at), `${name} at the helm`).toBeLessThanOrEqual(DARK);
+  // Seated in the boat in the clips that sit in it, either side deck (a
+  // hiking sailor's head is behind the moored boat's boom).
+  for (const clip of ['helm', 'helm-port', 'cross', 'climbing-in']) {
+    const seated = await show(page, { clip, t: 1 });
+    expect(
+      (await page.evaluate(() => globalThis.dressing.figures())).every((f) => f.inBoat),
+      clip,
+    ).toBe(true);
+    for (const [name, at] of Object.entries(await bones(page, parts))) {
+      expect(darkest(seated, at), `${name}, ${clip}`).toBeLessThanOrEqual(DARK);
+    }
   }
 });
+
+/** The catalog's looks after the Rover, two at a time, by id and name. */
+const LOOKS = (
+  JSON.parse(readFileSync(new URL('../src/catalog/catalog.gen.json', import.meta.url), 'utf8')) as {
+    sailors: { id: string; name: string }[];
+  }
+).sailors.slice(1);
+
+for (let i = 0; i < LOOKS.length; i += 2) {
+  const pair = LOOKS.slice(i, i + 2);
+  const looks = pair.map((l) => l.id);
+  const names = pair.map((l) => l.name);
+  test(`the ${names[0]} and the ${names[1]} stand, sit and go through their habits`, async ({
+    page,
+  }) => {
+    test.setTimeout(240_000);
+    for (const look of looks) {
+      await openRoom(page, `view=lineup&black=1&t=1&clip=rest&look=${look}`);
+      const figures = await page.evaluate(() => globalThis.dressing.figures());
+      expect(figures.map((f) => `${f.look} ${f.version}`)).toEqual([
+        `${look} female`,
+        `${look} male`,
+      ]);
+      for (const f of figures) {
+        expect(f).toMatchObject({ level: 'close', skinned: true, bones: 85, inBoat: false });
+      }
+      expect(await page.evaluate(() => globalThis.dressing.problems())).toEqual([]);
+      const parts = ['head', 'pelvis', 'hand_l', 'hand_r'];
+      // The habit, as the game asks for it, at the helm and standing.
+      for (const clip of ['rest', 'habit', 'habit-port', 'habit-standing']) {
+        const picture = await show(page, { clip, t: 1 });
+        if (clip.startsWith('habit') && clip !== 'habit-standing') {
+          expect(
+            (await page.evaluate(() => globalThis.dressing.figures())).every((f) => f.inBoat),
+            `${look} ${clip}`,
+          ).toBe(true);
+        }
+        for (const [name, at] of Object.entries(await bones(page, parts))) {
+          expect(darkest(picture, at), `${look} ${name}, ${clip}`).toBeLessThanOrEqual(DARK);
+        }
+      }
+    }
+  });
+}

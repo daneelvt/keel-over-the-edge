@@ -37,6 +37,7 @@ import (
 	"github.com/daneelvt/keel-over-the-edge/internal/edge"
 	"github.com/daneelvt/keel-over-the-edge/internal/forecast"
 	"github.com/daneelvt/keel-over-the-edge/internal/jobs"
+	"github.com/daneelvt/keel-over-the-edge/internal/looks"
 	"github.com/daneelvt/keel-over-the-edge/internal/oauth"
 	"github.com/daneelvt/keel-over-the-edge/internal/obs"
 	"github.com/daneelvt/keel-over-the-edge/internal/owner"
@@ -430,10 +431,7 @@ func runServer(ctx context.Context, getenv func(string) string, stdout io.Writer
 	if err != nil {
 		return stopEarly(side, flight, fmt.Errorf("passkeys: %w", err))
 	}
-	looks := make([]string, len(cat.Sailors))
-	for i, s := range cat.Sailors {
-		looks[i] = string(s.ID)
-	}
+	looks := looks.New(cat)
 	p := &process{
 		cfg: cfg, opt: opt, build: build, log: log, health: health, metrics: metrics,
 		db: db, writer: writer, lease: leaseEpoch, cat: cat, waves: waves, kinds: kinds, wcfg: wcfg,
@@ -459,7 +457,7 @@ func runServer(ctx context.Context, getenv func(string) string, stdout io.Writer
 	}
 	p.hand = accounts.New(accounts.Config{
 		Store: db, Sessions: p.sessions, Door: p.agents.grants, Agents: p.agents.core, World: p.accountsWorld,
-		Lifetime: p.agents.lifetime.Get, Looks: p.agents.looks, Stopped: stopped, Log: log, Metrics: metrics,
+		Lifetime: p.agents.lifetime.Get, Looks: p.agents.looks, Book: p.looks, Stopped: stopped, Log: log, Metrics: metrics,
 	})
 	for _, k := range []store.Kind{store.Human, store.AI} {
 		metrics.GaugeFunc("keel_accounts_stopped", "Accounts stopped by the operator, by kind; a stopped human's machine sailors among the AI accounts.",
