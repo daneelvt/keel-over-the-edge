@@ -131,9 +131,9 @@
   cursor: default;
 }
 
-.hud .watch-go,
-.hud .key-main,
-.hud .account .start-go {
+.hud button.watch-go,
+.hud button.key-main,
+.hud .account button.start-go {
   background: linear-gradient(var(--brass-light), var(--brass) 55%, var(--brass-dark));
   box-shadow:
     inset 0 1px 0 rgb(255 255 255 / 40%),

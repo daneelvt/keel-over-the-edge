@@ -1584,9 +1584,10 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
     /**
      * The sandbox's screen as it is while a boat is watched (the plate at
      * its foot, nothing that steers), that sailor's, a machine sailor's
-     * with the cog; null as it is while sailing.
+     * with the cog, the list of sailors to watch open over it if asked;
+     * null as it is while sailing.
      */
-    watchPlate(sailor: string | null, machine = true): void {
+    watchPlate(sailor: string | null, machine = true, list = false): void {
       sailing.remount?.(
         sailor === null
           ? null
@@ -1598,7 +1599,7 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
               place: signal(null),
               boatPlace: signal(null),
               watchers: signal(0),
-              list: signal(false),
+              list: signal(list),
               watch: () => {},
               sail: () => {},
               unwatch: () => {},
