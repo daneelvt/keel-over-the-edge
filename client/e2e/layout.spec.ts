@@ -13,9 +13,10 @@
 // The case is one size whatever its readouts say. Held sideways it is no
 // taller than its compass card, its pushers standing on three edges; held
 // upright the barometer's and the board's stand out of its bottom edge
-// beneath the readouts and the clock's out of its left edge under the
-// compass, and the open barometer and clock stay open, their column clear
-// of the boat. The pocket chart's caption
+// beneath the readouts and the clock's out of its top edge over the
+// speed's empty end, and the open barometer and clock stay open, their
+// column clear of the boat. No pusher stands over the compass card, the
+// readouts' words or another pusher, nor off the screen. The pocket chart's caption
 // is two lines within its frame, the weather's pusher set in the frame.
 // The menu, open, stands over everything and within the screen. The
 // sheet's legend at its longest, the sail luffing or stalled, stands
@@ -289,7 +290,7 @@ async function caseFaults(page: Page, upright: boolean): Promise<string[]> {
         (p) => `${p.getAttribute('data-pusher')} ${p.getAttribute('data-edge')}`,
       );
       const want = upright
-        ? 'clock left, barometer bottom, board bottom'
+        ? 'clock top, barometer bottom, board bottom'
         : 'clock top, barometer right, board bottom';
       if (edges.join(', ') !== want) {
         out.push(`the case's pushers: ${edges.join(', ')}`);
@@ -1265,6 +1266,104 @@ test('the chart’s strip and its weather’s case are one row each on every scr
       }
     }
   }
+  expect(found).toEqual([]);
+});
+
+/**
+ * What is wrong with the pushers: one over the compass card, over the
+ * readouts' words or over another, stem and face; or one off the screen.
+ */
+async function pusherFaults(page: Page): Promise<string[]> {
+  return page.evaluate(() => {
+    const out: string[] = [];
+    const over = (a: DOMRect, b: DOMRect) =>
+      Math.min(a.right, b.right) - Math.max(a.left, b.left) > 0.5 &&
+      Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top) > 0.5;
+    // Each pusher's target, and what is drawn of it: its stem and its face.
+    const pushers = [...document.querySelectorAll('.case [data-pusher], .pocket [data-pusher]')]
+      .map((p) => {
+        const drawn = [...p.querySelectorAll('.pusher-stem, .pusher-face')].map((e) =>
+          e.getBoundingClientRect(),
+        );
+        return { name: p.getAttribute('data-pusher') ?? '', r: p.getBoundingClientRect(), drawn };
+      })
+      .filter((p) => p.r.width > 0);
+    const compass = document.querySelector('.case .compass')?.getBoundingClientRect();
+    const words = [...document.querySelectorAll('.case .readouts .slot-text')].map((t) => {
+      const range = document.createRange();
+      range.selectNodeContents(t);
+      return range.getBoundingClientRect();
+    });
+    for (const p of pushers) {
+      if (compass !== undefined && p.drawn.some((d) => over(d, compass))) {
+        out.push(`the ${p.name} pusher stands over the compass card`);
+      }
+      if (words.some((w) => w.width > 0 && p.drawn.some((d) => over(d, w)))) {
+        out.push(`the ${p.name} pusher stands over the readouts’ words`);
+      }
+      if (
+        p.r.left < -0.5 ||
+        p.r.top < -0.5 ||
+        p.r.right > innerWidth + 0.5 ||
+        p.r.bottom > innerHeight + 0.5
+      ) {
+        out.push(`the ${p.name} pusher is off the screen`);
+      }
+    }
+    // Their targets apart.
+    for (let i = 0; i < pushers.length; i++) {
+      for (let j = i + 1; j < pushers.length; j++) {
+        const [a, b] = [pushers[i], pushers[j]];
+        if (a !== undefined && b !== undefined && over(a.r, b.r)) {
+          out.push(`the ${a.name} pusher covers the ${b.name} pusher`);
+        }
+      }
+    }
+    return out;
+  });
+}
+
+test('no pusher stands over the compass card, the readouts or another pusher, out at sea and in port, on every screen', async ({
+  page,
+}) => {
+  test.skip(test.info().project.name === 'webgpu', 'the case is the same on either back end');
+  const screens = [...SCREENS, { name: 'a desktop', width: 1440, height: 900, upright: false }];
+  await page.setViewportSize({
+    width: screens[0]?.width ?? 375,
+    height: screens[0]?.height ?? 667,
+  });
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await openScene(page, 'world=1', true);
+  const found: string[] = [];
+  for (const where of ['at sea', 'in port']) {
+    if (where === 'in port') {
+      await expect
+        .poll(() => page.evaluate(() => globalThis.keel.toHarbour()), { timeout: 30_000 })
+        .toBe(true);
+      await page.evaluate(() => {
+        globalThis.keel.advance(30);
+        globalThis.keel.render();
+      });
+      await expect(page.locator('[data-pusher=board]')).toBeVisible({ timeout: 15_000 });
+    }
+    for (const s of screens) {
+      await page.setViewportSize({ width: s.width, height: s.height });
+      await page.waitForFunction(
+        ({ width, height }) => innerWidth === width && innerHeight === height,
+        { width: s.width, height: s.height },
+      );
+      await page.evaluate(() => {
+        const k = globalThis.keel;
+        k.settings({ barometer: true, clock: true, rightOfWay: true });
+        k.readouts('longest');
+      });
+      await page.waitForTimeout(150);
+      for (const f of await pusherFaults(page)) {
+        found.push(`${s.name}, ${where}: ${f}`);
+      }
+    }
+  }
+  await page.evaluate(() => globalThis.keel.readouts(null));
   expect(found).toEqual([]);
 });
 

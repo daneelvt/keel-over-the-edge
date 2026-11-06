@@ -15,8 +15,8 @@
 // edge. Held upright, where the case shares the top of the screen with the
 // pocket chart, the barometer's and the board's stand out of the bottom
 // edge beneath the readouts, the case no wider than its words, the
-// clock's out of the left edge under the compass, and the complications
-// hang in a column.
+// clock's still on the top edge over the speed's empty end, and the
+// complications hang in a column.
 // The case never reaches the pocket chart, nor held upright the controls
 // at the foot of the screen: the complication opened first folds back in,
 // unless the case reached the chart with nothing out. A complication
@@ -565,7 +565,7 @@ export function Case({
               controls={IDS.clock}
               out={out.clock}
               press={() => put('clock', !out.clock)}
-              edge={upright ? 'left' : 'top'}
+              edge="top"
             >
               <ClockDecal />
             </Pusher>
