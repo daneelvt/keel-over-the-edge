@@ -7,41 +7,13 @@
 // The pictures are loaded when first shown, each pair once. And the inked
 // portrait, the look and version's drawing as the log shows it.
 
-import type { SailorArt } from '../catalog';
 import { coloursOf, isMachine, type Look, type Looks, lookWords, partsOf } from '../catalog/looks';
-import type { PortraitColours, PortraitFiles } from './portrait';
+import type { PortraitColours } from './portrait';
 import { PortraitCanvas, type PortraitSize } from './portraitcanvas';
+import { inkFile, portraitFiles } from './portraitfiles';
 
 export type { PortraitSize } from './portraitcanvas';
-
-/** Every look and version's portrait pictures, by their path under art/, as the build serves them. */
-const FILES = import.meta.glob<string>(
-  ['../../../art/sailors/*/*.portrait.{avif,webp}', '../../../art/sailors/*/*.portrait-mask.webp'],
-  { query: '?url&no-inline', import: 'default', eager: true },
-);
-
-/** Every look and version's inked portrait, by its path under art/. */
-const INKS = import.meta.glob<string>('../../../art/sailors/*/*.ink.webp', {
-  query: '?url&no-inline',
-  import: 'default',
-  eager: true,
-});
-
-/** A version's portrait pictures, by URL; null for one the build has not. */
-export function portraitFiles(art: SailorArt): PortraitFiles | null {
-  const at = (path: string) => FILES[`../../../art/${path}`];
-  const base = at(art.portrait);
-  const fallback = at(art.portraitFallback);
-  const mask = at(art.portraitMask);
-  return base === undefined || fallback === undefined || mask === undefined
-    ? null
-    : { base, fallback, mask };
-}
-
-/** A version's inked portrait, by URL; null for one the build has not. */
-export function inkFile(art: SailorArt): string | null {
-  return INKS[`../../../art/${art.ink}`] ?? null;
-}
+export { inkFile, portraitFiles } from './portraitfiles';
 
 /**
  * A look's portrait, size CSS pixels wide (the picture is 4:5), named by the
