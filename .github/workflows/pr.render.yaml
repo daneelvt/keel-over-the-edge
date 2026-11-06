@@ -137,8 +137,10 @@ jobs:
       - name: Seed 1's world, for its chart (discover.spec.ts)
         run: go run ./tools/dev -world 1
       - name: Chromium's headless shell for Playwright
-        working-directory: client
-        run: npx --no-install playwright install --with-deps --only-shell chromium
+        uses: ./.github/actions/install
+        with:
+          working-directory: client
+          command: npx --no-install playwright install --with-deps --only-shell chromium
       - name: The page's tests, three at a time, then those that change the world
         working-directory: client
         # Apart, not page-serial with its dependency: Playwright filters no
@@ -221,10 +223,14 @@ jobs:
       - name: Seed 1's world, for the sandbox's land (land.spec.ts)
         run: go run ./tools/dev -world 1
       - name: Chromium's headless shell for Playwright
-        working-directory: client
-        run: npx --no-install playwright install --with-deps --only-shell chromium
+        uses: ./.github/actions/install
+        with:
+          working-directory: client
+          command: npx --no-install playwright install --with-deps --only-shell chromium
       - name: Mesa's lavapipe, the CPU's Vulkan, for WebGL 2 (e2e/gpu.ts)
-        run: sudo apt-get install -y --no-install-recommends mesa-vulkan-drivers
+        uses: ./.github/actions/install
+        with:
+          command: sudo apt-get install -y --no-install-recommends mesa-vulkan-drivers
       - name: The page draws on lavapipe (WebGL 2) and SwiftShader (WebGPU)
         working-directory: client
         # bash as named, so that the pipe fails when the check does.
@@ -288,8 +294,10 @@ jobs:
       - name: Seed 1's world, for the sandbox's harbour (layout.spec.ts)
         run: go run ./tools/dev -world 1
       - name: WebKit for Playwright
-        working-directory: client
-        run: npx --no-install playwright install --with-deps webkit
+        uses: ./.github/actions/install
+        with:
+          working-directory: client
+          command: npx --no-install playwright install --with-deps webkit
       - name: The net worker's upgrade, the account's passkeys and the screen's layout on WebKit
         working-directory: client
         env:
