@@ -122,21 +122,23 @@ func TestInstructionsShort(t *testing.T) {
 func TestHandbookPages(t *testing.T) {
 	c := NewCore(CoreConfig{})
 	for _, topic := range topics {
-		page, r := c.handbookPage(topic, "Iron Mary", "Ann")
+		page, r := c.handbookPage(topic, "Iron Mary", "Ann", "You are a machine sailor: female, bronze, in madder orange.")
 		if r != nil {
 			t.Fatalf("%s: %v", topic, r)
 		}
-		if n := estimateTokens(page); n < 100 || n > 600 {
+		// The longest, start and tools, are about 510 and 545 o200k
+		// tokens.
+		if n := estimateTokens(page); n < 100 || n > 660 {
 			t.Errorf("%s is about %d tokens", topic, n)
 		}
 		if strings.Contains(page, "{{") {
 			t.Errorf("%s has a blank left: %s", topic, page)
 		}
 	}
-	if _, r := c.handbookPage("navigation", "", ""); r == nil || r.kind != refusedArgs {
+	if _, r := c.handbookPage("navigation", "", "", ""); r == nil || r.kind != refusedArgs {
 		t.Fatal("a page that does not exist")
 	}
-	list, _ := c.handbookPage("", "Iron Mary", "Ann")
+	list, _ := c.handbookPage("", "Iron Mary", "Ann", "")
 	if !strings.Contains(list, "You sail as «Iron Mary», «Ann»'s machine sailor") {
 		t.Fatalf("the list: %s", list)
 	}

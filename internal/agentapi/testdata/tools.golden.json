@@ -355,7 +355,7 @@
       "openWorldHint": false,
       "readOnlyHint": false
     },
-    "description": "Your owner's fleet: list the boats you may take, take one to sea, or leave the water. Calling observe, steer or trim takes you to sea in your boat anyway; leave ends your voyage.",
+    "description": "Your owner's fleet: list the boats you may take, take one to sea, or leave the water. Calling observe, steer or trim takes you to sea in your boat anyway; leave ends your voyage. sailor_look tells your look and its choices, and changes it at Port Royal.",
     "inputSchema": {
       "properties": {
         "action": {
@@ -371,6 +371,18 @@
         },
         "boat": {
           "description": "By its name, for take.",
+          "type": "string"
+        },
+        "colour": {
+          "description": "For sailor_look, by name.",
+          "type": "string"
+        },
+        "finish": {
+          "description": "For sailor_look, by name.",
+          "type": "string"
+        },
+        "version": {
+          "description": "For sailor_look, by name.",
           "type": "string"
         }
       },

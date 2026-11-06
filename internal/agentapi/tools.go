@@ -173,11 +173,15 @@ func tools() []toolDef {
 		{budget: orders, tool: &mcp.Tool{
 			Name: toolBoat, Title: "Boat",
 			Description: "Your owner's fleet: list the boats you may take, take one to sea, or leave the water. " +
-				"Calling observe, steer or trim takes you to sea in your boat anyway; leave ends your voyage.",
+				"Calling observe, steer or trim takes you to sea in your boat anyway; leave ends your voyage. " +
+				"sailor_look tells your look and its choices, and changes it at Port Royal.",
 			Annotations: hints("Boat", false, false, false),
 			InputSchema: schema(`{"type":"object","properties":{` +
 				`"action":{"type":"string","enum":["list","take","leave","look","sailor_look"],"description":"Default list."},` +
-				`"boat":{"type":"string","description":"By its name, for take."}` +
+				`"boat":{"type":"string","description":"By its name, for take."},` +
+				`"version":{"type":"string","description":"For sailor_look, by name."},` +
+				`"finish":{"type":"string","description":"For sailor_look, by name."},` +
+				`"colour":{"type":"string","description":"For sailor_look, by name."}` +
 				`}}`),
 		}},
 		{budget: looks, tool: &mcp.Tool{

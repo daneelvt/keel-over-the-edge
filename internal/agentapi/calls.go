@@ -215,11 +215,18 @@ func (c *Core) call(ctx context.Context, d toolDef, h *helm, a *oauth.Accepted, 
 		return text, nil, r
 	case toolBoat:
 		var o struct {
-			Action string `json:"action,omitempty"`
-			Boat   string `json:"boat,omitempty"`
+			Action  string `json:"action,omitempty"`
+			Boat    string `json:"boat,omitempty"`
+			Version string `json:"version,omitempty"`
+			Finish  string `json:"finish,omitempty"`
+			Colour  string `json:"colour,omitempty"`
 		}
 		if r := args(req, &o); r != nil {
 			return "", nil, r
+		}
+		look := lookArgs{Version: o.Version, Finish: o.Finish, Colour: o.Colour}
+		if o.Action == "sailor_look" || (o.Action == "" && look.changes()) {
+			return c.sailorLook(ctx, h, &look)
 		}
 		return c.boat(ctx, h, o.Action, o.Boat)
 	case toolHandbook:
@@ -227,7 +234,7 @@ func (c *Core) call(ctx context.Context, d toolDef, h *helm, a *oauth.Accepted, 
 		if r := args(req, &o); r != nil {
 			return "", nil, r
 		}
-		text, r := c.handbookPage(o.Topic, a.Name, a.OwnerName)
+		text, r := c.handbookPage(o.Topic, a.Name, a.OwnerName, c.lookLine(h))
 		return text, nil, r
 	}
 	if words, ok := notYet[d.tool.Name]; ok {
@@ -331,7 +338,8 @@ func (c *Core) order(ctx context.Context, h *helm, give func(s *Sea, f *bus.Fram
 	return strings.Join(lines, "\n"), nil, nil
 }
 
-// boat answers boat: the fleet, going to sea, leaving the water.
+// boat answers boat: the fleet, going to sea, leaving the water; the
+// sailor's look is sailorLook's.
 func (c *Core) boat(ctx context.Context, h *helm, action, which string) (string, any, *refusal) {
 	s := c.sea.Load()
 	if s == nil {
@@ -374,8 +382,6 @@ func (c *Core) boat(ctx context.Context, h *helm, action, which string) (string,
 		return "Your boat has left the water: your voyage is over. Calling observe, steer or trim takes you to sea again, at the start.", nil, nil
 	case "look":
 		return "Not yet: boat looks come with a later update.", nil, nil
-	case "sailor_look":
-		return "Not yet: sailors' looks come with a later update.", nil, nil
 	}
 	return "", nil, refuse(refusedArgs, "action is list, take, leave, look or sailor_look.")
 }
