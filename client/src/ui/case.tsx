@@ -13,8 +13,10 @@
 // complication out of the case and back in, down under the compass, side
 // by side; in port the harbourmaster's board's rises out of the bottom
 // edge. Held upright, where the case shares the top of the screen with the
-// pocket chart, all stand out of the bottom edge beneath the readouts, the
-// case no wider than its words, and the complications hang in a column.
+// pocket chart, the barometer's and the board's stand out of the bottom
+// edge beneath the readouts, the case no wider than its words, the
+// clock's out of the left edge under the compass, and the complications
+// hang in a column.
 // The case never reaches the pocket chart, nor held upright the controls
 // at the foot of the screen: the complication opened first folds back in,
 // unless the case reached the chart with nothing out. A complication
@@ -556,6 +558,18 @@ export function Case({
             <CompassCard model={model} />
             <Readouts model={model} controls={controls} last={last} />
           </div>
+          {clock !== null ? (
+            <Pusher
+              name="World time"
+              id="clock"
+              controls={IDS.clock}
+              out={out.clock}
+              press={() => put('clock', !out.clock)}
+              edge={upright ? 'left' : 'top'}
+            >
+              <ClockDecal />
+            </Pusher>
+          ) : null}
           <div class="case-pushers">
             {barometer !== null ? (
               <Pusher
@@ -567,18 +581,6 @@ export function Case({
                 edge={upright ? 'bottom' : 'right'}
               >
                 <AneroidDecal />
-              </Pusher>
-            ) : null}
-            {clock !== null ? (
-              <Pusher
-                name="World time"
-                id="clock"
-                controls={IDS.clock}
-                out={out.clock}
-                press={() => put('clock', !out.clock)}
-                edge={upright ? 'bottom' : 'top'}
-              >
-                <ClockDecal />
               </Pusher>
             ) : null}
             {board ? (

@@ -109,9 +109,9 @@ import {
 import { hourAt, sandboxEpochUs, skyFromQuery, skyPeriods, skyTimeFor } from '../sky/skytime';
 import { Barometer } from '../ui/barometer';
 import type { DialWord } from '../ui/barometerdial';
-import { ShipsClock } from '../ui/clock';
 import { serverNews } from '../ui/chart';
 import { ClearView, type Needed, needed } from '../ui/clearview';
+import { ShipsClock } from '../ui/clock';
 import { Countdown, EndNotices, localShown } from '../ui/countdown';
 import { mountScreen, type ScreenProps } from '../ui/hud';
 import { AGROUND } from '../ui/model';

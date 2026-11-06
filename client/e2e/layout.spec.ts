@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 // The screen at sea laid out on phones held either way and on the browser
-// tests' screen, in the offline sandbox: with the barometer out of the
-// case, the autopilot's control head open, the key that brings the full
+// tests' screen, in the offline sandbox: with the barometer and the ship's
+// clock out of the case, the autopilot's control head open, the key that brings the full
 // screen back shown, the right-of-way overlay on (so
 // the case's last line has its place), the readouts at their longest and
 // the boat in Port Royal's harbour, no part of the screen covers
@@ -11,9 +11,11 @@
 // less motion asked for, so that nothing is measured mid-slide.
 //
 // The case is one size whatever its readouts say. Held sideways it is no
-// taller than its compass card, its pushers standing on two edges; held
-// upright both stand out of its bottom edge beneath the readouts, and an
-// open barometer stays open. The pocket chart's caption
+// taller than its compass card, its pushers standing on three edges; held
+// upright the barometer's and the board's stand out of its bottom edge
+// beneath the readouts and the clock's out of its left edge under the
+// compass, and the open barometer and clock stay open, their column clear
+// of the boat. The pocket chart's caption
 // is two lines within its frame, the weather's pusher set in the frame.
 // The menu, open, stands over everything and within the screen. The
 // sheet's legend at its longest, the sail luffing or stalled, stands
@@ -33,7 +35,8 @@
 // The menu's button heads a column of keys under the pocket chart, Back
 // to the boat, the clear view's and the full screen's, 8 pixels apart; on
 // a screen 420 pixels tall or less they run left from it in a row. The
-// barometer, tapped, grows within the screen and shrinks on a second tap.
+// barometer and the clock, tapped, grow within the screen, one at a time,
+// and shrink on a second tap.
 // The clear view leaves its own key and Back to the boat where they stood,
 // and nothing else. Watching a boat (the sandbox's screen as it is then),
 // the plate is one row at the foot of the screen, covering nothing, and
@@ -113,6 +116,7 @@ async function parts(page: Page): Promise<{
     const all = [
       one('the case', '.case-top'),
       one('the barometer', '[data-complication=barometer]'),
+      one('the clock', '[data-complication=clock]'),
       one('the pocket chart', '.pocket-frame'),
       ...pushers,
       one('the menu button', '.menu-button'),
@@ -154,7 +158,7 @@ async function parts(page: Page): Promise<{
         return (
           r.left < p.left - out('left') ||
           r.right > p.right + out('right') ||
-          r.top < p.top - 0.5 ||
+          r.top < p.top - out('top') ||
           r.bottom > p.bottom + out('bottom')
         );
       })
@@ -284,11 +288,16 @@ async function caseFaults(page: Page, upright: boolean): Promise<string[]> {
       const edges = [...document.querySelectorAll('.case [data-pusher]')].map(
         (p) => `${p.getAttribute('data-pusher')} ${p.getAttribute('data-edge')}`,
       );
-      if (edges.join(', ') !== `barometer ${upright ? 'bottom' : 'right'}, board bottom`) {
+      const want = upright
+        ? 'clock left, barometer bottom, board bottom'
+        : 'clock top, barometer right, board bottom';
+      if (edges.join(', ') !== want) {
         out.push(`the case's pushers: ${edges.join(', ')}`);
       }
-      if (document.querySelector('[data-complication=barometer]:not([hidden])') === null) {
-        out.push('the barometer folded back into the case');
+      for (const c of ['barometer', 'clock']) {
+        if (document.querySelector(`[data-complication=${c}]:not([hidden])`) === null) {
+          out.push(`the ${c} folded back into the case`);
+        }
       }
       if (upright) {
         const words = Math.max(
@@ -296,18 +305,16 @@ async function caseFaults(page: Page, upright: boolean): Promise<string[]> {
             (w) => w.getBoundingClientRect().bottom,
           ),
         );
-        const faces = [...document.querySelectorAll('.case .pusher-face')].map((f) =>
+        const faces = [...document.querySelectorAll('.case .case-pushers .pusher-face')].map((f) =>
           f.getBoundingClientRect(),
         );
         if (faces.length === 0 || faces.some((f) => f.top < words - 0.5)) {
           out.push('the case’s pushers are not beneath its readouts');
         }
       }
-      if (
-        document.querySelector('[data-complication=clock], [data-pusher=clock], .world-clock') !==
-        null
-      ) {
-        out.push('a world clock in the case');
+      // The world's countdown is the pocket chart's, not the case's.
+      if (document.querySelector('.case .world-clock') !== null) {
+        out.push('the world’s countdown in the case');
       }
       const lines = [...document.querySelectorAll('.pocket-line')].map((l) => l.textContent ?? '');
       if (
@@ -594,6 +601,82 @@ async function bigBarometerFaults(page: Page): Promise<string[]> {
   return found;
 }
 
+/**
+ * The clock tapped: within the screen, its dial the barometer's size, its
+ * words within it; the barometer tapped then shrinks it, one enlarged at
+ * a time; a tap on the barometer again shrinks that.
+ */
+async function bigClockFaults(page: Page): Promise<string[]> {
+  const found: string[] = [];
+  const clock = page.getByRole('button', { name: 'World time, larger' });
+  const baro = page.getByRole('button', { name: 'Barometer, larger' });
+  await clock.click();
+  await expect(clock).toHaveAttribute('aria-expanded', 'true');
+  found.push(
+    ...(await page.evaluate(() => {
+      const out: string[] = [];
+      const big = document.querySelector('.clock.big')?.getBoundingClientRect();
+      const dial = document.querySelector('.clock.big svg')?.getBoundingClientRect();
+      if (big === undefined || dial === undefined) {
+        return ['the clock did not grow'];
+      }
+      if (
+        big.left < 11.5 ||
+        big.top < 11.5 ||
+        big.right > innerWidth - 11.5 ||
+        big.bottom > innerHeight - 11.5
+      ) {
+        out.push(
+          `the enlarged clock is off the screen (${[big.left, big.top, big.right, big.bottom].map(Math.round)})`,
+        );
+      }
+      const want = Math.min(240, Math.min(innerWidth, innerHeight) - 120);
+      if (Math.abs(dial.width - want) > 0.5) {
+        out.push(`the enlarged clock is ${dial.width} px across, not ${want}`);
+      }
+      const words = document.querySelector('[data-readout=clock]')?.textContent ?? '';
+      const sun = document.querySelector('[data-readout=clock-sun]')?.textContent ?? '';
+      if (!/^World time \d{1,2}:\d\d( [AP]M)?$/.test(words)) {
+        out.push(`the clock’s words: “${words}”`);
+      }
+      if (!/^Sun(set|rise) in \d+ min$/.test(sun)) {
+        out.push(`the clock’s sun: “${sun}”`);
+      }
+      for (const sel of ['[data-readout=clock]', '[data-readout=clock-sun]']) {
+        const e = document.querySelector(sel);
+        if (e === null) {
+          continue;
+        }
+        const range = document.createRange();
+        range.selectNodeContents(e);
+        const r = range.getBoundingClientRect();
+        if (
+          r.left < big.left - 0.5 ||
+          r.right > big.right + 0.5 ||
+          r.top < big.top - 0.5 ||
+          r.bottom > big.bottom + 0.5
+        ) {
+          out.push(`“${e.textContent}” runs out of the enlarged clock`);
+        }
+      }
+      return out;
+    })),
+  );
+  // One at a time: the barometer enlarged shrinks the clock.
+  await baro.click();
+  await expect(baro).toHaveAttribute('aria-expanded', 'true');
+  await expect(clock).toHaveAttribute('aria-expanded', 'false');
+  if ((await page.locator('.dial.big').count()) !== 1) {
+    found.push('more than one dial enlarged');
+  }
+  await baro.click();
+  await expect(baro).toHaveAttribute('aria-expanded', 'false');
+  await clock.click();
+  await page.keyboard.press('Escape');
+  await expect(clock).toHaveAttribute('aria-expanded', 'false');
+  return found;
+}
+
 /** The clear view: its key and Back to the boat where they stood, nothing else seen; and everything back. */
 async function clearFaults(page: Page): Promise<string[]> {
   const keys = () =>
@@ -671,6 +754,7 @@ async function plateFaults(page: Page, boat: Box | null): Promise<string[]> {
         ['the pocket chart', '.pocket-frame'],
         ['the case', '.case-top'],
         ['the barometer', '[data-complication=barometer]'],
+        ['the clock', '[data-complication=clock]'],
         ['the keys', '.sea-keys'],
       ]) {
         const r = document.querySelector(sel as string)?.getBoundingClientRect();
@@ -783,7 +867,7 @@ for (const upright of [true, false]) {
       // (the menu, opened on the screen before, put it away).
       await page.evaluate(() => {
         const k = globalThis.keel;
-        k.settings({ barometer: true, pilotHead: true, rightOfWay: true });
+        k.settings({ barometer: true, clock: true, pilotHead: true, rightOfWay: true });
         k.fullScreenKey(true);
         k.render();
       });
@@ -835,7 +919,10 @@ for (const upright of [true, false]) {
           const b = all[j];
           const names = [a?.name, b?.name];
           const inCase = (n?: string) =>
-            n === 'the case' || n === 'the barometer pusher' || n === 'the board pusher';
+            n === 'the case' ||
+            n === 'the barometer pusher' ||
+            n === 'the clock pusher' ||
+            n === 'the board pusher';
           const masthead = s.upright && names.some(inCase) && names.includes('the boat');
           // A pusher is set in its own part.
           const own =
@@ -858,7 +945,12 @@ for (const upright of [true, false]) {
                   (p) =>
                     !(
                       s.upright &&
-                      ['the case', 'the barometer pusher', 'the board pusher'].includes(p.name)
+                      [
+                        'the case',
+                        'the barometer pusher',
+                        'the clock pusher',
+                        'the board pusher',
+                      ].includes(p.name)
                     ),
                 )
                 .map((p) => room(p, seen.boat as Box)),
@@ -898,6 +990,9 @@ for (const upright of [true, false]) {
       // The menu, opened, put the full screen's key away.
       await page.evaluate(() => globalThis.keel.fullScreenKey(true));
       for (const f of await keyFaults(page, s.height <= 420)) {
+        found.push(`${s.name}: ${f}`);
+      }
+      for (const f of await bigClockFaults(page)) {
         found.push(`${s.name}: ${f}`);
       }
       for (const f of await bigBarometerFaults(page)) {
@@ -1165,6 +1260,321 @@ test('the chart’s strip and its weather’s case are one row each on every scr
         await button.click();
       }
     }
+  }
+  expect(found).toEqual([]);
+});
+
+/** The screens the instruments are held still on: the owner's phone either way, a wide phone, the tests' and a desktop. */
+const STILL = [
+  { name: 'small Android phone upright', width: 360, height: 640 },
+  { name: 'small Android phone sideways', width: 640, height: 360 },
+  { name: 'iPhone 16 sideways', width: 852, height: 393 },
+  { name: 'the tests’ screen', width: 960, height: 600 },
+  { name: 'a desktop', width: 1440, height: 900 },
+] as const;
+
+/** The complications' boxes, and the animations running on either. */
+async function stillness(page: Page): Promise<{ boxes: string; running: string[] }> {
+  return page.evaluate(async () => {
+    await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+    const parts = [...document.querySelectorAll<HTMLElement>('[data-complication]')];
+    return {
+      boxes: parts
+        .map((e) => {
+          const r = e.getBoundingClientRect();
+          return `${e.dataset.complication} ${[r.left, r.top, r.width, r.height].map(Math.round).join(',')}`;
+        })
+        .join('; '),
+      running: parts.flatMap((e) =>
+        e
+          .getAnimations({ subtree: true })
+          .map((a) => `${e.dataset.complication}: ${(a as CSSAnimation).animationName ?? a.id}`),
+      ),
+    };
+  });
+}
+
+test('the barometer and the clock keep still whatever else is pressed, toggled or resized', async ({
+  page,
+}) => {
+  test.skip(test.info().project.name === 'webgpu', 'the case is the same on either back end');
+  await page.setViewportSize({ width: STILL[0].width, height: STILL[0].height });
+  // Motion as a player has it: a slide replayed would be seen.
+  await openScene(page, 'world=1', true);
+  const found: string[] = [];
+  for (const s of STILL) {
+    const size = async (width: number, height: number) => {
+      await page.setViewportSize({ width, height });
+      await page.waitForFunction(
+        ({ width, height }) => innerWidth === width && innerHeight === height,
+        { width, height },
+      );
+    };
+    await size(s.width, s.height);
+    // Both out, opened afresh: they slide as they open, and are then still.
+    await page.evaluate(() => globalThis.keel.settings({ barometer: false, clock: false }));
+    await page.evaluate(() => globalThis.keel.settings({ barometer: true, clock: true }));
+    const opening = await stillness(page);
+    if (opening.running.length === 0) {
+      found.push(`${s.name}: nothing slid as the complications opened`);
+    }
+    await page.waitForTimeout(400);
+    const rest = await stillness(page);
+    if (!rest.boxes.includes('barometer') || !rest.boxes.includes('clock')) {
+      found.push(`${s.name}: the complications out are ${rest.boxes}`);
+    }
+    const check = async (what: string) => {
+      const now = await stillness(page);
+      if (now.running.length > 0) {
+        found.push(`${s.name}, ${what}: ${now.running.join(', ')} running`);
+      }
+      if (now.boxes !== rest.boxes) {
+        found.push(`${s.name}, ${what}: ${now.boxes}, at rest ${rest.boxes}`);
+      }
+    };
+    const weather = page.locator('[data-pusher=weather]');
+    await weather.click();
+    await check('the pocket chart’s weather off');
+    await weather.click();
+    await check('the pocket chart’s weather on');
+    await page.getByRole('button', { name: 'Menu' }).click();
+    await expect(page.locator('.menu')).toBeVisible();
+    await check('the menu open');
+    await page.locator('.menu-x').click();
+    await expect(page.locator('.menu')).toHaveCount(0);
+    await check('the menu shut');
+    for (const [dw, dh] of [
+      [24, 0],
+      [24, 16],
+      [0, 0],
+    ] as const) {
+      await size(s.width + dw, s.height + dh);
+      await check(`resized to ${s.width + dw} × ${s.height + dh}`);
+    }
+  }
+  expect(found).toEqual([]);
+});
+
+test('the pocket chart’s weather stays within its disk, a storm on the rim cut by it', async ({
+  page,
+}) => {
+  test.skip(
+    test.info().project.name === 'webgpu',
+    'a canvas of its own, the same on either back end',
+  );
+  await page.setViewportSize({ width: 960, height: 600 });
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await openScene(page, 'world=1', true);
+  await page.evaluate(() => {
+    const k = globalThis.keel;
+    k.stormAtRim();
+    k.weatherNow();
+    k.render();
+  });
+  // Painted pixels outside the disk's ellipse and its rim's line, and the colour of all.
+  const painted = () =>
+    page.evaluate(async () => {
+      // The pocket chart is drawn twice a second.
+      await new Promise((r) => setTimeout(r, 700));
+      const c = document.querySelector<HTMLCanvasElement>('.pocket-chart canvas');
+      const ctx = c?.getContext('2d', { willReadFrequently: true });
+      if (c === null || c === undefined || ctx === null || ctx === undefined) {
+        return null;
+      }
+      const { width: w, height: h } = c;
+      const d = ctx.getImageData(0, 0, w, h).data;
+      // The disk as it is drawn: 0.48 of the width across, seen at a tilt
+      // of 0.62; its rim's line two pixels wide, softened a pixel more.
+      const rx = 0.48 * w + 2;
+      const ry = 0.48 * w * 0.62 + 2;
+      let outside = 0;
+      let ink = 0;
+      for (let y = 0; y < h; y++) {
+        for (let x = 0; x < w; x++) {
+          const i = (y * w + x) * 4;
+          if ((d[i + 3] ?? 0) === 0) {
+            continue;
+          }
+          ink += (d[i] ?? 0) + (d[i + 1] ?? 0) + (d[i + 2] ?? 0);
+          const u = (x + 0.5 - w / 2) / rx;
+          const v = (y + 0.5 - h / 2) / ry;
+          if (u * u + v * v > 1) {
+            outside++;
+          }
+        }
+      }
+      return { outside, ink };
+    });
+  await page.evaluate(() => globalThis.keel.settings({ pocketWeather: false }));
+  const without = await painted();
+  expect(without).not.toBeNull();
+  await page.evaluate(() => globalThis.keel.settings({ pocketWeather: true }));
+  // The storm drawn, once the forecast's module is made.
+  await expect
+    .poll(async () => (await painted())?.ink ?? 0, { timeout: 30_000 })
+    .not.toBe(without?.ink ?? 0);
+  const withWeather = await painted();
+  // Nothing of it beyond the rim.
+  expect(withWeather?.outside).toBe(without?.outside);
+  expect(withWeather?.outside).toBe(0);
+});
+
+test('on the chart the arrow shrinks as it zooms out, the notices stand clear of its parts, and the strip’s clock follows the slider', async ({
+  page,
+}) => {
+  test.skip(test.info().project.name === 'webgpu', 'the controls are the same on either back end');
+  const screens = [
+    SCREENS[1],
+    SCREENS[5],
+    { name: 'a desktop', width: 1440, height: 900 },
+  ] as const;
+  await page.setViewportSize({ width: screens[0].width, height: screens[0].height });
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await openScene(page, 'world=1', true);
+  const now = Date.now();
+  await page.evaluate(
+    ({ now }) => {
+      const k = globalThis.keel;
+      k.setWorldEnd({
+        epoch: now - 5 * 86_400_000,
+        ends: now + 2 * 86_400_000,
+        closing: now - 86_400_000,
+      });
+      k.issueForecast();
+      k.openChart('chart');
+      k.render();
+    },
+    { now },
+  );
+  const found: string[] = [];
+  // The arrow as drawn: the chart redraws at its own pace.
+  const arrow = async (distance: number | null) => {
+    await page.evaluate((d) => {
+      if (d === null) {
+        globalThis.keel.fitChart();
+      } else {
+        globalThis.keel.chartFromBoat(d);
+      }
+    }, distance);
+    let last = Number.NaN;
+    for (let i = 0; i < 20; i++) {
+      await page.waitForTimeout(80);
+      const l = await page.evaluate(() => {
+        globalThis.keel.render();
+        const e = globalThis.keel.chartArrow();
+        return Math.hypot(e.nose.x - e.tail.x, e.nose.y - e.tail.y);
+      });
+      if (Math.abs(l - last) < 0.01) {
+        return l;
+      }
+      last = l;
+    }
+    return last;
+  };
+  for (const s of screens) {
+    await page.setViewportSize({ width: s.width, height: s.height });
+    await page.waitForFunction(
+      ({ width, height }) => innerWidth === width && innerHeight === height,
+      { width: s.width, height: s.height },
+    );
+    // The arrow from near to far, then the whole disk.
+    const lengths: number[] = [];
+    for (const d of [900, 3000, 6000, 9000, 15000, 22000, 30000]) {
+      lengths.push(await arrow(d));
+    }
+    lengths.push(await arrow(null));
+    for (const l of lengths) {
+      if (!(l >= 11.5 && l <= 32.5)) {
+        found.push(`${s.name}: the arrow is ${l.toFixed(1)} px long`);
+      }
+    }
+    for (let i = 1; i < lengths.length - 1; i++) {
+      if ((lengths[i] ?? 0) > (lengths[i - 1] ?? 0) + 0.5) {
+        found.push(
+          `${s.name}: the arrow grows as the chart zooms out: ${lengths.map((l) => l.toFixed(1)).join(', ')}`,
+        );
+        break;
+      }
+    }
+    // A notice, with a place's box open and the key open on the Play bar.
+    await page.evaluate(() => {
+      const k = globalThis.keel;
+      k.chartFromBoat(9000);
+      k.chartAt('island', 0);
+      k.raiseNotice('gale-warned', {
+        wind: 'NE force 8',
+        when: 'in 40 min',
+        where: '6 NM north-east of Port Royal',
+      });
+      k.render();
+    });
+    await expect(page.locator('.chart-notices .notice')).toBeVisible();
+    for (const open of ['', 'Layers', 'Key']) {
+      const button = page.getByRole('button', { name: open, exact: true });
+      if (open !== '') {
+        await button.click();
+      }
+      const covered = await page.evaluate(async () => {
+        // The top's foot is told to the box as the notice lays out.
+        await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+        const n = document.querySelector('.chart-notices .notice')?.getBoundingClientRect();
+        if (n === undefined) {
+          return ['no notice'];
+        }
+        const out: string[] = [];
+        for (const [name, sel] of [
+          ['the strip', '.chart-strip'],
+          ['the countdown', '.chart-falls'],
+          ['the Play bar', '.chart-time'],
+          ['the layers', '.chart-layers'],
+          ['the key', '.chart-key'],
+          ['the box', '.chart-box'],
+        ]) {
+          const r = document.querySelector(sel as string)?.getBoundingClientRect();
+          if (
+            r !== undefined &&
+            Math.min(n.right, r.right) - Math.max(n.left, r.left) > 0.5 &&
+            Math.min(n.bottom, r.bottom) - Math.max(n.top, r.top) > 0.5
+          ) {
+            out.push(`the notice covers ${name}`);
+          }
+        }
+        if (n.left < -0.5 || n.right > innerWidth + 0.5 || n.top < -0.5) {
+          out.push('the notice is off the screen');
+        }
+        return out;
+      });
+      for (const c of covered) {
+        found.push(`${s.name}, ${open || 'nothing'} open: ${c}`);
+      }
+      if (open !== '') {
+        await button.click();
+      }
+    }
+    await page.locator('.notice-dismiss').click();
+    // The strip's clock: in the strip, and swept on by the slider.
+    const clock = page.locator('.chart-strip .chart-clock');
+    await expect(clock).toBeVisible();
+    const hands = () =>
+      page.evaluate(() => ({
+        minute: document
+          .querySelector('.chart-clock [data-hand=minute]')
+          ?.getAttribute('transform'),
+        name: document.querySelector('.chart-clock')?.getAttribute('aria-label') ?? '',
+        ahead: document.querySelector('.chart-clock')?.classList.contains('ahead') ?? false,
+      }));
+    const atNow = await hands();
+    await page.evaluate(() => globalThis.keel.chartTime(30));
+    await expect.poll(async () => (await hands()).ahead).toBe(true);
+    const ahead = await hands();
+    if (ahead.minute === atNow.minute) {
+      found.push(`${s.name}: the strip’s clock did not move with the slider (${atNow.minute})`);
+    }
+    if (!/^World time .+, in 30 minutes$/.test(ahead.name)) {
+      found.push(`${s.name}: the strip’s clock is named “${ahead.name}”`);
+    }
+    await page.evaluate(() => globalThis.keel.chartTime(0));
+    await expect.poll(async () => (await hands()).ahead).toBe(false);
   }
   expect(found).toEqual([]);
 });

@@ -57,7 +57,7 @@ describe('the boat’s arrow on the chart', () => {
     // Never growing as the chart zooms out.
     const lengths = [900, 3000, 6000, 9000, 14000, 20000, 30000].map((d) => seen(d).length);
     for (let i = 1; i < lengths.length; i++) {
-      expect(lengths[i]).toBeLessThanOrEqual((lengths[i - 1] ?? 0) + 1e-6);
+      expect(lengths[i]).toBeLessThanOrEqual((lengths[i - 1] ?? 0) + 0.05);
     }
   });
 });

@@ -64,19 +64,29 @@ export function arrowLength(
   return Math.hypot(((nose.x - tail.x) * width) / 2, ((nose.y - tail.y) * height) / 2);
 }
 
-/** The arrow's scale as the camera sees it: bounded at its own size, then made exact at the bound. */
+/** The arrow's scale as the camera sees it: its own size, or brought to the nearer bound. */
 export function arrowSize(
   camera: PerspectiveCamera,
   width: number,
   height: number,
   b: ArrowAt,
 ): number {
-  const first = arrowScale(arrowLength(camera, width, height, b, 1));
-  if (first === 1) {
+  let scale = arrowScale(arrowLength(camera, width, height, b, 1));
+  if (scale === 1) {
     return 1;
   }
-  // The height above the paper grows with the scale too: one step more.
-  return first * arrowScale(arrowLength(camera, width, height, b, first));
+  // Brought to the bound it passed: the height above the paper grows with
+  // the scale too, and close in the camera's perspective with it, so a few
+  // steps more.
+  const bound = scale < 1 ? ARROW_MOST : ARROW_LEAST;
+  for (let i = 0; i < 4; i++) {
+    const length = arrowLength(camera, width, height, b, scale);
+    if (!(length > 0) || Math.abs(length - bound) < 0.02) {
+      break;
+    }
+    scale *= bound / length;
+  }
+  return scale;
 }
 
 /** Places the chart's camera: looking at target from distance m, at its elevation, turned by bearing rad. */
