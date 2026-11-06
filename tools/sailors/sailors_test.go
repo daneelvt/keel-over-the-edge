@@ -30,12 +30,15 @@ func TestBlenderVersion(t *testing.T) {
 
 func TestShown(t *testing.T) {
 	for line, want := range map[string]bool{
-		"[INFO ] mpfb.init ......: MPFB initialization has finished.": false,
-		"OBJ import of 'base.obj' took 5.29 ms":                       false,
-		"Blender 5.2.0 LTS (hash fbe6228777e7)":                       false,
-		"build: test in 13.2 s":                                       true,
-		"Traceback (most recent call last):":                          true,
-		"   ":                                                         false,
+		"[INFO ] mpfb.init ......: MPFB initialization has finished.":      false,
+		"OBJ import of 'base.obj' took 5.29 ms":                            false,
+		"Blender 5.2.0 LTS (hash fbe6228777e7)":                            false,
+		"build: test in 13.2 s":                                            true,
+		"Fra:1 Mem:120.33M (Peak 151.20M) | Time:00:00.21 | Sample 12/128": false,
+		"01:28:14 | INFO: Blender create Mesh node hair":                   false,
+		"portraits: rover female from run 137: avif 5.1 KB":                true,
+		"Traceback (most recent call last):":                               true,
+		"   ":                                                              false,
 	} {
 		if shown(line) != want {
 			t.Errorf("%q shown: %v", line, !want)

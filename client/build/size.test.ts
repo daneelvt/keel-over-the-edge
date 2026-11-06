@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
-import { readdirSync, readFileSync } from 'node:fs';
+import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { gzipSync } from 'node:zlib';
 import { describe, expect, test } from 'vitest';
 import { catalog } from '../src/catalog';
@@ -22,6 +22,7 @@ test('the models counted are those the first download names', () => {
 const ART = new URL('../../art/', import.meta.url);
 const gzipped = (path: string): number =>
   gzipSync(readFileSync(new URL(path, ART)), { level: 9 }).length;
+const bytes = (path: string): number => statSync(new URL(path, ART)).size;
 
 /** Every look's folder under art/sailors with built versions, but the build's test sailor. */
 const looks = readdirSync(new URL('sailors/', ART), { withFileTypes: true })
@@ -41,6 +42,29 @@ describe.each(looks)('the %s look', (look) => {
     expect(at('')).toBeLessThanOrEqual(SAILOR_BUDGETS.close);
     expect(at('.clips')).toBeLessThanOrEqual(SAILOR_BUDGETS.clips);
   });
+
+  test.each(versions)('%s’s portraits keep to their budgets', (version) => {
+    expect(portrait(look, version)).toBeLessThanOrEqual(SAILOR_BUDGETS.portrait);
+    expect(bytes(`sailors/${look}/${version}.ink.webp`)).toBeLessThanOrEqual(SAILOR_BUDGETS.ink);
+  });
+});
+
+/** A colour portrait's pair: its base, as most browsers load it, and its mask. */
+const portrait = (look: string, version: string): number =>
+  bytes(`sailors/${look}/${version}.portrait.avif`) +
+  bytes(`sailors/${look}/${version}.portrait-mask.webp`);
+
+test('every look and version’s colour portrait together keep to their budget', () => {
+  let all = 0;
+  for (const look of looks) {
+    for (const f of readdirSync(new URL(`sailors/${look}/`, ART))) {
+      const version = /^([a-z]+)\.glb$/.exec(f)?.[1];
+      if (version !== undefined) {
+        all += portrait(look, version);
+      }
+    }
+  }
+  expect(all).toBeLessThanOrEqual(SAILOR_BUDGETS.portraits);
 });
 
 test('the first download carries one look, every boat’s, and no other', () => {

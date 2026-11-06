@@ -9,6 +9,8 @@
 //	go run ./tools/sailors -look test   build one look
 //	go run ./tools/sailors -look test -version female
 //	                                    build one version of it, while working on it
+//	go run ./tools/sailors -portraits   make the portraits again from each look's last run, build nothing
+//	go run ./tools/sailors -portraits -look rover
 //	go run ./tools/sailors -setup       check Blender, install MPFB and gltfpack, build nothing
 //	go run ./tools/sailors -vendor UAL1.glb -into quaternius -pack "..." -clips Idle_Loop,...
 //	                                    copy clips out of an animation library into vendor/
@@ -20,6 +22,10 @@
 // reads is listed in art/sailors/SOURCES.md with its SHA-256, and the build
 // fails on one that is not. CI does not run it: the built files are
 // committed. It runs from the repository root.
+//
+// After a look the game offers is built, its portraits are made from the
+// run (art/sailors/build/portraits.py): a colour portrait and its mask, and
+// an inked portrait, a version, written beside its levels.
 package main
 
 import (
@@ -40,7 +46,9 @@ const (
 	sailorsDir = "art/sailors"
 	looksDir   = sailorsDir + "/looks"
 	buildEntry = sailorsDir + "/build/main.py"
-	stateDir   = ".dev"
+	// portraitsEntry makes a look's portraits from its last run.
+	portraitsEntry = sailorsDir + "/build/portraits.py"
+	stateDir       = ".dev"
 	// profileDir is the Blender profile the build runs in: its add-ons,
 	// its preferences, MPFB's own data.
 	profileDir = stateDir + "/blender"
@@ -53,6 +61,7 @@ func main() {
 	look := flag.String("look", "", "build only this look (its file's name in "+looksDir+", without .yaml)")
 	only := flag.String("version", "", "with -look: build only this version ("+strings.Join(versions, " or ")+")")
 	setup := flag.Bool("setup", false, "check Blender and install MPFB and gltfpack, build nothing")
+	portraits := flag.Bool("portraits", false, "make the portraits again from each look's last run, and build nothing")
 	verbose := flag.Bool("v", false, "show everything Blender and MPFB print")
 	pack := flag.String("vendor", "", "copy clips out of this animation library's glTF binary into "+sailorsDir+"/"+vendorDir+", and build nothing")
 	into := flag.String("into", "", "with -vendor: the folder under "+vendorDir+" they go into")
@@ -78,13 +87,13 @@ func main() {
 		fmt.Fprintln(os.Stderr, "sailors: -version needs -look, and is "+strings.Join(versions, " or "))
 		os.Exit(2)
 	}
-	if err := run(ctx, *look, *only, *setup, *verbose); err != nil {
+	if err := run(ctx, *look, *only, *setup, *portraits, *verbose); err != nil {
 		fmt.Fprintln(os.Stderr, "sailors:", err)
 		os.Exit(1)
 	}
 }
 
-func run(ctx context.Context, only, oneVersion string, setupOnly, verbose bool) error {
+func run(ctx context.Context, only, oneVersion string, setupOnly, portraitsOnly, verbose bool) error {
 	blender, err := findBlender(ctx)
 	if err != nil {
 		return err
@@ -140,10 +149,20 @@ func run(ctx context.Context, only, oneVersion string, setupOnly, verbose bool) 
 		if err != nil {
 			return err
 		}
-		if err := blender.build(ctx, profile, file, verbose); err != nil {
-			return fmt.Errorf("%s: %w", l.ID, err)
+		if !portraitsOnly {
+			if err := blender.run(ctx, profile, buildEntry, file, verbose); err != nil {
+				return fmt.Errorf("%s: %w", l.ID, err)
+			}
+			fmt.Printf("sailors: %s built in %.1f s, into %s\n", l.ID, time.Since(start).Seconds(), strings.TrimPrefix(job.Out, root+"/"))
 		}
-		fmt.Printf("sailors: %s built in %.1f s, into %s\n", l.ID, time.Since(start).Seconds(), strings.TrimPrefix(job.Out, root+"/"))
+		if !l.Committed {
+			continue
+		}
+		start = time.Now()
+		if err := blender.run(ctx, profile, portraitsEntry, file, verbose); err != nil {
+			return fmt.Errorf("%s's portraits: %w", l.ID, err)
+		}
+		fmt.Printf("sailors: %s's portraits made in %.1f s\n", l.ID, time.Since(start).Seconds())
 	}
 	return nil
 }

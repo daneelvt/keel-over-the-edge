@@ -88,6 +88,55 @@ stage:
     tiller-hiking: [-0.3, 0.05, 0.22]
     sheet-hiking: [0.3, 0.12, 0.28]
 
+# The portraits (build/portraits.py), every look's taken alike: head and
+# shoulders, three-quarter, the camera on the figure's left at the height
+# of its face, framing the same height of figure for every look (the
+# tallest hat fits), the eyes this share of the frame down from its top.
+# The colour portrait's lights, as watts, from directions in the camera's
+# frame (right, up, toward the camera): the key from the upper left (a
+# soft spot on the head, so the clothes below fall off), a fill from the
+# right, light from below (the deck's, under a brim) and a rim from
+# behind; the sky and the sea round it, which metal reflects. The inked
+# portrait is lit by one light from the upper left.
+portraits:
+  colour: { size: [256, 320], samples: 128, mask-samples: 48 }
+  # The inked portrait, drawn at scale times its size: its light; the
+  # light below which each level of ink begins, the lines' share of their
+  # period at each (the last crossed by a second set this wide), the
+  # face's last; the period in pixels; the planes' two directions.
+  ink:
+    size: [512, 640]
+    scale: 2
+    light: { from: [-0.8, 0.45, 0.9], strength: 3.2, sky: 0.25 }
+    levels: [0.55, 0.35, 0.2, 0.1]
+    widths: [0.16, 0.3, 0.45, 0.5]
+    cross: 0.3
+    face-cap: 3
+    # The least level hair is drawn at.
+    hair: 1
+    # What is painted on the face this much darker than round it is drawn.
+    marks: 0.7
+    period: 5
+    first: [0.18, 1, 0.12]
+    second: [1, -0.55, 0.2]
+  camera: { lens: 85, height: 0.595, eyes: 0.42, azimuth: 30 }
+  pose: { arms-down: 45, head-turn: 6, gaze: 14 }
+  lights:
+    key: { watts: 320, size: 0.5, cone: 24, from: [-0.8, 0.45, 0.9], colour: [1, 0.96, 0.9] }
+    fill: { watts: 12, size: 1.5, from: [0.9, -0.1, 0.8], colour: [0.85, 0.9, 1] }
+    below: { watts: 20, size: 2.0, from: [0, -1, 0.8], colour: [1, 0.92, 0.82] }
+    rim: { watts: 80, size: 1.0, from: [0.5, 0.6, -1], colour: [0.9, 0.95, 1] }
+    sky: [0.75, 0.78, 0.82]
+    sea: [0.08, 0.1, 0.11]
+    ambient: 0.15
+    # A machine's lamps, lit as at dusk.
+    lamp: { colour: "#FFB347", strength: 3 }
+  # The files: the shaded base (AVIF, and WebP for browsers without AVIF)
+  # at these qualities; the mask lossless, its shares in this many steps;
+  # the inked portrait lossless (100), every pixel ink or paper.
+  quality: { avif: 65, webp: 60, ink: 100 }
+  mask-steps: 16
+
 # The motion lab (build/motion.py) and its gate (review/motion.py).
 motion:
   fps: 30
