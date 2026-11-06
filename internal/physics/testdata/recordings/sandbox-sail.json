@@ -8,6 +8,8 @@
   "sigmaAbove": 0.09,
   "spreading": 5,
   "fetchCap": 6,
+  "stretchFrom": 8.75,
+  "stretchMost": 3.5,
   "cull": 0.1,
   "breaking": 0.5,
   "swellLeast": 0.05,

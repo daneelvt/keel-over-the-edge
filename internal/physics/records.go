@@ -228,8 +228,12 @@ type SeaParams struct {
 	SigmaAbove float64 // and above it
 	Spreading  float64 // the exponent s of the spreading cos²ˢ(θ/2), a whole number
 	FetchCap   float64 // the fetch of open water, nautical miles
-	Cull       float64 // waves lower than this fraction of an area's highest are left out
-	Breaking   float64 // the most significant height the waves keep in shallow water, as a share of its depth
+	// Above StretchFrom the wind sea's fetch is stretched by the square of
+	// the wind over it, at most StretchMost times: a licence (PrepareSea).
+	StretchFrom float64 // m/s
+	StretchMost float64 // a multiple
+	Cull        float64 // waves lower than this fraction of an area's highest are left out
+	Breaking    float64 // the most significant height the waves keep in shallow water, as a share of its depth
 	// Swell.
 	SwellLeast     float64 // a swell lower than this is none, m
 	SwellSpreading float64 // the exponent s of its spreading cos²ˢ(θ/2), a whole number

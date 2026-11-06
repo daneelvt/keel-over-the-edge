@@ -3523,6 +3523,15 @@ type WeatherSea struct {
 	// The directional spreading's exponent s in cos²ˢ(θ/2): a whole number.
 	Spreading int `json:"spreading"`
 
+	// The wave wind, in m/s, above which the wind sea's fetch is stretched by the
+	// square of the wind over it, as an open sea grows: a licence. At and below it
+	// the fetch is as it is.
+	StretchFrom float64 `json:"stretchFrom"`
+
+	// The most the fetch is stretched, a multiple: at most 4, the waves' lee's table
+	// reaching four times the lee's fetch.
+	StretchMost float64 `json:"stretchMost"`
+
 	// A swell lower than this, in m, is none.
 	SwellLeast float64 `json:"swellLeast"`
 
@@ -4498,4 +4507,4 @@ type WorldZones struct {
 }
 
 // Version is the catalog version (tools/catalog).
-const Version = "d2e619e217a0defe"
+const Version = "fe3c23df985d682f"

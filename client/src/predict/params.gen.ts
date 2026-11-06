@@ -145,6 +145,8 @@ export function writeSeaParams(params: Float64Array, s: WeatherSea): void {
   params[f.sigmaAbove] = s.sigmaAbove;
   params[f.spreading] = s.spreading;
   params[f.fetchCap] = s.fetchCap;
+  params[f.stretchFrom] = s.stretchFrom;
+  params[f.stretchMost] = s.stretchMost;
   params[f.cull] = s.cull;
   params[f.breaking] = s.breaking;
   params[f.swellLeast] = s.swellLeast;

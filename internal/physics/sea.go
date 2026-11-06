@@ -186,6 +186,8 @@ type Waves struct {
 	spreading     int32   // s
 	spreadNorm    float64 // 1 / ∫ cos²ˢ(θ/2) dθ
 	fetchCap      float64 // m
+	stretchFrom   float64 // m/s
+	stretchMost   float64
 	cull          float64
 	breaking      float64 // γ: the most Hs a depth keeps, as a share of it
 
@@ -268,6 +270,8 @@ func PrepareSea(p *SeaParams, w *Waves) {
 	}
 	w.spreadNorm = norm
 	w.fetchCap = float64(p.FetchCap * nauticalMile)
+	w.stretchFrom = max2(p.StretchFrom, 1e-3)
+	w.stretchMost = clamp(p.StretchMost, 1, leeStretchMost)
 	w.cull = p.Cull
 	w.breaking = p.Breaking
 	w.swellSpreading = max(toInt32(p.SwellSpreading), 1)
@@ -622,6 +626,9 @@ func (w *Waves) windSea(in SeaInput, amp, factor, pre []float64) (peak, m0, high
 		clear(pre)
 		return 0, 0, 0
 	}
+	if m := w.stretch(u); m > 1 {
+		f = float64(f * m)
+	}
 	alpha, peak := jonswapFit(u, f)
 	// Waves travel toward where the wind blows to: a half turn from where
 	// it comes from, which only changes the signs.
@@ -659,6 +666,25 @@ func (w *Waves) windSea(in SeaInput, amp, factor, pre []float64) (peak, m0, high
 	return peak, m0, high
 }
 
+// stretch is how many times the wind sea's fetch is stretched under a wind
+// of u m/s: (u / stretchFrom)², at most stretchMost, and exactly 1 at and
+// below stretchFrom. A licence, stated in the catalog: over the fetch the
+// disk allows a sea grows only in step with the wind (Hs ∝ U √F, the
+// Coastal Engineering Manual's fetch-limited growth, II-2), while an open
+// sea's grows with its square (Pierson and Moskowitz 1964); a storm that
+// travels with its own waves keeps them under its wind far past the
+// fetch it stands on (the moving or "trapped" fetch: Kudryavtsev and
+// others; Bowyer and MacAfee 2005). So above a fresh breeze the sea grows
+// as an open sea's, and below it nothing changes. The factor is capped,
+// not the fetch, so a short fetch's shelter keeps its ratio to a long one.
+func (w *Waves) stretch(u float64) float64 {
+	if !(u > w.stretchFrom) {
+		return 1
+	}
+	r := u / w.stretchFrom
+	return min2(float64(r*r), w.stretchMost)
+}
+
 // jonswapFit is the JONSWAP fits' α and peak frequency for a wind of u m/s
 // over a fetch of f m, the fetch counting only up to full development.
 func jonswapFit(u, f float64) (alpha, peak float64) {
@@ -681,13 +707,15 @@ func (w *Waves) bandVariance(level, peak float64) float64 {
 
 // The waves' lee needs the band's variance of a wind sea over short water:
 // a table of it by the wind's speed, every leeSpeedStep m/s up to
-// leeSpeeds of them, and by the fetch, every leeFetchStep m up to the
-// most a table's lee byte holds.
+// leeSpeeds of them, and by the fetch, every leeFetchStep m up to
+// leeStretchMost times the most a table's lee byte holds, since the lee's
+// fetch is stretched as the area's is.
 const (
-	leeSpeeds    = 41
-	leeSpeedStep = 1.0 // m/s
-	leeFetches   = 17
-	leeFetchStep = 16 * ShelterLeeStep // m
+	leeSpeeds      = 41
+	leeSpeedStep   = 1.0 // m/s
+	leeStretchMost = 4
+	leeFetches     = 16*leeStretchMost + 1
+	leeFetchStep   = 16 * ShelterLeeStep // m
 )
 
 // prepareLee fills the table.
@@ -707,8 +735,12 @@ func (w *Waves) prepareLee() {
 }
 
 // leeVariance is the band's variance of a wind sea of u m/s over f m of
-// short water: bilinear in the table, held at its fastest wind.
+// short water, the fetch stretched as an area's is: bilinear in the table,
+// held at its fastest wind.
 func (w *Waves) leeVariance(u, f float64) float64 {
+	if m := w.stretch(u); m > 1 {
+		f = float64(f * m)
+	}
 	su := min2(max2(u*(1/leeSpeedStep), 0), leeSpeeds-1)
 	sf := min2(max2(f*(1.0/leeFetchStep), 0), leeFetches-1)
 	i0, j0 := math.Floor(su), math.Floor(sf)

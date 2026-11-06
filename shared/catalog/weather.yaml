@@ -16,6 +16,21 @@ weather:
     # give 10 for wind waves, which is narrower.
     spreading: 5
     fetchCap: 6 # nautical miles of open water
+    # A licence: above a fresh breeze the wind sea grows as an open ocean's
+    # does, its fetch stretched by (U / stretchFrom)², at most stretchMost
+    # times, U the wave wind. Over a fetch the disk allows, a sea grows only
+    # in step with the wind (Hs ∝ U √F, the Coastal Engineering Manual's
+    # fetch-limited growth), where an open sea's grows with its square
+    # (Pierson and Moskowitz 1964): a gale's sea would be 1 m and 3.6 s. A
+    # storm that travels at about the group speed of its own waves keeps
+    # them under its wind and raises them far past the fetch it stands on,
+    # the moving or "trapped" fetch (Kudryavtsev and others; Bowyer and
+    # MacAfee 2005), as the game's storms, at 3–6 knots against a 3.5 s
+    # wave's 5.3, do. So a near gale raises about 1.7 m and 5 s, a gale
+    # about 2 m and 5.5 s, half the Met Office's Beaufort heights for an
+    # open sea. At and below stretchFrom the fetch is as it is.
+    stretchFrom: 8.75 # m/s, 17 knots
+    stretchMost: 3.5
     cull: 0.10
     # In shallow water the waves' significant height is capped at this share
     # of the depth, as in the inner surf zone, where it is 0.4–0.5 since the

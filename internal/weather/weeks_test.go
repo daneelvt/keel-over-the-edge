@@ -26,7 +26,9 @@ import (
 // held to its rule over the first three weeks on a grid half a mile apart,
 // and in the long run over the first hundred; and so are the signs in the
 // sky before the weather: the clouds' leads on their own wind, and a
-// front's cirrus's on its line, and the fog's wall. The long run's weeks are
+// front's cirrus's on its line, and the fog's wall. The wind sea is
+// tallied over the first week, at every fourth point of the wave wind's
+// grid, and in the long run over the first 24 at every one. The long run's weeks are
 // made and checked side by side, each into its own tally, added to the
 // whole in their order; none is begun once one has failed.
 func TestWeeks(t *testing.T) {
@@ -65,7 +67,12 @@ func TestWeeks(t *testing.T) {
 	if n > 100 {
 		workers = runtime.GOMAXPROCS(0)
 	}
-	waves, _ := cat.Prepare()
+	seaWeeks, seaEvery := 1, int64(4)
+	if n > 100 {
+		seaWeeks, seaEvery = 24, 1
+	}
+	sw := newSeaWaves(cat)
+	waves := sw.waves
 	kinds := busyKindsOf(cat, cfg)
 	tallies := make([]*weeksTally, n)
 	var wg sync.WaitGroup
@@ -100,6 +107,9 @@ func TestWeeks(t *testing.T) {
 				checkCloudLeads(cat, wt, w, swellGrid, wk)
 				checkFrontCirrus(cat, wt, w, swellGrid, wk)
 				checkFogWall(cat, wt, w, swellGrid, wk)
+			}
+			if i < seaWeeks {
+				checkSea(wt, w, sw, seaEvery, &wk.sea)
 			}
 			wk.weeks = 1
 			copy(wk.shares, w.Report.Shares)
@@ -167,7 +177,13 @@ func TestWeeks(t *testing.T) {
 	for _, f := range tally.busy.failures(cat, cfg) {
 		t.Error(f)
 	}
-	report := tally.markdown(cat) + tally.cloudsMarkdown() + tally.fogMarkdown() + tally.busy.markdown(cat)
+	// The sea rises with the weather: a gale's is 1.8 m or more, a stormy
+	// spell's high, and the trade wind's and the inner waters' as the
+	// fetch alone raises them.
+	for _, f := range tally.sea.failures(cat) {
+		t.Error(f)
+	}
+	report := tally.markdown(cat) + tally.cloudsMarkdown() + tally.fogMarkdown() + tally.busy.markdown(cat) + tally.sea.markdown(cat)
 	t.Log("\n" + report)
 	if path := os.Getenv("KEEL_WEEKS_SUMMARY"); path != "" {
 		if err := os.WriteFile(path, []byte(report), 0o644); err != nil {
@@ -193,6 +209,7 @@ type weeksTally struct {
 	fronts, cirrusShort                          int
 	cirrus                                       []float64 // a front's cirrus's leads on its line, minutes
 	fog                                          fogWall
+	sea                                          seaTally
 }
 
 // swellLead is the swell's lead on a storm's own wind at the places that
@@ -210,6 +227,7 @@ var swellKnots = [3]float64{10, 15, 20}
 
 // add adds a week's tally to t.
 func (t *weeksTally) add(o *weeksTally) {
+	t.sea.merge(&o.sea)
 	b, ob := &t.busy, &o.busy
 	b.minutes += ob.minutes
 	b.empty += ob.empty
