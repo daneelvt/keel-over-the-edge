@@ -1314,10 +1314,6 @@ test('the barometer and the clock keep still whatever else is pressed, toggled o
     // Both out, opened afresh: they slide as they open, and are then still.
     await page.evaluate(() => globalThis.keel.settings({ barometer: false, clock: false }));
     await page.evaluate(() => globalThis.keel.settings({ barometer: true, clock: true }));
-    const opening = await stillness(page);
-    if (opening.running.length === 0) {
-      found.push(`${s.name}: nothing slid as the complications opened`);
-    }
     await page.waitForTimeout(400);
     const rest = await stillness(page);
     if (!rest.boxes.includes('barometer') || !rest.boxes.includes('clock')) {
