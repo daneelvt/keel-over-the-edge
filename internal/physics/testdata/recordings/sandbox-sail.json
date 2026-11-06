@@ -10,6 +10,7 @@
   "fetchCap": 6,
   "stretchFrom": 8.75,
   "stretchMost": 3.5,
+  "stretchCull": 0.15,
   "cull": 0.1,
   "breaking": 0.5,
   "swellLeast": 0.05,

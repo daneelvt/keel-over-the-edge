@@ -232,6 +232,7 @@ type SeaParams struct {
 	// the wind over it, at most StretchMost times: a licence (PrepareSea).
 	StretchFrom float64 // m/s
 	StretchMost float64 // a multiple
+	StretchCull float64 // the wind sea's cull at StretchMost
 	Cull        float64 // waves lower than this fraction of an area's highest are left out
 	Breaking    float64 // the most significant height the waves keep in shallow water, as a share of its depth
 	// Swell.

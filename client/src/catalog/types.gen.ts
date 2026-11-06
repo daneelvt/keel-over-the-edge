@@ -1968,6 +1968,10 @@ export interface WeatherSea {
    */
   stretchMost: number;
   /**
+   * The wind sea's cull where its fetch is stretched the most: from the cull at no stretch it rises with the stretch to this.
+   */
+  stretchCull: number;
+  /**
    * Waves lower than this fraction of an area's highest are left out.
    */
   cull: number;
@@ -7483,4 +7487,4 @@ export interface NewsColumn {
 }
 
 /** The catalog version (tools/catalog). */
-export const CATALOG_VERSION = 'fe3c23df985d682f';
+export const CATALOG_VERSION = '418585d325a5300d';

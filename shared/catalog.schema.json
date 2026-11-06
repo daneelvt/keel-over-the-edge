@@ -63,7 +63,7 @@
       "description": "The waves long enough to move a boat: the band of wavelengths they span and the spectrum that gives each its height.",
       "type": "object",
       "additionalProperties": false,
-      "required": ["shortest", "longest", "gamma", "sigmaBelow", "sigmaAbove", "spreading", "fetchCap", "stretchFrom", "stretchMost", "cull", "breaking", "swellLeast", "swellSpreading", "swellSigma", "swellSteps", "currentMost", "shadowLeast", "leeReach"],
+      "required": ["shortest", "longest", "gamma", "sigmaBelow", "sigmaAbove", "spreading", "fetchCap", "stretchFrom", "stretchMost", "stretchCull", "cull", "breaking", "swellLeast", "swellSpreading", "swellSigma", "swellSteps", "currentMost", "shadowLeast", "leeReach"],
       "properties": {
         "shortest": { "description": "The shortest wavelength, in m.", "type": "number", "minimum": 1, "maximum": 100 },
         "longest": { "description": "The longest wavelength, in m.", "type": "number", "minimum": 2, "maximum": 1000 },
@@ -74,6 +74,7 @@
         "fetchCap": { "description": "The fetch of open water, in nautical miles.", "type": "number", "exclusiveMinimum": 0, "maximum": 1000 },
         "stretchFrom": { "description": "The wave wind, in m/s, above which the wind sea's fetch is stretched by the square of the wind over it, as an open sea grows: a licence. At and below it the fetch is as it is.", "type": "number", "exclusiveMinimum": 0, "maximum": 100 },
         "stretchMost": { "description": "The most the fetch is stretched, a multiple: at most 4, the waves' lee's table reaching four times the lee's fetch.", "type": "number", "minimum": 1, "maximum": 4 },
+        "stretchCull": { "description": "The wind sea's cull where its fetch is stretched the most: from the cull at no stretch it rises with the stretch to this.", "type": "number", "minimum": 0, "maximum": 0.5 },
         "cull": { "description": "Waves lower than this fraction of an area's highest are left out.", "type": "number", "minimum": 0, "maximum": 0.5 },
         "breaking": { "description": "The most significant height the waves keep in shallow water, as a share of its depth: where the water is shallower than the sea's height over this, its waves are capped to it and break.", "type": "number", "exclusiveMinimum": 0, "maximum": 1 },
         "swellLeast": { "description": "A swell lower than this, in m, is none.", "type": "number", "minimum": 0, "maximum": 1 },

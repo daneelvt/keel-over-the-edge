@@ -188,6 +188,7 @@ type Waves struct {
 	fetchCap      float64 // m
 	stretchFrom   float64 // m/s
 	stretchMost   float64
+	stretchCull   float64
 	cull          float64
 	breaking      float64 // γ: the most Hs a depth keeps, as a share of it
 
@@ -272,6 +273,7 @@ func PrepareSea(p *SeaParams, w *Waves) {
 	w.fetchCap = float64(p.FetchCap * nauticalMile)
 	w.stretchFrom = max2(p.StretchFrom, 1e-3)
 	w.stretchMost = clamp(p.StretchMost, 1, leeStretchMost)
+	w.stretchCull = p.StretchCull
 	w.cull = p.Cull
 	w.breaking = p.Breaking
 	w.swellSpreading = max(toInt32(p.SwellSpreading), 1)
@@ -547,7 +549,7 @@ func (w *Waves) amplitudes(in SeaInput, amp []float64, swell *[SeaComponents]flo
 			last.swellPeak = parts.SwellPeak
 		}
 	}
-	floorW, floorS := float64(w.cull*highW), float64(w.cull*highS)
+	floorW, floorS := float64(w.windCull(in)*highW), float64(w.cull*highS)
 	sumW, sumS, still := 0.0, 0.0, 0.0
 	for i, a := range amp {
 		if a < floorW {
@@ -683,6 +685,18 @@ func (w *Waves) stretch(u float64) float64 {
 	}
 	r := u / w.stretchFrom
 	return min2(float64(r*r), w.stretchMost)
+}
+
+// windCull is the wind sea's cull under the inputs' wind: the catalog's,
+// rising with the stretch to stretchCull where it is the most. A stretched
+// sea's peak is longer and narrower against the band, and more of its
+// waves would pass a cull that did not rise.
+func (w *Waves) windCull(in SeaInput) float64 {
+	m := w.stretch(float64(float64(in.Speed) * SeaSpeedStep))
+	if !(m > 1) || !(w.stretchMost > 1) {
+		return w.cull
+	}
+	return w.cull + float64((w.stretchCull-w.cull)*((m-1)/(w.stretchMost-1)))
 }
 
 // jonswapFit is the JONSWAP fits' α and peak frequency for a wind of u m/s

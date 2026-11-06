@@ -31,6 +31,11 @@ weather:
     # open sea. At and below stretchFrom the fetch is as it is.
     stretchFrom: 8.75 # m/s, 17 knots
     stretchMost: 3.5
+    # A stretched sea's peak is longer and narrower against the band, so
+    # more of its waves pass the cull: its cull rises with the stretch, to
+    # stretchCull at the most, which keeps the waves a step sums as many as
+    # before and the sea's height within 1%.
+    stretchCull: 0.15
     cull: 0.10
     # In shallow water the waves' significant height is capped at this share
     # of the depth, as in the inner surf zone, where it is 0.4–0.5 since the
