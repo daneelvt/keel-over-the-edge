@@ -128,6 +128,8 @@ export function sailorLookOf(cat: Looks, code: number): SailorLook {
 
 /** No boats: the fleet before the game is online. */
 const NO_BOATS: readonly DrawnBoat[] = [];
+/** A hull sits at most this much deeper or higher than at rest for its wake's waves, metres. */
+const SINK_MOST = 0.08;
 
 /**
  * What can cover the sea, drawn by the same renderer in its place while it
@@ -273,9 +275,8 @@ export class SeaScene {
   readonly #nearDist = new Float64Array(HULLS);
   readonly #query: URLSearchParams;
   readonly #store: Store | null;
-  /** The hull every boat has, for now: where its stern is and how wide it is, for the wakes. */
-  #aft = 0;
-  #halfBeam = 0.5;
+  /** The current at the boat, as the module gives it. */
+  readonly #current: number[] = [0, 0];
   /** The fade going over the lip, and the world's end's veil, 0 to 1; whether its words show. */
   #fadeOver = 0;
   #veil = 0;
@@ -702,13 +703,20 @@ export class SeaScene {
   }
 
   #hull(shape: HullShape): void {
-    this.#aft = shape.stations[0]?.[0] ?? 0;
-    this.#halfBeam = Math.max(...shape.stations.map((s) => s[1] ?? 0));
+    const s = shape.stations;
+    this.ocean.wakes.setHull({
+      aft: s[0]?.[0] ?? 0,
+      fore: s[s.length - 1]?.[0] ?? 0,
+      halfBeam: Math.max(...s.map((st) => st[1] ?? 0)),
+    });
+    this.ocean.wakeWaves.setShape(shape);
   }
 
   #attached(gfx: Gfx): void {
     this.shadows.attached(gfx.renderer);
     this.ocean.detail.attached();
+    this.ocean.compute = gfx.backend === 'webgpu';
+    this.ocean.wakeWaves.clear();
     this.ocean.choose(this.usePass, gfx.floatTargets);
     this.boat?.attached(gfx);
     const now = performance.now();
@@ -814,7 +822,12 @@ export class SeaScene {
     await Promise.all([
       lit,
       this.ocean.setQuality(
-        { detail: rung.detail, anisotropy: tier.anisotropy, foamMap: tier.foamMap },
+        {
+          detail: rung.detail,
+          anisotropy: tier.anisotropy,
+          foamMap: tier.foamMap,
+          wakeWaves: tier.wakeWaves,
+        },
         ahead ? (o) => this.stage.compile(o) : null,
         this.stage.gfx?.renderer ?? null,
       ),
@@ -874,26 +887,52 @@ export class SeaScene {
 
   /**
    * Tells the sea which hulls to keep out of: the player's own, and the
-   * nearest others within reach that have faded in.
+   * nearest others within reach that have faded in; and every boat drawn
+   * to the wakes: the wake's waves it pushes on, and the foam map's track
+   * and white water, by its speed through the water.
    */
   #placeHulls(): void {
     const p = this.pose;
     const bs = this.boatScene;
     const speed = this.out[RECORDS.out.speedThroughWater] ?? 0;
     hulls.begin();
-    hulls.add(bs.x, bs.y + p.heave, bs.z, p.heading, p.heel, p.pitch, speed);
-    const wakes = this.ocean.wakes;
+    hulls.add(bs.x, bs.y + p.heave, bs.z, p.heading, p.heel, p.pitch);
+    const ocean = this.ocean;
+    // The current at the boat, in which the wakes drift.
+    const physics = ocean.source?.physics ?? null;
+    const current = ocean.current;
+    if (physics !== null) {
+      physics.current(p.east, p.north, this.#current);
+      current.east = this.#current[0] ?? 0;
+      current.north = this.#current[1] ?? 0;
+    } else {
+      current.east = 0;
+      current.north = 0;
+    }
+    ocean.heading = p.heading;
+    const wakes = ocean.wakes;
+    const waves = ocean.wakeWaves;
     wakes.begin();
-    wakes.add(p.east, p.north, p.heading, speed, this.#aft, this.#halfBeam);
+    waves.begin();
+    wakes.add(p.east, p.north, p.heading, speed);
+    // The hull deeper than at rest where the sea under it stands above it:
+    // a boat that bobs makes rings.
+    const sink = Math.min(Math.max(this.#seaUnderBoat() - p.heave, -SINK_MOST), SINK_MOST);
+    waves.add(p.east, p.north, p.heading, sink);
     const fs = this.fleetSource;
     if (fs === null) {
       return;
     }
-    // Every boat drawn lays a wake; the map keeps those within its square.
+    // Every boat drawn makes a wake; the map and the waves keep those within
+    // their squares. A boat's drawn speed is over the ground: through the
+    // water it is that less the current.
     for (let i = 0; i < fs.count; i++) {
       const b = fs.drawn[i] as DrawnBoat;
       if (b.opacity >= 0.5) {
-        wakes.add(b.east, b.north, b.heading, b.speed, this.#aft, this.#halfBeam);
+        const ve = b.speed * Math.sin(b.heading) - current.east;
+        const vn = b.speed * Math.cos(b.heading) - current.north;
+        wakes.add(b.east, b.north, b.heading, Math.hypot(ve, vn));
+        waves.add(b.east, b.north, b.heading, 0);
       }
     }
     // The nearest, kept in order of distance as they are found.
@@ -921,7 +960,7 @@ export class SeaScene {
     const o = this.origin.world;
     for (let k = 0; k < n; k++) {
       const b = fs.drawn[near[k] ?? 0] as DrawnBoat;
-      hulls.add(b.east - o.x, b.heave, -(b.north - o.y), b.heading, b.heel, b.pitch, b.speed);
+      hulls.add(b.east - o.x, b.heave, -(b.north - o.y), b.heading, b.heel, b.pitch);
     }
   }
 

@@ -23,6 +23,7 @@
 //   ?world=7          the sandbox in seed 7's world, from .dev/worlds/7.world (go run ./tools/dev -world 7)
 //   ?wind=12,45       the sandbox's wind: knots 10 m up, and the degrees it comes from
 //   ?sea=gale         the sandbox's wind by the sea it raises: calm, breeze, fresh or gale
+//   ?wake=turn        a wake scene, the boat steered on its own: reach, turn, stop or cross
 //   ?weather=squall   the sandbox's weather: steady, a regime's id, front, or a kind of
 //                     system's id to meet the boat three minutes in
 //   ?front=40         a front crossing the boat that many minutes in, its sheets first
@@ -106,6 +107,7 @@ import {
   weatherFromQuery,
   windFromQuery,
 } from '../sandbox/sandbox';
+import { startWakeScene, wakeSceneFromQuery, wakeSceneHost } from '../sandbox/wakescenes';
 import { hourAt, sandboxEpochUs, skyFromQuery, skyPeriods, skyTimeFor } from '../sky/skytime';
 import { Barometer } from '../ui/barometer';
 import type { DialWord } from '../ui/barometerdial';
@@ -371,6 +373,11 @@ async function start(): Promise<void> {
       );
     }
     chooseSky(world, query);
+    // ?wake=scene: the boat steered through a wake scene of its own.
+    const wakeScene = wakeSceneFromQuery(query);
+    if (wakeScene !== null && !query.has('test')) {
+      startWakeScene(wakeSceneHost(game, sandbox, world), wakeScene, query.get('sea') ?? 'breeze');
+    }
     // The forecast, made as a server makes it from the sandbox's own
     // weather, every ten minutes of world time.
     let sandboxForecast: SandboxForecast | null = null;

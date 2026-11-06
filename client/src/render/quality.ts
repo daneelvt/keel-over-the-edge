@@ -31,6 +31,13 @@ export type DetailKind =
   | { kind: 'baked' }
   | { kind: 'none' };
 
+/** The wake's waves a tier draws: by the transform on the GPU, or on the CPU, over a square of size texels and span metres. */
+export interface WakeWavesKind {
+  kind: 'fft' | 'cpu';
+  size: 64 | 128 | 256;
+  span: number;
+}
+
 export interface Tier {
   name: TierName;
   /** As the server is told it: 1 low, 2 medium, 3 high. */
@@ -40,6 +47,8 @@ export interface Tier {
   detail: DetailKind;
   /** The foam map's side, in texels. */
   foamMap: number;
+  /** The wake's waves. */
+  wakeWaves: WakeWavesKind;
   /** The shadow map's side, in texels (0 for none), the side of the box it covers, in metres, and whether other boats cast and receive. */
   shadowMap: number;
   shadowBox: number;
@@ -62,6 +71,7 @@ export const TIERS: Record<TierName, Tier> = {
     scale: 2,
     detail: { kind: 'fft', size: 256, patches: 2 },
     foamMap: 512,
+    wakeWaves: { kind: 'fft', size: 256, span: 64 },
     // A shadow map is a depth texture and a colour target: 5 bytes a texel
     // here (shadows.ts), so 1,024² is 5 MB and 2,048² would be 20.
     shadowMap: 1024,
@@ -80,6 +90,7 @@ export const TIERS: Record<TierName, Tier> = {
     scale: 1.5,
     detail: { kind: 'fft', size: 128, patches: 1 },
     foamMap: 512,
+    wakeWaves: { kind: 'fft', size: 128, span: 48 },
     shadowMap: 1024,
     shadowBox: 12,
     shadowFleet: false,
@@ -96,6 +107,7 @@ export const TIERS: Record<TierName, Tier> = {
     scale: 1,
     detail: { kind: 'baked' },
     foamMap: 256,
+    wakeWaves: { kind: 'cpu', size: 64, span: 28 },
     shadowMap: 0,
     shadowBox: 0,
     shadowFleet: false,

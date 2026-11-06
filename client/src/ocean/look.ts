@@ -10,7 +10,7 @@
 export const KNOT = 1852 / 3600;
 
 /** Changed by hand whenever the tiers' values change: what a phone remembered of an older build's is let go. */
-export const QUALITY_VERSION = 2;
+export const QUALITY_VERSION = 3;
 
 /** The detail band: the waves shorter than the boat band's shortest, drawn and never felt. */
 export const DETAIL = {
@@ -265,20 +265,81 @@ export const FOAM = {
   patternSpan: 43,
 } as const;
 
-/** The wake and the foam about a hull. */
+/**
+ * The foam map: what the hulls leave on the water behind them, the white
+ * water and the churned track, in a square that follows the boat.
+ */
 export const WAKE = {
   /** The foam map's side, in metres: a square that follows the boat. */
   span: 256,
-  /** A wake fades over this long, in seconds. */
-  decay: 6,
-  /** How fast it widens as it fades, m²/s. */
+  /** The white water fades over this long, in seconds. */
+  decay: 3,
+  /** How fast it spreads as it fades, m²/s. */
   spread: 0.08,
-  /** A boat lays a full wake from this speed up, m/s. */
-  fullSpeed: 3,
-  /** The half-angle of the wake's arms: arcsin ⅓ (Thomson, "On ship waves", 1887). */
-  kelvin: Math.asin(1 / 3),
+  /** The track's churn fades over this long, in seconds: 5% is left after a minute. */
+  churnDecay: 20,
+  /**
+   * How fast the track widens, m²/s: from a beam's width to about four over
+   * its fading, its spread's square growing by twice this a second.
+   */
+  churnSpread: 0.18,
+  /** A hull churns its whole waterline at full from this speed through the water up, m/s. */
+  churnSpeed: 2.5,
+  /** How much of a full churn a hull lays at full speed, each pass of its length. */
+  churnLaid: 0.9,
+  /** White water behind the transom from this speed through the water, m/s (hull speed: 1.34 √LWL in feet), full at so much more. */
+  transomFrom: 2.4,
+  transomFull: 1.6,
+  /** Where the wake's waves fold, white water is born: so much a second at a full fold. */
+  foldBirth: 2.5,
+  /** The wake's waves fold where the Jacobian of their shift falls below this, under this chop. */
+  foldThreshold: 0.72,
+  foldChop: 1,
   /** Another boat's speed is its drawn position's change, smoothed over this long, in seconds. */
   speedEase: 0.5,
+} as const;
+
+/** What the track and the white water do to the sea's look. */
+export const TRACK = {
+  /** The churn smooths the wind's ripples by up to this share, so the lane mirrors the sky as a slick does. */
+  smooth: 0.75,
+  /** And lightens the water toward its scattering colour by up to this share: the bubbles under it. */
+  bubbles: 0.25,
+  /** The wake's white water shows the lace through a window this wide, softer than the sea's foam's 0.14. */
+  lace: 0.35,
+  /** Its colour goes toward the water's scattering colour by up to this share as it thins: bubbles under a film. */
+  thin: 0.55,
+} as const;
+
+/**
+ * The wake's waves (wakewaves.ts): a small sheet of water that follows the
+ * boat, which every hull in it pushes on, and whose waves run by deep
+ * water's dispersion. The sizes are a tier's (render/quality.ts).
+ */
+export const WAKE_WAVES = {
+  /** The square's centre lies this share of its side astern of the boat, along its heading. */
+  astern: 0.25,
+  /** The heading it is placed by follows the boat's over this long, in seconds. */
+  headingEase: 2,
+  /** Over this share of each half side the square damps waves, up to so much a second at its rim (Atlas). */
+  rim: 0.125,
+  rimRate: 6,
+  /** Every wave fades at this rate a second, and the finest so much faster ((k / k_max)⁴). */
+  rate: 0.03,
+  fine: 1.5,
+  /**
+   * The waves' height and slopes are drawn this many times linear theory's,
+   * a look: at 1 the Jolly boat's are 1 to 9 cm high and steep at most 0.25,
+   * and read faintly, if at all, from the chase camera on a phone; at 3
+   * they read as the waves of a wake.
+   */
+  gain: 3,
+  /** The whole-tile tilt reads the waves averaged over about this many metres. */
+  tileTexel: 2.5,
+  /** The low tier steps its field at most this often, per second of world time. */
+  cpuRate: 30,
+  /** A frame longer than this, in seconds (a page hidden and shown again), starts the field afresh. */
+  longest: 1,
 } as const;
 
 /** Spray: sprites thrown from the bow, and torn off the crests from force 7. */

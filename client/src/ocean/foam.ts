@@ -1,19 +1,25 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
-// Foam, as the sea's shader lays it. Five things make it: the detail band
-// where it folds; whitecaps on the boat band's crests, broken into patches;
-// streaks blown down the wind in a gale; the hulls; and the wakes in the
-// foam map. Their sum is an amount, 0 to 1. The amount is not drawn as a
-// grey: it sets how much of a pattern of lace shows, so a little foam is a
-// few threads and a lot is a sheet. And it is held within its tile: over
-// the tile's rim it fades to a seventh, so a patch of foam reads as a cluster
-// of white tiles.
+// Foam, as the sea's shader lays it. Four things make the sea's: the detail
+// band where it folds; whitecaps on the boat band's crests, broken into
+// patches; streaks blown down the wind in a gale; and the surf against the
+// land. Their sum is an amount, 0 to 1. The amount is not drawn as a grey:
+// it sets how much of a pattern of lace shows, so a little foam is a few
+// threads and a lot is a sheet. And it is held within its tile: over the
+// tile's rim it fades to a seventh, so a patch of foam reads as a cluster of
+// white tiles.
+//
+// The white water the boats make (the foam map's) is drawn as foam is, but
+// softer: its lace shows through a wider window, so its edge is soft; its
+// cover is as thin as its amount, so thin foam shows the water through it;
+// and as it thins its colour goes toward the water's own, bubbles under a
+// film (wakeCover, wakeColour). It dies as foam does, in seconds.
 
 import { Vector2 } from 'three';
-import { clamp, dot, float, max, smoothstep, uniform, vec2, vec3 } from 'three/tsl';
+import { clamp, dot, float, max, mix, smoothstep, uniform, vec2, vec3 } from 'three/tsl';
 import type { Node } from 'three/webgpu';
 import { look } from '../render/sky';
-import { FOAM } from './look';
+import { FOAM, TRACK } from './look';
 import { FINE_CELLS } from './pattern';
 
 /** The floating origin's place in the pattern: the pattern is laid over the world, not the scene. */
@@ -68,7 +74,7 @@ export interface FoamParts {
   pattern: Node<'vec4'>;
   /** The fine noise read along the wind (streakAt), or null without streaks. */
   streak: Node<'float'> | null;
-  /** Foam from the hulls and the wakes. */
+  /** Foam from the surf and the drains: what the land makes. */
   boats: Node<'float'>;
 }
 
@@ -110,6 +116,20 @@ export function foamCover(amount: Node<'float'>, pattern: Node<'vec4'>): Node<'f
   ) as unknown as Node<'float'>;
 }
 
+/**
+ * How much of the water the boats' white water covers here: the lace
+ * through a window TRACK.lace wide, so its edge is soft, and no more than
+ * the amount, so thin foam is thin.
+ */
+export function wakeCover(amount: Node<'float'>, pattern: Node<'vec4'>): Node<'float'> {
+  const lace = pattern.x.mul(0.55).add(pattern.y.mul(0.45));
+  const a = clamp(amount, 0, 1).mul(foamOn);
+  const shows = float(1).sub(a);
+  return smoothstep(shows.sub(TRACK.lace * 0.5), shows.add(TRACK.lace * 0.5), lace).mul(
+    a,
+  ) as unknown as Node<'float'>;
+}
+
 /** How much of its cover foam keeps at a tile's rim; fade is 0 in the tile's middle and 1 at its edge. */
 export function foamMargin(fade: Node<'float'>): Node<'float'> {
   const [from, to, loss] = FOAM.margin;
@@ -118,6 +138,18 @@ export function foamMargin(fade: Node<'float'>): Node<'float'> {
 
 /** The clouds' colour by day: the foam is as white as they are, and as dark by night. */
 const DAY_CLOUD = [0.97, 0.96, 0.93] as const;
+
+/**
+ * The boats' white water's colour on a surface with normal N, over water of
+ * the colour under it: the foam's, lit by the surface the wake's waves
+ * tilt, going toward the water's scattering colour as it thins (amount).
+ */
+export function wakeColour(normal: Node<'vec3'>, amount: Node<'float'>): Node<'vec3'> {
+  const thin = float(1)
+    .sub(smoothstep(0.1, 0.8, amount))
+    .mul(TRACK.thin);
+  return mix(foamColour(normal), look.scatter.mul(1.6), thin) as unknown as Node<'vec3'>;
+}
 
 /**
  * The foam's colour under the main light on a surface with normal N

@@ -19,9 +19,18 @@
 // leaves the finest ripples out, a shimmer of the pattern's noise stands in
 // for them, the tile's own too.
 //
-// On top comes the foam (foam.ts), held within each tile; and against the
-// land (shore.ts) the bed through shallow water, surf where the waves
-// break, and calmer water in the lee.
+// The wake's waves (wakewaves.ts) are drawn as the detail band is: read at
+// the tile's centre from their mipmap of about a tile's texels they tilt the
+// tile as a whole, and read at the fragment, at its own place (a wake is
+// where it is, not shifted by the tile's hash) and faded to nothing at the
+// rim, they ripple it; their height lights its crest. Nothing lifts a tile.
+// Where the foam map's track runs (foammap.ts), the wind's ripples are
+// smoothed, so the lane mirrors the sky as a real wake's slick does, and the
+// water is lightened toward its scattering colour, by the bubbles under it.
+//
+// On top comes the foam (foam.ts), held within each tile, and the boats'
+// white water, softer; and against the land (shore.ts) the bed through
+// shallow water, surf where the waves break, and calmer water in the lee.
 
 import {
   abs,
@@ -66,12 +75,14 @@ import {
   streakAt,
   streaks,
   streaksOn,
+  wakeColour,
+  wakeCover,
   whitecaps,
 } from './foam';
 import { GUST_LOOK } from './gusts';
 import { TILE_APOTHEM } from './hex';
 import { hulls } from './hulls';
-import { FOAM, RAIN_CUT } from './look';
+import { DETAIL, FOAM, RAIN_CUT, TRACK } from './look';
 import { shallows, surf } from './shore';
 import type { TileVaryings } from './tiles';
 
@@ -228,8 +239,10 @@ export interface SeaParts {
   shimmer: boolean;
   /** The foam's pattern and noise (pattern.ts). */
   pattern: Texture;
-  /** The wakes at a scene point (foammap.ts), or null without them. */
-  wakes: ((p: Node<'vec2'>) => Node<'float'>) | null;
+  /** The foam map at a scene point (foammap.ts): the boats' white water and the track; or null without it. */
+  wakes: ((p: Node<'vec2'>) => Node<'vec2'>) | null;
+  /** The wake's waves (wakewaves.ts), or null without them. */
+  wakeWaves: WakeWavesNodes | null;
   /** The rain's share at a scene point (water.ts), 0 to 1, or null without it. */
   rain: ((p: Node<'vec2'>) => Node<'float'>) | null;
 }
@@ -263,8 +276,14 @@ const pocks = (parts: SeaParts, p: Node<'vec2'>): Node<'vec2'> => {
   return vec2(a.y.sub(b.w), a.w.sub(b.y)) as Node<'vec2'>;
 };
 
+/** What the sea's material reads of the wake's waves: at a fragment, and at a tile's centre averaged over a tile; each vec4(the slope along x and z, the convergence, the height in metres), drawn. */
+export interface WakeWavesNodes {
+  fine(p: Node<'vec2'>): Node<'vec4'>;
+  coarse(p: Node<'vec2'>): Node<'vec4'>;
+}
+
 /** What a probe reads of a tile's fragment instead of its colour (the tests). */
-export type Probe = 'detail' | 'foam' | 'crest' | 'gust' | 'ground';
+export type Probe = 'detail' | 'foam' | 'crest' | 'gust' | 'ground' | 'wake';
 
 /**
  * The tiles' fragment colour. With a probe, the fragment's numbers instead:
@@ -272,17 +291,19 @@ export type Probe = 'detail' | 'foam' | 'crest' | 'gust' | 'ground';
  * ripples' slope along x and z); 'foam' vec4(the foam's cover with its
  * margin, its amount, the whitecaps' part, the streaks' part); 'crest'
  * vec4(the boat band's height in half significant heights, the detail's
- * height, how near the rim, the hulls' and wakes' foam); 'gust' vec4(the
- * gust on the tile as it shows, its gust and its lull, 1); 'ground'
- * vec4(the water's depth, the waves' cap, the surf's amount, the lee).
+ * height, how near the rim, the boats' white water's cover); 'gust'
+ * vec4(the gust on the tile as it shows, its gust and its lull, 1);
+ * 'ground' vec4(the water's depth, the waves' cap, the surf's amount, the
+ * lee); 'wake' vec4(the boats' white water's amount, the track's churn, the
+ * wake's waves' height and the size of their slope as drawn).
  */
 export function tileLook(v: TileVaryings, parts: SeaParts, probe?: Probe): Node<'vec4'> {
   const detail = parts.detail;
   // Once a tile, in the vertex stage: the same for every fragment of it.
   const whole = detail === null ? null : (varying(detail.coarse(v.centre)) as Node<'vec4'>);
   return Fn(() => {
-    // No water inside a hull; and the foam the hulls make.
-    const wet = hulls.wet(positionWorld, v.nearHull);
+    // No water inside a hull.
+    hulls.cut(positionWorld, v.nearHull);
     const toEye = cameraPosition.sub(positionWorld);
     const dist = length(toEye);
     const V = normalize(toEye);
@@ -344,7 +365,13 @@ export function tileLook(v: TileVaryings, parts: SeaParts, probe?: Probe): Node<
     If(streaksOn.greaterThan(0.5), () => {
       streak.assign(texture(parts.pattern, streakAt(own)).y);
     });
-    const wakes = (parts.wakes === null ? float(0) : parts.wakes(positionWorld.xz)).toVar();
+    const map = (parts.wakes === null ? vec2(0) : parts.wakes(positionWorld.xz)).toVar();
+    const white = map.x;
+    const churn = map.y;
+    // The wake's waves: at the tile's centre, the same for all of it, and here.
+    const ww = parts.wakeWaves;
+    const wakeTile = (ww === null ? vec4(0) : ww.coarse(positionWorld.xz.sub(e))).toVar();
+    const wakeHere = (ww === null ? vec4(0) : ww.fine(positionWorld.xz)).toVar();
 
     // The short sea heaps up with the wind's force.
     tilt.mulAssign(detailSteep);
@@ -359,6 +386,8 @@ export function tileLook(v: TileVaryings, parts: SeaParts, probe?: Probe): Node<
     const gusty = max(gust, 0);
     const lull = max(gust.negate(), 0);
     ripple.mulAssign(gusty.mul(GUST_LOOK.rough).sub(lull.mul(GUST_LOOK.smooth)).add(1));
+    // The track is smooth: the wind's ripples flattened in it.
+    ripple.mulAssign(float(1).sub(churn.mul(TRACK.smooth)));
     // Rain flattens the ripples and pocks the water near the eye.
     const rain = rainHere(parts, positionWorld.xz).toVar();
     ripple.mulAssign(float(1).sub(rain.mul(RAIN_LOOK.flat)));
@@ -373,6 +402,17 @@ export function tileLook(v: TileVaryings, parts: SeaParts, probe?: Probe): Node<
     // In the lee the wind raises less: smaller ripples, fewer whitecaps.
     const lee = clamp(v.lee, 0, 1.3);
     ripple.mulAssign(lee);
+    // The wake's waves, as they are: the tile's tilt, its own ripples
+    // faded to its rim, and the light of their crests.
+    tilt.addAssign(wakeTile.xy);
+    ripple.addAssign(wakeHere.xy.mul(inner));
+    const [tileLift, fragmentLift] = SEA_LOOK.lift as [number, number];
+    lift.addAssign(
+      wakeTile.w
+        .mul(tileLift)
+        .add(wakeHere.w.mul(fragmentLift).mul(inner))
+        .mul(1 / DETAIL.height),
+    );
     const ground = v.ground;
     const breaking = surf(ground.x, ground.y, ground.w, v.area.w, v.period, lee).toVar();
     const slope = v.plane.yz.add(tilt).add(ripple);
@@ -392,13 +432,11 @@ export function tileLook(v: TileVaryings, parts: SeaParts, probe?: Probe): Node<
       folding,
       pattern,
       streak,
-      boats: wet
-        .add(wakes)
-        .add(breaking)
-        .add(drainLines(positionWorld.xz)) as unknown as Node<'float'>,
+      boats: breaking.add(drainLines(positionWorld.xz)) as unknown as Node<'float'>,
     };
     const amount = foamAmount(foam).toVar();
     const cover = foamCover(amount, pattern).mul(foamMargin(fade)).toVar();
+    const whiteCover = wakeCover(white, pattern).mul(foamMargin(fade)).toVar();
     if (probe === 'detail') {
       return vec4(tilt, ripple);
     }
@@ -406,7 +444,10 @@ export function tileLook(v: TileVaryings, parts: SeaParts, probe?: Probe): Node<
       return vec4(cover, amount, whitecaps(foam), streaks(foam));
     }
     if (probe === 'crest') {
-      return vec4(crest, lift, rim, foam.boats);
+      return vec4(crest, lift, rim, whiteCover);
+    }
+    if (probe === 'wake') {
+      return vec4(white, churn, wakeHere.w, length(wakeHere.xy));
     }
     if (probe === 'gust') {
       return vec4(gust, gusty, lull, 1);
@@ -426,8 +467,11 @@ export function tileLook(v: TileVaryings, parts: SeaParts, probe?: Probe): Node<
     If(top, () => {
       // And darker, as the whole patch reads from a distance.
       col.mulAssign(float(1).sub(gusty.mul(GUST_LOOK.dark)));
+      // The bubbles under the track lighten it toward the water's scattering colour.
+      col.assign(mix(col, look.scatter, churn.mul(TRACK.bubbles)));
       col.assign(greyed(col, rain.mul(RAIN_LOOK.grey)));
       col.assign(mix(col, foamColour(N), cover.mul(FOAM.cover)));
+      col.assign(mix(col, wakeColour(N, white), whiteCover.mul(FOAM.cover)));
       const [s0, s1, sk] = SEA_LOOK.seam as [number, number, number];
       const [b0, b1, b2, bk] = SEA_LOOK.bevel as [number, number, number, number];
       col.mulAssign(
