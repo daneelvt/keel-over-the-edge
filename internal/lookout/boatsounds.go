@@ -30,7 +30,7 @@ type levelRecipe struct{ from, full, most float64 }
 // m/s, heights m, rain mm an hour.
 var (
 	windRecipe = struct {
-		level                       levelRecipe
+		level                        levelRecipe
 		breathRate, perGust, deepest float64
 	}{level: levelRecipe{from: 0.3, full: 17.5, most: 0.4}, breathRate: 0.11, perGust: 0.6, deepest: 0.3}
 	riggingRecipe  = levelRecipe{from: 3, full: 14, most: 0.05}

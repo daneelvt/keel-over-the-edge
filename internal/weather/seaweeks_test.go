@@ -88,10 +88,9 @@ func (s *seaSide) merge(o *seaSide) {
 
 // seaTally is the tally of the weeks' seas.
 type seaTally struct {
-	weeks       int
-	sea, plain  seaSide
-	byForce     [len(seaForces)]hsHistogram
-	sampleShare [len(seaForces)]int64
+	weeks      int
+	sea, plain seaSide
+	byForce    [len(seaForces)]hsHistogram
 	// Each week's own median and 95th percentile, for how much weeks differ.
 	medians, p95s []float64
 }
