@@ -4,12 +4,18 @@ import { describe, expect, it } from 'vitest';
 import { foamAt, KNOT, newFoamLook } from '../ocean/look';
 import { type CrestSample, SprayDrops, type SpraySource, type SprayWeather, seeded } from './spray';
 
-const weather = (knots: number): SprayWeather => ({
-  speed: knots * KNOT,
-  east: 0,
-  north: -1,
-  whitecaps: foamAt(knots, newFoamLook()).whitecaps,
-});
+const weather = (knots: number, hs = 1): SprayWeather => {
+  const look = foamAt(knots, newFoamLook());
+  return {
+    speed: knots * KNOT,
+    east: 0,
+    north: -1,
+    whitecaps: look.whitecaps,
+    hs,
+    crestRate: look.spray,
+    spindrift: look.spindrift,
+  };
+};
 
 /**
  * A boat sailing at speed into a sea whose height at its bow rises and falls
@@ -78,6 +84,26 @@ describe('spray', () => {
     expect(drops.count).toBe(0);
   });
 
+  it('is thrown more in a higher sea from the same rise', () => {
+    const low = new SprayDrops(2048, 4);
+    const high = new SprayDrops(2048, 4);
+    const run = (d: SprayDrops, hs: number): number => {
+      let thrown = 0;
+      for (let i = 0; i < 600; i++) {
+        const h = 0.5 * Math.sin((2 * Math.PI * i) / 150);
+        const before = d.count;
+        d.step(
+          1 / 60,
+          [{ east: 0, north: 0, height: 0.6 * h, sea: h, heading: 0, speed: 3 }],
+          weather(20, hs),
+        );
+        thrown += Math.max(d.count - before, 0);
+      }
+      return thrown;
+    };
+    expect(run(high, 2)).toBeGreaterThan(1.5 * run(low, 0.3));
+  });
+
   it('is thrown more in a gale than a breeze, and more the faster the boat', () => {
     const breeze = sail(new SprayDrops(2048), 3, 12, 0.5);
     const gale = sail(new SprayDrops(2048), 3, 34, 1.4);
@@ -109,7 +135,7 @@ describe('spray', () => {
     expect(one.data[1]).toBeLessThan(-0.5);
   });
 
-  it('comes off the crests from force 8, and never below', () => {
+  it('comes off the crests from force 7, more with every force, and never below', () => {
     const crests: CrestSample[] = Array.from({ length: 16 }, (_, i) => ({
       east: i * 5,
       north: 0,
@@ -126,9 +152,13 @@ describe('spray', () => {
       }
       return thrown;
     };
-    expect(still(33)).toBe(0);
+    expect(still(27.9)).toBe(0);
     expect(still(20)).toBe(0);
-    expect(still(34)).toBeGreaterThan(20);
+    const by = [30.5, 37, 44, 51.5].map(still);
+    expect(by[0]).toBeGreaterThan(20);
+    for (let i = 1; i < by.length; i++) {
+      expect(by[i]).toBeGreaterThan(1.5 * (by[i - 1] ?? 0));
+    }
     // Not off a low crest.
     const low = new SprayDrops(64);
     for (let i = 0; i < 600; i++) {

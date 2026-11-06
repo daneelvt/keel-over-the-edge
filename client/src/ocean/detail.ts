@@ -112,8 +112,8 @@ const NAUTICAL_MILE = 1852;
 export interface DetailNodes {
   /**
    * The band at the scene point p (x, z from the floating origin): the
-   * slope along x and z, the foam (0 to 1), and the height in units of
-   * three of its standard deviations. For a fragment.
+   * slope along x and z, the foam (0 to 1), and the height over
+   * DETAIL.height metres. For a fragment.
    */
   fine(p: Node<'vec2'>): Node<'vec4'>;
   /** The same averaged over a tile or so: what tilts and shades a tile as a whole. For the vertex stage. */
@@ -575,8 +575,8 @@ class Transformed {
   readonly first: Cascade;
   readonly second: Cascade | null;
   readonly nodes: DetailNodes;
-  /** 1 over three standard deviations of the height, for the height the material reads. */
-  readonly #perHeight = uniform(0);
+  /** 1 over DETAIL.height, for the height the material reads. */
+  readonly #perHeight = uniform(1 / DETAIL.height);
   readonly #sea: WeatherSea;
 
   readonly #scratch: Scratch;
@@ -620,8 +620,6 @@ class Transformed {
   step(renderer: WebGPURenderer, f: DetailFrame, foam: FoamLook): void {
     this.first.step(renderer, f, foam);
     this.second?.step(renderer, f, foam);
-    const sigma = Math.sqrt(this.first.inputs.variance);
-    this.#perHeight.value = sigma > 1e-6 ? 1 / (3 * sigma) : 0;
   }
 
   dispose(): void {
@@ -695,6 +693,8 @@ class Baked {
   readonly #frame = uniform(0);
   /** Each loop's slopes' scale, then each loop's share. */
   readonly #gain = uniform(new Vector4());
+  /** The loops' height, in three of their own standard deviations, over DETAIL.height. */
+  readonly #height = uniform(0);
   /** The loop as it is turned to the wind. */
   readonly #turned = new Turned(1 / DETAIL.patch, 1 / DETAIL.patch);
   #variance = { speed: Number.NaN, fetch: 0, value: 0 };
@@ -759,7 +759,8 @@ class Baked {
       const height = value(a.w as Node<'float'>)
         .mul(this.#gain.z)
         .add(value(b.w as Node<'float'>).mul(this.#gain.w))
-        .mul(HEIGHT_RANGE / 3);
+        .mul(HEIGHT_RANGE / 3)
+        .mul(this.#height);
       // The scene's z runs south.
       return vec4(world.x, world.y.negate(), foam, height) as unknown as Node<'vec4'>;
     };
@@ -825,6 +826,7 @@ class Baked {
 
     if (!this.ready) {
       this.#gain.value.set(0, 0, 0, 0);
+      this.#height.value = 0;
       return;
     }
     const v = this.#variance;
@@ -843,6 +845,8 @@ class Baked {
       sigma > 0 ? 1 - share : 0,
       sigma > 0 ? share : 0,
     );
+    // Three of the band's standard deviations, over the height it is drawn over.
+    this.#height.value = (3 * sigma) / DETAIL.height;
   }
 
   dispose(): void {

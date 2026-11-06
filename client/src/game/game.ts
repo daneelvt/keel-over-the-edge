@@ -582,6 +582,7 @@ export class Game implements PilotActions {
     );
     this.#sound.endNear = w.endStage.sound;
     this.#sound.rain = w.weather.rain;
+    this.#sound.gustFactor = w.wind.factor;
     this.sound.update(now, soundInput(w.out, w.sea, time, this.#sound));
     this.#harbour(now, look);
     this.#features(now, look);

@@ -85,9 +85,25 @@ export interface Jonswap {
   peak: number;
 }
 
-/** The spectrum's level and peak under a wind over a fetch, capped at full development and at the catalog's open water. */
+/**
+ * How many times the wind sea's fetch is stretched under a wind of speed
+ * m/s: (speed / stretchFrom)², at most stretchMost, and 1 at and below
+ * stretchFrom. The catalog's licence, as the physics has it: above a fresh
+ * breeze the sea grows as an open sea's, with the square of the wind
+ * (Pierson and Moskowitz 1964), where the fetch alone would let it grow
+ * only in step with it.
+ */
+export function fetchStretch(sea: WeatherSea, speed: number): number {
+  if (!(speed > sea.stretchFrom)) {
+    return 1;
+  }
+  const r = speed / sea.stretchFrom;
+  return Math.min(r * r, sea.stretchMost);
+}
+
+/** The spectrum's level and peak under a wind over a fetch, capped at full development and at the catalog's open water, and stretched as the catalog's licence has it. */
 export function jonswap(sea: WeatherSea, speed: number, fetch: number, out: Jonswap): Jonswap {
-  const f = Math.min(fetch, sea.fetchCap * NAUTICAL_MILE);
+  const f = Math.min(fetch, sea.fetchCap * NAUTICAL_MILE) * fetchStretch(sea, speed);
   if (!(speed > 0) || !(f > 0)) {
     out.level = 0;
     out.peak = 1;

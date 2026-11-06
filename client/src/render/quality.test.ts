@@ -158,7 +158,7 @@ describe('the ladder', () => {
 
   it('keeps the tiers’ values as the table has them', () => {
     expect(TIERS.high).toMatchObject({ scale: 2, foamMap: 512, shadowMap: 1024, spray: 512 });
-    expect(TIERS.medium).toMatchObject({ scale: 1.5, foamMap: 512, shadowMap: 1024, spray: 256 });
+    expect(TIERS.medium).toMatchObject({ scale: 1.5, foamMap: 512, shadowMap: 1024, spray: 512 });
     expect(TIERS.low).toMatchObject({ scale: 1, foamMap: 256, shadowMap: 0, spray: 96 });
     expect([TIERS.low.number, TIERS.medium.number, TIERS.high.number]).toEqual([1, 2, 3]);
   });

@@ -279,9 +279,11 @@ export function surf(
   const phase = fract(seaTime.div(max(period, 1.5)).add(depth.mul(0.8)));
   const band = smoothstep(0, 0.12, phase).mul(float(1).sub(smoothstep(0.2, 0.55, phase)));
   const crest = shore.crests.element(int(surface)) as unknown as Node<'float'>;
+  // A storm's surf is bigger than a breeze's: it grows with the sea to a
+  // significant height of 1.5 m.
   const amount = breaking
     .mul(band.mul(0.7).add(0.3).add(crest))
-    .mul(clamp(hs.mul(2), 0.25, 1))
+    .mul(clamp(hs.mul(0.5).add(0.25), 0.25, 1))
     .mul(clamp(lee, 0.3, 1));
   return clamp(amount, 0, 1).mul(shore.on) as unknown as Node<'float'>;
 }

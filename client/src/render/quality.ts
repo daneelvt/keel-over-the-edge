@@ -83,7 +83,7 @@ export const TIERS: Record<TierName, Tier> = {
     shadowMap: 1024,
     shadowBox: 12,
     shadowFleet: false,
-    spray: 256,
+    spray: 512,
     sprayBoats: 0,
     sprayCrests: true,
     anisotropy: 4,

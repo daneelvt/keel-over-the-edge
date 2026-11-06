@@ -1960,6 +1960,18 @@ export interface WeatherSea {
    */
   fetchCap: number;
   /**
+   * The wave wind, in m/s, above which the wind sea's fetch is stretched by the square of the wind over it, as an open sea grows: a licence. At and below it the fetch is as it is.
+   */
+  stretchFrom: number;
+  /**
+   * The most the fetch is stretched, a multiple: at most 4, the waves' lee's table reaching four times the lee's fetch.
+   */
+  stretchMost: number;
+  /**
+   * The wind sea's cull where its fetch is stretched the most: from the cull at no stretch it rises with the stretch to this.
+   */
+  stretchCull: number;
+  /**
    * Waves lower than this fraction of an area's highest are left out.
    */
   cull: number;
@@ -7475,4 +7487,4 @@ export interface NewsColumn {
 }
 
 /** The catalog version (tools/catalog). */
-export const CATALOG_VERSION = 'd2e619e217a0defe';
+export const CATALOG_VERSION = '418585d325a5300d';

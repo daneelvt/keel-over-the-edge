@@ -28,7 +28,7 @@ import { STEPS_PER_SECOND } from '../game/clock';
 import type { DrawnBoat } from '../game/fleet';
 import type { Land } from '../land/land';
 import { HULL_REACH, HULLS, type HullShape, hulls } from '../ocean/hulls';
-import { beaufort, KNOT, SPRAY } from '../ocean/look';
+import { foamAt, KNOT, newFoamLook, SPRAY } from '../ocean/look';
 import { Ocean } from '../ocean/ocean';
 import { rainShare } from '../ocean/water';
 import { type BoatPose, newPose } from '../predict/blend';
@@ -73,7 +73,13 @@ import { Shadows } from './shadows';
 import { StormCones } from './signals';
 import { look, Sky, toLinear } from './sky';
 import { type Chimney, Smoke, smokes } from './smoke';
-import { type CrestSample, SprayDrops, type SpraySource, SprayView } from './spray';
+import {
+  type CrestSample,
+  SprayDrops,
+  type SpraySource,
+  SprayView,
+  type SprayWeather,
+} from './spray';
 import { Stage } from './stage';
 import { FEW_STARS, Stars } from './stars';
 import { type FrameStats, Stats, WINDOW } from './stats';
@@ -940,9 +946,10 @@ export class SeaScene {
     const camera = this.stage.camera;
     if (this.freeCam.on) {
       const o = this.origin.world;
+      camera.up.set(0, 1, 0);
       this.freeCam.place(o.x, o.y, camera.position, this.#target);
     } else {
-      this.camera.place3(bs.x, bs.y, bs.z, camera.position, this.#target);
+      this.camera.place3(bs.x, bs.y, bs.z, camera.position, this.#target, camera.up);
     }
     camera.lookAt(this.#target);
     // The scene pass reads the camera's matrices before the render updates
@@ -1248,7 +1255,16 @@ export class SeaScene {
     // The dome bends about the focus: the viewer, wherever the boat is.
     domeCentre.value.set(fs0.x, fs0.z);
 
-    this.camera.update(dt, this.pose.heading, now, this.pose.heave, this.#seaUnderBoat());
+    this.camera.update(
+      dt,
+      this.pose.heading,
+      now,
+      this.pose.heave,
+      this.#seaUnderBoat(),
+      this.pose.pitch,
+      this.pose.heel,
+      this.sea.height,
+    );
     this.#placeCamera();
     const camera = this.stage.camera;
     const resting = !this.freeCam.on && this.camera.resting;
@@ -1401,7 +1417,17 @@ export class SeaScene {
     crest: 0,
   }));
   readonly #points = new Float64Array(2 * (4 + 16));
-  readonly #weather = { speed: 0, east: 0, north: -1, whitecaps: 0 };
+  readonly #weather: SprayWeather = {
+    speed: 0,
+    east: 0,
+    north: -1,
+    whitecaps: 0,
+    hs: 0,
+    crestRate: 0,
+    spindrift: 0,
+  };
+  /** The foam's look at the wind the boat feels, for the spray off the crests. */
+  readonly #sprayLook = newFoamLook();
   #crestSeed = 1;
 
   /** Steps the spray: the bows and, in a gale, the crests about the camera. */
@@ -1448,8 +1474,9 @@ export class SeaScene {
     }
     const wind = this.wind;
     const knots = wind.speed / KNOT;
+    const look = foamAt(knots, this.#sprayLook);
     const crests =
-      tier.sprayCrests && beaufort(knots) >= SPRAY.crestForce ? this.#crests.length : 0;
+      tier.sprayCrests && (look.spray > 0 || look.spindrift > 0) ? this.#crests.length : 0;
     // Places about the camera, scattered afresh each frame.
     const cam = this.stage.camera.position;
     const o = this.origin.world;
@@ -1486,6 +1513,9 @@ export class SeaScene {
       w.east = -Math.sin(wind.from);
       w.north = -Math.cos(wind.from);
       w.whitecaps = this.ocean.under.foam.whitecaps;
+      w.hs = sea[3] ?? 0;
+      w.crestRate = look.spray;
+      w.spindrift = look.spindrift;
       this.spray.step(dt, sources, w, this.#crests, n, crests);
     }
     this.sprayView.draw(this.spray, this.origin);

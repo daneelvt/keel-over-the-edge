@@ -157,210 +157,330 @@
  },
  {
   "knots": 19.5,
-  "whitecaps": 0.7136363636363636
+  "whitecaps": 0.7363636363636363
  },
  {
   "knots": 20,
-  "whitecaps": 0.7272727272727272
+  "whitecaps": 0.7727272727272727
  },
  {
   "knots": 20.5,
-  "whitecaps": 0.7409090909090909
- },
- {
-  "knots": 21,
-  "whitecaps": 0.7545454545454545
- },
- {
-  "knots": 21.5,
-  "whitecaps": 0.7681818181818182
- },
- {
-  "knots": 22,
-  "whitecaps": 0.7818181818181817
- },
- {
-  "knots": 22.5,
-  "whitecaps": 0.7954545454545454
- },
- {
-  "knots": 23,
   "whitecaps": 0.8090909090909091
  },
  {
+  "knots": 21,
+  "whitecaps": 0.8454545454545455
+ },
+ {
+  "knots": 21.5,
+  "whitecaps": 0.8818181818181818
+ },
+ {
+  "knots": 22,
+  "whitecaps": 0.9181818181818182
+ },
+ {
+  "knots": 22.5,
+  "whitecaps": 0.9545454545454546
+ },
+ {
+  "knots": 23,
+  "whitecaps": 0.990909090909091
+ },
+ {
   "knots": 23.5,
-  "whitecaps": 0.8227272727272728
+  "whitecaps": 1.0272727272727273
  },
  {
   "knots": 24,
-  "whitecaps": 0.8363636363636363
+  "whitecaps": 1.0636363636363637
  },
  {
   "knots": 24.5,
-  "whitecaps": 0.85
+  "whitecaps": 1.1
  },
  {
   "knots": 25,
-  "whitecaps": 0.8583333333333333
+  "whitecaps": 1.1416666666666668
  },
  {
   "knots": 25.5,
-  "whitecaps": 0.8666666666666667
+  "whitecaps": 1.1833333333333333
  },
  {
   "knots": 26,
-  "whitecaps": 0.875
+  "whitecaps": 1.225
  },
  {
   "knots": 26.5,
-  "whitecaps": 0.8833333333333333
+  "whitecaps": 1.2666666666666668
  },
  {
   "knots": 27,
-  "whitecaps": 0.8916666666666666
+  "whitecaps": 1.3083333333333333
  },
  {
   "knots": 27.5,
-  "whitecaps": 0.8999999999999999
+  "whitecaps": 1.35
  },
  {
   "knots": 28,
-  "whitecaps": 0.9083333333333333
+  "whitecaps": 1.3916666666666668
  },
  {
   "knots": 28.5,
-  "whitecaps": 0.9166666666666666
+  "whitecaps": 1.4333333333333333
  },
  {
   "knots": 29,
-  "whitecaps": 0.9249999999999999
+  "whitecaps": 1.475
  },
  {
   "knots": 29.5,
-  "whitecaps": 0.9333333333333333
+  "whitecaps": 1.5166666666666668
  },
  {
   "knots": 30,
-  "whitecaps": 0.9416666666666667
+  "whitecaps": 1.5583333333333333
  },
  {
   "knots": 30.5,
-  "whitecaps": 0.95
+  "whitecaps": 1.6
  },
  {
   "knots": 31,
-  "whitecaps": 0.9571428571428571
+  "whitecaps": 1.6307692307692307
  },
  {
   "knots": 31.5,
-  "whitecaps": 0.9642857142857143
+  "whitecaps": 1.6615384615384616
  },
  {
   "knots": 32,
-  "whitecaps": 0.9714285714285714
+  "whitecaps": 1.6923076923076923
  },
  {
   "knots": 32.5,
-  "whitecaps": 0.9785714285714285
+  "whitecaps": 1.7230769230769232
  },
  {
   "knots": 33,
-  "whitecaps": 0.9857142857142857
+  "whitecaps": 1.7538461538461538
  },
  {
   "knots": 33.5,
-  "whitecaps": 0.9928571428571429
+  "whitecaps": 1.7846153846153847
  },
  {
   "knots": 34,
-  "whitecaps": 1
+  "whitecaps": 1.8153846153846154
  },
  {
   "knots": 34.5,
-  "whitecaps": 1
+  "whitecaps": 1.8461538461538463
  },
  {
   "knots": 35,
-  "whitecaps": 1
+  "whitecaps": 1.876923076923077
  },
  {
   "knots": 35.5,
-  "whitecaps": 1
+  "whitecaps": 1.9076923076923078
  },
  {
   "knots": 36,
-  "whitecaps": 1
+  "whitecaps": 1.9384615384615385
  },
  {
   "knots": 36.5,
-  "whitecaps": 1
+  "whitecaps": 1.9692307692307693
  },
  {
   "knots": 37,
-  "whitecaps": 1
+  "whitecaps": 2
  },
  {
   "knots": 37.5,
-  "whitecaps": 1
+  "whitecaps": 2.0428571428571427
  },
  {
   "knots": 38,
-  "whitecaps": 1
+  "whitecaps": 2.085714285714286
  },
  {
   "knots": 38.5,
-  "whitecaps": 1
+  "whitecaps": 2.1285714285714286
  },
  {
   "knots": 39,
-  "whitecaps": 1
+  "whitecaps": 2.1714285714285713
  },
  {
   "knots": 39.5,
-  "whitecaps": 1
+  "whitecaps": 2.2142857142857144
  },
  {
   "knots": 40,
-  "whitecaps": 1
+  "whitecaps": 2.257142857142857
  },
  {
   "knots": 40.5,
-  "whitecaps": 1
+  "whitecaps": 2.3
  },
  {
   "knots": 41,
-  "whitecaps": 1
+  "whitecaps": 2.342857142857143
  },
  {
   "knots": 41.5,
-  "whitecaps": 1
+  "whitecaps": 2.3857142857142857
  },
  {
   "knots": 42,
-  "whitecaps": 1
+  "whitecaps": 2.428571428571429
  },
  {
   "knots": 42.5,
-  "whitecaps": 1
+  "whitecaps": 2.4714285714285715
  },
  {
   "knots": 43,
-  "whitecaps": 1
+  "whitecaps": 2.5142857142857142
  },
  {
   "knots": 43.5,
-  "whitecaps": 1
+  "whitecaps": 2.5571428571428574
  },
  {
   "knots": 44,
-  "whitecaps": 1
+  "whitecaps": 2.6
  },
  {
   "knots": 44.5,
-  "whitecaps": 1
+  "whitecaps": 2.6454545454545455
  },
  {
   "knots": 45,
-  "whitecaps": 1
+  "whitecaps": 2.690909090909091
+ },
+ {
+  "knots": 45.5,
+  "whitecaps": 2.7363636363636363
+ },
+ {
+  "knots": 46,
+  "whitecaps": 2.7818181818181817
+ },
+ {
+  "knots": 46.5,
+  "whitecaps": 2.827272727272727
+ },
+ {
+  "knots": 47,
+  "whitecaps": 2.872727272727273
+ },
+ {
+  "knots": 47.5,
+  "whitecaps": 2.9181818181818184
+ },
+ {
+  "knots": 48,
+  "whitecaps": 2.963636363636364
+ },
+ {
+  "knots": 48.5,
+  "whitecaps": 3.0090909090909093
+ },
+ {
+  "knots": 49,
+  "whitecaps": 3.0545454545454547
+ },
+ {
+  "knots": 49.5,
+  "whitecaps": 3.1
+ },
+ {
+  "knots": 50,
+  "whitecaps": 3.1454545454545455
+ },
+ {
+  "knots": 50.5,
+  "whitecaps": 3.190909090909091
+ },
+ {
+  "knots": 51,
+  "whitecaps": 3.2363636363636363
+ },
+ {
+  "knots": 51.5,
+  "whitecaps": 3.2818181818181817
+ },
+ {
+  "knots": 52,
+  "whitecaps": 3.327272727272727
+ },
+ {
+  "knots": 52.5,
+  "whitecaps": 3.372727272727273
+ },
+ {
+  "knots": 53,
+  "whitecaps": 3.4181818181818184
+ },
+ {
+  "knots": 53.5,
+  "whitecaps": 3.463636363636364
+ },
+ {
+  "knots": 54,
+  "whitecaps": 3.5090909090909093
+ },
+ {
+  "knots": 54.5,
+  "whitecaps": 3.5545454545454547
+ },
+ {
+  "knots": 55,
+  "whitecaps": 3.6
+ },
+ {
+  "knots": 55.5,
+  "whitecaps": 3.6
+ },
+ {
+  "knots": 56,
+  "whitecaps": 3.6
+ },
+ {
+  "knots": 56.5,
+  "whitecaps": 3.6
+ },
+ {
+  "knots": 57,
+  "whitecaps": 3.6
+ },
+ {
+  "knots": 57.5,
+  "whitecaps": 3.6
+ },
+ {
+  "knots": 58,
+  "whitecaps": 3.6
+ },
+ {
+  "knots": 58.5,
+  "whitecaps": 3.6
+ },
+ {
+  "knots": 59,
+  "whitecaps": 3.6
+ },
+ {
+  "knots": 59.5,
+  "whitecaps": 3.6
+ },
+ {
+  "knots": 60,
+  "whitecaps": 3.6
  }
 ]

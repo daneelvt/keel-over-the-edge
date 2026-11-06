@@ -38,7 +38,7 @@
         "rain": 0
       },
       "levels": {
-        "windLevel": 0.012632389815899798,
+        "windLevel": 0.011679041260147002,
         "rigLevel": 0,
         "flogLevel": 0,
         "waterLevel": 0,
@@ -62,7 +62,7 @@
         "rain": 0
       },
       "levels": {
-        "windLevel": 0.016389564640331585,
+        "windLevel": 0.015183010870898165,
         "rigLevel": 0,
         "flogLevel": 0,
         "waterLevel": 0.011467383537477071,
@@ -86,7 +86,7 @@
         "rain": 0
       },
       "levels": {
-        "windLevel": 0.030139042778441625,
+        "windLevel": 0.028096629181031813,
         "rigLevel": 0.000009262386954948892,
         "flogLevel": 0,
         "waterLevel": 0.046141385357899176,
@@ -110,7 +110,7 @@
         "rain": 0
       },
       "levels": {
-        "windLevel": 0.04353040947697844,
+        "windLevel": 0.04079944054234219,
         "rigLevel": 0.0005881855999999995,
         "flogLevel": 0,
         "waterLevel": 0.15373383436966653,
@@ -134,7 +134,7 @@
         "rain": 0
       },
       "levels": {
-        "windLevel": 0.16217681105106763,
+        "windLevel": 0.15898144115775506,
         "rigLevel": 0.019695203759356655,
         "flogLevel": 0,
         "waterLevel": 0.25929940507298155,
@@ -158,7 +158,7 @@
         "rain": 0
       },
       "levels": {
-        "windLevel": 0.19550831260186097,
+        "windLevel": 0.19461298229139368,
         "rigLevel": 0.026673129997969697,
         "flogLevel": 0,
         "waterLevel": 0.2914398090078384,
@@ -182,7 +182,7 @@
         "rain": 0
       },
       "levels": {
-        "windLevel": 0.24246533271224546,
+        "windLevel": 0.24802839417491918,
         "rigLevel": 0.03676686712034126,
         "flogLevel": 0,
         "waterLevel": 0.3,
@@ -206,7 +206,7 @@
         "rain": 0
       },
       "levels": {
-        "windLevel": 0.08135507122868439,
+        "windLevel": 0.0773199892347566,
         "rigLevel": 0.004959884324316527,
         "flogLevel": 0.17082239426934,
         "waterLevel": 0,
@@ -230,7 +230,7 @@
         "rain": 0
       },
       "levels": {
-        "windLevel": 0.11243105995757928,
+        "windLevel": 0.10807085837771563,
         "rigLevel": 0.01008265406683919,
         "flogLevel": 0.17802861030282469,
         "waterLevel": 0.15373383436966653,
@@ -254,7 +254,7 @@
         "rain": 0
       },
       "levels": {
-        "windLevel": 0.24246533271224546,
+        "windLevel": 0.24802839417491918,
         "rigLevel": 0.03676686712034126,
         "flogLevel": 0,
         "waterLevel": 0.21074643992010686,
@@ -264,6 +264,31 @@
         "drumLevel": 0
       },
       "words": "wind in the rigging, water along the hull"
+    },
+    {
+      "name": "a reach at 6 kn in a gusty 14 kn",
+      "input": {
+        "apparentWind": 8.231111111111112,
+        "speed": 3.0866666666666664,
+        "throughWater": 3.0866666666666664,
+        "seaHeight": 0.45,
+        "whitecaps": 0.3,
+        "luffing": 0,
+        "time": 77,
+        "rain": 0,
+        "gustFactor": 1.4
+      },
+      "levels": {
+        "windLevel": 0.18437177744412622,
+        "rigLevel": 0.023168127297668043,
+        "flogLevel": 0,
+        "waterLevel": 0.25929940507298155,
+        "hissLevel": 0.037031275843837815,
+        "seaLevel": 0.014516749567876693,
+        "rainLevel": 0,
+        "drumLevel": 0
+      },
+      "words": "water along the hull, wind in the rigging"
     },
     {
       "name": "hove to in 25 kn",
@@ -278,7 +303,7 @@
         "rain": 0
       },
       "levels": {
-        "windLevel": 0.3016473021590459,
+        "windLevel": 0.32840691867780425,
         "rigLevel": 0.04850305002633209,
         "flogLevel": 0,
         "waterLevel": 0.0023903411575793595,
@@ -302,7 +327,7 @@
         "rain": 1
       },
       "levels": {
-        "windLevel": 0.012632389815899798,
+        "windLevel": 0.011679041260147002,
         "rigLevel": 0,
         "flogLevel": 0,
         "waterLevel": 0.011467383537477071,
@@ -326,7 +351,7 @@
         "rain": 30
       },
       "levels": {
-        "windLevel": 0.053485501042504165,
+        "windLevel": 0.05031942900421517,
         "rigLevel": 0.001438421510895096,
         "flogLevel": 0,
         "waterLevel": 0.09621450924211311,
@@ -350,7 +375,7 @@
         "rain": 6
       },
       "levels": {
-        "windLevel": 0.11243105995757928,
+        "windLevel": 0.10807085837771563,
         "rigLevel": 0.01008265406683919,
         "flogLevel": 0,
         "waterLevel": 0.21074643992010686,
@@ -374,7 +399,7 @@
         "rain": 0
       },
       "levels": {
-        "windLevel": 0.14539677384978586,
+        "windLevel": 0.14154458493815186,
         "rigLevel": 0.016315733978083044,
         "flogLevel": 0,
         "waterLevel": 0.21074643992010686,
@@ -398,7 +423,7 @@
         "rain": 0
       },
       "levels": {
-        "windLevel": 0.211730603606522,
+        "windLevel": 0.21255080433169404,
         "rigLevel": 0.03014883726521413,
         "flogLevel": 0,
         "waterLevel": 0.3,
@@ -422,7 +447,7 @@
         "rain": 0
       },
       "levels": {
-        "windLevel": 0.06693719048154226,
+        "windLevel": 0.06328670478699991,
         "rigLevel": 0.0029683022539444023,
         "flogLevel": 0,
         "waterLevel": 0.026382436638435845,
