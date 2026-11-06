@@ -832,13 +832,21 @@ export class WakeWaves {
     w.stepped?.dispose();
   }
 
-  /** The waves at the scene point p, from the texels or from the mipmap whose texels are some 2.5 m: the slope along x and z, the convergence and the height, drawn. */
-  #read(p: Node<'vec2'>, coarse: boolean): Node<'vec4'> {
-    // What materials built now read: the way asked for.
-    const w = this.#next ?? this.#active ?? this.#noneWay;
+  /** The way materials built now read: the way asked for. */
+  #reading(): Way {
+    return this.#next ?? this.#active ?? this.#noneWay;
+  }
+
+  /**
+   * The waves at the scene point p, at a mipmap level (the texels', or one
+   * of about a tile's for the whole tile; null for the sampler's own): the
+   * slope along x and z, the convergence and the height, drawn.
+   */
+  #read(p: Node<'vec2'>, level: Node<'float'> | null): Node<'vec4'> {
+    const w = this.#reading();
     const uv = w.origin.add(vec2(p.x, p.y.negate()).mul(w.perSpan));
     const t = texture(w.out, uv);
-    const v = (coarse ? t.level(w.level) : t) as unknown as Node<'vec4'>;
+    const v = (level === null ? t : t.level(level)) as unknown as Node<'vec4'>;
     // Nothing beyond the square.
     const inside = smoothstep(
       0,
@@ -850,14 +858,39 @@ export class WakeWaves {
     return vec4(v.x, v.y.negate(), v.z, v.w).mul(g) as unknown as Node<'vec4'>;
   }
 
-  /** The waves at a fragment. */
-  fine(p: Node<'vec2'>): Node<'vec4'> {
-    return this.#read(p, false);
+  /**
+   * Whether the scene point p lies within the square, or within margin
+   * metres of it: where the waves are worth reading at all.
+   */
+  covers(p: Node<'vec2'>, margin: number): Node<'bool'> {
+    const w = this.#reading();
+    const uv = w.origin.add(vec2(p.x, p.y.negate()).mul(w.perSpan));
+    const m = w.perSpan.mul(margin);
+    return uv
+      .greaterThan(m.negate())
+      .all()
+      .and(uv.lessThan(m.add(1)).all()) as unknown as Node<'bool'>;
+  }
+
+  /**
+   * The waves at a fragment dist metres from the eye, at a mipmap level
+   * of the texels a pixel covers there, so that it may be read where
+   * fragments branch.
+   */
+  fine(p: Node<'vec2'>, dist?: Node<'float'>): Node<'vec4'> {
+    if (dist === undefined) {
+      return this.#read(p, null);
+    }
+    const w = this.#reading();
+    // A pixel covers some 2 mm a metre away, more where the sea is seen
+    // edge on: as many texels' worth of the mipmaps.
+    const level = max(dist.mul(0.002).mul(w.perSpan).mul(w.kind.size).log2(), 0);
+    return this.#read(p, level as unknown as Node<'float'>);
   }
 
   /** The waves averaged over a tile or so, read at the tile's centre. */
   coarse(p: Node<'vec2'>): Node<'vec4'> {
-    return this.#read(p, true);
+    return this.#read(p, this.#reading().level);
   }
 
   /**
@@ -866,7 +899,7 @@ export class WakeWaves {
    * falls below the threshold, over the threshold; 0 where they do not.
    */
   foldAt(east: Node<'float'>, north: Node<'float'>): Node<'float'> {
-    const v = this.#read(vec2(east, north.negate()) as unknown as Node<'vec2'>, false);
+    const v = this.#read(vec2(east, north.negate()) as unknown as Node<'vec2'>, float(0));
     const jacobian = float(1).sub(v.z.mul(WAKE.foldChop));
     return max(float(WAKE.foldThreshold).sub(jacobian), 0).div(
       WAKE.foldThreshold,

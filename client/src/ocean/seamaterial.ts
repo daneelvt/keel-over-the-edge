@@ -284,10 +284,16 @@ const pocks = (parts: SeaParts, p: Node<'vec2'>): Node<'vec2'> => {
   return vec2(a.y.sub(b.w), a.w.sub(b.y)) as Node<'vec2'>;
 };
 
-/** What the sea's material reads of the wake's waves: at a fragment, and at a tile's centre averaged over a tile; each vec4(the slope along x and z, the convergence, the height in metres), drawn. */
+/**
+ * What the sea's material reads of the wake's waves: at a fragment (dist
+ * metres from the eye), and at a tile's centre averaged over a tile; each
+ * vec4(the slope along x and z, the convergence, the height in metres),
+ * drawn. And whether a point is near enough the waves' square to read them.
+ */
 export interface WakeWavesNodes {
-  fine(p: Node<'vec2'>): Node<'vec4'>;
+  fine(p: Node<'vec2'>, dist?: Node<'float'>): Node<'vec4'>;
   coarse(p: Node<'vec2'>): Node<'vec4'>;
+  covers(p: Node<'vec2'>, margin: number): Node<'bool'>;
 }
 
 /** What a probe reads of a tile's fragment instead of its colour (the tests). */
@@ -378,8 +384,16 @@ export function tileLook(v: TileVaryings, parts: SeaParts, probe?: Probe): Node<
     const churn = map.y;
     // The wake's waves: at the tile's centre, the same for all of it, and here.
     const ww = parts.wakeWaves;
-    const wakeTile = (ww === null ? vec4(0) : ww.coarse(positionWorld.xz.sub(e))).toVar();
-    const wakeHere = (ww === null ? vec4(0) : ww.fine(positionWorld.xz)).toVar();
+    const wakeTile = vec4(0).toVar();
+    const wakeHere = vec4(0).toVar();
+    if (ww !== null) {
+      // Read only on the tiles of the waves' square: the same for all of a tile.
+      const centre = positionWorld.xz.sub(e);
+      If(ww.covers(centre, TILE_APOTHEM * 1.2), () => {
+        wakeTile.assign(ww.coarse(centre));
+        wakeHere.assign(ww.fine(positionWorld.xz, dist));
+      });
+    }
 
     // The short sea heaps up with the wind's force.
     tilt.mulAssign(detailSteep);

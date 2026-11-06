@@ -178,7 +178,11 @@ export class Ocean {
       shimmer: !(kind.kind === 'fft' && kind.patches === 2),
       pattern: this.pattern,
       wakes: (p) => this.wakes.sample(p),
-      wakeWaves: { fine: (p) => ww.fine(p), coarse: (p) => ww.coarse(p) },
+      wakeWaves: {
+        fine: (p, dist) => ww.fine(p, dist),
+        coarse: (p) => ww.coarse(p),
+        covers: (p, margin) => ww.covers(p, margin),
+      },
       rain: (p) => waterRainAt(this.gusts.water)(p),
     };
   }
