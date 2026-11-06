@@ -164,14 +164,14 @@ test.describe('the tiers', () => {
       expect(info.vertexStorageTextures).toBe(0);
       expect(info.tier).toBe('medium');
       expect(info.detail).toBe('fft 128 × 1');
-      // The detail band's four, and the wake's waves' four.
-      expect(info.dispatches).toBe(8);
+      // The detail band's four, and the wake's waves' four in one call.
+      expect(info.dispatches).toBe(5);
     } else {
       expect(info.compat).toBe(false);
       expect(info.workgroup).toBeGreaterThanOrEqual(256);
       expect(info.tier).toBe('high');
       expect(info.detail).toBe('fft 256 × 2');
-      expect(info.dispatches).toBe(12);
+      expect(info.dispatches).toBe(9);
     }
   });
 
@@ -1068,8 +1068,9 @@ test.describe('budgets', () => {
     for (const t of r) {
       expect(t.drawCalls as number).toBeLessThan(150);
       const rung = t.rung as string;
-      // The detail band's four a patch, and the wake's waves' four.
-      expect(t.dispatches).toBe(rung.includes('× 2') ? 12 : rung.includes('²') ? 8 : 0);
+      // The detail band's four calls a patch, and the wake's waves' four
+      // dispatches in one call.
+      expect(t.dispatches).toBe(rung.includes('× 2') ? 9 : rung.includes('²') ? 5 : 0);
       // Everything this look adds to a phone's GPU memory: the wake's waves
       // and the foam map's track 6 MB of it at most.
       expect(t.megabytes as number).toBeLessThan(18);
