@@ -10,6 +10,7 @@ import { catalog } from '../catalog';
 import type { ChartEntry } from '../net/messages';
 import { type Physics, VISIBILITY, WIND_VALUE, WIND_VALUES } from '../predict/physics';
 import type { SeaScene } from '../render/scene';
+import { hourAt, skyPeriods } from '../sky/skytime';
 import { type ChartSea, chartNews, type NewsSource } from '../ui/chart';
 import { type NoticeKind, Notices } from '../ui/notices';
 import { Chart } from './chart';
@@ -180,9 +181,15 @@ export function makeChart(
     });
   }
   const placeNews = w.places.kinds.map((k) => k.news === true);
+  const periods = skyPeriods(catalog.sky);
   const sea: ChartSea = {
     chart,
     boat,
+    tick: () => world.ticks,
+    hour: (tick) => {
+      const sky = world.skyTime;
+      return sky === null ? null : hourAt(sky.at(tick), periods);
+    },
     scale: catalog.sky.scale,
     lip: w.disk.radius,
     characters: w.lights.characters.map((c) => c.notation),

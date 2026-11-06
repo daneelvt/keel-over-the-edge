@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 // The screen at sea: the instruments' case top left (the compass and its
-// readouts, the barometer sliding out of it), the sailor's state when they
+// readouts, the barometer and the ship's clock sliding out of it), the sailor's state when they
 // are out of the boat beneath it, the pocket chart top right with the time
 // until a new world, the helm bottom left, the sheet bottom right, the
 // autopilot's control head between them, and the keys in a column under
@@ -34,6 +34,7 @@ import type { HarbourView } from './board';
 import { Case, type Lamp } from './case';
 import { ChartScreen, type ChartSea, NoticeLine, PocketChart } from './chart';
 import type { ClearView } from './clearview';
+import type { ShipsClock } from './clock';
 import { Helm, Sheet } from './controls';
 import type { Countdown } from './countdown';
 import { Menu } from './menu';
@@ -170,6 +171,8 @@ export interface ScreenProps {
   end?: Countdown | null;
   /** The barometer and the words about its dial; null without. */
   barometer?: { barometer: Barometer; words: readonly DialWord[] } | null;
+  /** The ship's clock, the world's time of day; null without. */
+  clock?: ShipsClock | null;
   /** The harbourmaster's board, in port; null without. */
   harbour?: HarbourView | null;
   /** Watching another sailor's boat; null in the offline sandbox. */
@@ -246,16 +249,7 @@ function Screen(props: ScreenProps) {
   const steer = watch === null || !watch.spectating.value;
   if (charted && sea !== null) {
     // The chart covers the screen; the boat sails on under it.
-    return (
-      <>
-        <ChartScreen sea={sea} end={end} />
-        {notices !== null ? (
-          <div class="hud-notices">
-            <NoticeLine notices={notices} />
-          </div>
-        ) : null}
-      </>
-    );
+    return <ChartScreen sea={sea} end={end} notices={notices} />;
   }
   if (flying && fly !== null) {
     // The free camera's picture is clean; a tap shows the way back a moment.
@@ -281,6 +275,7 @@ function Screen(props: ScreenProps) {
           settings={settings}
           controls={steer}
           barometer={props.barometer ?? null}
+          clock={props.clock ?? null}
           harbour={props.harbour ?? null}
           lamp={props.lamp ?? null}
           clear={cleared}

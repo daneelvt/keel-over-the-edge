@@ -106,11 +106,12 @@ import {
   weatherFromQuery,
   windFromQuery,
 } from '../sandbox/sandbox';
-import { sandboxEpochUs, skyFromQuery, skyPeriods, skyTimeFor } from '../sky/skytime';
+import { hourAt, sandboxEpochUs, skyFromQuery, skyPeriods, skyTimeFor } from '../sky/skytime';
 import { Barometer } from '../ui/barometer';
 import type { DialWord } from '../ui/barometerdial';
 import { serverNews } from '../ui/chart';
 import { ClearView, type Needed, needed } from '../ui/clearview';
+import { ShipsClock } from '../ui/clock';
 import { Countdown, EndNotices, localShown } from '../ui/countdown';
 import { mountScreen, type ScreenProps } from '../ui/hud';
 import { AGROUND } from '../ui/model';
@@ -404,6 +405,7 @@ async function start(): Promise<void> {
     );
     const issuer = sandboxForecast;
     const baro = startBarometer(world, sandbox.physics, forecasting);
+    const clock = startClock(world);
     // ?baro=hPa: a fall or a rise held, that much a quarter of an hour.
     const held = baroFromQuery(query);
     if (held !== null) {
@@ -463,6 +465,7 @@ async function start(): Promise<void> {
       sea: parts.sea,
       notices: parts.notices,
       barometer: baro,
+      clock: clock.clock,
       harbour: {
         port: watchHarbour(world, parts.chart.store),
         src: forecasting,
@@ -509,6 +512,8 @@ async function start(): Promise<void> {
         forecast: issuer,
         barometer: baro.barometer,
         readBarometer: baro.read,
+        clock: clock.clock,
+        readClock: clock.read,
         countdown,
         // The screen again, with a watch's parts or without: the layout's tests.
         remount: (watch) => {
@@ -861,6 +866,7 @@ async function start(): Promise<void> {
   world.placeFirstView();
   placed = true;
   const baro = startBarometer(world, predictor.physics, forecasting);
+  const clock = startClock(world);
   mountScreen(document.body, {
     model: game.hud,
     settings: game.settings,
@@ -882,6 +888,7 @@ async function start(): Promise<void> {
     notices: parts.notices,
     end: countdown,
     barometer: baro,
+    clock: clock.clock,
     harbour: {
       port: watchHarbour(world, parts.chart.store),
       src: forecasting,
@@ -909,6 +916,8 @@ async function start(): Promise<void> {
       predictor,
       chart: parts,
       barometer: baro.barometer,
+      clock: clock.clock,
+      readClock: clock.read,
       fullScreen: full,
       revealed: () => revealed,
     });
@@ -1026,6 +1035,25 @@ function startBarometer(
   };
   setInterval(read, 1000);
   return { barometer, words: b.words, read };
+}
+
+/**
+ * The ship's clock, read twice a second from the hour the sky is drawn at,
+ * at the centre of the disk: the developer's sky moves it too, so the
+ * clock and the sun never disagree.
+ */
+function startClock(world: SeaScene): { clock: ShipsClock; read: () => void } {
+  const clock = new ShipsClock(catalog.sky.day);
+  const periods = skyPeriods(catalog.sky);
+  const read = (): void => {
+    const sky = world.skyTime;
+    if (sky !== null) {
+      clock.update(hourAt(sky.at(world.ticks), periods));
+    }
+  };
+  read();
+  setInterval(read, 500);
+  return { clock, read };
 }
 
 /** The cover waits for the chunks handed within this of the boat, m; gate.ts says how long. */
