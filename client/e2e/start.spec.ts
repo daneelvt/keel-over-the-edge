@@ -79,10 +79,15 @@ test('the start screen: a name to give, a sailor drawn, and signing in beside it
   await expect(field).toHaveAttribute('spellcheck', 'false');
   await expect(field).toHaveAttribute('enterkeyhint', 'go');
   await expect(field).toHaveAttribute('maxlength', '20');
-  const names = data.sailors.flatMap((s) => s.versions.map((v) => `${s.name}, ${v.name}`));
-  expect(names).toContain(await page.locator('.start-look-name').textContent());
-  await page.getByRole('button', { name: 'Draw another sailor' }).click();
-  expect(names).toContain(await page.locator('.start-look-name').textContent());
+  // The picker, a look drawn at random, drawn again by Shuffle.
+  const names = data.sailors.map((s) => s.name);
+  const shown = page.locator('.picker-look-name');
+  expect(names).toContain(await shown.textContent());
+  const words = page.locator('.picker-words');
+  const before = await words.textContent();
+  await page.getByRole('button', { name: 'Shuffle' }).click();
+  await expect(words).not.toHaveText(before ?? '');
+  expect(names).toContain(await shown.textContent());
   await expect(page.getByRole('button', { name: 'Sign in with a passkey' })).toBeVisible();
   await expect(
     page.getByRole('button', { name: 'Lost your passkey? Use your recovery code' }),

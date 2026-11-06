@@ -6,6 +6,7 @@
   display: flex;
   flex-direction: column;
   gap: 6px;
+  container-type: inline-size;
 }
 
 .machine-swatch {
@@ -25,40 +26,48 @@
   font-weight: 500;
 }
 
+/* The look being made: its portrait, beside its words and Draw another. */
+.machine-picker {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
 .machine-look-row {
   display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
+  flex: 1 1 auto;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  min-width: 0;
 }
 
 .machine-draw {
   padding: 0 12px;
 }
 
-.machine-parts {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 6px;
+/* Eight colours across a panel held narrow, as the menu's is on a phone held sideways. */
+@container (max-width: 280px) {
+  .machine-fields .swatch {
+    min-width: 30px;
+  }
+
+  .machine-fields .swatch-colour {
+    width: 24px;
+    height: 24px;
+  }
+
+  .machine-fields .swatch[aria-checked="true"] .swatch-colour {
+    outline-offset: 2px;
+  }
 }
 
-.machine-part {
+/* A machine sailor in a list: its portrait beside its name and look. */
+.machine-who {
   display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.machine-part select {
-  min-height: 40px;
+  align-items: flex-start;
+  gap: 10px;
   min-width: 0;
-  padding: 0 4px;
-  border: 1px solid rgb(242 239 231 / 35%);
-  border-radius: 6px;
-  background: rgb(26 36 44);
-  color: var(--ink);
-  font: inherit;
-  font-size: 15px;
 }
 
 .machine-summary {
@@ -193,6 +202,18 @@
 
 .ai-panel .connect-recipes h3 {
   color: var(--cool);
+}
+
+/* The look's choices ringed in the panel's own colour, not gold. */
+.ai-panel .swatch[aria-checked="true"] .swatch-colour,
+.ai-panel .swatch:focus-visible,
+.ai-panel .chip:focus-visible {
+  outline-color: var(--cool);
+}
+
+.ai-panel .chip[aria-checked="true"] {
+  border-color: var(--cool);
+  box-shadow: inset 0 0 0 2px var(--cool);
 }
 
 /* The menu's panels hold the start screen's fields. */

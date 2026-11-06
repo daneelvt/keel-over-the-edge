@@ -21,12 +21,14 @@
 
 import './start.css';
 import { type JSX, render } from 'preact';
-import { useEffect, useRef, useState } from 'preact/hooks';
-import { drawLook, type Look, type Looks, partsOf } from '../catalog/looks';
+import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
+import { drawLook, type Looks } from '../catalog/looks';
 import { useWatch } from '../ui/watchlazy';
+import { LookChooser } from './chooser';
 import { type InApp, passkeySupport, type Support } from './inapp';
 import { useMachines } from './lazy';
 import { type Voyage, voyage } from './letwatch';
+import type { LookStage } from './lookstage';
 import { checkSession, type Me } from './me';
 import {
   codeForm,
@@ -38,25 +40,22 @@ import {
   signIn,
   useRecoveryCode,
 } from './passkeys';
+import { chosen, Picker, type PickerState, StageFront, shuffled, undone } from './picker';
 import { lengthProblem, MAX_NAME, reasonText, TAKEN_SIGN_IN } from './reasons';
 import { AddPasskey, RecoveredNotice, RecoveryCode, SetSailOrMake } from './recovery';
 import { YourSailor } from './yoursailor';
 
 export interface StartProps {
-  /** The catalog's looks, a new sailor's drawn from. */
+  /** The catalog's looks, a new sailor's chosen from. */
   looks: Looks;
+  /** The picker's stage, which draws the sailor behind the form; none on a page that draws nothing. */
+  stage?: LookStage;
   done: (me: Me) => void;
   /** Whether a sailor signed in is shown their own before the sea: not one come by a link to watch. */
   panel?: boolean;
   random?: () => number;
   /** The server and the browser's prompt; the browser's own unless a test stands in. */
   reach?: Reach;
-}
-
-/** A look's name and version, as the form names the sailor drawn. */
-function lookName(looks: Looks, l: Look): string {
-  const p = partsOf(looks, l);
-  return `${p.sailor?.name ?? ''}, ${p.version?.name ?? ''}`;
 }
 
 /** Whether a failed ceremony is passed over in silence: the prompt closed, or autofill turned down. */
@@ -79,12 +78,14 @@ type View =
   | { kind: 'recovered'; me: Me; at: number }
   | { kind: 'add-passkey'; me: Me };
 
-export function StartScreen({ looks, done, random, reach, panel = true }: StartProps) {
+export function StartScreen({ looks, done, random, reach, stage, panel = true }: StartProps) {
   const [view, setView] = useState<View>({ kind: 'form' });
   const [support, setSupport] = useState<Support | null>(null);
   const [anyway, setAnyway] = useState(false);
   const [name, setName] = useState('');
-  const [look, setLook] = useState<Look>(() => drawLook(looks, random));
+  // The look drawn at random on arrival, chosen in the picker.
+  const [pick, setPick] = useState<PickerState>(() => chosen(drawLook(looks, random)));
+  const look = pick.look;
   const [problem, setProblem] = useState('');
   const [taken, setTaken] = useState(false);
   const [busy, setBusy] = useState<'' | 'create' | 'sign-in' | 'code'>('');
@@ -172,6 +173,20 @@ export function StartScreen({ looks, done, random, reach, panel = true }: StartP
 
   const blocked = support?.kind === 'none' || (support?.kind === 'in-app' && !anyway);
   const formShown = view.kind === 'form' && support !== null && !blocked;
+  // The picker's stage behind the form while it is shown, with its look;
+  // the cover back over the page once it is not.
+  const picking = view.kind === 'form' && !blocked;
+  useEffect(() => {
+    if (stage !== undefined && picking) {
+      stage.show(look);
+    }
+  }, [stage, picking, look]);
+  useEffect(() => {
+    if (stage !== undefined && !picking) {
+      stage.hide();
+    }
+  }, [stage, picking]);
+  useEffect(() => () => stage?.hide(), [stage]);
   useEffect(() => {
     if (formShown) {
       startAutofill();
@@ -269,7 +284,16 @@ export function StartScreen({ looks, done, random, reach, panel = true }: StartP
         </div>
       );
     case 'sailor':
-      return <Sailor first={view.first} me={view.me} voyage={view.voyage} done={done} />;
+      return (
+        <Sailor
+          first={view.first}
+          me={view.me}
+          voyage={view.voyage}
+          done={done}
+          looks={looks}
+          stage={stage}
+        />
+      );
     case 'recovered':
       return (
         <div class="start">
@@ -356,7 +380,8 @@ export function StartScreen({ looks, done, random, reach, panel = true }: StartP
   }
 
   return (
-    <div class="start">
+    <div class={stage === undefined ? 'start' : 'start picking'}>
+      {stage === undefined ? null : <StageFront looks={looks} look={pick.look} stage={stage} />}
       <form
         key="start"
         class="start-panel"
@@ -384,6 +409,7 @@ export function StartScreen({ looks, done, random, reach, panel = true }: StartP
           spellcheck={false}
           enterkeyhint="go"
           maxLength={MAX_NAME}
+          placeholder={stage === undefined ? undefined : 'Your sailor’s name'}
           value={name}
           aria-invalid={problem !== ''}
           aria-describedby="start-problem"
@@ -393,21 +419,19 @@ export function StartScreen({ looks, done, random, reach, panel = true }: StartP
           {problem}
           {taken ? ` ${TAKEN_SIGN_IN}` : null}
         </p>
-        <div class="start-look">
-          <span class="start-label">Your sailor</span>
-          <span class="start-look-name">{lookName(looks, look)}</span>
-          <button
-            type="button"
-            class="start-shuffle"
-            aria-label="Draw another sailor"
-            onClick={() => setLook(drawLook(looks, random))}
-          >
-            ⟳
-          </button>
-        </div>
-        <button type="submit" class="start-go" disabled={busy !== ''}>
-          Set sail
-        </button>
+        <Picker
+          looks={looks}
+          look={pick.look}
+          choose={(l) => setPick(chosen(l))}
+          shuffle={() => setPick(shuffled(looks, pick, random))}
+          undo={pick.before === null ? null : () => setPick(undone(pick))}
+          figure={stage !== undefined}
+          actions={
+            <button type="submit" class="start-go" disabled={busy !== ''}>
+              Set sail
+            </button>
+          }
+        />
         <p class="start-text start-faint" aria-live="polite">
           {busy === 'create'
             ? 'Your phone will ask to save a passkey for Keel Over the Edge.'
@@ -453,27 +477,56 @@ export function StartScreen({ looks, done, random, reach, panel = true }: StartP
  */
 function Sailor({
   first,
-  me,
+  me: given,
   voyage: v,
   done,
+  looks,
+  stage,
 }: {
   first: boolean;
   me: Me;
   voyage: Voyage;
   done: (me: Me) => void;
+  looks?: Looks;
+  stage?: LookStage | undefined;
 }) {
-  const machines = first || (me.machines ?? 0) > 0;
+  const machines = first || (given.machines ?? 0) > 0;
   const m = useMachines(machines);
   const [listing, setListing] = useState(false);
   const w = useWatch(listing);
+  // The player's look, changed here before setting sail.
+  const chooser = useMemo(
+    () => (looks === undefined ? undefined : new LookChooser(looks, given, stage)),
+    [],
+  );
+  useEffect(() => () => stage?.hide(), []);
+  const me = chooser === undefined ? given : chooser.applied(given);
   const go = (watch?: string) => done(watch === undefined ? me : { ...me, watch });
   const yours = (
-    <YourSailor me={me} voyage={v} sail={go} watch={machines ? null : () => setListing(true)} />
+    <YourSailor
+      me={me}
+      voyage={v}
+      sail={go}
+      watch={machines ? null : () => setListing(true)}
+      {...(chooser === undefined ? {} : { chooser })}
+    />
   );
+  const picking = chooser !== undefined && chooser.mode.value !== 'shown' && stage !== undefined;
   return (
-    <div class="start">
-      {m !== null ? (
-        <m.MachineStart first={first} done={go} me={me} voyage={v} />
+    <div class={picking ? 'start picking' : 'start'}>
+      {picking && stage !== undefined && chooser !== undefined ? (
+        <StageFront looks={chooser.looks} look={chooser.pick.value.look} stage={stage} />
+      ) : null}
+      {picking ? (
+        yours
+      ) : m !== null ? (
+        <m.MachineStart
+          first={first}
+          done={go}
+          me={me}
+          voyage={v}
+          {...(chooser === undefined ? {} : { chooser })}
+        />
       ) : listing ? (
         w !== null && (
           <w.WatchList
@@ -552,9 +605,27 @@ export function showStartScreen(parent: HTMLElement, props: Omit<StartProps, 'do
   return mount(parent, (done) => <StartScreen {...props} done={done} />);
 }
 
-/** Shows the player's own sailor in parent until Set sail, or a sailor chosen to watch, then removes it. */
-export function showSailor(parent: HTMLElement, me: Me): Promise<Me> {
-  return mount(parent, (done) => <Sailor first={false} me={me} voyage={voyage(me)} done={done} />);
+/**
+ * Shows the player's own sailor in parent until Set sail, or a sailor
+ * chosen to watch, then removes it; with the catalog's looks, the player
+ * may change theirs there, on the picker's stage if there is one.
+ */
+export function showSailor(
+  parent: HTMLElement,
+  me: Me,
+  looks?: Looks,
+  stage?: LookStage,
+): Promise<Me> {
+  return mount(parent, (done) => (
+    <Sailor
+      first={false}
+      me={me}
+      voyage={voyage(me)}
+      done={done}
+      {...(looks === undefined ? {} : { looks })}
+      stage={stage}
+    />
+  ));
 }
 
 /** Asks a session the recovery code made for a new passkey, then shows the new code. */

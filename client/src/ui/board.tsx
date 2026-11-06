@@ -11,6 +11,7 @@ import { useEffect, useState } from 'preact/hooks';
 import { type Board, boardOf } from '../chart/board';
 import type { Forecasting } from '../chart/forecasting';
 import type { ChartStore } from '../chart/store';
+import { type HarbourLook, HarbourPicker } from './harbourlook';
 
 /** The port the boat is in, by its name and where its harbour is, or null. */
 export type InPort = { name: string; east: number; north: number } | null;
@@ -20,6 +21,8 @@ export interface HarbourView {
   port: ReadonlySignal<InPort>;
   src: Forecasting;
   store: ChartStore;
+  /** The player's look, changed in Port Royal's harbour; none where it cannot be. */
+  look?: HarbourLook;
 }
 
 /** The board of the port the boat is in. */
@@ -35,6 +38,7 @@ export function BoardPanel({
   close: () => void;
 }) {
   const [board, setBoard] = useState<Board | null>(null);
+  const [picking, setPicking] = useState(false);
   const version = harbour.src.forecasts.version;
   useEffect(() => {
     let on = true;
@@ -52,6 +56,10 @@ export function BoardPanel({
       clearInterval(t);
     };
   }, [harbour, port.name, port.east, port.north, version]);
+  const you = harbour.look;
+  if (picking && you !== undefined) {
+    return <HarbourPicker look={you} close={() => setPicking(false)} />;
+  }
   return (
     <section id={id} class="panel board" aria-label={`${port.name}: the harbourmaster's board`}>
       <h2>{port.name}</h2>
@@ -93,6 +101,11 @@ export function BoardPanel({
           </section>
         </>
       )}
+      {you?.royal.value === true ? (
+        <button type="button" class="board-close board-you" onClick={() => setPicking(true)}>
+          Your sailor
+        </button>
+      ) : null}
       <button type="button" class="board-close" onClick={close}>
         Close
       </button>

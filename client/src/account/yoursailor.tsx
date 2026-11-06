@@ -15,8 +15,11 @@
 
 import { sailFullScreen } from '../boot/fullscreen';
 import { STILL_AT_SEA, WATCH_ANOTHER_SAILOR } from '../ui/watchwords';
+import type { LookChooser } from './chooser';
 import { LetWatch, type Voyage } from './letwatch';
 import type { Me } from './me';
+import { Picker } from './picker';
+import { Portrait } from './portraits';
 
 /** The button that sails the player's own sailor, by its name. */
 export function setSailAs(name: string): string {
@@ -56,30 +59,53 @@ export function SetSail({
 /**
  * The player's panel: sail sets their own sailor to sea, once voyage has
  * sent the box's choice; watch opens the list of sailors to watch, null
- * while it cannot yet.
+ * while it cannot yet. With a chooser, their portrait beside their name
+ * and, ashore, Change your look; or the picker, as the chooser has it.
  */
 export function YourSailor({
   me,
   voyage,
   sail,
   watch,
+  chooser,
 }: {
   me: Me;
   voyage: Voyage;
   sail: () => void;
   watch: (() => void) | null;
+  chooser?: LookChooser;
 }) {
   const atSea = me.atSea === true;
+  const mode = chooser?.mode.value ?? 'shown';
+  if (chooser !== undefined && mode !== 'shown') {
+    return <ChooseLook chooser={chooser} name={me.name} first={mode === 'once'} />;
+  }
   return (
     <section class="start-panel your-sailor" aria-labelledby="start-title">
       <h1 id="start-title">Keel Over the Edge</h1>
       <h2 id="your-sailor-title">Your sailor</h2>
-      <p class="your-sailor-name">
-        <bdi>{me.name}</bdi>
-      </p>
-      <p class="start-text start-faint" data-readout="at-sea">
-        {atSea ? 'at sea' : 'not at sea'}
-      </p>
+      <div class="your-sailor-who">
+        {chooser === undefined ? null : (
+          <Portrait looks={chooser.looks} look={chooser.look.value} size={72} />
+        )}
+        <div class="your-sailor-words">
+          <p class="your-sailor-name">
+            <bdi>{me.name}</bdi>
+          </p>
+          <p class="start-text start-faint" data-readout="at-sea">
+            {atSea ? 'at sea' : 'not at sea'}
+          </p>
+          {chooser !== undefined && !atSea ? (
+            <button
+              type="button"
+              class="start-link your-sailor-change"
+              onClick={() => chooser.open()}
+            >
+              Change your look
+            </button>
+          ) : null}
+        </div>
+      </div>
       {atSea ? (
         <p class="start-warning" role="note">
           {STILL_AT_SEA}
@@ -95,6 +121,72 @@ export function YourSailor({
       >
         {WATCH_ANOTHER_SAILOR}
       </button>
+    </section>
+  );
+}
+
+/**
+ * The picker on the player's panel: Cancel and Save; or, the first time a
+ * sailor made before looks were chosen comes in, Keep (the look drawn for
+ * them) and Choose (the look picked).
+ */
+export function ChooseLook({
+  chooser: c,
+  name,
+  first,
+}: {
+  chooser: LookChooser;
+  name: string;
+  first: boolean;
+}) {
+  const p = c.pick.value;
+  const busy = c.busy.value;
+  return (
+    <section class="start-panel your-sailor choose-look" aria-labelledby="start-title">
+      <h1 id="start-title">{first ? 'Choose your look' : 'Change your look'}</h1>
+      {first ? (
+        <p class="start-text">
+          Sailors now choose how they look. We drew one for <bdi>{name}</bdi>: keep it, or choose
+          your own.
+        </p>
+      ) : null}
+      <Picker
+        looks={c.looks}
+        look={p.look}
+        choose={(l) => c.choose(l)}
+        shuffle={() => c.shuffle()}
+        undo={p.before === null ? null : () => c.undo()}
+        figure={c.stage !== undefined}
+      />
+      <p class="start-problem" aria-live="polite">
+        {c.problem.value}
+      </p>
+      <div class="choose-look-actions">
+        {first ? (
+          <>
+            <button
+              type="button"
+              class="start-sign-in"
+              disabled={busy}
+              onClick={() => void c.save(c.look.value)}
+            >
+              Keep
+            </button>
+            <button type="button" class="start-go" disabled={busy} onClick={() => void c.save()}>
+              Choose
+            </button>
+          </>
+        ) : (
+          <>
+            <button type="button" class="start-sign-in" disabled={busy} onClick={() => c.cancel()}>
+              Cancel
+            </button>
+            <button type="button" class="start-go" disabled={busy} onClick={() => void c.save()}>
+              Save
+            </button>
+          </>
+        )}
+      </div>
     </section>
   );
 }

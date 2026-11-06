@@ -4,8 +4,9 @@
 // by a name or part of one, an account's id, or a token or session pasted
 // in, which goes to keel in a POST's body alone and is never kept; the
 // accounts found a page at a time, in the order asked for; and an
-// account's card, read again every few seconds while it is shown, with the
-// owner's hand on it: stopped, started again, its tokens revoked or
+// account's card, its sailor's portrait beside its look in words, read
+// again every few seconds while it is shown, with the owner's hand on it:
+// stopped, started again, its tokens revoked or
 // deleted, each that cannot be taken back first counted by keel and
 // confirmed in the card with keel's own words; its owner's flag, priority
 // and machine sailors allowed. The token lifetime of AI apps is set here
@@ -13,6 +14,8 @@
 // its boat and its place in the queue.
 
 import { useEffect, useReducer, useRef, useState } from 'preact/hooks';
+import { Portrait } from '../account/portraits';
+import { catalog } from '../catalog';
 import { formatPosition } from '../chart/position';
 import {
   actionBody,
@@ -611,7 +614,10 @@ function Card({
         <dt>ID</dt>
         <dd class="small">{card.id}</dd>
         <dt>Look</dt>
-        <dd>{card.lookWords}</dd>
+        <dd class="card-look">
+          <Portrait looks={catalog} look={card.look} size={72} decorative />
+          <span>{card.lookWords}</span>
+        </dd>
         <dt>Made</dt>
         <dd>{momentWords(card.made)}</dd>
         <dt>Last active</dt>

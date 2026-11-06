@@ -451,10 +451,11 @@ export async function confirmPasskey(reach: Reach = browserReach()): Promise<Out
   return { ok: true, value: Number(done.body?.confirmedUntil ?? 0) };
 }
 
-/** The account page's data, GET /api/account. */
-export interface AccountData {
+/** The account page's data, GET /api/account: the sailor's name and look, and the rest. */
+export interface AccountData extends Look {
   name: string;
-  look: string;
+  /** Whether the player chose their look, or the game drew it. */
+  lookChosen?: boolean;
   created: number;
   recoveryMade: number;
   passkeys: PasskeyItem[];

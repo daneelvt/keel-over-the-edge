@@ -3,13 +3,17 @@
 // Machine sailors as the pages show them, and the fields that make one: a
 // name, by the rules of every sailor's name, and a machine look (a version,
 // a metal finish and a main colour), all three drawn at random first and
-// drawn again on asking, or chosen one by one. The choices are the
-// catalog's, handed in (the game reads its own catalog, the approval page
-// the server's answer), never named in code. Used by the game and by the
-// approval page, so it imports nothing of the game's.
+// drawn again on asking, or chosen one by one, its portrait beside them.
+// The choices are the catalog's, handed in (the game reads its own
+// catalog, the approval page the server's answer), never named in code;
+// and so is the portrait, which each page draws from its own pictures.
+// Used by the game and by the approval page, so it imports nothing of the
+// game's.
 
 import './machines.css';
+import type { ComponentChildren } from 'preact';
 import { useState } from 'preact/hooks';
+import { Choices } from './choices';
 import { drawLook } from './looks';
 import { MAX_NAME } from './reasons';
 import { dayOf } from './recovery';
@@ -105,10 +109,25 @@ export function withPart(looks: MachineLooks, d: Draft, part: LookPart, id: stri
   return o === undefined ? d : { ...d, [part]: o };
 }
 
-/** A look in words, as the server writes them: Brass · female · deep red. */
+/** A look in words, as the server and the game write them: Machine, female, brass, madder red. */
 export function lookWords(d: Pick<Draft, LookPart>): string {
-  return `${d.finish.name} · ${d.version.name} · ${d.colour.name}`;
+  return `Machine, ${d.version.name}, ${d.finish.name}, ${d.colour.name}`;
 }
+
+/** A machine look by its choices' ids, as a portrait is drawn from. */
+export type MachineIds = Pick<MachineLook, LookPart>;
+
+/** A draft's look by its choices' ids. */
+export function idsOf(d: Pick<Draft, LookPart>): MachineIds {
+  return { version: d.version.id, finish: d.finish.id, colour: d.colour.id };
+}
+
+/**
+ * A machine look's portrait at a size, decorative (its words are always
+ * beside it): the game's drawn from its catalog, the approval page's from
+ * the server's choices and its own pictures.
+ */
+export type MachinePicture = (look: MachineIds, size: 40 | 72) => ComponentChildren;
 
 /** What the server's routes take to make one. */
 export function draftBody(d: Draft) {
@@ -153,10 +172,21 @@ export function Swatch({ colour }: { colour: string }) {
   );
 }
 
-/** A machine sailor's name, look and whether it is at sea; its apps, when apps is set. */
-export function MachineSummary({ m, apps = true }: { m: MachineItem; apps?: boolean }) {
+/**
+ * A machine sailor's name, look and whether it is at sea; its apps, when
+ * apps is set; beside its portrait, when the page gives one.
+ */
+export function MachineSummary({
+  m,
+  apps = true,
+  picture,
+}: {
+  m: MachineItem;
+  apps?: boolean;
+  picture?: MachinePicture;
+}) {
   const live = liveApps(m);
-  return (
+  const summary = (
     <span class="machine-summary">
       <strong class="machine-name">
         <bdi>{m.name}</bdi>
@@ -175,6 +205,14 @@ export function MachineSummary({ m, apps = true }: { m: MachineItem; apps?: bool
       ) : null}
     </span>
   );
+  return picture === undefined ? (
+    summary
+  ) : (
+    <span class="machine-who">
+      {picture(m.look, 40)}
+      {summary}
+    </span>
+  );
 }
 
 export interface FieldsProps {
@@ -186,12 +224,32 @@ export interface FieldsProps {
   setName: (name: string) => void;
   pick: (part: LookPart, id: string) => void;
   draw: () => void;
+  picture?: MachinePicture;
 }
 
-const LABELS: Record<LookPart, string> = { version: 'Version', finish: 'Finish', colour: 'Colour' };
+/** The parts of a machine look as the picker names them, in its order. */
+export const PARTS: readonly { part: LookPart; label: string }[] = [
+  { part: 'version', label: 'Version' },
+  { part: 'finish', label: 'Metal finish' },
+  { part: 'colour', label: 'Main colour' },
+];
 
-/** The fields of a machine sailor to make, inside a form of the page's. */
-export function MachineFields({ looks, draft, problem, id, setName, pick, draw }: FieldsProps) {
+/**
+ * The fields of a machine sailor to make, inside a form of the page's: its
+ * name; then its portrait, the look in words (said again as it changes),
+ * Draw another, and each part of the look to choose: the version in words,
+ * the finish and the main colour as swatches.
+ */
+export function MachineFields({
+  looks,
+  draft,
+  problem,
+  id,
+  setName,
+  pick,
+  draw,
+  picture,
+}: FieldsProps) {
   return (
     <div class="machine-fields">
       <label class="start-label" for={`${id}-name`}>
@@ -214,33 +272,27 @@ export function MachineFields({ looks, draft, problem, id, setName, pick, draw }
       <p id={`${id}-problem`} class="start-problem" aria-live="polite">
         {problem}
       </p>
-      <div class="machine-look-row">
-        <span class="machine-look">
-          <Swatch colour={draft.colour.colour ?? ''} />
-          {lookWords(draft)}
-        </span>
-        <button type="button" class="start-sign-in machine-draw" onClick={draw}>
-          Draw another
-        </button>
+      <div class="machine-picker">
+        {picture?.(idsOf(draft), 72) ?? null}
+        <div class="machine-look-row">
+          <span class="machine-look" aria-live="polite">
+            {lookWords(draft)}
+          </span>
+          <button type="button" class="start-sign-in machine-draw" onClick={draw}>
+            Draw another
+          </button>
+        </div>
       </div>
-      <div class="machine-parts">
-        {(Object.keys(SETS) as LookPart[]).map((part) => (
-          <label key={part} class="machine-part">
-            <span class="start-label">{LABELS[part]}</span>
-            <select
-              name={`machine-${part}`}
-              value={draft[part].id}
-              onChange={(e) => pick(part, e.currentTarget.value)}
-            >
-              {looks[SETS[part]].map((o) => (
-                <option key={o.id} value={o.id}>
-                  {o.name}
-                </option>
-              ))}
-            </select>
-          </label>
-        ))}
-      </div>
+      {PARTS.map(({ part, label }) => (
+        <Choices
+          key={part}
+          label={label}
+          id={`${id}-${part}`}
+          choices={looks[SETS[part]]}
+          chosen={draft[part].id}
+          choose={(c) => pick(part, c)}
+        />
+      ))}
     </div>
   );
 }

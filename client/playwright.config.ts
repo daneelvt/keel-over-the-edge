@@ -55,6 +55,7 @@ export const pageFiles = [
   'connect',
   'discover',
   'lag',
+  'looks',
   'machines',
   'oauth-approve',
   'over',

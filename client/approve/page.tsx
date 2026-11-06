@@ -44,6 +44,7 @@ import {
   requestOptions,
 } from '../src/account/passkeys';
 import { approveReasonText, lengthProblem, SAILOR_STOPPED } from '../src/account/reasons';
+import { machinePicture } from './portraits';
 
 /** GET /oauth/request: the request as the page shows it. */
 export interface RequestData {
@@ -254,6 +255,7 @@ function Choose(props: ViewProps & { data: RequestData }) {
     return null;
   }
   const make = canMake(props.data);
+  const picture = machinePicture(props.data.looks);
   return (
     <>
       <p class="approve-signed">
@@ -273,7 +275,7 @@ function Choose(props: ViewProps & { data: RequestData }) {
               checked={props.choice === m.id}
               onChange={() => props.onChoose(m.id)}
             />
-            <MachineSummary m={m} />
+            <MachineSummary m={m} picture={picture} />
           </label>
         ))}
         {make ? (
@@ -300,6 +302,7 @@ function Choose(props: ViewProps & { data: RequestData }) {
           setName={props.setName}
           pick={props.pick}
           draw={props.draw}
+          picture={picture}
         />
       ) : null}
       <button

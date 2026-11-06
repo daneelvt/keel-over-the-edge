@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 // The card about a sailor one may watch, opened by ⓘ on the list in the
-// same panel: the boat and how many watch it; the weather at the boat;
+// same panel: the sailor's portrait in their look, while their boat is in
+// the water; the boat and how many watch it; the weather at the boat;
 // where it is (how far inside the lip, the nearest charted island, the
 // land in sight), unless the viewer's own boat is in the water; this
 // voyage's closest pass to the falls and its latest charting; Follow;
@@ -12,8 +13,10 @@
 import { useEffect, useState } from 'preact/hooks';
 import type { Fetch } from '../account/me';
 import { call, reasonOf } from '../account/passkeys';
+import { Portrait } from '../account/portraits';
 import { reasonText } from '../account/reasons';
 import { catalog } from '../catalog';
+import { lookOf } from '../catalog/looks';
 import { type PocketSky, SKY_WORDS } from '../chart/pocketsky';
 import { SkyDecal } from './decals';
 import { PlayerText } from './player';
@@ -73,6 +76,8 @@ export interface WatchRow {
   lively?: Lively[];
   /** A followed sailor that cannot be watched now; or, on the phone, a row whose sailor has gone since it was read. */
   gone?: Gone;
+  /** The sailor's look code, while their boat is in the water. */
+  look?: number;
 }
 
 /** GET /api/watch/sailor: the row and what the card adds. */
@@ -335,6 +340,7 @@ export function SailorCard({
 }) {
   const followed = c.followed === true;
   const lively = gone === null ? livelyLine(c.lively) : '';
+  const look = c.look === undefined ? null : lookOf(catalog, c.look);
   return (
     <div class={`watch-card${gone !== null ? ' gone' : ''}`} data-sailor={c.name}>
       <div class="watch-card-top">
@@ -352,11 +358,14 @@ export function SailorCard({
           </button>
         ) : null}
       </div>
-      <h2 class="watch-card-name" id="watch-list-title">
-        <PlayerText text={c.name} />
-        {c.machine ? <Cog /> : null}
-        <span class="watch-faint">{c.kind === '' ? '' : ` · ${kindName(c.kind)}`}</span>
-      </h2>
+      <div class="watch-card-head">
+        {look !== null ? <Portrait looks={catalog} look={look} size={72} /> : null}
+        <h2 class="watch-card-name" id="watch-list-title">
+          <PlayerText text={c.name} />
+          {c.machine ? <Cog /> : null}
+          <span class="watch-faint">{c.kind === '' ? '' : ` · ${kindName(c.kind)}`}</span>
+        </h2>
+      </div>
       {problem !== '' ? (
         <p class="watch-problem" role="status">
           {problem}
