@@ -616,7 +616,11 @@ async function wakeGrid(
 }
 
 /** A hull sailed northward from still water at speed for seconds, with the wake's waves alone: their grid about its track. */
-async function sailedWake(page: Page, speed: number, seconds = 40): Promise<WakeGrid & { span: number; kind: string }> {
+async function sailedWake(
+  page: Page,
+  speed: number,
+  seconds = 40,
+): Promise<WakeGrid & { span: number; kind: string }> {
   const end = await page.evaluate(
     ([speed, seconds]) =>
       globalThis.keel.runWakeWaves(seconds as number, [
@@ -691,7 +695,9 @@ test.describe('the wake’s waves', () => {
       {
         type: 'lengths',
         description: Object.entries(lengths)
-          .map(([u, l]) => `${u} m/s ${l.toFixed(2)} m, 2πU²/g ${acrossTrack(Number(u)).toFixed(2)} m`)
+          .map(
+            ([u, l]) => `${u} m/s ${l.toFixed(2)} m, 2πU²/g ${acrossTrack(Number(u)).toFixed(2)} m`,
+          )
           .join('; '),
       },
       { type: 'heights at 1, 2 and 5 lengths astern, linear', description: heights.join('; ') },
@@ -712,7 +718,9 @@ test.describe('the wake’s waves', () => {
     const look = async (seconds: number) => {
       const end = await page.evaluate(
         (s) =>
-          globalThis.keel.runWakeWaves(s, [{ east: 0, north: 0, heading: 0, speed: 3, stopAt: 20 }]),
+          globalThis.keel.runWakeWaves(s, [
+            { east: 0, north: 0, heading: 0, speed: 3, stopAt: 20 },
+          ]),
         seconds,
       );
       const g = await wakeGrid(page, end[0] as { east: number; north: number });
@@ -837,9 +845,15 @@ test.describe('the track', () => {
         north: 1,
       });
       const laid = lane(await k.wakes());
-      k.runTrack(10, [{ east: 0, north: 0, heading: Math.PI / 2, speed: 0 }], { east: 0, north: 1 });
+      k.runTrack(10, [{ east: 0, north: 0, heading: Math.PI / 2, speed: 0 }], {
+        east: 0,
+        north: 1,
+      });
       const drifted = lane(await k.wakes());
-      k.runTrack(50, [{ east: 0, north: 0, heading: Math.PI / 2, speed: 0 }], { east: 0, north: 1 });
+      k.runTrack(50, [{ east: 0, north: 0, heading: Math.PI / 2, speed: 0 }], {
+        east: 0,
+        north: 1,
+      });
       const later = lane(await k.wakes());
       return { held, laid, drifted, later };
     });
