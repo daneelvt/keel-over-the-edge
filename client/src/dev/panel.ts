@@ -11,7 +11,8 @@
 // golden scenario to download; camera presets; the back end, the render
 // scale, the tile pass and the antialiasing; the quality: the rung of the
 // ladder in use, adaptive quality on or off and the steps it took, and the
-// detail band, the foam and the wakes each on or off; the sky's hour, moon
+// detail band, the foam and the wakes each on or off, the wake's waves or
+// track as an overlay; the sky's hour, moon
 // and speed, and where the sun, the moon and the stars stand (skypanel.ts),
 // offline and online; and the frame statistics. It is a lazy import,
 // outside the game's first download. Built as nodes and text, never markup.
@@ -28,7 +29,7 @@ import type { LandStats } from '../land/land';
 import type { BumpTold, Traffic } from '../net/messages';
 import type { Online } from '../net/online';
 import { foamOn } from '../ocean/foam';
-import { detailOn } from '../ocean/seamaterial';
+import { detailOn, wakeOverlay } from '../ocean/seamaterial';
 import { RECORDS, SEA, SEA_SPEED_STEP, WEATHER } from '../predict/layout.gen';
 import { type Physics, SEA_PARTS } from '../predict/physics';
 import type { Predictor } from '../predict/predictor';
@@ -849,7 +850,19 @@ export function openPanel(
             world.ocean.drawWakes = on;
             if (!on) {
               world.ocean.wakes.clear();
+              world.ocean.wakeWaves.clear();
             }
+          },
+        ),
+      ),
+      row(
+        'Wake overlay',
+        select(
+          [0, 1, 2],
+          (x) => ['none', 'waves', 'track'][x] ?? 'none',
+          wakeOverlay.value,
+          (v) => {
+            wakeOverlay.value = v;
           },
         ),
       ),
@@ -911,6 +924,7 @@ export function openPanel(
       `scale   ${world.stage.pixelRatio().toFixed(2)}${world.stage.gfx?.floatTargets === false ? ', no float targets' : ''}`,
       `tier    ${rungName(world.rung)}${world.quality?.enabled ? ', adaptive' : ', held'} (wait ${((world.quality?.wait ?? 0) / 1000).toFixed(0)} s)`,
       `detail  ${detailLine(world)}`,
+      `wake    ${wakeLine(world)}`,
       `boat    ${p.east.toFixed(0)} E, ${p.north.toFixed(0)} N`,
       `origin  ${o.world.x.toFixed(0)} E, ${o.world.y.toFixed(0)} N, tile ${o.centre.q},${o.centre.r}`,
       `time    ${game.clock.time.toFixed(2)} s, step ${game.clock.steps}`,
@@ -1012,6 +1026,12 @@ function detailLine(world: SeaScene): string {
       ? `, ${d.baked ? 'made' : 'making'} in ${d.bakeSpent.toFixed(0)} ms (longest slice ${d.bakeLongest.toFixed(1)} ms)`
       : '';
   return `${d.kind}${bake}; ${wind}`;
+}
+
+function wakeLine(world: SeaScene): string {
+  const w = world.ocean.wakeWaves.state;
+  const cpu = w.kind.startsWith('cpu') ? `, ${w.cpuMs.toFixed(2)} ms a step on the CPU` : '';
+  return `${w.kind}, ${w.hulls} hull${w.hulls === 1 ? '' : 's'}${cpu}`;
 }
 
 /** What the connection's part of the panel shows. */

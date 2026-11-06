@@ -50,6 +50,7 @@ import {
   positionWorld,
   pow,
   reflect,
+  select,
   smoothstep,
   texture,
   uint,
@@ -107,6 +108,13 @@ export const tileHashNode = /* @__PURE__ */ Fn(([hex]: [Node<'vec2'>]) => {
   x.assign(x.bitXor(x.shiftRight(uint(16))));
   return x.shiftRight(uint(8));
 });
+
+/**
+ * The developer panel's overlay of the wake on the tiles: 0 none, 1 the
+ * wake's waves' height (red up, blue down, full at 5 cm drawn), 2 the
+ * track's churn (green).
+ */
+export const wakeOverlay = uniform(0);
 
 /** 1 to draw the detail band; 0 for the boat band alone (the developer panel, the tests). */
 export const detailOn = uniform(1);
@@ -472,6 +480,14 @@ export function tileLook(v: TileVaryings, parts: SeaParts, probe?: Probe): Node<
       col.assign(greyed(col, rain.mul(RAIN_LOOK.grey)));
       col.assign(mix(col, foamColour(N), cover.mul(FOAM.cover)));
       col.assign(mix(col, wakeColour(N, white), whiteCover.mul(FOAM.cover)));
+      // The panel's overlay, where asked for.
+      const up = clamp(wakeHere.w.mul(20), -1, 1);
+      const shown = select(
+        wakeOverlay.lessThan(1.5),
+        vec3(max(up, 0), 0, max(up.negate(), 0)),
+        vec3(0, churn, 0),
+      );
+      col.assign(mix(col, shown, select(wakeOverlay.greaterThan(0.5), float(0.7), float(0))));
       const [s0, s1, sk] = SEA_LOOK.seam as [number, number, number];
       const [b0, b1, b2, bk] = SEA_LOOK.bevel as [number, number, number, number];
       col.mulAssign(

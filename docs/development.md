@@ -3491,9 +3491,10 @@ measures it with `spectrum.ts`). Its height counts in metres, over
 lighten the water. The detail band's spectrum is stretched as the boat
 band's is.
 
-**Foam** (`foam.ts`) has five sources: folding in the detail band; whitecaps
-on the boat band's crests; streaks down the wind, from force 7; the hulls;
-and the wakes. Their sum sets how much of a pattern of lace shows
+**Foam** (`foam.ts`) has four sources of the sea's own: folding in the
+detail band; whitecaps on the boat band's crests; streaks down the wind,
+from force 7; and the surf. (The boats' white water is drawn apart, softer:
+see the wake, below.) Their sum sets how much of a pattern of lace shows
 (`pattern.ts`: one small texture made at start, lace and noise, read once a
 fragment), and the cover fades to a seventh over each tile's rim, so a
 patch of foam reads as white tiles. The whitecaps sit where the crest stands
@@ -3515,15 +3516,102 @@ all of it at forces 9 and 10. `internal/lookout/whitecaps.go` has the
 whitecaps' column for the machine sailors' report, held to the page's by
 `whitecaps.json`.
 
-**Round a hull** (`hulls.ts`), in the same walk that keeps the water out of
-it: a ring at the waterline, more at the bow, and two arms that trail at
-Kelvin's 19.5°, growing with the hull's speed through the water. Another
-boat's speed is how fast its drawn position moves, smoothed over 0.5 s.
-**The wakes** are a foam map (`foammap.ts`): a square 256 m a side that
-follows the boat in whole texels, 512 × 512 (256 × 256 on the low tier),
-8-bit. Each frame a pass moves it, fades it over 6 s, spreads it a little,
-and stamps every boat in it under its stern; its 8 bits are dithered, so it
-fades at the right rate at any frame rate. **Spray**
+**The wake is water, not paint**: the waves a hull makes, the churned lane
+it leaves, and white water only where the water breaks. Nothing of it is
+felt or sent: no boat rides a wake, and no tile is lifted by one.
+
+**The wake's waves** (`client/src/ocean/wakewaves.ts`, the physics and its
+float64 reference in `wakewavescpu.ts`) are a small square of water that
+follows the boat, its centre a quarter of its side astern along the
+heading (eased over 2 s), moved in whole texels. Every boat drawn in it
+pushes on it: a pressure of ρg times the hull's immersion, from the
+stations the model's script measured (the hull's dent, which at rest makes
+no waves; the own boat's sits deeper or higher by its heave against the sea
+under it, so a boat that bobs makes rings). The waves run by deep water's
+own dispersion: Tessendorf's eWave (2014), as Grapeshot's Atlas drew its
+wakes (Mihelich and Tcheblokov, GDC 2019). For each wave of the square's
+transform, u = h + d and the velocity potential turn at ω = √(g|k|) over a
+step, exactly, whatever its length. So Kelvin's V at arcsin ⅓ (Thomson,
+1887), the waves across the track 2πU²/g long, the V narrowing above a
+Froude number of a half (Rabaud and Moisy, 2013; Darmon, Benzaquen and
+Raphaël, 2014), the curve of a turn, the waves running on after a stop and
+two wakes crossing all follow, none drawn by hand. The square's outer
+eighth damps its waves (its solution is periodic), and every wave fades a
+little, the shortest most. The water drifts with the current at the boat,
+in whole texels as they add up.
+
+| | High | Medium | Low |
+|---|---|---|---|
+| Square | 256² over 64 m | 128² over 48 m | 64² over 28 m |
+| Made by | four compute passes | four compute passes | the reference, on the CPU |
+
+On WebGPU a step is four compute passes, by the detail band's transform:
+every row of u = h + d (the height moved and damped, the hulls' pressure
+drawn first into a half-float target, one instance a hull), every column
+and then each wave turned with the potential's transform (kept between
+steps, in two textures that take turns), every row back, every column back:
+the height kept, and the slopes, the convergence of the horizontal shift and
+the height for the material, `rgba16float` with mipmaps. On the low tier,
+and wherever compute passes are not to be had, the reference itself steps
+on the CPU at most 30 times a second (about half a millisecond a step on
+the Mac), its outputs uploaded as half floats with mipmaps it makes.
+Tessendorf's iWave, which the low tier could run as one fragment pass, does
+not keep deep water's dispersion over a dinghy's longer waves: with a
+13 × 13 kernel fitted by least squares its waves across the track came out
+8 to 10% short at 2.5 and 3.5 m/s, and its V too narrow at 2.5 m/s.
+
+On a tile they are drawn as the detail band is: read at the tile's centre
+from the mipmap of about 2.5 m texels they tilt the whole tile, read at the
+fragment (at its own place: a wake is where it is) and faded to nothing at
+the rim they ripple it, and their height lights its crest. Linear theory
+gives the Jolly boat waves of 1 to 9 cm, steep at most 0.25, which read
+faintly from the chase camera; they are drawn `WAKE_WAVES.gain` (3) times
+that.
+
+**The foam map** (`foammap.ts`) is a square 256 m a side that follows the
+boat in whole texels, 512 × 512 (256 × 256 on the low tier), two 8-bit
+channels, dithered so they fade at the right rate at any frame rate. Each
+frame a pass moves it (and drifts it with the current), fades and spreads
+it, then stamps every boat in it:
+
+- **the track** (green): every hull under way churns its whole waterline,
+  as strong as its speed through the water (another boat's is its drawn
+  speed less the current there), full from 2.5 m/s. It fades over 20 s (5%
+  is left after a minute) and widens from a beam to about four. Where it
+  runs, the wind's ripples, the shimmer and a gust's roughening are smoothed
+  by up to 75%, so the lane mirrors the sky as a real wake's slick does
+  (Glessmer, "Turbulent wake"), and the water is lightened toward its
+  scattering colour by up to 25%, the bubbles under it (`TRACK`);
+- **white water** (red): born where the wake's waves fold (the Jacobian of
+  their shift, drawn, under 0.72: the bow's wave among them), and behind a
+  transom driven past hull speed (2.4 m/s), more the faster; it fades over
+  3 s. It is drawn softer than the sea's foam: the lace through a window
+  0.35 wide, its cover as thin as its amount, going toward the water's
+  colour as it thins, lit by the surface the wake's waves tilt. A boat at
+  rest has none.
+
+The developer panel's **Wakes** switch turns the waves, the track and the
+white water off. The wake's numbers are in `look.ts` (`WAKE`, `TRACK`,
+`WAKE_WAVES`); the tiers' sizes in `quality.ts`. To look at them and tune
+them, sail the sandbox's wake scenes, the boat steered on its own:
+
+```sh
+# https://localhost:5173/?sandbox&wake=reach&sea=breeze   a steady beam reach
+# https://localhost:5173/?sandbox&wake=turn&sea=calm      the reach, then a 90° turn to the south
+# https://localhost:5173/?sandbox&wake=stop&sea=breeze    the reach, then head to wind with the sheet let fly
+# https://localhost:5173/?sandbox&wake=cross&sea=fresh    a second boat crossing the track 10 m astern
+# https://localhost:5173/?sandbox&wake=turn&tier=low      the low tier's
+```
+
+`npx vitest run src/ocean/wakewaves.test.ts` checks the physics on the
+reference: a wave's speed and energy whatever the step, the drift, a hull
+at rest making no waves, Kelvin's angle, the waves' length and the
+narrowing. `look.spec.ts` checks the GPU's waves against the reference and
+the same physics on every tier (the angle at 2 m/s within 2°, 3° on the low
+tier), the stop, the turn, the track's place, fade and drift, and that a
+boat at rest wears no foam.
+
+**Spray**
 (`client/src/render/spray.ts`) is sprites in one draw: from a bow the sea
 rises against faster than 0.2 m/s, more with speed, whitecaps and the sea's
 height, blown down the wind for about a second; torn off the crests near
@@ -3563,8 +3651,9 @@ A tier is a set of values (`client/src/render/quality.ts`):
 | Starts on | WebGPU, core features | WebGPU, compatibility mode | WebGL 2 |
 | Render scale, at most | 2 | 1.5 | 1 |
 | Detail band | Transform 256², two patches | Transform 128², one patch; shimmer | The loop; shimmer |
-| Compute dispatches a frame | 8 | 4 | 0 |
-| Foam map | 512² | 512² | 256² |
+| Compute dispatches a frame | 12 | 8 | 0 |
+| Foam map | 512², two channels | 512², two channels | 256², two channels |
+| The wake's waves | 256² over 64 m, compute | 128² over 48 m, compute | 64² over 28 m, CPU |
 | Shadows | 1,024², 40 m, other boats too | 1,024², 12 m, own boat | None |
 | Spray | 512, own boat and 3 nearest, off the crests | 512, own, off the crests | 96, own |
 | Clouds' puffs, at most | 1,024 | 768 | 512 |
