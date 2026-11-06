@@ -102,13 +102,13 @@ export function BarometerDial({
     </>
   );
   return press === null ? (
-    <section class="barometer" aria-label="Barometer">
+    <section class="dial barometer" aria-label="Barometer">
       {face}
     </section>
   ) : (
     <button
       type="button"
-      class={`barometer${big ? ' big' : ''}`}
+      class={`dial barometer${big ? ' big' : ''}`}
       aria-label="Barometer, larger"
       aria-describedby="baro-words"
       aria-expanded={big}

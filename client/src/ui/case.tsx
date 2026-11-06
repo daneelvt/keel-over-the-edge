@@ -7,23 +7,28 @@
 // longest words, so the case keeps one size whatever they say: the speed
 // over ground, the wind, and a last line that says what nothing else on
 // the screen does, there only where it can say something: on a boat
-// watched, or with the right-of-way overlay on. Its pushers stand on its edges: the barometer's on the
-// right, where a watch's crown is, sliding the barometer out of the case
-// and back in, down under the compass; in port the harbourmaster's board's
-// rises out of the bottom edge. Held upright, where the case shares the
-// top of the screen with the pocket chart, both stand out of the bottom
-// edge beneath the readouts, the case no wider than its words. The case
-// never reaches the pocket chart: the complication opened first folds back
-// in, unless the case reached it with nothing out. The pushers carry engraved
-// decals, not words. Watching one's own machine sailor, a running light
-// set into the case's top edge says its AI is at the helm (lit) or has
-// gone quiet (hollow).
+// watched, or with the right-of-way overlay on. Its pushers stand on its
+// edges: the barometer's on the right, where a watch's crown is, and the
+// ship's clock's on the top beside the speed, each sliding its
+// complication out of the case and back in, down under the compass, side
+// by side; in port the harbourmaster's board's rises out of the bottom
+// edge. Held upright, where the case shares the top of the screen with the
+// pocket chart, all stand out of the bottom edge beneath the readouts, the
+// case no wider than its words, and the complications hang in a column.
+// The case never reaches the pocket chart, nor held upright the controls
+// at the foot of the screen: the complication opened first folds back in,
+// unless the case reached the chart with nothing out. A complication
+// slides as it opens and as it folds, and at no other time: drawn again,
+// measured or laid out again for a turned or resized screen, it keeps
+// still. The pushers carry engraved decals, not words. Watching one's own
+// machine sailor, a running light set into the case's top edge says its
+// AI is at the helm (lit) or has gone quiet (hollow).
 //
-// A tap on the barometer enlarges it from its place, over whatever is
-// under it but the menu, kept within the screen: down from its place
-// where it fits, otherwise risen so its foot is at the screen's foot. A
-// tap on it, Escape, its pusher folding it, the chart or the clear view
-// shrinks it; it is never remembered.
+// A tap on a complication's dial enlarges it from its place, over whatever
+// is under it but the menu, kept within the screen: down from its place
+// where it fits, otherwise risen so its foot is at the screen's foot. One
+// is enlarged at a time. A tap on it, Escape, its pusher folding it, the
+// chart or the clear view shrinks it; it is never remembered.
 
 import type { ReadonlySignal } from '@preact/signals';
 import type { ComponentChildren } from 'preact';
@@ -32,6 +37,8 @@ import type { LampState } from '../net/messages';
 import type { Barometer } from './barometer';
 import { BarometerDial, type DialWord } from './barometerdial';
 import { BoardPanel, type HarbourView } from './board';
+import type { ShipsClock } from './clock';
+import { ClockDial } from './clockdial';
 import {
   type Complication,
   caseLine,
@@ -39,8 +46,11 @@ import {
   fitted,
   LAID,
   pressed as pressedOrder,
+  type Slide,
+  slideOf,
+  within,
 } from './complications';
-import { AneroidDecal, BoardDecal } from './decals';
+import { AneroidDecal, BoardDecal, ClockDecal } from './decals';
 import type { HudModel } from './model';
 import type { SettingsSignal } from './settings';
 
@@ -55,8 +65,10 @@ const GLOW = 150;
 /** How far the pushers' stems stand out of the case, px; and the room kept before the pocket chart. */
 const STEM = 6;
 const CLEAR = 8;
-/** The room the enlarged barometer keeps from the screen's edges, px. */
+/** The room an enlarged dial keeps from the screen's edges, px. */
 const SCREEN_EDGE = 12;
+/** The controls at the foot of the screen, which the complications' column keeps above held upright. */
+const FOOT = '.pilot-head, .pilot-button, [data-control=helm], .watch-plate';
 
 /** Whether the reader asks for less motion. */
 function reducedMotion(): boolean {
@@ -64,24 +76,32 @@ function reducedMotion(): boolean {
 }
 
 /**
- * Out, sliding back in, or in: what slides is still drawn for a moment
- * after it is put away, unless the reader asks for less motion.
+ * Out, sliding out, sliding back in, or in: what slides out does so for a
+ * moment after it is opened, and what is put away is still drawn for a
+ * moment as it folds, unless the reader asks for less motion. Only a
+ * change of out begins a slide: drawn again, it keeps still.
  */
-function useSlide(out: boolean, ms: number): 'out' | 'folding' | 'in' {
-  const [folding, setFolding] = useState(false);
+function useSlide(out: boolean, ms: number): Slide {
+  const [moving, setMoving] = useState<'opening' | 'folding' | null>(null);
   const was = useRef(out);
   useEffect(() => {
     const before = was.current;
     was.current = out;
-    if (!before || out || reducedMotion()) {
-      setFolding(false);
+    const m = slideOf(before, out, reducedMotion());
+    if (m === null) {
+      if (before !== out) {
+        setMoving(null);
+      }
       return;
     }
-    setFolding(true);
-    const t = setTimeout(() => setFolding(false), ms);
+    setMoving(m);
+    const t = setTimeout(() => setMoving(null), ms);
     return () => clearTimeout(t);
   }, [out, ms]);
-  return out ? 'out' : folding ? 'folding' : 'in';
+  if (out) {
+    return moving === 'opening' ? 'opening' : 'out';
+  }
+  return moving === 'folding' ? 'folding' : 'in';
 }
 
 /** Whether the screen is held upright, kept as it turns. */
@@ -279,7 +299,7 @@ export function Pusher({
   out: boolean;
   press: () => void;
   /** The edge it stands on, its stem out of it. */
-  edge?: 'right' | 'bottom' | 'left';
+  edge?: 'right' | 'bottom' | 'left' | 'top';
   /** Rising out of the case, or sinking back. */
   motion?: '' | 'rising' | 'sinking';
   /** A switch's state; null for a disclosure. */
@@ -322,7 +342,7 @@ const LAMP_WORDS: Record<Lamp, string> = {
 };
 
 /** The case's ids for what its pushers open. */
-const IDS: Record<Complication, string> = { barometer: 'case-barometer' };
+const IDS: Record<Complication, string> = { barometer: 'case-barometer', clock: 'case-clock' };
 const BOARD_ID = 'harbour-board';
 
 export interface CaseProps {
@@ -331,10 +351,12 @@ export interface CaseProps {
   /** Whether the controls that act on the boat are on the screen; none on a boat watched. */
   controls: boolean;
   barometer: { barometer: Barometer; words: readonly DialWord[] } | null;
+  /** The ship's clock; null without. */
+  clock?: ShipsClock | null;
   harbour: HarbourView | null;
   /** The running light; null where there is none. */
   lamp: ReadonlySignal<Lamp> | null;
-  /** The screen cleared: the barometer shrinks. */
+  /** The screen cleared: an enlarged dial shrinks. */
   clear?: boolean;
 }
 
@@ -343,6 +365,7 @@ export function Case({
   settings,
   controls,
   barometer,
+  clock = null,
   harbour,
   lamp,
   clear = false,
@@ -351,6 +374,7 @@ export function Case({
   const s = settings.value.value;
   const out: Record<Complication, boolean> = {
     barometer: barometer !== null && s.barometer,
+    clock: clock !== null && s.clock,
   };
   // The open complications, oldest opened first.
   const [order, setOrder] = useState<Complication[]>(() => LAID.filter((c) => out[c]));
@@ -360,22 +384,35 @@ export function Case({
   ];
   const put = (c: Complication, on: boolean) => {
     setOrder(pressedOrder(open, c, on));
-    settings.set({ barometer: on });
+    settings.set({ [c]: on });
   };
-  const slides: Record<Complication, 'out' | 'folding' | 'in'> = {
+  const slides: Record<Complication, Slide> = {
     barometer: useSlide(out.barometer, SLIDE),
+    clock: useSlide(out.clock, SLIDE),
   };
-  // The case never reaches the pocket chart: the oldest opened folds back.
-  const latest = useRef({ open, put, slides });
-  latest.current = { open, put, slides };
+  const upright = useUpright();
+  const light = lamp?.value ?? '';
+  // The harbour's pusher rises in port and sinks as the boat leaves.
+  const port = harbour?.port.value ?? null;
+  const rise = useSlide(port !== null, RISE);
+  const board = harbour !== null && rise !== 'in';
+  const last = !controls || s.rightOfWay;
+  // The case never reaches the pocket chart, nor held upright the controls
+  // at the foot: the oldest opened folds back. Measured when what is open
+  // or the case's room changes, not each time the case is drawn: the
+  // trial is one layout pass, which no frame sees.
+  const latest = useRef({ open, put, slides, upright });
+  latest.current = { open, put, slides, upright };
+  const folding = `${open.join(' ')}|${board}|${upright}|${last}|${light}`;
   useLayoutEffect(() => {
     const fold = () => {
       const c = el.current;
-      const { open, put, slides } = latest.current;
+      const { open, put, slides, upright } = latest.current;
       if (c === null || open.length === 0) {
         return;
       }
       const room = roomOf(c);
+      const foot = upright ? footOf(c) : Number.POSITIVE_INFINITY;
       const shown = (hide: (k: Complication) => boolean) => {
         for (const k of LAID) {
           const part = c.querySelector<HTMLElement>(`#${IDS[k]}`);
@@ -390,12 +427,16 @@ export function Case({
       };
       // A case already at the chart with nothing out, on a narrow screen,
       // folds back nothing that does not widen it: held upright the
-      // barometer hangs beneath the case and never does.
+      // complications hang beneath the case and never do.
       shown(() => true);
       const bare = c.getBoundingClientRect().right + STEM;
       const keep = fitted(open, (o) => {
         shown((k) => !o.includes(k));
-        return c.getBoundingClientRect().right + STEM <= Math.max(room, bare);
+        const r = c.getBoundingClientRect();
+        return within(
+          { right: r.right + STEM, bottom: r.bottom },
+          { right: Math.max(room, bare), bottom: foot },
+        );
       });
       // As drawn, whatever was tried.
       shown((k) => slides[k] === 'in');
@@ -407,11 +448,21 @@ export function Case({
     };
     fold();
     globalThis.addEventListener('resize', fold);
-    return () => globalThis.removeEventListener('resize', fold);
-  });
-  // The harbour's pusher rises in port and sinks as the boat leaves.
-  const port = harbour?.port.value ?? null;
-  const rise = useSlide(port !== null, RISE);
+    // The case's words laid out in their face once it has loaded, and the
+    // pocket chart's size, change its room without a resize.
+    const sized = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(fold);
+    const c = el.current;
+    const hud = c?.closest('.hud') ?? document;
+    for (const part of [c?.querySelector('.readouts'), hud.querySelector('.pocket-frame')]) {
+      if (part !== null && part !== undefined) {
+        sized?.observe(part);
+      }
+    }
+    return () => {
+      globalThis.removeEventListener('resize', fold);
+      sized?.disconnect();
+    };
+  }, [folding]);
   const [risen, setRisen] = useState(false);
   useEffect(() => {
     if (port === null) {
@@ -427,18 +478,22 @@ export function Case({
       setBoardOpen(false);
     }
   }, [port]);
-  // The barometer enlarged, and the size its place keeps meanwhile.
-  const [big, setBig] = useState<{ width: number; height: number } | null>(null);
-  const place = useRef<HTMLDivElement>(null);
-  const grow = () => {
-    const r = place.current?.getBoundingClientRect();
-    setBig(big !== null || r === undefined ? null : { width: r.width, height: r.height });
+  // The dial enlarged, one at a time, and the size its place keeps meanwhile.
+  const [big, setBig] = useState<{ c: Complication; width: number; height: number } | null>(null);
+  const places: Record<Complication, { current: HTMLDivElement | null }> = {
+    barometer: useRef<HTMLDivElement>(null),
+    clock: useRef<HTMLDivElement>(null),
   };
+  const grow = (c: Complication) => {
+    const r = places[c].current?.getBoundingClientRect();
+    setBig(big?.c === c || r === undefined ? null : { c, width: r.width, height: r.height });
+  };
+  const bigOut = big === null ? true : out[big.c];
   useEffect(() => {
-    if (!out.barometer || clear) {
+    if (!bigOut || clear) {
       setBig(null);
     }
-  }, [out.barometer, clear]);
+  }, [bigOut, clear]);
   // Escape, or the screen turned, shrinks it: heard from the first tap on.
   const enlarged = useRef(false);
   enlarged.current = big !== null;
@@ -458,7 +513,7 @@ export function Case({
     };
   }, []);
   useLayoutEffect(() => {
-    const b = place.current?.querySelector<HTMLElement>('.barometer.big');
+    const b = el.current?.querySelector<HTMLElement>('.dial.big');
     if (b === undefined || b === null) {
       return;
     }
@@ -473,9 +528,15 @@ export function Case({
     b.style.left = `${dx}px`;
     b.style.top = `${dy}px`;
   });
-  const upright = useUpright();
-  const light = lamp?.value ?? '';
-  const board = harbour !== null && rise !== 'in';
+  /** A complication's place: its class as it slides, and the size it keeps while its dial is enlarged. */
+  const place = (c: Complication) => ({
+    ref: places[c],
+    class: `complication${slides[c] === 'opening' || slides[c] === 'folding' ? ` ${slides[c]}` : ''}`,
+    id: IDS[c],
+    'data-complication': c,
+    hidden: slides[c] === 'in',
+    style: big?.c === c ? { width: big.width, height: big.height } : undefined,
+  });
   return (
     <>
       <section
@@ -493,7 +554,7 @@ export function Case({
         <div class="case-top">
           <div class="case-face">
             <CompassCard model={model} />
-            <Readouts model={model} controls={controls} last={!controls || s.rightOfWay} />
+            <Readouts model={model} controls={controls} last={last} />
           </div>
           <div class="case-pushers">
             {barometer !== null ? (
@@ -506,6 +567,18 @@ export function Case({
                 edge={upright ? 'bottom' : 'right'}
               >
                 <AneroidDecal />
+              </Pusher>
+            ) : null}
+            {clock !== null ? (
+              <Pusher
+                name="World time"
+                id="clock"
+                controls={IDS.clock}
+                out={out.clock}
+                press={() => put('clock', !out.clock)}
+                edge={upright ? 'bottom' : 'top'}
+              >
+                <ClockDecal />
               </Pusher>
             ) : null}
             {board ? (
@@ -525,20 +598,21 @@ export function Case({
         </div>
         <div class="complications" hidden={LAID.every((k) => slides[k] === 'in')}>
           {barometer !== null ? (
-            <div
-              ref={place}
-              class={`complication${slides.barometer === 'folding' ? ' folding' : ''}`}
-              id={IDS.barometer}
-              data-complication="barometer"
-              hidden={slides.barometer === 'in'}
-              style={big === null ? undefined : { width: big.width, height: big.height }}
-            >
+            <div {...place('barometer')}>
               <BarometerDial
                 barometer={barometer.barometer}
                 words={barometer.words}
-                big={big !== null}
-                press={grow}
+                big={big?.c === 'barometer'}
+                press={() => grow('barometer')}
               />
+            </div>
+          ) : null}
+          {clock !== null ? (
+            <div {...place('clock')}>
+              <ClockDial clock={clock} big={big?.c === 'clock'} press={() => grow('clock')} />
+              <span class="visually-hidden" role="status">
+                {clock.named}
+              </span>
             </div>
           ) : null}
         </div>
@@ -548,6 +622,19 @@ export function Case({
       ) : null}
     </>
   );
+}
+
+/** The foot the case may reach held upright: above the controls at the foot of the screen, or the screen's edge. */
+function footOf(c: HTMLElement): number {
+  const hud = c.closest('.hud') ?? document;
+  let foot = globalThis.innerHeight - SCREEN_EDGE;
+  for (const p of hud.querySelectorAll(FOOT)) {
+    const r = p.getBoundingClientRect();
+    if (r.height > 0) {
+      foot = Math.min(foot, r.top - CLEAR);
+    }
+  }
+  return foot;
 }
 
 /** The right edge the case may reach: short of the pocket chart and its pusher, or of the screen. */

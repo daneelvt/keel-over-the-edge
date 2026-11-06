@@ -101,6 +101,7 @@ import type { SandboxForecast } from '../sandbox/forecast';
 import { KNOT, type Sandbox, SEA_STATES } from '../sandbox/sandbox';
 import { hourAt, moonAgeAt, skyPeriods } from '../sky/skytime';
 import type { Barometer } from '../ui/barometer';
+import type { ShipsClock } from '../ui/clock';
 import type { Countdown } from '../ui/countdown';
 import type { SailState } from '../ui/model';
 import type { Settings } from '../ui/settings';
@@ -245,6 +246,9 @@ export type Sailing = (
   forecast?: SandboxForecast;
   barometer?: Barometer;
   readBarometer?: () => void;
+  /** The ship's clock, and its reading now, as its timer does. */
+  clock?: ShipsClock;
+  readClock?: () => void;
   /** The countdown to the world's end, which the sandbox's tests set. */
   countdown?: Countdown;
   /** The full screen's switch and key. */
@@ -3237,6 +3241,34 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
       sailing.forecast?.again();
     },
 
+    /**
+     * A storm at its strongest now on the disk's rim, east of the centre,
+     * its ring reaching past the world's edge; the forecast issued again.
+     * The sandbox only.
+     */
+    stormAtRim(): void {
+      const s = offline();
+      const c = catalog.weather;
+      const physics = s.physics;
+      const now = s.tick;
+      const minute = 60 * 30;
+      const fair = Math.max(
+        0,
+        c.regimes.findIndex((r) => !r.frontal),
+      );
+      const base = heldSpell(physics, c, fair, now - 240 * minute);
+      base[RECORDS.spell.still] = 0;
+      const kind = Math.max(
+        0,
+        c.systems.findIndex((k) => k.symbol === 'spiral'),
+      );
+      const lip = catalog.world.disk.radius;
+      physics.setRecords([placedRecord(c, kind, lip * 0.97, 0, now - 20 * minute, now, base)]);
+      s.systems = 1;
+      s.weather.set([base]);
+      sailing.forecast?.again();
+    },
+
     /** Ticks the sandbox's forecast and reads the barometer now, as their timers do: the sandbox only. */
     weatherNow(): void {
       sailing.forecast?.tick();
@@ -3267,6 +3299,22 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
     /** Where a point of the water lies on the chart's screen, CSS pixels; null off it. */
     chartScreenOf(east: number, north: number): { x: number; y: number } | null {
       return chartParts().chart.view.screenOf(east, north);
+    },
+
+    /** The boat's arrow on the chart: its nose and tail on the screen, CSS pixels, and its scale. */
+    chartArrow() {
+      return chartParts().chart.view.arrowEnds();
+    },
+
+    /** Zooms the chart by a factor about what it looks at: under 1 nearer. */
+    zoomChart(f: number): void {
+      chartParts().chart.view.zoom(f);
+    },
+
+    /** Looks at the boat on the chart from distance m. */
+    chartFromBoat(distance: number): void {
+      const v = chartParts().chart.view;
+      v.lookAt(world.pose.east, world.pose.north, distance);
     },
 
     /** The weather system or front whose box is open, or null. */
@@ -3347,6 +3395,26 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
         set: b.set,
         hand: b.hand.el?.style.transform ?? '',
         setHand: b.setHand.el?.style.transform ?? '',
+      };
+    },
+
+    /** The ship's clock, read now: its hour, its words, and its hands' and disc's turns as drawn. */
+    clock() {
+      const c = sailing.clock;
+      if (c === undefined) {
+        return null;
+      }
+      sailing.readClock?.();
+      const drawn = (part: 'hour' | 'minute' | 'disc') =>
+        document.querySelector(`#case-clock [data-hand=${part}]`)?.getAttribute('transform') ??
+        null;
+      return {
+        hour: c.hour,
+        words: c.words.value,
+        sun: c.sun.value,
+        hand: drawn('hour'),
+        minuteHand: drawn('minute'),
+        disc: drawn('disc'),
       };
     },
 
