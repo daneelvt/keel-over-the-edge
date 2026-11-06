@@ -11,7 +11,7 @@ package lookout
 // testdata/whitecaps.json.
 
 // whitecapsByForce are the whitecaps of each force's row, 0 to 10.
-var whitecapsByForce = [...]float64{0, 0, 0, 0.08, 0.25, 0.7, 1, 1.4, 2, 2.8, 3.6}
+var whitecapsByForce = [...]float64{0, 0, 0, 0.08, 0.25, 0.7, 1.1, 1.6, 2, 2.6, 3.6}
 
 // foamTop is the top row: it is read at foamTopKnots, where its force
 // ends, and holds above.

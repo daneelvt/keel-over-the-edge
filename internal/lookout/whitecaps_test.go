@@ -46,9 +46,9 @@ func TestWhitecapsFile(t *testing.T) {
 			t.Errorf("%v knots: %v, the file %v", got[i].Knots, got[i].Whitecaps, want[i].Whitecaps)
 		}
 	}
-	// Nothing in a breeze under force 3's beginning; whole at force 6, and
+	// Nothing in a breeze under force 3's beginning; whole by force 6, and
 	// more in a gale and a storm.
-	if Whitecaps(6) != 0 || Whitecaps(24.5) != 1 || !(Whitecaps(16) > 0.08 && Whitecaps(16) < 0.7) ||
+	if Whitecaps(6) != 0 || Whitecaps(24.5) != 1.1 || !(Whitecaps(16) > 0.08 && Whitecaps(16) < 0.7) ||
 		!(Whitecaps(40) > 1.5 && Whitecaps(55) > Whitecaps(40)) || Whitecaps(60) != Whitecaps(55) {
 		t.Errorf("6 knots %v, 16 %v, 24.5 %v, 40 %v, 55 %v, 60 %v", Whitecaps(6), Whitecaps(16), Whitecaps(24.5), Whitecaps(40), Whitecaps(55), Whitecaps(60))
 	}
