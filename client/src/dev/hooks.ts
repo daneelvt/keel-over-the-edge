@@ -77,6 +77,8 @@ import {
 import { groundWindow, leeTexture, shelterTexture, shore, waveLeeAt } from '../ocean/shore';
 import { GROUND_ROW, GUST_ROW, PASS_WIDTH } from '../ocean/tilepass';
 import { SKIRT_DEPTH } from '../ocean/tiles';
+import { wakeDamping } from '../ocean/wakewaves';
+import { WakeWavesReference } from '../ocean/wakewavescpu';
 import { boatBandAt } from '../ocean/wave';
 import { type RecordValues, spellOf, steer, toHex } from '../predict/golden';
 import { RECORDS, SEA, WEATHER } from '../predict/layout.gen';
@@ -2474,12 +2476,13 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
     /**
      * The bytes the GPU holds for the look's textures on the rung in use, as
      * three.js counts them once it has made them: the detail band's, the
-     * foam map's, the shadow map's (its depth and its colour target) and the
+     * foam map's, the wake's waves', the shadow map's (its depth and its colour target) and the
      * pattern's; and every texture's, the whole scene's.
      */
     textureBytes(): {
       detail: number;
       foamMap: number;
+      wakeWaves: number;
       shadowMap: number;
       pattern: number;
       all: number;
@@ -2497,6 +2500,7 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
       return {
         detail: sum(ocean.detail.textures),
         foamMap: sum(ocean.wakes.targets.map((t) => t.texture)),
+        wakeWaves: sum(ocean.wakeWaves.textures),
         shadowMap: world.shadows.light.castShadow ? sum([map?.texture, map?.depthTexture]) : 0,
         pattern: size(ocean.pattern),
         all: info.memory.texturesSize,
@@ -2832,6 +2836,117 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
       };
     },
     /**
+     * The wake's waves run on the GPU beside the reference on the CPU, in
+     * float64, from still water for so many steps of 1/30 s, a hull sailing
+     * at 2 m/s across the square: the root mean square of each, and of
+     * their difference, for the height and the slope east, away from the
+     * hull (where the pressure's half floats would count); and the largest
+     * difference of height. Null where the waves are the CPU's already.
+     */
+    async wakeWavesAgainstCPU(steps: number): Promise<{
+      height: [number, number];
+      slope: [number, number];
+      worst: number;
+    } | null> {
+      const ww = world.ocean.wakeWaves;
+      const k = ww.kind;
+      if (k === null || k.kind !== 'fft' || world.boat?.hullShape === undefined) {
+        return null;
+      }
+      const shape = world.boat.hullShape;
+      if (shape === null) {
+        return null;
+      }
+      const n = k.size;
+      const ref = new WakeWavesReference(n, k.span, wakeDamping());
+      const heading = 0.3;
+      const speed = 2;
+      hooks.runWakeWaves(steps / 30, [{ east: 0, north: 0, heading, speed }]);
+      const texel = k.span / n;
+      let east = 0;
+      let north = 0;
+      for (let i = 0; i <= steps; i++) {
+        const dt = i === 0 ? 0 : 1 / 30;
+        east += speed * Math.sin(heading) * dt;
+        north += speed * Math.cos(heading) * dt;
+        const back = WAKE_WAVES.astern * k.span;
+        const ce = Math.round((east - Math.sin(heading) * back) / texel) * texel;
+        const cn = Math.round((north - Math.cos(heading) * back) / texel) * texel;
+        ref.press(shape, [{ east, north, heading, sink: 0 }], ce, cn);
+        ref.step(dt, ce, cn);
+      }
+      const got = (await hooks.wakeWaves()).data;
+      let hh = 0;
+      let dh = 0;
+      let ss = 0;
+      let ds = 0;
+      let worst = 0;
+      let count = 0;
+      for (let i = 0; i < n * n; i++) {
+        const at = ref.at(i % n, Math.floor(i / n));
+        const near = Math.hypot(at.east - east, at.north - north);
+        if (near < 3) {
+          continue;
+        }
+        const h = ref.h[i] ?? 0;
+        const e = ref.east[i] ?? 0;
+        hh += h * h;
+        ss += e * e;
+        dh += ((got[i * 4 + 3] ?? 0) - h) ** 2;
+        ds += ((got[i * 4] ?? 0) - e) ** 2;
+        worst = Math.max(worst, Math.abs((got[i * 4 + 3] ?? 0) - h));
+        count++;
+      }
+      return {
+        height: [Math.sqrt(hh / count), Math.sqrt(dh / count)],
+        slope: [Math.sqrt(ss / count), Math.sqrt(ds / count)],
+        worst,
+      };
+    },
+    /**
+     * Runs the foam map on alone for seconds of world time at rate steps a
+     * second, with hulls of the boat's kind moving as given (east, north,
+     * heading and speed through the water each, stamping until stopAt
+     * seconds), in a current, the map following the first; the scene's own
+     * hulls are let be. Returns where each ended.
+     */
+    runTrack(
+      seconds: number,
+      boats: { east: number; north: number; heading: number; speed: number; stopAt?: number }[],
+      current: { east: number; north: number } = { east: 0, north: 0 },
+      rate = 15,
+    ): { east: number; north: number }[] {
+      const ocean = world.ocean;
+      const map = ocean.wakes;
+      const o = world.origin.world;
+      const at = boats.map((b) => ({ ...b }));
+      const steps = Math.round(seconds * rate);
+      for (let i = 1; i <= steps; i++) {
+        const dt = 1 / rate;
+        const t = i * dt;
+        map.begin();
+        for (const b of at) {
+          // Through the water at its speed, and with the water over the ground.
+          b.east += (b.speed * Math.sin(b.heading) + current.east) * dt;
+          b.north += (b.speed * Math.cos(b.heading) + current.north) * dt;
+          if (b.stopAt === undefined || t < b.stopAt) {
+            map.add(b.east, b.north, b.heading, b.speed);
+          }
+        }
+        const first = at[0] ?? { east: 0, north: 0 };
+        map.update(gfx().renderer, {
+          originEast: o.x,
+          originNorth: o.y,
+          boatEast: first.east,
+          boatNorth: first.north,
+          dt,
+          currentEast: current.east,
+          currentNorth: current.north,
+        });
+      }
+      return at.map((b) => ({ east: b.east, north: b.north }));
+    },
+    /**
      * Starts one of the sandbox's wake scenes (?sandbox&wake=…) in a sea,
      * the boat steered from now on; null stops the one running.
      */
@@ -2851,7 +2966,15 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
      */
     runWakeWaves(
       seconds: number,
-      boats: { east: number; north: number; heading: number; speed: number; turn?: number }[],
+      boats: {
+        east: number;
+        north: number;
+        heading: number;
+        speed: number;
+        turn?: number;
+        turnFrom?: number;
+        stopAt?: number;
+      }[],
       rate = 30,
       current: { east: number; north: number } = { east: 0, north: 0 },
     ): { east: number; north: number; heading: number }[] {
@@ -2866,9 +2989,11 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
         ww.begin();
         for (const b of at) {
           if (i > 0) {
-            b.heading += (b.turn ?? 0) * dt;
-            b.east += (b.speed * Math.sin(b.heading) + current.east) * dt;
-            b.north += (b.speed * Math.cos(b.heading) + current.north) * dt;
+            const speed = b.stopAt !== undefined && i / rate > b.stopAt ? 0 : b.speed;
+            const turning = speed > 0 && i / rate > (b.turnFrom ?? 0);
+            b.heading += (turning ? (b.turn ?? 0) : 0) * dt;
+            b.east += (speed * Math.sin(b.heading) + current.east) * dt;
+            b.north += (speed * Math.cos(b.heading) + current.north) * dt;
           }
           ww.add(b.east, b.north, b.heading, 0);
         }

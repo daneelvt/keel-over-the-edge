@@ -102,6 +102,7 @@ import {
   MeshBasicNodeMaterial,
   type Node,
   StorageTexture,
+  type UniformNode,
   type WebGPURenderer,
 } from 'three/webgpu';
 import type { WakeWavesKind } from '../render/quality';
@@ -113,6 +114,7 @@ import {
   rimKept,
   SAMPLES,
   type WakeDamping,
+  type WakeHull,
   WakeWavesReference,
 } from './wakewavescpu';
 
@@ -569,6 +571,30 @@ export interface WakeWavesState {
 }
 
 /** The wake's waves: whichever way of making them the tier asks for. */
+/** One way of making the waves, with what the material reads of it. */
+interface Way {
+  kind: WakeWavesKind;
+  transformed: Transformed | null;
+  stepped: Stepped | null;
+  /** The texture the material reads. */
+  out: Texture;
+  /** The floating origin's place in the square, as texture coordinates; 1 over its side; the mipmap of a tile's texels. */
+  origin: UniformNode<'vec2', Vector2>;
+  perSpan: UniformNode<'float', number>;
+  level: UniformNode<'float', number>;
+}
+
+function sameKind(a: WakeWavesKind | null, b: WakeWavesKind): boolean {
+  return a !== null && a.kind === b.kind && a.size === b.size && a.span === b.span;
+}
+
+/**
+ * The wake's waves: whichever way of making them the tier asks for. A change
+ * is made in two steps, as the detail band's: setKind makes the new way, for
+ * new materials to be built and compiled against, while the old one goes on
+ * being stepped and drawn; commit puts the new one in use as the materials
+ * are swapped.
+ */
 export class WakeWaves {
   /** The square's centre in the world, on its texels' grid. */
   readonly centre = { east: 0, north: 0 };
@@ -576,42 +602,51 @@ export class WakeWaves {
   readonly on = uniform(1);
   /** How many times linear theory's height and slopes are drawn. */
   readonly gain = uniform(WAKE_WAVES.gain as number);
-  /** Changes whenever what the material reads must be made again. */
-  version = 0;
-  kind: WakeWavesKind | null = null;
   steps = 0;
   cpuMs = 0;
 
-  readonly #origin = uniform(new Vector2(0.5, 0.5));
-  readonly #perSpan = uniform(1 / 64);
-  readonly #level = uniform(3);
-  readonly #samplers: { value: Texture }[] = [];
-  #transformed: Transformed | null = null;
-  #stepped: Stepped | null = null;
-  /** A texture of nothing, read with no field. */
+  #active: Way | null = null;
+  #next: Way | null = null;
+  /** A texture of nothing, read with no waves. */
   readonly #none: DataTexture;
-  /** The hulls this frame: east, north, heading, sink. */
-  readonly #hulls = new Float64Array(WAKE_HULLS * 4);
+  readonly #noneWay: Way;
+  /** The hulls this frame. */
+  readonly #hulls: WakeHull[] = Array.from({ length: WAKE_HULLS }, () => ({
+    east: 0,
+    north: 0,
+    heading: 0,
+    sink: 0,
+  }));
   #count = 0;
   #shape: PressureShape | null = null;
   /** The heading the square is placed by, as a direction east and north. */
   readonly #toward = { east: 0, north: 1, set: false };
+  /** Where the square is to be this frame. */
+  readonly #place = { east: 0, north: 0 };
   /** The water's drift not yet a whole texel, metres east and north. */
   readonly #drift = { east: 0, north: 0 };
+  /** Whole texels of drift and of the square's moves the CPU's field has yet to take. */
+  readonly #pendingDrift = { east: 0, north: 0 };
   #placed = false;
   readonly #stamps: Mesh;
   readonly #stampData: Float32Array;
   readonly #stampAttr: InstancedBufferAttribute;
   readonly #stations: Vector4[] = Array.from({ length: 8 }, () => new Vector4());
   readonly #bilge = uniform(2);
+  /** How far a hull reaches from its origin, metres: the stamp's half side. */
+  readonly #reach = uniform(3);
+  /** The stamps' square: 1 over its side, and a texel's side, metres. */
+  readonly #stampPerSpan = uniform(1 / 64);
+  readonly #texelSize = uniform(0.25);
   readonly #scene = new Scene();
   readonly #camera = new OrthographicCamera(-1, 1, 1, -1, 0, 2);
   readonly #damping = wakeDamping();
-  readonly #press: { east: number; north: number; heading: number; sink: number }[] = [];
+  readonly #clear = new Color();
 
   constructor() {
     this.#none = new DataTexture(new Uint16Array(4), 1, 1, RGBAFormat, HalfFloatType);
     this.#none.needsUpdate = true;
+    this.#noneWay = this.#way({ kind: 'cpu', size: 64, span: 28 }, null, null, this.#none);
     // The stamps: each hull's waterplane, its immersion at every texel's centre.
     const g = new InstancedBufferGeometry();
     const plane = new PlaneGeometry(2, 2);
@@ -652,8 +687,8 @@ export class WakeWaves {
     const east = local.x.mul(c).sub(local.y.negate().mul(s));
     const north = local.x.mul(s.negate()).sub(local.y.negate().mul(c));
     m.positionNode = vec3(
-      hull.x.add(east.mul(this.#perSpan.mul(2))),
-      hull.y.add(north.mul(this.#perSpan.mul(2))),
+      hull.x.add(east.mul(this.#stampPerSpan.mul(2))),
+      hull.y.add(north.mul(this.#stampPerSpan.mul(2))),
       -1,
     );
     const at = varying(vec2(local.x, local.y.negate()));
@@ -706,11 +741,6 @@ export class WakeWaves {
     return m;
   }
 
-  /** How far a hull reaches from its origin, metres: the stamp's half side. */
-  readonly #reach = uniform(3);
-  /** A texel's side, metres. */
-  readonly #texelSize = uniform(0.25);
-
   /** The hull every boat has, for now. */
   setShape(shape: PressureShape): void {
     this.#shape = shape;
@@ -723,58 +753,92 @@ export class WakeWaves {
     this.#reach.value = reach + 0.25;
   }
 
-  /** The texture the material reads now. */
-  get texture(): Texture {
-    return this.#transformed?.out ?? this.#stepped?.out ?? this.#none;
+  #way(
+    kind: WakeWavesKind,
+    transformed: Transformed | null,
+    stepped: Stepped | null,
+    out: Texture,
+  ): Way {
+    return {
+      kind,
+      transformed,
+      stepped,
+      out,
+      origin: uniform(new Vector2(0.5, 0.5)),
+      perSpan: uniform(1 / kind.span),
+      level: uniform(
+        Math.max(0, Math.round(Math.log2(WAKE_WAVES.tileTexel / (kind.span / kind.size)))),
+      ),
+    };
   }
 
-  /** The texels' side, metres. */
-  get texel(): number {
-    return this.kind === null ? 1 : this.kind.span / this.kind.size;
+  /** The way in use, its kind; null before the first. */
+  get kind(): WakeWavesKind | null {
+    return this.#active?.kind ?? null;
   }
 
   /**
    * Chooses how the waves are made: compute is whether the renderer runs
-   * compute passes. Changes version when the material must be made again.
+   * compute passes. Returns whether that changes what the material reads,
+   * so that the sea's materials must be made again and commit called once
+   * they are in.
    */
-  setKind(kind: WakeWavesKind, compute: boolean): void {
+  setKind(kind: WakeWavesKind, compute: boolean): boolean {
     const chosen: WakeWavesKind =
       kind.kind === 'fft' && !compute ? { kind: 'cpu', size: 64, span: 28 } : kind;
-    const k = this.kind;
-    if (k !== null && k.kind === chosen.kind && k.size === chosen.size && k.span === chosen.span) {
-      return;
+    if (sameKind((this.#next ?? this.#active)?.kind ?? null, chosen)) {
+      return false;
     }
-    this.#transformed?.dispose();
-    this.#stepped?.dispose();
-    this.#transformed = null;
-    this.#stepped = null;
-    this.kind = chosen;
+    // A way asked for and overtaken before it was used is let go at once.
+    if (this.#next !== null && this.#next !== this.#active) {
+      this.#disposeWay(this.#next);
+    }
+    if (sameKind(this.#active?.kind ?? null, chosen)) {
+      this.#next = null;
+      return true;
+    }
     if (chosen.kind === 'fft') {
-      this.#transformed = new Transformed(chosen.size, chosen.span, this.#damping);
+      const t = new Transformed(chosen.size, chosen.span, this.#damping);
+      this.#next = this.#way(chosen, t, null, t.out);
     } else {
-      this.#stepped = new Stepped(chosen.size, chosen.span, this.#damping);
+      const st = new Stepped(chosen.size, chosen.span, this.#damping);
+      this.#next = this.#way(chosen, null, st, st.out);
     }
-    this.#perSpan.value = 1 / chosen.span;
-    this.#texelSize.value = chosen.span / chosen.size;
-    this.#level.value = Math.max(
-      0,
-      Math.round(Math.log2(WAKE_WAVES.tileTexel / (chosen.span / chosen.size))),
-    );
+    return true;
+  }
+
+  /** Puts the way asked for in use. Returns what lets go of the old one, once nothing draws with it. */
+  commit(): () => void {
+    const old = this.#active;
+    const next = this.#next;
+    if (next === null || next === old) {
+      this.#next = null;
+      return () => undefined;
+    }
+    this.#active = next;
+    this.#next = null;
     this.#placed = false;
-    this.version++;
-    const t = this.texture;
-    for (const s of this.#samplers) {
-      s.value = t;
-    }
+    this.#stampPerSpan.value = 1 / next.kind.span;
+    this.#texelSize.value = next.kind.span / next.kind.size;
+    return () => {
+      if (old !== null && old !== this.#active && old !== this.#next) {
+        this.#disposeWay(old);
+      }
+    };
+  }
+
+  #disposeWay(w: Way): void {
+    w.transformed?.dispose();
+    w.stepped?.dispose();
   }
 
   /** The waves at the scene point p, from the texels or from the mipmap whose texels are some 2.5 m: the slope along x and z, the convergence and the height, drawn. */
   #read(p: Node<'vec2'>, coarse: boolean): Node<'vec4'> {
-    const uv = this.#origin.add(vec2(p.x, p.y.negate()).mul(this.#perSpan));
-    const t = texture(this.texture, uv);
-    const node = coarse ? t.level(this.#level) : t;
-    this.#samplers.push(node as unknown as { value: Texture });
-    const v = node as unknown as Node<'vec4'>;
+    // What materials built now read: the way asked for.
+    const w = this.#next ?? this.#active ?? this.#noneWay;
+    const uv = w.origin.add(vec2(p.x, p.y.negate()).mul(w.perSpan));
+    const t = texture(w.out, uv);
+    const v = (coarse ? t.level(w.level) : t) as unknown as Node<'vec4'>;
     // Nothing beyond the square.
     const inside = smoothstep(
       0,
@@ -809,16 +873,6 @@ export class WakeWaves {
     ) as unknown as Node<'float'>;
   }
 
-  /** How many nodes read the waves: a mark for forget. */
-  get readers(): number {
-    return this.#samplers.length;
-  }
-
-  /** Lets go of the first n nodes that read the waves: their materials are gone. */
-  forget(n: number): void {
-    this.#samplers.splice(0, n);
-  }
-
   /** Forgets every wave: the next step starts from still water. */
   clear(): void {
     this.#placed = false;
@@ -834,17 +888,16 @@ export class WakeWaves {
     if (this.#count >= WAKE_HULLS) {
       return;
     }
-    const i = this.#count * 4;
-    this.#hulls[i] = east;
-    this.#hulls[i + 1] = north;
-    this.#hulls[i + 2] = heading;
-    this.#hulls[i + 3] = sink;
+    const h = this.#hulls[this.#count] as WakeHull;
+    h.east = east;
+    h.north = north;
+    h.heading = heading;
+    h.sink = sink;
     this.#count++;
   }
 
   /** Where the square's centre is to be: a quarter of its side astern of the boat, on its texels' grid. */
-  #placeFor(f: WakeWavesFrame): { east: number; north: number } {
-    const k = this.kind as WakeWavesKind;
+  #placeFor(f: WakeWavesFrame, k: WakeWavesKind): { east: number; north: number } {
     const texel = k.span / k.size;
     const t = this.#toward;
     const e = Math.sin(f.heading);
@@ -864,25 +917,25 @@ export class WakeWaves {
       }
     }
     const back = WAKE_WAVES.astern * k.span;
-    return {
-      east: Math.round((f.boatEast - t.east * back) / texel) * texel,
-      north: Math.round((f.boatNorth - t.north * back) / texel) * texel,
-    };
+    this.#place.east = Math.round((f.boatEast - t.east * back) / texel) * texel;
+    this.#place.north = Math.round((f.boatNorth - t.north * back) / texel) * texel;
+    return this.#place;
   }
 
   /** Brings the waves to a frame: the hulls' pressure, then a step. */
   update(renderer: WebGPURenderer, f: WakeWavesFrame): void {
-    const k = this.kind;
-    if (k === null) {
+    const w = this.#active;
+    if (w === null) {
       return;
     }
+    const k = w.kind;
     const texel = k.span / k.size;
     if (f.dt > WAKE_WAVES.longest) {
       // A page hidden and shown again: what was there is long gone.
       this.#placed = false;
     }
     const fresh = !this.#placed;
-    const place = this.#placeFor(f);
+    const place = this.#placeFor(f, k);
     let driftEast = 0;
     let driftNorth = 0;
     if (fresh) {
@@ -897,7 +950,7 @@ export class WakeWaves {
       this.#drift.north -= driftNorth * texel;
     }
     const moved =
-      this.#transformed !== null &&
+      w.transformed !== null &&
       (place.east !== this.centre.east || place.north !== this.centre.north);
     const shiftEast = fresh ? 0 : Math.round((place.east - this.centre.east) / texel) - driftEast;
     const shiftNorth = fresh
@@ -905,42 +958,46 @@ export class WakeWaves {
       : Math.round((place.north - this.centre.north) / texel) - driftNorth;
     if (fresh || f.dt > 0 || moved) {
       this.#placed = true;
-      if (this.#transformed !== null) {
+      if (w.transformed !== null) {
         this.centre.east = place.east;
         this.centre.north = place.north;
-        this.#pressGPU(renderer, place);
-        this.#transformed.step(renderer, { dt: Math.max(f.dt, 0), shiftEast, shiftNorth, fresh });
+        this.#pressGPU(renderer, w.transformed, k, place);
+        w.transformed.step(renderer, { dt: Math.max(f.dt, 0), shiftEast, shiftNorth, fresh });
         this.steps++;
-      } else if (this.#stepped !== null) {
-        this.#stepCPU(f, place, fresh, driftEast, driftNorth);
+      } else if (w.stepped !== null) {
+        this.#stepCPU(w.stepped, f, place, fresh, driftEast, driftNorth);
         // What the texture holds is of the last step's square.
-        this.centre.east = this.#stepped.field.centre.east;
-        this.centre.north = this.#stepped.field.centre.north;
+        this.centre.east = w.stepped.field.centre.east;
+        this.centre.north = w.stepped.field.centre.north;
       }
     }
-    this.#origin.value.set(
+    w.origin.value.set(
       (f.originEast - this.centre.east) / k.span + 0.5,
       (f.originNorth - this.centre.north) / k.span + 0.5,
     );
   }
 
-  #pressGPU(renderer: WebGPURenderer, place: { east: number; north: number }): void {
-    const t = this.#transformed as Transformed;
-    const k = this.kind as WakeWavesKind;
+  #pressGPU(
+    renderer: WebGPURenderer,
+    t: Transformed,
+    k: WakeWavesKind,
+    place: { east: number; north: number },
+  ): void {
     const half = k.span / 2;
     const reach = this.#reach.value;
     let n = 0;
     for (let i = 0; i < this.#count; i++) {
-      const x = ((this.#hulls[i * 4] as number) - place.east) / half;
-      const y = ((this.#hulls[i * 4 + 1] as number) - place.north) / half;
+      const h = this.#hulls[i] as WakeHull;
+      const x = (h.east - place.east) / half;
+      const y = (h.north - place.north) / half;
       const r = reach / half;
       if (Math.abs(x) > 1 + r || Math.abs(y) > 1 + r || this.#shape === null) {
         continue;
       }
       this.#stampData[n * 4] = x;
       this.#stampData[n * 4 + 1] = y;
-      this.#stampData[n * 4 + 2] = this.#hulls[i * 4 + 2] as number;
-      this.#stampData[n * 4 + 3] = this.#hulls[i * 4 + 3] as number;
+      this.#stampData[n * 4 + 2] = h.heading;
+      this.#stampData[n * 4 + 3] = h.sink;
       n++;
     }
     (this.#stamps.geometry as InstancedBufferGeometry).instanceCount = n;
@@ -955,16 +1012,14 @@ export class WakeWaves {
     renderer.setClearColor(this.#clear, alpha);
   }
 
-  readonly #clear = new Color();
-
   #stepCPU(
+    s: Stepped,
     f: WakeWavesFrame,
     place: { east: number; north: number },
     fresh: boolean,
     driftEast: number,
     driftNorth: number,
   ): void {
-    const s = this.#stepped as Stepped;
     const field = s.field;
     s.pending += Math.max(f.dt, 0);
     if (fresh) {
@@ -977,18 +1032,8 @@ export class WakeWaves {
       return;
     }
     const start = performance.now();
-    const press = this.#press;
-    press.length = 0;
-    for (let i = 0; i < this.#count; i++) {
-      press.push({
-        east: this.#hulls[i * 4] as number,
-        north: this.#hulls[i * 4 + 1] as number,
-        heading: this.#hulls[i * 4 + 2] as number,
-        sink: this.#hulls[i * 4 + 3] as number,
-      });
-    }
     if (this.#shape !== null) {
-      field.press(this.#shape, press, place.east, place.north);
+      field.press(this.#shape, this.#hulls, place.east, place.north, this.#count);
     } else {
       field.pressure.fill(0);
     }
@@ -1007,24 +1052,25 @@ export class WakeWaves {
     this.cpuMs = performance.now() - start;
   }
 
-  readonly #pendingDrift = { east: 0, north: 0 };
-
   /** The CPU's field, on the low tier: the tests read it. */
   get reference(): WakeWavesReference | null {
-    return this.#stepped?.field ?? null;
+    return this.#active?.stepped?.field ?? null;
   }
 
   /** The compute field's outputs and pressure, for the tests that read them back. */
   get transformed(): { out: StorageTexture; pressure: RenderTarget; size: number } | null {
-    return this.#transformed;
+    return this.#active?.transformed ?? null;
   }
 
+  /** The kernels of the way asked for, to compile ahead of its first frame. */
   get kernels(): ComputeNode[] {
-    return this.#transformed?.kernels ?? [];
+    return (this.#next ?? this.#active)?.transformed?.kernels ?? [];
   }
 
+  /** Every texture the way in use holds, for counting its memory. */
   get textures(): Texture[] {
-    return this.#transformed?.textures ?? (this.#stepped === null ? [] : [this.#stepped.out]);
+    const w = this.#active;
+    return w?.transformed?.textures ?? (w?.stepped === null || w === null ? [] : [w.stepped.out]);
   }
 
   get state(): WakeWavesState {
@@ -1038,8 +1084,12 @@ export class WakeWaves {
   }
 
   dispose(): void {
-    this.#transformed?.dispose();
-    this.#stepped?.dispose();
+    if (this.#active !== null) {
+      this.#disposeWay(this.#active);
+    }
+    if (this.#next !== null) {
+      this.#disposeWay(this.#next);
+    }
     this.#none.dispose();
   }
 }

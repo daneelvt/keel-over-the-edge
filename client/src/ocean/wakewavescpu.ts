@@ -195,7 +195,13 @@ export class WakeWavesReference {
   }
 
   /** The hulls' immersion over the square about the centre (east, north), into pressure. */
-  press(shape: PressureShape, hulls: readonly WakeHull[], east: number, north: number): void {
+  press(
+    shape: PressureShape,
+    hulls: readonly WakeHull[],
+    east: number,
+    north: number,
+    count = hulls.length,
+  ): void {
     const n = this.size;
     const p = this.pressure;
     p.fill(0);
@@ -205,7 +211,8 @@ export class WakeWavesReference {
     }
     const half = n / 2;
     const texel = this.texel;
-    for (const hull of hulls) {
+    for (let h = 0; h < count; h++) {
+      const hull = hulls[h] as WakeHull;
       const s = Math.sin(hull.heading);
       const c = Math.cos(hull.heading);
       const c0 = Math.max(Math.floor((hull.east - reach - east) / texel + half), 0);

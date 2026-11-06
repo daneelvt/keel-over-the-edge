@@ -227,17 +227,13 @@ export class Ocean {
     renderer: WebGPURenderer | null = null,
   ): Promise<void> {
     this.wakes.setSize(q.foamMap);
-    const version = this.wakeWaves.version;
-    this.wakeWaves.setKind(q.wakeWaves, this.compute);
-    const retire =
-      this.detail.set(q.detail, q.anisotropy) ??
-      (version === this.wakeWaves.version ? null : () => undefined);
+    const waves = this.wakeWaves.setKind(q.wakeWaves, this.compute);
+    const retire = this.detail.set(q.detail, q.anisotropy) ?? (waves ? () => undefined : null);
     if (retire === null) {
       return;
     }
     const change = ++this.#pending;
     const before = this.wakes.readers;
-    const waveReaders = this.wakeWaves.readers;
     const made = this.#materials();
     if (compile !== null) {
       // The meshes as they will be, off the scene, for the compiler to see.
@@ -265,6 +261,7 @@ export class Ocean {
       }
     }
     this.detail.commit();
+    const retireWaves = this.wakeWaves.commit();
     const old = [
       this.passTiles.mesh.material,
       this.vertexTiles.mesh.material,
@@ -278,8 +275,7 @@ export class Ocean {
     }
     // What the old materials read is let go only now that nothing draws with them.
     this.wakes.forget(before);
-    this.wakeWaves.forget(waveReaders);
-    this.#retired.push(retire);
+    this.#retired.push(retire, retireWaves);
     for (const r of this.#retired.splice(0)) {
       r();
     }
