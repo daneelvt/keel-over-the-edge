@@ -198,6 +198,8 @@ class Transformed {
   };
   /** The shift east and north in texels, dt, and 1 for a fresh start. */
   readonly #step = uniform(new Vector4());
+  /** The four passes for each of the potential's two textures, as one pass's list. */
+  readonly #lists: [ComputeNode[], ComputeNode[]] = [[], []];
 
   constructor(size: number, span: number, damping: WakeDamping) {
     this.size = size;
@@ -441,10 +443,15 @@ class Transformed {
   step(renderer: WebGPURenderer, inputs: StepInputs): void {
     const n = this.size;
     this.#step.value.set(inputs.shiftEast, inputs.shiftNorth, inputs.dt, inputs.fresh ? 1 : 0);
-    renderer.compute(this.#kernels.rows, [1, n, 1]);
-    renderer.compute(this.#kernels.columns[this.#current] as ComputeNode, [1, n, 1]);
-    renderer.compute(this.#kernels.back, [1, n, 1]);
-    renderer.compute(this.#kernels.out, [1, n, 1]);
+    // One compute pass: its dispatches run in order, each seeing what the
+    // one before wrote.
+    const k = this.#kernels;
+    const list = this.#lists[this.#current] as ComputeNode[];
+    list[0] = k.rows;
+    list[1] = k.columns[this.#current] as ComputeNode;
+    list[2] = k.back;
+    list[3] = k.out;
+    renderer.compute(list, [1, n, 1]);
     this.#current = 1 - this.#current;
   }
 

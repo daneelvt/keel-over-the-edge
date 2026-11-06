@@ -382,18 +382,6 @@ export function tileLook(v: TileVaryings, parts: SeaParts, probe?: Probe): Node<
     const map = (parts.wakes === null ? vec2(0) : parts.wakes(positionWorld.xz)).toVar();
     const white = map.x;
     const churn = map.y;
-    // The wake's waves: at the tile's centre, the same for all of it, and here.
-    const ww = parts.wakeWaves;
-    const wakeTile = vec4(0).toVar();
-    const wakeHere = vec4(0).toVar();
-    if (ww !== null) {
-      // Read only on the tiles of the waves' square: the same for all of a tile.
-      const centre = positionWorld.xz.sub(e);
-      If(ww.covers(centre, TILE_APOTHEM * 1.2), () => {
-        wakeTile.assign(ww.coarse(centre));
-        wakeHere.assign(ww.fine(positionWorld.xz, dist));
-      });
-    }
 
     // The short sea heaps up with the wind's force.
     tilt.mulAssign(detailSteep);
@@ -425,16 +413,32 @@ export function tileLook(v: TileVaryings, parts: SeaParts, probe?: Probe): Node<
     const lee = clamp(v.lee, 0, 1.3);
     ripple.mulAssign(lee);
     // The wake's waves, as they are: the tile's tilt, its own ripples
-    // faded to its rim, and the light of their crests.
-    tilt.addAssign(wakeTile.xy);
-    ripple.addAssign(wakeHere.xy.mul(inner));
-    const [tileLift, fragmentLift] = SEA_LOOK.lift as [number, number];
-    lift.addAssign(
-      wakeTile.w
-        .mul(tileLift)
-        .add(wakeHere.w.mul(fragmentLift).mul(inner))
-        .mul(1 / DETAIL.height),
-    );
+    // faded to its rim, and the light of their crests. Read only on the
+    // tiles of the waves' square (the same for all of a tile), and added at
+    // once, so that little of them is held through the rest.
+    const ww = parts.wakeWaves;
+    const wakeHeight = float(0).toVar();
+    const wakeSlope = float(0).toVar();
+    if (ww !== null) {
+      const centre = positionWorld.xz.sub(e);
+      If(ww.covers(centre, TILE_APOTHEM * 1.2), () => {
+        const whole = ww.coarse(centre);
+        const here = ww.fine(positionWorld.xz, dist);
+        tilt.addAssign(whole.xy);
+        ripple.addAssign(here.xy.mul(inner));
+        const [tileLift, fragmentLift] = SEA_LOOK.lift as [number, number];
+        lift.addAssign(
+          whole.w
+            .mul(tileLift)
+            .add(here.w.mul(fragmentLift).mul(inner))
+            .mul(1 / DETAIL.height),
+        );
+        wakeHeight.assign(here.w);
+        if (probe === 'wake') {
+          wakeSlope.assign(length(here.xy));
+        }
+      });
+    }
     const ground = v.ground;
     const breaking = surf(ground.x, ground.y, ground.w, v.area.w, v.period, lee).toVar();
     const slope = v.plane.yz.add(tilt).add(ripple);
@@ -469,7 +473,7 @@ export function tileLook(v: TileVaryings, parts: SeaParts, probe?: Probe): Node<
       return vec4(crest, lift, rim, whiteCover);
     }
     if (probe === 'wake') {
-      return vec4(white, churn, wakeHere.w, length(wakeHere.xy));
+      return vec4(white, churn, wakeHeight, wakeSlope);
     }
     if (probe === 'gust') {
       return vec4(gust, gusty, lull, 1);
@@ -495,7 +499,7 @@ export function tileLook(v: TileVaryings, parts: SeaParts, probe?: Probe): Node<
       col.assign(mix(col, foamColour(N), cover.mul(FOAM.cover)));
       col.assign(mix(col, wakeColour(N, white), whiteCover.mul(FOAM.cover)));
       // The panel's overlay, where asked for.
-      const up = clamp(wakeHere.w.mul(20), -1, 1);
+      const up = clamp(wakeHeight.mul(20), -1, 1);
       const shown = select(
         wakeOverlay.lessThan(1.5),
         vec3(max(up, 0), 0, max(up.negate(), 0)),
