@@ -205,8 +205,19 @@ export function pickOne(rows: readonly WatchRow[], random = Math.random): string
   return top[Math.min(top.length - 1, Math.floor(random() * top.length))]?.name ?? null;
 }
 
-/** The question before the own boat leaves the water to watch. */
+/** The question before the own boat leaves the water to watch; Escape is Stay. */
 export function LeaveQuestion({ leave, stay }: { leave: () => void; stay: () => void }) {
+  // Heard as soon as it is drawn.
+  useLayoutEffect(() => {
+    const key = (e: KeyboardEvent) => {
+      if (e.code === 'Escape') {
+        e.preventDefault();
+        stay();
+      }
+    };
+    document.addEventListener('keydown', key);
+    return () => document.removeEventListener('keydown', key);
+  }, [stay]);
   return (
     <section class="watch-question" role="alertdialog" aria-labelledby="watch-leave-title">
       <h2 id="watch-leave-title">{LEAVE_QUESTION}</h2>
@@ -220,6 +231,26 @@ export function LeaveQuestion({ leave, stay }: { leave: () => void; stay: () => 
         </button>
       </div>
     </section>
+  );
+}
+
+/**
+ * The question as a window of its own, in the list's place: narrower than
+ * the list, its words and its two keys centred.
+ */
+export function LeaveWindow({
+  className,
+  leave,
+  stay,
+}: {
+  className: string;
+  leave: () => void;
+  stay: () => void;
+}) {
+  return (
+    <div class={`${className} watch-panel watch-asking`}>
+      <LeaveQuestion leave={leave} stay={stay} />
+    </div>
   );
 }
 
@@ -564,9 +595,7 @@ export function WatchList({
 
   if (asking !== null) {
     return (
-      <div class={`${className} watch-panel`}>
-        <LeaveQuestion leave={() => go(asking)} stay={() => setAsking(null)} />
-      </div>
+      <LeaveWindow className={className} leave={() => go(asking)} stay={() => setAsking(null)} />
     );
   }
 

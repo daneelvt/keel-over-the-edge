@@ -1584,9 +1584,10 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
     /**
      * The sandbox's screen as it is while a boat is watched (the plate at
      * its foot, nothing that steers), that sailor's, a machine sailor's
-     * with the cog; null as it is while sailing.
+     * with the cog, the list of sailors to watch open over it if asked;
+     * null as it is while sailing.
      */
-    watchPlate(sailor: string | null, machine = true): void {
+    watchPlate(sailor: string | null, machine = true, list = false): void {
       sailing.remount?.(
         sailor === null
           ? null
@@ -1598,12 +1599,32 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
               place: signal(null),
               boatPlace: signal(null),
               watchers: signal(0),
-              list: signal(false),
+              list: signal(list),
               watch: () => {},
               sail: () => {},
               unwatch: () => {},
             },
       );
+    },
+    /**
+     * The question asked before the own boat leaves the water to watch, in
+     * its window over the screen at sea, as the list shows it; false takes
+     * it away. Resolves once it is drawn.
+     */
+    async leaveQuestion(on: boolean): Promise<void> {
+      document.querySelector('.hud.leave-test')?.remove();
+      if (!on) {
+        return;
+      }
+      const [{ h, render }, { LeaveWindow }] = await Promise.all([
+        import('preact'),
+        import('../ui/watch'),
+      ]);
+      const host = document.createElement('div');
+      host.className = 'hud leave-test';
+      document.body.append(host);
+      const gone = () => host.remove();
+      render(h(LeaveWindow, { className: 'panel watch-list', leave: gone, stay: gone }), host);
     },
     /** What the page did from the tap to the world's reveal; null before it, or in the sandbox. */
     revealed(): Revealed | null {
