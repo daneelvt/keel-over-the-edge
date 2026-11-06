@@ -204,9 +204,18 @@ export class ChaseCamera {
     this.tilt = 0;
     this.lift = heave;
     this.sea = sea;
+    this.#level();
     this.#touched = Number.NEGATIVE_INFINITY;
     this.#opening = null;
     this.#descent = null;
+  }
+
+  /** Takes none of the boat's pitch and roll: a boat set down anew starts level. */
+  #level(): void {
+    this.pitch = 0;
+    this.roll = 0;
+    this.#meanPitch = 0;
+    this.#meanHeel = 0;
   }
 
   /**
@@ -219,6 +228,7 @@ export class ChaseCamera {
     this.yawRate = 0;
     this.lift = heave;
     this.sea = sea;
+    this.#level();
   }
 
   /**

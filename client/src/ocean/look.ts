@@ -256,7 +256,7 @@ export const FOAM = {
   /** Streaks are this many times longer down the wind than across it. */
   streakStretch: 13,
   /** Foam covers a tile's middle and fades by this share over this span of the rim's fade. */
-  margin: [0.55, 0.85, 0.8],
+  margin: [0.55, 0.85, 0.85],
   /** The foam's colour, display values, and how much of the water it hides at most. */
   colour: [0.94, 0.96, 0.95],
   cover: 0.92,

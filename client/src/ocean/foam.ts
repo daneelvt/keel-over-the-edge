@@ -6,7 +6,7 @@
 // foam map. Their sum is an amount, 0 to 1. The amount is not drawn as a
 // grey: it sets how much of a pattern of lace shows, so a little foam is a
 // few threads and a lot is a sheet. And it is held within its tile: over
-// the tile's rim it fades to a fifth, so a patch of foam reads as a cluster
+// the tile's rim it fades to a seventh, so a patch of foam reads as a cluster
 // of white tiles.
 
 import { Vector2 } from 'three';
