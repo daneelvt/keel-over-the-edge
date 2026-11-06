@@ -29,10 +29,10 @@ built files are committed; the catalog's `art.model` names them, and
 - `boats/jolly-boat/build.ts`: the Jolly boat.
 - `town/lib/kit.ts` and `town/<biome>/build.ts`: each biome's kit of town
   buildings and props, `town/<biome>.glb`.
-- `icon/icon.ts` and `icon/build.ts`: the game's icon, drawn as shapes (the
-  emblem in its brass ring; the tile, edge to edge, for home screens) and
-  rasterised to the PNGs a phone asks for, written to `client/public/`
-  beside the web app manifest. `client/build/icons.test.ts` fails if a PNG
+- `icon/icon.ts` and `icon/build.ts`: the game's icon, the boat on sky and
+  sea, one drawing for the favicon, the cover and home screens, drawn as
+  shapes and rasterised to the PNGs a phone asks for, written to
+  `client/public/` beside the web app manifest. `client/build/icons.test.ts` fails if a PNG
   is not the drawing.
 
 A model's nodes are named, and the client finds its parts by those names:

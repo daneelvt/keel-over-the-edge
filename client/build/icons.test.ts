@@ -80,6 +80,13 @@ describe('the icons', () => {
     expect(worst, 'rebuild the icons: node art/icon/build.ts').toBeLessThanOrEqual(1);
   });
 
+  test('every icon is the one drawing, the tile, the favicon and the cover too', () => {
+    for (const frame of FRAMES) {
+      expect(frame.drawing, frame.file).toBe(TILE);
+      expect(frame.unit, frame.file).toBe(0.5);
+    }
+  });
+
   test('the home screen icons keep the boat within the middle 80%, sky and sea to the edges', () => {
     // The circle of radius 0.8 about the middle every launcher's mask keeps.
     for (const s of TILE_BOAT) {
@@ -91,8 +98,7 @@ describe('the icons', () => {
     }
     for (const file of ['icon-maskable-512.png', 'apple-touch-icon.png']) {
       const frame = FRAMES.find((f) => f.file === file) as (typeof FRAMES)[number];
-      expect(frame.drawing, file).toBe(TILE);
-      expect(frame.unit, file).toBe(0.5);
+      expect(frame.corner, file).toBe(0);
       const rgba = rasterise(frame);
       const n = frame.size;
       // Every edge pixel opaque, and none of it the slate beneath.
