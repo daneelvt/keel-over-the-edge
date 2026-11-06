@@ -30,9 +30,9 @@ type levelRecipe struct{ from, full, most float64 }
 // m/s, heights m, rain mm an hour.
 var (
 	windRecipe = struct {
-		level             levelRecipe
-		breathRate, depth float64
-	}{level: levelRecipe{from: 0.3, full: 15, most: 0.32}, breathRate: 0.11, depth: 0}
+		level                       levelRecipe
+		breathRate, perGust, deepest float64
+	}{level: levelRecipe{from: 0.3, full: 17.5, most: 0.4}, breathRate: 0.11, perGust: 0.6, deepest: 0.3}
 	riggingRecipe  = levelRecipe{from: 3, full: 14, most: 0.05}
 	floggingRecipe = levelRecipe{from: 0.5, full: 9, most: 0.3}
 	waterRecipe    = levelRecipe{from: 0.05, full: 4, most: 0.3}
@@ -51,7 +51,8 @@ var (
 // masthead, m/s; its speed over the ground and through the water, m/s; the
 // significant height of the waves under it, m, and their whitecaps, 0 to
 // 1; how many of the sail's two strips are luffing, 0 to 2; world time, s;
-// and the rain at it, mm an hour.
+// the rain at it, mm an hour; and the wind's gust factor, 0 or 1 for a
+// steady wind.
 type BoatHeard struct {
 	ApparentWind float64 `json:"apparentWind"`
 	Speed        float64 `json:"speed"`
@@ -61,6 +62,7 @@ type BoatHeard struct {
 	Luffing      int     `json:"luffing"`
 	Seconds      float64 `json:"time"`
 	Rain         float64 `json:"rain"`
+	GustFactor   float64 `json:"gustFactor,omitempty"`
 }
 
 // BoatLevels are the boat's voices' levels, gains, as the phone sets them.
@@ -80,8 +82,10 @@ func BoatSounds(in *BoatHeard) BoatLevels {
 	var l BoatLevels
 	v := math.Max(0, in.ApparentWind)
 	w := &windRecipe
+	// The wind breathes as deep as it gusts: not at all in a steady wind.
+	depth := math.Min(w.deepest, float64(w.perGust*math.Max(in.GustFactor-1, 0)))
 	rate := float64(2 * math.Pi * w.breathRate)
-	breath := 1 + float64(float64(w.depth*physics.Sin(float64(rate*in.Seconds)))*
+	breath := 1 + float64(float64(depth*physics.Sin(float64(rate*in.Seconds)))*
 		physics.Sin(float64(float64(rate*0.37)*in.Seconds)+1))
 	l.Wind = float64(level(&w.level, v) * breath)
 	l.Rigging = level(&riggingRecipe, v)

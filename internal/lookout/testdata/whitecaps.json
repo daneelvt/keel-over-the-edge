@@ -157,210 +157,330 @@
  },
  {
   "knots": 19.5,
-  "whitecaps": 0.7136363636363636
- },
- {
-  "knots": 20,
   "whitecaps": 0.7272727272727272
  },
  {
-  "knots": 20.5,
-  "whitecaps": 0.7409090909090909
- },
- {
-  "knots": 21,
+  "knots": 20,
   "whitecaps": 0.7545454545454545
  },
  {
-  "knots": 21.5,
-  "whitecaps": 0.7681818181818182
- },
- {
-  "knots": 22,
+  "knots": 20.5,
   "whitecaps": 0.7818181818181817
  },
  {
-  "knots": 22.5,
-  "whitecaps": 0.7954545454545454
- },
- {
-  "knots": 23,
+  "knots": 21,
   "whitecaps": 0.8090909090909091
  },
  {
-  "knots": 23.5,
-  "whitecaps": 0.8227272727272728
- },
- {
-  "knots": 24,
+  "knots": 21.5,
   "whitecaps": 0.8363636363636363
  },
  {
+  "knots": 22,
+  "whitecaps": 0.8636363636363635
+ },
+ {
+  "knots": 22.5,
+  "whitecaps": 0.8909090909090909
+ },
+ {
+  "knots": 23,
+  "whitecaps": 0.9181818181818182
+ },
+ {
+  "knots": 23.5,
+  "whitecaps": 0.9454545454545454
+ },
+ {
+  "knots": 24,
+  "whitecaps": 0.9727272727272727
+ },
+ {
   "knots": 24.5,
-  "whitecaps": 0.85
+  "whitecaps": 1
  },
  {
   "knots": 25,
-  "whitecaps": 0.8583333333333333
+  "whitecaps": 1.0333333333333332
  },
  {
   "knots": 25.5,
-  "whitecaps": 0.8666666666666667
+  "whitecaps": 1.0666666666666667
  },
  {
   "knots": 26,
-  "whitecaps": 0.875
+  "whitecaps": 1.1
  },
  {
   "knots": 26.5,
-  "whitecaps": 0.8833333333333333
+  "whitecaps": 1.1333333333333333
  },
  {
   "knots": 27,
-  "whitecaps": 0.8916666666666666
+  "whitecaps": 1.1666666666666665
  },
  {
   "knots": 27.5,
-  "whitecaps": 0.8999999999999999
+  "whitecaps": 1.2
  },
  {
   "knots": 28,
-  "whitecaps": 0.9083333333333333
+  "whitecaps": 1.2333333333333334
  },
  {
   "knots": 28.5,
-  "whitecaps": 0.9166666666666666
+  "whitecaps": 1.2666666666666666
  },
  {
   "knots": 29,
-  "whitecaps": 0.9249999999999999
+  "whitecaps": 1.2999999999999998
  },
  {
   "knots": 29.5,
-  "whitecaps": 0.9333333333333333
+  "whitecaps": 1.3333333333333333
  },
  {
   "knots": 30,
-  "whitecaps": 0.9416666666666667
+  "whitecaps": 1.3666666666666667
  },
  {
   "knots": 30.5,
-  "whitecaps": 0.95
+  "whitecaps": 1.4
  },
  {
   "knots": 31,
-  "whitecaps": 0.9571428571428571
+  "whitecaps": 1.4461538461538461
  },
  {
   "knots": 31.5,
-  "whitecaps": 0.9642857142857143
+  "whitecaps": 1.4923076923076923
  },
  {
   "knots": 32,
-  "whitecaps": 0.9714285714285714
+  "whitecaps": 1.5384615384615383
  },
  {
   "knots": 32.5,
-  "whitecaps": 0.9785714285714285
+  "whitecaps": 1.5846153846153845
  },
  {
   "knots": 33,
-  "whitecaps": 0.9857142857142857
+  "whitecaps": 1.6307692307692307
  },
  {
   "knots": 33.5,
-  "whitecaps": 0.9928571428571429
+  "whitecaps": 1.676923076923077
  },
  {
   "knots": 34,
-  "whitecaps": 1
+  "whitecaps": 1.723076923076923
  },
  {
   "knots": 34.5,
-  "whitecaps": 1
+  "whitecaps": 1.7692307692307692
  },
  {
   "knots": 35,
-  "whitecaps": 1
+  "whitecaps": 1.8153846153846154
  },
  {
   "knots": 35.5,
-  "whitecaps": 1
+  "whitecaps": 1.8615384615384616
  },
  {
   "knots": 36,
-  "whitecaps": 1
+  "whitecaps": 1.9076923076923076
  },
  {
   "knots": 36.5,
-  "whitecaps": 1
+  "whitecaps": 1.953846153846154
  },
  {
   "knots": 37,
-  "whitecaps": 1
+  "whitecaps": 2
  },
  {
   "knots": 37.5,
-  "whitecaps": 1
+  "whitecaps": 2.057142857142857
  },
  {
   "knots": 38,
-  "whitecaps": 1
+  "whitecaps": 2.1142857142857143
  },
  {
   "knots": 38.5,
-  "whitecaps": 1
+  "whitecaps": 2.1714285714285713
  },
  {
   "knots": 39,
-  "whitecaps": 1
+  "whitecaps": 2.2285714285714286
  },
  {
   "knots": 39.5,
-  "whitecaps": 1
+  "whitecaps": 2.2857142857142856
  },
  {
   "knots": 40,
-  "whitecaps": 1
+  "whitecaps": 2.3428571428571425
  },
  {
   "knots": 40.5,
-  "whitecaps": 1
+  "whitecaps": 2.4
  },
  {
   "knots": 41,
-  "whitecaps": 1
+  "whitecaps": 2.457142857142857
  },
  {
   "knots": 41.5,
-  "whitecaps": 1
+  "whitecaps": 2.5142857142857142
  },
  {
   "knots": 42,
-  "whitecaps": 1
+  "whitecaps": 2.571428571428571
  },
  {
   "knots": 42.5,
-  "whitecaps": 1
+  "whitecaps": 2.6285714285714286
  },
  {
   "knots": 43,
-  "whitecaps": 1
+  "whitecaps": 2.6857142857142855
  },
  {
   "knots": 43.5,
-  "whitecaps": 1
+  "whitecaps": 2.742857142857143
  },
  {
   "knots": 44,
-  "whitecaps": 1
+  "whitecaps": 2.8
  },
  {
   "knots": 44.5,
-  "whitecaps": 1
+  "whitecaps": 2.836363636363636
  },
  {
   "knots": 45,
-  "whitecaps": 1
+  "whitecaps": 2.8727272727272726
+ },
+ {
+  "knots": 45.5,
+  "whitecaps": 2.9090909090909087
+ },
+ {
+  "knots": 46,
+  "whitecaps": 2.9454545454545453
+ },
+ {
+  "knots": 46.5,
+  "whitecaps": 2.9818181818181815
+ },
+ {
+  "knots": 47,
+  "whitecaps": 3.018181818181818
+ },
+ {
+  "knots": 47.5,
+  "whitecaps": 3.0545454545454547
+ },
+ {
+  "knots": 48,
+  "whitecaps": 3.090909090909091
+ },
+ {
+  "knots": 48.5,
+  "whitecaps": 3.127272727272727
+ },
+ {
+  "knots": 49,
+  "whitecaps": 3.1636363636363636
+ },
+ {
+  "knots": 49.5,
+  "whitecaps": 3.2
+ },
+ {
+  "knots": 50,
+  "whitecaps": 3.2363636363636363
+ },
+ {
+  "knots": 50.5,
+  "whitecaps": 3.2727272727272725
+ },
+ {
+  "knots": 51,
+  "whitecaps": 3.309090909090909
+ },
+ {
+  "knots": 51.5,
+  "whitecaps": 3.3454545454545457
+ },
+ {
+  "knots": 52,
+  "whitecaps": 3.381818181818182
+ },
+ {
+  "knots": 52.5,
+  "whitecaps": 3.418181818181818
+ },
+ {
+  "knots": 53,
+  "whitecaps": 3.4545454545454546
+ },
+ {
+  "knots": 53.5,
+  "whitecaps": 3.490909090909091
+ },
+ {
+  "knots": 54,
+  "whitecaps": 3.5272727272727273
+ },
+ {
+  "knots": 54.5,
+  "whitecaps": 3.5636363636363635
+ },
+ {
+  "knots": 55,
+  "whitecaps": 3.6
+ },
+ {
+  "knots": 55.5,
+  "whitecaps": 3.6
+ },
+ {
+  "knots": 56,
+  "whitecaps": 3.6
+ },
+ {
+  "knots": 56.5,
+  "whitecaps": 3.6
+ },
+ {
+  "knots": 57,
+  "whitecaps": 3.6
+ },
+ {
+  "knots": 57.5,
+  "whitecaps": 3.6
+ },
+ {
+  "knots": 58,
+  "whitecaps": 3.6
+ },
+ {
+  "knots": 58.5,
+  "whitecaps": 3.6
+ },
+ {
+  "knots": 59,
+  "whitecaps": 3.6
+ },
+ {
+  "knots": 59.5,
+  "whitecaps": 3.6
+ },
+ {
+  "knots": 60,
+  "whitecaps": 3.6
  }
 ]

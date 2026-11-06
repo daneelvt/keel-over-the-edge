@@ -106,9 +106,10 @@ describe('the sandbox', () => {
     const slot = s.seas.slotAt(s.tick + 1);
     expect(slot).toBeGreaterThanOrEqual(0);
     const hs = s.physics.seaHs(slot);
-    // A gale over six miles of open water: about a metre.
-    expect(hs[0]).toBeGreaterThan(0.8);
-    expect(hs[0]).toBeLessThan(1.2);
+    // A gale over six miles of open water, its fetch stretched as an open
+    // sea's: about two metres.
+    expect(hs[0]).toBeGreaterThan(1.8);
+    expect(hs[0]).toBeLessThan(2.2);
     expect(Array.from(hs).every((h) => h === hs[0])).toBe(true);
     expect(s.physics.seaActive(slot).length).toBeGreaterThan(80);
     for (let i = 0; i < 300; i++) {

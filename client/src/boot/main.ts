@@ -238,6 +238,11 @@ async function start(): Promise<void> {
   effect(() => {
     world.camera.easesBack = settings.value.value.cameraBack;
   });
+  // A big sea moves the view, unless the player chooses not, or the device
+  // asks for reduced motion (the camera's own check).
+  effect(() => {
+    world.camera.seaMoves = settings.value.value.seaMotion;
+  });
   const camera = { resting: world.resting, behind: () => world.camera.behind() };
   const clear = clearView(world);
 

@@ -143,6 +143,44 @@ describe('the chase camera', () => {
     expect(t.y - rest.target).toBeCloseTo(-0.4, 12);
   });
 
+  test('in a big sea takes a share of the boat’s pitch and roll, and none in a small one', () => {
+    /** Rocks the boat at 2 s a swing for seconds in a sea of hs metres, and returns the most the view's up leaned and its height swung. */
+    const rock = (hs: number, set: (cam: ChaseCamera) => void = () => {}) => {
+      const cam = new ChaseCamera();
+      set(cam);
+      cam.place(CHASE, 0);
+      const p = new Vector3();
+      const t = new Vector3();
+      const up = new Vector3();
+      let lean = 0;
+      let low = Number.POSITIVE_INFINITY;
+      let high = Number.NEGATIVE_INFINITY;
+      for (let i = 0; i < 600; i++) {
+        const s = Math.sin((2 * Math.PI * i) / 120);
+        // A steady heel of 20° and a swing of 10° about it; pitch 6° each way.
+        cam.update(1 / 60, 0, (i * 1000) / 60, 0, 0, 6 * DEG * s, 20 * DEG + 10 * DEG * s, hs);
+        cam.place3(0, 0, 0, p, t, up);
+        if (i > 300) {
+          lean = Math.max(lean, Math.abs(Math.atan2(up.x, up.y)));
+          low = Math.min(low, p.y);
+          high = Math.max(high, p.y);
+        }
+      }
+      return { lean: lean / DEG, swing: high - low };
+    };
+    const small = rock(0.3);
+    expect(small.lean).toBe(0);
+    expect(small.swing).toBeLessThan(1e-9);
+    const big = rock(2);
+    // About an eighth of the 10° swing, not of the steady 20°.
+    expect(big.lean).toBeGreaterThan(0.6);
+    expect(big.lean).toBeLessThan(1.4);
+    expect(big.swing).toBeGreaterThan(0.25);
+    // Off by the player's choice, and under reduced motion.
+    expect(rock(2, (c) => (c.seaMoves = false)).lean).toBe(0);
+    expect(rock(2, (c) => (c.reducedMotion = true)).lean).toBe(0);
+  });
+
   test('stays 1.6 m above the sea under the boat, on a crest too', () => {
     const cam = new ChaseCamera();
     cam.place({ azimuth: 0, elevation: 0.03, distance: 6 }, 0);

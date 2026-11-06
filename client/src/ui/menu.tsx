@@ -326,6 +326,12 @@ export function Menu({
             on={s.cameraBack}
             set={(cameraBack) => settings.set({ cameraBack })}
           />
+          <Toggle
+            name="sea-motion"
+            label="The sea moves the view"
+            on={s.seaMotion}
+            set={(seaMotion) => settings.set({ seaMotion })}
+          />
           {notices !== null ? <NoticeSwitches notices={notices} /> : null}
           {watch !== null ? <LazySpectators /> : null}
           {fly !== null ? (

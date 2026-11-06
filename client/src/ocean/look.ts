@@ -10,7 +10,7 @@
 export const KNOT = 1852 / 3600;
 
 /** Changed by hand whenever the tiers' values change: what a phone remembered of an older build's is let go. */
-export const QUALITY_VERSION = 1;
+export const QUALITY_VERSION = 2;
 
 /** The detail band: the waves shorter than the boat band's shortest, drawn and never felt. */
 export const DETAIL = {
@@ -33,6 +33,13 @@ export const DETAIL = {
   ease: 2,
   /** How fast foam spreads as it disperses, m²/s. */
   spread: 0.15,
+  /**
+   * The band's height is drawn over this many metres, not over its own
+   * spread: a calm's ripples barely lighten the water, a gale's heaped
+   * short sea does. About three standard deviations of its height in a
+   * near gale.
+   */
+  height: 0.25,
 } as const;
 
 /** The low tier's detail: a short loop of the same band, made once on the device. */
@@ -52,11 +59,15 @@ export const BAKED = {
   fetch: 6,
 } as const;
 
-/** What the foam does at a wind speed. */
+/** What the foam, and the water with it, does at a wind speed. */
 export interface FoamLook {
-  /** Whitecaps on the boat band's crests, 0 to 1. */
+  /**
+   * Whitecaps on the boat band's crests, from 0. Up to 1 they come on the
+   * highest crests; above 1 they reach down the crests too, so that more of
+   * the sea breaks.
+   */
   whitecaps: number;
-  /** Streaks of foam down the wind, 0 to 1. */
+  /** Streaks of foam down the wind, from 0: above 1 dense, and in patches. */
   streaks: number;
   /** Foam where the detail band folds, 0 to 1. */
   folding: number;
@@ -66,49 +77,191 @@ export interface FoamLook {
   chop: number;
   /** How long folded foam lasts, in seconds. */
   decay: number;
+  /** How much steeper the detail band is drawn than its spectrum: the short sea heaped up. */
+  steep: number;
+  /** Spray torn off the breaking crests: drops a crest a second, 0 for none. */
+  spray: number;
+  /** Spindrift: low streaks of spray blown along the water, 0 for none. */
+  spindrift: number;
 }
 
 /** A Beaufort force: the wind it begins at, in knots (Met Office, Beaufort wind force scale). */
-export const BEAUFORT_FROM = [0, 1, 4, 7, 11, 17, 22, 28, 34, 41] as const;
+export const BEAUFORT_FROM = [0, 1, 4, 7, 11, 17, 22, 28, 34, 41, 48] as const;
+
+/** The top force's row is read at this wind, in knots, where force 10 ends, and holds above it. */
+export const FOAM_TOP_KNOTS = 55;
 
 /**
- * The foam by Beaufort force, 0 to 9. A sailor reads the force from the
- * water (NOAA, Beaufort scale with sea criteria): scattered whitecaps from
- * force 3, frequent at 4, many at 5, everywhere at 6, foam blown in streaks
- * from 7, in long streaks at 8.
+ * The foam by Beaufort force, 0 to 10. A sailor reads the force from the
+ * water whatever its fetch (Met Office, Beaufort wind force scale):
+ * scattered white horses from force 3, frequent at 4, many at 5,
+ * everywhere at 6; at 7 the sea heaps up and foam is blown in streaks; at 8
+ * spindrift begins to be seen and the streaks are well marked; at 9 dense
+ * streaks and spray that may affect visibility; at 10 the sea takes on a
+ * white appearance. The drawn cover is about a sixth of Monahan and
+ * O'Muircheartaigh's (1980) up to force 5, as a look, and rises toward it
+ * from force 6: about half of it at 8, all of it at 10. The detail band is
+ * drawn steeper by force, its rms slope 2.5 times force 2's at force 8.
  */
 export const FOAM_BY_FORCE: readonly FoamLook[] = [
-  { whitecaps: 0, streaks: 0, folding: 0, threshold: 0.4, chop: 0.6, decay: 1.5 },
-  { whitecaps: 0, streaks: 0, folding: 0, threshold: 0.4, chop: 0.6, decay: 1.5 },
-  { whitecaps: 0, streaks: 0, folding: 0, threshold: 0.4, chop: 0.6, decay: 1.5 },
-  { whitecaps: 0.08, streaks: 0, folding: 0.5, threshold: 0.4, chop: 0.7, decay: 1.8 },
-  { whitecaps: 0.25, streaks: 0, folding: 0.8, threshold: 0.48, chop: 0.8, decay: 2.0 },
-  { whitecaps: 0.7, streaks: 0, folding: 1.0, threshold: 0.66, chop: 0.95, decay: 2.8 },
-  { whitecaps: 0.85, streaks: 0, folding: 1.0, threshold: 0.69, chop: 1.0, decay: 3.3 },
-  { whitecaps: 0.95, streaks: 0.4, folding: 1.0, threshold: 0.71, chop: 1.05, decay: 3.8 },
-  { whitecaps: 1.0, streaks: 0.75, folding: 1.0, threshold: 0.72, chop: 1.1, decay: 4.0 },
-  { whitecaps: 1.0, streaks: 0.75, folding: 1.0, threshold: 0.72, chop: 1.1, decay: 4.0 },
+  {
+    whitecaps: 0,
+    streaks: 0,
+    folding: 0,
+    threshold: 0.4,
+    chop: 0.6,
+    decay: 1.5,
+    steep: 1,
+    spray: 0,
+    spindrift: 0,
+  },
+  {
+    whitecaps: 0,
+    streaks: 0,
+    folding: 0,
+    threshold: 0.4,
+    chop: 0.6,
+    decay: 1.5,
+    steep: 1,
+    spray: 0,
+    spindrift: 0,
+  },
+  {
+    whitecaps: 0,
+    streaks: 0,
+    folding: 0,
+    threshold: 0.4,
+    chop: 0.6,
+    decay: 1.5,
+    steep: 1,
+    spray: 0,
+    spindrift: 0,
+  },
+  {
+    whitecaps: 0.08,
+    streaks: 0,
+    folding: 0.5,
+    threshold: 0.4,
+    chop: 0.7,
+    decay: 1.8,
+    steep: 1,
+    spray: 0,
+    spindrift: 0,
+  },
+  {
+    whitecaps: 0.25,
+    streaks: 0,
+    folding: 0.8,
+    threshold: 0.48,
+    chop: 0.8,
+    decay: 2.0,
+    steep: 1.06,
+    spray: 0,
+    spindrift: 0,
+  },
+  {
+    whitecaps: 0.7,
+    streaks: 0,
+    folding: 1.0,
+    threshold: 0.66,
+    chop: 0.95,
+    decay: 2.8,
+    steep: 1.15,
+    spray: 0,
+    spindrift: 0,
+  },
+  {
+    whitecaps: 1.0,
+    streaks: 0,
+    folding: 1.0,
+    threshold: 0.69,
+    chop: 1.05,
+    decay: 3.3,
+    steep: 1.33,
+    spray: 0,
+    spindrift: 0,
+  },
+  {
+    whitecaps: 1.4,
+    streaks: 0.45,
+    folding: 1.0,
+    threshold: 0.71,
+    chop: 1.15,
+    decay: 3.8,
+    steep: 1.54,
+    spray: 1,
+    spindrift: 0,
+  },
+  {
+    whitecaps: 2.0,
+    streaks: 0.8,
+    folding: 1.0,
+    threshold: 0.72,
+    chop: 1.25,
+    decay: 4.2,
+    steep: 1.74,
+    spray: 3,
+    spindrift: 1,
+  },
+  {
+    whitecaps: 2.8,
+    streaks: 1.2,
+    folding: 1.0,
+    threshold: 0.74,
+    chop: 1.35,
+    decay: 4.6,
+    steep: 1.85,
+    spray: 8,
+    spindrift: 2,
+  },
+  {
+    whitecaps: 3.6,
+    streaks: 1.6,
+    folding: 1.0,
+    threshold: 0.76,
+    chop: 1.5,
+    decay: 5.0,
+    steep: 1.95,
+    spray: 20,
+    spindrift: 4,
+  },
 ];
 
-const FIELDS = ['whitecaps', 'streaks', 'folding', 'threshold', 'chop', 'decay'] as const;
+const FIELDS = [
+  'whitecaps',
+  'streaks',
+  'folding',
+  'threshold',
+  'chop',
+  'decay',
+  'steep',
+  'spray',
+  'spindrift',
+] as const;
 /** The strengths: each is nothing below the force its row first has it at. */
-const ONSET: ReadonlySet<string> = new Set(['whitecaps', 'streaks', 'folding']);
-const TOP = FOAM_BY_FORCE.length - 2;
+const ONSET: ReadonlySet<string> = new Set([
+  'whitecaps',
+  'streaks',
+  'folding',
+  'spray',
+  'spindrift',
+]);
+const TOP = FOAM_BY_FORCE.length - 1;
 
 /**
  * The wind a force's row is read at, in knots: the middle of the force. The
- * top rows hold from where force 8 begins, the gale the look was chosen in.
+ * top row is read where its force ends, and holds above.
  */
 export function forceKnots(force: number): number {
   if (force >= TOP) {
-    return BEAUFORT_FROM[TOP] as number;
+    return FOAM_TOP_KNOTS;
   }
   const from = BEAUFORT_FROM[force] as number;
   // A force ends a knot below the next one's beginning.
   return (from + (BEAUFORT_FROM[force + 1] as number) - 1) / 2;
 }
 
-/** The Beaufort force of a wind in knots, 0 to 9. */
+/** The Beaufort force of a wind in knots, 0 to 10. */
 export function beaufort(knots: number): number {
   let force = 0;
   for (let f = 1; f < BEAUFORT_FROM.length; f++) {
@@ -150,8 +303,31 @@ export function foamAt(knots: number, out: FoamLook): FoamLook {
 
 /** A foam look of nothing, to write into. */
 export function newFoamLook(): FoamLook {
-  return { whitecaps: 0, streaks: 0, folding: 0, threshold: 0.4, chop: 0.6, decay: 1.5 };
+  return {
+    whitecaps: 0,
+    streaks: 0,
+    folding: 0,
+    threshold: 0.4,
+    chop: 0.6,
+    decay: 1.5,
+    steep: 1,
+    spray: 0,
+    spindrift: 0,
+  };
 }
+
+/**
+ * How much of the whitecaps rain takes away, 0 to 1, by their strength:
+ * all of them up to force 4's, none from force 6's. Rain damps the short
+ * waves and a moderate breeze's white horses with them; it does not stop
+ * a gale's crests from breaking.
+ */
+export const RAIN_CUT = {
+  /** Whitecaps of force 4's strength and less go wholly under heavy rain. */
+  from: 0.25,
+  /** From force 6's strength none go. */
+  to: 1.0,
+} as const;
 
 /**
  * The share of the sea whitecaps cover at a wind 10 m up, in m/s: Monahan
@@ -166,6 +342,12 @@ export function whitecapCoverage(speed: number): number {
 export const FOAM = {
   /** Whitecaps come where the crest's height, in half significant heights, passes from the first to the second. */
   crest: [0.75, 1.5],
+  /**
+   * Whitecaps stronger than 1 begin this much lower down the crest for each
+   * unit over, to no lower than the second: a storm's sea breaks over more
+   * of each crest, not only at its top.
+   */
+  crestReach: [0.2, 0.2],
   /** How much the detail band's height adds to the boat band's for the whitecaps. */
   crestDetail: 0.35,
   /** Streaks are this many times longer down the wind than across it. */
@@ -196,7 +378,7 @@ export const WAKE = {
   speedEase: 0.5,
 } as const;
 
-/** Spray: sprites thrown from the bow, and blown off the crests in a gale. */
+/** Spray: sprites thrown from the bow, and torn off the crests from force 7. */
 export const SPRAY = {
   /** The bow throws spray when the sea rises against it faster than this, m/s. */
   rise: 0.2,
@@ -204,8 +386,31 @@ export const SPRAY = {
   minSpeed: 1,
   /** A drop lives about this long, in seconds. */
   life: 1,
-  /** Spray is blown off the crests from this force up. */
-  crestForce: 8,
   /** Crests within this distance of the camera throw it, in metres. */
   crestReach: 60,
+  /** A crest throws spray where it stands this high, in half significant heights. */
+  crestFrom: 0.7,
+  /** The bow's spray grows with the sea's significant height: so much more a metre of it, at most most times. */
+  perHeight: 1,
+  most: 3,
+} as const;
+
+/**
+ * The chase camera in a big sea: a share of the boat's pitch and roll
+ * (their swing about their own mean, so a steady heel does not tilt the
+ * horizon), nothing under from metres of significant height, rising to
+ * pitch and roll at full, low-passed over smooth seconds. Above quick
+ * metres the camera follows the boat's heave over heave seconds, not its
+ * usual half second.
+ */
+export const SEA_MOTION = {
+  from: 0.4,
+  full: 2,
+  pitch: 0.2,
+  roll: 0.12,
+  smooth: 0.4,
+  /** The mean the swing is taken about follows over this long, in seconds. */
+  mean: 4,
+  quick: 1,
+  heave: 0.3,
 } as const;

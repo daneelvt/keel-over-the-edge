@@ -67,8 +67,7 @@ describe('the voices', () => {
     }
   });
 
-  test('nothing breathes: the same wind sounds the same at any time', () => {
-    expect(RECIPES.wind.breath.depth).toBe(0);
+  test('a steady wind does not breathe: the same wind sounds the same at any time', () => {
     const x = input({ apparentWind: 9, speed: 3, throughWater: 3, seaHeight: 0.8, whitecaps: 0.4 });
     const first = soundTargets(RECIPES, { ...x, time: 0 }, newTargets());
     for (const time of [0.7, 2.3, 9.1, 61, 3600.5]) {
@@ -78,6 +77,31 @@ describe('the voices', () => {
     const gust = soundTargets(RECIPES, { ...x, apparentWind: 12, time: 2.3 }, newTargets());
     expect(gust.windLevel).toBeGreaterThan(first.windLevel);
     expect(gust.windCentre).toBeGreaterThan(first.windCentre);
+  });
+
+  test('a gusty wind breathes, the deeper the more it gusts', () => {
+    const swing = (gustFactor: number): number => {
+      const x = input({ apparentWind: 9, gustFactor });
+      let lo = Number.POSITIVE_INFINITY;
+      let hi = 0;
+      for (let time = 0; time < 120; time += 0.25) {
+        const t = soundTargets(RECIPES, { ...x, time }, newTargets());
+        lo = Math.min(lo, t.windLevel);
+        hi = Math.max(hi, t.windLevel);
+      }
+      return hi / lo - 1;
+    };
+    expect(swing(1)).toBe(0);
+    expect(swing(1.2)).toBeGreaterThan(0.1);
+    expect(swing(1.45)).toBeGreaterThan(swing(1.2));
+  });
+
+  test('a storm howls: full at 34 knots apparent, and higher than a breeze', () => {
+    const at = (knots: number) =>
+      soundTargets(RECIPES, input({ apparentWind: (knots * 1852) / 3600 }), newTargets());
+    expect(at(34).windLevel).toBeCloseTo(RECIPES.wind.level.most, 6);
+    expect(at(28).windLevel).toBeLessThan(at(34).windLevel);
+    expect(at(40).windCentre / at(20).windCentre).toBeGreaterThan(1.5);
   });
 
   test('the sea is silent on flat water and rises with the height of the waves', () => {

@@ -57,7 +57,7 @@ export function streakAt(p: Node<'vec2'>): Node<'vec2'> {
 export interface FoamParts {
   /** The sea area's foam here: whitecaps, streaks, folding. */
   area: Node<'vec3'>;
-  /** The boat band's height in half significant heights, and the detail band's in three of its standard deviations. */
+  /** The boat band's height in half significant heights, and the detail band's over DETAIL.height. */
   crest: Node<'float'>;
   detail: Node<'float'>;
   /** How far the crest lightens the water, 0 to 1: streaks show most on crests. */
@@ -72,11 +72,16 @@ export interface FoamParts {
   boats: Node<'float'>;
 }
 
-/** The whitecaps: where the crest stands high for its sea, in patches. */
+/**
+ * The whitecaps: where the crest stands high for its sea, in patches.
+ * Stronger than 1, they begin lower down the crest (FOAM.crestReach).
+ */
 export function whitecaps(f: FoamParts): Node<'float'> {
   const [from, to] = FOAM.crest;
+  const [per, lowest] = FOAM.crestReach;
+  const begins = max(float(from).sub(max(f.area.x.sub(1), 0).mul(per)), lowest);
   return f.area.x
-    .mul(smoothstep(from, to, f.crest.add(f.detail.mul(FOAM.crestDetail))))
+    .mul(smoothstep(begins, to, f.crest.add(f.detail.mul(FOAM.crestDetail))))
     .mul(f.pattern.z.mul(0.6).add(0.55)) as unknown as Node<'float'>;
 }
 
