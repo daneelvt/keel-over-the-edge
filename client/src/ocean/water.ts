@@ -17,8 +17,9 @@
 // its rings, stalks and crowns (Melsheimer and others, as Long and Nie give
 // it), and "at the onset of a heavy rain the white-capping disappears very
 // rapidly", which is what sailors mean by "rain calms the sea" (Cavaleri
-// and others 2015). Beyond the grid the far sea takes the rain at the
-// camera.
+// and others 2015): a breeze's white horses go under it, though not a
+// gale's breaking crests (look.ts, RAIN_CUT). Beyond the grid the far sea
+// takes the rain at the camera.
 
 import { DataTexture, LinearFilter, RGFormat, UnsignedByteType, Vector2 } from 'three';
 import { Fn, float, texture, uniform, vec2 } from 'three/tsl';

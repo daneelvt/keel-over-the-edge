@@ -937,7 +937,7 @@ no more of where land is than the sky shows.
 | `client/src/sky/clouds.ts` | Every puff of every cloud, one instanced draw of an icosahedron of one subdivision: laid out by its form's recipe from its system's seed, carried on its cloud's velocity between layouts, lit from the main light with its top's and base's colours (`cloudTop`, `cloudBase` in the light table), hazed toward the sky's colour in its direction, halfway at 3 km, shorter in rain |
 | `client/src/sky/sheets.ts` | The sheets' texture of the module's lattice about the camera (48 points a side) and the sky shader's layers: where each view ray meets each layer's paraboloid over the dome, the cover by the module's own bilinear, a crisp edge where it passes a threshold, cirrus as streaks along the wind, a 22° halo where the cirrus is whole and no middle sheet has come, the sun dimmed through the middle sheet and hidden by the low |
 | `client/src/render/rain.ts` | Curtains under the clouds that rain, and streaks in a box about the camera as many as the rate asks, falling at the median drop's terminal speed (Marshall and Palmer; Atlas's fit to Gunn and Kinzer), slanted by the wind: a draw each |
-| `client/src/ocean/water.ts`, `seamaterial.ts` | The water's grid's second channel: under rain the ripples flatten, the whitecaps go, the colour greys and pocks of drops roughen the water near the eye; the far sea takes the rain at the camera |
+| `client/src/ocean/water.ts`, `seamaterial.ts` | The water's grid's second channel: under rain the ripples flatten, a breeze's whitecaps go (not a gale's), the colour greys and pocks of drops roughen the water near the eye; the far sea takes the rain at the camera |
 | `art/sound/rain.json`, `client/src/audio/` | Rain's hiss, by the logarithm of the rate at the boat, and in heavy rain a drumming |
 
 The camera's far plane is 8 km, beyond where a storm's deck can be seen.
@@ -3023,8 +3023,47 @@ Each area's wind is its **wave wind**, the mean wind at its centre averaged
 over the last minutes (see [The wave wind](#the-wave-wind)), and its fetch
 for that wind's direction, which the land shortens (see [Fetch and
 shelter](#fetch-and-shelter)); over open water, and with `KEEL_LAND=off`,
-it is the cap (`weather.sea.fetchCap`, 6 NM): 10 knots raise a boat band of about 0.25 m, 12 knots 0.33 m, 20 knots 0.6 m, 34 knots
-1 m.
+it is the cap (`weather.sea.fetchCap`, 6 NM).
+
+**The stretch** is a licence, stated as one in the catalog. Over the fetch
+the disk allows, a sea grows only in step with the wind (Hs ∝ U √F, the
+Coastal Engineering Manual's fetch-limited growth), while an open sea's
+grows with its square (Pierson and Moskowitz): left to the fetch, a gale
+would raise a metre at 3.6 s, a trade wind's sea scaled up. A storm that
+travels at about the group speed of its own waves keeps them under its wind
+and raises them far past the fetch it stands on, the moving or "trapped"
+fetch (Kudryavtsev and others; Bowyer and MacAfee), as the game's storms,
+at 3–6 knots against a 3.5 s wave's 5.3, do. So above
+`weather.sea.stretchFrom` (17 knots) the wind sea's fetch is stretched by
+(U / stretchFrom)², at most `stretchMost` (3.5) times
+(`physics.Waves.stretch`): the sea grows with the square of the wind, its
+period lengthening with it. At and below 17 knots the factor is exactly 1
+and every amplitude is what the fetch alone gives, bit for bit (`go test
+./internal/physics -run NoStretch`). The factor is capped, not the fetch,
+so a short fetch's shelter keeps its ratio to a long one; the lee's table
+stretches the lee's fetch the same way (it reaches four times the lee's
+reach). A stretched sea's peak is longer and narrower against the band, so
+its cull rises with the stretch, to `stretchCull` (0.15) at the most,
+which keeps the waves a step sums as many as before. The swell is its own,
+and is not stretched.
+
+Over open water, by the wave wind (`go test ./internal/physics -run
+SeaStates -v`):
+
+| Wave wind, knots | 10 | 15 | 20 | 25 | 30 | 35 | 40 |
+|---|---|---|---|---|---|---|---|
+| Hs, m | 0.25 | 0.42 | 0.71 | 1.16 | 1.69 | 2.05 | 2.29 |
+| Peak period, s | 2.40 | 2.75 | 3.37 | 4.21 | 5.05 | 5.53 | 5.79 |
+| Peak wavelength, m | 9 | 12 | 18 | 28 | 40 | 48 | 52 |
+
+About half the Met Office's Beaufort heights for a well-developed open sea
+at forces 6 to 8, and twice the fetch's alone. `go test ./internal/weather
+-run TestWeeks -v` tallies the wind sea over the first week (over 24 in the
+long run): by the wave wind's force, by regime and within 1.5 NM of the
+centre, beside the sea the fetch alone raises. Where force 8 blows the sea
+is 1.8 m or more, a stormy spell's 95th percentile 1.3 m or more, and the
+trade wind's median and the inner waters' quartiles are within 2% of the
+fetch's own.
 
 Time is the tick. A wave's phase from its frequency is the fraction of
 `turns × tick`, the product taken exactly (`SeaAt`), so it is the same bits
@@ -3151,6 +3190,14 @@ nothing: steered for a beam reach from there, 70% of getaways failed, where
 11%. A boat that is sailing hardly notices: with or without the moment the
 polar in waves differs by a hundredth of a knot in 12 knots, and by a tenth
 running dead before 20. Raise the share only with the getaway test passing.
+
+`go test ./internal/physics -run JollyBoatInAGalesSea -v` sails the Jolly
+boat ten minutes in a gale's stretched sea, at rest and on the autopilot
+close-hauled, on a beam reach and on a run with the handbook's trim, beside
+the same runs in flat water: the sea adds no capsize, and she pitches under
+30°. (On a broad reach, 135° off a gale, the sea rolls her over about once
+in ten minutes where flat water does not; at 150° the fetch's own sea did
+too.)
 
 `go test ./internal/physics -run 'Waves|Surfing|Heave|BeamSea|Drift|UnderWay|YawMoment'`
 checks what physics is sure of (a long wave is followed, a wave as long as
@@ -3310,7 +3357,8 @@ curl -X POST 'http://127.0.0.1:9090/debug/wind?knots=34&from=0'
 ```
 
 6, 12, 20 and 34 knots are a calm, a breeze, a fresh breeze and a gale; the
-sea takes some twelve minutes to follow. Production has no developer's
+sea takes some twelve minutes to follow, and what is drawn of it beside the
+boat band (the ripples, the foam) half a minute. Production has no developer's
 commands: its weather is the sequence's.
 
 ### The wire
@@ -3346,8 +3394,9 @@ TSL: it blends each wave's amplitude between the four areas about the point
 [−π, π] itself**, since a tile 650 m from the origin has an argument of
 hundreds of radians and WGSL promises its sine only on that interval, to
 2⁻¹¹. The tile pass, its per-vertex fallback and the far sea all use it.
-Crests are coloured by their height against the sea's own significant
-height, so a breeze and a gale both show theirs.
+Crests are lit by their height over half the sea's significant height, but
+never less than 0.6 m (`SEA_LOOK.crestLight`): a gale's crests glow, a
+calm's are faint.
 
 The check against the server: `go test ./internal/physics -run SeaFile
 -update` writes `internal/physics/testdata/sea.json`: the waves, and for a
@@ -3419,22 +3468,52 @@ ripples that are the tile's own. The far sea reads it plainly. Where a tier
 leaves the finest ripples out, a shimmer from the pattern's noise stands in
 for them.
 
+**The water shows the force**, not the sea's size: what is drawn beside the
+boat band follows the wind's Beaufort force on one scale, whatever the
+fetch, as a sailor reads the force from the water. `FOAM_BY_FORCE` in
+`look.ts` is a row a force, 0 to 10, read at the middle of each force and
+between them (the top row at 55 knots, and held above): the whitecaps, the
+streaks, the folding foam and its chop, threshold and decay, the detail
+band's steepness, the spray off the crests and the spindrift. Each sea area
+has its own, by its own wind. And it follows **the larger of the wave wind
+and the mean wind where it is**, eased over ten seconds (`under.ts`; the
+module's mean wind at each area's centre and at the boat, sampled twice a
+second): the short waves answer a wind in some ten of their periods, the
+sea's peak in a hundred (Uz and others), so a squall's line roughens and
+whitens the water half a minute after it arrives, minutes before its sea
+builds.
+
+**The detail band is drawn steeper by force** (`detailSteep`, the rows'
+`steep`): its rms slope, the spectrum's and the gain's together, is 2.5
+times force 2's at force 8 and goes on rising to force 10 (`look.test.ts`
+measures it with `spectrum.ts`). Its height counts in metres, over
+`DETAIL.height` (0.25 m), not over its own spread: a calm's ripples barely
+lighten the water. The detail band's spectrum is stretched as the boat
+band's is.
+
 **Foam** (`foam.ts`) has five sources: folding in the detail band; whitecaps
-where the boat band's crest stands above 0.75 of half the significant
-height; streaks down the wind, from force 7; the hulls; and the wakes. Their
-sum sets how much of a pattern of lace shows (`pattern.ts`: one small
-texture made at start, lace and noise, read once a fragment), and the cover
-fades to a fifth over each tile's rim, so a patch of foam reads as white
-tiles. What it does at each wind is `FOAM_BY_FORCE` in `look.ts`, a row a
-Beaufort force, read at the middle of each force and between them; each sea
-area has its own, by its own wind. `npx vitest run src/ocean/look.test.ts`
-checks the table: a row for every force, strengths from 0 to 1, nothing
-falling as the wind rises, no whitecaps under force 3 and no streaks under
-force 7. To tune it, change a row, look at it in the sandbox
-(`?sandbox&dev&sea=…`, or the panel's wind), and take the browser tests'
-pictures again. The browser tests record the white share of the sea at 6,
-12, 20 and 34 knots beside Monahan and O'Muircheartaigh's whitecap coverage:
-the drawn foam is a look, and covers about a sixth of what the fit gives.
+on the boat band's crests; streaks down the wind, from force 7; the hulls;
+and the wakes. Their sum sets how much of a pattern of lace shows
+(`pattern.ts`: one small texture made at start, lace and noise, read once a
+fragment), and the cover fades to a seventh over each tile's rim, so a
+patch of foam reads as white tiles. The whitecaps sit where the crest stands
+above 0.75 of half the significant height; stronger than 1 (from force 6)
+they reach down the crests, 0.15 lower for each unit over, to 0.25, so a
+storm's sea breaks over more of each crest. Rain flattens the finest
+ripples and greys the water, and takes away a breeze's whitecaps but not a
+gale's: its cut fades from whole at force 4's whitecaps to none from force
+6's (`RAIN_CUT`). `npx vitest run src/ocean/look.test.ts` checks the table:
+a row for every force, nothing falling as the wind rises, no whitecaps under
+force 3, no streaks or spray under force 7, no spindrift under force 8. To
+tune it, change a row, look at it in the sandbox (`?sandbox&dev&sea=…`, or
+the panel's wind), and take the browser tests' pictures again. The browser
+tests record the white share of the sea at 6, 12, 20 and 34 knots beside
+Monahan and O'Muircheartaigh's whitecap coverage. Measured with time
+running, the drawn foam is about a sixth of the fit's up to force 6, half
+of it at force 7, about 0.6 at 34 knots, 0.7 in the middle of force 8 and
+all of it at forces 9 and 10. `internal/lookout/whitecaps.go` has the
+whitecaps' column for the machine sailors' report, held to the page's by
+`whitecaps.json`.
 
 **Round a hull** (`hulls.ts`), in the same walk that keeps the water out of
 it: a ring at the waterline, more at the bow, and two arms that trail at
@@ -3446,9 +3525,30 @@ follows the boat in whole texels, 512 × 512 (256 × 256 on the low tier),
 and stamps every boat in it under its stern; its 8 bits are dithered, so it
 fades at the right rate at any frame rate. **Spray**
 (`client/src/render/spray.ts`) is sprites in one draw: from a bow the sea
-rises against faster than 0.2 m/s, more with speed and whitecaps, blown down
-the wind for about a second; and off the crests near the camera from
-force 8.
+rises against faster than 0.2 m/s, more with speed, whitecaps and the sea's
+height, blown down the wind for about a second; torn off the crests near
+the camera from force 7, from a drop or so a crest a second to sheets of
+larger drops at force 10; and spindrift from force 8, low streaks of small
+drops blown along the water at near the wind's speed.
+
+**The view in a big sea** (`client/src/render/camera.ts`): the chase camera
+takes a share of the boat's pitch and roll, their swing about their means
+over four seconds (so a steady heel does not tilt the horizon), none in a
+sea under 0.4 m, rising to 20% of the pitch and 12% of the roll at 2 m,
+low-passed over 0.4 s; in a sea over a metre it follows the boat's heave
+over 0.3 s, not 0.5 (`SEA_MOTION` in `look.ts`). The menu's **The sea moves
+the view** turns it off, and it is off whenever the device asks for reduced
+motion. The surf (`shore.ts`) grows with the sea to 1.5 m.
+
+To compare the seas, open the sandbox at each, on a phone or at 360 × 640:
+
+```sh
+# https://localhost:5173/?sandbox&sea=breeze            12 knots: 0.32 m, 2.6 s
+# https://localhost:5173/?sandbox&sea=fresh             20 knots: 0.71 m, 3.4 s
+# https://localhost:5173/?sandbox&sea=gale              34 knots: 2 m, 5.5 s, white water and spray
+# https://localhost:5173/?sandbox&sea=gale&tier=low     the low tier's gale
+# https://localhost:5173/?sandbox&weather=storm         a storm's ring arriving
+```
 
 **Shadows** (`client/src/render/shadows.ts`): one map of the sun's, round the
 boat. The boat and its sailor cast and receive; on the high tier the other
@@ -3466,7 +3566,7 @@ A tier is a set of values (`client/src/render/quality.ts`):
 | Compute dispatches a frame | 8 | 4 | 0 |
 | Foam map | 512² | 512² | 256² |
 | Shadows | 1,024², 40 m, other boats too | 1,024², 12 m, own boat | None |
-| Spray | 512, own boat and 3 nearest, off the crests | 256, own, off the crests | 96, own |
+| Spray | 512, own boat and 3 nearest, off the crests | 512, own, off the crests | 96, own |
 | Clouds' puffs, at most | 1,024 | 768 | 512 |
 | Rain's streaks at the boat, at most | 2,048 | 1,024 | 512 |
 
@@ -6548,8 +6648,10 @@ recoloured.
 Sound is synthesised in the browser with Web Audio; there are no sound
 files. The recipes are art, in `art/sound/*.json` (each names the art
 licence in its first field): **wind**, noise through a band-pass whose
-centre and level rise with the apparent wind, so it swells with the gusts
-the boat feels and with nothing else; **rigging**, a narrow band at
+centre and level rise with the apparent wind, full at 34 knots, so it
+swells with the gusts the boat feels; in a gusty wind it breathes too, as
+deep as the wind's gust factor (none in a steady wind), and in a storm it
+howls, its centre rising by a third from 23 to 39 knots; **rigging**, a narrow band at
 the sheet's Aeolian tone, 0.2 × apparent wind ÷ 10 mm; **flogging**, the
 cloth's band beaten at a flap rate, only while a sail strip luffs;
 **water**, low-passed noise rising with speed and a bow wave's hiss past the
@@ -6663,9 +6765,10 @@ after a lost device); foam forming where the surface folds and fading over
 its time; the low tier's loop made in slices; every fragment of a tile with
 the same whole-tile tilt, the tile's own ripples gone at its rim and unlike
 its neighbour's, the far sea without seams; no foam in a calm but round the
-hull, whitecaps only on high crests, streaks only from force 7 and long down
-the wind, foam's margin at each tile's rim, the white share rising with the
-wind (recorded beside Monahan's); a wake that stays on the water as the map
+hull, whitecaps only on the crests, lower down them in a gale, streaks only
+from force 7 and long down the wind, foam's margin at each tile's rim, the white share rising with the
+wind (recorded beside Monahan's, a fresh breeze's a fraction of it and a
+gale's near it); a wake that stays on the water as the map
 follows the boat and fades in 30 s, a stopped hull's ring, the arms at
 19.5°, eight boats in the draw calls of one; spray in one draw; shadows on
 the boat and nowhere else; the starting tier by device, `?tier`, every rung
