@@ -50,7 +50,7 @@ func TestMachineRoutes(t *testing.T) {
 		ConfirmedUntil int64
 	}
 	if err := json.Unmarshal([]byte(page), &p); status != 201 || err != nil || p.MCP != h.resource || p.Cap != 1 || p.Fleet[boatKind] != 2 ||
-		len(p.Machines) != 1 || p.Machines[0].Name != "Iron Mary" || p.Machines[0].Look.Words != "Tin · second · navy blue" ||
+		len(p.Machines) != 1 || p.Machines[0].Name != "Iron Mary" || p.Machines[0].Look.Words != "Machine, second, Tin, navy blue" ||
 		p.Machines[0].Look.SRGB != "#24406b" || p.Machines[0].AtSea || p.Machines[0].Token != nil {
 		t.Fatalf("made: %d %s", status, page)
 	}

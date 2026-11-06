@@ -1,0 +1,48 @@
+/* SPDX-License-Identifier: AGPL-3.0-only */
+/* A sailor's portrait, 4:5, at the sizes the screens show it. */
+.portrait {
+  display: block;
+  flex: none;
+  border-radius: 6px;
+  background: radial-gradient(circle at 50% 35%, rgb(255 255 255 / 0.12), transparent 70%);
+}
+.portrait-40 {
+  width: 40px;
+  height: 50px;
+  border-radius: 4px;
+}
+.portrait-72 {
+  width: 72px;
+  height: 90px;
+}
+.portrait-96 {
+  width: 96px;
+  height: 120px;
+}
+.portrait-160 {
+  width: 160px;
+  height: 200px;
+}
+
+/* The inked portrait, as the log shows it: ink on the log's paper. */
+.portrait-ink {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 128px;
+  margin: 0;
+}
+
+.portrait-ink img {
+  display: block;
+  width: 128px;
+  height: 160px;
+  border-radius: 6px;
+  background: #efe6d2;
+}
+
+.portrait-ink figcaption {
+  color: rgb(242 239 231 / 66%);
+  font-size: 13px;
+  text-align: center;
+}

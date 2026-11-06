@@ -36,12 +36,13 @@ const (
 	refusedFalling    refusalKind = "falling"     // over the falls: no orders until the boat starts again
 	refusedStopped    refusalKind = "stopped"     // the machine sailor was stopped by the game's operator, or deleted
 	refusedRevoked    refusalKind = "revoked"     // its grants were revoked by the game's operator
+	refusedPortRoyal  refusalKind = "port_royal"  // a change of look at sea beyond Port Royal's harbour
 )
 
 // refusalKinds lists every kind, for the metrics and the tests.
 var refusalKinds = []refusalKind{refusedOrders, refusedLooks, refusedOrder, refusedArgs, refusedPlace, refusedNotAtSea, refusedQueued,
 	refusedFull, refusedSuperseded, refusedEnded, refusedRestarting, refusedNoWorld, refusedBusy, refusedFalling, refusedStopped,
-	refusedRevoked}
+	refusedRevoked, refusedPortRoyal}
 
 // refusal is a call refused: its kind and its words.
 type refusal struct {
@@ -87,6 +88,7 @@ const (
 	wordsNoWorld    = "No world is open just now: the game is starting or between worlds. Call observe in a minute."
 	wordsBusy       = "The game is busy and did not answer in time. Nothing was changed. Try again in a moment."
 	wordsFalling    = "Your boat is over the falls. It starts again at the start in a moment: call observe with wait 10."
+	wordsPortRoyal  = "Only at Port Royal: change your look before you sail, or in its harbour."
 )
 
 // ordinal is n as an ordinal: "1st", "12th".

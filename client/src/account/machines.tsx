@@ -25,8 +25,10 @@
 import type { ComponentChildren, JSX } from 'preact';
 import { useEffect, useState } from 'preact/hooks';
 import { catalog } from '../catalog';
+import { MACHINE } from '../catalog/looks';
 import { useWatch } from '../ui/watchlazy';
 import { COPIED, COPY_WATCH_LINK, WATCH, watchersText, watchLink } from '../ui/watchwords';
+import type { LookChooser } from './chooser';
 import { Cog } from './cog';
 import { Connect } from './connect';
 import type { Voyage } from './letwatch';
@@ -38,11 +40,13 @@ import {
   MachineFields,
   type MachineItem,
   type MachineLooks,
+  type MachinePicture,
   MachineSummary,
   useDraft,
 } from './machineform';
 import type { Fetch, Me } from './me';
 import { call, confirmPasskey, type Outcome, reasonOf } from './passkeys';
+import { Portrait } from './portraits';
 import { lengthProblem, machineReasonText } from './reasons';
 import { dayOf } from './recovery';
 import { YourSailor } from './yoursailor';
@@ -103,6 +107,16 @@ export const makeToken = (machine: string, f?: Fetch) =>
   post<{ token: string; ends: number }>('/api/machines/token', { machine }, 201, f);
 export const revokeToken = (machine: string, f?: Fetch) =>
   post('/api/machines/token/revoke', { machine }, 200, f);
+
+/** A machine sailor's portrait, from the game's catalog; its look's words are beside it. */
+export const picture: MachinePicture = (l, size) => (
+  <Portrait
+    looks={catalog}
+    look={{ look: MACHINE, version: l.version, finish: l.finish, colour: l.colour }}
+    size={size}
+    decorative
+  />
+);
 
 /** When a machine sailor was stopped, "Stopped on 26 October"; "" for one not stopped. */
 export function stoppedOn(m: Machine, now = Date.now()): string {
@@ -187,6 +201,7 @@ export function MakeMachine({
         setName={setName}
         pick={pick}
         draw={draw}
+        picture={picture}
       />
       <button type="submit" class="start-go" disabled={busy}>
         Make it
@@ -253,7 +268,7 @@ export function MachineList({
         <ul class="machine-list">
           {page.machines.map((m) => (
             <li key={m.id} data-machine={m.name}>
-              <MachineSummary m={m} />
+              <MachineSummary m={m} picture={picture} />
               {watch !== null && m.atSea && stoppedOn(m) === '' ? (
                 <span class="machine-watch">
                   <button type="button" class="start-sign-in" onClick={() => watch(m.name)}>
@@ -384,16 +399,24 @@ export function StartPair({
   sail,
   list,
   children,
+  chooser,
 }: {
   me: Me;
   voyage: Voyage;
   sail: () => void;
   list: () => void;
   children: ComponentChildren;
+  chooser?: LookChooser | undefined;
 }) {
   return (
     <div class="start-pair">
-      <YourSailor me={me} voyage={voyage} sail={sail} watch={list} />
+      <YourSailor
+        me={me}
+        voyage={voyage}
+        sail={sail}
+        watch={list}
+        {...(chooser === undefined ? {} : { chooser })}
+      />
       <div class="start-panel ai-panel">{children}</div>
     </div>
   );
@@ -411,11 +434,14 @@ export function MachineStart({
   done,
   me,
   voyage,
+  chooser,
 }: {
   first: boolean;
   done: (watch?: string) => void;
   me: Me;
   voyage: Voyage;
+  /** The player's look, changed on their own panel. */
+  chooser?: LookChooser;
 }) {
   const { page, setPage, problem } = usePage();
   const [listing, setListing] = useState(false);
@@ -423,7 +449,13 @@ export function MachineStart({
     return <StartWatchList choose={(name) => done(name)} close={() => setListing(false)} />;
   }
   return (
-    <StartPair me={me} voyage={voyage} sail={() => done()} list={() => setListing(true)}>
+    <StartPair
+      me={me}
+      voyage={voyage}
+      sail={() => done()}
+      list={() => setListing(true)}
+      chooser={chooser}
+    >
       {page === null ? (
         <p class="start-text start-faint" aria-live="polite">
           {problem || 'Reading your machine sailors…'}
@@ -625,7 +657,7 @@ export function MachinesAccount({ now = Date.now() }: { now?: number }) {
         {page.machines.map((m) =>
           stoppedOn(m, now) !== '' ? (
             <li key={m.id} data-machine={m.name} data-stopped="">
-              <MachineSummary m={m} apps={false} />
+              <MachineSummary m={m} apps={false} picture={picture} />
               <span class="machine-soon">{stoppedOn(m, now)}.</span>
               <RevokedApps m={m} />
               <button
@@ -643,7 +675,7 @@ export function MachinesAccount({ now = Date.now() }: { now?: number }) {
             </li>
           ) : (
             <li key={m.id} data-machine={m.name}>
-              <MachineSummary m={m} apps={false} />
+              <MachineSummary m={m} apps={false} picture={picture} />
               <AppsList
                 m={m}
                 now={now}

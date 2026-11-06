@@ -43,6 +43,11 @@ const (
 // mostContacts is how many boats a report lists; the rest are summed.
 const mostContacts = 12
 
+// lookNear is how near another boat must be for the report to tell its
+// sailor's look, m: as near as an eye on deck makes out the figure aboard
+// and its colours.
+const lookNear = 60.0
+
 // report is a lookout report's facts.
 type report struct {
 	Clock string `json:"clock"`
@@ -477,10 +482,11 @@ func leeOf(s *Sea, x, y, from float64) string {
 }
 
 // sightLines are what the boat's lookout sees: the boats nearest first,
-// the first mostContacts of them and the rest summed; then the land, the
-// places and the lights, charted ones by name. A brief report gives of
-// these only those new since the last report or within landNear, and
-// counts the rest. With mu held.
+// those within lookNear with their sailors' looks, the first mostContacts
+// of them and the rest summed; then the land, the places and the lights,
+// charted ones by name. A brief report gives of these only those new
+// since the last report or within landNear, and counts the rest. With mu
+// held.
 func (h *helm) sightLines(s *Sea, f *bus.Frame, sl int32, brief bool) (lines []string, more string) {
 	st := &f.State[sl]
 	now := time.Now()
@@ -504,6 +510,11 @@ func (h *helm) sightLines(s *Sea, f *bus.Frame, sl int32, brief bool) (lines []s
 		kind := "human"
 		if f.Machine[c.slot] {
 			kind = "machine"
+		}
+		if c.d <= lookNear && s.Looks != nil {
+			if l, ok := s.Looks.Of(f.Look[c.slot]); ok {
+				kind += " · " + s.Looks.Seen(l)
+			}
 		}
 		line := fmt.Sprintf("B%d %s · %s %s · %s, heading %s, %s", n, kind, three(bearing5(bear)), rangeWords(c.d),
 			tackOf(&f.Course[c.slot]), three(bearing5(o.Heading)), speedWords(o))

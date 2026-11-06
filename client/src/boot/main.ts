@@ -123,6 +123,8 @@ import { type Cover, DROP, LIFT, LIFT_REDUCED, QUIET, takeCover } from './cover'
 import { browserEnv, fullScreen } from './fullscreen';
 import { Gate, type Revealed, WAITING_WORDS, type Waiting } from './gate';
 import { harbourWater, watchHarbour } from './harbour';
+import { harbourLook, sandboxHarbourLook } from './harbourlook';
+import { lookStage } from './lookstage';
 
 /** How long the camera comes down into the first view, s: at the start, and after a change of boat. */
 const DESCENT = 2.5;
@@ -277,7 +279,8 @@ async function start(): Promise<void> {
       ...(frontIn === null ? {} : { frontIn }),
     };
     // ?look=code: the sailor in a look of the developer's own.
-    world.sailAs(Number(query.get('look') ?? PERSON_DEFAULT) || PERSON_DEFAULT);
+    const sandboxLook = Number(query.get('look') ?? PERSON_DEFAULT) || PERSON_DEFAULT;
+    world.sailAs(sandboxLook);
     const [, sandbox] = await Promise.all([
       world.start(),
       startSandbox(fetch(wasmUrl), world.kind.physics, catalog.weather, catalog.world, begin),
@@ -459,6 +462,7 @@ async function start(): Promise<void> {
         port: watchHarbour(world, parts.chart.store),
         src: forecasting,
         store: parts.chart.store,
+        look: sandboxHarbourLook(world, sandboxLook),
       },
       camera,
       clear,
@@ -532,8 +536,13 @@ async function start(): Promise<void> {
   const set = (me: Me): Me => {
     tapped = performance.now();
     cover.say(SETTING_SAIL);
-    return own(me);
+    // The look chosen at the start: drawn now, though the own was loaded.
+    world.sailAs(codeOf(catalog, lookFrom(me)));
+    return me;
   };
+  // The picker's stage behind the start screen and the player's own panel,
+  // on a page that draws.
+  const stage = world.drawsWhenReady ? lookStage(world, cover) : undefined;
   const [, physics, me] = await Promise.all([
     world.start(),
     loadPhysics(fetch(wasmUrl)),
@@ -541,11 +550,12 @@ async function start(): Promise<void> {
       start: () =>
         showStartScreen(document.body, {
           looks: catalog,
+          ...(stage === undefined ? {} : { stage }),
           ...(linked === '' ? {} : { panel: false }),
         }).then(set),
       addPasskey: (me) => showAddPasskey(document.body, me),
       ...(linked === ''
-        ? { sailor: (me: Me) => showSailor(document.body, own(me)).then(set) }
+        ? { sailor: (me: Me) => showSailor(document.body, own(me), catalog, stage).then(set) }
         : {}),
       backSoon: notice,
     }).then(own),
@@ -871,6 +881,7 @@ async function start(): Promise<void> {
       port: watchHarbour(world, parts.chart.store),
       src: forecasting,
       store: parts.chart.store,
+      look: harbourLook(world, online),
     },
     watch: watchView,
     lamp: online.lamp,

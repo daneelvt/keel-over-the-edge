@@ -44,8 +44,9 @@ type handbookArgs struct {
 }
 
 // handbookPage is a page of the handbook, or with no topic the list and
-// who the agent sails as.
-func (c *Core) handbookPage(topic, name, owner string) (string, *refusal) {
+// who the agent sails as; look is the sentence that tells the agent its
+// look.
+func (c *Core) handbookPage(topic, name, owner, look string) (string, *refusal) {
 	if topic == "" {
 		whose := "a machine sailor"
 		if owner != "" {
@@ -62,7 +63,7 @@ func (c *Core) handbookPage(topic, name, owner string) (string, *refusal) {
 	return strings.NewReplacer(
 		"{{orders}}", trimFloat(float64(l.Orders)), "{{orderBurst}}", fmt.Sprint(l.OrderBurst),
 		"{{looks}}", trimFloat(float64(l.Looks)), "{{lookBurst}}", fmt.Sprint(l.LookBurst),
-		"{{silence}}", durationWords(c.cfg.Silence),
+		"{{silence}}", durationWords(c.cfg.Silence), "{{look}}", look,
 	).Replace(strings.TrimSpace(string(b))), nil
 }
 

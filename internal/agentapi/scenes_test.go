@@ -16,6 +16,7 @@ import (
 	"github.com/daneelvt/keel-over-the-edge/internal/bus"
 	"github.com/daneelvt/keel-over-the-edge/internal/catalog"
 	"github.com/daneelvt/keel-over-the-edge/internal/chart"
+	sailorlooks "github.com/daneelvt/keel-over-the-edge/internal/looks"
 	"github.com/daneelvt/keel-over-the-edge/internal/physics"
 	"github.com/daneelvt/keel-over-the-edge/internal/sight"
 	"github.com/daneelvt/keel-over-the-edge/internal/sim"
@@ -97,7 +98,7 @@ func newSceneOf(t testing.TB, capacity int, knots, from float64) *scene {
 	t.Cleanup(w.Close)
 	s := &Sea{Number: 1, Epoch: sceneEpoch, Bus: w.Bus(), Boats: cat.Boats, Limit: capacity, Timeline: tl, Waves: waves, Ground: terrain.Ground, Shelter: terrain.Shelter,
 		Bundle: b, Chart: model, Sight: sg, Words: weather.WordsOf(cat), Catalog: cat, Kinds: kinds, Encounters: enc,
-		Biomes: map[string]string{}, Sky: cat.PrepareSky()}
+		Biomes: map[string]string{}, Sky: cat.PrepareSky(), Looks: sailorlooks.New(cat)}
 	for _, is := range b.Islands {
 		if is.Kind == worldgen.KindMain {
 			s.Start = is.Name
@@ -148,7 +149,12 @@ func (sc *scene) boat(st physics.State, machine bool) int32 {
 	sc.next++
 	reply := make(chan bus.Reply, 1)
 	dev := sc.w.Bus().Commands.Developer()
-	dev.TrySend(bus.Command{Op: bus.Join, Account: bus.Account{0x01, 0x9a, sc.next}, Conn: uint64(sc.next), Machine: machine, Reply: reply})
+	look := sc.sea.Looks.Draw(uint64(sc.next))
+	if machine {
+		look = sc.sea.Looks.DrawMachine(uint64(sc.next))
+	}
+	dev.TrySend(bus.Command{Op: bus.Join, Account: bus.Account{0x01, 0x9a, sc.next}, Conn: uint64(sc.next), Machine: machine,
+		Look: sc.sea.Looks.Code(look), Reply: reply})
 	sc.w.Tick()
 	r := <-reply
 	dev.TrySend(bus.Command{Op: bus.Place, Boat: r.Boat, State: st})
@@ -286,6 +292,33 @@ func TestSceneACrossing(t *testing.T) {
 		t.Fatalf("no human in sight:\n%s", text)
 	}
 	golden(t, "crossing", text)
+	sc.parity(me, text)
+}
+
+// A boat within 60 m is named by its sailor's look, as a sailor on deck
+// sees it; one beyond is not.
+func TestSceneLooksClose(t *testing.T) {
+	sc := newScene(t, 12, 0)
+	at := sc.start()
+	at.X, at.Y = 1500, -1500
+	me := sc.boat(at, true)
+	near, far := at, at
+	near.X += 40
+	far.Y += 150
+	n := sc.boat(near, false)
+	m := sc.boat(far, true)
+	sc.sail(time.Second)
+	text, _ := sc.report(me)
+	f := sc.w.Latest()
+	nearLook, _ := sc.sea.Looks.Of(f.Look[n])
+	farLook, _ := sc.sea.Looks.Of(f.Look[m])
+	if !strings.Contains(text, "human · "+sc.sea.Looks.Seen(nearLook)+" · ") {
+		t.Fatalf("the near boat is not named %q:\n%s", sc.sea.Looks.Seen(nearLook), text)
+	}
+	if !strings.Contains(text, "B2 machine · ") || strings.Contains(text, sc.sea.Looks.Seen(farLook)) || strings.Contains(text, "machine sailor in") {
+		t.Fatalf("the far boat is named:\n%s", text)
+	}
+	t.Logf("a report with a boat close by:\n%s", text)
 	sc.parity(me, text)
 }
 

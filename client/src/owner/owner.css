@@ -653,3 +653,10 @@ table.busy td {
 .gales li.chosen button {
   color: #d55e00;
 }
+
+/* An account's sailor: the portrait beside the look in words. */
+dd.card-look {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}

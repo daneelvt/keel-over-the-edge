@@ -11,6 +11,8 @@
 import { signal } from '@preact/signals';
 import type { ComponentChildren, VNode } from 'preact';
 import { describe, expect, test } from 'vitest';
+import { catalog } from '../catalog';
+import { codeOf, drawLook, lookWords } from '../catalog/looks';
 import { HelmInput } from '../input/helm';
 import { PilotInput } from '../input/pilot';
 import { SheetInput } from '../input/sheet';
@@ -616,6 +618,24 @@ describe('the card about a sailor', () => {
     // The Watch button is the foot's, after the sections.
     const foot = find(t, (v) => v.props.class === 'watch-card-foot');
     expect(buttons(foot)).toEqual(['Watch']);
+  });
+
+  test('the sailor’s portrait in the heading’s row, from the look code; none without one', () => {
+    const look = drawLook(catalog, () => 0.4);
+    const t = drawn({ ...card, look: codeOf(catalog, look) });
+    const pictures = find(t, (v) => v.type === 'canvas');
+    expect(pictures).toHaveLength(1);
+    expect(pictures[0]?.props.class).toBe('portrait portrait-72');
+    expect(pictures[0]?.props.role).toBe('img');
+    expect(pictures[0]?.props['aria-label']).toBe(lookWords(catalog, look));
+    const head = find(t, (v) => v.props.class === 'watch-card-head');
+    expect(find(head, (v) => v.type === 'canvas')).toHaveLength(1);
+    expect(text(find(t, (v) => v.props.class === 'watch-card-name'))).toBe(
+      'Iron Mary⚙ · Jolly boat',
+    );
+    expect(find(drawn(card), (v) => v.type === 'canvas')).toHaveLength(0);
+    // A code that names no look in this catalog: no portrait.
+    expect(find(drawn({ ...card, look: 2 ** 20 - 1 }), (v) => v.type === 'canvas')).toHaveLength(0);
   });
 
   test('where withheld while the viewer’s own boat is in the water', () => {

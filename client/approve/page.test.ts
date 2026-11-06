@@ -5,6 +5,7 @@ import { describe, expect, test } from 'vitest';
 import { drawMachine, type MachineItem } from '../src/account/machineform';
 import type { Fetch } from '../src/account/me';
 import { APPROVE_REASONS, approveReasonText, REASONS } from '../src/account/reasons';
+import { catalog } from '../src/catalog';
 import {
   type ApproveReach,
   ApproveView,
@@ -20,6 +21,7 @@ import {
   readRequest,
   type ViewProps,
 } from './page';
+import { machineFiles, machinePicture } from './portraits';
 
 // Expands function components, so a test can see the elements they make.
 function expand(node: ComponentChildren): ComponentChildren {
@@ -89,7 +91,7 @@ const tin: MachineItem = {
     version: 'v1',
     finish: 'f1',
     colour: 'c1',
-    words: 'Brass · female · deep red',
+    words: 'Machine, female, Brass, deep red',
     srgb: '#9e2b25',
   },
   atSea: true,
@@ -193,7 +195,7 @@ describe('the approval page', () => {
     const text = textOf(v);
     expect(text).toContain('Signed in as Ann Bonny');
     expect(text).toContain('Tin Jack');
-    expect(text).toContain('Brass · female · deep red');
+    expect(text).toContain('Machine, female, Brass, deep red');
     expect(text).toContain('at sea');
     expect(text).toContain('Approved: Claude');
     expect(text).not.toContain('Old app');
@@ -203,6 +205,8 @@ describe('the approval page', () => {
     expect(buttons(v)).toEqual(['Approve', 'Cancel']);
     // The swatch is coloured by script, not by an inline style.
     expect(findAll(v, 'span').some((s) => s.props.style !== undefined)).toBe(false);
+    // Each machine sailor beside its portrait, a row's size.
+    expect(findAll(v, 'canvas').map((c) => c.props.class)).toEqual(['portrait portrait-40']);
   });
 
   test('signed in with none: the form to make one, drawn already', () => {
@@ -212,8 +216,53 @@ describe('the approval page', () => {
     const text = textOf(v);
     expect(text).toContain('Make a machine sailor');
     expect(text).toContain('Its name');
-    expect(text).toContain('Brass · female · deep red');
-    expect(buttons(v)).toEqual(['Draw another', 'Approve', 'Cancel']);
+    expect(text).toContain('Machine, female, Brass, deep red');
+    // The picker: the versions in words, the finishes and colours as swatches, named.
+    expect(buttons(v)).toEqual([
+      'Draw another',
+      'female',
+      'male',
+      '',
+      '',
+      '',
+      '',
+      'Approve',
+      'Cancel',
+    ]);
+    const radios = findAll(v, 'button').filter((b) => b.props.role === 'radio');
+    expect(radios.map((b) => b.props['aria-label'])).toEqual([
+      'female',
+      'male',
+      'Brass',
+      'Iron',
+      'deep red',
+      'navy blue',
+    ]);
+    expect(findAll(v, 'canvas').map((c) => c.props.class)).toEqual(['portrait portrait-72']);
+    // Nothing styled inline: the page's policy allows none.
+    for (const kind of ['span', 'canvas', 'button', 'div']) {
+      expect(findAll(v, kind).some((s) => s.props.style !== undefined)).toBe(false);
+    }
+  });
+
+  test('the portraits: the machine versions’ own pictures, in the server’s colours', () => {
+    for (const v of catalog.machine.versions) {
+      const files = machineFiles(v.id);
+      expect(files?.base).toContain(v.art.portrait);
+      expect(files?.fallback).toContain(v.art.portraitFallback);
+      expect(files?.mask).toContain(v.art.portraitMask);
+    }
+    expect(machineFiles('no such version')).toBeNull();
+    const canvas = expand(
+      machinePicture(looks)({ version: 'v1', finish: 'f2', colour: 'c2' }, 72),
+    ) as VNode<Record<string, unknown>>;
+    expect(canvas.type).toBe('canvas');
+    expect(canvas.props['aria-hidden']).toBe('true');
+    const p = machinePicture(looks)({ version: 'v1', finish: 'f2', colour: 'c2' }, 72) as VNode<
+      Record<string, unknown>
+    >;
+    expect(p.props.colours).toEqual({ main: '#24406b', skin: '#5d6066' });
+    expect(p.props.files).toBeNull();
   });
 
   test('at the cap: no machine sailor to make', () => {

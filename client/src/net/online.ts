@@ -141,6 +141,8 @@ export class Online {
   readonly watching = signal<WatchingTold | null>(null);
   /** The look code of the boat in view's sailor, the own or the one watched, as last told; null before a Welcome. */
   readonly look = signal<number | null>(null);
+  /** The world's harbour, Port Royal's, as the last Welcome named it; null for none. */
+  harbour: Harbour | null = null;
   /** The last watch ended or refused, until the next Welcome. */
   readonly ended = signal<WatchEnd | null>(null);
   /** The place in the spectators' queue, while all the places to watch are taken, or null. */
@@ -476,6 +478,7 @@ export class Online {
         this.tools.value = m.tools;
         this.#predictor.setCirculation(m.circulation);
         this.#predictor.setHarbour(m.harbour);
+        this.harbour = m.harbour;
         this.watching.value = m.watching;
         this.#lamp.value = null;
         this.ended.value = null;
