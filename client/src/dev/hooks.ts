@@ -1605,6 +1605,26 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
             },
       );
     },
+    /**
+     * The question asked before the own boat leaves the water to watch, in
+     * its window over the screen at sea, as the list shows it; false takes
+     * it away. Resolves once it is drawn.
+     */
+    async leaveQuestion(on: boolean): Promise<void> {
+      document.querySelector('.hud.leave-test')?.remove();
+      if (!on) {
+        return;
+      }
+      const [{ h, render }, { LeaveWindow }] = await Promise.all([
+        import('preact'),
+        import('../ui/watch'),
+      ]);
+      const host = document.createElement('div');
+      host.className = 'hud leave-test';
+      document.body.append(host);
+      const gone = () => host.remove();
+      render(h(LeaveWindow, { className: 'panel watch-list', leave: gone, stay: gone }), host);
+    },
     /** What the page did from the tap to the world's reveal; null before it, or in the sandbox. */
     revealed(): Revealed | null {
       return sailing.revealed?.() ?? null;

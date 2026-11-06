@@ -747,6 +747,10 @@ async function plateFaults(page: Page, boat: Box | null): Promise<string[]> {
           `the plate is not at the foot of the screen (${[p.left, p.top, p.right, p.bottom].map(Math.round)})`,
         );
       }
+      // Centred, to a pixel.
+      if (Math.abs((p.left + p.right) / 2 - innerWidth / 2) > 1) {
+        out.push(`the plate is not centred (${Math.round(p.left)} to ${Math.round(p.right)})`);
+      }
       const covers = (r: DOMRect | { left: number; top: number; right: number; bottom: number }) =>
         Math.min(p.right, r.right) - Math.max(p.left, r.left) > 0.5 &&
         Math.min(p.bottom, r.bottom) - Math.max(p.top, r.top) > 0.5;
@@ -1575,6 +1579,126 @@ test('on the chart the arrow shrinks as it zooms out, the notices stand clear of
     }
     await page.evaluate(() => globalThis.keel.chartTime(0));
     await expect.poll(async () => (await hands()).ahead).toBe(false);
+  }
+  expect(found).toEqual([]);
+});
+
+/**
+ * What is not in the plate's brass and lacquer: each visible part named,
+ * its frame's colour, its face and any blur behind it; and any button in
+ * it smaller than 44 pixels either way.
+ */
+async function lookFaults(page: Page, sel: string): Promise<string[]> {
+  return page.evaluate((sel) => {
+    const out: string[] = [];
+    const parts = [...document.querySelectorAll<HTMLElement>(sel)].filter(
+      (e) => e.getBoundingClientRect().width > 0 && e.checkVisibility(),
+    );
+    if (parts.length === 0) {
+      return [`nothing shown for ${sel}`];
+    }
+    for (const e of parts) {
+      const st = getComputedStyle(e);
+      const name = `${e.tagName.toLowerCase()}.${[...e.classList].join('.')}`;
+      // By its sides: a complication's top is the seam that joins it to the case.
+      if (st.borderLeftColor !== 'rgb(138, 101, 36)' || st.borderLeftWidth !== '1px') {
+        out.push(`${name}: framed ${st.borderLeftWidth} ${st.borderLeftColor}`);
+      }
+      if (!st.backgroundImage.includes('linear-gradient')) {
+        out.push(`${name}: its face is ${st.backgroundColor} ${st.backgroundImage}`);
+      }
+      if (st.backdropFilter !== 'none' && st.backdropFilter !== '') {
+        out.push(`${name}: blurs what is behind it (${st.backdropFilter})`);
+      }
+      for (const b of e.querySelectorAll('button')) {
+        const r = b.getBoundingClientRect();
+        if (r.width > 0 && (r.width < 43.5 || r.height < 43.5)) {
+          out.push(
+            `${name}: “${b.getAttribute('aria-label') ?? b.textContent}” is ${Math.round(r.width)} × ${Math.round(r.height)}`,
+          );
+        }
+      }
+    }
+    return out;
+  }, sel);
+}
+
+test('every panel and window on the screen at sea is in the plate’s brass and lacquer, its keys the head’s, the watch plate centred', async ({
+  page,
+}) => {
+  test.skip(test.info().project.name === 'webgpu', 'the panels are the same on either back end');
+  const screens = [
+    SCREENS[1],
+    SCREENS[5],
+    { name: 'a desktop', width: 1440, height: 900 },
+  ] as const;
+  await page.setViewportSize({ width: screens[0].width, height: screens[0].height });
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await openScene(page, 'world=1', true);
+  await expect
+    .poll(() => page.evaluate(() => globalThis.keel.toHarbour()), { timeout: 30_000 })
+    .toBe(true);
+  await page.evaluate(() => {
+    const k = globalThis.keel;
+    k.settings({ barometer: true, clock: true, forcesOverlay: true });
+    k.render();
+  });
+  await expect(page.locator('[data-pusher=board]')).toBeVisible({ timeout: 15_000 });
+  const found: string[] = [];
+  const check = async (where: string, sel: string) => {
+    for (const f of await lookFaults(page, sel)) {
+      found.push(`${where}: ${f}`);
+    }
+  };
+  for (const s of screens) {
+    await page.setViewportSize({ width: s.width, height: s.height });
+    await page.waitForFunction(
+      ({ width, height }) => innerWidth === width && innerHeight === height,
+      { width: s.width, height: s.height },
+    );
+    await page.waitForTimeout(200);
+    await check(s.name, '.case-top, .complications, .hud-top > .panel:not(.case)');
+    // A notice.
+    await page.evaluate(() => globalThis.keel.raiseNotice('charted-own', { name: 'Keyhole Rock' }));
+    await check(`${s.name}, a notice`, '.notice');
+    await page.locator('.notice-dismiss').click();
+    // The menu.
+    await page.getByRole('button', { name: 'Menu' }).click();
+    await check(`${s.name}, the menu`, '.menu');
+    await page.locator('.menu-x').click();
+    // The harbour board.
+    await page.locator('[data-pusher=board]').click();
+    await check(`${s.name}, the harbour board`, '.board');
+    await page.locator('.board').getByRole('button', { name: 'Close', exact: true }).click();
+    // The question before the boat leaves the water: a window of its own,
+    // no wider than 360 pixels, centred; Escape is Stay.
+    await page.evaluate(() => globalThis.keel.leaveQuestion(true));
+    await expect(page.locator('.watch-asking')).toBeVisible();
+    await check(`${s.name}, the question`, '.watch-asking');
+    const q = await page.evaluate(() => {
+      const r = document.querySelector('.watch-asking')?.getBoundingClientRect();
+      return r === undefined ? null : { left: r.left, right: r.right, width: r.width };
+    });
+    if (q === null || q.width > 360.5 || Math.abs((q.left + q.right) / 2 - s.width / 2) > 1) {
+      found.push(`${s.name}: the question’s window is ${JSON.stringify(q)}`);
+    }
+    await page.keyboard.press('Escape');
+    await expect(page.locator('.watch-asking')).toHaveCount(0);
+    // The plate.
+    await page.evaluate((name) => globalThis.keel.watchPlate(name), LONG);
+    await expect(page.locator('.watch-plate')).toBeVisible();
+    await check(`${s.name}, the plate`, '.watch-plate');
+    const p = await page.evaluate(() => {
+      const r = document.querySelector('.watch-plate')?.getBoundingClientRect();
+      return r === undefined ? null : { left: r.left, right: r.right };
+    });
+    if (p === null || Math.abs((p.left + p.right) / 2 - s.width / 2) > 1) {
+      found.push(`${s.name}: the plate is at ${JSON.stringify(p)}, not centred`);
+    }
+    await page.evaluate(() => globalThis.keel.watchPlate(null));
+    await page.evaluate(() =>
+      globalThis.keel.settings({ barometer: true, clock: true, forcesOverlay: true }),
+    );
   }
   expect(found).toEqual([]);
 });
