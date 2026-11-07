@@ -47,29 +47,7 @@ type Config struct {
 	// Nearest, if not nil, is the nearest charted island or place to a
 	// point, m east and north of the centre.
 	Nearest func(east, north float64) Place
-	// Formed, if not nil, is told of each of the week's storms as it
-	// forms, once a storm in a process: the news tells of it once.
-	Formed func(ctx context.Context, s Storm)
-	Log    *slog.Logger
-}
-
-// Storm is a storm of the week as it forms: its slot and its seed, which
-// name it; the tick it was born at; and at the tick it is told at, where
-// it is, m east and north, and the direction it moves toward, rad, and how
-// fast, m/s.
-type Storm struct {
-	Slot        int32
-	Seed        uint32
-	Born, At    int64
-	East, North float64
-	Heading     float64
-	Speed       float64
-}
-
-// stormKey is a storm told.
-type stormKey struct {
-	slot int32
-	seed uint32
+	Log     *slog.Logger
 }
 
 // Issue is an issue of the forecast: its tick, the forecast, its gale scan
@@ -111,7 +89,6 @@ type Issuer struct {
 	mu     sync.Mutex
 	issues map[int64]*Issue
 	end    int64
-	told   map[stormKey]bool
 
 	now atomic.Pointer[latest]
 	// scratch for the gale scan, the worker's
@@ -125,7 +102,7 @@ func New(cfg Config) *Issuer {
 	n := int(p.GaleSide()) * int(p.GaleSide())
 	is := &Issuer{
 		cfg: cfg, water: make([]uint8, n), on: make([]uint8, n),
-		work: make(chan request, 1), issues: map[int64]*Issue{}, told: map[stormKey]bool{},
+		work: make(chan request, 1), issues: map[int64]*Issue{},
 	}
 	physics.GaleWater(p, cfg.Ground, is.water)
 	if is.cfg.Log == nil {
@@ -205,47 +182,6 @@ func (is *Issuer) Update(ctx context.Context, tick int64, ws []bus.Weather, ss [
 	old := is.Issue(from, ws, ss)
 	p := tl.PastOf(from, at, ws, ss)
 	is.now.Store(&latest{issue: issue, past: protocol.ForecastPast(old.Message, p.Keyframes, p.Spells), at: at})
-	if is.cfg.Formed != nil {
-		for _, s := range is.formed(issue, tick) {
-			is.cfg.Formed(ctx, s)
-		}
-	}
-}
-
-// formed are the week's storms of an issue's that have formed by a tick
-// and are not yet told in this process: born no longer before it than the
-// forecast's horizon, so a process begun again tells again those it may
-// not have told, and the news, which keeps each storm's item once, tells
-// each once.
-func (is *Issuer) formed(x *Issue, tick int64) []Storm {
-	tl := is.cfg.Timeline
-	kind := float64(tl.Config().Week.Storms)
-	within := float64(tl.Prepared().ForecastHorizon())
-	f := &x.Forecast
-	origin := f.Head.Origin
-	local := float64(tick) - origin
-	var out []Storm
-	is.mu.Lock()
-	defer is.mu.Unlock()
-	for i := range int(f.Head.NSystems) {
-		r := &f.Systems[i]
-		slot := int32(f.Head.Slots[i])
-		if r.Kind != kind || slot >= physics.WeekSystems || !(r.Born <= local && local < r.Gone && r.Born > local-within) {
-			continue
-		}
-		k := stormKey{slot, uint32(r.Seed)}
-		if is.told[k] {
-			continue
-		}
-		is.told[k] = true
-		s := physics.SystemAt(r, local)
-		out = append(out, Storm{
-			Slot: slot, Seed: k.seed, Born: int64(r.Born + origin), At: tick,
-			East: s.East / 4, North: s.North / 4,
-			Heading: s.Heading * 2 * math.Pi / physics.TurnSteps, Speed: s.Speed * physics.SeaSpeedStep,
-		})
-	}
-	return out
 }
 
 // Issue is the issue at a tick, a boundary of the forecast's every, with

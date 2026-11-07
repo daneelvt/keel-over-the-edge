@@ -166,7 +166,6 @@ type database interface {
 	WorldsToDrop(ctx context.Context, before time.Time) ([]store.World, error)
 	DropWorld(ctx context.Context, lease int64, w store.World) error
 	WriteWorldNews(ctx context.Context, lease int64, world [16]byte, n store.WorldNews) error
-	WriteGaleNews(ctx context.Context, lease int64, world [16]byte, n store.GaleNews) (bool, error)
 	oauth.Store
 	api.Machines
 	accounts.Store
