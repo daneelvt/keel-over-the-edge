@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"math"
 	"strings"
 	"time"
 
@@ -268,7 +267,8 @@ func (h *helm) holding() string {
 	}
 	p := pilotOf(f, sl)
 	word, _, _ := held(s, f, sl)
-	line := fmt.Sprintf("%s, boom out to %d°", p.Holds, int(math.Round(boomOf(s.boat(f.Kind[sl]), word.SheetIndex()))))
+	b := s.boat(f.Kind[sl])
+	line := p.Holds + ", " + trimWords(b, boomOf(b, word.SheetIndex()))
 	if sail := f.Instruments[sl].Sail; f.Machine[sl] && sail != bus.SailDrawing {
 		line += ", " + sailWords[sail]
 	}

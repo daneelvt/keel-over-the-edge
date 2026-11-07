@@ -92,7 +92,7 @@ func tools() []toolDef {
 			Name: toolSteer, Title: "Steer",
 			Description: "Steer by autopilot (wind_angle with side, or heading) or by hand (rudder). " +
 				"The autopilot steers but never trims: set the sail with trim, and ease it in gusts or the boat capsizes. " +
-				"Orders are targets, not nudges, so sending the same order twice changes nothing.",
+				"Orders are targets: the same order twice changes nothing.",
 			Annotations: hints("Steer", false, true, false), Meta: alwaysLoad(),
 			InputSchema: schema(`{"type":"object","properties":{` +
 				`"wind_angle":{"type":"integer","minimum":30,"maximum":180,"description":"Autopilot: this angle off the true wind."},` +
@@ -113,7 +113,7 @@ func tools() []toolDef {
 				"A rough guide is half the apparent wind's angle. Ease it in gusts and in a breeze, or the boat heels too far and capsizes.",
 			Annotations: hints("Trim", false, true, false), Meta: alwaysLoad(),
 			InputSchema: schema(`{"type":"object","properties":{` +
-				`"boom":{"type":"integer","minimum":4,"maximum":95,"description":"Degrees the boom may swing out. Ease (larger) in gusts."},` +
+				`"boom":{"type":"integer","minimum":4,"maximum":95,"description":"Degrees the boom may swing out; a ship's yards, off the centreline. Ease (larger) in gusts."},` +
 				"\"reef\":{\"type\":\"integer\",\"minimum\":0,\"maximum\":2," +
 				`"description":"0 full sail; 1 or 2 reefs: a smaller sail, heeling less in a strong wind. Give boom, reef or both."}` +
 				`}}`),
