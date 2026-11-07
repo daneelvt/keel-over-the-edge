@@ -534,8 +534,9 @@ boats:
     # Her lookout is in the main top, the eye 15 m above the sea.
     lookout: 15
     # Her braces for a start from rest, by the angle off the wind: from
-    # tools/polar's sweep from rest (-start).
-    startSheet: [[90, 0.4], [110, 0.6], [130, 0.8]]
+    # tools/polar's sweep from rest (-start), each within 95% of the best
+    # braces' speed after 20 s in 3, 5 and 8 knots.
+    startSheet: [[90, 0.3], [110, 0.65], [130, 1]]
     controls:
       sheet: { name: Braces, trim: Brace up, ease: Square }
       reef: [Plain sail, Topgallants in, Topsails reefed]
@@ -718,7 +719,7 @@ boats:
         # Estimate: the yards meet the lee shrouds; tuned by tools/polar so
         # that her best VMG is 65° to 70° off the wind (at 30° she pointed
         # 55° to 60°).
-        braceSharp: 40
+        braceSharp: 42
         # Estimate: the crew swings the yards from sharp up on one side to the
         # other in half a minute, the wind helping them round.
         braceTime: 30
@@ -754,7 +755,12 @@ boats:
         # close-hauled.
         carryOver: 3.9
         heelLoss: 0.382
-        rudderInflow: 0.8 # estimate: behind a full hull
+        # Estimate: her rudder, as deep as her keel on the sternpost, meets
+        # the water at her own speed; tuned by tools/polar: at 0.8, the
+        # first estimate, behind a full hull, it could not hold her as she
+        # gathered way after a tack or a wear, and she came up into the
+        # wind again.
+        rudderInflow: 1.0
         downwash: 0.3 # estimate
         foilWetHeel: 70
         foilDryHeel: 130
@@ -795,7 +801,9 @@ boats:
         trimBand: 10
         tackHelm: 1.0
         gybeHelm: 1.0 # a wear in under four lengths of her
-        byTheLee: 30
+        # Her mizzen's boom gybes by itself 24° to 27° by the lee in 12 and
+        # 18 knots (tools/polar -manoeuvres).
+        byTheLee: 20
         onCourse: 10
         astern: 0.05
         # m/s, 3 knots: slower, a tack that gains too little stalls and she

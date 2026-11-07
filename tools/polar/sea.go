@@ -63,9 +63,13 @@ func sailInWaves(k *kind, w *physics.Waves, windKnots, twa, sheet float64) waveP
 	sea := newOpenSea(w, k.wind10(windKnots))
 	h := k.helmsmanOf(twa)
 	bt := newBoat(k, k.wind10(windKnots), h.target, sheet, 0)
-	n := int((seaSettle + seaMeasure) * physics.StepsPerSecond)
-	start := int(seaSettle * physics.StepsPerSecond)
+	// A slow boat settles as much longer as she does in flat water.
+	settled := seaSettle * k.settleAt(k.wind10(windKnots)) / settle
+	n := int((settled + seaMeasure) * physics.StepsPerSecond)
+	start := int(settled * physics.StepsPerSecond)
 	p := wavePoint{TWA: twa, Sheet: sheet}
+	var words [4]int
+	leeway := 0.0
 	speeds := make([]float64, 0, n-start)
 	y0 := 0.0
 	for i := range n {
@@ -81,6 +85,8 @@ func sailInWaves(k *kind, w *physics.Waves, windKnots, twa, sheet float64) waveP
 			p.Heel = max(p.Heel, math.Abs(bt.s.Heel)/deg)
 			p.Heave = max(p.Heave, math.Abs(bt.s.Heave))
 			p.Pitch = max(p.Pitch, math.Abs(bt.s.Pitch)/deg)
+			words[int(bt.o.Sail)]++
+			leeway += bt.o.Leeway
 		}
 	}
 	slices.Sort(speeds)
@@ -93,6 +99,17 @@ func sailInWaves(k *kind, w *physics.Waves, windKnots, twa, sheet float64) waveP
 	p.P90 = speeds[len(speeds)*9/10] / knot
 	p.VMG = (bt.s.Y - y0) / seaMeasure / knot
 	p.OK = !bt.capsized
+	if k.square {
+		// A ship aback or lifting, or going sideways, is not sailing.
+		word := 0
+		for w, c := range words {
+			if c > words[word] {
+				word = w
+			}
+		}
+		leeway /= float64(n - start)
+		p.OK = p.OK && word != physics.SailAback && word != physics.SailLuffing && math.Abs(leeway) < 45*deg
+	}
 	return p
 }
 

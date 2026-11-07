@@ -8111,4 +8111,4 @@ export interface NewsColumn {
 }
 
 /** The catalog version (tools/catalog). */
-export const CATALOG_VERSION = '8342880ffe462dd9';
+export const CATALOG_VERSION = '7bb1184061c90334';

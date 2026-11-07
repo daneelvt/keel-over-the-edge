@@ -37,11 +37,15 @@ type kind struct {
 	// boat slow to answer her helm and her sails (newKind).
 	steerRate       float64
 	settle, measure float64
-	// steerTrim is how fast the helmsman learns a standing helm, helm per
-	// radian off course per second: 0 for a boat quick to answer, whose
-	// helm is small. startSurge is the speed each sail begins at, m/s.
+	// slow is set for such a boat: her helmsman learns a standing helm,
+	// steerTrim, helm per radian off course per second, and her sails
+	// begin and settle by the wind (startAt, settleAt), no faster than
+	// startSurge, m/s.
+	slow       bool
 	steerTrim  float64
 	startSurge float64
+	// mass is her mass with the water she carries ahead, kg.
+	mass float64
 	// square is set for a boat with square sails: her sheet is the braces,
 	// the tool's boom the yards' angle off the centreline, and its angle of
 	// attack the after yards' lower sails'; in is the least of it, hauled
@@ -54,42 +58,72 @@ type kind struct {
 // meets a turn as far ahead as its rudder takes to go from hard over to
 // hard over, and no less than steerRate: a ship's wheel is slow. It sails
 // a point for settle, or for half the time her hull's drag takes to change
-// her speed at sailFrom, M / (ρ C_D A V), if that is longer: from there
-// her sails' drive, several times her hull's drag, brings her to her
-// steady speed in about that. It measures a third as long.
+// her speed at sailFrom, M / (ρ C_D A V), if that is longer: a boat so
+// slow to answer her sails is sailed by settleAt. It measures a third as
+// long.
 //
-// A boat that takes longer than settle carries a helm too large for a
-// heading-hold alone to keep her on course: its helmsman learns a standing
-// helm in the time it measures, as a ship's helmsman holds the spokes she
-// needs. Each of its sails begins at startFroude of her waterline's wave
-// speed, √(g L), if that is faster than sailFrom: from a dinghy's speed a
-// ship gathers way so slowly that her sails swing her head round before
-// her rudder can hold it.
+// A slow boat carries a helm too large for a heading-hold alone to keep
+// her on course: its helmsman learns a standing helm in the time it
+// measures, as a ship's helmsman holds the spokes she needs.
 func newKind(id, name string, b *physics.Prepared, p *physics.Params, height float64, startSheet [][]float64) *kind {
 	k := &kind{id: id, name: name, b: b, p: p, height: height, startSheet: startSheet,
 		steerRate: max(steerRate, steerGain*p.RudderTime), settle: settle, startSurge: sailFrom,
-		square: p.SquareForeArea > 0 || p.SquareAfterArea > 0, in: p.BoomIn}
+		square: p.SquareForeArea > 0 || p.SquareAfterArea > 0, in: p.BoomIn,
+		mass: p.Displacement + p.AddedMassSurge}
 	if k.square {
 		k.in = p.BraceSharp
 	}
-	i := sailFrom / p.DragAreaStep
-	j := int(i)
-	area := p.DragArea[j] + (i-float64(j))*(p.DragArea[j+1]-p.DragArea[j])
-	k.settle = max(settle, (p.Displacement+p.AddedMassSurge)/(waterDensity*area*sailFrom)/2)
+	k.settle = max(settle, k.answer(sailFrom)/2)
 	k.measure = k.settle * measure / settle
 	if k.settle > settle {
+		k.slow = true
 		k.steerTrim = steerGain / k.measure
 		k.startSurge = max(sailFrom, startFroude*math.Sqrt(gravity*p.WaterlineLength))
 	}
 	return k
 }
 
+// answer is the time her hull's drag takes to change her speed near v
+// m/s, M / (ρ C_D A V), s.
+func (k *kind) answer(v float64) float64 {
+	i := v / k.p.DragAreaStep
+	j := min(int(i), len(k.p.DragArea)-2)
+	area := k.p.DragArea[j] + (i-float64(j))*(k.p.DragArea[j+1]-k.p.DragArea[j])
+	return k.mass / (waterDensity * area * v)
+}
+
+// startAt is the speed a sail begins at in a wind of m/s 10 m up: a
+// dinghy's sailFrom; a slow boat's startShare of the wind, or startFroude
+// of her waterline's wave speed, √(g L), whichever is less, and no less
+// than sailFrom. From a dinghy's speed a ship gathers way so slowly that
+// her sails swing her head round before her rudder can hold it, and from
+// her own in a fresh breeze she is so slow to lose way in light air that
+// a sail never settles.
+func (k *kind) startAt(wind float64) float64 {
+	if !k.slow {
+		return sailFrom
+	}
+	return max(sailFrom, min(k.startSurge, startShare*wind))
+}
+
+// settleAt is how long a sail is sailed before it is measured in a wind
+// of m/s 10 m up: a dinghy's settle; a slow boat's the time her hull's
+// drag takes to change her speed at the speed she begins at, which in
+// light air is many minutes.
+func (k *kind) settleAt(wind float64) float64 {
+	if !k.slow {
+		return k.settle
+	}
+	return max(k.settle, k.answer(k.startAt(wind)))
+}
+
 // The physics package's water density, kg/m³, and gravity, m/s²; and the
-// Froude number a slow boat's sails begin at.
+// Froude number and the share of the wind a slow boat's sails begin at.
 const (
 	waterDensity = 1025
 	gravity      = 9.81
 	startFroude  = 0.19
+	startShare   = 0.3
 )
 
 // wind10 returns the wind 10 m up that blows at knots at the kind's
@@ -173,7 +207,7 @@ func newBoat(k *kind, wind, heading, sheet, reef float64) *boat {
 	bt.s.Reef, bt.c.Reef = reef, reef
 	bt.e.WindSpeed = wind
 	bt.s.Heading = heading
-	bt.s.Surge = k.startSurge
+	bt.s.Surge = k.startAt(wind)
 	bt.c.Sheet = sheet
 	bt.s.SheetLimit = math.Pi / 2 * sheet
 	return bt
@@ -228,8 +262,9 @@ func sail(k *kind, windKnots, twa, sheet, reef float64) point {
 	// so the heading is the true wind angle.
 	h := k.helmsmanOf(twa)
 	bt := newBoat(k, k.wind10(windKnots), h.target, sheet, reef)
-	n := int((k.settle + k.measure) * physics.StepsPerSecond)
-	start := int(k.settle * physics.StepsPerSecond)
+	settled := k.settleAt(k.wind10(windKnots))
+	n := int((settled + k.measure) * physics.StepsPerSecond)
+	start := int(settled * physics.StepsPerSecond)
 	var sum point
 	var words [4]int
 	y0, off, helm := 0.0, 0.0, 0.0
@@ -285,11 +320,12 @@ func sail(k *kind, windKnots, twa, sheet, reef float64) point {
 		}
 	}
 	if k.square && (p.Word == physics.SailAback || p.Word == physics.SailLuffing ||
-		helm*per > hardOver*k.p.RudderAngle*deg) {
+		helm*per > hardOver*k.p.RudderAngle*deg || math.Abs(p.Leeway) > 45) {
 		// A ship whose square sails are aback or lifting is not sailing:
 		// they drive her astern, or barely ahead, and only her
 		// fore-and-aft sails hold her way; nor is one whose helm is held
-		// hard over, which her sails turn as they will.
+		// over past half its travel, which her sails turn as they will,
+		// nor one going more sideways or astern than ahead.
 		p.OK, p.Aback = false, true
 	}
 	return p
@@ -297,15 +333,20 @@ func sail(k *kind, windKnots, twa, sheet, reef float64) point {
 
 // hardOver is the share of its greatest angle a ship's rudder is held at,
 // on the mean, when she is out of hand.
-const hardOver = 0.8
+const hardOver = 0.5
 
 // heldWithin is how far off its course a boat may go while it is measured,
 // rad: one that goes further is not sailing the point but turning.
 const heldWithin = 30 * deg
 
 // best finds the sheet that sails fastest at a true wind angle, the sail
-// reefed to reef: a coarse search, then a fine one around the best.
+// reefed to reef: a coarse search, then a fine one around the best. A
+// ship's braces, slow to sail and smooth in what they give, are searched
+// every fifth of their travel, then every twentieth about the best.
 func best(k *kind, windKnots, twa, reef float64) point {
+	if k.square {
+		return search(k, windKnots, twa, reef, 0.2, []float64{-0.1, -0.05, 0.05, 0.1})
+	}
 	var top point
 	aback := false
 	try := func(sheet float64) {
@@ -324,6 +365,33 @@ func best(k *kind, windKnots, twa, reef float64) point {
 	centre := top.Sheet
 	for d := -0.04; d <= 0.0401; d += 0.01 {
 		if s := centre + d; s >= 0 && s <= 1 && math.Abs(d) > 1e-9 {
+			try(s)
+		}
+	}
+	return top
+}
+
+// search is best with a coarse step and the fine offsets about the
+// coarse best.
+func search(k *kind, windKnots, twa, reef, step float64, fine []float64) point {
+	var top point
+	aback := false
+	try := func(sheet float64) {
+		p := sail(k, windKnots, twa, sheet, reef)
+		aback = aback || p.Aback
+		if p.OK && (!top.OK || p.Speed > top.Speed) {
+			top = p
+		}
+	}
+	for i := 0.0; i*step <= 1.0001; i++ {
+		try(i * step)
+	}
+	if !top.OK {
+		return point{TWA: twa, Aback: aback}
+	}
+	centre := top.Sheet
+	for _, d := range fine {
+		if s := centre + d; s >= 0 && s <= 1 {
 			try(s)
 		}
 	}
