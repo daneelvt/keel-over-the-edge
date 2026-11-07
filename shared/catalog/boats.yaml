@@ -794,7 +794,7 @@ boats:
       # The autopilot, tuned by tools/polar -manoeuvres and its behaviour
       # tests: damping strong for her slow turn and her wheel's six seconds.
       # At a gain of 3 and damping 20 she holds close-hauled in a stormy
-      # spell within 0.9° rms and 3° at most (at 2 and 10, the first
+      # spell within 0.9° rms and 2.5° at most (at 2 and 10, the first
       # estimates, 1.2° and 3.6°), and wears from a broad reach keeping 80%
       # of her speed (at a gain of 4, 63%: she rounded up past the beam).
       autopilot:
