@@ -11,6 +11,7 @@ import { BoatChooser } from './boatchooser';
 import {
   BOAT_NOTE,
   BoatLookChooser,
+  BoatPicture,
   CHANGE_ASHORE,
   CHANGE_AT_SEA,
   CHANGE_BOAT,
@@ -202,6 +203,43 @@ describe('the fleet in words', () => {
     expect(machineBoat(fleet(), 'Iron Mary')).toBe(`${sailors?.name} «Gull» 12`);
     expect(machineBoat(fleet(), 'Anne Bonny')).toBe('');
     expect(machineBoat(null, 'Iron Mary')).toBe('');
+  });
+});
+
+describe('the ship of square sails', () => {
+  /** The kind with square sails: the tall ship. */
+  const ship = catalog.boats.find((b) => b.physics.square.squareAfterArea > 0);
+
+  test('is one of the account’s, listed by her kind, name and number, available', () => {
+    expect(ship?.fleet).toBe('account');
+    const f = fleet();
+    const her = boat({ id: 's', kind: ship?.id ?? '', number: 1, name: 'Resolution' });
+    f.boats.push(her);
+    expect(fleetRowWords(catalog, f, her)).toBe(`${ship?.name} «Resolution» 1 · available`);
+    expect(standingWords(f, her)).toBe('available');
+  });
+
+  test('her picture draws her square sails on her masts, her number on the main topsail', () => {
+    const sq = ship?.physics.square;
+    const pic = expand(
+      BoatPicture({
+        cat: catalog,
+        kind: ship?.id ?? '',
+        paint: P[0]?.id ?? '',
+        cloth: C[0]?.id ?? '',
+        number: 7,
+        width: 120,
+      }),
+    );
+    const sails = findAll(
+      pic,
+      (n) => n.type === 'polygon' && n.props.class === 'boat-picture-sail',
+    );
+    expect(sails.length).toBe(4);
+    const number = findAll(pic, (n) => n.type === 'text');
+    expect(number.length).toBe(1);
+    expect(Number(number[0]?.props.x)).toBeCloseTo(sq?.squareAfterMast ?? Number.NaN, 1);
+    expect(text(number[0]?.props.children)).toBe('7');
   });
 });
 

@@ -94,6 +94,30 @@ function sailsOf(b: Boat): { sails: Point[][]; masts: [number, number][]; top: n
   return { sails, masts, top };
 }
 
+/**
+ * Where a kind's sail number is drawn, side on: on the main topsail of a
+ * ship of square sails, else on the mainsail; null for neither.
+ */
+function numberAt(b: Boat): { x: number; y: number; size: number } | null {
+  const s = b.physics.square;
+  if (s.squareAfterArea > 0 && s.squareLuff > 0) {
+    return {
+      x: s.squareAfterMast,
+      y: s.squareFootHeight + s.squareLuff * 0.42,
+      size: s.squareLuff * 0.12,
+    };
+  }
+  const r = b.physics.rig;
+  if (r.luff > 0) {
+    return {
+      x: r.mastPosition - r.foot * 0.38,
+      y: r.boomHeight + r.luff * 0.2,
+      size: r.luff * 0.16,
+    };
+  }
+  return null;
+}
+
 /** Each picture's own clip, by a number of its own. */
 let pictures = 0;
 
@@ -136,7 +160,7 @@ export function BoatPicture({
   const bow = 0.5 * L;
   const hull = `M ${stern} ${-f} L ${bow} ${-1.15 * f} Q ${0.42 * L} ${0.2 * f} ${0.28 * L} ${0.32 * f} L ${-0.4 * L} ${0.32 * f} Q ${stern} ${0.2 * f} ${stern} ${-f} Z`;
   const { sails, masts } = sailsOf(b);
-  const main = sails[0];
+  const at = numberAt(b);
   const id = `boat-clip-${++pictures}`;
   const r = b.physics.rig;
   const bandAt = r.luff > 0 ? r.boomHeight + r.luff * 0.38 : top * 0.45;
@@ -194,11 +218,11 @@ export function BoatPicture({
           fill={c.band}
         />
       )}
-      {number > 0 && main !== undefined && r.luff > 0 ? (
+      {number > 0 && at !== null ? (
         <text
-          x={(r.mastPosition - r.foot * 0.38).toFixed(2)}
-          y={(-(r.boomHeight + r.luff * 0.2)).toFixed(2)}
-          font-size={(r.luff * 0.16).toFixed(2)}
+          x={at.x.toFixed(2)}
+          y={(-at.y).toFixed(2)}
+          font-size={at.size.toFixed(2)}
           text-anchor="middle"
           fill={c?.ink}
           class="boat-picture-number"
