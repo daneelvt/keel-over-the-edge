@@ -1256,6 +1256,11 @@ type Life struct {
 
 	// The schedule's slots of world time, in s.
 	Slot int `json:"slot"`
+
+	// The gulls that wheel over each town by day, as a colony's birds wheel over it:
+	// the kind they are, by its id; how many; how far out and how high they wheel, in
+	// m.
+	Towns LifeTowns `json:"towns"`
 }
 
 // Which boat a group that follows boats takes as it begins: the nearest within
@@ -1438,6 +1443,23 @@ const LifePathPass LifePath = "pass"
 const LifePathSkim LifePath = "skim"
 const LifePathSoar LifePath = "soar"
 const LifePathWork LifePath = "work"
+
+// The gulls that wheel over each town by day, as a colony's birds wheel over it:
+// the kind they are, by its id; how many; how far out and how high they wheel, in
+// m.
+type LifeTowns struct {
+	// Count corresponds to the JSON schema field "count".
+	Count []int `json:"count"`
+
+	// Height corresponds to the JSON schema field "height".
+	Height []float64 `json:"height"`
+
+	// Kind corresponds to the JSON schema field "kind".
+	Kind string `json:"kind"`
+
+	// Wheel corresponds to the JSON schema field "wheel".
+	Wheel []float64 `json:"wheel"`
+}
 
 // Its weight by the sun: by day, at dusk and dawn, and at night.
 type LifeWhen struct {
@@ -5033,4 +5055,4 @@ type WorldZones struct {
 }
 
 // Version is the catalog version (tools/catalog).
-const Version = "15dfb020ae0c1a58"
+const Version = "f51848767195ce9c"

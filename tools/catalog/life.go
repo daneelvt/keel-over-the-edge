@@ -58,6 +58,20 @@ func checkLife(doc map[string]any) error {
 			bad("%s: a speed of nothing never arrives", where)
 		}
 	}
+	towns, _ := life["towns"].(map[string]any)
+	ranged("life.towns.count", towns["count"])
+	ranged("life.towns.wheel", towns["wheel"])
+	ranged("life.towns.height", towns["height"])
+	found := false
+	for _, k := range kinds {
+		kind, _ := k.(map[string]any)
+		if kind["id"] == towns["kind"] && kind["form"] == "bird" {
+			found = true
+		}
+	}
+	if !found {
+		bad("life.towns.kind: %v is not a bird of the life's kinds", towns["kind"])
+	}
 	if len(problems) > 0 {
 		sort.Strings(problems)
 		return fmt.Errorf("the sea's life:\n%s", strings.Join(problems, "\n"))

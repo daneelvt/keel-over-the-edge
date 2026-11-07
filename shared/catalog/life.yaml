@@ -40,6 +40,9 @@ life:
   # a thousand km: 38 at force 1, 25 at 2, 16 at 3, about none at 5 (Cape
   # Hatteras 2013); a gale's sea is empty of fins.
   sea: [1, 1, 1, 0.6, 0.4, 0.15, 0]
+  # A few gulls wheel over each town by day, over its square, or its quay
+  # where it has none, so that the gulls heard in a harbour are seen.
+  towns: { kind: laughing-gull, count: [2, 5], wheel: [25, 70], height: [8, 28] }
 
   # Each kind: its form, family and path; what it does with a boat; its
   # weight by habitat, near a colony and by the sun; the wind it is met in,

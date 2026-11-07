@@ -4276,7 +4276,7 @@
       "description": "The sea's life: the kinds of animal met at sea, and the schedule that says where and when each is met. The server draws it from the world's seed, the place, the time, the habitat there and the weather; every player near is told of each encounter.",
       "type": "object",
       "additionalProperties": false,
-      "required": ["cell", "slot", "lulls", "quiet", "bind", "drop", "dusk", "rainy", "habitat", "sea", "kinds"],
+      "required": ["cell", "slot", "lulls", "quiet", "bind", "drop", "dusk", "rainy", "habitat", "sea", "towns", "kinds"],
       "properties": {
         "cell": { "description": "The schedule's cells' side, in m.", "type": "number", "minimum": 100, "maximum": 10000 },
         "slot": { "description": "The schedule's slots of world time, in s.", "type": "integer", "minimum": 1, "maximum": 3600 },
@@ -4326,6 +4326,19 @@
           }
         },
         "sea": { "description": "The share of water life seen at each Beaufort force from 0, the last for every force beyond it.", "type": "array", "minItems": 1, "maxItems": 13, "items": { "type": "number", "minimum": 0, "maximum": 1 } },
+        "towns": {
+          "title": "LifeTowns",
+          "description": "The gulls that wheel over each town by day, as a colony's birds wheel over it: the kind they are, by its id; how many; how far out and how high they wheel, in m.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "count", "wheel", "height"],
+          "properties": {
+            "kind": { "type": "string", "pattern": "^[a-z][a-z0-9-]*$" },
+            "count": { "type": "array", "minItems": 2, "maxItems": 2, "items": { "type": "integer", "minimum": 0, "maximum": 50 } },
+            "wheel": { "type": "array", "minItems": 2, "maxItems": 2, "items": { "type": "number", "minimum": 5, "maximum": 500 } },
+            "height": { "type": "array", "minItems": 2, "maxItems": 2, "items": { "type": "number", "minimum": 1, "maximum": 200 } }
+          }
+        },
         "kinds": { "description": "The kinds of animal.", "type": "array", "minItems": 1, "maxItems": 255, "items": { "$ref": "#/$defs/LifeKind" } }
       }
     },

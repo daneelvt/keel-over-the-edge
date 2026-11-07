@@ -25,6 +25,7 @@ import {
   ChartSubject,
   type Harbour as HarbourTold,
   Lamp,
+  type LifeEncounter,
   type Light,
   type Place,
   WatchEnd,
@@ -37,6 +38,7 @@ import type {
   ChunksHanded,
   ForecastTold,
   LampState,
+  LifeSeen,
   LightSeen,
   PastTold,
   PlaceSeen,
@@ -130,6 +132,7 @@ export type Received =
   | { kind: 'places'; places: PlaceSeen[] }
   /** Lights come into range, and lights to drop. */
   | { kind: 'lights'; lights: LightSeen[]; drop: number[] }
+  | { kind: 'life'; life: LifeSeen[]; drop: string[] }
   /** The account's owner's flag was set or cleared. */
   | { kind: 'tools'; on: boolean }
   /** The world's chart: whole, or what was charted since. */
@@ -356,6 +359,13 @@ export class Session {
           lights: m.body.value.lights.map(lightSeen),
           drop: [...m.body.value.drop],
         };
+      case 'life':
+        this.#lastHeard = now;
+        return {
+          kind: 'life',
+          life: m.body.value.encounters.map(lifeSeen),
+          drop: m.body.value.drop.map((d) => d.toString()),
+        };
       case 'chart':
         this.#lastHeard = now;
         return { kind: 'chart', entries: m.body.value.entries.map(chartEntry), whole: true };
@@ -565,6 +575,24 @@ export function placeSeen(p: Place): PlaceSeen {
     age: p.age,
     sunk: p.sunk,
     heel: p.heel * TURN,
+  };
+}
+
+/** An encounter with the sea's life as the page draws it, from the server's. */
+export function lifeSeen(e: LifeEncounter): LifeSeen {
+  return {
+    id: e.id.toString(),
+    rev: e.rev,
+    kind: e.kind,
+    start: Number(e.start),
+    end: Number(e.end),
+    east: e.east / 100,
+    north: e.north / 100,
+    heading: e.heading,
+    speed: e.speed,
+    count: e.count,
+    seed: e.seed,
+    with: e.with,
   };
 }
 

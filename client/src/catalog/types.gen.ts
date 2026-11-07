@@ -8204,6 +8204,7 @@ export interface Life {
     | [number, number, number, number, number, number, number, number, number, number, number]
     | [number, number, number, number, number, number, number, number, number, number, number, number]
     | [number, number, number, number, number, number, number, number, number, number, number, number, number];
+  towns: LifeTowns;
   /**
    * The kinds of animal.
    *
@@ -8270,6 +8271,27 @@ export interface LifeHabitat {
    * The habitat's field's cells' side, built as the world loads, in m.
    */
   field: number;
+}
+/**
+ * The gulls that wheel over each town by day, as a colony's birds wheel over it: the kind they are, by its id; how many; how far out and how high they wheel, in m.
+ */
+export interface LifeTowns {
+  kind: string;
+  /**
+   * @minItems 2
+   * @maxItems 2
+   */
+  count: [number, number];
+  /**
+   * @minItems 2
+   * @maxItems 2
+   */
+  wheel: [number, number];
+  /**
+   * @minItems 2
+   * @maxItems 2
+   */
+  height: [number, number];
 }
 /**
  * A kind of animal met at sea: what it is and how it moves, where and when it is met, and how often.
@@ -8383,4 +8405,4 @@ export interface LifeWhen {
 }
 
 /** The catalog version (tools/catalog). */
-export const CATALOG_VERSION = '15dfb020ae0c1a58';
+export const CATALOG_VERSION = 'f51848767195ce9c';
