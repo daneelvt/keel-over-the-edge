@@ -26,7 +26,12 @@ built files are committed; the catalog's `art.model` names them, and
 
 - `lib/gltf.ts`: writes a glTF binary from nodes, meshes and materials.
 - `lib/mesh.ts`: a mesh builder: vertices, faces, normals, tubes and boxes.
+- `lib/fittings.ts`: what every boat carries alike: the tricolour lantern,
+  the pennant, the mainsail's telltales, the foils' blades.
 - `boats/jolly-boat/build.ts`: the Jolly boat.
+- `boats/keelboat/build.ts`: the keelboat, carvel planked with a copper
+  bottom, a fin keel and bulb, a cuddy, a sloop rig with its standing
+  rigging; its helm laid out as the sailors' stage boat's (below).
 - `town/lib/kit.ts` and `town/<biome>/build.ts`: each biome's kit of town
   buildings and props, `town/<biome>.glb`.
 - `icon/icon.ts` and `icon/build.ts`: the game's icon, the boat on sky and
@@ -38,12 +43,15 @@ built files are committed; the catalog's `art.model` names them, and
 A model's nodes are named, and the client finds its parts by those names:
 `hull`, `mast`, `boom` (its origin at the gooseneck), `sail` and `telltales`
 (also at the gooseneck), `pennant` (at the masthead), `rudder` (at its stock)
-with `tiller`, `daggerboard`, and `sailor`, an empty node where the sailor
-sits. The boat's origin is at its centre of gravity's station, on the
-centreline at the waterline; the bow points to -z and starboard is +x. The
-sail, telltales and pennant carry their fractions (of the chord and luff,
-along each ribbon) in their texture coordinates, and the client shapes them
-on the GPU.
+with `tiller`, `daggerboard` (a fixed keel too, its bulb a child), and
+`sailor`, an empty node where the sailor sits. A boat with headsails has
+`jib`, at its tack, its luff up the forestay to its head, `rake` (its
+`extras`) aft of the tack. The boat's origin is at its centre of gravity's
+station, on the centreline at the waterline; the bow points to -z and
+starboard is +x. The sails, telltales and pennant carry their fractions (of
+the chord and luff, along each ribbon) in their texture coordinates, and
+the client shapes them on the GPU. Each level's triangles are within the
+catalog's `art.budget`.
 
 ## Sailors in Blender
 
@@ -127,7 +135,12 @@ figure's own space to the boat model's (`art/boats/jolly-boat.glb`): the
 far level's `place`, for the pose it is made in, and in the clips' file
 `place-<clip>` for each clip, the identity for one not placed in the boat.
 The game puts the figure under the boat's model with it, so it sits where
-the gates judged it.
+the gates judged it. Another boat lays out its helm as that dinghy does
+about the seat (the side deck as wide, the cockpit's floor as deep below
+the gunwale, the tiller's hinge as far from the seat), and its `sailor`
+node's `extras.restage` is how far its seat is from the dinghy's; the game
+moves the clips by it (a tack's cross widened to its beam), and a boat
+without a hiking strap is hiked only to the rail.
 
 Every build is judged before anyone looks at it: the gates
 (`review/metrics.py`: budgets, clean meshes and weights, nothing through

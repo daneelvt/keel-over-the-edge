@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 // Every boat's model against the catalog: its named parts sit where the
-// physics puts them, within 1 cm, and it is within its triangle budget.
+// physics puts them, within 1 cm, its headsail's tack and head where the
+// headsails' are, and each level is within the catalog's triangle budget.
 // Every sailor's art is the sailors' build's: its deck level skinned and
 // within its budget, its far level one posed figure seated by its place, and
 // its clips every one the runtime sails with.
@@ -10,8 +11,6 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, test } from 'vitest';
 import { catalog } from '../catalog';
 
-/** Most triangles in a boat's model (starting value). */
-const BUDGET = 15000;
 /** Most triangles in a sailor's deck and far levels (the build's tables.yaml). */
 const DECK_BUDGET = 3300;
 const FAR_BUDGET = 300;
@@ -24,7 +23,7 @@ interface Gltf {
     translation?: number[];
     mesh?: number;
     children?: number[];
-    extras?: { plan?: { deviation: number } };
+    extras?: { plan?: { deviation: number }; rake?: number; restage?: number[] };
   }[];
   meshes: {
     primitives: { attributes: Record<string, number>; indices: number; material: number }[];
@@ -85,6 +84,7 @@ describe.each(versions)('sailor %s', (_, sailor) => {
 
 describe.each(catalog.boats.map((b) => [b.name, b] as const))('%s', (_, boat) => {
   const g = readGltf(boat.art.model);
+  const far = readGltf(boat.art.far);
   const node = (name: string) => {
     const n = g.nodes.find((x) => x.name === name);
     if (n === undefined) {
@@ -93,24 +93,42 @@ describe.each(catalog.boats.map((b) => [b.name, b] as const))('%s', (_, boat) =>
     return n;
   };
   const at = (name: string): number[] => node(name).translation ?? [0, 0, 0];
-  /** The bounds of a node's primitives of a material, in the node's frame. */
-  const bounds = (name: string, material?: string): { min: number[]; max: number[] } => {
-    const n = node(name);
+  /**
+   * The bounds of a node's primitives of some materials (all, if none
+   * given), in the node's frame; with its children's that have no place of
+   * their own, if asked.
+   */
+  const bounds = (
+    name: string,
+    materials?: string[],
+    children = false,
+  ): { min: number[]; max: number[] } => {
     const min = [Infinity, Infinity, Infinity];
     const max = [-Infinity, -Infinity, -Infinity];
-    for (const p of g.meshes[n.mesh ?? -1]?.primitives ?? []) {
-      if (material !== undefined && g.materials[p.material]?.name !== material) {
-        continue;
+    const add = (n: Gltf['nodes'][number]): void => {
+      for (const p of g.meshes[n.mesh ?? -1]?.primitives ?? []) {
+        if (materials !== undefined && !materials.includes(g.materials[p.material]?.name ?? '')) {
+          continue;
+        }
+        const a = g.accessors[p.attributes.POSITION ?? -1];
+        for (let k = 0; k < 3; k++) {
+          min[k] = Math.min(min[k] as number, a?.min?.[k] ?? Infinity);
+          max[k] = Math.max(max[k] as number, a?.max?.[k] ?? -Infinity);
+        }
       }
-      const a = g.accessors[p.attributes.POSITION ?? -1];
-      for (let k = 0; k < 3; k++) {
-        min[k] = Math.min(min[k] as number, a?.min?.[k] ?? Infinity);
-        max[k] = Math.max(max[k] as number, a?.max?.[k] ?? -Infinity);
+      for (const c of children ? (n.children ?? []) : []) {
+        const child = g.nodes[c];
+        if (child !== undefined && child.translation === undefined) {
+          add(child);
+        }
       }
-    }
+    };
+    add(node(name));
     return { min, max };
   };
-  const { rig, foils, hull, sailor } = boat.physics;
+  /** The hull's shell: its planking, painted or bright, and its sheathing. */
+  const SHELL = ['timber', 'paint', 'copper'];
+  const { rig, foils, hull, sailor, headsails } = boat.physics;
 
   test('has every named part', () => {
     for (const name of [
@@ -129,11 +147,31 @@ describe.each(catalog.boats.map((b) => [b.name, b] as const))('%s', (_, boat) =>
       'grip',
       'sheet',
       'sheet-boom',
-      'strap',
       'gunwale',
       'board-root',
     ]) {
       expect(() => node(name)).not.toThrow();
+    }
+    // A boat with headsails carries them.
+    expect(g.nodes.some((n) => n.name === 'jib')).toBe(headsails.headsailArea > 0);
+  });
+
+  test('its far model has the parts drawn far off, where the near one has them', () => {
+    for (const name of ['hull', 'mast', 'boom', 'sail', 'rudder', 'tiller', 'daggerboard']) {
+      const n = far.nodes.find((x) => x.name === name);
+      expect(n, name).toBeDefined();
+      expect(n?.translation ?? [0, 0, 0]).toEqual(at(name));
+    }
+    expect(far.nodes.some((n) => n.name === 'jib')).toBe(headsails.headsailArea > 0);
+  });
+
+  test('its seat is the stage’s, or says how far it is from it', () => {
+    const restage = node('sailor').extras?.restage;
+    if (restage !== undefined) {
+      expect(restage).toHaveLength(3);
+      for (const v of restage) {
+        expect(Number.isFinite(v)).toBe(true);
+      }
     }
   });
 
@@ -185,8 +223,8 @@ describe.each(catalog.boats.map((b) => [b.name, b] as const))('%s', (_, boat) =>
   });
 
   test('its hull, sail and foils have the physics’ dimensions', () => {
-    const deck = bounds('hull', 'deck');
-    const planks = bounds('hull', 'timber');
+    const deck = bounds('hull', ['deck']);
+    const planks = bounds('hull', SHELL);
     expect(Math.abs((deck.max[0] ?? 0) - (deck.min[0] ?? 0) - boat.beam)).toBeLessThan(CM);
     expect(Math.abs((planks.max[2] ?? 0) - (planks.min[2] ?? 0) - boat.lengthOverall)).toBeLessThan(
       CM,
@@ -195,8 +233,10 @@ describe.each(catalog.boats.map((b) => [b.name, b] as const))('%s', (_, boat) =>
     const sail = bounds('sail');
     expect(Math.abs((sail.max[1] ?? 0) - (sail.min[1] ?? 0) - rig.luff)).toBeLessThan(CM);
     expect(Math.abs((sail.max[2] ?? 0) - (sail.min[2] ?? 0) - rig.foot)).toBeLessThan(CM);
+    // The board or keel at its chord; the deepest of it (a keel's bulb) at the span.
     const board = bounds('daggerboard');
-    expect(Math.abs((board.min[1] ?? 0) + hull.hullDraught + foils.boardSpan)).toBeLessThan(CM);
+    const deepest = bounds('daggerboard', undefined, true);
+    expect(Math.abs((deepest.min[1] ?? 0) + hull.hullDraught + foils.boardSpan)).toBeLessThan(CM);
     expect(Math.abs((board.max[2] ?? 0) - (board.min[2] ?? 0) - foils.boardChord)).toBeLessThan(CM);
     const rudder = bounds('rudder');
     expect(Math.abs((rudder.min[1] ?? 0) + hull.hullDraught + foils.rudderSpan)).toBeLessThan(CM);
@@ -215,16 +255,39 @@ describe.each(catalog.boats.map((b) => [b.name, b] as const))('%s', (_, boat) =>
     expect(p?.attributes.TEXCOORD_1).toBeDefined();
   });
 
-  test(`is under ${BUDGET.toLocaleString('en')} triangles`, () => {
-    let triangles = 0;
-    for (const m of g.meshes) {
-      for (const p of m.primitives) {
-        triangles += (g.accessors[p.indices]?.count ?? 0) / 3;
-      }
-    }
-    expect(triangles).toBeGreaterThan(1000);
-    expect(triangles).toBeLessThan(BUDGET);
+  test(`is within its budget: ${boat.art.budget.near.toLocaleString('en')} triangles near, ${boat.art.budget.far.toLocaleString('en')} far`, () => {
+    expect(triangles(g)).toBeGreaterThan(1000);
+    expect(triangles(g)).toBeLessThanOrEqual(boat.art.budget.near);
+    expect(triangles(far)).toBeGreaterThan(100);
+    expect(triangles(far)).toBeLessThanOrEqual(boat.art.budget.far);
   });
+
+  test.runIf(headsails.headsailArea > 0)(
+    'its jib is tacked and headed where the headsails are, flat on its stay',
+    () => {
+      // The tack: the node, ahead of the centre of gravity at its height.
+      const tack = at('jib');
+      expect(Math.abs(tack[0] ?? 1)).toBeLessThan(CM);
+      expect(Math.abs((tack[1] ?? 0) - headsails.headsailTackHeight)).toBeLessThan(CM);
+      expect(Math.abs((tack[2] ?? 0) + headsails.headsailTack)).toBeLessThan(CM);
+      // The head: the luff's height above the tack, rake aft of it, ahead of
+      // the mast; the foot from the tack, aft along the deck.
+      const jib = bounds('jib');
+      const rake = node('jib').extras?.rake ?? -1;
+      expect(Math.abs((jib.min[1] ?? 1) - 0)).toBeLessThan(CM);
+      expect(Math.abs((jib.max[1] ?? 0) - headsails.headsailLuff)).toBeLessThan(CM);
+      expect(Math.abs(jib.min[2] ?? 1)).toBeLessThan(CM);
+      expect(Math.abs((jib.max[2] ?? 0) - headsails.headsailFoot)).toBeLessThan(CM);
+      expect(rake).toBeGreaterThan(0);
+      const head = (tack[2] ?? 0) + rake;
+      expect(head).toBeLessThan(-rig.mastPosition);
+      expect(head).toBeGreaterThan(-rig.mastPosition - 0.5);
+      // Flat in the centreline plane, shaped by its fractions of chord and luff.
+      expect(Math.max(Math.abs(jib.min[0] ?? 1), Math.abs(jib.max[0] ?? 1))).toBeLessThan(1e-4);
+      const p = g.meshes[node('jib').mesh ?? -1]?.primitives[0];
+      expect(p?.attributes.TEXCOORD_1).toBeDefined();
+    },
+  );
 
   test('the sail carries its fraction of chord and luff, for its vertex node', () => {
     const sail = g.meshes[node('sail').mesh ?? -1]?.primitives[0];
