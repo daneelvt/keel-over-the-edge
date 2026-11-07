@@ -113,6 +113,7 @@ import type { FloatingOrigin } from './coords';
 import {
   type BoatParts,
   GALLERY_PART,
+  HEADSAIL_UV,
   type Instances,
   jibNode,
   loadBoatParts,
@@ -289,7 +290,8 @@ class Level {
         { roughness: jib.material.roughness, metalness: 0, side: DoubleSide },
         jibNode(i, jib, cog, headsails.headsailFootStrip, headsails.headsailHeadStrip, time),
       );
-      const c = vec4(clothColour(palette, look, uv(), jibCloth), 1) as unknown as Node<'vec4'>;
+      const cloth = attribute(HEADSAIL_UV, 'vec4').xy as unknown as Node<'vec2'>;
+      const c = vec4(clothColour(palette, look, cloth, jibCloth), 1) as unknown as Node<'vec4'>;
       m.colorNode = c;
       m.emissiveNode = sailGlow(c);
       this.add(jib.geometry, m, n === 0 ? 'jib' : `jib ${n + 1}`);

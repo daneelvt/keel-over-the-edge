@@ -119,6 +119,24 @@ const UNDRAWN_NODES: Record<string, true> = { telltales: true, pennant: true };
 /** A 'part' attribute's last value: 1 for the painted topsides, GALLERY_PART for the gallery's panes. */
 export const GALLERY_PART = 2;
 
+/** A headsail's cloth's coordinates (TEXCOORD_0) and its shape's (TEXCOORD_1), as one attribute of the fleet's. */
+export const HEADSAIL_UV = 'headsailUv';
+
+/** A geometry's two texture coordinates, as one vec4 a vertex: the cloth's, then the shape's. */
+export function headsailUv(g: BufferGeometry): Float32BufferAttribute {
+  const a = g.getAttribute('uv');
+  const b = g.getAttribute('uv1') ?? a;
+  const n = g.getAttribute('position').count;
+  const out = new Float32Array(n * 4);
+  for (let i = 0; i < n; i++) {
+    out[i * 4] = a?.getX(i) ?? 0;
+    out[i * 4 + 1] = a?.getY(i) ?? 0;
+    out[i * 4 + 2] = b?.getX(i) ?? 0;
+    out[i * 4 + 3] = b?.getY(i) ?? 0;
+  }
+  return new Float32BufferAttribute(out, 4);
+}
+
 /** A headsail, in its frame at its tack: its geometry, its source material, its head's rake aft of its tack, and its tack's place in the model. */
 export interface Headsail {
   geometry: BufferGeometry;
@@ -334,19 +352,22 @@ export function boatParts(scene: Object3D, path: string): BoatParts {
       // A square sail: shaped in its node's frame, kept in the model's.
       const g = shapeSquare(o.geometry.clone(), square, toNode(o, square, scene));
       g.applyMatrix4(o.matrixWorld);
-      squareGeometries.push(keep(g, ['position', 'uv', 'uv1', 'square']));
+      squareGeometries.push(keep(g, ['position', 'normal', 'uv', 'square']));
       squareMaterial ??= material;
       return;
     }
     if (within(o, { jib: true }) !== null) {
       // Each headsail is shaped in its own frame, at its tack: its
-      // geometry taken there. Its normals are the shape's: the model's are
-      // not kept, so its draw reads no more vertex buffers than a device
-      // must allow.
+      // geometry taken there. Its two texture coordinates go in one
+      // attribute (HEADSAIL_UV), so its draw keeps the model's normals,
+      // which its lighting needs, within the vertex buffers a device must
+      // allow.
       const frame = headsailFrame(o);
       scene.updateMatrixWorld(true);
       const inFrame = new Matrix4().copy(frame.node.matrixWorld).invert().multiply(o.matrixWorld);
-      const g = keep(o.geometry.clone(), ['position', 'uv', 'uv1']).applyMatrix4(inFrame);
+      const g = o.geometry.clone().applyMatrix4(inFrame);
+      g.setAttribute(HEADSAIL_UV, headsailUv(g));
+      keep(g, ['position', 'normal', HEADSAIL_UV]);
       parts.jibs.push({
         geometry: g,
         material,
@@ -680,8 +701,8 @@ export function squareNode(
       { depth: float(BELLY), ripple: float(0), reef: reefOf(i), time },
       sv,
       positionGeometry as unknown as Node<'vec3'>,
-      uv(1).x,
-      uv(1).y,
+      uv().x,
+      sv.down,
     );
     // Each node's mast, and its turn: the fore's, the after's, none for the spritsail's yard.
     const pick = (v: (k: number) => Node<'float'>): Node<'float'> =>
@@ -777,11 +798,12 @@ export function jibNode(
     time,
   };
   return Fn(() => {
-    const fv = uv(1).y;
+    const shape = attribute(HEADSAIL_UV, 'vec4');
+    const fv = shape.w;
     const shaped = jibPoint(
       inputs,
       positionGeometry.z.sub(rake.mul(fv)),
-      uv(1).x,
+      shape.z,
       fv,
       positionGeometry.y,
       rake,

@@ -309,18 +309,18 @@ describe('a model’s square sails', () => {
     }
     const mesh = ts.meshes[0] as Mesh;
     const g = shapeSquare(mesh.geometry.clone(), ts, toNode(mesh, ts, root));
-    const uv1 = g.getAttribute('uv1');
     const sq = g.getAttribute('square');
     const pos = g.getAttribute('position');
+    expect(g.getAttribute('uv1')).toBeUndefined();
     for (let i = 0; i < pos.count; i++) {
-      expect(uv1.getY(i)).toBeCloseTo((20 - pos.getY(i)) / 7.5, 5);
-      expect(uv1.getX(i)).toBe(g.getAttribute('uv').getX(i));
       // The main topsail spans both strips: below its split the foot's.
       const v = g.getAttribute('uv').getY(i);
       expect(sq.getX(i)).toBe(nodeIndex('main-yards') * 4 + (v > 0.6 ? 2 : 3));
       expect(sq.getY(i)).toBeCloseTo(7.5, 5);
-      expect(sq.getZ(i)).toBe(packRule(ts.reef, true));
-      expect(sq.getW(i)).toBeCloseTo(0.25, 6);
+      // Its rule, its band beside it, and the vertex's height down the sail.
+      expect(Math.floor(sq.getZ(i))).toBe(packRule(ts.reef, true));
+      expect((sq.getZ(i) - packRule(ts.reef, true)) / 0.9).toBeCloseTo(0.25, 5);
+      expect(sq.getW(i)).toBeCloseTo((20 - pos.getY(i)) / 7.5, 5);
     }
     expect(packRule({ furl: 1, reef: 0, band: 0 }, false)).toBe(1);
     expect(packRule({ furl: 0, reef: 2, band: 0.2 }, true)).toBe(15);
@@ -340,7 +340,7 @@ describe('the fleet’s parts of a model with yards', () => {
     const parts = boatParts(ship(), 'test');
     expect(parts.square).not.toBeNull();
     const g = parts.square?.geometry as BufferGeometry;
-    expect(Object.keys(g.attributes).sort()).toEqual(['position', 'square', 'uv', 'uv1']);
+    expect(Object.keys(g.attributes).sort()).toEqual(['normal', 'position', 'square', 'uv']);
     // Every square sail's vertex: 8 sails of 20 vertices.
     expect(g.getAttribute('position').count).toBe(8 * 20);
     expect(parts.yardsAt.map((v) => v.z)).toEqual([-10, 0, 9, -20]);

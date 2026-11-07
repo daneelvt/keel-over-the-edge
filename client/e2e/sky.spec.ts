@@ -406,21 +406,24 @@ test.describe('lanterns', () => {
     page,
   }) => {
     await openScene(page);
-    // Her lanterns in the catalog's order: port, starboard, stern.
+    // Her lanterns in the catalog's order: port, starboard, stern. Each
+    // seen from where its arc does not reach shows nothing (its bearing out
+    // of its arc: her gallery's lamps may glow beside it on screen).
     const port = await lanterns(page, (315 * Math.PI) / 180, 0, 120, 2);
     expect(port).toHaveLength(3);
     expect(port[0]?.colours?.red).toBeGreaterThan(80);
     expect(port[0]?.colours?.green).toBeLessThan(20);
-    expect(port[1]?.colours?.green).toBeLessThan(20);
-    expect(port[2]?.colours?.white).toBeLessThan(60);
+    expect(port[1]?.at?.bearing).toBeLessThan(0);
+    expect(Math.abs(port[2]?.at?.bearing ?? 180)).toBeLessThan(112.5);
     const starboard = await lanterns(page, (225 * Math.PI) / 180, 0, 120, 2);
     expect(starboard[1]?.colours?.green).toBeGreaterThan(80);
     expect(starboard[1]?.colours?.red).toBeLessThan(20);
-    expect(starboard[0]?.colours?.red).toBeLessThan(20);
+    expect(starboard[0]?.at?.bearing).toBeGreaterThan(0);
+    expect(Math.abs(starboard[2]?.at?.bearing ?? 180)).toBeLessThan(112.5);
     const astern = await lanterns(page, Math.PI / 2, 0, 120, 2);
-    expect(astern[2]?.colours?.white).toBeGreaterThan(150);
-    expect(astern[0]?.colours?.red).toBeLessThan(20);
-    expect(astern[1]?.colours?.green).toBeLessThan(20);
+    expect(astern[2]?.colours?.white).toBeGreaterThan(120);
+    expect(Math.abs(astern[0]?.at?.bearing ?? 0)).toBeGreaterThan(112.5);
+    expect(Math.abs(astern[1]?.at?.bearing ?? 0)).toBeGreaterThan(112.5);
   });
 
   test('64 boats by night: two draws for the stars and every lantern, under 150 in all', async ({

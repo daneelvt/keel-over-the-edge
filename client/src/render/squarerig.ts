@@ -395,27 +395,29 @@ export function toNode(mesh: Mesh, sail: SquareSail, root: Object3D): Matrix4 {
     .multiply(mesh.matrixWorld);
 }
 
+/** A sail's band is packed beside its rule (packRule, a whole number) as this share of it. */
+const BAND_PACK = 0.9;
+
 /**
- * Gives a sail's mesh's geometry its shape coordinates in uv1 (u across
- * from the port arm, the cloth's; v down from the sail's head over its
- * height, from each vertex's height in its node's frame, which inNode
- * takes the geometry's own frame to) and its 'square' attribute: node × 4
- * + slot, the sail's height, its rule (packRule) and its band.
+ * Gives a sail's mesh's geometry its 'square' attribute: node × 4 + slot,
+ * the sail's height, its rule (packRule) with its band (BAND_PACK of it
+ * beside), and each vertex's height down from the sail's head as a share
+ * of its height (from the vertex's height in its node's frame, which
+ * inNode takes the geometry's own frame to). Its cloth's u is its shape's
+ * across. One attribute, so the fleet's draw keeps the model's normals
+ * within the vertex buffers a device must allow.
  */
 export function shapeSquare(g: BufferGeometry, sail: SquareSail, inNode: Matrix4): BufferGeometry {
   const p = g.getAttribute('position');
   const uv = g.getAttribute('uv');
   const height = Math.max(sail.head - sail.foot, 1e-3);
   const n = p.count;
-  const shape = new Float32Array(n * 2);
   const square = new Float32Array(n * 4);
   const node = nodeIndex(sail.node);
   const rule = packRule(sail.reef, sail.numbered);
   const v = new Vector3();
   for (let i = 0; i < n; i++) {
     v.fromBufferAttribute(p, i).applyMatrix4(inNode);
-    shape[i * 2] = uv === undefined ? 0.5 : uv.getX(i);
-    shape[i * 2 + 1] = Math.min(Math.max((sail.head - v.y) / height, 0), 1);
     // A sail spanning both strips: its cloth below the split the lower's.
     const slot =
       sail.split === null || uv === undefined
@@ -423,10 +425,9 @@ export function shapeSquare(g: BufferGeometry, sail: SquareSail, inNode: Matrix4
         : sail.slot - (sail.slot % 2) + (uv.getY(i) > sail.split ? 0 : 1);
     square[i * 4] = node * 4 + slot;
     square[i * 4 + 1] = height;
-    square[i * 4 + 2] = rule;
-    square[i * 4 + 3] = sail.reef.band;
+    square[i * 4 + 2] = rule + BAND_PACK * Math.min(Math.max(sail.reef.band, 0), 1);
+    square[i * 4 + 3] = Math.min(Math.max((sail.head - v.y) / height, 0), 1);
   }
-  g.setAttribute('uv1', new Float32BufferAttribute(shape, 2));
   g.setAttribute('square', new Float32BufferAttribute(square, 4));
   return g;
 }
@@ -508,12 +509,15 @@ export interface SquareVertex {
   reef: Node<'float'>;
   band: Node<'float'>;
   numbered: Node<'float'>;
+  /** The vertex's height down from its sail's head, a share of the sail's height. */
+  down: Node<'float'>;
 }
 
 /** The 'square' attribute's values. */
 export function squareVertex(): SquareVertex {
   const a = attribute('square', 'vec4') as unknown as Node<'vec4'>;
-  const r = floor(a.z.add(0.5));
+  // The rule's whole number, and the band beside it (under BAND_PACK).
+  const r = floor(a.z.add(1e-3));
   const numbered = select(r.greaterThan(8.5), float(1), float(0));
   const k = r.sub(numbered.mul(9));
   const reef = floor(k.div(3).add(0.01));
@@ -522,8 +526,9 @@ export function squareVertex(): SquareVertex {
     height: a.y,
     furl: k.sub(reef.mul(3)),
     reef,
-    band: a.w,
+    band: a.z.sub(r).div(BAND_PACK) as unknown as Node<'float'>,
     numbered: numbered as unknown as Node<'float'>,
+    down: a.w,
   };
 }
 

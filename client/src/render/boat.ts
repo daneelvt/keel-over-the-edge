@@ -295,6 +295,8 @@ export class Boat {
   /** The yards that come down as their sails' bands are taken in: each, its height at rest and its drop. */
   readonly #yards: { node: Object3D; rest: number; drop: number; sail: SquareSail }[] = [];
   readonly #belly: Belly = { depth: 0, ripple: 0 };
+  /** Set when the boat is put somewhere at once: its sails take the wind as it is at the next frame. */
+  #settled = false;
   readonly #ripple = new Float64Array(2);
   readonly #jibRipple = new Float64Array(2);
   /** The main's reef rows, where its reefs are slab reefs; else none. */
@@ -337,6 +339,11 @@ export class Boat {
     const { headsails } = kind.physics;
     this.jib.footV.value = headsails.headsailFootStrip;
     this.jib.headV.value = headsails.headsailHeadStrip;
+  }
+
+  /** The boat put somewhere at once: what eases with the wind is drawn as the wind is at the next frame. */
+  settle(): void {
+    this.#settled = true;
   }
 
   /** A named node's place in the model's frame, wherever it hangs; null for none. */
@@ -666,8 +673,9 @@ export class Boat {
     ] as const;
     const sq = this.square;
     // Eased as the wind changes; a frame with no time gone (held, or the
-    // first) shows the wind as it is.
-    const k = ease > 0 ? ease : 1;
+    // first), or the first after the boat is settled, shows the wind as it is.
+    const k = ease > 0 && !this.#settled ? ease : 1;
+    this.#settled = false;
     for (let i = 0; i < 4; i++) {
       const [attack, flow] = strips[i] as readonly [number, number];
       const b = squareBelly(out[attack] ?? 0, out[flow] ?? 1, this.#belly);
@@ -716,6 +724,7 @@ export class Boat {
         color: (src.color as Color).clone(),
         roughness: src.roughness,
         metalness: src.metalness,
+        vertexColors,
       });
       (made as MeshStandardNodeMaterial).emissiveNode = vec3(...LAMPLIGHT).mul(lampsLit);
     } else if (jibCloth !== null && this.#within(mesh, 'jib')) {
@@ -832,8 +841,8 @@ export class Boat {
         },
         sv,
         positionGeometry as unknown as Node<'vec3'>,
-        uv(1).x,
-        uv(1).y,
+        uv().x,
+        sv.down,
       );
       normalLocal.assign(at.normal);
       return at.position;

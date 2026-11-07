@@ -27,6 +27,8 @@ interface Pose {
   wind?: number;
   /** A machine sailor's boat. */
   machine?: boolean;
+  /** The view, if not the chase camera's: near enough that the fleet draws its full model. */
+  view?: { azimuth: number; elevation: number; distance: number };
 }
 
 /** A whole pose: every field the poses set, at rest. */
@@ -93,7 +95,7 @@ async function both(page: Page, pose: Pose, kind = 0) {
       // Its sailor seated afresh at the pose, as the fleet's is when met.
       k.settleSailor();
       k.render();
-      k.camera('chase');
+      k.camera(p.view ?? 'chase');
       const o = k.boat().out;
       const b = k.boat().state;
       const flat = Math.max(0, Math.min(15, Math.round(o.flattening * 15)));
@@ -111,6 +113,10 @@ async function both(page: Page, pose: Pose, kind = 0) {
         north: b.y,
         heading: b.heading,
         heel: b.heel,
+        // How it lies on the waves, as the own boat does: else the sea under
+        // it says, and a long hull lies otherwise.
+        heave: b.heave,
+        pitch: b.pitch,
         boom: b.boom,
         rudder: b.rudder,
         sailor: b.sailor,
@@ -122,18 +128,21 @@ async function both(page: Page, pose: Pose, kind = 0) {
   );
   await page.evaluate(() => globalThis.keel.hideSmallParts(true));
   const own = await picture(page);
-  await page.evaluate(async (s) => {
-    const k = globalThis.keel;
-    k.showOwnBoat(false);
-    k.setFleet([s]);
-    // Its look loaded, if this is its first boat.
-    k.render();
-    await k.fleetLoaded();
-    // The camera where it was for the own boat's picture: it eases between
-    // frames drawn on real time.
-    k.camera('chase');
-    k.render();
-  }, sail);
+  await page.evaluate(
+    async ({ s, view }) => {
+      const k = globalThis.keel;
+      k.showOwnBoat(false);
+      k.setFleet([s]);
+      // Its look loaded, if this is its first boat.
+      k.render();
+      await k.fleetLoaded();
+      // The camera where it was for the own boat's picture: it eases between
+      // frames drawn on real time.
+      k.camera(view ?? 'chase');
+      k.render();
+    },
+    { s: sail, view: pose.view },
+  );
   const fleet = await picture(page);
   await page.evaluate(() => {
     const k = globalThis.keel;
@@ -250,16 +259,26 @@ test('a keelboat and a tall ship of the fleet look as the own ones do, the jib, 
   }
   // The same page, its own boat a tall ship: the wind on her port beam, her
   // yards braced up and drawing; then running square before it, her
-  // topgallants furled.
-  await page.evaluate(() => globalThis.keel.useBoat('tall-ship'));
+  // topgallants furled. Seen from her quarter, near enough that the fleet
+  // draws her full model, as the chase camera's distance would not.
+  await page.evaluate(async () => {
+    const k = globalThis.keel;
+    await k.useBoat('tall-ship');
+    // Her foam and wake are the sea's, drawn by each boat's speed and its
+    // history, the own boat's and the fleet's apart: the hull's the same.
+    k.setParts({ foam: false, wakes: false });
+  });
+  const near = { azimuth: 0.5, elevation: 0.25, distance: 6 };
   for (const pose of [
     {
       name: 'a tall ship braced up',
       state: { ...rest, heading: 1.5708, heel: 4 * DEG, boom: 0.4, yards: 0.6, foreYards: 0.6 },
+      view: near,
     },
     {
       name: 'a tall ship running, her topgallants in',
       state: { ...rest, heading: Math.PI, boom: 1.0, yards: 1.5, foreYards: 1.5, reef: 1 },
+      view: near,
     },
   ]) {
     const { own, fleet } = await both(page, pose, 2);
