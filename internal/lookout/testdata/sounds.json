@@ -22,11 +22,13 @@
         "bell": null,
         "yard": null,
         "quay": null,
-        "hour": 0
+        "hour": 0,
+        "gulls": null
       },
       "weather": false,
       "lights": null,
       "flashes": null,
+      "life": null,
       "sounds": []
     },
     {
@@ -49,11 +51,13 @@
         "bell": null,
         "yard": null,
         "quay": null,
-        "hour": 0
+        "hour": 0,
+        "gulls": null
       },
       "weather": false,
       "lights": null,
       "flashes": null,
+      "life": null,
       "sounds": [
         {
           "kind": "falls",
@@ -86,11 +90,13 @@
         "bell": null,
         "yard": null,
         "quay": null,
-        "hour": 0
+        "hour": 0,
+        "gulls": null
       },
       "weather": false,
       "lights": null,
       "flashes": null,
+      "life": null,
       "sounds": [
         {
           "kind": "falls",
@@ -123,11 +129,13 @@
         "bell": null,
         "yard": null,
         "quay": null,
-        "hour": 0
+        "hour": 0,
+        "gulls": null
       },
       "weather": false,
       "lights": null,
       "flashes": null,
+      "life": null,
       "sounds": [
         {
           "kind": "falls",
@@ -160,11 +168,13 @@
         "bell": null,
         "yard": null,
         "quay": null,
-        "hour": 0
+        "hour": 0,
+        "gulls": null
       },
       "weather": false,
       "lights": null,
       "flashes": null,
+      "life": null,
       "sounds": [
         {
           "kind": "falls",
@@ -197,11 +207,13 @@
         "bell": null,
         "yard": null,
         "quay": null,
-        "hour": 0
+        "hour": 0,
+        "gulls": null
       },
       "weather": false,
       "lights": null,
       "flashes": null,
+      "life": null,
       "sounds": [
         {
           "kind": "falls",
@@ -307,11 +319,13 @@
         "bell": null,
         "yard": null,
         "quay": null,
-        "hour": 0
+        "hour": 0,
+        "gulls": null
       },
       "weather": false,
       "lights": null,
       "flashes": null,
+      "life": null,
       "sounds": [
         {
           "kind": "roar",
@@ -533,11 +547,13 @@
         "bell": null,
         "yard": null,
         "quay": null,
-        "hour": 0
+        "hour": 0,
+        "gulls": null
       },
       "weather": false,
       "lights": null,
       "flashes": null,
+      "life": null,
       "sounds": [
         {
           "kind": "roar",
@@ -661,11 +677,13 @@
         "bell": null,
         "yard": null,
         "quay": null,
-        "hour": 0
+        "hour": 0,
+        "gulls": null
       },
       "weather": false,
       "lights": null,
       "flashes": null,
+      "life": null,
       "sounds": [
         {
           "kind": "roar",
@@ -842,11 +860,28 @@
           "east": 50,
           "north": 80
         },
-        "hour": 14.50677966101695
+        "hour": 14.50677966101695,
+        "gulls": [
+          {
+            "town": 2,
+            "east": 30,
+            "north": 140,
+            "level": 1.5,
+            "seed": 123456789
+          },
+          {
+            "town": 5,
+            "east": 900,
+            "north": -800,
+            "level": 3,
+            "seed": 42
+          }
+        ]
       },
       "weather": false,
       "lights": null,
       "flashes": null,
+      "life": null,
       "sounds": [
         {
           "kind": "lapping",
@@ -984,11 +1019,13 @@
           "east": 40,
           "north": 0
         },
-        "hour": 20.003389830508475
+        "hour": 20.003389830508475,
+        "gulls": null
       },
       "weather": false,
       "lights": null,
       "flashes": null,
+      "life": null,
       "sounds": [
         {
           "kind": "lapping",
@@ -1102,11 +1139,28 @@
           "east": 20,
           "north": 30
         },
-        "hour": 9.2
+        "hour": 9.2,
+        "gulls": [
+          {
+            "town": 2,
+            "east": 30,
+            "north": 140,
+            "level": 1.5,
+            "seed": 123456789
+          },
+          {
+            "town": 5,
+            "east": 900,
+            "north": -800,
+            "level": 3,
+            "seed": 42
+          }
+        ]
       },
       "weather": false,
       "lights": null,
       "flashes": null,
+      "life": null,
       "sounds": [
         {
           "kind": "lapping",
@@ -1119,14 +1173,51 @@
         },
         {
           "kind": "gull",
-          "degrees": 33.86456271313364,
-          "bearing": 35,
-          "distance": 108.49662294058362,
+          "degrees": 23.334047424662703,
+          "bearing": 25,
+          "distance": 124.51215672158166,
           "at": 4010,
-          "level": 0.03318075625239949,
+          "level": 0.028912839475183652,
           "seed": 401
         }
       ]
+    },
+    {
+      "name": "near a town whose gulls are out of reach",
+      "from": 4000,
+      "to": 4030,
+      "seconds": 4030,
+      "east": 0,
+      "north": 0,
+      "day": true,
+      "seaHeight": 0,
+      "lip": 5000,
+      "falling": false,
+      "endNear": 0,
+      "features": null,
+      "harbour": {
+        "inPort": false,
+        "town": true,
+        "nearTown": 200,
+        "bell": null,
+        "yard": null,
+        "quay": null,
+        "hour": 9.2,
+        "gulls": [
+          {
+            "town": 1,
+            "east": 0,
+            "north": 330,
+            "level": 2,
+            "seed": 99
+          }
+        ]
+      },
+      "weather": false,
+      "lights": null,
+      "flashes": null,
+      "life": null,
+      "sounds": []
     },
     {
       "name": "past a town",
@@ -1157,11 +1248,343 @@
           "east": 20,
           "north": 30
         },
-        "hour": 12.003389830508475
+        "hour": 12.003389830508475,
+        "gulls": [
+          {
+            "town": 2,
+            "east": 30,
+            "north": 140,
+            "level": 1.5,
+            "seed": 123456789
+          },
+          {
+            "town": 5,
+            "east": 900,
+            "north": -800,
+            "level": 3,
+            "seed": 42
+          }
+        ]
       },
       "weather": false,
       "lights": null,
       "flashes": null,
+      "life": null,
+      "sounds": []
+    },
+    {
+      "name": "the sea's life by day",
+      "from": 123496.5,
+      "to": 123556.5,
+      "seconds": 123556.5,
+      "east": 2300.5,
+      "north": -1700.25,
+      "day": true,
+      "seaHeight": 1,
+      "lip": 5000,
+      "falling": false,
+      "endNear": 0,
+      "features": null,
+      "harbour": {
+        "inPort": false,
+        "town": false,
+        "nearTown": 0,
+        "bell": null,
+        "yard": null,
+        "quay": null,
+        "hour": 0,
+        "gulls": null
+      },
+      "weather": false,
+      "lights": null,
+      "flashes": null,
+      "life": [
+        {
+          "kind": 3,
+          "start": 3701895,
+          "end": 3709695,
+          "east": 2360.5,
+          "north": -1740.25,
+          "heading": 1.1,
+          "speed": 12,
+          "count": 2,
+          "seed": 2718281,
+          "with": 0,
+          "pose": null
+        },
+        {
+          "kind": 6,
+          "start": 3698895,
+          "end": 3733695,
+          "east": 2150.5,
+          "north": -1580.25,
+          "heading": 4,
+          "speed": 9,
+          "count": 14,
+          "seed": 31415926,
+          "with": 0,
+          "pose": null
+        },
+        {
+          "kind": 0,
+          "start": 3695895,
+          "end": 3715695,
+          "east": 2300.5,
+          "north": -1700.25,
+          "heading": 0.5,
+          "speed": 10,
+          "count": 1,
+          "seed": 4000000001,
+          "with": 1,
+          "pose": {
+            "east": 2302.5,
+            "north": -1703.25,
+            "heading": 0.5
+          }
+        },
+        {
+          "kind": 2,
+          "start": 3695895,
+          "end": 3715695,
+          "east": 2320.5,
+          "north": -1680.25,
+          "heading": 2,
+          "speed": 9,
+          "count": 1,
+          "seed": 77,
+          "with": 0,
+          "pose": null
+        },
+        {
+          "kind": 0,
+          "start": 3703095,
+          "end": 3708495,
+          "east": 4300.5,
+          "north": -1700.25,
+          "heading": 0,
+          "speed": 10,
+          "count": 3,
+          "seed": 5,
+          "with": 0,
+          "pose": null
+        },
+        {
+          "kind": 3,
+          "start": 3692895,
+          "end": 3704865,
+          "east": 2300.5,
+          "north": -1700.25,
+          "heading": 0,
+          "speed": 12,
+          "count": 3,
+          "seed": 6,
+          "with": 0,
+          "pose": null
+        }
+      ],
+      "sounds": [
+        {
+          "kind": "life",
+          "call": "whistle",
+          "degrees": 229.97279694226552,
+          "bearing": 230,
+          "distance": 278.35071309893635,
+          "at": 123500.9593629503,
+          "level": 0.014370360167097,
+          "seed": 6175
+        },
+        {
+          "kind": "life",
+          "call": "whistle",
+          "degrees": 102.319125228364,
+          "bearing": 100,
+          "distance": 99.26478709269995,
+          "at": 123529.95777710709,
+          "level": 0.04029626332915557,
+          "seed": 6176
+        },
+        {
+          "kind": "life",
+          "call": "tern",
+          "degrees": 308.6598082540901,
+          "bearing": 310,
+          "distance": 192.09372712298546,
+          "at": 123502.77531088094,
+          "level": 0.020823168251814142,
+          "seed": 16467
+        },
+        {
+          "kind": "life",
+          "call": "tern",
+          "degrees": 308.6598082540901,
+          "bearing": 310,
+          "distance": 192.09372712298546,
+          "at": 123513.56381624479,
+          "level": 0.020823168251814142,
+          "seed": 16468
+        },
+        {
+          "kind": "life",
+          "call": "tern",
+          "degrees": 308.6598082540901,
+          "bearing": 310,
+          "distance": 192.09372712298546,
+          "at": 123518.46359445916,
+          "level": 0.020823168251814142,
+          "seed": 16469
+        },
+        {
+          "kind": "life",
+          "call": "tern",
+          "degrees": 308.6598082540901,
+          "bearing": 310,
+          "distance": 192.09372712298546,
+          "at": 123542.12907253901,
+          "level": 0.020823168251814142,
+          "seed": 16472
+        },
+        {
+          "kind": "life",
+          "call": "laugh",
+          "degrees": 200.86379117820363,
+          "bearing": 200,
+          "distance": 23.57817133946907,
+          "at": 123510.5968592266,
+          "level": 0.16964844060252182,
+          "seed": 8234
+        },
+        {
+          "kind": "life",
+          "call": "laugh",
+          "degrees": 200.86379117820363,
+          "bearing": 200,
+          "distance": 23.57817133946907,
+          "at": 123530.38685622964,
+          "level": 0.16964844060252182,
+          "seed": 8235
+        },
+        {
+          "kind": "life",
+          "call": "laugh",
+          "degrees": 200.86379117820363,
+          "bearing": 200,
+          "distance": 23.57817133946907,
+          "at": 123545.35339171269,
+          "level": 0.16964844060252182,
+          "seed": 8236
+        }
+      ]
+    },
+    {
+      "name": "the sea's life by night",
+      "from": 123496.5,
+      "to": 123556.5,
+      "seconds": 123556.5,
+      "east": 2300.5,
+      "north": -1700.25,
+      "day": false,
+      "seaHeight": 1,
+      "lip": 5000,
+      "falling": false,
+      "endNear": 0,
+      "features": null,
+      "harbour": {
+        "inPort": false,
+        "town": false,
+        "nearTown": 0,
+        "bell": null,
+        "yard": null,
+        "quay": null,
+        "hour": 0,
+        "gulls": null
+      },
+      "weather": false,
+      "lights": null,
+      "flashes": null,
+      "life": [
+        {
+          "kind": 3,
+          "start": 3701895,
+          "end": 3709695,
+          "east": 2360.5,
+          "north": -1740.25,
+          "heading": 1.1,
+          "speed": 12,
+          "count": 2,
+          "seed": 2718281,
+          "with": 0,
+          "pose": null
+        },
+        {
+          "kind": 6,
+          "start": 3698895,
+          "end": 3733695,
+          "east": 2150.5,
+          "north": -1580.25,
+          "heading": 4,
+          "speed": 9,
+          "count": 14,
+          "seed": 31415926,
+          "with": 0,
+          "pose": null
+        },
+        {
+          "kind": 0,
+          "start": 3695895,
+          "end": 3715695,
+          "east": 2300.5,
+          "north": -1700.25,
+          "heading": 0.5,
+          "speed": 10,
+          "count": 1,
+          "seed": 4000000001,
+          "with": 1,
+          "pose": {
+            "east": 2302.5,
+            "north": -1703.25,
+            "heading": 0.5
+          }
+        },
+        {
+          "kind": 2,
+          "start": 3695895,
+          "end": 3715695,
+          "east": 2320.5,
+          "north": -1680.25,
+          "heading": 2,
+          "speed": 9,
+          "count": 1,
+          "seed": 77,
+          "with": 0,
+          "pose": null
+        },
+        {
+          "kind": 0,
+          "start": 3703095,
+          "end": 3708495,
+          "east": 4300.5,
+          "north": -1700.25,
+          "heading": 0,
+          "speed": 10,
+          "count": 3,
+          "seed": 5,
+          "with": 0,
+          "pose": null
+        },
+        {
+          "kind": 3,
+          "start": 3692895,
+          "end": 3704865,
+          "east": 2300.5,
+          "north": -1700.25,
+          "heading": 0,
+          "speed": 12,
+          "count": 3,
+          "seed": 6,
+          "with": 0,
+          "pose": null
+        }
+      ],
       "sounds": []
     },
     {
@@ -1184,7 +1607,8 @@
         "bell": null,
         "yard": null,
         "quay": null,
-        "hour": 0
+        "hour": 0,
+        "gulls": null
       },
       "weather": true,
       "lights": [
@@ -1230,6 +1654,7 @@
         }
       ],
       "flashes": null,
+      "life": null,
       "sounds": [
         {
           "kind": "fog",
@@ -1318,7 +1743,8 @@
         "bell": null,
         "yard": null,
         "quay": null,
-        "hour": 0
+        "hour": 0,
+        "gulls": null
       },
       "weather": false,
       "lights": [
@@ -1364,6 +1790,7 @@
         }
       ],
       "flashes": null,
+      "life": null,
       "sounds": []
     },
     {
@@ -1386,7 +1813,8 @@
         "bell": null,
         "yard": null,
         "quay": null,
-        "hour": 0
+        "hour": 0,
+        "gulls": null
       },
       "weather": false,
       "lights": null,
@@ -1448,6 +1876,7 @@
           "seed": 5
         }
       ],
+      "life": null,
       "sounds": [
         {
           "kind": "thunder",

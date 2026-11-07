@@ -15,6 +15,7 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/daneelvt/keel-over-the-edge/internal/catalog"
+	"github.com/daneelvt/keel-over-the-edge/internal/life"
 	"github.com/daneelvt/keel-over-the-edge/internal/oauth"
 	"github.com/daneelvt/keel-over-the-edge/internal/physics"
 	"github.com/daneelvt/keel-over-the-edge/internal/sim"
@@ -35,6 +36,13 @@ type harness struct {
 // from degrees, ticking at the world's pace; it stops as the test ends.
 func newHarness(t *testing.T, limit int, knots, from float64) *harness {
 	t.Helper()
+	return newHarnessOf(t, limit, knots, from, nil)
+}
+
+// newHarnessOf is newHarness's world with the sea's life of the schedule
+// sea makes from the catalog, nil for none.
+func newHarnessOf(t *testing.T, limit int, knots, from float64, sea func(*catalog.Catalog) *life.Schedule) *harness {
+	t.Helper()
 	cat, err := catalog.Load()
 	if err != nil {
 		t.Fatal(err)
@@ -42,12 +50,16 @@ func newHarness(t *testing.T, limit int, knots, from float64) *harness {
 	waves, kinds := cat.Prepare()
 	tl := weather.FixedIn(cat.PrepareWeather(), physics.SteadySpell(knots*nm/3600, from*3.141592653589793/180, 0))
 	enc := cat.PrepareEncounters()
-	w, err := sim.New(sim.Config{Capacity: 64, Kinds: kinds, Waves: waves, Weather: tl, Encounters: enc, Limit: limit, Tick: 1000})
+	var ls *life.Schedule
+	if sea != nil {
+		ls = sea(cat)
+	}
+	w, err := sim.New(sim.Config{Capacity: 64, Kinds: kinds, Waves: waves, Weather: tl, Encounters: enc, Limit: limit, Tick: 1000, Life: ls})
 	if err != nil {
 		t.Fatal(err)
 	}
 	s := &Sea{Number: 1, Epoch: time.Now(), Bus: w.Bus(), Boats: cat.Boats, Limit: limit, AICap: w.AICap(), AIReserve: w.AIReserve(),
-		Timeline: tl, Waves: waves, Words: weather.WordsOf(cat), Catalog: cat, Kinds: kinds, Encounters: enc}
+		Timeline: tl, Waves: waves, Words: weather.WordsOf(cat), Catalog: cat, Kinds: kinds, Encounters: enc, Life: ls}
 	h := &harness{core: NewCore(CoreConfig{Silence: time.Minute, Log: slog.New(slog.DiscardHandler)}), sea: s, w: w, done: make(chan struct{})}
 	w.Record(h.core.Open(s))
 	ctx, cancel := context.WithCancel(context.Background())

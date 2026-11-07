@@ -306,6 +306,7 @@ func (h *helm) moments(s *Sea, f *bus.Frame, sl int32, sighted bool) []event {
 	if sighted && s.Sight != nil && s.Sight.Table != nil && s.Chart != nil {
 		out = append(out, h.lightMoments(s, f, sl, m.known)...)
 	}
+	out = append(out, h.lifeMoments(s, f, sl, m.known)...)
 	if s.Watchers != nil {
 		n := s.Watchers(bus.Account(h.account))
 		switch {

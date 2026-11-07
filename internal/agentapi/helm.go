@@ -399,6 +399,10 @@ type helm struct {
 	// landSeen are the land, places and lights in sight at the last
 	// report: a brief report tells those that are new.
 	landSeen map[int32]bool
+	// lifeTold are the groups of the sea's life the last report told, by
+	// their ids: a brief report tells those that are new; lifeSeen those
+	// that have come into sight, each raised once as an event.
+	lifeTold, lifeSeen map[uint64]bool
 	// turning is the autopilot's turn under way at the hub's last look.
 	turning uint8
 	// goal is the charted place the agent's last wait watched, by its

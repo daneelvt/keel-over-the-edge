@@ -25,6 +25,7 @@ import { type FeaturesInput, isColonyCall } from '../audio/features';
 import { FOG_SIGNAL_RULES, type FogSignalsInput, poorBy } from '../audio/fogsignals';
 import { groundSound, SCRAPE, scrapeOf } from '../audio/ground';
 import { KNOCK, knockOf } from '../audio/knock';
+import { isLifeCall, type LifeGroup, type LifeInput } from '../audio/life';
 import type { ThunderInput } from '../audio/thunder';
 import { edgeInput, type SoundInput, soundInput } from '../audio/voices';
 import { catalog } from '../catalog';
@@ -53,6 +54,7 @@ import {
 import { quantiseHelm, quantiseSheet } from '../input/quantise';
 import { ReefInput } from '../input/reef';
 import { SheetInput } from '../input/sheet';
+import { type GullTown, gullTowns } from '../life/gulls';
 import type { BumpTold } from '../net/messages';
 import { RECORDS } from '../predict/layout.gen';
 import { wavePeriod } from '../render/features';
@@ -635,6 +637,7 @@ export class Game implements PilotActions {
     this.sound.update(now, soundInput(w.out, w.sea, time, this.#sound));
     this.#harbour(now, look);
     this.#features(now, look);
+    this.#life(now, look);
     this.#fogSignals(now, look);
     this.#thunder(now, look);
   }
@@ -700,11 +703,70 @@ export class Game implements PilotActions {
         listener: { east: p.east, north: p.north },
         look,
         ...heard,
+        gulls: this.#gullTowns(land.towns),
         seaHeight: w.sea.height,
         period: 4,
       },
       this.#secondsPerHour,
     );
+  }
+
+  /** The towns' gulls, found again when the towns held change. */
+  #gulls: { version: number; towns: GullTown[] } = { version: -1, towns: [] };
+
+  #gullTowns(towns: NonNullable<SeaScene['land']>['towns']): GullTown[] {
+    const version = towns.features().version;
+    if (version !== this.#gulls.version) {
+      this.#gulls = { version, towns: gullTowns(towns.buildings(), towns.kinds) };
+    }
+    return this.#gulls.towns;
+  }
+
+  /** The sea's life near the boat, its calls heard by day. */
+  readonly #lifeInput: LifeInput = {
+    seconds: 0,
+    day: false,
+    listener: { east: 0, north: 0 },
+    look: 0,
+    groups: [],
+  };
+
+  readonly #lifeGroups: LifeGroup[] = [];
+  readonly #ownPose: NonNullable<LifeGroup['pose']> = { east: 0, north: 0, heading: 0 };
+
+  #life(now: number, look: number): void {
+    const w = this.world;
+    const x = this.#lifeInput;
+    const p = w.pose;
+    x.seconds = w.ticks / STEPS_PER_SECOND;
+    x.day = w.sky.now.sunHeight > 0;
+    x.listener.east = p.east;
+    x.listener.north = p.north;
+    x.look = look;
+    const own = this.#ownPose;
+    own.east = p.east;
+    own.north = p.north;
+    own.heading = p.heading;
+    // The groups' entries are kept from frame to frame, and filled again.
+    const pool = this.#lifeGroups;
+    let n = 0;
+    for (const record of w.life.values()) {
+      const kind = catalog.life.kinds[record.kind];
+      const call = kind?.look?.call;
+      // A group with a boat is heard about the page's own; the others'
+      // boats are not drawn here.
+      if (kind === undefined || call === undefined || !isLifeCall(call) || record.with > 1) {
+        continue;
+      }
+      const g = pool[n] ?? { record, kind, pose: null };
+      pool[n++] = g;
+      g.record = record;
+      g.kind = kind;
+      g.pose = record.with === 1 ? own : null;
+    }
+    pool.length = n;
+    x.groups = pool;
+    this.sound.life(now, x);
   }
 
   /** The lights' fog signals, heard at the boat in fog. */
