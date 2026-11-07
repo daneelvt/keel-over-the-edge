@@ -29,7 +29,7 @@ import {
   type WheelHelm,
 } from './runtime';
 import { ballInside, hullSolid } from './solid';
-import { wheelOf } from './wheel';
+import { wheelData, wheelOf } from './wheel';
 
 const ART = new URL('../../../../art/', import.meta.url);
 
@@ -321,8 +321,19 @@ describe.each([
   );
 });
 
-/** Every boat but the one the clips were placed in. */
-const others = catalog.boats.filter((b) => b.art.model !== 'boats/jolly-boat.glb');
+/** Whether a boat's model has a wheel: a node whose data says it is one. */
+function steeredByWheel(model: string): boolean {
+  const glb = readFileSync(new URL(model, ART));
+  const gltf = JSON.parse(glb.subarray(20, 20 + glb.readUInt32LE(12)).toString('utf8')) as {
+    nodes?: { extras?: unknown }[];
+  };
+  return (gltf.nodes ?? []).some((n) => wheelData(n.extras) !== null);
+}
+
+/** Every boat but the one the clips were placed in, and those whose sailor stands at a wheel. */
+const others = catalog.boats.filter(
+  (b) => b.art.model !== 'boats/jolly-boat.glb' && !steeredByWheel(b.art.model),
+);
 
 describe.each(
   others.flatMap((b) =>
