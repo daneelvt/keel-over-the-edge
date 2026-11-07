@@ -156,17 +156,11 @@ export class Game implements PilotActions {
 
   /**
    * Asks for the main reefed to a level, 0 (full sail) … 2: the Reef key's
-   * and its Shake out's. STUB until the input carries the reef: it holds
-   * the level for the screen and hands it to a driver with a reef of its
-   * own (the sandbox's); the integrator connects it to the input's reef.
+   * and its Shake out's. The level goes out with the controls (and into a
+   * sandbox's step) as R and F set it.
    */
   setReef(level: number): void {
-    const l = Math.min(Math.max(Math.round(level), 0), 2);
-    this.hud.reef.value = l;
-    const d = this.driver as { reef?: number } | null;
-    if (d !== null && typeof d.reef === 'number') {
-      d.reef = l;
-    }
+    this.reef.set(level);
   }
 
   /**
@@ -201,7 +195,10 @@ export class Game implements PilotActions {
     };
     this.helm.onTake = () => this.takeHelm();
     this.sheet.onTake = () => this.controlsTouched();
-    this.reef.onTake = () => this.controlsTouched();
+    this.reef.onTake = () => {
+      this.hud.reef.value = this.reef.level;
+      this.controlsTouched();
+    };
     this.sheet.target = 0.5;
     world.tick = (dt, now) => this.#frame(dt, now);
     effect(() => {

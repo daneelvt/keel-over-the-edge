@@ -616,7 +616,7 @@ async function start(): Promise<void> {
   const watchFirst = linked !== '' ? linked : (me.watch ?? '');
   const predictor = new Predictor(
     physics,
-    world.kind.physics,
+    catalog.boats.map((b) => b.physics),
     catalog.weather,
     catalog.world,
     catalog.encounters,
@@ -627,7 +627,10 @@ async function start(): Promise<void> {
   const online = new Online(worker, predictor, game);
   // The boat in view's kind, as each Welcome tells it: drawn as its own,
   // under the cover, as every change of boat is.
-  online.onKind = (kind) => void game.useKind(kind);
+  online.onKind = (kind) => {
+    predictor.kind = kind;
+    void game.useKind(kind);
+  };
   if (watchFirst !== '') {
     // The connection's first Hello asks to watch.
     online.watch(watchFirst);
