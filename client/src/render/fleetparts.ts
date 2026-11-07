@@ -47,7 +47,7 @@ import {
   vec4,
 } from 'three/tsl';
 import type { Node, WebGPURenderer } from 'three/webgpu';
-import { artUrl } from './boat';
+import { artUrl, FULL_CAMBER } from './boat';
 import type { SailorColours } from './sailors/material';
 import { loadSailor } from './sailors/model';
 import { type JibInputs, jibPoint, LUFF_OFFSET, type SailInputs, sailPoint } from './sailshape';
@@ -214,8 +214,10 @@ export async function loadBoatParts(path: string): Promise<BoatParts> {
       }
       node.getWorldPosition(parts.jibAt);
       const rake = (node.userData as { rake?: unknown }).rake;
+      // Its normals are the shape's: the model's are not kept, so its
+      // draw reads no more vertex buffers than a device must allow.
       parts.jib = {
-        geometry: keep(o.geometry.clone(), ['position', 'normal', 'uv', 'uv1']),
+        geometry: keep(o.geometry.clone(), ['position', 'uv', 'uv1']),
         material,
         rake: typeof rake === 'number' && Number.isFinite(rake) ? rake : 0,
       };
@@ -491,10 +493,12 @@ export function jibNode(
   const at = parts.jibAt;
   const j = i.jib ?? vec4(0);
   const rake = float(parts.jib?.rake ?? 0);
+  // A full camber: the wire says nothing of the headsail's flattening, and
+  // reading the main's would take one more vertex buffer.
   const inputs: JibInputs = {
     boom: j.x,
     twist: j.y,
-    camber: i.sail.y,
+    camber: float(FULL_CAMBER),
     side: j.z,
     rippleFoot: j.w,
     rippleHead: j.w,
