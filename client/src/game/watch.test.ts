@@ -220,6 +220,8 @@ describe('watching online', () => {
     zone: '',
     watching,
     look: 0,
+    boatLook: 0,
+    boatName: '',
     first,
   });
   const mary: WatchingTold = { sailor: 'Iron Mary', machine: true, mine: true, look: 0 };

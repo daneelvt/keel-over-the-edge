@@ -20,6 +20,7 @@ import (
 	"github.com/daneelvt/keel-over-the-edge/internal/catalog"
 	"github.com/daneelvt/keel-over-the-edge/internal/config"
 	"github.com/daneelvt/keel-over-the-edge/internal/edge"
+	"github.com/daneelvt/keel-over-the-edge/internal/fleet"
 	"github.com/daneelvt/keel-over-the-edge/internal/forecast"
 	"github.com/daneelvt/keel-over-the-edge/internal/jobs"
 	"github.com/daneelvt/keel-over-the-edge/internal/looks"
@@ -69,10 +70,13 @@ type process struct {
 	sessions *auth.Cache
 	passkeys *auth.Passkeys
 	looks    *looks.Book
-	page     *api.Page
-	ownPage  *api.Page
-	flight   *obs.Flight
-	jobs     *jobs.Runner
+	// fleet is the accounts' fleets: the boat each sailor takes to sea,
+	// swaps and changes the look of.
+	fleet   *fleet.Fleet
+	page    *api.Page
+	ownPage *api.Page
+	flight  *obs.Flight
+	jobs    *jobs.Runner
 	// agents is sign-in for AI apps and the MCP address.
 	agents *agents
 	// hand is the owner's hand on accounts, and every deletion's.
@@ -337,6 +341,7 @@ func (p *process) openWorld(ctx context.Context, rw *readyWorld) (*worldHalf, er
 	h.forecasts = p.forecastsOf(rw, row, timeline)
 	h.game = edge.New(edge.Config{
 		LookCode: p.lookCode,
+		BoatOf:   p.boatOf,
 		Bus:      b, World: store.AccountID(row.ID).String(), Epoch: epoch, Ends: row.EndsAt, Closing: closingOf(row, cfg), Zone: zoneOf(cfg), Clock: h.loop,
 		Protocol: protocol.Version, Catalog: catalog.Version, Layout: physics.LayoutVersion,
 		Origin: cfg.PlayOrigin, Log: p.log, Metrics: p.metrics, Fail: api.WriteError,
@@ -372,6 +377,7 @@ func (p *process) openWorld(ctx context.Context, rw *readyWorld) (*worldHalf, er
 		Deletions: p.hand,
 		Looks:     p.looks,
 		LookSeat:  lookSeat{p},
+		Fleet:     p.fleet,
 		Game:      h.game,
 		Page:      p.page,
 		Chunks:    rw.chunks,

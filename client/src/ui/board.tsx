@@ -4,17 +4,34 @@
 // pusher opens while the boat is in the harbour: painted as a board, its
 // words the page's own, so a screen reader reads it as it reads the box:
 // the gale warning in force, the general situation, the next ninety
-// minutes, and now.
+// minutes, and now. In Port Royal or a port town, not at a fishing
+// village, the player's own boat may be changed there: "Your boat" opens
+// its look's chooser over the sea, in the board's place, and "Change boat"
+// the fleet's available boats, one chosen taking the place of the one in the
+// water. The server checks the place again, and says why it refuses.
 
 import type { ReadonlySignal } from '@preact/signals';
 import { useEffect, useState } from 'preact/hooks';
+import type { BoatChooser } from '../account/boatchooser';
+import { BoatLookChooser, CHANGE_BOAT, ChangeBoat, YOUR_BOAT } from '../account/boats';
 import { type Board, boardOf } from '../chart/board';
 import type { Forecasting } from '../chart/forecasting';
 import type { ChartStore } from '../chart/store';
 import { type HarbourLook, HarbourPicker } from './harbourlook';
 
-/** The port the boat is in, by its name and where its harbour is, or null. */
-export type InPort = { name: string; east: number; north: number } | null;
+/**
+ * The port the boat is in, by its name and where its harbour is, and
+ * whether boats may be changed there (Port Royal or a port town, not a
+ * fishing village); or null.
+ */
+export type InPort = { name: string; east: number; north: number; boats: boolean } | null;
+
+/** What the board needs to change the player's boat in a port. */
+export interface HarbourBoats {
+  /** Whether the boat in view is the player's own, not one watched. */
+  own: ReadonlySignal<boolean>;
+  chooser: BoatChooser;
+}
 
 /** What the board needs: the port the boat is in, the forecast and the chart. */
 export interface HarbourView {
@@ -23,6 +40,42 @@ export interface HarbourView {
   store: ChartStore;
   /** The player's look, changed in Port Royal's harbour; none where it cannot be. */
   look?: HarbourLook;
+  /** The player's boat, changed in a port; none where it cannot be. */
+  boats?: HarbourBoats;
+}
+
+/** Whether the board offers the player's boat to change: in a port that allows it, their own boat. */
+export function boatsHere(harbour: HarbourView, port: NonNullable<InPort>): boolean {
+  return port.boats && harbour.boats?.own.value === true;
+}
+
+/**
+ * The board's keys to the player's boat, where it may be changed: Your
+ * boat and Change boat, each once the fleet is read; or why it cannot be.
+ */
+export function BoatKeys({ boats }: { boats: BoatChooser }) {
+  const unread = boats.unread.value;
+  return (
+    <>
+      <button
+        type="button"
+        class="board-close board-you"
+        disabled={boats.yours === null}
+        onClick={() => boats.openLook()}
+      >
+        {YOUR_BOAT}
+      </button>
+      <button
+        type="button"
+        class="board-close board-you"
+        disabled={boats.fleet.value === null}
+        onClick={() => boats.openBoats()}
+      >
+        {CHANGE_BOAT}
+      </button>
+      {unread !== '' ? <p class="board-office">{unread}</p> : null}
+    </>
+  );
 }
 
 /** The board of the port the boat is in. */
@@ -57,8 +110,23 @@ export function BoardPanel({
     };
   }, [harbour, port.name, port.east, port.north, version]);
   const you = harbour.look;
+  const boats = boatsHere(harbour, port) ? harbour.boats?.chooser : undefined;
+  // The fleet read afresh each time the board opens where it may be changed.
+  useEffect(() => {
+    if (boats !== undefined) {
+      boats.cancel();
+      void boats.load();
+    }
+  }, [boats]);
   if (picking && you !== undefined) {
     return <HarbourPicker look={you} close={() => setPicking(false)} />;
+  }
+  const boat = boats?.mode.value ?? 'shown';
+  if (boats !== undefined && boat === 'look') {
+    return <BoatLookChooser chooser={boats} board className="panel board harbour-look" />;
+  }
+  if (boats !== undefined && boat === 'boats') {
+    return <ChangeBoat chooser={boats} board className="panel board harbour-look" />;
   }
   return (
     <section id={id} class="panel board" aria-label={`${port.name}: the harbourmaster's board`}>
@@ -106,6 +174,7 @@ export function BoardPanel({
           Your sailor
         </button>
       ) : null}
+      {boats !== undefined ? <BoatKeys boats={boats} /> : null}
       <button type="button" class="board-close" onClick={close}>
         Close
       </button>

@@ -15,14 +15,15 @@
 // and posed from the physics (sailors/onboat.ts), the tiller extension in
 // one hand and the mainsheet in the other.
 // The sailor is drawn in its look, loaded the first time it is asked for;
-// a machine sailor's boat carries the machine mark on its sail, as the
-// fleet's do. A boat with a headsail has it shaped as the main is, about
+// the boat in its own (boatlook.ts): its topsides in its paint with its
+// name on them, its sails in their cloth with its sail number on the
+// main; a machine sailor's boat carries the machine mark on its sail, as
+// the fleet's do. A boat with a headsail has it shaped as the main is, about
 // its stay, from the clew's angle and its flows; a reefed main is drawn
 // short (sailshape.ts), the reef points painted along each reef's row.
 
 import {
   type BufferGeometry,
-  CanvasTexture,
   type Color,
   DoubleSide,
   FrontSide,
@@ -31,18 +32,37 @@ import {
   Mesh,
   type MeshStandardMaterial,
   type Object3D,
-  SRGBColorSpace,
+  type Texture,
 } from 'three';
 import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { Fn, normalLocal, positionGeometry, uniform, uv } from 'three/tsl';
+import { Fn, normalLocal, positionGeometry, uniform, uv, varying, vec4 } from 'three/tsl';
 import type { MeshStandardNodeMaterial, Node, WebGPURenderer } from 'three/webgpu';
 import type { Boat as BoatKind, SailorArt } from '../catalog';
+import type { BoatLooks } from '../catalog/boatlooks';
 import { type HullShape, hullShape } from '../ocean/hulls';
 import type { BoatPose } from '../predict/blend';
 import { RECORDS } from '../predict/layout.gen';
+import {
+  clothColour,
+  clothMasks,
+  digits,
+  type HullName,
+  hullColour,
+  type LookNodes,
+  lookPalette,
+  MASK_HEIGHT,
+  MASK_WIDTH,
+  NameAtlas,
+  namePlace,
+  numberedSail,
+  numberPlace,
+  type SailPrint,
+  TOPSIDES,
+  writeLook,
+} from './boatlook';
 import { headingToRotationY, type ScenePoint } from './coords';
-import { chordAtHalf, type MarkPlace, markInk, markPlace, paintMark } from './machinemark';
+import { chordAt, chordAtHalf, markPlace } from './machinemark';
 import { litMaterial, sailGlow } from './materials';
 import { Pennant } from './pennant';
 import type { Gfx } from './renderer';
@@ -217,12 +237,19 @@ export class Boat {
   readonly #jibRipple = new Float64Array(2);
   /** The main's reef rows, where its reefs are slab reefs; else none. */
   #reefRows: number[] = [];
-  /** The sail's cloth, what is printed on it, and where the machine mark goes. */
-  #cloth: CanvasTexture | null = null;
-  #number = '';
-  #insignia = '';
-  #mark: MarkPlace | null = null;
-  #marked = false;
+  /** The catalog's looks, and the boat's own as its shaders read it. */
+  readonly #looks: BoatLooks;
+  readonly #look = {
+    paint: uniform(0),
+    cloth: uniform(0),
+    number: uniform(0),
+    row: uniform(-1),
+    machine: uniform(0),
+  };
+  readonly #lookValues = new Float32Array(3);
+  /** The boat's name, lettered on its topsides from a texture of one row; null until loaded. */
+  #names: NameAtlas | null = null;
+  #name = '';
   /** The sailors loaded, by their art, and those loading. */
   readonly #sailors = new Map<SailorArt, BoatSailor>();
   readonly #loading = new Set<SailorArt>();
@@ -233,8 +260,9 @@ export class Boat {
   #renderer: WebGPURenderer | null = null;
   #seed = 1;
 
-  constructor(kind: BoatKind) {
+  constructor(kind: BoatKind, looks: BoatLooks) {
     this.#kind = kind;
+    this.#looks = looks;
     const { hull, rig } = kind.physics;
     this.root.name = 'boat';
     this.heel.position.y = hull.centreOfGravity;
@@ -254,8 +282,8 @@ export class Boat {
     return this.#kind;
   }
 
-  /** Loads the boat's model from the catalog's art path. */
-  async load(sailNumber: string, insignia: string): Promise<void> {
+  /** Loads the boat's model from the catalog's art path; its sails carry the class insignia. */
+  async load(insignia: string): Promise<void> {
     const loader = new GLTFLoader();
     loader.setMeshoptDecoder(MeshoptDecoder);
     const gltf = await loader.loadAsync(artUrl(this.#kind.art.model));
@@ -275,14 +303,34 @@ export class Boat {
     const rows = reefRows(sail?.geometry, reefs);
     this.#reefRows = rows ?? [];
     this.sail.reefGather.value = rows === null ? 0 : 1;
-    const cloth = sailCloth(sailNumber, insignia, this.#reefRows);
-    this.#cloth = cloth;
-    this.#number = sailNumber;
-    this.#insignia = insignia;
     const rake = (this.parts.get('jib')?.userData as { rake?: unknown } | undefined)?.rake;
     this.jibRake.value = typeof rake === 'number' && Number.isFinite(rake) ? rake : 0;
-    const jibCloth = this.parts.has('jib') ? headsailCloth() : null;
-    this.#mark = markPlace(foot, luff, chordAtHalf(sail?.geometry));
+    // The sail that carries the number, by the model's word.
+    const numbered = numberedSail(this.parts.values());
+    const number = {
+      place: numberPlace(foot, luff, (v) => chordAt(sail?.geometry, v)),
+      digits: digits(),
+      mirrored: NUMBER_MIRRORED,
+    };
+    const cloth: SailPrint = {
+      masks: clothMasks({
+        insignia,
+        reefRows: this.#reefRows,
+        mark: markPlace(foot, luff, chordAtHalf(sail?.geometry)),
+      }),
+      number: numbered === 'sail' ? number : null,
+    };
+    const jibCloth: SailPrint | null = this.parts.has('jib')
+      ? {
+          masks: clothMasks(
+            { insignia: '', reefRows: [], mark: null },
+            MASK_WIDTH / 2,
+            MASK_HEIGHT / 2,
+          ),
+          number: numbered === 'jib' ? number : null,
+        }
+      : null;
+    this.#names = new NameAtlas(1, this.#looks.boatLooks.lettering);
     model.traverse((o) => {
       if (o instanceof Mesh) {
         o.material = this.#replace(o, o.material as Material, cloth, jibCloth);
@@ -292,6 +340,41 @@ export class Boat {
     });
     this.model.add(model);
     this.hullShape = hullShape(this.parts.get('hull')?.userData);
+    this.#letter();
+  }
+
+  /**
+   * The boat takes its own look: a boat look code (negative for none told:
+   * the first paint and cloth, no number) and its name ("" for none).
+   */
+  setBoatLook(code: number, name: string): void {
+    writeLook(this.#looks, code, this.#lookValues, 0);
+    this.#look.paint.value = this.#lookValues[0] ?? 0;
+    this.#look.cloth.value = this.#lookValues[1] ?? 0;
+    this.#look.number.value = this.#lookValues[2] ?? 0;
+    this.#name = name;
+    this.#letter();
+  }
+
+  /** The look drawn: the paint's and cloth's places, the sail number, the name lettered and its row (−1 for none). */
+  drawnBoatLook(): { paint: number; cloth: number; number: number; name: string; row: number } {
+    return {
+      paint: this.#look.paint.value,
+      cloth: this.#look.cloth.value,
+      number: this.#look.number.value,
+      name: this.#names?.rows.names[this.#look.row.value] ?? '',
+      row: this.#look.row.value,
+    };
+  }
+
+  /** Letters the name into its texture, if it has changed. */
+  #letter(): void {
+    const names = this.#names;
+    if (names === null) {
+      return;
+    }
+    this.#look.row.value = names.rowOf(this.#name, 0);
+    names.commit();
   }
 
   /**
@@ -358,17 +441,7 @@ export class Boat {
 
   /** Prints the machine mark on the sail, or takes it off. */
   #printMark(on: boolean): void {
-    const cloth = this.#cloth;
-    if (on === this.#marked || cloth === null || this.#mark === null) {
-      return;
-    }
-    this.#marked = on;
-    const g = (cloth.image as HTMLCanvasElement).getContext('2d') as CanvasRenderingContext2D;
-    paintCloth(g, this.#number, this.#insignia, this.#reefRows);
-    if (on) {
-      paintMark(g, this.#mark, CLOTH_WIDTH, CLOTH_HEIGHT, markInk(CLOTH));
-    }
-    cloth.needsUpdate = true;
+    this.#look.machine.value = on ? 1 : 0;
   }
 
   /**
@@ -458,29 +531,52 @@ export class Boat {
   /** After a new renderer: everything is kept on the CPU side and uploaded again by itself. */
   attached(_gfx: Gfx): void {}
 
-  #replace(
-    mesh: Mesh,
-    m: Material,
-    cloth: CanvasTexture,
-    jibCloth: CanvasTexture | null,
-  ): Material {
+  #replace(mesh: Mesh, m: Material, cloth: SailPrint, jibCloth: SailPrint | null): Material {
     const src = m as MeshStandardMaterial;
     const vertexColors = mesh.geometry.hasAttribute('color');
+    const look = this.#look as unknown as LookNodes;
+    const palette = lookPalette(this.#looks);
     let made: Material;
     if (jibCloth !== null && this.#within(mesh, 'jib')) {
       made = litMaterial(
-        { map: jibCloth, roughness: src.roughness, metalness: 0, side: DoubleSide },
+        { roughness: src.roughness, metalness: 0, side: DoubleSide },
         this.#jibNode(),
       );
-      (made as MeshStandardNodeMaterial).emissiveNode = sailGlow(jibCloth);
+      const c = vec4(clothColour(palette, look, uv(), jibCloth), 1);
+      (made as MeshStandardNodeMaterial).colorNode = c;
+      (made as MeshStandardNodeMaterial).emissiveNode = sailGlow(c);
     } else if (this.#within(mesh, 'sail')) {
       // Daylight comes through flax: its shaded side glows a little, with the
       // insignia and number showing through, as much as the hour gives.
       made = litMaterial(
-        { map: cloth, roughness: src.roughness, metalness: 0, side: DoubleSide },
+        { roughness: src.roughness, metalness: 0, side: DoubleSide },
         this.#sailNode(),
       );
-      (made as MeshStandardNodeMaterial).emissiveNode = sailGlow(cloth);
+      const c = vec4(clothColour(palette, look, uv(), cloth), 1);
+      (made as MeshStandardNodeMaterial).colorNode = c;
+      (made as MeshStandardNodeMaterial).emissiveNode = sailGlow(c);
+    } else if (src.name === TOPSIDES) {
+      // The topsides in the boat's paint, times each plank's tone, with
+      // its name on them.
+      made = litMaterial({
+        roughness: src.roughness,
+        metalness: src.metalness,
+        vertexColors,
+        side: src.side === DoubleSide ? DoubleSide : FrontSide,
+      });
+      const place = namePlace(
+        mesh.geometry.getAttribute('position').array,
+        this.parts.get('hull')?.userData,
+      );
+      const names = this.#names;
+      const name: HullName | null =
+        place === null || names === null
+          ? null
+          : { texture: names.texture as Texture, rows: names.rows.rows, place };
+      (made as MeshStandardNodeMaterial).colorNode = vec4(
+        hullColour(palette, look, varying(positionGeometry), name),
+        1,
+      );
     } else if (this.#within(mesh, 'telltales')) {
       made = litMaterial(
         { vertexColors: true, roughness: 0.9, metalness: 0, side: DoubleSide },
@@ -548,118 +644,9 @@ export class Boat {
   }
 }
 
-/** The sail's cloth's colour: cream flax. */
-export const CLOTH = '#efe6d2';
-/** The cloth's canvas: its width the foot, its height the luff, at the same scale. */
-export const CLOTH_WIDTH = 512;
-export const CLOTH_HEIGHT = 960;
-
 /**
- * The sail's cloth, drawn into a canvas: cream flax in crosscut panels,
- * the class insignia near the head and the sail number, if any, below it.
- * The canvas's width is the foot and its height the luff, at the same
- * scale.
+ * Whether a sail's front face reads its cloth's u (along the foot from the
+ * luff) from right to left, as the boats' models are made: its number's
+ * digits are laid out the other way on that face.
  */
-export function sailCloth(
-  number: string,
-  insignia: string,
-  reefRows: readonly number[] = [],
-): CanvasTexture {
-  const canvas = document.createElement('canvas');
-  canvas.width = CLOTH_WIDTH;
-  canvas.height = CLOTH_HEIGHT;
-  paintCloth(canvas.getContext('2d') as CanvasRenderingContext2D, number, insignia, reefRows);
-  return clothTexture(canvas);
-}
-
-/** The headsail's cloth: plain flax in its panels, no insignia and no number. */
-export function headsailCloth(): CanvasTexture {
-  const canvas = document.createElement('canvas');
-  canvas.width = CLOTH_WIDTH / 2;
-  canvas.height = CLOTH_HEIGHT / 2;
-  const g = canvas.getContext('2d') as CanvasRenderingContext2D;
-  g.fillStyle = CLOTH;
-  g.fillRect(0, 0, canvas.width, canvas.height);
-  seams(g, canvas.width, canvas.height, 31, 35);
-  return clothTexture(canvas);
-}
-
-/** Panel seams, square to the leech, every gap pixels, falling drop across the width. */
-function seams(
-  g: CanvasRenderingContext2D,
-  width: number,
-  height: number,
-  gap: number,
-  drop: number,
-) {
-  g.strokeStyle = 'rgba(120, 100, 70, 0.28)';
-  g.lineWidth = 2;
-  for (let y = gap * 0.65; y < height + drop; y += gap) {
-    g.beginPath();
-    g.moveTo(0, y);
-    g.lineTo(width, y - drop);
-    g.stroke();
-  }
-}
-
-/**
- * Paints the cloth into a canvas's CLOTH_WIDTH × CLOTH_HEIGHT from its
- * origin, as sailCloth has it: and a row of reef points at each reef row's
- * height, a fraction of the luff from the foot.
- */
-export function paintCloth(
-  g: CanvasRenderingContext2D,
-  number: string,
-  insignia: string,
-  reefRows: readonly number[] = [],
-): void {
-  const width = CLOTH_WIDTH;
-  const height = CLOTH_HEIGHT;
-  g.fillStyle = CLOTH;
-  g.fillRect(0, 0, width, height);
-  // Panel seams, square to the leech, and a faint weave.
-  g.strokeStyle = 'rgba(120, 100, 70, 0.28)';
-  g.lineWidth = 2;
-  for (let y = 40; y < height; y += 62) {
-    g.beginPath();
-    g.moveTo(0, y);
-    g.lineTo(width, y - 70);
-    g.stroke();
-  }
-  // The reef points: a band of reinforcing cloth and short ties, a tack
-  // cringle at the luff and a clew cringle at the leech of each row.
-  for (const v of reefRows) {
-    const y = (1 - v) * height;
-    g.fillStyle = 'rgba(214, 199, 166, 0.9)';
-    g.fillRect(0, y - 5, width, 10);
-    g.fillStyle = '#5b4a36';
-    for (let x = 0.05 * width; x < width; x += 0.075 * width) {
-      g.fillRect(x - 1.5, y - 9, 3, 18);
-    }
-  }
-  // The insignia in a ring, 22% of the foot across, near the head.
-  const cx = 0.115 * width;
-  const cy = 0.2 * height;
-  const r = 0.085 * width;
-  g.strokeStyle = '#a3362a';
-  g.fillStyle = '#a3362a';
-  g.lineWidth = 7;
-  g.beginPath();
-  g.arc(cx, cy, r, 0, 2 * Math.PI);
-  g.stroke();
-  g.font = `bold ${Math.round(r * 1.3)}px Georgia, serif`;
-  g.textAlign = 'center';
-  g.textBaseline = 'middle';
-  g.fillText(insignia, cx, cy + r * 0.06);
-  g.fillStyle = '#2b2118';
-  g.font = `${Math.round(r * 1.25)}px Georgia, serif`;
-  g.fillText(number, 0.16 * width, 0.38 * height);
-}
-
-/** A cloth's canvas as the sail's texture. */
-export function clothTexture(canvas: HTMLCanvasElement): CanvasTexture {
-  const t = new CanvasTexture(canvas);
-  t.colorSpace = SRGBColorSpace;
-  t.anisotropy = 4;
-  return t;
-}
+export const NUMBER_MIRRORED = true;

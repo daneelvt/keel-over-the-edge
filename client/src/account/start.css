@@ -535,3 +535,53 @@
     height: 50px;
   }
 }
+
+/* The player's sailor and their boat: one above the other; side by side
+   on a screen held sideways, the panel tighter and the boat's picture
+   left out, so Set sail stays in view. */
+.your-sailor-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+@media (max-height: 420px) {
+  .your-sailor-rows {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: start;
+    gap: 10px;
+  }
+  .start-panel.your-sailor {
+    gap: 6px;
+    padding: 12px 18px 14px;
+  }
+  .start-panel.your-sailor h1 {
+    margin: 0;
+    font-size: 24px;
+  }
+  .start-panel.your-sailor h2 {
+    margin: 2px 0 0;
+  }
+  .your-sailor-name {
+    font-size: 20px;
+  }
+  /* The boat's words alone, its keys side by side under them. */
+  .your-boat .boat-picture {
+    display: none;
+  }
+  .your-boat-name {
+    font-size: 16px;
+  }
+  /* How many it takes is the chooser's to say; and a boat in the water,
+     which is not changed from here, gives its room to the sailor's name. */
+  .your-boat-words .start-faint,
+  .your-boat-afloat {
+    display: none;
+  }
+  .your-sailor-rows:has(.your-boat-afloat) {
+    display: flex;
+  }
+  .your-boat-actions {
+    column-gap: 12px;
+  }
+}

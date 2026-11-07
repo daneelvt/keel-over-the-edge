@@ -108,6 +108,9 @@ type Terrain struct {
 	// start's breeze does not; nil for none. The world's timeline must be
 	// in it (weather.Timeline.InHarbour), as every game connection is told.
 	Harbour *physics.Harbour
+	// Ports are the harbours where a boat may be changed, Port Royal's and
+	// each port's, as discs of water: none in a world without land.
+	Ports []Disc
 }
 
 // A Phase is a part of a tick.
@@ -186,6 +189,9 @@ type World struct {
 	// harbour is Port Royal's, where a sailor at sea may change their
 	// look; nil for a world with none.
 	harbour *physics.Harbour
+	// ports are where a sailor at sea may swap their boat or change its
+	// look.
+	ports   []Disc
 	shelter *physics.Shelter
 	start   []physics.State
 	away    []float64
@@ -270,6 +276,7 @@ func New(cfg Config) (*World, error) {
 	if t := cfg.Terrain; t != nil {
 		w.ground, w.shelter, w.start, w.circulation = t.Ground, t.Shelter, t.Start, t.Circulation
 		w.harbour = t.Harbour
+		w.ports = t.Ports
 		if len(t.Away) == len(t.Start) {
 			w.away = t.Away
 		}

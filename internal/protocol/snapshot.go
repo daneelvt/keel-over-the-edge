@@ -36,7 +36,7 @@ const (
 	// block if it is aground, its rig's block if it has one, its over
 	// block if it is falling over the lip, then the view's entries; flag
 	// bit 4 while the boat stays.
-	SnapshotLayout = 12
+	SnapshotLayout = 13
 	// MaxEntries is the most entries a snapshot may hold.
 	MaxEntries = 128
 	// MaxSnapshotSize is the longest snapshot this package writes: an

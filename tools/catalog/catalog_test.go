@@ -40,16 +40,18 @@ const (
 
 // The sailors every fixture has unless it gives its own, and their art.
 const (
-	validSailors  = "sailors:\n  - id: test-sailor\n    name: Test sailor\n    habit: tests\n    hair: colours\n    versions:\n      - id: test-version\n        name: version\n        art:\n          model: sailors/test.deck.glb\n          far: sailors/test.far.glb\n          close: sailors/test.glb\n          clips: sailors/test.clips.glb\n          portrait: sailors/test.portrait.avif\n          portraitFallback: sailors/test.portrait.webp\n          portraitMask: sailors/test.portrait-mask.webp\n          ink: sailors/test.ink.webp\n" + validOptions + validMachine
-	validOptions  = "sailorOptions:\n  skins:\n    - {id: test-skin, name: skin, colour: \"#cda385\"}\n  hairs:\n    - {id: test-hair, name: hair, colour: \"#654a37\"}\n  greys:\n    - {id: test-grey, name: grey, colour: \"#817b76\"}\n  colours:\n    - {id: test-colour, name: colour, colour: \"#9b2226\"}\n"
-	validMachine  = "machine:\n  habit: tests\n  lamp: \"#ffb347\"\n  versions:\n    - id: test-machine\n      name: version\n      art:\n        model: sailors/m.deck.glb\n        far: sailors/m.far.glb\n        close: sailors/m.glb\n        clips: sailors/m.clips.glb\n        portrait: sailors/m.portrait.avif\n        portraitFallback: sailors/m.portrait.webp\n        portraitMask: sailors/m.portrait-mask.webp\n        ink: sailors/m.ink.webp\n  finishes:\n    - {id: test-finish, name: finish, colour: \"#808080\"}\n"
-	sailorsPath   = "shared/catalog/sailors.yaml"
-	weatherPath   = "shared/catalog/weather.yaml"
-	skyPath       = "shared/catalog/sky.yaml"
-	boatsPath     = "shared/catalog/boats.yaml"
-	encounterPath = "shared/catalog/encounters.yaml"
-	worldPath     = "shared/catalog/world.yaml"
-	noticesPath   = "shared/catalog/notices.yaml"
+	validSailors   = "sailors:\n  - id: test-sailor\n    name: Test sailor\n    habit: tests\n    hair: colours\n    versions:\n      - id: test-version\n        name: version\n        art:\n          model: sailors/test.deck.glb\n          far: sailors/test.far.glb\n          close: sailors/test.glb\n          clips: sailors/test.clips.glb\n          portrait: sailors/test.portrait.avif\n          portraitFallback: sailors/test.portrait.webp\n          portraitMask: sailors/test.portrait-mask.webp\n          ink: sailors/test.ink.webp\n" + validOptions + validMachine
+	validBoatLooks = "boatLooks:\n  paints:\n    - {id: test-paint, name: paint, colour: \"#e9e2d0\"}\n  cloths:\n    - {id: test-cloth, name: cloth, colour: \"#efe7d2\", ink: \"#2b2622\"}\n  lettering: \"#c9a447\"\n  numbers: 9999\n"
+	validOptions   = "sailorOptions:\n  skins:\n    - {id: test-skin, name: skin, colour: \"#cda385\"}\n  hairs:\n    - {id: test-hair, name: hair, colour: \"#654a37\"}\n  greys:\n    - {id: test-grey, name: grey, colour: \"#817b76\"}\n  colours:\n    - {id: test-colour, name: colour, colour: \"#9b2226\"}\n"
+	validMachine   = "machine:\n  habit: tests\n  lamp: \"#ffb347\"\n  versions:\n    - id: test-machine\n      name: version\n      art:\n        model: sailors/m.deck.glb\n        far: sailors/m.far.glb\n        close: sailors/m.glb\n        clips: sailors/m.clips.glb\n        portrait: sailors/m.portrait.avif\n        portraitFallback: sailors/m.portrait.webp\n        portraitMask: sailors/m.portrait-mask.webp\n        ink: sailors/m.ink.webp\n  finishes:\n    - {id: test-finish, name: finish, colour: \"#808080\"}\n"
+	sailorsPath    = "shared/catalog/sailors.yaml"
+	weatherPath    = "shared/catalog/weather.yaml"
+	skyPath        = "shared/catalog/sky.yaml"
+	boatsPath      = "shared/catalog/boats.yaml"
+	boatLooksPath  = "shared/catalog/boatlooks.yaml"
+	encounterPath  = "shared/catalog/encounters.yaml"
+	worldPath      = "shared/catalog/world.yaml"
+	noticesPath    = "shared/catalog/notices.yaml"
 )
 
 // glb is a glTF binary holding only its JSON: nodes of the given names.
@@ -164,6 +166,9 @@ func fixture(t *testing.T, files map[string]string) string {
 				files["art/sailors/"+who+f] = "art"
 			}
 		}
+	}
+	if _, ok := files[boatLooksPath]; !ok {
+		files[boatLooksPath] = validBoatLooks
 	}
 	if _, ok := files[weatherPath]; !ok {
 		files[weatherPath] = realWeather()

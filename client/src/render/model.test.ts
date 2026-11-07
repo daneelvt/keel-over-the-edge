@@ -127,7 +127,7 @@ describe.each(catalog.boats.map((b) => [b.name, b] as const))('%s', (_, boat) =>
     return { min, max };
   };
   /** The hull's shell: its planking, painted or bright, and its sheathing. */
-  const SHELL = ['timber', 'paint', 'copper'];
+  const SHELL = ['timber', 'topsides', 'paint', 'copper'];
   const { rig, foils, hull, sailor, headsails } = boat.physics;
 
   test('has every named part', () => {

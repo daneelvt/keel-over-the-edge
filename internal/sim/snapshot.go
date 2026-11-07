@@ -38,7 +38,8 @@ import (
 // Each boat is its slot and ID as uvarints, its owner's 16 bytes, its
 // connection as a uvarint, the tick its grace ends as a varint, its kind as a
 // uvarint, its account's kind as a uvarint of flags (1: a machine sailor's,
-// 2: a priority account's), its sailor's look code as a uvarint, its control word, its pilot word and its rig word in 8 bytes each, its state's
+// 2: a priority account's), its sailor's look code as a uvarint, its own
+// look code as a uvarint and its name as a uvarint length and its bytes, its control word, its pilot word and its rig word in 8 bytes each, its state's
 // fields in 8 bytes each, then its course's, the same, then its voyage at
 // the edge: the tick it went over the lip as a varint (0 afloat), a uvarint
 // of flags (1: an approach under way, 2: one survived), and for each flag
@@ -47,7 +48,7 @@ import (
 // bytes, the connection as a uvarint, the tick it was queued at and the tick
 // its place is given up at (0 while connected) as varints, and its account's
 // kind, the boat's flags, its look code, and the kind of boat it is to
-// have as a uvarint. Each pair is its
+// have as a uvarint, with that boat's look code and name as a boat's. Each pair is its
 // two slots and two boats, its keep-clear boat, Article and whose action as
 // uvarints, and the tick its keep-clear boat changed and the tick it last
 // touched as varints. The boats' winds and wakes follow from their states,
@@ -61,7 +62,7 @@ import (
 // A checkpoint stores this snapshot without the owner's tools' marks
 // (AppendCheckpoint), so a world is restored only by a build that reads its
 // version, and a restart clears them.
-const SnapshotVersion = 15
+const SnapshotVersion = 16
 
 // The owner's tools' marks of a boat, in a snapshot.
 const (
@@ -181,6 +182,7 @@ func AppendCheckpoint(dst []byte, f *bus.Frame) []byte {
 		dst = binary.AppendUvarint(dst, uint64(f.Kind[s]))
 		dst = binary.AppendUvarint(dst, kindFlags(f.Machine[s], f.Priority[s]))
 		dst = binary.AppendUvarint(dst, uint64(f.Look[s]))
+		dst = appendBoatLook(dst, f.BoatLook[s], f.BoatName[s])
 		dst = binary.LittleEndian.AppendUint64(dst, uint64(f.Control[s]))
 		dst = binary.LittleEndian.AppendUint64(dst, uint64(f.Pilot[s]))
 		dst = binary.LittleEndian.AppendUint64(dst, uint64(f.Rig[s]))
@@ -201,6 +203,7 @@ func AppendCheckpoint(dst []byte, f *bus.Frame) []byte {
 		dst = binary.AppendUvarint(dst, kindFlags(q.Machine, q.Priority))
 		dst = binary.AppendUvarint(dst, uint64(q.Look))
 		dst = binary.AppendUvarint(dst, uint64(q.BoatKind))
+		dst = appendBoatLook(dst, q.BoatLook, q.BoatName)
 	}
 	dst = binary.AppendUvarint(dst, uint64(len(f.Pairs)))
 	for _, p := range f.Pairs {
@@ -356,6 +359,7 @@ func ReadSnapshot(data []byte, f *bus.Frame) error {
 		var owner bus.Account
 		r.bytes(owner[:])
 		conn, grace, kind, flags, look := r.uvarint(), r.varint(), r.uvarint(), r.uvarint(), r.uvarint()
+		boatLook, boatName := r.boatLook()
 		word := bus.Word(r.u64())
 		pilot := bus.PilotWord(r.u64())
 		rig := bus.RigWord(r.u64())
@@ -372,6 +376,7 @@ func ReadSnapshot(data []byte, f *bus.Frame) error {
 		f.Conn[s], f.Grace[s] = conn, grace
 		f.Machine[s], f.Priority[s] = flags&kindMachine != 0, flags&kindPriority != 0
 		f.Look[s] = uint32(look)
+		f.BoatLook[s], f.BoatName[s] = boatLook, boatName
 		for _, v := range StateFields(&f.State[s]) {
 			*v = r.f64()
 		}
@@ -389,6 +394,7 @@ func ReadSnapshot(data []byte, f *bus.Frame) error {
 		r.bytes(q.Account[:])
 		q.Conn, q.Since, q.Grace = r.uvarint(), r.varint(), r.varint()
 		flags, look, boatKind := r.uvarint(), r.uvarint(), r.uvarint()
+		q.BoatLook, q.BoatName = r.boatLook()
 		if r.err == nil && (q.Grace < 0 || q.Conn != 0 && q.Grace != 0 || flags&^kindAll != 0 || look > math.MaxUint32 || boatKind > math.MaxUint16) {
 			return fmt.Errorf("sim: snapshot: a place in the queue with connection %d, grace %d and kind %d", q.Conn, q.Grace, flags)
 		}
@@ -515,6 +521,31 @@ func (r *reader) bytes(b []byte) {
 	}
 	copy(b, r.b)
 	r.b = r.b[len(b):]
+}
+
+// MaxBoatName is the longest boat's name a snapshot holds, in bytes.
+const MaxBoatName = 80
+
+// appendBoatLook appends a boat's own look code and its name.
+func appendBoatLook(dst []byte, look uint32, name string) []byte {
+	dst = binary.AppendUvarint(dst, uint64(look))
+	dst = binary.AppendUvarint(dst, uint64(len(name)))
+	return append(dst, name...)
+}
+
+// boatLook reads a boat's own look code and its name.
+func (r *reader) boatLook() (uint32, string) {
+	look := r.uvarint()
+	n := r.count(MaxBoatName)
+	if r.err == nil && look > math.MaxUint32 {
+		r.err = fmt.Errorf("sim: snapshot: a boat's look %d", look)
+	}
+	b := make([]byte, n)
+	r.bytes(b)
+	if r.err != nil {
+		return 0, ""
+	}
+	return uint32(look), string(b)
 }
 
 // count reads a count of at most limit.

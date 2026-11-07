@@ -156,6 +156,10 @@ export interface DrawnBoat {
   machine: number;
   /** Its sailor's look code; −1 for none given (a test's boat), drawn in the default look. */
   look: number;
+  /** Its own look code, its paint, cloth and sail number; −1 for none given (a test's boat), drawn in the first paint and cloth with no number. */
+  boatLook: number;
+  /** Its name, player text, as the server told it once the boat came near; "" for none. */
+  name: string;
 }
 
 /** A drawn boat at the origin, faded out. */
@@ -185,6 +189,8 @@ export function newDrawnBoat(): DrawnBoat {
     fall: -1,
     machine: 0,
     look: -1,
+    boatLook: -1,
+    name: '',
   };
 }
 
@@ -196,6 +202,9 @@ class Boat {
   machine = 0;
   /** Its sailor's look code. */
   look = 0;
+  /** Its own look code, and its name. */
+  boatLook = 0;
+  name = '';
   readonly ring = new Float64Array(SAMPLES * FIELDS);
   /** Samples held, and where the next goes. */
   count = 0;
@@ -276,6 +285,8 @@ class Boat {
     out.kind = this.kind;
     out.machine = this.machine;
     out.look = this.look;
+    out.boatLook = this.boatLook;
+    out.name = this.name;
     out.tick = rt;
     out.fall = rt >= this.fallTick ? (rt - this.fallTick) / TICKS_PER_SECOND : -1;
     const newest = this.at(0, F.tick);
@@ -412,6 +423,8 @@ export class Fleet {
   #entriesRate = 0;
   /** World time the latest snapshot came at, µs. */
   arrived = 0;
+  /** The boats' names by view slot, as the server told them: of the boat the slot holds as of the next snapshot. */
+  readonly #names: string[] = Array.from({ length: VIEW_SLOTS }, () => '');
 
   /** The boats drawn this frame: drawn[0 … count). */
   readonly drawn: DrawnBoat[] = Array.from({ length: 2 * VIEW_SLOTS }, newDrawnBoat);
@@ -443,8 +456,8 @@ export class Fleet {
       if (change !== CHANGE.none) {
         this.#entries++;
       }
-      // An enter of the boat the slot holds, its sailor's look changed,
-      // keeps it; any other enter replaces it.
+      // An enter of the boat the slot holds, its sailor's look, its own
+      // look or its kind changed, keeps it; any other enter replaces it.
       const relook = change === CHANGE.entered && b.present && f[o + SLOT.relook] === 1;
       if (change === CHANGE.left || (change === CHANGE.entered && b.present && !relook)) {
         this.#fadeOut(b);
@@ -456,6 +469,9 @@ export class Fleet {
       if (f[o + SLOT.present] === 1 && b.present) {
         b.machine = f[o + SLOT.machine] === 1 ? 1 : 0;
         b.look = f[o + SLOT.look] ?? 0;
+        b.boatLook = f[o + SLOT.boatLook] ?? 0;
+        b.kind = f[o + SLOT.kind] ?? 0;
+        b.name = this.#names[i] ?? '';
       }
       if (f[o + SLOT.present] === 1 && f[o + SLOT.sampled] === 1 && b.present) {
         b.add(f, o, tick);
@@ -463,8 +479,25 @@ export class Fleet {
     }
   }
 
+  /**
+   * Takes boats' names by view slot: each the name of the boat its slot
+   * holds as of the next snapshot, "" to clear one.
+   */
+  names(list: readonly { slot: number; name: string }[]): void {
+    for (const n of list) {
+      if (n.slot >= 0 && n.slot < VIEW_SLOTS) {
+        this.#names[n.slot] = n.name;
+        const b = this.#boats[n.slot] as Boat;
+        if (b.present) {
+          b.name = n.name;
+        }
+      }
+    }
+  }
+
   /** Forgets every boat, fading them out: a new connection. */
   clear(): void {
+    this.#names.fill('');
     for (const b of this.#boats) {
       if (b.present) {
         this.#fadeOut(b);
@@ -637,4 +670,6 @@ function copyDrawn(a: DrawnBoat, b: DrawnBoat): void {
   b.fall = a.fall;
   b.machine = a.machine;
   b.look = a.look;
+  b.boatLook = a.boatLook;
+  b.name = a.name;
 }

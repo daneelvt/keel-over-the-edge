@@ -119,11 +119,16 @@ func account(n uint64) bus.Account {
 // fall, and approaches survived 20 m back out of the mist band.
 var liveEdge = &sim.Edge{Fall: 150, Clear: 20}
 
+// livePort is the live sessions' worlds' one port, about the centre: of
+// open sea but for it.
+var livePort = &sim.Terrain{Ports: []sim.Disc{{X: 0, Y: 0, R: 300}}}
+
 func sailLive(t *testing.T, sailors, capacity, limit int, d time.Duration, stall int64) live {
 	var out live
 	dir := t.TempDir()
 	synctest.Test(t, func(t *testing.T) {
-		w, err := sim.New(sim.Config{Capacity: capacity, Kinds: catalogKinds(t), Waves: catalogWaves(t), Weather: catalogWeather(t), Encounters: catalogEncounters(t), Workers: 4, Tick: loop.TickAt(time.Now(), bubbleEpoch), Grace: liveGrace, Limit: limit, Edge: liveEdge})
+		w, err := sim.New(sim.Config{Capacity: capacity, Kinds: catalogKinds(t), Waves: catalogWaves(t), Weather: catalogWeather(t), Encounters: catalogEncounters(t), Workers: 4, Tick: loop.TickAt(time.Now(), bubbleEpoch), Grace: liveGrace, Limit: limit, Edge: liveEdge,
+			Terrain: livePort})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -289,6 +294,17 @@ func sailLive(t *testing.T, sailors, capacity, limit int, d time.Duration, stall
 					w.Bus().Commands.Server().TrySend(bus.Command{Op: bus.Chart, Subject: int32(n % 4), On: n%7 == 0})
 					// A sailor changes their look: at sea, ashore or waiting.
 					players.TrySend(bus.Command{Op: bus.SetLook, Account: account(n/2 + 1), Look: uint32(n)})
+					// Or their boat, or its look: in port, out of it, ashore
+					// or waiting; and once beside another boat, where there
+					// is no room for it.
+					players.TrySend(bus.Command{Op: bus.SetBoat, Account: account(n/3 + 1), BoatKind: uint16(n % 2), BoatLook: uint32(n) << 8, BoatName: "Kittiwake"})
+					players.TrySend(bus.Command{Op: bus.SetBoatLook, Account: account(n/2 + 2), BoatLook: uint32(n)<<8 | 0x21, BoatName: ""})
+					if len(boats) > 1 && n%5 == 0 {
+						a, b := boats[0], boats[1]
+						dev.TrySend(bus.Command{Op: bus.Place, Boat: a.boat, State: physics.State{X: 50, Y: 50}})
+						dev.TrySend(bus.Command{Op: bus.Place, Boat: b.boat, State: physics.State{X: 53, Y: 50}})
+						players.TrySend(bus.Command{Op: bus.SetBoat, Account: a.account, BoatKind: 1, BoatLook: 7 << 8})
+					}
 				case len(boats) > 0:
 					// Moved to open water, to the lip to go over, or into
 					// the mist band.
@@ -334,7 +350,7 @@ func replayLog(t *testing.T, data []byte, workers int) (replay.Result, []byte) {
 		t.Fatal(err)
 	}
 	var end []byte
-	res, err := replay.Run(f, replay.Options{Kinds: catalogKinds(t), Waves: catalogWaves(t), Weather: catalogWeather(t), Encounters: catalogEncounters(t), Workers: workers, Edge: liveEdge, At: func(fr *bus.Frame) {
+	res, err := replay.Run(f, replay.Options{Kinds: catalogKinds(t), Waves: catalogWaves(t), Weather: catalogWeather(t), Encounters: catalogEncounters(t), Workers: workers, Edge: liveEdge, Terrain: livePort, At: func(fr *bus.Frame) {
 		end = sim.AppendSnapshot(end[:0], fr)
 	}})
 	if err != nil {

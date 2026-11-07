@@ -28,9 +28,19 @@ import { catalog } from '../catalog';
 import { MACHINE } from '../catalog/looks';
 import { useWatch } from '../ui/watchlazy';
 import { COPIED, COPY_WATCH_LINK, WATCH, watchersText, watchLink } from '../ui/watchwords';
+import type { BoatChooser } from './boatchooser';
 import type { LookChooser } from './chooser';
 import { Cog } from './cog';
 import { Connect } from './connect';
+import {
+  boatOf,
+  boatTitle,
+  type Fleet,
+  type FleetBoat,
+  fleetRowWords,
+  inOrder,
+  readFleet,
+} from './fleet';
 import type { Voyage } from './letwatch';
 import {
   type Draft,
@@ -135,10 +145,21 @@ export function fleetLine(fleet: Record<string, number>): string {
   return parts.join(', ');
 }
 
-/** The account's machine sailors, read as the component shows. */
-function usePage() {
+/** A machine sailor's boat as it is named, from the fleet; "" for none known. */
+export function machineBoat(fleet: Fleet | null, name: string): string {
+  const b = boatOf(fleet, name);
+  return b === null || !b.machine ? '' : boatTitle(catalog, b);
+}
+
+/**
+ * The account's machine sailors, read as the component shows, and its
+ * fleet, which names their boats: the fleet given, when the screen has
+ * read it already, else read here.
+ */
+function usePage(given?: Fleet | null) {
   const [page, setPage] = useState<MachinesPage | null>(null);
   const [problem, setProblem] = useState('');
+  const [read, setRead] = useState<Fleet | null>(null);
   const load = async () => {
     const res = await readMachines();
     if (res.ok) {
@@ -149,8 +170,15 @@ function usePage() {
   };
   useEffect(() => {
     void load();
+    if (given === undefined) {
+      void readFleet().then((res) => {
+        if (res.ok) {
+          setRead(res.value);
+        }
+      });
+    }
   }, []);
-  return { page, setPage, problem, load };
+  return { page, setPage, problem, load, fleet: given === undefined ? read : given };
 }
 
 /** The form that makes a machine sailor; made is given the page with it, last. */
@@ -249,6 +277,7 @@ export function MachineList({
   toggle,
   make,
   watch = null,
+  fleet = null,
 }: {
   page: MachinesPage;
   heading: ComponentChildren;
@@ -257,6 +286,8 @@ export function MachineList({
   toggle: (id: string) => void;
   make: () => void;
   watch?: ((name: string) => void) | null;
+  /** The account's fleet, which names each one's boat; null while it is not known. */
+  fleet?: Fleet | null;
 }) {
   return (
     <section aria-labelledby="machines-title">
@@ -268,7 +299,7 @@ export function MachineList({
         <ul class="machine-list">
           {page.machines.map((m) => (
             <li key={m.id} data-machine={m.name}>
-              <MachineSummary m={m} picture={picture} />
+              <MachineSummary m={m} picture={picture} boat={machineBoat(fleet, m.name)} />
               {watch !== null && m.atSea && stoppedOn(m) === '' ? (
                 <span class="machine-watch">
                   <button type="button" class="start-sign-in" onClick={() => watch(m.name)}>
@@ -319,6 +350,7 @@ function MachinesBody({
   heading,
   line = '',
   watch = null,
+  fleet = null,
 }: {
   page: MachinesPage;
   setPage: (p: MachinesPage) => void;
@@ -326,6 +358,7 @@ function MachinesBody({
   heading: ComponentChildren;
   line?: string;
   watch?: ((name: string) => void) | null;
+  fleet?: Fleet | null;
 }) {
   const [view, setView] = useState<View>({ kind: first ? 'form' : 'list' });
   const [open, setOpen] = useState('');
@@ -361,6 +394,7 @@ function MachinesBody({
       toggle={(id) => setOpen(open === id ? '' : id)}
       make={() => setView({ kind: 'form' })}
       watch={watch}
+      fleet={fleet}
     />
   );
 }
@@ -400,6 +434,7 @@ export function StartPair({
   list,
   children,
   chooser,
+  boats,
 }: {
   me: Me;
   voyage: Voyage;
@@ -407,6 +442,7 @@ export function StartPair({
   list: () => void;
   children: ComponentChildren;
   chooser?: LookChooser | undefined;
+  boats?: BoatChooser | undefined;
 }) {
   return (
     <div class="start-pair">
@@ -416,6 +452,7 @@ export function StartPair({
         sail={sail}
         watch={list}
         {...(chooser === undefined ? {} : { chooser })}
+        boats={boats}
       />
       <div class="start-panel ai-panel">{children}</div>
     </div>
@@ -435,6 +472,7 @@ export function MachineStart({
   me,
   voyage,
   chooser,
+  boats,
 }: {
   first: boolean;
   done: (watch?: string) => void;
@@ -442,8 +480,10 @@ export function MachineStart({
   voyage: Voyage;
   /** The player's look, changed on their own panel. */
   chooser?: LookChooser;
+  /** The player's boat, chosen on their own panel, with the fleet it is read from. */
+  boats?: BoatChooser | undefined;
 }) {
-  const { page, setPage, problem } = usePage();
+  const { page, setPage, problem, fleet } = usePage(boats?.fleet.value);
   const [listing, setListing] = useState(false);
   if (listing) {
     return <StartWatchList choose={(name) => done(name)} close={() => setListing(false)} />;
@@ -455,6 +495,7 @@ export function MachineStart({
       sail={() => done()}
       list={() => setListing(true)}
       chooser={chooser}
+      boats={boats}
     >
       {page === null ? (
         <p class="start-text start-faint" aria-live="polite">
@@ -473,6 +514,7 @@ export function MachineStart({
           }
           line={AI_SAILORS_LINE}
           watch={(name) => done(name)}
+          fleet={fleet}
         />
       )}
     </StartPair>
@@ -481,7 +523,7 @@ export function MachineStart({
 
 /** The menu's panel of machine sailors. */
 export function MachinesPanel({ close }: { close: () => void }) {
-  const { page, setPage, problem } = usePage();
+  const { page, setPage, problem, fleet } = usePage();
   return (
     <section class="panel menu account machines" aria-label="Machine sailors">
       {page === null ? (
@@ -489,7 +531,13 @@ export function MachinesPanel({ close }: { close: () => void }) {
           {problem || 'Reading your machine sailors…'}
         </p>
       ) : (
-        <MachinesBody page={page} setPage={setPage} first={false} heading="Machine sailors" />
+        <MachinesBody
+          page={page}
+          setPage={setPage}
+          first={false}
+          heading="Machine sailors"
+          fleet={fleet}
+        />
       )}
       <button type="button" class="menu-close" onClick={close}>
         Close
@@ -516,7 +564,7 @@ type Shown =
 
 /** The account page's section: each machine sailor's apps, token and deletion. */
 export function MachinesAccount({ now = Date.now() }: { now?: number }) {
-  const { page, setPage, problem, load } = usePage();
+  const { page, setPage, problem, load, fleet } = usePage();
   const [shown, setShown] = useState<Shown>({ kind: 'page' });
   const [status, setStatus] = useState('');
   const [busy, setBusy] = useState(false);
@@ -645,11 +693,10 @@ export function MachinesAccount({ now = Date.now() }: { now?: number }) {
     );
   }
 
-  const fleet = fleetLine(page.fleet);
   return (
     <section class="machines-account" aria-labelledby="machines-account-title">
+      <FleetList fleet={fleet} counts={page.fleet} />
       <h3 id="machines-account-title">Machine sailors</h3>
-      {fleet !== '' ? <p class="account-faint">Your fleet: {fleet}</p> : null}
       {page.machines.length === 0 ? (
         <p class="account-faint">None: make one from the menu’s Machine sailors.</p>
       ) : null}
@@ -657,7 +704,12 @@ export function MachinesAccount({ now = Date.now() }: { now?: number }) {
         {page.machines.map((m) =>
           stoppedOn(m, now) !== '' ? (
             <li key={m.id} data-machine={m.name} data-stopped="">
-              <MachineSummary m={m} apps={false} picture={picture} />
+              <MachineSummary
+                m={m}
+                apps={false}
+                picture={picture}
+                boat={machineBoat(fleet, m.name)}
+              />
               <span class="machine-soon">{stoppedOn(m, now)}.</span>
               <RevokedApps m={m} />
               <button
@@ -675,7 +727,12 @@ export function MachinesAccount({ now = Date.now() }: { now?: number }) {
             </li>
           ) : (
             <li key={m.id} data-machine={m.name}>
-              <MachineSummary m={m} apps={false} picture={picture} />
+              <MachineSummary
+                m={m}
+                apps={false}
+                picture={picture}
+                boat={machineBoat(fleet, m.name)}
+              />
               <AppsList
                 m={m}
                 now={now}
@@ -754,6 +811,44 @@ export function MachinesAccount({ now = Date.now() }: { now?: number }) {
       <p class="machines-status" aria-live="polite">
         {status}
       </p>
+    </section>
+  );
+}
+
+/**
+ * The account page's fleet: each boat by its kind, name and number, at sea
+ * with its sailor or available; until the fleet is read, or if it cannot be,
+ * how many of each kind there are.
+ */
+export function FleetList({
+  fleet,
+  counts,
+}: {
+  fleet: Fleet | null;
+  counts: Record<string, number>;
+}) {
+  if (fleet === null || fleet.boats.length === 0) {
+    const line = fleetLine(counts);
+    return line === '' ? null : (
+      <>
+        <h3>Your fleet</h3>
+        <p class="account-faint">{line}</p>
+      </>
+    );
+  }
+  return (
+    <section class="fleet-account" aria-labelledby="fleet-account-title">
+      <h3 id="fleet-account-title">Your fleet</h3>
+      <p class="account-faint">
+        Shared by your sailors: choose an available one before you sail, or in a port.
+      </p>
+      <ul class="fleet-list">
+        {inOrder(catalog, fleet.boats).map((b: FleetBoat) => (
+          <li key={b.id} data-boat={b.id} data-at-sea={b.atSea ? '' : undefined}>
+            <bdi>{fleetRowWords(catalog, fleet, b)}</bdi>
+          </li>
+        ))}
+      </ul>
     </section>
   );
 }

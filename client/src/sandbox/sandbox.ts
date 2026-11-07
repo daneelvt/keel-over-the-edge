@@ -17,6 +17,7 @@
 // again at the sandbox's start, at rest. Its current runs the world's way
 // round the disk: a world file's, or clockwise.
 
+import { BOAT_NAME_MOST, type BoatLooks, boatCode, clothAt, paintAt } from '../catalog/boatlooks';
 import type { BoatPhysics, Weather } from '../catalog/types.gen';
 import type { BoatDriver, Wind } from '../game/driver';
 import { PILOT_IDLE, type PilotControl } from '../input/pilot';
@@ -859,6 +860,31 @@ export function boatFromQuery(query: URLSearchParams, ids: readonly string[]): n
   }
   const i = ids.indexOf(id);
   return i >= 0 ? i : null;
+}
+
+/**
+ * The own boat's look the query gives: ?paint and ?cloth by the catalog's
+ * ids, ?number, and ?boatname; a look code of −1 (none told) when it gives
+ * none of the first three, and "" for no name. One the catalog has not is
+ * its first; a number out of range none.
+ */
+export function boatLookFromQuery(
+  query: URLSearchParams,
+  cat: BoatLooks,
+): { look: number; name: string } {
+  const name = [...(query.get('boatname') ?? '')].slice(0, BOAT_NAME_MOST).join('');
+  if (!query.has('paint') && !query.has('cloth') && !query.has('number')) {
+    return { look: -1, name };
+  }
+  const n = Math.floor(Number(query.get('number') ?? 0));
+  return {
+    look: boatCode({
+      paint: Math.max(paintAt(cat, query.get('paint') ?? ''), 0),
+      cloth: Math.max(clothAt(cat, query.get('cloth') ?? ''), 0),
+      number: n >= 1 && n <= cat.boatLooks.numbers ? n : 0,
+    }),
+    name,
+  };
 }
 
 function wrap(a: number): number {

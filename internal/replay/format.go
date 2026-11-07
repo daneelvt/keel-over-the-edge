@@ -47,8 +47,9 @@ import (
 //	T tick      tick, ticks skipped before it, the control words applied
 //	            (count, then slot, word, pilot word and rig word for each), the commands applied in order with
 //	            their results (count, then each: op, its fields (a Join's account, connection,
-//	            kind: a byte, 1 for a machine sailor's, 2 a priority account's, look code and kind of boat;
-//	            a SetLook's account and look code), result, slot, boat, generation,
+//	            kind: a byte, 1 for a machine sailor's, 2 a priority account's, look code, kind of boat,
+//	            its look code and its name; a SetLook's account and look code; a SetBoat's account,
+//	            kind of boat, its look code and name; a SetBoatLook's account, look code and name), result, slot, boat, generation,
 //	            place in the queue, tick queued at); an account is its 16 bytes; a yes or
 //	            no a byte, 1 or 0; a Teleport its boat, whether to the start and its state;
 //	            a Stay or Unseen its boat and whether on; an End its last tick; a developer's
@@ -61,7 +62,7 @@ import (
 //	            nothing reliable from that tick on
 const (
 	magic         = "KEELLOG\n"
-	formatVersion = 14
+	formatVersion = 15
 
 	kindHeader   = 'H'
 	kindSnapshot = 'S'
@@ -201,9 +202,20 @@ func appendEvent(dst []byte, e *bus.Event) []byte {
 		dst = append(dst, joinKind(e.Machine, e.Priority))
 		dst = binary.AppendUvarint(dst, uint64(e.Look))
 		dst = binary.AppendUvarint(dst, uint64(e.BoatKind))
+		dst = binary.AppendUvarint(dst, uint64(e.BoatLook))
+		dst = appendString(dst, e.BoatName)
 	case bus.SetLook:
 		dst = append(dst, e.Account[:]...)
 		dst = binary.AppendUvarint(dst, uint64(e.Look))
+	case bus.SetBoat:
+		dst = append(dst, e.Account[:]...)
+		dst = binary.AppendUvarint(dst, uint64(e.BoatKind))
+		dst = binary.AppendUvarint(dst, uint64(e.BoatLook))
+		dst = appendString(dst, e.BoatName)
+	case bus.SetBoatLook:
+		dst = append(dst, e.Account[:]...)
+		dst = binary.AppendUvarint(dst, uint64(e.BoatLook))
+		dst = appendString(dst, e.BoatName)
 	case bus.Leave:
 		dst = binary.AppendUvarint(dst, e.Boat)
 	case bus.Disconnect:
@@ -568,9 +580,17 @@ func (p *payload) event(e *bus.Event) {
 		}
 		e.Look = p.look()
 		e.BoatKind = uint16(p.count(math.MaxUint16))
+		e.BoatLook, e.BoatName = p.boatLook()
 	case bus.SetLook:
 		p.bytes(e.Account[:])
 		e.Look = p.look()
+	case bus.SetBoat:
+		p.bytes(e.Account[:])
+		e.BoatKind = uint16(p.count(math.MaxUint16))
+		e.BoatLook, e.BoatName = p.boatLook()
+	case bus.SetBoatLook:
+		p.bytes(e.Account[:])
+		e.BoatLook, e.BoatName = p.boatLook()
 	case bus.Leave:
 		e.Boat = p.uvarint()
 	case bus.Disconnect:
@@ -634,6 +654,16 @@ func (p *payload) event(e *bus.Event) {
 }
 
 // look reads a look code.
+// boatLook reads a boat's own look code and its name.
+func (p *payload) boatLook() (uint32, string) {
+	look := uint32(p.count(math.MaxUint32))
+	name := p.string()
+	if p.err == nil && len(name) > sim.MaxBoatName {
+		p.err = fmt.Errorf("a boat's name of %d bytes", len(name))
+	}
+	return look, name
+}
+
 func (p *payload) look() uint32 {
 	l := p.uvarint()
 	if p.err == nil && l > math.MaxUint32 {

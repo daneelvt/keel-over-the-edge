@@ -155,6 +155,10 @@ type Config struct {
 	// LookCode, if not nil, is an account's sailor's look as the world
 	// holds it, a look code, which its boat is drawn in; else the first.
 	LookCode func(store.Account) uint32
+	// BoatOf, if not nil, is the boat of its account's fleet a sailor
+	// takes to sea, its kind, look and name, as it connects; else the
+	// first kind, with no look.
+	BoatOf func(context.Context, store.Account) Boat
 	// World is the world's ID, as Welcome names it, and Epoch the moment
 	// its time counts from, which Welcome carries too.
 	World string
@@ -391,6 +395,9 @@ func (e *Edge) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if e.cfg.LookCode != nil {
 		c.look = e.cfg.LookCode(acc)
 	}
+	if e.cfg.BoatOf != nil {
+		c.joinBoat = e.cfg.BoatOf(r.Context(), acc)
+	}
 	if cur, ok := auth.SessionFromContext(r.Context()); ok {
 		c.session = cur.Hash
 	}
@@ -400,6 +407,22 @@ func (e *Edge) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	defer e.untrack(c)
 	c.run()
+}
+
+// Boat is a fleet's boat as a sailor takes it to sea: its kind, an index
+// into the world's kinds; its look, a boat look code (internal/looks); and
+// its name, player text, "" for none.
+type Boat struct {
+	Kind uint16
+	Look uint32
+	Name string
+}
+
+// toldName is a view slot's boat's name as a client was last told it, and
+// the boat it was told for.
+type toldName struct {
+	boat uint64
+	name string
 }
 
 // stopped reports whether an account is stopped by the game's operator.

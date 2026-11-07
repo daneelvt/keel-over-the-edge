@@ -1,0 +1,32 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# A boat's look, which its sailor chooses and changes in port: the paint on
+# its hull and the cloth of its sails, each of the period (white lead and
+# the earth pigments, Prussian blue, verdigris and smalt; canvas bleached,
+# unbleached or barked, and striped with madder or indigo), its sail number
+# and its name. Looks only: never how a boat sails. At most 16 of each: the
+# boat's look code holds each in 4 bits. The first of each is a new boat's.
+boatLooks:
+  paints:
+    - { id: white-lead, name: white lead, colour: "#e9e2d0" }
+    # The wood showing under its varnish: drawn with the grain.
+    - { id: bright-varnish, name: bright varnish, colour: "#a8713c", grain: true }
+    - { id: prussian-blue, name: Prussian blue, colour: "#22344d" }
+    - { id: red-ochre, name: red ochre, colour: "#8e3424" }
+    - { id: verdigris, name: verdigris, colour: "#3d6650" }
+    - { id: pitch-black, name: pitch black, colour: "#25221f" }
+    - { id: smalt, name: smalt, colour: "#6f90b0" }
+    - { id: yellow-ochre, name: yellow ochre, colour: "#c9973a" }
+  # Each cloth with the ink its number and the machine mark are painted in:
+  # dark on the pale cloths, pale on the barked.
+  cloths:
+    - { id: bleached-canvas, name: bleached canvas, colour: "#efe7d2", ink: "#2b2622" }
+    - { id: flax, name: flax, colour: "#e0cfa8", ink: "#2b2622" }
+    - { id: tanbark, name: tanbark, colour: "#7f3d24", ink: "#efe7d2" }
+    - { id: cutch-brown, name: cutch brown, colour: "#4c3527", ink: "#e0cfa8" }
+    - { id: madder-stripe, name: madder stripe, colour: "#efe7d2", band: "#a3352a", ink: "#2b2622" }
+    - { id: indigo-stripe, name: indigo stripe, colour: "#efe7d2", band: "#2f4a72", ink: "#2b2622" }
+  # A boat's name is lettered on its topsides, or its transom, in gold leaf.
+  lettering: "#c9a447"
+  # Sail numbers run from 1 to this, each kind's its own: the game gives a
+  # new boat the lowest free one of its kind.
+  numbers: 9999

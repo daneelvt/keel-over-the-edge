@@ -68,6 +68,18 @@ func sailorsBoat(cat *catalog.Catalog) string {
 	return string(cat.Boats[0].ID)
 }
 
+// sharedBoats are the kinds of boat an account's fleet holds one of, for
+// its sailors to share: the catalog's boats of fleet account.
+func sharedBoats(cat *catalog.Catalog) []string {
+	var out []string
+	for i := range cat.Boats {
+		if cat.Boats[i].Fleet == catalog.FleetAccount {
+			out = append(out, string(cat.Boats[i].ID))
+		}
+	}
+	return out
+}
+
 // newAgents makes sign-in for AI apps, the lifetime read from the
 // database.
 func (p *process) newAgents(ctx context.Context, stopped *accounts.Set) (*agents, error) {
@@ -108,7 +120,7 @@ func (p *process) seaOf(h *worldHalf, rw *readyWorld, sighting *sim.Sight) *agen
 		Number: h.row.Number, Epoch: h.row.Epoch, Ends: h.ends, Bus: h.bus, Boats: cat.Boats,
 		Limit: h.world.Limit(), AICap: h.world.AICap(), AIReserve: h.world.AIReserve(),
 		Timeline: rw.timeline, Waves: p.waves, Sky: cat.PrepareSky(), Bundle: rw.bundle,
-		Forecast: h.forecasts, Words: weather.WordsOf(cat), Catalog: cat, Looks: p.looks, Kinds: p.kinds, Encounters: cat.PrepareEncounters(),
+		Forecast: h.forecasts, Words: weather.WordsOf(cat), Catalog: cat, Looks: p.looks, Kinds: p.kinds, Encounters: cat.PrepareEncounters(), Fleet: p.fleet,
 		News: news{db: p.db, world: h.row.ID}.News, Columns: map[string]string{}, Biomes: map[string]string{},
 	}
 	if h.game != nil {
@@ -163,6 +175,7 @@ const approvePage = "approve.html"
 func (a *agents) apiConfig(cfg *api.Config, p *process) {
 	cfg.OAuth, cfg.Grants, cfg.MCP, cfg.Lifetime = a.server, a.grants, p.cfg.AgentsURL, a.lifetime
 	cfg.MachineLooks, cfg.Boat, cfg.AtSea, cfg.Machines = a.looks, a.boat, p.atSea, p.db
+	cfg.SharedBoats = sharedBoats(p.cat)
 }
 
 // atSea reports whether an account's boat is at sea in the world sailed.

@@ -96,6 +96,7 @@ import { SandboxForecast } from '../sandbox/forecast';
 import { swellFromQuery } from '../sandbox/localsea';
 import {
   boatFromQuery,
+  boatLookFromQuery,
   commonestWeather,
   FRONT,
   flashFromQuery,
@@ -129,6 +130,7 @@ import { type Cover, DROP, LIFT, LIFT_REDUCED, QUIET, takeCover } from './cover'
 import { browserEnv, fullScreen } from './fullscreen';
 import { Gate, type Revealed, WAITING_WORDS, type Waiting } from './gate';
 import { harbourWater, watchHarbour } from './harbour';
+import { harbourBoats, sandboxBoats } from './harbourboats';
 import { harbourLook, sandboxHarbourLook } from './harbourlook';
 import { lookStage } from './lookstage';
 
@@ -297,6 +299,10 @@ async function start(): Promise<void> {
     // ?look=code: the sailor in a look of the developer's own.
     const sandboxLook = Number(query.get('look') ?? PERSON_DEFAULT) || PERSON_DEFAULT;
     world.sailAs(sandboxLook);
+    // ?paint=id&cloth=id&number=n&boatname=text: the boat in a look of the
+    // developer's own.
+    const boatLook = boatLookFromQuery(query, catalog);
+    world.setBoatLook(boatLook.look, boatLook.name);
     // ?boat=id: any of the catalog's boats; every kind is prepared, so the
     // developer panel can change it.
     const kind = boatFromQuery(
@@ -514,6 +520,7 @@ async function start(): Promise<void> {
         src: forecasting,
         store: parts.chart.store,
         look: sandboxHarbourLook(world, sandboxLook),
+        boats: sandboxBoats(catalog),
       },
       camera,
       clear,
@@ -603,12 +610,16 @@ async function start(): Promise<void> {
       start: () =>
         showStartScreen(document.body, {
           looks: catalog,
+          boats: catalog,
           ...(stage === undefined ? {} : { stage }),
           ...(linked === '' ? {} : { panel: false }),
         }).then(set),
       addPasskey: (me) => showAddPasskey(document.body, me),
       ...(linked === ''
-        ? { sailor: (me: Me) => showSailor(document.body, own(me), catalog, stage).then(set) }
+        ? {
+            sailor: (me: Me) =>
+              showSailor(document.body, own(me), catalog, stage, catalog).then(set),
+          }
         : {}),
       backSoon: notice,
     }).then(own),
@@ -841,6 +852,13 @@ async function start(): Promise<void> {
       void world.showLook(look);
     }
   });
+  // And the boat in view in its own look, and its name.
+  effect(() => {
+    const b = online.boatLook.value;
+    if (b !== null) {
+      world.setBoatLook(b.look, b.name);
+    }
+  });
   // The screen comes back by itself when the player is needed.
   const neededNow = (): Needed => ({
     overboard: !online.spectating.value && overboard(game.hud.sailor.value),
@@ -944,6 +962,7 @@ async function start(): Promise<void> {
       src: forecasting,
       store: parts.chart.store,
       look: harbourLook(world, online),
+      boats: harbourBoats(catalog, online),
     },
     watch: watchView,
     lamp: online.lamp,

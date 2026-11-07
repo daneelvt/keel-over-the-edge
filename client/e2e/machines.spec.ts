@@ -260,9 +260,13 @@ test('the account page: an app revoked, a connection token made once and revoked
   await page.getByRole('button', { name: 'Account' }).click();
   const row = page.locator('.machines-account li[data-machine]', { hasText: name });
   await expect(row).toBeVisible();
-  const boat = data.boats[0]?.name ?? '';
-  // A boat for the player, and one for the machine sailor.
-  await expect(page.locator('.machines-account')).toContainText(`Your fleet: 2 ${boat}s`);
+  // A Jolly boat for the player and one for the machine sailor, and a boat
+  // the account shares.
+  const each = data.boats.find((b) => b.fleet === 'sailor');
+  const shared = data.boats.find((b) => b.fleet === 'account');
+  const fleetRows = page.locator('.fleet-account li[data-boat]');
+  await expect(fleetRows).toHaveCount(2 + (shared === undefined ? 0 : 1));
+  await expect(fleetRows.filter({ hasText: each?.name ?? '' })).toHaveCount(2);
 
   // The app: its host, approved today, ending in the grant's lifetime.
   const app = row.locator('.machine-apps li', { hasText: 'Test app' });
@@ -301,6 +305,27 @@ test('the account page: an app revoked, a connection token made once and revoked
     },
   };
   expect((await mcp(init)).status()).not.toBe(401);
+  // Through it, the machine sailor takes the boat the account shares to
+  // sea, and the fleet says it sails it.
+  if (shared !== undefined) {
+    const call = await mcp({
+      jsonrpc: '2.0',
+      id: 2,
+      method: 'tools/call',
+      params: { name: 'boat', arguments: { action: 'take', boat: shared.name } },
+    });
+    expect(call.status()).toBe(200);
+    expect(await call.text()).toContain(`Your boat is ${shared.name}`);
+    await expect
+      .poll(async () => {
+        const res = await context.request.get('/api/fleet');
+        const f = (await res.json()) as {
+          boats: { kind: string; sailor: string; atSea: boolean }[];
+        };
+        return f.boats.find((b) => b.kind === shared.id);
+      })
+      .toMatchObject({ sailor: name, atSea: true });
+  }
   await page.getByRole('button', { name: 'Done' }).click();
   await expect(row).toContainText(/Connection token: made on \d+ \w+/);
   await expect(page.locator('[data-token]')).toHaveCount(0);

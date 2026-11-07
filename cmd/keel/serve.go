@@ -35,6 +35,7 @@ import (
 	"github.com/daneelvt/keel-over-the-edge/internal/catalog"
 	"github.com/daneelvt/keel-over-the-edge/internal/config"
 	"github.com/daneelvt/keel-over-the-edge/internal/edge"
+	"github.com/daneelvt/keel-over-the-edge/internal/fleet"
 	"github.com/daneelvt/keel-over-the-edge/internal/forecast"
 	"github.com/daneelvt/keel-over-the-edge/internal/jobs"
 	"github.com/daneelvt/keel-over-the-edge/internal/looks"
@@ -184,6 +185,7 @@ type database interface {
 	api.Notices
 	owner.Accounts
 	watch.Store
+	fleet.Store
 	WatchTarget(ctx context.Context, key string) (store.WatchTarget, error)
 	Stats() store.PoolStats
 	Close()
@@ -439,6 +441,7 @@ func runServer(ctx context.Context, getenv func(string) string, stdout io.Writer
 		replayRoutes: replayHandler, devRoutes: weatherHandler, ownerRoutes: ownerHandler, playRoutes: &lateHandler{},
 		fail: make(chan error, 1), making: make(chan struct{}, 1),
 	}
+	p.fleet = fleet.New(fleet.Config{Store: db, Catalog: cat, World: p.worldBus, Log: log})
 	p.registerWorldMetrics()
 	// The accounts stopped, before anyone is let in.
 	stopped, err := accounts.Load(ctx, db)
@@ -457,6 +460,7 @@ func runServer(ctx context.Context, getenv func(string) string, stdout io.Writer
 	p.hand = accounts.New(accounts.Config{
 		Store: db, Sessions: p.sessions, Door: p.agents.grants, Agents: p.agents.core, World: p.accountsWorld,
 		Lifetime: p.agents.lifetime.Get, Looks: p.agents.looks, Book: p.looks, Stopped: stopped, Log: log, Metrics: metrics,
+		Fleet: p.fleet,
 	})
 	for _, k := range []store.Kind{store.Human, store.AI} {
 		metrics.GaugeFunc("keel_accounts_stopped", "Accounts stopped by the operator, by kind; a stopped human's machine sailors among the AI accounts.",
@@ -660,7 +664,7 @@ func ownerTools(c ownerConfig) *owner.Owner {
 	}
 	cfg := owner.Config{
 		Bundle: c.bundle, Weather: prepared, Timeline: c.timeline, SystemKinds: systemKindNames(c.cat), Waves: waves,
-		Kinds: kinds, Regimes: regimes, Sky: c.cat.PrepareSky(),
+		Kinds: kinds, Regimes: regimes, Sky: c.cat.PrepareSky(), BoatLooks: looks.NewBoats(c.cat),
 		World:    owner.World{Number: c.sailed.Number, ID: c.sailed.ID, Epoch: c.sailed.Epoch, Made: c.made},
 		Calm:     c.cat.World.MainPort.Calm * 1852,
 		Accounts: c.db, Page: c.page, Log: c.log, Metrics: c.metrics,

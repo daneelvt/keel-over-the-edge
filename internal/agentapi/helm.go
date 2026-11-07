@@ -582,7 +582,12 @@ func (h *helm) join(ctx context.Context, s *Sea) (bus.Reply, error) {
 		code = s.Looks.Code(machineLook(s.Looks, h.account, look))
 	}
 	reply := make(chan bus.Reply, 1)
-	cmd := bus.Command{Op: bus.Join, Account: bus.Account(h.account), Conn: h.conn, Machine: true, Priority: priority, Look: code, Reply: reply}
+	cmd := bus.Command{Op: bus.Join, Account: bus.Account(h.account), Conn: h.conn, Machine: true, Priority: priority, Look: code, Reply: reply,
+		BoatKind: joinedKind}
+	if s.Fleet != nil {
+		j := s.Fleet.ForJoin(ctx, h.account)
+		cmd.BoatKind, cmd.BoatLook, cmd.BoatName = j.Kind, j.Look, j.Name
+	}
 	if err := send(ctx, s, cmd); err != nil {
 		return bus.Reply{}, err
 	}

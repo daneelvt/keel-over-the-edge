@@ -77,6 +77,10 @@ func (w *World) apply(c *bus.Command) {
 		w.endAt = max(c.At, f.Tick)
 	case bus.SetLook:
 		r = w.setLook(c.Account, c.Look)
+	case bus.SetBoat:
+		r = w.setBoat(c)
+	case bus.SetBoatLook:
+		r = w.setBoatLook(c)
 	default:
 		return
 	}

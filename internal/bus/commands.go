@@ -18,7 +18,8 @@ const QueueSize = 4096
 type Op uint8
 
 // The commands. Join, Leave and Disconnect come from players' connections,
-// and SetLook from a player's change of look at Port Royal;
+// SetLook from a player's change of look at Port Royal, and SetBoat and
+// SetBoatLook from a change of boat or of its look in port;
 // SetWeather and Place are for developers only: tests, scripted sailors
 // and replays; Hold is the server's own, from what writes the world to the
 // database, Chart, which marks what the world's chart holds from its
@@ -26,25 +27,28 @@ type Op uint8
 // Unseen are the owner's tools', and Chart too, which charts the whole
 // world from the world page.
 const (
-	Join       Op = iota + 1 // a boat for Account, sailed through connection Conn: its existing one, a new one, or a place in the queue
-	Leave                    // Boat leaves the world
-	SetWeather               // the developer's weather becomes Weather, from the second after next
-	Place                    // Boat's state becomes State
-	Disconnect               // connection Conn, Boat's, has ended: its grace begins; with Boat 0, Account's connection Conn, waiting or sailing
-	Hold                     // admission is held while Held: a Join without a boat waits in the queue, and the queue gives none
-	Teleport                 // Boat's state becomes State, or with Start the start's: at rest, its course cleared, its voyage marked placed
-	Stay                     // Boat stays where it is while On: not stepped, touching nothing, casting no shadow
-	Unseen                   // Boat is in no other connection's view while On, and touches nothing and casts no shadow
-	Chart                    // Subject is charted, credited to no one; with On, every subject
-	End                      // the world ends after tick At, or after this tick if At has passed: the falls take every boat afloat
-	SetLook                  // Account's sailor's look becomes Look: its boat's, if it is in Port Royal's harbour, or its place's in the queue
+	Join        Op = iota + 1 // a boat for Account, sailed through connection Conn: its existing one, a new one, or a place in the queue
+	Leave                     // Boat leaves the world
+	SetWeather                // the developer's weather becomes Weather, from the second after next
+	Place                     // Boat's state becomes State
+	Disconnect                // connection Conn, Boat's, has ended: its grace begins; with Boat 0, Account's connection Conn, waiting or sailing
+	Hold                      // admission is held while Held: a Join without a boat waits in the queue, and the queue gives none
+	Teleport                  // Boat's state becomes State, or with Start the start's: at rest, its course cleared, its voyage marked placed
+	Stay                      // Boat stays where it is while On: not stepped, touching nothing, casting no shadow
+	Unseen                    // Boat is in no other connection's view while On, and touches nothing and casts no shadow
+	Chart                     // Subject is charted, credited to no one; with On, every subject
+	End                       // the world ends after tick At, or after this tick if At has passed: the falls take every boat afloat
+	SetLook                   // Account's sailor's look becomes Look: its boat's, if it is in Port Royal's harbour, or its place's in the queue
+	SetBoat                   // Account's boat becomes one of kind BoatKind, of BoatLook and BoatName, where it lies, if it is in port and there is room; or its place's in the queue
+	SetBoatLook               // Account's boat's look and name become BoatLook and BoatName, if it is in port; or its place's in the queue
 	opEnd
 )
 
 // Ops lists every op, in order, for tables keyed by op.
-var Ops = []Op{Join, Leave, SetWeather, Place, Disconnect, Hold, Teleport, Stay, Unseen, Chart, End, SetLook}
+var Ops = []Op{Join, Leave, SetWeather, Place, Disconnect, Hold, Teleport, Stay, Unseen, Chart, End, SetLook, SetBoat, SetBoatLook}
 
-var opNames = [...]string{"", "join", "leave", "set_weather", "place", "disconnect", "hold", "teleport", "stay", "unseen", "chart", "end", "set_look"}
+var opNames = [...]string{"", "join", "leave", "set_weather", "place", "disconnect", "hold", "teleport", "stay", "unseen", "chart", "end", "set_look",
+	"set_boat", "set_boat_look"}
 
 func (o Op) String() string {
 	if o == 0 || o >= opEnd {
@@ -140,8 +144,8 @@ type System struct {
 // SystemSlots is the most systems a developer may place at once.
 const SystemSlots = 4
 
-// A Command asks the simulation to change the world. It is a value; the reply
-// channel is its only pointer.
+// A Command asks the simulation to change the world. It is a value: the
+// reply channel is its only pointer, and its one string is immutable.
 type Command struct {
 	Op      Op
 	Account Account       // Join, Disconnect with no boat: the account; in a Leave's event, the tick's record of who sailed the boat
@@ -162,9 +166,13 @@ type Command struct {
 	// Look is a Join's account's sailor's look, and a SetLook's new one:
 	// a look code (internal/looks).
 	Look uint32
-	// BoatKind is the kind of boat a Join's new boat is, an index into the
-	// world's kinds; a boat the account already has keeps its own.
+	// BoatKind is the kind of boat a Join's new boat is, or a SetBoat's, an
+	// index into the world's kinds; a boat the account already has keeps
+	// its own at a Join. BoatLook and BoatName are that boat's own look (a
+	// boat look code) and name, and a SetBoatLook's new ones.
 	BoatKind uint16
+	BoatLook uint32
+	BoatName string
 	// Reply, if not nil, receives the result. The simulation never waits on
 	// it, so it should have room for one reply.
 	Reply chan<- Reply
@@ -179,21 +187,23 @@ const (
 	Rejoined                   // the account's existing boat
 	Full                       // no free slot, and no room in the queue
 	Left                       // the boat has gone
-	Done                       // SetWeather, Place, Hold, Teleport, Stay, Unseen, End or SetLook applied; Disconnect's grace begun
-	NoBoat                     // no such boat; for SetLook, no boat afloat nor place in the queue
+	Done                       // SetWeather, Place, Hold, Teleport, Stay, Unseen, End, SetLook, SetBoat or SetBoatLook applied; Disconnect's grace begun
+	NoBoat                     // no such boat; for SetLook, SetBoat and SetBoatLook, no boat afloat nor place in the queue
 	Expired                    // the boat left at the end of its grace: the tick's own doing, not a command's
 	Stale                      // Disconnect from a connection that no longer sails the boat, or waits: ignored
 	Queued                     // the world is at its limit: the connection waits, at Position
 	Admitted                   // a waiting connection got its boat: the tick's own doing, recorded as a Join
 	Dequeued                   // Disconnect from a waiting connection: it waits no more
-	Away                       // SetLook for a boat at sea beyond Port Royal's harbour: its look stays
+	Away                       // SetLook for a boat at sea beyond Port Royal's harbour, SetBoat or SetBoatLook for one out of port: it stays as it was
+	NoRoom                     // SetBoat where the new boat would meet land, shoal water or another boat: it stays as it was
 	resultEnd
 )
 
 // Results lists every result, in order, for tables keyed by result.
-var Results = []Result{Joined, Rejoined, Full, Left, Done, NoBoat, Expired, Stale, Queued, Admitted, Dequeued, Away}
+var Results = []Result{Joined, Rejoined, Full, Left, Done, NoBoat, Expired, Stale, Queued, Admitted, Dequeued, Away, NoRoom}
 
-var resultNames = [...]string{"", "joined", "rejoined", "full", "left", "done", "no_boat", "expired", "stale", "queued", "admitted", "dequeued", "away"}
+var resultNames = [...]string{"", "joined", "rejoined", "full", "left", "done", "no_boat", "expired", "stale", "queued", "admitted", "dequeued", "away",
+	"no_room"}
 
 func (r Result) String() string {
 	if r == 0 || r >= resultEnd {
@@ -240,7 +250,7 @@ func NewQueue() *Queue {
 }
 
 // Players returns a sender for players' commands: Join, Leave,
-// Disconnect and SetLook.
+// Disconnect, SetLook, SetBoat and SetBoatLook.
 func (q *Queue) Players() Sender { return Sender{q: q, from: fromPlayers} }
 
 // Developer returns a sender for every command. Only code in the server's own

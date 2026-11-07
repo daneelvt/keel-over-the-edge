@@ -8,6 +8,7 @@
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { beforeAll, describe, expect, test } from 'vitest';
 import { catalog } from '../catalog';
+import { boatCode } from '../catalog/boatlooks';
 import { PILOT_WIND, PilotInput } from '../input/pilot';
 import { quantiseHelm, quantiseSheet } from '../input/quantise';
 import {
@@ -27,6 +28,7 @@ import { swellFromQuery } from './localsea';
 import type { Recording } from './record';
 import {
   boatFromQuery,
+  boatLookFromQuery,
   FRONT,
   KNOT,
   Sandbox,
@@ -441,6 +443,24 @@ describe('the sandbox’s boat', () => {
     ids.forEach((id, i) => {
       expect(boatFromQuery(new URLSearchParams(`boat=${id}`), ids)).toBe(i);
     });
+  });
+
+  test('is in the look ?paint, ?cloth, ?number and ?boatname give, or none told', () => {
+    const q = (s: string) => boatLookFromQuery(new URLSearchParams(s), catalog);
+    expect(q('')).toEqual({ look: -1, name: '' });
+    expect(q('boatname=Saltpeter')).toEqual({ look: -1, name: 'Saltpeter' });
+    const { paints, cloths } = catalog.boatLooks;
+    const p = paints[2]?.id ?? '';
+    const c = cloths[3]?.id ?? '';
+    expect(q(`paint=${p}&cloth=${c}&number=311`)).toEqual({
+      look: boatCode({ paint: 2, cloth: 3, number: 311 }),
+      name: '',
+    });
+    // One the catalog has not is its first; a number out of range none.
+    expect(q('paint=no-such-paint&number=99999').look).toBe(
+      boatCode({ paint: 0, cloth: 0, number: 0 }),
+    );
+    expect([...q(`boatname=${'x'.repeat(30)}`).name]).toHaveLength(20);
   });
 
   test('every kind prepared, it steps the one sailed, keeps its params for a recording, and reefs it', async () => {

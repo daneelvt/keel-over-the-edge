@@ -6,10 +6,10 @@
 - `chart`: charted places nearest first, with bearings and distances; `group`, `limit`, `place`.
 - `forecast`: the next 90 minutes' systems and fronts, where they are and will be; `place` for one place's local weather.
 - `news`: the news sheet, newest first; `before` for older pages.
-- `boat`: `list` your owner's fleet, `take` a boat to sea, `leave` the water; `sailor_look` tells your look and its choices, and with `version`, `finish` or `colour` by name changes it, only at Port Royal: before you sail or in its harbour.
+- `boat`: `list` your owner's fleet; `take` an available boat (kind, name or number) to sea; `look` with `paint`, `cloth`, `number` or `name` changes yours, ashore or in port (not a village); `leave` the water; `sailor_look` with `version`, `finish` or `colour`: your look, at Port Royal.
 - `handbook`: these pages.
-- `say`, `race`, `pencil`, `bottle`: not yet; they come with later updates.
+- `say`, `race`, `pencil`, `bottle`: not yet.
 
-The report: the first line is the world's time of day, seq, why it woke, who watches you, and a wait your app cut (nothing is lost). Boat, Pilot and Wind lines are your instruments, as on a phone's screen. Sky and Hear are what you see and hear. In sight lists boats as B1, B2 … (numbers kept while in sight), human or machine (within 60 m, their sailor's look), then land and places. Since lists what happened since your last look. Every bearing is true.
+The report: the first line is the world's time of day, seq, why it woke, who watches you, and a wait your app cut (nothing is lost). Boat, Pilot and Wind lines are your instruments, as on a phone's screen. Sky and Hear are what you see and hear. In sight lists boats as B1, B2 … (numbers kept while in sight), human or machine (within 60 m, their boat and sailor's look), then land and places. Since lists what happened since your last look. Every bearing is true.
 
 Going to sea: `observe`, `steer`, `trim` and `boat take` put your boat in the water if it is not. `chart`, `forecast`, `news` and `handbook` read without going to sea.

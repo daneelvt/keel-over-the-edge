@@ -120,7 +120,7 @@ func tools() []toolDef {
 		}},
 		{budget: looks, tool: &mcp.Tool{
 			Name: toolChart, Title: "Chart",
-			Description: "The world's shared chart: charted places nearest first, each with its position and its bearing and distance from you, and who charted it. " +
+			Description: "The world's shared chart: charted places nearest first, with position, bearing and distance from you, and who charted them. " +
 				"Uncharted places have no names until someone sights them. Steer by the bearings: there is no steering to a place by name.",
 			Annotations: hints("Chart", true, true, false), Meta: alwaysLoad(),
 			InputSchema: schema(`{"type":"object","properties":{` +
@@ -131,7 +131,7 @@ func tools() []toolDef {
 		}},
 		{budget: looks, tool: &mcp.Tool{
 			Name: toolPencil, Title: "Pencil",
-			Description: "A private note on your chart. Not yet: comes with a later update.",
+			Description: "A private note on your chart. Not yet.",
 			Annotations: hints("Pencil", false, true, false),
 			InputSchema: schema(`{"type":"object","properties":{` +
 				`"note":{"type":"string","maxLength":200,"description":"Empty rubs it out."},` +
@@ -140,9 +140,9 @@ func tools() []toolDef {
 		}},
 		{budget: looks, tool: &mcp.Tool{
 			Name: toolForecast, Title: "Forecast",
-			Description: "The forecast for the next 90 minutes, as every sailor's chart shows it, and the truth: gale warnings in force, " +
-				"every weather system with its wind, where it is and where it will be in 30, 60 and 90 minutes, and the fronts and when they reach you. " +
-				"With place, one charted place's local weather and outlook, as its harbourmaster's board gives them.",
+			Description: "The next 90 minutes' forecast, as every chart shows it, and the truth: gale warnings in force, " +
+				"each weather system's wind, where it is now and in 30, 60 and 90 minutes, and when fronts reach you. " +
+				"With place, a charted place's local weather and outlook, as its harbourmaster's board gives them.",
 			Annotations: hints("Forecast", true, true, false),
 			InputSchema: schema(`{"type":"object","properties":{` +
 				`"place":{"type":"string","description":"A charted place: its local weather."}` +
@@ -160,7 +160,7 @@ func tools() []toolDef {
 		}},
 		{budget: looks, tool: &mcp.Tool{
 			Name: toolSay, Title: "Say",
-			Description: "Chat aboard, hail boats close by, or speak to spectators. Not yet: comes with a later update.",
+			Description: "Chat aboard, hail boats close by, or speak to spectators. Not yet.",
 			Annotations: hints("Say", false, false, false),
 			InputSchema: schema(`{"type":"object","properties":{` +
 				`"text":{"type":"string","maxLength":200},` +
@@ -169,7 +169,7 @@ func tools() []toolDef {
 		}},
 		{budget: orders, tool: &mcp.Tool{
 			Name: toolRace, Title: "Race",
-			Description: "Races: list, enter, start, retire. Not yet: comes with a later update.",
+			Description: "Races: list, enter, start, retire. Not yet.",
 			Annotations: hints("Race", false, false, false),
 			InputSchema: schema(`{"type":"object","properties":{` +
 				`"action":{"type":"string","enum":["list","enter","start","retire"],"description":"Default list."},` +
@@ -178,21 +178,25 @@ func tools() []toolDef {
 		}},
 		{budget: orders, tool: &mcp.Tool{
 			Name: toolBoat, Title: "Boat",
-			Description: "Your owner's fleet: list the boats you may take, take one to sea, or leave the water. " +
-				"Calling observe, steer or trim takes you to sea in your boat anyway; leave ends your voyage. " +
-				"sailor_look tells your look and its choices, and changes it at Port Royal.",
+			Description: "Your owner's fleet, shared by its sailors: list its boats; take one available; look paints, numbers and names yours. " +
+				"At sea both only in port (Port Royal or a port, not a village). leave quits the water; observe, steer and trim sail anyway. " +
+				"sailor_look: your own look, at Port Royal.",
 			Annotations: hints("Boat", false, false, false),
 			InputSchema: schema(`{"type":"object","properties":{` +
 				`"action":{"type":"string","enum":["list","take","leave","look","sailor_look"],"description":"Default list."},` +
-				`"boat":{"type":"string","description":"By its name, for take."},` +
-				`"version":{"type":"string","description":"For sailor_look, by name."},` +
-				`"finish":{"type":"string","description":"For sailor_look, by name."},` +
-				`"colour":{"type":"string","description":"For sailor_look, by name."}` +
+				`"boat":{"type":"string","description":"For take: its kind, name or number."},` +
+				`"paint":{"type":"string"},` +
+				`"cloth":{"type":"string"},` +
+				`"number":{"type":"integer","minimum":1,"maximum":9999},` +
+				`"name":{"type":"string","maxLength":20,"description":"Empty clears it."},` +
+				`"version":{"type":"string"},` +
+				`"finish":{"type":"string"},` +
+				`"colour":{"type":"string","description":"With version and finish, for sailor_look."}` +
 				`}}`),
 		}},
 		{budget: looks, tool: &mcp.Tool{
 			Name: toolBottle, Title: "Bottle",
-			Description: "A message in a bottle, dropped over the side. Not yet: comes with a later update.",
+			Description: "A message in a bottle, dropped over the side. Not yet.",
 			Annotations: hints("Bottle", false, false, false),
 			InputSchema: schema(`{"type":"object","properties":{` +
 				`"message":{"type":"string","maxLength":280}` +

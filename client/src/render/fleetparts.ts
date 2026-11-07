@@ -2,7 +2,8 @@
 
 // The other boats' parts, for drawing many at once: a model's solid
 // primitives merged into one, each vertex carrying its material's colour,
-// roughness and metalness and tagged with the joint it turns on (the
+// roughness and metalness, whether it is of the painted topsides (which
+// take each boat's paint), and tagged with the joint it turns on (the
 // hull's frame, the boom about the gooseneck, the rudder about its stock),
 // so a kind's solids are one draw a level whatever its materials; and the
 // vertex nodes that place each instance. An instanced part cannot
@@ -48,6 +49,7 @@ import {
 } from 'three/tsl';
 import type { Node, WebGPURenderer } from 'three/webgpu';
 import { artUrl, FULL_CAMBER } from './boat';
+import { type NamePlace, namePlace, numberedSail, TOPSIDES } from './boatlook';
 import type { SailorColours } from './sailors/material';
 import { loadSailor } from './sailors/model';
 import { type JibInputs, jibPoint, LUFF_OFFSET, type SailInputs, sailPoint } from './sailshape';
@@ -71,10 +73,14 @@ export interface BoatParts {
   /**
    * The solid parts: one geometry for each side drawn (front, or both),
    * its vertices' colours their materials' (linear, times their own), and
-   * its 'part' the joint, the roughness and the metalness; with one of its
-   * source materials.
+   * its 'part' the joint, the roughness, the metalness, and 1 for the
+   * painted topsides; with one of its source materials.
    */
   solids: { geometry: BufferGeometry; material: MeshStandardMaterial }[];
+  /** Where the hull carries its name, from its topsides, in the model's frame; null for none. */
+  name: NamePlace | null;
+  /** The node name of the sail that carries the sail number (boatlook.ts's numberedSail). */
+  numbered: string;
   /** The sail, in its node's frame, and its source material. */
   sail: { geometry: BufferGeometry; material: MeshStandardMaterial } | null;
   /** The headsail, in its node's frame at the tack, its source material, and how far aft of the tack its head is; null for none. */
@@ -150,8 +156,11 @@ export async function loadBoatParts(path: string): Promise<BoatParts> {
     { geometries: BufferGeometry[]; material: MeshStandardMaterial }
   >();
   let sail: BoatParts['sail'] = null;
+  const topsides: number[] = [];
   const parts: BoatParts = {
     solids: [],
+    name: null,
+    numbered: 'sail',
     sail: null,
     jib: null,
     jibAt: new Vector3(),
@@ -237,13 +246,21 @@ export async function loadBoatParts(path: string): Promise<BoatParts> {
     g.setAttribute('color', coloursOf(g, material));
     keep(g, ['position', 'normal', 'color']);
     const n = g.getAttribute('position').count;
-    const part = new Float32Array(n * 3);
+    const painted = material.name === TOPSIDES;
+    const part = new Float32Array(n * 4);
     for (let i = 0; i < n; i++) {
-      part[i * 3] = JOINTS[joint] ?? 0;
-      part[i * 3 + 1] = material.roughness;
-      part[i * 3 + 2] = material.metalness;
+      part[i * 4] = JOINTS[joint] ?? 0;
+      part[i * 4 + 1] = material.roughness;
+      part[i * 4 + 2] = material.metalness;
+      part[i * 4 + 3] = painted ? 1 : 0;
     }
-    g.setAttribute('part', new Float32BufferAttribute(part, 3));
+    g.setAttribute('part', new Float32BufferAttribute(part, 4));
+    if (painted) {
+      const at = g.getAttribute('position');
+      for (let i = 0; i < at.count; i++) {
+        topsides.push(at.getX(i), at.getY(i), at.getZ(i));
+      }
+    }
     const key = material.side === DoubleSide ? 'double' : 'front';
     const entry = byMaterial.get(key) ?? { geometries: [], material };
     entry.geometries.push(g);
@@ -257,6 +274,8 @@ export async function loadBoatParts(path: string): Promise<BoatParts> {
     parts.solids.push({ geometry: merged, material });
   }
   parts.sail = sail;
+  parts.name = namePlace(topsides, parts.objects.get('hull')?.userData);
+  parts.numbered = numberedSail(parts.objects.values());
   return parts;
 }
 
@@ -347,7 +366,9 @@ export function seatFigure(
  * jib, read by the headsail alone: the clew's angle, the head's twist
  * (signed), the side it fills to (−1 … 1), and its ripple.
  * lean's last carries the main's reef level too: 1 for a machine, plus 2
- * for each reef.
+ * for each reef;
+ * look, the boat's own (boatlook.ts): its paint's place, its cloth's, its
+ * sail number (0 for none) and its name's row (−1 for none).
  */
 export interface Instances {
   pose: Node<'vec4'>;
@@ -359,6 +380,7 @@ export interface Instances {
   skin: Node<'vec4'>;
   hair: Node<'vec4'>;
   jib?: Node<'vec4'>;
+  look?: Node<'vec4'>;
 }
 
 /** An instance's flag of a machine sailor's boat, from lean's last value. */
@@ -420,7 +442,7 @@ export function solidNode(i: Instances, parts: BoatParts, cog: number): Node<'ve
   const g = parts.gooseneck;
   const k = parts.stock;
   return Fn(() => {
-    const joint = attribute('part', 'vec3').x;
+    const joint = attribute('part', 'vec4').x;
     const p = positionGeometry;
     const n = normalGeometry;
     const pivotBoom = vec3(g.x, g.y, g.z);

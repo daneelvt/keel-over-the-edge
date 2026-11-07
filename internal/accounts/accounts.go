@@ -18,6 +18,7 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/daneelvt/keel-over-the-edge/internal/fleet"
 	"github.com/daneelvt/keel-over-the-edge/internal/looks"
 	"github.com/daneelvt/keel-over-the-edge/internal/moderation"
 	"github.com/daneelvt/keel-over-the-edge/internal/oauth"
@@ -112,6 +113,9 @@ type Config struct {
 	// Book every sailor's, as the card shows them.
 	Looks oauth.MachineLooks
 	Book  *looks.Book
+	// Fleet, if not nil, is the accounts' fleets, as a human's card lists
+	// its boats.
+	Fleet *fleet.Fleet
 	// Stopped is the set loaded as keel started.
 	Stopped *Set
 	Log     *slog.Logger

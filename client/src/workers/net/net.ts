@@ -272,6 +272,8 @@ export class NetWorker {
                     look: watching.look,
                   },
             look: w.look,
+            boatLook: w.boatLook,
+            boatName: w.boatName,
             first,
           });
           this.#d.post({ type: 'clock', clock: { ...s.clock.state } });
@@ -335,6 +337,12 @@ export class NetWorker {
           break;
         case 'look':
           this.#d.post({ type: 'look', look: r.look });
+          break;
+        case 'boatLook':
+          this.#d.post({ type: 'boatLook', look: r.look, name: r.name });
+          break;
+        case 'boatNames':
+          this.#d.post({ type: 'boatNames', names: r.names });
           break;
         case 'lamp':
           this.#d.post({ type: 'lamp', state: r.state });

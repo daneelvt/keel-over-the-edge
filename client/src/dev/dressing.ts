@@ -49,6 +49,7 @@ import {
 import { clone as cloneSkinned } from 'three/addons/utils/SkeletonUtils.js';
 import { exp, float, fog, length, positionView, texture } from 'three/tsl';
 import { catalog } from '../catalog';
+import { boatCode } from '../catalog/boatlooks';
 import { newPose } from '../predict/blend';
 import { SIZES } from '../predict/layout.gen';
 import { BODY, SKY } from '../predict/physics';
@@ -781,8 +782,10 @@ export class DressingRoom {
     const key = `${this.room.boat}:${i}`;
     let b = this.#boats.get(key);
     if (b === undefined) {
-      const boat = new Boat(kind);
-      const loaded = boat.load(String(10 + i), kind.name.slice(0, 1)).then(() => {
+      const boat = new Boat(kind, catalog);
+      const loaded = boat.load(kind.name.slice(0, 1)).then(() => {
+        // Each in the first paint and cloth, numbered.
+        boat.setBoatLook(boatCode({ paint: 0, cloth: 0, number: 10 + i }), '');
         boat.model.traverse((o) => {
           if (o instanceof Mesh) {
             o.castShadow = true;

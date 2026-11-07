@@ -9,6 +9,7 @@ import (
 
 	"github.com/daneelvt/keel-over-the-edge/internal/api"
 	"github.com/daneelvt/keel-over-the-edge/internal/bus"
+	"github.com/daneelvt/keel-over-the-edge/internal/edge"
 	"github.com/daneelvt/keel-over-the-edge/internal/store"
 )
 
@@ -56,4 +57,18 @@ func (s lookSeat) ChangeLook(ctx context.Context, id store.AccountID, code uint3
 // lookCode is an account's sailor's look as the world holds it.
 func (p *process) lookCode(a store.Account) uint32 {
 	return p.looks.Code(p.looks.Resolve(a.ID, a.Look))
+}
+
+// worldBus is the world sailed's bus, or nil between worlds.
+func (p *process) worldBus() *bus.Bus {
+	if h := p.current.Load(); h != nil {
+		return h.bus
+	}
+	return nil
+}
+
+// boatOf is the boat of its fleet a sailor takes to sea as they connect.
+func (p *process) boatOf(ctx context.Context, a store.Account) edge.Boat {
+	j := p.fleet.ForJoin(ctx, a.ID)
+	return edge.Boat{Kind: j.Kind, Look: j.Look, Name: j.Name}
 }

@@ -176,7 +176,7 @@ func (a *api) finishAccount(w http.ResponseWriter, r *http.Request) {
 		var err error
 		id, err = a.cfg.Accounts.CreateAccount(r.Context(), store.NewAccount{
 			Name: c.Name, NameKey: c.NameKey, Look: chosen(c.Look), UserHandle: c.UserHandle,
-			Passkey: key, RecoveryHash: recovery, TokenHash: d.Hash, Boat: a.cfg.Boat,
+			Passkey: key, RecoveryHash: recovery, TokenHash: d.Hash, Boat: a.cfg.Boat, Shared: a.cfg.SharedBoats,
 		})
 		return err
 	})

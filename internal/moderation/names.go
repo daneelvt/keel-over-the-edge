@@ -25,6 +25,9 @@ const (
 	MinLength = 3
 	MaxLength = 20
 	MaxBytes  = 80
+	// MinBoatLength is the shortest a boat's name may be: two letters, as
+	// a boat may be called "Jo".
+	MinBoatLength = 2
 )
 
 // Reason is why a name was refused, as a code the client puts into words.
@@ -63,7 +66,15 @@ type Name struct {
 // letter and ends with a letter or digit. Its letters are of one script, or
 // of Latin with Japanese, Chinese or Korean (UTS #39's highly restrictive
 // level), so a name cannot mix look-alike letters of two alphabets.
-func CheckName(s string) (Name, error) {
+func CheckName(s string) (Name, error) { return check(s, MinLength) }
+
+// CheckBoatName checks a boat's name by a sailor's name's rules, but that it
+// may be as short as MinBoatLength: its display form and key, or a
+// *Refusal. Boats' names need not be unique.
+func CheckBoatName(s string) (Name, error) { return check(s, MinBoatLength) }
+
+// check checks a name of at least least characters.
+func check(s string, least int) (Name, error) {
 	if len(s) > 4*MaxBytes {
 		return Name{}, refuse(Long)
 	}
@@ -78,7 +89,7 @@ func CheckName(s string) (Name, error) {
 		return Name{}, refuse(Characters)
 	}
 	switch n := Length(display); {
-	case n < MinLength:
+	case n < least:
 		return Name{}, refuse(Short)
 	case n > MaxLength || len(display) > MaxBytes:
 		return Name{}, refuse(Long)

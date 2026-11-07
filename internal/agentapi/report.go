@@ -14,6 +14,7 @@ import (
 	"github.com/daneelvt/keel-over-the-edge/internal/catalog"
 	"github.com/daneelvt/keel-over-the-edge/internal/chart"
 	"github.com/daneelvt/keel-over-the-edge/internal/lookout"
+	sailorlooks "github.com/daneelvt/keel-over-the-edge/internal/looks"
 	"github.com/daneelvt/keel-over-the-edge/internal/physics"
 	"github.com/daneelvt/keel-over-the-edge/internal/sight"
 	"github.com/daneelvt/keel-over-the-edge/internal/sky"
@@ -517,9 +518,12 @@ func (h *helm) sightLines(s *Sea, f *bus.Frame, sl int32, brief bool) (lines []s
 		if f.Machine[c.slot] {
 			kind = "machine"
 		}
-		if c.d <= lookNear && s.Looks != nil {
-			if l, ok := s.Looks.Of(f.Look[c.slot]); ok {
-				kind += " · " + s.Looks.Seen(l)
+		if c.d <= lookNear {
+			kind += " · " + boatSeen(s, f, c.slot)
+			if s.Looks != nil {
+				if l, ok := s.Looks.Of(f.Look[c.slot]); ok {
+					kind += " · " + s.Looks.Seen(l)
+				}
 			}
 		}
 		line := fmt.Sprintf("B%d %s · %s %s · %s, heading %s, %s", n, kind, three(bearing5(bear)), rangeWords(c.d),
@@ -1009,3 +1013,10 @@ func (s *Sea) landWords(biome string) []string {
 
 // woodedFrom is the canopy, m, from which high ground is wooded.
 const woodedFrom = 8.0
+
+// boatSeen is the boat in slot of f as a sailor near it reads it: its kind,
+// its name, player text in «», and its sail number: "Keelboat «Saltpeter»
+// 311".
+func boatSeen(s *Sea, f *bus.Frame, slot int32) string {
+	return sailorlooks.Named(s.boat(f.Kind[slot]).Name, f.BoatName[slot], sailorlooks.BoatOf(f.BoatLook[slot]).Number)
+}

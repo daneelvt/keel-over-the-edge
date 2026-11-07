@@ -4,6 +4,8 @@ import { describe, expect, test } from 'vitest';
 import {
   actionBody,
   appWords,
+  boatWords,
+  cardBoatWords,
   checked,
   countsWords,
   dayWords,
@@ -210,5 +212,24 @@ describe('a confirmation', () => {
       body: { account: 'id' },
       words: 'w',
     });
+  });
+});
+
+describe('the boats', () => {
+  test('a boat in words, with its look, and whose it is', () => {
+    const keel = {
+      kind: 'Keelboat',
+      number: 311,
+      name: 'Saltpeter',
+      paint: 'red ochre',
+      cloth: 'tanbark',
+    };
+    expect(boatWords(keel)).toBe('Keelboat «Saltpeter» 311 · red ochre, tanbark sails');
+    expect(boatWords({ kind: 'Jolly boat', number: 2 })).toBe('Jolly boat 2');
+    expect(cardBoatWords({ ...keel, sailor: 'Iron Mary', machine: true, atSea: true })).toBe(
+      'Keelboat «Saltpeter» 311 · red ochre, tanbark sails · at sea, sailed by Iron Mary (AI)',
+    );
+    expect(cardBoatWords({ ...keel, sailor: 'Ann Bonny' })).toContain("· Ann Bonny's, ashore");
+    expect(cardBoatWords(keel)).toContain('· available');
   });
 });
