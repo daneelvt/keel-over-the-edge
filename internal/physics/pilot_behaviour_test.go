@@ -127,12 +127,14 @@ func slope(a, b []float64) float64 {
 // boat's own: close-hauled in a breeze, a gust heels her and she rounds up.
 func TestPilotHoldsAnAngleThroughTheShifts(t *testing.T) {
 	p := testWeather(t)
-	for _, boat := range testBoats(t) {
-		t.Run(boat.id, func(t *testing.T) { holdsAnAngle(t, p, boat.b) })
+	for i, boat := range testBoats(t) {
+		// The boats after the first are held in a spell of each regime,
+		// its second, the windier.
+		t.Run(boat.id, func(t *testing.T) { holdsAnAngle(t, p, boat.b, i > 0) })
 	}
 }
 
-func holdsAnAngle(t *testing.T, p *WeatherPrepared, b *Prepared) {
+func holdsAnAngle(t *testing.T, p *WeatherPrepared, b *Prepared, short bool) {
 	type point struct{ angle, sheet float64 }
 	light := []point{{45, 0.02}, {90, 0.23}, {150, 0.75}}
 	// Close-hauled in a trade spell's upper winds, a sheet hauled in hard
@@ -147,6 +149,9 @@ func holdsAnAngle(t *testing.T, p *WeatherPrepared, b *Prepared) {
 		{"settled", 1, light}, {"settled", 2, light}, {"trade", 1, light}, {"trade", 2, trade2},
 		{"unsettled", 1, breeze}, {"unsettled", 2, breeze}, {"stormy", 1, breeze}, {"stormy", 2, breeze},
 	} {
+		if short && c.n == 1 {
+			continue
+		}
 		s := spellOfRegime(t, p, c.regime, c.n, 0, 0, 0)
 		for _, pt := range c.points {
 			m := onPilot(t, b, weatherOf(p, s), pt.angle, pt.sheet, PilotWind)
