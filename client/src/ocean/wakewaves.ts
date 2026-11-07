@@ -603,6 +603,14 @@ function sameKind(a: WakeWavesKind | null, b: WakeWavesKind): boolean {
  * being stepped and drawn; commit puts the new one in use as the materials
  * are swapped.
  */
+/** A kind's hulls' stamps: their draw, their values, and how many this frame. */
+interface Stamps {
+  mesh: Mesh;
+  data: Float32Array;
+  attr: InstancedBufferAttribute;
+  n: number;
+}
+
 export class WakeWaves {
   /** The square's centre in the world, on its texels' grid. */
   readonly centre = { east: 0, north: 0 };
@@ -643,11 +651,8 @@ export class WakeWaves {
   /** Whole texels of drift and of the square's moves the CPU's field has yet to take. */
   readonly #pendingDrift = { east: 0, north: 0 };
   #placed = false;
-  readonly #stamps: Mesh;
-  readonly #stampData: Float32Array;
-  readonly #stampAttr: InstancedBufferAttribute;
-  readonly #stampKinds: Float32Array;
-  readonly #stampKindAttr: InstancedBufferAttribute;
+  /** Each kind's stamps: its own draw, reading its own stations. */
+  readonly #stamps: Stamps[];
   /** Each kind's stations, one after another; the first station's last value is its bilge's exponent. */
   readonly #stations: Vector4[] = Array.from({ length: 8 * HULL_SHAPES }, () => new Vector4());
   /** How far a hull reaches from its origin, metres: the stamp's half side. */
@@ -664,30 +669,30 @@ export class WakeWaves {
     this.#none = new DataTexture(new Uint16Array(4), 1, 1, RGBAFormat, HalfFloatType);
     this.#none.needsUpdate = true;
     this.#noneWay = this.#way({ kind: 'cpu', size: 64, span: 28 }, null, null, this.#none);
-    // The stamps: each hull's waterplane, its immersion at every texel's centre.
-    const g = new InstancedBufferGeometry();
+    // The stamps: each hull's waterplane, its immersion at every texel's
+    // centre; a draw for each kind, which reads its own hull's stations.
     const plane = new PlaneGeometry(2, 2);
-    g.setAttribute('position', plane.getAttribute('position'));
-    g.setIndex(plane.getIndex());
-    this.#stampData = new Float32Array(WAKE_HULLS * 4);
-    this.#stampAttr = new InstancedBufferAttribute(this.#stampData, 4);
-    this.#stampAttr.setUsage(DynamicDrawUsage);
-    g.setAttribute('hull', this.#stampAttr);
-    this.#stampKinds = new Float32Array(WAKE_HULLS);
-    this.#stampKindAttr = new InstancedBufferAttribute(this.#stampKinds, 1);
-    this.#stampKindAttr.setUsage(DynamicDrawUsage);
-    g.setAttribute('kind', this.#stampKindAttr);
-    g.instanceCount = 0;
-    this.#stamps = new Mesh(g, this.#stampMaterial());
-    this.#stamps.frustumCulled = false;
-    this.#scene.add(this.#stamps);
+    this.#stamps = Array.from({ length: HULL_SHAPES }, (_, kind) => {
+      const g = new InstancedBufferGeometry();
+      g.setAttribute('position', plane.getAttribute('position'));
+      g.setIndex(plane.getIndex());
+      const data = new Float32Array(WAKE_HULLS * 4);
+      const attr = new InstancedBufferAttribute(data, 4);
+      attr.setUsage(DynamicDrawUsage);
+      g.setAttribute('hull', attr);
+      g.instanceCount = 0;
+      const mesh = new Mesh(g, this.#stampMaterial(kind));
+      mesh.frustumCulled = false;
+      mesh.visible = false;
+      this.#scene.add(mesh);
+      return { mesh, data, attr, n: 0 };
+    });
     this.#camera.updateMatrixWorld();
   }
 
   /** The stamp: a square about the hull, as wide as it reaches, and its immersion within it (wakewavescpu.ts's immersion). */
-  #stampMaterial(): MeshBasicNodeMaterial {
+  #stampMaterial(kind: number): MeshBasicNodeMaterial {
     const hull = attribute<'vec4'>('hull', 'vec4');
-    const kindOf = varying(attribute<'float'>('kind', 'float'));
     const stations = uniformArray(this.#stations, 'vec4');
     const m = new MeshBasicNodeMaterial();
     m.blending = CustomBlending;
@@ -715,9 +720,10 @@ export class WakeWaves {
     );
     const at = varying(vec2(local.x, local.y.negate()));
     const sink = varying(hull.w);
+    // The kind's stations, after the kinds' before it.
+    const first = int(kind * 8);
     const turn = varying(vec2(c, s));
     const texel = this.#texelSize;
-    const first = int(kindOf.add(0.5)).mul(8);
     const bilge = (stations.element(first) as unknown as Node<'vec4'>).w;
     const immersionAt = (x: Node<'float'>, z: Node<'float'>): Node<'float'> => {
       const aft = (stations.element(first) as unknown as Node<'vec4'>).x;
@@ -1060,7 +1066,6 @@ export class WakeWaves {
   ): void {
     const half = k.span / 2;
     const reach = this.#reach.value;
-    let n = 0;
     for (let i = 0; i < this.#count; i++) {
       const h = this.#hulls[i] as WakeHull;
       const x = (h.east - place.east) / half;
@@ -1069,16 +1074,22 @@ export class WakeWaves {
       if (Math.abs(x) > 1 + r || Math.abs(y) > 1 + r || this.#shape === null) {
         continue;
       }
-      this.#stampData[n * 4] = x;
-      this.#stampData[n * 4 + 1] = y;
-      this.#stampData[n * 4 + 2] = h.heading;
-      this.#stampData[n * 4 + 3] = h.sink;
-      this.#stampKinds[n] = this.#kinds[i] ?? 0;
-      n++;
+      const st = this.#stamps[this.#kinds[i] ?? 0] as Stamps;
+      const o = st.n * 4;
+      st.data[o] = x;
+      st.data[o + 1] = y;
+      st.data[o + 2] = h.heading;
+      st.data[o + 3] = h.sink;
+      st.n++;
     }
-    (this.#stamps.geometry as InstancedBufferGeometry).instanceCount = n;
-    this.#stampAttr.needsUpdate = true;
-    this.#stampKindAttr.needsUpdate = true;
+    for (const st of this.#stamps) {
+      (st.mesh.geometry as InstancedBufferGeometry).instanceCount = st.n;
+      st.mesh.visible = st.n > 0;
+      if (st.n > 0) {
+        st.attr.needsUpdate = true;
+      }
+      st.n = 0;
+    }
     const before = renderer.getRenderTarget();
     renderer.getClearColor(this.#clear);
     const alpha = renderer.getClearAlpha();
