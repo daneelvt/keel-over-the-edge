@@ -57,6 +57,22 @@ func TestFlocks(t *testing.T) {
 	bound := f.Life[len(f.Life)-1]
 	st := &f.State[0]
 	cases = append(cases, flockCase{Record: bound, Pose: &Pose{X: st.X, Y: st.Y, Heading: st.Heading}})
+	// One riding a bow, at the boat itself.
+	w.Raise(f, rider(t, s), f.State[0].X+100, f.State[0].Y-80)
+	ride := *raised(f)
+	if ride.Boat == 0 {
+		t.Fatal("the pod took no boat")
+	}
+	cases = append(cases, flockCase{Record: ride, Pose: &Pose{X: st.X, Y: st.Y, Heading: st.Heading}})
+	// Of each path, one that drifts and one that comes with another.
+	var drift, over bool
+	for _, c := range cases {
+		drift = drift || s.kinds[c.Record.Kind].PathOf(&c.Record) == PathDrift
+		over = over || c.Record.Over != 0
+	}
+	if !drift || !over {
+		t.Fatalf("the cases hold one that drifts %v, one that comes with another %v", drift, over)
+	}
 
 	for i := range cases {
 		c := &cases[i]

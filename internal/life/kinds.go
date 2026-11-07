@@ -62,6 +62,10 @@ type Bring struct {
 	CountHigh int32
 }
 
+// maxBrings is the most groups that come with another's: each one's id
+// is the other's with its number in the top bits (bringShift).
+const maxBrings = 63
+
 // Kind is a kind of the sea's life as the schedule and the paths read it.
 type Kind struct {
 	Index  int
@@ -194,7 +198,7 @@ func Prepare(cat *catalog.Catalog) (*Params, []Kind) {
 			k.Collective = *c.Collective
 		}
 		for _, b := range c.Brings {
-			if j, ok := index[b.Kind]; ok {
+			if j, ok := index[b.Kind]; ok && len(k.Brings) < maxBrings {
 				k.Brings = append(k.Brings, Bring{Kind: j, Share: b.Share,
 					CountLow: int32(pairOrInt(b.Count, 0)), CountHigh: int32(pairOrInt(b.Count, 1))})
 			}
@@ -270,6 +274,28 @@ func (k *Kind) PathOf(e *bus.LifeEncounter) int {
 func pairOrInt(p []int, i int) int {
 	if i < len(p) {
 		return p[i]
+	}
+	return 0
+}
+
+// ownPatch is which of a group's own numbers draws how far its patch
+// reaches.
+const ownPatch = 30
+
+// Patch is how far the patch of a group of the kind of its own seed
+// reaches from its middle, m: a ground of fish, a boil of bait.
+func Patch(k *Kind, seed uint32) float64 { return lerp(k.PatchLow, k.PatchHigh, Own(seed, ownPatch)) }
+
+// Linked is how far a fish of the kind flushed from its ground glides, its
+// glides linked, m: its look's linked glides, else its longest glide.
+func (k *Kind) Linked() float64 {
+	switch {
+	case k.Swim == nil:
+		return 0
+	case k.Swim.Linked != nil:
+		return *k.Swim.Linked
+	case len(k.Swim.Glide) > 1:
+		return k.Swim.Glide[1]
 	}
 	return 0
 }

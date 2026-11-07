@@ -308,6 +308,11 @@ func New(cfg Config) (*World, error) {
 	w.initChart(cfg.Sight, len(cfg.Kinds))
 	if cfg.Life != nil {
 		w.life = life.NewWorld(cfg.Life, cfg.Capacity)
+		bows := make([]float64, len(cfg.Kinds))
+		for i := range cfg.Kinds {
+			bows[i] = cfg.Kinds[i].Bow()
+		}
+		w.life.SetBows(bows)
 		w.lifeWeather.w = w
 	}
 	w.inputsFn, w.seaFn, w.physicsFn, w.gridFn, w.contactsFn, w.rulesFn, w.publishFn = w.inputs, w.seaPhase, w.physics, w.grid, w.contacts, w.rules, w.publish

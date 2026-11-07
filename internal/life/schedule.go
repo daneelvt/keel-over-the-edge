@@ -263,7 +263,64 @@ func (s *Schedule) Slot(slot int64, c Conditions, out []bus.LifeEncounter) []bus
 				continue
 			}
 			out = append(out, s.encounter(k, cd, slot, cell))
+			if len(k.Brings) > 0 {
+				parent := out[len(out)-1]
+				out = s.Bring(&parent, out)
+			}
 		}
+	}
+	return out
+}
+
+// An encounter's id says where it came from, and no two alive share one:
+//
+//   - a slot's own: slot<<20 | cell<<8 | kind, the slot below 2^36 (two
+//     million years of 30 s slots), so bits 56 to 63 are clear;
+//   - one raised by hand: 1<<63 | n, n counting those raised, below 2^32;
+//   - one that comes with another (Bring): the other's id | (j+1)<<56, j
+//     its number among the other's brings, below maxBrings, so bits 56
+//     to 61, clear in the other's, hold j+1 and bit 62 stays clear;
+//   - fish flushed from a ground (flushID): 1<<62 | slot<<24 |
+//     boat slot<<8 | ground, the flushes' slot of FlushEvery ticks in
+//     bits 24 to 61 (17,000 years of 2 s slots), the boat's slot in bits
+//     8 to 23 and the ground's number among those alive in bits 0 to 7.
+const (
+	raisedBit  = 1 << 63
+	flushBit   = 1 << 62
+	bringShift = 56
+)
+
+// bringSalt keeps the draws of the groups that come with another apart
+// from the other's own.
+const bringSalt = 0x6b1d5c3e
+
+// Bring appends to out the groups that come with parent, in the order of
+// its kind's brings: each whose share passes a draw of parent's seed and
+// its number, its kind's, over parent's patch from parent's start to its
+// end, its count drawn in the bring's range and its heading and speed as
+// its kind's. It is a pure function of parent.
+func (s *Schedule) Bring(parent *bus.LifeEncounter, out []bus.LifeEncounter) []bus.LifeEncounter {
+	k := &s.kinds[parent.Kind]
+	for j := range k.Brings {
+		b := &k.Brings[j]
+		d := draws(hash32(parent.Seed ^ hash32(bringSalt+uint32(j))))
+		if !(b.Share >= 1) && d.n(drawWhether) >= threshold(b.Share) {
+			continue
+		}
+		c := &s.kinds[b.Kind]
+		e := bus.LifeEncounter{
+			ID:    parent.ID | uint64(j+1)<<bringShift,
+			Kind:  uint16(b.Kind),
+			Start: parent.Start,
+			End:   parent.End,
+			Seed:  d.n(drawSeed),
+			Slot:  -1,
+			Over:  parent.ID,
+		}
+		span := uint32(max(b.CountHigh-b.CountLow, 0)) + 1
+		e.Count = uint16(b.CountLow + int32(d.n(drawCount)%span))
+		place(&e, parent.East, parent.North, float64(unit(d.n(drawHeading))*(2*math.Pi)), lerp(c.SpeedLow, c.SpeedHigh, unit(d.n(drawSpeed))))
+		out = append(out, e)
 	}
 	return out
 }
