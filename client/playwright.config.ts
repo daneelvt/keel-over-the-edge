@@ -56,6 +56,7 @@ export const pageFiles = [
   'boats',
   'discover',
   'lag',
+  'life',
   'looks',
   'machines',
   'oauth-approve',

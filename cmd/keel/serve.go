@@ -125,7 +125,9 @@ Configured from the environment:
                        POST /debug/weather?auto (the world's own) and
                        POST /debug/encounter?situation=…[&boat=…] (a scripted
                        boat meeting that player's, or the first sailing
-                       player's) (default 0)
+                       player's) and POST /debug/life?kind=…&east=…&north=…
+                       or &at=boat (a group of the sea's life of that kind
+                       there) (default 0)
 `
 
 func serve(ctx context.Context, args []string, getenv func(string) string, stdout, stderr io.Writer) error {
@@ -496,7 +498,7 @@ func runServer(ctx context.Context, getenv func(string) string, stdout io.Writer
 	}
 	p.current.Store(first)
 	if weatherHandler != nil {
-		log.Warn("developer commands are on: POST /debug/wind, /debug/weather, /debug/encounter, /debug/place and /debug/chart on the internal listener")
+		log.Warn("developer commands are on: POST /debug/wind, /debug/weather, /debug/encounter, /debug/place, /debug/chart and /debug/life on the internal listener")
 	}
 	health.Beat()
 	play := newServer(p.playRoutes, log)

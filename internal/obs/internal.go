@@ -35,8 +35,8 @@ var InternalPaths = []string{
 // net/http/pprof also registers them on http.DefaultServeMux, which the
 // server never serves. flight, replay, weather and owner may be nil, and
 // their routes then answer 404; weather, the developer's commands, is POST
-// /debug/wind, /debug/weather, /debug/encounter, /debug/place, /debug/chart
-// and /debug/end; owner is
+// /debug/wind, /debug/weather, /debug/encounter, /debug/place, /debug/chart,
+// /debug/end and /debug/life; owner is
 // everything under /owner/, which guards itself.
 func Internal(h *Health, m *Metrics, flight, replay, weather, owner http.Handler) http.Handler {
 	mux := http.NewServeMux()
@@ -64,6 +64,7 @@ func Internal(h *Health, m *Metrics, flight, replay, weather, owner http.Handler
 		mux.Handle("POST /debug/place", weather)
 		mux.Handle("POST /debug/end", weather)
 		mux.Handle("POST /debug/chart", weather)
+		mux.Handle("POST /debug/life", weather)
 	}
 	if owner != nil {
 		mux.Handle("/owner/", owner)

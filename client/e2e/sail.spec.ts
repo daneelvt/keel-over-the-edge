@@ -5,7 +5,8 @@
 // keyboard steers; the boat capsizes and the sailor rights it; a frame the
 // cap skips leaves the picture; every new material is the factory's; the
 // pictures match their references; sound starts on a tap and stops while
-// the page is hidden; and the frame allocates nothing that stays.
+// the page is hidden; and the frame allocates nothing that stays, with the
+// sea's birds in view.
 
 import { readFileSync } from 'node:fs';
 import { type CDPSession, expect, type Page, test } from '@playwright/test';
@@ -421,8 +422,16 @@ test('the frame allocates nothing that stays, sailing with the controls moving',
     await cdp.send('HeapProfiler.collectGarbage');
     return (await cdp.send('Runtime.getHeapUsage')).usedSize;
   };
-  await page.evaluate(async () => {
+  // The sea's birds in view the whole while: a group of each kind about
+  // the boat, those that stay over a patch staying minutes.
+  const birds = (
+    catalog as unknown as { life: { kinds: { id: string; form: string }[] } }
+  ).life.kinds
+    .filter((k) => k.form === 'bird')
+    .map((k) => k.id);
+  await page.evaluate(async (birds) => {
     const k = globalThis.keel;
+    birds.forEach((id, n) => k.raiseLife(id, 80 * Math.sin(n), 80 * Math.cos(n)));
     k.settings({ windOverlay: true, forcesOverlay: true });
     k.script('wiggle');
     k.thaw();
@@ -432,7 +441,8 @@ test('the frame allocates nothing that stays, sailing with the controls moving',
     // hundred frames, less and less. Measured over the 400 frames after
     // 700, it grew 92 to 119 KB.
     await k.frames(700);
-  });
+  }, birds);
+  expect(await page.evaluate(() => globalThis.keel.life().birds)).toBeGreaterThan(0);
   const before = await used();
   await page.evaluate(() => globalThis.keel.frames(400));
   const after = await used();
