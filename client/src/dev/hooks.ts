@@ -2229,11 +2229,15 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
       world.fleet.forgetSailors();
     },
 
-    /** Resolves once every look a boat of the fleet has been drawn with has loaded (or failed). */
+    /**
+     * Resolves once every kind and every look a boat of the fleet has been
+     * drawn with has loaded (or failed).
+     */
     async fleetLoaded(): Promise<void> {
       const busy = () =>
-        world.fleet.looks?.looks.some((l) => l.state === 'loading' || l.clipsState === 'loading') ??
-        false;
+        world.fleet.loading ||
+        (world.fleet.looks?.looks.some((l) => l.state === 'loading' || l.clipsState === 'loading') ??
+          false);
       while (busy()) {
         await new Promise((r) => setTimeout(r, 50));
       }

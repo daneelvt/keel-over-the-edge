@@ -1,9 +1,11 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
-// The other boats' parts, for drawing many at once: a model's primitives
-// merged by material, each vertex tagged with the joint it turns on (the
+// The other boats' parts, for drawing many at once: a model's solid
+// primitives merged into one, each vertex carrying its material's colour,
+// roughness and metalness and tagged with the joint it turns on (the
 // hull's frame, the boom about the gooseneck, the rudder about its stock),
-// and the vertex nodes that place each instance. An instanced part cannot
+// so a kind's solids are one draw a level whatever its materials; and the
+// vertex nodes that place each instance. An instanced part cannot
 // take its boat's transform from the instance matrix: the sail's own vertex
 // node builds the sail from positionGeometry, which discards it (three.js
 // r186, NodeMaterial.setupPosition applies the instance matrix to
@@ -17,6 +19,7 @@
 
 import {
   type BufferGeometry,
+  DoubleSide,
   Float32BufferAttribute,
   type Material,
   Matrix4,
@@ -63,9 +66,14 @@ const JOINTS: Record<string, number> = {
   tiller: JOINT.rudder,
 };
 
-/** A model's parts, merged by material. */
+/** A model's parts, its solids merged. */
 export interface BoatParts {
-  /** The solid parts: one geometry a material, with its source material. */
+  /**
+   * The solid parts: one geometry for each side drawn (front, or both),
+   * its vertices' colours their materials' (linear, times their own), and
+   * its 'part' the joint, the roughness and the metalness; with one of its
+   * source materials.
+   */
   solids: { geometry: BufferGeometry; material: MeshStandardMaterial }[];
   /** The sail, in its node's frame, and its source material. */
   sail: { geometry: BufferGeometry; material: MeshStandardMaterial } | null;
@@ -120,7 +128,21 @@ function keep(g: BufferGeometry, names: string[]): BufferGeometry {
   return g;
 }
 
-/** Loads a boat's model and merges its parts by material. */
+/** A solid primitive's colours: its material's, times its own where it has them, three floats a vertex. */
+function coloursOf(g: BufferGeometry, material: MeshStandardMaterial): Float32BufferAttribute {
+  const n = g.getAttribute('position').count;
+  const own = g.getAttribute('color');
+  const c = material.color;
+  const out = new Float32Array(n * 3);
+  for (let i = 0; i < n; i++) {
+    out[i * 3] = c.r * (own === undefined ? 1 : own.getX(i));
+    out[i * 3 + 1] = c.g * (own === undefined ? 1 : own.getY(i));
+    out[i * 3 + 2] = c.b * (own === undefined ? 1 : own.getZ(i));
+  }
+  return new Float32BufferAttribute(out, 3);
+}
+
+/** Loads a boat's model and merges its solid parts. */
 export async function loadBoatParts(path: string): Promise<BoatParts> {
   const scene = await load(path);
   const byMaterial = new Map<
@@ -210,14 +232,17 @@ export async function loadBoatParts(path: string): Promise<BoatParts> {
       return;
     }
     const g = (o.geometry as BufferGeometry).clone().applyMatrix4(o.matrixWorld);
-    const colours = g.hasAttribute('color');
-    keep(g, colours ? ['position', 'normal', 'color'] : ['position', 'normal']);
+    g.setAttribute('color', coloursOf(g, material));
+    keep(g, ['position', 'normal', 'color']);
     const n = g.getAttribute('position').count;
-    g.setAttribute(
-      'part',
-      new Float32BufferAttribute(new Float32Array(n).fill(JOINTS[joint] ?? 0), 1),
-    );
-    const key = `${material.name}/${colours}`;
+    const part = new Float32Array(n * 3);
+    for (let i = 0; i < n; i++) {
+      part[i * 3] = JOINTS[joint] ?? 0;
+      part[i * 3 + 1] = material.roughness;
+      part[i * 3 + 2] = material.metalness;
+    }
+    g.setAttribute('part', new Float32BufferAttribute(part, 3));
+    const key = material.side === DoubleSide ? 'double' : 'front';
     const entry = byMaterial.get(key) ?? { geometries: [], material };
     entry.geometries.push(g);
     byMaterial.set(key, entry);
@@ -393,7 +418,7 @@ export function solidNode(i: Instances, parts: BoatParts, cog: number): Node<'ve
   const g = parts.gooseneck;
   const k = parts.stock;
   return Fn(() => {
-    const joint = attribute('part', 'float');
+    const joint = attribute('part', 'vec3').x;
     const p = positionGeometry;
     const n = normalGeometry;
     const pivotBoom = vec3(g.x, g.y, g.z);

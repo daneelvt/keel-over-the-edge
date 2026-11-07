@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
-// The other boats, drawn many at once: for each kind, one InstancedMesh a
-// material of its model, every boat of that kind an instance, with its pose,
+// The other boats, drawn many at once: for each kind, one InstancedMesh for
+// its solids (every material's, merged), one for its sail and one for its
+// headsail, every boat of that kind an instance, with its pose,
 // rig, sail and sailor in per-instance values that the parts' vertex nodes
 // read (fleetparts.ts). Each kind has its own view, made when a boat of the
 // kind first comes into view; its headsail is shaped about its stay and its
@@ -48,6 +49,7 @@ import {
   type Vector3,
 } from 'three';
 import {
+  attribute,
   float,
   instancedDynamicBufferAttribute,
   instanceIndex,
@@ -180,17 +182,15 @@ class Level {
     const i = this.nodes;
     for (const s of parts.solids) {
       const src = s.material;
+      // Each vertex its own material's colour, roughness and metalness.
       const m = litMaterial(
-        {
-          color: (src.color as Color).clone(),
-          roughness: src.roughness,
-          metalness: src.metalness,
-          vertexColors: s.geometry.hasAttribute('color'),
-          side: src.side === DoubleSide ? DoubleSide : FrontSide,
-        },
+        { vertexColors: true, side: src.side === DoubleSide ? DoubleSide : FrontSide },
         solidNode(i, parts, cog),
       );
-      this.add(s.geometry, m, src.name);
+      const own = attribute('part', 'vec3') as unknown as Node<'vec3'>;
+      m.roughnessNode = own.y;
+      m.metalnessNode = own.z;
+      this.add(s.geometry, m, src.side === DoubleSide ? 'solids, both sides' : 'solids');
     }
     if (parts.sail !== null) {
       const rows = reefRows(parts.sail.geometry, rig.reefs);
@@ -911,9 +911,11 @@ export class FleetViews {
         // drawn once they are.
         if (v.parts === null && !this.#loading.has(v)) {
           this.#loading.add(v);
-          this.#loadView(v).catch((e: unknown) => {
-            console.error(`the fleet’s ${v.kind.name} did not load`, e);
-          });
+          this.#loadView(v)
+            .catch((e: unknown) => {
+              console.error(`the fleet’s ${v.kind.name} did not load`, e);
+            })
+            .finally(() => this.#loading.delete(v));
         }
         continue;
       }
@@ -933,6 +935,11 @@ export class FleetViews {
   }
 
   readonly #loading = new Set<FleetView>();
+
+  /** Whether a kind's view is loading: one first seen not yet drawn. */
+  get loading(): boolean {
+    return this.#loading.size > 0;
+  }
 
   /** Every loaded view's levels: near and far, for the tests. */
   levels(): Level[] {
