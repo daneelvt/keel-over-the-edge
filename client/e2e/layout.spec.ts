@@ -50,8 +50,16 @@
 // screen, at the same screens: full rows and a full card, the server's
 // answers stood in for, with a twenty-letter name. Watch is in view, no
 // part covers another, and every button is 44 pixels or more.
+//
+// In port the board opens the player's boat's look and the fleet's boats
+// in its place, on the screen, Save, Cancel and a boat in view. On the
+// start screen the player's own panel, with their boat at its longest
+// name, keeps Set sail in view on every screen, and the boat's look and
+// the fleet's boats keep Save, Cancel, every swatch and the first boat in
+// view, the server's answers stood in for.
 
 import { expect, type Page, test } from '@playwright/test';
+import data from '../src/catalog/catalog.gen.json' with { type: 'json' };
 import { GAME, openScene, sailor } from './helpers';
 
 /** The screens: phones in CSS pixels, upright and sideways, and the tests' own. */
@@ -447,22 +455,64 @@ async function sheetFaults(page: Page): Promise<string[]> {
   return found;
 }
 
-/** What is wrong with the harbour board, open: any of its frame off the screen. */
+/**
+ * What is wrong with the harbour board, open, and with what it opens of
+ * the player's boat in port, each in the board's place: any of its frame
+ * off the screen; for the boat's look and the fleet's boats, Save, Cancel
+ * or the first boat out of view.
+ */
 async function boardFaults(page: Page): Promise<string[]> {
   await page.locator('[data-pusher=board]').click();
   await expect(page.locator('.board')).toBeVisible();
-  const r = await page.evaluate(() => {
-    const b = document.querySelector('.board')?.getBoundingClientRect();
-    return b === undefined ? null : { left: b.left, right: b.right, top: b.top, bottom: b.bottom };
-  });
-  await page.locator('.board').getByRole('button', { name: 'Close', exact: true }).click();
-  const v = page.viewportSize();
-  if (r === null || v === null) {
-    return ['no harbour board'];
-  }
-  return r.left < -0.5 || r.top < -0.5 || r.right > v.width + 0.5 || r.bottom > v.height + 0.5
-    ? [`the harbour board is off the screen (${edges({ name: '', ...r })})`]
-    : [];
+  const board = page.locator('.board');
+  const found: string[] = [];
+  const faults = async (what: string, keys: string[]) => {
+    const r = await page.evaluate((keys) => {
+      const el = document.querySelector('.board');
+      const b = el?.getBoundingClientRect();
+      if (el === null || el === undefined || b === undefined) {
+        return null;
+      }
+      const out: string[] = [];
+      for (const k of keys) {
+        const key = [...el.querySelectorAll<HTMLElement>(`button, .change-boat-choice`)].find(
+          (e) =>
+            e.textContent?.trim() === k || (k === 'a boat' && e.matches('.change-boat-choice')),
+        );
+        const r = key?.getBoundingClientRect();
+        if (
+          r === undefined ||
+          r.top < Math.max(b.top, 0) - 0.5 ||
+          r.bottom > Math.min(b.bottom, innerHeight) + 0.5
+        ) {
+          out.push(`${k} is out of view`);
+        }
+      }
+      return { left: b.left, right: b.right, top: b.top, bottom: b.bottom, out };
+    }, keys);
+    const v = page.viewportSize();
+    if (r === null || v === null) {
+      found.push(`no ${what}`);
+      return;
+    }
+    if (r.left < -0.5 || r.top < -0.5 || r.right > v.width + 0.5 || r.bottom > v.height + 0.5) {
+      found.push(`${what} is off the screen (${edges({ name: '', ...r })})`);
+    }
+    for (const o of r.out) {
+      found.push(`${what}: ${o}`);
+    }
+  };
+  await faults('the harbour board', []);
+  await board.getByRole('button', { name: 'Your boat', exact: true }).click();
+  await expect(page.locator('.board.boat-look')).toBeVisible();
+  await faults('the boat’s look', ['Save', 'Cancel']);
+  await board.getByRole('button', { name: 'Cancel', exact: true }).click();
+  await board.getByRole('button', { name: 'Change boat', exact: true }).click();
+  await expect(page.locator('.board.change-boat')).toBeVisible();
+  await faults('the fleet’s boats', ['a boat', 'Cancel']);
+  await board.getByRole('button', { name: 'Cancel', exact: true }).click();
+  await board.getByRole('button', { name: 'Close', exact: true }).click();
+  return found;
 }
 
 /** What is wrong with the menu, open: off the screen, under anything, its close out of reach. */
@@ -1868,9 +1918,12 @@ test('every panel and window on the screen at sea is in the plate’s brass and 
     await page.getByRole('button', { name: 'Menu' }).click();
     await check(`${s.name}, the menu`, '.menu');
     await page.locator('.menu-x').click();
-    // The harbour board.
+    // The harbour board, and the fleet's boats it opens in its place.
     await page.locator('[data-pusher=board]').click();
     await check(`${s.name}, the harbour board`, '.board');
+    await page.locator('.board').getByRole('button', { name: 'Change boat', exact: true }).click();
+    await check(`${s.name}, the fleet’s boats`, '.board');
+    await page.locator('.board').getByRole('button', { name: 'Cancel', exact: true }).click();
     await page.locator('.board').getByRole('button', { name: 'Close', exact: true }).click();
     // The question before the boat leaves the water: a window of its own,
     // no wider than 360 pixels, centred; Escape is Stay.
@@ -1966,6 +2019,149 @@ test('the list of sailors to watch and the card fit every screen, Watch in view'
       found.push(`${s.name}, the card: Watch is out of view`);
     }
     await page.getByRole('button', { name: 'Back' }).click();
+  }
+  expect(found).toEqual([]);
+});
+
+/** A fleet at its longest: a twenty-letter name on the largest kind, its sail number four figures. */
+function longFleet() {
+  const kinds = data.boats;
+  const big = [...kinds].sort((a, b) => b.lengthOverall - a.lengthOverall)[0];
+  const small = kinds[0];
+  const paints = data.boatLooks.paints;
+  const cloths = data.boatLooks.cloths;
+  const boat = (id: string, kind: string, number: number, name: string, i: number) => ({
+    id,
+    kind,
+    number,
+    name,
+    paint: paints[i % paints.length]?.id ?? '',
+    cloth: cloths[i % cloths.length]?.id ?? '',
+    sailor: i === 0 ? LONG : '',
+    machine: false,
+    atSea: false,
+    yours: i === 0,
+  });
+  return {
+    boat: 'b1',
+    boats: [
+      boat('b1', big?.id ?? '', 9999, 'Queen Anne’s Revenge', 0),
+      {
+        ...boat('b2', small?.id ?? '', 12, 'Gull', 1),
+        sailor: 'Iron Mary',
+        machine: true,
+        atSea: true,
+      },
+      boat('b3', small?.id ?? '', 4321, '', 2),
+    ],
+  };
+}
+
+test('the player’s own panel keeps Set sail in view with their boat, and the boat’s look and the fleet’s boats fit every screen', async ({
+  page,
+}) => {
+  test.skip(test.info().project.name === 'webgpu', 'the panels are the same on either back end');
+  test.setTimeout(150_000);
+  const o = data.sailorOptions;
+  await page.route(
+    (url) => url.pathname === '/api/me',
+    (r) =>
+      r.fulfill({
+        json: {
+          name: LONG,
+          look: data.sailors[0]?.id,
+          version: data.sailors[0]?.versions[0]?.id,
+          skin: o.skins[0]?.id,
+          hair: o.hairs[0]?.id,
+          colour: o.colours[0]?.id,
+          lookChosen: true,
+          kind: data.boats[0]?.id,
+          spectators: 'no',
+          atSea: false,
+        },
+      }),
+  );
+  await page.route(
+    (url) => url.pathname === '/api/fleet',
+    (r) => r.fulfill({ json: longFleet() }),
+  );
+  await page.setViewportSize({ width: SCREENS[0].width, height: SCREENS[0].height });
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await page.goto(GAME);
+  await expect(page.locator('.your-sailor [data-readout=boat]')).toBeVisible({ timeout: 90_000 });
+  const found: string[] = [];
+  /** Each of the named keys within the screen, and within the panel shown. */
+  const inSight = async (where: string, panel: string, keys: string[]) => {
+    const out = await page.evaluate(
+      ({ panel, keys }) => {
+        const p = document.querySelector(panel)?.getBoundingClientRect();
+        if (p === undefined) {
+          return [`no ${panel}`];
+        }
+        const out: string[] = [];
+        for (const k of keys) {
+          const els = [...document.querySelectorAll<HTMLElement>(k)];
+          if (els.length === 0) {
+            out.push(`no ${k}`);
+          }
+          for (const e of els) {
+            const r = e.getBoundingClientRect();
+            if (
+              r.top < Math.max(p.top, 0) - 0.5 ||
+              r.bottom > Math.min(p.bottom, innerHeight) + 0.5 ||
+              r.left < -0.5 ||
+              r.right > innerWidth + 0.5
+            ) {
+              out.push(`${k} “${e.getAttribute('aria-label') ?? e.textContent}” is out of view`);
+            }
+          }
+        }
+        return out;
+      },
+      { panel, keys },
+    );
+    for (const f of out) {
+      found.push(`${where}: ${f}`);
+    }
+  };
+  for (const s of SCREENS) {
+    await page.setViewportSize({ width: s.width, height: s.height });
+    await page.waitForFunction(
+      ({ width, height }) => innerWidth === width && innerHeight === height,
+      { width: s.width, height: s.height },
+    );
+    await page.waitForTimeout(100);
+    await inSight(`${s.name}, the panel`, '.your-sailor', [
+      '.your-sailor-go',
+      '[data-readout=boat]',
+    ]);
+    await page.getByRole('button', { name: 'Your boat', exact: true }).click();
+    await expect(page.locator('.boat-look')).toBeVisible();
+    await inSight(`${s.name}, the boat’s look`, '.boat-look', [
+      '.boat-look-actions .start-go',
+      '.boat-look-actions .start-sign-in',
+    ]);
+    // Every swatch on the screen's width, and in view as the panel scrolls to it.
+    for (const radio of await page.locator('.boat-look [role=radio]').all()) {
+      await radio.scrollIntoViewIfNeeded();
+      const b = await radio.boundingBox();
+      if (
+        b === null ||
+        b.x + b.width > s.width + 0.5 ||
+        b.y < -0.5 ||
+        b.y + b.height > s.height + 0.5
+      ) {
+        found.push(`${s.name}, the boat’s look: a swatch is off the screen (${JSON.stringify(b)})`);
+      }
+    }
+    await page.getByRole('button', { name: 'Cancel', exact: true }).click();
+    await page.getByRole('button', { name: 'Change boat', exact: true }).click();
+    await expect(page.locator('.change-boat')).toBeVisible();
+    await inSight(`${s.name}, the fleet’s boats`, '.change-boat', [
+      '.change-boat-list li:first-child .change-boat-choice',
+      '.change-boat .boat-look-actions .start-sign-in',
+    ]);
+    await page.getByRole('button', { name: 'Cancel', exact: true }).click();
   }
   expect(found).toEqual([]);
 });

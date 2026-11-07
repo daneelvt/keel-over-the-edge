@@ -257,3 +257,13 @@
 .machine-watch .start-sign-in {
   padding: 0 16px;
 }
+
+/* The account page's fleet: a line for each boat. */
+.fleet-list {
+  margin: 4px 0 12px;
+  padding-left: 20px;
+}
+.fleet-list li {
+  margin: 2px 0;
+  overflow-wrap: anywhere;
+}

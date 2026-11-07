@@ -53,6 +53,7 @@ const linux = process.platform === 'linux';
 // keel's world is a minute old: it is the page project's first file.
 export const pageFiles = [
   'connect',
+  'boats',
   'discover',
   'lag',
   'looks',

@@ -89,7 +89,7 @@
 .hud .menu-close,
 .hud .account button:not(.start-link, .chip, .picker-swatch),
 .hud .watch-list button,
-.hud .board button,
+.hud .board button:where(:not(.swatch)),
 .hud .connection-line .takeover,
 .hud .fly-back {
   border: 0;
@@ -110,7 +110,7 @@
 .hud .menu-close,
 .hud .account button:not(.start-link, .chip, .picker-swatch),
 .hud .watch-list button,
-.hud .board button,
+.hud .board button:where(:not(.swatch)),
 .hud .connection-line .takeover,
 .hud .fly-back {
   min-width: 44px;
