@@ -142,6 +142,9 @@ func run(root string, check bool, out io.Writer) error {
 	if err := checkWorld(doc); err != nil {
 		return err
 	}
+	if err := checkLife(doc); err != nil {
+		return err
+	}
 	if err := checkBoats(doc); err != nil {
 		return err
 	}
@@ -308,6 +311,10 @@ func ids(doc map[string]any) []string {
 		if towns, ok := world["towns"].(map[string]any); ok {
 			add(towns["buildings"])
 		}
+	}
+	// The sea's life keeps its kinds in its group, as the world does.
+	if life, ok := doc["life"].(map[string]any); ok {
+		add(life["kinds"])
 	}
 	sort.Strings(out)
 	return slices.Compact(out)

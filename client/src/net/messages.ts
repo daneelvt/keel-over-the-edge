@@ -171,6 +171,30 @@ export interface LightSeen {
   fogSignal: number;
 }
 
+/**
+ * An encounter with the sea's life, as the server tells of it once the eye
+ * is within its reach, and again when it changes: its id and revision, its
+ * kind (the catalog's index), its start and end (ticks), its centre (metres
+ * east and north), its heading (radians clockwise from north) and speed
+ * (m/s), how many, its own seed, and the boat it is with: 0 none, 1 the
+ * page's own boat or the one it watches, 2 + n the boat in view slot n,
+ * 255 a boat the page does not see.
+ */
+export interface LifeSeen {
+  id: string;
+  rev: number;
+  kind: number;
+  start: number;
+  end: number;
+  east: number;
+  north: number;
+  heading: number;
+  speed: number;
+  count: number;
+  seed: number;
+  with: number;
+}
+
 /** What can be charted: an island, a place or a feature. */
 export type ChartSubject = 'island' | 'place' | 'feature';
 
@@ -388,6 +412,8 @@ export type FromWorker =
   | { type: 'places'; places: PlaceSeen[] }
   /** Lights come into range, and lights to drop, by number. */
   | { type: 'lights'; lights: LightSeen[]; drop: number[] }
+  /** The sea's life come within reach or changed, and encounters to drop, by id. */
+  | { type: 'life'; life: LifeSeen[]; drop: string[] }
   /** The world's chart: whole after a Welcome, or what was charted since. */
   | { type: 'chart'; entries: ChartEntry[]; whole: boolean }
   /** The forecast as it is issued, with what has been after a Welcome. */

@@ -37,6 +37,7 @@ import (
 	"github.com/daneelvt/keel-over-the-edge/internal/api"
 	"github.com/daneelvt/keel-over-the-edge/internal/bus"
 	"github.com/daneelvt/keel-over-the-edge/internal/edge"
+	"github.com/daneelvt/keel-over-the-edge/internal/life"
 	"github.com/daneelvt/keel-over-the-edge/internal/looks"
 	"github.com/daneelvt/keel-over-the-edge/internal/obs"
 	"github.com/daneelvt/keel-over-the-edge/internal/physics"
@@ -176,6 +177,9 @@ type Config struct {
 	// ids, by their indices.
 	Kinds   []string
 	Regimes []string
+	// SeaLife is the world's life schedule, whose kinds the frames' sea
+	// life is of; nil for a sea with nothing alive in it.
+	SeaLife *life.Schedule
 	// BoatLooks are the catalog's boat looks, which name each boat's
 	// paint and cloth; nil for none.
 	BoatLooks *looks.Boats

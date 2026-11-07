@@ -65,6 +65,7 @@ import type {
   FromWorker,
   HelloVersions,
   LampState,
+  LifeSeen,
   LightSeen,
   PastTold,
   PlaceSeen,
@@ -214,6 +215,8 @@ export class Online {
   onWeather: ((spells: WeatherSpells | null, keyframes: WeatherKeyframe[]) => void) | null = null;
   /** Told of lights come into range, and lights to drop; and at each Welcome, of the main port's light, with all others dropped. */
   onLights: ((lights: LightSeen[], drop: number[] | 'all') => void) | null = null;
+  /** Told of the sea's life come within reach or changed, and encounters to drop; at a new connection's Welcome, of every one dropped. */
+  onLife: ((life: LifeSeen[], drop: string[] | 'all') => void) | null = null;
   /** Islands' caps come into sight, and those to drop: all of them for a new connection. */
   onCaps: ((caps: CapSeen[], drop: number[] | 'all') => void) | null = null;
   /** The latest margin a snapshot carried, and the lowest of the last few seconds. */
@@ -443,6 +446,9 @@ export class Online {
       case 'lights':
         this.onLights?.(m.lights, m.drop);
         break;
+      case 'life':
+        this.onLife?.(m.life, m.drop);
+        break;
       case 'caps':
         this.onCaps?.(m.caps, m.drop);
         break;
@@ -501,6 +507,7 @@ export class Online {
           // A new connection is sent the lights in range again; a later
           // Welcome on it, nothing it holds.
           this.onLights?.(m.light === null ? [] : [m.light], 'all');
+          this.onLife?.([], 'all');
           this.onCaps?.([], 'all');
         }
         this.tools.value = m.tools;

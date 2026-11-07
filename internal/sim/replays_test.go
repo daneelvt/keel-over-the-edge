@@ -299,6 +299,8 @@ func sailLive(t *testing.T, sailors, capacity, limit int, d time.Duration, stall
 					// is no room for it.
 					players.TrySend(bus.Command{Op: bus.SetBoat, Account: account(n/3 + 1), BoatKind: uint16(n % 2), BoatLook: uint32(n) << 8, BoatName: "Kittiwake"})
 					players.TrySend(bus.Command{Op: bus.SetBoatLook, Account: account(n/2 + 2), BoatLook: uint32(n)<<8 | 0x21, BoatName: ""})
+					// The sea's life raised by hand, in a sea with none.
+					dev.TrySend(bus.Command{Op: bus.RaiseLife, LifeKind: uint16(n % 3), State: physics.State{X: float64(n%50) * 10}})
 					if len(boats) > 1 && n%5 == 0 {
 						a, b := boats[0], boats[1]
 						dev.TrySend(bus.Command{Op: bus.Place, Boat: a.boat, State: physics.State{X: 50, Y: 50}})

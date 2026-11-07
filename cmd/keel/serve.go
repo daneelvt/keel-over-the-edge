@@ -38,6 +38,7 @@ import (
 	"github.com/daneelvt/keel-over-the-edge/internal/fleet"
 	"github.com/daneelvt/keel-over-the-edge/internal/forecast"
 	"github.com/daneelvt/keel-over-the-edge/internal/jobs"
+	"github.com/daneelvt/keel-over-the-edge/internal/life"
 	"github.com/daneelvt/keel-over-the-edge/internal/looks"
 	"github.com/daneelvt/keel-over-the-edge/internal/oauth"
 	"github.com/daneelvt/keel-over-the-edge/internal/obs"
@@ -124,7 +125,9 @@ Configured from the environment:
                        POST /debug/weather?auto (the world's own) and
                        POST /debug/encounter?situation=…[&boat=…] (a scripted
                        boat meeting that player's, or the first sailing
-                       player's) (default 0)
+                       player's) and POST /debug/life?kind=…&east=…&north=…
+                       or &at=boat (a group of the sea's life of that kind
+                       there) (default 0)
 `
 
 func serve(ctx context.Context, args []string, getenv func(string) string, stdout, stderr io.Writer) error {
@@ -495,7 +498,7 @@ func runServer(ctx context.Context, getenv func(string) string, stdout io.Writer
 	}
 	p.current.Store(first)
 	if weatherHandler != nil {
-		log.Warn("developer commands are on: POST /debug/wind, /debug/weather, /debug/encounter, /debug/place and /debug/chart on the internal listener")
+		log.Warn("developer commands are on: POST /debug/wind, /debug/weather, /debug/encounter, /debug/place, /debug/chart and /debug/life on the internal listener")
 	}
 	health.Beat()
 	play := newServer(p.playRoutes, log)
@@ -622,6 +625,7 @@ type ownerConfig struct {
 	wcfg     *weather.Config
 	timeline *weather.Timeline // nil for a world whose week is not yet made
 	terrain  *sim.Terrain      // nil with land off
+	life     *life.Schedule    // nil for the next world
 	db       database
 	sessions *auth.Cache
 	game     *edge.Edge
@@ -664,7 +668,7 @@ func ownerTools(c ownerConfig) *owner.Owner {
 	}
 	cfg := owner.Config{
 		Bundle: c.bundle, Weather: prepared, Timeline: c.timeline, SystemKinds: systemKindNames(c.cat), Waves: waves,
-		Kinds: kinds, Regimes: regimes, Sky: c.cat.PrepareSky(), BoatLooks: looks.NewBoats(c.cat),
+		Kinds: kinds, Regimes: regimes, Sky: c.cat.PrepareSky(), BoatLooks: looks.NewBoats(c.cat), SeaLife: c.life,
 		World:    owner.World{Number: c.sailed.Number, ID: c.sailed.ID, Epoch: c.sailed.Epoch, Made: c.made},
 		Calm:     c.cat.World.MainPort.Calm * 1852,
 		Accounts: c.db, Page: c.page, Log: c.log, Metrics: c.metrics,
@@ -807,8 +811,11 @@ func devRoutes(ctx context.Context, b *bus.Bus, cat *catalog.Catalog, charts *wo
 	enc := encounterRoute(ctx, b, cat, log)
 	place := placeRoute(b, log)
 	chartIt := chartRoute(b, charts, log)
+	raise := lifeRoute(b, cat, log)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
+		case "/debug/life":
+			raise.ServeHTTP(w, r)
 		case "/debug/encounter":
 			enc.ServeHTTP(w, r)
 		case "/debug/place":

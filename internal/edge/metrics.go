@@ -110,11 +110,12 @@ const (
 	outLook
 	outBoatLook
 	outBoatNames
+	outLife
 	outs
 )
 
 var outNames = [outs]string{"welcome", "pong", "snapshot", "queued", "restart", "sea_areas", "weather_systems", "bump", "chunks", "tools", "places", "lights", "chart", "charted", "island_caps", "forecast", "watch_ended", "watchers", "agent_lamp", "look_changed",
-	"boat_look_changed", "boat_names"}
+	"boat_look_changed", "boat_names", "life"}
 
 // The entries of a snapshot, by op.
 const (

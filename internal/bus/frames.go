@@ -107,6 +107,11 @@ type Frame struct {
 	// digest.
 	Charted []Charted
 
+	// Life is the sea's life alive at the tick: each encounter from its
+	// start to its end, the oldest first. It follows from the world's life
+	// schedule and the boats, so it is in no snapshot or digest.
+	Life []LifeEncounter
+
 	// Ended says this tick was the world's last: the falls took every boat
 	// afloat (their EdgeTaken events are in Edges), and no tick follows.
 	Ended bool
@@ -245,8 +250,37 @@ type Charted struct {
 	X, Y    float64
 }
 
+// LifeEncounter is a group of one kind of the sea's life met from Start to
+// End, its record as every phone draws it: where it is and which way it
+// goes, how fast, how many, its own seed, and the boat it is with, if any.
+// A free group's path is a function of the record and world time alone; a
+// group with a boat moves about that boat as it is drawn. Rev counts its
+// changes: a binding ended early, or its end moved.
+type LifeEncounter struct {
+	ID    uint64
+	Kind  uint16 // an index into the catalog's life kinds
+	Rev   uint32
+	Start int64 // ticks
+	End   int64
+	// East and North are its centre, m from the world's centre, in whole
+	// centimetres; Heading the way it goes, rad clockwise from north, and
+	// Speed how fast, m/s, each a float32's.
+	East, North    float64
+	Heading, Speed float64
+	Count          uint16
+	Seed           uint32
+	// Boat is the boat it is with, 0 for none, and Slot that boat's slot,
+	// −1 for none.
+	Boat uint64
+	Slot int32
+}
+
 // BumpTicks is how many ticks a frame keeps a bump: a second.
 const BumpTicks = 30
+
+// LifeRoom is how many encounters with the sea's life a frame has room for
+// without growing.
+const LifeRoom = 256
 
 // Cells is the number of the grid's cells.
 const Cells = physics.GridCells * physics.GridCells
@@ -391,6 +425,7 @@ func NewFrame(capacity int) *Frame {
 		Instruments: make([]Instruments, capacity),
 		Pairs:       make([]Pair, 0, capacity),
 		Bumps:       make([]Bump, 0, 64),
+		Life:        make([]LifeEncounter, 0, LifeRoom),
 		Grid: Grid{
 			Start: make([]int32, Cells+1),
 			Slots: make([]int32, 0, capacity),

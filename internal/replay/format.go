@@ -254,6 +254,10 @@ func appendEvent(dst []byte, e *bus.Event) []byte {
 		dst = append(dst, flag(e.On))
 	case bus.End:
 		dst = binary.AppendVarint(dst, e.At)
+	case bus.RaiseLife:
+		dst = binary.AppendUvarint(dst, uint64(e.LifeKind))
+		dst = appendF64(dst, e.State.X)
+		dst = appendF64(dst, e.State.Y)
 	}
 	dst = append(dst, byte(e.Reply.Result))
 	dst = binary.AppendVarint(dst, int64(e.Reply.Slot))
@@ -635,6 +639,10 @@ func (p *payload) event(e *bus.Event) {
 		e.On = p.flag("every subject charted")
 	case bus.End:
 		e.At = p.varint()
+	case bus.RaiseLife:
+		e.LifeKind = uint16(p.count(math.MaxUint16))
+		e.State.X = p.f64()
+		e.State.Y = p.f64()
 	default:
 		if p.err == nil {
 			p.err = fmt.Errorf("unknown command %d", e.Op)

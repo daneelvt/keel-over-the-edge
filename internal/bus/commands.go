@@ -20,8 +20,8 @@ type Op uint8
 // The commands. Join, Leave and Disconnect come from players' connections,
 // SetLook from a player's change of look at Port Royal, and SetBoat and
 // SetBoatLook from a change of boat or of its look in port;
-// SetWeather and Place are for developers only: tests, scripted sailors
-// and replays; Hold is the server's own, from what writes the world to the
+// SetWeather, Place and RaiseLife are for developers only: tests,
+// scripted sailors, scenes and replays; Hold is the server's own, from what writes the world to the
 // database, Chart, which marks what the world's chart holds from its
 // start, and End, which ends the world at its end; Teleport, Stay and
 // Unseen are the owner's tools', and Chart too, which charts the whole
@@ -41,14 +41,15 @@ const (
 	SetLook                   // Account's sailor's look becomes Look: its boat's, if it is in Port Royal's harbour, or its place's in the queue
 	SetBoat                   // Account's boat becomes one of kind BoatKind, of BoatLook and BoatName, where it lies, if it is in port and there is room; or its place's in the queue
 	SetBoatLook               // Account's boat's look and name become BoatLook and BoatName, if it is in port; or its place's in the queue
+	RaiseLife                 // an encounter with the sea's life of kind LifeKind begins at State's X and Y, now
 	opEnd
 )
 
 // Ops lists every op, in order, for tables keyed by op.
-var Ops = []Op{Join, Leave, SetWeather, Place, Disconnect, Hold, Teleport, Stay, Unseen, Chart, End, SetLook, SetBoat, SetBoatLook}
+var Ops = []Op{Join, Leave, SetWeather, Place, Disconnect, Hold, Teleport, Stay, Unseen, Chart, End, SetLook, SetBoat, SetBoatLook, RaiseLife}
 
 var opNames = [...]string{"", "join", "leave", "set_weather", "place", "disconnect", "hold", "teleport", "stay", "unseen", "chart", "end", "set_look",
-	"set_boat", "set_boat_look"}
+	"set_boat", "set_boat_look", "raise_life"}
 
 func (o Op) String() string {
 	if o == 0 || o >= opEnd {
@@ -58,7 +59,7 @@ func (o Op) String() string {
 }
 
 // Developer reports whether only developer sources may send o.
-func (o Op) Developer() bool { return o == SetWeather || o == Place }
+func (o Op) Developer() bool { return o == SetWeather || o == Place || o == RaiseLife }
 
 // Server reports whether only the server's own parts may send o: a
 // developer's sender may too, a player's never.
@@ -173,6 +174,9 @@ type Command struct {
 	BoatKind uint16
 	BoatLook uint32
 	BoatName string
+	// LifeKind is a RaiseLife's kind of the sea's life, an index into the
+	// catalog's; it begins at State's X and Y.
+	LifeKind uint16
 	// Reply, if not nil, receives the result. The simulation never waits on
 	// it, so it should have room for one reply.
 	Reply chan<- Reply

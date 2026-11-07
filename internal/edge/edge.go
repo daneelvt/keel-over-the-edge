@@ -230,6 +230,9 @@ type Config struct {
 	// wait of its is under way. An owner watching their own machine
 	// sailor is told from it whether the agent attends.
 	Agent func(bus.Account) (last time.Time, waiting bool)
+	// Life, if not nil, is how far each kind of the sea's life is sent:
+	// its encounters go to a connection whose eye comes within reach.
+	Life *LifeReach
 }
 
 // Edge serves the game connection.

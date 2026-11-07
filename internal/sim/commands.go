@@ -69,6 +69,11 @@ func (w *World) apply(c *bus.Command) {
 	case bus.Hold:
 		f.Held = c.Held
 		r = bus.Reply{Result: bus.Done, Slot: -1}
+	case bus.RaiseLife:
+		r = bus.Reply{Result: bus.NoBoat, Slot: -1}
+		if w.life != nil && w.life.Raise(f, int(c.LifeKind), c.State.X, c.State.Y) {
+			r.Result = bus.Done
+		}
 	case bus.Chart:
 		r = bus.Reply{Result: bus.Done, Slot: -1}
 		w.chartByHand(f, c.Subject, c.On)

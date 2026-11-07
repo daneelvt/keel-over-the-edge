@@ -23,6 +23,7 @@ import (
 	"github.com/daneelvt/keel-over-the-edge/internal/fleet"
 	"github.com/daneelvt/keel-over-the-edge/internal/forecast"
 	"github.com/daneelvt/keel-over-the-edge/internal/jobs"
+	"github.com/daneelvt/keel-over-the-edge/internal/life"
 	"github.com/daneelvt/keel-over-the-edge/internal/looks"
 	"github.com/daneelvt/keel-over-the-edge/internal/obs"
 	"github.com/daneelvt/keel-over-the-edge/internal/owner"
@@ -189,6 +190,8 @@ type readyWorld struct {
 	// timeline is the world's weather: its week as stored, until the world
 	// opens with its own.
 	timeline *weather.Timeline
+	// life is the world's life schedule.
+	life *life.Schedule
 }
 
 // loadWorld loads a world's terrain, making it first if it has none, and
@@ -230,6 +233,7 @@ func (p *process) loadWorld(ctx context.Context, row store.World) (*readyWorld, 
 		p.log.Warn("land is off: the world's terrain is sailed as open sea")
 	}
 	rw.timeline = p.shownWeek(ctx, row, rw.terrain)
+	rw.life = lifeOf(cat, bundle, p.wcfg.Prepared.Edge(), row.Epoch, p.log)
 	// What can be charted, and the islands' models: the world's, whether
 	// its land is sailed or not.
 	made := time.Now()
@@ -306,6 +310,7 @@ func (p *process) openWorld(ctx context.Context, rw *readyWorld) (*worldHalf, er
 	world, err := sim.New(sim.Config{
 		Kinds: p.kinds, StartSheets: cat.StartSheets(), Waves: p.waves, Weather: timeline, Encounters: cat.PrepareEncounters(), Workers: p.opt.workers,
 		Tick: loop.TickAt(time.Now(), epoch), Limit: cfg.BoatLimit, Terrain: rw.terrain, Edge: edgeOf(cat), Sight: sighting,
+		Life: rw.life,
 	})
 	if err != nil {
 		return nil, err
@@ -352,6 +357,7 @@ func (p *process) openWorld(ctx context.Context, rw *readyWorld) (*worldHalf, er
 		Seen:     p.sessions.Seen,
 		Watch:    p.watchTarget, SpectatorLimit: cfg.SpectatorLimit,
 		Agent: p.agents.core.Attending,
+		Life:  lifeReach(cat),
 	})
 	h.lasting = persist.New(persist.Config{
 		Frames: b.Frames, Store: p.writer, World: row.ID, Epoch: p.lease,
@@ -365,7 +371,7 @@ func (p *process) openWorld(ctx context.Context, rw *readyWorld) (*worldHalf, er
 		cat: cat, bus: b, bundle: rw.bundle, made: rw.held.made, sailed: row, wcfg: p.wcfg, timeline: timeline, terrain: rw.terrain,
 		db: p.db, sessions: p.sessions, game: h.game, charts: rw.charts, clock: h.loop, page: p.ownPage, log: p.log, metrics: p.metrics,
 		lifecycle: p, from: p.nextView.Load(), forecasts: h.forecasts, agents: p.agents, hand: p.hand,
-		aiCap: world.AICap(), aiReserve: world.AIReserve(),
+		aiCap: world.AICap(), aiReserve: world.AIReserve(), life: rw.life,
 	})
 	playCfg := api.Config{
 		Version:   api.Version{Build: p.build, Catalog: catalog.Version},

@@ -5,7 +5,7 @@
   "description": "Every list of kinds in the game. Kinds are data: code reads their properties, never their names.",
   "type": "object",
   "additionalProperties": false,
-  "required": ["boats", "boatLooks", "sailors", "sailorOptions", "machine", "weather", "sky", "encounters", "world", "notices", "news"],
+  "required": ["boats", "boatLooks", "sailors", "sailorOptions", "machine", "weather", "sky", "encounters", "world", "notices", "news", "life"],
   "properties": {
     "boats": {
       "description": "Boat types.",
@@ -28,7 +28,8 @@
     "encounters": { "$ref": "#/$defs/Encounters" },
     "world": { "$ref": "#/$defs/World" },
     "notices": { "$ref": "#/$defs/Notices" },
-    "news": { "$ref": "#/$defs/News" }
+    "news": { "$ref": "#/$defs/News" },
+    "life": { "$ref": "#/$defs/Life" }
   },
   "$defs": {
     "Weather": {
@@ -4270,21 +4271,179 @@
       "type": "string",
       "enum": ["cave", "arch", "blowhole", "waterfall", "spring", "crater", "fumarole", "ruin", "colony"]
     },
+    "Life": {
+      "title": "Life",
+      "description": "The sea's life: the kinds of animal met at sea, and the schedule that says where and when each is met. The server draws it from the world's seed, the place, the time, the habitat there and the weather; every player near is told of each encounter.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["cell", "slot", "lulls", "quiet", "bind", "drop", "dusk", "rainy", "habitat", "sea", "towns", "kinds"],
+      "properties": {
+        "cell": { "description": "The schedule's cells' side, in m.", "type": "number", "minimum": 100, "maximum": 10000 },
+        "slot": { "description": "The schedule's slots of world time, in s.", "type": "integer", "minimum": 1, "maximum": 3600 },
+        "lulls": {
+          "title": "LifeLulls",
+          "description": "How long after an encounter of a family begins no other of the family begins in its cell or the eight about it, in s.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["birds", "water", "big", "night"],
+          "properties": {
+            "birds": { "type": "number", "minimum": 0, "maximum": 86400 },
+            "water": { "type": "number", "minimum": 0, "maximum": 86400 },
+            "big": { "type": "number", "minimum": 0, "maximum": 86400 },
+            "night": { "type": "number", "minimum": 0, "maximum": 86400 }
+          }
+        },
+        "quiet": { "description": "A boat followed, ridden or perched on is not again until this long after, in s.", "type": "number", "minimum": 0, "maximum": 86400 },
+        "bind": {
+          "title": "LifeBind",
+          "description": "Which boat a group that follows boats takes as it begins: the nearest within this, sailing this fast or faster on a course steady this long.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["within", "speed", "steady", "turn"],
+          "properties": {
+            "within": { "description": "In m.", "type": "number", "minimum": 0, "maximum": 5000 },
+            "speed": { "description": "In m/s.", "type": "number", "minimum": 0, "maximum": 20 },
+            "steady": { "description": "In s.", "type": "number", "minimum": 0, "maximum": 600 },
+            "turn": { "description": "A course is steady while the heading stays within this of where it was, in degrees.", "type": "number", "minimum": 1, "maximum": 180 }
+          }
+        },
+        "drop": { "description": "An encounter sent is dropped once the eye is this far beyond its reach, in m.", "type": "number", "minimum": 0, "maximum": 5000 },
+        "dusk": { "description": "The sun's height from which dusk and dawn begin to where they end, in degrees.", "type": "array", "minItems": 2, "maxItems": 2, "items": { "type": "number", "minimum": -90, "maximum": 90 } },
+        "rainy": { "description": "Rain this heavy or heavier thins life as its kind's rain says, in mm an hour.", "type": "number", "minimum": 0, "maximum": 200 },
+        "habitat": {
+          "title": "LifeHabitat",
+          "description": "Where each habitat is.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["harbour", "reef", "shelf", "outer", "colony", "field"],
+          "properties": {
+            "harbour": { "description": "Water within this of a town is its harbour, in m.", "type": "number", "minimum": 0, "maximum": 5000 },
+            "reef": { "description": "Water within this of a reef or a lagoon is the reef's, in m.", "type": "number", "minimum": 0, "maximum": 5000 },
+            "shelf": { "description": "Water shallower than this is the shelf, deeper the deep, in m.", "type": "number", "minimum": 1, "maximum": 500 },
+            "outer": { "description": "Water this far from the centre or further is the outer water, in m.", "type": "number", "minimum": 0, "maximum": 20000 },
+            "colony": { "description": "Within this of a colony a kind's nearColony counts, in m.", "type": "number", "minimum": 0, "maximum": 20000 },
+            "field": { "description": "The habitat's field's cells' side, built as the world loads, in m.", "type": "number", "minimum": 10, "maximum": 1000 }
+          }
+        },
+        "sea": { "description": "The share of water life seen at each Beaufort force from 0, the last for every force beyond it.", "type": "array", "minItems": 1, "maxItems": 13, "items": { "type": "number", "minimum": 0, "maximum": 1 } },
+        "towns": {
+          "title": "LifeTowns",
+          "description": "The gulls that wheel over each town by day, as a colony's birds wheel over it: the kind they are, by its id; how many; how far out and how high they wheel, in m.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "count", "wheel", "height"],
+          "properties": {
+            "kind": { "type": "string", "pattern": "^[a-z][a-z0-9-]*$" },
+            "count": { "type": "array", "minItems": 2, "maxItems": 2, "items": { "type": "integer", "minimum": 0, "maximum": 50 } },
+            "wheel": { "type": "array", "minItems": 2, "maxItems": 2, "items": { "type": "number", "minimum": 5, "maximum": 500 } },
+            "height": { "type": "array", "minItems": 2, "maxItems": 2, "items": { "type": "number", "minimum": 1, "maximum": 200 } }
+          }
+        },
+        "kinds": { "description": "The kinds of animal.", "type": "array", "minItems": 1, "maxItems": 255, "items": { "$ref": "#/$defs/LifeKind" } }
+      }
+    },
+    "LifeKind": {
+      "title": "LifeKind",
+      "description": "A kind of animal met at sea: what it is and how it moves, where and when it is met, and how often.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "name", "plural", "form", "family", "path", "habitats", "when", "wind", "rain", "bySea", "rate", "group", "stay", "speed", "height", "range", "reach"],
+      "properties": {
+        "id": { "type": "string", "pattern": "^[a-z][a-z0-9-]*$" },
+        "name": { "type": "string" },
+        "plural": { "description": "Its name for more than one.", "type": "string" },
+        "form": { "$ref": "#/$defs/LifeForm" },
+        "family": { "$ref": "#/$defs/LifeFamily" },
+        "path": { "$ref": "#/$defs/LifePath" },
+        "binds": { "$ref": "#/$defs/LifeBinds" },
+        "dives": { "description": "Its plunges, each bird a minute.", "type": "number", "minimum": 0, "maximum": 60 },
+        "line": { "description": "Whether a group flies in a line, one behind another.", "type": "boolean" },
+        "homeward": { "description": "Whether at dusk it heads for the nearest colony, or the nearest land without one.", "type": "boolean" },
+        "habitats": {
+          "title": "LifeHabitats",
+          "description": "Its weight in each habitat: a point is its harbour's if within one, else its reef's, else the outer water's, else the shelf's or the deep's.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["harbour", "reef", "shelf", "deep", "outer"],
+          "properties": {
+            "harbour": { "type": "number", "minimum": 0, "maximum": 10 },
+            "reef": { "type": "number", "minimum": 0, "maximum": 10 },
+            "shelf": { "type": "number", "minimum": 0, "maximum": 10 },
+            "deep": { "type": "number", "minimum": 0, "maximum": 10 },
+            "outer": { "type": "number", "minimum": 0, "maximum": 10 }
+          }
+        },
+        "nearColony": { "description": "Its weight times this within the habitat's colony distance of a colony.", "type": "number", "minimum": 0, "maximum": 10 },
+        "when": {
+          "title": "LifeWhen",
+          "description": "Its weight by the sun: by day, at dusk and dawn, and at night.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["day", "dusk", "night"],
+          "properties": {
+            "day": { "type": "number", "minimum": 0, "maximum": 10 },
+            "dusk": { "type": "number", "minimum": 0, "maximum": 10 },
+            "night": { "type": "number", "minimum": 0, "maximum": 10 }
+          }
+        },
+        "wind": { "description": "The least wind it is met in and the most, 10 m up, in m/s.", "type": "array", "minItems": 2, "maxItems": 2, "items": { "type": "number", "minimum": 0, "maximum": 100 } },
+        "rain": { "description": "The share of it met in rain.", "type": "number", "minimum": 0, "maximum": 1 },
+        "bySea": { "description": "Whether it is seen less as the sea rises, by the life's sea.", "type": "boolean" },
+        "rate": { "description": "Its encounters a km² an hour at a weight of 1.", "type": "number", "minimum": 0, "maximum": 100 },
+        "group": { "description": "How many in a group, the least and the most.", "type": "array", "minItems": 2, "maxItems": 2, "items": { "type": "integer", "minimum": 1, "maximum": 1000 } },
+        "stay": { "description": "How long it stays over its patch or with a boat, the least and the most, in s.", "type": "array", "minItems": 2, "maxItems": 2, "items": { "type": "number", "minimum": 0, "maximum": 86400 } },
+        "speed": { "description": "How fast it goes, the least and the most, in m/s.", "type": "array", "minItems": 2, "maxItems": 2, "items": { "type": "number", "minimum": 0, "maximum": 100 } },
+        "height": { "description": "How high it flies, the least and the most, in m.", "type": "array", "minItems": 2, "maxItems": 2, "items": { "type": "number", "minimum": -500, "maximum": 2000 } },
+        "range": { "description": "How far out it comes from and goes to, in m.", "type": "number", "minimum": 600, "maximum": 5000 },
+        "reach": { "description": "It is drawn within this, in m.", "type": "number", "minimum": 100, "maximum": 5000 },
+        "look": { "$ref": "#/$defs/BirdLook" }
+      }
+    },
     "ColonyBirds": {
       "title": "ColonyBirds",
       "description": "A colony's birds: where they nest, and how they look, fly and call.",
       "type": "object",
       "additionalProperties": false,
-      "required": ["nests", "span", "body", "wing", "tip", "flap", "glide", "call"],
+      "required": ["nests", "look"],
       "properties": {
         "nests": { "description": "Where they nest.", "type": "array", "items": { "type": "string", "enum": ["stack", "cliff", "cay", "trees"] } },
-        "span": { "description": "Their wingspan, in m.", "type": "number", "minimum": 0.1, "maximum": 5 },
+        "look": { "$ref": "#/$defs/BirdLook" }
+      }
+    },
+    "LifeForm": {
+      "title": "LifeForm",
+      "description": "What it is, as the phone draws it.",
+      "type": "string", "enum": ["bird", "glider", "bait", "pod", "turtle", "whale", "ray", "fin", "glow"]
+    },
+    "LifeFamily": {
+      "title": "LifeFamily",
+      "description": "Its family, whose lull it keeps.",
+      "type": "string", "enum": ["birds", "water", "big", "night"]
+    },
+    "LifePath": {
+      "title": "LifePath",
+      "description": "How it moves when it is with no boat: passing through, soaring in circles, skimming the swell in arcs, or working a patch of water.",
+      "type": "string", "enum": ["pass", "soar", "skim", "work"]
+    },
+    "LifeBinds": {
+      "title": "LifeBinds",
+      "description": "What it does with a boat it meets, if anything: follows its stern.",
+      "type": "string", "enum": ["follow"]
+    },
+    "BirdLook": {
+      "title": "BirdLook",
+      "description": "How a bird looks, flies and calls: a colony's birds and the birds met at sea alike.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["span", "body", "wing", "tip", "flap", "glide", "call"],
+      "properties": {
+        "span": { "description": "Its wingspan, in m.", "type": "number", "minimum": 0.1, "maximum": 5 },
         "body": { "$ref": "#/$defs/Colour" },
         "wing": { "$ref": "#/$defs/Colour" },
         "tip": { "$ref": "#/$defs/Colour" },
-        "flap": { "description": "Their wingbeats, in Hz.", "type": "number", "minimum": 0.1, "maximum": 20 },
-        "glide": { "description": "The share of the time they glide.", "type": "number", "minimum": 0, "maximum": 1 },
-        "call": { "description": "Their call.", "type": "string", "enum": ["harsh", "whistle", "rattle"] }
+        "flap": { "description": "Its wingbeats, in Hz.", "type": "number", "minimum": 0.1, "maximum": 20 },
+        "glide": { "description": "The share of the time it glides.", "type": "number", "minimum": 0, "maximum": 1 },
+        "call": { "description": "Its call; silent for a bird not heard at sea.", "type": "string", "enum": ["harsh", "whistle", "rattle", "laugh", "tern", "silent"] }
       }
     },
     "WorldFlora": {

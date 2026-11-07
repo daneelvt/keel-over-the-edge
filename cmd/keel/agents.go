@@ -119,7 +119,7 @@ func (p *process) seaOf(h *worldHalf, rw *readyWorld, sighting *sim.Sight) *agen
 	s := &agentapi.Sea{
 		Number: h.row.Number, Epoch: h.row.Epoch, Ends: h.ends, Bus: h.bus, Boats: cat.Boats,
 		Limit: h.world.Limit(), AICap: h.world.AICap(), AIReserve: h.world.AIReserve(),
-		Timeline: rw.timeline, Waves: p.waves, Sky: cat.PrepareSky(), Bundle: rw.bundle,
+		Timeline: rw.timeline, Waves: p.waves, Sky: cat.PrepareSky(), Bundle: rw.bundle, Life: rw.life,
 		Forecast: h.forecasts, Words: weather.WordsOf(cat), Catalog: cat, Looks: p.looks, Kinds: p.kinds, Encounters: cat.PrepareEncounters(), Fleet: p.fleet,
 		News: news{db: p.db, world: h.row.ID}.News, Columns: map[string]string{}, Biomes: map[string]string{},
 	}

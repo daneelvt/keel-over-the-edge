@@ -36,6 +36,7 @@ type Edge struct {
 func (w *World) rules() {
 	w.edgeRules()
 	w.sighting()
+	w.lifeRules()
 	w.ends()
 }
 

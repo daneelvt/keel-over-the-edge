@@ -58,13 +58,18 @@
 //     nearest of the buildings that are not props, ruins left out; Bell,
 //     the nearest building that stands above its town (a belfry), else the
 //     nearest on a square that is not a prop; Yard, the nearest on a slip;
-//     Quay, the nearest at a quay's edge; and Hour, HourAt of sky time
-//     (sky.Time) and the sky's day (sky.Prepared.Day).
+//     Quay, the nearest at a quay's edge; Hour, HourAt of sky time
+//     (sky.Time) and the sky's day (sky.Prepared.Day); and Gulls, the
+//     towns' gulls (life.GullTowns of the bundle's Buildings, each kind
+//     the catalog's world.towns.buildings by its index).
 //   - Lights, the worldgen.Bundle's Lights, each with its fog signal as
 //     chart.FogSignals gives it; Visibility, physics.VisibilityAt at a
 //     place at the tick asked, from the weather then.
 //   - Flashes, the lightning of the last minute: physics.Flashes for each
 //     of its slots.
+//   - Life, the groups of the sea's life near (bus.Frame's Life), each
+//     with the pose of the boat it is with, from the frame's State at its
+//     Slot (nil for a group with none).
 //
 // BoatSounds takes a BoatHeard: ApparentWind, Speed and ThroughWater, the
 // boat's physics.Out (ApparentWindSpeed, SpeedOverGround and

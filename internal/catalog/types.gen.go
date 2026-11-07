@@ -122,6 +122,31 @@ type BiomeZones struct {
 	Rim float64 `json:"rim"`
 }
 
+// How a bird looks, flies and calls: a colony's birds and the birds met at sea
+// alike.
+type BirdLook struct {
+	// Body corresponds to the JSON schema field "body".
+	Body Colour `json:"body"`
+
+	// Its call; silent for a bird not heard at sea.
+	Call Call `json:"call"`
+
+	// Its wingbeats, in Hz.
+	Flap float64 `json:"flap"`
+
+	// The share of the time it glides.
+	Glide float64 `json:"glide"`
+
+	// Its wingspan, in m.
+	Span float64 `json:"span"`
+
+	// Tip corresponds to the JSON schema field "tip".
+	Tip Colour `json:"tip"`
+
+	// Wing corresponds to the JSON schema field "wing".
+	Wing Colour `json:"wing"`
+}
+
 type Boat struct {
 	// Art corresponds to the JSON schema field "art".
 	Art BoatArt `json:"art"`
@@ -336,7 +361,10 @@ type BuildingKind struct {
 type Call string
 
 const CallHarsh Call = "harsh"
+const CallLaugh Call = "laugh"
 const CallRattle Call = "rattle"
+const CallSilent Call = "silent"
+const CallTern Call = "tern"
 const CallWhistle Call = "whistle"
 
 // Every list of kinds in the game. Kinds are data: code reads their properties,
@@ -350,6 +378,9 @@ type Catalog struct {
 
 	// Encounters corresponds to the JSON schema field "encounters".
 	Encounters Encounters `json:"encounters"`
+
+	// Life corresponds to the JSON schema field "life".
+	Life Life `json:"life"`
 
 	// Machine corresponds to the JSON schema field "machine".
 	Machine Machine `json:"machine"`
@@ -597,29 +628,11 @@ const CloudFormStorm CloudForm = "storm"
 
 // A colony's birds: where they nest, and how they look, fly and call.
 type ColonyBirds struct {
-	// Body corresponds to the JSON schema field "body".
-	Body Colour `json:"body"`
-
-	// Their call.
-	Call Call `json:"call"`
-
-	// Their wingbeats, in Hz.
-	Flap float64 `json:"flap"`
-
-	// The share of the time they glide.
-	Glide float64 `json:"glide"`
+	// Look corresponds to the JSON schema field "look".
+	Look BirdLook `json:"look"`
 
 	// Where they nest.
 	Nests []Nest `json:"nests"`
-
-	// Their wingspan, in m.
-	Span float64 `json:"span"`
-
-	// Tip corresponds to the JSON schema field "tip".
-	Tip Colour `json:"tip"`
-
-	// Wing corresponds to the JSON schema field "wing".
-	Wing Colour `json:"wing"`
 }
 
 // A colour, as #rrggbb in sRGB.
@@ -1202,6 +1215,263 @@ type Level string
 
 const LevelActive Level = "active"
 const LevelPassive Level = "passive"
+
+// The sea's life: the kinds of animal met at sea, and the schedule that says where
+// and when each is met. The server draws it from the world's seed, the place, the
+// time, the habitat there and the weather; every player near is told of each
+// encounter.
+type Life struct {
+	// Which boat a group that follows boats takes as it begins: the nearest within
+	// this, sailing this fast or faster on a course steady this long.
+	Bind LifeBind `json:"bind"`
+
+	// The schedule's cells' side, in m.
+	Cell float64 `json:"cell"`
+
+	// An encounter sent is dropped once the eye is this far beyond its reach, in m.
+	Drop float64 `json:"drop"`
+
+	// The sun's height from which dusk and dawn begin to where they end, in degrees.
+	Dusk []float64 `json:"dusk"`
+
+	// Where each habitat is.
+	Habitat LifeHabitat `json:"habitat"`
+
+	// The kinds of animal.
+	Kinds []LifeKind `json:"kinds"`
+
+	// How long after an encounter of a family begins no other of the family begins in
+	// its cell or the eight about it, in s.
+	Lulls LifeLulls `json:"lulls"`
+
+	// A boat followed, ridden or perched on is not again until this long after, in s.
+	Quiet float64 `json:"quiet"`
+
+	// Rain this heavy or heavier thins life as its kind's rain says, in mm an hour.
+	Rainy float64 `json:"rainy"`
+
+	// The share of water life seen at each Beaufort force from 0, the last for every
+	// force beyond it.
+	Sea []float64 `json:"sea"`
+
+	// The schedule's slots of world time, in s.
+	Slot int `json:"slot"`
+
+	// The gulls that wheel over each town by day, as a colony's birds wheel over it:
+	// the kind they are, by its id; how many; how far out and how high they wheel, in
+	// m.
+	Towns LifeTowns `json:"towns"`
+}
+
+// Which boat a group that follows boats takes as it begins: the nearest within
+// this, sailing this fast or faster on a course steady this long.
+type LifeBind struct {
+	// In m/s.
+	Speed float64 `json:"speed"`
+
+	// In s.
+	Steady float64 `json:"steady"`
+
+	// A course is steady while the heading stays within this of where it was, in
+	// degrees.
+	Turn float64 `json:"turn"`
+
+	// In m.
+	Within float64 `json:"within"`
+}
+
+type LifeBinds string
+
+const LifeBindsFollow LifeBinds = "follow"
+
+type LifeFamily string
+
+const LifeFamilyBig LifeFamily = "big"
+const LifeFamilyBirds LifeFamily = "birds"
+const LifeFamilyNight LifeFamily = "night"
+const LifeFamilyWater LifeFamily = "water"
+
+type LifeForm string
+
+const LifeFormBait LifeForm = "bait"
+const LifeFormBird LifeForm = "bird"
+const LifeFormFin LifeForm = "fin"
+const LifeFormGlider LifeForm = "glider"
+const LifeFormGlow LifeForm = "glow"
+const LifeFormPod LifeForm = "pod"
+const LifeFormRay LifeForm = "ray"
+const LifeFormTurtle LifeForm = "turtle"
+const LifeFormWhale LifeForm = "whale"
+
+// Where each habitat is.
+type LifeHabitat struct {
+	// Within this of a colony a kind's nearColony counts, in m.
+	Colony float64 `json:"colony"`
+
+	// The habitat's field's cells' side, built as the world loads, in m.
+	Field float64 `json:"field"`
+
+	// Water within this of a town is its harbour, in m.
+	Harbour float64 `json:"harbour"`
+
+	// Water this far from the centre or further is the outer water, in m.
+	Outer float64 `json:"outer"`
+
+	// Water within this of a reef or a lagoon is the reef's, in m.
+	Reef float64 `json:"reef"`
+
+	// Water shallower than this is the shelf, deeper the deep, in m.
+	Shelf float64 `json:"shelf"`
+}
+
+// Its weight in each habitat: a point is its harbour's if within one, else its
+// reef's, else the outer water's, else the shelf's or the deep's.
+type LifeHabitats struct {
+	// Deep corresponds to the JSON schema field "deep".
+	Deep float64 `json:"deep"`
+
+	// Harbour corresponds to the JSON schema field "harbour".
+	Harbour float64 `json:"harbour"`
+
+	// Outer corresponds to the JSON schema field "outer".
+	Outer float64 `json:"outer"`
+
+	// Reef corresponds to the JSON schema field "reef".
+	Reef float64 `json:"reef"`
+
+	// Shelf corresponds to the JSON schema field "shelf".
+	Shelf float64 `json:"shelf"`
+}
+
+// A kind of animal met at sea: what it is and how it moves, where and when it is
+// met, and how often.
+type LifeKind struct {
+	// Binds corresponds to the JSON schema field "binds".
+	Binds *LifeBinds `json:"binds,omitempty,omitzero"`
+
+	// Whether it is seen less as the sea rises, by the life's sea.
+	BySea bool `json:"bySea"`
+
+	// Its plunges, each bird a minute.
+	Dives *float64 `json:"dives,omitempty,omitzero"`
+
+	// Family corresponds to the JSON schema field "family".
+	Family LifeFamily `json:"family"`
+
+	// Form corresponds to the JSON schema field "form".
+	Form LifeForm `json:"form"`
+
+	// How many in a group, the least and the most.
+	Group []int `json:"group"`
+
+	// Its weight in each habitat: a point is its harbour's if within one, else its
+	// reef's, else the outer water's, else the shelf's or the deep's.
+	Habitats LifeHabitats `json:"habitats"`
+
+	// How high it flies, the least and the most, in m.
+	Height []float64 `json:"height"`
+
+	// Whether at dusk it heads for the nearest colony, or the nearest land without
+	// one.
+	Homeward *bool `json:"homeward,omitempty,omitzero"`
+
+	// ID corresponds to the JSON schema field "id".
+	ID string `json:"id"`
+
+	// Whether a group flies in a line, one behind another.
+	Line *bool `json:"line,omitempty,omitzero"`
+
+	// Look corresponds to the JSON schema field "look".
+	Look *BirdLook `json:"look,omitempty,omitzero"`
+
+	// Name corresponds to the JSON schema field "name".
+	Name string `json:"name"`
+
+	// Its weight times this within the habitat's colony distance of a colony.
+	NearColony *float64 `json:"nearColony,omitempty,omitzero"`
+
+	// Path corresponds to the JSON schema field "path".
+	Path LifePath `json:"path"`
+
+	// Its name for more than one.
+	Plural string `json:"plural"`
+
+	// The share of it met in rain.
+	Rain float64 `json:"rain"`
+
+	// How far out it comes from and goes to, in m.
+	Range float64 `json:"range"`
+
+	// Its encounters a km² an hour at a weight of 1.
+	Rate float64 `json:"rate"`
+
+	// It is drawn within this, in m.
+	Reach float64 `json:"reach"`
+
+	// How fast it goes, the least and the most, in m/s.
+	Speed []float64 `json:"speed"`
+
+	// How long it stays over its patch or with a boat, the least and the most, in s.
+	Stay []float64 `json:"stay"`
+
+	// Its weight by the sun: by day, at dusk and dawn, and at night.
+	When LifeWhen `json:"when"`
+
+	// The least wind it is met in and the most, 10 m up, in m/s.
+	Wind []float64 `json:"wind"`
+}
+
+// How long after an encounter of a family begins no other of the family begins in
+// its cell or the eight about it, in s.
+type LifeLulls struct {
+	// Big corresponds to the JSON schema field "big".
+	Big float64 `json:"big"`
+
+	// Birds corresponds to the JSON schema field "birds".
+	Birds float64 `json:"birds"`
+
+	// Night corresponds to the JSON schema field "night".
+	Night float64 `json:"night"`
+
+	// Water corresponds to the JSON schema field "water".
+	Water float64 `json:"water"`
+}
+
+type LifePath string
+
+const LifePathPass LifePath = "pass"
+const LifePathSkim LifePath = "skim"
+const LifePathSoar LifePath = "soar"
+const LifePathWork LifePath = "work"
+
+// The gulls that wheel over each town by day, as a colony's birds wheel over it:
+// the kind they are, by its id; how many; how far out and how high they wheel, in
+// m.
+type LifeTowns struct {
+	// Count corresponds to the JSON schema field "count".
+	Count []int `json:"count"`
+
+	// Height corresponds to the JSON schema field "height".
+	Height []float64 `json:"height"`
+
+	// Kind corresponds to the JSON schema field "kind".
+	Kind string `json:"kind"`
+
+	// Wheel corresponds to the JSON schema field "wheel".
+	Wheel []float64 `json:"wheel"`
+}
+
+// Its weight by the sun: by day, at dusk and dawn, and at night.
+type LifeWhen struct {
+	// Day corresponds to the JSON schema field "day".
+	Day float64 `json:"day"`
+
+	// Dusk corresponds to the JSON schema field "dusk".
+	Dusk float64 `json:"dusk"`
+
+	// Night corresponds to the JSON schema field "night".
+	Night float64 `json:"night"`
+}
 
 type Light string
 
@@ -4785,4 +5055,4 @@ type WorldZones struct {
 }
 
 // Version is the catalog version (tools/catalog).
-const Version = "a88071c8a988b7d2"
+const Version = "370c8c926db17136"

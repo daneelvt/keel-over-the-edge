@@ -9,6 +9,8 @@ import (
 	"time"
 
 	"github.com/daneelvt/keel-over-the-edge/internal/bus"
+	"github.com/daneelvt/keel-over-the-edge/internal/catalog"
+	"github.com/daneelvt/keel-over-the-edge/internal/life"
 	"github.com/daneelvt/keel-over-the-edge/internal/lookout"
 	"github.com/daneelvt/keel-over-the-edge/internal/physics"
 	"github.com/daneelvt/keel-over-the-edge/internal/sky"
@@ -27,6 +29,8 @@ type overlays struct {
 	right []*lookout.RightOfWay // by the sailor's kind of boat
 	dirty []*lookout.DirtyAir
 	hear  *lookout.Hearing
+	// gulls are the towns' gulls, found once from the world's buildings.
+	gulls []life.GullTown
 }
 
 // rules are the world's overlays' rules: none for a world given no
@@ -38,6 +42,13 @@ func (s *Sea) rules() *overlays {
 			return
 		}
 		o.hear = lookout.NewHearing(s.Catalog)
+		if s.Bundle != nil {
+			bs := make([]life.GullBuilding, len(s.Bundle.Buildings))
+			for i, b := range s.Bundle.Buildings {
+				bs[i] = life.GullBuilding{Kind: int(b.Kind), East: b.X, North: b.Y, Seed: uint32(b.Seed), Town: b.Town, Level: float64(b.Level) / 10}
+			}
+			o.gulls = life.GullTowns(bs, s.Catalog.World.Towns.Buildings)
+		}
 		if s.Encounters == nil {
 			return
 		}
@@ -228,6 +239,8 @@ func (h *helm) hearLines(s *Sea, f *bus.Frame, sl int32) []string {
 	if end := s.ends(); !end.IsZero() {
 		in.EndNear = lookout.EndRoar(math.Max(0, time.Until(end).Seconds()), &cat.World.Edge.End)
 	}
+	// With no sky the sun never sets, as the sea's life has it.
+	in.Day = s.Sky == nil
 	if s.Sky != nil {
 		t := sky.Time(s.Sky, float64(s.Epoch.UnixMicro()), float64(int64(now*1e6)))
 		in.Day = sky.SunAltitude(s.Sky, t, st.X, st.Y) > 0
@@ -236,6 +249,8 @@ func (h *helm) hearLines(s *Sea, f *bus.Frame, sl int32) []string {
 	if sea := seaOf(s, f, st.X, st.Y); sea != nil {
 		in.SeaHeight = sea.Waves
 	}
+	s.harbourHeard(st.X, st.Y, &in.Harbour)
+	in.Life = s.lifeHeard(f, sl)
 	if b := s.Bundle; b != nil {
 		kinds := cat.World.Features.Kinds
 		for _, p := range b.Parts {
@@ -245,7 +260,7 @@ func (h *helm) hearLines(s *Sea, f *bus.Frame, sl int32) []string {
 			k := &kinds[p.Kind]
 			fh := lookout.FeatureHeard{Site: k.Site, East: p.X, North: p.Y, Drop: p.Level, Seed: float64(p.Seed)}
 			if k.Birds != nil {
-				fh.Call = k.Birds.Call
+				fh.Call = k.Birds.Look.Call
 			}
 			in.Features = append(in.Features, fh)
 		}
@@ -277,9 +292,8 @@ func (h *helm) hearLines(s *Sea, f *bus.Frame, sl int32) []string {
 	said := map[string]bool{}
 	for _, snd := range o.hear.Sounds(in, now-thunderBack, now) {
 		line := snd.Kind.String()
-		if snd.Kind == lookout.SoundGull || snd.Kind == lookout.SoundFalls && in.Lip > 1000 {
-			// A gull is about the boat; the end's roar comes from
-			// everywhere.
+		if snd.Kind == lookout.SoundFalls && in.Lip > 1000 {
+			// The end's roar comes from everywhere.
 		} else {
 			line += " to the " + point16(rad(snd.Degrees))
 		}
@@ -292,6 +306,75 @@ func (h *helm) hearLines(s *Sea, f *bus.Frame, sl int32) []string {
 		}
 	}
 	return out
+}
+
+// harbourHeard sets what the harbour sounds from at (x, y), as the phone
+// finds it from the towns' buildings: whether the boat is in port, on
+// water within a harbour's disc; the nearest of the buildings that are not
+// props, ruins left out; the nearest belfry, else square, slip and quay's
+// edge; and the towns' gulls.
+func (s *Sea) harbourHeard(x, y float64, h *lookout.HarbourHeard) {
+	b := s.Bundle
+	if b == nil || s.Catalog == nil {
+		return
+	}
+	h.Gulls = s.rules().gulls
+	water := true
+	if s.Ground != nil {
+		e, _ := s.Ground.At(x, y)
+		water = e <= 0
+	}
+port:
+	for _, t := range b.Towns {
+		for _, d := range t.Harbour {
+			if dx, dy := x-d.X, y-d.Y; float64(dx*dx)+float64(dy*dy) <= float64(d.R*d.R) {
+				h.InPort = water
+				break port
+			}
+		}
+	}
+	kinds := s.Catalog.World.Towns.Buildings
+	const far = math.MaxFloat64
+	near := far
+	best := [4]float64{far, far, far, far} // belfry, square, slip, edge
+	var at [4]*lookout.Point
+	for i := range b.Buildings {
+		bd := &b.Buildings[i]
+		if int(bd.Kind) >= len(kinds) {
+			continue
+		}
+		k := &kinds[bd.Kind]
+		switch k.Stands {
+		case catalog.StandsHamlet, catalog.StandsChapel, catalog.StandsBeacon:
+			continue
+		}
+		prop := k.Prop != nil && *k.Prop
+		dx, dy := bd.X-x, bd.Y-y
+		d := math.Sqrt(float64(dx*dx) + float64(dy*dy))
+		if !prop {
+			near = min(near, d)
+		}
+		role := -1
+		switch {
+		case k.Stands == catalog.StandsAbove:
+			role = 0
+		case k.Stands == catalog.StandsSquare && !prop:
+			role = 1
+		case k.Stands == catalog.StandsSlip:
+			role = 2
+		case k.Stands == catalog.StandsEdge:
+			role = 3
+		}
+		if role >= 0 && d < best[role] {
+			best[role] = d
+			at[role] = &lookout.Point{East: bd.X, North: bd.Y}
+		}
+	}
+	h.Town, h.NearTown = near < far, near
+	h.Bell, h.Yard, h.Quay = at[0], at[2], at[3]
+	if h.Bell == nil {
+		h.Bell = at[1]
+	}
 }
 
 // boatHeard are the boat's own sounds in slot sl, by the phone's rules:
