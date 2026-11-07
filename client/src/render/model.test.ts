@@ -30,6 +30,7 @@ interface Gltf {
       restage?: number[];
       square?: { group: string; strip: number; split?: number; reefs?: number[] };
       number?: boolean;
+      yard?: string;
       wheel?: { radius: number; spokes: number };
     };
   }[];
@@ -393,7 +394,15 @@ describe.each(catalog.boats.map((b) => [b.name, b] as const))('%s', (_, boat) =>
       let numbered = 0;
       const groups = new Set<string>();
       for (const yards of ['fore-yards', 'main-yards', 'mizzen-yards']) {
+        // The topsail's yard is its own node, which a reef lowers.
+        const own = (node(yards).children ?? []).filter(
+          (i) => g.nodes[i]?.extras?.yard !== undefined,
+        );
+        expect(own.map((i) => g.nodes[i]?.extras?.yard)).toEqual(['topsail']);
         for (const i of node(yards).children ?? []) {
+          if (own.includes(i)) {
+            continue;
+          }
           const sail = g.nodes[i];
           const sq = sail?.extras?.square;
           expect(sq, sail?.name).toBeDefined();

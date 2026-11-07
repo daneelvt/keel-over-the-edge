@@ -1451,6 +1451,14 @@ function reefBands(headW: number, footW: number, deep: number): number[] {
   return [0.5, 1].map((f) => depthFromHead(headW, footW, deep, f * REEFED_SHARE * area) / deep);
 }
 
+/** A yard: its height, radius, half its length, and where its lifts meet the mast. */
+interface SquareYard {
+  y: number;
+  r: number;
+  half: number;
+  lift: number;
+}
+
 /** A mast's yards and sails, in its yards' node's frame (its axis at the courses' foot). */
 interface YardsOut {
   spar: MeshBuilder;
@@ -1458,6 +1466,32 @@ interface YardsOut {
   rope: MeshBuilder;
   sails: NodeDef[];
   meshes: MeshBuilder[];
+  /** The topsail's yard, its own node: lowered to the reef band when the topsail is reefed. */
+  topsailYard: NodeDef;
+}
+
+/**
+ * A topsail's yard as its own node under its yards' joint, at the yard's
+ * middle, with its footropes; its lifts stay with the joint, up to the
+ * topmast's head. Its extras say it is the topsail's yard, which the game
+ * lowers to the topsail's reef band as the topsail is reefed.
+ */
+function topsailYard(name: string, y: SquareYard, z: number): NodeDef {
+  const spar = new MeshBuilder('spar');
+  const ropes = new MeshBuilder('rope');
+  yard(spar, 0, 0, y.half, y.r);
+  if (D.small) {
+    rigYard(ropes, 0, 0, y.half, 0, false);
+  }
+  return {
+    name,
+    translation: [0, y.y - FOOT_Y, z],
+    extras: { yard: 'topsail' },
+    primitives: prims([
+      [spar, false],
+      [ropes, false],
+    ]),
+  };
 }
 
 /**
@@ -1495,9 +1529,12 @@ function squareYards(
   ];
   const zs = yards.map((y) => yardZ(m, y.y, y.r));
   yards.forEach((y, i) => {
-    yard(spar, y.y - FOOT_Y, zs[i] as number, y.half, y.r);
+    const own = i === 1;
+    if (!own) {
+      yard(spar, y.y - FOOT_Y, zs[i] as number, y.half, y.r);
+    }
     if (D.small) {
-      rigYard(ropes, y.y - FOOT_Y, zs[i] as number, y.half, y.lift - FOOT_Y);
+      rigYard(ropes, y.y - FOOT_Y, zs[i] as number, y.half, y.lift - FOOT_Y, true, !own);
     }
   });
   const course = { headW: w, footW: COURSE_FOOT_W * w };
@@ -1562,27 +1599,40 @@ function squareYards(
       primitives: [(meshes[i] as MeshBuilder).primitive()],
     })),
     meshes,
+    topsailYard: topsailYard(`${name}-topsail-yard`, yards[1] as SquareYard, zs[1] as number),
   };
 }
 
-/** A yard's lifts, from its arms up to the mast, and its footropes, sagging under it. */
-function rigYard(m: MeshBuilder, y: number, z: number, half: number, lift: number): void {
+/** A yard's lifts, from its arms up to the mast, and its footropes, sagging under it; or one of them. */
+function rigYard(
+  m: MeshBuilder,
+  y: number,
+  z: number,
+  half: number,
+  lift: number,
+  lifts = true,
+  footropes = true,
+): void {
   for (const s of [1, -1]) {
-    rope(
-      m,
-      [
-        [s * (half - 0.15), y, z],
-        [0, lift, -0.1],
-      ],
-      0.025,
-    );
-    const path: Vec3[] = [];
-    for (let i = 0; i <= 4; i++) {
-      const f = i / 4;
-      const x = s * lerp(0.6, half - 0.2, f);
-      path.push([x, y - 0.25 - 0.55 * Math.sin(Math.PI * f), z + 0.12]);
+    if (lifts) {
+      rope(
+        m,
+        [
+          [s * (half - 0.15), y, z],
+          [0, lift, -0.1],
+        ],
+        0.025,
+      );
     }
-    rope(m, path, 0.025);
+    if (footropes) {
+      const path: Vec3[] = [];
+      for (let i = 0; i <= 4; i++) {
+        const f = i / 4;
+        const x = s * lerp(0.6, half - 0.2, f);
+        path.push([x, y - 0.25 - 0.55 * Math.sin(Math.PI * f), z + 0.12]);
+      }
+      rope(m, path, 0.025);
+    }
   }
 }
 
@@ -1600,9 +1650,12 @@ function mizzenYards(): YardsOut {
   ];
   const zs = yards.map((y) => yardZ(m, y.y, y.r));
   yards.forEach((y, i) => {
-    yard(spar, y.y - FOOT_Y, zs[i] as number, y.half, y.r);
+    const own = i === 1;
+    if (!own) {
+      yard(spar, y.y - FOOT_Y, zs[i] as number, y.half, y.r);
+    }
     if (D.small) {
-      rigYard(ropes, y.y - FOOT_Y, zs[i] as number, y.half, y.lift - FOOT_Y);
+      rigYard(ropes, y.y - FOOT_Y, zs[i] as number, y.half, y.lift - FOOT_Y, true, !own);
     }
   });
   const reefs = reefBands(headW, footW, MIZZEN_TOPSAIL_DEPTH).map(round5);
@@ -1625,6 +1678,7 @@ function mizzenYards(): YardsOut {
     rope: ropes,
     sails: [{ name: sail.name, extras: sail.extras, primitives: [mesh.primitive()] }],
     meshes: [mesh],
+    topsailYard: topsailYard('mizzen-topsail-yard', yards[1] as SquareYard, zs[1] as number),
   };
 }
 
@@ -3029,7 +3083,7 @@ function model(): NodeDef[] {
         [y.black, false],
         [y.rope, false],
       ]),
-      children: y.sails,
+      children: [y.topsailYard, ...y.sails],
     });
   }
   const boomParts = boomSpar();
