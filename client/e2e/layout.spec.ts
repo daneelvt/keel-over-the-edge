@@ -860,19 +860,33 @@ async function plateFaults(page: Page, boat: Box | null): Promise<string[]> {
   return found;
 }
 
-/** The Reef key and the key that shakes a reef out: 44 pixels or more, on the sheet's top or beside it. */
+/** The Reef key and the key that shakes a reef out: 44 pixels or more, their words within them, on the sheet's top or beside it. */
 async function reefFaults(page: Page): Promise<string[]> {
   return page.evaluate(() => {
     const out: string[] = [];
     const sheet = document.querySelector('[data-control=sheet]')?.getBoundingClientRect();
-    const keys = [...document.querySelectorAll('.reef-key')].map((k) => ({
-      name: k.getAttribute('aria-label') ?? '',
-      r: k.getBoundingClientRect(),
-    }));
+    const keys = [...document.querySelectorAll('.reef-key')].map((k) => {
+      const range = document.createRange();
+      range.selectNodeContents(k);
+      return {
+        name: k.getAttribute('aria-label') ?? '',
+        r: k.getBoundingClientRect(),
+        words: range.getBoundingClientRect(),
+      };
+    });
     if (sheet === undefined || keys.length !== 2) {
       return [`${keys.length} reef keys, a reef asked for`];
     }
-    for (const { name, r } of keys) {
+    for (const { name, r, words } of keys) {
+      // Its words within its face, however long the boat's are.
+      if (
+        words.left < r.left - 0.5 ||
+        words.right > r.right + 0.5 ||
+        words.top < r.top - 0.5 ||
+        words.bottom > r.bottom + 0.5
+      ) {
+        out.push(`“${name}”: its words run out of the key`);
+      }
       if (r.width < 43.5 || r.height < 43.5) {
         out.push(`“${name}” is ${Math.round(r.width)} × ${Math.round(r.height)}`);
       }

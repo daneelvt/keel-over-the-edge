@@ -1387,10 +1387,11 @@
   filter: saturate(0.6) brightness(0.85);
 }
 
+/* A level's words wider than the key ("Topgallants in") take a second line. */
 .reef-key .reef-level {
   font-size: 10.5px;
   letter-spacing: 0.01em;
-  white-space: nowrap;
+  line-height: 11px;
 }
 
 .hud .reef-key.shake {
