@@ -6,7 +6,9 @@
 // figure sits on the side deck it last crossed to, where its own file seats
 // it, and leans out as it hikes. In the water it floats beside the hull on the
 // high side; on the daggerboard it stands on the board, leaning back to lever
-// the boat up; climbing back in, it is half over the gunwale. Positions are
+// the boat up; climbing back in, it is half over the gunwale. At a wheel it
+// is at the helmsman's place, facing forward, whatever the physics says:
+// raised to a standing sailor's height, behind the wheel. Positions are
 // in the boat's heeled frame (the model's: x to starboard, y up, z aft), the
 // figure's origin at its hips; the figure faces +x before it is turned.
 
@@ -43,7 +45,13 @@ export interface SailorFrame {
   boardZ: number;
   /** The board's depth below the waterline where the sailor stands on it. */
   boardDepth: number;
+  /** Where the helmsman stands at a wheel (on the deck, the model's frame), on a boat steered by one. */
+  wheel?: { y: number; z: number } | null;
 }
+
+/** The seated figure at a wheel: its seat this high over the deck (its head a standing sailor's), this far aft of the helmsman's place (its knees short of the wheel). */
+const WHEEL_SEAT_UP = 0.75;
+const WHEEL_SEAT_AFT = 0.5;
 
 /**
  * Where the figure is for a sailor offset (m, positive to starboard), a
@@ -58,6 +66,15 @@ export function placeSailor(
   side: number,
   out: SailorPlace,
 ): SailorPlace {
+  if (frame.wheel) {
+    out.x = 0;
+    out.y = frame.wheel.y + WHEEL_SEAT_UP;
+    out.z = frame.wheel.z + WHEEL_SEAT_AFT;
+    // Facing forward (figureNode's facing 0 faces starboard).
+    out.facing = Math.PI / 2;
+    out.tilt = 0;
+    return out;
+  }
   // The high side of a heeled boat, where a sailor in the water holds on.
   const high = heel > 0 ? -1 : 1;
   switch (mode) {

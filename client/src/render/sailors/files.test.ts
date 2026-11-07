@@ -4,7 +4,8 @@
 // the game will load them: each version's close and deck levels skinned to
 // one skeleton, the far level one rigid figure with the place it sits in,
 // one material whose base colour is the atlas and whose occlusion texture
-// is the mask, both KTX2; and the clips with a place each.
+// is the mask, both KTX2; and the clips with a place each, those at a wheel
+// in a file of their own.
 
 import { readdirSync, readFileSync } from 'node:fs';
 import { describe, expect, test } from 'vitest';
@@ -91,6 +92,23 @@ describe.each(looks)('%s', (look) => {
         'figure',
       ]);
       expect(levels.far.nodes.find((n) => n.name === 'place')?.matrix).toHaveLength(16);
+    });
+
+    test('its clips at a wheel, a file of their own on its skeleton, placed from the helmsman’s place', () => {
+      if (look === 'test') {
+        return;
+      }
+      const wheel = readGltf(`${look}/${version}.wheel.glb`);
+      const names = (wheel.animations ?? []).map((a) => a.name).sort();
+      expect(names).toEqual(['habit-wheel', 'helm-wheel', 'helm-wheel-port']);
+      expect(joints(wheel)).toEqual(joints(clips));
+      for (const name of names) {
+        const m = wheel.nodes.find((n) => n.name === `place-${name}`)?.matrix ?? [];
+        // Standing on the deck at the helmsman's place, facing forward (−z).
+        expect(Math.hypot(m[12] ?? 9, m[14] ?? 9), name).toBeLessThan(0.3);
+        expect(Math.abs(m[13] ?? 9), name).toBeLessThan(0.1);
+        expect(m[10], name).toBeLessThan(-0.99);
+      }
     });
 
     test('every clip has its place', () => {

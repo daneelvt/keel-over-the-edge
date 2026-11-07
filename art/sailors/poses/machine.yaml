@@ -57,6 +57,26 @@ poses:
       - [neck_01, z, 10]
       - [head, z, 22]
 
+  # At the wheel, both hands on its spokes: the same steps.
+  machine-wheel-listen:
+    from: wheel-stand
+    turn:
+      - [lid_lower_l, z, 50]
+      - [lid_lower_r, z, -50]
+      - [head, x, -3]
+
+  machine-wheel-turn-1:
+    from: machine-wheel-listen
+    turn:
+      - [neck_01, z, -5]
+      - [head, z, -10]
+
+  machine-wheel-turn-2:
+    from: machine-wheel-listen
+    turn:
+      - [neck_01, z, -10]
+      - [head, z, -22]
+
 clips:
   machine-habit:
     sides: true
@@ -76,3 +96,11 @@ clips:
       - { pose: machine-stand-turn-1, hold: 0.25, ramp: 0.55, lead: head }
       - { pose: machine-stand-turn-2, hold: 0.8, ramp: 0.55, lead: head }
       - { pose: machine-stand, hold: 0.4, ramp: 1.2, lead: head }
+
+  machine-habit-wheel:
+    keys:
+      - { pose: wheel-stand, hold: 0.3 }
+      - { pose: machine-wheel-listen, hold: 0.4, ramp: 0.5 }
+      - { pose: machine-wheel-turn-1, hold: 0.25, ramp: 0.55, lead: head }
+      - { pose: machine-wheel-turn-2, hold: 0.8, ramp: 0.55, lead: head }
+      - { pose: wheel-stand, hold: 0.4, ramp: 1.2, lead: head }

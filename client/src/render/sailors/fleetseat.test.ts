@@ -12,7 +12,7 @@ import type { KTX2Loader } from 'three/addons/loaders/KTX2Loader.js';
 import { expect, test } from 'vitest';
 import { catalog } from '../../catalog';
 import { seatFigure } from '../fleetparts';
-import { placeSailor, SAILING, type SailorPlace } from '../sailor';
+import { IN_WATER, placeSailor, SAILING, type SailorPlace } from '../sailor';
 import { placesOf } from './model';
 import { hullSolid, inside } from './solid';
 
@@ -93,4 +93,74 @@ test('the fleet’s sailor sits on its side deck, sitting or hiking, nothing of 
     }
   }
   expect(through.slice(0, 5)).toEqual([]);
+});
+
+test('at a wheel, the fleet’s sailor stands behind it on the deck, facing forward, whatever the physics says', async () => {
+  const sailor = catalog.sailors[0]?.versions[0];
+  const kind = catalog.boats[0];
+  if (sailor === undefined || kind === undefined) {
+    throw new Error('no sailor or boat');
+  }
+  const boat = await load(kind.art.model);
+  boat.updateMatrixWorld(true);
+  const pos = (name: string): Vector3 =>
+    (boat.getObjectByName(name) as Object3D).getWorldPosition(new Vector3());
+  const gunwale = pos('gunwale');
+  const seatZ = pos('sailor').z;
+  const far = await load(sailor.art.far);
+  const meshes: Mesh[] = [];
+  far.traverse((o) => {
+    if (o instanceof Mesh) {
+      meshes.push(o);
+    }
+  });
+  const g = seatFigure(
+    far,
+    meshes,
+    placesOf(far).get('place') ?? null,
+    gunwale.x,
+    gunwale.y,
+    seatZ,
+  );
+  const p = g.getAttribute('position');
+  // The helmsman's place on a quarterdeck; the wheel's hub 0.55 m ahead of it.
+  const stand = { y: 4.5, z: 12 };
+  const frame = {
+    seatOut: 0,
+    seatY: 0,
+    seatZ: 0,
+    centreOfGravity: 1,
+    boardZ: 0,
+    boardDepth: 0,
+    wheel: stand,
+  };
+  const at: SailorPlace = { x: 0, y: 0, z: 0, facing: 0, tilt: 0 };
+  const v = new Vector3();
+  for (const [offset, mode] of [
+    [0.5, SAILING],
+    [-0.5, SAILING],
+    [0, IN_WATER],
+  ] as const) {
+    placeSailor(offset, mode, 0.3, frame, 1, at);
+    let low = Infinity;
+    let high = -Infinity;
+    let fore = Infinity;
+    let side = 0;
+    for (let i = 0; i < p.count; i++) {
+      v.fromBufferAttribute(p, i)
+        .applyAxisAngle(new Vector3(0, 1, 0), at.facing)
+        .applyAxisAngle(new Vector3(0, 0, 1), at.tilt)
+        .add(new Vector3(at.x, at.y, at.z));
+      low = Math.min(low, v.y);
+      high = Math.max(high, v.y);
+      fore = Math.min(fore, v.z);
+      side = Math.max(side, Math.abs(v.x));
+    }
+    // On the deck, a standing sailor's height, short of the wheel's plane.
+    expect(low).toBeGreaterThan(stand.y - 0.02);
+    expect(high - stand.y).toBeGreaterThan(1.4);
+    expect(high - stand.y).toBeLessThan(1.9);
+    expect(fore).toBeGreaterThan(stand.z - 0.55);
+    expect(side).toBeLessThan(0.6);
+  }
 });

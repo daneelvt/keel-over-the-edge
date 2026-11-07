@@ -7,6 +7,10 @@
 // mainsheet from its block under the boom down to the block on the floor
 // and up to the forward hand.
 //
+// On a boat steered by a wheel (its model's `wheel` node), the sailor stands
+// at it, its hands on the spokes as the wheel turns: no extension, no
+// mainsheet.
+//
 // The figure is a child of the boat's model, placed by the runtime's root
 // (the clips' places, from the build, moved to this boat's seat if it is
 // not the boat they were placed in): what it sits on is the boat model's
@@ -23,6 +27,7 @@ import {
   Mesh,
   type MeshStandardMaterial,
   type Object3D,
+  Quaternion,
   Vector3,
 } from 'three';
 import { dot, float, mix, saturate, uniform, uv, vec3, vec4 } from 'three/tsl';
@@ -37,7 +42,8 @@ import { loadClips, loadSailor, type SailorModel } from './model';
 import { seating } from './restage';
 import { bonesFor, Rig } from './rig';
 import { type SailorBoat, type SailorMoment, SailorRuntime } from './runtime';
-import { hullSolid } from './solid';
+import { type HullSolid, hullSolid } from './solid';
+import { turnIn, wheelOf, wheelTurnOf } from './wheel';
 
 /** Nearer than this to the camera the close level is drawn, metres; back to the deck level beyond the second. */
 export const CLOSE_IN = 6;
@@ -53,6 +59,8 @@ export interface SailorUrls {
   /** The close level's URL, fetched when first wanted. */
   close: () => Promise<string>;
   clips: string;
+  /** The clips at a wheel's URL, fetched for a boat steered by one. */
+  wheel?: () => Promise<string>;
   colours: { main: string; skin: string; hair: string };
 }
 
@@ -95,6 +103,9 @@ export class BoatSailor {
   readonly #glowStrength = uniform(1);
   readonly #lanternBone: number = -1;
   readonly #lanternRest = new Matrix4();
+  /** The wheel's node and its turn at rest, on a boat steered by one. */
+  readonly #wheelNode: Object3D | null;
+  readonly #wheelRest = new Quaternion();
   #time = 0;
 
   private constructor(
@@ -118,6 +129,10 @@ export class BoatSailor {
     this.#urls = urls;
     this.#renderer = renderer;
     this.runtime = new SailorRuntime(rig, clips, boat, seed, machine);
+    this.#wheelNode = boat.wheel ? (parts.get('wheel') ?? null) : null;
+    if (this.#wheelNode !== null) {
+      turnIn(this.#wheelNode, model, this.#wheelRest);
+    }
     this.#deckBones = bonesFor(rig, deck.root);
     deck.root.name = 'sailor figure';
     deck.root.matrixAutoUpdate = false;
@@ -178,12 +193,20 @@ export class BoatSailor {
     const rig = Rig.from(deck.root, boneNames(deck.root));
     const clips = new Map<string, Clip>();
     const identity = new Matrix4();
-    for (const a of clipFile.clips) {
-      const place = clipFile.places.get(`place-${a.name}`) ?? null;
-      clips.set(
-        a.name,
-        Clip.from(a, rig, place !== null && !place.equals(identity) ? place : null),
-      );
+    const wheel = wheelOf(parts, model);
+    // At a wheel, its clips too.
+    const files =
+      wheel !== null && urls.wheel !== undefined
+        ? [clipFile, await loadClips(await urls.wheel(), renderer)]
+        : [clipFile];
+    for (const file of files) {
+      for (const a of file.clips) {
+        const place = file.places.get(`place-${a.name}`) ?? null;
+        clips.set(
+          a.name,
+          Clip.from(a, rig, place !== null && !place.equals(identity) ? place : null),
+        );
+      }
     }
     const at = (name: string): Vector3 | null => {
       const o = parts.get(name);
@@ -194,10 +217,28 @@ export class BoatSailor {
       span: foils.boardSpan,
       chord: foils.boardChord,
     });
+    const seat = at('sailor');
+    if (wheel !== null && seat !== null) {
+      // At the wheel: what the seat and the tiller would be is the
+      // helmsman's place; the hull's solid only if the model has it.
+      const boat: SailorBoat = {
+        hinge: seat.clone(),
+        hingeRest: seat,
+        extension: 0,
+        seatY: seat.y,
+        seatIn: 0,
+        seatOut: 0,
+        seatZ: seat.z,
+        cog: kind.physics.hull.centreOfGravity,
+        solid: solid ?? NO_SOLID,
+        climbTime: sailor.climbTime,
+        wheel,
+      };
+      return new BoatSailor(model, parts, deck, rig, clips, boat, urls, renderer, seed, machine);
+    }
     const hinge = at('extension');
     const grip = at('grip');
     const gunwale = at('gunwale');
-    const seat = at('sailor');
     if (solid === null || hinge === null || grip === null || gunwale === null || seat === null) {
       throw new Error('the boat model has no solid, extension, gunwale or seat for its sailor');
     }
@@ -289,6 +330,11 @@ export class BoatSailor {
       ext.quaternion.identity();
       modelPosition(ext, this.#model, this.#boat.hinge);
     }
+    const wheel = this.#boat.wheel;
+    if (wheel && this.#wheelNode !== null) {
+      // The wheel as the rudder has turned it.
+      wheel.turn = wheelTurnOf(this.#wheelNode, this.#model, this.#wheelRest);
+    }
     const mo = this.#moment;
     mo.dt = dt;
     mo.time = this.#time;
@@ -362,6 +408,14 @@ export class BoatSailor {
     tube(this.#rope.geometry, this.#ropePoints, ROPE_RADIUS);
   }
 }
+
+/** A hull with nothing in it: a boat at whose wheel the sailor stands needs none. */
+export const NO_SOLID: HullSolid = {
+  stations: [],
+  exponent: 2,
+  cockpit: { fore: 0, aft: 0, halfWidth: 0, floor: 0 },
+  board: { y: 0, z: 0, span: 0, chord: 0, thickness: 0 },
+};
 
 /** The bone a machine's lantern rides on. */
 const LANTERN_BONE = 'spine_03';

@@ -84,6 +84,7 @@ packed by Python under `blender -b`, by script and nothing by hand:
 go run ./tools/sailors              # or: cd client && npm run art:sailors
 go run ./tools/sailors -look test   # one look
 go run ./tools/sailors -setup       # check Blender, install MPFB and gltfpack
+go run ./tools/sailors -add helm-wheel,habit-wheel   # only these clips, on every look
 ```
 
 It needs Blender 5.2 LTS installed; the first run installs the pinned MPFB
@@ -162,6 +163,22 @@ the gunwale, the tiller's hinge as far from the seat), and its `sailor`
 node's `extras.restage` is how far its seat is from the dinghy's; the game
 moves the clips by it (a tack's cross widened to its beam), and a boat
 without a hiking strap is hiked only to the rail.
+
+A boat steered by a wheel has a node `wheel` with `extras.wheel` (its
+radius and spokes; the node's origin the hub, its axle fore and aft, a
+spoke straight up at rest) and its `sailor` node where the helmsman stands,
+on the deck between the feet, facing forward. Its clips (`helm-wheel`,
+and `-port` for the wind over the port side; `habit-wheel`, each look's
+habit at the wheel) are made at the stage's wheel (`tables.yaml`'s
+`stage.wheel`: the hub 0.55 m ahead of that place and 1.05 m above the
+deck, 0.75 m to the rim, 8 spokes), placed from the helmsman's place
+(`place-helm-wheel` is from the figure's space to the `sailor` node's),
+and written to a file of their own, `<version>.wheel.glb`, which only a
+boat steered by a wheel loads. The game keeps the hands on the spokes as
+the wheel turns with the rudder. `-add` makes only the clips named (as the
+game asks for them) on each committed look and writes their file, adding
+them to it if it has others, those kept byte for byte; nothing else is
+written, and garments it must make again go into `.dev`.
 
 Every build is judged before anyone looks at it: the gates
 (`review/metrics.py`: budgets, clean meshes and weights, nothing through

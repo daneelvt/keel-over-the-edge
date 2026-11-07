@@ -59,6 +59,31 @@ poses:
       - [neck_01, z, -7]
       - [head, z, -14]
 
+  # At the wheel: the right hand off its spoke, flat over the eyes, and
+  # the head turning slowly across the water ahead and back.
+  lookout-wheel-shade:
+    from: wheel-grip-left
+    turn:
+      - [spine_02, x, -3]
+      - [head, x, -5]
+      - [hand_r, x, -35]
+    ik:
+      hand_r: { at: bone, bone: head, offset: [-0.15, -0.25, 0.12], pole: [-0.6, -0.1, -0.1] }
+
+  lookout-wheel-left:
+    from: lookout-wheel-shade
+    turn:
+      - [spine_03, z, 5]
+      - [neck_01, z, 7]
+      - [head, z, 14]
+
+  lookout-wheel-right:
+    from: lookout-wheel-shade
+    turn:
+      - [spine_03, z, -5]
+      - [neck_01, z, -7]
+      - [head, z, -14]
+
 clips:
   lookout-habit:
     sides: true
@@ -80,3 +105,12 @@ clips:
       - { pose: lookout-stand-shade, hold: 0.2, ramp: 1.4, lead: head }
       - { pose: lookout-stand-lower, hold: 0.1, ramp: 1.2 }
       - { pose: stand, hold: 0.5, ramp: 1.0 }
+
+  lookout-habit-wheel:
+    keys:
+      - { pose: wheel-stand, hold: 0.4 }
+      - { pose: lookout-wheel-shade, hold: 0.4, ramp: 1.4, arc: [0.06, 0.05] }
+      - { pose: lookout-wheel-left, hold: 0.5, ramp: 1.9, lead: head }
+      - { pose: lookout-wheel-right, hold: 0.5, ramp: 2.0, lead: head }
+      - { pose: lookout-wheel-shade, hold: 0.2, ramp: 1.4, lead: head }
+      - { pose: wheel-stand, hold: 0.5, ramp: 1.5, arc: [0.08, 0.0] }

@@ -87,6 +87,26 @@ stage:
     sheet: [0.3, 0.3, 0.3]
     tiller-hiking: [-0.3, 0.05, 0.22]
     sheet-hiking: [0.3, 0.12, 0.28]
+  # The ship's helm, where the sailor stands at a wheel (build/stage.py's
+  # Wheel): the point the helmsman stands at, between the feet on a flat
+  # deck (set this far forward of the dinghy, clear of it); the hub this
+  # far ahead of it and up from the deck, its axle fore and aft; the rim,
+  # the spokes (the first straight up at rest) and their handles beyond the
+  # rim, as the ship's model is built; and where the hands hold the
+  # spokes, each the spoke's angle from the top (degrees, to starboard as
+  # the helmsman sees it) and how far out along it from the hub. The clips
+  # placed here are placed from the helmsman's point, as the game places
+  # them from the model's `sailor` node.
+  wheel:
+    at: [0.0, 12.0, 0.0]
+    deck: { width: 3.0, length: 3.0, thickness: 0.2 }
+    hub: { ahead: 0.55, up: 1.05 }
+    radius: 0.75
+    spokes: 8
+    handles: 0.15
+    grips:
+      wheel-left: [-45, 0.4]
+      wheel-right: [45, 0.4]
 
 # The portraits (build/portraits.py), every look's taken alike: head and
 # shoulders, three-quarter, the camera on the figure's left at the height

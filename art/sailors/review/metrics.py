@@ -87,9 +87,10 @@ class Gates:
         self.levels.setdefault(level, {})[gate] = {"value": _round(value), "limit": _round(limit), "ok": bool(ok),
                                                    **{k: _round(v) for k, v in detail.items()}}
 
-    def failures(self):
+    def failures(self, levels=None):
         return [f"{self.name} {lv} {g}: {r['value']} (limit {r['limit']})"
-                for lv, gates in self.levels.items() for g, r in gates.items() if not r["ok"]]
+                for lv, gates in self.levels.items() for g, r in gates.items()
+                if not r["ok"] and (levels is None or lv in levels)]
 
 
 # --- Counts and meshes --------------------------------------------------
