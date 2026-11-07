@@ -311,6 +311,9 @@ func Stay(k *Kind, seed uint32) float64 {
 // is met with no boat, s: through from its range to its range, or in,
 // staying and out.
 func (k *Kind) FreeLife(v, stay float64) float64 {
+	if k.Path == PathDrift {
+		return stay
+	}
 	a := k.Arrive(v)
 	if k.Lingers() {
 		return float64(2*a) + stay

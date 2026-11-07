@@ -273,6 +273,9 @@ type LifeEncounter struct {
 	// −1 for none.
 	Boat uint64
 	Slot int32
+	// Over is the encounter on whose patch it comes, 0 for none: the
+	// birds and the dolphins with bait, the flying fish of a ground.
+	Over uint64
 }
 
 // BumpTicks is how many ticks a frame keeps a bump: a second.

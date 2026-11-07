@@ -27,6 +27,7 @@ function group(k: LifeKind, kind: number, boat: boolean, seed = 12345): LifeSeen
   const life = boat ? 2 * a + stay : lingers(k) ? 2 * a + stay : 2 * a;
   return {
     id: 'g',
+    over: '',
     rev: 0,
     kind,
     start: 3000,

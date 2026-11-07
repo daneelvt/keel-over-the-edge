@@ -137,7 +137,8 @@ func TestNothingOnLand(t *testing.T) {
 		byKind[e.Kind]++
 	}
 	for i := range s.kinds {
-		if byKind[uint16(i)] == 0 {
+		// A kind of no rate comes only with another's groups.
+		if byKind[uint16(i)] == 0 && s.kinds[i].Rate > 0 {
 			t.Errorf("no %s in 6,000 slots", s.kinds[i].Name)
 		}
 	}

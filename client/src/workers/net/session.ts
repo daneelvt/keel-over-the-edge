@@ -593,6 +593,7 @@ export function lifeSeen(e: LifeEncounter): LifeSeen {
     count: e.count,
     seed: e.seed,
     with: e.with,
+    over: e.over === 0n ? '' : e.over.toString(),
   };
 }
 

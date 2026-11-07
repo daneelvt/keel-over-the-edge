@@ -11,8 +11,10 @@ import (
 )
 
 // The sea's life is checked here for what the schema cannot say: ranges
-// that run from low to high, a bird with a look to draw it by, and a kind
-// that stays over a patch or with a boat with a stay to keep.
+// that run from low to high, a bird with a look to draw it by and a
+// swimmer with a body, a kind that stays over a patch or with a boat with
+// a stay to keep, a ground with a patch, and the groups a kind brings
+// among the kinds.
 
 // checkLife fails on life values the schema cannot judge.
 func checkLife(doc map[string]any) error {
@@ -37,7 +39,16 @@ func checkLife(doc map[string]any) error {
 		}
 	}
 	ranged("life.dusk", life["dusk"])
+	if flush, _ := life["flush"].(map[string]any); flush != nil {
+		ranged("life.flush.ahead", flush["ahead"])
+	}
 	kinds, _ := life["kinds"].([]any)
+	ids := map[string]bool{}
+	for _, k := range kinds {
+		kind, _ := k.(map[string]any)
+		id, _ := kind["id"].(string)
+		ids[id] = true
+	}
 	for i, k := range kinds {
 		kind, _ := k.(map[string]any)
 		id, _ := kind["id"].(string)
@@ -48,8 +59,28 @@ func checkLife(doc map[string]any) error {
 		if kind["form"] == "bird" && kind["look"] == nil {
 			bad("%s: a bird with no look", where)
 		}
+		if f := kind["form"]; f != "bird" && f != "bait" && f != "glow" && kind["swim"] == nil {
+			bad("%s: a swimmer with no swim to draw it by", where)
+		}
+		if swim, _ := kind["swim"].(map[string]any); swim != nil {
+			for _, r := range []string{"spins", "glide", "breaths", "dive"} {
+				ranged(where+".swim."+r, swim[r])
+			}
+		}
+		ranged(where+".patch", kind["patch"])
+		if (kind["binds"] == "flush" || kind["form"] == "bait") && kind["patch"] == nil {
+			bad("%s: a ground or a boil with no patch", where)
+		}
+		brings, _ := kind["brings"].([]any)
+		for j, b := range brings {
+			bring, _ := b.(map[string]any)
+			ranged(fmt.Sprintf("%s.brings[%d].count", where, j), bring["count"])
+			if other, _ := bring["kind"].(string); !ids[other] || other == id {
+				bad("%s.brings[%d]: %v is not another of the life's kinds", where, j, bring["kind"])
+			}
+		}
 		_, binds := kind["binds"]
-		if p := kind["path"]; p == "soar" || p == "work" || binds {
+		if p := kind["path"]; p == "soar" || p == "work" || p == "stay" || p == "drift" || binds {
 			if st, _ := kind["stay"].([]any); len(st) == 2 && !(num(st[1]) > 0) {
 				bad("%s: stays over a patch or with a boat, with no stay", where)
 			}

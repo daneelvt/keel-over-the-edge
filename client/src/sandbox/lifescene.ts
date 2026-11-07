@@ -80,5 +80,6 @@ export function lifeScene(
     count: Math.max(lo, Math.ceil((lo + hi) / 2)),
     seed: hash32((kind + 1) * 7919 + n),
     with: follows ? 1 : 0,
+    over: '',
   };
 }

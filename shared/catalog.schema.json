@@ -4276,8 +4276,16 @@
       "description": "The sea's life: the kinds of animal met at sea, and the schedule that says where and when each is met. The server draws it from the world's seed, the place, the time, the habitat there and the weather; every player near is told of each encounter.",
       "type": "object",
       "additionalProperties": false,
-      "required": ["cell", "slot", "lulls", "quiet", "bind", "drop", "dusk", "rainy", "habitat", "sea", "towns", "kinds"],
+      "required": ["art", "cell", "slot", "lulls", "quiet", "bind", "ride", "flush", "drop", "dusk", "rainy", "habitat", "sea", "towns", "kinds"],
       "properties": {
+        "art": {
+          "title": "LifeArt",
+          "description": "The bodies of the life in the water, one model each.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["model"],
+          "properties": { "model": { "$ref": "#/$defs/ArtPath" } }
+        },
         "cell": { "description": "The schedule's cells' side, in m.", "type": "number", "minimum": 100, "maximum": 10000 },
         "slot": { "description": "The schedule's slots of world time, in s.", "type": "integer", "minimum": 1, "maximum": 3600 },
         "lulls": {
@@ -4305,6 +4313,31 @@
             "speed": { "description": "In m/s.", "type": "number", "minimum": 0, "maximum": 20 },
             "steady": { "description": "In s.", "type": "number", "minimum": 0, "maximum": 600 },
             "turn": { "description": "A course is steady while the heading stays within this of where it was, in degrees.", "type": "number", "minimum": 1, "maximum": 180 }
+          }
+        },
+        "ride": {
+          "title": "LifeRide",
+          "description": "When a group riding a boat's bow leaves it at once: the boat slower than this, in m/s, or turned more than this from its heading as the ride began, in degrees.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["slower", "turn"],
+          "properties": {
+            "slower": { "type": "number", "minimum": 0, "maximum": 20 },
+            "turn": { "type": "number", "minimum": 1, "maximum": 180 }
+          }
+        },
+        "flush": {
+          "title": "LifeFlush",
+          "description": "How a boat sailing through a ground flushes its fish: every so many s, by a draw of the boat, the ground and that slot, at this chance, if it sails at the bind's speed or faster; the fish come up this long after, this far ahead of its bow and up to this far either side of its course, in m.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["every", "chance", "lead", "ahead", "beside"],
+          "properties": {
+            "every": { "type": "number", "minimum": 0.5, "maximum": 60 },
+            "chance": { "type": "number", "minimum": 0, "maximum": 1 },
+            "lead": { "type": "number", "minimum": 0, "maximum": 10 },
+            "ahead": { "type": "array", "minItems": 2, "maxItems": 2, "items": { "type": "number", "minimum": 0, "maximum": 200 } },
+            "beside": { "type": "number", "minimum": 0, "maximum": 200 }
           }
         },
         "drop": { "description": "An encounter sent is dropped once the eye is this far beyond its reach, in m.", "type": "number", "minimum": 0, "maximum": 5000 },
@@ -4356,6 +4389,10 @@
         "family": { "$ref": "#/$defs/LifeFamily" },
         "path": { "$ref": "#/$defs/LifePath" },
         "binds": { "$ref": "#/$defs/LifeBinds" },
+        "over": { "$ref": "#/$defs/LifeOver" },
+        "brings": { "description": "The groups that come with it, on its patch, from its start to its end.", "type": "array", "items": { "$ref": "#/$defs/LifeBring" } },
+        "patch": { "description": "How far its patch reaches from its middle, the least and the most, in m: a ground of flying fish, a boil of bait.", "type": "array", "minItems": 2, "maxItems": 2, "items": { "type": "number", "minimum": 0, "maximum": 5000 } },
+        "collective": { "description": "What a group of it is called, as a pod of dolphins.", "type": "string" },
         "dives": { "description": "Its plunges, each bird a minute.", "type": "number", "minimum": 0, "maximum": 60 },
         "line": { "description": "Whether a group flies in a line, one behind another.", "type": "boolean" },
         "homeward": { "description": "Whether at dusk it heads for the nearest colony, or the nearest land without one.", "type": "boolean" },
@@ -4394,9 +4431,54 @@
         "stay": { "description": "How long it stays over its patch or with a boat, the least and the most, in s.", "type": "array", "minItems": 2, "maxItems": 2, "items": { "type": "number", "minimum": 0, "maximum": 86400 } },
         "speed": { "description": "How fast it goes, the least and the most, in m/s.", "type": "array", "minItems": 2, "maxItems": 2, "items": { "type": "number", "minimum": 0, "maximum": 100 } },
         "height": { "description": "How high it flies, the least and the most, in m.", "type": "array", "minItems": 2, "maxItems": 2, "items": { "type": "number", "minimum": -500, "maximum": 2000 } },
-        "range": { "description": "How far out it comes from and goes to, in m.", "type": "number", "minimum": 600, "maximum": 5000 },
+        "range": { "description": "How far out it comes from and goes to, in m.", "type": "number", "minimum": 0, "maximum": 5000 },
         "reach": { "description": "It is drawn within this, in m.", "type": "number", "minimum": 100, "maximum": 5000 },
-        "look": { "$ref": "#/$defs/BirdLook" }
+        "look": { "$ref": "#/$defs/BirdLook" },
+        "swim": { "$ref": "#/$defs/SwimLook" }
+      }
+    },
+    "LifeOver": {
+      "title": "LifeOver",
+      "description": "How it moves over the patch of a group it comes with, if not by its own path: working it, or staying over it.",
+      "type": "string", "enum": ["work", "stay"]
+    },
+    "LifeBring": {
+      "title": "LifeBring",
+      "description": "A group that comes with another: its kind, by its id; the share of the other's groups it comes with; and how many in it.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "share", "count"],
+      "properties": {
+        "kind": { "type": "string", "pattern": "^[a-z][a-z0-9-]*$" },
+        "share": { "type": "number", "minimum": 0, "maximum": 1 },
+        "count": { "type": "array", "minItems": 2, "maxItems": 2, "items": { "type": "integer", "minimum": 1, "maximum": 1000 } }
+      }
+    },
+    "LifeBody": {
+      "title": "LifeBody",
+      "description": "A body of the life in the water, a model in the life's art.",
+      "type": "string", "enum": ["dolphin", "turtle", "flyingfish", "tarpon"]
+    },
+    "SwimLook": {
+      "title": "SwimLook",
+      "description": "How an animal in the water looks and moves: its body, scaled to its length; its back's and belly's colours; its tail's or flippers' beats; its leaps a minute and the spins in each; a glider's glides; its breaths at each surfacing and its dives between them; and what is heard of it.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["body", "length", "back", "belly", "beat", "depth", "call"],
+      "properties": {
+        "body": { "$ref": "#/$defs/LifeBody" },
+        "length": { "description": "Its length, in m.", "type": "number", "minimum": 0.05, "maximum": 40 },
+        "back": { "$ref": "#/$defs/Colour" },
+        "belly": { "$ref": "#/$defs/Colour" },
+        "beat": { "description": "Its tail's or flippers' beats, in Hz.", "type": "number", "minimum": 0.05, "maximum": 60 },
+        "depth": { "description": "How deep it swims between its breaths, in m.", "type": "number", "minimum": 0, "maximum": 50 },
+        "leaps": { "description": "Its leaps clear of the water, each animal a minute.", "type": "number", "minimum": 0, "maximum": 60 },
+        "spins": { "description": "The spins in a leap, the least and the most.", "type": "array", "minItems": 2, "maxItems": 2, "items": { "type": "integer", "minimum": 0, "maximum": 10 } },
+        "glide": { "description": "A glide's length, the least and the most, in m.", "type": "array", "minItems": 2, "maxItems": 2, "items": { "type": "number", "minimum": 1, "maximum": 1000 } },
+        "linked": { "description": "The longest glides linked one after another, in m.", "type": "number", "minimum": 1, "maximum": 1000 },
+        "breaths": { "description": "Its breaths at each surfacing, the least and the most.", "type": "array", "minItems": 2, "maxItems": 2, "items": { "type": "integer", "minimum": 1, "maximum": 50 } },
+        "dive": { "description": "How long it is down between surfacings, the least and the most, in s.", "type": "array", "minItems": 2, "maxItems": 2, "items": { "type": "number", "minimum": 1, "maximum": 7200 } },
+        "call": { "description": "What is heard of it: its breath, or nothing but its splashes.", "type": "string", "enum": ["breath", "silent"] }
       }
     },
     "ColonyBirds": {
@@ -4422,13 +4504,13 @@
     },
     "LifePath": {
       "title": "LifePath",
-      "description": "How it moves when it is with no boat: passing through, soaring in circles, skimming the swell in arcs, or working a patch of water.",
-      "type": "string", "enum": ["pass", "soar", "skim", "work"]
+      "description": "How it moves when it is with no boat: passing through, soaring in circles, skimming the swell in arcs, working a patch of water, staying about its patch, or drifting from where it began.",
+      "type": "string", "enum": ["pass", "soar", "skim", "work", "stay", "drift"]
     },
     "LifeBinds": {
       "title": "LifeBinds",
-      "description": "What it does with a boat it meets, if anything: follows its stern.",
-      "type": "string", "enum": ["follow"]
+      "description": "What it does with a boat it meets, if anything: follows its stern, rides its bow, or, a ground of fish, is flushed by every boat sailing through it.",
+      "type": "string", "enum": ["follow", "ride", "flush"]
     },
     "BirdLook": {
       "title": "BirdLook",

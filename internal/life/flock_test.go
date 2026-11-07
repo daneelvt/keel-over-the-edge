@@ -73,9 +73,15 @@ func TestFlocks(t *testing.T) {
 		if c.Pose != nil {
 			ref = [2]float64{c.Pose.X, c.Pose.Y}
 		}
+		// A kind that comes from nowhere far (a drifting boil, a ground of
+		// fish) is under the water or nothing until it is near.
+		far := math.Min(600, 0.9*kind.Range)
+		if kind.PathOf(e) == PathDrift || !(far > 0) {
+			continue
+		}
 		for _, tick := range []float64{float64(e.Start), float64(e.End - 1)} {
 			x, y, _, _ := FlockAt(e, kind, tick, c.Pose)
-			if d := math.Hypot(x-ref[0], y-ref[1]); d < 600 {
+			if d := math.Hypot(x-ref[0], y-ref[1]); d < far {
 				t.Errorf("%s at tick %.0f of %d–%d is %.0f m from where it is met", kind.Name, tick, e.Start, e.End, d)
 			}
 		}

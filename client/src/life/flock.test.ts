@@ -22,6 +22,7 @@ interface Record {
   Count: number;
   Seed: number;
   Boat: number;
+  Over?: number;
 }
 
 interface Case {
@@ -60,6 +61,7 @@ describe('flockAt', () => {
       count: r.Count,
       seed: r.Seed,
       with: r.Boat === 0 ? 0 : 1,
+      over: r.Over === undefined || r.Over === 0 ? '' : String(r.Over),
     };
     const pose =
       c.pose === undefined ? null : { east: c.pose.X, north: c.pose.Y, heading: c.pose.Heading };

@@ -186,7 +186,7 @@ function played(c: Case, look: number): Played[] {
     out.push({ kind: e.kind, at: e.at, level: e.level, pan: e.pan });
   }
   const groups: LifeGroup[] = (c.life ?? []).map((g, i) => ({
-    record: { ...g, id: String(i), rev: 0 },
+    record: { ...g, id: String(i), rev: 0, over: '' },
     kind: catalog.life.kinds[g.kind] as LifeGroup['kind'],
     pose: g.pose,
   }));
