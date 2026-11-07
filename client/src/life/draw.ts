@@ -110,6 +110,11 @@ export class LifeDraw {
   #towns: GullTown[] = [];
   #townsVersion = Number.NaN;
 
+  /** The towns' gulls' wheels, as last found from the towns held. */
+  get towns(): readonly GullTown[] {
+    return this.#towns;
+  }
+
   constructor(life: Life, buildings: readonly BuildingKind[]) {
     this.#life = life;
     this.#kinds = buildings;

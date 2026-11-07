@@ -58,6 +58,7 @@ import type { BoatDriver } from '../game/driver';
 import { type DrawnBoat, newDrawnBoat } from '../game/fleet';
 import type { Game } from '../game/game';
 import type { LifeBird } from '../life/draw';
+import type { GullTown } from '../life/gulls';
 import { nowUs, worldUs } from '../net/clock';
 import type { BumpTold, ChartEntry, ChartSubject, LifeSeen } from '../net/messages';
 import type { Online } from '../net/online';
@@ -1909,9 +1910,17 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
      * gulls; and every bird in the birds' one draw, colonies' too, with its
      * draws (0 or 1).
      */
-    life(): { records: LifeSeen[]; birds: number; gulls: number; drawn: number; draws: number } {
+    life(): {
+      records: LifeSeen[];
+      birds: number;
+      gulls: number;
+      drawn: number;
+      draws: number;
+      towns: GullTown[];
+    } {
       const s = world.lifeDraw.stats;
       return {
+        towns: world.lifeDraw.towns.map((t) => ({ ...t })),
         records: [...world.life.values()],
         birds: s.birds,
         gulls: s.gulls,
