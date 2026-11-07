@@ -92,6 +92,7 @@ func Digest(f *bus.Frame) uint64 {
 		if l := f.Look[s]; l != 0 {
 			h.u64(uint64(l) << 16)
 		}
+		h.boatLook(f.BoatLook[s], f.BoatName[s])
 	}
 	for _, q := range f.Queue {
 		for _, b := range q.Account {
@@ -109,6 +110,7 @@ func Digest(f *bus.Frame) uint64 {
 		if q.BoatKind != 0 {
 			h.u64(uint64(q.BoatKind) << 48)
 		}
+		h.boatLook(q.BoatLook, q.BoatName)
 	}
 	for _, p := range f.Pairs {
 		h.u64(uint64(p.A))
@@ -159,6 +161,18 @@ func (h *fnv) sea(areas []physics.SeaInput) {
 		h.u64(uint64(uint32(areas[i].CurrentEast)))
 		h.u64(uint64(uint32(areas[i].CurrentNorth)))
 		i = j
+	}
+}
+
+// boatLook hashes a boat's own look and name once it has either, so a
+// world of boats with none hashes as before.
+func (h *fnv) boatLook(look uint32, name string) {
+	if look == 0 && name == "" {
+		return
+	}
+	h.u64(uint64(look) << 24)
+	for i := range len(name) {
+		h.byte(name[i])
 	}
 }
 

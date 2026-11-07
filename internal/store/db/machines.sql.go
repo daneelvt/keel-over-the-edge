@@ -40,16 +40,17 @@ func (q *Queries) CountMachines(ctx context.Context, ownerID pgtype.UUID) (int64
 }
 
 const createBoat = `-- name: CreateBoat :exec
-INSERT INTO boat (account_id, kind) VALUES ($1, $2)
+INSERT INTO boat (account_id, kind, number) VALUES ($1, $2, $3)
 `
 
 type CreateBoatParams struct {
 	AccountID pgtype.UUID
 	Kind      string
+	Number    int32
 }
 
 func (q *Queries) CreateBoat(ctx context.Context, arg CreateBoatParams) error {
-	_, err := q.db.Exec(ctx, createBoat, arg.AccountID, arg.Kind)
+	_, err := q.db.Exec(ctx, createBoat, arg.AccountID, arg.Kind, arg.Number)
 	return err
 }
 

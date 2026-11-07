@@ -82,7 +82,7 @@ func fillFleet(ctx context.Context, q *db.Queries, owner AccountID, kind string,
 		return err
 	}
 	for ; have < sailors; have++ {
-		if err := q.CreateBoat(ctx, db.CreateBoatParams{AccountID: uuidOf(owner), Kind: kind}); err != nil {
+		if err := createBoat(ctx, q, owner, kind); err != nil {
 			return err
 		}
 	}

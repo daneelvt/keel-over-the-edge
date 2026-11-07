@@ -84,6 +84,16 @@ type conn struct {
 	// of the boat its snapshots are about, as the client was last told.
 	look, toldLook uint32
 	toldLamp       pb.Lamp
+	// joinBoat is the fleet's boat the account takes to sea, as it joins:
+	// its kind, look and name. toldKind, toldBoatLook and toldBoatName
+	// are those of the boat its snapshots are about, as the client was
+	// last told; toldNames the names of the boats in its view, by view
+	// slot, as the client was last told them: the encoder's.
+	joinBoat     Boat
+	toldKind     uint16
+	toldBoatLook uint32
+	toldBoatName string
+	toldNames    [protocol.ViewSlots]toldName
 
 	// The control slot's writer, stopped once another connection has
 	// taken the boat over: a word is stored only under wmu while not
@@ -361,7 +371,8 @@ func (c *conn) join() bool {
 		c.wmu.Unlock()
 		return false
 	}
-	err := e.cfg.Bus.Commands.Players().TrySend(bus.Command{Op: bus.Join, Account: c.account, Conn: c.id, Priority: c.priority, Look: c.look, Reply: reply})
+	err := e.cfg.Bus.Commands.Players().TrySend(bus.Command{Op: bus.Join, Account: c.account, Conn: c.id, Priority: c.priority, Look: c.look,
+		BoatKind: c.joinBoat.Kind, BoatLook: c.joinBoat.Look, BoatName: c.joinBoat.Name, Reply: reply})
 	c.wmu.Unlock()
 	if err != nil {
 		e.m.join[joinBusy].Inc()

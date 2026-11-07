@@ -58,12 +58,16 @@ type Frame struct {
 	Machine  []bool
 	Priority []bool
 	// Look is per slot its sailor's look: a look code (internal/looks).
-	Look    []uint32
-	Control []Word // per slot: the controls in force: the helm and sheet, the autopilot's and the rig's
-	Pilot   []PilotWord
-	Rig     []RigWord
-	State   []physics.State
-	Sail    []uint8 // per slot: physics.SailByte of the boat's last step, for drawing
+	// BoatLook is the boat's own look, its paint, cloth and sail number (a
+	// boat look code), and BoatName its name, player text, "" for none.
+	Look     []uint32
+	BoatLook []uint32
+	BoatName []string
+	Control  []Word // per slot: the controls in force: the helm and sheet, the autopilot's and the rig's
+	Pilot    []PilotWord
+	Rig      []RigWord
+	State    []physics.State
+	Sail     []uint8 // per slot: physics.SailByte of the boat's last step, for drawing
 	// Course is per slot what the Articles keep of a boat between ticks.
 	Course []physics.Course
 	// Voyage is per slot what the edge keeps of a boat's voyage: whether
@@ -259,11 +263,14 @@ type Waiting struct {
 	// at, unless its account joins first; 0 while connected.
 	Grace int64
 	// Machine and Priority are its account's kind, as the Join gave it,
-	// Look its sailor's look and BoatKind the kind of boat it is to have.
+	// Look its sailor's look and BoatKind the kind of boat it is to have,
+	// BoatLook and BoatName that boat's own look and name.
 	Machine  bool
 	Priority bool
 	Look     uint32
 	BoatKind uint16
+	BoatLook uint32
+	BoatName string
 }
 
 // QueuePlace is the place in the queue of q[i] among those of its kind, human
@@ -362,6 +369,8 @@ func NewFrame(capacity int) *Frame {
 		Machine:  make([]bool, capacity),
 		Priority: make([]bool, capacity),
 		Look:     make([]uint32, capacity),
+		BoatLook: make([]uint32, capacity),
+		BoatName: make([]string, capacity),
 		Control:  make([]Word, capacity),
 		Pilot:    make([]PilotWord, capacity),
 		Rig:      make([]RigWord, capacity),

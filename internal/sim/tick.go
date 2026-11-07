@@ -81,6 +81,7 @@ func (w *World) inputs() {
 		next.Grace[s] = cur.Grace[s]
 		next.Kind[s] = cur.Kind[s]
 		next.Machine[s], next.Priority[s], next.Look[s] = cur.Machine[s], cur.Priority[s], cur.Look[s]
+		next.BoatLook[s], next.BoatName[s] = cur.BoatLook[s], cur.BoatName[s]
 		next.Control[s] = cur.Control[s]
 		next.Pilot[s] = cur.Pilot[s]
 		next.Rig[s] = cur.Rig[s]

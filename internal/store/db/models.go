@@ -62,6 +62,11 @@ type Boat struct {
 	AccountID pgtype.UUID
 	Kind      string
 	MadeAt    time.Time
+	Sailor    pgtype.UUID
+	Paint     int16
+	Cloth     int16
+	Number    int32
+	Name      pgtype.Text
 }
 
 type Charting struct {

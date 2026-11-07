@@ -25,7 +25,7 @@ SELECT count(*) FROM account WHERE owner_id = @owner_id AND kind = 'ai';
 SELECT count(*) FROM boat WHERE account_id = @account_id AND kind = @kind;
 
 -- name: CreateBoat :exec
-INSERT INTO boat (account_id, kind) VALUES (@account_id, @kind);
+INSERT INTO boat (account_id, kind, number) VALUES (@account_id, @kind, @number);
 
 -- name: Fleet :many
 -- A human account's boats, by kind: how many of each.

@@ -125,7 +125,7 @@ func (w *World) join(c *bus.Command) bus.Reply {
 	// The newcomer waits at the tail, and gets the next boat at once if
 	// admission would give it to them.
 	f.Queue = append(f.Queue, bus.Waiting{Account: account, Conn: conn, Since: f.Tick, Machine: c.Machine, Priority: c.Priority,
-		Look: c.Look, BoatKind: w.kindOf(c.BoatKind)})
+		Look: c.Look, BoatKind: w.kindOf(c.BoatKind), BoatLook: c.BoatLook, BoatName: c.BoatName})
 	last := len(f.Queue) - 1
 	if !f.Held && w.nextAdmitted(f, machines(f)) == last {
 		q := f.Queue[last]
@@ -163,7 +163,7 @@ func (w *World) admit() {
 		f.Grace[s] = q.Grace
 		r := bus.Reply{Result: bus.Admitted, Slot: s, Boat: f.Boat[s], Gen: f.Gen[s], Tick: f.Tick, Since: q.Since}
 		f.Events = append(f.Events, bus.Event{Command: bus.Command{Op: bus.Join, Account: q.Account, Conn: q.Conn,
-			Machine: q.Machine, Priority: q.Priority, Look: q.Look, BoatKind: q.BoatKind}, Reply: r})
+			Machine: q.Machine, Priority: q.Priority, Look: q.Look, BoatKind: q.BoatKind, BoatLook: q.BoatLook, BoatName: q.BoatName}, Reply: r})
 	}
 }
 
@@ -193,6 +193,7 @@ func (w *World) newBoat(q *bus.Waiting) int32 {
 	f.Grace[s] = 0
 	f.Kind[s] = q.BoatKind
 	f.Machine[s], f.Priority[s], f.Look[s] = q.Machine, q.Priority, q.Look
+	f.BoatLook[s], f.BoatName[s] = q.BoatLook, q.BoatName
 	f.State[s] = w.spawn(f, s)
 	f.Control[s] = bus.Pack(0, bus.Steps/2, w.startSheet(f, s), gen)
 	f.Pilot[s] = bus.PilotOffWord(gen)

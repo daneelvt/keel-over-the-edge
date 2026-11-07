@@ -12,6 +12,7 @@ import (
 
 	"github.com/daneelvt/keel-over-the-edge/internal/accounts"
 	"github.com/daneelvt/keel-over-the-edge/internal/auth"
+	"github.com/daneelvt/keel-over-the-edge/internal/fleet"
 	"github.com/daneelvt/keel-over-the-edge/internal/looks"
 	"github.com/daneelvt/keel-over-the-edge/internal/moderation"
 	"github.com/daneelvt/keel-over-the-edge/internal/oauth"
@@ -56,8 +57,13 @@ type Config struct {
 	Looks    *looks.Book
 	LookSeat LookSeat
 	// Boat is the kind of boat each sailor brings to its account's fleet,
-	// the catalog's.
-	Boat string
+	// the catalog's, and SharedBoats the kinds an account has one of, for
+	// its sailors to share.
+	Boat        string
+	SharedBoats []string
+	// Fleet, if not nil, is the accounts' fleets: the boats a player may
+	// take, and their looks.
+	Fleet *fleet.Fleet
 	// OAuth, if not nil, is the authorization server AI apps sign in with,
 	// whose routes this serves; Grants is the MCP address's check, told
 	// of every grant ended here. MCP is the MCP address, Lifetime how long
@@ -173,6 +179,11 @@ func Handler(cfg Config) http.Handler {
 	mux.Handle("POST /api/account/delete", required(a.deleteAccount))
 	if cfg.Looks != nil {
 		mux.Handle("POST /api/sailor/look", required(a.setLook))
+	}
+	if cfg.Fleet != nil {
+		mux.Handle("GET /api/fleet", required(a.fleet))
+		mux.Handle("POST /api/boat", required(a.takeBoat))
+		mux.Handle("POST /api/boat/look", required(a.setBoatLook))
 	}
 	if cfg.Machines != nil {
 		mux.Handle("GET /api/machines", required(a.machines))

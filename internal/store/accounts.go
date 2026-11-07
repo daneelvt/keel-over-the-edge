@@ -87,9 +87,11 @@ type NewAccount struct {
 	Passkey      Passkey
 	RecoveryHash [32]byte
 	TokenHash    [32]byte
-	// Boat is the kind of its fleet's first boat, the catalog's; none
-	// when empty.
-	Boat string
+	// Boat is the kind of its fleet's first boat, the catalog's, one for
+	// each sailor; none when empty. Shared are the kinds the account has
+	// one of, for its sailors to share.
+	Boat   string
+	Shared []string
 }
 
 var (
@@ -142,6 +144,11 @@ func (s *Store) CreateAccount(ctx context.Context, a NewAccount) (AccountID, err
 		}
 		if a.Boat != "" {
 			if err := fillFleet(ctx, q, id, a.Boat, 1); err != nil {
+				return err
+			}
+		}
+		for _, kind := range a.Shared {
+			if err := fillFleet(ctx, q, id, kind, 1); err != nil {
 				return err
 			}
 		}

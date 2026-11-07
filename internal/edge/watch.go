@@ -322,10 +322,11 @@ func (c *conn) welcomeWatch(f *bus.Frame) bool {
 	s := c.w.slot
 	wt, _ := e.cfg.Clock.WorldTime()
 	c.toldLook = f.Look[s]
+	c.toldBoat(f, s)
 	c.rmu.Lock()
 	ok := c.send(&pb.ServerMessage{Body: &pb.ServerMessage_Welcome{Welcome: &pb.Welcome{
 		World: e.cfg.World, Tick: f.Tick, WorldTimeUs: wt.Microseconds(),
-		Boat: c.w.boat, Kind: uint32(f.Kind[s]), Look: c.toldLook,
+		Boat: c.w.boat, Kind: uint32(f.Kind[s]), Look: c.toldLook, BoatLook: c.toldBoatLook, BoatName: c.toldBoatName,
 		EpochUs: e.cfg.Epoch.UnixMicro(), Land: e.cfg.Land, Circulation: e.cfg.Circulation, Harbour: e.cfg.Harbour,
 		Tools: c.tools.Load(), Light: e.cfg.MainLight, EndsUs: e.endsUs.Load(), ClosingUs: e.closingUs.Load(), Zone: e.cfg.Zone,
 		Watching: &pb.Watching{Sailor: c.w.target.Name, Machine: c.w.target.Machine(), Mine: c.w.mine, Look: c.toldLook},

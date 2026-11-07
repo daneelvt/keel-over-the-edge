@@ -35,6 +35,7 @@ import (
 	"github.com/daneelvt/keel-over-the-edge/internal/catalog"
 	"github.com/daneelvt/keel-over-the-edge/internal/config"
 	"github.com/daneelvt/keel-over-the-edge/internal/edge"
+	"github.com/daneelvt/keel-over-the-edge/internal/fleet"
 	"github.com/daneelvt/keel-over-the-edge/internal/forecast"
 	"github.com/daneelvt/keel-over-the-edge/internal/jobs"
 	"github.com/daneelvt/keel-over-the-edge/internal/looks"
@@ -184,6 +185,7 @@ type database interface {
 	api.Notices
 	owner.Accounts
 	watch.Store
+	fleet.Store
 	WatchTarget(ctx context.Context, key string) (store.WatchTarget, error)
 	Stats() store.PoolStats
 	Close()
@@ -439,6 +441,7 @@ func runServer(ctx context.Context, getenv func(string) string, stdout io.Writer
 		replayRoutes: replayHandler, devRoutes: weatherHandler, ownerRoutes: ownerHandler, playRoutes: &lateHandler{},
 		fail: make(chan error, 1), making: make(chan struct{}, 1),
 	}
+	p.fleet = fleet.New(fleet.Config{Store: db, Catalog: cat, World: p.worldBus, Log: log})
 	p.registerWorldMetrics()
 	// The accounts stopped, before anyone is let in.
 	stopped, err := accounts.Load(ctx, db)

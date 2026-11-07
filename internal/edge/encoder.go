@@ -357,6 +357,7 @@ func (c *conn) welcome(f *bus.Frame) bool {
 	c.wmu.Unlock()
 	c.toldWatchers = 0
 	c.toldLook = f.Look[s]
+	c.toldBoat(f, s)
 	wt, _ := e.cfg.Clock.WorldTime()
 	// Under rmu, so that a Tools for a change of the flag after this one
 	// read it comes after it.
@@ -366,7 +367,7 @@ func (c *conn) welcome(f *bus.Frame) bool {
 		Boat: c.boat, Kind: uint32(f.Kind[s]), Rejoined: c.rejoined,
 		EpochUs: e.cfg.Epoch.UnixMicro(), Land: e.cfg.Land, Circulation: e.cfg.Circulation, Harbour: e.cfg.Harbour,
 		Tools: c.tools.Load(), Light: e.cfg.MainLight, EndsUs: e.endsUs.Load(), ClosingUs: e.closingUs.Load(), Zone: e.cfg.Zone,
-		Look: c.toldLook,
+		Look: c.toldLook, BoatLook: c.toldBoatLook, BoatName: c.toldBoatName,
 	}}}, outWelcome)
 	ok = ok && c.firstChart()
 	c.rmu.Unlock()
@@ -402,6 +403,9 @@ func (enc *encoder) encode(c *conn, f *bus.Frame) {
 			return
 		}
 	}
+	if f.Kind[s] != c.toldKind && !c.swapped(f) {
+		return
+	}
 	x, y, chunks := f.State[s].X, f.State[s].Y, c.e.cfg.Chunks
 	if p := c.eye.Load(); p != nil {
 		x, y = p.x, p.y
@@ -429,7 +433,8 @@ func (enc *encoder) encode(c *conn, f *bus.Frame) {
 	}
 	// The weather, the sea, the land's chunks and the bumps first: they are
 	// queued, and what is queued goes out before the snapshot.
-	if !c.weather(f) || !c.seaAreas(f, x, y) || !c.chunks(chunks, x, y) || !c.bumps(f, next, s, boat) || !c.lookOf(f, s) {
+	if !c.weather(f) || !c.seaAreas(f, x, y) || !c.chunks(chunks, x, y) || !c.bumps(f, next, s, boat) || !c.lookOf(f, s) ||
+		!c.boatLookOf(f, s) || !c.boatNames(f, next) {
 		return
 	}
 	b = b[:protocol.MaxHeaderSize]
@@ -466,6 +471,66 @@ func (c *conn) lookOf(f *bus.Frame, s int32) bool {
 		return c.send(&pb.ServerMessage{Body: &pb.ServerMessage_LookChanged{LookChanged: &pb.LookChanged{Look: l}}}, outLook)
 	}
 	return true
+}
+
+// swapped welcomes c again to the boat in slot s of f, its own or the one
+// it watches, swapped in port for a boat of another kind: the boat it now
+// is, its snapshots afresh.
+func (c *conn) swapped(f *bus.Frame) bool {
+	if c.w.on {
+		return c.welcomeWatch(f)
+	}
+	c.wmu.Lock()
+	c.rejoined = true
+	c.wmu.Unlock()
+	return c.welcome(f)
+}
+
+// toldBoat notes the boat in slot s of f as a Welcome tells it: its kind,
+// look and name; and that the client holds no boats' names, as a Welcome
+// clears them.
+func (c *conn) toldBoat(f *bus.Frame, s int32) {
+	c.toldKind, c.toldBoatLook, c.toldBoatName = f.Kind[s], f.BoatLook[s], f.BoatName[s]
+	c.toldNames = [protocol.ViewSlots]toldName{}
+}
+
+// boatLookOf tells c that the boat in slot s of f, its own or the one it
+// watches, was given a new look or name in port, if it was since it was
+// last told.
+func (c *conn) boatLookOf(f *bus.Frame, s int32) bool {
+	if l, n := f.BoatLook[s], f.BoatName[s]; l != c.toldBoatLook || n != c.toldBoatName {
+		c.toldBoatLook, c.toldBoatName = l, n
+		return c.send(&pb.ServerMessage{Body: &pb.ServerMessage_BoatLookChanged{BoatLookChanged: &pb.BoatLookChanged{Look: l, Name: n}}}, outBoatLook)
+	}
+	return true
+}
+
+// boatNames tells c the names of the boats in its view v of f that it has
+// not been told: of each boat in the near band once, and again if it
+// changes. A far boat keeps a name told while it was near; a slot whose
+// told name is not its boat's is told it has none.
+func (c *conn) boatNames(f *bus.Frame, v *connView) bool {
+	var names []*pb.BoatName
+	for m := v.view.Used; m != 0; m &= m - 1 {
+		vs := bits.TrailingZeros64(m)
+		told := &c.toldNames[vs]
+		boat := v.boat[vs]
+		var name string
+		switch {
+		case !v.view.Boats[vs].Far():
+			name = f.BoatName[v.slot[vs]]
+		case told.boat == boat:
+			name = told.name
+		}
+		if name != told.name {
+			names = append(names, &pb.BoatName{Slot: uint32(vs), Name: name})
+		}
+		told.boat, told.name = boat, name
+	}
+	if len(names) == 0 {
+		return true
+	}
+	return c.send(&pb.ServerMessage{Body: &pb.ServerMessage_BoatNames{BoatNames: &pb.BoatNames{Names: names}}}, outBoatNames)
 }
 
 // bumps sends c the bumps of f after the last it was sent: with the

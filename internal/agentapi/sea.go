@@ -10,6 +10,7 @@ import (
 	"github.com/daneelvt/keel-over-the-edge/internal/bus"
 	"github.com/daneelvt/keel-over-the-edge/internal/catalog"
 	"github.com/daneelvt/keel-over-the-edge/internal/chart"
+	"github.com/daneelvt/keel-over-the-edge/internal/fleet"
 	"github.com/daneelvt/keel-over-the-edge/internal/forecast"
 	sailorlooks "github.com/daneelvt/keel-over-the-edge/internal/looks"
 	"github.com/daneelvt/keel-over-the-edge/internal/physics"
@@ -83,6 +84,10 @@ type Sea struct {
 	// by; nil for none.
 	Looks      *sailorlooks.Book
 	Encounters *physics.EncounterPrepared
+	// Fleet is the accounts' fleets, which a machine sailor takes its boat
+	// from, swaps and changes the look of; nil for none: it sails the kind
+	// each sailor brings, of the first look.
+	Fleet *fleet.Fleet
 
 	overlays overlays
 
