@@ -52,6 +52,7 @@ const (
 	encounterPath  = "shared/catalog/encounters.yaml"
 	worldPath      = "shared/catalog/world.yaml"
 	noticesPath    = "shared/catalog/notices.yaml"
+	lifePath       = "shared/catalog/life.yaml"
 )
 
 // glb is a glTF binary holding only its JSON: nodes of the given names.
@@ -184,6 +185,9 @@ func fixture(t *testing.T, files map[string]string) string {
 	}
 	if _, ok := files[worldPath]; !ok {
 		files[worldPath] = realFile(worldPath)
+	}
+	if _, ok := files[lifePath]; !ok {
+		files[lifePath] = realFile(lifePath)
 	}
 	// The real world's town kits and plants.
 	for _, kit := range []string{"wooded", "tropical", "rocky", "sandy", "volcanic"} {

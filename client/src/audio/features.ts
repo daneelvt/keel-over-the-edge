@@ -26,6 +26,11 @@ export const FEATURE_RECIPES: FeatureRecipes = { waterfall, blowhole, colony };
 /** A colony's call, as its birds' catalog entry names it. */
 export type Call = 'harsh' | 'whistle' | 'rattle';
 
+/** Whether a bird's call is one a colony's recipes voice. */
+export function isColonyCall(c: string): c is Call {
+  return c === 'harsh' || c === 'whistle' || c === 'rattle';
+}
+
 /** What the features sound like from here, now. */
 export interface FeaturesInput {
   /** World time, s; whether the sun is up at the listener. */

@@ -72,6 +72,34 @@ export type FeatureSite1 =
  * A colour, as #rrggbb in sRGB.
  */
 export type Colour4 = string;
+/**
+ * What it is, as the phone draws it.
+ *
+ * This interface was referenced by `Catalog`'s JSON-Schema
+ * via the `definition` "LifeForm".
+ */
+export type LifeForm = "bird" | "glider" | "bait" | "pod" | "turtle" | "whale" | "ray" | "fin" | "glow";
+/**
+ * Its family, whose lull it keeps.
+ *
+ * This interface was referenced by `Catalog`'s JSON-Schema
+ * via the `definition` "LifeFamily".
+ */
+export type LifeFamily = "birds" | "water" | "big" | "night";
+/**
+ * How it moves when it is with no boat: passing through, soaring in circles, skimming the swell in arcs, or working a patch of water.
+ *
+ * This interface was referenced by `Catalog`'s JSON-Schema
+ * via the `definition` "LifePath".
+ */
+export type LifePath = "pass" | "soar" | "skim" | "work";
+/**
+ * What it does with a boat it meets, if anything: follows its stern.
+ *
+ * This interface was referenced by `Catalog`'s JSON-Schema
+ * via the `definition` "LifeBinds".
+ */
+export type LifeBinds = "follow";
 
 /**
  * Every list of kinds in the game. Kinds are data: code reads their properties, never their names.
@@ -130,6 +158,7 @@ export interface Catalog {
   world: World;
   notices: Notices;
   news: News;
+  life: Life;
 }
 /**
  * This interface was referenced by `Catalog`'s JSON-Schema
@@ -7014,25 +7043,34 @@ export interface ColonyBirds {
    * Where they nest.
    */
   nests: ("stack" | "cliff" | "cay" | "trees")[];
+  look: BirdLook;
+}
+/**
+ * How a bird looks, flies and calls: a colony's birds and the birds met at sea alike.
+ *
+ * This interface was referenced by `Catalog`'s JSON-Schema
+ * via the `definition` "BirdLook".
+ */
+export interface BirdLook {
   /**
-   * Their wingspan, in m.
+   * Its wingspan, in m.
    */
   span: number;
   body: Colour3;
   wing: Colour3;
   tip: Colour3;
   /**
-   * Their wingbeats, in Hz.
+   * Its wingbeats, in Hz.
    */
   flap: number;
   /**
-   * The share of the time they glide.
+   * The share of the time it glides.
    */
   glide: number;
   /**
-   * Their call.
+   * Its call; silent for a bird not heard at sea.
    */
-  call: "harsh" | "whistle" | "rattle";
+  call: "harsh" | "whistle" | "rattle" | "laugh" | "tern" | "silent";
 }
 /**
  * Caves, arches and blowholes, cut into cliffed headlands.
@@ -8109,6 +8147,240 @@ export interface NewsColumn {
    */
   of: "charting" | "world";
 }
+/**
+ * The sea's life: the kinds of animal met at sea, and the schedule that says where and when each is met. The server draws it from the world's seed, the place, the time, the habitat there and the weather; every player near is told of each encounter.
+ *
+ * This interface was referenced by `Catalog`'s JSON-Schema
+ * via the `definition` "Life".
+ */
+export interface Life {
+  /**
+   * The schedule's cells' side, in m.
+   */
+  cell: number;
+  /**
+   * The schedule's slots of world time, in s.
+   */
+  slot: number;
+  lulls: LifeLulls;
+  /**
+   * A boat followed, ridden or perched on is not again until this long after, in s.
+   */
+  quiet: number;
+  bind: LifeBind;
+  /**
+   * An encounter sent is dropped once the eye is this far beyond its reach, in m.
+   */
+  drop: number;
+  /**
+   * The sun's height from which dusk and dawn begin to where they end, in degrees.
+   *
+   * @minItems 2
+   * @maxItems 2
+   */
+  dusk: [number, number];
+  /**
+   * Rain this heavy or heavier thins life as its kind's rain says, in mm an hour.
+   */
+  rainy: number;
+  habitat: LifeHabitat;
+  /**
+   * The share of water life seen at each Beaufort force from 0, the last for every force beyond it.
+   *
+   * @minItems 1
+   * @maxItems 13
+   */
+  sea:
+    | [number]
+    | [number, number]
+    | [number, number, number]
+    | [number, number, number, number]
+    | [number, number, number, number, number]
+    | [number, number, number, number, number, number]
+    | [number, number, number, number, number, number, number]
+    | [number, number, number, number, number, number, number, number]
+    | [number, number, number, number, number, number, number, number, number]
+    | [number, number, number, number, number, number, number, number, number, number]
+    | [number, number, number, number, number, number, number, number, number, number, number]
+    | [number, number, number, number, number, number, number, number, number, number, number, number]
+    | [number, number, number, number, number, number, number, number, number, number, number, number, number];
+  /**
+   * The kinds of animal.
+   *
+   * @minItems 1
+   * @maxItems 255
+   */
+  kinds: [LifeKind, ...LifeKind[]];
+}
+/**
+ * How long after an encounter of a family begins no other of the family begins in its cell or the eight about it, in s.
+ */
+export interface LifeLulls {
+  birds: number;
+  water: number;
+  big: number;
+  night: number;
+}
+/**
+ * Which boat a group that follows boats takes as it begins: the nearest within this, sailing this fast or faster on a course steady this long.
+ */
+export interface LifeBind {
+  /**
+   * In m.
+   */
+  within: number;
+  /**
+   * In m/s.
+   */
+  speed: number;
+  /**
+   * In s.
+   */
+  steady: number;
+  /**
+   * A course is steady while the heading stays within this of where it was, in degrees.
+   */
+  turn: number;
+}
+/**
+ * Where each habitat is.
+ */
+export interface LifeHabitat {
+  /**
+   * Water within this of a town is its harbour, in m.
+   */
+  harbour: number;
+  /**
+   * Water within this of a reef or a lagoon is the reef's, in m.
+   */
+  reef: number;
+  /**
+   * Water shallower than this is the shelf, deeper the deep, in m.
+   */
+  shelf: number;
+  /**
+   * Water this far from the centre or further is the outer water, in m.
+   */
+  outer: number;
+  /**
+   * Within this of a colony a kind's nearColony counts, in m.
+   */
+  colony: number;
+  /**
+   * The habitat's field's cells' side, built as the world loads, in m.
+   */
+  field: number;
+}
+/**
+ * A kind of animal met at sea: what it is and how it moves, where and when it is met, and how often.
+ *
+ * This interface was referenced by `Catalog`'s JSON-Schema
+ * via the `definition` "LifeKind".
+ */
+export interface LifeKind {
+  id: string;
+  name: string;
+  /**
+   * Its name for more than one.
+   */
+  plural: string;
+  form: LifeForm;
+  family: LifeFamily;
+  path: LifePath;
+  binds?: LifeBinds;
+  /**
+   * Its plunges, each bird a minute.
+   */
+  dives?: number;
+  /**
+   * Whether a group flies in a line, one behind another.
+   */
+  line?: boolean;
+  /**
+   * Whether at dusk it heads for the nearest colony, or the nearest land without one.
+   */
+  homeward?: boolean;
+  habitats: LifeHabitats;
+  /**
+   * Its weight times this within the habitat's colony distance of a colony.
+   */
+  nearColony?: number;
+  when: LifeWhen;
+  /**
+   * The least wind it is met in and the most, 10 m up, in m/s.
+   *
+   * @minItems 2
+   * @maxItems 2
+   */
+  wind: [number, number];
+  /**
+   * The share of it met in rain.
+   */
+  rain: number;
+  /**
+   * Whether it is seen less as the sea rises, by the life's sea.
+   */
+  bySea: boolean;
+  /**
+   * Its encounters a km² an hour at a weight of 1.
+   */
+  rate: number;
+  /**
+   * How many in a group, the least and the most.
+   *
+   * @minItems 2
+   * @maxItems 2
+   */
+  group: [number, number];
+  /**
+   * How long it stays over its patch or with a boat, the least and the most, in s.
+   *
+   * @minItems 2
+   * @maxItems 2
+   */
+  stay: [number, number];
+  /**
+   * How fast it goes, the least and the most, in m/s.
+   *
+   * @minItems 2
+   * @maxItems 2
+   */
+  speed: [number, number];
+  /**
+   * How high it flies, the least and the most, in m.
+   *
+   * @minItems 2
+   * @maxItems 2
+   */
+  height: [number, number];
+  /**
+   * How far out it comes from and goes to, in m.
+   */
+  range: number;
+  /**
+   * It is drawn within this, in m.
+   */
+  reach: number;
+  look?: BirdLook;
+}
+/**
+ * Its weight in each habitat: a point is its harbour's if within one, else its reef's, else the outer water's, else the shelf's or the deep's.
+ */
+export interface LifeHabitats {
+  harbour: number;
+  reef: number;
+  shelf: number;
+  deep: number;
+  outer: number;
+}
+/**
+ * Its weight by the sun: by day, at dusk and dawn, and at night.
+ */
+export interface LifeWhen {
+  day: number;
+  dusk: number;
+  night: number;
+}
 
 /** The catalog version (tools/catalog). */
-export const CATALOG_VERSION = 'a88071c8a988b7d2';
+export const CATALOG_VERSION = '15dfb020ae0c1a58';

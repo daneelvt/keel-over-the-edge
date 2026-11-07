@@ -1,0 +1,213 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# The sea's life: the animals met at sea, from time to time, where and when
+# they live. The server draws what is in the sea from the world's seed, a
+# cell of the world, a slot of world time, the habitat at a point and the
+# weather there, and tells every player near; the phones draw each
+# encounter from its record and the world's time, the same for everyone.
+# Nothing alive changes how a boat sails. Starting values, tuned by
+# go run ./tools/life -tally and in play.
+life:
+  # Squares of cell m in the world's east/north frame, slots of slot s of
+  # world time: each kind draws in each cell and slot whether it begins
+  # there, as Worley's cells draw their points, with a time slot added.
+  cell: 1000 # m
+  slot: 30 # s
+  # A lull after each: an encounter of a family is not begun within its
+  # family's lull after another of it began in its cell or the eight about
+  # it, as Left 4 Dead's director relaxes after each peak (Booth 2009).
+  lulls: { birds: 180, water: 600, big: 2400, night: 1200 } # s
+  # A boat followed, ridden or perched on is left alone for this long after.
+  quiet: 2700 # s
+  # A group that follows boats takes, as it begins, the nearest boat within
+  # within m sailing speed m/s or faster on a course steady for steady s,
+  # its heading within turn degrees; with none, it passes. Dolphins show no
+  # interest below 2 m/s and keep with a boat on a steady speed and course
+  # (Fiori and others 2024).
+  bind: { within: 300, speed: 2, steady: 10, turn: 15 }
+  drop: 200 # m
+  # The sun's height across which dusk and dawn run, degrees: from civil
+  # twilight's end to a few degrees up.
+  dusk: [-6, 6]
+  # Rain this heavy thins the birds: "half the birds in rain".
+  rainy: 0.5 # mm/h
+  # A point is its harbour's within harbour m of a town; its reef's within
+  # reef m of a reef or a lagoon; the outer water's from outer m from the
+  # centre (3.5 NM); else the shelf's, shallower than shelf m (the sea bed's
+  # deep), or the deep's. A kind's nearColony counts within colony m of a
+  # colony. The field is built at the world's load, cells of field m.
+  habitat: { harbour: 400, reef: 300, shelf: 40, outer: 6482, colony: 3000, field: 100 }
+  # Water life seen by Beaufort force, as an aerial survey logged cetaceans
+  # a thousand km: 38 at force 1, 25 at 2, 16 at 3, about none at 5 (Cape
+  # Hatteras 2013); a gale's sea is empty of fins.
+  sea: [1, 1, 1, 0.6, 0.4, 0.15, 0]
+
+  # Each kind: its form, family and path; what it does with a boat; its
+  # weight by habitat, near a colony and by the sun; the wind it is met in,
+  # m/s 10 m up; its share in rain; its rate, encounters a km² an hour at a
+  # weight of 1; its group; how long it stays over a patch or with a boat,
+  # s; its speed, m/s, and height, m; how far out it comes from and goes to,
+  # m; how far it is drawn, m; and its look. Wingspans and wingbeats from
+  # the field guides (Audubon, Cornell Lab's Birds of the World); a herring
+  # gull beats 2.5 times a second, a laughing gull 4.0 (Tobalske and
+  # Dial; Condor).
+  kinds:
+    # The only gull that breeds in the Lesser Antilles: about harbours and
+    # anchorages, following boats for scraps, its laugh a "ha-ha-ha".
+    - id: laughing-gull
+      name: Laughing gull
+      plural: Laughing gulls
+      form: bird
+      family: birds
+      path: pass
+      binds: follow
+      habitats: { harbour: 1, reef: 0.15, shelf: 0.08, deep: 0, outer: 0 }
+      when: { day: 1, dusk: 0.5, night: 0 }
+      wind: [0, 17]
+      rain: 0.5
+      bySea: false
+      rate: 2.5
+      group: [1, 6]
+      stay: [60, 180]
+      speed: [9, 12]
+      height: [4, 14]
+      range: 800
+      reach: 1000
+      look: { span: 1.0, body: "#f4f4f1", wing: "#6e7378", tip: "#1c1c1c", flap: 4, glide: 0.25, call: laugh }
+    # Inshore and in harbours, skimming low along the swell's faces in a
+    # line, carried by the wave's updraft (Stokes and Lucas, UC San Diego),
+    # and plunging from 10–20 m; silent away from its nest.
+    - id: brown-pelican
+      name: Brown pelican
+      plural: Brown pelicans
+      form: bird
+      family: birds
+      path: skim
+      line: true
+      dives: 0.4
+      habitats: { harbour: 1, reef: 0.7, shelf: 0.5, deep: 0, outer: 0 }
+      when: { day: 1, dusk: 0.4, night: 0 }
+      wind: [0, 14]
+      rain: 0.5
+      bySea: false
+      rate: 0.25
+      group: [1, 5]
+      stay: [0, 0]
+      speed: [9, 12]
+      height: [1.2, 3]
+      range: 900
+      reach: 1000
+      look: { span: 2.1, body: "#8b7d6c", wing: "#6a6056", tip: "#2e2a26", flap: 2.2, glide: 0.6, call: silent }
+    # Everywhere by day, soaring in slow circles under the cumulus a few
+    # hundred metres up, rarely beating its wings; it cannot settle on the
+    # sea and keeps out of rain and strong wind; more near its roosts.
+    - id: magnificent-frigatebird
+      name: Magnificent frigatebird
+      plural: Magnificent frigatebirds
+      form: bird
+      family: birds
+      path: soar
+      habitats: { harbour: 0.4, reef: 0.8, shelf: 0.7, deep: 0.5, outer: 0.3 }
+      nearColony: 2
+      when: { day: 1, dusk: 0.3, night: 0 }
+      wind: [0, 10.8]
+      rain: 0
+      bySea: false
+      rate: 0.05
+      group: [1, 3]
+      stay: [120, 300]
+      speed: [8, 11]
+      height: [60, 220]
+      range: 900
+      reach: 1200
+      look: { span: 2.3, body: "#1c1a1a", wing: "#1c1a1a", tip: "#1c1a1a", flap: 1.5, glide: 0.95, call: silent }
+    # Within a day's sail of land: passing and plunging, and flying home to
+    # its island at dusk, as sailors have always read it; the male whistles.
+    - id: brown-booby
+      name: Brown booby
+      plural: Brown boobies
+      form: bird
+      family: birds
+      path: pass
+      dives: 0.8
+      homeward: true
+      habitats: { harbour: 0.2, reef: 0.6, shelf: 1, deep: 0.8, outer: 0.4 }
+      nearColony: 1.5
+      when: { day: 1, dusk: 1.5, night: 0 }
+      wind: [0, 17]
+      rain: 0.5
+      bySea: false
+      rate: 0.07
+      group: [1, 4]
+      stay: [0, 0]
+      speed: [11, 15]
+      height: [6, 22]
+      range: 900
+      reach: 1000
+      look: { span: 1.45, body: "#5a4634", wing: "#4e3c2c", tip: "#3a2c20", flap: 3.5, glide: 0.4, call: whistle }
+    # Far out: fast, deep wingbeats high over the water, its long tail's
+    # streamers trailing.
+    - id: white-tailed-tropicbird
+      name: White-tailed tropicbird
+      plural: White-tailed tropicbirds
+      form: bird
+      family: birds
+      path: pass
+      dives: 0.2
+      habitats: { harbour: 0, reef: 0, shelf: 0.15, deep: 0.6, outer: 1 }
+      when: { day: 1, dusk: 0.2, night: 0 }
+      wind: [0, 17]
+      rain: 0.5
+      bySea: false
+      rate: 0.05
+      group: [1, 2]
+      stay: [0, 0]
+      speed: [12, 16]
+      height: [18, 45]
+      range: 900
+      reach: 1000
+      look: { span: 0.95, body: "#f8f8f5", wing: "#f8f8f5", tip: "#1e1e1e", flap: 4.5, glide: 0.15, call: silent }
+    # The open sea's shearwater, often with the sargassum: dynamic soaring
+    # in low arcs over the waves, which needs wind (about 7 kn at least for
+    # an albatross; Richardson 2011).
+    - id: audubons-shearwater
+      name: Audubon's shearwater
+      plural: Audubon's shearwaters
+      form: bird
+      family: birds
+      path: skim
+      habitats: { harbour: 0, reef: 0, shelf: 0.2, deep: 1, outer: 1 }
+      when: { day: 1, dusk: 0.3, night: 0 }
+      wind: [3.5, 20]
+      rain: 0.5
+      bySea: false
+      rate: 0.06
+      group: [2, 10]
+      stay: [0, 0]
+      speed: [9, 13]
+      height: [0.8, 7]
+      range: 900
+      reach: 1000
+      look: { span: 0.7, body: "#eeeeea", wing: "#38363a", tip: "#2a282c", flap: 5, glide: 0.7, call: silent }
+    # Over fish driven up by predators, within tens of km of land: wheeling
+    # over a patch of water and dipping and plunging into it, calling; they
+    # cannot float, and a sooty tern's call is its "wide-awake".
+    - id: sooty-tern
+      name: Sooty tern
+      plural: Sooty terns
+      form: bird
+      family: birds
+      path: work
+      dives: 2.5
+      habitats: { harbour: 0, reef: 0.3, shelf: 1, deep: 0.8, outer: 0.4 }
+      when: { day: 1, dusk: 0.3, night: 0 }
+      wind: [0, 14]
+      rain: 0.5
+      bySea: false
+      rate: 0.035
+      group: [5, 30]
+      stay: [300, 900]
+      speed: [8, 11]
+      height: [3, 18]
+      range: 900
+      reach: 1200
+      look: { span: 0.86, body: "#f4f4f1", wing: "#2a2a2c", tip: "#1a1a1a", flap: 3, glide: 0.3, call: tern }

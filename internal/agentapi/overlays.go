@@ -245,7 +245,7 @@ func (h *helm) hearLines(s *Sea, f *bus.Frame, sl int32) []string {
 			k := &kinds[p.Kind]
 			fh := lookout.FeatureHeard{Site: k.Site, East: p.X, North: p.Y, Drop: p.Level, Seed: float64(p.Seed)}
 			if k.Birds != nil {
-				fh.Call = k.Birds.Call
+				fh.Call = k.Birds.Look.Call
 			}
 			in.Features = append(in.Features, fh)
 		}

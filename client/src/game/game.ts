@@ -21,7 +21,7 @@
 
 import { effect, signal } from '@preact/signals';
 import { SoundEngine } from '../audio/engine';
-import type { FeaturesInput } from '../audio/features';
+import { type FeaturesInput, isColonyCall } from '../audio/features';
 import { FOG_SIGNAL_RULES, type FogSignalsInput, poorBy } from '../audio/fogsignals';
 import { groundSound, SCRAPE, scrapeOf } from '../audio/ground';
 import { KNOCK, knockOf } from '../audio/knock';
@@ -672,7 +672,10 @@ export class Game implements PilotActions {
       } else if (kind.site === 'blowhole') {
         x.blowholes.push({ ...at, seed: part.seed });
       } else if (kind.site === 'colony' && kind.birds !== undefined) {
-        x.colonies.push({ ...at, call: kind.birds.call, seed: part.seed });
+        const call = kind.birds.look.call;
+        if (isColonyCall(call)) {
+          x.colonies.push({ ...at, call, seed: part.seed });
+        }
       }
     }
     this.sound.features(now, x);

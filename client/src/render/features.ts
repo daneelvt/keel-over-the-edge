@@ -529,7 +529,7 @@ export class Features {
           if (f.night || kind.birds === undefined) {
             break;
           }
-          const b = kind.birds;
+          const b = kind.birds.look;
           const body = hexRgb(b.body);
           const wingC = hexRgb(b.wing);
           const tip = hexRgb(b.tip)[0];
