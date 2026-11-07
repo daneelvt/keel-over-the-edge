@@ -163,6 +163,18 @@ export interface SquareSail {
   head: number;
   foot: number;
   width: number;
+  /** Its yard, where the model has it as a node of its own ({"yard": sail}): lowered as its band is taken in. */
+  yard: Object3D | null;
+}
+
+/** How far a sail's yard comes down with its band taken in all the way, metres. */
+export function yardDrop(sail: SquareSail): number {
+  return sail.reef.reef > 0 ? sail.reef.band * (sail.head - sail.foot) : 0;
+}
+
+/** How far a reef at a level (0 … 2, and between) has taken a sail's band in, 0 … 1. */
+export function bandTaken(reef: SailReef, level: number): number {
+  return reef.reef > 0 ? Math.min(Math.max(level - (reef.reef - 1), 0), 1) : 0;
 }
 
 /** The reef bands of a topsail with none told: double-reefed, the second band at this share of its height. */
@@ -299,6 +311,7 @@ export function squareSails(root: Object3D): SquareSail[] {
         head: s.hi,
         foot: s.lo,
         width: s.width,
+        yard: yardOf(node, sail),
       });
     });
   }
@@ -318,10 +331,22 @@ export function squareSails(root: Object3D): SquareSail[] {
         head: hi,
         foot: lo,
         width,
+        yard: null,
       });
     }
   }
   return out;
+}
+
+/** The node under a yards' node that is a sail's yard, by its extras' word; null for none. */
+function yardOf(node: Object3D, sail: string): Object3D | null {
+  let found: Object3D | null = null;
+  node.traverse((o) => {
+    if (found === null && (o.userData as { yard?: unknown }).yard === sail) {
+      found = o;
+    }
+  });
+  return found;
 }
 
 /** A sail's node's index, as the fleet's vertices carry it. */

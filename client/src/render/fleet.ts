@@ -216,7 +216,12 @@ class Level {
     const i = this.nodes;
     const squareRig = parts.square !== null;
     const joints = squareRig
-      ? { yardsAt: parts.yardsAt, wheelAt: parts.wheelAt, rudderAngle: foils.rudderAngle }
+      ? {
+          yardsAt: parts.yardsAt,
+          yardDrops: parts.yardDrops,
+          wheelAt: parts.wheelAt,
+          rudderAngle: foils.rudderAngle,
+        }
       : null;
     const l = varying(i.look ?? vec4(0, 0, 0, -1)) as unknown as Node<'vec4'>;
     const look: LookNodes = {

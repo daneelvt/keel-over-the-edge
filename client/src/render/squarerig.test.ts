@@ -20,10 +20,12 @@ import { boatParts, GALLERY_PART, JOINT } from './fleetparts';
 import {
   ABACK,
   BELLY,
+  bandTaken,
   nodeIndex,
   packRule,
   packYards,
   readsMirrored,
+  type SquareSail,
   shapeSquare,
   squareBelly,
   squareSails,
@@ -31,6 +33,7 @@ import {
   unpackYardsCPU,
   WHEEL_TURNS,
   wheelTurn,
+  yardDrop,
   yardsTurn,
 } from './squarerig';
 
@@ -138,6 +141,10 @@ function ship(named = false): Group {
       sailMesh(27, 20.5, 9),
     );
   }
+  // The main topsail's yard, a node of its own, comes down as its band is taken in.
+  const yard = node('main-topsail-yard', [0, 20, 0], { yard: 'topsail' });
+  yard.add(box('spar'));
+  main.add(yard);
   withSail(mizzen, 'mizzen-topsail', { square: { group: 'after', strip: 1 } }, sailMesh(19, 13, 8));
   const sprit = node('spritsail', [0, 0, -20], { furl: 2 });
   sprit.add(sailMesh(4, 1, 7));
@@ -256,6 +263,12 @@ describe('a model’s square sails', () => {
       expect(sails.filter((s) => s.numbered).map((s) => `${s.node} ${s.sail}`)).toEqual([
         'main-yards topsail',
       ]);
+      expect(by('main-yards', 'topsail')?.yard?.name).toBe('main-topsail-yard');
+      expect(by('fore-yards', 'topsail')?.yard).toBeNull();
+      expect(yardDrop(by('main-yards', 'topsail') as SquareSail)).toBeCloseTo(0.25 * 7.5, 6);
+      expect(bandTaken({ furl: 0, reef: 2, band: 0.25 }, 1)).toBe(0);
+      expect(bandTaken({ furl: 0, reef: 2, band: 0.25 }, 1.5)).toBe(0.5);
+      expect(bandTaken({ furl: 0, reef: 2, band: 0.25 }, 2)).toBe(1);
       const sprit = sails.find((s) => s.node === 'spritsail');
       expect(sprit?.reef).toEqual({ furl: 2, reef: 0, band: 0 });
     }
@@ -320,7 +333,10 @@ describe('the fleet’s parts of a model with yards', () => {
         marks.add(part.getW(i));
       }
     }
-    expect([...joints].sort()).toEqual([JOINT.hull, JOINT.wheel, JOINT.foreYards]);
+    expect([...joints].sort()).toEqual([JOINT.hull, JOINT.wheel, JOINT.foreYards, JOINT.mainYard]);
+    expect(parts.yardDrops[1]?.drop).toBeCloseTo(0.25 * 7.5, 6);
+    expect(parts.yardDrops[1]?.level).toBe(2);
+    expect(parts.yardDrops[0]?.drop).toBe(0);
     // The lantern's brass is drawn with the hull on a model with yards.
     expect(marks.has(GALLERY_PART)).toBe(true);
     expect(marks.has(1)).toBe(true);

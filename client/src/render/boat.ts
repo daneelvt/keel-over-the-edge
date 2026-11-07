@@ -88,6 +88,7 @@ import { BoatSailor } from './sailors/onboat';
 import { jibPoint, LUFF_OFFSET, sailPoint, sailUniforms } from './sailshape';
 import {
   type Belly,
+  bandTaken,
   readsMirrored,
   type SquareSail,
   shapeSquare,
@@ -98,6 +99,7 @@ import {
   toNode,
   wheelTurn,
   YARDS_NODES,
+  yardDrop,
 } from './squarerig';
 import { FLOW_LUFFING, Telltales } from './telltales';
 
@@ -286,6 +288,8 @@ export class Boat {
   /** The model's square sails, and their meshes. */
   #squareSails: SquareSail[] = [];
   readonly #squareMeshes = new Set<Object3D>();
+  /** The yards that come down as their sails' bands are taken in: each, its height at rest and its drop. */
+  readonly #yards: { node: Object3D; rest: number; drop: number; sail: SquareSail }[] = [];
   readonly #belly: Belly = { depth: 0, ripple: 0 };
   readonly #ripple = new Float64Array(2);
   readonly #jibRipple = new Float64Array(2);
@@ -392,6 +396,9 @@ export class Boat {
       for (const m of s.meshes) {
         shapeSquare(m.geometry, s, toNode(m, s, model));
         this.#squareMeshes.add(m);
+      }
+      if (s.yard !== null && yardDrop(s) > 0) {
+        this.#yards.push({ node: s.yard, rest: s.yard.position.y, drop: yardDrop(s), sail: s });
       }
     }
     if (this.#squareSails.length > 0) {
@@ -630,6 +637,9 @@ export class Boat {
       r.value += (b.ripple - r.value) * k;
     }
     sq.reef.value = pose.reef;
+    for (const y of this.#yards) {
+      y.node.position.y = y.rest - y.drop * bandTaken(y.sail.reef, pose.reef);
+    }
   }
 
   /** After a new renderer: everything is kept on the CPU side and uploaded again by itself. */
@@ -815,7 +825,7 @@ export class Boat {
  */
 export function squarePrint(sails: readonly SquareSail[]): SailPrint {
   const masks = clothMasks(
-    { insignia: '', reefRows: [], mark: null },
+    { insignia: '', reefRows: [], mark: null, upright: true },
     SQUARE_MASK.width,
     SQUARE_MASK.height,
   );

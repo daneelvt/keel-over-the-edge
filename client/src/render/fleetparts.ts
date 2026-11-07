@@ -73,6 +73,7 @@ import {
   WHEEL_TURNS,
   YARDS_ORDER,
   type YardsNode,
+  yardDrop,
 } from './squarerig';
 
 /** The joints a vertex turns on, in its 'part' attribute. */
@@ -84,6 +85,10 @@ export const JOINT = {
   foreYards: 4,
   mainYards: 5,
   mizzenYards: 6,
+  /** A yard of each yards' node that comes down as its sail's band is taken in. */
+  foreYard: 7,
+  mainYard: 8,
+  mizzenYard: 9,
 } as const;
 
 /** The nodes under which each joint's parts are; the telltales and pennant are not drawn. */
@@ -155,6 +160,8 @@ export interface BoatParts {
     sails: SquareSail[];
   } | null;
   yardsAt: Vector3[];
+  /** How far each yards' node's lowered yard comes down at its reef (fore, main, mizzen), and at which level, metres. */
+  yardDrops: { drop: number; level: number }[];
   wheelAt: Vector3 | null;
   gallery: boolean;
 }
@@ -216,6 +223,14 @@ export function boatParts(scene: Object3D, path: string): BoatParts {
       squareMeshes.set(m, s);
     }
   }
+  // The yards that come down with a reef: each its node's joint.
+  const loweredYards = new Map<Object3D, number>();
+  for (const s of sails) {
+    const at = YARDS_ORDER.indexOf(s.node as YardsNode);
+    if (s.yard !== null && at >= 0 && yardDrop(s) > 0) {
+      loweredYards.set(s.yard, JOINT.foreYard + at);
+    }
+  }
   const squareGeometries: BufferGeometry[] = [];
   let squareMaterial: MeshStandardMaterial | null = null;
   // A model with yards draws every mesh; others leave out what no joint holds.
@@ -247,6 +262,7 @@ export function boatParts(scene: Object3D, path: string): BoatParts {
     hullData: undefined,
     square: null,
     yardsAt: [...YARDS_ORDER, SPRITSAIL].map(() => new Vector3()),
+    yardDrops: YARDS_ORDER.map(() => ({ drop: 0, level: 0 })),
     wheelAt: null,
     gallery: false,
   };
@@ -331,6 +347,10 @@ export function boatParts(scene: Object3D, path: string): BoatParts {
     if ((joint === null && !everything) || within(o, UNDRAWN_NODES) !== null) {
       return;
     }
+    let lowered: number | null = null;
+    for (let p: Object3D | null = o; p !== null && lowered === null; p = p.parent) {
+      lowered = loweredYards.get(p) ?? null;
+    }
     const g = (o.geometry as BufferGeometry).clone().applyMatrix4(o.matrixWorld);
     g.setAttribute('color', coloursOf(g, material));
     keep(g, ['position', 'normal', 'color']);
@@ -340,7 +360,7 @@ export function boatParts(scene: Object3D, path: string): BoatParts {
     parts.gallery ||= gallery;
     const part = new Float32Array(n * 4);
     for (let i = 0; i < n; i++) {
-      part[i * 4] = joint === null ? JOINT.hull : (JOINTS[joint] ?? 0);
+      part[i * 4] = lowered ?? (joint === null ? JOINT.hull : (JOINTS[joint] ?? 0));
       part[i * 4 + 1] = material.roughness;
       part[i * 4 + 2] = material.metalness;
       part[i * 4 + 3] = gallery ? GALLERY_PART : painted ? 1 : 0;
@@ -365,6 +385,12 @@ export function boatParts(scene: Object3D, path: string): BoatParts {
     parts.solids.push({ geometry: merged, material });
   }
   parts.sail = sail;
+  for (const s of sails) {
+    const at = YARDS_ORDER.indexOf(s.node as YardsNode);
+    if (s.yard !== null && at >= 0) {
+      parts.yardDrops[at] = { drop: yardDrop(s), level: s.reef.reef };
+    }
+  }
   if (squareGeometries.length > 0 && squareMaterial !== null) {
     const merged = mergeGeometries(squareGeometries, false);
     if (merged === null) {
@@ -538,6 +564,7 @@ export function placeNormal(n: Node<'vec3'>, i: Instances): Node<'vec3'> {
 /** A square rig's joints, for a kind's solids: its yards' and wheel's places, and its rudder's stop, degrees. */
 export interface RigJoints {
   yardsAt: readonly Vector3[];
+  yardDrops: readonly { drop: number; level: number }[];
   wheelAt: Vector3 | null;
   rudderAngle: number;
 }
@@ -587,12 +614,23 @@ export function solidNode(
       local = select(is(JOINT.wheel), rotZ(p.sub(pivotWheel), wheel).add(pivotWheel), local);
       turned = select(is(JOINT.wheel), rotZ(n, wheel), turned);
       const nodes = [JOINT.foreYards, JOINT.mainYards, JOINT.mizzenYards];
+      const level = reefOf(i);
       nodes.forEach((j, at) => {
         const y = rig.yardsAt[at] ?? new Vector3();
         const pivot = vec3(y.x, 0, y.z);
         const turn = at === 0 ? yards.fore : yards.after;
         local = select(is(j), rotY(p.sub(pivot), turn).add(pivot), local);
         turned = select(is(j), rotY(n, turn), turned);
+        // Its lowered yard: turned with it, and down by its drop once reefed.
+        const d = rig.yardDrops[at] ?? { drop: 0, level: 0 };
+        if (d.drop > 0) {
+          const down = select(level.greaterThan(d.level - 0.5), float(d.drop), float(0));
+          const lowered = rotY(p.sub(pivot), turn)
+            .add(pivot)
+            .sub(vec3(0, down, 0));
+          local = select(is(JOINT.foreYard + at), lowered, local);
+          turned = select(is(JOINT.foreYard + at), rotY(n, turn), turned);
+        }
       });
     }
     normalLocal.assign(placeNormal(turned, i));
