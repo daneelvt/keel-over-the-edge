@@ -3,7 +3,7 @@
 // The sea: the boat band's waves, the tile pass, the tiles and the far sea,
 // kept in step each frame with the sea the boat is sailed in, the floating
 // origin, the tile under the boat and the camera's height; and, drawn on
-// them, the detail band, the foam and the wakes.
+// them, the detail band, the foam, the wake's waves and the foam map.
 
 import type { Mesh, Object3D, Scene } from 'three';
 import type { MeshBasicNodeMaterial, WebGPURenderer } from 'three/webgpu';
@@ -14,7 +14,7 @@ import { type Physics, SEA_PARTS } from '../predict/physics';
 import type { Seas } from '../predict/seas';
 import type { FloatingOrigin } from '../render/coords';
 import { seaMaterial } from '../render/materials';
-import type { DetailKind } from '../render/quality';
+import type { DetailKind, WakeWavesKind } from '../render/quality';
 import { Detail, type DetailFrame } from './detail';
 import { FarSea, farRadius } from './far';
 import {
@@ -37,6 +37,7 @@ import { TilePass } from './tilepass';
 import { Tiles } from './tiles';
 import { fract1, Turned } from './turn';
 import { SeaUnder } from './under';
+import { WakeWaves } from './wakewaves';
 import { waterRainAt } from './water';
 import { type BandUniforms, bandUniforms } from './wave';
 
@@ -73,6 +74,8 @@ export interface SeaQuality {
   anisotropy: number;
   /** The foam map's side, in texels. */
   foamMap: number;
+  /** The wake's waves. */
+  wakeWaves: WakeWavesKind;
 }
 
 export class Ocean {
@@ -99,9 +102,17 @@ export class Ocean {
   readonly under = new SeaUnder();
   readonly detail = new Detail(catalog.weather.sea);
   readonly wakes: FoamMap;
+  /** The wake's waves: the hulls push on them (scene.ts). */
+  readonly wakeWaves = new WakeWaves();
   readonly pattern = patternTexture();
-  /** Whether the wakes are drawn (the developer panel). */
+  /** Whether the wakes are drawn: the wake's waves, the track and the white water (the developer panel). */
   drawWakes = true;
+  /** Whether the renderer runs compute passes. */
+  compute = false;
+  /** The current at the boat, m/s east and north: the wakes drift with it. */
+  readonly current = { east: 0, north: 0 };
+  /** The boat's heading, which places the wake's waves' square. */
+  heading = 0;
   /** The last frame's detail and wakes, for whoever reads them back. */
   readonly frame: DetailFrame = {
     originEast: 0,
@@ -145,7 +156,8 @@ export class Ocean {
     this.vertexTiles.centreHex.value = this.passTiles.centreHex.value;
     this.pass.centre.value = this.passTiles.centre.value;
     this.pass.centreHex.value = this.passTiles.centreHex.value;
-    this.wakes = new FoamMap(foamMap);
+    const ww = this.wakeWaves;
+    this.wakes = new FoamMap(foamMap, (east, north) => ww.foldAt(east, north));
     this.far = new FarSea(this.uniforms, this.passTiles.centre, this.passTiles.centreHex);
     const [pass, vertex, far] = this.#materials();
     this.passTiles.mesh.material = pass;
@@ -159,12 +171,18 @@ export class Ocean {
   /** What the look is made from, as the detail band and the wakes are now. */
   get parts(): SeaParts {
     const kind = this.detail.kind;
+    const ww = this.wakeWaves;
     return {
       detail: this.detail.nodes,
       // The second patch of the transform holds the finest ripples itself.
       shimmer: !(kind.kind === 'fft' && kind.patches === 2),
       pattern: this.pattern,
       wakes: (p) => this.wakes.sample(p),
+      wakeWaves: {
+        fine: (p, dist) => ww.fine(p, dist),
+        coarse: (p) => ww.coarse(p),
+        covers: (p, margin) => ww.covers(p, margin),
+      },
       rain: (p) => waterRainAt(this.gusts.water)(p),
     };
   }
@@ -213,7 +231,8 @@ export class Ocean {
     renderer: WebGPURenderer | null = null,
   ): Promise<void> {
     this.wakes.setSize(q.foamMap);
-    const retire = this.detail.set(q.detail, q.anisotropy);
+    const waves = this.wakeWaves.setKind(q.wakeWaves, this.compute);
+    const retire = this.detail.set(q.detail, q.anisotropy) ?? (waves ? () => undefined : null);
     if (retire === null) {
       return;
     }
@@ -232,6 +251,9 @@ export class Ocean {
       await Promise.all([
         ...meshes.map((m) => compile(m)),
         renderer === null ? Promise.resolve() : this.detail.compile(renderer),
+        renderer === null || this.wakeWaves.kernels.length === 0
+          ? Promise.resolve()
+          : renderer.compileComputeAsync(this.wakeWaves.kernels).then(() => undefined),
       ]);
       if (change !== this.#pending) {
         // Another change overtook this one, and lets go of what this one would have.
@@ -243,6 +265,7 @@ export class Ocean {
       }
     }
     this.detail.commit();
+    const retireWaves = this.wakeWaves.commit();
     const old = [
       this.passTiles.mesh.material,
       this.vertexTiles.mesh.material,
@@ -256,7 +279,7 @@ export class Ocean {
     }
     // What the old materials read is let go only now that nothing draws with them.
     this.wakes.forget(before);
-    this.#retired.push(retire);
+    this.#retired.push(retire, retireWaves);
     for (const r of this.#retired.splice(0)) {
       r();
     }
@@ -338,12 +361,26 @@ export class Ocean {
       return;
     }
     this.detail.update(renderer, frame);
+    const wakeDt = this.drawWakes ? f.dt : 0;
+    this.wakeWaves.on.value = this.drawWakes ? 1 : 0;
+    this.wakeWaves.update(renderer, {
+      originEast: origin.world.x,
+      originNorth: origin.world.y,
+      boatEast: f.boatEast,
+      boatNorth: f.boatNorth,
+      heading: this.heading,
+      dt: wakeDt,
+      currentEast: this.current.east,
+      currentNorth: this.current.north,
+    });
     this.wakes.update(renderer, {
       originEast: origin.world.x,
       originNorth: origin.world.y,
       boatEast: f.boatEast,
       boatNorth: f.boatNorth,
-      dt: this.drawWakes ? f.dt : 0,
+      dt: wakeDt,
+      currentEast: this.current.east,
+      currentNorth: this.current.north,
     });
     if (this.#active === this.passTiles) {
       this.pass.render(renderer);
