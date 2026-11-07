@@ -175,6 +175,8 @@ export class Online {
   boat = 0;
   /** The world's epoch, in microseconds of UTC since 1970, as the latest Welcome told it. */
   epochUs = 0;
+  /** Called with the boat in view's kind at each Welcome: an index into the catalog's boats. */
+  onKind: ((kind: number) => void) | null = null;
   /** Called with the world's epoch at each Welcome: the sky is counted from it. */
   onEpoch: ((epochUs: number) => void) | null = null;
   /** Told of each bump the server tells of: the game knocks, shakes and says the verdict. */
@@ -456,6 +458,8 @@ export class Online {
           this.place.value = null;
         }
         this.boat = m.boat;
+        this.#watcher.kind = m.kind;
+        this.onKind?.(m.kind);
         this.look.value = m.look;
         this.epochUs = m.epochUs;
         this.onEpoch?.(m.epochUs);

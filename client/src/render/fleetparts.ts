@@ -11,7 +11,9 @@
 // applies its boat's pose itself, normals too, from per-instance values,
 // exactly as the own boat's nodes are nested (boat.ts): the boom and rudder
 // turned about their joints, the heel about the centre of gravity's height,
-// then the heading and position; then the material factory's bend.
+// then the heading and position; then the material factory's bend. A
+// headsail is shaped about its stay as the sail is about the mast, and a
+// reefed main drawn short, from each instance's values.
 
 import {
   type BufferGeometry,
@@ -39,12 +41,13 @@ import {
   sin,
   uv,
   vec3,
+  vec4,
 } from 'three/tsl';
 import type { Node, WebGPURenderer } from 'three/webgpu';
 import { artUrl } from './boat';
 import type { SailorColours } from './sailors/material';
 import { loadSailor } from './sailors/model';
-import { LUFF_OFFSET, type SailInputs, sailPoint } from './sailshape';
+import { type JibInputs, jibPoint, LUFF_OFFSET, type SailInputs, sailPoint } from './sailshape';
 
 /** The joints a vertex turns on, in its 'part' attribute. */
 export const JOINT = { hull: 0, boom: 1, rudder: 2 } as const;
@@ -66,6 +69,13 @@ export interface BoatParts {
   solids: { geometry: BufferGeometry; material: MeshStandardMaterial }[];
   /** The sail, in its node's frame, and its source material. */
   sail: { geometry: BufferGeometry; material: MeshStandardMaterial } | null;
+  /** The headsail, in its node's frame at the tack, its source material, and how far aft of the tack its head is; null for none. */
+  jib: { geometry: BufferGeometry; material: MeshStandardMaterial; rake: number } | null;
+  jibAt: Vector3;
+  /** Every named node's place in the model's frame: the lanterns', among others. */
+  nodes: Map<string, Vector3>;
+  /** Every named node, as loaded: what the sailor's seating reads. */
+  objects: Map<string, Object3D>;
   /** The gooseneck, the rudder's stock and the sail's node, in the model's frame. */
   gooseneck: Vector3;
   stock: Vector3;
@@ -121,6 +131,10 @@ export async function loadBoatParts(path: string): Promise<BoatParts> {
   const parts: BoatParts = {
     solids: [],
     sail: null,
+    jib: null,
+    jibAt: new Vector3(),
+    nodes: new Map(),
+    objects: new Map(),
     gooseneck: new Vector3(),
     stock: new Vector3(),
     sailAt: new Vector3(),
@@ -133,6 +147,10 @@ export async function loadBoatParts(path: string): Promise<BoatParts> {
     hullData: undefined,
   };
   scene.traverse((o) => {
+    if (o.name !== '' && !parts.nodes.has(o.name)) {
+      parts.nodes.set(o.name, o.getWorldPosition(new Vector3()));
+      parts.objects.set(o.name, o);
+    }
     switch (o.name) {
       case 'boom':
         o.getWorldPosition(parts.gooseneck);
@@ -166,6 +184,21 @@ export async function loadBoatParts(path: string): Promise<BoatParts> {
       return;
     }
     const material = o.material as MeshStandardMaterial;
+    if (within(o, { jib: true }) !== null) {
+      // The headsail is shaped in its node's frame, at the tack.
+      let node: Object3D = o;
+      while (node.name !== 'jib' && node.parent !== null) {
+        node = node.parent;
+      }
+      node.getWorldPosition(parts.jibAt);
+      const rake = (node.userData as { rake?: unknown }).rake;
+      parts.jib = {
+        geometry: keep(o.geometry.clone(), ['position', 'normal', 'uv', 'uv1']),
+        material,
+        rake: typeof rake === 'number' && Number.isFinite(rake) ? rake : 0,
+      };
+      return;
+    }
     if (within(o, { sail: true }) !== null) {
       // The sail is shaped in its node's frame: its geometry stays there.
       o.getWorldPosition(parts.sailAt);
@@ -283,7 +316,11 @@ export function seatFigure(
  * main: the sailor's main colour (linear), and its look's layer;
  * skin: its skin colour, and 1 for a machine;
  * hair: its hair colour, and 1 where its figure is drawn rigid (all far
- * boats; near ones whose look's skinned figure has not loaded).
+ * boats; near ones whose look's skinned figure has not loaded);
+ * jib, read by the headsail alone: the clew's angle, the head's twist
+ * (signed), the side it fills to (−1 … 1), and its ripple.
+ * lean's last carries the main's reef level too: 1 for a machine, plus 2
+ * for each reef.
  */
 export interface Instances {
   pose: Node<'vec4'>;
@@ -294,6 +331,24 @@ export interface Instances {
   main: Node<'vec4'>;
   skin: Node<'vec4'>;
   hair: Node<'vec4'>;
+  jib?: Node<'vec4'>;
+}
+
+/** An instance's flag of a machine sailor's boat, from lean's last value. */
+export function machineOf(i: Instances): Node<'float'> {
+  return i.lean.w.sub(i.lean.w.mul(0.5).floor().mul(2)) as unknown as Node<'float'>;
+}
+
+/** An instance's main's reef level, 0, 1 or 2, from lean's last value. */
+export function reefOf(i: Instances): Node<'float'> {
+  return i.lean.w.mul(0.5).floor() as unknown as Node<'float'>;
+}
+
+/** A kind's main's reefs, as the fleet's sail reads them: its shares, and whether it gathers (sailshape.ts). */
+export interface SailReef {
+  shares: readonly number[];
+  gather: boolean;
+  luff: number;
 }
 
 /** v turned about the vertical by angle a, as Object3D.rotation.y turns it. */
@@ -362,8 +417,16 @@ export function sailNode(
   footV: number,
   headV: number,
   time: Node<'float'>,
+  reef: SailReef = { shares: [1, 1, 1], gather: false, luff: 1 },
 ): Node<'vec3'> {
   const at = parts.sailAt;
+  const level = reefOf(i);
+  const [r0, r1, r2] = [reef.shares[0] ?? 1, reef.shares[1] ?? 1, reef.shares[2] ?? 1];
+  const share = select(
+    level.lessThan(0.5),
+    float(r0),
+    select(level.lessThan(1.5), float(r1), float(r2)),
+  );
   const inputs: SailInputs = {
     boom: i.rig.x,
     twist: i.sail.x,
@@ -374,6 +437,9 @@ export function sailNode(
     footV: float(footV),
     headV: float(headV),
     time,
+    reefShare: share as unknown as Node<'float'>,
+    reefGather: float(reef.gather ? 1 : 0),
+    luff: float(reef.luff),
   };
   return Fn(() => {
     const shaped = sailPoint(
@@ -382,6 +448,44 @@ export function sailNode(
       uv(1).x,
       uv(1).y,
       positionGeometry.y,
+    );
+    normalLocal.assign(placeNormal(shaped.normal, i));
+    return placePoint(shaped.position.add(vec3(at.x, at.y, at.z)), i, cog);
+  })() as unknown as Node<'vec3'>;
+}
+
+/** The headsail's vertex node: shaped about its stay from the instance's jib values, then placed. */
+export function jibNode(
+  i: Instances,
+  parts: BoatParts,
+  cog: number,
+  footV: number,
+  headV: number,
+  time: Node<'float'>,
+): Node<'vec3'> {
+  const at = parts.jibAt;
+  const j = i.jib ?? vec4(0);
+  const rake = float(parts.jib?.rake ?? 0);
+  const inputs: JibInputs = {
+    boom: j.x,
+    twist: j.y,
+    camber: i.sail.y,
+    side: j.z,
+    rippleFoot: j.w,
+    rippleHead: j.w,
+    footV: float(footV),
+    headV: float(headV),
+    time,
+  };
+  return Fn(() => {
+    const fv = uv(1).y;
+    const shaped = jibPoint(
+      inputs,
+      positionGeometry.z.sub(rake.mul(fv)),
+      uv(1).x,
+      fv,
+      positionGeometry.y,
+      rake,
     );
     normalLocal.assign(placeNormal(shaped.normal, i));
     return placePoint(shaped.position.add(vec3(at.x, at.y, at.z)), i, cog);
@@ -409,4 +513,5 @@ export function disposeParts(parts: BoatParts): void {
     (s.material as Material).dispose();
   }
   parts.sail?.geometry.dispose();
+  parts.jib?.geometry.dispose();
 }

@@ -35,6 +35,10 @@ export interface BoatPose {
   sailorTimer: number;
   /** The heel's rate, radians a second. */
   rollRate: number;
+  /** The headsails' clew's angle, positive to starboard, radians; 0 on a boat with none. */
+  jib: number;
+  /** How far the main is reefed: 0 at full sail, up to 2. */
+  reef: number;
 }
 
 export function newPose(): BoatPose {
@@ -52,6 +56,8 @@ export function newPose(): BoatPose {
     sailorMode: 0,
     sailorTimer: 0,
     rollRate: 0,
+    jib: 0,
+    reef: 0,
   };
 }
 
@@ -102,6 +108,8 @@ export class StatePair {
     out.sailorMode = this.current[S.sailorMode] ?? 0;
     out.sailorTimer = this.current[S.sailorTimer] ?? 0;
     out.rollRate = this.#at(S.rollRate, alpha);
+    out.jib = this.#at(S.jib, alpha);
+    out.reef = this.#at(S.reef, alpha);
     return out;
   }
 

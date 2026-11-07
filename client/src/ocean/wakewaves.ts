@@ -107,6 +107,7 @@ import {
 } from 'three/webgpu';
 import type { WakeWavesKind } from '../render/quality';
 import { transformTable } from './detail';
+import { HULL_SHAPES } from './hulls';
 import { WAKE, WAKE_WAVES } from './look';
 import { GRAVITY } from './spectrum';
 import {
@@ -623,9 +624,16 @@ export class WakeWaves {
     north: 0,
     heading: 0,
     sink: 0,
+    shape: null,
   }));
+  /** Each hull's kind's shape's number. */
+  readonly #kinds = new Int32Array(WAKE_HULLS);
   #count = 0;
   #shape: PressureShape | null = null;
+  /** Each kind's hull, by its index; the first kind's is #shape. */
+  readonly #shapes: (PressureShape | null)[] = new Array<PressureShape | null>(HULL_SHAPES).fill(
+    null,
+  );
   /** The heading the square is placed by, as a direction east and north. */
   readonly #toward = { east: 0, north: 1, set: false };
   /** Where the square is to be this frame. */
@@ -638,8 +646,10 @@ export class WakeWaves {
   readonly #stamps: Mesh;
   readonly #stampData: Float32Array;
   readonly #stampAttr: InstancedBufferAttribute;
-  readonly #stations: Vector4[] = Array.from({ length: 8 }, () => new Vector4());
-  readonly #bilge = uniform(2);
+  readonly #stampKinds: Float32Array;
+  readonly #stampKindAttr: InstancedBufferAttribute;
+  /** Each kind's stations, one after another; the first station's last value is its bilge's exponent. */
+  readonly #stations: Vector4[] = Array.from({ length: 8 * HULL_SHAPES }, () => new Vector4());
   /** How far a hull reaches from its origin, metres: the stamp's half side. */
   readonly #reach = uniform(3);
   /** The stamps' square: 1 over its side, and a texel's side, metres. */
@@ -663,6 +673,10 @@ export class WakeWaves {
     this.#stampAttr = new InstancedBufferAttribute(this.#stampData, 4);
     this.#stampAttr.setUsage(DynamicDrawUsage);
     g.setAttribute('hull', this.#stampAttr);
+    this.#stampKinds = new Float32Array(WAKE_HULLS);
+    this.#stampKindAttr = new InstancedBufferAttribute(this.#stampKinds, 1);
+    this.#stampKindAttr.setUsage(DynamicDrawUsage);
+    g.setAttribute('kind', this.#stampKindAttr);
     g.instanceCount = 0;
     this.#stamps = new Mesh(g, this.#stampMaterial());
     this.#stamps.frustumCulled = false;
@@ -673,6 +687,7 @@ export class WakeWaves {
   /** The stamp: a square about the hull, as wide as it reaches, and its immersion within it (wakewavescpu.ts's immersion). */
   #stampMaterial(): MeshBasicNodeMaterial {
     const hull = attribute<'vec4'>('hull', 'vec4');
+    const kindOf = varying(attribute<'float'>('kind', 'float'));
     const stations = uniformArray(this.#stations, 'vec4');
     const m = new MeshBasicNodeMaterial();
     m.blending = CustomBlending;
@@ -701,16 +716,17 @@ export class WakeWaves {
     const at = varying(vec2(local.x, local.y.negate()));
     const sink = varying(hull.w);
     const turn = varying(vec2(c, s));
-    const bilge = this.#bilge;
     const texel = this.#texelSize;
+    const first = int(kindOf.add(0.5)).mul(8);
+    const bilge = (stations.element(first) as unknown as Node<'vec4'>).w;
     const immersionAt = (x: Node<'float'>, z: Node<'float'>): Node<'float'> => {
-      const aft = (stations.element(int(0)) as unknown as Node<'vec4'>).x;
-      const fore = (stations.element(int(7)) as unknown as Node<'vec4'>).x;
+      const aft = (stations.element(first) as unknown as Node<'vec4'>).x;
+      const fore = (stations.element(first.add(7)) as unknown as Node<'vec4'>).x;
       const t = aft.sub(z).div(aft.sub(fore)).mul(7);
       const k = min(floor(t), 6).max(0);
       const f = t.sub(k);
-      const a = stations.element(int(k)) as unknown as Node<'vec4'>;
-      const b = stations.element(int(k).add(1)) as unknown as Node<'vec4'>;
+      const a = stations.element(first.add(int(k))) as unknown as Node<'vec4'>;
+      const b = stations.element(first.add(int(k)).add(1)) as unknown as Node<'vec4'>;
       const beam = mix(a.y, b.y, f);
       const depth = mix(a.z, b.z, f).add(sink);
       const across = abs(x).div(max(beam, 1e-4));
@@ -748,16 +764,32 @@ export class WakeWaves {
     return m;
   }
 
-  /** The hull every boat has, for now. */
-  setShape(shape: PressureShape): void {
-    this.#shape = shape;
+  /** A kind's hull, by the kind's index (below HULL_SHAPES): each hull pushes the waves by its own. */
+  setShape(shape: PressureShape, kind = 0): void {
+    if (kind < 0 || kind >= HULL_SHAPES) {
+      return;
+    }
+    if (kind === 0 || this.#shape === null) {
+      this.#shape = shape;
+    }
+    this.#shapes[kind] = shape;
     let reach = 0;
     shape.stations.forEach((s, i) => {
-      (this.#stations[i] as Vector4).set(s[0] ?? 0, s[1] ?? 0, s[2] ?? 0, 0);
+      (this.#stations[kind * 8 + i] as Vector4).set(
+        s[0] ?? 0,
+        s[1] ?? 0,
+        s[2] ?? 0,
+        i === 0 ? shape.bilge : 0,
+      );
       reach = Math.max(reach, Math.hypot(s[0] ?? 0, s[1] ?? 0));
     });
-    this.#bilge.value = shape.bilge;
-    this.#reach.value = reach + 0.25;
+    // The stamp's square reaches as far as the longest hull's.
+    this.#reach.value = Math.max(this.#reach.value, reach + 0.25);
+  }
+
+  /** Whether a kind's hull is known. */
+  has(kind: number): boolean {
+    return this.#shapes[kind] != null;
   }
 
   #way(
@@ -923,16 +955,19 @@ export class WakeWaves {
     this.#count = 0;
   }
 
-  /** A hull in the world, heading clockwise from north, sitting sink metres deeper than at rest. */
-  add(east: number, north: number, heading: number, sink = 0): void {
+  /** A hull in the world, heading clockwise from north, sitting sink metres deeper than at rest; of a kind, whose hull it is. */
+  add(east: number, north: number, heading: number, sink = 0, kind = 0): void {
     if (this.#count >= WAKE_HULLS) {
       return;
     }
+    const k = this.#shapes[kind] == null ? 0 : kind;
     const h = this.#hulls[this.#count] as WakeHull;
     h.east = east;
     h.north = north;
     h.heading = heading;
     h.sink = sink;
+    h.shape = this.#shapes[k] ?? null;
+    this.#kinds[this.#count] = k;
     this.#count++;
   }
 
@@ -1038,10 +1073,12 @@ export class WakeWaves {
       this.#stampData[n * 4 + 1] = y;
       this.#stampData[n * 4 + 2] = h.heading;
       this.#stampData[n * 4 + 3] = h.sink;
+      this.#stampKinds[n] = this.#kinds[i] ?? 0;
       n++;
     }
     (this.#stamps.geometry as InstancedBufferGeometry).instanceCount = n;
     this.#stampAttr.needsUpdate = true;
+    this.#stampKindAttr.needsUpdate = true;
     const before = renderer.getRenderTarget();
     renderer.getClearColor(this.#clear);
     const alpha = renderer.getClearAlpha();

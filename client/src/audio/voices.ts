@@ -72,6 +72,16 @@ export interface SoundInput {
   rain?: number;
   /** The wind's gust factor where the boat is: 1 in a steady wind. */
   gustFactor?: number;
+  /** The boat's waterline, m: its hull speed, where the bow wave hisses. */
+  waterline?: number;
+  /** The main's area, m²: how thick its sheet is, and so its tone. */
+  sailArea?: number;
+}
+
+
+/** A rope's diameter on a boat whose main has this area, m², by the rigging's recipe. */
+export function ropeDiameter(r: Recipes['rigging'], sailArea: number): number {
+  return r.diameter * (Math.max(sailArea, 0.1) / r.forArea) ** 0.25;
 }
 
 export interface SoundTargets {
@@ -234,7 +244,7 @@ export function soundTargets(r: Recipes, x: SoundInput, out: SoundTargets): Soun
   out.windLevel = w.level.most * ramp(w.level.from, w.level.full, v) * breath;
 
   const g = r.rigging;
-  out.rigTone = aeolianTone(g.strouhal, v, g.diameter);
+  out.rigTone = aeolianTone(g.strouhal, v, ropeDiameter(g, x.sailArea ?? g.forArea));
   out.rigLevel = g.level.most * ramp(g.level.from, g.level.full, v);
 
   const f = r.flogging;
@@ -248,7 +258,10 @@ export function soundTargets(r: Recipes, x: SoundInput, out: SoundTargets): Soun
   const h = r.water;
   out.waterCutoff = Math.min(h.cutoff.most, h.cutoff.atRest + h.cutoff.perSpeed * s);
   out.waterLevel = h.level.most * ramp(h.level.from, h.level.full, s);
-  out.hissLevel = h.hiss.most * ramp(h.hiss.hullSpeed, h.hiss.full, s);
+  // The bow wave hisses past the hull speed, which goes as the square
+  // root of the waterline.
+  const k = Math.sqrt((x.waterline ?? h.hiss.waterline) / h.hiss.waterline);
+  out.hissLevel = h.hiss.most * ramp(h.hiss.hullSpeed * k, h.hiss.full * k, s);
 
   // The sea: its level by the height of the waves, shared between the sea
   // alone, its whitecaps and the boat's way through it.

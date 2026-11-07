@@ -43,6 +43,10 @@
 // Watching another sailor's boat, it never eases back by itself: the
 // player looks where they choose, and Back to the boat brings it back.
 //
+// Its views are framed for the catalog's first boat: for a larger one its
+// distance and the height it looks at scale with the boat (sizeOf), so the
+// boat fills the frame as the first does.
+//
 // As the world is shown it comes down into its first view, from twice its
 // height and distance, and a touch ends the descent where it is.
 //
@@ -124,6 +128,24 @@ const ARM_DONE = 0.001;
 const RISE_DONE = 1e-4;
 /** The rise tries this many elevations, evenly, from the view's up to the highest. */
 const RISE_STEPS = 6;
+
+/** A boat's size, as the camera frames it: its length over all, and its masthead's height, metres. */
+export interface FramedBoat {
+  lengthOverall: number;
+  physics: { rig: { boomHeight: number; luff: number } };
+}
+
+/**
+ * How much farther the camera stands from a boat than from the one its
+ * views are framed for, and how much higher it looks: by the boat's
+ * length or its masthead's height, whichever is the more.
+ */
+export function sizeOf(boat: FramedBoat, framed: FramedBoat): number {
+  const mast = (b: FramedBoat) => b.physics.rig.boomHeight + b.physics.rig.luff;
+  return boat === framed
+    ? 1
+    : Math.max(boat.lengthOverall / framed.lengthOverall, mast(boat) / mast(framed));
+}
 
 /** The view the game starts with, behind and above the boat. */
 export const CHASE: CameraView = { azimuth: 0, elevation: 0.3, distance: 16 };
@@ -212,6 +234,8 @@ export class ChaseCamera {
   sea = 0;
   /** Whether it eases back to its resting view untouched, as the player chooses. */
   easesBack = true;
+  /** How much larger the boat is than the one the views are framed for (sizeOf): its distances and look height scale by it. */
+  size = 1;
   /** Another's boat watched: it never eases back by itself, and there is no opening view. */
   watching = false;
   /** Where the camera holds, in the scene, looking at the boat wherever it goes: going over the lip. */
@@ -557,6 +581,11 @@ export class ChaseCamera {
     this.#shakeAt = now;
   }
 
+  /** The height above the boat the camera looks at, metres. */
+  get lookHeight(): number {
+    return LOOK_HEIGHT * this.size;
+  }
+
   /** The shake's displacement at now (ms): a wobble dying away over SHAKE_TIME. */
   shakeAt(now: number): number {
     const t = (now - this.#shakeAt) / 1000;
@@ -582,12 +611,12 @@ export class ChaseCamera {
     up?: Vec3Like,
   ): void {
     const v = this.view;
-    const distance = v.distance * this.#scale;
+    const distance = v.distance * this.#scale * this.size;
     // The stern's direction in the scene's x–z plane is the heading plus a
     // quarter turn (x east, z south, both turning clockwise from above).
     const a = this.yaw + Math.PI / 2 + v.azimuth;
     const tx = x;
-    const ty = y + this.lift + LOOK_HEIGHT;
+    const ty = y + this.lift + this.lookHeight;
     const tz = z;
     target.set(tx, ty, tz);
     up?.set(0, 1, 0);

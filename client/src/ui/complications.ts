@@ -77,13 +77,14 @@ export function disclosure(
 
 /**
  * The case's last line: the autopilot where no control on the screen says
- * what it holds (a boat watched has none), else the boat's tack while the
- * right-of-way overlay is on, else nothing. Its place is kept on a boat
- * watched and while the overlay is on, so the case keeps its size.
+ * what it holds (a boat watched has none), else the reef the main has,
+ * reefed, else the boat's tack while the right-of-way overlay is on, else
+ * nothing. Its place is kept on a boat watched, while the overlay is on
+ * and while reefed, so the case keeps its size.
  */
-export function caseLine(pilot: string, tack: string, controls: boolean): string {
+export function caseLine(pilot: string, tack: string, controls: boolean, reef = ''): string {
   if (pilot !== '' && !controls) {
     return `Autopilot ${pilot}`;
   }
-  return tack;
+  return reef !== '' ? reef : tack;
 }

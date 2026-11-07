@@ -116,11 +116,21 @@ export interface FoamFrame {
  */
 export type FoldAt = (east: Node<'float'>, north: Node<'float'>) => Node<'float'>;
 
-/** The hull every boat has, for the stamps: its waterline's ends aft and forward of the origin (z aft), and its half-beam. */
+/**
+ * A kind's hull, for the stamps: its waterline's ends aft and forward of
+ * the origin (z aft), its half-beam, and the speed through the water past
+ * which white water breaks behind its transom (look.ts's transomFrom).
+ */
 export interface StampHull {
   aft: number;
   fore: number;
   halfBeam: number;
+  transomFrom: number;
+}
+
+/** How far a hull's stamp's square reaches from its middle, metres. */
+function stampReach(h: StampHull): number {
+  return Math.max(h.halfBeam + 0.5, (h.aft - h.fore + WAKE_TAIL) / 2 + 0.5);
 }
 
 export class FoamMap {
@@ -149,8 +159,13 @@ export class FoamMap {
   readonly #stamps: Mesh;
   readonly #stampData: Float32Array;
   readonly #stampAttr: InstancedBufferAttribute;
-  /** The waterline's aft and forward ends (z aft) and its half-beam; and how far the stamp's square reaches. */
-  readonly #hull = uniform(new Vector4(1.9, -1.5, 0.52, 4));
+  /** Each stamp's hull: its waterline's aft and forward ends (z aft), its half-beam, and where its transom breaks. */
+  readonly #stampHulls: Float32Array;
+  readonly #stampHullAttr: InstancedBufferAttribute;
+  /** Each kind's hull, by its index; the first kind's stands for a kind not yet known. */
+  readonly #hulls: StampHull[] = [];
+  /** How far the longest hull's stamp reaches. */
+  #reach = 4;
   /** The time a frame stamps, s. */
   readonly #dt = uniform(0);
   readonly #scene = new Scene();
@@ -227,6 +242,10 @@ export class FoamMap {
     this.#stampAttr = new InstancedBufferAttribute(this.#stampData, 4);
     this.#stampAttr.setUsage(DynamicDrawUsage);
     g.setAttribute('stamp', this.#stampAttr);
+    this.#stampHulls = new Float32Array(STAMPS * 4);
+    this.#stampHullAttr = new InstancedBufferAttribute(this.#stampHulls, 4);
+    this.#stampHullAttr.setUsage(DynamicDrawUsage);
+    g.setAttribute('hull', this.#stampHullAttr);
     g.instanceCount = 0;
     this.#stamps = new Mesh(g, this.#stampMaterial());
     this.#stamps.frustumCulled = false;
@@ -243,7 +262,7 @@ export class FoamMap {
    */
   #stampMaterial(): MeshBasicNodeMaterial {
     const stamp = attribute<'vec4'>('stamp', 'vec4');
-    const hull = this.#hull as unknown as Node<'vec4'>;
+    const own = attribute<'vec4'>('hull', 'vec4');
     const sm = new MeshBasicNodeMaterial();
     // Added to what is there, one for one: the target has no alpha to weigh by.
     sm.blending = CustomBlending;
@@ -257,8 +276,10 @@ export class FoamMap {
     sm.depthWrite = false;
     // The square's corners in the hull's frame: x to starboard, forward
     // along y; its middle half way along the waterline and the transom's tail.
-    const middle = hull.x.add(hull.y).add(WAKE_TAIL).mul(0.5);
-    const local = vec2(positionGeometry.x.mul(hull.w), positionGeometry.y.mul(hull.w).sub(middle));
+    const reach = max(own.z.add(0.5), own.x.sub(own.y).add(WAKE_TAIL).mul(0.5).add(0.5));
+    const middle = own.x.add(own.y).add(WAKE_TAIL).mul(0.5);
+    const local = vec2(positionGeometry.x.mul(reach), positionGeometry.y.mul(reach).sub(middle));
+    const hull = varying(own);
     const c = cos(stamp.z);
     const s = sin(stamp.z);
     const east = local.x.mul(c).add(local.y.mul(s));
@@ -293,17 +314,23 @@ export class FoamMap {
       const tongue = smoothstep(-0.2, 0.2, behind)
         .mul(float(1).sub(smoothstep(WAKE_TAIL * 0.4, WAKE_TAIL, behind)))
         .mul(float(1).sub(smoothstep(0.5, 1, across)));
-      const driven = clamp(speed.sub(WAKE.transomFrom).div(WAKE.transomFull), 0, 1);
+      const from = hull.w;
+      const driven = clamp(speed.sub(from).div(from.mul(WAKE.transomFull)), 0, 1);
       const white = tongue.mul(driven).mul(min(speed.mul(dt).div(WAKE_TAIL), 1));
       return vec4(max(white, 0), max(churn, 0), 0, 1);
     })() as unknown as Node<'vec4'>;
     return sm;
   }
 
-  /** The hull every boat has, for now. */
-  setHull(hull: StampHull): void {
-    const reach = Math.max(hull.halfBeam + 0.5, (hull.aft - hull.fore + WAKE_TAIL) / 2 + 0.5);
-    this.#hull.value.set(hull.aft, hull.fore, hull.halfBeam, reach);
+  /** A kind's hull, by the kind's index: each boat stamps its own. */
+  setHull(hull: StampHull, kind = 0): void {
+    this.#hulls[kind] = { ...hull };
+    this.#reach = Math.max(this.#reach, stampReach(hull));
+  }
+
+  /** Whether a kind's hull is known. */
+  has(kind: number): boolean {
+    return this.#hulls[kind] !== undefined;
   }
 
   /** The map as the sea's material reads it at the scene point p (x, z): the white water and the track, 0 to 1 each. */
@@ -356,8 +383,9 @@ export class FoamMap {
    * A boat in the world, heading clockwise from north, sailing at speed m/s
    * through the water. It is stamped if it lies in the square.
    */
-  add(east: number, north: number, heading: number, speed: number): void {
-    if (this.#count >= STAMPS || !(speed > 0)) {
+  add(east: number, north: number, heading: number, speed: number, kind = 0): void {
+    const h = this.#hulls[kind] ?? this.#hulls[0];
+    if (this.#count >= STAMPS || !(speed > 0) || h === undefined) {
       return;
     }
     const at = this.#count * 4;
@@ -365,6 +393,11 @@ export class FoamMap {
     this.#stampData[at + 1] = north;
     this.#stampData[at + 2] = heading;
     this.#stampData[at + 3] = speed;
+    const hulls = this.#stampHulls;
+    hulls[at] = h.aft;
+    hulls[at + 1] = h.fore;
+    hulls[at + 2] = h.halfBeam;
+    hulls[at + 3] = h.transomFrom;
     this.#count++;
   }
 
@@ -427,7 +460,7 @@ export class FoamMap {
     // Each stamp in the square's own coordinates, in half squares.
     const half = WAKE.span / 2;
     const data = this.#stampData;
-    const reach = this.#hull.value.w / half;
+    const reach = this.#reach / half;
     let n = 0;
     for (let i = 0; i < this.#count; i++) {
       const x = ((data[i * 4] as number) - east) / half;
@@ -439,10 +472,15 @@ export class FoamMap {
       data[n * 4 + 1] = y;
       data[n * 4 + 2] = data[i * 4 + 2] as number;
       data[n * 4 + 3] = data[i * 4 + 3] as number;
+      const hulls = this.#stampHulls;
+      for (let k = 0; k < 4; k++) {
+        hulls[n * 4 + k] = hulls[i * 4 + k] as number;
+      }
       n++;
     }
     (this.#stamps.geometry as InstancedBufferGeometry).instanceCount = n;
     this.#stampAttr.needsUpdate = true;
+    this.#stampHullAttr.needsUpdate = true;
 
     const before = renderer.getRenderTarget();
     const cleared = renderer.autoClear;

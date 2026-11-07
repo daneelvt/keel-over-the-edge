@@ -1,8 +1,9 @@
 {
   "licence": "SPDX-License-Identifier: LicenseRef-All-Rights-Reserved. Art: all rights reserved, not covered by the AGPL. See art/README.md.",
-  "description": "The rigging's song: a narrow band of noise at the Aeolian tone of the sheet, f = St × V ÷ d (Strouhal number St, apparent wind V, rope diameter d), heard once the wind is up.",
+  "description": "The rigging's song: a narrow band of noise at the Aeolian tone of the sheet, f = St × V ÷ d (Strouhal number St, apparent wind V, rope diameter d), heard once the wind is up. A bigger boat's sheet is thicker: its diameter grows as the fourth root of the main's area (its load, shared by a purchase that grows with the sail), 10 mm on a sail of 7 m².",
   "strouhal": 0.2,
   "diameter": 0.01,
+  "forArea": 7.06,
   "q": 24,
   "level": { "from": 3, "full": 14, "most": 0.05 }
 }
