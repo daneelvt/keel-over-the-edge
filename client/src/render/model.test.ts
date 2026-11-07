@@ -2,7 +2,8 @@
 
 // Every boat's model against the catalog: its named parts sit where the
 // physics puts them, within 1 cm, its headsail's tack and head where the
-// headsails' are, and each level is within the catalog's triangle budget.
+// headsails' are, a ship's square sails on her yards' joints where her
+// square groups are, and each level is within the catalog's triangle budget.
 // Every sailor's art is the sailors' build's: its deck level skinned and
 // within its budget, its far level one posed figure seated by its place, and
 // its clips every one the runtime sails with.
@@ -23,7 +24,14 @@ interface Gltf {
     translation?: number[];
     mesh?: number;
     children?: number[];
-    extras?: { plan?: { deviation: number }; rake?: number; restage?: number[] };
+    extras?: {
+      plan?: { deviation: number; widest?: boolean };
+      rake?: number;
+      restage?: number[];
+      square?: { group: string; strip: number; split?: number; reefs?: number[] };
+      number?: boolean;
+      wheel?: { radius: number; spokes: number };
+    };
   }[];
   meshes: {
     primitives: { attributes: Record<string, number>; indices: number; material: number }[];
@@ -128,7 +136,28 @@ describe.each(catalog.boats.map((b) => [b.name, b] as const))('%s', (_, boat) =>
   };
   /** The hull's shell: its planking, painted or bright, and its sheathing. */
   const SHELL = ['timber', 'topsides', 'paint', 'copper'];
-  const { rig, foils, hull, sailor, headsails } = boat.physics;
+  const { rig, foils, hull, sailor, headsails, square } = boat.physics;
+  const has = (name: string): boolean => g.nodes.some((n) => n.name === name);
+  /** A node's place in the model's frame: its own and its parents'. */
+  const place = (name: string): number[] => {
+    const index = g.nodes.findIndex((n) => n.name === name);
+    const p = [...at(name)];
+    for (let i = index; ; ) {
+      const parent = g.nodes.findIndex((n) => n.children?.includes(i));
+      if (parent < 0) {
+        return p;
+      }
+      const t = g.nodes[parent]?.translation ?? [0, 0, 0];
+      for (let k = 0; k < 3; k++) {
+        p[k] = (p[k] ?? 0) + (t[k] ?? 0);
+      }
+      i = parent;
+    }
+  };
+  /** A boat steered by a wheel stands her sailor at it; one steered by a tiller seats him by it. */
+  const wheel = has('wheel');
+  /** The square-rigged: sails on yards turned by the braces. */
+  const squareRigged = square.squareForeArea > 0 || square.squareAfterArea > 0;
 
   test('has every named part', () => {
     for (const name of [
@@ -143,10 +172,7 @@ describe.each(catalog.boats.map((b) => [b.name, b] as const))('%s', (_, boat) =>
       'daggerboard',
       'sailor',
       // What the sailor holds, stands on and sits against.
-      'extension',
-      'grip',
-      'sheet',
-      'sheet-boom',
+      ...(wheel ? ['wheel'] : ['extension', 'grip', 'sheet', 'sheet-boom']),
       'gunwale',
       'board-root',
     ]) {
@@ -195,19 +221,41 @@ describe.each(catalog.boats.map((b) => [b.name, b] as const))('%s', (_, boat) =>
     expect(at('boom')[2]).toBeCloseTo(-rig.mastPosition, 2);
     expect(at('sail')).toEqual(at('boom'));
     expect(at('telltales')).toEqual(at('boom'));
-    // The lantern stands on the masthead, and the pennant flies from a
-    // short staff above it.
-    const masthead = rig.boomHeight + rig.luff;
-    for (const light of boat.lights) {
-      expect(at(light)[2]).toBeCloseTo(-rig.mastPosition, 2);
-      expect(at(light)[1] ?? 0).toBeGreaterThan(masthead);
-      expect(at(light)[1] ?? 0).toBeLessThan(masthead + 0.3);
+    if (squareRigged) {
+      // Her sidelights at the rail on their sides, forward of the mainmast;
+      // her sternlight on the centreline at the taffrail.
+      const main = at('main-yards');
+      for (const light of boat.lights) {
+        const p = at(light);
+        expect(p[1] ?? 0).toBeGreaterThan(1);
+        expect(p[1] ?? 0).toBeLessThan(10);
+        if (light === 'stern') {
+          expect(Math.abs(p[0] ?? 1)).toBeLessThan(CM);
+          expect(p[2] ?? 0).toBeGreaterThan(hull.transom - 0.5);
+        } else {
+          expect(Math.sign(p[0] ?? 0)).toBe(light === 'port' ? -1 : 1);
+          expect(Math.abs(p[0] ?? 0)).toBeGreaterThan(boat.beam / 2 - 1);
+          expect(p[2] ?? 0).toBeLessThan(main[2] ?? 0);
+        }
+      }
+      // The pennant flies at the main truck, above the topgallant yards.
+      expect(at('pennant')[2]).toBeCloseTo(main[2] ?? 0, 2);
+      expect(at('pennant')[1] ?? 0).toBeGreaterThan(square.squareFootHeight + square.squareLuff);
+    } else {
+      // The lantern stands on the masthead, and the pennant flies from a
+      // short staff above it.
+      const masthead = rig.boomHeight + rig.luff;
+      for (const light of boat.lights) {
+        expect(at(light)[2]).toBeCloseTo(-rig.mastPosition, 2);
+        expect(at(light)[1] ?? 0).toBeGreaterThan(masthead);
+        expect(at(light)[1] ?? 0).toBeLessThan(masthead + 0.3);
+      }
+      expect(at('pennant')[2]).toBeCloseTo(-rig.mastPosition, 2);
+      for (const light of boat.lights) {
+        expect(at('pennant')[1] ?? 0).toBeGreaterThan(at(light)[1] ?? 0);
+      }
+      expect(at('pennant')[1] ?? 0).toBeLessThan(masthead + 0.5);
     }
-    expect(at('pennant')[2]).toBeCloseTo(-rig.mastPosition, 2);
-    for (const light of boat.lights) {
-      expect(at('pennant')[1] ?? 0).toBeGreaterThan(at(light)[1] ?? 0);
-    }
-    expect(at('pennant')[1] ?? 0).toBeLessThan(masthead + 0.5);
     expect(at('rudder')[2]).toBeCloseTo(foils.rudderPosition, 2);
     expect(at('daggerboard')[2]).toBeCloseTo(-foils.boardPosition, 2);
     expect(at('sailor')[1]).toBeCloseTo(hull.centreOfGravity + sailor.sailorSeatHeight, 2);
@@ -223,23 +271,29 @@ describe.each(catalog.boats.map((b) => [b.name, b] as const))('%s', (_, boat) =>
   });
 
   test('its hull, sail and foils have the physics’ dimensions', () => {
-    const deck = bounds('hull', ['deck']);
+    // The beam across the deck; or, where the model says its plan is at the
+    // hull's widest (she tumbles home above it), across the planking.
     const planks = bounds('hull', SHELL);
-    expect(Math.abs((deck.max[0] ?? 0) - (deck.min[0] ?? 0) - boat.beam)).toBeLessThan(CM);
+    const across = node('hull').extras?.plan?.widest === true ? planks : bounds('hull', ['deck']);
+    expect(Math.abs((across.max[0] ?? 0) - (across.min[0] ?? 0) - boat.beam)).toBeLessThan(CM);
     expect(Math.abs((planks.max[2] ?? 0) - (planks.min[2] ?? 0) - boat.lengthOverall)).toBeLessThan(
       CM,
     );
     expect(Math.abs((planks.min[1] ?? 0) + hull.hullDraught)).toBeLessThan(CM);
+    // The sail's luff up the mast to its head, or to the gaff's throat.
     const sail = bounds('sail');
-    expect(Math.abs((sail.max[1] ?? 0) - (sail.min[1] ?? 0) - rig.luff)).toBeLessThan(CM);
+    const head = has('gaff') ? (at('gaff')[1] ?? 0) : (sail.max[1] ?? 0);
+    expect(Math.abs(head - (sail.min[1] ?? 0) - rig.luff)).toBeLessThan(CM);
     expect(Math.abs((sail.max[2] ?? 0) - (sail.min[2] ?? 0) - rig.foot)).toBeLessThan(CM);
     // The board or keel at its chord; the deepest of it (a keel's bulb) at the span.
     const board = bounds('daggerboard');
     const deepest = bounds('daggerboard', undefined, true);
     expect(Math.abs((deepest.min[1] ?? 0) + hull.hullDraught + foils.boardSpan)).toBeLessThan(CM);
     expect(Math.abs((board.max[2] ?? 0) - (board.min[2] ?? 0) - foils.boardChord)).toBeLessThan(CM);
+    // A rudder hung on the sternpost, behind the deadwood, reaches the keel's depth.
     const rudder = bounds('rudder');
-    expect(Math.abs((rudder.min[1] ?? 0) + hull.hullDraught + foils.rudderSpan)).toBeLessThan(CM);
+    const span = has('deadwood') ? foils.boardSpan : foils.rudderSpan;
+    expect(Math.abs((rudder.min[1] ?? 0) + hull.hullDraught + span)).toBeLessThan(CM);
   });
 
   test('its telltales sit at the height of each sail strip’s centre of effort', () => {
@@ -262,7 +316,7 @@ describe.each(catalog.boats.map((b) => [b.name, b] as const))('%s', (_, boat) =>
     expect(triangles(far)).toBeLessThanOrEqual(boat.art.budget.far);
   });
 
-  test.runIf(headsails.headsailArea > 0)(
+  test.runIf(headsails.headsailArea > 0 && !squareRigged)(
     'its jib is tacked and headed where the headsails are, flat on its stay',
     () => {
       // The tack: the node, ahead of the centre of gravity at its height.
@@ -288,6 +342,91 @@ describe.each(catalog.boats.map((b) => [b.name, b] as const))('%s', (_, boat) =>
       expect(p?.attributes.TEXCOORD_1).toBeDefined();
     },
   );
+
+  test.runIf(squareRigged)(
+    'her headsails are about their tack, the jib with their luff and foot, flat on their stays',
+    () => {
+      const tack = at('jib');
+      expect(Math.abs(tack[0] ?? 1)).toBeLessThan(CM);
+      expect(Math.abs((tack[1] ?? 0) - headsails.headsailTackHeight)).toBeLessThan(CM);
+      expect(Math.abs((tack[2] ?? 0) + headsails.headsailTack)).toBeLessThan(CM);
+      const sails = (node('jib').children ?? []).map((i) => g.nodes[i]?.name ?? '');
+      expect(sails.length).toBeGreaterThan(1);
+      let jib = false;
+      for (const name of sails.filter((n) => node(n).extras?.rake !== undefined)) {
+        const b = bounds(name);
+        const rake = node(name).extras?.rake ?? 0;
+        // Flat in the centreline, tacked at its node, its head rake aft.
+        expect(Math.max(Math.abs(b.min[0] ?? 1), Math.abs(b.max[0] ?? 1))).toBeLessThan(1e-4);
+        expect(Math.abs(b.min[1] ?? 1)).toBeLessThan(CM);
+        expect(Math.abs(b.min[2] ?? 1)).toBeLessThan(CM);
+        expect(rake).toBeGreaterThan(0);
+        const p = g.meshes[node(name).mesh ?? -1]?.primitives[0];
+        expect(p?.attributes.TEXCOORD_1).toBeDefined();
+        // The jib: the catalog's luff up its stay, and its foot (its head may lie aft of its clew).
+        const luff = Math.hypot(b.max[1] ?? 0, rake);
+        const reach = (b.max[2] ?? 0) - (b.min[2] ?? 0);
+        if (Math.abs(luff - headsails.headsailLuff) < CM && reach > headsails.headsailFoot - CM) {
+          jib = true;
+        }
+      }
+      expect(jib).toBe(true);
+    },
+  );
+
+  test.runIf(squareRigged)(
+    'her square sails hang on her yards’ joints, where her square groups are',
+    () => {
+      // The joints at the masts, square at rest: the fore at its group's mast.
+      for (const name of ['fore-yards', 'main-yards', 'mizzen-yards']) {
+        expect(Math.abs(at(name)[0] ?? 1)).toBeLessThan(CM);
+      }
+      expect(at('fore-yards')[2]).toBeCloseTo(-square.squareForeMast, 2);
+      expect(at('mizzen-yards')[2]).toBeCloseTo(at('mast')[2] ?? 0, 2);
+      const fore = at('fore-yards')[2] ?? 0;
+      expect(at('main-yards')[2] ?? 0).toBeGreaterThan(fore);
+      expect(at('main-yards')[2] ?? 0).toBeLessThan(-square.squareAfterMast);
+      // Each sail flat across its joint's plane, of a group and a strip;
+      // the courses' foot and the topgallants' heads the luff apart.
+      let lowest = Infinity;
+      let highest = -Infinity;
+      let numbered = 0;
+      const groups = new Set<string>();
+      for (const yards of ['fore-yards', 'main-yards', 'mizzen-yards']) {
+        for (const i of node(yards).children ?? []) {
+          const sail = g.nodes[i];
+          const sq = sail?.extras?.square;
+          expect(sq, sail?.name).toBeDefined();
+          groups.add(sq?.group ?? '');
+          expect([0, 1]).toContain(sq?.strip);
+          const b = bounds(sail?.name ?? '');
+          expect((b.max[2] ?? 0) - (b.min[2] ?? 0)).toBeLessThan(1e-4);
+          lowest = Math.min(lowest, (b.min[1] ?? 0) + (at(yards)[1] ?? 0));
+          highest = Math.max(highest, (b.max[1] ?? 0) + (at(yards)[1] ?? 0));
+          numbered += sail?.extras?.number === true ? 1 : 0;
+        }
+      }
+      expect([...groups].sort()).toEqual(['after', 'fore']);
+      expect(Math.abs(lowest - square.squareFootHeight)).toBeLessThan(CM);
+      expect(Math.abs(highest - square.squareFootHeight - square.squareLuff)).toBeLessThan(CM);
+      expect(numbered).toBe(1);
+    },
+  );
+
+  test.runIf(wheel)('her wheel stands before her helmsman, its axle fore and aft', () => {
+    const w = place('wheel');
+    const s = place('sailor');
+    expect(Math.abs(w[0] ?? 1)).toBeLessThan(CM);
+    expect(Math.abs((s[2] ?? 0) - (w[2] ?? 0) - 0.55)).toBeLessThan(CM);
+    expect(Math.abs((w[1] ?? 0) - (s[1] ?? 0) - 1.05)).toBeLessThan(CM);
+    const spec = node('wheel').extras?.wheel;
+    expect(spec?.radius).toBeCloseTo(0.75, 2);
+    expect(spec?.spokes).toBe(8);
+    // The rim and its handles in the node's x-y plane.
+    const b = bounds('wheel');
+    expect(Math.abs((b.max[0] ?? 0) - 0.9)).toBeLessThan(CM);
+    expect(Math.abs((b.max[1] ?? 0) - 0.9)).toBeLessThan(CM);
+  });
 
   test('the sail carries its fraction of chord and luff, for its vertex node', () => {
     const sail = g.meshes[node('sail').mesh ?? -1]?.primitives[0];

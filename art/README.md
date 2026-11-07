@@ -32,6 +32,11 @@ built files are committed; the catalog's `art.model` names them, and
 - `boats/keelboat/build.ts`: the keelboat, carvel planked with a copper
   bottom, a fin keel and bulb, a cuddy, a sloop rig with its standing
   rigging; its helm laid out as the sailors' stage boat's (below).
+- `boats/tall-ship/build.ts`: the tall ship, a ship-rigged collier with a
+  quarterdeck, a forecastle and a stern gallery, three masts in sections
+  with tops and crosstrees, square sails on yards, headsails, the mizzen
+  on its gaff and boom, shrouds with ratlines and deadeyes, her wheel and
+  her lanterns.
 - `town/lib/kit.ts` and `town/<biome>/build.ts`: each biome's kit of town
   buildings and props, `town/<biome>.glb`.
 - `icon/icon.ts` and `icon/build.ts`: the game's icon, the boat on sky and
@@ -52,6 +57,22 @@ starboard is +x. The sails, telltales and pennant carry their fractions (of
 the chord and luff, along each ribbon) in their texture coordinates, and
 the client shapes them on the GPU. Each level's triangles are within the
 catalog's `art.budget`.
+
+A square-rigged ship has more. Each mast's yards and their sails are a joint
+at the mast's axis, `fore-yards`, `main-yards` and `mizzen-yards`, at the
+courses' foot, square athwartships at rest, which the client turns about the
+vertical to brace them. Each square sail is a flat grid in its yard's
+upright plane, u from the port arm to the starboard and v from the head to
+the foot, whose `extras` name its `square` group and strip (a topsail's
+`split` is where its foot, of the lower strip, begins, and its `reefs` its
+reef bands); the main topsail carries the number (`{"number": true}`). Her
+`jib` node holds her headsails, each at its own tack with its `rake`, and
+the `spritsail` under the bowsprit. The mizzen's `boom` has its `gaff` at
+the throat. The `wheel` turns about its own z axis, fore and aft, its
+`extras` its radius and spokes; the `sailor` stands behind it. The
+`gallery` is the stern windows' panes, and her name goes on the transom
+(`{"name": {"on": "transom"}}` on the hull). Her lanterns are the nodes
+named as her lights.
 
 ## Sailors in Blender
 
