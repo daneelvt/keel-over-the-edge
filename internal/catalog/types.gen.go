@@ -2046,8 +2046,9 @@ type PhysicsSquare struct {
 	// between its masts, by their sails' areas.
 	SquareAfterMast float64 `json:"squareAfterMast"`
 
-	// Viscous drag coefficient.
-	SquareDrag float64 `json:"squareDrag"`
+	// Drag coefficient of the sails drawing, every 5° of angle of attack off the
+	// yards' line from 0° to 90°.
+	SquareDrag []float64 `json:"squareDrag"`
 
 	// The lowest sails' foot above the waterline, in m.
 	SquareFootHeight float64 `json:"squareFootHeight"`
@@ -2066,14 +2067,15 @@ type PhysicsSquare struct {
 	// fraction of the luff.
 	SquareHeadStrip float64 `json:"squareHeadStrip"`
 
+	// Lift coefficient of the sails drawing, the wind on their after face, every 5°
+	// of angle of attack off the yards' line from 0° to 90°.
+	SquareLift []float64 `json:"squareLift"`
+
 	// The sails' height from that foot to the highest yard, in m.
 	SquareLuff float64 `json:"squareLuff"`
 
-	// Greatest lift coefficient.
-	SquareMaxLift float64 `json:"squareMaxLift"`
-
-	// Normal force coefficient of separated flow, every 10° of angle of attack from
-	// 0° to 180°: also of a sail aback, pressed flat against its mast.
+	// Normal force coefficient of the sails aback, pressed flat against their mast,
+	// every 10° of angle of attack from 0° to 180°.
 	SquareNormalForce []float64 `json:"squareNormalForce"`
 
 	// Centre of pressure out along the yards from the mast toward the arm the wind
@@ -2083,12 +2085,6 @@ type PhysicsSquare struct {
 
 	// The share of their luff kept at full sail, with one reef and with two.
 	SquareReefs []float64 `json:"squareReefs"`
-
-	// Angle of attack of the greatest lift, in degrees.
-	SquareStallAngle float64 `json:"squareStallAngle"`
-
-	// Angle past it over which the lift falls away, in degrees.
-	SquareStallWidth float64 `json:"squareStallWidth"`
 
 	// The upper strip's yards braced this much squarer than the lower's, in degrees:
 	// the wind aloft is freer.
@@ -4784,4 +4780,4 @@ type WorldZones struct {
 }
 
 // Version is the catalog version (tools/catalog).
-const Version = "438c24e76c1d9e19"
+const Version = "d75eb06081de313e"

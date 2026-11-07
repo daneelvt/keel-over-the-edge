@@ -219,11 +219,9 @@ type Params struct {
 	SquareFootStrip   float64     // height of the lower strip's centre of effort above the foot, fraction of the luff
 	SquareHeadStrip   float64     // and the upper strip's
 	SquarePressure    float64     // centre of pressure out along the yards from the mast toward the arm the wind meets first, with the flow attached, fraction of their half-width
-	SquareMaxLift     float64     // greatest lift coefficient
-	SquareStallAngle  float64     // angle of attack of greatest lift, degrees
-	SquareStallWidth  float64     // angle over which the flow separates past it, degrees
-	SquareDrag        float64     // viscous drag coefficient
-	SquareNormalForce [19]float64 // normal force coefficient of separated flow, every 10° of attack from 0° to 180°
+	SquareLift        [19]float64 // lift coefficient drawing, every 5° of attack from 0° to 90°
+	SquareDrag        [19]float64 // drag coefficient drawing, every 5° of attack from 0° to 90°
+	SquareNormalForce [19]float64 // normal force coefficient aback, every 10° of attack from 0° to 180°
 	SquareTwist       float64     // the upper strip's yards braced squarer than the lower's, degrees
 	BraceSharp        float64     // the yards' least angle off the centreline, braced up sharp, degrees
 	BraceTime         float64     // s for the crew to swing the yards from sharp up on one side to the other

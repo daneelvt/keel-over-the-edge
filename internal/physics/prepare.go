@@ -99,22 +99,28 @@ type Prepared struct {
 
 	// The square sails, if the boat has any: a fore and an after group on
 	// yards the braces hold, and the crew that hauls them round.
-	square           bool
-	foreStrip        float64 // ½ρ_air × the area of one of the fore group's strips at full sail, kg/m
-	afterStrip       float64
-	squareSail       sailCoefficients
-	foreX, afterX    float64 // each group's mast ahead of the centre of gravity, m
-	squareFootZ      float64 // the sails' foot's depth below the centre of gravity, m
-	squareFootHeight float64 // each strip's centre of effort above the foot at full sail, m
-	squareHeadHeight float64
-	squarePressure   float64 // m out along the yards with the flow attached
-	squareTwist      float64 // rad
-	squareReefs      [3]float64
-	braceSharp       float64 // rad
-	braceRate        float64 // rad/s
-	hauls, letGo     float64 // rad
-	squareTrimBelow  float64 // rad: below this angle of attack the square sails lift, for Out.Sail
-	squareEaseAbove  float64 // rad: past this they are stalled
+	square            bool
+	foreStrip         float64 // ½ρ_air × the area of one of the fore group's strips at full sail, kg/m
+	afterStrip        float64
+	squareLift        [19]float64 // drawing, every 5° of attack from 0° to 90°
+	squareDrag        [19]float64
+	squareNormal      [19]float64 // aback, every 10° from 0° to 180°
+	squareStall       float64     // rad: the attack of greatest lift
+	invSquareSeparate float64     // 1 / the angle from it to square, 1/rad
+	invSquareLuff     float64     // 1 / the main's luffing angle, 1/rad
+	squareFlog        float64
+	foreX, afterX     float64 // each group's mast ahead of the centre of gravity, m
+	squareFootZ       float64 // the sails' foot's depth below the centre of gravity, m
+	squareFootHeight  float64 // each strip's centre of effort above the foot at full sail, m
+	squareHeadHeight  float64
+	squarePressure    float64 // m out along the yards with the flow attached
+	squareTwist       float64 // rad
+	squareReefs       [3]float64
+	braceSharp        float64 // rad
+	braceRate         float64 // rad/s
+	hauls, letGo      float64 // rad
+	squareTrimBelow   float64 // rad: below this angle of attack the square sails lift, for Out.Sail
+	squareEaseAbove   float64 // rad: past this they are stalled
 
 	// Foils.
 	board, rudder     foil
@@ -423,8 +429,9 @@ func (b *Prepared) prepareHeadsails(p *Params) {
 }
 
 // prepareSquare derives the square sails' constants, if the boat has any.
-// Each group is two strips each half its area, with the main's luffing
-// angle and flogging drag and the whole rig's induced drag. The braces
+// Each group is two strips each half its area, with its coefficients from
+// the catalog's tables, which hold the rig's own induced drag, and the
+// main's luffing angle and flogging drag. The braces
 // swing the yards over their travel from sharp up on one side, through
 // square, to sharp up on the other in the brace time.
 func (b *Prepared) prepareSquare(p *Params) {
@@ -434,8 +441,18 @@ func (b *Prepared) prepareSquare(p *Params) {
 	b.square = true
 	b.foreStrip = float64(float64(0.5*airDensity) * (0.5 * p.SquareForeArea))
 	b.afterStrip = float64(float64(0.5*airDensity) * (0.5 * p.SquareAfterArea))
-	b.squareSail.prepare(p.SquareMaxLift, p.SquareStallAngle, p.SquareStallWidth, p.SquareDrag,
-		&p.SquareNormalForce, b.sail.liftDrag, p.LuffAngle, p.FlogDrag)
+	b.squareLift, b.squareDrag, b.squareNormal = p.SquareLift, p.SquareDrag, p.SquareNormalForce
+	// The flow separates from the attack of greatest lift to square.
+	most := 0
+	for i := range b.squareLift {
+		if b.squareLift[i] > b.squareLift[most] {
+			most = i
+		}
+	}
+	b.squareStall = float64(float64(most) * (5 * degree))
+	b.invSquareSeparate = 1 / (math.Pi/2 - b.squareStall)
+	b.invSquareLuff = 1 / (p.LuffAngle * degree)
+	b.squareFlog = p.FlogDrag
 	b.foreX = p.SquareForeMast
 	b.afterX = p.SquareAfterMast
 	b.squareFootZ = p.CentreOfGravity - p.SquareFootHeight
@@ -450,6 +467,6 @@ func (b *Prepared) prepareSquare(p *Params) {
 	b.braceRate = float64(2*(math.Pi/2-b.braceSharp)) / p.BraceTime
 	b.hauls = float64(p.Hauls * degree)
 	b.letGo = float64(p.LetGo * degree)
-	b.squareTrimBelow = float64(0.5 * b.squareSail.stallAngle)
-	b.squareEaseAbove = float64(1.75 * b.squareSail.stallAngle)
+	b.squareTrimBelow = float64(0.5 * b.squareStall)
+	b.squareEaseAbove = float64(1.75 * b.squareStall)
 }

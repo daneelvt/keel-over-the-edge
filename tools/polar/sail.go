@@ -128,14 +128,30 @@ func trimmed(c coefficients, awa float64) (cl, cd, angle float64) {
 // runSail prints each of the boat's sails trimmed against its source, as
 // lift and drag and as drive and side force, and fails if drive or side
 // force where they are held is further from the source's than
-// sailTolerance. Induced drag is the whole rig's, as in the step: its area
-// on its effective height.
+// sailTolerance; and its square sails, if it has any, against the wind
+// tunnel's. Induced drag is the whole rig's, as in the step: its area on
+// its effective height.
+//
+// A ship's mizzen and headsails keep the main's and the jib's coefficients
+// as the other boats fit them, and are shown against ORC's, but not held:
+// in a ship's rig, whose induced drag is three times a sloop's, the trim
+// that drives her best near the wind is not the one ORC's sails, trimmed
+// for a sloop's lift, are taken at, and a ship never sails so close to
+// the apparent wind.
 func runSail(k *kind) error {
-	induced := (k.p.SailArea + k.p.HeadsailArea) / (math.Pi * k.p.EffectiveHeight * k.p.EffectiveHeight)
+	area := ((k.p.SailArea + k.p.HeadsailArea) + k.p.SquareForeArea) + k.p.SquareAfterArea
+	induced := area / (math.Pi * k.p.EffectiveHeight * k.p.EffectiveHeight)
 	fmt.Printf("%s\n", k.name)
+	square := k.p.SquareForeArea > 0 || k.p.SquareAfterArea > 0
 	failed := compareSail("the main", mainOf(k), orcMain, induced)
 	if k.p.HeadsailArea > 0 {
 		failed = append(failed, compareSail("the headsails", headsailsOf(k), orcJib, induced)...)
+	}
+	if square {
+		for _, f := range failed {
+			fmt.Println("  not held in a ship's rig:", f)
+		}
+		failed = compareSquare(k)
 	}
 	if len(failed) > 0 {
 		return errors.New("the trimmed sails are not ORC's:\n  " + strings.Join(failed, "\n  "))
@@ -171,6 +187,47 @@ func compareSail(name string, c coefficients, src orcSail, induced float64) []st
 			if math.Abs(drive-orcDrive) > sailTolerance*total || sideOff {
 				failed = append(failed, fmt.Sprintf("%s at %g°: drive %.3f against %.3f, side %.3f against %.3f", name, o.awa, drive, orcDrive, side, orcSide))
 			}
+		}
+	}
+	return failed
+}
+
+// tadano is a foremast of six square sails in a wind tunnel (Tadano,
+// Ohsugi, Amemiya and Yoshimura 1991, Figure 9): its lift and drag at
+// each angle of attack off the yards' line, degrees, read from the
+// figure's points.
+var tadano = []struct{ attack, cl, cd float64 }{
+	{5, 0.262, 0.132},
+	{10, 0.444, 0.161},
+	{15, 0.624, 0.219},
+	{20, 0.814, 0.274},
+	{25, 0.968, 0.356},
+	{30, 1.012, 0.422},
+	{35, 1.005, 0.48},
+	{40, 0.922, 0.532},
+	{45, 0.841, 0.591},
+	{50, 0.80, 0.643},
+	{55, 0.75, 0.70},
+	{60, 0.65, 0.755},
+	{70, 0.45, 0.82},
+	{80, 0.20, 0.86},
+	{90, 0, 0.88},
+}
+
+// compareSquare prints the square sails' coefficients at each of the wind
+// tunnel's angles of attack beside its own, and returns the angles at
+// which lift or drag is further from it than sailTolerance of its whole
+// force there. A strip's yards hold it at its attack: there is no trim.
+func compareSquare(k *kind) []string {
+	fmt.Println("the square sails against Tadano's foremast of six")
+	fmt.Println("  attack |   lift  Tadano |   drag  Tadano")
+	var failed []string
+	for _, t := range tadano {
+		cl, cd := physics.SquareCoefficients(k.b, t.attack*deg)
+		fmt.Printf("  %6.0f | %6.3f %6.3f | %6.3f %6.3f\n", t.attack, cl, t.cl, cd, t.cd)
+		total := math.Hypot(t.cl, t.cd)
+		if math.Abs(cl-t.cl) > sailTolerance*total || math.Abs(cd-t.cd) > sailTolerance*total {
+			failed = append(failed, fmt.Sprintf("the square sails at %g°: lift %.3f against %.3f, drag %.3f against %.3f", t.attack, cl, t.cl, cd, t.cd))
 		}
 	}
 	return failed

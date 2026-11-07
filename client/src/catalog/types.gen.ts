@@ -744,23 +744,61 @@ export interface PhysicsSquare {
    */
   squarePressure: number;
   /**
-   * Greatest lift coefficient.
+   * Lift coefficient of the sails drawing, the wind on their after face, every 5° of angle of attack off the yards' line from 0° to 90°.
+   *
+   * @minItems 19
+   * @maxItems 19
    */
-  squareMaxLift: number;
+  squareLift: [
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number
+  ];
   /**
-   * Angle of attack of the greatest lift, in degrees.
+   * Drag coefficient of the sails drawing, every 5° of angle of attack off the yards' line from 0° to 90°.
+   *
+   * @minItems 19
+   * @maxItems 19
    */
-  squareStallAngle: number;
+  squareDrag: [
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number
+  ];
   /**
-   * Angle past it over which the lift falls away, in degrees.
-   */
-  squareStallWidth: number;
-  /**
-   * Viscous drag coefficient.
-   */
-  squareDrag: number;
-  /**
-   * Normal force coefficient of separated flow, every 10° of angle of attack from 0° to 180°: also of a sail aback, pressed flat against its mast.
+   * Normal force coefficient of the sails aback, pressed flat against their mast, every 10° of angle of attack from 0° to 180°.
    *
    * @minItems 19
    * @maxItems 19
@@ -8069,4 +8107,4 @@ export interface NewsColumn {
 }
 
 /** The catalog version (tools/catalog). */
-export const CATALOG_VERSION = '438c24e76c1d9e19';
+export const CATALOG_VERSION = 'd75eb06081de313e';

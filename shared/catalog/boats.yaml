@@ -181,10 +181,8 @@ boats:
         squareFootStrip: 0
         squareHeadStrip: 0
         squarePressure: 0
-        squareMaxLift: 0
-        squareStallAngle: 0
-        squareStallWidth: 0
-        squareDrag: 0
+        squareLift: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+        squareDrag: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
         squareNormalForce: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
         squareTwist: 0
         braceSharp: 0
@@ -675,14 +673,21 @@ boats:
         squareFootStrip: 0.235
         squareHeadStrip: 0.72
         squarePressure: 0.4 # estimate
-        # Fitted by tools/polar -sail to Tadano's foremast of square sails:
-        # the greatest lift, 1.03, at 30°, with no sudden stall.
-        squareMaxLift: 1.15
-        squareStallAngle: 30
-        squareStallWidth: 25
-        squareDrag: 0.05
-        squareNormalForce: [0, 0.35, 0.65, 0.9, 1.05, 1.15, 1.22, 1.26, 1.28,
-          1.28, 1.28, 1.26, 1.22, 1.15, 1.05, 0.9, 0.65, 0.35, 0]
+        # Tadano, Ohsugi, Amemiya and Yoshimura (1991), Figure 9: a foremast of
+        # six square sails in a wind tunnel, its lift greatest, 1.01, at 30°
+        # of attack, falling gently with no sudden stall, and its drag
+        # rising to 0.88 square to the wind; at 65°, 75° and 85°, between
+        # their points. Every 5° from 0° (their line to 5°) to 90°.
+        squareLift: [0.08, 0.262, 0.444, 0.624, 0.814, 0.968, 1.012, 1.005,
+          0.922, 0.841, 0.80, 0.75, 0.65, 0.55, 0.45, 0.325, 0.20, 0.10, 0]
+        squareDrag: [0.12, 0.132, 0.161, 0.219, 0.274, 0.356, 0.422, 0.48,
+          0.532, 0.591, 0.643, 0.70, 0.755, 0.788, 0.82, 0.84, 0.86, 0.87,
+          0.88]
+        # Aback, the sails pressed flat against their masts: the resultant
+        # of their drawing, from 0 edge on to their drag square to the wind;
+        # symmetric about square. Every 10° from 0° to 180°.
+        squareNormalForce: [0, 0.47, 0.86, 1.10, 1.06, 1.03, 1.0, 0.94, 0.88,
+          0.88, 0.88, 0.94, 1.0, 1.03, 1.06, 1.10, 0.86, 0.47, 0]
         squareTwist: 5 # estimate
         braceSharp: 30 # estimate: the yards meet the lee shrouds
         braceTime: 40 # estimate

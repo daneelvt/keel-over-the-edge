@@ -107,10 +107,8 @@ func PhysicsParams(b *Boat) physics.Params {
 	p.SquareFootStrip = b.Physics.Square.SquareFootStrip
 	p.SquareHeadStrip = b.Physics.Square.SquareHeadStrip
 	p.SquarePressure = b.Physics.Square.SquarePressure
-	p.SquareMaxLift = b.Physics.Square.SquareMaxLift
-	p.SquareStallAngle = b.Physics.Square.SquareStallAngle
-	p.SquareStallWidth = b.Physics.Square.SquareStallWidth
-	p.SquareDrag = b.Physics.Square.SquareDrag
+	copy(p.SquareLift[:], b.Physics.Square.SquareLift)
+	copy(p.SquareDrag[:], b.Physics.Square.SquareDrag)
 	copy(p.SquareNormalForce[:], b.Physics.Square.SquareNormalForce)
 	p.SquareTwist = b.Physics.Square.SquareTwist
 	p.BraceSharp = b.Physics.Square.BraceSharp

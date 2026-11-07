@@ -155,10 +155,10 @@ func (b *Prepared) sailLoads(s *State, m *motion, flat, twist float64, g *rig, l
 //
 // A square sail is the same from either yardarm: the flow meets it at an
 // angle of attack off the yards' line, from 0, edge on, to 90°, square to
-// it, on its after face, where it draws and bellies forward (Tadano and
-// others 1991), or on its fore face, aback, where it lies flat against
-// its mast and gives the normal force of separated flow, driving the ship
-// astern. Its lift is across the flow toward the face the wind is not on.
+// it, on its after face, where it draws and bellies forward, or on its
+// fore face, aback, where it lies flat against its mast and gives the
+// normal force of separated flow, driving the ship astern. Its lift is
+// across the flow toward the face the wind is not on.
 func (b *Prepared) squareLoads(yards, x, strip float64, m *motion, g *rig, l *loads, r *sailResult, attackOut, flowOut *[2]float64) {
 	out := sign(yards)
 	if out == 0 {
@@ -189,10 +189,10 @@ func (b *Prepared) squareLoads(yards, x, strip float64, m *motion, g *rig, l *lo
 		sinA, cosA := SinCos(a)
 		var cl, cd, sep float64
 		if aback {
-			n := lookup(b.squareSail.normalForce[:], a, 18/math.Pi)
-			cl, cd, sep = float64(n*cosA), b.squareSail.drag+float64(n*sinA), 1
+			n := lookup(b.squareNormal[:], a, 18/math.Pi)
+			cl, cd, sep = float64(n*cosA), b.squareDrag[0]+float64(n*sinA), 1
 		} else {
-			cl, cd, sep = b.squareSail.coefficients(a, sinA, cosA, 1)
+			cl, cd, sep = b.squareCoefficients(a)
 		}
 		// The centre of pressure moves in to the mast as the flow
 		// separates.
@@ -215,13 +215,51 @@ func (b *Prepared) squareLoads(yards, x, strip float64, m *motion, g *rig, l *lo
 			l.K += float64(pf.side * fz)
 		}
 		attackOut[i] = a
-		flowOut[i] = b.squareSail.flowOf(a, sep)
+		flowOut[i] = b.squareFlow(a, sep)
 		if aback {
 			attackOut[i], flowOut[i] = -a, FlowAback
 		}
 	}
 }
 
+// squareCoefficients returns a square sail's strip's lift and drag
+// coefficients drawing at angle of attack a in [0, π/2] off its yards'
+// line, and how far its flow has separated, from 0 to 1. They are a
+// foremast's six square sails in a wind tunnel (Tadano, Ohsugi, Amemiya
+// and Yoshimura 1991): bellied forward, they lift even along their yards'
+// line; their lift rises steadily to its greatest at about 30° and falls
+// gently past it, with no sudden stall, the vortices off their heads and
+// feet holding the flow on their backs; and the drag of the whole mast,
+// its own induced drag in it, rises to 0.88 square to the wind. The flow
+// separates from the greatest lift to square. Below the luffing angle the
+// cloth flogs, as the main's does.
+func (b *Prepared) squareCoefficients(a float64) (cl, cd, sep float64) {
+	luff := smooth(float64(a * b.invSquareLuff))
+	cl = float64(lookup(b.squareLift[:], a, 36/math.Pi) * luff)
+	cd = lookup(b.squareDrag[:], a, 36/math.Pi) + float64(b.squareFlog*(1-luff))
+	sep = smooth(float64((a - b.squareStall) * b.invSquareSeparate))
+	return cl, cd, sep
+}
+
+// squareFlow is a square sail's strip's flow drawing at angle of attack a,
+// its flow separated by sep.
+func (b *Prepared) squareFlow(a, sep float64) float64 {
+	switch {
+	case a < 1/b.invSquareLuff:
+		return FlowLuffing
+	case sep > 0.5:
+		return FlowStalled
+	}
+	return FlowAttached
+}
+
+// SquareCoefficients returns a square sail's strip's lift and drag
+// coefficients drawing at angle of attack a off its yards' line, in [0,
+// π/2], for tools/polar, which compares them with the wind tunnel's.
+func SquareCoefficients(b *Prepared, a float64) (cl, cd float64) {
+	cl, cd, _ = b.squareCoefficients(a)
+	return cl, cd
+}
 
 // jibLoads adds the headsails' strips' forces to l, at the tack, and fills
 // r's headsail values. They are the main's strips about the stay, the clew

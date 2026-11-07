@@ -373,7 +373,7 @@ func (b *Prepared) squareState(s *State, o *Out) float64 {
 			return SailDrawing
 		}
 		return SailLuffing
-	case a > b.squareEaseAbove && math.Abs(s.Yards) < math.Pi/2-0.05*(math.Pi/2-b.braceSharp) &&
+	case a > b.squareEaseAbove && math.Abs(s.Yards) < math.Pi/2-float64(0.05*(math.Pi/2-b.braceSharp)) &&
 		math.Abs(o.ApparentWindAngle) < sailRunFrom:
 		return SailStalled
 	}
