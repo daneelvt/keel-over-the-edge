@@ -178,7 +178,7 @@ func tools() []toolDef {
 		}},
 		{budget: orders, tool: &mcp.Tool{
 			Name: toolBoat, Title: "Boat",
-			Description: "Your owner's fleet, shared by its sailors: list its boats; take a free one; look paints, numbers and names yours. " +
+			Description: "Your owner's fleet, shared by its sailors: list its boats; take one available; look paints, numbers and names yours. " +
 				"At sea both only in port (Port Royal or a port, not a village). leave quits the water; observe, steer and trim sail anyway. " +
 				"sailor_look: your own look, at Port Royal.",
 			Annotations: hints("Boat", false, false, false),

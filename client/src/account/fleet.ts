@@ -5,7 +5,7 @@
 // its name (none until given), its hull's paint and its sails' cloth; and
 // who has it: the sailor who sails it, or sailed it last and will again.
 // A boat at sea with another of the account's sailors is taken; any other
-// is free, and the player may choose it for their next voyage, or in a
+// is available, and the player may choose it for their next voyage, or in a
 // port take it in place of the one they sail. Its look is changed ashore,
 // or in a port.
 //
@@ -99,7 +99,7 @@ export function boatOf(f: Fleet | null, sailor: string): FleetBoat | null {
 
 /**
  * Where a boat is, among the fleet's to choose from: "yours", "at sea ·
- * Iron Mary" for one taken, "free", or "free · last sailed by Iron Mary".
+ * Iron Mary" for one taken, "available", or "available · last sailed by Iron Mary".
  */
 export function standingWords(f: Fleet, b: FleetBoat): string {
   if (b.id === f.boat) {
@@ -108,16 +108,16 @@ export function standingWords(f: Fleet, b: FleetBoat): string {
   if (taken(b)) {
     return `at sea · ${b.sailor}`;
   }
-  return b.sailor === '' ? 'free' : `free · last sailed by ${b.sailor}`;
+  return b.sailor === '' ? 'available' : `available · last sailed by ${b.sailor}`;
 }
 
 /**
  * A boat in the account page's list: "Keelboat «Saltpeter» 311 · at sea,
- * Iron Mary", "… · yours" for the one the player will take, or "… · free".
+ * Iron Mary", "… · yours" for the one the player will take, or "… · available".
  */
 export function fleetRowWords(cat: BoatCatalog, f: Fleet, b: FleetBoat): string {
   const where =
-    b.atSea && b.sailor !== '' ? `at sea, ${b.sailor}` : b.id === f.boat ? 'yours' : 'free';
+    b.atSea && b.sailor !== '' ? `at sea, ${b.sailor}` : b.id === f.boat ? 'yours' : 'available';
   return `${boatTitle(cat, b)} · ${where}`;
 }
 

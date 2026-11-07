@@ -9,11 +9,11 @@
 // machine sailors. Each boat is one sailor's at a time, the one who sails it
 // or sailed it last and takes it again (store.Boat.Sailor). A boat is taken
 // while that sailor is in the water, or waits for a boat, in the world
-// sailed; otherwise it is free, and a sailor who takes it makes it theirs.
-// A sailor with no boat of their own takes the first free boat of the kind
+// sailed; otherwise it is available, and a sailor who takes it makes it theirs.
+// A sailor with no boat of their own takes the first available boat of the kind
 // each sailor brings to the fleet.
 //
-// A sailor ashore may take any free boat and change any boat's look. At
+// A sailor ashore may take any available boat and change any boat's look. At
 // sea, they may do either only in port: their boat is swapped where it
 // lies, or given its new look in the world at once.
 package fleet
@@ -168,16 +168,16 @@ func (f *Fleet) view(boats []store.Boat, sailor store.AccountID, afloat map[stor
 		}
 	}
 	if v.Yours < 0 {
-		v.Yours = f.firstFree(&v)
+		v.Yours = f.firstAvailable(&v)
 	}
 	return v
 }
 
-// firstFree is the boat a sailor with none would take: the first free boat
-// of the kind each sailor brings, one no sailor has before one whose sailor
-// is ashore; −1 for none.
-func (f *Fleet) firstFree(v *View) int {
-	free := -1
+// firstAvailable is the boat a sailor with none would take: the first
+// available boat of the kind each sailor brings, one no sailor has before
+// one whose sailor is ashore; −1 for none.
+func (f *Fleet) firstAvailable(v *View) int {
+	found := -1
 	for i := range v.Boats {
 		b := &v.Boats[i]
 		if b.Kind != f.sailors || b.Taken() {
@@ -186,11 +186,11 @@ func (f *Fleet) firstFree(v *View) int {
 		if !b.Held {
 			return i
 		}
-		if free < 0 {
-			free = i
+		if found < 0 {
+			found = i
 		}
 	}
-	return free
+	return found
 }
 
 // read is the fleet a sailor sails from, as they see it, and its owner.
@@ -221,8 +221,8 @@ type Join struct {
 }
 
 // ForJoin is the boat a sailor takes to sea as they join: their own, or
-// the first free boat of the kind each sailor brings, which becomes theirs.
-// With no fleet to read, or no free boat, the kind each sailor brings, of
+// the first available boat of the kind each sailor brings, which becomes theirs.
+// With no fleet to read, or no available boat, the kind each sailor brings, of
 // the first look, unnumbered: a sailor never stays ashore for want of one.
 func (f *Fleet) ForJoin(ctx context.Context, sailor store.AccountID) Join {
 	fallback := Join{Kind: uint16(f.sailors)}

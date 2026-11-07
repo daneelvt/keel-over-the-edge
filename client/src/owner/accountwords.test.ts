@@ -230,6 +230,6 @@ describe('the boats', () => {
       'Keelboat «Saltpeter» 311 · red ochre, tanbark sails · at sea, sailed by Iron Mary (AI)',
     );
     expect(cardBoatWords({ ...keel, sailor: 'Ann Bonny' })).toContain("· Ann Bonny's, ashore");
-    expect(cardBoatWords(keel)).toContain('· free');
+    expect(cardBoatWords(keel)).toContain('· available');
   });
 });

@@ -6,7 +6,7 @@
 - `chart`: charted places nearest first, with bearings and distances; `group`, `limit`, `place`.
 - `forecast`: the next 90 minutes' systems and fronts, where they are and will be; `place` for one place's local weather.
 - `news`: the news sheet, newest first; `before` for older pages.
-- `boat`: `list` your owner's fleet; `take` a free boat (kind, name or number) to sea; `look` with `paint`, `cloth`, `number` or `name` changes yours, ashore or in port (not a village); `leave` the water; `sailor_look` with `version`, `finish` or `colour` changes your look at Port Royal.
+- `boat`: `list` your owner's fleet; `take` an available boat (kind, name or number) to sea; `look` with `paint`, `cloth`, `number` or `name` changes yours, ashore or in port (not a village); `leave` the water; `sailor_look` with `version`, `finish` or `colour`: your look, at Port Royal.
 - `handbook`: these pages.
 - `say`, `race`, `pencil`, `bottle`: not yet.
 

@@ -16,7 +16,7 @@ import (
 
 // The fleet as a machine sailor's agent sails it: the boats of its owner's
 // fleet, which it shares with its owner and the owner's other machine
-// sailors; taking a free one, ashore or in port; and its own boat's look,
+// sailors; taking an available one, ashore or in port; and its own boat's look,
 // changed there.
 
 // fleetArgs are boat's arguments for the fleet: the boat taken, by its
@@ -57,7 +57,7 @@ func boatState(b *fleet.Boat, atSea bool) string {
 	case b.Taken():
 		return "at sea, sailed by «" + b.SailorName + "»"
 	}
-	return "free"
+	return "available"
 }
 
 // fleetList is the fleet as its agent reads it.
@@ -74,12 +74,12 @@ func (c *Core) fleetList(s *Sea, v *fleet.View) string {
 			b.WriteString(", the boat you take to sea")
 		}
 	}
-	b.WriteString("\nTake a free boat with action take and boat (its kind, name or number); paint, number and name yours with action look. " + fleetWhere)
+	b.WriteString("\nTake an available boat with action take and boat (its kind, name or number); paint, number and name yours with action look. " + fleetWhere)
 	return b.String()
 }
 
 // whichBoat is the boat of v a word names: by its sail number, its name,
-// its kind and number ("keelboat 3"), or its kind, a free one or yours
+// its kind and number ("keelboat 3"), or its kind, an available one or yours
 // first; −1 for none.
 func whichBoat(s *Sea, v *fleet.View, word string) int {
 	w := fold(word)
@@ -117,7 +117,7 @@ func fleetRefusal(err error, what string) *refusal {
 	case errors.Is(err, fleet.ErrPort):
 		return refuse(refusedPort, wordsPort)
 	case errors.Is(err, fleet.ErrTaken):
-		return refuse(refusedArgs, "That boat is at sea with another of your owner's sailors: take a free one.")
+		return refuse(refusedArgs, "That boat is at sea with another of your owner's sailors: take an available one.")
 	case errors.Is(err, fleet.ErrRoom):
 		return refuse(refusedArgs, "No room here for "+what+": too near land, shoal water or another boat. Try the open water of the harbour.")
 	case errors.Is(err, fleet.ErrNumber):
@@ -194,7 +194,7 @@ func (c *Core) boatLook(ctx context.Context, h *helm, s *Sea, o *fleetArgs) (str
 		return "", nil, refuse(refusedBusy, wordsBusy)
 	}
 	if v.Yours < 0 {
-		return "", nil, refuse(refusedArgs, "No boat of your owner's fleet is free for you now.\n"+c.fleetList(s, &v))
+		return "", nil, refuse(refusedArgs, "No boat of your owner's fleet is available to you now.\n"+c.fleetList(s, &v))
 	}
 	b := v.Boats[v.Yours]
 	bl := s.Fleet.Looks()

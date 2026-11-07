@@ -411,12 +411,12 @@ export function BoatLookChooser({
 /** What Change boat says of a boat chosen: ashore, for the next voyage; at sea, here. */
 export const CHANGE_ASHORE = 'The boat you choose is yours for your next voyage.';
 export const CHANGE_AT_SEA = 'The boat you choose takes your boat’s place here, at rest.';
-export const NONE_FREE = 'No other boat of your fleet is free.';
+export const NONE_AVAILABLE = 'No other boat of your fleet is available.';
 
 /**
  * The fleet's boats to choose from: each with its picture, kind, name and
  * number, how many it takes and where it is; the player's marked, one
- * taken shown by whom and not chosen. At sea, only the free ones.
+ * taken shown by whom and not chosen. At sea, only the available ones.
  */
 export function ChangeBoat({
   chooser: c,
@@ -424,7 +424,7 @@ export function ChangeBoat({
   className = '',
 }: {
   chooser: BoatChooser;
-  /** On the board, at sea in a port: only the free boats, and one chosen takes the place of the one sailed. */
+  /** On the board, at sea in a port: only the available boats, and one chosen takes the place of the one sailed. */
   board?: boolean;
   className?: string;
 }) {
@@ -467,7 +467,7 @@ export function ChangeBoat({
           </li>
         ))}
       </ul>
-      {boats.every((b) => b.id === f.boat) ? <p class={k.faint}>{NONE_FREE}</p> : null}
+      {boats.every((b) => b.id === f.boat) ? <p class={k.faint}>{NONE_AVAILABLE}</p> : null}
       <div class="boat-look-foot">
         <p class="boat-look-problem" aria-live="polite">
           {c.problem.value}

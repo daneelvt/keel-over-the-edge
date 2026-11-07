@@ -101,11 +101,15 @@ export function boatWords(b: {
   return `${b.kind}${name} ${b.number}${look}`;
 }
 
-/** A card's boat and whose it is: "… · at sea, sailed by Iron Mary (AI)"; "… · free". */
+/** A card's boat and whose it is: "… · at sea, sailed by Iron Mary (AI)"; "… · available". */
 export function cardBoatWords(b: CardBoat): string {
   const who =
     b.sailor === undefined || b.sailor === '' ? '' : `${b.sailor}${b.machine ? ' (AI)' : ''}`;
-  const state = b.atSea ? `at sea, sailed by ${who}` : who === '' ? 'free' : `${who}'s, ashore`;
+  const state = b.atSea
+    ? `at sea, sailed by ${who}`
+    : who === ''
+      ? 'available'
+      : `${who}'s, ashore`;
   return `${boatWords(b)} · ${state}`;
 }
 

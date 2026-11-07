@@ -7,7 +7,7 @@
 // minutes, and now. In Port Royal or a port town, not at a fishing
 // village, the player's own boat may be changed there: "Your boat" opens
 // its look's chooser over the sea, in the board's place, and "Change boat"
-// the fleet's free boats, one chosen taking the place of the one in the
+// the fleet's available boats, one chosen taking the place of the one in the
 // water. The server checks the place again, and says why it refuses.
 
 import type { ReadonlySignal } from '@preact/signals';

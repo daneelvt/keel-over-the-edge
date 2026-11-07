@@ -817,7 +817,7 @@ export function MachinesAccount({ now = Date.now() }: { now?: number }) {
 
 /**
  * The account page's fleet: each boat by its kind, name and number, at sea
- * with its sailor or free; until the fleet is read, or if it cannot be,
+ * with its sailor or available; until the fleet is read, or if it cannot be,
  * how many of each kind there are.
  */
 export function FleetList({
@@ -840,7 +840,7 @@ export function FleetList({
     <section class="fleet-account" aria-labelledby="fleet-account-title">
       <h3 id="fleet-account-title">Your fleet</h3>
       <p class="account-faint">
-        Shared by your sailors: choose a free one before you sail, or in a port.
+        Shared by your sailors: choose an available one before you sail, or in a port.
       </p>
       <ul class="fleet-list">
         {inOrder(catalog, fleet.boats).map((b: FleetBoat) => (

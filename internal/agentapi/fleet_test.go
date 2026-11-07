@@ -40,7 +40,7 @@ func TestFleet(t *testing.T) {
 	h.sea.Fleet = fleet.New(fleet.Config{Store: ms, Catalog: h.sea.Catalog, World: h.w.Bus, Log: slog.New(slog.DiscardHandler)})
 
 	text, refused := h.call(t, mary, toolBoat, map[string]any{})
-	for _, want := range []string{"Jolly boat 1, free\n", "Jolly boat 2, free (white lead, bleached canvas sails), the boat you take to sea", "Keelboat «Saltpeter» 7, free"} {
+	for _, want := range []string{"Jolly boat 1, available\n", "Jolly boat 2, available (white lead, bleached canvas sails), the boat you take to sea", "Keelboat «Saltpeter» 7, available"} {
 		if refused || !strings.Contains(text, want) {
 			t.Fatalf("the list lacks %q: %s", want, text)
 		}

@@ -20,9 +20,9 @@ import (
 
 func id(n byte) store.AccountID { return store.AccountID{15: n} }
 
-// TestFleet: a sailor takes the first free boat of the kind each sailor
+// TestFleet: a sailor takes the first available boat of the kind each sailor
 // brings to sea, which is theirs from then on; a boat another sailor has in
-// the water is taken; ashore a sailor takes any free boat and changes any
+// the water is taken; ashore a sailor takes any available boat and changes any
 // boat's look, checked against the catalog; at sea only in port, where the
 // world swaps the boat or changes its look at once.
 func TestFleet(t *testing.T) {

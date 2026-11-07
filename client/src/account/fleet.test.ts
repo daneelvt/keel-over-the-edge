@@ -104,7 +104,7 @@ function boat(over: Partial<FleetBoat> & { id: string; kind: string }): FleetBoa
   };
 }
 
-/** A fleet: the player's keelboat, a Jolly boat at sea with a machine sailor, a free one. */
+/** A fleet: the player's keelboat, a Jolly boat at sea with a machine sailor, an available one. */
 function fleet(): Fleet {
   return {
     boat: 'k',
@@ -172,14 +172,14 @@ describe('the fleet in words', () => {
     expect(aboardWords(account)).toBe(`up to ${account?.capacity} aboard`);
   });
 
-  test('where each boat is, to choose from: the player’s, taken by whom, or free', () => {
+  test('where each boat is, to choose from: the player’s, taken by whom, or available', () => {
     const f = fleet();
     const [j1, k, j2] = f.boats as [FleetBoat, FleetBoat, FleetBoat];
     expect(standingWords(f, k)).toBe('yours');
     expect(standingWords(f, j1)).toBe('at sea · Iron Mary');
-    expect(standingWords(f, j2)).toBe('free');
+    expect(standingWords(f, j2)).toBe('available');
     expect(standingWords(f, { ...j2, sailor: 'Copper Kate' })).toBe(
-      'free · last sailed by Copper Kate',
+      'available · last sailed by Copper Kate',
     );
   });
 
@@ -188,7 +188,7 @@ describe('the fleet in words', () => {
     const [j1, k, j2] = f.boats as [FleetBoat, FleetBoat, FleetBoat];
     expect(fleetRowWords(catalog, f, j1)).toBe(`${sailors?.name} «Gull» 12 · at sea, Iron Mary`);
     expect(fleetRowWords(catalog, f, k)).toBe(`${account?.name} «Saltpeter» 311 · yours`);
-    expect(fleetRowWords(catalog, f, j2)).toBe(`${sailors?.name} 40 · free`);
+    expect(fleetRowWords(catalog, f, j2)).toBe(`${sailors?.name} 40 · available`);
   });
 
   test('the boats in the catalog’s order of kinds, then by number', () => {
@@ -378,7 +378,7 @@ describe('the look’s chooser', () => {
 });
 
 describe('the boat chosen from the fleet', () => {
-  test('one free is chosen at once: POST /api/boat, the fleet as answered', async () => {
+  test('one available is chosen at once: POST /api/boat, the fleet as answered', async () => {
     const next = { ...fleet(), boat: 'j2' };
     const { c, sent } = await loaded(() => answer(200, next));
     c.openBoats();
@@ -470,7 +470,7 @@ describe('the player’s panel and the board', () => {
     expect(text(yours)).toContain('Saltpeter');
   });
 
-  test('on the board, in a port, the free boats only', async () => {
+  test('on the board, in a port, the available boats only', async () => {
     const { c } = await loaded();
     const v = expand(ChangeBoat({ chooser: c, board: true }));
     expect(text(v)).toContain(CHANGE_AT_SEA);
