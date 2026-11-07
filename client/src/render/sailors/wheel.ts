@@ -9,6 +9,15 @@
 import { Matrix4, type Object3D, Quaternion, Vector3 } from 'three';
 import type { WheelHelm } from './runtime';
 
+/**
+ * A look's clips at a wheel, beside its other clips (the art path of its
+ * clips' file, as the catalog names it): only a boat steered by one loads
+ * them.
+ */
+export function wheelClips(clips: string): string {
+  return clips.replace(/\.clips\.glb$/, '.wheel.glb');
+}
+
 /** A wheel's numbers from its node's data, or null if the node says it is none. */
 export function wheelData(data: unknown): { radius: number; spokes: number } | null {
   const w = (data as { wheel?: { radius?: unknown; spokes?: unknown } } | undefined)?.wheel;

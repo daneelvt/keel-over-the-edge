@@ -241,6 +241,10 @@ export class NearSailors extends SailorRows {
     if (b.slot < 0 || b.slot >= SLOTS || look.deck === null || look.clips === null) {
       return false;
     }
+    if (this.boat.wheel && look.wheelState !== 'ready') {
+      // At a wheel: rigid until its clips at the wheel have loaded.
+      return false;
+    }
     let s = this.#slots[b.slot] ?? null;
     if (s === null || s.look !== look) {
       s = new Sailor(look, this.boat, b.slot * 131 + look.index * 17 + 1, this.#still);

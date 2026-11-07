@@ -44,6 +44,7 @@ import { gltfLoader, placesOf } from './model';
 import { boneNames } from './onboat';
 import { Rig } from './rig';
 import { CHAINS } from './springs';
+import { wheelClips } from './wheel';
 
 /** Where the fleet's figures are seated: the boat model's seat (fleetparts.ts's seatFigure). */
 export interface FleetSeat {
@@ -70,6 +71,8 @@ export class FleetLook {
   layer = -1;
   state: LookState = 'none';
   clipsState: LookState = 'none';
+  /** Its clips at a wheel, added to its clips when a boat in the fleet is steered by one. */
+  wheelState: LookState = 'none';
   /** Whether a boat with it has come near: its clips are wanted. */
   near = false;
   deck: DeckLook | null = null;
@@ -101,6 +104,8 @@ export class FleetLooks {
   bones = 0;
   /** Called when a look has loaded. */
   onLoad: (look: FleetLook) => void = () => {};
+  /** Whether a boat in the fleet is steered by a wheel: its looks' clips at a wheel are loaded too. */
+  wheel = false;
 
   constructor(
     readonly renderer: WebGPURenderer,
@@ -150,6 +155,25 @@ export class FleetLooks {
         },
       );
     }
+    if (
+      this.wheel &&
+      look.clipsState === 'ready' &&
+      look.wheelState === 'none' &&
+      look.deck !== null
+    ) {
+      look.wheelState = 'loading';
+      const path = wheelClips(look.art.clips);
+      this.#loadClips(look, look.deck.rig, path).then(
+        () => {
+          look.wheelState = 'ready';
+          this.onLoad(look);
+        },
+        (e: unknown) => {
+          look.wheelState = 'failed';
+          console.error(`the fleet's sailor's clips ${path} did not load`, e);
+        },
+      );
+    }
   }
 
   /** Loads a look in full, at once: for a look the first frame needs. */
@@ -160,8 +184,9 @@ export class FleetLooks {
     }
     if (clips) {
       this.want(look, true);
-      while (look.clipsState === 'loading') {
+      while (look.clipsState === 'loading' || look.wheelState === 'loading') {
         await new Promise((r) => setTimeout(r, 10));
+        this.want(look, true);
       }
     }
   }
@@ -213,12 +238,13 @@ export class FleetLooks {
     this.#pools();
   }
 
-  async #loadClips(look: FleetLook, rig: Rig): Promise<void> {
-    const url = await this.files(look.art.clips);
+  /** Loads a clips' file of a look's (its clips, or those at a wheel) into its clips. */
+  async #loadClips(look: FleetLook, rig: Rig, path = look.art.clips): Promise<void> {
+    const url = await this.files(path);
     const gltf = await gltfLoader(this.renderer).loadAsync(url);
     const places = placesOf(gltf.scene);
     const identity = new Matrix4();
-    const clips = new Map<string, Clip>();
+    const clips = look.clips ?? new Map<string, Clip>();
     for (const a of gltf.animations) {
       const place = places.get(`place-${a.name}`) ?? null;
       clips.set(

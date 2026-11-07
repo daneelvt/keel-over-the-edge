@@ -59,15 +59,18 @@ async function sailor(
   boat: SailorBoat;
 }> {
   const gltf = await load(`sailors/${look}/${version}.clips.glb`);
-  const places = placesOf(gltf.scene);
   const rig = Rig.from(gltf.scene, boneNames(gltf.scene));
   const clips = new Map<string, Clip>();
-  for (const a of gltf.animations) {
-    const place = places.get(`place-${a.name}`) ?? null;
-    clips.set(
-      a.name,
-      Clip.from(a, rig, place !== null && !place.equals(new Matrix4()) ? place : null),
-    );
+  // And its clips at a wheel, a file of their own.
+  for (const file of [gltf, await load(`sailors/${look}/${version}.wheel.glb`)]) {
+    const places = placesOf(file.scene);
+    for (const a of file.animations) {
+      const place = places.get(`place-${a.name}`) ?? null;
+      clips.set(
+        a.name,
+        Clip.from(a, rig, place !== null && !place.equals(new Matrix4()) ? place : null),
+      );
+    }
   }
   const boat = await load(model);
   boat.scene.updateMatrixWorld(true);

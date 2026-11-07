@@ -226,31 +226,13 @@ def merge_clips(path, added_path):
     the other's, each view as it was. Returns how far the two files'
     skeletons are apart at rest: the most a joint's place differs (m), and
     its turn (the quaternions' largest component's difference)."""
+    apart, turned = skeletons_apart(path, added_path)
     gltf, binary = read(path)
     new, new_binary = read(added_path)
     names = {a["name"] for a in new.get("animations", [])}
     _drop_clips(gltf, names)
     binary = binary[:gltf["buffers"][0]["byteLength"]]
     by_name = {n.get("name"): i for i, n in enumerate(gltf["nodes"])}
-    # The skeletons, at rest.
-    apart, turned = 0.0, 0.0
-    for n in new["nodes"]:
-        m = by_name.get(n.get("name"))
-        if m is None or n.get("name", "").startswith("place"):
-            continue
-        o = gltf["nodes"][m]
-        for key, worst in (("translation", "apart"), ("rotation", "turned")):
-            a, b = o.get(key), n.get(key)
-            if a is None and b is None:
-                continue
-            a = a or ([0, 0, 0] if key == "translation" else [0, 0, 0, 1])
-            b = b or ([0, 0, 0] if key == "translation" else [0, 0, 0, 1])
-            d = max(abs(x - y) for x, y in zip(a, b))
-            if key == "rotation":
-                d = min(d, max(abs(x + y) for x, y in zip(a, b)))
-                turned = max(turned, d)
-            else:
-                apart = max(apart, d)
     data = next(i for i, b in enumerate(gltf["buffers"]) if not b.get("extensions"))
     fallback = next(i for i, b in enumerate(gltf["buffers"]) if b.get("extensions"))
     views, accessors = {}, {}
@@ -278,6 +260,32 @@ def merge_clips(path, added_path):
             scene.append(len(gltf["nodes"]) - 1)
     gltf["buffers"][data]["byteLength"] = len(out)
     write_glb(path, gltf, bytes(out))
+    return apart, turned
+
+
+def skeletons_apart(path, other):
+    """How far two packed files' skeletons are apart at rest, joint by
+    joint by name: the most a joint's place differs (m), and its turn (the
+    quaternions' largest component's difference)."""
+    a, _ = read(path)
+    b, _ = read(other)
+    by_name = {n.get("name"): n for n in a["nodes"]}
+    apart, turned = 0.0, 0.0
+    for n in b["nodes"]:
+        o = by_name.get(n.get("name"))
+        if o is None or n.get("name", "").startswith("place"):
+            continue
+        for key in ("translation", "rotation"):
+            x, y = o.get(key), n.get(key)
+            if x is None and y is None:
+                continue
+            x = x or ([0, 0, 0] if key == "translation" else [0, 0, 0, 1])
+            y = y or ([0, 0, 0] if key == "translation" else [0, 0, 0, 1])
+            d = max(abs(p - q) for p, q in zip(x, y))
+            if key == "rotation":
+                turned = max(turned, min(d, max(abs(p + q) for p, q in zip(x, y))))
+            else:
+                apart = max(apart, d)
     return apart, turned
 
 

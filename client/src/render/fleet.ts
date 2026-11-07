@@ -527,6 +527,8 @@ export class FleetView {
     });
     const wheel = wheelOf(nearParts.objects, null);
     const stand = nearParts.nodes.get('sailor');
+    // Its sailors' clips at the wheel, with their other clips.
+    looks.wheel ||= wheel !== null;
     // Standing at a wheel: no tiller, no seat, no hull to keep out of.
     const boat: NearBoat | null =
       wheel !== null && stand !== undefined

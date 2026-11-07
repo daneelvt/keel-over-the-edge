@@ -6976,7 +6976,9 @@ telltales at each sail strip's height, its jib's tack and head where the
 headsails' are, and each level within the catalog's `art.budget`; and
 each sailor's model has its parts and is under 2,000. The sailors' clips
 are placed in the Jolly boat; another boat's model says how far its seat is
-from it (`art/README.md`), and `render/sailors/restage.ts` moves them there. A kind's `art.model`
+from it (`art/README.md`), and `render/sailors/restage.ts` moves them there; on a boat with a
+wheel (its `wheel` node's data) the sailor stands at its `sailor` node instead, the hands
+kept on the spokes as the wheel turns (`render/sailors/runtime.ts`). A kind's `art.model`
 must name a file that exists (`go run ./tools/catalog -check`). The catalog's
 `sailors` list names the figures; the first is drawn.
 

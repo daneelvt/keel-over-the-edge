@@ -59,6 +59,8 @@ export interface SailorUrls {
   /** The close level's URL, fetched when first wanted. */
   close: () => Promise<string>;
   clips: string;
+  /** The clips at a wheel's URL, fetched for a boat steered by one. */
+  wheel?: () => Promise<string>;
   colours: { main: string; skin: string; hair: string };
 }
 
@@ -191,12 +193,20 @@ export class BoatSailor {
     const rig = Rig.from(deck.root, boneNames(deck.root));
     const clips = new Map<string, Clip>();
     const identity = new Matrix4();
-    for (const a of clipFile.clips) {
-      const place = clipFile.places.get(`place-${a.name}`) ?? null;
-      clips.set(
-        a.name,
-        Clip.from(a, rig, place !== null && !place.equals(identity) ? place : null),
-      );
+    const wheel = wheelOf(parts, model);
+    // At a wheel, its clips too.
+    const files =
+      wheel !== null && urls.wheel !== undefined
+        ? [clipFile, await loadClips(await urls.wheel(), renderer)]
+        : [clipFile];
+    for (const file of files) {
+      for (const a of file.clips) {
+        const place = file.places.get(`place-${a.name}`) ?? null;
+        clips.set(
+          a.name,
+          Clip.from(a, rig, place !== null && !place.equals(identity) ? place : null),
+        );
+      }
     }
     const at = (name: string): Vector3 | null => {
       const o = parts.get(name);
@@ -207,7 +217,6 @@ export class BoatSailor {
       span: foils.boardSpan,
       chord: foils.boardChord,
     });
-    const wheel = wheelOf(parts, model);
     const seat = at('sailor');
     if (wheel !== null && seat !== null) {
       // At the wheel: what the seat and the tiller would be is the

@@ -24,7 +24,8 @@ export const BUDGET = 4 * 1024 * 1024;
  * A sailor's files' budgets, gzipped, in bytes, a look and version: its deck
  * and far levels together (they load together, when a boat with the look
  * first comes into view), its close level (when the camera comes near the
- * boat in view), its clips (when a boat with it first comes near); and what
+ * boat in view), its clips (when a boat with it first comes near), and its
+ * clips at a wheel with them on a boat steered by one; and what
  * the first download carries of sailors: one look's deck, far and clips,
  * the one every boat is drawn with. And its portraits, as files (images
  * gain nothing by gzip): the colour portrait's base (AVIF) and mask
@@ -34,6 +35,8 @@ export const SAILOR_BUDGETS = {
   deckFar: 150 * 1024,
   close: 300 * 1024,
   clips: 150 * 1024,
+  /** Its clips at a wheel: a file of their own, loaded with the clips for a boat steered by one. */
+  wheel: 50 * 1024,
   /** A person's look's deck, far and clips together: the player's own, the first download's. */
   critical: 280 * 1024,
   /** The texture transcoder, which loads with the first sailor. */

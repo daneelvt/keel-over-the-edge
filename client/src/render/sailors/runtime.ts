@@ -54,7 +54,7 @@ export const CLIPS = {
   wheelHabit: 'habit-wheel',
 } as const;
 /** The clips placed at the wheel, from the helmsman's place: never moved to another seat. */
-const AT_WHEEL: readonly string[] = [CLIPS.wheel, CLIPS.wheel + '-port', CLIPS.wheelHabit];
+const AT_WHEEL: readonly string[] = [CLIPS.wheel, `${CLIPS.wheel}-port`, CLIPS.wheelHabit];
 
 /** Whether a clip is placed at a wheel (from the helmsman's place), not in the dinghy the others are. */
 export function atWheel(clip: string): boolean {
@@ -182,7 +182,7 @@ export interface Hands {
 /** A hand at the wheel: the spoke it holds (counted from the top at rest), and a change to the next. */
 interface WheelHand {
   spoke: number;
-  /** The spoke it is going to, and how far there (0 to 1); -1 when not changing. */
+  /** The spoke it is going to, and how far there (0 to 1); -1 when not changing. Spokes count 0 to n − 1. */
   next: number;
   change: number;
   /** Its grip at rest in the helmsman's frame: the clip's hand at the start of its wheel clip. */
@@ -328,6 +328,7 @@ export class SailorRuntime {
    * spoke nearest it.
    */
   #gripsAtRest(wheel: WheelHelm): void {
+    const n = wheel.spokes;
     const c = this.#clip(CLIPS.wheel, 1);
     const rig = this.rig;
     const pose = this.#scratch;
@@ -343,7 +344,7 @@ export class SailorRuntime {
       const home = rig.position(rig.bone(b), new Vector3()).applyMatrix4(c?.place ?? m.identity());
       const angle = Math.atan2(home.x - o.x, home.y - o.y);
       this.#wheelHands.push({
-        spoke: Math.round(angle / step),
+        spoke: ((Math.round(angle / step) % n) + n) % n,
         next: -1,
         change: 0,
         home,
@@ -679,7 +680,8 @@ export class SailorRuntime {
         h.next < 0 &&
         (Math.abs(off) > SPOKE_MOST || (Math.abs(off) > SPOKE_LEAD && (other?.next ?? -1) < 0))
       ) {
-        h.next = Math.round((h.angle - wheel.turn) / step);
+        const n = wheel.spokes;
+        h.next = (((Math.round((h.angle - wheel.turn) / step) % n) + n) % n) as number;
         h.change = 0;
         if (h.next === h.spoke) {
           h.next = -1;
@@ -696,11 +698,6 @@ export class SailorRuntime {
           h.spoke = h.next;
           h.next = -1;
         }
-      }
-      // Normalised, so the spoke counts stay small.
-      h.spoke = ((h.spoke % wheel.spokes) + wheel.spokes) % wheel.spokes;
-      if (h.next >= 0) {
-        h.next = ((h.next % wheel.spokes) + wheel.spokes) % wheel.spokes;
       }
       if (hold <= 0) {
         continue;

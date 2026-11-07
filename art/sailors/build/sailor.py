@@ -91,7 +91,7 @@ def build_look(job):
     if job.get("add"):
         # Only the clips added are made and written: theirs are the gates
         # that count, and the clips' file's.
-        report["failures"] = [f for g in judged.values() for f in g.failures(("clips",))]
+        report["failures"] = [f for g in judged.values() for f in g.failures(("clips", "clips wheel"))]
     return report
 
 
@@ -550,25 +550,55 @@ def make_clips(job, v, fig, lib, kinds, gates, renderer, lookmat, work, worn=())
         review.clip_sheet(renderer, fig, lookmat, clip, act, slot, track, os.path.join(work, f"clip-{name}.png"),
                           judge.CURVES)
         fig.reset()
-    path = os.path.join(job["out"], f"{v}.clips.glb")
-    made = [as_(n) for n in names]
-    if job.get("add"):
-        # Packed apart, then added to the look's clips' file: the clips it
-        # has already kept as they are.
-        added = os.path.join(work, f"{v}.clips.added.glb")
-        motion.export(added, fig.arm, actions, job["gltfpack"], work, places)
-        before = sorted(a["name"] for a in export.read(path)[0].get("animations", []))
-        apart, turned = export.merge_clips(path, added)
-        gates.add("clips", "skeleton at rest", apart, 1e-4, apart <= 1e-4 and turned <= 1e-4, turned=turned)
-        made = sorted(set(before) | set(made))
-    else:
-        motion.export(path, fig.arm, actions, job["gltfpack"], work, places)
     clip_seat(gates, "close", fig, out)
     clip_wheel(gates, fig, out)
     clip_skirts(gates, fig, worn, out)
-    gltf, _ = export.read(path)
-    metrics.file(gates, "clips", path, gltf, [], job["tables"]["skeleton"], None, clips=made)
-    metrics.skeleton(gates, "clips", gltf, job["tables"]["skeleton"])
+    # The files: the clips at a wheel apart from the rest, as only a boat
+    # steered by one loads them.
+    groups = (("clips", [n for n in names if not getattr(fig.made[n][2], "standing", False)]),
+              ("wheel", [n for n in names if getattr(fig.made[n][2], "standing", False)]))
+    exported = False
+    for group, members in groups:
+        if not members:
+            continue
+        path = os.path.join(job["out"], f"{v}.{group}.glb")
+        # Exporting a file lets every other clip's action go: after the
+        # first, made again from their frames.
+        actions = []
+        for n in members:
+            act, slot, clip = fig.made[n]
+            if exported:
+                act, slot = motion.write_action(fig.arm, as_(n), clip.frames, clip.fps)
+                fig.made[n] = (act, slot, clip)
+            actions.append((act, slot))
+        exported = True
+        here = {f"place-{as_(n)}": places[f"place-{as_(n)}"] for n in members}
+        made = [as_(n) for n in members]
+        before = sorted(a["name"] for a in export.read(path)[0].get("animations", [])) \
+            if job.get("add") and os.path.exists(path) else []
+        if set(before) - set(made):
+            # Packed apart, then added to the look's file: the clips it has
+            # already kept as they are.
+            added = os.path.join(work, f"{v}.{group}.added.glb")
+            motion.export(added, fig.arm, actions, job["gltfpack"], work, here)
+            export.merge_clips(path, added)
+            made = sorted(set(before) | set(made))
+        else:
+            motion.export(path, fig.arm, actions, job["gltfpack"], work, here)
+        level = "clips" if group == "clips" else f"clips {group}"
+        gltf, _ = export.read(path)
+        metrics.file(gates, level, path, gltf, [], job["tables"]["skeleton"], None, clips=made)
+        metrics.skeleton(gates, level, gltf, job["tables"]["skeleton"])
+        if group != "clips":
+            # On the look's skeleton, joint for joint, as its other clips are.
+            apart, turned = export.skeletons_apart(os.path.join(job["out"], f"{v}.clips.glb"), path)
+            gates.add(level, "skeleton at rest", apart, 1e-4, apart <= 1e-4 and turned <= 1e-4, turned=turned)
+        last = set(members)
+    # Every clip's action again, for the deck level's judges.
+    for n in names:
+        if n not in last:
+            act, slot, clip = fig.made[n]
+            fig.made[n] = motion.write_action(fig.arm, as_(n), clip.frames, clip.fps) + (clip,)
     return out
 
 

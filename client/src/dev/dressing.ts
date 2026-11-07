@@ -68,7 +68,7 @@ import { loadClips, loadSailor, type SailorClips, type SailorModel } from '../re
 import { boneNames } from '../render/sailors/onboat';
 import { restageAnimation, restageOf, restagePlace } from '../render/sailors/restage';
 import { Rig } from '../render/sailors/rig';
-import { atWheel } from '../render/sailors/runtime';
+import { atWheel, CLIPS } from '../render/sailors/runtime';
 import { frameIn, wheelOf } from '../render/sailors/wheel';
 import { Shadows } from '../render/shadows';
 import { Sky, look as skyLook, toLinear } from '../render/sky';
@@ -92,14 +92,14 @@ export type LightName = 'noon' | 'dusk' | 'night' | 'morning';
 /** A look's files: each version's levels and clips, by URL. */
 export interface LookFiles {
   look: string;
-  versions: Map<string, { levels: Partial<Record<Level, string>>; clips?: string }>;
+  versions: Map<string, { levels: Partial<Record<Level, string>>; clips?: string; wheel?: string }>;
 }
 
 /** The looks the build has written, in the order of their folders' names. */
 export function builtLooks(files: Record<string, string>): LookFiles[] {
   const looks = new Map<string, LookFiles>();
   for (const [path, url] of Object.entries(files)) {
-    const m = /\/art\/sailors\/([^/]+)\/([a-z]+)(?:\.(deck|far|clips))?\.glb$/.exec(path);
+    const m = /\/art\/sailors\/([^/]+)\/([a-z]+)(?:\.(deck|far|clips|wheel))?\.glb$/.exec(path);
     if (m === null) {
       continue;
     }
@@ -110,6 +110,8 @@ export function builtLooks(files: Record<string, string>): LookFiles[] {
     entry.versions.set(version, v);
     if (kind === 'clips') {
       v.clips = url;
+    } else if (kind === 'wheel') {
+      v.wheel = url;
     } else {
       v.levels[(kind ?? 'close') as Level] = url;
     }
@@ -684,9 +686,11 @@ export class DressingRoom {
       this.#protos.set(url, proto);
     }
     let clips: Promise<SailorClips> | null = null;
-    if (files?.clips !== undefined) {
-      clips = this.#clips.get(files.clips) ?? loadClips(files.clips, renderer);
-      this.#clips.set(files.clips, clips);
+    // The clips at a wheel are a file of their own.
+    const clipsUrl = atWheel(this.room.clip) ? files?.wheel : files?.clips;
+    if (clipsUrl !== undefined) {
+      clips = this.#clips.get(clipsUrl) ?? loadClips(clipsUrl, renderer);
+      this.#clips.set(clipsUrl, clips);
     }
     const [model, c] = await Promise.all([proto, clips]);
     const root = cloneSkinned(model.root);
@@ -1162,6 +1166,12 @@ export class DressingRoom {
     for (const f of this.#figures) {
       for (const c of f.clips?.clips ?? []) {
         names.add(c.name);
+      }
+    }
+    // The clips at a wheel, from their own file.
+    if (this.#shown().some((l) => [...l.versions.values()].some((v) => v.wheel !== undefined))) {
+      for (const c of [CLIPS.wheel, `${CLIPS.wheel}-port`, CLIPS.wheelHabit]) {
+        names.add(c);
       }
     }
     group(

@@ -67,6 +67,7 @@ import { litMaterial, sailGlow } from './materials';
 import { Pennant } from './pennant';
 import type { Gfx } from './renderer';
 import { BoatSailor } from './sailors/onboat';
+import { wheelClips } from './sailors/wheel';
 import { jibPoint, LUFF_OFFSET, sailPoint, sailUniforms } from './sailshape';
 import { FLOW_LUFFING, Telltales } from './telltales';
 
@@ -425,6 +426,7 @@ export class Boat {
         model: await lazyArtUrl(a.model),
         close: () => lazyArtUrl(a.close),
         clips: await lazyArtUrl(a.clips),
+        wheel: () => lazyArtUrl(wheelClips(a.clips)),
         colours: look.colours,
       },
       renderer,
