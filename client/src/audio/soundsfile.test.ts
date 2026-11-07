@@ -3,18 +3,20 @@
 // What the phone plays is what the server says it plays: for every
 // listener of internal/lookout/testdata/sounds.json the falls, the loudest
 // waterfall's roar and the lapping as loud and from the same way, and the
-// same booms, calls, bells, gulls, blows, blasts and thunder, heard at the
-// same times, as loud, from the same bearings.
+// same booms, calls, bells, gulls, the sea's life's calls, blows, blasts
+// and thunder, heard at the same times, as loud, from the same bearings.
 
 import { readFileSync } from 'node:fs';
 import { describe, expect, test } from 'vitest';
 import { catalog } from '../catalog';
 import type { FogSignalDevice } from '../catalog/types.gen';
+import type { GullTown } from '../life/gulls';
 import { wavePeriod } from '../render/features';
 import { HOURS } from '../sky/skytime';
 import { type Call, FEATURE_RECIPES, type FeaturesInput, featureEvents, roarNow } from './features';
 import { FOG_SIGNAL_RECIPES, FOG_SIGNAL_RULES, fogSignalEvents, poorBy } from './fogsignals';
 import { type At, HARBOUR_RECIPES, type HarbourInput, harbourEvents, lappingNow } from './harbour';
+import { LIFE_RECIPES, type LifeGroup, lifeEvents } from './life';
 import { THUNDER_RECIPE, THUNDER_RULE, thunderEvents } from './thunder';
 import { newTargets, RECIPES, soundTargets } from './voices';
 
@@ -56,6 +58,7 @@ interface SoundsFile {
       yard: At | null;
       quay: At | null;
       hour: number;
+      gulls: GullTown[] | null;
     };
     weather: boolean;
     lights:
@@ -70,6 +73,21 @@ interface SoundsFile {
       | null;
     flashes:
       | { tick: number; east: number; north: number; sea: boolean; base: number; seed: number }[]
+      | null;
+    life:
+      | {
+          kind: number;
+          start: number;
+          end: number;
+          east: number;
+          north: number;
+          heading: number;
+          speed: number;
+          count: number;
+          seed: number;
+          with: number;
+          pose: { east: number; north: number; heading: number } | null;
+        }[]
       | null;
     sounds: Heard[];
   }[];
@@ -150,6 +168,7 @@ function played(c: Case, look: number): Played[] {
     bell: h.bell,
     yard: h.yard,
     quay: h.quay,
+    gulls: h.gulls ?? [],
     seaHeight: c.seaHeight,
     period: 4,
   };
@@ -165,6 +184,20 @@ function played(c: Case, look: number): Played[] {
   }
   for (const e of harbourEvents(HARBOUR_RECIPES, hx, c.from, c.to, file.secondsPerHour)) {
     out.push({ kind: e.kind, at: e.at, level: e.level, pan: e.pan });
+  }
+  const groups: LifeGroup[] = (c.life ?? []).map((g, i) => ({
+    record: { ...g, id: String(i), rev: 0 },
+    kind: catalog.life.kinds[g.kind] as LifeGroup['kind'],
+    pose: g.pose,
+  }));
+  const life = lifeEvents(
+    LIFE_RECIPES,
+    { seconds: c.seconds, day: c.day, listener, look, groups },
+    c.from,
+    c.to,
+  );
+  for (const e of life) {
+    out.push({ kind: 'life', at: e.at, level: e.level, pan: e.pan, call: e.kind });
   }
   if (c.weather) {
     const lights = c.lights ?? [];

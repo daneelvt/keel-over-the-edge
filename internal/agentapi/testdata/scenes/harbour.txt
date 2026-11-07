@@ -1,4 +1,4 @@
-# about 619 tokens
+# about 639 tokens
 day 12:01 · seq 0
 Boat: Jolly boat, full sail · sailing · heading 156° · 0.6 kn · heel 0° · port tack
 Pilot: hand · boom 50° (sheet out to 50°) · rudder 0° · sail stalled: ease
@@ -24,4 +24,4 @@ In sight:
  and 7 more boats
  Port Royal · 290° 0.1 NM · known
  Table Head Light · 298° 0.2 NM · light Fl(3) W 15s · known
-Hear: quiet
+Hear: quiet · the harbour bell to the WNW · a mallet's blow to the NNW

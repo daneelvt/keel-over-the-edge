@@ -500,9 +500,10 @@ func leeOf(s *Sea, x, y, from float64) string {
 
 // sightLines are what the boat's lookout sees: the boats nearest first,
 // those within lookNear with their sailors' looks, the first mostContacts
-// of them and the rest summed; then the land, the places and the lights,
-// charted ones by name. A brief report gives of these only those new
-// since the last report or within landNear, and counts the rest. With mu
+// of them and the rest summed; then the sea's life, nearest first; then
+// the land, the places and the lights, charted ones by name. A brief
+// report gives of the life only the groups new since the last report, and
+// of the land those new or within landNear, and counts the rest. With mu
 // held.
 func (h *helm) sightLines(s *Sea, f *bus.Frame, sl int32, brief bool) (lines []string, more string) {
 	st := &f.State[sl]
@@ -557,10 +558,22 @@ func (h *helm) sightLines(s *Sea, f *bus.Frame, sl int32, brief bool) (lines []s
 		more = fmt.Sprintf("and %d more boats", len(seen)-mostContacts)
 		lines = append(lines, more)
 	}
+	// The sea's life, nearest first: a brief report tells the groups new
+	// since the last.
+	left := 0
+	told := h.lifeTold
+	h.lifeTold = map[uint64]bool{}
+	for _, g := range s.lifeInSight(f, sl) {
+		h.lifeTold[g.id] = true
+		if brief && told[g.id] {
+			left++
+			continue
+		}
+		lines = append(lines, g.text)
+	}
 	land := s.landLines(f, sl)
 	was := h.landSeen
 	h.landSeen = map[int32]bool{}
-	left := 0
 	for _, l := range land {
 		h.landSeen[l.subject] = true
 		// The place the agent's wait watched is always told: it is what

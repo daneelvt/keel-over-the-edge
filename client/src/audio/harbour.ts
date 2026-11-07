@@ -6,8 +6,9 @@
 // the same for everyone ("strike the bell: … as many times as there are
 // half hours of the watch elapsed … The watch of four hours is eight
 // bells", Smyth, The Sailor's Word-Book, 1867), its strokes in pairs; gulls
-// call by day, a few a minute; the shipyard's mallets knock at Port Royal
-// by day. Each is placed where it is: panned by its bearing from where the
+// call by day, a few a minute, each call from one of the gulls wheeling
+// over the nearest town, where it is as it calls; the shipyard's mallets
+// knock at Port Royal by day. Each is placed where it is: panned by its bearing from where the
 // camera looks, and fainter with distance, a point source's 6 dB each time
 // the distance doubles. Which call and which blow comes when is drawn from
 // world time, so every phone hears the harbour alike.
@@ -16,6 +17,8 @@ import bell from '../../../art/sound/bell.json';
 import gulls from '../../../art/sound/gulls.json';
 import lapping from '../../../art/sound/lapping.json';
 import mallets from '../../../art/sound/mallets.json';
+import { catalog } from '../catalog';
+import { type GullPlace, type GullTown, gullAt, gullCount } from '../life/gulls';
 
 export interface HarbourRecipes {
   bell: typeof bell;
@@ -49,6 +52,8 @@ export interface HarbourInput {
   bell: At | null;
   yard: At | null;
   quay: At | null;
+  /** The towns' gulls held (gullTowns). */
+  gulls: readonly GullTown[];
   /** The sea's significant height and its waves' period, m and s. */
   seaHeight: number;
   period: number;
@@ -110,6 +115,22 @@ export function heard(x: HarbourInput): boolean {
   return x.inPort || x.nearTown <= HEARD_WITHIN;
 }
 
+/** The town whose gulls wheel nearest the listener within the gulls' reach, null for none. */
+export function nearestGulls(x: HarbourInput, reach: number): GullTown | null {
+  let best: GullTown | null = null;
+  let bd = reach;
+  for (const t of x.gulls) {
+    const d = Math.hypot(t.east - x.listener.east, t.north - x.listener.north);
+    if (d <= bd) {
+      best = t;
+      bd = d;
+    }
+  }
+  return best;
+}
+
+const gull: GullPlace = { east: 0, north: 0, up: 0, heading: 0 };
+
 /** A number in [0, 1) of slot n of a voice: the same on every phone. */
 function draw(n: number, voice: number): number {
   const v = Math.sin(n * 12.9898 + voice * 78.233) * 43758.5453;
@@ -155,18 +176,24 @@ export function harbourEvents(
   if (!x.day) {
     return out;
   }
-  // The gulls: in each slot of a few seconds, a call or none.
+  // The gulls: in each slot of a few seconds, a call or none, from one of
+  // the gulls wheeling over the nearest town, where it is then.
+  const town = nearestGulls(x, r.gulls.reach);
+  const count = town === null ? 0 : gullCount(town, catalog.life.towns);
   const slot = 60 / Math.max(r.gulls.perMinute, 0.01) / 2;
-  for (let n = Math.ceil(from / slot); n * slot < to; n++) {
+  for (let n = Math.ceil(from / slot); n * slot < to && town !== null && count > 0; n++) {
     if (draw(n, 1) < 0.5) {
-      const a = draw(n, 2) * 2 * Math.PI;
-      const dist = 25 + draw(n, 3) * 120;
-      const at = {
-        east: x.listener.east + dist * Math.sin(a),
-        north: x.listener.north + dist * Math.cos(a),
-      };
+      const k = Math.min(Math.floor(draw(n, 2) * count), count - 1);
+      gullAt(town, catalog.life.towns, k, n * slot, gull);
+      const dist = Math.hypot(gull.east - x.listener.east, gull.north - x.listener.north);
       const level = r.gulls.level * pointLevel(dist, r.gulls.near, r.gulls.reach);
-      out.push({ kind: 'gull', at: n * slot, level, pan: panOf(x.listener, at, x.look), seed: n });
+      out.push({
+        kind: 'gull',
+        at: n * slot,
+        level,
+        pan: panOf(x.listener, gull, x.look),
+        seed: n,
+      });
     }
   }
   // The mallets: runs of blows a beat apart, rests between, at the slip.

@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import { describe, expect, test } from 'vitest';
+import { catalog } from '../catalog';
+import { type GullPlace, gullAt, gullCount } from '../life/gulls';
 import {
   bellPartials,
   bellStrokes,
@@ -26,6 +28,7 @@ const input = (change: Partial<HarbourInput> = {}): HarbourInput => ({
   bell: { east: 100, north: 0 },
   yard: { east: -60, north: 0 },
   quay: { east: 0, north: 10 },
+  gulls: [{ town: 3, east: 40, north: 90, level: 1.5, seed: 123456789 }],
   seaHeight: 0.5,
   period: 4,
   ...change,
@@ -79,6 +82,28 @@ describe('the harbour’s voices', () => {
     const day = harbourEvents(R, input({ hour: 10.1 }), 900, 1000, 300);
     expect(day.some((e) => e.kind === 'gull')).toBe(true);
     expect(day.some((e) => e.kind === 'mallet')).toBe(true);
+  });
+
+  test('call from the town’s gulls where they wheel, and from none past their reach', () => {
+    const x = input();
+    const town = x.gulls[0];
+    const calls = harbourEvents(R, x, 600, 1200, 300).filter((e) => e.kind === 'gull');
+    expect(calls.length).toBeGreaterThan(5);
+    const n = gullCount(town as NonNullable<typeof town>, catalog.life.towns);
+    const g: GullPlace = { east: 0, north: 0, up: 0, heading: 0 };
+    for (const c of calls) {
+      // From one of the town's gulls as it is then: its pan is one of theirs.
+      const pans = Array.from({ length: n }, (_, k) => {
+        gullAt(town as NonNullable<typeof town>, catalog.life.towns, k, c.at, g);
+        return panOf(x.listener, g, x.look);
+      });
+      expect(pans.some((p) => Math.abs(p - c.pan) < 1e-12)).toBe(true);
+    }
+    const far = input({ gulls: [{ town: 3, east: 400, north: 0, level: 1, seed: 1 }] });
+    expect(harbourEvents(R, far, 600, 1200, 300).filter((e) => e.kind === 'gull')).toEqual([]);
+    expect(
+      harbourEvents(R, input({ gulls: [] }), 600, 1200, 300).some((e) => e.kind === 'gull'),
+    ).toBe(false);
   });
 
   test('are the same on every phone at the same world time', () => {

@@ -31,6 +31,7 @@ import { closedIn, EndSlabs, type EndStage, endStage, risen } from '../edge/take
 import { STEPS_PER_SECOND } from '../game/clock';
 import type { DrawnBoat } from '../game/fleet';
 import type { Land } from '../land/land';
+import { LifeStore } from '../life/store';
 import { HULL_REACH, HULLS, hullShape, hulls } from '../ocean/hulls';
 import { foamAt, KNOT, newFoamLook, SPRAY, transomFrom } from '../ocean/look';
 import { Ocean } from '../ocean/ocean';
@@ -193,6 +194,8 @@ export class SeaScene {
   readonly stars = new Stars();
   /** The flashes of the weather's squalls and storms, their clouds lit and their bolts. */
   readonly lightning = new Lightning();
+  /** The sea's life the page has been told of. */
+  readonly life = new LifeStore();
   readonly lanterns = new Lanterns();
   /** The towns' flags and chimney smoke, each showing the true wind where it is. */
   readonly flags = new Flags(catalog.world.towns.flags);

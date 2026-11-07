@@ -66,7 +66,7 @@
           "type": "integer"
         },
         "wake_on": {
-          "description": "What ends the wait. Default all but heel, wind_shift, bearing and near, which need a value.",
+          "description": "What ends the wait. Default all but life and heel, wind_shift, bearing, near (need values).",
           "items": {
             "enum": [
               "gust",
@@ -81,7 +81,8 @@
               "race",
               "pilot",
               "sky",
-              "weather"
+              "weather",
+              "life"
             ],
             "type": "string"
           },
