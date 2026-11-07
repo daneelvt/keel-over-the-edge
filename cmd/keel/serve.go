@@ -807,8 +807,11 @@ func devRoutes(ctx context.Context, b *bus.Bus, cat *catalog.Catalog, charts *wo
 	enc := encounterRoute(ctx, b, cat, log)
 	place := placeRoute(b, log)
 	chartIt := chartRoute(b, charts, log)
+	raise := lifeRoute(b, cat, log)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
+		case "/debug/life":
+			raise.ServeHTTP(w, r)
 		case "/debug/encounter":
 			enc.ServeHTTP(w, r)
 		case "/debug/place":

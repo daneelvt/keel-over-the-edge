@@ -128,6 +128,9 @@ type conn struct {
 	handout connChunks // what of the land the client has been handed: the encoder's
 	// lightsSent is which lights the client has been sent: the encoder's.
 	lightsSent connLights
+	// lifeSent is which of the sea's life the client has been sent: the
+	// encoder's.
+	lifeSent connLife
 	// capsSent is which islands' caps the client has been sent: the
 	// encoder's.
 	capsSent connCaps

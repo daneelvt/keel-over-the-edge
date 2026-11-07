@@ -13,7 +13,7 @@ var InternalPaths = []string{
 	"/livez", "/readyz", "/metrics",
 	"/debug/pprof/", "/debug/pprof/cmdline", "/debug/pprof/profile", "/debug/pprof/symbol",
 	"/debug/pprof/trace", "/debug/pprof/goroutine", "/debug/pprof/goroutineleak",
-	"/debug/flightrecorder", "/debug/replay", "/debug/wind", "/debug/weather", "/debug/place", "/debug/chart", "/debug/end",
+	"/debug/flightrecorder", "/debug/replay", "/debug/wind", "/debug/weather", "/debug/place", "/debug/chart", "/debug/end", "/debug/life",
 	// The owner's tools' (internal/owner's Paths).
 	"/owner/", "/owner/index.html", "/owner/assets/x.js",
 	"/owner/api/world.json", "/owner/api/gusts.bin", "/owner/api/islands.json", "/owner/api/current.json",

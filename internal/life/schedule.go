@@ -57,7 +57,7 @@ func NewSchedule(c *Config) *Schedule {
 	s := &Schedule{p: p, kinds: c.Kinds, hab: c.Habitat, sky: c.Sky, epoch: float64(c.Epoch)}
 	s.seed = hash32(uint32(c.Seed) ^ hash32(uint32(c.Seed>>32)^lifeSalt))
 	disk := c.Habitat.disk
-	s.n = int32(math.Ceil(float64(2*disk) / p.Cell))
+	s.n = toInt32(math.Ceil(float64(2*disk) / p.Cell))
 	s.origin = -float64(float64(s.n)*p.Cell) / 2
 	s.cells = make([]bool, int(s.n)*int(s.n))
 	for j := range s.n {
@@ -115,7 +115,7 @@ func (s *Schedule) Sun(tick int64, x, y float64) float64 {
 	if s.sky == nil {
 		return math.Pi / 2
 	}
-	t := sky.Time(s.sky, s.epoch, float64(int64(float64(tick)*1e6/physics.StepsPerSecond)))
+	t := sky.Time(s.sky, s.epoch, float64(tick*1_000_000/physics.StepsPerSecond))
 	return sky.SunAltitude(s.sky, t, x, y)
 }
 
@@ -179,7 +179,7 @@ func (s *Schedule) candidate(cell int32, slot int64, kind int) candidate {
 	if !(w > 0) || whether >= threshold(float64(float64(s.base[kind]*w)*s.mostWhn[kind])) {
 		return candidate{}
 	}
-	tick := slot*s.p.SlotTicks + int64(unit(d.n(drawWhen))*float64(s.p.SlotTicks))
+	tick := slot*s.p.SlotTicks + int64(toInt32(float64(unit(d.n(drawWhen))*float64(s.p.SlotTicks))))
 	return candidate{ok: true, tick: tick, x: x, y: y, draws: d}
 }
 
@@ -297,11 +297,7 @@ func (s *Schedule) encounter(k *Kind, cd candidate, slot int64, cell int32) bus.
 func place(e *bus.LifeEncounter, x, y, heading, speed float64) {
 	e.East = math.Floor(float64(x*100)+0.5) / 100
 	e.North = math.Floor(float64(y*100)+0.5) / 100
-	h := math.Mod(heading, 2*math.Pi)
-	if h < 0 {
-		h += 2 * math.Pi
-	}
-	e.Heading = float64(float32(h))
+	e.Heading = float64(float32(turn(heading)))
 	e.Speed = float64(float32(speed))
 }
 
@@ -323,7 +319,9 @@ func (k *Kind) FreeLife(v, stay float64) float64 {
 }
 
 // lifeTicks is a life of s seconds in whole ticks, rounded up.
-func lifeTicks(s float64) int64 { return int64(math.Ceil(float64(s * physics.StepsPerSecond))) }
+func lifeTicks(s float64) int64 {
+	return int64(toInt32(math.Ceil(float64(s * physics.StepsPerSecond))))
+}
 
 // threshold is a chance as a draw's threshold: a draw below it happens.
 func threshold(c float64) uint32 {
@@ -333,7 +331,8 @@ func threshold(c float64) uint32 {
 	case c >= 1:
 		return math.MaxUint32
 	}
-	return uint32(float64(c * math.MaxUint32))
+	// In steps of two: a draw's bottom bit says nothing.
+	return uint32(toInt32(float64(c*(1<<31)))) << 1
 }
 
 // lerp is a share u of the way from lo to hi.

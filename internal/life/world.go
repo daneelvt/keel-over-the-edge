@@ -52,7 +52,7 @@ func NewWorld(s *Schedule, capacity int) *World {
 		}
 		longest = math.Max(longest, life)
 	}
-	w.back = int64(math.Ceil(float64(longest*physics.StepsPerSecond)/float64(s.p.SlotTicks))) + 1
+	w.back = int64(toInt32(math.Ceil(float64(longest*physics.StepsPerSecond)/float64(s.p.SlotTicks)))) + 1
 	w.pending = make([]bus.LifeEncounter, 0, bus.LifeRoom)
 	w.alive = make([]bus.LifeEncounter, 0, bus.LifeRoom)
 	w.last = make([]Pose, 0, bus.LifeRoom)
@@ -226,10 +226,4 @@ func (w *World) Raise(f *bus.Frame, kind int, x, y float64) bool {
 }
 
 // wrap is an angle within ±π.
-func wrap(a float64) float64 {
-	a = math.Mod(a+math.Pi, 2*math.Pi)
-	if a < 0 {
-		a += 2 * math.Pi
-	}
-	return a - math.Pi
-}
+func wrap(a float64) float64 { return turn(a+math.Pi) - math.Pi }

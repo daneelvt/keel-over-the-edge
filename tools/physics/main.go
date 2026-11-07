@@ -36,6 +36,9 @@ const (
 	// sightPkg decides what a boat's lookout sees, in the simulation's
 	// tick: it is held to the float rules too, and checked as it is.
 	sightPkg = "./internal/sight"
+	// lifeDir is the sea's life's schedule, in the simulation's tick: held
+	// to the generator's float rules, and checked as the simulation is.
+	lifeDir = "internal/life"
 	// worldgenDir is the world generator, held to the float rules so that
 	// a seed makes the same world on every machine.
 	worldgenDir = "internal/worldgen"
@@ -113,12 +116,14 @@ func runCheck(ctx context.Context) error {
 		return err
 	}
 	problems = append(problems, found...)
-	found, err = checkGenerator(worldgenDir)
-	if err != nil {
-		return err
+	for _, dir := range []string{worldgenDir, lifeDir} {
+		found, err = checkGenerator(dir)
+		if err != nil {
+			return err
+		}
+		problems = append(problems, found...)
 	}
-	problems = append(problems, found...)
-	for _, pkg := range []string{"./" + physicsDir, "./" + skyDir, simPkg, weatherPkg, sightPkg, "./" + worldgenDir} {
+	for _, pkg := range []string{"./" + physicsDir, "./" + skyDir, simPkg, weatherPkg, sightPkg, "./" + worldgenDir, "./" + lifeDir} {
 		found, err = checkFused(ctx, pkg)
 		if err != nil {
 			return err

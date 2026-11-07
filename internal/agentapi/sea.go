@@ -12,6 +12,7 @@ import (
 	"github.com/daneelvt/keel-over-the-edge/internal/chart"
 	"github.com/daneelvt/keel-over-the-edge/internal/fleet"
 	"github.com/daneelvt/keel-over-the-edge/internal/forecast"
+	"github.com/daneelvt/keel-over-the-edge/internal/life"
 	sailorlooks "github.com/daneelvt/keel-over-the-edge/internal/looks"
 	"github.com/daneelvt/keel-over-the-edge/internal/physics"
 	"github.com/daneelvt/keel-over-the-edge/internal/sim"
@@ -45,6 +46,9 @@ type Sea struct {
 	// Bundle is the world's terrain as made: its islands, places and
 	// lights.
 	Bundle *worldgen.Bundle
+	// Life is the world's life schedule, whose kinds a frame's life is of;
+	// nil for a sea with nothing alive in it.
+	Life *life.Schedule
 	// Chart is the world's chart as written, Sight what the lookouts see
 	// by; nil for a world nobody charts.
 	Chart *chart.Model

@@ -104,7 +104,7 @@ type Params struct {
 // Prepare reads the catalog's life.
 func Prepare(cat *catalog.Catalog) (*Params, []Kind) {
 	l := &cat.Life
-	ticks := func(s float64) int64 { return int64(math.Floor(float64(s*physics.StepsPerSecond) + 0.5)) }
+	ticks := func(s float64) int64 { return int64(toInt32(math.Floor(float64(s*physics.StepsPerSecond) + 0.5))) }
 	p := &Params{
 		Cell: l.Cell, SlotTicks: int64(l.Slot) * physics.StepsPerSecond,
 		Lulls: [Families]int64{ticks(l.Lulls.Birds), ticks(l.Lulls.Water), ticks(l.Lulls.Big), ticks(l.Lulls.Night)},

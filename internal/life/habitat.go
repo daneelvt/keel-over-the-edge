@@ -56,7 +56,7 @@ type Habitat struct {
 // everywhere), its places and the radius of its disk, m.
 func NewHabitat(p *Params, ground *physics.Ground, places Places, disk float64) *Habitat {
 	h := &Habitat{p: p, ground: ground, places: places, disk: disk, side: p.Field}
-	h.n = int32(math.Ceil(float64(2*disk) / p.Field))
+	h.n = toInt32(math.Ceil(float64(2*disk) / p.Field))
 	h.field = make([]uint8, int(h.n)*int(h.n))
 	h.outerSq = float64(p.OuterFrom * p.OuterFrom)
 	for _, t := range places.Towns {
@@ -90,7 +90,7 @@ func (h *Habitat) stamp(x, y, r float64, flag uint8) {
 
 // cellOf is the field's cell (x, y) is in, which may lie outside it.
 func (h *Habitat) cellOf(x, y float64) (i, j int32) {
-	return int32(math.Floor((x + h.disk) / h.side)), int32(math.Floor((y + h.disk) / h.side))
+	return toInt32(math.Floor((x + h.disk) / h.side)), toInt32(math.Floor((y + h.disk) / h.side))
 }
 
 // centre is the middle of the field's cell (i, j).
