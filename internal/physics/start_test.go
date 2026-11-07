@@ -21,38 +21,46 @@ func TestStartSheet(t *testing.T) {
 	}
 	var c struct {
 		Boats []struct {
+			ID         string       `json:"id"`
 			StartSheet [][2]float64 `json:"startSheet"`
 		} `json:"boats"`
 	}
 	if err := json.Unmarshal(data, &c); err != nil {
 		t.Fatal(err)
 	}
-	if len(c.Boats) == 0 || len(c.Boats[0].StartSheet) == 0 {
-		t.Fatal("the Jolly boat has no start sheet")
+	if len(c.Boats) == 0 {
+		t.Fatal("the catalog has no boats")
 	}
-	for _, e := range c.Boats[0].StartSheet {
-		for _, knots := range []float64{3, 5, 8} {
-			got := startFromRest(t, knots, e[0], e[1])
-			most, bestSheet := 0.0, 0.0
-			for sheet := 0.0; sheet <= 1+1e-9; sheet += 0.05 {
-				if v := startFromRest(t, knots, e[0], sheet); v > most {
-					most, bestSheet = v, sheet
+	for _, boat := range c.Boats {
+		if len(boat.StartSheet) == 0 {
+			t.Errorf("%s has no start sheet", boat.ID)
+			continue
+		}
+		b := boatOf(t, boat.ID)
+		for _, e := range boat.StartSheet {
+			for _, knots := range []float64{3, 5, 8} {
+				got := startFromRest(t, b, knots, e[0], e[1])
+				most, bestSheet := 0.0, 0.0
+				for sheet := 0.0; sheet <= 1+1e-9; sheet += 0.05 {
+					if v := startFromRest(t, b, knots, e[0], sheet); v > most {
+						most, bestSheet = v, sheet
+					}
 				}
-			}
-			t.Logf("%.0f° off %.0f knots: the start sheet %.2f makes %.2f knots at 20 s, the best, %.2f, %.2f", e[0], knots, e[1], got, bestSheet, most)
-			if got < 0.85*most {
-				t.Errorf("%.0f° off %.0f knots: the start sheet %.2f makes %.2f knots at 20 s, under 85%% of the best's %.2f (%.2f)",
-					e[0], knots, e[1], got, most, bestSheet)
+				t.Logf("%s %.0f° off %.0f knots: the start sheet %.2f makes %.2f knots at 20 s, the best, %.2f, %.2f", boat.ID, e[0], knots, e[1], got, bestSheet, most)
+				if got < 0.85*most {
+					t.Errorf("%s %.0f° off %.0f knots: the start sheet %.2f makes %.2f knots at 20 s, under 85%% of the best's %.2f (%.2f)",
+						boat.ID, e[0], knots, e[1], got, most, bestSheet)
+				}
 			}
 		}
 	}
 }
 
-// startFromRest is the speed through the water, knots, of the Jolly boat
-// 20 s after it starts at rest, off degrees off a wind of knots, its sheet
-// at sheet and its helm centred.
-func startFromRest(t *testing.T, knots, off, sheet float64) float64 {
-	m := newSim(t, knots*knot, off, sheet)
+// startFromRest is the speed through the water, knots, of the boat b 20 s
+// after it starts at rest, off degrees off a wind of knots, its sheet at
+// sheet and its helm centred.
+func startFromRest(t *testing.T, b *Prepared, knots, off, sheet float64) float64 {
+	m := newSimOf(t, b, knots*knot, off, sheet)
 	m.s.Surge = 0
 	m.steer, m.c.Helm = false, 0
 	m.run(20, nil)

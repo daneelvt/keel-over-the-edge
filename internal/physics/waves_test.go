@@ -483,7 +483,12 @@ func mirrorSea(o *ocean) *ocean {
 // Port and starboard are mirrors in waves too: a boat in the mirrored sea
 // sails the mirrored course.
 func TestMirrorSymmetryInWaves(t *testing.T) {
-	b := jolly(t)
+	for _, boat := range testBoats(t) {
+		t.Run(boat.id, func(t *testing.T) { mirrorInWaves(t, boat.b) })
+	}
+}
+
+func mirrorInWaves(t *testing.T, b *Prepared) {
 	for _, c := range []struct {
 		name           string
 		knots, heading float64
@@ -510,6 +515,7 @@ func TestMirrorSymmetryInWaves(t *testing.T) {
 				p.Boom - q.Boom, p.BoomRate - q.BoomRate, p.Sailor - q.Sailor, p.Rudder - q.Rudder,
 				p.SheetLimit - q.SheetLimit, p.SailorMode - q.SailorMode, p.SailorTimer - q.SailorTimer,
 				p.Heave - q.Heave, p.HeaveRate - q.HeaveRate, p.Pitch - q.Pitch, p.PitchRate - q.PitchRate,
+				p.Jib - q.Jib, p.JibRate - q.JibRate, p.JibLimit - q.JibLimit,
 			} {
 				if math.Abs(d) > 1e-12 {
 					t.Fatalf("%s, step %d: the mirrored run differs by %g:\n plain    %+v\n mirrored %+v", c.name, i, d, p, q)

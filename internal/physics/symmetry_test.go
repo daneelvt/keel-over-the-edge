@@ -109,6 +109,7 @@ func TestMirrorSymmetry(t *testing.T) {
 					p.Boom - m.Boom, p.BoomRate - m.BoomRate, p.Sailor - m.Sailor, p.Rudder - m.Rudder,
 					p.SheetLimit - m.SheetLimit, p.SailorMode - m.SailorMode, p.SailorTimer - m.SailorTimer,
 					p.PilotTrim - m.PilotTrim, p.PilotWay - m.PilotWay, p.PilotOrder - m.PilotOrder,
+					p.Jib - m.Jib, p.JibRate - m.JibRate, p.JibLimit - m.JibLimit, p.Reef - m.Reef,
 				} {
 					if math.Abs(d) > 1e-12 {
 						t.Fatalf("step %d: the mirrored run differs by %g:\n plain    %+v\n mirrored %+v", i, d, p, m)

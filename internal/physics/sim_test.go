@@ -76,7 +76,12 @@ func (m *sim) step() {
 // m/s from the north, with the sheet at sheet and a heading-hold on.
 func newSim(t testing.TB, wind, heading, sheet float64) *sim {
 	t.Helper()
-	b := jolly(t)
+	return newSimOf(t, jolly(t), wind, heading, sheet)
+}
+
+// newSimOf is newSim with the boat b.
+func newSimOf(t testing.TB, b *Prepared, wind, heading, sheet float64) *sim {
+	t.Helper()
 	m := &sim{t: t, b: b}
 	m.e.WindSpeed = wind
 	m.s.Heading = heading * deg

@@ -284,7 +284,10 @@ boats:
     # Her lookout is the sailor seated aft on her deck, the eye 2 m above the
     # sea.
     lookout: 2
-    startSheet: [[90, 0.25], [110, 0.3], [130, 0.45]]
+    # Her sheet for a start from rest, by the angle off the wind: from
+    # tools/polar's sweep from rest (-start), each within 85% of the best
+    # sheet's speed after 20 s in 3, 5 and 8 knots.
+    startSheet: [[90, 0.5], [110, 0.6], [130, 0.7]]
     controls:
       sheet: { name: Sheet, trim: Trim, ease: Ease }
       reef: [Full sail, One reef, Two reefs]
@@ -468,11 +471,17 @@ boats:
         rudderTime: 0.4 # estimate
         sheetHaulTime: 4 # estimate: main and jib, by hand
         sheetEaseTime: 1.5 # estimate
-      # The autopilot: the Jolly boat's, until tools/polar -manoeuvres
-      # tunes it for this hull.
+      # The autopilot. Gain and damping tuned for her heavier hull: at the
+      # Jolly boat's, a stormy spell's gusts turned her up to 4.6° off a beam
+      # reach; at these she holds every point within 1° rms and 3° at most,
+      # and tacks in under 5 s keeping two-thirds of her speed. Half the helm
+      # gybes her in a stormy spell without a knockdown. The rest are the
+      # Jolly boat's: she gybes by herself 18° to 22° by the lee
+      # (tools/polar -manoeuvres). Measured with the step in the catalog's
+      # spells.
       autopilot:
-        gain: 2
-        damping: 0.8
+        gain: 3.5 # helm per radian
+        damping: 2 # helm per rad/s
         trimTime: 10
         trimLimit: 0.3
         trimBand: 10
