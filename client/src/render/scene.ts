@@ -359,6 +359,8 @@ export class SeaScene {
     });
     this.edge.on = this.#query.get('edge') !== 'off';
     this.freeCam.lip = catalog.world.disk.radius;
+    // The chase camera's arm reads the land in the world: the origin's offset.
+    this.camera.origin = this.origin.world;
     this.fade = document.createElement('div');
     this.fade.className = 'edge-fade';
     const words = document.createElement('p');
@@ -543,6 +545,10 @@ export class SeaScene {
     }
     this.land = land;
     this.stage.scene.add(land.group);
+    // Both cameras keep out of the land's solids and the lighthouses' towers.
+    land.solids.towers = this.lighthouses;
+    this.camera.solids = land.solids;
+    this.freeCam.solids = land.solids;
   }
 
   setUsePass(on: boolean): void {

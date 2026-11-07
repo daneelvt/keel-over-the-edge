@@ -81,10 +81,11 @@ import { wakeDamping } from '../ocean/wakewaves';
 import { WakeWavesReference } from '../ocean/wakewavescpu';
 import { boatBandAt } from '../ocean/wave';
 import { type RecordValues, spellOf, steer, toHex } from '../predict/golden';
-import { RECORDS, SEA, WEATHER } from '../predict/layout.gen';
+import { GROUND, RECORDS, SEA, WEATHER } from '../predict/layout.gen';
 import { BODY, SKY, WIND_VALUE, WIND_VALUES } from '../predict/physics';
 import type { Predictor } from '../predict/predictor';
 import { heldSpell, placedRecord } from '../predict/weather';
+import { LOOK_HEIGHT } from '../render/camera';
 import { MACHINE_DEFAULT, PERSON_DEFAULT } from '../render/fleet';
 import { airLook } from '../render/fog';
 import { flashNear } from '../render/lightning';
@@ -1993,6 +1994,86 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
         back: document.querySelector('.fly-back.shown') !== null,
         stays: (driver as { stays?: boolean }).stays ?? false,
       };
+    },
+
+    /**
+     * The chase camera's arm: where its eye and the point it looks at are in
+     * the world (m east, north and up), how far along its line the arm
+     * holds it (∞ while the line is clear to the view) and the elevation it
+     * has lifted it to (−∞ for none); and the player's view.
+     */
+    arm() {
+      const c = stage.camera.position;
+      const o = world.origin.world;
+      const cam = world.camera;
+      // The look point: LOOK_HEIGHT above the boat and its followed heave.
+      const bs = world.boatScene;
+      const look = { east: bs.x + o.x, north: -bs.z + o.y, up: bs.y + cam.lift + LOOK_HEIGHT };
+      return {
+        eye: { east: c.x + o.x, north: -c.z + o.y, up: c.y },
+        look,
+        reach: cam.armReach,
+        rise: cam.armRise,
+        view: { ...cam.view },
+      };
+    },
+
+    /** Whether the cameras keep out of the land's solids: off, they stand as their views put them. */
+    cameraSolids(on: boolean): void {
+      const solids = on ? (world.land?.solids ?? null) : null;
+      world.camera.solids = solids;
+      world.freeCam.solids = solids;
+    },
+
+    /**
+     * The land's solids as the grids hold them within reach of (east,
+     * north), for a test's own lookup: each hexagon of land's centre and
+     * elevation (decimetres), each roof's centre, underside and top, each
+     * building's middle, heading, frontage, depth, level and top, each
+     * lighthouse tower's site; and the terrace.
+     */
+    solidsNear(east: number, north: number, reach: number) {
+      const hexes: number[] = [];
+      const roofs: number[] = [];
+      const buildings: number[] = [];
+      const towers: number[] = [];
+      for (const [n, g] of world.land?.grids ?? []) {
+        const [c0, j0] = chunkCorner(n);
+        const e = g.elevation;
+        if (e !== null) {
+          for (let i = 0; i < e.length; i++) {
+            if ((e[i] ?? 0) <= 0) {
+              continue;
+            }
+            const [q, r] = cellHex(
+              c0 + Math.floor(i / GROUND.chunkRows),
+              j0 + (i % GROUND.chunkRows),
+            );
+            const [he, hn] = landHexCentre(q, r);
+            if (Math.hypot(he - east, hn - north) <= reach) {
+              hexes.push(he, hn, e[i] ?? 0);
+            }
+          }
+        }
+        for (const f of g.features?.roofs ?? []) {
+          const [q, r] = cellHex(f.column, f.row);
+          const [he, hn] = landHexCentre(q, r);
+          if (Math.hypot(he - east, hn - north) <= reach) {
+            roofs.push(he, hn, f.under, f.top);
+          }
+        }
+        for (const b of g.town?.buildings ?? []) {
+          if (Math.hypot(b.east - east, b.north - north) <= reach) {
+            buildings.push(b.east, b.north, b.heading, b.frontage, b.depth, b.level, b.top);
+          }
+        }
+      }
+      for (const p of world.lighthouses.sites.values()) {
+        if (p.tower > 0 && Math.hypot(p.east - east, p.north - north) <= reach) {
+          towers.push(p.east, p.north, p.ground, p.tower);
+        }
+      }
+      return { hexes, roofs, buildings, towers, terrace: catalog.world.look.terrace };
     },
 
     /** Where the camera's eye is: m east and north in the world, and m above the sea. */

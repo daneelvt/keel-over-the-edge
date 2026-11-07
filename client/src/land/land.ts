@@ -38,6 +38,7 @@ import { colourBytes, landLook } from '../workers/mesh/look';
 import type { FromMesh, ToMesh } from '../workers/mesh/mesh';
 import { cellAt, chunkAt, ModuleSlots } from './ground';
 import { landMaterial } from './material';
+import { Solids } from './solids';
 
 /** The page's end of the mesh worker. */
 export interface MeshPort {
@@ -127,6 +128,8 @@ export class Land {
   readonly flora: Flora;
   /** The features' parts on the land held: falls, spouts, vents, colonies. */
   readonly features: Features;
+  /** What the cameras keep out of, over the grids held. */
+  readonly solids: Solids;
 
   readonly #port: MeshPort;
   readonly #world: World;
@@ -149,6 +152,7 @@ export class Land {
     this.#port = port;
     this.#world = world;
     this.material = landMaterial();
+    this.solids = new Solids(world.look.terrace);
     this.group.name = 'land';
     this.towns = new Towns(world);
     this.group.add(this.towns.root);
@@ -199,6 +203,7 @@ export class Land {
     this.#held.clear();
     this.#given.clear();
     this.#grids.clear();
+    this.solids.dropAll();
     this.towns.clear();
     this.flora.clear();
     this.features.clear();
@@ -361,6 +366,7 @@ export class Land {
       if (h.grids !== null && Math.min(d, outlineDistance(h, boatEast, boatNorth)) > keepGrids) {
         h.grids = null;
         this.#grids.delete(h.number);
+        this.solids.drop(h.number);
         this.#version++;
       }
       const m = h.mesh;
@@ -448,6 +454,7 @@ export class Land {
     if (h.grids === null) {
       h.grids = m.grids;
       this.#grids.set(m.number, m.grids);
+      this.solids.add(m.number, m.grids);
       this.#version++;
     }
     if (m.mesh !== null && h.mesh === null) {
