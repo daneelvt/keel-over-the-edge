@@ -184,14 +184,25 @@ export class SailHold {
   }
 }
 
-/** The sheet's words for assistive technology: its setting, and what the sail wants. */
-export function sheetText(sheet: number, sail: SailState): string {
-  const v = `Sheet ${Math.round(sheet * 100)}%`;
+/** The sheet's words on a boat that names it so. */
+export const SHEET_WORDS: HudControls['sheet'] = { name: 'Sheet', trim: 'Trim', ease: 'Ease' };
+
+/**
+ * The sheet's words for assistive technology, in the boat's words for its
+ * sheet: its setting, and what the sail wants.
+ */
+export function sheetText(
+  sheet: number,
+  sail: SailState,
+  words: HudControls['sheet'] = SHEET_WORDS,
+): string {
+  const v = `${words.name} ${Math.round(sheet * 100)}%`;
+  const trim = words.trim === SHEET_WORDS.trim ? 'trim in' : words.trim.toLowerCase();
   switch (sail) {
     case 'luffing':
-      return `${v}, luffing: trim in`;
+      return `${v}, luffing: ${trim}`;
     case 'stalled':
-      return `${v}, stalled: ease`;
+      return `${v}, stalled: ${words.ease.toLowerCase()}`;
     case 'aback':
       return `${v}, aback`;
     default:
@@ -204,6 +215,8 @@ export class SheetText {
   el: HTMLElement | SVGElement | null = null;
   #percent = -1;
   #sail: SailState | null = null;
+  /** The boat's words for its sheet. */
+  #words = SHEET_WORDS;
 
   set(sheet: number, sail: SailState): void {
     const percent = Math.round(sheet * 100);
@@ -212,7 +225,13 @@ export class SheetText {
     }
     this.#percent = percent;
     this.#sail = sail;
-    this.el.setAttribute('aria-valuetext', sheetText(sheet, sail));
+    this.el.setAttribute('aria-valuetext', sheetText(sheet, sail, this.#words));
+  }
+
+  /** The boat's words for its sheet: written afresh at the next setting. */
+  words(w: HudControls['sheet']): void {
+    this.#words = w;
+    this.#percent = -1;
   }
 
   /** Forgets what was written (a new element was attached). */
@@ -223,28 +242,60 @@ export class SheetText {
   }
 }
 
-/** What the controls are called on a kind of boat, and whether it reefs: the catalog's controls and its main's reefs. */
+/** What the controls are called on a kind of boat, and whether it reefs: the catalog's controls and its sails' reefs. */
 export interface HudControls {
   sheet: { name: string; trim: string; ease: string };
   /** The reef's three levels in words: full sail, one reef, two. */
   reef: readonly string[];
-  /** Whether the boat can reef at all: a reef that shortens its main. */
+  /** Whether the boat can reef at all: a reef that shortens any of its sails. */
   reefs: boolean;
+  /**
+   * Whether the sheet is the braces of square sails: aback, its legend
+   * names the control, since the yards are aback, not a sail on a sheet.
+   */
+  braces: boolean;
 }
 
 /** A kind of boat as the screen reads it. */
 export interface HudKind {
   controls: { sheet: HudControls['sheet']; reef: readonly string[] };
-  physics: { rig: { reefs: readonly number[] } };
+  physics: {
+    rig: { reefs: readonly number[] };
+    headsails?: { headsailReefs: readonly number[] };
+    square?: { squareForeArea: number; squareAfterArea: number; squareReefs: readonly number[] };
+  };
 }
 
 /** The controls' words and the reef for a kind of boat. */
 export function controlsOf(kind: HudKind): HudControls {
+  const { rig, headsails, square } = kind.physics;
+  const braces = square !== undefined && square.squareForeArea + square.squareAfterArea > 0;
+  const shares = [
+    ...rig.reefs,
+    ...(headsails?.headsailReefs ?? []),
+    ...(braces ? (square?.squareReefs ?? []) : []),
+  ];
   return {
     sheet: kind.controls.sheet,
     reef: kind.controls.reef,
-    reefs: kind.physics.rig.reefs.some((share) => share < 1),
+    reefs: shares.some((share) => share < 1),
+    braces,
   };
+}
+
+/** The sheet's legend for what the sail is doing, but for its own name while it draws. */
+export function sheetLegend(c: HudControls | null, sail: SailState): string {
+  const name = c?.sheet.name ?? SHEET_WORDS.name;
+  switch (sail) {
+    case '':
+      return name;
+    case 'luffing':
+      return 'Luffing';
+    case 'stalled':
+      return 'Stalled';
+    case 'aback':
+      return c?.braces === true ? `${name} · Aback` : 'Aback';
+  }
 }
 
 /** The case's line for a reef, 0 … 2 as the state has it: its level's words, none at full sail. */
@@ -315,6 +366,7 @@ export class HudModel {
   /** The own boat's kind: its controls' words, and whether it reefs. */
   setKind(kind: HudKind): void {
     this.controls.value = controlsOf(kind);
+    this.sheetText.words(this.controls.value.sheet);
   }
 
   /** Shows a bump's line from now (ms) for BUMP_LINE. */

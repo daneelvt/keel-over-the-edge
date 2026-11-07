@@ -44,7 +44,7 @@ import { SkyTime } from '../sky/skytime';
 import starsUrl from '../sky/stars.bin?url';
 import { SkyWeather } from '../sky/weather';
 import { Boat, lampsLit, lazyArtUrl, type SailorLook } from './boat';
-import { CAMERA_PRESETS, type CameraView, ChaseCamera, sizeOf } from './camera';
+import { CAMERA_PRESETS, type CameraView, ChaseCamera, lookSizeOf, sizeOf } from './camera';
 import { FloatingOrigin, type ScenePoint } from './coords';
 import { DirtyAir } from './dirtyair';
 import { type FlagSeen, Flags } from './flags';
@@ -634,6 +634,7 @@ export class SeaScene {
     // The camera and the shadows' box sized to the boat.
     const size = sizeOf(kind, catalog.boats[0]);
     this.camera.size = size;
+    this.camera.lookSize = lookSizeOf(kind, catalog.boats[0]);
     this.shadows.scale = size;
     this.boat = boat;
     this.stage.scene.add(boat.root);

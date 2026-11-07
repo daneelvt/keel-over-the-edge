@@ -8,9 +8,9 @@ import { BufferAttribute, BufferGeometry } from 'three';
 import { describe, expect, test } from 'vitest';
 import { catalog } from '../catalog';
 import { transomFrom } from '../ocean/look';
-import { controlsOf, reefLine } from '../ui/model';
+import { controlsOf, reefLine, sheetLegend, sheetText } from '../ui/model';
 import { reefRows, reefShare } from './boat';
-import { sizeOf } from './camera';
+import { CHASE, lookSizeOf, MAX_CHASE, mastOf, sizeOf } from './camera';
 
 /** A sail's TEXCOORD_1 rows, as a model of that many rows (and those given) has them. */
 function sailWithRows(rows: number[]): BufferGeometry {
@@ -54,12 +54,31 @@ describe('the camera’s size for a boat', () => {
     expect(sizeOf(first, first)).toBe(1);
     for (const boat of catalog.boats.slice(1)) {
       const s = sizeOf(boat, first);
-      const mast = (b: typeof boat) => b.physics.rig.boomHeight + b.physics.rig.luff;
       expect(s).toBeCloseTo(
-        Math.max(boat.lengthOverall / first.lengthOverall, mast(boat) / mast(first)),
+        Math.min(
+          Math.max(boat.lengthOverall / first.lengthOverall, mastOf(boat) / mastOf(first)),
+          MAX_CHASE / CHASE.distance,
+        ),
         12,
       );
       expect(s).toBeGreaterThan(1);
+      expect(s * CHASE.distance).toBeLessThanOrEqual(MAX_CHASE);
+      expect(lookSizeOf(boat, first)).toBeCloseTo(mastOf(boat) / mastOf(first), 12);
+    }
+  });
+
+  test('looks up to the highest sail’s head: the main’s, the headsails’ or the square sails’', () => {
+    for (const boat of catalog.boats) {
+      const { rig, headsails, square } = boat.physics;
+      expect(mastOf(boat)).toBeGreaterThanOrEqual(rig.boomHeight + rig.luff);
+      if (square.squareForeArea + square.squareAfterArea > 0) {
+        expect(mastOf(boat)).toBeGreaterThanOrEqual(square.squareFootHeight + square.squareLuff);
+      }
+      if (headsails.headsailArea > 0) {
+        expect(mastOf(boat)).toBeGreaterThanOrEqual(
+          headsails.headsailTackHeight + headsails.headsailLuff,
+        );
+      }
     }
   });
 });
@@ -72,17 +91,42 @@ describe('the white water behind a transom', () => {
 });
 
 describe('the controls’ words', () => {
-  test('are each boat’s from the catalog, and the case names the reef the main has', () => {
+  test('are each boat’s from the catalog, and the case names the reef its sails have', () => {
     for (const boat of catalog.boats) {
       const c = controlsOf(boat);
+      const { rig, headsails, square } = boat.physics;
+      const braces = square.squareForeArea + square.squareAfterArea > 0;
       expect(c.sheet).toEqual(boat.controls.sheet);
       expect(c.reef).toEqual(boat.controls.reef);
-      expect(c.reefs).toBe(boat.physics.rig.reefs.some((share) => share < 1));
+      expect(c.braces).toBe(braces);
+      expect(c.reefs).toBe(
+        [...rig.reefs, ...headsails.headsailReefs, ...(braces ? square.squareReefs : [])].some(
+          (share) => share < 1,
+        ),
+      );
       expect(reefLine(c, 0)).toBe('');
       expect(reefLine(c, 0.4)).toBe('');
       expect(reefLine(c, 0.6)).toBe(boat.controls.reef[1]);
       expect(reefLine(c, 2)).toBe(boat.controls.reef[2]);
     }
     expect(reefLine(null, 2)).toBe('');
+  });
+
+  test('every boat reefs; a boat of square sails has braces, and only its legend names them aback', () => {
+    for (const boat of catalog.boats) {
+      const c = controlsOf(boat);
+      expect(c.reefs).toBe(true);
+      expect(sheetLegend(c, '')).toBe(boat.controls.sheet.name);
+      expect(sheetLegend(c, 'luffing')).toBe('Luffing');
+      expect(sheetLegend(c, 'stalled')).toBe('Stalled');
+      expect(sheetLegend(c, 'aback')).toBe(
+        c.braces ? `${boat.controls.sheet.name} · Aback` : 'Aback',
+      );
+    }
+    expect(catalog.boats.filter((b) => controlsOf(b).braces)).toHaveLength(1);
+    const ship = catalog.boats.find((b) => controlsOf(b).braces);
+    expect(sheetText(0.4, 'luffing', ship?.controls.sheet)).toBe('Braces 40%, luffing: brace up');
+    expect(sheetText(0.4, 'stalled', ship?.controls.sheet)).toBe('Braces 40%, stalled: square');
+    expect(sheetText(0.4, 'aback', ship?.controls.sheet)).toBe('Braces 40%, aback');
   });
 });

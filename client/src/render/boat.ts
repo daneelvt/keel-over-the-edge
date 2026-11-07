@@ -618,13 +618,16 @@ export class Boat {
       [o.afterHeadAttack, o.afterHeadFlow],
     ] as const;
     const sq = this.square;
+    // Eased as the wind changes; a frame with no time gone (held, or the
+    // first) shows the wind as it is.
+    const k = ease > 0 ? ease : 1;
     for (let i = 0; i < 4; i++) {
       const [attack, flow] = strips[i] as readonly [number, number];
       const b = squareBelly(out[attack] ?? 0, out[flow] ?? 1, this.#belly);
       const d = sq.depth[i] as typeof sq.reef;
       const r = sq.ripple[i] as typeof sq.reef;
-      d.value += (b.depth - d.value) * ease;
-      r.value += (b.ripple - r.value) * ease;
+      d.value += (b.depth - d.value) * k;
+      r.value += (b.ripple - r.value) * k;
     }
     sq.reef.value = pose.reef;
   }
