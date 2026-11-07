@@ -431,7 +431,9 @@ test('the frame allocates nothing that stays, sailing with the controls moving',
     .map((k) => k.id);
   await page.evaluate(async (birds) => {
     const k = globalThis.keel;
-    birds.forEach((id, n) => k.raiseLife(id, 80 * Math.sin(n), 80 * Math.cos(n)));
+    for (const [n, id] of birds.entries()) {
+      k.raiseLife(id, 80 * Math.sin(n), 80 * Math.cos(n));
+    }
     k.settings({ windOverlay: true, forcesOverlay: true });
     k.script('wiggle');
     k.thaw();

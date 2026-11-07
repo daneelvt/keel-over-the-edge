@@ -30,11 +30,10 @@ type World struct {
 // the boat, its heading when its course last changed and since when, and
 // the tick before which nothing follows it.
 type boatLife struct {
-	boat   uint64
-	ref    float64
-	since  int64
-	quiet  int64
-	steady bool
+	boat  uint64
+	ref   float64
+	since int64
+	quiet int64
 }
 
 // steadyEvery is how often each boat's course is looked at, ticks.
