@@ -2257,6 +2257,7 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
     /** Seats the sailor in view afresh at the boat's pose, as the fleet meets a boat's. */
     settleSailor(): void {
       world.boat?.sailor?.runtime.reset();
+      world.boat?.settle();
     },
 
     /**

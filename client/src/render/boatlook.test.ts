@@ -23,6 +23,7 @@ import {
   NAME_ASPECT,
   NameAtlas,
   NameRows,
+  type NumberPlace,
   namePlace,
   numberedSail,
   numberPlace,
@@ -33,6 +34,7 @@ import {
 import type { FloatingOrigin } from './coords';
 import { FleetViews, LEAN_STRIDE } from './fleet';
 import { luminance } from './machinemark';
+import { type SquareSail, squareSails } from './squarerig';
 
 const { paints, cloths, lettering } = catalog.boatLooks;
 const grained = paints.findIndex((p) => p.grain === true);
@@ -248,7 +250,7 @@ async function model(path: string): Promise<Object3D> {
 }
 
 describe.each(catalog.boats.map((b) => [b.name, b] as const))('the %s', (_, boat) => {
-  test('has painted topsides, its name on both bows within them', async () => {
+  test('has painted topsides, its name within them where its hull says: both bows or the transom', async () => {
     const scene = await model(boat.art.model);
     const at: number[] = [];
     let hull: unknown;
@@ -272,12 +274,23 @@ describe.each(catalog.boats.map((b) => [b.name, b] as const))('the %s', (_, boat
     if (place === null) {
       return;
     }
-    expect(place.on).toBe('bows');
+    const transom = (hull as { name?: { on?: unknown } } | undefined)?.name?.on === 'transom';
+    expect(place.on).toBe(transom ? 'transom' : 'bows');
     expect(place.width / place.height).toBeCloseTo(NAME_ASPECT, 6);
-    // Forward, above the water, and no longer than a quarter of the hull.
-    const { lengthOverall } = boat;
-    expect(place.z).toBeLessThan(0);
-    expect(place.width).toBeLessThanOrEqual(0.25 * lengthOverall);
+    const { lengthOverall, beam } = boat;
+    if (transom) {
+      // Across the after end, no wider than the boat.
+      let aft = Number.NEGATIVE_INFINITY;
+      for (let i = 2; i < at.length; i += 3) {
+        aft = Math.max(aft, at[i] ?? 0);
+      }
+      expect(place.z).toBe(aft);
+      expect(place.width).toBeLessThanOrEqual(beam);
+    } else {
+      // Forward, and no longer than a quarter of the hull.
+      expect(place.z).toBeLessThan(0);
+      expect(place.width).toBeLessThanOrEqual(0.25 * lengthOverall);
+    }
     expect(place.y - place.height / 2).toBeGreaterThan(0);
     expect(place.height).toBeGreaterThan(0.05);
     // The box's top and bottom on the topsides at its station.
@@ -293,24 +306,43 @@ describe.each(catalog.boats.map((b) => [b.name, b] as const))('the %s', (_, boat
     expect(place.y + place.height / 2).toBeLessThanOrEqual(hi);
   });
 
-  test('carries its number on the main, both faces, within the sail', async () => {
+  test('carries its number on the sail its model says, both faces, within the sail', async () => {
     const scene = await model(boat.art.model);
     const nodes: Object3D[] = [];
     scene.traverse((o) => {
       nodes.push(o);
     });
-    expect(numberedSail(nodes)).toBe('sail');
-    const { foot, luff } = boat.physics.rig;
-    const p = numberPlace(foot, luff, (v) => 1 - v);
+    const numbered = numberedSail(nodes);
+    const square = squareSails(scene);
+    let p: NumberPlace;
+    let chord: (v: number) => number;
+    if (numbered === 'sail') {
+      const { foot, luff } = boat.physics.rig;
+      p = numberPlace(foot, luff, (v) => 1 - v);
+      chord = (v) => 1 - v;
+      // Its digits as high in metres as a fraction of the foot, whatever the luff.
+      expect(p.dv * luff).toBeCloseTo((p.du / 0.62) * foot, 6);
+    } else {
+      // A square sail: the one its model marks, a square rig's only.
+      const marked = square.filter((s) => s.numbered);
+      expect(marked).toHaveLength(1);
+      expect(
+        marked[0]?.meshes.some((m) => m.name === numbered || m.parent?.name === numbered),
+      ).toBe(true);
+      const sail = marked[0] as SquareSail;
+      // As the square sails' print places it (boat.ts's squarePrint).
+      p = numberPlace(sail.width, sail.head - sail.foot, () => 1);
+      chord = () => 1;
+    }
     for (const face of [p.front, p.back]) {
       // Four digits within the chord at their height, which a triangle's is.
       expect(face.u - 2 * p.du).toBeGreaterThan(0);
-      expect(face.u + 2 * p.du).toBeLessThan(1 - face.v);
+      expect(face.u + 2 * p.du).toBeLessThan(chord(face.v));
+      expect(face.v + p.dv / 2).toBeLessThan(1);
+      expect(face.v - p.dv / 2).toBeGreaterThan(0);
     }
     // The front face's above the back's, apart.
     expect(p.front.v - p.back.v).toBeGreaterThan(p.dv);
-    // Its digits as high in metres as a fraction of the foot, whatever the luff.
-    expect(p.dv * luff).toBeCloseTo((p.du / 0.62) * foot, 6);
   });
 });
 

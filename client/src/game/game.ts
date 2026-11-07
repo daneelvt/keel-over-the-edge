@@ -628,7 +628,10 @@ export class Game implements PilotActions {
     this.#sound.rain = w.weather.rain;
     this.#sound.gustFactor = w.wind.factor;
     this.#sound.waterline = w.kind.physics.hull.waterlineLength;
-    this.#sound.sailArea = w.kind.physics.rig.sailArea;
+    // The rigging's rope by the sails it holds up: the main's, and a square
+    // rig's yards too (a headsail's stay is not the rigging that sings).
+    const { rig, square } = w.kind.physics;
+    this.#sound.sailArea = rig.sailArea + square.squareForeArea + square.squareAfterArea;
     this.sound.update(now, soundInput(w.out, w.sea, time, this.#sound));
     this.#harbour(now, look);
     this.#features(now, look);

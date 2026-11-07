@@ -23,7 +23,7 @@
 import { type FallShape, fallPose } from '../edge/over';
 import { TICKS_PER_SECOND } from '../net/clock';
 import { CHANGE, FLEET_META, SLOT, slotAt, VIEW_SLOTS } from '../net/view';
-import { lerpAngle } from '../predict/blend';
+import { lerpAngle, yardsTurn } from '../predict/blend';
 
 /** The near band's delay, ticks: two snapshots at 15 a second, 133 ms. */
 export const NEAR_DELAY = 4;
@@ -80,8 +80,10 @@ const F = {
   falling: 11,
   jib: 12,
   reef: 13,
+  yardsTurn: 14,
+  foreYardsTurn: 15,
 } as const;
-const FIELDS = 14;
+const FIELDS = 16;
 
 /**
  * The slot fields the wire may carry beyond those every boat has: the
@@ -142,6 +144,12 @@ export interface DrawnBoat {
   jib: number;
   /** The main's reef level: 0 at full sail, 1 or 2. */
   reef: number;
+  /**
+   * Its after and fore yards' nodes' turns about their masts, radians
+   * (yardsTurn of the wire's yards): 0 square, and on a boat with none.
+   */
+  yardsTurn: number;
+  foreYardsTurn: number;
   /** 0 … 1: how far it has faded in. */
   opacity: number;
   /** 0 near … 1 far: where its delay is between the bands'. */
@@ -181,6 +189,8 @@ export function newDrawnBoat(): DrawnBoat {
     sail: 0,
     jib: 0,
     reef: 0,
+    yardsTurn: 0,
+    foreYardsTurn: 0,
     opacity: 0,
     far: 0,
     motion: 0,
@@ -265,6 +275,10 @@ class Boat {
     r[k + F.far] = f[o + SLOT.far] ?? 0;
     r[k + F.jib] = SLOT_MORE.jib === undefined ? 0 : (f[o + SLOT_MORE.jib] ?? 0);
     r[k + F.reef] = SLOT_MORE.reef === undefined ? 0 : (f[o + SLOT_MORE.reef] ?? 0);
+    // The yards by their turns, which run smoothly through square, where
+    // the angles' sign flips: blended, they never pass the centreline.
+    r[k + F.yardsTurn] = yardsTurn(f[o + SLOT.yards] ?? 0);
+    r[k + F.foreYardsTurn] = yardsTurn(f[o + SLOT.foreYards] ?? 0);
     const falling = f[o + SLOT.falling] ?? 0;
     r[k + F.falling] = falling;
     if (falling === 0) {
@@ -314,6 +328,8 @@ class Boat {
       out.rudder = this.#mix(i, F.rudder, t);
       out.sailor = this.#mix(i, F.sailor, t);
       out.jib = this.#mix(i, F.jib, t);
+      out.yardsTurn = this.#mix(i, F.yardsTurn, t);
+      out.foreYardsTurn = this.#mix(i, F.foreYardsTurn, t);
       const discrete = t < 0.5 ? i + 1 : i;
       out.mode = this.at(discrete, F.mode);
       out.sail = this.at(discrete, F.sail);
@@ -353,6 +369,8 @@ class Boat {
     out.sail = this.at(i, F.sail);
     out.jib = this.at(i, F.jib);
     out.reef = this.at(i, F.reef);
+    out.yardsTurn = this.at(i, F.yardsTurn);
+    out.foreYardsTurn = this.at(i, F.foreYardsTurn);
   }
 }
 
@@ -662,6 +680,8 @@ function copyDrawn(a: DrawnBoat, b: DrawnBoat): void {
   b.sail = a.sail;
   b.jib = a.jib;
   b.reef = a.reef;
+  b.yardsTurn = a.yardsTurn;
+  b.foreYardsTurn = a.foreYardsTurn;
   b.opacity = a.opacity;
   b.far = a.far;
   b.motion = a.motion;

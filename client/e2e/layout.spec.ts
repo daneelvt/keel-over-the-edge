@@ -368,13 +368,17 @@ async function caseFaults(page: Page, upright: boolean): Promise<string[]> {
   return found;
 }
 
-/** What is wrong with the sheet's legend as the sail luffs, stalls or is aback: its words out of the frame, or over the ends. */
-async function sheetFaults(page: Page): Promise<string[]> {
+/**
+ * What is wrong with the sheet's legend as the sail luffs, stalls or is
+ * aback (its legend then aback): its words out of the frame, or over the
+ * ends.
+ */
+async function sheetFaults(page: Page, aback = 'Aback'): Promise<string[]> {
   const found: string[] = [];
   for (const [state, legend, lit] of [
     ['luffing', 'Luffing', 'trim'],
     ['stalled', 'Stalled', 'ease'],
-    ['aback', 'Aback', null],
+    ['aback', aback, null],
   ] as const) {
     found.push(
       ...(await page.evaluate(
@@ -856,19 +860,33 @@ async function plateFaults(page: Page, boat: Box | null): Promise<string[]> {
   return found;
 }
 
-/** The Reef key and the key that shakes a reef out: 44 pixels or more, on the sheet's top or beside it. */
+/** The Reef key and the key that shakes a reef out: 44 pixels or more, their words within them, on the sheet's top or beside it. */
 async function reefFaults(page: Page): Promise<string[]> {
   return page.evaluate(() => {
     const out: string[] = [];
     const sheet = document.querySelector('[data-control=sheet]')?.getBoundingClientRect();
-    const keys = [...document.querySelectorAll('.reef-key')].map((k) => ({
-      name: k.getAttribute('aria-label') ?? '',
-      r: k.getBoundingClientRect(),
-    }));
+    const keys = [...document.querySelectorAll('.reef-key')].map((k) => {
+      const range = document.createRange();
+      range.selectNodeContents(k);
+      return {
+        name: k.getAttribute('aria-label') ?? '',
+        r: k.getBoundingClientRect(),
+        words: range.getBoundingClientRect(),
+      };
+    });
     if (sheet === undefined || keys.length !== 2) {
       return [`${keys.length} reef keys, a reef asked for`];
     }
-    for (const { name, r } of keys) {
+    for (const { name, r, words } of keys) {
+      // Its words within its face, however long the boat's are.
+      if (
+        words.left < r.left - 0.5 ||
+        words.right > r.right + 0.5 ||
+        words.top < r.top - 0.5 ||
+        words.bottom > r.bottom + 0.5
+      ) {
+        out.push(`“${name}”: its words run out of the key`);
+      }
       if (r.width < 43.5 || r.height < 43.5) {
         out.push(`“${name}” is ${Math.round(r.width)} × ${Math.round(r.height)}`);
       }
@@ -1114,70 +1132,105 @@ for (const upright of [true, false]) {
   });
 }
 
-// The keelboat stands taller than the Jolly boat: the camera stands back
-// and looks higher in proportion, so on every screen no part covers it,
-// held upright save the case's face and pushers over its masthead, as the
-// Jolly boat's.
-test('the keelboat is framed as the Jolly boat is, clear of every part, on every screen', async ({
+// The keelboat and the tall ship stand taller than the Jolly boat: the
+// camera stands back and looks higher in proportion, so on every screen,
+// and a desktop's, no part covers either, held upright save the case's
+// face and pushers over its masthead, as the Jolly boat's. The tall ship's
+// sheet is her braces, from Brace up to Square, its legend aback the
+// longest: "Braces · Aback", within the sheet's frame.
+test('the keelboat and the tall ship are framed as the Jolly boat is, clear of every part, on every screen', async ({
   page,
 }) => {
+  test.setTimeout(150_000);
   await page.setViewportSize({ width: SCREENS[0].width, height: SCREENS[0].height });
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await openScene(page, 'boat=keelboat', true);
-  await page.evaluate(() => {
-    const k = globalThis.keel;
-    k.setState({ sheetLimit: 0.05, boom: 0, jib: 0, surge: 0 });
-    k.setControls(0, 0);
-    k.setReef(1);
-    k.advance(30);
-    k.render();
-    k.camera('chase');
-    k.render();
-  });
   const found: string[] = [];
-  for (const s of SCREENS) {
-    await page.setViewportSize({ width: s.width, height: s.height });
-    await page.waitForFunction(
-      ({ width, height }) =>
-        innerWidth === width &&
-        innerHeight === height &&
-        Math.abs(globalThis.keel.world.stage.camera.aspect - width / height) < 1e-6,
-      { width: s.width, height: s.height },
-    );
-    await page.evaluate(() => {
+  // Every boat but the first, whose screens the other tests hold: aback,
+  // the braces of square sails name themselves.
+  const larger = data.boats.slice(1).map((kind) => {
+    const { square } = kind.physics;
+    const braces = square.squareForeArea + square.squareAfterArea > 0;
+    return { kind, braces, aback: braces ? `${kind.controls.sheet.name} · Aback` : 'Aback' };
+  });
+  for (const { kind, braces, aback } of larger) {
+    const id = kind.name;
+    await page.setViewportSize({ width: SCREENS[0].width, height: SCREENS[0].height });
+    await page.evaluate(async (index) => {
       const k = globalThis.keel;
-      k.fullScreenKey(true);
+      await k.useBoat(index);
+      k.setState({ sheetLimit: 0.05, boom: 0, jib: 0, surge: 0 });
+      k.setControls(0, 0);
+      k.setReef(1);
+      k.advance(30);
+      k.render();
       k.camera('chase');
       k.render();
-    });
-    await page.waitForTimeout(150);
-    await page.evaluate(() => globalThis.keel.render());
-    const seen = await parts(page);
-    if (seen.boat === null) {
-      found.push(`${s.name}: no boat drawn`);
-      continue;
-    }
-    const boat = seen.boat;
-    const inCase = (n: string) =>
-      n === 'the case' ||
-      n === 'the barometer pusher' ||
-      n === 'the clock pusher' ||
-      n === 'the board pusher';
-    for (const p of seen.parts) {
-      if (!(s.upright && inCase(p.name)) && overlap(p, boat)) {
-        found.push(`${s.name}: ${p.name} covers the keelboat (${edges(p)} and ${edges(boat)})`);
+    }, data.boats.indexOf(kind));
+    const screens = braces
+      ? [...SCREENS, { name: 'a desktop', width: 1440, height: 900, upright: false }]
+      : SCREENS;
+    for (const s of screens) {
+      await page.setViewportSize({ width: s.width, height: s.height });
+      await page.waitForFunction(
+        ({ width, height }) =>
+          innerWidth === width &&
+          innerHeight === height &&
+          Math.abs(globalThis.keel.world.stage.camera.aspect - width / height) < 1e-6,
+        { width: s.width, height: s.height },
+      );
+      await page.evaluate(() => {
+        const k = globalThis.keel;
+        k.fullScreenKey(true);
+        k.camera('chase');
+        k.render();
+      });
+      await page.waitForTimeout(150);
+      await page.evaluate(() => globalThis.keel.render());
+      const seen = await parts(page);
+      if (seen.boat === null) {
+        found.push(`${id}, ${s.name}: no boat drawn`);
+        continue;
       }
-    }
-    if (
-      boat.left < -0.5 ||
-      boat.top < -0.5 ||
-      boat.right > s.width + 0.5 ||
-      boat.bottom > s.height + 0.5
-    ) {
-      found.push(`${s.name}: the keelboat is off the screen (${edges(boat)})`);
-    }
-    for (const f of await reefFaults(page)) {
-      found.push(`${s.name}: ${f}`);
+      const boat = seen.boat;
+      const inCase = (n: string) =>
+        n === 'the case' ||
+        n === 'the barometer pusher' ||
+        n === 'the clock pusher' ||
+        n === 'the board pusher';
+      for (const p of seen.parts) {
+        if (!(s.upright && inCase(p.name)) && overlap(p, boat)) {
+          found.push(
+            `${id}, ${s.name}: ${p.name} covers the boat (${edges(p)} and ${edges(boat)})`,
+          );
+        }
+      }
+      if (
+        boat.left < -0.5 ||
+        boat.top < -0.5 ||
+        boat.right > s.width + 0.5 ||
+        boat.bottom > s.height + 0.5
+      ) {
+        found.push(`${id}, ${s.name}: the boat is off the screen (${edges(boat)})`);
+      }
+      for (const f of await reefFaults(page)) {
+        found.push(`${id}, ${s.name}: ${f}`);
+      }
+      // The sheet's name and ends in the boat's words, and its legends within it.
+      const words = await page.evaluate(() =>
+        [
+          ...document.querySelectorAll(
+            '[data-control=sheet] .sheet-end, [data-control=sheet] .control-label',
+          ),
+        ].map((e) => e.textContent),
+      );
+      const sheet = kind.controls.sheet;
+      if (JSON.stringify(words) !== JSON.stringify([sheet.trim, sheet.ease, sheet.name])) {
+        found.push(`${id}, ${s.name}: the sheet reads ${JSON.stringify(words)}`);
+      }
+      for (const f of await sheetFaults(page, aback)) {
+        found.push(`${id}, ${s.name}: ${f}`);
+      }
     }
   }
   expect(found).toEqual([]);

@@ -4,7 +4,8 @@
 // the GPU where the physics module's rule and the camera put it, from the
 // centre, half way and the rim; the stars by the hour; the light of the
 // hour on the sea and the boat; looking up and tapping a star; the
-// lanterns' arcs; the draw calls by night; and pictures of the hours.
+// lanterns' arcs, a dinghy's tricolour and a tall ship's sidelights and
+// sternlight; the draw calls by night; and pictures of the hours.
 
 import { expect, type Page, test } from '@playwright/test';
 import { openScene, type Picture, picture } from './helpers';
@@ -339,23 +340,39 @@ test.describe('looking up', () => {
 });
 
 test.describe('lanterns', () => {
-  /** A boat 40 m ahead of the camera, on a heading, at an hour; its lantern's colours on screen. */
-  async function lantern(page: Page, heading: number, hour: number, ahead = 40) {
-    await page.evaluate(
-      ({ heading, hour, ahead }) => {
+  /**
+   * A boat of a kind 40 m ahead of the camera, on a heading, at an hour;
+   * its lanterns' colours on screen, the first's, or each of its kind's.
+   */
+  async function lanterns(page: Page, heading: number, hour: number, ahead = 40, kind = 0) {
+    const n = await page.evaluate(
+      async ({ heading, hour, ahead, kind }) => {
         const k = globalThis.keel;
         k.showOwnBoat(false);
         k.setSky(hour, 0);
         const b = k.boat().state;
         // The own boat heads east, and the chase camera looks along it.
-        k.setFleet([{ east: b.x + ahead, north: b.y, heading, boom: 0.3, sail: 15 }]);
+        k.setFleet([{ kind, east: b.x + ahead, north: b.y, heading, boom: 0.3, sail: 15 }]);
         k.render();
+        await k.fleetLoaded();
+        k.render();
+        return k.sky().lanternsDrawn;
       },
-      { heading, hour, ahead },
+      { heading, hour, ahead, kind },
     );
     const p = await picture(page);
-    const at = await page.evaluate(() => globalThis.keel.lanternOnScreen(0));
-    return { at, colours: at === null ? null : around(p, at.x, at.y, 5) };
+    const out = [];
+    for (let i = 0; i < Math.max(n, 1); i++) {
+      const at = await page.evaluate((i) => globalThis.keel.lanternOnScreen(i), i);
+      out.push({ at, colours: at === null ? null : around(p, at.x, at.y, 5) });
+    }
+    return out;
+  }
+
+  async function lantern(page: Page, heading: number, hour: number, ahead = 40) {
+    return (await lanterns(page, heading, hour, ahead))[0] as Awaited<
+      ReturnType<typeof lanterns>
+    >[number];
   }
 
   test('by night, red from the port bow and white from astern, none beyond the horizon; by day none', async ({
@@ -383,6 +400,30 @@ test.describe('lanterns', () => {
     // By day the lantern is brass and glass: no glow is drawn at all.
     const day = await lantern(page, (315 * Math.PI) / 180, 10);
     expect(day.at).toBeNull();
+  });
+
+  test('a tall ship by night: her red sidelight from her port bow, her green from her starboard, her white astern', async ({
+    page,
+  }) => {
+    await openScene(page);
+    // Her lanterns in the catalog's order: port, starboard, stern. Each
+    // seen from where its arc does not reach shows nothing (its bearing out
+    // of its arc: her gallery's lamps may glow beside it on screen).
+    const port = await lanterns(page, (315 * Math.PI) / 180, 0, 120, 2);
+    expect(port).toHaveLength(3);
+    expect(port[0]?.colours?.red).toBeGreaterThan(80);
+    expect(port[0]?.colours?.green).toBeLessThan(20);
+    expect(port[1]?.at?.bearing).toBeLessThan(0);
+    expect(Math.abs(port[2]?.at?.bearing ?? 180)).toBeLessThan(112.5);
+    const starboard = await lanterns(page, (225 * Math.PI) / 180, 0, 120, 2);
+    expect(starboard[1]?.colours?.green).toBeGreaterThan(80);
+    expect(starboard[1]?.colours?.red).toBeLessThan(20);
+    expect(starboard[0]?.at?.bearing).toBeGreaterThan(0);
+    expect(Math.abs(starboard[2]?.at?.bearing ?? 180)).toBeLessThan(112.5);
+    const astern = await lanterns(page, Math.PI / 2, 0, 120, 2);
+    expect(astern[2]?.colours?.white).toBeGreaterThan(120);
+    expect(Math.abs(astern[0]?.at?.bearing ?? 0)).toBeGreaterThan(112.5);
+    expect(Math.abs(astern[1]?.at?.bearing ?? 0)).toBeGreaterThan(112.5);
   });
 
   test('64 boats by night: two draws for the stars and every lantern, under 150 in all', async ({

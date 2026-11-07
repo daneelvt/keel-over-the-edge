@@ -1387,10 +1387,11 @@
   filter: saturate(0.6) brightness(0.85);
 }
 
+/* A level's words wider than the key ("Topgallants in") take a second line. */
 .reef-key .reef-level {
   font-size: 10.5px;
   letter-spacing: 0.01em;
-  white-space: nowrap;
+  line-height: 11px;
 }
 
 .hud .reef-key.shake {
@@ -1408,6 +1409,14 @@
 .sheet .control-label.sail {
   color: var(--ink);
   white-space: nowrap;
+}
+
+/* A legend that names the control too ("Braces · Aback") takes two lines,
+   the name over the state, under the ease end's word. */
+.sheet .control-label.sail.two {
+  white-space: normal;
+  line-height: 13px;
+  padding: 0 2px;
 }
 
 .sheet-end.lit {
