@@ -165,6 +165,12 @@ export interface SquareSail {
   width: number;
   /** Its yard, where the model has it as a node of its own ({"yard": sail}): lowered as its band is taken in. */
   yard: Object3D | null;
+  /**
+   * Where it changes from the lower strip to the upper, as its cloth's v,
+   * for a sail that spans both (a topsail): below it its vertices fill
+   * with the group's foot strip, above with its head; null for one strip.
+   */
+  split: number | null;
 }
 
 /** How far a sail's yard comes down with its band taken in all the way, metres. */
@@ -184,7 +190,11 @@ interface SquareExtras {
   group?: unknown;
   strip?: unknown;
   sail?: unknown;
+  /** Its reef bands' heights down from its head, as shares of it (either word). */
   reefBands?: unknown;
+  reefs?: unknown;
+  /** Where a sail that spans both strips changes from the lower to the upper: its cloth's v. */
+  split?: unknown;
 }
 
 /** The node of a mesh's that carries an extra, nearest first, up to (not past) stop. */
@@ -279,9 +289,9 @@ export function squareSails(root: Object3D): SquareSail[] {
     // Highest first: the topgallant of three or more, else the topsail.
     found.sort((a, b) => b.hi - a.hi);
     found.forEach((s, rank) => {
-      const told = typeof s.extras.sail === 'string' ? s.extras.sail : null;
+      const word = typeof s.extras.sail === 'string' ? s.extras.sail : null;
       const sail =
-        told ??
+        word ??
         (found.length >= 3
           ? rank === 0
             ? 'topgallant'
@@ -294,7 +304,8 @@ export function squareSails(root: Object3D): SquareSail[] {
       const group = s.extras.group === 'fore' ? 0 : s.extras.group === 'after' ? 1 : null;
       const g = group ?? (YARDS_NODES[name] === 'fore' ? 0 : 1);
       const strip = s.extras.strip === 1 ? 1 : 0;
-      const bands = Array.isArray(s.extras.reefBands) ? (s.extras.reefBands as unknown[]) : [];
+      const told = s.extras.reefBands ?? s.extras.reefs;
+      const bands = Array.isArray(told) ? (told as unknown[]) : [];
       const band = bands.filter((b): b is number => typeof b === 'number' && b > 0 && b < 1);
       out.push({
         meshes: s.meshes,
@@ -312,6 +323,10 @@ export function squareSails(root: Object3D): SquareSail[] {
         foot: s.lo,
         width: s.width,
         yard: yardOf(node, sail),
+        split:
+          typeof s.extras.split === 'number' && s.extras.split > 0 && s.extras.split < 1
+            ? s.extras.split
+            : null,
       });
     });
   }
@@ -332,6 +347,7 @@ export function squareSails(root: Object3D): SquareSail[] {
         foot: lo,
         width,
         yard: null,
+        split: null,
       });
     }
   }
@@ -400,7 +416,12 @@ export function shapeSquare(g: BufferGeometry, sail: SquareSail, inNode: Matrix4
     v.fromBufferAttribute(p, i).applyMatrix4(inNode);
     shape[i * 2] = uv === undefined ? 0.5 : uv.getX(i);
     shape[i * 2 + 1] = Math.min(Math.max((sail.head - v.y) / height, 0), 1);
-    square[i * 4] = node * 4 + sail.slot;
+    // A sail spanning both strips: its cloth below the split the lower's.
+    const slot =
+      sail.split === null || uv === undefined
+        ? sail.slot
+        : sail.slot - (sail.slot % 2) + (uv.getY(i) > sail.split ? 0 : 1);
+    square[i * 4] = node * 4 + slot;
     square[i * 4 + 1] = height;
     square[i * 4 + 2] = rule;
     square[i * 4 + 3] = sail.reef.band;

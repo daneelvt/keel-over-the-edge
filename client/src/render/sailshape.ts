@@ -21,6 +21,7 @@
 // clew's angle plus its twist up the luff, with camber and ripple, and
 // never reefed.
 
+import type { Object3D } from 'three';
 import { cos, float, max, mix, normalize, select, sin, smoothstep, uniform, vec3 } from 'three/tsl';
 import type { Node, UniformNode } from 'three/webgpu';
 
@@ -179,4 +180,23 @@ export function jibPoint(
     y,
   );
   return { ...p, position: p.position.add(vec3(0, 0, rake.mul(fv))) };
+}
+
+/**
+ * The frame a headsail is shaped in: the nearest node at or above it with
+ * a rake in its extras (its tack, its head that far aft), or else the
+ * headsails' node 'jib', its rake or none.
+ */
+export function headsailFrame(o: Object3D): { node: Object3D; rake: number } {
+  let jib: Object3D | null = null;
+  for (let p: Object3D | null = o; p !== null; p = p.parent) {
+    const rake = (p.userData as { rake?: unknown }).rake;
+    if (typeof rake === 'number' && Number.isFinite(rake)) {
+      return { node: p, rake };
+    }
+    if (p.name === 'jib' && jib === null) {
+      jib = p;
+    }
+  }
+  return { node: jib ?? o, rake: 0 };
 }

@@ -59,7 +59,14 @@ import { artUrl, FULL_CAMBER, GALLERY } from './boat';
 import { type NamePlace, namePlace, numberedSail, TOPSIDES } from './boatlook';
 import type { SailorColours } from './sailors/material';
 import { loadSailor } from './sailors/model';
-import { type JibInputs, jibPoint, LUFF_OFFSET, type SailInputs, sailPoint } from './sailshape';
+import {
+  headsailFrame,
+  type JibInputs,
+  jibPoint,
+  LUFF_OFFSET,
+  type SailInputs,
+  sailPoint,
+} from './sailshape';
 import {
   BELLY,
   SPRITSAIL,
@@ -112,6 +119,14 @@ const UNDRAWN_NODES: Record<string, true> = { telltales: true, pennant: true };
 /** A 'part' attribute's last value: 1 for the painted topsides, GALLERY_PART for the gallery's panes. */
 export const GALLERY_PART = 2;
 
+/** A headsail, in its frame at its tack: its geometry, its source material, its head's rake aft of its tack, and its tack's place in the model. */
+export interface Headsail {
+  geometry: BufferGeometry;
+  material: MeshStandardMaterial;
+  rake: number;
+  at: Vector3;
+}
+
 /** A model's parts, its solids merged. */
 export interface BoatParts {
   /**
@@ -127,9 +142,11 @@ export interface BoatParts {
   numbered: string;
   /** The sail, in its node's frame, and its source material. */
   sail: { geometry: BufferGeometry; material: MeshStandardMaterial } | null;
-  /** The headsail, in its node's frame at the tack, its source material, and how far aft of the tack its head is; null for none. */
-  jib: { geometry: BufferGeometry; material: MeshStandardMaterial; rake: number } | null;
+  /** The first headsail, in its node's frame at the tack, its source material, and how far aft of the tack its head is; null for none. */
+  jib: Headsail | null;
   jibAt: Vector3;
+  /** Every headsail, each in its own frame at its tack, and where that is in the model's frame. */
+  jibs: Headsail[];
   /** Every named node's place in the model's frame: the lanterns', among others. */
   nodes: Map<string, Vector3>;
   /** Every named node, as loaded: what the sailor's seating reads. */
@@ -248,6 +265,7 @@ export function boatParts(scene: Object3D, path: string): BoatParts {
     sail: null,
     jib: null,
     jibAt: new Vector3(),
+    jibs: [],
     nodes: new Map(),
     objects: new Map(),
     gooseneck: new Vector3(),
@@ -321,20 +339,24 @@ export function boatParts(scene: Object3D, path: string): BoatParts {
       return;
     }
     if (within(o, { jib: true }) !== null) {
-      // The headsail is shaped in its node's frame, at the tack.
-      let node: Object3D = o;
-      while (node.name !== 'jib' && node.parent !== null) {
-        node = node.parent;
-      }
-      node.getWorldPosition(parts.jibAt);
-      const rake = (node.userData as { rake?: unknown }).rake;
-      // Its normals are the shape's: the model's are not kept, so its
-      // draw reads no more vertex buffers than a device must allow.
-      parts.jib = {
-        geometry: keep(o.geometry.clone(), ['position', 'uv', 'uv1']),
+      // Each headsail is shaped in its own frame, at its tack: its
+      // geometry taken there. Its normals are the shape's: the model's are
+      // not kept, so its draw reads no more vertex buffers than a device
+      // must allow.
+      const frame = headsailFrame(o);
+      scene.updateMatrixWorld(true);
+      const inFrame = new Matrix4().copy(frame.node.matrixWorld).invert().multiply(o.matrixWorld);
+      const g = keep(o.geometry.clone(), ['position', 'uv', 'uv1']).applyMatrix4(inFrame);
+      parts.jibs.push({
+        geometry: g,
         material,
-        rake: typeof rake === 'number' && Number.isFinite(rake) ? rake : 0,
-      };
+        rake: frame.rake,
+        at: frame.node.getWorldPosition(new Vector3()),
+      });
+      parts.jib ??= parts.jibs[0] ?? null;
+      if (parts.jibs.length === 1) {
+        frame.node.getWorldPosition(parts.jibAt);
+      }
       return;
     }
     if (within(o, { sail: true }) !== null) {
@@ -729,18 +751,18 @@ export function sailNode(
   })() as unknown as Node<'vec3'>;
 }
 
-/** The headsail's vertex node: shaped about its stay from the instance's jib values, then placed. */
+/** A headsail's vertex node: shaped about its stay from the instance's jib values, then placed. */
 export function jibNode(
   i: Instances,
-  parts: BoatParts,
+  headsail: Headsail,
   cog: number,
   footV: number,
   headV: number,
   time: Node<'float'>,
 ): Node<'vec3'> {
-  const at = parts.jibAt;
+  const at = headsail.at;
   const j = i.jib ?? vec4(0);
-  const rake = float(parts.jib?.rake ?? 0);
+  const rake = float(headsail.rake);
   // A full camber: the wire says nothing of the headsail's flattening, and
   // reading the main's would take one more vertex buffer.
   const inputs: JibInputs = {
@@ -790,5 +812,7 @@ export function disposeParts(parts: BoatParts): void {
     (s.material as Material).dispose();
   }
   parts.sail?.geometry.dispose();
-  parts.jib?.geometry.dispose();
+  for (const j of parts.jibs) {
+    j.geometry.dispose();
+  }
 }

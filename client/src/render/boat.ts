@@ -87,7 +87,7 @@ import { litMaterial, sailGlow } from './materials';
 import { Pennant } from './pennant';
 import type { Gfx } from './renderer';
 import { BoatSailor } from './sailors/onboat';
-import { jibPoint, LUFF_OFFSET, sailPoint, sailUniforms } from './sailshape';
+import { headsailFrame, jibPoint, LUFF_OFFSET, sailPoint, sailUniforms } from './sailshape';
 import {
   type Belly,
   bandTaken,
@@ -290,6 +290,8 @@ export class Boat {
   /** The model's square sails, and their meshes. */
   #squareSails: SquareSail[] = [];
   readonly #squareMeshes = new Set<Object3D>();
+  /** Each headsail's mesh, and its head's rake aft of its tack. */
+  readonly #headsails = new Map<Object3D, number>();
   /** The yards that come down as their sails' bands are taken in: each, its height at rest and its drop. */
   readonly #yards: { node: Object3D; rest: number; drop: number; sail: SquareSail }[] = [];
   readonly #belly: Belly = { depth: 0, ripple: 0 };
@@ -375,8 +377,30 @@ export class Boat {
     const rows = reefRows(sail?.geometry, reefs);
     this.#reefRows = rows ?? [];
     this.sail.reefGather.value = rows === null ? 0 : 1;
-    const rake = (this.parts.get('jib')?.userData as { rake?: unknown } | undefined)?.rake;
-    this.jibRake.value = typeof rake === 'number' && Number.isFinite(rake) ? rake : 0;
+    // Each headsail in its own frame, at its tack: a mesh hung below that
+    // frame's node is taken into it, so its own vertices are the frame's.
+    this.#headsails.clear();
+    const headsails: Mesh[] = [];
+    this.parts.get('jib')?.traverse((o) => {
+      if (o instanceof Mesh) {
+        headsails.push(o);
+      }
+    });
+    model.updateMatrixWorld(true);
+    for (const m of headsails) {
+      const frame = headsailFrame(m);
+      if (frame.node !== m) {
+        const inFrame = new Matrix4().copy(frame.node.matrixWorld).invert().multiply(m.matrixWorld);
+        m.geometry = m.geometry.clone().applyMatrix4(inFrame);
+        frame.node.add(m);
+        m.position.set(0, 0, 0);
+        m.quaternion.identity();
+        m.scale.set(1, 1, 1);
+      }
+      this.#headsails.set(m, frame.rake);
+    }
+    const rake = this.#headsails.values().next().value;
+    this.jibRake.value = rake ?? 0;
     // The sail that carries the number, by the model's word.
     const numbered = numberedSail(this.parts.values());
     const number = {
@@ -695,7 +719,7 @@ export class Boat {
     } else if (jibCloth !== null && this.#within(mesh, 'jib')) {
       made = litMaterial(
         { roughness: src.roughness, metalness: 0, side: DoubleSide },
-        this.#jibNode(),
+        this.#jibNode(this.#headsails.get(mesh) ?? this.jibRake.value),
       );
       const c = vec4(clothColour(palette, look, uv(), jibCloth), 1);
       (made as MeshStandardNodeMaterial).colorNode = c;
@@ -814,17 +838,18 @@ export class Boat {
     })() as unknown as Node<'vec3'>;
   }
 
-  /** The headsail's vertex node: each vertex at its place on the shaped headsail. */
-  #jibNode(): Node<'vec3'> {
+  /** A headsail's vertex node: each vertex at its place on the shaped headsail, its head rake aft of its tack. */
+  #jibNode(rake: number): Node<'vec3'> {
+    const r = float(rake);
     return Fn(() => {
       const fv = uv(1).y;
       const at = jibPoint(
         this.jib,
-        positionGeometry.z.sub(this.jibRake.mul(fv)),
+        positionGeometry.z.sub(r.mul(fv)),
         uv(1).x,
         fv,
         positionGeometry.y,
-        this.jibRake,
+        r,
       );
       normalLocal.assign(at.normal);
       return at.position;

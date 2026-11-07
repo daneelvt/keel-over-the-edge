@@ -280,16 +280,20 @@ class Level {
       m.emissiveNode = sailGlow(c);
       this.add(parts.sail.geometry, m, 'sail');
     }
-    if (parts.jib !== null && jibCloth !== null) {
+    // Each headsail its own draw: each is shaped in its own frame.
+    parts.jibs.forEach((jib, n) => {
+      if (jibCloth === null) {
+        return;
+      }
       const m = litMaterial(
-        { roughness: parts.jib.material.roughness, metalness: 0, side: DoubleSide },
-        jibNode(i, parts, cog, headsails.headsailFootStrip, headsails.headsailHeadStrip, time),
+        { roughness: jib.material.roughness, metalness: 0, side: DoubleSide },
+        jibNode(i, jib, cog, headsails.headsailFootStrip, headsails.headsailHeadStrip, time),
       );
       const c = vec4(clothColour(palette, look, uv(), jibCloth), 1) as unknown as Node<'vec4'>;
       m.colorNode = c;
       m.emissiveNode = sailGlow(c);
-      this.add(parts.jib.geometry, m, 'jib');
-    }
+      this.add(jib.geometry, m, n === 0 ? 'jib' : `jib ${n + 1}`);
+    });
     if (parts.square !== null && squareCloth !== null) {
       const m = litMaterial(
         { roughness: parts.square.material.roughness, metalness: 0, side: DoubleSide },

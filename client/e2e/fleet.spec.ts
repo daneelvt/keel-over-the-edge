@@ -199,8 +199,8 @@ test('a mixed 64, Jolly boats, keelboats and tall ships, keep to 32 draw calls a
     for (let i = 0; i < 64; i++) {
       // The start line again: of every sixteen, three keelboats and a tall
       // ship, the keelboats' jibs drawing and every other one reefed, the
-      // ships braced up, one with her topgallants in.
-      const ship = i % 16 === 15;
+      // ships braced up, one with her topgallants in, the first near.
+      const ship = i % 16 === 3;
       const keel = !ship && i % 4 === 3;
       const kind = ship ? 2 : keel ? 1 : 0;
       boats.push({
@@ -210,7 +210,7 @@ test('a mixed 64, Jolly boats, keelboats and tall ships, keep to 32 draw calls a
         heading: 1.5708,
         boom: 0.6,
         jib: kind > 0 ? 0.3 : 0,
-        reef: (keel && i % 8 === 3) || (ship && i === 15) ? 1 : 0,
+        reef: (keel && i % 8 === 3) || (ship && i === 19) ? 1 : 0,
         yardsTurn: ship ? -0.9 : 0,
         foreYardsTurn: ship ? -0.9 : 0,
         sail: 15 | (1 << 4) | (1 << 6),

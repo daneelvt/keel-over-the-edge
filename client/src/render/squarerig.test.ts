@@ -129,7 +129,10 @@ function ship(named = false): Group {
       parent,
       `${n}-topsail`,
       {
-        square: { group, strip: 0, reefBands: [0.12, 0.25], ...word('topsail') },
+        square:
+          n === 'main'
+            ? { group, strip: 1, split: 0.6, reefs: [0.12, 0.25], ...word('topsail') }
+            : { group, strip: 0, reefBands: [0.12, 0.25], ...word('topsail') },
         ...(n === 'main' ? { number: true } : {}),
       },
       sailMesh(20, 12.5, 13),
@@ -295,7 +298,9 @@ describe('a model’s square sails', () => {
     for (let i = 0; i < pos.count; i++) {
       expect(uv1.getY(i)).toBeCloseTo((20 - pos.getY(i)) / 7.5, 5);
       expect(uv1.getX(i)).toBe(g.getAttribute('uv').getX(i));
-      expect(sq.getX(i)).toBe(nodeIndex('main-yards') * 4 + 2);
+      // The main topsail spans both strips: below its split the foot's.
+      const v = g.getAttribute('uv').getY(i);
+      expect(sq.getX(i)).toBe(nodeIndex('main-yards') * 4 + (v > 0.6 ? 2 : 3));
       expect(sq.getY(i)).toBeCloseTo(7.5, 5);
       expect(sq.getZ(i)).toBe(packRule(ts.reef, true));
       expect(sq.getW(i)).toBeCloseTo(0.25, 6);
