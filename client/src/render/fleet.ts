@@ -36,7 +36,6 @@
 import {
   type BufferGeometry,
   type CanvasTexture,
-  type Color,
   DoubleSide,
   DynamicDrawUsage,
   FrontSide,

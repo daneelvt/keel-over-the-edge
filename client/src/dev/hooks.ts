@@ -2208,10 +2208,11 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
       // Each lies on the sea drawn, unless told how it lies.
       const physics = driver.physics;
       const slot = world.ocean.source?.seas.slotAt(Math.floor(world.ticks) + 1) ?? -1;
-      const hull = world.kind.physics.hull;
       if (physics !== undefined && slot >= 0) {
         physics.seaDrawAt(game.clock.steps + game.clock.alpha);
         drawn.forEach((d, i) => {
+          // Each on the sea under its own kind's waterline.
+          const hull = (catalog.boats[d.kind] ?? world.kind).physics.hull;
           const w = physics.waveUnder(
             slot,
             d.east,
@@ -2236,7 +2237,9 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
     async fleetLoaded(): Promise<void> {
       const busy = () =>
         world.fleet.loading ||
-        (world.fleet.looks?.looks.some((l) => l.state === 'loading' || l.clipsState === 'loading') ??
+        (world.fleet.looks?.looks.some(
+          (l) => l.state === 'loading' || l.clipsState === 'loading',
+        ) ??
           false);
       while (busy()) {
         await new Promise((r) => setTimeout(r, 50));

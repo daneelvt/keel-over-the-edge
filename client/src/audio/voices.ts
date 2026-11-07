@@ -78,7 +78,6 @@ export interface SoundInput {
   sailArea?: number;
 }
 
-
 /** A rope's diameter on a boat whose main has this area, m², by the rigging's recipe. */
 export function ropeDiameter(r: Recipes['rigging'], sailArea: number): number {
   return r.diameter * (Math.max(sailArea, 0.1) / r.forArea) ** 0.25;

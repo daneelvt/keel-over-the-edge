@@ -26,12 +26,12 @@ import { newBoatWind } from '../predict/weather';
 import { swellFromQuery } from './localsea';
 import type { Recording } from './record';
 import {
+  boatFromQuery,
   FRONT,
   KNOT,
   Sandbox,
   START,
   STEADY,
-  boatFromQuery,
   seaFromQuery,
   startSandbox,
   weatherFromQuery,

@@ -78,38 +78,41 @@ const poses: Pose[] = [
  */
 async function both(page: Page, pose: Pose, kind = 0) {
   await page.evaluate((m) => globalThis.keel.machineAboard(m), pose.machine === true);
-  const sail = await page.evaluate(({ kind, ...p }) => {
-    const k = globalThis.keel;
-    k.setFleet(null);
-    k.showOwnBoat(true);
-    k.setWind(p.wind ?? 12, 0);
-    k.setReef(Math.round(p.state.reef ?? 0));
-    k.setState(p.state);
-    k.advance(1);
-    k.setState(p.state);
-    // Its sailor seated afresh at the pose, as the fleet's is when met.
-    k.settleSailor();
-    k.render();
-    k.camera('chase');
-    const o = k.boat().out;
-    const b = k.boat().state;
-    const flat = Math.max(0, Math.min(15, Math.round(o.flattening * 15)));
-    return {
-      kind,
-      jib: b.jib,
-      reef: Math.round(b.reef),
-      sail: flat | (o.footFlow << 4) | (o.headFlow << 6),
-      east: b.x,
-      north: b.y,
-      heading: b.heading,
-      heel: b.heel,
-      boom: b.boom,
-      rudder: b.rudder,
-      sailor: b.sailor,
-      mode: b.sailorMode,
-      machine: p.machine === true ? 1 : 0,
-    };
-  }, { ...pose, kind });
+  const sail = await page.evaluate(
+    ({ kind, ...p }) => {
+      const k = globalThis.keel;
+      k.setFleet(null);
+      k.showOwnBoat(true);
+      k.setWind(p.wind ?? 12, 0);
+      k.setReef(Math.round(p.state.reef ?? 0));
+      k.setState(p.state);
+      k.advance(1);
+      k.setState(p.state);
+      // Its sailor seated afresh at the pose, as the fleet's is when met.
+      k.settleSailor();
+      k.render();
+      k.camera('chase');
+      const o = k.boat().out;
+      const b = k.boat().state;
+      const flat = Math.max(0, Math.min(15, Math.round(o.flattening * 15)));
+      return {
+        kind,
+        jib: b.jib,
+        reef: Math.round(b.reef),
+        sail: flat | (o.footFlow << 4) | (o.headFlow << 6),
+        east: b.x,
+        north: b.y,
+        heading: b.heading,
+        heel: b.heel,
+        boom: b.boom,
+        rudder: b.rudder,
+        sailor: b.sailor,
+        mode: b.sailorMode,
+        machine: p.machine === true ? 1 : 0,
+      };
+    },
+    { ...pose, kind },
+  );
   await page.evaluate(() => globalThis.keel.hideSmallParts(true));
   const own = await picture(page);
   await page.evaluate(async (s) => {
