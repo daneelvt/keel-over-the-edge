@@ -54,6 +54,27 @@ poses:
     ik:
       hand_r: { at: bone, bone: pelvis, offset: [-0.24, -0.2, 0.14], pole: [-0.7, 0.4, 0.0] }
 
+  # At the wheel: the right hand off its spoke to the brim and a sweep of
+  # the hat out to the side, the left on its spoke.
+  cavalier-wheel-brim:
+    from: wheel-grip-left
+    turn:
+      - [neck_01, x, -2]
+      - [head, x, -4]
+    ik:
+      hand_r: { at: bone, bone: head, offset: [-0.08, -0.31, 0.02], pole: [-0.6, 0.4, 0.0] }
+
+  cavalier-wheel-sweep:
+    from: wheel-grip-left
+    turn:
+      - [spine_03, x, 4]
+      - [neck_01, x, 4]
+      - [head, x, 8]
+      - [neck_01, z, -4]
+      - [head, z, -10]
+    ik:
+      hand_r: { at: bone, bone: spine_03, offset: [-0.55, -0.3, -0.08], pole: [-0.4, 0.7, -0.2] }
+
 clips:
   cavalier-habit:
     sides: true
@@ -84,3 +105,17 @@ clips:
       - { pose: cavalier-stand-sweep, hold: 0.5, ramp: 2.3, arc: [0.14, 0.04], lead: head }
       - { pose: cavalier-stand-lower, hold: 0.05, ramp: 1.5 }
       - { pose: stand, hold: 0.4, ramp: 1.2 }
+
+  cavalier-habit-wheel:
+    keys:
+      - { pose: wheel-stand, hold: 0.3 }
+      - {
+          pose: cavalier-wheel-brim,
+          hold: 0.25,
+          ramp: 1.6,
+          anticipate: 0.06,
+          arc: [0.08, 0.05],
+          lead: head,
+        }
+      - { pose: cavalier-wheel-sweep, hold: 0.5, ramp: 2.2, arc: [0.14, 0.04], lead: head }
+      - { pose: wheel-stand, hold: 0.4, ramp: 1.8, arc: [0.06, 0.04] }

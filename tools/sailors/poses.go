@@ -95,7 +95,7 @@ type retarget struct {
 }
 
 var (
-	places     = []string{"", "seat", "gunwale", "cockpit", "outside"}
+	places     = []string{"", "seat", "gunwale", "cockpit", "outside", "wheel"}
 	effectors  = []string{"hand_l", "hand_r", "foot_l", "foot_r"}
 	stageAt    = []string{"seat", "gunwale", "floor", "strap", "free"}
 	keySides   = []string{"", "port", "starboard"}
@@ -153,6 +153,15 @@ func (lib poseLibrary) check(t tables, sources map[string]source) error {
 		if ps, ok := st["points"].(map[string]any); ok {
 			for p := range ps {
 				points[p] = true
+			}
+		}
+		// At the wheel: the deck the helmsman stands on, and the grips.
+		if w, ok := st["wheel"].(map[string]any); ok {
+			points["deck"] = true
+			if gs, ok := w["grips"].(map[string]any); ok {
+				for g := range gs {
+					points[g] = true
+				}
 			}
 		}
 	}

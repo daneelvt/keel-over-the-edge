@@ -298,7 +298,126 @@ poses:
       foot_l: { at: floor, offset: [0.15, 0.0, 0.14], reach: 0.9 }
       foot_r: { at: floor, offset: [0.45, 0.0, 0.14], reach: 0.9 }
 
+  # Standing at a ship's wheel on her deck, facing forward, the feet apart
+  # (the left ahead), the knees soft and the hips forward over the leading
+  # foot, leaning a little into the wheel; the hands on the spokes either
+  # side of the top, the wrists behind them, the fingers round them. The
+  # game turns the wheel with the rudder and keeps the hands on its spokes.
+  # Written for the wind over the starboard side: windward is to the right.
+  wheel-base:
+    place: wheel
+    shift: [0.14, 0.0, 0.02]
+    turn:
+      - [spine_01, x, 6]
+      - [spine_02, x, 4]
+      - [spine_03, x, 2]
+      - [neck_01, x, -4]
+      - [head, x, -5]
+    ik:
+      hand_l: { at: wheel-left, offset: [-0.07, 0.0, -0.01] }
+      hand_r: { at: wheel-right, offset: [-0.07, 0.0, -0.01] }
+      foot_l: { at: deck, offset: [0.16, 0.15, 0.12] }
+      foot_r: { at: deck, offset: [-0.03, -0.15, 0.12] }
+
+  # The left hand's fingers round its spoke: what a habit keeps when the
+  # right hand leaves the wheel.
+  wheel-grip-left:
+    from: wheel-base
+    turn:
+      - [index_01_l, y, 35]
+      - [index_02_l, y, 45]
+      - [index_03_l, y, 25]
+      - [middle_01_l, y, 35]
+      - [middle_02_l, y, 45]
+      - [middle_03_l, y, 25]
+      - [ring_01_l, y, 35]
+      - [ring_02_l, y, 45]
+      - [ring_03_l, y, 25]
+      - [pinky_01_l, y, 35]
+      - [pinky_02_l, y, 45]
+      - [pinky_03_l, y, 25]
+
+  wheel-stand:
+    from: wheel-grip-left
+    turn:
+      - [index_01_r, y, -35]
+      - [index_02_r, y, -45]
+      - [index_03_r, y, -25]
+      - [middle_01_r, y, -35]
+      - [middle_02_r, y, -45]
+      - [middle_03_r, y, -25]
+      - [ring_01_r, y, -35]
+      - [ring_02_r, y, -45]
+      - [ring_03_r, y, -25]
+      - [pinky_01_r, y, -35]
+      - [pinky_02_r, y, -45]
+      - [pinky_03_r, y, -25]
+
+  # Looking aloft at the sails, up and ahead.
+  wheel-aloft:
+    from: wheel-stand
+    turn:
+      - [spine_03, x, -3]
+      - [neck_01, x, -12]
+      - [head, x, -22]
+      - [neck_01, z, 4]
+      - [head, z, 8]
+
+  # Over the right shoulder to windward.
+  wheel-windward:
+    from: wheel-stand
+    turn:
+      - [spine_03, z, -5]
+      - [neck_01, z, -14]
+      - [head, z, -30]
+      - [head, x, -2]
+
+  # The Rover's habit at the wheel: the right hand off its spoke to the
+  # hat's front point, a tug, back to the spoke, and a long look ahead.
+  wheel-reach:
+    from: wheel-grip-left
+    turn:
+      - [head, x, -4]
+    ik:
+      hand_r: { at: bone, bone: head, offset: [-0.03, -0.28, -0.04], pole: [-0.6, 0.4, 0.0] }
+
+  wheel-settle:
+    from: wheel-grip-left
+    turn:
+      - [head, x, 2]
+    ik:
+      hand_r: { at: bone, bone: head, offset: [-0.03, -0.27, -0.055], pole: [-0.6, 0.4, 0.0] }
+
+  wheel-ahead:
+    from: wheel-stand
+    turn:
+      - [spine_03, z, 4]
+      - [neck_01, z, 8]
+      - [head, z, 20]
+      - [head, x, -6]
+
 clips:
+  # At the wheel: looking ahead, aloft, ahead and to windward. Its -port
+  # is for the wind over the port side.
+  helm-wheel:
+    loop: true
+    idle: true
+    sides: true
+    keys:
+      - { pose: wheel-stand, hold: 1.6, ramp: 1.5, lead: head }
+      - { pose: wheel-aloft, hold: 1.4, ramp: 1.6, lead: head, anticipate: 0.05 }
+      - { pose: wheel-stand, hold: 1.2, ramp: 1.5, lead: head }
+      - { pose: wheel-windward, hold: 1.2, ramp: 1.4, lead: head, anticipate: 0.05 }
+
+  habit-wheel:
+    keys:
+      - { pose: wheel-stand, hold: 0.3 }
+      - { pose: wheel-reach, hold: 0.15, ramp: 1.5, arc: [0.08, 0.04] }
+      - { pose: wheel-settle, hold: 0.25, ramp: 0.5 }
+      - { pose: wheel-stand, hold: 0.2, ramp: 1.5, arc: [0.08, 0.0] }
+      - { pose: wheel-ahead, hold: 1.0, ramp: 1.8, lead: head }
+      - { pose: wheel-stand, hold: 0.3, ramp: 1.8, lead: head }
+
   helm:
     loop: true
     idle: true

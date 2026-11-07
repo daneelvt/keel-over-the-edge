@@ -257,6 +257,8 @@ palette:
 clips:
   [
     helm,
+    helm-wheel,
+    quartermaster-habit-wheel,
     hiking-1,
     hiking-2,
     hiking-3,
@@ -268,4 +270,4 @@ clips:
     righting,
     climbing-in,
   ]
-names: { quartermaster-habit: habit, quartermaster-habit-standing: habit-standing }
+names: { quartermaster-habit: habit, quartermaster-habit-standing: habit-standing, quartermaster-habit-wheel: habit-wheel }

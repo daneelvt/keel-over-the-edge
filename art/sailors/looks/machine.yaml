@@ -165,6 +165,8 @@ palette:
 clips:
   [
     helm,
+    helm-wheel,
+    machine-habit-wheel,
     hiking-1,
     hiking-2,
     hiking-3,
@@ -176,6 +178,6 @@ clips:
     righting,
     climbing-in,
   ]
-names: { machine-habit: habit, machine-habit-standing: habit-standing }
+names: { machine-habit: habit, machine-habit-standing: habit-standing, machine-habit-wheel: habit-wheel }
 # The head takes less of the atlas: its face is planes of metal.
 atlas-head: 0.3

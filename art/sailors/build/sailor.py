@@ -72,9 +72,13 @@ def build_look(job):
     # The sheets, each with every look's silhouettes and the last run's
     # sheet beside it.
     start = time.time()
-    row = silhouettes(os.path.dirname(runs))
+    # Only adding clips, the look is as it was: no silhouettes to compare.
+    row = [] if job.get("add") else silhouettes(os.path.dirname(runs))
     for v, sheet in sheets.items():
-        sheet.row(row)
+        if row:
+            sheet.row(row)
+        if not sheet.rows:
+            continue
         path = os.path.join(run, v, "sheet.png")
         img = sheet.image()
         review.save(img, path)
@@ -84,6 +88,10 @@ def build_look(job):
     report["sheet seconds"] = round(time.time() - start + sum(s.seconds for s in sheets.values()), 1)
     report["path"] = run
     report["failures"] = [f for g in judged.values() for f in g.failures()]
+    if job.get("add"):
+        # Only the clips added are made and written: theirs are the gates
+        # that count, and the clips' file's.
+        report["failures"] = [f for g in judged.values() for f in g.failures(("clips",))]
     return report
 
 
@@ -285,9 +293,13 @@ def build_version(job, v, run):
     clips = {}
 
     levels = {}
-    out = job["out"]
+    # Only adding clips, the levels are made only as far as the clips need
+    # (the close level), and written with the run, not beside the art.
+    adding = bool(job.get("add"))
+    out = work if adding else job["out"]
     sizes = {}
-    for level, s in (("close", size), ("deck", tables["atlas"]["deck"]), ("far", tables["atlas"]["far"])):
+    for level, s in (("close", size), ("deck", tables["atlas"]["deck"]), ("far", tables["atlas"]["far"]))[
+            :1 if adding else 3]:
         b, m = (base_px, mask_px) if s == size else (atlas.scaled(base_px, s), atlas.scaled(mask_px, s))
         base_png, mask_png = os.path.join(work, f"{level}.base.png"), os.path.join(work, f"{level}.mask.png")
         atlas.save(b, base_png)
@@ -428,7 +440,7 @@ def build_version(job, v, run):
         lap("gates")
         # The sheet, and the clips on the close level.
         start = time.time()
-        if level == "close":
+        if level == "close" and not adding:
             sheet.row(review.views(renderer, fig, lookmat))
             sheet.row(review.faces(renderer, fig, lookmat))
             sheet.row(review.technical(renderer, fig, lookmat))
@@ -437,6 +449,7 @@ def build_version(job, v, run):
                       review.posed(renderer, fig, lookmat, lib, POSES[:2]))
             sheet.row(review.posed(renderer, fig, lookmat, lib, POSES[2:]))
             sheet.row(review.boat_views(renderer, fig, lookmat, lib))
+        if level == "close":
             sheet.seconds += time.time() - start
             lap("sheet")
             clips = make_clips(job, v, fig, lib, kinds, gates, renderer, lookmat, work, worn)
@@ -451,8 +464,9 @@ def build_version(job, v, run):
         lap("sheet")
     lookmat.restore()
     renderer.close()
-    gates.add("far", "file size", sizes["deck"] + sizes["far"], tables["sizes"]["deck-far"],
-              sizes["deck"] + sizes["far"] <= tables["sizes"]["deck-far"], with_deck=True)
+    if not adding:
+        gates.add("far", "file size", sizes["deck"] + sizes["far"], tables["sizes"]["deck-far"],
+                  sizes["deck"] + sizes["far"] <= tables["sizes"]["deck-far"], with_deck=True)
 
     return {
         "bare": _round(bare),
@@ -474,8 +488,8 @@ def build_version(job, v, run):
             "shoulder-to-hip": f"{bare['shoulder-to-hip']:.3f} bare, {dressed['shoulder-to-hip']:.3f} dressed",
             "bones": len(arm.data.bones),
             "head in the atlas": f"{share:.0%}",
-            "triangles": "/".join(str(levels[k]["figure"]) for k in ("close", "deck", "far")),
-            "KB": "/".join(f"{levels[k]['bytes'] / 1024:.0f}" for k in ("close", "deck", "far")),
+            "triangles": "/".join(str(levels[k]["figure"]) for k in ("close", "deck", "far") if k in levels),
+            "KB": "/".join(f"{levels[k]['bytes'] / 1024:.0f}" for k in ("close", "deck", "far") if k in levels),
             "gates failed": len(gates.failures()),
             "sheet": f"{sheet.seconds:.1f} s",
         },
@@ -488,7 +502,8 @@ def make_clips(job, v, fig, lib, kinds, gates, renderer, lookmat, work, worn=())
     and exported together. Returns each clip's measures."""
     # A clip made on both sides is two; each is written under the name the
     # game asks for it by.
-    names = [n for c in job["look"].get("clips") or [] for n in (c, c + motion.PORT) if n in lib.clips or n == c]
+    names = [n for c in job.get("add") or job["look"].get("clips") or [] for n in (c, c + motion.PORT)
+             if n in lib.clips or n == c]
     called = job["look"].get("names") or {}
 
     def as_(n):
@@ -533,11 +548,23 @@ def make_clips(job, v, fig, lib, kinds, gates, renderer, lookmat, work, worn=())
                           judge.CURVES)
         fig.reset()
     path = os.path.join(job["out"], f"{v}.clips.glb")
-    motion.export(path, fig.arm, actions, job["gltfpack"], work, places)
+    made = [as_(n) for n in names]
+    if job.get("add"):
+        # Packed apart, then added to the look's clips' file: the clips it
+        # has already kept as they are.
+        added = os.path.join(work, f"{v}.clips.added.glb")
+        motion.export(added, fig.arm, actions, job["gltfpack"], work, places)
+        before = sorted(a["name"] for a in export.read(path)[0].get("animations", []))
+        apart, turned = export.merge_clips(path, added)
+        gates.add("clips", "skeleton at rest", apart, 1e-4, apart <= 1e-4 and turned <= 1e-4, turned=turned)
+        made = sorted(set(before) | set(made))
+    else:
+        motion.export(path, fig.arm, actions, job["gltfpack"], work, places)
     clip_seat(gates, "close", fig, out)
+    clip_wheel(gates, fig, out)
     clip_skirts(gates, fig, worn, out)
     gltf, _ = export.read(path)
-    metrics.file(gates, "clips", path, gltf, [], job["tables"]["skeleton"], None, clips=[as_(n) for n in names])
+    metrics.file(gates, "clips", path, gltf, [], job["tables"]["skeleton"], None, clips=made)
     metrics.skeleton(gates, "clips", gltf, job["tables"]["skeleton"])
     return out
 
@@ -555,14 +582,16 @@ def clip_seat(gates, level, fig, measures=None):
         fig.reset()
         motion.play(fig.arm, act, slot)
         fig.arm.matrix_world = clip.place
-        fig.on_seat(True)
+        standing = getattr(clip, "standing", False)
+        fig.on_seat(not standing)
         through = []
         total = 0
         for f in range(len(clip.frames)):
             bpy.context.scene.frame_set(f)
             # The cloth is laid on the seat while the hips are over it, not
-            # while the sailor hangs outside the boat, climbing in.
-            fig.on_seat(fig.world("pelvis").z > fig.stage.seat.z - 0.2)
+            # while the sailor hangs outside the boat, climbing in; nor
+            # standing at the wheel.
+            fig.on_seat(not standing and fig.world("pelvis").z > fig.stage.seat.z - 0.2)
             fig.update()
             t, hits = metrics.through_boat(fig, fig.meshes)
             k = t["vertices"] + t["bones"]
@@ -577,6 +606,55 @@ def clip_seat(gates, level, fig, measures=None):
                   seconds=round(time.time() - start, 1))
         if measures is not None and name in measures:
             measures[name]["seat"] = {"value": total, "limit": 0, "ok": total == 0}
+
+
+# What may touch the wheel: the hands on its spokes, and the cuffs at the
+# wrists, by the bone that carries most of a vertex.
+ON_WHEEL = ("hand", "thumb", "index", "middle", "ring", "pinky", "lowerarm_twist")
+
+
+def clip_wheel(gates, fig, measures):
+    """Nothing of the figure in the wheel's wood (its rim, its spokes) in
+    any frame of a clip at the wheel, but the hands that hold its spokes
+    and the cuffs at their wrists."""
+    import bpy
+
+    wheel = fig.stage.wheel
+    if wheel is None:
+        return
+    held = {}
+    for o in fig.meshes:
+        names = {g.index: g.name for g in o.vertex_groups}
+        held[o.name] = np.array([bool(v.groups) and motion.kind(max((g.weight, names.get(g.group, ""))
+                                                                    for g in v.groups)[1]) in ON_WHEEL
+                                 for v in o.data.vertices])
+    for name, (act, slot, clip) in fig.made.items():
+        if not getattr(clip, "standing", False):
+            continue
+        start = time.time()
+        fig.reset()
+        motion.play(fig.arm, act, slot)
+        fig.arm.matrix_world = clip.place
+        fig.on_seat(False)
+        frames = []
+        for f in range(len(clip.frames)):
+            bpy.context.scene.frame_set(f)
+            fig.update()
+            hits = {}
+            for o in fig.meshes:
+                co, _ = motion.coords_posed(o)
+                idx = wheel.near(co, held[o.name])
+                if len(idx):
+                    hits[o.name] = [len(idx)] + [round(float(x), 3) for x in co[idx].mean(0)]
+            if hits:
+                frames.append([f, hits])
+        motion.stop(fig.arm)
+        fig.reset()
+        total = sum(h[0] for _, hs in frames for h in hs.values())
+        gates.add("clips", f"{name} clear of the wheel", total, 0, total == 0, frames=frames[:3],
+                  seconds=round(time.time() - start, 1))
+        if name in measures:
+            measures[name]["wheel"] = {"value": total, "limit": 0, "ok": total == 0}
 
 
 def clip_skirts(gates, fig, worn, measures):
@@ -598,7 +676,8 @@ def clip_skirts(gates, fig, worn, measures):
         fig.reset()
         motion.play(fig.arm, act, slot)
         fig.arm.matrix_world = clip.place
-        seated = clip.place != Matrix()
+        # Standing at the wheel the cloth hangs as it does standing anywhere.
+        seated = clip.place != Matrix() and not getattr(clip, "standing", False)
         frames = []
         for f in range(len(clip.frames)):
             bpy.context.scene.frame_set(f)

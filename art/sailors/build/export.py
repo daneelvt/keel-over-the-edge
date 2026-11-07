@@ -215,3 +215,143 @@ def triangles(gltf):
             n += acc["count"] // 3
         out[named[i]] = n
     return out
+
+
+def merge_clips(path, added_path):
+    """Adds the clips of one packed clips' file (added_path) to another's
+    (path), in place: each clip of the first replaces the second's of its
+    name, and the second's other clips are kept as they are, their data
+    the same bytes at the same places. Both are gltfpack's, compressed
+    (EXT_meshopt_compression): the added clips' compressed data goes after
+    the other's, each view as it was. Returns how far the two files'
+    skeletons are apart at rest: the most a joint's place differs (m), and
+    its turn (the quaternions' largest component's difference)."""
+    gltf, binary = read(path)
+    new, new_binary = read(added_path)
+    names = {a["name"] for a in new.get("animations", [])}
+    _drop_clips(gltf, names)
+    binary = binary[:gltf["buffers"][0]["byteLength"]]
+    by_name = {n.get("name"): i for i, n in enumerate(gltf["nodes"])}
+    # The skeletons, at rest.
+    apart, turned = 0.0, 0.0
+    for n in new["nodes"]:
+        m = by_name.get(n.get("name"))
+        if m is None or n.get("name", "").startswith("place"):
+            continue
+        o = gltf["nodes"][m]
+        for key, worst in (("translation", "apart"), ("rotation", "turned")):
+            a, b = o.get(key), n.get(key)
+            if a is None and b is None:
+                continue
+            a = a or ([0, 0, 0] if key == "translation" else [0, 0, 0, 1])
+            b = b or ([0, 0, 0] if key == "translation" else [0, 0, 0, 1])
+            d = max(abs(x - y) for x, y in zip(a, b))
+            if key == "rotation":
+                d = min(d, max(abs(x + y) for x, y in zip(a, b)))
+                turned = max(turned, d)
+            else:
+                apart = max(apart, d)
+    data = next(i for i, b in enumerate(gltf["buffers"]) if not b.get("extensions"))
+    fallback = next(i for i, b in enumerate(gltf["buffers"]) if b.get("extensions"))
+    views, accessors = {}, {}
+    for a in new["animations"]:
+        samplers = []
+        for s in a["samplers"]:
+            samplers.append(dict(s, input=_take(new, new_binary, gltf, s["input"], views, accessors, data, fallback),
+                                 output=_take(new, new_binary, gltf, s["output"], views, accessors, data, fallback)))
+        channels = []
+        for c in a["channels"]:
+            target = dict(c["target"], node=by_name[new["nodes"][c["target"]["node"]]["name"]])
+            channels.append(dict(c, target=target))
+        gltf["animations"].append(dict(a, samplers=samplers, channels=channels))
+    # The added data, at the end of the data buffer: each view's compressed
+    # bytes, aligned as gltfpack aligns them.
+    out = bytearray(binary)
+    for old, (index, start) in sorted(views.items(), key=lambda kv: kv[1][0]):
+        ext = new["bufferViews"][old]["extensions"]["EXT_meshopt_compression"]
+        out += b"\0" * (start - len(out))
+        out += new_binary[ext["byteOffset"]:ext["byteOffset"] + ext["byteLength"]]
+    scene = gltf["scenes"][gltf.get("scene", 0)]["nodes"]
+    for n in new["nodes"]:
+        if n.get("name", "").startswith("place-") and n["name"][len("place-"):] in names:
+            gltf["nodes"].append(dict(n))
+            scene.append(len(gltf["nodes"]) - 1)
+    gltf["buffers"][data]["byteLength"] = len(out)
+    write_glb(path, gltf, bytes(out))
+    return apart, turned
+
+
+def _take(src, src_binary, dst, accessor, views, accessors, data, fallback):
+    """An accessor of src copied into dst with its view (once each),
+    returning its index there. A copied view's compressed bytes are placed
+    after dst's (views: by src's view, its index in dst and where its bytes
+    go)."""
+    if accessor in accessors:
+        return accessors[accessor]
+    acc = dict(src["accessors"][accessor])
+    v = acc["bufferView"]
+    if v not in views:
+        view = src["bufferViews"][v]
+        ext = dict(view["extensions"]["EXT_meshopt_compression"])
+        end = max([dst["buffers"][data]["byteLength"]] + [s + src["bufferViews"][o]["extensions"]
+                   ["EXT_meshopt_compression"]["byteLength"] for o, (_, s) in views.items()])
+        start = end + (-end % 4)
+        fb = dst["buffers"][fallback]["byteLength"]
+        fb += -fb % 16
+        ext.update(buffer=data, byteOffset=start)
+        dst["bufferViews"].append(dict(view, buffer=fallback, byteOffset=fb,
+                                       extensions={"EXT_meshopt_compression": ext}))
+        dst["buffers"][fallback]["byteLength"] = fb + view["byteLength"]
+        views[v] = (len(dst["bufferViews"]) - 1, start)
+    acc["bufferView"] = views[v][0]
+    dst["accessors"].append(acc)
+    accessors[accessor] = len(dst["accessors"]) - 1
+    return accessors[accessor]
+
+
+def _drop_clips(gltf, names):
+    """Drops the clips of these names and their places from a packed
+    clips' file, and what only they used: their accessors, and their
+    views, which must come after every view kept (as merge_clips adds
+    them), so the data kept is the same bytes at the same places."""
+    if not any(a["name"] in names for a in gltf.get("animations", [])):
+        return
+    gltf["animations"] = [a for a in gltf["animations"] if a["name"] not in names]
+    # The places, by their nodes; the scene's list renumbered.
+    drop = {i for i, n in enumerate(gltf["nodes"])
+            if n.get("name", "").startswith("place-") and n["name"][len("place-"):] in names}
+    keep = [i for i in range(len(gltf["nodes"])) if i not in drop]
+    renumber = {old: new for new, old in enumerate(keep)}
+    if any(i > min(drop) for i in keep if not gltf["nodes"][i].get("name", "").startswith("place")):
+        raise AssertionError("a place comes before a joint: the clips cannot be dropped")
+    gltf["nodes"] = [gltf["nodes"][i] for i in keep]
+    for s in gltf["scenes"]:
+        s["nodes"] = [renumber[i] for i in s["nodes"] if i in renumber]
+    # The accessors still used, and their views.
+    used = set()
+    for a in gltf["animations"]:
+        for s in a["samplers"]:
+            used |= {s["input"], s["output"]}
+    for s in gltf.get("skins", []):
+        if "inverseBindMatrices" in s:
+            used.add(s["inverseBindMatrices"])
+    acc = sorted(used)
+    acc_map = {old: new for new, old in enumerate(acc)}
+    views = sorted({gltf["accessors"][i]["bufferView"] for i in acc})
+    if views != list(range(len(views))):
+        raise AssertionError("the clips dropped share views with those kept: the clips cannot be dropped")
+    gltf["accessors"] = [gltf["accessors"][i] for i in acc]
+    for a in gltf["animations"]:
+        for s in a["samplers"]:
+            s["input"], s["output"] = acc_map[s["input"]], acc_map[s["output"]]
+    for s in gltf.get("skins", []):
+        if "inverseBindMatrices" in s:
+            s["inverseBindMatrices"] = acc_map[s["inverseBindMatrices"]]
+    gltf["bufferViews"] = gltf["bufferViews"][:len(views)]
+    last = gltf["bufferViews"][-1]
+    ext = last["extensions"]["EXT_meshopt_compression"]
+    data, fallback = ext["buffer"], last["buffer"]
+    gltf["buffers"][data]["byteLength"] = max(v["extensions"]["EXT_meshopt_compression"]["byteOffset"] +
+                                              v["extensions"]["EXT_meshopt_compression"]["byteLength"]
+                                              for v in gltf["bufferViews"])
+    gltf["buffers"][fallback]["byteLength"] = max(v["byteOffset"] + v["byteLength"] for v in gltf["bufferViews"])

@@ -391,6 +391,15 @@ class Figure:
             contact = Vector((pelvis.x, pelvis.y, low))
             at = Vector((0.0, st.floor.y, st.floor.z))
             return Matrix.Translation(at) @ Matrix.Rotation(math.pi, 4, "Z") @ Matrix.Translation(-contact)
+        if place == "wheel":
+            # Standing at the wheel on the deck, facing forward: the soles
+            # on the deck, the hips over the helmsman's point.
+            pelvis = self.bones["pelvis"].head
+            low = min(min(self.bones[f"{b}_{s}"].head.z, self.bones[f"{b}_{s}"].tail.z)
+                      for b in ("foot", "ball") for s in ("l", "r")) - SOLE
+            contact = Vector((pelvis.x, pelvis.y, low))
+            at = st.point("deck", side)
+            return Matrix.Translation(at) @ Matrix.Rotation(math.pi, 4, "Z") @ Matrix.Translation(-contact)
         if place == "outside":
             # In the water at the side, facing in, the chest at the gunwale:
             # where a sailor climbing back in starts.
@@ -646,7 +655,8 @@ class Figure:
             # Moved forward, inboard and up in the seat's frame.
             place = Matrix.Translation(self.stage.frame(side).to_3x3() @ Vector(pose["shift"])) @ place
         self.arm.matrix_world = place
-        self.on_seat(pose["place"] is not None)
+        # Standing at a wheel, nothing lies on a seat.
+        self.on_seat(pose["place"] not in (None, STANDS))
         self.update()
         at = {}
         for eff in EFFECTORS:
@@ -700,6 +710,8 @@ class Clip:
         # IK.
         self.made = False
         self.ik = []
+        # Placed standing at the wheel, every key: nothing lies on a seat.
+        self.standing = False
 
 
 def make(fig, lib, name):
@@ -755,6 +767,7 @@ def make(fig, lib, name):
     length = frames / fps
     clip = Clip(name, fps, loop, bool(spec.get("idle")))
     clip.place = place
+    clip.standing = all(lib.poses[k["pose"]]["place"] == STANDS for k in keys)
     # Feet that stay where they are: in the boat, never stepping elsewhere.
     still = all(p["place"] == place for p in kp)
     clip.planted = ["foot_l", "foot_r"] if all(p["place"] for p in kp) and still else []
@@ -909,6 +922,10 @@ def make(fig, lib, name):
     return clip
 
 
+# The place a figure stands at, not sits: at the wheel.
+STANDS = "wheel"
+
+
 # The channel of the hips' place, beside the bones' turns.
 PELVIS_AT = "pelvis.location"
 
@@ -950,7 +967,7 @@ def clear_skirts(fig, clip, under, skirts, rounds=16, passes=5):
     if not under or not skirts:
         return 0
     chains = {s.name: _chains_of(s) for s in skirts}
-    seated = clip.place != Matrix()
+    seated = clip.place != Matrix() and not getattr(clip, "standing", False)
     n = len(clip.frames)
     # A loop's last frame is its first again: the turns wrap round the
     # frames before it.

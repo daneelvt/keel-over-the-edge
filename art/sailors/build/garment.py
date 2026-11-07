@@ -39,6 +39,7 @@ import inspect
 import json
 import math
 import os
+import shutil
 import uuid
 from collections import namedtuple
 
@@ -95,7 +96,8 @@ def dress(job, v, human, arm, marks, work):
         if lod.made_from(path) != k:
             make(human, marks, spec, params, ease, path, k, under)
         obj = fit(human, path, spec["id"])
-        if params.get("flare"):
+        if isinstance(params.get("flare"), dict):
+            # Slops' wide legs; a number is a garment's own flare (cuffs').
             flare(obj, marks, params["flare"])
         # The fit is within a millimetre of the cut, unevenly: made its own
         # mirror again.
@@ -205,6 +207,17 @@ def version_params(spec, v):
 def garments_dir(job):
     """Where a look's garments are kept: beside the art for the game's
     looks, in .dev for the build's own."""
+    if job["look"]["committed"] and job.get("add"):
+        # Only adding clips: the committed garments are read, never
+        # written; one made again (its recipe changed since) is kept in
+        # .dev.
+        here = os.path.join(job["root"], "art", "sailors", "garments", job["look"]["id"])
+        there = os.path.join(os.path.dirname(os.path.dirname(job["work"])), "garments-added", job["look"]["id"])
+        os.makedirs(there, exist_ok=True)
+        for f in os.listdir(here):
+            if not os.path.exists(os.path.join(there, f)):
+                shutil.copy2(os.path.join(here, f), there)
+        return there
     if job["look"]["committed"]:
         return os.path.join(job["root"], "art", "sailors", "garments", job["look"]["id"])
     return os.path.join(os.path.dirname(os.path.dirname(job["work"])), "garments", job["look"]["id"])
