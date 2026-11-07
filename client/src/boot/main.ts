@@ -96,6 +96,7 @@ import { SandboxForecast } from '../sandbox/forecast';
 import { swellFromQuery } from '../sandbox/localsea';
 import {
   boatFromQuery,
+  boatLookFromQuery,
   commonestWeather,
   FRONT,
   flashFromQuery,
@@ -297,6 +298,10 @@ async function start(): Promise<void> {
     // ?look=code: the sailor in a look of the developer's own.
     const sandboxLook = Number(query.get('look') ?? PERSON_DEFAULT) || PERSON_DEFAULT;
     world.sailAs(sandboxLook);
+    // ?paint=id&cloth=id&number=n&boatname=text: the boat in a look of the
+    // developer's own.
+    const boatLook = boatLookFromQuery(query, catalog);
+    world.setBoatLook(boatLook.look, boatLook.name);
     // ?boat=id: any of the catalog's boats; every kind is prepared, so the
     // developer panel can change it.
     const kind = boatFromQuery(
@@ -839,6 +844,13 @@ async function start(): Promise<void> {
     const look = online.look.value;
     if (look !== null) {
       void world.showLook(look);
+    }
+  });
+  // And the boat in view in its own look, and its name.
+  effect(() => {
+    const b = online.boatLook.value;
+    if (b !== null) {
+      world.setBoatLook(b.look, b.name);
     }
   });
   // The screen comes back by itself when the player is needed.

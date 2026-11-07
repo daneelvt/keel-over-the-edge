@@ -180,7 +180,7 @@ export class SeaScene {
   readonly focusScene: ScenePoint = { x: 0, y: 0, z: 0 };
   boat: Boat | null = null;
   /** The other boats, drawn many at once, a view for each kind. */
-  readonly fleet = new FleetViews(catalog.boats);
+  readonly fleet = new FleetViews(catalog.boats, catalog);
   /** Where the other boats' poses come from: the game's fleet online, or a test's. */
   fleetSource: FleetSource | null = null;
   /** The world's land, once there is a world whose land may be drawn. */
@@ -535,9 +535,22 @@ export class SeaScene {
   #loadingKind = -1;
 
   /**
+   * The boat in view's own look: a boat look code (negative for none told)
+   * and its name, drawn on every kind the own boat has been, and on each
+   * it becomes.
+   */
+  setBoatLook(look: number, name: string): void {
+    this.#boatLook = { look, name };
+    for (const b of this.#boats.values()) {
+      b.setBoatLook(look, name);
+    }
+  }
+
+  #boatLook = { look: -1, name: '' };
+
+  /**
    * Loads the boat, and its sailor once the player's look is known
-   * (sailAs). Its sail number and insignia are fixed until boats can be
-   * customised.
+   * (sailAs). Its sails carry its kind's insignia.
    */
   async loadBoat(): Promise<void> {
     const [boat] = await Promise.all([this.#boatOf(this.kindIndex), this.fleet.load()]);
@@ -554,8 +567,9 @@ export class SeaScene {
       return had;
     }
     const k = catalog.boats[kind] ?? catalog.boats[0];
-    const boat = new Boat(k);
-    await boat.load('17', k.name.slice(0, 1));
+    const boat = new Boat(k, catalog);
+    await boat.load(k.name.slice(0, 1));
+    boat.setBoatLook(this.#boatLook.look, this.#boatLook.name);
     this.#boats.set(kind, boat);
     return boat;
   }

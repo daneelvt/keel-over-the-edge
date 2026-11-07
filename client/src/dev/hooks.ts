@@ -12,6 +12,7 @@
 
 import { signal } from '@preact/signals';
 import {
+  Color,
   DataTexture,
   FloatType,
   Mesh,
@@ -85,7 +86,8 @@ import { GROUND, RECORDS, SEA, WEATHER } from '../predict/layout.gen';
 import { BODY, SKY, WIND_VALUE, WIND_VALUES } from '../predict/physics';
 import type { Predictor } from '../predict/predictor';
 import { heldSpell, placedRecord } from '../predict/weather';
-import { MACHINE_DEFAULT, PERSON_DEFAULT } from '../render/fleet';
+import { lookPalette } from '../render/boatlook';
+import { LEAN_STRIDE, MACHINE_DEFAULT, PERSON_DEFAULT } from '../render/fleet';
 import { airLook } from '../render/fog';
 import { flashNear } from '../render/lightning';
 import {
@@ -1353,11 +1355,17 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
       game.setReef(level);
     },
     /**
-     * Sails another of the catalog's boats, by its id, from the start: the
-     * sandbox steps it and the scene draws it. Resolves once it is drawn.
+     * Sails another of the catalog's boats, by its id or its place among
+     * them, from the start: the sandbox steps it and the scene draws it.
+     * Resolves once it is drawn.
      */
-    async useBoat(id: string): Promise<void> {
-      const kind = catalog.boats.findIndex((b) => b.id === id);
+    async useBoat(id: string | number): Promise<void> {
+      const kind =
+        typeof id === 'number'
+          ? catalog.boats[id] === undefined
+            ? -1
+            : id
+          : catalog.boats.findIndex((b) => b.id === id);
       if (kind < 0) {
         throw new Error(`the catalog has no boat ${id}`);
       }
@@ -2388,6 +2396,74 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
         ...world.fleet.counts(),
         ...world.fleet.figures(),
         sailorDraws: world.fleet.sailorDraws(),
+      };
+    },
+    /**
+     * The boat in view takes its own look, a boat look code (negative for
+     * none told: the first paint and cloth, no number), and its name, as
+     * the server tells them. The fleet's boats take theirs by setFleet's
+     * boatLook and name.
+     */
+    setBoatLook(look: number, name = ''): void {
+      world.setBoatLook(look, name);
+    },
+    /**
+     * The boats' own looks as drawn: the own boat's, from its shaders'
+     * uniforms, and each fleet boat's by kind, level and instance, from its
+     * instance values: the paint's and cloth's places, the sail number and
+     * the name's row (−1 for none); with the colours (sRGB) the palette
+     * draws them in, and the names lettered and how often a row was.
+     */
+    boatLooksDrawn() {
+      const palette = lookPalette(catalog);
+      const hex = (list: number, i: number): string => {
+        const v = palette.values[list * 16 + i];
+        return v === undefined ? '' : `#${new Color(v.x, v.y, v.z).getHexString()}`;
+      };
+      const colours = (paint: number, cloth: number) => ({
+        hull: hex(0, paint),
+        grain: (palette.values[paint]?.w ?? 0) === 1,
+        sail: hex(1, cloth),
+        band: (palette.values[16 + cloth]?.w ?? 0) === 1 ? hex(2, cloth) : null,
+        ink: hex(3, cloth),
+      });
+      const own = world.boat?.drawnBoatLook() ?? null;
+      const fleet: {
+        kind: number;
+        level: string;
+        paint: number;
+        cloth: number;
+        number: number;
+        row: number;
+        colours: ReturnType<typeof colours>;
+      }[] = [];
+      for (const v of world.fleet.views) {
+        if (v?.loaded !== true) {
+          continue;
+        }
+        for (const level of [v.near, v.far]) {
+          const a = level.lean.array as Float32Array;
+          for (let n = 0; n < level.count; n++) {
+            const o = n * LEAN_STRIDE + 4;
+            const paint = a[o] ?? 0;
+            const cloth = a[o + 1] ?? 0;
+            fleet.push({
+              kind: v.index,
+              level: level.name,
+              paint,
+              cloth,
+              number: a[o + 2] ?? 0,
+              row: a[o + 3] ?? -1,
+              colours: colours(paint, cloth),
+            });
+          }
+        }
+      }
+      const names = world.fleet.names;
+      return {
+        own: own === null ? null : { ...own, colours: colours(own.paint, own.cloth) },
+        fleet,
+        names: names === null ? null : { rows: [...names.rows.names], drawn: names.drawn },
       };
     },
     /**

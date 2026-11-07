@@ -11,11 +11,14 @@
 // Boats fade in and out dithered (alphaHash), so they stay in the opaque
 // pass, in the same draw, with no sorting. The telltales and pennant of
 // other boats are too small to see, and not drawn; their sails carry the
-// class insignia and no number. A machine sailor's sail carries the
-// machine mark too (machinemark.ts): the fleet's cloth is drawn twice in
-// one texture, plain above and marked below, and each instance's flag
-// picks its half in the vertex stage, so the sail's fragments sample the
-// cloth once, as without the mark.
+// class insignia. Each boat is drawn in its own look (boatlook.ts): its
+// paint, cloth and sail number are instance values beside its lean, which
+// the parts' fragments colour by, from the catalog's palette and one
+// texture of masks a kind; so the draws are the same whatever the looks.
+// A machine sailor's sail carries the machine mark too (machinemark.ts),
+// a mask its flag inks. The near boats carry their names, each lettered
+// into a row of one small texture for the whole fleet, redrawn only when
+// a row is given another name; the far ones carry none.
 //
 // The sailors (sailors/fleetsailors.ts): on the near boats, skinned and
 // moving, every look in one draw; on the far ones, and on near ones whose
@@ -35,7 +38,6 @@
 
 import {
   type BufferGeometry,
-  type CanvasTexture,
   DoubleSide,
   DynamicDrawUsage,
   FrontSide,
@@ -53,16 +55,18 @@ import {
   instancedDynamicBufferAttribute,
   instanceIndex,
   int,
+  positionGeometry,
+  select,
   sin,
-  texture,
   uniform,
   uv,
   varying,
-  vec2,
+  vec3,
   vec4,
 } from 'three/tsl';
 import type { Node, WebGPURenderer } from 'three/webgpu';
 import type { Boat as BoatKind } from '../catalog';
+import type { BoatLooks } from '../catalog/boatlooks';
 import {
   artOf,
   coloursOf,
@@ -73,17 +77,23 @@ import {
   MACHINE_MARK,
 } from '../catalog/looks';
 import type { DrawnBoat } from '../game/fleet';
+import { FULL_CAMBER, NUMBER_MIRRORED, reefRows, type SailorLook } from './boat';
 import {
-  CLOTH,
-  CLOTH_HEIGHT,
-  CLOTH_WIDTH,
-  clothTexture,
-  FULL_CAMBER,
-  headsailCloth,
-  paintCloth,
-  reefRows,
-  type SailorLook,
-} from './boat';
+  clothColour,
+  clothMasks,
+  digits,
+  type HullName,
+  hullColour,
+  type LookNodes,
+  type LookPalette,
+  lookPalette,
+  MASK_HEIGHT,
+  MASK_WIDTH,
+  NameAtlas,
+  numberPlace,
+  type SailPrint,
+  writeLook,
+} from './boatlook';
 import type { FloatingOrigin } from './coords';
 import {
   type BoatParts,
@@ -94,7 +104,7 @@ import {
   sailNode,
   solidNode,
 } from './fleetparts';
-import { chordAtHalf, type MarkPlace, markInk, markPlace, paintMark } from './machinemark';
+import { chordAt, chordAtHalf, markPlace } from './machinemark';
 import { litMaterial, sailGlow } from './materials';
 import { placeSailor, SAILING, type SailorFrame, type SailorPlace } from './sailor';
 import { type ArtFiles, type FleetLook, FleetLooks } from './sailors/fleetlooks';
@@ -114,6 +124,8 @@ import { FLOW_LUFFING } from './telltales';
 
 /** The most boats drawn at once: a full view and as many fading out. */
 export const FLEET_CAPACITY = 128;
+/** The rows of the fleet's names' texture: one for each near boat, and a few kept for those that pass. */
+export const NAME_ROWS = 16;
 /** The full model is drawn for at most this many boats, the nearest the camera... */
 export const NEAR_MODELS = 12;
 /** ...within this distance of it, metres. */
@@ -133,7 +145,8 @@ class Level {
   readonly rig = attr();
   readonly sail = attr();
   readonly seat = attr();
-  readonly lean = attr();
+  /** Each instance's lean (four values) and its look (four more), one buffer, which the parts read as one. */
+  readonly lean = attr(LEAN_STRIDE);
   readonly jib = attr();
   /** Each instance's sailor's row (fleetsailors.ts's first eight texels), which the rigid figures read. */
   readonly rows: SailorRows;
@@ -160,7 +173,8 @@ class Level {
       rig: node(this.rig),
       sail: node(this.sail),
       seat: node(this.seat),
-      lean: node(this.lean),
+      lean: node(this.lean, LEAN_STRIDE),
+      look: node(this.lean, LEAN_STRIDE, 4),
       // The boats' meshes read none of the sailors' values.
       main: vec4(0),
       skin: vec4(0),
@@ -172,23 +186,43 @@ class Level {
   build(
     parts: BoatParts,
     kind: BoatKind,
-    cloth: CanvasTexture,
-    jibCloth: CanvasTexture | null,
+    cloth: SailPrint,
+    jibCloth: SailPrint | null,
     time: Node<'float'>,
+    palette: LookPalette,
+    name: HullName | null,
   ): void {
     const { hull, rig, headsails } = kind.physics;
     const cog = hull.centreOfGravity;
     const i = this.nodes;
+    const l = varying(i.look ?? vec4(0, 0, 0, -1)) as unknown as Node<'vec4'>;
+    const look: LookNodes = {
+      paint: l.x,
+      cloth: l.y,
+      number: l.z,
+      row: l.w,
+      machine: varying(machineOf(i)),
+    } as unknown as LookNodes;
     for (const s of parts.solids) {
       const src = s.material;
-      // Each vertex its own material's colour, roughness and metalness.
+      // Each vertex its own material's colour, roughness and metalness;
+      // the topsides' tones in the boat's paint, with its name on them.
       const m = litMaterial(
         { vertexColors: true, side: src.side === DoubleSide ? DoubleSide : FrontSide },
         solidNode(i, parts, cog),
       );
-      const own = attribute('part', 'vec3') as unknown as Node<'vec3'>;
+      const own = attribute('part', 'vec4') as unknown as Node<'vec4'>;
       m.roughnessNode = own.y;
       m.metalnessNode = own.z;
+      const topsides = varying(own.w);
+      m.colorNode = vec4(
+        select(
+          topsides.greaterThan(0.5),
+          hullColour(palette, look, varying(positionGeometry), name),
+          vec3(1),
+        ),
+        1,
+      );
       this.add(s.geometry, m, src.side === DoubleSide ? 'solids, both sides' : 'solids');
     }
     if (parts.sail !== null) {
@@ -201,17 +235,7 @@ class Level {
           luff: rig.luff,
         }),
       );
-      // The cloth's half: the plain one above, or, for a machine
-      // sailor's boat, the marked one below.
-      const at = varying(
-        vec2(
-          uv().x,
-          uv()
-            .y.add(float(1).sub(machineOf(i)))
-            .mul(0.5),
-        ),
-      );
-      const c = texture(cloth, at) as unknown as Node<'vec4'>;
+      const c = vec4(clothColour(palette, look, uv(), cloth), 1) as unknown as Node<'vec4'>;
       m.colorNode = c;
       m.emissiveNode = sailGlow(c);
       this.add(parts.sail.geometry, m, 'sail');
@@ -221,7 +245,7 @@ class Level {
         { roughness: parts.jib.material.roughness, metalness: 0, side: DoubleSide },
         jibNode(i, parts, cog, headsails.headsailFootStrip, headsails.headsailHeadStrip, time),
       );
-      const c = texture(jibCloth, uv()) as unknown as Node<'vec4'>;
+      const c = vec4(clothColour(palette, look, uv(), jibCloth), 1) as unknown as Node<'vec4'>;
       m.colorNode = c;
       m.emissiveNode = sailGlow(c);
       this.add(parts.jib.geometry, m, 'jib');
@@ -281,8 +305,11 @@ class Level {
   }
 }
 
-function attr(): InstancedInterleavedBuffer {
-  const b = new InstancedInterleavedBuffer(new Float32Array(FLEET_CAPACITY * 4), 4, 1);
+/** The lean's buffer's values an instance: its lean, then its look. */
+export const LEAN_STRIDE = 8;
+
+function attr(stride = 4): InstancedInterleavedBuffer {
+  const b = new InstancedInterleavedBuffer(new Float32Array(FLEET_CAPACITY * stride), stride, 1);
   b.setUsage(DynamicDrawUsage);
   return b;
 }
@@ -290,10 +317,11 @@ function attr(): InstancedInterleavedBuffer {
 /**
  * An instance-stepped vec4 attribute of b, as three.js's own instance
  * matrices are made (nodes/accessors/Instance.js): on an
- * InstancedInterleavedBuffer, which both back ends step per instance.
+ * InstancedInterleavedBuffer, which both back ends step per instance. Two
+ * of one buffer are one vertex buffer to the device.
  */
-function node(b: InstancedInterleavedBuffer): Node<'vec4'> {
-  return instancedDynamicBufferAttribute(b, 'vec4', 4, 0) as unknown as Node<'vec4'>;
+function node(b: InstancedInterleavedBuffer, stride = 4, offset = 0): Node<'vec4'> {
+  return instancedDynamicBufferAttribute(b, 'vec4', stride, offset) as unknown as Node<'vec4'>;
 }
 
 /**
@@ -317,10 +345,28 @@ function lampPulse(time: Node<'float'>): Node<'float'> {
   ) as unknown as Node<'float'>;
 }
 
-/** What every kind's view shares: the looks, their figures, and the time. */
+/** What every kind's view shares: the looks, their figures, the boats' own looks and names, and the time. */
 class Shared {
   /** World time, seconds, modulo 2π, for the luffing ripple. */
   readonly time = uniform(0);
+  /** The catalog's boats' looks, and their palette. */
+  readonly boatLooks: BoatLooks;
+  readonly palette: LookPalette;
+  /** The near boats' names, lettered; made with the first view loaded. */
+  names: NameAtlas | null = null;
+  /** The frames drawn: which names are wanted when. */
+  frame = 0;
+
+  constructor(boatLooks: BoatLooks) {
+    this.boatLooks = boatLooks;
+    this.palette = lookPalette(boatLooks);
+  }
+
+  /** The names' texture, made the first time it is asked for. */
+  nameAtlas(): NameAtlas {
+    this.names ??= new NameAtlas(NAME_ROWS, this.boatLooks.boatLooks.lettering);
+    return this.names;
+  }
   looks: FleetLooks | null = null;
   /** The catalog's looks; the look every boat is drawn with until its own has loaded. */
   cat: Looks | null = null;
@@ -410,19 +456,43 @@ export class FleetView {
     ]);
     const g = nearParts.gunwale;
     const { foot, luff, reefs } = kind.physics.rig;
-    const mark = markPlace(foot, luff, chordAtHalf(nearParts.sail?.geometry));
-    const cloth = fleetCloth(
-      kind.name.slice(0, 1),
-      mark,
-      reefRows(nearParts.sail?.geometry, reefs) ?? [],
-    );
-    const jibCloth = nearParts.jib === null ? null : headsailCloth();
+    const sail = nearParts.sail?.geometry;
+    const number = {
+      place: numberPlace(foot, luff, (v) => chordAt(sail, v)),
+      digits: digits(),
+      mirrored: NUMBER_MIRRORED,
+    };
+    const cloth: SailPrint = {
+      masks: clothMasks({
+        insignia: kind.name.slice(0, 1),
+        reefRows: reefRows(sail, reefs) ?? [],
+        mark: markPlace(foot, luff, chordAtHalf(sail)),
+      }),
+      number: nearParts.numbered === 'sail' ? number : null,
+    };
+    const jibCloth: SailPrint | null =
+      nearParts.jib === null
+        ? null
+        : {
+            masks: clothMasks(
+              { insignia: '', reefRows: [], mark: null },
+              MASK_WIDTH / 2,
+              MASK_HEIGHT / 2,
+            ),
+            number: nearParts.numbered === 'jib' ? number : null,
+          };
     this.#frame.seatZ = nearParts.seatZ;
     this.#frame.seatOut = g.x;
     this.#frame.seatY = g.y;
-    const time = this.#shared.time;
-    this.near.build(nearParts, kind, cloth, jibCloth, time);
-    this.far.build(farParts, kind, cloth, jibCloth, time);
+    const shared = this.#shared;
+    const time = shared.time;
+    const names = shared.nameAtlas();
+    const name: HullName | null =
+      nearParts.name === null
+        ? null
+        : { texture: names.texture, rows: names.rows.rows, place: nearParts.name };
+    this.near.build(nearParts, kind, cloth, jibCloth, time, shared.palette, name);
+    this.far.build(farParts, kind, cloth, jibCloth, time, shared.palette, null);
     this.parts = nearParts;
     this.loaded = true;
   }
@@ -608,15 +678,22 @@ export class FleetView {
     seat[o + 2] = p.z;
     seat[o + 3] = p.facing;
     const lean = level.lean.array as Float32Array;
-    lean[o] = p.tilt;
-    lean[o + 1] = b.heave;
-    lean[o + 2] = b.pitch;
+    const ol = n * LEAN_STRIDE;
+    lean[ol] = p.tilt;
+    lean[ol + 1] = b.heave;
+    lean[ol + 2] = b.pitch;
     // A machine's mark, and the main's reef level above it.
-    lean[o + 3] = (b.machine === 1 ? 1 : 0) + 2 * Math.min(Math.max(Math.round(b.reef), 0), 2);
+    lean[ol + 3] = (b.machine === 1 ? 1 : 0) + 2 * Math.min(Math.max(Math.round(b.reef), 0), 2);
+    // Its own look: paint, cloth, sail number, and its name's row (near only).
+    const shared = this.#shared;
+    writeLook(shared.boatLooks, b.boatLook, lean, ol + 4);
+    lean[ol + 7] =
+      near && b.name !== '' && shared.names !== null
+        ? shared.names.rowOf(b.name, shared.frame)
+        : -1;
     // Its sailor, in its look: loaded when first seen; until then the
     // first look's figure, in its own colours. Skinned near, once its
     // look's moving figure has loaded; else rigid.
-    const shared = this.#shared;
     const d = shared.lookOf(b);
     if (d === null || shared.first === null || level.figures === null) {
       return;
@@ -659,7 +736,7 @@ export class FleetView {
     const o = 4 * n;
     for (let k = 0; k < 4; k++) {
       d[r + k] = level.pose.array[o + k] as number;
-      d[r + 4 + k] = level.lean.array[o + k] as number;
+      d[r + 4 + k] = level.lean.array[n * LEAN_STRIDE + k] as number;
       d[r + 8 + k] = level.rig.array[o + k] as number;
       d[r + 28 + k] = level.seat.array[o + k] as number;
     }
@@ -710,7 +787,7 @@ export class FleetViews {
   readonly views: (FleetView | undefined)[] = [];
   loaded = false;
   readonly #kinds: readonly BoatKind[];
-  readonly #shared = new Shared();
+  readonly #shared: Shared;
   /** The looks are ready for each view as it loads. */
   #sailorsReady = false;
   /** The near level's shadows, for each view as it is made. */
@@ -723,9 +800,16 @@ export class FleetViews {
   /** Called when a kind's view has loaded and is ready to draw (its shaders to compile). */
   onView: ((view: FleetView) => void) | null = null;
 
-  constructor(kinds: readonly BoatKind[]) {
+  /** The catalog's boats, and their looks. */
+  constructor(kinds: readonly BoatKind[], boatLooks: BoatLooks) {
     this.#kinds = kinds;
+    this.#shared = new Shared(boatLooks);
     this.root.name = 'fleet';
+  }
+
+  /** The names' texture, once a view has loaded: the tests' count of its redraws. */
+  get names(): NameAtlas | null {
+    return this.#shared.names;
   }
 
   /** The first kind's view: what seats the fleet's sailors. */
@@ -865,6 +949,7 @@ export class FleetViews {
   ): void {
     const start = performance.now();
     this.#shared.time.value = time % (2 * Math.PI);
+    this.#shared.frame++;
     this.#pools();
     // The nearest few within range get the full model, whatever their kind.
     let nearN = 0;
@@ -929,6 +1014,7 @@ export class FleetViews {
     for (const v of this.views) {
       v?.commit();
     }
+    this.#shared.names?.commit();
     this.#frames++;
     this.#ms += performance.now() - start;
   }
@@ -1042,29 +1128,4 @@ function trianglesOf(g: BufferGeometry | null): number {
   }
   const index = g.index;
   return (index !== null ? index.count : g.getAttribute('position').count) / 3;
-}
-
-/**
- * The fleet's cloth: the sail's, with the insignia and no number, drawn
- * twice, one above the other; the lower carries the machine mark at its
- * place.
- */
-export function fleetCloth(
-  insignia: string,
-  mark: MarkPlace,
-  reefRows: readonly number[] = [],
-): CanvasTexture {
-  const canvas = document.createElement('canvas');
-  canvas.width = CLOTH_WIDTH;
-  canvas.height = 2 * CLOTH_HEIGHT;
-  const g = canvas.getContext('2d') as CanvasRenderingContext2D;
-  paintCloth(g, '', insignia, reefRows);
-  // The lower half, its seams kept out of the upper one.
-  g.translate(0, CLOTH_HEIGHT);
-  g.beginPath();
-  g.rect(0, 0, CLOTH_WIDTH, CLOTH_HEIGHT);
-  g.clip();
-  paintCloth(g, '', insignia, reefRows);
-  paintMark(g, mark, CLOTH_WIDTH, CLOTH_HEIGHT, markInk(CLOTH));
-  return clothTexture(canvas);
 }

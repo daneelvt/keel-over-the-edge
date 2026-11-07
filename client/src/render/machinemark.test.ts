@@ -13,7 +13,6 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { describe, expect, test } from 'vitest';
 import { catalog } from '../catalog';
 import { newDrawnBoat } from '../game/fleet';
-import { CLOTH } from './boat';
 import type { FloatingOrigin } from './coords';
 import { FleetViews } from './fleet';
 import {
@@ -24,9 +23,6 @@ import {
   chordAtHalf,
   cogOutline,
   luminance,
-  MARK_DARK,
-  MARK_GOLD,
-  markInk,
   markPlace,
   onCog,
 } from './machinemark';
@@ -98,16 +94,14 @@ describe('the cog', () => {
 });
 
 describe('the ink', () => {
-  test('is dark on the light cloth, gold on a dark one, and stands out from either', () => {
-    expect(markInk(CLOTH)).toBe(MARK_DARK);
-    expect(markInk('#2a3348')).toBe(MARK_GOLD);
-    expect(markInk('#5b2a22')).toBe(MARK_GOLD);
+  test('is each cloth’s own, and stands out from it', () => {
     const contrast = (a: string, b: string) => {
       const [hi, lo] = [luminance(a), luminance(b)].sort((p, q) => q - p);
       return ((hi ?? 0) + 0.05) / ((lo ?? 0) + 0.05);
     };
-    expect(contrast(CLOTH, markInk(CLOTH))).toBeGreaterThan(7);
-    expect(contrast('#2a3348', markInk('#2a3348'))).toBeGreaterThan(4.5);
+    for (const c of catalog.boatLooks.cloths) {
+      expect(contrast(c.colour, c.ink), c.name).toBeGreaterThan(4.5);
+    }
   });
 });
 
@@ -203,7 +197,7 @@ describe('the mark’s place', () => {
 
 describe('the fleet’s flag', () => {
   test('follows each drawn boat’s, instance by instance', () => {
-    const views = new FleetViews(catalog.boats);
+    const views = new FleetViews(catalog.boats, catalog);
     // Its models are not loaded here: the instances' values are written all the same.
     const view = views.first;
     view.loaded = true;
@@ -218,7 +212,7 @@ describe('the fleet’s flag', () => {
     }));
     const flags = () => {
       const lean = view.near.lean.array as Float32Array;
-      return [0, 1, 2].map((n) => lean[n * 4 + 3]);
+      return [0, 1, 2].map((n) => lean[n * 8 + 3]);
     };
     views.draw(boats, 3, origin, camera, 0, 0);
     expect(view.near.count).toBe(3);
