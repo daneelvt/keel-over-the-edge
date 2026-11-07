@@ -1886,6 +1886,58 @@ rest. The developer panel lists the chunks handed, held, built and drawn,
 fetched and cached, and their times. `client/e2e/land.spec.ts` runs on seed
 1's world, which `pr.render` makes in the job.
 
+### The camera against the land
+
+The chase camera keeps out of the land by a **spring arm**
+(`render/camera.ts`, as Unreal's spring arm and Cinemachine's deoccluder
+do): each frame its line from the point it looks at, 1.8 m above the boat,
+out to where the player's view puts it is marched in steps of at most 1 m,
+and it stands at the farthest point clear of every solid by **0.5 m** all
+the way from the look point. So it is never in the land nor under it, its
+0.2 m near plane never cuts a wall, and the land never stands between it
+and the boat. It comes in at once, the frame the land comes into its line,
+and goes back out by a critically damped spring, settled in **0.6 s**,
+never past the view. Where the clear reach is under **4 m** it rises at
+the same azimuth, to the first of six elevations up to the highest that
+reaches 4 m, or the one that reaches farthest; under a roof that is no
+help, and it stays at its reach, however short. The player's view, its
+rest and its ease back are never changed by the land: the arm only
+shortens and lifts it while it must. It works the same for the opening
+view, the descent, another's boat watched and the gaze lifted to the sky;
+the camera held going over the lip is left where it is. Away from land it
+is not there: the camera stands where it stood without it, to the bit.
+
+The **solids** (`land/solids.ts`) are the land's columns, each hexagon to
+the higher of its elevation and its drawn terrace; the roofs, from their
+undersides to their tops; the buildings, each a box turned by its heading
+from its plot's level to its top and chimney, its eaves a tenth beyond its
+walls; and the lighthouses' towers. Trees, bushes, props, boats and the
+sailors are not solid. Where no grids are held it is the open sea. Each
+chunk's grids are indexed as they arrive, in blocks 16 m square holding
+the highest top of anything within 1 m of them and the buildings that
+are, and dropped as they are let go; a lookup reads the hexagon under the
+point and those beside it within the radius, and allocates nothing. The
+arm costs about 1 to 4 µs a frame on the Mac at Port Royal, the camera at
+160 m included. The **free camera** keeps 2 m above the highest solid
+within 0.5 m of its point, and under a roof 0.5 m below its underside or
+over its top, whichever is nearer.
+
+```sh
+go run ./tools/dev -world 1                       # then, in a calm on seed 1's world:
+# https://localhost:5173/?sandbox&camera=stack     beside the 24.5 m stack south-west of Port Royal, the camera through it
+# https://localhost:5173/?sandbox&camera=cliff     under Port Royal's 18 m northern cliffs, the camera into them
+# https://localhost:5173/?sandbox&camera=harbour   in the cove on its western shore, the camera among the houses above
+# https://localhost:5173/?sandbox&camera=arch      under an arch's span, the camera up along it into its rock
+```
+
+Each scene holds the camera at a view that goes into the land without the
+arm; drag to swing it round. `client/e2e/camera.spec.ts` swings it round
+each scene in 10° steps at its lowest, resting and highest elevations and
+at 5, 16 and 80 m and checks every eye and line against a lookup of its
+own over the grids read back, sails past the stack, compares the open sea
+with the arm off to the millimetre, and flies the free camera at the stack
+and into a house.
+
 ## The edge
 
 The disk ends at the lip of the falls, `world.disk.radius` (8,334 m, 4.5

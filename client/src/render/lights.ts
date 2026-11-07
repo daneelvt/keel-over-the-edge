@@ -246,6 +246,8 @@ export class Lighthouses {
   readonly perPixel = uniform(0.001);
   /** The lighthouses known, by place number, and the lights, by light number. */
   readonly sites = new Map<number, PlaceSeen>();
+  /** Counts the changes to the sites, for what keeps their towers (the cameras' solids). */
+  sitesVersion = 0;
   readonly lights = new Map<number, Held>();
   count = 0;
 
@@ -400,6 +402,7 @@ export class Lighthouses {
     for (const p of places) {
       if (p.kind === this.#lighthouse) {
         this.sites.set(p.number, p);
+        this.sitesVersion++;
       }
     }
   }
@@ -433,6 +436,7 @@ export class Lighthouses {
   /** Forgets every place and light: a new world. */
   clear(): void {
     this.sites.clear();
+    this.sitesVersion++;
     this.lights.clear();
   }
 

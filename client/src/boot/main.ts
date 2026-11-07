@@ -90,6 +90,7 @@ import { flashNear } from '../render/lightning';
 import { chooseBackend } from '../render/renderer';
 import { CAMERA_PRESETS, SeaScene } from '../render/scene';
 import { pointUp } from '../render/signals';
+import { cameraSceneFromQuery, startCameraScene } from '../sandbox/camerascenes';
 import { SandboxForecast } from '../sandbox/forecast';
 import { swellFromQuery } from '../sandbox/localsea';
 import {
@@ -256,11 +257,16 @@ async function start(): Promise<void> {
     // A steady wind where one is asked for, and for the tests, whose
     // pictures and recordings are of one wind; otherwise a spell of the
     // commonest regime, with its shifts and gusts.
-    const wind = windFromQuery(query) ?? seaFromQuery(query);
+    // ?camera=scene: the boat still beside seed 1's land, the camera into it.
+    const cameraScene = cameraSceneFromQuery(query);
+    const wind =
+      windFromQuery(query) ??
+      seaFromQuery(query) ??
+      (cameraScene === null ? null : { speed: 0, from: 0 });
     const frontIn = frontFromQuery(query);
     // ?world=seed: a whole world, from the file go run ./tools/dev -world
     // writes, the boat at its start: its first mooring, facing the narrows.
-    const seed = query.get('world');
+    const seed = query.get('world') ?? (cameraScene === null ? null : '1');
     const file: WorldFile | null = seed === null ? null : await fetchWorldFile(seed);
     const place = file?.start.places[0];
     const begin = {
@@ -352,6 +358,19 @@ async function start(): Promise<void> {
       if (at !== null) {
         sandbox.place(at.east, at.north, 0);
       }
+    }
+    if (cameraScene !== null && !query.has('test')) {
+      startCameraScene(
+        {
+          place: (east, north, heading) => sandbox.place(east, north, heading),
+          landNear: () =>
+            world.land !== null &&
+            world.land.heightAt(world.pose.east, world.pose.north) !== null &&
+            world.land.ready(world.pose.east, world.pose.north, catalog.world.look.keepGrids),
+          placeCamera: (v) => world.placeCamera(v),
+        },
+        cameraScene,
+      );
     }
     // ?gale=minutes: a storm to bring a gale to the boat that many minutes on.
     const gale = galeFromQuery(query);
