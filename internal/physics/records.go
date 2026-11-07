@@ -9,6 +9,10 @@ package physics
 // LayoutVersion (layout.gen.go), and a client refuses a module whose version
 // differs.
 
+// BoatKinds is the most kinds of boat a world sails: the module holds each
+// one's prepared constants.
+const BoatKinds = 8
+
 // The sailor's modes, stored in State.SailorMode.
 const (
 	Sailing  = 0 // aboard, hiking and sailing
@@ -61,6 +65,21 @@ type State struct {
 	// as deep, or deeper. A boat pushed off is put back the way it came.
 	DeepX float64
 	DeepY float64
+	// The headsails' clew swings free to its sheet's limit as the boom
+	// does: its angle off the centreline at the stay, positive to
+	// starboard, its rate, and the furthest the sheet lets it out.
+	Jib      float64 // rad
+	JibRate  float64 // rad/s
+	JibLimit float64 // rad
+	// The square sails' yards, held at the braces' angle: the after yards'
+	// angle off the centreline, signed by the side they are braced for,
+	// and the fore yards', which differ from it only while the crew hauls
+	// them round in a turn. 0 on a boat with no square sails.
+	Yards     float64 // rad
+	ForeYards float64 // rad
+	// Reef is how far the sail is reefed, from 0, full sail, to 2: the crew
+	// takes a reef in or shakes it out over the rig's reef time.
+	Reef float64
 }
 
 // Control holds what the player sets. Helm and Sheet are targets: the rudder
@@ -77,6 +96,8 @@ type Control struct {
 	Target float64
 	Order  float64 // the order count, 0 … 3: a value the state has not taken is a new order
 	Way    float64 // the way of the latest order: WayHold, WayTack or WayGybe
+	// Reef is the reef the crew is to take: 0 full sail, 1 or 2 reefs.
+	Reef float64
 }
 
 // Env is the world at the boat during the step.
@@ -157,6 +178,56 @@ type Params struct {
 	SailFloat         float64     // upward force per metre a sail strip is pushed under water, N/m
 	SailWaterDamping  float64     // vertical damping of a sail strip in the water, N·s/m
 	CloseHauled       float64     // the close-hauled course's angle off the true wind, degrees
+	Reefs             [3]float64  // the share of its luff the main keeps at full sail, one reef and two
+	ReefTime          float64     // s for the crew to take a reef in or shake it out
+
+	// Headsails: sails tacked on a stay ahead of the mast, with no boom,
+	// their clew free to their own sheet's limit, set together. None where
+	// the area is 0.
+	HeadsailArea              float64     // m²
+	HeadsailLuff              float64     // the head's height above the tack, m
+	HeadsailFoot              float64     // m
+	HeadsailTackHeight        float64     // the tack's height above the waterline, m
+	HeadsailTack              float64     // the tack's distance ahead of the centre of gravity, m
+	HeadsailFootStrip         float64     // height of the lower strip's centre of effort above the tack, fraction of the luff
+	HeadsailHeadStrip         float64     // and the upper strip's
+	HeadsailPressureAttached  float64     // centre of pressure aft of the tack with the flow attached, fraction of the foot
+	HeadsailPressureSeparated float64     // and with the flow separated
+	HeadsailMaxLift           float64     // greatest lift coefficient
+	HeadsailStallAngle        float64     // angle of attack of greatest lift, degrees
+	HeadsailStallWidth        float64     // angle over which the flow separates past the stall, degrees
+	HeadsailDrag              float64     // viscous drag coefficient
+	HeadsailNormalForce       [19]float64 // normal force coefficient of separated flow, every 10° of attack from 0° to 180°
+	HeadsailTwist             float64     // the upper strip's twist beyond the clew's line sheeted in, degrees
+	HeadsailTwistEased        float64     // extra twist as the sheet lets the clew out, growing with its angle, degrees
+	HeadsailIn                float64     // the clew's angle off the centreline sheeted in hard, degrees
+	HeadsailOut               float64     // and let fly, degrees
+	HeadsailInertia           float64     // sail and clew about the stay, kg·m²
+	HeadsailMoment            float64     // their mass times its distance aft of the stay, kg·m
+	HeadsailDamping           float64     // friction of the clew's swing, N·m·s/rad
+	HeadsailReefs             [3]float64  // the share of their luff kept at full sail, one reef and two
+
+	// Square sails, on yards the braces hold at an angle, in a fore and an
+	// after group. None where an area is 0.
+	SquareForeArea    float64     // the fore group's area, m²
+	SquareAfterArea   float64     // the after group's, m²
+	SquareForeMast    float64     // the fore group's mast ahead of the centre of gravity, m
+	SquareAfterMast   float64     // the after group's, m
+	SquareFootHeight  float64     // the lowest yard's height above the waterline, m
+	SquareLuff        float64     // the sails' height from the lowest yard to the highest, m
+	SquareFootStrip   float64     // height of the lower strip's centre of effort above the lowest yard, fraction of the luff
+	SquareHeadStrip   float64     // and the upper strip's
+	SquarePressure    float64     // centre of pressure aft of the yard's line with the flow separated, fraction of a yard's half-length
+	SquareMaxLift     float64     // greatest lift coefficient
+	SquareStallAngle  float64     // angle of attack of greatest lift, degrees
+	SquareStallWidth  float64     // angle over which the flow separates past it, degrees
+	SquareDrag        float64     // viscous drag coefficient
+	SquareNormalForce [19]float64 // normal force coefficient, every 10° of attack from 0° to 180°
+	BraceSharp        float64     // the yards' least angle off the centreline, braced up sharp, degrees
+	BraceTime         float64     // s for the crew to swing the yards from sharp up on one side to the other
+	Hauls             float64     // in a tack the after yards swing as the head comes this near the wind, degrees
+	LetGo             float64     // and the fore yards once the wind is this far on the new bow, degrees
+	SquareReefs       [3]float64  // the share of their luff kept at full sail, one reef and two
 
 	// Foils.
 	BoardSpan      float64 // daggerboard below the hull, m
@@ -177,6 +248,9 @@ type Params struct {
 	Downwash       float64 // share of the sideways flow at the rudder that the board's downwash cancels
 	FoilWetHeel    float64 // the foils are fully in the water up to this heel, degrees
 	FoilDryHeel    float64 // and out of it from this heel, degrees
+	// Fixed is 1 for a fixed keel, which the ground meets at its tip and
+	// never cuts away, and 0 for a board the ground pushes up.
+	Fixed float64
 
 	// Sailor.
 	SailorMass       float64 // kg
@@ -280,6 +354,25 @@ type Out struct {
 	Aground           float64 // Afloat, OnBottom or AgainstLand
 	PushedOff         float64 // 1 if the step pushed the boat off, else 0
 	PilotStalled      float64 // 1 if the autopilot's tack or gybe stalled during the step, else 0
+	// The headsails' strips, as the main's: 0 on a boat with none.
+	JibFootAttack float64 // rad
+	JibHeadAttack float64 // rad
+	JibFootFlow   float64
+	JibHeadFlow   float64
+	JibTwist      float64 // the upper strip's twist beyond the clew's line, rad
+	// The square sails' groups, their lower and upper strips: 0 on a boat
+	// with none.
+	ForeFootAttack  float64 // rad
+	ForeHeadAttack  float64 // rad
+	ForeFootFlow    float64
+	ForeHeadFlow    float64
+	AfterFootAttack float64 // rad
+	AfterHeadAttack float64 // rad
+	AfterFootFlow   float64
+	AfterHeadFlow   float64
+	// ReefShare is the share of its luff the main keeps as reefed: 1 at
+	// full sail.
+	ReefShare float64
 }
 
 // GroundParams describe how a boat meets the ground: the catalog's world

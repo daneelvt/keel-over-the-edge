@@ -23,9 +23,14 @@ var validBoats = `boats:
     lights: [tricolour]
     lookout: 2
     startSheet: [[110, 0.25]]
+    controls:
+      sheet: { name: Sheet, trim: Trim, ease: Ease }
+      reef: [Full sail, One reef, Two reefs]
+    fleet: sailor
     art:
       model: boats/test-boat/model.glb
       far: boats/test-boat/far.glb
+      budget: { near: 15000, far: 1000 }
 ` + realPhysics()
 
 const (
@@ -334,8 +339,8 @@ func TestRejects(t *testing.T) {
 			want:  "/boats/0/physics/autopilot/damping",
 		},
 		{
-			name:  "an autopilot let by the lee as far as the boom gybes",
-			files: map[string]string{"shared/catalog/boats.yaml": strings.Replace(validBoats, "        byTheLee: ", "        byTheLee: 17 #", 1)},
+			name:  "an autopilot let by the lee past a beam reach",
+			files: map[string]string{"shared/catalog/boats.yaml": strings.Replace(validBoats, "        byTheLee: ", "        byTheLee: 61 #", 1)},
 			want:  "/boats/0/physics/autopilot/byTheLee",
 		},
 		{
@@ -430,7 +435,7 @@ func TestRejects(t *testing.T) {
 		{
 			name: "no art",
 			files: map[string]string{"shared/catalog/boats.yaml": strings.Replace(validBoats,
-				"    art:\n      model: boats/test-boat/model.glb\n      far: boats/test-boat/far.glb\n", "", 1)},
+				"    art:\n      model: boats/test-boat/model.glb\n      far: boats/test-boat/far.glb\n      budget: { near: 15000, far: 1000 }\n", "", 1)},
 			want: "/boats/0: &{[art]}",
 		},
 		{
@@ -520,7 +525,9 @@ func TestCanonicalJSONIgnoresFileOrderAndLayout(t *testing.T) {
 	a := fixture(t, map[string]string{"shared/catalog/boats.yaml": validBoats})
 	reordered := `boats:
   - lengthOverall: 3.50
-    art: {model: boats/test-boat/model.glb, far: boats/test-boat/far.glb}
+    art: {model: boats/test-boat/model.glb, far: boats/test-boat/far.glb, budget: {far: 1000, near: 15000}}
+    fleet: sailor
+    controls: {reef: [Full sail, One reef, Two reefs], sheet: {trim: Trim, name: Sheet, ease: Ease}}
     beam: 1.20
     capacity: 2
     description: A boat for tests
@@ -691,7 +698,7 @@ func TestEncounters(t *testing.T) {
 		{name: "wider than the beam", boats: strings.Replace(boats, "beam: 1.39", "beam: 1.2", 1), want: "wider than half the beam"},
 		{name: "longer than the boat", boats: strings.Replace(boats, "stem: 2.25", "stem: 2.5", 1), want: "not the length overall"},
 		{name: "close-hauled at 20°", boats: strings.Replace(boats, "closeHauled: 40", "closeHauled: 20", 1), want: "/boats/0/physics/rig/closeHauled"},
-		{name: "close-hauled at 61°", boats: strings.Replace(boats, "closeHauled: 40", "closeHauled: 61", 1), want: "/boats/0/physics/rig/closeHauled"},
+		{name: "close-hauled at 81°", boats: strings.Replace(boats, "closeHauled: 40", "closeHauled: 81", 1), want: "/boats/0/physics/rig/closeHauled"},
 		{name: "a restitution above 1", enc: strings.Replace(realEncounters(), "restitution: 0.3", "restitution: 1.2", 1), want: "/encounters/contact/restitution"},
 		{name: "a restitution below 0", enc: strings.Replace(realEncounters(), "restitution: 0.3", "restitution: -0.1", 1), want: "/encounters/contact/restitution"},
 		{name: "a taper past the reach", enc: strings.Replace(realEncounters(), "taper: 8", "taper: 12", 1), want: "taper"},
@@ -708,6 +715,8 @@ func TestEncounters(t *testing.T) {
 			// The real boat's art, so that only the encounters can fail.
 			files["art/boats/jolly-boat.glb"] = glb("hull", "tricolour")
 			files["art/boats/jolly-boat.far.glb"] = "glTF"
+			files["art/boats/keelboat.glb"] = glb("hull", "tricolour")
+			files["art/boats/keelboat.far.glb"] = "glTF"
 			root := fixture(t, files)
 			err := checkAll(root)
 			if err == nil {

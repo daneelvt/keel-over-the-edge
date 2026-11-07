@@ -172,8 +172,45 @@ export interface Boat {
    * @minItems 1
    */
   startSheet: [[number, number], ...[number, number][]];
+  controls: BoatControls;
+  /**
+   * How many of the boat an account's fleet holds: one for each of its sailors, or one for the account, shared by them.
+   */
+  fleet: "sailor" | "account";
   physics: BoatPhysics;
   art: BoatArt;
+}
+/**
+ * The words the boat's controls are shown with. Every boat has the helm, the sheet and the reef; the sheet sets the main's limit, the headsails' in the same share, and the yards' brace.
+ *
+ * This interface was referenced by `Catalog`'s JSON-Schema
+ * via the `definition` "BoatControls".
+ */
+export interface BoatControls {
+  /**
+   * The sheet's control: its name, and its two ends' words.
+   */
+  sheet: {
+    /**
+     * What the control is called.
+     */
+    name: string;
+    /**
+     * The word at its end that hauls in.
+     */
+    trim: string;
+    /**
+     * The word at its end that lets out.
+     */
+    ease: string;
+  };
+  /**
+   * The reef's three levels in words: full sail, one reef, two.
+   *
+   * @minItems 3
+   * @maxItems 3
+   */
+  reef: [string, string, string];
 }
 /**
  * The boat's physics, in SI units with angles in degrees. Every value is required.
@@ -184,6 +221,8 @@ export interface Boat {
 export interface BoatPhysics {
   hull: PhysicsHull;
   rig: PhysicsRig;
+  headsails: PhysicsHeadsails;
+  square: PhysicsSquare;
   foils: PhysicsFoils;
   sailor: PhysicsSailor;
   rates: PhysicsRates;
@@ -357,7 +396,7 @@ export interface PhysicsHull {
   stem: number;
 }
 /**
- * The sail, boom and windage.
+ * The main, its boom and reefs, and the windage.
  *
  * This interface was referenced by `Catalog`'s JSON-Schema
  * via the `definition` "PhysicsRig".
@@ -526,9 +565,252 @@ export interface PhysicsRig {
    * The boat's close-hauled course: its heading off the true wind sailing as close to it as it sails well, in degrees.
    */
   closeHauled: number;
+  /**
+   * The share of its luff the main keeps at full sail, with one reef and with two: its area goes as the square of the share, its centre of effort down with it.
+   *
+   * @minItems 3
+   * @maxItems 3
+   */
+  reefs: [number, number, number];
+  /**
+   * Time for the crew to take a reef in or shake it out, in s.
+   */
+  reefTime: number;
 }
 /**
- * The daggerboard or keel, and the rudder.
+ * The headsails: sails tacked on a stay ahead of the mast, their clew free to their own sheet's limit, with no boom, set and trimmed together as one. A boat with none has an area of 0, and its other values 0.
+ *
+ * This interface was referenced by `Catalog`'s JSON-Schema
+ * via the `definition` "PhysicsHeadsails".
+ */
+export interface PhysicsHeadsails {
+  /**
+   * Their area, in m²; 0 for none.
+   */
+  headsailArea: number;
+  /**
+   * The head's height above the tack, in m.
+   */
+  headsailLuff: number;
+  /**
+   * Length of the foot, in m.
+   */
+  headsailFoot: number;
+  /**
+   * The tack's height above the waterline, in m.
+   */
+  headsailTackHeight: number;
+  /**
+   * The tack's distance ahead of the centre of gravity, in m.
+   */
+  headsailTack: number;
+  /**
+   * Height of the lower strip's centre of effort above the tack, as a fraction of the luff.
+   */
+  headsailFootStrip: number;
+  /**
+   * Height of the upper strip's centre of effort above the tack, as a fraction of the luff.
+   */
+  headsailHeadStrip: number;
+  /**
+   * Centre of pressure aft of the tack with the flow attached, as a fraction of the foot.
+   */
+  headsailPressureAttached: number;
+  /**
+   * Centre of pressure aft of the tack with the flow separated, as a fraction of the foot.
+   */
+  headsailPressureSeparated: number;
+  /**
+   * Greatest lift coefficient.
+   */
+  headsailMaxLift: number;
+  /**
+   * Angle of attack of the greatest lift, in degrees.
+   */
+  headsailStallAngle: number;
+  /**
+   * Angle past the stall over which the flow separates, in degrees.
+   */
+  headsailStallWidth: number;
+  /**
+   * Viscous drag coefficient.
+   */
+  headsailDrag: number;
+  /**
+   * Normal force coefficient of separated flow, every 10° of angle of attack from 0° to 180°.
+   *
+   * @minItems 19
+   * @maxItems 19
+   */
+  headsailNormalForce: [
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number
+  ];
+  /**
+   * The upper strip's twist beyond the clew's line, sheeted in, in degrees.
+   */
+  headsailTwist: number;
+  /**
+   * Extra twist as the sheet lets the clew out, growing in proportion to its angle, in degrees.
+   */
+  headsailTwistEased: number;
+  /**
+   * The clew's angle off the centreline, seen from the tack, with the sheet hauled in hard, in degrees.
+   */
+  headsailIn: number;
+  /**
+   * The clew's angle with the sheet let fly, in degrees.
+   */
+  headsailOut: number;
+  /**
+   * Moment of inertia of the sail and its clew about the stay, in kg·m².
+   */
+  headsailInertia: number;
+  /**
+   * Their mass times the distance of their centre of gravity aft of the stay, in kg·m.
+   */
+  headsailMoment: number;
+  /**
+   * Friction of the clew's swing, in N·m·s/rad.
+   */
+  headsailDamping: number;
+  /**
+   * The share of their luff kept at full sail, with one reef and with two.
+   *
+   * @minItems 3
+   * @maxItems 3
+   */
+  headsailReefs: [number, number, number];
+}
+/**
+ * Square sails on yards the braces hold at an angle, in a fore group and an after group, and the crew that hauls the yards round in a turn. A boat with none has areas of 0, and its other values 0.
+ *
+ * This interface was referenced by `Catalog`'s JSON-Schema
+ * via the `definition` "PhysicsSquare".
+ */
+export interface PhysicsSquare {
+  /**
+   * The fore group's area, in m²; 0 for none.
+   */
+  squareForeArea: number;
+  /**
+   * The after group's area, in m²; 0 for none.
+   */
+  squareAfterArea: number;
+  /**
+   * The fore group's mast ahead of the centre of gravity, in m.
+   */
+  squareForeMast: number;
+  /**
+   * The after group's mast ahead of the centre of gravity, in m.
+   */
+  squareAfterMast: number;
+  /**
+   * The lowest yard's height above the waterline, in m.
+   */
+  squareFootHeight: number;
+  /**
+   * The sails' height from the lowest yard to the highest, in m.
+   */
+  squareLuff: number;
+  /**
+   * Height of the lower strip's centre of effort above the lowest yard, as a fraction of the luff.
+   */
+  squareFootStrip: number;
+  /**
+   * Height of the upper strip's centre of effort above the lowest yard, as a fraction of the luff.
+   */
+  squareHeadStrip: number;
+  /**
+   * Centre of pressure aft of the yards' line with the flow separated, as a fraction of a yard's half-length.
+   */
+  squarePressure: number;
+  /**
+   * Greatest lift coefficient.
+   */
+  squareMaxLift: number;
+  /**
+   * Angle of attack of the greatest lift, in degrees.
+   */
+  squareStallAngle: number;
+  /**
+   * Angle past it over which the lift falls away, in degrees.
+   */
+  squareStallWidth: number;
+  /**
+   * Viscous drag coefficient.
+   */
+  squareDrag: number;
+  /**
+   * Normal force coefficient, every 10° of angle of attack from 0° to 180°.
+   *
+   * @minItems 19
+   * @maxItems 19
+   */
+  squareNormalForce: [
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number
+  ];
+  /**
+   * The yards' least angle off the centreline, braced up sharp, in degrees.
+   */
+  braceSharp: number;
+  /**
+   * Time for the crew to swing the yards from braced up sharp on one side to the other, in s.
+   */
+  braceTime: number;
+  /**
+   * In a tack, the after yards swing as the head comes this near the wind, in degrees.
+   */
+  hauls: number;
+  /**
+   * And the fore yards once the wind is this far on the new bow, in degrees.
+   */
+  letGo: number;
+  /**
+   * The share of their luff kept at full sail, with one reef and with two.
+   *
+   * @minItems 3
+   * @maxItems 3
+   */
+  squareReefs: [number, number, number];
+}
+/**
+ * The daggerboard or fixed keel, and the rudder.
  *
  * This interface was referenced by `Catalog`'s JSON-Schema
  * via the `definition` "PhysicsFoils".
@@ -606,6 +888,10 @@ export interface PhysicsFoils {
    * Heel from which the foils are out of the water, in degrees.
    */
   foilDryHeel: number;
+  /**
+   * 1 for a fixed keel, which the ground meets at its tip, stopping the boat, and never pushes up; 0 for a daggerboard the ground pushes up as the water shoals.
+   */
+  fixed: number;
 }
 /**
  * What the sailor does by themselves: hiking, flattening the sail, righting the boat. The same for every player.
@@ -771,13 +1057,26 @@ export interface PhysicsAutopilot {
  */
 export interface BoatArt {
   /**
-   * The boat's model: a glTF binary with the nodes hull, mast, boom, sail, telltales, pennant, rudder, tiller, daggerboard and sailor, and a node for each of the boat's lights, named as the light, where its lantern is.
+   * The boat's model: a glTF binary with the nodes hull, mast, boom, sail, telltales, pennant, rudder, tiller, daggerboard and sailor, a jib on a boat with headsails, and a node for each of the boat's lights, named as the light, where its lantern is.
    */
   model: string;
   /**
    * The boat's far model, drawn for boats seen from afar among many: the model's nodes but telltales, pennant and lights, with few segments.
    */
   far: string;
+  /**
+   * The most triangles each of the boat's models may have.
+   */
+  budget: {
+    /**
+     * The model's.
+     */
+    near: number;
+    /**
+     * The far model's.
+     */
+    far: number;
+  };
 }
 /**
  * A look: its name, its habit, which hair colours it takes, and its versions.
@@ -7487,4 +7786,4 @@ export interface NewsColumn {
 }
 
 /** The catalog version (tools/catalog). */
-export const CATALOG_VERSION = '418585d325a5300d';
+export const CATALOG_VERSION = 'a4d6682f15d9a71a';

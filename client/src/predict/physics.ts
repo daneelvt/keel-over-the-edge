@@ -32,8 +32,8 @@ interface Exports {
   components(): number;
   wave(): number;
   seaPrepare(): void;
-  prepare(): void;
-  step(): void;
+  prepare(kind: number): void;
+  step(kind: number): void;
   seaWindow(slot: number, col: number, row: number, size: number): void;
   seaArea(
     slot: number,
@@ -115,6 +115,7 @@ interface Exports {
   encounterPrepare(): void;
   wake(): number;
   wakeOf(
+    kind: number,
     x: number,
     y: number,
     heading: number,
@@ -125,18 +126,18 @@ interface Exports {
     speed: number,
     from: number,
   ): void;
-  wakeOfState(): void;
+  wakeOfState(kind: number): void;
   wakes(): number;
   wakeCapacity(): number;
   shadowAt(n: number): number;
   course(): number;
-  courseTrack(windFrom: number): void;
-  courseOf(heading: number, boom: number, windFrom: number): void;
+  courseTrack(kind: number, windFrom: number): void;
+  courseOf(kind: number, heading: number, boom: number, windFrom: number): void;
   encounter(): number;
   verdict(): number;
-  articlesJudge(): void;
+  articlesJudge(a: number, b: number): void;
   contact(): number;
-  collide(): number;
+  collide(a: number, b: number): number;
   skyParams(): number;
   skyPrepare(): void;
   sky(): number;
@@ -571,20 +572,21 @@ export class Physics {
   }
 
   /**
-   * Derives the boat's constants from the params record, for the sea's
-   * waves. Call it after writing params (writeParams) and after prepareSea,
-   * and before stepping.
+   * Derives a kind of boat's constants from the params record, for the
+   * sea's waves: kind is its place in the catalog's boats. Call it after
+   * writing params (writeParams) and after prepareSea, and before stepping.
    */
-  prepare(): void {
-    this.#x.prepare();
+  prepare(kind = 0): void {
+    this.#x.prepare(kind);
   }
 
   /**
-   * Advances the state by one step, 1/30 of a second, and writes out: in
-   * the window seaUse named at the tick seaAt set, or in flat water.
+   * Advances the state, a boat of kind, by one step, 1/30 of a second, and
+   * writes out: in the window seaUse named at the tick seaAt set, or in
+   * flat water.
    */
-  step(): void {
-    this.#x.step();
+  step(kind = 0): void {
+    this.#x.step(kind);
   }
 
   /**
@@ -1488,10 +1490,10 @@ export class Physics {
   }
 
   /**
-   * The wake of a boat of the prepared kind at (east, north) heading
-   * heading, heeled heel with its boom at boom, moving at (vx, vy) m/s, in
-   * a true wind of speed m/s from from: the wake record, indexed by
-   * RECORDS.wake. A view: read it before the next call.
+   * The wake of a boat of kind at (east, north) heading heading, heeled
+   * heel with its boom at boom, moving at (vx, vy) m/s, in a true wind of
+   * speed m/s from from: the wake record, indexed by RECORDS.wake. A view:
+   * read it before the next call.
    */
   wakeOf(
     east: number,
@@ -1503,14 +1505,15 @@ export class Physics {
     vy: number,
     speed: number,
     from: number,
+    kind = 0,
   ): Float64Array {
-    this.#x.wakeOf(east, north, heading, heel, boom, vx, vy, speed, from);
+    this.#x.wakeOf(kind, east, north, heading, heel, boom, vx, vy, speed, from);
     return this.records.wake;
   }
 
-  /** The wake the state record leaves in the wind of the env record, as the server's step leaves it. A view. */
-  wakeOfState(): Float64Array {
-    this.#x.wakeOfState();
+  /** The wake the state record, a boat of kind, leaves in the wind of the env record, as the server's step leaves it. A view. */
+  wakeOfState(kind = 0): Float64Array {
+    this.#x.wakeOfState(kind);
     return this.records.wake;
   }
 
@@ -1531,34 +1534,35 @@ export class Physics {
     return this.#x.shadowAt(n) >>> 0;
   }
 
-  /** Brings the course record to the state, in the true wind from windFrom. */
-  courseTrack(windFrom: number): void {
-    this.#x.courseTrack(windFrom);
+  /** Brings the course record to the state, a boat of kind, in the true wind from windFrom. */
+  courseTrack(windFrom: number, kind = 0): void {
+    this.#x.courseTrack(kind, windFrom);
   }
 
   /**
    * Brings a course, four values as the course record holds them, to a boat
-   * heading heading with its boom at boom, in the true wind from windFrom.
+   * of kind heading heading with its boom at boom, in the true wind from
+   * windFrom.
    */
-  courseOf(c: Float64Array, heading: number, boom: number, windFrom: number): void {
+  courseOf(c: Float64Array, heading: number, boom: number, windFrom: number, kind = 0): void {
     const r = this.records.course;
     r.set(c);
-    this.#x.courseOf(heading, boom, windFrom);
+    this.#x.courseOf(kind, heading, boom, windFrom);
     c.set(this.records.course);
   }
 
-  /** The Articles' verdict on the encounter record's two boats: the verdict record. A view. */
-  articlesJudge(): Float64Array {
-    this.#x.articlesJudge();
+  /** The Articles' verdict on the encounter record's two boats, of kinds a and b: the verdict record. A view. */
+  articlesJudge(a = 0, b = 0): Float64Array {
+    this.#x.articlesJudge(a, b);
     return this.records.verdict;
   }
 
   /**
-   * Resolves a contact between the state and other records' boats, both
-   * of the prepared kind, writing the contact record; whether they touched.
+   * Resolves a contact between the state and other records' boats, of
+   * kinds a and b, writing the contact record; whether they touched.
    */
-  collide(): boolean {
-    return this.#x.collide() !== 0;
+  collide(a = 0, b = 0): boolean {
+    return this.#x.collide(a, b) !== 0;
   }
 
   /** The sky's numbers, to write with writeSkyParams before prepareSky. A view. */

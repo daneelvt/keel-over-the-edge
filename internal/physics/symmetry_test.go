@@ -21,6 +21,7 @@ func mirror(s State) State {
 	s.X, s.Heading, s.Sway, s.YawRate = -s.X, -s.Heading, -s.Sway, -s.YawRate
 	s.Heel, s.RollRate, s.Boom, s.BoomRate = -s.Heel, -s.RollRate, -s.Boom, -s.BoomRate
 	s.Sailor, s.Rudder = -s.Sailor, -s.Rudder
+	s.Jib, s.JibRate, s.Yards, s.ForeYards = -s.Jib, -s.JibRate, -s.Yards, -s.ForeYards
 	return s
 }
 

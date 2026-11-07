@@ -93,14 +93,15 @@ export function sheetIndex(sheet: number): number {
 }
 
 /**
- * Readies a physics module for a kind of boat in the catalog's weather:
- * every record cleared, the sea's waves derived, then the boat's constants,
- * the wind's, the visibility's and, if given, the encounters'. No spell of weather is in play
- * until one is set.
+ * Readies a physics module for kinds of boat in the catalog's weather:
+ * every record cleared, the sea's waves derived, then each boat's
+ * constants, by its place in boats (one boat is kind 0), the wind's, the
+ * visibility's and, if given, the encounters'. No spell of weather is in
+ * play until one is set.
  */
 export function preparePhysics(
   physics: Physics,
-  boat: BoatPhysics,
+  boats: BoatPhysics | readonly BoatPhysics[],
   weather: Weather,
   world: VisibilityWorld,
   encounters?: Encounters,
@@ -111,8 +112,11 @@ export function preparePhysics(
   }
   writeSeaParams(r.seaParams, weather.sea);
   physics.prepareSea();
-  writeParams(physics.records.params, boat);
-  physics.prepare();
+  const kinds = Array.isArray(boats) ? boats : [boats as BoatPhysics];
+  kinds.forEach((boat, kind) => {
+    writeParams(physics.records.params, boat);
+    physics.prepare(kind);
+  });
   writeWeatherParams(physics.records.weatherParams, weather);
   physics.prepareWeather();
   physics.setSystemKinds(weather.systems.map(systemKindRecord));

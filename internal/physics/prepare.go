@@ -44,22 +44,18 @@ type Prepared struct {
 	floorWindFactor float64 // the wind profile's value at windFloor, as a fraction of the 10 m wind
 	mastheadZ       float64
 
-	// Sail.
-	strip              float64 // ½ρ_air × the area of one strip, kg/m
-	liftDrag           float64 // induced and quadratic drag per lift coefficient squared
-	maxLift            float64
-	stallAngle         float64
+	// Sail: the main.
+	strip              float64 // ½ρ_air × the area of one strip at full sail, kg/m
+	sail               sailCoefficients
 	trimBelow          float64 // rad: below this angle of attack the sail luffs, for Out.Sail
 	easeAbove          float64 // rad: past this, with its flow separated, it stalls
 	letFly             float64 // rad: a sheet let out past this cannot be eased
-	invStallAngle      float64
-	invStallWidth      float64
-	sailDrag           float64
-	invLuffAngle       float64
-	flogDrag           float64
-	normalForce        [19]float64
-	effortZ            float64 // depth of the sail's centre of effort, between the strips, m
-	footZ, headZ       float64 // depth of each strip's centre of effort below the centre of gravity (negative: above), m
+	effortZ            float64 // depth of the sail's centre of effort at full sail, between the strips, m
+	footZ, headZ       float64 // depth of each strip's centre of effort below the centre of gravity (negative: above) at full sail, m
+	footHeight         float64 // each strip's centre of effort above the boom at full sail, m
+	headHeight         float64
+	reefs              [3]float64 // the share of the luff kept at each reef
+	reefRate           float64    // reefs a second
 	mastX              float64
 	boomZ              float64
 	pressureAttached   float64 // m aft of the mast
@@ -81,6 +77,26 @@ type Prepared struct {
 	sailFloat          float64
 	sailWaterDamping   float64
 
+	// The headsails, if the boat has any.
+	jib                  bool
+	jibStrip             float64 // ½ρ_air × the area of one strip at full sail, kg/m
+	jibSail              sailCoefficients
+	jibX                 float64 // the tack ahead of the centre of gravity, m
+	jibTackZ             float64 // the tack's depth below the centre of gravity, m
+	jibFootHeight        float64 // each strip's centre of effort above the tack at full sail, m
+	jibHeadHeight        float64
+	jibPressureAttached  float64 // m aft of the tack
+	jibPressureSeparated float64
+	jibTwist             float64 // rad
+	jibTwistPerAngle     float64 // rad of extra twist per radian of the clew's angle
+	jibIn, jibOut        float64 // rad
+	jibInvInertia        float64
+	jibMoment            float64
+	jibDamping           float64
+	jibReefs             [3]float64
+	jibHaulRate          float64 // rad/s
+	jibEaseRate          float64 // rad/s
+
 	// Foils.
 	board, rudder     foil
 	foilStall         float64
@@ -95,6 +111,8 @@ type Prepared struct {
 	rudderMax         float64
 
 	// The ground.
+	fixed          bool    // the board is a fixed keel
+	draught        float64 // the deepest the boat reaches below the water, m: the keel's tip, or the hull with its board pushed up
 	hullDraught    float64 // m
 	invHullDraught float64
 	boardDepth     float64 // how deep the board reaches below the water, m
@@ -197,27 +215,25 @@ func Prepare(p *Params, w *Waves, b *Prepared) {
 	b.waveYaw = float64(p.WaveYaw * b.waveSway)
 
 	// Each strip is half the sail. Induced drag follows the Offshore Racing
-	// Congress's VPP (2023, eq. 5.34): A/(π h_eff²).
+	// Congress's VPP (2023, eq. 5.34): A/(π h_eff²), of the whole rig's
+	// area, main and headsails, on the rig's effective height.
 	b.strip = float64(float64(0.5*airDensity) * (0.5 * p.SailArea))
-	b.liftDrag = p.SailArea/float64(math.Pi*float64(p.EffectiveHeight*p.EffectiveHeight)) + p.QuadraticDrag
-	b.maxLift = p.MaxLift
-	b.stallAngle = float64(p.StallAngle * degree)
-	b.invStallAngle = 1 / b.stallAngle
+	liftDrag := (p.SailArea+p.HeadsailArea)/float64(math.Pi*float64(p.EffectiveHeight*p.EffectiveHeight)) + p.QuadraticDrag
+	b.sail.prepare(p.MaxLift, p.StallAngle, p.StallWidth, p.SailDrag, &p.NormalForce, liftDrag, p.LuffAngle, p.FlogDrag)
 	// The sail luffs, for the sailor, below half its stall angle: a boat
 	// there makes half the speed of its best trim or less, which lies
 	// within a few degrees of the stall angle on every point of sailing
 	// but a run; it stalls past 1.75 times it.
-	b.trimBelow = float64(0.5 * b.stallAngle)
-	b.easeAbove = float64(1.75 * b.stallAngle)
-	b.invStallWidth = 1 / (p.StallWidth * degree)
-	b.sailDrag = p.SailDrag
-	b.invLuffAngle = 1 / (p.LuffAngle * degree)
-	b.flogDrag = p.FlogDrag
-	b.normalForce = p.NormalForce
+	b.trimBelow = float64(0.5 * b.sail.stallAngle)
+	b.easeAbove = float64(1.75 * b.sail.stallAngle)
 	b.boomZ = cg - p.BoomHeight
-	b.footZ = b.boomZ - float64(p.FootStrip*p.Luff)
-	b.headZ = b.boomZ - float64(p.HeadStrip*p.Luff)
+	b.footHeight = float64(p.FootStrip * p.Luff)
+	b.headHeight = float64(p.HeadStrip * p.Luff)
+	b.footZ = b.boomZ - b.footHeight
+	b.headZ = b.boomZ - b.headHeight
 	b.effortZ = float64(0.5 * (b.footZ + b.headZ))
+	b.reefs = p.Reefs
+	b.reefRate = 1 / p.ReefTime
 	b.mastX = p.MastPosition
 	b.pressureAttached = float64(p.PressureAttached * p.Foot)
 	b.pressureSeparated = float64(p.PressureSeparated * p.Foot)
@@ -240,6 +256,7 @@ func Prepare(p *Params, w *Waves, b *Prepared) {
 	b.windageZ = cg - p.WindageHeight
 	b.sailFloat = p.SailFloat
 	b.sailWaterDamping = p.SailWaterDamping
+	b.prepareHeadsails(p)
 
 	// The foils' centres of pressure are at PressureDepth of their span
 	// below the hull (Keuning and Vermeulen 2003, as used by Day 2017).
@@ -260,6 +277,11 @@ func Prepare(p *Params, w *Waves, b *Prepared) {
 	b.foilDryHeel = float64(p.FoilDryHeel * degree)
 	b.invFoilWetRange = 1 / ((p.FoilDryHeel - p.FoilWetHeel) * degree)
 	b.rudderMax = float64(p.RudderAngle * degree)
+	b.fixed = p.Fixed != 0
+	b.draught = p.HullDraught
+	if b.fixed {
+		b.draught = p.HullDraught + p.BoardSpan
+	}
 	b.hullDraught = p.HullDraught
 	b.invHullDraught = 1 / p.HullDraught
 	b.boardDepth = p.HullDraught + p.BoardSpan
@@ -320,4 +342,60 @@ func newFoil(span, chord, x, z float64) foil {
 		induced: 1 / (math.Pi * aspect),
 		carry:   1,
 	}
+}
+
+// sailCoefficients holds the constants a sail's lift and drag are worked out
+// with (sail.go).
+type sailCoefficients struct {
+	maxLift       float64
+	stallAngle    float64 // rad
+	invStallAngle float64
+	invStallWidth float64
+	drag          float64
+	liftDrag      float64 // induced and quadratic drag per lift coefficient squared
+	invLuffAngle  float64
+	flogDrag      float64
+	normalForce   [19]float64
+}
+
+func (k *sailCoefficients) prepare(maxLift, stallAngle, stallWidth, drag float64, normal *[19]float64, liftDrag, luffAngle, flogDrag float64) {
+	k.maxLift = maxLift
+	k.stallAngle = float64(stallAngle * degree)
+	k.invStallAngle = 1 / k.stallAngle
+	k.invStallWidth = 1 / (stallWidth * degree)
+	k.drag = drag
+	k.liftDrag = liftDrag
+	k.invLuffAngle = 1 / (luffAngle * degree)
+	k.flogDrag = flogDrag
+	k.normalForce = *normal
+}
+
+// prepareHeadsails derives the headsails' constants, if the boat has any.
+// They are worked as the main is, two strips each half their area, with the
+// main's luffing angle and flogging drag and the whole rig's induced drag;
+// their sheet hauls and eases at the main's rates over its own travel.
+func (b *Prepared) prepareHeadsails(p *Params) {
+	if !(p.HeadsailArea > 0) {
+		return
+	}
+	b.jib = true
+	b.jibStrip = float64(float64(0.5*airDensity) * (0.5 * p.HeadsailArea))
+	b.jibSail.prepare(p.HeadsailMaxLift, p.HeadsailStallAngle, p.HeadsailStallWidth, p.HeadsailDrag,
+		&p.HeadsailNormalForce, b.sail.liftDrag, p.LuffAngle, p.FlogDrag)
+	b.jibX = p.HeadsailTack
+	b.jibTackZ = p.CentreOfGravity - p.HeadsailTackHeight
+	b.jibFootHeight = float64(p.HeadsailFootStrip * p.HeadsailLuff)
+	b.jibHeadHeight = float64(p.HeadsailHeadStrip * p.HeadsailLuff)
+	b.jibPressureAttached = float64(p.HeadsailPressureAttached * p.HeadsailFoot)
+	b.jibPressureSeparated = float64(p.HeadsailPressureSeparated * p.HeadsailFoot)
+	b.jibTwist = float64(p.HeadsailTwist * degree)
+	b.jibTwistPerAngle = p.HeadsailTwistEased / p.HeadsailOut
+	b.jibIn = float64(p.HeadsailIn * degree)
+	b.jibOut = float64(p.HeadsailOut * degree)
+	b.jibInvInertia = 1 / p.HeadsailInertia
+	b.jibMoment = p.HeadsailMoment
+	b.jibDamping = p.HeadsailDamping
+	b.jibReefs = p.HeadsailReefs
+	b.jibHaulRate = (b.jibOut - b.jibIn) / p.SheetHaulTime
+	b.jibEaseRate = (b.jibOut - b.jibIn) / p.SheetEaseTime
 }

@@ -402,7 +402,7 @@ func TestWaveYawMoment(t *testing.T) {
 		s := State{X: c.x, Y: c.y, Heading: c.heading * deg}
 		sinH, cosH := math.Sincos(s.Heading)
 		var v wave
-		v.read(sea, &s, sinH, cosH, b.halfLength, b.halfBeam, &b.foilDecay)
+		v.read(sea, s.X, s.Y, s.Surge, s.Sway, sinH, cosH, b.halfLength, b.halfBeam, &b.foilDecay)
 		v.twist *= b.twistArm
 		var l loads
 		b.waveLoads(&v, &l)

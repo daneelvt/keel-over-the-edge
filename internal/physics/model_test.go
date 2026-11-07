@@ -174,7 +174,9 @@ func TestSailContinuous(t *testing.T) {
 func sailAt(b *Prepared, boom float64) (l loads, r sailResult) {
 	s := State{Boom: boom}
 	m := motion{cosHeel: 1, windY: -6}
-	b.sailLoads(&s, &m, 1, b.twist(boom, 1), &l, &r)
+	var g rig
+	b.rigAt(0, &g)
+	b.sailLoads(&s, &m, 1, b.twist(boom, 1), &g, &l, &r)
 	return l, r
 }
 
@@ -197,7 +199,9 @@ func TestNoWindNoForce(t *testing.T) {
 		m := motion{cosHeel: 1}
 		var l loads
 		var r sailResult
-		b.sailLoads(&s, &m, 1, b.twist(boom, 1), &l, &r)
+		var g rig
+		b.rigAt(0, &g)
+		b.sailLoads(&s, &m, 1, b.twist(boom, 1), &g, &l, &r)
 		if l != (loads{}) || r.boomMoment != 0 {
 			t.Errorf("a sail in no wind at %g rad gives %+v, boom moment %g", boom, l, r.boomMoment)
 		}
