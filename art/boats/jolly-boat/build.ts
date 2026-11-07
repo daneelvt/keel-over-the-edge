@@ -22,7 +22,15 @@
 
 import { execFileSync } from 'node:child_process';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { blade, LANTERN_Y, lantern, PENNANT_WIDTH, pennant, STAFF_TOP, telltales } from '../../lib/fittings.ts';
+import {
+  blade,
+  LANTERN_Y,
+  lantern,
+  PENNANT_WIDTH,
+  pennant,
+  STAFF_TOP,
+  telltales,
+} from '../../lib/fittings.ts';
 import { type MaterialDef, type NodeDef, writeGlb } from '../../lib/gltf.ts';
 import { MeshBuilder, srgb, type Vec3 } from '../../lib/mesh.ts';
 

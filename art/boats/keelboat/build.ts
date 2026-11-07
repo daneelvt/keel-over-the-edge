@@ -192,8 +192,13 @@ function readStage(): Stage {
     const t = node(name).translation ?? [0, 0, 0];
     return [t[0] ?? 0, t[1] ?? 0, t[2] ?? 0];
   };
-  const cockpit = (node('hull').extras?.solid as { cockpit: { halfWidth: number; floor: number } })
-    .cockpit;
+  const solid = node('hull').extras?.solid as
+    | { cockpit: { halfWidth: number; floor: number } }
+    | undefined;
+  if (solid === undefined) {
+    throw new Error('the stage boat has no hull solid');
+  }
+  const cockpit = solid.cockpit;
   const gunwale = at('gunwale');
   return {
     gunwale,
@@ -766,7 +771,11 @@ function cuddy(): { wood: MeshBuilder; roof: MeshBuilder; glass: MeshBuilder; br
     [0, 0, 1],
     dark,
   );
-  wood.box([-0.27, top, CUDDY_AFT - 0.5], [0.27, top + 0.05, CUDDY_AFT + 0.02], shade(VARNISH, 0.8));
+  wood.box(
+    [-0.27, top, CUDDY_AFT - 0.5],
+    [0.27, top + 0.05, CUDDY_AFT + 0.02],
+    shade(VARNISH, 0.8),
+  );
   // Two windows a side, each of four small panes in a brass frame.
   for (const s of [1, -1]) {
     for (const mid of [0.32, 0.68]) {
@@ -785,7 +794,12 @@ function cuddy(): { wood: MeshBuilder; roof: MeshBuilder; glass: MeshBuilder; br
       const frame = [on(t0, h0, 0.004), on(t1, h0, 0.004), on(t1, h1, 0.004), on(t0, h1, 0.004)];
       quad(brass, frame, out, [1, 1, 1]);
       const pane = (a: number, b: number, c: number, d: number): void =>
-        quad(glass, [on(a, c, 0.007), on(b, c, 0.007), on(b, d, 0.007), on(a, d, 0.007)], out, GLASS);
+        quad(
+          glass,
+          [on(a, c, 0.007), on(b, c, 0.007), on(b, d, 0.007), on(a, d, 0.007)],
+          out,
+          GLASS,
+        );
       const tm = (t0 + t1) / 2;
       const hm = (h0 + h1) / 2;
       const g = 0.006;
@@ -815,8 +829,7 @@ const HOUNDS = TACK[1] + headsails.headsailLuff + 0.45;
 /** The forestay, from the tack to the mast's fore side at the hounds. */
 const STAY_TOP: Vec3 = [0, HOUNDS, MAST_Z - mastR(HOUNDS)];
 /** How far aft of the tack the jib's head is: along the forestay, the jib's luff up. */
-const RAKE =
-  (headsails.headsailLuff * (STAY_TOP[2] - TACK[2])) / (STAY_TOP[1] - TACK[1]);
+const RAKE = (headsails.headsailLuff * (STAY_TOP[2] - TACK[2])) / (STAY_TOP[1] - TACK[1]);
 /** The spreaders: their height, length and sweep aft; the shrouds' chainplates' station, and the lowers' root. */
 const SPREADER_Y = 4.6;
 const SPREADER = 0.62;
@@ -862,14 +875,7 @@ function mast(): { spar: MeshBuilder; iron: MeshBuilder } {
     ironBand(iron, y);
   }
   for (const s of [1, -1]) {
-    spar.tube(
-      [
-        [s * mastR(SPREADER_Y), SPREADER_Y, 0],
-        spreaderTip(s, 0),
-      ],
-      [0.022, 0.014],
-      6,
-    );
+    spar.tube([[s * mastR(SPREADER_Y), SPREADER_Y, 0], spreaderTip(s, 0)], [0.022, 0.014], 6);
   }
   return { spar, iron };
 }
@@ -947,7 +953,10 @@ function rigging(): { rope: MeshBuilder; bronze: MeshBuilder; wood: MeshBuilder 
     bronze.box(add(p, [-0.012, -0.02, -0.012]), add(p, [0.012, 0.02, 0.012]));
   }
   // The backstay's plate on the transom.
-  bronze.box([-0.02, sheer(0) - 0.15, TRANSOM_Z - 0.01], [0.02, sheer(0) + 0.05, TRANSOM_Z + 0.008]);
+  bronze.box(
+    [-0.02, sheer(0) - 0.15, TRANSOM_Z - 0.01],
+    [0.02, sheer(0) + 0.05, TRANSOM_Z + 0.008],
+  );
   return { rope, bronze, wood };
 }
 
@@ -1234,11 +1243,7 @@ const TILLER_END: Vec3 = [0, HINGE[1] - RUDDER_HEAD, HINGE[2] - foils.rudderPosi
 function tiller(): MeshBuilder {
   const m = new MeshBuilder('foil');
   m.tube(
-    [
-      [0, 0, 0.03],
-      [0, TILLER_END[1] * 0.4 + 0.02, TILLER_END[2] * 0.45],
-      TILLER_END,
-    ],
+    [[0, 0, 0.03], [0, TILLER_END[1] * 0.4 + 0.02, TILLER_END[2] * 0.45], TILLER_END],
     [0.026, 0.022, 0.016],
     D.small ? 8 : 3,
   );
@@ -1552,11 +1557,7 @@ function model(): NodeDef[] {
         b.positions[i * 3 + 2] = (b.positions[i * 3 + 2] ?? 0) - MAST_Z;
       }
     }
-    mastParts.push(
-      r.rope.primitive(),
-      r.bronze.primitive(),
-      r.wood.primitive({ colors: true }),
-    );
+    mastParts.push(r.rope.primitive(), r.bronze.primitive(), r.wood.primitive({ colors: true }));
     boomParts.push(spars.iron.primitive(), gooseneck().primitive());
   }
   const rudderParts = rudder();
