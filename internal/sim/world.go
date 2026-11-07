@@ -468,36 +468,33 @@ func (w *World) placeAt(p int64) physics.State {
 }
 
 // spawn is where a new boat in slot s of f appears: the first place of the
-// start from its slot's, along the row then the next, where it fits
-// (fits), so that no boat appears inside another or aground; in a world of
-// ghosts, its slot's place. It faces a reach off the wind there (onReach).
+// start from its slot's, along the row then the next, where it fits, so
+// that no boat appears inside another or aground; in a world of ghosts,
+// its slot's place. It faces a reach off the wind there (onReach).
 func (w *World) spawn(f *bus.Frame, s int32) physics.State {
-	p := w.placeOf(f, s)
-	st := w.placeAt(p)
-	w.onReach(&st, p)
+	if w.enc != nil {
+		for p, end := int64(s), int64(s)+int64(w.capacity); p < end; p++ {
+			st := w.placeAt(p)
+			if !w.clear(f, s, f.Kind[s], &st) {
+				continue
+			}
+			w.onReach(&st, p)
+			if w.room(f, s, f.Kind[s], &st) {
+				return st
+			}
+		}
+	}
+	st := w.placeAt(int64(s))
+	w.onReach(&st, int64(s))
 	return st
 }
 
-// placeOf is the place of the start a new boat in slot s of f appears at.
-func (w *World) placeOf(f *bus.Frame, s int32) int64 {
-	p := int64(s)
-	if w.enc == nil {
-		return p
-	}
-	for end := p + int64(w.capacity); p < end; p++ {
-		if w.fits(f, s, w.placeAt(p)) {
-			return p
-		}
-	}
-	return int64(s)
-}
-
-// fits reports whether the boat in slot s of f may start at place st: by
-// its own size, its hull startClear clear of every other boat's, and the
-// water there its draught and startDeep deep. A small boat fits where a
-// large one would lie across its neighbours, or touch the bottom.
-func (w *World) fits(f *bus.Frame, s int32, st physics.State) bool {
-	b := &w.kinds[f.Kind[s]]
+// clear reports whether a boat of kind may lie at st, whichever way it
+// heads, beside the boats of f but the one in slot s: its hull startClear
+// clear of every other boat's, each taken as the circle about its outline,
+// and the water under its middle its draught and startDeep deep.
+func (w *World) clear(f *bus.Frame, s int32, kind uint16, st *physics.State) bool {
+	b := &w.kinds[kind]
 	if w.ground != nil {
 		if e, _ := w.ground.At(st.X, st.Y); e > -(physics.Draught(b) + startDeep) {
 			return false
