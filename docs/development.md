@@ -139,7 +139,7 @@ credentials.
 | `render-nightly.yaml` | Every night at 04:17 UTC on `main`; by hand; pull requests labelled `render`, on each push while the label stays | What `pr.render` leaves: the `@long` and `@nightly` tests on both back ends and the page's, the sea's tests on a WebGPU device held to compatibility mode's limits, the slow-network tests through real TCP loss where the runner has netem, and the flake hunt: `pr.render`'s suite five times over (the page's, the scene's on WebGL 2, WebKit's), a test that passed in one run and failed in another named flaky in the summary. Not a required check; GitHub mails a failed night | the same, with `--grep '@long\|@nightly'` or `--repeat-each 5` |
 | `pr.licences.yaml` | Pull requests, not drafts, that change its files | The licence header in every source file (and the art header in `art/`'s scripts and sound recipes); licences of Go packages linked into `keel` | `go run ./tools/licences` |
 | `pr.catalog.yaml` | Pull requests, not drafts, that change its files | The catalog against its schema, unique ids, art present, generated files current, no kind's id used as a string in code | `go run ./tools/catalog -check` |
-| `pr.physics.yaml` | Pull requests, not drafts, that change its files | The physics package's rules (imports, `math` functions, no fused multiply-add in the source or the compiled code for arm64 and amd64, nor in the simulation's), the world generator's float rules, its layout files current, and the module built with no heap allocation and within its size budget; each boat's polar against its original's measured data, each boat's trimmed sails against ORC's mainsail and jib, and the polar in a breeze's sea and a gale's, printed and not checked | `go run ./tools/physics -check`, `go run ./tools/polar -check`, `go run ./tools/polar -sail`, `go run ./tools/polar -sea 12` |
+| `pr.physics.yaml` | Pull requests, not drafts, that change its files | The physics package's rules (imports, `math` functions, no fused multiply-add in the source or the compiled code for arm64 and amd64, nor in the simulation's), the world generator's and the sea's life's float rules, its layout files current, and the module built with no heap allocation and within its size budget; each boat's polar against its original's measured data, each boat's trimmed sails against ORC's mainsail and jib, and the polar in a breeze's sea and a gale's, printed and not checked | `go run ./tools/physics -check`, `go run ./tools/polar -check`, `go run ./tools/polar -sail`, `go run ./tools/polar -sea 12` |
 | `pr.infra.yaml` | Pull requests, not drafts, that change its files | Every entry point of both clusters in `infra/cluster` rendered with kustomize, as a release renders it, checked against the manifests' rules (each rule also broken on purpose) and with kubeconform against its kinds' schemas (a field no schema knows, and a kind with no schema, also tried); no Secret under `infra/`; the release's signer accepted and every other refused; a promotion's refusals; `tools/cluster`'s and `tools/release`'s steps against fake commands, a fake registry and a fake GitHub; the pinned tools' downloads; Renovate's patterns finding every pin; every alert rule made to fire and to stay quiet, with VictoriaMetrics' `vmalert-tool`; the dashboards and the vendored manifests against their records; and the signatures Flux cannot check, of cert-manager's chart and images and Kured's image, with cosign (see [The local cluster](#the-local-cluster), [Releases](#releases) and [Monitoring](#monitoring)) | `go test ./tools/cluster ./tools/release ./tools/dashboards ./tools/vendored ./tools/ops ./tools/internal/...`, `go run ./tools/release -verify-keyed` |
 | `pr.machine.yaml` | Pull requests, not drafts, that change its files | The tailnet policy's rules (each broken on purpose); `tools/machine`'s and `tools/tailnet`'s steps against fake programs, a fake registry, a fake Infisical and a fake Tailscale; `join.sh` in bash and shellcheck; Ansible and ansible-lint from hashed requirements, the playbooks' syntax and the `production` profile, in a couple of minutes | `go test ./tools/machine ./tools/tailnet`, `go run ./tools/tailnet -check` |
 | `pr.accounts.yaml` | Pull requests, not drafts, that change its files | `infra/tofu` formatted, initialised without a backend from the lock file alone, and valid; the lock file what OpenTofu writes for every platform; `tools/accounts` against a fake OpenTofu and a fake Infisical (the credentials in tofu's environment alone, masked first; no value of a plan shown; addresses scrubbed from errors; a plan from elsewhere refused). No credential | `go run ./tools/accounts -check`, `go test ./tools/accounts` |
@@ -2809,6 +2809,159 @@ To make a failing seed's world again:
 go test ./internal/worldgen -run '^TestSeeds$' -v -seeds 1 -seeds-from SEED
 go run ./tools/worldgen-preview -seed SEED
 ```
+
+## Life at sea
+
+The sea has life in it, met from time to time: birds passing, soaring,
+skimming the swell and working a patch of water, gulls following a boat
+out of harbour, and gulls wheeling over every town by day. What is in the
+sea, where and when, is the server's, and every player near is told of it:
+two players side by side, and anyone watching either, see the same birds
+in the same places. Nothing alive changes how a boat sails.
+
+### The schedule
+
+`internal/life` draws the sea's life from the world's seed, a cell of the
+world, a slot of world time, the habitat at a point and the weather there
+(`Schedule.Slot`). The world is cut into squares (`life.cell`, 1 km) in its
+east/north frame and world time into slots (`life.slot`, 30 s); in each
+cell and slot each kind draws from an integer hash of the life seed, the
+cell, the slot and its index whether an encounter of it may begin there (a
+candidate), when in the slot, where in the cell, its heading, its group's
+size, its speed and its own seed. Integer draws decide every whether: the
+chance is the kind's `rate` (encounters a km² an hour) times the habitat's
+weight at the drawn point, as a draw's threshold. Then:
+
+- **A lull**: a candidate is dropped if a candidate of its family (`birds`,
+  `water`, `big`, `night`) began in its cell or the eight about it within
+  the family's lull before it (`life.lulls`). Candidates, not the
+  encounters kept, are counted, so a slot needs nothing but the slots
+  before it within a lull, and the schedule stays a pure function.
+- **The conditions** thin what is left: the kind's weight by the sun at the
+  point (`when`: by day, at dusk and dawn, at night), nothing outside the
+  wind it is met in (`wind`), its share in rain (`rain`, from `life.rainy`
+  mm an hour), and, for life in the water (`bySea`), the share seen at the
+  sea's Beaufort force (`life.sea`). A kind flying home at dusk
+  (`homeward`) heads for the nearest colony, or the nearest island.
+
+The package is held to the physics package's float rules (`go run
+./tools/physics -check` checks it with the generator's), to the
+simulation's determinism rules (`internal/sim/rules_test.go`), and to
+`internal/life/testdata/slots.json`, a seed's slots under the sky, on every
+machine.
+
+### The habitat
+
+Read where an encounter is drawn: its depth from the world's ground, and,
+from a field of 100 m cells built as the world loads (from its bundle,
+whether its land is sailed or not), whether it is within `harbour` m of a
+town, within `reef` m of a reef or a lagoon place (and half its length),
+and within `colony` m of a colony. A point is in one habitat, the first
+that holds of **harbour**, **reef**, **outer** (from `outer` m from the
+centre), **shelf** (shallower than `shelf` m) and **deep**; nothing starts
+on land. A kind's `habitats` weigh each, and `nearColony` multiplies its
+weight near a colony.
+
+### In the simulation
+
+The rules phase draws each slot as it begins, in the weather at that tick
+(the mean wind and the rain at a point), keeps the encounters drawn until
+each begins, and keeps those alive in `Frame.Life` (`bus.LifeEncounter`:
+id, kind, start and end ticks, centre, heading, speed, count, own seed, the
+boat it is with and a revision). A kind that follows boats (`binds:
+follow`) takes, as it begins, the nearest boat within `life.bind.within` m
+of its centre sailing at `bind.speed` m/s or faster on a course steady for
+`bind.steady` s, its heading within `bind.turn`° (ties to the lower boat),
+and only a boat that has had none for `life.quiet` s after its last; with
+none it passes. A group whose boat leaves, falls over the lip, stays or is
+made unseen goes on alone from where it was, its revision raised. Nothing
+is checkpointed: a world opened again draws the encounters still alive
+from the schedule, and none is with a boat. A tick of 64 boats takes as
+long with the sea's life as without it (`BenchmarkTickWithLife`).
+
+### On the wire
+
+`Life` messages (`shared/protocol/keel/v1/game.proto`): each encounter is
+sent once the connection's eye (its boat's, or the watched boat's for a
+spectator) is within its kind's `reach` and `range` of its centre, or of
+the boat it is with; again on a new revision, or when the boat it is with
+is seen otherwise; and dropped once the eye is `life.drop` m further
+(`internal/edge/life.go`). An encounter that ends is let go with no word.
+The boat an encounter is with goes as the connection sees it: none, its
+own (or the watched) boat, a view slot, or a boat it does not see, which
+is drawn nowhere. A new connection's Welcome drops every one it held.
+
+### On the phone
+
+Every motion is a function of the record and world time, the same on
+every phone: `client/src/life/flock.ts` finds a group's middle (the
+server's `internal/life/flock.go`, held to
+`internal/life/testdata/flocks.json`): through its centre at the middle of
+its life for a kind that passes; in along its heading, over its centre for
+its stay and out again for one that soars or works; in to a place astern of
+its boat, keeping there, and out for one with a boat. Each comes in from
+its kind's `range` and goes out to it, so nothing appears near anyone.
+`client/src/life/birds.ts` spreads each bird about the middle by its path:
+passing in a loose flock (or in a line, `line`), soaring in wide circles,
+skimming the swell in banked arcs, wheeling over a patch, hanging astern
+of a boat, and plunging (`dives` a bird a minute), always over the water
+but in a plunge. `client/src/render/birds.ts` draws every bird, the
+colonies', the sea's life's and the towns' gulls, in one instanced draw,
+wings flapped at the look's `flap` Hz in the vertex stage; within the
+kind's `reach` of the camera, shrinking over its last 15%; half of each
+group on the low tier. The towns' gulls (`client/src/life/gulls.ts`, the
+server's `internal/life/gulls.go`) wheel by day over each town's square, or
+its quay where it has none, and the harbour's gull calls come from them.
+The sea's birds call from where their group is (`client/src/audio/life.ts`,
+`art/sound/seabirds.json`); the server's twin
+(`internal/lookout/sounds.go`) is held to the same cases.
+
+A machine sailor's `observe` names the life in sight, by bearing and
+distance ("a few sooty terns working the water to the SW, ~400 m",
+"laughing gulls following your boat"), and in its `Hear` line the calls
+heard; `wake_on: ["life"]` wakes a wait as a group first comes into sight
+(not in the default set). The world page marks each group alive at its
+middle (the layer **Life at sea**).
+
+### Adding a kind
+
+A kind is data: add it to `shared/catalog/life.yaml` with its `form`,
+`family`, `path` and the rest (the schema's `LifeKind`), run `go run
+./tools/catalog`, and the schedule draws it. Code reads a kind's
+properties, never its id: a new way of moving is a new `path` (in the
+schema, `internal/life/kinds.go`, `flock.go` and `flock.ts` if it moves the
+middle, `birds.ts` or a body's own drawing), a new form a drawing of its
+own on the phone. A catalog change starts the world empty at the next
+promote, and the recorded edge traces must be written again (`go test
+-short -run 'TestTraces|TestFleetTraces|TestOverTheLipOnline'
+./internal/edge/edgetest/ -update`), with the life's golden files (`go test
+./internal/life -run 'Golden|Flocks' -update`, then `GOARCH=amd64 go test
+./internal/life`).
+
+### The tally
+
+Rates are set so that a sailor meets something from time to time and
+never constantly. `go run ./tools/life -tally` makes 100 worlds as keel
+does, with their weeks of weather, and sails 20 routes in each at 5 kn
+through open water at hours spread over the week, the world's life kept
+tick by tick as the simulation keeps it: it prints a table of how many
+groups of each kind come into sight an hour by day, near the islands and
+in the outer water, the gaps between sightings and the longest empty
+stretches (`-kinds` by habitat too; `-seeds 20` for a quick look, about 20
+s). Run it after changing a rate, a lull, a habitat or a kind.
+
+### Looking at it
+
+```sh
+# https://localhost:5173/?sandbox&life=sooty-tern   a group of that kind by the boat, 40 s in
+# POST http://127.0.0.1:9090/debug/life?kind=sooty-tern&at=boat   (KEEL_DEV_COMMANDS=1) one by the first player's boat
+# POST http://127.0.0.1:9090/debug/life?kind=2&east=…&north=…        one there, by the kind's index
+```
+
+The keel hooks `keel.life()`, `keel.lifeBirds(tick)` and
+`keel.raiseLife(kindId, east, north)` report what is drawn and raise one on
+the page; `client/e2e/life.spec.ts` holds two players and a spectator to
+the same birds, `client/e2e/seabirds.spec.ts` sixty birds to the budgets.
 
 ## Sighting and the chart
 
