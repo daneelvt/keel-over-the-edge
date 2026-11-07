@@ -248,7 +248,7 @@ export function YourBoat({ chooser: c, changes }: { chooser: BoatChooser; change
   }
   const kind = kindOf(c.cat, b.kind);
   return (
-    <div class="your-boat">
+    <div class={changes ? 'your-boat' : 'your-boat your-boat-afloat'}>
       <Picture cat={c.cat} b={b} width={72} />
       <div class="your-boat-words">
         <p class="your-boat-name" data-readout="boat">

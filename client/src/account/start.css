@@ -572,6 +572,15 @@
   .your-boat-name {
     font-size: 16px;
   }
+  /* How many it takes is the chooser's to say; and a boat in the water,
+     which is not changed from here, gives its room to the sailor's name. */
+  .your-boat-words .start-faint,
+  .your-boat-afloat {
+    display: none;
+  }
+  .your-sailor-rows:has(.your-boat-afloat) {
+    display: flex;
+  }
   .your-boat-actions {
     column-gap: 12px;
   }
