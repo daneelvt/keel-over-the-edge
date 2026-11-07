@@ -259,7 +259,7 @@ test('a keelboat and a tall ship of the fleet look as the own ones do, the jib, 
     },
     {
       name: 'a tall ship running, her topgallants in',
-      state: { ...rest, heading: 3.1416, boom: 1.0, yards: 1.5, foreYards: 1.5, reef: 1 },
+      state: { ...rest, heading: Math.PI, boom: 1.0, yards: 1.5, foreYards: 1.5, reef: 1 },
     },
   ]) {
     const { own, fleet } = await both(page, pose, 2);

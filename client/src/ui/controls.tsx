@@ -153,7 +153,9 @@ export function Sheet({ input, model }: { input: SheetInput; model: HudModel }) 
           </span>
         )}
       </span>
-      <span class={`control-label${sail === '' ? '' : ' sail'}${legend.includes(' · ') ? ' two' : ''}`}>
+      <span
+        class={`control-label${sail === '' ? '' : ' sail'}${legend.includes(' · ') ? ' two' : ''}`}
+      >
         {legend}
       </span>
     </div>
