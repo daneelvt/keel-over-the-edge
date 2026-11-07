@@ -21,6 +21,12 @@
 // the fleet's do. A boat with a headsail has it shaped as the main is, about
 // its stay, from the clew's angle and its flows; a reefed main is drawn
 // short (sailshape.ts), the reef points painted along each reef's row.
+//
+// A square rig (squarerig.ts): the yards' nodes turned by the braces as
+// the physics holds them, the square sails bellied by each strip's wind,
+// lifting or aback, and taken in as the boat reefs, their cloth the boat's
+// with the sail number on the sail the model says; the wheel turned with
+// the rudder; and the stern gallery's panes lit by night.
 
 import {
   type BufferGeometry,
@@ -36,7 +42,19 @@ import {
 } from 'three';
 import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { Fn, normalLocal, positionGeometry, uniform, uv, varying, vec4 } from 'three/tsl';
+import {
+  Fn,
+  float,
+  normalLocal,
+  positionGeometry,
+  select,
+  uniform,
+  uv,
+  varying,
+  vec2,
+  vec3,
+  vec4,
+} from 'three/tsl';
 import type { MeshStandardNodeMaterial, Node, WebGPURenderer } from 'three/webgpu';
 import type { Boat as BoatKind, SailorArt } from '../catalog';
 import type { BoatLooks } from '../catalog/boatlooks';
@@ -68,6 +86,19 @@ import { Pennant } from './pennant';
 import type { Gfx } from './renderer';
 import { BoatSailor } from './sailors/onboat';
 import { jibPoint, LUFF_OFFSET, sailPoint, sailUniforms } from './sailshape';
+import {
+  type Belly,
+  readsMirrored,
+  type SquareSail,
+  shapeSquare,
+  squareBelly,
+  squarePoint,
+  squareSails,
+  squareVertex,
+  toNode,
+  wheelTurn,
+  YARDS_NODES,
+} from './squarerig';
 import { FLOW_LUFFING, Telltales } from './telltales';
 
 /**
@@ -128,6 +159,19 @@ export const FULL_CAMBER = 0.09;
 /** Seconds over which the sail's ripple grows and dies away. */
 const RIPPLE_EASE = 0.25;
 const DEG = Math.PI / 180;
+
+/** The node whose meshes are the stern gallery's panes, lit by night. */
+export const GALLERY = 'gallery';
+/** The gallery's lamplight, display values, at its brightest. */
+export const LAMPLIGHT = [1.6, 0.95, 0.45] as const;
+/**
+ * How lit the boats' cabin lamps are, 0 by day to 1 by night: the scene
+ * sets it as the sun sets, and every boat's gallery glows by it.
+ */
+export const lampsLit = uniform(0);
+
+/** The square sails' cloth's masks' size: wider than high, as the sails are. */
+const SQUARE_MASK = { width: 512, height: 320 } as const;
 
 /**
  * Places a boat's nodes: root at the scene point, lifted by the heave and
@@ -233,6 +277,16 @@ export class Boat {
   hullShape: HullShape | null = null;
 
   readonly #kind: BoatKind;
+  /** The square sails' strips' bellies and ripples (fore foot, fore head, after foot, after head), the reef and the time. */
+  readonly square = {
+    depth: [uniform(0), uniform(0), uniform(0), uniform(0)],
+    ripple: [uniform(0), uniform(0), uniform(0), uniform(0)],
+    reef: uniform(0),
+  };
+  /** The model's square sails, and their meshes. */
+  #squareSails: SquareSail[] = [];
+  readonly #squareMeshes = new Set<Object3D>();
+  readonly #belly: Belly = { depth: 0, ripple: 0 };
   readonly #ripple = new Float64Array(2);
   readonly #jibRipple = new Float64Array(2);
   /** The main's reef rows, where its reefs are slab reefs; else none. */
@@ -331,9 +385,21 @@ export class Boat {
         }
       : null;
     this.#names = new NameAtlas(1, this.#looks.boatLooks.lettering);
+    // The square sails: each mesh given its shape's values.
+    this.#squareSails = squareSails(model);
+    let squareCloth: SailPrint | null = null;
+    for (const s of this.#squareSails) {
+      for (const m of s.meshes) {
+        shapeSquare(m.geometry, s, toNode(m, s, model));
+        this.#squareMeshes.add(m);
+      }
+    }
+    if (this.#squareSails.length > 0) {
+      squareCloth = squarePrint(this.#squareSails);
+    }
     model.traverse((o) => {
       if (o instanceof Mesh) {
-        o.material = this.#replace(o, o.material as Material, cloth, jibCloth);
+        o.material = this.#replace(o, o.material as Material, cloth, jibCloth, squareCloth);
         // The shaped sail, the ribbons and the pennant leave their rest bounds.
         o.frustumCulled = false;
       }
@@ -501,6 +567,7 @@ export class Boat {
     const share = out[RECORDS.out.reefShare] ?? 1;
     this.sail.reefShare.value = share > 0 ? share : 1;
     this.#drawJib(pose, out, flat, ease);
+    this.#drawSquare(pose, out, ease);
     this.telltales.update(out, pose.boom, dt);
     this.pennant.update(out, dt);
 
@@ -528,16 +595,77 @@ export class Boat {
     j.rippleHead.value = this.#jibRipple[1] ?? 0;
   }
 
+  /** The yards turned, the square sails filled by each strip's wind, and the wheel turned with the rudder. */
+  #drawSquare(pose: BoatPose, out: Float64Array, ease: number): void {
+    for (const name of Object.keys(YARDS_NODES) as (keyof typeof YARDS_NODES)[]) {
+      const node = this.parts.get(name);
+      if (node !== undefined) {
+        node.rotation.y = YARDS_NODES[name] === 'fore' ? pose.foreYardsTurn : pose.yardsTurn;
+      }
+    }
+    const wheel = this.parts.get('wheel');
+    if (wheel !== undefined) {
+      wheel.rotation.z = wheelTurn(pose.rudder, this.#kind.physics.foils.rudderAngle);
+    }
+    if (this.#squareSails.length === 0) {
+      return;
+    }
+    const o = RECORDS.out;
+    const strips = [
+      [o.foreFootAttack, o.foreFootFlow],
+      [o.foreHeadAttack, o.foreHeadFlow],
+      [o.afterFootAttack, o.afterFootFlow],
+      [o.afterHeadAttack, o.afterHeadFlow],
+    ] as const;
+    const sq = this.square;
+    for (let i = 0; i < 4; i++) {
+      const [attack, flow] = strips[i] as readonly [number, number];
+      const b = squareBelly(out[attack] ?? 0, out[flow] ?? 1, this.#belly);
+      const d = sq.depth[i] as typeof sq.reef;
+      const r = sq.ripple[i] as typeof sq.reef;
+      d.value += (b.depth - d.value) * ease;
+      r.value += (b.ripple - r.value) * ease;
+    }
+    sq.reef.value = pose.reef;
+  }
+
   /** After a new renderer: everything is kept on the CPU side and uploaded again by itself. */
   attached(_gfx: Gfx): void {}
 
-  #replace(mesh: Mesh, m: Material, cloth: SailPrint, jibCloth: SailPrint | null): Material {
+  #replace(
+    mesh: Mesh,
+    m: Material,
+    cloth: SailPrint,
+    jibCloth: SailPrint | null,
+    squareCloth: SailPrint | null,
+  ): Material {
     const src = m as MeshStandardMaterial;
     const vertexColors = mesh.geometry.hasAttribute('color');
     const look = this.#look as unknown as LookNodes;
     const palette = lookPalette(this.#looks);
     let made: Material;
-    if (jibCloth !== null && this.#within(mesh, 'jib')) {
+    if (squareCloth !== null && this.#squareMeshes.has(mesh)) {
+      // The square sails: their cloth's v runs down from the head; the
+      // number only on the sail that carries it.
+      made = litMaterial(
+        { roughness: src.roughness, metalness: 0, side: DoubleSide },
+        this.#squareNode(),
+      );
+      const sv = squareVertex();
+      const numbered = { ...look, number: look.number.mul(varying(sv.numbered)) } as LookNodes;
+      const at = vec2(uv().x, float(1).sub(uv().y));
+      const c = vec4(clothColour(palette, numbered, at, squareCloth), 1);
+      (made as MeshStandardNodeMaterial).colorNode = c;
+      (made as MeshStandardNodeMaterial).emissiveNode = sailGlow(c);
+    } else if (this.#within(mesh, GALLERY)) {
+      // The stern gallery's panes: dark glass by day, lamplit by night.
+      made = litMaterial({
+        color: (src.color as Color).clone(),
+        roughness: src.roughness,
+        metalness: src.metalness,
+      });
+      (made as MeshStandardNodeMaterial).emissiveNode = vec3(...LAMPLIGHT).mul(lampsLit);
+    } else if (jibCloth !== null && this.#within(mesh, 'jib')) {
       made = litMaterial(
         { roughness: src.roughness, metalness: 0, side: DoubleSide },
         this.#jibNode(),
@@ -626,6 +754,39 @@ export class Boat {
     })() as unknown as Node<'vec3'>;
   }
 
+  /** The square sails' vertex node: each vertex bellied by its strip's wind, and taken in by the reef. */
+  #squareNode(): Node<'vec3'> {
+    const sq = this.square;
+    return Fn(() => {
+      const sv = squareVertex();
+      const slot = sv.index.sub(sv.index.div(4).floor().mul(4));
+      const pick = (u: readonly Node<'float'>[]): Node<'float'> =>
+        select(
+          slot.lessThan(0.5),
+          u[0] as Node<'float'>,
+          select(
+            slot.lessThan(1.5),
+            u[1] as Node<'float'>,
+            select(slot.lessThan(2.5), u[2] as Node<'float'>, u[3] as Node<'float'>),
+          ),
+        ) as unknown as Node<'float'>;
+      const at = squarePoint(
+        {
+          depth: pick(sq.depth as unknown as Node<'float'>[]),
+          ripple: pick(sq.ripple as unknown as Node<'float'>[]),
+          reef: sq.reef as unknown as Node<'float'>,
+          time: this.sail.time as unknown as Node<'float'>,
+        },
+        sv,
+        positionGeometry as unknown as Node<'vec3'>,
+        uv(1).x,
+        uv(1).y,
+      );
+      normalLocal.assign(at.normal);
+      return at.position;
+    })() as unknown as Node<'vec3'>;
+  }
+
   /** The headsail's vertex node: each vertex at its place on the shaped headsail. */
   #jibNode(): Node<'vec3'> {
     return Fn(() => {
@@ -642,6 +803,32 @@ export class Boat {
       return at.position;
     })() as unknown as Node<'vec3'>;
   }
+}
+
+/**
+ * The square sails' print: their cloth's masks (no insignia, no reef rows:
+ * they are many sails of one mask), and the number's place on the sail
+ * that carries it, by its width and height, read the way its face reads.
+ */
+export function squarePrint(sails: readonly SquareSail[]): SailPrint {
+  const masks = clothMasks(
+    { insignia: '', reefRows: [], mark: null },
+    SQUARE_MASK.width,
+    SQUARE_MASK.height,
+  );
+  const numbered = sails.find((s) => s.numbered);
+  if (numbered === undefined) {
+    return { masks, number: null };
+  }
+  const geometry = numbered.meshes[0]?.geometry;
+  return {
+    masks,
+    number: {
+      place: numberPlace(numbered.width, numbered.head - numbered.foot, () => 1),
+      digits: digits(),
+      mirrored: geometry === undefined ? false : readsMirrored(geometry),
+    },
+  };
 }
 
 /**

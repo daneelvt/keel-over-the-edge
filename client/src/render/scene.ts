@@ -43,7 +43,7 @@ import { type BoatWind, newBoatWind } from '../predict/weather';
 import { SkyTime } from '../sky/skytime';
 import starsUrl from '../sky/stars.bin?url';
 import { SkyWeather } from '../sky/weather';
-import { Boat, lazyArtUrl, type SailorLook } from './boat';
+import { Boat, lampsLit, lazyArtUrl, type SailorLook } from './boat';
 import { CAMERA_PRESETS, type CameraView, ChaseCamera, sizeOf } from './camera';
 import { FloatingOrigin, type ScenePoint } from './coords';
 import { DirtyAir } from './dirtyair';
@@ -1225,6 +1225,8 @@ export class SeaScene {
     const p = this.pose;
     const bs = this.boatScene;
     const own = this.sky.now.sunHeight;
+    // The cabins' lamps, as the lanterns are lit: every gallery by the sun here.
+    lampsLit.value = this.drawSky ? lanternLit(own) : 0;
     if (this.drawSky && this.boat?.root.visible) {
       l.add(p, bs.x, bs.z, camera, lanternLit(own), this.kindIndex);
     }

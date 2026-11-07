@@ -28,6 +28,12 @@
 // view (sailors/fleetlooks.ts), and until then the boat carries the first
 // look's figure (the player's own) in its own colours.
 //
+// A kind with a square rig (squarerig.ts) has one more part, its square
+// sails, bellied as drawing sails, turned with its yards and taken in as
+// the wire's reef says; its yards and wheel are joints of its solids, its
+// yards' turns packed in the instance's rig in place of the sail's side;
+// its stern gallery glows by night.
+//
 // The looks are the fleet's, one set for every kind: their figures are
 // seated in the boat the clips were placed in, and each instance's seat is
 // its own kind's.
@@ -61,6 +67,7 @@ import {
   uniform,
   uv,
   varying,
+  vec2,
   vec3,
   vec4,
 } from 'three/tsl';
@@ -77,7 +84,15 @@ import {
   MACHINE_MARK,
 } from '../catalog/looks';
 import type { DrawnBoat } from '../game/fleet';
-import { FULL_CAMBER, NUMBER_MIRRORED, reefRows, type SailorLook } from './boat';
+import {
+  FULL_CAMBER,
+  LAMPLIGHT,
+  lampsLit,
+  NUMBER_MIRRORED,
+  reefRows,
+  type SailorLook,
+  squarePrint,
+} from './boat';
 import {
   clothColour,
   clothMasks,
@@ -97,12 +112,14 @@ import {
 import type { FloatingOrigin } from './coords';
 import {
   type BoatParts,
+  GALLERY_PART,
   type Instances,
   jibNode,
   loadBoatParts,
   machineOf,
   sailNode,
   solidNode,
+  squareNode,
 } from './fleetparts';
 import { chordAt, chordAtHalf, markPlace } from './machinemark';
 import { litMaterial, sailGlow } from './materials';
@@ -120,6 +137,7 @@ import { type SailorColours, sailorColours, sailorMaterial } from './sailors/mat
 import { seating } from './sailors/restage';
 import { hullSolid } from './sailors/solid';
 import { Shadows } from './shadows';
+import { packYards, squareVertex } from './squarerig';
 import { FLOW_LUFFING } from './telltales';
 
 /** The most boats drawn at once: a full view and as many fading out. */
@@ -188,13 +206,18 @@ class Level {
     kind: BoatKind,
     cloth: SailPrint,
     jibCloth: SailPrint | null,
+    squareCloth: SailPrint | null,
     time: Node<'float'>,
     palette: LookPalette,
     name: HullName | null,
   ): void {
-    const { hull, rig, headsails } = kind.physics;
+    const { hull, rig, headsails, foils } = kind.physics;
     const cog = hull.centreOfGravity;
     const i = this.nodes;
+    const squareRig = parts.square !== null;
+    const joints = squareRig
+      ? { yardsAt: parts.yardsAt, wheelAt: parts.wheelAt, rudderAngle: foils.rudderAngle }
+      : null;
     const l = varying(i.look ?? vec4(0, 0, 0, -1)) as unknown as Node<'vec4'>;
     const look: LookNodes = {
       paint: l.x,
@@ -209,31 +232,43 @@ class Level {
       // the topsides' tones in the boat's paint, with its name on them.
       const m = litMaterial(
         { vertexColors: true, side: src.side === DoubleSide ? DoubleSide : FrontSide },
-        solidNode(i, parts, cog),
+        solidNode(i, parts, cog, joints),
       );
       const own = attribute('part', 'vec4') as unknown as Node<'vec4'>;
       m.roughnessNode = own.y;
       m.metalnessNode = own.z;
       const topsides = varying(own.w);
+      const painted = parts.gallery
+        ? topsides.greaterThan(0.5).and(topsides.lessThan(GALLERY_PART - 0.5))
+        : topsides.greaterThan(0.5);
       m.colorNode = vec4(
-        select(
-          topsides.greaterThan(0.5),
-          hullColour(palette, look, varying(positionGeometry), name),
-          vec3(1),
-        ),
+        select(painted, hullColour(palette, look, varying(positionGeometry), name), vec3(1)),
         1,
       );
+      if (parts.gallery) {
+        // The gallery's panes, lamplit by night.
+        m.emissiveNode = select(
+          topsides.greaterThan(GALLERY_PART - 0.5),
+          vec3(...LAMPLIGHT).mul(lampsLit),
+          vec3(0),
+        );
+      }
       this.add(s.geometry, m, src.side === DoubleSide ? 'solids, both sides' : 'solids');
     }
     if (parts.sail !== null) {
       const rows = reefRows(parts.sail.geometry, rig.reefs);
       const m = litMaterial(
         { roughness: parts.sail.material.roughness, metalness: 0, side: DoubleSide },
-        sailNode(i, parts, cog, rig.footStrip, rig.headStrip, time, {
-          shares: rig.reefs,
-          gather: rows !== null,
-          luff: rig.luff,
-        }),
+        sailNode(
+          i,
+          parts,
+          cog,
+          rig.footStrip,
+          rig.headStrip,
+          time,
+          { shares: rig.reefs, gather: rows !== null, luff: rig.luff },
+          squareRig ? rig.twistTurn : null,
+        ),
       );
       const c = vec4(clothColour(palette, look, uv(), cloth), 1) as unknown as Node<'vec4'>;
       m.colorNode = c;
@@ -249,6 +284,20 @@ class Level {
       m.colorNode = c;
       m.emissiveNode = sailGlow(c);
       this.add(parts.jib.geometry, m, 'jib');
+    }
+    if (parts.square !== null && squareCloth !== null) {
+      const m = litMaterial(
+        { roughness: parts.square.material.roughness, metalness: 0, side: DoubleSide },
+        squareNode(i, parts, cog, time),
+      );
+      // The number only on the sail that carries it; the cloth's v runs down from the head.
+      const sv = squareVertex();
+      const numbered = { ...look, number: look.number.mul(varying(sv.numbered)) } as LookNodes;
+      const at = vec2(uv().x, float(1).sub(uv().y)) as unknown as Node<'vec2'>;
+      const c = vec4(clothColour(palette, numbered, at, squareCloth), 1) as unknown as Node<'vec4'>;
+      m.colorNode = c;
+      m.emissiveNode = sailGlow(c);
+      this.add(parts.square.geometry, m, 'square sails');
     }
   }
 
@@ -428,6 +477,8 @@ export class FleetView {
   readonly #side = new Float32Array(64);
   readonly #sway = { x: 0, z: 0 };
   readonly #cog: number;
+  /** Whether its kind has square sails: its instances' rig.w carries their yards. */
+  #squareRig = false;
 
   constructor(kind: BoatKind, index: number, shared: Shared) {
     this.kind = kind;
@@ -491,8 +542,11 @@ export class FleetView {
       nearParts.name === null
         ? null
         : { texture: names.texture, rows: names.rows.rows, place: nearParts.name };
-    this.near.build(nearParts, kind, cloth, jibCloth, time, shared.palette, name);
-    this.far.build(farParts, kind, cloth, jibCloth, time, shared.palette, null);
+    // The square sails' print by the near model's sails, for both levels.
+    const squareCloth = nearParts.square === null ? null : squarePrint(nearParts.square.sails);
+    this.near.build(nearParts, kind, cloth, jibCloth, squareCloth, time, shared.palette, name);
+    this.far.build(farParts, kind, cloth, jibCloth, squareCloth, time, shared.palette, null);
+    this.#squareRig = nearParts.square !== null;
     this.parts = nearParts;
     this.loaded = true;
   }
@@ -616,7 +670,7 @@ export class FleetView {
     r[o] = b.boom;
     r[o + 1] = b.rudder;
     r[o + 2] = b.opacity;
-    r[o + 3] = turn;
+    r[o + 3] = this.#squareRig ? packYards(b.foreYardsTurn, b.yardsTurn) : turn;
     const flat = (b.sail & 15) / 15;
     const perFlat = ((rig.twistDepowered - rig.twistPowered) * DEG) / (1 - sailor.flattenMin);
     const twist =
