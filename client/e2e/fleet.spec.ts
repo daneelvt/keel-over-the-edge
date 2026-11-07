@@ -4,8 +4,10 @@
 // looks as the player's own boat looks at that pose, heeled, gybing,
 // capsized, luffing, with the rudder hard over, its sailor a person's or a
 // machine's; a keelboat of the fleet as the own keelboat, its jib and its
-// reef; the fleet's 64 boats keep to their draw calls and triangles, and a
-// mixed 64 of Jolly boats and keelboats to theirs,
+// reef, and a tall ship as the own tall ship, her yards braced and her
+// topgallants furled; the fleet's 64 boats keep to their draw calls and
+// triangles, and a mixed 64 of Jolly boats, keelboats and tall ships to
+// theirs,
 // their sailors, near and far, of every look, to at most 6; every fleet
 // material is the factory's, with the bend; faded boats dither and none
 // sorts; and a picture of a fleet at fixed poses, near and far models,
@@ -99,6 +101,11 @@ async function both(page: Page, pose: Pose, kind = 0) {
         kind,
         jib: b.jib,
         reef: Math.round(b.reef),
+        // The yards by their nodes' turns (yardsTurn): π/2 less the angle,
+        // the port arm forward for a positive angle.
+        yardsTurn: b.yards === 0 ? 0 : -Math.sign(b.yards) * (Math.PI / 2 - Math.abs(b.yards)),
+        foreYardsTurn:
+          b.foreYards === 0 ? 0 : -Math.sign(b.foreYards) * (Math.PI / 2 - Math.abs(b.foreYards)),
         sail: flat | (o.footFlow << 4) | (o.headFlow << 6),
         east: b.x,
         north: b.y,
@@ -181,7 +188,7 @@ test('64 boats keep to 22 draw calls and 200,000 triangles', async ({ page }) =>
   test.info().annotations.push({ type: 'measured', description: JSON.stringify(budget) });
 });
 
-test('a mixed 64, Jolly boats and keelboats, keep to 32 draw calls and 320,000 triangles', async ({
+test('a mixed 64, Jolly boats, keelboats and tall ships, keep to 32 draw calls and 320,000 triangles', async ({
   page,
 }) => {
   await openScene(page);
@@ -190,23 +197,28 @@ test('a mixed 64, Jolly boats and keelboats, keep to 32 draw calls and 320,000 t
     const b = k.boat().state;
     const boats = [];
     for (let i = 0; i < 64; i++) {
-      // The start line again, every fourth boat a keelboat, her jib drawing
-      // and every other one reefed.
-      const keel = i % 4 === 3;
+      // The start line again: of every sixteen, three keelboats and a tall
+      // ship, the keelboats' jibs drawing and every other one reefed, the
+      // ships braced up, one with her topgallants in.
+      const ship = i % 16 === 15;
+      const keel = !ship && i % 4 === 3;
+      const kind = ship ? 2 : keel ? 1 : 0;
       boats.push({
-        kind: keel ? 1 : 0,
+        kind,
         east: b.x - 70 + (i % 8) * 20,
         north: b.y + 20 + Math.floor(i / 8) * 20,
         heading: 1.5708,
         boom: 0.6,
-        jib: keel ? 0.3 : 0,
-        reef: keel && i % 8 === 3 ? 1 : 0,
+        jib: kind > 0 ? 0.3 : 0,
+        reef: (keel && i % 8 === 3) || (ship && i === 15) ? 1 : 0,
+        yardsTurn: ship ? -0.9 : 0,
+        foreYardsTurn: ship ? -0.9 : 0,
         sail: 15 | (1 << 4) | (1 << 6),
       });
     }
     k.setFleet(boats);
     k.render();
-    // The keelboats' kind loads as its first boat comes into view.
+    // The keelboats' and the ships' kinds load as their first boats come into view.
     await k.fleetLoaded();
     k.render();
     return k.fleetBudget();
@@ -218,7 +230,7 @@ test('a mixed 64, Jolly boats and keelboats, keep to 32 draw calls and 320,000 t
   expect(budget.triangles).toBeLessThanOrEqual(320_000);
 });
 
-test('a keelboat of the fleet looks as the own keelboat does, her jib and her reef', async ({
+test('a keelboat and a tall ship of the fleet look as the own ones do, the jib, the yards and the reefs', async ({
   page,
 }) => {
   await openScene(page, 'boat=keelboat');
@@ -234,6 +246,23 @@ test('a keelboat of the fleet looks as the own keelboat does, her jib and her re
     },
   ]) {
     const { own, fleet } = await both(page, pose, 1);
+    diffs[pose.name] = pictureDifference(own, fleet);
+  }
+  // The same page, its own boat a tall ship: the wind on her port beam, her
+  // yards braced up and drawing; then running square before it, her
+  // topgallants furled.
+  await page.evaluate(() => globalThis.keel.useBoat('tall-ship'));
+  for (const pose of [
+    {
+      name: 'a tall ship braced up',
+      state: { ...rest, heading: 1.5708, heel: 4 * DEG, boom: 0.4, yards: 0.6, foreYards: 0.6 },
+    },
+    {
+      name: 'a tall ship running, her topgallants in',
+      state: { ...rest, heading: 3.1416, boom: 1.0, yards: 1.5, foreYards: 1.5, reef: 1 },
+    },
+  ]) {
+    const { own, fleet } = await both(page, pose, 2);
     diffs[pose.name] = pictureDifference(own, fleet);
   }
   test.info().annotations.push({ type: 'measured', description: JSON.stringify(diffs) });
