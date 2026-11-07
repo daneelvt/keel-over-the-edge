@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 // The player's own sailor, shown before every voyage: its name, whether its
-// boat is in the water, whether others may watch it sail, Set sail as it,
-// and Watch another sailor. It is the screen's only gold button, as setting
+// boat is in the water, the boat it sails (chosen from the fleet, its look
+// set, ashore), whether others may watch it sail, Set sail as it, and
+// Watch another sailor. It is the screen's only gold button, as setting
 // sail is the only thing there the player does as themselves; their machine
 // sailors, when they have any, stand apart beside it. In the game's first
 // download, so the screen shows it at once, alone or while the machine
@@ -15,6 +16,8 @@
 
 import { sailFullScreen } from '../boot/fullscreen';
 import { STILL_AT_SEA, WATCH_ANOTHER_SAILOR } from '../ui/watchwords';
+import type { BoatChooser } from './boatchooser';
+import { BoatLookChooser, ChangeBoat, YourBoat } from './boats';
 import type { LookChooser } from './chooser';
 import { LetWatch, type Voyage } from './letwatch';
 import type { Me } from './me';
@@ -61,6 +64,8 @@ export function SetSail({
  * sent the box's choice; watch opens the list of sailors to watch, null
  * while it cannot yet. With a chooser, their portrait beside their name
  * and, ashore, Change your look; or the picker, as the chooser has it.
+ * With boats, the boat they sail and, ashore, Your boat and Change boat;
+ * or the boat's look chosen, or the fleet's boats, as boats has it.
  */
 export function YourSailor({
   me,
@@ -68,43 +73,55 @@ export function YourSailor({
   sail,
   watch,
   chooser,
+  boats,
 }: {
   me: Me;
   voyage: Voyage;
   sail: () => void;
   watch: (() => void) | null;
   chooser?: LookChooser;
+  boats?: BoatChooser | undefined;
 }) {
   const atSea = me.atSea === true;
   const mode = chooser?.mode.value ?? 'shown';
   if (chooser !== undefined && mode !== 'shown') {
     return <ChooseLook chooser={chooser} name={me.name} first={mode === 'once'} />;
   }
+  const boat = boats?.mode.value ?? 'shown';
+  if (boats !== undefined && boat === 'look') {
+    return <BoatLookChooser chooser={boats} className="start-panel" />;
+  }
+  if (boats !== undefined && boat === 'boats') {
+    return <ChangeBoat chooser={boats} className="start-panel" />;
+  }
   return (
     <section class="start-panel your-sailor" aria-labelledby="start-title">
       <h1 id="start-title">Keel Over the Edge</h1>
       <h2 id="your-sailor-title">Your sailor</h2>
-      <div class="your-sailor-who">
-        {chooser === undefined ? null : (
-          <Portrait looks={chooser.looks} look={chooser.look.value} size={72} />
-        )}
-        <div class="your-sailor-words">
-          <p class="your-sailor-name">
-            <bdi>{me.name}</bdi>
-          </p>
-          <p class="start-text start-faint" data-readout="at-sea">
-            {atSea ? 'at sea' : 'not at sea'}
-          </p>
-          {chooser !== undefined && !atSea ? (
-            <button
-              type="button"
-              class="start-link your-sailor-change"
-              onClick={() => chooser.open()}
-            >
-              Change your look
-            </button>
-          ) : null}
+      <div class="your-sailor-rows">
+        <div class="your-sailor-who">
+          {chooser === undefined ? null : (
+            <Portrait looks={chooser.looks} look={chooser.look.value} size={72} />
+          )}
+          <div class="your-sailor-words">
+            <p class="your-sailor-name">
+              <bdi>{me.name}</bdi>
+            </p>
+            <p class="start-text start-faint" data-readout="at-sea">
+              {atSea ? 'at sea' : 'not at sea'}
+            </p>
+            {chooser !== undefined && !atSea ? (
+              <button
+                type="button"
+                class="start-link your-sailor-change"
+                onClick={() => chooser.open()}
+              >
+                Change your look
+              </button>
+            ) : null}
+          </div>
         </div>
+        {boats === undefined ? null : <YourBoat chooser={boats} changes={!atSea} />}
       </div>
       {atSea ? (
         <p class="start-warning" role="note">

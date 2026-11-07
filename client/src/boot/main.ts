@@ -129,6 +129,7 @@ import { type Cover, DROP, LIFT, LIFT_REDUCED, QUIET, takeCover } from './cover'
 import { browserEnv, fullScreen } from './fullscreen';
 import { Gate, type Revealed, WAITING_WORDS, type Waiting } from './gate';
 import { harbourWater, watchHarbour } from './harbour';
+import { harbourBoats, sandboxBoats } from './harbourboats';
 import { harbourLook, sandboxHarbourLook } from './harbourlook';
 import { lookStage } from './lookstage';
 
@@ -514,6 +515,7 @@ async function start(): Promise<void> {
         src: forecasting,
         store: parts.chart.store,
         look: sandboxHarbourLook(world, sandboxLook),
+        boats: sandboxBoats(catalog),
       },
       camera,
       clear,
@@ -603,12 +605,16 @@ async function start(): Promise<void> {
       start: () =>
         showStartScreen(document.body, {
           looks: catalog,
+          boats: catalog,
           ...(stage === undefined ? {} : { stage }),
           ...(linked === '' ? {} : { panel: false }),
         }).then(set),
       addPasskey: (me) => showAddPasskey(document.body, me),
       ...(linked === ''
-        ? { sailor: (me: Me) => showSailor(document.body, own(me), catalog, stage).then(set) }
+        ? {
+            sailor: (me: Me) =>
+              showSailor(document.body, own(me), catalog, stage, catalog).then(set),
+          }
         : {}),
       backSoon: notice,
     }).then(own),
@@ -944,6 +950,7 @@ async function start(): Promise<void> {
       src: forecasting,
       store: parts.chart.store,
       look: harbourLook(world, online),
+      boats: harbourBoats(catalog, online),
     },
     watch: watchView,
     lamp: online.lamp,

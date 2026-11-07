@@ -173,17 +173,21 @@ export function Swatch({ colour }: { colour: string }) {
 }
 
 /**
- * A machine sailor's name, look and whether it is at sea; its apps, when
- * apps is set; beside its portrait, when the page gives one.
+ * A machine sailor's name, look and whether it is at sea; the boat it
+ * has, when the fleet is known; its apps, when apps is set; beside its
+ * portrait, when the page gives one.
  */
 export function MachineSummary({
   m,
   apps = true,
   picture,
+  boat = '',
 }: {
   m: MachineItem;
   apps?: boolean;
   picture?: MachinePicture;
+  /** Its boat, as it is named: "Jolly boat «Gull» 12"; "" for none known. */
+  boat?: string;
 }) {
   const live = liveApps(m);
   const summary = (
@@ -196,6 +200,11 @@ export function MachineSummary({
         {m.look.words}
       </span>
       <span class="machine-faint">{m.atSea ? 'at sea' : 'not at sea'}</span>
+      {boat === '' ? null : (
+        <span class="machine-faint machine-boat" data-readout="boat">
+          <bdi>{boat}</bdi>
+        </span>
+      )}
       {apps ? (
         <span class="machine-faint">
           {live.length === 0

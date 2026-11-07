@@ -1,14 +1,38 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 // The harbour the boat is in: from the towns' harbour discs, as the
-// harbour's sounds find it, named by the chart; and a place on the water in
-// Port Royal's, for the board's tests.
+// harbour's sounds find it, named by the chart, with whether boats may be
+// changed there; and a place on the water in Port Royal's, for the board's
+// tests.
 
 import { type ReadonlySignal, signal } from '@preact/signals';
 import { catalog } from '../catalog';
 import type { ChartStore } from '../chart/store';
 import type { SeaScene } from '../render/scene';
 import type { InPort } from '../ui/board';
+
+/**
+ * Whether boats may be changed at (east, north): within a disc of harbour
+ * water of Port Royal or a port town, not of a fishing village. The chunks
+ * do not say which kind of town a disc is of, but its size does: a
+ * fishing village's discs are the catalog's village size, every other's
+ * not.
+ */
+export function boatsAt(
+  discs: Iterable<{ east: number; north: number; radius: number }>,
+  east: number,
+  north: number,
+  village: number = catalog.world.towns.inPort.village,
+): boolean {
+  for (const d of discs) {
+    const dx = east - d.east;
+    const dy = north - d.north;
+    if (dx * dx + dy * dy <= d.radius * d.radius && d.radius !== village) {
+      return true;
+    }
+  }
+  return false;
+}
 
 /**
  * The port the boat is in, worked out once a second from the towns' harbour
@@ -46,8 +70,9 @@ export function watchHarbour(world: SeaScene, store: ChartStore): ReadonlySignal
     if (name === '') {
       name = Math.hypot(p.east, p.north) < 1852 ? catalog.world.mainPort.name : 'The harbour';
     }
-    if (port.value?.name !== name) {
-      port.value = { name, ...at };
+    const boats = boatsAt(land?.towns.harbour() ?? [], p.east, p.north);
+    if (port.value?.name !== name || port.value.boats !== boats) {
+      port.value = { name, ...at, boats };
     }
   }, 1000);
   return port;

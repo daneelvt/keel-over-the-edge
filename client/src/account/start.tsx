@@ -24,12 +24,14 @@ import { type JSX, render } from 'preact';
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { drawLook, type Looks } from '../catalog/looks';
 import { useWatch } from '../ui/watchlazy';
+import { BoatChooser } from './boatchooser';
 import { LookChooser } from './chooser';
+import type { BoatCatalog } from './fleet';
 import { type InApp, passkeySupport, type Support } from './inapp';
 import { useMachines } from './lazy';
 import { type Voyage, voyage } from './letwatch';
 import type { LookStage } from './lookstage';
-import { checkSession, type Me } from './me';
+import { checkSession, type Fetch, type Me } from './me';
 import {
   codeForm,
   makeSailor,
@@ -50,6 +52,8 @@ export interface StartProps {
   looks: Looks;
   /** The picker's stage, which draws the sailor behind the form; none on a page that draws nothing. */
   stage?: LookStage;
+  /** The catalog's boats and their looks, the player's boat chosen from the fleet with; none for no choice. */
+  boats?: BoatCatalog;
   done: (me: Me) => void;
   /** Whether a sailor signed in is shown their own before the sea: not one come by a link to watch. */
   panel?: boolean;
@@ -78,7 +82,15 @@ type View =
   | { kind: 'recovered'; me: Me; at: number }
   | { kind: 'add-passkey'; me: Me };
 
-export function StartScreen({ looks, done, random, reach, stage, panel = true }: StartProps) {
+export function StartScreen({
+  looks,
+  boats,
+  done,
+  random,
+  reach,
+  stage,
+  panel = true,
+}: StartProps) {
   const [view, setView] = useState<View>({ kind: 'form' });
   const [support, setSupport] = useState<Support | null>(null);
   const [anyway, setAnyway] = useState(false);
@@ -292,6 +304,8 @@ export function StartScreen({ looks, done, random, reach, stage, panel = true }:
           done={done}
           looks={looks}
           stage={stage}
+          boats={boats}
+          fetcher={reach?.fetch}
         />
       );
     case 'recovered':
@@ -473,7 +487,9 @@ export function StartScreen({ looks, done, random, reach, stage, panel = true }:
  * sailor to make), the start screen with machine sailors, once its module
  * is loaded; until then the player's own panel stands where it will be,
  * with its Set sail. Alone, Watch another sailor opens the list of
- * sailors to watch in its place, once that module is loaded.
+ * sailors to watch in its place, once that module is loaded. With the
+ * catalog's boats, the fleet is read, and the player's boat shown on
+ * their panel; its look's chooser and the fleet's boats stand alone.
  */
 function Sailor({
   first,
@@ -482,6 +498,8 @@ function Sailor({
   done,
   looks,
   stage,
+  boats: cat,
+  fetcher,
 }: {
   first: boolean;
   me: Me;
@@ -489,6 +507,8 @@ function Sailor({
   done: (me: Me) => void;
   looks?: Looks;
   stage?: LookStage | undefined;
+  boats?: BoatCatalog | undefined;
+  fetcher?: Fetch | undefined;
 }) {
   const machines = first || (given.machines ?? 0) > 0;
   const m = useMachines(machines);
@@ -500,6 +520,8 @@ function Sailor({
     [],
   );
   useEffect(() => () => stage?.hide(), []);
+  const boats = useMemo(() => (cat === undefined ? undefined : new BoatChooser(cat, fetcher)), []);
+  useEffect(() => void boats?.load(), []);
   const me = chooser === undefined ? given : chooser.applied(given);
   const go = (watch?: string) => done(watch === undefined ? me : { ...me, watch });
   const yours = (
@@ -509,15 +531,18 @@ function Sailor({
       sail={go}
       watch={machines ? null : () => setListing(true)}
       {...(chooser === undefined ? {} : { chooser })}
+      boats={boats}
     />
   );
   const picking = chooser !== undefined && chooser.mode.value !== 'shown' && stage !== undefined;
+  // The boat's look chosen, or another boat: alone on the screen, over the cover.
+  const boating = boats !== undefined && boats.mode.value !== 'shown';
   return (
     <div class={picking ? 'start picking' : 'start'}>
       {picking && stage !== undefined && chooser !== undefined ? (
         <StageFront looks={chooser.looks} look={chooser.pick.value.look} stage={stage} />
       ) : null}
-      {picking ? (
+      {picking || boating ? (
         yours
       ) : m !== null ? (
         <m.MachineStart
@@ -526,6 +551,7 @@ function Sailor({
           me={me}
           voyage={v}
           {...(chooser === undefined ? {} : { chooser })}
+          boats={boats}
         />
       ) : listing ? (
         w !== null && (
@@ -608,13 +634,15 @@ export function showStartScreen(parent: HTMLElement, props: Omit<StartProps, 'do
 /**
  * Shows the player's own sailor in parent until Set sail, or a sailor
  * chosen to watch, then removes it; with the catalog's looks, the player
- * may change theirs there, on the picker's stage if there is one.
+ * may change theirs there, on the picker's stage if there is one; with its
+ * boats, choose their boat from the fleet and set its look.
  */
 export function showSailor(
   parent: HTMLElement,
   me: Me,
   looks?: Looks,
   stage?: LookStage,
+  boats?: BoatCatalog,
 ): Promise<Me> {
   return mount(parent, (done) => (
     <Sailor
@@ -624,6 +652,7 @@ export function showSailor(
       done={done}
       {...(looks === undefined ? {} : { looks })}
       stage={stage}
+      boats={boats}
     />
   ));
 }
