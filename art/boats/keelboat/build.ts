@@ -377,6 +377,8 @@ const BOOT = srgb(0.894, 0.851, 0.749);
 /** The copper sheathing, going green here and there. */
 const COPPER = srgb(0.69, 0.424, 0.25);
 const VERDIGRIS = srgb(0.36, 0.52, 0.42);
+/** Where the sheer strake begins, as a share of the topsides' girth. */
+const SHEER_FROM = 0.875;
 /** The boot top's lower and upper edges, above the waterline. */
 const BOOT_FROM = 0.02;
 const BOOT_TO = 0.08;
@@ -435,11 +437,13 @@ function planking(): { copper: MeshBuilder; paint: MeshBuilder } {
   const top = new MeshBuilder('paint');
   band(top, bootFrom, bootTo, [0, 1], () => BOOT);
   // The strakes from the boot top to the sheer, the top one the dark sheer
-  // strake; each plank's own tone, its lower edge a dark seam.
+  // strake, an eighth of the girth; each plank's own tone, its lower edge a
+  // dark seam.
   const seam = D.seams ? [0, 0.1, 1] : [0, 1];
+  const edge = (k: number): number => (k >= D.strakes ? 1 : (SHEER_FROM * k) / (D.strakes - 1));
   for (let k = 0; k < D.strakes; k++) {
-    const f0 = k / D.strakes;
-    const f1 = (k + 1) / D.strakes;
+    const f0 = edge(k);
+    const f1 = edge(k + 1);
     const base = k === D.strakes - 1 ? SHEER_STRAKE : TOPSIDES;
     const tone = 0.94 + 0.12 * jitter(k + 40);
     band(
