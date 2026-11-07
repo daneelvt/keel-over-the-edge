@@ -20,6 +20,7 @@ import { formatPosition } from '../chart/position';
 import {
   actionBody,
   appWords,
+  cardBoatWords,
   checked,
   countsWords,
   dayWords,
@@ -682,7 +683,17 @@ function Card({
                 : `${card.sessions.count}, the latest made ${momentWords(card.sessions.latest)}`}
             </dd>
             <dt>Fleet</dt>
-            <dd>{fleetWords(card.fleet ?? {})}</dd>
+            <dd data-field="card-fleet">
+              {(card.boats ?? []).length === 0 ? (
+                fleetWords(card.fleet ?? {})
+              ) : (
+                <ul class="plain">
+                  {(card.boats ?? []).map((b) => (
+                    <li key={`${b.kind} ${b.number}`}>{cardBoatWords(b)}</li>
+                  ))}
+                </ul>
+              )}
+            </dd>
             <dt>Machine sailors allowed</dt>
             <dd data-field="card-cap">{card.cap ?? 0}</dd>
             <dt>Machine sailors</dt>

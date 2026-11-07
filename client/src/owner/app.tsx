@@ -45,6 +45,7 @@ import {
 import { formatPosition } from '../chart/position';
 import { lightOn } from '../lights/character';
 import { AccountBoxes, AccountsTab } from './accounts';
+import { boatWords } from './accountwords';
 import { agentWords, machinesLine, rulesLine, spectatorsLine, watchersWords } from './admission';
 import {
   type AccountsData,
@@ -532,7 +533,7 @@ function BoatRow({
             </div>
           ) : null}
         </td>
-        <td>{b.kind}</td>
+        <td data-field="boat-look">{boatWords(b)}</td>
         <td class="small" data-field="boat-position">
           {formatPosition(b.east, b.north)}
         </td>

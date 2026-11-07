@@ -7,7 +7,7 @@
 // confirmed. A confirmation open closes as soon as what it was asked for
 // changes, so that no stray click does what was not read.
 
-import type { AccountCard, AccountsData, CardApp, Sort } from './api';
+import type { AccountCard, AccountsData, CardApp, CardBoat, Sort } from './api';
 import { machinesWords, plural } from './machines';
 
 /** How the accounts found may be ordered, in words. */
@@ -85,6 +85,28 @@ export function fleetWords(fleet: Record<string, number>): string {
     .filter(([, n]) => n > 0)
     .map(([id, n]) => `${n} ${id}`);
   return parts.length === 0 ? 'none' : parts.join(', ');
+}
+
+/** A boat as the owner reads it: "Keelboat «Saltpeter» 311 · red ochre, tanbark sails". */
+export function boatWords(b: {
+  kind: string;
+  number: number;
+  name?: string;
+  paint?: string;
+  cloth?: string;
+}): string {
+  const name = b.name === undefined || b.name === '' ? '' : ` «${b.name}»`;
+  const look =
+    b.paint === undefined || b.paint === '' ? '' : ` · ${b.paint}, ${b.cloth ?? ''} sails`;
+  return `${b.kind}${name} ${b.number}${look}`;
+}
+
+/** A card's boat and whose it is: "… · at sea, sailed by Iron Mary (AI)"; "… · free". */
+export function cardBoatWords(b: CardBoat): string {
+  const who =
+    b.sailor === undefined || b.sailor === '' ? '' : `${b.sailor}${b.machine ? ' (AI)' : ''}`;
+  const state = b.atSea ? `at sea, sailed by ${who}` : who === '' ? 'free' : `${who}'s, ashore`;
+  return `${boatWords(b)} · ${state}`;
 }
 
 /** An app approved: where it returns to, when approved and last used, and when its grant ends or how it ended. */

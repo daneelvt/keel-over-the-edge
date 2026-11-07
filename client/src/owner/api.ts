@@ -25,6 +25,11 @@ export interface Boat {
   sailor: string;
   human: boolean;
   kind: string;
+  /** Its sail number, its name (player text, absent for none), and its paint's and cloth's names. */
+  number: number;
+  boatName?: string;
+  paint?: string;
+  cloth?: string;
   east: number;
   north: number;
   /** Degrees clockwise from north. */
@@ -1006,6 +1011,8 @@ export interface AccountCard {
   recoveryMade?: number;
   sessions?: { count: number; latest: number };
   fleet?: Record<string, number>;
+  /** Each of a human's boats: its kind's name, number, name, paint and cloth, and whose it is. */
+  boats?: CardBoat[];
   cap?: number;
   machines?: AccountCard[];
   owner?: { id: string; name: string };
@@ -1182,4 +1189,17 @@ export async function searchAccounts(
 /** An account's card, by its id. */
 export function getAccount(id: string): Promise<AccountCard> {
   return getJSON<AccountCard>(`account.json?id=${encodeURIComponent(id)}`);
+}
+
+/** One of a human account's boats, as the card lists it. */
+export interface CardBoat {
+  kind: string;
+  number: number;
+  name?: string;
+  paint: string;
+  cloth: string;
+  /** The sailor whose boat it is, a machine sailor or not, and whether in the water now. */
+  sailor?: string;
+  machine?: boolean;
+  atSea?: boolean;
 }

@@ -460,6 +460,7 @@ func runServer(ctx context.Context, getenv func(string) string, stdout io.Writer
 	p.hand = accounts.New(accounts.Config{
 		Store: db, Sessions: p.sessions, Door: p.agents.grants, Agents: p.agents.core, World: p.accountsWorld,
 		Lifetime: p.agents.lifetime.Get, Looks: p.agents.looks, Book: p.looks, Stopped: stopped, Log: log, Metrics: metrics,
+		Fleet: p.fleet,
 	})
 	for _, k := range []store.Kind{store.Human, store.AI} {
 		metrics.GaugeFunc("keel_accounts_stopped", "Accounts stopped by the operator, by kind; a stopped human's machine sailors among the AI accounts.",
@@ -663,7 +664,7 @@ func ownerTools(c ownerConfig) *owner.Owner {
 	}
 	cfg := owner.Config{
 		Bundle: c.bundle, Weather: prepared, Timeline: c.timeline, SystemKinds: systemKindNames(c.cat), Waves: waves,
-		Kinds: kinds, Regimes: regimes, Sky: c.cat.PrepareSky(),
+		Kinds: kinds, Regimes: regimes, Sky: c.cat.PrepareSky(), BoatLooks: looks.NewBoats(c.cat),
 		World:    owner.World{Number: c.sailed.Number, ID: c.sailed.ID, Epoch: c.sailed.Epoch, Made: c.made},
 		Calm:     c.cat.World.MainPort.Calm * 1852,
 		Accounts: c.db, Page: c.page, Log: c.log, Metrics: c.metrics,

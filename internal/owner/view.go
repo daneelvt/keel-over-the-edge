@@ -13,6 +13,7 @@ import (
 
 	"github.com/daneelvt/keel-over-the-edge/internal/bus"
 	"github.com/daneelvt/keel-over-the-edge/internal/edge"
+	"github.com/daneelvt/keel-over-the-edge/internal/looks"
 	"github.com/daneelvt/keel-over-the-edge/internal/physics"
 	"github.com/daneelvt/keel-over-the-edge/internal/sky"
 	"github.com/daneelvt/keel-over-the-edge/internal/store"
@@ -44,6 +45,8 @@ type boatCopy struct {
 	conn           uint64
 	grace          int64
 	kind           uint16
+	boatLook       uint32
+	boatName       string
 	x, y, heading  float64
 	speed          float64 // over the ground, m/s
 	falling, stays bool
@@ -114,6 +117,7 @@ func (b *builder) copyFrame() {
 		st := &f.State[s]
 		b.boats = append(b.boats, boatCopy{
 			boat: f.Boat[s], owner: f.Owner[s], conn: f.Conn[s], grace: f.Grace[s], kind: f.Kind[s],
+			boatLook: f.BoatLook[s], boatName: f.BoatName[s],
 			x: st.X, y: st.Y, heading: st.Heading, speed: math.Hypot(st.Surge, st.Sway),
 			falling: f.Voyage[s].Falling(), stays: f.Stay[s], unseen: f.Unseen[s],
 			machine: f.Machine[s], priority: f.Priority[s],
@@ -169,6 +173,11 @@ func (b *builder) build(ctx context.Context) *view {
 			FromLip: round2(physics.EdgeDistance(p, bc.x, bc.y)), Connected: bc.conn != 0,
 			Falling: bc.falling, Stays: bc.stays, Unseen: bc.unseen, Tools: n.acc.Tools,
 			Machine: bc.machine, Priority: n.acc.Priority, Admitted: bc.priority, Watchers: watched[bc.owner],
+		}
+		bl := looks.BoatOf(bc.boatLook)
+		j.Number, j.BoatName = bl.Number, bc.boatName
+		if l := b.cfg.BoatLooks; l != nil {
+			j.Paint, j.Cloth = l.PaintName(bl.Paint), l.ClothName(bl.Cloth)
 		}
 		if bc.machine {
 			w.Admission.Machines++
@@ -481,11 +490,17 @@ type windJSON struct {
 }
 
 type boatJSON struct {
-	Boat      uint64      `json:"boat"`
-	Account   string      `json:"account"`
-	Sailor    string      `json:"sailor"`
-	Human     bool        `json:"human"`
-	Kind      string      `json:"kind"`
+	Boat    uint64 `json:"boat"`
+	Account string `json:"account"`
+	Sailor  string `json:"sailor"`
+	Human   bool   `json:"human"`
+	Kind    string `json:"kind"`
+	// Number and BoatName are the boat's sail number and name, player
+	// text; Paint and Cloth its paint's and cloth's names.
+	Number    int         `json:"number"`
+	BoatName  string      `json:"boatName,omitempty"`
+	Paint     string      `json:"paint,omitempty"`
+	Cloth     string      `json:"cloth,omitempty"`
 	East      float64     `json:"east"`
 	North     float64     `json:"north"`
 	Heading   float64     `json:"heading"` // degrees

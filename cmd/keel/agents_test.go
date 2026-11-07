@@ -61,7 +61,7 @@ func (noAccounts) DeleteMachine(context.Context, store.AccountID, store.AccountI
 	return store.ErrNotFound
 }
 func (noAccounts) Fleet(context.Context, store.AccountID) (map[string]int, error) { return nil, nil }
-func (noAccounts) Boats(context.Context, store.AccountID) ([]store.Boat, error) { return nil, nil }
+func (noAccounts) Boats(context.Context, store.AccountID) ([]store.Boat, error)   { return nil, nil }
 func (noAccounts) FleetOwner(_ context.Context, id store.AccountID) (store.AccountID, error) {
 	return id, nil
 }
@@ -71,7 +71,9 @@ func (noAccounts) GiveBoat(context.Context, store.AccountID, store.AccountID, st
 func (noAccounts) SetBoatLook(context.Context, store.AccountID, store.BoatID, store.BoatLook) error {
 	return store.ErrNotFound
 }
-func (noAccounts) BoatNumberFree(context.Context, string, int, store.BoatID) (bool, error) { return true, nil }
+func (noAccounts) BoatNumberFree(context.Context, string, int, store.BoatID) (bool, error) {
+	return true, nil
+}
 func (noAccounts) RevokeOwnedGrant(context.Context, store.AccountID, [16]byte) (store.AccountID, error) {
 	return store.AccountID{}, store.ErrNotFound
 }
