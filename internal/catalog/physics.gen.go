@@ -112,6 +112,7 @@ func PhysicsParams(b *Boat) physics.Params {
 	p.SquareStallWidth = b.Physics.Square.SquareStallWidth
 	p.SquareDrag = b.Physics.Square.SquareDrag
 	copy(p.SquareNormalForce[:], b.Physics.Square.SquareNormalForce)
+	p.SquareTwist = b.Physics.Square.SquareTwist
 	p.BraceSharp = b.Physics.Square.BraceSharp
 	p.BraceTime = b.Physics.Square.BraceTime
 	p.Hauls = b.Physics.Square.Hauls

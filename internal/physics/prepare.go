@@ -97,6 +97,25 @@ type Prepared struct {
 	jibHaulRate          float64 // rad/s
 	jibEaseRate          float64 // rad/s
 
+	// The square sails, if the boat has any: a fore and an after group on
+	// yards the braces hold, and the crew that hauls them round.
+	square           bool
+	foreStrip        float64 // ½ρ_air × the area of one of the fore group's strips at full sail, kg/m
+	afterStrip       float64
+	squareSail       sailCoefficients
+	foreX, afterX    float64 // each group's mast ahead of the centre of gravity, m
+	squareFootZ      float64 // the sails' foot's depth below the centre of gravity, m
+	squareFootHeight float64 // each strip's centre of effort above the foot at full sail, m
+	squareHeadHeight float64
+	squarePressure   float64 // m out along the yards with the flow attached
+	squareTwist      float64 // rad
+	squareReefs      [3]float64
+	braceSharp       float64 // rad
+	braceRate        float64 // rad/s
+	hauls, letGo     float64 // rad
+	squareTrimBelow  float64 // rad: below this angle of attack the square sails lift, for Out.Sail
+	squareEaseAbove  float64 // rad: past this they are stalled
+
 	// Foils.
 	board, rudder     foil
 	foilStall         float64
@@ -216,9 +235,11 @@ func Prepare(p *Params, w *Waves, b *Prepared) {
 
 	// Each strip is half the sail. Induced drag follows the Offshore Racing
 	// Congress's VPP (2023, eq. 5.34): A/(π h_eff²), of the whole rig's
-	// area, main and headsails, on the rig's effective height.
+	// area, main, headsails and square sails, on the rig's effective
+	// height.
 	b.strip = float64(float64(0.5*airDensity) * (0.5 * p.SailArea))
-	liftDrag := (p.SailArea+p.HeadsailArea)/float64(math.Pi*float64(p.EffectiveHeight*p.EffectiveHeight)) + p.QuadraticDrag
+	area := ((p.SailArea + p.HeadsailArea) + p.SquareForeArea) + p.SquareAfterArea
+	liftDrag := area/float64(math.Pi*float64(p.EffectiveHeight*p.EffectiveHeight)) + p.QuadraticDrag
 	b.sail.prepare(p.MaxLift, p.StallAngle, p.StallWidth, p.SailDrag, &p.NormalForce, liftDrag, p.LuffAngle, p.FlogDrag)
 	// The sail luffs, for the sailor, below half its stall angle: a boat
 	// there makes half the speed of its best trim or less, which lies
@@ -257,6 +278,7 @@ func Prepare(p *Params, w *Waves, b *Prepared) {
 	b.sailFloat = p.SailFloat
 	b.sailWaterDamping = p.SailWaterDamping
 	b.prepareHeadsails(p)
+	b.prepareSquare(p)
 
 	// The foils' centres of pressure are at PressureDepth of their span
 	// below the hull (Keuning and Vermeulen 2003, as used by Day 2017).
@@ -398,4 +420,36 @@ func (b *Prepared) prepareHeadsails(p *Params) {
 	b.jibReefs = p.HeadsailReefs
 	b.jibHaulRate = (b.jibOut - b.jibIn) / p.SheetHaulTime
 	b.jibEaseRate = (b.jibOut - b.jibIn) / p.SheetEaseTime
+}
+
+// prepareSquare derives the square sails' constants, if the boat has any.
+// Each group is two strips each half its area, with the main's luffing
+// angle and flogging drag and the whole rig's induced drag. The braces
+// swing the yards over their travel from sharp up on one side, through
+// square, to sharp up on the other in the brace time.
+func (b *Prepared) prepareSquare(p *Params) {
+	if !(p.SquareForeArea > 0 || p.SquareAfterArea > 0) {
+		return
+	}
+	b.square = true
+	b.foreStrip = float64(float64(0.5*airDensity) * (0.5 * p.SquareForeArea))
+	b.afterStrip = float64(float64(0.5*airDensity) * (0.5 * p.SquareAfterArea))
+	b.squareSail.prepare(p.SquareMaxLift, p.SquareStallAngle, p.SquareStallWidth, p.SquareDrag,
+		&p.SquareNormalForce, b.sail.liftDrag, p.LuffAngle, p.FlogDrag)
+	b.foreX = p.SquareForeMast
+	b.afterX = p.SquareAfterMast
+	b.squareFootZ = p.CentreOfGravity - p.SquareFootHeight
+	b.squareFootHeight = float64(p.SquareFootStrip * p.SquareLuff)
+	b.squareHeadHeight = float64(p.SquareHeadStrip * p.SquareLuff)
+	// Half the sails' mean width, the greater group's.
+	width := float64(0.5 * max2(p.SquareForeArea, p.SquareAfterArea) / p.SquareLuff)
+	b.squarePressure = float64(p.SquarePressure * width)
+	b.squareTwist = float64(p.SquareTwist * degree)
+	b.squareReefs = p.SquareReefs
+	b.braceSharp = float64(p.BraceSharp * degree)
+	b.braceRate = float64(2*(math.Pi/2-b.braceSharp)) / p.BraceTime
+	b.hauls = float64(p.Hauls * degree)
+	b.letGo = float64(p.LetGo * degree)
+	b.squareTrimBelow = float64(0.5 * b.squareSail.stallAngle)
+	b.squareEaseAbove = float64(1.75 * b.squareSail.stallAngle)
 }

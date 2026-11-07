@@ -117,6 +117,7 @@ export function writeParams(params: Float64Array, p: BoatPhysics): void {
   params[f.squareStallWidth] = p.square.squareStallWidth;
   params[f.squareDrag] = p.square.squareDrag;
   params.set(p.square.squareNormalForce, f.squareNormalForce);
+  params[f.squareTwist] = p.square.squareTwist;
   params[f.braceSharp] = p.square.braceSharp;
   params[f.braceTime] = p.square.braceTime;
   params[f.hauls] = p.square.hauls;

@@ -1,6 +1,6 @@
 {
  "comment": "Written by go test ./internal/physics -run Golden -update. Floats are their IEEE 754 bits in hexadecimal.",
- "layout": "0xd041ad55",
+ "layout": "0xdf1f0b30",
  "scenarios": [
   {
    "name": "beat",

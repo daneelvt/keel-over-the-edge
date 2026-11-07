@@ -118,6 +118,16 @@
         "The start sheet [[90, 0.5], [110, 0.6], [130, 0.7]] from tools/polar -start: each within 85% of the best sheet's speed 20 s from rest in 3, 5 and 8 knots.",
         "Where she differs from the rating: from 90° aft the rating sets a spinnaker, which she has not: 3% to 26% slower there. Heel costs her hull nothing, as the Jolly boat's (the towed resistance is upright only), so in 20 knots her beat VMG, 4.13 knots, is near the rating's with the full crew; flattening alone holds it under."
       ]
+    },
+    {
+      "boat": "tall-ship",
+      "original": "HM Bark Endeavour replica (1994), under plain sail, smooth water",
+      "height": 10,
+      "points": [
+        {"measure": "speed", "twa": 135, "wind": 16, "value": 7.5, "tolerance": 0.067, "source": "the replica's passages: about 7.5 knots for long periods in a 15 to 18 knot breeze"},
+        {"measure": "speed", "atMost": true, "twa": 150, "wind": 20, "value": 9, "tolerance": 0, "source": "at most 9 knots off the wind in 20 knots of smooth water"}
+      ],
+      "notes": []
     }
   ]
 }

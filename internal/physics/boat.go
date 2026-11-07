@@ -66,6 +66,9 @@ func step(s *State, c *Control, e *Env, sea *Sea, g *Ground, b *Prepared, o *Out
 		}
 		s.JibLimit = approach(clamp(s.JibLimit, b.jibIn, b.jibOut), limit, float64(rate*Dt))
 	}
+	if b.square {
+		b.brace(s, e, sheet)
+	}
 	if s.SailorMode == Sailing {
 		// The crew takes a reef in or shakes one out a level at a time.
 		s.Reef = approach(s.Reef, control(c.Reef, 0, 2), float64(b.reefRate*Dt))
@@ -272,7 +275,109 @@ func (b *Prepared) substep(s *State, wind, sinW, cosW, dt float64, g *rig, v *wa
 		o.JibFootFlow, o.JibHeadFlow = sail.jibFlow[0], sail.jibFlow[1]
 		o.JibTwist = sail.jibTwist
 		o.ReefShare = g.share
+		o.ForeFootAttack, o.ForeHeadAttack = sail.foreAttack[0], sail.foreAttack[1]
+		o.ForeFootFlow, o.ForeHeadFlow = sail.foreFlow[0], sail.foreFlow[1]
+		o.AfterFootAttack, o.AfterHeadAttack = sail.afterAttack[0], sail.afterAttack[1]
+		o.AfterFootFlow, o.AfterHeadFlow = sail.afterFlow[0], sail.afterFlow[1]
+		if b.square {
+			o.Sail = b.squareState(s, o)
+		}
 	}
+}
+
+// brace swings the yards toward the braces' angle, sheet, from 0 braced
+// up sharp to 1 square, on the side the crew hauls them to, at the
+// crew's rate. Yards never braced, on a boat just made, are braced at
+// once.
+//
+// The crew braces each group of yards for the wind over the other side,
+// the side it fills from, and hauls them round in a turn as a ship's
+// crew does (Willis 2003). In a tack, as the ship's head comes within
+// hauls of the wind and turns on through it, the after yards swing to
+// the new side, "mainsail haul"; the fore yards stay, aback, and push her
+// head round, until the wind is letGo on the new bow, "let go and haul".
+// A ship that stops short falls back, and the after yards come back to
+// her old side. Wearing, both groups keep their side until the wind is
+// letGo on the new quarter. Each rule keeps its side within its margin,
+// so a yawing ship never braces back and forth.
+func (b *Prepared) brace(s *State, e *Env, sheet float64) {
+	angle := b.braceSharp + float64(sheet*(math.Pi/2-b.braceSharp))
+	w := wrapAngle(e.WindFrom - s.Heading)
+	a := math.Abs(w)
+	filled := -sign(w) // the side that fills from the wind
+	after, fore := sign(s.Yards), sign(s.ForeYards)
+	if a < math.Pi-b.letGo {
+		switch {
+		case a > b.hauls:
+			after = filled
+		case float64(s.YawRate*w) > 0 && math.Abs(s.YawRate) > hauling:
+			// Turning on through the wind: the new side.
+			after = -filled
+		}
+		if a > b.letGo {
+			fore = filled
+		}
+	}
+	step := float64(b.braceRate * Dt)
+	s.Yards = swingYards(s.Yards, after, angle, step)
+	s.ForeYards = swingYards(s.ForeYards, fore, angle, step)
+}
+
+// hauling is the least rate of turn at which the crew takes a ship to be
+// coming round through the wind, rad/s.
+const hauling = 0.5 * degree
+
+// swingYards moves yards, an angle off the centreline signed by the side they
+// are braced for, toward angle on side side by at most step. To change
+// sides they swing through square, where either sign is the same yards.
+// Yards at 0, never braced, or with no side to go to, are set at once.
+func swingYards(yards, side, angle, step float64) float64 {
+	if side == 0 {
+		side = sign(yards)
+	}
+	if yards == 0 || side == 0 {
+		if side == 0 {
+			side = 1
+		}
+		return float64(side * angle)
+	}
+	at := math.Abs(yards)
+	if sign(yards) == side {
+		return float64(side * approach(at, angle, step))
+	}
+	if left := step - (math.Pi/2 - at); left > 0 {
+		return float64(side * approach(math.Pi/2, angle, left))
+	}
+	return float64(-side * (at + step))
+}
+
+// squareState is what a ship's square sails want of the braces, for
+// Out.Sail, as squareState's watcher would say of the after yards' lower
+// sails: aback, the wind on their fore face; lifting, their angle of
+// attack under squareTrimBelow, the yards braced too square for the wind
+// (brace up); stalled, past squareEaseAbove with the yards not yet
+// square (square them); or drawing. At rest head to wind they are drawing:
+// no bracing mends it.
+func (b *Prepared) squareState(s *State, o *Out) float64 {
+	a := math.Abs(o.AfterFootAttack)
+	still := o.SpeedThroughWater < sailRestSpeed
+	headToWind := math.Abs(o.ApparentWindAngle) < sailHeadToWind
+	switch {
+	case o.AfterFootFlow == FlowAback:
+		if still && headToWind {
+			return SailDrawing
+		}
+		return SailAback
+	case a < b.squareTrimBelow:
+		if still && headToWind {
+			return SailDrawing
+		}
+		return SailLuffing
+	case a > b.squareEaseAbove && math.Abs(s.Yards) < math.Pi/2-0.05*(math.Pi/2-b.braceSharp) &&
+		math.Abs(o.ApparentWindAngle) < sailRunFrom:
+		return SailStalled
+	}
+	return SailDrawing
 }
 
 // sailState is what the sail wants of its sheet, for Out.Sail, as a sailor

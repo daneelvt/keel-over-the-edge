@@ -1592,7 +1592,7 @@ type PhysicsAutopilot struct {
 
 // The daggerboard or fixed keel, and the rudder.
 type PhysicsFoils struct {
-	// Chord of the daggerboard, in m.
+	// Chord of the daggerboard, or of a fixed keel along its length, in m.
 	BoardChord float64 `json:"boardChord"`
 
 	// Distance of the daggerboard ahead of the centre of gravity, in m.
@@ -2035,22 +2035,24 @@ type PhysicsSquare struct {
 	// degrees.
 	Hauls float64 `json:"hauls"`
 
-	// And the fore yards once the wind is this far on the new bow, in degrees.
+	// And the fore yards once the wind is this far on the new bow; wearing, every
+	// yard once the wind is this far on the new quarter, in degrees.
 	LetGo float64 `json:"letGo"`
 
 	// The after group's area, in m²; 0 for none.
 	SquareAfterArea float64 `json:"squareAfterArea"`
 
-	// The after group's mast ahead of the centre of gravity, in m.
+	// The after group's centre of effort ahead of the centre of gravity, in m:
+	// between its masts, by their sails' areas.
 	SquareAfterMast float64 `json:"squareAfterMast"`
 
 	// Viscous drag coefficient.
 	SquareDrag float64 `json:"squareDrag"`
 
-	// The lowest yard's height above the waterline, in m.
+	// The lowest sails' foot above the waterline, in m.
 	SquareFootHeight float64 `json:"squareFootHeight"`
 
-	// Height of the lower strip's centre of effort above the lowest yard, as a
+	// Height of the lower strip's centre of effort above the sails' foot, as a
 	// fraction of the luff.
 	SquareFootStrip float64 `json:"squareFootStrip"`
 
@@ -2060,21 +2062,23 @@ type PhysicsSquare struct {
 	// The fore group's mast ahead of the centre of gravity, in m.
 	SquareForeMast float64 `json:"squareForeMast"`
 
-	// Height of the upper strip's centre of effort above the lowest yard, as a
+	// Height of the upper strip's centre of effort above the sails' foot, as a
 	// fraction of the luff.
 	SquareHeadStrip float64 `json:"squareHeadStrip"`
 
-	// The sails' height from the lowest yard to the highest, in m.
+	// The sails' height from that foot to the highest yard, in m.
 	SquareLuff float64 `json:"squareLuff"`
 
 	// Greatest lift coefficient.
 	SquareMaxLift float64 `json:"squareMaxLift"`
 
-	// Normal force coefficient, every 10° of angle of attack from 0° to 180°.
+	// Normal force coefficient of separated flow, every 10° of angle of attack from
+	// 0° to 180°: also of a sail aback, pressed flat against its mast.
 	SquareNormalForce []float64 `json:"squareNormalForce"`
 
-	// Centre of pressure aft of the yards' line with the flow separated, as a
-	// fraction of a yard's half-length.
+	// Centre of pressure out along the yards from the mast toward the arm the wind
+	// meets first, with the flow attached, as a fraction of the sails' half-width
+	// (half their area over their luff); with the flow separated it is at the mast.
 	SquarePressure float64 `json:"squarePressure"`
 
 	// The share of their luff kept at full sail, with one reef and with two.
@@ -2085,6 +2089,10 @@ type PhysicsSquare struct {
 
 	// Angle past it over which the lift falls away, in degrees.
 	SquareStallWidth float64 `json:"squareStallWidth"`
+
+	// The upper strip's yards braced this much squarer than the lower's, in degrees:
+	// the wind aloft is freer.
+	SquareTwist float64 `json:"squareTwist"`
 }
 
 // How long a wreck has lain: how much of her is left.
@@ -4776,4 +4784,4 @@ type WorldZones struct {
 }
 
 // Version is the catalog version (tools/catalog).
-const Version = "dd9366a4c537ddb1"
+const Version = "438c24e76c1d9e19"
