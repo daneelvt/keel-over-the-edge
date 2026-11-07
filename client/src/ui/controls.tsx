@@ -105,6 +105,14 @@ export function Helm({ input, model }: { input: HelmInput; model: HudModel }) {
   );
 }
 
+/**
+ * An end's word long enough ("Brace up") that with its arrow it would not
+ * fit the sheet's width, and is set smaller while lit.
+ */
+function long(word: string): string {
+  return word.length > 6 ? ' long' : '';
+}
+
 export function Sheet({ input, model }: { input: SheetInput; model: HudModel }) {
   const dimmed = model.sailor.value !== '';
   const sail = model.sail.value;
@@ -129,7 +137,7 @@ export function Sheet({ input, model }: { input: SheetInput; model: HudModel }) 
       data-sail={sail === '' ? undefined : sail}
       {...handlers(input, 'y')}
     >
-      <span class={`sheet-end${trim ? ' lit' : ''}`} data-end="trim">
+      <span class={`sheet-end${trim ? ' lit' : ''}${long(words.trim)}`} data-end="trim">
         {trim && (
           <span class="sheet-arrow" aria-hidden="true">
             ▲
@@ -145,7 +153,7 @@ export function Sheet({ input, model }: { input: SheetInput; model: HudModel }) 
           <span class="knob" />
         </div>
       </div>
-      <span class={`sheet-end${ease ? ' lit' : ''}`} data-end="ease">
+      <span class={`sheet-end${ease ? ' lit' : ''}${long(words.ease)}`} data-end="ease">
         {words.ease}
         {ease && (
           <span class="sheet-arrow" aria-hidden="true">
