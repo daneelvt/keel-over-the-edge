@@ -49,6 +49,35 @@ export function boatsHere(harbour: HarbourView, port: NonNullable<InPort>): bool
   return port.boats && harbour.boats?.own.value === true;
 }
 
+/**
+ * The board's keys to the player's boat, where it may be changed: Your
+ * boat and Change boat, each once the fleet is read; or why it cannot be.
+ */
+export function BoatKeys({ boats }: { boats: BoatChooser }) {
+  const unread = boats.unread.value;
+  return (
+    <>
+      <button
+        type="button"
+        class="board-close board-you"
+        disabled={boats.yours === null}
+        onClick={() => boats.openLook()}
+      >
+        {YOUR_BOAT}
+      </button>
+      <button
+        type="button"
+        class="board-close board-you"
+        disabled={boats.fleet.value === null}
+        onClick={() => boats.openBoats()}
+      >
+        {CHANGE_BOAT}
+      </button>
+      {unread !== '' ? <p class="board-office">{unread}</p> : null}
+    </>
+  );
+}
+
 /** The board of the port the boat is in. */
 export function BoardPanel({
   id,
@@ -145,27 +174,7 @@ export function BoardPanel({
           Your sailor
         </button>
       ) : null}
-      {boats !== undefined ? (
-        <>
-          <button
-            type="button"
-            class="board-close board-you"
-            disabled={boats.yours === null}
-            onClick={() => boats.openLook()}
-          >
-            {YOUR_BOAT}
-          </button>
-          <button
-            type="button"
-            class="board-close board-you"
-            disabled={boats.fleet.value === null}
-            onClick={() => boats.openBoats()}
-          >
-            {CHANGE_BOAT}
-          </button>
-        </>
-      ) : null}
-      {boats?.unread.value ? <p class="board-office">{boats.unread.value}</p> : null}
+      {boats !== undefined ? <BoatKeys boats={boats} /> : null}
       <button type="button" class="board-close" onClick={close}>
         Close
       </button>
