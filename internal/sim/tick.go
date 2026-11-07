@@ -83,6 +83,7 @@ func (w *World) inputs() {
 		next.Machine[s], next.Priority[s], next.Look[s] = cur.Machine[s], cur.Priority[s], cur.Look[s]
 		next.Control[s] = cur.Control[s]
 		next.Pilot[s] = cur.Pilot[s]
+		next.Rig[s] = cur.Rig[s]
 		next.State[s] = cur.State[s]
 		next.Course[s] = cur.Course[s]
 		next.Voyage[s] = cur.Voyage[s]
@@ -110,7 +111,7 @@ func (w *World) inputs() {
 	if in := w.given; in != nil {
 		for _, sw := range in.Changed {
 			if sw.Slot >= 0 && int(sw.Slot) < w.capacity && next.Occupied[sw.Slot] {
-				next.Control[sw.Slot], next.Pilot[sw.Slot] = sw.Word, sw.Pilot
+				next.Control[sw.Slot], next.Pilot[sw.Slot], next.Rig[sw.Slot] = sw.Word, sw.Pilot, sw.Rig
 				next.Changed = append(next.Changed, sw)
 			}
 		}
@@ -124,13 +125,15 @@ func (w *World) inputs() {
 
 	controls := w.bus.Controls
 	for _, s := range next.Live {
-		word, pilot := controls.Load(s)
-		// The pair is taken whole: two words of different ticks were read
-		// between a writer's two stores, and wait a tick.
-		if (word != next.Control[s] || pilot != next.Pilot[s]) && word.Seq() == pilot.Seq() &&
-			word.Gen() == next.Gen[s] && pilot.Gen() == next.Gen[s] && bus.Due(word.Seq(), next.Tick) {
-			next.Control[s], next.Pilot[s] = word, pilot
-			next.Changed = append(next.Changed, bus.SlotWord{Slot: s, Word: word, Pilot: pilot})
+		word, pilot, rig := controls.Load(s)
+		// The words are taken whole: words of different ticks were read
+		// between a writer's stores, and wait a tick.
+		g := next.Gen[s]
+		if (word != next.Control[s] || pilot != next.Pilot[s] || rig != next.Rig[s]) &&
+			word.Seq() == pilot.Seq() && word.Seq() == rig.Seq() &&
+			word.Gen() == g && pilot.Gen() == g && rig.Gen() == g && bus.Due(word.Seq(), next.Tick) {
+			next.Control[s], next.Pilot[s], next.Rig[s] = word, pilot, rig
+			next.Changed = append(next.Changed, bus.SlotWord{Slot: s, Word: word, Pilot: pilot, Rig: rig})
 		}
 	}
 	q := w.bus.Commands
@@ -186,6 +189,7 @@ func (w *World) stepSlots(slots []int32, o *physics.Out, src *physics.Sources) {
 		word := f.Control[s]
 		c := physics.Control{Helm: word.Helm(), Sheet: word.Sheet()}
 		c.Pilot, c.Target, c.Order, c.Way = f.Pilot[s].Control()
+		c.Reef = float64(f.Rig[s].Reef())
 		if f.Voyage[s].Falling() || f.Stay[s] {
 			// A boat falling over the lip is not stepped: it keeps its
 			// state and its sail as it went over; nor is a boat that

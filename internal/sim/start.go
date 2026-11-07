@@ -129,7 +129,7 @@ func (w *World) startSheet(f *bus.Frame, s int32) uint16 {
 
 // readyControls sets the controls of the boat in slot s of f, just put at
 // the start, as a new boat's: the helm centred, the sheet its start
-// sheet, the autopilot off. The slot is told, so the controls hold until
+// sheet, the autopilot off and the reefs shaken out. The slot is told, so the controls hold until
 // its sailor writes again; the sailor's phone takes them from the
 // Welcome that follows.
 func (w *World) readyControls(f *bus.Frame, s int32) {
@@ -139,8 +139,9 @@ func (w *World) readyControls(f *bus.Frame, s int32) {
 	word := f.Control[s]
 	f.Control[s] = bus.Pack(word.Seq(), bus.Steps/2, w.startSheet(f, s), f.Gen[s])
 	f.Pilot[s] = bus.HandPilot(f.Control[s])
+	f.Rig[s] = bus.HandRig(f.Control[s])
 	if w.given == nil {
-		w.bus.Controls.Store(s, f.Control[s], f.Pilot[s])
+		w.bus.Controls.Store(s, f.Control[s], f.Pilot[s], f.Rig[s])
 	}
 }
 

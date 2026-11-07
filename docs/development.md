@@ -1476,10 +1476,11 @@ The behaviour tests say what must stay true
 (`go test ./internal/physics -run 'BoatsBump|DirtyAir|Shadow|Contact|Articles' -v`):
 boats bump at every crossing angle and part, the wake follows the apparent
 wind, and dirty air costs a boat a share of its way to windward (logged in
-three winds). The snapshot is version 10 (8 with the pilot word, 9 with the
-time aground, 10 with each boat's voyage at the edge): a change to the
-courses, the pairs or the control words is a new version, and a reset at the
-deploy.
+three winds). The snapshot is version 15 (8 with the pilot word, 9 with the
+time aground, 10 with each boat's voyage at the edge, 15 with the rig word,
+the state's rig and the kind of boat a place in the queue is to have): a
+change to the courses, the pairs or the control words is a new version, and
+a reset at the deploy.
 
 ## The autopilot
 
@@ -1533,17 +1534,21 @@ with the input's tick like the helm, so the page predicts them. The page
 mirrors the target as it orders the turn: the angle's sign, or in heading
 mode the heading about the mean wind.
 
-### The two words, and what the state carries
+### The three words, and what the state carries
 
-A control slot is two 64-bit words, each with the input's tick and the
-slot's generation: the helm and sheet (`bus.Word`), and the autopilot's
-mode, way, order count and target in 65536ths of a turn (`bus.PilotWord`).
-The edge stores the pilot word, then the other; the tick takes the pair only
-when both carry the same tick, and otherwise keeps the pair in force a tick
-longer: a read between the two stores costs a late input, never a mismatch.
-A writer that steers by hand stores its word with the autopilot off
-(`Controls.StoreHand`). The frames (`Frame.Pilot`), the input log, the
-digest and checkpoints (snapshot version 8, now 9) carry the pilot word.
+A control slot is three 64-bit words, each with the input's tick and the
+slot's generation: the helm and sheet (`bus.Word`); the autopilot's mode,
+way, order count and target in 65536ths of a turn (`bus.PilotWord`); and the
+rig's (`bus.RigWord`): the reef, 0 full sail, 1 or 2, in two bits, and 20
+spare bits kept 0 for the rig's later controls. The edge stores the rig
+word, then the pilot word, then the other; the tick takes the three only
+when all carry the same tick, and otherwise keeps those in force a tick
+longer: a read between the stores costs a late input, never a mismatch. A
+writer that steers by hand stores its word with the autopilot off and the
+reefs shaken out (`Controls.StoreHand`). The frames (`Frame.Pilot`,
+`Frame.Rig`), the input log, the digest and checkpoints carry every word.
+The tick applies the rig word's reef as `Control.Reef`; the autopilot never
+reefs.
 
 What the autopilot remembers is in `State`: `PilotTrim`, `PilotWay` and
 `PilotOrder`, so a replay from the server's state steers as the server did.
@@ -2448,7 +2453,14 @@ reach 110° off the mean wind at its place, on the side with the more open
 water ahead out to 150 m, on that reach and on the close reach its weather
 helm rounds it up to, then on the side leading away from the coast; its
 sheet its kind's start sheet for the angle (`boats[].startSheet`, chosen by
-`go run ./tools/polar -start`), its helm centred, its autopilot off. A boat
+`go run ./tools/polar -start`), its helm centred, its autopilot off and
+its reefs shaken out. A boat takes a place only where it fits by its size
+(`World.fits`): the circle about its outline 5 m clear of every other
+boat's, and the water there its draught (`physics.Draught`) and a metre
+deep; from its slot's place it takes the first that does, so a keelboat
+passes places a dinghy takes. A `Join` names the kind of boat a new boat is
+(`Command.BoatKind`, kept with a place in the queue): online every sailor's
+names none, the world's first, the Jolly boat; tests name others. A boat
 back from the edge, or restored onto land, starts the same way, and the
 phone takes the controls from the Welcome that follows. A world with no
 start area (open sea, or its land sailed off) starts boats on the spawn
@@ -4062,7 +4074,8 @@ A second request while one is being written gets 409.
 
 The tick is deterministic, so what it was given reproduces what it did. The
 input log records, tick by tick, what each tick **applied**: the control words
-that changed and the commands with their results, and any ticks skipped. It
+that changed (all three of a slot: format 14) and the commands with their
+results (a `Join` with the kind of boat it names), and any ticks skipped. It
 is binary, in segments of 30 s, each opening with a snapshot of the whole
 world, with a digest of the world every second. The tick hands its records to
 a writer goroutine and never waits for it: if the writer falls 10 s behind,
@@ -4531,7 +4544,14 @@ gybe raises the autopilot's order count only when the side changes and no
 turn is under way or waiting, so a retried tack turns once. A new mode or
 target ends a stalled turn (`physics.PilotHeld`), so the answer tells the
 order, not the stall; a turn's answer says how far round it goes. `trim`'s
-degrees map to the sheet by the catalog's boom range.
+degrees map to the sheet by the boat's own kind's boom range. `trim` and
+`steer` take `reef` (0 full sail, 1 or 2), written in the rig word; the
+order line and the report's Boat line say how the sail stands in the
+boat's words (`controls.reef`: "one reef", or "reefing to two reefs" while
+the crew is at work). The full report's Boat line names the boat's kind
+and its reef; the brief one its reef while the sail is reefed. The boat a
+machine sailor takes is the kind its `Join` gives, the world's first
+(`joinedKind`); at sea the tools read the boat's own kind.
 
 **Limits** (`limits.go`): orders 2 a second (burst 5), looks 4 a second
 (burst 10). `internal/scripted`'s `TestHandSteeringAgainstTheAutopilot`
@@ -4564,9 +4584,15 @@ check WebSockets' origins, keel does). A message may be 1 KB at most.
 message; its first byte is its kind: `1`, a Protocol Buffers envelope
 (`keel/v1/game.proto`: `Hello`, `Input`, `Ping`, `Command` from the client;
 `Welcome`, `Pong`, `Queued`, `Restart`, `SeaAreas`, `WeatherSystems` from
-the server), or `2`, the packed snapshot (`snapshot.txt`: a 176-byte header
-with the own boat's state as float64, its heave and pitch included, then the
-other boats' entries; see [Other boats](#other-boats)). `SeaAreas` is the
+the server), or `2`, the packed snapshot (`snapshot.txt`, layout 12: a
+176-byte header with the own boat's state as float64, its heave and pitch
+included; blocks after it only while they are not zero, the autopilot's, the
+time aground, and the rig's (the headsails' clew, the yards, the reef the
+sail is at, and the reef in force: 56 bytes, which a Jolly boat under full
+sail never sends); then the other boats' entries; see [Other
+boats](#other-boats)). The own boat's state is sent whole, every field of
+`physics.State` (`sim.StateFields`, 34), so the page replays it bit for
+bit. `SeaAreas` is the
 sea about the boat ([Waves](#waves)) and `WeatherSystems` the spells of
 weather its wind is computed from ([Wind and weather](#wind-and-weather)). `go run
 ./tools/protocol` generates the Go (`internal/protocol/pb`) and TypeScript
@@ -4585,7 +4611,8 @@ through one connection: a newer one stops the older writing the boat's
 control slot, closes it with 4001 ("playing on another device", with **Take
 over**), then joins. `Welcome` comes with the first frame that holds the
 boat; a snapshot follows on every even tick (15 a second). The client sends
-an `Input` when its quantised controls change, stamped with the tick it
+an `Input` (the helm, the sheet, the autopilot's control and the reef, 0 to
+2) when its quantised controls change, stamped with the tick it
 stepped them for; the edge holds it until the tick before that is
 published, and the simulation never applies a word before its tick, so the
 server steps the boat with the controls the page stepped it with. Each
@@ -4635,8 +4662,11 @@ once, once a round trip; 5 s of margins of 3 or more lower it by one. Steps
 for ticks an input could no longer reach in time (catching up, or before the
 first `Pong`) keep the controls the server holds.
 
-**Prediction** (`client/src/predict/predictor.ts`). The page keeps 64 ticks
-of its steps' controls and states. A snapshot equal to the state predicted
+**Prediction** (`client/src/predict/predictor.ts`). The module holds every
+kind of boat in the catalog (`preparePhysics` with `catalog.boats`), and the
+predictor steps the own boat's, `Welcome.kind` (`Predictor.kind`); other
+boats' wakes are each their own kind's. The page keeps 64 ticks
+of its steps' controls (the reef among them) and states. A snapshot equal to the state predicted
 for its tick, bit for bit, changes nothing, as it is whenever the inputs
 arrived in time; one that differs puts the boat back to the server's state
 and steps it again to the present, and the drawn boat eases the difference
@@ -4681,12 +4711,22 @@ third of the connections sample their far band on each.
 what can be seen: position to the centimetre, heading, heel, boom and rudder
 in 65,536 steps a turn (coarser angles, which change only every few
 snapshots, make a boat drawn between them heel and swing its boom in
-jerks), the sailor's offset in centimetres, its mode,
+jerks), the sailor's offset in centimetres, its mode, the reef its sail is
+at rounded to a level (flags bits 6–7),
 and the **sail byte**, which the physics workers keep for every boat: the
 sail's flattening and the flow over its two strips (luffing, drawing,
-stalled, aback), which the state cannot tell. The entries change the view of
-a **base**: an `enter` (the boat in full, 19 bytes), an `update` of the
+stalled, aback), which the state cannot tell; and the **rig**: the
+headsails' clew (`jib`), the yards and the fore yards' difference from them
+while the crew hauls them round apart, each in the same steps, sent only
+while not zero. The entries change the view of
+a **base**: an `enter` (the boat in full, 20 bytes with its entry's byte;
+its kind's uvarint is the kind × 8 plus which rig fields follow, so a
+keelboat's jib costs 2 bytes more), an `update` of the
 fields that changed (a moving near boat costs about 10 bytes), or a `leave`.
+An update of a rig field is op 3, whose change mask has a second byte for
+them, so a boat with no rig never pays for it: a Jolly boat's snapshot is
+byte for byte what it was before layout 12 (a keelboat's moving update is
+about 13 bytes, and its own snapshot carries the rig's block, 56 bytes).
 A boat that has not changed sends nothing. The game connection is TCP, and
 one writer writes a connection's messages in turn, so the base is the newest
 snapshot the writer has **taken** from the mailbox: the client will hold it
@@ -4739,8 +4779,9 @@ fewer than half of that (their reserve) the first of them waiting goes
 before any human. No boat at sea is ever taken out for another. A
 **priority account** (the world page's box) never waits: it gets a boat
 beyond the limit and the cap, while a slot is free. A place's kind and
-priority are kept with it, and with every boat, in the checkpoint (format
-12) and the input log. The edge tells a waiting
+priority are kept with it, and with every boat, in the checkpoint
+(snapshot version 15) and the input log, as is the kind of boat it is to
+have. The edge tells a waiting
 connection its place (`Queued`) when it changes, at most once a second, and
 welcomes it when its boat appears. The page shows "The sea is full. You are
 12th in line." over the "Back soon" screen; while waiting the net worker
@@ -6749,6 +6790,7 @@ things and their pictures stay in one wind. The developer page is
 | Helm | The arc bottom left: drag left to turn the bow to port, right to starboard, relative to where the thumb lands (140 px is the full travel). A double tap centres it | ← and → (or A and D), the full travel in 0.6 s while held; C centres it |
 | Sheet | The slider bottom right: drag up to trim (haul in), down to ease, relative to where the thumb lands (160 px from hauled in to let fly) | W trims and S eases, the whole range in 2 s while held |
 | Autopilot | The button between them: on at the boat's angle to the wind, and its dial; touching the helm takes the helm back | P on or off; Q and E turn its target a degree to port or starboard, ten with Shift; T tacks, G gybes; the helm's keys take the helm back |
+| Reef | The Reef key (`Game.reef.set(level)`) | R takes one more reef, F shakes one out (Shift and R too, since F flies the free camera where it may); the crew takes the boat's reef time a level, and the reef goes out in each `Input` |
 | Camera | Drag on the sea to swing it round and up or down; pinch for its distance (5 to 80 m). It eases back behind the boat 5 s after the last touch | Drag with the mouse; the wheel for the distance |
 
 Both controls take a thumb each at once. Each shows its target (the knob)

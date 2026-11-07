@@ -116,6 +116,53 @@ describe('the predictor', () => {
     expect(Math.abs(p.offset.east)).toBeLessThan(1e-4);
   });
 
+  test('a boat of each kind, its reef kept with each tick and replayed', async () => {
+    const boats = catalog.boats.map((b) => b.physics);
+    const keelboat = catalog.boats.findIndex((b) => b.id === 'keelboat');
+    expect(keelboat).toBeGreaterThan(0);
+    const of = async (kind: number): Promise<Predictor> => {
+      const p = new Predictor(await loadPhysics(bytes), boats, catalog.weather, catalog.world);
+      p.kind = kind;
+      return p;
+    };
+    const reefAt = (i: number): number => (i >= 5 ? 2 : 0);
+    const p = await of(keelboat);
+    expect(p.kind).toBe(keelboat);
+    p.snapshot(start(100));
+    for (let i = 0; i < 20; i++) {
+      p.stepIndices(...controls(i), undefined, reefAt(i));
+    }
+    const server = await of(keelboat);
+    server.reset(start(100));
+    for (let i = 0; i < 10; i++) {
+      server.stepIndices(...controls(i), undefined, reefAt(i));
+    }
+    const sn = snapshotOf(server);
+    sn.state[S.x] = (sn.state[S.x] ?? 0) + 0.5;
+    const want = await of(keelboat);
+    want.reset(sn);
+    for (let i = 10; i < 20; i++) {
+      want.stepIndices(...controls(i), undefined, reefAt(i));
+    }
+    expect(p.snapshot(sn).corrected).toBe(true);
+    expect(Array.from(p.states.current)).toEqual(Array.from(want.states.current));
+    // The crew is reefing, and the keelboat's jib has its sheet.
+    const st = p.states.current;
+    expect(st[S.reef]).toBeGreaterThan(0);
+    expect(st[S.jibLimit]).toBeGreaterThan(0);
+    // The first kind steps as a dinghy: no jib.
+    const dinghy = await of(0);
+    dinghy.reset(start(100));
+    for (let i = 0; i < 20; i++) {
+      dinghy.stepIndices(...controls(i), undefined, reefAt(i));
+    }
+    expect(dinghy.states.current[S.jibLimit]).toBe(0);
+    expect(dinghy.states.current[S.reef]).toBeGreaterThan(0);
+    // A kind the module does not hold is the first.
+    dinghy.kind = boats.length;
+    expect(dinghy.kind).toBe(0);
+  });
+
   test('a boat that stays is held unstepped, and let go starts again once', async () => {
     const p = await predictor();
     p.snapshot(start(100));
@@ -262,7 +309,17 @@ describe('pacing online', () => {
     o.pace(worldAt(111));
     const inputs = port.sent.filter((m) => m.type === 'input');
     expect(inputs).toEqual([
-      { type: 'input', seq: 113, helm: 768, sheet: 700, pilot: 0, target: 0, order: 0, way: 0 },
+      {
+        type: 'input',
+        seq: 113,
+        helm: 768,
+        sheet: 700,
+        pilot: 0,
+        target: 0,
+        order: 0,
+        way: 0,
+        reef: 0,
+      },
     ]);
     // Drawn the fraction of the way the clock is.
     expect(helmsman.clock.steps).toBe(112);
@@ -290,7 +347,17 @@ describe('pacing online', () => {
     o.pace(worldAt(100));
     expect(p.tick).toBe(105);
     expect(port.sent.filter((m) => m.type === 'input')).toEqual([
-      { type: 'input', seq: 104, helm: 1024, sheet: 700, pilot: 0, target: 0, order: 0, way: 0 },
+      {
+        type: 'input',
+        seq: 104,
+        helm: 1024,
+        sheet: 700,
+        pilot: 0,
+        target: 0,
+        order: 0,
+        way: 0,
+        reef: 0,
+      },
     ]);
   });
 

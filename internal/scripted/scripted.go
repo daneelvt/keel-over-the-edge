@@ -171,7 +171,7 @@ func Run(ctx context.Context, cfg Config) error {
 				s.sheet = SheetIndex(now, wind.WindSpeed)
 			}
 			controls.Store(s.slot, bus.Pack(seq, bus.Steps/2, s.sheet, s.gen),
-				bus.PackPilot(seq, bus.PilotWind, s.way, s.order, Target(s.angle), s.gen))
+				bus.PackPilot(seq, bus.PilotWind, s.way, s.order, Target(s.angle), s.gen), bus.PackRig(seq, 0, s.gen))
 			heap.Fix(&q, 0)
 		}
 		f.Release()

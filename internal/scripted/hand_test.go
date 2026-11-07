@@ -127,7 +127,7 @@ func TestHandSteeringAgainstTheAutopilot(t *testing.T) {
 			}
 			if s.config == 0 {
 				w.Bus().Controls.Store(s.slot, bus.Pack(seq, bus.Steps/2, sheet, s.gen),
-					bus.PackPilot(seq, bus.PilotWind, bus.WayHold, 0, Target(s.angle), s.gen))
+					bus.PackPilot(seq, bus.PilotWind, bus.WayHold, 0, Target(s.angle), s.gen), bus.PackRig(seq, 0, s.gen))
 				continue
 			}
 			every := int(math.Round(physics.StepsPerSecond / rates[s.config-1]))

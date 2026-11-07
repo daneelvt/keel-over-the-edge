@@ -50,7 +50,8 @@ describe('the view decoder, fuzzed', () => {
             for (let f = 0; f < VIEW_STRIDE; f++) {
               view.q[slot * VIEW_STRIDE + f] = Math.floor(random() * 65536) - 32768;
             }
-            view.q[slot * VIEW_STRIDE + Q.flags] = Math.floor(random() * 8);
+            view.q[slot * VIEW_STRIDE + Q.flags] =
+              Math.floor(random() * 8) | (Math.floor(random() * 3) << 6);
           }
         }
         let b: Uint8Array;

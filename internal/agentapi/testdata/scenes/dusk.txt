@@ -1,6 +1,6 @@
-# about 297 tokens
+# about 301 tokens
 night 18:12 · seq 2503
-Boat: Jolly boat · sailing · heading 116° · 1.4 kn · heel 0° · port tack
+Boat: Jolly boat, full sail · sailing · heading 116° · 1.4 kn · heel 0° · port tack
 Pilot: hand · boom 50° (sheet out to 50°) · rudder 0° · sail drawing
 Wind: 359° N 2 kn F1 · 117° off the bow, port side · apparent 2 kn 80° · in the lee of land to the N
 Shoal: under 1.5 m 180°–270°, 45–60 m · 295°–315°, 250–300 m · 340°–045°, 45–50 m · clear 070°–160°

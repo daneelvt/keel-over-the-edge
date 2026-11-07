@@ -162,6 +162,9 @@ type Command struct {
 	// Look is a Join's account's sailor's look, and a SetLook's new one:
 	// a look code (internal/looks).
 	Look uint32
+	// BoatKind is the kind of boat a Join's new boat is, an index into the
+	// world's kinds; a boat the account already has keeps its own.
+	BoatKind uint16
 	// Reply, if not nil, receives the result. The simulation never waits on
 	// it, so it should have room for one reply.
 	Reply chan<- Reply

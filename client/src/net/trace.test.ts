@@ -115,6 +115,11 @@ function pilotOf(v: number[]): PilotControl {
   return { mode, way, order, target };
 }
 
+/** A traced step's or input's reef, after its autopilot's: 0 when not traced. */
+function reefOf(v: number[]): number {
+  return v[7] ?? 0;
+}
+
 async function replay(trace: Trace): Promise<{
   corrections: number;
   snapshots: number;
@@ -125,7 +130,7 @@ async function replay(trace: Trace): Promise<{
 }> {
   const predictor = new Predictor(
     await loadPhysics(bytes),
-    catalog.boats[0].physics,
+    catalog.boats.map((b) => b.physics),
     catalog.weather,
     catalog.world,
     catalog.encounters,
@@ -186,10 +191,10 @@ async function replay(trace: Trace): Promise<{
       expected.push(...out.map(hexOf));
     } else if (e.input !== undefined) {
       const [seq = 0, helm = 0, sheet = 0] = e.input;
-      expected.push(hexOf(session.input(e.t, seq, helm, sheet, pilotOf(e.input))));
+      expected.push(hexOf(session.input(e.t, seq, helm, sheet, pilotOf(e.input), reefOf(e.input))));
     } else if (e.step !== undefined) {
       const [tick = 0, helm = 0, sheet = 0] = e.step;
-      predictor.stepIndices(helm, sheet, pilotOf(e.step));
+      predictor.stepIndices(helm, sheet, pilotOf(e.step), reefOf(e.step));
       expect(predictor.tick, where).toBe(tick);
       fell = Math.max(fell, predictor.over);
       if (predictor.wakes.reaching > 0) {

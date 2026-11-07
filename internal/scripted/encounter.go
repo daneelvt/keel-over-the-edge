@@ -64,7 +64,10 @@ var ErrNoPlayer = errors.New("scripted: no player's boat is sailing")
 type EncounterConfig struct {
 	Bus     *bus.Bus
 	Weather *physics.WeatherPrepared // the world's wind's constants, to know the wind at the player
-	Length  float64                  // the boats' length overall, m
+	// Lengths are each kind of boat's length overall, m, by its index in
+	// the world's kinds. The staged boat is of the first kind, as a Join
+	// that names none.
+	Lengths []float64
 	Log     *slog.Logger
 }
 
@@ -111,6 +114,7 @@ func Encounter(ctx context.Context, cfg EncounterConfig, situation string, boat 
 	}
 	h := f.State[player]
 	playerBoat := f.Boat[player]
+	length := cfg.length(f.Kind[player])
 	w := physics.Weather{Prepared: cfg.Weather}
 	w.Set(f.SpellsInPlay())
 	var wt physics.WeatherTick
@@ -118,7 +122,7 @@ func Encounter(ctx context.Context, cfg EncounterConfig, situation string, boat 
 	f.Release()
 	wind := physics.WindAt(&wt, h.X, h.Y, nil)
 
-	p := stage(situation, &h, wind.WindFrom, cfg.Length)
+	p := stage(situation, &h, wind.WindFrom, length)
 	// Before the join: an earlier staging's boat, which the join may give
 	// again, is not made to leave now.
 	n := stagings.Add(1)
@@ -137,6 +141,19 @@ func Encounter(ctx context.Context, cfg EncounterConfig, situation string, boat 
 		Situation: situation, Article: article, Boat: staged, Player: playerBoat,
 		East: p.state.X, North: p.state.Y, Heading: p.state.Heading * 180 / math.Pi,
 	}, nil
+}
+
+// length is the length staging takes between the staged boat and a
+// player's boat of kind: the two boats' mean length overall.
+func (cfg *EncounterConfig) length(kind uint16) float64 {
+	if len(cfg.Lengths) == 0 {
+		return 0
+	}
+	player := cfg.Lengths[0]
+	if int(kind) < len(cfg.Lengths) {
+		player = cfg.Lengths[kind]
+	}
+	return (player + cfg.Lengths[0]) / 2
 }
 
 // scriptedAccount reports whether a is a scripted sailor's.
@@ -196,7 +213,7 @@ func sailStaged(ctx context.Context, b *bus.Bus, slot int32, gen uint16, boat ui
 		if p.course != nil {
 			pilot = bus.PackPilot(seq, bus.PilotHeading, bus.WayHold, 0, compass(p.course(time.Since(start).Seconds())), gen)
 		}
-		b.Controls.Store(slot, bus.Pack(seq, bus.Steps/2, sheet, gen), pilot)
+		b.Controls.Store(slot, bus.Pack(seq, bus.Steps/2, sheet, gen), pilot, bus.PackRig(seq, 0, gen))
 	}
 }
 
@@ -210,7 +227,7 @@ func ahead(h float64) (x, y float64)     { return math.Sin(h), math.Cos(h) }
 func starboard(h float64) (x, y float64) { return math.Cos(h), -math.Sin(h) }
 
 // stage plans situation against the player's boat h in the true wind from
-// windFrom, for boats length long.
+// windFrom, for boats length long: the staged boat's and the player's mean.
 func stage(situation string, h *physics.State, windFrom, length float64) plan {
 	// The player's tack: the side the wind comes over, starboard positive.
 	tack := 1.0

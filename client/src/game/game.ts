@@ -51,6 +51,7 @@ import {
   WAY_TACK_STALLED,
 } from '../input/pilot';
 import { quantiseHelm, quantiseSheet } from '../input/quantise';
+import { ReefInput } from '../input/reef';
 import { SheetInput } from '../input/sheet';
 import type { BumpTold } from '../net/messages';
 import { RECORDS } from '../predict/layout.gen';
@@ -74,7 +75,9 @@ export class Game implements PilotActions {
   readonly helm = new HelmInput();
   readonly sheet = new SheetInput();
   readonly pilot = new PilotInput();
-  readonly keys = new KeyInput(this.helm, this.sheet, this);
+  /** The reef the player asks for: the Reef key calls reef.set(level). */
+  readonly reef = new ReefInput();
+  readonly keys = new KeyInput(this.helm, this.sheet, this, this.reef);
   readonly hud = new HudModel();
   readonly sound = new SoundEngine();
   readonly world: SeaScene;
@@ -160,6 +163,7 @@ export class Game implements PilotActions {
     this.#halfLength = world.kind.physics.hull.waterlineLength / 2;
     this.helm.onTake = () => this.takeHelm();
     this.sheet.onTake = () => this.controlsTouched();
+    this.reef.onTake = () => this.controlsTouched();
     this.sheet.target = 0.5;
     world.tick = (dt, now) => this.#frame(dt, now);
     effect(() => {
@@ -502,7 +506,12 @@ export class Game implements PilotActions {
       return;
     }
     this.beforeStep?.();
-    d.step(quantiseHelm(this.helm.target), quantiseSheet(this.sheet.target), this.pilot);
+    d.step(
+      quantiseHelm(this.helm.target),
+      quantiseSheet(this.sheet.target),
+      this.pilot,
+      this.reef.level,
+    );
   }
 
   #frame(dt: number, now: number): void {

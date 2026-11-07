@@ -28,20 +28,27 @@ export const Q = {
   sail: 9,
   /** The sailor's look code, which only an enter carries. */
   look: 10,
+  /** The rig: the headsails' clew, the after yards, the fore yards less the after, in angle steps; 0 without. */
+  jib: 11,
+  yards: 12,
+  fore: 13,
 } as const;
-export const VIEW_STRIDE = 11;
+export const VIEW_STRIDE = 14;
 
 /**
  * A boat's flags: in the far band; the sailor's mode is bits 1–2; falling
- * over the lip; a machine sailor's, sailed by an AI agent; and, in an
- * enter, the same boat in its sailor's new look.
+ * over the lip; a machine sailor's, sailed by an AI agent; in an enter,
+ * the same boat in its sailor's new look; and the reef, rounded to a
+ * level, in bits 6–7.
  */
 export const FAR_BAND = 1;
 export const FALLING = 8;
 export const MACHINE = 16;
 /** In an enter: the boat the slot already holds, its sailor's look changed. */
 export const RELOOK = 32;
-const FLAGS_USED = 63;
+/** The reef's place in the flags: 0 full sail, 1 or 2; 3 is refused. */
+export const REEF_SHIFT = 6;
+const MAX_REEF = 2;
 
 /** The steps of the fields: the heading's, heel's, boom's and rudder's, and the position's. */
 export const ANGLE_STEP = (2 * Math.PI) / 65536;
@@ -54,6 +61,13 @@ export const CHANGE = { none: 0, entered: 1, updated: 2, left: 3 } as const;
 const OP_UPDATE = 0;
 const OP_ENTER = 1;
 const OP_LEAVE = 2;
+/** An update whose change mask has a second byte, for the rig's fields. */
+const OP_UPDATE_RIG = 3;
+
+/** An enter's kind is its kind × RIG_KINDS plus which rig fields follow: 1 the jib, 2 the yards, 4 the fore yards. */
+const RIG_KINDS = 8;
+/** The rig's fields, in their order after an enter's and in an update's second mask byte. */
+const RIG_FIELDS = [Q.jib, Q.yards, Q.fore] as const;
 
 /** The boats a player sees after a snapshot, as the wire carries them. */
 export class View {
@@ -134,8 +148,13 @@ class Reader {
 
 class EntryError extends Error {}
 
-/** An enter's length after its kind and look. */
+/** An enter's length after its kind and look, the rig's fields aside. */
 const ENTER_FIELDS = 17;
+
+/** Whether a boat's flags are refused: a reef of 3. */
+function badFlags(flags: number): boolean {
+  return flags >> REEF_SHIFT > MAX_REEF;
+}
 
 function int24(v: DataView, at: number): number {
   return ((v.getUint8(at) | (v.getUint8(at + 1) << 8) | (v.getUint8(at + 2) << 16)) << 8) >> 8;
@@ -173,7 +192,9 @@ export function applyEntries(
           changes[slot] = CHANGE.left;
           break;
         case OP_ENTER: {
-          const kind = r.uvarint();
+          const kindRig = r.uvarint();
+          const kind = Math.floor(kindRig / RIG_KINDS);
+          const rig = kindRig % RIG_KINDS;
           if (kind > 65535) {
             return `a boat of kind ${kind}`;
           }
@@ -186,7 +207,7 @@ export function applyEntries(
           }
           const b = r.at;
           const flags = v.getUint8(b);
-          if ((flags & ~FLAGS_USED) !== 0) {
+          if (badFlags(flags)) {
             return 'a boat with flags it should not have';
           }
           q[o + Q.kind] = kind;
@@ -201,12 +222,30 @@ export function applyEntries(
           q[o + Q.sailor] = v.getInt8(b + 15);
           q[o + Q.sail] = v.getUint8(b + 16);
           r.at += ENTER_FIELDS;
+          for (let i = 0; i < RIG_FIELDS.length; i++) {
+            let value = 0;
+            if ((rig & (1 << i)) !== 0) {
+              value = ((r.byte() | (r.byte() << 8)) << 16) >> 16;
+              if (value === 0) {
+                return "an enter's rig field of 0 sent";
+              }
+            }
+            q[o + (RIG_FIELDS[i] as number)] = value;
+          }
           view.used[slot] = 1;
           changes[slot] = CHANGE.entered;
           break;
         }
-        case OP_UPDATE: {
-          const m = r.byte();
+        case OP_UPDATE:
+        case OP_UPDATE_RIG: {
+          let m = r.byte();
+          if (op === OP_UPDATE_RIG) {
+            const rigMask = r.byte();
+            if (rigMask === 0 || rigMask > 7) {
+              return `a rig's update of mask ${rigMask}`;
+            }
+            m |= rigMask << 8;
+          }
           if (m === 0) {
             return 'an update of nothing';
           }
@@ -247,18 +286,21 @@ export function applyEntries(
           }
           if ((m & 128) !== 0) {
             const flags = r.byte();
-            if ((flags & ~FLAGS_USED) !== 0) {
+            if (badFlags(flags)) {
               return 'a boat with flags it should not have';
             }
             q[o + Q.flags] = flags;
+          }
+          for (let i = 0; i < RIG_FIELDS.length; i++) {
+            if ((m & (256 << i)) !== 0) {
+              q[o + (RIG_FIELDS[i] as number)] = ((r.byte() | (r.byte() << 8)) << 16) >> 16;
+            }
           }
           if (changes[slot] !== CHANGE.entered) {
             changes[slot] = CHANGE.updated;
           }
           break;
         }
-        default:
-          return `an entry of op ${op}`;
       }
     }
   } catch (e) {
@@ -396,8 +438,15 @@ export const SLOT = {
   look: 16,
   /** 1 when the snapshot's enter is of the boat the slot held, its sailor's look changed. */
   relook: 17,
+  /** Radians, positive to starboard: the headsails' clew's angle off the centreline; 0 with no headsails. */
+  jib: 18,
+  /** The reef the sail is at, rounded to a level: 0 full sail, 1 or 2. */
+  reef: 19,
+  /** Radians: the after yards' angle off the centreline, and the fore yards'; 0 with no square sails. */
+  yards: 20,
+  foreYards: 21,
 } as const;
-export const SLOT_FIELDS = 18;
+export const SLOT_FIELDS = 22;
 /** A record's length in bytes. */
 export const FLEET_RECORD_BYTES = MAX_HEADER_SIZE + 8 * (META_FIELDS + VIEW_SLOTS * SLOT_FIELDS);
 
@@ -463,6 +512,11 @@ export function writeRecord(
     f[o + SLOT.machine] = (flagBits & MACHINE) !== 0 ? 1 : 0;
     f[o + SLOT.look] = q[b + Q.look] ?? 0;
     f[o + SLOT.relook] = (flagBits & RELOOK) !== 0 ? 1 : 0;
+    f[o + SLOT.jib] = (q[b + Q.jib] ?? 0) * ANGLE_STEP;
+    f[o + SLOT.reef] = flagBits >> REEF_SHIFT;
+    const yards = q[b + Q.yards] ?? 0;
+    f[o + SLOT.yards] = yards * ANGLE_STEP;
+    f[o + SLOT.foreYards] = (yards + (q[b + Q.fore] ?? 0)) * ANGLE_STEP;
   }
   f[FLEET_META.boats] = boats;
 }

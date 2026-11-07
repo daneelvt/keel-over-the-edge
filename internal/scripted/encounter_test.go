@@ -46,7 +46,7 @@ func TestEncounters(t *testing.T) {
 						w.Tick()
 					}
 				})
-				cfg := EncounterConfig{Bus: w.Bus(), Weather: w.Timeline().Prepared(), Length: cat.Boats[0].LengthOverall, Log: slog.New(slog.DiscardHandler)}
+				cfg := EncounterConfig{Bus: w.Bus(), Weather: w.Timeline().Prepared(), Lengths: lengths(cat), Log: slog.New(slog.DiscardHandler)}
 				if _, err := Encounter(ctx, cfg, situation, 0); !errors.Is(err, ErrNoPlayer) {
 					t.Fatalf("with no player: %v", err)
 				}
@@ -141,7 +141,7 @@ func TestEncounterStagedAgain(t *testing.T) {
 				w.Tick()
 			}
 		})
-		cfg := EncounterConfig{Bus: w.Bus(), Weather: w.Timeline().Prepared(), Length: cat.Boats[0].LengthOverall, Log: slog.New(slog.DiscardHandler)}
+		cfg := EncounterConfig{Bus: w.Bus(), Weather: w.Timeline().Prepared(), Lengths: lengths(cat), Log: slog.New(slog.DiscardHandler)}
 		reply := make(chan bus.Reply, 1)
 		w.Bus().Commands.Players().TrySend(bus.Command{Op: bus.Join, Account: bus.Account{1}, Conn: 7, Reply: reply})
 		<-reply
@@ -214,4 +214,13 @@ func TestCrowdBumps(t *testing.T) {
 		})
 		t.Logf("a thousand scripted sailors on the spawn grid: %d bumps in %d s, %.1f a second", bumps, ticks/30, float64(bumps)*30/float64(ticks))
 	})
+}
+
+// lengths are the catalog's boats' lengths overall, by kind.
+func lengths(cat *catalog.Catalog) []float64 {
+	l := make([]float64, len(cat.Boats))
+	for i := range cat.Boats {
+		l[i] = cat.Boats[i].LengthOverall
+	}
+	return l
 }

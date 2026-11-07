@@ -287,6 +287,8 @@ func TestOrdersOutOfBounds(t *testing.T) {
 			{"steer", map[string]any{"tiller": 3}, "not this tool's"},
 			{"trim", map[string]any{"boom": 120}, "out of range"},
 			{"trim", nil, "trim takes boom"},
+			{"trim", map[string]any{"reef": 3}, "reef is 0 (full sail), 1 (one reef) or 2 (two reefs): 3 is out of range."},
+			{"steer", map[string]any{"wind_angle": 90, "reef": -1}, "reef is 0 (full sail)"},
 			{"observe", map[string]any{"wake_on": []string{"heel"}}, "needs heel_over"},
 			{"observe", map[string]any{"wait": 90}, "wait is 0 to 50"},
 			{"chart", map[string]any{"place": "Nowhere"}, "No charted place"},
@@ -296,6 +298,39 @@ func TestOrdersOutOfBounds(t *testing.T) {
 				t.Errorf("%s %v: %v %q", c.tool, c.args, refused, text)
 			}
 			time.Sleep(time.Second)
+		}
+	})
+}
+
+// A reef is a target the crew works to: trim and steer take it, the order
+// line and the report say how the sail stands, and the same reef again
+// changes nothing.
+func TestReefOrders(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		h := newHarness(t, 8, 12, 0)
+		a := sailor(1, "Iron Mary")
+		if text, _ := h.call(t, a, "observe", map[string]any{"detail": "full"}); !strings.Contains(text, "Boat: Jolly boat, full sail · ") {
+			t.Fatalf("the first look: %q", text)
+		}
+		if text, refused := h.call(t, a, "trim", map[string]any{"reef": 1}); refused || !strings.Contains(text, " · reefing to one reef · ") {
+			t.Fatalf("a reef: %v %q", refused, text)
+		}
+		time.Sleep(time.Second)
+		if text, _ := h.call(t, a, "trim", map[string]any{"reef": 1}); !strings.Contains(text, "already holding") {
+			t.Fatalf("the reef again: %q", text)
+		}
+		time.Sleep(40 * time.Second)
+		if text, _ := h.call(t, a, "observe", nil); !strings.Contains(text, "Boat: one reef · sailing") {
+			t.Fatalf("reefed: %q", text)
+		}
+		if text, refused := h.call(t, a, "steer", map[string]any{"wind_angle": 120, "reef": 0}); refused || !strings.Contains(text, " · shaking out to full sail · ") {
+			t.Fatalf("shaking it out: %v %q", refused, text)
+		}
+		time.Sleep(time.Second)
+		f := h.sea.Bus.Frames.Acquire()
+		defer f.Release()
+		if sl := f.Live[0]; f.Rig[sl].Reef() != 0 || !(f.State[sl].Reef > 0.9) {
+			t.Fatalf("the boat holds reef %d, its sail at %v", f.Rig[sl].Reef(), f.State[sl].Reef)
 		}
 	})
 }

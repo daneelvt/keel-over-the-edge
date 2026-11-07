@@ -5,13 +5,15 @@
 // and right arrows (or A and D) move the helm, W hauls the sheet in and S
 // eases it. C centres the helm. The helm's keys take the helm back from the
 // autopilot. P switches the autopilot on or off; Q and E turn what it holds
-// a degree to port or starboard, ten with Shift; T tacks, G gybes. Keys are
-// read by their place on the keyboard (KeyboardEvent.code), whatever its
-// layout.
+// a degree to port or starboard, ten with Shift; T tacks, G gybes. R takes
+// one more reef, F shakes one out, as Shift and R do where F flies the free
+// camera. Keys are read by their place on the keyboard (KeyboardEvent.code),
+// whatever its layout.
 
 import type { HelmInput } from './helm';
 import { clamp } from './helm';
 import type { PilotActions } from './pilot';
+import type { ReefInput } from './reef';
 import type { SheetInput } from './sheet';
 
 /** Seconds for a held key to move the helm over its full travel. */
@@ -33,7 +35,9 @@ type Action =
   | 'pilotPort'
   | 'pilotStarboard'
   | 'tack'
-  | 'gybe';
+  | 'gybe'
+  | 'reef'
+  | 'shakeOut';
 
 const KEYS: Record<string, Action> = {
   ArrowLeft: 'port',
@@ -48,6 +52,8 @@ const KEYS: Record<string, Action> = {
   KeyE: 'pilotStarboard',
   KeyT: 'tack',
   KeyG: 'gybe',
+  KeyR: 'reef',
+  KeyF: 'shakeOut',
 };
 
 export class KeyInput {
@@ -55,11 +61,18 @@ export class KeyInput {
   readonly #helm: HelmInput;
   readonly #sheet: SheetInput;
   readonly #pilot: PilotActions | null;
+  readonly #reef: ReefInput | null;
 
-  constructor(helm: HelmInput, sheet: SheetInput, pilot: PilotActions | null = null) {
+  constructor(
+    helm: HelmInput,
+    sheet: SheetInput,
+    pilot: PilotActions | null = null,
+    reef: ReefInput | null = null,
+  ) {
     this.#helm = helm;
     this.#sheet = sheet;
     this.#pilot = pilot;
+    this.#reef = reef;
   }
 
   /** A key went down, with Shift or not; returns whether it is one of the game's. */
@@ -103,6 +116,16 @@ export class KeyInput {
         break;
       case 'gybe':
         p?.pilotGybe();
+        break;
+      case 'reef':
+        if (shift) {
+          this.#reef?.shakeOut();
+        } else {
+          this.#reef?.reef();
+        }
+        break;
+      case 'shakeOut':
+        this.#reef?.shakeOut();
         break;
     }
     return true;

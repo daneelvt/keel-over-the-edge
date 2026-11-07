@@ -375,13 +375,14 @@ export class Session {
     return { kind: 'other' };
   }
 
-  /** The page's controls for tick seq: the helm's and sheet's indices, and the autopilot's control. */
+  /** The page's controls for tick seq: the helm's and sheet's indices, the autopilot's control and the reef. */
   input(
     now: number,
     seq: number,
     helm: number,
     sheet: number,
     pilot: PilotControl = PILOT_IDLE,
+    reef = 0,
   ): Uint8Array<ArrayBuffer> {
     return this.#encode(now, {
       body: {
@@ -395,6 +396,7 @@ export class Session {
           target: pilot.target,
           order: pilot.order,
           way: pilot.way,
+          reef,
         },
       },
     });

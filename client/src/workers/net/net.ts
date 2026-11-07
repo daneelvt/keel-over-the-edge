@@ -95,12 +95,14 @@ export class NetWorker {
         if (this.#session?.welcomed && this.#sailing) {
           this.#traffic.controls++;
           this.#send(
-            this.#session.input(this.#d.now(), m.seq, m.helm, m.sheet, {
-              mode: m.pilot,
-              target: m.target,
-              order: m.order,
-              way: m.way,
-            }),
+            this.#session.input(
+              this.#d.now(),
+              m.seq,
+              m.helm,
+              m.sheet,
+              { mode: m.pilot, target: m.target, order: m.order, way: m.way },
+              m.reef,
+            ),
           );
           this.#arm();
         }

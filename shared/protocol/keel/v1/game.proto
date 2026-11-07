@@ -64,6 +64,10 @@ message Input {
   uint32 order = 8;
   // The way of the latest order: 0 hold, 1 tack, 2 gybe.
   uint32 way = 9;
+  // The reef the crew is to take: 0 full sail, 1 or 2 reefs. A target the
+  // crew works to over the rig's reef time, applied at the input's tick as
+  // the helm is.
+  uint32 reef = 10;
 }
 
 // Ping asks for the server's world time, for the client's clock.

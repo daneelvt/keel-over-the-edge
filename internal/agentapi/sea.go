@@ -156,12 +156,18 @@ func (s *Sea) weatherAtTick(f *bus.Frame, tick int64) *physics.WeatherTick {
 	return t
 }
 
-// boat is a kind of boat by its index, the first for one out of range.
+// joinedKind is the kind of boat a machine sailor's Join gives it, as a
+// player's does: a Join names none, so the world's first, the boat every
+// sailor takes to sea.
+const joinedKind = 0
+
+// boat is a kind of boat by its index; one out of range, which no boat of
+// the world is, is the kind a Join gives.
 func (s *Sea) boat(kind uint16) *catalog.Boat {
 	if int(kind) < len(s.Boats) {
 		return &s.Boats[kind]
 	}
-	return &s.Boats[0]
+	return &s.Boats[joinedKind]
 }
 
 // ends is when the world ends, zero for none known.

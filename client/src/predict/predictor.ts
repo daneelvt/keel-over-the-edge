@@ -20,13 +20,16 @@
 // falling is the boat back at the start, and the prediction starts again
 // from it. A boat that stays where it is while its owner's free camera
 // roams is held so too, as the server holds it, and the first snapshot that
-// lets it go starts the prediction again from it. The Go test client
-// predicts the same way
+// lets it go starts the prediction again from it. The boat is of one of
+// the catalog's kinds, every one of which the module holds, and the
+// player's reef is part of each step's controls, as the helm is. The Go
+// test client predicts the same way
 // (internal/client/predict.go), and the tests replay its traces here.
 
 import type { BoatPhysics, Encounters, Weather } from '../catalog/types.gen';
 import type { BoatDriver } from '../game/driver';
 import { PILOT_IDLE, type PilotControl } from '../input/pilot';
+import { reefLevel } from '../input/reef';
 import type { OwnSnapshot } from '../net/snapshot';
 import { type BoatPose, StatePair } from './blend';
 import { RECORDS, SIZES } from './layout.gen';
@@ -180,23 +183,44 @@ export class Predictor implements BoatDriver {
   /** Each tick's autopilot control: mode, way and order count, and target. */
   readonly #pilot = new Uint8Array(RING * 3);
   readonly #target = new Uint16Array(RING);
+  /** Each tick's reef. */
+  readonly #reef = new Uint8Array(RING);
+  /** How many kinds of boat the module holds. */
+  readonly #kinds: number;
+  #kind = 0;
   readonly #ring = new Float64Array(RING * N);
   readonly #before = new Float64Array(N);
   /** The drawn boat's offset from the predicted one, eased away. */
   readonly offset = { east: 0, north: 0, heading: 0 };
 
+  /**
+   * A predictor of a boat of one of boats, the catalog's every kind (or one
+   * boat, kind 0), each prepared in the module by its place; the first
+   * until kind is set.
+   */
   constructor(
     physics: Physics,
-    boat: BoatPhysics,
+    boats: BoatPhysics | readonly BoatPhysics[],
     weather: Weather,
     world: VisibilityWorld,
     encounters?: Encounters,
   ) {
     this.#physics = physics;
-    preparePhysics(physics, boat, weather, world, encounters);
+    preparePhysics(physics, boats, weather, world, encounters);
+    this.#kinds = Array.isArray(boats) ? boats.length : 1;
     this.seas = new Seas(physics);
     this.weather = new Spells(physics);
     this.wakes = new Wakes(physics);
+    this.wakes.kinds = this.#kinds;
+  }
+
+  /** The boat's kind, its index in the catalog's boats (Welcome.kind); a kind the module does not hold is the first. */
+  get kind(): number {
+    return this.#kind;
+  }
+
+  set kind(k: number) {
+    this.#kind = Number.isInteger(k) && k >= 0 && k < this.#kinds ? k : 0;
   }
 
   /** The physics module, for whoever draws its sea. */
@@ -248,6 +272,7 @@ export class Predictor implements BoatDriver {
     target: number,
     order: number,
     way: number,
+    reef: number,
   ): void {
     const r = this.#physics.records;
     const c = r.control;
@@ -257,24 +282,34 @@ export class Predictor implements BoatDriver {
     c[RECORDS.control.target] = target;
     c[RECORDS.control.order] = order;
     c[RECORDS.control.way] = way;
+    c[RECORDS.control.reef] = reef;
     if (this.over !== 0 || this.stays) {
       return;
     }
     this.weather.use(tick);
     this.wakes.use(tick);
     this.seas.use(tick);
-    this.#physics.step();
+    this.#physics.step(this.#kind);
     if (this.#physics.over()) {
       this.over = tick;
     }
   }
 
-  /** Steps the next tick with the controls' indices and the autopilot's control. */
-  stepIndices(helm: number, sheet: number, pilot: PilotControl = PILOT_IDLE): void {
+  /** Steps the next tick with the controls' indices, the autopilot's control and the reef (reefLevel's: 0, 1 or 2). */
+  stepIndices(helm: number, sheet: number, pilot: PilotControl = PILOT_IDLE, reef = 0): void {
     const before = this.#physics.records.state;
     // The wind the step sails in is the wind where the boat is as it begins.
     this.weather.read(this.tick + 1, before[S.x] ?? 0, before[S.y] ?? 0, this.wind);
-    this.#stepModule(this.tick + 1, helm, sheet, pilot.mode, pilot.target, pilot.order, pilot.way);
+    this.#stepModule(
+      this.tick + 1,
+      helm,
+      sheet,
+      pilot.mode,
+      pilot.target,
+      pilot.order,
+      pilot.way,
+      reef,
+    );
     if (this.wakes.reaching > 0) {
       this.counts.shadowed++;
       // The wind the step sailed in, in the shadow of the boats near.
@@ -292,6 +327,7 @@ export class Predictor implements BoatDriver {
     this.#pilot[3 * i + 1] = pilot.way;
     this.#pilot[3 * i + 2] = pilot.order;
     this.#target[i] = pilot.target;
+    this.#reef[i] = reef;
     this.#ring.set(r.state, i * N);
     this.out.set(r.out);
     if ((r.out[RECORDS.out.pushedOff] ?? 0) !== 0) {
@@ -304,8 +340,8 @@ export class Predictor implements BoatDriver {
   }
 
   /** A BoatDriver's step: controls already at their resolution. */
-  step(helm: number, sheet: number, pilot: PilotControl = PILOT_IDLE): void {
-    this.stepIndices(helmIndex(helm), sheetIndex(sheet), pilot);
+  step(helm: number, sheet: number, pilot: PilotControl = PILOT_IDLE, reef = 0): void {
+    this.stepIndices(helmIndex(helm), sheetIndex(sheet), pilot, reefLevel(reef));
   }
 
   readonly #outcome: Outcome = {
@@ -387,6 +423,7 @@ export class Predictor implements BoatDriver {
         this.#target[j] ?? 0,
         p[3 * j + 2] ?? 0,
         p[3 * j + 1] ?? 0,
+        this.#reef[j] ?? 0,
       );
       this.#ring.set(r.state, j * N);
     }

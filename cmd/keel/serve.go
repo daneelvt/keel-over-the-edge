@@ -901,7 +901,11 @@ func placeRoute(b *bus.Bus, log *slog.Logger) http.Handler {
 //
 //	POST /debug/encounter?situation=port-starboard|windward-leeward|overtaking|tacking|luffing|capsized[&boat=…]
 func encounterRoute(ctx context.Context, b *bus.Bus, cat *catalog.Catalog, log *slog.Logger) http.Handler {
-	cfg := scripted.EncounterConfig{Bus: b, Weather: cat.PrepareWeather(), Length: cat.Boats[0].LengthOverall, Log: log}
+	lengths := make([]float64, len(cat.Boats))
+	for i := range cat.Boats {
+		lengths[i] = cat.Boats[i].LengthOverall
+	}
+	cfg := scripted.EncounterConfig{Bus: b, Weather: cat.PrepareWeather(), Lengths: lengths, Log: log}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		situation := r.URL.Query().Get("situation")
 		if _, ok := scripted.Situations[situation]; !ok {
