@@ -8405,4 +8405,4 @@ export interface LifeWhen {
 }
 
 /** The catalog version (tools/catalog). */
-export const CATALOG_VERSION = 'f51848767195ce9c';
+export const CATALOG_VERSION = '370c8c926db17136';
