@@ -52,7 +52,7 @@ poses:
       - [neck_01, x, -4]
       - [head, x, -12]
     ik:
-      hand_r: { at: bone, bone: pelvis, offset: [-0.17, 0.14, 0.08], pole: [-0.8, 0.5, 0.1] }
+      hand_r: { at: bone, bone: pelvis, offset: [-0.22, 0.1, 0.12], pole: [-0.8, 0.5, 0.1] }
 
   bosun-wheel-twist:
     from: bosun-wheel-arch

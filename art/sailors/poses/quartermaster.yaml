@@ -129,4 +129,4 @@ clips:
       - { pose: quartermaster-wheel-nod, hold: 0.3, ramp: 1.0, lead: head }
       - { pose: quartermaster-wheel-tally, hold: 0.4, ramp: 1.2, lead: head }
       - { pose: quartermaster-wheel-book, hold: 0.15, ramp: 1.3 }
-      - { pose: wheel-stand, hold: 0.3, ramp: 1.3 }
+      - { pose: wheel-stand, hold: 0.3, ramp: 1.6, arc: [0.04, 0.02] }

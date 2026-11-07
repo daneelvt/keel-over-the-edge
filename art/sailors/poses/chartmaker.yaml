@@ -66,17 +66,16 @@ poses:
   chartmaker-wheel-read:
     from: wheel-grip-left
     turn:
-      - [spine_03, x, 3]
-      - [neck_01, x, 10]
-      - [head, x, 16]
+      - [neck_01, x, 7]
+      - [head, x, 12]
     ik:
       hand_r: { at: bone, bone: spine_03, offset: [-0.05, -0.28, -0.08], pole: [-0.7, 0.2, -0.3] }
 
   chartmaker-wheel-sail:
     from: chartmaker-wheel-read
     turn:
-      - [neck_01, x, -10]
-      - [head, x, -18]
+      - [neck_01, x, -8]
+      - [head, x, -14]
       - [neck_01, z, -5]
       - [head, z, -10]
 
@@ -110,4 +109,4 @@ clips:
       - { pose: chartmaker-wheel-sail, hold: 0.6, ramp: 1.6, lead: head }
       - { pose: chartmaker-wheel-read, hold: 0.5, ramp: 1.1, lead: head }
       - { pose: chartmaker-wheel-pocket, hold: 0.15, ramp: 0.9 }
-      - { pose: wheel-stand, hold: 0.3, ramp: 1.3 }
+      - { pose: wheel-stand, hold: 0.3, ramp: 1.6, arc: [0.04, 0.02] }

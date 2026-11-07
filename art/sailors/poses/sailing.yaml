@@ -381,14 +381,16 @@ poses:
   wheel-reach:
     from: wheel-grip-left
     turn:
-      - [head, x, -4]
+      - [neck_01, x, 4]
+      - [head, x, 4]
     ik:
       hand_r: { at: bone, bone: head, offset: [-0.03, -0.28, -0.04], pole: [-0.6, 0.4, 0.0] }
 
   wheel-settle:
     from: wheel-grip-left
     turn:
-      - [head, x, 2]
+      - [neck_01, x, 4]
+      - [head, x, 9]
     ik:
       hand_r: { at: bone, bone: head, offset: [-0.03, -0.27, -0.055], pole: [-0.6, 0.4, 0.0] }
 
@@ -417,8 +419,8 @@ clips:
     keys:
       - { pose: wheel-stand, hold: 0.3 }
       - { pose: wheel-reach, hold: 0.15, ramp: 1.5, arc: [0.08, 0.04] }
-      - { pose: wheel-settle, hold: 0.25, ramp: 0.5 }
-      - { pose: wheel-stand, hold: 0.2, ramp: 1.5, arc: [0.08, 0.0] }
+      - { pose: wheel-settle, hold: 0.3, ramp: 0.5 }
+      - { pose: wheel-stand, hold: 0.2, ramp: 1.8, arc: [0.06, 0.04], anticipate: 0.06 }
       - { pose: wheel-ahead, hold: 1.0, ramp: 1.8, lead: head }
       - { pose: wheel-stand, hold: 0.3, ramp: 1.8, lead: head }
 
