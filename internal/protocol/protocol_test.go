@@ -166,6 +166,10 @@ func goldens() []golden {
 	// Sailors in looks: the first, one of a code of three bytes, a machine.
 	v1.Boats[1].Look = 0xFFFFF
 	v1.Boats[2].Look = 0x7012F
+	// Boats in their own looks: the largest code; a Jolly boat of number
+	// 12, cloth 2 and paint 1.
+	v1.Boats[1].BoatLook = 0x3FFFFF
+	v1.Boats[4].BoatLook = 0xC21
 	// Rigs: a jib and a reef; yards hauled round apart, and every rig
 	// field at once; a jib alone, to change alone.
 	v1.Boats[5].Jib, v1.Boats[5].Flags = 1234, v1.Boats[5].Flags|1<<reefShift
@@ -180,6 +184,7 @@ func goldens() []golden {
 	v2.Remove(63)
 	v2.Put(2, ptr(boat(2, false, physics.Sailing, 5, 6, 7, 8, 9, 10, 11, 12)))  // replaces
 	v2.Put(40, ptr(boat(0, false, physics.Sailing, -9, -9, 9, 9, -9, 9, 9, 9))) // enters
+	v2.Boats[40].BoatLook = 311<<8 | 3<<4 | 2                                   // in its own look
 	v2.Boats[0].Look = 0x35214                                                  // a look changed: an enter
 	v2.Boats[1].Jib, v2.Boats[1].Yards, v2.Boats[1].Fore = 77, -88, 99          // and the rig's, reefed
 	v2.Boats[1].Flags |= 2 << reefShift
@@ -547,24 +552,25 @@ func TestSnapshotRefusals(t *testing.T) {
 	// Entries refused against the base, each alone after a good header.
 	header := good[:sn.Header]
 	for name, entries := range map[string][]byte{
-		"rig update cut":        {OpUpdateRig<<6 | 1, ChangeHeading},
-		"rig update of no rig":  {OpUpdateRig<<6 | 1, ChangeHeading, 0, 1, 2},
-		"rig update spare bits": {OpUpdateRig<<6 | 1, 0, 0x08},
-		"rig update cut short":  {OpUpdateRig<<6 | 1, 0, ChangeJib >> 8, 1},
-		"reef 3":                {OpUpdate<<6 | 1, ChangeFlags, 3 << reefShift},
-		"rig of 0 entered":      {OpEnter<<6 | 1, enterJib, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
-		"rig entered cut":       {OpEnter<<6 | 1, enterYards, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1},
-		"truncated enter":       {OpEnter<<6 | 1, 0, 0, 1, 2},
-		"truncated update":      {OpUpdate<<6 | 1, ChangeHeading, 1},
-		"update of nothing":     {OpUpdate<<6 | 1, 0},
-		"update of empty slot":  {OpUpdate<<6 | 3, ChangeHeel, 1, 0},
-		"leave of empty slot":   {OpLeave<<6 | 3},
-		"look over 20 bits":     {OpEnter<<6 | 1, 0, 0x80, 0x80, 0x40, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
-		"overlong varint":       {OpUpdate<<6 | 1, ChangePosition, 0x80, 0x00, 0},
-		"kind above 65535":      {OpEnter<<6 | 1, 0x80, 0x80, 0x20, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
-		"beyond 24 bits":        {OpUpdate<<6 | 2, ChangePosition, 2, 0},
-		"bytes after the last":  {OpLeave<<6 | 1, 0},
-		"varint past its bytes": {OpUpdate<<6 | 1, ChangePosition, 0xff},
+		"rig update cut":         {OpUpdateRig<<6 | 1, ChangeHeading},
+		"rig update of no rig":   {OpUpdateRig<<6 | 1, ChangeHeading, 0, 1, 2},
+		"rig update spare bits":  {OpUpdateRig<<6 | 1, 0, 0x08},
+		"rig update cut short":   {OpUpdateRig<<6 | 1, 0, ChangeJib >> 8, 1},
+		"reef 3":                 {OpUpdate<<6 | 1, ChangeFlags, 3 << reefShift},
+		"rig of 0 entered":       {OpEnter<<6 | 1, enterJib, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+		"rig entered cut":        {OpEnter<<6 | 1, enterYards, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1},
+		"truncated enter":        {OpEnter<<6 | 1, 0, 0, 0, 1, 2},
+		"boat look over 22 bits": {OpEnter<<6 | 1, 0, 0, 0x80, 0x80, 0x80, 0x02, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+		"truncated update":       {OpUpdate<<6 | 1, ChangeHeading, 1},
+		"update of nothing":      {OpUpdate<<6 | 1, 0},
+		"update of empty slot":   {OpUpdate<<6 | 3, ChangeHeel, 1, 0},
+		"leave of empty slot":    {OpLeave<<6 | 3},
+		"look over 20 bits":      {OpEnter<<6 | 1, 0, 0x80, 0x80, 0x40, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+		"overlong varint":        {OpUpdate<<6 | 1, ChangePosition, 0x80, 0x00, 0},
+		"kind above 65535":       {OpEnter<<6 | 1, 0x80, 0x80, 0x20, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+		"beyond 24 bits":         {OpUpdate<<6 | 2, ChangePosition, 2, 0},
+		"bytes after the last":   {OpLeave<<6 | 1, 0},
+		"varint past its bytes":  {OpUpdate<<6 | 1, ChangePosition, 0xff},
 	} {
 		b := append(slices.Clone(header), entries...)
 		SetEntries(b, 1)

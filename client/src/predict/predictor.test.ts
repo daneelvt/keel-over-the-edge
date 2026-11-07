@@ -277,6 +277,8 @@ describe('pacing online', () => {
       zone: '',
       watching: null,
       look: 0,
+      boatLook: 0,
+      boatName: '',
       first: true,
     });
     const sn = start(100);
@@ -407,6 +409,8 @@ describe('the queue and the fleet online', () => {
       zone: '',
       watching: null,
       look: 0,
+      boatLook: 0,
+      boatName: '',
       first: true,
     });
     port.deliver({ type: 'status', status: 'sailing', waitMs: 0, reason: '' });
@@ -441,6 +445,8 @@ describe('the queue and the fleet online', () => {
       zone: '',
       watching: null,
       look: 0,
+      boatLook: 0,
+      boatName: '',
       first: true,
     });
     const record = new ArrayBuffer(FLEET_RECORD_BYTES);
@@ -483,6 +489,8 @@ describe('the bell online', () => {
       zone: '',
       watching: null,
       look: 0,
+      boatLook: 0,
+      boatName: '',
       first: true,
     });
     port.deliver({ type: 'status', status: 'sailing', waitMs: 0, reason: '' });
@@ -518,6 +526,8 @@ describe('the bell online', () => {
       zone: '',
       watching: null,
       look: 0,
+      boatLook: 0,
+      boatName: '',
       first: true,
     });
     port.deliver(status('sailing'));
@@ -549,6 +559,8 @@ describe('the bell online', () => {
       zone: '',
       watching: null,
       look: 0,
+      boatLook: 0,
+      boatName: '',
       first: true,
     });
     port.deliver(status('sailing'));
@@ -591,6 +603,8 @@ describe('a new boat’s first view', () => {
     zone: '',
     watching: null,
     look: 0,
+    boatLook: 0,
+    boatName: '',
     first: true,
     ...change,
   });

@@ -33,7 +33,7 @@ export const OVER_SIZE = 8;
 /** The header's length with every block. */
 export const MAX_HEADER_SIZE = HEADER_SIZE + PILOT_SIZE + GROUND_SIZE + RIG_SIZE + OVER_SIZE;
 /** The layout this client reads: the own boat's state as float64, its autopilot's, ground, rig's and over blocks, then the view's entries; flag bit 4 while the boat stays. */
-export const SNAPSHOT_LAYOUT = 12;
+export const SNAPSHOT_LAYOUT = 13;
 /** The most entries a snapshot may hold. */
 export const MAX_ENTRIES = 128;
 /** A header's flag: the far band's boats are sampled by this snapshot. */

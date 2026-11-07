@@ -184,6 +184,23 @@ type BoatArt struct {
 	Model ArtPath `json:"model"`
 }
 
+type BoatCloth struct {
+	// A band of another colour across the sail, if it is striped, sRGB, #rrggbb.
+	Band *string `json:"band,omitempty,omitzero"`
+
+	// The cloth's colour, sRGB, #rrggbb.
+	Colour string `json:"colour"`
+
+	// ID corresponds to the JSON schema field "id".
+	ID ID `json:"id"`
+
+	// The colour its sail number and the machine mark are painted in, sRGB, #rrggbb.
+	Ink string `json:"ink"`
+
+	// Display name, as the player reads it.
+	Name string `json:"name"`
+}
+
 // The words the boat's controls are shown with. Every boat has the helm, the sheet
 // and the reef; the sheet sets the main's limit, the headsails' in the same share,
 // and the yards' brace.
@@ -193,6 +210,40 @@ type BoatControls struct {
 
 	// The sheet's control: its name, and its two ends' words.
 	Sheet Sheet `json:"sheet"`
+}
+
+// The looks a boat takes: its hull's paints and its sails' cloths, the gold its
+// name is lettered in, and the highest sail number. At most 16 paints and 16
+// cloths: a boat's look code holds each in 4 bits. The first of each is a new
+// boat's.
+type BoatLooks struct {
+	// Sail cloths, in the chooser's order.
+	Cloths []BoatCloth `json:"cloths"`
+
+	// The colour a boat's name is lettered in, sRGB, #rrggbb.
+	Lettering string `json:"lettering"`
+
+	// The highest sail number: numbers run from 1 to it, each kind's its own. At most
+	// 16383, a look code's 14 bits.
+	Numbers int `json:"numbers"`
+
+	// Hull paints, in the chooser's order.
+	Paints []BoatPaint `json:"paints"`
+}
+
+type BoatPaint struct {
+	// Its colour, sRGB, #rrggbb.
+	Colour string `json:"colour"`
+
+	// The wood shows through it: the hull is drawn with its grain.
+	Grain *bool `json:"grain,omitempty,omitzero"`
+
+	// ID corresponds to the JSON schema field "id".
+	ID ID `json:"id"`
+
+	// Display name, as the player reads it: lowercase but for a name such as
+	// "Prussian blue".
+	Name string `json:"name"`
 }
 
 // The boat's physics, in SI units with angles in degrees. Every value is required.
@@ -291,6 +342,9 @@ const CallWhistle Call = "whistle"
 // Every list of kinds in the game. Kinds are data: code reads their properties,
 // never their names.
 type Catalog struct {
+	// BoatLooks corresponds to the JSON schema field "boatLooks".
+	BoatLooks BoatLooks `json:"boatLooks"`
+
 	// Boat types.
 	Boats []Boat `json:"boats"`
 
@@ -4722,4 +4776,4 @@ type WorldZones struct {
 }
 
 // Version is the catalog version (tools/catalog).
-const Version = "a069a5c58702b770"
+const Version = "dd9366a4c537ddb1"

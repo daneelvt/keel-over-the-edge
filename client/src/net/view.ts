@@ -32,8 +32,10 @@ export const Q = {
   jib: 11,
   yards: 12,
   fore: 13,
+  /** The boat's own look code, its paint, cloth and sail number, which only an enter carries. */
+  boatLook: 14,
 } as const;
-export const VIEW_STRIDE = 14;
+export const VIEW_STRIDE = 15;
 
 /**
  * A boat's flags: in the far band; the sailor's mode is bits 1–2; falling
@@ -44,7 +46,7 @@ export const VIEW_STRIDE = 14;
 export const FAR_BAND = 1;
 export const FALLING = 8;
 export const MACHINE = 16;
-/** In an enter: the boat the slot already holds, its sailor's look changed. */
+/** In an enter: the boat the slot already holds, its sailor's look, its own look or its kind changed. */
 export const RELOOK = 32;
 /** The reef's place in the flags: 0 full sail, 1 or 2; 3 is refused. */
 export const REEF_SHIFT = 6;
@@ -202,6 +204,10 @@ export function applyEntries(
           if (look >= 2 ** 20) {
             return `a sailor's look ${look}`;
           }
+          const boatLook = r.uvarint();
+          if (boatLook >= 2 ** 22) {
+            return `a boat's look ${boatLook}`;
+          }
           if (r.left() < ENTER_FIELDS) {
             return 'an entry cut short';
           }
@@ -212,6 +218,7 @@ export function applyEntries(
           }
           q[o + Q.kind] = kind;
           q[o + Q.look] = look;
+          q[o + Q.boatLook] = boatLook;
           q[o + Q.flags] = flags;
           q[o + Q.x] = int24(v, b + 1);
           q[o + Q.y] = int24(v, b + 4);
@@ -436,7 +443,7 @@ export const SLOT = {
   machine: 15,
   /** The sailor's look code. */
   look: 16,
-  /** 1 when the snapshot's enter is of the boat the slot held, its sailor's look changed. */
+  /** 1 when the snapshot's enter is of the boat the slot held, its sailor's look, its own look or its kind changed. */
   relook: 17,
   /** Radians, positive to starboard: the headsails' clew's angle off the centreline; 0 with no headsails. */
   jib: 18,
@@ -445,8 +452,10 @@ export const SLOT = {
   /** Radians: the after yards' angle off the centreline, and the fore yards'; 0 with no square sails. */
   yards: 20,
   foreYards: 21,
+  /** The boat's own look code: its paint, cloth and sail number. */
+  boatLook: 22,
 } as const;
-export const SLOT_FIELDS = 22;
+export const SLOT_FIELDS = 23;
 /** A record's length in bytes. */
 export const FLEET_RECORD_BYTES = MAX_HEADER_SIZE + 8 * (META_FIELDS + VIEW_SLOTS * SLOT_FIELDS);
 
@@ -517,6 +526,7 @@ export function writeRecord(
     const yards = q[b + Q.yards] ?? 0;
     f[o + SLOT.yards] = yards * ANGLE_STEP;
     f[o + SLOT.foreYards] = (yards + (q[b + Q.fore] ?? 0)) * ANGLE_STEP;
+    f[o + SLOT.boatLook] = q[b + Q.boatLook] ?? 0;
   }
   f[FLEET_META.boats] = boats;
 }

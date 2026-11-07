@@ -144,6 +144,12 @@ export class Online {
   readonly watching = signal<WatchingTold | null>(null);
   /** The look code of the boat in view's sailor, the own or the one watched, as last told; null before a Welcome. */
   readonly look = signal<number | null>(null);
+  /**
+   * The boat in view's own look, the own or the one watched: its boat look
+   * code (paint, cloth and sail number) and its name, "" for none; null
+   * before a Welcome.
+   */
+  readonly boatLook = signal<{ look: number; name: string } | null>(null);
   /** The kind of the boat in view, the own or the one watched, as the last Welcome told it: an index into the catalog's boats. */
   readonly kind = signal(0);
   /** The world's harbour, Port Royal's, as the last Welcome named it; null for none. */
@@ -398,6 +404,12 @@ export class Online {
       case 'look':
         this.look.value = m.look;
         break;
+      case 'boatLook':
+        this.boatLook.value = { look: m.look, name: m.name };
+        break;
+      case 'boatNames':
+        this.fleet.names(m.names);
+        break;
       case 'lamp': {
         const w = this.watching.value;
         this.#lamp.value = w?.machine && w.mine ? { state: m.state, of: w } : null;
@@ -468,6 +480,7 @@ export class Online {
         this.#watcher.kind = m.kind;
         this.onKind?.(m.kind);
         this.look.value = m.look;
+        this.boatLook.value = { look: m.boatLook, name: m.boatName };
         this.kind.value = m.kind;
         if (m.watching === null) {
           this.#predictor.kind = m.kind;

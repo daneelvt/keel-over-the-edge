@@ -107,6 +107,10 @@ export type Received =
   | { kind: 'lamp'; state: LampState }
   /** The sailor of the boat sailed or watched changed their look: its code. */
   | { kind: 'look'; look: number }
+  /** The boat sailed or watched was given a new look in port: its boat look code and name. */
+  | { kind: 'boatLook'; look: number; name: string }
+  /** The names of boats in view, by view slot, as of the next snapshot. */
+  | { kind: 'boatNames'; names: { slot: number; name: string }[] }
   /** The server is about to restart, in about inMs. */
   | { kind: 'restart'; inMs: number }
   /** The sea about the boat. */
@@ -252,6 +256,15 @@ export class Session {
       case 'lookChanged':
         this.#lastHeard = now;
         return { kind: 'look', look: m.body.value.look };
+      case 'boatLookChanged':
+        this.#lastHeard = now;
+        return { kind: 'boatLook', look: m.body.value.look, name: m.body.value.name };
+      case 'boatNames':
+        this.#lastHeard = now;
+        return {
+          kind: 'boatNames',
+          names: m.body.value.names.map((n) => ({ slot: n.slot, name: n.name })),
+        };
       case 'agentLamp': {
         this.#lastHeard = now;
         const state = m.body.value.state;

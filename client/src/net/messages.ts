@@ -334,6 +334,9 @@ export type FromWorker =
       watching: WatchingTold | null;
       /** The look code of the boat's sailor: the connection's own, or the one watched. */
       look: number;
+      /** The boat's own look code, its paint, cloth and sail number; and its name, "" for none. */
+      boatLook: number;
+      boatName: string;
       /**
        * The connection's first Welcome. A later one, a watch begun or the
        * own boat back, is sent nothing again that the connection was
@@ -355,6 +358,10 @@ export type FromWorker =
   | { type: 'lamp'; state: LampState }
   /** The sailor of the boat sailed or watched changed their look, at Port Royal: its code. */
   | { type: 'look'; look: number }
+  /** The boat sailed or watched was given a new look in port: its boat look code and name. */
+  | { type: 'boatLook'; look: number; name: string }
+  /** The names of boats in view, by view slot, as of the next snapshot: player text, "" for none. */
+  | { type: 'boatNames'; names: { slot: number; name: string }[] }
   /** The server is about to restart, in about inMs: the bell. */
   | { type: 'restart'; inMs: number }
   /** The sea about the boat, for the prediction and the drawing. */

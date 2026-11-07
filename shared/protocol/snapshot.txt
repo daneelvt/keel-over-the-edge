@@ -27,7 +27,7 @@ its rig's block of 56 bytes; then, while the boat is falling over the lip,
 its over block of 8 bytes; then the entries:
 
   offset  bytes  field
-       0      1  layout: 12
+       0      1  layout: 13
        1      8  tick (int64)
        9      2  base: how many ticks before this one the base snapshot is
                  (uint16); 0 for none: the view starts empty
@@ -102,7 +102,7 @@ before it end:
 A boat that stays is held where it is, as one falling over the lip is,
 until a snapshot without bit 4 lets it go.
 
-A layout byte other than 12 is refused, as are a mode, way, order or reef
+A layout byte other than 13 is refused, as are a mode, way, order or reef
 out of range, a spare byte not 0 and an over block's tick out of its range. The wind is not in the snapshot: the client
 computes the wind at its boat from the spells of weather it is sent
 (WeatherSystems), as the server does.
@@ -121,13 +121,19 @@ waves for everyone. A view slot's boat is:
              look among its sailors (15 for the machine), the
              version, the skin (a machine's finish), the hair (0 for
              a machine) and the main colour; at most 20 bits
+  boat look  the boat's own look code: its hull's paint in bits 0–3
+             and its sails' cloth in bits 4–7, places in the
+             catalog's boatLooks lists, and its sail number in bits
+             8–21; at most 22 bits. Its name, player text, comes
+             apart, in BoatNames
   flags      bit 0: in the far band; bits 1–2: the sailor's mode
              (sailing, in the water, on the board, climbing); bit 3: the
              boat has gone over the lip and is falling, not stepped; bit
              4: the boat is a machine sailor's, sailed by an AI agent,
              and carries the machine mark on its sail; bit 5, in an
              enter, the boat is the one the slot already holds, its
-             sailor's look changed; bits 6–7, the reef the sail is at,
+             sailor's look, its own look or its kind changed (swapped
+             in port); bits 6–7, the reef the sail is at,
              rounded to a level: 0 full sail, 1 or 2
   x, y       position, cm east and north of the world's centre, each
              within a signed 24-bit integer
@@ -166,13 +172,13 @@ bits 6–7. Applied in order to the base's view:
                  boat, and the mask must not be 0.
   op 1  enter    a boat in full: kind and rig (uvarint: the kind × 8,
                  plus 1 if jib follows, 2 if yards, 4 if fore), look
-                 (uvarint), flags (1), x and y (int24 each), heading,
+                 (uvarint), boat look (uvarint), flags (1), x and y (int24 each), heading,
                  heel, boom, rudder (2 each), sailor (1), sail (1); then
                  jib, yards and fore (2 each), those the rig names: those
                  not 0, which are 0 when not sent. An enter on a slot that
-                 holds a boat replaces it. A sailor's look changed is sent
-                 as an enter, whatever the band; an update never changes
-                 it.
+                 holds a boat replaces it. A sailor's look, the boat's
+                 look or its kind changed is sent as an enter, whatever
+                 the band; an update never changes them.
   op 2  leave    nothing more: the slot's boat leaves the view. The slot
                  must hold a boat.
   op 3  update   an update with a change mask of two bytes, the first as
@@ -185,8 +191,8 @@ bits 6–7. Applied in order to the base's view:
 
 Refused: varints written longer than they need be, a position outside 24
 bits, flags with their spare bits set or a reef of 3, a kind above 65535,
-a look of more than 20 bits, an enter's rig field sent as 0, and bytes
-after the last entry.
+a look of more than 20 bits, a boat look of more than 22, an enter's
+rig field sent as 0, and bytes after the last entry.
 
 Samples
 -------

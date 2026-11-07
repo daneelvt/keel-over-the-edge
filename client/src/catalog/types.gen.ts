@@ -83,6 +83,7 @@ export interface Catalog {
    * @minItems 1
    */
   boats: [Boat, ...Boat[]];
+  boatLooks: BoatLooks;
   /**
    * The looks sailors choose from, in the picker's order. At most 15: a look code holds a look's place in 4 bits, the 16th place the machine's.
    *
@@ -1077,6 +1078,284 @@ export interface BoatArt {
      */
     far: number;
   };
+}
+/**
+ * The looks a boat takes: its hull's paints and its sails' cloths, the gold its name is lettered in, and the highest sail number. At most 16 paints and 16 cloths: a boat's look code holds each in 4 bits. The first of each is a new boat's.
+ *
+ * This interface was referenced by `Catalog`'s JSON-Schema
+ * via the `definition` "BoatLooks".
+ */
+export interface BoatLooks {
+  /**
+   * Hull paints, in the chooser's order.
+   *
+   * @minItems 1
+   * @maxItems 16
+   */
+  paints:
+    | [BoatPaint]
+    | [BoatPaint, BoatPaint]
+    | [BoatPaint, BoatPaint, BoatPaint]
+    | [BoatPaint, BoatPaint, BoatPaint, BoatPaint]
+    | [BoatPaint, BoatPaint, BoatPaint, BoatPaint, BoatPaint]
+    | [BoatPaint, BoatPaint, BoatPaint, BoatPaint, BoatPaint, BoatPaint]
+    | [BoatPaint, BoatPaint, BoatPaint, BoatPaint, BoatPaint, BoatPaint, BoatPaint]
+    | [BoatPaint, BoatPaint, BoatPaint, BoatPaint, BoatPaint, BoatPaint, BoatPaint, BoatPaint]
+    | [BoatPaint, BoatPaint, BoatPaint, BoatPaint, BoatPaint, BoatPaint, BoatPaint, BoatPaint, BoatPaint]
+    | [BoatPaint, BoatPaint, BoatPaint, BoatPaint, BoatPaint, BoatPaint, BoatPaint, BoatPaint, BoatPaint, BoatPaint]
+    | [
+        BoatPaint,
+        BoatPaint,
+        BoatPaint,
+        BoatPaint,
+        BoatPaint,
+        BoatPaint,
+        BoatPaint,
+        BoatPaint,
+        BoatPaint,
+        BoatPaint,
+        BoatPaint
+      ]
+    | [
+        BoatPaint,
+        BoatPaint,
+        BoatPaint,
+        BoatPaint,
+        BoatPaint,
+        BoatPaint,
+        BoatPaint,
+        BoatPaint,
+        BoatPaint,
+        BoatPaint,
+        BoatPaint,
+        BoatPaint
+      ]
+    | [
+        BoatPaint,
+        BoatPaint,
+        BoatPaint,
+        BoatPaint,
+        BoatPaint,
+        BoatPaint,
+        BoatPaint,
+        BoatPaint,
+        BoatPaint,
+        BoatPaint,
+        BoatPaint,
+        BoatPaint,
+        BoatPaint
+      ]
+    | [
+        BoatPaint,
+        BoatPaint,
+        BoatPaint,
+        BoatPaint,
+        BoatPaint,
+        BoatPaint,
+        BoatPaint,
+        BoatPaint,
+        BoatPaint,
+        BoatPaint,
+        BoatPaint,
+        BoatPaint,
+        BoatPaint,
+        BoatPaint
+      ]
+    | [
+        BoatPaint,
+        BoatPaint,
+        BoatPaint,
+        BoatPaint,
+        BoatPaint,
+        BoatPaint,
+        BoatPaint,
+        BoatPaint,
+        BoatPaint,
+        BoatPaint,
+        BoatPaint,
+        BoatPaint,
+        BoatPaint,
+        BoatPaint,
+        BoatPaint
+      ]
+    | [
+        BoatPaint,
+        BoatPaint,
+        BoatPaint,
+        BoatPaint,
+        BoatPaint,
+        BoatPaint,
+        BoatPaint,
+        BoatPaint,
+        BoatPaint,
+        BoatPaint,
+        BoatPaint,
+        BoatPaint,
+        BoatPaint,
+        BoatPaint,
+        BoatPaint,
+        BoatPaint
+      ];
+  /**
+   * Sail cloths, in the chooser's order.
+   *
+   * @minItems 1
+   * @maxItems 16
+   */
+  cloths:
+    | [BoatCloth]
+    | [BoatCloth, BoatCloth]
+    | [BoatCloth, BoatCloth, BoatCloth]
+    | [BoatCloth, BoatCloth, BoatCloth, BoatCloth]
+    | [BoatCloth, BoatCloth, BoatCloth, BoatCloth, BoatCloth]
+    | [BoatCloth, BoatCloth, BoatCloth, BoatCloth, BoatCloth, BoatCloth]
+    | [BoatCloth, BoatCloth, BoatCloth, BoatCloth, BoatCloth, BoatCloth, BoatCloth]
+    | [BoatCloth, BoatCloth, BoatCloth, BoatCloth, BoatCloth, BoatCloth, BoatCloth, BoatCloth]
+    | [BoatCloth, BoatCloth, BoatCloth, BoatCloth, BoatCloth, BoatCloth, BoatCloth, BoatCloth, BoatCloth]
+    | [BoatCloth, BoatCloth, BoatCloth, BoatCloth, BoatCloth, BoatCloth, BoatCloth, BoatCloth, BoatCloth, BoatCloth]
+    | [
+        BoatCloth,
+        BoatCloth,
+        BoatCloth,
+        BoatCloth,
+        BoatCloth,
+        BoatCloth,
+        BoatCloth,
+        BoatCloth,
+        BoatCloth,
+        BoatCloth,
+        BoatCloth
+      ]
+    | [
+        BoatCloth,
+        BoatCloth,
+        BoatCloth,
+        BoatCloth,
+        BoatCloth,
+        BoatCloth,
+        BoatCloth,
+        BoatCloth,
+        BoatCloth,
+        BoatCloth,
+        BoatCloth,
+        BoatCloth
+      ]
+    | [
+        BoatCloth,
+        BoatCloth,
+        BoatCloth,
+        BoatCloth,
+        BoatCloth,
+        BoatCloth,
+        BoatCloth,
+        BoatCloth,
+        BoatCloth,
+        BoatCloth,
+        BoatCloth,
+        BoatCloth,
+        BoatCloth
+      ]
+    | [
+        BoatCloth,
+        BoatCloth,
+        BoatCloth,
+        BoatCloth,
+        BoatCloth,
+        BoatCloth,
+        BoatCloth,
+        BoatCloth,
+        BoatCloth,
+        BoatCloth,
+        BoatCloth,
+        BoatCloth,
+        BoatCloth,
+        BoatCloth
+      ]
+    | [
+        BoatCloth,
+        BoatCloth,
+        BoatCloth,
+        BoatCloth,
+        BoatCloth,
+        BoatCloth,
+        BoatCloth,
+        BoatCloth,
+        BoatCloth,
+        BoatCloth,
+        BoatCloth,
+        BoatCloth,
+        BoatCloth,
+        BoatCloth,
+        BoatCloth
+      ]
+    | [
+        BoatCloth,
+        BoatCloth,
+        BoatCloth,
+        BoatCloth,
+        BoatCloth,
+        BoatCloth,
+        BoatCloth,
+        BoatCloth,
+        BoatCloth,
+        BoatCloth,
+        BoatCloth,
+        BoatCloth,
+        BoatCloth,
+        BoatCloth,
+        BoatCloth,
+        BoatCloth
+      ];
+  /**
+   * The colour a boat's name is lettered in, sRGB, #rrggbb.
+   */
+  lettering: string;
+  /**
+   * The highest sail number: numbers run from 1 to it, each kind's its own. At most 16383, a look code's 14 bits.
+   */
+  numbers: number;
+}
+/**
+ * This interface was referenced by `Catalog`'s JSON-Schema
+ * via the `definition` "BoatPaint".
+ */
+export interface BoatPaint {
+  id: Id;
+  /**
+   * Display name, as the player reads it: lowercase but for a name such as "Prussian blue".
+   */
+  name: string;
+  /**
+   * Its colour, sRGB, #rrggbb.
+   */
+  colour: string;
+  /**
+   * The wood shows through it: the hull is drawn with its grain.
+   */
+  grain?: boolean;
+}
+/**
+ * This interface was referenced by `Catalog`'s JSON-Schema
+ * via the `definition` "BoatCloth".
+ */
+export interface BoatCloth {
+  id: Id;
+  /**
+   * Display name, as the player reads it.
+   */
+  name: string;
+  /**
+   * The cloth's colour, sRGB, #rrggbb.
+   */
+  colour: string;
+  /**
+   * A band of another colour across the sail, if it is striped, sRGB, #rrggbb.
+   */
+  band?: string;
+  /**
+   * The colour its sail number and the machine mark are painted in, sRGB, #rrggbb.
+   */
+  ink: string;
 }
 /**
  * A look: its name, its habit, which hair colours it takes, and its versions.
@@ -7786,4 +8065,4 @@ export interface NewsColumn {
 }
 
 /** The catalog version (tools/catalog). */
-export const CATALOG_VERSION = 'a069a5c58702b770';
+export const CATALOG_VERSION = 'dd9366a4c537ddb1';

@@ -166,6 +166,8 @@ message ServerMessage {
     Watchers watchers = 17;
     AgentLamp agent_lamp = 18;
     LookChanged look_changed = 19;
+    BoatLookChanged boat_look_changed = 20;
+    BoatNames boat_names = 21;
   }
 }
 
@@ -214,6 +216,33 @@ message Watchers {
 message LookChanged {
   // The sailor's look: a look code, as an enter in a snapshot has it.
   uint32 look = 1;
+}
+
+// BoatLookChanged says the boat the connection sails or watches was given
+// a new look in port, its paint, cloth, sail number or name: as of the
+// next snapshot, it is drawn so. Other connections see it as an enter of
+// the boat, and its name in BoatNames. A boat swapped for another kind
+// comes as a Welcome instead.
+message BoatLookChanged {
+  // The boat's look: a boat look code, as an enter in a snapshot has it.
+  uint32 look = 1;
+  // The boat's name, player text; "" for none.
+  string name = 2;
+}
+
+// BoatNames are the names of boats in the connection's view, each sent once
+// as the boat comes into the near band, and again if it changes: player
+// text, drawn on the boat's topsides or transom. A boat with no name is
+// sent "" only to clear a name the slot was told before.
+message BoatNames {
+  repeated BoatName names = 1;
+}
+
+// BoatName is a boat's name by its view slot: the boat that slot holds as
+// of the next snapshot.
+message BoatName {
+  uint32 slot = 1;
+  string name = 2;
 }
 
 // AgentLamp says whether the AI agent of the machine sailor a connection
@@ -810,6 +839,11 @@ message Welcome {
   // The look of the boat's sailor, the connection's own or the one it
   // watches: a look code, as an enter in a snapshot has it.
   uint32 look = 17;
+  // The boat's own look, its paint, cloth and sail number: a boat look
+  // code, as an enter in a snapshot has it; and its name, player text, ""
+  // for none.
+  uint32 boat_look = 18;
+  string boat_name = 19;
 }
 
 // Harbour is a world's harbour, in decimetres east and north of the

@@ -29,7 +29,8 @@ const (
 	Falling   = 1 << 3 // the boat has gone over the lip and is falling
 	Machine   = 1 << 4 // the boat is a machine sailor's, sailed by an AI agent
 	// Relook marks an enter of the boat the view slot already holds: its
-	// sailor's look changed, and nothing else about it.
+	// sailor's look, its own look or its kind changed (a swap in port),
+	// and nothing else about it.
 	Relook    = 1 << 5
 	reefShift = 6 // the reef, rounded to a level, in bits 6–7
 	flagsUsed = FarBand | 3<<modeShift | Falling | Machine | Relook | 3<<reefShift
@@ -55,23 +56,32 @@ const (
 // Boat is a boat in a view, as the wire carries it.
 type Boat struct {
 	Kind uint16
-	// Look is the sailor's look code (internal/looks), which only an enter
-	// carries: a look changed is sent as an enter.
-	Look    uint32
-	Flags   uint8 // FarBand, the sailor's mode, Falling, Machine and Relook
-	X, Y    int32 // cm, east and north
-	Heading uint16
-	Heel    int16
-	Boom    int16
-	Rudder  int16
-	Sailor  int8 // cm
-	Sail    uint8
+	// Look is the sailor's look code (internal/looks), and BoatLook the
+	// boat's own look code, its paint, cloth and sail number, which only an
+	// enter carries: a look changed is sent as an enter.
+	Look     uint32
+	BoatLook uint32
+	Flags    uint8 // FarBand, the sailor's mode, Falling, Machine and Relook
+	X, Y     int32 // cm, east and north
+	Heading  uint16
+	Heel     int16
+	Boom     int16
+	Rudder   int16
+	Sailor   int8 // cm
+	Sail     uint8
 	// Jib is the headsails' clew's angle off the centreline, Yards the
 	// after yards' and Fore the fore yards' less the after yards', each in
 	// AngleSteps: 0 on a boat without them.
 	Jib   int16
 	Yards int16
 	Fore  int16
+}
+
+// Relooked says whether a view slot's boat, the same boat, is drawn
+// otherwise in q than in base: its sailor's look, its own look or its kind
+// changed. It is sent as an enter.
+func Relooked(base, q *Boat) bool {
+	return q.Look != base.Look || q.BoatLook != base.BoatLook || q.Kind != base.Kind
 }
 
 // Far says whether the boat is in the far band.
@@ -193,10 +203,10 @@ const (
 )
 
 // maxEntrySize is the longest entry this package writes: an enter of a
-// kind of 3 bytes, a look of 3 (a look code holds 20 bits) and every rig
-// field; an update of every field, its position changes 4 bytes each, is
-// shorter.
-const maxEntrySize = 30
+// kind of 3 bytes, a look of 3 (a look code holds 20 bits), a boat look of
+// 4 (22 bits) and every rig field; an update of every field, its position
+// changes 4 bytes each, is shorter.
+const maxEntrySize = 34
 
 // Entry is one entry of a snapshot.
 type Entry struct {
@@ -260,7 +270,8 @@ func Diff(base, q *Boat) uint16 {
 // replaces any boat base has there, and for each slot both hold whose
 // sailor's look changed; a leave for each slot base holds and next does
 // not; and, for each other slot both hold that sample names, an update of
-// what changed, if anything did. A slot neither entered nor
+// what changed, if anything did. A boat whose sailor's look, own look or
+// kind changed is entered again. A slot neither entered nor
 // sampled must hold the same in both. It allocates nothing when b has room
 // for MaxSnapshotSize.
 func AppendEntries(b []byte, base, next *View, enter, sample uint64) ([]byte, int) {
@@ -268,7 +279,7 @@ func AppendEntries(b []byte, base, next *View, enter, sample uint64) ([]byte, in
 	for slot := range ViewSlots {
 		bit := uint64(1) << slot
 		switch {
-		case next.Used&bit != 0 && (enter&bit != 0 || base.Used&bit != 0 && next.Boats[slot].Look != base.Boats[slot].Look):
+		case next.Used&bit != 0 && (enter&bit != 0 || base.Used&bit != 0 && Relooked(&base.Boats[slot], &next.Boats[slot])):
 			b = AppendEntry(b, &Entry{Slot: uint8(slot), Op: OpEnter, Boat: next.Boats[slot]})
 		case next.Used&bit != 0 && base.Used&bit != 0 && sample&bit != 0:
 			q, p := &next.Boats[slot], &base.Boats[slot]
@@ -307,6 +318,7 @@ func AppendEntry(b []byte, e *Entry) []byte {
 		}
 		b = binary.AppendUvarint(b, uint64(q.Kind)<<kindShift|rig)
 		b = binary.AppendUvarint(b, uint64(q.Look))
+		b = binary.AppendUvarint(b, uint64(q.BoatLook))
 		b = append(b, q.Flags)
 		b = appendInt24(b, q.X)
 		b = appendInt24(b, q.Y)
@@ -386,10 +398,18 @@ func ReadEntry(b []byte, e *Entry) ([]byte, error) {
 			return b, fmt.Errorf("protocol: a sailor's look %d", look)
 		}
 		b = b[n:]
+		boatLook, n, err := uvarint(b)
+		if err != nil {
+			return b, err
+		}
+		if boatLook >= 1<<22 {
+			return b, fmt.Errorf("protocol: a boat's look %d", boatLook)
+		}
+		b = b[n:]
 		if len(b) < enterFields {
 			return b, ErrEntryShort
 		}
-		q.Kind, q.Look = uint16(kind), uint32(look)
+		q.Kind, q.Look, q.BoatLook = uint16(kind), uint32(look), uint32(boatLook)
 		q.Flags = b[0]
 		q.X, q.Y = int24(b[1:]), int24(b[4:])
 		q.Heading = binary.LittleEndian.Uint16(b[7:])
