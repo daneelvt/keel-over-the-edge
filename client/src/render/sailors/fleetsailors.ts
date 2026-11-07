@@ -74,6 +74,7 @@ import type { DrawnBoat } from '../../game/fleet';
 import { figureNode, type Instances, placeNormal, placePoint } from '../fleetparts';
 import { SAILING } from '../sailor';
 import type { FleetLook } from './fleetlooks';
+import { type Hike, STRAPPED } from './restage';
 import { Rig } from './rig';
 import { type SailorBoat, type SailorMoment, SailorRuntime } from './runtime';
 import type { HullSolid } from './solid';
@@ -104,6 +105,9 @@ export interface NearBoat {
   cog: number;
   solid: HullSolid;
   climbTime: number;
+  /** How far the seat is from the clips' boat's, and how it hikes (restage.ts's seating). */
+  restage?: Vector3 | null;
+  hike?: Hike;
 }
 
 /** A near boat's sailor: its runtime, and its bones' matrices as last run. */
@@ -144,6 +148,8 @@ class Sailor {
       cog: near.cog,
       solid: near.solid,
       climbTime: near.climbTime,
+      restage: near.restage ?? null,
+      hike: near.hike ?? STRAPPED,
     };
     this.runtime = new SailorRuntime(rig, clips, this.boat, seed, look.machine, false);
     this.bones = new Float32Array(12 * t.names.length);

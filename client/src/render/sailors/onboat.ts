@@ -8,7 +8,8 @@
 // and up to the forward hand.
 //
 // The figure is a child of the boat's model, placed by the runtime's root
-// (the clips' places, from the build): what it sits on is the boat model's
+// (the clips' places, from the build, moved to this boat's seat if it is
+// not the boat they were placed in): what it sits on is the boat model's
 // own deck. A machine lives by its own layers, and its lamps glow as they
 // say.
 
@@ -33,6 +34,7 @@ import { fallToEdge, glowMaterial, litMaterial } from '../materials';
 import { Clip } from './clips';
 import { type SailorColours, sailorColours, sailorLight } from './material';
 import { loadClips, loadSailor, type SailorModel } from './model';
+import { seating } from './restage';
 import { bonesFor, Rig } from './rig';
 import { type SailorBoat, type SailorMoment, SailorRuntime } from './runtime';
 import { hullSolid } from './solid';
@@ -210,6 +212,7 @@ export class BoatSailor {
       cog: kind.physics.hull.centreOfGravity,
       solid,
       climbTime: sailor.climbTime,
+      ...seating(parts, sailor.hikeReach),
     };
     return new BoatSailor(model, parts, deck, rig, clips, boat, urls, renderer, seed, machine);
   }

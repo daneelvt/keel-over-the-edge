@@ -21,7 +21,9 @@
 // and hair (#RRGGBB without the #), black (the silhouettes in black), mask
 // (the mask in place of the colours: red main, green skin, blue hair), phone
 // (the stage at a phone's 360 × 640), t (the clips held at that many
-// seconds, for pictures), who, look (only that look's versions). The back
+// seconds, for pictures), who, look (only that look's versions), boat (the
+// boat the sailors sit in, by its place in the catalog's boats: 0 the
+// first; the clips moved to its seat as the game moves them). The back
 // end is the game's choice, and
 // ?backend=webgl2 or ?compat as in the game.
 //
@@ -56,6 +58,9 @@ import { TIERS } from '../render/quality';
 import { chooseBackend, wantsCompat } from '../render/renderer';
 import { readSailorLight, type SailorColours, sailorColours } from '../render/sailors/material';
 import { loadClips, loadSailor, type SailorClips, type SailorModel } from '../render/sailors/model';
+import { boneNames } from '../render/sailors/onboat';
+import { restageAnimation, restageOf, restagePlace } from '../render/sailors/restage';
+import { Rig } from '../render/sailors/rig';
 import { Shadows } from '../render/shadows';
 import { Sky, look as skyLook, toLinear } from '../render/sky';
 import { Stage } from '../render/stage';
@@ -125,6 +130,8 @@ export interface Room {
   who: number;
   /** Only this look's versions, or every look's (''). */
   look: string;
+  /** The boat they sit in: its place in the catalog's boats. */
+  boat: number;
 }
 
 /** The test sailor's colours, and the clip each view starts in. */
@@ -144,6 +151,7 @@ const DEFAULTS: Room = {
   t: null,
   who: 0,
   look: '',
+  boat: 0,
 };
 const VIEW_CLIP: Record<View, string> = {
   lineup: 'standing-idle',
@@ -197,6 +205,7 @@ export function readRoom(hash: string): Room {
     t: q.has('t') && Number.isFinite(t) ? t : null,
     who: Math.max(0, Math.floor(Number(q.get('who')) || 0)),
     look: /^[a-z][a-z0-9-]*$/.test(q.get('look') ?? '') ? (q.get('look') as string) : '',
+    boat: Math.min(catalog.boats.length - 1, Math.max(0, Math.floor(Number(q.get('boat')) || 0))),
   };
 }
 
@@ -217,6 +226,7 @@ export function writeRoom(r: Room): string {
   if (r.t !== null) q.set('t', String(r.t));
   if (r.who !== 0) q.set('who', String(r.who));
   if (r.look !== '') q.set('look', r.look);
+  if (r.boat !== 0) q.set('boat', String(r.boat));
   return `#sailors&${q.toString()}`;
 }
 
@@ -267,7 +277,7 @@ interface Figure {
   action: AnimationAction | null;
   /** Seconds its clip is ahead of the others', so the row is not in step. */
   offset: number;
-  /** The dinghy it sits in, when its pose is placed in one. */
+  /** The boat it sits in, when its pose is placed in one. */
   boat: Boat | null;
 }
 
@@ -332,6 +342,13 @@ export interface DressingHooks {
   problems(): string[];
   /** The last frame's draws and triangles. */
   counts(): { draws: number; triangles: number };
+  /** Turns the camera about what it looks at, for pictures: as far as said, the rest kept. */
+  orbit(o: {
+    azimuth?: number;
+    elevation?: number;
+    distance?: number;
+    target?: [number, number, number];
+  }): void;
 }
 
 export class DressingRoom {
@@ -346,7 +363,8 @@ export class DressingRoom {
   readonly #figures: Figure[] = [];
   readonly #protos = new Map<string, Promise<SailorModel>>();
   readonly #clips = new Map<string, Promise<SailorClips>>();
-  readonly #boats: Boat[] = [];
+  /** The boats made, by the catalog's boat and the place in the room, and their models' loads. */
+  readonly #boats = new Map<string, { boat: Boat; loaded: Promise<void> }>();
   readonly #props = new Group();
   readonly #quay: Mesh;
   readonly #disc: Mesh;
@@ -451,6 +469,16 @@ export class DressingRoom {
       counts: () => {
         const info = this.stage.renderer?.info.render;
         return { draws: info?.drawCalls ?? 0, triangles: info?.triangles ?? 0 };
+      },
+      orbit: (o) => {
+        const orbit = this.#orbit;
+        orbit.azimuth = o.azimuth ?? orbit.azimuth;
+        orbit.elevation = o.elevation ?? orbit.elevation;
+        orbit.distance = o.distance ?? orbit.distance;
+        if (o.target !== undefined) {
+          orbit.target.fromArray(o.target);
+        }
+        this.#frame(0);
       },
     };
     this.#controls(stageBox);
@@ -569,9 +597,11 @@ export class DressingRoom {
       wanted.map((w) => this.#figure(w.look, w.version, w.level, w.colours, w.at)),
     );
     for (const [i, f] of made.entries()) {
-      this.#place(f, i);
+      await this.#place(f, i);
       this.#figures.push(f);
     }
+    // A figure seated in a boat needs no disc to stand on.
+    this.#disc.visible &&= !this.#figures.some((f) => f.boat !== null);
     this.#materials();
     this.#aim(true);
     this.#time = 0;
@@ -647,12 +677,14 @@ export class DressingRoom {
     return f;
   }
 
-  /** Where a figure stands, or sits: on the quay or the disc, or in its dinghy. */
-  #place(f: Figure, i: number): void {
+  /** Where a figure stands, or sits: on the quay or the disc, or in its boat. */
+  async #place(f: Figure, i: number): Promise<void> {
     const r = this.room;
-    const seat = this.#seat(f);
+    let seat = this.#seat(f);
     if (seat !== null) {
-      const boat = this.#boat(i);
+      const { boat, loaded } = this.#boat(i);
+      await loaded;
+      seat = this.#restage(f, boat, seat);
       f.boat = boat;
       boat.model.add(f.root);
       f.root.matrixAutoUpdate = true;
@@ -667,7 +699,7 @@ export class DressingRoom {
         // Moored before the quay, turned so the sailor faces the front.
         const n = this.#figuresWanted();
         boat.root.position.set(
-          (i - (n - 1) / 2) * BOAT_SPACING,
+          (i - (n - 1) / 2) * this.#boatSpacing(),
           0,
           r.view === 'picker' ? 0 : MOORED_Z,
         );
@@ -713,20 +745,53 @@ export class DressingRoom {
     return place.equals(IDENTITY) ? null : place;
   }
 
-  /** The room's i-th dinghy, made once and kept. */
-  #boat(i: number): Boat {
-    let b = this.#boats[i];
+  /**
+   * A seated figure's place moved to its boat's seat, if the boat is not
+   * the one the clips were placed in: its clip played moved as the game
+   * moves it (a cross widened), or its far level's place moved.
+   */
+  #restage(f: Figure, boat: Boat, seat: Matrix4): Matrix4 {
+    const by = restageOf(boat.parts.get('sailor')?.userData);
+    if (by === null) {
+      return seat;
+    }
+    if (f.mixer === null || f.action === null) {
+      return restagePlace(seat, by);
+    }
+    const rig = Rig.from(f.root, boneNames(f.root));
+    const moved = restageAnimation(f.action.getClip(), seat, rig, by);
+    f.mixer.stopAllAction();
+    f.action = f.mixer.clipAction(moved.animation);
+    f.action.play();
+    return moved.place;
+  }
+
+  /** The room's boats' kind, and the room between them moored. */
+  #kind() {
+    return catalog.boats[this.room.boat] ?? catalog.boats[0];
+  }
+
+  #boatSpacing(): number {
+    return Math.max(BOAT_SPACING, this.#kind().lengthOverall + 1);
+  }
+
+  /** The room's i-th boat of its kind, made once and kept, and its model's load. */
+  #boat(i: number): { boat: Boat; loaded: Promise<void> } {
+    const kind = this.#kind();
+    const key = `${this.room.boat}:${i}`;
+    let b = this.#boats.get(key);
     if (b === undefined) {
-      b = new Boat(catalog.boats[0]);
-      this.#boats[i] = b;
-      void b.load(String(10 + i), catalog.boats[0].name.slice(0, 1)).then(() => {
-        b?.model.traverse((o) => {
+      const boat = new Boat(kind);
+      const loaded = boat.load(String(10 + i), kind.name.slice(0, 1)).then(() => {
+        boat.model.traverse((o) => {
           if (o instanceof Mesh) {
             o.castShadow = true;
             o.receiveShadow = true;
           }
         });
       });
+      b = { boat, loaded };
+      this.#boats.set(key, b);
     }
     return b;
   }
@@ -756,9 +821,18 @@ export class DressingRoom {
     if (r.view === 'lineup') {
       const n = this.#figuresWanted();
       const seated = this.#figures.some((f) => f.boat !== null);
-      const width = (n - 1) * (seated ? BOAT_SPACING : SPACING) + (seated ? 3.5 : 1);
-      // Seated, the sailors sit on the far side deck, across the cockpit.
-      o.target.set(0, seated ? 0.9 : QUAY_TOP + 0.95, seated ? MOORED_Z - 0.5 : ROW_Z);
+      const width = (n - 1) * (seated ? this.#boatSpacing() : SPACING) + (seated ? 3.5 : 1);
+      // Seated, the sailors sit on the far side deck, across the cockpit:
+      // the boat's seat moved from the first boat's.
+      const by =
+        restageOf(
+          this.#figures.find((f) => f.boat !== null)?.boat?.parts.get('sailor')?.userData,
+        ) ?? new Vector3();
+      o.target.set(
+        0,
+        seated ? 0.9 + by.y : QUAY_TOP + 0.95,
+        seated ? MOORED_Z - 0.5 - by.x : ROW_Z,
+      );
       if (reset) {
         o.azimuth = back;
         o.elevation = seated ? 0.16 : 0.06;
@@ -802,8 +876,13 @@ export class DressingRoom {
     const pose = newPose();
     // At sea the boom to port, the sailor to windward on the starboard side
     // deck; moored, to starboard behind the sailor, who faces the camera
-    // across the cockpit.
-    pose.boom = r.view === 'deck' ? -0.35 : 0.35;
+    // across the cockpit, no further out than clears the sailor's head
+    // (half a metre out at the seat).
+    const kind = this.#kind();
+    const lever =
+      (this.#boats.get(`${r.boat}:0`)?.boat.parts.get('sailor')?.position.z ?? 0) +
+      kind.physics.rig.mastPosition;
+    pose.boom = r.view === 'deck' ? -0.35 : Math.min(0.35, Math.atan2(0.5, Math.max(lever, 0.1)));
     for (const f of this.#figures) {
       const b = f.boat;
       if (b !== null) {
@@ -998,6 +1077,10 @@ export class DressingRoom {
         r.clip === c || (c === 'rest' && !names.has(r.clip)),
         () => void this.set({ clip: c }),
       ]),
+    );
+    group(
+      'Boat',
+      catalog.boats.map((b, k) => [b.name, r.boat === k, () => void this.set({ boat: k })]),
     );
     group('Side', [
       ['front', r.side === 'front', () => this.#side('front')],

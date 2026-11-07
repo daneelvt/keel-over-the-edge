@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import { describe, expect, test } from 'vitest';
+import { catalog } from '../catalog';
 import { BODY, SKY } from '../predict/physics';
 import { builtLooks, readRoom, skyRecord, writeRoom } from './dressing';
 
@@ -33,12 +34,17 @@ describe('the room’s hash', () => {
     expect(readRoom('#sailors&view=attic&level=huge').level).toBe('close');
     expect(readRoom('#sailors&look=rover').look).toBe('rover');
     expect(readRoom('#sailors&look=../x').look).toBe('');
+    // The boat by its place in the catalog, within it.
+    expect(readRoom('#sailors').boat).toBe(0);
+    expect(readRoom('#sailors&boat=1').boat).toBe(Math.min(1, catalog.boats.length - 1));
+    expect(readRoom('#sailors&boat=99').boat).toBe(catalog.boats.length - 1);
+    expect(readRoom('#sailors&boat=-3').boat).toBe(0);
   });
 
   test('writes only what differs from the view’s defaults, and reads back the same', () => {
     expect(writeRoom(readRoom('#sailors&view=deck'))).toBe('#sailors&view=deck');
     const hash =
-      '#sailors&view=lineup&clip=helm-idle&side=back&hair=C9AC7E&mask=1&phone=1&t=1&look=test';
+      '#sailors&view=lineup&clip=helm-idle&side=back&hair=C9AC7E&mask=1&phone=1&t=1&look=test&boat=1';
     expect(writeRoom(readRoom(hash))).toBe(hash);
   });
 });

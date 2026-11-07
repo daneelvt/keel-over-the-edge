@@ -6765,8 +6765,11 @@ the `hull` node's `extras`: the sea is not drawn inside it
 
 Commit the rebuilt `.glb`. `npm test` checks each boat's model against the
 catalog: its hull's volume against its waterline's length, beam and draught; its named parts sit where the physics puts them, within 1 cm, its
-telltales at each sail strip's height, and it is under 15,000 triangles; and
-each sailor's model has its parts and is under 2,000. A kind's `art.model`
+telltales at each sail strip's height, its jib's tack and head where the
+headsails' are, and each level within the catalog's `art.budget`; and
+each sailor's model has its parts and is under 2,000. The sailors' clips
+are placed in the Jolly boat; another boat's model says how far its seat is
+from it (`art/README.md`), and `render/sailors/restage.ts` moves them there. A kind's `art.model`
 must name a file that exists (`go run ./tools/catalog -check`). The catalog's
 `sailors` list names the figures; the first is drawn.
 
@@ -6781,8 +6784,9 @@ back, and in a dinghy each when the clip seats them; `face`, a head
 close; `deck`, a fleet at the game's chase camera, the near sailors at the
 deck level and the far at the far one; `picker`, a sailor on a disc of
 planks. The **Room** button opens the rest: the light (noon, morning,
-dusk, night), the level, the clip, the skin, hair and main colour, the
-silhouettes in black, and a phone's 360 × 640. All of it is in the hash
+dusk, night), the level, the clip, the boat the sailors sit in (`boat=1`,
+the catalog's second), the skin, hair and main colour, the silhouettes in
+black, and a phone's 360 × 640. All of it is in the hash
 (`#sailors&view=deck&light=dusk&clip=helm-idle&black=1`), so a view can be
 linked to; `?backend=webgl2` and `?compat` as in the game. Drag turns the
 camera, the wheel or a pinch sets its distance. `e2e/sailors.spec.ts`
