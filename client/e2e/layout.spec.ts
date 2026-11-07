@@ -1146,14 +1146,19 @@ test('the keelboat and the tall ship are framed as the Jolly boat is, clear of e
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await openScene(page, 'boat=keelboat', true);
   const found: string[] = [];
-  for (const [id, aback] of [
-    ['keelboat', 'Aback'],
-    ['tall-ship', 'Braces · Aback'],
-  ] as const) {
+  // Every boat but the first, whose screens the other tests hold: aback,
+  // the braces of square sails name themselves.
+  const larger = data.boats.slice(1).map((kind) => {
+    const { square } = kind.physics;
+    const braces = square.squareForeArea + square.squareAfterArea > 0;
+    return { kind, braces, aback: braces ? `${kind.controls.sheet.name} · Aback` : 'Aback' };
+  });
+  for (const { kind, braces, aback } of larger) {
+    const id = kind.name;
     await page.setViewportSize({ width: SCREENS[0].width, height: SCREENS[0].height });
-    await page.evaluate(async (id) => {
+    await page.evaluate(async (index) => {
       const k = globalThis.keel;
-      await k.useBoat(id);
+      await k.useBoat(index);
       k.setState({ sheetLimit: 0.05, boom: 0, jib: 0, surge: 0 });
       k.setControls(0, 0);
       k.setReef(1);
@@ -1161,12 +1166,10 @@ test('the keelboat and the tall ship are framed as the Jolly boat is, clear of e
       k.render();
       k.camera('chase');
       k.render();
-    }, id);
-    const kind = data.boats.find((b) => b.id === id);
-    const screens =
-      id === 'tall-ship'
-        ? [...SCREENS, { name: 'a desktop', width: 1440, height: 900, upright: false }]
-        : SCREENS;
+    }, data.boats.indexOf(kind));
+    const screens = braces
+      ? [...SCREENS, { name: 'a desktop', width: 1440, height: 900, upright: false }]
+      : SCREENS;
     for (const s of screens) {
       await page.setViewportSize({ width: s.width, height: s.height });
       await page.waitForFunction(
@@ -1221,8 +1224,8 @@ test('the keelboat and the tall ship are framed as the Jolly boat is, clear of e
           ),
         ].map((e) => e.textContent),
       );
-      const sheet = kind?.controls.sheet;
-      if (JSON.stringify(words) !== JSON.stringify([sheet?.trim, sheet?.ease, sheet?.name])) {
+      const sheet = kind.controls.sheet;
+      if (JSON.stringify(words) !== JSON.stringify([sheet.trim, sheet.ease, sheet.name])) {
         found.push(`${id}, ${s.name}: the sheet reads ${JSON.stringify(words)}`);
       }
       for (const f of await sheetFaults(page, aback)) {

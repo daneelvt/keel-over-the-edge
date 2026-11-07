@@ -263,7 +263,7 @@ test('a keelboat and a tall ship of the fleet look as the own ones do, the jib, 
   // draws her full model, as the chase camera's distance would not.
   await page.evaluate(async () => {
     const k = globalThis.keel;
-    await k.useBoat('tall-ship');
+    await k.useBoat(2);
     // Her foam and wake are the sea's, drawn by each boat's speed and its
     // history, the own boat's and the fleet's apart: the hull's the same.
     k.setParts({ foam: false, wakes: false });
