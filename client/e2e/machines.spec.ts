@@ -260,12 +260,14 @@ test('the account page: an app revoked, a connection token made once and revoked
   await page.getByRole('button', { name: 'Account' }).click();
   const row = page.locator('.machines-account li[data-machine]', { hasText: name });
   await expect(row).toBeVisible();
-  // A Jolly boat for the player and one for the machine sailor, and a boat
-  // the account shares.
+  // A Jolly boat for the player and one for the machine sailor, and the
+  // boats the account shares: the machine sailor takes the last, the
+  // largest, the tall ship.
   const each = data.boats.find((b) => b.fleet === 'sailor');
-  const shared = data.boats.find((b) => b.fleet === 'account');
+  const shares = data.boats.filter((b) => b.fleet === 'account');
+  const shared = shares.at(-1);
   const fleetRows = page.locator('.fleet-account li[data-boat]');
-  await expect(fleetRows).toHaveCount(2 + (shared === undefined ? 0 : 1));
+  await expect(fleetRows).toHaveCount(2 + shares.length);
   await expect(fleetRows.filter({ hasText: each?.name ?? '' })).toHaveCount(2);
 
   // The app: its host, approved today, ending in the grant's lifetime.
