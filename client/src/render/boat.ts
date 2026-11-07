@@ -35,10 +35,12 @@ import {
   FrontSide,
   Group,
   type Material,
+  Matrix4,
   Mesh,
   type MeshStandardMaterial,
   type Object3D,
   type Texture,
+  Vector3,
 } from 'three';
 import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
@@ -333,6 +335,18 @@ export class Boat {
     const { headsails } = kind.physics;
     this.jib.footV.value = headsails.headsailFootStrip;
     this.jib.headV.value = headsails.headsailHeadStrip;
+  }
+
+  /** A named node's place in the model's frame, wherever it hangs; null for none. */
+  nodeAt(name: string): Vector3 | null {
+    const o = this.parts.get(name);
+    const model = this.model.children[0];
+    if (o === undefined || model === undefined) {
+      return null;
+    }
+    model.updateMatrixWorld(true);
+    const inModel = new Matrix4().copy(model.matrixWorld).invert().multiply(o.matrixWorld);
+    return new Vector3().setFromMatrixPosition(inModel);
   }
 
   /** The kind of boat it is. */
