@@ -3,6 +3,7 @@
 package physics
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"encoding/binary"
 	"encoding/hex"
@@ -41,7 +42,9 @@ const (
 type scenarioFile struct {
 	Description string             `json:"description"`
 	Sea         map[string]float64 `json:"sea"`
-	Params      map[string]any     `json:"params"`
+	// Params are each boat's Params, by the catalog's id, in the catalog's
+	// order.
+	Params boatParams `json:"params"`
 	// Wind is WeatherParams, for the scenarios that sail in spells of
 	// weather.
 	Wind map[string]any `json:"wind,omitempty"`
@@ -51,7 +54,10 @@ type scenarioFile struct {
 }
 
 type scenario struct {
-	Name    string             `json:"name"`
+	Name string `json:"name"`
+	// Boat is the boat the scenario sails, by its id among the file's
+	// params; "" is the first.
+	Boat    string             `json:"boat,omitempty"`
 	Steps   int                `json:"steps"`
 	State   map[string]float64 `json:"state"`
 	Control map[string]float64 `json:"control"`
@@ -101,6 +107,67 @@ type change struct {
 	Steer *float64 `json:"steer"`
 	// Spells replaces the spells of weather the scenario sails in.
 	Spells []map[string]any `json:"spells,omitempty"`
+}
+
+// boatParams are each boat's values by id, in the order the file gives
+// them.
+type boatParams struct {
+	ids    []string
+	values map[string]map[string]any
+}
+
+func (bp *boatParams) UnmarshalJSON(data []byte) error {
+	d := json.NewDecoder(bytes.NewReader(data))
+	if t, err := d.Token(); err != nil || t != json.Delim('{') {
+		return fmt.Errorf("params must be an object of each boat's values by id")
+	}
+	bp.values = map[string]map[string]any{}
+	for d.More() {
+		t, err := d.Token()
+		if err != nil {
+			return err
+		}
+		id := t.(string)
+		var v map[string]any
+		if err := d.Decode(&v); err != nil {
+			return fmt.Errorf("params of %s: %w", id, err)
+		}
+		bp.ids = append(bp.ids, id)
+		bp.values[id] = v
+	}
+	if len(bp.ids) == 0 {
+		return fmt.Errorf("params name no boat")
+	}
+	_, err := d.Token()
+	return err
+}
+
+// of is the values of the boat id, "" the first.
+func (bp *boatParams) of(id string) (map[string]any, error) {
+	if id == "" {
+		id = bp.ids[0]
+	}
+	v, ok := bp.values[id]
+	if !ok {
+		return nil, fmt.Errorf("no params for the boat %q", id)
+	}
+	return v, nil
+}
+
+// prepared is the boat id, "" the first, prepared for the test sea.
+func (bp *boatParams) prepared(t testing.TB, id string) *Prepared {
+	t.Helper()
+	values, err := bp.of(id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var p Params
+	if err := setParams(&p, values); err != nil {
+		t.Fatal(err)
+	}
+	var b Prepared
+	Prepare(&p, testWaves(t), &b)
+	return &b
 }
 
 type golden struct {
@@ -153,7 +220,11 @@ func TestGolden(t *testing.T) {
 		}
 	}
 	for i, sc := range sf.Scenarios {
-		g, err := runScenario(sf.Sea, sf.Params, sf.Wind, sf.Ground, sc)
+		params, err := sf.Params.of(sc.Boat)
+		if err != nil {
+			t.Fatalf("%s: %v", sc.Name, err)
+		}
+		g, err := runScenario(sf.Sea, params, sf.Wind, sf.Ground, sc)
 		if err != nil {
 			t.Fatalf("%s: %v", sc.Name, err)
 		}
@@ -646,18 +717,39 @@ func readJSON(t testing.TB, path string, v any) {
 	}
 }
 
-// jolly returns the Jolly boat, prepared, from the scenarios file.
+// jolly returns the Jolly boat, the first boat, prepared, from the
+// scenarios file.
 func jolly(t testing.TB) *Prepared {
 	t.Helper()
 	var sf scenarioFile
 	readJSON(t, scenariosFile, &sf)
-	var p Params
-	if err := setParams(&p, sf.Params); err != nil {
-		t.Fatal(err)
+	return sf.Params.prepared(t, "")
+}
+
+// testBoat is a boat of the scenarios file, prepared.
+type testBoat struct {
+	id string
+	b  *Prepared
+}
+
+// testBoats returns every boat of the scenarios file, prepared, in order.
+func testBoats(t testing.TB) []testBoat {
+	t.Helper()
+	var sf scenarioFile
+	readJSON(t, scenariosFile, &sf)
+	var out []testBoat
+	for _, id := range sf.Params.ids {
+		out = append(out, testBoat{id, sf.Params.prepared(t, id)})
 	}
-	var b Prepared
-	Prepare(&p, testWaves(t), &b)
-	return &b
+	return out
+}
+
+// boatOf returns the boat id of the scenarios file, prepared.
+func boatOf(t testing.TB, id string) *Prepared {
+	t.Helper()
+	var sf scenarioFile
+	readJSON(t, scenariosFile, &sf)
+	return sf.Params.prepared(t, id)
 }
 
 func TestStepAllocatesNothing(t *testing.T) {

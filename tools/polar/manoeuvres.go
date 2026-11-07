@@ -21,10 +21,10 @@ type manoeuvre struct {
 
 // settled returns a boat sailing steadily at twa (degrees) on port tack with
 // the best sheet there.
-func settled(b *physics.Prepared, windKnots, twa float64) (*boat, helmsman) {
-	pt := best(b, windKnots, twa)
+func settled(k *kind, windKnots, twa float64) (*boat, helmsman) {
+	pt := best(k, windKnots, twa, 0)
 	h := helmsman{target: twa * deg}
-	bt := newBoat(b, wind10(windKnots), h.target, pt.Sheet)
+	bt := newBoat(k.b, k.wind10(windKnots), h.target, pt.Sheet, 0)
 	for range int(settle * physics.StepsPerSecond) {
 		bt.c.Helm = h.helm(&bt.s)
 		bt.step()
@@ -36,8 +36,8 @@ func settled(b *physics.Prepared, windKnots, twa float64) (*boat, helmsman) {
 // other tack, through the wind for a tack or through dead downwind for a
 // gybe, and measures the manoeuvre over the following 30 s against the VMG
 // it had.
-func turn(b *physics.Prepared, windKnots, from float64) manoeuvre {
-	bt, h := settled(b, windKnots, from)
+func turn(k *kind, windKnots, from float64) manoeuvre {
+	bt, h := settled(k, windKnots, from)
 	// Speed and progress toward the wind before the turn.
 	var m manoeuvre
 	y0 := bt.s.Y
@@ -83,8 +83,8 @@ func turn(b *physics.Prepared, windKnots, from float64) manoeuvre {
 // byTheLee bears away slowly from a run until the boom gybes by itself, and
 // returns how far by the lee the boat was then, in degrees; NaN if it never
 // gybed.
-func byTheLee(b *physics.Prepared, windKnots float64) float64 {
-	bt, h := settled(b, windKnots, 170)
+func byTheLee(k *kind, windKnots float64) float64 {
+	bt, h := settled(k, windKnots, 170)
 	const rate = 1 * deg // per second
 	side := math.Signbit(bt.s.Boom)
 	for range int(60 * physics.StepsPerSecond) {
@@ -100,14 +100,15 @@ func byTheLee(b *physics.Prepared, windKnots float64) float64 {
 	return math.NaN()
 }
 
-func runManoeuvres(b *physics.Prepared) error {
+func runManoeuvres(k *kind) error {
+	fmt.Printf("%s, winds %s\n", k.name, k.heightWords())
 	fmt.Println("wind  manoeuvre  before  least  least/before  regain 90%  lost      boom crossed")
 	for _, w := range []float64{6, 12, 18} {
 		for _, mv := range []struct {
 			name string
 			from float64
 		}{{"tack", 45}, {"gybe", 150}} {
-			m := turn(b, w, mv.from)
+			m := turn(k, w, mv.from)
 			status := ""
 			if !m.OK {
 				status = "  capsized"
@@ -117,7 +118,7 @@ func runManoeuvres(b *physics.Prepared) error {
 		}
 	}
 	for _, w := range []float64{6, 12, 18} {
-		fmt.Printf("%4g  an accidental gybe comes %.1f° by the lee\n", w, byTheLee(b, w))
+		fmt.Printf("%4g  an accidental gybe comes %.1f° by the lee\n", w, byTheLee(k, w))
 	}
 	return nil
 }

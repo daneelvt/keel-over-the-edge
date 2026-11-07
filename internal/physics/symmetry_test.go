@@ -92,12 +92,12 @@ func runScenarioStates(t *testing.T, b *Prepared, sc scenario, n int32, mirrored
 func TestMirrorSymmetry(t *testing.T) {
 	var sf scenarioFile
 	readJSON(t, scenariosFile, &sf)
-	b := jolly(t)
 	for _, sc := range sf.Scenarios {
 		if sc.Sea != nil {
 			// TestMirrorSymmetryInWaves mirrors a sea.
 			continue
 		}
+		b := sf.Params.prepared(t, sc.Boat)
 		t.Run(sc.Name, func(t *testing.T) {
 			plain := runScenarioStates(t, b, sc, Substeps, false, sc.Steps)
 			mirrored := runScenarioStates(t, b, sc, Substeps, true, sc.Steps)

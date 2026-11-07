@@ -11,10 +11,20 @@ import (
 
 func TestWind10(t *testing.T) {
 	// 10 knots at 3 m is more 10 m up, by the log law over the open sea.
-	got := wind10(10) / knot
+	dinghy := &kind{height: 3}
+	got := dinghy.wind10(10) / knot
 	want := 10 * math.Log(10/0.0002) / math.Log(3/0.0002)
 	if math.Abs(got-want) > 1e-12 || got <= 10 {
 		t.Errorf("wind10(10) = %v knots, want %v", got, want)
+	}
+	// And back.
+	if back := dinghy.atHeight(got); math.Abs(back-10) > 1e-12 {
+		t.Errorf("atHeight(%v) = %v knots, want 10", got, back)
+	}
+	// A wind given 10 m up is the game's.
+	keel := &kind{height: 10}
+	if got := keel.wind10(10) / knot; got != 10 || keel.atHeight(10) != 10 {
+		t.Errorf("10 knots 10 m up is %v knots 10 m up", got)
 	}
 }
 
@@ -66,7 +76,7 @@ func TestChartIsSVG(t *testing.T) {
 }
 
 func TestBoomRounded(t *testing.T) {
-	for deg, want := range map[float64]int{4: 4, 4.4: 4, 4.9: 5, 12.2: 10, 12.6: 15, 77.7: 80, 84.1: 85} {
+	for deg, want := range map[float64]int{4: 4, 4.4: 4, 4.9: 5, 12.2: 10, 12.6: 15, 77.7: 80, 84.1: 85, -80: 80, -4: 4} {
 		if got := boomRounded(deg); got != want {
 			t.Errorf("boomRounded(%v) = %d, want %d", deg, got, want)
 		}

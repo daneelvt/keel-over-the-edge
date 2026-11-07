@@ -9,8 +9,6 @@ import (
 	"os"
 	"slices"
 	"strings"
-
-	"github.com/daneelvt/keel-over-the-edge/internal/physics"
 )
 
 // referenceFile is internal/physics/testdata/reference.json.
@@ -21,10 +19,12 @@ type referenceFile struct {
 
 // reference is the measured performance of one boat's original.
 type reference struct {
-	Boat     string     `json:"boat"`
-	Original string     `json:"original"`
-	Points   []refPoint `json:"points"`
-	Notes    []string   `json:"notes"`
+	Boat     string `json:"boat"`
+	Original string `json:"original"`
+	// Height is the height its winds are given at, m.
+	Height float64    `json:"height"`
+	Points []refPoint `json:"points"`
+	Notes  []string   `json:"notes"`
 }
 
 type refPoint struct {
@@ -102,27 +102,24 @@ func (p refPoint) label() string {
 
 // runCheck sails the polar at the reference's winds and angles and fails
 // outside the tolerances, then at the chart's winds, and fails unless the
-// sail says drawing at the fastest sheet and, for the boat of the handbook,
-// unless its trim table is the polar's.
-func runCheck(b *physics.Prepared, id string, handbook bool) error {
-	r, err := readReference()
-	if err != nil {
-		return err
-	}
-	ref := r.boat(id)
-	if ref == nil {
-		return fmt.Errorf("%s has no reference data for %s", referencePath, id)
-	}
+// sail says drawing at the fastest sheet, and unless the handbook's trim
+// table and reefing advice for the kind are the polar's.
+func runCheck(k *kind, ref *reference) error {
 	var winds []float64
+	angles := slices.Clone(chartAngles)
 	for _, p := range ref.Points {
 		if !slices.Contains(winds, p.Wind) {
 			winds = append(winds, p.Wind)
 		}
+		if p.Measure == "speed" && !slices.Contains(angles, p.TWA) {
+			angles = append(angles, p.TWA)
+		}
 	}
 	slices.Sort(winds)
-	polars := sailPolars(b, winds, chartAngles)
+	slices.Sort(angles)
+	polars := sailPolars(k, winds, angles)
 	var failed []string
-	fmt.Printf("%s against %s\n", id, ref.Original)
+	fmt.Printf("%s against %s, winds %s\n", k.id, ref.Original, k.heightWords())
 	for _, p := range ref.Points {
 		got, err := p.model(polars)
 		if err != nil {
@@ -140,12 +137,9 @@ func runCheck(b *physics.Prepared, id string, handbook bool) error {
 	if len(failed) > 0 {
 		return errors.New("outside the reference's tolerances:\n  " + strings.Join(failed, "\n  "))
 	}
-	all := sailPolars(b, chartWinds, chartAngles)
+	all := sailPolars(k, chartWinds, chartAngles)
 	if err := checkWords(all); err != nil {
 		return err
 	}
-	if handbook {
-		return checkHandbook(all)
-	}
-	return nil
+	return checkHandbook(k)
 }

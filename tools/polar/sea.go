@@ -26,15 +26,15 @@ const (
 	seaTick = 740_000_000
 )
 
-// openSea is the sea a wind of knots at sail height, from the north, raises
-// over open water: one area, the same everywhere.
+// openSea is the sea a wind of m/s 10 m up, from the north, raises over
+// open water: one area, the same everywhere.
 type openSea struct {
 	sea  physics.Sea
 	win  physics.SeaWindow
 	time physics.SeaTick
 }
 
-func newOpenSea(w *physics.Waves, windKnots float64) *openSea {
+func newOpenSea(w *physics.Waves, wind float64) *openSea {
 	o := &openSea{win: physics.SeaWindow{
 		Size:   1,
 		Inputs: make([]physics.SeaInput, 1),
@@ -42,7 +42,7 @@ func newOpenSea(w *physics.Waves, windKnots float64) *openSea {
 		Hs:     make([]float64, 1),
 		Peak:   make([]float64, 1),
 	}}
-	physics.SeaArea(w, &o.win, 0, w.OpenSea(wind10(windKnots), 0))
+	physics.SeaArea(w, &o.win, 0, w.OpenSea(wind, 0))
 	o.win.Seal()
 	o.sea = physics.Sea{Waves: w, Window: &o.win, Tick: &o.time}
 	return o
@@ -59,10 +59,10 @@ type wavePoint struct {
 }
 
 // sailInWaves sails at twa with the sheet fixed, in a sea of its own.
-func sailInWaves(b *physics.Prepared, w *physics.Waves, windKnots, twa, sheet float64) wavePoint {
-	sea := newOpenSea(w, windKnots)
+func sailInWaves(k *kind, w *physics.Waves, windKnots, twa, sheet float64) wavePoint {
+	sea := newOpenSea(w, k.wind10(windKnots))
 	h := helmsman{target: twa * deg}
-	bt := newBoat(b, wind10(windKnots), h.target, sheet)
+	bt := newBoat(k.b, k.wind10(windKnots), h.target, sheet, 0)
 	n := int((seaSettle + seaMeasure) * physics.StepsPerSecond)
 	start := int(seaSettle * physics.StepsPerSecond)
 	p := wavePoint{TWA: twa, Sheet: sheet}
@@ -98,17 +98,17 @@ func sailInWaves(b *physics.Prepared, w *physics.Waves, windKnots, twa, sheet fl
 
 // bestInWaves finds the sheet that sails fastest at a true wind angle in
 // waves, among those that keep the boat upright.
-func bestInWaves(b *physics.Prepared, w *physics.Waves, windKnots, twa float64) wavePoint {
+func bestInWaves(k *kind, w *physics.Waves, windKnots, twa float64) wavePoint {
 	top := wavePoint{TWA: twa}
 	for sheet := 0.0; sheet <= 1.0001; sheet += 0.05 {
-		if p := sailInWaves(b, w, windKnots, twa, sheet); p.OK && (!top.OK || p.Mean > top.Mean) {
+		if p := sailInWaves(k, w, windKnots, twa, sheet); p.OK && (!top.OK || p.Mean > top.Mean) {
 			top = p
 		}
 	}
 	return top
 }
 
-func runSea(b *physics.Prepared, w *physics.Waves, windKnots float64) error {
+func runSea(k *kind, w *physics.Waves, windKnots float64) error {
 	if !(windKnots > 0) {
 		return fmt.Errorf("-sea wants a wind in knots, not %g", windKnots)
 	}
@@ -119,8 +119,8 @@ func runSea(b *physics.Prepared, w *physics.Waves, windKnots float64) error {
 	for range runtime.NumCPU() {
 		wg.Go(func() {
 			for j := range jobs {
-				flat[j] = best(b, windKnots, chartAngles[j])
-				waves[j] = bestInWaves(b, w, windKnots, chartAngles[j])
+				flat[j] = best(k, windKnots, chartAngles[j], 0)
+				waves[j] = bestInWaves(k, w, windKnots, chartAngles[j])
 			}
 		})
 	}
@@ -130,10 +130,10 @@ func runSea(b *physics.Prepared, w *physics.Waves, windKnots float64) error {
 	close(jobs)
 	wg.Wait()
 
-	sea := newOpenSea(w, windKnots)
+	sea := newOpenSea(w, k.wind10(windKnots))
 	var s strings.Builder
-	fmt.Fprintf(&s, "\n%g knots of wind at sail height (%.1f knots 10 m up) and the sea it raises: Hs %.2f m, peak period %.1f s, %d waves\n",
-		windKnots, wind10(windKnots)/knot, sea.win.Hs[0], 2*math.Pi/sea.win.Peak[0], sea.win.Count)
+	fmt.Fprintf(&s, "\n%s in %g knots of wind %s (%.1f knots 10 m up) and the sea it raises: Hs %.2f m, peak period %.1f s, %d waves\n",
+		k.name, windKnots, k.heightWords(), k.wind10(windKnots)/knot, sea.win.Hs[0], 2*math.Pi/sea.win.Peak[0], sea.win.Count)
 	fmt.Fprintln(&s, "        flat water          in waves")
 	fmt.Fprintln(&s, "  TWA  speed    VMG    mean    10%    90%    VMG  heel heave pitch sheet")
 	var upFlat, upWaves, downFlat, downWaves float64

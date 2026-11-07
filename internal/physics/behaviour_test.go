@@ -96,7 +96,6 @@ func TestRandomStaysFinite(t *testing.T) {
 func TestSubstepsConverge(t *testing.T) {
 	var sf scenarioFile
 	readJSON(t, scenariosFile, &sf)
-	b := jolly(t)
 	maxWind := func(sc scenario) float64 {
 		w := sc.Env["windSpeed"]
 		for _, c := range sc.Changes {
@@ -121,6 +120,7 @@ func TestSubstepsConverge(t *testing.T) {
 			// TestSubstepsConvergeInWaves has the boat in a sea.
 			continue
 		}
+		b := sf.Params.prepared(t, sc.Boat)
 		t.Run(sc.Name, func(t *testing.T) {
 			steps := min(sc.Steps, 600)
 			fine := runScenarioStates(t, b, sc, 32, false, steps)

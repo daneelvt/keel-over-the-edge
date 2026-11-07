@@ -249,12 +249,12 @@ func TestUpwindInWaves(t *testing.T) {
 func TestNoSeaNoChange(t *testing.T) {
 	var sf scenarioFile
 	readJSON(t, scenariosFile, &sf)
-	b := jolly(t)
 	calm := openSea(t, 0, 0, 6)
 	for _, sc := range sf.Scenarios {
 		if sc.Sea != nil {
 			continue
 		}
+		b := sf.Params.prepared(t, sc.Boat)
 		var (
 			s, s2 State
 			c     Control

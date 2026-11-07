@@ -3,6 +3,7 @@
 package main
 
 import (
+	"fmt"
 	"math"
 	"runtime"
 	"sync"
@@ -15,17 +16,38 @@ const (
 	deg  = math.Pi / 180
 )
 
-// sailHeight is the height at which the reference data's wind is taken: the
-// sail's, about 3 m. The game's wind, and the physics', is 10 m up.
-const sailHeight = 3.0
-
 // seaRoughness must match the physics package's.
 const seaRoughness = 0.0002
 
-// wind10 returns the wind 10 m up that blows at knots at sail height, in m/s,
-// by the logarithmic profile over the open sea.
-func wind10(knotsAtSail float64) float64 {
-	return knotsAtSail * knot * math.Log(10/seaRoughness) / math.Log(sailHeight/seaRoughness)
+// kind is a boat of the catalog as the tool sails it: its constants, its
+// raw values, and the height its reference data's wind is taken at.
+type kind struct {
+	id, name string
+	b        *physics.Prepared
+	p        *physics.Params
+	// height is the reference data's wind height, m: a dinghy's wind is
+	// measured near its sail, about 3 m up; a keelboat's polar is rated in
+	// the wind 10 m up, the game's own height. The tool's winds are given
+	// at this height.
+	height     float64
+	startSheet [][]float64
+}
+
+// wind10 returns the wind 10 m up that blows at knots at the kind's
+// reference height, in m/s, by the logarithmic profile over the open sea.
+func (k *kind) wind10(knots float64) float64 {
+	if k.height == 10 {
+		return knots * knot
+	}
+	return knots * knot * math.Log(10/seaRoughness) / math.Log(k.height/seaRoughness)
+}
+
+// heightWords names the height the tool's winds are given at.
+func (k *kind) heightWords() string {
+	if k.height == 10 {
+		return "10 m up"
+	}
+	return fmt.Sprintf("at sail height, %g m", k.height)
 }
 
 // helmsman steers by a heading: a proportional-derivative heading-hold of the
@@ -53,12 +75,20 @@ type boat struct {
 	o    physics.Out
 	sea  *physics.Sea // nil in flat water
 	time float64
-	// capsized is set once the sailor has fallen in.
+	// capsized is set once the sailor has fallen in, or a boat whose sailor
+	// stays aboard is knocked down past knockedDown.
 	capsized bool
 }
 
-func newBoat(b *physics.Prepared, wind, heading, sheet float64) *boat {
+// knockedDown is the heel past which a boat counts as capsized though its
+// sailor stays aboard, rad: a dinghy's sailor falls in before it.
+const knockedDown = 75 * deg
+
+// newBoat is a boat under way at heading in a wind of m/s 10 m up from the
+// north, its sheet at sheet and its sail reefed to reef, from 0 to 2.
+func newBoat(b *physics.Prepared, wind, heading, sheet, reef float64) *boat {
 	bt := &boat{b: b}
+	bt.s.Reef, bt.c.Reef = reef, reef
 	bt.e.WindSpeed = wind
 	bt.s.Heading = heading
 	bt.s.Surge = 1.5
@@ -70,7 +100,7 @@ func newBoat(b *physics.Prepared, wind, heading, sheet float64) *boat {
 func (bt *boat) step() {
 	physics.Step(&bt.s, &bt.c, &bt.e, bt.sea, nil, bt.b, &bt.o)
 	bt.time += physics.Dt
-	if bt.s.SailorMode != physics.Sailing {
+	if bt.s.SailorMode != physics.Sailing || math.Abs(bt.s.Heel) > knockedDown {
 		bt.capsized = true
 	}
 }
@@ -102,12 +132,13 @@ const (
 )
 
 // sail sails a boat at true wind angle twa (degrees) on port tack with the
-// sheet fixed, and returns its mean over the measured time.
-func sail(b *physics.Prepared, windKnots, twa, sheet float64) point {
+// sheet fixed and the sail reefed to reef, and returns its mean over the
+// measured time.
+func sail(k *kind, windKnots, twa, sheet, reef float64) point {
 	// The wind comes from the north; on port tack it comes over the port side,
 	// so the heading is the true wind angle.
 	h := helmsman{target: twa * deg}
-	bt := newBoat(b, wind10(windKnots), h.target, sheet)
+	bt := newBoat(k.b, k.wind10(windKnots), h.target, sheet, reef)
 	n := int((settle + measure) * physics.StepsPerSecond)
 	start := int(settle * physics.StepsPerSecond)
 	var sum point
@@ -132,24 +163,24 @@ func sail(b *physics.Prepared, windKnots, twa, sheet float64) point {
 			words[int(bt.o.Sail)]++
 		}
 	}
-	k := 1 / float64(n-start)
+	per := 1 / float64(n-start)
 	p := point{
 		TWA:   twa,
 		Sheet: sheet,
-		Speed: sum.Speed * k / knot,
+		Speed: sum.Speed * per / knot,
 		VMG:   (bt.s.Y - y0) / measure / knot,
 		// On port tack leeward is starboard, positive; the sailor hikes to
 		// port, negative; weather helm, the tiller to windward, turns the
 		// blade to leeward: positive.
-		Heel:   sum.Heel * k / deg,
-		Rudder: sum.Rudder * k / deg,
-		Leeway: sum.Leeway * k / deg,
-		Boom:   sum.Boom * k / deg,
-		Attack: sum.Attack * k / deg,
-		Sailor: -sum.Sailor * k,
-		Flat:   sum.Flat * k,
+		Heel:   sum.Heel * per / deg,
+		Rudder: sum.Rudder * per / deg,
+		Leeway: sum.Leeway * per / deg,
+		Boom:   sum.Boom * per / deg,
+		Attack: sum.Attack * per / deg,
+		Sailor: -sum.Sailor * per,
+		Flat:   sum.Flat * per,
 		// The mean apparent angle and the commonest word.
-		Apparent: sum.Apparent * k / deg,
+		Apparent: sum.Apparent * per / deg,
 		OK:       !bt.capsized,
 	}
 	for w, n := range words {
@@ -160,12 +191,12 @@ func sail(b *physics.Prepared, windKnots, twa, sheet float64) point {
 	return p
 }
 
-// best finds the sheet that sails fastest at a true wind angle: a coarse
-// search, then a fine one around the best.
-func best(b *physics.Prepared, windKnots, twa float64) point {
+// best finds the sheet that sails fastest at a true wind angle, the sail
+// reefed to reef: a coarse search, then a fine one around the best.
+func best(k *kind, windKnots, twa, reef float64) point {
 	var top point
 	try := func(sheet float64) {
-		p := sail(b, windKnots, twa, sheet)
+		p := sail(k, windKnots, twa, sheet, reef)
 		if p.OK && (!top.OK || p.Speed > top.Speed) {
 			top = p
 		}
@@ -187,12 +218,18 @@ func best(b *physics.Prepared, windKnots, twa float64) point {
 
 // polar is the boat's speed at each true wind angle in one wind.
 type polar struct {
-	Wind   float64 `json:"wind"` // knots at sail height
+	Wind   float64 `json:"wind"` // knots at the kind's reference height
 	Points []point `json:"points"`
 }
 
-// sailPolars computes polars for every wind and angle, in parallel.
-func sailPolars(b *physics.Prepared, winds, angles []float64) []polar {
+// sailPolars computes polars at full sail for every wind and angle, in
+// parallel.
+func sailPolars(k *kind, winds, angles []float64) []polar {
+	return reefedPolars(k, winds, angles, 0)
+}
+
+// reefedPolars computes polars with the sail reefed to reef.
+func reefedPolars(k *kind, winds, angles []float64, reef float64) []polar {
 	out := make([]polar, len(winds))
 	type job struct{ i, j int }
 	jobs := make(chan job)
@@ -203,7 +240,7 @@ func sailPolars(b *physics.Prepared, winds, angles []float64) []polar {
 	for range runtime.NumCPU() {
 		wg.Go(func() {
 			for jb := range jobs {
-				out[jb.i].Points[jb.j] = best(b, winds[jb.i], angles[jb.j])
+				out[jb.i].Points[jb.j] = best(k, winds[jb.i], angles[jb.j], reef)
 			}
 		})
 	}

@@ -15,6 +15,7 @@ import {
   type GoldenFile,
   runScenario,
   type ScenarioFile,
+  scenarioBoat,
   spellOf,
   steer,
   toHex,
@@ -315,7 +316,12 @@ describe('the sandbox', () => {
     let ran = 0;
     for (const [k, sc] of scenarios.scenarios.entries()) {
       const weather = sc.weather;
-      if (weather === undefined || sc.sea !== undefined || sc.terrain !== undefined) {
+      if (
+        weather === undefined ||
+        sc.sea !== undefined ||
+        sc.terrain !== undefined ||
+        scenarioBoat(scenarios, sc.boat).kind !== 0
+      ) {
         // The sandbox makes its own wind and sea, on open water: a scenario
         // with a wind given step by step, a sea or a terrain is not its to
         // sail. A recorded sail, below, has both of the first.
@@ -437,7 +443,12 @@ describe('a recorded sail', () => {
     // Changes only where a control, the weather or the sea changed.
     expect(sc.changes.length).toBeGreaterThan(5);
     expect(sc.changes.length).toBeLessThan(700);
-    const replay = await runScenario(await loadPhysics(bytes), rec, sc);
+    // The recording's params are the one boat it sailed.
+    const replay = await runScenario(
+      await loadPhysics(bytes),
+      { ...rec, params: { sailed: rec.params } },
+      sc,
+    );
     expect(replay.checkpoints.at(-1)?.state).toEqual(sc.end);
     // It began in a steady 10 knots and its sea.
     expect(sc.sea.tick).toBe(2);
@@ -478,7 +489,7 @@ describe('a recorded sail', () => {
   test('its params are the catalog boat’s, as the golden scenarios have them', async () => {
     const rec = await scriptedSail();
     const scenarios = readJSON<ScenarioFile>(new URL('scenarios.json', testdata));
-    expect(rec.params).toEqual(scenarios.params);
+    expect(rec.params).toEqual(scenarioBoat(scenarios).params);
     expect(rec.sea).toEqual(scenarios.sea);
     expect(rec.wind).toEqual(scenarios.wind);
     expect(rec.scenarios[0]?.end.heading).toBe(toHex(fromHex(rec.scenarios[0]?.end.heading ?? '')));

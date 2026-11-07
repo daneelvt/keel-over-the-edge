@@ -308,9 +308,7 @@ boats:
         # proportions, every half knot from 0 to 12 knots: the hump past
         # its hull speed of about 6 knots. The keel's and rudder's own
         # friction is the foils'.
-        dragArea: [0.048, 0.046, 0.044, 0.042, 0.041, 0.040, 0.039, 0.039,
-          0.040, 0.041, 0.043, 0.047, 0.053, 0.062, 0.0715, 0.079, 0.083,
-          0.083, 0.081, 0.079, 0.077, 0.075, 0.073, 0.071, 0.069]
+        dragArea: [0.041, 0.039, 0.037, 0.036, 0.035, 0.034, 0.033, 0.033, 0.034, 0.035, 0.038, 0.053, 0.068, 0.083, 0.0965, 0.107, 0.112, 0.112, 0.109, 0.107, 0.104, 0.101, 0.099, 0.096, 0.093]
         crossFlowDrag: 1.0 # estimate
         addedMassSurge: 45 # estimate: about 5% of the mass
         addedMassSway: 900 # estimate: the hull's slender-body added mass and the keel's
@@ -318,12 +316,18 @@ boats:
         yawInertia: 4500 # estimate: hull, keel, rig, sailor and added inertia
         rollInertia: 1500 # estimate: the keel's lead, the mast, the hull
         rollDamping: 300 # estimate
-        # Estimate: the righting moment at 1°, 15.9 kg·m (ORC certificate),
-        # its slope at the start, falling to nothing at the limit of positive
-        # stability, 105° (ORC certificate); a keelboat's shape between, its
-        # greatest lever near 50°. Every 10° from 0° to 180°.
-        rightingLever: [0, 0.17, 0.32, 0.44, 0.51, 0.53, 0.50, 0.43, 0.33,
-          0.21, 0.08, -0.08, -0.20, -0.28, -0.32, -0.30, -0.23, -0.12, 0]
+        # Estimate, with the sailor seated on the centreline: a simple hull
+        # (sections from the plan at the sheer and the certificate's
+        # freeboards of 0.80 m forward and 0.57 m aft, a canoe body 0.30 m
+        # deep on a 5.95 m waterline, the cuddy, the fin and its lead),
+        # heeled in still water. Its centre of gravity gives the boat alone
+        # the certificate's righting moment at 1°, 15.9 kg·m, and the fullness
+        # of its sections its limit of positive stability, 105° (ORC
+        # certificate). The sailor's 80 kg on deck brings the limit to about
+        # 100°. The cuddy's top meets the water at about 60°. Every 10° from
+        # 0° to 180°.
+        rightingLever: [0, 0.17, 0.30, 0.37, 0.41, 0.41, 0.41, 0.38, 0.27,
+          0.14, 0, -0.12, -0.22, -0.30, -0.36, -0.37, -0.29, -0.12, 0]
         waterlineBeam: 1.95 # estimate
         waterplaneArea: 7.9 # estimate: a waterplane coefficient of 0.70
         waterplanePitch: 18 # estimate: an ellipse's π L³ B / 64
@@ -353,8 +357,8 @@ boats:
         pressureSeparated: 0.50
         effectiveHeight: 9.0 # estimate: about the masthead's height
         quadraticDrag: 0.01379 # ORC 2023, Table 5.1
-        # The Jolly boat's fit to ORC's mainsail, until tools/polar -sail
-        # fits this one.
+        # Fitted by tools/polar -sail to ORC's low-lift mainsail, as the
+        # Jolly boat's: the same coefficients, the twist eased below.
         maxLift: 1.48
         stallAngle: 28
         stallWidth: 20
@@ -365,7 +369,9 @@ boats:
           1.28, 1.19, 1.07, 0.93, 0.77, 0.59, 0.40, 0.20, 0]
         twistPowered: 5 # estimate
         twistDepowered: 15 # estimate
-        twistEased: 10 # estimate: a vang holds the boom down
+        # Fitted with the sail: the vang holds the boom down, but the leech
+        # still opens as the sheet eases.
+        twistEased: 18
         twistTurn: 3 # estimate
         headBacked: 90 # estimate
         headBackedWidth: 20 # estimate
@@ -395,17 +401,22 @@ boats:
         headsailHeadStrip: 0.53
         headsailPressureAttached: 0.33
         headsailPressureSeparated: 0.50
-        # Estimates, until tools/polar -sail fits them to ORC's jib.
-        headsailMaxLift: 1.5
-        headsailStallAngle: 25
-        headsailStallWidth: 20
-        headsailDrag: 0.02
-        headsailNormalForce: [0, 0.5, 0.9, 1.07, 1.21, 1.31, 1.37, 1.39, 1.38,
-          1.35, 1.28, 1.19, 1.07, 0.93, 0.77, 0.59, 0.40, 0.20, 0]
-        headsailTwist: 6 # estimate
-        headsailTwistEased: 10 # estimate
+        # Fitted by tools/polar -sail to ORC's low-lift jib (2023, Table
+        # 5.4) from 27° to 100° of apparent wind, sheeted between its leads:
+        # a jib's lift rises steeply as it is trimmed, and once eased its
+        # drag grows fast, its clew stopped at the rail and its leech open.
+        headsailMaxLift: 2.1
+        headsailStallAngle: 17
+        headsailStallWidth: 19
+        headsailDrag: 0.034
+        headsailNormalForce: [0, 0.5, 0.83, 1.01, 1.10, 1.14, 1.14, 1.11, 1.08,
+          1.05, 1.04, 1.01, 0.97, 0.90, 0.77, 0.59, 0.40, 0.20, 0]
+        headsailTwist: 8 # fitted with the sail
+        headsailTwistEased: 10 # fitted with the sail
         headsailIn: 10 # estimate: the jib's leads inside the shrouds
-        headsailOut: 60 # estimate
+        # Estimate: the clew goes out no further than the rail, about 0.9 m
+        # out at the end of the foot's 2.75 m.
+        headsailOut: 20
         headsailInertia: 15 # estimate
         headsailMoment: 6 # estimate
         headsailDamping: 8 # estimate
@@ -415,7 +426,7 @@ boats:
         # The fin keel: the certificate's draft of 1.179 m less the hull's.
         boardSpan: 0.879
         boardChord: 0.72 # estimate
-        boardPosition: 0.10 # estimate, tuned for weather helm
+        boardPosition: 0.9 # estimate, tuned for weather helm
         rudderSpan: 0.90 # estimate
         rudderChord: 0.33 # estimate
         rudderPosition: 2.95 # estimate: hung on the transom
@@ -428,7 +439,7 @@ boats:
         carryOver: 1.80 # Keuning and Verwerft (2009)
         heelLoss: 0.382 # Keuning and Verwerft (2009)
         rudderInflow: 0.9
-        downwash: 0.5 # estimate
+        downwash: 0.8 # estimate
         foilWetHeel: 70 # estimate: a deep keel stays in the water
         foilDryHeel: 120 # estimate
         fixed: 1
@@ -442,9 +453,9 @@ boats:
         hikeLag: 0.5 # estimate
         heelGain: 1.0
         rollRateGain: 0.6
-        flattenFrom: 6 # estimate
-        flattenTo: 12 # estimate
-        flattenMin: 0.62 # estimate; ORC's floor is 0.6
+        flattenFrom: 8 # estimate
+        flattenTo: 11 # estimate
+        flattenMin: 0.6 # estimate; ORC's floor is 0.6
         # A keelboat is knocked down, not capsized: her sailor stays aboard
         # and her ballast brings her back.
         fallOutHeel: 180
