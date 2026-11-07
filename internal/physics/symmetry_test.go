@@ -15,8 +15,9 @@ import (
 // bit; the test allows 10⁻¹² for a later change of summation order.
 
 // mirror turns a state east for west: positions east, headings, turning,
-// sideways motion, heel and everything to one side change sign. The
-// autopilot's standing helm is kept toward the wind, so it does not.
+// sideways motion, heel and everything to one side change sign, a ship's
+// yards braced for the other side among them. The autopilot's standing
+// helm is kept toward the wind, so it does not.
 func mirror(s State) State {
 	s.X, s.Heading, s.Sway, s.YawRate = -s.X, -s.Heading, -s.Sway, -s.YawRate
 	s.Heel, s.RollRate, s.Boom, s.BoomRate = -s.Heel, -s.RollRate, -s.Boom, -s.BoomRate
@@ -110,6 +111,7 @@ func TestMirrorSymmetry(t *testing.T) {
 					p.SheetLimit - m.SheetLimit, p.SailorMode - m.SailorMode, p.SailorTimer - m.SailorTimer,
 					p.PilotTrim - m.PilotTrim, p.PilotWay - m.PilotWay, p.PilotOrder - m.PilotOrder,
 					p.Jib - m.Jib, p.JibRate - m.JibRate, p.JibLimit - m.JibLimit, p.Reef - m.Reef,
+					p.Yards - m.Yards, p.ForeYards - m.ForeYards,
 				} {
 					if math.Abs(d) > 1e-12 {
 						t.Fatalf("step %d: the mirrored run differs by %g:\n plain    %+v\n mirrored %+v", i, d, p, m)

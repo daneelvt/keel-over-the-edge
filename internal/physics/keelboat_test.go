@@ -59,7 +59,9 @@ func TestKeelboatUpwind(t *testing.T) {
 // in, she goes far over; her sheet let fly 4 s in, her keel and her sails
 // bring her back under 30° within 60 s of the gust's coming, and she stays
 // there; her sailor never leaves her, and the helm and sheet work
-// throughout.
+// throughout. A ship, stiffer and slower to roll, is laid over with her
+// yards braced up sharp for a roll and a half, 12 s, her lee rail under,
+// past 25°, before her braces are let go and her yards squared.
 func TestKnockdownRecovers(t *testing.T) {
 	ran := 0
 	for _, boat := range testBoats(t) {
@@ -67,23 +69,27 @@ func TestKnockdownRecovers(t *testing.T) {
 			continue
 		}
 		ran++
+		hauled, laid := 4.0, 45.0
+		if boat.b.square {
+			hauled, laid = 12, 25
+		}
 		m := newSimOf(t, boat.b, 12*knot, 80, 0.3)
 		m.run(60, nil)
 		m.maxHeel = 0
 		m.e.WindSpeed = 40 * knot
 		m.c.Sheet = 0
-		m.run(4, nil)
+		m.run(hauled, nil)
 		deepest := m.maxHeel
 		m.c.Sheet = 1
 		limit := m.s.SheetLimit
-		m.run(16, nil)
+		m.run(20-hauled, nil)
 		m.e.WindSpeed = 12 * knot
 		m.run(30, nil)
 		// The last 10 s of the minute.
 		most := 0.0
 		m.run(10, func() { most = max(most, math.Abs(m.s.Heel)) })
 		t.Logf("%s: knocked down to %.0f°, at most %.1f° over the last 10 s of the minute", boat.id, deepest, most/deg)
-		if deepest < 45 {
+		if deepest < laid {
 			t.Errorf("%s: a 40-knot gust sheeted in heeled her only to %.0f°", boat.id, deepest)
 		}
 		if most > 30*deg {
@@ -95,9 +101,9 @@ func TestKnockdownRecovers(t *testing.T) {
 		if !(m.s.SheetLimit > limit) {
 			t.Errorf("%s: let fly, the sheet did not run: %.1f° from %.1f°", boat.id, m.s.SheetLimit/deg, limit/deg)
 		}
-		// The helm still turns her rudder.
+		// The helm still turns her rudder, as fast as her wheel turns.
 		m.steer, m.c.Helm = false, 1
-		m.run(1, nil)
+		m.run(max(1, float64(2.2*boat.b.rudderMax)/boat.b.rudderRate), nil)
 		if !(m.s.Rudder > 0.9*m.b.rudderMax) {
 			t.Errorf("%s: after the knockdown the rudder is at %.1f°, not following the helm", boat.id, m.s.Rudder/deg)
 		}
@@ -156,31 +162,49 @@ func TestKeelAground(t *testing.T) {
 // near hard, past where her sailor can hold her up at full sail, a reef
 // heels her less and two less still, and she sails no slower for them;
 // the crew takes them in at her reef time, the sail's share of its luff
-// going down to the reef's.
+// going down to the reef's. A ship sails close-hauled, braced up sharp,
+// in 30 knots, past where her crew reefs her: reefed she makes no less
+// to windward, though she is slower through the water.
 func TestReefingHeelsLess(t *testing.T) {
 	for _, boat := range testBoats(t) {
-		heel := func(reef float64) (float64, *sim) {
-			m := newSimOf(t, boat.b, 24*knot, 50, 0.1)
-			m.c.Reef = reef
-			m.run(90, nil)
-			return m.mean(30, func() float64 { return math.Abs(m.s.Heel) }) / deg, m
+		knots, angle, sheet := 24.0, 50.0, 0.1
+		if boat.b.square {
+			knots, angle, sheet = 30, boat.b.closeHauled/deg, 0
 		}
-		full, m0 := heel(0)
-		one, _ := heel(1)
-		two, m := heel(2)
-		t.Logf("%s, 24 knots at 50°: heel %.1f° at full sail, %.1f° with a reef, %.1f° with two, %.2f and %.2f knots; the luff's share %.3f",
-			boat.id, full, one, two, m0.speed()/knot, m.speed()/knot, m.o.ReefShare)
+		heel := func(reef float64) (float64, float64, *sim) {
+			m := newSimOf(t, boat.b, knots*knot, angle, sheet)
+			m.c.Reef = reef
+			if boat.b.square {
+				shipPilot(m, angle)
+				m.run(240, nil)
+			} else {
+				m.run(90, nil)
+			}
+			y := m.s.Y
+			h := m.mean(30, func() float64 { return math.Abs(m.s.Heel) }) / deg
+			return h, (m.s.Y - y) / 30, m
+		}
+		full, made0, m0 := heel(0)
+		one, _, _ := heel(1)
+		two, made, m := heel(2)
+		t.Logf("%s, %g knots at %.0f°: heel %.1f° at full sail, %.1f° with a reef, %.1f° with two, %.2f and %.2f knots, %.2f and %.2f to windward; the luff's share %.3f",
+			boat.id, knots, angle, full, one, two, m0.speed()/knot, m.speed()/knot, made0/knot, made/knot, m.o.ReefShare)
 		if !(two < one && one < full) {
 			t.Errorf("%s: heel %.1f°, %.1f°, %.1f° with no reef, one and two: not less as she reefs", boat.id, full, one, two)
 		}
-		if m.maxMode != Sailing || m.speed() < 0.95*m0.speed() {
-			t.Errorf("%s: with two reefs in 24 knots, sailor mode %v, %.2f knots against %.2f at full sail", boat.id, m.maxMode, m.speed()/knot, m0.speed()/knot)
+		switch {
+		case m.maxMode != Sailing:
+			t.Errorf("%s: with two reefs, sailor mode %v", boat.id, m.maxMode)
+		case boat.b.square && made < 0.95*made0:
+			t.Errorf("%s: with two reefs, %.2f knots to windward against %.2f at full sail", boat.id, made/knot, made0/knot)
+		case !boat.b.square && m.speed() < 0.95*m0.speed():
+			t.Errorf("%s: with two reefs, %.2f knots against %.2f at full sail", boat.id, m.speed()/knot, m0.speed()/knot)
 		}
 		if m.s.Reef != 2 || m.o.ReefShare != boat.b.reefs[2] {
 			t.Errorf("%s: reefed to %v, the luff's share %v, not 2 and %v", boat.id, m.s.Reef, m.o.ReefShare, boat.b.reefs[2])
 		}
 		// From full sail, a reef takes her reef time.
-		m = newSimOf(t, boat.b, 24*knot, 50, 0.1)
+		m = newSimOf(t, boat.b, knots*knot, angle, sheet)
 		m.c.Reef = 1
 		took := math.NaN()
 		m.run(2/boat.b.reefRate, func() {

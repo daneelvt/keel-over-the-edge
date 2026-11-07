@@ -516,6 +516,7 @@ func mirrorInWaves(t *testing.T, b *Prepared) {
 				p.SheetLimit - q.SheetLimit, p.SailorMode - q.SailorMode, p.SailorTimer - q.SailorTimer,
 				p.Heave - q.Heave, p.HeaveRate - q.HeaveRate, p.Pitch - q.Pitch, p.PitchRate - q.PitchRate,
 				p.Jib - q.Jib, p.JibRate - q.JibRate, p.JibLimit - q.JibLimit,
+				p.Yards - q.Yards, p.ForeYards - q.ForeYards,
 			} {
 				if math.Abs(d) > 1e-12 {
 					t.Fatalf("%s, step %d: the mirrored run differs by %g:\n plain    %+v\n mirrored %+v", c.name, i, d, p, q)
