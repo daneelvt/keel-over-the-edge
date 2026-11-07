@@ -28,7 +28,10 @@ type reference struct {
 }
 
 type refPoint struct {
-	Measure   string  `json:"measure"` // speed, upwindVMG or downwindVMG
+	// Measure is speed (at TWA), upwindVMG or downwindVMG, in knots;
+	// upwindAngle, the true wind angle of the best upwind VMG, degrees;
+	// or upwindLeeway, the leeway there, degrees.
+	Measure   string  `json:"measure"`
 	AtMost    bool    `json:"atMost,omitempty"`
 	TWA       float64 `json:"twa,omitempty"`
 	Wind      float64 `json:"wind"`
@@ -64,16 +67,20 @@ func (p refPoint) model(polars []polar) (float64, error) {
 		if pl.Wind != p.Wind {
 			continue
 		}
-		up, _, down, _ := vmg(pl)
+		up, upAngle, down, _ := vmg(pl)
 		switch p.Measure {
 		case "upwindVMG":
 			return up, nil
+		case "upwindAngle":
+			return upAngle, nil
+		case "upwindLeeway":
+			return at(pl, upAngle).Leeway, nil
 		case "downwindVMG":
 			return down, nil
 		case "speed":
 			pt := at(pl, p.TWA)
 			if !pt.OK {
-				return 0, fmt.Errorf("the boat capsizes at %g° in %g knots", p.TWA, p.Wind)
+				return 0, fmt.Errorf("at %g° in %g knots the boat %s", p.TWA, p.Wind, pt.cannot())
 			}
 			return pt.Speed, nil
 		}
@@ -94,8 +101,13 @@ func (p refPoint) verdict(got float64) (ok bool, text string) {
 }
 
 func (p refPoint) label() string {
-	if p.Measure == "speed" {
+	switch p.Measure {
+	case "speed":
 		return fmt.Sprintf("speed at %g°", p.TWA)
+	case "upwindAngle":
+		return "upwind angle"
+	case "upwindLeeway":
+		return "upwind leeway"
 	}
 	return p.Measure
 }

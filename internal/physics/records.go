@@ -128,6 +128,7 @@ type Params struct {
 	YawInertia      float64                  // added inertia included, kg·m²
 	RollInertia     float64                  // added inertia included, kg·m²
 	RollDamping     float64                  // the hull's own roll damping, N·m·s/rad
+	YawDamping      float64                  // the hull's resistance to turning, from the cross flow along it, N·m per (rad/s)²
 	RightingLever   [19]float64              // with the sailor on the centreline, every 10° of heel from 0° to 180°, m
 	WaterlineBeam   float64                  // m
 	WaterplaneArea  float64                  // m²

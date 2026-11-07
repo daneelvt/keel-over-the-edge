@@ -318,6 +318,10 @@ export interface PhysicsHull {
    */
   rollDamping: number;
   /**
+   * The hull's resistance to turning, from the water flowing across it as it turns, in N·m per (rad/s)²: its moment against the rate of turn times the rate's size. 0 where the foils alone damp the turning.
+   */
+  yawDamping: number;
+  /**
    * Righting lever (GZ) with the sailor on the centreline, every 10° of heel from 0° to 180°, in m.
    *
    * @minItems 19
@@ -8107,4 +8111,4 @@ export interface NewsColumn {
 }
 
 /** The catalog version (tools/catalog). */
-export const CATALOG_VERSION = 'd75eb06081de313e';
+export const CATALOG_VERSION = '8342880ffe462dd9';

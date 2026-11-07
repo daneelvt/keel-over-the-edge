@@ -56,18 +56,23 @@ func step(s *State, c *Control, e *Env, sea *Sea, g *Ground, b *Prepared, o *Out
 		rate = b.easeRate
 	}
 	s.SheetLimit = approach(clamp(s.SheetLimit, b.boomIn, b.boomOut), limit, float64(rate*Dt))
+	letFly := false
+	if b.square {
+		letFly = b.brace(s, e, sheet)
+	}
 	if b.jib {
 		// The crew trims the headsails to the main: their sheet's limit
-		// over its own travel, in the same share.
+		// over its own travel, in the same share; a ship's crew lets them
+		// fly in a tack.
 		limit = b.jibIn + float64(sheet*(b.jibOut-b.jibIn))
+		if letFly {
+			limit = b.jibOut
+		}
 		rate = b.jibHaulRate
 		if limit > s.JibLimit {
 			rate = b.jibEaseRate
 		}
 		s.JibLimit = approach(clamp(s.JibLimit, b.jibIn, b.jibOut), limit, float64(rate*Dt))
-	}
-	if b.square {
-		b.brace(s, e, sheet)
 	}
 	if s.SailorMode == Sailing {
 		// The crew takes a reef in or shakes one out a level at a time.
@@ -300,19 +305,35 @@ func (b *Prepared) substep(s *State, wind, sinW, cosW, dt float64, g *rig, v *wa
 // her old side. Wearing, both groups keep their side until the wind is
 // letGo on the new quarter. Each rule keeps its side within its margin,
 // so a yawing ship never braces back and forth.
-func (b *Prepared) brace(s *State, e *Env, sheet float64) {
+//
+// It reports whether the crew lets the headsails' sheets fly: in a tack,
+// from the time the ship comes up within hauls and letGo of the wind,
+// turning on, until the fore yards are hauled round, "raise tacks and
+// sheets", so that the headsails never hold her head off the wind.
+func (b *Prepared) brace(s *State, e *Env, sheet float64) bool {
 	angle := b.braceSharp + float64(sheet*(math.Pi/2-b.braceSharp))
 	w := wrapAngle(e.WindFrom - s.Heading)
 	a := math.Abs(w)
 	filled := -sign(w) // the side that fills from the wind
 	after, fore := sign(s.Yards), sign(s.ForeYards)
+	// Yards never braced are braced for the side the wind fills.
+	if after == 0 {
+		after = filled
+	}
+	if fore == 0 {
+		fore = filled
+	}
 	if a < math.Pi-b.letGo {
 		switch {
 		case a > b.hauls:
 			after = filled
-		case float64(s.YawRate*w) > 0 && math.Abs(s.YawRate) > hauling:
-			// Turning on through the wind: the new side.
+		case math.Abs(s.YawRate) > hauling && float64(s.YawRate*w) > 0:
+			// Turning on through the wind: the side she is coming to.
 			after = -filled
+		case math.Abs(s.YawRate) > hauling:
+			// Turning away from the wind: the side she is going off on,
+			// the new one past head to wind, or her old one falling back.
+			after = filled
 		}
 		if a > b.letGo {
 			fore = filled
@@ -321,6 +342,8 @@ func (b *Prepared) brace(s *State, e *Env, sheet float64) {
 	step := float64(b.braceRate * Dt)
 	s.Yards = swingYards(s.Yards, after, angle, step)
 	s.ForeYards = swingYards(s.ForeYards, fore, angle, step)
+	coming := a < b.hauls+b.letGo && math.Abs(s.YawRate) > hauling && float64(s.YawRate*w) > 0
+	return coming || sign(s.Yards) != sign(s.ForeYards)
 }
 
 // hauling is the least rate of turn at which the crew takes a ship to be

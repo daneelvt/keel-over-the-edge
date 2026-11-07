@@ -25,6 +25,7 @@ type Prepared struct {
 	weight          float64 // N
 	rightingLever   [19]float64
 	rollDamping     float64
+	yawDamping      float64 // N·m per (rad/s)²
 	invLogReference float64 // 1 / ln(10 m / z₀)
 
 	// In waves.
@@ -219,6 +220,7 @@ func Prepare(p *Params, w *Waves, b *Prepared) {
 	b.weight = float64(m * gravity)
 	b.rightingLever = p.RightingLever
 	b.rollDamping = p.RollDamping
+	b.yawDamping = p.YawDamping
 	b.invLogReference = 1 / Log(10/seaRoughness)
 	b.floorWindFactor = float64(Log(windFloor/seaRoughness) * b.invLogReference)
 	b.mastheadZ = cg - (p.BoomHeight + p.Luff)
@@ -467,6 +469,18 @@ func (b *Prepared) prepareSquare(p *Params) {
 	b.braceRate = float64(2*(math.Pi/2-b.braceSharp)) / p.BraceTime
 	b.hauls = float64(p.Hauls * degree)
 	b.letGo = float64(p.LetGo * degree)
-	b.squareTrimBelow = float64(0.5 * b.squareStall)
+	// They lift, for the crew, below the attack at which their lift first
+	// reaches a quarter of its greatest: there the weather leeches shake
+	// and the ship barely moves. They stall past 1.75 times the attack of
+	// the greatest lift.
+	quarter := float64(0.25 * b.squareLift[most])
+	b.squareTrimBelow = 0
+	for i := 1; i <= most; i++ {
+		if b.squareLift[i] >= quarter {
+			f := (quarter - b.squareLift[i-1]) / (b.squareLift[i] - b.squareLift[i-1])
+			b.squareTrimBelow = float64((float64(i-1) + f) * (5 * degree))
+			break
+		}
+	}
 	b.squareEaseAbove = float64(1.75 * b.squareStall)
 }

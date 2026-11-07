@@ -31,6 +31,7 @@ export function writeParams(params: Float64Array, p: BoatPhysics): void {
   params[f.yawInertia] = p.hull.yawInertia;
   params[f.rollInertia] = p.hull.rollInertia;
   params[f.rollDamping] = p.hull.rollDamping;
+  params[f.yawDamping] = p.hull.yawDamping;
   params.set(p.hull.rightingLever, f.rightingLever);
   params[f.waterlineBeam] = p.hull.waterlineBeam;
   params[f.waterplaneArea] = p.hull.waterplaneArea;

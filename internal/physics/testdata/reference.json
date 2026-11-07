@@ -124,8 +124,17 @@
       "original": "HM Bark Endeavour replica (1994), under plain sail, smooth water",
       "height": 10,
       "points": [
-        {"measure": "speed", "twa": 135, "wind": 16, "value": 7.5, "tolerance": 0.067, "source": "the replica's passages: about 7.5 knots for long periods in a 15 to 18 knot breeze"},
-        {"measure": "speed", "atMost": true, "twa": 150, "wind": 20, "value": 9, "tolerance": 0, "source": "at most 9 knots off the wind in 20 knots of smooth water"}
+        {"measure": "upwindAngle", "wind": 10, "value": 67.5, "tolerance": 0.038, "source": "Willis (2003), The Capability of Sailing Warships, Part 1: Windward Performance, The Northern Mariner XIII(4): the best ships close-hauled six points, 67.5°, off the wind; replicas 60° to 65° (Whitewright 2011). Here 65° to 70°, the angle of her best VMG made good"},
+        {"measure": "upwindAngle", "wind": 15, "value": 67.5, "tolerance": 0.038, "source": "Willis (2003), The Capability of Sailing Warships, Part 1: Windward Performance, The Northern Mariner XIII(4): the best ships close-hauled six points, 67.5°, off the wind; replicas 60° to 65° (Whitewright 2011). Here 65° to 70°, the angle of her best VMG made good"},
+        {"measure": "upwindAngle", "wind": 20, "value": 67.5, "tolerance": 0.038, "source": "Willis (2003), The Capability of Sailing Warships, Part 1: Windward Performance, The Northern Mariner XIII(4): the best ships close-hauled six points, 67.5°, off the wind; replicas 60° to 65° (Whitewright 2011). Here 65° to 70°, the angle of her best VMG made good"},
+        {"measure": "upwindLeeway", "wind": 10, "value": 9, "tolerance": 0.334, "source": "Willis (2003), The Capability of Sailing Warships, Part 1: Windward Performance, The Northern Mariner XIII(4): leeway close-hauled about a point, 6° to 12° measured; here at the angle of her best VMG"},
+        {"measure": "upwindLeeway", "wind": 15, "value": 9, "tolerance": 0.334, "source": "Willis (2003), The Capability of Sailing Warships, Part 1: Windward Performance, The Northern Mariner XIII(4): leeway close-hauled about a point, 6° to 12° measured; here at the angle of her best VMG"},
+        {"measure": "upwindLeeway", "wind": 20, "value": 9, "tolerance": 0.334, "source": "Willis (2003), The Capability of Sailing Warships, Part 1: Windward Performance, The Northern Mariner XIII(4): leeway close-hauled about a point, 6° to 12° measured; here at the angle of her best VMG"},
+        {"measure": "speed", "twa": 135, "wind": 15, "value": 7.5, "tolerance": 0.067, "source": "Australian National Maritime Museum: the replica's passages, 7.5 knots for long periods in a 15 to 18 knot breeze; here 7 to 8 knots with the wind on the quarter"},
+        {"measure": "speed", "twa": 135, "wind": 18, "value": 7.5, "tolerance": 0.067, "source": "Australian National Maritime Museum: the replica's passages, 7.5 knots for long periods in a 15 to 18 knot breeze; here 7 to 8 knots with the wind on the quarter"},
+        {"measure": "speed", "atMost": true, "twa": 135, "wind": 20, "value": 9, "tolerance": 0, "source": "Australian National Maritime Museum: the replica's passages; at most 9 knots off the wind in 20 knots of smooth water, her 13 knots in a 2012 storm surfing"},
+        {"measure": "speed", "atMost": true, "twa": 150, "wind": 20, "value": 9, "tolerance": 0, "source": "Australian National Maritime Museum: the replica's passages; at most 9 knots off the wind in 20 knots of smooth water, her 13 knots in a 2012 storm surfing"},
+        {"measure": "speed", "atMost": true, "twa": 180, "wind": 20, "value": 9, "tolerance": 0, "source": "Australian National Maritime Museum: the replica's passages; at most 9 knots off the wind in 20 knots of smooth water, her 13 knots in a 2012 storm surfing"}
       ],
       "notes": []
     }

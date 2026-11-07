@@ -26,6 +26,7 @@ func PhysicsParams(b *Boat) physics.Params {
 	p.YawInertia = b.Physics.Hull.YawInertia
 	p.RollInertia = b.Physics.Hull.RollInertia
 	p.RollDamping = b.Physics.Hull.RollDamping
+	p.YawDamping = b.Physics.Hull.YawDamping
 	copy(p.RightingLever[:], b.Physics.Hull.RightingLever)
 	p.WaterlineBeam = b.Physics.Hull.WaterlineBeam
 	p.WaterplaneArea = b.Physics.Hull.WaterplaneArea

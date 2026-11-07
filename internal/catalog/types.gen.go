@@ -1821,6 +1821,11 @@ type PhysicsHull struct {
 	// water of an oblique wave.
 	WaveYaw float64 `json:"waveYaw"`
 
+	// The hull's resistance to turning, from the water flowing across it as it turns,
+	// in N·m per (rad/s)²: its moment against the rate of turn times the rate's size.
+	// 0 where the foils alone damp the turning.
+	YawDamping float64 `json:"yawDamping"`
+
 	// Moment of inertia in yaw, added inertia included, in kg·m².
 	YawInertia float64 `json:"yawInertia"`
 }
@@ -4780,4 +4785,4 @@ type WorldZones struct {
 }
 
 // Version is the catalog version (tools/catalog).
-const Version = "d75eb06081de313e"
+const Version = "8342880ffe462dd9"

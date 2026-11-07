@@ -26,16 +26,25 @@ var (
 // The page's words about the tables and the reefs: the generated part runs
 // from trimIntro to the end of the reefing paragraph.
 const (
-	trimIntro = "The fastest boom by angle off the true wind, in 6, 12 and 20 knots"
-	reefIntro = "Reef (trim or steer with reef 1 or 2; 0 shakes the reefs out) when close-hauled the sheet hauled in hard heels the boat past its trim: from there only easing holds her up, and reefed she heels less and stands up."
+	trimIntro   = "The fastest boom by angle off the true wind, in 6, 12 and 20 knots"
+	squareIntro = "The fastest braces, the yards' angle off the centreline, by angle off the true wind, in 6, 12 and 20 knots"
+	reefIntro   = "Reef (trim or steer with reef 1 or 2; 0 shakes the reefs out) when close-hauled the sheet hauled in hard heels the boat past its trim: from there only easing holds her up, and reefed she heels less and stands up."
 )
 
 // trimTable is a kind's table, under a line naming it, a line for each angle
 // with the boom in each of trimWinds, "- 40°: 4, 4, 10", from polars that
 // include them.
+//
+// A ship's is of the braces, the yards' angle off the centreline, from
+// braced up sharp to square, under its own line, with "aback" where she
+// cannot sail.
 func trimTable(k *kind, polars []polar) (string, error) {
 	var b strings.Builder
-	fmt.Fprintf(&b, "%s (%s, flat water):\n\n", trimIntro, k.name)
+	if k.square {
+		fmt.Fprintf(&b, "%s (%s, flat water):\n\n", squareIntro, k.name)
+	} else {
+		fmt.Fprintf(&b, "%s (%s, flat water):\n\n", trimIntro, k.name)
+	}
 	for _, a := range trimAngles {
 		fmt.Fprintf(&b, "- %g°:", a)
 		for i, w := range trimWinds {
@@ -44,14 +53,18 @@ func trimTable(k *kind, polars []polar) (string, error) {
 				return "", fmt.Errorf("no polar for %g knots", w)
 			}
 			pt := at(p, a)
-			if !pt.OK {
-				return "", fmt.Errorf("the boat capsizes at %g° in %g knots", a, w)
-			}
 			sep := ","
 			if i == 0 {
 				sep = ""
 			}
-			fmt.Fprintf(&b, "%s %d", sep, boomRounded(pt.Boom))
+			switch {
+			case pt.Aback:
+				fmt.Fprintf(&b, "%s aback", sep)
+			case !pt.OK:
+				return "", fmt.Errorf("the boat capsizes at %g° in %g knots", a, w)
+			default:
+				fmt.Fprintf(&b, "%s %d", sep, boomRounded(pt.Boom))
+			}
 		}
 		b.WriteString("\n")
 	}
@@ -97,14 +110,15 @@ const (
 
 // reefWind is the least wind, knots 10 m up, in which the kind heels past
 // its trim at full sail: close-hauled, its fastest sheet is no longer
-// hauled in hard, because hauled in it heels further than the sailor can
-// hold and loses more to the heel than the sail gains. Zero if it never
+// hauled in hard, or a ship's braces no longer braced up sharp, because
+// hauled in it heels further than the sailor can hold and loses more to
+// the heel than the sail gains. Zero if it never
 // does up to reefTo. The sheet eases as the wind rises, so the wind is
 // found by halving.
 func reefWind(k *kind) float64 {
 	eased := func(w float64) bool {
 		pt := best(k, k.atHeight(w), k.p.CloseHauled, 0)
-		return !pt.OK || pt.Boom > k.p.BoomIn+easedOver
+		return !pt.OK || pt.Boom > k.in+easedOver
 	}
 	lo, hi := float64(reefFrom), float64(reefTo)
 	if eased(lo) {

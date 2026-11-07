@@ -4,8 +4,8 @@ package physics
 
 import "math"
 
-// hullLoads adds the hull's resistance, its sideways drag and the Munk
-// moment.
+// hullLoads adds the hull's resistance, its sideways drag, the Munk
+// moment, and a long hull's resistance to turning.
 //
 // The upright resistance is Day and Nixon's (2014), towed in the Kelvin
 // Hydrodynamics Laboratory, as a drag area against speed: ½ρ (C_D A)(V) V²,
@@ -23,6 +23,11 @@ func (b *Prepared) hullLoads(m *motion, l *loads) {
 	l.Y -= side
 	l.K += float64(b.hullZ * side)
 	l.N -= float64(float64(b.munk*u) * v)
+	if b.yawDamping != 0 {
+		// A long hull turning drives the water across its ends: the
+		// cross flow's moment, ∫ ½ρ C_D T (r x)|r x| x dx along it.
+		l.N -= float64(float64(b.yawDamping*m.r) * math.Abs(m.r))
+	}
 }
 
 // rightingMoment returns the roll moment of the hull's form and weight, with

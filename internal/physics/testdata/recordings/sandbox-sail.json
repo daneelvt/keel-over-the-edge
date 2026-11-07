@@ -61,6 +61,7 @@
   "yawInertia": 250,
   "rollInertia": 235,
   "rollDamping": 60,
+  "yawDamping": 0,
   "rightingLever": [
    0,
    0.074,
