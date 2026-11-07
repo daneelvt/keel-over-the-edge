@@ -202,6 +202,24 @@ own, its windows and bands; or above the walls); its first's x a window's
 number. Its colour is the part's own, or for the parts the palette colours,
 a shade. Everything is real size: a storey is 3 m.
 
+## Life in the water
+
+`life/build.ts` (with `life/lib/`) builds the bodies of the sea's swimmers
+from their real proportions into `life/swimmers.glb`, the catalog's
+`life.art.model`: four meshes, each a node of its name, `dolphin` (built
+2.2 m long), `turtle` (1.0 m), `flyingfish` (0.3 m, its wings spread) and
+`tarpon` (1.5 m), whose `extras` give its `length`; the page scales each to
+a kind's own length and paints it in the kind's colours. They are laid out
+as the boats are, their origin halfway along their length on the spine, and
+faceted, each face its own vertices. Their vertices' colour is the back's
+share (r: 1 the back's colour, 0 the belly's), a dark mark (g: an eye, a
+mouth, a fin's edge, a seam) and whether the part is a paddle that strokes
+on its own (b: flippers, the flying fish's wings); their first texture
+coordinate is the share along the body, snout tip to tail tip, by z (u),
+and a paddle's share out from its root to its tip (v). The script fails if
+a body is not as long as it was built or is over its triangles' budget;
+`client/build/swimmers.test.ts` checks the committed file.
+
 ## Sound
 
 `sound/*.json` are the recipes the client's sound engine plays: filter
