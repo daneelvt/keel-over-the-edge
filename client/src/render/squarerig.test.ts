@@ -16,6 +16,8 @@ import {
   Vector3,
 } from 'three';
 import { describe, expect, test } from 'vitest';
+import { newPose, StatePair } from '../predict/blend';
+import { RECORDS, SIZES } from '../predict/layout.gen';
 import { boatParts, GALLERY_PART, JOINT } from './fleetparts';
 import {
   ABACK,
@@ -194,6 +196,21 @@ describe('the yards', () => {
   test('turn smoothly through square from one side to the other', () => {
     const near = 89.9 * DEG;
     expect(Math.abs(yardsTurn(near) - yardsTurn(-near))).toBeLessThan(0.01);
+  });
+
+  test('of the own boat are blended between steps by their turns, through square', () => {
+    const pair = new StatePair();
+    const a = new Float64Array(SIZES.state);
+    a[RECORDS.state.yards] = 1.5;
+    a[RECORDS.state.foreYards] = 1.5;
+    pair.hold(a);
+    const b = new Float64Array(SIZES.state);
+    b[RECORDS.state.yards] = -1.5;
+    b[RECORDS.state.foreYards] = 1.4;
+    pair.push(b);
+    const pose = pair.blend(0.5, newPose());
+    expect(pose.yardsTurn).toBeCloseTo(0, 12);
+    expect(pose.foreYardsTurn).toBeCloseTo((yardsTurn(1.5) + yardsTurn(1.4)) / 2, 12);
   });
 
   test('pack into one float32 within a twentieth of a degree each', () => {
