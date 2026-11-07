@@ -103,21 +103,20 @@ func (p refPoint) label() string {
 // runCheck sails the polar at the reference's winds and angles and fails
 // outside the tolerances, then at the chart's winds, and fails unless the
 // sail says drawing at the fastest sheet, and unless the handbook's trim
-// table and reefing advice for the kind are the polar's.
+// table and reefing advice for the kind are the polar's. Every wind and
+// angle is sailed once, together.
 func runCheck(k *kind, ref *reference) error {
-	var winds []float64
+	winds := append(slices.Clone(chartWinds), k.trimWinds()...)
 	angles := slices.Clone(chartAngles)
 	for _, p := range ref.Points {
-		if !slices.Contains(winds, p.Wind) {
-			winds = append(winds, p.Wind)
-		}
-		if p.Measure == "speed" && !slices.Contains(angles, p.TWA) {
+		winds = append(winds, p.Wind)
+		if p.Measure == "speed" {
 			angles = append(angles, p.TWA)
 		}
 	}
 	slices.Sort(winds)
 	slices.Sort(angles)
-	polars := sailPolars(k, winds, angles)
+	polars := sailPolars(k, slices.Compact(winds), slices.Compact(angles))
 	var failed []string
 	fmt.Printf("%s against %s, winds %s\n", k.id, ref.Original, k.heightWords())
 	for _, p := range ref.Points {
@@ -137,9 +136,13 @@ func runCheck(k *kind, ref *reference) error {
 	if len(failed) > 0 {
 		return errors.New("outside the reference's tolerances:\n  " + strings.Join(failed, "\n  "))
 	}
-	all := sailPolars(k, chartWinds, chartAngles)
-	if err := checkWords(all); err != nil {
+	var chart []polar
+	for _, w := range chartWinds {
+		p, _ := polarAt(polars, w)
+		chart = append(chart, p)
+	}
+	if err := checkWords(chart); err != nil {
 		return err
 	}
-	return checkHandbook(k)
+	return checkHandbook(k, polars)
 }

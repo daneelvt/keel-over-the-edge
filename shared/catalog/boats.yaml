@@ -306,12 +306,16 @@ boats:
         # the sailor seated on deck.
         centreOfGravity: -0.12
         dragAreaStep: 0.2572222222222222 # half a knot, in m/s
-        # Estimate: the hull's friction by ITTC 1957 on 9 m² wetted and
-        # its wave-making by the Delft series' residuary resistance for its
+        # Estimate: the canoe body's friction by ITTC 1957 and its
+        # wave-making by the Delft series' residuary resistance for its
         # proportions, every half knot from 0 to 12 knots: the hump past
-        # its hull speed of about 6 knots. The keel's and rudder's own
-        # friction is the foils'.
-        dragArea: [0.041, 0.039, 0.037, 0.036, 0.035, 0.034, 0.033, 0.033, 0.034, 0.035, 0.038, 0.053, 0.068, 0.083, 0.0965, 0.107, 0.112, 0.112, 0.109, 0.107, 0.104, 0.101, 0.099, 0.096, 0.093]
+        # its hull speed of about 6 knots, a resistance of 3.6% of her weight
+        # at 6 knots and 7% at 7. Tuned by tools/polar: lower in light air,
+        # steeper past 5 knots, against the certificate's reaching speeds.
+        # The keel's and rudder's own friction is the foils'.
+        dragArea: [0.041, 0.039, 0.037, 0.036, 0.035, 0.034, 0.033, 0.033,
+          0.034, 0.035, 0.038, 0.053, 0.068, 0.083, 0.0965, 0.107, 0.112,
+          0.112, 0.109, 0.107, 0.104, 0.101, 0.099, 0.096, 0.093]
         crossFlowDrag: 1.0 # estimate
         addedMassSurge: 45 # estimate: about 5% of the mass
         addedMassSway: 900 # estimate: the hull's slender-body added mass and the keel's
@@ -429,7 +433,9 @@ boats:
         # The fin keel: the certificate's draft of 1.179 m less the hull's.
         boardSpan: 0.879
         boardChord: 0.72 # estimate
-        boardPosition: 0.9 # estimate, tuned for weather helm
+        # Estimate: the fin under the mast, its centre of pressure a quarter
+        # of its chord aft; tuned for weather helm (tools/polar).
+        boardPosition: 0.9
         rudderSpan: 0.90 # estimate
         rudderChord: 0.33 # estimate
         rudderPosition: 2.95 # estimate: hung on the transom
@@ -442,7 +448,7 @@ boats:
         carryOver: 1.80 # Keuning and Verwerft (2009)
         heelLoss: 0.382 # Keuning and Verwerft (2009)
         rudderInflow: 0.9
-        downwash: 0.8 # estimate
+        downwash: 0.8 # estimate: a deep fin close ahead of the rudder; tuned for weather helm
         foilWetHeel: 70 # estimate: a deep keel stays in the water
         foilDryHeel: 120 # estimate
         fixed: 1
@@ -456,9 +462,11 @@ boats:
         hikeLag: 0.5 # estimate
         heelGain: 1.0
         rollRateGain: 0.6
-        flattenFrom: 8 # estimate
-        flattenTo: 11 # estimate
-        flattenMin: 0.6 # estimate; ORC's floor is 0.6
+        # Estimates, tuned against the certificate's beat VMG: flattened
+        # from 8 m/s of apparent wind, fully by 11, to ORC's floor of 0.6.
+        flattenFrom: 8
+        flattenTo: 11
+        flattenMin: 0.6
         # A keelboat is knocked down, not capsized: her sailor stays aboard
         # and her ballast brings her back.
         fallOutHeel: 180

@@ -139,7 +139,7 @@ credentials.
 | `render-nightly.yaml` | Every night at 04:17 UTC on `main`; by hand; pull requests labelled `render`, on each push while the label stays | What `pr.render` leaves: the `@long` and `@nightly` tests on both back ends and the page's, the sea's tests on a WebGPU device held to compatibility mode's limits, the slow-network tests through real TCP loss where the runner has netem, and the flake hunt: `pr.render`'s suite five times over (the page's, the scene's on WebGL 2, WebKit's), a test that passed in one run and failed in another named flaky in the summary. Not a required check; GitHub mails a failed night | the same, with `--grep '@long\|@nightly'` or `--repeat-each 5` |
 | `pr.licences.yaml` | Pull requests, not drafts, that change its files | The licence header in every source file (and the art header in `art/`'s scripts and sound recipes); licences of Go packages linked into `keel` | `go run ./tools/licences` |
 | `pr.catalog.yaml` | Pull requests, not drafts, that change its files | The catalog against its schema, unique ids, art present, generated files current, no kind's id used as a string in code | `go run ./tools/catalog -check` |
-| `pr.physics.yaml` | Pull requests, not drafts, that change its files | The physics package's rules (imports, `math` functions, no fused multiply-add in the source or the compiled code for arm64 and amd64, nor in the simulation's), the world generator's float rules, its layout files current, and the module built with no heap allocation and within its size budget; each boat's polar against its original's measured data, the trimmed sail against ORC's mainsail, and the polar in a breeze's sea and a gale's, printed and not checked | `go run ./tools/physics -check`, `go run ./tools/polar -check`, `go run ./tools/polar -sail`, `go run ./tools/polar -sea 12` |
+| `pr.physics.yaml` | Pull requests, not drafts, that change its files | The physics package's rules (imports, `math` functions, no fused multiply-add in the source or the compiled code for arm64 and amd64, nor in the simulation's), the world generator's float rules, its layout files current, and the module built with no heap allocation and within its size budget; each boat's polar against its original's measured data, each boat's trimmed sails against ORC's mainsail and jib, and the polar in a breeze's sea and a gale's, printed and not checked | `go run ./tools/physics -check`, `go run ./tools/polar -check`, `go run ./tools/polar -sail`, `go run ./tools/polar -sea 12` |
 | `pr.infra.yaml` | Pull requests, not drafts, that change its files | Every entry point of both clusters in `infra/cluster` rendered with kustomize, as a release renders it, checked against the manifests' rules (each rule also broken on purpose) and with kubeconform against its kinds' schemas (a field no schema knows, and a kind with no schema, also tried); no Secret under `infra/`; the release's signer accepted and every other refused; a promotion's refusals; `tools/cluster`'s and `tools/release`'s steps against fake commands, a fake registry and a fake GitHub; the pinned tools' downloads; Renovate's patterns finding every pin; every alert rule made to fire and to stay quiet, with VictoriaMetrics' `vmalert-tool`; the dashboards and the vendored manifests against their records; and the signatures Flux cannot check, of cert-manager's chart and images and Kured's image, with cosign (see [The local cluster](#the-local-cluster), [Releases](#releases) and [Monitoring](#monitoring)) | `go test ./tools/cluster ./tools/release ./tools/dashboards ./tools/vendored ./tools/ops ./tools/internal/...`, `go run ./tools/release -verify-keyed` |
 | `pr.machine.yaml` | Pull requests, not drafts, that change its files | The tailnet policy's rules (each broken on purpose); `tools/machine`'s and `tools/tailnet`'s steps against fake programs, a fake registry, a fake Infisical and a fake Tailscale; `join.sh` in bash and shellcheck; Ansible and ansible-lint from hashed requirements, the playbooks' syntax and the `production` profile, in a couple of minutes | `go test ./tools/machine ./tools/tailnet`, `go run ./tools/tailnet -check` |
 | `pr.accounts.yaml` | Pull requests, not drafts, that change its files | `infra/tofu` formatted, initialised without a backend from the lock file alone, and valid; the lock file what OpenTofu writes for every platform; `tools/accounts` against a fake OpenTofu and a fake Infisical (the credentials in tofu's environment alone, masked first; no value of a plan shown; addresses scrubbed from errors; a plan from elsewhere refused). No credential | `go run ./tools/accounts -check`, `go test ./tools/accounts` |
@@ -256,7 +256,10 @@ not a record: the module keeps it, and the client fills it through exports
 The golden tests run the scenarios in `internal/physics/testdata/scenarios.json`
 natively (`go test ./internal/physics`) and in the module (`npm test` in
 `client/`), and compare every step's state and `Out`, and a table of
-function values, with `testdata/golden.json`. A scenario can steer with a
+function values, with `testdata/golden.json`. The file's `params` hold every
+catalog boat's values by id, in the catalog's order (`catalog_test.go` checks
+them against the catalog bit for bit); a scenario names its `boat`, the first
+if it names none, and the module runs it as that kind. A scenario can steer with a
 simple heading-hold (`steer`), which both runners compute with exactly
 rounded operations only. CI runs them on amd64 and arm64. After a deliberate
 change to the physics, rewrite the file and review the diff:
@@ -274,8 +277,8 @@ inputs each; CI draws four thousand.
 ### The model
 
 A boat is a rigid body in surge, sway, yaw and roll, heaving and pitching on
-the waves ([Waves](#waves)), with the boom as a body of its own and the
-sailor's position as state. In flat water it neither heaves nor pitches, and
+the waves ([Waves](#waves)), with the boom, and the headsails' clew, as bodies
+of their own and the sailor's position as state. In flat water it neither heaves nor pitches, and
 sails exactly as it did before it knew of waves. Each part of the boat computes its
 force from the flow it meets, including the flow from the boat's own turning
 and rolling, so tacks, gybes, luffing, weather helm and capsizes follow from
@@ -285,18 +288,56 @@ semi-implicit Euler (`Substeps`).
 | File | What |
 |------|------|
 | `wind.go` | The frames; the wind at each height by the open sea's log profile (z₀ = 0.0002 m; the game's wind is 10 m up); the apparent flow at any point of the boat, turned into the heeled body's plane |
-| `sail.go` | The sail as two strips, foot and head, the head twisted further out (more as the sailor flattens the sail and as the boom goes out); lift and drag from each strip's angle of attack; the boom on its sheet; the backed head that drags the boom across in an accidental gybe; a capsized sail floating on the water |
-| `foils.go` | Daggerboard and rudder: Helmbold's lift slope, the stall to a flat plate, reversed flow, the hull's carry-over, the board's downwash at the rudder |
+| `sail.go` | The sail groups, each two strips, foot and head, the head twisted further out (more as the sailor flattens the sail and as the boom or clew goes out); lift and drag from each strip's angle of attack; the boom on its sheet; the backed head that drags the boom across in an accidental gybe; the headsails about their tack; the reef; a capsized sail floating on the water |
+| `foils.go` | Daggerboard or fixed keel, and rudder: Helmbold's lift slope, the stall to a flat plate, reversed flow, the hull's carry-over, the board's downwash at the rudder |
 | `hull.go` | Upright resistance from the towed hull's drag area, cross-flow drag, the Munk moment, the righting lever |
-| `sailor.go` | The automatic sailor: hiking to the position that balances the boat, flattening the sail by the apparent wind, falling in past 70° of heel, swimming to the board, righting the boat, climbing back in |
-| `boat.go` | The step: the rudder and sheet following the controls at the hands' rates, the substeps, the boom's stop, `Out` |
+| `sailor.go` | The automatic sailor: hiking to the position that balances the boat, flattening the sail by the apparent wind, falling in past the boat's fall-out heel (70° in the Jolly boat; never in the keelboat), swimming to the board, righting the boat, climbing back in |
+| `boat.go` | The step: the rudder, sheets and reef following the controls at the hands' rates, the substeps, the boom's and clew's stops, `Out` |
 | `prepare.go` | `Prepare`: every derived constant |
 | `sea.go`, `waves.go` | The sea and the boat in it: see [Waves](#waves) |
 
-The player has two controls, `Helm` and `Sheet`. The sheet sets how far the
+The player has three controls, `Helm`, `Sheet` and `Reef`. The sheet sets how far the
 boom may swing out; it never pulls the boom in, so an eased sail luffs, a
 trimmed one presses on the sheet, and a sail with the wind behind its leech
 swings across.
+
+**The sail groups.** A boat's rig is up to four groups, each in its own
+`Params` fields, and a group of no area is skipped, so a boat with the main
+alone steps as it always did:
+
+- **The main**, on its boom about the mast (the Jolly boat's one sail, the
+  keelboat's main).
+- **The headsails**, tacked at a stay ahead of the mast (`headsailTack`,
+  `headsailTackHeight`), two strips about the tack. Their clew is a body as
+  the boom is (`State.Jib`, `JibRate`), lighter, swinging free to its own
+  sheet's limit (`JibLimit`) and crossing in a tack by itself. The one sheet
+  trims them in the same share as the main, over their own travel
+  (`headsailIn` … `headsailOut`), the crew trimming the jib to the main.
+  They have no backed head. Induced drag is the whole rig's: its area on
+  its effective height (ORC VPP 2023, eq. 5.34). `Out.JibFootAttack`,
+  `JibHeadAttack`, `JibFootFlow`, `JibHeadFlow` and `JibTwist` are theirs.
+- **Fore and after square sails**, on yards held at the braces' angle: their
+  fields exist and are skipped, since no boat has them yet.
+
+**The reef.** `Control.Reef` is a target, 0 (full sail), 1 or 2; `State.Reef`
+follows it continuously at `reefTime` seconds a level while the sailor is
+sailing, so prediction replays it. Each group's `reefs [3]` is the share of
+its luff kept at each level: its area goes as the share's square, its strips'
+heights above the boom, or the tack, with it (ORC's `rfm`). `Out.ReefShare`
+is the main's share. The Jolly boat reefs as the ILCA 6 and 4 rigs, 0.903
+and 0.816 (a licence: an ILCA changes its rig ashore); the keelboat's main
+takes two slab reefs, 0.85 and 0.70, and its jib none. The autopilot never
+reefs.
+
+**The fixed keel.** A boat with `fixed` 1 has a fin keel where the Jolly
+boat has its daggerboard: the ground never pushes it up, its tip meets the
+bottom and drags there (`ground.go`), and the boat stops where the water is
+its draught (`physics.Draught`: the hull's and the keel's). Its ballast is
+in its centre of gravity and its righting lever. A boat pushed off the
+ground is put in water its draught and a metre deep, or the ground's
+`pushDepth`, whichever is deeper (`physics.PushDepth`). A boat whose
+`fallOutHeel` is 180° never loses its sailor: a knockdown leaves the helm
+and sheet live, and the sails in the water and the keel bring her back.
 
 ### The Jolly boat's numbers
 
@@ -319,50 +360,108 @@ from:
 - **Estimates, left as argued:** the righting lever beyond the data, added
   masses and inertias, the rudder's size, the sail on the water.
 
+### The keelboat's numbers
+
+The keelboat is a J/22, a fractionally rigged day-sailing keelboat of 1983,
+sailed by one 80 kg sailor under main and jib, with no spinnaker, after its
+ORC International One Design certificate (2021). Each value in
+`shared/catalog/boats.yaml` says where it comes from:
+
+- **Published (the certificate):** length, beam and draft; the displacement,
+  857 kg, to which the game adds its sailor's 80 kg; the main's and jib's
+  areas, 13.76 and 9.49 m²; the rig's P, E and J; the righting moment at 1°,
+  15.9 kg·m, and the limit of positive stability, 105°; the freeboards; the
+  rated speeds `tools/polar -check` holds it to. ORC's VPP (2023): induced
+  and quadratic drag, flattening to its floor of 0.6, the reef.
+- **Fitted:** the main to ORC's low-lift mainsail, as the Jolly boat's (the
+  same coefficients, its eased twist its own), and the jib to ORC's
+  low-lift jib from 27° to 100° of apparent wind (`tools/polar -sail`),
+  with its clew stopped at the rail.
+- **Estimates, tuned against the certificate:** the keel's position and its
+  downwash at the rudder (weather helm), the flattening (the beat VMG), the
+  hull's drag area (the reaches above 12 knots), the autopilot's gain and
+  damping (its holding in a stormy spell), the start sheet (`-start`).
+- **Estimated from a simple hull:** the righting lever, from sections on
+  the plan at the sheer and the certificate's freeboards, a canoe body, the
+  cuddy, the fin and its lead, heeled in still water, its centre of gravity
+  set for the certificate's moment at 1° and its sections' fullness for the
+  limit of positive stability; then the sailor seated on the centreline.
+  Its greatest lever is 0.41 m from 40° to 60°.
+- **Estimates, left as argued:** added masses and inertias, the waterplane,
+  the rudder's size, the jib's clew as a body, the reefs' shares and time.
+
+`reference.json`'s notes give each value's change and its reason.
+
 ### `tools/polar`
 
 ```sh
-go run ./tools/polar               # the polar at 6 to 20 knots: a table, and .dev/polar/<boat>.json and .svg
+go run ./tools/polar               # every boat's polar at 6 to 20 knots: a table, and .dev/polar/<boat>.json and .svg
 go run ./tools/polar -check        # against internal/physics/testdata/reference.json; fails outside its tolerances,
                                    # unless the sail says drawing at its fastest sheet, or unless the
-                                   # machine sailors' handbook's trim table is the polar's
-go run ./tools/polar -handbook     # that trim table, for internal/agentapi/handbook/trim.md
-go run ./tools/polar -sail         # the trimmed sail against ORC's mainsail
+                                   # machine sailors' handbook's trim tables and reefing advice are the polar's
+go run ./tools/polar -handbook     # writes those tables and the reefing advice into internal/agentapi/handbook/trim.md
+go run ./tools/polar -sail         # each boat's trimmed sails against ORC's mainsail and jib
 go run ./tools/polar -manoeuvres   # tacks and gybes at 6, 12 and 18 knots, and where an accidental gybe comes
+go run ./tools/polar -start        # starts from rest by the sheet, beside the catalog's start sheet
 go run ./tools/polar -sea 12       # the polar in 12 knots and the sea it raises over open water, beside flat water
 ```
 
-The tool steers with a heading-hold of its own, tries the sheet from hauled
+Every mode sails every boat of the catalog. The tool steers with a heading-hold of its own, tries the sheet from hauled
 in to let fly at every true wind angle, and measures each point after 60 s
-of sailing. Winds are given at sail height, 3 m, where the reference data's
-wind was measured; the table shows the 10 m wind beside them. Its columns:
+of sailing; a boat whose sailor stays aboard counts as capsized past 75° of
+heel. Its winds are given at each boat's reference height, its entry's
+`height` in `reference.json`: the Jolly boat's 3 m, its sail's, where the
+reference data's wind was measured, the table showing the 10 m wind beside
+them; the keelboat's 10 m, where its certificate rates it, the game's own.
+Its columns:
 speed and VMG in knots; heel, positive to leeward; rudder, positive for
 weather helm; leeway; boom; the foot's angle of attack; how far out the
 sailor is; the flattening; the best sheet. In the chart, filled points are
-measurements and hollow ones upper bounds (speeds measured with surfing,
-which flat water cannot reach).
+measurements and hollow ones upper bounds.
+
+`-sail` trims each sail for the most drive within its sheet's travel and
+compares it with its source: the main with ORC's low-lift mainsail (Table
+5.1), held from 28° to 180° of apparent wind and its side force at 28° and
+60°; the headsails with ORC's low-lift jib (Table 5.4), held from 27° to
+100° and their side force at 27°, 50° and 60°. From 150° aft ORC's jib
+stands across the wind as if poled out; a jib sheeted to the rail stands
+behind the main, and is not held there.
+
+`-handbook` writes each boat's table of the fastest boom, at 6, 12 and 20
+knots 10 m up, under a line naming the boat, and when to reef: the least
+wind in which the boat heels past its trim at full sail, the wind in which,
+close-hauled, its fastest sheet is no longer hauled in hard (eased more than
+2.5°), since hauled in it heels further than its sailor can hold. It prints
+how each boat sails close-hauled with no reef, one and two in that wind and
+above.
 
 `-sea` sails each angle for two minutes in the sea the wind raises, with the
 sheet that sails it fastest among those that keep the boat upright, and
 prints the mean speed with its 10th and 90th percentiles, the VMG, and the
 greatest heel, heave and pitch, beside the flat-water speed. Nothing is
-checked: no published polar of a dinghy in known waves exists to check
-against. Off the wind the boat surfs and gains; to windward it loses a
+checked: no published polar of these boats in known waves exists to check
+against. Off the wind a dinghy surfs and gains; to windward it loses a
 little.
 
-The reference data (`reference.json`) holds each point with its source:
-Day's VPP for upwind and downwind VMG (±5% and ±10%), Binns, Bethwaite and
-Saunders's measured close-hauled and beam-reach speeds (±10%), and their
-broad-reach and run speeds as upper bounds.
+The reference data (`reference.json`) holds each point with its source. The
+Jolly boat's: Day's VPP for upwind and downwind VMG (±5% and ±10%), Binns,
+Bethwaite and Saunders's measured close-hauled and beam-reach speeds (±10%),
+and their broad-reach and run speeds as upper bounds. The keelboat's, from
+the J/22's certificate: the beat VMG and the speeds at 52°, 60° and 75°
+within ±10% from 6 to 12 knots; above 12 knots at most the rating upwind,
+since one 80 kg sailor carries less righting moment than the rated crew of
+up to 275 kg; and from 90° aft at most the rating at every wind, since the
+rating sets a spinnaker there, which the game's keelboat has not.
 
 ### Recalibrating
 
 When a parameter changes, or better data arrive:
 
-1. Fit the sail first: `go run ./tools/polar -sail` must hold drive within 5%
-   of ORC's from 28° to 180°, and side force at 28° and 60°. Change only
-   `maxLift`, `stallAngle`, `stallWidth`, `sailDrag`, `normalForce` and
-   `twistEased`.
+1. Fit the sails first: `go run ./tools/polar -sail` must hold each sail
+   within 5% of its source where it is held. Change only the coefficients
+   (`maxLift`, `stallAngle`, `stallWidth`, `sailDrag`, `normalForce` and
+   their `headsail` twins), the twists (`twistEased`, `headsailTwist`,
+   `headsailTwistEased`) and the jib's sheet travel.
 2. The board's position and the downwash, for weather helm upwind
    (`go run ./tools/polar`, the rudder column).
 3. `headBacked`, for accidental gybes 10° to 25° by the lee
@@ -370,9 +469,12 @@ When a parameter changes, or better data arrive:
 4. The flattening, against the upwind VMG above 9 knots (`-check`).
 5. The drag area above 9 knots, only if the reaches miss by more than 10%.
 
-Then run the behaviour tests (`go test ./internal/physics`), rewrite the
-golden file, and copy the catalog's new values into `scenarios.json`'s
-`params` (a test fails until they match). Note each change and its reason in
+Never change the Jolly boat's values for another boat, nor the published
+ones (dimensions, areas, rig, displacement, draft), nor the geometry the
+boat's model is built from. Then run the behaviour tests (`go test ./internal/physics`), rewrite the
+golden file, and copy the catalog's new values into that boat's
+`scenarios.json` `params` (a test fails until they match). Rewrite the
+handbook's tables (`-handbook`), and set the start sheet from `-start`. Note each change and its reason in
 `reference.json`'s notes.
 
 ### Where the model and the data differ
@@ -387,6 +489,17 @@ golden file, and copy the catalog's new values into `scenarios.json`'s
 - **The sail's side force from a beam reach aft** is not ORC's: there, an
   attached trim and a stalled one give nearly the same drive, and which is
   best decides the side force. Drive matches.
+- **The keelboat's jib from a broad reach aft** gives a third to a half of
+  the drive ORC's jib gives, which stands across the wind as if poled out.
+  With no spinnaker either, she is 3% to 26% slower than her rating from
+  90° aft.
+- **Heel costs the keelboat's hull nothing**, as the Jolly boat's: in 20
+  knots her beat VMG is near the rating's with the full crew sitting out,
+  and only the flattening holds it under. Her weather helm is light too,
+  within a degree of neutral close-hauled.
+- **The keelboat's righting lever** is from a simple hull: matching the
+  certificate's moment at 1° and its limit of positive stability puts her
+  centre of gravity near the waterline, higher than her lead suggests.
 
 ## Wind and weather
 

@@ -696,23 +696,25 @@ func TestEffectiveWave(t *testing.T) {
 	}
 }
 
-// BenchmarkStepInSea times one step on a beam reach in the sea a breeze and
-// a gale raise over open water, and the sea's time for a tick, which a
+// BenchmarkStepInSea times one step of every boat on a beam reach in the
+// sea a breeze and a gale raise over open water, and the sea's time for a
+// tick, which a
 // server sets once for every boat and a client once a step.
 func BenchmarkStepInSea(bm *testing.B) {
-	b := jolly(bm)
-	for _, knots := range []float64{12, 34} {
-		sea := openSea(bm, knots, 0, 6)
-		sea.at(7.4e8)
-		bm.Run(fmt.Sprintf("%gknots-%dwaves", knots, sea.Window.Count), func(bm *testing.B) {
-			s := State{Heading: math.Pi / 2, Surge: 3, SheetLimit: 0.6}
-			c := Control{Sheet: 0.35}
-			e := Env{WindSpeed: 7, WindFrom: 0}
-			var o Out
-			for bm.Loop() {
-				Step(&s, &c, &e, &sea.Sea, nil, b, &o)
-			}
-		})
+	for _, boat := range testBoats(bm) {
+		for _, knots := range []float64{12, 34} {
+			sea := openSea(bm, knots, 0, 6)
+			sea.at(7.4e8)
+			bm.Run(fmt.Sprintf("%s-%gknots-%dwaves", boat.id, knots, sea.Window.Count), func(bm *testing.B) {
+				s := State{Heading: math.Pi / 2, Surge: 3, SheetLimit: 0.6, JibLimit: 0.3}
+				c := Control{Sheet: 0.35}
+				e := Env{WindSpeed: 7, WindFrom: 0}
+				var o Out
+				for bm.Loop() {
+					Step(&s, &c, &e, &sea.Sea, nil, boat.b, &o)
+				}
+			})
+		}
 	}
 	bm.Run("SeaAt", func(bm *testing.B) {
 		sea := openSea(bm, 34, 0, 6)

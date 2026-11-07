@@ -82,3 +82,25 @@ func TestBoomRounded(t *testing.T) {
 		}
 	}
 }
+
+func TestReefAdvice(t *testing.T) {
+	kinds := []*kind{{name: "Jolly boat"}, {name: "Keelboat"}, {name: "Ship"}}
+	got := reefAdvice(kinds, []float64{19, 13, 25})
+	want := reefIntro + " Reef the Jolly boat from 19 knots, the Keelboat from 13 knots and the Ship from 25 knots.\n"
+	if got != want {
+		t.Errorf("reefAdvice = %q, want %q", got, want)
+	}
+	// The page's generated part runs from the first table to the advice's
+	// end, and -handbook can find it again in what it wrote.
+	page := "# Trim\n\nBefore.\n\n" + trimIntro + " (Jolly boat, flat water):\n\n- 40°: 4\n\n" + got + "\nAfter.\n"
+	from, to, err := pageBlock(page)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if page[:from] != "# Trim\n\nBefore.\n\n" || page[to:] != "\nAfter.\n" {
+		t.Errorf("the generated part is %q", page[from:to])
+	}
+	if _, _, err := pageBlock("# Trim\n"); err == nil {
+		t.Error("a page with no generated part")
+	}
+}

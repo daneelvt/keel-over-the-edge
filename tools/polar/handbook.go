@@ -87,27 +87,41 @@ func polarAt(polars []polar, wind float64) (polar, bool) {
 }
 
 // The winds the reef is looked for in, knots 10 m up, and how far off
-// hauled in hard a boom must be to count as eased, degrees.
+// hauled in hard a boom must be to count as eased, degrees: half the
+// trim table's step, so that a boom it gives as hauled in hard is.
 const (
 	reefFrom  = 4
 	reefTo    = 30
-	easedOver = 0.5
+	easedOver = 2.5
 )
 
 // reefWind is the least wind, knots 10 m up, in which the kind heels past
 // its trim at full sail: close-hauled, its fastest sheet is no longer
 // hauled in hard, because hauled in it heels further than the sailor can
 // hold and loses more to the heel than the sail gains. Zero if it never
-// does up to reefTo.
+// does up to reefTo. The sheet eases as the wind rises, so the wind is
+// found by halving.
 func reefWind(k *kind) float64 {
-	in := k.p.BoomIn
-	for w := float64(reefFrom); w <= reefTo; w++ {
+	eased := func(w float64) bool {
 		pt := best(k, k.atHeight(w), k.p.CloseHauled, 0)
-		if !pt.OK || pt.Boom > in+easedOver {
-			return w
+		return !pt.OK || pt.Boom > k.p.BoomIn+easedOver
+	}
+	lo, hi := float64(reefFrom), float64(reefTo)
+	if eased(lo) {
+		return lo
+	}
+	if !eased(hi) {
+		return 0
+	}
+	for hi-lo > 1 {
+		mid := math.Floor((lo + hi) / 2)
+		if eased(mid) {
+			hi = mid
+		} else {
+			lo = mid
 		}
 	}
-	return 0
+	return hi
 }
 
 // reefAdvice is the page's paragraph on reefing, every kind's wind in it.
@@ -171,9 +185,10 @@ func pageBlock(page string) (from, to int, err error) {
 }
 
 // checkHandbook fails unless the handbook's page carries the kind's table
-// and its reefing wind as the polars give them.
-func checkHandbook(k *kind) error {
-	t, err := trimTable(k, sailPolars(k, k.trimWinds(), chartAngles))
+// and its reefing wind as the polars, which include the handbook's winds,
+// give them.
+func checkHandbook(k *kind, polars []polar) error {
+	t, err := trimTable(k, polars)
 	if err != nil {
 		return err
 	}

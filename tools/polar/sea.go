@@ -132,8 +132,12 @@ func runSea(k *kind, w *physics.Waves, windKnots float64) error {
 
 	sea := newOpenSea(w, k.wind10(windKnots))
 	var s strings.Builder
-	fmt.Fprintf(&s, "\n%s in %g knots of wind %s (%.1f knots 10 m up) and the sea it raises: Hs %.2f m, peak period %.1f s, %d waves\n",
-		k.name, windKnots, k.heightWords(), k.wind10(windKnots)/knot, sea.win.Hs[0], 2*math.Pi/sea.win.Peak[0], sea.win.Count)
+	wind := fmt.Sprintf("%g knots of wind 10 m up", windKnots)
+	if k.height != 10 {
+		wind = fmt.Sprintf("%g knots of wind %s (%.1f knots 10 m up)", windKnots, k.heightWords(), k.wind10(windKnots)/knot)
+	}
+	fmt.Fprintf(&s, "\n%s in %s and the sea it raises: Hs %.2f m, peak period %.1f s, %d waves\n",
+		k.name, wind, sea.win.Hs[0], 2*math.Pi/sea.win.Peak[0], sea.win.Count)
 	fmt.Fprintln(&s, "        flat water          in waves")
 	fmt.Fprintln(&s, "  TWA  speed    VMG    mean    10%    90%    VMG  heel heave pitch sheet")
 	var upFlat, upWaves, downFlat, downWaves float64
