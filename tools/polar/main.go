@@ -60,7 +60,7 @@ func main() {
 		if !(ref.Height > 0) {
 			fail(fmt.Errorf("%s: %s's reference data has no height", referencePath, boat.ID))
 		}
-		kinds[i] = &kind{id: string(boat.ID), name: boat.Name, b: &prepared[i], p: &params, height: ref.Height, startSheet: boat.StartSheet}
+		kinds[i] = newKind(string(boat.ID), boat.Name, &prepared[i], &params, ref.Height, boat.StartSheet)
 	}
 	if *handbook {
 		if err := runHandbook(kinds); err != nil {

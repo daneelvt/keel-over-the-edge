@@ -61,7 +61,7 @@ type wavePoint struct {
 // sailInWaves sails at twa with the sheet fixed, in a sea of its own.
 func sailInWaves(k *kind, w *physics.Waves, windKnots, twa, sheet float64) wavePoint {
 	sea := newOpenSea(w, k.wind10(windKnots))
-	h := helmsman{target: twa * deg}
+	h := k.helmsmanOf(twa)
 	bt := newBoat(k.b, k.wind10(windKnots), h.target, sheet, 0)
 	n := int((seaSettle + seaMeasure) * physics.StepsPerSecond)
 	start := int(seaSettle * physics.StepsPerSecond)

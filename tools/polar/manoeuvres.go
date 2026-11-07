@@ -23,9 +23,9 @@ type manoeuvre struct {
 // the best sheet there.
 func settled(k *kind, windKnots, twa float64) (*boat, helmsman) {
 	pt := best(k, windKnots, twa, 0)
-	h := helmsman{target: twa * deg}
+	h := k.helmsmanOf(twa)
 	bt := newBoat(k.b, k.wind10(windKnots), h.target, pt.Sheet, 0)
-	for range int(settle * physics.StepsPerSecond) {
+	for range int(k.settle * physics.StepsPerSecond) {
 		bt.c.Helm = h.helm(&bt.s)
 		bt.step()
 	}

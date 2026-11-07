@@ -31,7 +31,34 @@ type kind struct {
 	// at this height.
 	height     float64
 	startSheet [][]float64
+	// steerRate is the tool's helmsman's helm per rad/s of turn, and
+	// settle and measure how long it sails a point before measuring and
+	// how long it measures, s: a dinghy's or a keelboat's, or longer for a
+	// boat slow to answer her helm and her sails (newKind).
+	steerRate       float64
+	settle, measure float64
 }
+
+// newKind is a boat of the catalog as the tool sails it. Its helmsman
+// meets a turn as far ahead as its rudder takes to go from hard over to
+// hard over, and no less than steerRate: a ship's wheel is slow. It sails
+// a point for settle, or for half the time her hull's drag takes to change
+// her speed at sailFrom, M / (ρ C_D A V), if that is longer: from there
+// her sails' drive, several times her hull's drag, brings her to her
+// steady speed in about that. It measures a third as long.
+func newKind(id, name string, b *physics.Prepared, p *physics.Params, height float64, startSheet [][]float64) *kind {
+	k := &kind{id: id, name: name, b: b, p: p, height: height, startSheet: startSheet,
+		steerRate: max(steerRate, steerGain*p.RudderTime), settle: settle}
+	i := sailFrom / p.DragAreaStep
+	j := int(i)
+	area := p.DragArea[j] + (i-float64(j))*(p.DragArea[j+1]-p.DragArea[j])
+	k.settle = max(settle, (p.Displacement+p.AddedMassSurge)/(waterDensity*area*sailFrom)/2)
+	k.measure = k.settle * measure / settle
+	return k
+}
+
+// waterDensity must match the physics package's, kg/m³.
+const waterDensity = 1025
 
 // wind10 returns the wind 10 m up that blows at knots at the kind's
 // reference height, in m/s, by the logarithmic profile over the open sea.
@@ -54,16 +81,23 @@ func (k *kind) heightWords() string {
 // tool's own, not the game's autopilot.
 type helmsman struct {
 	target float64 // heading, rad
+	rate   float64 // helm per rad/s of turn
 }
 
+// The helmsman's gain and least rate: a dinghy's.
 const (
 	steerGain = 1.6 // helm per radian off course
 	steerRate = 0.8 // helm per rad/s of turn
 )
 
+// helmsmanOf is the kind's helmsman, steering for twa degrees.
+func (k *kind) helmsmanOf(twa float64) helmsman {
+	return helmsman{target: twa * deg, rate: k.steerRate}
+}
+
 func (h helmsman) helm(s *physics.State) float64 {
 	off := math.Remainder(h.target-s.Heading, 2*math.Pi)
-	return max(-1, min(1, steerGain*off-steerRate*s.YawRate))
+	return max(-1, min(1, steerGain*off-h.rate*s.YawRate))
 }
 
 // boat is one boat sailing in the tool, from rest or a given state.
@@ -91,7 +125,7 @@ func newBoat(b *physics.Prepared, wind, heading, sheet, reef float64) *boat {
 	bt.s.Reef, bt.c.Reef = reef, reef
 	bt.e.WindSpeed = wind
 	bt.s.Heading = heading
-	bt.s.Surge = 1.5
+	bt.s.Surge = sailFrom
 	bt.c.Sheet = sheet
 	bt.s.SheetLimit = math.Pi / 2 * sheet
 	return bt
@@ -126,9 +160,12 @@ type point struct {
 	OK       bool    `json:"ok"` // false if the boat capsized or never settled
 }
 
+// The least times a point is sailed before measuring and measured, s,
+// and the speed each sail begins at, m/s.
 const (
-	settle  = 60.0 // s sailed before measuring
-	measure = 20.0 // s measured
+	settle   = 60.0
+	measure  = 20.0
+	sailFrom = 1.5
 )
 
 // sail sails a boat at true wind angle twa (degrees) on port tack with the
@@ -137,10 +174,10 @@ const (
 func sail(k *kind, windKnots, twa, sheet, reef float64) point {
 	// The wind comes from the north; on port tack it comes over the port side,
 	// so the heading is the true wind angle.
-	h := helmsman{target: twa * deg}
+	h := k.helmsmanOf(twa)
 	bt := newBoat(k.b, k.wind10(windKnots), h.target, sheet, reef)
-	n := int((settle + measure) * physics.StepsPerSecond)
-	start := int(settle * physics.StepsPerSecond)
+	n := int((k.settle + k.measure) * physics.StepsPerSecond)
+	start := int(k.settle * physics.StepsPerSecond)
 	var sum point
 	var words [4]int
 	y0 := 0.0
@@ -168,7 +205,7 @@ func sail(k *kind, windKnots, twa, sheet, reef float64) point {
 		TWA:   twa,
 		Sheet: sheet,
 		Speed: sum.Speed * per / knot,
-		VMG:   (bt.s.Y - y0) / measure / knot,
+		VMG:   (bt.s.Y - y0) / k.measure / knot,
 		// On port tack leeward is starboard, positive; the sailor hikes to
 		// port, negative; weather helm, the tiller to windward, turns the
 		// blade to leeward: positive.
