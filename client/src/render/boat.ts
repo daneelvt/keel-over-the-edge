@@ -381,8 +381,10 @@ export class Boat {
     // frame's node is taken into it, so its own vertices are the frame's.
     this.#headsails.clear();
     const headsails: Mesh[] = [];
+    // A square sail under the headsails' node (a spritsail) is not one.
+    const square = new Set(squareSails(model).flatMap((s) => s.meshes));
     this.parts.get('jib')?.traverse((o) => {
-      if (o instanceof Mesh) {
+      if (o instanceof Mesh && !square.has(o)) {
         headsails.push(o);
       }
     });
