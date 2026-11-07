@@ -304,3 +304,60 @@ func pushWords(depth func(x, y float64) float64, r float64, pushes []physics.Sta
 	}
 	return out
 }
+
+// The Articles take a square-rigger's tack from her largest fore-and-aft
+// sail, her mizzen on its boom (the Collision Regulations, Rule 12(b)),
+// never from her yards: running by the lee with the wind on her starboard
+// quarter and her mizzen boom out to starboard she is on port tack, and
+// keeps clear of a Jolly boat on starboard (Article 10), whichever way her
+// yards are braced; with her mizzen to port she is on starboard tack with
+// it, and Article 10 says nothing.
+func TestTheShipsTackIsHerMizzens(t *testing.T) {
+	cat, err := catalog.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, kinds := cat.Prepare()
+	ep := cat.PrepareEncounters()
+	big := 0
+	for i := range kinds {
+		if physics.Radius(&kinds[i]) > physics.Radius(&kinds[big]) {
+			big = i
+		}
+	}
+	deg := math.Pi / 180
+	// The wind from the north. The Jolly boat heads 240°, the wind 120° on
+	// her starboard side, her boom out to port; the ship 190°, the wind
+	// 170° on her starboard quarter.
+	jolly := physics.State{X: 40, Y: -40, Heading: -120 * deg, Boom: -60 * deg}
+	for _, c := range []struct {
+		mizzen, yards float64
+		tack          float64
+		keeper        float64
+		article       float64
+	}{
+		{mizzen: 70 * deg, yards: 60 * deg, tack: -1, keeper: physics.First, article: physics.Article10},
+		{mizzen: 70 * deg, yards: -60 * deg, tack: -1, keeper: physics.First, article: physics.Article10},
+		{mizzen: -70 * deg, yards: 60 * deg, tack: 1},
+		{mizzen: -70 * deg, yards: -60 * deg, tack: 1},
+	} {
+		ship := physics.State{Heading: -170 * deg, Boom: c.mizzen, Yards: c.yards, ForeYards: c.yards}
+		var e physics.Encounter
+		for i, b := range [2]struct {
+			st   *physics.State
+			kind int
+		}{{&ship, big}, {&jolly, 0}} {
+			var course physics.Course
+			physics.TrackCourse(&course, b.st, 0, &kinds[b.kind], ep)
+			e.X[i], e.Y[i], e.Heading[i], e.Heel[i], e.Boom[i] = b.st.X, b.st.Y, b.st.Heading, b.st.Heel, b.st.Boom
+			e.Tack[i], e.Tacking[i], e.Settled[i], e.Course[i] = course.Tack, course.Tacking, physics.CourseSettled, course.Course
+		}
+		if e.Tack[0] != c.tack || e.Tack[1] != 1 {
+			t.Errorf("mizzen %.0f°, yards %.0f°: the ship's tack %v (want %v), the Jolly boat's %v", c.mizzen/deg, c.yards/deg, e.Tack[0], c.tack, e.Tack[1])
+		}
+		v := physics.Judge(&e, &kinds[big], &kinds[0], ep)
+		if c.article != 0 && (v.Keeper != c.keeper || v.Article != c.article) || c.article == 0 && v.Article == physics.Article10 {
+			t.Errorf("mizzen %.0f°, yards %.0f°: %+v", c.mizzen/deg, c.yards/deg, v)
+		}
+	}
+}
