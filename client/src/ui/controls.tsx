@@ -111,6 +111,7 @@ export function Sheet({ input, model }: { input: SheetInput; model: HudModel }) 
   const trim = sail === 'luffing';
   const ease = sail === 'stalled';
   const words = model.controls.value?.sheet ?? SHEET_WORDS;
+  const legend = sheetLegend(model.controls.value, sail);
   return (
     <div
       class={`control sheet${dimmed ? ' dimmed' : ''}`}
@@ -152,8 +153,8 @@ export function Sheet({ input, model }: { input: SheetInput; model: HudModel }) 
           </span>
         )}
       </span>
-      <span class={`control-label${sail === '' ? '' : ' sail'}`}>
-        {sheetLegend(model.controls.value, sail)}
+      <span class={`control-label${sail === '' ? '' : ' sail'}${legend.includes(' · ') ? ' two' : ''}`}>
+        {legend}
       </span>
     </div>
   );

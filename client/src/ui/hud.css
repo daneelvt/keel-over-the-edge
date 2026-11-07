@@ -1410,6 +1410,14 @@
   white-space: nowrap;
 }
 
+/* A legend that names the control too ("Braces · Aback") takes two lines,
+   the name over the state, under the ease end's word. */
+.sheet .control-label.sail.two {
+  white-space: normal;
+  line-height: 13px;
+  padding: 0 2px;
+}
+
 .sheet-end.lit {
   color: var(--gold);
   text-shadow: 0 0 6px rgb(232 180 80 / 45%);
