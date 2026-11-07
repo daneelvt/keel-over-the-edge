@@ -264,4 +264,9 @@ clips:
     righting,
     climbing-in,
   ]
-names: { cavalier-habit: habit, cavalier-habit-standing: habit-standing, cavalier-habit-wheel: habit-wheel }
+names:
+  {
+    cavalier-habit: habit,
+    cavalier-habit-standing: habit-standing,
+    cavalier-habit-wheel: habit-wheel,
+  }

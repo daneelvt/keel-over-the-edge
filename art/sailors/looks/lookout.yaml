@@ -181,4 +181,5 @@ clips:
     righting,
     climbing-in,
   ]
-names: { lookout-habit: habit, lookout-habit-standing: habit-standing, lookout-habit-wheel: habit-wheel }
+names:
+  { lookout-habit: habit, lookout-habit-standing: habit-standing, lookout-habit-wheel: habit-wheel }

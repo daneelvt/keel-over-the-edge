@@ -239,4 +239,9 @@ clips:
     righting,
     climbing-in,
   ]
-names: { shipwright-habit: habit, shipwright-habit-standing: habit-standing, shipwright-habit-wheel: habit-wheel }
+names:
+  {
+    shipwright-habit: habit,
+    shipwright-habit-standing: habit-standing,
+    shipwright-habit-wheel: habit-wheel,
+  }

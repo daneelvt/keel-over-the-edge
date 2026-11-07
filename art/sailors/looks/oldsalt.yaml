@@ -271,4 +271,5 @@ clips:
     righting,
     climbing-in,
   ]
-names: { oldsalt-habit: habit, oldsalt-habit-standing: habit-standing, oldsalt-habit-wheel: habit-wheel }
+names:
+  { oldsalt-habit: habit, oldsalt-habit-standing: habit-standing, oldsalt-habit-wheel: habit-wheel }

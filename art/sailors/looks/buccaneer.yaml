@@ -275,4 +275,9 @@ clips:
     righting,
     climbing-in,
   ]
-names: { buccaneer-habit: habit, buccaneer-habit-standing: habit-standing, buccaneer-habit-wheel: habit-wheel }
+names:
+  {
+    buccaneer-habit: habit,
+    buccaneer-habit-standing: habit-standing,
+    buccaneer-habit-wheel: habit-wheel,
+  }

@@ -320,4 +320,9 @@ clips:
     righting,
     climbing-in,
   ]
-names: { chartmaker-habit: habit, chartmaker-habit-standing: habit-standing, chartmaker-habit-wheel: habit-wheel }
+names:
+  {
+    chartmaker-habit: habit,
+    chartmaker-habit-standing: habit-standing,
+    chartmaker-habit-wheel: habit-wheel,
+  }

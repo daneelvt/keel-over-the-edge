@@ -178,6 +178,7 @@ clips:
     righting,
     climbing-in,
   ]
-names: { machine-habit: habit, machine-habit-standing: habit-standing, machine-habit-wheel: habit-wheel }
+names:
+  { machine-habit: habit, machine-habit-standing: habit-standing, machine-habit-wheel: habit-wheel }
 # The head takes less of the atlas: its face is planes of metal.
 atlas-head: 0.3

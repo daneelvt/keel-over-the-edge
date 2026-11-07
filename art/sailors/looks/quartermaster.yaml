@@ -270,4 +270,9 @@ clips:
     righting,
     climbing-in,
   ]
-names: { quartermaster-habit: habit, quartermaster-habit-standing: habit-standing, quartermaster-habit-wheel: habit-wheel }
+names:
+  {
+    quartermaster-habit: habit,
+    quartermaster-habit-standing: habit-standing,
+    quartermaster-habit-wheel: habit-wheel,
+  }
