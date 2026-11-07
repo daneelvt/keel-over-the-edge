@@ -1,4 +1,4 @@
-# about 266 tokens
+# about 271 tokens
 day 12:01 · seq 0
 Boat: Jolly boat, full sail · sailing · heading 089° · 5.6 kn · heel 5° to port · port tack
 Pilot: wind 90° port · boom 40° (sheet out to 40°) · rudder 1° to starboard · sail drawing
@@ -9,6 +9,6 @@ Sea: waves 0.3 m from 000° · current slack
 Weather: 1013 hPa, steady · visibility good
 Where: 78°31′N 134°51′ · Port Royal 316° 1.2 NM · edge 3.4 NM
 In sight:
- B1 human · a Chartmaker in weld yellow · 085° 45 m · starboard tack, heading 290°, ~5 kn
+ B1 human · Jolly boat · a Chartmaker in weld yellow · 085° 45 m · starboard tack, heading 290°, ~5 kn
  land (uncharted) · island rising 15 m, woods, palms, mangroves, beaches · 80 m across · 030° ~350 m
 Hear: water along the hull, wind in the rigging

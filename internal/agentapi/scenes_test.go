@@ -295,8 +295,8 @@ func TestSceneACrossing(t *testing.T) {
 	sc.parity(me, text)
 }
 
-// A boat within 60 m is named by its sailor's look, as a sailor on deck
-// sees it; one beyond is not.
+// A boat within 60 m is named by its kind, name and number and its
+// sailor's look, as a sailor on deck sees it; one beyond is not.
 func TestSceneLooksClose(t *testing.T) {
 	sc := newScene(t, 12, 0)
 	at := sc.start()
@@ -312,7 +312,7 @@ func TestSceneLooksClose(t *testing.T) {
 	f := sc.w.Latest()
 	nearLook, _ := sc.sea.Looks.Of(f.Look[n])
 	farLook, _ := sc.sea.Looks.Of(f.Look[m])
-	if !strings.Contains(text, "human · "+sc.sea.Looks.Seen(nearLook)+" · ") {
+	if !strings.Contains(text, "human · Jolly boat · "+sc.sea.Looks.Seen(nearLook)+" · ") {
 		t.Fatalf("the near boat is not named %q:\n%s", sc.sea.Looks.Seen(nearLook), text)
 	}
 	if !strings.Contains(text, "B2 machine · ") || strings.Contains(text, sc.sea.Looks.Seen(farLook)) || strings.Contains(text, "machine sailor in") {

@@ -45,6 +45,11 @@ type viewer struct {
 	lamps  []pb.Lamp
 	looks  []uint32
 	closed bool
+	// welcomes counts the Welcomes; boatLooks are the boat's looks told,
+	// in order, and names the boats' names by view slot, as last told.
+	welcomes  int
+	boatLooks []*pb.BoatLookChanged
+	names     map[uint32]string
 }
 
 // dial opens the game connection with the cookie and says hello.
@@ -102,6 +107,8 @@ func (v *viewer) take(r client.Received) {
 	switch m := r.Message.Body.(type) {
 	case *pb.ServerMessage_Welcome:
 		v.welcome, v.snaps, v.queued = m.Welcome, 0, nil
+		v.welcomes++
+		v.names = nil
 	case *pb.ServerMessage_WatchEnded:
 		v.ended = m.WatchEnded
 	case *pb.ServerMessage_Queued:
@@ -112,6 +119,15 @@ func (v *viewer) take(r client.Received) {
 		v.lamps = append(v.lamps, m.AgentLamp.GetState())
 	case *pb.ServerMessage_LookChanged:
 		v.looks = append(v.looks, m.LookChanged.GetLook())
+	case *pb.ServerMessage_BoatLookChanged:
+		v.boatLooks = append(v.boatLooks, m.BoatLookChanged)
+	case *pb.ServerMessage_BoatNames:
+		if v.names == nil {
+			v.names = map[uint32]string{}
+		}
+		for _, n := range m.BoatNames.GetNames() {
+			v.names[n.GetSlot()] = n.GetName()
+		}
 	}
 }
 

@@ -200,7 +200,7 @@
       "openWorldHint": false,
       "readOnlyHint": true
     },
-    "description": "The world's shared chart: charted places nearest first, each with its position and its bearing and distance from you, and who charted it. Uncharted places have no names until someone sights them. Steer by the bearings: there is no steering to a place by name.",
+    "description": "The world's shared chart: charted places nearest first, with position, bearing and distance from you, and who charted them. Uncharted places have no names until someone sights them. Steer by the bearings: there is no steering to a place by name.",
     "inputSchema": {
       "properties": {
         "group": {
@@ -236,7 +236,7 @@
       "openWorldHint": false,
       "readOnlyHint": false
     },
-    "description": "A private note on your chart. Not yet: comes with a later update.",
+    "description": "A private note on your chart. Not yet.",
     "inputSchema": {
       "properties": {
         "note": {
@@ -260,7 +260,7 @@
       "openWorldHint": false,
       "readOnlyHint": true
     },
-    "description": "The forecast for the next 90 minutes, as every sailor's chart shows it, and the truth: gale warnings in force, every weather system with its wind, where it is and where it will be in 30, 60 and 90 minutes, and the fronts and when they reach you. With place, one charted place's local weather and outlook, as its harbourmaster's board gives them.",
+    "description": "The next 90 minutes' forecast, as every chart shows it, and the truth: gale warnings in force, each weather system's wind, where it is now and in 30, 60 and 90 minutes, and when fronts reach you. With place, a charted place's local weather and outlook, as its harbourmaster's board gives them.",
     "inputSchema": {
       "properties": {
         "place": {
@@ -305,7 +305,7 @@
       "openWorldHint": false,
       "readOnlyHint": false
     },
-    "description": "Chat aboard, hail boats close by, or speak to spectators. Not yet: comes with a later update.",
+    "description": "Chat aboard, hail boats close by, or speak to spectators. Not yet.",
     "inputSchema": {
       "properties": {
         "text": {
@@ -334,7 +334,7 @@
       "openWorldHint": false,
       "readOnlyHint": false
     },
-    "description": "Races: list, enter, start, retire. Not yet: comes with a later update.",
+    "description": "Races: list, enter, start, retire. Not yet.",
     "inputSchema": {
       "properties": {
         "action": {
@@ -364,7 +364,7 @@
       "openWorldHint": false,
       "readOnlyHint": false
     },
-    "description": "Your owner's fleet: list the boats you may take, take one to sea, or leave the water. Calling observe, steer or trim takes you to sea in your boat anyway; leave ends your voyage. sailor_look tells your look and its choices, and changes it at Port Royal.",
+    "description": "Your owner's fleet, shared by its sailors: list its boats; take a free one; look paints, numbers and names yours. At sea both only in port (Port Royal or a port, not a village). leave quits the water; observe, steer and trim sail anyway. sailor_look: your own look, at Port Royal.",
     "inputSchema": {
       "properties": {
         "action": {
@@ -379,19 +379,33 @@
           "type": "string"
         },
         "boat": {
-          "description": "By its name, for take.",
+          "description": "For take: its kind, name or number.",
+          "type": "string"
+        },
+        "cloth": {
           "type": "string"
         },
         "colour": {
-          "description": "For sailor_look, by name.",
+          "description": "With version and finish, for sailor_look.",
           "type": "string"
         },
         "finish": {
-          "description": "For sailor_look, by name.",
+          "type": "string"
+        },
+        "name": {
+          "description": "Empty clears it.",
+          "maxLength": 20,
+          "type": "string"
+        },
+        "number": {
+          "maximum": 9999,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "paint": {
           "type": "string"
         },
         "version": {
-          "description": "For sailor_look, by name.",
           "type": "string"
         }
       },
@@ -407,7 +421,7 @@
       "openWorldHint": false,
       "readOnlyHint": false
     },
-    "description": "A message in a bottle, dropped over the side. Not yet: comes with a later update.",
+    "description": "A message in a bottle, dropped over the side. Not yet.",
     "inputSchema": {
       "properties": {
         "message": {

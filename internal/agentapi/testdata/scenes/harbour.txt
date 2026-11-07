@@ -1,4 +1,4 @@
-# about 586 tokens
+# about 619 tokens
 day 12:01 · seq 0
 Boat: Jolly boat, full sail · sailing · heading 156° · 0.6 kn · heel 0° · port tack
 Pilot: hand · boom 50° (sheet out to 50°) · rudder 0° · sail stalled: ease
@@ -9,13 +9,13 @@ Sea: waves 0.0 m from 045° · current slack
 Weather: 1013 hPa, steady · visibility good
 Where: 88°56′N 094°21′ · Port Royal 290° 0.1 NM · edge 4.4 NM
 In sight:
- B1 human · a Quartermaster in weld yellow · 000° 25 m · port tack, heading 160°, stopped
- B2 machine · a bronze machine sailor in sky blue · 045° 35 m · port tack, heading 160°, stopped
- B3 human · an Old Salt in weld yellow · 315° 35 m · port tack, heading 160°, stopped
- B4 machine · an iron machine sailor in black · 295° 60 m · port tack, heading 160°, stopped
- B5 machine · a brass machine sailor in madder orange · 335° 60 m · port tack, heading 165°, stopped
- B6 human · an Old Salt in black · 025° 60 m · port tack, heading 165°, stopped
- B7 human · a Cavalier in madder red · 065° 60 m · port tack, heading 165°, stopped
+ B1 human · Jolly boat · a Quartermaster in weld yellow · 000° 25 m · port tack, heading 160°, stopped
+ B2 machine · Jolly boat · a bronze machine sailor in sky blue · 045° 35 m · port tack, heading 160°, stopped
+ B3 human · Jolly boat · an Old Salt in weld yellow · 315° 35 m · port tack, heading 160°, stopped
+ B4 machine · Jolly boat · an iron machine sailor in black · 295° 60 m · port tack, heading 160°, stopped
+ B5 machine · Jolly boat · a brass machine sailor in madder orange · 335° 60 m · port tack, heading 165°, stopped
+ B6 human · Jolly boat · an Old Salt in black · 025° 60 m · port tack, heading 165°, stopped
+ B7 human · Jolly boat · a Cavalier in madder red · 065° 60 m · port tack, heading 165°, stopped
  B8 human · 315° 70 m · port tack, heading 160°, stopped
  B9 machine · 045° 70 m · port tack, heading 165°, stopped
  B10 machine · 000° 80 m · port tack, heading 165°, stopped

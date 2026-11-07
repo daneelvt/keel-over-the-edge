@@ -56,6 +56,9 @@ type Config struct {
 	Encoders int // the edge's encoders; GOMAXPROCS if 0
 	Limits   edge.Limits
 	Ends     time.Time // the world's end, as Welcome tells it
+	// BoatOf, if not nil, is the boat a sailor takes to sea, as the edge's
+	// Config has it.
+	BoatOf func(context.Context, store.Account) edge.Boat
 	// Kinds are the world's boats, prepared, and Waves the sea they were
 	// prepared for; the catalog's if Kinds is nil.
 	Kinds []physics.Prepared
@@ -221,7 +224,7 @@ func (s *Server) start(t testing.TB, w *sim.World) {
 		Lip: cfg.Weather.Prepared().Edge(), RoamChunks: cfg.RoamChunks, Forecast: cfg.Forecast,
 		Stopped: cfg.Stopped, Seen: cfg.Seen, LongAfter: cfg.LongAfter,
 		Watch: s.Sessions.Target, SpectatorLimit: cfg.SpectatorLimit,
-		Agent: cfg.Agent,
+		Agent: cfg.Agent, BoatOf: cfg.BoatOf,
 	})
 	var recorders []sim.Recorder
 	if cfg.Record != nil {
