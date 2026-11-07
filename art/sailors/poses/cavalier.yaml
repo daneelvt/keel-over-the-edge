@@ -59,21 +59,21 @@ poses:
   cavalier-wheel-brim:
     from: wheel-grip-left
     turn:
-      - [neck_01, x, -2]
-      - [head, x, -4]
+      - [neck_01, x, 3]
+      - [head, x, 4]
     ik:
       hand_r: { at: bone, bone: head, offset: [-0.08, -0.31, 0.02], pole: [-0.6, 0.4, 0.0] }
 
+  # The bow made with the head turned to the side, clear of the spokes.
   cavalier-wheel-sweep:
     from: wheel-grip-left
     turn:
-      - [spine_03, x, 4]
-      - [neck_01, x, 4]
-      - [head, x, 8]
-      - [neck_01, z, -4]
-      - [head, z, -10]
+      - [spine_03, x, 2]
+      - [head, x, 4]
+      - [neck_01, z, -8]
+      - [head, z, -18]
     ik:
-      hand_r: { at: bone, bone: spine_03, offset: [-0.55, -0.3, -0.08], pole: [-0.4, 0.7, -0.2] }
+      hand_r: { at: bone, bone: spine_03, offset: [-0.5, -0.3, -0.12], pole: [-0.4, 0.7, -0.2] }
 
 clips:
   cavalier-habit:
@@ -112,7 +112,7 @@ clips:
       - {
           pose: cavalier-wheel-brim,
           hold: 0.25,
-          ramp: 1.6,
+          ramp: 1.7,
           anticipate: 0.06,
           arc: [0.08, 0.05],
           lead: head,

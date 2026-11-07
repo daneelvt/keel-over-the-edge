@@ -306,13 +306,13 @@ poses:
   # Written for the wind over the starboard side: windward is to the right.
   wheel-base:
     place: wheel
-    shift: [0.14, 0.0, 0.005]
+    shift: [0.16, 0.0, 0.005]
     turn:
-      - [spine_01, x, 6]
-      - [spine_02, x, 4]
-      - [spine_03, x, 2]
-      - [neck_01, x, -4]
-      - [head, x, -5]
+      - [spine_01, x, 4]
+      - [spine_02, x, 2]
+      - [spine_03, x, 1]
+      - [neck_01, x, -6]
+      - [head, x, -10]
     ik:
       # The wrist behind the spoke and outside it, the fingers forward and
       # the palm turned in to the spoke.
