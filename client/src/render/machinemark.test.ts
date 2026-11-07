@@ -15,7 +15,7 @@ import { catalog } from '../catalog';
 import { newDrawnBoat } from '../game/fleet';
 import { CLOTH } from './boat';
 import type { FloatingOrigin } from './coords';
-import { FleetView } from './fleet';
+import { FleetViews } from './fleet';
 import {
   COG_ACROSS,
   COG_HOLE,
@@ -203,7 +203,10 @@ describe('the mark’s place', () => {
 
 describe('the fleet’s flag', () => {
   test('follows each drawn boat’s, instance by instance', () => {
-    const view = new FleetView(catalog.boats[0] as (typeof catalog.boats)[number]);
+    const views = new FleetViews(catalog.boats);
+    // Its models are not loaded here: the instances' values are written all the same.
+    const view = views.first;
+    view.loaded = true;
     const origin = { world: { x: 0, y: 0 } } as unknown as FloatingOrigin;
     const camera = new Vector3();
     const boats = [0, 1, 0].map((machine, i) => ({
@@ -217,13 +220,13 @@ describe('the fleet’s flag', () => {
       const lean = view.near.lean.array as Float32Array;
       return [0, 1, 2].map((n) => lean[n * 4 + 3]);
     };
-    view.draw(boats, 3, origin, camera, 0, 0);
+    views.draw(boats, 3, origin, camera, 0, 0);
     expect(view.near.count).toBe(3);
     expect(flags()).toEqual([0, 1, 0]);
     // The machine sailor's slot taken by a human's boat: no mark.
     (boats[1] as (typeof boats)[number]).machine = 0;
     (boats[2] as (typeof boats)[number]).machine = 1;
-    view.draw(boats, 3, origin, camera, 0, 0);
+    views.draw(boats, 3, origin, camera, 0, 0);
     expect(flags()).toEqual([0, 0, 1]);
   });
 });

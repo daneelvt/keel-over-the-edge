@@ -120,7 +120,7 @@ func Run(ctx context.Context, cfg Config) (*Report, error) {
 	if err != nil {
 		return nil, err
 	}
-	kind, waves, wx, enc, err := jollyBoat()
+	kinds, waves, wx, enc, err := boats()
 	if err != nil {
 		return nil, err
 	}
@@ -150,7 +150,7 @@ func Run(ctx context.Context, cfg Config) (*Report, error) {
 				watchOne(ctx, cfg, cookies[i], end, p)
 				return
 			}
-			sailOne(ctx, cfg, kind, waves, wx, enc, cookies[i], uint64(i), end, p)
+			sailOne(ctx, cfg, kinds, waves, wx, enc, cookies[i], uint64(i), end, p)
 		})
 	}
 	wg.Wait()
@@ -208,7 +208,7 @@ func addStats(to, s *client.Stats) {
 // connection ends: after 1012, a server's restart, in 0.5 to 5 s at
 // random, as the page does; after 4002, versions that differ, never;
 // after anything else, in a second.
-func sailOne(ctx context.Context, cfg Config, kind *physics.Prepared, waves *physics.Waves, wx *physics.WeatherPrepared, enc *physics.EncounterPrepared, cookie string, i uint64, end time.Time, p *Player) {
+func sailOne(ctx context.Context, cfg Config, kinds []physics.Prepared, waves *physics.Waves, wx *physics.WeatherPrepared, enc *physics.EncounterPrepared, cookie string, i uint64, end time.Time, p *Player) {
 	rng := rand.New(rand.NewPCG(i, 7))
 	helm, sheet := 512, 512
 	// A share of the players sail on the autopilot as the scripted sailors
@@ -268,7 +268,7 @@ func sailOne(ctx context.Context, cfg Config, kind *physics.Prepared, waves *phy
 		}
 		return cfg.Dial(ctx, cookie, wrap)
 	}
-	s = client.NewSailor(dial, kind, waves, wx, controls)
+	s = client.NewSailor(dial, kinds, waves, wx, controls)
 	s.Predictor.Encounters = enc
 	s.FrameEvery = cfg.FrameEvery
 	// The last snapshot, and a return under way: the connection ended,
@@ -330,15 +330,15 @@ func sailOne(ctx context.Context, cfg Config, kind *physics.Prepared, waves *phy
 	p.RTT = time.Duration(s.Net.Clock.RTT) * time.Microsecond
 }
 
-// jollyBoat is the catalog's first boat, prepared: the players' boat, and
-// the sea and the wind it sails in.
-func jollyBoat() (*physics.Prepared, *physics.Waves, *physics.WeatherPrepared, *physics.EncounterPrepared, error) {
+// boats are the catalog's boats, prepared: each bot sails the kind its
+// Welcome names; and the sea and the wind they sail in.
+func boats() ([]physics.Prepared, *physics.Waves, *physics.WeatherPrepared, *physics.EncounterPrepared, error) {
 	cat, err := catalog.Load()
 	if err != nil {
 		return nil, nil, nil, nil, err
 	}
 	waves, kinds := cat.Prepare()
-	return &kinds[0], waves, cat.PrepareWeather(), cat.PrepareEncounters(), nil
+	return kinds, waves, cat.PrepareWeather(), cat.PrepareEncounters(), nil
 }
 
 func botName(i int) string { return fmt.Sprintf("Loadbot %d", i+1) }

@@ -54,6 +54,7 @@ type goldenSnapshot struct {
 	Way     uint8             `json:"way"`
 	Order   uint8             `json:"order"`
 	Target  uint16            `json:"target"`
+	Reef    uint8             `json:"reef"`
 	Over    string            `json:"over,omitempty"` // the tick the boat went over the lip, as Tick
 	Stays   bool              `json:"stays,omitempty"`
 	State   map[string]string `json:"state"`
@@ -78,6 +79,9 @@ type goldenBoat struct {
 	Rudder  int16  `json:"rudder"`
 	Sailor  int8   `json:"sailor"`
 	Sail    uint8  `json:"sail"`
+	Jib     int16  `json:"jib"`
+	Yards   int16  `json:"yards"`
+	Fore    int16  `json:"fore"`
 }
 
 func f64bits(v float64) string { return fmt.Sprintf("%#016x", math.Float64bits(v)) }
@@ -162,6 +166,13 @@ func goldens() []golden {
 	// Sailors in looks: the first, one of a code of three bytes, a machine.
 	v1.Boats[1].Look = 0xFFFFF
 	v1.Boats[2].Look = 0x7012F
+	// Rigs: a jib and a reef; yards hauled round apart, and every rig
+	// field at once; a jib alone, to change alone.
+	v1.Boats[5].Jib, v1.Boats[5].Flags = 1234, v1.Boats[5].Flags|1<<reefShift
+	v1.Boats[63].Jib, v1.Boats[63].Yards, v1.Boats[63].Fore = -1, -3000, 500
+	v1.Boats[63].Flags |= 2 << reefShift
+	v1.Put(4, ptr(boat(1, false, physics.Sailing, 300, 400, 100, 0, 0, 0, 0, 0x11)))
+	v1.Boats[4].Jib = 2000
 
 	v2 := v1
 	v2.Boats[0] = boat(0, false, 0, 13, -7, 0, 0, 0, 0, 0, 0)                                                     // position only
@@ -170,6 +181,9 @@ func goldens() []golden {
 	v2.Put(2, ptr(boat(2, false, physics.Sailing, 5, 6, 7, 8, 9, 10, 11, 12)))  // replaces
 	v2.Put(40, ptr(boat(0, false, physics.Sailing, -9, -9, 9, 9, -9, 9, 9, 9))) // enters
 	v2.Boats[0].Look = 0x35214                                                  // a look changed: an enter
+	v2.Boats[1].Jib, v2.Boats[1].Yards, v2.Boats[1].Fore = 77, -88, 99          // and the rig's, reefed
+	v2.Boats[1].Flags |= 2 << reefShift
+	v2.Boats[4].Jib = 2100 // the rig's alone: the second byte alone
 	// Slot 5 is far, and not sampled: unchanged.
 
 	v3 := v1
@@ -203,6 +217,11 @@ func goldens() []golden {
 	staying.Stays = true
 	stayingAll := fallingAll
 	stayingAll.Tick, stayingAll.Base, stayingAll.Stays = 1020, 4, true
+	// Reefed: the rig word alone carries the rig's block; and a keelboat's
+	// state, its jib swinging, carries it too.
+	reefed := header(1022, 0, 0, physics.State{Y: -20, Heading: math.Pi / 2})
+	reefed.Reef = 2
+	jib := header(1024, 2, 0, physics.State{Y: -21, Heading: 1, Jib: 0.3, JibRate: -0.1, JibLimit: 0.35, Reef: 0.25})
 
 	return []golden{
 		{"full", header(1000, 0, 0, physics.State{Y: -20, Heading: math.Pi / 2}), v1, v1.Used, 0},
@@ -224,6 +243,8 @@ func goldens() []golden {
 		{"falling with every block", fallingAll, v7, 0, v7.Used},
 		{"staying", staying, v1, v1.Used, 0},
 		{"staying with every block", stayingAll, v7, 0, v7.Used},
+		{"reefed", reefed, v1, v1.Used, 0},
+		{"a jib swinging", jib, v1, 0, v1.Used},
 	}
 }
 
@@ -244,7 +265,7 @@ func viewOf(v *View) []goldenBoat {
 	for _, slot := range slotsOf(v.Used) {
 		q := v.Boats[slot]
 		out = append(out, goldenBoat{Slot: slot, Kind: q.Kind, Flags: q.Flags, X: q.X, Y: q.Y, Heading: q.Heading,
-			Heel: q.Heel, Boom: q.Boom, Rudder: q.Rudder, Sailor: q.Sailor, Sail: q.Sail})
+			Heel: q.Heel, Boom: q.Boom, Rudder: q.Rudder, Sailor: q.Sailor, Sail: q.Sail, Jib: q.Jib, Yards: q.Yards, Fore: q.Fore})
 	}
 	return out
 }
@@ -275,7 +296,7 @@ func TestSnapshotGolden(t *testing.T) {
 			views[g.header.Tick] = &g.view
 			h := g.header
 			gs := goldenSnapshot{Name: g.name, Tick: strconv.FormatInt(h.Tick, 10), Base: h.Base, Flags: b[offFlags], Seq: h.Seq,
-				Margin: h.Margin, Helm: h.Helm, Sheet: h.Sheet, Mode: h.Mode, Way: h.Way, Order: h.Order, Target: h.Target,
+				Margin: h.Margin, Helm: h.Helm, Sheet: h.Sheet, Mode: h.Mode, Way: h.Way, Order: h.Order, Target: h.Target, Reef: h.Reef,
 				State: map[string]string{}, Bytes: hex.EncodeToString(b), View: viewOf(&g.view)}
 			if h.Over != 0 {
 				gs.Over = strconv.FormatInt(h.Over, 10)
@@ -327,7 +348,7 @@ func TestSnapshotGolden(t *testing.T) {
 		}
 		if tick, _ := strconv.ParseInt(g.Tick, 10, 64); got.Tick != tick || got.Base != g.Base || got.Flags != g.Flags ||
 			got.Seq != g.Seq || got.Margin != g.Margin || got.Helm != g.Helm || got.Sheet != g.Sheet ||
-			got.Mode != g.Mode || got.Way != g.Way || got.Order != g.Order || got.Target != g.Target || got.Header != c.header.Len() ||
+			got.Mode != g.Mode || got.Way != g.Way || got.Order != g.Order || got.Target != g.Target || got.Reef != g.Reef || got.Header != c.header.Len() ||
 			got.Over != c.header.Over || got.Stays != g.Stays || g.Stays != c.header.Stays {
 			t.Errorf("%s: read %+v", g.Name, got)
 		}
@@ -413,9 +434,18 @@ func TestDeltaAgainstEveryBase(t *testing.T) {
 }
 
 func randomBoat(rng *rand.Rand) Boat {
-	return Boat{Kind: uint16(rng.IntN(3)), Flags: uint8(rng.IntN(8)), X: int32(rng.IntN(1<<24) - 1<<23), Y: int32(rng.IntN(1<<24) - 1<<23),
+	q := Boat{Kind: uint16(rng.IntN(3)), Flags: uint8(rng.IntN(8)) | uint8(rng.IntN(3))<<reefShift, X: int32(rng.IntN(1<<24) - 1<<23), Y: int32(rng.IntN(1<<24) - 1<<23),
 		Heading: uint16(rng.Uint32()), Heel: int16(rng.Uint32()), Boom: int16(rng.Uint32()), Rudder: int16(rng.Uint32()),
 		Sailor: int8(rng.Uint32()), Sail: uint8(rng.Uint32())}
+	// A rig on some boats, each field now and then zero.
+	if q.Kind > 0 {
+		for _, v := range []*int16{&q.Jib, &q.Yards, &q.Fore} {
+			if rng.IntN(3) > 0 {
+				*v = int16(rng.Uint32())
+			}
+		}
+	}
+	return q
 }
 
 // TestQuantise: each field to its step, at its limits.
@@ -437,6 +467,13 @@ func TestQuantise(t *testing.T) {
 		{physics.State{Heading: -math.Pi, Heel: math.Pi, Boom: 3 * math.Pi, Sailor: -9}, Boat{Heading: 32768, Heel: math.MinInt16, Boom: math.MinInt16, Sailor: math.MinInt8}},
 		{physics.State{Heading: 2*math.Pi - 1e-9, Heel: math.Pi - AngleStep/4, Rudder: -math.Pi + AngleStep/4}, Boat{Heading: 0, Heel: math.MinInt16, Rudder: math.MinInt16}},
 		{physics.State{Heading: -AngleStep * 0.6, SailorMode: 7}, Boat{Heading: 65535, Flags: 3 << modeShift}},
+		// The rig: the reef rounded to a level, and kept to its range.
+		{physics.State{Jib: -0.5, Yards: 1, ForeYards: 0.75, Reef: 1.4}, Boat{Jib: int16(math.Round(-0.5 / AngleStep)),
+			Yards: int16(math.Round(1 / AngleStep)), Fore: int16(math.Round(0.75/AngleStep) - math.Round(1/AngleStep)), Flags: 1 << reefShift}},
+		{physics.State{Reef: 1.5}, Boat{Flags: 2 << reefShift}},
+		{physics.State{Reef: 7}, Boat{Flags: 2 << reefShift}},
+		{physics.State{Reef: -1}, Boat{}},
+		{physics.State{Reef: math.NaN()}, Boat{}},
 	} {
 		var q Boat
 		Quantise(&tc.st, 0, 0, false, &q)
@@ -482,7 +519,10 @@ func TestSnapshotRefusals(t *testing.T) {
 		"header cut":      good[:HeaderSize-1],
 		"layout 5":        withByte(good, offLayout, 5),
 		"helm over 1024":  withUint16(good, offHelm, 1025),
-		"spare flags":     withByte(good, offFlags, 32|PilotHeld|GroundHeld),
+		"spare flags":     withByte(good, offFlags, 64|PilotHeld|GroundHeld|RigHeld),
+		"rig cut":         good[:HeaderSize+PilotSize+GroundSize+RigSize-1],
+		"reef 3 in force": withByte(good, HeaderSize+PilotSize+GroundSize, 3),
+		"rig spare byte":  withByte(good, HeaderSize+PilotSize+GroundSize+7, 1),
 		"129 entries":     withByte(good, offEntries, 129),
 		"layout 6":        withByte(good, offLayout, 6),
 		"layout 7":        withByte(good, offLayout, 7),
@@ -501,22 +541,27 @@ func TestSnapshotRefusals(t *testing.T) {
 			t.Errorf("%s: read", name)
 		}
 	}
-	if err := ReadSnapshot(good, &sn); err != nil || sn.Header != HeaderSize+PilotSize+GroundSize {
-		t.Fatalf("a snapshot on the autopilot and aground has a header of %d bytes: %v", sn.Header, err)
+	if err := ReadSnapshot(good, &sn); err != nil || sn.Header != HeaderSize+PilotSize+GroundSize+RigSize {
+		t.Fatalf("a snapshot on the autopilot, aground and rigged has a header of %d bytes: %v", sn.Header, err)
 	}
 	// Entries refused against the base, each alone after a good header.
 	header := good[:sn.Header]
 	for name, entries := range map[string][]byte{
-		"op 3":                  {3<<6 | 1},
+		"rig update cut":        {OpUpdateRig<<6 | 1, ChangeHeading},
+		"rig update of no rig":  {OpUpdateRig<<6 | 1, ChangeHeading, 0, 1, 2},
+		"rig update spare bits": {OpUpdateRig<<6 | 1, 0, 0x08},
+		"rig update cut short":  {OpUpdateRig<<6 | 1, 0, ChangeJib >> 8, 1},
+		"reef 3":                {OpUpdate<<6 | 1, ChangeFlags, 3 << reefShift},
+		"rig of 0 entered":      {OpEnter<<6 | 1, enterJib, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+		"rig entered cut":       {OpEnter<<6 | 1, enterYards, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1},
 		"truncated enter":       {OpEnter<<6 | 1, 0, 0, 1, 2},
 		"truncated update":      {OpUpdate<<6 | 1, ChangeHeading, 1},
 		"update of nothing":     {OpUpdate<<6 | 1, 0},
 		"update of empty slot":  {OpUpdate<<6 | 3, ChangeHeel, 1, 0},
 		"leave of empty slot":   {OpLeave<<6 | 3},
-		"spare boat flags":      {OpUpdate<<6 | 1, ChangeFlags, 64},
 		"look over 20 bits":     {OpEnter<<6 | 1, 0, 0x80, 0x80, 0x40, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
 		"overlong varint":       {OpUpdate<<6 | 1, ChangePosition, 0x80, 0x00, 0},
-		"kind above 65535":      {OpEnter<<6 | 1, 0x80, 0x80, 0x04, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+		"kind above 65535":      {OpEnter<<6 | 1, 0x80, 0x80, 0x20, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
 		"beyond 24 bits":        {OpUpdate<<6 | 2, ChangePosition, 2, 0},
 		"bytes after the last":  {OpLeave<<6 | 1, 0},
 		"varint past its bytes": {OpUpdate<<6 | 1, ChangePosition, 0xff},
@@ -576,7 +621,7 @@ func TestEncodingAllocatesNothing(t *testing.T) {
 	word := bus.Pack(s.Seq, s.Helm, s.Sheet, 3)
 	if n := testing.AllocsPerRun(100, func() {
 		b = b[:MaxHeaderSize]
-		b = b[:PutHeader(b, s.Tick, s.Base, s.Flags, word, bus.PackPilot(s.Seq, bus.PilotWind, bus.WayTack, 1, 9000, 3), s.Margin, s.Over, s.Stays, &s.State)]
+		b = b[:PutHeader(b, s.Tick, s.Base, s.Flags, word, bus.PackPilot(s.Seq, bus.PilotWind, bus.WayTack, 1, 9000, 3), bus.PackRig(s.Seq, 1, 3), s.Margin, s.Over, s.Stays, &s.State)]
 		b, _ = AppendEntries(b, &cases[0].view, &cases[1].view, cases[1].enter, cases[1].sample)
 	}); n != 0 {
 		t.Fatalf("%v allocations", n)
@@ -632,6 +677,7 @@ func messages() (clients []*pb.ClientMessage, servers []*pb.ServerMessage) {
 		{Body: &pb.ClientMessage_Input{Input: &pb.Input{Seq: 727706170, Helm: 1024, Sheet: 3, AckTick: 727706164}}},
 		{Body: &pb.ClientMessage_Input{Input: &pb.Input{AckTick: 1 << 40, AckOnly: true}}},
 		{Body: &pb.ClientMessage_Input{Input: &pb.Input{Seq: 727706171, Helm: 512, Sheet: 300, AckTick: 727706165, Pilot: 1, Target: 57344, Order: 3, Way: 2}}},
+		{Body: &pb.ClientMessage_Input{Input: &pb.Input{Seq: 727706172, Helm: 500, Sheet: 310, AckTick: 727706166, Reef: 2}}},
 		{Body: &pb.ClientMessage_Ping{Ping: &pb.Ping{ClientTimeUs: 123456789, AckTick: 42, RttMs: 200, FrameMs: 17}}},
 		{Body: &pb.ClientMessage_Command{Command: &pb.Command{Body: &pb.Command_Resync{Resync: &pb.Resync{}}}}},
 	}

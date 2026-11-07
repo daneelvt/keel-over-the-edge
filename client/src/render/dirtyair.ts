@@ -153,6 +153,7 @@ export class DirtyAir {
         this.#boat.boom = b.boom;
         this.#boat.vEast = b.speed * Math.sin(b.heading);
         this.#boat.vNorth = b.speed * Math.cos(b.heading);
+        this.#boat.kind = b.kind;
         n = this.#place(physics, n, b.slot, this.#boat, originX, originY);
       }
     }
@@ -194,6 +195,7 @@ export class DirtyAir {
       b.vNorth,
       speed,
       from,
+      b.kind ?? 0,
     );
     const h = w[K.height] ?? 0;
     if (!(h > 0)) {

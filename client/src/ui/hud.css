@@ -49,6 +49,8 @@
   --edge-right: max(12px, env(safe-area-inset-right));
   --edge-bottom: max(12px, env(safe-area-inset-bottom));
   --edge-left: max(12px, env(safe-area-inset-left));
+  /* The sheet's height: shorter on short screens and small phones upright. */
+  --sheet-height: 196px;
   position: fixed;
   inset: 0;
   height: 100dvh;
@@ -1261,7 +1263,7 @@
 .sheet {
   right: var(--edge-right);
   width: 64px;
-  height: 196px;
+  height: var(--sheet-height);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -1314,6 +1316,92 @@
   bottom: 4px;
 }
 
+/* The Reef key at the sheet's top, brass as the knobs are, since it is
+   pressed: its face says the reef asked for; once reefed, the key that
+   shakes one out beside it. Held sideways they stand beside the sheet's
+   top, toward the boat, the keys under the pocket chart running down
+   over the sheet; held upright, where the boat stands beside the sheet,
+   on the sheet's top, the shake out's key over the Reef key. */
+.reef-keys {
+  position: absolute;
+  right: calc(var(--edge-right) + 64px + 8px);
+  bottom: calc(var(--edge-bottom) + var(--sheet-height) - 44px);
+  display: flex;
+  flex-direction: row-reverse;
+  align-items: flex-end;
+  gap: 8px;
+  pointer-events: auto;
+  transition: opacity 0.3s;
+}
+
+@media (orientation: portrait) {
+  .reef-keys {
+    right: var(--edge-right);
+    bottom: calc(var(--edge-bottom) + var(--sheet-height) + 8px);
+    flex-direction: column-reverse;
+  }
+}
+
+.reef-keys.dimmed {
+  opacity: 0.45;
+}
+
+.hud .reef-key {
+  box-sizing: border-box;
+  width: 64px;
+  height: 44px;
+  padding: 0 2px;
+  border: 1px solid var(--brass-dark);
+  border-radius: 10px;
+  background: linear-gradient(var(--brass-light), var(--brass) 55%, var(--brass-dark));
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 45%),
+    0 1px 2px rgb(0 0 0 / 55%),
+    0 2px 6px rgb(0 0 0 / 30%);
+  color: #2b2118;
+  font:
+    13px "IM Fell English SC",
+    Georgia,
+    serif;
+  line-height: 1.05;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.hud .reef-key:active:not(:disabled) {
+  transform: translateY(1px);
+  box-shadow: inset 0 1px 3px rgb(0 0 0 / 45%);
+}
+
+.hud .reef-key:focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: 2px;
+}
+
+.hud .reef-key:disabled {
+  cursor: default;
+  filter: saturate(0.6) brightness(0.85);
+}
+
+.reef-key .reef-level {
+  font-size: 10.5px;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+}
+
+.hud .reef-key.shake {
+  width: 44px;
+  font-size: 11px;
+}
+
+.reef-key .reef-glyph {
+  font-size: 9px;
+}
+
 /* The sail luffing, stalled or aback: its word in the legend's place, in
    the ink, and the end to move the sheet toward lit in gold with an arrow
    pointing to it. The word says it without the colour. */
@@ -1353,12 +1441,17 @@
 }
 
 @media (max-height: 420px) {
-  .sheet {
-    height: 160px;
-  }
-
   .sheet-track {
     flex-basis: 78px;
+  }
+}
+
+/* On a small phone held upright the sheet is shorter, to leave the Reef
+   key and its shake out's room over it below the keys under the pocket
+   chart: a drag moves the sheet as far whatever the track's length. */
+@media (orientation: portrait) and (max-height: 700px) {
+  .sheet-track {
+    flex-basis: 68px;
   }
 }
 
@@ -1669,6 +1762,18 @@
     --key: 38px;
     --head-gap: 2px;
     --head-pad: 1px;
+  }
+}
+
+@media (max-height: 420px) {
+  .hud {
+    --sheet-height: 160px;
+  }
+}
+
+@media (orientation: portrait) and (max-height: 700px) {
+  .hud {
+    --sheet-height: 150px;
   }
 }
 

@@ -12,11 +12,24 @@
 // The sheet's legend says when the sail is luffing, stalled or aback, and
 // the end to move it toward lights in gold with an arrow: Trim while it
 // luffs, Ease while it stalls. Aback, no sheeting helps, and neither lights.
+// Its name and its ends' words are the boat's (the catalog's controls).
+//
+// The Reef key, brass, stands on the sheet's top: a tap reefs one more,
+// its face saying the reef asked for in the boat's words; once reefed a
+// second key beside it shakes one out. R and F do the same.
 
 import type { PointerEventHandler as Handler } from 'preact';
 import type { HelmInput } from '../input/helm';
 import type { SheetInput } from '../input/sheet';
 import { HELM_ARC, type HudModel, type SailState } from './model';
+
+/** What the Reef key asks for: the main reefed to a level, 0 (full sail) … 2. */
+export interface ReefActions {
+  setReef(level: number): void;
+}
+
+/** The most reefs a main takes. */
+const REEFS = 2;
 
 type PointerHandler = Handler<HTMLDivElement>;
 
@@ -90,9 +103,8 @@ export function Helm({ input, model }: { input: HelmInput; model: HudModel }) {
   );
 }
 
-/** The sheet's legend for what the sail is doing: its own name while the sail draws. */
-const SAIL_LEGENDS: Record<SailState, string> = {
-  '': 'Sheet',
+/** The sheet's legend for what the sail is doing, but for its own name while the sail draws. */
+const SAIL_LEGENDS: Record<Exclude<SailState, ''>, string> = {
   luffing: 'Luffing',
   stalled: 'Stalled',
   aback: 'Aback',
@@ -103,11 +115,12 @@ export function Sheet({ input, model }: { input: SheetInput; model: HudModel }) 
   const sail = model.sail.value;
   const trim = sail === 'luffing';
   const ease = sail === 'stalled';
+  const words = model.controls.value?.sheet ?? { name: 'Sheet', trim: 'Trim', ease: 'Ease' };
   return (
     <div
       class={`control sheet${dimmed ? ' dimmed' : ''}`}
       role="slider"
-      aria-label="Sheet"
+      aria-label={words.name}
       aria-valuemin={0}
       aria-valuemax={1}
       aria-valuenow={0.5}
@@ -126,7 +139,7 @@ export function Sheet({ input, model }: { input: SheetInput; model: HudModel }) 
             ▲
           </span>
         )}
-        Trim
+        {words.trim}
       </span>
       <div class="sheet-track">
         <div class="sheet-travel actual" ref={(el) => model.sheetActual.attach(el)}>
@@ -137,14 +150,60 @@ export function Sheet({ input, model }: { input: SheetInput; model: HudModel }) 
         </div>
       </div>
       <span class={`sheet-end${ease ? ' lit' : ''}`} data-end="ease">
-        Ease
+        {words.ease}
         {ease && (
           <span class="sheet-arrow" aria-hidden="true">
             ▼
           </span>
         )}
       </span>
-      <span class={`control-label${sail === '' ? '' : ' sail'}`}>{SAIL_LEGENDS[sail]}</span>
+      <span class={`control-label${sail === '' ? '' : ' sail'}`}>
+        {sail === '' ? words.name : SAIL_LEGENDS[sail]}
+      </span>
+    </div>
+  );
+}
+
+/**
+ * The Reef key on the sheet's top, and once reefed the key that shakes a
+ * reef out; neither on a boat that does not reef. Dimmed with the sheet
+ * while the sailor is out of the boat, and still taking the player's word
+ * for when the sailor is back.
+ */
+export function Reef({ actions, model }: { actions: ReefActions; model: HudModel }) {
+  const c = model.controls.value;
+  if (c === null || !c.reefs) {
+    return null;
+  }
+  const level = model.reef.value;
+  const dimmed = model.sailor.value !== '';
+  const words = c.reef[level] ?? '';
+  return (
+    <div class={`reef-keys${dimmed ? ' dimmed' : ''}`} data-control="reef">
+      <button
+        type="button"
+        class="reef-key"
+        aria-label={`Reef: ${words}${level < REEFS ? '; tap to reef' : ''}`}
+        data-level={level}
+        disabled={level >= REEFS}
+        onClick={() => actions.setReef(level + 1)}
+      >
+        <span class="reef-name">Reef</span>
+        <span class="reef-level">{words}</span>
+      </button>
+      {level > 0 ? (
+        <button
+          type="button"
+          class="reef-key shake"
+          aria-label={`Shake out a reef: ${c.reef[level - 1] ?? ''}`}
+          onClick={() => actions.setReef(level - 1)}
+        >
+          <span class="reef-glyph" aria-hidden="true">
+            ▲
+          </span>
+          Shake
+        </button>
+      ) : null}
     </div>
   );
 }

@@ -5,6 +5,7 @@ package agentapi
 import (
 	"fmt"
 	"math"
+	"strings"
 
 	"github.com/daneelvt/keel-over-the-edge/internal/bus"
 	"github.com/daneelvt/keel-over-the-edge/internal/catalog"
@@ -21,7 +22,7 @@ import (
 // a retried tack turns once.
 
 // steerOrder is what steer asks for: exactly one of a wind angle, a
-// heading and a rudder.
+// heading and a rudder, and with it a trim and a reef if it likes.
 type steerOrder struct {
 	WindAngle *int   `json:"wind_angle,omitempty"`
 	Side      string `json:"side,omitempty"`
@@ -29,6 +30,7 @@ type steerOrder struct {
 	Rudder    *int   `json:"rudder,omitempty"`
 	Via       string `json:"via,omitempty"`
 	Boom      *int   `json:"boom,omitempty"`
+	Reef      *int   `json:"reef,omitempty"`
 }
 
 // The ways and sides an order names.
@@ -78,14 +80,60 @@ func turnTarget(deg float64) uint16 {
 	return uint16(int64(math.Round(deg*physics.TurnSteps/360)) & (physics.TurnSteps - 1))
 }
 
-// held is the pair of words in force for the boat in slot sl: the last
-// the helm wrote that the boat has not yet taken, or else the frame's.
-func held(s *Sea, f *bus.Frame, sl int32) (bus.Word, bus.PilotWord) {
-	w, p := s.Bus.Controls.Load(sl)
-	if w.Gen() == f.Gen[sl] && p.Gen() == f.Gen[sl] && w.Seq() == p.Seq() && int32(w.Seq()-uint32(f.Tick)) > 0 {
-		return w, p
+// held is the words in force for the boat in slot sl: the last the helm
+// wrote that the boat has not yet taken, or else the frame's.
+func held(s *Sea, f *bus.Frame, sl int32) (bus.Word, bus.PilotWord, bus.RigWord) {
+	w, p, r := s.Bus.Controls.Load(sl)
+	g := f.Gen[sl]
+	if w.Gen() == g && p.Gen() == g && r.Gen() == g && w.Seq() == p.Seq() && w.Seq() == r.Seq() && int32(w.Seq()-uint32(f.Tick)) > 0 {
+		return w, p, r
 	}
-	return f.Control[sl], f.Pilot[sl]
+	return f.Control[sl], f.Pilot[sl], f.Rig[sl]
+}
+
+// reefOf is the reef an order asks for, or the one in force r without one;
+// refusal is non-empty for a reef out of range, in the boat's words.
+func reefOf(b *catalog.Boat, r bus.RigWord, reef *int) (uint8, string) {
+	if reef == nil {
+		return r.Reef(), ""
+	}
+	if *reef < 0 || *reef > bus.MaxReef {
+		return 0, fmt.Sprintf("reef is %s: %d is out of range.", reefChoices(b), *reef)
+	}
+	return uint8(*reef), ""
+}
+
+// reefChoices are the reefs a boat of kind b may take, in its words: "0
+// (full sail), 1 (one reef) or 2 (two reefs)".
+func reefChoices(b *catalog.Boat) string {
+	var c [bus.MaxReef + 1]string
+	for i := range c {
+		c[i] = fmt.Sprintf("%d (%s)", i, reefWord(b, i))
+	}
+	return strings.Join(c[:bus.MaxReef], ", ") + " or " + c[bus.MaxReef]
+}
+
+// reefWord is reef level i in the words of boat b's controls, lower case:
+// "full sail", "one reef", "two reefs".
+func reefWord(b *catalog.Boat, i int) string {
+	if words := b.Controls.Reef; i < len(words) {
+		return strings.ToLower(words[i])
+	}
+	return fmt.Sprintf("reef %d", i)
+}
+
+// reefState is how the sail of a boat of kind b in state st stands with
+// reef r in force: "full sail", "one reef", or, while the crew is at
+// work, "reefing to two reefs" or "shaking out to full sail".
+func reefState(b *catalog.Boat, st *physics.State, r uint8) string {
+	w := reefWord(b, int(r))
+	switch at := st.Reef; {
+	case at < float64(r):
+		return "reefing to " + w
+	case at > float64(r):
+		return "shaking out to " + w
+	}
+	return w
 }
 
 // pending reports whether the boat in slot sl has an order count it has
@@ -141,7 +189,7 @@ func presentSide(f *bus.Frame, sl int32) float64 {
 // non-empty for an order refused, in words that say what to send instead.
 func (h *helm) steer(s *Sea, f *bus.Frame, sl int32, o *steerOrder) (w written, refusal string) {
 	b := s.boat(f.Kind[sl])
-	word, pw := held(s, f, sl)
+	word, pw, rw := held(s, f, sl)
 	sheet := word.SheetIndex()
 	if o.Boom != nil {
 		if *o.Boom < 4 || *o.Boom > 95 {
@@ -149,8 +197,13 @@ func (h *helm) steer(s *Sea, f *bus.Frame, sl int32, o *steerOrder) (w written, 
 		}
 		sheet = sheetOf(b, float64(*o.Boom))
 	}
+	reef, refused := reefOf(b, rw, o.Reef)
+	if refused != "" {
+		return w, refused
+	}
 	seq := uint32(f.Tick + 1)
 	gen := f.Gen[sl]
+	rig := bus.PackRig(seq, reef, gen)
 	order, way := pw.Order(), uint8(bus.WayHold)
 	given := 0
 	for _, set := range []bool{o.WindAngle != nil, o.Heading != nil, o.Rudder != nil} {
@@ -172,10 +225,10 @@ func (h *helm) steer(s *Sea, f *bus.Frame, sl int32, o *steerOrder) (w written, 
 		}
 		helm := uint16(math.Round((float64(r)/float64(most) + 1) / 2 * bus.Steps))
 		next := bus.Pack(seq, helm, sheet, gen)
-		if pw.Mode() == bus.PilotOff && word.HelmIndex() == helm && word.SheetIndex() == sheet {
+		if pw.Mode() == bus.PilotOff && word.HelmIndex() == helm && word.SheetIndex() == sheet && rw.Reef() == reef {
 			return written{already: true}, ""
 		}
-		s.Bus.Controls.Store(sl, next, bus.PackPilot(seq, bus.PilotOff, bus.WayHold, order, 0, gen))
+		s.Bus.Controls.Store(sl, next, bus.PackPilot(seq, bus.PilotOff, bus.WayHold, order, 0, gen), rig)
 		return w, ""
 	case o.WindAngle != nil:
 		a := *o.WindAngle
@@ -204,10 +257,10 @@ func (h *helm) steer(s *Sea, f *bus.Frame, sl int32, o *steerOrder) (w written, 
 		if turn != "" {
 			order, way = (order+1)&3, wayOf(turn)
 		}
-		if turn == "" && pw.Mode() == bus.PilotWind && pw.Target() == target && word.SheetIndex() == sheet {
+		if turn == "" && pw.Mode() == bus.PilotWind && pw.Target() == target && word.SheetIndex() == sheet && rw.Reef() == reef {
 			return written{already: true, turning: pendingTurn(f, sl, pw)}, ""
 		}
-		s.Bus.Controls.Store(sl, bus.Pack(seq, bus.Steps/2, sheet, gen), bus.PackPilot(seq, bus.PilotWind, way, order, target, gen))
+		s.Bus.Controls.Store(sl, bus.Pack(seq, bus.Steps/2, sheet, gen), bus.PackPilot(seq, bus.PilotWind, way, order, target, gen), rig)
 		return turnWritten(f, sl, turn, float64(a), o.Via), ""
 	case o.Heading != nil:
 		hd := *o.Heading
@@ -233,10 +286,10 @@ func (h *helm) steer(s *Sea, f *bus.Frame, sl int32, o *steerOrder) (w written, 
 		if turn != "" {
 			order, way = (order+1)&3, wayOf(turn)
 		}
-		if turn == "" && pw.Mode() == bus.PilotHeading && pw.Target() == target && word.SheetIndex() == sheet {
+		if turn == "" && pw.Mode() == bus.PilotHeading && pw.Target() == target && word.SheetIndex() == sheet && rw.Reef() == reef {
 			return written{already: true, turning: pendingTurn(f, sl, pw)}, ""
 		}
-		s.Bus.Controls.Store(sl, bus.Pack(seq, bus.Steps/2, sheet, gen), bus.PackPilot(seq, bus.PilotHeading, way, order, target, gen))
+		s.Bus.Controls.Store(sl, bus.Pack(seq, bus.Steps/2, sheet, gen), bus.PackPilot(seq, bus.PilotHeading, way, order, target, gen), rig)
 		return turnWritten(f, sl, turn, deg(math.Abs(off)), o.Via), ""
 	}
 	return w, ""
@@ -317,20 +370,30 @@ func (h *helm) turnFor(f *bus.Frame, sl int32, pw bus.PilotWord, sign, angle flo
 	return "", "via is auto, tack or gybe: how to turn if the side changes."
 }
 
-// trim lets the boom out to boom degrees, the helm held as it is.
-func (h *helm) trim(s *Sea, f *bus.Frame, sl int32, boom int) (written, string) {
+// trim lets the boom out to boom degrees, and takes reef, either kept as
+// it is when nil, the helm held as it is. The boom is the boat's own: its
+// kind's sheet lets it out.
+func (h *helm) trim(s *Sea, f *bus.Frame, sl int32, boom, reef *int) (written, string) {
 	b := s.boat(f.Kind[sl])
-	if boom < 4 || boom > 95 {
-		return written{}, refusalBoom(boom, b)
+	word, pw, rw := held(s, f, sl)
+	sheet := word.SheetIndex()
+	if boom != nil {
+		if *boom < 4 || *boom > 95 {
+			return written{}, refusalBoom(*boom, b)
+		}
+		sheet = sheetOf(b, float64(*boom))
 	}
-	word, pw := held(s, f, sl)
-	sheet := sheetOf(b, float64(boom))
-	if word.SheetIndex() == sheet {
+	r, refused := reefOf(b, rw, reef)
+	if refused != "" {
+		return written{}, refused
+	}
+	if word.SheetIndex() == sheet && rw.Reef() == r {
 		return written{already: true}, ""
 	}
 	seq := uint32(f.Tick + 1)
-	s.Bus.Controls.Store(sl, bus.Pack(seq, word.HelmIndex(), sheet, f.Gen[sl]),
-		bus.PackPilot(seq, pw.Mode(), pw.Way(), pw.Order(), pw.Target(), f.Gen[sl]))
+	gen := f.Gen[sl]
+	s.Bus.Controls.Store(sl, bus.Pack(seq, word.HelmIndex(), sheet, gen),
+		bus.PackPilot(seq, pw.Mode(), pw.Way(), pw.Order(), pw.Target(), gen), bus.PackRig(seq, r, gen))
 	return written{}, ""
 }
 
@@ -344,7 +407,7 @@ func refusalBoom(boom int, b *catalog.Boat) string {
 // leaves it, from the words written and the frame.
 func orderLine(s *Sea, f *bus.Frame, sl int32, w written) string {
 	b := s.boat(f.Kind[sl])
-	word, pw := held(s, f, sl)
+	word, pw, rw := held(s, f, sl)
 	st := &f.State[sl]
 	what := ""
 	target := float64(pw.Target()) * 2 * math.Pi / physics.TurnSteps
@@ -383,6 +446,10 @@ func orderLine(s *Sea, f *bus.Frame, sl int32, w written) string {
 	if w.already {
 		what = "already " + what
 	}
-	return fmt.Sprintf("%s · %s · boom out to %d° · %s · heel %d°", clockOf(s, f, st.X, st.Y), what,
-		int(math.Round(boomOf(b, word.SheetIndex()))), knots1(float64(f.Instruments[sl].SpeedOverGround)), degrees(math.Abs(st.Heel)))
+	reef := ""
+	if rw.Reef() != 0 || st.Reef != 0 {
+		reef = " · " + reefState(b, st, rw.Reef())
+	}
+	return fmt.Sprintf("%s · %s · boom out to %d°%s · %s · heel %d°", clockOf(s, f, st.X, st.Y), what,
+		int(math.Round(boomOf(b, word.SheetIndex()))), reef, knots1(float64(f.Instruments[sl].SpeedOverGround)), degrees(math.Abs(st.Heel)))
 }

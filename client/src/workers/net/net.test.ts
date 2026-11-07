@@ -601,8 +601,10 @@ describe('watching, in the net worker', () => {
       target: 0,
       order: 0,
       way: 0,
+      reef: 2,
     });
     expect(inputs(s).filter((i) => !i.ackOnly)).toHaveLength(1);
+    expect(inputs(s).find((i) => !i.ackOnly)?.reef).toBe(2);
     // Asked to watch: the command goes at once, and a Welcome for the watch.
     h.net.handle({ type: 'watch', sailor: 'Iron Mary' });
     expect(s.sent.map(decodeClient).at(-1)?.body).toMatchObject({
@@ -621,6 +623,7 @@ describe('watching, in the net worker', () => {
       target: 0,
       order: 0,
       way: 0,
+      reef: 0,
     });
     expect(inputs(s).filter((i) => !i.ackOnly)).toHaveLength(1);
   });

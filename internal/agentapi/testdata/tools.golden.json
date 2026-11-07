@@ -118,6 +118,12 @@
           "minimum": 0,
           "type": "integer"
         },
+        "reef": {
+          "description": "Also reef, as trim does.",
+          "maximum": 2,
+          "minimum": 0,
+          "type": "integer"
+        },
         "rudder": {
           "description": "Hand steering, degrees; negative turns to port.",
           "maximum": 40,
@@ -172,11 +178,14 @@
           "maximum": 95,
           "minimum": 4,
           "type": "integer"
+        },
+        "reef": {
+          "description": "0 full sail; 1 or 2 reefs: a smaller sail, heeling less in a strong wind. Give boom, reef or both.",
+          "maximum": 2,
+          "minimum": 0,
+          "type": "integer"
         }
       },
-      "required": [
-        "boom"
-      ],
       "type": "object"
     },
     "name": "trim",

@@ -231,6 +231,13 @@ type dumpedControl struct {
 	Helm  exact       `json:"helm"`
 	Sheet exact       `json:"sheet"`
 	Pilot dumpedPilot `json:"pilot"`
+	Rig   dumpedRig   `json:"rig"`
+}
+
+// dumpedRig is the rig word in force.
+type dumpedRig struct {
+	Word string `json:"word"`
+	Reef uint8  `json:"reef,omitempty"`
 }
 
 // dumpedPilot is the pilot word in force.
@@ -259,6 +266,7 @@ type dumpedWaiting struct {
 	Connection uint64 `json:"connection"`
 	Since      int64  `json:"since"`
 	Grace      int64  `json:"grace"`
+	Kind       uint16 `json:"kind"`
 }
 
 // dumpedWeather is a developer's weather.
@@ -293,15 +301,16 @@ func writeDump(w io.Writer, f *bus.Frame) error {
 		d.Weathers = append(d.Weathers, dumpedWeather{From: w.From, Mode: uint8(w.Mode), Regime: w.Regime, Speed: w.Speed, Dir: w.Dir})
 	}
 	for _, q := range f.Queue {
-		d.Queue = append(d.Queue, dumpedWaiting{Account: q.Account.String(), Connection: q.Conn, Since: q.Since, Grace: q.Grace})
+		d.Queue = append(d.Queue, dumpedWaiting{Account: q.Account.String(), Connection: q.Conn, Since: q.Since, Grace: q.Grace, Kind: q.BoatKind})
 	}
 	for _, s := range f.Live {
-		c, p := f.Control[s], f.Pilot[s]
+		c, p, r := f.Control[s], f.Pilot[s], f.Rig[s]
 		b := dumpedBoat{
 			Slot: s, Boat: f.Boat[s], Generation: f.Gen[s], Owner: f.Owner[s].String(),
 			Connection: f.Conn[s], Grace: f.Grace[s], Kind: f.Kind[s],
 			Control: dumpedControl{Word: fmt.Sprintf("%#016x", uint64(c)), Seq: c.Seq(), Helm: exact(c.Helm()), Sheet: exact(c.Sheet()),
-				Pilot: dumpedPilot{Word: fmt.Sprintf("%#016x", uint64(p)), Mode: p.Mode(), Way: p.Way(), Order: p.Order(), Target: p.Target()}},
+				Pilot: dumpedPilot{Word: fmt.Sprintf("%#016x", uint64(p)), Mode: p.Mode(), Way: p.Way(), Order: p.Order(), Target: p.Target()},
+				Rig:   dumpedRig{Word: fmt.Sprintf("%#016x", uint64(r)), Reef: r.Reef()}},
 			State: map[string]exact{},
 		}
 		for i, v := range sim.StateFields(&f.State[s]) {

@@ -35,7 +35,7 @@ import { Case, type Lamp } from './case';
 import { ChartScreen, type ChartSea, NoticeLine, PocketChart } from './chart';
 import type { ClearView } from './clearview';
 import type { ShipsClock } from './clock';
-import { Helm, Sheet } from './controls';
+import { Helm, Reef, type ReefActions, Sheet } from './controls';
 import type { Countdown } from './countdown';
 import { Menu } from './menu';
 import type { HudModel } from './model';
@@ -101,6 +101,7 @@ export function SeaControls({
   helm,
   sheet,
   pilot,
+  reef,
   model,
   settings,
 }: {
@@ -108,6 +109,7 @@ export function SeaControls({
   helm: HelmInput;
   sheet: SheetInput;
   pilot: PilotActions;
+  reef?: ReefActions | null;
   model: HudModel;
   settings: SettingsSignal;
 }) {
@@ -119,6 +121,7 @@ export function SeaControls({
       <Helm input={helm} model={model} />
       <Pilot actions={pilot} model={model} settings={settings} />
       <Sheet input={sheet} model={model} />
+      {reef != null ? <Reef actions={reef} model={model} /> : null}
     </>
   );
 }
@@ -155,6 +158,8 @@ export interface ScreenProps {
   sheet: SheetInput;
   /** The autopilot's control head. */
   pilot: PilotActions;
+  /** The Reef key's: the main reefed to a level; none for no key. */
+  reef?: ReefActions;
   /** The layer the overlays' labels go in. */
   labels: (el: HTMLElement | null) => void;
   /** The sailor's name, or null in the offline sandbox. */
@@ -371,6 +376,7 @@ function Screen(props: ScreenProps) {
         helm={props.helm}
         sheet={props.sheet}
         pilot={props.pilot}
+        reef={props.reef ?? null}
         model={model}
         settings={settings}
       />

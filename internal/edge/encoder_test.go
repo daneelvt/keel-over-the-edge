@@ -132,7 +132,8 @@ func TestEncoderAllocatesNothing(t *testing.T) {
 		for i, c := range conns {
 			if i%3 == 0 {
 				c.wmu.Lock()
-				c.held[(c.first+c.nheld)%heldWords] = heldPair{word: bus.Pack(uint32(next+2), uint16(i%1024), 512, c.gen), pilot: bus.PilotOffWord(c.gen) | bus.PilotWord(next+2)<<32}
+				c.held[(c.first+c.nheld)%heldWords] = heldInput{word: bus.Pack(uint32(next+2), uint16(i%1024), 512, c.gen), pilot: bus.PilotOffWord(c.gen) | bus.PilotWord(next+2)<<32,
+					rig: bus.FullSail(c.gen) | bus.RigWord(next+2)<<32}
 				c.nheld++
 				c.waiting.Store(int32(c.nheld))
 				c.wmu.Unlock()

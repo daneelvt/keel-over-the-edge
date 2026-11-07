@@ -241,7 +241,7 @@ export interface HelloVersions {
 export type ToWorker =
   /** Connect to url, and keep connecting. */
   | { type: 'start'; url: string; versions: HelloVersions }
-  /** The controls stepped for tick seq: the helm and sheet indices, and the autopilot's control. */
+  /** The controls stepped for tick seq: the helm and sheet indices, the autopilot's control and the reef. */
   | {
       type: 'input';
       seq: number;
@@ -251,6 +251,7 @@ export type ToWorker =
       target: number;
       order: number;
       way: number;
+      reef: number;
     }
   /** The page's frame time's 95th percentile, ms, for the server's metrics. */
   | { type: 'frame'; ms: number }

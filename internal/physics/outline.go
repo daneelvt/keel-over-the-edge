@@ -125,3 +125,7 @@ func (h *hullFrame) lowest(nx, ny float64) float64 {
 	}
 	return m
 }
+
+// Radius is how far boat b's outline reaches from its centre of gravity,
+// m: the circle about its hull, for the simulation's start places.
+func Radius(b *Prepared) float64 { return b.outline.radius }

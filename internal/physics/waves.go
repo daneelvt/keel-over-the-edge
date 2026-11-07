@@ -54,17 +54,17 @@ type wave struct {
 	currentEast, currentNorth float64
 }
 
-// read sets v to the effective wave under a hull at the boat's position and
-// heading, whose sine and cosine are sinH and cosH, over a waterplane of
+// read sets v to the effective wave under a hull at (x, y), moving at surge
+// and sway, and heading the way sinH and cosH say, over a waterplane of
 // half-length halfLength and half-beam halfBeam. decay is how much of each
 // wave's motion reaches the foils; with none the water's motion there is
 // left out. It leaves the twist per unit of the lever L²/12.
 //
 // The rates are those the hull meets: it moves through the waves, so each
 // wave's phase passes it at k·V − ω, not at −ω.
-func (v *wave) read(sea *Sea, s *State, sinH, cosH, halfLength, halfBeam float64, decay *[SeaComponents]float64) {
+func (v *wave) read(sea *Sea, x, y, surge, sway, sinH, cosH, halfLength, halfBeam float64, decay *[SeaComponents]float64) {
 	w, win, t := sea.Waves, sea.Window, sea.Tick
-	sw, se, nw, ne, wx, wy := win.corners(s.X, s.Y)
+	sw, se, nw, ne, wx, wy := win.corners(x, y)
 	// The waves of the four areas, ascending.
 	for k := range int32(SeaWords) {
 		for word := win.word(k, sw, se, nw, ne); word != 0; word &= word - 1 {
@@ -74,14 +74,14 @@ func (v *wave) read(sea *Sea, s *State, sinH, cosH, halfLength, halfBeam float64
 				continue
 			}
 			ke, kn := w.kEast[i], w.kNorth[i]
-			psi := (w.Phase[i] + (float64(ke*s.X) + float64(kn*s.Y))) - t.Phase[i]
+			psi := (w.Phase[i] + (float64(ke*x) + float64(kn*y))) - t.Phase[i]
 			kx := float64(ke*sinH) + float64(kn*cosH)
 			ky := float64(ke*cosH) - float64(kn*sinH)
 			sin, cos := SinCos(psi)
 			su, gu := averages(float64(kx * halfLength))
 			sv, gv := averages(float64(ky * halfBeam))
 			as, ac := float64(a*sin), float64(a*cos)
-			rate := (float64(kx*s.Surge) + float64(ky*s.Sway)) - w.Omega[i]
+			rate := (float64(kx*surge) + float64(ky*sway)) - w.Omega[i]
 
 			mean := float64(su * sv)
 			v.height += float64(mean * as)
@@ -184,9 +184,8 @@ type EffectiveWave struct {
 // open sea.
 func WaveUnder(sea *Sea, g *Ground, length, beam, x, y, heading float64) EffectiveWave {
 	var v wave
-	s := State{X: x, Y: y}
 	sinH, cosH := SinCos(heading)
-	v.read(sea, &s, sinH, cosH, float64(0.5*length), float64(0.5*beam), nil)
+	v.read(sea, x, y, 0, 0, sinH, cosH, float64(0.5*length), float64(0.5*beam), nil)
 	v.capDepth(sea, g, x, y)
 	return EffectiveWave{Height: v.height, Ahead: v.ahead, Across: v.across}
 }

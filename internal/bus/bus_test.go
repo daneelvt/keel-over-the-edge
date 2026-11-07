@@ -80,16 +80,54 @@ func TestControls(t *testing.T) {
 	c := NewControls(3)
 	w := Pack(5, 100, 200, 3)
 	p := PackPilot(5, PilotWind, WayTack, 2, 60000, 3)
-	c.Store(2, w, p)
-	if gw, gp := c.Load(2); gw != w || gp != p || c.Len() != 3 {
+	r := PackRig(5, 2, 3)
+	c.Store(2, w, p, r)
+	if gw, gp, gr := c.Load(2); gw != w || gp != p || gr != r || c.Len() != 3 {
 		t.Fatal("a slot does not hold its words")
 	}
-	if gw, gp := c.Load(0); gw != 0 || gp != 0 {
+	if gw, gp, gr := c.Load(0); gw != 0 || gp != 0 || gr != 0 {
 		t.Fatal("an empty slot holds words")
 	}
 	c.StoreHand(1, w)
-	if gw, gp := c.Load(1); gw != w || gp.Seq() != 5 || gp.Gen() != 3 || gp.Mode() != PilotOff || gp.Target() != 0 {
-		t.Fatalf("by hand: %#x %#x", gw, gp)
+	if gw, gp, gr := c.Load(1); gw != w || gp.Seq() != 5 || gp.Gen() != 3 || gp.Mode() != PilotOff || gp.Target() != 0 ||
+		gr.Seq() != 5 || gr.Gen() != 3 || gr.Reef() != 0 {
+		t.Fatalf("by hand: %#x %#x %#x", gw, gp, gr)
+	}
+}
+
+// A rig word holds its fields apart: a reef past the deepest is the
+// deepest, the generation as the Word's, and the spare bits stay 0.
+func TestRigWord(t *testing.T) {
+	for _, c := range []struct {
+		seq      uint32
+		reef     uint8
+		gen      uint16
+		wantReef uint8
+		wantGen  uint16
+	}{
+		{0, 0, 0, 0, 0},
+		{1<<32 - 1, 2, GenMask, 2, GenMask},
+		{77, 1, GenMask + 2, 1, 1},
+		{78, 3, 7, 2, 7},
+		{79, 255, 8, 2, 8},
+	} {
+		r := PackRig(c.seq, c.reef, c.gen)
+		if r.Seq() != c.seq || r.Reef() != c.wantReef || r.Gen() != c.wantGen {
+			t.Errorf("%+v: seq %d, reef %d, gen %d", c, r.Seq(), r.Reef(), r.Gen())
+		}
+		if spare := uint64(r) >> genBits & (1<<20 - 1); spare != 0 {
+			t.Errorf("%+v: spare bits %#x", c, spare)
+		}
+		if got := r.Restamp(c.seq+1, 5); got.Seq() != c.seq+1 || got.Gen() != 5 || got.Reef() != c.wantReef {
+			t.Errorf("%+v: restamped as %#x", c, got)
+		}
+	}
+	// A word made by hand with a reef of 3 still decodes in range.
+	if raw := RigWord(3 << rigReefShift); raw.Reef() != MaxReef {
+		t.Errorf("a reef of 3 reads as %d", raw.Reef())
+	}
+	if FullSail(9) != PackRig(0, 0, 9) {
+		t.Error("a new boat is reefed")
 	}
 }
 

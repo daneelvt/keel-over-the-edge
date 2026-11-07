@@ -170,14 +170,15 @@ func (c *Core) call(ctx context.Context, d toolDef, h *helm, a *oauth.Accepted, 
 	case toolTrim:
 		var o struct {
 			Boom *int `json:"boom"`
+			Reef *int `json:"reef,omitempty"`
 		}
 		if r := args(req, &o); r != nil {
 			return "", nil, r
 		}
-		if o.Boom == nil {
-			return "", nil, refuse(refusedArgs, "trim takes boom: how far out the boom may swing, 4 to 95 degrees.")
+		if o.Boom == nil && o.Reef == nil {
+			return "", nil, refuse(refusedArgs, "trim takes boom, how far out the boom may swing, 4 to 95 degrees; or reef, 0 to 2; or both.")
 		}
-		return c.order(ctx, h, func(s *Sea, f *bus.Frame, sl int32) (written, string) { return h.trim(s, f, sl, *o.Boom) })
+		return c.order(ctx, h, func(s *Sea, f *bus.Frame, sl int32) (written, string) { return h.trim(s, f, sl, o.Boom, o.Reef) })
 	case toolChart:
 		var o chartArgs
 		if r := args(req, &o); r != nil {
@@ -258,7 +259,7 @@ func (h *helm) holding() string {
 		return ""
 	}
 	p := pilotOf(f, sl)
-	word, _ := held(s, f, sl)
+	word, _, _ := held(s, f, sl)
 	line := fmt.Sprintf("%s, boom out to %d°", p.Holds, int(math.Round(boomOf(s.boat(f.Kind[sl]), word.SheetIndex()))))
 	if sail := f.Instruments[sl].Sail; f.Machine[sl] && sail != bus.SailDrawing {
 		line += ", " + sailWords[sail]
@@ -338,6 +339,19 @@ func (c *Core) order(ctx context.Context, h *helm, give func(s *Sea, f *bus.Fram
 	return strings.Join(lines, "\n"), nil, nil
 }
 
+// boatName is the name of the helm's boat's kind: the boat it sails, or,
+// ashore, the kind its Join will give it.
+func (c *Core) boatName(s *Sea, h *helm) string {
+	f := s.Bus.Frames.Acquire()
+	defer f.Release()
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if h.sea == s && h.locate(f) {
+		return s.boat(f.Kind[h.slot]).Name
+	}
+	return s.boat(joinedKind).Name
+}
+
 // boat answers boat: the fleet, going to sea, leaving the water; the
 // sailor's look is sailorLook's.
 func (c *Core) boat(ctx context.Context, h *helm, action, which string) (string, any, *refusal) {
@@ -345,7 +359,7 @@ func (c *Core) boat(ctx context.Context, h *helm, action, which string) (string,
 	if s == nil {
 		return "", nil, refuse(refusedNoWorld, wordsNoWorld)
 	}
-	name := s.Boats[0].Name
+	name := c.boatName(s, h)
 	switch action {
 	case "", "list":
 		_, _, _, atSea := c.where(h)

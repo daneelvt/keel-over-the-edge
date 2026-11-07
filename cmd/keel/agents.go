@@ -56,6 +56,18 @@ func machineLooks(cat *catalog.Catalog) oauth.MachineLooks {
 	return oauth.MachineLooks{Versions: versions, Finishes: of(m.Finishes), Colours: of(cat.SailorOptions.Colours)}
 }
 
+// sailorsBoat is the kind of boat each sailor brings to the fleet: the
+// catalog's first boat of fleet sailor, one for every sailor, or its first
+// boat if none is.
+func sailorsBoat(cat *catalog.Catalog) string {
+	for i := range cat.Boats {
+		if cat.Boats[i].Fleet == catalog.FleetSailor {
+			return string(cat.Boats[i].ID)
+		}
+	}
+	return string(cat.Boats[0].ID)
+}
+
 // newAgents makes sign-in for AI apps, the lifetime read from the
 // database.
 func (p *process) newAgents(ctx context.Context, stopped *accounts.Set) (*agents, error) {
@@ -63,7 +75,7 @@ func (p *process) newAgents(ctx context.Context, stopped *accounts.Set) (*agents
 	if err != nil {
 		return nil, fmt.Errorf("the grant lifetime: %w", err)
 	}
-	a := &agents{lifetime: oauth.NewLifetime(d), looks: machineLooks(p.cat), boat: string(p.cat.Boats[0].ID)}
+	a := &agents{lifetime: oauth.NewLifetime(d), looks: machineLooks(p.cat), boat: sailorsBoat(p.cat)}
 	a.grants = oauth.NewGrants(p.db, a.lifetime, p.cfg.Schedule.Zone, nil)
 	var page func(w http.ResponseWriter, r *http.Request)
 	if p.page != nil && p.page.Has(approvePage) {

@@ -662,6 +662,17 @@ export function openPanel(
     const boat = el('div');
     boat.className = 'buttons';
     boat.append(
+      // Any of the catalog's boats, sailed from the start (as ?boat=id).
+      select(
+        catalog.boats.map((_, i) => i),
+        (i) => catalog.boats[i]?.name ?? String(i),
+        sandbox.kind,
+        (kind) => {
+          sandbox.setKind(kind);
+          game.setReef(0);
+          void game.useKind(kind).then(render);
+        },
+      ),
       button('Reset to the start', () => {
         sandbox.reset();
         render();

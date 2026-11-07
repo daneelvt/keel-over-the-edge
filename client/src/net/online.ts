@@ -32,6 +32,7 @@ import { Floater } from '../game/float';
 import { WatchDriver } from '../game/watch';
 import { type PilotControl, PilotInput } from '../input/pilot';
 import { quantiseHelm, quantiseSheet } from '../input/quantise';
+import { reefLevel } from '../input/reef';
 import { RECORDS } from '../predict/layout.gen';
 import type { Harbour } from '../predict/physics';
 import {
@@ -88,6 +89,8 @@ export interface Helmsman {
   readonly helm: { target: number };
   readonly sheet: { target: number };
   readonly pilot: PilotInput;
+  /** The reef the player asks for, 0 … 2 (ReefInput); none is full sail. */
+  readonly reef?: { level: number };
   /** Called before each step (the browser tests script controls). */
   beforeStep: (() => void) | null;
   readonly clock: { steps: number; alpha: number };
@@ -141,6 +144,8 @@ export class Online {
   readonly watching = signal<WatchingTold | null>(null);
   /** The look code of the boat in view's sailor, the own or the one watched, as last told; null before a Welcome. */
   readonly look = signal<number | null>(null);
+  /** The kind of the boat in view, the own or the one watched, as the last Welcome told it: an index into the catalog's boats. */
+  readonly kind = signal(0);
   /** The world's harbour, Port Royal's, as the last Welcome named it; null for none. */
   harbour: Harbour | null = null;
   /** The last watch ended or refused, until the next Welcome. */
@@ -175,6 +180,8 @@ export class Online {
   boat = 0;
   /** The world's epoch, in microseconds of UTC since 1970, as the latest Welcome told it. */
   epochUs = 0;
+  /** Called with the boat in view's kind at each Welcome: an index into the catalog's boats. */
+  onKind: ((kind: number) => void) | null = null;
   /** Called with the world's epoch at each Welcome: the sky is counted from it. */
   onEpoch: ((epochUs: number) => void) | null = null;
   /** Told of each bump the server tells of: the game knocks, shakes and says the verdict. */
@@ -234,6 +241,8 @@ export class Online {
   #sent = [-1, -1];
   /** The autopilot's control last sent, as the first snapshot after a Welcome sets it. */
   readonly #sentPilot = new PilotInput();
+  /** The reef last sent, as the first snapshot after a Welcome sets it. */
+  #sentReef = 0;
   #fresh = false;
   #hadBoat = false;
   /** A new boat's Welcome named its world's harbour: its first snapshot may open on the mouth. */
@@ -456,7 +465,13 @@ export class Online {
           this.place.value = null;
         }
         this.boat = m.boat;
+        this.#watcher.kind = m.kind;
+        this.onKind?.(m.kind);
         this.look.value = m.look;
+        this.kind.value = m.kind;
+        if (m.watching === null) {
+          this.#predictor.kind = m.kind;
+        }
         this.epochUs = m.epochUs;
         this.onEpoch?.(m.epochUs);
         this.onWorld?.(m.world, m.land);
@@ -575,9 +590,13 @@ export class Online {
       this.#sent[0] = sn.helm;
       this.#sent[1] = sn.sheet;
       this.#sentPilot.set(sn);
+      this.#sentReef = sn.reef;
       this.#helmsman.helm.target = helmOf(sn.helm);
       this.#helmsman.sheet.target = sheetOf(sn.sheet);
       this.#helmsman.pilot.set(sn);
+      if (this.#helmsman.reef !== undefined) {
+        this.#helmsman.reef.level = sn.reef;
+      }
       const h = this.#opening;
       this.#opening = null;
       const east = sn.state[RECORDS.state.x] ?? 0;
@@ -595,6 +614,7 @@ export class Online {
     this.#latest.way = sn.way;
     this.#latest.order = sn.order;
     this.#latest.target = sn.target;
+    this.#latest.reef = sn.reef;
     this.#latest.margin = sn.margin;
     this.#latest.state.set(sn.state);
     this.#haveLatest = true;
@@ -739,18 +759,25 @@ export class Online {
     const h = this.#helmsman;
     for (let n = Math.min(MAX_STEPS, target - p.tick); n > 0; n--) {
       if (p.tick + 1 < reach) {
-        p.stepIndices(this.#sent[0] ?? 512, this.#sent[1] ?? 512, this.#sentPilot);
+        p.stepIndices(this.#sent[0] ?? 512, this.#sent[1] ?? 512, this.#sentPilot, this.#sentReef);
         continue;
       }
       h.beforeStep?.();
       const helm = helmIndex(quantiseHelm(h.helm.target));
       const sheet = sheetIndex(quantiseSheet(h.sheet.target));
       const pilot = h.pilot;
-      p.stepIndices(helm, sheet, pilot);
-      if (helm !== this.#sent[0] || sheet !== this.#sent[1] || !samePilot(pilot, this.#sentPilot)) {
+      const reef = reefLevel(h.reef?.level ?? 0);
+      p.stepIndices(helm, sheet, pilot, reef);
+      if (
+        helm !== this.#sent[0] ||
+        sheet !== this.#sent[1] ||
+        !samePilot(pilot, this.#sentPilot) ||
+        reef !== this.#sentReef
+      ) {
         this.#sent[0] = helm;
         this.#sent[1] = sheet;
         this.#sentPilot.set(pilot);
+        this.#sentReef = reef;
         this.#port.postMessage({
           type: 'input',
           seq: p.tick,
@@ -760,6 +787,7 @@ export class Online {
           target: pilot.target,
           order: pilot.order,
           way: pilot.way,
+          reef,
         });
       }
     }

@@ -56,6 +56,22 @@ func step(s *State, c *Control, e *Env, sea *Sea, g *Ground, b *Prepared, o *Out
 		rate = b.easeRate
 	}
 	s.SheetLimit = approach(clamp(s.SheetLimit, b.boomIn, b.boomOut), limit, float64(rate*Dt))
+	if b.jib {
+		// The crew trims the headsails to the main: their sheet's limit
+		// over its own travel, in the same share.
+		limit = b.jibIn + float64(sheet*(b.jibOut-b.jibIn))
+		rate = b.jibHaulRate
+		if limit > s.JibLimit {
+			rate = b.jibEaseRate
+		}
+		s.JibLimit = approach(clamp(s.JibLimit, b.jibIn, b.jibOut), limit, float64(rate*Dt))
+	}
+	if s.SailorMode == Sailing {
+		// The crew takes a reef in or shakes one out a level at a time.
+		s.Reef = approach(s.Reef, control(c.Reef, 0, 2), float64(b.reefRate*Dt))
+	}
+	var sails rig
+	b.rigAt(s.Reef, &sails)
 
 	wind := e.WindSpeed
 	if !(wind > 0) {
@@ -68,7 +84,7 @@ func step(s *State, c *Control, e *Env, sea *Sea, g *Ground, b *Prepared, o *Out
 	var v wave
 	if sea != nil {
 		sinH, cosH := SinCos(s.Heading)
-		v.read(sea, s, sinH, cosH, b.halfLength, b.halfBeam, &b.foilDecay)
+		v.read(sea, s.X, s.Y, s.Surge, s.Sway, sinH, cosH, b.halfLength, b.halfBeam, &b.foilDecay)
 		v.capDepth(sea, g, s.X, s.Y)
 		v.twist = float64(v.twist * b.twistArm)
 	}
@@ -87,7 +103,7 @@ func step(s *State, c *Control, e *Env, sea *Sea, g *Ground, b *Prepared, o *Out
 	}
 	dt := Dt / float64(n)
 	for i := range n {
-		b.substep(s, wind, sinW, cosW, dt, &v, &bd, o, i == n-1)
+		b.substep(s, wind, sinW, cosW, dt, &sails, &v, &bd, o, i == n-1)
 		v.advance(dt)
 	}
 	s.Heading = wrapAngle(s.Heading)
@@ -101,7 +117,7 @@ func step(s *State, c *Control, e *Env, sea *Sea, g *Ground, b *Prepared, o *Out
 	b.ground(s, e, g, &bd, o, x, y)
 }
 
-func (b *Prepared) substep(s *State, wind, sinW, cosW, dt float64, v *wave, bd *bed, o *Out, last bool) {
+func (b *Prepared) substep(s *State, wind, sinW, cosW, dt float64, g *rig, v *wave, bd *bed, o *Out, last bool) {
 	sinH, cosH := SinCos(s.Heading)
 	m := motion{u: s.Surge, v: s.Sway, r: s.YawRate, p: s.RollRate, q: s.PitchRate}
 	m.sinHeel, m.cosHeel = SinCos(s.Heel)
@@ -130,14 +146,14 @@ func (b *Prepared) substep(s *State, wind, sinW, cosW, dt float64, v *wave, bd *
 
 	// The sailor flattens the sail by the apparent wind at its centre of
 	// effort, which flattening also twists.
-	ce := b.flow(&m, b.mastX, 0, b.effortZ, 0, 0, true)
+	ce := b.flow(&m, b.mastX, 0, g.effortZ, 0, 0, true)
 	sailWind := ce.speed()
 	flat := b.flattening(sailWind)
 	twist := b.twist(s.Boom, flat)
 
 	var l loads
 	var sail sailResult
-	b.sailLoads(s, &m, flat, twist, &l, &sail)
+	b.sailLoads(s, &m, flat, twist, g, &l, &sail)
 
 	// Windage of hull, sailor and spars: ½ρ (A_front |cos β| + A_side |sin β|) V
 	// times the flow (Day 2017).
@@ -183,6 +199,19 @@ func (b *Prepared) substep(s *State, wind, sinW, cosW, dt float64, v *wave, bd *
 		s.Boom, s.BoomRate = float64(out*s.SheetLimit), 0
 		l.N -= float64(boomMoment * m.cosHeel)
 	}
+	// The headsails' clew, as the boom: its sheet holds it at its limit.
+	var jibMoment float64
+	jibHeld := true
+	if b.jib {
+		jibMoment = (sail.jibMoment + float64(float64(b.jibMoment*gravity)*float64(m.sinHeel*Cos(s.Jib)))) -
+			float64((b.jibDamping+sail.jibWetDamping)*s.JibRate)
+		out := sign(s.Jib)
+		jibHeld = math.Abs(s.Jib) >= s.JibLimit && float64(jibMoment*out) >= 0 && float64(s.JibRate*out) >= 0
+		if jibHeld {
+			s.Jib, s.JibRate = float64(out*s.JibLimit), 0
+			l.N -= float64(jibMoment * m.cosHeel)
+		}
+	}
 
 	if v.current {
 		// In a current the added masses' share of the terms of turning is
@@ -202,6 +231,15 @@ func (b *Prepared) substep(s *State, wind, sinW, cosW, dt float64, v *wave, bd *
 		s.BoomRate += float64(float64(boomMoment*b.invBoomInertia) * dt)
 		s.Boom += float64(s.BoomRate * dt)
 		b.boomStop(s, m.cosHeel)
+	}
+	if !jibHeld {
+		s.JibRate += float64(float64(jibMoment*b.jibInvInertia) * dt)
+		s.Jib += float64(s.JibRate * dt)
+		if math.Abs(s.Jib) > s.JibLimit {
+			// The sheet stops the clew: the sail is light, and what it
+			// carries is lost in the cloth.
+			s.Jib, s.JibRate = float64(sign(s.Jib)*s.JibLimit), 0
+		}
 	}
 	s.Heading += float64(s.YawRate * dt)
 	s.Heel += float64(s.RollRate * dt)
@@ -230,6 +268,10 @@ func (b *Prepared) substep(s *State, wind, sinW, cosW, dt float64, v *wave, bd *
 		tu, tv := s.Surge-m.waterX, s.Sway-m.waterY
 		o.SpeedThroughWater = math.Sqrt(float64(tu*tu) + float64(tv*tv))
 		o.Sail = b.sailState(s, o)
+		o.JibFootAttack, o.JibHeadAttack = sail.jibAttack[0], sail.jibAttack[1]
+		o.JibFootFlow, o.JibHeadFlow = sail.jibFlow[0], sail.jibFlow[1]
+		o.JibTwist = sail.jibTwist
+		o.ReefShare = g.share
 	}
 }
 

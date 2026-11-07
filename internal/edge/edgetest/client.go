@@ -66,7 +66,7 @@ func (s *Server) NewSailor(o DialOptions, controls client.Controls) *client.Sail
 	sailor := client.NewSailor(func(ctx context.Context) (*websocket.Conn, error) {
 		ws, _, err := s.Dial(ctx, o)
 		return ws, err
-	}, &s.Kinds[0], s.Waves, s.Weather.Prepared(), controls)
+	}, s.Kinds, s.Waves, s.Weather.Prepared(), controls)
 	sailor.Predictor.Encounters = s.Encounters
 	return sailor
 }

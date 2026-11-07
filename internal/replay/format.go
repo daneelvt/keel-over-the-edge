@@ -45,9 +45,9 @@ import (
 //	            strings as a uvarint length and bytes
 //	S snapshot  tick, then sim's snapshot of the world after it: a segment starts
 //	T tick      tick, ticks skipped before it, the control words applied
-//	            (count, then slot, word and pilot word for each), the commands applied in order with
+//	            (count, then slot, word, pilot word and rig word for each), the commands applied in order with
 //	            their results (count, then each: op, its fields (a Join's account, connection,
-//	            kind: a byte, 1 for a machine sailor's, 2 a priority account's, and look code;
+//	            kind: a byte, 1 for a machine sailor's, 2 a priority account's, look code and kind of boat;
 //	            a SetLook's account and look code), result, slot, boat, generation,
 //	            place in the queue, tick queued at); an account is its 16 bytes; a yes or
 //	            no a byte, 1 or 0; a Teleport its boat, whether to the start and its state;
@@ -61,7 +61,7 @@ import (
 //	            nothing reliable from that tick on
 const (
 	magic         = "KEELLOG\n"
-	formatVersion = 13
+	formatVersion = 14
 
 	kindHeader   = 'H'
 	kindSnapshot = 'S'
@@ -166,6 +166,7 @@ func appendTick(dst []byte, f *bus.Frame) []byte {
 		dst = binary.AppendUvarint(dst, uint64(sw.Slot))
 		dst = binary.LittleEndian.AppendUint64(dst, uint64(sw.Word))
 		dst = binary.LittleEndian.AppendUint64(dst, uint64(sw.Pilot))
+		dst = binary.LittleEndian.AppendUint64(dst, uint64(sw.Rig))
 	}
 	dst = binary.AppendUvarint(dst, uint64(len(f.Events)))
 	for i := range f.Events {
@@ -199,6 +200,7 @@ func appendEvent(dst []byte, e *bus.Event) []byte {
 		dst = binary.AppendUvarint(dst, e.Conn)
 		dst = append(dst, joinKind(e.Machine, e.Priority))
 		dst = binary.AppendUvarint(dst, uint64(e.Look))
+		dst = binary.AppendUvarint(dst, uint64(e.BoatKind))
 	case bus.SetLook:
 		dst = append(dst, e.Account[:]...)
 		dst = binary.AppendUvarint(dst, uint64(e.Look))
@@ -398,11 +400,12 @@ func (f *File) add(kind byte, p *payload) error {
 		r := Record{Kind: kindTick, Tick: p.varint(), Skipped: int64(p.count(math.MaxInt64))}
 		// Counts are bounded by the bytes left, so a damaged count cannot
 		// make the reader allocate more than the log could hold.
-		r.Changed = make([]bus.SlotWord, p.count(min(uint64(f.Header.Capacity), uint64(len(p.b)/17))))
+		r.Changed = make([]bus.SlotWord, p.count(min(uint64(f.Header.Capacity), uint64(len(p.b)/25))))
 		for i := range r.Changed {
 			slot := int32(p.count(uint64(f.Header.Capacity) - 1))
 			word := bus.Word(p.u64())
-			r.Changed[i] = bus.SlotWord{Slot: slot, Word: word, Pilot: bus.PilotWord(p.u64())}
+			pilot := bus.PilotWord(p.u64())
+			r.Changed[i] = bus.SlotWord{Slot: slot, Word: word, Pilot: pilot, Rig: bus.RigWord(p.u64())}
 		}
 		r.Events = make([]bus.Event, p.count(uint64(len(p.b)/6)))
 		for i := range r.Events {
@@ -564,6 +567,7 @@ func (p *payload) event(e *bus.Event) {
 			e.Machine, e.Priority = k&joinMachine != 0, k&joinPriority != 0
 		}
 		e.Look = p.look()
+		e.BoatKind = uint16(p.count(math.MaxUint16))
 	case bus.SetLook:
 		p.bytes(e.Account[:])
 		e.Look = p.look()

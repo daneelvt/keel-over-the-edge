@@ -730,10 +730,20 @@
       "description": "A boat's art. Every art object's values are paths under art/, checked to exist.",
       "type": "object",
       "additionalProperties": false,
-      "required": ["model", "far"],
+      "required": ["model", "far", "budget"],
       "properties": {
-        "model": { "description": "The boat's model: a glTF binary with the nodes hull, mast, boom, sail, telltales, pennant, rudder, tiller, daggerboard and sailor, and a node for each of the boat's lights, named as the light, where its lantern is.", "$ref": "#/$defs/ArtPath" },
-        "far": { "description": "The boat's far model, drawn for boats seen from afar among many: the model's nodes but telltales, pennant and lights, with few segments.", "$ref": "#/$defs/ArtPath" }
+        "model": { "description": "The boat's model: a glTF binary with the nodes hull, mast, boom, sail, telltales, pennant, rudder, tiller, daggerboard and sailor, a jib on a boat with headsails, and a node for each of the boat's lights, named as the light, where its lantern is.", "$ref": "#/$defs/ArtPath" },
+        "far": { "description": "The boat's far model, drawn for boats seen from afar among many: the model's nodes but telltales, pennant and lights, with few segments.", "$ref": "#/$defs/ArtPath" },
+        "budget": {
+          "description": "The most triangles each of the boat's models may have.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["near", "far"],
+          "properties": {
+            "near": { "description": "The model's.", "type": "integer", "minimum": 1, "maximum": 100000 },
+            "far": { "description": "The far model's.", "type": "integer", "minimum": 1, "maximum": 10000 }
+          }
+        }
       }
     },
     "SailorArt": {
@@ -819,7 +829,7 @@
     "Boat": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["id", "name", "description", "capacity", "lengthOverall", "beam", "lights", "lookout", "startSheet", "physics", "art"],
+      "required": ["id", "name", "description", "capacity", "lengthOverall", "beam", "lights", "lookout", "startSheet", "controls", "fleet", "physics", "art"],
       "properties": {
         "id": { "$ref": "#/$defs/Id" },
         "name": { "description": "Display name.", "type": "string", "minLength": 1 },
@@ -840,8 +850,31 @@
             "items": { "type": "number", "minimum": 0, "maximum": 180 }
           }
         },
+        "controls": { "$ref": "#/$defs/BoatControls" },
+        "fleet": { "description": "How many of the boat an account's fleet holds: one for each of its sailors, or one for the account, shared by them.", "type": "string", "enum": ["sailor", "account"] },
         "physics": { "$ref": "#/$defs/BoatPhysics" },
         "art": { "$ref": "#/$defs/BoatArt" }
+      }
+    },
+    "BoatControls": {
+      "title": "BoatControls",
+      "description": "The words the boat's controls are shown with. Every boat has the helm, the sheet and the reef; the sheet sets the main's limit, the headsails' in the same share, and the yards' brace.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["sheet", "reef"],
+      "properties": {
+        "sheet": {
+          "description": "The sheet's control: its name, and its two ends' words.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["name", "trim", "ease"],
+          "properties": {
+            "name": { "description": "What the control is called.", "type": "string", "minLength": 1, "maxLength": 12 },
+            "trim": { "description": "The word at its end that hauls in.", "type": "string", "minLength": 1, "maxLength": 12 },
+            "ease": { "description": "The word at its end that lets out.", "type": "string", "minLength": 1, "maxLength": 12 }
+          }
+        },
+        "reef": { "description": "The reef's three levels in words: full sail, one reef, two.", "type": "array", "minItems": 3, "maxItems": 3, "items": { "type": "string", "minLength": 1, "maxLength": 16 } }
       }
     },
     "BoatPhysics": {
@@ -849,10 +882,12 @@
       "description": "The boat's physics, in SI units with angles in degrees. Every value is required.",
       "type": "object",
       "additionalProperties": false,
-      "required": ["hull", "rig", "foils", "sailor", "rates", "autopilot"],
+      "required": ["hull", "rig", "headsails", "square", "foils", "sailor", "rates", "autopilot"],
       "properties": {
         "hull": { "$ref": "#/$defs/PhysicsHull" },
         "rig": { "$ref": "#/$defs/PhysicsRig" },
+        "headsails": { "$ref": "#/$defs/PhysicsHeadsails" },
+        "square": { "$ref": "#/$defs/PhysicsSquare" },
         "foils": { "$ref": "#/$defs/PhysicsFoils" },
         "sailor": { "$ref": "#/$defs/PhysicsSailor" },
         "rates": { "$ref": "#/$defs/PhysicsRates" },
@@ -896,10 +931,10 @@
     },
     "PhysicsRig": {
       "title": "PhysicsRig",
-      "description": "The sail, boom and windage.",
+      "description": "The main, its boom and reefs, and the windage.",
       "type": "object",
       "additionalProperties": false,
-      "required": ["sailArea", "luff", "foot", "boomHeight", "mastPosition", "footStrip", "headStrip", "pressureAttached", "pressureSeparated", "effectiveHeight", "quadraticDrag", "maxLift", "stallAngle", "stallWidth", "sailDrag", "luffAngle", "flogDrag", "normalForce", "twistPowered", "twistDepowered", "twistEased", "twistTurn", "headBacked", "headBackedWidth", "boomIn", "boomOut", "boomInertia", "boomMoment", "boomDamping", "windageFront", "windageSide", "windageHeight", "sailFloat", "sailWaterDamping", "closeHauled"],
+      "required": ["sailArea", "luff", "foot", "boomHeight", "mastPosition", "footStrip", "headStrip", "pressureAttached", "pressureSeparated", "effectiveHeight", "quadraticDrag", "maxLift", "stallAngle", "stallWidth", "sailDrag", "luffAngle", "flogDrag", "normalForce", "twistPowered", "twistDepowered", "twistEased", "twistTurn", "headBacked", "headBackedWidth", "boomIn", "boomOut", "boomInertia", "boomMoment", "boomDamping", "windageFront", "windageSide", "windageHeight", "sailFloat", "sailWaterDamping", "closeHauled", "reefs", "reefTime"],
       "properties": {
         "sailArea": { "description": "Sail area, in m².", "type": "number", "exclusiveMinimum": 0, "maximum": 2000 },
         "luff": { "description": "Length of the luff, in m.", "type": "number", "exclusiveMinimum": 0, "maximum": 100 },
@@ -935,15 +970,76 @@
         "windageHeight": { "description": "Height of the windage's centre above the waterline, in m.", "type": "number", "minimum": 0, "maximum": 50 },
         "sailFloat": { "description": "Upward force per metre a sail strip is pushed under the water, in N/m.", "type": "number", "minimum": 0, "maximum": 10000000 },
         "sailWaterDamping": { "description": "Vertical damping of a sail strip in the water, in N·s/m.", "type": "number", "minimum": 0, "maximum": 10000000 },
-        "closeHauled": { "description": "The boat's close-hauled course: its heading off the true wind sailing as close to it as it sails well, in degrees.", "type": "number", "minimum": 25, "maximum": 60 }
+        "closeHauled": { "description": "The boat's close-hauled course: its heading off the true wind sailing as close to it as it sails well, in degrees.", "type": "number", "minimum": 25, "maximum": 80 },
+        "reefs": { "description": "The share of its luff the main keeps at full sail, with one reef and with two: its area goes as the square of the share, its centre of effort down with it.", "type": "array", "items": { "type": "number", "exclusiveMinimum": 0, "maximum": 1 }, "minItems": 3, "maxItems": 3 },
+        "reefTime": { "description": "Time for the crew to take a reef in or shake it out, in s.", "type": "number", "exclusiveMinimum": 0, "maximum": 600 }
+      }
+    },
+    "PhysicsHeadsails": {
+      "title": "PhysicsHeadsails",
+      "description": "The headsails: sails tacked on a stay ahead of the mast, their clew free to their own sheet's limit, with no boom, set and trimmed together as one. A boat with none has an area of 0, and its other values 0.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["headsailArea", "headsailLuff", "headsailFoot", "headsailTackHeight", "headsailTack", "headsailFootStrip", "headsailHeadStrip", "headsailPressureAttached", "headsailPressureSeparated", "headsailMaxLift", "headsailStallAngle", "headsailStallWidth", "headsailDrag", "headsailNormalForce", "headsailTwist", "headsailTwistEased", "headsailIn", "headsailOut", "headsailInertia", "headsailMoment", "headsailDamping", "headsailReefs"],
+      "properties": {
+        "headsailArea": { "description": "Their area, in m²; 0 for none.", "type": "number", "minimum": 0, "maximum": 2000 },
+        "headsailLuff": { "description": "The head's height above the tack, in m.", "type": "number", "minimum": 0, "maximum": 100 },
+        "headsailFoot": { "description": "Length of the foot, in m.", "type": "number", "minimum": 0, "maximum": 100 },
+        "headsailTackHeight": { "description": "The tack's height above the waterline, in m.", "type": "number", "minimum": 0, "maximum": 20 },
+        "headsailTack": { "description": "The tack's distance ahead of the centre of gravity, in m.", "type": "number", "minimum": -50, "maximum": 50 },
+        "headsailFootStrip": { "description": "Height of the lower strip's centre of effort above the tack, as a fraction of the luff.", "type": "number", "minimum": 0, "maximum": 1 },
+        "headsailHeadStrip": { "description": "Height of the upper strip's centre of effort above the tack, as a fraction of the luff.", "type": "number", "minimum": 0, "maximum": 1 },
+        "headsailPressureAttached": { "description": "Centre of pressure aft of the tack with the flow attached, as a fraction of the foot.", "type": "number", "minimum": 0, "maximum": 1 },
+        "headsailPressureSeparated": { "description": "Centre of pressure aft of the tack with the flow separated, as a fraction of the foot.", "type": "number", "minimum": 0, "maximum": 1 },
+        "headsailMaxLift": { "description": "Greatest lift coefficient.", "type": "number", "minimum": 0, "maximum": 3 },
+        "headsailStallAngle": { "description": "Angle of attack of the greatest lift, in degrees.", "type": "number", "minimum": 0, "maximum": 60 },
+        "headsailStallWidth": { "description": "Angle past the stall over which the flow separates, in degrees.", "type": "number", "minimum": 0, "maximum": 60 },
+        "headsailDrag": { "description": "Viscous drag coefficient.", "type": "number", "minimum": 0, "maximum": 1 },
+        "headsailNormalForce": { "description": "Normal force coefficient of separated flow, every 10° of angle of attack from 0° to 180°.", "type": "array", "items": { "type": "number", "minimum": 0, "maximum": 3 }, "minItems": 19, "maxItems": 19 },
+        "headsailTwist": { "description": "The upper strip's twist beyond the clew's line, sheeted in, in degrees.", "type": "number", "minimum": 0, "maximum": 45 },
+        "headsailTwistEased": { "description": "Extra twist as the sheet lets the clew out, growing in proportion to its angle, in degrees.", "type": "number", "minimum": 0, "maximum": 45 },
+        "headsailIn": { "description": "The clew's angle off the centreline, seen from the tack, with the sheet hauled in hard, in degrees.", "type": "number", "minimum": 0, "maximum": 45 },
+        "headsailOut": { "description": "The clew's angle with the sheet let fly, in degrees.", "type": "number", "minimum": 0, "maximum": 120 },
+        "headsailInertia": { "description": "Moment of inertia of the sail and its clew about the stay, in kg·m².", "type": "number", "minimum": 0, "maximum": 1000000 },
+        "headsailMoment": { "description": "Their mass times the distance of their centre of gravity aft of the stay, in kg·m.", "type": "number", "minimum": 0, "maximum": 1000000 },
+        "headsailDamping": { "description": "Friction of the clew's swing, in N·m·s/rad.", "type": "number", "minimum": 0, "maximum": 1000000 },
+        "headsailReefs": { "description": "The share of their luff kept at full sail, with one reef and with two.", "type": "array", "items": { "type": "number", "minimum": 0, "maximum": 1 }, "minItems": 3, "maxItems": 3 }
+      }
+    },
+    "PhysicsSquare": {
+      "title": "PhysicsSquare",
+      "description": "Square sails on yards the braces hold at an angle, in a fore group and an after group, and the crew that hauls the yards round in a turn. A boat with none has areas of 0, and its other values 0.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["squareForeArea", "squareAfterArea", "squareForeMast", "squareAfterMast", "squareFootHeight", "squareLuff", "squareFootStrip", "squareHeadStrip", "squarePressure", "squareMaxLift", "squareStallAngle", "squareStallWidth", "squareDrag", "squareNormalForce", "braceSharp", "braceTime", "hauls", "letGo", "squareReefs"],
+      "properties": {
+        "squareForeArea": { "description": "The fore group's area, in m²; 0 for none.", "type": "number", "minimum": 0, "maximum": 5000 },
+        "squareAfterArea": { "description": "The after group's area, in m²; 0 for none.", "type": "number", "minimum": 0, "maximum": 5000 },
+        "squareForeMast": { "description": "The fore group's mast ahead of the centre of gravity, in m.", "type": "number", "minimum": -50, "maximum": 50 },
+        "squareAfterMast": { "description": "The after group's mast ahead of the centre of gravity, in m.", "type": "number", "minimum": -50, "maximum": 50 },
+        "squareFootHeight": { "description": "The lowest yard's height above the waterline, in m.", "type": "number", "minimum": 0, "maximum": 50 },
+        "squareLuff": { "description": "The sails' height from the lowest yard to the highest, in m.", "type": "number", "minimum": 0, "maximum": 100 },
+        "squareFootStrip": { "description": "Height of the lower strip's centre of effort above the lowest yard, as a fraction of the luff.", "type": "number", "minimum": 0, "maximum": 1 },
+        "squareHeadStrip": { "description": "Height of the upper strip's centre of effort above the lowest yard, as a fraction of the luff.", "type": "number", "minimum": 0, "maximum": 1 },
+        "squarePressure": { "description": "Centre of pressure aft of the yards' line with the flow separated, as a fraction of a yard's half-length.", "type": "number", "minimum": 0, "maximum": 1 },
+        "squareMaxLift": { "description": "Greatest lift coefficient.", "type": "number", "minimum": 0, "maximum": 3 },
+        "squareStallAngle": { "description": "Angle of attack of the greatest lift, in degrees.", "type": "number", "minimum": 0, "maximum": 90 },
+        "squareStallWidth": { "description": "Angle past it over which the lift falls away, in degrees.", "type": "number", "minimum": 0, "maximum": 90 },
+        "squareDrag": { "description": "Viscous drag coefficient.", "type": "number", "minimum": 0, "maximum": 1 },
+        "squareNormalForce": { "description": "Normal force coefficient, every 10° of angle of attack from 0° to 180°.", "type": "array", "items": { "type": "number", "minimum": 0, "maximum": 3 }, "minItems": 19, "maxItems": 19 },
+        "braceSharp": { "description": "The yards' least angle off the centreline, braced up sharp, in degrees.", "type": "number", "minimum": 0, "maximum": 90 },
+        "braceTime": { "description": "Time for the crew to swing the yards from braced up sharp on one side to the other, in s.", "type": "number", "minimum": 0, "maximum": 600 },
+        "hauls": { "description": "In a tack, the after yards swing as the head comes this near the wind, in degrees.", "type": "number", "minimum": 0, "maximum": 90 },
+        "letGo": { "description": "And the fore yards once the wind is this far on the new bow, in degrees.", "type": "number", "minimum": 0, "maximum": 90 },
+        "squareReefs": { "description": "The share of their luff kept at full sail, with one reef and with two.", "type": "array", "items": { "type": "number", "minimum": 0, "maximum": 1 }, "minItems": 3, "maxItems": 3 }
       }
     },
     "PhysicsFoils": {
       "title": "PhysicsFoils",
-      "description": "The daggerboard or keel, and the rudder.",
+      "description": "The daggerboard or fixed keel, and the rudder.",
       "type": "object",
       "additionalProperties": false,
-      "required": ["boardSpan", "boardChord", "boardPosition", "rudderSpan", "rudderChord", "rudderPosition", "rudderAngle", "foilStall", "foilStallWidth", "foilDrag", "plateNormal", "pressureDepth", "carryOver", "heelLoss", "rudderInflow", "downwash", "foilWetHeel", "foilDryHeel"],
+      "required": ["boardSpan", "boardChord", "boardPosition", "rudderSpan", "rudderChord", "rudderPosition", "rudderAngle", "foilStall", "foilStallWidth", "foilDrag", "plateNormal", "pressureDepth", "carryOver", "heelLoss", "rudderInflow", "downwash", "foilWetHeel", "foilDryHeel", "fixed"],
       "properties": {
         "boardSpan": { "description": "Span of the daggerboard below the hull, in m.", "type": "number", "exclusiveMinimum": 0, "maximum": 20 },
         "boardChord": { "description": "Chord of the daggerboard, in m.", "type": "number", "exclusiveMinimum": 0, "maximum": 20 },
@@ -962,7 +1058,8 @@
         "rudderInflow": { "description": "The rudder's share of the boat's speed through the water.", "type": "number", "minimum": 0, "maximum": 1.5 },
         "downwash": { "description": "Share of the sideways flow from leeway that the daggerboard's downwash cancels at the rudder.", "type": "number", "minimum": 0, "maximum": 1 },
         "foilWetHeel": { "description": "Heel up to which the foils are fully in the water, in degrees.", "type": "number", "minimum": 0, "maximum": 180 },
-        "foilDryHeel": { "description": "Heel from which the foils are out of the water, in degrees.", "type": "number", "minimum": 0, "maximum": 180 }
+        "foilDryHeel": { "description": "Heel from which the foils are out of the water, in degrees.", "type": "number", "minimum": 0, "maximum": 180 },
+        "fixed": { "description": "1 for a fixed keel, which the ground meets at its tip, stopping the boat, and never pushes up; 0 for a daggerboard the ground pushes up as the water shoals.", "type": "number", "minimum": 0, "maximum": 1 }
       }
     },
     "PhysicsSailor": {
@@ -1017,7 +1114,7 @@
         "trimBand": { "description": "The standing helm grows only this near the course, in degrees.", "type": "number", "exclusiveMinimum": 0, "maximum": 45 },
         "tackHelm": { "description": "The most helm in a tack.", "type": "number", "exclusiveMinimum": 0, "maximum": 1 },
         "gybeHelm": { "description": "The most helm in a gybe.", "type": "number", "exclusiveMinimum": 0, "maximum": 1 },
-        "byTheLee": { "description": "How far by the lee the boat sails before the autopilot counts it gybed, in degrees. Below the angle at which the boom goes over by itself, about 17° on a dinghy.", "type": "number", "minimum": 0, "exclusiveMaximum": 17 },
+        "byTheLee": { "description": "How far by the lee the boat sails before the autopilot counts it gybed, in degrees. Below the angle at which the boom goes over by itself, about 17° on a dinghy.", "type": "number", "minimum": 0, "maximum": 60 },
         "onCourse": { "description": "A tack or gybe ends this near its target, in degrees.", "type": "number", "exclusiveMinimum": 0, "maximum": 45 },
         "astern": { "description": "Going astern faster than this through the water, in m/s, the boat is told it goes astern: the water reaches the rudder from behind and works it in reverse.", "type": "number", "minimum": 0, "maximum": 1 },
         "steerage": { "description": "Slower than this through the water, either way, in m/s, the rudder has no steerage: the report says so, and a turn may stall.", "type": "number", "exclusiveMinimum": 0, "maximum": 2 },

@@ -59,8 +59,9 @@ type Frame struct {
 	Priority []bool
 	// Look is per slot its sailor's look: a look code (internal/looks).
 	Look    []uint32
-	Control []Word // per slot: the controls in force
+	Control []Word // per slot: the controls in force: the helm and sheet, the autopilot's and the rig's
 	Pilot   []PilotWord
+	Rig     []RigWord
 	State   []physics.State
 	Sail    []uint8 // per slot: physics.SailByte of the boat's last step, for drawing
 	// Course is per slot what the Articles keep of a boat between ticks.
@@ -258,10 +259,11 @@ type Waiting struct {
 	// at, unless its account joins first; 0 while connected.
 	Grace int64
 	// Machine and Priority are its account's kind, as the Join gave it,
-	// and Look its sailor's look.
+	// Look its sailor's look and BoatKind the kind of boat it is to have.
 	Machine  bool
 	Priority bool
 	Look     uint32
+	BoatKind uint16
 }
 
 // QueuePlace is the place in the queue of q[i] among those of its kind, human
@@ -331,11 +333,12 @@ func (f *Frame) SpellsInPlay() []physics.Spell { return f.Spells[:f.NSpells] }
 // QueueLimit is the most connections that may wait for a boat.
 const QueueLimit = 4096
 
-// SlotWord is a pair of control words applied to a slot.
+// SlotWord is the control words applied to a slot.
 type SlotWord struct {
 	Slot  int32
 	Word  Word
 	Pilot PilotWord
+	Rig   RigWord
 }
 
 // An Event is a command the tick applied and what came of it. Its Reply
@@ -361,6 +364,7 @@ func NewFrame(capacity int) *Frame {
 		Look:     make([]uint32, capacity),
 		Control:  make([]Word, capacity),
 		Pilot:    make([]PilotWord, capacity),
+		Rig:      make([]RigWord, capacity),
 		State:    make([]physics.State, capacity),
 		Sea: Sea{
 			Now:  make([]physics.SeaInput, physics.SeaAreas*physics.SeaAreas),

@@ -200,14 +200,15 @@ describe('the screen on a boat watched', () => {
         pilotAdjust() {},
         pilotMode() {},
       },
+      reef: { setReef() {} },
       model: new HudModel(),
       settings: settingsSignal(null),
     });
 
-  test('has no helm, sheet or autopilot', () => {
+  test('has no helm, sheet, autopilot or Reef key', () => {
     expect(controls(false)).toBeNull();
-    const own = controls(true) as VNode<{ children: VNode[] }>;
-    expect(own.props.children).toHaveLength(3);
+    const own = controls(true) as VNode<{ children: (VNode | null)[] }>;
+    expect(own.props.children.filter((c) => c !== null)).toHaveLength(4);
   });
 
   test('says whose boat it is, with the cog, Watch another and Sail', () => {

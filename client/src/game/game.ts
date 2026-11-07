@@ -51,6 +51,7 @@ import {
   WAY_TACK_STALLED,
 } from '../input/pilot';
 import { quantiseHelm, quantiseSheet } from '../input/quantise';
+import { ReefInput } from '../input/reef';
 import { SheetInput } from '../input/sheet';
 import type { BumpTold } from '../net/messages';
 import { RECORDS } from '../predict/layout.gen';
@@ -74,7 +75,9 @@ export class Game implements PilotActions {
   readonly helm = new HelmInput();
   readonly sheet = new SheetInput();
   readonly pilot = new PilotInput();
-  readonly keys = new KeyInput(this.helm, this.sheet, this);
+  /** The reef the player asks for: the Reef key calls reef.set(level). */
+  readonly reef = new ReefInput();
+  readonly keys = new KeyInput(this.helm, this.sheet, this, this.reef);
   readonly hud = new HudModel();
   readonly sound = new SoundEngine();
   readonly world: SeaScene;
@@ -114,7 +117,6 @@ export class Game implements PilotActions {
   #back = Number.NEGATIVE_INFINITY;
   /** How a boat over the lip is drawn falling: the own and the others. */
   readonly fallShape: FallShape;
-  readonly #halfLength: number;
 
   readonly #sound: SoundInput = {
     apparentWind: 0,
@@ -132,22 +134,56 @@ export class Game implements PilotActions {
   #aground = 0;
   #speed = 0;
   #pushes = 0;
-  readonly #rudderMax: number;
-  readonly #boomIn: number;
-  readonly #boomOut: number;
   #lastTime = 0;
+
+  /** The own boat's kind's rudder's travel and the boom's least and most, radians. */
+  get #rudderMax(): number {
+    return this.world.kind.physics.foils.rudderAngle * DEG;
+  }
+
+  get #boomIn(): number {
+    return this.world.kind.physics.rig.boomIn * DEG;
+  }
+
+  get #boomOut(): number {
+    return this.world.kind.physics.rig.boomOut * DEG;
+  }
+
+  /** Half the own boat's waterline, metres. */
+  get #halfLength(): number {
+    return this.world.kind.physics.hull.waterlineLength / 2;
+  }
+
+  /**
+   * Asks for the main reefed to a level, 0 (full sail) … 2: the Reef key's
+   * and its Shake out's. The level goes out with the controls (and into a
+   * sandbox's step) as R and F set it.
+   */
+  setReef(level: number): void {
+    this.reef.set(level);
+  }
+
+  /**
+   * The own boat becomes one of another kind (or the boat watched is one):
+   * the scene draws it, the autopilot's dial and the controls' words are
+   * its. Resolves once it is drawn.
+   */
+  useKind(kind: number): Promise<void> {
+    const drawn = this.world.useKind(kind);
+    const k = this.world.kind;
+    this.pilot.least = (k.physics.rig.closeHauled - 10) * DEG;
+    this.hud.setKind(k);
+    return drawn;
+  }
 
   constructor(world: SeaScene, settings: SettingsSignal) {
     this.world = world;
     this.settings = settings;
     this.loop = new StepLoop(this.clock, () => this.#step());
-    const { foils, rig } = world.kind.physics;
-    this.#rudderMax = foils.rudderAngle * DEG;
-    this.#boomIn = rig.boomIn * DEG;
-    this.#boomOut = rig.boomOut * DEG;
     // The dial and the keys go no closer to the wind than ten degrees
     // inside close-hauled.
-    this.pilot.least = (rig.closeHauled - 10) * DEG;
+    this.pilot.least = (world.kind.physics.rig.closeHauled - 10) * DEG;
+    this.hud.setKind(world.kind);
     const edge = world.edge;
     this.approach = new ApproachWatch(edge.lip, edge.band, catalog.world.edge.clear);
     const slabs = catalog.world.edge.look.slabs;
@@ -157,9 +193,12 @@ export class Game implements PilotActions {
       gravity: slabs.gravity,
       tip: [slabs.tip[0] ?? 0.3, slabs.tip[1] ?? 1.9],
     };
-    this.#halfLength = world.kind.physics.hull.waterlineLength / 2;
     this.helm.onTake = () => this.takeHelm();
     this.sheet.onTake = () => this.controlsTouched();
+    this.reef.onTake = () => {
+      this.hud.reef.value = this.reef.level;
+      this.controlsTouched();
+    };
     this.sheet.target = 0.5;
     world.tick = (dt, now) => this.#frame(dt, now);
     effect(() => {
@@ -502,7 +541,12 @@ export class Game implements PilotActions {
       return;
     }
     this.beforeStep?.();
-    d.step(quantiseHelm(this.helm.target), quantiseSheet(this.sheet.target), this.pilot);
+    d.step(
+      quantiseHelm(this.helm.target),
+      quantiseSheet(this.sheet.target),
+      this.pilot,
+      this.reef.level,
+    );
   }
 
   #frame(dt: number, now: number): void {
@@ -583,6 +627,8 @@ export class Game implements PilotActions {
     this.#sound.endNear = w.endStage.sound;
     this.#sound.rain = w.weather.rain;
     this.#sound.gustFactor = w.wind.factor;
+    this.#sound.waterline = w.kind.physics.hull.waterlineLength;
+    this.#sound.sailArea = w.kind.physics.rig.sailArea;
     this.sound.update(now, soundInput(w.out, w.sea, time, this.#sound));
     this.#harbour(now, look);
     this.#features(now, look);

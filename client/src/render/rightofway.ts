@@ -45,6 +45,8 @@ export interface Seen {
   /** m/s east and north. */
   vEast: number;
   vNorth: number;
+  /** Its kind, an index into the catalog's boats; the first if not given. */
+  kind?: number;
 }
 
 /** A boat that will come close: its index among those offered, and how close, m. */
@@ -143,7 +145,8 @@ export class RightOfWay {
   readonly shown: MarkShown[] = [];
 
   readonly #cfg: EncountersOverlay;
-  readonly #close: number;
+  #close: number;
+  readonly #closeEach: number;
   readonly #marks: Mark[];
   readonly #own = new Float64Array(SIZES.course);
   /** Each view slot's boat's course, and whether it was drawn at the last judgement. */
@@ -162,11 +165,17 @@ export class RightOfWay {
   ) {
     this.#cfg = cfg;
     this.#close = cfg.close * kind.lengthOverall;
+    this.#closeEach = cfg.close;
     this.group.name = 'right of way';
     this.#marks = Array.from({ length: cfg.marks }, () => new Mark(doc));
     for (const m of this.#marks) {
       this.group.add(m.group);
     }
+  }
+
+  /** The player's boat's kind: how close is close is by its length. */
+  setKind(kind: BoatKind): void {
+    this.#close = this.#closeEach * kind.lengthOverall;
   }
 
   /** Puts the labels in a layer over the scene; null takes them out. */
@@ -220,7 +229,7 @@ export class RightOfWay {
       // panel; the others' only with the overlay on.
       physics.windDrawAt(tick);
       const from = physics.windPoint(own.east, own.north)[W.from] ?? 0;
-      physics.courseOf(this.#own, own.heading, own.boom, from);
+      physics.courseOf(this.#own, own.heading, own.boom, from, own.kind ?? 0);
       if (this.on) {
         this.#judge(physics, tick, own, from, drawn, count);
       }
@@ -308,6 +317,7 @@ export class RightOfWay {
       s.mode = b.mode;
       s.vEast = b.speed * Math.sin(b.heading);
       s.vNorth = b.speed * Math.cos(b.heading);
+      s.kind = b.kind;
       if (b.slot < 0) {
         // Fading out of the view: its slot may be another's soon.
         s.vEast = s.vNorth = 0;
@@ -320,7 +330,7 @@ export class RightOfWay {
         c.fill(0);
       }
       const from = physics.windPoint(b.east, b.north)[W.from] ?? 0;
-      physics.courseOf(c, b.heading, b.boom, from);
+      physics.courseOf(c, b.heading, b.boom, from, b.kind);
     }
 
     const cfg = this.#cfg;
@@ -348,7 +358,7 @@ export class RightOfWay {
       // knows, right of way has not changed hands lately.
       e[E.since] = 1e9;
       e[E.by] = 0;
-      const v = physics.articlesJudge();
+      const v = physics.articlesJudge(own.kind ?? 0, b.kind);
       const keeper = v[V.keeper] ?? 0;
       if (keeper === 0) {
         continue;

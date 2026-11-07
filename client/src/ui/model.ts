@@ -223,6 +223,36 @@ export class SheetText {
   }
 }
 
+/** What the controls are called on a kind of boat, and whether it reefs: the catalog's controls and its main's reefs. */
+export interface HudControls {
+  sheet: { name: string; trim: string; ease: string };
+  /** The reef's three levels in words: full sail, one reef, two. */
+  reef: readonly string[];
+  /** Whether the boat can reef at all: a reef that shortens its main. */
+  reefs: boolean;
+}
+
+/** A kind of boat as the screen reads it. */
+export interface HudKind {
+  controls: { sheet: HudControls['sheet']; reef: readonly string[] };
+  physics: { rig: { reefs: readonly number[] } };
+}
+
+/** The controls' words and the reef for a kind of boat. */
+export function controlsOf(kind: HudKind): HudControls {
+  return {
+    sheet: kind.controls.sheet,
+    reef: kind.controls.reef,
+    reefs: kind.physics.rig.reefs.some((share) => share < 1),
+  };
+}
+
+/** The case's line for a reef, 0 … 2 as the state has it: its level's words, none at full sail. */
+export function reefLine(c: HudControls | null, reef: number): string {
+  const level = Math.min(Math.max(Math.round(reef), 0), 2);
+  return c === null || level === 0 ? '' : (c.reef[level] ?? '');
+}
+
 /** The helm's knob travels along an arc of this many degrees each side of the top. */
 export const HELM_ARC = 55;
 
@@ -247,6 +277,12 @@ export class HudModel {
   /** What the sail is doing wrong, on the sheet's legend: luffing, stalled, aback, or nothing. */
   readonly sail = signal<SailState>('');
   readonly sailHold = new SailHold();
+  /** The own boat's controls' words, and whether it reefs; null until a kind is known. */
+  readonly controls = signal<HudControls | null>(null);
+  /** The reef asked for, 0 … 2: what the Reef key shows. */
+  readonly reef = signal(0);
+  /** The reef the main has, in words, for the case; empty at full sail. */
+  readonly reefed = signal('');
   #bumpUntil = 0;
   /** How many times the signals were written. */
   writes = 0;
@@ -275,6 +311,11 @@ export class HudModel {
   readonly clinometer = new Moved(rotate, 0.1);
 
   #lastWrite = Number.NEGATIVE_INFINITY;
+
+  /** The own boat's kind: its controls' words, and whether it reefs. */
+  setKind(kind: HudKind): void {
+    this.controls.value = controlsOf(kind);
+  }
 
   /** Shows a bump's line from now (ms) for BUMP_LINE. */
   showBump(text: string, now: number): void {
@@ -345,6 +386,7 @@ export class HudModel {
       pose.sailorMode === 0 && aground !== 0 ? AGROUND : (SAILOR_LINES[pose.sailorMode] ?? '');
     this.pilot.value = pilotText(pilot, way, watch, left);
     this.sail.value = this.sailHold.shown;
+    this.reefed.value = reefLine(this.controls.peek(), pose.reef);
     if (this.bump.value !== '' && now >= this.#bumpUntil) {
       this.bump.value = '';
     }

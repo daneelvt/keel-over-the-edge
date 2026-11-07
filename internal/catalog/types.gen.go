@@ -132,8 +132,15 @@ type Boat struct {
 	// Most people aboard, the skipper included.
 	Capacity int `json:"capacity"`
 
+	// Controls corresponds to the JSON schema field "controls".
+	Controls BoatControls `json:"controls"`
+
 	// What the boat is, in a few words.
 	Description string `json:"description"`
+
+	// How many of the boat an account's fleet holds: one for each of its sailors, or
+	// one for the account, shared by them.
+	Fleet Fleet `json:"fleet"`
 
 	// ID corresponds to the JSON schema field "id".
 	ID ID `json:"id"`
@@ -163,14 +170,29 @@ type Boat struct {
 
 // A boat's art. Every art object's values are paths under art/, checked to exist.
 type BoatArt struct {
+	// The most triangles each of the boat's models may have.
+	Budget Budget `json:"budget"`
+
 	// The boat's far model, drawn for boats seen from afar among many: the model's
 	// nodes but telltales, pennant and lights, with few segments.
 	Far ArtPath `json:"far"`
 
 	// The boat's model: a glTF binary with the nodes hull, mast, boom, sail,
-	// telltales, pennant, rudder, tiller, daggerboard and sailor, and a node for each
-	// of the boat's lights, named as the light, where its lantern is.
+	// telltales, pennant, rudder, tiller, daggerboard and sailor, a jib on a boat
+	// with headsails, and a node for each of the boat's lights, named as the light,
+	// where its lantern is.
 	Model ArtPath `json:"model"`
+}
+
+// The words the boat's controls are shown with. Every boat has the helm, the sheet
+// and the reef; the sheet sets the main's limit, the headsails' in the same share,
+// and the yards' brace.
+type BoatControls struct {
+	// The reef's three levels in words: full sail, one reef, two.
+	Reef []string `json:"reef"`
+
+	// The sheet's control: its name, and its two ends' words.
+	Sheet Sheet `json:"sheet"`
 }
 
 // The boat's physics, in SI units with angles in degrees. Every value is required.
@@ -180,6 +202,9 @@ type BoatPhysics struct {
 
 	// Foils corresponds to the JSON schema field "foils".
 	Foils PhysicsFoils `json:"foils"`
+
+	// Headsails corresponds to the JSON schema field "headsails".
+	Headsails PhysicsHeadsails `json:"headsails"`
 
 	// Hull corresponds to the JSON schema field "hull".
 	Hull PhysicsHull `json:"hull"`
@@ -192,6 +217,18 @@ type BoatPhysics struct {
 
 	// Sailor corresponds to the JSON schema field "sailor".
 	Sailor PhysicsSailor `json:"sailor"`
+
+	// Square corresponds to the JSON schema field "square".
+	Square PhysicsSquare `json:"square"`
+}
+
+// The most triangles each of the boat's models may have.
+type Budget struct {
+	// The far model's.
+	Far int `json:"far"`
+
+	// The model's.
+	Near int `json:"near"`
 }
 
 // A kind of building, or a prop, of a town.
@@ -911,6 +948,11 @@ type FeatureStreams struct {
 
 const FeatureSulphur Feature = "sulphur"
 
+type Fleet string
+
+const FleetAccount Fleet = "account"
+const FleetSailor Fleet = "sailor"
+
 // Their models.
 type FloraArt struct {
 	// Model corresponds to the JSON schema field "model".
@@ -1494,7 +1536,7 @@ type PhysicsAutopilot struct {
 	TrimTime float64 `json:"trimTime"`
 }
 
-// The daggerboard or keel, and the rudder.
+// The daggerboard or fixed keel, and the rudder.
 type PhysicsFoils struct {
 	// Chord of the daggerboard, in m.
 	BoardChord float64 `json:"boardChord"`
@@ -1512,6 +1554,10 @@ type PhysicsFoils struct {
 	// Share of the sideways flow from leeway that the daggerboard's downwash cancels
 	// at the rudder.
 	Downwash float64 `json:"downwash"`
+
+	// 1 for a fixed keel, which the ground meets at its tip, stopping the boat, and
+	// never pushes up; 0 for a daggerboard the ground pushes up as the water shoals.
+	Fixed float64 `json:"fixed"`
 
 	// Viscous drag coefficient of the foils, on plan area.
 	FoilDrag float64 `json:"foilDrag"`
@@ -1552,6 +1598,85 @@ type PhysicsFoils struct {
 
 	// Span of the rudder below the hull, in m.
 	RudderSpan float64 `json:"rudderSpan"`
+}
+
+// The headsails: sails tacked on a stay ahead of the mast, their clew free to
+// their own sheet's limit, with no boom, set and trimmed together as one. A boat
+// with none has an area of 0, and its other values 0.
+type PhysicsHeadsails struct {
+	// Their area, in m²; 0 for none.
+	HeadsailArea float64 `json:"headsailArea"`
+
+	// Friction of the clew's swing, in N·m·s/rad.
+	HeadsailDamping float64 `json:"headsailDamping"`
+
+	// Viscous drag coefficient.
+	HeadsailDrag float64 `json:"headsailDrag"`
+
+	// Length of the foot, in m.
+	HeadsailFoot float64 `json:"headsailFoot"`
+
+	// Height of the lower strip's centre of effort above the tack, as a fraction of
+	// the luff.
+	HeadsailFootStrip float64 `json:"headsailFootStrip"`
+
+	// Height of the upper strip's centre of effort above the tack, as a fraction of
+	// the luff.
+	HeadsailHeadStrip float64 `json:"headsailHeadStrip"`
+
+	// The clew's angle off the centreline, seen from the tack, with the sheet hauled
+	// in hard, in degrees.
+	HeadsailIn float64 `json:"headsailIn"`
+
+	// Moment of inertia of the sail and its clew about the stay, in kg·m².
+	HeadsailInertia float64 `json:"headsailInertia"`
+
+	// The head's height above the tack, in m.
+	HeadsailLuff float64 `json:"headsailLuff"`
+
+	// Greatest lift coefficient.
+	HeadsailMaxLift float64 `json:"headsailMaxLift"`
+
+	// Their mass times the distance of their centre of gravity aft of the stay, in
+	// kg·m.
+	HeadsailMoment float64 `json:"headsailMoment"`
+
+	// Normal force coefficient of separated flow, every 10° of angle of attack from
+	// 0° to 180°.
+	HeadsailNormalForce []float64 `json:"headsailNormalForce"`
+
+	// The clew's angle with the sheet let fly, in degrees.
+	HeadsailOut float64 `json:"headsailOut"`
+
+	// Centre of pressure aft of the tack with the flow attached, as a fraction of the
+	// foot.
+	HeadsailPressureAttached float64 `json:"headsailPressureAttached"`
+
+	// Centre of pressure aft of the tack with the flow separated, as a fraction of
+	// the foot.
+	HeadsailPressureSeparated float64 `json:"headsailPressureSeparated"`
+
+	// The share of their luff kept at full sail, with one reef and with two.
+	HeadsailReefs []float64 `json:"headsailReefs"`
+
+	// Angle of attack of the greatest lift, in degrees.
+	HeadsailStallAngle float64 `json:"headsailStallAngle"`
+
+	// Angle past the stall over which the flow separates, in degrees.
+	HeadsailStallWidth float64 `json:"headsailStallWidth"`
+
+	// The tack's distance ahead of the centre of gravity, in m.
+	HeadsailTack float64 `json:"headsailTack"`
+
+	// The tack's height above the waterline, in m.
+	HeadsailTackHeight float64 `json:"headsailTackHeight"`
+
+	// The upper strip's twist beyond the clew's line, sheeted in, in degrees.
+	HeadsailTwist float64 `json:"headsailTwist"`
+
+	// Extra twist as the sheet lets the clew out, growing in proportion to its angle,
+	// in degrees.
+	HeadsailTwistEased float64 `json:"headsailTwistEased"`
 }
 
 // The hull: its mass, resistance, inertia and stability.
@@ -1658,7 +1783,7 @@ type PhysicsRates struct {
 	SheetHaulTime float64 `json:"sheetHaulTime"`
 }
 
-// The sail, boom and windage.
+// The main, its boom and reefs, and the windage.
 type PhysicsRig struct {
 	// Friction of the boom about the mast, in N·m·s/rad.
 	BoomDamping float64 `json:"boomDamping"`
@@ -1735,6 +1860,13 @@ type PhysicsRig struct {
 
 	// Drag growing with the square of the lift coefficient (k_pm).
 	QuadraticDrag float64 `json:"quadraticDrag"`
+
+	// Time for the crew to take a reef in or shake it out, in s.
+	ReefTime float64 `json:"reefTime"`
+
+	// The share of its luff the main keeps at full sail, with one reef and with two:
+	// its area goes as the square of the share, its centre of effort down with it.
+	Reefs []float64 `json:"reefs"`
 
 	// Sail area, in m².
 	SailArea float64 `json:"sailArea"`
@@ -1832,6 +1964,73 @@ type PhysicsSailor struct {
 
 	// Time to swim to the daggerboard after falling in, in s.
 	SwimTime float64 `json:"swimTime"`
+}
+
+// Square sails on yards the braces hold at an angle, in a fore group and an after
+// group, and the crew that hauls the yards round in a turn. A boat with none has
+// areas of 0, and its other values 0.
+type PhysicsSquare struct {
+	// The yards' least angle off the centreline, braced up sharp, in degrees.
+	BraceSharp float64 `json:"braceSharp"`
+
+	// Time for the crew to swing the yards from braced up sharp on one side to the
+	// other, in s.
+	BraceTime float64 `json:"braceTime"`
+
+	// In a tack, the after yards swing as the head comes this near the wind, in
+	// degrees.
+	Hauls float64 `json:"hauls"`
+
+	// And the fore yards once the wind is this far on the new bow, in degrees.
+	LetGo float64 `json:"letGo"`
+
+	// The after group's area, in m²; 0 for none.
+	SquareAfterArea float64 `json:"squareAfterArea"`
+
+	// The after group's mast ahead of the centre of gravity, in m.
+	SquareAfterMast float64 `json:"squareAfterMast"`
+
+	// Viscous drag coefficient.
+	SquareDrag float64 `json:"squareDrag"`
+
+	// The lowest yard's height above the waterline, in m.
+	SquareFootHeight float64 `json:"squareFootHeight"`
+
+	// Height of the lower strip's centre of effort above the lowest yard, as a
+	// fraction of the luff.
+	SquareFootStrip float64 `json:"squareFootStrip"`
+
+	// The fore group's area, in m²; 0 for none.
+	SquareForeArea float64 `json:"squareForeArea"`
+
+	// The fore group's mast ahead of the centre of gravity, in m.
+	SquareForeMast float64 `json:"squareForeMast"`
+
+	// Height of the upper strip's centre of effort above the lowest yard, as a
+	// fraction of the luff.
+	SquareHeadStrip float64 `json:"squareHeadStrip"`
+
+	// The sails' height from the lowest yard to the highest, in m.
+	SquareLuff float64 `json:"squareLuff"`
+
+	// Greatest lift coefficient.
+	SquareMaxLift float64 `json:"squareMaxLift"`
+
+	// Normal force coefficient, every 10° of angle of attack from 0° to 180°.
+	SquareNormalForce []float64 `json:"squareNormalForce"`
+
+	// Centre of pressure aft of the yards' line with the flow separated, as a
+	// fraction of a yard's half-length.
+	SquarePressure float64 `json:"squarePressure"`
+
+	// The share of their luff kept at full sail, with one reef and with two.
+	SquareReefs []float64 `json:"squareReefs"`
+
+	// Angle of attack of the greatest lift, in degrees.
+	SquareStallAngle float64 `json:"squareStallAngle"`
+
+	// Angle past it over which the lift falls away, in degrees.
+	SquareStallWidth float64 `json:"squareStallWidth"`
 }
 
 // How long a wreck has lain: how much of her is left.
@@ -2447,6 +2646,18 @@ const ShapeDome Shape = "dome"
 const ShapeLine Shape = "line"
 const ShapeLow Shape = "low"
 const ShapeNone Shape = "none"
+
+// The sheet's control: its name, and its two ends' words.
+type Sheet struct {
+	// The word at its end that lets out.
+	Ease string `json:"ease"`
+
+	// What the control is called.
+	Name string `json:"name"`
+
+	// The word at its end that hauls in.
+	Trim string `json:"trim"`
+}
 
 type Site string
 
@@ -4511,4 +4722,4 @@ type WorldZones struct {
 }
 
 // Version is the catalog version (tools/catalog).
-const Version = "418585d325a5300d"
+const Version = "a069a5c58702b770"

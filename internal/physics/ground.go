@@ -107,7 +107,15 @@ type bed struct {
 	friction    [3]float64 // the bottom's coefficient under each point
 	onBottom    bool
 	pressedLoad float64 // N: the weight each point carries when fully pressed
+	// A fixed keel is never pushed up: its tip meets the bottom and drags
+	// on it, carrying the boat's weight once it is keelPress into it.
+	keelPressed  float64
+	keelFriction float64
 }
+
+// keelPress is how far a fixed keel's tip reaches into the bottom before it
+// carries the boat's whole weight, m.
+const keelPress = 0.2
 
 // The hull's three points on the bottom, ahead of the centre of gravity as
 // shares of half its waterline length.
@@ -119,7 +127,13 @@ func (bd *bed) read(g *Ground, s *State, b *Prepared, sinH, cosH float64) {
 	at := pointGround(g, s.X, s.Y, b.board.x, sinH, cosH)
 	bd.depth = -at.elevation
 	bd.boardCut, bd.rudderCut = 1, 1
-	if bd.depth < b.boardDepth {
+	switch {
+	case !(bd.depth < b.boardDepth):
+	case b.fixed:
+		bd.active, bd.onBottom = true, true
+		bd.keelPressed = clamp((b.boardDepth-bd.depth)/keelPress, 0, 1)
+		bd.keelFriction = gp.friction[min(max(at.surface, 0), GroundSurfaces-1)]
+	default:
 		bd.active = true
 		bd.boardCut = clamp(float64((bd.depth-b.hullDraught)*b.invBoardSpan), 0, 1)
 	}
@@ -174,6 +188,19 @@ func (bd *bed) loads(m *motion, b *Prepared, l *loads) {
 		l.X += fx
 		l.Y += fy
 		l.N += float64(x * fy)
+	}
+	if bd.keelPressed > 0 {
+		x := b.board.x
+		vx, vy := m.u, m.v+float64(m.r*x)
+		speed := math.Sqrt((float64(vx*vx) + float64(vy*vy)) + bedFrictionSpeed*bedFrictionSpeed)
+		f := float64(float64(bd.keelFriction*b.weight)*bd.keelPressed) / speed
+		fx, fy := float64(-f*vx), float64(-f*vy)
+		l.X += fx
+		l.Y += fy
+		l.N += float64(x * fy)
+		// The tip is below the centre of gravity: dragged, it rolls the
+		// boat over it.
+		l.K -= float64((b.centreOfGravity + b.boardDepth) * fy)
 	}
 }
 
@@ -336,7 +363,7 @@ const (
 func (b *Prepared) pushOff(s *State, g *Ground, from float64) bool {
 	gp := g.Prepared
 	q0, r0 := HexAt(s.X, s.Y)
-	deep := toInt32(math.Floor(float64(-gp.pushDepth*10) + 0.5))
+	deep := toInt32(math.Floor(float64(-b.pushDepth(gp)*10) + 0.5))
 	cx, cy := s.X, s.Y
 	if s.DeepX != 0 || s.DeepY != 0 {
 		cx, cy = s.DeepX, s.DeepY
@@ -407,7 +434,7 @@ func (b *Prepared) pushOff(s *State, g *Ground, from float64) bool {
 // land's contacts, the time aground and still, and pushing off.
 func (b *Prepared) ground(s *State, e *Env, g *Ground, bd *bed, o *Out, x, y float64) {
 	switch {
-	case !(bd.depth < g.Prepared.pushDepth):
+	case !(bd.depth < b.pushDepth(g.Prepared)):
 		s.DeepX, s.DeepY = 0, 0
 	case s.DeepX == 0 && s.DeepY == 0:
 		s.DeepX, s.DeepY = x, y
@@ -435,3 +462,16 @@ func (b *Prepared) ground(s *State, e *Env, g *Ground, bd *bed, o *Out, x, y flo
 		o.PushedOff = 1
 	}
 }
+
+// pushDepth is how deep the water a boat is pushed off into is: the
+// ground's depth, or the boat's draught and a metre, whichever is deeper.
+func (b *Prepared) pushDepth(gp *GroundPrepared) float64 {
+	return max2(gp.pushDepth, b.draught+1)
+}
+
+// PushDepth is the depth of water boat b is pushed off into on ground gp,
+// m: for the simulation's start places and tools.
+func PushDepth(b *Prepared, gp *GroundPrepared) float64 { return b.pushDepth(gp) }
+
+// Draught is the deepest boat b reaches below the water, m.
+func Draught(b *Prepared) float64 { return b.draught }

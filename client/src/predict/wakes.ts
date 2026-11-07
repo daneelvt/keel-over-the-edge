@@ -28,11 +28,15 @@ export class Wakes {
   readonly #y = new Float64Array(VIEW_SLOTS * 2);
   /** The newest's heading, heel and boom. */
   readonly #pose = new Float64Array(VIEW_SLOTS * 3);
+  /** Each boat's kind: its wake is its own kind's. */
+  readonly #kind = new Uint16Array(VIEW_SLOTS);
   readonly #order = new Int32Array(VIEW_SLOTS);
   readonly #d2 = new Float64Array(VIEW_SLOTS);
   readonly #physics: Physics;
   /** How many wakes reached the boat at the last step, for the developer panel. */
   reaching = 0;
+  /** How many kinds of boat the module holds: a boat of a kind beyond them casts the first kind's wake, as Go's twin has it. */
+  kinds = 1;
 
   constructor(physics: Physics) {
     this.#physics = physics;
@@ -77,6 +81,7 @@ export class Wakes {
       this.#pose[3 * i] = f[o + SLOT.heading] ?? 0;
       this.#pose[3 * i + 1] = f[o + SLOT.heel] ?? 0;
       this.#pose[3 * i + 2] = f[o + SLOT.boom] ?? 0;
+      this.#kind[i] = f[o + SLOT.kind] ?? 0;
       this.#n[i] = Math.min((this.#n[i] ?? 0) + 1, 2);
     }
   }
@@ -136,6 +141,7 @@ export class Wakes {
         vx = ux * TICKS_PER_SECOND;
         vy = uy * TICKS_PER_SECOND;
       }
+      const kind = this.#kind[i] ?? 0;
       const wind = p.windPoint(px, py);
       const speed = wind[W.speed] ?? 0;
       const from = wind[W.from] ?? 0;
@@ -149,6 +155,7 @@ export class Wakes {
         vy,
         speed,
         from,
+        kind < this.kinds ? kind : 0,
       );
       p.wakes.set(w, k * SIZES.wake);
     }

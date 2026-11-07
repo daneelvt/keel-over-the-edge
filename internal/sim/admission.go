@@ -108,7 +108,7 @@ func (w *World) join(c *bus.Command) bus.Reply {
 				// sailor: a word it left waiting for its tick is put back
 				// to the word in force, so only the new sailor's are applied
 				// from here on.
-				w.bus.Controls.Store(s, f.Control[s], f.Pilot[s])
+				w.bus.Controls.Store(s, f.Control[s], f.Pilot[s], f.Rig[s])
 			}
 			return bus.Reply{Result: bus.Rejoined, Slot: s, Boat: f.Boat[s], Gen: f.Gen[s]}
 		}
@@ -124,11 +124,13 @@ func (w *World) join(c *bus.Command) bus.Reply {
 	}
 	// The newcomer waits at the tail, and gets the next boat at once if
 	// admission would give it to them.
-	f.Queue = append(f.Queue, bus.Waiting{Account: account, Conn: conn, Since: f.Tick, Machine: c.Machine, Priority: c.Priority, Look: c.Look})
+	f.Queue = append(f.Queue, bus.Waiting{Account: account, Conn: conn, Since: f.Tick, Machine: c.Machine, Priority: c.Priority,
+		Look: c.Look, BoatKind: w.kindOf(c.BoatKind)})
 	last := len(f.Queue) - 1
 	if !f.Held && w.nextAdmitted(f, machines(f)) == last {
+		q := f.Queue[last]
 		f.Queue = f.Queue[:last]
-		s := w.newBoat(account, conn, c.Machine, c.Priority, c.Look)
+		s := w.newBoat(&q)
 		return bus.Reply{Result: bus.Joined, Slot: s, Boat: f.Boat[s], Gen: f.Gen[s]}
 	}
 	pos, _ := bus.QueuePlace(f.Queue, last)
@@ -154,21 +156,32 @@ func (w *World) admit() {
 		}
 		q := f.Queue[i]
 		f.Queue = slices.Delete(f.Queue, i, i+1)
-		s := w.newBoat(q.Account, q.Conn, q.Machine, q.Priority, q.Look)
+		s := w.newBoat(&q)
 		if q.Machine {
 			ai++
 		}
 		f.Grace[s] = q.Grace
 		r := bus.Reply{Result: bus.Admitted, Slot: s, Boat: f.Boat[s], Gen: f.Gen[s], Tick: f.Tick, Since: q.Since}
 		f.Events = append(f.Events, bus.Event{Command: bus.Command{Op: bus.Join, Account: q.Account, Conn: q.Conn,
-			Machine: q.Machine, Priority: q.Priority, Look: q.Look}, Reply: r})
+			Machine: q.Machine, Priority: q.Priority, Look: q.Look, BoatKind: q.BoatKind}, Reply: r})
 	}
 }
 
-// newBoat puts a new boat for account, of its kind, its sailor of a look,
-// sailed through conn, in the lowest free slot, and returns the slot. The
-// world must have room.
-func (w *World) newBoat(account bus.Account, conn uint64, machine, priority bool, look uint32) int32 {
+// kindOf is the kind of boat a Join asks for, as the world has it: a kind
+// it does not have is its first.
+func (w *World) kindOf(kind uint16) uint16 {
+	if int(kind) >= len(w.kinds) {
+		return 0
+	}
+	return kind
+}
+
+// newBoat puts a new boat for the account waiting in q, of its account's
+// kind, of the kind of boat it asked for, its sailor of its look, sailed
+// through its connection, in the lowest free slot, and returns the slot.
+// The world must have room.
+func (w *World) newBoat(q *bus.Waiting) int32 {
+	account, conn := q.Account, q.Conn
 	f := w.next
 	s := int32(slices.Index(f.Occupied, false))
 	gen := f.Gen[s]
@@ -178,11 +191,12 @@ func (w *World) newBoat(account bus.Account, conn uint64, machine, priority bool
 	f.Owner[s] = account
 	f.Conn[s] = conn
 	f.Grace[s] = 0
-	f.Kind[s] = 0
-	f.Machine[s], f.Priority[s], f.Look[s] = machine, priority, look
+	f.Kind[s] = q.BoatKind
+	f.Machine[s], f.Priority[s], f.Look[s] = q.Machine, q.Priority, q.Look
 	f.State[s] = w.spawn(f, s)
 	f.Control[s] = bus.Pack(0, bus.Steps/2, w.startSheet(f, s), gen)
 	f.Pilot[s] = bus.PilotOffWord(gen)
+	f.Rig[s] = bus.FullSail(gen)
 	f.Course[s] = physics.Course{}
 	f.Voyage[s] = bus.Voyage{}
 	f.Stay[s], f.Unseen[s] = false, false
@@ -192,7 +206,7 @@ func (w *World) newBoat(account bus.Account, conn uint64, machine, priority bool
 		// The slot may hold a word for the boat that had it before, which
 		// its generation already disowns; this one the new sailor's writer
 		// overwrites.
-		w.bus.Controls.Store(s, f.Control[s], f.Pilot[s])
+		w.bus.Controls.Store(s, f.Control[s], f.Pilot[s], f.Rig[s])
 	}
 	return s
 }

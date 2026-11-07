@@ -15,15 +15,17 @@
 // blended, the figure carried along a path that stays out of the hull.
 //
 // Everything here is in the boat model's frame (x to starboard, y up, z
-// aft), unheeled; the boat's heel turns the model. Allocation-free once
-// made.
+// aft), unheeled; the boat's heel turns the model. A boat other than the
+// one the clips were placed in moves them to its own seat (restage.ts).
+// Allocation-free once made.
 
 import { Euler, Matrix4, Quaternion, Vector3 } from 'three';
 import { CLIMBING, IN_WATER, ON_BOARD } from '../sailor';
 import { type Clip, Pose } from './clips';
-import { twoBone } from './ik';
+import { REACH, twoBone } from './ik';
 import { Layers, random, type SailorLayers } from './layers';
 import { MachineLayers } from './machinelayers';
+import { type Hike, restageClip, STRAPPED } from './restage';
 import type { Rig } from './rig';
 import { type HullSolid, reach } from './solid';
 import { Springs, type SpringWorld } from './springs';
@@ -43,10 +45,6 @@ export const CLIPS = {
 const PORT = '-port';
 /** The helm and the hiking depths, blended by how far out the sailor is. */
 const SEATED: readonly string[] = [CLIPS.helm, ...CLIPS.hiking];
-
-/** Where the hiking poses come in: from this far out (m) to fully out at HIKE_FULL. */
-const HIKE_FROM = 0.55;
-const HIKE_FULL = 0.95;
 /** How far out and up of both ends a change of mode's path bows. */
 const ARC_OUT = 0.35;
 const ARC_UP = 0.6;
@@ -80,6 +78,14 @@ export interface SailorBoat {
   solid: HullSolid;
   /** The physics' climbing time, seconds. */
   climbTime: number;
+  /**
+   * How far this boat's seat is from that of the boat the clips were
+   * placed in, on the starboard side: the clips are moved by it. None (or
+   * null) for that boat itself.
+   */
+  restage?: Vector3 | null;
+  /** How it hikes: a dinghy's strap if not said. */
+  hike?: Hike;
 }
 
 /** The physics' moment for the sailor. */
@@ -116,6 +122,7 @@ const v = new Vector3();
 const w = new Vector3();
 const u = new Vector3();
 const p = new Vector3();
+const o = new Vector3();
 const q = new Quaternion();
 const q2 = new Quaternion();
 const m = new Matrix4();
@@ -205,7 +212,11 @@ export class SailorRuntime {
     /** Whether the cloth and hair move on springs (the boat in view's); else as the clips have them. */
     readonly springs = true,
   ) {
-    this.#clips = clips;
+    const by = boat.restage;
+    this.#clips =
+      by === undefined || by === null
+        ? clips
+        : new Map([...clips].map(([name, c]) => [name, restageClip(c, rig, by)]));
     const n = rig.names.length;
     this.#pose = new Pose(n).rest(rig);
     this.#scratch = new Pose(n).rest(rig);
@@ -278,7 +289,11 @@ export class SailorRuntime {
     }
     this.#effort = Math.max(
       0,
-      Math.min(1, this.#effort + (Math.abs(s.offset) > HIKE_FROM ? dt / 20 : -dt / 40)),
+      Math.min(
+        1,
+        this.#effort +
+          (Math.abs(s.offset) > (this.boat.hike ?? STRAPPED).from ? dt / 20 : -dt / 40),
+      ),
     );
 
     // The mode's pose and place.
@@ -422,7 +437,8 @@ export class SailorRuntime {
     }
     const side = this.#side;
     const out = Math.max(0, s.offset * side);
-    const h = Math.max(0, Math.min(1, (out - HIKE_FROM) / (HIKE_FULL - HIKE_FROM))) * 3;
+    const hike = this.boat.hike ?? STRAPPED;
+    const h = Math.max(0, Math.min(1, (out - hike.from) / (hike.full - hike.from))) * hike.depth;
     const t = s.time + this.#helmOffset;
     // The helm and the hiking depths, each by its weight, and their places.
     const scratch = this.#scratch;
@@ -578,7 +594,9 @@ export class SailorRuntime {
   /**
    * The aft hand brought to the extension, which the rudder swings: kept
    * as far from its hinge as the clip has it, along the line to where the
-   * clip puts it. Seated and not crossing only.
+   * clip puts it; slid along the extension toward the clip's hand, no
+   * further than its end, where the arm could not reach so far (a long
+   * tiller swung away from the sailor). Seated and not crossing only.
    */
   #tillerHand(seated: boolean): void {
     const hands = this.hands;
@@ -601,8 +619,28 @@ export class SailorRuntime {
     }
     const b = this.boat;
     this.rig.position(hand, v).applyMatrix4(this.root);
-    const hold = Math.min(b.extension, v.distanceTo(b.hingeRest));
-    w.subVectors(v, b.hinge).normalize().multiplyScalar(hold).add(b.hinge);
+    let hold = Math.min(b.extension, v.distanceTo(b.hingeRest));
+    u.subVectors(v, b.hinge).normalize();
+    // Out of the arm's reach there, the hold slides along the extension to
+    // the nearest point within it: |hinge + h·u − shoulder| = the reach.
+    const rig = this.rig;
+    const most =
+      REACH *
+      (rig.position(upper, p).distanceTo(rig.position(lower, w)) +
+        w.distanceTo(rig.position(hand, o)));
+    rig.position(upper, p).applyMatrix4(this.root);
+    w.copy(u).multiplyScalar(hold).add(b.hinge);
+    if (w.distanceTo(p) > most) {
+      o.subVectors(b.hinge, p);
+      const od = o.dot(u);
+      const disc = od * od - o.lengthSq() + most * most;
+      if (disc >= 0) {
+        const r = Math.sqrt(disc);
+        const near = Math.abs(-od - r - hold) < Math.abs(-od + r - hold) ? -od - r : -od + r;
+        hold = Math.max(0, Math.min(b.extension, near));
+      }
+    }
+    w.copy(u).multiplyScalar(hold).add(b.hinge);
     hands.tillerAt.copy(w);
     if (!crossing && w.distanceToSquared(v) > 1e-8) {
       inv.copy(this.root).invert();

@@ -32,9 +32,14 @@ boats:
     # sheet's speed after 20 s in 3, 5 and 8 knots. Half the wind's angle,
     # a rule of thumb, luffs her once she moves.
     startSheet: [[90, 0.2], [110, 0.25], [130, 0.4]]
+    controls:
+      sheet: { name: Sheet, trim: Trim, ease: Ease }
+      reef: [Full sail, One reef, Two reefs]
+    fleet: sailor
     art:
       model: boats/jolly-boat.glb
       far: boats/jolly-boat.far.glb
+      budget: { near: 15000, far: 1000 }
     physics:
       hull:
         displacement: 160 # boat with sail 80 kg, sailor 80 kg (Day)
@@ -136,6 +141,56 @@ boats:
         # tools/polar's best upwind VMG: 45° to the true wind in 6.8 knots,
         # 40° from 10 to 22.5 knots.
         closeHauled: 40
+        # Reefed, she sails as the ILCA 6 (5.76 m²) and the ILCA 4 (4.70 m²),
+        # the ILCA 7's smaller rigs: the shares of the luff whose squares are
+        # their areas' shares (ILCA class). A licence: an ILCA changes its rig
+        # ashore, not at sea.
+        reefs: [1, 0.903, 0.816]
+        reefTime: 30 # estimate
+      # A dinghy with the one sail.
+      headsails: &noHeadsails
+        headsailArea: 0
+        headsailLuff: 0
+        headsailFoot: 0
+        headsailTackHeight: 0
+        headsailTack: 0
+        headsailFootStrip: 0
+        headsailHeadStrip: 0
+        headsailPressureAttached: 0
+        headsailPressureSeparated: 0
+        headsailMaxLift: 0
+        headsailStallAngle: 0
+        headsailStallWidth: 0
+        headsailDrag: 0
+        headsailNormalForce: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+        headsailTwist: 0
+        headsailTwistEased: 0
+        headsailIn: 0
+        headsailOut: 0
+        headsailInertia: 0
+        headsailMoment: 0
+        headsailDamping: 0
+        headsailReefs: [0, 0, 0]
+      square: &noSquare
+        squareForeArea: 0
+        squareAfterArea: 0
+        squareForeMast: 0
+        squareAfterMast: 0
+        squareFootHeight: 0
+        squareLuff: 0
+        squareFootStrip: 0
+        squareHeadStrip: 0
+        squarePressure: 0
+        squareMaxLift: 0
+        squareStallAngle: 0
+        squareStallWidth: 0
+        squareDrag: 0
+        squareNormalForce: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+        braceSharp: 0
+        braceTime: 0
+        hauls: 0
+        letGo: 0
+        squareReefs: [0, 0, 0]
       foils:
         boardSpan: 0.69 # 0.787 m below the waterline, less the hull's draught
         boardChord: 0.34
@@ -155,6 +210,7 @@ boats:
         downwash: 0.5 # estimate: the rudder works in the board's downwash (Keuning, Vermeulen and de Ridder 2005)
         foilWetHeel: 60 # estimate
         foilDryHeel: 90 # estimate
+        fixed: 0 # a daggerboard: the ground pushes it up
       sailor:
         sailorMass: 80 # Day's baseline sailor
         sailorSeatHeight: 0.25 # estimate
@@ -203,5 +259,245 @@ boats:
         # 5° in 8 s has stalled, and the autopilot gives it up.
         astern: 0.05 # m/s
         steerage: 0.26 # m/s, half a knot
+        stallTime: 8
+        stallGain: 5
+
+  # The J/22, a fractionally rigged day-sailing keelboat of 1983, sailed by
+  # one 80 kg sailor under main and jib, with no spinnaker. Its values are
+  # the J/22's where they are published; the rest are estimates as the Jolly
+  # boat's were, tuned only by tools/polar. Sources:
+  #   Offshore Racing Congress (2021), ORC International One Design
+  #     certificate, J-22: dimensions, sail areas, the rig's I, J, P and E,
+  #     displacement, righting moment at 1° and the limit of positive
+  #     stability, and the polar tools/polar checks.
+  #   Offshore Racing Congress (2023), ORC VPP Documentation: the sails,
+  #     induced and quadratic drag, flattening and reefing.
+  - id: keelboat
+    name: Keelboat
+    description: Day-sailing keelboat
+    capacity: 5
+    lengthOverall: 6.86 # ORC certificate
+    beam: 2.446 # ORC certificate
+    # A sailing vessel of less than 20 m may combine her lights in one
+    # lantern at the masthead (Collision Regulations, Rule 25(b)).
+    lights: [tricolour]
+    # Her lookout is the sailor seated aft on her deck, the eye 2 m above the
+    # sea.
+    lookout: 2
+    # Her sheet for a start from rest, by the angle off the wind: from
+    # tools/polar's sweep from rest (-start), each within 85% of the best
+    # sheet's speed after 20 s in 3, 5 and 8 knots.
+    startSheet: [[90, 0.5], [110, 0.6], [130, 0.7]]
+    controls:
+      sheet: { name: Sheet, trim: Trim, ease: Ease }
+      reef: [Full sail, One reef, Two reefs]
+    fleet: account
+    art:
+      model: boats/keelboat.glb
+      far: boats/keelboat.far.glb
+      budget: { near: 15000, far: 1000 }
+    physics:
+      hull:
+        # 857 kg (ORC certificate) and the sailor's 80 kg.
+        displacement: 937
+        waterlineLength: 5.76 # estimate: the class's published 18 ft 11 in
+        hullDraught: 0.30 # estimate: the canoe body
+        # Estimate: 318 kg of lead in the keel, the hull and rig above, and
+        # the sailor seated on deck.
+        centreOfGravity: -0.12
+        dragAreaStep: 0.2572222222222222 # half a knot, in m/s
+        # Estimate: the canoe body's friction by ITTC 1957 and its
+        # wave-making by the Delft series' residuary resistance for its
+        # proportions, every half knot from 0 to 12 knots: the hump past
+        # its hull speed of about 6 knots, a resistance of 3.6% of her weight
+        # at 6 knots and 7% at 7. Tuned by tools/polar: lower in light air,
+        # steeper past 5 knots, against the certificate's reaching speeds.
+        # The keel's and rudder's own friction is the foils'.
+        dragArea: [0.041, 0.039, 0.037, 0.036, 0.035, 0.034, 0.033, 0.033,
+          0.034, 0.035, 0.038, 0.053, 0.068, 0.083, 0.0965, 0.107, 0.112,
+          0.112, 0.109, 0.107, 0.104, 0.101, 0.099, 0.096, 0.093]
+        crossFlowDrag: 1.0 # estimate
+        addedMassSurge: 45 # estimate: about 5% of the mass
+        addedMassSway: 900 # estimate: the hull's slender-body added mass and the keel's
+        munk: 500 # estimate: the hull's own added masses, less in surge
+        yawInertia: 4500 # estimate: hull, keel, rig, sailor and added inertia
+        rollInertia: 1500 # estimate: the keel's lead, the mast, the hull
+        rollDamping: 300 # estimate
+        # Estimate, with the sailor seated on the centreline: a simple hull
+        # (sections from the plan at the sheer and the certificate's
+        # freeboards of 0.80 m forward and 0.57 m aft, a canoe body 0.30 m
+        # deep on a 5.95 m waterline, the cuddy, the fin and its lead),
+        # heeled in still water. Its centre of gravity gives the boat alone
+        # the certificate's righting moment at 1°, 15.9 kg·m, and the fullness
+        # of its sections its limit of positive stability, 105° (ORC
+        # certificate). The sailor's 80 kg on deck brings the limit to about
+        # 100°. The cuddy's top meets the water at about 60°. Every 10° from
+        # 0° to 180°.
+        rightingLever: [0, 0.17, 0.30, 0.37, 0.41, 0.41, 0.41, 0.38, 0.27,
+          0.14, 0, -0.12, -0.22, -0.30, -0.36, -0.37, -0.29, -0.12, 0]
+        waterlineBeam: 1.95 # estimate
+        waterplaneArea: 7.9 # estimate: a waterplane coefficient of 0.70
+        waterplanePitch: 18 # estimate: an ellipse's π L³ B / 64
+        addedMassHeave: 2000 # estimate
+        pitchInertia: 4500 # estimate
+        heaveDamping: 0.3 # estimate
+        pitchDamping: 0.3 # estimate
+        waveForce: 1.0
+        waveYaw: 0
+        # The plan at the sheer, every tenth of the length from the transom
+        # to the stem: a broad transom, the greatest beam just aft of
+        # amidships, a fine bow (art/boats/keelboat/build.ts builds from it).
+        outline: [0.80, 0.98, 1.10, 1.18, 1.22, 1.223, 1.20, 1.12, 0.97, 0.68, 0]
+        transom: 3.05
+        stem: 3.81
+      rig:
+        # The mainsail as measured (13.76 m²; rated 14.11), on P 7.955 m and
+        # E 2.745 m (ORC certificate).
+        sailArea: 13.76
+        luff: 7.955
+        foot: 2.745
+        boomHeight: 1.45 # estimate: the boom above the waterline
+        mastPosition: 1.14 # J 2.62 m aft of the stem's fitting
+        footStrip: 0.14
+        headStrip: 0.55
+        pressureAttached: 0.33 # ORC
+        pressureSeparated: 0.50
+        effectiveHeight: 9.0 # estimate: about the masthead's height
+        quadraticDrag: 0.01379 # ORC 2023, Table 5.1
+        # Fitted by tools/polar -sail to ORC's low-lift mainsail, as the
+        # Jolly boat's: the same coefficients, the twist eased below.
+        maxLift: 1.48
+        stallAngle: 28
+        stallWidth: 20
+        sailDrag: 0.026
+        luffAngle: 3
+        flogDrag: 0.05
+        normalForce: [0, 0.5, 0.9, 1.07, 1.21, 1.31, 1.37, 1.39, 1.38, 1.35,
+          1.28, 1.19, 1.07, 0.93, 0.77, 0.59, 0.40, 0.20, 0]
+        twistPowered: 5 # estimate
+        twistDepowered: 15 # estimate
+        # Fitted with the sail: the vang holds the boom down, but the leech
+        # still opens as the sheet eases.
+        twistEased: 18
+        twistTurn: 3 # estimate
+        headBacked: 90 # estimate
+        headBackedWidth: 20 # estimate
+        boomIn: 3 # estimate: the traveller to windward
+        boomOut: 80 # estimate: the shrouds stop the boom
+        boomInertia: 80 # estimate: boom and main about 25 kg, and the air the sail carries
+        boomMoment: 32 # estimate
+        boomDamping: 20 # estimate
+        # Estimates: the topsides, the cuddy, the sailor and the rig.
+        windageFront: 2.1
+        windageSide: 5.1
+        windageHeight: 0.9
+        sailFloat: 3000 # estimate
+        sailWaterDamping: 600 # estimate
+        closeHauled: 40 # the certificate's beat angles, 39° to 43.5°
+        # Two slab reefs (ORC reefs the main after flattening it).
+        reefs: [1, 0.85, 0.70] # estimate
+        reefTime: 40 # estimate
+      headsails:
+        headsailArea: 9.49 # ORC certificate
+        headsailLuff: 6.7 # estimate: the head's height above the tack, below I 7.13 m
+        headsailFoot: 2.75 # estimate
+        headsailTackHeight: 0.75 # estimate: the stem's sheer
+        headsailTack: 3.76
+        # A triangle's two halves of its area.
+        headsailFootStrip: 0.137
+        headsailHeadStrip: 0.53
+        headsailPressureAttached: 0.33
+        headsailPressureSeparated: 0.50
+        # Fitted by tools/polar -sail to ORC's low-lift jib (2023, Table
+        # 5.4) from 27° to 100° of apparent wind, sheeted between its leads:
+        # a jib's lift rises steeply as it is trimmed, and once eased its
+        # drag grows fast, its clew stopped at the rail and its leech open.
+        headsailMaxLift: 2.1
+        headsailStallAngle: 17
+        headsailStallWidth: 19
+        headsailDrag: 0.034
+        headsailNormalForce: [0, 0.5, 0.83, 1.01, 1.10, 1.14, 1.14, 1.11, 1.08,
+          1.05, 1.04, 1.01, 0.97, 0.90, 0.77, 0.59, 0.40, 0.20, 0]
+        headsailTwist: 8 # fitted with the sail
+        headsailTwistEased: 10 # fitted with the sail
+        headsailIn: 10 # estimate: the jib's leads inside the shrouds
+        # Estimate: the clew goes out no further than the rail, about 0.9 m
+        # out at the end of the foot's 2.75 m.
+        headsailOut: 20
+        headsailInertia: 15 # estimate
+        headsailMoment: 6 # estimate
+        headsailDamping: 8 # estimate
+        headsailReefs: [1, 1, 1] # the jib is not reefed
+      square: *noSquare
+      foils:
+        # The fin keel: the certificate's draft of 1.179 m less the hull's.
+        boardSpan: 0.879
+        boardChord: 0.72 # estimate
+        # Estimate: the fin under the mast, its centre of pressure a quarter
+        # of its chord aft; tuned for weather helm (tools/polar).
+        boardPosition: 0.9
+        rudderSpan: 0.90 # estimate
+        rudderChord: 0.33 # estimate
+        rudderPosition: 2.95 # estimate: hung on the transom
+        rudderAngle: 35 # estimate
+        foilStall: 13 # estimate
+        foilStallWidth: 6 # estimate
+        foilDrag: 0.008 # ITTC 1957 at Re ≈ 3 × 10⁶, both faces
+        plateNormal: 1.2 # a flat plate
+        pressureDepth: 0.43 # Keuning and Vermeulen (2003)
+        carryOver: 1.80 # Keuning and Verwerft (2009)
+        heelLoss: 0.382 # Keuning and Verwerft (2009)
+        rudderInflow: 0.9
+        downwash: 0.8 # estimate: a deep fin close ahead of the rudder; tuned for weather helm
+        foilWetHeel: 70 # estimate: a deep keel stays in the water
+        foilDryHeel: 120 # estimate
+        fixed: 1
+      sailor:
+        sailorMass: 80
+        # Seated on the side deck aft, at the tiller.
+        sailorSeatHeight: 1.05 # estimate
+        hikeReach: 1.10 # estimate: sitting out on the rail, with no straps
+        leeReach: 0.50 # estimate: on the lee side, to see the jib
+        hikeSpeed: 1.0 # estimate
+        hikeLag: 0.5 # estimate
+        heelGain: 1.0
+        rollRateGain: 0.6
+        # Estimates, tuned against the certificate's beat VMG: flattened
+        # from 8 m/s of apparent wind, fully by 11, to ORC's floor of 0.6.
+        flattenFrom: 8
+        flattenTo: 11
+        flattenMin: 0.6
+        # A keelboat is knocked down, not capsized: her sailor stays aboard
+        # and her ballast brings her back.
+        fallOutHeel: 180
+        climbInHeel: 30
+        boardReach: 0
+        sailorDrag: 0
+        swimTime: 0
+        climbTime: 0
+      rates:
+        rudderTime: 0.4 # estimate
+        sheetHaulTime: 4 # estimate: main and jib, by hand
+        sheetEaseTime: 1.5 # estimate
+      # The autopilot. Gain and damping tuned for her heavier hull: at the
+      # Jolly boat's, a stormy spell's gusts turned her up to 4.6° off a beam
+      # reach; at these she holds every point within 1° rms and 3° at most,
+      # and tacks in under 5 s keeping two-thirds of her speed. Half the helm
+      # gybes her in a stormy spell without a knockdown. The rest are the
+      # Jolly boat's: she gybes by herself 18° to 22° by the lee
+      # (tools/polar -manoeuvres). Measured with the step in the catalog's
+      # spells.
+      autopilot:
+        gain: 3.5 # helm per radian
+        damping: 2 # helm per rad/s
+        trimTime: 10
+        trimLimit: 0.3
+        trimBand: 10
+        tackHelm: 1.0
+        gybeHelm: 0.5
+        byTheLee: 15
+        onCourse: 10
+        astern: 0.05
+        steerage: 0.26
         stallTime: 8
         stallGain: 5

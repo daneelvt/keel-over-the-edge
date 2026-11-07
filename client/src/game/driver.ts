@@ -31,9 +31,10 @@ export interface BoatDriver {
   readonly wind: Readonly<BoatWind>;
   /**
    * Steps the boat once with these controls, the helm and the sheet already
-   * at their resolution, and the autopilot's control (off if not given).
+   * at their resolution, the autopilot's control (off if not given), and
+   * the reef the crew is to take, 0 full sail, 1 or 2 (0 if not given).
    */
-  step(helm: number, sheet: number, pilot?: PilotControl): void;
+  step(helm: number, sheet: number, pilot?: PilotControl, reef?: number): void;
   /** Moves the drawn pose, dt seconds after the last frame's. */
   decorate?(pose: BoatPose, dt: number): void;
   /** The physics module that steps the boat, and the sea and the weather it holds, for drawing them. */

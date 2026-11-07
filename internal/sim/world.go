@@ -369,7 +369,7 @@ func (w *World) load(snapshot []byte, adjust func(*bus.Frame)) error {
 	w.sea.under(&f.Sea, f.Tick, devOf(f))
 	// Each slot holds the controls in force until its sailor writes again.
 	for _, s := range f.Live {
-		w.bus.Controls.Store(s, f.Control[s], f.Pilot[s])
+		w.bus.Controls.Store(s, f.Control[s], f.Pilot[s], f.Rig[s])
 	}
 	// The wind and the wakes follow from the state, as the tick that made
 	// it left them.
@@ -430,8 +430,13 @@ const spawnSpacing = 20
 // spawnRow is how many new boats stand side by side in a row.
 const spawnRow = 64
 
-// spawnClear is how far a new boat's place must be from every hull, m.
-const spawnClear = 10
+// startClear is how far a new boat's hull must be from every other's, m,
+// each taken as the circle about its outline; and startDeep how much
+// deeper than the boat's draught the water at its place must be.
+const (
+	startClear = 5
+	startDeep  = 1
+)
 
 // spawnAt is the place p of the spawn grid: south of the world's centre,
 // spawnSpacing apart, spawnRow to a row, heading east, at rest. The grid is
@@ -456,8 +461,8 @@ func (w *World) placeAt(p int64) physics.State {
 }
 
 // spawn is where a new boat in slot s of f appears: the first place of the
-// start from its slot's, along the row then the next, with no hull within
-// spawnClear, so that no boat appears inside another; in a world of
+// start from its slot's, along the row then the next, where it fits
+// (fits), so that no boat appears inside another or aground; in a world of
 // ghosts, its slot's place. It faces a reach off the wind there (onReach).
 func (w *World) spawn(f *bus.Frame, s int32) physics.State {
 	p := w.placeOf(f, s)
@@ -473,17 +478,29 @@ func (w *World) placeOf(f *bus.Frame, s int32) int64 {
 		return p
 	}
 	for end := p + int64(w.capacity); p < end; p++ {
-		st := w.placeAt(p)
-		free := true
-		for _, o := range f.Live {
-			if o != s && physics.Within(&f.State[o], st.X, st.Y, spawnClear) {
-				free = false
-				break
-			}
-		}
-		if free {
+		if w.fits(f, s, w.placeAt(p)) {
 			return p
 		}
 	}
 	return int64(s)
+}
+
+// fits reports whether the boat in slot s of f may start at place st: by
+// its own size, its hull startClear clear of every other boat's, and the
+// water there its draught and startDeep deep. A small boat fits where a
+// large one would lie across its neighbours, or touch the bottom.
+func (w *World) fits(f *bus.Frame, s int32, st physics.State) bool {
+	b := &w.kinds[f.Kind[s]]
+	if w.ground != nil {
+		if e, _ := w.ground.At(st.X, st.Y); e > -(physics.Draught(b) + startDeep) {
+			return false
+		}
+	}
+	r := physics.Radius(b) + startClear
+	for _, o := range f.Live {
+		if o != s && physics.Within(&f.State[o], st.X, st.Y, r+physics.Radius(&w.kinds[f.Kind[o]])) {
+			return false
+		}
+	}
+	return true
 }

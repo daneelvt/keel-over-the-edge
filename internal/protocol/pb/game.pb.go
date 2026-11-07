@@ -494,7 +494,11 @@ type Input struct {
 	// a tack or a gybe, applied at the input's tick as the helm is.
 	Order uint32 `protobuf:"varint,8,opt,name=order,proto3" json:"order,omitempty"`
 	// The way of the latest order: 0 hold, 1 tack, 2 gybe.
-	Way           uint32 `protobuf:"varint,9,opt,name=way,proto3" json:"way,omitempty"`
+	Way uint32 `protobuf:"varint,9,opt,name=way,proto3" json:"way,omitempty"`
+	// The reef the crew is to take: 0 full sail, 1 or 2 reefs. A target the
+	// crew works to over the rig's reef time, applied at the input's tick as
+	// the helm is.
+	Reef          uint32 `protobuf:"varint,10,opt,name=reef,proto3" json:"reef,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -588,6 +592,13 @@ func (x *Input) GetOrder() uint32 {
 func (x *Input) GetWay() uint32 {
 	if x != nil {
 		return x.Way
+	}
+	return 0
+}
+
+func (x *Input) GetReef() uint32 {
+	if x != nil {
+		return x.Reef
 	}
 	return 0
 }
@@ -4562,7 +4573,7 @@ const file_keel_v1_game_proto_rawDesc = "" +
 	"\acatalog\x18\x02 \x01(\tR\acatalog\x12%\n" +
 	"\x0ephysics_layout\x18\x03 \x01(\rR\rphysicsLayout\x12\x14\n" +
 	"\x05build\x18\x04 \x01(\tR\x05build\x12\x14\n" +
-	"\x05watch\x18\x05 \x01(\tR\x05watch\"\xcf\x01\n" +
+	"\x05watch\x18\x05 \x01(\tR\x05watch\"\xe3\x01\n" +
 	"\x05Input\x12\x10\n" +
 	"\x03seq\x18\x01 \x01(\rR\x03seq\x12\x12\n" +
 	"\x04helm\x18\x02 \x01(\rR\x04helm\x12\x14\n" +
@@ -4572,7 +4583,9 @@ const file_keel_v1_game_proto_rawDesc = "" +
 	"\x05pilot\x18\x06 \x01(\rR\x05pilot\x12\x16\n" +
 	"\x06target\x18\a \x01(\rR\x06target\x12\x14\n" +
 	"\x05order\x18\b \x01(\rR\x05order\x12\x10\n" +
-	"\x03way\x18\t \x01(\rR\x03way\"\xb0\x01\n" +
+	"\x03way\x18\t \x01(\rR\x03way\x12\x12\n" +
+	"\x04reef\x18\n" +
+	" \x01(\rR\x04reef\"\xb0\x01\n" +
 	"\x04Ping\x12$\n" +
 	"\x0eclient_time_us\x18\x01 \x01(\x03R\fclientTimeUs\x12\x19\n" +
 	"\back_tick\x18\x02 \x01(\x03R\aackTick\x12\x15\n" +

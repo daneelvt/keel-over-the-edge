@@ -1,6 +1,6 @@
-# about 257 tokens
+# about 261 tokens
 day 12:00 · seq 0
-Boat: Jolly boat · sailing · heading 358° · 2.8 kn · heel 6° to starboard · port tack
+Boat: Jolly boat, full sail · sailing · heading 358° · 2.8 kn · heel 6° to starboard · port tack
 Pilot: wind 90° port · boom 40° (sheet out to 40°) · rudder 3° to starboard · sail drawing
 Wind: 270° W 11 kn F4 · 89° off the bow, port side · apparent 10 kn 73°
 Shoal: under 1.5 m 205°–315°, 60–100 m · 340° ~180 m · clear 000°–180°

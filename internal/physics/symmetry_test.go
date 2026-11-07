@@ -21,6 +21,7 @@ func mirror(s State) State {
 	s.X, s.Heading, s.Sway, s.YawRate = -s.X, -s.Heading, -s.Sway, -s.YawRate
 	s.Heel, s.RollRate, s.Boom, s.BoomRate = -s.Heel, -s.RollRate, -s.Boom, -s.BoomRate
 	s.Sailor, s.Rudder = -s.Sailor, -s.Rudder
+	s.Jib, s.JibRate, s.Yards, s.ForeYards = -s.Jib, -s.JibRate, -s.Yards, -s.ForeYards
 	return s
 }
 
@@ -91,12 +92,12 @@ func runScenarioStates(t *testing.T, b *Prepared, sc scenario, n int32, mirrored
 func TestMirrorSymmetry(t *testing.T) {
 	var sf scenarioFile
 	readJSON(t, scenariosFile, &sf)
-	b := jolly(t)
 	for _, sc := range sf.Scenarios {
 		if sc.Sea != nil {
 			// TestMirrorSymmetryInWaves mirrors a sea.
 			continue
 		}
+		b := sf.Params.prepared(t, sc.Boat)
 		t.Run(sc.Name, func(t *testing.T) {
 			plain := runScenarioStates(t, b, sc, Substeps, false, sc.Steps)
 			mirrored := runScenarioStates(t, b, sc, Substeps, true, sc.Steps)
@@ -108,6 +109,7 @@ func TestMirrorSymmetry(t *testing.T) {
 					p.Boom - m.Boom, p.BoomRate - m.BoomRate, p.Sailor - m.Sailor, p.Rudder - m.Rudder,
 					p.SheetLimit - m.SheetLimit, p.SailorMode - m.SailorMode, p.SailorTimer - m.SailorTimer,
 					p.PilotTrim - m.PilotTrim, p.PilotWay - m.PilotWay, p.PilotOrder - m.PilotOrder,
+					p.Jib - m.Jib, p.JibRate - m.JibRate, p.JibLimit - m.JibLimit, p.Reef - m.Reef,
 				} {
 					if math.Abs(d) > 1e-12 {
 						t.Fatalf("step %d: the mirrored run differs by %g:\n plain    %+v\n mirrored %+v", i, d, p, m)

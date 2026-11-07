@@ -3,6 +3,7 @@
 package physics_test
 
 import (
+	"bytes"
 	"encoding/json"
 	"math"
 	"os"
@@ -15,43 +16,70 @@ import (
 	"github.com/daneelvt/keel-over-the-edge/internal/physics"
 )
 
-// The golden scenarios carry the Jolly boat's Params as data, so that the
-// client can run them without the catalog's Go types. They must be the
-// catalog's values exactly, bit for bit.
+// The golden scenarios carry every boat's Params as data, by its id in the
+// catalog's order, so that the client can run them without the catalog's Go
+// types. They must be the catalog's values exactly, bit for bit; and every
+// boat's prepared constants must be finite.
 func TestScenarioParamsAreTheCatalogs(t *testing.T) {
 	cat, err := catalog.Load()
 	if err != nil {
 		t.Fatal(err)
 	}
-	var boat *catalog.Boat
-	for i := range cat.Boats {
-		if cat.Boats[i].ID == "jolly-boat" {
-			boat = &cat.Boats[i]
-		}
-	}
-	if boat == nil {
-		t.Fatal("the catalog has no jolly-boat")
-	}
-	p := catalog.PhysicsParams(boat)
-
 	data, err := os.ReadFile("testdata/scenarios.json")
 	if err != nil {
 		t.Fatal(err)
 	}
 	var sf struct {
-		Params map[string]json.RawMessage `json:"params"`
+		Params json.RawMessage `json:"params"`
 	}
 	if err := json.Unmarshal(data, &sf); err != nil {
 		t.Fatal(err)
 	}
+	// The boats in the file's order.
+	d := json.NewDecoder(bytes.NewReader(sf.Params))
+	if _, err := d.Token(); err != nil {
+		t.Fatal(err)
+	}
+	var ids []string
+	byID := map[string]map[string]json.RawMessage{}
+	for d.More() {
+		tok, err := d.Token()
+		if err != nil {
+			t.Fatal(err)
+		}
+		var v map[string]json.RawMessage
+		if err := d.Decode(&v); err != nil {
+			t.Fatal(err)
+		}
+		ids = append(ids, tok.(string))
+		byID[tok.(string)] = v
+	}
+	if len(ids) != len(cat.Boats) {
+		t.Fatalf("scenarios.json has params for %v, the catalog %d boats", ids, len(cat.Boats))
+	}
+	for i := range cat.Boats {
+		boat := &cat.Boats[i]
+		if ids[i] != string(boat.ID) {
+			t.Errorf("scenarios.json's params are in the order %v, not the catalog's: %s is boat %d", ids, boat.ID, i)
+			continue
+		}
+		t.Run(string(boat.ID), func(t *testing.T) {
+			checkParams(t, catalog.PhysicsParams(boat), byID[ids[i]])
+		})
+	}
+}
+
+// checkParams fails unless values are p's, bit for bit, and p prepares to
+// finite constants.
+func checkParams(t *testing.T, p physics.Params, values map[string]json.RawMessage) {
 	v := reflect.ValueOf(p)
-	if len(sf.Params) != v.NumField() {
-		t.Errorf("scenarios.json has %d params, Params %d fields", len(sf.Params), v.NumField())
+	if len(values) != v.NumField() {
+		t.Errorf("scenarios.json has %d params, Params %d fields", len(values), v.NumField())
 	}
 	for i := range v.NumField() {
 		name := v.Type().Field(i).Name
 		r, n := utf8.DecodeRuneInString(name)
-		raw, ok := sf.Params[string(unicode.ToLower(r))+name[n:]]
+		raw, ok := values[string(unicode.ToLower(r))+name[n:]]
 		if !ok {
 			t.Errorf("scenarios.json has no %s", name)
 			continue

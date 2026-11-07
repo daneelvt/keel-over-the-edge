@@ -401,6 +401,46 @@ func TestSailOnPilot(t *testing.T) {
 	}
 }
 
+// TestSailReefing: a reef taken by the page reaches the server in the
+// input's rig word, and the crew reefs there as the page predicts it: with
+// no lag, no snapshot differs from the prediction, the server's boat is
+// reefing, and its snapshots say the reef in force.
+func TestSailReefing(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		srv := NewServer(t, Config{})
+		token, _ := srv.Sailor("Ann")
+		s := srv.NewSailor(DialOptions{Cookie: token}, func(n int) client.Input {
+			in := client.Hand(bus.Steps/2, 400)
+			if n >= 5*physics.StepsPerSecond {
+				in.Reef = 2
+			}
+			return in
+		})
+		if err := s.Connect(t.Context()); err != nil {
+			t.Fatal(err)
+		}
+		if err := s.Sail(t.Context(), 20*time.Second); err != nil {
+			t.Fatal(err)
+		}
+		s.Drop()
+		if s.Stats.Corrections != 0 || s.Stats.Snapshots < 100 {
+			t.Errorf("reefing with no lag: %d corrections in %d snapshots", s.Stats.Corrections, s.Stats.Snapshots)
+		}
+		f := srv.World.Bus().Frames.Acquire()
+		defer f.Release()
+		if len(f.Live) != 1 {
+			t.Fatalf("%d boats", len(f.Live))
+		}
+		sl := f.Live[0]
+		if r := f.State[sl].Reef; f.Rig[sl].Reef() != 2 || !(r > 0.2 && r < 2) {
+			t.Errorf("the server's boat holds reef %d, its sail at %v", f.Rig[sl].Reef(), r)
+		}
+		if p := s.Predictor.State.Reef; !(p > 0.2) {
+			t.Errorf("the page's boat's sail is at %v", p)
+		}
+	})
+}
+
 // TestTraces records, with -update, the traces the TypeScript tests replay:
 // with no lag, and at 200 ms and 2% loss, sailed by hand in the server's
 // steady wind and on the autopilot in a trade spell; and replays the
@@ -525,7 +565,7 @@ func replayTrace(t *testing.T, trace *client.Trace) (corrections int) {
 	// The page computes the wind with the catalog's constants, as a server
 	// with the catalog's sequence of spells does; a steady spell's wind is
 	// the same with any.
-	p := client.NewPredictor(&kinds[0], waves, cat.PrepareWeather())
+	p := client.NewPredictor(kinds, waves, cat.PrepareWeather())
 	p.Encounters = cat.PrepareEncounters()
 	snapshots := map[int64]*protocol.Snapshot{}
 	var latest *protocol.Snapshot

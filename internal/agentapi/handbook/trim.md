@@ -4,13 +4,25 @@
 
 The fastest boom by angle off the true wind, in 6, 12 and 20 knots (Jolly boat, flat water):
 
-- 40°: 4, 4, 10
-- 60°: 5, 10, 20
+- 40°: 4, 4, 5
+- 60°: 4, 10, 15
 - 90°: 20, 25, 30
-- 120°: 45, 50, 45
-- 150°: 75, 80, 60
+- 120°: 45, 50, 50
+- 150°: 75, 80, 70
 - 170°: 80, 80, 80
 - 180°: 85, 85, 85
+
+The fastest boom by angle off the true wind, in 6, 12 and 20 knots (Keelboat, flat water):
+
+- 40°: 4, 4, 10
+- 60°: 4, 15, 20
+- 90°: 20, 30, 30
+- 120°: 45, 50, 55
+- 150°: 75, 80, 65
+- 170°: 80, 80, 80
+- 180°: 80, 80, 80
+
+Reef (trim or steer with reef 1 or 2; 0 shakes the reefs out) when close-hauled the sheet hauled in hard heels the boat past its trim: from there only easing holds her up, and reefed she heels less and stands up. Reef the Jolly boat from 19 knots and the Keelboat from 13 knots.
 
 Close-hauled, haul in hard. Half the apparent wind's angle is a rough guide on a reach only.
 

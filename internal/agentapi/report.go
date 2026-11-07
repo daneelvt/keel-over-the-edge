@@ -75,7 +75,11 @@ type report struct {
 }
 
 type boatFacts struct {
-	Kind    string  `json:"kind"`
+	Kind string `json:"kind"`
+	// Reef is how the sail stands: "full sail", "one reef", or, while the
+	// crew is at work, "reefing to two reefs".
+	Reef    string  `json:"reef,omitempty"`
+	reefed  bool    // reefed, or the crew at work
 	State   string  `json:"state"`
 	Heading int     `json:"heading"`
 	Speed   float64 `json:"speedKnots"`
@@ -153,7 +157,9 @@ func (h *helm) reportFor(s *Sea, f *bus.Frame, sl int32, detail string, since in
 	r.Clock = clockOf(s, f, st.X, st.Y)
 
 	// The boat.
-	b := &boatFacts{Kind: s.boat(f.Kind[sl]).Name, State: stateOf(f, sl), Heading: degrees(st.Heading),
+	kind := s.boat(f.Kind[sl])
+	b := &boatFacts{Kind: kind.Name, Reef: reefState(kind, st, f.Rig[sl].Reef()), reefed: f.Rig[sl].Reef() != 0 || st.Reef != 0,
+		State: stateOf(f, sl), Heading: degrees(st.Heading),
 		Speed: math.Floor(knots(float64(in.SpeedOverGround))*10+0.5) / 10, Heel: degrees(math.Abs(st.Heel))}
 	if b.Heel > 0 {
 		b.HeelTo = side(st.Heel)
@@ -844,9 +850,14 @@ func (r *report) text() string {
 			speed += fmt.Sprintf(" · %.1f m under you", *bt.Depth)
 		}
 		if r.brief {
-			fmt.Fprintf(&b, "Boat: %s · heading %s · %s · %s · %s", bt.State, three(bt.Heading), speed, heel, bt.Tack)
+			// The reef only while the sail is reefed, or the crew at work.
+			reef := ""
+			if bt.reefed {
+				reef = bt.Reef + " · "
+			}
+			fmt.Fprintf(&b, "Boat: %s%s · heading %s · %s · %s · %s", reef, bt.State, three(bt.Heading), speed, heel, bt.Tack)
 		} else {
-			fmt.Fprintf(&b, "Boat: %s · %s · heading %s · %s · %s · %s\n", bt.Kind, bt.State, three(bt.Heading), speed, heel, bt.Tack)
+			fmt.Fprintf(&b, "Boat: %s, %s · %s · heading %s · %s · %s · %s\n", bt.Kind, bt.Reef, bt.State, three(bt.Heading), speed, heel, bt.Tack)
 		}
 	}
 	if p := r.Pilot; p != nil {

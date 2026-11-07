@@ -27,18 +27,55 @@ type sailResult struct {
 	side       float64 // level force to starboard, N
 	attack     [2]float64
 	flow       [2]float64
+	// The headsails', as the main's.
+	jibMoment     float64 // moment swinging the clew to starboard, N·m
+	jibWetDamping float64
+	jibTwist      float64 // rad
+	jibAttack     [2]float64
+	jibFlow       [2]float64
+}
+
+// rig is the sails' shape for a step: their areas and heights as reefed.
+// A reef shortens a sail's luff to its share: its area goes as the square
+// of the share and its strips' heights above the boom, or the tack, with
+// it (as the Offshore Racing Congress's VPP, 2023, reefs a sail).
+type rig struct {
+	share        float64 // the main's share of its luff
+	strip        float64 // ½ρ_air × the area of one of its strips, kg/m
+	footZ, headZ float64 // depth of each strip's centre of effort below the centre of gravity, m
+	effortZ      float64
+	jibStrip     float64
+	jibFootZ     float64
+	jibHeadZ     float64
+}
+
+// rigAt fills r with the sails' shape at reef reef, from 0 to 2.
+func (b *Prepared) rigAt(reef float64, r *rig) {
+	share := lookup(b.reefs[:], reef, 1)
+	r.share = share
+	r.strip = float64(float64(b.strip*share) * share)
+	r.footZ = b.boomZ - float64(b.footHeight*share)
+	r.headZ = b.boomZ - float64(b.headHeight*share)
+	r.effortZ = float64(0.5 * (r.footZ + r.headZ))
+	if b.jib {
+		share = lookup(b.jibReefs[:], reef, 1)
+		r.jibStrip = float64(float64(b.jibStrip*share) * share)
+		r.jibFootZ = b.jibTackZ - float64(b.jibFootHeight*share)
+		r.jibHeadZ = b.jibTackZ - float64(b.jibHeadHeight*share)
+	}
 }
 
 // sailLoads adds both strips' forces to l, at the mast, and fills r. flat is
-// the sailor's flattening, twist the head strip's twist beyond the boom.
-func (b *Prepared) sailLoads(s *State, m *motion, flat, twist float64, l *loads, r *sailResult) {
+// the sailor's flattening, twist the head strip's twist beyond the boom,
+// g the sails' shape as reefed. The headsails follow the main.
+func (b *Prepared) sailLoads(s *State, m *motion, flat, twist float64, g *rig, l *loads, r *sailResult) {
 	// The twist falls off to whichever side the boom is on, turning over
 	// smoothly as the boom crosses the centreline.
 	turn := clamp(float64(s.Boom*b.invTwistTurn), -1, 1)
 	for i := range 2 {
-		angle, z := s.Boom, b.footZ
+		angle, z := s.Boom, g.footZ
 		if i == 1 {
-			angle, z = s.Boom+float64(twist*turn), b.headZ
+			angle, z = s.Boom+float64(twist*turn), g.headZ
 		}
 		sinB, cosB := SinCos(angle)
 		// The chord runs from the mast toward the leech.
@@ -47,8 +84,8 @@ func (b *Prepared) sailLoads(s *State, m *motion, flat, twist float64, l *loads,
 		swing := float64(d * s.BoomRate)
 		pf := b.flow(m, b.mastX+float64(d*cx), float64(d*cy), z, float64(swing*sinB), float64(swing*cosB), true)
 		a, side, sinA, cosA := attack(&pf, cx, cy)
-		cl, cd, sep := b.sailCoefficients(a, sinA, cosA, flat)
-		fx, fy := force(&pf, float64(side*cl), cd, b.strip)
+		cl, cd, sep := b.sail.coefficients(a, sinA, cosA, flat)
+		fx, fy := force(&pf, float64(side*cl), cd, g.strip)
 		l.add(m, fx, fy, b.mastX, 0, z)
 
 		// The centre of pressure moves aft as the flow separates; the moment
@@ -80,20 +117,63 @@ func (b *Prepared) sailLoads(s *State, m *motion, flat, twist float64, l *loads,
 		}
 
 		r.attack[i] = float64(side * a)
-		switch {
-		case a > math.Pi/2:
-			r.flow[i] = FlowAback
-		case a < 1/b.invLuffAngle:
-			r.flow[i] = FlowLuffing
-		case sep > 0.5:
-			r.flow[i] = FlowStalled
-		default:
-			r.flow[i] = FlowAttached
-		}
+		r.flow[i] = b.sail.flowOf(a, sep)
+	}
+	if b.jib {
+		b.jibLoads(s, m, flat, g, l, r)
 	}
 }
 
-// sailCoefficients returns a strip's lift and drag coefficients at angle of
+// jibLoads adds the headsails' strips' forces to l, at the tack, and fills
+// r's headsail values. They are the main's strips about the stay, the clew
+// in place of the boom, with no backed head: a backed jib only presses its
+// clew across.
+func (b *Prepared) jibLoads(s *State, m *motion, flat float64, g *rig, l *loads, r *sailResult) {
+	turn := clamp(float64(s.Jib*b.invTwistTurn), -1, 1)
+	twist := b.jibTwist + float64(b.jibTwistPerAngle*math.Abs(s.Jib))
+	r.jibTwist = twist
+	for i := range 2 {
+		angle, z := s.Jib, g.jibFootZ
+		if i == 1 {
+			angle, z = s.Jib+float64(twist*turn), g.jibHeadZ
+		}
+		sinJ, cosJ := SinCos(angle)
+		cx, cy := -cosJ, sinJ
+		d := b.jibPressureAttached
+		swing := float64(d * s.JibRate)
+		pf := b.flow(m, b.jibX+float64(d*cx), float64(d*cy), z, float64(swing*sinJ), float64(swing*cosJ), true)
+		a, side, sinA, cosA := attack(&pf, cx, cy)
+		cl, cd, sep := b.jibSail.coefficients(a, sinA, cosA, flat)
+		fx, fy := force(&pf, float64(side*cl), cd, g.jibStrip)
+		l.add(m, fx, fy, b.jibX, 0, z)
+		cp := b.jibPressureAttached + float64(sep*(b.jibPressureSeparated-b.jibPressureAttached))
+		r.jibMoment += float64(cp * (float64(fx*sinJ) + float64(fy*cosJ)))
+		r.drive += fx
+		r.side += float64(fy * m.cosHeel)
+		if pf.height < 0 {
+			fz := float64(b.sailFloat*pf.height) - float64(b.sailWaterDamping*pf.vz)
+			l.K += float64(pf.side * fz)
+			r.jibWetDamping += float64(float64(b.sailWaterDamping*d) * d)
+		}
+		r.jibAttack[i] = float64(side * a)
+		r.jibFlow[i] = b.jibSail.flowOf(a, sep)
+	}
+}
+
+// flowOf is a strip's flow at angle of attack a, its flow separated by sep.
+func (k *sailCoefficients) flowOf(a, sep float64) float64 {
+	switch {
+	case a > math.Pi/2:
+		return FlowAback
+	case a < 1/k.invLuffAngle:
+		return FlowLuffing
+	case sep > 0.5:
+		return FlowStalled
+	}
+	return FlowAttached
+}
+
+// coefficients returns a strip's lift and drag coefficients at angle of
 // attack a in [0, π], whose sine and cosine are sinA and cosA, with the sail
 // flattened to flat; and how far its flow has separated, from 0 to 1.
 //
@@ -101,27 +181,41 @@ func (b *Prepared) sailLoads(s *State, m *motion, flat, twist float64, l *loads,
 // k_pm)·C_L², the induced and quadratic drag of ORC's VPP (2023, eq. 5.34).
 // Below the luffing angle the cloth flogs: little lift, a little more drag.
 // Separated flow: a normal force from the table, acting across the chord.
-func (b *Prepared) sailCoefficients(a, sinA, cosA, flat float64) (cl, cd, sep float64) {
-	luff := smooth(float64(a * b.invLuffAngle))
-	t := min2(float64(a*b.invStallAngle), 2)
-	clAttached := float64(float64(float64(flat*b.maxLift)*Sin(float64(math.Pi/2*t))) * luff)
-	cdAttached := (b.sailDrag + float64(float64(b.liftDrag*clAttached)*clAttached)) + float64(b.flogDrag*(1-luff))
-	n := lookup(b.normalForce[:], a, 18/math.Pi)
+func (k *sailCoefficients) coefficients(a, sinA, cosA, flat float64) (cl, cd, sep float64) {
+	luff := smooth(float64(a * k.invLuffAngle))
+	t := min2(float64(a*k.invStallAngle), 2)
+	clAttached := float64(float64(float64(flat*k.maxLift)*Sin(float64(math.Pi/2*t))) * luff)
+	cdAttached := (k.drag + float64(float64(k.liftDrag*clAttached)*clAttached)) + float64(k.flogDrag*(1-luff))
+	n := lookup(k.normalForce[:], a, 18/math.Pi)
 	clSeparated := float64(n * cosA)
-	cdSeparated := b.sailDrag + float64(n*sinA)
-	sep = smooth(float64((a - b.stallAngle) * b.invStallWidth))
+	cdSeparated := k.drag + float64(n*sinA)
+	sep = smooth(float64((a - k.stallAngle) * k.invStallWidth))
 	cl = clAttached + float64(sep*(clSeparated-clAttached))
 	cd = cdAttached + float64(sep*(cdSeparated-cdAttached))
 	return cl, cd, sep
 }
 
-// SailCoefficients returns a sail strip's lift and drag coefficients at angle
-// of attack a, in [0, π], with the sail flattened to flat. It is for
+// SailCoefficients returns a main's strip's lift and drag coefficients at
+// angle of attack a, in [0, π], with the sail flattened to flat. It is for
 // tools/polar, which compares the trimmed sail with ORC's.
 func SailCoefficients(b *Prepared, a, flat float64) (cl, cd float64) {
 	sinA, cosA := SinCos(a)
-	cl, cd, _ = b.sailCoefficients(a, sinA, cosA, flat)
+	cl, cd, _ = b.sail.coefficients(a, sinA, cosA, flat)
 	return cl, cd
+}
+
+// HeadsailCoefficients returns the same of a headsail's strip, for
+// tools/polar, which compares it with ORC's jib.
+func HeadsailCoefficients(b *Prepared, a, flat float64) (cl, cd float64) {
+	sinA, cosA := SinCos(a)
+	cl, cd, _ = b.jibSail.coefficients(a, sinA, cosA, flat)
+	return cl, cd
+}
+
+// HeadsailTwist returns a headsail's upper strip's twist beyond the clew's
+// line with the clew at angle radians, for tools/polar.
+func HeadsailTwist(b *Prepared, angle float64) float64 {
+	return b.jibTwist + float64(b.jibTwistPerAngle*math.Abs(angle))
 }
 
 // twist returns the head strip's twist beyond the boom: more as the sailor

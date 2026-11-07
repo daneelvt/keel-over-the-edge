@@ -175,7 +175,7 @@ func (sc *scene) steer(sl int32, angle, boom float64) {
 	f := sc.w.Latest()
 	seq := uint32(f.Tick + 1)
 	sheet := sheetOf(&sc.cat.Boats[0], boom)
-	sc.w.Bus().Controls.Store(sl, bus.Pack(seq, bus.Steps/2, sheet, f.Gen[sl]), bus.PackPilot(seq, bus.PilotWind, bus.WayHold, 0, turnTarget(angle), f.Gen[sl]))
+	sc.w.Bus().Controls.Store(sl, bus.Pack(seq, bus.Steps/2, sheet, f.Gen[sl]), bus.PackPilot(seq, bus.PilotWind, bus.WayHold, 0, turnTarget(angle), f.Gen[sl]), bus.PackRig(seq, 0, f.Gen[sl]))
 }
 
 // report is the full report of the machine sailor's boat in slot sl.

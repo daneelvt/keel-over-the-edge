@@ -433,7 +433,7 @@ func (enc *encoder) encode(c *conn, f *bus.Frame) {
 		return
 	}
 	b = b[:protocol.MaxHeaderSize]
-	b = b[:protocol.PutHeader(b, f.Tick, dist, flags, f.Control[s], f.Pilot[s], c.marginNow(), f.Voyage[s].Over, f.Stay[s], &f.State[s])]
+	b = b[:protocol.PutHeader(b, f.Tick, dist, flags, f.Control[s], f.Pilot[s], f.Rig[s], c.marginNow(), f.Voyage[s].Over, f.Stay[s], &f.State[s])]
 	b, n := protocol.AppendEntries(b, baseView, &next.view, enter, sample)
 	protocol.SetEntries(b, n)
 

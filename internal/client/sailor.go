@@ -24,12 +24,13 @@ import (
 )
 
 // Input is a step's controls as the wire carries them: the helm's and the
-// sheet's indices, and the autopilot's mode, the way of its latest order,
-// its order count and its target.
+// sheet's indices, the autopilot's mode, the way of its latest order, its
+// order count and its target, and the reef.
 type Input struct {
 	Helm, Sheet      uint16
 	Mode, Way, Order uint8
 	Target           uint16
+	Reef             uint8
 }
 
 // Hand is steering by hand: the helm and the sheet, the autopilot off.
@@ -40,6 +41,9 @@ func Hand(helm, sheet uint16) Input { return Input{Helm: helm, Sheet: sheet} }
 func (in Input) Pilot(seq uint32, gen uint16) bus.PilotWord {
 	return bus.PackPilot(seq, in.Mode, in.Way, in.Order, in.Target, gen)
 }
+
+// Rig is the input's rig word, stamped seq, for a slot of generation gen.
+func (in Input) Rig(seq uint32, gen uint16) bus.RigWord { return bus.PackRig(seq, in.Reef, gen) }
 
 // Controls gives the controls for the n-th step a sailor takes.
 type Controls func(n int) Input
@@ -108,7 +112,6 @@ type Dialer func(ctx context.Context) (*websocket.Conn, error)
 // that.
 type Sailor struct {
 	dial Dialer
-	kind *physics.Prepared
 
 	ws    *websocket.Conn
 	inbox *Inbox
@@ -170,12 +173,13 @@ type MSeen struct {
 	M  int
 }
 
-// NewSailor makes a sailor of a boat of kind that connects through dial
-// and steers with controls, in the sea of waves and the wind of weather.
-func NewSailor(dial Dialer, kind *physics.Prepared, waves *physics.Waves, weather *physics.WeatherPrepared, controls Controls) *Sailor {
+// NewSailor makes a sailor that connects through dial and steers with
+// controls a boat of the kind its Welcome names, one of kinds, in the sea
+// of waves and the wind of weather.
+func NewSailor(dial Dialer, kinds []physics.Prepared, waves *physics.Waves, weather *physics.WeatherPrepared, controls Controls) *Sailor {
 	return &Sailor{
-		dial: dial, kind: kind, controls: controls,
-		start: time.Now(), Ahead: NewAhead(), Predictor: NewPredictor(kind, waves, weather),
+		dial: dial, controls: controls,
+		start: time.Now(), Ahead: NewAhead(), Predictor: NewPredictor(kinds, waves, weather),
 		Net: Net{FrameMs: 17},
 	}
 }
@@ -273,6 +277,7 @@ func (s *Sailor) Sail(ctx context.Context, d time.Duration) error {
 			if w := ev.Welcome; w != nil {
 				s.Welcomes = append(s.Welcomes, WelcomeSeen{Boat: w.GetBoat(), Rejoined: w.GetRejoined(), EpochUs: w.GetEpochUs()})
 				s.Predictor.Circulation = float64(w.GetCirculation())
+				s.Predictor.Kind = uint16(min(w.GetKind(), math.MaxUint16))
 				s.Predictor.SetHarbour(w.GetHarbour())
 				s.Tools = w.GetTools()
 				s.fresh = true
@@ -390,7 +395,7 @@ func (s *Sailor) frame(ctx context.Context) error {
 		if s.fresh {
 			// On each connection the controls start at the indices in
 			// force: the word the server holds.
-			s.sent = Input{Helm: sn.Helm, Sheet: sn.Sheet, Mode: sn.Mode, Way: sn.Way, Order: sn.Order, Target: sn.Target}
+			s.sent = Input{Helm: sn.Helm, Sheet: sn.Sheet, Mode: sn.Mode, Way: sn.Way, Order: sn.Order, Target: sn.Target, Reef: sn.Reef}
 			s.sentAny = true
 			s.fresh = false
 		}
@@ -530,11 +535,15 @@ func (t *Trace) input(now float64, tick int64, in Input) {
 }
 
 // traced is a tick and its controls as a trace holds them: the
-// autopilot's only if any of them is not zero.
+// autopilot's only if any of them or the reef is not zero, and the reef
+// only if it is not zero.
 func traced(tick int64, in Input) []int64 {
 	v := []int64{tick, int64(in.Helm), int64(in.Sheet)}
-	if in.Mode|in.Way|in.Order != 0 || in.Target != 0 {
+	if in.Mode|in.Way|in.Order|in.Reef != 0 || in.Target != 0 {
 		v = append(v, int64(in.Mode), int64(in.Way), int64(in.Order), int64(in.Target))
+	}
+	if in.Reef != 0 {
+		v = append(v, int64(in.Reef))
 	}
 	return v
 }
@@ -544,6 +553,9 @@ func Untraced(v []int64) Input {
 	in := Input{Helm: uint16(v[1]), Sheet: uint16(v[2])}
 	if len(v) >= 7 {
 		in.Mode, in.Way, in.Order, in.Target = uint8(v[3]), uint8(v[4]), uint8(v[5]), uint16(v[6])
+	}
+	if len(v) >= 8 {
+		in.Reef = uint8(v[7])
 	}
 	return in
 }
