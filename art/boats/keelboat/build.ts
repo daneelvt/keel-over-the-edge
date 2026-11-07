@@ -2,8 +2,8 @@
 // Art: all rights reserved, not covered by the AGPL. See art/README.md.
 
 // The keelboat: a day-sailing keelboat of our time built by a shipwright of
-// the period. A carvel-planked hull painted red ochre with a dark sheer
-// strake, a cream boot top and a copper bottom; a laid deck with a shallow
+// the period. A carvel-planked hull, its topsides in the paint its sailor
+// chooses, with a dark sheer strake, a cream boot top and a copper bottom; a laid deck with a shallow
 // cockpit aft and a varnished cuddy with small panes forward of it; a fin
 // keel sheathed in copper with a cast lead bulb, and a rudder under the
 // counter with a long tiller and its extension; a fractional sloop rig of
@@ -337,6 +337,9 @@ function girthAt(u: number, y: number): number {
 
 const materials: MaterialDef[] = [
   { name: 'paint', color: [1, 1, 1], roughness: 0.55, metalness: 0 },
+  // The topsides, in the paint the boat's sailor chooses: their vertices
+  // carry only each plank's tone, and the game gives them the paint.
+  { name: 'topsides', color: [1, 1, 1], roughness: 0.55, metalness: 0 },
   { name: 'copper', color: [1, 1, 1], roughness: 0.42, metalness: 0.75 },
   { name: 'deck', color: [1, 1, 1], roughness: 0.5, metalness: 0 },
   { name: 'varnish', color: [1, 1, 1], roughness: 0.3, metalness: 0 },
@@ -375,8 +378,8 @@ const mix = (a: Vec3, b: Vec3, t: number): Vec3 => [
 
 // --- The planking ------------------------------------------------------------
 
-/** The paint: red ochre topsides, a dark sheer strake, a cream boot top. */
-const TOPSIDES = srgb(0.557, 0.204, 0.141);
+/** The paint: the topsides in the boat's own (white: their tones alone), a dark sheer strake, a cream boot top. */
+const TOPSIDES: Vec3 = [1, 1, 1];
 const SHEER_STRAKE = srgb(0.165, 0.133, 0.106);
 const BOOT = srgb(0.894, 0.851, 0.749);
 /** The copper sheathing, going green here and there. */
@@ -416,10 +419,14 @@ function band(
   }
 }
 
-/** The hull's shell: the copper bottom, and the boot top, topsides and transom in paint. */
-function planking(): { copper: MeshBuilder; paint: MeshBuilder } {
+/**
+ * The hull's shell: the copper bottom; the boot top, sheer strake and
+ * transom in paint; and the topsides between, in the boat's own paint.
+ */
+function planking(): { copper: MeshBuilder; paint: MeshBuilder; topsides: MeshBuilder } {
   const copper = new MeshBuilder('copper');
   const paint = new MeshBuilder('paint');
+  const topsides = new MeshBuilder('topsides');
   const bootFrom = (u: number): number => girthAt(u, BOOT_FROM);
   const bootTo = (u: number): number => girthAt(u, BOOT_TO);
   const side = new MeshBuilder('copper');
@@ -440,6 +447,7 @@ function planking(): { copper: MeshBuilder; paint: MeshBuilder } {
   copper.append(side, true);
 
   const top = new MeshBuilder('paint');
+  const sides = new MeshBuilder('topsides');
   band(top, bootFrom, bootTo, [0, 1], () => BOOT);
   // The strakes from the boot top to the sheer, the top one the dark sheer
   // strake, an eighth of the girth; each plank's own tone, its lower edge a
@@ -449,10 +457,11 @@ function planking(): { copper: MeshBuilder; paint: MeshBuilder } {
   for (let k = 0; k < D.strakes; k++) {
     const f0 = edge(k);
     const f1 = edge(k + 1);
-    const base = k === D.strakes - 1 ? SHEER_STRAKE : TOPSIDES;
+    const sheerStrake = k === D.strakes - 1;
+    const base = sheerStrake ? SHEER_STRAKE : TOPSIDES;
     const tone = 0.94 + 0.12 * jitter(k + 40);
     band(
-      top,
+      sheerStrake ? top : sides,
       (u) => lerp(bootTo(u), 1, f0),
       (u) => lerp(bootTo(u), 1, f1),
       seam,
@@ -462,7 +471,9 @@ function planking(): { copper: MeshBuilder; paint: MeshBuilder } {
   paint.append(top);
   paint.append(top, true);
   paint.append(transom());
-  return { copper, paint };
+  topsides.append(sides);
+  topsides.append(sides, true);
+  return { copper, paint, topsides };
 }
 
 /** The transom: varnished mahogany, flat across the hull's after end. */
@@ -1523,6 +1534,7 @@ function model(): NodeDef[] {
   const shellAll = new MeshBuilder('paint');
   shellAll.append(shell.copper);
   shellAll.append(shell.paint);
+  shellAll.append(shell.topsides);
   const waterline = hullVolume(shellAll);
   const rails = new MeshBuilder('varnish');
   rubrails(rails);
@@ -1534,6 +1546,7 @@ function model(): NodeDef[] {
   const hullParts = [
     shell.copper.primitive({ colors: true }),
     shell.paint.primitive({ colors: true }),
+    shell.topsides.primitive({ colors: true }),
     deckMesh.primitive({ colors: true }),
     rails.primitive({ colors: true }),
     house.wood.primitive({ colors: true }),

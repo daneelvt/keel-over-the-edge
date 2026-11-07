@@ -2,8 +2,9 @@
 // Art: all rights reserved, not covered by the AGPL. See art/README.md.
 
 // The Jolly boat: a single-handed dinghy built by a shipwright of the
-// period. A clinker-planked hull of varnished timber with a laid deck and a
-// cockpit, a varnished spruce mast and boom, a cream flax sail, a
+// period. A clinker-planked hull, its planking in the paint its sailor
+// chooses (bright varnish shows the timber), a varnished transom and
+// rubbing strakes, with a laid deck and a cockpit, a varnished spruce mast and boom, a cream flax sail, a
 // daggerboard and a rudder with its tiller, bronze fittings, and at the
 // masthead a brass lantern with the pennant's staff above it.
 //
@@ -220,6 +221,9 @@ const stations = (): number[] => Array.from({ length: D.stations + 1 }, (_, i) =
 
 const materials: MaterialDef[] = [
   { name: 'timber', color: [1, 1, 1], roughness: 0.32, metalness: 0 },
+  // The planking, in the paint the boat's sailor chooses: its vertices
+  // carry only each plank's tone, and the game gives them the paint.
+  { name: 'topsides', color: [1, 1, 1], roughness: 0.32, metalness: 0 },
   { name: 'deck', color: [1, 1, 1], roughness: 0.45, metalness: 0 },
   { name: 'spar', color: srgb(0.8, 0.6, 0.34), roughness: 0.35, metalness: 0 },
   { name: 'flax', color: srgb(0.93, 0.89, 0.78), roughness: 0.85, metalness: 0, doubleSided: true },
@@ -250,8 +254,9 @@ const jitter = (i: number): number => {
 const LAP = 0.014;
 const TIMBER = srgb(0.68, 0.42, 0.2);
 
+/** The planking, both sides: its vertices each plank's tone, the paint the game's. */
 function planking(): MeshBuilder {
-  const side = new MeshBuilder('timber');
+  const side = new MeshBuilder('topsides');
   const strakes = D.strakes;
   const laps = D.laps;
   for (let k = 0; k + 1 < strakes.length; k++) {
@@ -263,7 +268,7 @@ function planking(): MeshBuilder {
     stations().forEach((u, i) => {
       // A little grain along the plank.
       const grain = tone * (0.96 + 0.08 * jitter(k * 100 + i));
-      const c: Vec3 = [TIMBER[0] * grain, TIMBER[1] * grain, TIMBER[2] * grain];
+      const c: Vec3 = [grain, grain, grain];
       D.strakeRows.forEach((s, r) => {
         const g = g0 + (g1 - g0) * s;
         const p = section(u, g);
@@ -296,7 +301,7 @@ function planking(): MeshBuilder {
       side.strip(land[0] as number[], land[1] as number[]);
     }
   }
-  const both = new MeshBuilder('timber');
+  const both = new MeshBuilder('topsides');
   both.append(side);
   both.append(side, true);
   return both;
@@ -883,11 +888,14 @@ function solid(): Record<string, unknown> {
 
 /** The boat's nodes at the detail in force. */
 function model(): NodeDef[] {
-  const hullMesh = planking();
-  hullMesh.append(transom());
+  const planks = planking();
+  const stern = transom();
+  const hullMesh = new MeshBuilder('timber');
+  hullMesh.append(planks);
+  hullMesh.append(stern);
   const waterline = hullVolume(hullMesh);
   const rails = new MeshBuilder('timber');
-  rails.append(hullMesh);
+  rails.append(stern);
   rubrails(rails);
   let deckMesh: MeshBuilder;
   if (D.plankedDeck) {
@@ -896,7 +904,11 @@ function model(): NodeDef[] {
   } else {
     deckMesh = plainDeck();
   }
-  const hullParts = [rails.primitive({ colors: true }), deckMesh.primitive({ colors: true })];
+  const hullParts = [
+    planks.primitive({ colors: true }),
+    rails.primitive({ colors: true }),
+    deckMesh.primitive({ colors: true }),
+  ];
   const boomParts = [boom().primitive()];
   if (D.small) {
     hullParts.push(fittings().primitive());
