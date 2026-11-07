@@ -57,8 +57,9 @@ import { STEPS_PER_SECOND } from '../game/clock';
 import type { BoatDriver } from '../game/driver';
 import { type DrawnBoat, newDrawnBoat } from '../game/fleet';
 import type { Game } from '../game/game';
+import type { LifeBird } from '../life/draw';
 import { nowUs, worldUs } from '../net/clock';
-import type { BumpTold, ChartEntry, ChartSubject } from '../net/messages';
+import type { BumpTold, ChartEntry, ChartSubject, LifeSeen } from '../net/messages';
 import type { Online } from '../net/online';
 import type { Cascade } from '../ocean/detail';
 import { FieldMaker, newFields } from '../ocean/field';
@@ -102,6 +103,7 @@ import { rungName, TIERS } from '../render/quality';
 import { CAMERA_PRESETS, type CameraView, type SeaScene } from '../render/scene';
 import { look } from '../render/sky';
 import type { SandboxForecast } from '../sandbox/forecast';
+import { lifeScene } from '../sandbox/lifescene';
 import { KNOT, type Sandbox, SEA_STATES } from '../sandbox/sandbox';
 import { startWakeScene, type WakeSceneName, wakeSceneHost } from '../sandbox/wakescenes';
 import { hourAt, moonAgeAt, skyPeriods } from '../sky/skytime';
@@ -286,6 +288,8 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
     before?.();
     seaFrames++;
   };
+  // The sea's life raised by hand, counted: each its own id and seed.
+  let lifeRaised = 0;
   // Every notice shown, in order, for tests that look after it has gone.
   const noticesShown: string[] = [];
   sailing.chart?.notices.shown.subscribe((s) => {
@@ -1899,6 +1903,48 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
         return null;
       }
       return { ...f.stats, steam: f.steam.count };
+    },
+    /**
+     * The sea's life held, the birds of it drawn last frame and the towns'
+     * gulls; and every bird in the birds' one draw, colonies' too, with its
+     * draws (0 or 1).
+     */
+    life(): { records: LifeSeen[]; birds: number; gulls: number; drawn: number; draws: number } {
+      const s = world.lifeDraw.stats;
+      return {
+        records: [...world.life.values()],
+        birds: s.birds,
+        gulls: s.gulls,
+        drawn: world.birds.stats.birds,
+        draws: world.birds.stats.draws,
+      };
+    },
+    /**
+     * The birds of the sea's life within reach of the camera at a tick, now
+     * by default, each one's group, number and place, found as the frame
+     * finds them: two pages compared at one tick see the same birds.
+     */
+    lifeBirds(tick?: number): LifeBird[] {
+      const f = world.lifeFrame(stage.camera.position, false);
+      return world.lifeDraw.birdsAt(world.life, f, tick ?? world.ticks);
+    },
+    /**
+     * Raises a group of a kind, by its id, by the boat now: its middle
+     * east and north of the boat by so many m (200 m ahead by default)
+     * at once, as ?life raises one 40 s after the load. Its record, or
+     * null for a kind not in the catalog.
+     */
+    raiseLife(kindId: string, eastOff?: number, northOff?: number): LifeSeen | null {
+      const kind = catalog.life.kinds.findIndex((k) => k.id === kindId);
+      const offset =
+        eastOff === undefined && northOff === undefined
+          ? undefined
+          : { east: eastOff ?? 0, north: northOff ?? 0 };
+      const e = lifeScene(catalog.life, kind, world.ticks, world.pose, ++lifeRaised, 0, offset);
+      if (e !== null) {
+        world.life.set([e], []);
+      }
+      return e;
     },
     /** The towns drawn: their buildings near and far, props, draws and triangles; the buildings held. */
     towns() {

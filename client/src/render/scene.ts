@@ -31,6 +31,9 @@ import { closedIn, EndSlabs, type EndStage, endStage, risen } from '../edge/take
 import { STEPS_PER_SECOND } from '../game/clock';
 import type { DrawnBoat } from '../game/fleet';
 import type { Land } from '../land/land';
+import type { BoatAt } from '../life/birds';
+import { type GullSource, LifeDraw, type LifeFrame } from '../life/draw';
+import { LifeStore } from '../life/store';
 import { HULL_REACH, HULLS, hullShape, hulls } from '../ocean/hulls';
 import { foamAt, KNOT, newFoamLook, SPRAY, transomFrom } from '../ocean/look';
 import { Ocean } from '../ocean/ocean';
@@ -43,6 +46,7 @@ import { type BoatWind, newBoatWind } from '../predict/weather';
 import { SkyTime } from '../sky/skytime';
 import starsUrl from '../sky/stars.bin?url';
 import { SkyWeather } from '../sky/weather';
+import { Birds } from './birds';
 import { Boat, lampsLit, lazyArtUrl, type SailorLook } from './boat';
 import { CAMERA_PRESETS, type CameraView, ChaseCamera, lookSizeOf, sizeOf } from './camera';
 import { FloatingOrigin, type ScenePoint } from './coords';
@@ -209,6 +213,11 @@ export class SeaScene {
     catalog.world.lights,
     catalog.world.places.kinds.findIndex((k) => k.site === 'light'),
   );
+  /** Every bird drawn, one draw: the colonies', the sea's life's and the towns' gulls. */
+  readonly birds = new Birds();
+  /** The sea's life the page has been told of, and how it is drawn. */
+  readonly life = new LifeStore();
+  readonly lifeDraw = new LifeDraw(catalog.life, catalog.world.towns.buildings);
   /** The wrecks, stranded and sunk. */
   readonly wrecks = new Wrecks(
     catalog.world.places.rigs,
@@ -388,6 +397,7 @@ export class SeaScene {
     scene.add(this.flags.mesh, this.smoke.mesh, this.cones.mesh);
     scene.add(this.lighthouses.towers, this.lighthouses.glows);
     scene.add(this.wrecks.root);
+    scene.add(this.birds.mesh);
     this.wrecks.depthAt = (east, north) => {
       const h = this.land?.heightAt(east, north) ?? null;
       return h === null ? null : -h;
@@ -689,6 +699,7 @@ export class SeaScene {
     land.solids.towers = this.lighthouses;
     this.camera.solids = land.solids;
     this.freeCam.solids = land.solids;
+    this.#lands++;
   }
 
   setUsePass(on: boolean): void {
@@ -1297,6 +1308,7 @@ export class SeaScene {
       seaHeight: this.sea.height,
       windSpeed: wind.speed,
       windFrom: wind.from,
+      birds: this.birds,
     });
     const features = land.towns.features();
     const time = this.ticks / STEPS_PER_SECOND;
@@ -1322,6 +1334,60 @@ export class SeaScene {
       this.galeUp,
     );
     this.smoke.frame(chimneys, o, time, 0.25 + 0.75 * (1 - night));
+  }
+
+  /** The lands used, so the towns' gulls are found again in a new one. */
+  #lands = 0;
+  /** The towns' buildings as the gulls' wheels are found from them. */
+  readonly #gullSource: GullSource = {
+    version: 0,
+    buildings: () => this.land?.towns.buildings() ?? [],
+  };
+  /** The own boat as the life with it reads it, and the life's frame, reused. */
+  readonly #lifeOwn: BoatAt = { east: 0, north: 0, heading: 0, speed: 0 };
+  readonly #lifeFrame: LifeFrame = {
+    ticks: 0,
+    cameraEast: 0,
+    cameraNorth: 0,
+    cameraUp: 0,
+    seaHeight: 0,
+    low: false,
+    night: false,
+    own: null,
+    fleet: NO_BOATS,
+    count: 0,
+  };
+
+  /** The life's frame at the camera now: the boats a group may be with, the sea, the tier. */
+  lifeFrame(camera: Vector3, night: boolean): LifeFrame {
+    const o = this.origin.world;
+    const f = this.#lifeFrame;
+    f.ticks = this.ticks;
+    f.cameraEast = camera.x + o.x;
+    f.cameraNorth = -camera.z + o.y;
+    f.cameraUp = camera.y;
+    f.seaHeight = this.sea.height;
+    f.low = this.rung.tier === 'low';
+    f.night = night;
+    const own = this.#lifeOwn;
+    own.east = this.pose.east;
+    own.north = this.pose.north;
+    own.heading = this.pose.heading;
+    own.speed = this.out[RECORDS.out.speedOverGround] ?? 0;
+    f.own = this.boat === null ? null : own;
+    f.fleet = this.fleetSource?.drawn ?? NO_BOATS;
+    f.count = this.fleetSource?.count ?? 0;
+    return f;
+  }
+
+  /** The sea's life near, and the towns' gulls by day, into the birds' draw. */
+  #drawLife(camera: Vector3, night: boolean): void {
+    const land = this.land;
+    const towns = land === null ? null : this.#gullSource;
+    if (land !== null) {
+      this.#gullSource.version = this.#lands * 1e9 + land.towns.features().version;
+    }
+    this.lifeDraw.frame(this.life, this.lifeFrame(camera, night), this.birds, towns);
   }
 
   /** The winds asked of the module about the towns, by place, and when. */
@@ -1491,7 +1557,11 @@ export class SeaScene {
         this.timeStep,
       );
     }
+    const night = this.drawSky ? lanternLit(this.sky.now.sunHeight) : 0;
+    this.birds.begin(this.origin.world, this.ticks / STEPS_PER_SECOND, 0.25 + 0.75 * (1 - night));
     this.#drawTowns(camera.position, now);
+    this.#drawLife(camera.position, night > 0.5);
+    this.birds.end();
     this.#drawLanterns(view.height, camera.position);
     this.#drawLights(view.height, camera.position, now);
     this.wrecks.frame(this.origin);

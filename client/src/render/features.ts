@@ -19,7 +19,8 @@
 //
 // Each is a function of world time and its part's numbers, so every phone
 // shows the same spouts, curtains and birds. All the curtains are one
-// draw, the spray one, the steam one, the birds one.
+// draw, the spray one, the steam one; the birds are written to the
+// scene's draw of every bird (birds.ts).
 
 import {
   BufferAttribute,
@@ -45,7 +46,6 @@ import {
   instancedDynamicBufferAttribute,
   mix,
   positionLocal,
-  select,
   sin,
   smoothstep,
   uniform,
@@ -57,6 +57,7 @@ import type { Node } from 'three/webgpu';
 import { spoutOffset } from '../audio/features';
 import type { FeatureKind, World } from '../catalog/types.gen';
 import type { ChunkFeatures, ChunkPart } from '../workers/mesh/chunk';
+import type { Birds } from './birds';
 import { headingToRotationY } from './coords';
 import { basicMaterial, bendScene, horizonDistance } from './materials';
 import { type Chimney, Smoke } from './smoke';
@@ -112,6 +113,8 @@ export interface FeaturesFrame {
   seaHeight: number;
   windSpeed: number;
   windFrom: number;
+  /** The birds' draw the colonies' birds are written to, the scene's; null for none. */
+  birds: Birds | null;
 }
 
 /** What the tests and the panel read. */
@@ -128,7 +131,6 @@ export interface FeaturesStats {
 /** The capacities. */
 const FALLS = 64;
 const PUFFS = 1024;
-const BIRDS = 1024;
 /** The curtain's rows down and columns across. */
 const ROWS = 10;
 const COLS = 2;
@@ -168,8 +170,6 @@ export class Features {
   readonly #puffs: InstancedMesh;
   readonly #puffPlace: InstancedInterleavedBuffer;
   readonly #puffShade: InstancedInterleavedBuffer;
-  readonly #birds: InstancedMesh;
-  readonly #birdData: InstancedInterleavedBuffer;
 
   constructor(world: World) {
     this.#world = world;
@@ -197,8 +197,7 @@ export class Features {
     this.scene.add(this.steam.mesh);
     [this.#falls, this.#fallData] = this.#makeFalls();
     [this.#puffs, this.#puffPlace, this.#puffShade] = this.#makePuffs();
-    [this.#birds, this.#birdData] = this.#makeBirds();
-    this.root.add(this.#falls, this.#birds);
+    this.root.add(this.#falls);
     this.scene.add(this.#puffs);
   }
 
@@ -319,85 +318,6 @@ export class Features {
     return [mesh, placeBuf, shadeBuf];
   }
 
-  /** The birds: a body and two wings of two panels each, flapping on the GPU. */
-  #makeBirds(): [InstancedMesh, InstancedInterleavedBuffer] {
-    // x across the wings (a unit span), z from tail (+) to bill (−); uv.x
-    // the wing's share out, uv.y the part: 0 body, 1 wing, 2 tip.
-    const v: number[] = [];
-    const uv: number[] = [];
-    const tri = (a: number[], b: number[], c: number[], out: number[], part: number) => {
-      v.push(...a, ...b, ...c);
-      uv.push(out[0] ?? 0, part, out[1] ?? 0, part, out[2] ?? 0, part);
-    };
-    tri([0, 0, -0.35], [0.06, 0, 0.1], [-0.06, 0, 0.1], [0, 0, 0], 0);
-    tri([-0.06, 0, 0.1], [0.06, 0, 0.1], [0, 0, 0.3], [0, 0, 0], 0);
-    for (const side of [1, -1]) {
-      tri(
-        [0.05 * side, 0, -0.1],
-        [0.3 * side, 0, -0.06],
-        [0.05 * side, 0, 0.08],
-        [0.1, 0.6, 0.1],
-        1,
-      );
-      tri(
-        [0.3 * side, 0, -0.06],
-        [0.3 * side, 0, 0.06],
-        [0.05 * side, 0, 0.08],
-        [0.6, 0.6, 0.1],
-        1,
-      );
-      tri([0.3 * side, 0, -0.06], [0.5 * side, 0, 0.02], [0.3 * side, 0, 0.06], [0.6, 1, 0.6], 2);
-    }
-    const g = new BufferGeometry();
-    g.setAttribute('position', new Float32BufferAttribute(v, 3));
-    g.setAttribute('uv', new Float32BufferAttribute(uv, 2));
-    g.computeVertexNormals();
-    const data = new InstancedInterleavedBuffer(new Float32Array(BIRDS * 16), 16, 1);
-    data.setUsage(DynamicDrawUsage);
-    ['birdAt', 'birdFly', 'birdBody', 'birdWing'].forEach((name, k) => {
-      g.setAttribute(name, new InterleavedBufferAttribute(data, 4, k * 4));
-    });
-    const at = attribute('birdAt', 'vec4') as unknown as Node<'vec4'>;
-    const fly = attribute('birdFly', 'vec4') as unknown as Node<'vec4'>;
-    const body = attribute('birdBody', 'vec4') as unknown as Node<'vec4'>;
-    const wing = attribute('birdWing', 'vec4') as unknown as Node<'vec4'>;
-    const tag = attribute('uv', 'vec2') as unknown as Node<'vec2'>;
-    // at: (x, y, z, heading as a turn about y); fly: (flap Hz, glide share, phase, span); body: (rgb, ·); wing: (rgb of the wing, tip's grey).
-    const vertex = Fn(() => {
-      const p = positionLocal.mul(fly.w).toVar();
-      const cycle = fract(this.time.mul(0.12).add(fly.z));
-      const flapping = select(cycle.greaterThan(fly.y), float(1), float(0.08));
-      const beat = sin(
-        this.time
-          .mul(fly.x)
-          .mul(2 * Math.PI)
-          .add(fly.z.mul(40)),
-      );
-      p.y.addAssign(beat.mul(tag.x).mul(fly.w).mul(0.35).mul(flapping));
-      const c = cos(at.w);
-      const s = sin(at.w);
-      return vec3(p.x.mul(c).add(p.z.mul(s)), p.y, p.z.mul(c).sub(p.x.mul(s))).add(at.xyz);
-    })() as unknown as Node<'vec3'>;
-    // In their own colours by the daylight, so a gannet shows white against
-    // the sky as it does.
-    const m = basicMaterial({ side: DoubleSide }, vertex);
-    m.name = 'birds';
-    const vPart = varying(tag.y);
-    const vBody = varying(body.xyz);
-    const vWing = varying(wing.xyz);
-    const vTip = varying(wing.w);
-    m.colorNode = select(
-      vPart.lessThan(0.5),
-      vBody,
-      select(vPart.lessThan(1.5), vWing, vec3(vTip, vTip, vTip)),
-    ).mul(this.light) as unknown as Node<'vec3'>;
-    const mesh = new InstancedMesh(g, m, BIRDS);
-    mesh.name = 'birds';
-    mesh.count = 0;
-    mesh.frustumCulled = false;
-    return [mesh, data];
-  }
-
   /** A chunk's features, handed with its land. */
   add(n: number, f: ChunkFeatures | null): void {
     if (f === null || f.parts.length === 0) {
@@ -439,7 +359,6 @@ export class Features {
     const fallData = this.#fallData.array as Float32Array;
     const place = this.#puffPlace.array as Float32Array;
     const shade = this.#puffShade.array as Float32Array;
-    const birdData = this.#birdData.array as Float32Array;
     let falls = 0;
     let puffs = 0;
     let birds = 0;
@@ -526,28 +445,26 @@ export class Features {
           });
           break;
         case 'colony': {
-          if (f.night || kind.birds === undefined) {
+          const draw = f.birds;
+          if (f.night || kind.birds === undefined || draw === null) {
             break;
           }
-          const b = kind.birds.look;
-          const body = hexRgb(b.body);
-          const wingC = hexRgb(b.wing);
-          const tip = hexRgb(b.tip)[0];
-          for (let k = 0; k < p.count && birds < BIRDS; k++) {
+          const look = kind.birds.look;
+          for (let k = 0; k < p.count; k++) {
             const at = birdAt(f.time, k, p.seed, p.size);
-            const o = birds * 16;
-            birdData[o] = p.east + at.r * Math.sin(at.a);
-            birdData[o + 1] = p.level + at.up;
-            birdData[o + 2] = -(p.north + at.r * Math.cos(at.a));
             // Flying round: along the tangent of its circle.
-            birdData[o + 3] = headingToRotationY(at.a + Math.PI / 2);
-            birdData[o + 4] = b.flap;
-            birdData[o + 5] = b.glide;
-            birdData[o + 6] = own(20 + k);
-            birdData[o + 7] = b.span;
-            birdData.set(body, o + 8);
-            birdData.set(wingC, o + 12);
-            birdData[o + 15] = tip;
+            if (
+              !draw.add(
+                look,
+                p.east + at.r * Math.sin(at.a),
+                p.north + at.r * Math.cos(at.a),
+                p.level + at.up,
+                at.a + Math.PI / 2,
+                own(20 + k),
+              )
+            ) {
+              break;
+            }
             birds++;
           }
           break;
@@ -561,9 +478,6 @@ export class Features {
     this.#puffs.visible = puffs > 0;
     this.#puffPlace.needsUpdate = true;
     this.#puffShade.needsUpdate = true;
-    this.#birds.count = birds;
-    this.#birds.visible = birds > 0;
-    this.#birdData.needsUpdate = true;
     this.steam.frame(vents, f.origin, f.time, f.light);
     const s = this.stats;
     s.parts = parts;
@@ -572,20 +486,6 @@ export class Features {
     s.vents = vents.length;
     s.birds = birds;
     s.puffs = puffs;
-    s.draws =
-      (falls > 0 ? 1 : 0) +
-      (puffs > 0 ? 1 : 0) +
-      (birds > 0 ? 1 : 0) +
-      (this.steam.count > 0 ? 1 : 0);
+    s.draws = (falls > 0 ? 1 : 0) + (puffs > 0 ? 1 : 0) + (this.steam.count > 0 ? 1 : 0);
   }
-}
-
-/** A colour #rrggbb as linear values. */
-function hexRgb(hex: string): [number, number, number] {
-  const n = Number.parseInt(hex.slice(1), 16);
-  const f = (c: number): number => {
-    const v = c / 255;
-    return v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4;
-  };
-  return [f((n >> 16) & 255), f((n >> 8) & 255), f(n & 255)];
 }

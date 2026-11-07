@@ -32,6 +32,7 @@
 //   ?rain=20          rain held at the camera, mm an hour
 //   ?swell=0.6,6,270  a swell of the sandbox's own: height m, period s, from degrees
 //   ?edge=off         no mist, lip or falls
+//   ?life=sooty-tern  the sandbox with a group of the sea's life of that kind by the boat
 //   ?dev              the developer panel (loaded only when asked for)
 //   ?backend=webgl2   the WebGL 2 back end even where WebGPU is offered
 //   ?tier=low         a tier, high, medium or low, held: adaptive quality is off
@@ -93,6 +94,7 @@ import { CAMERA_PRESETS, SeaScene } from '../render/scene';
 import { pointUp } from '../render/signals';
 import { cameraSceneFromQuery, startCameraScene } from '../sandbox/camerascenes';
 import { SandboxForecast } from '../sandbox/forecast';
+import { lifeKindFromQuery, lifeScene } from '../sandbox/lifescene';
 import { swellFromQuery } from '../sandbox/localsea';
 import {
   boatFromQuery,
@@ -534,6 +536,14 @@ async function start(): Promise<void> {
     } else {
       world.placeFirstView();
     }
+    // ?life=id: a group of the sea's life of that kind by the boat, its
+    // middle 200 m ahead 40 s on (or with the boat, for a kind that
+    // follows boats), for pictures of it.
+    const lifeKind = lifeKindFromQuery(query, catalog.life);
+    const raised = lifeScene(catalog.life, lifeKind, world.ticks, world.pose, 0);
+    if (raised !== null) {
+      world.life.set([raised], []);
+    }
     const start = performance.now();
     const ready = untilReady(
       new Gate(
@@ -699,6 +709,7 @@ async function start(): Promise<void> {
     world.wrecks.setPlaces(p);
   };
   online.onLights = (l, drop) => world.lighthouses.setLights(l, drop);
+  online.onLife = (l, drop) => world.life.set(l, drop);
   online.onCaps = (c, drop) => world.weather.setCaps(c, drop);
   // The forecast as the server issues it, and what has been, kept.
   const forecasting = new Forecasting({
