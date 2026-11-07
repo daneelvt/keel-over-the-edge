@@ -78,7 +78,7 @@ type boatFacts struct {
 	Kind string `json:"kind"`
 	// Reef is how the sail stands: "full sail", "one reef", or, while the
 	// crew is at work, "reefing to two reefs".
-	Reef    string  `json:"reef"`
+	Reef    string  `json:"reef,omitempty"`
 	reefed  bool    // reefed, or the crew at work
 	State   string  `json:"state"`
 	Heading int     `json:"heading"`

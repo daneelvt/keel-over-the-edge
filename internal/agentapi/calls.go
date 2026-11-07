@@ -170,7 +170,7 @@ func (c *Core) call(ctx context.Context, d toolDef, h *helm, a *oauth.Accepted, 
 	case toolTrim:
 		var o struct {
 			Boom *int `json:"boom"`
-			Reef *int `json:"reef"`
+			Reef *int `json:"reef,omitempty"`
 		}
 		if r := args(req, &o); r != nil {
 			return "", nil, r

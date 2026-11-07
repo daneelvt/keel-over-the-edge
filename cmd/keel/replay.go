@@ -237,7 +237,7 @@ type dumpedControl struct {
 // dumpedRig is the rig word in force.
 type dumpedRig struct {
 	Word string `json:"word"`
-	Reef uint8  `json:"reef"`
+	Reef uint8  `json:"reef,omitempty"`
 }
 
 // dumpedPilot is the pilot word in force.

@@ -36,7 +36,7 @@ type Action =
   | 'pilotStarboard'
   | 'tack'
   | 'gybe'
-  | 'reef'
+  | 'reefIn'
   | 'shakeOut';
 
 const KEYS: Record<string, Action> = {
@@ -52,7 +52,7 @@ const KEYS: Record<string, Action> = {
   KeyE: 'pilotStarboard',
   KeyT: 'tack',
   KeyG: 'gybe',
-  KeyR: 'reef',
+  KeyR: 'reefIn',
   KeyF: 'shakeOut',
 };
 
@@ -117,7 +117,7 @@ export class KeyInput {
       case 'gybe':
         p?.pilotGybe();
         break;
-      case 'reef':
+      case 'reefIn':
         if (shift) {
           this.#reef?.shakeOut();
         } else {

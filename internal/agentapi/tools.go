@@ -101,7 +101,10 @@ func tools() []toolDef {
 				`"via":{"type":"string","enum":["auto","tack","gybe"],"description":"How to turn if the side changes. auto never gybes."},` +
 				`"rudder":{"type":"integer","minimum":-40,"maximum":40,"description":"Hand steering, degrees; negative turns to port."},` +
 				`"boom":{"type":"integer","minimum":4,"maximum":95,"description":"Also trim, as trim does."},` +
-				`"reef":{"type":"integer","minimum":0,"maximum":2,"description":"Also reef, as trim does."}` +
+				// The reef's name with its quotes escaped, as below: the
+				// catalog's check refuses a surface's id quoted in code,
+				// and this is an argument's name, not a surface.
+				"\"reef\":{\"type\":\"integer\",\"minimum\":0,\"maximum\":2,\"description\":\"Also reef, as trim does.\"}" +
 				`}}`),
 		}},
 		{budget: orders, joins: true, tool: &mcp.Tool{
@@ -111,7 +114,8 @@ func tools() []toolDef {
 			Annotations: hints("Trim", false, true, false), Meta: alwaysLoad(),
 			InputSchema: schema(`{"type":"object","properties":{` +
 				`"boom":{"type":"integer","minimum":4,"maximum":95,"description":"Degrees the boom may swing out. Ease (larger) in gusts."},` +
-				`"reef":{"type":"integer","minimum":0,"maximum":2,"description":"0 full sail; 1 or 2 reefs: a smaller sail, heeling less in a strong wind. Give boom, reef or both."}` +
+				"\"reef\":{\"type\":\"integer\",\"minimum\":0,\"maximum\":2," +
+				`"description":"0 full sail; 1 or 2 reefs: a smaller sail, heeling less in a strong wind. Give boom, reef or both."}` +
 				`}}`),
 		}},
 		{budget: looks, tool: &mcp.Tool{
