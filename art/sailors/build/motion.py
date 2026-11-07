@@ -1383,10 +1383,13 @@ def stop(arm):
         pb.matrix_basis.identity()
 
 
-def export(path, arm, actions, gltfpack, work, places=None):
+def export(path, arm, actions, gltfpack, work, places=None, fps=30):
     """The clips with the skeleton alone, packed: rotations and the
-    pelvis's translation, at 30 frames a second; and where each clip is
-    placed, by name (export.add_places)."""
+    pelvis's translation, a key a frame at fps (the scene's rate, which
+    the exporter times the keys by); and where each clip is placed, by
+    name (export.add_places)."""
+    bpy.context.scene.render.fps = fps
+    bpy.context.scene.render.fps_base = 1.0
     stop(arm)
     keep = {a.name for a, _ in actions}
     for a in list(bpy.data.actions):

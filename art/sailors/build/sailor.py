@@ -580,15 +580,23 @@ def make_clips(job, v, fig, lib, kinds, gates, renderer, lookmat, work, worn=())
             # Packed apart, then added to the look's file: the clips it has
             # already kept as they are.
             added = os.path.join(work, f"{v}.{group}.added.glb")
-            motion.export(added, fig.arm, actions, job["gltfpack"], work, here)
+            motion.export(added, fig.arm, actions, job["gltfpack"], work, here, m["fps"])
             export.merge_clips(path, added)
             made = sorted(set(before) | set(made))
         else:
-            motion.export(path, fig.arm, actions, job["gltfpack"], work, here)
+            motion.export(path, fig.arm, actions, job["gltfpack"], work, here, m["fps"])
         level = "clips" if group == "clips" else f"clips {group}"
         gltf, _ = export.read(path)
         metrics.file(gates, level, path, gltf, [], job["tables"]["skeleton"], None, clips=made)
         metrics.skeleton(gates, level, gltf, job["tables"]["skeleton"])
+        # Each clip made here as long in the file as it was made, at its rate.
+        off = 0.0
+        for a in gltf.get("animations", []):
+            n = next((k for k in members if as_(k) == a["name"]), None)
+            if n is not None:
+                length = max(gltf["accessors"][sm["input"]]["max"][0] for sm in a["samplers"])
+                off = max(off, abs(length - (len(fig.made[n][2].frames) - 1) / m["fps"]))
+        gates.add(level, "lengths", off, 0.02, off <= 0.02)
         if group != "clips":
             # On the look's skeleton, joint for joint, as its other clips are.
             apart, turned = export.skeletons_apart(os.path.join(job["out"], f"{v}.clips.glb"), path)
