@@ -242,8 +242,9 @@ function Readouts({
   /** Whether the last line has a place: on a boat watched, or with the right-of-way overlay. */
   last: boolean;
 }) {
-  const line = caseLine(model.pilot.value, model.tack.value, controls);
-  const pilot = line !== '' && line !== model.tack.value;
+  const reef = model.reefed.value;
+  const line = caseLine(model.pilot.value, model.tack.value, controls, reef);
+  const pilot = line !== '' && line !== model.tack.value && line !== reef;
   return (
     <div class="readouts">
       <p class="speed">
@@ -267,7 +268,9 @@ function Readouts({
               <>
                 Autopilot <b data-readout="pilot">{model.pilot}</b>
               </>
-            ) : line === '' ? null : (
+            ) : line === '' ? null : line === reef ? (
+              <b data-readout="reef">{line}</b>
+            ) : (
               <b data-readout="tack">{line}</b>
             )}
           </Slot>
@@ -398,7 +401,7 @@ export function Case({
   const port = harbour?.port.value ?? null;
   const rise = useSlide(port !== null, RISE);
   const board = harbour !== null && rise !== 'in';
-  const last = !controls || s.rightOfWay;
+  const last = !controls || s.rightOfWay || model.reefed.value !== '';
   // The case never reaches the pocket chart, nor held upright the controls
   // at the foot: the oldest opened folds back. Measured when what is open
   // or the case's room changes, not each time the case is drawn: the

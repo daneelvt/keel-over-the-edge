@@ -11,8 +11,10 @@
 // catalog's; a sailing vessel under 20 m may carry the three in one
 // lantern at the masthead (Rule 25(b)).
 //
-// Each lantern is a glow added to the picture, one instanced draw for
-// every boat in view, the player's among them. It is a place: it bends
+// Each kind of boat places each of its lights at its model's node of the
+// light's name: a tricolour at the masthead, sidelights and a sternlight
+// where its model has them. Each lantern is a glow added to the picture,
+// one instanced draw for every boat in view, the player's among them. It is a place: it bends
 // with the dome, so the sea hides it past the horizon. It keeps a least
 // size on screen far off, and dims with distance. Lanterns are lit while
 // the sun is below the horizon at the boat (Rule 20(b)), coming on through
@@ -120,8 +122,22 @@ export interface LanternPose {
   heave: number;
 }
 
-/** The most lanterns drawn: every boat in view and the player's, and the lanterns ashore. */
-export const LANTERN_CAPACITY = 129 + TOWN_LANTERNS;
+/** The most lanterns a boat carries: sidelights and a sternlight. */
+export const BOAT_LANTERNS = 3;
+/** The most lanterns drawn: every boat's in view and the player's, and the lanterns ashore. */
+export const LANTERN_CAPACITY = 129 * BOAT_LANTERNS + TOWN_LANTERNS;
+
+/** A lantern of a kind of boat: where it is in the model's frame, and the lights it shows. */
+export interface BoatLantern {
+  at: Vector3;
+  lights: readonly Light[];
+}
+
+/** A kind's lanterns, and the height of the centre of gravity its model turns about. */
+interface KindLanterns {
+  lanterns: { at: Vector3; port: number; starboard: number; stern: number }[];
+  cog: number;
+}
 /** A glow's size, metres, and the least it is drawn on screen, CSS pixels. */
 const GLOW_SIZE = 0.45;
 const LEAST_PIXELS = 7;
@@ -140,12 +156,12 @@ export class Lanterns {
   readonly perPixel = uniform(0.001);
   count = 0;
 
-  /** The lantern in the model's frame, the model's centre of gravity's height, and its lights. */
-  readonly #at = new Vector3();
-  #cog = 0;
-  #lights: readonly Light[] = [];
+  /** Each kind's lanterns, by its index among the catalog's boats. */
+  readonly #kinds: (KindLanterns | undefined)[] = [];
   readonly #q = new Quaternion();
   readonly #qHeel = new Quaternion();
+  readonly #qi = new Quaternion();
+  readonly #qHeelI = new Quaternion();
   readonly #e = new Euler();
   readonly #v = new Vector3();
   readonly #c = new Vector3();
@@ -221,18 +237,38 @@ export class Lanterns {
   }
 
   /**
-   * The lantern of the boats drawn: where it is in the model (the lights'
-   * node), the height of the centre of gravity the model turns about, and
-   * the lights the catalog gives the boat.
+   * The lantern of a kind's boats, at the given place in its model (the
+   * light's node), the height of the centre of gravity the model turns
+   * about, and the lights the catalog gives the kind.
    */
-  setLantern(at: Vector3, centreOfGravity: number, lights: readonly Light[]): void {
-    this.#at.copy(at);
-    this.#cog = centreOfGravity;
-    this.#lights = lights;
+  setLantern(at: Vector3, centreOfGravity: number, lights: readonly Light[], kind = 0): void {
+    this.setKind(kind, [{ at, lights }], centreOfGravity);
   }
 
+  /** A kind's lanterns, each at its place in the model and showing its lights. */
+  setKind(kind: number, lanterns: readonly BoatLantern[], centreOfGravity: number): void {
+    this.#kinds[kind] = {
+      cog: centreOfGravity,
+      lanterns: lanterns.slice(0, BOAT_LANTERNS).map((l) => {
+        const all = l.lights.includes('tricolour');
+        return {
+          at: l.at.clone(),
+          port: all || l.lights.includes('port') ? 1 : 0,
+          starboard: all || l.lights.includes('starboard') ? 1 : 0,
+          stern: all || l.lights.includes('stern') ? 1 : 0,
+        };
+      }),
+    };
+  }
+
+  /** Whether the first kind's lanterns are known. */
   get ready(): boolean {
-    return this.#lights.length > 0;
+    return this.has(0);
+  }
+
+  /** Whether a kind's lanterns are known. */
+  has(kind: number): boolean {
+    return (this.#kinds[kind]?.lanterns.length ?? 0) > 0;
   }
 
   begin(): void {
@@ -240,44 +276,51 @@ export class Lanterns {
   }
 
   /**
-   * Adds a boat's lantern: the boat's pose, its scene position (x, z, with
-   * the floating origin taken off), the camera's scene position, and how
-   * lit it is, 0 to 1, with its opacity.
+   * Adds a boat's lanterns: the boat's pose, its scene position (x, z, with
+   * the floating origin taken off), the camera's scene position, how lit
+   * they are, 0 to 1, with its opacity; and its kind.
    */
-  add(p: LanternPose, x: number, z: number, camera: Vector3, lit: number): void {
-    if (this.count >= LANTERN_CAPACITY || lit <= 0 || !this.ready) {
+  add(p: LanternPose, x: number, z: number, camera: Vector3, lit: number, kind = 0): void {
+    const k = this.#kinds[kind];
+    if (lit <= 0 || k === undefined) {
       return;
     }
     // The boat's turn: the heading, then the pitch and heel about the
     // centre of gravity, as the boat's model is placed.
     this.#q.setFromEuler(this.#e.set(0, headingToRotationY(p.heading), 0));
     this.#qHeel.setFromEuler(this.#e.set(p.pitch, 0, -p.heel));
-    const at = this.#v.copy(this.#at);
-    at.y -= this.#cog;
-    at.applyQuaternion(this.#qHeel);
-    at.y += this.#cog;
-    at.applyQuaternion(this.#q);
-    at.x += x;
-    at.y += p.heave;
-    at.z += z;
-    // The camera seen from the lantern, in the boat's own frame: bow −z,
-    // starboard +x.
-    const c = this.#c.copy(camera).sub(at);
-    c.applyQuaternion(this.#q.invert()).applyQuaternion(this.#qHeel.invert());
-    const bearing = Math.atan2(c.x, -c.z) / DEG;
-    const o = this.count * 4;
-    const place = this.place.array as Float32Array;
-    place[o] = at.x;
-    place[o + 1] = at.y;
-    place[o + 2] = at.z;
-    place[o + 3] = bearing;
-    const shows = this.shows.array as Float32Array;
-    const all = this.#lights.includes('tricolour');
-    shows[o] = all || this.#lights.includes('port') ? 1 : 0;
-    shows[o + 1] = all || this.#lights.includes('starboard') ? 1 : 0;
-    shows[o + 2] = all || this.#lights.includes('stern') ? 1 : 0;
-    shows[o + 3] = lit;
-    this.count++;
+    for (const lantern of k.lanterns) {
+      if (this.count >= LANTERN_CAPACITY) {
+        return;
+      }
+      const at = this.#v.copy(lantern.at);
+      at.y -= k.cog;
+      at.applyQuaternion(this.#qHeel);
+      at.y += k.cog;
+      at.applyQuaternion(this.#q);
+      at.x += x;
+      at.y += p.heave;
+      at.z += z;
+      // The camera seen from the lantern, in the boat's own frame: bow −z,
+      // starboard +x.
+      const c = this.#c.copy(camera).sub(at);
+      c.applyQuaternion(this.#qi.copy(this.#q).invert()).applyQuaternion(
+        this.#qHeelI.copy(this.#qHeel).invert(),
+      );
+      const bearing = Math.atan2(c.x, -c.z) / DEG;
+      const o = this.count * 4;
+      const place = this.place.array as Float32Array;
+      place[o] = at.x;
+      place[o + 1] = at.y;
+      place[o + 2] = at.z;
+      place[o + 3] = bearing;
+      const shows = this.shows.array as Float32Array;
+      shows[o] = lantern.port;
+      shows[o + 1] = lantern.starboard;
+      shows[o + 2] = lantern.stern;
+      shows[o + 3] = lit;
+      this.count++;
+    }
   }
 
   /**

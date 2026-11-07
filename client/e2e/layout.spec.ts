@@ -21,7 +21,10 @@
 // The menu, open, stands over everything and within the screen. The
 // sheet's legend at its longest, the sail luffing or stalled, stands
 // within the sheet's frame, clear of its ends, the end lit with its arrow
-// within it too.
+// within it too. The Reef key and, a reef asked for, the key that shakes
+// it out stand on the sheet's top, 44 pixels or more, covering nothing.
+// The keelboat, larger, is framed as the Jolly boat is: on every screen
+// the parts stand clear of it too.
 //
 // Held upright, the chase camera puts the boat's masthead within a sixth
 // of the screen's height of its top, where no case of instruments fits
@@ -126,6 +129,8 @@ async function parts(page: Page): Promise<{
       one('the full screen key', '.fullscreen-key'),
       one('the helm', '[data-control=helm]'),
       one('the sheet', '[data-control=sheet]'),
+      one('the Reef key', '.reef-key:not(.shake)'),
+      one('the shake out key', '.reef-key.shake'),
       one('the autopilot', '.pilot-head'),
       one('the autopilot button', '.pilot-button'),
       ...[...hud.querySelectorAll('.hud-top > .panel:not(.case)')].map((e) =>
@@ -801,6 +806,34 @@ async function plateFaults(page: Page, boat: Box | null): Promise<string[]> {
   return found;
 }
 
+/** The Reef key and the key that shakes a reef out: 44 pixels or more, on the sheet's top or beside it. */
+async function reefFaults(page: Page): Promise<string[]> {
+  return page.evaluate(() => {
+    const out: string[] = [];
+    const sheet = document.querySelector('[data-control=sheet]')?.getBoundingClientRect();
+    const keys = [...document.querySelectorAll('.reef-key')].map((k) => ({
+      name: k.getAttribute('aria-label') ?? '',
+      r: k.getBoundingClientRect(),
+    }));
+    if (sheet === undefined || keys.length !== 2) {
+      return [`${keys.length} reef keys, a reef asked for`];
+    }
+    for (const { name, r } of keys) {
+      if (r.width < 43.5 || r.height < 43.5) {
+        out.push(`“${name}” is ${Math.round(r.width)} × ${Math.round(r.height)}`);
+      }
+      // Over the sheet's top, or beside it level with its top.
+      if (r.bottom > sheet.top + 0.5 && r.right > sheet.left + 0.5) {
+        out.push(`“${name}” stands over the sheet`);
+      }
+      if (r.top < sheet.top - 120 && r.bottom > sheet.top - 120 && r.right < sheet.left) {
+        out.push(`“${name}” is not at the sheet's top`);
+      }
+    }
+    return out;
+  });
+}
+
 /** A box's edges, left, top, right and bottom, in whole pixels. */
 function edges(b: Box): string {
   return [b.left, b.top, b.right, b.bottom].map(Math.round).join(', ');
@@ -841,8 +874,10 @@ for (const upright of [true, false]) {
           closing: now - 86_400_000,
         });
         // At rest, the sail sheeted in: the boat drawn the same every time.
+        // A reef asked for, so the key that shakes it out shows too.
         k.setState({ sheetLimit: 0.05, boom: 0, surge: 0 });
         k.setControls(0, 0);
+        k.setReef(1);
         k.advance(30);
         k.render();
         // The chase camera behind it again: time is held.
@@ -986,6 +1021,9 @@ for (const upright of [true, false]) {
       for (const f of await sheetFaults(page)) {
         found.push(`${s.name}: ${f}`);
       }
+      for (const f of await reefFaults(page)) {
+        found.push(`${s.name}: ${f}`);
+      }
       for (const f of await menuFaults(page)) {
         found.push(`${s.name}: ${f}`);
       }
@@ -1025,6 +1063,75 @@ for (const upright of [true, false]) {
     expect(found).toEqual([]);
   });
 }
+
+// The keelboat stands taller than the Jolly boat: the camera stands back
+// and looks higher in proportion, so on every screen no part covers it,
+// held upright save the case's face and pushers over its masthead, as the
+// Jolly boat's.
+test('the keelboat is framed as the Jolly boat is, clear of every part, on every screen', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: SCREENS[0].width, height: SCREENS[0].height });
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await openScene(page, 'boat=keelboat', true);
+  await page.evaluate(() => {
+    const k = globalThis.keel;
+    k.setState({ sheetLimit: 0.05, boom: 0, jib: 0, surge: 0 });
+    k.setControls(0, 0);
+    k.setReef(1);
+    k.advance(30);
+    k.render();
+    k.camera('chase');
+    k.render();
+  });
+  const found: string[] = [];
+  for (const s of SCREENS) {
+    await page.setViewportSize({ width: s.width, height: s.height });
+    await page.waitForFunction(
+      ({ width, height }) =>
+        innerWidth === width &&
+        innerHeight === height &&
+        Math.abs(globalThis.keel.world.stage.camera.aspect - width / height) < 1e-6,
+      { width: s.width, height: s.height },
+    );
+    await page.evaluate(() => {
+      const k = globalThis.keel;
+      k.fullScreenKey(true);
+      k.camera('chase');
+      k.render();
+    });
+    await page.waitForTimeout(150);
+    await page.evaluate(() => globalThis.keel.render());
+    const seen = await parts(page);
+    if (seen.boat === null) {
+      found.push(`${s.name}: no boat drawn`);
+      continue;
+    }
+    const boat = seen.boat;
+    const inCase = (n: string) =>
+      n === 'the case' ||
+      n === 'the barometer pusher' ||
+      n === 'the clock pusher' ||
+      n === 'the board pusher';
+    for (const p of seen.parts) {
+      if (!(s.upright && inCase(p.name)) && overlap(p, boat)) {
+        found.push(`${s.name}: ${p.name} covers the keelboat (${edges(p)} and ${edges(boat)})`);
+      }
+    }
+    if (
+      boat.left < -0.5 ||
+      boat.top < -0.5 ||
+      boat.right > s.width + 0.5 ||
+      boat.bottom > s.height + 0.5
+    ) {
+      found.push(`${s.name}: the keelboat is off the screen (${edges(boat)})`);
+    }
+    for (const f of await reefFaults(page)) {
+      found.push(`${s.name}: ${f}`);
+    }
+  }
+  expect(found).toEqual([]);
+});
 
 /** A row of the list as full as it gets. */
 function row(name: string, i: number) {

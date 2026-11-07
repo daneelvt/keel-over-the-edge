@@ -85,7 +85,6 @@ import { GROUND, RECORDS, SEA, WEATHER } from '../predict/layout.gen';
 import { BODY, SKY, WIND_VALUE, WIND_VALUES } from '../predict/physics';
 import type { Predictor } from '../predict/predictor';
 import { heldSpell, placedRecord } from '../predict/weather';
-import { LOOK_HEIGHT } from '../render/camera';
 import { MACHINE_DEFAULT, PERSON_DEFAULT } from '../render/fleet';
 import { airLook } from '../render/fog';
 import { flashNear } from '../render/lightning';
@@ -1349,6 +1348,24 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
       offline().setState(values);
       floatBoat();
     },
+    /** Asks for the main reefed to a level, 0 … 2, as the Reef key does. */
+    setReef(level: number): void {
+      game.setReef(level);
+    },
+    /**
+     * Sails another of the catalog's boats, by its id, from the start: the
+     * sandbox steps it and the scene draws it. Resolves once it is drawn.
+     */
+    async useBoat(id: string): Promise<void> {
+      const kind = catalog.boats.findIndex((b) => b.id === id);
+      if (kind < 0) {
+        throw new Error(`the catalog has no boat ${id}`);
+      }
+      offline().setKind(kind);
+      game.setReef(0);
+      await game.useKind(kind);
+      floatBoat();
+    },
     /** The sandbox's wind, steady and at once, in knots and the degrees it comes from. */
     setWind(knots: number, from: number): void {
       offline().steadyNow(knots * KNOT, (from * Math.PI) / 180);
@@ -1669,6 +1686,9 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
       h.wind.value = long ? 'WNW 88 kn · F12' : 'N 0 kn · F0';
       h.pilot.value = long ? 'Wind 135° P' : '';
       h.tack.value = long ? 'Starboard tack' : '';
+      // The longest a reef is said in, reefed.
+      const reefs = (h.controls.value?.reef ?? []).slice(1);
+      h.reefed.value = long ? reefs.reduce((a, b) => (b.length > a.length ? b : a), '') : '';
     },
     /**
      * Holds the sheet's legend at what the sail is doing, '' for nothing,
@@ -2006,9 +2026,13 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
       const c = stage.camera.position;
       const o = world.origin.world;
       const cam = world.camera;
-      // The look point: LOOK_HEIGHT above the boat and its followed heave.
+      // The look point: the camera's look height above the boat and its followed heave.
       const bs = world.boatScene;
-      const look = { east: bs.x + o.x, north: -bs.z + o.y, up: bs.y + cam.lift + LOOK_HEIGHT };
+      const look = {
+        east: bs.x + o.x,
+        north: -bs.z + o.y,
+        up: bs.y + cam.lift + world.camera.lookHeight,
+      };
       return {
         eye: { east: c.x + o.x, north: -c.z + o.y, up: c.y },
         look,
@@ -2184,10 +2208,11 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
       // Each lies on the sea drawn, unless told how it lies.
       const physics = driver.physics;
       const slot = world.ocean.source?.seas.slotAt(Math.floor(world.ticks) + 1) ?? -1;
-      const hull = world.kind.physics.hull;
       if (physics !== undefined && slot >= 0) {
         physics.seaDrawAt(game.clock.steps + game.clock.alpha);
         drawn.forEach((d, i) => {
+          // Each on the sea under its own kind's waterline.
+          const hull = (catalog.boats[d.kind] ?? world.kind).physics.hull;
           const w = physics.waveUnder(
             slot,
             d.east,
@@ -2202,14 +2227,20 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
       }
       world.fleetSource = { drawn, count: drawn.length };
       // Boats put somewhere at once: their sailors met afresh.
-      world.fleet.nearSailors?.forget();
+      world.fleet.forgetSailors();
     },
 
-    /** Resolves once every look a boat of the fleet has been drawn with has loaded (or failed). */
+    /**
+     * Resolves once every kind and every look a boat of the fleet has been
+     * drawn with has loaded (or failed).
+     */
     async fleetLoaded(): Promise<void> {
       const busy = () =>
-        world.fleet.looks?.looks.some((l) => l.state === 'loading' || l.clipsState === 'loading') ??
-        false;
+        world.fleet.loading ||
+        (world.fleet.looks?.looks.some(
+          (l) => l.state === 'loading' || l.clipsState === 'loading',
+        ) ??
+          false);
       while (busy()) {
         await new Promise((r) => setTimeout(r, 50));
       }
@@ -2334,7 +2365,7 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
     /** Fleet materials that would sort or fade otherwise than dithered: none, if all is well. */
     fleetMaterials(): string[] {
       const problems: string[] = [];
-      for (const level of [world.fleet.near, world.fleet.far]) {
+      for (const level of world.fleet.levels()) {
         for (const m of level.meshes) {
           const material = m.material as { name: string; alphaHash: boolean; transparent: boolean };
           if (!material.alphaHash || material.transparent) {
@@ -2354,13 +2385,9 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
     fleetBudget() {
       return {
         ...world.fleet.budget(),
-        near: world.fleet.near.count,
-        far: world.fleet.far.count,
-        nearMeshes: world.fleet.near.meshes.length,
-        farMeshes: world.fleet.far.meshes.length,
+        ...world.fleet.counts(),
         ...world.fleet.figures(),
         sailorDraws: world.fleet.sailorDraws(),
-        skinned: world.fleet.near.count - world.fleet.near.rigid,
       };
     },
     /**

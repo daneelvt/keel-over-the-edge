@@ -67,6 +67,8 @@ export interface WakeHull {
   heading: number;
   /** Added to every station's depth: the hull sitting deeper than at rest (positive) or lifted. */
   sink: number;
+  /** Its own kind's hull, where it is not the one the square is pressed with. */
+  shape?: PressureShape | null;
 }
 
 /** How the square's waves are damped. */
@@ -205,14 +207,15 @@ export class WakeWavesReference {
     const n = this.size;
     const p = this.pressure;
     p.fill(0);
-    let reach = 0;
-    for (const s of shape.stations) {
-      reach = Math.max(reach, Math.hypot(s[0] ?? 0, s[1] ?? 0));
-    }
     const half = n / 2;
     const texel = this.texel;
     for (let h = 0; h < count; h++) {
       const hull = hulls[h] as WakeHull;
+      const own = hull.shape ?? shape;
+      let reach = 0;
+      for (const st of own.stations) {
+        reach = Math.max(reach, Math.hypot(st[0] ?? 0, st[1] ?? 0));
+      }
       const s = Math.sin(hull.heading);
       const c = Math.cos(hull.heading);
       const c0 = Math.max(Math.floor((hull.east - reach - east) / texel + half), 0);
@@ -231,7 +234,7 @@ export class WakeWavesReference {
               // Into the hull's frame: x to starboard, z aft.
               const x = de * c - dn * s;
               const z = -(de * s + dn * c);
-              sum += immersion(shape, x, z, hull.sink);
+              sum += immersion(own, x, z, hull.sink);
             }
           }
           p[row * n + col] = (p[row * n + col] as number) + sum / (SAMPLES * SAMPLES);

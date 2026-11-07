@@ -78,8 +78,16 @@ const F = {
   sail: 9,
   far: 10,
   falling: 11,
+  jib: 12,
+  reef: 13,
 } as const;
-const FIELDS = 12;
+const FIELDS = 14;
+
+/**
+ * The slot fields the wire may carry beyond those every boat has: the
+ * headsails' clew angle and the reef level, read as 0 where it does not.
+ */
+const SLOT_MORE = SLOT as typeof SLOT & { jib?: number; reef?: number };
 /** Samples kept a boat. */
 export const SAMPLES = 8;
 
@@ -130,6 +138,10 @@ export interface DrawnBoat {
   sailor: number;
   mode: number;
   sail: number;
+  /** The headsails' clew's angle, radians, positive to starboard; 0 for a boat with none. */
+  jib: number;
+  /** The main's reef level: 0 at full sail, 1 or 2. */
+  reef: number;
   /** 0 … 1: how far it has faded in. */
   opacity: number;
   /** 0 near … 1 far: where its delay is between the bands'. */
@@ -163,6 +175,8 @@ export function newDrawnBoat(): DrawnBoat {
     sailor: 0,
     mode: 0,
     sail: 0,
+    jib: 0,
+    reef: 0,
     opacity: 0,
     far: 0,
     motion: 0,
@@ -240,6 +254,8 @@ class Boat {
     r[k + F.mode] = f[o + SLOT.mode] ?? 0;
     r[k + F.sail] = f[o + SLOT.sail] ?? 0;
     r[k + F.far] = f[o + SLOT.far] ?? 0;
+    r[k + F.jib] = SLOT_MORE.jib === undefined ? 0 : (f[o + SLOT_MORE.jib] ?? 0);
+    r[k + F.reef] = SLOT_MORE.reef === undefined ? 0 : (f[o + SLOT_MORE.reef] ?? 0);
     const falling = f[o + SLOT.falling] ?? 0;
     r[k + F.falling] = falling;
     if (falling === 0) {
@@ -286,9 +302,11 @@ class Boat {
       out.boom = this.#mix(i, F.boom, t);
       out.rudder = this.#mix(i, F.rudder, t);
       out.sailor = this.#mix(i, F.sailor, t);
+      out.jib = this.#mix(i, F.jib, t);
       const discrete = t < 0.5 ? i + 1 : i;
       out.mode = this.at(discrete, F.mode);
       out.sail = this.at(discrete, F.sail);
+      out.reef = this.at(discrete, F.reef);
       return MOTION.interpolated;
     }
     // Past the newest: carried on by the last two samples' velocity and
@@ -322,6 +340,8 @@ class Boat {
     out.sailor = this.at(i, F.sailor);
     out.mode = this.at(i, F.mode);
     out.sail = this.at(i, F.sail);
+    out.jib = this.at(i, F.jib);
+    out.reef = this.at(i, F.reef);
   }
 }
 
@@ -607,6 +627,8 @@ function copyDrawn(a: DrawnBoat, b: DrawnBoat): void {
   b.sailor = a.sailor;
   b.mode = a.mode;
   b.sail = a.sail;
+  b.jib = a.jib;
+  b.reef = a.reef;
   b.opacity = a.opacity;
   b.far = a.far;
   b.motion = a.motion;

@@ -115,22 +115,27 @@ export class Overlays {
 
   readonly #labels: Label[] = [];
   readonly #v = new Vector3();
-  readonly #masthead: number;
-  readonly #mastZ: number;
-  readonly #effort: number;
-  readonly #foot: number;
+  #masthead = 0;
+  #mastZ = 0;
+  #effort = 0;
+  #foot = 0;
 
   constructor(kind: BoatKind) {
-    const { rig } = kind.physics;
-    this.#masthead = rig.boomHeight + rig.luff;
-    this.#mastZ = -rig.mastPosition;
-    this.#effort = rig.boomHeight + 0.5 * (rig.footStrip + rig.headStrip) * rig.luff;
-    this.#foot = rig.foot;
+    this.setKind(kind);
     this.world.name = 'overlays';
     this.onBoat.name = 'overlays on the boat';
     this.world.add(this.trueWind.group, this.course.group);
     this.onBoat.add(this.apparentWind.group, this.drive.group, this.side.group);
     this.#show();
+  }
+
+  /** The boat the arrows are drawn on: its masthead, its mast and its sail's centre of effort. */
+  setKind(kind: BoatKind): void {
+    const { rig } = kind.physics;
+    this.#masthead = rig.boomHeight + rig.luff;
+    this.#mastZ = -rig.mastPosition;
+    this.#effort = rig.boomHeight + 0.5 * (rig.footStrip + rig.headStrip) * rig.luff;
+    this.#foot = rig.foot;
   }
 
   /** Puts the labels in a layer of the page over the scene; null takes them out. */

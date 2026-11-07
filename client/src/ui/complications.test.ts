@@ -78,3 +78,12 @@ describe('the case’s complications', () => {
     expect(caseLine('', '', false)).toBe('');
   });
 });
+
+describe('the case’s last line, reefed', () => {
+  test('names the reef before the tack, and after the autopilot on a boat watched', () => {
+    expect(caseLine('', 'Port tack', true, 'One reef')).toBe('One reef');
+    expect(caseLine('', '', true, 'Two reefs')).toBe('Two reefs');
+    expect(caseLine('Wind 45° S', 'Port tack', false, 'One reef')).toBe('Autopilot Wind 45° S');
+    expect(caseLine('', 'Port tack', true, '')).toBe('Port tack');
+  });
+});

@@ -20,6 +20,7 @@
 //
 // Query strings, for development:
 //   ?sandbox          the offline sandbox alone: no server, no account
+//   ?boat=keelboat    the sandbox's boat: any of the catalog's, by its id
 //   ?world=7          the sandbox in seed 7's world, from .dev/worlds/7.world (go run ./tools/dev -world 7)
 //   ?wind=12,45       the sandbox's wind: knots 10 m up, and the degrees it comes from
 //   ?sea=gale         the sandbox's wind by the sea it raises: calm, breeze, fresh or gale
@@ -94,6 +95,7 @@ import { cameraSceneFromQuery, startCameraScene } from '../sandbox/camerascenes'
 import { SandboxForecast } from '../sandbox/forecast';
 import { swellFromQuery } from '../sandbox/localsea';
 import {
+  boatFromQuery,
   commonestWeather,
   FRONT,
   flashFromQuery,
@@ -295,9 +297,23 @@ async function start(): Promise<void> {
     // ?look=code: the sailor in a look of the developer's own.
     const sandboxLook = Number(query.get('look') ?? PERSON_DEFAULT) || PERSON_DEFAULT;
     world.sailAs(sandboxLook);
+    // ?boat=id: any of the catalog's boats; every kind is prepared, so the
+    // developer panel can change it.
+    const kind = boatFromQuery(
+      query,
+      catalog.boats.map((b) => b.id),
+    );
+    await game.useKind(kind ?? 0);
     const [, sandbox] = await Promise.all([
       world.start(),
-      startSandbox(fetch(wasmUrl), world.kind.physics, catalog.weather, catalog.world, begin),
+      startSandbox(
+        fetch(wasmUrl),
+        catalog.boats.map((b) => b.physics),
+        catalog.weather,
+        catalog.world,
+        begin,
+        kind ?? 0,
+      ),
     ]);
     prepareEncounters(sandbox.physics, catalog.encounters);
     // The edge's rules, as a server keeps them; the world file's water's way.
@@ -476,6 +492,7 @@ async function start(): Promise<void> {
       helm: game.helm,
       sheet: game.sheet,
       pilot: game,
+      reef: game,
       labels: (el) => world.attachLabels(el),
       fullScreen: full,
       sailor: null,
@@ -608,6 +625,9 @@ async function start(): Promise<void> {
     type: 'module',
   });
   const online = new Online(worker, predictor, game);
+  // The boat in view's kind, as each Welcome tells it: drawn as its own,
+  // under the cover, as every change of boat is.
+  online.onKind = (kind) => void game.useKind(kind);
   if (watchFirst !== '') {
     // The connection's first Hello asks to watch.
     online.watch(watchFirst);
@@ -899,6 +919,7 @@ async function start(): Promise<void> {
     helm: game.helm,
     sheet: game.sheet,
     pilot: game,
+    reef: game,
     labels: (el) => world.attachLabels(el),
     fullScreen: full,
     sailor: me.name,

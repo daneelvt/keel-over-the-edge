@@ -287,9 +287,14 @@ export const WAKE = {
   churnSpeed: 2.5,
   /** How much of a full churn a hull lays at full speed, each pass of its length. */
   churnLaid: 0.9,
-  /** White water behind the transom from this speed through the water, m/s (hull speed: 1.34 √LWL in feet), full at so much more. */
-  transomFrom: 2.4,
-  transomFull: 1.6,
+  /**
+   * White water behind the transom from this Froude number of the speed
+   * through the water on the waterline, just short of hull speed's 0.40
+   * (1.34 √LWL knots, LWL in feet): 2.4 m/s on a 3.8 m waterline. Full at
+   * so much more, as a share of where it begins.
+   */
+  transomFroude: 0.3936,
+  transomFull: 2 / 3,
   /** Where the wake's waves fold, white water is born: so much a second at a full fold. */
   foldBirth: 2.5,
   /** The wake's waves fold where the Jacobian of their shift falls below this, under this chop. */
@@ -378,3 +383,11 @@ export const SEA_MOTION = {
   quick: 1,
   heave: 0.3,
 } as const;
+
+/** Gravity, m/s². */
+const G = 9.80665;
+
+/** The speed through the water at which white water begins behind a transom on a waterline this long, m/s. */
+export function transomFrom(waterline: number): number {
+  return WAKE.transomFroude * Math.sqrt(G * Math.max(waterline, 0));
+}

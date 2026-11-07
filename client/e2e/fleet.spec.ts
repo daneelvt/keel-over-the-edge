@@ -3,7 +3,9 @@
 // The other boats drawn, on each back end: a boat of the fleet at a pose
 // looks as the player's own boat looks at that pose, heeled, gybing,
 // capsized, luffing, with the rudder hard over, its sailor a person's or a
-// machine's; the fleet's 64 boats keep to their draw calls and triangles,
+// machine's; a keelboat of the fleet as the own keelboat, its jib and its
+// reef; the fleet's 64 boats keep to their draw calls and triangles, and a
+// mixed 64 of Jolly boats and keelboats to theirs,
 // their sailors, near and far, of every look, to at most 6; every fleet
 // material is the factory's, with the bend; faded boats dither and none
 // sorts; and a picture of a fleet at fixed poses, near and far models,
@@ -74,36 +76,43 @@ const poses: Pose[] = [
  * place, the own boat hidden, and returns both pictures. The telltales and
  * pennant, which the fleet does not draw, are hidden on the own boat.
  */
-async function both(page: Page, pose: Pose) {
+async function both(page: Page, pose: Pose, kind = 0) {
   await page.evaluate((m) => globalThis.keel.machineAboard(m), pose.machine === true);
-  const sail = await page.evaluate((p) => {
-    const k = globalThis.keel;
-    k.setFleet(null);
-    k.showOwnBoat(true);
-    k.setWind(p.wind ?? 12, 0);
-    k.setState(p.state);
-    k.advance(1);
-    k.setState(p.state);
-    // Its sailor seated afresh at the pose, as the fleet's is when met.
-    k.settleSailor();
-    k.render();
-    k.camera('chase');
-    const o = k.boat().out;
-    const b = k.boat().state;
-    const flat = Math.max(0, Math.min(15, Math.round(o.flattening * 15)));
-    return {
-      sail: flat | (o.footFlow << 4) | (o.headFlow << 6),
-      east: b.x,
-      north: b.y,
-      heading: b.heading,
-      heel: b.heel,
-      boom: b.boom,
-      rudder: b.rudder,
-      sailor: b.sailor,
-      mode: b.sailorMode,
-      machine: p.machine === true ? 1 : 0,
-    };
-  }, pose);
+  const sail = await page.evaluate(
+    ({ kind, ...p }) => {
+      const k = globalThis.keel;
+      k.setFleet(null);
+      k.showOwnBoat(true);
+      k.setWind(p.wind ?? 12, 0);
+      k.setReef(Math.round(p.state.reef ?? 0));
+      k.setState(p.state);
+      k.advance(1);
+      k.setState(p.state);
+      // Its sailor seated afresh at the pose, as the fleet's is when met.
+      k.settleSailor();
+      k.render();
+      k.camera('chase');
+      const o = k.boat().out;
+      const b = k.boat().state;
+      const flat = Math.max(0, Math.min(15, Math.round(o.flattening * 15)));
+      return {
+        kind,
+        jib: b.jib,
+        reef: Math.round(b.reef),
+        sail: flat | (o.footFlow << 4) | (o.headFlow << 6),
+        east: b.x,
+        north: b.y,
+        heading: b.heading,
+        heel: b.heel,
+        boom: b.boom,
+        rudder: b.rudder,
+        sailor: b.sailor,
+        mode: b.sailorMode,
+        machine: p.machine === true ? 1 : 0,
+      };
+    },
+    { ...pose, kind },
+  );
   await page.evaluate(() => globalThis.keel.hideSmallParts(true));
   const own = await picture(page);
   await page.evaluate(async (s) => {
@@ -170,6 +179,67 @@ test('64 boats keep to 22 draw calls and 200,000 triangles', async ({ page }) =>
   expect(budget.drawCalls).toBeLessThanOrEqual(22);
   expect(budget.triangles).toBeLessThanOrEqual(200_000);
   test.info().annotations.push({ type: 'measured', description: JSON.stringify(budget) });
+});
+
+test('a mixed 64, Jolly boats and keelboats, keep to 32 draw calls and 320,000 triangles', async ({
+  page,
+}) => {
+  await openScene(page);
+  const budget = await page.evaluate(async () => {
+    const k = globalThis.keel;
+    const b = k.boat().state;
+    const boats = [];
+    for (let i = 0; i < 64; i++) {
+      // The start line again, every fourth boat a keelboat, her jib drawing
+      // and every other one reefed.
+      const keel = i % 4 === 3;
+      boats.push({
+        kind: keel ? 1 : 0,
+        east: b.x - 70 + (i % 8) * 20,
+        north: b.y + 20 + Math.floor(i / 8) * 20,
+        heading: 1.5708,
+        boom: 0.6,
+        jib: keel ? 0.3 : 0,
+        reef: keel && i % 8 === 3 ? 1 : 0,
+        sail: 15 | (1 << 4) | (1 << 6),
+      });
+    }
+    k.setFleet(boats);
+    k.render();
+    // The keelboats' kind loads as its first boat comes into view.
+    await k.fleetLoaded();
+    k.render();
+    return k.fleetBudget();
+  });
+  test.info().annotations.push({ type: 'measured', description: JSON.stringify(budget) });
+  expect(budget.near + budget.far).toBe(64);
+  expect(budget.near).toBeLessThanOrEqual(12);
+  expect(budget.drawCalls).toBeLessThanOrEqual(32);
+  expect(budget.triangles).toBeLessThanOrEqual(320_000);
+});
+
+test('a keelboat of the fleet looks as the own keelboat does, her jib and her reef', async ({
+  page,
+}) => {
+  await openScene(page, 'boat=keelboat');
+  const diffs: Record<string, number> = {};
+  for (const pose of [
+    {
+      name: 'a keelboat close-hauled',
+      state: { ...rest, heading: 1.5708, heel: 15 * DEG, boom: 0.15, jib: 0.2, sailor: -0.9 },
+    },
+    {
+      name: 'a keelboat reefed, reaching',
+      state: { ...rest, heading: 1.5708, heel: 10 * DEG, boom: 0.7, jib: 0.35, reef: 1 },
+    },
+  ]) {
+    const { own, fleet } = await both(page, pose, 1);
+    diffs[pose.name] = pictureDifference(own, fleet);
+  }
+  test.info().annotations.push({ type: 'measured', description: JSON.stringify(diffs) });
+  for (const [name, d] of Object.entries(diffs)) {
+    expect(d, name).toBeLessThan(LIKE);
+  }
 });
 
 test('every sailor, near and far, person or machine, in at most 6 draws', async ({ page }) => {

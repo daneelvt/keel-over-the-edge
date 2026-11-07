@@ -37,6 +37,8 @@ export class WatchDriver implements BoatDriver {
   readonly wind: BoatWind = newBoatWind();
   /** A header has come since the watch began. */
   started = false;
+  /** The boat's kind, as its Welcome says: an index into the catalog's boats. */
+  kind = 0;
   /** The tick the drawn boat went over the lip, 0 while afloat; the times it was back at the start. */
   over = 0;
   restarts = 0;
@@ -171,13 +173,16 @@ export class WatchDriver implements BoatDriver {
     c[RECORDS.control.target] = sn.target;
     c[RECORDS.control.order] = sn.order;
     c[RECORDS.control.way] = sn.way;
+    // The reef asked for, where the header carries it; else the reef it has.
+    const reef = (sn as { reef?: number }).reef;
+    c[RECORDS.control.reef] = reef ?? Math.round(sn.state[S.reef] ?? 0);
     const tick = sn.tick + 1;
     // The wind the step sails in is the wind where the boat is as it begins.
     this.#weather.read(tick, sn.state[S.x] ?? 0, sn.state[S.y] ?? 0, wind);
     this.#weather.use(tick);
     this.#wakes.use(tick);
     this.#seas.use(tick);
-    this.#physics.step();
+    this.#physics.step(this.kind);
     if (this.#wakes.reaching > 0) {
       const env = r.env;
       wind.shadowSpeed = env[RECORDS.env.windSpeed] ?? 0;

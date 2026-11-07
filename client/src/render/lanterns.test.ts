@@ -99,3 +99,41 @@ describe('the lanterns drawn', () => {
     expect(l.count).toBe(0);
   });
 });
+
+describe('each kind’s lanterns', () => {
+  test('are placed at their own nodes: a tricolour at its masthead, sidelights and a sternlight apart', () => {
+    const l = new Lanterns();
+    l.setKind(0, [{ at: new Vector3(0, 6.3, -0.95), lights: ['tricolour'] }], 0.3);
+    l.setKind(
+      2,
+      [
+        { at: new Vector3(-2, 3, -10), lights: ['port'] },
+        { at: new Vector3(2, 3, -10), lights: ['starboard'] },
+        { at: new Vector3(0, 4, 15), lights: ['stern'] },
+      ],
+      1.2,
+    );
+    expect(l.has(0)).toBe(true);
+    expect(l.has(1)).toBe(false);
+    const pose = { east: 0, north: 0, heading: 0, heel: 0, pitch: 0, heave: 0 };
+    const camera = new Vector3(0, 6, -300);
+    l.begin();
+    l.add(pose, 0, 0, camera, 1, 0);
+    l.add(pose, 0, 0, camera, 1, 1);
+    l.add(pose, 0, 0, camera, 1, 2);
+    // The first kind's one lantern, none for a kind unknown, the third's three.
+    expect(l.count).toBe(4);
+    const place = l.place.array as Float32Array;
+    const shows = l.shows.array as Float32Array;
+    expect([place[0], place[1], place[2]].map((v) => Number(v?.toFixed(3)))).toEqual([
+      0, 6.3, -0.95,
+    ]);
+    // Heading north, a model's −z is the bow: the stern light 15 m aft is
+    // south of the boat, the scene's +z.
+    expect(place[3 * 4 + 2]).toBeCloseTo(15, 4);
+    expect(Array.from(shows.subarray(0, 3))).toEqual([1, 1, 1]);
+    expect(Array.from(shows.subarray(4, 7))).toEqual([1, 0, 0]);
+    expect(Array.from(shows.subarray(8, 11))).toEqual([0, 1, 0]);
+    expect(Array.from(shows.subarray(12, 15))).toEqual([0, 0, 1]);
+  });
+});

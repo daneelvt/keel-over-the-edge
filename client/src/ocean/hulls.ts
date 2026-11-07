@@ -10,7 +10,8 @@
 // top, so a wave that rises above the gunwale is not drawn inside the boat
 // either, which a lid at the gunwale would let through. The fragment is
 // taken into the hull's own frame first, its heave, pitch and heel
-// included, so the volume holds however the boat lies.
+// included, so the volume holds however the boat lies. Each kind of boat
+// has its own hull: each hull drawn names its kind's shape.
 //
 // This is clipping the water's surface by a primitive (Crest, "Water
 // Exclusion": clip surface, signed distance primitives): it needs no
@@ -46,6 +47,8 @@ import { DOME_RADIUS, domeCentre } from '../render/materials';
 export const HULLS = 8;
 /** Stations along a hull. */
 export const STATIONS = 8;
+/** The most kinds of hull the sea knows at once. */
+export const HULL_SHAPES = 3;
 /** Other boats further than this from the player's are left to the sea, metres. */
 export const HULL_REACH = 150;
 /** The volume is this fraction of the hull's width, so the sea meets the planking. */
@@ -139,28 +142,44 @@ export class HullVolumes {
   readonly count: UniformNode<'float', number> = uniform(0);
   /** Each hull's centre of gravity in the scene, and its heading. */
   readonly #places: Vector4[] = Array.from({ length: HULLS }, () => new Vector4());
-  /** Each hull's heel and pitch. */
+  /** Each hull's heel and pitch, and its kind's shape's number. */
   readonly #tilts: Vector4[] = Array.from({ length: HULLS }, () => new Vector4());
-  /** The stations: z, half-beam, depth. */
-  readonly #stations: Vector4[] = Array.from({ length: STATIONS }, () => new Vector4());
-  /** The bilge's exponent, the centre of gravity's height above the waterline, and the hull's reach from it. */
+  /** Each kind's stations, one after another: z, half-beam, depth. */
+  readonly #stations: Vector4[] = Array.from(
+    { length: STATIONS * HULL_SHAPES },
+    () => new Vector4(),
+  );
+  /** Each kind's bilge exponent and centre of gravity's height above the waterline; and every hull's reach from it, the most of any kind's. */
+  readonly #shapes: Vector4[] = Array.from({ length: HULL_SHAPES }, () => new Vector4(2, 0, 0, 0));
   readonly #shape = uniform(new Vector4(2, 0, 0, 0));
   readonly #placesNode = uniformArray(this.#places, 'vec4');
   readonly #tiltsNode = uniformArray(this.#tilts, 'vec4');
   readonly #stationsNode = uniformArray(this.#stations, 'vec4');
+  readonly #shapesNode = uniformArray(this.#shapes, 'vec4');
   #n = 0;
-  #ready = false;
+  readonly #ready: boolean[] = new Array<boolean>(HULL_SHAPES).fill(false);
 
-  /** The kind's hull, and its centre of gravity's height above the waterline. */
-  setShape(shape: HullShape, centreOfGravity: number): void {
+  /** A kind's hull, by the kind's index (below HULL_SHAPES), and its centre of gravity's height above the waterline. */
+  setShape(shape: HullShape, centreOfGravity: number, kind = 0): void {
+    if (kind < 0 || kind >= HULL_SHAPES) {
+      return;
+    }
     let reach = 0;
     shape.stations.forEach((s, i) => {
-      (this.#stations[i] as Vector4).set(s[0] ?? 0, s[1] ?? 0, s[2] ?? 0, 0);
+      (this.#stations[kind * STATIONS + i] as Vector4).set(s[0] ?? 0, s[1] ?? 0, s[2] ?? 0, 0);
       reach = Math.max(reach, Math.hypot(s[0] ?? 0, s[1] ?? 0));
     });
-    // A heeled or pitched hull reaches no further from its centre of gravity than this.
-    this.#shape.value.set(shape.bilge, centreOfGravity, reach + centreOfGravity + 0.5, 0);
-    this.#ready = true;
+    (this.#shapes[kind] as Vector4).set(shape.bilge, centreOfGravity, 0, 0);
+    // A heeled or pitched hull reaches no further from its centre of
+    // gravity than this; the walk's test is by the furthest any kind's does.
+    const v = this.#shape.value;
+    v.set(shape.bilge, centreOfGravity, Math.max(v.z, reach + centreOfGravity + 0.5), 0);
+    this.#ready[kind] = true;
+  }
+
+  /** Whether a kind's hull is known. */
+  has(kind: number): boolean {
+    return this.#ready[kind] === true;
   }
 
   /** Starts a frame's hulls. */
@@ -171,14 +190,24 @@ export class HullVolumes {
 
   /**
    * Adds a hull: where its waterline's origin would be in flat water, in
-   * the scene, lifted by its heave; its heading, heel and pitch.
+   * the scene, lifted by its heave; its heading, heel and pitch; and its
+   * kind, whose hull it is.
    */
-  add(x: number, y: number, z: number, heading: number, heel: number, pitch: number): void {
-    if (!this.#ready || this.#n >= HULLS) {
+  add(
+    x: number,
+    y: number,
+    z: number,
+    heading: number,
+    heel: number,
+    pitch: number,
+    kind = 0,
+  ): void {
+    if (this.#ready[kind] !== true || this.#n >= HULLS) {
       return;
     }
-    (this.#places[this.#n] as Vector4).set(x, y + this.#shape.value.y, z, heading);
-    (this.#tilts[this.#n] as Vector4).set(heel, pitch, 0, 0);
+    const cog = (this.#shapes[kind] as Vector4).y;
+    (this.#places[this.#n] as Vector4).set(x, y + cog, z, heading);
+    (this.#tilts[this.#n] as Vector4).set(heel, pitch, kind, 0);
     this.#n++;
     this.count.value = this.#n;
   }
@@ -232,11 +261,16 @@ export class HullVolumes {
       const d = level.sub(place.xyz).toVar();
       If(dot(d, d).lessThan(shape.z.mul(shape.z)), () => {
         const tilt = this.#tiltsNode.element(i) as unknown as Node<'vec4'>;
+        const kind = int(tilt.z);
+        const first = kind.mul(STATIONS);
+        const own = this.#shapesNode.element(kind) as unknown as Node<'vec4'>;
         // Into the hull's frame: the heading undone, then the pitch, then the heel.
         const m = inHull(d, place.w, tilt.y, tilt.x).toVar();
-        const aft = (this.#stationsNode.element(int(0)) as unknown as Node<'vec4'>).x;
-        const fore = (this.#stationsNode.element(int(STATIONS - 1)) as unknown as Node<'vec4'>).x;
-        const y = m.y.add(shape.y);
+        const aft = (this.#stationsNode.element(first) as unknown as Node<'vec4'>).x;
+        const fore = (
+          this.#stationsNode.element(first.add(STATIONS - 1)) as unknown as Node<'vec4'>
+        ).x;
+        const y = m.y.add(own.y);
         If(m.z.lessThan(aft).and(m.z.greaterThan(fore)), () => {
           const t = aft
             .sub(m.z)
@@ -244,12 +278,12 @@ export class HullVolumes {
             .mul(STATIONS - 1);
           const k = min(floor(t), STATIONS - 2);
           const f = t.sub(k);
-          const a = this.#stationsNode.element(int(k)) as unknown as Node<'vec4'>;
-          const b = this.#stationsNode.element(int(k).add(1)) as unknown as Node<'vec4'>;
+          const a = this.#stationsNode.element(first.add(int(k))) as unknown as Node<'vec4'>;
+          const b = this.#stationsNode.element(first.add(int(k)).add(1)) as unknown as Node<'vec4'>;
           const beam = mix(a.y, b.y, f);
           const depth = mix(a.z, b.z, f);
           const below = min(max(y.negate().div(max(depth, 1e-4)), 0), 1);
-          const side = pow(float(1).sub(pow(below, shape.x)), float(1).div(shape.x));
+          const side = pow(float(1).sub(pow(below, own.x)), float(1).div(own.x));
           If(
             y.greaterThan(depth.negate()).and(abs(m.x).lessThan(beam.mul(side).mul(HULL_FILL))),
             () => {
