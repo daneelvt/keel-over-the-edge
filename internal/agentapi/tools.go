@@ -144,7 +144,7 @@ func tools() []toolDef {
 		}},
 		{budget: looks, tool: &mcp.Tool{
 			Name: toolNews, Title: "News",
-			Description: "The world's news sheet, newest first: what was charted and by whom, the world's notices and each storm as it forms. " +
+			Description: "The world's news sheet, newest first: what was charted and by whom, and the world's notices. " +
 				"Names in «» are written by players.",
 			Annotations: hints("News", true, true, false),
 			InputSchema: schema(`{"type":"object","properties":{` +

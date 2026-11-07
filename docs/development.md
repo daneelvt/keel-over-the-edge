@@ -1092,8 +1092,12 @@ charted island or place to its strongest point: "Gale warning: Northerly
 gale 8 soon, north of Galley Packet Cay" (`weather.WarningText`). A warning
 keeps its key, the issue it came into force at, for as long as it is
 issued again, so it is told once: a notice on the phone (`gale-warnings`,
-which the menu can switch off) and an item in the world's news (subject
-`gale`, one by world and key, migration 00013).
+which the menu can switch off), and the gale hatched on the chart. Neither
+a warning nor a storm is in the world's news: the weather is the chart's,
+the forecast's and the notice's. Migration 00013 let the news hold items of
+subject `gale`; migration 00022 deleted those written (each storm as it
+formed) in every world, and nothing writes one now. The subject's check and
+the `news_item_gale` index stay, for a build before it.
 
 ### On the wire
 
@@ -2585,7 +2589,9 @@ worth; the key (world, subject, number) leaves a second write as it was.
 A charting credited to a sailor, not charted with another, makes a news
 item (`news_item`): an island, a port, a lighthouse or a wreck one of its
 own; a sailor's other places and features about one island within
-`news.fold` minutes are folded into its item.
+`news.fold` minutes are folded into its item. The news carries what is
+charted and by whom, and the world's own notices (its end, subject
+`world`, in the Notices to Mariners); never the weather.
 
 Only what is written is shown: persist hands each written batch's chartings
 to the chart's model (`chart.Model`), which publishes the chart whole by an

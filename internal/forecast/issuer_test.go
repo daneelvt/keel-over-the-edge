@@ -4,7 +4,6 @@ package forecast
 
 import (
 	"context"
-	"sync"
 	"testing"
 	"time"
 
@@ -154,63 +153,6 @@ func TestGaleWarningKey(t *testing.T) {
 	again := New(Config{Timeline: tl})
 	if x := again.Issue(first+2*every, nil, nil); x.Gale != nil && x.Key != first {
 		t.Fatalf("after a restart the warning's key is %d, not %d", x.Key, first)
-	}
-}
-
-// Each of the week's storms is told once as it forms, where it is and how
-// it moves, over two days updated every five minutes; an issuer begun
-// again tells again only those formed within the horizon.
-func TestStormFormedOnce(t *testing.T) {
-	tl := timeline(t)
-	var mu sync.Mutex
-	told := map[[2]uint32]Storm{}
-	again := 0
-	formed := func(_ context.Context, s Storm) {
-		mu.Lock()
-		defer mu.Unlock()
-		k := [2]uint32{uint32(s.Slot), s.Seed}
-		if _, ok := told[k]; ok {
-			again++
-		}
-		told[k] = s
-	}
-	is := New(Config{Timeline: tl, Formed: formed})
-	ctx := context.Background()
-	end := int64(2 * 24 * 60 * minute)
-	for tick := int64(0); tick < end; tick += weather.PastEvery {
-		is.Update(ctx, tick, nil, nil)
-	}
-	// The week's storms born in the two days, but for any born in the last
-	// five minutes.
-	cfg := tl.Config()
-	want := 0
-	for _, s := range tl.Week().Systems {
-		at := int64(s.Born) + tl.Origin()
-		if s.Kind != float64(cfg.Week.Storms) || at > end-weather.PastEvery || at < 0 {
-			continue
-		}
-		want++
-		got, ok := told[[2]uint32{uint32(s.Slot), uint32(s.Seed)}]
-		if !ok {
-			t.Fatalf("the storm born at %d in slot %d is not told", at, s.Slot)
-		}
-		k := physics.SystemAt(&s.SystemRecord, float64(got.At-tl.Origin()))
-		if got.Born != at || got.At < at || got.At-at >= weather.PastEvery || got.East != k.East/4 || got.North != k.North/4 || got.Speed <= 0 {
-			t.Fatalf("the storm born at %d told %+v", at, got)
-		}
-	}
-	if want == 0 || len(told) != want || again != 0 {
-		t.Fatalf("%d storms told, %d told again; the week's %d", len(told), again, want)
-	}
-	t.Logf("%d storms formed in two days", want)
-	// Begun again: none older than the horizon is told again.
-	clear(told)
-	is = New(Config{Timeline: tl, Formed: formed})
-	is.Update(ctx, end, nil, nil)
-	for _, s := range told {
-		if end-s.Born >= tl.Prepared().ForecastHorizon() {
-			t.Fatalf("begun again, a storm born %d ticks before is told", end-s.Born)
-		}
 	}
 }
 

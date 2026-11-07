@@ -8,8 +8,8 @@
 // any minute of the latest issue's reach still to come, within 1.5 NM of
 // the boat or across the course the sailor steered for a system from its
 // box. A gale elsewhere is hatched on the chart, and named in the places'
-// boxes, on the boards and in the news, but raises no notice: with a storm
-// on the disk half the time, a warning for every gale would mean nothing.
+// boxes and on the boards, but raises no notice: with a storm on the disk
+// half the time, a warning for every gale would mean nothing.
 
 import { catalog } from '../catalog';
 import type { ForecastTold } from '../net/messages';

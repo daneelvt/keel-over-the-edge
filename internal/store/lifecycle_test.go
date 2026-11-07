@@ -5,6 +5,7 @@ package store_test
 import (
 	"context"
 	"errors"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -501,33 +502,70 @@ func TestWorldNews(t *testing.T) {
 	}
 }
 
-// A gale warning is in the news once, however often it is written: after
-// a restart, the process writes it again and nothing changes.
-func TestGaleNews(t *testing.T) {
+// TestNoStormNewsMigration: migrated on from the schema before, a world's
+// items told of storms are gone and nothing else is: a charting and the
+// world's end keep their ids, their order and their words.
+func TestNoStormNewsMigration(t *testing.T) {
 	ctx := context.Background()
-	s, _, lease := lifecycleStore(t)
-	w, err := s.ActiveOrFirstWorld(ctx, time.Now())
+	u := storetest.Empty(t)
+	if _, err := store.Migrate(ctx, u, 21); err != nil {
+		t.Fatal(err)
+	}
+	pool := storetest.PoolOn(t, u)
+	var w [16]byte
+	if err := pool.QueryRow(ctx, "INSERT INTO world (number, epoch, state) VALUES (1, now(), 'active') RETURNING id").Scan(&w); err != nil {
+		t.Fatal(err)
+	}
+	must(t, pool, "SELECT create_world_partitions($1)", w)
+	must(t, pool, `INSERT INTO news_item (world_id, news_column, sailor, account_kind, subject, number, title, what, island_number, worth, x, y)
+		VALUES ($1, 'discoveries', 'Ann Bonny', 'human', 'island', 3, 'GANNET HOLM', 'an island of the rim', 3, 120, 900, -400)`, w)
+	must(t, pool, `INSERT INTO news_item (world_id, news_column, subject, number, title, what, worth, x, y)
+		VALUES ($1, 'notices', 'gale', 4129, 'STORM', 'A storm has formed in the south outer waters, moving east slowly', 0, -3000, -2500)`, w)
+	end := time.Now().Add(48 * time.Hour).Truncate(time.Second)
+	must(t, pool, `INSERT INTO news_item (world_id, news_column, subject, number, title, what, worth, x, y, ends_at)
+		VALUES ($1, 'notices', 'world', 1, 'PORT ROYAL', 'falls', 0, 0, 0, $2)`, w, end)
+	type item struct {
+		id                   [16]byte
+		subject, title, what string
+	}
+	items := func() []item {
+		rows, err := pool.Query(ctx, "SELECT id, subject, title, what FROM news_item WHERE world_id = $1 AND subject <> 'gale' ORDER BY id DESC", w)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer rows.Close()
+		var out []item
+		for rows.Next() {
+			var it item
+			if err := rows.Scan(&it.id, &it.subject, &it.title, &it.what); err != nil {
+				t.Fatal(err)
+			}
+			out = append(out, it)
+		}
+		return out
+	}
+	before := items()
+	if _, err := store.Migrate(ctx, u, store.Latest); err != nil {
+		t.Fatal(err)
+	}
+	var storms, all int
+	if err := pool.QueryRow(ctx, "SELECT count(*) FILTER (WHERE subject = 'gale'), count(*) FROM news_item WHERE world_id = $1", w).Scan(&storms, &all); err != nil || storms != 0 || all != 2 {
+		t.Fatalf("after the migration %d storms of %d items, %v", storms, all, err)
+	}
+	if after := items(); !slices.Equal(after, before) || len(after) != 2 {
+		t.Fatalf("the others after the migration %+v, before %+v", after, before)
+	}
+	s, err := store.Open(ctx, u, store.Options{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	n := store.GaleNews{Column: "notices", Number: 41, Title: "GALE WARNING", What: "Southwesterly gale 8 expected soon, south-west of Gannet Holm", X: -3000, Y: -2500}
-	if _, err := s.WriteGaleNews(ctx, lease+1, w.ID, n); !errors.Is(err, store.ErrFenced) {
-		t.Fatalf("another epoch wrote: %v", err)
+	defer s.Close()
+	news, err := s.News(ctx, w, nil, 10)
+	if err != nil || len(news) != 2 {
+		t.Fatal(news, err)
 	}
-	for i, want := range []bool{true, false, false} {
-		if written, err := s.WriteGaleNews(ctx, lease, w.ID, n); err != nil || written != want {
-			t.Fatalf("write %d: written %v, %v", i, written, err)
-		}
-	}
-	n.Number = 42
-	if written, err := s.WriteGaleNews(ctx, lease, w.ID, n); err != nil || !written {
-		t.Fatalf("another warning: written %v, %v", written, err)
-	}
-	items, err := s.News(ctx, w.ID, nil, 10)
-	if err != nil || len(items) != 2 {
-		t.Fatal(items, err)
-	}
-	if it := items[1]; it.Subject != store.SubjectGale || it.Number != 41 || it.What != n.What {
-		t.Fatalf("%+v", it)
+	if news[0].ID != before[0].id || news[0].Subject != store.SubjectWorld || !news[0].EndsAt.Equal(end) ||
+		news[1].ID != before[1].id || news[1].Subject != "island" || news[1].Sailor != "Ann Bonny" || news[1].What != "an island of the rim" {
+		t.Fatalf("the news %+v", news)
 	}
 }

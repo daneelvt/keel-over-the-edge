@@ -506,7 +506,7 @@ export function ChartList({ sea }: { sea: ChartSea }) {
   );
 }
 
-/** An item of the news. */
+/** An item of the news: what is charted and by whom, or a notice of the world's own (its end). */
 export interface NewsItem {
   id: string;
   column: string;
@@ -585,18 +585,12 @@ function ChartedItem({ sea, it, now }: { sea: ChartSea; it: NewsItem; now: numbe
   );
 }
 
-/** An item of the Notices to Mariners: the world's end, in the reader's own time. */
-function WorldItem({ sea, it, zone }: { sea: ChartSea; it: NewsItem; zone: string }) {
-  if (it.subject === 'gale') {
-    // A gale warning: where its strongest wind was forecast, on the chart at a tap.
-    return (
-      <li class="news-world news-gale">
-        <button type="button" onClick={() => sea.chart.showPoint(it.east, it.north)}>
-          <span class="news-title">{it.title.toUpperCase()}.</span> {it.what}.
-        </button>
-      </li>
-    );
-  }
+/**
+ * An item of the Notices to Mariners: a notice of the world's own, its end,
+ * in the reader's own time. The weather is never in the news: the chart,
+ * the forecast and the gale warning's notice tell of it.
+ */
+function WorldItem({ it, zone }: { it: NewsItem; zone: string }) {
   return (
     <li class="news-world">
       <span class="news-title">{it.title.toUpperCase()}.</span> The falls take this world on{' '}
@@ -651,7 +645,7 @@ export function NewsSheet({ sea, end = null }: { sea: ChartSea; end?: Countdown 
           <h3>{sea.columns.find((c) => c.of === 'world')?.title}</h3>
           <ol class="news-items">
             {notices.map((it) => (
-              <WorldItem key={it.id} sea={sea} it={it} zone={zone} />
+              <WorldItem key={it.id} it={it} zone={zone} />
             ))}
           </ol>
         </section>
