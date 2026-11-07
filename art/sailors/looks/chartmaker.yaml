@@ -307,6 +307,8 @@ palette:
 clips:
   [
     helm,
+    helm-wheel,
+    chartmaker-habit-wheel,
     hiking-1,
     hiking-2,
     hiking-3,
@@ -318,4 +320,9 @@ clips:
     righting,
     climbing-in,
   ]
-names: { chartmaker-habit: habit, chartmaker-habit-standing: habit-standing }
+names:
+  {
+    chartmaker-habit: habit,
+    chartmaker-habit-standing: habit-standing,
+    chartmaker-habit-wheel: habit-wheel,
+  }

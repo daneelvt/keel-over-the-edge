@@ -32,6 +32,11 @@ built files are committed; the catalog's `art.model` names them, and
 - `boats/keelboat/build.ts`: the keelboat, carvel planked with a copper
   bottom, a fin keel and bulb, a cuddy, a sloop rig with its standing
   rigging; its helm laid out as the sailors' stage boat's (below).
+- `boats/tall-ship/build.ts`: the tall ship, a ship-rigged collier with a
+  quarterdeck, a forecastle and a stern gallery, three masts in sections
+  with tops and crosstrees, square sails on yards, headsails, the mizzen
+  on its gaff and boom, shrouds with ratlines and deadeyes, her wheel and
+  her lanterns.
 - `town/lib/kit.ts` and `town/<biome>/build.ts`: each biome's kit of town
   buildings and props, `town/<biome>.glb`.
 - `icon/icon.ts` and `icon/build.ts`: the game's icon, the boat on sky and
@@ -53,6 +58,22 @@ the chord and luff, along each ribbon) in their texture coordinates, and
 the client shapes them on the GPU. Each level's triangles are within the
 catalog's `art.budget`.
 
+A square-rigged ship has more. Each mast's yards and their sails are a joint
+at the mast's axis, `fore-yards`, `main-yards` and `mizzen-yards`, at the
+courses' foot, square athwartships at rest, which the client turns about the
+vertical to brace them. Each square sail is a flat grid in its yard's
+upright plane, u from the port arm to the starboard and v from the head to
+the foot, whose `extras` name its `square` group and strip (a topsail's
+`split` is where its foot, of the lower strip, begins, and its `reefs` its
+reef bands); the main topsail carries the number (`{"number": true}`). Her
+`jib` node holds her headsails, each at its own tack with its `rake`, and
+the `spritsail` under the bowsprit. The mizzen's `boom` has its `gaff` at
+the throat. The `wheel` turns about its own z axis, fore and aft, its
+`extras` its radius and spokes; the `sailor` stands behind it. The
+`gallery` is the stern windows' panes, and her name goes on the transom
+(`{"name": {"on": "transom"}}` on the hull). Her lanterns are the nodes
+named as her lights.
+
 ## Sailors in Blender
 
 The sailors are people, so they are made from a human body that deforms,
@@ -63,6 +84,7 @@ packed by Python under `blender -b`, by script and nothing by hand:
 go run ./tools/sailors              # or: cd client && npm run art:sailors
 go run ./tools/sailors -look test   # one look
 go run ./tools/sailors -setup       # check Blender, install MPFB and gltfpack
+go run ./tools/sailors -add helm-wheel,habit-wheel   # only these clips, on every look
 ```
 
 It needs Blender 5.2 LTS installed; the first run installs the pinned MPFB
@@ -141,6 +163,22 @@ the gunwale, the tiller's hinge as far from the seat), and its `sailor`
 node's `extras.restage` is how far its seat is from the dinghy's; the game
 moves the clips by it (a tack's cross widened to its beam), and a boat
 without a hiking strap is hiked only to the rail.
+
+A boat steered by a wheel has a node `wheel` with `extras.wheel` (its
+radius and spokes; the node's origin the hub, its axle fore and aft, a
+spoke straight up at rest) and its `sailor` node where the helmsman stands,
+on the deck between the feet, facing forward. Its clips (`helm-wheel`,
+and `-port` for the wind over the port side; `habit-wheel`, each look's
+habit at the wheel) are made at the stage's wheel (`tables.yaml`'s
+`stage.wheel`: the hub 0.55 m ahead of that place and 1.05 m above the
+deck, 0.75 m to the rim, 8 spokes), placed from the helmsman's place
+(`place-helm-wheel` is from the figure's space to the `sailor` node's),
+and written to a file of their own, `<version>.wheel.glb`, which only a
+boat steered by a wheel loads. The game keeps the hands on the spokes as
+the wheel turns with the rudder. `-add` makes only the clips named (as the
+game asks for them) on each committed look and writes their file, adding
+them to it if it has others, those kept byte for byte; nothing else is
+written, and garments it must make again go into `.dev`.
 
 Every build is judged before anyone looks at it: the gates
 (`review/metrics.py`: budgets, clean meshes and weights, nothing through

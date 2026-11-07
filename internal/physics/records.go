@@ -128,6 +128,7 @@ type Params struct {
 	YawInertia      float64                  // added inertia included, kg·m²
 	RollInertia     float64                  // added inertia included, kg·m²
 	RollDamping     float64                  // the hull's own roll damping, N·m·s/rad
+	YawDamping      float64                  // the hull's resistance to turning, from the cross flow along it, N·m per (rad/s)²
 	RightingLever   [19]float64              // with the sailor on the centreline, every 10° of heel from 0° to 180°, m
 	WaterlineBeam   float64                  // m
 	WaterplaneArea  float64                  // m²
@@ -208,25 +209,25 @@ type Params struct {
 	HeadsailReefs             [3]float64  // the share of their luff kept at full sail, one reef and two
 
 	// Square sails, on yards the braces hold at an angle, in a fore and an
-	// after group. None where an area is 0.
+	// after group, each of two strips, the lower sails' and the upper's.
+	// None where an area is 0.
 	SquareForeArea    float64     // the fore group's area, m²
 	SquareAfterArea   float64     // the after group's, m²
 	SquareForeMast    float64     // the fore group's mast ahead of the centre of gravity, m
-	SquareAfterMast   float64     // the after group's, m
-	SquareFootHeight  float64     // the lowest yard's height above the waterline, m
-	SquareLuff        float64     // the sails' height from the lowest yard to the highest, m
-	SquareFootStrip   float64     // height of the lower strip's centre of effort above the lowest yard, fraction of the luff
+	SquareAfterMast   float64     // the after group's centre of effort ahead of the centre of gravity, m
+	SquareFootHeight  float64     // the lowest sails' foot above the waterline, m
+	SquareLuff        float64     // the sails' height from that foot to the highest yard, m
+	SquareFootStrip   float64     // height of the lower strip's centre of effort above the foot, fraction of the luff
 	SquareHeadStrip   float64     // and the upper strip's
-	SquarePressure    float64     // centre of pressure aft of the yard's line with the flow separated, fraction of a yard's half-length
-	SquareMaxLift     float64     // greatest lift coefficient
-	SquareStallAngle  float64     // angle of attack of greatest lift, degrees
-	SquareStallWidth  float64     // angle over which the flow separates past it, degrees
-	SquareDrag        float64     // viscous drag coefficient
-	SquareNormalForce [19]float64 // normal force coefficient, every 10° of attack from 0° to 180°
+	SquarePressure    float64     // centre of pressure out along the yards from the mast toward the arm the wind meets first, with the flow attached, fraction of their half-width
+	SquareLift        [19]float64 // lift coefficient drawing, every 5° of attack from 0° to 90°
+	SquareDrag        [19]float64 // drag coefficient drawing, every 5° of attack from 0° to 90°
+	SquareNormalForce [19]float64 // normal force coefficient aback, every 10° of attack from 0° to 180°
+	SquareTwist       float64     // the upper strip's yards braced squarer than the lower's, degrees
 	BraceSharp        float64     // the yards' least angle off the centreline, braced up sharp, degrees
 	BraceTime         float64     // s for the crew to swing the yards from sharp up on one side to the other
 	Hauls             float64     // in a tack the after yards swing as the head comes this near the wind, degrees
-	LetGo             float64     // and the fore yards once the wind is this far on the new bow, degrees
+	LetGo             float64     // and the fore yards once the wind is this far on the new bow, or, wearing, on the new quarter, degrees
 	SquareReefs       [3]float64  // the share of their luff kept at full sail, one reef and two
 
 	// Foils.

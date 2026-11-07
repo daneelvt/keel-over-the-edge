@@ -17,6 +17,13 @@
 // then the heading and position; then the material factory's bend. A
 // headsail is shaped about its stay as the sail is about the mast, and a
 // reefed main drawn short, from each instance's values.
+//
+// A square rig (squarerig.ts): its yards' nodes are joints too, turned
+// about their masts by the instance's yards, the wheel about its axle with
+// the rudder; its square sails are one more part, each vertex carrying its
+// sail's node, strip, height and reefs, bellied and turned with its yards.
+// On a model with yards every mesh is drawn, under a joint or with the
+// hull; the stern gallery's panes are marked, to be lit by night.
 
 import {
   type BufferGeometry,
@@ -48,14 +55,48 @@ import {
   vec4,
 } from 'three/tsl';
 import type { Node, WebGPURenderer } from 'three/webgpu';
-import { artUrl, FULL_CAMBER } from './boat';
+import { artUrl, FULL_CAMBER, GALLERY } from './boat';
 import { type NamePlace, namePlace, numberedSail, TOPSIDES } from './boatlook';
 import type { SailorColours } from './sailors/material';
 import { loadSailor } from './sailors/model';
-import { type JibInputs, jibPoint, LUFF_OFFSET, type SailInputs, sailPoint } from './sailshape';
+import {
+  headsailFrame,
+  type JibInputs,
+  jibPoint,
+  LUFF_OFFSET,
+  type SailInputs,
+  sailPoint,
+} from './sailshape';
+import {
+  BELLY,
+  SPRITSAIL,
+  type SquareSail,
+  shapeSquare,
+  squarePoint,
+  squareSails,
+  squareVertex,
+  toNode,
+  unpackYards,
+  WHEEL_TURNS,
+  YARDS_ORDER,
+  type YardsNode,
+  yardDrop,
+} from './squarerig';
 
 /** The joints a vertex turns on, in its 'part' attribute. */
-export const JOINT = { hull: 0, boom: 1, rudder: 2 } as const;
+export const JOINT = {
+  hull: 0,
+  boom: 1,
+  rudder: 2,
+  wheel: 3,
+  foreYards: 4,
+  mainYards: 5,
+  mizzenYards: 6,
+  /** A yard of each yards' node that comes down as its sail's band is taken in. */
+  foreYard: 7,
+  mainYard: 8,
+  mizzenYard: 9,
+} as const;
 
 /** The nodes under which each joint's parts are; the telltales and pennant are not drawn. */
 const JOINTS: Record<string, number> = {
@@ -66,7 +107,43 @@ const JOINTS: Record<string, number> = {
   vang: JOINT.boom,
   rudder: JOINT.rudder,
   tiller: JOINT.rudder,
+  wheel: JOINT.wheel,
+  'fore-yards': JOINT.foreYards,
+  'main-yards': JOINT.mainYards,
+  'mizzen-yards': JOINT.mizzenYards,
 };
+
+/** The nodes never drawn in the fleet: too small to see. */
+const UNDRAWN_NODES: Record<string, true> = { telltales: true, pennant: true };
+
+/** A 'part' attribute's last value: 1 for the painted topsides, GALLERY_PART for the gallery's panes. */
+export const GALLERY_PART = 2;
+
+/** A headsail's cloth's coordinates (TEXCOORD_0) and its shape's (TEXCOORD_1), as one attribute of the fleet's. */
+export const HEADSAIL_UV = 'headsailUv';
+
+/** A geometry's two texture coordinates, as one vec4 a vertex: the cloth's, then the shape's. */
+export function headsailUv(g: BufferGeometry): Float32BufferAttribute {
+  const a = g.getAttribute('uv');
+  const b = g.getAttribute('uv1') ?? a;
+  const n = g.getAttribute('position').count;
+  const out = new Float32Array(n * 4);
+  for (let i = 0; i < n; i++) {
+    out[i * 4] = a?.getX(i) ?? 0;
+    out[i * 4 + 1] = a?.getY(i) ?? 0;
+    out[i * 4 + 2] = b?.getX(i) ?? 0;
+    out[i * 4 + 3] = b?.getY(i) ?? 0;
+  }
+  return new Float32BufferAttribute(out, 4);
+}
+
+/** A headsail, in its frame at its tack: its geometry, its source material, its head's rake aft of its tack, and its tack's place in the model. */
+export interface Headsail {
+  geometry: BufferGeometry;
+  material: MeshStandardMaterial;
+  rake: number;
+  at: Vector3;
+}
 
 /** A model's parts, its solids merged. */
 export interface BoatParts {
@@ -83,9 +160,11 @@ export interface BoatParts {
   numbered: string;
   /** The sail, in its node's frame, and its source material. */
   sail: { geometry: BufferGeometry; material: MeshStandardMaterial } | null;
-  /** The headsail, in its node's frame at the tack, its source material, and how far aft of the tack its head is; null for none. */
-  jib: { geometry: BufferGeometry; material: MeshStandardMaterial; rake: number } | null;
+  /** The first headsail, in its node's frame at the tack, its source material, and how far aft of the tack its head is; null for none. */
+  jib: Headsail | null;
   jibAt: Vector3;
+  /** Every headsail, each in its own frame at its tack, and where that is in the model's frame. */
+  jibs: Headsail[];
   /** Every named node's place in the model's frame: the lanterns', among others. */
   nodes: Map<string, Vector3>;
   /** Every named node, as loaded: what the sailor's seating reads. */
@@ -104,6 +183,22 @@ export interface BoatParts {
   grip: Vector3 | null;
   boardRoot: Vector3 | null;
   hullData: unknown;
+  /**
+   * A square rig's: its square sails in the model's frame (shapeSquare's
+   * attributes, the cloth's uv) and their source material, the print's
+   * sails; each yards' node's place (fore, main, mizzen, the spritsail's),
+   * the wheel's; whether it has a gallery. null without square sails.
+   */
+  square: {
+    geometry: BufferGeometry;
+    material: MeshStandardMaterial;
+    sails: SquareSail[];
+  } | null;
+  yardsAt: Vector3[];
+  /** How far each yards' node's lowered yard comes down at its reef (fore, main, mizzen), and at which level, metres. */
+  yardDrops: { drop: number; level: number }[];
+  wheelAt: Vector3 | null;
+  gallery: boolean;
 }
 
 async function load(path: string): Promise<Object3D> {
@@ -150,7 +245,31 @@ function coloursOf(g: BufferGeometry, material: MeshStandardMaterial): Float32Bu
 
 /** Loads a boat's model and merges its solid parts. */
 export async function loadBoatParts(path: string): Promise<BoatParts> {
-  const scene = await load(path);
+  return boatParts(await load(path), path);
+}
+
+/** A loaded model's parts, its solids merged. */
+export function boatParts(scene: Object3D, path: string): BoatParts {
+  scene.updateMatrixWorld(true);
+  const sails = squareSails(scene);
+  const squareMeshes = new Map<Object3D, SquareSail>();
+  for (const s of sails) {
+    for (const m of s.meshes) {
+      squareMeshes.set(m, s);
+    }
+  }
+  // The yards that come down with a reef: each its node's joint.
+  const loweredYards = new Map<Object3D, number>();
+  for (const s of sails) {
+    const at = YARDS_ORDER.indexOf(s.node as YardsNode);
+    if (s.yard !== null && at >= 0 && yardDrop(s) > 0) {
+      loweredYards.set(s.yard, JOINT.foreYard + at);
+    }
+  }
+  const squareGeometries: BufferGeometry[] = [];
+  let squareMaterial: MeshStandardMaterial | null = null;
+  // A model with yards draws every mesh; others leave out what no joint holds.
+  const everything = sails.length > 0 || YARDS_ORDER.some((n) => scene.getObjectByName(n));
   const byMaterial = new Map<
     string,
     { geometries: BufferGeometry[]; material: MeshStandardMaterial }
@@ -164,6 +283,7 @@ export async function loadBoatParts(path: string): Promise<BoatParts> {
     sail: null,
     jib: null,
     jibAt: new Vector3(),
+    jibs: [],
     nodes: new Map(),
     objects: new Map(),
     gooseneck: new Vector3(),
@@ -176,8 +296,20 @@ export async function loadBoatParts(path: string): Promise<BoatParts> {
     grip: null,
     boardRoot: null,
     hullData: undefined,
+    square: null,
+    yardsAt: [...YARDS_ORDER, SPRITSAIL].map(() => new Vector3()),
+    yardDrops: YARDS_ORDER.map(() => ({ drop: 0, level: 0 })),
+    wheelAt: null,
+    gallery: false,
   };
   scene.traverse((o) => {
+    const yards = [...YARDS_ORDER, SPRITSAIL].indexOf(o.name as YardsNode);
+    if (yards >= 0) {
+      o.getWorldPosition(parts.yardsAt[yards] as Vector3);
+    }
+    if (o.name === 'wheel') {
+      parts.wheelAt = o.getWorldPosition(new Vector3());
+    }
     if (o.name !== '' && !parts.nodes.has(o.name)) {
       parts.nodes.set(o.name, o.getWorldPosition(new Vector3()));
       parts.objects.set(o.name, o);
@@ -215,21 +347,37 @@ export async function loadBoatParts(path: string): Promise<BoatParts> {
       return;
     }
     const material = o.material as MeshStandardMaterial;
+    const square = squareMeshes.get(o);
+    if (square !== undefined) {
+      // A square sail: shaped in its node's frame, kept in the model's.
+      const g = shapeSquare(o.geometry.clone(), square, toNode(o, square, scene));
+      g.applyMatrix4(o.matrixWorld);
+      squareGeometries.push(keep(g, ['position', 'normal', 'uv', 'square']));
+      squareMaterial ??= material;
+      return;
+    }
     if (within(o, { jib: true }) !== null) {
-      // The headsail is shaped in its node's frame, at the tack.
-      let node: Object3D = o;
-      while (node.name !== 'jib' && node.parent !== null) {
-        node = node.parent;
-      }
-      node.getWorldPosition(parts.jibAt);
-      const rake = (node.userData as { rake?: unknown }).rake;
-      // Its normals are the shape's: the model's are not kept, so its
-      // draw reads no more vertex buffers than a device must allow.
-      parts.jib = {
-        geometry: keep(o.geometry.clone(), ['position', 'uv', 'uv1']),
+      // Each headsail is shaped in its own frame, at its tack: its
+      // geometry taken there. Its two texture coordinates go in one
+      // attribute (HEADSAIL_UV), so its draw keeps the model's normals,
+      // which its lighting needs, within the vertex buffers a device must
+      // allow.
+      const frame = headsailFrame(o);
+      scene.updateMatrixWorld(true);
+      const inFrame = new Matrix4().copy(frame.node.matrixWorld).invert().multiply(o.matrixWorld);
+      const g = o.geometry.clone().applyMatrix4(inFrame);
+      g.setAttribute(HEADSAIL_UV, headsailUv(g));
+      keep(g, ['position', 'normal', HEADSAIL_UV]);
+      parts.jibs.push({
+        geometry: g,
         material,
-        rake: typeof rake === 'number' && Number.isFinite(rake) ? rake : 0,
-      };
+        rake: frame.rake,
+        at: frame.node.getWorldPosition(new Vector3()),
+      });
+      parts.jib ??= parts.jibs[0] ?? null;
+      if (parts.jibs.length === 1) {
+        frame.node.getWorldPosition(parts.jibAt);
+      }
       return;
     }
     if (within(o, { sail: true }) !== null) {
@@ -239,20 +387,26 @@ export async function loadBoatParts(path: string): Promise<BoatParts> {
       return;
     }
     const joint = within(o, JOINTS);
-    if (joint === null) {
+    if ((joint === null && !everything) || within(o, UNDRAWN_NODES) !== null) {
       return;
+    }
+    let lowered: number | null = null;
+    for (let p: Object3D | null = o; p !== null && lowered === null; p = p.parent) {
+      lowered = loweredYards.get(p) ?? null;
     }
     const g = (o.geometry as BufferGeometry).clone().applyMatrix4(o.matrixWorld);
     g.setAttribute('color', coloursOf(g, material));
     keep(g, ['position', 'normal', 'color']);
     const n = g.getAttribute('position').count;
     const painted = material.name === TOPSIDES;
+    const gallery = within(o, { [GALLERY]: true }) !== null;
+    parts.gallery ||= gallery;
     const part = new Float32Array(n * 4);
     for (let i = 0; i < n; i++) {
-      part[i * 4] = JOINTS[joint] ?? 0;
+      part[i * 4] = lowered ?? (joint === null ? JOINT.hull : (JOINTS[joint] ?? 0));
       part[i * 4 + 1] = material.roughness;
       part[i * 4 + 2] = material.metalness;
-      part[i * 4 + 3] = painted ? 1 : 0;
+      part[i * 4 + 3] = gallery ? GALLERY_PART : painted ? 1 : 0;
     }
     g.setAttribute('part', new Float32BufferAttribute(part, 4));
     if (painted) {
@@ -274,6 +428,19 @@ export async function loadBoatParts(path: string): Promise<BoatParts> {
     parts.solids.push({ geometry: merged, material });
   }
   parts.sail = sail;
+  for (const s of sails) {
+    const at = YARDS_ORDER.indexOf(s.node as YardsNode);
+    if (s.yard !== null && at >= 0) {
+      parts.yardDrops[at] = { drop: yardDrop(s), level: s.reef.reef };
+    }
+  }
+  if (squareGeometries.length > 0 && squareMaterial !== null) {
+    const merged = mergeGeometries(squareGeometries, false);
+    if (merged === null) {
+      throw new Error(`the square sails in ${path} do not merge`);
+    }
+    parts.square = { geometry: merged, material: squareMaterial, sails };
+  }
   parts.name = namePlace(topsides, parts.objects.get('hull')?.userData);
   parts.numbered = numberedSail(parts.objects.values());
   return parts;
@@ -437,8 +604,31 @@ export function placeNormal(n: Node<'vec3'>, i: Instances): Node<'vec3'> {
   return rotY(rotX(rotZ(n, i.pose.w.negate()), i.lean.z), i.pose.z.negate());
 }
 
+/** A square rig's joints, for a kind's solids: its yards' and wheel's places, and its rudder's stop, degrees. */
+export interface RigJoints {
+  yardsAt: readonly Vector3[];
+  yardDrops: readonly { drop: number; level: number }[];
+  wheelAt: Vector3 | null;
+  rudderAngle: number;
+}
+
+/**
+ * A square rig's yards' turns on the GPU: the fore and after nodes' from
+ * the instance's rig.w (squarerig.ts's packYards), which on a kind with
+ * yards carries them in place of the sail's side (which its sail works out
+ * from the boom).
+ */
+export function yardsOf(i: Instances): { fore: Node<'float'>; after: Node<'float'> } {
+  return unpackYards(i.rig.w);
+}
+
 /** A solid part's vertex node: its joint turned, then the boat placed. */
-export function solidNode(i: Instances, parts: BoatParts, cog: number): Node<'vec3'> {
+export function solidNode(
+  i: Instances,
+  parts: BoatParts,
+  cog: number,
+  rig: RigJoints | null = null,
+): Node<'vec3'> {
   const g = parts.gooseneck;
   const k = parts.stock;
   return Fn(() => {
@@ -451,10 +641,82 @@ export function solidNode(i: Instances, parts: BoatParts, cog: number): Node<'ve
     const ruddered = rotY(p.sub(pivotRudder), i.rig.y).add(pivotRudder);
     const isBoom = joint.greaterThan(JOINT.boom - 0.5).and(joint.lessThan(JOINT.boom + 0.5));
     const isRudder = joint.greaterThan(JOINT.rudder - 0.5);
-    const local = select(isBoom, boomed, select(isRudder, ruddered, p));
-    const turned = select(isBoom, rotY(n, i.rig.x), select(isRudder, rotY(n, i.rig.y), n));
+    let local = select(isBoom, boomed, select(isRudder, ruddered, p));
+    let turned = select(isBoom, rotY(n, i.rig.x), select(isRudder, rotY(n, i.rig.y), n));
+    if (rig !== null) {
+      // The wheel about its axle with the rudder, each yards' node about its mast.
+      const yards = yardsOf(i);
+      const stop = (rig.rudderAngle * Math.PI) / 180;
+      const wheel = i.rig.y
+        .div(stop > 0 ? stop : 1)
+        .clamp(-1, 1)
+        .mul(-WHEEL_TURNS * 2 * Math.PI);
+      const w = rig.wheelAt ?? new Vector3();
+      const pivotWheel = vec3(w.x, w.y, w.z);
+      const is = (j: number) => joint.greaterThan(j - 0.5).and(joint.lessThan(j + 0.5));
+      local = select(is(JOINT.wheel), rotZ(p.sub(pivotWheel), wheel).add(pivotWheel), local);
+      turned = select(is(JOINT.wheel), rotZ(n, wheel), turned);
+      const nodes = [JOINT.foreYards, JOINT.mainYards, JOINT.mizzenYards];
+      const level = reefOf(i);
+      nodes.forEach((j, at) => {
+        const y = rig.yardsAt[at] ?? new Vector3();
+        const pivot = vec3(y.x, 0, y.z);
+        const turn = at === 0 ? yards.fore : yards.after;
+        local = select(is(j), rotY(p.sub(pivot), turn).add(pivot), local);
+        turned = select(is(j), rotY(n, turn), turned);
+        // Its lowered yard: turned with it, and down by its drop once reefed.
+        const d = rig.yardDrops[at] ?? { drop: 0, level: 0 };
+        if (d.drop > 0) {
+          const down = select(level.greaterThan(d.level - 0.5), float(d.drop), float(0));
+          const lowered = rotY(p.sub(pivot), turn)
+            .add(pivot)
+            .sub(vec3(0, down, 0));
+          local = select(is(JOINT.foreYard + at), lowered, local);
+          turned = select(is(JOINT.foreYard + at), rotY(n, turn), turned);
+        }
+      });
+    }
     normalLocal.assign(placeNormal(turned, i));
     return placePoint(local, i, cog);
+  })() as unknown as Node<'vec3'>;
+}
+
+/**
+ * The square sails' vertex node: each vertex bellied as a drawing sail is
+ * (the wire says nothing of their strips' wind), taken in by the
+ * instance's reef, turned with its yards about its mast, then placed.
+ */
+export function squareNode(
+  i: Instances,
+  parts: BoatParts,
+  cog: number,
+  time: Node<'float'>,
+): Node<'vec3'> {
+  const yardsAt = parts.yardsAt;
+  return Fn(() => {
+    const sv = squareVertex();
+    const node = sv.index.div(4).floor();
+    const yards = yardsOf(i);
+    const at = squarePoint(
+      { depth: float(BELLY), ripple: float(0), reef: reefOf(i), time },
+      sv,
+      positionGeometry as unknown as Node<'vec3'>,
+      uv().x,
+      sv.down,
+    );
+    // Each node's mast, and its turn: the fore's, the after's, none for the spritsail's yard.
+    const pick = (v: (k: number) => Node<'float'>): Node<'float'> =>
+      select(
+        node.lessThan(0.5),
+        v(0),
+        select(node.lessThan(1.5), v(1), select(node.lessThan(2.5), v(2), v(3))),
+      ) as unknown as Node<'float'>;
+    const px = pick((k) => float(yardsAt[k]?.x ?? 0));
+    const pz = pick((k) => float(yardsAt[k]?.z ?? 0));
+    const turn = pick((k) => (k === 0 ? yards.fore : k < 3 ? yards.after : float(0)));
+    const pivot = vec3(px, 0, pz);
+    normalLocal.assign(placeNormal(rotY(at.normal, turn), i));
+    return placePoint(rotY(at.position.sub(pivot), turn).add(pivot), i, cog);
   })() as unknown as Node<'vec3'>;
 }
 
@@ -467,8 +729,15 @@ export function sailNode(
   headV: number,
   time: Node<'float'>,
   reef: SailReef = { shares: [1, 1, 1], gather: false, luff: 1 },
+  twistTurn: number | null = null,
 ): Node<'vec3'> {
   const at = parts.sailAt;
+  // On a kind with yards rig.w carries them: the side comes from the boom,
+  // as the fleet's writer works it out for the others.
+  const side =
+    twistTurn === null
+      ? i.rig.w
+      : (i.rig.x.div((twistTurn * Math.PI) / 180).clamp(-1, 1) as unknown as Node<'float'>);
   const level = reefOf(i);
   const [r0, r1, r2] = [reef.shares[0] ?? 1, reef.shares[1] ?? 1, reef.shares[2] ?? 1];
   const share = select(
@@ -480,7 +749,7 @@ export function sailNode(
     boom: i.rig.x,
     twist: i.sail.x,
     camber: i.sail.y,
-    side: i.rig.w,
+    side,
     rippleFoot: i.sail.z,
     rippleHead: i.sail.w,
     footV: float(footV),
@@ -503,18 +772,18 @@ export function sailNode(
   })() as unknown as Node<'vec3'>;
 }
 
-/** The headsail's vertex node: shaped about its stay from the instance's jib values, then placed. */
+/** A headsail's vertex node: shaped about its stay from the instance's jib values, then placed. */
 export function jibNode(
   i: Instances,
-  parts: BoatParts,
+  headsail: Headsail,
   cog: number,
   footV: number,
   headV: number,
   time: Node<'float'>,
 ): Node<'vec3'> {
-  const at = parts.jibAt;
+  const at = headsail.at;
   const j = i.jib ?? vec4(0);
-  const rake = float(parts.jib?.rake ?? 0);
+  const rake = float(headsail.rake);
   // A full camber: the wire says nothing of the headsail's flattening, and
   // reading the main's would take one more vertex buffer.
   const inputs: JibInputs = {
@@ -529,11 +798,12 @@ export function jibNode(
     time,
   };
   return Fn(() => {
-    const fv = uv(1).y;
+    const shape = attribute(HEADSAIL_UV, 'vec4');
+    const fv = shape.w;
     const shaped = jibPoint(
       inputs,
       positionGeometry.z.sub(rake.mul(fv)),
-      uv(1).x,
+      shape.z,
       fv,
       positionGeometry.y,
       rake,
@@ -564,5 +834,7 @@ export function disposeParts(parts: BoatParts): void {
     (s.material as Material).dispose();
   }
   parts.sail?.geometry.dispose();
-  parts.jib?.geometry.dispose();
+  for (const j of parts.jibs) {
+    j.geometry.dispose();
+  }
 }

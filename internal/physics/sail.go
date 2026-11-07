@@ -33,6 +33,12 @@ type sailResult struct {
 	jibTwist      float64 // rad
 	jibAttack     [2]float64
 	jibFlow       [2]float64
+	// The square sails': each group's strips' angles of attack, negative
+	// aback, and their flows.
+	foreAttack  [2]float64
+	foreFlow    [2]float64
+	afterAttack [2]float64
+	afterFlow   [2]float64
 }
 
 // rig is the sails' shape for a step: their areas and heights as reefed.
@@ -47,6 +53,10 @@ type rig struct {
 	jibStrip     float64
 	jibFootZ     float64
 	jibHeadZ     float64
+	foreStrip    float64
+	afterStrip   float64
+	squareFootZ  float64
+	squareHeadZ  float64
 }
 
 // rigAt fills r with the sails' shape at reef reef, from 0 to 2.
@@ -62,6 +72,14 @@ func (b *Prepared) rigAt(reef float64, r *rig) {
 		r.jibStrip = float64(float64(b.jibStrip*share) * share)
 		r.jibFootZ = b.jibTackZ - float64(b.jibFootHeight*share)
 		r.jibHeadZ = b.jibTackZ - float64(b.jibHeadHeight*share)
+	}
+	if b.square {
+		share = lookup(b.squareReefs[:], reef, 1)
+		share2 := float64(share * share)
+		r.foreStrip = float64(b.foreStrip * share2)
+		r.afterStrip = float64(b.afterStrip * share2)
+		r.squareFootZ = b.squareFootZ - float64(b.squareFootHeight*share)
+		r.squareHeadZ = b.squareFootZ - float64(b.squareHeadHeight*share)
 	}
 }
 
@@ -122,6 +140,125 @@ func (b *Prepared) sailLoads(s *State, m *motion, flat, twist float64, g *rig, l
 	if b.jib {
 		b.jibLoads(s, m, flat, g, l, r)
 	}
+	if b.square {
+		b.squareLoads(s.ForeYards, b.foreX, g.foreStrip, m, g, l, r, &r.foreAttack, &r.foreFlow)
+		b.squareLoads(s.Yards, b.afterX, g.afterStrip, m, g, l, r, &r.afterAttack, &r.afterFlow)
+	}
+}
+
+// squareLoads adds a group of square sails' strips' forces to l, at their
+// centres of pressure, and fills r's drive and side force and the strips'
+// attack and flow. yards is the group's yards' angle off the centreline,
+// positive braced for the wind over port (the port yardarm forward), and
+// x its mast's place. The yards hold the sails: their forces pass to the
+// hull through the braces.
+//
+// A square sail is the same from either yardarm: the flow meets it at an
+// angle of attack off the yards' line, from 0, edge on, to 90°, square to
+// it, on its after face, where it draws and bellies forward, or on its
+// fore face, aback, where it lies flat against its mast and gives the
+// normal force of separated flow, driving the ship astern. Its lift is
+// across the flow toward the face the wind is not on.
+func (b *Prepared) squareLoads(yards, x, strip float64, m *motion, g *rig, l *loads, r *sailResult, attackOut, flowOut *[2]float64) {
+	out := sign(yards)
+	if out == 0 {
+		out = 1
+	}
+	for i := range 2 {
+		angle, z := math.Abs(yards), g.squareFootZ
+		if i == 1 {
+			angle, z = min2(angle+b.squareTwist, math.Pi/2), g.squareHeadZ
+		}
+		sinY, cosY := SinCos(angle)
+		// Along the yards from the arm braced forward to the one aft, and
+		// the normal out of the sails' after face.
+		cx, cy := -cosY, float64(out*sinY)
+		nx, ny := -sinY, float64(-out*cosY)
+		// The flow at the mast: the yards are short beside the ship's
+		// turning.
+		pf := b.flow(m, x, 0, z, 0, 0, true)
+		a, _, _, _ := attack(&pf, cx, cy)
+		// The arm the flow meets first, and the angle off the yards' line.
+		from := -1.0
+		if a > math.Pi/2 {
+			a, from = math.Pi-a, 1
+		}
+		face := float64(pf.x*nx) + float64(pf.y*ny)
+		aback := face > 0
+		d := b.squarePressure
+		sinA, cosA := SinCos(a)
+		var cl, cd, sep float64
+		if aback {
+			n := lookup(b.squareNormal[:], a, 18/math.Pi)
+			cl, cd, sep = float64(n*cosA), b.squareDrag[0]+float64(n*sinA), 1
+		} else {
+			cl, cd, sep = b.squareCoefficients(a)
+		}
+		// The centre of pressure moves in to the mast as the flow
+		// separates.
+		cp := float64(float64(from*d) * (1 - sep))
+		px, py := float64(cp*cx), float64(cp*cy)
+		// Lift toward the leeward face: the face the flow leaves by.
+		lx, ly := nx, ny
+		if !aback {
+			lx, ly = -nx, -ny
+		}
+		if float64(-pf.y*lx)+float64(pf.x*ly) < 0 {
+			cl = -cl
+		}
+		fx, fy := force(&pf, cl, cd, strip)
+		l.add(m, fx, fy, x+px, py, z)
+		r.drive += fx
+		r.side += float64(fy * m.cosHeel)
+		if pf.height < 0 {
+			fz := float64(b.sailFloat*pf.height) - float64(b.sailWaterDamping*pf.vz)
+			l.K += float64(pf.side * fz)
+		}
+		attackOut[i] = a
+		flowOut[i] = b.squareFlow(a, sep)
+		if aback {
+			attackOut[i], flowOut[i] = -a, FlowAback
+		}
+	}
+}
+
+// squareCoefficients returns a square sail's strip's lift and drag
+// coefficients drawing at angle of attack a in [0, π/2] off its yards'
+// line, and how far its flow has separated, from 0 to 1. They are a
+// foremast's six square sails in a wind tunnel (Tadano, Ohsugi, Amemiya
+// and Yoshimura 1991): bellied forward, they lift even along their yards'
+// line; their lift rises steadily to its greatest at about 30° and falls
+// gently past it, with no sudden stall, the vortices off their heads and
+// feet holding the flow on their backs; and the drag of the whole mast,
+// its own induced drag in it, rises to 0.88 square to the wind. The flow
+// separates from the greatest lift to square. Below the luffing angle the
+// cloth flogs, as the main's does.
+func (b *Prepared) squareCoefficients(a float64) (cl, cd, sep float64) {
+	luff := smooth(float64(a * b.invSquareLuff))
+	cl = float64(lookup(b.squareLift[:], a, 36/math.Pi) * luff)
+	cd = lookup(b.squareDrag[:], a, 36/math.Pi) + float64(b.squareFlog*(1-luff))
+	sep = smooth(float64((a - b.squareStall) * b.invSquareSeparate))
+	return cl, cd, sep
+}
+
+// squareFlow is a square sail's strip's flow drawing at angle of attack a,
+// its flow separated by sep.
+func (b *Prepared) squareFlow(a, sep float64) float64 {
+	switch {
+	case a < 1/b.invSquareLuff:
+		return FlowLuffing
+	case sep > 0.5:
+		return FlowStalled
+	}
+	return FlowAttached
+}
+
+// SquareCoefficients returns a square sail's strip's lift and drag
+// coefficients drawing at angle of attack a off its yards' line, in [0,
+// π/2], for tools/polar, which compares them with the wind tunnel's.
+func SquareCoefficients(b *Prepared, a float64) (cl, cd float64) {
+	cl, cd, _ = b.squareCoefficients(a)
+	return cl, cd
 }
 
 // jibLoads adds the headsails' strips' forces to l, at the tack, and fills

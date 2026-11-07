@@ -57,8 +57,8 @@ var sailWords = [...]string{
 	physics.SailAback:   "aback",
 }
 
-// table lists every point: speed, VMG, heel, rudder, leeway, boom and angle
-// of attack, then the best VMGs.
+// table lists every point: speed, VMG, heel, rudder, leeway, boom (a ship's
+// yards) and angle of attack, then the best VMGs.
 func table(k *kind, polars []polar) string {
 	var b strings.Builder
 	for _, p := range polars {
@@ -67,10 +67,14 @@ func table(k *kind, polars []polar) string {
 		} else {
 			fmt.Fprintf(&b, "\n%g knots of wind %s (%.1f knots 10 m up)\n", p.Wind, k.heightWords(), k.wind10(p.Wind)/knot)
 		}
-		fmt.Fprintln(&b, "  TWA  speed    VMG  heel rudder leeway  boom attack sailor  flat sheet   AWA  sail")
+		if k.square {
+			fmt.Fprintln(&b, "  TWA  speed    VMG  heel rudder leeway yards attack sailor  flat brace   AWA  sail")
+		} else {
+			fmt.Fprintln(&b, "  TWA  speed    VMG  heel rudder leeway  boom attack sailor  flat sheet   AWA  sail")
+		}
 		for _, pt := range p.Points {
 			if !pt.OK {
-				fmt.Fprintf(&b, "  %3.0f  capsizes at every sheet\n", pt.TWA)
+				fmt.Fprintf(&b, "  %3.0f  %s\n", pt.TWA, pt.cannot())
 				continue
 			}
 			fmt.Fprintf(&b, "  %3.0f %6.2f %6.2f %5.1f %6.1f %6.1f %5.1f %6.1f %6.2f %5.2f %5.2f %5.0f  %s\n",

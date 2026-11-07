@@ -288,18 +288,18 @@ semi-implicit Euler (`Substeps`).
 | File | What |
 |------|------|
 | `wind.go` | The frames; the wind at each height by the open sea's log profile (z₀ = 0.0002 m; the game's wind is 10 m up); the apparent flow at any point of the boat, turned into the heeled body's plane |
-| `sail.go` | The sail groups, each two strips, foot and head, the head twisted further out (more as the sailor flattens the sail and as the boom or clew goes out); lift and drag from each strip's angle of attack; the boom on its sheet; the backed head that drags the boom across in an accidental gybe; the headsails about their tack; the reef; a capsized sail floating on the water |
+| `sail.go` | The sail groups, each two strips, foot and head, the head twisted further out (more as the sailor flattens the sail and as the boom or clew goes out); lift and drag from each strip's angle of attack; the boom on its sheet; the backed head that drags the boom across in an accidental gybe; the headsails about their tack; the square sails on their yards, drawing or aback; the reef; a capsized sail floating on the water |
 | `foils.go` | Daggerboard or fixed keel, and rudder: Helmbold's lift slope, the stall to a flat plate, reversed flow, the hull's carry-over, the board's downwash at the rudder |
-| `hull.go` | Upright resistance from the towed hull's drag area, cross-flow drag, the Munk moment, the righting lever |
+| `hull.go` | Upright resistance from the towed hull's drag area, cross-flow drag, the Munk moment, a long hull's resistance to turning, the righting lever |
 | `sailor.go` | The automatic sailor: hiking to the position that balances the boat, flattening the sail by the apparent wind, falling in past the boat's fall-out heel (70° in the Jolly boat; never in the keelboat), swimming to the board, righting the boat, climbing back in |
-| `boat.go` | The step: the rudder, sheets and reef following the controls at the hands' rates, the substeps, the boom's and clew's stops, `Out` |
+| `boat.go` | The step: the rudder, sheets and reef following the controls at the hands' rates, a ship's braces and her crew's rule, the substeps, the boom's and clew's stops, `Out` |
 | `prepare.go` | `Prepare`: every derived constant |
 | `sea.go`, `waves.go` | The sea and the boat in it: see [Waves](#waves) |
 
 The player has three controls, `Helm`, `Sheet` and `Reef`. The sheet sets how far the
 boom may swing out; it never pulls the boom in, so an eased sail luffs, a
 trimmed one presses on the sheet, and a sail with the wind behind its leech
-swings across.
+swings across. On a ship the sheet is the braces (below).
 
 **The sail groups.** A boat's rig is up to four groups, each in its own
 `Params` fields, and a group of no area is skipped, so a boat with the main
@@ -316,8 +316,57 @@ alone steps as it always did:
   They have no backed head. Induced drag is the whole rig's: its area on
   its effective height (ORC VPP 2023, eq. 5.34). `Out.JibFootAttack`,
   `JibHeadAttack`, `JibFootFlow`, `JibHeadFlow` and `JibTwist` are theirs.
-- **Fore and after square sails**, on yards held at the braces' angle: their
-  fields exist and are skipped, since no boat has them yet.
+- **Fore and after square sails**, on yards held at the braces' angle, in
+  a fore group (the foremast's) and an after group (the main and mizzen
+  masts' and the staysails between them, at their centre by area), each
+  two strips, the lower sails and the upper, the upper braced
+  `squareTwist` squarer. A square sail is the same from either yardarm: the
+  flow meets it at an angle of attack off the yards' line, 0 to 90°. On
+  its after face it draws, its lift and drag from tables every 5° of
+  attack (`squareLift`, `squareDrag`), a wind tunnel's foremast of six
+  square sails (Tadano, Ohsugi, Amemiya and Yoshimura 1991): bellied, they
+  lift even along their yards' line, their lift rising steadily to its
+  greatest, 1.01, at 30° and falling gently past it, with no sudden stall,
+  and their drag, the mast's own induced drag in it, rising to 0.88 square
+  to the wind. On its fore face it is aback: it lies flat against its mast
+  and gives a normal force (`squareNormalForce`), driving her astern. Its
+  centre of pressure lies out along the yards toward the arm the wind
+  meets first, a tenth of the sails' half-width with the flow attached
+  (`squarePressure`), in to the mast as the flow separates.
+  `Out.ForeFootAttack` … `AfterHeadFlow` are each group's strips', negative
+  and `FlowAback` aback; `Out.Sail` on a ship is the after yards' lower
+  sails': aback, lifting below the attack of a quarter of the greatest
+  lift (brace up), stalled past 1.75 times the attack of the greatest lift
+  with the yards not square (square them), or drawing.
+
+**The braces.** On a boat with square sails the sheet, 0 … 1, is the
+braces: the yards' angle off the centreline is `braceSharp` (braced up
+sharp, where they meet the lee shrouds) + sheet × (90° − `braceSharp`),
+square at 1. The same sheet still sets the mizzen's boom and the
+headsails' clew as on the other boats: the crew trims them to the braces.
+`State.Yards` and `State.ForeYards` are the after and fore yards' angle
+off the centreline, signed by the side they are braced for: positive braced
+for the wind over port, the port yardarm forward. To change sides they
+swing through square, where either sign is the same yards; 0 is never
+braced, and such yards are braced at once for the side the wind fills.
+
+**The crew's rule.** The crew is a rule in the physics, as the dinghy's
+sailor's hiking is: it braces each group of yards for the side the wind
+fills, swinging them at `braceRate`, the travel from sharp up on one side
+to sharp up on the other in `braceTime`, and hauls them round in a turn as
+a ship's crew does (Willis 2003). In a tack, as her head comes within
+`hauls` of the wind and turns on through it, the after yards swing to the
+new side, "mainsail haul", and stay there as she turns on past head to
+wind; the fore yards stay, aback, and push her head round, until the wind
+is `letGo` on the new bow, "let go and haul". From the time she comes up
+within `hauls` and `letGo` of the wind until the fore yards come round, the
+crew lets the headsails' sheets fly, so that they never hold her head off
+the wind. A ship that stops short falls back, and the after yards come
+back to her old side. Wearing, both groups keep their side until the wind
+is `letGo` on the new quarter. Each rule keeps its side within its margin,
+so a yawing ship never braces back and forth. A tack the autopilot orders
+without way enough (`steerage`) stalls by its stall rule, "Tack stalled",
+and she pays off on her old tack.
 
 **The reef.** `Control.Reef` is a target, 0 (full sail), 1 or 2; `State.Reef`
 follows it continuously at `reefTime` seconds a level while the sailor is
@@ -326,8 +375,12 @@ its luff kept at each level: its area goes as the share's square, its strips'
 heights above the boom, or the tack, with it (ORC's `rfm`). `Out.ReefShare`
 is the main's share. The Jolly boat reefs as the ILCA 6 and 4 rigs, 0.903
 and 0.816 (a licence: an ILCA changes its rig ashore); the keelboat's main
-takes two slab reefs, 0.85 and 0.70, and its jib none. The autopilot never
-reefs.
+takes two slab reefs, 0.85 and 0.70, and its jib none. The tall ship's
+first reef takes her topgallants in and her second reefs her topsails twice
+and takes her spritsail in (Beaufort's man-of-war scale at forces 6 and 7):
+her square sails' shares 0.91 and 0.83, her headsails' 1 and 0.79; her
+mizzen is not reefed, and her crew takes a level in 120 s. The autopilot
+never reefs.
 
 **The fixed keel.** A boat with `fixed` 1 has a fin keel where the Jolly
 boat has its daggerboard: the ground never pushes it up, its tip meets the
@@ -338,6 +391,14 @@ ground is put in water its draught and a metre deep, or the ground's
 `pushDepth`, whichever is deeper (`physics.PushDepth`). A boat whose
 `fallOutHeel` is 180° never loses its sailor: a knockdown leaves the helm
 and sheet live, and the sails in the water and the keel bring her back.
+
+**A long hull's turning.** `yawDamping` is a hull's resistance to turning
+by the water flowing across it as it turns, its moment against the rate of
+turn times the rate's size, ½ρ C_D T L⁴/32 for a hull of draught T and
+length L. A dinghy's and a keelboat's are 0: their board or keel and rudder
+damp their turning. The tall ship's keel is one foil at one place, which
+gives her almost none, and without it a tack's turn carried her on round
+with no way to stop it.
 
 ### The Jolly boat's numbers
 
@@ -392,6 +453,47 @@ ORC International One Design certificate (2021). Each value in
 
 `reference.json`'s notes give each value's change and its reason.
 
+### The tall ship's numbers
+
+The tall ship is the HM Bark Endeavour replica (1994), after the collier
+bark of 1768, under her plain sail: courses, topsails and topgallants on
+the fore and main, a mizzen topsail and the mizzen on its gaff and boom,
+the jib, fore topmast staysail and spritsail. She is steered from a wheel
+by one sailor standing on her quarterdeck, and her crew is the rule above.
+No stability booklet or polar of hers is published. Each value in
+`shared/catalog/boats.yaml` says where it comes from:
+
+- **Published:** her length on deck, 33.3 m, beam 9.28 m, draught 3.4 m,
+  displacement 550 t and the area of her plain sail (Australian National
+  Maritime Museum).
+- **Fitted:** her square sails' lift and drag, the wind tunnel's foremast
+  of six (`tools/polar -sail`), and their centre of pressure near the mast.
+  Her mizzen and headsails keep the main's and the jib's coefficients as
+  the other boats fit them.
+- **Estimates from her sail plan and lines:** her groups' areas and
+  centres (the fore 275 m² on the foremast, 11.4 m ahead of her centre of
+  gravity; the after 435 m² centred 0.7 m aft of it; the mizzen 80 m² on
+  its boom 9.6 m aft; the headsails 120 m² tacked 21 m ahead), their
+  heights, the hull's outline, waterplane and masses.
+- **Estimates, tuned against her references and the seamanship of square
+  rig** (`tools/polar`): how sharp her yards brace (42°, so that her best
+  VMG is 65° off the wind), her lateral plane (the keel and deadwood the
+  foil below a 0.8 m body, its centre a metre aft of her centre of gravity,
+  its carry-over and the Munk moment, for her leeway and her balance), her
+  rudder's flow, the hull's drag past 7.5 knots (her passages' speeds), her
+  resistance to turning, her crew's brace time, and her autopilot's gain,
+  damping, gybe helm, steerage and tack by the lee (her tacks and wears).
+- **Estimates, left as argued:** her righting lever, a metacentric height
+  of 1.2 m, the greatest lever 0.68 m at 50° and a range of 110°, past the
+  90° large sailing vessels are held to, so that a squall that lays her on
+  her beam ends never leaves her there; her inertias, the reefs' shares and
+  time.
+
+She carries about 4° of lee helm close-hauled and none reaching: every
+balance that gave her weather helm close-hauled left her, slow and sliding
+sideways after a tack or a wear, rounding up into the wind until she
+tacked back.
+
 ### `tools/polar`
 
 ```sh
@@ -406,10 +508,22 @@ go run ./tools/polar -start        # starts from rest by the sheet, beside the c
 go run ./tools/polar -sea 12       # the polar in 12 knots and the sea it raises over open water, beside flat water
 ```
 
-Every mode sails every boat of the catalog. The tool steers with a heading-hold of its own, tries the sheet from hauled
+Every mode sails every boat of the catalog, or `-boat` one of them by its
+id (but `-handbook`, which writes every boat's). The tool steers with a heading-hold of its own, tries the sheet from hauled
 in to let fly at every true wind angle, and measures each point after 60 s
 of sailing; a boat whose sailor stays aboard counts as capsized past 75° of
-heel. Its winds are given at each boat's reference height, its entry's
+heel. A boat slow to answer her helm and her sails, one whose hull's drag
+takes more than two minutes to change her speed at 1.5 m/s, the tall ship,
+is sailed as she answers: the helmsman meets her turn as far ahead as her
+wheel takes and learns the standing helm she needs; each sail begins at 30%
+of the wind's speed, no faster than a Froude number of 0.19, and settles
+for as long as her hull takes to change her speed there, two to eight
+minutes; her braces are searched every fifth of their travel, then about
+the best. A ship counts as not sailing a point where her square sails are
+aback or lifting, where she is out of hand, her helm held past half its
+travel, or where she goes more sideways than ahead; her VMG is what she
+makes good over the ground, her leeway in it, and her boom column is her
+yards' angle. Its winds are given at each boat's reference height, its entry's
 `height` in `reference.json`: the Jolly boat's 3 m, its sail's, where the
 reference data's wind was measured, the table showing the 10 m wind beside
 them; the keelboat's 10 m, where its certificate rates it, the game's own.
@@ -425,15 +539,33 @@ compares it with its source: the main with ORC's low-lift mainsail (Table
 60°; the headsails with ORC's low-lift jib (Table 5.4), held from 27° to
 100° and their side force at 27°, 50° and 60°. From 150° aft ORC's jib
 stands across the wind as if poled out; a jib sheeted to the rail stands
-behind the main, and is not held there.
+behind the main, and is not held there. A ship's square sails, held by
+their yards at each angle of attack, are compared with the wind tunnel's
+foremast of six (Tadano and others 1991, Figure 9) from 5° to 90°, within
+5% of its whole force there. Her mizzen and headsails are shown against
+ORC's but not held: in her rig, whose induced drag is three times a
+sloop's, the trim that drives her best near the wind is not ORC's.
 
 `-handbook` writes each boat's table of the fastest boom, at 6, 12 and 20
 knots 10 m up, under a line naming the boat, and when to reef: the least
 wind in which the boat heels past its trim at full sail, the wind in which,
 close-hauled, its fastest sheet is no longer hauled in hard (eased more than
-2.5°), since hauled in it heels further than its sailor can hold. It prints
-how each boat sails close-hauled with no reef, one and two in that wind and
-above.
+2.5°), since hauled in it heels further than its sailor can hold. A ship's
+table is of her braces, the yards' angle off the centreline from braced up
+sharp to 90°, square (an AI app's `boom` on a ship), "aback" where she
+cannot sail; her yards stay braced up sharp close-hauled in any wind, and
+she reefs from the wind in which, close-hauled at full sail, she heels past
+10°, where her crew takes her topgallants in (Beaufort's force 6). It
+prints how each boat sails close-hauled with no reef, one and two in that
+wind and above.
+
+`-manoeuvres` tacks from close-hauled, 45° or the boat's own angle if she
+cannot sail so close, and gybes from 150°; for a ship it then sails her own
+autopilot and crew in 12 knots, braced up sharp: her tack from her full
+speed, which must come round; her tack from 2.5 knots, which must stall and
+leave her on her old tack; and her wear, which must stay within four of
+her lengths of where it began, as the best ships wore (Willis 2003). It
+fails if any does not.
 
 `-sea` sails each angle for two minutes in the sea the wind raises, with the
 sheet that sails it fastest among those that keep the boat upright, and
@@ -443,7 +575,9 @@ checked: no published polar of these boats in known waves exists to check
 against. Off the wind a dinghy surfs and gains; to windward it loses a
 little.
 
-The reference data (`reference.json`) holds each point with its source. The
+The reference data (`reference.json`) holds each point with its source,
+as a speed at an angle, the best upwind or downwind VMG, the angle of the
+best upwind VMG (`upwindAngle`) or the leeway there (`upwindLeeway`). The
 Jolly boat's: Day's VPP for upwind and downwind VMG (±5% and ±10%), Binns,
 Bethwaite and Saunders's measured close-hauled and beam-reach speeds (±10%),
 and their broad-reach and run speeds as upper bounds. The keelboat's, from
@@ -451,7 +585,13 @@ the J/22's certificate: the beat VMG and the speeds at 52°, 60° and 75°
 within ±10% from 6 to 12 knots; above 12 knots at most the rating upwind,
 since one 80 kg sailor carries less righting moment than the rated crew of
 up to 275 kg; and from 90° aft at most the rating at every wind, since the
-rating sets a spinnaker there, which the game's keelboat has not.
+rating sets a spinnaker there, which the game's keelboat has not. The tall
+ship's, from the seamanship of square rig and her passages: her best VMG
+65° to 70° off the wind in 10, 15 and 20 knots, as the best ships sailed six
+points (Willis 2003; replicas 60° to 65°, Whitewright 2011), and her leeway
+there 6° to 12°; 7 to 8 knots with the wind on the quarter in 15 and 18
+knots, her long passages; at most 9 knots off the wind in 20 knots of flat
+water.
 
 ### Recalibrating
 
@@ -468,6 +608,13 @@ When a parameter changes, or better data arrive:
    (`-manoeuvres`).
 4. The flattening, against the upwind VMG above 9 knots (`-check`).
 5. The drag area above 9 knots, only if the reaches miss by more than 10%.
+
+For a ship: fit the square sails to their tables first, then the braces'
+sharpest angle for her pointing, the lateral plane (the keel's place, its
+carry-over, the Munk moment) for her leeway and her balance, the drag area
+for her passages' speeds, and last her crew's times and her autopilot by
+`-manoeuvres` and the behaviour tests (`ship_test.go`): her tack with way,
+her stalled tack and her wear.
 
 Never change the Jolly boat's values for another boat, nor the published
 ones (dimensions, areas, rig, displacement, draft), nor the geometry the
@@ -500,6 +647,20 @@ handbook's tables (`-handbook`), and set the start sheet from `-start`. Note eac
 - **The keelboat's righting lever** is from a simple hull: matching the
   certificate's moment at 1° and its limit of positive stability puts her
   centre of gravity near the waterline, higher than her lead suggests.
+- **The tall ship's lateral plane** is a foil at one place and the Munk
+  moment, tuned for her balance and her tacks, not measured; it gives her
+  a little lee helm close-hauled where a ship carried a little weather
+  helm. Her square sails are a wind tunnel's model foremast; at full scale
+  they "stalled at about 25°" and gave more lift and drag (Ohsugi and
+  Amemiya 1988).
+- **The tall ship's speed past 8 knots** is held down by a steep drag table,
+  to her passages' 7 to 8 knots in 15 to 18 knots: in flat water she makes
+  at most 8.3 knots in 20 knots, where in a sea she would surf, as she did
+  at 13 knots in 2012.
+- **The tall ship tacks slowly and nearly stops**: from 4.3 knots in 12
+  knots of wind she is within 5° of her new course in about a minute and a
+  half, her speed down to a quarter of a knot through the wind, and pays
+  off 40° past it before she gathers way.
 
 ## Wind and weather
 
@@ -6976,7 +7137,9 @@ telltales at each sail strip's height, its jib's tack and head where the
 headsails' are, and each level within the catalog's `art.budget`; and
 each sailor's model has its parts and is under 2,000. The sailors' clips
 are placed in the Jolly boat; another boat's model says how far its seat is
-from it (`art/README.md`), and `render/sailors/restage.ts` moves them there. A kind's `art.model`
+from it (`art/README.md`), and `render/sailors/restage.ts` moves them there; on a boat with a
+wheel (its `wheel` node's data) the sailor stands at its `sailor` node instead, the hands
+kept on the spokes as the wheel turns (`render/sailors/runtime.ts`). A kind's `art.model`
 must name a file that exists (`go run ./tools/catalog -check`). The catalog's
 `sailors` list names the figures; the first is drawn.
 

@@ -20,6 +20,7 @@ import {
   COG_HOLE,
   COG_ROOT,
   COG_TEETH,
+  chordAt,
   chordAtHalf,
   cogOutline,
   luminance,
@@ -186,10 +187,13 @@ describe('the mark’s place', () => {
         }
       }
       expect(p.u + p.ru).toBeLessThan(leech.x);
-      // The near model's chord at half height: the foot's half and the roach.
+      // The near model's chord at half height: the foot's half and the
+      // roach; a gaff sail's, its head along the gaff, half its foot and
+      // its head together.
       if (path === boat.art.model) {
+        const head = chordAt(sail, 1);
         expect(chordAtHalf(sail)).toBeGreaterThan(0.5);
-        expect(chordAtHalf(sail)).toBeLessThan(0.6);
+        expect(chordAtHalf(sail)).toBeLessThan(head > 0.2 ? 0.6 + head / 2 : 0.6);
       }
     });
   });

@@ -13,6 +13,9 @@
 //	go run ./tools/polar -start        starts from rest by the sheet, beside the catalog's start sheet
 //	go run ./tools/polar -sea 12       the polar in 12 knots and the sea it raises, beside flat water
 //
+// -boat sails one boat of the catalog, by its id, in any mode but
+// -handbook, which writes every boat's.
+//
 // Each boat's winds are given at its reference data's height
 // (internal/physics/testdata/reference.json). It steers with a
 // heading-hold of its own and runs each point to steady state. It runs
@@ -38,6 +41,7 @@ func main() {
 	start := flag.Bool("start", false, "starts from rest, untouched, by the sheet: what a boat's start sheet is chosen by")
 	handbook := flag.Bool("handbook", false, "write the machine sailors' handbook's trim tables and reefing advice into "+handbookPath)
 	out := flag.String("out", ".dev/polar", "folder for the polar's JSON and SVG")
+	only := flag.String("boat", "", "sail only the boat of this id, not every boat of the catalog")
 	flag.Parse()
 
 	cat, err := catalog.Load()
@@ -60,7 +64,7 @@ func main() {
 		if !(ref.Height > 0) {
 			fail(fmt.Errorf("%s: %s's reference data has no height", referencePath, boat.ID))
 		}
-		kinds[i] = &kind{id: string(boat.ID), name: boat.Name, b: &prepared[i], p: &params, height: ref.Height, startSheet: boat.StartSheet}
+		kinds[i] = newKind(string(boat.ID), boat.Name, &prepared[i], &params, ref.Height, boat.StartSheet)
 	}
 	if *handbook {
 		if err := runHandbook(kinds); err != nil {
@@ -69,6 +73,9 @@ func main() {
 		return
 	}
 	for i, k := range kinds {
+		if *only != "" && k.id != *only {
+			continue
+		}
 		switch {
 		case *edge:
 			err = runEdge(k.b, waves, cat)

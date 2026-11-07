@@ -318,6 +318,10 @@ export interface PhysicsHull {
    */
   rollDamping: number;
   /**
+   * The hull's resistance to turning, from the water flowing across it as it turns, in N·m per (rad/s)²: its moment against the rate of turn times the rate's size. 0 where the foils alone damp the turning.
+   */
+  yawDamping: number;
+  /**
    * Righting lever (GZ) with the sailor on the centreline, every 10° of heel from 0° to 180°, in m.
    *
    * @minItems 19
@@ -720,47 +724,85 @@ export interface PhysicsSquare {
    */
   squareForeMast: number;
   /**
-   * The after group's mast ahead of the centre of gravity, in m.
+   * The after group's centre of effort ahead of the centre of gravity, in m: between its masts, by their sails' areas.
    */
   squareAfterMast: number;
   /**
-   * The lowest yard's height above the waterline, in m.
+   * The lowest sails' foot above the waterline, in m.
    */
   squareFootHeight: number;
   /**
-   * The sails' height from the lowest yard to the highest, in m.
+   * The sails' height from that foot to the highest yard, in m.
    */
   squareLuff: number;
   /**
-   * Height of the lower strip's centre of effort above the lowest yard, as a fraction of the luff.
+   * Height of the lower strip's centre of effort above the sails' foot, as a fraction of the luff.
    */
   squareFootStrip: number;
   /**
-   * Height of the upper strip's centre of effort above the lowest yard, as a fraction of the luff.
+   * Height of the upper strip's centre of effort above the sails' foot, as a fraction of the luff.
    */
   squareHeadStrip: number;
   /**
-   * Centre of pressure aft of the yards' line with the flow separated, as a fraction of a yard's half-length.
+   * Centre of pressure out along the yards from the mast toward the arm the wind meets first, with the flow attached, as a fraction of the sails' half-width (half their area over their luff); with the flow separated it is at the mast.
    */
   squarePressure: number;
   /**
-   * Greatest lift coefficient.
+   * Lift coefficient of the sails drawing, the wind on their after face, every 5° of angle of attack off the yards' line from 0° to 90°.
+   *
+   * @minItems 19
+   * @maxItems 19
    */
-  squareMaxLift: number;
+  squareLift: [
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number
+  ];
   /**
-   * Angle of attack of the greatest lift, in degrees.
+   * Drag coefficient of the sails drawing, every 5° of angle of attack off the yards' line from 0° to 90°.
+   *
+   * @minItems 19
+   * @maxItems 19
    */
-  squareStallAngle: number;
+  squareDrag: [
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number
+  ];
   /**
-   * Angle past it over which the lift falls away, in degrees.
-   */
-  squareStallWidth: number;
-  /**
-   * Viscous drag coefficient.
-   */
-  squareDrag: number;
-  /**
-   * Normal force coefficient, every 10° of angle of attack from 0° to 180°.
+   * Normal force coefficient of the sails aback, pressed flat against their mast, every 10° of angle of attack from 0° to 180°.
    *
    * @minItems 19
    * @maxItems 19
@@ -787,6 +829,10 @@ export interface PhysicsSquare {
     number
   ];
   /**
+   * The upper strip's yards braced this much squarer than the lower's, in degrees: the wind aloft is freer.
+   */
+  squareTwist: number;
+  /**
    * The yards' least angle off the centreline, braced up sharp, in degrees.
    */
   braceSharp: number;
@@ -799,7 +845,7 @@ export interface PhysicsSquare {
    */
   hauls: number;
   /**
-   * And the fore yards once the wind is this far on the new bow, in degrees.
+   * And the fore yards once the wind is this far on the new bow; wearing, every yard once the wind is this far on the new quarter, in degrees.
    */
   letGo: number;
   /**
@@ -822,7 +868,7 @@ export interface PhysicsFoils {
    */
   boardSpan: number;
   /**
-   * Chord of the daggerboard, in m.
+   * Chord of the daggerboard, or of a fixed keel along its length, in m.
    */
   boardChord: number;
   /**
@@ -8065,4 +8111,4 @@ export interface NewsColumn {
 }
 
 /** The catalog version (tools/catalog). */
-export const CATALOG_VERSION = 'dd9366a4c537ddb1';
+export const CATALOG_VERSION = 'a88071c8a988b7d2';

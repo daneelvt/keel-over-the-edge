@@ -237,7 +237,9 @@ def mirrored(pose):
     def across(v):
         return None if v is None else [-v[0], v[1], v[2]]
 
-    turn = [[other(b), axis, d if axis == "x" else -d] for b, axis, d in pose["turn"]]
+    # A bone's own x axis on one side is the other's mirrored and reversed:
+    # a turn about it keeps its sign, as one about the figure's x does.
+    turn = [[other(b), axis, d if axis in ("x", "lx") else -d] for b, axis, d in pose["turn"]]
     ik = {}
     for eff, spec in pose["ik"].items():
         t = dict(spec)
@@ -335,12 +337,14 @@ class Figure:
 
     def turn(self, turns):
         """Turns bones about the figure's axes, each about its posed head,
-        root first (as listed), carrying its children."""
+        root first (as listed), carrying its children; or, axis lx, about
+        the bone's own x axis as it lies (a finger's curl, toward the palm)."""
         for name, axis, degrees in turns:
             pb = self.bones[name]
             self.update()
             head = pb.matrix.to_translation()
-            r = Matrix.Translation(head) @ Matrix.Rotation(math.radians(degrees), 4, axis.upper()) @ Matrix.Translation(-head)
+            about = pb.matrix.to_3x3().col[0].normalized() if axis == "lx" else axis.upper()
+            r = Matrix.Translation(head) @ Matrix.Rotation(math.radians(degrees), 4, about) @ Matrix.Translation(-head)
             pb.matrix = r @ pb.matrix
         self.update()
 
@@ -390,6 +394,15 @@ class Figure:
                       for b in ("foot", "ball") for s in ("l", "r")) - SOLE
             contact = Vector((pelvis.x, pelvis.y, low))
             at = Vector((0.0, st.floor.y, st.floor.z))
+            return Matrix.Translation(at) @ Matrix.Rotation(math.pi, 4, "Z") @ Matrix.Translation(-contact)
+        if place == "wheel":
+            # Standing at the wheel on the deck, facing forward: the soles
+            # on the deck, the hips over the helmsman's point.
+            pelvis = self.bones["pelvis"].head
+            low = min(min(self.bones[f"{b}_{s}"].head.z, self.bones[f"{b}_{s}"].tail.z)
+                      for b in ("foot", "ball") for s in ("l", "r")) - SOLE
+            contact = Vector((pelvis.x, pelvis.y, low))
+            at = st.point("deck", side)
             return Matrix.Translation(at) @ Matrix.Rotation(math.pi, 4, "Z") @ Matrix.Translation(-contact)
         if place == "outside":
             # In the water at the side, facing in, the chest at the gunwale:
@@ -485,10 +498,12 @@ class Figure:
                 p.x = -side * far
         return p
 
-    def solve(self, effector, target, pole=None):
+    def solve(self, effector, target, pole=None, grip=None, side=1):
         """Two-bone IK: the chain's end to target, the middle joint toward
         its pole (POLES, or an offset from the chest), within the reach
-        the tables allow."""
+        the tables allow; and a hand that grips (grip: its fingers' aim and
+        its palm's facing, forward, inboard and up in the stage's frame on
+        the side; weight, how far from the hand's own turn) turned so."""
         upper, lower, end = EFFECTORS[effector]
         s = self.world(upper)
         l1 = self.arm.data.bones[upper].length
@@ -529,6 +544,27 @@ class Figure:
         elbow = s + dn * a + toward * h
         self._aim(upper, elbow)
         self._aim(lower, t)
+        if grip is not None and effector.startswith("hand"):
+            self.grip(end, grip, side)
+
+    def grip(self, name, grip, side=1):
+        """Turns a hand so its fingers point along grip["aim"] and its palm
+        (the bone's own z) faces grip["palm"], both in the stage's frame
+        on the side (forward, inboard, up), as far as grip["weight"] (1 if
+        not said) from its turn as it is."""
+        self.update()
+        frame = self.stage.frame(side).to_3x3()
+        y = (frame @ Vector(grip["aim"])).normalized()
+        z = frame @ Vector(grip["palm"])
+        z = (z - y * z.dot(y)).normalized()
+        x = y.cross(z)
+        want = Matrix((x, y, z)).transposed().to_quaternion()
+        m = self.world_matrix(name)
+        now = m.to_quaternion()
+        q = now.slerp(want, grip.get("weight", 1.0))
+        local = self.arm.matrix_world.inverted() @ Matrix.LocRotScale(m.to_translation(), q, None)
+        self.bones[name].matrix = local
+        self.update()
 
     def clear_leg(self, s):
         """Turns a leg at the hip, a few degrees at a time, the least way
@@ -646,7 +682,8 @@ class Figure:
             # Moved forward, inboard and up in the seat's frame.
             place = Matrix.Translation(self.stage.frame(side).to_3x3() @ Vector(pose["shift"])) @ place
         self.arm.matrix_world = place
-        self.on_seat(pose["place"] is not None)
+        # Standing at a wheel, nothing lies on a seat.
+        self.on_seat(pose["place"] not in (None, STANDS))
         self.update()
         at = {}
         for eff in EFFECTORS:
@@ -658,6 +695,26 @@ class Figure:
             if spec and spec.get("planted") and eff.startswith("foot") and spec["at"] != "free":
                 # A foot planted on what it stands on, its heel not under it.
                 at[eff].z = max(at[eff].z, self.stage.point(spec["at"], side).z + HEEL_CLEAR)
+        if pose["place"] == STANDS:
+            # Standing, a foot's target as high as its toes need to be on
+            # the deck with the foot set on it (a trailing foot's heel off
+            # it), so the bake never lifts it off its target.
+            for eff, spec in pose["ik"].items():
+                if eff.startswith("foot") and spec["at"] not in ("bone", "free") and not spec.get("planted"):
+                    surface = self.stage.point(spec["at"], side).z
+                    for _ in range(3):
+                        self.solve(eff, at[eff], spec.get("pole"))
+                        self.level_foot(eff)
+                        low = min(self.toes(eff) - TOE_CLEAR, self.world(EFFECTORS[eff][2]).z - HEEL_CLEAR) - surface
+                        if low >= -1e-4:
+                            break
+                        at[eff].z -= low
+        for eff, spec in pose["ik"].items():
+            if spec.get("grip") is not None and eff.startswith("hand"):
+                # A hand that grips: turned to it with the arm on its target,
+                # and kept so against the forearm, as a joint of the key.
+                self.solve(eff, at[eff], spec.get("pole"), spec["grip"], side)
+                rot[eff] = self.bones[eff].rotation_quaternion.copy()
         return {"rot": rot, "place": place, "ik": pose["ik"], "side": side, "at": at,
                 "pelvis": self.bones["pelvis"].location.copy()}
 
@@ -665,7 +722,7 @@ class Figure:
         """Sets a pose from the library, placed and IK solved."""
         k = self.key(pose, side)
         for eff, spec in k["ik"].items():
-            self.solve(eff, self.target(spec, side, eff), spec.get("pole"))
+            self.solve(eff, self.target(spec, side, eff), spec.get("pole"), spec.get("grip"), side)
         self.derive()
         return k
 
@@ -700,6 +757,8 @@ class Clip:
         # IK.
         self.made = False
         self.ik = []
+        # Placed standing at the wheel, every key: nothing lies on a seat.
+        self.standing = False
 
 
 def make(fig, lib, name):
@@ -755,6 +814,7 @@ def make(fig, lib, name):
     length = frames / fps
     clip = Clip(name, fps, loop, bool(spec.get("idle")))
     clip.place = place
+    clip.standing = all(lib.poses[k["pose"]]["place"] == STANDS for k in keys)
     # Feet that stay where they are: in the boat, never stepping elsewhere.
     still = all(p["place"] == place for p in kp)
     clip.planted = ["foot_l", "foot_r"] if all(p["place"] for p in kp) and still else []
@@ -909,6 +969,10 @@ def make(fig, lib, name):
     return clip
 
 
+# The place a figure stands at, not sits: at the wheel.
+STANDS = "wheel"
+
+
 # The channel of the hips' place, beside the bones' turns.
 PELVIS_AT = "pelvis.location"
 
@@ -950,7 +1014,7 @@ def clear_skirts(fig, clip, under, skirts, rounds=16, passes=5):
     if not under or not skirts:
         return 0
     chains = {s.name: _chains_of(s) for s in skirts}
-    seated = clip.place != Matrix()
+    seated = clip.place != Matrix() and not getattr(clip, "standing", False)
     n = len(clip.frames)
     # A loop's last frame is its first again: the turns wrap round the
     # frames before it.
@@ -1319,10 +1383,13 @@ def stop(arm):
         pb.matrix_basis.identity()
 
 
-def export(path, arm, actions, gltfpack, work, places=None):
+def export(path, arm, actions, gltfpack, work, places=None, fps=30):
     """The clips with the skeleton alone, packed: rotations and the
-    pelvis's translation, at 30 frames a second; and where each clip is
-    placed, by name (export.add_places)."""
+    pelvis's translation, a key a frame at fps (the scene's rate, which
+    the exporter times the keys by); and where each clip is placed, by
+    name (export.add_places)."""
+    bpy.context.scene.render.fps = fps
+    bpy.context.scene.render.fps_base = 1.0
     stop(arm)
     keep = {a.name for a, _ in actions}
     for a in list(bpy.data.actions):

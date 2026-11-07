@@ -95,23 +95,23 @@ func (w *World) setBoat(c *bus.Command) bus.Reply {
 }
 
 // room reports whether a boat of kind may lie at st in place of the boat
-// in slot s of f: the water under its middle and its ends its draught and
-// startDeep deep, and its hull startClear clear of every other boat's.
+// in slot s of f, or beside it: the water under its middle and its ends,
+// along its heading, its draught and startDeep deep, and its hull
+// startClear clear of every other boat's. A small boat fits where a large
+// one would lie across its neighbours, or touch the bottom.
 func (w *World) room(f *bus.Frame, s int32, kind uint16, st *physics.State) bool {
-	b := &w.kinds[kind]
-	r := physics.Radius(b)
+	if !w.clear(f, s, kind, st) {
+		return false
+	}
 	if w.ground != nil {
+		b := &w.kinds[kind]
+		r := physics.Radius(b)
 		sin, cos := physics.SinCos(st.Heading)
-		for _, along := range [3]float64{0, r, -r} {
+		for _, along := range [2]float64{r, -r} {
 			x, y := st.X+float64(along*sin), st.Y+float64(along*cos)
 			if e, _ := w.ground.At(x, y); e > -(physics.Draught(b) + startDeep) {
 				return false
 			}
-		}
-	}
-	for _, o := range f.Live {
-		if o != s && physics.Within(&f.State[o], st.X, st.Y, r+startClear+physics.Radius(&w.kinds[f.Kind[o]])) {
-			return false
 		}
 	}
 	return true

@@ -104,3 +104,11 @@ func TestReefAdvice(t *testing.T) {
 		t.Error("a page with no generated part")
 	}
 }
+
+func TestBracesRounded(t *testing.T) {
+	for deg, want := range map[float64]int{42: 42, 44.4: 42, 44.6: 45, 52.4: 50, 89.9: 90} {
+		if got := bracesRounded(deg, 42); got != want {
+			t.Errorf("bracesRounded(%v, 42) = %d, want %d", deg, got, want)
+		}
+	}
+}

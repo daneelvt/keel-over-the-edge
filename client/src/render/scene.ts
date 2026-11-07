@@ -43,8 +43,8 @@ import { type BoatWind, newBoatWind } from '../predict/weather';
 import { SkyTime } from '../sky/skytime';
 import starsUrl from '../sky/stars.bin?url';
 import { SkyWeather } from '../sky/weather';
-import { Boat, lazyArtUrl, type SailorLook } from './boat';
-import { CAMERA_PRESETS, type CameraView, ChaseCamera, sizeOf } from './camera';
+import { Boat, lampsLit, lazyArtUrl, type SailorLook } from './boat';
+import { CAMERA_PRESETS, type CameraView, ChaseCamera, lookSizeOf, sizeOf } from './camera';
 import { FloatingOrigin, type ScenePoint } from './coords';
 import { DirtyAir } from './dirtyair';
 import { type FlagSeen, Flags } from './flags';
@@ -625,15 +625,12 @@ export class SeaScene {
     Shadows.cast(boat.model, this.shadows.on, this.shadows.lit);
     this.overlays.setKind(kind);
     this.rightOfWay.setKind(kind);
-    // Its lights are children of the model's root: their places are the model's.
-    this.#kindParts(
-      this.kindIndex,
-      (name) => boat.parts.get(name)?.position ?? null,
-      boat.parts.get('hull')?.userData,
-    );
+    // Its lights at their nodes' places in the model, wherever they hang.
+    this.#kindParts(this.kindIndex, (name) => boat.nodeAt(name), boat.parts.get('hull')?.userData);
     // The camera and the shadows' box sized to the boat.
     const size = sizeOf(kind, catalog.boats[0]);
     this.camera.size = size;
+    this.camera.lookSize = lookSizeOf(kind, catalog.boats[0]);
     this.shadows.scale = size;
     this.boat = boat;
     this.stage.scene.add(boat.root);
@@ -1225,6 +1222,8 @@ export class SeaScene {
     const p = this.pose;
     const bs = this.boatScene;
     const own = this.sky.now.sunHeight;
+    // The cabins' lamps, as the lanterns are lit: every gallery by the sun here.
+    lampsLit.value = this.drawSky ? lanternLit(own) : 0;
     if (this.drawSky && this.boat?.root.visible) {
       l.add(p, bs.x, bs.z, camera, lanternLit(own), this.kindIndex);
     }

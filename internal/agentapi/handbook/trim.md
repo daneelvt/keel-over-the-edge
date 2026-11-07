@@ -22,7 +22,17 @@ The fastest boom by angle off the true wind, in 6, 12 and 20 knots (Keelboat, fl
 - 170°: 80, 80, 80
 - 180°: 80, 80, 80
 
-Reef (trim or steer with reef 1 or 2; 0 shakes the reefs out) when close-hauled the sheet hauled in hard heels the boat past its trim: from there only easing holds her up, and reefed she heels less and stands up. Reef the Jolly boat from 19 knots and the Keelboat from 13 knots.
+The fastest braces, the yards' angle off the centreline, by angle off the true wind, in 6, 12 and 20 knots (Tall ship, flat water):
+
+- 40°: aback, aback, aback
+- 60°: 42, 42, 42
+- 90°: 42, 42, 42
+- 120°: 50, 55, 65
+- 150°: 90, 90, 90
+- 170°: 90, 90, 90
+- 180°: 90, 90, 90
+
+Reef (trim or steer with reef 1 or 2; 0 shakes the reefs out) when close-hauled the sheet hauled in hard heels the boat past its trim: from there only easing holds her up, and reefed she heels less and stands up. Reef the Jolly boat from 19 knots, the Keelboat from 13 knots and the Tall ship from 27 knots.
 
 Close-hauled, haul in hard. Half the apparent wind's angle is a rough guide on a reach only.
 

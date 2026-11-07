@@ -296,6 +296,8 @@ palette:
 clips:
   [
     helm,
+    helm-wheel,
+    habit-wheel,
     hiking-1,
     hiking-2,
     hiking-3,

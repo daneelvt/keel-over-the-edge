@@ -9,6 +9,9 @@
 //	go run ./tools/sailors -look test   build one look
 //	go run ./tools/sailors -look test -version female
 //	                                    build one version of it, while working on it
+//	go run ./tools/sailors -add helm-wheel,habit-wheel
+//	                                    make these clips on every committed look that has them and
+//	                                    add them to its clips' files, keeping everything else as it is
 //	go run ./tools/sailors -portraits   make the portraits again from each look's last run, build nothing
 //	go run ./tools/sailors -portraits -look rover
 //	go run ./tools/sailors -setup       check Blender, install MPFB and gltfpack, build nothing
@@ -62,6 +65,7 @@ func main() {
 	only := flag.String("version", "", "with -look: build only this version ("+strings.Join(versions, " or ")+")")
 	setup := flag.Bool("setup", false, "check Blender and install MPFB and gltfpack, build nothing")
 	portraits := flag.Bool("portraits", false, "make the portraits again from each look's last run, and build nothing")
+	add := flag.String("add", "", "make only these clips (the names the game asks for them by, comma-separated) and add them to the committed looks' clips files, leaving every other file as it is")
 	verbose := flag.Bool("v", false, "show everything Blender and MPFB print")
 	pack := flag.String("vendor", "", "copy clips out of this animation library's glTF binary into "+sailorsDir+"/"+vendorDir+", and build nothing")
 	into := flag.String("into", "", "with -vendor: the folder under "+vendorDir+" they go into")
@@ -87,13 +91,17 @@ func main() {
 		fmt.Fprintln(os.Stderr, "sailors: -version needs -look, and is "+strings.Join(versions, " or "))
 		os.Exit(2)
 	}
-	if err := run(ctx, *look, *only, *setup, *portraits, *verbose); err != nil {
+	var adding []string
+	if *add != "" {
+		adding = strings.Split(*add, ",")
+	}
+	if err := run(ctx, *look, *only, *setup, *portraits, *verbose, adding); err != nil {
 		fmt.Fprintln(os.Stderr, "sailors:", err)
 		os.Exit(1)
 	}
 }
 
-func run(ctx context.Context, only, oneVersion string, setupOnly, portraitsOnly, verbose bool) error {
+func run(ctx context.Context, only, oneVersion string, setupOnly, portraitsOnly, verbose bool, adding []string) error {
 	blender, err := findBlender(ctx)
 	if err != nil {
 		return err
@@ -145,6 +153,15 @@ func run(ctx context.Context, only, oneVersion string, setupOnly, portraitsOnly,
 		}
 		start := time.Now()
 		job := newJob(root, l, tables, sources, poses, gltfpack)
+		if adding != nil {
+			if !l.Committed {
+				continue
+			}
+			job.Add = l.adding(adding)
+			if len(job.Add) == 0 {
+				continue
+			}
+		}
 		file, err := job.write(filepath.Join(workDir, "jobs"))
 		if err != nil {
 			return err
@@ -155,7 +172,7 @@ func run(ctx context.Context, only, oneVersion string, setupOnly, portraitsOnly,
 			}
 			fmt.Printf("sailors: %s built in %.1f s, into %s\n", l.ID, time.Since(start).Seconds(), strings.TrimPrefix(job.Out, root+"/"))
 		}
-		if !l.Committed {
+		if !l.Committed || adding != nil {
 			continue
 		}
 		start = time.Now()

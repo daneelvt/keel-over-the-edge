@@ -26,6 +26,7 @@ func PhysicsParams(b *Boat) physics.Params {
 	p.YawInertia = b.Physics.Hull.YawInertia
 	p.RollInertia = b.Physics.Hull.RollInertia
 	p.RollDamping = b.Physics.Hull.RollDamping
+	p.YawDamping = b.Physics.Hull.YawDamping
 	copy(p.RightingLever[:], b.Physics.Hull.RightingLever)
 	p.WaterlineBeam = b.Physics.Hull.WaterlineBeam
 	p.WaterplaneArea = b.Physics.Hull.WaterplaneArea
@@ -107,11 +108,10 @@ func PhysicsParams(b *Boat) physics.Params {
 	p.SquareFootStrip = b.Physics.Square.SquareFootStrip
 	p.SquareHeadStrip = b.Physics.Square.SquareHeadStrip
 	p.SquarePressure = b.Physics.Square.SquarePressure
-	p.SquareMaxLift = b.Physics.Square.SquareMaxLift
-	p.SquareStallAngle = b.Physics.Square.SquareStallAngle
-	p.SquareStallWidth = b.Physics.Square.SquareStallWidth
-	p.SquareDrag = b.Physics.Square.SquareDrag
+	copy(p.SquareLift[:], b.Physics.Square.SquareLift)
+	copy(p.SquareDrag[:], b.Physics.Square.SquareDrag)
 	copy(p.SquareNormalForce[:], b.Physics.Square.SquareNormalForce)
+	p.SquareTwist = b.Physics.Square.SquareTwist
 	p.BraceSharp = b.Physics.Square.BraceSharp
 	p.BraceTime = b.Physics.Square.BraceTime
 	p.Hauls = b.Physics.Square.Hauls

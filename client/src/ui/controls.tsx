@@ -12,7 +12,9 @@
 // The sheet's legend says when the sail is luffing, stalled or aback, and
 // the end to move it toward lights in gold with an arrow: Trim while it
 // luffs, Ease while it stalls. Aback, no sheeting helps, and neither lights.
-// Its name and its ends' words are the boat's (the catalog's controls).
+// Its name and its ends' words are the boat's (the catalog's controls): on
+// a boat of square sails it is the braces, from Brace up to Square, and
+// aback its legend names them ("Braces · Aback").
 //
 // The Reef key, brass, stands on the sheet's top: a tap reefs one more,
 // its face saying the reef asked for in the boat's words; once reefed a
@@ -21,7 +23,7 @@
 import type { PointerEventHandler as Handler } from 'preact';
 import type { HelmInput } from '../input/helm';
 import type { SheetInput } from '../input/sheet';
-import { HELM_ARC, type HudModel, type SailState } from './model';
+import { HELM_ARC, type HudModel, SHEET_WORDS, sheetLegend } from './model';
 
 /** What the Reef key asks for: the main reefed to a level, 0 (full sail) … 2. */
 export interface ReefActions {
@@ -103,19 +105,21 @@ export function Helm({ input, model }: { input: HelmInput; model: HudModel }) {
   );
 }
 
-/** The sheet's legend for what the sail is doing, but for its own name while the sail draws. */
-const SAIL_LEGENDS: Record<Exclude<SailState, ''>, string> = {
-  luffing: 'Luffing',
-  stalled: 'Stalled',
-  aback: 'Aback',
-};
+/**
+ * An end's word long enough ("Brace up") that with its arrow it would not
+ * fit the sheet's width, and is set smaller while lit.
+ */
+function long(word: string): string {
+  return word.length > 6 ? ' long' : '';
+}
 
 export function Sheet({ input, model }: { input: SheetInput; model: HudModel }) {
   const dimmed = model.sailor.value !== '';
   const sail = model.sail.value;
   const trim = sail === 'luffing';
   const ease = sail === 'stalled';
-  const words = model.controls.value?.sheet ?? { name: 'Sheet', trim: 'Trim', ease: 'Ease' };
+  const words = model.controls.value?.sheet ?? SHEET_WORDS;
+  const legend = sheetLegend(model.controls.value, sail);
   return (
     <div
       class={`control sheet${dimmed ? ' dimmed' : ''}`}
@@ -133,7 +137,7 @@ export function Sheet({ input, model }: { input: SheetInput; model: HudModel }) 
       data-sail={sail === '' ? undefined : sail}
       {...handlers(input, 'y')}
     >
-      <span class={`sheet-end${trim ? ' lit' : ''}`} data-end="trim">
+      <span class={`sheet-end${trim ? ' lit' : ''}${long(words.trim)}`} data-end="trim">
         {trim && (
           <span class="sheet-arrow" aria-hidden="true">
             ▲
@@ -149,7 +153,7 @@ export function Sheet({ input, model }: { input: SheetInput; model: HudModel }) 
           <span class="knob" />
         </div>
       </div>
-      <span class={`sheet-end${ease ? ' lit' : ''}`} data-end="ease">
+      <span class={`sheet-end${ease ? ' lit' : ''}${long(words.ease)}`} data-end="ease">
         {words.ease}
         {ease && (
           <span class="sheet-arrow" aria-hidden="true">
@@ -157,8 +161,10 @@ export function Sheet({ input, model }: { input: SheetInput; model: HudModel }) 
           </span>
         )}
       </span>
-      <span class={`control-label${sail === '' ? '' : ' sail'}`}>
-        {sail === '' ? words.name : SAIL_LEGENDS[sail]}
+      <span
+        class={`control-label${sail === '' ? '' : ' sail'}${legend.includes(' · ') ? ' two' : ''}`}
+      >
+        {legend}
       </span>
     </div>
   );

@@ -1387,10 +1387,11 @@
   filter: saturate(0.6) brightness(0.85);
 }
 
+/* A level's words wider than the key ("Topgallants in") take a second line. */
 .reef-key .reef-level {
   font-size: 10.5px;
   letter-spacing: 0.01em;
-  white-space: nowrap;
+  line-height: 11px;
 }
 
 .hud .reef-key.shake {
@@ -1410,9 +1411,25 @@
   white-space: nowrap;
 }
 
+/* A legend that names the control too ("Braces · Aback") takes two lines,
+   the name over the state, under the ease end's word. */
+.sheet .control-label.sail.two {
+  white-space: normal;
+  line-height: 13px;
+  padding: 0 2px;
+}
+
 .sheet-end.lit {
   color: var(--gold);
   text-shadow: 0 0 6px rgb(232 180 80 / 45%);
+}
+
+/* A long word lit with its arrow ("Brace up") keeps to one line, set
+   smaller: wrapped, it would push the ease end down onto the legend. */
+.sheet-end.lit.long {
+  white-space: nowrap;
+  letter-spacing: 0;
+  font-size: 10.5px;
 }
 
 .sheet-arrow {

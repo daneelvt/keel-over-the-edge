@@ -56,16 +56,21 @@ type wavePoint struct {
 	Heel           float64 // degrees, the greatest to either side
 	Heave, Pitch   float64 // m and degrees, the greatest either way
 	OK             bool
+	Aback          bool // a ship that cannot sail there, as point.Aback
 }
 
 // sailInWaves sails at twa with the sheet fixed, in a sea of its own.
 func sailInWaves(k *kind, w *physics.Waves, windKnots, twa, sheet float64) wavePoint {
 	sea := newOpenSea(w, k.wind10(windKnots))
-	h := helmsman{target: twa * deg}
-	bt := newBoat(k.b, k.wind10(windKnots), h.target, sheet, 0)
-	n := int((seaSettle + seaMeasure) * physics.StepsPerSecond)
-	start := int(seaSettle * physics.StepsPerSecond)
+	h := k.helmsmanOf(twa)
+	bt := newBoat(k, k.wind10(windKnots), h.target, sheet, 0)
+	// A slow boat settles as much longer as she does in flat water.
+	settled := seaSettle * k.settleAt(k.wind10(windKnots)) / settle
+	n := int((settled + seaMeasure) * physics.StepsPerSecond)
+	start := int(settled * physics.StepsPerSecond)
 	p := wavePoint{TWA: twa, Sheet: sheet}
+	var words [4]int
+	leeway, off, helm := 0.0, 0.0, 0.0
 	speeds := make([]float64, 0, n-start)
 	y0 := 0.0
 	for i := range n {
@@ -81,6 +86,10 @@ func sailInWaves(k *kind, w *physics.Waves, windKnots, twa, sheet float64) waveP
 			p.Heel = max(p.Heel, math.Abs(bt.s.Heel)/deg)
 			p.Heave = max(p.Heave, math.Abs(bt.s.Heave))
 			p.Pitch = max(p.Pitch, math.Abs(bt.s.Pitch)/deg)
+			words[int(bt.o.Sail)]++
+			leeway += bt.o.Leeway
+			off = max(off, math.Abs(math.Remainder(h.target-bt.s.Heading, 2*math.Pi)))
+			helm += math.Abs(bt.s.Rudder)
 		}
 	}
 	slices.Sort(speeds)
@@ -93,6 +102,20 @@ func sailInWaves(k *kind, w *physics.Waves, windKnots, twa, sheet float64) waveP
 	p.P90 = speeds[len(speeds)*9/10] / knot
 	p.VMG = (bt.s.Y - y0) / seaMeasure / knot
 	p.OK = !bt.capsized
+	if k.square {
+		// As in flat water, a ship aback or lifting, out of hand or going
+		// sideways is not sailing.
+		word := 0
+		for w, c := range words {
+			if c > words[word] {
+				word = w
+			}
+		}
+		per := 1 / float64(n-start)
+		p.Aback = word == physics.SailAback || word == physics.SailLuffing || off >= heldWithin ||
+			helm*per > hardOver*k.p.RudderAngle*deg || math.Abs(leeway*per) > 45*deg
+		p.OK = p.OK && !p.Aback
+	}
 	return p
 }
 
@@ -101,7 +124,9 @@ func sailInWaves(k *kind, w *physics.Waves, windKnots, twa, sheet float64) waveP
 func bestInWaves(k *kind, w *physics.Waves, windKnots, twa float64) wavePoint {
 	top := wavePoint{TWA: twa}
 	for sheet := 0.0; sheet <= 1.0001; sheet += 0.05 {
-		if p := sailInWaves(k, w, windKnots, twa, sheet); p.OK && (!top.OK || p.Mean > top.Mean) {
+		p := sailInWaves(k, w, windKnots, twa, sheet)
+		top.Aback = top.Aback || p.Aback
+		if p.OK && (!top.OK || p.Mean > top.Mean) {
 			top = p
 		}
 	}
@@ -147,12 +172,16 @@ func runSea(k *kind, w *physics.Waves, windKnots float64) error {
 		if f.OK {
 			fmt.Fprintf(&s, " %6.2f %6.2f", f.Speed, f.VMG)
 			upFlat, downFlat = max(upFlat, f.VMG), max(downFlat, -f.VMG)
+		} else if f.Aback {
+			fmt.Fprint(&s, "         aback")
 		} else {
 			fmt.Fprint(&s, "      capsizes")
 		}
 		if v.OK {
 			fmt.Fprintf(&s, " %7.2f %6.2f %6.2f %6.2f %5.0f %5.2f %5.1f %5.2f\n", v.Mean, v.P10, v.P90, v.VMG, v.Heel, v.Heave, v.Pitch, v.Sheet)
 			upWaves, downWaves = max(upWaves, v.VMG), max(downWaves, -v.VMG)
+		} else if v.Aback {
+			fmt.Fprintln(&s, "   aback, lifting or out of hand at every brace")
 		} else {
 			fmt.Fprintln(&s, "   capsizes at every sheet")
 		}

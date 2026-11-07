@@ -545,11 +545,16 @@ export function clothColour(
 export const MASK_WIDTH = 512;
 export const MASK_HEIGHT = 960;
 
-/** What a sail's masks carry: its insignia (none for ""), its reef rows, and the machine mark's place (none for a sail without). */
+/**
+ * What a sail's masks carry: its insignia (none for ""), its reef rows, and
+ * the machine mark's place (none for a sail without); and whether its
+ * cloths run up and down, as a square sail's do, not square to the leech.
+ */
 export interface MaskParts {
   insignia: string;
   reefRows: readonly number[];
   mark: MarkPlace | null;
+  upright?: boolean;
 }
 
 /**
@@ -572,7 +577,10 @@ export function clothMasks(parts: MaskParts, width = MASK_WIDTH, height = MASK_H
     draw(g);
     return g.getImageData(0, 0, width, height).data;
   };
-  const shade = layer((g) => paintShade(g, width, height, parts.reefRows), '#fff');
+  const shade = layer(
+    (g) => paintShade(g, width, height, parts.reefRows, parts.upright === true),
+    '#fff',
+  );
   const band = layer((g) => {
     g.fillStyle = '#fff';
     g.fillRect(0, (1 - BAND.to) * height, width, (BAND.to - BAND.from) * height);
@@ -615,23 +623,38 @@ export function clothMasks(parts: MaskParts, width = MASK_WIDTH, height = MASK_H
   return t;
 }
 
-/** The cloth's shade: panel seams square to the leech, and a row of reef points at each reef row's height. */
+/**
+ * The cloth's shade: panel seams square to the leech (or up and down, its
+ * cloths upright), and a row of reef points at each reef row's height.
+ */
 function paintShade(
   g: CanvasRenderingContext2D,
   width: number,
   height: number,
   reefRows: readonly number[],
+  upright = false,
 ): void {
-  // The seams: a panel's width in proportion to the cloth.
-  const gap = (62 / 960) * height;
-  const drop = (70 / 512) * width;
   g.strokeStyle = 'rgba(70, 70, 70, 0.28)';
   g.lineWidth = Math.max(1, (2 / 512) * width);
-  for (let y = (40 / 960) * height; y < height + drop; y += gap) {
-    g.beginPath();
-    g.moveTo(0, y);
-    g.lineTo(width, y - drop);
-    g.stroke();
+  if (upright) {
+    // A square sail's cloths, about a thirtieth of its width each.
+    const gap = width / 30;
+    for (let x = gap; x < width; x += gap) {
+      g.beginPath();
+      g.moveTo(x, 0);
+      g.lineTo(x, height);
+      g.stroke();
+    }
+  } else {
+    // The seams: a panel's width in proportion to the cloth.
+    const gap = (62 / 960) * height;
+    const drop = (70 / 512) * width;
+    for (let y = (40 / 960) * height; y < height + drop; y += gap) {
+      g.beginPath();
+      g.moveTo(0, y);
+      g.lineTo(width, y - drop);
+      g.stroke();
+    }
   }
   // The reef points: a band of reinforcing cloth and short ties.
   for (const v of reefRows) {

@@ -35,6 +35,9 @@ interface SlotIn {
   sampled?: boolean;
   kind?: number;
   machine?: boolean;
+  /** The after and fore yards' angles off the centreline, radians. */
+  yards?: number;
+  foreYards?: number;
 }
 
 /** A snapshot record's fleet: the slots given present, the rest empty. */
@@ -52,6 +55,8 @@ function record(tick: number, slots: SlotIn[]): Float64Array {
     f[o + SLOT.y] = s.y ?? 0;
     f[o + SLOT.heading] = s.heading ?? 0;
     f[o + SLOT.machine] = s.machine ? 1 : 0;
+    f[o + SLOT.yards] = s.yards ?? 0;
+    f[o + SLOT.foreYards] = s.foreYards ?? s.yards ?? 0;
   }
   return f;
 }
@@ -101,6 +106,23 @@ describe('the fleet', () => {
     // Across ±π, not the long way round through 0.
     expect(Math.abs(Math.cos(b?.heading ?? 0) + 1)).toBeLessThan(1e-9);
     expect(b?.motion).toBe(MOTION.interpolated);
+  });
+
+  test('its yards blended by their turns: through square from one side to the other, never across the centreline', () => {
+    const fleet = new Fleet();
+    // Braced for the wind over port, then over starboard, nearly square
+    // both: the yards swing through square between.
+    fleet.add(
+      record(10, [{ slot: 3, change: CHANGE.entered, yards: 1.5, foreYards: 1.2 }]),
+      10 * TICK_US,
+    );
+    fleet.add(record(12, [{ slot: 3, yards: -1.5, foreYards: 1.2 }]), 12 * TICK_US);
+    fleet.update(15 * TICK_US, 0);
+    const b = fleet.drawn[0];
+    expect(b?.tick).toBeCloseTo(11, 9);
+    // Half way: square, not braced fore and aft as the angles' mean (0) would be.
+    expect(b?.yardsTurn).toBeCloseTo(0, 9);
+    expect(b?.foreYardsTurn).toBeCloseTo(-(Math.PI / 2 - 1.2), 9);
   });
 
   test('near boats are drawn 133 ms behind the newest data, far ones 400 ms', () => {

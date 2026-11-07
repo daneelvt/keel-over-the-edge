@@ -56,7 +56,7 @@ func TestPosesRefused(t *testing.T) {
 	for name, c := range map[string]struct{ body, want string }{
 		"a field no pose has":         {good + "    colour: red\n", "not found"},
 		"a bone the skeleton has not": {strings.Replace(good, "thigh_l", "tail", 1), `no bone "tail"`},
-		"an axis":                     {strings.Replace(good, ", x,", ", w,", 1), "the axis is x, y or z"},
+		"an axis":                     {strings.Replace(good, ", x,", ", w,", 1), "the axis is x, y, z or lx"},
 		"too far a turn":              {strings.Replace(good, "-80", "-200", 1), "within ±180"},
 		"a place":                     {good + "    place: mast\n", "none of seat, gunwale, cockpit, outside"},
 		"IK on the head":              {strings.Replace(good, "hand_r:", "head:", 1), "only hand_l"},

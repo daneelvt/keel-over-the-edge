@@ -44,8 +44,8 @@
 // player looks where they choose, and Back to the boat brings it back.
 //
 // Its views are framed for the catalog's first boat: for a larger one its
-// distance and the height it looks at scale with the boat (sizeOf), so the
-// boat fills the frame as the first does.
+// distance scales with the boat (sizeOf), and the height it looks at with
+// its masthead (lookSizeOf), so the boat fills the frame as the first does.
 //
 // As the world is shown it comes down into its first view, from twice its
 // height and distance, and a touch ends the descent where it is.
@@ -129,22 +129,53 @@ const RISE_DONE = 1e-4;
 /** The rise tries this many elevations, evenly, from the view's up to the highest. */
 const RISE_STEPS = 6;
 
-/** A boat's size, as the camera frames it: its length over all, and its masthead's height, metres. */
+/** A boat's size, as the camera frames it: its length over all, and its sails' heights, metres. */
 export interface FramedBoat {
   lengthOverall: number;
-  physics: { rig: { boomHeight: number; luff: number } };
+  physics: {
+    rig: { boomHeight: number; luff: number };
+    headsails?: { headsailArea: number; headsailTackHeight: number; headsailLuff: number };
+    square?: {
+      squareForeArea: number;
+      squareAfterArea: number;
+      squareFootHeight: number;
+      squareLuff: number;
+    };
+  };
+}
+
+/** The farthest the chase camera stands from any boat at rest, metres. */
+export const MAX_CHASE = 140;
+
+/** The height of a boat's highest sail's head above the water: its main's, its headsails', or its square sails'. */
+export function mastOf(b: FramedBoat): number {
+  const { rig, headsails, square } = b.physics;
+  let top = rig.boomHeight + rig.luff;
+  if (headsails !== undefined && headsails.headsailArea > 0) {
+    top = Math.max(top, headsails.headsailTackHeight + headsails.headsailLuff);
+  }
+  if (square !== undefined && square.squareForeArea + square.squareAfterArea > 0) {
+    top = Math.max(top, square.squareFootHeight + square.squareLuff);
+  }
+  return top;
 }
 
 /**
  * How much farther the camera stands from a boat than from the one its
- * views are framed for, and how much higher it looks: by the boat's
- * length or its masthead's height, whichever is the more.
+ * views are framed for: by the boat's length or its masthead's height,
+ * whichever is the more, the chase view never past MAX_CHASE.
  */
 export function sizeOf(boat: FramedBoat, framed: FramedBoat): number {
-  const mast = (b: FramedBoat) => b.physics.rig.boomHeight + b.physics.rig.luff;
-  return boat === framed
-    ? 1
-    : Math.max(boat.lengthOverall / framed.lengthOverall, mast(boat) / mast(framed));
+  if (boat === framed) {
+    return 1;
+  }
+  const size = Math.max(boat.lengthOverall / framed.lengthOverall, mastOf(boat) / mastOf(framed));
+  return Math.min(size, MAX_CHASE / CHASE.distance);
+}
+
+/** How much higher the camera looks above a boat than above the one its views are framed for: by its masthead. */
+export function lookSizeOf(boat: FramedBoat, framed: FramedBoat): number {
+  return boat === framed ? 1 : mastOf(boat) / mastOf(framed);
 }
 
 /** The view the game starts with, behind and above the boat. */
@@ -234,8 +265,10 @@ export class ChaseCamera {
   sea = 0;
   /** Whether it eases back to its resting view untouched, as the player chooses. */
   easesBack = true;
-  /** How much larger the boat is than the one the views are framed for (sizeOf): its distances and look height scale by it. */
+  /** How much larger the boat is than the one the views are framed for (sizeOf): its distances scale by it. */
   size = 1;
+  /** How much taller its masthead is (lookSizeOf): the height looked at scales by it. */
+  lookSize = 1;
   /** Another's boat watched: it never eases back by itself, and there is no opening view. */
   watching = false;
   /** Where the camera holds, in the scene, looking at the boat wherever it goes: going over the lip. */
@@ -583,7 +616,7 @@ export class ChaseCamera {
 
   /** The height above the boat the camera looks at, metres. */
   get lookHeight(): number {
-    return LOOK_HEIGHT * this.size;
+    return LOOK_HEIGHT * this.lookSize;
   }
 
   /** The shake's displacement at now (ms): a wobble dying away over SHAKE_TIME. */

@@ -321,6 +321,26 @@ type job struct {
 	// itself: the reports of each run.
 	Out  string `json:"out"`
 	Work string `json:"work"`
+	// Add, if any, are the only clips made, by their names in the pose
+	// library: added to the committed clips' files (or made anew there),
+	// and nothing else written beside the art.
+	Add []string `json:"add,omitempty"`
+}
+
+// adding is which of the look's clips the game asks for by one of names:
+// their names in the pose library.
+func (l look) adding(names []string) []string {
+	var out []string
+	for _, c := range l.Clips {
+		as := c
+		if n, ok := l.Names[c]; ok {
+			as = n
+		}
+		if slices.Contains(names, as) {
+			out = append(out, c)
+		}
+	}
+	return out
 }
 
 func newJob(root string, l look, t tables, sources map[string]source, poses poseLibrary, gltfpack string) job {

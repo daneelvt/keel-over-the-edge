@@ -21,8 +21,15 @@ import { twoBone } from './ik';
 import { placesOf } from './model';
 import { restageClip, seating } from './restage';
 import { Rig } from './rig';
-import { CLIPS, type SailorBoat, type SailorMoment, SailorRuntime } from './runtime';
+import {
+  CLIPS,
+  type SailorBoat,
+  type SailorMoment,
+  SailorRuntime,
+  type WheelHelm,
+} from './runtime';
 import { ballInside, hullSolid } from './solid';
+import { wheelData, wheelOf } from './wheel';
 
 const ART = new URL('../../../../art/', import.meta.url);
 
@@ -52,15 +59,18 @@ async function sailor(
   boat: SailorBoat;
 }> {
   const gltf = await load(`sailors/${look}/${version}.clips.glb`);
-  const places = placesOf(gltf.scene);
   const rig = Rig.from(gltf.scene, boneNames(gltf.scene));
   const clips = new Map<string, Clip>();
-  for (const a of gltf.animations) {
-    const place = places.get(`place-${a.name}`) ?? null;
-    clips.set(
-      a.name,
-      Clip.from(a, rig, place !== null && !place.equals(new Matrix4()) ? place : null),
-    );
+  // And its clips at a wheel, a file of their own.
+  for (const file of [gltf, await load(`sailors/${look}/${version}.wheel.glb`)]) {
+    const places = placesOf(file.scene);
+    for (const a of file.animations) {
+      const place = places.get(`place-${a.name}`) ?? null;
+      clips.set(
+        a.name,
+        Clip.from(a, rig, place !== null && !place.equals(new Matrix4()) ? place : null),
+      );
+    }
   }
   const boat = await load(model);
   boat.scene.updateMatrixWorld(true);
@@ -311,8 +321,19 @@ describe.each([
   );
 });
 
-/** Every boat but the one the clips were placed in. */
-const others = catalog.boats.filter((b) => b.art.model !== 'boats/jolly-boat.glb');
+/** Whether a boat's model has a wheel: a node whose data says it is one. */
+function steeredByWheel(model: string): boolean {
+  const glb = readFileSync(new URL(model, ART));
+  const gltf = JSON.parse(glb.subarray(20, 20 + glb.readUInt32LE(12)).toString('utf8')) as {
+    nodes?: { extras?: unknown }[];
+  };
+  return (gltf.nodes ?? []).some((n) => wheelData(n.extras) !== null);
+}
+
+/** Every boat but the one the clips were placed in, and those whose sailor stands at a wheel. */
+const others = catalog.boats.filter(
+  (b) => b.art.model !== 'boats/jolly-boat.glb' && !steeredByWheel(b.art.model),
+);
 
 describe.each(
   others.flatMap((b) =>
@@ -431,3 +452,149 @@ function foils(model: string): { rudderPosition: number } {
   }
   return kind.physics.foils;
 }
+
+/** Every look, each version: the clips at the wheel are every sailor's. */
+const LOOKS = [
+  'bosun',
+  'buccaneer',
+  'cavalier',
+  'chartmaker',
+  'lookout',
+  'machine',
+  'oldsalt',
+  'quartermaster',
+  'rover',
+  'shipwright',
+] as const;
+
+/**
+ * A boat's wheel: a model's that has one (its `wheel` node), or one made to
+ * the numbers the ships' models are built to (the hub 0.55 m ahead of the
+ * helmsman's place and 1.05 m above the deck, 0.75 m to the rim, 8 spokes),
+ * at a quarterdeck's place.
+ */
+async function aWheel(): Promise<WheelHelm> {
+  for (const kind of catalog.boats) {
+    const boat = await load(kind.art.model);
+    const parts = new Map<string, Object3D>();
+    boat.scene.traverse((o) => {
+      if (o.name !== '') {
+        parts.set(o.name, o);
+      }
+    });
+    const w = wheelOf(parts, boat.scene);
+    if (w !== null) {
+      return w;
+    }
+  }
+  const stand = new Matrix4().makeTranslation(0, 4.5, 12);
+  return {
+    stand,
+    hub: new Vector3(0, 4.5 + 1.05, 12 - 0.55),
+    radius: 0.75,
+    spokes: 8,
+    turn: 0,
+  };
+}
+
+/** A hand's place against the wheel: off its nearest spoke across it, aft of the wheel's plane, and out from the hub. */
+function onSpoke(at: Vector3, wheel: WheelHelm): { across: number; aft: number; out: number } {
+  const x = at.x - wheel.hub.x;
+  const y = at.y - wheel.hub.y;
+  const step = (2 * Math.PI) / wheel.spokes;
+  let across = Infinity;
+  for (let k = 0; k < wheel.spokes; k++) {
+    const a = wheel.turn + k * step;
+    const along = x * Math.sin(a) + y * Math.cos(a);
+    if (along > 0) {
+      across = Math.min(across, Math.abs(x * Math.cos(a) - y * Math.sin(a)));
+    }
+  }
+  return { across, aft: at.z - wheel.hub.z, out: Math.hypot(x, y) };
+}
+
+describe.each(LOOKS.flatMap((l) => (['female', 'male'] as const).map((v) => [l, v] as const)))(
+  'at a wheel, the %s, %s',
+  (look, version) => {
+    test('stands at the wheel playing its clip, the hands on the spokes as it turns', async () => {
+      const { rig, clips, boat } = await sailor(version, look);
+      for (const name of [CLIPS.wheel, `${CLIPS.wheel}-port`, CLIPS.wheelHabit]) {
+        expect(clips.has(name), name).toBe(true);
+      }
+      const wheel = await aWheel();
+      boat.wheel = wheel;
+      const rt = new SailorRuntime(rig, clips, boat, 7, look === 'machine');
+      const stand = new Vector3().setFromMatrixPosition(wheel.stand);
+      const deg = Math.PI / 180;
+      let t = 0;
+      // Hand over hand as the wheel goes hard over one way and the other.
+      for (const turn of [0, 0.3, -0.3, 1.2, 2.5, 7.85, 0, -7.85]) {
+        const from = wheel.turn;
+        for (let f = 0; f < 60; f++, t += 1 / 30) {
+          wheel.turn = from + (turn - from) * Math.min(1, f / 30);
+          rt.update(moment({ time: t, offset: 0.4, heel: 5 * deg, still: true }));
+        }
+        expect(rt.hands.wheel, `turn ${turn}`).toBe(2);
+        for (const at of rt.hands.wheelAt) {
+          const s = onSpoke(at, wheel);
+          expect(s.across, `turn ${turn}: across the spoke`).toBeLessThan(0.06);
+          expect(s.aft, `turn ${turn}: aft of the wheel`).toBeGreaterThan(0.02);
+          expect(s.aft, `turn ${turn}: aft of the wheel`).toBeLessThan(0.14);
+          expect(s.out, `turn ${turn}: along the spoke`).toBeGreaterThan(0.2);
+          expect(s.out, `turn ${turn}: along the spoke`).toBeLessThan(wheel.radius);
+        }
+        // Each hand where the runtime says.
+        for (const [k, b] of (['hand_l', 'hand_r'] as const).entries()) {
+          const hand = rig.position(rig.bone(b), new Vector3()).applyMatrix4(rt.root);
+          expect(hand.distanceTo(rt.hands.wheelAt[k] as Vector3)).toBeLessThan(1e-4);
+        }
+      }
+      // Standing on the deck behind the wheel, facing forward: never at a
+      // tiller or a sheet, never hiking, crossing or in the water.
+      expect(rt.hands.tiller).toBe(false);
+      expect(rt.hands.sheet).toBe(false);
+      for (const mode of [SAILING, IN_WATER, ON_BOARD, CLIMBING]) {
+        t += 1 / 30;
+        rt.update(moment({ time: t, mode, offset: -0.5 }));
+        expect(rt.crossing).toBe(false);
+        const hips = rig.position(rig.bone('pelvis'), new Vector3()).applyMatrix4(rt.root);
+        expect(Math.abs(hips.x - stand.x)).toBeLessThan(0.1);
+        expect(hips.y - stand.y).toBeGreaterThan(0.8);
+        expect(hips.y - stand.y).toBeLessThan(1.15);
+        expect(hips.z).toBeLessThan(stand.z + 0.05);
+        expect(hips.z).toBeGreaterThan(wheel.hub.z + 0.2);
+        for (const foot of ['foot_l', 'foot_r']) {
+          const p = rig.position(rig.bone(foot), new Vector3()).applyMatrix4(rt.root);
+          expect(p.y - stand.y, foot).toBeGreaterThan(0.06);
+          expect(p.y - stand.y, foot).toBeLessThan(0.2);
+        }
+        const head = rig.position(rig.bone('head'), new Vector3()).applyMatrix4(rt.root);
+        expect(head.y - stand.y).toBeGreaterThan(1.3);
+      }
+    });
+
+    test('looks to windward, and now and then its habit takes a hand off the wheel', async () => {
+      const { rig, clips, boat } = await sailor(version, look);
+      const wheel = await aWheel();
+      boat.wheel = wheel;
+      const rt = new SailorRuntime(rig, clips, boat, 8, look === 'machine');
+      let t = 0;
+      let off = false;
+      const run = (frames: number, windAngle: number): void => {
+        for (let f = 0; f < frames; f++, t += 1 / 15) {
+          rt.update(moment({ dt: 1 / 15, time: t, windAngle }));
+          if (rt.hands.wheel < 2) {
+            off = true;
+          }
+        }
+      };
+      run(60, 0.9);
+      expect(rt.windward).toBe(1);
+      // The wind over the port side, for a minute.
+      run(900, -0.9);
+      expect(rt.windward).toBe(-1);
+      // The machine and the Old Salt keep both hands on the wheel in theirs.
+      expect(off).toBe(!(look === 'machine' || look === 'oldsalt'));
+    });
+  },
+);

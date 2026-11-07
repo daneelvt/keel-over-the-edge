@@ -226,6 +226,8 @@ palette:
 clips:
   [
     helm,
+    helm-wheel,
+    shipwright-habit-wheel,
     hiking-1,
     hiking-2,
     hiking-3,
@@ -237,4 +239,9 @@ clips:
     righting,
     climbing-in,
   ]
-names: { shipwright-habit: habit, shipwright-habit-standing: habit-standing }
+names:
+  {
+    shipwright-habit: habit,
+    shipwright-habit-standing: habit-standing,
+    shipwright-habit-wheel: habit-wheel,
+  }
