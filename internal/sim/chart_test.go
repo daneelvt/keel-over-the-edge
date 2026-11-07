@@ -248,3 +248,75 @@ func TestLightLitByFog(t *testing.T) {
 		t.Errorf("by night lit %v, seen against %g", n.chart.lit[0], math.Exp(n.chart.thr[0]))
 	}
 }
+
+// TestEachKindLooksFromItsOwnLookout: a boat sights land from its own
+// kind's lookout, over the world's dome: low land 2 m high is first seen
+// from the dinghy's 2 m eye within √(2·2500·2) + √(2·2500·2), 200 m, and
+// from the tall ship's main top, 15 m up, within 100 + √(2·2500·15),
+// 374 m.
+func TestEachKindLooksFromItsOwnLookout(t *testing.T) {
+	cat, err := catalog.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var eyes []float64
+	high := 0
+	for i := range cat.Boats {
+		eyes = append(eyes, cat.Boats[i].Lookout)
+		if eyes[i] > eyes[high] {
+			high = i
+		}
+	}
+	if eyes[0] != 2 || eyes[high] != 15 {
+		t.Fatalf("the lookouts are %v m", eyes)
+	}
+	const dome, low = 2500, 2.0
+	horizon := func(h float64) float64 { return math.Sqrt(2*dome*h) + math.Sqrt(2*dome*low) }
+	// Two low islands of one cell each, 4 km apart.
+	in := &sight.Input{
+		Ground: &physics.Ground{Prepared: new(physics.GroundPrepared)}, Eyes: []float64{2, 15},
+		Dome: dome, Rays: 48, Grid: 500, Lip: 8334, Clear: 8334, Contrast: 3.912, Threshold: 2e-7,
+		Subjects: []sight.Subject{
+			{Kind: sight.Island, Number: 0, Island: -1, X: -2000, Y: 0, Top: low, Seen: sight.ByLand},
+			{Kind: sight.Island, Number: 1, Island: -1, X: 2000, Y: 0, Top: low, Seen: sight.ByLand},
+		},
+		Cells: []sight.Cell{{X: -2000, Y: 0, Top: low, Subject: 0}, {X: 2000, Y: 0, Top: low, Subject: 1}},
+	}
+	w, err := New(Config{Capacity: 8, Kinds: kinds(t), Workers: 1, Tick: 100,
+		Sight: &Sight{Table: sight.Build(in), Every: 1, Lookouts: eyes}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(w.Close)
+	dinghy := do(t, w, bus.Command{Op: bus.Join, Account: acct(1)})
+	ship := do(t, w, bus.Command{Op: bus.Join, Account: acct(2), BoatKind: uint16(high)})
+	if f := w.Latest(); f.Kind[dinghy.Slot] != 0 || f.Kind[ship.Slot] != uint16(high) {
+		t.Fatalf("kinds %d and %d", f.Kind[dinghy.Slot], f.Kind[ship.Slot])
+	}
+	// Each 300 m from an island: the ship sees hers, the dinghy not its.
+	send(t, w, bus.Command{Op: bus.Place, Boat: dinghy.Boat, State: physics.State{X: -2000, Y: 300}})
+	send(t, w, bus.Command{Op: bus.Place, Boat: ship.Boat, State: physics.State{X: 2000, Y: horizon(15) + 10}})
+	w.Tick()
+	w.Tick()
+	if got := charted(w); len(got) != 0 {
+		t.Fatalf("charted from beyond both horizons: %+v", got)
+	}
+	send(t, w, bus.Command{Op: bus.Place, Boat: ship.Boat, State: physics.State{X: 2000, Y: horizon(15) - 10}})
+	var got []bus.Charted
+	for range 2 {
+		w.Tick()
+		got = append(got, charted(w)...)
+	}
+	if len(got) != 1 || got[0].Subject != 1 || got[0].Boat != ship.Boat {
+		t.Fatalf("charted %+v; want the ship to sight her island %.0f m off, the dinghy nothing %d m off", got, horizon(15)-10, 300)
+	}
+	send(t, w, bus.Command{Op: bus.Place, Boat: dinghy.Boat, State: physics.State{X: -2000, Y: horizon(2) - 10}})
+	got = nil
+	for range 2 {
+		w.Tick()
+		got = append(got, charted(w)...)
+	}
+	if len(got) != 1 || got[0].Subject != 0 || got[0].Boat != dinghy.Boat {
+		t.Fatalf("charted %+v; want the dinghy to sight its island %.0f m off", got, horizon(2)-10)
+	}
+}

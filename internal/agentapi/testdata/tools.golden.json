@@ -103,7 +103,7 @@
       "openWorldHint": false,
       "readOnlyHint": false
     },
-    "description": "Steer by autopilot (wind_angle with side, or heading) or by hand (rudder). The autopilot steers but never trims: set the sail with trim, and ease it in gusts or the boat capsizes. Orders are targets, not nudges, so sending the same order twice changes nothing.",
+    "description": "Steer by autopilot (wind_angle with side, or heading) or by hand (rudder). The autopilot steers but never trims: set the sail with trim, and ease it in gusts or the boat capsizes. Orders are targets: the same order twice changes nothing.",
     "inputSchema": {
       "properties": {
         "boom": {
@@ -174,7 +174,7 @@
     "inputSchema": {
       "properties": {
         "boom": {
-          "description": "Degrees the boom may swing out. Ease (larger) in gusts.",
+          "description": "Degrees the boom may swing out; a ship's yards, off the centreline. Ease (larger) in gusts.",
           "maximum": 95,
           "minimum": 4,
           "type": "integer"

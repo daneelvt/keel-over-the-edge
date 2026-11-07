@@ -57,17 +57,57 @@ type written struct {
 
 // sheetOf is the sheet's index in the control's steps for a boom let out
 // to boom degrees on a boat of kind b: the sheet lets the boom out from
-// hauled in hard to let fly.
+// hauled in hard to let fly; on a ship, the braces turn the yards from
+// braced up sharp to square, boom their angle off the centreline.
 func sheetOf(b *catalog.Boat, boom float64) uint16 {
-	in, out := b.Physics.Rig.BoomIn, b.Physics.Rig.BoomOut
+	in, out := sheetRange(b)
 	share := min(max((boom-in)/(out-in), 0), 1)
 	return uint16(math.Round(share * bus.Steps))
 }
 
-// boomOf is the boom's angle the sheet lets out, degrees.
+// boomOf is the boom's angle the sheet lets out, degrees; on a ship, the
+// yards' angle off the centreline the braces turn them to.
 func boomOf(b *catalog.Boat, sheet uint16) float64 {
-	in, out := b.Physics.Rig.BoomIn, b.Physics.Rig.BoomOut
+	in, out := sheetRange(b)
 	return in + float64(sheet)/bus.Steps*(out-in)
+}
+
+// braced reports whether a kind's sheet is its braces: a ship's, of square
+// sails on yards.
+func braced(b *catalog.Boat) bool {
+	return b.Physics.Square.SquareForeArea > 0 || b.Physics.Square.SquareAfterArea > 0
+}
+
+// sheetRange is the angles a kind's sheet sets, degrees, from hauled in to
+// let fly: the boom's limit, or a ship's yards' angle off the centreline,
+// from braced up sharp to square.
+func sheetRange(b *catalog.Boat) (in, out float64) {
+	if braced(b) {
+		return b.Physics.Square.BraceSharp, 90
+	}
+	return b.Physics.Rig.BoomIn, b.Physics.Rig.BoomOut
+}
+
+// trimWords are the sheet in words, at angle degrees: "boom out to 40°",
+// or a ship's "yards braced sharp", "yards square" or "yards 55°".
+func trimWords(b *catalog.Boat, angle float64) string {
+	if braced(b) {
+		return "yards " + yardsWords(b, angle)
+	}
+	return fmt.Sprintf("boom out to %d°", int(math.Round(angle)))
+}
+
+// yardsWords are a ship's yards at angle degrees off the centreline:
+// "braced sharp", "square", or the angle.
+func yardsWords(b *catalog.Boat, angle float64) string {
+	switch a := math.Round(angle); {
+	case a <= math.Round(b.Physics.Square.BraceSharp):
+		return "braced sharp"
+	case a >= 90:
+		return "square"
+	default:
+		return fmt.Sprintf("%d°", int(a))
+	}
 }
 
 // leastAngle is the closest to the wind the autopilot's dial goes on a
@@ -399,6 +439,10 @@ func (h *helm) trim(s *Sea, f *bus.Frame, sl int32, boom, reef *int) (written, s
 
 // refusalBoom is a boom out of its range.
 func refusalBoom(boom int, b *catalog.Boat) string {
+	if braced(b) {
+		return fmt.Sprintf("The braces turn the yards from %d° off the centreline (braced up sharp) to 90° (square): %d is out of range.",
+			int(math.Round(b.Physics.Square.BraceSharp)), boom)
+	}
 	return fmt.Sprintf("The boom swings from %d° (hauled in hard) to %d° (let fly): %d is out of range. A rough guide is half the apparent wind's angle, eased in gusts.",
 		int(math.Ceil(b.Physics.Rig.BoomIn)), int(b.Physics.Rig.BoomOut), boom)
 }
@@ -450,6 +494,6 @@ func orderLine(s *Sea, f *bus.Frame, sl int32, w written) string {
 	if rw.Reef() != 0 || st.Reef != 0 {
 		reef = " · " + reefState(b, st, rw.Reef())
 	}
-	return fmt.Sprintf("%s · %s · boom out to %d°%s · %s · heel %d°", clockOf(s, f, st.X, st.Y), what,
-		int(math.Round(boomOf(b, word.SheetIndex()))), reef, knots1(float64(f.Instruments[sl].SpeedOverGround)), degrees(math.Abs(st.Heel)))
+	return fmt.Sprintf("%s · %s · %s%s · %s · heel %d°", clockOf(s, f, st.X, st.Y), what,
+		trimWords(b, boomOf(b, word.SheetIndex())), reef, knots1(float64(f.Instruments[sl].SpeedOverGround)), degrees(math.Abs(st.Heel)))
 }

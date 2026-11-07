@@ -79,8 +79,12 @@ type boatFacts struct {
 	Kind string `json:"kind"`
 	// Reef is how the sail stands: "full sail", "one reef", or, while the
 	// crew is at work, "reefing to two reefs".
-	Reef    string  `json:"reef,omitempty"`
-	reefed  bool    // reefed, or the crew at work
+	Reef   string `json:"reef,omitempty"`
+	reefed bool   // reefed, or the crew at work
+	// Yards are a ship's yards: "braced sharp", "square", an angle off
+	// the centreline, or "hauling round" while the fore yards and the
+	// after stand apart in a turn; "" on a boat without them.
+	Yards   string  `json:"yards,omitempty"`
 	State   string  `json:"state"`
 	Heading int     `json:"heading"`
 	Speed   float64 `json:"speedKnots"`
@@ -166,6 +170,12 @@ func (h *helm) reportFor(s *Sea, f *bus.Frame, sl int32, detail string, since in
 		b.HeelTo = side(st.Heel)
 	}
 	b.Tack = ownTack(f, sl)
+	if braced(kind) {
+		b.Yards = "yards " + yardsWords(kind, math.Abs(st.Yards)*180/math.Pi)
+		if math.Abs(st.ForeYards-st.Yards) > math.Pi/180 {
+			b.Yards = "yards hauling round"
+		}
+	}
 	if d := float64(in.Depth); d < shoalUnder {
 		d = math.Floor(max(d, 0)*10+0.5) / 10
 		b.Depth = &d
@@ -859,9 +869,16 @@ func (r *report) text() string {
 			if bt.reefed {
 				reef = bt.Reef + " · "
 			}
+			if bt.Yards != "" {
+				reef += bt.Yards + " · "
+			}
 			fmt.Fprintf(&b, "Boat: %s%s · heading %s · %s · %s · %s", reef, bt.State, three(bt.Heading), speed, heel, bt.Tack)
 		} else {
-			fmt.Fprintf(&b, "Boat: %s, %s · %s · heading %s · %s · %s · %s\n", bt.Kind, bt.Reef, bt.State, three(bt.Heading), speed, heel, bt.Tack)
+			kind := bt.Kind + ", " + bt.Reef
+			if bt.Yards != "" {
+				kind += ", " + bt.Yards
+			}
+			fmt.Fprintf(&b, "Boat: %s · %s · heading %s · %s · %s · %s\n", kind, bt.State, three(bt.Heading), speed, heel, bt.Tack)
 		}
 	}
 	if p := r.Pilot; p != nil {
