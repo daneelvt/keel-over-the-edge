@@ -391,6 +391,8 @@ life:
     # Grazing the seagrass and the reefs, the commonest turtle seen; young
     # ones dive about 1.5 min in shallow water and take about 6 breaths
     # each time they come up (ICM-CSIC), most active early in the morning.
+    # A swimmer's length runs from its snout to its tail's or flippers'
+    # tips: a carapace of about 1 m is a turtle of about 1.3 m.
     - id: green-turtle
       name: Green turtle
       plural: Green turtles
@@ -409,7 +411,7 @@ life:
       height: [-2, -1.2]
       range: 60
       reach: 600
-      swim: { body: turtle, length: 1, back: "#5c5a3a", belly: "#b8a47a", beat: 0.5, depth: 2.5, breaths: [3, 6], dive: [60, 120], call: silent }
+      swim: { body: turtle, length: 1.3, back: "#5c5a3a", belly: "#b8a47a", beat: 0.5, depth: 2.5, breaths: [3, 6], dive: [60, 120], call: silent }
     # On the reefs alone, and rarer.
     - id: hawksbill-turtle
       name: Hawksbill turtle
@@ -429,7 +431,7 @@ life:
       height: [-2, -1.2]
       range: 60
       reach: 600
-      swim: { body: turtle, length: 0.8, back: "#6a4a2a", belly: "#c9a66a", beat: 0.6, depth: 2.5, breaths: [3, 5], dive: [60, 120], call: silent }
+      swim: { body: turtle, length: 1.05, back: "#6a4a2a", belly: "#c9a66a", beat: 0.6, depth: 2.5, breaths: [3, 5], dive: [60, 120], call: silent }
     # In calm harbours and lagoons, rolling at the surface to gulp air at
     # dawn and dusk (Waypoint TV, "Why tarpon roll").
     - id: atlantic-tarpon

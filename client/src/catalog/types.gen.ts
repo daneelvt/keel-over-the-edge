@@ -8544,4 +8544,4 @@ export interface SwimLook {
 }
 
 /** The catalog version (tools/catalog). */
-export const CATALOG_VERSION = '4398c690ffa07c86';
+export const CATALOG_VERSION = '0eae0eb25ec0b032';
