@@ -3487,7 +3487,9 @@ A boat's lights are the catalog's: `lights`, a list of `tricolour`, `port`,
 the lantern is. `tools/catalog -check` fails on a light without its node, on
 a tricolour on a boat of 20 m or more, and on lights that do not make the
 full circle once. The Jolly boat carries a brass tricolour lantern at the
-masthead, with the pennant's staff above it.
+masthead, with the pennant's staff above it, and the keelboat hers at her
+masthead, 9.56 m up. `render/lanterns.ts` places each light of each boat
+at its own kind's node, from the model as it loads, up to three a boat.
 
 ### Seeing it
 
@@ -3755,7 +3757,9 @@ it, then stamps every boat in it:
   scattering colour by up to 25%, the bubbles under it (`TRACK`);
 - **white water** (red): born where the wake's waves fold (the Jacobian of
   their shift, drawn, under 0.72: the bow's wave among them), and behind a
-  transom driven past hull speed (2.4 m/s), more the faster; it fades over
+  transom driven past hull speed (look.ts's `transomFrom`: a Froude number
+  of 0.39 on each hull's own waterline, 2.4 m/s on the Jolly boat's,
+  3.0 on the keelboat's), more the faster; it fades over
   3 s. It is drawn softer than the sea's foam: the lace through a window
   0.35 wide, its cover as thin as its amount, going toward the water's
   colour as it thins, lit by the surface the wake's waves tilt. A boat at
@@ -3782,8 +3786,14 @@ the same physics on every tier (the angle at 2 m/s within 2°, 3° on the low
 tier), the stop, the turn, the track's place, fade and drift, and that a
 boat at rest wears no foam.
 
+Each kind's hull is its own (`ocean/hulls.ts`, `wakewaves.ts`,
+`foammap.ts`): its model's stations keep the sea out of it and press its
+wake's waves, its waterline lays its track, up to three kinds at once, each
+hull drawn naming its kind's.
+
 **Spray**
-(`client/src/render/spray.ts`) is sprites in one draw: from a bow the sea
+(`client/src/render/spray.ts`) is sprites in one draw: from a bow (each
+boat's own, half its waterline ahead) the sea
 rises against faster than 0.2 m/s, more with speed, whitecaps and the sea's
 height, blown down the wind for about a second; torn off the crests near
 the camera from force 7, from a drop or so a crest a second to sheets of
@@ -4717,17 +4727,24 @@ its last velocity and turn for 250 ms, then held; when data comes the
 difference is eased away over 100 ms. Boats fade in and out over half a
 second, dithered (`alphaHash`), so they stay in the opaque pass.
 
-**Drawing** (`client/src/render/fleet.ts`, `fleetparts.ts`). Each model is
-merged by material, each vertex tagged with the joint it turns on (the
-hull's frame, the boom, the rudder), and drawn as one `InstancedMesh` a
-material; the parts' vertex nodes place each boat themselves from
-per-instance attributes, since the sail's own node discards the instance
-matrix. The full model is drawn for the 12 boats nearest the camera within
-60 m, the **far model** (the catalog's `art.far`, built by the same script
-with few segments) for the rest: 64 boats in 15 draw calls and about
-163,000 triangles. Other boats carry the class insignia and no number, and
-no telltales or pennant. `e2e/fleet.spec.ts` checks a boat of the fleet
-looks as the own boat does at the same pose.
+**Drawing** (`client/src/render/fleet.ts`, `fleetparts.ts`). Each kind has
+its view (`FleetView`), made when a boat of the kind first comes into
+view (the first kind's at once: its model seats the fleet's sailors, whose
+looks every kind shares). A model's solids are merged into one geometry,
+each vertex carrying its material's colour, roughness and metalness and
+tagged with the joint it turns on (the hull's frame, the boom, the
+rudder), and drawn as one `InstancedMesh`; its sail and its headsail one
+each, shaped from per-instance values (the headsail's angle from the
+wire's `jib`, the main reefed by its `reef`); the parts' vertex nodes place
+each boat themselves from per-instance attributes, since the sail's own
+node discards the instance matrix. The full model is drawn for the 12
+boats nearest the camera within 60 m, whatever their kind, the **far
+model** (the catalog's `art.far`, built by the same script with few
+segments) for the rest: 64 Jolly boats in 6 draw calls and about 187,000
+triangles; 48 Jolly boats and 16 keelboats in 14 and about 186,000. Other
+boats carry the class insignia and no number, and no telltales or pennant.
+`e2e/fleet.spec.ts` checks a boat of the fleet looks as the own boat does
+at the same pose, the keelboat's with her jib and reefed too.
 
 **The queue.** At most `KEEL_BOAT_LIMIT` boats sail, those in their grace
 included. A `Join` that admission would not give the next place waits in
@@ -6732,6 +6749,7 @@ things and their pictures stay in one wind. The developer page is
 | Query | What |
 |-------|------|
 | `?sandbox` | The offline sandbox alone: no server, no session, no start screen. The browser tests of the scene use it |
+| `?boat=keelboat` | The sandbox's boat: any of the catalog's boats, by its id (the first if the catalog has none of that id). Every kind is prepared in the module; the developer panel changes it |
 | `?wind=12,45` | The sandbox's wind, steady: knots 10 m up, and the degrees it comes from |
 | `?weather=stormy` | The sandbox's weather: one of the catalog's regimes (`settled`, `trade`, `unsettled`, `stormy`), or `steady` |
 | `?dev` | The developer panel (a lazy import, outside the first download); see below |
@@ -6747,7 +6765,8 @@ things and their pictures stay in one wind. The developer page is
 | Control | Touch | Keyboard and mouse |
 |---------|-------|--------------------|
 | Helm | The arc bottom left: drag left to turn the bow to port, right to starboard, relative to where the thumb lands (140 px is the full travel). A double tap centres it | ← and → (or A and D), the full travel in 0.6 s while held; C centres it |
-| Sheet | The slider bottom right: drag up to trim (haul in), down to ease, relative to where the thumb lands (160 px from hauled in to let fly) | W trims and S eases, the whole range in 2 s while held |
+| Sheet | The slider bottom right: drag up to trim (haul in), down to ease, relative to where the thumb lands (160 px from hauled in to let fly). Its name and its ends' words are the boat's (the catalog's `controls.sheet`: "Sheet", Trim and Ease on the Jolly boat and the keelboat) | W trims and S eases, the whole range in 2 s while held |
+| Reef | The brass Reef key at the sheet's top (held sideways beside it, toward the boat): a tap reefs one more, its face the reef asked for in the boat's words (`controls.reef`: Full sail, One reef, Two reefs); once reefed a second key, Shake, beside it (upright over it) shakes one out. The crew takes the catalog's `reefTime` a reef; the case's last line names the reef the main has. On a boat whose main does not reef, no key | R reefs one more, F shakes one out |
 | Autopilot | The button between them: on at the boat's angle to the wind, and its dial; touching the helm takes the helm back | P on or off; Q and E turn its target a degree to port or starboard, ten with Shift; T tacks, G gybes; the helm's keys take the helm back |
 | Camera | Drag on the sea to swing it round and up or down; pinch for its distance (5 to 80 m). It eases back behind the boat 5 s after the last touch | Drag with the mouse; the wheel for the distance |
 
@@ -6770,6 +6789,13 @@ the true wind's arrow on the water upwind, the apparent wind's above the
 masthead, and a dashed ring round each gust heading for the boat; **sail forces**: drive and side force at the sail's centre of
 effort, and a clinometer), and the helm's release.
 
+On a small phone held upright the sheet is 150 px tall (160 on a screen
+420 px tall or less, 196 otherwise), so that the Reef key and its Shake
+stand over it below the keys under the pocket chart; a drag moves the
+sheet as far whatever its track's length. `e2e/layout.spec.ts` holds the
+keys at 44 px, on the sheet's top or beside it, covering nothing, on its
+five phone screens and the tests' (and the keelboat framed on every one).
+
 ### The frame
 
 | File | What |
@@ -6779,11 +6805,37 @@ effort, and a clinometer), and the helm's release.
 | `client/src/predict/blend.ts` | The state before and after the latest step; the boat is drawn between them, the heading the short way round |
 | `client/src/game/driver.ts`, `client/src/sandbox/` | The boat driver: controls in, states and `Out` to draw. The sandbox is the offline driver |
 | `client/src/game/game.ts` | The frame: keys, steps, the pose, the instruments, the sound. Input events only move targets; the frame reads them. The frame allocates nothing |
-| `client/src/render/camera.ts` | The chase camera: its yaw follows the heading through a critically damped spring (ω = 4 s⁻¹, 12 with reduced motion); it rises and falls with the boat's heave, over half a second, but not with its heel or pitch, and stays 1.6 m above the sea under the boat |
-| `client/src/render/boat.ts`, `sailshape.ts`, `telltales.ts`, `pennant.ts`, `sailor.ts` | The boat from the physics: lifted by its heave, pitched and heeled about its centre of gravity; the boom, rudder and tiller; the sail's twist from `Out.Twist`, camber from `Out.Flattening`, rippling where a strip luffs; the telltales from each strip's flow (attached: both stream aft; luffing: the windward one lifts; stalled: the leeward one droops; aback: both stream forward); the pennant downwind of the apparent wind at the masthead; the sailor by mode |
+| `client/src/render/camera.ts` | The chase camera: its yaw follows the heading through a critically damped spring (ω = 4 s⁻¹, 12 with reduced motion); it rises and falls with the boat's heave, over half a second, but not with its heel or pitch, and stays 1.6 m above the sea under the boat; its distances and the height it looks at scale with the boat's size |
+| `client/src/render/boat.ts`, `sailshape.ts`, `telltales.ts`, `pennant.ts`, `sailor.ts` | The boat from the physics, as its kind's model: lifted by its heave, pitched and heeled about its centre of gravity; the boom, rudder and tiller; the sail's twist from `Out.Twist`, camber from `Out.Flattening`, rippling where a strip luffs; a headsail (the model's `jib`, its node at the tack, `extras.rake` how far aft of it the head is) shaped the same way from `State.Jib`, `Out.JibTwist` and its flows, each height's chord turned about its point on the raked stay; a reefed main drawn to `Out.ReefShare` of its luff (below); the telltales from each strip's flow (attached: both stream aft; luffing: the windward one lifts; stalled: the leeward one droops; aback: both stream forward); the pennant downwind of the apparent wind at the masthead; the sailor by mode |
 | `client/src/render/overlays.ts` | The beginners' arrows, each its own shape with a label |
 | `client/src/ui/` | The screen at sea in Preact: instruments, sailor line, helm, sheet, menu. Words and numbers are signals written at most ten times a second; what moves every frame moves by `style.transform` |
 | `client/src/audio/` | Sound, synthesised with Web Audio from the recipes in `art/sound/` (below) |
+
+**A reefed main** is drawn short. Where its model has a row of vertices at
+each reef's height (`1 − reefs[n]` of the luff: the keelboat's slab reefs
+at 0.15 and 0.30), the cloth above the row comes down to the boom keeping
+its shape, the cloth below gathered along the boom in a fold, and the
+cloth carries its reef points painted along each row. Where it has none
+(the Jolly boat's reefs are the ILCA 6 and ILCA 4 rigs) the whole sail is
+drawn smaller, its luff and chord alike. The own boat's share is
+`Out.ReefShare`; another boat's, the catalog's `reefs` at the level the wire
+sends. At full sail the shape is the one it was.
+
+**Every kind** (`client/src/render/scene.ts`): the own boat is drawn, and
+the predictor and the sandbox step it, as the kind its Welcome names (the
+sandbox's `?boat=`, or the panel's); a change of kind goes through the
+cover, as any other change of boat, the gate waiting for the new boat's
+sailor. Each kind's lanterns, hull and wake are its own (below); the chase
+camera's distance and the height it looks at, and the shadow map's box,
+scale with the boat's length or its masthead's height, whichever is the
+more, against the catalog's first boat's (`sizeOf` in `camera.ts`): about
+1.4 for the keelboat.
+
+```sh
+# https://localhost:5173/?sandbox&boat=keelboat        the keelboat in the sandbox: R reefs her, F shakes a reef out
+# https://localhost:5173/?sandbox&boat=keelboat&dev    with the panel, to change the boat
+# https://localhost:5173/?sandbox&boat=keelboat&sky=midnight   her tricolour lit at the masthead
+```
 
 ### The developer panel
 
@@ -6800,8 +6852,8 @@ a swell of its own (`?swell=height,period,from`, e.g. `?sea=breeze&swell=0.6,6,2
 `?weather=storm` brings a storm 45 minutes off, whose swell comes first);
 the sea's parts at the boat (the wind sea's and the swell's Hs and period,
 the current's factor and the lee's);
-the boat, reset to the start, placed at a position and heading, or
-jumped to the rim; time, paused, stepped once or slowed to ½ or ¼; the live
+the boat: any of the catalog's (sailed from the start), reset to the start,
+placed at a position and heading, or jumped to the rim; time, paused, stepped once or slowed to ½ or ¼; the live
 `State` and `Out`; camera presets; the back end, render scale,
 tile pass and antialiasing; the quality: the rung of the ladder (any can be
 chosen), adaptive quality on or off, the detail band, the foam and the
@@ -6916,10 +6968,13 @@ centre and level rise with the apparent wind, full at 34 knots, so it
 swells with the gusts the boat feels; in a gusty wind it breathes too, as
 deep as the wind's gust factor (none in a steady wind), and in a storm it
 howls, its centre rising by a third from 23 to 39 knots; **rigging**, a narrow band at
-the sheet's Aeolian tone, 0.2 × apparent wind ÷ 10 mm; **flogging**, the
+the sheet's Aeolian tone, 0.2 × apparent wind ÷ its diameter, 10 mm on a
+main of 7 m² and thicker as the fourth root of the main's area (12 mm on
+the keelboat); **flogging**, the
 cloth's band beaten at a flap rate, only while a sail strip luffs;
 **water**, low-passed noise rising with speed and a bow wave's hiss past the
-hull speed; **sea**, a wide, low band that rises and brightens with the
+hull speed, 2.4 m/s on the Jolly boat's waterline and faster as the square
+root of a longer one's; **sea**, a wide, low band that rises and brightens with the
 significant height of the waves under the boat, louder with its whitecaps
 and with the boat's speed through the water, and silent on flat water. `client/src/audio/voices.ts` maps them onto the physics;
 `engine.ts` plays them, setting parameters at most every 50 ms. Audio starts
@@ -6987,8 +7042,10 @@ sees it through its grace after its page closes; and, through the lag proxy
 (or netem), for a minute no near boat held in more than 1% of frames but in
 retransmission timeouts, which it reports, and no correction drawn at once.
 `fleet.spec.ts` draws other boats in the sandbox: a boat of the fleet as
-the own boat at seven poses, 64 boats within 22 draw calls and 200,000
-triangles, the materials dithered, and a picture. `sky.spec.ts` finds each
+the own boat at seven poses, and a keelboat as the own keelboat with her
+jib and reefed, 64 boats within 22 draw calls and 200,000 triangles, a
+mixed 64 of Jolly boats and keelboats within 32 and 320,000, the materials
+dithered, and a picture. `sky.spec.ts` finds each
 named star where the GPU draws it, within 0.1° of where the module's rule
 and the camera put it, from the centre, half way and the rim; no star by day
 and the brightest first at dusk; a moonless night with nothing bright and

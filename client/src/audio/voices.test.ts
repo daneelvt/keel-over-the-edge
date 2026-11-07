@@ -6,6 +6,7 @@ import {
   aeolianTone,
   fallsCutoff,
   newTargets,
+  ropeDiameter,
   RECIPES,
   SOUND_INTERVAL,
   type SoundInput,
@@ -244,5 +245,27 @@ describe('the falls', () => {
     const falling = at(Number.POSITIVE_INFINITY, { falling: true });
     expect(falling.fallsLevel).toBe(RECIPES.falls.level.falling);
     expect(falling.fallsLevel).toBeGreaterThan(at(10).fallsLevel);
+  });
+});
+
+describe('each boat’s own voices', () => {
+  test('its bow wave hisses from its own hull speed, and its sheet sings by its thickness', () => {
+    const t = (v: Partial<SoundInput>) => soundTargets(RECIPES, input(v), newTargets());
+    const hull = RECIPES.water.hiss;
+    // Just past the dinghy's hull speed: hissing on the dinghy, not yet on a
+    // boat with four times its waterline, whose hull speed is twice as fast.
+    const at = hull.hullSpeed + 0.2;
+    expect(t({ speed: at }).hissLevel).toBeGreaterThan(0);
+    expect(t({ speed: at, waterline: 4 * hull.waterline }).hissLevel).toBe(0);
+    expect(t({ speed: 2 * at, waterline: 4 * hull.waterline }).hissLevel).toBeCloseTo(
+      t({ speed: at }).hissLevel,
+      9,
+    );
+    // A main sixteen times the area: a sheet twice as thick, an octave lower.
+    const r = RECIPES.rigging;
+    expect(ropeDiameter(r, r.forArea)).toBe(r.diameter);
+    expect(
+      t({ apparentWind: 8, sailArea: 16 * r.forArea }).rigTone / t({ apparentWind: 8 }).rigTone,
+    ).toBeCloseTo(0.5, 9);
   });
 });

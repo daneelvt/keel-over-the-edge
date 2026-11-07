@@ -31,6 +31,7 @@ import {
   Sandbox,
   START,
   STEADY,
+  boatFromQuery,
   seaFromQuery,
   startSandbox,
   weatherFromQuery,
@@ -431,6 +432,45 @@ async function scriptedSail(): Promise<Recording> {
   }
   return s.recorded('sandbox-sail');
 }
+
+describe('the sandbox’s boat', () => {
+  test('is any of the catalog’s, by ?boat’s id, and none it has not is the first', () => {
+    const ids = catalog.boats.map((b) => b.id);
+    expect(boatFromQuery(new URLSearchParams(''), ids)).toBeNull();
+    expect(boatFromQuery(new URLSearchParams('boat=no-such-boat'), ids)).toBeNull();
+    ids.forEach((id, i) => {
+      expect(boatFromQuery(new URLSearchParams(`boat=${id}`), ids)).toBe(i);
+    });
+  });
+
+  test('every kind prepared, it steps the one sailed, keeps its params for a recording, and reefs it', async () => {
+    const all = catalog.boats.map((b) => b.physics);
+    for (const [kind, b] of catalog.boats.entries()) {
+      const s = await startSandbox(bytes, all, sea, catalog.world, START, kind);
+      expect(s.kind).toBe(kind);
+      const p = s.records.params;
+      expect(p[RECORDS.params.waterlineLength]).toBe(b.physics.hull.waterlineLength);
+      // A reef asked for comes in at the crew's pace, and the main keeps its share.
+      s.reef = 1;
+      const steps = Math.ceil(b.physics.rig.reefTime * 30) + 30;
+      for (let i = 0; i < steps; i++) {
+        s.step(0, 0.5);
+      }
+      const r = s.records.state[RECORDS.state.reef] ?? 0;
+      expect(r).toBeCloseTo(1, 6);
+      expect(s.out[RECORDS.out.reefShare]).toBeCloseTo(b.physics.rig.reefs[1] ?? 1, 6);
+      // Another kind, from the start, at full sail.
+      const other = (kind + 1) % catalog.boats.length;
+      s.setKind(other);
+      expect(s.kind).toBe(other);
+      expect(s.reef).toBe(0);
+      expect(s.records.state[RECORDS.state.reef]).toBe(0);
+      expect(p[RECORDS.params.waterlineLength]).toBe(
+        catalog.boats[other]?.physics.hull.waterlineLength,
+      );
+    }
+  });
+});
 
 describe('a recorded sail', () => {
   test('replays in the golden runner to the state the sandbox reached', async () => {
