@@ -314,8 +314,12 @@ poses:
       - [neck_01, x, -4]
       - [head, x, -5]
     ik:
-      hand_l: { at: wheel-left, offset: [-0.07, 0.0, -0.01] }
-      hand_r: { at: wheel-right, offset: [-0.07, 0.0, -0.01] }
+      # The wrist behind the spoke and outside it, the fingers forward and
+      # the palm turned in to the spoke.
+      hand_l:
+        { at: wheel-left, offset: [-0.075, 0.035, 0.0], grip: { aim: [1, 0, 0.1], palm: [0.2, -1, -0.1] } }
+      hand_r:
+        { at: wheel-right, offset: [-0.075, -0.035, 0.0], grip: { aim: [1, 0, 0.1], palm: [0.2, 1, -0.1] } }
       foot_l: { at: deck, offset: [0.16, 0.15, 0.12] }
       foot_r: { at: deck, offset: [-0.03, -0.15, 0.12] }
 
@@ -324,34 +328,34 @@ poses:
   wheel-grip-left:
     from: wheel-base
     turn:
-      - [index_01_l, y, 35]
-      - [index_02_l, y, 45]
-      - [index_03_l, y, 25]
-      - [middle_01_l, y, 35]
-      - [middle_02_l, y, 45]
-      - [middle_03_l, y, 25]
-      - [ring_01_l, y, 35]
-      - [ring_02_l, y, 45]
-      - [ring_03_l, y, 25]
-      - [pinky_01_l, y, 35]
-      - [pinky_02_l, y, 45]
-      - [pinky_03_l, y, 25]
+      - [index_01_l, lx, 45]
+      - [index_02_l, lx, 60]
+      - [index_03_l, lx, 40]
+      - [middle_01_l, lx, 45]
+      - [middle_02_l, lx, 60]
+      - [middle_03_l, lx, 40]
+      - [ring_01_l, lx, 45]
+      - [ring_02_l, lx, 60]
+      - [ring_03_l, lx, 40]
+      - [pinky_01_l, lx, 45]
+      - [pinky_02_l, lx, 60]
+      - [pinky_03_l, lx, 40]
 
   wheel-stand:
     from: wheel-grip-left
     turn:
-      - [index_01_r, y, -35]
-      - [index_02_r, y, -45]
-      - [index_03_r, y, -25]
-      - [middle_01_r, y, -35]
-      - [middle_02_r, y, -45]
-      - [middle_03_r, y, -25]
-      - [ring_01_r, y, -35]
-      - [ring_02_r, y, -45]
-      - [ring_03_r, y, -25]
-      - [pinky_01_r, y, -35]
-      - [pinky_02_r, y, -45]
-      - [pinky_03_r, y, -25]
+      - [index_01_r, lx, 45]
+      - [index_02_r, lx, 60]
+      - [index_03_r, lx, 40]
+      - [middle_01_r, lx, 45]
+      - [middle_02_r, lx, 60]
+      - [middle_03_r, lx, 40]
+      - [ring_01_r, lx, 45]
+      - [ring_02_r, lx, 60]
+      - [ring_03_r, lx, 40]
+      - [pinky_01_r, lx, 45]
+      - [pinky_02_r, lx, 60]
+      - [pinky_03_r, lx, 40]
 
   # Looking aloft at the sails, up and ahead.
   wheel-aloft:

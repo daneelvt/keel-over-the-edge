@@ -93,6 +93,21 @@ describe.each(looks)('%s', (look) => {
       expect(levels.far.nodes.find((n) => n.name === 'place')?.matrix).toHaveLength(16);
     });
 
+    test('the clips at a wheel, every look’s, placed from the helmsman’s place', () => {
+      const names = (clips.animations ?? []).map((a) => a.name);
+      const wheel = ['helm-wheel', 'helm-wheel-port', 'habit-wheel'];
+      if (look !== 'test') {
+        expect(names).toEqual(expect.arrayContaining(wheel));
+      }
+      for (const name of names.filter((n) => wheel.includes(n))) {
+        const m = clips.nodes.find((n) => n.name === `place-${name}`)?.matrix ?? [];
+        // Standing on the deck at the helmsman's place, facing forward (−z).
+        expect(Math.hypot(m[12] ?? 9, m[14] ?? 9), name).toBeLessThan(0.3);
+        expect(Math.abs(m[13] ?? 9), name).toBeLessThan(0.1);
+        expect(m[10], name).toBeLessThan(-0.99);
+      }
+    });
+
     test('every clip has its place', () => {
       const names = (clips.animations ?? []).map((a) => a.name);
       expect(names.length).toBeGreaterThan(0);

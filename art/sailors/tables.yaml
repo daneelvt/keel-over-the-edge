@@ -105,8 +105,8 @@ stage:
     spokes: 8
     handles: 0.15
     grips:
-      wheel-left: [-40, 0.4]
-      wheel-right: [40, 0.4]
+      wheel-left: [-45, 0.4]
+      wheel-right: [45, 0.4]
 
 # The portraits (build/portraits.py), every look's taken alike: head and
 # shoulders, three-quarter, the camera on the figure's left at the height

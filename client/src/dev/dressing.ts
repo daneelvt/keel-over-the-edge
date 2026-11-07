@@ -23,7 +23,10 @@
 // (the stage at a phone's 360 × 640), t (the clips held at that many
 // seconds, for pictures), who, look (only that look's versions), boat (the
 // boat the sailors sit in, by its place in the catalog's boats: 0 the
-// first; the clips moved to its seat as the game moves them). The back
+// first; the clips moved to its seat as the game moves them). A clip at a
+// wheel stands each sailor at the wheel of a boat that has one, as the game
+// stands it; in a boat that has none, on the quay behind a wheel made to the
+// numbers the ships' models are built to. The back
 // end is the game's choice, and
 // ?backend=webgl2 or ?compat as in the game.
 //
@@ -35,6 +38,7 @@ import {
   type AnimationAction,
   AnimationMixer,
   BoxGeometry,
+  type BufferGeometry,
   CylinderGeometry,
   DoubleSide,
   Group,
@@ -43,9 +47,11 @@ import {
   Mesh,
   type Object3D,
   PlaneGeometry,
+  TorusGeometry,
   Vector2,
   Vector3,
 } from 'three';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { clone as cloneSkinned } from 'three/addons/utils/SkeletonUtils.js';
 import { exp, float, fog, length, positionView, texture } from 'three/tsl';
 import { catalog } from '../catalog';
@@ -62,6 +68,8 @@ import { loadClips, loadSailor, type SailorClips, type SailorModel } from '../re
 import { boneNames } from '../render/sailors/onboat';
 import { restageAnimation, restageOf, restagePlace } from '../render/sailors/restage';
 import { Rig } from '../render/sailors/rig';
+import { atWheel } from '../render/sailors/runtime';
+import { frameIn, wheelOf } from '../render/sailors/wheel';
 import { Shadows } from '../render/shadows';
 import { Sky, look as skyLook, toLinear } from '../render/sky';
 import { Stage } from '../render/stage';
@@ -280,7 +288,12 @@ interface Figure {
   offset: number;
   /** The boat it sits in, when its pose is placed in one. */
   boat: Boat | null;
+  /** The wheel it stands at on the quay, when its clip is at a wheel and the boat has none. */
+  wheel: Object3D | null;
 }
+
+/** The wheel stood at on the quay: its hub ahead of and above the helmsman's place, its rim, spokes and their handles beyond it, as the ships' models are built. */
+const WHEEL = { ahead: 0.55, up: 1.05, radius: 0.75, spokes: 8, handles: 0.15 };
 
 /** The quay's top, the line the row stands on, and the space between sailors, in metres. */
 const QUAY_TOP = 1.0;
@@ -314,6 +327,40 @@ interface Orbit {
   azimuth: number;
   elevation: number;
   distance: number;
+}
+
+/**
+ * A wheel to WHEEL's numbers in the helmsman's frame (x to starboard, y
+ * up, z aft; the helmsman facing −z): the rim, the spokes out to their
+ * handles' ends, and the hub on its axle.
+ */
+function standInWheel(): Mesh {
+  const { ahead, up, radius, spokes, handles } = WHEEL;
+  const parts: BufferGeometry[] = [new TorusGeometry(radius, 0.025, 8, 64)];
+  for (let k = 0; k < spokes; k++) {
+    const a = (2 * Math.PI * k) / spokes;
+    const length = radius + handles - 0.06;
+    parts.push(
+      new BoxGeometry(0.036, length, 0.036).translate(0, 0.06 + length / 2, 0).rotateZ(-a),
+    );
+  }
+  parts.push(new CylinderGeometry(0.07, 0.07, 0.12, 16).rotateX(Math.PI / 2));
+  const keep = parts.map((g) => {
+    const out = g.index === null ? g : g.toNonIndexed();
+    for (const name of Object.keys(out.attributes)) {
+      if (name !== 'position' && name !== 'normal') {
+        out.deleteAttribute(name);
+      }
+    }
+    return out;
+  });
+  const merged = mergeGeometries(keep, false) as BufferGeometry;
+  merged.translate(0, up, -ahead);
+  const mesh = new Mesh(merged, litMaterial({ color: 0x6b4a2e, roughness: 0.7, metalness: 0 }));
+  mesh.name = 'wheel';
+  mesh.castShadow = true;
+  mesh.receiveShadow = true;
+  return mesh;
 }
 
 /** What tests read of the room: window.dressing. */
@@ -593,6 +640,7 @@ export class DressingRoom {
       f.root.removeFromParent();
       f.mixer?.stopAllAction();
       f.boat?.root.removeFromParent();
+      f.wheel?.removeFromParent();
     }
     const made = await Promise.all(
       wanted.map((w) => this.#figure(w.look, w.version, w.level, w.colours, w.at)),
@@ -668,6 +716,7 @@ export class DressingRoom {
       action: null,
       offset: at * 0.7,
       boat: null,
+      wheel: null,
     };
     const clip = c?.clips.find((k) => k.name === this.room.clip);
     if (model.skeleton !== null && clip !== undefined) {
@@ -682,10 +731,24 @@ export class DressingRoom {
   async #place(f: Figure, i: number): Promise<void> {
     const r = this.room;
     let seat = this.#seat(f);
+    const wheeled = seat !== null && atWheel(r.clip);
+    if (seat !== null && wheeled) {
+      // At a wheel: the boat's, from its helmsman's place; or on the quay.
+      const { boat, loaded } = this.#boat(i);
+      await loaded;
+      const stand = boat.parts.get('sailor');
+      if (wheelOf(boat.parts, boat.model) === null || stand === undefined) {
+        this.#standAtWheel(f, i, seat);
+        return;
+      }
+      seat = frameIn(stand, boat.model, new Matrix4()).multiply(seat);
+    }
     if (seat !== null) {
       const { boat, loaded } = this.#boat(i);
       await loaded;
-      seat = this.#restage(f, boat, seat);
+      if (!wheeled) {
+        seat = this.#restage(f, boat, seat);
+      }
       f.boat = boat;
       boat.model.add(f.root);
       f.root.matrixAutoUpdate = true;
@@ -717,6 +780,31 @@ export class DressingRoom {
     }
     f.root.rotation.set(0, 0, 0);
     this.#props.add(f.root);
+  }
+
+  /**
+   * A figure at a wheel on the quay: placed from the helmsman's place, on
+   * the quay facing the front, behind a wheel made to WHEEL's numbers.
+   */
+  #standAtWheel(f: Figure, i: number, place: Matrix4): void {
+    const n = this.#figuresWanted();
+    const at = new Matrix4()
+      .makeTranslation(
+        this.room.view === 'picker' ? 0 : (i - (n - 1) / 2) * SPACING * 1.6,
+        this.room.view === 'picker' ? DISC_TOP : QUAY_TOP,
+        this.room.view === 'picker' ? 0 : ROW_Z,
+      )
+      .multiply(new Matrix4().makeRotationY(Math.PI));
+    f.boat = null;
+    f.root.matrixAutoUpdate = true;
+    new Matrix4()
+      .multiplyMatrices(at, place)
+      .decompose(f.root.position, f.root.quaternion, f.root.scale);
+    this.#props.add(f.root);
+    const wheel = standInWheel();
+    at.decompose(wheel.position, wheel.quaternion, wheel.scale);
+    this.#props.add(wheel);
+    f.wheel = wheel;
   }
 
   #figuresWanted(): number {
@@ -824,7 +912,10 @@ export class DressingRoom {
     if (r.view === 'lineup') {
       const n = this.#figuresWanted();
       const seated = this.#figures.some((f) => f.boat !== null);
-      const width = (n - 1) * (seated ? this.#boatSpacing() : SPACING) + (seated ? 3.5 : 1);
+      const wheels = this.#figures.some((f) => f.wheel !== null);
+      const width =
+        (n - 1) * (seated ? this.#boatSpacing() : SPACING * (wheels ? 1.6 : 1)) +
+        (seated ? 3.5 : 1);
       // Seated, the sailors sit on the far side deck, across the cockpit:
       // the boat's seat moved from the first boat's.
       const by =

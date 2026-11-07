@@ -48,6 +48,16 @@ type target struct {
 	// end, on the stage's surface it names (a crouch's feet on the floor),
 	// or anywhere (at free: a leg hanging over the side).
 	Planted bool `yaml:"planted" json:"planted,omitempty"`
+	// Grip turns a hand on its target so its fingers point along Aim and
+	// its palm faces Palm (forward, inboard and up in the stage's frame):
+	// a hand round a wheel's spoke.
+	Grip *grip `yaml:"grip" json:"grip,omitempty"`
+}
+
+// grip is which way a hand's fingers point and its palm faces.
+type grip struct {
+	Aim  []float64 `yaml:"aim" json:"aim"`
+	Palm []float64 `yaml:"palm" json:"palm"`
 }
 
 type clip struct {
@@ -95,12 +105,14 @@ type retarget struct {
 }
 
 var (
-	places     = []string{"", "seat", "gunwale", "cockpit", "outside", "wheel"}
-	effectors  = []string{"hand_l", "hand_r", "foot_l", "foot_r"}
-	stageAt    = []string{"seat", "gunwale", "floor", "strap", "free"}
-	keySides   = []string{"", "port", "starboard"}
-	leads      = []string{"", "hips", "head"}
-	turnAxes   = []string{"x", "y", "z"}
+	places    = []string{"", "seat", "gunwale", "cockpit", "outside", "wheel"}
+	effectors = []string{"hand_l", "hand_r", "foot_l", "foot_r"}
+	stageAt   = []string{"seat", "gunwale", "floor", "strap", "free"}
+	keySides  = []string{"", "port", "starboard"}
+	leads     = []string{"", "hips", "head"}
+	// turnAxes are the figure's axes, and lx a bone's own x axis (a
+	// finger's curl toward the palm).
+	turnAxes   = []string{"x", "y", "z", "lx"}
 	maxDegrees = 180.0
 )
 
@@ -239,7 +251,7 @@ func (p pose) check(bones []string, points map[string]bool, all map[string]pose)
 		case !slices.Contains(bones, bone):
 			return fmt.Errorf("the turn %v: no bone %q", tr, tr[0])
 		case !slices.Contains(turnAxes, axis):
-			return fmt.Errorf("the turn %v: the axis is x, y or z", tr)
+			return fmt.Errorf("the turn %v: the axis is x, y, z or lx", tr)
 		case !ok || math.Abs(deg) > maxDegrees:
 			return fmt.Errorf("the turn %v: the degrees are a number within ±%v", tr, maxDegrees)
 		}
@@ -256,6 +268,8 @@ func (p pose) check(bones []string, points map[string]bool, all map[string]pose)
 			return fmt.Errorf("IK on %s: an offset or a pole is three numbers", e)
 		case tg.Reach < 0 || tg.Reach > 1 || tg.Reach > 0 && tg.At == "bone":
 			return fmt.Errorf("IK on %s: a reach is a share of a limb, on a stage target", e)
+		case tg.Grip != nil && (!strings.HasPrefix(e, "hand") || len(tg.Grip.Aim) != 3 || len(tg.Grip.Palm) != 3):
+			return fmt.Errorf("IK on %s: a grip is a hand's, its aim and palm three numbers each", e)
 		}
 	}
 	return nil

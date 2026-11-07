@@ -6,7 +6,8 @@
 //
 // Near: every near boat's sailor has a runtime of its own (runtime.ts:
 // clips, the life layers, the hand on the tiller extension; no springs),
-// run 20 times a second, each boat's in its own turn of the frames, which
+// run 20 times a second (at a wheel, the wheel turned by the rudder as the
+// boat draws it), each boat's in its own turn of the frames, which
 // leaves its bones' matrices (from the figure's bind pose to the boat
 // model) in a cache. Each frame the near boats' rows of a float texture
 // take their boat's values and their sailor's matrices from the cache,
@@ -76,7 +77,13 @@ import { SAILING } from '../sailor';
 import type { FleetLook } from './fleetlooks';
 import { type Hike, STRAPPED } from './restage';
 import { Rig } from './rig';
-import { type SailorBoat, type SailorMoment, SailorRuntime } from './runtime';
+import {
+  type SailorBoat,
+  type SailorMoment,
+  SailorRuntime,
+  type WheelHelm,
+  wheelTurn,
+} from './runtime';
 import type { HullSolid } from './solid';
 
 /** How often a near sailor's runtime runs, a second. */
@@ -108,6 +115,9 @@ export interface NearBoat {
   /** How far the seat is from the clips' boat's, and how it hikes (restage.ts's seating). */
   restage?: Vector3 | null;
   hike?: Hike;
+  /** The wheel the sailor stands at, on a boat steered by one (wheel.ts's wheelOf), and the rudder's most (radians) that turns it hard over. */
+  wheel?: WheelHelm | null;
+  rudderMax?: number;
 }
 
 /** A near boat's sailor: its runtime, and its bones' matrices as last run. */
@@ -150,6 +160,8 @@ class Sailor {
       climbTime: near.climbTime,
       restage: near.restage ?? null,
       hike: near.hike ?? STRAPPED,
+      // Each its own, turned by its own boat's rudder.
+      wheel: near.wheel ? { ...near.wheel, turn: 0 } : null,
     };
     this.runtime = new SailorRuntime(rig, clips, this.boat, seed, look.machine, false);
     this.bones = new Float32Array(12 * t.names.length);
@@ -272,6 +284,9 @@ export class NearSailors extends SailorRows {
     const c = Math.cos(b.rudder);
     const sn = Math.sin(b.rudder);
     s.boat.hinge.set(k.x + v.x * c + v.z * sn, s.boat.hingeRest.y, k.z + v.z * c - v.x * sn);
+    if (s.boat.wheel) {
+      s.boat.wheel.turn = wheelTurn(b.rudder, this.boat.rudderMax ?? 0);
+    }
     const rt = s.runtime;
     rt.update(mo);
     const rig = rt.rig;

@@ -535,7 +535,10 @@ def make_clips(job, v, fig, lib, kinds, gates, renderer, lookmat, work, worn=())
         act, slot = motion.write_action(fig.arm, as_(name), clip.frames, clip.fps)
         actions.append((act, slot))
         fig.made[name] = (act, slot, clip)
-        places[f"place-{as_(name)}"] = clip.place.copy()
+        # A clip at the wheel is placed from the helmsman's place, as the
+        # game places it from the boat's `sailor` node.
+        places[f"place-{as_(name)}"] = (Matrix.Translation(-fig.stage.wheel.at) @ clip.place
+                                        if getattr(clip, "standing", False) else clip.place.copy())
         fig.quiet()
         measures, track = judge.check(fig, clip, act, slot, m["gate"], m["ranges"], proxies)
         fig.quiet(False)

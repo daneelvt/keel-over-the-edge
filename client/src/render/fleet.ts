@@ -109,6 +109,7 @@ import { litMaterial, sailGlow } from './materials';
 import { placeSailor, SAILING, type SailorFrame, type SailorPlace } from './sailor';
 import { type ArtFiles, type FleetLook, FleetLooks } from './sailors/fleetlooks';
 import {
+  type NearBoat,
   NearSailors,
   nearSailorNodes,
   ROW_HEAD,
@@ -117,8 +118,10 @@ import {
   swayOf,
 } from './sailors/fleetsailors';
 import { type SailorColours, sailorColours, sailorMaterial } from './sailors/material';
+import { NO_SOLID } from './sailors/onboat';
 import { seating } from './sailors/restage';
 import { hullSolid } from './sailors/solid';
+import { wheelOf } from './sailors/wheel';
 import { Shadows } from './shadows';
 import { FLOW_LUFFING } from './telltales';
 
@@ -484,6 +487,12 @@ export class FleetView {
     this.#frame.seatZ = nearParts.seatZ;
     this.#frame.seatOut = g.x;
     this.#frame.seatY = g.y;
+    // A boat steered by a wheel has its sailor standing at it.
+    const stand = nearParts.nodes.get('sailor');
+    this.#frame.wheel =
+      wheelOf(nearParts.objects, null) !== null && stand !== undefined
+        ? { y: stand.y, z: stand.z }
+        : null;
     const shared = this.#shared;
     const time = shared.time;
     const names = shared.nameAtlas();
@@ -516,25 +525,42 @@ export class FleetView {
       span: kind.physics.foils.boardSpan,
       chord: kind.physics.foils.boardChord,
     });
-    if (
-      looks.near !== null &&
-      solid !== null &&
-      nearParts.hinge !== null &&
-      nearParts.grip !== null
-    ) {
-      const near = new NearSailors(looks.bones, NEAR_MODELS, {
-        stock: nearParts.stock,
-        hinge: nearParts.hinge,
-        extension: nearParts.hinge.distanceTo(nearParts.grip),
-        seatY: g.y,
-        seatIn: nearParts.seatIn,
-        seatOut: g.x,
-        seatZ: nearParts.seatZ,
-        cog: this.#cog,
-        solid,
-        climbTime: kind.physics.sailor.climbTime,
-        ...seating(nearParts.objects, kind.physics.sailor.hikeReach),
-      });
+    const wheel = wheelOf(nearParts.objects, null);
+    const stand = nearParts.nodes.get('sailor');
+    // Standing at a wheel: no tiller, no seat, no hull to keep out of.
+    const boat: NearBoat | null =
+      wheel !== null && stand !== undefined
+        ? {
+            stock: stand,
+            hinge: stand,
+            extension: 0,
+            seatY: stand.y,
+            seatIn: 0,
+            seatOut: 0,
+            seatZ: stand.z,
+            cog: this.#cog,
+            solid: solid ?? NO_SOLID,
+            climbTime: kind.physics.sailor.climbTime,
+            wheel,
+            rudderMax: kind.physics.foils.rudderAngle * DEG,
+          }
+        : solid !== null && nearParts.hinge !== null && nearParts.grip !== null
+          ? {
+              stock: nearParts.stock,
+              hinge: nearParts.hinge,
+              extension: nearParts.hinge.distanceTo(nearParts.grip),
+              seatY: g.y,
+              seatIn: nearParts.seatIn,
+              seatOut: g.x,
+              seatZ: nearParts.seatZ,
+              cog: this.#cog,
+              solid,
+              climbTime: kind.physics.sailor.climbTime,
+              ...seating(nearParts.objects, kind.physics.sailor.hikeReach),
+            }
+          : null;
+    if (looks.near !== null && boat !== null) {
+      const near = new NearSailors(looks.bones, NEAR_MODELS, boat);
       this.nearSailors = near;
       const seat = { y: g.y, in: nearParts.seatIn, out: g.x };
       const n = nearSailorNodes(near.texture, int(instanceIndex), this.#cog, seat, time);

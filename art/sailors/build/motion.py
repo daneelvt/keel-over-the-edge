@@ -237,7 +237,9 @@ def mirrored(pose):
     def across(v):
         return None if v is None else [-v[0], v[1], v[2]]
 
-    turn = [[other(b), axis, d if axis == "x" else -d] for b, axis, d in pose["turn"]]
+    # A bone's own x axis on one side is the other's mirrored and reversed:
+    # a turn about it keeps its sign, as one about the figure's x does.
+    turn = [[other(b), axis, d if axis in ("x", "lx") else -d] for b, axis, d in pose["turn"]]
     ik = {}
     for eff, spec in pose["ik"].items():
         t = dict(spec)
@@ -335,12 +337,14 @@ class Figure:
 
     def turn(self, turns):
         """Turns bones about the figure's axes, each about its posed head,
-        root first (as listed), carrying its children."""
+        root first (as listed), carrying its children; or, axis lx, about
+        the bone's own x axis as it lies (a finger's curl, toward the palm)."""
         for name, axis, degrees in turns:
             pb = self.bones[name]
             self.update()
             head = pb.matrix.to_translation()
-            r = Matrix.Translation(head) @ Matrix.Rotation(math.radians(degrees), 4, axis.upper()) @ Matrix.Translation(-head)
+            about = pb.matrix.to_3x3().col[0].normalized() if axis == "lx" else axis.upper()
+            r = Matrix.Translation(head) @ Matrix.Rotation(math.radians(degrees), 4, about) @ Matrix.Translation(-head)
             pb.matrix = r @ pb.matrix
         self.update()
 
@@ -494,10 +498,12 @@ class Figure:
                 p.x = -side * far
         return p
 
-    def solve(self, effector, target, pole=None):
+    def solve(self, effector, target, pole=None, grip=None, side=1):
         """Two-bone IK: the chain's end to target, the middle joint toward
         its pole (POLES, or an offset from the chest), within the reach
-        the tables allow."""
+        the tables allow; and a hand that grips (grip: its fingers' aim and
+        its palm's facing, forward, inboard and up in the stage's frame on
+        the side; weight, how far from the hand's own turn) turned so."""
         upper, lower, end = EFFECTORS[effector]
         s = self.world(upper)
         l1 = self.arm.data.bones[upper].length
@@ -538,6 +544,27 @@ class Figure:
         elbow = s + dn * a + toward * h
         self._aim(upper, elbow)
         self._aim(lower, t)
+        if grip is not None and effector.startswith("hand"):
+            self.grip(end, grip, side)
+
+    def grip(self, name, grip, side=1):
+        """Turns a hand so its fingers point along grip["aim"] and its palm
+        (the bone's own z) faces grip["palm"], both in the stage's frame
+        on the side (forward, inboard, up), as far as grip["weight"] (1 if
+        not said) from its turn as it is."""
+        self.update()
+        frame = self.stage.frame(side).to_3x3()
+        y = (frame @ Vector(grip["aim"])).normalized()
+        z = frame @ Vector(grip["palm"])
+        z = (z - y * z.dot(y)).normalized()
+        x = y.cross(z)
+        want = Matrix((x, y, z)).transposed().to_quaternion()
+        m = self.world_matrix(name)
+        now = m.to_quaternion()
+        q = now.slerp(want, grip.get("weight", 1.0))
+        local = self.arm.matrix_world.inverted() @ Matrix.LocRotScale(m.to_translation(), q, None)
+        self.bones[name].matrix = local
+        self.update()
 
     def clear_leg(self, s):
         """Turns a leg at the hip, a few degrees at a time, the least way
@@ -668,6 +695,12 @@ class Figure:
             if spec and spec.get("planted") and eff.startswith("foot") and spec["at"] != "free":
                 # A foot planted on what it stands on, its heel not under it.
                 at[eff].z = max(at[eff].z, self.stage.point(spec["at"], side).z + HEEL_CLEAR)
+        for eff, spec in pose["ik"].items():
+            if spec.get("grip") is not None and eff.startswith("hand"):
+                # A hand that grips: turned to it with the arm on its target,
+                # and kept so against the forearm, as a joint of the key.
+                self.solve(eff, at[eff], spec.get("pole"), spec["grip"], side)
+                rot[eff] = self.bones[eff].rotation_quaternion.copy()
         return {"rot": rot, "place": place, "ik": pose["ik"], "side": side, "at": at,
                 "pelvis": self.bones["pelvis"].location.copy()}
 
@@ -675,7 +708,7 @@ class Figure:
         """Sets a pose from the library, placed and IK solved."""
         k = self.key(pose, side)
         for eff, spec in k["ik"].items():
-            self.solve(eff, self.target(spec, side, eff), spec.get("pole"))
+            self.solve(eff, self.target(spec, side, eff), spec.get("pole"), spec.get("grip"), side)
         self.derive()
         return k
 
