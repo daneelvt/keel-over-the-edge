@@ -371,7 +371,7 @@ func (p *process) openWorld(ctx context.Context, rw *readyWorld) (*worldHalf, er
 		cat: cat, bus: b, bundle: rw.bundle, made: rw.held.made, sailed: row, wcfg: p.wcfg, timeline: timeline, terrain: rw.terrain,
 		db: p.db, sessions: p.sessions, game: h.game, charts: rw.charts, clock: h.loop, page: p.ownPage, log: p.log, metrics: p.metrics,
 		lifecycle: p, from: p.nextView.Load(), forecasts: h.forecasts, agents: p.agents, hand: p.hand,
-		aiCap: world.AICap(), aiReserve: world.AIReserve(),
+		aiCap: world.AICap(), aiReserve: world.AIReserve(), life: rw.life,
 	})
 	playCfg := api.Config{
 		Version:   api.Version{Build: p.build, Catalog: catalog.Version},

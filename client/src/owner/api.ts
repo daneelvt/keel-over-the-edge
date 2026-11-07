@@ -145,6 +145,23 @@ export interface WorldNow {
   queue: Waiting[];
   admission: Admission;
   spectators: Spectators;
+  /** The sea's life alive, each group where its middle is now. */
+  life?: LifeGroup[];
+}
+
+/**
+ * A group of the sea's life on the map: its id, its kind's name and form,
+ * how many, its middle (m east, north and up), and the boat it is with.
+ */
+export interface LifeGroup {
+  id: number;
+  kind: string;
+  form: string;
+  count: number;
+  east: number;
+  north: number;
+  up: number;
+  boat?: number;
 }
 
 export interface Island {
