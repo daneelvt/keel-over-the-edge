@@ -2166,9 +2166,17 @@ const sheathed = (y: number): Vec3 => {
   return shade(COPPER, tone);
 };
 
-/** The keel's half-thickness at its root (fairing into the hull's body) and its foot. */
-const KEEL_ROOT_T = 0.45;
+/**
+ * The keel's half-thickness at its foot, and at its root inside the hull's
+ * body: a share of the body's breadth there, so that below a shallow body
+ * the keel and deadwood read as the hull's lower part, narrowing to the
+ * keel.
+ */
 const KEEL_FOOT_T = 0.24;
+const rootT = (z: number): number => {
+  const u = uAt(z);
+  return Math.min(1.3, Math.max(KEEL_FOOT_T, 0.42 * breadth(u, keelY(u) + 0.25)));
+};
 
 /**
  * The keel, in its node's frame (the keel's station): its root inside the
@@ -2183,7 +2191,7 @@ function keel(): MeshBuilder {
   for (let i = 0; i <= n; i++) {
     const z = -c / 2 + (c * i) / n;
     const top = keelY(uAt(z - foils.boardPosition)) + 0.25;
-    cols.push([z, top, KEEL_BOTTOM, KEEL_ROOT_T, KEEL_FOOT_T]);
+    cols.push([z, top, KEEL_BOTTOM, rootT(z - foils.boardPosition), KEEL_FOOT_T]);
   }
   plate(m, cols, sheathed);
   return m;
@@ -2204,12 +2212,18 @@ function deadwood(): MeshBuilder {
   for (let i = 0; i <= n; i++) {
     const z = lerp(KEEL_AFT_Z - 0.3, POST_Z, i / n);
     const top = keelY(uAt(z)) + 0.25;
-    const t = lerp(KEEL_ROOT_T, 0.2, i / n);
-    aft.push([z - at, Math.max(top, KEEL_BOTTOM + 0.3), KEEL_BOTTOM, t, Math.min(t, KEEL_FOOT_T)]);
+    const t = Math.max(0.2, rootT(z));
+    aft.push([
+      z - at,
+      Math.max(top, KEEL_BOTTOM + 0.3),
+      KEEL_BOTTOM,
+      t,
+      lerp(KEEL_FOOT_T, 0.2, i / n),
+    ]);
   }
   plate(m, aft, sheathed);
   const fore: [number, number, number, number, number][] = [];
-  const reach = 1.6;
+  const reach = Math.max(1.6, 0.45 * (1 - U_FORE) * L);
   for (let i = 0; i <= n; i++) {
     const f = i / n;
     const z = KEEL_FORE_Z + 0.3 - f * (reach + 0.3);
@@ -2217,7 +2231,8 @@ function deadwood(): MeshBuilder {
     const s = Math.max(0, (KEEL_FORE_Z - z) / reach);
     const end = keelY(uAt(KEEL_FORE_Z - reach));
     const bottom = Math.min(top - 0.05, KEEL_BOTTOM + (end - KEEL_BOTTOM) * s * s);
-    fore.push([z - at, top, bottom, KEEL_ROOT_T * (1 - 0.6 * f), KEEL_FOOT_T * (1 - 0.6 * f)]);
+    const t = Math.max(0.1, rootT(Math.min(z, KEEL_FORE_Z)) * (1 - 0.6 * f));
+    fore.push([z - at, top, bottom, t, KEEL_FOOT_T * (1 - 0.6 * f)]);
   }
   plate(m, fore, sheathed);
   return m;
