@@ -306,7 +306,7 @@ poses:
   # Written for the wind over the starboard side: windward is to the right.
   wheel-base:
     place: wheel
-    shift: [0.14, 0.0, 0.02]
+    shift: [0.14, 0.0, 0.005]
     turn:
       - [spine_01, x, 6]
       - [spine_02, x, 4]
@@ -320,8 +320,8 @@ poses:
         { at: wheel-left, offset: [-0.075, 0.035, 0.0], grip: { aim: [1, 0, 0.1], palm: [0.2, -1, -0.1] } }
       hand_r:
         { at: wheel-right, offset: [-0.075, -0.035, 0.0], grip: { aim: [1, 0, 0.1], palm: [0.2, 1, -0.1] } }
-      foot_l: { at: deck, offset: [0.16, 0.15, 0.12] }
-      foot_r: { at: deck, offset: [-0.03, -0.15, 0.12] }
+      foot_l: { at: deck, offset: [0.17, 0.15, 0.12] }
+      foot_r: { at: deck, offset: [0.0, -0.15, 0.12] }
 
   # The left hand's fingers round its spoke: what a habit keeps when the
   # right hand leaves the wheel.

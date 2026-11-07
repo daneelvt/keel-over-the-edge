@@ -695,6 +695,20 @@ class Figure:
             if spec and spec.get("planted") and eff.startswith("foot") and spec["at"] != "free":
                 # A foot planted on what it stands on, its heel not under it.
                 at[eff].z = max(at[eff].z, self.stage.point(spec["at"], side).z + HEEL_CLEAR)
+        if pose["place"] == STANDS:
+            # Standing, a foot's target as high as its toes need to be on
+            # the deck with the foot set on it (a trailing foot's heel off
+            # it), so the bake never lifts it off its target.
+            for eff, spec in pose["ik"].items():
+                if eff.startswith("foot") and spec["at"] not in ("bone", "free") and not spec.get("planted"):
+                    surface = self.stage.point(spec["at"], side).z
+                    for _ in range(3):
+                        self.solve(eff, at[eff], spec.get("pole"))
+                        self.level_foot(eff)
+                        low = min(self.toes(eff) - TOE_CLEAR, self.world(EFFECTORS[eff][2]).z - HEEL_CLEAR) - surface
+                        if low >= -1e-4:
+                            break
+                        at[eff].z -= low
         for eff, spec in pose["ik"].items():
             if spec.get("grip") is not None and eff.startswith("hand"):
                 # A hand that grips: turned to it with the arm on its target,
