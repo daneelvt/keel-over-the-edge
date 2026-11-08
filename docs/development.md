@@ -3606,10 +3606,13 @@ go run ./cmd/keel admin -addr 127.0.0.1:9090 show 0199…
 of the shell's history), `show ID`, `stop ID -reason …`, `start ID`,
 `revoke ID -reason …`, `delete ID -name … -reason …`, `flag ID on|off`,
 `priority ID on|off`, `cap ID N`, `lifetime 90d`, `actions [ID]`,
-`settings`, `links on|off`, `boarding on|off`, `linklife 24h`; text, or
-`-json` as keel answers. Without `-yes`, `stop`, `revoke`, `delete`,
-`lifetime`, `links off` and `linklife` only say what they would do. The command's actions are recorded
-as `command` (the `Keel-Source` header).
+`settings`, `links on|off`, `boarding on|off`, `linklife 24h`, `chat
+on|off`, `shipmates on|off`, `countries BR,AU` (`""` clears them),
+`reports`, `report ID` and `act ID ACTION` (see [Reports](#reports)); text,
+or `-json` as keel answers. Without `-yes`, `stop`, `revoke`, `delete`,
+`lifetime`, `links off`, `linklife`, `chat off` and `act` only say what
+they would do. The command's actions are recorded as `command` (the
+`Keel-Source` header).
 
 ### Links to come aboard
 
@@ -3626,6 +3629,56 @@ Links off ends every live link for good; a shorter lifetime stops older
 links at once and ends nothing, but a longer one never lengthens a link
 past the expiry it was made with. The `sessions` job deletes links a day
 after they stop working; a deleted skipper's go with the account.
+
+**Chat's switches** sit beside them, on the same card and in the same
+`setting` row: chat on or off for everyone (off is asked once, "Chat off
+for everyone? Every line stops at once"), shipmates' messages on or off
+(a switch for later), and the countries where chat is off, two letters
+each as ISO 3166 has them (`BR, AU`; nothing for none). The settings'
+routes take `"chat"`, `"shipmateMessages"` and `"chatCountries"` too;
+each change is recorded, then every game connection is told how chat
+stands for it.
+
+### Reports
+
+**The Reports tab**, beside Accounts, is the queue of reports open
+(`GET /owner/api/reports.json`, read every 10 s while it shows): a
+child's safety first, marked plainly, then the players with the most
+reports open, then the oldest. Each row has the reason, who reported whom
+(a machine sailor marked), where, the reports open on that player, the
+lines it holds, an answer from the player waiting, and how long it has
+waited. A row opens **the report** (`GET /owner/api/report.json?id=`):
+who reported and who is reported (with a machine sailor's human), where,
+who was aboard and their bands, the note, whether it is still taking the
+next 10 minutes of the conversation, the lines it holds in time order
+(the one reported marked; the players' words shown as text, never
+markup), the owner's notes and the player's answer, a notice's details,
+and its outcome, hold and referral. The lines are shown here and nowhere
+else: a line of chat is only ever written down in a report. An account's
+card links the reports open on it and its machine sailors, by name.
+
+**The actions**, each `POST /owner/api/reports/act {"report", "action",
+…}`, first with `"check": true`, whose words the confirmation shows, and
+then done; the queue is read again after:
+
+| Action | What it does |
+|---|---|
+| `dismiss` | Closes the report; nobody is told |
+| `warn` (`"note"`: what was seen) | A statement of reasons at the player's next entry; every report open on them closes |
+| `mute-chat` (`"days"`: 1, 7 or 30) | The player's chat muted, and they are told why |
+| `stop`, `delete` (`"reason"`, required) | As on the account's card, on the account reported; the page asks the reported name typed again to delete |
+| `remove-line` (`"line"`, `"at"` as `report.json` gives them) | The line goes from the game's memory and every report holding it; its sender is told why |
+| `purge` | Every line the report holds goes, from every report holding it |
+| `hold`, `release` | Kept a year at least, past its accounts' deletion; or kept as any other |
+| `under-13` | The human deleted as under 13 |
+| `referred` (`"referred"`: to whom, and its reference) | Recorded as referred |
+
+A machine sailor's words are its human's to answer for: a warning or a
+mute reaches the human. `keel admin reports` lists the queue, `keel admin
+report ID` writes a report whole with its lines (each with the `-line`
+and `-at` to remove it), and `keel admin act ID ACTION [-days N] [-reason
+…] [-note …] [-line N -at T] [-referred …] [-yes]` acts, telling first
+without `-yes`.
 
 ### The free camera
 
