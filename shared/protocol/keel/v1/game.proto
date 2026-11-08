@@ -539,6 +539,10 @@ message LifeEncounter {
   // slot n, and 255 a boat this connection does not see, so it is drawn
   // nowhere.
   uint32 with = 12;
+  // The encounter on whose patch it comes, 0 for none: the birds and the
+  // dolphins with bait, the flying fish a boat flushes from a ground. One
+  // with a kind that moves otherwise over another's patch moves so.
+  uint64 over = 13;
 }
 
 // Light is a lighthouse's light. It shows its character's light and dark

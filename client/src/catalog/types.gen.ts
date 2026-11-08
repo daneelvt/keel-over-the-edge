@@ -87,19 +87,33 @@ export type LifeForm = "bird" | "glider" | "bait" | "pod" | "turtle" | "whale" |
  */
 export type LifeFamily = "birds" | "water" | "big" | "night";
 /**
- * How it moves when it is with no boat: passing through, soaring in circles, skimming the swell in arcs, or working a patch of water.
+ * How it moves when it is with no boat: passing through, soaring in circles, skimming the swell in arcs, working a patch of water, staying about its patch, or drifting from where it began.
  *
  * This interface was referenced by `Catalog`'s JSON-Schema
  * via the `definition` "LifePath".
  */
-export type LifePath = "pass" | "soar" | "skim" | "work";
+export type LifePath = "pass" | "soar" | "skim" | "work" | "stay" | "drift";
 /**
- * What it does with a boat it meets, if anything: follows its stern.
+ * What it does with a boat it meets, if anything: follows its stern, rides its bow, or, a ground of fish, is flushed by every boat sailing through it.
  *
  * This interface was referenced by `Catalog`'s JSON-Schema
  * via the `definition` "LifeBinds".
  */
-export type LifeBinds = "follow";
+export type LifeBinds = "follow" | "ride" | "flush";
+/**
+ * How it moves over the patch of a group it comes with, if not by its own path: working it, or staying over it.
+ *
+ * This interface was referenced by `Catalog`'s JSON-Schema
+ * via the `definition` "LifeOver".
+ */
+export type LifeOver = "work" | "stay";
+/**
+ * A body of the life in the water, a model in the life's art.
+ *
+ * This interface was referenced by `Catalog`'s JSON-Schema
+ * via the `definition` "LifeBody".
+ */
+export type LifeBody = "dolphin" | "turtle" | "flyingfish" | "tarpon";
 
 /**
  * Every list of kinds in the game. Kinds are data: code reads their properties, never their names.
@@ -8154,6 +8168,7 @@ export interface NewsColumn {
  * via the `definition` "Life".
  */
 export interface Life {
+  art: LifeArt;
   /**
    * The schedule's cells' side, in m.
    */
@@ -8168,6 +8183,8 @@ export interface Life {
    */
   quiet: number;
   bind: LifeBind;
+  ride: LifeRide;
+  flush: LifeFlush;
   /**
    * An encounter sent is dropped once the eye is this far beyond its reach, in m.
    */
@@ -8214,6 +8231,12 @@ export interface Life {
   kinds: [LifeKind, ...LifeKind[]];
 }
 /**
+ * The bodies of the life in the water, one model each.
+ */
+export interface LifeArt {
+  model: ArtPath;
+}
+/**
  * How long after an encounter of a family begins no other of the family begins in its cell or the eight about it, in s.
  */
 export interface LifeLulls {
@@ -8242,6 +8265,28 @@ export interface LifeBind {
    * A course is steady while the heading stays within this of where it was, in degrees.
    */
   turn: number;
+}
+/**
+ * How far a group that rides bows comes from to a boat, in m, by the bind's other rules; and when it leaves the bow at once: the boat slower than this, in m/s, or turned more than this from its heading as the ride began, in degrees.
+ */
+export interface LifeRide {
+  within: number;
+  slower: number;
+  turn: number;
+}
+/**
+ * How a boat sailing through a ground flushes its fish: every so many s, by a draw of the boat, the ground and that slot, at this chance, if it sails at the bind's speed or faster; the fish come up this long after, this far ahead of its bow and up to this far either side of its course, in m.
+ */
+export interface LifeFlush {
+  every: number;
+  chance: number;
+  lead: number;
+  /**
+   * @minItems 2
+   * @maxItems 2
+   */
+  ahead: [number, number];
+  beside: number;
 }
 /**
  * Where each habitat is.
@@ -8310,6 +8355,22 @@ export interface LifeKind {
   family: LifeFamily;
   path: LifePath;
   binds?: LifeBinds;
+  over?: LifeOver;
+  /**
+   * The groups that come with it, on its patch, from its start to its end.
+   */
+  brings?: LifeBring[];
+  /**
+   * How far its patch reaches from its middle, the least and the most, in m: a ground of flying fish, a boil of bait.
+   *
+   * @minItems 2
+   * @maxItems 2
+   */
+  patch?: [number, number];
+  /**
+   * What a group of it is called, as a pod of dolphins.
+   */
+  collective?: string;
   /**
    * Its plunges, each bird a minute.
    */
@@ -8384,6 +8445,22 @@ export interface LifeKind {
    */
   reach: number;
   look?: BirdLook;
+  swim?: SwimLook;
+}
+/**
+ * A group that comes with another: its kind, by its id; the share of the other's groups it comes with; and how many in it.
+ *
+ * This interface was referenced by `Catalog`'s JSON-Schema
+ * via the `definition` "LifeBring".
+ */
+export interface LifeBring {
+  kind: string;
+  share: number;
+  /**
+   * @minItems 2
+   * @maxItems 2
+   */
+  count: [number, number];
 }
 /**
  * Its weight in each habitat: a point is its harbour's if within one, else its reef's, else the outer water's, else the shelf's or the deep's.
@@ -8403,6 +8480,69 @@ export interface LifeWhen {
   dusk: number;
   night: number;
 }
+/**
+ * How an animal in the water looks and moves: its body, scaled to its length; its back's and belly's colours; its tail's or flippers' beats; its leaps a minute and the spins in each; a glider's glides; its breaths at each surfacing and its dives between them; and what is heard of it.
+ *
+ * This interface was referenced by `Catalog`'s JSON-Schema
+ * via the `definition` "SwimLook".
+ */
+export interface SwimLook {
+  body: LifeBody;
+  /**
+   * Its length, in m.
+   */
+  length: number;
+  back: Colour3;
+  belly: Colour3;
+  /**
+   * Its tail's or flippers' beats, in Hz.
+   */
+  beat: number;
+  /**
+   * How deep it swims between its breaths, in m.
+   */
+  depth: number;
+  /**
+   * Its leaps clear of the water, each animal a minute.
+   */
+  leaps?: number;
+  /**
+   * The spins in a leap, the least and the most.
+   *
+   * @minItems 2
+   * @maxItems 2
+   */
+  spins?: [number, number];
+  /**
+   * A glide's length, the least and the most, in m.
+   *
+   * @minItems 2
+   * @maxItems 2
+   */
+  glide?: [number, number];
+  /**
+   * The longest glides linked one after another, in m.
+   */
+  linked?: number;
+  /**
+   * Its breaths at each surfacing, the least and the most.
+   *
+   * @minItems 2
+   * @maxItems 2
+   */
+  breaths?: [number, number];
+  /**
+   * How long it is down between surfacings, the least and the most, in s.
+   *
+   * @minItems 2
+   * @maxItems 2
+   */
+  dive?: [number, number];
+  /**
+   * What is heard of it: its breath, or nothing but its splashes.
+   */
+  call: "breath" | "silent";
+}
 
 /** The catalog version (tools/catalog). */
-export const CATALOG_VERSION = '370c8c926db17136';
+export const CATALOG_VERSION = '730d4c4ea4fde401';

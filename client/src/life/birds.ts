@@ -30,7 +30,16 @@
 
 import type { LifeKind } from '../catalog/types.gen';
 import type { LifeSeen } from '../net/messages';
-import { type FlockPlace, flockAt, flockHeight, hash32, lerp, own, type Pose } from './flock';
+import {
+  type FlockPlace,
+  flockAt,
+  flockHeight,
+  hash32,
+  lerp,
+  own,
+  type Pose,
+  pathOf,
+} from './flock';
 
 /** Ticks a second of world time. */
 const STEPS = 30;
@@ -49,9 +58,10 @@ const CATCH = 2.5;
 /** The most a bank is, radians. */
 const BANK = 0.9;
 
-/** A boat a group is with: its pose, and its speed over the ground along its heading, m/s, if known. */
+/** A boat a group is with: its pose, its speed over the ground along its heading, m/s, and how far its stem is ahead of its middle, m, if known. */
 export interface BoatAt extends Pose {
   speed?: number;
+  bow?: number;
 }
 
 /** Where a bird is and how it flies. */
@@ -269,7 +279,7 @@ function spotAt(
       lerp(Math.min(4, mid.up), mid.up, own(s, 7)) +
       2 * wave(u, lerp(6, 11, own(s, 8)), own(s, 10));
   } else {
-    switch (k.path) {
+    switch (pathOf(k, e)) {
       case 'soar': {
         const r = lerp(40, 140, own(s, 1));
         const speed = lerp(7, 10, own(s, 2));

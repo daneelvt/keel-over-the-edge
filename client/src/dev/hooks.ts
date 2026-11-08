@@ -104,7 +104,7 @@ import { rungName, TIERS } from '../render/quality';
 import { CAMERA_PRESETS, type CameraView, type SeaScene } from '../render/scene';
 import { look } from '../render/sky';
 import type { SandboxForecast } from '../sandbox/forecast';
-import { lifeScene } from '../sandbox/lifescene';
+import { lifeScene, raiseScene } from '../sandbox/lifescene';
 import { KNOT, type Sandbox, SEA_STATES } from '../sandbox/sandbox';
 import { startWakeScene, type WakeSceneName, wakeSceneHost } from '../sandbox/wakescenes';
 import { hourAt, moonAgeAt, skyPeriods } from '../sky/skytime';
@@ -1917,8 +1917,16 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
       drawn: number;
       draws: number;
       towns: GullTown[];
+      swimmers: number;
+      swimDraws: number;
+      swimLoaded: boolean;
+      swimTriangles: number;
+      tinted: boolean;
+      splashes: number;
+      boils: number;
     } {
       const s = world.lifeDraw.stats;
+      const w = world.swimmers.stats;
       return {
         towns: world.lifeDraw.towns.map((t) => ({ ...t })),
         records: [...world.life.values()],
@@ -1926,6 +1934,13 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
         gulls: s.gulls,
         drawn: world.birds.stats.birds,
         draws: world.birds.stats.draws,
+        swimmers: w.swimmers,
+        swimDraws: w.draws,
+        swimLoaded: w.loaded,
+        swimTriangles: w.triangles,
+        tinted: world.swimmers.tinted,
+        splashes: world.lifeDraw.splashCount,
+        boils: world.lifeDraw.boilCount,
       };
     },
     /**
@@ -1937,21 +1952,51 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
       const f = world.lifeFrame(stage.camera.position, false);
       return world.lifeDraw.birdsAt(world.life, f, tick ?? world.ticks);
     },
+    /** The boat a group of the sea's life is with, as this page draws it now; null for none or one not drawn. */
+    lifeWith(id: string): { east: number; north: number; heading: number } | null {
+      const e = world.life.get(id);
+      if (e === undefined) {
+        return null;
+      }
+      const p = world.lifeDraw.pose(e, world.lifeFrame(stage.camera.position, false));
+      return p === null || p === undefined
+        ? null
+        : { east: p.east, north: p.north, heading: p.heading };
+    },
+    /**
+     * The animals of the sea's life in the water within reach of the camera
+     * at a tick, now by default, each one's group, number and place, up from
+     * the water's surface: two pages compared at one tick see the same.
+     */
+    lifeSwimmers(tick?: number): LifeBird[] {
+      const f = world.lifeFrame(stage.camera.position, false);
+      return world.lifeDraw.swimmersAt(world.life, f, tick ?? world.ticks);
+    },
     /**
      * Raises a group of a kind, by its id, by the boat now: its middle
      * east and north of the boat by so many m (200 m ahead by default)
-     * at once, as ?life raises one 40 s after the load. Its record, or
-     * null for a kind not in the catalog.
+     * at once, as ?life raises one 40 s after the load; free, a kind that
+     * follows or rides boats passes by as if there were none. Its record,
+     * or null for a kind not in the catalog.
      */
-    raiseLife(kindId: string, eastOff?: number, northOff?: number): LifeSeen | null {
+    raiseLife(kindId: string, eastOff?: number, northOff?: number, free = false): LifeSeen | null {
       const kind = catalog.life.kinds.findIndex((k) => k.id === kindId);
       const offset =
         eastOff === undefined && northOff === undefined
           ? undefined
           : { east: eastOff ?? 0, north: northOff ?? 0 };
-      const e = lifeScene(catalog.life, kind, world.ticks, world.pose, ++lifeRaised, 0, offset);
+      const e = lifeScene(
+        catalog.life,
+        kind,
+        world.ticks,
+        world.pose,
+        ++lifeRaised,
+        0,
+        offset,
+        free,
+      );
       if (e !== null) {
-        world.life.set([e], []);
+        raiseScene(world, e, catalog.life);
       }
       return e;
     },

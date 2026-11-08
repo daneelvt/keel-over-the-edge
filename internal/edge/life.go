@@ -152,7 +152,7 @@ func lifeAdd(m *pb.Life, e *bus.LifeEncounter, with uint32) *pb.Life {
 	m.Encounters = append(m.Encounters, &pb.LifeEncounter{
 		Id: e.ID, Rev: e.Rev, Kind: uint32(e.Kind), Start: e.Start, End: e.End,
 		East: int32(math.Round(e.East * 100)), North: int32(math.Round(e.North * 100)),
-		Heading: float32(e.Heading), Speed: float32(e.Speed), Count: uint32(e.Count), Seed: e.Seed, With: with,
+		Heading: float32(e.Heading), Speed: float32(e.Speed), Count: uint32(e.Count), Seed: e.Seed, With: with, Over: e.Over,
 	})
 	return m
 }

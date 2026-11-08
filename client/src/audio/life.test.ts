@@ -19,6 +19,7 @@ function kindOf(call: string): number {
 
 const record = (kind: number, change: Partial<LifeSeen> = {}): LifeSeen => ({
   id: '1',
+  over: '',
   rev: 0,
   kind,
   start: 30 * 900,

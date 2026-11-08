@@ -3119,7 +3119,11 @@ type LifeEncounter struct {
 	// connection's own boat or the one it watches, 2 + n the boat in view
 	// slot n, and 255 a boat this connection does not see, so it is drawn
 	// nowhere.
-	With          uint32 `protobuf:"varint,12,opt,name=with,proto3" json:"with,omitempty"`
+	With uint32 `protobuf:"varint,12,opt,name=with,proto3" json:"with,omitempty"`
+	// The encounter on whose patch it comes, 0 for none: the birds and the
+	// dolphins with bait, the flying fish a boat flushes from a ground. One
+	// with a kind that moves otherwise over another's patch moves so.
+	Over          uint64 `protobuf:"varint,13,opt,name=over,proto3" json:"over,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -3234,6 +3238,13 @@ func (x *LifeEncounter) GetSeed() uint32 {
 func (x *LifeEncounter) GetWith() uint32 {
 	if x != nil {
 		return x.With
+	}
+	return 0
+}
+
+func (x *LifeEncounter) GetOver() uint64 {
+	if x != nil {
+		return x.Over
 	}
 	return 0
 }
@@ -5205,7 +5216,7 @@ const file_keel_v1_game_proto_rawDesc = "" +
 	"\n" +
 	"encounters\x18\x01 \x03(\v2\x16.keel.v1.LifeEncounterR\n" +
 	"encounters\x12\x12\n" +
-	"\x04drop\x18\x02 \x03(\x04R\x04drop\"\x85\x02\n" +
+	"\x04drop\x18\x02 \x03(\x04R\x04drop\"\x99\x02\n" +
 	"\rLifeEncounter\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x04R\x02id\x12\x10\n" +
 	"\x03rev\x18\x02 \x01(\rR\x03rev\x12\x12\n" +
@@ -5219,7 +5230,8 @@ const file_keel_v1_game_proto_rawDesc = "" +
 	"\x05count\x18\n" +
 	" \x01(\rR\x05count\x12\x12\n" +
 	"\x04seed\x18\v \x01(\rR\x04seed\x12\x12\n" +
-	"\x04with\x18\f \x01(\rR\x04with\"\xc8\x01\n" +
+	"\x04with\x18\f \x01(\rR\x04with\x12\x12\n" +
+	"\x04over\x18\r \x01(\x04R\x04over\"\xc8\x01\n" +
 	"\x05Light\x12\x16\n" +
 	"\x06number\x18\x01 \x01(\rR\x06number\x12\x12\n" +
 	"\x04east\x18\x02 \x01(\x11R\x04east\x12\x14\n" +

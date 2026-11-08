@@ -64,6 +64,7 @@ import {
   min,
   positionGeometry,
   screenCoordinate,
+  select,
   sin,
   smoothstep,
   texture,
@@ -289,6 +290,7 @@ export class FoamMap {
     // x to starboard, z aft.
     const at = varying(vec2(local.x, local.y.negate()));
     const speed = varying(stamp.w);
+    const spotRing = varying(stamp.z);
     const dt = this.#dt as unknown as Node<'float'>;
     sm.fragmentNode = Fn(() => {
       const aft = hull.x;
@@ -317,7 +319,20 @@ export class FoamMap {
       const from = hull.w;
       const driven = clamp(speed.sub(from).div(from.mul(WAKE.transomFull)), 0, 1);
       const white = tongue.mul(driven).mul(min(speed.mul(dt).div(WAKE_TAIL), 1));
-      return vec4(max(white, 0), max(churn, 0), 0, 1);
+      // A spot (its hull's last word below nought): white water laid at
+      // once about its middle, a disc or a ring, as much as its speed says,
+      // where something broke the water.
+      const d = dot(at, at).sqrt().div(beam);
+      const disc = float(1).sub(smoothstep(0.4, 1, d));
+      const ring = smoothstep(0.45, 0.75, d).mul(float(1).sub(smoothstep(0.8, 1, d)));
+      const spot = select(spotRing.greaterThan(0.5), ring, disc).mul(speed);
+      const isSpot = hull.w.lessThan(0);
+      return vec4(
+        max(select(isSpot, spot, white), 0),
+        max(select(isSpot, spot.mul(0.5), churn), 0),
+        0,
+        1,
+      );
     })() as unknown as Node<'vec4'>;
     return sm;
   }
@@ -398,6 +413,30 @@ export class FoamMap {
     hulls[at + 1] = h.fore;
     hulls[at + 2] = h.halfBeam;
     hulls[at + 3] = h.transomFrom;
+    this.#count++;
+  }
+
+  /**
+   * A spot of white water at a place in the world, radius m across its
+   * middle, white 0 to 1 laid at once: a disc, or a ring where something
+   * broke the water. It is stamped if it lies in the square and there is
+   * room after the boats.
+   */
+  spot(east: number, north: number, radius: number, white: number, ring = false): void {
+    if (this.#count >= STAMPS || !(white > 0) || !(radius > 0)) {
+      return;
+    }
+    const at = this.#count * 4;
+    this.#stampData[at] = east;
+    this.#stampData[at + 1] = north;
+    this.#stampData[at + 2] = ring ? 1 : 0;
+    this.#stampData[at + 3] = white;
+    const hulls = this.#stampHulls;
+    hulls[at] = radius;
+    hulls[at + 1] = -radius;
+    hulls[at + 2] = radius;
+    hulls[at + 3] = -1;
+    this.#reach = Math.max(this.#reach, radius + WAKE_TAIL);
     this.#count++;
   }
 

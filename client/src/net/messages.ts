@@ -178,7 +178,8 @@ export interface LightSeen {
  * east and north), its heading (radians clockwise from north) and speed
  * (m/s), how many, its own seed, and the boat it is with: 0 none, 1 the
  * page's own boat or the one it watches, 2 + n the boat in view slot n,
- * 255 a boat the page does not see.
+ * 255 a boat the page does not see; and the encounter on whose patch it
+ * comes, '' for none.
  */
 export interface LifeSeen {
   id: string;
@@ -193,6 +194,7 @@ export interface LifeSeen {
   count: number;
   seed: number;
   with: number;
+  over: string;
 }
 
 /** What can be charted: an island, a place or a feature. */

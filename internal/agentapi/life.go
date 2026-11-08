@@ -16,17 +16,22 @@ import (
 	"github.com/daneelvt/keel-over-the-edge/internal/life"
 	"github.com/daneelvt/keel-over-the-edge/internal/lookout"
 	"github.com/daneelvt/keel-over-the-edge/internal/physics"
+	"github.com/daneelvt/keel-over-the-edge/internal/weather"
 )
 
 // The sea's life as the lookout sees it: each group in the frame whose
 // middle, where every phone draws it, is within its kind's reach of the
-// boat and within the visibility there, and, for birds, while the sun is
-// up over it. Groups are told by what they are and do, "two brown boobies
-// flying low", and where they are, by compass point and range; a group
-// with the boat is "following your boat".
+// boat and within the visibility there, while the sun is up over it, and
+// for life in the water seen less as the sea rises, while the sea there
+// shows it at all. Groups are told by what they are and do, "two brown
+// boobies flying low", "a pod of spotted dolphins passing", and where
+// they are, by compass point and range; a group with the boat is
+// "following your boat" or "riding your bow". The fish flushed from a
+// ground are the ground's: told once, nearest, however often a boat
+// flushes them.
 
-// lifeSeen is a group of the sea's life in sight: its id, its range, m,
-// and its line.
+// lifeSeen is a group of the sea's life in sight: its id, or for fish
+// flushed from a ground the ground's, its range, m, and its line.
 type lifeSeen struct {
 	id   uint64
 	d    float64
@@ -46,6 +51,26 @@ func poseOf(f *bus.Frame, e *bus.LifeEncounter) (*life.Pose, bool) {
 	return &life.Pose{X: st.X, Y: st.Y, Heading: st.Heading}, true
 }
 
+// lifeAtBow is how near the own boat's bow fish flushed are, as they
+// break the surface, to be flushed from it, m.
+const lifeAtBow = 40.0
+
+// lifeLeaps is the speed above which dolphins leap as they go, m/s:
+// leaping costs less than swimming above about 3.5 m/s (Au and Weihs
+// 1980).
+const lifeLeaps = 3.5
+
+// bowOf is where the bow of the boat in slot sl is, m east and north.
+func (s *Sea) bowOf(f *bus.Frame, sl int32) (x, y float64) {
+	st := &f.State[sl]
+	bow := 4.0
+	if k := int(f.Kind[sl]); k < len(s.Kinds) {
+		bow = s.Kinds[k].Bow()
+	}
+	sin, cos := math.Sincos(st.Heading)
+	return st.X + bow*sin, st.Y + bow*cos
+}
+
 // lifeInSight are the groups of the sea's life the lookout of the boat in
 // slot sl sees, nearest first.
 func (s *Sea) lifeInSight(f *bus.Frame, sl int32) []lifeSeen {
@@ -53,10 +78,12 @@ func (s *Sea) lifeInSight(f *bus.Frame, sl int32) []lifeSeen {
 		return nil
 	}
 	kinds := s.Life.Kinds()
+	p := s.Life.Params()
 	st := &f.State[sl]
 	own := f.Boat[sl]
 	wt := s.weatherAt(f)
-	weather := wt != nil && wt.Prepared() != nil
+	hasWeather := wt != nil && wt.Prepared() != nil
+	bx, by := s.bowOf(f, sl)
 	var out []lifeSeen
 	for i := range f.Life {
 		e := &f.Life[i]
@@ -74,18 +101,46 @@ func (s *Sea) lifeInSight(f *bus.Frame, sl int32) []lifeSeen {
 		}
 		dx, dy := x-st.X, y-st.Y
 		d := math.Sqrt(float64(dx*dx) + float64(dy*dy))
-		if d > k.Reach || weather && d > physics.VisibilityAt(wt, x, y) {
+		if d > k.Reach || hasWeather && d > physics.VisibilityAt(wt, x, y) {
 			continue
 		}
 		sun := s.Life.Sun(f.Tick, x, y)
-		if k.Form == catalog.LifeFormBird && !(sun > 0) {
+		if !(sun > 0) {
 			continue
 		}
-		line := groupWords(k, e) + " " + s.lifeDoing(k, e, sun, own)
-		if e.Boat != own || own == 0 {
+		if k.BySea && hasWeather && len(p.Sea) > 0 {
+			mean, _ := physics.MeanWindAt(wt, x, y)
+			if !(p.Sea[min(weather.ForceOf(mean), len(p.Sea)-1)] > 0) {
+				continue
+			}
+		}
+		id := e.ID
+		var line string
+		near := false
+		switch {
+		case k.Form == catalog.LifeFormBird:
+			doing := s.lifeDoing(k, e, sun, own)
+			line = groupWords(k, e) + " " + doing
+			near = e.Boat != 0 && e.Boat == own
+		case k.Flushes():
+			id = e.Over
+			if fx, fy := e.East-bx, e.North-by; float64(fx*fx)+float64(fy*fy) <= lifeAtBow*lifeAtBow {
+				line, near = lifeName(k.Plural)+" skittering away from your bow", true
+			} else {
+				line = lifeName(k.Plural) + " gliding"
+			}
+		case k.Rides() && e.Boat != 0 && e.Boat == own:
+			line, near = lifeName(k.Plural)+" riding your bow", true
+		default:
+			line = groupWords(k, e)
+			if doing := swimDoing(k, e); doing != "" {
+				line += " " + doing
+			}
+		}
+		if !near {
 			line += fmt.Sprintf(" to the %s, %s", point16(physics.Atan2(dx, dy)), rangeWords(d))
 		}
-		out = append(out, lifeSeen{id: e.ID, d: d, text: line})
+		out = append(out, lifeSeen{id: id, d: d, text: line})
 	}
 	slices.SortFunc(out, func(a, b lifeSeen) int {
 		if c := cmp.Compare(a.d, b.d); c != 0 {
@@ -93,14 +148,20 @@ func (s *Sea) lifeInSight(f *bus.Frame, sl int32) []lifeSeen {
 		}
 		return cmp.Compare(a.id, b.id)
 	})
-	return out
+	// The fish of a ground once, the nearest.
+	return slices.CompactFunc(out, func(a, b lifeSeen) bool { return a.id == b.id })
 }
 
 // groupWords are a group by its count and kind: "a laughing gull", "two
 // brown boobies", "a few sooty terns", "a flock of Audubon's
-// shearwaters".
+// shearwaters"; a kind with a word for its groups by it, "a pod of
+// spotted dolphins", "a boil of bait".
 func groupWords(k *life.Kind, e *bus.LifeEncounter) string {
-	switch n := e.Count; {
+	n := e.Count
+	if k.Collective != "" && (n > 1 || k.Name == k.Plural) {
+		return "a " + k.Collective + " of " + lifeName(k.Plural)
+	}
+	switch {
 	case n <= 1:
 		name := lifeName(k.Name)
 		if strings.ContainsRune("aeiou", rune(name[0])) {
@@ -128,8 +189,8 @@ func lifeName(n string) string {
 	return string(unicode.ToLower(r)) + n[size:]
 }
 
-// lifeDoing is what a group is doing as seen: following a boat; flying
-// home at dusk, for a kind that does; else as its path goes.
+// lifeDoing is what a group of birds is doing as seen: following a boat;
+// flying home at dusk, for a kind that does; else as its path goes.
 func (s *Sea) lifeDoing(k *life.Kind, e *bus.LifeEncounter, sun float64, own uint64) string {
 	switch {
 	case e.Boat != 0 && e.Boat == own:
@@ -139,7 +200,7 @@ func (s *Sea) lifeDoing(k *life.Kind, e *bus.LifeEncounter, sun float64, own uin
 	case k.Homeward && s.Life.Dusk(sun):
 		return "flying homeward"
 	}
-	switch k.Path {
+	switch k.PathOf(e) {
 	case life.PathSoar:
 		return "soaring high"
 	case life.PathWork:
@@ -159,38 +220,114 @@ func (s *Sea) lifeDoing(k *life.Kind, e *bus.LifeEncounter, sun float64, own uin
 	return "flying high"
 }
 
+// swimDoing is what a group in the water is doing as seen, "" for nothing
+// to tell (a boil of bait is its own news): riding another boat's bow;
+// feeding over another's patch; surfacing, for a turtle; leaping and
+// spinning, or rolling at the surface, for one that stays about its
+// patch; passing, or leaping as it passes when fast.
+func swimDoing(k *life.Kind, e *bus.LifeEncounter) string {
+	switch {
+	case k.Form == catalog.LifeFormBait:
+		return ""
+	case e.Boat != 0:
+		return "riding a boat's bow"
+	case e.Over != 0:
+		return "feeding"
+	case k.Form == catalog.LifeFormTurtle:
+		return "surfacing"
+	case k.Lingers():
+		if k.Swim != nil && len(k.Swim.Spins) > 0 {
+			return "leaping and spinning"
+		}
+		return "rolling at the surface"
+	case e.Speed > lifeLeaps:
+		if e.Count <= 1 && k.Name != k.Plural {
+			return "leaping as it passes"
+		}
+		return "leaping as they pass"
+	}
+	return "passing"
+}
+
+// lifeForget is how long a group, or a ground of fish, is gone from the
+// frame before coming into sight again is news again, ticks: a ground's
+// fish are flushed again and again, with gaps between.
+const lifeForget = 120 * physics.StepsPerSecond
+
 // lifeMoments are the groups of the sea's life come into sight of the
-// boat in slot sl since the helm last looked, as events: each group once.
-// told is false at the helm's first look, when what is in sight already
-// is no news. With mu held.
+// boat in slot sl since the helm last looked, as events: each group once,
+// and each ground of fish once. told is false at the helm's first look,
+// when what is in sight already is no news. With mu held.
 func (h *helm) lifeMoments(s *Sea, f *bus.Frame, sl int32, told bool) []event {
 	seen := s.lifeInSight(f, sl)
 	if len(seen) == 0 && len(h.lifeSeen) == 0 {
 		return nil
 	}
 	if h.lifeSeen == nil {
-		h.lifeSeen = map[uint64]bool{}
+		h.lifeSeen = map[uint64]int64{}
 	}
 	var out []event
 	for _, g := range seen {
-		if h.lifeSeen[g.id] {
-			continue
-		}
-		h.lifeSeen[g.id] = true
-		if told {
+		if _, ok := h.lifeSeen[g.id]; !ok && told {
 			out = append(out, event{Tick: f.Tick, Kind: evLife, Words: "life in sight: " + g.text})
 		}
+		h.lifeSeen[g.id] = f.Tick
 	}
-	// A group gone from the frame is let go: its id is not used again.
+	// A group gone from the frame a while is let go: its id is not used
+	// again, and a ground's fish flushed again later are news again.
 	if len(h.lifeSeen) > len(seen) {
-		alive := make(map[uint64]bool, len(f.Life))
 		for i := range f.Life {
-			alive[f.Life[i].ID] = true
+			e := &f.Life[i]
+			if _, ok := h.lifeSeen[e.ID]; ok {
+				h.lifeSeen[e.ID] = f.Tick
+			}
+			if _, ok := h.lifeSeen[e.Over]; ok && e.Over != 0 {
+				h.lifeSeen[e.Over] = f.Tick
+			}
 		}
-		for id := range h.lifeSeen {
-			if !alive[id] {
+		for id, at := range h.lifeSeen {
+			if f.Tick-at > lifeForget {
 				delete(h.lifeSeen, id)
 			}
+		}
+	}
+	return out
+}
+
+// lifeBreath is how near a group that breathes at the surface is heard
+// blowing, m.
+const lifeBreath = 40.0
+
+// breathLines are the breaths of the groups in the water heard about the
+// boat in slot sl, by day or night: "dolphins breathing close by", by the
+// last word of their kind's plural.
+func (s *Sea) breathLines(f *bus.Frame, sl int32) []string {
+	if s.Life == nil {
+		return nil
+	}
+	kinds := s.Life.Kinds()
+	st := &f.State[sl]
+	var out []string
+	for i := range f.Life {
+		e := &f.Life[i]
+		if int(e.Kind) >= len(kinds) {
+			continue
+		}
+		k := &kinds[e.Kind]
+		if k.Swim == nil || k.Swim.Call != catalog.SwimLookCallBreath {
+			continue
+		}
+		pose, ok := poseOf(f, e)
+		if !ok {
+			continue
+		}
+		x, y, _, alive := life.FlockAt(e, k, float64(f.Tick), pose)
+		if dx, dy := x-st.X, y-st.Y; !alive || float64(dx*dx)+float64(dy*dy) > lifeBreath*lifeBreath {
+			continue
+		}
+		words := strings.Fields(lifeName(k.Plural))
+		if line := words[len(words)-1] + " breathing close by"; !slices.Contains(out, line) {
+			out = append(out, line)
 		}
 	}
 	return out

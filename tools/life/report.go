@@ -17,6 +17,11 @@ const (
 	targetLong     = "20–30 min, common"
 	targetPassing  = "4–6 near islands, 1–2 outer"
 	targetWorking  = "about 1"
+	targetDolphins = "about 1"
+	targetBow      = "0.33–0.5"
+	targetGrounds  = "about 2"
+	targetBait     = "about 1"
+	targetTurtles  = "about 3"
 	targetNoTarget = ""
 )
 
@@ -62,6 +67,14 @@ func (t *tally) write(w io.Writer, o options, kinds bool) {
 	row("Birds passing", &t.passing, targetPassing)
 	row("Birds working the water", &t.working, targetWorking)
 	fmt.Fprintf(w, "| Groups following the boat | | | %s | %s | — |\n", per(t.followed[byDay], day[everywhere]), per(t.followed[allHours], all[everywhere]))
+	row("Dolphins in sight: pods of kinds that ride bows", t.of(func(k *life.Kind) bool { return k.Rides() }), targetDolphins)
+	fmt.Fprintf(w, "| Dolphins at the bow | | | %s | %s | %s |\n", per(t.rode[byDay], day[everywhere]), per(t.rode[allHours], all[everywhere]), targetBow)
+	row("Flying fish grounds crossed: grounds the boat flushed fish from", &t.grounds, targetGrounds)
+	row("Bait: boils in sight", t.of(func(k *life.Kind) bool { return k.Form == catalog.LifeFormBait }), targetBait)
+	turtles := t.of(func(k *life.Kind) bool { return k.Form == catalog.LifeFormTurtle })
+	row("Turtles", turtles, targetNoTarget)
+	fmt.Fprintf(w, "| Turtles an hour sailed in the reef habitat (%.0f h) | | | %s | | %s |\n",
+		day[habitats+life.Reef], per(turtles[byDay][habitats+life.Reef], day[habitats+life.Reef]), targetTurtles)
 	water := false
 	for i := range t.kinds {
 		water = water || t.kinds[i].Form != catalog.LifeFormBird
@@ -104,6 +117,22 @@ func (t *tally) write(w io.Writer, o options, kinds bool) {
 		}
 		fmt.Fprintln(w)
 	}
+}
+
+// of is the groups in sight of the kinds that hold, by water.
+func (t *tally) of(ok func(*life.Kind) bool) *[2][waters]float64 {
+	var c [2][waters]float64
+	for i := range t.kinds {
+		if !ok(&t.kinds[i]) {
+			continue
+		}
+		for d := range 2 {
+			for w := range waters {
+				c[d][w] += t.sighted[d][i][w]
+			}
+		}
+	}
+	return &c
 }
 
 // per is n an hour of h hours, to two places: a dash with no hours.

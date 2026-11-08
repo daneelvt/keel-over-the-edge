@@ -48,6 +48,9 @@ function frame(over: Partial<LifeFrame> = {}): LifeFrame {
     low: false,
     night: false,
     own: { east: 0, north: 0, heading: 0, speed: 3 },
+    bowOf: () => 3,
+    ownKind: 0,
+    dt: 0,
     fleet: [],
     count: 0,
     ...over,
@@ -110,7 +113,15 @@ describe('the sea’s life drawn', () => {
     const d = new LifeDraw(life, catalog.world.towns.buildings);
     const e = raised(follows);
     const t = e.end - Math.floor((e.end - e.start) / 2);
-    const boat: LifeBoat = { slot: 4, east: 50, north: 60, heading: 1, speed: 2, opacity: 1 };
+    const boat: LifeBoat = {
+      slot: 4,
+      kind: 0,
+      east: 50,
+      north: 60,
+      heading: 1,
+      speed: 2,
+      opacity: 1,
+    };
     const cases: [number, number][] = [
       [1, e.count],
       [2 + 4, e.count],

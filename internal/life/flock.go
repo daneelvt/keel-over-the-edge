@@ -13,9 +13,11 @@ import (
 // every phone, which draws each animal about it (client/src/life/flock.ts,
 // held to testdata/flocks.json). A group comes in from its range and goes
 // out to it, so nothing appears or vanishes near anyone: a group passing
-// crosses its centre at the middle of its life; one that soars or works
-// comes in along its heading, stays over its centre and goes on; one with
-// a boat comes in to a place astern of it, keeps there, and goes on.
+// crosses its centre at the middle of its life; one that soars, works or
+// stays comes in along its heading, stays over its centre and goes on;
+// one that drifts goes along its heading from its centre as it began, at
+// its speed; one with a boat comes in to a place astern of it, or to the
+// boat itself for one riding its bow, keeps there, and goes on.
 
 // Pose is a boat as a group with it moves about it: where it is, m east
 // and north, and which way it heads, rad clockwise from north.
@@ -44,14 +46,21 @@ func FlockAt(e *bus.LifeEncounter, k *Kind, t float64, pose *Pose) (x, y, z floa
 	sin, cos := physics.SinCos(e.Heading)
 	z = Height(k, e.Seed)
 	cx, cy := e.East, e.North
+	path := k.PathOf(e)
 	if e.Boat != 0 {
 		if pose == nil {
 			return 0, 0, 0, false
 		}
-		bs, bc := physics.SinCos(pose.Heading)
-		b := Behind(e.Seed)
-		cx, cy = pose.X-float64(bs*b), pose.Y-float64(bc*b)
-	} else if !k.Lingers() {
+		cx, cy = pose.X, pose.Y
+		if !k.Rides() {
+			bs, bc := physics.SinCos(pose.Heading)
+			b := Behind(e.Seed)
+			cx, cy = pose.X-float64(bs*b), pose.Y-float64(bc*b)
+		}
+	} else if path == PathDrift {
+		s := float64(v * u)
+		return cx + float64(sin*s), cy + float64(cos*s), z, true
+	} else if !lingers(path) {
 		// Through: at its centre halfway.
 		s := float64(v * (u - float64(life/2)))
 		return cx + float64(sin*s), cy + float64(cos*s), z, true

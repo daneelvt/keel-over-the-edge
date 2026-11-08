@@ -78,7 +78,11 @@ func lifeReach(cat *catalog.Catalog) *edge.LifeReach {
 // internal listener only, with KEEL_DEV_COMMANDS=1: of the kind given, by
 // its id or its index in the catalog's, at a point, or near the first
 // player's boat (at=boat, 150 m off its bow, or the boat given), beginning
-// at the next tick. It answers with the kind and where.
+// at the next tick. A kind that follows boats or rides their bows takes
+// the boat if it is under way on a steady course, quiet or not; one that
+// brings others brings them; a ground of fish is raised reaching its
+// kind's furthest, unseen but for the fish the boats in it flush. It
+// answers with the kind and where.
 //
 //	POST /debug/life?kind=…&east=…&north=…
 //	POST /debug/life?kind=…&at=boat[&boat=…][&ahead=m]

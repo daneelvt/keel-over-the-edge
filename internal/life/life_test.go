@@ -131,13 +131,21 @@ func TestNothingOnLand(t *testing.T) {
 		if at == Land {
 			t.Fatalf("%s began on land at (%.0f, %.0f)", k.Name, e.East, e.North)
 		}
-		if !(k.Habitat[at] > 0) {
+		// One that comes with another is where the other lives.
+		if !(k.Habitat[at] > 0) && e.Over == 0 {
 			t.Errorf("%s began in habitat %d, where it weighs nothing", k.Name, at)
 		}
 		byKind[e.Kind]++
 	}
+	brought := map[int]bool{}
 	for i := range s.kinds {
-		if byKind[uint16(i)] == 0 {
+		for _, b := range s.kinds[i].Brings {
+			brought[b.Kind] = true
+		}
+	}
+	for i := range s.kinds {
+		// A kind of no rate comes only with another's groups.
+		if byKind[uint16(i)] == 0 && (s.kinds[i].Rate > 0 || brought[i]) {
 			t.Errorf("no %s in 6,000 slots", s.kinds[i].Name)
 		}
 	}
@@ -202,10 +210,11 @@ func TestHeavySeaStartsNoWaterLife(t *testing.T) {
 }
 
 // TestLulls: no two encounters of a family begin in neighbouring cells
-// within the family's lull of each other.
+// within the family's lull of each other; those that come with another
+// keep no lull of their own.
 func TestLulls(t *testing.T) {
 	s := testSchedule(t, 5)
-	enc := slots(s, 30000, 4000, steady{wind: 6})
+	enc := slices.DeleteFunc(slots(s, 30000, 4000, steady{wind: 6}), func(e bus.LifeEncounter) bool { return e.Over != 0 })
 	cellOf := func(e bus.LifeEncounter) (int64, int64) {
 		c := int64(e.ID>>8) & 0xfff
 		return c % int64(s.n), c / int64(s.n)

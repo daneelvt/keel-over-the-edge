@@ -6,11 +6,13 @@
 // testdata/flocks.json): every phone draws the same group in the same
 // place. A group comes in from its range and goes out to it, so nothing
 // appears or vanishes near anyone: one passing crosses its centre at the
-// middle of its life; one that soars or works comes in along its heading,
-// stays over its centre and goes on; one with a boat comes in to a place
-// astern of it, keeps there, and goes on.
+// middle of its life; one that soars, works or stays comes in along its
+// heading, stays over its centre and goes on; one that drifts goes along
+// its heading from its centre as it began; one with a boat comes in to a
+// place astern of it, or to the boat itself for one riding its bow, keeps
+// there, and goes on.
 
-import type { LifeKind } from '../catalog/types.gen';
+import type { LifeKind, LifePath } from '../catalog/types.gen';
 import type { LifeSeen } from '../net/messages';
 
 /** Ticks a second of world time. */
@@ -41,9 +43,24 @@ export function lerp(lo: number, hi: number, u: number): number {
   return lo + (hi - lo) * u;
 }
 
-/** Whether a kind stays over its patch: it soars or works. */
+/** Whether a path stays over its patch: it soars, works or stays. */
+export function lingersOn(path: LifePath): boolean {
+  return path === 'soar' || path === 'work' || path === 'stay';
+}
+
+/** Whether a kind stays over its patch, by its own path. */
 export function lingers(k: LifeKind): boolean {
-  return k.path === 'soar' || k.path === 'work';
+  return lingersOn(k.path);
+}
+
+/** The path a group follows: over the patch of a group it comes with, its kind's over if it has one, else its own. */
+export function pathOf(k: LifeKind, e: LifeSeen): LifePath {
+  return e.over !== '' && k.over !== undefined ? k.over : k.path;
+}
+
+/** Whether a kind rides a boat's bow. */
+export function rides(k: LifeKind): boolean {
+  return k.binds === 'ride';
 }
 
 /** How long a group of the kind takes to come in from its range at speed v, s. */
@@ -99,14 +116,23 @@ export function flockAt(
   out.up = flockHeight(k, e.seed);
   let cx = e.east;
   let cy = e.north;
+  const path = pathOf(k, e);
   if (e.with !== 0) {
     if (pose === null) {
       return false;
     }
-    const b = behind(e.seed);
-    cx = pose.east - Math.sin(pose.heading) * b;
-    cy = pose.north - Math.cos(pose.heading) * b;
-  } else if (!lingers(k)) {
+    cx = pose.east;
+    cy = pose.north;
+    if (!rides(k)) {
+      const b = behind(e.seed);
+      cx -= Math.sin(pose.heading) * b;
+      cy -= Math.cos(pose.heading) * b;
+    }
+  } else if (path === 'drift') {
+    out.east = cx + sin * v * u;
+    out.north = cy + cos * v * u;
+    return true;
+  } else if (!lingersOn(path)) {
     const s = v * (u - life / 2);
     out.east = cx + sin * s;
     out.north = cy + cos * s;

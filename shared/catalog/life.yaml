@@ -7,6 +7,8 @@
 # Nothing alive changes how a boat sails. Starting values, tuned by
 # go run ./tools/life -tally and in play.
 life:
+  # The bodies of the life in the water (art/life/build.ts).
+  art: { model: life/swimmers.glb }
   # Squares of cell m in the world's east/north frame, slots of slot s of
   # world time: each kind draws in each cell and slot whether it begins
   # there, as Worley's cells draw their points, with a time slot added.
@@ -15,7 +17,9 @@ life:
   # A lull after each: an encounter of a family is not begun within its
   # family's lull after another of it began in its cell or the eight about
   # it, as Left 4 Dead's director relaxes after each peak (Booth 2009).
-  lulls: { birds: 60, water: 600, big: 2400, night: 1200 } # s
+  # The water's is short: its kinds are many, and flying fish, turtles on
+  # a reef and dolphins are each met often.
+  lulls: { birds: 60, water: 30, big: 2400, night: 1200 } # s
   # A boat followed, ridden or perched on is left alone for this long after.
   quiet: 2700 # s
   # A group that follows boats takes, as it begins, the nearest boat within
@@ -24,6 +28,19 @@ life:
   # interest below 2 m/s and keep with a boat on a steady speed and course
   # (Fiori and others 2024).
   bind: { within: 300, speed: 2, steady: 10, turn: 15 }
+  # A pod that rides bows comes to a boat from within within m, the bind's
+  # other rules kept: dolphins hear a hull and come to it from far off. It
+  # leaves the bow at once when the boat slows below slower m/s or turns
+  # more than turn degrees from its heading as the ride began: dolphins
+  # keep with a boat on a steady speed and course, and avoid erratic
+  # handling (Fiori and others 2024).
+  ride: { within: 1800, slower: 2, turn: 40 }
+  # A boat sailing through a ground of flying fish flushes them ahead of
+  # and beside its bow: every every s, by a draw of the boat, the ground
+  # and that slot, at chance, if it sails at the bind's speed; the fish
+  # break the surface lead s later, ahead m ahead of the bow and up to
+  # beside m either side of its course.
+  flush: { every: 2, chance: 0.3, lead: 1, ahead: [6, 22], beside: 14 }
   drop: 200 # m
   # The sun's height across which dusk and dawn run, degrees: from civil
   # twilight's end to a few degrees up.
@@ -131,6 +148,7 @@ life:
       form: bird
       family: birds
       path: pass
+      over: work
       dives: 0.8
       homeward: true
       habitats: { harbour: 0.2, reef: 0.6, shelf: 1, deep: 0.8, outer: 0.4 }
@@ -193,7 +211,8 @@ life:
       look: { span: 0.7, body: "#eeeeea", wing: "#38363a", tip: "#2a282c", flap: 5, glide: 0.7, call: silent }
     # Over fish driven up by predators, within tens of km of land: wheeling
     # over a patch of water and dipping and plunging into it, calling; they
-    # cannot float, and a sooty tern's call is its "wide-awake".
+    # cannot float, and a sooty tern's call is its "wide-awake". They come
+    # only with the bait they work (its brings), never alone.
     - id: sooty-tern
       name: Sooty tern
       plural: Sooty terns
@@ -206,7 +225,7 @@ life:
       wind: [0, 14]
       rain: 0.5
       bySea: false
-      rate: 0.2
+      rate: 0
       group: [5, 30]
       stay: [300, 900]
       speed: [8, 11]
@@ -214,3 +233,229 @@ life:
       range: 900
       reach: 1200
       look: { span: 0.86, body: "#f4f4f1", wing: "#2a2a2c", tip: "#1a1a1a", flap: 3, glide: 0.3, call: tern }
+    # Terns' companion over the bait, darker, dipping to the surface rather
+    # than plunging; it too cannot settle on the sea.
+    - id: brown-noddy
+      name: Brown noddy
+      plural: Brown noddies
+      form: bird
+      family: birds
+      path: work
+      dives: 1.5
+      habitats: { harbour: 0, reef: 0.3, shelf: 1, deep: 0.8, outer: 0.4 }
+      when: { day: 1, dusk: 0.3, night: 0 }
+      wind: [0, 14]
+      rain: 0.5
+      bySea: false
+      rate: 0
+      group: [3, 15]
+      stay: [300, 900]
+      speed: [7, 10]
+      height: [2, 10]
+      range: 900
+      reach: 1200
+      look: { span: 0.8, body: "#4b3f38", wing: "#3a302a", tip: "#2a221e", flap: 3.2, glide: 0.3, call: tern }
+
+    # Life in the water. Each is drawn from a body (art/life) scaled to its
+    # length in its own colours, its tail beating in a wave along its spine;
+    # a swimmer's height is how deep it swims. Seen less as the sea rises,
+    # as an aerial survey logged cetaceans (Cape Hatteras 2013).
+
+    # The commonest dolphin around Guadeloupe and Martinique, all year off
+    # the leeward coasts (Frontiers in Marine Science 2023); groups of
+    # 13 ± 11 (Atlantic spotted). Leaps rather than swims above about
+    # 3.5 m/s (Au and Weihs 1980), and comes to ride a boat's bow.
+    - id: spotted-dolphin
+      name: Spotted dolphin
+      plural: Spotted dolphins
+      collective: pod
+      form: pod
+      family: water
+      path: pass
+      binds: ride
+      over: stay
+      habitats: { harbour: 0.1, reef: 0.3, shelf: 0.8, deep: 1, outer: 0.8 }
+      when: { day: 1, dusk: 1, night: 0.6 }
+      wind: [0, 20]
+      rain: 0.8
+      bySea: true
+      rate: 0.19
+      group: [5, 25]
+      stay: [120, 600]
+      speed: [2.5, 5]
+      height: [-1.6, -0.6]
+      range: 900
+      reach: 1500
+      swim: { body: dolphin, length: 2.1, back: "#4a535d", belly: "#c4cace", beat: 2.4, depth: 1.5, leaps: 1.2, breaths: [1, 2], dive: [8, 25], call: breath }
+    # About harbour mouths and over the shelf, in small groups (5 ± 3.5),
+    # cruising at 3.3–4.5 kn; they too ride bows.
+    - id: bottlenose-dolphin
+      name: Bottlenose dolphin
+      plural: Bottlenose dolphins
+      collective: pod
+      form: pod
+      family: water
+      path: pass
+      binds: ride
+      over: stay
+      habitats: { harbour: 0.6, reef: 0.6, shelf: 1, deep: 0.3, outer: 0.1 }
+      when: { day: 1, dusk: 1, night: 0.6 }
+      wind: [0, 20]
+      rain: 0.8
+      bySea: true
+      rate: 0.19
+      group: [2, 8]
+      stay: [120, 600]
+      speed: [1.7, 3.5]
+      height: [-1.8, -0.7]
+      range: 900
+      reach: 1500
+      swim: { body: dolphin, length: 2.8, back: "#5b6268", belly: "#b5babe", beat: 2, depth: 1.8, leaps: 0.4, breaths: [1, 3], dive: [10, 35], call: breath }
+    # Resting by day in coves and lagoons near deep water, leaping more
+    # toward late afternoon, each leap spinning 2–5 times, up to 7 (NOAA
+    # Fisheries).
+    - id: spinner-dolphin
+      name: Spinner dolphin
+      plural: Spinner dolphins
+      collective: pod
+      form: pod
+      family: water
+      path: stay
+      binds: ride
+      habitats: { harbour: 0.3, reef: 1, shelf: 0.4, deep: 0.2, outer: 0 }
+      when: { day: 0.7, dusk: 1.5, night: 0.3 }
+      wind: [0, 17]
+      rain: 0.8
+      bySea: true
+      rate: 0.12
+      group: [10, 60]
+      stay: [300, 900]
+      speed: [1.5, 3]
+      height: [-1.4, -0.5]
+      range: 600
+      reach: 1500
+      swim: { body: dolphin, length: 1.8, back: "#3c434c", belly: "#cfd3d6", beat: 2.6, depth: 1.2, leaps: 2, spins: [2, 5], breaths: [1, 2], dive: [6, 20], call: breath }
+    # The commonest sight at sea, "every day and evening" on a crossing: a
+    # ground of them flushed by a hull, gliding about 50 m, linked glides
+    # up to about 400 m, a metre or two up at 10–20 m/s (Britannica). The
+    # group is the fish of each flush.
+    - id: flying-fish
+      name: Flying fish
+      plural: Flying fish
+      form: glider
+      family: water
+      path: stay
+      binds: flush
+      habitats: { harbour: 0, reef: 0.1, shelf: 0.6, deep: 1, outer: 1 }
+      when: { day: 1, dusk: 0.6, night: 0 }
+      wind: [0, 18]
+      rain: 0.8
+      bySea: false
+      rate: 1.0
+      group: [1, 12]
+      stay: [1200, 2400]
+      speed: [10, 15]
+      height: [0.3, 1.5]
+      range: 0
+      reach: 400
+      patch: [300, 600]
+      swim: { body: flyingfish, length: 0.3, back: "#2c4877", belly: "#d6dce2", beat: 30, depth: 0.5, glide: [20, 50], linked: 150, call: silent }
+    # Fish driven up to the surface by predators below: the water boils at
+    # the flock's edge as terns, noddies and boobies plunge into it and
+    # frigatebirds swoop from above; predators were under 60 of 62 feeding
+    # flocks off Hawaii, dolphins under 8% of them (Hebshi and others
+    # 2008). The patch drifts a little, and slowly enough that its birds,
+    # working over where it began, stay over it; it is gone in minutes,
+    # and a boat through its middle breaks it up.
+    - id: bait-ball
+      name: Bait
+      plural: Bait
+      collective: boil
+      form: bait
+      family: water
+      path: drift
+      habitats: { harbour: 0, reef: 0.2, shelf: 1, deep: 0.8, outer: 0.4 }
+      when: { day: 1, dusk: 0.5, night: 0 }
+      wind: [0, 14]
+      rain: 0.8
+      bySea: false
+      rate: 0.23
+      group: [1, 1]
+      stay: [300, 900]
+      speed: [0.01, 0.03]
+      height: [0, 0]
+      range: 0
+      reach: 1500
+      patch: [5, 15]
+      brings:
+        - { kind: sooty-tern, share: 1, count: [5, 30] }
+        - { kind: brown-noddy, share: 0.6, count: [3, 15] }
+        - { kind: brown-booby, share: 0.5, count: [1, 4] }
+        - { kind: magnificent-frigatebird, share: 0.4, count: [1, 2] }
+        - { kind: spotted-dolphin, share: 0.1, count: [5, 15] }
+    # Grazing the seagrass and the reefs, the commonest turtle seen; young
+    # ones dive about 1.5 min in shallow water and take about 6 breaths
+    # each time they come up (ICM-CSIC), most active early in the morning.
+    # A swimmer's length runs from its snout to its tail's or flippers'
+    # tips: a carapace of about 1 m is a turtle of about 1.3 m.
+    - id: green-turtle
+      name: Green turtle
+      plural: Green turtles
+      form: turtle
+      family: water
+      path: stay
+      habitats: { harbour: 0.2, reef: 1, shelf: 0.25, deep: 0, outer: 0 }
+      when: { day: 1, dusk: 1.3, night: 0 }
+      wind: [0, 14]
+      rain: 0.8
+      bySea: true
+      rate: 4.2
+      group: [1, 2]
+      stay: [300, 600]
+      speed: [0.3, 0.6]
+      height: [-2, -1.2]
+      range: 60
+      reach: 600
+      swim: { body: turtle, length: 1.3, back: "#5c5a3a", belly: "#b8a47a", beat: 0.5, depth: 2.5, breaths: [3, 6], dive: [60, 120], call: silent }
+    # On the reefs alone, and rarer.
+    - id: hawksbill-turtle
+      name: Hawksbill turtle
+      plural: Hawksbill turtles
+      form: turtle
+      family: water
+      path: stay
+      habitats: { harbour: 0, reef: 1, shelf: 0, deep: 0, outer: 0 }
+      when: { day: 1, dusk: 0.8, night: 0 }
+      wind: [0, 14]
+      rain: 0.8
+      bySea: true
+      rate: 1.2
+      group: [1, 1]
+      stay: [300, 600]
+      speed: [0.3, 0.5]
+      height: [-2, -1.2]
+      range: 60
+      reach: 600
+      swim: { body: turtle, length: 1.05, back: "#6a4a2a", belly: "#c9a66a", beat: 0.6, depth: 2.5, breaths: [3, 5], dive: [60, 120], call: silent }
+    # In calm harbours and lagoons, rolling at the surface to gulp air at
+    # dawn and dusk (Waypoint TV, "Why tarpon roll").
+    - id: atlantic-tarpon
+      name: Tarpon
+      plural: Tarpon
+      collective: school
+      form: pod
+      family: water
+      path: stay
+      habitats: { harbour: 1, reef: 0.8, shelf: 0.1, deep: 0, outer: 0 }
+      when: { day: 0.3, dusk: 2, night: 0.2 }
+      wind: [0, 6]
+      rain: 0.8
+      bySea: true
+      rate: 0.6
+      group: [3, 10]
+      stay: [180, 600]
+      speed: [0.5, 1.2]
+      height: [-1.6, -0.8]
+      range: 100
+      reach: 800
+      swim: { body: tarpon, length: 1.5, back: "#5d6c72", belly: "#dce2e5", beat: 1.4, depth: 1.6, breaths: [1, 1], dive: [15, 50], call: silent }

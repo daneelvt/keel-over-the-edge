@@ -49,7 +49,16 @@ import {
   lappingNow,
 } from './harbour';
 import type { Knock } from './knock';
-import { LIFE_RECIPES, type LifeEvent, type LifeInput, type LifeRecipes, lifeEvents } from './life';
+import {
+  LIFE_RECIPES,
+  type LifeEvent,
+  type LifeInput,
+  type LifeRecipes,
+  lifeEvents,
+  WATER_RECIPES,
+  type WaterRecipes,
+  type WaterSound,
+} from './life';
 import {
   THUNDER_RECIPE,
   THUNDER_RULE,
@@ -513,6 +522,63 @@ export class SoundEngine {
       this.#playLife(g, e, at + Math.max(0, e.at - x.seconds));
     }
     this.#lifeTo = x.seconds;
+  }
+
+  readonly #water: WaterRecipes = WATER_RECIPES;
+  /** The splashes and breaths played (tests). */
+  waterSounds = 0;
+
+  /** Plays the life in the water's splashes and breaths of a frame, each once, now. */
+  water(sounds: readonly WaterSound[]): void {
+    const g = this.#graph;
+    if (g === null || g.ctx.state !== 'running') {
+      return;
+    }
+    for (const s of sounds) {
+      this.#playWater(g, s);
+    }
+  }
+
+  /** A splash or a breath: a burst of the noise through a falling band, dying away. */
+  #playWater(g: Graph, s: WaterSound): void {
+    if (!(s.level > 0)) {
+      return;
+    }
+    this.waterSounds++;
+    const ctx = g.ctx;
+    const c = this.#water[s.kind];
+    const unit = (k: number): number => {
+      const v = Math.sin(s.seed * 3.7 + k * 1.3) * 43758.5453;
+      return v - Math.floor(v);
+    };
+    const at = ctx.currentTime;
+    const length =
+      (c.length[0] ?? 0.2) + unit(1) * ((c.length[1] ?? 0.4) - (c.length[0] ?? 0.2)) * s.size;
+    const f = (c.band[0] ?? 800) + unit(2) * ((c.band[1] ?? 1600) - (c.band[0] ?? 800));
+    const burst = ctx.createBufferSource();
+    burst.buffer = g.noise;
+    const band = ctx.createBiquadFilter();
+    band.type = 'bandpass';
+    band.Q.value = c.q;
+    band.frequency.setValueAtTime(f, at);
+    band.frequency.exponentialRampToValueAtTime(f * c.fall, at + length);
+    const v = ctx.createGain();
+    v.gain.setValueAtTime(0, at);
+    v.gain.linearRampToValueAtTime(s.level, at + 0.012);
+    v.gain.exponentialRampToValueAtTime(0.0001, at + length);
+    const pan = ctx.createStereoPanner();
+    pan.pan.value = s.pan;
+    burst.connect(band);
+    band.connect(v);
+    v.connect(pan);
+    pan.connect(g.master);
+    burst.start(at, unit(3) * 2);
+    burst.stop(at + length + 0.05);
+    burst.onended = () => {
+      for (const n of [burst, band, v, pan]) {
+        n.disconnect();
+      }
+    };
   }
 
   #playLife(g: Graph, e: LifeEvent, at: number): void {

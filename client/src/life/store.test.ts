@@ -6,6 +6,7 @@ import { LifeStore } from './store';
 
 const rec = (id: string, rev: number, end = 1000): LifeSeen => ({
   id,
+  over: '',
   rev,
   kind: 0,
   start: 0,

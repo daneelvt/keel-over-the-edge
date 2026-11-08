@@ -422,17 +422,17 @@ test('the frame allocates nothing that stays, sailing with the controls moving',
     await cdp.send('HeapProfiler.collectGarbage');
     return (await cdp.send('Runtime.getHeapUsage')).usedSize;
   };
-  // The sea's birds in view the whole while: a group of each kind about
-  // the boat, those that stay over a patch staying minutes.
-  const birds = (
+  // The sea's life in view the whole while: a group of each kind about
+  // the boat, the birds further out and the life in the water close by,
+  // those that stay over a patch staying minutes.
+  const kinds = (
     catalog as unknown as { life: { kinds: { id: string; form: string }[] } }
-  ).life.kinds
-    .filter((k) => k.form === 'bird')
-    .map((k) => k.id);
-  await page.evaluate(async (birds) => {
+  ).life.kinds.map((k) => ({ id: k.id, near: k.form !== 'bird' }));
+  await page.evaluate(async (kinds) => {
     const k = globalThis.keel;
-    for (const [n, id] of birds.entries()) {
-      k.raiseLife(id, 80 * Math.sin(n), 80 * Math.cos(n));
+    for (const [n, { id, near }] of kinds.entries()) {
+      const r = near ? 30 : 80;
+      k.raiseLife(id, r * Math.sin(n), r * Math.cos(n), true);
     }
     k.settings({ windOverlay: true, forcesOverlay: true });
     k.script('wiggle');
@@ -443,8 +443,10 @@ test('the frame allocates nothing that stays, sailing with the controls moving',
     // hundred frames, less and less. Measured over the 400 frames after
     // 700, it grew 92 to 119 KB.
     await k.frames(700);
-  }, birds);
-  expect(await page.evaluate(() => globalThis.keel.life().birds)).toBeGreaterThan(0);
+  }, kinds);
+  const life = await page.evaluate(() => globalThis.keel.life());
+  expect(life.birds).toBeGreaterThan(0);
+  expect(life.swimmers).toBeGreaterThan(0);
   const before = await used();
   await page.evaluate(() => globalThis.keel.frames(400));
   const after = await used();

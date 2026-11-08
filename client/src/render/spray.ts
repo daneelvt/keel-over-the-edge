@@ -142,6 +142,28 @@ export class SprayDrops {
   }
 
   /**
+   * Something breaking the water at a place, the sea there at sea m: a
+   * crown of drops thrown up and out, more and higher the bigger it is, 0
+   * to 1, from a flying fish's taxi to a dolphin falling back from a leap.
+   */
+  splash(east: number, north: number, sea: number, size: number): void {
+    const n = Math.round(4 + 14 * size);
+    for (let j = 0; j < n; j++) {
+      const a = this.#rand() * 2 * Math.PI;
+      const out = (0.4 + 1.2 * this.#rand()) * (0.5 + size);
+      this.#throw(
+        east + Math.sin(a) * 0.3 * size,
+        north + Math.cos(a) * 0.3 * size,
+        sea + 0.05,
+        Math.sin(a) * out,
+        Math.cos(a) * out,
+        (1.2 + 2.4 * this.#rand()) * (0.5 + size),
+        0.04 + 0.07 * this.#rand() * (0.5 + size),
+      );
+    }
+  }
+
+  /**
    * One frame of dt seconds: the drops move and age, the bows throw, and in
    * a gale so do the crests.
    */
