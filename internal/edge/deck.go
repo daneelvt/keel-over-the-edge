@@ -111,7 +111,6 @@ type decks struct {
 	hour     map[bus.Account][]time.Time
 	notNow   map[notNowKey]time.Time
 	names    map[bus.Account]string // sailors' names, as players see them, for those aboard and their skippers
-	put      map[uint64]bool        // boats whose decks' put-ashore marks are kept
 	lastTidy time.Time
 }
 

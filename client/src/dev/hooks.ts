@@ -1830,6 +1830,30 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
         ticks: world.ticks,
       };
     },
+    /**
+     * Sailing together: whose boat the connection is aboard, who is aboard
+     * the boat in view and who holds its controls, the knocks waiting on
+     * the own boat, how the own knock stands, the controls offered, and
+     * whether the connection holds the controls; with the controls held
+     * in force, as the screen shows them.
+     */
+    deck() {
+      const o = sailing.online;
+      if (o === undefined) {
+        throw new Error('the boat is sailed offline');
+      }
+      return {
+        aboard: o.aboard.value,
+        crew: o.crew.value,
+        knocks: o.knocks.value,
+        knocking: o.knocking.value,
+        handed: o.handed.value,
+        holding: o.holding.value,
+        spectating: o.spectating.value,
+        boat: o.boat,
+        controls: o.traffic.controls,
+      };
+    },
     /** Asks to watch a sailor's boat, as the list does. */
     watchSailor(name: string): void {
       sailing.online?.watch(name);
