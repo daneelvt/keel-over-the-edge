@@ -24,12 +24,15 @@ import {
   BumpPart,
   type ChartEntry as ChartEntryWire,
   ChartSubject,
+  ChatRefusal,
+  ChatStatus,
   type Harbour as HarbourTold,
   KnockState,
   Lamp,
   type LifeEncounter,
   type Light,
   type Place,
+  ReportReason,
   WatchEnd,
   type Welcome,
 } from '../../net/gen/keel/v1/game_pb';
@@ -38,6 +41,9 @@ import type {
   BumpTold,
   CapSeen,
   ChartEntry,
+  ChatRefusalTold,
+  ChatStateTold,
+  ChatTold,
   ChunksHanded,
   CrewTold,
   ForecastTold,
@@ -50,9 +56,12 @@ import type {
   LightSeen,
   PastTold,
   PlaceSeen,
+  ReportReasonTold,
   SeaAreas,
+  TiedTold,
   WeatherKeyframe,
   WeatherSpells,
+  WhoTold,
 } from '../../net/messages';
 import { KIND_SNAPSHOT, newSnapshot, readSnapshot } from '../../net/snapshot';
 import { PROTOCOL_VERSION } from '../../net/version.gen';
@@ -121,6 +130,42 @@ const KNOCKS: Record<number, KnockStateTold> = {
 };
 
 /** Why someone left a boat, as the page names it. */
+/** Why a line was not said, as the page names it. */
+const REFUSALS: Record<number, ChatRefusalTold> = {
+  [ChatRefusal.CONTACT]: 'contact',
+  [ChatRefusal.LONG]: 'long',
+  [ChatRefusal.FAST]: 'fast',
+  [ChatRefusal.SILENT]: 'silent',
+  [ChatRefusal.NOBODY]: 'nobody',
+};
+
+/** How chat stands, as the page names it; an unknown status reads as off. */
+const CHAT_STATUS: Record<number, ChatStateTold['status']> = {
+  [ChatStatus.ON]: 'on',
+  [ChatStatus.OFF]: 'off',
+  [ChatStatus.OWN_OFF]: 'own-off',
+  [ChatStatus.RESTING]: 'resting',
+};
+
+/** Why a player is reported, on the wire. */
+const REASONS: Record<ReportReasonTold, ReportReason> = {
+  child: ReportReason.CHILD,
+  sexual: ReportReason.SEXUAL,
+  bullying: ReportReason.BULLYING,
+  hate: ReportReason.HATE,
+  threats: ReportReason.THREATS,
+  scam: ReportReason.SCAM,
+  cheating: ReportReason.CHEATING,
+  other: ReportReason.OTHER,
+};
+
+/** Someone aboard on the wire: by seat, or by a line's number. */
+function whoOf(w: WhoTold) {
+  return 'seat' in w
+    ? { who: { case: 'seat' as const, value: w.seat } }
+    : { who: { case: 'line' as const, value: BigInt(w.line) } };
+}
+
 const ASHORE: Record<number, AshoreWhyTold> = {
   [AshoreWhy.CHOSE]: 'chose',
   [AshoreWhy.PUT]: 'put',
@@ -145,6 +190,10 @@ export type Received =
   | { kind: 'crew'; crew: CrewTold }
   | { kind: 'handed'; handed: HandedTold }
   | { kind: 'ashore'; why: AshoreWhyTold }
+  | { kind: 'chat'; chat: ChatTold }
+  | { kind: 'chatState'; state: ChatStateTold }
+  | { kind: 'tied'; tied: TiedTold }
+  | { kind: 'reported'; ok: boolean }
   /** Whether the AI of the own machine sailor watched attends to it. */
   | { kind: 'lamp'; state: LampState }
   /** The sailor of the boat sailed or watched changed their look: its code. */
@@ -328,6 +377,8 @@ export class Session {
               name: p.name,
               machine: p.machine,
               you: p.you,
+              muted: p.muted,
+              blocked: p.blocked,
             })),
             holder: m.body.value.holder,
           },
@@ -340,6 +391,47 @@ export class Session {
       case 'ashore':
         this.#lastHeard = now;
         return { kind: 'ashore', why: ASHORE[m.body.value.why] ?? 'other' };
+      case 'chat': {
+        this.#lastHeard = now;
+        const c = m.body.value;
+        return {
+          kind: 'chat',
+          chat: {
+            id: Number(c.id),
+            seat: c.seat,
+            name: c.name,
+            machine: c.machine,
+            at: Number(c.atUs) / 1000,
+            text: c.text,
+            you: c.you,
+            echo: c.echo,
+            refused: REFUSALS[c.refused] ?? '',
+          },
+        };
+      }
+      case 'chatState': {
+        this.#lastHeard = now;
+        const c = m.body.value;
+        return {
+          kind: 'chatState',
+          state: {
+            status: CHAT_STATUS[c.status] ?? 'off',
+            until: Number(c.untilUs) / 1000,
+            rules: c.rules,
+          },
+        };
+      }
+      case 'tied': {
+        this.#lastHeard = now;
+        const t = m.body.value;
+        return {
+          kind: 'tied',
+          tied: { name: t.name, muted: t.muted, blocked: t.blocked, full: t.full },
+        };
+      }
+      case 'reported':
+        this.#lastHeard = now;
+        return { kind: 'reported', ok: m.body.value.ok };
       case 'lookChanged':
         this.#lastHeard = now;
         return { kind: 'look', look: m.body.value.look };
@@ -608,6 +700,47 @@ export class Session {
   closeKnocksCommand(now: number, closed: boolean): Uint8Array<ArrayBuffer> {
     return this.#encode(now, {
       body: { case: 'command', value: { body: { case: 'closeKnocks', value: { closed } } } },
+    });
+  }
+
+  /** Says a line aboard; id is the page's own, which its echo carries. */
+  sayCommand(now: number, text: string, id: number): Uint8Array<ArrayBuffer> {
+    return this.#encode(now, {
+      body: { case: 'command', value: { body: { case: 'say', value: { text, id } } } },
+    });
+  }
+
+  /** Mutes someone aboard, or no longer. */
+  muteCommand(now: number, who: WhoTold, on: boolean): Uint8Array<ArrayBuffer> {
+    return this.#encode(now, {
+      body: { case: 'command', value: { body: { case: 'mute', value: { who: whoOf(who), on } } } },
+    });
+  }
+
+  /** Blocks someone aboard, or no longer. */
+  blockCommand(now: number, who: WhoTold, on: boolean): Uint8Array<ArrayBuffer> {
+    return this.#encode(now, {
+      body: {
+        case: 'command',
+        value: { body: { case: 'block', value: { who: whoOf(who), on } } },
+      },
+    });
+  }
+
+  /** Reports someone aboard, with a note for the game's owner. */
+  reportCommand(
+    now: number,
+    who: WhoTold,
+    reason: ReportReasonTold,
+    note: string,
+  ): Uint8Array<ArrayBuffer> {
+    return this.#encode(now, {
+      body: {
+        case: 'command',
+        value: {
+          body: { case: 'report', value: { who: whoOf(who), reason: REASONS[reason], note } },
+        },
+      },
     });
   }
 

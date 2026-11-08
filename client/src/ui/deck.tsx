@@ -15,6 +15,9 @@
 // what the player may do to that person, by who the player is and who
 // holds the controls; and the skipper's link (sailwithme.tsx).
 //
+// Who is aboard also mutes, blocks and reports each other person, and chat
+// aboard (chat.tsx) stands with these parts under the case.
+//
 // Loaded only when first needed (decklazy.ts): none of it is in the
 // game's first download.
 
@@ -24,8 +27,10 @@ import { Portrait } from '../account/portraits';
 import { catalog } from '../catalog';
 import { lookOf } from '../catalog/looks';
 import type { CrewTold, PersonTold } from '../net/messages';
+import { ChatStrip, ChatWindows } from './chat';
+import { BLOCK, BLOCKED, MUTE, MUTED, REPORT, UNBLOCK, UNMUTE } from './chatwords';
 import { Decal } from './decals';
-import { type DeckView, deckPlate, selfOf, skipperAway } from './decklazy';
+import { chatShown, type DeckView, deckPlate, selfOf, skipperAway } from './decklazy';
 import {
   ABOARD,
   AT_THE_HELM,
@@ -116,14 +121,25 @@ export function HelmMark() {
 }
 
 /** What the player may do to a person aboard, by who the player is and who holds the controls. */
-export type RowAction = 'hand' | 'take' | 'giveBack' | 'putAshore';
+export type RowAction =
+  | 'hand'
+  | 'take'
+  | 'giveBack'
+  | 'putAshore'
+  | 'mute'
+  | 'unmute'
+  | 'block'
+  | 'unblock'
+  | 'report';
 
 /**
  * The keys on the row of the person in seat: whoever holds the controls
  * hands them to anyone else; the skipper takes them back (on their own
  * row) while another holds them, and puts anyone else ashore; one of the
- * crew who holds them gives them back (on their own row). Nothing for a
- * spectator, who is not aboard.
+ * crew who holds them gives them back (on their own row). And anyone
+ * aboard mutes, blocks and reports anyone else, or ends a mute or a
+ * block, as the account has them. Nothing for a spectator, who is not
+ * aboard.
  */
 export function rowActions(crew: CrewTold, seat: number): RowAction[] {
   const me = selfOf(crew);
@@ -149,6 +165,9 @@ export function rowActions(crew: CrewTold, seat: number): RowAction[] {
   if (skipper) {
     out.push('putAshore');
   }
+  if (person.name !== '') {
+    out.push(person.muted ? 'unmute' : 'mute', person.blocked ? 'unblock' : 'block', 'report');
+  }
   return out;
 }
 
@@ -158,6 +177,11 @@ const ACTION_WORDS: Record<RowAction, string> = {
   take: TAKE_BACK,
   giveBack: GIVE_BACK,
   putAshore: PUT_ASHORE,
+  mute: MUTE,
+  unmute: UNMUTE,
+  block: BLOCK,
+  unblock: UNBLOCK,
+  report: REPORT,
 };
 
 /** The name of whoever holds the controls; "" for none known. */
@@ -396,7 +420,12 @@ export function PersonRow({
   act: (a: RowAction, p: PersonTold) => void;
 }) {
   const actions = rowActions(crew, person.seat);
-  const tags = [person.seat === 0 ? SKIPPER : '', person.you ? YOU : ''].filter((t) => t !== '');
+  const tags = [
+    person.seat === 0 ? SKIPPER : '',
+    person.you ? YOU : '',
+    person.muted ? MUTED : '',
+    person.blocked ? BLOCKED : '',
+  ].filter((t) => t !== '');
   return (
     <li class="deck-row" data-seat={person.seat}>
       <Face look={person.look} />
@@ -464,6 +493,22 @@ export function AboardList({ deck }: { deck: DeckView }) {
       case 'putAshore':
         setPutting(p);
         break;
+      case 'mute':
+      case 'unmute':
+        deck.chat.mute({ seat: p.seat }, p.name, a === 'mute');
+        break;
+      case 'unblock':
+        deck.chat.block({ seat: p.seat }, p.name, false);
+        break;
+      case 'block':
+      case 'report':
+        deck.chat.sheet.value = {
+          who: { seat: p.seat },
+          name: p.name,
+          machine: p.machine,
+          step: a,
+        };
+        break;
     }
   };
   const people = crew?.people ?? [];
@@ -528,6 +573,11 @@ export function DeckTop({ deck }: { deck: DeckView }) {
   );
 }
 
+/** Chat aboard's strip, under the case, while anyone else is aboard. */
+export function DeckChat({ deck, sailor }: { deck: DeckView; sailor: string | null }) {
+  return chatShown(deck) ? <ChatStrip deck={deck} sailor={sailor} /> : null;
+}
+
 /** At the foot of the screen, in the controls' place: the plate. */
 export function DeckFoot({ deck }: { deck: DeckView }) {
   if (deck.watching.value !== null || !deckPlate(deck)) {
@@ -540,8 +590,11 @@ export function DeckFoot({ deck }: { deck: DeckView }) {
   );
 }
 
-/** The windows over the sea: going ashore's question, who is aboard, the skipper's link. */
+/** The windows over the sea: chat's, going ashore's question, who is aboard, the skipper's link. */
 export function DeckWindows({ deck, sailor }: { deck: DeckView; sailor: string | null }) {
+  if (deck.chat.ask.value !== null || deck.chat.sheet.value !== null) {
+    return <ChatWindows deck={deck} sailor={sailor} />;
+  }
   if (deck.ashore.value && deck.aboard.value !== null) {
     return <AshoreQuestion deck={deck} />;
   }
