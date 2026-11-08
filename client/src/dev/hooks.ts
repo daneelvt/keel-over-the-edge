@@ -1952,6 +1952,17 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
       const f = world.lifeFrame(stage.camera.position, false);
       return world.lifeDraw.birdsAt(world.life, f, tick ?? world.ticks);
     },
+    /** The boat a group of the sea's life is with, as this page draws it now; null for none or one not drawn. */
+    lifeWith(id: string): { east: number; north: number; heading: number } | null {
+      const e = world.life.get(id);
+      if (e === undefined) {
+        return null;
+      }
+      const p = world.lifeDraw.pose(e, world.lifeFrame(stage.camera.position, false));
+      return p === null || p === undefined
+        ? null
+        : { east: p.east, north: p.north, heading: p.heading };
+    },
     /**
      * The animals of the sea's life in the water within reach of the camera
      * at a tick, now by default, each one's group, number and place, up from
@@ -1974,7 +1985,16 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
         eastOff === undefined && northOff === undefined
           ? undefined
           : { east: eastOff ?? 0, north: northOff ?? 0 };
-      const e = lifeScene(catalog.life, kind, world.ticks, world.pose, ++lifeRaised, 0, offset, free);
+      const e = lifeScene(
+        catalog.life,
+        kind,
+        world.ticks,
+        world.pose,
+        ++lifeRaised,
+        0,
+        offset,
+        free,
+      );
       if (e !== null) {
         raiseScene(world, e, catalog.life);
       }

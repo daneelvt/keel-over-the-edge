@@ -4,19 +4,23 @@
 // by the developer's command between two players sailing near each other
 // reaches both pages, and a third watching one of them, as the same
 // record; and each page finds every bird of it in the same place at the
-// same tick, within half a metre. The pages draw nothing (?draw=off): the
-// birds are found as the frame finds them.
+// same tick, within half a metre. A pod of dolphins raised ahead of one of
+// them sailing steadily rides her bow, and every page sees it at that
+// boat's bow, within a metre. The pages draw nothing (?draw=off): the
+// animals are found as the frame finds them.
 
 import { type BrowserContext, expect, type Page, test } from '@playwright/test';
 import data from '../src/catalog/catalog.gen.json' with { type: 'json' };
 import type { LifeSeen } from '../src/net/messages';
-import { GAME, sail, sailor, setSail } from './helpers';
+import { alone, GAME, heldRegime, sail, sailor, setSail } from './helpers';
 
 /** keel's internal listener, as tools/e2e serves it: its developer commands. */
 const internal = 'http://127.0.0.1:19090';
 
 /** The kind raised: one that works a patch of water, staying minutes; by its index. */
 const kind = data.life.kinds.findIndex((k) => k.path === 'work');
+/** A pod that rides bows and passes when it has none to ride; by its index. */
+const rider = data.life.kinds.findIndex((k) => k.binds === 'ride' && k.path === 'pass');
 
 /** Waits until the page holds the record of id, and gives it. */
 async function record(page: Page, id: string): Promise<LifeSeen> {
@@ -115,5 +119,139 @@ test('two players and a spectator see the same birds in the same places', async 
     for (const c of contexts) {
       await c.close();
     }
+  }
+});
+
+test('a pod rides one boat’s bow, at that bow on every page', async ({ browser, request }) => {
+  test.setTimeout(240_000);
+  const contexts: BrowserContext[] = [];
+  // A steady breeze, so the boat has way on whatever the world's weather is.
+  expect((await request.post(`${internal}/debug/wind?knots=14&from=0`)).status()).toBe(204);
+  try {
+    const ann = await browser.newContext();
+    contexts.push(ann);
+    const made = await sailor(ann, 'Ann');
+    const a = await ann.newPage();
+    await a.goto(GAME);
+    await a.getByRole('checkbox', { name: 'Let others watch me sail' }).check({ timeout: 90_000 });
+    await setSail(a);
+    await a.waitForFunction(() => globalThis.keel?.net().status === 'sailing', null, {
+      timeout: 60_000,
+    });
+    await a.waitForFunction(() => Math.cos(globalThis.keel.boat().wind.meanFrom) > 0.99, null, {
+      timeout: 10_000,
+    });
+    // Out of the roads, on a beam reach, the sail set and the course held.
+    const spot = await alone(a, 90);
+    const heading = await a.evaluate(() => {
+      globalThis.keel.setControls(0, 0.3);
+      return globalThis.keel.boat().state.heading;
+    });
+    await a.evaluate((h) => globalThis.keel.script('steer', h), heading);
+
+    // Bob lies at rest abeam of her, near enough to see her; Cat watches her.
+    const bob = await browser.newContext();
+    contexts.push(bob);
+    await sailor(bob, 'Bob');
+    const b = await bob.newPage();
+    await sail(b);
+    const bobBoat = await b.evaluate(() => globalThis.keel.net().boat);
+    const abeam = heading + Math.PI / 2;
+    const res = await b.request.post(
+      `${internal}/debug/place?east=${Math.round(spot.east + 120 * Math.sin(abeam))}&north=${Math.round(spot.north + 120 * Math.cos(abeam))}&heading=0&boat=${bobBoat}`,
+    );
+    expect(res.status(), await res.text()).toBe(200);
+    const cat = await browser.newContext();
+    contexts.push(cat);
+    await sailor(cat, 'Cat');
+    const c = await cat.newPage();
+    await c.goto(`${GAME}&watch=${encodeURIComponent(made.name)}`);
+    await c.waitForFunction((n) => globalThis.keel?.watch().watching?.sailor === n, made.name, {
+      timeout: 90_000,
+    });
+
+    // Way on, on a steady course, a while.
+    await a.waitForFunction(() => globalThis.keel.boat().out.speedOverGround > 2.3, null, {
+      timeout: 60_000,
+    });
+    await a.waitForTimeout(12_000);
+    const boat = await a.evaluate(() => globalThis.keel.net().boat);
+    const before = new Set(
+      (await a.evaluate(() => globalThis.keel.life().records)).map((r) => r.id),
+    );
+    const raised = await a.request.post(
+      `${internal}/debug/life?kind=${rider}&at=boat&boat=${boat}&ahead=30`,
+    );
+    expect(raised.status(), await raised.text()).toBe(200);
+    await a.waitForFunction(
+      (before) =>
+        globalThis.keel.life().records.some((r) => !before.includes(r.id) && r.with === 1),
+      [...before],
+      { timeout: 30_000 },
+    );
+    const pod = (await a.evaluate(() => globalThis.keel.life().records)).find(
+      (r) => !before.has(r.id) && r.with === 1,
+    ) as LifeSeen;
+    expect(pod.kind).toBe(rider);
+    // The watcher has it with the boat it watches, Bob with a boat he sees.
+    const cp = await record(c, pod.id);
+    expect(cp.with).toBe(1);
+    const bp = await record(b, pod.id);
+    expect(bp.with).toBeGreaterThanOrEqual(2);
+    expect(bp.with).toBeLessThan(255);
+    expect({ ...bp, with: 1 }).toEqual(pod);
+
+    // Riding, once in: each page finds the riders at the bow of her boat
+    // as it draws it, within a metre of each other.
+    const k = data.life.kinds[rider];
+    const life = (pod.end - pod.start) / 30;
+    const inAt = Math.min((k?.range ?? 0) / pod.speed, life / 2);
+    const tick = pod.start + Math.round((inAt + 20) * 30);
+    // Each page's riders, from its own boat as it draws her at that
+    // moment: where they are about the bow it draws.
+    const swimmers = async (p: Page) =>
+      p.evaluate(
+        ([t, id]) => {
+          const k = globalThis.keel;
+          const at = k.lifeWith(id);
+          return k
+            .lifeSwimmers(t)
+            .filter((x) => x.id === id && at !== null)
+            .map((x) => ({
+              ...x,
+              east: x.east - (at?.east ?? 0),
+              north: x.north - (at?.north ?? 0),
+            }));
+        },
+        [tick, pod.id] as const,
+      );
+    const [sa, sb, sc] = await Promise.all([swimmers(a), swimmers(b), swimmers(c)]);
+    expect(sa.length).toBeGreaterThan(0);
+    const h = await a.evaluate(() => globalThis.keel.boat().state.heading);
+    // The first riders are a few metres ahead of her middle.
+    const lead = sa.find((x) => x.k === 0);
+    expect(lead).toBeDefined();
+    if (lead !== undefined) {
+      const ahead = lead.east * Math.sin(h) + lead.north * Math.cos(h);
+      expect(ahead).toBeGreaterThan(0);
+      expect(ahead).toBeLessThan(15);
+    }
+    for (const other of [sb, sc]) {
+      let compared = 0;
+      for (const x of sa) {
+        const y = other.find((o) => o.k === x.k);
+        if (y === undefined) {
+          continue;
+        }
+        compared++;
+        expect(Math.hypot(x.east - y.east, x.north - y.north)).toBeLessThan(1);
+      }
+      expect(compared).toBeGreaterThan(0);
+    }
+  } finally {
+    for (const c of contexts) {
+      await c.close();
+    }
+    await request.post(`${internal}/debug/weather?regime=${heldRegime()}`);
   }
 });

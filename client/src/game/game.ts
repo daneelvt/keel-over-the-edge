@@ -25,7 +25,14 @@ import { type FeaturesInput, isColonyCall } from '../audio/features';
 import { FOG_SIGNAL_RULES, type FogSignalsInput, poorBy } from '../audio/fogsignals';
 import { groundSound, SCRAPE, scrapeOf } from '../audio/ground';
 import { KNOCK, knockOf } from '../audio/knock';
-import { isLifeCall, type LifeGroup, type LifeInput } from '../audio/life';
+import {
+  isLifeCall,
+  type LifeGroup,
+  type LifeInput,
+  WATER_RECIPES,
+  type WaterSound,
+  waterSounds,
+} from '../audio/life';
 import type { ThunderInput } from '../audio/thunder';
 import { edgeInput, type SoundInput, soundInput } from '../audio/voices';
 import { catalog } from '../catalog';
@@ -767,7 +774,25 @@ export class Game implements PilotActions {
     pool.length = n;
     x.groups = pool;
     this.sound.life(now, x);
+    // What broke the water, and the dolphins' breaths, as the frame drew them.
+    const d = w.lifeDraw;
+    if (d.splashCount > 0 || d.breathCount > 0) {
+      this.sound.water(
+        waterSounds(
+          WATER_RECIPES,
+          x.listener,
+          look,
+          d.splashes,
+          d.splashCount,
+          d.breaths,
+          d.breathCount,
+          this.#waterSounds,
+        ),
+      );
+    }
   }
+
+  readonly #waterSounds: WaterSound[] = [];
 
   /** The lights' fog signals, heard at the boat in fog. */
   readonly #fogInput: FogSignalsInput = {

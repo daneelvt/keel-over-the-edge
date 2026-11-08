@@ -1,0 +1,6 @@
+{
+  "licence": "SPDX-License-Identifier: LicenseRef-All-Rights-Reserved. Art: all rights reserved, not covered by the AGPL. See art/README.md.",
+  "description": "The life in the water, heard: what breaks the water, a splash, a burst of noise through a band near band Hz falling to fall of it, length seconds long, heard within reach metres, the biggest (a dolphin falling back from a leap) loudest; and a dolphin's breath as it rolls at the surface, a short, explosive 'pfoosh' through its blowhole, a lower band of noise, heard within reach metres (40 m), by night too. Levels as gains.",
+  "splash": { "band": [900, 2600], "fall": 0.45, "length": [0.18, 0.5], "q": 0.9, "near": 8, "reach": 150, "level": 0.25 },
+  "breath": { "band": [380, 700], "fall": 0.7, "length": [0.35, 0.55], "q": 1.4, "near": 4, "reach": 40, "level": 0.3 }
+}

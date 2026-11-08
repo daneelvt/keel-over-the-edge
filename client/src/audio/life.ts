@@ -14,6 +14,7 @@
 // calls from the same places.
 
 import seabirds from '../../../art/sound/seabirds.json';
+import swimmers from '../../../art/sound/swimmers.json';
 import type { LifeKind } from '../catalog/types.gen';
 import { type FlockPlace, flockAt, own, type Pose } from '../life/flock';
 import type { LifeSeen } from '../net/messages';
@@ -109,6 +110,73 @@ export function lifeEvents(r: LifeRecipes, x: LifeInput, from: number, to: numbe
         pan: panOf(x.listener, middle, x.look),
         seed: n,
       });
+    }
+  }
+  return out;
+}
+
+export type WaterRecipes = typeof swimmers;
+
+export const WATER_RECIPES: WaterRecipes = swimmers;
+
+/** Something heard of the life in the water: a splash or a breath, how loud, panned how, how big and its own number. */
+export interface WaterSound {
+  kind: 'splash' | 'breath';
+  level: number;
+  pan: number;
+  size: number;
+  seed: number;
+}
+
+/** Where something was heard from: m east and north, and how big, 0 to 1. */
+export interface WaterSource {
+  east: number;
+  north: number;
+  size?: number;
+}
+
+/**
+ * The splashes and breaths of a frame as heard at the listener: each
+ * splash and breath the page drew, fainter with distance, a point
+ * source's 6 dB each time the distance doubles, and none beyond its reach.
+ */
+export function waterSounds(
+  r: WaterRecipes,
+  listener: At,
+  look: number,
+  splashes: readonly WaterSource[],
+  splashCount: number,
+  breaths: readonly WaterSource[],
+  breathCount: number,
+  out: WaterSound[],
+): WaterSound[] {
+  out.length = 0;
+  const hear = (kind: 'splash' | 'breath', s: WaterSource, i: number): void => {
+    const c = r[kind];
+    const d = Math.hypot(s.east - listener.east, s.north - listener.north);
+    const size = s.size ?? 1;
+    const level =
+      c.level * pointLevel(d, c.near, c.reach) * (kind === 'splash' ? 0.3 + 0.7 * size : 1);
+    if (level > 0) {
+      out.push({
+        kind,
+        level,
+        pan: panOf(listener, s, look),
+        size,
+        seed: Math.floor(s.east * 7 + s.north * 13) + i,
+      });
+    }
+  };
+  for (let i = 0; i < splashCount; i++) {
+    const s = splashes[i];
+    if (s !== undefined) {
+      hear('splash', s, i);
+    }
+  }
+  for (let i = 0; i < breathCount; i++) {
+    const b = breaths[i];
+    if (b !== undefined) {
+      hear('breath', b, i);
     }
   }
   return out;
