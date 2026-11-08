@@ -159,7 +159,8 @@ func (q *Queries) InsertSailLink(ctx context.Context, arg InsertSailLinkParams) 
 }
 
 const knockerOf = `-- name: KnockerOf :one
-SELECT a.kind, coalesce(a.born, 0)::integer AS born, (a.rules_at IS NOT NULL)::boolean AS rules, sl.name, sl.look,
+SELECT a.kind, coalesce(a.born, 0)::integer AS born, (a.rules_at IS NOT NULL)::boolean AS rules,
+  (a.rested_at IS NOT NULL)::boolean AS rested, sl.name, sl.look,
   coalesce(sl.version, '')::text AS version, coalesce(sl.skin, '')::text AS skin, coalesce(sl.hair, '')::text AS hair,
   coalesce(sl.colour, '')::text AS colour, coalesce(sl.finish, '')::text AS finish, sl.look_chosen
 FROM account a
@@ -171,6 +172,7 @@ type KnockerOfRow struct {
 	Kind       string
 	Born       int32
 	Rules      bool
+	Rested     bool
 	Name       string
 	Look       string
 	Version    string
@@ -189,6 +191,7 @@ func (q *Queries) KnockerOf(ctx context.Context, id pgtype.UUID) (KnockerOfRow, 
 		&i.Kind,
 		&i.Born,
 		&i.Rules,
+		&i.Rested,
 		&i.Name,
 		&i.Look,
 		&i.Version,

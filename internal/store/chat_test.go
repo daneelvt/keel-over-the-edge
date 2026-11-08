@@ -113,6 +113,9 @@ func TestReports(t *testing.T) {
 	if tk, err := s.Talker(ctx, ann); err != nil || !tk.Rested {
 		t.Fatalf("Ann's chat: %+v %v", tk, err)
 	}
+	if k, err := s.Knocker(ctx, ann); err != nil || !k.Rested {
+		t.Fatalf("Ann's knocks are not rested: %+v %v", k, err)
+	}
 
 	r, err := s.Report(ctx, first.ID)
 	if err != nil || len(r.Lines) != 2 || !r.Lines[1].Reported || r.Lines[0].Text != "zebrafish one" || len(r.People) != 2 || r.People[1].Band != "13-17" {

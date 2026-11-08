@@ -85,6 +85,9 @@ type Knocker struct {
 	Kind  Kind
 	Born  int32
 	Rules bool
+	// Rested: reports rested the player's chat and knocks until the owner
+	// looks.
+	Rested bool
 }
 
 // Knocker finds an account as a knock shows it: ErrNotFound for none.
@@ -97,7 +100,7 @@ func (s *Store) Knocker(ctx context.Context, id AccountID) (Knocker, error) {
 		return Knocker{}, err
 	}
 	return Knocker{
-		Name: r.Name, Kind: Kind(r.Kind), Born: r.Born, Rules: r.Rules,
+		Name: r.Name, Kind: Kind(r.Kind), Born: r.Born, Rules: r.Rules, Rested: r.Rested,
 		Look: lookOfRow(r.Look, r.Version, r.Skin, r.Hair, r.Colour, r.Finish, r.LookChosen),
 	}, nil
 }

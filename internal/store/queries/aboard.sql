@@ -16,7 +16,8 @@ WHERE l.hash = @hash;
 
 -- name: KnockerOf :one
 -- An account as a knock shows it, and what it may do.
-SELECT a.kind, coalesce(a.born, 0)::integer AS born, (a.rules_at IS NOT NULL)::boolean AS rules, sl.name, sl.look,
+SELECT a.kind, coalesce(a.born, 0)::integer AS born, (a.rules_at IS NOT NULL)::boolean AS rules,
+  (a.rested_at IS NOT NULL)::boolean AS rested, sl.name, sl.look,
   coalesce(sl.version, '')::text AS version, coalesce(sl.skin, '')::text AS skin, coalesce(sl.hair, '')::text AS hair,
   coalesce(sl.colour, '')::text AS colour, coalesce(sl.finish, '')::text AS finish, sl.look_chosen
 FROM account a

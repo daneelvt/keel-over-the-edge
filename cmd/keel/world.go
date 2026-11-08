@@ -768,7 +768,7 @@ func (p *process) knocker(ctx context.Context, a bus.Account) (edge.Knocker, err
 	if err != nil {
 		return edge.Knocker{}, err
 	}
-	return edge.Knocker{Name: k.Name, Look: p.lookCode(store.Account{ID: store.AccountID(a), Look: k.Look}), Born: k.Born, Rules: k.Rules}, nil
+	return edge.Knocker{Name: k.Name, Look: p.lookCode(store.Account{ID: store.AccountID(a), Look: k.Look}), Born: k.Born, Rules: k.Rules, Rested: k.Rested}, nil
 }
 
 func (p *process) watchTarget(ctx context.Context, key string) (watch.Target, error) {

@@ -69,6 +69,9 @@ type Knocker struct {
 	Look  uint32
 	Born  int32 // year × 100 + month; 0 for not answered
 	Rules bool  // the Rules of the sea accepted
+	// Rested: reports rested the sailor's chat and knocks until the
+	// game's owner looks; their knocks read as the boat not taking crew.
+	Rested bool
 }
 
 // knock is a knock waiting for its skipper's answer.
@@ -343,6 +346,10 @@ func (c *conn) knockCommand(token string, now time.Time) {
 	}
 	if !mayBoard(who, now) {
 		c.knocked(pb.KnockState_KNOCK_STATE_FIRST, l.Name, 0, "")
+		return
+	}
+	if who.Rested {
+		c.knocked(pb.KnockState_KNOCK_STATE_CLOSED, l.Name, 0, "")
 		return
 	}
 	d.knowName(l.Skipper, l.Name)

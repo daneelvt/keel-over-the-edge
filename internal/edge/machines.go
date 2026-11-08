@@ -178,6 +178,10 @@ func (c *conn) machineKnock(token, machine string, now time.Time) {
 		c.knockedAs(t.Name, pb.KnockState_KNOCK_STATE_FIRST, l.Name, 0, "")
 		return
 	}
+	if who.Rested {
+		c.knockedAs(t.Name, pb.KnockState_KNOCK_STATE_CLOSED, l.Name, 0, "")
+		return
+	}
 	f := e.cfg.Bus.Frames.Acquire()
 	s := findBoat(f, l.Skipper)
 	kn := &knock{skipper: l.Skipper, by: c, name: t.Name, skipperName: l.Name, approver: l.Owner, machine: m, ownerName: who.Name}
