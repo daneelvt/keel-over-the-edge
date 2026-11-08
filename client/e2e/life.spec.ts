@@ -122,7 +122,10 @@ test('two players and a spectator see the same birds in the same places', async 
   }
 });
 
-test('a pod rides one boat’s bow, at that bow on every page', async ({ browser, request }) => {
+test('a pod rides one boat’s bow, at that bow on every page', { tag: '@world' }, async ({
+  browser,
+  request,
+}) => {
   test.setTimeout(240_000);
   const contexts: BrowserContext[] = [];
   // A steady breeze, so the boat has way on whatever the world's weather is.
