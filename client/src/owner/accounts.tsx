@@ -10,7 +10,7 @@
 // deleted, each that cannot be taken back first counted by keel and
 // confirmed in the card with keel's own words; its owner's flag, priority
 // and machine sailors allowed. The token lifetime of AI apps is set here
-// too. An account's flag and priority are also on the world's tab, beside
+// too, and links to come aboard (settings.tsx). An account's flag and priority are also on the world's tab, beside
 // its boat and its place in the queue.
 
 import { useEffect, useReducer, useRef, useState } from 'preact/hooks';
@@ -52,6 +52,7 @@ import {
 import { hidden } from './life';
 import type { Act } from './lifecycle';
 import { AISignIn, MAX_CAP, plural } from './machines';
+import { SailWithSettings } from './settings';
 
 /** How often the card shown is read again, ms. */
 export const CARD_EVERY = 5000;
@@ -830,6 +831,7 @@ export function AccountsTab({
           <p data-field="account-counts">{accounts === null ? '—' : countsWords(accounts)}</p>
         </section>
         {accounts !== null ? <AISignIn accounts={accounts} act={act} /> : null}
+        {accounts !== null ? <SailWithSettings act={act} /> : null}
         <Search open={open} chosen={chosen} again={again} />
       </div>
       <aside>

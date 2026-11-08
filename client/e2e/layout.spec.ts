@@ -2218,3 +2218,153 @@ test('the player’s own panel keeps Set sail in view with their boat, and the b
   }
   expect(found).toEqual([]);
 });
+
+// Sailing together, on every screen: the controls offered, the knocks on
+// the skipper's boat, the player's own knock and the line while they hold
+// the controls with others aboard stand under the case, clear of every
+// part, upright over no more of the boat than its masthead; the plate at
+// the foot, in the controls' place, one row, clear of every part and the
+// boat, centred; the windows (who is aboard, going ashore's
+// question, the skipper's link) within the screen. Every key 44 pixels
+// or more; nothing that steers while the player does not hold the
+// controls.
+test('sailing together’s parts stand clear of the instruments and the boat on every screen, their keys 44 px', async ({
+  page,
+}) => {
+  test.skip(test.info().project.name === 'webgpu', 'the panels are the same on either back end');
+  test.setTimeout(150_000);
+  await page.setViewportSize({ width: SCREENS[0].width, height: SCREENS[0].height });
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  // The skipper's link as the server would answer it.
+  const expires = new Date(Date.now() + 24 * 3_600_000).toISOString();
+  await page.route('**/api/sail/link', (r) =>
+    r.fulfill({
+      json: { live: true, expires },
+    }),
+  );
+  await openScene(page, '', true);
+  await page.evaluate(() => {
+    const k = globalThis.keel;
+    k.setState({ sheetLimit: 0.05, boom: 0, surge: 0 });
+    k.setControls(0, 0);
+    k.render();
+  });
+  const SCENES = [
+    { name: 'knocks', steers: true },
+    { name: 'knocking', steers: true },
+    { name: 'skipper', steers: true },
+    { name: 'skipper-away', steers: false },
+    { name: 'aboard', steers: false },
+    { name: 'aboard-holding', steers: true },
+    { name: 'handed', steers: false },
+    { name: 'list', steers: false },
+    { name: 'list-skipper', steers: false },
+    { name: 'ashore', steers: false },
+    { name: 'link', steers: true },
+  ] as const;
+  const found: string[] = [];
+  for (const s of SCREENS) {
+    await page.setViewportSize({ width: s.width, height: s.height });
+    await page.waitForFunction(
+      ({ width, height }) => innerWidth === width && innerHeight === height,
+      { width: s.width, height: s.height },
+    );
+    for (const scene of SCENES) {
+      await page.evaluate(({ name, sailor }) => globalThis.keel.deckScene(name, sailor), {
+        name: scene.name,
+        sailor: LONG,
+      });
+      const sel =
+        '.deck-knock, .deck-knocking, .deck-line, .deck-plate, .deck-handed, .deck-window';
+      await expect(page.locator(sel).first()).toBeVisible();
+      await page.evaluate(() => globalThis.keel.render());
+      const seen = await parts(page);
+      const where = `${s.name}, ${scene.name}`;
+      const faults = await page.evaluate(
+        ({ sel, boat, others, upright, steers }) => {
+          const out: string[] = [];
+          const covers = (
+            a: { left: number; top: number; right: number; bottom: number },
+            b: { left: number; top: number; right: number; bottom: number },
+          ) =>
+            Math.min(a.right, b.right) - Math.max(a.left, b.left) > 0.5 &&
+            Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top) > 0.5;
+          for (const e of document.querySelectorAll<HTMLElement>(sel)) {
+            const r = e.getBoundingClientRect();
+            const name = `.${[...e.classList].join('.')}`;
+            if (
+              r.left < -0.5 ||
+              r.top < -0.5 ||
+              r.right > innerWidth + 0.5 ||
+              r.bottom > innerHeight + 0.5
+            ) {
+              out.push(
+                `${name} is off the screen (${[r.left, r.top, r.right, r.bottom].map(Math.round)})`,
+              );
+            }
+            for (const b of e.querySelectorAll('button')) {
+              const k = b.getBoundingClientRect();
+              if (k.width < 43.5 || k.height < 43.5) {
+                out.push(
+                  `${name}: “${b.textContent}” is ${Math.round(k.width)} × ${Math.round(k.height)}`,
+                );
+              }
+            }
+            // A window stands over the rest while it is open.
+            if (e.classList.contains('deck-window')) {
+              continue;
+            }
+            for (const o of others) {
+              if (covers(r, o) && !o.name.startsWith('the line')) {
+                out.push(`${name} covers ${o.name}`);
+              }
+            }
+            if (boat !== null) {
+              // Under the case, held upright, as the case may: the masthead,
+              // never the hull.
+              const top = e.closest('.hud-top') !== null;
+              const hull = top && upright ? { ...boat, top: (boat.top + boat.bottom) / 2 } : boat;
+              if (covers(r, hull)) {
+                out.push(`${name} covers the boat`);
+              }
+            }
+          }
+          const plate = document.querySelector('.deck-plate')?.getBoundingClientRect();
+          if (plate !== undefined) {
+            if (Math.abs((plate.left + plate.right) / 2 - innerWidth / 2) > 1) {
+              out.push('the plate is not centred');
+            }
+            if (plate.height > 56) {
+              out.push(`the plate is ${Math.round(plate.height)} px tall: more than a row`);
+            }
+          }
+          const steering =
+            document.querySelector('[data-control=helm], [data-control=sheet], .pilot-head') !==
+            null;
+          if (steering !== steers) {
+            out.push(steers ? 'the controls are gone' : 'a control that steers shows');
+          }
+          return out;
+        },
+        {
+          sel,
+          boat: seen.boat,
+          others: seen.parts,
+          upright: s.upright,
+          steers: scene.steers,
+        },
+      );
+      for (const f of faults) {
+        found.push(`${where}: ${f}`);
+      }
+      if (s.name === 'small Android phone upright') {
+        await test.info().attach(`${where}.png`, {
+          body: await page.screenshot(),
+          contentType: 'image/png',
+        });
+      }
+    }
+  }
+  await page.evaluate(() => globalThis.keel.deckScene(null));
+  expect(found).toEqual([]);
+});

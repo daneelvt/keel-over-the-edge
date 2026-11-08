@@ -19,6 +19,10 @@ boats:
     name: Jolly boat
     description: Single-handed dinghy
     capacity: 1
+    # Where the people aboard are: the helmsman on the starboard side deck,
+    # where the helm's seat is, facing in.
+    stations:
+      - { at: [0.69, 0.31, 0.35], pose: seated, facing: 270 }
     lengthOverall: 4.2
     beam: 1.39 # ILCA class
     # A sailing vessel of less than 20 m may combine her sidelights and
@@ -280,6 +284,15 @@ boats:
     name: Keelboat
     description: Day-sailing keelboat
     capacity: 5
+    # Where the people aboard are: the helmsman on the starboard gunwale,
+    # then the crew on the side decks forward and aft of the helm, their
+    # feet in the cockpit, and one standing by the starboard shrouds.
+    stations:
+      - { at: [1.15, 0.7, 1.25], pose: seated, facing: 270 }
+      - { at: [-0.95, 0.71, 0.45], pose: seated, facing: 90 }
+      - { at: [0.95, 0.71, 0.45], pose: seated, facing: 270 }
+      - { at: [-0.95, 0.7, 2.1], pose: seated, facing: 90 }
+      - { at: [0.95, 0.71, -0.45], pose: standing, facing: 0 }
     lengthOverall: 6.86 # ORC certificate
     beam: 2.446 # ORC certificate
     # A sailing vessel of less than 20 m may combine her lights in one
@@ -531,6 +544,50 @@ boats:
     name: Tall ship
     description: Traditional sailing ship
     capacity: 40
+    # Where the people aboard are: her helmsman at the wheel, then the
+    # quarterdeck, the waist at the rails and by the masts, and the
+    # forecastle, all standing.
+    stations:
+      - { at: [0, 5, 12.6], pose: standing, facing: 0 } # at the wheel
+      - { at: [1.4, 4.97, 12.4], pose: standing, facing: 0 } # the quarterdeck, beside the wheel
+      - { at: [-1.4, 4.97, 12.4], pose: standing, facing: 0 }
+      - { at: [3.1, 4.78, 9], pose: standing, facing: 90 } # at the quarterdeck's rails
+      - { at: [-3.1, 4.78, 9], pose: standing, facing: 270 }
+      - { at: [1, 4.84, 8.6], pose: standing, facing: 0 } # by the mizzen
+      - { at: [-1, 4.84, 8.6], pose: standing, facing: 0 }
+      - { at: [2.2, 4.75, 6.2], pose: standing, facing: 0 } # at the break of the quarterdeck
+      - { at: [-2.2, 4.75, 6.2], pose: standing, facing: 0 }
+      - { at: [1.3, 5.1, 15.1], pose: standing, facing: 180 } # at the taffrail
+      - { at: [-1.3, 5.1, 15.1], pose: standing, facing: 180 }
+      - { at: [3.3, 3.2, -10], pose: standing, facing: 90 } # the waist, at the rails
+      - { at: [-3.3, 3.2, -10], pose: standing, facing: 270 }
+      - { at: [3.35, 3.09, -8], pose: standing, facing: 90 }
+      - { at: [-3.35, 3.09, -8], pose: standing, facing: 270 }
+      - { at: [3.4, 3, -6], pose: standing, facing: 90 }
+      - { at: [-3.4, 3, -6], pose: standing, facing: 270 }
+      - { at: [3.75, 2.92, -4], pose: standing, facing: 90 }
+      - { at: [-3.75, 2.92, -4], pose: standing, facing: 270 }
+      - { at: [3.8, 2.86, -1.5], pose: standing, facing: 90 }
+      - { at: [-3.8, 2.86, -1.5], pose: standing, facing: 270 }
+      - { at: [3.8, 2.84, 1], pose: standing, facing: 90 }
+      - { at: [-3.8, 2.84, 1], pose: standing, facing: 270 }
+      - { at: [3.8, 2.84, 3], pose: standing, facing: 90 }
+      - { at: [-3.8, 2.84, 3], pose: standing, facing: 270 }
+      - { at: [1.4, 2.95, -1.1], pose: standing, facing: 270 } # by the mainmast's fife rail
+      - { at: [-1.4, 2.95, -1.1], pose: standing, facing: 90 }
+      - { at: [1.4, 2.94, 0.3], pose: standing, facing: 270 }
+      - { at: [-1.4, 2.94, 0.3], pose: standing, facing: 90 }
+      - { at: [1.5, 3.31, -10.6], pose: standing, facing: 270 } # by the foremast
+      - { at: [-1.5, 3.31, -10.6], pose: standing, facing: 90 }
+      - { at: [0.9, 4.41, -15.3], pose: standing, facing: 0 } # the forecastle
+      - { at: [-0.9, 4.41, -15.3], pose: standing, facing: 0 }
+      - { at: [2.5, 4.25, -13.4], pose: standing, facing: 90 }
+      - { at: [-2.5, 4.25, -13.4], pose: standing, facing: 270 }
+      - { at: [2.6, 4.96, 13.2], pose: standing, facing: 90 } # the quarterdeck's after corners
+      - { at: [-2.6, 4.96, 13.2], pose: standing, facing: 270 }
+      - { at: [3.6, 2.87, 4.6], pose: standing, facing: 90 } # the waist, abreast of the ladders
+      - { at: [-3.6, 2.87, 4.6], pose: standing, facing: 270 }
+      - { at: [0, 4.36, -14], pose: standing, facing: 0 } # the forecastle, the lookout
     # Her hull on deck, which meets other boats and the land; 43.6 m over
     # her jibboom.
     lengthOverall: 33.3

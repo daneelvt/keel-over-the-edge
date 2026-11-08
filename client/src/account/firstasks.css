@@ -1,0 +1,102 @@
+/* SPDX-License-Identifier: AGPL-3.0-only */
+
+/* The questions asked once: the start screen's panel, wherever it is shown,
+   with its own colours where it is not on the start screen. */
+
+.first-ask {
+  --panel: rgb(26 36 44 / 92%);
+  --ink: #f2efe7;
+  --faint: rgb(242 239 231 / 66%);
+  --gold: #e8b450;
+  --warn: #f3b3a6;
+  color: var(--ink);
+  font:
+    16px / 1.35 "Alegreya Sans",
+    system-ui,
+    sans-serif;
+}
+
+.first-ask-refusal {
+  margin: 8px 0;
+}
+
+/* The month and year, side by side: 16px or more, so iOS does not zoom. */
+.born {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.born-legend {
+  padding: 0;
+  margin-bottom: 2px;
+  color: var(--faint);
+  font-size: 14px;
+}
+
+.first-ask .born-legend {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.born-boxes {
+  display: grid;
+  grid-template-columns: 3fr 2fr;
+  gap: 8px;
+}
+
+.born-box {
+  min-width: 0;
+  min-height: 44px;
+  padding: 0 10px;
+  border: 1px solid rgb(242 239 231 / 35%);
+  border-radius: 8px;
+  background: rgb(255 255 255 / 10%);
+  color: var(--ink);
+  font:
+    18px "Alegreya Sans",
+    system-ui,
+    sans-serif;
+}
+
+.born-box option {
+  background: #1a242c;
+  color: #f2efe7;
+}
+
+.born-box:focus {
+  outline: 2px solid var(--gold);
+  outline-offset: 1px;
+}
+
+.born-box[aria-invalid="true"] {
+  border-color: var(--warn);
+}
+
+.rules-lines {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding-left: 1.2em;
+  font-size: 15px;
+}
+
+.first-ask-links a,
+.start-pages a {
+  color: var(--gold);
+}
+
+.start-pages {
+  margin: 0;
+  text-align: center;
+  font-size: 14px;
+}

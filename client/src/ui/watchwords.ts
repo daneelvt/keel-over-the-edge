@@ -54,6 +54,7 @@ export type WatchEndWhy =
   | 'own'
   | 'quick'
   | 'busy'
+  | 'aboard'
   | 'other';
 
 /** The words of a watch ended or refused, the sailor named as the server names them. */
@@ -73,6 +74,8 @@ export function endedText(why: WatchEndWhy, sailor: string): string {
       return 'One at a time: try again in a moment.';
     case 'busy':
       return 'The harbour is busy: try again in a moment.';
+    case 'aboard':
+      return 'Go ashore first to watch another boat.';
     default:
       return `${sailor} cannot be watched now.`;
   }

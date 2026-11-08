@@ -15,6 +15,31 @@ import { FLEET_RECORD_BYTES, writeRecord } from '../../net/view';
 import { afterClose } from './policy';
 import { harbourOf, lightSeen, Session } from './session';
 
+/** The command for something the page asks of the boat's deck. */
+type DeckAsk = Extract<
+  ToWorker,
+  { type: 'knock' | 'answer' | 'hand' | 'take' | 'giveBack' | 'ashore' | 'closeKnocks' }
+>;
+
+function deckCommand(s: Session, now: number, m: DeckAsk): Uint8Array<ArrayBuffer> {
+  switch (m.type) {
+    case 'knock':
+      return s.knockCommand(now, m.token);
+    case 'answer':
+      return s.answerCommand(now, m.knock, m.let);
+    case 'hand':
+      return s.handCommand(now, m.to);
+    case 'take':
+      return s.takeCommand(now);
+    case 'giveBack':
+      return s.giveBackCommand(now);
+    case 'ashore':
+      return s.ashoreCommand(now, m.who);
+    case 'closeKnocks':
+      return s.closeKnocksCommand(now, m.closed);
+  }
+}
+
 /** The part of a WebSocket the worker uses. */
 export interface Socket {
   binaryType: BinaryType;
@@ -139,6 +164,18 @@ export class NetWorker {
           this.#setStatus(this.#boatQueued ? 'queued' : 'idle');
         }
         break;
+      case 'knock':
+      case 'answer':
+      case 'hand':
+      case 'take':
+      case 'giveBack':
+      case 'ashore':
+      case 'closeKnocks':
+        if (this.#session !== null) {
+          this.#send(deckCommand(this.#session, this.#d.now(), m));
+          this.#arm();
+        }
+        break;
       case 'frame':
         if (this.#session !== null) {
           this.#session.frameMs = Math.round(m.ms);
@@ -241,7 +278,9 @@ export class NetWorker {
           this.#attempt = 0;
           const w = r.welcome;
           const watching = w.watching ?? null;
+          const aboard = w.aboard ?? null;
           this.#watching = watching !== null;
+          // Aboard, the page sends controls only while it holds them.
           this.#sailing = !this.#watching;
           if (this.#sailing) {
             this.#boatQueued = false;
@@ -271,6 +310,8 @@ export class NetWorker {
                     mine: watching.mine,
                     look: watching.look,
                   },
+            aboard:
+              aboard === null ? null : { skipper: aboard.skipper, look: aboard.look, seat: aboard.seat },
             look: w.look,
             boatLook: w.boatLook,
             boatName: w.boatName,
@@ -334,6 +375,21 @@ export class NetWorker {
         }
         case 'watchers':
           this.#d.post({ type: 'watchers', count: r.count });
+          break;
+        case 'knockCard':
+          this.#d.post({ type: 'knockCard', card: r.card });
+          break;
+        case 'knocking':
+          this.#d.post({ type: 'knocking', knocking: r.knocking });
+          break;
+        case 'crew':
+          this.#d.post({ type: 'crew', crew: r.crew });
+          break;
+        case 'handed':
+          this.#d.post({ type: 'handed', handed: r.handed });
+          break;
+        case 'ashore':
+          this.#d.post({ type: 'ashore', why: r.why });
           break;
         case 'look':
           this.#d.post({ type: 'look', look: r.look });

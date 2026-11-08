@@ -197,6 +197,18 @@ the tool checks that and generates `catalog.PhysicsParams` for the server and
 `writeParams` (`client/src/predict/params.gen.ts`) for the client, so the
 three cannot drift.
 
+A boat's `stations` are where the people aboard are drawn, one for each
+person it can carry (`capacity`), in seat order: the first is the helm,
+where its sailor is today (the gunwale's seat of a boat with a tiller, the
+`sailor` node of one with a wheel), then each seat's; each a point in the
+model's frame, standing (the deck between the feet) or seated (the seat's
+edge, as a dinghy's helmsman sits), and the way the person faces. The tool
+checks that there is one for each person, within the hull's beam and
+length, above the waterline and below the boom, and none within 0.45 m of
+another; `render/sailors/crew.test.ts` holds each to its model's deck
+within 1 cm, the first to the helm, with nothing of the hull where a
+person stands.
+
 ## The physics package
 
 `internal/physics` steps boats. The server runs it natively, and the client
@@ -7271,6 +7283,7 @@ things and their pictures stay in one wind. The developer page is
 |-------|------|
 | `?sandbox` | The offline sandbox alone: no server, no session, no start screen. The browser tests of the scene use it |
 | `?boat=keelboat` | The sandbox's boat: any of the catalog's boats, by its id (the first if the catalog has none of that id). Every kind is prepared in the module; the developer panel changes it |
+| `?crew=5` | That many people aboard the sandbox's boat, its capacity at most, each in a look of their own, the same at every load, every sixth a machine; with more than one, the second holds the controls (below) |
 | `?wind=12,45` | The sandbox's wind, steady: knots 10 m up, and the degrees it comes from |
 | `?weather=stormy` | The sandbox's weather: one of the catalog's regimes (`settled`, `trade`, `unsettled`, `stormy`), or `steady` |
 | `?dev` | The developer panel (a lazy import, outside the first download); see below |
@@ -7353,7 +7366,27 @@ scale with the boat's length or its masthead's height, whichever is the
 more, against the catalog's first boat's (`sizeOf` in `camera.ts`): about
 1.4 for the keelboat.
 
+**People aboard** (`client/src/render/sailors/crew.ts`): when others are
+aboard the boat in view (the connection's `crew`), whoever holds the
+controls is its sailor at the helm, in their look, as the one sailor is
+drawn otherwise; the skipper, while another holds them, stands at that
+one's station; everyone else at their seat's (the catalog's `stations`).
+The sail's machine mark stays the skipper's. The people are posed once and
+drawn still and rigid, each level in one instanced draw however many looks:
+the nearest 12 within 60 m of the camera as their looks' deck level,
+skinned once on the CPU (the clips' `helm` seated, `standing-idle`
+standing); the rest as their looks' far level, stood up for a standing
+station by moving each of its vertices with the bones of the deck level's
+vertex nearest it seated. Each level's figures are triangle lists in a
+float texture its vertex stage reads by vertex and instance, so an
+instance runs its level's largest figure's vertices, those past its own
+folded away. The fleet's looks' layered atlases colour them. From the
+tall ship's chase camera her forty are all far: one more draw (and its
+shadow's), some 11,500 triangles.
+
 ```sh
+# https://localhost:5173/?sandbox&boat=tall-ship&crew=40   forty aboard the tall ship
+# https://localhost:5173/?sandbox&boat=keelboat&crew=5     five aboard the keelboat
 # https://localhost:5173/?sandbox&boat=keelboat        the keelboat in the sandbox: R reefs her, F shakes a reef out
 # https://localhost:5173/?sandbox&boat=keelboat&dev    with the panel, to change the boat
 # https://localhost:5173/?sandbox&boat=keelboat&sky=midnight   her tricolour lit at the masthead
@@ -7565,6 +7598,12 @@ where the server has it at the tick it is drawn at, sees it turn, and still
 sees it through its grace after its page closes; and, through the lag proxy
 (or netem), for a minute no near boat held in more than 1% of frames but in
 retransmission timeouts, which it reports, and no correction drawn at once.
+`crew.spec.ts` puts people aboard at a phone's 360 × 640: forty aboard the
+tall ship, each at their station on her deck and one at the wheel, in a
+draw or two more than her one sailor, her frames, each drawn and waited
+for, little dearer than with her one sailor and, on a real GPU, within a
+frame at 60 Hz, from the chase camera and close (`@long`); and the
+keelboat's five on her deck.
 `fleet.spec.ts` draws other boats in the sandbox: a boat of the fleet as
 the own boat at seven poses, and a keelboat as the own keelboat with her
 jib and reefed, 64 boats within 22 draw calls and 200,000 triangles, a

@@ -27,7 +27,7 @@ its rig's block of 56 bytes; then, while the boat is falling over the lip,
 its over block of 8 bytes; then the entries:
 
   offset  bytes  field
-       0      1  layout: 13
+       0      1  layout: 14
        1      8  tick (int64)
        9      2  base: how many ticks before this one the base snapshot is
                  (uint16); 0 for none: the view starts empty
@@ -37,7 +37,12 @@ its over block of 8 bytes; then the entries:
                  over block follows the blocks before it, or the header;
                  bit 4, the boat stays where it is, not stepped, while its
                  owner's free camera roams; bit 5, the rig's block follows
-                 the blocks before it, or the header; the rest 0
+                 the blocks before it, or the header; bit 6, the
+                 connection does not hold the boat's controls: its inputs
+                 steer nothing, and it predicts nothing (a sailor holds
+                 their own boat's unless they handed them to someone
+                 aboard, a crew member once handed them, a spectator
+                 never); the rest 0
       12      4  seq of the own boat's control word in force (uint32)
       16      2  arrival margin in ticks (int16): the lowest since the
                  previous snapshot, how many ticks before its tick an input

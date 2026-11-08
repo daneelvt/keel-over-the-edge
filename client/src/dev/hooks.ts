@@ -60,7 +60,7 @@ import type { Game } from '../game/game';
 import type { LifeBird } from '../life/draw';
 import type { GullTown } from '../life/gulls';
 import { nowUs, worldUs } from '../net/clock';
-import type { BumpTold, ChartEntry, ChartSubject, LifeSeen } from '../net/messages';
+import type { BumpTold, ChartEntry, ChartSubject, KnockStateTold, LifeSeen } from '../net/messages';
 import type { Online } from '../net/online';
 import type { Cascade } from '../ocean/detail';
 import { FieldMaker, newFields } from '../ocean/field';
@@ -103,6 +103,7 @@ import {
 import { rungName, TIERS } from '../render/quality';
 import { CAMERA_PRESETS, type CameraView, type SeaScene } from '../render/scene';
 import { look } from '../render/sky';
+import { sandboxCrew } from '../sandbox/crewscene';
 import type { SandboxForecast } from '../sandbox/forecast';
 import { aboardScene, lifeScene, raiseScene } from '../sandbox/lifescene';
 import { KNOT, type Sandbox, SEA_STATES } from '../sandbox/sandbox';
@@ -111,6 +112,7 @@ import { hourAt, moonAgeAt, skyPeriods } from '../sky/skytime';
 import type { Barometer } from '../ui/barometer';
 import type { ShipsClock } from '../ui/clock';
 import type { Countdown } from '../ui/countdown';
+import type { DeckView } from '../ui/decklazy';
 import type { SailState } from '../ui/model';
 import type { Settings } from '../ui/settings';
 import type { WatchView } from '../ui/watchlazy';
@@ -120,6 +122,7 @@ import {
   drawnHeight,
   hexCentre as landHexCentre,
 } from '../workers/mesh/build';
+import { type DeckSceneName, deckScene } from './deckscenes';
 import { setSky } from './skypanel';
 
 export interface Info {
@@ -261,8 +264,8 @@ export type Sailing = (
   countdown?: Countdown;
   /** The full screen's switch and key. */
   fullScreen?: FullScreen;
-  /** The sandbox's screen drawn again, with a watch's parts or without. */
-  remount?: (watch: WatchView | null) => void;
+  /** The sandbox's screen drawn again, with a watch's parts or without, and sailing together's. */
+  remount?: (watch: WatchView | null, deck?: DeckView | null) => void;
   /** What the page did from the tap to the world's reveal; null before it. */
   revealed?: () => Revealed | null;
 };
@@ -291,6 +294,8 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
   };
   // The sea's life raised by hand, counted: each its own id and seed.
   let lifeRaised = 0;
+  // What the screen of the latest scene of sailing together asked of it.
+  let deckCalls: string[] = [];
   // Every notice shown, in order, for tests that look after it has gone.
   const noticesShown: string[] = [];
   sailing.chart?.notices.shown.subscribe((s) => {
@@ -1647,6 +1652,26 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
       );
     },
     /**
+     * The sandbox's screen as it is in a scene of sailing together (see
+     * deckscenes.ts), the sailor named in it, and a knock's state; null as
+     * it is while sailing alone. What the screen asks of it is kept, for
+     * deckCalls.
+     */
+    deckScene(name: DeckSceneName | null, sailor?: string, state?: KnockStateTold): void {
+      if (name === null) {
+        deckCalls = [];
+        sailing.remount?.(null, null);
+        return;
+      }
+      const scene = deckScene(name, sailor, state);
+      deckCalls = scene.calls;
+      sailing.remount?.(scene.watch, scene.deck);
+    },
+    /** What the screen of the latest deckScene asked of it, in order. */
+    deckCalls(): string[] {
+      return [...deckCalls];
+    },
+    /**
      * The question asked before the own boat leaves the water to watch, in
      * its window over the screen at sea, as the list shows it; false takes
      * it away. Resolves once it is drawn.
@@ -2369,6 +2394,94 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
         ) ??
           false);
       while (busy()) {
+        await new Promise((r) => setTimeout(r, 50));
+      }
+    },
+
+    /**
+     * Puts n people aboard the boat in view as the sandbox's ?crew does (the
+     * second at the helm), or none but its sailor for 0.
+     */
+    showCrew(n: number): Promise<void> {
+      return world.showCrew(n > 0 ? sandboxCrew(Math.min(n, world.kind.capacity), catalog) : null);
+    },
+
+    /**
+     * The people aboard drawn besides the one at the helm: how many, at
+     * which level, their figures' triangles, whether all are drawn in their
+     * own looks, the helm's look, and where each one's head is on screen
+     * (CSS pixels, with the dome's drop).
+     */
+    crew(): {
+      aboard: number;
+      ready: boolean;
+      near: number;
+      far: number;
+      nearTriangles: number;
+      farTriangles: number;
+      helm: string | null;
+      heads: { x: number; y: number; near: boolean; station: number }[];
+    } {
+      const c = world.crew;
+      const canvas = stage.gfx?.canvas;
+      const bs = world.boatScene;
+      return {
+        aboard: c.count,
+        ready: c.ready,
+        ...c.drawn,
+        helm: world.boat?.drawnLook()?.model ?? null,
+        heads: c.heads().map((h) => {
+          const p = h.at;
+          p.y -= domeDrop(Math.hypot(p.x - bs.x, p.z - bs.z));
+          p.project(stage.camera);
+          return {
+            x: ((p.x + 1) / 2) * (canvas?.clientWidth ?? 0),
+            y: ((1 - p.y) / 2) * (canvas?.clientHeight ?? 0),
+            near: h.near,
+            station: h.station,
+          };
+        }),
+      };
+    },
+
+    /**
+     * Draws n frames one after another, each waited for on the GPU before
+     * the next (no animation frames between), and returns the milliseconds
+     * a frame took: its main thread's work and its GPU's, end to end.
+     */
+    async frameCost(n: number): Promise<number> {
+      const backend = stage.gfx?.renderer.backend as
+        | { device?: GPUDevice; gl?: WebGL2RenderingContext }
+        | undefined;
+      const pixel = new Uint8Array(4);
+      const done = async (): Promise<void> => {
+        if (backend?.device !== undefined) {
+          await backend.device.queue.onSubmittedWorkDone();
+        } else if (backend?.gl !== undefined) {
+          // Reading a pixel back waits for everything drawn before it.
+          const gl = backend.gl;
+          gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+          gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, pixel);
+        }
+      };
+      stage.renderOnce(performance.now());
+      await done();
+      const t0 = performance.now();
+      for (let i = 0; i < n; i++) {
+        stage.renderOnce(performance.now());
+        await done();
+      }
+      return (performance.now() - t0) / n;
+    },
+
+    /** Resolves once everyone aboard is drawn in their own look, the helm's too, drawing frames meanwhile. */
+    async crewReady(): Promise<void> {
+      const c = world.crew;
+      for (;;) {
+        stage.renderOnce(performance.now());
+        if (c.ready && world.helmDrawn) {
+          return;
+        }
         await new Promise((r) => setTimeout(r, 50));
       }
     },

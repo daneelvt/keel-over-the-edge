@@ -35,8 +35,9 @@ const (
 	// state as float64, its autopilot's block if it has one, its ground
 	// block if it is aground, its rig's block if it has one, its over
 	// block if it is falling over the lip, then the view's entries; flag
-	// bit 4 while the boat stays.
-	SnapshotLayout = 13
+	// bit 4 while the boat stays, bit 6 while the connection does not
+	// hold its controls.
+	SnapshotLayout = 14
 	// MaxEntries is the most entries a snapshot may hold.
 	MaxEntries = 128
 	// MaxSnapshotSize is the longest snapshot this package writes: an
@@ -70,8 +71,14 @@ const (
 	// the headsails' state, the yards or the reef the sail is at is not
 	// zero, so a dinghy under full sail pays nothing.
 	RigHeld = 1 << 5
+	// Elsewhere: the connection does not hold the controls of the boat its
+	// snapshots are about: its inputs steer nothing, and its client draws
+	// the boat from the snapshots, predicting nothing. A sailor holds their
+	// own boat's unless they have handed them to someone aboard; a crew
+	// member holds them only once handed them; a spectator never does.
+	Elsewhere = 1 << 6
 
-	headerFlags = FarSampled | PilotHeld | GroundHeld | OverHeld | Staying | RigHeld
+	headerFlags = FarSampled | PilotHeld | GroundHeld | OverHeld | Staying | RigHeld | Elsewhere
 )
 
 const (
@@ -118,7 +125,10 @@ type Snapshot struct {
 	Over int64
 	// Stays: the boat stays where it is, not stepped (flag Staying).
 	Stays bool
-	State physics.State
+	// Elsewhere: the connection does not hold the boat's controls (flag
+	// Elsewhere).
+	Elsewhere bool
+	State   physics.State
 	// Entries is how many entries follow the header, and Header the
 	// header's length, where they begin.
 	Entries int
@@ -324,6 +334,7 @@ func ReadSnapshot(b []byte, s *Snapshot) error {
 	}
 	held, aground, rigged, falling := s.Flags&PilotHeld != 0, s.Flags&GroundHeld != 0, s.Flags&RigHeld != 0, s.Flags&OverHeld != 0
 	s.Stays = s.Flags&Staying != 0
+	s.Elsewhere = s.Flags&Elsewhere != 0
 	s.Header = headerLength(held, aground, rigged, falling)
 	if len(b) < s.Header {
 		return fmt.Errorf("protocol: a snapshot of %d bytes, shorter than its header and blocks", len(b))

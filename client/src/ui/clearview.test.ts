@@ -47,6 +47,8 @@ describe('the clear view', () => {
       { returned: 1 },
       { ended: { why: 'left', sailor: 'Iron Mary' } },
       { queued: true },
+      { knocks: 1 },
+      { handed: true },
     ];
     for (const c of cases) {
       expect(needed(CALM, { ...CALM, ...c }), JSON.stringify(c)).toBe(true);
@@ -54,8 +56,18 @@ describe('the clear view', () => {
   });
 
   test('not while that state merely holds, nor for anything else', () => {
-    const over = { ...CALM, overboard: true, takeover: true, queued: true, returned: 2 };
+    const over = {
+      ...CALM,
+      overboard: true,
+      takeover: true,
+      queued: true,
+      returned: 2,
+      knocks: 2,
+      handed: true,
+    };
     expect(needed(over, over)).toBe(false);
+    // A knock answered or gone needs nothing.
+    expect(needed(over, { ...over, knocks: 1 })).toBe(false);
     // Their end needs nothing: the count of returns only grows.
     expect(needed(over, { ...CALM, returned: 2 })).toBe(false);
     expect(needed(CALM, CALM)).toBe(false);

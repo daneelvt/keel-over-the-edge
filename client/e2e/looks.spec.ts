@@ -7,7 +7,7 @@
 
 import { expect, type Page, test } from '@playwright/test';
 import data from '../src/catalog/catalog.gen.json' with { type: 'json' };
-import { GAME, sail, sailor, setSail, stamp } from './helpers';
+import { answerBorn, GAME, sail, sailor, setSail, stamp } from './helpers';
 
 /** A look's code, as the wire carries it: five fields of 4 bits. */
 function codeOf(l: { look: string; version: string; skin: string; hair: string; colour: string }) {
@@ -56,6 +56,7 @@ test('a new sailor chooses a look in the picker, sails as it, and another page s
   await page.goto(GAME);
   const name = `Picker ${stamp()}`;
   await page.getByLabel('Your sailor’s name').fill(name);
+  await answerBorn(page);
   // Through the looks to the fourth look's second version, and its options.
   const look = data.sailors[3];
   if (look === undefined) {
@@ -123,6 +124,7 @@ test('a look changed ashore from the player’s own panel', async ({ context, pa
   await context.credentials.install();
   await page.goto(GAME);
   await page.getByLabel('Your sailor’s name').fill(`Ashore ${stamp()}`);
+  await answerBorn(page);
   await page.getByRole('button', { name: 'Set sail' }).click();
   await page.getByRole('button', { name: 'I’ve written it down' }).click({ timeout: 30_000 });
   await page.goto(GAME);
@@ -147,6 +149,7 @@ test('a sailor whose look the game drew is asked once: Keep keeps it', async ({
   await context.credentials.install();
   await page.goto(GAME);
   await page.getByLabel('Your sailor’s name').fill(`Drawn ${stamp()}`);
+  await answerBorn(page);
   await page.getByRole('button', { name: 'Set sail' }).click();
   await page.getByRole('button', { name: 'I’ve written it down' }).click({ timeout: 30_000 });
   const kept = await me(page);

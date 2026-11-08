@@ -322,6 +322,8 @@ export class Boat {
   #shown: BoatSailor | null = null;
   #shownMachine = false;
   #wanted: SailorLook | null = null;
+  /** Whether the sail carries the machine mark, as last asked. */
+  #wantedMark = false;
   #renderer: WebGPURenderer | null = null;
   #seed = 1;
 
@@ -501,11 +503,14 @@ export class Boat {
   /**
    * The sailor aboard takes a look: its art, loaded the first time (the
    * sailor drawn till then stays), and its colours; a machine sailor's look
-   * prints the machine mark on the sail. Resolves once the look is drawn.
+   * prints the machine mark on the sail (or as mark says: the boat's
+   * skipper's, while another is at the helm). Resolves once the look is
+   * drawn.
    */
-  async setLook(look: SailorLook): Promise<void> {
+  async setLook(look: SailorLook, mark = look.machine): Promise<void> {
     this.#wanted = look;
-    this.#printMark(look.machine);
+    this.#wantedMark = mark;
+    this.#printMark(mark);
     const renderer = this.#renderer;
     if (renderer === null) {
       return;
@@ -527,7 +532,7 @@ export class Boat {
     if (wanted === null || wanted.art !== look.art) {
       // Another look was asked for meanwhile: it is drawn when it loads.
       if (wanted !== null && this.#sailors.has(wanted.art)) {
-        await this.setLook(wanted);
+        await this.setLook(wanted, this.#wantedMark);
       }
       return;
     }
@@ -575,7 +580,9 @@ export class Boat {
     this.#renderer = renderer;
     this.#seed = seed;
     // A look asked for before (the boat watched) is the one drawn.
-    await this.setLook(this.#wanted ?? look);
+    await (this.#wanted === null
+      ? this.setLook(look)
+      : this.setLook(this.#wanted, this.#wantedMark));
   }
 
   /**

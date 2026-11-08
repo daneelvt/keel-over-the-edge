@@ -79,6 +79,7 @@ import {
 } from './quality';
 import { type Gfx, type Wanted, wantsCompat } from './renderer';
 import { RightOfWay, type Seen } from './rightofway';
+import { CrewDeck, type CrewShown, helmLook } from './sailors/crew';
 import { Shadows } from './shadows';
 import { StormCones } from './signals';
 import { look, Sky, toLinear } from './sky';
@@ -188,6 +189,8 @@ export class SeaScene {
   boat: Boat | null = null;
   /** The other boats, drawn many at once, a view for each kind. */
   readonly fleet = new FleetViews(catalog.boats, catalog);
+  /** The people aboard the boat in view besides its sailor at the helm, at their stations. */
+  readonly crew = new CrewDeck((code) => sailorLookOf(catalog, code));
   /** Where the other boats' poses come from: the game's fleet online, or a test's. */
   fleetSource: FleetSource | null = null;
   /** The world's land, once there is a world whose land may be drawn. */
@@ -498,14 +501,56 @@ export class SeaScene {
     }
   }
 
-  /** Draws the sailor of the boat in view in a look: the player's own, or the one watched. */
+  /**
+   * Draws the sailor of the boat in view in a look: the player's own, or the
+   * one watched; while others are aboard, the sailor at the helm is whoever
+   * holds the controls, in their look (showCrew).
+   */
   showLook(code: number): Promise<void> {
     this.#lookShown = code;
-    return this.boat?.setLook(sailorLookOf(catalog, code)) ?? Promise.resolve();
+    return this.#drawHelm();
+  }
+
+  /**
+   * Who is aboard the boat in view: whoever holds the controls drawn at the
+   * helm, as its one sailor is, the others at their stations; null for
+   * nobody but the one sailor.
+   */
+  showCrew(crew: CrewShown | null): Promise<void> {
+    this.#crewShown = crew;
+    this.crew.set(crew);
+    return this.#drawHelm();
+  }
+
+  /** The look the sailor at the helm is drawn in: whoever holds the controls', else the look last asked for. */
+  #helmCode(): number {
+    const crew = this.#crewShown;
+    return (
+      (crew === null ? null : helmLook(crew)) ?? this.#lookShown ?? this.#ownLook ?? PERSON_DEFAULT
+    );
+  }
+
+  /** Whether the sailor at the helm is drawn in the look it is to be: whoever holds the controls'. */
+  get helmDrawn(): boolean {
+    return this.boat?.drawnLook()?.model === sailorLookOf(catalog, this.#helmCode()).art.model;
+  }
+
+  #drawHelm(): Promise<void> {
+    if (this.#crewShown === null && this.#lookShown === null && this.#ownLook === null) {
+      return Promise.resolve();
+    }
+    // The sail's mark is the skipper's: a machine sailor's boat carries it.
+    const crew = this.#crewShown;
+    const skipper = crew?.people.find((p) => p.seat === 0);
+    const helm = sailorLookOf(catalog, this.#helmCode());
+    const mark = skipper === undefined ? helm.machine : sailorLookOf(catalog, skipper.look).machine;
+    return this.boat?.setLook(helm, mark) ?? Promise.resolve();
   }
 
   /** The look the boat in view's sailor was last asked to be drawn in; null for the player's own. */
   #lookShown: number | null = null;
+  /** Who is aboard the boat in view, as last told; null for nobody but its sailor. */
+  #crewShown: CrewShown | null = null;
 
   /**
    * The sailors seated, the own boat's and the fleet's first look, once the
@@ -525,9 +570,17 @@ export class SeaScene {
     await this.#lookAsked;
     const look = sailorLookOf(catalog, this.#ownLook ?? PERSON_DEFAULT);
     await Promise.all([
-      boat.loadSailor(look, renderer, 1),
+      // At the helm, whoever holds the controls, if others are aboard.
+      boat.loadSailor(sailorLookOf(catalog, this.#helmCode()), renderer, 1),
       this.fleet.loadSailors(catalog, look, renderer, lazyArtUrl),
     ]);
+    if (this.#crewShown !== null) {
+      await this.#drawHelm();
+    }
+    const looks = this.fleet.looks;
+    if (looks !== null) {
+      this.crew.useLooks(looks, Math.max(...catalog.boats.map((b) => b.stations.length)));
+    }
     Shadows.cast(boat.model, this.shadows.on, this.shadows.lit);
     // A change of kind meanwhile seats its own boat's sailor.
     if (this.#loadingKind < 0 && this.boat === boat) {
@@ -621,8 +674,7 @@ export class SeaScene {
     const renderer = this.stage.renderer;
     if (boat.sailor === null && renderer !== null) {
       await this.#lookAsked;
-      const code = this.#lookShown ?? this.#ownLook ?? PERSON_DEFAULT;
-      await boat.loadSailor(sailorLookOf(catalog, code), renderer, 1);
+      await boat.loadSailor(sailorLookOf(catalog, this.#helmCode()), renderer, 1);
     }
     if (this.kindIndex !== kind) {
       return;
@@ -639,6 +691,7 @@ export class SeaScene {
       this.stage.scene.remove(was.root);
     }
     boat.model.add(this.overlays.onBoat);
+    this.crew.aboard(boat.model, kind.stations);
     Shadows.cast(boat.model, this.shadows.on, this.shadows.lit);
     this.overlays.setKind(kind);
     this.rightOfWay.setKind(kind);
@@ -1714,6 +1767,7 @@ export class SeaScene {
     this.boat?.draw(bs, this.pose, this.out, this.time, this.timeStep);
     // The sailor drawn close when the camera is near it.
     this.boat?.sailor?.near(camera.position.distanceTo(this.#v.set(bs.x, bs.y + 0.8, bs.z)));
+    this.crew.frame(camera.position);
     const fs = this.fleetSource;
     if (this.fleet.loaded) {
       this.fleet.windFrom = this.wind.meanFrom;
