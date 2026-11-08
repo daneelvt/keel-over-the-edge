@@ -94,3 +94,68 @@ body.words-body {
   color: var(--faint);
   font-size: 15px;
 }
+
+/* The notice page's form: one column, its fields a phone wide. */
+.words-form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin: 20px 0 0;
+}
+
+.words-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.words-form input,
+.words-form select,
+.words-form textarea {
+  width: 100%;
+  min-height: 44px;
+  padding: 8px 10px;
+  border: 1px solid rgb(242 239 231 / 35%);
+  border-radius: 8px;
+  background: rgb(255 255 255 / 8%);
+  color: var(--ink);
+  font: inherit;
+}
+
+.words-form select option {
+  background: #1a242c;
+}
+
+.words-form :focus {
+  outline: 2px solid var(--gold);
+  outline-offset: 1px;
+}
+
+.words-problem {
+  min-height: 1.45em;
+  color: #f3b3a6;
+}
+
+.words-go {
+  min-height: 44px;
+  padding: 8px 18px;
+  border: 0;
+  border-radius: 8px;
+  background: var(--gold);
+  color: #1a242c;
+  font:
+    600 17px / 1.2 system-ui,
+    sans-serif;
+  cursor: pointer;
+}
+
+.words-go:disabled {
+  opacity: 0.6;
+}
+
+.words-sent {
+  margin-top: 20px;
+  padding: 12px 16px;
+  border-radius: 10px;
+  background: var(--panel);
+}
