@@ -3,6 +3,7 @@
 package agentapi
 
 import (
+	"math"
 	"strings"
 	"testing"
 	"testing/synctest"
@@ -11,6 +12,7 @@ import (
 	"github.com/daneelvt/keel-over-the-edge/internal/bus"
 	"github.com/daneelvt/keel-over-the-edge/internal/catalog"
 	"github.com/daneelvt/keel-over-the-edge/internal/life"
+	"github.com/daneelvt/keel-over-the-edge/internal/oauth"
 	"github.com/daneelvt/keel-over-the-edge/internal/physics"
 )
 
@@ -62,8 +64,9 @@ func (h *harness) raise(t *testing.T, kind int, x, y float64) bus.LifeEncounter 
 	time.Sleep(time.Second)
 	f := h.w.Bus().Frames.Acquire()
 	defer f.Release()
-	for _, e := range f.Life {
-		if int(e.Kind) == kind && e.ID>>63 == 1 {
+	// The last raised of the kind, not one that came with another.
+	for i := len(f.Life) - 1; i >= 0; i-- {
+		if e := f.Life[i]; int(e.Kind) == kind && e.ID>>63 == 1 && e.Over == 0 {
 			return e
 		}
 	}
@@ -111,6 +114,8 @@ func TestLifeInSight(t *testing.T) {
 
 		// Under way, a gull that follows boats takes the boat.
 		h.call(t, a, "steer", map[string]any{"wind_angle": 90, "boom": 45})
+		time.Sleep(20 * time.Second)
+		h.call(t, a, "observe", nil)
 		time.Sleep(20 * time.Second)
 		follows := lifeKind(t, h.sea, func(k *life.Kind) bool { return k.Follows })
 		_, st = h.own(t)
@@ -166,4 +171,169 @@ func TestLifeWakes(t *testing.T) {
 			t.Fatalf("a wait by default: %s", text)
 		}
 	})
+}
+
+// raiseUnseen begins a group of the kind at (x, y) that is not in the
+// frame itself, a ground of fish, and lets the world take it.
+func (h *harness) raiseUnseen(t *testing.T, kind int, x, y float64) {
+	t.Helper()
+	reply := make(chan bus.Reply, 1)
+	if err := h.w.Bus().Commands.Developer().TrySend(bus.Command{Op: bus.RaiseLife, LifeKind: uint16(kind), State: physics.State{X: x, Y: y}, Reply: reply}); err != nil {
+		t.Fatal(err)
+	}
+	if r := <-reply; r.Result != bus.Done {
+		t.Fatalf("raised: %v", r.Result)
+	}
+}
+
+// waitFor calls observe every 30 s for up to s seconds until a full
+// report holds every one of want, and returns the last.
+func (h *harness) waitFor(t *testing.T, a *oauth.Accepted, s int, want ...string) string {
+	t.Helper()
+	text := ""
+	for range s/30 + 1 {
+		text, _ = h.call(t, a, "observe", map[string]any{"detail": "full"})
+		all := true
+		for _, w := range want {
+			all = all && strings.Contains(text, w)
+		}
+		if all {
+			return text
+		}
+		time.Sleep(30 * time.Second)
+	}
+	return text
+}
+
+// The lookout names the life in the water by what it is and does, by its
+// kind's word for its groups: turtles surfacing, pods passing, leaping
+// and spinning, tarpon rolling, a boil of bait; a pod at the boat's own
+// bow, heard breathing; fish flushed from its bow, told once a ground.
+func TestWaterLifeInSight(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		h := newHarnessOf(t, 8, 12, 0, quietLife)
+		a := sailor(1, "Iron Mary")
+		h.call(t, a, "observe", nil)
+		_, st := h.own(t)
+		kinds := h.sea.Life.Kinds()
+		turtle := lifeKind(t, h.sea, func(k *life.Kind) bool { return k.Form == catalog.LifeFormTurtle })
+		spins := lifeKind(t, h.sea, func(k *life.Kind) bool { return k.Swim != nil && len(k.Swim.Spins) > 0 && k.Lingers() })
+		rolls := lifeKind(t, h.sea, func(k *life.Kind) bool {
+			return k.Form == catalog.LifeFormPod && k.Lingers() && k.Swim != nil && len(k.Swim.Spins) == 0
+		})
+		rides := lifeKind(t, h.sea, func(k *life.Kind) bool { return k.Rides() && k.Path == life.PathPass })
+		bait := lifeKind(t, h.sea, func(k *life.Kind) bool { return k.Form == catalog.LifeFormBait })
+		flush := lifeKind(t, h.sea, (*life.Kind).Flushes)
+		et := h.raise(t, turtle, st.X-80, st.Y)
+		es := h.raise(t, spins, st.X+300, st.Y)
+		er := h.raise(t, rolls, st.X, st.Y-300)
+		wantTurtle := groupWords(&kinds[turtle], &et) + " surfacing to the "
+		wantSpins := groupWords(&kinds[spins], &es) + " leaping and spinning to the "
+		wantRolls := groupWords(&kinds[rolls], &er) + " rolling at the surface to the "
+		if !strings.HasPrefix(groupWords(&kinds[rolls], &er), "a "+kinds[rolls].Collective+" of ") {
+			t.Errorf("a group of %d %s is %q", er.Count, kinds[rolls].Plural, groupWords(&kinds[rolls], &er))
+		}
+		text := h.waitFor(t, a, 450, wantTurtle, wantSpins, wantRolls)
+		for _, w := range []string{wantTurtle, wantSpins, wantRolls} {
+			if !strings.Contains(text, w) {
+				t.Errorf("no %q in\n%s", w, text)
+			}
+		}
+		// A boil of bait, and a pod passing the boat at rest.
+		h.raise(t, bait, st.X-354, st.Y-354)
+		ep := h.raise(t, rides, st.X+424, st.Y+424)
+		if ep.Boat != 0 {
+			t.Fatalf("a pod took a boat at rest: %+v", ep)
+		}
+		passing := " passing to the "
+		if ep.Speed > lifeLeaps {
+			passing = " leaping as they pass to the "
+		}
+		text, _ = h.call(t, a, "observe", map[string]any{"detail": "full"})
+		for _, w := range []string{"a boil of bait to the SW, ~", groupWords(&kinds[rides], &ep) + passing, "working the water"} {
+			if !strings.Contains(text, w) {
+				t.Errorf("no %q in\n%s", w, text)
+			}
+		}
+
+		// Under way, a pod rides the bow, and is heard breathing there.
+		h.call(t, a, "steer", map[string]any{"wind_angle": 90, "boom": 45})
+		time.Sleep(20 * time.Second)
+		h.call(t, a, "observe", nil)
+		time.Sleep(20 * time.Second)
+		_, st = h.own(t)
+		eb := h.raise(t, rides, st.X+150*math.Sin(st.Heading), st.Y+150*math.Cos(st.Heading))
+		if eb.Boat == 0 {
+			t.Fatalf("the pod took no boat at %.1f m/s", st.Surge)
+		}
+		want := lifeName(kinds[rides].Plural) + " riding your bow"
+		if text, _ = h.call(t, a, "observe", nil); !strings.Contains(text, want) || strings.Contains(lineOf(text, want), " to the ") {
+			t.Fatalf("no %q in\n%s", want, text)
+		}
+		text = h.waitFor(t, a, 400, "dolphins breathing close by")
+		if heard := lineOf(text, "Hear:"); !strings.Contains(heard, "dolphins breathing close by") {
+			t.Errorf("no breathing heard at the bow: %s", text)
+		}
+
+		// Fish flushed from the bow, told once for their ground.
+		_, st = h.own(t)
+		h.raiseUnseen(t, flush, st.X, st.Y)
+		events := 0
+		flushed := false
+		for range 30 {
+			time.Sleep(2 * time.Second)
+			text, _ = h.call(t, a, "observe", nil)
+			events += strings.Count(text, "life in sight: flying fish")
+			flushed = flushed || strings.Contains(text, "flying fish skittering away from your bow")
+		}
+		if !flushed || events != 1 {
+			t.Errorf("fish flushed from the bow: %v, told %d times", flushed, events)
+		}
+	})
+}
+
+// Life in the water is not seen in a sea of force 6 or more.
+func TestNoWaterLifeInAHeavySea(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		h := newHarnessOf(t, 8, 25, 0, quietLife)
+		a := sailor(1, "Iron Mary")
+		h.call(t, a, "observe", nil)
+		_, st := h.own(t)
+		turtle := lifeKind(t, h.sea, func(k *life.Kind) bool { return k.Form == catalog.LifeFormTurtle })
+		h.raise(t, turtle, st.X-80, st.Y)
+		if text := h.waitFor(t, a, 240, "surfacing"); strings.Contains(text, "surfacing") {
+			t.Fatalf("a turtle seen in a near gale:\n%s", text)
+		}
+	})
+}
+
+// swimDoing tells each way of a group in the water.
+func TestSwimDoing(t *testing.T) {
+	cat, err := catalog.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, kinds := life.Prepare(cat)
+	var pod *life.Kind
+	for i := range kinds {
+		if kinds[i].Rides() && kinds[i].Path == life.PathPass {
+			pod = &kinds[i]
+		}
+	}
+	for _, c := range []struct {
+		e    bus.LifeEncounter
+		want string
+	}{
+		{bus.LifeEncounter{Count: 9, Speed: 3}, "passing"},
+		{bus.LifeEncounter{Count: 9, Speed: 4}, "leaping as they pass"},
+		{bus.LifeEncounter{Count: 9, Speed: 3, Boat: 4}, "riding a boat's bow"},
+		{bus.LifeEncounter{Count: 9, Speed: 3, Over: 77}, "feeding"},
+	} {
+		if got := swimDoing(pod, &c.e); got != c.want {
+			t.Errorf("%+v: %q, want %q", c.e, got, c.want)
+		}
+	}
+	if got := groupWords(pod, &bus.LifeEncounter{Count: 9}); got != "a pod of "+lifeName(pod.Plural) {
+		t.Errorf("a group of nine is %q", got)
+	}
 }

@@ -305,7 +305,7 @@ func (h *helm) hearLines(s *Sea, f *bus.Frame, sl int32) []string {
 			out = append(out, line)
 		}
 	}
-	return out
+	return append(out, s.breathLines(f, sl)...)
 }
 
 // harbourHeard sets what the harbour sounds from at (x, y), as the phone
