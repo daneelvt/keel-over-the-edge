@@ -2298,6 +2298,11 @@ test('sailing together’s parts stand clear of the instruments and the boat on 
       const sel =
         '.deck-knock, .deck-knocking, .deck-line, .deck-plate, .deck-handed, .deck-window';
       await expect(page.locator(sel).first()).toBeVisible();
+      // Two frames for the screen to settle at its new size (a slow
+      // runner lays out a resized screen a frame late), then drawn.
+      await page.evaluate(
+        () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))),
+      );
       await page.evaluate(() => globalThis.keel.render());
       const seen = await parts(page);
       const where = `${s.name}, ${scene.name}`;
