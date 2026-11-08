@@ -2940,6 +2940,53 @@ The sea's birds call from where their group is (`client/src/audio/life.ts`,
 `art/sound/seabirds.json`); the server's twin
 (`internal/lookout/sounds.go`) is held to the same cases.
 
+### The life in the water on the phone
+
+Each animal in the water is a function of its group's record, its own
+number and world time, as a bird is (`client/src/life/swim.ts`), its
+height from the water's surface where it is:
+
+- **a pod** (`form: pod`: dolphins, a school of tarpon) swims a little
+  apart, down at its kind's `swim.depth` between breaths, and rolls up to
+  breathe, `swim.breaths` at a time every `swim.dive` s; faster than
+  3.5 m/s a kind that rides bows porpoises, each leap a ballistic arc
+  under gravity; `swim.leaps` a minute one leaps clear, spinning
+  `swim.spins` times; staying, it mills about its patch; riding, up to
+  eight hold a metre or two ahead of the stem of the boat as the page
+  draws it, to either side, the rest alongside, coming in and leaving over
+  12 s;
+- **a turtle** wanders slowly about its patch, down `swim.dive` s, up for
+  `swim.breaths` breaths;
+- **a glider** (the fish of a flush) breaks the surface where the flush
+  begins, taxis half a second and glides `swim.glide` m, sometimes linked
+  to `swim.linked` m, at its speed, under its height;
+- **a boil** (`form: bait`) is drawn as white water over its patch on the
+  foam map and small fish breaking the surface in the spray, stronger over
+  its first half minute and fading over its last minute.
+
+`client/src/render/swimmers.ts` draws every animal in the water in one
+draw, whatever its body: the bodies of `art/life/swimmers.glb` (built by
+`art/life/build.ts`, one node each, `extras.length` and `extras.bend`)
+are laid in one float texture, a row of corners each, padded to the
+largest, and each instance reads its body's corners by the vertex's
+number. The spine bends in a wave toward the tail (up and down for
+flukes, side to side for a fish's tail, not at all for a shell), paddles
+stroke and a flying fish's wings fold, all in the vertex stage; painted in
+the kind's `swim.back` and `swim.belly` by the vertices' colours. Under
+the surface and within 2 m of it an animal is drawn through the water:
+each corner under the surface is moved along the camera's line to where
+it meets the surface, so the sea's crests, boats and land still hide it,
+and it takes the water's colour and fades as it goes deeper. The low tier
+(and WebGL 2, whose top tier is low) draws it solid, and the sea hides what
+is under it: only what breaks the surface is seen. At most 24 of a group,
+half on the low tier. An animal not riding is drawn deeper where it meets
+a hull.
+
+What breaks the water (a leap's fall, a flying fish's taxi, a bird's
+plunge) is a splash: drops thrown in the spray and a ring of white water
+on the foam map (`FoamMap.spot`), and heard within 150 m; a dolphin
+rolling within 40 m is heard breathing (`art/sound/swimmers.json`).
+
 A phone with no server (the sandbox) flushes the same fish from the same
 inputs as the server: `client/src/life/flush.ts` is `life.Flush`'s twin,
 held to `internal/life/testdata/flushes.json`.
@@ -3000,10 +3047,17 @@ it, quiet or not; bait brings the groups that come with it; a ground of
 fish is raised reaching its kind's furthest, seen only as the boats in it
 flush its fish.
 
-The keel hooks `keel.life()`, `keel.lifeBirds(tick)` and
-`keel.raiseLife(kindId, east, north)` report what is drawn and raise one on
-the page; `client/e2e/life.spec.ts` holds two players and a spectator to
-the same birds, `client/e2e/seabirds.spec.ts` sixty birds to the budgets.
+The keel hooks `keel.life()`, `keel.lifeBirds(tick)`,
+`keel.lifeSwimmers(tick)`, `keel.lifeWith(id)` and `keel.raiseLife(kindId,
+east, north, free)` report what is drawn and raise one on the page (free,
+a pod that rides bows passes instead; a ground of flying fish is kept by
+the page and flushes fish ahead of its boat as it sails through it);
+`client/e2e/life.spec.ts` holds two players and a spectator to the same
+birds, and to the same pod at the same boat's bow;
+`client/e2e/seabirds.spec.ts` holds sixty birds to the budgets, and
+`client/e2e/swimmers.spec.ts` a group of every kind in the water with
+sixty birds; `?life=<kind id>` puts one of the water's kinds by the boat
+too.
 
 ## Sighting and the chart
 
