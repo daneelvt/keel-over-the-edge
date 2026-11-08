@@ -24,7 +24,9 @@ func TestBigLifeInSight(t *testing.T) {
 		h.call(t, a, "observe", nil)
 		_, st := h.own(t)
 		kinds := h.sea.Life.Kinds()
-		whale := lifeKind(t, h.sea, func(k *life.Kind) bool { return k.Form == catalog.LifeFormWhale && k.Path == life.PathPass && k.Collective == "" })
+		whale := lifeKind(t, h.sea, func(k *life.Kind) bool {
+			return k.Form == catalog.LifeFormWhale && k.Path == life.PathPass && k.Collective == ""
+		})
 		fin := lifeKind(t, h.sea, func(k *life.Kind) bool { return k.Form == catalog.LifeFormFin })
 		booby := lifeKind(t, h.sea, (*life.Kind).Perches)
 		ew := h.raise(t, whale, st.X+250, st.Y)
