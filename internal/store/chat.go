@@ -104,6 +104,8 @@ type Talker struct {
 	Chat       bool
 	MutedUntil time.Time
 	Rested     bool
+	// Offline: the human appears offline to their shipmates.
+	Offline bool
 }
 
 // Talker finds an account as chat needs it: ErrNotFound for none.
@@ -118,6 +120,7 @@ func (s *Store) Talker(ctx context.Context, id AccountID) (Talker, error) {
 	return Talker{
 		Kind: Kind(r.Kind), Human: r.Human.Bytes, Name: r.Name, Born: r.Born, Rules: r.Rules,
 		ChatSet: r.Chat.Valid, Chat: r.Chat.Bool, MutedUntil: timeOf(r.ChatMutedUntil), Rested: r.RestedAt.Valid,
+		Offline: r.AppearOffline,
 	}, nil
 }
 

@@ -501,6 +501,13 @@ func runServer(ctx context.Context, getenv func(string) string, stdout io.Writer
 		},
 	})
 	p.reports = review.New(review.Config{Store: db, Hand: p.hand, Hub: p.hub, Log: log, Metrics: metrics})
+	if err := p.loadShipmates(ctx); err != nil {
+		if ctx.Err() != nil {
+			return stopEarly(side, flight, nil)
+		}
+		return stopEarly(side, flight, fmt.Errorf("the shipmates: %w", err))
+	}
+	p.shipmates = p.newShipmates()
 	for _, k := range []store.Kind{store.Human, store.AI} {
 		metrics.GaugeFunc("keel_accounts_stopped", "Accounts stopped by the operator, by kind; a stopped human's machine sailors among the AI accounts.",
 			prometheus.Labels{"kind": string(k)}, func() float64 { return float64(stopped.Count(k)) })

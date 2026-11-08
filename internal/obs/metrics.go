@@ -164,15 +164,18 @@ type Metrics struct {
 	// often a line was handed to someone; what the memory holds and what
 	// its limits dropped; how long a line took the server; reports by
 	// reason, the reports open and the oldest's age.
-	ChatLines           *prometheus.CounterVec // by result
-	ChatDeliveries      prometheus.Counter
-	ChatRingLines       prometheus.Gauge
-	ChatRingBytes       prometheus.Gauge
-	ChatDropped         *prometheus.CounterVec // by why
-	ChatSay             prometheus.Histogram
-	Reports             *prometheus.CounterVec // by reason
-	ReportsOpen         *prometheus.GaugeVec   // all, child
-	ReportsOldest       prometheus.Gauge
+	ChatLines      *prometheus.CounterVec // by result
+	ChatDeliveries prometheus.Counter
+	ChatRingLines  prometheus.Gauge
+	ChatRingBytes  prometheus.Gauge
+	ChatDropped    *prometheus.CounterVec // by why
+	ChatSay        prometheus.Histogram
+	Reports        *prometheus.CounterVec // by reason
+	ReportsOpen    *prometheus.GaugeVec   // all, child
+	ReportsOldest  prometheus.Gauge
+	// Shipmates counts two people found to have sailed together five
+	// minutes or more, offers, shipmates made and ended.
+	Shipmates           *prometheus.CounterVec   // by what
 	EdgeRefused         *prometheus.CounterVec   // by what
 	EdgeViewBoats       *prometheus.HistogramVec // by band
 	EdgeSnapshotBytes   prometheus.Histogram
@@ -390,7 +393,7 @@ func NewMetrics(build, catalog string) *Metrics {
 		Name: "keel_edge_aboard", Help: "People aboard boats not their own, their connections' graces included.",
 	})
 	m.ChatLines = prometheus.NewCounterVec(prometheus.CounterOpts{
-		Name: "keel_chat_lines_total", Help: "Lines of chat said, by what came of them: said, refused for a contact detail, too long, too fast, silent, nobody to hear, or a word.",
+		Name: "keel_chat_lines_total", Help: "Lines of chat and messages between shipmates said, by what came of them: said, refused for a contact detail, too long, too fast, silent, nobody to hear, a shipmate away, shipmates' messages resting, or a word.",
 	}, []string{"result"})
 	m.ChatDeliveries = prometheus.NewCounter(prometheus.CounterOpts{
 		Name: "keel_chat_deliveries_total", Help: "Lines of chat handed to someone: a line heard by three counts three.",
@@ -417,6 +420,9 @@ func NewMetrics(build, catalog string) *Metrics {
 	m.ReportsOldest = prometheus.NewGauge(prometheus.GaugeOpts{
 		Name: "keel_reports_oldest_seconds", Help: "How long the oldest report waiting for the owner has waited, 0 for none.",
 	})
+	m.Shipmates = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "keel_shipmates_total", Help: "Shipmates: two people found to have sailed together five minutes or more (sailed), offers made (offered), shipmates made (made) and ended (ended).",
+	}, []string{"what"})
 	m.EdgeRefused = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Name: "keel_edge_refused_total", Help: "What a game connection sent that it may not, dropped: controls from a connection that sails no boat.",
 	}, []string{"what"})
@@ -521,7 +527,7 @@ func NewMetrics(build, catalog string) *Metrics {
 	reg.MustRegister(m.Grace, m.EdgeConnections, m.EdgeUpgrades, m.EdgeHellos, m.EdgeJoins, m.EdgeCloses, m.EdgeMessages,
 		m.EdgeBytes, m.EdgeDropped, m.EdgeEncodeDuration, m.EdgeWriteDuration, m.EdgeInputMargin, m.ClientRTT, m.ClientFrame, m.ClientTier, m.ClientRenderScale,
 		m.EdgeEncoders, m.EdgeQueued, m.EdgeWatches, m.EdgeSpectators, m.EdgeSpectatorLimit, m.EdgeWatchers, m.EdgeKnocks, m.EdgeDeck, m.EdgeAboard,
-		m.ChatLines, m.ChatDeliveries, m.ChatRingLines, m.ChatRingBytes, m.ChatDropped, m.ChatSay, m.Reports, m.ReportsOpen, m.ReportsOldest, m.EdgeRefused, m.EdgeViewBoats, m.EdgeSnapshotBytes, m.EdgeSnapshotEntries, m.EdgeSnapshotLag, m.EdgeResyncs)
+		m.ChatLines, m.ChatDeliveries, m.ChatRingLines, m.ChatRingBytes, m.ChatDropped, m.ChatSay, m.Reports, m.ReportsOpen, m.ReportsOldest, m.Shipmates, m.EdgeRefused, m.EdgeViewBoats, m.EdgeSnapshotBytes, m.EdgeSnapshotEntries, m.EdgeSnapshotLag, m.EdgeResyncs)
 	reg.MustRegister(info, m.Tick, m.TickDuration, m.PhaseDuration, m.Ticks, m.TicksLate, m.TicksSkipped,
 		m.ClockDrift, m.Boats, m.BoatLimit, m.QueueLength, m.BoatsByKind, m.QueueByKind, m.QueueOldest, m.AICap, m.AIReserve, m.Admissions, m.QueueWait, m.GridDuration, m.Workers, m.Commands, m.Snapshots,
 		m.DBQueryDuration, m.DBQueryErrors, m.SchemaVersion, m.AccountsCreated, m.NamesRefused, m.Ceremonies, m.SignIns,

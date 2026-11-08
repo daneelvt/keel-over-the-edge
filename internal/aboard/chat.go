@@ -12,7 +12,7 @@ import (
 
 // Chat. Nothing reaches anyone who has not accepted its sender: a line
 // goes only to those aboard the same boat, where the skipper let every
-// person aboard and every crew member chose to knock, or (later) between
+// person aboard and every crew member chose to knock, or between
 // two shipmates, who both chose it. Every door that delivers a line asks
 // Delivered, for every line and every receiver.
 
@@ -42,6 +42,8 @@ type Speaker struct {
 	MutedUntil time.Time
 	Rested     bool
 	Resting    bool
+	// Offline: the human appears offline to their shipmates.
+	Offline bool
 }
 
 // ChatOn reports whether a player's own chat is on: their choice, or by
@@ -276,20 +278,23 @@ func Countries(codes []string) (out []string, ok bool) {
 	return slices.Compact(out), ok
 }
 
-// Ties are every player's mutes and blocks of others, held in memory as
-// the database has them, read for every line and every knock. A mute
-// hides the other's lines from the player; a block hides each one's lines
-// from the other, refuses knocks both ways, and puts the other ashore from
-// the player's boat.
+// Ties are every player's mutes and blocks of others, and every pair of
+// shipmates, held in memory as the database has them, read for every line
+// and every knock. A mute hides the other's lines from the player; a block
+// hides each one's lines from the other, refuses knocks both ways, and
+// puts the other ashore from the player's boat. Shipmates message each
+// other anywhere in the game, and knock on each other's boat without a
+// link.
 type Ties struct {
-	mu     sync.RWMutex
-	mutes  map[[16]byte]map[[16]byte]bool
-	blocks map[[16]byte]map[[16]byte]bool
+	mu        sync.RWMutex
+	mutes     map[[16]byte]map[[16]byte]bool
+	blocks    map[[16]byte]map[[16]byte]bool
+	shipmates map[[16]byte]map[[16]byte]bool
 }
 
 // NewTies holds the mutes and blocks given, each an account and the other.
 func NewTies(mutes, blocks [][2][16]byte) *Ties {
-	t := &Ties{mutes: map[[16]byte]map[[16]byte]bool{}, blocks: map[[16]byte]map[[16]byte]bool{}}
+	t := &Ties{mutes: map[[16]byte]map[[16]byte]bool{}, blocks: map[[16]byte]map[[16]byte]bool{}, shipmates: map[[16]byte]map[[16]byte]bool{}}
 	for _, m := range mutes {
 		set(t.mutes, m[0], m[1], true)
 	}
@@ -347,11 +352,38 @@ func (t *Ties) SetBlock(a, b [16]byte, on bool) {
 	t.mu.Unlock()
 }
 
+// Shipmates reports whether a and b are shipmates.
+func (t *Ties) Shipmates(a, b [16]byte) bool {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+	return t.shipmates[a][b]
+}
+
+// ShipmatesOf are a's shipmates, in no order.
+func (t *Ties) ShipmatesOf(a [16]byte) [][16]byte {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+	out := make([][16]byte, 0, len(t.shipmates[a]))
+	for b := range t.shipmates[a] {
+		out = append(out, b)
+	}
+	return out
+}
+
+// SetShipmates makes a and b shipmates in memory, or no longer, after the
+// database: both ways at once.
+func (t *Ties) SetShipmates(a, b [16]byte, on bool) {
+	t.mu.Lock()
+	set(t.shipmates, a, b, on)
+	set(t.shipmates, b, a, on)
+	t.mu.Unlock()
+}
+
 // Forget drops every tie of an account deleted.
 func (t *Ties) Forget(a [16]byte) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	for _, m := range []map[[16]byte]map[[16]byte]bool{t.mutes, t.blocks} {
+	for _, m := range []map[[16]byte]map[[16]byte]bool{t.mutes, t.blocks, t.shipmates} {
 		delete(m, a)
 		for k, v := range m {
 			delete(v, a)
@@ -365,3 +397,13 @@ func (t *Ties) Forget(a [16]byte) {
 // Refuses is the knock's refusal for a block, from either side: Ties is
 // the edge's Refuser.
 func (t *Ties) Refuses(skipper, knocker [16]byte) bool { return t.Blocks(skipper, knocker) }
+
+// MayBeShipmates reports whether two players of the bands given may be
+// shipmates: both adults, or both 13 to 17, so that an adult and a teen
+// never have the private channel shipmates' messages are. An offer between
+// the bands is sent as any other and never reaches its receiver, so that
+// neither its absence nor a refusal says anything of an age. Once made,
+// shipmates stay shipmates when a teen turns 18.
+func MayBeShipmates(a, b Band) bool {
+	return a == b && (a == Adult || a == Teen)
+}

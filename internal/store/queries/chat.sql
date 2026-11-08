@@ -7,9 +7,10 @@
 -- name: TalkerOf :one
 -- An account as chat needs it: its kind, its human's (itself for a
 -- human), and its human's month of birth, Rules of the sea, chat switch,
--- mute from chat and rest.
+-- mute from chat and rest, and whether they appear offline to their
+-- shipmates.
 SELECT a.kind, coalesce(a.owner_id, a.id)::uuid AS human, coalesce(h.born, 0)::integer AS born,
-  (h.rules_at IS NOT NULL)::boolean AS rules, h.chat, h.chat_muted_until, h.rested_at, sl.name
+  (h.rules_at IS NOT NULL)::boolean AS rules, h.chat, h.chat_muted_until, h.rested_at, sl.name, h.appear_offline
 FROM account a
 JOIN account h ON h.id = coalesce(a.owner_id, a.id)
 JOIN sailor sl ON sl.account_id = a.id

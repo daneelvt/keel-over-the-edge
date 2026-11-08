@@ -214,6 +214,7 @@ func (c *conn) crewOf(f *bus.Frame, s int32) bool {
 	tie := func(p *pb.Person, a bus.Account) {
 		if ties != nil && !p.You {
 			p.Muted, p.Blocked = ties.Mutes(c.account, a), ties.Blocked(c.account, a)
+			p.Shipmate = !c.w.on && ties.Shipmates(c.account, a)
 		}
 	}
 	holder := uint32(0)

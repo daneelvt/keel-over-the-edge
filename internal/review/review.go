@@ -127,9 +127,35 @@ func bandName(b aboard.Band) string {
 	return "unknown"
 }
 
+// two are the reporter and the reported, with their bands, for a report
+// with nobody else in it.
+func (s *Service) two(ctx context.Context, hub *chat.Hub, in In, reporter, reported store.Talker) []store.ReportPerson {
+	var out []store.ReportPerson
+	for _, p := range []struct {
+		a bus.Account
+		t store.Talker
+	}{{in.Reporter, reporter}, {in.Reported, reported}} {
+		rp := store.ReportPerson{Name: p.t.Name, Machine: p.t.Kind == store.AI, Band: bandOf(p.t)}
+		if sp, ok := hub.Speaker(p.a); ok {
+			rp.Band = bandName(sp.Band)
+		}
+		out = append(out, rp)
+	}
+	return out
+}
+
+// bandOf is the band of a talker as a report keeps it, worked out now.
+func bandOf(t store.Talker) string {
+	if b, ok := aboard.BornOf(t.Born); ok {
+		return bandName(aboard.BandOf(b, time.Now()))
+	}
+	return bandName(aboard.Unknown)
+}
+
 // In is a player's report: the reporter, the account reported, the boat
 // it was about, and the line it was made from (0 for one made from a name
-// aboard).
+// aboard). Thread is a report about the messages between the two as
+// shipmates: the pair's ring is copied rather than a boat's.
 type In struct {
 	Reporter bus.Account
 	Reported bus.Account
@@ -137,6 +163,7 @@ type In struct {
 	Line     uint64
 	Reason   string
 	Note     string
+	Thread   bool
 }
 
 // Report keeps a player's report, with what the server holds of the
@@ -171,7 +198,17 @@ func (s *Service) Report(ctx context.Context, in In) error {
 	}
 	hub := s.cfg.Hub()
 	room := chat.Boat(in.Boat)
-	if hub != nil && in.Boat != 0 {
+	if in.Thread {
+		room = chat.Pair(in.Reporter, in.Reported)
+	}
+	if hub != nil && in.Thread {
+		for _, l := range hub.Rings.Lines(room, now.Add(-chat.DefaultLimits().Keep)) {
+			r.Lines = append(r.Lines, lineOf(l, l.ID == in.Line))
+		}
+		r.People = s.two(ctx, hub, in, reporter, reported)
+		r.Place = "messages between shipmates " + reporter.Name + " and " + reported.Name
+	}
+	if hub != nil && in.Boat != 0 && !in.Thread {
 		for _, l := range hub.Rings.Lines(room, now.Add(-chat.DefaultLimits().Keep)) {
 			r.Lines = append(r.Lines, lineOf(l, l.ID == in.Line))
 		}
@@ -192,6 +229,11 @@ func (s *Service) Report(ctx context.Context, in In) error {
 			if len(r.People) > 0 {
 				r.Place = "aboard " + r.People[0].Name + "’s boat"
 			}
+		} else {
+			// The boat has left the water: reported from the list of recent
+			// crew, after sailing together.
+			r.People = s.two(ctx, hub, in, reporter, reported)
+			r.Place = "aboard a boat together, since gone ashore"
 		}
 	}
 	made, err := s.cfg.Store.MakeReport(ctx, r)
@@ -206,7 +248,7 @@ func (s *Service) Report(ctx context.Context, in In) error {
 	if made.Rested && hub != nil {
 		hub.Update(bus.Account(made.Subject), func(sp *aboard.Speaker) { sp.Rested = true })
 	}
-	if hub != nil && in.Boat != 0 {
+	if hub != nil && (in.Boat != 0 || in.Thread) {
 		s.follow(hub, made.ID, room, made.At.Add(Follow))
 	}
 	return nil

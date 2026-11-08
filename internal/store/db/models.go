@@ -32,6 +32,7 @@ type Account struct {
 	Chat           pgtype.Bool
 	ChatMutedUntil pgtype.Timestamptz
 	RestedAt       pgtype.Timestamptz
+	AppearOffline  bool
 }
 
 type AccountAction struct {
@@ -323,6 +324,14 @@ type SailLink struct {
 	EndedAt   pgtype.Timestamptz
 }
 
+type SailedWith struct {
+	AID      pgtype.UUID
+	BID      pgtype.UUID
+	SeenAt   time.Time
+	SailedAt pgtype.Timestamptz
+	Boat     int64
+}
+
 type Sailor struct {
 	AccountID  pgtype.UUID
 	Name       string
@@ -356,6 +365,19 @@ type Setting struct {
 	Chat             bool
 	ShipmateMessages bool
 	ChatCountries    []string
+}
+
+type Shipmate struct {
+	AID    pgtype.UUID
+	BID    pgtype.UUID
+	MadeAt time.Time
+}
+
+type ShipmateOffer struct {
+	FromID pgtype.UUID
+	ToID   pgtype.UUID
+	MadeAt time.Time
+	Silent bool
 }
 
 type SimLease struct {

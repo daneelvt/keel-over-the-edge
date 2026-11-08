@@ -68,6 +68,9 @@ func (o chatOut) Deliver(l chat.Line, seat uint32, _ uint64, to []bus.Account) {
 	}
 }
 
+// DeliverPair: machine sailors are never shipmates.
+func (chatOut) DeliverPair(chat.Line, bus.Account) {}
+
 // Changed: an agent is told how chat stands when it next says a line.
 func (chatOut) Changed([]bus.Account) {}
 
