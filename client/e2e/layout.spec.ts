@@ -2226,9 +2226,9 @@ test('the player’s own panel keeps Set sail in view with their boat, and the b
 // the foot, in the controls' place, one row, clear of every part and the
 // boat, centred; the windows (who is aboard, going ashore's
 // question, the skipper's link) within the screen. Every key 44 pixels
-// or more; nothing that steers while the player does not hold the
+// a touch, its face the instruments' height; nothing that steers while the player does not hold the
 // controls.
-test('sailing together’s parts stand clear of the instruments and the boat on every screen, their keys 44 px', async ({
+test('sailing together’s parts stand clear of the instruments and the boat on every screen, their keys a 44 px touch', async ({
   page,
 }) => {
   test.skip(test.info().project.name === 'webgpu', 'the panels are the same on either back end');
@@ -2302,9 +2302,12 @@ test('sailing together’s parts stand clear of the instruments and the boat on 
                 `${name} is off the screen (${[r.left, r.top, r.right, r.bottom].map(Math.round)})`,
               );
             }
+            // Each key the instruments' height (38 px or more), its
+            // reach 3 px beyond its face above and below: 44 px a touch.
             for (const b of e.querySelectorAll('button')) {
               const k = b.getBoundingClientRect();
-              if (k.width < 43.5 || k.height < 43.5) {
+              const reach = Number.parseFloat(getComputedStyle(b, '::after').top) || 0;
+              if (k.width < 43.5 || k.height < 37.5 || k.height - 2 * reach < 43.5) {
                 out.push(
                   `${name}: “${b.textContent}” is ${Math.round(k.width)} × ${Math.round(k.height)}`,
                 );

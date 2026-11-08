@@ -100,3 +100,39 @@
   text-align: center;
   font-size: 14px;
 }
+
+/* These keys, and the link's page's, the game's own size rather than
+   the start screen's Set sail: the case's height, their reach a touch
+   beyond. */
+.first-ask .start-go,
+.first-ask .start-sign-in,
+.come-aboard .start-go,
+.come-aboard .start-sign-in {
+  position: relative;
+  min-height: 40px;
+  margin-top: 0;
+  padding: 4px 14px;
+  font-size: 15px;
+  line-height: 1.2;
+}
+
+.first-ask .start-go::after,
+.first-ask .start-sign-in::after,
+.come-aboard .start-go::after,
+.come-aboard .start-sign-in::after {
+  content: "";
+  position: absolute;
+  inset: -3px 0;
+}
+
+.first-ask .born-box {
+  min-height: 0;
+  height: 40px;
+  font-size: 16px;
+}
+
+/* Over the sea, its heading a window's, not the start screen's title. */
+.hud .first-ask :is(h1, h2) {
+  margin: 0;
+  font-size: 20px;
+}

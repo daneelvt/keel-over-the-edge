@@ -5,7 +5,7 @@
    with others aboard, the plate at the foot of the screen in the
    controls' place, and the windows over the sea (who is aboard,
    going ashore's question, the skipper's link). In the plate's brass and
-   lacquer; every button 44 px or more. */
+   lacquer, its keys the instruments' head keys' size. */
 
 .deck-faint {
   color: var(--faint);
@@ -150,10 +150,7 @@
 }
 
 .hud .deck-plate .head-key {
-  min-height: 44px;
-  height: auto;
-  align-self: stretch;
-  padding: 0 12px;
+  padding: 0 14px;
 }
 
 .deck-plate-words {
@@ -361,4 +358,37 @@
 .deck-asks .start-panel {
   width: 100%;
   pointer-events: auto;
+}
+
+/* Every key of sailing together the instruments' head keys' size: the
+   case's height, 14 px words, its bulk in its width and the space about
+   it, never its height. Each answers a touch 3 px beyond its face, above
+   and below, so a finger's 44 px lands on it all the same. */
+.hud :is(.deck-knock, .deck-knocking, .deck-handed, .deck-line, .deck-window, .deck-plate) button {
+  position: relative;
+  min-width: 44px;
+  min-height: 0;
+  height: var(--key);
+  padding: 0 14px;
+  font:
+    500 14px / 1 "Alegreya Sans",
+    system-ui,
+    sans-serif;
+}
+
+.hud
+  :is(.deck-knock, .deck-knocking, .deck-handed, .deck-line, .deck-window, .deck-plate)
+  button::after {
+  content: "";
+  position: absolute;
+  inset: -3px 0;
+}
+
+.deck-keys,
+.deck-row-keys {
+  column-gap: 10px;
+}
+
+.hud .deck-window h2 {
+  font-size: 18px;
 }
