@@ -89,6 +89,27 @@
   font-size: 12px;
 }
 
+/* On a short screen, a phone held sideways, the fold key at the field's
+   end: the head's row is the lines'. An owner reading keeps the head, for
+   whose chat it is. */
+.hud .chat-strip .foot-fold {
+  display: none;
+}
+
+@media (max-height: 499px) {
+  .hud .chat-strip:not(.reads) .chat-head {
+    display: none;
+  }
+
+  .hud .chat-strip:not(.reads) .foot-fold {
+    display: block;
+  }
+
+  .hud .chat-strip.open:not(.reads) {
+    padding-top: 6px;
+  }
+}
+
 .chat-lines {
   flex: 0 1 auto;
   margin: 0;

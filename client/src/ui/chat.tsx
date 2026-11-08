@@ -242,6 +242,28 @@ export function ChatStrip({ deck, sailor }: { deck: DeckView; sailor: string | n
   const field = useRef<HTMLInputElement>(null);
   const keyboard = useKeyboard(deck, open);
   const [fit, setFit] = useState<{ lines: number; lift: number }>({ lines: LINES_MAX, lift: 0 });
+  // Counts the changes to the screen about the open strip: a part shown
+  // or gone below it, a turn of the phone, fits it again.
+  const [, setMoved] = useState(0);
+  useEffect(() => {
+    // The screen's parts are its own children: the readouts that change
+    // within them each frame are not watched.
+    const screen = strip.current?.closest('.hud-screen');
+    if (!open || screen == null) {
+      return;
+    }
+    const moved = () => setMoved((n) => n + 1);
+    const seen = new MutationObserver(moved);
+    seen.observe(screen, { childList: true });
+    addEventListener('resize', moved);
+    // The parts drawn since the strip was first fitted.
+    const frame = requestAnimationFrame(moved);
+    return () => {
+      seen.disconnect();
+      removeEventListener('resize', moved);
+      cancelAnimationFrame(frame);
+    };
+  }, [open]);
 
   // Own lines with no echo, and old notes, go in time.
   const waiting = log.waiting;
@@ -373,10 +395,25 @@ export function ChatStrip({ deck, sailor }: { deck: DeckView; sailor: string | n
     }
     field.current?.focus();
   };
+  // The fold key heads the strip; on a short screen, where every row
+  // counts, it stands at the field's end instead.
+  const fold = (where: 'head' | 'foot') => (
+    <button
+      type="button"
+      class={`plate-key chat-fold ${where}-fold`}
+      aria-expanded="true"
+      aria-label={FOLD_CHAT}
+      onClick={() => {
+        chat.open.value = false;
+      }}
+    >
+      ▴
+    </button>
+  );
   return (
     <section
       ref={strip}
-      class="panel chat-strip open"
+      class={`panel chat-strip open${readOnly ? ' reads' : ''}`}
       aria-label={CHAT_ABOARD}
       data-readout="chat"
       style={fit.lift > 0 ? { translate: `0 ${-fit.lift}px` } : undefined}
@@ -385,17 +422,7 @@ export function ChatStrip({ deck, sailor }: { deck: DeckView; sailor: string | n
         <span class="chat-title">
           {readOnly && w !== null ? <Said words={ownerReadsWords(w.sailor)} /> : CHAT_ABOARD}
         </span>
-        <button
-          type="button"
-          class="plate-key chat-fold"
-          aria-expanded="true"
-          aria-label={FOLD_CHAT}
-          onClick={() => {
-            chat.open.value = false;
-          }}
-        >
-          ▴
-        </button>
+        {fold('head')}
       </div>
       <ol class="chat-lines" ref={list} style={{ maxHeight: `${fit.lines}px` }} aria-live="polite">
         {lines.length === 0 ? <li class="chat-line faint">{NOTHING_SAID}</li> : null}
@@ -422,6 +449,7 @@ export function ChatStrip({ deck, sailor }: { deck: DeckView; sailor: string | n
               {TURN_CHAT_ON}
             </button>
           ) : null}
+          {fold('foot')}
         </div>
       ) : (
         <form class="chat-foot" onSubmit={send}>
@@ -442,6 +470,7 @@ export function ChatStrip({ deck, sailor }: { deck: DeckView; sailor: string | n
           <button type="submit" class="plate-key key-main" disabled={length === 0 || length > 200}>
             {SEND}
           </button>
+          {fold('foot')}
           {left !== '' ? <span class="chat-left">{left}</span> : null}
         </form>
       )}
