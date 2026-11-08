@@ -13,8 +13,10 @@ import (
 // The sea's life is checked here for what the schema cannot say: ranges
 // that run from low to high, a bird with a look to draw it by and a
 // swimmer with a body, a kind that stays over a patch or with a boat with
-// a stay to keep, a ground with a patch, and the groups a kind brings
-// among the kinds.
+// a stay to keep, a ground with a patch, a bird that perches with a body
+// to sit on its perch, a whale with a blow, glowing water with its light,
+// and the groups a kind brings and the fish that land aboard among the
+// kinds.
 
 // checkLife fails on life values the schema cannot judge.
 func checkLife(doc map[string]any) error {
@@ -63,9 +65,26 @@ func checkLife(doc map[string]any) error {
 			bad("%s: a swimmer with no swim to draw it by", where)
 		}
 		if swim, _ := kind["swim"].(map[string]any); swim != nil {
-			for _, r := range []string{"spins", "glide", "breaths", "dive"} {
+			for _, r := range []string{"spins", "glide", "breaths", "dive", "blowEvery"} {
 				ranged(where+".swim."+r, swim[r])
 			}
+			if blow, _ := swim["blow"].(map[string]any); blow != nil {
+				ranged(where+".swim.blow.height", blow["height"])
+			}
+		}
+		if kind["form"] == "whale" {
+			if swim, _ := kind["swim"].(map[string]any); swim == nil || swim["blow"] == nil || swim["blowEvery"] == nil || swim["breaths"] == nil || swim["dive"] == nil {
+				bad("%s: a whale with no blow, breaths and dives", where)
+			}
+		}
+		if kind["binds"] == "perch" && (kind["form"] != "bird" || kind["swim"] == nil) {
+			bad("%s: perches with no body to sit on its perch", where)
+		}
+		if (kind["form"] == "glow") != (kind["glow"] != nil) {
+			bad("%s: glowing water and its light go together", where)
+		}
+		if kind["form"] == "glow" && kind["patch"] == nil {
+			bad("%s: glowing water with no patch", where)
 		}
 		ranged(where+".patch", kind["patch"])
 		if (kind["binds"] == "flush" || kind["form"] == "bait") && kind["patch"] == nil {
@@ -88,6 +107,17 @@ func checkLife(doc map[string]any) error {
 		if sp, _ := kind["speed"].([]any); len(sp) == 2 && !(num(sp[0]) > 0) {
 			bad("%s: a speed of nothing never arrives", where)
 		}
+	}
+	aboard, _ := life["aboard"].(map[string]any)
+	fish := false
+	for _, k := range kinds {
+		kind, _ := k.(map[string]any)
+		if kind["id"] == aboard["kind"] && kind["form"] == "glider" && kind["swim"] != nil {
+			fish = true
+		}
+	}
+	if !fish {
+		bad("life.aboard.kind: %v is not a glider of the life's kinds", aboard["kind"])
 	}
 	towns, _ := life["towns"].(map[string]any)
 	ranged("life.towns.count", towns["count"])

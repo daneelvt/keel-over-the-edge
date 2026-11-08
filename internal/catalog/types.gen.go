@@ -160,6 +160,9 @@ type Boat struct {
 	// Controls corresponds to the JSON schema field "controls".
 	Controls BoatControls `json:"controls"`
 
+	// Where a flying fish lands on its deck, in m in its model's frame.
+	Deck BoatPoint `json:"deck"`
+
 	// What the boat is, in a few words.
 	Description string `json:"description"`
 
@@ -183,6 +186,10 @@ type Boat struct {
 
 	// Display name.
 	Name string `json:"name"`
+
+	// Where a seabird perches on it, in m in its model's frame (x to starboard, y up
+	// from the model's origin, z aft).
+	Perch BoatPoint `json:"perch"`
 
 	// Physics corresponds to the JSON schema field "physics".
 	Physics BoatPhysics `json:"physics"`
@@ -297,6 +304,9 @@ type BoatPhysics struct {
 	// Square corresponds to the JSON schema field "square".
 	Square PhysicsSquare `json:"square"`
 }
+
+// A point on a boat, in m in its model's frame: x to starboard, y up, z aft.
+type BoatPoint []float64
 
 // The most triangles each of the boat's models may have.
 type Budget struct {
@@ -1221,6 +1231,12 @@ const LevelPassive Level = "passive"
 // time, the habitat there and the weather; every player near is told of each
 // encounter.
 type Life struct {
+	// A flying fish drawn to a boat's lights by night, landing on its deck: the kind
+	// of fish, by its id; every so many s, by a draw of the boat and that slot, at
+	// this chance, a boat lit and sailing over water the kind lives in has one land
+	// aboard, where it lies this long, in s.
+	Aboard LifeAboard `json:"aboard"`
+
 	// The bodies of the life in the water, one model each.
 	Art LifeArt `json:"art"`
 
@@ -1277,6 +1293,24 @@ type Life struct {
 	Towns LifeTowns `json:"towns"`
 }
 
+// A flying fish drawn to a boat's lights by night, landing on its deck: the kind
+// of fish, by its id; every so many s, by a draw of the boat and that slot, at
+// this chance, a boat lit and sailing over water the kind lives in has one land
+// aboard, where it lies this long, in s.
+type LifeAboard struct {
+	// Chance corresponds to the JSON schema field "chance".
+	Chance float64 `json:"chance"`
+
+	// Every corresponds to the JSON schema field "every".
+	Every float64 `json:"every"`
+
+	// Kind corresponds to the JSON schema field "kind".
+	Kind string `json:"kind"`
+
+	// Stay corresponds to the JSON schema field "stay".
+	Stay float64 `json:"stay"`
+}
+
 // The bodies of the life in the water, one model each.
 type LifeArt struct {
 	// Model corresponds to the JSON schema field "model".
@@ -1304,12 +1338,40 @@ type LifeBinds string
 
 const LifeBindsFlush LifeBinds = "flush"
 const LifeBindsFollow LifeBinds = "follow"
+const LifeBindsPerch LifeBinds = "perch"
 const LifeBindsRide LifeBinds = "ride"
+
+// A whale's blow: how high it rises, the least and the most, and how wide it
+// spreads, in m; how far it leans forward of upright and to the left, in degrees;
+// and how long it lasts, in s.
+type LifeBlow struct {
+	// Height corresponds to the JSON schema field "height".
+	Height []float64 `json:"height"`
+
+	// Last corresponds to the JSON schema field "last".
+	Last float64 `json:"last"`
+
+	// Lean corresponds to the JSON schema field "lean".
+	Lean float64 `json:"lean"`
+
+	// Left corresponds to the JSON schema field "left".
+	Left float64 `json:"left"`
+
+	// Width corresponds to the JSON schema field "width".
+	Width float64 `json:"width"`
+}
 
 type LifeBody string
 
+const LifeBodyBooby LifeBody = "booby"
+const LifeBodyBoobyAsleep LifeBody = "booby-asleep"
 const LifeBodyDolphin LifeBody = "dolphin"
 const LifeBodyFlyingfish LifeBody = "flyingfish"
+const LifeBodyHumpback LifeBody = "humpback"
+const LifeBodyPilot LifeBody = "pilot"
+const LifeBodyRay LifeBody = "ray"
+const LifeBodyShark LifeBody = "shark"
+const LifeBodySperm LifeBody = "sperm"
 const LifeBodyTarpon LifeBody = "tarpon"
 const LifeBodyTurtle LifeBody = "turtle"
 
@@ -1365,6 +1427,17 @@ const LifeFormPod LifeForm = "pod"
 const LifeFormRay LifeForm = "ray"
 const LifeFormTurtle LifeForm = "turtle"
 const LifeFormWhale LifeForm = "whale"
+
+// Water that glows where it is disturbed, on a dark night: its light's colour; and
+// how lit the sky may be for it to show, the moon's lit share times its height's
+// sine above the horizon at the most, the sun below the horizon.
+type LifeGlow struct {
+	// Colour corresponds to the JSON schema field "colour".
+	Colour Colour `json:"colour"`
+
+	// Moon corresponds to the JSON schema field "moon".
+	Moon float64 `json:"moon"`
+}
 
 // Where each habitat is.
 type LifeHabitat struct {
@@ -1430,6 +1503,9 @@ type LifeKind struct {
 	// Form corresponds to the JSON schema field "form".
 	Form LifeForm `json:"form"`
 
+	// Glow corresponds to the JSON schema field "glow".
+	Glow *LifeGlow `json:"glow,omitempty,omitzero"`
+
 	// How many in a group, the least and the most.
 	Group []int `json:"group"`
 
@@ -1468,6 +1544,10 @@ type LifeKind struct {
 
 	// Path corresponds to the JSON schema field "path".
 	Path LifePath `json:"path"`
+
+	// Whether, with a boat, it flutters low over the boat's wake, its feet pattering
+	// on the water.
+	Patters *bool `json:"patters,omitempty,omitzero"`
 
 	// Its name for more than one.
 	Plural string `json:"plural"`
@@ -3264,6 +3344,9 @@ type SurfaceLook struct {
 // and the spins in each; a glider's glides; its breaths at each surfacing and its
 // dives between them; and what is heard of it.
 type SwimLook struct {
+	// Asleep corresponds to the JSON schema field "asleep".
+	Asleep *LifeBody `json:"asleep,omitempty,omitzero"`
+
 	// Back corresponds to the JSON schema field "back".
 	Back Colour `json:"back"`
 
@@ -3273,13 +3356,23 @@ type SwimLook struct {
 	// Belly corresponds to the JSON schema field "belly".
 	Belly Colour `json:"belly"`
 
+	// Blow corresponds to the JSON schema field "blow".
+	Blow *LifeBlow `json:"blow,omitempty,omitzero"`
+
+	// A whale's time from one blow to the next at the surface, the least and the
+	// most, in s.
+	BlowEvery []float64 `json:"blowEvery,omitempty,omitzero"`
+
 	// Body corresponds to the JSON schema field "body".
 	Body LifeBody `json:"body"`
+
+	// The share of a whale's surfacings in which it breaches.
+	Breach *float64 `json:"breach,omitempty,omitzero"`
 
 	// Its breaths at each surfacing, the least and the most.
 	Breaths []int `json:"breaths,omitempty,omitzero"`
 
-	// What is heard of it: its breath, or nothing but its splashes.
+	// What is heard of it: its breath, a whale's blow, or nothing but its splashes.
 	Call SwimLookCall `json:"call"`
 
 	// How deep it swims between its breaths, in m.
@@ -3287,6 +3380,9 @@ type SwimLook struct {
 
 	// How long it is down between surfacings, the least and the most, in s.
 	Dive []float64 `json:"dive,omitempty,omitzero"`
+
+	// The share of a whale's dives on which it raises its flukes.
+	Fluke *float64 `json:"fluke,omitempty,omitzero"`
 
 	// A glide's length, the least and the most, in m.
 	Glide []float64 `json:"glide,omitempty,omitzero"`
@@ -3300,12 +3396,20 @@ type SwimLook struct {
 	// The longest glides linked one after another, in m.
 	Linked *float64 `json:"linked,omitempty,omitzero"`
 
+	// Whether it lies still at the surface between its breaths, logging, rather than
+	// rolling under.
+	Logs *bool `json:"logs,omitempty,omitzero"`
+
+	// The share of a whale's surfacings in which it slaps the water with its tail.
+	Slap *float64 `json:"slap,omitempty,omitzero"`
+
 	// The spins in a leap, the least and the most.
 	Spins []int `json:"spins,omitempty,omitzero"`
 }
 
 type SwimLookCall string
 
+const SwimLookCallBlow SwimLookCall = "blow"
 const SwimLookCallBreath SwimLookCall = "breath"
 const SwimLookCallSilent SwimLookCall = "silent"
 
@@ -5205,4 +5309,4 @@ type WorldZones struct {
 }
 
 // Version is the catalog version (tools/catalog).
-const Version = "730d4c4ea4fde401"
+const Version = "c5883c235f3bccf6"
