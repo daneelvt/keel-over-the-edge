@@ -249,12 +249,17 @@ export interface AccountsData {
 
 /**
  * settings.json: links to come aboard, as the owner sets them: how long a
- * link lasts, s, and whether links and boarding are on for everyone.
+ * link lasts, s, and whether links and boarding are on for everyone; and
+ * chat's switches: chat and shipmates' messages on for everyone, and the
+ * countries, two letters each, where chat is off.
  */
 export interface SailSettings {
   linkLifetime: number;
   links: boolean;
   boarding: boolean;
+  chat: boolean;
+  shipmateMessages: boolean;
+  chatCountries: string[];
 }
 
 /** What POST settings answers: the settings, what it would do or did in words, and the live links it ends. */
@@ -1193,7 +1198,8 @@ export type Control =
   | 'accounts/stop'
   | 'accounts/start'
   | 'accounts/revoke'
-  | 'accounts/delete';
+  | 'accounts/delete'
+  | 'reports/act';
 
 /** Works a control: a POST of JSON, done on any 2xx (202 for one under way). */
 export async function control(path: Control | 'accounts/search', body: unknown): Promise<Answer> {
@@ -1224,6 +1230,96 @@ export async function searchAccounts(
 /** An account's card, by its id. */
 export function getAccount(id: string): Promise<AccountCard> {
   return getJSON<AccountCard>(`account.json?id=${encodeURIComponent(id)}`);
+}
+
+/** Where a report came from: a player, a notice from outside the game, or the game. */
+export type ReportSource = 'player' | 'notice' | 'game';
+
+/** A report open, as reports.json lists it: a child's safety first. Times are RFC 3339. */
+export interface QueueRow {
+  id: string;
+  made: string;
+  source: ReportSource;
+  reason: string;
+  reporter?: string;
+  reported?: string;
+  machine?: boolean;
+  place?: string;
+  /** How many reports are open on the same player. */
+  reports: number;
+  urgent?: boolean;
+  /** How many lines it holds. */
+  lines: number;
+  /** An answer from the player waiting. */
+  answered?: boolean;
+}
+
+/** Someone aboard when a report was made: their band is adult, 13-17, under 13 or unknown. */
+export interface ReportPerson {
+  name: string;
+  band: string;
+  machine?: boolean;
+  skipper?: boolean;
+}
+
+/** A line a report holds. */
+export interface ReportLine {
+  line: number;
+  at: string;
+  name: string;
+  machine?: boolean;
+  text: string;
+  reported?: boolean;
+}
+
+/** A notice from outside the game, its fields named as keel gives them. */
+export interface ReportNotice {
+  Who: string;
+  Contact: string;
+  Sailor: string;
+  Happened: string;
+  Reason: string;
+  What: string;
+}
+
+/** report.json: a report whole. */
+export interface ReportPage {
+  id: string;
+  made: string;
+  source: ReportSource;
+  reason: string;
+  note?: string;
+  reporter?: string;
+  reported?: string;
+  /** The account reported, and a machine sailor's human, by their IDs. */
+  account?: string;
+  machine?: boolean;
+  owner?: string;
+  place?: string;
+  people: ReportPerson[];
+  /** Until when it still takes the conversation after it. */
+  taking?: string;
+  closed?: string;
+  outcome?: string;
+  held?: string;
+  referred?: string;
+  notice?: ReportNotice;
+  lines: ReportLine[];
+  notes: { at: string; by: 'owner' | 'player'; text: string }[];
+  actions: string[];
+  days: number[];
+}
+
+/** What POST reports/act answers: what the action would do, with check, or did. */
+export interface ReportAnswer {
+  action: string;
+  done: boolean;
+  words: string;
+}
+
+/** A report whole, by its id. */
+export function getReport(id: string): Promise<ReportPage> {
+  return getJSON<ReportPage>(`report.json?id=${encodeURIComponent(id)}`);
 }
 
 /** One of a human account's boats, as the card lists it. */

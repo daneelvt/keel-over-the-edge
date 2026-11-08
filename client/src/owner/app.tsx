@@ -30,7 +30,8 @@
 // app, its last call and its wait; humans and machine sailors wait in
 // queues of their own, each shown with its places' positions, and the
 // machine sailors at sea are counted against their cap and the places kept
-// for them.
+// for them. The players' reports are on a tab of their own: the queue, a
+// child's safety first, and each report whole, with the owner's hand on it.
 
 import { render } from 'preact';
 import {
@@ -130,6 +131,7 @@ import { brief, hidden, serverOffset } from './life';
 import { type Life, LifecycleCard, SwitchBar, WorldByHand } from './lifecycle';
 import { machinesWords } from './machines';
 import { centreOn, fitView, pan, toWorld, type View, zoomAt } from './map';
+import { ReportsTab } from './reports';
 import { foamOver, RAISED, SEA_COLOURS, SEA_EVERY, SEA_FULL, seaWords } from './sea';
 import { fromNow, WEATHER_COLOURS, whereFrom } from './weather';
 import { useWeather, WEATHER_EVERY, WeekCard } from './week';
@@ -1374,9 +1376,11 @@ function App() {
   const [now, setNow] = useState<WorldNow | null>(null);
   const [life, setLife] = useState<Life | null>(null);
   const [lifeError, setLifeError] = useState('');
-  const [tab, setTab] = useState<'world' | 'next' | 'accounts'>('world');
+  const [tab, setTab] = useState<'world' | 'next' | 'accounts' | 'reports'>('world');
   // The account whose card is open on the Accounts tab.
   const [card, setCard] = useState<string | null>(null);
+  // The name the Reports tab's queue is narrowed to, or "" for every report.
+  const [reportsFilter, setReportsFilter] = useState('');
   const [seenNext, setSeenNext] = useState(false);
   const [view, setView] = useState<View | null>(null);
   const [nextView, setNextView] = useState<View | null>(null);
@@ -1420,7 +1424,8 @@ function App() {
   // the world being sailed, whose live layers are read only while it shows.
   const onNext = tab === 'next' && next !== null;
   const onAccounts = tab === 'accounts';
-  const onWorld = !onNext && !onAccounts;
+  const onReports = tab === 'reports';
+  const onWorld = !onNext && !onAccounts && !onReports;
 
   // What was picked of a world ended means nothing in the next.
   useEffect(() => {
@@ -1790,9 +1795,12 @@ function App() {
             readLife.current();
             setTimeout(() => readLife.current(), 2000);
           }
-          if (a.ok && (path === 'lifetime' || path.startsWith('accounts/'))) {
+          if (
+            a.ok &&
+            (path === 'lifetime' || path.startsWith('accounts/') || path === 'reports/act')
+          ) {
             // The lifetime and the grants it leaves live show at once, and
-            // the accounts stopped.
+            // the accounts stopped, from their cards or from a report.
             readCharted.current();
           }
           if (a.ok && path === 'chart') {
@@ -1822,6 +1830,11 @@ function App() {
   const openAccount = useCallback((id: string): void => {
     setCard(id);
     setTab('accounts');
+  }, []);
+  // The reports on a name, opened from its account's card: on the Reports tab.
+  const openReports = useCallback((name: string): void => {
+    setReportsFilter(name);
+    setTab('reports');
   }, []);
   // A boat shown from its account's card: chosen on the world's tab, the map on it.
   const showBoat = useCallback(
@@ -2039,6 +2052,14 @@ function App() {
           >
             Accounts
           </button>
+          <button
+            type="button"
+            name="tab-reports"
+            aria-pressed={onReports}
+            onClick={() => setTab('reports')}
+          >
+            Reports
+          </button>
         </nav>
       </header>
       <AccountsTab
@@ -2047,9 +2068,17 @@ function App() {
         chosen={card}
         open={setCard}
         showBoat={showBoat}
+        openReports={openReports}
         act={act}
       />
-      {onAccounts ? null : (
+      <ReportsTab
+        shown={onReports}
+        filter={reportsFilter}
+        setFilter={setReportsFilter}
+        openAccount={openAccount}
+        act={act}
+      />
+      {onAccounts || onReports ? null : (
         <main>
           <div class="map-box">
             {onNext ? (

@@ -10,8 +10,9 @@
 // deleted, each that cannot be taken back first counted by keel and
 // confirmed in the card with keel's own words; its owner's flag, priority
 // and machine sailors allowed. The token lifetime of AI apps is set here
-// too, and links to come aboard (settings.tsx). An account's flag and priority are also on the world's tab, beside
-// its boat and its place in the queue.
+// too, and links to come aboard and chat's switches (settings.tsx). An account's flag and priority are also on the world's tab, beside
+// its boat and its place in the queue. A card on which reports are open
+// links them, on the Reports tab.
 
 import { useEffect, useReducer, useRef, useState } from 'preact/hooks';
 import { Portrait } from '../account/portraits';
@@ -45,6 +46,8 @@ import {
   type ActionAnswer,
   control,
   getAccount,
+  getJSON,
+  type QueueRow,
   type SearchAnswer,
   type Sort,
   searchAccounts,
@@ -52,6 +55,7 @@ import {
 import { hidden } from './life';
 import type { Act } from './lifecycle';
 import { AISignIn, MAX_CAP, plural } from './machines';
+import { reportsOn } from './reportwords';
 import { SailWithSettings } from './settings';
 
 /** How often the card shown is read again, ms. */
@@ -533,12 +537,57 @@ function Sea({
   );
 }
 
+/**
+ * The reports open on an account and its machine sailors, by name, each a
+ * link to them on the Reports tab; nothing while there are none, or while
+ * reports are not running.
+ */
+function CardReports({
+  names,
+  openReports,
+}: {
+  names: string[];
+  openReports: (name: string) => void;
+}) {
+  const [rows, setRows] = useState<QueueRow[] | null>(null);
+  // Read once as a card is opened (each card is its own): the queue is
+  // the Reports tab's to follow.
+  useEffect(() => {
+    let live = true;
+    getJSON<QueueRow[]>('reports.json')
+      .then((q) => live && setRows(q))
+      .catch(() => live && setRows(null));
+    return () => {
+      live = false;
+    };
+  }, []);
+  const on = rows === null ? [] : reportsOn(rows, names);
+  if (on.length === 0) {
+    return null;
+  }
+  return (
+    <>
+      <dt>Reports</dt>
+      <dd data-field="card-reports">
+        {on.map((r) => (
+          <span key={r.name} class="side">
+            <button type="button" class="link" name="reports" onClick={() => openReports(r.name)}>
+              <bdi>{r.name}</bdi>: {plural(r.open, 'report')} open
+            </button>{' '}
+          </span>
+        ))}
+      </dd>
+    </>
+  );
+}
+
 /** An account's card: what it is, what it has, what was done to it, and the owner's hand on it. */
 function Card({
   id,
   shown,
   open,
   showBoat,
+  openReports,
   act,
   changed,
 }: {
@@ -546,6 +595,7 @@ function Card({
   shown: boolean;
   open: (id: string | null) => void;
   showBoat: (boat: number, east: number, north: number) => void;
+  openReports: (name: string) => void;
   act: Act;
   changed: () => void;
 }) {
@@ -739,6 +789,10 @@ function Card({
             </dd>
           </>
         )}
+        <CardReports
+          names={[card.name, ...(card.machines ?? []).map((m) => m.name)]}
+          openReports={openReports}
+        />
         <dt>Flags</dt>
         <dd>
           <AccountBoxes
@@ -806,6 +860,7 @@ export function AccountsTab({
   chosen,
   open,
   showBoat,
+  openReports,
   act,
 }: {
   accounts: AccountsData | null;
@@ -813,6 +868,7 @@ export function AccountsTab({
   chosen: string | null;
   open: (id: string | null) => void;
   showBoat: (boat: number, east: number, north: number) => void;
+  openReports: (name: string) => void;
   act: Act;
 }) {
   const [again, searchAgain] = useReducer((n: number) => n + 1, 0);
@@ -842,6 +898,7 @@ export function AccountsTab({
             shown={shown}
             open={open}
             showBoat={showBoat}
+            openReports={openReports}
             act={act}
             changed={() => searchAgain(undefined)}
           />
