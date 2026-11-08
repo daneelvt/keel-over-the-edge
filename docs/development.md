@@ -5670,6 +5670,113 @@ sails 40 players in groups of five: each group's first makes a link, the
 others knock with it and are let aboard, and the skipper hands the controls
 round and takes them back, reporting the knocks, arrivals and hand-overs.
 
+### Chat aboard
+
+Everyone aboard one boat can chat: text, one line of at most 200
+characters, never markup, links or images. **Nothing anyone says is
+stored**: a line lives in keel's memory for half an hour, for reports, and
+is gone after that or at a restart. The one exception is a report, which
+copies what the memory still holds.
+
+**The rule** (`aboard.Rules.Delivered`, `internal/aboard/chat.go`), asked
+for every line and every receiver: chat on for everyone and in both their
+countries (the owner's switches; the country is Cloudflare's
+`Cf-Ipcountry` header); both players' own chat on (`account.chat`, NULL for
+the band's default: on for an adult, off for 13 to 17 until they turn it
+on, nobody else); the sender not muted from chat by the owner, rested by
+reports or resting after refusals, and the Rules of the sea accepted;
+neither blocking the other, nor the receiver muting the sender; and the
+two aboard the same boat (later, shipmates too, with their own switch). A
+machine sailor's line reaches no human but its owner and the boat's
+skipper's human, and an owner watching their own machine sailor reads its
+boat's chat and says nothing (`Together.Owns`). Mutes and blocks are held
+in memory (`aboard.Ties`, loaded as keel starts, changed after the
+database), which is also the knocks' `Refuser`: a block refuses knocks both
+ways, a human's watch (`watch.Boat.Blocked`, and the watch list leaves the
+human out), never anyone's watch of a machine sailor, and a skipper's block
+puts the person ashore.
+
+**The filter** (`moderation.CheckChat`, `internal/moderation/chat.go`,
+`contact.go`, `fold.go`): the line cleaned (NFKC; controls, bidirectional
+and invisible characters out; one line), then matched on folded forms (the
+look-alike skeleton, digits and symbols read as letters, repeats and
+spaced-out letters joined). A link or bare domain (`mvdan.cc/xurls`, and
+"x dot com" spelled out, against `lists/tlds.txt`), an email, seven digits
+or more however spaced or spelled, a handle (`@name`, `#name`, `name#1234`)
+or another app's name with a contact cue (`lists/apps.txt`) is refused as a
+contact: its sender is told "Links and contact details can't be sent
+aboard". A listed word is refused silently: the line comes back to its
+sender as said and reaches nobody. `lists/innocent-chat.txt` holds sailors'
+talk that must pass ("the poop deck", "seamen"). Phone numbers' examples
+from `nyaruka/phonenumbers` for every region are tested to be refused; the
+module is a test's only, not linked into keel. The first call builds the
+matchers (about 10 ms).
+
+**The hub** (`internal/chat`, one each world, `cmd/keel/world.go`): each
+door joins its speakers (the game connection a person, the agents' door a
+machine sailor) and registers an `Out`; `Hub.Say` finds the sender's boat
+in the latest frame (nobody else aboard: "nobody"), takes the line from
+the sender's budget (`Limiter`: a line every 2 s, bursts of 5, 30 a
+minute; 5 refusals in 10 minutes rest the sender's chat for 10), asks the
+filter, keeps it in the rings and hands it to every door with the accounts
+the rule lets it reach. **The rings** (`Rings`): each boat's lines for 30
+minutes, 200 a boat, one sender's 200 lines or 64 KiB across every boat
+(their own oldest go first), 64 MiB in all (the oldest anywhere go first),
+each line counted at its allocation (`Cost`). A boat's lines outlive its
+voyage by the same half hour.
+
+**On the wire**: `Command.say{text, id}`; `Command.mute`, `block` and
+`report`, each naming someone by `Who` (a seat aboard, or a line the
+connection was sent, which the edge checks and the hub still holds: no
+account ID reaches the client); `Chat` (a line, or its echo to the sender,
+refused or said), `ChatState` (on, off, own off, resting, the Rules to
+accept: sent with each `Crew` and as it changes), `Tied`, `Reported`;
+`Person.muted` and `blocked`. Nothing of a line's text is logged or
+counted: `TestChatAboard` greps the edge's log and metrics for it.
+
+**Reports** (`internal/review`): a report from a line or a name copies the
+boat's lines the rings hold (the line it was made from marked), who is
+aboard and their bands, then follows the boat's chat for 10 minutes more
+(`Rings.Follow`; a restart ends the following). Reports from three players
+in a day, or one that a child may be at risk, rest the reported human's
+chat and knocks until the owner acts (`account.rested_at`, a `rest` in the
+record). The owner's page and `keel admin` act on them (see "Reports").
+The tables: `mute`, `block`, `report` (no foreign key: a held report
+outlives a deletion; a trigger deletes those not held with the reported
+account, and blanks a deleted reporter's name), `report_line` (the only
+place a line is ever written), `report_note`, `notice_report`,
+`statement`. The `sessions` job deletes reports closed six months ago and
+not held. `POST /api/notice` takes a notice from anyone (5 an hour an
+address) into the same queue; `/report` is its page.
+
+**Metrics**: `keel_chat_lines_total{result}`,
+`keel_chat_deliveries_total`, `keel_chat_ring_lines`,
+`keel_chat_ring_bytes`, `keel_chat_dropped_total{why}`,
+`keel_chat_say_seconds`, `keel_reports_total{reason}`,
+`keel_reports_open{which}`, `keel_reports_oldest_seconds`; the Game
+dashboard's "Sailing together and chat" row. **Alerts**: `ChildAtRisk`
+(critical, while a report that a child may be at risk waits) and
+`ReportsWaiting` (the oldest open a day). Alertmanager sends nothing until
+it has a receiver (see "Monitoring").
+
+**Testing it**: `internal/aboard/chat_test.go` (the rule for every pair of
+bands and switches, blocks, mutes, machines); `internal/chat` (the rings'
+limits, the flood at full rate, the limiter); `internal/moderation`'s
+evasions, innocent lines and `FuzzCheckChat`; `internal/store/chat_test.go`
+(ties, reports, rests, statements, removal and purge from every copy,
+holds through a deletion and the sweep, and no line's text in any column
+but `report_line`); `internal/edge/edgetest/chat_test.go` (a line heard by
+those aboard alone, refusals both ways, a teen opting in, the owner's
+switch, a mute, a report's lines before and after, a skipper's block). The
+load bot chats:
+
+```sh
+go run ./tools/loadbot -n 40 -crews 5 -chat 2 -for 5m -url https://macbook.local
+```
+
+each person aboard says two lines a minute, and the report counts the
+lines said, echoed, refused and heard.
+
 ### Chat aboard, on the page
 
 **The strip** (`client/src/ui/chat.tsx`, loaded with sailing together's
