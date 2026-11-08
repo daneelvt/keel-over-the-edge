@@ -172,6 +172,12 @@ export function actionName(action: string, name: string): string {
   return `${action}: ${name}`;
 }
 
+/** The key on a person's row that opens what is rarely done to them, and its label. */
+export const MORE = '⋯';
+export function moreFor(name: string): string {
+  return name === '' ? 'More' : `More: ${name}`;
+}
+
 /** The controls offered: "Iron Mary hands you the controls". */
 export function handedWords(from: string): Words {
   return [p(from), ' hands you the controls'];

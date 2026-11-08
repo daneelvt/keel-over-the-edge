@@ -290,6 +290,21 @@
   margin-left: auto;
 }
 
+/* What is rarely done to someone: behind the row's ⋯ key, opened under
+   the row, the keys the instruments' size. */
+.deck-more {
+  min-width: 44px;
+  letter-spacing: 0.08em;
+}
+
+.deck-row-more {
+  display: flex;
+  flex: 1 1 100%;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px 10px;
+}
+
 .deck-putting p {
   flex: 1 1 140px;
   overflow-wrap: anywhere;

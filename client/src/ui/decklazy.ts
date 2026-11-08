@@ -115,6 +115,8 @@ export interface DeckView {
   link: Signal<boolean>;
   /** Whether the list of who is aboard is open. */
   list: Signal<boolean>;
+  /** The seat whose row of who is aboard opens with its ⋯ open: the sandbox's scenes alone. */
+  openRow?: number;
   /** Whether the question before going ashore is asked. */
   ashore: Signal<boolean>;
   /** The player's own knock put away. */

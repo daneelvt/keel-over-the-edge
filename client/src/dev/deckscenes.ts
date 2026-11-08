@@ -43,6 +43,7 @@ export const DECK_SCENES = [
   'handed',
   'list',
   'list-skipper',
+  'list-more',
   'ashore',
   'link',
   'chat',
@@ -188,6 +189,7 @@ export function deckScene(
   const skipper =
     name.startsWith('skipper') ||
     name === 'list-skipper' ||
+    name === 'list-more' ||
     name === 'link' ||
     (chatting && !aboard && !owner);
   const away = name === 'skipper-away' || name === 'list-skipper';
@@ -247,7 +249,10 @@ export function deckScene(
     boatName: computed(() => ''),
     closed,
     link: signal(name === 'link'),
-    list: signal(name === 'list' || name === 'list-skipper' || name === 'chat-list'),
+    list: signal(
+      name === 'list' || name === 'list-skipper' || name === 'list-more' || name === 'chat-list',
+    ),
+    ...(name === 'list-more' ? { openRow: 1 } : {}),
     ashore: signal(name === 'ashore'),
     dismissed: signal(null),
     answer: (k, l) => calls.push(`answer ${k} ${l ? 'let' : 'not now'}`),

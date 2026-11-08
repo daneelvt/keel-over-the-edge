@@ -58,6 +58,8 @@ import {
   KEEP_ABOARD,
   knockingWords,
   LET_ABOARD,
+  MORE,
+  moreFor,
   moreWaitingText,
   NOT_NOW,
   PUT_ASHORE,
@@ -178,6 +180,27 @@ export function rowActions(crew: CrewTold, seat: number): RowAction[] {
     out.push(person.muted ? 'unmute' : 'mute', person.blocked ? 'unblock' : 'block', 'report');
   }
   return out;
+}
+
+/**
+ * The actions a row keeps behind its ⋯ key, rarely used: putting someone
+ * ashore, mute, block and report. The controls' keys stand on the row.
+ */
+export const MORE_ACTIONS: ReadonlySet<RowAction> = new Set<RowAction>([
+  'putAshore',
+  'mute',
+  'unmute',
+  'block',
+  'unblock',
+  'report',
+]);
+
+/** A row's actions split: the keys on the row, and those behind its ⋯ key. */
+export function splitActions(actions: RowAction[]): { keys: RowAction[]; more: RowAction[] } {
+  return {
+    keys: actions.filter((a) => !MORE_ACTIONS.has(a)),
+    more: actions.filter((a) => MORE_ACTIONS.has(a)),
+  };
 }
 
 /** A key's words for each action. */
@@ -427,17 +450,36 @@ export function DeckPlate({ deck }: { deck: DeckView }) {
   );
 }
 
-/** One person aboard: their portrait and name, who they are, the helm's mark, and the keys. */
+/**
+ * One person aboard: their portrait and name, who they are, the helm's
+ * mark, and the controls' keys; what is rarely done to them behind a ⋯
+ * key, opened under the row.
+ */
 export function PersonRow({
   person,
   crew,
   act,
+  open = false,
+  toggle,
 }: {
   person: PersonTold;
   crew: CrewTold;
   act: (a: RowAction, p: PersonTold) => void;
+  open?: boolean;
+  toggle?: () => void;
 }) {
-  const actions = rowActions(crew, person.seat);
+  const { keys: actions, more } = splitActions(rowActions(crew, person.seat));
+  const key = (a: RowAction) => (
+    <button
+      key={a}
+      type="button"
+      class={`plate-key${a === 'take' ? ' key-main' : ''}`}
+      aria-label={person.you ? ACTION_WORDS[a] : actionName(ACTION_WORDS[a], person.name)}
+      onClick={() => act(a, person)}
+    >
+      {ACTION_WORDS[a]}
+    </button>
+  );
   const tags = [
     person.seat === 0 ? SKIPPER : '',
     person.you ? YOU : '',
@@ -461,19 +503,23 @@ export function PersonRow({
         </p>
         {tags.length > 0 ? <p class="deck-faint">{tags.join(' · ')}</p> : null}
       </div>
-      <span class="deck-row-keys">
-        {actions.map((a) => (
-          <button
-            key={a}
-            type="button"
-            class={`plate-key${a === 'take' ? ' key-main' : ''}`}
-            aria-label={person.you ? ACTION_WORDS[a] : actionName(ACTION_WORDS[a], person.name)}
-            onClick={() => act(a, person)}
-          >
-            {ACTION_WORDS[a]}
-          </button>
-        ))}
-      </span>
+      {actions.length > 0 || more.length > 0 ? (
+        <span class="deck-row-keys">
+          {actions.map(key)}
+          {more.length > 0 ? (
+            <button
+              type="button"
+              class="plate-key deck-more"
+              aria-label={moreFor(person.name)}
+              aria-expanded={open}
+              onClick={() => toggle?.()}
+            >
+              {MORE}
+            </button>
+          ) : null}
+        </span>
+      ) : null}
+      {open && more.length > 0 ? <div class="deck-row-more">{more.map(key)}</div> : null}
     </li>
   );
 }
@@ -486,6 +532,8 @@ export function PersonRow({
 export function AboardList({ deck }: { deck: DeckView }) {
   const crew = deck.crew.value;
   const [putting, setPutting] = useState<PersonTold | null>(null);
+  // The one row whose ⋯ is open, by seat; -1 for none.
+  const [opened, setOpened] = useState(deck.openRow ?? -1);
   const close = () => (deck.list.value = false);
   useLayoutEffect(() => {
     const key = (e: KeyboardEvent) => {
@@ -498,6 +546,7 @@ export function AboardList({ deck }: { deck: DeckView }) {
     return () => document.removeEventListener('keydown', key);
   }, []);
   const act = (a: RowAction, p: PersonTold) => {
+    setOpened(-1);
     switch (a) {
       case 'hand':
         deck.hand(p.seat);
@@ -558,7 +607,14 @@ export function AboardList({ deck }: { deck: DeckView }) {
               </span>
             </li>
           ) : crew !== null ? (
-            <PersonRow key={p.seat} person={p} crew={crew} act={act} />
+            <PersonRow
+              key={p.seat}
+              person={p}
+              crew={crew}
+              act={act}
+              open={opened === p.seat}
+              toggle={() => setOpened(opened === p.seat ? -1 : p.seat)}
+            />
           ) : null,
         )}
       </ul>

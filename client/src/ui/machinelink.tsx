@@ -8,7 +8,7 @@
 
 import { useState } from 'preact/hooks';
 import type { DeckView } from './decklazy';
-import { CLOSE, PUT_ASHORE, WHO_IS_ABOARD } from './deckwords';
+import { actionName, CLOSE, MORE, moreFor, PUT_ASHORE, WHO_IS_ABOARD } from './deckwords';
 import { COG, SAIL_WITH_MACHINE_DETAIL, sailWithMeFor } from './machinewords';
 import { PlayerText } from './player';
 import { linkServer, SailWithMe } from './sailwithme';
@@ -42,6 +42,8 @@ export function MachineCrew({ deck, machine }: { deck: DeckView; machine: string
   const crew = deck.crew.value;
   const close = () => (deck.list.value = false);
   const people = crew?.people ?? [];
+  // The one row whose ⋯ is open, by seat; -1 for none.
+  const [opened, setOpened] = useState(-1);
   // Only while the machine sailor watched is the boat's skipper.
   const skipper = people[0]?.name === machine;
   return (
@@ -56,10 +58,31 @@ export function MachineCrew({ deck, machine }: { deck: DeckView; machine: string
             </span>
             {skipper && p.seat !== 0 ? (
               <span class="deck-row-keys">
-                <button type="button" class="plate-key" onClick={() => deck.putAshore(p.seat)}>
-                  {PUT_ASHORE}
+                <button
+                  type="button"
+                  class="plate-key deck-more"
+                  aria-label={moreFor(p.name)}
+                  aria-expanded={opened === p.seat}
+                  onClick={() => setOpened(opened === p.seat ? -1 : p.seat)}
+                >
+                  {MORE}
                 </button>
               </span>
+            ) : null}
+            {skipper && p.seat !== 0 && opened === p.seat ? (
+              <div class="deck-row-more">
+                <button
+                  type="button"
+                  class="plate-key"
+                  aria-label={actionName(PUT_ASHORE, p.name)}
+                  onClick={() => {
+                    setOpened(-1);
+                    deck.putAshore(p.seat);
+                  }}
+                >
+                  {PUT_ASHORE}
+                </button>
+              </div>
             ) : null}
           </li>
         ))}

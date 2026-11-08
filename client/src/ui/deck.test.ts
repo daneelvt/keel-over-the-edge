@@ -12,7 +12,7 @@ import { describe, expect, test } from 'vitest';
 import { deckScene } from '../dev/deckscenes';
 import type { CrewTold, PersonTold, WhoTold } from '../net/messages';
 import { ChatLog } from './chatlog';
-import { DeckPlate, holderName, KnockCards, rowActions, secondsLeft } from './deck';
+import { DeckPlate, holderName, KnockCards, rowActions, secondsLeft, splitActions } from './deck';
 import { canShareLink, deckOf, deckPlate, deckShown, selfOf, skipperAway } from './decklazy';
 import {
   keepLink,
@@ -78,6 +78,12 @@ describe('who is aboard: what each row offers', () => {
     c.people[2] = { ...person(2), blocked: true };
     expect(rowActions(c, 1)).toEqual(['hand', 'putAshore', 'unmute', 'block', 'report']);
     expect(rowActions(c, 2)).toEqual(['hand', 'putAshore', 'mute', 'unblock', 'report']);
+    // The controls stand on the row; the rest is behind its ⋯ key.
+    expect(splitActions(rowActions(c, 1))).toEqual({
+      keys: ['hand'],
+      more: ['putAshore', 'unmute', 'block', 'report'],
+    });
+    expect(splitActions(['take'])).toEqual({ keys: ['take'], more: [] });
   });
 
   test('a spectator, who is not aboard, may do nothing; nor to a seat no one has', () => {

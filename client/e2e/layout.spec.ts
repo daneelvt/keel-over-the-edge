@@ -2279,6 +2279,7 @@ test('sailing together’s parts stand clear of the instruments and the boat on 
     { name: 'handed', steers: false },
     { name: 'list', steers: false },
     { name: 'list-skipper', steers: false },
+    { name: 'list-more', steers: true },
     { name: 'ashore', steers: false },
     { name: 'link', steers: true },
   ] as const;
