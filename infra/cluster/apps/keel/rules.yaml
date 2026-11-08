@@ -116,6 +116,28 @@ spec:
             summary: "One of keel's jobs keeps failing."
           annotations:
             description: "The job {{ $labels.name }} has failed for half an hour without a run that succeeded. Its runs, and why each failed, are on the world page."
+    # Reports of what players said or did. A report that a child may be
+    # at risk pages the owner while it waits; the queue waiting a day
+    # warns. Their component is their own: GameDown holds them back
+    # nowhere, a report made before keel stopped still waits.
+    - name: reports
+      rules:
+        - alert: ChildAtRisk
+          expr: max(keel_reports_open{which="child"}) > 0
+          labels:
+            severity: critical
+            component: reports
+            summary: "A player reported that a child may be at risk."
+          annotations:
+            description: "{{ $value }} such reports wait. Read them first on the owner's page, Reports tab: the lines are kept with the report, and the reported player's chat and knocks rest until you act."
+        - alert: ReportsWaiting
+          expr: max(keel_reports_oldest_seconds) > 86400
+          labels:
+            severity: warning
+            component: reports
+            summary: "A report has waited a day for the owner."
+          annotations:
+            description: "The oldest open report has waited {{ $value | humanizeDuration }}. The owner's page, Reports tab, lists them, a child's safety first."
     - name: database
       rules:
         - alert: DatabaseDown
