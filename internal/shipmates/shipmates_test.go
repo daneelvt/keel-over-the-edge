@@ -82,14 +82,6 @@ func sailor(t *testing.T, s *store.Store, name string, born int32) store.Account
 	return id
 }
 
-func names(rows []shipmates.Row) []string {
-	var out []string
-	for _, r := range rows {
-		out = append(out, r.Name)
-	}
-	return out
-}
-
 // TestShipmates: an offer needs five minutes aboard together in the last
 // 30 days; an offer between an adult and a teen is sent as any other and
 // never reaches the teen, nor can be accepted, and nothing either is shown
