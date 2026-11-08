@@ -62,6 +62,11 @@ const BANK = 0.9;
 export interface BoatAt extends Pose {
   speed?: number;
   bow?: number;
+  /** How she floats as drawn: her rise, m, her heel, radians to starboard, and her pitch, bow up; and her kind. */
+  heave?: number;
+  heel?: number;
+  pitch?: number;
+  kind?: number;
 }
 
 /** Where a bird is and how it flies. */
@@ -262,7 +267,15 @@ function spotAt(
   let along = 0;
   let across = 0;
   let line = e.heading;
-  if (withBoat(e) && pose !== null) {
+  if (withBoat(e) && pose !== null && k.patters === true) {
+    // Fluttering low over the wake astern, a storm petrel's feet pattering
+    // on the water as it picks at what the hull stirs up, each drifting
+    // back along the wake and fluttering up to it again.
+    line = pose.heading;
+    along = -lerp(4, 22, own(s, 1)) - 5 * (0.5 + 0.5 * wave(u, lerp(8, 14, own(s, 2)), own(s, 3)));
+    across = (own(s, 4) - 0.5) * 5 + 1.5 * wave(u, lerp(3, 6, own(s, 5)), own(s, 6));
+    up = floor * 0.6 + 0.12 * Math.abs(Math.sin((2 * Math.PI * u) / lerp(0.5, 0.9, own(s, 7))));
+  } else if (withBoat(e) && pose !== null) {
     // Wheeling about the place astern, in the boat's frame: wide, then
     // closing in to hang in the boat's air.
     line = pose.heading;
@@ -342,7 +355,7 @@ function spotAt(
   const cos = Math.cos(line);
   east += sin * along + cos * across;
   north += cos * along - sin * across;
-  up = Math.max(up, floor);
+  up = Math.max(up, k.patters === true && withBoat(e) ? floor * 0.6 : floor);
   out.east = east;
   out.north = north;
   out.plunge = false;
