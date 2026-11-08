@@ -47,7 +47,7 @@ life:
   # s, by a draw of the boat and that slot, at chance, a boat lit (the sun
   # below the horizon) and sailing at the bind's speed over water the kind
   # lives in has one land aboard; it lies stay s and is gone.
-  aboard: { kind: flying-fish, every: 60, chance: 0.01, stay: 60 }
+  aboard: { kind: flying-fish, every: 60, chance: 0.006, stay: 60 }
   drop: 200 # m
   # The sun's height across which dusk and dawn run, degrees: from civil
   # twilight's end to a few degrees up.
@@ -508,7 +508,7 @@ life:
       wind: [0, 14]
       rain: 0.5
       bySea: false
-      rate: 0.04
+      rate: 0.1
       group: [1, 1]
       stay: [300, 1200]
       speed: [10, 13]
@@ -534,12 +534,12 @@ life:
       form: whale
       family: big
       path: pass
-      habitats: { harbour: 0, reef: 0, shelf: 0.6, deep: 1, outer: 1.6 }
+      habitats: { harbour: 0, reef: 0, shelf: 0.2, deep: 0.45, outer: 10 }
       when: { day: 1, dusk: 1, night: 1 }
       wind: [0, 20]
       rain: 0.8
       bySea: true
-      rate: 0.01
+      rate: 0.012
       group: [1, 3]
       stay: [0, 0]
       speed: [1.2, 2.2]
@@ -557,12 +557,12 @@ life:
       form: whale
       family: big
       path: drift
-      habitats: { harbour: 0, reef: 0, shelf: 0.1, deep: 0.6, outer: 1.6 }
+      habitats: { harbour: 0, reef: 0, shelf: 0, deep: 0.2, outer: 10 }
       when: { day: 1, dusk: 1, night: 1 }
       wind: [0, 20]
       rain: 0.8
       bySea: true
-      rate: 0.01
+      rate: 0.011
       group: [1, 4]
       stay: [480, 660]
       speed: [0.3, 0.8]
@@ -584,7 +584,7 @@ life:
       wind: [0, 20]
       rain: 0.8
       bySea: true
-      rate: 0.005
+      rate: 0.02
       group: [10, 20]
       stay: [0, 0]
       speed: [0.4, 1.0]
@@ -609,7 +609,7 @@ life:
       wind: [0, 14]
       rain: 0.8
       bySea: true
-      rate: 0.01
+      rate: 0.04
       group: [5, 30]
       stay: [0, 0]
       speed: [0.8, 1.5]
@@ -630,7 +630,7 @@ life:
       wind: [0, 12]
       rain: 0.8
       bySea: true
-      rate: 0.01
+      rate: 0.04
       group: [1, 1]
       stay: [0, 0]
       speed: [0.6, 1.0]
@@ -654,12 +654,12 @@ life:
       wind: [0, 14]
       rain: 1
       bySea: false
-      rate: 0.02
+      rate: 0.3
       group: [1, 1]
       stay: [1800, 3600]
       speed: [0.01, 0.02]
       height: [0, 0]
       range: 0
       reach: 1800
-      patch: [300, 800]
+      patch: [400, 1000]
       glow: { colour: "#62f0cf", moon: 0.33 }
