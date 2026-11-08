@@ -308,7 +308,11 @@ function podSpot(
     let side: number;
     let depth: number;
     if (i < riding) {
-      ahead = bow + lerp(0.3, 2.4, own(s, 13)) + 0.4 * wave(u, lerp(5, 9, own(s, 14)), own(s, 15));
+      ahead =
+        bow +
+        0.3 * length +
+        lerp(0, 1.5, own(s, 13)) +
+        0.4 * wave(u, lerp(5, 9, own(s, 14)), own(s, 15));
       side =
         (i % 2 === 0 ? 1 : -1) *
         (lerp(0.5, 2.2, own(s, 16)) + 0.3 * wave(u, lerp(6, 11, own(s, 17)), own(s, 18)));

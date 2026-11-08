@@ -1445,7 +1445,7 @@ export class SeaScene {
         continue;
       }
       // Small fish breaking the surface, driven up from below.
-      let owed = dt * 12 * b.strength;
+      let owed = dt * 20 * b.strength;
       while (owed > 0) {
         this.#boilSeed = (Math.imul(this.#boilSeed, 1103515245) + 12345) >>> 0;
         if (owed < 1 && this.#boilSeed / 4294967296 > owed) {
@@ -1454,7 +1454,7 @@ export class SeaScene {
         owed -= 1;
         const a = ((this.#boilSeed >>> 4) / 268435456) * 2 * Math.PI;
         const r = b.reach * Math.sqrt(((this.#boilSeed >>> 8) & 0xffff) / 65536);
-        this.spray.splash(b.east + Math.sin(a) * r, b.north + Math.cos(a) * r, 0, 0.25);
+        this.spray.splash(b.east + Math.sin(a) * r, b.north + Math.cos(a) * r, 0, 0.35);
       }
     }
   }

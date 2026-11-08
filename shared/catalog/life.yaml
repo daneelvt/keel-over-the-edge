@@ -364,8 +364,9 @@ life:
     # the flock's edge as terns, noddies and boobies plunge into it and
     # frigatebirds swoop from above; predators were under 60 of 62 feeding
     # flocks off Hawaii, dolphins under 8% of them (Hebshi and others
-    # 2008). The patch drifts and is gone in minutes; a boat through its
-    # middle breaks it up.
+    # 2008). The patch drifts a little, and slowly enough that its birds,
+    # working over where it began, stay over it; it is gone in minutes,
+    # and a boat through its middle breaks it up.
     - id: bait-ball
       name: Bait
       plural: Bait
@@ -381,7 +382,7 @@ life:
       rate: 0.23
       group: [1, 1]
       stay: [300, 900]
-      speed: [0.1, 0.3]
+      speed: [0.01, 0.03]
       height: [0, 0]
       range: 0
       reach: 1500
