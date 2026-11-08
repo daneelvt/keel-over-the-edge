@@ -50,6 +50,14 @@ type viewer struct {
 	welcomes  int
 	boatLooks []*pb.BoatLookChanged
 	names     map[uint32]string
+	// What is told of sailing together: the knocks waiting by ID, the own
+	// knock's latest state, the latest crew, the controls offered, and the
+	// latest going ashore.
+	cards    map[uint64]*pb.KnockCard
+	knocking *pb.Knocking
+	crew     *pb.Crew
+	handed   *pb.Handed
+	ashore   *pb.Ashore
 }
 
 // dial opens the game connection with the cookie and says hello.
@@ -121,6 +129,23 @@ func (v *viewer) take(r client.Received) {
 		v.looks = append(v.looks, m.LookChanged.GetLook())
 	case *pb.ServerMessage_BoatLookChanged:
 		v.boatLooks = append(v.boatLooks, m.BoatLookChanged)
+	case *pb.ServerMessage_Knock:
+		if v.cards == nil {
+			v.cards = map[uint64]*pb.KnockCard{}
+		}
+		if m.Knock.GetGone() {
+			delete(v.cards, m.Knock.GetId())
+		} else {
+			v.cards[m.Knock.GetId()] = m.Knock
+		}
+	case *pb.ServerMessage_Knocking:
+		v.knocking = m.Knocking
+	case *pb.ServerMessage_Crew:
+		v.crew = m.Crew
+	case *pb.ServerMessage_Handed:
+		v.handed = m.Handed
+	case *pb.ServerMessage_Ashore:
+		v.ashore = m.Ashore
 	case *pb.ServerMessage_BoatNames:
 		if v.names == nil {
 			v.names = map[uint32]string{}

@@ -41,7 +41,7 @@ func TestLoadValid(t *testing.T) {
 	want := Config{
 		PlayAddr: "127.0.0.1:8080", PlayOrigin: "https://keel.local:5173", PasskeyRPID: "keel.local", PasskeyOrigins: []string{"https://keel.local:5173"},
 		AgentsAddr: "127.0.0.1:8081", AgentsURL: "https://keel.local:5173/mcp", InternalAddr: "127.0.0.1:9090", LogLevel: slog.LevelInfo, DatabaseURL: dbURL,
-		BoatLimit: DefaultBoatLimit, SpectatorLimit: DefaultSpectatorLimit, AISilence: DefaultAISilence, Bell: DefaultBell, Land: true, WorldKeep: DefaultWorldKeep,
+		BoatLimit: DefaultBoatLimit, SpectatorLimit: DefaultSpectatorLimit, CrewLimit: DefaultCrewLimit, AISilence: DefaultAISilence, Bell: DefaultBell, Land: true, WorldKeep: DefaultWorldKeep,
 		// A zone loaded is a pointer of its own: the schedule is compared
 		// by what it says.
 		Schedule: c.Schedule,

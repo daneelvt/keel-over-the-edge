@@ -112,6 +112,9 @@ func (enc *encoder) frame() {
 			enc.active = enc.active[:last]
 			continue
 		}
+		if c.joined.Load() || c.crew.Load() {
+			enc.hands(c, f)
+		}
 		if c.waiting.Load() > 0 {
 			c.release(next)
 		}
@@ -169,7 +172,7 @@ func (enc *encoder) adopt(f *bus.Frame) {
 	enc.mu.Unlock()
 	var later []ask
 	for _, a := range asks {
-		if a.kind == askJoined && a.r.Tick > f.Tick || slices.ContainsFunc(later, func(l ask) bool { return l.c == a.c }) {
+		if (a.kind == askJoined || a.kind == askAboard) && a.r.Tick > f.Tick || slices.ContainsFunc(later, func(l ask) bool { return l.c == a.c }) {
 			later = append(later, a)
 			continue
 		}
@@ -209,6 +212,8 @@ func (enc *encoder) do(a ask, f *bus.Frame) {
 		enc.sail(c, f)
 	case askWatch:
 		enc.beginWatch(c, f, a.target)
+	case askAboard:
+		enc.aboardWelcome(c, f, a.r.Slot, a.name)
 	case askUnwatch:
 		if c.w.on {
 			enc.stopWatching(c, pb.WatchEnd_WATCH_END_UNSPECIFIED)
@@ -353,8 +358,11 @@ func (c *conn) welcome(f *bus.Frame) bool {
 	}
 	e.voyages.sails(c.account, c.boat)
 	c.wmu.Lock()
-	c.steering = true
+	c.gen = f.Gen[s]
+	c.steering = f.Holder[s] == (bus.Account{})
+	c.holding = c.steering
 	c.wmu.Unlock()
+	c.toldDeck, c.toldCrew = [2]uint64{}, false
 	c.toldWatchers = 0
 	c.toldLook = f.Look[s]
 	c.toldBoat(f, s)
@@ -374,6 +382,9 @@ func (c *conn) welcome(f *bus.Frame) bool {
 	c.ready.Store(ok)
 	c.box.restart()
 	c.bumped = f.Tick
+	if ok {
+		c.resendKnocks()
+	}
 	// The land about the boat, at once after the Welcome: the client draws
 	// what is near before it shows the sea.
 	return ok && c.chunks(e.cfg.Chunks, f.State[s].X, f.State[s].Y)
@@ -391,6 +402,10 @@ func (enc *encoder) encode(c *conn, f *bus.Frame) {
 	if !f.Occupied[s] || f.Boat[s] != boat {
 		if c.w.on {
 			enc.stopWatching(c, pb.WatchEnd_WATCH_END_LEFT)
+			return
+		}
+		if c.crew.Load() {
+			// Ashore with the next frame.
 			return
 		}
 		c.gone.Store(true)
@@ -427,6 +442,9 @@ func (enc *encoder) encode(c *conn, f *bus.Frame) {
 	if farSampled(c.id, f.Tick) {
 		flags = protocol.FarSampled
 	}
+	if c.w.on || !c.holding {
+		flags |= protocol.Elsewhere
+	}
 	baseView, dist := &enc.empty.view, uint16(0)
 	if base != nil {
 		baseView, dist = &base.view, uint16(f.Tick-base.tick)
@@ -434,7 +452,7 @@ func (enc *encoder) encode(c *conn, f *bus.Frame) {
 	// The weather, the sea, the land's chunks and the bumps first: they are
 	// queued, and what is queued goes out before the snapshot.
 	if !c.weather(f) || !c.seaAreas(f, x, y) || !c.chunks(chunks, x, y) || !c.bumps(f, next, s, boat) || !c.lookOf(f, s) ||
-		!c.boatLookOf(f, s) || !c.boatNames(f, next) || !c.life(f, next, s, x, y) {
+		!c.boatLookOf(f, s) || !c.boatNames(f, next) || !c.life(f, next, s, x, y) || !c.crewOf(f, s) {
 		return
 	}
 	b = b[:protocol.MaxHeaderSize]

@@ -524,7 +524,7 @@ func TestSnapshotRefusals(t *testing.T) {
 		"header cut":      good[:HeaderSize-1],
 		"layout 5":        withByte(good, offLayout, 5),
 		"helm over 1024":  withUint16(good, offHelm, 1025),
-		"spare flags":     withByte(good, offFlags, 64|PilotHeld|GroundHeld|RigHeld),
+		"spare flags":     withByte(good, offFlags, 128|PilotHeld|GroundHeld|RigHeld),
 		"rig cut":         good[:HeaderSize+PilotSize+GroundSize+RigSize-1],
 		"reef 3 in force": withByte(good, HeaderSize+PilotSize+GroundSize, 3),
 		"rig spare byte":  withByte(good, HeaderSize+PilotSize+GroundSize+7, 1),

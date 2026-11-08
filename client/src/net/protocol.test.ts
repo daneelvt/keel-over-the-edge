@@ -246,7 +246,7 @@ describe('the snapshot', () => {
     helm[20] = 0x04;
     expect(refused(helm)).not.toBeNull();
     const flags = good.slice();
-    flags[12] = 64 | PILOT_HELD | GROUND_HELD | RIG_HELD;
+    flags[12] = 128 | PILOT_HELD | GROUND_HELD | RIG_HELD;
     expect(refused(flags)).not.toBeNull();
     const eight = good.slice();
     eight[1] = 8;
