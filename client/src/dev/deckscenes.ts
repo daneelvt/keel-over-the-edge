@@ -10,7 +10,9 @@
 // side) and a line refused for a word (seen as said), the sheet of mute,
 // block and report and the report's form, the teens' card, the Rules
 // before a first line, chat resting or off, an owner reading their
-// machine sailor's chat, and a statement of reasons. And shipmates': the
+// machine sailor's chat, a spectator reading a boat of machine sailors'
+// (and the same boat with a person aboard, no chat), and a statement of
+// reasons. And shipmates': the
 // panel (offers, shipmates where they are, the recent crew), a row's ⋯,
 // an offer made and accepted, ending's question, appearing offline and
 // the panel empty; a thread, a message refused for its shipmate away, the
@@ -71,6 +73,8 @@ export const DECK_SCENES = [
   'chat-off',
   'chat-own-off',
   'chat-owner',
+  'chat-spectator',
+  'chat-spectator-person',
   'chat-statement',
   'chat-list-shipmate',
   'shipmates',
@@ -95,6 +99,33 @@ function look(n: number): number {
     catalog,
     drawLook(catalog, () => n),
   );
+}
+
+/** The lines said aboard a boat of machine sailors, the skipper named first, as a spectator reads them. */
+function machineLines(log: ChatLog, sailor: string, at: number): void {
+  const said: [string, string][] = [
+    [sailor, 'Welcome aboard, Gull. Take the helm while I trim?'],
+    ['Gull', 'Aye. Holding 040, the wind backing a little.'],
+    ['Rover', 'Squall to windward, about two miles off. Shall we reef?'],
+    [sailor, 'One reef now, before it reaches us.'],
+  ];
+  said.forEach(([name, text], i) => {
+    log.receive(
+      {
+        id: i + 1,
+        seat: i,
+        name,
+        machine: true,
+        at: at - (said.length - i) * 30_000,
+        text,
+        you: false,
+        echo: 0,
+        refused: '',
+        thread: '',
+      },
+      at,
+    );
+  });
 }
 
 /** The screen's views of a scene: sailing together's, watching's (nothing steers without the controls), and the statements'. */
@@ -204,6 +235,10 @@ export function deckScene(
   const calls: string[] = [];
   const chatting = name.startsWith('chat');
   const owner = name === 'chat-owner';
+  // Watching another's machine sailor: its boat's machine sailors, or one
+  // with a person aboard.
+  const spectator = name === 'chat-spectator' || name === 'chat-spectator-person';
+  const watcher = owner || spectator;
   const aboard =
     name.startsWith('aboard') ||
     name === 'handed' ||
@@ -215,15 +250,15 @@ export function deckScene(
     name === 'list-skipper' ||
     name === 'list-more' ||
     name === 'link' ||
-    (chatting && !aboard && !owner);
+    (chatting && !aboard && !watcher);
   const away = name === 'skipper-away' || name === 'list-skipper';
-  const holding = owner ? false : !aboard ? !away : name === 'aboard-holding';
+  const holding = watcher ? false : !aboard ? !away : name === 'aboard-holding';
   const person = (seat: number, n: number, who: string, you: boolean): PersonTold => ({
     seat,
     look: look(n),
     // A spectator is told no names.
-    name: owner ? '' : who,
-    machine: owner,
+    name: watcher ? '' : who,
+    machine: watcher && !(name === 'chat-spectator-person' && seat === 1),
     you,
     muted: name === 'chat-list' && who === 'Bosun Bly',
     blocked: false,
@@ -238,7 +273,7 @@ export function deckScene(
     people[2] = person(2, 0.8, 'Bosun Bly', false);
   }
   const crew: CrewTold | null =
-    aboard || skipper || owner
+    aboard || skipper || watcher
       ? { people, holder: name === 'aboard-holding' ? 2 : away ? 1 : 0 }
       : null;
   const knocks: KnockCardTold[] =
@@ -256,7 +291,9 @@ export function deckScene(
   const told: AboardTold | null = aboard ? { skipper: sailor, look: look(0.1), seat: 2 } : null;
   const watching: WatchingTold | null = owner
     ? { sailor: 'Gull', machine: true, mine: true, look: look(0.9) }
-    : null;
+    : spectator
+      ? { sailor, machine: true, mine: false, look: look(0.1) }
+      : null;
   const closed = signal(false);
   const now = Date.now();
   const statements = name === 'chat-statement' ? [statementOf(now)] : [];
@@ -345,7 +382,9 @@ function chatScene(
 ): ChatView {
   const self = 'Saltpeter Sue';
   const log = new ChatLog();
-  if (name.startsWith('chat') && name !== 'chat-teen') {
+  if (name === 'chat-spectator') {
+    machineLines(log, sailor, now);
+  } else if (name.startsWith('chat') && name !== 'chat-teen' && name !== 'chat-spectator-person') {
     chatLines(log, sailor, self, now);
   }
   if (name === 'chat-refused') {

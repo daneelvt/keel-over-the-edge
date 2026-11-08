@@ -100,6 +100,9 @@ type Line struct {
 	Machine bool      // a machine sailor's
 	At      time.Time // given by Add from the clock if zero
 	Text    string
+	// Public: said while everyone aboard was a machine sailor, so that
+	// anyone watching the boat reads it.
+	Public bool
 }
 
 // Limits bound the memory whatever players do.

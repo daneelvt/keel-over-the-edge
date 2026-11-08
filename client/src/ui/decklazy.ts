@@ -239,21 +239,21 @@ export function deckPlate(d: DeckView): boolean {
 
 /**
  * Whether the chat strip is on the screen: with anyone else aboard the
- * boat sailed or aboard; and for an owner watching their own machine
- * sailor aboard a boat with company, to read.
+ * boat sailed or aboard; and for anyone watching a boat with company where
+ * everyone aboard is a machine sailor, to read.
  */
 export function chatShown(d: DeckView): boolean {
   if (d.crew.value === null) {
     return false;
   }
   const w = d.watching.value;
-  // Watching, an owner reads their machine sailor's boat's chat only while
-  // everyone aboard is a machine sailor: with a person aboard it is theirs
-  // alone, as the server keeps it.
-  return w === null || (w.machine && w.mine && d.crew.value.people.every((p) => p.machine));
+  // Watching, anyone reads a boat's chat only while everyone aboard is a
+  // machine sailor: what machine sailors say is public. With a person
+  // aboard it is theirs alone, as the server keeps it.
+  return w === null || (w.machine && d.crew.value.people.every((p) => p.machine));
 }
 
-/** Whether the strip only reads: an owner watching their own machine sailor. */
+/** Whether the strip only reads: a spectator's, who never says anything. */
 export function chatReadOnly(d: DeckView): boolean {
   return d.watching.value !== null;
 }

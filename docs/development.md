@@ -5687,12 +5687,17 @@ on, nobody else); the sender not muted from chat by the owner, rested by
 reports or resting after refusals, and the Rules of the sea accepted;
 neither blocking the other, nor the receiver muting the sender; and the
 two aboard the same boat, or shipmates with shipmates' messages on. A
-machine sailor's line reaches no human but its owner and the boat's
-skipper's human, and an owner watching their own machine sailor reads its
-boat's chat and says nothing (`Together.Owns`), but only while everyone
-aboard is a machine sailor: with a person aboard, a boat's chat is its
-company's alone, and no spectator reads a word of it
-(`aboard.SpectatorReads`, the one place that decides it). Mutes and blocks are held
+machine sailor's line reaches no human aboard but its owner and the
+boat's skipper's human. What machine sailors say is public: while
+everyone aboard is a machine sailor, anyone watching the boat reads its
+chat and says nothing (`Together.Watches`: a machine sailor's lines only,
+never a person's). With a person aboard, a boat's chat is its company's
+alone, and no spectator reads a word of it, an owner watching their own
+machine sailor included (`aboard.SpectatorReads`, the one place that
+decides it). A block between a spectator and a machine sailor's owner
+hides none of the machine sailor's lines, as it ends no watch of a
+machine sailor; the spectator's own mute or block of the machine sailor
+does. Mutes and blocks are held
 in memory (`aboard.Ties`, loaded as keel starts, changed after the
 database), which is also the knocks' `Refuser`: a block refuses knocks both
 ways, a human's watch (`watch.Boat.Blocked`, and the watch list leaves the
@@ -5722,7 +5727,17 @@ in the latest frame (nobody else aboard: "nobody"), takes the line from
 the sender's budget (`Limiter`: a line every 2 s, bursts of 5, 30 a
 minute; 5 refusals in 10 minutes rest the sender's chat for 10), asks the
 filter, keeps it in the rings and hands it to every door with the accounts
-the rule lets it reach. **The rings** (`Rings`): each boat's lines for 30
+the rule lets it reach. A line said while everyone aboard is a machine
+sailor, in that frame, is marked `Line.Public`: the edge's door hands it
+to every connection watching the boat (`boatWatchers`, kept by the
+encoders as watches begin, follow and end) that the rule lets it reach,
+encoded once for all of them. No other line, and no message between
+shipmates, reaches a spectator, and a spectator's `Say` is refused at the
+door, whatever its client sends. A spectator reads the lines said from
+the moment they watch: the rings' earlier lines are not sent on arrival.
+Delivering a line to 1,000 spectators takes about 116 µs on an M5
+(`BenchmarkDeliverPublic`), on the sender's goroutine, not the tick's.
+**The rings** (`Rings`): each boat's lines for 30
 minutes, 200 a boat, one sender's 200 lines or 64 KiB across every boat
 (their own oldest go first), 64 MiB in all (the oldest anywhere go first),
 each line counted at its allocation (`Cost`). A boat's lines outlive its
@@ -5785,8 +5800,10 @@ lines said, echoed, refused and heard.
 **The strip** (`client/src/ui/chat.tsx`, loaded with sailing together's
 parts, outside the first download) stands under the case with the other
 parts of sailing together, while anyone else is aboard the boat sailed or
-aboard, and for an owner watching their own machine sailor aboard a boat
-with company, who reads and has no field. Folded it is one row the keys'
+aboard, and for anyone watching a boat with company where everyone aboard
+is a machine sailor, who reads and has no field (`chatShown`,
+`chatReadOnly`). Watching, a person coming aboard takes the strip away
+and forgets its lines: it begins again empty once they go ashore. Folded it is one row the keys'
 height, the newest line; open, the last lines, a note of what came of the
 player's last act, and the field (200 characters, one line) with Send.
 Open, it fits itself above whatever stands below it (the helm, the
@@ -5956,11 +5973,12 @@ HTTP. The crew machine sailor's owner calls it ashore from its row
 (`POST /api/sail/ashore {"machine"}`, 409 `ashore` when it is aboard no
 boat; `/api/machines` marks it `aboard`). An owner's watch of their own
 machine sailor follows it (`encoder.follow`): aboard another's boat, its
-eye is that boat, registered there in `mineWatch`, so the owner reads
+eye is that boat, registered there in `boatWatchers`, so the owner reads
 that boat's chat read-only and is told the names aboard; ashore, back to
-its own boat. Another spectator sees the crew on deck, unnamed, and no
-chat; their watch of a machine sailor that goes aboard another's boat
-ends as its boat leaves the water.
+its own boat. Another spectator sees the crew on deck, unnamed, and reads
+the chat while everyone aboard is a machine sailor; their watch of a
+machine sailor that goes aboard another's boat ends as its boat leaves
+the water.
 
 **Testing it**: `internal/agentapi/chat_test.go` (a line with nobody
 aboard; the owner aboard, their line waking the agent, wrapped, and the
@@ -5973,9 +5991,17 @@ harness, whose boat carries five there, with a stand-in `Deck`;
 another player may not, a Jolly boat has no room; a machine sailor sent
 aboard, never to a person's boat nor a person to a machine sailor's, let
 aboard by the skipper's owner, its owner's watch following it and reading
-the chat, another spectator reading none, put ashore from watching and
+the chat, another spectator reading it too, put ashore from watching and
 knocking in vain after; a knock lapsing with the owner away), with
 stand-in helms (`Config.Machines`) and chat (`Config.Chat`);
+`internal/edge/edgetest/public_test.go` (a spectator who owns none of the
+machine sailors reads them, their lines marked; their line refused; a
+block between them and an owner hiding nothing, their mute of a machine
+sailor hiding its lines; a report from a spectator, about the machine
+sailor, its owner's to answer; a shipmates' message reaching no
+spectator; the owner aboard, nothing read, and ashore again, only the
+lines said after; a boat of people read by no spectator);
+`internal/edge`'s `TestDeliverPublic` and `BenchmarkDeliverPublic`;
 `internal/store`'s `TestMachineSailLinks`.
 
 ### Shipmates

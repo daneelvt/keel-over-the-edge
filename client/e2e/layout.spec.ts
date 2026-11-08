@@ -2432,6 +2432,7 @@ test('chat aboard’s strip and windows stand clear of the instruments, above th
     { name: 'chat-off', steers: true, open: true },
     { name: 'chat-own-off', steers: true, open: true },
     { name: 'chat-owner', steers: false, open: true },
+    { name: 'chat-spectator', steers: false, open: true },
     { name: 'chat-list', steers: true, open: false },
     { name: 'chat-sheet', steers: true, open: true },
     { name: 'chat-block', steers: true, open: true },
@@ -2564,6 +2565,13 @@ test('chat aboard’s strip and windows stand clear of the instruments, above th
       for (const f of faults) {
         found.push(`${where}: ${f}`);
       }
+      if (scene.name === 'chat-owner' || scene.name === 'chat-spectator') {
+        // A spectator's strip only reads: no field, no Send.
+        const field = await page.locator('.chat-strip input, .chat-strip [type=submit]').count();
+        if (field > 0) {
+          found.push(`${where}: a spectator's strip has a field`);
+        }
+      }
       if (s.name === 'small Android phone upright' || s.name === 'small Android phone sideways') {
         await test.info().attach(`${where}.png`, {
           body: await page.screenshot(),
@@ -2571,6 +2579,14 @@ test('chat aboard’s strip and windows stand clear of the instruments, above th
         });
       }
     }
+  }
+  // Watching a machine sailor's boat with a person aboard: no chat at all.
+  await page.evaluate(({ sailor }) => globalThis.keel.deckScene('chat-spectator-person', sailor), {
+    sailor: LONG,
+  });
+  await page.evaluate(() => new Promise((r) => requestAnimationFrame(r)));
+  if ((await page.locator('.chat-strip').count()) > 0) {
+    found.push('watching a boat with a person aboard, the chat strip shows');
   }
   await page.evaluate(() => globalThis.keel.deckScene(null));
   expect(found).toEqual([]);

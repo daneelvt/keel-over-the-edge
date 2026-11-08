@@ -239,12 +239,25 @@ func (c *conn) crewOf(f *bus.Frame, s int32) bool {
 	if !c.send(&pb.ServerMessage{Body: &pb.ServerMessage_Crew{Crew: &pb.Crew{People: people, Holder: holder}}}, outCrew) {
 		return false
 	}
-	// Those aboard, and an owner watching their machine sailor, are told
-	// how chat stands for them with each change aboard.
-	if named || c.w.mine {
+	// Those aboard, and a spectator of a boat with only machine sailors
+	// aboard, who reads its chat, are told how chat stands for them with
+	// each change aboard.
+	if named || machinesOnly(f, s) {
 		return c.chatState(true)
 	}
 	return true
+}
+
+// machinesOnly reports whether everyone aboard the boat in slot s of f is
+// a machine sailor: its spectators read the chat aboard.
+func machinesOnly(f *bus.Frame, s int32) bool {
+	lo, hi := f.CrewOf(s)
+	machines := make([]bool, 0, hi-lo+1)
+	machines = append(machines, f.Machine[s])
+	for _, a := range f.Crew[lo:hi] {
+		machines = append(machines, a.Machine)
+	}
+	return aboard.SpectatorReads(machines)
 }
 
 // joinedAboard is a Join answered with the connection aboard a boat, as

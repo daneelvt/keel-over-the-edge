@@ -289,7 +289,7 @@ type Edge struct {
 	spect    spectators
 	voyages  voyages
 	decks    decks
-	mine     mineWatch
+	watchers boatWatchers
 
 	mu      sync.Mutex
 	closing bool

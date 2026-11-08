@@ -539,6 +539,11 @@ export class Online {
       case 'crew':
         this.crew.value = m.crew.people.length > 1 ? m.crew : null;
         this.chat.crew(m.crew.people);
+        if (this.watching.value !== null && m.crew.people.some((p) => !p.machine)) {
+          // A person aboard the boat watched: its chat is theirs alone,
+          // and the strip begins again empty once they go ashore.
+          this.chat.clear();
+        }
         break;
       case 'chat':
         if (this.threads.answers(m.chat)) {

@@ -13,7 +13,16 @@ import { deckScene } from '../dev/deckscenes';
 import type { CrewTold, PersonTold, WhoTold } from '../net/messages';
 import { ChatLog } from './chatlog';
 import { DeckPlate, holderName, KnockCards, rowActions, secondsLeft, splitActions } from './deck';
-import { canShareLink, deckOf, deckPlate, deckShown, selfOf, skipperAway } from './decklazy';
+import {
+  canShareLink,
+  chatReadOnly,
+  chatShown,
+  deckOf,
+  deckPlate,
+  deckShown,
+  selfOf,
+  skipperAway,
+} from './decklazy';
 import {
   keepLink,
   keptLink,
@@ -132,6 +141,21 @@ describe('what shows of sailing together', () => {
     expect(plate('knocks')).toBe(false);
     expect(skipperAway(deckScene('skipper-away').deck)).toBe(true);
     expect(skipperAway(deckScene('aboard').deck)).toBe(false);
+  });
+
+  test('a spectator reads the chat of a boat of machine sailors, its owner or not, and none with a person aboard', () => {
+    const shown = (name: Parameters<typeof deckScene>[0]) => {
+      const d = deckScene(name).deck;
+      return [chatShown(d), chatReadOnly(d)];
+    };
+    expect(shown('chat-spectator')).toEqual([true, true]);
+    expect(shown('chat-owner')).toEqual([true, true]);
+    expect(shown('chat-spectator-person')).toEqual([false, true]);
+    expect(shown('chat-open')).toEqual([true, false]);
+    // A person skippering, machine sailors aboard or not: nothing.
+    const d = deckScene('chat-spectator').deck;
+    const people = (d.crew.value?.people ?? []).map((p, i) => ({ ...p, machine: i !== 0 }));
+    expect(chatShown({ ...d, crew: signal<CrewTold | null>({ people, holder: 0 }) })).toBe(false);
   });
 
   test('nothing while sailing alone, and nothing while watching a crewed boat', () => {

@@ -46,13 +46,18 @@ func (l *lockedBuffer) String() string {
 type reportStore struct {
 	mu    sync.Mutex
 	names map[store.AccountID]string
-	made  []store.NewReport
-	after [][]store.ReportLine
+	// owners are the machine sailors' owners.
+	owners map[store.AccountID]store.AccountID
+	made   []store.NewReport
+	after  [][]store.ReportLine
 }
 
 func (r *reportStore) Talker(_ context.Context, id store.AccountID) (store.Talker, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	if owner, ok := r.owners[id]; ok {
+		return store.Talker{Kind: store.AI, Human: owner, Name: r.names[id]}, nil
+	}
 	return store.Talker{Kind: store.Human, Human: id, Name: r.names[id]}, nil
 }
 
@@ -97,14 +102,14 @@ type chatWorld struct {
 	speakers map[bus.Account]aboard.Speaker
 }
 
-func newChatWorld(t *testing.T) *chatWorld {
+func newChatWorld(t *testing.T, opts ...func(*Config)) *chatWorld {
 	t.Helper()
 	cw := &chatWorld{
 		switches: aboard.NewSwitches(aboard.DefaultLifetime), ties: aboard.NewTies(nil, nil), log: &lockedBuffer{},
 		reports: &reportStore{names: map[store.AccountID]string{}}, speakers: map[bus.Account]aboard.Speaker{},
 	}
 	var reviews *review.Service
-	cw.srv = NewServer(t, Config{
+	cfg := Config{
 		BoatOf: keelboats(t), Refuser: cw.ties, Switches: cw.switches,
 		Log: slog.New(slog.NewTextHandler(cw.log, &slog.HandlerOptions{Level: slog.LevelDebug})),
 		Chat: func(f *bus.Frames) *chat.Hub {
@@ -132,7 +137,11 @@ func newChatWorld(t *testing.T) *chatWorld {
 			return nil
 		},
 		Report: func(ctx context.Context, r edge.ReportIn) error { return reviews.Report(ctx, review.In(r)) },
-	})
+	}
+	for _, o := range opts {
+		o(&cfg)
+	}
+	cw.srv = NewServer(t, cfg)
 	cw.srv.Chat.Metrics = cw.srv.Metrics
 	reviews = review.New(review.Config{Store: cw.reports, Hub: func() *chat.Hub { return cw.srv.Chat }, Metrics: cw.srv.Metrics})
 	return cw

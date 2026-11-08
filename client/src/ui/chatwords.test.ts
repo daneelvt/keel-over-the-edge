@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 // Chat's words: why a line was not said, how chat stands, a mute or a
-// block told, the report's reasons (a child at risk first), the owner
+// block told, the report's reasons (a child at risk first), a spectator
 // reading, a statement of reasons; names kept apart as player text; and
 // never who reported anyone, nor an age.
 
@@ -12,10 +12,10 @@ import {
   blockWords,
   leftText,
   lineWords,
-  ownerReadsWords,
   REPORT_REASONS,
   refusedText,
   restingText,
+  spectatorReadsWords,
   tiedWords,
   whenText,
 } from './chatwords';
@@ -47,8 +47,8 @@ describe('how chat stands', () => {
     expect(whenText(now, now, zone)).toBe('14:00');
   });
 
-  test('an owner reading their machine sailor’s chat', () => {
-    const w = ownerReadsWords('Gull');
+  test('a spectator reading a machine sailor’s chat', () => {
+    const w = spectatorReadsWords('Gull');
     expect(plain(w)).toBe('Watching Gull: you read its chat aboard');
     expect(w).toContainEqual({ player: 'Gull' });
   });
