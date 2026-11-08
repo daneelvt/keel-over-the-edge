@@ -249,8 +249,14 @@ export function chatShown(d: DeckView): boolean {
   const w = d.watching.value;
   // Watching, anyone reads a boat's chat only while everyone aboard is a
   // machine sailor: what machine sailors say is public. With a person
-  // aboard it is theirs alone, as the server keeps it.
-  return w === null || (w.machine && d.crew.value.people.every((p) => p.machine));
+  // aboard it is theirs alone, as the server keeps it; and with chat off
+  // for spectators (the owner's switches) the strip goes too.
+  return (
+    w === null ||
+    (w.machine &&
+      d.crew.value.people.every((p) => p.machine) &&
+      d.chat.state.value?.status !== 'off')
+  );
 }
 
 /** Whether the strip only reads: a spectator's, who never says anything. */

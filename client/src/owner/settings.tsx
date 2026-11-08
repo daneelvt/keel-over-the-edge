@@ -3,7 +3,8 @@
 // Links to come aboard on the world page's Accounts tab: how long a
 // skipper's link lasts, set in minutes, hours or days, and links and
 // boarding switched on or off for everyone; and chat's switches beside
-// them: chat and shipmates' messages on or off for everyone, and the
+// them, as one group: chat for everyone, shipmates' messages, spectators
+// reading machine sailors' chat, each with its state and its key, then the
 // countries where chat is off. Each change is first checked, then
 // confirmed in the card with what it would do and how many live links it
 // ends, so that no stray click cuts every crew off or silences everyone.
@@ -71,6 +72,46 @@ export function touchesLinks(body: Partial<SailSettings>): boolean {
 /** The question a change asks before keel's words, or "": chat off asks plainly. */
 export function changeQuestion(body: Partial<SailSettings>): string {
   return body.chat === false ? 'Chat off for everyone? Every line stops at once.' : '';
+}
+
+/** One of chat's switches for everyone, as the group shows it: its name, its field, whether it is on, and the change its key asks. */
+export interface ChatSwitch {
+  field: string;
+  name: string;
+  on: boolean;
+  key: string;
+  body: Partial<SailSettings>;
+  what: string;
+}
+
+/** Chat's switches for everyone, in the group's order: chat, shipmates' messages, spectators' reading. */
+export function chatSwitches(s: SailSettings): ChatSwitch[] {
+  return [
+    {
+      field: 'chat',
+      name: 'Chat for everyone',
+      on: s.chat,
+      key: s.chat ? 'Switch chat off' : 'Switch chat on',
+      body: { chat: !s.chat },
+      what: `chat switched ${onOff(!s.chat)} for everyone`,
+    },
+    {
+      field: 'shipmate-messages',
+      name: "Shipmates' messages",
+      on: s.shipmateMessages,
+      key: s.shipmateMessages ? "Switch shipmates' messages off" : "Switch shipmates' messages on",
+      body: { shipmateMessages: !s.shipmateMessages },
+      what: `shipmates' messages switched ${onOff(!s.shipmateMessages)} for everyone`,
+    },
+    {
+      field: 'spectator-chat',
+      name: "Spectators read machine sailors' chat",
+      on: s.spectatorChat,
+      key: s.spectatorChat ? "Switch spectators' reading off" : "Switch spectators' reading on",
+      body: { spectatorChat: !s.spectatorChat },
+      what: `spectators reading machine sailors' chat switched ${onOff(!s.spectatorChat)} for everyone`,
+    },
+  ];
 }
 
 /** A change asked for, and what its check answered. */
@@ -233,43 +274,32 @@ export function SailWithSettings({ act }: { act: Act }) {
           {settings.boarding ? 'Switch boarding off' : 'Switch boarding on'}
         </button>
       </p>
-      <h3>Chat</h3>
-      <dl>
-        <dt>Chat</dt>
-        <dd data-field="chat">{onOff(settings.chat)}</dd>
-        <dt>Shipmates' messages</dt>
-        <dd data-field="shipmate-messages">{onOff(settings.shipmateMessages)}</dd>
-        <dt>Chat off in</dt>
-        <dd data-field="chat-countries">{countriesWords(settings.chatCountries)}</dd>
-      </dl>
-      <p>
-        <button
-          type="button"
-          name="chat"
-          class={settings.chat ? 'danger' : ''}
-          disabled={checking}
-          onClick={() =>
-            check({ chat: !settings.chat }, `chat switched ${onOff(!settings.chat)} for everyone`)
-          }
-        >
-          {settings.chat ? 'Switch chat off' : 'Switch chat on'}
-        </button>{' '}
-        <button
-          type="button"
-          name="shipmate-messages"
-          disabled={checking}
-          onClick={() =>
-            check(
-              { shipmateMessages: !settings.shipmateMessages },
-              `shipmates' messages switched ${onOff(!settings.shipmateMessages)} for everyone`,
-            )
-          }
-        >
-          {settings.shipmateMessages
-            ? "Switch shipmates' messages off"
-            : "Switch shipmates' messages on"}
-        </button>
-      </p>
+      <section class="chat-switches" aria-label="Chat" data-field="chat-switches">
+        <h3>Chat</h3>
+        {chatSwitches(settings).map((s) => (
+          <div class="switch-row" key={s.field} data-switch={s.field}>
+            <span class="switch-name">{s.name}</span>
+            <span class={`switch-state ${s.on ? 'on' : 'off'}`} data-field={s.field}>
+              {onOff(s.on)}
+            </span>
+            <button
+              type="button"
+              name={s.field}
+              class={s.field === 'chat' && s.on ? 'danger' : ''}
+              disabled={checking}
+              onClick={() => check(s.body, s.what)}
+            >
+              {s.key}
+            </button>
+          </div>
+        ))}
+        <div class="switch-row" data-switch="chat-countries">
+          <span class="switch-name">Chat off in</span>
+          <span class="switch-state wide" data-field="chat-countries">
+            {countriesWords(settings.chatCountries)}
+          </span>
+        </div>
+      </section>
       <form
         onSubmit={(e) => {
           e.preventDefault();

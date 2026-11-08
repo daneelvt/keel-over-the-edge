@@ -112,6 +112,7 @@ func NewSwitches(lifetime time.Duration) *Switches {
 	s.lifetime.Store(int64(lifetime))
 	s.chat.chat.Store(true)
 	s.chat.shipmates.Store(true)
+	s.chat.spectators.Store(true)
 	return s
 }
 

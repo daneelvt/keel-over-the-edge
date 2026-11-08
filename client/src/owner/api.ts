@@ -250,8 +250,9 @@ export interface AccountsData {
 /**
  * settings.json: links to come aboard, as the owner sets them: how long a
  * link lasts, s, and whether links and boarding are on for everyone; and
- * chat's switches: chat and shipmates' messages on for everyone, and the
- * countries, two letters each, where chat is off.
+ * chat's switches: chat, shipmates' messages and spectators' reading of
+ * machine sailors' chat on for everyone, and the countries, two letters
+ * each, where chat is off.
  */
 export interface SailSettings {
   linkLifetime: number;
@@ -259,6 +260,7 @@ export interface SailSettings {
   boarding: boolean;
   chat: boolean;
   shipmateMessages: boolean;
+  spectatorChat: boolean;
   chatCountries: string[];
 }
 

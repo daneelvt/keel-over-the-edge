@@ -237,6 +237,70 @@ func TestMachineSailorsChatInPublic(t *testing.T) {
 	})
 }
 
+// TestSpectatorChatSwitch: the owner's switch for spectators' reading off,
+// neither Carl nor Ann, watching her own machine sailor, reads the next
+// line, and both are told chat is off for them, which puts their strip
+// away; those aboard still hear it. On again, both read the next line and
+// are told chat is on.
+func TestSpectatorChatSwitch(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		cw, helms := machineChatWorld(t)
+		srv, hub := cw.srv, cw.srv.Chat
+		annToken, ann := cw.sailor("Ann Bonny", aboard.Speaker{})
+		carlToken, _ := cw.sailor("Carl Vane", aboard.Speaker{})
+		mary, _ := cw.machine(t, helms, "Iron Mary", ann, 0)
+		cw.machine(t, helms, "Pearl", ann, 2)
+		a := dial(t, srv, annToken, client.HelloWatch("Iron Mary"))
+		a.welcomed()
+		a.keepAlive()
+		c := dial(t, srv, carlToken, client.HelloWatch("Iron Mary"))
+		c.welcomed()
+		c.keepAlive()
+		link := srv.MachineLink(mary, ann, "Iron Mary")
+		if got := a.machineKnock(link, "Pearl"); got != pb.KnockState_KNOCK_STATE_WAITING {
+			t.Fatalf("Pearl's knock: %v", a.knocking)
+		}
+		card := a.card()
+		a.command(&pb.Command{Body: &pb.Command_Answer{Answer: &pb.Answer{Knock: card.GetId(), Let: true}}})
+		for _, v := range []*viewer{a, c} {
+			if !v.read(5*time.Second, func() bool {
+				return len(v.crew.GetPeople()) == 2 && v.chatState.GetStatus() == pb.ChatStatus_CHAT_STATUS_ON
+			}) {
+				t.Fatalf("a spectator's crew and chat: %v %v", v.crew, v.chatState)
+			}
+		}
+
+		cw.switches.SetSpectatorChat(false)
+		hub.Changed(nil)
+		for _, v := range []*viewer{a, c} {
+			if !v.read(5*time.Second, func() bool { return v.chatState.GetStatus() == pb.ChatStatus_CHAT_STATUS_OFF }) {
+				t.Fatalf("a spectator not told chat is off: %v", v.chatState)
+			}
+		}
+		if s := hub.Say(bus.Account(mary), "Nobody watching reads this"); s.Refused != 0 || s.Heard != 1 {
+			t.Fatalf("Iron Mary's line, spectators' reading off: %+v", s)
+		}
+		for _, v := range []*viewer{a, c} {
+			if v.heard("Nobody watching reads this", 2*time.Second) {
+				t.Fatal("a spectator read a line with spectators' reading off")
+			}
+		}
+
+		cw.switches.SetSpectatorChat(true)
+		hub.Changed(nil)
+		time.Sleep(2 * time.Second)
+		hub.Say(bus.Account(mary), "Read again")
+		for _, v := range []*viewer{a, c} {
+			if !v.heard("Read again", 5*time.Second) || v.chatState.GetStatus() != pb.ChatStatus_CHAT_STATUS_ON {
+				t.Fatalf("spectators' reading on again: %v %v", v.texts(), v.chatState)
+			}
+			if got := v.texts(); len(got) != 1 {
+				t.Fatalf("what a spectator read: %v", got)
+			}
+		}
+	})
+}
+
 // TestNoSpectatorReadsPeople: Dan watches Ann sail with Bob aboard. He
 // reads neither of them, and his own line is refused.
 func TestNoSpectatorReadsPeople(t *testing.T) {

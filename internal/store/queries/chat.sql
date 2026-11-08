@@ -213,5 +213,11 @@ UPDATE setting SET chat = @chat;
 -- name: SetShipmateMessages :execrows
 UPDATE setting SET shipmate_messages = @shipmate_messages;
 
+-- name: SpectatorChat :one
+SELECT spectator_chat FROM setting;
+
+-- name: SetSpectatorChat :execrows
+UPDATE setting SET spectator_chat = @spectator_chat;
+
 -- name: SetChatCountries :execrows
 UPDATE setting SET chat_countries = @chat_countries;

@@ -10,7 +10,7 @@ import { signal } from '@preact/signals';
 import type { ComponentChildren, VNode } from 'preact';
 import { describe, expect, test } from 'vitest';
 import { deckScene } from '../dev/deckscenes';
-import type { CrewTold, PersonTold, WhoTold } from '../net/messages';
+import type { ChatStateTold, CrewTold, PersonTold, WhoTold } from '../net/messages';
 import { ChatLog } from './chatlog';
 import { DeckPlate, holderName, KnockCards, rowActions, secondsLeft, splitActions } from './deck';
 import {
@@ -152,6 +152,19 @@ describe('what shows of sailing together', () => {
     expect(shown('chat-owner')).toEqual([true, true]);
     expect(shown('chat-spectator-person')).toEqual([false, true]);
     expect(shown('chat-open')).toEqual([true, false]);
+    // The owner's switch for spectators' reading off: told as chat off.
+    const told = (status: ChatStateTold['status']) => {
+      const d = deckScene('chat-spectator').deck;
+      return chatShown({
+        ...d,
+        chat: {
+          ...d.chat,
+          state: signal<ChatStateTold | null>({ status, until: 0, rules: false }),
+        },
+      });
+    };
+    expect(told('off')).toBe(false);
+    expect(told('on')).toBe(true);
     // A person skippering, machine sailors aboard or not: nothing.
     const d = deckScene('chat-spectator').deck;
     const people = (d.crew.value?.people ?? []).map((p, i) => ({ ...p, machine: i !== 0 }));

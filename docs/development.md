@@ -3607,7 +3607,7 @@ of the shell's history), `show ID`, `stop ID -reason …`, `start ID`,
 `revoke ID -reason …`, `delete ID -name … -reason …`, `flag ID on|off`,
 `priority ID on|off`, `cap ID N`, `lifetime 90d`, `actions [ID]`,
 `settings`, `links on|off`, `boarding on|off`, `linklife 24h`, `chat
-on|off`, `shipmates on|off`, `countries BR,AU` (`""` clears them),
+on|off`, `shipmates on|off`, `spectators on|off`, `countries BR,AU` (`""` clears them),
 `reports`, `report ID` and `act ID ACTION` (see [Reports](#reports)); text,
 or `-json` as keel answers. Without `-yes`, `stop`, `revoke`, `delete`,
 `lifetime`, `links off`, `linklife`, `chat off` and `act` only say what
@@ -3630,14 +3630,20 @@ links at once and ends nothing, but a longer one never lengthens a link
 past the expiry it was made with. The `sessions` job deletes links a day
 after they stop working; a deleted skipper's go with the account.
 
-**Chat's switches** sit beside them, on the same card and in the same
-`setting` row: chat on or off for everyone (off is asked once, "Chat off
-for everyone? Every line stops at once"), shipmates' messages on or off
-(off: every message between shipmates is refused as resting, at once), and the countries where chat is off, two letters
-each as ISO 3166 has them (`BR, AU`; nothing for none). The settings'
-routes take `"chat"`, `"shipmateMessages"` and `"chatCountries"` too;
-each change is recorded, then every game connection is told how chat
-stands for it.
+**Chat's switches** sit beside them, on the same card as one group, Chat,
+each row its name, its state and its key, and in the same `setting` row:
+chat on or off for everyone (off is asked once, "Chat off for everyone?
+Every line stops at once"), shipmates' messages on or off (off: every
+message between shipmates is refused as resting, at once), spectators
+reading machine sailors' chat on or off (`spectator_chat`, on to start;
+off: no spectator reads a line from the next one, owners watching their
+own machine sailor included, and each is told chat is off, which puts
+their strip away; those aboard still talk), then the countries where chat
+is off, two letters each as ISO 3166 has them (`BR, AU`; nothing for
+none). Chat off for everyone silences spectators too. The settings'
+routes take `"chat"`, `"shipmateMessages"`, `"spectatorChat"` and
+`"chatCountries"` too; each change is recorded, then every game
+connection is told how chat stands for it.
 
 ### Reports
 
@@ -5691,7 +5697,7 @@ machine sailor's line reaches no human aboard but its owner and the
 boat's skipper's human. What machine sailors say is public: while
 everyone aboard is a machine sailor, anyone watching the boat reads its
 chat and says nothing (`Together.Watches`: a machine sailor's lines only,
-never a person's). With a person aboard, a boat's chat is its company's
+never a person's), unless the owner has spectators' reading off. With a person aboard, a boat's chat is its company's
 alone, and no spectator reads a word of it, an owner watching their own
 machine sailor included (`aboard.SpectatorReads`, the one place that
 decides it). A block between a spectator and a machine sailor's owner

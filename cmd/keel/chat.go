@@ -42,6 +42,8 @@ type chatStore interface {
 	review.Store
 	SetChatSwitch(ctx context.Context, on bool, a store.Action) error
 	SetShipmateMessages(ctx context.Context, on bool, a store.Action) error
+	SpectatorChat(ctx context.Context) (bool, error)
+	SetSpectatorChat(ctx context.Context, on bool, a store.Action) error
 	SetChatCountries(ctx context.Context, countries []string, a store.Action) error
 	shipmateStore
 }
@@ -56,6 +58,11 @@ func loadChat(ctx context.Context, db chatStore, sw *aboard.Switches) (*aboard.T
 	sw.SetChat(on)
 	sw.SetShipmateMessages(shipmates)
 	sw.SetChatCountries(countries)
+	spectators, err := db.SpectatorChat(ctx)
+	if err != nil {
+		return nil, err
+	}
+	sw.SetSpectatorChat(spectators)
 	mutes, blocks, err := db.Ties(ctx)
 	if err != nil {
 		return nil, err

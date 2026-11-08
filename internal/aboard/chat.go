@@ -201,12 +201,13 @@ func (r Rules) MaySay(from Speaker, now time.Time) Silence {
 // sailor's line and nobody else's: what machine sailors say is public, so
 // a block between the spectator and its owner hides none of it, as it
 // hides no watch of a machine sailor; the spectator's own mute or block
-// of the machine sailor does.
+// of the machine sailor does, and so does the owner's switch for
+// spectators' reading, off.
 func (r Rules) Delivered(from, to Speaker, t Together, now time.Time) bool {
 	if from.Account == to.Account || r.MaySay(from, now) != Speaks {
 		return false
 	}
-	if t.Watches && (!from.Machine || to.Machine) {
+	if t.Watches && (!from.Machine || to.Machine || r.Switches != nil && !r.Switches.SpectatorChat()) {
 		return false
 	}
 	if r.Switches != nil && r.Switches.ChatOffIn(to.Country) || !to.On() {
@@ -230,9 +231,10 @@ func (r Rules) Delivered(from, to Speaker, t Together, now time.Time) bool {
 
 // chatSwitches are the owner's switches for chat, inside Switches.
 type chatSwitches struct {
-	chat      atomic.Bool
-	shipmates atomic.Bool
-	countries atomic.Pointer[[]string]
+	chat       atomic.Bool
+	shipmates  atomic.Bool
+	spectators atomic.Bool
+	countries  atomic.Pointer[[]string]
 }
 
 // Chat reports whether chat is on for everyone; ShipmateMessages whether
@@ -242,6 +244,13 @@ func (s *Switches) ShipmateMessages() bool { return s.chat.shipmates.Load() }
 func (s *Switches) SetChat(on bool)        { s.chat.chat.Store(on) }
 func (s *Switches) SetShipmateMessages(on bool) {
 	s.chat.shipmates.Store(on)
+}
+
+// SpectatorChat reports whether spectators read machine sailors' chat, on
+// for everyone unless the owner switches it off.
+func (s *Switches) SpectatorChat() bool { return s.chat.spectators.Load() }
+func (s *Switches) SetSpectatorChat(on bool) {
+	s.chat.spectators.Store(on)
 }
 
 // ChatCountries are the countries where chat is off, as ISO 3166 codes in

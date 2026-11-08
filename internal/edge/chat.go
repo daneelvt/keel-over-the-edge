@@ -142,7 +142,8 @@ func (c *conn) leaveChat() {
 }
 
 // chatState tells the connection how chat stands for it, if that has
-// changed since it was last told, or always with force.
+// changed since it was last told, or always with force. To a spectator,
+// the owner's switch for spectators' reading off reads as chat off.
 func (c *conn) chatState(force bool) bool {
 	h := c.e.cfg.Chat
 	if h == nil {
@@ -162,6 +163,11 @@ func (c *conn) chatState(force bool) bool {
 		}
 	case aboard.NoRules:
 		st.Rules = true
+	}
+	if sw := h.Rules.Switches; c.spectating.Load() && sw != nil && !sw.SpectatorChat() {
+		// A spectator reads no chat at all while the owner has
+		// spectators' reading off: their page puts the strip away.
+		st = pb.ChatState{Status: pb.ChatStatus_CHAT_STATUS_OFF}
 	}
 	c.chat.mu.Lock()
 	same := c.chat.tolds && c.chat.told.Status == st.Status && c.chat.told.UntilUs == st.UntilUs && c.chat.told.Rules == st.Rules

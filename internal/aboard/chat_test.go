@@ -128,6 +128,18 @@ func TestDeliveredRefusals(t *testing.T) {
 			from.Machine, from.Human = true, [16]byte{9}
 			r.Ties.SetMute(to.Account, from.Account, true)
 		}, watches, false},
+		{"spectators' reading off by the owner", func(r Rules, from, _ *Speaker) {
+			from.Machine, from.Human = true, [16]byte{9}
+			r.Switches.SetSpectatorChat(false)
+		}, watches, false},
+		{"spectators' reading off leaves those aboard", func(r Rules, from, to *Speaker) {
+			from.Machine, from.Human = true, to.Account
+			r.Switches.SetSpectatorChat(false)
+		}, aboard, true},
+		{"chat off for everyone, spectators too", func(r Rules, from, _ *Speaker) {
+			from.Machine, from.Human = true, [16]byte{9}
+			r.Switches.SetChat(false)
+		}, watches, false},
 		{"a spectator's own chat off", func(_ Rules, from, to *Speaker) {
 			from.Machine, from.Human = true, [16]byte{9}
 			to.ChatSet, to.Chat = true, false
