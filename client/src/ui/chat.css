@@ -1,0 +1,317 @@
+/* SPDX-License-Identifier: AGPL-3.0-only */
+
+/* Chat aboard: the strip under the case, as wide as sailing together's
+   other panels there, in the plate's brass and lacquer; folded to one
+   line, the key's height, or open to its lines, a note and the field; and
+   the sheet of mute, block and report and the report's form, windows over
+   the sea. Its keys the instruments' head keys' size. */
+
+.hud .chat-strip {
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: var(--deck-width);
+  padding: 2px;
+  pointer-events: auto;
+}
+
+.hud .chat-strip.open {
+  padding: 2px 6px 6px;
+}
+
+/* Folded: one line, the newest said, a long one ending in an ellipsis. */
+.hud .chat-strip .chat-folded {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 0 4px 0 10px;
+  border: 0;
+  border-radius: 10px;
+  background: none;
+  box-shadow: none;
+  color: var(--ink);
+  text-align: left;
+  cursor: pointer;
+}
+
+.chat-folded-line {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 15px;
+}
+
+.chat-folded-line.faint,
+.chat-line.faint {
+  color: var(--faint);
+}
+
+.chat-mark {
+  flex: none;
+  color: var(--brass);
+  font-size: 12px;
+}
+
+/* Open: its title and the fold key, the lines, a note, the field. */
+.chat-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.chat-title {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding-left: 6px;
+  color: var(--faint);
+  overflow-wrap: anywhere;
+  font:
+    13px / 1.2 "IM Fell English SC",
+    Georgia,
+    serif;
+  letter-spacing: 0.04em;
+}
+
+.chat-title .player-text {
+  color: var(--gold);
+}
+
+.hud .chat-strip .chat-fold {
+  flex: none;
+  width: 44px;
+  padding: 0;
+  color: var(--brass-light);
+  font-size: 12px;
+}
+
+.chat-lines {
+  flex: 0 1 auto;
+  margin: 0;
+  padding: 0 4px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  list-style: none;
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+.chat-line {
+  padding: 1px 0;
+  overflow-wrap: anywhere;
+  font-size: 15px;
+  line-height: 1.3;
+  border-radius: 4px;
+}
+
+.chat-line[tabindex] {
+  cursor: context-menu;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.chat-line[tabindex]:focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: 1px;
+}
+
+.chat-name {
+  margin-right: 2px;
+  font-weight: 500;
+}
+
+.chat-name .player-text {
+  color: var(--gold);
+}
+
+.chat-line.pending {
+  opacity: 0.7;
+}
+
+.chat-note {
+  padding: 0 4px;
+  color: var(--brass-light);
+  font-size: 14px;
+  overflow-wrap: anywhere;
+}
+
+.chat-note .player-text {
+  color: var(--gold);
+}
+
+.chat-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.chat-state {
+  flex: 1 1 100%;
+  padding: 0 4px;
+  color: var(--faint);
+  font-size: 14px;
+}
+
+.chat-left {
+  flex: 1 1 100%;
+  padding: 0 4px;
+  color: var(--faint);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* The sheet: whose it is, what each key does, the keys. */
+.chat-sheet-name {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  overflow-wrap: anywhere;
+}
+
+.chat-sheet-name .player-text,
+.chat-sheet h2 .player-text {
+  color: var(--gold);
+}
+
+.chat-sheet .deck-faint {
+  font-size: 14px;
+}
+
+/* The report's form: the reasons a column of rows, a child at risk first. */
+.chat-report-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.chat-reasons {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.chat-reasons legend {
+  margin-bottom: 4px;
+  padding: 0;
+  color: var(--faint);
+  font-size: 14px;
+}
+
+.chat-reason {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 36px;
+  cursor: pointer;
+}
+
+.chat-reason input {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  margin: 0;
+  accent-color: var(--gold);
+}
+
+.chat-reason.first span {
+  font-weight: 500;
+}
+
+.chat-report-note {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 14px;
+}
+
+.hud .chat-report-note textarea {
+  min-height: 60px;
+  padding: 8px 10px;
+  font-size: 16px;
+  resize: none;
+}
+
+/* Every key of chat the instruments' head keys' size, as sailing
+   together's are: its bulk in its width, a touch 3 px beyond its face. */
+.hud :is(.chat-strip, .chat-sheet) button {
+  position: relative;
+  min-width: 44px;
+  min-height: 0;
+  height: var(--key);
+  font:
+    500 14px / 1 "Alegreya Sans",
+    system-ui,
+    sans-serif;
+}
+
+.hud .chat-strip button:not(.chat-folded, .chat-fold),
+.hud .chat-sheet button {
+  padding: 0 14px;
+}
+
+.hud :is(.chat-strip, .chat-sheet) button::after {
+  content: "";
+  position: absolute;
+  inset: -3px 0;
+}
+
+/* The strip's folded line in its 15 px words, not a key's 14. */
+.hud .chat-strip .chat-folded {
+  font: inherit;
+}
+
+/* A statement of reasons: its facts, and the one answer. */
+.statement-facts {
+  margin: 0;
+}
+
+.statement-facts dt {
+  color: var(--faint);
+  font-size: 14px;
+}
+
+.statement-facts dd {
+  margin: 0 0 6px;
+  overflow-wrap: anywhere;
+}
+
+.statement-answer {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.statement-answer label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 14px;
+}
+
+.hud .statement-answer textarea {
+  min-height: 72px;
+  padding: 8px 10px;
+  font-size: 16px;
+  resize: none;
+}
+
+/* The player's own name a paler brass than others'. */
+.chat-line.mine .chat-name .player-text {
+  color: var(--brass-light);
+}
+
+/* The field the keys' height, its words 16 px so no phone zooms to it. */
+.hud .chat-foot input {
+  flex: 1 1 80px;
+  min-width: 0;
+  min-height: 0;
+  height: var(--key);
+  font-size: 16px;
+}

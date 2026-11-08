@@ -8,16 +8,85 @@
 
 import { computed, effect, type ReadonlySignal, type Signal, signal } from '@preact/signals';
 import { useEffect, useState } from 'preact/hooks';
+import { type ChatServer, chatServer } from '../account/chatapi';
 import type {
   AboardTold,
+  ChatStateTold,
   CrewTold,
   HandedTold,
   KnockCardTold,
   KnockingTold,
   PersonTold,
+  ReportReasonTold,
   Status,
   WatchingTold,
+  WhoTold,
 } from '../net/messages';
+import type { ChatLog } from './chatlog';
+
+/** Whom the sheet of mute, block and report is about, and how far along it is. */
+export interface ChatSheet {
+  who: WhoTold;
+  name: string;
+  machine: boolean;
+  /** The sheet's keys; the one question before a block; the report's form. */
+  step: 'menu' | 'block' | 'report';
+}
+
+/** Chat aboard, as the screens see it, and what they ask of it. */
+export interface ChatView {
+  /** The lines, the note, and whose lines are hidden. */
+  log: ChatLog;
+  /** How chat stands for the connection; null before it is told. */
+  state: ReadonlySignal<ChatStateTold | null>;
+  /** The strip open, showing the last lines and the field. */
+  open: Signal<boolean>;
+  /** The field's words as typed, kept while the strip folds; in memory only. */
+  draft: Signal<string>;
+  /** The sheet of mute, block and report, or null. */
+  sheet: Signal<ChatSheet | null>;
+  /** A window of chat's own: the Rules of the sea before a first line, or turning chat on. */
+  ask: Signal<'rules' | 'turn-on' | null>;
+  /** A line held while the Rules are asked, sent once they are accepted. */
+  held: Signal<string>;
+  /** The height the keyboard covers, held by a scene (px); null to follow the visual viewport. */
+  keyboard: ReadonlySignal<number> | null;
+  /** The account's side of chat. */
+  server: ChatServer;
+  say(text: string, self: string): boolean;
+  mute(who: WhoTold, name: string, on: boolean): void;
+  block(who: WhoTold, name: string, on: boolean): void;
+  report(who: WhoTold, reason: ReportReasonTold, note: string): void;
+}
+
+/** The game connection's side of chat, as Online has it. */
+export interface ChatSource {
+  chat: ChatLog;
+  chatState: ReadonlySignal<ChatStateTold | null>;
+  sayAboard(text: string, self: string): boolean;
+  mute(who: WhoTold, name: string, on: boolean): void;
+  block(who: WhoTold, name: string, on: boolean): void;
+  report(who: WhoTold, reason: ReportReasonTold, note: string): void;
+}
+
+/** The screens' view of chat. */
+export function chatOf(o: ChatSource, server: ChatServer = chatServer()): ChatView {
+  return {
+    log: o.chat,
+    state: o.chatState,
+    open: signal(false),
+    draft: signal(''),
+    sheet: signal(null),
+    ask: signal(null),
+    held: signal(''),
+    keyboard: null,
+    server,
+    say: (text, self) => o.sayAboard(text, self),
+    mute: (who, name, on) => o.mute(who, name, on),
+    block: (who, name, on) => o.block(who, name, on),
+    report: (who, reason, note) => o.report(who, reason, note),
+  };
+}
 
 /** What the screens show of sailing together, and what they ask of it. */
 export interface DeckView {
@@ -57,10 +126,12 @@ export interface DeckView {
   goAshore(): void;
   putAshore(seat: number): void;
   closeKnocks(closed: boolean): void;
+  /** Chat aboard. */
+  chat: ChatView;
 }
 
 /** The game connection's side of it, as Online has it. */
-export interface DeckSource {
+export interface DeckSource extends ChatSource {
   aboard: ReadonlySignal<AboardTold | null>;
   crew: ReadonlySignal<CrewTold | null>;
   knocks: ReadonlySignal<readonly KnockCardTold[]>;
@@ -124,6 +195,7 @@ export function deckOf(
       closed.value = c;
       o.closeKnocks(c);
     },
+    chat: chatOf(o),
   };
 }
 
@@ -155,8 +227,29 @@ export function deckPlate(d: DeckView): boolean {
   );
 }
 
+/**
+ * Whether the chat strip is on the screen: with anyone else aboard the
+ * boat sailed or aboard; and for an owner watching their own machine
+ * sailor aboard a boat with company, to read.
+ */
+export function chatShown(d: DeckView): boolean {
+  if (d.crew.value === null) {
+    return false;
+  }
+  const w = d.watching.value;
+  return w === null || (w.machine && w.mine);
+}
+
+/** Whether the strip only reads: an owner watching their own machine sailor. */
+export function chatReadOnly(d: DeckView): boolean {
+  return d.watching.value !== null;
+}
+
 /** Whether any part of sailing together is on the screen. */
 export function deckShown(d: DeckView): boolean {
+  if (chatShown(d) || d.chat.sheet.value !== null || d.chat.ask.value !== null) {
+    return true;
+  }
   if (d.watching.value !== null) {
     return false;
   }

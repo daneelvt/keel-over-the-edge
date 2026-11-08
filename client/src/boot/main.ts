@@ -137,6 +137,7 @@ import { AGROUND } from '../ui/model';
 import { saveNoticesOff } from '../ui/notices';
 import { showQueue } from '../ui/queue';
 import { settingsSignal } from '../ui/settings';
+import { checkStatements, statementsOf } from '../ui/statementlazy';
 import { loadWatch, type WatchView } from '../ui/watchlazy';
 import { watchFromQuery } from '../ui/watchwords';
 import { type Cover, DROP, LIFT, LIFT_REDUCED, QUIET, takeCover } from './cover';
@@ -595,11 +596,11 @@ async function start(): Promise<void> {
         countdown,
         // The screen again, with a watch's parts or without, and sailing
         // together's: the layout's tests.
-        remount: (watch, deck = null) => {
+        remount: (watch, deck = null, statements = null) => {
           unmount();
           unmount = mountScreen(
             document.body,
-            watch === null && deck === null ? screen : { ...screen, watch, deck },
+            watch === null && deck === null ? screen : { ...screen, watch, deck, statements },
           );
         },
       });
@@ -991,6 +992,7 @@ async function start(): Promise<void> {
   placed = true;
   const baro = startBarometer(world, predictor.physics, forecasting);
   const clock = startClock(world);
+  const statements = statementsOf();
   mountScreen(document.body, {
     model: game.hud,
     settings: game.settings,
@@ -1023,6 +1025,7 @@ async function start(): Promise<void> {
     },
     watch: watchView,
     deck: deckOf(online, (act) => void changeBoat(act)),
+    statements,
     lamp: online.lamp,
     camera,
     clear,
@@ -1058,6 +1061,8 @@ async function start(): Promise<void> {
   };
   atSea = true;
   reveal(world, cover, view === undefined ? DESCENT : 0);
+  // A word from the game's owner about chat, if one waits unread.
+  void checkStatements(statements);
 }
 
 /** Whether the sailor is out of the boat, or the boat over: the sailor's line says so, but for aground. */
