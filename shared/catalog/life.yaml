@@ -17,7 +17,9 @@ life:
   # A lull after each: an encounter of a family is not begun within its
   # family's lull after another of it began in its cell or the eight about
   # it, as Left 4 Dead's director relaxes after each peak (Booth 2009).
-  lulls: { birds: 60, water: 600, big: 2400, night: 1200 } # s
+  # The water's is short: its kinds are many, and flying fish, turtles on
+  # a reef and dolphins are each met often.
+  lulls: { birds: 60, water: 30, big: 2400, night: 1200 } # s
   # A boat followed, ridden or perched on is left alone for this long after.
   quiet: 2700 # s
   # A group that follows boats takes, as it begins, the nearest boat within
@@ -26,11 +28,13 @@ life:
   # interest below 2 m/s and keep with a boat on a steady speed and course
   # (Fiori and others 2024).
   bind: { within: 300, speed: 2, steady: 10, turn: 15 }
-  # A pod riding a bow leaves it at once when the boat slows below slower
-  # m/s or turns more than turn degrees from its heading as the ride began:
-  # dolphins keep with a boat on a steady speed and course, and avoid
-  # erratic handling (Fiori and others 2024).
-  ride: { slower: 2, turn: 40 }
+  # A pod that rides bows comes to a boat from within within m, the bind's
+  # other rules kept: dolphins hear a hull and come to it from far off. It
+  # leaves the bow at once when the boat slows below slower m/s or turns
+  # more than turn degrees from its heading as the ride began: dolphins
+  # keep with a boat on a steady speed and course, and avoid erratic
+  # handling (Fiori and others 2024).
+  ride: { within: 1800, slower: 2, turn: 40 }
   # A boat sailing through a ground of flying fish flushes them ahead of
   # and beside its bow: every every s, by a draw of the boat, the ground
   # and that slot, at chance, if it sails at the bind's speed; the fish
@@ -275,7 +279,7 @@ life:
       wind: [0, 20]
       rain: 0.8
       bySea: true
-      rate: 0.12
+      rate: 0.19
       group: [5, 25]
       stay: [120, 600]
       speed: [2.5, 5]
@@ -299,7 +303,7 @@ life:
       wind: [0, 20]
       rain: 0.8
       bySea: true
-      rate: 0.12
+      rate: 0.19
       group: [2, 8]
       stay: [120, 600]
       speed: [1.7, 3.5]
@@ -323,7 +327,7 @@ life:
       wind: [0, 17]
       rain: 0.8
       bySea: true
-      rate: 0.08
+      rate: 0.12
       group: [10, 60]
       stay: [300, 900]
       speed: [1.5, 3]
@@ -347,14 +351,14 @@ life:
       wind: [0, 18]
       rain: 0.8
       bySea: false
-      rate: 0.1
+      rate: 1.0
       group: [1, 12]
-      stay: [600, 1200]
+      stay: [1200, 2400]
       speed: [10, 15]
       height: [0.3, 1.5]
       range: 0
       reach: 400
-      patch: [250, 500]
+      patch: [300, 600]
       swim: { body: flyingfish, length: 0.3, back: "#2c4877", belly: "#d6dce2", beat: 30, depth: 0.5, glide: [20, 50], linked: 150, call: silent }
     # Fish driven up to the surface by predators below: the water boils at
     # the flock's edge as terns, noddies and boobies plunge into it and
@@ -374,7 +378,7 @@ life:
       wind: [0, 14]
       rain: 0.8
       bySea: false
-      rate: 0.15
+      rate: 0.23
       group: [1, 1]
       stay: [300, 900]
       speed: [0.1, 0.3]
@@ -404,7 +408,7 @@ life:
       wind: [0, 14]
       rain: 0.8
       bySea: true
-      rate: 0.6
+      rate: 4.2
       group: [1, 2]
       stay: [300, 600]
       speed: [0.3, 0.6]
@@ -424,7 +428,7 @@ life:
       wind: [0, 14]
       rain: 0.8
       bySea: true
-      rate: 0.2
+      rate: 1.2
       group: [1, 1]
       stay: [300, 600]
       speed: [0.3, 0.5]

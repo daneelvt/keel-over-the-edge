@@ -63,6 +63,8 @@ type tally struct {
 	working  [2][waters]float64 // groups that work the water
 	inWater  [2][waters]float64 // life that is not a bird
 	followed [2]float64         // groups that followed the boat
+	rode     [2]float64         // pods that rode its bow
+	grounds  [2][waters]float64 // grounds of fish it flushed fish from
 	inSight  float64            // s by day with something in sight
 	gaps     []float64
 	empty    []float64
@@ -89,11 +91,13 @@ func (t *tally) add(u *tally) {
 			t.passing[d][w] += u.passing[d][w]
 			t.working[d][w] += u.working[d][w]
 			t.inWater[d][w] += u.inWater[d][w]
+			t.grounds[d][w] += u.grounds[d][w]
 			for k := range t.sighted[d] {
 				t.sighted[d][k][w] += u.sighted[d][k][w]
 			}
 		}
 		t.followed[d] += u.followed[d]
+		t.rode[d] += u.rode[d]
 	}
 	t.inSight += u.inSight
 	t.gaps = append(t.gaps, u.gaps...)
@@ -187,11 +191,12 @@ func (s *sea) sail(o options, r int, t *tally) {
 	f.Occupied[0] = true
 	f.Boat[0] = 1
 	kinds := s.sched.Kinds()
-	seen, followed := map[uint64]bool{}, map[uint64]bool{}
+	seen, followed, flushed, worked := map[uint64]bool{}, map[uint64]bool{}, map[uint64]bool{}, map[uint64]bool{}
 	var a air
 	slot := int64(math.MinInt64)
 	g := gapper{t: t}
 	var classes [4]int
+	lastFlush := int64(math.MinInt64 / 2)
 	for now := start; now < start+dur; now += step {
 		if sl := s.sched.SlotOf(now); sl != slot {
 			slot = sl
@@ -226,6 +231,23 @@ func (s *sea) sail(o options, r int, t *tally) {
 			e := &f.Life[i]
 			k := &kinds[e.Kind]
 			bird := k.Form == catalog.LifeFormBird
+			// The fish flushed from a ground are the ground's: met once,
+			// however often they are flushed.
+			id := e.ID
+			if k.Flushes() {
+				id = e.Over
+				if !flushed[id] {
+					flushed[id] = true
+					for d := range 2 {
+						if d == byDay && !day {
+							continue
+						}
+						for _, c := range cls {
+							t.grounds[d][c]++
+						}
+					}
+				}
+			}
 			if bird && !day {
 				continue
 			}
@@ -238,17 +260,34 @@ func (s *sea) sail(o options, r int, t *tally) {
 				continue
 			}
 			something = true
+			if k.Flushes() {
+				lastFlush = now
+			}
 			if e.Boat != 0 && !followed[e.ID] {
 				followed[e.ID] = true
-				t.followed[allHours]++
+				with := &t.followed
+				if k.Rides() {
+					with = &t.rode
+				}
+				with[allHours]++
 				if day {
-					t.followed[byDay]++
+					with[byDay]++
 				}
 			}
-			if seen[e.ID] {
+			if seen[id] {
 				continue
 			}
-			seen[e.ID], fresh = true, true
+			// A group that comes with another seen already is part of
+			// that sighting, not a sighting of its own.
+			seen[id] = true
+			fresh = fresh || e.Over == 0 || !seen[e.Over]
+			// The birds working one patch of bait are one flock working
+			// the water, however many kinds are in it.
+			work, again := k.PathOf(e) == life.PathWork, false
+			if work && e.Over != 0 {
+				again = worked[e.Over]
+				worked[e.Over] = true
+			}
 			for d := range 2 {
 				if d == byDay && !day {
 					continue
@@ -257,9 +296,11 @@ func (s *sea) sail(o options, r int, t *tally) {
 					t.sighted[d][e.Kind][c]++
 					t.groups[d][c]++
 					switch {
-					case k.Path == life.PathWork:
+					case again:
+					case work:
 						t.working[d][c]++
-					case bird:
+					case bird && e.Over == 0:
+						// Birds over another's patch are not passing.
 						t.passing[d][c]++
 					}
 					if !bird {
@@ -268,12 +309,19 @@ func (s *sea) sail(o options, r int, t *tally) {
 				}
 			}
 		}
+		// A ground's fish flushed again and again keep it in sight while
+		// the boat sails through it.
+		something = something || now-lastFlush <= flushHold
 		g.at(now, day, something, fresh, dt)
 		sin, cos := math.Sincos(heading)
 		x, y = x+speed*dt*sin, y+speed*dt*cos
 	}
 	g.end(start + dur)
 }
+
+// flushHold is how long fish flushed keep something in sight after,
+// ticks: a boat in a ground flushes them every few seconds.
+const flushHold = 30 * physics.StepsPerSecond
 
 // openWater is a point of open water drawn at random, well clear of the
 // shallows: false if a thousand draws found none.

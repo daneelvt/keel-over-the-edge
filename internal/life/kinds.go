@@ -145,6 +145,9 @@ type Params struct {
 	// BindTurn is how far a boat's heading may wander and its course still
 	// count as steady, rad.
 	BindTurn float64
+	// RideWithin is how far a group that rides bows comes from to a boat,
+	// m, in BindWithin's place.
+	RideWithin float64
 	// A group riding a bow leaves it once the boat is slower than
 	// RideSlower, m/s, or has turned more than RideTurn, rad, from its
 	// heading as the ride began.
@@ -171,7 +174,7 @@ func Prepare(cat *catalog.Catalog) (*Params, []Kind) {
 		HarbourIn: l.Habitat.Harbour, ReefIn: l.Habitat.Reef, ShelfIn: l.Habitat.Shelf, OuterFrom: l.Habitat.Outer,
 		ColonyIn: l.Habitat.Colony, Field: l.Habitat.Field, Sea: l.Sea,
 		BindWithin: l.Bind.Within, BindSpeed: l.Bind.Speed, BindSteady: ticks(l.Bind.Steady), BindTurn: l.Bind.Turn * math.Pi / 180,
-		RideSlower: l.Ride.Slower, RideTurn: l.Ride.Turn * math.Pi / 180,
+		RideWithin: l.Ride.Within, RideSlower: l.Ride.Slower, RideTurn: l.Ride.Turn * math.Pi / 180,
 		FlushEvery: max(ticks(l.Flush.Every), 1), FlushChance: l.Flush.Chance, FlushLead: ticks(l.Flush.Lead),
 		FlushAheadLow: pairOr(l.Flush.Ahead, 0, 0), FlushAheadHigh: pairOr(l.Flush.Ahead, 1, 0), FlushBeside: l.Flush.Beside,
 	}

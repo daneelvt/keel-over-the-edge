@@ -1259,9 +1259,9 @@ type Life struct {
 	// Rain this heavy or heavier thins life as its kind's rain says, in mm an hour.
 	Rainy float64 `json:"rainy"`
 
-	// When a group riding a boat's bow leaves it at once: the boat slower than this,
-	// in m/s, or turned more than this from its heading as the ride began, in
-	// degrees.
+	// How far a group that rides bows comes from to a boat, in m, by the bind's other
+	// rules; and when it leaves the bow at once: the boat slower than this, in m/s,
+	// or turned more than this from its heading as the ride began, in degrees.
 	Ride LifeRide `json:"ride"`
 
 	// The share of water life seen at each Beaufort force from 0, the last for every
@@ -1530,14 +1530,18 @@ const LifePathSoar LifePath = "soar"
 const LifePathStay LifePath = "stay"
 const LifePathWork LifePath = "work"
 
-// When a group riding a boat's bow leaves it at once: the boat slower than this,
-// in m/s, or turned more than this from its heading as the ride began, in degrees.
+// How far a group that rides bows comes from to a boat, in m, by the bind's other
+// rules; and when it leaves the bow at once: the boat slower than this, in m/s, or
+// turned more than this from its heading as the ride began, in degrees.
 type LifeRide struct {
 	// Slower corresponds to the JSON schema field "slower".
 	Slower float64 `json:"slower"`
 
 	// Turn corresponds to the JSON schema field "turn".
 	Turn float64 `json:"turn"`
+
+	// Within corresponds to the JSON schema field "within".
+	Within float64 `json:"within"`
 }
 
 // The gulls that wheel over each town by day, as a colony's birds wheel over it:
@@ -5201,4 +5205,4 @@ type WorldZones struct {
 }
 
 // Version is the catalog version (tools/catalog).
-const Version = "0eae0eb25ec0b032"
+const Version = "2b71fe88a1bb4f30"

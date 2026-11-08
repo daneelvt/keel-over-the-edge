@@ -8267,9 +8267,10 @@ export interface LifeBind {
   turn: number;
 }
 /**
- * When a group riding a boat's bow leaves it at once: the boat slower than this, in m/s, or turned more than this from its heading as the ride began, in degrees.
+ * How far a group that rides bows comes from to a boat, in m, by the bind's other rules; and when it leaves the bow at once: the boat slower than this, in m/s, or turned more than this from its heading as the ride began, in degrees.
  */
 export interface LifeRide {
+  within: number;
   slower: number;
   turn: number;
 }
@@ -8544,4 +8545,4 @@ export interface SwimLook {
 }
 
 /** The catalog version (tools/catalog). */
-export const CATALOG_VERSION = '0eae0eb25ec0b032';
+export const CATALOG_VERSION = '2b71fe88a1bb4f30';

@@ -4317,11 +4317,12 @@
         },
         "ride": {
           "title": "LifeRide",
-          "description": "When a group riding a boat's bow leaves it at once: the boat slower than this, in m/s, or turned more than this from its heading as the ride began, in degrees.",
+          "description": "How far a group that rides bows comes from to a boat, in m, by the bind's other rules; and when it leaves the bow at once: the boat slower than this, in m/s, or turned more than this from its heading as the ride began, in degrees.",
           "type": "object",
           "additionalProperties": false,
-          "required": ["slower", "turn"],
+          "required": ["within", "slower", "turn"],
           "properties": {
+            "within": { "type": "number", "minimum": 0, "maximum": 5000 },
             "slower": { "type": "number", "minimum": 0, "maximum": 20 },
             "turn": { "type": "number", "minimum": 1, "maximum": 180 }
           }

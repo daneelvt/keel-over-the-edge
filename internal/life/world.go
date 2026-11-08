@@ -337,11 +337,16 @@ func (w *World) begin(f *bus.Frame, e bus.LifeEncounter, raised bool) {
 }
 
 // boatFor is the slot of the boat a group that follows boats or rides
-// their bows takes as it begins: the nearest within reach of its centre sailing fast enough on a
+// their bows takes as it begins: the nearest within reach of its centre,
+// the bind's or for one that rides the ride's, sailing fast enough on a
 // steady course, not quiet, ties to the lower boat; −1 for none.
 func (w *World) boatFor(f *bus.Frame, e *bus.LifeEncounter, raised bool) int32 {
 	p := w.s.p
-	best, bestD := int32(-1), float64(p.BindWithin*p.BindWithin)
+	within := p.BindWithin
+	if w.s.kinds[e.Kind].Rides() {
+		within = p.RideWithin
+	}
+	best, bestD := int32(-1), float64(within*within)
 	for _, s := range f.Live {
 		b := &w.boats[s]
 		st := &f.State[s]
