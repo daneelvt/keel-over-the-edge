@@ -6,8 +6,10 @@
 // record; and each page finds every bird of it in the same place at the
 // same tick, within half a metre. A pod of dolphins raised ahead of one of
 // them sailing steadily rides her bow, and every page sees it at that
-// boat's bow, within a metre. The pages draw nothing (?draw=off): the
-// animals are found as the frame finds them.
+// boat's bow, within a metre. A whale raised between them is in the same
+// place on every page, and a booby raised at one boat perches on that boat
+// on every page. The pages draw nothing (?draw=off): the animals are found
+// as the frame finds them.
 
 import { type BrowserContext, expect, type Page, test } from '@playwright/test';
 import data from '../src/catalog/catalog.gen.json' with { type: 'json' };
@@ -19,6 +21,9 @@ const internal = 'http://127.0.0.1:19090';
 
 /** The kind raised: one that works a patch of water, staying minutes; by its index. */
 const kind = data.life.kinds.findIndex((k) => k.path === 'work');
+/** A whale with no pod about it, and a bird that perches on boats; by their indices. */
+const whale = data.life.kinds.findIndex((k) => k.form === 'whale' && !('collective' in k));
+const percher = data.life.kinds.findIndex((k) => k.binds === 'perch');
 /** A pod that rides bows and passes when it has none to ride; by its index. */
 const rider = data.life.kinds.findIndex((k) => k.binds === 'ride' && k.path === 'pass');
 
@@ -114,6 +119,58 @@ test('two players and a spectator see the same birds in the same places', async 
         expect(Math.hypot(x.east - y.east, x.north - y.north, x.up - y.up)).toBeLessThan(0.5);
       }
       expect(compared).toBeGreaterThan(0);
+    }
+
+    // A whale between them, and a booby at Ann's boat: the same records,
+    // the same whale in the same place, the booby on Ann's boat on every
+    // page.
+    const raise = async (q: string): Promise<LifeSeen> => {
+      const had = new Set(
+        (await a.evaluate(() => globalThis.keel.life().records)).map((r) => r.id),
+      );
+      const r = await a.request.post(`${internal}/debug/life?${q}`);
+      expect(r.status(), await r.text()).toBe(200);
+      await a.waitForFunction(
+        (had) => globalThis.keel.life().records.some((r) => !had.includes(r.id)),
+        [...had],
+        { timeout: 30_000 },
+      );
+      return (await a.evaluate(() => globalThis.keel.life().records)).find(
+        (r) => !had.has(r.id),
+      ) as LifeSeen;
+    };
+    const w = await raise(`kind=${whale}&east=${east}&north=${north}`);
+    const sa2 = await at(a);
+    const booby = await raise(`kind=${percher}&east=${sa2.x}&north=${sa2.y}`);
+    expect(booby.with).toBe(1);
+    for (const p of [b, c]) {
+      expect(await record(p, w.id)).toEqual(w);
+      const r = await record(p, booby.id);
+      expect({ ...r, with: 0 }).toEqual({ ...booby, with: 0 });
+    }
+    const swimmers = async (p: Page, t: number) =>
+      (await p.evaluate((t) => globalThis.keel.lifeSwimmers(t), t)).filter((x) => x.id === w.id);
+    let seen = 0;
+    for (let t = w.start + 30 * 30; t < w.end && seen === 0; t += 60 * 30) {
+      const [wa, wb, wc] = [await swimmers(a, t), await swimmers(b, t), await swimmers(c, t)];
+      for (const other of [wb, wc]) {
+        for (const x of wa) {
+          const y = other.find((o) => o.k === x.k);
+          if (y !== undefined) {
+            seen++;
+            expect(Math.hypot(x.east - y.east, x.north - y.north, x.up - y.up)).toBeLessThan(0.5);
+          }
+        }
+      }
+    }
+    expect(seen).toBeGreaterThan(0);
+    const withs = await Promise.all(
+      [a, b, c].map((p) => p.evaluate((id) => globalThis.keel.lifeWith(id), booby.id)),
+    );
+    const boatA = await at(a);
+    for (const pose of withs) {
+      expect(pose).not.toBeNull();
+      expect(Math.hypot((pose?.east ?? 0) - boatA.x, (pose?.north ?? 0) - boatA.y)).toBeLessThan(5);
     }
   } finally {
     for (const c of contexts) {

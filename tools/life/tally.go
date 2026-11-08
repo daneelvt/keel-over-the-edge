@@ -65,6 +65,10 @@ type tally struct {
 	followed [2]float64         // groups that followed the boat
 	rode     [2]float64         // pods that rode its bow
 	grounds  [2][waters]float64 // grounds of fish it flushed fish from
+	perched  [2][waters]float64 // birds that perched on it
+	aboard   float64            // fish that landed on its deck
+	glowing  float64            // s at night in glowing water, dark enough to show
+	glows    float64            // patches of glowing water it sailed into, dark
 	inSight  float64            // s by day with something in sight
 	gaps     []float64
 	empty    []float64
@@ -92,6 +96,7 @@ func (t *tally) add(u *tally) {
 			t.working[d][w] += u.working[d][w]
 			t.inWater[d][w] += u.inWater[d][w]
 			t.grounds[d][w] += u.grounds[d][w]
+			t.perched[d][w] += u.perched[d][w]
 			for k := range t.sighted[d] {
 				t.sighted[d][k][w] += u.sighted[d][k][w]
 			}
@@ -100,6 +105,9 @@ func (t *tally) add(u *tally) {
 		t.rode[d] += u.rode[d]
 	}
 	t.inSight += u.inSight
+	t.aboard += u.aboard
+	t.glowing += u.glowing
+	t.glows += u.glows
 	t.gaps = append(t.gaps, u.gaps...)
 	t.empty = append(t.empty, u.empty...)
 	t.longest = append(t.longest, u.longest...)
@@ -192,6 +200,7 @@ func (s *sea) sail(o options, r int, t *tally) {
 	f.Boat[0] = 1
 	kinds := s.sched.Kinds()
 	seen, followed, flushed, worked := map[uint64]bool{}, map[uint64]bool{}, map[uint64]bool{}, map[uint64]bool{}
+	glowed := map[uint64]bool{}
 	var a air
 	slot := int64(math.MinInt64)
 	g := gapper{t: t}
@@ -231,6 +240,25 @@ func (s *sea) sail(o options, r int, t *tally) {
 			e := &f.Life[i]
 			k := &kinds[e.Kind]
 			bird := k.Form == catalog.LifeFormBird
+			// A fish on the deck, once; glowing water while the boat is in
+			// it on a dark night; neither is a sighting of its own.
+			if life.Aboard(e) {
+				if !seen[e.ID] {
+					seen[e.ID] = true
+					t.aboard++
+				}
+				continue
+			}
+			if k.Form == catalog.LifeFormGlow {
+				if r := life.Patch(k, e.Seed); math.Hypot(x-e.East, y-e.North) <= r && s.sched.Dark(k, now, x, y) {
+					t.glowing += dt
+					if !glowed[e.ID] {
+						glowed[e.ID] = true
+						t.glows++
+					}
+				}
+				continue
+			}
 			// The fish flushed from a ground are the ground's: met once,
 			// however often they are flushed.
 			id := e.ID
@@ -265,13 +293,24 @@ func (s *sea) sail(o options, r int, t *tally) {
 			}
 			if e.Boat != 0 && !followed[e.ID] {
 				followed[e.ID] = true
-				with := &t.followed
-				if k.Rides() {
-					with = &t.rode
-				}
-				with[allHours]++
-				if day {
-					with[byDay]++
+				if k.Perches() {
+					for d := range 2 {
+						if d == byDay && !day {
+							continue
+						}
+						for _, c := range cls {
+							t.perched[d][c]++
+						}
+					}
+				} else {
+					with := &t.followed
+					if k.Rides() {
+						with = &t.rode
+					}
+					with[allHours]++
+					if day {
+						with[byDay]++
+					}
 				}
 			}
 			if seen[id] {

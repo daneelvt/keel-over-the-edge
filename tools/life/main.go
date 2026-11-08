@@ -9,6 +9,7 @@
 //	go run ./tools/life -tally                       100 worlds, 20 routes each
 //	go run ./tools/life -tally -seeds 20 -from 41    worlds of seeds 41 to 60
 //	go run ./tools/life -tally -kinds                each kind by habitat too
+//	go run ./tools/life -tally -lulls 60,600,2400,1200   the families' lulls, s
 //
 // For each seed it makes the world as keel does, its week of weather from
 // the seed and the sky's sun for a week from the sample epoch, and builds
@@ -45,6 +46,7 @@ func main() {
 	step := flag.Float64("step", 5, "the boat's step, s: a multiple of a second")
 	kinds := flag.Bool("kinds", false, "also print each kind met an hour in each habitat")
 	workers := flag.Int("workers", runtime.GOMAXPROCS(0), "worlds made and sailed at once")
+	lulls := flag.String("lulls", "", "the families' lulls instead of the catalog's, s: birds,water,big,night")
 	flag.Parse()
 	if !*tally {
 		flag.Usage()
@@ -54,6 +56,14 @@ func main() {
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "life:", err)
 		os.Exit(1)
+	}
+	if *lulls != "" {
+		var l [4]float64
+		if n, err := fmt.Sscanf(*lulls, "%g,%g,%g,%g", &l[0], &l[1], &l[2], &l[3]); err != nil || n != 4 {
+			fmt.Fprintln(os.Stderr, "life: -lulls is four numbers of seconds, birds,water,big,night")
+			os.Exit(2)
+		}
+		cat.Life.Lulls.Birds, cat.Life.Lulls.Water, cat.Life.Lulls.Big, cat.Life.Lulls.Night = l[0], l[1], l[2], l[3]
 	}
 	o := options{Seeds: *seeds, From: *from, Routes: *routes, Hours: *hours, Step: *step, Workers: *workers}
 	start := time.Now()
