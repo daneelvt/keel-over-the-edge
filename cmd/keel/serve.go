@@ -130,7 +130,9 @@ Configured from the environment:
                        boat meeting that player's, or the first sailing
                        player's) and POST /debug/life?kind=…&east=…&north=…
                        or &at=boat (a group of the sea's life of that kind
-                       there) (default 0)
+                       there) and POST /debug/sailed (everyone aboard
+                       together now counted as having sailed together five
+                       minutes) (default 0)
 `
 
 func serve(ctx context.Context, args []string, getenv func(string) string, stdout, stderr io.Writer) error {

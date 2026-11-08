@@ -362,4 +362,3 @@ func TestShipmates(t *testing.T) {
 		t.Fatalf("%d rows left after the sweep", n)
 	}
 }
-

@@ -65,6 +65,7 @@ export const pageFiles = [
   'owner',
   'passkeys',
   'roam',
+  'shipmates',
   'start',
   'stopped',
   'together',

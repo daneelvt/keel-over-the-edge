@@ -3633,7 +3633,7 @@ after they stop working; a deleted skipper's go with the account.
 **Chat's switches** sit beside them, on the same card and in the same
 `setting` row: chat on or off for everyone (off is asked once, "Chat off
 for everyone? Every line stops at once"), shipmates' messages on or off
-(a switch for later), and the countries where chat is off, two letters
+(off: every message between shipmates is refused as resting, at once), and the countries where chat is off, two letters
 each as ISO 3166 has them (`BR, AU`; nothing for none). The settings'
 routes take `"chat"`, `"shipmateMessages"` and `"chatCountries"` too;
 each change is recorded, then every game connection is told how chat
@@ -5686,7 +5686,7 @@ the band's default: on for an adult, off for 13 to 17 until they turn it
 on, nobody else); the sender not muted from chat by the owner, rested by
 reports or resting after refusals, and the Rules of the sea accepted;
 neither blocking the other, nor the receiver muting the sender; and the
-two aboard the same boat (later, shipmates too, with their own switch). A
+two aboard the same boat, or shipmates with shipmates' messages on. A
 machine sailor's line reaches no human but its owner and the boat's
 skipper's human, and an owner watching their own machine sailor reads its
 boat's chat and says nothing (`Together.Owns`), but only while everyone
@@ -5977,6 +5977,119 @@ the chat, another spectator reading none, put ashore from watching and
 knocking in vain after; a knock lapsing with the owner away), with
 stand-in helms (`Config.Machines`) and chat (`Config.Chat`);
 `internal/store`'s `TestMachineSailLinks`.
+
+### Shipmates
+
+Two people who have sailed aboard one boat together for five minutes or
+more, in the last 30 days, may become **shipmates**: one offers (*Be
+shipmates*, from the row of who is aboard or from *Recent crew*), the
+other accepts. Shipmates see when the other is in the game, knock on the
+boat the other skippers without a link (its skipper still answers), and
+message each other anywhere in the game while both are in it. Nothing is
+kept for a shipmate who is away. Machine sailors are never shipmates.
+
+**Who sailed together** (`internal/shipmates/tally.go`, one each world):
+every 15 s the tally reads the latest frame for the people aboard each
+boat with company (a machine sailor is never counted) and records each
+pair in `sailed_with` (the lesser ID first): `seen_at` as they are first
+seen together, `sailed_at` once they have been together five minutes in
+one stretch, and both again every half hour; `boat` is the boat, for a
+report from *Recent crew*. A stretch is held in memory, and begins again
+after a restart or a break. Rows are kept 30 days (the `sessions` job).
+`POST /debug/sailed` (`KEEL_DEV_COMMANDS=1`) counts everyone aboard
+together now as having sailed five minutes, for a trial.
+
+**The rules** (`internal/shipmates/shipmates.go`, over `aboard.Ties`, which
+hold every pair in memory as keel starts): an offer needs `sailed_at`
+within 30 days, both players people, fewer than 200 shipmates and 20 offers
+waiting (`store.MaxShipmates`, `MaxOffers`), and lapses after 7 days.
+**Shipmates only within one age band** (`aboard.MayBeShipmates`: both
+adults or both 13 to 17): an offer between the bands, or with a block
+between the two, is kept `silent`. It never reaches its receiver and
+cannot be accepted, and its sender sees it waiting as any other, so
+nothing on any screen says why or says anything of an age; a teen's
+shipmates stay when they turn 18. An offer back makes the two shipmates
+at once. *Decline* silences an offer the same way. **No longer
+shipmates** deletes the `shipmate` row and every offer between the two,
+clears `sailed_at`, so an offer again needs sailing together again, and
+takes effect at once for both: the other's connection is told only that
+its list changed (`Shipmates`, an empty message). Nothing else records
+it. A block ends shipmates, from anywhere (`process.tie`). `Ties.Forget`
+drops an account's pairs as it is deleted; the rows cascade.
+
+**Messages** (`chat.Hub.SayTo`): `Command.say{text, id, to}`, `to` a
+shipmate's account ID, goes through the same rule (`aboard.Rules.Delivered`
+with `Together.Shipmates`, so chat's switch and shipmates' messages'
+switch both stop it at once), filter, limits and memory as a line aboard,
+in the pair's ring (`chat.Pair`). Refused as `away` ("‹name› isn't in the
+game; messages aren't kept for later"), and kept nowhere, when the
+receiver is not in the game, not a shipmate (or no longer), or appears
+offline, unless they wrote to the sender in the last half hour
+(`chat.OfflineAnswers`); `resting` with shipmates' messages off. The
+receiver's connection is sent `Chat` with `thread` (the sender's ID), seat
+0, wherever it is in the game; a message whose two stop being shipmates
+before it is handed out is not delivered. A report of a message (`Who.line`
+of a thread) copies the pair's ring and follows it for ten minutes, with
+the two and their bands; the review page shows it as "messages between
+shipmates".
+
+**Knocking without a link**: `Command.knock{shipmate}` knocks on the boat
+the shipmate skippers, asking every rule a link's knock asks (the edge's
+`knockOn`, `boardable` through `aboard.MayJoin`); a shipmate who appears
+offline, is not skippering a boat at sea, or is no shipmate reads as not
+at sea. `KnockCard.shipmate` and `Person.shipmate` mark shipmates (★) on
+the skipper's card and in who is aboard.
+
+**The routes** (`internal/api/shipmates.go`, people only): `GET
+/api/shipmates` is the account's shipmates by name with where each is
+(`game`, `sea`, or nothing for one not in the game or appearing offline;
+`skipper` while they skipper a boat at sea, from `edge.Presence`), the
+offers waiting for its answer, *Recent crew* (aboard together in the last
+24 hours, newest first, with `can`, `offered` and `shipmate`), its own
+`offline` and the owner's `messages` switch. Nobody else ever sees a
+player's shipmates or where they are. `POST /api/shipmates/offer` (`{"id"}`
+or `{"seat"}` aboard: `offered`, `made`, `not-yet`, `full`, `offers`,
+`already`), `accept` (409 `gone` or `full`), `decline`, `end` (`{"id"}` or
+`{"seat"}`), `block` and `report` (`{"id", "reason", "note"}`: a shipmate's
+thread, or the boat last sailed on with someone of recent crew), and `POST
+/api/me/offline {"on"}`, *Appear offline*.
+
+**Metrics**: `keel_shipmates_total{what}` (`sailed`, `offered`, `made`,
+`ended`); messages are counted with chat's lines,
+`keel_chat_lines_total{result}` gaining `away` and `resting`.
+
+**On the page** (`client/src/ui/shipmates.tsx`, loaded with sailing
+together's parts): the menu's *Shipmates* opens the list: offers first
+(*Accept*, ✕), then shipmates with where they are, then *Recent crew*.
+Each row shows its one key (*Message*; *Be shipmates* for recent crew)
+and keeps the rest behind ⋯ (*Ask to come aboard*, *Watch*, *No longer
+shipmates*, *Block*, *Report*); ending and blocking ask once in the row.
+*Appear offline* is at the list's foot and on the account panel. A thread
+(`ShipmateThreads`, `client/src/ui/shipmatelog.ts`) keeps each shipmate's
+newest 50 messages in the page's memory only, and closes silently when the
+name leaves the list. A message that comes while its thread is shut, and
+an offer, show a notice under the case. The list is read when the
+connection is first welcomed, at each `Shipmates`, and every 20 s while
+it or a thread is open (`client/src/ui/shipmatesview.ts`); every word is
+in `client/src/ui/shipmatewords.ts`. `?sandbox&test` and
+`keel.deckScene(name)` show `shipmates`, `shipmates-more`,
+`shipmates-offered`, `shipmates-made`, `shipmates-thread`,
+`shipmates-away`, `shipmates-keyboard`, `shipmates-notice`,
+`shipmates-offer-notice`, `shipmates-end`, `shipmates-offline`,
+`shipmates-empty` and `chat-list-shipmate`; `e2e/layout.spec.ts` holds them
+on every screen, and `e2e/shipmates.spec.ts` sails two browsers together.
+
+**Testing it**: `internal/shipmates` (against the test database: no offer
+before five minutes in 30 days, an offer across the bands reaching nobody
+and looking waiting, two teens, ending it for both and needing to sail
+again, a decline, a block, reports from the lists, deletion and the sweep,
+and no message's text in any column); `internal/edge/edgetest/shipmates_test.go`
+(messages between two boats, a stranger's and an absent shipmate's
+refused and kept nowhere, appearing offline, both switches, a report of a
+thread, ending it mid-conversation, knocks without a link and the marks,
+the tally's five minutes, and no text in the log or metrics);
+`internal/api`'s `TestShipmatesRoutes`; `internal/aboard`'s
+`TestMayBeShipmates`.
 
 ## The local cluster
 

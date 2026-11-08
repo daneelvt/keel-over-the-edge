@@ -4135,7 +4135,7 @@
     {
       "type": "timeseries",
       "title": "Lines of chat",
-      "description": "Lines said, by what came of them, and how often one was handed to someone. Never their text.",
+      "description": "Lines said aboard and messages between shipmates, by what came of them, and how often one was handed to someone; and shipmates: pairs found to have sailed together five minutes, offers, shipmates made and ended. Never their text.",
       "datasource": {
         "type": "prometheus",
         "uid": "VictoriaMetrics"
@@ -4161,6 +4161,18 @@
           },
           "expr": "sum(rate(keel_chat_deliveries_total[5m]))",
           "legendFormat": "handed",
+          "editorMode": "code",
+          "range": true,
+          "instant": false
+        },
+        {
+          "refId": "C",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "sum by (what) (rate(keel_shipmates_total[5m]))",
+          "legendFormat": "shipmates {{what}}",
           "editorMode": "code",
           "range": true,
           "instant": false

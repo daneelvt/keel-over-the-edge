@@ -154,7 +154,8 @@ export const SEE = 'See';
 
 /** The account's switch, on the panel's foot and the account page. */
 export const APPEAR_OFFLINE = 'Appear offline';
-export const APPEAR_OFFLINE_DETAIL = 'Your shipmates won’t see that you’re in the game.';
+export const APPEAR_OFFLINE_DETAIL =
+  'Your shipmates won’t see that you’re in the game, and their messages reach you only once you’ve written to them.';
 
 /** A report made from the panel, of someone not aboard. */
 export const REPORT_SHIPMATE_DETAIL =
