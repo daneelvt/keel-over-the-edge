@@ -592,7 +592,12 @@ export class LifeDraw {
             }
           }
         }
-        if (place.up < -DRAWN_DOWN) {
+        // Too deep to show: no part of it, pitched as it is, within reach
+        // of the surface (a whale's raised flukes show over a deep middle).
+        if (
+          place.up + k.swim.length * (0.5 * Math.abs(Math.sin(place.pitch)) + 0.1) <
+          -DRAWN_DOWN
+        ) {
           continue;
         }
         const slot = this.#found[found] as Found;

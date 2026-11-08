@@ -776,7 +776,7 @@ export class Game implements PilotActions {
     this.sound.life(now, x);
     // What broke the water, and the dolphins' breaths, as the frame drew them.
     const d = w.lifeDraw;
-    if (d.splashCount > 0 || d.breathCount > 0) {
+    if (d.splashCount > 0 || d.breathCount > 0 || d.heardCount > 0) {
       this.sound.water(
         waterSounds(
           WATER_RECIPES,
@@ -787,6 +787,8 @@ export class Game implements PilotActions {
           d.breaths,
           d.breathCount,
           this.#waterSounds,
+          d.heard,
+          d.heardCount,
         ),
       );
     }

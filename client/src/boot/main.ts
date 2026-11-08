@@ -94,7 +94,13 @@ import { CAMERA_PRESETS, SeaScene } from '../render/scene';
 import { pointUp } from '../render/signals';
 import { cameraSceneFromQuery, startCameraScene } from '../sandbox/camerascenes';
 import { SandboxForecast } from '../sandbox/forecast';
-import { lifeKindFromQuery, lifeScene, raiseScene } from '../sandbox/lifescene';
+import {
+  aboardFromQuery,
+  aboardScene,
+  lifeKindFromQuery,
+  lifeScene,
+  raiseScene,
+} from '../sandbox/lifescene';
 import { swellFromQuery } from '../sandbox/localsea';
 import {
   boatFromQuery,
@@ -540,7 +546,9 @@ async function start(): Promise<void> {
     // middle 200 m ahead 40 s on (or with the boat, for a kind that
     // follows boats), for pictures of it.
     const lifeKind = lifeKindFromQuery(query, catalog.life);
-    const raised = lifeScene(catalog.life, lifeKind, world.ticks, world.pose, 0);
+    const raised = aboardFromQuery(query)
+      ? aboardScene(catalog.life, world.ticks, 0)
+      : lifeScene(catalog.life, lifeKind, world.ticks, world.pose, 0);
     if (raised !== null) {
       raiseScene(world, raised, catalog.life);
     }

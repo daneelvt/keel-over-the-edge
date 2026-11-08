@@ -48,8 +48,10 @@ import { basicMaterial } from './materials';
 const GRAVITY = 9.81;
 /** A drop takes on the wind's speed over this long, in seconds. */
 const DRAG = 0.4;
-/** Fields a drop: east, north, up (m), their rates (m/s), its age and life (s), its size (m). */
-const FIELDS = 9;
+/** Fields a drop: east, north, up (m), their rates (m/s), its age and life (s), its size (m), and whether it is mist that hangs. */
+const FIELDS = 10;
+/** Mist's rise slows over this long, s: a blow's drops hang where they rise to and drift with the wind. */
+const HANG = 0.3;
 
 /** A generator of numbers in [0, 1) from a seed (Tommy Ettinger's mulberry32). */
 export function seeded(seed: number): () => number {
@@ -140,6 +142,7 @@ export class SprayDrops {
     vh: number,
     size: number,
     life = SPRAY.life * (0.6 + 0.8 * this.#rand()),
+    hang = 0,
   ): void {
     if (this.count >= this.capacity) {
       return;
@@ -155,6 +158,7 @@ export class SprayDrops {
     d[at + 6] = 0;
     d[at + 7] = life;
     d[at + 8] = size;
+    d[at + 9] = hang;
     this.count++;
   }
 
@@ -184,9 +188,10 @@ export class SprayDrops {
    * A whale's blow at a place, the sea there at sea m: a column of mist
    * thrown up to height m, spreading width m across, leaning lean radians
    * forward of upright along heading and left radians to its left (a sperm
-   * whale's, from its blowhole at the front left of its head), each drop
-   * living a little past the top of its rise, so the blow lasts a second or
-   * two; the wind bends it as it rises. share thins it, on a low tier.
+   * whale's, from its blowhole at the front left of its head): mist that
+   * shoots up and hangs where it rises to, wider toward its top, for a
+   * second or two, drifting with the wind and fading. share thins it, on a
+   * low tier.
    */
   blow(
     east: number,
@@ -199,7 +204,7 @@ export class SprayDrops {
     left: number,
     share = 1,
   ): void {
-    const n = Math.round((8 + 2 * height + 4 * width) * share);
+    const n = Math.round((12 + 4 * height + 6 * width) * share);
     const sh = Math.sin(heading);
     const ch = Math.cos(heading);
     // The column's axis: up, leaning forward along the heading and to its left.
@@ -207,11 +212,12 @@ export class SprayDrops {
     const fn = ch * Math.sin(lean) + sh * Math.sin(left);
     const fu = Math.cos(lean) * Math.cos(left);
     for (let j = 0; j < n; j++) {
-      const h = height * (0.3 + 0.7 * Math.sqrt(this.#rand()));
-      const v = Math.sqrt(2 * GRAVITY * h);
-      const rise = v / GRAVITY;
+      // Up the column, more toward its top, and wider there: a bushy,
+      // balloon-shaped blow over a narrow stem.
+      const up = Math.sqrt(this.#rand());
+      const v = (height * (0.1 + 0.9 * up)) / HANG;
       const a = this.#rand() * 2 * Math.PI;
-      const out = ((0.5 * width) / Math.max(rise, 0.2)) * Math.sqrt(this.#rand());
+      const out = ((0.5 * width * (0.25 + 0.75 * up * up)) / HANG) * Math.sqrt(this.#rand());
       this.#throw(
         east,
         north,
@@ -219,8 +225,9 @@ export class SprayDrops {
         (v * fe) / Math.max(fu, 0.3) + Math.sin(a) * out,
         (v * fn) / Math.max(fu, 0.3) + Math.cos(a) * out,
         v,
-        width * (0.18 + 0.22 * this.#rand()),
-        rise * (0.9 + 0.5 * this.#rand()),
+        width * (0.22 + 0.3 * up) * (0.7 + 0.6 * this.#rand()),
+        1 + 1.2 * this.#rand(),
+        1,
       );
     }
   }
@@ -258,7 +265,10 @@ export class SprayDrops {
       }
       d[to + 3] = (d[to + 3] as number) + (we - (d[to + 3] as number)) * k;
       d[to + 4] = (d[to + 4] as number) + (wn - (d[to + 4] as number)) * k;
-      d[to + 5] = (d[to + 5] as number) - GRAVITY * dt;
+      d[to + 5] =
+        (d[to + 9] as number) > 0
+          ? (d[to + 5] as number) * Math.exp(-dt / HANG)
+          : (d[to + 5] as number) - GRAVITY * dt;
       d[to] = (d[to] as number) + (d[to + 3] as number) * dt;
       d[to + 1] = (d[to + 1] as number) + (d[to + 4] as number) * dt;
       d[to + 2] = (d[to + 2] as number) + (d[to + 5] as number) * dt;

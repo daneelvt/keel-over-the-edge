@@ -104,7 +104,7 @@ import { rungName, TIERS } from '../render/quality';
 import { CAMERA_PRESETS, type CameraView, type SeaScene } from '../render/scene';
 import { look } from '../render/sky';
 import type { SandboxForecast } from '../sandbox/forecast';
-import { lifeScene, raiseScene } from '../sandbox/lifescene';
+import { aboardScene, lifeScene, raiseScene } from '../sandbox/lifescene';
 import { KNOT, type Sandbox, SEA_STATES } from '../sandbox/sandbox';
 import { startWakeScene, type WakeSceneName, wakeSceneHost } from '../sandbox/wakescenes';
 import { hourAt, moonAgeAt, skyPeriods } from '../sky/skytime';
@@ -1999,6 +1999,25 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
         raiseScene(world, e, catalog.life);
       }
       return e;
+    },
+    /** Lands a fish of the catalog's that come aboard lit boats on the own boat's deck, now. */
+    raiseAboard(): LifeSeen | null {
+      const e = aboardScene(catalog.life, world.ticks, ++lifeRaised, 0);
+      if (e !== null) {
+        world.life.set([e], []);
+      }
+      return e;
+    },
+    /** The glow of the water drawn about the camera now: its colour and strength; the blows, footprints and trails of the last frame. */
+    lifeGlow() {
+      const d = world.lifeDraw;
+      return {
+        ...d.glow,
+        blows: d.blowCount,
+        prints: d.printCount,
+        trails: d.trailCount,
+        heard: d.heardCount,
+      };
     },
     /** The towns drawn: their buildings near and far, props, draws and triangles; the buildings held. */
     towns() {
