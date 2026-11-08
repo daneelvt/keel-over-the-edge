@@ -218,3 +218,44 @@ func TestTiesForget(t *testing.T) {
 		t.Error("a deleted account's ties kept")
 	}
 }
+
+// TestMayBeShipmates: shipmates only within one band, adults or 13 to 17;
+// nobody whose age is not known, or under 13.
+func TestMayBeShipmates(t *testing.T) {
+	bands := []Band{Unknown, Child, Teen, Adult}
+	for _, a := range bands {
+		for _, b := range bands {
+			want := a == b && (a == Adult || a == Teen)
+			if got := MayBeShipmates(a, b); got != want {
+				t.Errorf("MayBeShipmates(%d, %d) = %v", a, b, got)
+			}
+		}
+	}
+}
+
+// TestShipmatesTies: shipmates both ways at once, ended both ways, and
+// forgotten with an account; a line between shipmates is delivered only
+// with shipmates' messages on.
+func TestShipmatesTies(t *testing.T) {
+	ann, bob := [16]byte{1}, [16]byte{2}
+	ties := NewTies(nil, nil)
+	ties.SetShipmates(ann, bob, true)
+	if !ties.Shipmates(ann, bob) || !ties.Shipmates(bob, ann) || len(ties.ShipmatesOf(bob)) != 1 {
+		t.Fatal("not shipmates both ways")
+	}
+	sw := NewSwitches(DefaultLifetime)
+	r := Rules{Switches: sw, Ties: ties}
+	from := Speaker{Account: ann, Human: ann, Band: Adult, Rules: true}
+	to := Speaker{Account: bob, Human: bob, Band: Adult, Rules: true}
+	if !r.Delivered(from, to, Together{Shipmates: true}, time.Now()) {
+		t.Fatal("a line between shipmates not delivered")
+	}
+	sw.SetShipmateMessages(false)
+	if r.Delivered(from, to, Together{Shipmates: true}, time.Now()) {
+		t.Fatal("a line between shipmates delivered with their messages off")
+	}
+	ties.Forget(bob)
+	if ties.Shipmates(ann, bob) || len(ties.ShipmatesOf(ann)) != 0 {
+		t.Fatal("a deleted account's shipmates kept")
+	}
+}
