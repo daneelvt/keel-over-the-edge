@@ -105,7 +105,28 @@ func (s *Sea) lifeInSight(f *bus.Frame, sl int32) []lifeSeen {
 			continue
 		}
 		sun := s.Life.Sun(f.Tick, x, y)
+		if k.Form == catalog.LifeFormGlow {
+			// Seen only from inside it, on a dark night, in the wake.
+			if dx, dy := st.X-e.East, st.Y-e.North; float64(dx*dx)+float64(dy*dy) > float64(life.Patch(k, e.Seed)*life.Patch(k, e.Seed)) || !s.Life.Dark(k, f.Tick, st.X, st.Y) {
+				continue
+			}
+			out = append(out, lifeSeen{id: e.ID, d: 0, text: "the water glowing blue-green where your wake breaks"})
+			continue
+		}
+		if life.Aboard(e) {
+			if e.Boat == own {
+				out = append(out, lifeSeen{id: e.ID, d: 0, text: "a flying fish landed on your deck"})
+			}
+			continue
+		}
 		if !(sun > 0) {
+			// By night only what glowing water lights is seen: a pod
+			// swimming through it, close by.
+			if d > lifeTrails || k.Form != catalog.LifeFormPod || !s.glowing(f, x, y) {
+				continue
+			}
+			out = append(out, lifeSeen{id: e.ID, d: d, text: fmt.Sprintf("%s trailing light through the glowing water to the %s, %s",
+				lifeName(k.Plural), point16(physics.Atan2(dx, dy)), rangeWords(d))})
 			continue
 		}
 		if k.BySea && hasWeather && len(p.Sea) > 0 {
@@ -118,10 +139,22 @@ func (s *Sea) lifeInSight(f *bus.Frame, sl int32) []lifeSeen {
 		var line string
 		near := false
 		switch {
+		case k.Form == catalog.LifeFormBird && k.Perches() && e.Boat != 0:
+			line = groupWords(k, e) + " " + perchDoing(k, e, f.Tick, e.Boat == own)
+			near = e.Boat == own
 		case k.Form == catalog.LifeFormBird:
 			doing := s.lifeDoing(k, e, sun, own)
 			line = groupWords(k, e) + " " + doing
 			near = e.Boat != 0 && e.Boat == own
+		case k.Form == catalog.LifeFormWhale:
+			doing := whaleDoing(k, e, f.Tick)
+			if doing == "" {
+				// Down on a dive: nothing shows.
+				continue
+			}
+			line = groupWords(k, e) + " " + doing
+		case k.Form == catalog.LifeFormFin:
+			line = "the fin of " + groupWords(k, e) + " cutting the water"
 		case k.Flushes():
 			id = e.Over
 			if fx, fy := e.East-bx, e.North-by; float64(fx*fx)+float64(fy*fy) <= lifeAtBow*lifeAtBow {
@@ -176,6 +209,143 @@ func groupWords(k *life.Kind, e *bus.LifeEncounter) string {
 		return "a few " + lifeName(k.Plural)
 	}
 	return "a flock of " + lifeName(k.Plural)
+}
+
+// lifeTrails is how near a pod swimming through glowing water at night is
+// seen by the light it trails, m.
+const lifeTrails = 300.0
+
+// glowing says whether glowing water shows at (x, y) now: inside a patch
+// of it, on a dark night.
+func (s *Sea) glowing(f *bus.Frame, x, y float64) bool {
+	kinds := s.Life.Kinds()
+	for i := range f.Life {
+		e := &f.Life[i]
+		if int(e.Kind) >= len(kinds) || kinds[e.Kind].Form != catalog.LifeFormGlow {
+			continue
+		}
+		k := &kinds[e.Kind]
+		r := life.Patch(k, e.Seed)
+		if dx, dy := x-e.East, y-e.North; float64(dx*dx)+float64(dy*dy) <= float64(r*r) && s.Life.Dark(k, f.Tick, x, y) {
+			return true
+		}
+	}
+	return false
+}
+
+// perchDoing is what a booby that perches on boats is doing with its
+// boat, the own or another: flying in to it, perched on it, or leaving it.
+func perchDoing(k *life.Kind, e *bus.LifeEncounter, tick int64, own bool) string {
+	boat := "a boat"
+	if own {
+		boat = "your boat"
+	}
+	u := float64(tick-e.Start) / physics.StepsPerSecond
+	a := k.Arrive(e.Speed)
+	switch {
+	case u < a:
+		return "flying in to perch on " + boat
+	case u > float64(e.End-e.Start)/physics.StepsPerSecond-a:
+		return "leaving " + boat
+	}
+	return "perched on " + boat
+}
+
+// whaleSeen is how long after a blow, a breach or a dive with its flukes
+// raised a whale is seen by it, s: a blow hangs a second or two, but a
+// lookout who saw it keeps the place.
+const whaleSeen = 60.0
+
+// whaleDoing is what a group of whales is seen doing now: breaching,
+// slapping, fluking up, blowing; or "" while every one of them is down.
+// A group that logs at the surface is logging between its blows.
+func whaleDoing(k *life.Kind, e *bus.LifeEncounter, tick int64) string {
+	u := float64(tick-e.Start) / physics.StepsPerSecond
+	var blew, breached, slapped, fluked bool
+	for i := range min(int(e.Count), 24) {
+		life.WhaleEvents(k, e, i, u-whaleSeen, u+1e-9, func(ev int, at float64) {
+			switch ev {
+			case life.WhaleBlow:
+				blew = true
+			case life.WhaleBreach:
+				breached = breached || u-at < 20
+			case life.WhaleSlap:
+				slapped = slapped || u-at < 20
+			case life.WhaleFluke:
+				fluked = fluked || u-at < 20
+			}
+		})
+	}
+	logs := k.Swim != nil && k.Swim.Logs != nil && *k.Swim.Logs
+	switch {
+	case breached:
+		return "breaching"
+	case slapped:
+		return "slapping the water with its tail"
+	case fluked:
+		return "diving, flukes raised"
+	case blew && logs:
+		return "logging at the surface, blowing"
+	case blew:
+		return "blowing"
+	}
+	return ""
+}
+
+// whaleHeard are how far a whale's blow and its breach or slap are heard,
+// m: a blow's low rush to 600 m, a breach's boom to 1,500 m.
+const (
+	whaleBlowHeard  = 600.0
+	whaleBoomHeard  = 1500.0
+	whaleHeardAfter = 20.0 // s: what a report listens back for
+)
+
+// whaleLines are the whales heard about the boat in slot sl, by day or
+// night: blowing, breaching or slapping the water, and where.
+func (s *Sea) whaleLines(f *bus.Frame, sl int32) []string {
+	if s.Life == nil {
+		return nil
+	}
+	kinds := s.Life.Kinds()
+	st := &f.State[sl]
+	var out []string
+	for i := range f.Life {
+		e := &f.Life[i]
+		if int(e.Kind) >= len(kinds) || kinds[e.Kind].Form != catalog.LifeFormWhale {
+			continue
+		}
+		k := &kinds[e.Kind]
+		x, y, _, alive := life.FlockAt(e, k, float64(f.Tick), nil)
+		dx, dy := x-st.X, y-st.Y
+		d := math.Sqrt(float64(dx*dx) + float64(dy*dy))
+		if !alive || d > whaleBoomHeard {
+			continue
+		}
+		u := float64(f.Tick-e.Start) / physics.StepsPerSecond
+		var blew, boomed, slapped bool
+		for w := range min(int(e.Count), 24) {
+			life.WhaleEvents(k, e, w, u-whaleHeardAfter, u+1e-9, func(ev int, _ float64) {
+				blew = blew || ev == life.WhaleBlow && d <= whaleBlowHeard
+				boomed = boomed || ev == life.WhaleBreach
+				slapped = slapped || ev == life.WhaleSlap
+			})
+		}
+		name := lifeName(k.Name)
+		where := " to the " + point16(physics.Atan2(dx, dy))
+		for _, l := range []struct {
+			ok   bool
+			line string
+		}{
+			{boomed, "a " + name + " breaching" + where + ", a boom"},
+			{slapped, "a " + name + "'s tail slapping the water" + where},
+			{blew, "a " + name + " blowing" + where},
+		} {
+			if l.ok && !slices.Contains(out, l.line) {
+				out = append(out, l.line)
+			}
+		}
+	}
+	return out
 }
 
 // lifeName is a kind's name within a line: lower case but for a name of
