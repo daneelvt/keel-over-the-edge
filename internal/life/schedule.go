@@ -119,6 +119,26 @@ func (s *Schedule) Sun(tick int64, x, y float64) float64 {
 	return sky.SunAltitude(s.sky, t, x, y)
 }
 
+// Dark says whether the sky at (x, y) at a tick is dark enough for
+// glowing water of the kind to show: the sun below the horizon, and the
+// moon's light (its lit share times the sine of its height, nothing while
+// it is down) under the kind's limit. Without a sky the sun is always up.
+func (s *Schedule) Dark(k *Kind, tick int64, x, y float64) bool {
+	if s.sky == nil {
+		return false
+	}
+	var sk sky.Sky
+	sky.At(s.sky, sky.Time(s.sky, s.epoch, float64(tick*1_000_000/physics.StepsPerSecond)), x, y, &sk)
+	if !(sk.Sun.Altitude < 0) {
+		return false
+	}
+	moon := 0.0
+	if sk.Moon.Altitude > 0 {
+		moon = float64(sk.Lit * physics.Sin(sk.Moon.Altitude))
+	}
+	return moon < k.GlowMoon
+}
+
 // When is a kind's weight by the sun's height a.
 func (s *Schedule) When(k *Kind, a float64) float64 {
 	switch {

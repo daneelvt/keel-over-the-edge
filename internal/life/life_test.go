@@ -144,8 +144,9 @@ func TestNothingOnLand(t *testing.T) {
 		}
 	}
 	for i := range s.kinds {
-		// A kind of no rate comes only with another's groups.
-		if byKind[uint16(i)] == 0 && (s.kinds[i].Rate > 0 || brought[i]) {
+		// A kind of no rate comes only with another's groups; one met only
+		// by night is not met under the test's sun, always up.
+		if byKind[uint16(i)] == 0 && (s.kinds[i].Rate > 0 || brought[i]) && s.kinds[i].Day > 0 {
 			t.Errorf("no %s in 6,000 slots", s.kinds[i].Name)
 		}
 	}

@@ -71,7 +71,13 @@ func (w *World) apply(c *bus.Command) {
 		r = bus.Reply{Result: bus.Done, Slot: -1}
 	case bus.RaiseLife:
 		r = bus.Reply{Result: bus.NoBoat, Slot: -1}
-		if w.life != nil && w.life.Raise(f, int(c.LifeKind), c.State.X, c.State.Y) {
+		switch {
+		case w.life == nil:
+		case c.LifeKind&bus.LifeAboard != 0:
+			if w.life.RaiseAboard(f, c.State.X, c.State.Y) {
+				r.Result = bus.Done
+			}
+		case w.life.Raise(f, int(c.LifeKind), c.State.X, c.State.Y):
 			r.Result = bus.Done
 		}
 	case bus.Chart:

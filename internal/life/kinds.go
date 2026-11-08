@@ -51,6 +51,7 @@ const (
 	BindsFollow // keeps astern of it
 	BindsRide   // rides its bow
 	BindsFlush  // a ground of fish flushed by every boat sailing through it
+	BindsPerch  // flies in and perches on it
 )
 
 // Bring is a group that comes with another: its kind, by its index, the
@@ -83,7 +84,9 @@ type Kind struct {
 	Follows  bool
 	Homeward bool
 	Line     bool
-	Dives    float64 // each bird a minute
+	// Patters says whether, with a boat, it flutters low over its wake.
+	Patters bool
+	Dives   float64 // each bird a minute
 	// Habitat is its weight in each habitat; NearColony its weight's
 	// factor near a colony, 1 for none.
 	Habitat    [Habitats]float64
@@ -114,6 +117,9 @@ type Kind struct {
 	// Look is a bird's look, nil for any other form; Swim a swimmer's.
 	Look *catalog.BirdLook
 	Swim *catalog.SwimLook
+	// GlowMoon is, for glowing water, how lit the sky may be for it to
+	// show: the moon's lit share times the sine of its height.
+	GlowMoon float64
 }
 
 // Rides says whether a group of the kind rides a boat's bow.
@@ -121,6 +127,23 @@ func (k *Kind) Rides() bool { return k.Binds == BindsRide }
 
 // Flushes says whether the kind is a ground of fish flushed by boats.
 func (k *Kind) Flushes() bool { return k.Binds == BindsFlush }
+
+// Perches says whether a group of the kind flies in and perches on a boat.
+func (k *Kind) Perches() bool { return k.Binds == BindsPerch }
+
+// WithBoats says whether a group of the kind takes a boat as it begins:
+// it follows boats, rides their bows or perches on them.
+func (k *Kind) WithBoats() bool { return k.Follows || k.Rides() || k.Perches() }
+
+// Travel is how far from its centre a group of the kind may be drawn, m:
+// the range it comes in from, the way it drifts, and its patch.
+func (k *Kind) Travel() float64 {
+	t := k.Range
+	if k.Path == PathDrift {
+		t += float64(k.SpeedHigh * k.StayHigh)
+	}
+	return t + k.PatchHigh
+}
 
 // Params are the schedule's numbers.
 type Params struct {
@@ -159,6 +182,12 @@ type Params struct {
 	FlushChance                                float64
 	FlushLead                                  int64
 	FlushAheadLow, FlushAheadHigh, FlushBeside float64
+	// A boat lit at night has a fish of kind AboardKind (−1 for none)
+	// land on her deck every AboardEvery ticks at AboardChance, where it
+	// lies AboardStay ticks.
+	AboardKind              int
+	AboardEvery, AboardStay int64
+	AboardChance            float64
 }
 
 // Prepare reads the catalog's life.
@@ -182,6 +211,11 @@ func Prepare(cat *catalog.Catalog) (*Params, []Kind) {
 	for i := range l.Kinds {
 		index[l.Kinds[i].ID] = i
 	}
+	p.AboardKind = -1
+	if i, ok := index[l.Aboard.Kind]; ok {
+		p.AboardKind = i
+	}
+	p.AboardEvery, p.AboardStay, p.AboardChance = max(ticks(l.Aboard.Every), 1), ticks(l.Aboard.Stay), l.Aboard.Chance
 	kinds := make([]Kind, len(l.Kinds))
 	for i := range l.Kinds {
 		c := &l.Kinds[i]
@@ -242,11 +276,17 @@ func Prepare(cat *catalog.Catalog) (*Params, []Kind) {
 				k.Binds = BindsRide
 			case catalog.LifeBindsFlush:
 				k.Binds = BindsFlush
+			case catalog.LifeBindsPerch:
+				k.Binds = BindsPerch
 			}
 		}
 		k.Follows = k.Binds == BindsFollow
 		k.Homeward = c.Homeward != nil && *c.Homeward
 		k.Line = c.Line != nil && *c.Line
+		k.Patters = c.Patters != nil && *c.Patters
+		if c.Glow != nil {
+			k.GlowMoon = c.Glow.Moon
+		}
 		if c.Dives != nil {
 			k.Dives = *c.Dives
 		}

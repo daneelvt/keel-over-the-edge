@@ -45,6 +45,10 @@ const (
 	opEnd
 )
 
+// LifeAboard, set in a RaiseLife's LifeKind, raises the catalog's fish
+// that lands aboard, on the deck of the boat nearest its X and Y.
+const LifeAboard uint16 = 1 << 15
+
 // Ops lists every op, in order, for tables keyed by op.
 var Ops = []Op{Join, Leave, SetWeather, Place, Disconnect, Hold, Teleport, Stay, Unseen, Chart, End, SetLook, SetBoat, SetBoatLook, RaiseLife}
 
@@ -175,7 +179,9 @@ type Command struct {
 	BoatLook uint32
 	BoatName string
 	// LifeKind is a RaiseLife's kind of the sea's life, an index into the
-	// catalog's; it begins at State's X and Y.
+	// catalog's; it begins at State's X and Y. With LifeAboard set, it is
+	// the catalog's fish that lands aboard instead, on the deck of the
+	// boat nearest X and Y.
 	LifeKind uint16
 	// Reply, if not nil, receives the result. The simulation never waits on
 	// it, so it should have room for one reply.

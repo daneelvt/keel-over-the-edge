@@ -28,6 +28,7 @@ type World struct {
 	met     []Pose
 	grounds []ground // the grounds of fish begun and not over
 	flushed int64    // the flushes' last slot
+	lit     int64    // the last slot of fish landing aboard lit boats
 	bows    []float64
 	boats   []boatLife
 	raised  uint32
@@ -69,7 +70,7 @@ func NewWorld(s *Schedule, capacity int) *World {
 	for i := range s.kinds {
 		k := &s.kinds[i]
 		life := k.FreeLife(k.SpeedLow, k.StayHigh)
-		if k.Follows || k.Rides() {
+		if k.WithBoats() {
 			life = float64(2*k.Arrive(k.SpeedLow)) + k.StayHigh
 		}
 		longest = math.Max(longest, life)
@@ -82,6 +83,7 @@ func NewWorld(s *Schedule, capacity int) *World {
 	w.grounds = make([]ground, 0, bus.LifeRoom)
 	w.drawn = make([]bus.LifeEncounter, 0, bus.LifeRoom)
 	w.flushed = math.MinInt64
+	w.lit = math.MinInt64
 	return w
 }
 
@@ -134,6 +136,10 @@ func (w *World) Tick(f *bus.Frame, c Conditions) {
 		w.flushed = fs
 		w.flushes(f, fs)
 	}
+	if ls := now / w.s.p.AboardEvery; ls != w.lit && w.s.p.AboardKind >= 0 {
+		w.lit = ls
+		w.aboard(f, ls)
+	}
 	// Those due begin, in the order drawn.
 	kept := w.pending[:0]
 	for _, e := range w.pending {
@@ -154,12 +160,16 @@ func (w *World) Tick(f *bus.Frame, c Conditions) {
 		}
 		if e.Boat != 0 {
 			s := e.Slot
+			k := &w.s.kinds[e.Kind]
 			if s >= 0 && int(s) < len(f.Occupied) && f.Occupied[s] && f.Boat[s] == e.Boat && !f.Voyage[s].Falling() && !f.Stay[s] && !f.Unseen[s] {
 				st := &f.State[s]
 				w.last[i] = Pose{X: st.X, Y: st.Y, Heading: st.Heading}
-				if k := &w.s.kinds[e.Kind]; k.Rides() && !w.riding(k, &e, st, &w.met[i], now) {
+				if k.Rides() && !w.riding(k, &e, st, &w.met[i], now) {
 					w.leave(&e, &w.last[i], &w.met[i], now)
 				}
+			} else if k.Flushes() {
+				// A fish aboard a boat gone is gone with it.
+				continue
 			} else {
 				w.leave(&e, &w.last[i], &w.met[i], now)
 			}
@@ -320,8 +330,13 @@ func (w *World) begin(f *bus.Frame, e bus.LifeEncounter, raised bool) {
 		return
 	}
 	pose := Pose{}
-	if (k.Follows || k.Rides()) && e.Over == 0 {
-		if s := w.boatFor(f, &e, raised); s >= 0 {
+	if k.WithBoats() && e.Over == 0 {
+		s := w.boatFor(f, &e, raised)
+		if s < 0 && k.Perches() {
+			// A bird that perches finds no boat: it is not met.
+			return
+		}
+		if s >= 0 {
 			st := &f.State[s]
 			pose = Pose{X: st.X, Y: st.Y, Heading: st.Heading}
 			e.Boat, e.Slot = f.Boat[s], s
@@ -336,27 +351,36 @@ func (w *World) begin(f *bus.Frame, e bus.LifeEncounter, raised bool) {
 	w.met = append(w.met, pose)
 }
 
-// boatFor is the slot of the boat a group that follows boats or rides
-// their bows takes as it begins: the nearest within reach of its centre,
-// the bind's or for one that rides the ride's, sailing fast enough on a
-// steady course, not quiet, ties to the lower boat; −1 for none.
+// boatFor is the slot of the boat a group that follows boats, rides their
+// bows or perches on them takes as it begins: the nearest within reach of
+// its centre, the bind's, for one that rides the ride's, for one that
+// perches its range, which it comes from; sailing fast enough on a steady
+// course, but for one that perches, which lands on a boat however she
+// goes; not quiet; ties to the lower boat; −1 for none.
 func (w *World) boatFor(f *bus.Frame, e *bus.LifeEncounter, raised bool) int32 {
 	p := w.s.p
+	k := &w.s.kinds[e.Kind]
 	within := p.BindWithin
-	if w.s.kinds[e.Kind].Rides() {
+	switch {
+	case k.Rides():
 		within = p.RideWithin
+	case k.Perches():
+		within = k.Range
 	}
 	best, bestD := int32(-1), float64(within*within)
 	for _, s := range f.Live {
 		b := &w.boats[s]
 		st := &f.State[s]
-		if f.Voyage[s].Falling() || f.Stay[s] || f.Unseen[s] || b.boat != f.Boat[s] || f.Tick-b.since < p.BindSteady {
+		if f.Voyage[s].Falling() || f.Stay[s] || f.Unseen[s] {
+			continue
+		}
+		if !k.Perches() && (b.boat != f.Boat[s] || f.Tick-b.since < p.BindSteady) {
 			continue
 		}
 		if !raised && f.Tick < b.quiet {
 			continue
 		}
-		if speed := math.Sqrt(float64(st.Surge*st.Surge) + float64(st.Sway*st.Sway)); speed < p.BindSpeed {
+		if speed := math.Sqrt(float64(st.Surge*st.Surge) + float64(st.Sway*st.Sway)); speed < p.BindSpeed && !k.Perches() {
 			continue
 		}
 		dx, dy := st.X-e.East, st.Y-e.North
@@ -425,3 +449,96 @@ func (w *World) Raise(f *bus.Frame, kind int, x, y float64) bool {
 
 // wrap is an angle within ±π.
 func wrap(a float64) float64 { return turn(a+math.Pi) - math.Pi }
+
+// aboardSalt keeps the draws of fish landing aboard apart from the others.
+const aboardSalt = 0x3c9e1d27
+
+// aboardBits mark a fish landed aboard's id: both the raised and the
+// flushed bits, which no other id has together.
+const aboardBits = raisedBit | flushBit
+
+// aboard has a flying fish land on the deck of each boat lit at night, in
+// the slot ls of AboardEvery ticks, at a draw of the boat and the slot:
+// each boat at sea, sailing at the bind's speed or faster with the sun
+// below the horizon where she is (her lights lit), over water its kind
+// lives in. Lights draw flying fish aboard at night (yachtingworld.com).
+func (w *World) aboard(f *bus.Frame, ls int64) {
+	p := w.s.p
+	k := &w.s.kinds[p.AboardKind]
+	for _, s := range f.Live {
+		st := &f.State[s]
+		if f.Voyage[s].Falling() || f.Stay[s] || f.Unseen[s] {
+			continue
+		}
+		if speed := math.Sqrt(float64(st.Surge*st.Surge) + float64(st.Sway*st.Sway)); speed < p.BindSpeed {
+			continue
+		}
+		d := aboardDraws(f.Boat[s], ls)
+		if d.n(drawWhether) >= threshold(p.AboardChance) {
+			continue
+		}
+		if !(w.s.hab.Weight(k, st.X, st.Y) > 0) || !(w.s.Sun(f.Tick, st.X, st.Y) < 0) {
+			continue
+		}
+		w.landAboard(f, k, s, uint64(ls), d.n(drawSeed))
+	}
+}
+
+// aboardDraws are the draws of a boat's fish in a slot.
+func aboardDraws(boat uint64, slot int64) draws {
+	k := hash32(uint32(boat) ^ aboardSalt)
+	k = hash32(k ^ uint32(boat>>32))
+	k = hash32(k ^ uint32(slot))
+	return draws(hash32(k ^ uint32(slot>>32)))
+}
+
+// landAboard has a fish of kind k land on the deck of the boat in slot s
+// now, alive for the catalog's stay; n numbers it among those landed.
+func (w *World) landAboard(f *bus.Frame, k *Kind, s int32, n uint64, seed uint32) {
+	st := &f.State[s]
+	e := bus.LifeEncounter{
+		ID:    aboardBits | n&(1<<38-1)<<16 | uint64(s)&0xffff,
+		Kind:  uint16(k.Index),
+		Start: f.Tick,
+		End:   f.Tick + w.s.p.AboardStay,
+		Count: 1,
+		Seed:  seed,
+		Boat:  f.Boat[s],
+		Slot:  s,
+	}
+	place(&e, st.X, st.Y, st.Heading, 0)
+	pose := Pose{X: st.X, Y: st.Y, Heading: st.Heading}
+	w.alive = append(w.alive, e)
+	w.last = append(w.last, pose)
+	w.met = append(w.met, pose)
+}
+
+// Aboard says whether an encounter is a fish landed on a boat's deck.
+func Aboard(e *bus.LifeEncounter) bool { return e.ID&aboardBits == aboardBits }
+
+// RaiseAboard has a fish of the catalog's that land aboard land on the
+// deck of the boat nearest (x, y), within 300 m, now, by hand: the
+// developer's, for tests and scenes. It reports whether there was one.
+func (w *World) RaiseAboard(f *bus.Frame, x, y float64) bool {
+	p := w.s.p
+	if p.AboardKind < 0 {
+		return false
+	}
+	best, bestD := int32(-1), 300.0*300.0
+	for _, s := range f.Live {
+		st := &f.State[s]
+		if f.Voyage[s].Falling() || f.Stay[s] || f.Unseen[s] {
+			continue
+		}
+		if d := float64((st.X-x)*(st.X-x)) + float64((st.Y-y)*(st.Y-y)); d < bestD {
+			best, bestD = s, d
+		}
+	}
+	if best < 0 {
+		return false
+	}
+	w.raised++
+	w.landAboard(f, &w.s.kinds[p.AboardKind], best, 1<<37|uint64(w.raised), hash32(w.raised^hash32(uint32(f.Tick))^w.s.seed))
+	f.Life = append(f.Life[:0], w.alive...)
+	return true
+}
