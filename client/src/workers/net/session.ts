@@ -703,6 +703,13 @@ export class Session {
     });
   }
 
+  /** Comes aboard the own machine sailor watched, without knocking. */
+  comeAboardCommand(now: number): Uint8Array<ArrayBuffer> {
+    return this.#encode(now, {
+      body: { case: 'command', value: { body: { case: 'comeAboard', value: {} } } },
+    });
+  }
+
   /** Says a line aboard; id is the page's own, which its echo carries. */
   sayCommand(now: number, text: string, id: number): Uint8Array<ArrayBuffer> {
     return this.#encode(now, {

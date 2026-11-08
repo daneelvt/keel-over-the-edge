@@ -261,7 +261,7 @@
       "openWorldHint": false,
       "readOnlyHint": true
     },
-    "description": "The next 90 minutes' forecast, as every chart shows it, and the truth: gale warnings in force, each weather system's wind, where it is now and in 30, 60 and 90 minutes, and when fronts reach you. With place, a charted place's local weather and outlook, as its harbourmaster's board gives them.",
+    "description": "The next 90 minutes' forecast, as every chart shows it, and the truth: gale warnings in force, each weather system's wind, where it is now and in 30, 60 and 90 minutes, and when fronts reach you. With place, a charted place's local weather and outlook.",
     "inputSchema": {
       "properties": {
         "place": {
@@ -306,7 +306,7 @@
       "openWorldHint": false,
       "readOnlyHint": false
     },
-    "description": "Chat aboard, hail boats close by, or speak to spectators. Not yet.",
+    "description": "Chat aboard: a line to all aboard your boat; theirs come in observe. hail, spectators: not yet.",
     "inputSchema": {
       "properties": {
         "text": {
@@ -314,7 +314,7 @@
           "type": "string"
         },
         "to": {
-          "description": "Default hail.",
+          "description": "Default aboard.",
           "enum": [
             "aboard",
             "hail",
@@ -444,7 +444,7 @@
       "openWorldHint": false,
       "readOnlyHint": true
     },
-    "description": "How to sail and how the game works, a short page a topic: start, sailing, trim, autopilot, articles, charting, edge, weather, tools, limits. With no topic, the list, and which machine sailor you sail as. Read start first.",
+    "description": "How to sail and how the game works, a short page a topic. With no topic, the list, and which machine sailor you sail as. Read start first.",
     "inputSchema": {
       "properties": {
         "topic": {
@@ -458,6 +458,7 @@
             "charting",
             "edge",
             "weather",
+            "aboard",
             "tools",
             "limits"
           ],

@@ -142,7 +142,7 @@ func tools() []toolDef {
 			Name: toolForecast, Title: "Forecast",
 			Description: "The next 90 minutes' forecast, as every chart shows it, and the truth: gale warnings in force, " +
 				"each weather system's wind, where it is now and in 30, 60 and 90 minutes, and when fronts reach you. " +
-				"With place, a charted place's local weather and outlook, as its harbourmaster's board gives them.",
+				"With place, a charted place's local weather and outlook.",
 			Annotations: hints("Forecast", true, true, false),
 			InputSchema: schema(`{"type":"object","properties":{` +
 				`"place":{"type":"string","description":"A charted place: its local weather."}` +
@@ -160,11 +160,11 @@ func tools() []toolDef {
 		}},
 		{budget: looks, tool: &mcp.Tool{
 			Name: toolSay, Title: "Say",
-			Description: "Chat aboard, hail boats close by, or speak to spectators. Not yet.",
+			Description: "Chat aboard: a line to all aboard your boat; theirs come in observe. hail, spectators: not yet.",
 			Annotations: hints("Say", false, false, false),
 			InputSchema: schema(`{"type":"object","properties":{` +
 				`"text":{"type":"string","maxLength":200},` +
-				`"to":{"type":"string","enum":["aboard","hail","spectators"],"description":"Default hail."}` +
+				`"to":{"type":"string","enum":["aboard","hail","spectators"],"description":"Default aboard."}` +
 				`}}`),
 		}},
 		{budget: orders, tool: &mcp.Tool{
@@ -204,11 +204,11 @@ func tools() []toolDef {
 		}},
 		{budget: looks, tool: &mcp.Tool{
 			Name: toolHandbook, Title: "Handbook",
-			Description: "How to sail and how the game works, a short page a topic: start, sailing, trim, autopilot, articles, charting, edge, weather, tools, limits. " +
+			Description: "How to sail and how the game works, a short page a topic. " +
 				"With no topic, the list, and which machine sailor you sail as. Read start first.",
 			Annotations: hints("Handbook", true, true, false), Meta: alwaysLoad(),
 			InputSchema: schema(`{"type":"object","properties":{` +
-				`"topic":{"type":"string","enum":["start","sailing","trim","autopilot","articles","charting","edge","weather","tools","limits"],"description":"Default: the list."}` +
+				`"topic":{"type":"string","enum":["start","sailing","trim","autopilot","articles","charting","edge","weather","aboard","tools","limits"],"description":"Default: the list."}` +
 				`}}`),
 		}},
 	}

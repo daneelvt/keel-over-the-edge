@@ -51,6 +51,7 @@ const (
 	evWatched   // the first to watch the boat came
 	evUnwatched // the last went
 	evLife      // a group of the sea's life came into sight
+	evChat      // a line said aboard reached the machine sailor
 )
 
 // always are the events that end any wait: a sailor would notice them
@@ -79,6 +80,8 @@ func (k evKind) wake() string {
 		return wakeWeather
 	case evLife:
 		return wakeLife
+	case evChat:
+		return wakeChat
 	}
 	return ""
 }
@@ -142,6 +145,8 @@ func (k evKind) word() string {
 		return "watchers"
 	case evLife:
 		return "life in sight"
+	case evChat:
+		return "chat"
 	}
 	return "event"
 }

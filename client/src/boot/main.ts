@@ -890,6 +890,7 @@ async function start(): Promise<void> {
       void changeBoat(() => online.sail());
     },
     unwatch: () => online.unwatch(),
+    comeAboard: () => online.comeAboard(),
   };
   // A boat watched: the camera stays where the player puts it. The boat in
   // view's sailor is drawn in its look, as the server tells it: a machine

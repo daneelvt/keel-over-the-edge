@@ -384,6 +384,11 @@ export class Online {
     this.#port.postMessage({ type: 'closeKnocks', closed });
   }
 
+  /** Comes aboard the own machine sailor watched, without knocking: knocking tells how it stands. */
+  comeAboard(): void {
+    this.#port.postMessage({ type: 'comeAboard' });
+  }
+
   /** Says a line aboard as self: shown at once, its echo awaited; false for nothing to send. */
   sayAboard(text: string, self: string): boolean {
     const s = this.chat.say(text, self, Date.now());

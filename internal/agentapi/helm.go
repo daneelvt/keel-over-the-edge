@@ -13,6 +13,7 @@ import (
 	"golang.org/x/time/rate"
 
 	"github.com/daneelvt/keel-over-the-edge/internal/bus"
+	"github.com/daneelvt/keel-over-the-edge/internal/chat"
 	"github.com/daneelvt/keel-over-the-edge/internal/lookout"
 	"github.com/daneelvt/keel-over-the-edge/internal/oauth"
 	"github.com/daneelvt/keel-over-the-edge/internal/obs"
@@ -124,6 +125,9 @@ func (c *Core) Limits() Limits { return c.cfg.Limits }
 // joins the new world at its agent's next call, told of the new world.
 func (c *Core) Open(s *Sea) *Recorder {
 	c.sea.Store(s)
+	if s.Chat != nil {
+		s.Chat.AddOut(chatOut{core: c, sea: s})
+	}
 	return c.hub.recorder(s)
 }
 
@@ -235,6 +239,7 @@ func (c *Core) Stop(id store.AccountID, words string) {
 	if h == nil {
 		return
 	}
+	defer h.unspeak()
 	r := refuse(refusedStopped, words)
 	h.mu.Lock()
 	h.ended, h.waitEnd = r, r
@@ -305,7 +310,7 @@ func (c *Core) Run(ctx context.Context) {
 // helms with neither a boat nor a call for an hour.
 func (c *Core) sweep(now time.Time) {
 	c.mu.Lock()
-	var silent []*helm
+	var silent, forgotten []*helm
 	for id, h := range c.helms {
 		h.mu.Lock()
 		quiet := now.Sub(h.lastCall)
@@ -315,6 +320,7 @@ func (c *Core) sweep(now time.Time) {
 		}
 		if !afloat && h.waiter == nil && quiet >= forgetIdle {
 			delete(c.helms, id)
+			forgotten = append(forgotten, h)
 		}
 		h.mu.Unlock()
 	}
@@ -322,6 +328,9 @@ func (c *Core) sweep(now time.Time) {
 		c.cfg.Metrics.AgentHelms.Set(float64(len(c.helms)))
 	}
 	c.mu.Unlock()
+	for _, h := range forgotten {
+		h.unspeak()
+	}
 	for _, h := range silent {
 		h.mu.Lock()
 		h.left = leftSilent
@@ -385,6 +394,12 @@ type helm struct {
 	refusals uint64
 	// apps are the apps that have called, each logged once.
 	apps map[string]bool
+	// spoke is the chat the machine sailor speaks in, nil for none;
+	// spokeTried when the store last failed to say what chat needs of it;
+	// human its human, as chat's rule has it.
+	spoke      *chat.Hub
+	spokeTried time.Time
+	human      [16]byte
 
 	// What the reports keep: the seq of the last report, the numbers of
 	// the boats in sight, and the wind readout's samples.
@@ -503,6 +518,9 @@ func (h *helm) atSea(ctx context.Context) (*Sea, *bus.Frame, joinResult, error) 
 	// taken over with a Join, which ends its grace.
 	need := !found || h.away || f.Conn[h.slot] != h.conn || f.Grace[h.slot] != 0
 	h.mu.Unlock()
+	// At sea, the machine sailor speaks in the world's chat: those aboard
+	// with it hear it, and it hears them.
+	h.speak(ctx, s)
 	if !need {
 		return s, f, res, nil
 	}

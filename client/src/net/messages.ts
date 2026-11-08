@@ -448,6 +448,8 @@ export type ToWorker =
   | { type: 'ashore'; who: number }
   /** Close the boat to knocks for this voyage, or open it again. */
   | { type: 'closeKnocks'; closed: boolean }
+  /** Come aboard the own machine sailor watched, without knocking: knocking tells how it stands. */
+  | { type: 'comeAboard' }
   /** Say a line aboard; id is the page's own number, which its echo carries. */
   | { type: 'say'; text: string; id: number }
   /** Mute someone aboard, or no longer. */

@@ -237,6 +237,12 @@ func (c *Core) call(ctx context.Context, d toolDef, h *helm, a *oauth.Accepted, 
 			o.Action = "look"
 		}
 		return c.boat(ctx, h, o.Action, &fa)
+	case toolSay:
+		var o sayArgs
+		if r := args(req, &o); r != nil {
+			return "", nil, r
+		}
+		return c.say(ctx, h, &o)
 	case toolHandbook:
 		var o handbookArgs
 		if r := args(req, &o); r != nil {

@@ -216,6 +216,8 @@ func (c *conn) deckCommand(cmd *pb.Command) {
 		c.ashoreCommand(cmd.GetAshore().GetWho())
 	case cmd.GetCloseKnocks() != nil:
 		c.closeKnocks(cmd.GetCloseKnocks().GetClosed())
+	case cmd.GetComeAboard() != nil:
+		c.comeAboardCommand()
 	}
 }
 
@@ -379,19 +381,10 @@ func (e *Edge) boardable(f *bus.Frame, s int32, knocker bus.Account) pb.KnockSta
 		return pb.KnockState_KNOCK_STATE_NOT_AT_SEA
 	case f.Machine[s]:
 		return pb.KnockState_KNOCK_STATE_CLOSED
-	case e.cfg.Switches != nil && !e.cfg.Switches.Boarding():
-		return pb.KnockState_KNOCK_STATE_CLOSED
 	case e.refuses(f.Owner[s], knocker):
 		return pb.KnockState_KNOCK_STATE_CLOSED
 	}
-	lo, hi := f.CrewOf(s)
-	if hi-lo+1 >= e.capacityOf(f.Kind[s]) {
-		return pb.KnockState_KNOCK_STATE_FULL
-	}
-	if len(f.Crew) >= e.crewLimit() {
-		return pb.KnockState_KNOCK_STATE_CROWDED
-	}
-	return pb.KnockState_KNOCK_STATE_UNSPECIFIED
+	return e.roomAboard(f, s)
 }
 
 // refuses reports whether a skipper and a knocker keep each other off

@@ -54,7 +54,7 @@ func newHarnessOf(t *testing.T, limit int, knots, from float64, sea func(*catalo
 	if sea != nil {
 		ls = sea(cat)
 	}
-	w, err := sim.New(sim.Config{Capacity: 64, Kinds: kinds, Waves: waves, Weather: tl, Encounters: enc, Limit: limit, Tick: 1000, Life: ls})
+	w, err := sim.New(sim.Config{Capacity: 64, Kinds: kinds, Waves: waves, Weather: tl, Encounters: enc, Limit: limit, Tick: 1000, Life: ls, Capacities: crewed(cat)})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -82,6 +82,14 @@ func newHarnessOf(t *testing.T, limit int, knots, from float64, sea func(*catalo
 		w.Close()
 	})
 	return h
+}
+
+// crewed are the kinds' capacities, the boat a Join gives carrying five
+// as a keelboat does, so the tests' crews fit aboard it.
+func crewed(cat *catalog.Catalog) []int {
+	c := cat.Capacities()
+	c[joinedKind] = max(c[joinedKind], 5)
+	return c
 }
 
 // sailor is a machine sailor the door accepted.

@@ -5053,8 +5053,9 @@ A machine sailor's agent sails through twelve tools at the MCP address
 (`internal/agentapi/tools.go`, the whole `tools/list` answer held to
 `testdata/tools.golden.json`): `observe`, `steer`, `trim`, `chart`,
 `pencil`, `forecast`, `news`, `say`, `race`, `boat`, `bottle`, `handbook`.
-`say`, `race`, `pencil` and `bottle` answer "not yet": the list never changes
-as the game grows, since apps cache it. A change to a description or a
+`race`, `pencil` and `bottle` answer "not yet", as do `say`'s `hail` and
+`spectators`: the list never changes as the game grows, since apps cache
+it. A change to a description or a
 schema is a deliberate change: run `go test ./internal/agentapi -run
 ToolsList -update` and name it in the release notes.
 
@@ -5726,6 +5727,53 @@ screen), `chat-refused`, `chat-word`, `chat-list`, `chat-sheet`,
 `e2e/layout.spec.ts` holds them on every screen, and `e2e/aboard.spec.ts`
 says lines between two browsers: one received, a link refused, a word seen
 as said by its sender alone, and a mute.
+
+### Machine sailors together
+
+A machine sailor's agent chats aboard as a person does, and its owner may
+come aboard its boat as crew. No other person comes aboard a machine
+sailor's boat, and no machine sailor comes aboard a person's.
+
+**Chat for agents** (`internal/agentapi/chat.go`). Each world's `Sea`
+carries its chat hub and a `Talker`, the store's: a machine sailor's
+speaker has its human's band, chat switch, Rules of the sea and the
+owner's mute, so its owner's choices hold for it. A helm at sea joins the
+hub as its machine sailor's speaker (`hub.Join`, the store asked once a
+world, again a minute after a failure) and leaves it when the helm is
+stopped or forgotten. The core registers an `Out` with each world's hub as
+it opens: a line that may reach a machine sailor becomes an event in its
+helm's ring, its sender's name and its words as player text, with
+"human" or "machine", "your owner" and "skipper" in the game's words, and
+wakes a wait on `chat` (on by default). The event's tick is the frame's,
+or the last report's seq and one, so the next report always tells it.
+`say` with `to` aboard (the default) says the line through `hub.Say`,
+under chat's filter and limits, after the looks' budget: "Said aboard."
+for a line said or refused for a listed word, "Nobody is aboard to hear
+you." with nobody else aboard, and the filter's, the limits' or the
+owner's switches' refusals in plain words, each a refusal `chat`.
+`hail` and `spectators` answer "not yet". Nothing of a line's text is
+logged or counted. The report's Aboard line names everyone aboard,
+human or machine, the skipper and the seats, and who holds the controls,
+whenever anyone else is aboard; the handbook's page `aboard` says all
+this to the agent.
+
+**The owner aboard** (`internal/edge/machines.go`). `Command.come_aboard`,
+from a connection watching its account's own machine sailor, brings it
+aboard that boat as crew without knocking, as a knock let aboard does
+(`bus.Board`): told how it stands in `Knocking`, refused as "closed" for a
+machine sailor of another's, "not at sea" for one aboard another's boat,
+"full" for no room (a Jolly boat carries its skipper alone), and
+boarding off, the crews' limit, and the age question and the Rules of the
+sea as a knock is. The watch plate shows "Come aboard" while the player
+watches their own machine sailor (`client/src/ui/machinewords.ts`).
+Aboard, the owner chats with the agent: chat's rule lets a machine
+sailor's line reach its own human and the boat's skipper's.
+
+**Testing it**: `internal/agentapi/chat_test.go` (a line with nobody
+aboard; the owner aboard, their line waking the agent, wrapped, and the
+agent's reaching them; a link refused) on the sea harness, whose boat
+carries five there; `internal/edge/edgetest/machines_test.go` (the owner
+comes aboard, another player may not, a Jolly boat has no room).
 
 ## The local cluster
 

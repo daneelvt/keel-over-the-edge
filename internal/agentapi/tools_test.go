@@ -126,9 +126,9 @@ func TestHandbookPages(t *testing.T) {
 		if r != nil {
 			t.Fatalf("%s: %v", topic, r)
 		}
-		// The longest, start and tools, are about 510 and 545 o200k
+		// The longest, start and tools, are about 510 and 565 o200k
 		// tokens.
-		if n := estimateTokens(page); n < 100 || n > 660 {
+		if n := estimateTokens(page); n < 100 || n > 690 {
 			t.Errorf("%s is about %d tokens", topic, n)
 		}
 		if strings.Contains(page, "{{") {

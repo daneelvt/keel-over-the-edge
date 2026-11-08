@@ -530,17 +530,30 @@ func (s *Server) Machines(t testing.TB, n int, at func(i int) physics.State) []u
 // is; and returns its account and its boat's ID.
 func (s *Server) Machine(t testing.TB, name string, owner store.AccountID, st physics.State) (store.AccountID, uint64) {
 	t.Helper()
+	return s.MachineKind(t, name, owner, 0, st)
+}
+
+// MachineKind is Machine with a boat of the kind given.
+func (s *Server) MachineKind(t testing.TB, name string, owner store.AccountID, kind uint16, st physics.State) (store.AccountID, uint64) {
+	t.Helper()
 	id := s.Sessions.addMachine(name, owner)
-	return id, s.Launch(t, id, true, st)
+	return id, s.LaunchKind(t, id, true, kind, st)
 }
 
 // Launch puts an account's boat in the world at st with no connection, a
 // machine sailor's or not, and returns its ID.
 func (s *Server) Launch(t testing.TB, id store.AccountID, machine bool, st physics.State) uint64 {
 	t.Helper()
+	return s.LaunchKind(t, id, machine, 0, st)
+}
+
+// LaunchKind is Launch with a boat of the kind given, by its place in the
+// catalog.
+func (s *Server) LaunchKind(t testing.TB, id store.AccountID, machine bool, kind uint16, st physics.State) uint64 {
+	t.Helper()
 	dev := s.World.Bus().Commands.Developer()
 	reply := make(chan bus.Reply, 1)
-	for dev.TrySend(bus.Command{Op: bus.Join, Account: bus.Account(id), Machine: machine, Reply: reply}) != nil {
+	for dev.TrySend(bus.Command{Op: bus.Join, Account: bus.Account(id), Machine: machine, BoatKind: kind, Reply: reply}) != nil {
 		time.Sleep(time.Second / 30)
 	}
 	r := <-reply

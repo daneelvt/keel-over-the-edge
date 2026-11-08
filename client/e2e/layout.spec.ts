@@ -778,13 +778,33 @@ async function clearFaults(page: Page): Promise<string[]> {
   return found;
 }
 
-/** Watching: the plate one row at the foot of the screen, over nothing, the case where it is when sailing. */
+/**
+ * Watching: the plate one row at the foot of the screen, over nothing, the
+ * case where it is when sailing; another's boat, and the player's own
+ * machine sailor's with its Come aboard.
+ */
 async function plateFaults(page: Page, boat: Box | null): Promise<string[]> {
+  const found: string[] = [];
+  for (const mine of [false, true]) {
+    for (const f of await onePlateFaults(page, boat, mine)) {
+      found.push(mine ? `the own machine sailor’s plate: ${f}` : f);
+    }
+  }
+  return found;
+}
+
+async function onePlateFaults(page: Page, boat: Box | null, mine: boolean): Promise<string[]> {
   const caseTop = () =>
     page.evaluate(() => document.querySelector('.case-top')?.getBoundingClientRect().top ?? null);
   const sailing = await caseTop();
-  await page.evaluate((name) => globalThis.keel.watchPlate(name), LONG);
+  await page.evaluate(({ name, mine }) => globalThis.keel.watchPlate(name, true, false, mine), {
+    name: LONG,
+    mine,
+  });
   const plate = page.locator('.watch-plate');
+  if (mine) {
+    await expect(plate.getByRole('button', { name: /^Come aboard/ })).toBeVisible();
+  }
   await expect(plate).toBeVisible();
   await expect(plate).toHaveAttribute('aria-label', `Watching ${LONG}`);
   await page.evaluate(() => globalThis.keel.render());

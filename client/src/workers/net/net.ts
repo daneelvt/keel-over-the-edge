@@ -27,6 +27,7 @@ type DeckAsk = Extract<
       | 'giveBack'
       | 'ashore'
       | 'closeKnocks'
+      | 'comeAboard'
       | 'say'
       | 'mute'
       | 'block'
@@ -50,6 +51,8 @@ function deckCommand(s: Session, now: number, m: DeckAsk): Uint8Array<ArrayBuffe
       return s.ashoreCommand(now, m.who);
     case 'closeKnocks':
       return s.closeKnocksCommand(now, m.closed);
+    case 'comeAboard':
+      return s.comeAboardCommand(now);
     case 'say':
       return s.sayCommand(now, m.text, m.id);
     case 'mute':
@@ -192,6 +195,7 @@ export class NetWorker {
       case 'giveBack':
       case 'ashore':
       case 'closeKnocks':
+      case 'comeAboard':
       case 'say':
       case 'mute':
       case 'block':

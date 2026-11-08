@@ -126,6 +126,9 @@ func (p *process) seaOf(h *worldHalf, rw *readyWorld, sighting *sim.Sight) *agen
 	if h.game != nil {
 		s.Watchers = h.game.Watchers
 	}
+	if h.chat != nil {
+		s.Chat, s.Talker = h.chat, p.talker
+	}
 	if t := rw.terrain; t != nil {
 		s.Ground, s.Shelter = t.Ground, t.Shelter
 	}

@@ -1637,12 +1637,12 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
      * with the cog, the list of sailors to watch open over it if asked;
      * null as it is while sailing.
      */
-    watchPlate(sailor: string | null, machine = true, list = false): void {
+    watchPlate(sailor: string | null, machine = true, list = false, mine = false): void {
       sailing.remount?.(
         sailor === null
           ? null
           : {
-              watching: signal({ sailor, machine, mine: false, look: -1 }),
+              watching: signal({ sailor, machine, mine, look: -1 }),
               spectating: signal(true),
               status: signal('sailing'),
               ended: signal(null),
@@ -1653,6 +1653,7 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
               watch: () => {},
               sail: () => {},
               unwatch: () => {},
+              comeAboard: () => {},
             },
       );
     },

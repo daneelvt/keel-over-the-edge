@@ -105,8 +105,17 @@ message Command {
     Mute mute = 14;
     Block block = 15;
     Report report = 16;
+    ComeAboard come_aboard = 17;
   }
 }
+
+// ComeAboard brings an owner watching their own machine sailor aboard its
+// boat, as crew, without knocking: the boat is theirs. It is told how it
+// stands as a knock is (Knocking): let aboard, a Welcome to the boat
+// follows and the watch ends; or why not (the boat full, boarding off, the
+// age question or the Rules of the sea first, the machine sailor not its
+// boat's skipper).
+message ComeAboard {}
 
 // Say says a line to everyone aboard the boat the connection sails or is
 // aboard: at most 200 characters, one line, text only. The server checks
