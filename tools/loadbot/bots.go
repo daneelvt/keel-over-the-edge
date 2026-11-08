@@ -75,6 +75,9 @@ type Config struct {
 	// Crews, if more than 1, sails the players in groups of that many: a
 	// skipper and the crew it lets aboard by its link (crews.go).
 	Crews int
+	// Chat is how many lines of chat each person aboard says a minute,
+	// with Crews.
+	Chat float64
 	// Metrics, if not nil, reads the server's metrics in Prometheus's text
 	// format, before and after the sail.
 	Metrics func(ctx context.Context) (string, error)
