@@ -5810,8 +5810,11 @@ Rules of the sea come before a first line (the card from sailing together,
 the line held until accepted). Every word is in `client/src/ui/chatwords.ts`.
 
 **Mute, block and report**: a long press on another's line (a right-click,
-or the menu key, on a computer) opens a sheet; each row of who is aboard
-has the keys too, and says "muted" or "blocked". Block asks once; the
+or the menu key, on a computer) opens a sheet. Each row of who is aboard
+shows only the controls' keys (Hand over the controls; Take back and Give
+them back on one's own row); Put ashore, Mute, Block and Report are behind
+its ⋯ key, opened under the row (`splitActions` in `client/src/ui/deck.tsx`),
+and the row says "muted" or "blocked". Block asks once; the
 report's form offers the reasons, a child at risk first, and a note for the
 owner alone; `Reported` answers "Thanks: the owner will look". The account
 page has the switch "Chat with other players" and the list of mutes and
