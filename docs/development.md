@@ -2874,10 +2874,34 @@ of its centre sailing at `bind.speed` m/s or faster on a course steady for
 `bind.steady` s, its heading within `bind.turn`° (ties to the lower boat),
 and only a boat that has had none for `life.quiet` s after its last; with
 none it passes. A group whose boat leaves, falls over the lip, stays or is
-made unseen goes on alone from where it was, its revision raised. Nothing
-is checkpointed: a world opened again draws the encounters still alive
-from the schedule, and none is with a boat. A tick of 64 boats takes as
-long with the sea's life as without it (`BenchmarkTickWithLife`).
+made unseen goes on alone from where it was, its revision raised.
+
+A pod that rides bows (`binds: ride`) takes a boat by the same rule, from
+within `life.ride.within` m, and shares the boat's one quiet with the
+followers; it comes in to the bow itself and keeps there for its stay. It
+leaves at once when its boat is slower than `ride.slower` m/s or has turned
+more than `ride.turn`° from its heading as the pod reached the bow, going
+on from where it is, back toward where it met the boat. A kind that
+`brings` others (bait) comes with them: for each bring whose share passes
+a draw of its seed, a group of the bring's kind over its patch from its
+start to its end, `Over` its id, drawn in the slot's output right after it
+(`Schedule.Bring`); a group over another's patch moves by its kind's
+`over` path, and takes no boat. Each second a boil of bait with a boat
+within its patch (`life.Patch`, from its seed) of its middle breaks up: it
+ends a minute later, and the groups over it leave from where they are. A
+ground of fish (`binds: flush`) is drawn as any encounter but is kept
+apart, never in the frame: every `flush.every` s each boat sailing through
+its patch at `bind.speed` or faster flushes some of its fish at
+`flush.chance`, by a draw of the ground's seed, the boat's id and that slot
+of time (`life.Flush`, a pure function), an encounter of its own over the
+ground, ahead of the bow, alive while its fish glide. An encounter's id
+says where it came from (`internal/life/schedule.go`): a slot's, one
+raised by hand, one that comes with another, or fish flushed.
+
+Nothing is checkpointed: a world opened again draws the encounters still
+alive from the schedule, the grounds of fish too, and none is with a
+boat; no flush is kept. A tick of 64 boats takes as long with the sea's
+life as without it (`BenchmarkTickWithLife`).
 
 ### On the wire
 
@@ -2916,11 +2940,19 @@ The sea's birds call from where their group is (`client/src/audio/life.ts`,
 `art/sound/seabirds.json`); the server's twin
 (`internal/lookout/sounds.go`) is held to the same cases.
 
-A machine sailor's `observe` names the life in sight, by bearing and
-distance ("a few sooty terns working the water to the SW, ~400 m",
-"laughing gulls following your boat"), and in its `Hear` line the calls
-heard; `wake_on: ["life"]` wakes a wait as a group first comes into sight
-(not in the default set). The world page marks each group alive at its
+A phone with no server (the sandbox) flushes the same fish from the same
+inputs as the server: `client/src/life/flush.ts` is `life.Flush`'s twin,
+held to `internal/life/testdata/flushes.json`.
+
+A machine sailor's `observe` names the life in sight by day, by bearing
+and distance ("a few sooty terns working the water to the SW, ~400 m",
+"laughing gulls following your boat", "a pod of spotted dolphins passing
+to the NE, ~600 m", "spotted dolphins riding your bow", "flying fish
+skittering away from your bow", "a boil of bait to the SW, ~500 m"), a
+kind of the water only while the sea at its Beaufort force shows it
+(`life.sea`), and in its `Hear` line the calls heard and the dolphins
+breathing within 40 m; `wake_on: ["life"]` wakes a wait as a group first
+comes into sight, a ground's flushes once (not in the default set). The world page marks each group alive at its
 middle (the layer **Life at sea**).
 
 ### Adding a kind
@@ -2936,7 +2968,7 @@ promote, and the recorded edge traces must be written again (`go test
 -short -run 'TestTraces|TestFleetTraces|TestOverTheLipOnline'
 ./internal/edge/edgetest/ -update`), with the life's golden files (`go test
 ./internal/life -run 'Golden|Flocks' -update`, then `GOARCH=amd64 go test
-./internal/life`).
+./internal/life` and, from `client/`, `npx vitest run src/life`).
 
 ### The tally
 
@@ -2948,7 +2980,12 @@ tick by tick as the simulation keeps it: it prints a table of how many
 groups of each kind come into sight an hour by day, near the islands and
 in the outer water, the gaps between sightings and the longest empty
 stretches (`-kinds` by habitat too; `-seeds 20` for a quick look, about 20
-s). Run it after changing a rate, a lull, a habitat or a kind.
+s), and for the life in the water the pods of kinds that ride bows in
+sight, those at the boat's bow, the grounds it flushed fish from, the
+boils of bait and the turtles an hour sailed on a reef. A ground's flushes
+are one sighting, and keep it in sight while the boat crosses it; the
+groups over another's patch are one sighting with it, and one flock
+working the water. Run it after changing a rate, a lull, a habitat or a kind.
 
 ### Looking at it
 
@@ -2957,6 +2994,11 @@ s). Run it after changing a rate, a lull, a habitat or a kind.
 # POST http://127.0.0.1:9090/debug/life?kind=sooty-tern&at=boat   (KEEL_DEV_COMMANDS=1) one by the first player's boat
 # POST http://127.0.0.1:9090/debug/life?kind=2&east=…&north=…        one there, by the kind's index
 ```
+
+Raised at a boat under way on a steady course, a pod that rides bows takes
+it, quiet or not; bait brings the groups that come with it; a ground of
+fish is raised reaching its kind's furthest, seen only as the boats in it
+flush its fish.
 
 The keel hooks `keel.life()`, `keel.lifeBirds(tick)` and
 `keel.raiseLife(kindId, east, north)` report what is drawn and raise one on
