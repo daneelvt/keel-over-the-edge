@@ -5,7 +5,8 @@
 // to see; the overlays on the sea go with them. Tapped again, everything
 // returns. It comes back by itself when the player is needed: their boat
 // capsized or its sailor in the water, the boat taken by another device or
-// returned to port, a watch ended or turned into a queue, a change of boat.
+// returned to port, a watch ended or turned into a queue, a change of boat,
+// a new knock on the own boat or the controls offered.
 // Never for the weather, a notice or a connection that sails on under
 // prediction. It is not remembered: every voyage starts with everything
 // shown.
@@ -48,6 +49,10 @@ export interface Needed {
   ended: WatchEnd | null;
   /** In a queue: for a boat, or to watch. */
   queued: boolean;
+  /** How many knocks wait on the own boat; none when absent. */
+  knocks?: number;
+  /** The controls are offered to the player. */
+  handed?: boolean;
 }
 
 /** Whether, from was to now, something came that needs the player. */
@@ -57,6 +62,8 @@ export function needed(was: Needed, now: Needed): boolean {
     (now.takeover && !was.takeover) ||
     now.returned !== was.returned ||
     (now.ended !== null && now.ended !== was.ended) ||
-    (now.queued && !was.queued)
+    (now.queued && !was.queued) ||
+    (now.knocks ?? 0) > (was.knocks ?? 0) ||
+    (now.handed === true && was.handed !== true)
   );
 }

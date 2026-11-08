@@ -198,6 +198,11 @@ type Boat struct {
 	// and the sheet there, from 0 hauled in to 1 let fly, by rising angle, read
 	// linearly between them.
 	StartSheet [][]float64 `json:"startSheet"`
+
+	// Where the people aboard are drawn, one a person it can carry (capacity), in
+	// seat order: the first the helm, where whoever holds the controls is, then each
+	// seat's.
+	Stations []BoatStation `json:"stations"`
 }
 
 // A boat's art. Every art object's values are paths under art/, checked to exist.
@@ -307,6 +312,23 @@ type BoatPhysics struct {
 
 // A point on a boat, in m in its model's frame: x to starboard, y up, z aft.
 type BoatPoint []float64
+
+// A place aboard where a person is drawn: standing on the deck, or seated as a
+// dinghy's helmsman sits on the side deck.
+type BoatStation struct {
+	// In m in the model's frame. Standing, the deck between the feet; seated, the
+	// seat's back edge, as the gunwale is to a dinghy's helmsman: the hips just
+	// within it, the legs reaching 0.7 m the way the person faces, the feet 0.2 m
+	// below it.
+	At BoatPoint `json:"at"`
+
+	// The way the person faces, in degrees clockwise from the bow seen from above: 0
+	// forward, 90 to starboard, 180 aft, 270 to port.
+	Facing float64 `json:"facing"`
+
+	// Pose corresponds to the JSON schema field "pose".
+	Pose StationPose `json:"pose"`
+}
 
 // The most triangles each of the boat's models may have.
 type Budget struct {
@@ -3298,6 +3320,11 @@ type StartMoorings struct {
 	Spacing float64 `json:"spacing"`
 }
 
+type StationPose string
+
+const StationPoseSeated StationPose = "seated"
+const StationPoseStanding StationPose = "standing"
+
 // What the ground is covered with.
 type Surface struct {
 	// How high its plants stand over the ground, as the wind feels them, in m.
@@ -5309,4 +5336,4 @@ type WorldZones struct {
 }
 
 // Version is the catalog version (tools/catalog).
-const Version = "b5d32d65abdf99b2"
+const Version = "ef1768cdcb0d0393"

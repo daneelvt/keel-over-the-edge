@@ -14,7 +14,9 @@
 // connection is poor or lost. A page opened with ?watch=Iron%20Mary, or a
 // sailor chosen to watch on the start screen, watches that sailor's boat
 // instead, from its own place: nothing steers it, and the player may
-// watch another or sail from there. Each change of boat goes through the
+// watch another or sail from there. A page opened at a link to come aboard
+// (/sail/<token>) offers, once signed in, to knock on the skipper's boat
+// rather than plain Set sail. Each change of boat goes through the
 // cover again: down over the screen, the world changed under it, and up
 // once the new boat's world is ready.
 //
@@ -50,6 +52,7 @@
 
 import './game.css';
 import { effect, signal } from '@preact/signals';
+import { sailFromPath } from '../account/comeaboardwords';
 import { NOT_WATCHED, watchRefused } from '../account/letwatch';
 import { type Me, resolveSailor } from '../account/me';
 import { backSoon, showAddPasskey, showSailor, showStartScreen } from '../account/start';
@@ -93,6 +96,7 @@ import { chooseBackend } from '../render/renderer';
 import { CAMERA_PRESETS, SeaScene } from '../render/scene';
 import { pointUp } from '../render/signals';
 import { cameraSceneFromQuery, startCameraScene } from '../sandbox/camerascenes';
+import { crewFromQuery } from '../sandbox/crewscene';
 import { SandboxForecast } from '../sandbox/forecast';
 import {
   aboardFromQuery,
@@ -127,6 +131,7 @@ import { serverNews } from '../ui/chart';
 import { ClearView, type Needed, needed } from '../ui/clearview';
 import { ShipsClock } from '../ui/clock';
 import { Countdown, EndNotices, localShown } from '../ui/countdown';
+import { deckOf } from '../ui/decklazy';
 import { mountScreen, type ScreenProps } from '../ui/hud';
 import { AGROUND } from '../ui/model';
 import { saveNoticesOff } from '../ui/notices';
@@ -318,6 +323,11 @@ async function start(): Promise<void> {
       catalog.boats.map((b) => b.id),
     );
     await game.useKind(kind ?? 0);
+    // ?crew=N: N people aboard at their stations, one of them at the helm.
+    const crew = crewFromQuery(query, catalog.boats[kind ?? 0]?.capacity ?? 1, catalog);
+    if (crew !== null) {
+      void world.showCrew(crew);
+    }
     const [, sandbox] = await Promise.all([
       world.start(),
       startSandbox(
@@ -583,10 +593,14 @@ async function start(): Promise<void> {
         clock: clock.clock,
         readClock: clock.read,
         countdown,
-        // The screen again, with a watch's parts or without: the layout's tests.
-        remount: (watch) => {
+        // The screen again, with a watch's parts or without, and sailing
+        // together's: the layout's tests.
+        remount: (watch, deck = null) => {
           unmount();
-          unmount = mountScreen(document.body, watch === null ? screen : { ...screen, watch });
+          unmount = mountScreen(
+            document.body,
+            watch === null && deck === null ? screen : { ...screen, watch, deck },
+          );
         },
       });
     }
@@ -621,6 +635,13 @@ async function start(): Promise<void> {
   // The picker's stage behind the start screen and the player's own panel,
   // on a page that draws.
   const stage = world.drawsWhenReady ? lookStage(world, cover) : undefined;
+  // A link to come aboard (/sail/<token>): once signed in, or the sailor
+  // made, the skipper's boat and the knock in place of Set sail.
+  const sailLink = linked === '' ? sailFromPath(location.pathname) : '';
+  const aboard = (me: Me): Promise<Me> =>
+    import('../account/comeaboard').then((m) =>
+      m.showComeAboard(document.body, own(me), sailLink, catalog, catalog),
+    );
   const [, physics, me] = await Promise.all([
     world.start(),
     loadPhysics(fetch(wasmUrl)),
@@ -630,13 +651,18 @@ async function start(): Promise<void> {
           looks: catalog,
           boats: catalog,
           ...(stage === undefined ? {} : { stage }),
-          ...(linked === '' ? {} : { panel: false }),
-        }).then(set),
+          ...(linked === '' && sailLink === '' ? {} : { panel: false }),
+          ...(sailLink === '' ? {} : { straight: true }),
+        })
+          .then((me) => (sailLink === '' ? me : aboard(me)))
+          .then(set),
       addPasskey: (me) => showAddPasskey(document.body, me),
       ...(linked === ''
         ? {
             sailor: (me: Me) =>
-              showSailor(document.body, own(me), catalog, stage, catalog).then(set),
+              sailLink === ''
+                ? showSailor(document.body, own(me), catalog, stage, catalog).then(set)
+                : aboard(me).then(set),
           }
         : {}),
       backSoon: notice,
@@ -663,6 +689,11 @@ async function start(): Promise<void> {
   if (watchFirst !== '') {
     // The connection's first Hello asks to watch.
     online.watch(watchFirst);
+  }
+  const knock = me.knock;
+  if (knock !== undefined) {
+    // Asked to come aboard: the knock once the player's own boat is in.
+    void whenArrived(online, 0).then(() => online.knock(knock));
   }
   world.fleetSource = online.fleet;
   world.onQuality = (tier, scale) => online.quality(tier, scale);
@@ -871,6 +902,11 @@ async function start(): Promise<void> {
       void world.showLook(look);
     }
   });
+  // Who is aboard the boat in view: whoever holds the controls at the helm,
+  // the others at their stations.
+  effect(() => {
+    void world.showCrew(online.crew.value);
+  });
   // And the boat in view in its own look, and its name.
   effect(() => {
     const b = online.boatLook.value;
@@ -885,6 +921,8 @@ async function start(): Promise<void> {
     returned: online.returned.value,
     ended: online.ended.value,
     queued: online.watchPlace.value !== null || online.place.value !== null,
+    knocks: online.knocks.value.length,
+    handed: online.handed.value !== null,
   });
   let was = neededNow();
   effect(() => {
@@ -984,6 +1022,7 @@ async function start(): Promise<void> {
       boats: harbourBoats(catalog, online),
     },
     watch: watchView,
+    deck: deckOf(online, (act) => void changeBoat(act)),
     lamp: online.lamp,
     camera,
     clear,

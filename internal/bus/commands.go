@@ -42,6 +42,9 @@ const (
 	SetBoat                   // Account's boat becomes one of kind BoatKind, of BoatLook and BoatName, where it lies, if it is in port and there is room; or its place's in the queue
 	SetBoatLook               // Account's boat's look and name become BoatLook and BoatName, if it is in port; or its place's in the queue
 	RaiseLife                 // an encounter with the sea's life of kind LifeKind begins at State's X and Y, now
+	Board                     // Account comes aboard Boat as its crew, through connection Conn, let aboard by its skipper: its own boat leaves the water
+	Ashore                    // Account leaves the boat it is aboard, for Why, its own boat put in the water at the nearest port
+	SetHolder                 // Boat's controls go to Account, one of its crew, or with the zero account back to its skipper
 	opEnd
 )
 
@@ -50,10 +53,19 @@ const (
 const LifeAboard uint16 = 1 << 15
 
 // Ops lists every op, in order, for tables keyed by op.
-var Ops = []Op{Join, Leave, SetWeather, Place, Disconnect, Hold, Teleport, Stay, Unseen, Chart, End, SetLook, SetBoat, SetBoatLook, RaiseLife}
+var Ops = []Op{Join, Leave, SetWeather, Place, Disconnect, Hold, Teleport, Stay, Unseen, Chart, End, SetLook, SetBoat, SetBoatLook, RaiseLife,
+	Board, Ashore, SetHolder}
 
 var opNames = [...]string{"", "join", "leave", "set_weather", "place", "disconnect", "hold", "teleport", "stay", "unseen", "chart", "end", "set_look",
-	"set_boat", "set_boat_look", "raise_life"}
+	"set_boat", "set_boat_look", "raise_life", "board", "ashore", "set_holder"}
+
+// Why someone goes ashore, in an Ashore's Why.
+const (
+	AshoreChose uint8 = iota + 1 // they chose to
+	AshorePut                    // their skipper put them ashore
+	AshoreLeft                   // their skipper's boat left the water
+	AshoreGone                   // their connection ended and did not come back within its grace
+)
 
 func (o Op) String() string {
 	if o == 0 || o >= opEnd {
@@ -183,6 +195,10 @@ type Command struct {
 	// the catalog's fish that lands aboard instead, on the deck of the
 	// boat nearest X and Y.
 	LifeKind uint16
+	// Name is a Board's account's sailor's name, as players see it; Why an
+	// Ashore's reason, AshoreChose or AshorePut.
+	Name string
+	Why  uint8
 	// Reply, if not nil, receives the result. The simulation never waits on
 	// it, so it should have room for one reply.
 	Reply chan<- Reply
@@ -205,15 +221,18 @@ const (
 	Admitted                   // a waiting connection got its boat: the tick's own doing, recorded as a Join
 	Dequeued                   // Disconnect from a waiting connection: it waits no more
 	Away                       // SetLook for a boat at sea beyond Port Royal's harbour, SetBoat or SetBoatLook for one out of port: it stays as it was
-	NoRoom                     // SetBoat where the new boat would meet land, shoal water or another boat: it stays as it was
+	NoRoom                     // SetBoat where the new boat would meet land, shoal water or another boat: it stays as it was; Board onto a boat with no room aboard
+	Crewed                     // Board: the account is aboard; Join: the account is aboard a boat, through the connection
+	Ashored                    // Ashore of an account with no connection, or none waiting: it is ashore, with no boat
+	Gone                       // the boat left the water as its sailor came aboard another: the tick's own doing, recorded as a Leave
 	resultEnd
 )
 
 // Results lists every result, in order, for tables keyed by result.
-var Results = []Result{Joined, Rejoined, Full, Left, Done, NoBoat, Expired, Stale, Queued, Admitted, Dequeued, Away, NoRoom}
+var Results = []Result{Joined, Rejoined, Full, Left, Done, NoBoat, Expired, Stale, Queued, Admitted, Dequeued, Away, NoRoom, Crewed, Ashored, Gone}
 
 var resultNames = [...]string{"", "joined", "rejoined", "full", "left", "done", "no_boat", "expired", "stale", "queued", "admitted", "dequeued", "away",
-	"no_room"}
+	"no_room", "crewed", "ashored", "gone"}
 
 func (r Result) String() string {
 	if r == 0 || r >= resultEnd {
@@ -260,7 +279,9 @@ func NewQueue() *Queue {
 }
 
 // Players returns a sender for players' commands: Join, Leave,
-// Disconnect, SetLook, SetBoat and SetBoatLook.
+// Disconnect, SetLook, SetBoat, SetBoatLook, and Board, Ashore and
+// SetHolder, which the game connection sends only as a boat's skipper and
+// crew may ask them.
 func (q *Queue) Players() Sender { return Sender{q: q, from: fromPlayers} }
 
 // Developer returns a sender for every command. Only code in the server's own

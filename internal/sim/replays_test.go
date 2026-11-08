@@ -123,12 +123,25 @@ var liveEdge = &sim.Edge{Fall: 150, Clear: 20}
 // open sea but for it.
 var livePort = &sim.Terrain{Ports: []sim.Disc{{X: 0, Y: 0, R: 300}}}
 
+// catalogCapacities are the catalog's kinds' people aboard.
+func catalogCapacities() []int {
+	cat, err := catalog.Load()
+	if err != nil {
+		panic(err)
+	}
+	var c []int
+	for _, b := range cat.Boats {
+		c = append(c, b.Capacity)
+	}
+	return c
+}
+
 func sailLive(t *testing.T, sailors, capacity, limit int, d time.Duration, stall int64) live {
 	var out live
 	dir := t.TempDir()
 	synctest.Test(t, func(t *testing.T) {
 		w, err := sim.New(sim.Config{Capacity: capacity, Kinds: catalogKinds(t), Waves: catalogWaves(t), Weather: catalogWeather(t), Encounters: catalogEncounters(t), Workers: 4, Tick: loop.TickAt(time.Now(), bubbleEpoch), Grace: liveGrace, Limit: limit, Edge: liveEdge,
-			Terrain: livePort})
+			Terrain: livePort, Capacities: catalogCapacities()})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -299,6 +312,17 @@ func sailLive(t *testing.T, sailors, capacity, limit int, d time.Duration, stall
 					// is no room for it.
 					players.TrySend(bus.Command{Op: bus.SetBoat, Account: account(n/3 + 1), BoatKind: uint16(n % 2), BoatLook: uint32(n) << 8, BoatName: "Kittiwake"})
 					players.TrySend(bus.Command{Op: bus.SetBoatLook, Account: account(n/2 + 2), BoatLook: uint32(n)<<8 | 0x21, BoatName: ""})
+					// Someone comes aboard a boat, is handed its controls,
+					// and now and then goes ashore again.
+					if len(boats) > 0 {
+						b := boats[int(n%uint64(len(boats)))]
+						crew := account(n/2 + 3)
+						players.TrySend(bus.Command{Op: bus.Board, Boat: b.boat, Account: crew, Conn: conn, Look: uint32(n), Name: "Crew"})
+						players.TrySend(bus.Command{Op: bus.SetHolder, Boat: b.boat, Account: crew})
+						if n%3 == 0 {
+							players.TrySend(bus.Command{Op: bus.Ashore, Account: crew, Why: bus.AshoreChose})
+						}
+					}
 					// The sea's life raised by hand, in a sea with none.
 					dev.TrySend(bus.Command{Op: bus.RaiseLife, LifeKind: uint16(n % 3), State: physics.State{X: float64(n%50) * 10}})
 					if len(boats) > 1 && n%5 == 0 {
@@ -352,7 +376,7 @@ func replayLog(t *testing.T, data []byte, workers int) (replay.Result, []byte) {
 		t.Fatal(err)
 	}
 	var end []byte
-	res, err := replay.Run(f, replay.Options{Kinds: catalogKinds(t), Waves: catalogWaves(t), Weather: catalogWeather(t), Encounters: catalogEncounters(t), Workers: workers, Edge: liveEdge, Terrain: livePort, At: func(fr *bus.Frame) {
+	res, err := replay.Run(f, replay.Options{Kinds: catalogKinds(t), Capacities: catalogCapacities(), Waves: catalogWaves(t), Weather: catalogWeather(t), Encounters: catalogEncounters(t), Workers: workers, Edge: liveEdge, Terrain: livePort, At: func(fr *bus.Frame) {
 		end = sim.AppendSnapshot(end[:0], fr)
 	}})
 	if err != nil {

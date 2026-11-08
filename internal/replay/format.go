@@ -56,13 +56,19 @@ import (
 //	            weather its mode, regime, speed and direction, and a system's its kind, point and
 //	            ticks to it; a boat whose
 //	            grace ended is a Leave with the result Expired, and a connection given a boat
-//	            from the queue a Join with the result Admitted, which the tick makes itself
+//	            from the queue a Join with the result Admitted, which the tick makes itself;
+//	            a Board its account, connection, boat, kind, look code, name, and the kind of
+//	            its own boat with that boat's look code and name; an Ashore its account,
+//	            connection, boat and why as a byte; a SetHolder its boat and account; a boat
+//	            that left the water as its sailor came aboard another is a Leave with the
+//	            result Gone, and someone put ashore as their boat left the water or their
+//	            grace ended an Ashore of why 3 or 4, which the tick makes itself too
 //	D digest    tick, sim.Digest of the world after it, 8 bytes
 //	X broken    the first tick whose records were lost: the segment holds
 //	            nothing reliable from that tick on
 const (
 	magic         = "KEELLOG\n"
-	formatVersion = 15
+	formatVersion = 16
 
 	kindHeader   = 'H'
 	kindSnapshot = 'S'
@@ -258,6 +264,24 @@ func appendEvent(dst []byte, e *bus.Event) []byte {
 		dst = binary.AppendUvarint(dst, uint64(e.LifeKind))
 		dst = appendF64(dst, e.State.X)
 		dst = appendF64(dst, e.State.Y)
+	case bus.Board:
+		dst = append(dst, e.Account[:]...)
+		dst = binary.AppendUvarint(dst, e.Conn)
+		dst = binary.AppendUvarint(dst, e.Boat)
+		dst = append(dst, joinKind(e.Machine, e.Priority))
+		dst = binary.AppendUvarint(dst, uint64(e.Look))
+		dst = appendString(dst, e.Name)
+		dst = binary.AppendUvarint(dst, uint64(e.BoatKind))
+		dst = binary.AppendUvarint(dst, uint64(e.BoatLook))
+		dst = appendString(dst, e.BoatName)
+	case bus.Ashore:
+		dst = append(dst, e.Account[:]...)
+		dst = binary.AppendUvarint(dst, e.Conn)
+		dst = binary.AppendUvarint(dst, e.Boat)
+		dst = append(dst, e.Why)
+	case bus.SetHolder:
+		dst = binary.AppendUvarint(dst, e.Boat)
+		dst = append(dst, e.Account[:]...)
 	}
 	dst = append(dst, byte(e.Reply.Result))
 	dst = binary.AppendVarint(dst, int64(e.Reply.Slot))
@@ -643,6 +667,29 @@ func (p *payload) event(e *bus.Event) {
 		e.LifeKind = uint16(p.count(math.MaxUint16))
 		e.State.X = p.f64()
 		e.State.Y = p.f64()
+	case bus.Board:
+		p.bytes(e.Account[:])
+		e.Conn = p.uvarint()
+		e.Boat = p.uvarint()
+		if k := p.byte(); k&^(joinMachine|joinPriority) != 0 {
+			p.err = fmt.Errorf("a board of kind %d", k)
+		} else {
+			e.Machine, e.Priority = k&joinMachine != 0, k&joinPriority != 0
+		}
+		e.Look = p.look()
+		if e.Name = p.string(); p.err == nil && len(e.Name) > sim.MaxBoatName {
+			p.err = fmt.Errorf("a name of %d bytes", len(e.Name))
+		}
+		e.BoatKind = uint16(p.count(math.MaxUint16))
+		e.BoatLook, e.BoatName = p.boatLook()
+	case bus.Ashore:
+		p.bytes(e.Account[:])
+		e.Conn = p.uvarint()
+		e.Boat = p.uvarint()
+		e.Why = p.byte()
+	case bus.SetHolder:
+		e.Boat = p.uvarint()
+		p.bytes(e.Account[:])
 	default:
 		if p.err == nil {
 			p.err = fmt.Errorf("unknown command %d", e.Op)
@@ -680,13 +727,26 @@ func (p *payload) look() uint32 {
 	return uint32(l)
 }
 
+// Made reports whether an event is the tick's own doing, not a command's:
+// a boat whose grace ended, a connection the queue gave a boat, a boat that
+// left the water as its sailor came aboard another, and someone going
+// ashore as their boat left the water or their grace ended. A replay does
+// not apply them again, since the tick does them.
+func Made(e *bus.Event) bool {
+	switch e.Reply.Result {
+	case bus.Expired, bus.Admitted, bus.Gone:
+		return true
+	}
+	return e.Op == bus.Ashore && (e.Why == bus.AshoreLeft || e.Why == bus.AshoreGone)
+}
+
 // Commands are the commands of a tick record's events, to apply again:
 // all but the boats whose grace ended, which the tick takes out itself, and
 // the connections the queue gave boats, which it admits itself.
 func (r *Record) Commands() []bus.Command {
 	cs := make([]bus.Command, 0, len(r.Events))
 	for i := range r.Events {
-		if res := r.Events[i].Reply.Result; res != bus.Expired && res != bus.Admitted {
+		if !Made(&r.Events[i]) {
 			cs = append(cs, r.Events[i].Command)
 		}
 	}

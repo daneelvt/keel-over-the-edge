@@ -18,6 +18,7 @@ import { useEffect, useState } from 'preact/hooks';
 import { catalog } from '../catalog';
 import { lookFrom } from '../catalog/looks';
 import { useWatch } from '../ui/watchlazy';
+import { RULES_PAGE, RULES_TITLE, SAFETY_PAGE, STAYING_SAFE } from './firstwords';
 import { useMachines } from './lazy';
 import {
   type AccountData,
@@ -313,6 +314,15 @@ export function AccountPanel({
           </button>
         </>
       )}
+      <p class="account-pages">
+        <a href={RULES_PAGE} target="_blank" rel="noopener">
+          {RULES_TITLE}
+        </a>
+        {' · '}
+        <a href={SAFETY_PAGE} target="_blank" rel="noopener">
+          {STAYING_SAFE}
+        </a>
+      </p>
       <button type="button" class="menu-close" onClick={close}>
         Close
       </button>

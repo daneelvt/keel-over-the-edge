@@ -112,6 +112,26 @@ func Digest(f *bus.Frame) uint64 {
 		}
 		h.boatLook(q.BoatLook, q.BoatName)
 	}
+	for _, a := range f.Crew {
+		h.u64(uint64(a.Slot))
+		h.u64(a.Boat)
+		h.byte(a.Seat)
+		for _, b := range a.Account {
+			h.byte(b)
+		}
+		h.u64(a.Conn)
+		h.u64(uint64(a.Since))
+		h.u64(uint64(a.Grace))
+		k := kindFlags(a.Machine, a.Priority)
+		if f.Holder[a.Slot] == a.Account {
+			k |= crewHolds
+		}
+		h.u64(k)
+		h.u64(uint64(a.Look))
+		h.u64(uint64(a.BoatKind))
+		h.boatLook(a.BoatLook, a.BoatName)
+		h.boatLook(0, a.Name)
+	}
 	for _, p := range f.Pairs {
 		h.u64(uint64(p.A))
 		h.u64(uint64(p.B))

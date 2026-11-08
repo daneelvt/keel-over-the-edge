@@ -17,7 +17,7 @@
 import { createHash, randomBytes } from 'node:crypto';
 import { type BrowserContext, expect, type Page, test } from '@playwright/test';
 import data from '../src/catalog/catalog.gen.json' with { type: 'json' };
-import { GAME, holdPasskeys, type Made, sailor, setSail, stamp } from './helpers';
+import { answerBorn, GAME, holdPasskeys, type Made, sailor, setSail, stamp } from './helpers';
 import { assertPasskey } from './passkey';
 
 /**
@@ -151,6 +151,7 @@ test('a new sailor’s machine sailor: the choice, the form, how to connect, and
   // A name of the most letters a sailor may have, which wraps on a phone.
   const player = `Wavecrestmak ${stamp()}`;
   await page.getByLabel('Your sailor’s name').fill(player);
+  await answerBorn(page);
   await page.getByRole('button', { name: 'Set sail' }).click();
   await page.getByRole('button', { name: 'I’ve written it down' }).click({ timeout: 30_000 });
 

@@ -66,6 +66,9 @@ type Event struct {
 	// Dropped: a snapshot whose base the client lacks, let go; a Resync
 	// is sent.
 	Dropped bool
+	// Deck is a message of sailing together: a knock, how the own knock
+	// stands, who is aboard, the controls offered, or going ashore.
+	Deck *pb.ServerMessage
 }
 
 // Open starts a connection: the Hello to send.
@@ -136,6 +139,9 @@ func (n *Net) Receive(now float64, b []byte) ([][]byte, Event, error) {
 	case *pb.ServerMessage_Forecast:
 		n.lastHeard = now
 		return nil, Event{Forecast: b.Forecast}, nil
+	case *pb.ServerMessage_Knock, *pb.ServerMessage_Knocking, *pb.ServerMessage_Crew, *pb.ServerMessage_Handed, *pb.ServerMessage_Ashore:
+		n.lastHeard = now
+		return nil, Event{Deck: &pb.ServerMessage{Body: m.Body}}, nil
 	}
 	return nil, Event{}, nil
 }
@@ -156,6 +162,11 @@ func (n *Net) Roam(now float64, on bool, east, north, height float64) []byte {
 			On: on, East: int32(math.Round(east * 100)), North: int32(math.Round(north * 100)), Height: uint32(math.Round(max(height, 0) * 100)),
 		}},
 	}}})
+}
+
+// Command is a Command, encoded.
+func (n *Net) Command(now float64, c *pb.Command) []byte {
+	return n.encode(now, &pb.ClientMessage{Body: &pb.ClientMessage_Command{Command: c}})
 }
 
 // Deadline is when Time must next be called.

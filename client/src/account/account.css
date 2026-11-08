@@ -33,6 +33,14 @@
   cursor: auto;
 }
 
+.account .account-pages {
+  margin: 14px 0 0;
+}
+
+.account .account-pages a {
+  color: inherit;
+}
+
 .account-passkeys {
   margin: 0 0 8px;
   padding: 0;

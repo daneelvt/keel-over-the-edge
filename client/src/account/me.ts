@@ -32,11 +32,20 @@ export interface Me extends Look {
   spectators?: 'no' | 'voyage';
   /** The player's own boat is in the water now. */
   atSea?: boolean;
+  /** Whether the player has answered when they were born; asked once of a sailor made before it was. */
+  born?: boolean;
+  /** Whether the player has accepted the Rules of the sea, asked once before their first knock or link. */
+  rules?: boolean;
   /**
    * Not the server's: the sailor the player chose on the start screen to
    * watch rather than sail; none to sail.
    */
   watch?: string;
+  /**
+   * Not the server's: the token of a link to come aboard, the knock to make
+   * once the player's own boat is in the water; none for no knock.
+   */
+  knock?: string;
 }
 
 export type SessionCheck = { kind: 'sailor'; me: Me } | { kind: 'none' } | { kind: 'failed' };

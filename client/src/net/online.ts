@@ -57,13 +57,19 @@ import {
   worldUs,
 } from './clock';
 import type {
+  AboardTold,
+  AshoreWhyTold,
   BumpTold,
   CapSeen,
   ChartEntry,
   ChunksHanded,
+  CrewTold,
   ForecastTold,
   FromWorker,
+  HandedTold,
   HelloVersions,
+  KnockCardTold,
+  KnockingTold,
   LampState,
   LifeSeen,
   LightSeen,
@@ -161,6 +167,20 @@ export class Online {
   readonly watchPlace = signal<Place | null>(null);
   /** How many watch the own boat. */
   readonly watchers = signal(0);
+  /** Whose boat the connection is aboard, as its crew, from its Welcome; null while it sails its own, watches or is idle. */
+  readonly aboard = signal<AboardTold | null>(null);
+  /** Who is aboard the boat sailed, aboard or watched, as last told; null for nobody but its skipper. */
+  readonly crew = signal<CrewTold | null>(null);
+  /** The knocks waiting on the own boat for the skipper's answer, oldest first. */
+  readonly knocks = signal<KnockCardTold[]>([]);
+  /** How the connection's own knock stands, as last told; null for none. */
+  readonly knocking = signal<KnockingTold | null>(null);
+  /** The controls offered to the connection, while the offer stands; null for none. */
+  readonly handed = signal<HandedTold | null>(null);
+  /** The connection holds the controls of the boat it sails or is aboard, as the latest snapshot says. */
+  readonly holding = signal(true);
+  /** Why the connection last left a boat it was aboard, until its own boat's Welcome. */
+  #ashore: AshoreWhyTold | null = null;
   /** What the server last told of the AI of the own machine sailor watched, and of which watch. */
   readonly #lamp = signal<{ state: LampState; of: WatchingTold } | null>(null);
   /**
@@ -314,6 +334,48 @@ export class Online {
     this.#port.postMessage({ type: 'watch', sailor });
   }
 
+  /** Asks to come aboard by a link's token: knocking tells how it stands. */
+  knock(token: string): void {
+    this.#port.postMessage({ type: 'knock', token });
+  }
+
+  /** The skipper's answer to a knock: let them aboard, or not now. */
+  answer(knock: number, let_: boolean): void {
+    this.#port.postMessage({ type: 'answer', knock, let: let_ });
+    this.knocks.value = this.knocks.value.filter((k) => k.id !== knock);
+  }
+
+  /** Offers the controls to the person in seat. */
+  hand(seat: number): void {
+    this.#port.postMessage({ type: 'hand', to: seat });
+  }
+
+  /** Takes the controls offered; the skipper's, takes them back at once. */
+  take(): void {
+    this.#port.postMessage({ type: 'take' });
+    this.handed.value = null;
+  }
+
+  /** Gives the controls back to the skipper. */
+  giveBack(): void {
+    this.#port.postMessage({ type: 'giveBack' });
+  }
+
+  /** Goes ashore from the boat the connection is aboard. */
+  goAshore(): void {
+    this.#port.postMessage({ type: 'ashore', who: 0 });
+  }
+
+  /** The skipper's: puts the person in seat ashore. */
+  putAshore(seat: number): void {
+    this.#port.postMessage({ type: 'ashore', who: seat });
+  }
+
+  /** The skipper's: closes the boat to knocks for this voyage, or opens it. */
+  closeKnocks(closed: boolean): void {
+    this.#port.postMessage({ type: 'closeKnocks', closed });
+  }
+
   /** A boat: a new one at the start, or a place in the queue, while a watch goes on. */
   sail(): void {
     this.#port.postMessage({ type: 'sail' });
@@ -404,6 +466,24 @@ export class Online {
       case 'watchers':
         this.watchers.value = m.count;
         break;
+      case 'knockCard': {
+        const rest = this.knocks.value.filter((k) => k.id !== m.card.id);
+        this.knocks.value = m.card.gone ? rest : [...rest, m.card];
+        break;
+      }
+      case 'knocking':
+        this.knocking.value = m.knocking;
+        break;
+      case 'crew':
+        this.crew.value = m.crew.people.length > 1 ? m.crew : null;
+        break;
+      case 'handed':
+        this.handed.value = m.handed.gone ? null : m.handed;
+        break;
+      case 'ashore':
+        this.#ashore = m.why;
+        this.handed.value = null;
+        break;
       case 'look':
         this.look.value = m.look;
         break;
@@ -461,12 +541,17 @@ export class Online {
       case 'welcome':
         // A new boat in the water at the start, not one back from the edge.
         this.#opening =
-          m.watching === null && !m.rejoined && (this.#away || !this.#hadBoat) ? m.harbour : null;
-        if (m.watching !== null) {
+          m.watching === null && m.aboard === null && !m.rejoined && (this.#away || !this.#hadBoat)
+            ? m.harbour
+            : null;
+        if (m.watching !== null || m.aboard !== null) {
           if (this.#bell) {
             this.notice.value = null;
           }
           this.#away = true;
+        } else if (this.#ashore !== null) {
+          // Ashore from a boat aboard: the own boat at the nearest port.
+          this.say(ashoreText(this.#ashore));
         } else if (this.#away) {
           // From watching, or idle: the own boat in the water at the start.
           this.say(BOAT_IN_THE_WATER);
@@ -477,7 +562,8 @@ export class Online {
           this.notice.value = null;
         }
         this.#bell = false;
-        if (m.watching === null) {
+        this.#ashore = null;
+        if (m.watching === null && m.aboard === null) {
           this.#hadBoat = true;
           this.#away = false;
           this.place.value = null;
@@ -491,6 +577,11 @@ export class Online {
         if (m.watching === null) {
           this.#predictor.kind = m.kind;
         }
+        this.aboard.value = m.aboard;
+        this.crew.value = null;
+        this.knocks.value = [];
+        this.handed.value = null;
+        this.holding.value = m.watching === null && m.aboard === null;
         this.epochUs = m.epochUs;
         this.onEpoch?.(m.epochUs);
         this.onWorld?.(m.world, m.land);
@@ -518,8 +609,9 @@ export class Online {
         this.#lamp.value = null;
         this.ended.value = null;
         this.watchPlace.value = null;
-        if (m.watching !== null) {
-          // Another boat's headers: none of the last one's, and no prediction.
+        if (m.watching !== null || m.aboard !== null) {
+          // Another boat's headers: none of the last one's, and no
+          // prediction until the connection holds the controls.
           this.watchers.value = 0;
           this.#watcher.reset();
           if (!this.watched) {
@@ -651,6 +743,29 @@ export class Online {
     return o;
   }
 
+  /**
+   * The controls change hands: from this snapshot the boat sailed or
+   * aboard is predicted while the connection holds its controls, its
+   * controls starting from those in force, and drawn from the snapshots
+   * while someone else aboard holds them. A watch never holds them.
+   */
+  #holds(holding: boolean): void {
+    if (this.watching.value !== null || holding === this.holding.value) {
+      return;
+    }
+    this.holding.value = holding;
+    if (holding) {
+      this.#predictor.started = false;
+      this.#fresh = true;
+      this.#use(this.#predictor);
+    } else if (!this.watched) {
+      this.#watcher.reset();
+      this.#watcher.holdFrom(this.#predictor);
+      this.#predictor.started = false;
+      this.#use(this.#watcher);
+    }
+  }
+
   /** Reads a snapshot's record: its own boat reconciled, its other boats to the fleet; then hands it back. */
   #take(data: ArrayBuffer, now: number): void {
     if (readSnapshot(new DataView(data), this.#scratch) === null) {
@@ -658,6 +773,7 @@ export class Online {
       // The other boats' samples first: the steps the reconciliation
       // replays sail in their shadow, and the watched boat's step.
       this.#predictor.wakes.observe(f);
+      this.#holds(this.#scratch.holding);
       if (this.watched) {
         this.#watcher.receive(this.#scratch);
         this.#ready();
@@ -827,6 +943,18 @@ export class Online {
     const n = Math.min(this.#frameN, this.#frames.length);
     const v = Array.from(this.#frames.subarray(0, n)).sort((a, b) => a - b);
     this.#port.postMessage({ type: 'frame', ms: v[Math.ceil(0.95 * n) - 1] ?? 0 });
+  }
+}
+
+/** The line as the connection's own boat comes into the water after going ashore. */
+export function ashoreText(why: AshoreWhyTold): string {
+  switch (why) {
+    case 'put':
+      return 'The skipper put you ashore. Your boat is in the water at the nearest port.';
+    case 'left':
+      return "The skipper's boat has left the water. Yours is in the water at the nearest port.";
+    default:
+      return 'You are ashore. Your boat is in the water at the nearest port.';
   }
 }
 

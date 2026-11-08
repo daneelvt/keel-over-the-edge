@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/daneelvt/keel-over-the-edge/internal/aboard"
 	"github.com/daneelvt/keel-over-the-edge/internal/accounts"
 	"github.com/daneelvt/keel-over-the-edge/internal/auth"
 	"github.com/daneelvt/keel-over-the-edge/internal/fleet"
@@ -105,6 +106,19 @@ type Config struct {
 	// at GET /api/status; Website is the origin whose pages may read it.
 	Status  func() *Status
 	Website string
+	// Sailing, if not nil, is sailing together's store: a month of birth
+	// given once, the Rules of the sea accepted, and skippers' links;
+	// Young stops an account whose player says they are under 13.
+	// Switches, if not nil, are the owner's switches for everyone, which
+	// the links' routes need; Origin the play origin a link's address is
+	// made at; Deck, if not nil, the world sailed, which a link's page
+	// asks whether the viewer may knock (without it, the skipper is not at
+	// sea).
+	Sailing  Sailing
+	Young    Young
+	Switches *aboard.Switches
+	Origin   string
+	Deck     Deck
 	// ReadTimeout and WriteTimeout, if not zero, replace the constants, for
 	// tests.
 	ReadTimeout, WriteTimeout time.Duration
@@ -116,7 +130,10 @@ type Deletions interface {
 	DeleteMachineByPlayer(ctx context.Context, owner, id store.AccountID) error
 }
 
-var _ Deletions = (*accounts.Accounts)(nil)
+var (
+	_ Deletions = (*accounts.Accounts)(nil)
+	_ Young     = (*accounts.Accounts)(nil)
+)
 
 // longLived are the routes whose connections stay open, which set deadlines
 // of their own: the game connection.
@@ -198,6 +215,9 @@ func Handler(cfg Config) http.Handler {
 	}
 	if cfg.Notices != nil {
 		mux.Handle("POST /api/me/notices", required(a.setNotices))
+	}
+	if cfg.Sailing != nil {
+		a.registerSailing(mux, required)
 	}
 	if cfg.Watch != nil {
 		mux.Handle("GET /api/watch", required(a.watchList))
@@ -295,6 +315,8 @@ var refusals = []string{
 
 type api struct {
 	cfg Config
+	// links are the times of each account's latest links.
+	links linkTimes
 }
 
 func versionHandler(v Version) http.Handler {

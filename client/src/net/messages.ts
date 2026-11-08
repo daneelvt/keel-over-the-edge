@@ -257,6 +257,79 @@ export interface WatchingTold {
   look: number;
 }
 
+/** Whose boat the connection is aboard, as its crew, and its seat there. */
+export interface AboardTold {
+  /** The skipper's name, as players see it, and look code. */
+  skipper: string;
+  look: number;
+  seat: number;
+}
+
+/** Someone aboard a boat: their seat, look, name ("" for a spectator), a machine sailor, the connection's own. */
+export interface PersonTold {
+  seat: number;
+  look: number;
+  name: string;
+  machine: boolean;
+  you: boolean;
+}
+
+/**
+ * Who is aboard the boat sailed, aboard or watched, the skipper (seat 0)
+ * first, and the seat of whoever holds the controls. Whoever holds them
+ * stands at the helm (station 0), the skipper at the holder's station,
+ * everyone else at the station of their seat.
+ */
+export interface CrewTold {
+  people: PersonTold[];
+  holder: number;
+}
+
+/** A knock waiting for the skipper's answer, or, gone, no longer waiting. */
+export interface KnockCardTold {
+  id: number;
+  sailor: string;
+  look: number;
+  gone: boolean;
+}
+
+/** How the connection's own knock stands, or why it was refused. */
+export type KnockStateTold =
+  | 'waiting'
+  | 'let'
+  | 'not-now'
+  | 'lapsed'
+  | 'ended'
+  | 'not-at-sea'
+  | 'full'
+  | 'closed'
+  | 'busy'
+  | 'often'
+  | 'crowded'
+  | 'own'
+  | 'first'
+  | 'try-again'
+  | 'withdrawn'
+  | 'other';
+
+/** The connection's own knock: how it stands, and the boat it is for. */
+export interface KnockingTold {
+  state: KnockStateTold;
+  skipper: string;
+  kind: number;
+  boat: string;
+}
+
+/** The controls offered to the connection, by whom and for how long; or, gone, no longer. */
+export interface HandedTold {
+  from: string;
+  seconds: number;
+  gone: boolean;
+}
+
+/** Why the connection left the boat it was aboard. */
+export type AshoreWhyTold = 'chose' | 'put' | 'left' | 'other';
+
 /** What the net worker's Hello carries besides the protocol version. */
 export interface HelloVersions {
   catalog: string;
@@ -301,6 +374,20 @@ export type ToWorker =
   | { type: 'sail' }
   /** Stop watching, without sailing: the connection is idle. */
   | { type: 'unwatch' }
+  /** Ask to come aboard by a link's token. */
+  | { type: 'knock'; token: string }
+  /** The skipper's answer to a knock. */
+  | { type: 'answer'; knock: number; let: boolean }
+  /** Offer the controls to the person in that seat. */
+  | { type: 'hand'; to: number }
+  /** Take the controls offered; the skipper's, take them back at once. */
+  | { type: 'take' }
+  /** Give the controls back to the skipper. */
+  | { type: 'giveBack' }
+  /** Go ashore (who 0), or, the skipper's, put the person in seat who ashore. */
+  | { type: 'ashore'; who: number }
+  /** Close the boat to knocks for this voyage, or open it again. */
+  | { type: 'closeKnocks'; closed: boolean }
   /** The page is going: close with 1000. */
   | { type: 'stop' }
   /** A snapshot record read, for the worker to fill again. */
@@ -358,6 +445,8 @@ export type FromWorker =
       zone: string;
       /** The boat watched, whose the boat and kind are; null for the connection's own. */
       watching: WatchingTold | null;
+      /** The boat the connection is aboard as crew, whose the boat and kind are; null for none. */
+      aboard: AboardTold | null;
       /** The look code of the boat's sailor: the connection's own, or the one watched. */
       look: number;
       /** The boat's own look code, its paint, cloth and sail number; and its name, "" for none. */
@@ -380,6 +469,16 @@ export type FromWorker =
   | { type: 'watchEnded'; why: WatchEndWhy; sailor: string }
   /** How many watch the connection's own boat. */
   | { type: 'watchers'; count: number }
+  /** A knock on the skipper's boat, or one no longer waiting. */
+  | { type: 'knockCard'; card: KnockCardTold }
+  /** How the connection's own knock stands. */
+  | { type: 'knocking'; knocking: KnockingTold }
+  /** Who is aboard the boat sailed, aboard or watched. */
+  | { type: 'crew'; crew: CrewTold }
+  /** The controls offered to the connection, or the offer gone. */
+  | { type: 'handed'; handed: HandedTold }
+  /** The connection left the boat it was aboard: its own boat's Welcome, or a Queued, follows. */
+  | { type: 'ashore'; why: AshoreWhyTold }
   /** Whether the AI of the own machine sailor watched attends to it: at the helm, or quiet. */
   | { type: 'lamp'; state: LampState }
   /** The sailor of the boat sailed or watched changed their look, at Port Royal: its code. */

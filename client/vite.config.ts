@@ -116,8 +116,9 @@ export default defineConfig({
     // its size is reported by build/size.ts against the 4 MB critical set.
     chunkSizeWarningLimit: 1500,
     rolldownOptions: {
-      // The game, and the developer page with its physics check.
-      input: { main: 'index.html', dev: 'dev.html' },
+      // The game, the developer page with its physics check, and the
+      // game's pages of plain words: the Rules of the sea and staying safe.
+      input: { main: 'index.html', dev: 'dev.html', rules: 'rules.html', safety: 'safety.html' },
     },
   },
   worker: {

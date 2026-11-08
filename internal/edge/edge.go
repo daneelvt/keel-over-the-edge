@@ -38,6 +38,7 @@ import (
 	"github.com/coder/websocket"
 	"golang.org/x/time/rate"
 
+	"github.com/daneelvt/keel-over-the-edge/internal/aboard"
 	"github.com/daneelvt/keel-over-the-edge/internal/auth"
 	"github.com/daneelvt/keel-over-the-edge/internal/bus"
 	"github.com/daneelvt/keel-over-the-edge/internal/obs"
@@ -233,6 +234,19 @@ type Config struct {
 	// Life, if not nil, is how far each kind of the sea's life is sent:
 	// its encounters go to a connection whose eye comes within reach.
 	Life *LifeReach
+	// Link and Knocker, if not nil, find a link to come aboard by its
+	// token's hash (store.ErrNotFound for none), and a knocking sailor:
+	// without them every knock reads as an ended link. Switches are the
+	// owner's for links and boarding, nil for always on; Refuser, if not
+	// nil, says who keeps whom off their boat; Capacities are each kind's
+	// people aboard, its skipper included; CrewLimit how many may be aboard
+	// boats not their own at once, DefaultCrewLimit if zero.
+	Link       func(ctx context.Context, hash [32]byte) (LinkFound, error)
+	Knocker    func(ctx context.Context, account bus.Account) (Knocker, error)
+	Switches   *aboard.Switches
+	Refuser    aboard.Refuser
+	Capacities []int
+	CrewLimit  int
 }
 
 // Edge serves the game connection.
@@ -257,6 +271,7 @@ type Edge struct {
 	encs     []*encoder
 	spect    spectators
 	voyages  voyages
+	decks    decks
 
 	mu      sync.Mutex
 	closing bool
@@ -292,6 +307,7 @@ func New(cfg Config) *Edge {
 	e.registry.init()
 	e.spect.init(cfg.SpectatorLimit)
 	e.voyages.m = map[bus.Account]uint64{}
+	e.decks.init()
 	e.m.spectatorLimit.Set(float64(e.spect.limit))
 	e.SetEnds(cfg.Ends, cfg.Closing)
 	n := cfg.Encoders
@@ -324,6 +340,7 @@ func (e *Edge) Run(ctx context.Context) {
 		wg.Go(func() { enc.run(ctx) })
 	}
 	wg.Go(func() { e.tellSpectators(ctx) })
+	wg.Go(func() { e.countAboard(ctx) })
 	wg.Wait()
 }
 

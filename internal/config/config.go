@@ -68,6 +68,9 @@ type Config struct {
 	// SpectatorLimit is the most players who may watch boats at once;
 	// beyond it, they wait in a queue of their own.
 	SpectatorLimit int
+	// CrewLimit is the most players who may be aboard boats not their own
+	// at once.
+	CrewLimit int
 	// DevSailors is how many scripted sailors sail in the world.
 	DevSailors int
 	// AISilence is how long a machine sailor's boat stays at sea with no
@@ -128,6 +131,10 @@ const DefaultBoatLimit = 1000
 // sets one: a spectator costs the server what a sailor does.
 const DefaultSpectatorLimit = 1000
 
+// DefaultCrewLimit is the crew limit unless KEEL_CREW_LIMIT sets one: each
+// person aboard is a connection encoded as a spectator is.
+const DefaultCrewLimit = 1000
+
 // DefaultBell is the bell unless KEEL_BELL sets one, and MaxBell the
 // longest it may be: the stop's other steps and its bell must fit in the
 // time Kubernetes gives a pod to stop.
@@ -165,6 +172,7 @@ func Load(getenv func(string) string) (Config, error) {
 		DatabaseURL:    getenv("KEEL_DATABASE_URL"),
 		BoatLimit:      DefaultBoatLimit,
 		SpectatorLimit: DefaultSpectatorLimit,
+		CrewLimit:      DefaultCrewLimit,
 		AISilence:      DefaultAISilence,
 		Bell:           DefaultBell,
 		Land:           true,
@@ -241,6 +249,13 @@ func Load(getenv func(string) string) (Config, error) {
 			errs = append(errs, fmt.Errorf("KEEL_SPECTATOR_LIMIT: %q is not a number from 0 to 100000", v))
 		}
 		c.SpectatorLimit = n
+	}
+	if v := getenv("KEEL_CREW_LIMIT"); v != "" {
+		n, err := strconv.Atoi(v)
+		if err != nil || n < 1 || n > 100_000 {
+			errs = append(errs, fmt.Errorf("KEEL_CREW_LIMIT: %q is not a number from 1 to 100000", v))
+		}
+		c.CrewLimit = n
 	}
 	if v := getenv("KEEL_DEV_SAILORS"); v != "" {
 		n, err := strconv.Atoi(v)

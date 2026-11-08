@@ -19,9 +19,11 @@ type Options struct {
 	// StartSheets are each kind's sheet for a start from rest, as the
 	// world started its boats with.
 	StartSheets [][][2]float64
-	Waves       *physics.Waves    // the sea's waves; nil replays a world of flat water
-	Weather     *weather.Timeline // the world's own weather; nil is the simulation's default
-	Workers     int               // goroutines stepping boats; the result never depends on it
+	// Capacities are each kind's people aboard, its skipper included.
+	Capacities []int
+	Waves      *physics.Waves    // the sea's waves; nil replays a world of flat water
+	Weather    *weather.Timeline // the world's own weather; nil is the simulation's default
+	Workers    int               // goroutines stepping boats; the result never depends on it
 	// Encounters are how the world's boats meet; nil replays a world of
 	// ghosts. A log must be replayed with what it was recorded with.
 	Encounters *physics.EncounterPrepared
@@ -65,7 +67,7 @@ func Run(f *File, opt Options) (Result, error) {
 	if len(f.Segments) == 0 {
 		return res, errors.New("replay: the log has no segment")
 	}
-	w, err := sim.New(sim.Config{Capacity: f.Header.Capacity, Kinds: opt.Kinds, StartSheets: opt.StartSheets, Waves: opt.Waves, Weather: opt.Weather, Workers: opt.Workers, Encounters: opt.Encounters, Grace: f.Header.Grace, Limit: f.Header.Limit, Terrain: opt.Terrain, Edge: opt.Edge})
+	w, err := sim.New(sim.Config{Capacity: f.Header.Capacity, Kinds: opt.Kinds, StartSheets: opt.StartSheets, Waves: opt.Waves, Weather: opt.Weather, Workers: opt.Workers, Encounters: opt.Encounters, Grace: f.Header.Grace, Limit: f.Header.Limit, Terrain: opt.Terrain, Edge: opt.Edge, Capacities: opt.Capacities})
 	if err != nil {
 		return res, err
 	}

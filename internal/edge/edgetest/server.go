@@ -19,6 +19,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/daneelvt/keel-over-the-edge/internal/aboard"
 	"github.com/daneelvt/keel-over-the-edge/internal/api"
 	"github.com/daneelvt/keel-over-the-edge/internal/auth"
 	"github.com/daneelvt/keel-over-the-edge/internal/bus"
@@ -102,6 +103,12 @@ type Config struct {
 	// Agent is the edge's: a machine sailor's agent's last call, and
 	// whether a wait of its is under way.
 	Agent func(bus.Account) (time.Time, bool)
+	// Switches, Refuser and CrewLimit are the edge's: the owner's for
+	// links and boarding, who keeps whom off their boat, and how many may
+	// be aboard boats not their own.
+	Switches  *aboard.Switches
+	Refuser   aboard.Refuser
+	CrewLimit int
 }
 
 // Server is the game's server in a test.
@@ -117,7 +124,10 @@ type Server struct {
 	Weather  *weather.Timeline
 	// Encounters are how the world's boats meet.
 	Encounters *physics.EncounterPrepared
+	// Capacities are each kind's people aboard, the catalog's.
+	Capacities []int
 
+	links    sync.Map // a link's token's hash: its edge.LinkFound
 	cfg      Config
 	sessions *auth.Cache
 	handler  atomic.Pointer[http.Handler] // the game's routes, replaced by a restart
@@ -187,7 +197,8 @@ func NewServer(t testing.TB, cfg Config) *Server {
 		cfg.Edge = &CatalogEdge
 	}
 	m := obs.NewMetrics("test", catalog.Version)
-	s := &Server{Metrics: m, Sessions: NewSessions(), Kinds: cfg.Kinds, Waves: cfg.Waves, Weather: cfg.Weather, Encounters: cfg.Encounters, cfg: cfg}
+	s := &Server{Metrics: m, Sessions: NewSessions(), Kinds: cfg.Kinds, Waves: cfg.Waves, Weather: cfg.Weather, Encounters: cfg.Encounters, cfg: cfg,
+		Capacities: cat.Capacities()}
 	s.sessions = auth.NewCache(s.Sessions, auth.CacheConfig{Log: slog.New(slog.DiscardHandler)})
 	s.start(t, s.newWorld(t))
 	s.HTTP = httptest.NewTestServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -201,11 +212,58 @@ func (s *Server) newWorld(t testing.TB) *sim.World {
 	t.Helper()
 	cfg := s.cfg
 	w, err := sim.New(sim.Config{Capacity: cfg.Capacity, Kinds: cfg.Kinds, StartSheets: cfg.StartSheets, Waves: cfg.Waves, Encounters: cfg.Encounters, Workers: 1,
-		Tick: loop.TickAt(time.Now(), Epoch), Grace: cfg.Grace, Limit: cfg.Limit, Weather: cfg.Weather, Terrain: cfg.Terrain, Edge: cfg.Edge})
+		Tick: loop.TickAt(time.Now(), Epoch), Grace: cfg.Grace, Limit: cfg.Limit, Weather: cfg.Weather, Terrain: cfg.Terrain, Edge: cfg.Edge, Capacities: s.Capacities})
 	if err != nil {
 		t.Fatal(err)
 	}
 	return w
+}
+
+// Link makes a link to come aboard skipper's boat, made now and lasting
+// a day, and returns its token.
+func (s *Server) Link(skipper store.AccountID, name string) string {
+	token, hash := aboard.NewToken()
+	s.links.Store(hash, edge.LinkFound{Skipper: bus.Account(skipper), Name: name, Made: time.Now(), Expires: time.Now().Add(24 * time.Hour)})
+	return token
+}
+
+// EndLink ends a link made by Link.
+func (s *Server) EndLink(token string) {
+	hash, _ := aboard.TokenHash(token)
+	if v, ok := s.links.Load(hash); ok {
+		l := v.(edge.LinkFound)
+		l.Ended = true
+		s.links.Store(hash, l)
+	}
+}
+
+func (s *Server) link(_ context.Context, hash [32]byte) (edge.LinkFound, error) {
+	v, ok := s.links.Load(hash)
+	if !ok {
+		return edge.LinkFound{}, store.ErrNotFound
+	}
+	return v.(edge.LinkFound), nil
+}
+
+// knocker is a sailor as a knock finds them: every sailor of the test's
+// sessions answered the age question as an adult and accepted the Rules,
+// unless their account says otherwise (Born -1: not answered).
+func (s *Server) knocker(_ context.Context, a bus.Account) (edge.Knocker, error) {
+	acc, err := s.Sessions.Accounts(context.Background(), []store.AccountID{store.AccountID(a)})
+	if err != nil {
+		return edge.Knocker{}, err
+	}
+	x, ok := acc[store.AccountID(a)]
+	if !ok {
+		return edge.Knocker{}, store.ErrNotFound
+	}
+	k := edge.Knocker{Name: x.Name, Look: lookCode(x), Born: 197001, Rules: true}
+	if x.Born < 0 {
+		k.Born, k.Rules = 0, false
+	} else if x.Born > 0 {
+		k.Born, k.Rules = x.Born, x.Rules
+	}
+	return k, nil
 }
 
 // start runs w: its loop, an edge, and the game's routes.
@@ -225,6 +283,7 @@ func (s *Server) start(t testing.TB, w *sim.World) {
 		Stopped: cfg.Stopped, Seen: cfg.Seen, LongAfter: cfg.LongAfter,
 		Watch: s.Sessions.Target, SpectatorLimit: cfg.SpectatorLimit,
 		Agent: cfg.Agent, BoatOf: cfg.BoatOf,
+		Link: s.link, Knocker: s.knocker, Switches: cfg.Switches, Refuser: cfg.Refuser, Capacities: s.Capacities, CrewLimit: cfg.CrewLimit,
 	})
 	var recorders []sim.Recorder
 	if cfg.Record != nil {

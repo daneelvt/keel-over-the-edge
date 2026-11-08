@@ -94,7 +94,68 @@ message Command {
     Watch watch = 3;
     Sail sail = 4;
     Unwatch unwatch = 5;
+    Knock knock = 6;
+    Answer answer = 7;
+    Hand hand = 8;
+    Take take = 9;
+    GiveBack give_back = 10;
+    GoAshore ashore = 11;
+    CloseKnocks close_knocks = 12;
   }
+}
+
+// Knock asks to come aboard another sailor's boat, by the token of the
+// link its skipper shared (the last part of /sail/<token>). The skipper is
+// shown a card and answers it; the knocker is told how it stands
+// (Knocking), and once let aboard is welcomed to the boat as its crew
+// (Welcome.aboard): a boat it sails leaves the water then, at once, and a
+// watch ends. A connection knocks on one boat at a time: a second knock
+// withdraws the first.
+message Knock {
+  string token = 1;
+}
+
+// Answer is the skipper's answer to a knock: let them aboard, or not now.
+// Only the boat's skipper answers its knocks, never whoever holds the
+// controls.
+message Answer {
+  // The knock's ID, as its KnockCard has it.
+  uint64 knock = 1;
+  bool let = 2;
+}
+
+// Hand offers the boat's controls, all of them, to someone aboard, by
+// their seat (Crew): from whoever holds them. The receiver is told
+// (Handed) and has 15 seconds to take them; until then the controls stay
+// where they are.
+message Hand {
+  uint32 to = 1;
+}
+
+// Take takes the controls offered to the connection; from the boat's
+// skipper, it takes them back at once, from whoever holds them, offered or
+// not.
+message Take {}
+
+// GiveBack hands the controls back to the skipper at once, from whoever
+// holds them.
+message GiveBack {}
+
+// GoAshore leaves the boat the connection is aboard, its own boat put in
+// the water at the nearest port; or, from the skipper, puts the crew
+// member in seat who ashore. A skipper cannot go ashore from their own
+// boat: they leave the water.
+message GoAshore {
+  // The seat of the crew member the skipper puts ashore; 0 to go ashore
+  // oneself.
+  uint32 who = 1;
+}
+
+// CloseKnocks closes the skipper's boat to knocks, or opens it again, for
+// this voyage: closed, every knock is refused quietly, as "not taking
+// crew".
+message CloseKnocks {
+  bool closed = 1;
 }
 
 // Watch asks to watch another sailor's boat from that boat's own place: a
@@ -169,7 +230,121 @@ message ServerMessage {
     BoatLookChanged boat_look_changed = 20;
     BoatNames boat_names = 21;
     Life life = 22;
+    KnockCard knock = 23;
+    Knocking knocking = 24;
+    Crew crew = 25;
+    Handed handed = 26;
+    Ashore ashore = 27;
   }
+}
+
+// KnockCard tells a skipper that a sailor asks to come aboard, for them to
+// answer (Answer) within two minutes; with gone, the knock is no longer
+// waiting: answered, lapsed or withdrawn. Never an age.
+message KnockCard {
+  uint64 id = 1;
+  // The sailor's name and look, as players see them.
+  string sailor = 2;
+  uint32 look = 3;
+  bool gone = 4;
+}
+
+// Knocking tells a knocker how their knock stands. Let aboard, a Welcome
+// to the boat follows.
+message Knocking {
+  KnockState state = 1;
+  // The skipper's name, their boat's kind (an index into the catalog's
+  // boats) and its name, player text: what the knock is for.
+  string skipper = 2;
+  uint32 kind = 3;
+  string boat = 4;
+}
+
+// KnockState is how a knock stands, or why it was refused. A refusal never
+// says that a block refused it.
+enum KnockState {
+  KNOCK_STATE_UNSPECIFIED = 0;
+  // The skipper has the card.
+  KNOCK_STATE_WAITING = 1;
+  // Let aboard: a Welcome follows.
+  KNOCK_STATE_LET = 2;
+  // The skipper said not now.
+  KNOCK_STATE_NOT_NOW = 3;
+  // The skipper did not answer within two minutes.
+  KNOCK_STATE_LAPSED = 4;
+  // The link has expired, or was ended, or links are off.
+  KNOCK_STATE_ENDED = 5;
+  // The skipper's boat is not in the water.
+  KNOCK_STATE_NOT_AT_SEA = 6;
+  // The boat has no room aboard.
+  KNOCK_STATE_FULL = 7;
+  // The boat is not taking crew.
+  KNOCK_STATE_CLOSED = 8;
+  // The skipper has knocks waiting: try again soon.
+  KNOCK_STATE_BUSY = 9;
+  // Too many knocks in the last hour, or on this boat again too soon.
+  KNOCK_STATE_OFTEN = 10;
+  // Too many people are aboard boats across the sea.
+  KNOCK_STATE_CROWDED = 11;
+  // The link is the connection's own.
+  KNOCK_STATE_OWN = 12;
+  // The age question or the Rules of the sea must be answered first.
+  KNOCK_STATE_FIRST = 13;
+  // The game could not look the link up in time: try again.
+  KNOCK_STATE_TRY_AGAIN = 14;
+  // Withdrawn by a knock on another boat, or the knocker went elsewhere.
+  KNOCK_STATE_WITHDRAWN = 15;
+}
+
+// Crew is who is aboard the boat the connection sails, is aboard or
+// watches, and who holds its controls: sent as it changes, and once at
+// each Welcome to a boat with anyone aboard but its skipper. Names only to
+// those aboard.
+message Crew {
+  // Everyone aboard, the skipper first, in seat order.
+  repeated Person people = 1;
+  // The seat of whoever holds the controls.
+  uint32 holder = 2;
+}
+
+// Person is someone aboard: their seat, the station on deck they stand at
+// (the skipper's, 0, is the helm's), and their look; whoever holds the
+// controls stands at the helm, and the skipper at the holder's station.
+message Person {
+  uint32 seat = 1;
+  uint32 look = 2;
+  // As players see it; "" for a spectator.
+  string name = 3;
+  // A machine sailor, sailed by an AI agent.
+  bool machine = 4;
+  // The connection's own.
+  bool you = 5;
+}
+
+// Handed offers the connection the boat's controls, from whoever holds
+// them: a Take within the seconds given takes them. With gone, the offer
+// has lapsed or been withdrawn.
+message Handed {
+  string from = 1;
+  uint32 seconds = 2;
+  bool gone = 3;
+}
+
+// Ashore says the connection has left the boat it was aboard, and why: a
+// Welcome to its own boat follows, at the nearest port, or a Queued.
+message Ashore {
+  AshoreWhy why = 1;
+}
+
+// AshoreWhy is why someone left a boat they were aboard.
+enum AshoreWhy {
+  ASHORE_WHY_UNSPECIFIED = 0;
+  // They chose to go ashore.
+  ASHORE_WHY_CHOSE = 1;
+  // The skipper put them ashore.
+  ASHORE_WHY_PUT = 2;
+  // The skipper's boat left the water.
+  ASHORE_WHY_LEFT = 3;
 }
 
 // WatchEnded says a watch has ended, or was refused: the connection is
@@ -203,6 +378,8 @@ enum WatchEnd {
   WATCH_END_QUICK = 7;
   // The game could not look the sailor up in time: try again.
   WATCH_END_BUSY = 8;
+  // The connection is aboard a boat: it goes ashore first.
+  WATCH_END_ABOARD = 9;
 }
 
 // Watchers says how many watch the connection's boat, as it changes, at
@@ -893,6 +1070,20 @@ message Welcome {
   // for none.
   uint32 boat_look = 18;
   string boat_name = 19;
+  // The connection is aboard another sailor's boat, as its crew: boat and
+  // kind are that boat's, and so are the snapshots, as when watching; its
+  // inputs steer the boat only while it holds the controls (the
+  // snapshot's holding flag). A Welcome to the connection's own boat comes
+  // when it goes ashore.
+  Aboard aboard = 20;
+}
+
+// Aboard is whose boat a connection is aboard, and its seat there.
+message Aboard {
+  // The skipper's name and look.
+  string skipper = 1;
+  uint32 look = 2;
+  uint32 seat = 3;
 }
 
 // Harbour is a world's harbour, in decimetres east and north of the

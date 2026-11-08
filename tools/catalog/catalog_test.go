@@ -18,6 +18,9 @@ var validBoats = `boats:
     name: Test boat
     description: A boat for tests
     capacity: 2
+    stations:
+      - { at: [0.55, 0.3, 0.4], pose: seated, facing: 270 }
+      - { at: [-0.3, 0.3, -0.5], pose: standing, facing: 0 }
     lengthOverall: 3.5
     beam: 1.2
     lights: [tricolour]
@@ -461,6 +464,35 @@ func TestRejects(t *testing.T) {
 			want: "/sailors: ",
 		},
 		{
+			name: "a station short",
+			files: map[string]string{"shared/catalog/boats.yaml": strings.Replace(validBoats,
+				"      - { at: [-0.3, 0.3, -0.5], pose: standing, facing: 0 }\n", "", 1)},
+			want: "boats[0].stations: 1, not one for each of the 2 it carries",
+		},
+		{
+			name: "a station outside the hull",
+			files: map[string]string{"shared/catalog/boats.yaml": strings.Replace(validBoats,
+				"at: [-0.3, 0.3, -0.5]", "at: [-0.7, 0.3, -0.5]", 1)},
+			want: "boats[0].stations[1]: (-0.7, -0.5) is outside the hull",
+		},
+		{
+			name: "a station under the water",
+			files: map[string]string{"shared/catalog/boats.yaml": strings.Replace(validBoats,
+				"at: [-0.3, 0.3, -0.5]", "at: [-0.3, -0.1, -0.5]", 1)},
+			want: "boats[0].stations[1]: -0.1 m up is not on a deck",
+		},
+		{
+			name: "two stations at one place",
+			files: map[string]string{"shared/catalog/boats.yaml": strings.Replace(validBoats,
+				"at: [-0.3, 0.3, -0.5]", "at: [0.3, 0.3, 0.3]", 1)},
+			want: "boats[0].stations[1]: within 0.45 m of stations[0]",
+		},
+		{
+			name:  "a station's pose unknown",
+			files: map[string]string{"shared/catalog/boats.yaml": strings.Replace(validBoats, "pose: standing", "pose: kneeling", 1)},
+			want:  "/boats/0/stations/1/pose",
+		},
+		{
 			name: "id in code",
 			files: map[string]string{
 				"shared/catalog/boats.yaml": validBoats,
@@ -544,6 +576,7 @@ func TestCanonicalJSONIgnoresFileOrderAndLayout(t *testing.T) {
     controls: {reef: [Full sail, One reef, Two reefs], sheet: {trim: Trim, name: Sheet, ease: Ease}}
     beam: 1.20
     capacity: 2
+    stations: [{facing: 270, pose: seated, at: [0.55, 0.30, 0.4]}, {pose: standing, at: [-0.3, 0.3, -0.5], facing: 0}]
     description: A boat for tests
     name: Test boat
     lights:
@@ -711,7 +744,7 @@ func TestEncounters(t *testing.T) {
 		{name: "not convex", boats: strings.Replace(boats, outline, "outline: [0.528, 0.592, 0.646, 0.682, 0.695, 0.685, 0.651, 0.40, 0.492, 0.342, 0]", 1), want: "not convex"},
 		{name: "a blunt stem", boats: strings.Replace(boats, outline, "outline: [0.528, 0.592, 0.646, 0.682, 0.695, 0.685, 0.651, 0.590, 0.492, 0.342, 0.1]", 1), want: "not convex"},
 		{name: "ten stations", boats: strings.Replace(boats, outline, "outline: [0.528, 0.592, 0.646, 0.682, 0.695, 0.685, 0.651, 0.590, 0.492, 0]", 1), want: "/boats/0/physics/hull/outline"},
-		{name: "wider than the beam", boats: strings.Replace(boats, "beam: 1.39", "beam: 1.2", 1), want: "wider than half the beam"},
+		{name: "wider than the beam", boats: strings.Replace(strings.Replace(boats, "beam: 1.39", "beam: 1.2", 1), "at: [0.69, 0.31, 0.35]", "at: [0.59, 0.31, 0.35]", 1), want: "wider than half the beam"},
 		{name: "longer than the boat", boats: strings.Replace(boats, "stem: 2.25", "stem: 2.5", 1), want: "not the length overall"},
 		{name: "close-hauled at 20°", boats: strings.Replace(boats, "closeHauled: 40", "closeHauled: 20", 1), want: "/boats/0/physics/rig/closeHauled"},
 		{name: "close-hauled at 81°", boats: strings.Replace(boats, "closeHauled: 40", "closeHauled: 81", 1), want: "/boats/0/physics/rig/closeHauled"},

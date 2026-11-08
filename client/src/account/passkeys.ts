@@ -12,6 +12,7 @@
 // the sailor, and for a new account its recovery code, never a token.
 
 import { type Look, lookFrom } from '../catalog/looks';
+import type { Born } from './firstwords';
 import type { Fetch, Me } from './me';
 
 /** base64url without padding, as WebAuthn's JSON forms write bytes. */
@@ -291,15 +292,17 @@ export interface Made {
 }
 
 /**
- * Makes a sailor: the name and look checked by the server, the passkey made
- * by the browser's prompt, and the account made with it.
+ * Makes a sailor: the name, look and when its player was born checked by
+ * the server, the passkey made by the browser's prompt, and the account
+ * made with it.
  */
 export async function makeSailor(
   name: string,
   look: Look,
+  born: Born,
   reach: Reach = browserReach(),
 ): Promise<Outcome<Made>> {
-  const begun = await call(reach.fetch, '/account/begin', { name, ...look });
+  const begun = await call(reach.fetch, '/account/begin', { name, ...look, born });
   if (begun.status !== 200 || begun.body === null) {
     return { ok: false, reason: reasonOf(begun) };
   }
@@ -320,7 +323,11 @@ export async function makeSailor(
   }
   return {
     ok: true,
-    value: { me: meOf(done.body), recoveryCode: String(done.body?.recoveryCode) },
+    // When the sailor was born was answered as it was made.
+    value: {
+      me: { ...meOf(done.body), born: true },
+      recoveryCode: String(done.body?.recoveryCode),
+    },
   };
 }
 

@@ -149,6 +149,9 @@ type Sailor struct {
 	// OnView, if not nil, is given each snapshot as it is decoded, with the
 	// view after it, what its entries did and the slots it samples.
 	OnView func(ev *Event)
+	// OnDeck, if not nil, is given each message of sailing together, and
+	// each Welcome, as they come.
+	OnDeck func(m *pb.ServerMessage)
 	// Tools is the account's owner's flag, as the Welcome and Tools last
 	// said.
 	Tools bool
@@ -210,6 +213,11 @@ func (s *Sailor) Drop() {
 		}
 		s.ws = nil
 	}
+}
+
+// Command sends a Command: a knock, an answer, the controls handed.
+func (s *Sailor) Command(ctx context.Context, c *pb.Command) error {
+	return s.send(ctx, s.Net.Command(s.now(), c))
 }
 
 // Roam sends the owner's free camera off the boat to (east, north),
@@ -284,6 +292,12 @@ func (s *Sailor) Sail(ctx context.Context, d time.Duration) error {
 				// A snapshot still waiting for a frame is the last
 				// connection's: its controls are not this boat's.
 				s.queued = s.queued[:0]
+			}
+			if ev.Deck != nil && s.OnDeck != nil {
+				s.OnDeck(ev.Deck)
+			}
+			if ev.Welcome != nil && s.OnDeck != nil {
+				s.OnDeck(&pb.ServerMessage{Body: &pb.ServerMessage_Welcome{Welcome: ev.Welcome}})
 			}
 			if q := ev.Queued; q != nil {
 				s.Places = append(s.Places, Place{Position: q.GetPosition(), Waiting: q.GetWaiting()})
@@ -392,7 +406,11 @@ func (s *Sailor) frame(ctx context.Context) error {
 		}
 		s.Ms = append(s.Ms, MSeen{At: time.Duration(now) * time.Microsecond, M: s.Ahead.M})
 		s.Stats.MaxAhead = max(s.Stats.MaxAhead, s.Ahead.M)
-		if s.fresh {
+		if sn.Elsewhere {
+			// Someone else aboard holds the controls: the controls start
+			// again at those in force when they come back.
+			s.fresh = true
+		} else if s.fresh {
 			// On each connection the controls start at the indices in
 			// force: the word the server holds.
 			s.sent = Input{Helm: sn.Helm, Sheet: sn.Sheet, Mode: sn.Mode, Way: sn.Way, Order: sn.Order, Target: sn.Target, Reef: sn.Reef}
@@ -439,6 +457,11 @@ func (s *Sailor) frame(ctx context.Context) error {
 			p.Step(s.sent)
 			s.Stats.Steps++
 			s.Trace.step(now, p.Tick, s.sent)
+			continue
+		}
+		if s.latest != nil && s.latest.Elsewhere {
+			p.Step(s.sent)
+			s.Stats.Steps++
 			continue
 		}
 		in := s.controls(s.stepN)

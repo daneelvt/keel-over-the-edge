@@ -11,7 +11,10 @@
 // no part over another or over the boat. Watching another sailor's boat,
 // every control that acts is gone (the helm, the sheet, the autopilot,
 // the free camera, taking the boat over): the instruments read the boat
-// watched, and a plate where the controls were says whose it is.
+// watched, and a plate where the controls were says whose it is. Aboard
+// another's boat as crew, or the skipper while another aboard holds the
+// controls, it is the same, a plate of sailing together in the watch
+// plate's place; the knocks on the own boat stand under the case.
 //
 // The clear view hides every part but Back to the boat and its own key,
 // which stay in their places, and shows each notice alone at the top as it
@@ -37,6 +40,7 @@ import type { ClearView } from './clearview';
 import type { ShipsClock } from './clock';
 import { Helm, Reef, type ReefActions, Sheet } from './controls';
 import type { Countdown } from './countdown';
+import { type DeckView, deckPlate, deckShown, useDeck } from './decklazy';
 import { Menu } from './menu';
 import type { HudModel } from './model';
 import type { Notices } from './notices';
@@ -93,6 +97,30 @@ function LazyWatch({ watch, part }: { watch: WatchView; part: 'plate' | 'list' }
     return null;
   }
   return part === 'plate' ? <m.WatchBar view={watch} /> : <m.SeaWatchList view={watch} />;
+}
+
+/** Sailing together's parts: under the case, at the foot of the screen, or its windows over the rest. */
+function LazyDeck({
+  deck,
+  part,
+  sailor,
+}: {
+  deck: DeckView;
+  part: 'top' | 'foot' | 'windows';
+  sailor: string | null;
+}) {
+  const shown = deckShown(deck);
+  const m = useDeck(shown);
+  if (m === null || !shown) {
+    return null;
+  }
+  return part === 'top' ? (
+    <m.DeckTop deck={deck} />
+  ) : part === 'foot' ? (
+    <m.DeckFoot deck={deck} />
+  ) : (
+    <m.DeckWindows deck={deck} sailor={sailor} />
+  );
 }
 
 /** The controls that act on the boat: the helm, the autopilot and the sheet; none on a boat watched. */
@@ -182,6 +210,8 @@ export interface ScreenProps {
   harbour?: HarbourView | null;
   /** Watching another sailor's boat; null in the offline sandbox. */
   watch?: WatchView | null;
+  /** Sailing together; null in the offline sandbox. */
+  deck?: DeckView | null;
   /** The running light of the own machine sailor's AI, while watching it; null in the offline sandbox. */
   lamp?: ReadonlySignal<Lamp> | null;
   /** The full screen's switch and key; null where it is not run. */
@@ -224,6 +254,10 @@ function Screen(props: ScreenProps) {
   const notices = props.notices ?? null;
   const end = props.end ?? null;
   const watch = props.watch ?? null;
+  const deck = props.deck ?? null;
+  // Aboard without the controls, or the skipper while another holds
+  // them: the plate of sailing together stands where the watch plate would.
+  const decked = deck !== null && deckPlate(deck);
   const full = props.fullScreen ?? null;
   const camera = props.camera ?? null;
   const clear = props.clear ?? null;
@@ -289,6 +323,7 @@ function Screen(props: ScreenProps) {
         {watch !== null && steer ? <WatchersLine watch={watch} /> : null}
         <BumpLine model={model} />
         {notices !== null && !cleared ? <NoticeLine notices={notices} /> : null}
+        {deck !== null ? <LazyDeck deck={deck} part="top" sailor={props.sailor} /> : null}
         {props.connection !== null ? (
           <ConnectionLine view={props.connection} takeover={steer} />
         ) : null}
@@ -366,11 +401,13 @@ function Screen(props: ScreenProps) {
               : null
           }
           watch={watch}
+          deck={deck}
           fullScreen={full}
         />
       ) : null}
-      {watch !== null ? <LazyWatch watch={watch} part="plate" /> : null}
+      {watch !== null && !decked ? <LazyWatch watch={watch} part="plate" /> : null}
       {watch !== null ? <LazyWatch watch={watch} part="list" /> : null}
+      {deck !== null ? <LazyDeck deck={deck} part="foot" sailor={props.sailor} /> : null}
       <SeaControls
         steer={steer}
         helm={props.helm}
@@ -380,6 +417,7 @@ function Screen(props: ScreenProps) {
         model={model}
         settings={settings}
       />
+      {deck !== null ? <LazyDeck deck={deck} part="windows" sailor={props.sailor} /> : null}
     </div>
   );
 }

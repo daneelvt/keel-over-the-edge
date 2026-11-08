@@ -157,6 +157,9 @@ type Metrics struct {
 	EdgeSpectators      *prometheus.GaugeVec   // by state
 	EdgeSpectatorLimit  prometheus.Gauge
 	EdgeWatchers        prometheus.Histogram
+	EdgeKnocks          *prometheus.CounterVec // by result
+	EdgeDeck            *prometheus.CounterVec // by what changed
+	EdgeAboard          prometheus.Gauge
 	EdgeRefused         *prometheus.CounterVec   // by what
 	EdgeViewBoats       *prometheus.HistogramVec // by band
 	EdgeSnapshotBytes   prometheus.Histogram
@@ -364,6 +367,15 @@ func NewMetrics(build, catalog string) *Metrics {
 		Name: "keel_edge_watchers", Help: "Spectators of each boat watched, sampled once a second.",
 		Buckets: []float64{1, 2, 5, 10, 20, 50, 100, 200, 500, 1000},
 	})
+	m.EdgeKnocks = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "keel_edge_knocks_total", Help: "Knocks to come aboard a boat, by what came of them.",
+	}, []string{"result"})
+	m.EdgeDeck = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "keel_edge_deck_total", Help: "Changes aboard boats: arrivals, the controls handed, taken and given back, and people going ashore, by why.",
+	}, []string{"what"})
+	m.EdgeAboard = prometheus.NewGauge(prometheus.GaugeOpts{
+		Name: "keel_edge_aboard", Help: "People aboard boats not their own, their connections' graces included.",
+	})
 	m.EdgeRefused = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Name: "keel_edge_refused_total", Help: "What a game connection sent that it may not, dropped: controls from a connection that sails no boat.",
 	}, []string{"what"})
@@ -467,7 +479,7 @@ func NewMetrics(build, catalog string) *Metrics {
 	reg.MustRegister(m.LeaseEpoch, m.LeaseWait, m.LeaseLost, m.Restores, m.RestoredBoats, m.RestoreGap, m.PersistBatch, m.PersistCheckpoint, m.PersistWrites)
 	reg.MustRegister(m.Grace, m.EdgeConnections, m.EdgeUpgrades, m.EdgeHellos, m.EdgeJoins, m.EdgeCloses, m.EdgeMessages,
 		m.EdgeBytes, m.EdgeDropped, m.EdgeEncodeDuration, m.EdgeWriteDuration, m.EdgeInputMargin, m.ClientRTT, m.ClientFrame, m.ClientTier, m.ClientRenderScale,
-		m.EdgeEncoders, m.EdgeQueued, m.EdgeWatches, m.EdgeSpectators, m.EdgeSpectatorLimit, m.EdgeWatchers, m.EdgeRefused, m.EdgeViewBoats, m.EdgeSnapshotBytes, m.EdgeSnapshotEntries, m.EdgeSnapshotLag, m.EdgeResyncs)
+		m.EdgeEncoders, m.EdgeQueued, m.EdgeWatches, m.EdgeSpectators, m.EdgeSpectatorLimit, m.EdgeWatchers, m.EdgeKnocks, m.EdgeDeck, m.EdgeAboard, m.EdgeRefused, m.EdgeViewBoats, m.EdgeSnapshotBytes, m.EdgeSnapshotEntries, m.EdgeSnapshotLag, m.EdgeResyncs)
 	reg.MustRegister(info, m.Tick, m.TickDuration, m.PhaseDuration, m.Ticks, m.TicksLate, m.TicksSkipped,
 		m.ClockDrift, m.Boats, m.BoatLimit, m.QueueLength, m.BoatsByKind, m.QueueByKind, m.QueueOldest, m.AICap, m.AIReserve, m.Admissions, m.QueueWait, m.GridDuration, m.Workers, m.Commands, m.Snapshots,
 		m.DBQueryDuration, m.DBQueryErrors, m.SchemaVersion, m.AccountsCreated, m.NamesRefused, m.Ceremonies, m.SignIns,
@@ -582,11 +594,11 @@ func NewMetrics(build, catalog string) *Metrics {
 	reg.MustRegister(m.MachinesCreated, m.MachinesDeleted, m.OAuthAuthorize, m.OAuthTokens, m.OAuthReuse, m.OAuthRegistered,
 		m.ClientFetches, m.ClientFetchTime, m.DoorRequests, m.DoorDuration, m.GrantsLive)
 	for _, a := range []string{"flag", "unflag", "place", "unseen", "seen", "world", "remake", "lifetime", "cap", "priority", "unpriority",
-		"stop", "start", "revoke", "delete", "search", "card"} {
+		"stop", "start", "revoke", "delete", "search", "card", "link-lifetime", "links", "boarding"} {
 		m.OwnerActions.WithLabelValues(a)
 	}
 	for _, w := range []string{"roam", "place", "flag", "unseen", "request", "world", "remake", "lifetime", "cap", "priority",
-		"stop", "start", "revoke", "delete", "search", "card"} {
+		"stop", "start", "revoke", "delete", "search", "card", "settings"} {
 		m.OwnerRefused.WithLabelValues(w)
 	}
 	reg.MustRegister(m.OwnerActions, m.OwnerRefused, m.OwnerView)

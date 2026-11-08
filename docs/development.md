@@ -197,6 +197,18 @@ the tool checks that and generates `catalog.PhysicsParams` for the server and
 `writeParams` (`client/src/predict/params.gen.ts`) for the client, so the
 three cannot drift.
 
+A boat's `stations` are where the people aboard are drawn, one for each
+person it can carry (`capacity`), in seat order: the first is the helm,
+where its sailor is today (the gunwale's seat of a boat with a tiller, the
+`sailor` node of one with a wheel), then each seat's; each a point in the
+model's frame, standing (the deck between the feet) or seated (the seat's
+edge, as a dinghy's helmsman sits), and the way the person faces. The tool
+checks that there is one for each person, within the hull's beam and
+length, above the waterline and below the boom, and none within 0.45 m of
+another; `render/sailors/crew.test.ts` holds each to its model's deck
+within 1 cm, the first to the helm, with nothing of the hull where a
+person stands.
+
 ## The physics package
 
 `internal/physics` steps boats. The server runs it natively, and the client
@@ -3570,8 +3582,10 @@ sees the reason's words, not the owner's reason, which may name a report or
 another player.
 
 **The record** (`account_action`): every stop, start, revoke and delete,
-and every flag, priority, cap and lifetime set, with the sailor's name as
-it was, the reason or value, `page` or `command`, and the address. It has
+and every flag, priority, cap and lifetime set, and every switch for
+sailing together, with the sailor's name as it was, the reason or value,
+`page` or `command` (or `game`, for an account the game stopped because
+its player said they are under 13: `young`), and the address. It has
 no foreign key, so it outlives a deletion; the `sessions` job deletes
 entries older than two years. The logs keep 14 days: a stop's reason must
 outlive them. `GET /owner/api/actions.json[?account=…]` lists the latest
@@ -3591,10 +3605,27 @@ go run ./cmd/keel admin -addr 127.0.0.1:9090 show 0199…
 `search [TEXT]` (`-` reads it from the standard input, so a token stays out
 of the shell's history), `show ID`, `stop ID -reason …`, `start ID`,
 `revoke ID -reason …`, `delete ID -name … -reason …`, `flag ID on|off`,
-`priority ID on|off`, `cap ID N`, `lifetime 90d`, `actions [ID]`; text, or
-`-json` as keel answers. Without `-yes`, `stop`, `revoke`, `delete` and
-`lifetime` only say what they would do. The command's actions are recorded
+`priority ID on|off`, `cap ID N`, `lifetime 90d`, `actions [ID]`,
+`settings`, `links on|off`, `boarding on|off`, `linklife 24h`; text, or
+`-json` as keel answers. Without `-yes`, `stop`, `revoke`, `delete`,
+`lifetime`, `links off` and `linklife` only say what they would do. The command's actions are recorded
 as `command` (the `Keel-Source` header).
+
+### Links to come aboard
+
+The owner's switches for everyone, on the Accounts tab and in `keel
+admin`: how long a skipper's link lasts from when it is made (24 hours to
+start, 5 minutes to 7 days), whether links work, and whether anyone may
+come aboard. They live in the `setting` row and, loaded as keel starts, in
+one set in memory (`aboard.Switches`) that the play routes, the owner's
+page and the game connection read. `GET /owner/api/settings.json`; `POST
+/owner/api/settings {"linkLifetime"?, "links"?, "boarding"?, "check"?}`
+answers `{"settings", "words", "ended"}`, the working links it stops. Each
+change is written with its record in one transaction, then to memory.
+Links off ends every live link for good; a shorter lifetime stops older
+links at once and ends nothing, but a longer one never lengthens a link
+past the expiry it was made with. The `sessions` job deletes links a day
+after they stop working; a deleted skipper's go with the account.
 
 ### The free camera
 
@@ -4422,6 +4453,7 @@ own (9091 in the cluster) it reads the metrics alone. The other variables:
 | `KEEL_CLIENT_DIR` | none | The game's built page (`client/dist`), served by the `play.` listener (see [Routes and middleware](#routes-and-middleware)); it must hold `index.html`, or the server does not start. Its `owner/` folder, the world page, is served by the internal listener alone, if it is there. The image sets it; in development Vite serves the pages instead |
 | `KEEL_BOAT_LIMIT` | 1000 | The most boats at sea at once, from 1 to 4,096; beyond it players wait in a queue of up to 4,096. A starting value, until load tests on the server's machine set it. Machine sailors sail at most half of them, with half of that kept for them |
 | `KEEL_SPECTATOR_LIMIT` | 1000 | The most players watching boats at once, from 0 to 100,000; beyond it they wait in a queue of their own of up to 4,096. A priority account, an owner watching their own machine sailor and a player waiting for a boat never wait (see [Watching a boat](#watching-a-boat)) |
+| `KEEL_CREW_LIMIT` | 1000 | The most players aboard boats not their own at once, from 1 to 100,000: each is a connection encoded as a spectator's is. A knock let aboard past it is refused (see [Sailing together](#sailing-together)) |
 | `KEEL_AI_SILENCE` | `3m` | How long a machine sailor's boat stays at sea with no call from its agent before its minute's grace begins, from 1s to 1h |
 | `KEEL_BELL` | `3s` | How long the world sails on, as the server stops, once every phone has been told it is restarting; from `0s` to `10s`. `tools/dev` and `tools/e2e` set `0s` |
 | `KEEL_DEV_SAILORS` | 0 | Scripted sailors, up to 4,096; any beyond the boat limit stay ashore |
@@ -4630,12 +4662,18 @@ go test -run '^$' -bench 'Tick|Workers' ./internal/sim
 | Route | What |
 |-------|------|
 | `GET /api/version` | The build and the catalog's version |
-| `POST /account/begin` | `{"name", "look"}` begins making a sailor: 200 with the creation options (`{"publicKey": …}`) and the ceremony's cookie; 422 `{"error": reason}` for a refused name, before any passkey; 409 when the request already has a session; 400 for a malformed body, an unknown member or a look not in the catalog; 415 for anything but JSON; 413 past 16 KB |
+| `POST /account/begin` | `{"name", "look", "born": {"year", "month"}}` begins making a sailor: 200 with the creation options (`{"publicKey": …}`) and the ceremony's cookie, which keeps the month of birth until finish writes it on the account; 400 `born` for no month of birth or not one; 403 `young` under 13, with nothing made or kept (not even in the log) and the cookie `keel-young` (30 days, readable by the page), which answers 403 `young` before anything else, here and at finish; 422 `{"error": reason}` for a refused name, before any passkey; 409 when the request already has a session; 400 for a malformed body, an unknown member or a look not in the catalog; 415 for anything but JSON; 413 past 16 KB |
 | `POST /account/finish` | The browser's answer (`PublicKeyCredential.toJSON()`): 201 `{"name", "look", "recoveryCode"}` and the session cookie, the account made with its passkey; 400 `refused`; 409 `again`; 422 `taken` with `unknown`, the passkey for the browser to forget, when another sailor took the name meanwhile |
 | `POST /signin/begin`, `/signin/finish` | A sign-in with any of the game's passkeys the browser holds (`?mediation=conditional` on both for autofill): 200 `{"name", "look", "accepted", "recovered"?}` and a new session's cookie; 404 `unknown-passkey` with `unknown` for a passkey no account has |
 | `POST /recovery` | `{"code"}`: 200 `{"name", "look", "addPasskey": true}` and a session held to adding a passkey; 422 `code` |
 | `POST /logout` | This session ends: 204, the cookie cleared |
-| `GET /api/me` | The session's account, `{"name", "look", "kind", "noticesOff", "addPasskey"?, "machines"?}` (how many machine sailors it has), or 401; a session held to adding a passkey is answered too |
+| `GET /api/me` | The session's account, `{"name", "look", "kind", "noticesOff", "addPasskey"?, "machines"?, "born", "rules"}` (how many machine sailors it has; whether its player has given a month of birth and accepted the Rules of the sea), or 401; a session held to adding a passkey is answered too |
+| `POST /api/me/born` | `{"year", "month"}`, once, for an account made before the question: 204; 409 `answered`; 400 `born`; 403 `young` under 13: nothing of the answer kept, the cookie set, and the account stopped as the owner's Stop does (recorded `young`, by the `game`), for the owner to review; its player is told only "This sailor has been stopped." |
+| `POST /api/me/rules` | The Rules of the sea accepted: 204, again too |
+| `POST /api/sail/link` | A new "sail with me" link, the old one ended: 201 `{"url", "expires"}`, at the play origin, `/sail/` and 128 random bits in base64url; the database keeps the token's SHA-256 alone. 403 `born` (no month of birth, or not 13 or over) and `rules`; 409 `links-off`; 429 `often` past 10 an hour (in memory) |
+| `POST /api/sail/link/end`, `GET /api/sail/link` | The skipper's link ended (204); whether it works, `{"live", "expires"?}` |
+| `GET /api/sail/{token}` | What a link's page shows, with a session: `{"skipper", "look", "kind", "boat", "can"}` (`ok`, `not-at-sea`, `full`, `closed` or `own`, from the world sailed); 410 `ended` for an unknown, ended or expired link, one past the lifetime in force, or links off. A token not of the game's form never reaches the database. It changes nothing |
+| `GET /sail/{token}` | The game's page, `index.html`, whatever the token: no session read, no referrer sent on, no index kept (`robots.txt` disallows `/sail/`) |
 | `GET /api/account` | The account page: `{"name", "look", "created", "recoveryMade", "passkeys", "confirmedUntil"}`, each passkey `{"id", "madeOn", "created", "lastUsed", "synced"}` |
 | `POST /api/account/passkeys/begin`, `…/finish` | One more passkey; after the recovery code, the session let go and `recoveryCode` in the answer |
 | `POST /api/account/confirm/begin`, `…/finish` | One of the account's own passkeys, user verification required: 200 `{"confirmedUntil"}`, the session confirmed for 5 minutes |
@@ -5467,6 +5505,116 @@ second).
 2m -url https://macbook.local` has 200 headless spectators watch one boat
 (the Go client's `Spectator`), reporting as the sailing bots do;
 `BenchmarkEncodeSpectators` encodes 100 and 1,000 spectators of one boat.
+
+### Sailing together
+
+A skipper shares a **link** ("Sail with me" in the menu: share, copy, a new
+link, links off, closed to knocks); whoever opens it, signed in or after
+making a sailor, **knocks** on the game connection, and the skipper lets
+each arrival aboard, every time. Aboard, one person **holds the boat's
+controls**, all of them: the skipper unless they hand them on.
+
+**The rules** (`internal/aboard`): a month and a year of birth (`Born`, kept
+on the account as year × 100 + month) and the band worked out from it at
+each entry (`BandOf`: under 13, 13 to 17, 18 and over, a year older on the
+first of the month); the owner's switches in memory (`Switches`: links,
+boarding, the link's lifetime); links' tokens (16 random bytes, base64url,
+22 characters; only the SHA-256 kept, `TokenHash` refusing anything that
+cannot be one before the database is asked); `Live`, a link's validity
+under the lifetime in force; and `Refuser`, who keeps whom off their boats
+without saying why, which nothing fills yet (`NoBlocks`). A knock needs the
+age question answered, 13 or over, and the Rules of the sea accepted.
+
+**Knocks** (`internal/edge/deck.go`, in memory, lost harmlessly at a
+restart): `Command.knock{token}` is rate-limited (10 an hour an account),
+looked up (`Config.Link`, `Config.Knocker`, at most 2 s, on the reader),
+then refused or shown to the skipper as a `KnockCard`, with the knocker
+told how it stands (`Knocking`). Refusals: the link ended, expired or links
+off (`ended`); the own link; the boat not in the water, a machine sailor's
+(no machine sailor's boat takes anyone, and machine sailors never knock),
+boarding off, the boat closed to knocks, someone put ashore from it this
+voyage, or a refusal of the `Refuser`, all `closed`; no room (capacity
+counts the skipper), or the crews across the world at `KEEL_CREW_LIMIT`
+(1,000); five already waiting (`busy`); the same boat within 10 minutes of
+"not now" (`often`). A knock lapses after 2 minutes; a second knock
+withdraws the first; a knocker's connection ending withdraws theirs; the
+skipper is shown the knocks waiting again at each Welcome. Only the
+skipper answers (`Command.answer`), never whoever holds the controls.
+
+**Aboard** (`internal/sim/crew.go`): let aboard, the edge sends
+`bus.Board`; the simulation takes the knocker's own boat out of the water
+in the same tick (a `Leave` with the result `Gone`), gives up any place it
+held in the queue, and adds them to the frame's `Crew` at the lowest free
+seat (the skipper's is 0). Crew have no boat and hold no place against the
+boat limit. Who is aboard and who holds the controls (`Holder`, the zero
+account for the skipper) are world state, in the snapshot (version 17),
+the digest and the input log (format 16), so a restart keeps everyone
+aboard: each comes back within the grace a boat has. A crew member's
+connection is welcomed with `Welcome.aboard` and encoded as a spectator's
+is, the boat its eye, with a margin; `Crew` tells those aboard, and the
+boat's spectators without names, who is aboard and who holds the controls,
+as that changes (the frame's `Deck` counts the changes). Other connections
+see one sailor on each boat: whoever holds its controls (`Frame.HelmLook`).
+
+**The controls** pass whole, never in part. `Command.hand{to}` (a seat),
+from whoever holds them, offers them for 15 s (`Handed`); only the
+receiver's `Command.take` moves them; the skipper's `take` takes them back
+at once from anyone, offered or not; `Command.giveBack` gives them back. In
+the simulation each change of hands (`bus.SetHolder`) moves the slot's
+generation on and stamps the controls in force with it, written back to the
+slot: a word the former holder's connection wrote, or is still to write,
+carries the old generation and is never applied, however late, and the new
+holder starts from the controls in force, so the boat does not jump and an
+autopilot engaged steers on. Each encoder reads every frame who holds each
+boat its connections sail or are aboard, and lets a connection steer, with
+that frame's generation, only while it holds them; the snapshot's flag
+`Elsewhere` (bit 6) tells a connection that does not, and the page then
+draws the boat from the snapshots as when watching, and predicts it again
+from the controls in force when it holds them. A holder whose connection
+ends gives the controls back the same tick; a skipper whose connection ends
+leaves the boat its grace, the holder sailing on. A swap of boat in port
+gives them back too, and puts ashore whoever the new boat has no room for.
+
+**Ashore**: `Command.ashore{who}`, 0 for oneself, a seat from the skipper
+(the only one who puts anyone ashore; there are no votes). The simulation
+puts the person's own boat in the water at the port nearest where they
+were (`portPlace`: the first place from the middle of the nearest port's
+harbour outward where a new boat fits, on rings 10 m apart, at bearings
+written out so that no trigonometry runs), ahead of anyone waiting, or at
+the head of the queue at the limit; a boat leaving the water puts everyone
+aboard ashore the same way (an `Ashore` of why 3, which the tick makes
+itself). The connection is told why (`Ashore`), then welcomed to its boat.
+
+**The page**: the age question as a sailor is made, and once for an older
+account; the link's landing at `/sail/<token>` (`client/src/account/comeaboard.tsx`);
+the Rules of the sea and the safety pages (`rules.html`, `safety.html`);
+the deck's panels (`client/src/ui/deck.tsx`, `sailwithme.tsx`, their words in
+`deckwords.ts`); `Online`'s `aboard`, `crew`, `knocks`, `knocking`,
+`handed` and `holding`. `?sandbox&test` and `keel.deckScene(name)` show
+each panel with a scene of its own, for the layout's tests and pictures.
+
+**Metrics**: `keel_edge_knocks_total{result}`, `keel_edge_deck_total{what}`
+(arrivals, the controls offered, taken, taken back and given back, and
+going ashore by why) and `keel_edge_aboard`.
+
+**Testing it**: `internal/sim/crew_test.go` (boarding, room, the
+controls changing hands and the former holder's words dropped, ashore, the
+grace, the snapshot); `internal/edge/edgetest/aboard_test.go` (two and
+three sailors on the in-memory network: a knock, let aboard, handed,
+taken, taken back, given back, ashore; knocks lapsing, the sixth refused,
+not now, an ended link, closed to knocks, the age question first, a
+machine sailor's boat; the holder's connection ending, a crew member who
+was not handed the controls taking nothing, the skipper's boat leaving);
+`BenchmarkEncodeCrew` (forty aboard one boat, encoded as spectators are).
+The load bot sails crews:
+
+```sh
+go run ./tools/loadbot -n 40 -crews 5 -for 5m -url https://macbook.local
+```
+
+sails 40 players in groups of five: each group's first makes a link, the
+others knock with it and are let aboard, and the skipper hands the controls
+round and takes them back, reporting the knocks, arrivals and hand-overs.
 
 ## The local cluster
 
@@ -7271,6 +7419,7 @@ things and their pictures stay in one wind. The developer page is
 |-------|------|
 | `?sandbox` | The offline sandbox alone: no server, no session, no start screen. The browser tests of the scene use it |
 | `?boat=keelboat` | The sandbox's boat: any of the catalog's boats, by its id (the first if the catalog has none of that id). Every kind is prepared in the module; the developer panel changes it |
+| `?crew=5` | That many people aboard the sandbox's boat, its capacity at most, each in a look of their own, the same at every load, every sixth a machine; with more than one, the second holds the controls (below) |
 | `?wind=12,45` | The sandbox's wind, steady: knots 10 m up, and the degrees it comes from |
 | `?weather=stormy` | The sandbox's weather: one of the catalog's regimes (`settled`, `trade`, `unsettled`, `stormy`), or `steady` |
 | `?dev` | The developer panel (a lazy import, outside the first download); see below |
@@ -7353,7 +7502,27 @@ scale with the boat's length or its masthead's height, whichever is the
 more, against the catalog's first boat's (`sizeOf` in `camera.ts`): about
 1.4 for the keelboat.
 
+**People aboard** (`client/src/render/sailors/crew.ts`): when others are
+aboard the boat in view (the connection's `crew`), whoever holds the
+controls is its sailor at the helm, in their look, as the one sailor is
+drawn otherwise; the skipper, while another holds them, stands at that
+one's station; everyone else at their seat's (the catalog's `stations`).
+The sail's machine mark stays the skipper's. The people are posed once and
+drawn still and rigid, each level in one instanced draw however many looks:
+the nearest 12 within 60 m of the camera as their looks' deck level,
+skinned once on the CPU (the clips' `helm` seated, `standing-idle`
+standing); the rest as their looks' far level, stood up for a standing
+station by moving each of its vertices with the bones of the deck level's
+vertex nearest it seated. Each level's figures are triangle lists in a
+float texture its vertex stage reads by vertex and instance, so an
+instance runs its level's largest figure's vertices, those past its own
+folded away. The fleet's looks' layered atlases colour them. From the
+tall ship's chase camera her forty are all far: one more draw (and its
+shadow's), some 11,500 triangles.
+
 ```sh
+# https://localhost:5173/?sandbox&boat=tall-ship&crew=40   forty aboard the tall ship
+# https://localhost:5173/?sandbox&boat=keelboat&crew=5     five aboard the keelboat
 # https://localhost:5173/?sandbox&boat=keelboat        the keelboat in the sandbox: R reefs her, F shakes a reef out
 # https://localhost:5173/?sandbox&boat=keelboat&dev    with the panel, to change the boat
 # https://localhost:5173/?sandbox&boat=keelboat&sky=midnight   her tricolour lit at the masthead
@@ -7565,6 +7734,12 @@ where the server has it at the tick it is drawn at, sees it turn, and still
 sees it through its grace after its page closes; and, through the lag proxy
 (or netem), for a minute no near boat held in more than 1% of frames but in
 retransmission timeouts, which it reports, and no correction drawn at once.
+`crew.spec.ts` puts people aboard at a phone's 360 × 640: forty aboard the
+tall ship, each at their station on her deck and one at the wheel, in a
+draw or two more than her one sailor, her frames, each drawn and waited
+for, little dearer than with her one sailor and, on a real GPU, within a
+frame at 60 Hz, from the chase camera and close (`@long`); and the
+keelboat's five on her deck.
 `fleet.spec.ts` draws other boats in the sandbox: a boat of the fleet as
 the own boat at seven poses, and a keelboat as the own keelboat with her
 jib and reefed, 64 boats within 22 draw calls and 200,000 triangles, a

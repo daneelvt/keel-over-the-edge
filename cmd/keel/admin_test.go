@@ -15,6 +15,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/daneelvt/keel-over-the-edge/internal/aboard"
 	"github.com/daneelvt/keel-over-the-edge/internal/accounts"
 	"github.com/daneelvt/keel-over-the-edge/internal/auth"
 	"github.com/daneelvt/keel-over-the-edge/internal/catalog"
@@ -33,6 +34,7 @@ type adminFixture struct {
 	st         *store.Store
 	logs       *syncBuffer
 	lifetime   *oauth.Lifetime
+	switches   *aboard.Switches
 	ann, mary  store.AccountID
 	connection string
 }
@@ -67,7 +69,9 @@ func newAdminFixture(t *testing.T) *adminFixture {
 	if err != nil {
 		t.Fatal(err)
 	}
-	o := owner.New(owner.Config{Weather: wcfg.Prepared, Accounts: st, Sessions: sessions, Hand: hand, Machines: st, Lifetime: f.lifetime, Log: log, Metrics: metrics})
+	f.switches = aboard.NewSwitches(aboard.DefaultLifetime)
+	o := owner.New(owner.Config{Weather: wcfg.Prepared, Accounts: st, Sessions: sessions, Hand: hand, Machines: st, Lifetime: f.lifetime, Log: log, Metrics: metrics,
+		Switches: f.switches, Sail: st})
 	f.srv = httptest.NewServer(o.Handler())
 	t.Cleanup(f.srv.Close)
 	return f

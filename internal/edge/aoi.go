@@ -90,7 +90,7 @@ func (a *aoi) find(f *bus.Frame, own int32, x, y float64, base, next *connView, 
 		// enters or crosses into the band, or its sailor's look, its own
 		// look or its kind changes; between them it stays as the client
 		// last saw it.
-		if kept && !near && !wasNear && !farTick && baseView.Boats[vs].Look == f.Look[s] &&
+		if kept && !near && !wasNear && !farTick && baseView.Boats[vs].Look == f.HelmLook(s) &&
 			baseView.Boats[vs].BoatLook == f.BoatLook[s] && baseView.Boats[vs].Kind == f.Kind[s] {
 			next.view.Boats[vs] = baseView.Boats[vs]
 			continue
@@ -102,7 +102,8 @@ func (a *aoi) find(f *bus.Frame, own int32, x, y float64, base, next *connView, 
 		if f.Machine[s] {
 			next.view.Boats[vs].Flags |= protocol.Machine
 		}
-		next.view.Boats[vs].Look = f.Look[s]
+		// The sailor at the helm: whoever holds the controls.
+		next.view.Boats[vs].Look = f.HelmLook(s)
 		next.view.Boats[vs].BoatLook = f.BoatLook[s]
 		if kept && protocol.Relooked(&baseView.Boats[vs], &next.view.Boats[vs]) {
 			next.view.Boats[vs].Flags |= protocol.Relook

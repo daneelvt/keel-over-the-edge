@@ -83,8 +83,8 @@ func (q *Queries) DeletePasskey(ctx context.Context, arg DeletePasskeyParams) (i
 }
 
 const insertCeremony = `-- name: InsertCeremony :exec
-INSERT INTO webauthn_ceremony (handle_hash, kind, account_id, name, name_key, look, version, skin, hair, colour, user_handle, session, build, expires_at)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+INSERT INTO webauthn_ceremony (handle_hash, kind, account_id, name, name_key, look, version, skin, hair, colour, user_handle, session, build, expires_at, born)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
 `
 
 type InsertCeremonyParams struct {
@@ -102,6 +102,7 @@ type InsertCeremonyParams struct {
 	Session    []byte
 	Build      string
 	ExpiresAt  time.Time
+	Born       pgtype.Int4
 }
 
 func (q *Queries) InsertCeremony(ctx context.Context, arg InsertCeremonyParams) error {
@@ -120,6 +121,7 @@ func (q *Queries) InsertCeremony(ctx context.Context, arg InsertCeremonyParams) 
 		arg.Session,
 		arg.Build,
 		arg.ExpiresAt,
+		arg.Born,
 	)
 	return err
 }
@@ -221,7 +223,7 @@ func (q *Queries) PasskeysOf(ctx context.Context, accountID pgtype.UUID) ([]Pass
 
 const takeCeremony = `-- name: TakeCeremony :one
 DELETE FROM webauthn_ceremony WHERE handle_hash = $1 AND kind = $2
-RETURNING account_id, name, name_key, look, version, skin, hair, colour, user_handle, session, build, expires_at
+RETURNING account_id, name, name_key, look, version, skin, hair, colour, user_handle, session, build, expires_at, born
 `
 
 type TakeCeremonyParams struct {
@@ -242,6 +244,7 @@ type TakeCeremonyRow struct {
 	Session    []byte
 	Build      string
 	ExpiresAt  time.Time
+	Born       pgtype.Int4
 }
 
 // A ceremony finished: taken and gone, so it is used once.
@@ -261,6 +264,7 @@ func (q *Queries) TakeCeremony(ctx context.Context, arg TakeCeremonyParams) (Tak
 		&i.Session,
 		&i.Build,
 		&i.ExpiresAt,
+		&i.Born,
 	)
 	return i, err
 }

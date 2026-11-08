@@ -20,10 +20,12 @@ import { PILOT_IDLE, type PilotControl } from '../../input/pilot';
 import { Clock } from '../../net/clock';
 import { decodeServer, encodeClient } from '../../net/frame';
 import {
+  AshoreWhy,
   BumpPart,
   type ChartEntry as ChartEntryWire,
   ChartSubject,
   type Harbour as HarbourTold,
+  KnockState,
   Lamp,
   type LifeEncounter,
   type Light,
@@ -32,11 +34,17 @@ import {
   type Welcome,
 } from '../../net/gen/keel/v1/game_pb';
 import type {
+  AshoreWhyTold,
   BumpTold,
   CapSeen,
   ChartEntry,
   ChunksHanded,
+  CrewTold,
   ForecastTold,
+  HandedTold,
+  KnockCardTold,
+  KnockingTold,
+  KnockStateTold,
   LampState,
   LifeSeen,
   LightSeen,
@@ -90,6 +98,33 @@ const ENDS: Record<number, WatchEndWhy> = {
   [WatchEnd.OWN]: 'own',
   [WatchEnd.QUICK]: 'quick',
   [WatchEnd.BUSY]: 'busy',
+  [WatchEnd.ABOARD]: 'aboard',
+};
+
+/** How a knock stands, as the page names it. */
+const KNOCKS: Record<number, KnockStateTold> = {
+  [KnockState.WAITING]: 'waiting',
+  [KnockState.LET]: 'let',
+  [KnockState.NOT_NOW]: 'not-now',
+  [KnockState.LAPSED]: 'lapsed',
+  [KnockState.ENDED]: 'ended',
+  [KnockState.NOT_AT_SEA]: 'not-at-sea',
+  [KnockState.FULL]: 'full',
+  [KnockState.CLOSED]: 'closed',
+  [KnockState.BUSY]: 'busy',
+  [KnockState.OFTEN]: 'often',
+  [KnockState.CROWDED]: 'crowded',
+  [KnockState.OWN]: 'own',
+  [KnockState.FIRST]: 'first',
+  [KnockState.TRY_AGAIN]: 'try-again',
+  [KnockState.WITHDRAWN]: 'withdrawn',
+};
+
+/** Why someone left a boat, as the page names it. */
+const ASHORE: Record<number, AshoreWhyTold> = {
+  [AshoreWhy.CHOSE]: 'chose',
+  [AshoreWhy.PUT]: 'put',
+  [AshoreWhy.LEFT]: 'left',
 };
 
 /** What a message from the server was. */
@@ -105,6 +140,11 @@ export type Received =
   | { kind: 'watchEnded'; why: WatchEndWhy; sailor: string }
   /** How many watch the connection's own boat. */
   | { kind: 'watchers'; count: number }
+  | { kind: 'knockCard'; card: KnockCardTold }
+  | { kind: 'knocking'; knocking: KnockingTold }
+  | { kind: 'crew'; crew: CrewTold }
+  | { kind: 'handed'; handed: HandedTold }
+  | { kind: 'ashore'; why: AshoreWhyTold }
   /** Whether the AI of the own machine sailor watched attends to it. */
   | { kind: 'lamp'; state: LampState }
   /** The sailor of the boat sailed or watched changed their look: its code. */
@@ -256,6 +296,50 @@ export class Session {
       case 'watchers':
         this.#lastHeard = now;
         return { kind: 'watchers', count: m.body.value.count };
+      case 'knock': {
+        this.#lastHeard = now;
+        const k = m.body.value;
+        return {
+          kind: 'knockCard',
+          card: { id: Number(k.id), sailor: k.sailor, look: k.look, gone: k.gone },
+        };
+      }
+      case 'knocking': {
+        this.#lastHeard = now;
+        const k = m.body.value;
+        return {
+          kind: 'knocking',
+          knocking: {
+            state: KNOCKS[k.state] ?? 'other',
+            skipper: k.skipper,
+            kind: k.kind,
+            boat: k.boat,
+          },
+        };
+      }
+      case 'crew':
+        this.#lastHeard = now;
+        return {
+          kind: 'crew',
+          crew: {
+            people: m.body.value.people.map((p) => ({
+              seat: p.seat,
+              look: p.look,
+              name: p.name,
+              machine: p.machine,
+              you: p.you,
+            })),
+            holder: m.body.value.holder,
+          },
+        };
+      case 'handed': {
+        this.#lastHeard = now;
+        const h = m.body.value;
+        return { kind: 'handed', handed: { from: h.from, seconds: h.seconds, gone: h.gone } };
+      }
+      case 'ashore':
+        this.#lastHeard = now;
+        return { kind: 'ashore', why: ASHORE[m.body.value.why] ?? 'other' };
       case 'lookChanged':
         this.#lastHeard = now;
         return { kind: 'look', look: m.body.value.look };
@@ -472,6 +556,58 @@ export class Session {
   unwatchCommand(now: number): Uint8Array<ArrayBuffer> {
     return this.#encode(now, {
       body: { case: 'command', value: { body: { case: 'unwatch', value: {} } } },
+    });
+  }
+
+  /** Asks to come aboard by a link's token. */
+  knockCommand(now: number, token: string): Uint8Array<ArrayBuffer> {
+    return this.#encode(now, {
+      body: { case: 'command', value: { body: { case: 'knock', value: { token } } } },
+    });
+  }
+
+  /** The skipper's answer to a knock. */
+  answerCommand(now: number, knock: number, let_: boolean): Uint8Array<ArrayBuffer> {
+    return this.#encode(now, {
+      body: {
+        case: 'command',
+        value: { body: { case: 'answer', value: { knock: BigInt(knock), let: let_ } } },
+      },
+    });
+  }
+
+  /** Offers the controls to the person in seat to. */
+  handCommand(now: number, to: number): Uint8Array<ArrayBuffer> {
+    return this.#encode(now, {
+      body: { case: 'command', value: { body: { case: 'hand', value: { to } } } },
+    });
+  }
+
+  /** Takes the controls offered, or, the skipper's, takes them back. */
+  takeCommand(now: number): Uint8Array<ArrayBuffer> {
+    return this.#encode(now, {
+      body: { case: 'command', value: { body: { case: 'take', value: {} } } },
+    });
+  }
+
+  /** Gives the controls back to the skipper. */
+  giveBackCommand(now: number): Uint8Array<ArrayBuffer> {
+    return this.#encode(now, {
+      body: { case: 'command', value: { body: { case: 'giveBack', value: {} } } },
+    });
+  }
+
+  /** Goes ashore (who 0), or puts the person in seat who ashore. */
+  ashoreCommand(now: number, who: number): Uint8Array<ArrayBuffer> {
+    return this.#encode(now, {
+      body: { case: 'command', value: { body: { case: 'ashore', value: { who } } } },
+    });
+  }
+
+  /** Closes the boat to knocks, or opens it. */
+  closeKnocksCommand(now: number, closed: boolean): Uint8Array<ArrayBuffer> {
+    return this.#encode(now, {
+      body: { case: 'command', value: { body: { case: 'closeKnocks', value: { closed } } } },
     });
   }
 

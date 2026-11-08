@@ -247,6 +247,23 @@ export interface AccountsData {
   };
 }
 
+/**
+ * settings.json: links to come aboard, as the owner sets them: how long a
+ * link lasts, s, and whether links and boarding are on for everyone.
+ */
+export interface SailSettings {
+  linkLifetime: number;
+  links: boolean;
+  boarding: boolean;
+}
+
+/** What POST settings answers: the settings, what it would do or did in words, and the live links it ends. */
+export interface SettingsAnswer {
+  settings: SailSettings;
+  words: string;
+  ended: number;
+}
+
 /** charted.json: what is charted, the oldest first, and how many there are to chart. */
 export interface ChartedData {
   subjects: number;
@@ -1170,6 +1187,7 @@ export type Control =
   | 'next'
   | 'chart'
   | 'lifetime'
+  | 'settings'
   | 'machines'
   | 'priority'
   | 'accounts/stop'

@@ -9,6 +9,20 @@
  */
 export type Id = string;
 /**
+ * In m in the model's frame. Standing, the deck between the feet; seated, the seat's back edge, as the gunwale is to a dinghy's helmsman: the hips just within it, the legs reaching 0.7 m the way the person faces, the feet 0.2 m below it.
+ *
+ * @minItems 3
+ * @maxItems 3
+ */
+export type BoatPoint = [number, number, number];
+/**
+ * How a person is at a station: standing, or seated.
+ *
+ * This interface was referenced by `Catalog`'s JSON-Schema
+ * via the `definition` "StationPose".
+ */
+export type StationPose = "standing" | "seated";
+/**
  * A navigation light a boat shows from sunset to sunrise, by the arc it shows over (International Regulations for Preventing Collisions at Sea, Rule 21): a red sidelight to port and a green to starboard, each from right ahead to 22.5° abaft the beam; a white sternlight over the 135° astern; or the three combined in one lantern at the masthead, which Rule 25(b) allows a sailing vessel of less than 20 m.
  *
  * This interface was referenced by `Catalog`'s JSON-Schema
@@ -21,14 +35,14 @@ export type Light = "tricolour" | "port" | "starboard" | "stern";
  * @minItems 3
  * @maxItems 3
  */
-export type BoatPoint = [number, number, number];
+export type BoatPoint1 = [number, number, number];
 /**
  * Where a flying fish lands on its deck, in m in its model's frame.
  *
  * @minItems 3
  * @maxItems 3
  */
-export type BoatPoint1 = [number, number, number];
+export type BoatPoint2 = [number, number, number];
 /**
  * A cloud's form, which names how it is drawn: fair cumulus, a towering cumulonimbus with its anvil and shelf, a storm's deck with its towers, fog, or none.
  *
@@ -148,7 +162,7 @@ export type LifeBody =
  * This interface was referenced by `Catalog`'s JSON-Schema
  * via the `definition` "BoatPoint".
  */
-export type BoatPoint2 = [number, number, number];
+export type BoatPoint3 = [number, number, number];
 
 /**
  * Every list of kinds in the game. Kinds are data: code reads their properties, never their names.
@@ -228,6 +242,12 @@ export interface Boat {
    */
   capacity: number;
   /**
+   * Where the people aboard are drawn, one a person it can carry (capacity), in seat order: the first the helm, where whoever holds the controls is, then each seat's.
+   *
+   * @minItems 1
+   */
+  stations: [BoatStation, ...BoatStation[]];
+  /**
    * Length overall, in metres.
    */
   lengthOverall: number;
@@ -245,8 +265,8 @@ export interface Boat {
    * How high its lookout's eye is above the sea, in m: what it sees over the horizon.
    */
   lookout: number;
-  perch: BoatPoint;
-  deck: BoatPoint1;
+  perch: BoatPoint1;
+  deck: BoatPoint2;
   /**
    * Its sheet for a start from rest: pairs of an angle off the wind, in degrees, and the sheet there, from 0 hauled in to 1 let fly, by rising angle, read linearly between them.
    *
@@ -260,6 +280,20 @@ export interface Boat {
   fleet: "sailor" | "account";
   physics: BoatPhysics;
   art: BoatArt;
+}
+/**
+ * A place aboard where a person is drawn: standing on the deck, or seated as a dinghy's helmsman sits on the side deck.
+ *
+ * This interface was referenced by `Catalog`'s JSON-Schema
+ * via the `definition` "BoatStation".
+ */
+export interface BoatStation {
+  at: BoatPoint;
+  pose: StationPose;
+  /**
+   * The way the person faces, in degrees clockwise from the bow seen from above: 0 forward, 90 to starboard, 180 aft, 270 to port.
+   */
+  facing: number;
 }
 /**
  * The words the boat's controls are shown with. Every boat has the helm, the sheet and the reef; the sheet sets the main's limit, the headsails' in the same share, and the yards' brace.
@@ -8649,4 +8683,4 @@ export interface LifeGlow {
 }
 
 /** The catalog version (tools/catalog). */
-export const CATALOG_VERSION = 'b5d32d65abdf99b2';
+export const CATALOG_VERSION = 'ef1768cdcb0d0393';

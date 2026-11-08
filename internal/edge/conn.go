@@ -44,6 +44,18 @@ type conn struct {
 	rejoined bool
 	joinTick int64
 	joined   atomic.Bool // the simulation gave the connection a boat it sails
+	// crew: the connection is aboard another sailor's boat, slot and boat
+	// that boat's; boarded, it has been let aboard one, so its end is told
+	// to the simulation by its account. The encoder alone reads the rest:
+	// holding, whether its inputs steer the boat as of its last frame;
+	// seat, its seat aboard; toldDeck, the boat and its deck's count as the
+	// client was last told its crew, and toldCrew whether it was told any.
+	crew     atomic.Bool
+	boarded  atomic.Bool
+	holding  bool
+	seat     uint8
+	toldDeck [2]uint64
+	toldCrew bool
 	ready    atomic.Bool // the Welcome to its own boat is queued: inputs steer the boat from now on
 	// queued: the connection waits in the simulation's queue for a boat.
 	// The encoder alone reads the rest.
@@ -398,6 +410,10 @@ func (c *conn) join() bool {
 	}
 	switch r.Result {
 	case bus.Joined, bus.Rejoined:
+	case bus.Crewed:
+		e.m.join[joinRejoined].Inc()
+		c.joinedAboard(r)
+		return true
 	case bus.Queued:
 		// The sea is full: the connection waits, and its encoder tells it
 		// its place, and welcomes it once the queue gives it a boat.
@@ -439,6 +455,8 @@ func (c *conn) lateJoin(reply <-chan bus.Reply) {
 			switch r.Result {
 			case bus.Joined, bus.Rejoined:
 				e.disconnect(bus.Command{Op: bus.Disconnect, Boat: r.Boat, Conn: c.id})
+			case bus.Crewed:
+				e.disconnect(bus.Command{Op: bus.Disconnect, Account: c.account, Conn: c.id})
 			case bus.Queued:
 				e.disconnect(bus.Command{Op: bus.Disconnect, Account: c.account, Conn: c.id})
 			}
@@ -478,6 +496,7 @@ func (c *conn) handle(data []byte) bool {
 		if b.Command.GetUnwatch() != nil {
 			c.unwatchCommand()
 		}
+		c.deckCommand(b.Command)
 	}
 	return true
 }
@@ -758,6 +777,7 @@ func (c *conn) finish() {
 	c.gone.Store(true)
 	e.registry.release(c)
 	e.spect.release(c)
+	e.knockerGone(c)
 	if c.enc != nil {
 		c.ask(ask{kind: askGone})
 	}
@@ -773,6 +793,7 @@ func (c *conn) finish() {
 	case c.queued.Load():
 		e.disconnect(bus.Command{Op: bus.Disconnect, Account: c.account, Conn: c.id})
 	}
+	c.noMoreAboard()
 	if e.cfg.Seen != nil && c.session != ([32]byte{}) && time.Since(c.opened) >= e.cfg.LongAfter {
 		e.helpers.Go(func() { e.cfg.Seen(c.session) })
 	}

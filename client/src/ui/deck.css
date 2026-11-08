@@ -1,0 +1,394 @@
+/* SPDX-License-Identifier: AGPL-3.0-only */
+
+/* Sailing together: the controls offered, the knocks and the own knock
+   under the case, the line there while the player holds the controls
+   with others aboard, the plate at the foot of the screen in the
+   controls' place, and the windows over the sea (who is aboard,
+   going ashore's question, the skipper's link). In the plate's brass and
+   lacquer, its keys the instruments' head keys' size. */
+
+.deck-faint {
+  color: var(--faint);
+}
+
+/* Under the case, beside the pocket chart: no wider than leaves it room
+   on a phone held upright. */
+.hud-top {
+  --deck-width: min(320px, calc(100vw - var(--edge-left) - var(--edge-right) - 114px));
+}
+
+/* Held sideways: no wider than the case, clear of the boat. */
+@media (max-height: 499px) {
+  .hud-top {
+    --deck-width: 250px;
+  }
+}
+
+/* A knock: the sailor's portrait and words, then Let aboard and Not now;
+   cards behind it, while more wait, as edges under it. */
+.hud .deck-knock {
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: var(--deck-width);
+  padding: 8px 10px;
+}
+
+.hud .deck-knock.stacked {
+  box-shadow:
+    var(--plate-shadow),
+    0 4px 0 -1px rgb(14 20 25 / 92%),
+    0 4px 0 0 var(--brass-dark),
+    0 8px 0 -2px rgb(14 20 25 / 92%),
+    0 8px 0 -1px var(--brass-dark);
+  margin-bottom: 8px;
+}
+
+.deck-knock-who {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.deck-knock-who p {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-weight: 500;
+}
+
+.deck-knock-who .player-text,
+.deck-knocking .player-text,
+.deck-handed .player-text,
+.deck-putting .player-text {
+  color: var(--gold);
+}
+
+.deck-face,
+.deck-knock .portrait,
+.deck-row .portrait {
+  flex: none;
+  width: 40px;
+  height: 50px;
+  border-radius: 4px;
+}
+
+.deck-keys {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.deck-keys > button {
+  flex: 1 1 auto;
+}
+
+.deck-knock .deck-faint {
+  font-size: 14px;
+}
+
+/* The own knock: as a notice is, its × to put it away. */
+.hud .deck-knocking {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  box-sizing: border-box;
+  max-width: var(--deck-width);
+  padding: 0 0 0 12px;
+  font-weight: 500;
+}
+
+.deck-knocking > span {
+  min-width: 0;
+  padding: 8px 0;
+  overflow-wrap: anywhere;
+}
+
+/* Under the case, holding the controls with others aboard. */
+.hud .deck-line {
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  max-width: var(--deck-width);
+  padding: 2px 2px 2px 12px;
+}
+
+.deck-line-words {
+  font-size: 14px;
+}
+
+/* At the foot of the screen, centred, in the controls' place; one row,
+   a long name ending in an ellipsis. */
+.deck-foot {
+  position: absolute;
+  bottom: var(--edge-bottom);
+  left: 50%;
+  translate: -50% 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  width: max-content;
+  max-width: calc(100vw - var(--edge-left) - var(--edge-right));
+}
+
+/* The plate: the watch plate's brass and lacquer, its keys the head's. */
+.hud .deck-plate {
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  max-width: 100%;
+  padding: 2px 2px 2px 12px;
+  border: 1px solid var(--brass-dark);
+  border-radius: 12px;
+  background: var(--lacquer);
+  box-shadow: var(--plate-shadow);
+  pointer-events: auto;
+}
+
+.hud .deck-plate .head-key {
+  padding: 0 14px;
+}
+
+.deck-plate-words {
+  flex: 0 1 auto;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  max-width: 21ch;
+  padding: 2px 8px 2px 0;
+}
+
+/* "Aboard", engraved small above whose boat. */
+.deck-plate-label {
+  color: var(--faint);
+  font:
+    11px / 1.1 "IM Fell English SC",
+    Georgia,
+    serif;
+  letter-spacing: 0.06em;
+}
+
+.deck-plate-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 16px;
+  font-weight: 500;
+}
+
+.deck-plate-name .player-text {
+  color: var(--gold);
+}
+
+/* The controls offered, under the case: whose offer, the seconds left,
+   Take them. */
+.hud .deck-handed {
+  box-sizing: border-box;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+  width: var(--deck-width);
+  padding: 8px 10px;
+}
+
+.deck-handed p {
+  flex: 1 1 100%;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-weight: 500;
+}
+
+.deck-handed button {
+  flex: 1 1 auto;
+}
+
+.deck-seconds {
+  font-variant-numeric: tabular-nums;
+}
+
+/* A window over the sea, centred, within the screen; what is in it scrolls. */
+.hud .deck-window {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  translate: -50% -50%;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: min(420px, calc(100vw - var(--edge-left) - var(--edge-right)));
+  max-height: min(calc(100dvh - 32px), calc(100dvh - var(--edge-top) - var(--edge-bottom)));
+  padding: 12px 16px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  pointer-events: auto;
+}
+
+.hud .deck-window h2 {
+  margin: 0;
+  font-size: 20px;
+}
+
+.hud .deck-question {
+  width: min(360px, calc(100vw - var(--edge-left) - var(--edge-right)));
+  text-align: center;
+}
+
+.deck-question .deck-keys {
+  justify-content: center;
+}
+
+/* Who is aboard: a row each, its keys beside it, or under it when narrow. */
+.deck-rows {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.deck-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+  padding: 8px 0;
+  border-bottom: 1px solid rgb(255 255 255 / 12%);
+}
+
+.deck-row-who {
+  flex: 1 1 120px;
+  min-width: 0;
+}
+
+.deck-row-name {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.deck-row-name strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 500;
+}
+
+.deck-row .deck-faint {
+  font-size: 14px;
+}
+
+.deck-row-keys {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+  margin-left: auto;
+}
+
+.deck-putting p {
+  flex: 1 1 140px;
+  overflow-wrap: anywhere;
+}
+
+.deck-cog {
+  color: var(--gold);
+}
+
+/* The helm's mark beside whoever holds the controls. */
+.deck-helm {
+  flex: none;
+  display: inline-block;
+  width: 18px;
+  height: 18px;
+  color: var(--gold);
+}
+
+.hud .deck-close {
+  width: 100%;
+}
+
+.deck-list-foot {
+  flex: none;
+}
+
+/* The skipper's link: its address in a slot, the time it has left. */
+.hud .deck-link .deck-url {
+  width: 100%;
+  font-size: 14px;
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+.deck-problem {
+  color: var(--warn, #f3b3a6);
+}
+
+.deck-switch {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 44px;
+}
+
+.deck-switch-detail {
+  display: block;
+  font-size: 14px;
+}
+
+.deck-switch input {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  accent-color: var(--gold);
+}
+
+/* The questions before the first link, in the start screen's panel. */
+.hud .deck-asks {
+  padding: 0;
+  gap: 8px;
+  align-items: stretch;
+}
+
+.deck-asks .start-panel {
+  width: 100%;
+  pointer-events: auto;
+}
+
+/* Every key of sailing together the instruments' head keys' size: the
+   case's height, 14 px words, its bulk in its width and the space about
+   it, never its height. Each answers a touch 3 px beyond its face, above
+   and below, so a finger's 44 px lands on it all the same. */
+.hud :is(.deck-knock, .deck-knocking, .deck-handed, .deck-line, .deck-window, .deck-plate) button {
+  position: relative;
+  min-width: 44px;
+  min-height: 0;
+  height: var(--key);
+  padding: 0 14px;
+  font:
+    500 14px / 1 "Alegreya Sans",
+    system-ui,
+    sans-serif;
+}
+
+.hud
+  :is(.deck-knock, .deck-knocking, .deck-handed, .deck-line, .deck-window, .deck-plate)
+  button::after {
+  content: "";
+  position: absolute;
+  inset: -3px 0;
+}
+
+.deck-keys,
+.deck-row-keys {
+  column-gap: 10px;
+}
+
+.hud .deck-window h2 {
+  font-size: 18px;
+}

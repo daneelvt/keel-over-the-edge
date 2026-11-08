@@ -235,7 +235,7 @@ func (a *Accounts) operation(req Request, action, detail string) store.Operation
 }
 
 func source(s string) string {
-	if s == store.SourceCommand {
+	if s == store.SourceCommand || s == store.SourceGame {
 		return s
 	}
 	return store.SourcePage
@@ -304,11 +304,28 @@ func (a *Accounts) done(req Request, action string, t *store.Target, e Effects, 
 // are revoked, and a human's machine sailors stop with it. A reason is
 // required.
 func (a *Accounts) Stop(ctx context.Context, req Request) (Done, error) {
+	return a.stop(ctx, req, store.ActionStop)
+}
+
+// YoungReason is the stop's reason when a player says they are under 13:
+// the owner's to read, never the player's, who is told only that the
+// sailor has been stopped.
+const YoungReason = "Stopped by the game: its player said they are under 13. Review it, and delete the account."
+
+// StopYoung stops a human's account whose player said they are under 13,
+// as the owner's Stop does, recorded as the game's, for the owner to
+// review and delete.
+func (a *Accounts) StopYoung(ctx context.Context, id store.AccountID) error {
+	_, err := a.stop(ctx, Request{Account: id, Reason: YoungReason, Source: store.SourceGame}, store.ActionYoung)
+	return err
+}
+
+func (a *Accounts) stop(ctx context.Context, req Request, action string) (Done, error) {
 	why, err := reason(req.Reason, true)
 	if err != nil {
 		return Done{}, err
 	}
-	out, err := a.cfg.Store.Stop(ctx, a.operation(req, store.ActionStop, why))
+	out, err := a.cfg.Store.Stop(ctx, a.operation(req, action, why))
 	if err != nil {
 		return Done{}, storeErr(err)
 	}
@@ -319,7 +336,7 @@ func (a *Accounts) Stop(ctx context.Context, req Request) (Done, error) {
 		verb(len(ids), "stops", "stop"), plural(int(out.Sessions), "session"), verb(int(out.Sessions), "ends", "end"),
 		plural(int(out.Grants), "grant"), verb(int(out.Grants), "is", "are"), plural(e.Boats, "boat"), verb(e.Boats, "leaves", "leave"))
 	if req.Check {
-		return a.done(req, store.ActionStop, t, e, words), nil
+		return a.done(req, action, t, e, words), nil
 	}
 	// The set first, so that a connection that claims its account from
 	// now on is refused; then every cache forgets, so that nothing waits
@@ -341,9 +358,9 @@ func (a *Accounts) Stop(ctx context.Context, req Request) (Done, error) {
 			a.cfg.Agents.Stop(id, AgentStopped)
 		}
 	}
-	a.cfg.Log.Info("owner: an account stopped", "action", store.ActionStop, "account", t.ID.String(), "kind", string(t.Kind),
+	a.cfg.Log.Info("owner: an account stopped", "action", action, "account", t.ID.String(), "kind", string(t.Kind),
 		"machines", len(t.Machines), "sessions", out.Sessions, "grants", out.Grants, "reason", why, "source", source(req.Source), "from", req.From)
-	return a.done(req, store.ActionStop, t, e, words), nil
+	return a.done(req, action, t, e, words), nil
 }
 
 // Start starts a stopped account again: it may sign in, with its passkey

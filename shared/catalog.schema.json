@@ -869,12 +869,16 @@
     "Boat": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["id", "name", "description", "capacity", "lengthOverall", "beam", "lights", "lookout", "perch", "deck", "startSheet", "controls", "fleet", "physics", "art"],
+      "required": ["id", "name", "description", "capacity", "stations", "lengthOverall", "beam", "lights", "lookout", "perch", "deck", "startSheet", "controls", "fleet", "physics", "art"],
       "properties": {
         "id": { "$ref": "#/$defs/Id" },
         "name": { "description": "Display name.", "type": "string", "minLength": 1 },
         "description": { "description": "What the boat is, in a few words.", "type": "string", "minLength": 1 },
         "capacity": { "description": "Most people aboard, the skipper included.", "type": "integer", "minimum": 1 },
+        "stations": {
+          "description": "Where the people aboard are drawn, one a person it can carry (capacity), in seat order: the first the helm, where whoever holds the controls is, then each seat's.",
+          "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/BoatStation" }
+        },
         "lengthOverall": { "description": "Length overall, in metres.", "type": "number", "exclusiveMinimum": 0 },
         "beam": { "description": "Greatest width of the hull, in metres.", "type": "number", "exclusiveMinimum": 0, "maximum": 30 },
         "lights": { "description": "The navigation lights the boat shows by night. Together their arcs make the full circle once.", "type": "array", "minItems": 1, "uniqueItems": true, "items": { "$ref": "#/$defs/Light" } },
@@ -902,6 +906,23 @@
       "title": "BoatPoint",
       "description": "A point on a boat, in m in its model's frame: x to starboard, y up, z aft.",
       "type": "array", "minItems": 3, "maxItems": 3, "items": { "type": "number", "minimum": -60, "maximum": 60 }
+    },
+    "BoatStation": {
+      "title": "BoatStation",
+      "description": "A place aboard where a person is drawn: standing on the deck, or seated as a dinghy's helmsman sits on the side deck.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["at", "pose", "facing"],
+      "properties": {
+        "at": { "description": "In m in the model's frame. Standing, the deck between the feet; seated, the seat's back edge, as the gunwale is to a dinghy's helmsman: the hips just within it, the legs reaching 0.7 m the way the person faces, the feet 0.2 m below it.", "$ref": "#/$defs/BoatPoint" },
+        "pose": { "$ref": "#/$defs/StationPose" },
+        "facing": { "description": "The way the person faces, in degrees clockwise from the bow seen from above: 0 forward, 90 to starboard, 180 aft, 270 to port.", "type": "number", "minimum": 0, "exclusiveMaximum": 360 }
+      }
+    },
+    "StationPose": {
+      "title": "StationPose",
+      "description": "How a person is at a station: standing, or seated.",
+      "type": "string", "enum": ["standing", "seated"]
     },
     "BoatControls": {
       "title": "BoatControls",

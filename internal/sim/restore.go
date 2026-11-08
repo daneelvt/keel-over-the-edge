@@ -79,6 +79,16 @@ func (w *World) Restore(snapshot []byte, now int64) (Restored, error) {
 				q.Grace = now + w.grace
 			}
 		}
+		// Everyone aboard stays aboard for a grace of their own, to come
+		// back to; the controls are each boat's skipper's again.
+		for i := range f.Crew {
+			a := &f.Crew[i]
+			a.Conn = 0
+			if a.Grace == 0 {
+				a.Grace = now + w.grace
+			}
+			f.Holder[a.Slot] = bus.Account{}
+		}
 	})
 	return r, err
 }

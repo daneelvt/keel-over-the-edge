@@ -32,8 +32,8 @@ export const RIG_SIZE = 56;
 export const OVER_SIZE = 8;
 /** The header's length with every block. */
 export const MAX_HEADER_SIZE = HEADER_SIZE + PILOT_SIZE + GROUND_SIZE + RIG_SIZE + OVER_SIZE;
-/** The layout this client reads: the own boat's state as float64, its autopilot's, ground, rig's and over blocks, then the view's entries; flag bit 4 while the boat stays. */
-export const SNAPSHOT_LAYOUT = 13;
+/** The layout this client reads: the own boat's state as float64, its autopilot's, ground, rig's and over blocks, then the view's entries; flag bit 4 while the boat stays, bit 6 while the connection does not hold its controls. */
+export const SNAPSHOT_LAYOUT = 14;
 /** The most entries a snapshot may hold. */
 export const MAX_ENTRIES = 128;
 /** A header's flag: the far band's boats are sampled by this snapshot. */
@@ -48,7 +48,10 @@ export const OVER_HELD = 8;
 export const STAYING = 16;
 /** A header's flag: the rig's block follows it and the autopilot's and ground blocks, if they are there. */
 export const RIG_HELD = 32;
-const HEADER_FLAGS = FAR_SAMPLED | PILOT_HELD | GROUND_HELD | OVER_HELD | STAYING | RIG_HELD;
+/** A header's flag: the connection does not hold the boat's controls: its inputs steer nothing, and the page predicts nothing. */
+export const ELSEWHERE = 64;
+const HEADER_FLAGS =
+  FAR_SAMPLED | PILOT_HELD | GROUND_HELD | OVER_HELD | STAYING | RIG_HELD | ELSEWHERE;
 /** A snapshot's margin when no input arrived since the one before. */
 export const NO_MARGIN = -32768;
 /** The boat's state's fields, as the physics module lays them out: the boat's own, then its autopilot's, then how long it has been aground and where it left deep water, then its rig's. */
@@ -90,6 +93,8 @@ export interface OwnSnapshot {
   over: number;
   /** The boat stays where it is while its owner's free camera roams. */
   stays: boolean;
+  /** The connection holds the boat's controls: no ELSEWHERE flag. */
+  holding: boolean;
   /** The boat's state, in the physics module's order. */
   readonly state: Float64Array;
 }
@@ -112,6 +117,7 @@ export function newSnapshot(): OwnSnapshot {
     margin: NO_MARGIN,
     over: 0,
     stays: false,
+    holding: true,
     state: new Float64Array(STATE_FIELDS),
   };
 }
@@ -244,6 +250,7 @@ export function readSnapshot(v: DataView, out: OwnSnapshot): string | null {
   out.tick = tick;
   out.over = over;
   out.stays = (flags & STAYING) !== 0;
+  out.holding = (flags & ELSEWHERE) === 0;
   out.base = v.getUint16(BASE, true);
   out.flags = flags;
   out.entries = entries;
@@ -333,12 +340,13 @@ export function writeSnapshot(s: OwnSnapshot, v: DataView): number {
   const rigged = rigHeld(s);
   const falling = s.over !== 0;
   const flags =
-    (s.flags & ~(PILOT_HELD | GROUND_HELD | RIG_HELD | OVER_HELD | STAYING)) |
+    (s.flags & ~(PILOT_HELD | GROUND_HELD | RIG_HELD | OVER_HELD | STAYING | ELSEWHERE)) |
     (held ? PILOT_HELD : 0) |
     (aground ? GROUND_HELD : 0) |
     (rigged ? RIG_HELD : 0) |
     (falling ? OVER_HELD : 0) |
-    (s.stays ? STAYING : 0);
+    (s.stays ? STAYING : 0) |
+    (s.holding ? 0 : ELSEWHERE);
   v.setUint8(0, KIND_SNAPSHOT);
   v.setUint8(1, SNAPSHOT_LAYOUT);
   setInt64(v, TICK, s.tick);

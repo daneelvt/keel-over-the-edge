@@ -90,7 +90,10 @@ func (w *World) inputs() {
 		next.Voyage[s] = cur.Voyage[s]
 		next.Stay[s] = cur.Stay[s]
 		next.Unseen[s] = cur.Unseen[s]
+		next.Holder[s] = cur.Holder[s]
+		next.Deck[s] = cur.Deck[s]
 	}
+	next.Crew = append(next.Crew[:0], cur.Crew...)
 	// A bump stays a second in the frames, for encoders that skip one.
 	next.Bumps = next.Bumps[:0]
 	for _, b := range cur.Bumps {
@@ -105,6 +108,7 @@ func (w *World) inputs() {
 	next.Edges = next.Edges[:0]
 	next.Charted = next.Charted[:0]
 	next.Ended = false
+	w.landed = w.landed[:0]
 	w.restarted = w.restarted[:0]
 	w.expire()
 	w.fallsEnd()

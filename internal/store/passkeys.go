@@ -174,6 +174,8 @@ type Ceremony struct {
 	Session []byte
 	Build   string
 	Expires time.Time
+	// Born is the new sailor's month of birth, year × 100 + month.
+	Born int32
 }
 
 func text(s string) pgtype.Text { return pgtype.Text{String: s, Valid: s != ""} }
@@ -184,7 +186,7 @@ func (s *Store) SaveCeremony(ctx context.Context, c Ceremony) error {
 	p := db.InsertCeremonyParams{
 		HandleHash: c.Hash[:], Kind: c.Kind, Name: text(c.Name), NameKey: text(c.NameKey), Look: text(c.Look.Look),
 		Version: text(c.Look.Version), Skin: text(c.Look.Skin), Hair: text(c.Look.Hair), Colour: text(c.Look.Colour),
-		UserHandle: c.UserHandle, Session: c.Session, Build: c.Build, ExpiresAt: c.Expires,
+		UserHandle: c.UserHandle, Session: c.Session, Build: c.Build, ExpiresAt: c.Expires, Born: bornOf(c.Born),
 	}
 	if c.HasAccount {
 		p.AccountID = uuidOf(c.Account)
@@ -211,7 +213,7 @@ func (s *Store) TakeCeremony(ctx context.Context, hash [32]byte, kind string) (C
 		Hash: hash, Kind: kind, Account: r.AccountID.Bytes, HasAccount: r.AccountID.Valid,
 		Name: r.Name.String, NameKey: r.NameKey.String,
 		Look: Look{Look: r.Look.String, Version: r.Version.String, Skin: r.Skin.String, Hair: r.Hair.String, Colour: r.Colour.String}, UserHandle: r.UserHandle,
-		Session: r.Session, Build: r.Build, Expires: r.ExpiresAt,
+		Session: r.Session, Build: r.Build, Expires: r.ExpiresAt, Born: r.Born.Int32,
 	}, nil
 }
 

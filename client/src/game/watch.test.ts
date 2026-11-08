@@ -219,6 +219,7 @@ describe('watching online', () => {
     closingUs: 0,
     zone: '',
     watching,
+    aboard: null,
     look: 0,
     boatLook: 0,
     boatName: '',

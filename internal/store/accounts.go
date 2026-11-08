@@ -57,6 +57,11 @@ type Account struct {
 	// NoticesOff are the kinds of notice its sailor has switched off, by
 	// the catalog's ids.
 	NoticesOff []string
+	// Born is the month of birth its player gave, year × 100 + month, 0
+	// for one not given yet; Rules whether its player has accepted the
+	// Rules of the sea. A machine sailor has neither.
+	Born  int32
+	Rules bool
 }
 
 // Look is a sailor's look, by the catalog's ids: a person's look, version,
@@ -92,6 +97,9 @@ type NewAccount struct {
 	// one of, for its sailors to share.
 	Boat   string
 	Shared []string
+	// Born is the month of birth its player gave, year × 100 + month; 0
+	// for none.
+	Born int32
 }
 
 var (
@@ -130,7 +138,7 @@ const sessionTokenKey = "session_token_hash_key"
 func (s *Store) CreateAccount(ctx context.Context, a NewAccount) (AccountID, error) {
 	var id AccountID
 	err := s.inTx(ctx, func(q *db.Queries) error {
-		u, err := q.CreateAccount(ctx, db.CreateAccountParams{UserHandle: a.UserHandle, RecoveryHash: a.RecoveryHash[:]})
+		u, err := q.CreateAccount(ctx, db.CreateAccountParams{UserHandle: a.UserHandle, RecoveryHash: a.RecoveryHash[:], Born: bornOf(a.Born)})
 		if err != nil {
 			return err
 		}
@@ -199,7 +207,7 @@ func (s *Store) AccountByUserHandle(ctx context.Context, handle []byte) (Holder,
 		return Holder{}, err
 	}
 	return Holder{
-		Account:    Account{ID: row.ID.Bytes, Kind: Kind(row.Kind), Name: row.Name, Look: Look{Look: row.Look, Version: row.Version, Skin: row.Skin, Hair: row.Hair, Colour: row.Colour, Finish: row.Finish, Chosen: row.LookChosen}, Tools: row.Tools, Priority: row.Priority, NoticesOff: row.NoticesOff},
+		Account:    Account{ID: row.ID.Bytes, Kind: Kind(row.Kind), Name: row.Name, Look: Look{Look: row.Look, Version: row.Version, Skin: row.Skin, Hair: row.Hair, Colour: row.Colour, Finish: row.Finish, Chosen: row.LookChosen}, Tools: row.Tools, Priority: row.Priority, NoticesOff: row.NoticesOff, Born: row.Born, Rules: row.Rules},
 		UserHandle: row.UserHandle, Passkeys: keys, Stopped: row.Stopped,
 	}, nil
 }
@@ -227,7 +235,7 @@ func (s *Store) Profile(ctx context.Context, id AccountID) (Profile, error) {
 	}
 	p := Profile{
 		Holder: Holder{
-			Account:    Account{ID: row.ID.Bytes, Kind: Kind(row.Kind), Name: row.Name, Look: Look{Look: row.Look, Version: row.Version, Skin: row.Skin, Hair: row.Hair, Colour: row.Colour, Finish: row.Finish, Chosen: row.LookChosen}, Tools: row.Tools, Priority: row.Priority, NoticesOff: row.NoticesOff},
+			Account:    Account{ID: row.ID.Bytes, Kind: Kind(row.Kind), Name: row.Name, Look: Look{Look: row.Look, Version: row.Version, Skin: row.Skin, Hair: row.Hair, Colour: row.Colour, Finish: row.Finish, Chosen: row.LookChosen}, Tools: row.Tools, Priority: row.Priority, NoticesOff: row.NoticesOff, Born: row.Born, Rules: row.Rules},
 			UserHandle: row.UserHandle, Passkeys: keys,
 		},
 		Created: row.CreatedAt,

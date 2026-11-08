@@ -31,6 +31,11 @@ type me struct {
 	// the water, which watching would take out.
 	Spectators string `json:"spectators,omitempty"`
 	AtSea      bool   `json:"atSea,omitempty"`
+	// Born is whether the player has said when they were born, and Rules
+	// whether they have accepted the Rules of the sea: until both, they
+	// sail alone. When is never told.
+	Born  bool `json:"born"`
+	Rules bool `json:"rules"`
 }
 
 // me answers GET /api/me, behind auth.Signed: a session held to adding a
@@ -59,7 +64,7 @@ func (a *api) meOf(acc store.Account) me {
 	if off == nil {
 		off = []string{}
 	}
-	return me{Name: acc.Name, lookShown: a.shown(acc.ID, acc.Look), Kind: string(acc.Kind), NoticesOff: off}
+	return me{Name: acc.Name, lookShown: a.shown(acc.ID, acc.Look), Kind: string(acc.Kind), NoticesOff: off, Born: acc.Born != 0, Rules: acc.Rules}
 }
 
 // Notices sets an account's notices switched off: the store.

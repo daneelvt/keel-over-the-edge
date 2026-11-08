@@ -12,6 +12,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/daneelvt/keel-over-the-edge/internal/aboard"
 	"github.com/daneelvt/keel-over-the-edge/internal/accounts"
 	"github.com/daneelvt/keel-over-the-edge/internal/agentapi"
 	"github.com/daneelvt/keel-over-the-edge/internal/api"
@@ -82,6 +83,11 @@ type process struct {
 	agents *agents
 	// hand is the owner's hand on accounts, and every deletion's.
 	hand *accounts.Accounts
+	// switches are the owner's for sailing together, loaded as keel
+	// starts: whether links work, whether anyone may come aboard, and how
+	// long a link lasts. The play routes, the owner's page and the game
+	// connection read this one set.
+	switches *aboard.Switches
 
 	// The routes the world half serves, set as each opens.
 	replayRoutes, devRoutes, ownerRoutes, playRoutes *lateHandler
@@ -308,7 +314,7 @@ func (p *process) openWorld(ctx context.Context, rw *readyWorld) (*worldHalf, er
 	rw.timeline = timeline
 	sighting := rw.charts.sight(cat, epoch)
 	world, err := sim.New(sim.Config{
-		Kinds: p.kinds, StartSheets: cat.StartSheets(), Waves: p.waves, Weather: timeline, Encounters: cat.PrepareEncounters(), Workers: p.opt.workers,
+		Kinds: p.kinds, StartSheets: cat.StartSheets(), Capacities: cat.Capacities(), Waves: p.waves, Weather: timeline, Encounters: cat.PrepareEncounters(), Workers: p.opt.workers,
 		Tick: loop.TickAt(time.Now(), epoch), Limit: cfg.BoatLimit, Terrain: rw.terrain, Edge: edgeOf(cat), Sight: sighting,
 		Life: rw.life,
 	})
@@ -358,6 +364,7 @@ func (p *process) openWorld(ctx context.Context, rw *readyWorld) (*worldHalf, er
 		Watch:    p.watchTarget, SpectatorLimit: cfg.SpectatorLimit,
 		Agent: p.agents.core.Attending,
 		Life:  lifeReach(cat),
+		Link:  p.sailLink, Knocker: p.knocker, Switches: p.switches, Capacities: cat.Capacities(), CrewLimit: cfg.CrewLimit,
 	})
 	h.lasting = persist.New(persist.Config{
 		Frames: b.Frames, Store: p.writer, World: row.ID, Epoch: p.lease,
@@ -372,6 +379,7 @@ func (p *process) openWorld(ctx context.Context, rw *readyWorld) (*worldHalf, er
 		db: p.db, sessions: p.sessions, game: h.game, charts: rw.charts, clock: h.loop, page: p.ownPage, log: p.log, metrics: p.metrics,
 		lifecycle: p, from: p.nextView.Load(), forecasts: h.forecasts, agents: p.agents, hand: p.hand,
 		aiCap: world.AICap(), aiReserve: world.AIReserve(), life: rw.life,
+		switches: p.switches,
 	})
 	playCfg := api.Config{
 		Version:   api.Version{Build: p.build, Catalog: catalog.Version},
@@ -395,6 +403,14 @@ func (p *process) openWorld(ctx context.Context, rw *readyWorld) (*worldHalf, er
 		NoticeKinds: noticeKinds(cat),
 		Status:      p.statusNow,
 		Website:     websiteOf(cfg.PlayOrigin),
+
+		// Sailing together: the links are made at the play origin; the
+		// Deck, the world sailed, tells a link's page of the boat.
+		Sailing:  p.db,
+		Young:    p.hand,
+		Switches: p.switches,
+		Origin:   cfg.PlayOrigin,
+		Deck:     h.game,
 	}
 	h.watch = watch.New(watch.Config{Store: p.db, Frames: b.Frames, Edge: h.game, Kinds: boatIDs(cat), Sea: h.sea, Agent: p.agentAttends})
 	playCfg.Watch = h.watch
@@ -718,6 +734,25 @@ func (p *process) closeForStop(bell time.Duration) int64 {
 }
 
 // watchTarget is the sailor whose name has key, to watch.
+// sailLink finds a link to come aboard for a knock.
+func (p *process) sailLink(ctx context.Context, hash [32]byte) (edge.LinkFound, error) {
+	l, err := p.db.SailLink(ctx, hash)
+	if err != nil {
+		return edge.LinkFound{}, err
+	}
+	return edge.LinkFound{Skipper: bus.Account(l.Skipper), Name: l.Name, Made: l.Made, Expires: l.Expires, Ended: l.Ended}, nil
+}
+
+// knocker finds a knocking sailor, their look as the game connection
+// sends it.
+func (p *process) knocker(ctx context.Context, a bus.Account) (edge.Knocker, error) {
+	k, err := p.db.Knocker(ctx, store.AccountID(a))
+	if err != nil {
+		return edge.Knocker{}, err
+	}
+	return edge.Knocker{Name: k.Name, Look: p.lookCode(store.Account{ID: store.AccountID(a), Look: k.Look}), Born: k.Born, Rules: k.Rules}, nil
+}
+
 func (p *process) watchTarget(ctx context.Context, key string) (watch.Target, error) {
 	t, err := p.db.WatchTarget(ctx, key)
 	return watch.Target(t), err

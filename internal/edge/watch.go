@@ -62,6 +62,9 @@ const (
 	askUnwatch
 	// askGone: the connection has ended.
 	askGone
+	// askAboard: the connection is aboard another sailor's boat, by r, its
+	// skipper named name: it is welcomed aboard from the frame of r's tick.
+	askAboard
 )
 
 // ask is something a connection's reader, or the spectators, ask of its
@@ -88,6 +91,10 @@ func (c *conn) ask(a ask) {
 // for; a refusal is told, the connection as it was.
 func (c *conn) watchCommand(name string, now time.Time) {
 	e := c.e
+	if c.crew.Load() {
+		c.refuse(pb.WatchEnd_WATCH_END_ABOARD, name)
+		return
+	}
 	if !c.lastWatch.IsZero() && now.Sub(c.lastWatch) < watchEvery {
 		e.m.watch[watchQuick].Inc()
 		c.refuse(pb.WatchEnd_WATCH_END_QUICK, name)
@@ -210,7 +217,7 @@ func (c *conn) unwatchCommand() {
 // the watch goes on until the boat is given. One that sails or waits
 // already is answered nothing. False ends the connection.
 func (c *conn) sailCommand() bool {
-	if c.joined.Load() || c.queued.Load() {
+	if c.joined.Load() || c.queued.Load() || c.crew.Load() {
 		return true
 	}
 	c.e.m.join[joinSail].Inc()
@@ -323,6 +330,7 @@ func (c *conn) welcomeWatch(f *bus.Frame) bool {
 	wt, _ := e.cfg.Clock.WorldTime()
 	c.toldLook = f.Look[s]
 	c.toldBoat(f, s)
+	c.toldDeck, c.toldCrew = [2]uint64{}, false
 	c.rmu.Lock()
 	ok := c.send(&pb.ServerMessage{Body: &pb.ServerMessage_Welcome{Welcome: &pb.Welcome{
 		World: e.cfg.World, Tick: f.Tick, WorldTimeUs: wt.Microseconds(),
