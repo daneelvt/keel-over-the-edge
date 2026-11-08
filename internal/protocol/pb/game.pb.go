@@ -138,6 +138,9 @@ const (
 	KnockState_KNOCK_STATE_TRY_AGAIN KnockState = 14
 	// Withdrawn by a knock on another boat, or the knocker went elsewhere.
 	KnockState_KNOCK_STATE_WITHDRAWN KnockState = 15
+	// The machine sailor sent aboard is not in the water: its AI app sails
+	// it there first.
+	KnockState_KNOCK_STATE_AWAY KnockState = 16
 )
 
 // Enum value maps for KnockState.
@@ -159,6 +162,7 @@ var (
 		13: "KNOCK_STATE_FIRST",
 		14: "KNOCK_STATE_TRY_AGAIN",
 		15: "KNOCK_STATE_WITHDRAWN",
+		16: "KNOCK_STATE_AWAY",
 	}
 	KnockState_value = map[string]int32{
 		"KNOCK_STATE_UNSPECIFIED": 0,
@@ -177,6 +181,7 @@ var (
 		"KNOCK_STATE_FIRST":       13,
 		"KNOCK_STATE_TRY_AGAIN":   14,
 		"KNOCK_STATE_WITHDRAWN":   15,
+		"KNOCK_STATE_AWAY":        16,
 	}
 )
 
@@ -1748,8 +1753,16 @@ func (x *Report) GetNote() string {
 // watch ends. A connection knocks on one boat at a time: a second knock
 // withdraws the first.
 type Knock struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Token         string                 `protobuf:"bytes,1,opt,name=token,proto3" json:"token,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	Token string                 `protobuf:"bytes,1,opt,name=token,proto3" json:"token,omitempty"`
+	// The name of one of the account's machine sailors, to send it aboard
+	// rather than come aboard oneself: the link must be a machine sailor's,
+	// the machine sailor sent in the water, and the knock is answered by
+	// the skipper machine sailor's owner, wherever they are in the game,
+	// never by its agent. Let aboard, the machine sailor's own boat leaves
+	// the water and it is crew there; the connection is told as a knocker
+	// is.
+	Machine       string `protobuf:"bytes,2,opt,name=machine,proto3" json:"machine,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1787,6 +1800,13 @@ func (*Knock) Descriptor() ([]byte, []int) {
 func (x *Knock) GetToken() string {
 	if x != nil {
 		return x.Token
+	}
+	return ""
+}
+
+func (x *Knock) GetMachine() string {
+	if x != nil {
+		return x.Machine
 	}
 	return ""
 }
@@ -2873,9 +2893,16 @@ type KnockCard struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	Id    uint64                 `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
 	// The sailor's name and look, as players see them.
-	Sailor        string `protobuf:"bytes,2,opt,name=sailor,proto3" json:"sailor,omitempty"`
-	Look          uint32 `protobuf:"varint,3,opt,name=look,proto3" json:"look,omitempty"`
-	Gone          bool   `protobuf:"varint,4,opt,name=gone,proto3" json:"gone,omitempty"`
+	Sailor string `protobuf:"bytes,2,opt,name=sailor,proto3" json:"sailor,omitempty"`
+	Look   uint32 `protobuf:"varint,3,opt,name=look,proto3" json:"look,omitempty"`
+	Gone   bool   `protobuf:"varint,4,opt,name=gone,proto3" json:"gone,omitempty"`
+	// A machine sailor sent aboard by its owner, named owner (their sailor's
+	// name), knocking on the boat of skipper, the connection's own machine
+	// sailor: the card goes to that machine sailor's owner wherever they are
+	// in the game.
+	Machine       bool   `protobuf:"varint,5,opt,name=machine,proto3" json:"machine,omitempty"`
+	Owner         string `protobuf:"bytes,6,opt,name=owner,proto3" json:"owner,omitempty"`
+	Skipper       string `protobuf:"bytes,7,opt,name=skipper,proto3" json:"skipper,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -2938,6 +2965,27 @@ func (x *KnockCard) GetGone() bool {
 	return false
 }
 
+func (x *KnockCard) GetMachine() bool {
+	if x != nil {
+		return x.Machine
+	}
+	return false
+}
+
+func (x *KnockCard) GetOwner() string {
+	if x != nil {
+		return x.Owner
+	}
+	return ""
+}
+
+func (x *KnockCard) GetSkipper() string {
+	if x != nil {
+		return x.Skipper
+	}
+	return ""
+}
+
 // Knocking tells a knocker how their knock stands. Let aboard, a Welcome
 // to the boat follows.
 type Knocking struct {
@@ -2945,9 +2993,11 @@ type Knocking struct {
 	State KnockState             `protobuf:"varint,1,opt,name=state,proto3,enum=keel.v1.KnockState" json:"state,omitempty"`
 	// The skipper's name, their boat's kind (an index into the catalog's
 	// boats) and its name, player text: what the knock is for.
-	Skipper       string `protobuf:"bytes,2,opt,name=skipper,proto3" json:"skipper,omitempty"`
-	Kind          uint32 `protobuf:"varint,3,opt,name=kind,proto3" json:"kind,omitempty"`
-	Boat          string `protobuf:"bytes,4,opt,name=boat,proto3" json:"boat,omitempty"`
+	Skipper string `protobuf:"bytes,2,opt,name=skipper,proto3" json:"skipper,omitempty"`
+	Kind    uint32 `protobuf:"varint,3,opt,name=kind,proto3" json:"kind,omitempty"`
+	Boat    string `protobuf:"bytes,4,opt,name=boat,proto3" json:"boat,omitempty"`
+	// The machine sailor the knock sends aboard, "" for the knocker's own.
+	Machine       string `protobuf:"bytes,5,opt,name=machine,proto3" json:"machine,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -3006,6 +3056,13 @@ func (x *Knocking) GetKind() uint32 {
 func (x *Knocking) GetBoat() string {
 	if x != nil {
 		return x.Boat
+	}
+	return ""
+}
+
+func (x *Knocking) GetMachine() string {
+	if x != nil {
+		return x.Machine
 	}
 	return ""
 }
@@ -7248,9 +7305,10 @@ const file_keel_v1_game_proto_rawDesc = "" +
 	"\x06Report\x12\x1e\n" +
 	"\x03who\x18\x01 \x01(\v2\f.keel.v1.WhoR\x03who\x12-\n" +
 	"\x06reason\x18\x02 \x01(\x0e2\x15.keel.v1.ReportReasonR\x06reason\x12\x12\n" +
-	"\x04note\x18\x03 \x01(\tR\x04note\"\x1d\n" +
+	"\x04note\x18\x03 \x01(\tR\x04note\"7\n" +
 	"\x05Knock\x12\x14\n" +
-	"\x05token\x18\x01 \x01(\tR\x05token\"0\n" +
+	"\x05token\x18\x01 \x01(\tR\x05token\x12\x18\n" +
+	"\amachine\x18\x02 \x01(\tR\amachine\"0\n" +
 	"\x06Answer\x12\x14\n" +
 	"\x05knock\x18\x01 \x01(\x04R\x05knock\x12\x10\n" +
 	"\x03let\x18\x02 \x01(\bR\x03let\"\x16\n" +
@@ -7311,17 +7369,21 @@ const file_keel_v1_game_proto_rawDesc = "" +
 	"chat_state\x18\x1d \x01(\v2\x12.keel.v1.ChatStateH\x00R\tchatState\x12#\n" +
 	"\x04tied\x18\x1e \x01(\v2\r.keel.v1.TiedH\x00R\x04tied\x12/\n" +
 	"\breported\x18\x1f \x01(\v2\x11.keel.v1.ReportedH\x00R\breportedB\x06\n" +
-	"\x04body\"[\n" +
+	"\x04body\"\xa5\x01\n" +
 	"\tKnockCard\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x04R\x02id\x12\x16\n" +
 	"\x06sailor\x18\x02 \x01(\tR\x06sailor\x12\x12\n" +
 	"\x04look\x18\x03 \x01(\rR\x04look\x12\x12\n" +
-	"\x04gone\x18\x04 \x01(\bR\x04gone\"w\n" +
+	"\x04gone\x18\x04 \x01(\bR\x04gone\x12\x18\n" +
+	"\amachine\x18\x05 \x01(\bR\amachine\x12\x14\n" +
+	"\x05owner\x18\x06 \x01(\tR\x05owner\x12\x18\n" +
+	"\askipper\x18\a \x01(\tR\askipper\"\x91\x01\n" +
 	"\bKnocking\x12)\n" +
 	"\x05state\x18\x01 \x01(\x0e2\x13.keel.v1.KnockStateR\x05state\x12\x18\n" +
 	"\askipper\x18\x02 \x01(\tR\askipper\x12\x12\n" +
 	"\x04kind\x18\x03 \x01(\rR\x04kind\x12\x12\n" +
-	"\x04boat\x18\x04 \x01(\tR\x04boat\"G\n" +
+	"\x04boat\x18\x04 \x01(\tR\x04boat\x12\x18\n" +
+	"\amachine\x18\x05 \x01(\tR\amachine\"G\n" +
 	"\x04Crew\x12'\n" +
 	"\x06people\x18\x01 \x03(\v2\x0f.keel.v1.PersonR\x06people\x12\x16\n" +
 	"\x06holder\x18\x02 \x01(\rR\x06holder\"\xa0\x01\n" +
@@ -7665,7 +7727,7 @@ const file_keel_v1_game_proto_rawDesc = "" +
 	"\x15REPORT_REASON_THREATS\x10\x05\x12\x16\n" +
 	"\x12REPORT_REASON_SCAM\x10\x06\x12\x1a\n" +
 	"\x16REPORT_REASON_CHEATING\x10\a\x12\x17\n" +
-	"\x13REPORT_REASON_OTHER\x10\b*\x91\x03\n" +
+	"\x13REPORT_REASON_OTHER\x10\b*\xa7\x03\n" +
 	"\n" +
 	"KnockState\x12\x1b\n" +
 	"\x17KNOCK_STATE_UNSPECIFIED\x10\x00\x12\x17\n" +
@@ -7684,7 +7746,8 @@ const file_keel_v1_game_proto_rawDesc = "" +
 	"\x0fKNOCK_STATE_OWN\x10\f\x12\x15\n" +
 	"\x11KNOCK_STATE_FIRST\x10\r\x12\x19\n" +
 	"\x15KNOCK_STATE_TRY_AGAIN\x10\x0e\x12\x19\n" +
-	"\x15KNOCK_STATE_WITHDRAWN\x10\x0f*\xa5\x01\n" +
+	"\x15KNOCK_STATE_WITHDRAWN\x10\x0f\x12\x14\n" +
+	"\x10KNOCK_STATE_AWAY\x10\x10*\xa5\x01\n" +
 	"\vChatRefusal\x12\x1c\n" +
 	"\x18CHAT_REFUSAL_UNSPECIFIED\x10\x00\x12\x18\n" +
 	"\x14CHAT_REFUSAL_CONTACT\x10\x01\x12\x15\n" +

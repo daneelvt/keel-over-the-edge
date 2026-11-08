@@ -63,8 +63,16 @@ function msOf(t: unknown): number {
   return typeof t === 'string' ? Date.parse(t) : Number.NaN;
 }
 
-/** The link's routes, as the server answers them. */
-export function linkServer(f: Fetch = (input, init) => fetch(input, init)): LinkServer {
+/**
+ * The link's routes, as the server answers them: the player's own, or,
+ * with machine, that of one of the player's machine sailors, by its name.
+ */
+export function linkServer(
+  f: Fetch = (input, init) => fetch(input, init),
+  machine = '',
+): LinkServer {
+  const body = machine === '' ? undefined : { machine };
+  const query = machine === '' ? '' : `?machine=${encodeURIComponent(machine)}`;
   return {
     async asks() {
       try {
@@ -76,7 +84,10 @@ export function linkServer(f: Fetch = (input, init) => fetch(input, init)): Link
     },
     async status() {
       try {
-        const res = await f('/api/sail/link', { cache: 'no-store', credentials: 'same-origin' });
+        const res = await f(`/api/sail/link${query}`, {
+          cache: 'no-store',
+          credentials: 'same-origin',
+        });
         if (res.status !== 200) {
           return null;
         }
@@ -90,7 +101,7 @@ export function linkServer(f: Fetch = (input, init) => fetch(input, init)): Link
       }
     },
     async make() {
-      const a = await call(f, '/api/sail/link');
+      const a = await call(f, '/api/sail/link', body);
       const url = a.body?.url;
       const expires = msOf(a.body?.expires);
       if (a.status === 201 && typeof url === 'string' && Number.isFinite(expires)) {
@@ -99,7 +110,7 @@ export function linkServer(f: Fetch = (input, init) => fetch(input, init)): Link
       return { error: a.status === 201 ? 'unavailable' : reasonOf(a) };
     },
     async end() {
-      return (await call(f, '/api/sail/link/end')).status === 204;
+      return (await call(f, '/api/sail/link/end', body)).status === 204;
     },
   };
 }
@@ -209,12 +220,17 @@ export function SailWithMe({
   close,
   from = defaultServer,
   store = defaultStore(),
+  title = SAIL_WITH_ME,
+  detail = SAIL_WITH_ME_DETAIL,
 }: {
-  deck: DeckView;
+  /** The boat closed to knocks, and the switch; null for none here. */
+  deck: Pick<DeckView, 'closed' | 'closeKnocks'> | null;
   sailor: string | null;
   close: () => void;
   from?: LinkServer;
   store?: LinkStore | null;
+  title?: string;
+  detail?: string;
 }) {
   const who = sailor ?? '';
   const [shown, setShown] = useState<LinkShown>({ kind: 'reading' });
@@ -324,7 +340,7 @@ export function SailWithMe({
   const link = shown.kind === 'here' ? shown.link : null;
   const share =
     link !== null && typeof navigator !== 'undefined' && typeof navigator.share === 'function'
-      ? () => void navigator.share({ title: SAIL_WITH_ME, url: link.url }).catch(() => {})
+      ? () => void navigator.share({ title, url: link.url }).catch(() => {})
       : null;
   const copy = () => {
     if (link === null) {
@@ -337,8 +353,8 @@ export function SailWithMe({
   };
   return (
     <section class="panel deck-window deck-link" aria-labelledby="deck-link-title">
-      <h2 id="deck-link-title">{SAIL_WITH_ME}</h2>
-      <p class="deck-faint">{SAIL_WITH_ME_DETAIL}</p>
+      <h2 id="deck-link-title">{title}</h2>
+      <p class="deck-faint">{detail}</p>
       {shown.kind === 'reading' ? <p aria-live="polite">{READING_LINK}</p> : null}
       {shown.kind === 'unread' ? <p aria-live="polite">{LINK_UNREADABLE}</p> : null}
       {shown.kind === 'none' ? <p>{shown.ended ? LINK_ENDED : NO_LINK}</p> : null}
@@ -355,7 +371,7 @@ export function SailWithMe({
             type="text"
             name="sail-link"
             readOnly
-            aria-label={SAIL_WITH_ME}
+            aria-label={title}
             value={link.url}
             onFocus={(e) => e.currentTarget.select()}
           />
@@ -400,18 +416,20 @@ export function SailWithMe({
           ) : null}
         </div>
       ) : null}
-      <label class="deck-switch">
-        <span>
-          {CLOSED_TO_KNOCKS}
-          <span class="deck-faint deck-switch-detail">{CLOSED_DETAIL}</span>
-        </span>
-        <input
-          type="checkbox"
-          name="closed-to-knocks"
-          checked={deck.closed.value}
-          onChange={(e) => deck.closeKnocks(e.currentTarget.checked)}
-        />
-      </label>
+      {deck === null ? null : (
+        <label class="deck-switch">
+          <span>
+            {CLOSED_TO_KNOCKS}
+            <span class="deck-faint deck-switch-detail">{CLOSED_DETAIL}</span>
+          </span>
+          <input
+            type="checkbox"
+            name="closed-to-knocks"
+            checked={deck.closed.value}
+            onChange={(e) => deck.closeKnocks(e.currentTarget.checked)}
+          />
+        </label>
+      )}
       <button type="button" class="plate-key deck-close" onClick={close}>
         {CLOSE}
       </button>

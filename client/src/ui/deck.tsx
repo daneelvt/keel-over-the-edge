@@ -30,7 +30,14 @@ import type { CrewTold, PersonTold } from '../net/messages';
 import { ChatStrip, ChatWindows } from './chat';
 import { BLOCK, BLOCKED, MUTE, MUTED, REPORT, UNBLOCK, UNMUTE } from './chatwords';
 import { Decal } from './decals';
-import { chatShown, type DeckView, deckPlate, selfOf, skipperAway } from './decklazy';
+import {
+  chatShown,
+  type DeckView,
+  deckPlate,
+  machineShared,
+  selfOf,
+  skipperAway,
+} from './decklazy';
 import {
   ABOARD,
   AT_THE_HELM,
@@ -67,6 +74,8 @@ import {
   YOU,
   YOU_HOLD,
 } from './deckwords';
+import { MachineCrew, MachineLink } from './machinelink';
+import { machineAsksWords, machineKnockingWords } from './machinewords';
 import { PlayerText } from './player';
 import { SailWithMe } from './sailwithme';
 
@@ -201,7 +210,10 @@ export function KnockCards({ deck }: { deck: DeckView }) {
     return null;
   }
   const more = moreWaitingText(knocks.length - 1);
-  const words = asksWords(k.sailor);
+  const words =
+    k.machine === undefined
+      ? asksWords(k.sailor)
+      : machineAsksWords(k.sailor, k.machine.owner, k.machine.skipper);
   return (
     <section
       class={`panel deck-knock${more === '' ? '' : ' stacked'}`}
@@ -241,7 +253,13 @@ export function KnockingCard({ deck }: { deck: DeckView }) {
   return (
     <p class="panel deck-knocking" role="status" data-knocking={k.state}>
       <span>
-        <Said words={knockingWords(k.state, k.skipper, k.boat, kindNameOf(k.kind))} />
+        <Said
+          words={
+            k.machine === undefined || k.machine === ''
+              ? knockingWords(k.state, k.skipper, k.boat, kindNameOf(k.kind))
+              : machineKnockingWords(k.state, k.machine, k.skipper, k.boat, kindNameOf(k.kind))
+          }
+        />
       </span>
       <button
         type="button"
@@ -561,7 +579,14 @@ export function AboardList({ deck }: { deck: DeckView }) {
 /** What the screen shows of sailing together under the case: the controls offered, the knocks, the own knock, the line. */
 export function DeckTop({ deck }: { deck: DeckView }) {
   if (deck.watching.value !== null) {
-    return null;
+    // Watching: the knocks of machine sailors on the player's own, and the
+    // player's machine sailor's own knock.
+    return (
+      <>
+        <KnockCards deck={deck} />
+        <KnockingCard deck={deck} />
+      </>
+    );
   }
   return (
     <>
@@ -600,6 +625,14 @@ export function DeckWindows({ deck, sailor }: { deck: DeckView; sailor: string |
   }
   if (deck.list.value && deck.crew.value !== null && deck.watching.value === null) {
     return <AboardList deck={deck} />;
+  }
+  // Watching their own machine sailor, its owner's windows.
+  const machine = machineShared(deck);
+  if (machine !== null && deck.list.value && deck.crew.value !== null) {
+    return <MachineCrew deck={deck} machine={machine} />;
+  }
+  if (machine !== null && deck.link.value) {
+    return <MachineLink machine={machine} deck={deck} close={() => (deck.link.value = false)} />;
   }
   if (deck.link.value) {
     return <SailWithMe deck={deck} sailor={sailor} close={() => (deck.link.value = false)} />;

@@ -144,7 +144,7 @@ func (c *conn) watchCommand(name string, now time.Time) {
 
 // verdict is the rule for viewer watching t, as f has t's boat.
 func (e *Edge) verdict(f *bus.Frame, t watch.Target, viewer bus.Account) watch.Verdict {
-	s := findBoat(f, bus.Account(t.ID))
+	s := watchSlot(f, t, viewer)
 	b := e.boatOf(f, s)
 	b.Blocked = e.refuses(bus.Account(t.ID), viewer)
 	return watch.Allowed(t, b, store.AccountID(viewer))
@@ -156,6 +156,16 @@ func (e *Edge) boatOf(f *bus.Frame, s int32) watch.Boat {
 		return watch.Boat{}
 	}
 	return watch.Boat{InWater: true, Unseen: f.Unseen[s], Voyage: e.voyages.allows(f.Owner[s], f.Boat[s])}
+}
+
+// watchSlot is the slot of the boat viewer watches t on in f: its own,
+// or, for the viewer's own machine sailor, the boat it is aboard; −1 for
+// none.
+func watchSlot(f *bus.Frame, t watch.Target, viewer bus.Account) int32 {
+	if t.Mine(store.AccountID(viewer)) {
+		return whereMachine(f, bus.Account(t.ID))
+	}
+	return findBoat(f, bus.Account(t.ID))
 }
 
 // findBoat is the slot of an account's boat in f, or −1.
@@ -231,7 +241,7 @@ func (c *conn) sailCommand() bool {
 // at once, and the connection is welcomed to the watched boat.
 func (enc *encoder) beginWatch(c *conn, f *bus.Frame, t watch.Target) {
 	e := enc.e
-	s := findBoat(f, bus.Account(t.ID))
+	s := watchSlot(f, t, c.account)
 	if v := e.verdict(f, t, c.account); v != watch.Yes {
 		// Refused since the reader asked: a watch under way ends too.
 		enc.stopWatching(c, pb.WatchEnd_WATCH_END_UNSPECIFIED)
@@ -260,6 +270,37 @@ func (enc *encoder) beginWatch(c *conn, f *bus.Frame, t watch.Target) {
 		return
 	}
 	enc.activate(c)
+}
+
+// follow keeps an owner's watch of their own machine sailor on it: on its
+// own boat, or the boat it is aboard, welcomed to whichever it is on now,
+// and reading its chat; a machine sailor aboard no boat any longer ends
+// the watch. It reports whether c is encoded with f.
+func (enc *encoder) follow(c *conn, f *bus.Frame) bool {
+	m := bus.Account(c.w.target.ID)
+	at := whereMachine(f, m)
+	s, boat := c.w.slot, c.w.boat
+	if at == s && f.Boat[at] == boat {
+		return true
+	}
+	if at < 0 {
+		if f.Occupied[s] && f.Boat[s] == boat && f.Owner[s] != m {
+			// Gone ashore from the boat it was aboard, with no boat of its
+			// own.
+			enc.stopWatching(c, pb.WatchEnd_WATCH_END_LEFT)
+			return false
+		}
+		return true
+	}
+	e := enc.e
+	e.mine.set(c, boat, false)
+	c.w.slot, c.w.boat = at, f.Boat[at]
+	e.mine.set(c, c.w.boat, true)
+	c.toldLamp = pb.Lamp_LAMP_UNSPECIFIED
+	if !c.welcomeWatch(f) {
+		c.active = false
+	}
+	return false
 }
 
 // leaveWater takes the boat the connection sails, or its account has in
@@ -351,6 +392,9 @@ func (c *conn) welcomeWatch(f *bus.Frame) bool {
 	c.rmu.Unlock()
 	c.box.restart()
 	c.bumped = f.Tick
+	if ok {
+		c.resendKnocks()
+	}
 	return ok && c.chunks(e.cfg.Chunks, f.State[s].X, f.State[s].Y)
 }
 

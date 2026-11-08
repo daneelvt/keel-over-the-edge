@@ -16,6 +16,7 @@ import (
 
 	"github.com/daneelvt/keel-over-the-edge/internal/aboard"
 	"github.com/daneelvt/keel-over-the-edge/internal/auth"
+	"github.com/daneelvt/keel-over-the-edge/internal/moderation"
 	"github.com/daneelvt/keel-over-the-edge/internal/store"
 )
 
@@ -36,6 +37,8 @@ type Sailing interface {
 	EndSailLink(ctx context.Context, skipper store.AccountID) (bool, error)
 	LiveSailLink(ctx context.Context, skipper store.AccountID) (made, expires time.Time, ok bool, err error)
 	SailLink(ctx context.Context, hash [32]byte) (store.SailLink, error)
+	MakeMachineSailLink(ctx context.Context, owner, machine store.AccountID, hash [32]byte, made, expires time.Time) error
+	OwnsMachine(ctx context.Context, owner, machine store.AccountID) (bool, error)
 }
 
 // Deck is the world sailed as a link's page reads it: whether the viewer
@@ -44,6 +47,15 @@ type Sailing interface {
 // and name.
 type Deck interface {
 	LinkCan(skipper, viewer store.AccountID) (can string, kind uint16, boat string)
+	// MachineCan says whether owner's machine sailor may be sent aboard a
+	// machine sailor skipper's boat now: "ok", "away", "aboard",
+	// "not-at-sea", "full", "closed" or "own".
+	MachineCan(skipper, skipperOwner, machine, owner store.AccountID) string
+	// CallAshore calls a machine sailor ashore from the boat it is aboard,
+	// reporting whether it was aboard one; Aboard whether an account is
+	// aboard a boat not its own.
+	CallAshore(machine store.AccountID) bool
+	Aboard(id store.AccountID) bool
 }
 
 // Young stops an account whose player said they are under 13, as the
@@ -288,7 +300,8 @@ func mayLink(w http.ResponseWriter, acc store.Account, now time.Time) bool {
 //	429 {"error":"often"}      LinkLimit links in the last LinkWindow
 func (a *api) makeLink(w http.ResponseWriter, r *http.Request) {
 	acc, _ := auth.FromContext(r.Context())
-	if !emptyBody(w, r) {
+	machine, ok := a.machineOf(w, r, acc)
+	if !ok {
 		return
 	}
 	now := time.Now()
@@ -309,9 +322,18 @@ func (a *api) makeLink(w http.ResponseWriter, r *http.Request) {
 	for range 2 {
 		var hash [32]byte
 		token, hash = aboard.NewToken()
-		if err = a.cfg.Sailing.MakeSailLink(r.Context(), acc.ID, hash, now, expires); !errors.Is(err, store.ErrTokenTaken) {
+		if machine != (store.AccountID{}) {
+			err = a.cfg.Sailing.MakeMachineSailLink(r.Context(), acc.ID, machine, hash, now, expires)
+		} else {
+			err = a.cfg.Sailing.MakeSailLink(r.Context(), acc.ID, hash, now, expires)
+		}
+		if !errors.Is(err, store.ErrTokenTaken) {
 			break
 		}
+	}
+	if errors.Is(err, store.ErrNotFound) {
+		writeError(w, http.StatusNotFound, "machine")
+		return
 	}
 	if err != nil {
 		a.unavailable(w, r, "making a link", err)
@@ -324,10 +346,15 @@ func (a *api) makeLink(w http.ResponseWriter, r *http.Request) {
 // skipper's live link ended, if it has one.
 func (a *api) endLink(w http.ResponseWriter, r *http.Request) {
 	acc, _ := auth.FromContext(r.Context())
-	if !emptyBody(w, r) {
+	machine, ok := a.machineOf(w, r, acc)
+	if !ok {
 		return
 	}
-	if _, err := a.cfg.Sailing.EndSailLink(r.Context(), acc.ID); err != nil {
+	skipper := acc.ID
+	if machine != (store.AccountID{}) {
+		skipper = machine
+	}
+	if _, err := a.cfg.Sailing.EndSailLink(r.Context(), skipper); err != nil {
 		a.unavailable(w, r, "ending a link", err)
 		return
 	}
@@ -352,7 +379,15 @@ func linkEnd(made, expires time.Time, lifetime time.Duration) time.Time {
 // skipper's link works, and until when. Its token is never shown again.
 func (a *api) liveLink(w http.ResponseWriter, r *http.Request) {
 	acc, _ := auth.FromContext(r.Context())
-	made, expires, ok, err := a.cfg.Sailing.LiveSailLink(r.Context(), acc.ID)
+	skipper := acc.ID
+	if q := r.URL.Query().Get("machine"); q != "" {
+		m, ok := a.ownMachine(w, r, acc, q)
+		if !ok {
+			return
+		}
+		skipper = m
+	}
+	made, expires, ok, err := a.cfg.Sailing.LiveSailLink(r.Context(), skipper)
 	if err != nil {
 		a.unavailable(w, r, "reading a link", err)
 		return
@@ -373,6 +408,19 @@ type linkPage struct {
 	Kind    uint16 `json:"kind"`
 	Boat    string `json:"boat"`
 	Can     string `json:"can"`
+	// Machine: the skipper is a machine sailor, which takes no person
+	// aboard but its owner; Send then are the viewer's machine sailors and
+	// whether each may be sent aboard.
+	Machine bool       `json:"machine,omitempty"`
+	Send    []sendable `json:"send,omitempty"`
+}
+
+// sendable is one of the viewer's machine sailors, on a machine sailor's
+// link's page: its name and whether it may be sent aboard now (Deck's
+// MachineCan).
+type sendable struct {
+	Name string `json:"name"`
+	Can  string `json:"can"`
 }
 
 // readLink answers GET /api/sail/{token}, behind auth.Required: what a
@@ -397,11 +445,11 @@ func (a *api) readLink(w http.ResponseWriter, r *http.Request) {
 		a.unavailable(w, r, "reading a link", err)
 		return
 	}
-	if l.Kind != store.Human || !aboard.Live(l.Made, l.Expires, l.Ended, a.cfg.Switches.Lifetime(), time.Now()) {
+	if !aboard.Live(l.Made, l.Expires, l.Ended, a.cfg.Switches.Lifetime(), time.Now()) {
 		writeError(w, http.StatusGone, "ended")
 		return
 	}
-	out := linkPage{Skipper: l.Name, Can: CanNotAtSea}
+	out := linkPage{Skipper: l.Name, Can: CanNotAtSea, Machine: l.Kind == store.AI}
 	if a.cfg.Looks != nil {
 		out.Look = a.cfg.Looks.Code(a.cfg.Looks.Resolve(l.Skipper, l.Look))
 	}
@@ -409,12 +457,116 @@ func (a *api) readLink(w http.ResponseWriter, r *http.Request) {
 		out.Can, out.Kind, out.Boat = d.LinkCan(l.Skipper, acc.ID)
 	}
 	switch {
-	case l.Skipper == acc.ID:
+	case l.Skipper == acc.ID || out.Machine && l.Owner == acc.ID:
 		out.Can = CanOwn
+	case out.Machine:
+		// No person comes aboard a machine sailor's boat by its link.
+		if out.Can != CanNotAtSea {
+			out.Can = CanClosed
+		}
 	case out.Can == CanOK && !a.cfg.Switches.Boarding():
 		out.Can = CanClosed
 	}
+	if out.Machine && a.cfg.Machines != nil {
+		ms, err := a.cfg.Machines.Machines(r.Context(), acc.ID)
+		if err != nil {
+			a.unavailable(w, r, "listing machine sailors", err)
+			return
+		}
+		for _, m := range ms {
+			can := CanNotAtSea
+			if d := a.cfg.Deck; d != nil {
+				can = d.MachineCan(l.Skipper, l.Owner, m.ID, acc.ID)
+			}
+			if can == CanOK && !a.cfg.Switches.Boarding() {
+				can = CanClosed
+			}
+			out.Send = append(out.Send, sendable{Name: m.Name, Can: can})
+		}
+	}
 	writeJSON(w, http.StatusOK, out)
+}
+
+// machineJSON names one of the account's machine sailors by its ID.
+type machineJSON struct {
+	Machine string `json:"machine"`
+}
+
+// machineOf reads a body that is none, or names one of the account's
+// machine sailors: its ID, zero for none. 404 machine for one not the
+// account's.
+func (a *api) machineOf(w http.ResponseWriter, r *http.Request, acc store.Account) (store.AccountID, bool) {
+	var peek [1]byte
+	n, err := io.ReadFull(r.Body, peek[:])
+	if n == 0 && (err == io.EOF || err == io.ErrUnexpectedEOF) {
+		return store.AccountID{}, true
+	}
+	r.Body = io.NopCloser(io.MultiReader(bytes.NewReader(peek[:n]), r.Body))
+	var m machineJSON
+	if !readJSON(w, r, &m) {
+		return store.AccountID{}, false
+	}
+	if m.Machine == "" {
+		return store.AccountID{}, true
+	}
+	return a.ownMachine(w, r, acc, m.Machine)
+}
+
+// ownMachine is the account's machine sailor of ID id, or, for one that
+// is not an ID, of that name as players see it, answering 404 machine for
+// one not the account's.
+func (a *api) ownMachine(w http.ResponseWriter, r *http.Request, acc store.Account, id string) (store.AccountID, bool) {
+	m, ok := store.ParseID(id)
+	if !ok && a.cfg.Machines != nil {
+		ms, err := a.cfg.Machines.Machines(r.Context(), acc.ID)
+		if err != nil {
+			a.unavailable(w, r, "finding a machine sailor", err)
+			return store.AccountID{}, false
+		}
+		for _, x := range ms {
+			if moderation.Key(x.Name) == moderation.Key(id) {
+				m, ok = x.ID, true
+			}
+		}
+	}
+	if !ok {
+		writeError(w, http.StatusNotFound, "machine")
+		return store.AccountID{}, false
+	}
+	mine, err := a.cfg.Sailing.OwnsMachine(r.Context(), acc.ID, m)
+	if err != nil {
+		a.unavailable(w, r, "finding a machine sailor", err)
+		return store.AccountID{}, false
+	}
+	if !mine {
+		writeError(w, http.StatusNotFound, "machine")
+		return store.AccountID{}, false
+	}
+	return m, true
+}
+
+// callAshore answers POST /api/sail/ashore {"machine"}, behind
+// auth.Required: the account's machine sailor called ashore from the boat
+// it is aboard, its own boat put in the water at the nearest port.
+//
+//	204                       called ashore
+//	404 {"error":"machine"}   not the account's machine sailor
+//	409 {"error":"ashore"}    aboard no boat
+func (a *api) callAshore(w http.ResponseWriter, r *http.Request) {
+	acc, _ := auth.FromContext(r.Context())
+	m, ok := a.machineOf(w, r, acc)
+	if !ok {
+		return
+	}
+	if m == (store.AccountID{}) {
+		writeError(w, http.StatusNotFound, "machine")
+		return
+	}
+	if a.cfg.Deck == nil || !a.cfg.Deck.CallAshore(m) {
+		writeError(w, http.StatusConflict, "ashore")
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
 
 // registerSailing adds sailing together's routes.
@@ -427,5 +579,6 @@ func (a *api) registerSailing(mux *http.ServeMux, required func(http.HandlerFunc
 	mux.Handle("POST /api/sail/link", required(a.makeLink))
 	mux.Handle("POST /api/sail/link/end", required(a.endLink))
 	mux.Handle("GET /api/sail/link", required(a.liveLink))
+	mux.Handle("POST /api/sail/ashore", required(a.callAshore))
 	mux.Handle("GET /api/sail/{token}", required(a.readLink))
 }

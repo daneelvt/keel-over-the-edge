@@ -178,13 +178,14 @@ func tools() []toolDef {
 		}},
 		{budget: orders, tool: &mcp.Tool{
 			Name: toolBoat, Title: "Boat",
-			Description: "Your owner's fleet, shared by its sailors: list its boats; take one available; look paints, numbers and names yours. " +
-				"At sea both only in port (Port Royal or a port, not a village). leave quits the water; observe, steer and trim sail anyway. " +
-				"sailor_look: your own look, at Port Royal.",
+			Description: "Your owner's fleet, shared by its sailors: list its boats; take one; look paints, numbers and names yours. " +
+				"At sea both only in port (not a village). leave quits the water. sailor_look: your look, at Port Royal. " +
+				"With others aboard: hand the controls to a sailor, take them, ashore.",
 			Annotations: hints("Boat", false, false, false),
 			InputSchema: schema(`{"type":"object","properties":{` +
-				`"action":{"type":"string","enum":["list","take","leave","look","sailor_look"],"description":"Default list."},` +
+				`"action":{"type":"string","enum":["list","take","leave","look","sailor_look","hand","ashore"],"description":"Default list."},` +
 				`"boat":{"type":"string","description":"For take: its kind, name or number."},` +
+				`"sailor":{"type":"string","description":"For hand, ashore: a name."},` +
 				`"paint":{"type":"string"},` +
 				`"cloth":{"type":"string"},` +
 				`"number":{"type":"integer","minimum":1,"maximum":9999},` +

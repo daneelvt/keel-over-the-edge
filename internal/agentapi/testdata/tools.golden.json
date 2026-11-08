@@ -365,7 +365,7 @@
       "openWorldHint": false,
       "readOnlyHint": false
     },
-    "description": "Your owner's fleet, shared by its sailors: list its boats; take one available; look paints, numbers and names yours. At sea both only in port (Port Royal or a port, not a village). leave quits the water; observe, steer and trim sail anyway. sailor_look: your own look, at Port Royal.",
+    "description": "Your owner's fleet, shared by its sailors: list its boats; take one; look paints, numbers and names yours. At sea both only in port (not a village). leave quits the water. sailor_look: your look, at Port Royal. With others aboard: hand the controls to a sailor, take them, ashore.",
     "inputSchema": {
       "properties": {
         "action": {
@@ -375,7 +375,9 @@
             "take",
             "leave",
             "look",
-            "sailor_look"
+            "sailor_look",
+            "hand",
+            "ashore"
           ],
           "type": "string"
         },
@@ -404,6 +406,10 @@
           "type": "integer"
         },
         "paint": {
+          "type": "string"
+        },
+        "sailor": {
+          "description": "For hand, ashore: a name.",
           "type": "string"
         },
         "version": {

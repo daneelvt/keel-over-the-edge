@@ -49,6 +49,8 @@ type record struct {
 	x, y    float64
 	owner   bus.Account
 	result  bus.Result
+	// why is an Ashore's reason.
+	why uint8
 }
 
 // Recorder is handed a world's frames as they are published: a
@@ -78,6 +80,8 @@ func (r *Recorder) Record(f *bus.Frame) {
 			put(record{tick: f.Tick, kind: evAdmitted, account: e.Account, conn: e.Conn, boat: e.Reply.Boat, slot: e.Reply.Slot})
 		case e.Op == bus.Leave && (e.Reply.Result == bus.Left || e.Reply.Result == bus.Expired):
 			put(record{tick: f.Tick, kind: evLeft, account: e.Account, boat: e.Reply.Boat, result: e.Reply.Result})
+		case e.Op == bus.Ashore:
+			put(record{tick: f.Tick, kind: evAboard, account: e.Account, boat: e.Reply.Boat, slot: e.Reply.Slot, result: e.Reply.Result, why: e.Why})
 		}
 	}
 	for i := range f.Edges {
@@ -250,6 +254,15 @@ func (h *hub) dispatch(r recordFor) {
 		}
 		hm.boat = 0
 		e = event{Tick: r.tick, Kind: evLeft, Words: why}
+	case evAboard:
+		// Ashore from the boat it was aboard: its own boat in the water,
+		// or none.
+		hm.aboard = false
+		hm.boat = 0
+		if r.result == bus.Joined {
+			hm.slot, hm.boat, hm.queued, hm.ordered = r.slot, r.boat, false, false
+		}
+		e = event{Tick: r.tick, Kind: evAboard, Words: ashoreEventWords(r.why, r.result)}
 	case evOver:
 		e = event{Tick: r.tick, Kind: evOver, Words: "over the falls: your boat starts again at the start"}
 	case evTaken:
@@ -338,10 +351,22 @@ func (h *hub) boatEvents(f *bus.Frame, sl int32, mode uint8, aground bool) {
 	if h.boats[sl] != f.Boat[sl] {
 		return
 	}
-	hm := h.helmByAccount(f.Owner[sl])
-	if hm == nil {
-		return
+	// Its skipper's helm, and the machine sailors aboard as crew.
+	if hm := h.helmByAccount(f.Owner[sl]); hm != nil {
+		h.boatEventsOf(hm, f, sl, mode, aground)
 	}
+	lo, hi := f.CrewOf(sl)
+	for _, a := range f.Crew[lo:hi] {
+		if a.Machine {
+			if hm := h.helmByAccount(a.Account); hm != nil {
+				h.boatEventsOf(hm, f, sl, mode, aground)
+			}
+		}
+	}
+}
+
+// boatEventsOf tells a helm of the boat's capsizes and groundings.
+func (h *hub) boatEventsOf(hm *helm, f *bus.Frame, sl int32, mode uint8, aground bool) {
 	switch {
 	case mode != physics.Sailing && h.modes[sl] == physics.Sailing:
 		hm.event(event{Tick: f.Tick, Kind: evCapsized, Words: "capsized: your sailor is in the water, righting the boat"})

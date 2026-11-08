@@ -118,6 +118,8 @@ export function knockingWords(
       return ['That knock didn’t reach the skipper; try again.'];
     case 'withdrawn':
       return ['Your knock was withdrawn.'];
+    case 'away':
+      return ['Your machine sailor isn’t in the water now.'];
     default:
       return ['You can’t come aboard now.'];
   }

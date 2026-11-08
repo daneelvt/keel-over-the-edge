@@ -378,6 +378,7 @@ func (p *process) openWorld(ctx context.Context, rw *readyWorld) (*worldHalf, er
 		Link:  p.sailLink, Knocker: p.knocker, Switches: p.switches, Capacities: cat.Capacities(), CrewLimit: cfg.CrewLimit,
 		Refuser: p.ties,
 		Chat:    h.chat, Talker: p.talker, Tie: p.tie, Report: p.report, CountryHeader: countryHeader,
+		Machines: p.agents.core,
 	})
 	h.lasting = persist.New(persist.Config{
 		Frames: b.Frames, Store: p.writer, World: row.ID, Epoch: p.lease,
@@ -756,7 +757,8 @@ func (p *process) sailLink(ctx context.Context, hash [32]byte) (edge.LinkFound, 
 	if err != nil {
 		return edge.LinkFound{}, err
 	}
-	return edge.LinkFound{Skipper: bus.Account(l.Skipper), Name: l.Name, Made: l.Made, Expires: l.Expires, Ended: l.Ended}, nil
+	return edge.LinkFound{Skipper: bus.Account(l.Skipper), Machine: l.Kind == store.AI, Owner: bus.Account(l.Owner), Name: l.Name,
+		Made: l.Made, Expires: l.Expires, Ended: l.Ended}, nil
 }
 
 // knocker finds a knocking sailor, their look as the game connection

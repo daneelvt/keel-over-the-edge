@@ -39,12 +39,13 @@ const (
 	refusedPortRoyal  refusalKind = "port_royal"  // a change of look at sea beyond Port Royal's harbour
 	refusedPort       refusalKind = "port"        // a change of boat at sea out of port
 	refusedChat       refusalKind = "chat"        // a line not said aboard: nobody to hear it, or chat's filter or limits
+	refusedControls   refusalKind = "controls"    // an order from a machine sailor that does not hold the boat's controls
 )
 
 // refusalKinds lists every kind, for the metrics and the tests.
 var refusalKinds = []refusalKind{refusedOrders, refusedLooks, refusedOrder, refusedArgs, refusedPlace, refusedNotAtSea, refusedQueued,
 	refusedFull, refusedSuperseded, refusedEnded, refusedRestarting, refusedNoWorld, refusedBusy, refusedFalling, refusedStopped,
-	refusedRevoked, refusedPortRoyal, refusedPort, refusedChat}
+	refusedRevoked, refusedPortRoyal, refusedPort, refusedChat, refusedControls}
 
 // refusal is a call refused: its kind and its words.
 type refusal struct {

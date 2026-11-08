@@ -189,6 +189,14 @@ enum ReportReason {
 // withdraws the first.
 message Knock {
   string token = 1;
+  // The name of one of the account's machine sailors, to send it aboard
+  // rather than come aboard oneself: the link must be a machine sailor's,
+  // the machine sailor sent in the water, and the knock is answered by
+  // the skipper machine sailor's owner, wherever they are in the game,
+  // never by its agent. Let aboard, the machine sailor's own boat leaves
+  // the water and it is crew there; the connection is told as a knocker
+  // is.
+  string machine = 2;
 }
 
 // Answer is the skipper's answer to a knock: let them aboard, or not now.
@@ -327,6 +335,13 @@ message KnockCard {
   string sailor = 2;
   uint32 look = 3;
   bool gone = 4;
+  // A machine sailor sent aboard by its owner, named owner (their sailor's
+  // name), knocking on the boat of skipper, the connection's own machine
+  // sailor: the card goes to that machine sailor's owner wherever they are
+  // in the game.
+  bool machine = 5;
+  string owner = 6;
+  string skipper = 7;
 }
 
 // Knocking tells a knocker how their knock stands. Let aboard, a Welcome
@@ -338,6 +353,8 @@ message Knocking {
   string skipper = 2;
   uint32 kind = 3;
   string boat = 4;
+  // The machine sailor the knock sends aboard, "" for the knocker's own.
+  string machine = 5;
 }
 
 // KnockState is how a knock stands, or why it was refused. A refusal never
@@ -374,6 +391,9 @@ enum KnockState {
   KNOCK_STATE_TRY_AGAIN = 14;
   // Withdrawn by a knock on another boat, or the knocker went elsewhere.
   KNOCK_STATE_WITHDRAWN = 15;
+  // The machine sailor sent aboard is not in the water: its AI app sails
+  // it there first.
+  KNOCK_STATE_AWAY = 16;
 }
 
 // Crew is who is aboard the boat the connection sails, is aboard or

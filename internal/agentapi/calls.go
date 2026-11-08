@@ -224,8 +224,15 @@ func (c *Core) call(ctx context.Context, d toolDef, h *helm, a *oauth.Accepted, 
 			Version string  `json:"version,omitempty"`
 			Finish  string  `json:"finish,omitempty"`
 			Colour  string  `json:"colour,omitempty"`
+			Sailor  string  `json:"sailor,omitempty"`
 		}
 		if r := args(req, &o); r != nil {
+			return "", nil, r
+		}
+		if o.Action == "hand" || o.Action == "ashore" || o.Action == "take" && o.Boat == "" && h.inCompany(c.sea.Load()) {
+			return c.controls(ctx, h, o.Action, o.Sailor)
+		}
+		if r := h.crewRefusal(o.Action); r != nil {
 			return "", nil, r
 		}
 		look := lookArgs{Version: o.Version, Finish: o.Finish, Colour: o.Colour}
@@ -341,7 +348,11 @@ func (c *Core) order(ctx context.Context, h *helm, give func(s *Sea, f *bus.Fram
 	}
 	h.mu.Lock()
 	sl := h.slot
+	r := h.controlsRefusal(s, f, sl)
 	h.mu.Unlock()
+	if r != nil {
+		return "", nil, r
+	}
 	if f.Voyage[sl].Falling() {
 		return "", nil, refuse(refusedFalling, wordsFalling)
 	}

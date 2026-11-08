@@ -19,6 +19,9 @@ import (
 // owner is the human whose machine sailors the harness's sailors are.
 var owner = bus.Account{0x01, 0x9a, 0xee}
 
+// machineNames are the tests' machine sailors' names, by sailor's number.
+var machineNames = map[byte]string{1: "Iron Mary", 2: "Rover"}
+
 // people are the humans the tests' chat knows, by account, and the
 // machine sailors' talkers answer with their owner's facts.
 type people struct {
@@ -59,7 +62,7 @@ func (h *harness) withChat(t *testing.T) (*chat.Hub, *people) {
 	h.sea.Talker = func(_ context.Context, a bus.Account) (aboard.Speaker, string, error) {
 		s := adult(owner)
 		s.Account, s.Machine = a, true
-		return s, "Iron Mary", nil
+		return s, machineNames[a[2]], nil
 	}
 	hub.AddOut(chatOut{core: h.core, sea: h.sea})
 	return hub, p

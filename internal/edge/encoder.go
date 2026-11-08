@@ -398,6 +398,9 @@ func (c *conn) welcome(f *bus.Frame) bool {
 // the boat it watches, or its free camera while it roams. A watched boat
 // gone, or no longer to be watched, ends the watch.
 func (enc *encoder) encode(c *conn, f *bus.Frame) {
+	if c.w.on && c.w.mine && !enc.follow(c, f) {
+		return
+	}
 	s, boat := c.eyeSlot()
 	if !f.Occupied[s] || f.Boat[s] != boat {
 		if c.w.on {

@@ -104,6 +104,34 @@ func (q *Queries) EndLiveSailLink(ctx context.Context, skipperID pgtype.UUID) (i
 	return result.RowsAffected(), nil
 }
 
+const insertMachineSailLink = `-- name: InsertMachineSailLink :execrows
+INSERT INTO sail_link (skipper_id, hash, made_at, expires_at)
+SELECT a.id, $1, $2, $3 FROM account a WHERE a.id = $4 AND a.kind = 'ai' AND a.owner_id = $5
+`
+
+type InsertMachineSailLinkParams struct {
+	Hash      []byte
+	MadeAt    time.Time
+	ExpiresAt time.Time
+	SkipperID pgtype.UUID
+	OwnerID   pgtype.UUID
+}
+
+// A link made for a machine sailor, by its owner.
+func (q *Queries) InsertMachineSailLink(ctx context.Context, arg InsertMachineSailLinkParams) (int64, error) {
+	result, err := q.db.Exec(ctx, insertMachineSailLink,
+		arg.Hash,
+		arg.MadeAt,
+		arg.ExpiresAt,
+		arg.SkipperID,
+		arg.OwnerID,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const insertSailLink = `-- name: InsertSailLink :execrows
 INSERT INTO sail_link (skipper_id, hash, made_at, expires_at)
 SELECT a.id, $1, $2, $3 FROM account a WHERE a.id = $4 AND a.kind = 'human'
@@ -190,8 +218,25 @@ func (q *Queries) LiveSailLink(ctx context.Context, skipperID pgtype.UUID) (Live
 	return i, err
 }
 
+const ownsMachine = `-- name: OwnsMachine :one
+SELECT EXISTS (SELECT 1 FROM account WHERE id = $1 AND kind = 'ai' AND owner_id = $2)::boolean
+`
+
+type OwnsMachineParams struct {
+	ID      pgtype.UUID
+	OwnerID pgtype.UUID
+}
+
+// Whether a machine sailor is the owner's.
+func (q *Queries) OwnsMachine(ctx context.Context, arg OwnsMachineParams) (bool, error) {
+	row := q.db.QueryRow(ctx, ownsMachine, arg.ID, arg.OwnerID)
+	var column_1 bool
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
 const sailLinkByHash = `-- name: SailLinkByHash :one
-SELECT l.skipper_id, l.made_at, l.expires_at, (l.ended_at IS NOT NULL)::boolean AS ended, a.kind, sl.name, sl.look,
+SELECT l.skipper_id, l.made_at, l.expires_at, (l.ended_at IS NOT NULL)::boolean AS ended, a.kind, a.owner_id, sl.name, sl.look,
   coalesce(sl.version, '')::text AS version, coalesce(sl.skin, '')::text AS skin, coalesce(sl.hair, '')::text AS hair,
   coalesce(sl.colour, '')::text AS colour, coalesce(sl.finish, '')::text AS finish, sl.look_chosen
 FROM sail_link l
@@ -206,6 +251,7 @@ type SailLinkByHashRow struct {
 	ExpiresAt  time.Time
 	Ended      bool
 	Kind       string
+	OwnerID    pgtype.UUID
 	Name       string
 	Look       string
 	Version    string
@@ -216,7 +262,8 @@ type SailLinkByHashRow struct {
 	LookChosen bool
 }
 
-// A link and its skipper, by its token's hash.
+// A link and its skipper, by its token's hash: a machine sailor's with
+// its owner.
 func (q *Queries) SailLinkByHash(ctx context.Context, hash []byte) (SailLinkByHashRow, error) {
 	row := q.db.QueryRow(ctx, sailLinkByHash, hash)
 	var i SailLinkByHashRow
@@ -226,6 +273,7 @@ func (q *Queries) SailLinkByHash(ctx context.Context, hash []byte) (SailLinkByHa
 		&i.ExpiresAt,
 		&i.Ended,
 		&i.Kind,
+		&i.OwnerID,
 		&i.Name,
 		&i.Look,
 		&i.Version,

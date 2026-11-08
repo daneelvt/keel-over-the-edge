@@ -692,7 +692,18 @@ async function start(): Promise<void> {
     online.watch(watchFirst);
   }
   const knock = me.knock;
-  if (knock !== undefined) {
+  const sending = me.knockMachine;
+  if (knock !== undefined && sending !== undefined) {
+    // A machine sailor of the player's sent aboard: the knock once the
+    // watch of it has begun.
+    let sent = false;
+    effect(() => {
+      if (!sent && online.watching.value?.sailor === sending) {
+        sent = true;
+        online.knock(knock, sending);
+      }
+    });
+  } else if (knock !== undefined) {
     // Asked to come aboard: the knock once the player's own boat is in.
     void whenArrived(online, 0).then(() => online.knock(knock));
   }

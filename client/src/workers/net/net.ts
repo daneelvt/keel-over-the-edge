@@ -38,7 +38,7 @@ type DeckAsk = Extract<
 function deckCommand(s: Session, now: number, m: DeckAsk): Uint8Array<ArrayBuffer> {
   switch (m.type) {
     case 'knock':
-      return s.knockCommand(now, m.token);
+      return s.knockCommand(now, m.token, m.machine);
     case 'answer':
       return s.answerCommand(now, m.knock, m.let);
     case 'hand':

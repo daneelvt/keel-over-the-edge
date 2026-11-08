@@ -30,6 +30,10 @@ type Deck interface {
 	// PutAshore puts who ashore from boat, by its skipper, and reports
 	// whether they were aboard.
 	PutAshore(boat uint64, skipper, who bus.Account) bool
+	// Hand offers boat's controls from from, who holds them, to to; Take
+	// has account take them, offered it, or back at once as the skipper.
+	Hand(boat uint64, from, to bus.Account) bool
+	Take(boat uint64, account bus.Account) bool
 }
 
 // chatLookup is how long the store may take to find what chat needs of a

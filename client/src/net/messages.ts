@@ -297,6 +297,8 @@ export interface KnockCardTold {
   sailor: string;
   look: number;
   gone: boolean;
+  /** A machine sailor sent aboard by its owner (their sailor's name), knocking on skipper's boat, the player's own machine sailor's. */
+  machine?: { owner: string; skipper: string };
 }
 
 /** How the connection's own knock stands, or why it was refused. */
@@ -316,6 +318,7 @@ export type KnockStateTold =
   | 'first'
   | 'try-again'
   | 'withdrawn'
+  | 'away'
   | 'other';
 
 /** The connection's own knock: how it stands, and the boat it is for. */
@@ -324,6 +327,8 @@ export interface KnockingTold {
   skipper: string;
   kind: number;
   boat: string;
+  /** The player's machine sailor the knock sends aboard; absent or "" for the player. */
+  machine?: string;
 }
 
 /** The controls offered to the connection, by whom and for how long; or, gone, no longer. */
@@ -435,7 +440,7 @@ export type ToWorker =
   /** Stop watching, without sailing: the connection is idle. */
   | { type: 'unwatch' }
   /** Ask to come aboard by a link's token. */
-  | { type: 'knock'; token: string }
+  | { type: 'knock'; token: string; machine: string }
   /** The skipper's answer to a knock. */
   | { type: 'answer'; knock: number; let: boolean }
   /** Offer the controls to the person in that seat. */

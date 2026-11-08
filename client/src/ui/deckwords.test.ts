@@ -61,6 +61,7 @@ describe('sailing together’s words', () => {
       first: 'Answer the questions before your first knock, then try again.',
       'try-again': 'That knock didn’t reach the skipper; try again.',
       withdrawn: 'Your knock was withdrawn.',
+      away: 'Your machine sailor isn’t in the water now.',
       other: 'You can’t come aboard now.',
     };
     for (const [state, text] of Object.entries(words)) {

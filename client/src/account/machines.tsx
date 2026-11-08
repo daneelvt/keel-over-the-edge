@@ -54,6 +54,7 @@ import {
   MachineSummary,
   useDraft,
 } from './machineform';
+import { MachineShare } from './machineshare';
 import type { Fetch, Me } from './me';
 import { call, confirmPasskey, type Outcome, reasonOf } from './passkeys';
 import { Portrait } from './portraits';
@@ -66,7 +67,7 @@ import { YourSailor } from './yoursailor';
  * game's operator stopped it on its own, 0 for not; and how many watch it
  * now, 0 when none or not at sea.
  */
-export type Machine = MachineItem & { stopped?: number; watchers?: number };
+export type Machine = MachineItem & { stopped?: number; watchers?: number; aboard?: boolean };
 
 /** GET /api/machines: the account's machine sailors and what goes with them. */
 export interface MachinesPage {
@@ -310,6 +311,7 @@ export function MachineList({
                       {watchersText(m.watchers ?? 0)}
                     </span>
                   ) : null}
+                  <MachineShare name={m.name} id={m.id} aboard={m.aboard === true} />
                 </span>
               ) : null}
               {stoppedOn(m) !== '' ? (

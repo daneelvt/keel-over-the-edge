@@ -204,7 +204,9 @@ func (c *conn) crewOf(f *bus.Frame, s int32) bool {
 		return true
 	}
 	c.toldCrew = lo < hi
-	named := !c.w.on
+	// Names to those aboard, and to an owner watching their own machine
+	// sailor, who reads the chat aboard.
+	named := !c.w.on || c.w.mine
 	var ties *aboard.Ties
 	if c.e.cfg.Chat != nil && named {
 		ties = c.e.cfg.Chat.Rules.Ties

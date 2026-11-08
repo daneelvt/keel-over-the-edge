@@ -4,8 +4,9 @@
 ;
 
 -- name: SailLinkByHash :one
--- A link and its skipper, by its token's hash.
-SELECT l.skipper_id, l.made_at, l.expires_at, (l.ended_at IS NOT NULL)::boolean AS ended, a.kind, sl.name, sl.look,
+-- A link and its skipper, by its token's hash: a machine sailor's with
+-- its owner.
+SELECT l.skipper_id, l.made_at, l.expires_at, (l.ended_at IS NOT NULL)::boolean AS ended, a.kind, a.owner_id, sl.name, sl.look,
   coalesce(sl.version, '')::text AS version, coalesce(sl.skin, '')::text AS skin, coalesce(sl.hair, '')::text AS hair,
   coalesce(sl.colour, '')::text AS colour, coalesce(sl.finish, '')::text AS finish, sl.look_chosen
 FROM sail_link l
@@ -30,6 +31,15 @@ UPDATE sail_link SET ended_at = now() WHERE skipper_id = @skipper_id AND ended_a
 -- A link made for a human skipper.
 INSERT INTO sail_link (skipper_id, hash, made_at, expires_at)
 SELECT a.id, @hash, @made_at, @expires_at FROM account a WHERE a.id = @skipper_id AND a.kind = 'human';
+
+-- name: InsertMachineSailLink :execrows
+-- A link made for a machine sailor, by its owner.
+INSERT INTO sail_link (skipper_id, hash, made_at, expires_at)
+SELECT a.id, @hash, @made_at, @expires_at FROM account a WHERE a.id = @skipper_id AND a.kind = 'ai' AND a.owner_id = @owner_id;
+
+-- name: OwnsMachine :one
+-- Whether a machine sailor is the owner's.
+SELECT EXISTS (SELECT 1 FROM account WHERE id = @id AND kind = 'ai' AND owner_id = @owner_id)::boolean;
 
 -- name: EndAllSailLinks :execrows
 UPDATE sail_link SET ended_at = now() WHERE ended_at IS NULL;

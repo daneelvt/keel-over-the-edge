@@ -104,8 +104,10 @@ type MachineItem struct {
 	Name  string `json:"name"`
 	Look  Look   `json:"look"`
 	AtSea bool   `json:"atSea"`
-	// Watchers is how many watch it now, filled by the game's own page.
+	// Watchers is how many watch it now, and Aboard whether it is crew
+	// aboard another's boat, filled by the game's own page.
 	Watchers int        `json:"watchers"`
+	Aboard   bool       `json:"aboard,omitempty"`
 	Stopped  int64      `json:"stopped"`
 	Apps     []AppItem  `json:"apps"`
 	Token    *TokenItem `json:"token"`

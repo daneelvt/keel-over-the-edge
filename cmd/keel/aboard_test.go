@@ -21,6 +21,12 @@ func (noAccounts) AcceptRules(context.Context, store.AccountID) error    { retur
 func (noAccounts) MakeSailLink(context.Context, store.AccountID, [32]byte, time.Time, time.Time) error {
 	return errNoAccounts
 }
+func (noAccounts) MakeMachineSailLink(context.Context, store.AccountID, store.AccountID, [32]byte, time.Time, time.Time) error {
+	return errNoAccounts
+}
+func (noAccounts) OwnsMachine(context.Context, store.AccountID, store.AccountID) (bool, error) {
+	return false, nil
+}
 func (noAccounts) EndSailLink(context.Context, store.AccountID) (bool, error) { return false, nil }
 func (noAccounts) LiveSailLink(context.Context, store.AccountID) (time.Time, time.Time, bool, error) {
 	return time.Time{}, time.Time{}, false, nil

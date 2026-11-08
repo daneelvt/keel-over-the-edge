@@ -342,9 +342,9 @@ export class Online {
     this.#port.postMessage({ type: 'watch', sailor });
   }
 
-  /** Asks to come aboard by a link's token: knocking tells how it stands. */
-  knock(token: string): void {
-    this.#port.postMessage({ type: 'knock', token });
+  /** Asks to come aboard by a link's token, or sends the player's machine sailor named machine: knocking tells how it stands. */
+  knock(token: string, machine = ''): void {
+    this.#port.postMessage({ type: 'knock', token, machine });
   }
 
   /** The skipper's answer to a knock: let them aboard, or not now. */

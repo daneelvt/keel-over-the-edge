@@ -250,10 +250,17 @@ export function deckShown(d: DeckView): boolean {
   if (chatShown(d) || d.chat.sheet.value !== null || d.chat.ask.value !== null) {
     return true;
   }
-  if (d.watching.value !== null) {
-    return false;
-  }
   const k = d.knocking.value;
+  if (d.watching.value !== null) {
+    // Watching, the knocks on the player's own machine sailor's boat, their
+    // machine sailor's knock, and its owner's windows.
+    const w = d.watching.value;
+    return (
+      d.knocks.value.length > 0 ||
+      (k !== null && k !== d.dismissed.value && (k.machine ?? '') !== '') ||
+      (w.machine && w.mine && (d.link.value || d.list.value))
+    );
+  }
   return (
     d.aboard.value !== null ||
     d.crew.value !== null ||
@@ -263,6 +270,12 @@ export function deckShown(d: DeckView): boolean {
     (k !== null && k !== d.dismissed.value) ||
     d.link.value
   );
+}
+
+/** The player's own machine sailor watched, whose link and crew they may see to: its name, or null. */
+export function machineShared(d: DeckView): string | null {
+  const w = d.watching.value;
+  return w?.machine && w.mine ? w.sailor : null;
 }
 
 /** Whether "Sail with me" is offered: the own boat in the water, not aboard another or watching. */

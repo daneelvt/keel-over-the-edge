@@ -257,6 +257,55 @@ func TestSailLinks(t *testing.T) {
 	}
 }
 
+// TestMachineSailLinks: a machine sailor's link is made by its owner
+// alone, ends the one before, and is found with its owner.
+func TestMachineSailLinks(t *testing.T) {
+	ctx := context.Background()
+	s, _ := storetest.Store(t, store.Options{})
+	ann, err := s.CreateAccount(ctx, withBoat(storetest.NewAccount("Ann Bonny", "annbonny", sha256.Sum256([]byte("ann")))))
+	if err != nil {
+		t.Fatal(err)
+	}
+	bob, err := s.CreateAccount(ctx, withBoat(storetest.NewAccount("Bob Read", "bobread", sha256.Sum256([]byte("bob")))))
+	if err != nil {
+		t.Fatal(err)
+	}
+	ai, err := s.CreateMachine(ctx, ann, store.NewMachine{Name: "Iron Mary", NameKey: "ironmary", Version: "v", Finish: "f", Colour: "c"}, "jolly-boat")
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now().Truncate(time.Microsecond)
+	first, second := sha256.Sum256([]byte("m1")), sha256.Sum256([]byte("m2"))
+	if err := s.MakeMachineSailLink(ctx, bob, ai, first, now, now.Add(time.Hour)); !errors.Is(err, store.ErrNotFound) {
+		t.Fatalf("another's machine sailor's link: %v", err)
+	}
+	if err := s.MakeMachineSailLink(ctx, ann, ann, first, now, now.Add(time.Hour)); !errors.Is(err, store.ErrNotFound) {
+		t.Fatalf("a human's link as a machine sailor's: %v", err)
+	}
+	if mine, err := s.OwnsMachine(ctx, ann, ai); err != nil || !mine {
+		t.Fatalf("Ann owns Iron Mary: %v %v", mine, err)
+	}
+	if mine, err := s.OwnsMachine(ctx, bob, ai); err != nil || mine {
+		t.Fatalf("Bob owns Iron Mary: %v %v", mine, err)
+	}
+	if err := s.MakeMachineSailLink(ctx, ann, ai, first, now, now.Add(time.Hour)); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.MakeMachineSailLink(ctx, ann, ai, second, now, now.Add(time.Hour)); err != nil {
+		t.Fatal(err)
+	}
+	if l, err := s.SailLink(ctx, first); err != nil || !l.Ended {
+		t.Fatalf("the first link after the second: %+v %v", l, err)
+	}
+	l, err := s.SailLink(ctx, second)
+	if err != nil || l.Skipper != ai || l.Owner != ann || l.Kind != store.AI || l.Name != "Iron Mary" || l.Ended {
+		t.Fatalf("the machine sailor's link: %+v %v", l, err)
+	}
+	if l, err := s.SailLink(ctx, sha256.Sum256([]byte("none"))); !errors.Is(err, store.ErrNotFound) {
+		t.Fatalf("no link: %+v %v", l, err)
+	}
+}
+
 // TestSailSettings: the owner's switches start on with a day's lifetime;
 // each is set with its entry in the record; links off ends every live
 // link.

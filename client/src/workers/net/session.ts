@@ -127,6 +127,7 @@ const KNOCKS: Record<number, KnockStateTold> = {
   [KnockState.FIRST]: 'first',
   [KnockState.TRY_AGAIN]: 'try-again',
   [KnockState.WITHDRAWN]: 'withdrawn',
+  [KnockState.AWAY]: 'away',
 };
 
 /** Why someone left a boat, as the page names it. */
@@ -350,7 +351,13 @@ export class Session {
         const k = m.body.value;
         return {
           kind: 'knockCard',
-          card: { id: Number(k.id), sailor: k.sailor, look: k.look, gone: k.gone },
+          card: {
+            id: Number(k.id),
+            sailor: k.sailor,
+            look: k.look,
+            gone: k.gone,
+            ...(k.machine ? { machine: { owner: k.owner, skipper: k.skipper } } : {}),
+          },
         };
       }
       case 'knocking': {
@@ -363,6 +370,7 @@ export class Session {
             skipper: k.skipper,
             kind: k.kind,
             boat: k.boat,
+            machine: k.machine,
           },
         };
       }
@@ -652,9 +660,9 @@ export class Session {
   }
 
   /** Asks to come aboard by a link's token. */
-  knockCommand(now: number, token: string): Uint8Array<ArrayBuffer> {
+  knockCommand(now: number, token: string, machine = ''): Uint8Array<ArrayBuffer> {
     return this.#encode(now, {
-      body: { case: 'command', value: { body: { case: 'knock', value: { token } } } },
+      body: { case: 'command', value: { body: { case: 'knock', value: { token, machine } } } },
     });
   }
 

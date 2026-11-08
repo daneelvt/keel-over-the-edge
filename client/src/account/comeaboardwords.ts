@@ -30,6 +30,9 @@ export interface SailLink {
   /** The boat's name; '' for none. */
   boat: string;
   can: LinkCan;
+  /** The skipper is a machine sailor: no person comes aboard; send lists the player's own machine sailors and whether each may be sent aboard. */
+  machine?: boolean;
+  send?: { name: string; can: string }[];
 }
 
 /** A link read: what it is, ended, or not read. */
@@ -61,8 +64,25 @@ export function linkOf(status: number, body: unknown): LinkRead {
       kind: typeof b.kind === 'number' ? b.kind : -1,
       boat: typeof b.boat === 'string' ? b.boat : '',
       can: b.can,
+      ...(b.machine === true ? { machine: true, send: sendOf(b.send) } : {}),
     },
   };
+}
+
+/** The player's machine sailors on a machine sailor's link, as the server gave them. */
+function sendOf(raw: unknown): { name: string; can: string }[] {
+  if (!Array.isArray(raw)) {
+    return [];
+  }
+  return raw.flatMap((m: unknown) => {
+    const x = m as { name?: unknown; can?: unknown } | null;
+    return x !== null &&
+      typeof x === 'object' &&
+      typeof x.name === 'string' &&
+      typeof x.can === 'string'
+      ? [{ name: x.name, can: x.can }]
+      : [];
+  });
 }
 
 /** A kind of boat as a sentence names it: "the keelboat". */

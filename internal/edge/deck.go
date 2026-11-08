@@ -54,6 +54,9 @@ const (
 // LinkFound is a link's skipper as the store has it: what a knock needs.
 type LinkFound struct {
 	Skipper bus.Account
+	// Machine: the skipper is a machine sailor, Owner its human.
+	Machine bool
+	Owner   bus.Account
 	Name    string
 	Made    time.Time
 	Expires time.Time
@@ -81,6 +84,35 @@ type knock struct {
 	skipperName string
 	kind        uint16
 	boatName    string
+	// approver answers the knock: the skipper, or a machine sailor
+	// skipper's owner. machine is the machine sailor its owner, by, sends
+	// aboard, named name, ownerName their sailor's name; zero for by's own
+	// account.
+	approver  bus.Account
+	machine   bus.Account
+	ownerName string
+}
+
+// who is the account the knock brings aboard.
+func (kn *knock) who() bus.Account {
+	if kn.machine != (bus.Account{}) {
+		return kn.machine
+	}
+	return kn.by.account
+}
+
+// tell tells the knocker how the knock stands.
+func (kn *knock) tell(state pb.KnockState) {
+	kn.by.knockedAs(kn.machineName(), state, kn.skipperName, kn.kind, kn.boatName)
+}
+
+// machineName is the name of the machine sailor the knock sends, "" for
+// the knocker's own.
+func (kn *knock) machineName() string {
+	if kn.machine == (bus.Account{}) {
+		return ""
+	}
+	return kn.name
 }
 
 // offer is the controls offered to someone aboard, until its lapse.
@@ -88,6 +120,8 @@ type offer struct {
 	to    bus.Account
 	from  string
 	timer *time.Timer
+	// machine: to is a machine sailor, whose agent is told.
+	machine bool
 }
 
 // deck is what the edge keeps of a boat's company, by the boat.
@@ -202,6 +236,8 @@ func (e *Edge) tidyDecks(now time.Time) {
 func (c *conn) deckCommand(cmd *pb.Command) {
 	now := time.Now()
 	switch {
+	case cmd.GetKnock() != nil && cmd.GetKnock().GetMachine() != "":
+		c.machineKnock(cmd.GetKnock().GetToken(), cmd.GetKnock().GetMachine(), now)
 	case cmd.GetKnock() != nil:
 		c.knockCommand(cmd.GetKnock().GetToken(), now)
 	case cmd.GetAnswer() != nil:
@@ -223,17 +259,26 @@ func (c *conn) deckCommand(cmd *pb.Command) {
 
 // knocked tells a knocker how their knock stands.
 func (c *conn) knocked(state pb.KnockState, skipper string, kind uint16, boat string) {
+	c.knockedAs("", state, skipper, kind, boat)
+}
+
+// knockedAs tells a knocker how their knock stands, for the machine
+// sailor of theirs named machine, "" for themselves.
+func (c *conn) knockedAs(machine string, state pb.KnockState, skipper string, kind uint16, boat string) {
 	c.e.m.knock(state)
 	c.send(&pb.ServerMessage{Body: &pb.ServerMessage_Knocking{Knocking: &pb.Knocking{
-		State: state, Skipper: skipper, Kind: uint32(kind), Boat: boat,
+		State: state, Skipper: skipper, Kind: uint32(kind), Boat: boat, Machine: machine,
 	}}}, outKnocking)
 }
 
-// card shows a skipper a knock, or that it no longer waits.
+// card shows whoever answers a knock the knock, or that it no longer
+// waits.
 func (c *conn) card(k *knock, gone bool) {
-	c.send(&pb.ServerMessage{Body: &pb.ServerMessage_Knock{Knock: &pb.KnockCard{
-		Id: k.id, Sailor: k.name, Look: k.look, Gone: gone,
-	}}}, outKnock)
+	m := &pb.KnockCard{Id: k.id, Sailor: k.name, Look: k.look, Gone: gone}
+	if k.machine != (bus.Account{}) {
+		m.Machine, m.Owner, m.Skipper = true, k.ownerName, k.skipperName
+	}
+	c.send(&pb.ServerMessage{Body: &pb.ServerMessage_Knock{Knock: m}}, outKnock)
 }
 
 // knockCommand is a knock by a link's token: looked up, every rule asked,
@@ -283,6 +328,12 @@ func (c *conn) knockCommand(token string, now time.Time) {
 	}
 	if l.Skipper == c.account {
 		c.knocked(pb.KnockState_KNOCK_STATE_OWN, l.Name, 0, "")
+		return
+	}
+	if l.Machine {
+		// No person comes aboard a machine sailor's boat by its link: its
+		// owner comes aboard from watching it.
+		c.knocked(pb.KnockState_KNOCK_STATE_CLOSED, l.Name, 0, "")
 		return
 	}
 	who, err := e.cfg.Knocker(ctx, c.account)
@@ -342,14 +393,15 @@ func (c *conn) knockCommand(token string, now time.Time) {
 		e.dropKnock(old)
 	}
 	d.next++
-	kn := &knock{id: d.next, boat: boat, skipper: l.Skipper, by: c, name: who.Name, look: who.Look, skipperName: l.Name, kind: kind, boatName: boatName}
+	kn := &knock{id: d.next, boat: boat, skipper: l.Skipper, by: c, name: who.Name, look: who.Look, skipperName: l.Name, kind: kind, boatName: boatName,
+		approver: l.Skipper}
 	k.knocks = append(k.knocks, kn)
 	d.knocks[kn.id] = kn
 	d.knocking[c] = kn
 	kn.timer = time.AfterFunc(KnockLapse, func() { e.lapse(kn) })
 	d.mu.Unlock()
 	if old != nil {
-		if sk := e.registry.get(old.skipper); sk != nil {
+		if sk := e.registry.get(old.approver); sk != nil {
 			sk.card(old, true)
 		}
 	}
@@ -435,11 +487,11 @@ func (e *Edge) lapse(kn *knock) {
 	}
 	e.dropKnock(kn)
 	d.mu.Unlock()
-	if sk := e.registry.get(kn.skipper); sk != nil {
+	if sk := e.registry.get(kn.approver); sk != nil {
 		sk.card(kn, true)
 	}
 	if !kn.by.gone.Load() {
-		kn.by.knocked(pb.KnockState_KNOCK_STATE_LAPSED, kn.skipperName, kn.kind, kn.boatName)
+		kn.tell(pb.KnockState_KNOCK_STATE_LAPSED)
 	}
 }
 
@@ -453,20 +505,28 @@ func (e *Edge) knockerGone(c *conn) {
 	}
 	d.mu.Unlock()
 	if kn != nil {
-		if sk := e.registry.get(kn.skipper); sk != nil {
+		if sk := e.registry.get(kn.approver); sk != nil {
 			sk.card(kn, true)
 		}
 	}
 }
 
 // resendKnocks shows a skipper, welcomed to their boat, the knocks
-// waiting on it.
+// waiting on it; and a machine sailor's owner, welcomed to any boat, the
+// knocks on theirs.
 func (c *conn) resendKnocks() {
 	d := &c.e.decks
 	d.mu.Lock()
 	var waiting []*knock
-	if k := d.by[c.boat]; k != nil && k.skipper == c.account {
+	if k := d.by[c.boat]; k != nil && k.skipper == c.account && c.joined.Load() {
 		waiting = append(waiting, k.knocks...)
+	}
+	// And a machine sailor's owner, wherever they are, the knocks on its
+	// boat.
+	for _, kn := range d.knocks {
+		if kn.approver == c.account && kn.machine != (bus.Account{}) {
+			waiting = append(waiting, kn)
+		}
 	}
 	d.mu.Unlock()
 	for _, kn := range waiting {
@@ -480,13 +540,15 @@ func (c *conn) answerCommand(id uint64, let bool, now time.Time) {
 	d := &e.decks
 	d.mu.Lock()
 	kn := d.knocks[id]
-	if kn == nil || kn.skipper != c.account || !c.joined.Load() || c.boat != kn.boat {
+	// A person's knock is answered by its skipper on their boat; a machine
+	// sailor's by the skipper machine sailor's owner, wherever they are.
+	if kn == nil || kn.approver != c.account || kn.machine == (bus.Account{}) && (!c.joined.Load() || c.boat != kn.boat) {
 		d.mu.Unlock()
 		return
 	}
 	e.dropKnock(kn)
 	if !let {
-		d.notNow[notNowKey{kn.by.account, kn.boat}] = now.Add(NotNowFor)
+		d.notNow[notNowKey{kn.who(), kn.boat}] = now.Add(NotNowFor)
 	}
 	d.mu.Unlock()
 	c.card(kn, true)
@@ -495,7 +557,11 @@ func (c *conn) answerCommand(id uint64, let bool, now time.Time) {
 		return
 	}
 	if !let {
-		by.knocked(pb.KnockState_KNOCK_STATE_NOT_NOW, kn.skipperName, kn.kind, kn.boatName)
+		kn.tell(pb.KnockState_KNOCK_STATE_NOT_NOW)
+		return
+	}
+	if kn.machine != (bus.Account{}) {
+		e.boardMachine(kn)
 		return
 	}
 	f := e.cfg.Bus.Frames.Acquire()
@@ -550,6 +616,8 @@ func (c *conn) board(kn *knock) {
 // closeKnocks closes the connection's own boat to knocks, or opens it.
 func (c *conn) closeKnocks(closed bool) {
 	if !c.joined.Load() {
+		// Watching their own machine sailor, its owner closes its boat.
+		c.ownerCloses(closed)
 		return
 	}
 	d := &c.e.decks
@@ -614,9 +682,11 @@ func (c *conn) handCommand(to uint32) {
 	h, ok := c.handsOf(f)
 	var target bus.Account
 	var from string
+	var machine bool
 	if ok && h.holds(c.account) {
 		var found bool
 		target, _, found = e.personAt(f, h.slot, to)
+		machine = machineAt(f, h.slot, to)
 		ok = found && target != c.account
 		if lo, hi := f.CrewOf(h.slot); ok {
 			from = e.decks.name(c.account)
@@ -633,14 +703,36 @@ func (c *conn) handCommand(to uint32) {
 	if !ok {
 		return
 	}
+	e.offerControls(h.boat, h.skipper, from, target, machine)
+}
+
+// machineAt reports whether the person in seat of the boat in slot s of f
+// is a machine sailor.
+func machineAt(f *bus.Frame, s int32, seat uint32) bool {
+	if seat == 0 {
+		return f.Machine[s]
+	}
+	lo, hi := f.CrewOf(s)
+	for _, a := range f.Crew[lo:hi] {
+		if uint32(a.Seat) == seat {
+			return a.Machine
+		}
+	}
+	return false
+}
+
+// offerControls offers boat's controls, from whoever holds them, named
+// from, to target, for HandLapse; a standing offer to another is
+// withdrawn.
+func (e *Edge) offerControls(boat uint64, skipper bus.Account, from string, target bus.Account, machine bool) {
 	d := &e.decks
 	d.mu.Lock()
-	k := d.deckOf(h.boat, h.skipper)
+	k := d.deckOf(boat, skipper)
 	old := k.offer
 	if old != nil {
 		old.timer.Stop()
 	}
-	o := &offer{to: target, from: from}
+	o := &offer{to: target, from: from, machine: machine}
 	k.offer = o
 	o.timer = time.AfterFunc(HandLapse, func() {
 		d.mu.Lock()
@@ -650,21 +742,30 @@ func (c *conn) handCommand(to uint32) {
 		}
 		d.mu.Unlock()
 		if still {
-			if t := e.registry.get(o.to); t != nil {
-				t.handed(o, true)
-			}
+			e.tellHanded(o, true)
 		}
 	})
 	d.mu.Unlock()
 	if old != nil && old.to != target {
-		if t := e.registry.get(old.to); t != nil {
-			t.handed(old, true)
-		}
+		e.tellHanded(old, true)
 	}
-	if t := e.registry.get(target); t != nil {
-		t.handed(o, false)
-	}
+	e.tellHanded(o, false)
 	e.m.deck[deckOffered].Inc()
+}
+
+// tellHanded tells whoever an offer is to that the controls are offered
+// them, or that the offer stands no longer: their connection, or a
+// machine sailor's agent.
+func (e *Edge) tellHanded(o *offer, gone bool) {
+	if o.machine {
+		if e.cfg.Machines != nil {
+			e.cfg.Machines.Handed(o.to, o.from, gone)
+		}
+		return
+	}
+	if t := e.registry.get(o.to); t != nil {
+		t.handed(o, gone)
+	}
 }
 
 // handed tells a connection the controls are offered to it, or that the
@@ -685,11 +786,18 @@ func (c *conn) takeCommand() {
 	if !ok {
 		return
 	}
+	e.takeControls(h, c.account)
+}
+
+// takeControls has account take the controls of h's boat offered it; its
+// skipper takes them back at once, offered or not. It reports whether
+// they moved.
+func (e *Edge) takeControls(h hands, account bus.Account) bool {
 	d := &e.decks
 	d.mu.Lock()
 	k := d.by[h.boat]
 	var o *offer
-	if k != nil && k.offer != nil && (k.offer.to == c.account || h.mine) {
+	if k != nil && k.offer != nil && (k.offer.to == account || h.mine) {
 		o = k.offer
 		k.offer = nil
 		o.timer.Stop()
@@ -697,19 +805,20 @@ func (c *conn) takeCommand() {
 	d.mu.Unlock()
 	switch {
 	case h.mine:
-		if o != nil && o.to != c.account {
-			if t := e.registry.get(o.to); t != nil {
-				t.handed(o, true)
-			}
+		if o != nil && o.to != account {
+			e.tellHanded(o, true)
 		}
 		if h.holder != (bus.Account{}) {
 			e.m.deck[deckTakenBack].Inc()
 			e.setHolder(h.boat, bus.Account{})
+			return true
 		}
 	case o != nil:
 		e.m.deck[deckTaken].Inc()
-		e.setHolder(h.boat, c.account)
+		e.setHolder(h.boat, account)
+		return true
 	}
+	return false
 }
 
 // giveBackCommand gives the controls back to the skipper, from whoever
@@ -738,6 +847,12 @@ func (e *Edge) setHolder(boat uint64, account bus.Account) {
 // boat's voyage.
 func (c *conn) ashoreCommand(who uint32) {
 	e := c.e
+	if !c.joined.Load() && !c.crew.Load() {
+		// Watching their own machine sailor, its owner puts anyone aboard
+		// its boat ashore.
+		c.ownerAshore(who)
+		return
+	}
 	f := e.cfg.Bus.Frames.Acquire()
 	h, ok := c.handsOf(f)
 	var target bus.Account

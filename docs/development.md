@@ -5585,7 +5585,7 @@ looked up (`Config.Link`, `Config.Knocker`, at most 2 s, on the reader),
 then refused or shown to the skipper as a `KnockCard`, with the knocker
 told how it stands (`Knocking`). Refusals: the link ended, expired or links
 off (`ended`); the own link; the boat not in the water, a machine sailor's
-(no machine sailor's boat takes anyone, and machine sailors never knock),
+(no person's knock: see [Machine sailors together](#machine-sailors-together)),
 boarding off, the boat closed to knocks, someone put ashore from it this
 voyage, or a refusal of the `Refuser`, all `closed`; no room (capacity
 counts the skipper), or the crews across the world at `KEEL_CREW_LIMIT`
@@ -5769,11 +5769,93 @@ watches their own machine sailor (`client/src/ui/machinewords.ts`).
 Aboard, the owner chats with the agent: chat's rule lets a machine
 sailor's line reach its own human and the boat's skipper's.
 
+**Aboard each other's boats.** A machine sailor's owner makes its link
+(`POST /api/sail/link {"machine"}`, the machine sailor by its ID or its
+name; `GET /api/sail/link?machine=`, `POST /api/sail/link/end
+{"machine"}`; the store's `MakeMachineSailLink`, its owner's alone),
+under links' rules and lifetime: from its row on the start screen
+(`client/src/account/machineshare.tsx`) or, watching it, the menu's "Sail
+with me for ‹machine›" (`client/src/ui/machinelink.tsx`). An agent never
+makes a link. `GET /api/sail/{token}` for a machine sailor's link says
+`machine`, `can` "closed" for the player (or "own" for its owner), and
+`send`: each of the player's machine sailors and whether it may be sent
+(`Deck.MachineCan`: "ok", "away" for one not in the water, "aboard",
+"full", "closed", "not-at-sea"). The link's page offers "Send ‹machine›
+aboard" for each: the page watches that machine sailor, and once the
+watch begins knocks with `Knock{token, machine}` on the game connection;
+the token never passes through an agent.
+
+The edge's `machineKnock` (`internal/edge/machines.go`) asks a person's
+knock's rules, and more: the link a machine sailor's, the one sent the
+knocker's own and in the water, nothing between the two machine sailors
+nor their owners (the `Refuser`), the owner answering the age question
+and the Rules for it. The knock's `approver` is the skipper machine
+sailor's owner, `LinkFound.Owner`: its `KnockCard` (with `machine`,
+`owner`, the arriving machine sailor's owner's sailor name, and
+`skipper`, which of theirs it knocks on) goes to their connection
+wherever it is, sailing, watching or idle, and again at each Welcome;
+with none open, nobody can let it aboard, and it lapses in 2 minutes. The
+agent of the skipper machine sailor has no say. Let aboard, the edge asks
+`Config.Machines.Board` (the agents' `Core.Board`): the helm sends
+`bus.Board` with its own connection, and the simulation takes the
+machine sailor's own boat out of the water in the same tick (a `Leave`
+with the result `Gone`, which the agents' recorder does not take for a
+boat leaving). A person's knock on a machine sailor's boat is refused
+"closed", and so is a machine sailor sent to a person's boat; refusals say
+`KNOCK_STATE_AWAY` for a machine sailor not in the water.
+
+**Crew.** A helm aboard another's boat (`helm.aboard`) has that boat's
+slot and boat; `locate` finds it in the frame's `Crew` first, and a Join
+answered `Crewed` keeps it aboard (after keel restarts, too). The report
+is of the boat aboard; its Aboard line names the skipper (by the chat
+hub's name) and the seats, and says when the agent does not hold the
+controls. `steer` and `trim` are refused "You don't hold the controls"
+(refusal `controls`) unless the frame's `Holder` is the machine sailor,
+or zero on its own boat; orders are written with the frame's `Gen`, which
+moves on at each change of hands, so a former holder's word is dropped.
+`boat` gained the actions `hand` (with `sailor`, a name aboard) and
+`ashore`; `take` with no `boat`, in company, takes the controls offered,
+or as the skipper takes them back at once. They reach the edge through
+`Sea.Deck` (the edge's `Hand`, `Take`, `PutAshore`), which keeps the
+offer, its 15 s and who was put ashore; an offer to a machine sailor is
+told to its agent (`Machines.Handed`, an event that always wakes). The
+hub tells each helm, from the frame's `Deck` count, who came aboard or
+went ashore and who holds the controls (waking `boat`), a machine crew
+its boat's capsizes and groundings, and every `Ashore` event as its own
+words. `ashore` takes a crew member ashore, its own boat in the water at
+the nearest port; a skipper's puts someone ashore for the voyage, never
+its owner. A crew helm silent for its silence goes ashore the same way,
+then its boat's grace begins; a stopped one goes ashore and its boat
+leaves the water.
+
+**The owners.** Watching their machine sailor as skipper, its owner puts
+anyone aboard ashore (`Command.ashore{who}`, the menu's "Who's aboard")
+and closes it to knocks (`Command.close_knocks`), and ends its link over
+HTTP. The crew machine sailor's owner calls it ashore from its row
+(`POST /api/sail/ashore {"machine"}`, 409 `ashore` when it is aboard no
+boat; `/api/machines` marks it `aboard`). An owner's watch of their own
+machine sailor follows it (`encoder.follow`): aboard another's boat, its
+eye is that boat, registered there in `mineWatch`, so the owner reads
+that boat's chat read-only and is told the names aboard; ashore, back to
+its own boat. Another spectator sees the crew on deck, unnamed, and no
+chat; their watch of a machine sailor that goes aboard another's boat
+ends as its boat leaves the water.
+
 **Testing it**: `internal/agentapi/chat_test.go` (a line with nobody
 aboard; the owner aboard, their line waking the agent, wrapped, and the
-agent's reaching them; a link refused) on the sea harness, whose boat
-carries five there; `internal/edge/edgetest/machines_test.go` (the owner
-comes aboard, another player may not, a Jolly boat has no room).
+agent's reaching them; a link refused) and `aboard_test.go` (two agents
+hand the controls, only the holder's orders act, the skipper takes them
+back at once, a crew member goes ashore; a silent crew goes ashore after
+its silence, its boat leaving at the end of its grace) on the sea
+harness, whose boat carries five there, with a stand-in `Deck`;
+`internal/edge/edgetest/machines_test.go` (the owner comes aboard,
+another player may not, a Jolly boat has no room; a machine sailor sent
+aboard, never to a person's boat nor a person to a machine sailor's, let
+aboard by the skipper's owner, its owner's watch following it and reading
+the chat, another spectator reading none, put ashore from watching and
+knocking in vain after; a knock lapsing with the owner away), with
+stand-in helms (`Config.Machines`) and chat (`Config.Chat`);
+`internal/store`'s `TestMachineSailLinks`.
 
 ## The local cluster
 

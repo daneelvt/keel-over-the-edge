@@ -259,6 +259,11 @@ type Config struct {
 	Tie           func(ctx context.Context, account, other bus.Account, block, on bool) error
 	Report        func(ctx context.Context, r ReportIn) error
 	CountryHeader string
+	// Machines, if not nil, are the machine sailors' helms, which bring a
+	// machine sailor sent aboard by its owner aboard, and tell its agent of
+	// the controls offered it; without them no machine sailor is sent
+	// aboard.
+	Machines Machines
 }
 
 // Edge serves the game connection.

@@ -20,8 +20,9 @@ import type { ChartMode } from '../chart/chart';
 import { NoticeSwitches } from './chart';
 import { type ConnectionView, RoundTrip } from './connection';
 import type { Countdown } from './countdown';
-import { canShareLink, type DeckView } from './decklazy';
-import { SAIL_WITH_ME } from './deckwords';
+import { canShareLink, type DeckView, machineShared } from './decklazy';
+import { SAIL_WITH_ME, WHO_IS_ABOARD } from './deckwords';
+import { sailWithMeFor } from './machinewords';
 import type { Notices } from './notices';
 import { PlayerText } from './player';
 import type { SettingsSignal } from './settings';
@@ -245,6 +246,30 @@ export function Menu({
               >
                 {SAIL_WITH_ME}
               </button>
+            </div>
+          ) : null}
+          {deck !== null && machineShared(deck) !== null ? (
+            <div class="menu-chart">
+              <button
+                type="button"
+                onClick={() => {
+                  deck.link.value = true;
+                  close();
+                }}
+              >
+                {sailWithMeFor(machineShared(deck) ?? '')}
+              </button>
+              {deck.crew.value !== null ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    deck.list.value = true;
+                    close();
+                  }}
+                >
+                  {WHO_IS_ABOARD}
+                </button>
+              ) : null}
             </div>
           ) : null}
           {watch !== null && deck?.aboard.value == null ? (

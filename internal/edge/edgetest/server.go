@@ -24,6 +24,7 @@ import (
 	"github.com/daneelvt/keel-over-the-edge/internal/auth"
 	"github.com/daneelvt/keel-over-the-edge/internal/bus"
 	"github.com/daneelvt/keel-over-the-edge/internal/catalog"
+	"github.com/daneelvt/keel-over-the-edge/internal/chat"
 	"github.com/daneelvt/keel-over-the-edge/internal/edge"
 	"github.com/daneelvt/keel-over-the-edge/internal/looks"
 	"github.com/daneelvt/keel-over-the-edge/internal/moderation"
@@ -109,6 +110,12 @@ type Config struct {
 	Switches  *aboard.Switches
 	Refuser   aboard.Refuser
 	CrewLimit int
+	// Chat and Talker are the edge's chat aboard, its hub on the world's
+	// frames made by NewChat if not nil; Machines its machine sailors'
+	// helms.
+	Chat     func(*bus.Frames) *chat.Hub
+	Talker   func(ctx context.Context, a bus.Account) (aboard.Speaker, string, error)
+	Machines edge.Machines
 }
 
 // Server is the game's server in a test.
@@ -126,6 +133,8 @@ type Server struct {
 	Encounters *physics.EncounterPrepared
 	// Capacities are each kind's people aboard, the catalog's.
 	Capacities []int
+	// Chat is the world's chat aboard, if the config asked for one.
+	Chat *chat.Hub
 
 	links    sync.Map // a link's token's hash: its edge.LinkFound
 	cfg      Config
@@ -227,6 +236,15 @@ func (s *Server) Link(skipper store.AccountID, name string) string {
 	return token
 }
 
+// MachineLink makes a link to come aboard a machine sailor's boat, its
+// owner's, made now and lasting a day, and returns its token.
+func (s *Server) MachineLink(skipper, owner store.AccountID, name string) string {
+	token, hash := aboard.NewToken()
+	s.links.Store(hash, edge.LinkFound{Skipper: bus.Account(skipper), Machine: true, Owner: bus.Account(owner), Name: name,
+		Made: time.Now(), Expires: time.Now().Add(24 * time.Hour)})
+	return token
+}
+
 // EndLink ends a link made by Link.
 func (s *Server) EndLink(token string) {
 	hash, _ := aboard.TokenHash(token)
@@ -273,6 +291,9 @@ func (s *Server) start(t testing.TB, w *sim.World) {
 	log := slog.New(slog.DiscardHandler)
 	s.World = w
 	s.Loop = loop.New(loop.Config{World: w, Epoch: Epoch, Log: log, Metrics: m})
+	if cfg.Chat != nil {
+		s.Chat = cfg.Chat(w.Bus().Frames)
+	}
 	s.Edge = edge.New(edge.Config{
 		LookCode: lookCode,
 		Bus:      w.Bus(), World: WorldID, Epoch: Epoch, Ends: cfg.Ends, Clock: s.Loop,
@@ -284,6 +305,7 @@ func (s *Server) start(t testing.TB, w *sim.World) {
 		Watch: s.Sessions.Target, SpectatorLimit: cfg.SpectatorLimit,
 		Agent: cfg.Agent, BoatOf: cfg.BoatOf,
 		Link: s.link, Knocker: s.knocker, Switches: cfg.Switches, Refuser: cfg.Refuser, Capacities: s.Capacities, CrewLimit: cfg.CrewLimit,
+		Chat: s.Chat, Talker: cfg.Talker, Machines: cfg.Machines,
 	})
 	var recorders []sim.Recorder
 	if cfg.Record != nil {

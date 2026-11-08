@@ -46,6 +46,11 @@ export interface Me extends Look {
    * once the player's own boat is in the water; none for no knock.
    */
   knock?: string;
+  /**
+   * Not the server's: the player's machine sailor the knock sends aboard,
+   * watched as it goes; none for the player's own knock.
+   */
+  knockMachine?: string;
 }
 
 export type SessionCheck = { kind: 'sailor'; me: Me } | { kind: 'none' } | { kind: 'failed' };
