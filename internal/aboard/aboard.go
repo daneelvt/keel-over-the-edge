@@ -93,20 +93,25 @@ const (
 )
 
 // Switches are the owner's for everyone at once, kept in memory as the
-// database has them and read at every knock and link: whether links work,
-// whether anyone may come aboard, and how long a link lasts.
+// database has them and read at every knock, link and line: whether links
+// work, whether anyone may come aboard, how long a link lasts, whether
+// chat and shipmates' messages are on, and where chat is off.
 type Switches struct {
 	links    atomic.Bool
 	boarding atomic.Bool
 	lifetime atomic.Int64
+	chat     chatSwitches
 }
 
-// NewSwitches is every switch on, and the lifetime given.
+// NewSwitches is every switch on, chat off nowhere, and the lifetime
+// given.
 func NewSwitches(lifetime time.Duration) *Switches {
 	s := &Switches{}
 	s.links.Store(true)
 	s.boarding.Store(true)
 	s.lifetime.Store(int64(lifetime))
+	s.chat.chat.Store(true)
+	s.chat.shipmates.Store(true)
 	return s
 }
 
@@ -171,7 +176,7 @@ type Refuser interface {
 	Refuses(skipper, knocker [16]byte) bool
 }
 
-// NoBlocks refuses nobody: the game has no blocks yet.
+// NoBlocks refuses nobody: for tests, and a game without blocks.
 type NoBlocks struct{}
 
 // Refuses reports false.

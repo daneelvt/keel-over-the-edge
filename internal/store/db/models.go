@@ -29,6 +29,9 @@ type Account struct {
 	StopReason     pgtype.Text
 	Born           pgtype.Int4
 	RulesAt        pgtype.Timestamptz
+	Chat           pgtype.Bool
+	ChatMutedUntil pgtype.Timestamptz
+	RestedAt       pgtype.Timestamptz
 }
 
 type AccountAction struct {
@@ -41,6 +44,7 @@ type AccountAction struct {
 	Detail    string
 	Source    string
 	FromAddr  string
+	ReportID  pgtype.UUID
 }
 
 type AiGrant struct {
@@ -57,6 +61,12 @@ type AiGrant struct {
 	LastUsedAt  pgtype.Timestamptz
 	RevokedAt   pgtype.Timestamptz
 	RevokedWhy  pgtype.Text
+}
+
+type Block struct {
+	AccountID pgtype.UUID
+	OtherID   pgtype.UUID
+	MadeAt    time.Time
 }
 
 type Boat struct {
@@ -149,6 +159,12 @@ type Light struct {
 	Daymark   int16
 }
 
+type Mute struct {
+	AccountID pgtype.UUID
+	OtherID   pgtype.UUID
+	MadeAt    time.Time
+}
+
 type NewsItem struct {
 	WorldID      pgtype.UUID
 	ID           pgtype.UUID
@@ -167,6 +183,15 @@ type NewsItem struct {
 	Also         []byte
 	WrittenAt    time.Time
 	EndsAt       pgtype.Timestamptz
+}
+
+type NoticeReport struct {
+	ReportID pgtype.UUID
+	Who      string
+	Contact  string
+	Sailor   string
+	Happened string
+	What     string
 }
 
 type OauthClient struct {
@@ -249,6 +274,46 @@ type Place struct {
 	Details []byte
 }
 
+type Report struct {
+	ID            pgtype.UUID
+	MadeAt        time.Time
+	Source        string
+	Reason        string
+	Note          string
+	ReporterID    pgtype.UUID
+	ReporterName  string
+	ReportedID    pgtype.UUID
+	ReportedKind  pgtype.Text
+	ReportedName  string
+	ReportedOwner pgtype.UUID
+	Place         string
+	People        []byte
+	FollowUntil   pgtype.Timestamptz
+	ClosedAt      pgtype.Timestamptz
+	Outcome       string
+	HeldUntil     pgtype.Timestamptz
+	Referred      string
+}
+
+type ReportLine struct {
+	ReportID   pgtype.UUID
+	Line       int64
+	At         time.Time
+	SenderID   pgtype.UUID
+	SenderName string
+	Machine    bool
+	Text       string
+	Reported   bool
+}
+
+type ReportNote struct {
+	ID       pgtype.UUID
+	ReportID pgtype.UUID
+	At       time.Time
+	By       string
+	Text     string
+}
+
 type SailLink struct {
 	ID        pgtype.UUID
 	SkipperID pgtype.UUID
@@ -283,11 +348,14 @@ type Session struct {
 }
 
 type Setting struct {
-	One           bool
-	GrantLifetime pgtype.Interval
-	LinkLifetime  pgtype.Interval
-	Links         bool
-	Boarding      bool
+	One              bool
+	GrantLifetime    pgtype.Interval
+	LinkLifetime     pgtype.Interval
+	Links            bool
+	Boarding         bool
+	Chat             bool
+	ShipmateMessages bool
+	ChatCountries    []string
 }
 
 type SimLease struct {
@@ -295,6 +363,20 @@ type SimLease struct {
 	Epoch     int64
 	Holder    string
 	Since     pgtype.Timestamptz
+}
+
+type Statement struct {
+	ID         pgtype.UUID
+	AccountID  pgtype.UUID
+	ReportID   pgtype.UUID
+	MadeAt     time.Time
+	Action     string
+	Rule       string
+	Seen       string
+	Until      pgtype.Timestamptz
+	ReadAt     pgtype.Timestamptz
+	Answer     pgtype.Text
+	AnsweredAt pgtype.Timestamptz
 }
 
 type WebauthnCeremony struct {

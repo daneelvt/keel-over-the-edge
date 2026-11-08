@@ -6,6 +6,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/daneelvt/keel-over-the-edge/internal/aboard"
 	"github.com/daneelvt/keel-over-the-edge/internal/bus"
 	"github.com/daneelvt/keel-over-the-edge/internal/protocol/pb"
 )
@@ -193,9 +194,10 @@ func (enc *encoder) ashore(c *conn, f *bus.Frame) {
 // were told of someone before.
 func (c *conn) crewOf(f *bus.Frame, s int32) bool {
 	told := [2]uint64{f.Boat[s], uint64(f.Deck[s])}
-	if told == c.toldDeck {
+	if told == c.toldDeck && !c.recrew.Load() {
 		return true
 	}
+	c.recrew.Store(false)
 	c.toldDeck = told
 	lo, hi := f.CrewOf(s)
 	if lo == hi && !c.toldCrew {
@@ -203,24 +205,43 @@ func (c *conn) crewOf(f *bus.Frame, s int32) bool {
 	}
 	c.toldCrew = lo < hi
 	named := !c.w.on
+	var ties *aboard.Ties
+	if c.e.cfg.Chat != nil && named {
+		ties = c.e.cfg.Chat.Rules.Ties
+	}
+	tie := func(p *pb.Person, a bus.Account) {
+		if ties != nil && !p.You {
+			p.Muted, p.Blocked = ties.Mutes(c.account, a), ties.Blocked(c.account, a)
+		}
+	}
 	holder := uint32(0)
 	people := make([]*pb.Person, 0, hi-lo+1)
 	skipper := &pb.Person{Seat: 0, Look: f.Look[s], Machine: f.Machine[s], You: !c.w.on && !c.crew.Load()}
 	if named {
 		skipper.Name = c.e.decks.name(f.Owner[s])
 	}
+	tie(skipper, f.Owner[s])
 	people = append(people, skipper)
 	for _, a := range f.Crew[lo:hi] {
 		p := &pb.Person{Seat: uint32(a.Seat), Look: a.Look, Machine: a.Machine, You: !c.w.on && a.Account == c.account}
 		if named {
 			p.Name = a.Name
 		}
+		tie(p, a.Account)
 		if f.Holder[s] == a.Account {
 			holder = uint32(a.Seat)
 		}
 		people = append(people, p)
 	}
-	return c.send(&pb.ServerMessage{Body: &pb.ServerMessage_Crew{Crew: &pb.Crew{People: people, Holder: holder}}}, outCrew)
+	if !c.send(&pb.ServerMessage{Body: &pb.ServerMessage_Crew{Crew: &pb.Crew{People: people, Holder: holder}}}, outCrew) {
+		return false
+	}
+	// Those aboard, and an owner watching their machine sailor, are told
+	// how chat stands for them with each change aboard.
+	if named || c.w.mine {
+		return c.chatState(true)
+	}
+	return true
 }
 
 // joinedAboard is a Join answered with the connection aboard a boat, as

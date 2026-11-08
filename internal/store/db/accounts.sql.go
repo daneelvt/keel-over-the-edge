@@ -556,8 +556,8 @@ func (q *Queries) HumansByActiveOldest(ctx context.Context, arg HumansByActiveOl
 }
 
 const insertAction = `-- name: InsertAction :exec
-INSERT INTO account_action (at, action, account_id, kind, name, detail, source, from_addr)
-VALUES (clock_timestamp(), $1, $2, $3, $4, $5, $6, $7)
+INSERT INTO account_action (at, action, account_id, kind, name, detail, source, from_addr, report_id)
+VALUES (clock_timestamp(), $1, $2, $3, $4, $5, $6, $7, $8)
 `
 
 type InsertActionParams struct {
@@ -568,6 +568,7 @@ type InsertActionParams struct {
 	Detail    string
 	Source    string
 	FromAddr  string
+	ReportID  pgtype.UUID
 }
 
 // An action recorded at the moment it is taken, under its account's lock,
@@ -582,6 +583,7 @@ func (q *Queries) InsertAction(ctx context.Context, arg InsertActionParams) erro
 		arg.Detail,
 		arg.Source,
 		arg.FromAddr,
+		arg.ReportID,
 	)
 	return err
 }

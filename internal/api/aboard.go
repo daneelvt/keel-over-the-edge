@@ -206,6 +206,9 @@ func (a *api) setBorn(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	a.cfg.Sessions.ForgetAccount(acc.ID)
+	if a.cfg.Chat != nil {
+		a.cfg.Chat.Changed(r.Context(), acc.ID)
+	}
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -226,6 +229,9 @@ func (a *api) acceptRules(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		a.cfg.Sessions.ForgetAccount(acc.ID)
+		if a.cfg.Chat != nil {
+			a.cfg.Chat.Changed(r.Context(), acc.ID)
+		}
 	}
 	w.WriteHeader(http.StatusNoContent)
 }

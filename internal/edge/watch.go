@@ -145,7 +145,9 @@ func (c *conn) watchCommand(name string, now time.Time) {
 // verdict is the rule for viewer watching t, as f has t's boat.
 func (e *Edge) verdict(f *bus.Frame, t watch.Target, viewer bus.Account) watch.Verdict {
 	s := findBoat(f, bus.Account(t.ID))
-	return watch.Allowed(t, e.boatOf(f, s), store.AccountID(viewer))
+	b := e.boatOf(f, s)
+	b.Blocked = e.refuses(bus.Account(t.ID), viewer)
+	return watch.Allowed(t, b, store.AccountID(viewer))
 }
 
 // boatOf is what the rule is told of the boat in slot s of f, −1 for none.
@@ -250,6 +252,9 @@ func (enc *encoder) beginWatch(c *conn, f *bus.Frame, t watch.Target) {
 	c.toldLamp = pb.Lamp_LAMP_UNSPECIFIED
 	c.spectating.Store(true)
 	c.watched.Store(&t.Name)
+	if c.w.mine {
+		e.mine.set(c, c.w.boat, true)
+	}
 	e.spect.watching(bus.Account(t.ID), 1)
 	if !c.welcomeWatch(f) {
 		return
@@ -288,6 +293,9 @@ func (enc *encoder) endWatch(c *conn, why pb.WatchEnd, name string) {
 	}
 	e := enc.e
 	e.spect.watching(bus.Account(c.w.target.ID), -1)
+	if c.w.mine {
+		e.mine.set(c, c.w.boat, false)
+	}
 	c.w = watching{}
 	c.toldLamp = pb.Lamp_LAMP_UNSPECIFIED
 	c.spectating.Store(false)
@@ -316,7 +324,7 @@ func (enc *encoder) stillWatchable(c *conn, f *bus.Frame, s int32) pb.WatchEnd {
 	if f.Unseen[s] {
 		return pb.WatchEnd_WATCH_END_CANNOT
 	}
-	if !enc.e.voyages.allows(f.Owner[s], f.Boat[s]) {
+	if !enc.e.voyages.allows(f.Owner[s], f.Boat[s]) || enc.e.refuses(f.Owner[s], c.account) {
 		return pb.WatchEnd_WATCH_END_OFF
 	}
 	return pb.WatchEnd_WATCH_END_UNSPECIFIED

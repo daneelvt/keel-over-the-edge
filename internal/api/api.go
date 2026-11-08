@@ -119,6 +119,10 @@ type Config struct {
 	Switches *aboard.Switches
 	Origin   string
 	Deck     Deck
+	// Chat, if not nil, is chat aboard's side of the account: its switch,
+	// its mutes and blocks, its statements of reasons, and the notice
+	// page's form.
+	Chat Chatting
 	// ReadTimeout and WriteTimeout, if not zero, replace the constants, for
 	// tests.
 	ReadTimeout, WriteTimeout time.Duration
@@ -219,6 +223,7 @@ func Handler(cfg Config) http.Handler {
 	if cfg.Sailing != nil {
 		a.registerSailing(mux, required)
 	}
+	a.registerChat(mux, required)
 	if cfg.Watch != nil {
 		mux.Handle("GET /api/watch", required(a.watchList))
 		mux.Handle("GET /api/watch/sailor", required(a.watchSailor))
@@ -317,6 +322,8 @@ type api struct {
 	cfg Config
 	// links are the times of each account's latest links.
 	links linkTimes
+	// notices are the notices from each address in the last hour.
+	notices notices
 }
 
 func versionHandler(v Version) http.Handler {

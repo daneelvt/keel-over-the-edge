@@ -41,6 +41,7 @@ import (
 	"github.com/daneelvt/keel-over-the-edge/internal/aboard"
 	"github.com/daneelvt/keel-over-the-edge/internal/auth"
 	"github.com/daneelvt/keel-over-the-edge/internal/bus"
+	"github.com/daneelvt/keel-over-the-edge/internal/chat"
 	"github.com/daneelvt/keel-over-the-edge/internal/obs"
 	"github.com/daneelvt/keel-over-the-edge/internal/protocol/pb"
 	"github.com/daneelvt/keel-over-the-edge/internal/store"
@@ -247,6 +248,17 @@ type Config struct {
 	Refuser    aboard.Refuser
 	Capacities []int
 	CrewLimit  int
+	// Chat, if not nil, is chat aboard: the hub every line is said through,
+	// whose rule's ties are the mutes and blocks. Talker reads what chat
+	// needs of an account, and its name, as it connects; Tie keeps a mute
+	// or a block (store.ErrTooManyTies past the limit); Report keeps a
+	// report. CountryHeader is the request's header that names where a
+	// player is, "" for none.
+	Chat          *chat.Hub
+	Talker        func(ctx context.Context, a bus.Account) (aboard.Speaker, string, error)
+	Tie           func(ctx context.Context, account, other bus.Account, block, on bool) error
+	Report        func(ctx context.Context, r ReportIn) error
+	CountryHeader string
 }
 
 // Edge serves the game connection.
@@ -272,6 +284,7 @@ type Edge struct {
 	spect    spectators
 	voyages  voyages
 	decks    decks
+	mine     mineWatch
 
 	mu      sync.Mutex
 	closing bool
@@ -308,6 +321,9 @@ func New(cfg Config) *Edge {
 	e.spect.init(cfg.SpectatorLimit)
 	e.voyages.m = map[bus.Account]uint64{}
 	e.decks.init()
+	if cfg.Chat != nil {
+		cfg.Chat.AddOut(chatOut{e})
+	}
 	e.m.spectatorLimit.Set(float64(e.spect.limit))
 	e.SetEnds(cfg.Ends, cfg.Closing)
 	n := cfg.Encoders
@@ -420,6 +436,9 @@ func (e *Edge) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	if cur, ok := auth.SessionFromContext(r.Context()); ok {
 		c.session = cur.Hash
+	}
+	if e.cfg.CountryHeader != "" {
+		c.chat.country = r.Header.Get(e.cfg.CountryHeader)
 	}
 	if !e.track(c) {
 		_ = ws.Close(websocket.StatusServiceRestart, "the server is restarting")

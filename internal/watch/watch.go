@@ -41,6 +41,9 @@ type Boat struct {
 	Unseen bool
 	// Voyage: its human allows spectators for this voyage.
 	Voyage bool
+	// Blocked: its human and the viewer block one another. It refuses a
+	// human's watch, never a watch of anyone's machine sailor.
+	Blocked bool
 }
 
 // Verdict is the rule's answer.
@@ -79,7 +82,7 @@ func Allowed(t Target, b Boat, viewer store.AccountID) Verdict {
 			return Cannot
 		}
 		return Yes
-	case !b.InWater || t.Stopped || b.Unseen || !b.Voyage:
+	case !b.InWater || t.Stopped || b.Unseen || !b.Voyage || b.Blocked:
 		return Cannot
 	}
 	return Yes

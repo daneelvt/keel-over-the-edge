@@ -19,6 +19,7 @@ import (
 	"github.com/daneelvt/keel-over-the-edge/internal/auth"
 	"github.com/daneelvt/keel-over-the-edge/internal/bus"
 	"github.com/daneelvt/keel-over-the-edge/internal/catalog"
+	"github.com/daneelvt/keel-over-the-edge/internal/chat"
 	"github.com/daneelvt/keel-over-the-edge/internal/config"
 	"github.com/daneelvt/keel-over-the-edge/internal/edge"
 	"github.com/daneelvt/keel-over-the-edge/internal/fleet"
@@ -33,6 +34,7 @@ import (
 	"github.com/daneelvt/keel-over-the-edge/internal/protocol"
 	"github.com/daneelvt/keel-over-the-edge/internal/protocol/pb"
 	"github.com/daneelvt/keel-over-the-edge/internal/replay"
+	"github.com/daneelvt/keel-over-the-edge/internal/review"
 	"github.com/daneelvt/keel-over-the-edge/internal/scripted"
 	"github.com/daneelvt/keel-over-the-edge/internal/sim"
 	"github.com/daneelvt/keel-over-the-edge/internal/sim/loop"
@@ -88,6 +90,11 @@ type process struct {
 	// long a link lasts. The play routes, the owner's page and the game
 	// connection read this one set.
 	switches *aboard.Switches
+	// ties are every player's mutes and blocks, loaded as keel starts:
+	// every line, knock and watch reads them. reports are reports and the
+	// owner's hand on them, across worlds.
+	ties    *aboard.Ties
+	reports *review.Service
 
 	// The routes the world half serves, set as each opens.
 	replayRoutes, devRoutes, ownerRoutes, playRoutes *lateHandler
@@ -268,6 +275,8 @@ type worldHalf struct {
 	sea *agentapi.Sea
 	// watch is the world's watching: the list, the card and follows.
 	watch *watch.Service
+	// chat is the world's chat aboard: every line is said through it.
+	chat  *chat.Hub
 	tools *owner.Owner
 	play  http.Handler
 
@@ -350,6 +359,8 @@ func (p *process) openWorld(ctx context.Context, rw *readyWorld) (*worldHalf, er
 	}
 	h.loop = loop.New(lcfg)
 	h.forecasts = p.forecastsOf(rw, row, timeline)
+	h.chat = chat.NewHub(b.Frames, aboard.Rules{Switches: p.switches, Ties: p.ties}, time.Now)
+	h.chat.Metrics = p.metrics
 	h.game = edge.New(edge.Config{
 		LookCode: p.lookCode,
 		BoatOf:   p.boatOf,
@@ -365,6 +376,8 @@ func (p *process) openWorld(ctx context.Context, rw *readyWorld) (*worldHalf, er
 		Agent: p.agents.core.Attending,
 		Life:  lifeReach(cat),
 		Link:  p.sailLink, Knocker: p.knocker, Switches: p.switches, Capacities: cat.Capacities(), CrewLimit: cfg.CrewLimit,
+		Refuser: p.ties,
+		Chat:    h.chat, Talker: p.talker, Tie: p.tie, Report: p.report, CountryHeader: countryHeader,
 	})
 	h.lasting = persist.New(persist.Config{
 		Frames: b.Frames, Store: p.writer, World: row.ID, Epoch: p.lease,
@@ -379,7 +392,7 @@ func (p *process) openWorld(ctx context.Context, rw *readyWorld) (*worldHalf, er
 		db: p.db, sessions: p.sessions, game: h.game, charts: rw.charts, clock: h.loop, page: p.ownPage, log: p.log, metrics: p.metrics,
 		lifecycle: p, from: p.nextView.Load(), forecasts: h.forecasts, agents: p.agents, hand: p.hand,
 		aiCap: world.AICap(), aiReserve: world.AIReserve(), life: rw.life,
-		switches: p.switches,
+		switches: p.switches, chat: p.chatDB(), reports: p.reports, hub: h.chat,
 	})
 	playCfg := api.Config{
 		Version:   api.Version{Build: p.build, Catalog: catalog.Version},
@@ -411,8 +424,10 @@ func (p *process) openWorld(ctx context.Context, rw *readyWorld) (*worldHalf, er
 		Switches: p.switches,
 		Origin:   cfg.PlayOrigin,
 		Deck:     h.game,
+		Chat:     chatting{p},
 	}
-	h.watch = watch.New(watch.Config{Store: p.db, Frames: b.Frames, Edge: h.game, Kinds: boatIDs(cat), Sea: h.sea, Agent: p.agentAttends})
+	h.watch = watch.New(watch.Config{Store: p.db, Frames: b.Frames, Edge: h.game, Kinds: boatIDs(cat), Sea: h.sea, Agent: p.agentAttends,
+		Blocks: func(a, b bus.Account) bool { return p.ties.Blocks(a, b) }})
 	playCfg.Watch = h.watch
 	p.agents.apiConfig(&playCfg, p)
 	h.play = api.Handler(playCfg)
@@ -527,6 +542,7 @@ func (h *worldHalf) start() {
 		wg.Go(func() { h.tools.Run(encoderCtx) })
 		wg.Go(func() { h.forecasts.Run(encoderCtx) })
 		wg.Go(func() { p.publishStatus(encoderCtx, h) })
+		wg.Go(func() { h.chat.Run(encoderCtx) })
 		h.game.Run(encoderCtx)
 		wg.Wait()
 	}()

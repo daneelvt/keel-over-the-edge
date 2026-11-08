@@ -101,7 +101,74 @@ message Command {
     GiveBack give_back = 10;
     GoAshore ashore = 11;
     CloseKnocks close_knocks = 12;
+    Say say = 13;
+    Mute mute = 14;
+    Block block = 15;
+    Report report = 16;
   }
+}
+
+// Say says a line to everyone aboard the boat the connection sails or is
+// aboard: at most 200 characters, one line, text only. The server checks
+// it, and the sender is sent the line back as it was said (Chat, with
+// echo), or why it was not (Chat.refused). A line refused for a word
+// comes back as said and reaches nobody.
+message Say {
+  string text = 1;
+  // The client's own number for the line, which its Chat echoes.
+  uint32 id = 2;
+}
+
+// Who is someone aboard, for mute, block and report: by their seat on the
+// boat the connection sails or is aboard, or by a line of theirs the
+// connection was sent (its Chat.id), which the server still holds.
+message Who {
+  oneof who {
+    uint32 seat = 1;
+    uint64 line = 2;
+  }
+}
+
+// Mute hides one player's lines from the connection's account, everywhere,
+// or shows them again; they are not told.
+message Mute {
+  Who who = 1;
+  bool on = 2;
+}
+
+// Block hides each one's lines from the other, everywhere, refuses their
+// knocks both ways and their watch of the account's sailor, and puts them
+// ashore from the account's boat; or ends the block. They are not told.
+message Block {
+  Who who = 1;
+  bool on = 2;
+}
+
+// Report reports a player, from a line of theirs or from their name
+// aboard: the server keeps what it still holds of the boat's chat with
+// the report, for the game's owner. The reporter is told it was received
+// (Reported); the reported is never told who.
+message Report {
+  Who who = 1;
+  ReportReason reason = 2;
+  // Seen only by the game's owner: at most 200 characters.
+  string note = 3;
+}
+
+// ReportReason is why a player is reported.
+enum ReportReason {
+  REPORT_REASON_UNSPECIFIED = 0;
+  // A child may be at risk: ahead of every other report.
+  REPORT_REASON_CHILD = 1;
+  REPORT_REASON_SEXUAL = 2;
+  REPORT_REASON_BULLYING = 3;
+  REPORT_REASON_HATE = 4;
+  // Threats or self-harm.
+  REPORT_REASON_THREATS = 5;
+  // Scams or spam.
+  REPORT_REASON_SCAM = 6;
+  REPORT_REASON_CHEATING = 7;
+  REPORT_REASON_OTHER = 8;
 }
 
 // Knock asks to come aboard another sailor's boat, by the token of the
@@ -235,6 +302,10 @@ message ServerMessage {
     Crew crew = 25;
     Handed handed = 26;
     Ashore ashore = 27;
+    Chat chat = 28;
+    ChatState chat_state = 29;
+    Tied tied = 30;
+    Reported reported = 31;
   }
 }
 
@@ -319,6 +390,86 @@ message Person {
   bool machine = 4;
   // The connection's own.
   bool you = 5;
+  // The connection's account mutes them, or blocks them.
+  bool muted = 6;
+  bool blocked = 7;
+}
+
+// Chat is a line said aboard the boat the connection sails, is aboard,
+// or (its owner's machine sailor aboard it) watches: player text, from the
+// person in seat. To its sender it comes back with echo, said or refused.
+message Chat {
+  // The line's number, for mute, block and report (Who.line).
+  uint64 id = 1;
+  uint32 seat = 2;
+  // The sender's name as players see it, and whether a machine sailor
+  // said it.
+  string name = 3;
+  bool machine = 4;
+  // When it was said, µs of UTC.
+  int64 at_us = 5;
+  string text = 6;
+  // The connection's own line, its Say's id; refused, it reached nobody.
+  bool you = 7;
+  uint32 echo = 8;
+  ChatRefusal refused = 9;
+}
+
+// ChatRefusal is why a line was not said. A line refused for a word is
+// never told so: it comes back as said.
+enum ChatRefusal {
+  CHAT_REFUSAL_UNSPECIFIED = 0;
+  // A link or a contact detail: those can't be sent aboard.
+  CHAT_REFUSAL_CONTACT = 1;
+  // Longer than 200 characters, or empty.
+  CHAT_REFUSAL_LONG = 2;
+  // Too many lines too fast.
+  CHAT_REFUSAL_FAST = 3;
+  // The sender may say nothing now (ChatState says why).
+  CHAT_REFUSAL_SILENT = 4;
+  // Nobody is aboard to hear it.
+  CHAT_REFUSAL_NOBODY = 5;
+}
+
+// ChatState is whether the connection may chat aboard now, sent at each
+// Welcome and as it changes.
+message ChatState {
+  ChatStatus status = 1;
+  // Until when it rests, µs of UTC; 0 for until the game's owner looks.
+  int64 until_us = 2;
+  // The Rules of the sea are to be accepted before a first line.
+  bool rules = 3;
+}
+
+// ChatStatus is how chat stands for a connection.
+enum ChatStatus {
+  CHAT_STATUS_UNSPECIFIED = 0;
+  // Lines go and come.
+  CHAT_STATUS_ON = 1;
+  // The game's owner has chat off, for everyone or where the player is:
+  // "Chat is resting".
+  CHAT_STATUS_OFF = 2;
+  // The player's own chat is off (a player of 13 to 17 until they turn it
+  // on).
+  CHAT_STATUS_OWN_OFF = 3;
+  // The player's chat rests: too many lines refused, a report, or the
+  // game's owner.
+  CHAT_STATUS_RESTING = 4;
+}
+
+// Tied says a mute or a block is in force, or ended, for the person named.
+message Tied {
+  string name = 1;
+  bool muted = 2;
+  bool blocked = 3;
+  // The account has as many as it may keep: nothing changed.
+  bool full = 4;
+}
+
+// Reported says a report was received, or (ok false) could not be kept:
+// try again.
+message Reported {
+  bool ok = 1;
 }
 
 // Handed offers the connection the boat's controls, from whoever holds

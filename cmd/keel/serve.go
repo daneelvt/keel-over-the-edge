@@ -34,6 +34,7 @@ import (
 	"github.com/daneelvt/keel-over-the-edge/internal/auth"
 	"github.com/daneelvt/keel-over-the-edge/internal/bus"
 	"github.com/daneelvt/keel-over-the-edge/internal/catalog"
+	"github.com/daneelvt/keel-over-the-edge/internal/chat"
 	"github.com/daneelvt/keel-over-the-edge/internal/config"
 	"github.com/daneelvt/keel-over-the-edge/internal/edge"
 	"github.com/daneelvt/keel-over-the-edge/internal/fleet"
@@ -46,6 +47,7 @@ import (
 	"github.com/daneelvt/keel-over-the-edge/internal/owner"
 	"github.com/daneelvt/keel-over-the-edge/internal/persist"
 	"github.com/daneelvt/keel-over-the-edge/internal/physics"
+	"github.com/daneelvt/keel-over-the-edge/internal/review"
 	"github.com/daneelvt/keel-over-the-edge/internal/scripted"
 	"github.com/daneelvt/keel-over-the-edge/internal/sim"
 	"github.com/daneelvt/keel-over-the-edge/internal/sim/loop"
@@ -199,6 +201,9 @@ type database interface {
 	Knocker(ctx context.Context, id store.AccountID) (store.Knocker, error)
 	SailSettings(ctx context.Context) (lifetime time.Duration, links, boarding bool, err error)
 	DeleteSailLinks(ctx context.Context, before time.Time, lifetime time.Duration) (int64, error)
+	// Chat aboard: the owner's switches, mutes and blocks, players'
+	// switches, reports and statements of reasons.
+	chatStore
 	Stats() store.PoolStats
 	Close()
 }
@@ -463,6 +468,12 @@ func runServer(ctx context.Context, getenv func(string) string, stdout io.Writer
 		}
 		return stopEarly(side, flight, fmt.Errorf("the settings for sailing together: %w", err))
 	}
+	if p.ties, err = loadChat(ctx, db, p.switches); err != nil {
+		if ctx.Err() != nil {
+			return stopEarly(side, flight, nil)
+		}
+		return stopEarly(side, flight, fmt.Errorf("the settings for chat, mutes and blocks: %w", err))
+	}
 	p.registerWorldMetrics()
 	// The accounts stopped, before anyone is let in.
 	stopped, err := accounts.Load(ctx, db)
@@ -482,7 +493,14 @@ func runServer(ctx context.Context, getenv func(string) string, stdout io.Writer
 		Store: db, Sessions: p.sessions, Door: p.agents.grants, Agents: p.agents.core, World: p.accountsWorld,
 		Lifetime: p.agents.lifetime.Get, Looks: p.agents.looks, Book: p.looks, Stopped: stopped, Log: log, Metrics: metrics,
 		Fleet: p.fleet,
+		Young: db.MakeYoungReport,
+		Forget: func(ids ...store.AccountID) {
+			for _, id := range ids {
+				p.ties.Forget(id)
+			}
+		},
 	})
+	p.reports = review.New(review.Config{Store: db, Hand: p.hand, Hub: p.hub, Log: log, Metrics: metrics})
 	for _, k := range []store.Kind{store.Human, store.AI} {
 		metrics.GaugeFunc("keel_accounts_stopped", "Accounts stopped by the operator, by kind; a stopped human's machine sailors among the AI accounts.",
 			prometheus.Labels{"kind": string(k)}, func() float64 { return float64(stopped.Count(k)) })
@@ -558,6 +576,7 @@ func runServer(ctx context.Context, getenv func(string) string, stdout io.Writer
 		wg.Go(func() { p.agents.usage.Run(jobsCtx) })
 		wg.Go(func() { p.agents.core.Run(jobsCtx) })
 		wg.Go(func() { p.countGrants(jobsCtx) })
+		wg.Go(func() { p.reports.Run(jobsCtx) })
 		p.jobs.Run(jobsCtx)
 		wg.Wait()
 		return nil
@@ -661,6 +680,11 @@ type ownerConfig struct {
 	// switches are the owner's for sailing together; nil for the next
 	// world.
 	switches *aboard.Switches
+	// chat is the store's side of chat's switches, reports the reports'
+	// queue, and hub the world's chat; nil for the next world.
+	chat    owner.ChatSettings
+	reports owner.Reports
+	hub     *chat.Hub
 	// agents is sign-in for AI apps, whose lifetime and caps the owner
 	// sets.
 	agents *agents
@@ -688,7 +712,7 @@ func ownerTools(c ownerConfig) *owner.Owner {
 		prepared = c.timeline.Prepared()
 	}
 	cfg := owner.Config{
-		Switches: c.switches, Sail: c.db,
+		Switches: c.switches, Sail: c.db, ChatSettings: c.chat, Reports: c.reports,
 		Bundle: c.bundle, Weather: prepared, Timeline: c.timeline, SystemKinds: systemKindNames(c.cat), Waves: waves,
 		Kinds: kinds, Regimes: regimes, Sky: c.cat.PrepareSky(), BoatLooks: looks.NewBoats(c.cat), SeaLife: c.life,
 		World:    owner.World{Number: c.sailed.Number, ID: c.sailed.ID, Epoch: c.sailed.Epoch, Made: c.made},
@@ -703,6 +727,10 @@ func ownerTools(c ownerConfig) *owner.Owner {
 		l := a.core.Limits()
 		cfg.AIOrders = fmt.Sprintf("%g a second, a burst of %d", float64(l.Orders), l.OrderBurst)
 		cfg.AILooks = fmt.Sprintf("%g a second, a burst of %d", float64(l.Looks), l.LookBurst)
+	}
+	if c.hub != nil {
+		hub := c.hub
+		cfg.ChatChanged = func() { hub.Changed(nil) }
 	}
 	cfg.AICap, cfg.AIReserve = c.aiCap, c.aiReserve
 	if c.bus != nil {
