@@ -90,7 +90,19 @@ func (w *World) setBoat(c *bus.Command) bus.Reply {
 		// follows the swap.
 		w.bus.Controls.Store(s, f.Control[s], f.Pilot[s], f.Rig[s])
 	}
-	r.Result = bus.Done
+	// The swap is the skipper's: the controls are theirs again, and those
+	// aboard the new boat has no room for go ashore.
+	if f.Holder[s] != (bus.Account{}) {
+		w.handTo(f, s, bus.Account{})
+	}
+	room := w.capacityOf(kind)
+	lo, hi := f.CrewOf(s)
+	for i := hi - 1; i >= lo; i-- {
+		if int(f.Crew[i].Seat) >= room {
+			w.landed = append(w.landed, landing{a: w.leaveCrew(f, i), why: bus.AshoreLeft})
+		}
+	}
+	r.Result, r.Gen = bus.Done, f.Gen[s]
 	return r
 }
 

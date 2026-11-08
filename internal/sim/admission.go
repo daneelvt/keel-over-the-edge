@@ -99,11 +99,17 @@ func (w *World) nextAdmitted(f *bus.Frame, ai int) int {
 func (w *World) join(c *bus.Command) bus.Reply {
 	account, conn := c.Account, c.Conn
 	f := w.next
+	if i := f.Aboard(account); i >= 0 {
+		// Aboard another's boat: aboard it again, through this connection.
+		a := &f.Crew[i]
+		a.Conn, a.Grace = conn, 0
+		return bus.Reply{Result: bus.Crewed, Slot: a.Slot, Boat: a.Boat, Gen: f.Gen[a.Slot]}
+	}
 	for _, s := range f.Live {
 		if f.Owner[s] == account {
 			f.Conn[s] = conn
 			f.Grace[s] = 0
-			if w.given == nil {
+			if w.given == nil && f.Holder[s] == (bus.Account{}) {
 				// Whoever wrote the slot before is no longer the boat's
 				// sailor: a word it left waiting for its tick is put back
 				// to the word in force, so only the new sailor's are applied
@@ -201,6 +207,7 @@ func (w *World) newBoat(q *bus.Waiting) int32 {
 	f.Course[s] = physics.Course{}
 	f.Voyage[s] = bus.Voyage{}
 	f.Stay[s], f.Unseen[s] = false, false
+	f.Holder[s] = bus.Account{}
 	i, _ := slices.BinarySearch(f.Live, s)
 	f.Live = slices.Insert(f.Live, i, s)
 	if w.given == nil {
@@ -235,6 +242,9 @@ func (w *World) disconnect(boat, conn uint64) bus.Reply {
 // ignored.
 func (w *World) disconnectAccount(account bus.Account, conn uint64) bus.Reply {
 	f := w.next
+	if i := f.Aboard(account); i >= 0 {
+		return w.crewDisconnect(f, i, conn)
+	}
 	if i := queued(f, account); i >= 0 {
 		if f.Queue[i].Conn != conn {
 			return bus.Reply{Result: bus.Stale, Slot: -1}

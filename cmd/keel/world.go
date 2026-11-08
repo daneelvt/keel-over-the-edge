@@ -314,7 +314,7 @@ func (p *process) openWorld(ctx context.Context, rw *readyWorld) (*worldHalf, er
 	rw.timeline = timeline
 	sighting := rw.charts.sight(cat, epoch)
 	world, err := sim.New(sim.Config{
-		Kinds: p.kinds, StartSheets: cat.StartSheets(), Waves: p.waves, Weather: timeline, Encounters: cat.PrepareEncounters(), Workers: p.opt.workers,
+		Kinds: p.kinds, StartSheets: cat.StartSheets(), Capacities: cat.Capacities(), Waves: p.waves, Weather: timeline, Encounters: cat.PrepareEncounters(), Workers: p.opt.workers,
 		Tick: loop.TickAt(time.Now(), epoch), Limit: cfg.BoatLimit, Terrain: rw.terrain, Edge: edgeOf(cat), Sight: sighting,
 		Life: rw.life,
 	})

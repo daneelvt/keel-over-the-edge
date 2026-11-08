@@ -3,6 +3,7 @@
 package bus
 
 import (
+	"slices"
 	"sync/atomic"
 
 	"github.com/daneelvt/keel-over-the-edge/internal/physics"
@@ -123,6 +124,16 @@ type Frame struct {
 	// Queue is who waits for a boat while the world is at its limit, the
 	// head first.
 	Queue []Waiting
+
+	// Crew is everyone aboard a boat not their own, by their boat's slot,
+	// then their seat. Holder is per slot who holds the boat's controls:
+	// one of its crew, or the zero account for its skipper, its Owner.
+	// Deck is per slot a count of the changes to who is aboard and who
+	// holds the controls, for those who tell of them: it is in no snapshot
+	// or digest.
+	Crew   []Aboard
+	Holder []Account
+	Deck   []uint32
 
 	// What the tick applied, in the order it applied it: the input log
 	// records these.
@@ -310,6 +321,72 @@ type Waiting struct {
 	BoatName string
 }
 
+// Aboard is someone aboard another sailor's boat, as its crew: they have
+// no boat of their own in the world, and hold no place against the boat
+// limit. Seat is their station on deck, 1 up to the boat's capacity less
+// one (the skipper's is 0).
+type Aboard struct {
+	Slot    int32  // the boat's slot
+	Boat    uint64 // the boat
+	Seat    uint8
+	Account Account
+	Conn    uint64 // the connection they are aboard through, 0 for none
+	// Grace is the tick they go ashore at, their connection gone, unless
+	// they come back first; 0 while connected.
+	Grace int64
+	Since int64 // the tick they came aboard
+	// Machine and Priority are their account's kind; Look their sailor's
+	// look and Name their name, as players see it.
+	Machine  bool
+	Priority bool
+	Look     uint32
+	Name     string
+	// BoatKind, BoatLook and BoatName are their own boat's, for when they
+	// go ashore.
+	BoatKind uint16
+	BoatLook uint32
+	BoatName string
+}
+
+// MaxCrew is the most people aboard one boat but its skipper.
+const MaxCrew = 63
+
+// CrewOf is the crew of the boat in slot s: f.Crew[lo:hi].
+func (f *Frame) CrewOf(s int32) (lo, hi int) {
+	lo, _ = slices.BinarySearchFunc(f.Crew, s, func(a Aboard, s int32) int { return int(a.Slot - s) })
+	hi = lo
+	for hi < len(f.Crew) && f.Crew[hi].Slot == s {
+		hi++
+	}
+	return lo, hi
+}
+
+// Aboard is the index in f.Crew of account, or −1 if it is aboard no boat.
+func (f *Frame) Aboard(account Account) int {
+	for i := range f.Crew {
+		if f.Crew[i].Account == account {
+			return i
+		}
+	}
+	return -1
+}
+
+// HelmLook is the look of whoever holds the controls of the boat in slot
+// s, drawn at its helm: its skipper's, or the crew member's they handed
+// them to.
+func (f *Frame) HelmLook(s int32) uint32 {
+	if f.Holder[s] == (Account{}) {
+		return f.Look[s]
+	}
+	lo, hi := f.CrewOf(s)
+	for i := lo; i < hi; i++ {
+		if f.Crew[i].Account == f.Holder[s] {
+			return f.Crew[i].Look
+		}
+	}
+	return f.Look[s]
+}
+
 // QueuePlace is the place in the queue of q[i] among those of its kind, human
 // or machine, 1 for the head, and how many of its kind wait: humans and
 // machine sailors wait in queues of their own.
@@ -435,6 +512,9 @@ func NewFrame(capacity int) *Frame {
 			Cell:  make([]int32, capacity),
 		},
 		Queue:    make([]Waiting, 0, QueueLimit),
+		Crew:     make([]Aboard, 0, 64),
+		Holder:   make([]Account, capacity),
+		Deck:     make([]uint32, capacity),
 		Weathers: make([]Weather, 0, WeatherHistory),
 		Systems:  make([]System, 0, SystemSlots),
 		Changed:  make([]SlotWord, 0, capacity),

@@ -88,6 +88,10 @@ type Config struct {
 	// Life is the world's life schedule: the sea's life met about its
 	// boats; nil is a sea with nothing alive in it.
 	Life *life.Schedule
+	// Capacities are how many people each kind of boat carries, its
+	// skipper included, by its index; a kind with none carries its skipper
+	// alone.
+	Capacities []int
 }
 
 // Terrain is a world's land: the ground boats run aground on, the land's
@@ -165,20 +169,25 @@ type Input struct {
 // World is a world's boats and weather, and the machinery that ticks them.
 // Everything but Bus and Close is for the one goroutine that ticks.
 type World struct {
-	bus       *bus.Bus
-	capacity  int
-	limit     int
-	kinds     []physics.Prepared
-	sheets    [][][2]float64
-	sea       sea
-	timeline  *weather.Timeline
-	keyMemo   keyMemo
-	weather   physics.Weather
-	wind      physics.WeatherTick
-	grace     int64
-	observer  Observer
-	recorders []Recorder
-	ctx       context.Context // for trace regions
+	bus      *bus.Bus
+	capacity int
+	limit    int
+	kinds    []physics.Prepared
+	sheets   [][][2]float64
+	// capacities are each kind's people aboard, its skipper included;
+	// landed those going ashore from a boat that left the water, whose own
+	// boats are still to be put in the water.
+	capacities []int
+	landed     []landing
+	sea        sea
+	timeline   *weather.Timeline
+	keyMemo    keyMemo
+	weather    physics.Weather
+	wind       physics.WeatherTick
+	grace      int64
+	observer   Observer
+	recorders  []Recorder
+	ctx        context.Context // for trace regions
 
 	// The tick in progress.
 	cur, next *bus.Frame
@@ -264,15 +273,16 @@ func New(cfg Config) (*World, error) {
 		cfg.Weather = weather.Fixed(DefaultSpell)
 	}
 	w := &World{
-		bus:      bus.New(cfg.Capacity),
-		capacity: cfg.Capacity,
-		limit:    cfg.Limit,
-		kinds:    cfg.Kinds,
-		sheets:   cfg.StartSheets,
-		grace:    cfg.Grace,
-		timeline: cfg.Weather,
-		ctx:      context.Background(),
-		enc:      cfg.Encounters,
+		bus:        bus.New(cfg.Capacity),
+		capacity:   cfg.Capacity,
+		limit:      cfg.Limit,
+		kinds:      cfg.Kinds,
+		capacities: cfg.Capacities,
+		sheets:     cfg.StartSheets,
+		grace:      cfg.Grace,
+		timeline:   cfg.Weather,
+		ctx:        context.Background(),
+		enc:        cfg.Encounters,
 	}
 	if w.enc != nil {
 		for i := range w.kinds {
