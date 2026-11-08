@@ -97,7 +97,7 @@ test('a link opened by a friend who has never played: a sailor made, let aboard,
   await bob.waitForFunction(() => globalThis.keel.deck().holding, null, { timeout: 30_000 });
   await page.waitForFunction(() => !globalThis.keel.deck().holding, null, { timeout: 30_000 });
   // The friend's screen has the controls now; the skipper's Take back.
-  await expect(page.getByRole('button', { name: 'Take back the controls' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Take back the controls' }).first()).toBeVisible();
 
   // Given back.
   await bob.getByRole('button', { name: 'Crew' }).first().click();

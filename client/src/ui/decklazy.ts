@@ -6,7 +6,7 @@
 // (deck.tsx) are loaded the first time one is needed: the game's first
 // download holds none of them.
 
-import { computed, type ReadonlySignal, type Signal, signal } from '@preact/signals';
+import { computed, effect, type ReadonlySignal, type Signal, signal } from '@preact/signals';
 import { useEffect, useState } from 'preact/hooks';
 import type {
   AboardTold,
@@ -90,6 +90,14 @@ export function deckOf(
   change: (act: () => void) => void = (act) => act(),
 ): DeckView {
   const closed = signal(false);
+  const list = signal(false);
+  // The controls offered close the list, so its window never covers the
+  // offer's Take them.
+  effect(() => {
+    if (o.handed.value !== null) {
+      list.value = false;
+    }
+  });
   return {
     aboard: o.aboard,
     crew: o.crew,
@@ -103,7 +111,7 @@ export function deckOf(
     boatName: computed(() => o.boatLook.value?.name ?? ''),
     closed,
     link: signal(false),
-    list: signal(false),
+    list,
     ashore: signal(false),
     dismissed: signal(null),
     answer: (knock, let_) => o.answer(knock, let_),
