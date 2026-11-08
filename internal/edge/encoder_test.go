@@ -536,3 +536,104 @@ func BenchmarkEncodeSpectators(b *testing.B) {
 		}
 	}
 }
+
+// BenchmarkEncodeCrew is the encoders' time for a frame of a boat with
+// forty aboard, its skipper and 39 crew, beside the 64 boats about it, the
+// boats sailing between rounds: each person aboard is encoded as a
+// spectator is, the boat its header and the view about it.
+func BenchmarkEncodeCrew(b *testing.B) {
+	for _, encoders := range []int{1, 8} {
+		b.Run(fmt.Sprintf("40/%d", encoders), func(b *testing.B) {
+			cat, err := catalog.Load()
+			if err != nil {
+				b.Fatal(err)
+			}
+			waves, kinds := cat.Prepare()
+			w, err := sim.New(sim.Config{Kinds: kinds[:1], Waves: waves, Workers: 4, Tick: 1000, Capacities: []int{40}})
+			if err != nil {
+				b.Fatal(err)
+			}
+			b.Cleanup(w.Close)
+			e := New(Config{Bus: w.Bus(), Metrics: obs.NewMetrics("test", "test"), Log: slog.New(slog.DiscardHandler), Encoders: encoders})
+			dev := w.Bus().Commands.Developer()
+			for i := range 65 {
+				var a bus.Account
+				a[14], a[15] = byte(i>>8), byte(i)
+				dev.TrySend(bus.Command{Op: bus.Join, Account: a, Conn: uint64(i + 1)})
+			}
+			w.Tick()
+			sailors := sailing(w, e)
+			boat := sailors[0]
+			for i := range 39 {
+				var a bus.Account
+				a[13], a[15] = 1, byte(i)
+				dev.TrySend(bus.Command{Op: bus.Board, Boat: boat.boat, Account: a, Conn: uint64(1000 + i), Name: "Crew"})
+			}
+			w.Tick()
+			if n := len(w.Latest().Crew); n != 39 {
+				b.Fatalf("%d aboard", n)
+			}
+			var crew []*conn
+			for i := range 39 {
+				c := &conn{e: e, id: uint64(1000 + i), slot: boat.slot, boat: boat.boat, queue: make(chan outgoing, 8), active: true}
+				c.account[13], c.account[15] = 1, byte(i)
+				c.crew.Store(true)
+				c.margin.init()
+				c.box.init()
+				enc := e.encs[i%len(e.encs)]
+				enc.active = append(enc.active, c)
+				crew = append(crew, c)
+			}
+			done := make(chan struct{}, len(e.encs))
+			var size, snapshots int
+			round := func() {
+				for _, enc := range e.encs {
+					go func() {
+						f := e.cfg.Bus.Frames.Acquire()
+						for _, c := range enc.active {
+							if c.crew.Load() {
+								enc.hands(c, f)
+								enc.encode(c, f)
+							}
+						}
+						f.Release()
+						done <- struct{}{}
+					}()
+				}
+				for range e.encs {
+					<-done
+				}
+			}
+			step := func() {
+				b.StopTimer()
+				f := w.Latest()
+				for i, s := range f.Live {
+					w.Bus().Controls.StoreHand(s, bus.Pack(uint32(f.Tick+1), uint16((i*37+int(f.Tick))%1025), 600, f.Gen[s]))
+				}
+				w.Tick()
+				w.Tick()
+				for _, c := range crew {
+					buf, _ := c.box.take()
+					size += len(buf)
+					snapshots++
+					for len(c.queue) > 0 {
+						<-c.queue
+					}
+				}
+				b.StartTimer()
+			}
+			for range 20 {
+				step()
+				round()
+			}
+			size, snapshots = 0, 0
+			b.ReportAllocs()
+			for b.Loop() {
+				step()
+				round()
+			}
+			b.ReportMetric(float64(size)/float64(max(snapshots, 1)), "bytes/snapshot")
+			b.ReportMetric(float64(b.Elapsed().Nanoseconds())/float64(b.N)/39, "ns/crew")
+		})
+	}
+}

@@ -311,7 +311,9 @@ export class NetWorker {
                     look: watching.look,
                   },
             aboard:
-              aboard === null ? null : { skipper: aboard.skipper, look: aboard.look, seat: aboard.seat },
+              aboard === null
+                ? null
+                : { skipper: aboard.skipper, look: aboard.look, seat: aboard.seat },
             look: w.look,
             boatLook: w.boatLook,
             boatName: w.boatName,

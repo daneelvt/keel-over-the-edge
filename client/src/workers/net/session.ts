@@ -37,14 +37,14 @@ import type {
   AshoreWhyTold,
   BumpTold,
   CapSeen,
+  ChartEntry,
+  ChunksHanded,
   CrewTold,
+  ForecastTold,
   HandedTold,
   KnockCardTold,
   KnockingTold,
   KnockStateTold,
-  ChartEntry,
-  ChunksHanded,
-  ForecastTold,
   LampState,
   LifeSeen,
   LightSeen,
@@ -309,7 +309,12 @@ export class Session {
         const k = m.body.value;
         return {
           kind: 'knocking',
-          knocking: { state: KNOCKS[k.state] ?? 'other', skipper: k.skipper, kind: k.kind, boat: k.boat },
+          knocking: {
+            state: KNOCKS[k.state] ?? 'other',
+            skipper: k.skipper,
+            kind: k.kind,
+            boat: k.boat,
+          },
         };
       }
       case 'crew':

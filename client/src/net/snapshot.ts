@@ -50,7 +50,8 @@ export const STAYING = 16;
 export const RIG_HELD = 32;
 /** A header's flag: the connection does not hold the boat's controls: its inputs steer nothing, and the page predicts nothing. */
 export const ELSEWHERE = 64;
-const HEADER_FLAGS = FAR_SAMPLED | PILOT_HELD | GROUND_HELD | OVER_HELD | STAYING | RIG_HELD | ELSEWHERE;
+const HEADER_FLAGS =
+  FAR_SAMPLED | PILOT_HELD | GROUND_HELD | OVER_HELD | STAYING | RIG_HELD | ELSEWHERE;
 /** A snapshot's margin when no input arrived since the one before. */
 export const NO_MARGIN = -32768;
 /** The boat's state's fields, as the physics module lays them out: the boat's own, then its autopilot's, then how long it has been aground and where it left deep water, then its rig's. */

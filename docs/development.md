@@ -4453,6 +4453,7 @@ own (9091 in the cluster) it reads the metrics alone. The other variables:
 | `KEEL_CLIENT_DIR` | none | The game's built page (`client/dist`), served by the `play.` listener (see [Routes and middleware](#routes-and-middleware)); it must hold `index.html`, or the server does not start. Its `owner/` folder, the world page, is served by the internal listener alone, if it is there. The image sets it; in development Vite serves the pages instead |
 | `KEEL_BOAT_LIMIT` | 1000 | The most boats at sea at once, from 1 to 4,096; beyond it players wait in a queue of up to 4,096. A starting value, until load tests on the server's machine set it. Machine sailors sail at most half of them, with half of that kept for them |
 | `KEEL_SPECTATOR_LIMIT` | 1000 | The most players watching boats at once, from 0 to 100,000; beyond it they wait in a queue of their own of up to 4,096. A priority account, an owner watching their own machine sailor and a player waiting for a boat never wait (see [Watching a boat](#watching-a-boat)) |
+| `KEEL_CREW_LIMIT` | 1000 | The most players aboard boats not their own at once, from 1 to 100,000: each is a connection encoded as a spectator's is. A knock let aboard past it is refused (see [Sailing together](#sailing-together)) |
 | `KEEL_AI_SILENCE` | `3m` | How long a machine sailor's boat stays at sea with no call from its agent before its minute's grace begins, from 1s to 1h |
 | `KEEL_BELL` | `3s` | How long the world sails on, as the server stops, once every phone has been told it is restarting; from `0s` to `10s`. `tools/dev` and `tools/e2e` set `0s` |
 | `KEEL_DEV_SAILORS` | 0 | Scripted sailors, up to 4,096; any beyond the boat limit stay ashore |
@@ -5504,6 +5505,116 @@ second).
 2m -url https://macbook.local` has 200 headless spectators watch one boat
 (the Go client's `Spectator`), reporting as the sailing bots do;
 `BenchmarkEncodeSpectators` encodes 100 and 1,000 spectators of one boat.
+
+### Sailing together
+
+A skipper shares a **link** ("Sail with me" in the menu: share, copy, a new
+link, links off, closed to knocks); whoever opens it, signed in or after
+making a sailor, **knocks** on the game connection, and the skipper lets
+each arrival aboard, every time. Aboard, one person **holds the boat's
+controls**, all of them: the skipper unless they hand them on.
+
+**The rules** (`internal/aboard`): a month and a year of birth (`Born`, kept
+on the account as year × 100 + month) and the band worked out from it at
+each entry (`BandOf`: under 13, 13 to 17, 18 and over, a year older on the
+first of the month); the owner's switches in memory (`Switches`: links,
+boarding, the link's lifetime); links' tokens (16 random bytes, base64url,
+22 characters; only the SHA-256 kept, `TokenHash` refusing anything that
+cannot be one before the database is asked); `Live`, a link's validity
+under the lifetime in force; and `Refuser`, who keeps whom off their boats
+without saying why, which nothing fills yet (`NoBlocks`). A knock needs the
+age question answered, 13 or over, and the Rules of the sea accepted.
+
+**Knocks** (`internal/edge/deck.go`, in memory, lost harmlessly at a
+restart): `Command.knock{token}` is rate-limited (10 an hour an account),
+looked up (`Config.Link`, `Config.Knocker`, at most 2 s, on the reader),
+then refused or shown to the skipper as a `KnockCard`, with the knocker
+told how it stands (`Knocking`). Refusals: the link ended, expired or links
+off (`ended`); the own link; the boat not in the water, a machine sailor's
+(no machine sailor's boat takes anyone, and machine sailors never knock),
+boarding off, the boat closed to knocks, someone put ashore from it this
+voyage, or a refusal of the `Refuser`, all `closed`; no room (capacity
+counts the skipper), or the crews across the world at `KEEL_CREW_LIMIT`
+(1,000); five already waiting (`busy`); the same boat within 10 minutes of
+"not now" (`often`). A knock lapses after 2 minutes; a second knock
+withdraws the first; a knocker's connection ending withdraws theirs; the
+skipper is shown the knocks waiting again at each Welcome. Only the
+skipper answers (`Command.answer`), never whoever holds the controls.
+
+**Aboard** (`internal/sim/crew.go`): let aboard, the edge sends
+`bus.Board`; the simulation takes the knocker's own boat out of the water
+in the same tick (a `Leave` with the result `Gone`), gives up any place it
+held in the queue, and adds them to the frame's `Crew` at the lowest free
+seat (the skipper's is 0). Crew have no boat and hold no place against the
+boat limit. Who is aboard and who holds the controls (`Holder`, the zero
+account for the skipper) are world state, in the snapshot (version 17),
+the digest and the input log (format 16), so a restart keeps everyone
+aboard: each comes back within the grace a boat has. A crew member's
+connection is welcomed with `Welcome.aboard` and encoded as a spectator's
+is, the boat its eye, with a margin; `Crew` tells those aboard, and the
+boat's spectators without names, who is aboard and who holds the controls,
+as that changes (the frame's `Deck` counts the changes). Other connections
+see one sailor on each boat: whoever holds its controls (`Frame.HelmLook`).
+
+**The controls** pass whole, never in part. `Command.hand{to}` (a seat),
+from whoever holds them, offers them for 15 s (`Handed`); only the
+receiver's `Command.take` moves them; the skipper's `take` takes them back
+at once from anyone, offered or not; `Command.giveBack` gives them back. In
+the simulation each change of hands (`bus.SetHolder`) moves the slot's
+generation on and stamps the controls in force with it, written back to the
+slot: a word the former holder's connection wrote, or is still to write,
+carries the old generation and is never applied, however late, and the new
+holder starts from the controls in force, so the boat does not jump and an
+autopilot engaged steers on. Each encoder reads every frame who holds each
+boat its connections sail or are aboard, and lets a connection steer, with
+that frame's generation, only while it holds them; the snapshot's flag
+`Elsewhere` (bit 6) tells a connection that does not, and the page then
+draws the boat from the snapshots as when watching, and predicts it again
+from the controls in force when it holds them. A holder whose connection
+ends gives the controls back the same tick; a skipper whose connection ends
+leaves the boat its grace, the holder sailing on. A swap of boat in port
+gives them back too, and puts ashore whoever the new boat has no room for.
+
+**Ashore**: `Command.ashore{who}`, 0 for oneself, a seat from the skipper
+(the only one who puts anyone ashore; there are no votes). The simulation
+puts the person's own boat in the water at the port nearest where they
+were (`portPlace`: the first place from the middle of the nearest port's
+harbour outward where a new boat fits, on rings 10 m apart, at bearings
+written out so that no trigonometry runs), ahead of anyone waiting, or at
+the head of the queue at the limit; a boat leaving the water puts everyone
+aboard ashore the same way (an `Ashore` of why 3, which the tick makes
+itself). The connection is told why (`Ashore`), then welcomed to its boat.
+
+**The page**: the age question as a sailor is made, and once for an older
+account; the link's landing at `/sail/<token>` (`client/src/account/comeaboard.tsx`);
+the Rules of the sea and the safety pages (`rules.html`, `safety.html`);
+the deck's panels (`client/src/ui/deck.tsx`, `sailwithme.tsx`, their words in
+`deckwords.ts`); `Online`'s `aboard`, `crew`, `knocks`, `knocking`,
+`handed` and `holding`. `?sandbox&test` and `keel.deckScene(name)` show
+each panel with a scene of its own, for the layout's tests and pictures.
+
+**Metrics**: `keel_edge_knocks_total{result}`, `keel_edge_deck_total{what}`
+(arrivals, the controls offered, taken, taken back and given back, and
+going ashore by why) and `keel_edge_aboard`.
+
+**Testing it**: `internal/sim/crew_test.go` (boarding, room, the
+controls changing hands and the former holder's words dropped, ashore, the
+grace, the snapshot); `internal/edge/edgetest/aboard_test.go` (two and
+three sailors on the in-memory network: a knock, let aboard, handed,
+taken, taken back, given back, ashore; knocks lapsing, the sixth refused,
+not now, an ended link, closed to knocks, the age question first, a
+machine sailor's boat; the holder's connection ending, a crew member who
+was not handed the controls taking nothing, the skipper's boat leaving);
+`BenchmarkEncodeCrew` (forty aboard one boat, encoded as spectators are).
+The load bot sails crews:
+
+```sh
+go run ./tools/loadbot -n 40 -crews 5 -for 5m -url https://macbook.local
+```
+
+sails 40 players in groups of five: each group's first makes a link, the
+others knock with it and are let aboard, and the skipper hands the controls
+round and takes them back, reporting the knocks, arrivals and hand-overs.
 
 ## The local cluster
 

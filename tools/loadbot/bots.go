@@ -72,6 +72,9 @@ type Config struct {
 	// Watch, if not "", is a sailor's name: the players watch that
 	// sailor's boat, as spectators, rather than sail.
 	Watch string
+	// Crews, if more than 1, sails the players in groups of that many: a
+	// skipper and the crew it lets aboard by its link (crews.go).
+	Crews int
 	// Metrics, if not nil, reads the server's metrics in Prometheus's text
 	// format, before and after the sail.
 	Metrics func(ctx context.Context) (string, error)
@@ -104,6 +107,8 @@ type Player struct {
 	// Bumps are the bumps the player was told of: its own, with the
 	// Article, and those it saw near, without.
 	Bumps []*pb.Bump
+	// Crewing is what it did of sailing together, with -crews.
+	Crewing Crewing
 }
 
 // Return is a player's coming back after the connection ended.
@@ -129,6 +134,12 @@ func Run(ctx context.Context, cfg Config) (*Report, error) {
 		before, _ = cfg.Metrics(ctx)
 	}
 	rep := &Report{Players: make([]Player, cfg.N), Made: made}
+	var groups []*crew
+	if cfg.Crews > 1 {
+		for range (cfg.N + cfg.Crews - 1) / cfg.Crews {
+			groups = append(groups, &crew{token: make(chan string, 1)})
+		}
+	}
 	start := time.Now()
 	end := start.Add(cfg.Ramp + cfg.Sail)
 	var wg sync.WaitGroup
@@ -150,7 +161,17 @@ func Run(ctx context.Context, cfg Config) (*Report, error) {
 				watchOne(ctx, cfg, cookies[i], end, p)
 				return
 			}
-			sailOne(ctx, cfg, kinds, waves, wx, enc, cookies[i], uint64(i), end, p)
+			var hook func(*client.Sailor)
+			if groups != nil {
+				h, err := crewOne(ctx, cfg, groups, i, cookies[i], p)
+				if err != nil {
+					p.Errors++
+					fmt.Fprintf(os.Stderr, "loadbot: %s: %v\n", p.Name, err)
+					return
+				}
+				hook = h
+			}
+			sailOne(ctx, cfg, kinds, waves, wx, enc, cookies[i], uint64(i), end, p, hook)
 		})
 	}
 	wg.Wait()
@@ -208,7 +229,7 @@ func addStats(to, s *client.Stats) {
 // connection ends: after 1012, a server's restart, in 0.5 to 5 s at
 // random, as the page does; after 4002, versions that differ, never;
 // after anything else, in a second.
-func sailOne(ctx context.Context, cfg Config, kinds []physics.Prepared, waves *physics.Waves, wx *physics.WeatherPrepared, enc *physics.EncounterPrepared, cookie string, i uint64, end time.Time, p *Player) {
+func sailOne(ctx context.Context, cfg Config, kinds []physics.Prepared, waves *physics.Waves, wx *physics.WeatherPrepared, enc *physics.EncounterPrepared, cookie string, i uint64, end time.Time, p *Player, hook func(*client.Sailor)) {
 	rng := rand.New(rand.NewPCG(i, 7))
 	helm, sheet := 512, 512
 	// A share of the players sail on the autopilot as the scripted sailors
@@ -296,6 +317,9 @@ func sailOne(ctx context.Context, cfg Config, kinds []physics.Prepared, waves *p
 			last.boat = s.Welcomes[n-1].Boat
 			p.EpochUs = s.Welcomes[n-1].EpochUs
 		}
+	}
+	if hook != nil {
+		hook(s)
 	}
 	for ctx.Err() == nil && time.Until(end) > 0 {
 		err := s.Connect(ctx)
