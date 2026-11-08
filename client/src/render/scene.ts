@@ -139,8 +139,6 @@ export function sailorLookOf(cat: Looks, code: number): SailorLook {
 const NO_BOATS: readonly DrawnBoat[] = [];
 /** A hull sits at most this much deeper or higher than at rest for its wake's waves, metres. */
 const SINK_MOST = 0.08;
-/** The foam map's hull for a splash of the sea's life, past any boat kind's. */
-const SPLASH_HULL = 250;
 
 /**
  * What can cover the sea, drawn by the same renderer in its place while it
@@ -405,11 +403,6 @@ export class SeaScene {
     scene.add(this.lighthouses.towers, this.lighthouses.glows);
     scene.add(this.wrecks.root);
     scene.add(this.birds.mesh, this.swimmers.mesh);
-    // What breaks the water leaves a little white water on the foam map.
-    this.ocean.wakes.setHull(
-      { aft: 0.7, fore: -0.7, halfBeam: 0.7, transomFrom: 0.3 },
-      SPLASH_HULL,
-    );
     this.wrecks.depthAt = (east, north) => {
       const h = this.land?.heightAt(east, north) ?? null;
       return h === null ? null : -h;
@@ -1452,7 +1445,7 @@ export class SeaScene {
         continue;
       }
       // Small fish breaking the surface, driven up from below.
-      let owed = dt * 6 * b.strength;
+      let owed = dt * 12 * b.strength;
       while (owed > 0) {
         this.#boilSeed = (Math.imul(this.#boilSeed, 1103515245) + 12345) >>> 0;
         if (owed < 1 && this.#boilSeed / 4294967296 > owed) {
@@ -1461,7 +1454,7 @@ export class SeaScene {
         owed -= 1;
         const a = ((this.#boilSeed >>> 4) / 268435456) * 2 * Math.PI;
         const r = b.reach * Math.sqrt(((this.#boilSeed >>> 8) & 0xffff) / 65536);
-        this.spray.splash(b.east + Math.sin(a) * r, b.north + Math.cos(a) * r, 0, 0.08);
+        this.spray.splash(b.east + Math.sin(a) * r, b.north + Math.cos(a) * r, 0, 0.25);
       }
     }
   }
@@ -1473,7 +1466,7 @@ export class SeaScene {
     for (let i = 0; i < d.splashCount; i++) {
       const s = d.splashes[i];
       if (s !== undefined) {
-        wakes.add(s.east, s.north, 0, 0.6 + 1.6 * s.size, SPLASH_HULL);
+        wakes.spot(s.east, s.north, 0.5 + 1.5 * s.size, 0.9, true);
       }
     }
     for (let i = 0; i < d.boilCount; i++) {
@@ -1482,17 +1475,12 @@ export class SeaScene {
         continue;
       }
       // The water boiling at the flock's edge: white here and there across it.
-      for (let k = 0; k < 3; k++) {
+      for (let k = 0; k < 5; k++) {
         this.#boilSeed = (Math.imul(this.#boilSeed, 1103515245) + 12345) >>> 0;
         const a = (this.#boilSeed / 4294967296) * 2 * Math.PI;
         const r = b.reach * Math.sqrt(((this.#boilSeed >>> 8) & 0xffff) / 65536);
-        wakes.add(
-          b.east + Math.sin(a) * r,
-          b.north + Math.cos(a) * r,
-          a,
-          1.2 * b.strength,
-          SPLASH_HULL,
-        );
+        const size = 2 + (3 * ((this.#boilSeed >>> 3) & 7)) / 7;
+        wakes.spot(b.east + Math.sin(a) * r, b.north + Math.cos(a) * r, size, 0.5 * b.strength);
       }
     }
   }

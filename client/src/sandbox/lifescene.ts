@@ -51,6 +51,7 @@ export function lifeScene(
   n: number,
   delay = DELAY,
   offset?: { east: number; north: number },
+  free = false,
 ): LifeSeen | null {
   const k = life.kinds[kind];
   if (k === undefined) {
@@ -62,7 +63,7 @@ export function lifeScene(
   const lo = k.group[0] ?? 1;
   const hi = k.group[1] ?? lo;
   const at = now + delay * STEPS;
-  const bound = k.binds === 'follow' || k.binds === 'ride';
+  const bound = !free && (k.binds === 'follow' || k.binds === 'ride');
   const east = boat.east + (offset?.east ?? Math.sin(boat.heading) * AHEAD);
   const north = boat.north + (offset?.north ?? Math.cos(boat.heading) * AHEAD);
   // Each is at its point a, its coming in, after it begins: one that

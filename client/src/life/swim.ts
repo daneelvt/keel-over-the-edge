@@ -312,7 +312,7 @@ function podSpot(
       side =
         (i % 2 === 0 ? 1 : -1) *
         (lerp(0.5, 2.2, own(s, 16)) + 0.3 * wave(u, lerp(6, 11, own(s, 17)), own(s, 18)));
-      depth = lerp(0.5, 1.1, own(s, 19));
+      depth = lerp(0.35, 0.8, own(s, 19));
     } else {
       ahead = lerp(-bow * 3 - 8, bow, own(s, 13)) + 2 * wave(u, 20, own(s, 15));
       side = (i % 2 === 0 ? 1 : -1) * lerp(4, 14, own(s, 16));
@@ -327,10 +327,12 @@ function podSpot(
       at.heading = boat.heading;
     }
     if (i < riding && w > 0.99) {
+      at.east = east;
+      at.north = north;
       // Riding: held in the bow wave, up to breathe now and then.
       const cycle = lerp(8, 20, own(s, 20));
       const x = (((u + own(s, 21) * cycle) % cycle) + cycle) % cycle;
-      const roll = 1.1;
+      const roll = 1.6;
       const q = x / roll;
       at.up =
         q < 1
@@ -694,8 +696,10 @@ export function swimAt(
       ? Math.atan2(de, dn)
       : e.heading
     : a0.heading;
-  out.pitch =
-    span > 0 && (flat > 1e-6 || b.up !== a.up) ? Math.atan2(b.up - a.up, Math.max(flat, 0.05)) : 0;
+  // Pitched by its way up or down against its way along, as if it went
+  // at least so fast along (2 m/s for a pod, half a metre a second for
+  // the rest): a slow animal rising does not stand on its tail.
+  out.pitch = span > 0 ? Math.atan2(b.up - a.up, Math.max(flat, (k.form === 'pod' ? 2 : 0.5) * span)) : 0;
   const v = span > 0 ? flat / span : 0;
   const s = swimSeed(e.seed, i);
   const swim = k.swim;

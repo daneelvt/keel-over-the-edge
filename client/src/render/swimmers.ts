@@ -448,14 +448,14 @@ export class Swimmers {
     const base = mix(vBelly, vBack, vColour.x).mul(float(1).sub(vColour.y.mul(0.65)));
     const shaded = base.mul(vLit).mul(this.light);
     if (tinted) {
-      const under = smoothstep(0, SEEN_DOWN, vDepth);
-      m.colorNode = mix(
-        shaded,
-        this.water.mul(this.light),
-        under.mul(0.8),
-      ) as unknown as Node<'vec3'>;
+      // Under at all, it takes the water's colour at once, and more of it
+      // and less of itself the deeper it is.
+      const under = smoothstep(0, 0.15, vDepth)
+        .mul(0.35)
+        .add(smoothstep(0.15, SEEN_DOWN, vDepth).mul(0.55));
+      m.colorNode = mix(shaded, this.water.mul(this.light), under) as unknown as Node<'vec3'>;
       m.opacityNode = float(1).sub(
-        smoothstep(0.05, SEEN_DOWN * 1.1, vDepth).mul(0.92),
+        smoothstep(0.3, SEEN_DOWN * 1.1, vDepth).mul(0.95),
       ) as unknown as Node<'float'>;
     } else {
       m.colorNode = shaded as unknown as Node<'vec3'>;
