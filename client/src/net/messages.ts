@@ -265,13 +265,19 @@ export interface AboardTold {
   seat: number;
 }
 
-/** Someone aboard a boat: their seat, look, name ("" for a spectator), a machine sailor, the connection's own. */
+/**
+ * Someone aboard a boat: their seat, look, name ("" for a spectator), a
+ * machine sailor, the connection's own; and whether the connection's
+ * account mutes or blocks them.
+ */
 export interface PersonTold {
   seat: number;
   look: number;
   name: string;
   machine: boolean;
   you: boolean;
+  muted: boolean;
+  blocked: boolean;
 }
 
 /**
@@ -326,6 +332,60 @@ export interface HandedTold {
   seconds: number;
   gone: boolean;
 }
+
+/** Why a line was not said; '' for a line said (or refused for a word, which is never told). */
+export type ChatRefusalTold = '' | 'contact' | 'long' | 'fast' | 'silent' | 'nobody';
+
+/**
+ * A line said aboard: its number (for mute, block and report), the
+ * sender's seat, name and whether a machine sailor said it, when (ms of
+ * UTC), and its text, all player text. To its sender it comes back with
+ * you and echo (its Say's id), said or refused.
+ */
+export interface ChatTold {
+  id: number;
+  seat: number;
+  name: string;
+  machine: boolean;
+  at: number;
+  text: string;
+  you: boolean;
+  echo: number;
+  refused: ChatRefusalTold;
+}
+
+/**
+ * How chat stands for the connection: on; off by the game's owner; off by
+ * the player's own switch; resting, until a time (ms of UTC, 0 until the
+ * owner looks); and whether the Rules of the sea are still to be accepted.
+ */
+export interface ChatStateTold {
+  status: 'on' | 'off' | 'own-off' | 'resting';
+  until: number;
+  rules: boolean;
+}
+
+/** A mute or a block in force or ended, for the person named; full: the list is full and nothing changed. */
+export interface TiedTold {
+  name: string;
+  muted: boolean;
+  blocked: boolean;
+  full: boolean;
+}
+
+/** Someone aboard, for mute, block and report: by their seat, or by a line of theirs. */
+export type WhoTold = { seat: number } | { line: number };
+
+/** Why a player is reported, in the order offered. */
+export type ReportReasonTold =
+  | 'child'
+  | 'sexual'
+  | 'bullying'
+  | 'hate'
+  | 'threats'
+  | 'scam'
+  | 'cheating'
+  | 'other';
 
 /** Why the connection left the boat it was aboard. */
 export type AshoreWhyTold = 'chose' | 'put' | 'left' | 'other';
@@ -388,6 +448,14 @@ export type ToWorker =
   | { type: 'ashore'; who: number }
   /** Close the boat to knocks for this voyage, or open it again. */
   | { type: 'closeKnocks'; closed: boolean }
+  /** Say a line aboard; id is the page's own number, which its echo carries. */
+  | { type: 'say'; text: string; id: number }
+  /** Mute someone aboard, or no longer. */
+  | { type: 'mute'; who: WhoTold; on: boolean }
+  /** Block someone aboard, or no longer. */
+  | { type: 'block'; who: WhoTold; on: boolean }
+  /** Report someone aboard, with a note for the game's owner. */
+  | { type: 'report'; who: WhoTold; reason: ReportReasonTold; note: string }
   /** The page is going: close with 1000. */
   | { type: 'stop' }
   /** A snapshot record read, for the worker to fill again. */
@@ -479,6 +547,14 @@ export type FromWorker =
   | { type: 'handed'; handed: HandedTold }
   /** The connection left the boat it was aboard: its own boat's Welcome, or a Queued, follows. */
   | { type: 'ashore'; why: AshoreWhyTold }
+  /** A line said aboard, or the connection's own back, said or refused. */
+  | { type: 'chat'; chat: ChatTold }
+  /** How chat stands for the connection. */
+  | { type: 'chatState'; state: ChatStateTold }
+  /** A mute or a block in force, or ended. */
+  | { type: 'tied'; tied: TiedTold }
+  /** A report received, or (ok false) not kept. */
+  | { type: 'reported'; ok: boolean }
   /** Whether the AI of the own machine sailor watched attends to it: at the helm, or quiet. */
   | { type: 'lamp'; state: LampState }
   /** The sailor of the boat sailed or watched changed their look, at Port Royal: its code. */

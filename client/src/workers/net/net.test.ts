@@ -8,7 +8,7 @@
 import { describe, expect, test } from 'vitest';
 import { applied, Clock, SET_BEYOND } from '../../net/clock';
 import { decodeClient, encodeServer } from '../../net/frame';
-import { WatchEnd } from '../../net/gen/keel/v1/game_pb';
+import { ChatRefusal, ChatStatus, ReportReason, WatchEnd } from '../../net/gen/keel/v1/game_pb';
 import type { FromWorker } from '../../net/messages';
 import { HEADER_SIZE, newSnapshot, writeSnapshot } from '../../net/snapshot';
 import { FLEET_META, FLEET_RECORD_BYTES, fleetOf } from '../../net/view';
@@ -189,6 +189,100 @@ describe('the session', () => {
     expect(decodeClient(s.unwatchCommand(3)).body).toMatchObject({
       case: 'command',
       value: { body: { case: 'unwatch' } },
+    });
+  });
+
+  test('chat aboard: a line, its echo refused, how chat stands, a mute told and a report received', () => {
+    const s = welcomed();
+    const line = s.receive(
+      1,
+      encodeServer({
+        body: {
+          case: 'chat',
+          value: {
+            id: 7n,
+            seat: 2,
+            name: 'Iron Mary',
+            machine: true,
+            atUs: 1_000_000_000n,
+            text: 'Ahoy',
+          },
+        },
+      }),
+    );
+    expect(line).toEqual({
+      kind: 'chat',
+      chat: {
+        id: 7,
+        seat: 2,
+        name: 'Iron Mary',
+        machine: true,
+        at: 1_000_000,
+        text: 'Ahoy',
+        you: false,
+        echo: 0,
+        refused: '',
+      },
+    });
+    const refused = s.receive(
+      2,
+      encodeServer({
+        body: { case: 'chat', value: { you: true, echo: 3, refused: ChatRefusal.CONTACT } },
+      }),
+    );
+    expect(refused).toMatchObject({
+      kind: 'chat',
+      chat: { you: true, echo: 3, refused: 'contact' },
+    });
+    expect(
+      s.receive(
+        3,
+        encodeServer({
+          body: { case: 'chatState', value: { status: ChatStatus.RESTING, untilUs: 5_000_000n } },
+        }),
+      ),
+    ).toEqual({ kind: 'chatState', state: { status: 'resting', until: 5_000, rules: false } });
+    expect(
+      s.receive(4, encodeServer({ body: { case: 'chatState', value: { rules: true } } })),
+    ).toEqual({ kind: 'chatState', state: { status: 'off', until: 0, rules: true } });
+    expect(
+      s.receive(5, encodeServer({ body: { case: 'tied', value: { name: 'Gull', muted: true } } })),
+    ).toEqual({ kind: 'tied', tied: { name: 'Gull', muted: true, blocked: false, full: false } });
+    expect(s.receive(6, encodeServer({ body: { case: 'reported', value: { ok: true } } }))).toEqual(
+      { kind: 'reported', ok: true },
+    );
+  });
+
+  test('the commands of chat: a line, a mute by seat, a block by line, a report', () => {
+    const s = welcomed();
+    expect(decodeClient(s.sayCommand(1, 'Fair winds', 4)).body).toMatchObject({
+      case: 'command',
+      value: { body: { case: 'say', value: { text: 'Fair winds', id: 4 } } },
+    });
+    expect(decodeClient(s.muteCommand(2, { seat: 3 }, true)).body).toMatchObject({
+      case: 'command',
+      value: {
+        body: { case: 'mute', value: { who: { who: { case: 'seat', value: 3 } }, on: true } },
+      },
+    });
+    expect(decodeClient(s.blockCommand(3, { line: 12 }, false)).body).toMatchObject({
+      case: 'command',
+      value: {
+        body: { case: 'block', value: { who: { who: { case: 'line', value: 12n } }, on: false } },
+      },
+    });
+    expect(decodeClient(s.reportCommand(4, { line: 12 }, 'child', 'worried')).body).toMatchObject({
+      case: 'command',
+      value: {
+        body: {
+          case: 'report',
+          value: {
+            who: { who: { case: 'line', value: 12n } },
+            reason: ReportReason.CHILD,
+            note: 'worried',
+          },
+        },
+      },
     });
   });
 });

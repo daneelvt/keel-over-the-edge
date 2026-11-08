@@ -18,7 +18,20 @@ import { harbourOf, lightSeen, Session } from './session';
 /** The command for something the page asks of the boat's deck. */
 type DeckAsk = Extract<
   ToWorker,
-  { type: 'knock' | 'answer' | 'hand' | 'take' | 'giveBack' | 'ashore' | 'closeKnocks' }
+  {
+    type:
+      | 'knock'
+      | 'answer'
+      | 'hand'
+      | 'take'
+      | 'giveBack'
+      | 'ashore'
+      | 'closeKnocks'
+      | 'say'
+      | 'mute'
+      | 'block'
+      | 'report';
+  }
 >;
 
 function deckCommand(s: Session, now: number, m: DeckAsk): Uint8Array<ArrayBuffer> {
@@ -37,6 +50,14 @@ function deckCommand(s: Session, now: number, m: DeckAsk): Uint8Array<ArrayBuffe
       return s.ashoreCommand(now, m.who);
     case 'closeKnocks':
       return s.closeKnocksCommand(now, m.closed);
+    case 'say':
+      return s.sayCommand(now, m.text, m.id);
+    case 'mute':
+      return s.muteCommand(now, m.who, m.on);
+    case 'block':
+      return s.blockCommand(now, m.who, m.on);
+    case 'report':
+      return s.reportCommand(now, m.who, m.reason, m.note);
   }
 }
 
@@ -171,6 +192,10 @@ export class NetWorker {
       case 'giveBack':
       case 'ashore':
       case 'closeKnocks':
+      case 'say':
+      case 'mute':
+      case 'block':
+      case 'report':
         if (this.#session !== null) {
           this.#send(deckCommand(this.#session, this.#d.now(), m));
           this.#arm();
@@ -392,6 +417,18 @@ export class NetWorker {
           break;
         case 'ashore':
           this.#d.post({ type: 'ashore', why: r.why });
+          break;
+        case 'chat':
+          this.#d.post({ type: 'chat', chat: r.chat });
+          break;
+        case 'chatState':
+          this.#d.post({ type: 'chatState', state: r.state });
+          break;
+        case 'tied':
+          this.#d.post({ type: 'tied', tied: r.tied });
+          break;
+        case 'reported':
+          this.#d.post({ type: 'reported', ok: r.ok });
           break;
         case 'look':
           this.#d.post({ type: 'look', look: r.look });
