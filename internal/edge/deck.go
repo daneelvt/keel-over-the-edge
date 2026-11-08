@@ -105,9 +105,9 @@ type deck struct {
 type decks struct {
 	mu       sync.Mutex
 	next     uint64
-	by       map[uint64]*deck   // by boat
-	knocks   map[uint64]*knock  // by ID
-	knocking map[*conn]*knock   // each knocker's waiting knock
+	by       map[uint64]*deck  // by boat
+	knocks   map[uint64]*knock // by ID
+	knocking map[*conn]*knock  // each knocker's waiting knock
 	hour     map[bus.Account][]time.Time
 	notNow   map[notNowKey]time.Time
 	names    map[bus.Account]string // sailors' names, as players see them, for those aboard and their skippers

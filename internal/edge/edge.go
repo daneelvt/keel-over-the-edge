@@ -38,8 +38,8 @@ import (
 	"github.com/coder/websocket"
 	"golang.org/x/time/rate"
 
-	"github.com/daneelvt/keel-over-the-edge/internal/auth"
 	"github.com/daneelvt/keel-over-the-edge/internal/aboard"
+	"github.com/daneelvt/keel-over-the-edge/internal/auth"
 	"github.com/daneelvt/keel-over-the-edge/internal/bus"
 	"github.com/daneelvt/keel-over-the-edge/internal/obs"
 	"github.com/daneelvt/keel-over-the-edge/internal/protocol/pb"
