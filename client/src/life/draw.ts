@@ -797,7 +797,7 @@ export class LifeDraw {
       this.#hear('thump', d.east, d.north, 0.3);
     }
     const u = (f.ticks - e.start) / STEPS;
-    // On its side, its tail flapping, its wings half folded.
+    // On its side, its tail flapping, its wings folded.
     return sink.add(
       swim,
       d.east,
@@ -809,7 +809,7 @@ export class LifeDraw {
       1.45,
       d.flap,
       2 * Math.PI * 9 * u,
-      0.6,
+      1,
       0,
       1,
     )
