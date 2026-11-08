@@ -2439,6 +2439,7 @@ test('chat aboard’s strip and windows stand clear of the instruments, above th
     { name: 'chat-teen', steers: true, open: true },
     { name: 'chat-rules', steers: true, open: true },
     { name: 'chat-statement', steers: true, open: false },
+    { name: 'chat-list-shipmate', steers: true, open: false },
   ] as const;
   const found: string[] = [];
   for (const s of SCREENS) {
@@ -2559,6 +2560,166 @@ test('chat aboard’s strip and windows stand clear of the instruments, above th
           open: scene.open,
           keyboard,
         },
+      );
+      for (const f of faults) {
+        found.push(`${where}: ${f}`);
+      }
+      if (s.name === 'small Android phone upright' || s.name === 'small Android phone sideways') {
+        await test.info().attach(`${where}.png`, {
+          body: await page.screenshot(),
+          contentType: 'image/png',
+        });
+      }
+    }
+  }
+  await page.evaluate(() => globalThis.keel.deckScene(null));
+  expect(found).toEqual([]);
+});
+
+// Shipmates, on every screen: the panel over the sea (offers, shipmates,
+// the recent crew, a row's ⋯, an offer's words, ending's question, Appear
+// offline, the panel empty) and a thread within the screen; a thread with
+// the keyboard up, its field above the keyboard; the notices under the
+// case clear of every part and, upright, over no more of the boat than
+// its masthead. Every key 44 pixels a touch, its face the instruments'
+// height; the controls still there, the player sailing alone.
+test('shipmates’ panel, threads and notices stand clear of the instruments, above the keyboard, their keys a 44 px touch', async ({
+  page,
+}) => {
+  test.skip(test.info().project.name === 'webgpu', 'the panels are the same on either back end');
+  test.setTimeout(240_000);
+  await page.setViewportSize({ width: SCREENS[0].width, height: SCREENS[0].height });
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await openScene(page, '', true);
+  await page.evaluate(() => {
+    const k = globalThis.keel;
+    k.setState({ sheetLimit: 0.05, boom: 0, surge: 0 });
+    k.setControls(0, 0);
+    k.render();
+  });
+  const SCENES = [
+    { name: 'shipmates', sel: '.shipmates-panel' },
+    { name: 'shipmates-more', sel: '.shipmates-panel .deck-row-more' },
+    { name: 'shipmates-offered', sel: '.shipmates-panel .deck-row-note' },
+    { name: 'shipmates-made', sel: '.shipmates-panel .deck-row-note' },
+    { name: 'shipmates-end', sel: '.shipmates-panel [data-asking=end]' },
+    { name: 'shipmates-offline', sel: '.shipmates-panel' },
+    { name: 'shipmates-empty', sel: '.shipmates-panel' },
+    { name: 'shipmates-thread', sel: '.shipmate-thread' },
+    { name: 'shipmates-away', sel: '.shipmate-thread .chat-note' },
+    { name: 'shipmates-keyboard', sel: '.shipmate-thread' },
+    { name: 'shipmates-notice', sel: '.shipmate-notice' },
+    { name: 'shipmates-offer-notice', sel: '.shipmate-notice' },
+  ] as const;
+  const found: string[] = [];
+  for (const s of SCREENS) {
+    await page.setViewportSize({ width: s.width, height: s.height });
+    await page.waitForFunction(
+      ({ width, height }) => innerWidth === width && innerHeight === height,
+      { width: s.width, height: s.height },
+    );
+    for (const scene of SCENES) {
+      await page.evaluate(({ name, sailor }) => globalThis.keel.deckScene(name, sailor), {
+        name: scene.name,
+        sailor: LONG,
+      });
+      await expect(page.locator(scene.sel).first()).toBeVisible();
+      await page.evaluate(
+        () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))),
+      );
+      await page.evaluate(() => globalThis.keel.render());
+      const seen = await parts(page);
+      const where = `${s.name}, ${scene.name}`;
+      const keyboard =
+        scene.name === 'shipmates-keyboard'
+          ? Math.round(s.height * (s.height >= s.width ? 0.42 : 0.55))
+          : 0;
+      const faults = await page.evaluate(
+        ({ boat, others, upright, keyboard }) => {
+          const out: string[] = [];
+          const covers = (
+            a: { left: number; top: number; right: number; bottom: number },
+            b: { left: number; top: number; right: number; bottom: number },
+          ) =>
+            Math.min(a.right, b.right) - Math.max(a.left, b.left) > 0.5 &&
+            Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top) > 0.5;
+          const shown = innerHeight - keyboard;
+          for (const e of document.querySelectorAll<HTMLElement>(
+            '.shipmates-panel, .shipmate-thread, .shipmate-notice',
+          )) {
+            const r = e.getBoundingClientRect();
+            const name = `.${[...e.classList].join('.')}`;
+            if (
+              r.left < -0.5 ||
+              r.top < -0.5 ||
+              r.right > innerWidth + 0.5 ||
+              r.bottom > shown + 0.5
+            ) {
+              out.push(
+                `${name} is off the screen or under the keyboard (${[r.left, r.top, r.right, r.bottom].map(Math.round)})`,
+              );
+            }
+            for (const b of e.querySelectorAll('button')) {
+              const k = b.getBoundingClientRect();
+              if (k.width === 0) {
+                continue;
+              }
+              // The instruments' head keys: 38 to 40 px tall, a touch 3 px beyond.
+              const reach = Number.parseFloat(getComputedStyle(b, '::after').top) || 0;
+              if (
+                k.width < 43.5 ||
+                k.height < 37.5 ||
+                k.height > 40.5 ||
+                k.height - 2 * reach < 43.5
+              ) {
+                out.push(
+                  `${name}: “${b.textContent}” is ${Math.round(k.width)} × ${Math.round(k.height)}`,
+                );
+              }
+              const font = getComputedStyle(b);
+              if (font.fontSize !== '14px' && b.textContent !== '✕') {
+                out.push(`${name}: “${b.textContent}” is in ${font.fontSize} words`);
+              }
+            }
+            // A window stands over the rest while it is open; a thread's
+            // lines keep two rows at the least.
+            if (e.classList.contains('deck-window')) {
+              const lines = e.querySelector('.chat-lines');
+              if (e.classList.contains('shipmate-thread') && lines !== null) {
+                const l = lines.getBoundingClientRect();
+                if (l.height < 39.5) {
+                  out.push(`the thread’s lines are ${Math.round(l.height)} px tall`);
+                }
+              }
+              continue;
+            }
+            for (const o of others) {
+              if (covers(r, o) && !o.name.startsWith('the line')) {
+                out.push(`${name} covers ${o.name}`);
+              }
+            }
+            if (boat !== null) {
+              const hull = upright ? { ...boat, top: (boat.top + boat.bottom) / 2 } : boat;
+              if (covers(r, hull)) {
+                out.push(`${name} covers the boat`);
+              }
+            }
+          }
+          const field = document
+            .querySelector('.shipmate-thread .chat-foot input')
+            ?.getBoundingClientRect();
+          if (field !== undefined && field.bottom > shown + 0.5) {
+            out.push(`the field is under the keyboard (${Math.round(field.bottom)} > ${shown})`);
+          }
+          if (
+            document.querySelector('[data-control=helm], [data-control=sheet], .pilot-head') ===
+            null
+          ) {
+            out.push('the controls are gone');
+          }
+          return out;
+        },
+        { boat: seen.boat, others: seen.parts, upright: s.upright, keyboard },
       );
       for (const f of faults) {
         found.push(`${where}: ${f}`);

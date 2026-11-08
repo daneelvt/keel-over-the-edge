@@ -38,7 +38,7 @@ type DeckAsk = Extract<
 function deckCommand(s: Session, now: number, m: DeckAsk): Uint8Array<ArrayBuffer> {
   switch (m.type) {
     case 'knock':
-      return s.knockCommand(now, m.token, m.machine);
+      return s.knockCommand(now, m.token, m.machine, m.shipmate ?? '');
     case 'answer':
       return s.answerCommand(now, m.knock, m.let);
     case 'hand':
@@ -54,7 +54,7 @@ function deckCommand(s: Session, now: number, m: DeckAsk): Uint8Array<ArrayBuffe
     case 'comeAboard':
       return s.comeAboardCommand(now);
     case 'say':
-      return s.sayCommand(now, m.text, m.id);
+      return s.sayCommand(now, m.text, m.id, m.to ?? '');
     case 'mute':
       return s.muteCommand(now, m.who, m.on);
     case 'block':
@@ -433,6 +433,9 @@ export class NetWorker {
           break;
         case 'reported':
           this.#d.post({ type: 'reported', ok: r.ok });
+          break;
+        case 'shipmates':
+          this.#d.post({ type: 'shipmates' });
           break;
         case 'look':
           this.#d.post({ type: 'look', look: r.look });

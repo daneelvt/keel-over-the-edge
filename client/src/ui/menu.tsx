@@ -8,9 +8,9 @@
 // the helm returns to the centre when let go, and whether the camera comes
 // back behind the boat by itself. The full screen where the
 // page can take it, with how to install the game where that gives more of
-// the screen. Online, a sailor to watch, the link that asks others to
-// sail with the player (while their own boat is in the water), and who
-// may watch the player's own boat. It stands over everything at
+// the screen. Online, the player's shipmates, a sailor to watch, the link
+// that asks others to sail with the player (while their own boat is in
+// the water), and who may watch the player's own boat. It stands over everything at
 // sea, within the screen held either way, its head and its close at the
 // top while the rest scrolls; a tap beside it closes it.
 
@@ -26,6 +26,7 @@ import { sailWithMeFor } from './machinewords';
 import type { Notices } from './notices';
 import { PlayerText } from './player';
 import type { SettingsSignal } from './settings';
+import { SHIPMATES } from './shipmatewords';
 import { useWatch, type WatchView } from './watchlazy';
 import { STOP_WATCHING, WATCH_A_SAILOR } from './watchwords';
 
@@ -233,6 +234,21 @@ export function Menu({
                   Machine sailors
                 </button>
               ) : null}
+            </div>
+          ) : null}
+          {deck?.shipmates != null && sailor !== null ? (
+            <div class="menu-chart">
+              <button
+                type="button"
+                onClick={() => {
+                  if (deck.shipmates !== null) {
+                    deck.shipmates.panel.value = true;
+                  }
+                  close();
+                }}
+              >
+                {SHIPMATES}
+              </button>
             </div>
           ) : null}
           {deck !== null && canShareLink(deck) ? (

@@ -16,6 +16,7 @@
 // needed: none of it is in the game's first download.
 
 import './chat.css';
+import type { ReadonlySignal } from '@preact/signals';
 import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks';
 import { ChatTurnOn } from '../account/chatcard';
 import { RulesCard } from '../account/firstasks';
@@ -66,6 +67,7 @@ import {
 import { type ChatSheet, chatReadOnly, type DeckView, selfOf } from './decklazy';
 import { plain, type Words } from './deckwords';
 import { PlayerText } from './player';
+import { REPORT_SHIPMATE_DETAIL } from './shipmatewords';
 
 /** Words with a player's text among them, that text as player text. */
 function Said({ words }: { words: Words }) {
@@ -156,7 +158,7 @@ function Cog() {
 }
 
 /** One line: the sender's name and words; another's opens the sheet on a long press. */
-function LineRow({ line, act }: { line: ChatLine; act: ((l: ChatLine) => void) | null }) {
+export function LineRow({ line, act }: { line: ChatLine; act: ((l: ChatLine) => void) | null }) {
   const can = act !== null && !line.you && line.id !== 0;
   const press = usePress(can ? () => act(line) : null);
   return (
@@ -194,9 +196,8 @@ function stateText(d: DeckView, now: number): string {
   }
 }
 
-/** The height the keyboard covers at the foot of the screen, px: the scene's, or the visual viewport's. */
-function useKeyboard(d: DeckView, on: boolean): number {
-  const held = d.chat.keyboard;
+/** The height the keyboard covers at the foot of the screen, px: the scene's held, or the visual viewport's. */
+export function useKeyboard(held: ReadonlySignal<number> | null, on: boolean): number {
   const [inset, setInset] = useState(0);
   useEffect(() => {
     const vv = globalThis.visualViewport;
@@ -240,7 +241,7 @@ export function ChatStrip({ deck, sailor }: { deck: DeckView; sailor: string | n
   const strip = useRef<HTMLElement>(null);
   const list = useRef<HTMLOListElement>(null);
   const field = useRef<HTMLInputElement>(null);
-  const keyboard = useKeyboard(deck, open);
+  const keyboard = useKeyboard(deck.chat.keyboard, open);
   const [fit, setFit] = useState<{ lines: number; lift: number }>({ lines: LINES_MAX, lift: 0 });
   // Counts the changes to the screen about the open strip: a part shown
   // or gone below it, a turn of the phone, fits it again.
@@ -496,15 +497,22 @@ function ReportForm({ deck, sheet }: { deck: DeckView; sheet: ChatSheet }) {
   const [note, setNote] = useState('');
   const [problem, setProblem] = useState('');
   const [sent, setSent] = useState<number | null>(null);
+  // A report from the shipmates panel goes over HTTP: its answer is its own.
+  const [answered, setAnswered] = useState<boolean | null>(null);
   const told = chat.log.note.value;
-  const back = told !== null && told.kind === 'reported' && sent !== null && told.at >= sent;
+  const back =
+    sheet.shipmate !== undefined
+      ? answered !== null
+      : told !== null && told.kind === 'reported' && sent !== null && told.at >= sent;
+  const ok =
+    sheet.shipmate !== undefined ? answered === true : told?.kind === 'reported' && told.ok;
   if (sent !== null) {
     return (
       <section class="panel deck-window chat-sheet" role="dialog" aria-labelledby="chat-report">
         <h2 id="chat-report">
           <Said words={reportWords(sheet.name)} />
         </h2>
-        <p role="status">{back ? (told.ok ? REPORTED : NOT_REPORTED) : '…'}</p>
+        <p role="status">{back ? (ok ? REPORTED : NOT_REPORTED) : '…'}</p>
         <div class="deck-keys">
           <button
             type="button"
@@ -526,7 +534,13 @@ function ReportForm({ deck, sheet }: { deck: DeckView; sheet: ChatSheet }) {
       return;
     }
     setSent(Date.now() - 1);
-    chat.report(sheet.who, reason, note.trim());
+    const id = sheet.shipmate;
+    const shipmates = deck.shipmates;
+    if (id !== undefined && shipmates !== null) {
+      void shipmates.report(id, reason, note.trim()).then(setAnswered);
+    } else {
+      chat.report(sheet.who, reason, note.trim());
+    }
   };
   const used = lineLength(note);
   return (
@@ -568,7 +582,9 @@ function ReportForm({ deck, sheet }: { deck: DeckView; sheet: ChatSheet }) {
           />
           <span class="deck-faint">{leftText(used, MAX_NOTE)}</span>
         </label>
-        <p class="deck-faint">{REPORT_DETAIL}</p>
+        <p class="deck-faint">
+          {sheet.shipmate !== undefined ? REPORT_SHIPMATE_DETAIL : REPORT_DETAIL}
+        </p>
         <p class="deck-problem" aria-live="polite">
           {problem}
         </p>

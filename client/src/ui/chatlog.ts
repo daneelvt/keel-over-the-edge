@@ -116,8 +116,9 @@ export class ChatLog {
     if (t === null) {
       return null;
     }
-    // The Say's id is a uint32 the page counts; 0 is no echo.
-    this.#say = (this.#say % 0xffff_ffff) + 1;
+    // The Say's id is a uint32 the page counts; 0 is no echo, and from
+    // 2³¹ on the ids are the messages between shipmates' (shipmatelog.ts).
+    this.#say = (this.#say % 0x8000_0000) + 1;
     const id = this.#say;
     this.note.value = null;
     this.#add({

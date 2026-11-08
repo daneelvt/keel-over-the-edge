@@ -118,14 +118,19 @@ message Command {
 message ComeAboard {}
 
 // Say says a line to everyone aboard the boat the connection sails or is
-// aboard: at most 200 characters, one line, text only. The server checks
+// aboard, or, with to, a message to one shipmate wherever they are in the
+// game: at most 200 characters, one line, text only. The server checks
 // it, and the sender is sent the line back as it was said (Chat, with
 // echo), or why it was not (Chat.refused). A line refused for a word
-// comes back as said and reaches nobody.
+// comes back as said and reaches nobody. A message reaches a shipmate
+// only while they are in the game; it is never kept for later.
 message Say {
   string text = 1;
   // The client's own number for the line, which its Chat echoes.
   uint32 id = 2;
+  // A shipmate's account, as the shipmates list names it (its ID in UUID
+  // text); "" to say it aboard.
+  string to = 3;
 }
 
 // Who is someone aboard, for mute, block and report: by their seat on the
@@ -197,6 +202,10 @@ message Knock {
   // the water and it is crew there; the connection is told as a knocker
   // is.
   string machine = 2;
+  // A shipmate's account, as the shipmates list names it, to knock on the
+  // boat they skipper without a link: token is then empty. Their skipper's
+  // answer is asked as for any knock.
+  string shipmate = 3;
 }
 
 // Answer is the skipper's answer to a knock: let them aboard, or not now.
@@ -323,8 +332,14 @@ message ServerMessage {
     ChatState chat_state = 29;
     Tied tied = 30;
     Reported reported = 31;
+    Shipmates shipmates = 32;
   }
 }
+
+// Shipmates says the account's shipmates have changed: an offer made to
+// it, an offer accepted, or a shipmate no longer one. Never what changed
+// or why: the shipmates list is read again over HTTP.
+message Shipmates {}
 
 // KnockCard tells a skipper that a sailor asks to come aboard, for them to
 // answer (Answer) within two minutes; with gone, the knock is no longer
@@ -342,6 +357,8 @@ message KnockCard {
   bool machine = 5;
   string owner = 6;
   string skipper = 7;
+  // A shipmate of the skipper's, knocking from their shipmates list.
+  bool shipmate = 8;
 }
 
 // Knocking tells a knocker how their knock stands. Let aboard, a Welcome
@@ -422,6 +439,8 @@ message Person {
   // The connection's account mutes them, or blocks them.
   bool muted = 6;
   bool blocked = 7;
+  // A shipmate of the connection's account.
+  bool shipmate = 8;
 }
 
 // Chat is a line said aboard the boat the connection sails, is aboard,
@@ -442,6 +461,10 @@ message Chat {
   bool you = 7;
   uint32 echo = 8;
   ChatRefusal refused = 9;
+  // A message between shipmates, not a line aboard: the other shipmate's
+  // account, as the shipmates list names it (to its sender, whom it was
+  // to; to its receiver, who sent it). Seat is then 0.
+  string thread = 10;
 }
 
 // ChatRefusal is why a line was not said. A line refused for a word is
@@ -458,6 +481,10 @@ enum ChatRefusal {
   CHAT_REFUSAL_SILENT = 4;
   // Nobody is aboard to hear it.
   CHAT_REFUSAL_NOBODY = 5;
+  // The shipmate isn't in the game: messages aren't kept for later.
+  CHAT_REFUSAL_AWAY = 6;
+  // The game's owner has shipmates' messages off for everyone.
+  CHAT_REFUSAL_RESTING = 7;
 }
 
 // ChatState is whether the connection may chat aboard now, sent at each

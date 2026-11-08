@@ -222,6 +222,7 @@ describe('the session', () => {
         you: false,
         echo: 0,
         refused: '',
+        thread: '',
       },
     });
     const refused = s.receive(
@@ -251,6 +252,77 @@ describe('the session', () => {
     expect(s.receive(6, encodeServer({ body: { case: 'reported', value: { ok: true } } }))).toEqual(
       { kind: 'reported', ok: true },
     );
+  });
+
+  test('shipmates: a message heard, one refused away, the list changed, a shipmate aboard and knocking', () => {
+    const s = welcomed();
+    const id = '0b6a2f9e-1c1d-4e55-9a51-8d2f0e3b7c41';
+    expect(
+      s.receive(
+        1,
+        encodeServer({
+          body: {
+            case: 'chat',
+            value: { id: 9n, name: 'Iron Mary', atUs: 2_000_000n, text: 'Ahoy', thread: id },
+          },
+        }),
+      ),
+    ).toMatchObject({
+      kind: 'chat',
+      chat: { id: 9, seat: 0, name: 'Iron Mary', text: 'Ahoy', you: false, thread: id },
+    });
+    expect(
+      s.receive(
+        2,
+        encodeServer({
+          body: {
+            case: 'chat',
+            value: { you: true, echo: 2147483649, refused: ChatRefusal.AWAY, thread: id },
+          },
+        }),
+      ),
+    ).toMatchObject({ kind: 'chat', chat: { you: true, refused: 'away', thread: id } });
+    expect(
+      s.receive(
+        3,
+        encodeServer({
+          body: { case: 'chat', value: { you: true, refused: ChatRefusal.RESTING } },
+        }),
+      ),
+    ).toMatchObject({ kind: 'chat', chat: { refused: 'resting' } });
+    expect(s.receive(4, encodeServer({ body: { case: 'shipmates', value: {} } }))).toEqual({
+      kind: 'shipmates',
+    });
+    expect(
+      s.receive(
+        5,
+        encodeServer({
+          body: {
+            case: 'crew',
+            value: { people: [{ seat: 1, name: 'Iron Mary', shipmate: true }], holder: 0 },
+          },
+        }),
+      ),
+    ).toMatchObject({ kind: 'crew', crew: { people: [{ seat: 1, shipmate: true }] } });
+    expect(
+      s.receive(
+        6,
+        encodeServer({
+          body: { case: 'knock', value: { id: 4n, sailor: 'Iron Mary', shipmate: true } },
+        }),
+      ),
+    ).toEqual({
+      kind: 'knockCard',
+      card: { id: 4, sailor: 'Iron Mary', look: 0, gone: false, shipmate: true },
+    });
+    expect(decodeClient(s.sayCommand(7, 'Fair winds', 2147483650, id)).body).toMatchObject({
+      case: 'command',
+      value: { body: { case: 'say', value: { text: 'Fair winds', id: 2147483650, to: id } } },
+    });
+    expect(decodeClient(s.knockCommand(8, '', '', id)).body).toMatchObject({
+      case: 'command',
+      value: { body: { case: 'knock', value: { token: '', machine: '', shipmate: id } } },
+    });
   });
 
   test('the commands of chat: a line, a mute by seat, a block by line, a report', () => {

@@ -267,8 +267,8 @@ export interface AboardTold {
 
 /**
  * Someone aboard a boat: their seat, look, name ("" for a spectator), a
- * machine sailor, the connection's own; and whether the connection's
- * account mutes or blocks them.
+ * machine sailor, the connection's own; whether the connection's account
+ * mutes or blocks them; and whether they are its shipmate.
  */
 export interface PersonTold {
   seat: number;
@@ -278,6 +278,7 @@ export interface PersonTold {
   you: boolean;
   muted: boolean;
   blocked: boolean;
+  shipmate: boolean;
 }
 
 /**
@@ -299,6 +300,8 @@ export interface KnockCardTold {
   gone: boolean;
   /** A machine sailor sent aboard by its owner (their sailor's name), knocking on skipper's boat, the player's own machine sailor's. */
   machine?: { owner: string; skipper: string };
+  /** A shipmate of the skipper's, knocking from their shipmates list. */
+  shipmate?: boolean;
 }
 
 /** How the connection's own knock stands, or why it was refused. */
@@ -339,13 +342,26 @@ export interface HandedTold {
 }
 
 /** Why a line was not said; '' for a line said (or refused for a word, which is never told). */
-export type ChatRefusalTold = '' | 'contact' | 'long' | 'fast' | 'silent' | 'nobody';
+export type ChatRefusalTold =
+  | ''
+  | 'contact'
+  | 'long'
+  | 'fast'
+  | 'silent'
+  | 'nobody'
+  /** A shipmate's message: they aren't in the game, and nothing is kept for later. */
+  | 'away'
+  /** A shipmate's message: the game's owner has shipmates' messages off. */
+  | 'resting';
 
 /**
  * A line said aboard: its number (for mute, block and report), the
  * sender's seat, name and whether a machine sailor said it, when (ms of
  * UTC), and its text, all player text. To its sender it comes back with
- * you and echo (its Say's id), said or refused.
+ * you and echo (its Say's id), said or refused. A message between
+ * shipmates names its thread: the other shipmate's account ID (to its
+ * sender, whom it was to; to its receiver, who sent it); "" for a line
+ * aboard.
  */
 export interface ChatTold {
   id: number;
@@ -357,6 +373,7 @@ export interface ChatTold {
   you: boolean;
   echo: number;
   refused: ChatRefusalTold;
+  thread: string;
 }
 
 /**
@@ -439,8 +456,8 @@ export type ToWorker =
   | { type: 'sail' }
   /** Stop watching, without sailing: the connection is idle. */
   | { type: 'unwatch' }
-  /** Ask to come aboard by a link's token. */
-  | { type: 'knock'; token: string; machine: string }
+  /** Ask to come aboard by a link's token, or, without one, the boat a shipmate (their account ID) skippers. */
+  | { type: 'knock'; token: string; machine: string; shipmate?: string }
   /** The skipper's answer to a knock. */
   | { type: 'answer'; knock: number; let: boolean }
   /** Offer the controls to the person in that seat. */
@@ -455,8 +472,11 @@ export type ToWorker =
   | { type: 'closeKnocks'; closed: boolean }
   /** Come aboard the own machine sailor watched, without knocking: knocking tells how it stands. */
   | { type: 'comeAboard' }
-  /** Say a line aboard; id is the page's own number, which its echo carries. */
-  | { type: 'say'; text: string; id: number }
+  /**
+   * Say a line aboard, or, with to (a shipmate's account ID), a message to
+   * that shipmate; id is the page's own number, which its echo carries.
+   */
+  | { type: 'say'; text: string; id: number; to?: string }
   /** Mute someone aboard, or no longer. */
   | { type: 'mute'; who: WhoTold; on: boolean }
   /** Block someone aboard, or no longer. */
@@ -562,6 +582,8 @@ export type FromWorker =
   | { type: 'tied'; tied: TiedTold }
   /** A report received, or (ok false) not kept. */
   | { type: 'reported'; ok: boolean }
+  /** The account's shipmates changed: the list is to be read again. Never what changed. */
+  | { type: 'shipmates' }
   /** Whether the AI of the own machine sailor watched attends to it: at the helm, or quiet. */
   | { type: 'lamp'; state: LampState }
   /** The sailor of the boat sailed or watched changed their look, at Port Royal: its code. */

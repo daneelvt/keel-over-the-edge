@@ -32,6 +32,7 @@ function person(seat: number, you = false): PersonTold {
     you,
     muted: false,
     blocked: false,
+    shipmate: false,
   };
 }
 
@@ -84,6 +85,27 @@ describe('who is aboard: what each row offers', () => {
       more: ['putAshore', 'unmute', 'block', 'report'],
     });
     expect(splitActions(['take'])).toEqual({ keys: ['take'], more: [] });
+  });
+
+  test('with shipmates, a person is offered to be shipmates, a shipmate ended, behind ⋯', () => {
+    const c = crew(1, 0);
+    c.people[2] = { ...person(2), shipmate: true };
+    expect(rowActions(c, 0, true)).toEqual(['shipmates', ...TIES]);
+    expect(rowActions(c, 2, true)).toEqual(['unship', ...TIES]);
+    expect(rowActions(c, 1, true)).toEqual([]);
+    expect(splitActions(rowActions(crew(0, 0), 1, true))).toEqual({
+      keys: ['hand'],
+      more: ['shipmates', 'putAshore', ...TIES],
+    });
+  });
+
+  test('never shipmates with a machine sailor, nor anyone blocked; nothing for a spectator', () => {
+    const c = crew(0, 0);
+    c.people[1] = { ...person(1), machine: true };
+    c.people[2] = { ...person(2), blocked: true };
+    expect(rowActions(c, 1, true)).toEqual(['hand', 'putAshore', ...TIES]);
+    expect(rowActions(c, 2, true)).toEqual(['hand', 'putAshore', 'mute', 'unblock', 'report']);
+    expect(rowActions(crew(null, 0), 1, true)).toEqual([]);
   });
 
   test('a spectator, who is not aboard, may do nothing; nor to a seat no one has', () => {
