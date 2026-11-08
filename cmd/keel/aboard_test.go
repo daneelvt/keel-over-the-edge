@@ -55,7 +55,7 @@ func TestAdminSettings(t *testing.T) {
 	if err := f.st.MakeSailLink(ctx, f.ann, sha256.Sum256([]byte("link")), now.Add(-2*time.Hour), now.Add(22*time.Hour)); err != nil {
 		t.Fatal(err)
 	}
-	if out, _, err := f.admin(t, "", "settings"); err != nil || out != "a link lasts 24h0m0s; links on; boarding on\n" {
+	if out, _, err := f.admin(t, "", "settings"); err != nil || out != "a link lasts 24h0m0s; links on; boarding on\nchat on; shipmates' messages on; chat off in no country\n" {
 		t.Fatalf("settings: %v %q", err, out)
 	}
 	if out, _, err := f.admin(t, "", "linklife", "1h"); err != nil || !strings.Contains(out, "stops 1 working link") ||

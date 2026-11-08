@@ -226,3 +226,108 @@ func TestSettingsGuarded(t *testing.T) {
 		t.Fatalf("not running, set: %d", code)
 	}
 }
+
+// fakeChat is the database's switches for chat: each write, with the
+// switches in memory as it found them.
+type fakeChat struct {
+	mu       sync.Mutex
+	switches *aboard.Switches
+	writes   []string
+	actions  []store.Action
+}
+
+func (f *fakeChat) wrote(what string, a store.Action) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.writes = append(f.writes, what+" over "+onOff(f.switches.Chat())+"/"+onOff(f.switches.ShipmateMessages())+"/"+strings.Join(f.switches.ChatCountries(), ","))
+	f.actions = append(f.actions, a)
+}
+
+func (f *fakeChat) SetChatSwitch(_ context.Context, on bool, a store.Action) error {
+	f.wrote("chat "+onOff(on), a)
+	return nil
+}
+
+func (f *fakeChat) SetShipmateMessages(_ context.Context, on bool, a store.Action) error {
+	f.wrote("shipmates "+onOff(on), a)
+	return nil
+}
+
+func (f *fakeChat) SetChatCountries(_ context.Context, c []string, a store.Action) error {
+	f.wrote("countries "+strings.Join(c, ","), a)
+	return nil
+}
+
+// TestSettingsChat: chat's switches as settings.json tells them; a check
+// changes nothing and tells no connection; a change writes the database
+// first, then memory, and tells every connection once; the countries are
+// two letters each, upper case, sorted, and an empty list clears them.
+func TestSettingsChat(t *testing.T) {
+	r, sail := sailRig(t)
+	f := &fakeChat{switches: r.o.cfg.Switches}
+	told := 0
+	r.o.cfg.ChatSettings, r.o.cfg.ChatChanged = f, func() { told++ }
+	sw := r.o.cfg.Switches
+
+	code, a, _ := settingsCall(t, r, SettingsRequest{Chat: yes(false), Check: true})
+	if code != 200 || a.Settings.Chat || a.Words != "Would set: chat off for everyone. It stops 0 working links at once." {
+		t.Fatalf("chat off checked: %d %+v", code, a)
+	}
+	if len(f.writes) != 0 || told != 0 || !sw.Chat() {
+		t.Fatalf("a check changed something: %v, told %d", f.writes, told)
+	}
+	code, a, _ = settingsCall(t, r, SettingsRequest{Chat: yes(false)})
+	if code != 200 || a.Settings.Chat || sw.Chat() || !strings.HasPrefix(a.Words, "Done: chat off for everyone.") || told != 1 {
+		t.Fatalf("chat off: %d %+v, told %d", code, a, told)
+	}
+	if f.writes[0] != "chat off over on/on/" || f.actions[0].Detail != "off" || f.actions[0].Source != store.SourcePage {
+		t.Fatalf("the write: %v %+v", f.writes, f.actions)
+	}
+
+	// The countries checked as the server takes them.
+	for _, c := range [][]string{{"BRA"}, {"B"}, {"b1"}, {""}, {"BR", "ÉS"}} {
+		if code, _, body := settingsCall(t, r, SettingsRequest{ChatCountries: &c}); code != 400 || !strings.HasPrefix(body, "chatCountries:") {
+			t.Errorf("%q: %d %s", c, code, body)
+		}
+	}
+	if len(f.writes) != 1 || told != 1 {
+		t.Fatalf("a refusal wrote: %v, told %d", f.writes, told)
+	}
+	// Shipmates' messages and the countries together: told once.
+	c := []string{" au", "br", "AU"}
+	code, a, _ = settingsCall(t, r, SettingsRequest{ShipmateMessages: yes(false), ChatCountries: &c})
+	if code != 200 || told != 2 || a.Settings.ShipmateMessages || strings.Join(a.Settings.ChatCountries, ",") != "AU,BR" ||
+		!strings.HasPrefix(a.Words, "Done: shipmates' messages off for everyone; chat off in AU, BR.") {
+		t.Fatalf("shipmates and countries: %d %+v, told %d", code, a, told)
+	}
+	if !sw.ChatOffIn("BR") || sw.ChatOffIn("NZ") || sw.ShipmateMessages() || f.actions[2].Detail != "AU,BR" {
+		t.Fatalf("memory after: %v %+v", sw.ChatCountries(), f.actions)
+	}
+	code, body := r.do(t, "GET", "/owner/api/settings.json", nil)
+	if code != 200 || strings.TrimSpace(string(body)) != `{"linkLifetime":86400,"links":true,"boarding":true,"chat":false,"shipmateMessages":false,"chatCountries":["AU","BR"]}` {
+		t.Fatalf("settings.json after: %d %s", code, body)
+	}
+	none := []string{}
+	if code, a, _ = settingsCall(t, r, SettingsRequest{ChatCountries: &none, Chat: yes(true)}); code != 200 || told != 3 || len(a.Settings.ChatCountries) != 0 ||
+		!a.Settings.Chat || !strings.Contains(a.Words, "chat off in no country") || sw.ChatOffIn("BR") {
+		t.Fatalf("countries cleared: %d %+v", code, a)
+	}
+	// Links' switches alone tell no connection about chat.
+	if code, _, _ = settingsCall(t, r, SettingsRequest{Boarding: yes(false)}); code != 200 || told != 3 || len(sail.writes) != 1 {
+		t.Fatalf("boarding off told chat: %d, told %d", code, told)
+	}
+	for action, n := range map[string]float64{store.ActionChat: 2, store.ActionShipmateMessages: 1, store.ActionChatCountries: 2} {
+		if got := testutil.ToFloat64(r.metrics.OwnerActions.WithLabelValues(action)); got != n {
+			t.Errorf("%s counted %v", action, got)
+		}
+	}
+
+	// Without chat's store, its switches are refused, and the others not.
+	r.o.cfg.ChatSettings = nil
+	if code, _, _ := settingsCall(t, r, SettingsRequest{Chat: yes(false)}); code != 503 || !sw.Chat() {
+		t.Fatalf("chat not running: %d", code)
+	}
+	if code, _, _ := settingsCall(t, r, SettingsRequest{Boarding: yes(true)}); code != 200 {
+		t.Fatalf("boarding, chat not running: %d", code)
+	}
+}

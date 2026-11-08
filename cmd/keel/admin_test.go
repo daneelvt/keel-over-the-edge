@@ -22,13 +22,15 @@ import (
 	"github.com/daneelvt/keel-over-the-edge/internal/oauth"
 	"github.com/daneelvt/keel-over-the-edge/internal/obs"
 	"github.com/daneelvt/keel-over-the-edge/internal/owner"
+	"github.com/daneelvt/keel-over-the-edge/internal/review"
 	"github.com/daneelvt/keel-over-the-edge/internal/store"
 	"github.com/daneelvt/keel-over-the-edge/internal/store/storetest"
 	"github.com/daneelvt/keel-over-the-edge/internal/weather"
 )
 
 // adminFixture is an internal listener with the owner's real routes on
-// the test database, and a sailor with a machine sailor and its token.
+// the test database, its reports and chat's switches, and a sailor with a
+// machine sailor and its token.
 type adminFixture struct {
 	srv        *httptest.Server
 	st         *store.Store
@@ -71,7 +73,7 @@ func newAdminFixture(t *testing.T) *adminFixture {
 	}
 	f.switches = aboard.NewSwitches(aboard.DefaultLifetime)
 	o := owner.New(owner.Config{Weather: wcfg.Prepared, Accounts: st, Sessions: sessions, Hand: hand, Machines: st, Lifetime: f.lifetime, Log: log, Metrics: metrics,
-		Switches: f.switches, Sail: st})
+		Switches: f.switches, Sail: st, ChatSettings: st, Reports: review.New(review.Config{Store: st, Hand: hand, Log: log, Metrics: metrics})})
 	f.srv = httptest.NewServer(o.Handler())
 	t.Cleanup(f.srv.Close)
 	return f
@@ -242,5 +244,163 @@ func TestAccountRoutesGuarded(t *testing.T) {
 	}
 	if acts, _ := f.st.Actions(ctx, nil, 10); len(acts) != 0 {
 		t.Fatalf("checks recorded: %+v", acts)
+	}
+}
+
+// TestAdminReports: the queue, a report whole with its lines, and the
+// owner's actions on it, each only told without -yes; what keel refuses
+// is told and does nothing.
+func TestAdminReports(t *testing.T) {
+	f := newAdminFixture(t)
+	ctx := context.Background()
+	_, hash := auth.NewToken()
+	jack, err := f.st.CreateAccount(ctx, storetest.NewAccount("Calico Jack", "calicojack", hash))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if out, _, err := f.admin(t, "", "reports"); err != nil || out != "No report is open.\n" {
+		t.Fatalf("no reports: %v %q", err, out)
+	}
+	at := time.Now().Add(-time.Minute).UTC().Truncate(time.Microsecond)
+	made, err := f.st.MakeReport(ctx, store.NewReport{
+		Source: store.ReportByPlayer, Reason: store.ReasonChild, Note: "asked \x1b[31mher age",
+		Reporter: jack, HasReporter: true, ReporterName: "Calico Jack",
+		Reported: f.mary, HasReported: true, ReportedKind: store.AI, ReportedName: "Iron Mary", Owner: f.ann, HasOwner: true,
+		Place: "aboard Calico Jack’s boat", People: []store.ReportPerson{{Name: "Calico Jack", Band: "13-17", Skipper: true}, {Name: "Iron Mary", Band: "adult", Machine: true}},
+		Lines: []store.ReportLine{
+			{Line: 7, At: at, Sender: f.mary, HasSender: true, Name: "Iron Mary", Machine: true, Text: "how old are you?", Reported: true},
+			{Line: 8, At: at.Add(time.Second), Sender: jack, HasSender: true, Name: "Calico Jack", Text: "<b>twelve</b>"},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	id := store.AccountID(made.ID).String()
+	out, _, err := f.admin(t, "", "reports")
+	for _, want := range []string{"1 report open.", "CHILD SAFETY  " + id, `"Calico Jack" reported "Iron Mary" (machine sailor)`, "2 lines held", "a child may be at risk"} {
+		if err != nil || !strings.Contains(out, want) {
+			t.Fatalf("reports, no %q: %v\n%s", want, err, out)
+		}
+	}
+	out, _, err = f.admin(t, "", "report", id)
+	for _, want := range []string{
+		"CHILD SAFETY: report " + id, "its human " + f.ann.String(), `"Calico Jack" (13-17, skipper)`, `the note: "asked \x1b[31mher age"`,
+		"-line 7 -at " + at.Format(time.RFC3339Nano) + `  "Iron Mary" (machine sailor): "how old are you?"  <- REPORTED`, `"<b>twelve</b>"`,
+	} {
+		if err != nil || !strings.Contains(out, want) {
+			t.Fatalf("report, no %q: %v\n%s", want, err, out)
+		}
+	}
+	if strings.Contains(out, "\x1b") {
+		t.Fatalf("a control character reached the terminal:\n%s", out)
+	}
+	js, _, err := f.admin(t, "", "-json", "report", id)
+	var rep owner.ReportJSON
+	if err != nil || json.Unmarshal([]byte(js), &rep) != nil || len(rep.Lines) != 2 || rep.Owner != f.ann.String() {
+		t.Fatalf("report as JSON: %v\n%s", err, js)
+	}
+
+	// Told first, then done: a line removed.
+	out, _, err = f.admin(t, "", "act", id, "remove-line", "-line", "8", "-at", rep.Lines[1].At)
+	if err != nil || !strings.Contains(out, "The line goes") || !strings.Contains(out, "Nothing is done yet") {
+		t.Fatalf("remove-line, checked: %v\n%s", err, out)
+	}
+	if r, _ := f.st.Report(ctx, made.ID); len(r.Lines) != 2 {
+		t.Fatalf("a check removed a line: %+v", r.Lines)
+	}
+	if out, _, err = f.admin(t, "", "act", id, "remove-line", "-line", "8", "-at", rep.Lines[1].At, "-yes"); err != nil || !strings.HasPrefix(out, "Done: ") {
+		t.Fatalf("remove-line: %v\n%s", err, out)
+	}
+	if r, _ := f.st.Report(ctx, made.ID); len(r.Lines) != 1 || r.Lines[0].Line != 7 {
+		t.Fatalf("after remove-line: %+v", r.Lines)
+	}
+	// A mute of 3 days, or of a line never held, refused.
+	if _, errs, err := f.admin(t, "", "act", id, "mute-chat", "-days", "3", "-yes"); !errors.Is(err, errAdmin) || !strings.Contains(errs, "1, 7 or 30 days") {
+		t.Fatalf("a mute of 3 days: %v %s", err, errs)
+	}
+	if _, _, err := f.admin(t, "", "act", id, "remove-line", "-line", "99", "-yes"); !errors.Is(err, errAdmin) {
+		t.Fatalf("no such line: %v", err)
+	}
+	if _, _, err := f.admin(t, "", "act", id, "keelhaul", "-yes"); !errors.Is(err, errAdmin) {
+		t.Fatalf("no such action: %v", err)
+	}
+	// The mute reaches the machine sailor's human, and closes the report.
+	out, _, err = f.admin(t, "", "act", id, "mute-chat", "-days", "7", "-reason", "asked a child's age", "-note", "her age")
+	if err != nil || !strings.Contains(out, "Ann Bonny’s chat is muted for 7 days") || !strings.Contains(out, "Nothing is done yet") {
+		t.Fatalf("mute, checked: %v\n%s", err, out)
+	}
+	if out, _, err = f.admin(t, "", "act", id, "mute-chat", "-days", "7", "-reason", "asked a child's age", "-note", "her age", "-yes"); err != nil ||
+		!strings.HasPrefix(out, "Done: Ann Bonny’s chat is muted") {
+		t.Fatalf("mute: %v\n%s", err, out)
+	}
+	if out, _, err := f.admin(t, "", "reports"); err != nil || out != "No report is open.\n" {
+		t.Fatalf("after the mute: %v %q", err, out)
+	}
+	if out, _, err := f.admin(t, "", "report", id); err != nil || !strings.Contains(out, "closed ") || !strings.Contains(out, "mute-chat") {
+		t.Fatalf("the report after the mute: %v\n%s", err, out)
+	}
+	// The report rested the human's chat, the game's doing; the rest is
+	// the command's.
+	acts, err := f.st.Actions(ctx, nil, 10)
+	if err != nil || len(acts) != 3 || acts[2].Action != store.ActionRest {
+		t.Fatalf("the record: %+v %v", acts, err)
+	}
+	for _, a := range acts[:2] {
+		if a.Source != store.SourceCommand {
+			t.Errorf("recorded as %s: %+v", a.Source, a)
+		}
+	}
+	for _, c := range [][]string{{"report"}, {"report", "nine"}, {"act", id}, {"act"}, {"act", "nine", "warn"}, {"reports", "all"}} {
+		if _, _, err := f.admin(t, "", c...); !errors.Is(err, errUsage) {
+			t.Errorf("%v: %v", c, err)
+		}
+	}
+}
+
+// TestAdminChat: chat's switches, chat off only told without -yes; the
+// countries as keel takes them, "" clearing them.
+func TestAdminChat(t *testing.T) {
+	f := newAdminFixture(t)
+	ctx := context.Background()
+	if out, _, err := f.admin(t, "", "settings"); err != nil || !strings.HasSuffix(out, "\nchat on; shipmates' messages on; chat off in no country\n") {
+		t.Fatalf("settings: %v %q", err, out)
+	}
+	if out, _, err := f.admin(t, "", "chat", "off"); err != nil || !strings.Contains(out, "Would set: chat off for everyone") ||
+		!strings.Contains(out, "Nothing is done yet") || !f.switches.Chat() {
+		t.Fatalf("chat off, checked: %v\n%s", err, out)
+	}
+	if out, _, err := f.admin(t, "", "chat", "off", "-yes"); err != nil || !strings.Contains(out, "chat off; shipmates' messages on") || f.switches.Chat() {
+		t.Fatalf("chat off: %v\n%s", err, out)
+	}
+	if out, _, err := f.admin(t, "", "chat", "on"); err != nil || !f.switches.Chat() || !strings.Contains(out, "Done: chat on for everyone") {
+		t.Fatalf("chat on: %v\n%s", err, out)
+	}
+	if out, _, err := f.admin(t, "", "shipmates", "off"); err != nil || f.switches.ShipmateMessages() || !strings.Contains(out, "shipmates' messages off") {
+		t.Fatalf("shipmates off: %v\n%s", err, out)
+	}
+	if out, _, err := f.admin(t, "", "countries", "br, AU"); err != nil || !strings.Contains(out, "chat off in AU, BR") || !f.switches.ChatOffIn("BR") {
+		t.Fatalf("countries: %v\n%s", err, out)
+	}
+	if _, errs, err := f.admin(t, "", "countries", "BRA"); !errors.Is(err, errAdmin) || !strings.Contains(errs, "two letters each") || !f.switches.ChatOffIn("AU") {
+		t.Fatalf("a country of three letters: %v %s", err, errs)
+	}
+	if out, _, err := f.admin(t, "", "-json", "settings"); err != nil || !strings.Contains(out, `"chatCountries": [`) || !strings.Contains(out, `"shipmateMessages": false`) {
+		t.Fatalf("settings as JSON: %v\n%s", err, out)
+	}
+	if out, _, err := f.admin(t, "", "countries", ""); err != nil || !strings.Contains(out, "chat off in no country") || f.switches.ChatOffIn("AU") {
+		t.Fatalf("countries cleared: %v\n%s", err, out)
+	}
+	on, ship, countries, err := f.st.ChatSettings(ctx)
+	if err != nil || !on || ship || len(countries) != 0 {
+		t.Fatalf("the database: %v %v %v %v", on, ship, countries, err)
+	}
+	for _, c := range [][]string{{"chat"}, {"chat", "maybe"}, {"shipmates", "on", "now"}, {"countries"}, {"countries", "BR", "AU"}} {
+		if _, _, err := f.admin(t, "", c...); !errors.Is(err, errUsage) {
+			t.Errorf("%v: %v", c, err)
+		}
+	}
+	acts, err := f.st.Actions(ctx, nil, 10)
+	if err != nil || len(acts) != 5 {
+		t.Fatalf("the record: %+v %v", acts, err)
 	}
 }
