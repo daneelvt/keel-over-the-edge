@@ -463,7 +463,11 @@ func (s *Service) Do(ctx context.Context, a Act) (Done, error) {
 		act.MuteUntil = now.Add(time.Duration(a.Days) * 24 * time.Hour)
 		act.Tell = &store.Statement{Action: MuteChat, Rule: rule, Seen: a.Note, Until: act.MuteUntil}
 		act.Detail = strings.TrimSpace(fmt.Sprintf("%d days. %s", a.Days, a.Reason))
-		words = fmt.Sprintf("%s’s chat is muted for %d days, and they are told why; every report open on them closes.", whoName, a.Days)
+		days := fmt.Sprintf("%d days", a.Days)
+		if a.Days == 1 {
+			days = "a day"
+		}
+		words = fmt.Sprintf("%s’s chat is muted for %s, and they are told why; every report open on them closes.", whoName, days)
 		after = func() error {
 			if hub := s.cfg.Hub(); hub != nil {
 				hub.Update(bus.Account(who), func(sp *aboard.Speaker) { sp.MutedUntil, sp.Rested = act.MuteUntil, false })
