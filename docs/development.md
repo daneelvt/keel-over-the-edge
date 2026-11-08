@@ -5616,6 +5616,64 @@ sails 40 players in groups of five: each group's first makes a link, the
 others knock with it and are let aboard, and the skipper hands the controls
 round and takes them back, reporting the knocks, arrivals and hand-overs.
 
+### Chat aboard, on the page
+
+**The strip** (`client/src/ui/chat.tsx`, loaded with sailing together's
+parts, outside the first download) stands under the case with the other
+parts of sailing together, while anyone else is aboard the boat sailed or
+aboard, and for an owner watching their own machine sailor aboard a boat
+with company, who reads and has no field. Folded it is one row the keys'
+height, the newest line; open, the last lines, a note of what came of the
+player's last act, and the field (200 characters, one line) with Send.
+Open, it fits itself above whatever stands below it (the helm, the
+autopilot's head, the plate at the foot, the watch's bar) and above the
+keyboard, which it reads from `visualViewport`; held sideways its fold key
+stands at the field's end. It is never over the case; open, it may stand
+over the boat, which the player chose. Above the controls, where it was
+first meant to go, there is no room upright on a small phone: the
+autopilot's head fills the space between the hull and the helm.
+
+**The lines** (`ChatLog`, `client/src/ui/chatlog.ts`) are kept in the
+page's memory, the newest 50, and forgotten when the boat in view changes;
+nothing of chat goes in the browser's storage. An own line shows at once,
+waiting, and is matched to its echo by the `Say`'s id: said (or refused for
+a listed word, which looks the same to its sender), or refused, taken back
+with why in plain words and its text put back in the field; with no echo in
+10 s it is lost. A mute or a block hides the person's lines at once, by
+name, before the server's `Tied` confirms it; `Person.muted` and `blocked`
+keep it as the server has it. `ChatState` says chat is resting (the
+owner's switch), off (the player's own: a key turns it on, the age
+question first if unanswered, and for a player of 13 to 17 the card,
+`client/src/account/chatcard.tsx`), resting for the player, or that the
+Rules of the sea come before a first line (the card from sailing together,
+the line held until accepted). Every word is in `client/src/ui/chatwords.ts`.
+
+**Mute, block and report**: a long press on another's line (a right-click,
+or the menu key, on a computer) opens a sheet; each row of who is aboard
+has the keys too, and says "muted" or "blocked". Block asks once; the
+report's form offers the reasons, a child at risk first, and a note for the
+owner alone; `Reported` answers "Thanks: the owner will look". The account
+page has the switch "Chat with other players" and the list of mutes and
+blocks (`client/src/account/chataccount.tsx`). A statement of reasons from
+the owner, unread, waits under the case as the player comes to sea
+(`client/src/ui/statements.tsx`), with its one answer.
+
+**The pages**: the Rules of the sea (`rules.html`) carry chat's rules,
+staying safe (`safety.html`) muting, blocking and reporting, and
+`privacy.html` what chat keeps and for how long. The notice page,
+`report.html`, also at `/report` (`internal/api/client.go`), is for anyone,
+signed in or not: its form posts to `/api/notice`. The owner's contact
+address is a marked placeholder on the safety and privacy pages.
+
+`?sandbox&test` and `keel.deckScene(name)` show each part: `chat` (folded),
+`chat-open`, `chat-crew`, `chat-keyboard` (the keyboard over the foot of the
+screen), `chat-refused`, `chat-word`, `chat-list`, `chat-sheet`,
+`chat-block`, `chat-report`, `chat-teen`, `chat-rules`, `chat-resting`,
+`chat-off`, `chat-own-off`, `chat-owner` and `chat-statement`.
+`e2e/layout.spec.ts` holds them on every screen, and `e2e/aboard.spec.ts`
+says lines between two browsers: one received, a link refused, a word seen
+as said by its sender alone, and a mute.
+
 ## The local cluster
 
 `go run ./tools/dev` is where almost all work happens. Beside it, the game
