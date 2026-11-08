@@ -179,23 +179,35 @@ test('a pod rides one boat’s bow, at that bow on every page', { tag: '@world' 
     });
     await a.waitForTimeout(12_000);
     const boat = await a.evaluate(() => globalThis.keel.net().boat);
-    const before = new Set(
-      (await a.evaluate(() => globalThis.keel.life().records)).map((r) => r.id),
-    );
-    const raised = await a.request.post(
-      `${internal}/debug/life?kind=${rider}&at=boat&boat=${boat}&ahead=30`,
-    );
-    expect(raised.status(), await raised.text()).toBe(200);
-    await a.waitForFunction(
-      (before) =>
-        globalThis.keel.life().records.some((r) => !before.includes(r.id) && r.with === 1),
-      [...before],
-      { timeout: 30_000 },
-    );
-    const pod = (await a.evaluate(() => globalThis.keel.life().records)).find(
-      (r) => !before.has(r.id) && r.with === 1,
-    ) as LifeSeen;
-    expect(pod.kind).toBe(rider);
+    // Raised just ahead of her: it takes her once her course has held for
+    // the binding's while; until then it passes, and another is raised.
+    let pod: LifeSeen | undefined;
+    for (let n = 0; n < 4 && pod?.with !== 1; n++) {
+      const before = new Set(
+        (await a.evaluate(() => globalThis.keel.life().records)).map((r) => r.id),
+      );
+      const raised = await a.request.post(
+        `${internal}/debug/life?kind=${rider}&at=boat&boat=${boat}&ahead=30`,
+      );
+      expect(raised.status(), await raised.text()).toBe(200);
+      await a.waitForFunction(
+        ([before, rider]) =>
+          globalThis.keel.life().records.some((r) => !before.includes(r.id) && r.kind === rider),
+        [[...before], rider] as const,
+        { timeout: 30_000 },
+      );
+      pod = (await a.evaluate(() => globalThis.keel.life().records)).find(
+        (r) => !before.has(r.id) && r.kind === rider,
+      );
+      if (pod?.with !== 1) {
+        await a.waitForTimeout(5_000);
+      }
+    }
+    if (pod === undefined) {
+      throw new Error('no pod raised');
+    }
+    const way = await a.evaluate(() => globalThis.keel.boat().out.speedOverGround);
+    expect(pod.with, `the pod rides her bow (she sails at ${way.toFixed(2)} m/s)`).toBe(1);
     // The watcher has it with the boat it watches, Bob with a boat he sees.
     const cp = await record(c, pod.id);
     expect(cp.with).toBe(1);
