@@ -270,7 +270,7 @@ func TestSettingsChat(t *testing.T) {
 	sw := r.o.cfg.Switches
 
 	code, a, _ := settingsCall(t, r, SettingsRequest{Chat: yes(false), Check: true})
-	if code != 200 || a.Settings.Chat || a.Words != "Would set: chat off for everyone. It stops 0 working links at once." {
+	if code != 200 || a.Settings.Chat || a.Words != "Would set: chat off for everyone." {
 		t.Fatalf("chat off checked: %d %+v", code, a)
 	}
 	if len(f.writes) != 0 || told != 0 || !sw.Chat() {
