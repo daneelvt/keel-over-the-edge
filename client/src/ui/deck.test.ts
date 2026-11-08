@@ -340,7 +340,11 @@ describe('the skipper’s link', () => {
       return a;
     });
     expect(await s.asks()).toEqual(['rules']);
-    expect(await s.status()).toEqual({ live: true, expires: Date.parse('2026-11-09T12:00:00Z') });
+    expect(await s.status()).toEqual({
+      live: true,
+      closed: false,
+      expires: Date.parse('2026-11-09T12:00:00Z'),
+    });
     expect(await s.make()).toEqual({
       link: { url: 'https://play.example/sail/abc', expires: Date.parse('2026-11-09T12:00:00Z') },
     });

@@ -47,6 +47,9 @@ type Sailing interface {
 // and name.
 type Deck interface {
 	LinkCan(skipper, viewer store.AccountID) (can string, kind uint16, boat string)
+	// Closed says whether the skipper's boat in the water is closed to
+	// knocks for its voyage.
+	Closed(skipper store.AccountID) bool
 	// MachineCan says whether owner's machine sailor may be sent aboard a
 	// machine sailor skipper's boat now: "ok", "away", "aboard",
 	// "not-at-sea", "full", "closed" or "own".
@@ -365,6 +368,8 @@ func (a *api) endLink(w http.ResponseWriter, r *http.Request) {
 type linkStatus struct {
 	Live    bool   `json:"live"`
 	Expires string `json:"expires,omitempty"`
+	// Closed: the boat is closed to knocks for its voyage.
+	Closed bool `json:"closed,omitempty"`
 }
 
 // linkEnd is when a link stops working under the lifetime in force.
@@ -393,11 +398,12 @@ func (a *api) liveLink(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	life := a.cfg.Switches.Lifetime()
+	closed := a.cfg.Deck != nil && a.cfg.Deck.Closed(skipper)
 	if !ok || !a.cfg.Switches.Links() || !aboard.Live(made, expires, false, life, time.Now()) {
-		writeJSON(w, http.StatusOK, linkStatus{})
+		writeJSON(w, http.StatusOK, linkStatus{Closed: closed})
 		return
 	}
-	writeJSON(w, http.StatusOK, linkStatus{Live: true, Expires: linkEnd(made, expires, life).UTC().Format(time.RFC3339)})
+	writeJSON(w, http.StatusOK, linkStatus{Live: true, Expires: linkEnd(made, expires, life).UTC().Format(time.RFC3339), Closed: closed})
 }
 
 // linkPage is GET /api/sail/{token}'s answer: whose boat, how they look,

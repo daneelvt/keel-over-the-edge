@@ -44,7 +44,10 @@ export interface SailLink {
 }
 
 /** GET /api/sail/link: whether a link is out, and when it ends; null if unread. */
-export type LinkStatus = { live: true; expires: number } | { live: false };
+export type LinkStatus = ({ live: true; expires: number } | { live: false }) & {
+  /** The boat is closed to knocks for its voyage, as the server keeps it. */
+  closed?: boolean;
+};
 
 /** A new link, or why none was made: the server's reason. */
 export type Made = { link: SailLink } | { error: string };
@@ -91,11 +94,12 @@ export function linkServer(
         if (res.status !== 200) {
           return null;
         }
-        const b = (await res.json()) as { live?: unknown; expires?: unknown };
+        const b = (await res.json()) as { live?: unknown; expires?: unknown; closed?: unknown };
         const expires = msOf(b.expires);
+        const closed = b.closed === true;
         return b.live === true && Number.isFinite(expires)
-          ? { live: true, expires }
-          : { live: false };
+          ? { live: true, expires, closed }
+          : { live: false, closed };
       } catch {
         return null;
       }
@@ -246,6 +250,10 @@ export function SailWithMe({
     void from.status().then((status) => {
       if (!live) {
         return;
+      }
+      if (status !== null && deck !== null && status.closed !== undefined) {
+        // The server keeps the switch for the voyage: a reload shows it.
+        deck.closed.value = status.closed;
       }
       const s = shownLink(status, keptLink(who, store), Date.now());
       if (s.forget) {

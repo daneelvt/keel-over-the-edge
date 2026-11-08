@@ -878,6 +878,26 @@ func (c *conn) ashoreCommand(who uint32) {
 	}
 }
 
+// Closed reports whether the skipper's boat in the water is closed to
+// knocks for its voyage, as the skipper last switched it.
+func (e *Edge) Closed(skipper store.AccountID) bool {
+	f := e.cfg.Bus.Frames.Acquire()
+	s := findBoat(f, bus.Account(skipper))
+	var boat uint64
+	if s >= 0 {
+		boat = f.Boat[s]
+	}
+	f.Release()
+	if s < 0 {
+		return false
+	}
+	d := &e.decks
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	k := d.by[boat]
+	return k != nil && k.closed
+}
+
 // LinkCan says whether viewer may knock on skipper's boat now, as the
 // game connection would answer a knock: "ok", or "not-at-sea", "full" or
 // "closed" ("closed" too for a block, never saying so), and the boat's
