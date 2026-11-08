@@ -59,9 +59,17 @@ const adminUsage = `usage: keel admin [-addr host:port] [-json] <command> [argum
   lifetime DURATION [-yes]
                        how long an AI app's approval lasts: 90d, 12h, 30m
   actions [ID]         the record of the owner's actions
+  settings             links to come aboard: how long a link lasts, and
+                       whether links and boarding are on for everyone
+  links on|off [-yes]  every skipper's links work, or none does: off ends
+                       every live link for good
+  boarding on|off      anyone may come aboard a boat, or nobody
+  linklife DURATION [-yes]
+                       how long a new link lasts, from 5m to 7d: 24h, 2d;
+                       a shorter one stops older links at once
 
-Without -yes, stop, revoke, delete and lifetime say what they would do,
-and do nothing.
+Without -yes, stop, revoke, delete, lifetime, links off and linklife say
+what they would do, and do nothing.
 
   -addr  keel's internal listener (default KEEL_INTERNAL_ADDR, or
          127.0.0.1:9090)
@@ -343,6 +351,38 @@ func adminWith(ctx context.Context, args []string, getenv func(string) string, s
 			}
 			fmt.Fprintf(stdout, "A lifetime of %s ends %d live grants at once.\nNothing is done yet: run it again with -yes.\n", d, out.Ends)
 		})
+	case "settings":
+		raw, err := c.do(ctx, http.MethodGet, "/owner/api/settings.json", nil, stderr)
+		if err != nil {
+			return err
+		}
+		var out owner.SettingsJSON
+		return c.show(raw, &out, func() { writeSettings(stdout, out) })
+	case "links", "boarding":
+		if len(pos) != 1 || (pos[0] != "on" && pos[0] != "off") {
+			fmt.Fprintf(stderr, "keel admin %s: on|off\n", verb)
+			return errUsage
+		}
+		on := pos[0] == "on"
+		req := owner.SettingsRequest{Check: verb == "links" && !on && !*yes}
+		if verb == "links" {
+			req.Links = &on
+		} else {
+			req.Boarding = &on
+		}
+		return c.settings(ctx, req, stderr)
+	case "linklife":
+		if len(pos) != 1 {
+			fmt.Fprintln(stderr, "keel admin linklife: DURATION, as 24h, 2d or 30m")
+			return errUsage
+		}
+		d, err := parseLifetime(pos[0])
+		if err != nil {
+			fmt.Fprintln(stderr, "keel admin linklife:", err)
+			return errUsage
+		}
+		secs := int64(d / time.Second)
+		return c.settings(ctx, owner.SettingsRequest{LinkLifetime: &secs, Check: !*yes}, stderr)
 	case "actions":
 		path := "/owner/api/actions.json"
 		if len(pos) > 0 {
@@ -367,6 +407,30 @@ func adminWith(ctx context.Context, args []string, getenv func(string) string, s
 	}
 	fmt.Fprintf(stderr, "keel admin: unknown command %q\n\n%s", verb, adminUsage)
 	return errUsage
+}
+
+// settings changes the switches for sailing together, or with a check
+// says what it would do.
+func (c *adminClient) settings(ctx context.Context, req owner.SettingsRequest, stderr io.Writer) error {
+	raw, err := c.do(ctx, http.MethodPost, "/owner/api/settings", req, stderr)
+	if err != nil {
+		return err
+	}
+	var out owner.SettingsAnswer
+	return c.show(raw, &out, func() {
+		fmt.Fprintln(c.stdout, out.Words)
+		if req.Check {
+			fmt.Fprintln(c.stdout, "Nothing is done yet: run it again with -yes.")
+			return
+		}
+		writeSettings(c.stdout, out.Settings)
+	})
+}
+
+// writeSettings writes the switches for sailing together as text.
+func writeSettings(w io.Writer, s owner.SettingsJSON) {
+	fmt.Fprintf(w, "a link lasts %s; links %s; boarding %s\n", time.Duration(s.LinkLifetime)*time.Second,
+		map[bool]string{true: "on", false: "off"}[s.Links], map[bool]string{true: "on", false: "off"}[s.Boarding])
 }
 
 func (c *adminClient) search(ctx context.Context, req owner.SearchRequest, stderr io.Writer) error {

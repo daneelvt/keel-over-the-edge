@@ -28,10 +28,10 @@ SELECT count(*) FROM passkey WHERE account_id = @account_id;
 DELETE FROM passkey WHERE id = @id AND account_id = @account_id;
 
 -- name: InsertCeremony :exec
-INSERT INTO webauthn_ceremony (handle_hash, kind, account_id, name, name_key, look, version, skin, hair, colour, user_handle, session, build, expires_at)
-VALUES (@handle_hash, @kind, @account_id, @name, @name_key, @look, @version, @skin, @hair, @colour, @user_handle, @session, @build, @expires_at);
+INSERT INTO webauthn_ceremony (handle_hash, kind, account_id, name, name_key, look, version, skin, hair, colour, user_handle, session, build, expires_at, born)
+VALUES (@handle_hash, @kind, @account_id, @name, @name_key, @look, @version, @skin, @hair, @colour, @user_handle, @session, @build, @expires_at, @born);
 
 -- name: TakeCeremony :one
 -- A ceremony finished: taken and gone, so it is used once.
 DELETE FROM webauthn_ceremony WHERE handle_hash = @handle_hash AND kind = @kind
-RETURNING account_id, name, name_key, look, version, skin, hair, colour, user_handle, session, build, expires_at;
+RETURNING account_id, name, name_key, look, version, skin, hair, colour, user_handle, session, build, expires_at, born;

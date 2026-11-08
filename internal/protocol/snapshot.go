@@ -128,7 +128,7 @@ type Snapshot struct {
 	// Elsewhere: the connection does not hold the boat's controls (flag
 	// Elsewhere).
 	Elsewhere bool
-	State   physics.State
+	State     physics.State
 	// Entries is how many entries follow the header, and Header the
 	// header's length, where they begin.
 	Entries int

@@ -127,7 +127,12 @@ func (p *Page) Size() int {
 var servedElsewhere = map[string]bool{"approve.html": true}
 
 // pageRoutes are the page's routes: GET, and so HEAD. They need no session.
-var pageRoutes = map[string]bool{"GET /{$}": true, "GET /{file}": true, "GET /assets/{file}": true}
+var pageRoutes = map[string]bool{"GET /{$}": true, "GET /{file}": true, "GET /assets/{file}": true, sailPageRoute: true}
+
+// sailPageRoute is a skipper's link: the game's own page, whatever the
+// token, which reads the link itself once its player is signed in. Its
+// address is told to no other site, and no search engine keeps it.
+const sailPageRoute = "GET /sail/{token}"
 
 func (p *Page) register(mux *http.ServeMux) {
 	mux.HandleFunc("GET /{$}", func(w http.ResponseWriter, r *http.Request) {
@@ -143,6 +148,12 @@ func (p *Page) register(mux *http.ServeMux) {
 	})
 	mux.HandleFunc("GET /assets/{file}", func(w http.ResponseWriter, r *http.Request) {
 		p.serve(w, r, "assets/"+r.PathValue("file"), assetCache)
+	})
+	mux.HandleFunc(sailPageRoute, func(w http.ResponseWriter, r *http.Request) {
+		h := w.Header()
+		h.Set("Referrer-Policy", "no-referrer")
+		h.Set("X-Robots-Tag", "noindex")
+		p.serve(w, r, "index.html", pageCache)
 	})
 }
 

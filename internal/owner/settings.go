@@ -1,0 +1,179 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+
+package owner
+
+import (
+	"context"
+	"fmt"
+	"net/http"
+	"strings"
+	"time"
+
+	"github.com/daneelvt/keel-over-the-edge/internal/aboard"
+	"github.com/daneelvt/keel-over-the-edge/internal/store"
+)
+
+// SailSettings are the owner's switches for sailing together as the
+// database keeps them, each written with its entry in the record: the
+// store.
+type SailSettings interface {
+	SetLinkLifetime(ctx context.Context, d time.Duration, a store.Action) error
+	SetLinks(ctx context.Context, on bool, a store.Action) (int64, error)
+	SetBoarding(ctx context.Context, on bool, a store.Action) error
+	CountLiveSailLinks(ctx context.Context, lifetime time.Duration) (int64, error)
+	SailLinksEndedBy(ctx context.Context, now, d time.Duration) (int64, error)
+}
+
+// SettingsJSON is settings.json: how long a link lasts, s, and whether
+// links and boarding are on for everyone.
+type SettingsJSON struct {
+	LinkLifetime int64 `json:"linkLifetime"`
+	Links        bool  `json:"links"`
+	Boarding     bool  `json:"boarding"`
+}
+
+// SettingsRequest changes any of the switches; with Check, it only says
+// what it would do.
+type SettingsRequest struct {
+	LinkLifetime *int64 `json:"linkLifetime,omitempty"`
+	Links        *bool  `json:"links,omitempty"`
+	Boarding     *bool  `json:"boarding,omitempty"`
+	Check        bool   `json:"check,omitempty"`
+}
+
+// SettingsAnswer is what a change did, or checked would do: the switches
+// after it, its words, and how many working links it ends.
+type SettingsAnswer struct {
+	Settings SettingsJSON `json:"settings"`
+	Words    string       `json:"words"`
+	Ended    int64        `json:"ended"`
+}
+
+func settingsOf(s *aboard.Switches) SettingsJSON {
+	return SettingsJSON{LinkLifetime: int64(s.Lifetime() / time.Second), Links: s.Links(), Boarding: s.Boarding()}
+}
+
+// settings serves settings.json, the switches in force.
+func (o *Owner) settings(w http.ResponseWriter, _ *http.Request) {
+	if o.cfg.Switches == nil {
+		http.Error(w, "sailing together is not running", http.StatusServiceUnavailable)
+		return
+	}
+	writeJSON(w, settingsOf(o.cfg.Switches))
+}
+
+func onOff(on bool) string {
+	if on {
+		return "on"
+	}
+	return "off"
+}
+
+// workingLinks is "1 working link", "2 working links".
+func workingLinks(n int64) string {
+	if n == 1 {
+		return "1 working link"
+	}
+	return fmt.Sprintf("%d working links", n)
+}
+
+// setSettings changes the owner's switches for sailing together: the
+// database first, each with its entry in the record, then the switches in
+// memory every knock and link reads, so a change works at once. Links off
+// ends every live link for good; a shorter lifetime stops the links older
+// than it at once, and ends nothing in the database, so a longer one
+// again never lengthens a link beyond its own expiry. The answer counts
+// the working links it stops.
+//
+//	POST /owner/api/settings {"linkLifetime": 3600, "links": false, "boarding": false, "check": true}
+func (o *Owner) setSettings(w http.ResponseWriter, r *http.Request) {
+	var req SettingsRequest
+	if !readBody(w, r, &req) {
+		return
+	}
+	if o.cfg.Switches == nil || o.cfg.Sail == nil {
+		o.refuse(w, "settings", http.StatusServiceUnavailable, "sailing together is not running")
+		return
+	}
+	if req.LinkLifetime == nil && req.Links == nil && req.Boarding == nil {
+		o.refuse(w, "settings", http.StatusBadRequest, "nothing to change: give linkLifetime, links or boarding")
+		return
+	}
+	sw := o.cfg.Switches
+	was, life := sw.Lifetime(), sw.Lifetime()
+	if req.LinkLifetime != nil {
+		life = time.Duration(*req.LinkLifetime) * time.Second
+		if life < aboard.MinLifetime || life > aboard.MaxLifetime {
+			o.refuse(w, "settings", http.StatusBadRequest, "lifetime: a link lasts from 5 minutes to 7 days (300 to 604800 s)")
+			return
+		}
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), dbTimeout)
+	defer cancel()
+	var ended int64
+	var err error
+	switch {
+	case req.Links != nil && !*req.Links && sw.Links():
+		ended, err = o.cfg.Sail.CountLiveSailLinks(ctx, min(was, life))
+	case life < was && sw.Links():
+		ended, err = o.cfg.Sail.SailLinksEndedBy(ctx, was, life)
+	}
+	if err != nil {
+		http.Error(w, "the database: "+err.Error(), http.StatusServiceUnavailable)
+		return
+	}
+	after := settingsOf(sw)
+	var words []string
+	if req.LinkLifetime != nil {
+		after.LinkLifetime = *req.LinkLifetime
+		words = append(words, fmt.Sprintf("a link lasts %s", life))
+	}
+	if req.Links != nil {
+		after.Links = *req.Links
+		words = append(words, "links "+onOff(*req.Links)+" for everyone")
+	}
+	if req.Boarding != nil {
+		after.Boarding = *req.Boarding
+		words = append(words, "boarding "+onOff(*req.Boarding)+" for everyone")
+	}
+	said := strings.Join(words, "; ")
+	if req.Check {
+		writeJSON(w, SettingsAnswer{Settings: after, Ended: ended,
+			Words: fmt.Sprintf("Would set: %s. It stops %s at once.", said, workingLinks(ended))})
+		return
+	}
+	a := store.Action{Source: sourceOf(r), From: r.RemoteAddr}
+	if req.LinkLifetime != nil {
+		a.Detail = life.String()
+		if err := o.cfg.Sail.SetLinkLifetime(ctx, life, a); err != nil {
+			http.Error(w, "the database: "+err.Error(), http.StatusServiceUnavailable)
+			return
+		}
+		sw.SetLifetime(life)
+		o.count(store.ActionLinkLifetime)
+		o.cfg.Log.Info("owner: the link lifetime set", "action", store.ActionLinkLifetime, "was", was.String(), "now", life.String(), "from", r.RemoteAddr)
+	}
+	if req.Links != nil {
+		a.Detail = onOff(*req.Links)
+		n, err := o.cfg.Sail.SetLinks(ctx, *req.Links, a)
+		if err != nil {
+			http.Error(w, "the database: "+err.Error(), http.StatusServiceUnavailable)
+			return
+		}
+		sw.SetLinks(*req.Links)
+		o.count(store.ActionLinks)
+		o.cfg.Log.Info("owner: links switched", "action", store.ActionLinks, "on", *req.Links, "ended", n, "from", r.RemoteAddr)
+	}
+	if req.Boarding != nil {
+		a.Detail = onOff(*req.Boarding)
+		if err := o.cfg.Sail.SetBoarding(ctx, *req.Boarding, a); err != nil {
+			http.Error(w, "the database: "+err.Error(), http.StatusServiceUnavailable)
+			return
+		}
+		sw.SetBoarding(*req.Boarding)
+		o.count(store.ActionBoarding)
+		o.cfg.Log.Info("owner: boarding switched", "action", store.ActionBoarding, "on", *req.Boarding, "from", r.RemoteAddr)
+	}
+	writeJSON(w, SettingsAnswer{Settings: settingsOf(sw), Ended: ended,
+		Words: fmt.Sprintf("Done: %s. It stopped %s at once.", said, workingLinks(ended))})
+}

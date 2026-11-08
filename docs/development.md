@@ -3582,8 +3582,10 @@ sees the reason's words, not the owner's reason, which may name a report or
 another player.
 
 **The record** (`account_action`): every stop, start, revoke and delete,
-and every flag, priority, cap and lifetime set, with the sailor's name as
-it was, the reason or value, `page` or `command`, and the address. It has
+and every flag, priority, cap and lifetime set, and every switch for
+sailing together, with the sailor's name as it was, the reason or value,
+`page` or `command` (or `game`, for an account the game stopped because
+its player said they are under 13: `young`), and the address. It has
 no foreign key, so it outlives a deletion; the `sessions` job deletes
 entries older than two years. The logs keep 14 days: a stop's reason must
 outlive them. `GET /owner/api/actions.json[?account=…]` lists the latest
@@ -3603,10 +3605,27 @@ go run ./cmd/keel admin -addr 127.0.0.1:9090 show 0199…
 `search [TEXT]` (`-` reads it from the standard input, so a token stays out
 of the shell's history), `show ID`, `stop ID -reason …`, `start ID`,
 `revoke ID -reason …`, `delete ID -name … -reason …`, `flag ID on|off`,
-`priority ID on|off`, `cap ID N`, `lifetime 90d`, `actions [ID]`; text, or
-`-json` as keel answers. Without `-yes`, `stop`, `revoke`, `delete` and
-`lifetime` only say what they would do. The command's actions are recorded
+`priority ID on|off`, `cap ID N`, `lifetime 90d`, `actions [ID]`,
+`settings`, `links on|off`, `boarding on|off`, `linklife 24h`; text, or
+`-json` as keel answers. Without `-yes`, `stop`, `revoke`, `delete`,
+`lifetime`, `links off` and `linklife` only say what they would do. The command's actions are recorded
 as `command` (the `Keel-Source` header).
+
+### Links to come aboard
+
+The owner's switches for everyone, on the Accounts tab and in `keel
+admin`: how long a skipper's link lasts from when it is made (24 hours to
+start, 5 minutes to 7 days), whether links work, and whether anyone may
+come aboard. They live in the `setting` row and, loaded as keel starts, in
+one set in memory (`aboard.Switches`) that the play routes, the owner's
+page and the game connection read. `GET /owner/api/settings.json`; `POST
+/owner/api/settings {"linkLifetime"?, "links"?, "boarding"?, "check"?}`
+answers `{"settings", "words", "ended"}`, the working links it stops. Each
+change is written with its record in one transaction, then to memory.
+Links off ends every live link for good; a shorter lifetime stops older
+links at once and ends nothing, but a longer one never lengthens a link
+past the expiry it was made with. The `sessions` job deletes links a day
+after they stop working; a deleted skipper's go with the account.
 
 ### The free camera
 
@@ -4642,12 +4661,18 @@ go test -run '^$' -bench 'Tick|Workers' ./internal/sim
 | Route | What |
 |-------|------|
 | `GET /api/version` | The build and the catalog's version |
-| `POST /account/begin` | `{"name", "look"}` begins making a sailor: 200 with the creation options (`{"publicKey": …}`) and the ceremony's cookie; 422 `{"error": reason}` for a refused name, before any passkey; 409 when the request already has a session; 400 for a malformed body, an unknown member or a look not in the catalog; 415 for anything but JSON; 413 past 16 KB |
+| `POST /account/begin` | `{"name", "look", "born": {"year", "month"}}` begins making a sailor: 200 with the creation options (`{"publicKey": …}`) and the ceremony's cookie, which keeps the month of birth until finish writes it on the account; 400 `born` for no month of birth or not one; 403 `young` under 13, with nothing made or kept (not even in the log) and the cookie `keel-young` (30 days, readable by the page), which answers 403 `young` before anything else, here and at finish; 422 `{"error": reason}` for a refused name, before any passkey; 409 when the request already has a session; 400 for a malformed body, an unknown member or a look not in the catalog; 415 for anything but JSON; 413 past 16 KB |
 | `POST /account/finish` | The browser's answer (`PublicKeyCredential.toJSON()`): 201 `{"name", "look", "recoveryCode"}` and the session cookie, the account made with its passkey; 400 `refused`; 409 `again`; 422 `taken` with `unknown`, the passkey for the browser to forget, when another sailor took the name meanwhile |
 | `POST /signin/begin`, `/signin/finish` | A sign-in with any of the game's passkeys the browser holds (`?mediation=conditional` on both for autofill): 200 `{"name", "look", "accepted", "recovered"?}` and a new session's cookie; 404 `unknown-passkey` with `unknown` for a passkey no account has |
 | `POST /recovery` | `{"code"}`: 200 `{"name", "look", "addPasskey": true}` and a session held to adding a passkey; 422 `code` |
 | `POST /logout` | This session ends: 204, the cookie cleared |
-| `GET /api/me` | The session's account, `{"name", "look", "kind", "noticesOff", "addPasskey"?, "machines"?}` (how many machine sailors it has), or 401; a session held to adding a passkey is answered too |
+| `GET /api/me` | The session's account, `{"name", "look", "kind", "noticesOff", "addPasskey"?, "machines"?, "born", "rules"}` (how many machine sailors it has; whether its player has given a month of birth and accepted the Rules of the sea), or 401; a session held to adding a passkey is answered too |
+| `POST /api/me/born` | `{"year", "month"}`, once, for an account made before the question: 204; 409 `answered`; 400 `born`; 403 `young` under 13: nothing of the answer kept, the cookie set, and the account stopped as the owner's Stop does (recorded `young`, by the `game`), for the owner to review; its player is told only "This sailor has been stopped." |
+| `POST /api/me/rules` | The Rules of the sea accepted: 204, again too |
+| `POST /api/sail/link` | A new "sail with me" link, the old one ended: 201 `{"url", "expires"}`, at the play origin, `/sail/` and 128 random bits in base64url; the database keeps the token's SHA-256 alone. 403 `born` (no month of birth, or not 13 or over) and `rules`; 409 `links-off`; 429 `often` past 10 an hour (in memory) |
+| `POST /api/sail/link/end`, `GET /api/sail/link` | The skipper's link ended (204); whether it works, `{"live", "expires"?}` |
+| `GET /api/sail/{token}` | What a link's page shows, with a session: `{"skipper", "look", "kind", "boat", "can"}` (`ok`, `not-at-sea`, `full`, `closed` or `own`, from the world sailed); 410 `ended` for an unknown, ended or expired link, one past the lifetime in force, or links off. A token not of the game's form never reaches the database. It changes nothing |
+| `GET /sail/{token}` | The game's page, `index.html`, whatever the token: no session read, no referrer sent on, no index kept (`robots.txt` disallows `/sail/`) |
 | `GET /api/account` | The account page: `{"name", "look", "created", "recoveryMade", "passkeys", "confirmedUntil"}`, each passkey `{"id", "madeOn", "created", "lastUsed", "synced"}` |
 | `POST /api/account/passkeys/begin`, `…/finish` | One more passkey; after the recovery code, the session let go and `recoveryCode` in the answer |
 | `POST /api/account/confirm/begin`, `…/finish` | One of the account's own passkeys, user verification required: 200 `{"confirmedUntil"}`, the session confirmed for 5 minutes |

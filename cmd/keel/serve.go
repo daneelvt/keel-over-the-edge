@@ -28,6 +28,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"golang.org/x/sync/errgroup"
 
+	"github.com/daneelvt/keel-over-the-edge/internal/aboard"
 	"github.com/daneelvt/keel-over-the-edge/internal/accounts"
 	"github.com/daneelvt/keel-over-the-edge/internal/api"
 	"github.com/daneelvt/keel-over-the-edge/internal/auth"
@@ -190,6 +191,14 @@ type database interface {
 	watch.Store
 	fleet.Store
 	WatchTarget(ctx context.Context, key string) (store.WatchTarget, error)
+	// Sailing together: a month of birth and the Rules of the sea,
+	// skippers' links, a knock's look at its knocker, and the owner's
+	// switches.
+	api.Sailing
+	owner.SailSettings
+	Knocker(ctx context.Context, id store.AccountID) (store.Knocker, error)
+	SailSettings(ctx context.Context) (lifetime time.Duration, links, boarding bool, err error)
+	DeleteSailLinks(ctx context.Context, before time.Time, lifetime time.Duration) (int64, error)
 	Stats() store.PoolStats
 	Close()
 }
@@ -445,6 +454,15 @@ func runServer(ctx context.Context, getenv func(string) string, stdout io.Writer
 		fail: make(chan error, 1), making: make(chan struct{}, 1),
 	}
 	p.fleet = fleet.New(fleet.Config{Store: db, Catalog: cat, World: p.worldBus, Log: log})
+	// The owner's switches for sailing together, as the database has
+	// them: one set in memory for the routes, the owner's page and the
+	// game connection.
+	if p.switches, err = loadSwitches(ctx, db); err != nil {
+		if ctx.Err() != nil {
+			return stopEarly(side, flight, nil)
+		}
+		return stopEarly(side, flight, fmt.Errorf("the settings for sailing together: %w", err))
+	}
 	p.registerWorldMetrics()
 	// The accounts stopped, before anyone is let in.
 	stopped, err := accounts.Load(ctx, db)
@@ -640,6 +658,9 @@ type ownerConfig struct {
 	from      *owner.Owner
 	// forecasts is the world's forecast issuer; nil for the next world.
 	forecasts *forecast.Issuer
+	// switches are the owner's for sailing together; nil for the next
+	// world.
+	switches *aboard.Switches
 	// agents is sign-in for AI apps, whose lifetime and caps the owner
 	// sets.
 	agents *agents
@@ -667,6 +688,7 @@ func ownerTools(c ownerConfig) *owner.Owner {
 		prepared = c.timeline.Prepared()
 	}
 	cfg := owner.Config{
+		Switches: c.switches, Sail: c.db,
 		Bundle: c.bundle, Weather: prepared, Timeline: c.timeline, SystemKinds: systemKindNames(c.cat), Waves: waves,
 		Kinds: kinds, Regimes: regimes, Sky: c.cat.PrepareSky(), BoatLooks: looks.NewBoats(c.cat), SeaLife: c.life,
 		World:    owner.World{Number: c.sailed.Number, ID: c.sailed.ID, Epoch: c.sailed.Epoch, Made: c.made},

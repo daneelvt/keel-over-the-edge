@@ -27,6 +27,8 @@ type Account struct {
 	Priority       bool
 	StoppedAt      pgtype.Timestamptz
 	StopReason     pgtype.Text
+	Born           pgtype.Int4
+	RulesAt        pgtype.Timestamptz
 }
 
 type AccountAction struct {
@@ -247,6 +249,15 @@ type Place struct {
 	Details []byte
 }
 
+type SailLink struct {
+	ID        pgtype.UUID
+	SkipperID pgtype.UUID
+	Hash      []byte
+	MadeAt    time.Time
+	ExpiresAt time.Time
+	EndedAt   pgtype.Timestamptz
+}
+
 type Sailor struct {
 	AccountID  pgtype.UUID
 	Name       string
@@ -274,6 +285,9 @@ type Session struct {
 type Setting struct {
 	One           bool
 	GrantLifetime pgtype.Interval
+	LinkLifetime  pgtype.Interval
+	Links         bool
+	Boarding      bool
 }
 
 type SimLease struct {
@@ -299,6 +313,7 @@ type WebauthnCeremony struct {
 	Skin       pgtype.Text
 	Hair       pgtype.Text
 	Colour     pgtype.Text
+	Born       pgtype.Int4
 }
 
 type World struct {

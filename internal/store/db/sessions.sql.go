@@ -121,7 +121,8 @@ func (q *Queries) ReleaseSession(ctx context.Context, arg ReleaseSessionParams) 
 const sessionAccount = `-- name: SessionAccount :one
 SELECT a.id, a.kind, a.tools, a.priority, a.notices_off, sl.name, sl.look, coalesce(sl.version, '')::text AS version, coalesce(sl.skin, '')::text AS skin,
   coalesce(sl.hair, '')::text AS hair, coalesce(sl.colour, '')::text AS colour, coalesce(sl.finish, '')::text AS finish, sl.look_chosen, s.last_seen_at,
-  s.held, coalesce(s.confirmed_until, 'epoch')::timestamptz AS confirmed_until
+  s.held, coalesce(s.confirmed_until, 'epoch')::timestamptz AS confirmed_until, coalesce(a.born, 0)::integer AS born,
+  (a.rules_at IS NOT NULL)::boolean AS rules
 FROM session s
 JOIN account a ON a.id = s.account_id
 JOIN sailor sl ON sl.account_id = a.id
@@ -145,6 +146,8 @@ type SessionAccountRow struct {
 	LastSeenAt     time.Time
 	Held           bool
 	ConfirmedUntil time.Time
+	Born           int32
+	Rules          bool
 }
 
 // The account a session names; none for a stopped account's.
@@ -168,6 +171,8 @@ func (q *Queries) SessionAccount(ctx context.Context, tokenHash []byte) (Session
 		&i.LastSeenAt,
 		&i.Held,
 		&i.ConfirmedUntil,
+		&i.Born,
+		&i.Rules,
 	)
 	return i, err
 }

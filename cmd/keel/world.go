@@ -12,6 +12,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/daneelvt/keel-over-the-edge/internal/aboard"
 	"github.com/daneelvt/keel-over-the-edge/internal/accounts"
 	"github.com/daneelvt/keel-over-the-edge/internal/agentapi"
 	"github.com/daneelvt/keel-over-the-edge/internal/api"
@@ -82,6 +83,11 @@ type process struct {
 	agents *agents
 	// hand is the owner's hand on accounts, and every deletion's.
 	hand *accounts.Accounts
+	// switches are the owner's for sailing together, loaded as keel
+	// starts: whether links work, whether anyone may come aboard, and how
+	// long a link lasts. The play routes, the owner's page and the game
+	// connection read this one set.
+	switches *aboard.Switches
 
 	// The routes the world half serves, set as each opens.
 	replayRoutes, devRoutes, ownerRoutes, playRoutes *lateHandler
@@ -372,6 +378,7 @@ func (p *process) openWorld(ctx context.Context, rw *readyWorld) (*worldHalf, er
 		db: p.db, sessions: p.sessions, game: h.game, charts: rw.charts, clock: h.loop, page: p.ownPage, log: p.log, metrics: p.metrics,
 		lifecycle: p, from: p.nextView.Load(), forecasts: h.forecasts, agents: p.agents, hand: p.hand,
 		aiCap: world.AICap(), aiReserve: world.AIReserve(), life: rw.life,
+		switches: p.switches,
 	})
 	playCfg := api.Config{
 		Version:   api.Version{Build: p.build, Catalog: catalog.Version},
@@ -395,6 +402,13 @@ func (p *process) openWorld(ctx context.Context, rw *readyWorld) (*worldHalf, er
 		NoticeKinds: noticeKinds(cat),
 		Status:      p.statusNow,
 		Website:     websiteOf(cfg.PlayOrigin),
+
+		// Sailing together: the links are made at the play origin; the
+		// Deck, the world sailed, tells a link's page of the boat.
+		Sailing:  p.db,
+		Young:    p.hand,
+		Switches: p.switches,
+		Origin:   cfg.PlayOrigin,
 	}
 	h.watch = watch.New(watch.Config{Store: p.db, Frames: b.Frames, Edge: h.game, Kinds: boatIDs(cat), Sea: h.sea, Agent: p.agentAttends})
 	playCfg.Watch = h.watch

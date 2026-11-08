@@ -184,7 +184,7 @@ func (w *countingWriter) Write(b []byte) (int, error) {
 
 // robots keeps search engines off the chunks' addresses: they are
 // capabilities, and no use to anyone not sailing.
-const robots = "User-agent: *\nDisallow: /w/\n"
+const robots = "User-agent: *\nDisallow: /w/\nDisallow: /sail/\n"
 
 func serveRobots(w http.ResponseWriter, _ *http.Request) {
 	h := w.Header()

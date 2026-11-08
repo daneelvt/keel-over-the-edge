@@ -36,7 +36,7 @@ func (s *Store) Session(ctx context.Context, hash [32]byte) (Session, error) {
 		return Session{}, err
 	}
 	return Session{
-		Account:  Account{ID: row.ID.Bytes, Kind: Kind(row.Kind), Name: row.Name, Look: Look{Look: row.Look, Version: row.Version, Skin: row.Skin, Hair: row.Hair, Colour: row.Colour, Finish: row.Finish, Chosen: row.LookChosen}, Tools: row.Tools, Priority: row.Priority, NoticesOff: row.NoticesOff},
+		Account:  Account{ID: row.ID.Bytes, Kind: Kind(row.Kind), Name: row.Name, Look: Look{Look: row.Look, Version: row.Version, Skin: row.Skin, Hair: row.Hair, Colour: row.Colour, Finish: row.Finish, Chosen: row.LookChosen}, Tools: row.Tools, Priority: row.Priority, NoticesOff: row.NoticesOff, Born: row.Born, Rules: row.Rules},
 		LastSeen: row.LastSeenAt, Held: row.Held, ConfirmedUntil: row.ConfirmedUntil,
 	}, nil
 }

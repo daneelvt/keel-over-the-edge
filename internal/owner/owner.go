@@ -33,6 +33,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/daneelvt/keel-over-the-edge/internal/aboard"
 	"github.com/daneelvt/keel-over-the-edge/internal/accounts"
 	"github.com/daneelvt/keel-over-the-edge/internal/api"
 	"github.com/daneelvt/keel-over-the-edge/internal/bus"
@@ -216,6 +217,11 @@ type Config struct {
 	Machines        AISailors
 	Lifetime        Lifetime
 	LifetimeChanged func()
+	// Switches, if not nil, are the owner's switches for sailing together
+	// in memory, which every knock and link reads, and Sail the database's
+	// (both needed for the settings' routes).
+	Switches *aboard.Switches
+	Sail     SailSettings
 
 	// PlaceKinds and Characters are the catalog's kinds of place and
 	// lights' characters, by their indices, as the page shows them.
@@ -386,6 +392,8 @@ func (o *Owner) Handler() http.Handler {
 	mux.HandleFunc("POST /owner/api/priority", o.priority)
 	mux.HandleFunc("POST /owner/api/lifetime", o.lifetime)
 	mux.HandleFunc("POST /owner/api/machines", o.machineCap)
+	mux.HandleFunc("GET /owner/api/settings.json", o.settings)
+	mux.HandleFunc("POST /owner/api/settings", o.setSettings)
 	mux.HandleFunc("POST /owner/api/accounts/search", o.searchAccounts)
 	mux.HandleFunc("GET /owner/api/account.json", o.accountCard)
 	mux.HandleFunc("GET /owner/api/actions.json", o.actions)
