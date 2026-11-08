@@ -869,7 +869,7 @@
     "Boat": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["id", "name", "description", "capacity", "lengthOverall", "beam", "lights", "lookout", "startSheet", "controls", "fleet", "physics", "art"],
+      "required": ["id", "name", "description", "capacity", "lengthOverall", "beam", "lights", "lookout", "perch", "deck", "startSheet", "controls", "fleet", "physics", "art"],
       "properties": {
         "id": { "$ref": "#/$defs/Id" },
         "name": { "description": "Display name.", "type": "string", "minLength": 1 },
@@ -879,6 +879,8 @@
         "beam": { "description": "Greatest width of the hull, in metres.", "type": "number", "exclusiveMinimum": 0, "maximum": 30 },
         "lights": { "description": "The navigation lights the boat shows by night. Together their arcs make the full circle once.", "type": "array", "minItems": 1, "uniqueItems": true, "items": { "$ref": "#/$defs/Light" } },
         "lookout": { "description": "How high its lookout's eye is above the sea, in m: what it sees over the horizon.", "type": "number", "exclusiveMinimum": 0, "maximum": 60 },
+        "perch": { "description": "Where a seabird perches on it, in m in its model's frame (x to starboard, y up from the model's origin, z aft).", "$ref": "#/$defs/BoatPoint" },
+        "deck": { "description": "Where a flying fish lands on its deck, in m in its model's frame.", "$ref": "#/$defs/BoatPoint" },
         "startSheet": {
           "description": "Its sheet for a start from rest: pairs of an angle off the wind, in degrees, and the sheet there, from 0 hauled in to 1 let fly, by rising angle, read linearly between them.",
           "type": "array",
@@ -895,6 +897,11 @@
         "physics": { "$ref": "#/$defs/BoatPhysics" },
         "art": { "$ref": "#/$defs/BoatArt" }
       }
+    },
+    "BoatPoint": {
+      "title": "BoatPoint",
+      "description": "A point on a boat, in m in its model's frame: x to starboard, y up, z aft.",
+      "type": "array", "minItems": 3, "maxItems": 3, "items": { "type": "number", "minimum": -60, "maximum": 60 }
     },
     "BoatControls": {
       "title": "BoatControls",
@@ -4276,7 +4283,7 @@
       "description": "The sea's life: the kinds of animal met at sea, and the schedule that says where and when each is met. The server draws it from the world's seed, the place, the time, the habitat there and the weather; every player near is told of each encounter.",
       "type": "object",
       "additionalProperties": false,
-      "required": ["art", "cell", "slot", "lulls", "quiet", "bind", "ride", "flush", "drop", "dusk", "rainy", "habitat", "sea", "towns", "kinds"],
+      "required": ["art", "cell", "slot", "lulls", "quiet", "bind", "ride", "flush", "aboard", "drop", "dusk", "rainy", "habitat", "sea", "towns", "kinds"],
       "properties": {
         "art": {
           "title": "LifeArt",
@@ -4341,6 +4348,19 @@
             "beside": { "type": "number", "minimum": 0, "maximum": 200 }
           }
         },
+        "aboard": {
+          "title": "LifeAboard",
+          "description": "A flying fish drawn to a boat's lights by night, landing on its deck: the kind of fish, by its id; every so many s, by a draw of the boat and that slot, at this chance, a boat lit and sailing over water the kind lives in has one land aboard, where it lies this long, in s.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "every", "chance", "stay"],
+          "properties": {
+            "kind": { "type": "string", "pattern": "^[a-z][a-z0-9-]*$" },
+            "every": { "type": "number", "minimum": 1, "maximum": 3600 },
+            "chance": { "type": "number", "minimum": 0, "maximum": 1 },
+            "stay": { "type": "number", "minimum": 1, "maximum": 3600 }
+          }
+        },
         "drop": { "description": "An encounter sent is dropped once the eye is this far beyond its reach, in m.", "type": "number", "minimum": 0, "maximum": 5000 },
         "dusk": { "description": "The sun's height from which dusk and dawn begin to where they end, in degrees.", "type": "array", "minItems": 2, "maxItems": 2, "items": { "type": "number", "minimum": -90, "maximum": 90 } },
         "rainy": { "description": "Rain this heavy or heavier thins life as its kind's rain says, in mm an hour.", "type": "number", "minimum": 0, "maximum": 200 },
@@ -4397,6 +4417,7 @@
         "dives": { "description": "Its plunges, each bird a minute.", "type": "number", "minimum": 0, "maximum": 60 },
         "line": { "description": "Whether a group flies in a line, one behind another.", "type": "boolean" },
         "homeward": { "description": "Whether at dusk it heads for the nearest colony, or the nearest land without one.", "type": "boolean" },
+        "patters": { "description": "Whether, with a boat, it flutters low over the boat's wake, its feet pattering on the water.", "type": "boolean" },
         "habitats": {
           "title": "LifeHabitats",
           "description": "Its weight in each habitat: a point is its harbour's if within one, else its reef's, else the outer water's, else the shelf's or the deep's.",
@@ -4435,7 +4456,33 @@
         "range": { "description": "How far out it comes from and goes to, in m.", "type": "number", "minimum": 0, "maximum": 5000 },
         "reach": { "description": "It is drawn within this, in m.", "type": "number", "minimum": 100, "maximum": 5000 },
         "look": { "$ref": "#/$defs/BirdLook" },
-        "swim": { "$ref": "#/$defs/SwimLook" }
+        "swim": { "$ref": "#/$defs/SwimLook" },
+        "glow": { "$ref": "#/$defs/LifeGlow" }
+      }
+    },
+    "LifeGlow": {
+      "title": "LifeGlow",
+      "description": "Water that glows where it is disturbed, on a dark night: its light's colour; and how lit the sky may be for it to show, the moon's lit share times its height's sine above the horizon at the most, the sun below the horizon.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["colour", "moon"],
+      "properties": {
+        "colour": { "$ref": "#/$defs/Colour" },
+        "moon": { "type": "number", "minimum": 0, "maximum": 1 }
+      }
+    },
+    "LifeBlow": {
+      "title": "LifeBlow",
+      "description": "A whale's blow: how high it rises, the least and the most, and how wide it spreads, in m; how far it leans forward of upright and to the left, in degrees; and how long it lasts, in s.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["height", "width", "lean", "left", "last"],
+      "properties": {
+        "height": { "type": "array", "minItems": 2, "maxItems": 2, "items": { "type": "number", "minimum": 0.1, "maximum": 20 } },
+        "width": { "type": "number", "minimum": 0.1, "maximum": 20 },
+        "lean": { "type": "number", "minimum": 0, "maximum": 90 },
+        "left": { "type": "number", "minimum": 0, "maximum": 90 },
+        "last": { "type": "number", "minimum": 0.1, "maximum": 10 }
       }
     },
     "LifeOver": {
@@ -4458,7 +4505,7 @@
     "LifeBody": {
       "title": "LifeBody",
       "description": "A body of the life in the water, a model in the life's art.",
-      "type": "string", "enum": ["dolphin", "turtle", "flyingfish", "tarpon"]
+      "type": "string", "enum": ["dolphin", "turtle", "flyingfish", "tarpon", "humpback", "sperm", "pilot", "ray", "shark", "booby", "booby-asleep"]
     },
     "SwimLook": {
       "title": "SwimLook",
@@ -4477,9 +4524,16 @@
         "spins": { "description": "The spins in a leap, the least and the most.", "type": "array", "minItems": 2, "maxItems": 2, "items": { "type": "integer", "minimum": 0, "maximum": 10 } },
         "glide": { "description": "A glide's length, the least and the most, in m.", "type": "array", "minItems": 2, "maxItems": 2, "items": { "type": "number", "minimum": 1, "maximum": 1000 } },
         "linked": { "description": "The longest glides linked one after another, in m.", "type": "number", "minimum": 1, "maximum": 1000 },
-        "breaths": { "description": "Its breaths at each surfacing, the least and the most.", "type": "array", "minItems": 2, "maxItems": 2, "items": { "type": "integer", "minimum": 1, "maximum": 50 } },
+        "breaths": { "description": "Its breaths at each surfacing, the least and the most.", "type": "array", "minItems": 2, "maxItems": 2, "items": { "type": "integer", "minimum": 1, "maximum": 100 } },
         "dive": { "description": "How long it is down between surfacings, the least and the most, in s.", "type": "array", "minItems": 2, "maxItems": 2, "items": { "type": "number", "minimum": 1, "maximum": 7200 } },
-        "call": { "description": "What is heard of it: its breath, or nothing but its splashes.", "type": "string", "enum": ["breath", "silent"] }
+        "blowEvery": { "description": "A whale's time from one blow to the next at the surface, the least and the most, in s.", "type": "array", "minItems": 2, "maxItems": 2, "items": { "type": "number", "minimum": 1, "maximum": 600 } },
+        "blow": { "$ref": "#/$defs/LifeBlow" },
+        "fluke": { "description": "The share of a whale's dives on which it raises its flukes.", "type": "number", "minimum": 0, "maximum": 1 },
+        "breach": { "description": "The share of a whale's surfacings in which it breaches.", "type": "number", "minimum": 0, "maximum": 1 },
+        "slap": { "description": "The share of a whale's surfacings in which it slaps the water with its tail.", "type": "number", "minimum": 0, "maximum": 1 },
+        "logs": { "description": "Whether it lies still at the surface between its breaths, logging, rather than rolling under.", "type": "boolean" },
+        "asleep": { "$ref": "#/$defs/LifeBody" },
+        "call": { "description": "What is heard of it: its breath, a whale's blow, or nothing but its splashes.", "type": "string", "enum": ["breath", "blow", "silent"] }
       }
     },
     "ColonyBirds": {
@@ -4510,8 +4564,8 @@
     },
     "LifeBinds": {
       "title": "LifeBinds",
-      "description": "What it does with a boat it meets, if anything: follows its stern, rides its bow, or, a ground of fish, is flushed by every boat sailing through it.",
-      "type": "string", "enum": ["follow", "ride", "flush"]
+      "description": "What it does with a boat it meets, if anything: follows its stern, rides its bow, perches on it, or, a ground of fish, is flushed by every boat sailing through it.",
+      "type": "string", "enum": ["follow", "ride", "perch", "flush"]
     },
     "BirdLook": {
       "title": "BirdLook",

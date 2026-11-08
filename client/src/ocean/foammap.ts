@@ -321,15 +321,18 @@ export class FoamMap {
       const white = tongue.mul(driven).mul(min(speed.mul(dt).div(WAKE_TAIL), 1));
       // A spot (its hull's last word below nought): white water laid at
       // once about its middle, a disc or a ring, as much as its speed says,
-      // where something broke the water.
+      // where something broke the water; or a smooth patch, the track's
+      // alone with no white water, where a whale's fluke stroke near the
+      // surface smoothed it (Levy and others 2011).
       const d = dot(at, at).sqrt().div(beam);
       const disc = float(1).sub(smoothstep(0.4, 1, d));
       const ring = smoothstep(0.45, 0.75, d).mul(float(1).sub(smoothstep(0.8, 1, d)));
-      const spot = select(spotRing.greaterThan(0.5), ring, disc).mul(speed);
+      const smooth = spotRing.greaterThan(1.5);
+      const spot = select(spotRing.greaterThan(0.5).and(smooth.not()), ring, disc).mul(speed);
       const isSpot = hull.w.lessThan(0);
       return vec4(
-        max(select(isSpot, spot, white), 0),
-        max(select(isSpot, spot.mul(0.5), churn), 0),
+        max(select(isSpot, select(smooth, float(0), spot), white), 0),
+        max(select(isSpot, select(smooth, spot, spot.mul(0.5)), churn), 0),
         0,
         1,
       );
@@ -438,6 +441,19 @@ export class FoamMap {
     hulls[at + 3] = -1;
     this.#reach = Math.max(this.#reach, radius + WAKE_TAIL);
     this.#count++;
+  }
+
+  /**
+   * A smooth patch at a place in the world, radius m across: the track's
+   * smooth water laid at strength 0 to 1, with no white water, fading as a
+   * track does; a whale's footprint after a fluke stroke near the surface.
+   */
+  print(east: number, north: number, radius: number, strength: number): void {
+    if (this.#count >= STAMPS || !(strength > 0) || !(radius > 0)) {
+      return;
+    }
+    this.spot(east, north, radius, strength);
+    this.#stampData[(this.#count - 1) * 4 + 2] = 2;
   }
 
   /** Brings the map to a frame: the pass, then the stamps. */

@@ -26,31 +26,34 @@ export interface Corner {
   v?: number;
 }
 
-/** A ring of the body's loft: at s, its back's and belly's heights, its half-width, and the height of its widest line. */
+/** A ring of the body's loft: at s, its back's and belly's heights, its half-width, the height of its widest line, and its own fullness. */
 export interface Station {
   s: number;
   top: number;
   bot: number;
   w: number;
   mid?: number;
+  full?: number;
 }
 
 /** A loft's paint: its back's share and its mark at s, on its ring at c (1 the back's line, -1 the belly's). */
 export type Paint = (s: number, c: number) => { r: number; g?: number };
 
-/** A chord across a fin, root to tip: its leading and trailing points (x, y, s) and its half-thickness, fractions of the length. */
+/** A chord across a fin, root to tip: its leading and trailing points (x, y, s), its half-thickness, fractions of the length, and the back's share on it, both faces, if not the fin's. */
 export interface Chord {
   lead: Vec3;
   trail: Vec3;
   thick: number;
+  r?: number;
 }
 
-/** A fin's paint: the back's share on its upper face and its lower, and the marks of its edges. */
+/** A fin's paint: the back's share on its upper face and its lower, the marks of its edges, and the back's share at its tip if not the faces'. */
 export interface FinPaint {
   r: [number, number];
   lead?: number;
   trail?: number;
   tip?: number;
+  tipR?: number;
 }
 
 const dot = (a: Vec3, b: Vec3): number => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
@@ -177,15 +180,15 @@ export class Body {
       n = [-n[0], -n[1], -n[2]];
     }
     for (const side of [1, -1]) {
-      const r = side > 0 ? paint.r[0] : paint.r[1];
-      const corner = (p: Vec3, g: number): Corner => ({ p, r, g, v: v(p) });
+      const face = side > 0 ? paint.r[0] : paint.r[1];
+      const corner = (p: Vec3, g: number, r = face): Corner => ({ p, r, g, v: v(p) });
       const ridge = chords.map((c, i) => {
         const p = mix(leads[i] as Vec3, trails[i] as Vec3, 0.35);
         const t = c.thick * this.length * side;
-        return corner([p[0] + n[0] * t, p[1] + n[1] * t, p[2] + n[2] * t], 0);
+        return corner([p[0] + n[0] * t, p[1] + n[1] * t, p[2] + n[2] * t], 0, c.r ?? face);
       });
-      const lead = leads.map((p) => corner(p, paint.lead ?? 0));
-      const trail = trails.map((p) => corner(p, paint.trail ?? 0));
+      const lead = leads.map((p, i) => corner(p, paint.lead ?? 0, chords[i]?.r ?? face));
+      const trail = trails.map((p, i) => corner(p, paint.trail ?? 0, chords[i]?.r ?? face));
       const want: Vec3 = [n[0] * side, n[1] * side, n[2] * side];
       for (let i = 0; i + 1 < chords.length; i++) {
         const [l0, l1, m0, m1, t0, t1] = [
@@ -200,7 +203,7 @@ export class Body {
         this.quad(m0 as Corner, m1 as Corner, t1 as Corner, t0 as Corner, want, paddle);
       }
       const last = chords.length - 1;
-      const top = corner(end, paint.tip ?? paint.trail ?? 0);
+      const top = corner(end, paint.tip ?? paint.trail ?? 0, paint.tipR ?? face);
       this.tri(lead[last] as Corner, top, ridge[last] as Corner, want, paddle);
       this.tri(ridge[last] as Corner, top, trail[last] as Corner, want, paddle);
     }
@@ -236,7 +239,7 @@ export class Surface {
     const sn = Math.sin(a);
     const mid = this.mid(st);
     const h = c >= 0 ? st.top - mid : mid - st.bot;
-    const e = this.fullness;
+    const e = st.full ?? this.fullness;
     const x = st.w * Math.sign(sn) * Math.abs(sn) ** e;
     const y = mid + h * Math.sign(c) * Math.abs(c) ** e;
     return { p: [x, y, st.s], c };
@@ -273,6 +276,7 @@ export class Surface {
       bot: lerp(a.bot, b.bot, t),
       w: lerp(a.w, b.w, t),
       mid: lerp(this.mid(a), this.mid(b), t),
+      full: lerp(a.full ?? this.fullness, b.full ?? this.fullness, t),
     };
   }
 
@@ -389,7 +393,7 @@ export class Surface {
     const h = y >= this.mid(st) ? st.top - this.mid(st) : this.mid(st) - st.bot;
     // The ring's c whose corner stands at this height.
     const f = h === 0 ? 0 : Math.min(Math.max((y - this.mid(st)) / h, -1), 1);
-    const r = this.paint(s, Math.sign(f) * Math.abs(f) ** (1 / this.fullness)).r;
+    const r = this.paint(s, Math.sign(f) * Math.abs(f) ** (1 / (st.full ?? this.fullness))).r;
     for (const m of [1, -1]) {
       const cs = q.map((p) => ({ p: this.body.at([p[0] * m, p[1], p[2]]), r, g }));
       const want: Vec3 = [n[0] * m, n[1], n[2]];

@@ -119,9 +119,12 @@ export type WaterRecipes = typeof swimmers;
 
 export const WATER_RECIPES: WaterRecipes = swimmers;
 
-/** Something heard of the life in the water: a splash or a breath, how loud, panned how, how big and its own number. */
+/** What is heard of the life in the water: a splash, a breath, a whale's blow, a breach's boom, a slap, a fish landing aboard. */
+export type WaterKind = 'splash' | 'breath' | 'blow' | 'boom' | 'slap' | 'thump';
+
+/** Something heard of the life in the water: what, how loud, panned how, how big and its own number. */
 export interface WaterSound {
-  kind: 'splash' | 'breath';
+  kind: WaterKind;
   level: number;
   pan: number;
   size: number;
@@ -133,6 +136,11 @@ export interface WaterSource {
   east: number;
   north: number;
   size?: number;
+}
+
+/** Something big heard, by what it is. */
+export interface BigSource extends WaterSource {
+  kind: 'blow' | 'boom' | 'slap' | 'thump';
 }
 
 /**
@@ -149,12 +157,14 @@ export function waterSounds(
   breaths: readonly WaterSource[],
   breathCount: number,
   out: WaterSound[],
+  big: readonly BigSource[] = [],
+  bigCount = 0,
 ): WaterSound[] {
   out.length = 0;
-  const hear = (kind: 'splash' | 'breath', s: WaterSource, i: number): void => {
+  const hear = (kind: WaterKind, s: WaterSource, i: number): void => {
     const c = r[kind];
     const d = Math.hypot(s.east - listener.east, s.north - listener.north);
-    const size = s.size ?? 1;
+    const size = Math.min(s.size ?? 1, 1);
     const level =
       c.level * pointLevel(d, c.near, c.reach) * (kind === 'splash' ? 0.3 + 0.7 * size : 1);
     if (level > 0) {
@@ -177,6 +187,12 @@ export function waterSounds(
     const b = breaths[i];
     if (b !== undefined) {
       hear('breath', b, i);
+    }
+  }
+  for (let i = 0; i < bigCount; i++) {
+    const b = big[i];
+    if (b !== undefined) {
+      hear(b.kind, b, i);
     }
   }
   return out;

@@ -32,6 +32,16 @@ import type { LifeKind, SwimLook } from '../catalog/types.gen';
 import type { LifeSeen } from '../net/messages';
 import type { BoatAt } from './birds';
 import { type FlockPlace, flockAt, hash32, lerp, lingersOn, own, pathOf, rides } from './flock';
+import {
+  newBout,
+  round,
+  surfaceOf,
+  WHALE_BREACH_TIME,
+  WHALE_DIVE,
+  WHALE_FALL,
+  WHALE_SLAP_TIME,
+  WHALE_UP,
+} from './whale';
 
 /** Ticks a second of world time. */
 const STEPS = 30;
@@ -130,6 +140,8 @@ interface Spot {
   breath: boolean;
   /** Its heading, if its path says it outright (riding, milling); NaN to find it from its way. */
   heading: number;
+  /** Its pitch, if its path says it outright (a whale fluking up, a breach); NaN to find it from its way. */
+  pitch: number;
 }
 
 function newSpot(): Spot {
@@ -143,6 +155,7 @@ function newSpot(): Spot {
     shown: false,
     breath: false,
     heading: Number.NaN,
+    pitch: Number.NaN,
   };
 }
 
@@ -612,6 +625,230 @@ function glideSpot(
   return true;
 }
 
+/** The group's way at tick t: its middle's heading and speed either side in time, to out. */
+function groupWay(
+  e: LifeSeen,
+  k: LifeKind,
+  t: number,
+  out: { heading: number; speed: number },
+): void {
+  const step = DT * STEPS;
+  out.heading = e.heading;
+  out.speed = 0;
+  const t1 = Math.max(t - step, e.start);
+  const t2 = Math.min(t + step, e.end - 1e-6);
+  if (flockAt(e, k, t1, null, midA) && flockAt(e, k, t2, null, midB)) {
+    const de = midB.east - midA.east;
+    const dn = midB.north - midA.north;
+    const span = (t2 - t1) / STEPS;
+    if (Math.hypot(de, dn) > 1e-4 && span > 0) {
+      out.heading = Math.atan2(de, dn);
+      out.speed = Math.hypot(de, dn) / span;
+    }
+  }
+}
+
+const way = { heading: 0, speed: 0 };
+const bout = newBout();
+
+/** Places at about its group's middle at its own place in the group, spread m across, along the group's way. */
+function inGroup(e: LifeSeen, s: number, u: number, spread: number, at: Spot): void {
+  const along =
+    (own(s, 2) - 0.5) * spread * 1.4 + 1.5 * wave(u, lerp(25, 40, own(s, 3)), own(s, 4));
+  const across = (own(s, 5) - 0.5) * spread + 1.2 * wave(u, lerp(20, 35, own(s, 11)), own(s, 12));
+  const sh = Math.sin(way.heading);
+  const ch = Math.cos(way.heading);
+  at.east = mid.east + sh * along + ch * across;
+  at.north = mid.north + ch * along - sh * across;
+  at.heading = Number.isNaN(e.heading) ? Number.NaN : way.heading;
+}
+
+/**
+ * Sets at to where whale i is at tick t, by its round (whale.ts): down
+ * between bouts, rising to blow; at the surface its back rolling over
+ * after each blow and under till the next, or for one that logs lying
+ * awash; a breach, up two thirds out of the water and over onto its side;
+ * a slap, its tail up and down onto the water; and its dive, its flukes
+ * raised as its head goes down.
+ */
+function whaleSpot(
+  e: LifeSeen,
+  k: LifeKind,
+  swim: SwimLook,
+  i: number,
+  t: number,
+  at: Spot,
+): boolean {
+  if (!flockAt(e, k, t, null, mid)) {
+    return false;
+  }
+  const s = swimSeed(e.seed, i);
+  const u = (t - e.start) / STEPS;
+  const life = (e.end - e.start) / STEPS;
+  const length = swim.length * lerp(0.92, 1.05, own(s, 1));
+  const n = Math.max(e.count, 1);
+  groupWay(e, k, t, way);
+  inGroup(e, s, u, length * (swim.logs === true ? 0.7 : 1.2) * (0.5 + 0.5 * Math.sqrt(n)), at);
+  at.heading = way.heading;
+  at.roll = 0;
+  at.fold = 0;
+  at.stroke = 0.2;
+  at.shown = true;
+  at.breath = false;
+  const top = 0.1 * length;
+  const awash = -top + 0.35;
+  const deep = -Math.max(swim.depth, 3);
+  if (!round(k, e.seed, i, u, life, bout)) {
+    at.up = deep;
+    return true;
+  }
+  const dive = bout.start + surfaceOf(bout);
+  if (u < bout.start - WHALE_UP) {
+    at.up = deep;
+  } else if (u < bout.start) {
+    // Rising to blow, head a little up.
+    const q = smooth((u - (bout.start - WHALE_UP)) / WHALE_UP);
+    at.up = lerp(deep, awash, q);
+    at.pitch = 0.12 * Math.sin(Math.PI * q);
+  } else if (u < dive) {
+    const x = u - bout.start;
+    const y = x - Math.floor(x / bout.every) * bout.every;
+    at.breath = y < 1.5;
+    if (swim.logs === true) {
+      // Logging: awash, the head lifting a little at each blow.
+      at.up = awash - 0.12 + 0.12 * Math.cos((2 * Math.PI * y) / bout.every);
+      at.pitch = 0.03 * Math.sin((2 * Math.PI * y) / bout.every);
+    } else {
+      // Its back rolls over after the blow and under, and up again for the next.
+      const under =
+        smooth((y - 2) / Math.max(bout.every * 0.35, 1)) * (1 - smooth((y - (bout.every - 4)) / 3));
+      at.up = awash - (top + 1.4) * under;
+      at.pitch = -0.08 * Math.sin(Math.PI * Math.min(y / Math.max(bout.every - 3, 1), 1));
+    }
+    if (bout.breach >= 0 && u >= bout.breach && u < bout.breach + WHALE_BREACH_TIME) {
+      breach(u - bout.breach, length, awash, at);
+    } else if (bout.slap >= 0 && u >= bout.slap && u < bout.slap + WHALE_SLAP_TIME) {
+      slap(u - bout.slap, length, awash, at);
+    }
+  } else if (u < dive + WHALE_DIVE) {
+    const z = u - dive;
+    if (bout.fluke) {
+      // Fluking up: the head goes down and the flukes come up and over.
+      at.pitch = -1.35 * smooth(z / 4.5);
+      at.up = awash - 0.3 * length * smooth(z / 4) - 1.5 * Math.max(z - 4, 0);
+    } else {
+      at.pitch = -0.3 * smooth(z / 3) * (1 - smooth((z - 5) / 3));
+      at.up = lerp(awash, deep, smooth(z / WHALE_DIVE));
+    }
+  } else {
+    at.up = deep;
+  }
+  return true;
+}
+
+/** A breach z s in: up from under nearly upright, two thirds out of the water, and over onto its side, falling back at WHALE_FALL. */
+function breach(z: number, length: number, awash: number, at: Spot): void {
+  at.breath = false;
+  if (z < 1.5) {
+    const q = z / 1.5;
+    at.up = lerp(-0.45 * length, -0.2 * length, q);
+    at.pitch = 1.25 * smooth(q * 2);
+    return;
+  }
+  if (z < WHALE_FALL) {
+    const q = (z - 1.5) / (WHALE_FALL - 1.5);
+    at.up = -0.2 * length + 0.32 * length * Math.sin(Math.PI * q);
+    at.pitch = 1.25 * (1 - smooth(q));
+    at.roll = 1.5 * smooth((q - 0.3) / 0.7);
+    return;
+  }
+  const q = (z - WHALE_FALL) / (WHALE_BREACH_TIME - WHALE_FALL);
+  at.up = lerp(-0.2 * length, awash, smooth(q));
+  at.pitch = 0;
+  at.roll = 1.5 * (1 - smooth(q));
+}
+
+/** A slap z s in: its head down and its tail raised, brought down hard onto the water at the middle, and up again. */
+function slap(z: number, length: number, awash: number, at: Spot): void {
+  const half = WHALE_SLAP_TIME / 2;
+  const raise = z < half ? smooth(z / (half - 0.3)) : 1 - smooth((z - half) / 0.3);
+  const settle = z < half ? 1 : 1 - smooth((z - half - 0.3) / (half - 0.3));
+  at.pitch = -1.0 * raise - 0.35 * (1 - raise) * settle;
+  at.up = lerp(awash, -0.28 * length, Math.max(raise, 0.6 * settle));
+}
+
+/**
+ * Sets at to where ray i is at tick t: gliding in a loose school under
+ * the surface, its wings beating slowly; now and then leaping clear, a
+ * metre or two, wings flapping, and falling flat back onto the water with
+ * a smack (scubadiverlife.com).
+ */
+function raySpot(
+  e: LifeSeen,
+  k: LifeKind,
+  swim: SwimLook,
+  i: number,
+  t: number,
+  at: Spot,
+): boolean {
+  if (!flockAt(e, k, t, null, mid)) {
+    return false;
+  }
+  const s = swimSeed(e.seed, i);
+  const u = (t - e.start) / STEPS;
+  const life = (e.end - e.start) / STEPS;
+  groupWay(e, k, t, way);
+  inGroup(e, s, u, 4 + 3 * Math.sqrt(Math.max(e.count, 1)), at);
+  at.heading = Number.NaN;
+  at.roll = 0.1 * wave(u, lerp(5, 9, own(s, 13)), own(s, 14));
+  at.fold = 0;
+  at.stroke = 0.7;
+  at.shown = true;
+  at.breath = false;
+  at.up = -swim.depth * lerp(0.7, 1.2, own(s, 6)) + 0.2 * wave(u, 8, own(s, 7));
+  if (leapAt(swim, s, u, life, leap)) {
+    const x = leap.at;
+    at.up = -0.2 + leap.rise * x - (G * x * x) / 2 + 0.2 * (x / leap.air);
+    at.pitch = 0.35 * (1 - (2 * x) / leap.air);
+    at.roll = 0.5 * (own(s, 15) - 0.5) * Math.sin((Math.PI * x) / leap.air);
+    at.stroke = 1;
+  }
+  return true;
+}
+
+/**
+ * Sets at to where a shark is at tick t: slow at the surface, its fin and
+ * the top of its back out, its tail sweeping it on a weaving course.
+ */
+function finSpot(
+  e: LifeSeen,
+  k: LifeKind,
+  swim: SwimLook,
+  i: number,
+  t: number,
+  at: Spot,
+): boolean {
+  if (!flockAt(e, k, t, null, mid)) {
+    return false;
+  }
+  const s = swimSeed(e.seed, i);
+  const u = (t - e.start) / STEPS;
+  groupWay(e, k, t, way);
+  const across = 4 * wave(u, lerp(30, 50, own(s, 1)), own(s, 2)) + (own(s, 5) - 0.5) * 6 * i;
+  const sh = Math.sin(way.heading);
+  const ch = Math.cos(way.heading);
+  at.east = mid.east + ch * across;
+  at.north = mid.north - sh * across;
+  at.heading = Number.NaN;
+  at.roll = 0;
+  at.fold = 0;
+  at.stroke = 0.15;
+  at.shown = true;
+  at.breath = false;
+  at.up = -swim.depth + 0.03 * wave(u, 3, own(s, 3));
+  return true;
+}
+
 /** Sets at to where animal i of a group of the water is at tick t. */
 function spotOf(
   e: LifeSeen,
@@ -625,13 +862,21 @@ function spotOf(
   if (swim === undefined) {
     return false;
   }
+  at.pitch = Number.NaN;
   switch (k.form) {
     case 'pod':
       return podSpot(e, k, swim, i, t, e.with === 0 ? null : boat, at);
     case 'turtle':
       return turtleSpot(e, k, swim, i, t, at);
     case 'glider':
-      return glideSpot(e, k, swim, i, t, at);
+      // A fish landed aboard lies on the deck, drawn there (perch.ts).
+      return e.with === 0 && glideSpot(e, k, swim, i, t, at);
+    case 'whale':
+      return whaleSpot(e, k, swim, i, t, at);
+    case 'ray':
+      return raySpot(e, k, swim, i, t, at);
+    case 'fin':
+      return finSpot(e, k, swim, i, t, at);
   }
   return false;
 }
@@ -703,8 +948,11 @@ export function swimAt(
   // Pitched by its way up or down against its way along, as if it went
   // at least so fast along (2 m/s for a pod, half a metre a second for
   // the rest): a slow animal rising does not stand on its tail.
-  out.pitch =
-    span > 0 ? Math.atan2(b.up - a.up, Math.max(flat, (k.form === 'pod' ? 2 : 0.5) * span)) : 0;
+  out.pitch = !Number.isNaN(a0.pitch)
+    ? a0.pitch
+    : span > 0
+      ? Math.atan2(b.up - a.up, Math.max(flat, (k.form === 'pod' ? 2 : 0.5) * span))
+      : 0;
   const v = span > 0 ? flat / span : 0;
   const s = swimSeed(e.seed, i);
   const swim = k.swim;

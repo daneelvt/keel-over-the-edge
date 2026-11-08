@@ -305,6 +305,7 @@ func (h *helm) hearLines(s *Sea, f *bus.Frame, sl int32) []string {
 			out = append(out, line)
 		}
 	}
+	out = append(out, s.whaleLines(f, sl)...)
 	return append(out, s.breathLines(f, sl)...)
 }
 

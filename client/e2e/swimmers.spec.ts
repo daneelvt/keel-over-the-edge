@@ -1,8 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 // The life in the water in a real browser, on the offline sandbox: a group
-// of every kind in the water raised about the boat, with sixty birds, the
-// most life in view, draw within the budget of draw calls and triangles,
+// of every kind in the water raised about the boat (whales, rays and a
+// shark's fin among them), a booby perched aboard and a flying fish on the
+// deck, with sixty birds, the most life in view, draw within the budget of
+// draw calls and triangles,
 // every body in one draw, in the factory's materials; on the low tier half
 // of each group is drawn, solid, only what breaks the surface seen.
 
@@ -43,6 +45,7 @@ async function raise(page: Page): Promise<{ swimmers: number; birds: number }> {
         const a = n * 2.39996;
         k.raiseLife(id, 30 * Math.sin(a), 30 * Math.cos(a), true);
       });
+      k.raiseAboard();
       for (let n = 0; n < 40 && k.lifeBirds().length < 60; n++) {
         const a = n * 2.39996;
         const r = 60 + 15 * n;

@@ -1,6 +1,6 @@
 {
   "licence": "SPDX-License-Identifier: LicenseRef-All-Rights-Reserved. Art: all rights reserved, not covered by the AGPL. See art/README.md.",
-  "description": "The life in the water, heard: what breaks the water, a splash, a burst of noise through a band near band Hz falling to fall of it, length seconds long, heard within reach metres, the biggest (a dolphin falling back from a leap) loudest; and a dolphin's breath as it rolls at the surface, a short, explosive 'pfoosh' through its blowhole, a lower band of noise, heard within reach metres (40 m), by night too. Levels as gains.",
+  "description": "The life in the water, heard: what breaks the water, a splash, a burst of noise through a band near band Hz falling to fall of it, length seconds long, heard within reach metres, the biggest (a dolphin falling back from a leap) loudest; a dolphin's breath as it rolls at the surface, a short, explosive 'pfoosh' through its blowhole, a lower band of noise, heard within reach metres (40 m), by night too; a whale's blow, a long low rush of air through its blowholes, heard within 600 m; a whale falling back from a breach, a boom like a cannon heard far off, within 1,500 m; a whale's tail slapping the water, a sharp smack; and a flying fish landing on a deck, a dull thump close by. Levels as gains.",
   "splash": {
     "band": [900, 2600],
     "fall": 0.45,
@@ -18,5 +18,41 @@
     "near": 4,
     "reach": 40,
     "level": 0.3
+  },
+  "blow": {
+    "band": [180, 420],
+    "fall": 0.55,
+    "length": [1.0, 1.5],
+    "q": 0.7,
+    "near": 20,
+    "reach": 600,
+    "level": 0.4
+  },
+  "boom": {
+    "band": [45, 110],
+    "fall": 0.6,
+    "length": [1.0, 1.6],
+    "q": 0.8,
+    "near": 40,
+    "reach": 1500,
+    "level": 0.6
+  },
+  "slap": {
+    "band": [500, 1400],
+    "fall": 0.4,
+    "length": [0.3, 0.6],
+    "q": 0.8,
+    "near": 25,
+    "reach": 1000,
+    "level": 0.5
+  },
+  "thump": {
+    "band": [120, 260],
+    "fall": 0.5,
+    "length": [0.08, 0.14],
+    "q": 1.2,
+    "near": 2,
+    "reach": 30,
+    "level": 0.35
   }
 }

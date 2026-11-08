@@ -27,6 +27,10 @@ boats:
     lights: [tricolour]
     # Her lookout is the sailor seated on her deck, the eye 2 m above the sea.
     lookout: 2
+    # A seabird aboard perches on her foredeck, ahead of the mast; a flying
+    # fish lands on her deck, ahead of the sailor.
+    perch: [0, 0.41, -1.9]
+    deck: [0.25, 0.4, -0.6]
     # Her sheet for a start from rest, by the angle off the wind: from
     # tools/polar's sweep from rest (-start), each within 85% of the best
     # sheet's speed after 20 s in 3, 5 and 8 knots. Half the wind's angle,
@@ -284,6 +288,10 @@ boats:
     # Her lookout is the sailor seated aft on her deck, the eye 2 m above the
     # sea.
     lookout: 2
+    # A seabird aboard perches on her bow's pulpit; a flying fish lands on
+    # her side deck, abreast of the cabin.
+    perch: [0, 1.12, -3.45]
+    deck: [0.62, 0.74, -0.9]
     # Her sheet for a start from rest, by the angle off the wind: from
     # tools/polar's sweep from rest (-start), each within 85% of the best
     # sheet's speed after 20 s in 3, 5 and 8 knots.
@@ -533,6 +541,10 @@ boats:
     lights: [port, starboard, stern]
     # Her lookout is in the main top, the eye 15 m above the sea.
     lookout: 15
+    # A seabird aboard perches on her forecastle's rail, over the bow; a
+    # flying fish lands on her quarterdeck, by the wheel.
+    perch: [0, 5.3, -16.4]
+    deck: [1.0, 5.05, 10.6]
     # Her braces for a start from rest, by the angle off the wind: from
     # tools/polar's sweep from rest (-start), each within 95% of the best
     # braces' speed after 20 s in 3, 5 and 8 knots.

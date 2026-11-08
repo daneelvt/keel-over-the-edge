@@ -31,7 +31,7 @@ import { type Field, hexCentre, makeField, type Point } from './hex';
 import { FOAM } from './look';
 import { patternTexture } from './pattern';
 import { SeaBand } from './phases';
-import { detailSteep, farLook, type SeaParts, seaTime, tileLook } from './seamaterial';
+import { detailSteep, farLook, type SeaParts, seaTime, setSeaGlow, tileLook } from './seamaterial';
 import { leeTexture, shore } from './shore';
 import { TilePass } from './tilepass';
 import { Tiles } from './tiles';
@@ -166,6 +166,16 @@ export class Ocean {
     this.#active = this.passTiles;
     scene.add(this.passTiles.mesh);
     scene.add(this.far.mesh);
+  }
+
+  /**
+   * Glowing water: the boats' white water and their track drawn as light
+   * of a colour (display values, 0 to 1), by a strength from 0 (none: the
+   * sea as without it) to 1. Only a uniform changes, so it may be called
+   * every frame: nothing is allocated and no shader is remade.
+   */
+  setGlow(r: number, g: number, b: number, strength: number): void {
+    setSeaGlow(r, g, b, strength);
   }
 
   /** What the look is made from, as the detail band and the wakes are now. */

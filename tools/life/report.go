@@ -22,6 +22,9 @@ const (
 	targetGrounds  = "about 2"
 	targetBait     = "about 1"
 	targetTurtles  = "about 3"
+	targetWhales   = "0.17–0.25, twice as often outer"
+	targetRare     = "0.05–0.1"
+	targetBooby    = "about 0.1"
 	targetNoTarget = ""
 )
 
@@ -75,6 +78,20 @@ func (t *tally) write(w io.Writer, o options, kinds bool) {
 	row("Turtles", turtles, targetNoTarget)
 	fmt.Fprintf(w, "| Turtles an hour sailed in the reef habitat (%.0f h) | | | %s | | %s |\n",
 		day[habitats+life.Reef], per(turtles[byDay][habitats+life.Reef], day[habitats+life.Reef]), targetTurtles)
+	whales := t.of(func(k *life.Kind) bool { return k.Form == catalog.LifeFormWhale && k.Collective == "" })
+	row("Whales: humpback and sperm whales", whales, targetWhales)
+	row("Pilot whales", t.of(func(k *life.Kind) bool { return k.Form == catalog.LifeFormWhale && k.Collective != "" }), targetRare)
+	row("Rays", t.of(func(k *life.Kind) bool { return k.Form == catalog.LifeFormRay }), targetRare)
+	row("A shark's fin", t.of(func(k *life.Kind) bool { return k.Form == catalog.LifeFormFin }), targetRare)
+	deep := habitats + life.Deep
+	fmt.Fprintf(w, "| A booby perched aboard, an hour sailed by day in the deep (%.0f h) | | | %s | | %s |\n",
+		day[deep], per(t.perched[byDay][deep], day[deep]), targetBooby)
+	fmt.Fprintf(w, "| A booby perched aboard, anywhere | | | %s | %s | — |\n",
+		per(t.perched[byDay][everywhere], day[everywhere]), per(t.perched[allHours][everywhere], all[everywhere]))
+	night := all[everywhere] - day[everywhere]
+	fmt.Fprintf(w, "| Flying fish landed on deck, an hour sailed by night (%.0f h) | | | | %s | now and then |\n", night, per(t.aboard, night))
+	fmt.Fprintf(w, "| Glowing water sailed into on a dark night, an hour by night | | | | %s | — |\n", per(t.glows, night))
+	fmt.Fprintf(w, "| Night sailed in glowing water, dark enough to show | | | | %s | — |\n", share(t.glowing/3600, night))
 	water := false
 	for i := range t.kinds {
 		water = water || t.kinds[i].Form != catalog.LifeFormBird

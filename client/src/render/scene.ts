@@ -33,6 +33,7 @@ import type { DrawnBoat } from '../game/fleet';
 import type { Land } from '../land/land';
 import type { BoatAt } from '../life/birds';
 import { type GullSource, LifeDraw, type LifeFrame, type SurfaceAt } from '../life/draw';
+import type { Aboard } from '../life/perch';
 import { LifeStore } from '../life/store';
 import { HULL_REACH, HULLS, hullShape, hulls } from '../ocean/hulls';
 import { foamAt, KNOT, newFoamLook, SPRAY, transomFrom } from '../ocean/look';
@@ -50,6 +51,7 @@ import { Birds } from './birds';
 import { Boat, lampsLit, lazyArtUrl, type SailorLook } from './boat';
 import { CAMERA_PRESETS, type CameraView, ChaseCamera, lookSizeOf, sizeOf } from './camera';
 import { FloatingOrigin, type ScenePoint } from './coords';
+import { glowDark } from './daylight';
 import { DirtyAir } from './dirtyair';
 import { type FlagSeen, Flags } from './flags';
 import { FleetViews, PERSON_DEFAULT } from './fleet';
@@ -1235,6 +1237,21 @@ export class SeaScene {
     this.stars.turn(this.skyRecord, SKY.stars);
   }
 
+  /**
+   * How dark the sky is for glowing water to show, 0 to 1 (glowDark), by
+   * the sky as last read at the focus: the sun's and the moon's true
+   * heights and the moon's lit share. The moon's light at the most for it
+   * to show is the limit (the catalog's glow.moon). 0 while the sky is not
+   * drawn (the tests). Allocates nothing.
+   */
+  skyDark(limit: number): number {
+    if (!this.drawSky) {
+      return 0;
+    }
+    const n = this.sky.now;
+    return glowDark(n.sunHeight, n.moonHeight, n.lit, limit);
+  }
+
   /** The lanterns of the player's boat and of the others, each lit by the sun at its own boat. */
   #drawLanterns(height: number, camera: Vector3): void {
     const l = this.lanterns;
@@ -1367,9 +1384,21 @@ export class SeaScene {
     fleet: NO_BOATS,
     count: 0,
     bowOf: (kind) => (catalog.boats[kind] ?? this.kind).physics.hull.waterlineLength / 2,
+    aboardOf: (kind) => this.#aboardOf(kind),
+    windFrom: 0,
+    skyDark: (moon) => this.skyDark(moon),
     ownKind: 0,
     dt: 0,
   };
+  /** Each boat kind's perch, deck and centre of gravity, by its index, made once. */
+  readonly #aboard: (Aboard | undefined)[] = catalog.boats.map((b) => ({
+    perch: b.perch,
+    deck: b.deck,
+    cog: b.physics.hull.centreOfGravity,
+  }));
+  #aboardOf(kind: number): Aboard | undefined {
+    return this.#aboard[kind];
+  }
 
   /** The life's frame at the camera now: the boats a group may be with, the sea, the tier. */
   lifeFrame(camera: Vector3, night: boolean): LifeFrame {
@@ -1386,6 +1415,10 @@ export class SeaScene {
     own.east = this.pose.east;
     own.north = this.pose.north;
     own.heading = this.pose.heading;
+    own.heave = this.pose.heave;
+    own.heel = this.pose.heel;
+    own.pitch = this.pose.pitch;
+    f.windFrom = this.wind.meanFrom;
     own.speed = this.out[RECORDS.out.speedOverGround] ?? 0;
     f.own = this.boat === null ? null : own;
     f.fleet = this.fleetSource?.drawn ?? NO_BOATS;
@@ -1428,15 +1461,43 @@ export class SeaScene {
     this.onLife?.(f);
     this.lifeDraw.frame(this.life, f, this.birds, towns, this.swimmers, this.#surface);
     this.swimmers.end();
+    // Glowing water about the camera: the wake's white water, the track and
+    // the bow's spray drawn as its light.
+    const g = this.lifeDraw.glow;
+    this.ocean.setGlow(g.r, g.g, g.b, g.strength);
+    this.sprayView.setGlow(g.r, g.g, g.b, g.strength);
   }
 
   /** The sea's life's splashes thrown as spray, and flecks over the boils of bait. */
   #sprayLife(dt: number): void {
     const d = this.lifeDraw;
+    const share = this.rung.tier === 'low' ? 0.5 : 1;
     for (let i = 0; i < d.splashCount; i++) {
       const s = d.splashes[i];
-      if (s !== undefined) {
+      if (s === undefined) {
+        continue;
+      }
+      if (s.size > 1) {
+        // A whale's: a wall of white water thrown up as it falls back.
+        this.spray.blow(s.east, s.north, 0, 2.5 * s.size, 2.2 * s.size, 0, 0, 0, share);
+      } else {
         this.spray.splash(s.east, s.north, 0, s.size);
+      }
+    }
+    for (let i = 0; i < d.blowCount; i++) {
+      const b = d.blows[i];
+      if (b !== undefined) {
+        this.spray.blow(
+          b.east,
+          b.north,
+          b.sea,
+          b.height,
+          b.width,
+          b.heading,
+          b.lean,
+          b.left,
+          share,
+        );
       }
     }
     for (let i = 0; i < d.boilCount; i++) {
@@ -1466,7 +1527,20 @@ export class SeaScene {
     for (let i = 0; i < d.splashCount; i++) {
       const s = d.splashes[i];
       if (s !== undefined) {
-        wakes.spot(s.east, s.north, 0.5 + 1.5 * s.size, 0.9, true);
+        wakes.spot(s.east, s.north, 0.5 + 1.5 * s.size, 0.9, s.size <= 1);
+      }
+    }
+    for (let i = 0; i < d.printCount; i++) {
+      const p = d.prints[i];
+      if (p !== undefined) {
+        wakes.print(p.east, p.north, p.size, 0.8);
+      }
+    }
+    // Glowing water lit where the animals swimming through it disturb it.
+    for (let i = 0; i < d.trailCount; i++) {
+      const p = d.trails[i];
+      if (p !== undefined) {
+        wakes.spot(p.east, p.north, 0.6 + 0.6 * p.size, 0.35 * p.size);
       }
     }
     for (let i = 0; i < d.boilCount; i++) {

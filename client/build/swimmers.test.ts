@@ -17,10 +17,17 @@ const BODIES: Record<string, { length: number; budget: number }> = {
   turtle: { length: 1.0, budget: 320 },
   flyingfish: { length: 0.3, budget: 160 },
   tarpon: { length: 1.5, budget: 320 },
+  humpback: { length: 14, budget: 320 },
+  sperm: { length: 12, budget: 320 },
+  pilot: { length: 4.5, budget: 320 },
+  ray: { length: 1.1, budget: 320 },
+  shark: { length: 2.7, budget: 320 },
+  booby: { length: 0.75, budget: 320 },
+  'booby-asleep': { length: 0.56, budget: 320 },
 };
 
 /** The bodies with paddles: the parts that stroke on their own. */
-const PADDLES = ['dolphin', 'turtle', 'flyingfish'];
+const PADDLES = ['dolphin', 'turtle', 'flyingfish', 'humpback', 'pilot', 'ray', 'shark'];
 
 interface Accessor {
   bufferView: number;
@@ -108,7 +115,7 @@ const primitive = (name: string) => {
 };
 
 describe('the swimmers', () => {
-  test('are the four bodies, each named, each with the length it was built at', () => {
+  test('are the bodies, each named, each with the length it was built at', () => {
     const named = gltf.nodes.filter((n) => n.mesh !== undefined);
     expect(named.map((n) => n.name).sort()).toEqual(Object.keys(BODIES).sort());
     for (const n of named) {

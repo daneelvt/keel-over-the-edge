@@ -49,6 +49,9 @@ function frame(over: Partial<LifeFrame> = {}): LifeFrame {
     night: false,
     own: { east: 0, north: 0, heading: 0, speed: 3 },
     bowOf: () => 3,
+    aboardOf: () => ({ perch: [0, 0.4, -1.9], deck: [0.3, 0.1, -0.3], cog: 0.3 }),
+    windFrom: 0,
+    skyDark: () => 0,
     ownKind: 0,
     dt: 0,
     fleet: [],
@@ -121,6 +124,9 @@ describe('the sea’s life drawn', () => {
       heading: 1,
       speed: 2,
       opacity: 1,
+      heave: 0,
+      heel: 0,
+      pitch: 0,
     };
     const cases: [number, number][] = [
       [1, e.count],

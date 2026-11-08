@@ -16,6 +16,20 @@ export type Id = string;
  */
 export type Light = "tricolour" | "port" | "starboard" | "stern";
 /**
+ * Where a seabird perches on it, in m in its model's frame (x to starboard, y up from the model's origin, z aft).
+ *
+ * @minItems 3
+ * @maxItems 3
+ */
+export type BoatPoint = [number, number, number];
+/**
+ * Where a flying fish lands on its deck, in m in its model's frame.
+ *
+ * @minItems 3
+ * @maxItems 3
+ */
+export type BoatPoint1 = [number, number, number];
+/**
  * A cloud's form, which names how it is drawn: fair cumulus, a towering cumulonimbus with its anvil and shelf, a storm's deck with its towers, fog, or none.
  *
  * This interface was referenced by `Catalog`'s JSON-Schema
@@ -94,12 +108,12 @@ export type LifeFamily = "birds" | "water" | "big" | "night";
  */
 export type LifePath = "pass" | "soar" | "skim" | "work" | "stay" | "drift";
 /**
- * What it does with a boat it meets, if anything: follows its stern, rides its bow, or, a ground of fish, is flushed by every boat sailing through it.
+ * What it does with a boat it meets, if anything: follows its stern, rides its bow, perches on it, or, a ground of fish, is flushed by every boat sailing through it.
  *
  * This interface was referenced by `Catalog`'s JSON-Schema
  * via the `definition` "LifeBinds".
  */
-export type LifeBinds = "follow" | "ride" | "flush";
+export type LifeBinds = "follow" | "ride" | "perch" | "flush";
 /**
  * How it moves over the patch of a group it comes with, if not by its own path: working it, or staying over it.
  *
@@ -113,7 +127,28 @@ export type LifeOver = "work" | "stay";
  * This interface was referenced by `Catalog`'s JSON-Schema
  * via the `definition` "LifeBody".
  */
-export type LifeBody = "dolphin" | "turtle" | "flyingfish" | "tarpon";
+export type LifeBody =
+  | "dolphin"
+  | "turtle"
+  | "flyingfish"
+  | "tarpon"
+  | "humpback"
+  | "sperm"
+  | "pilot"
+  | "ray"
+  | "shark"
+  | "booby"
+  | "booby-asleep";
+/**
+ * A point on a boat, in m in its model's frame: x to starboard, y up, z aft.
+ *
+ * @minItems 3
+ * @maxItems 3
+ *
+ * This interface was referenced by `Catalog`'s JSON-Schema
+ * via the `definition` "BoatPoint".
+ */
+export type BoatPoint2 = [number, number, number];
 
 /**
  * Every list of kinds in the game. Kinds are data: code reads their properties, never their names.
@@ -210,6 +245,8 @@ export interface Boat {
    * How high its lookout's eye is above the sea, in m: what it sees over the horizon.
    */
   lookout: number;
+  perch: BoatPoint;
+  deck: BoatPoint1;
   /**
    * Its sheet for a start from rest: pairs of an angle off the wind, in degrees, and the sheet there, from 0 hauled in to 1 let fly, by rising angle, read linearly between them.
    *
@@ -8185,6 +8222,7 @@ export interface Life {
   bind: LifeBind;
   ride: LifeRide;
   flush: LifeFlush;
+  aboard: LifeAboard;
   /**
    * An encounter sent is dropped once the eye is this far beyond its reach, in m.
    */
@@ -8289,6 +8327,15 @@ export interface LifeFlush {
   beside: number;
 }
 /**
+ * A flying fish drawn to a boat's lights by night, landing on its deck: the kind of fish, by its id; every so many s, by a draw of the boat and that slot, at this chance, a boat lit and sailing over water the kind lives in has one land aboard, where it lies this long, in s.
+ */
+export interface LifeAboard {
+  kind: string;
+  every: number;
+  chance: number;
+  stay: number;
+}
+/**
  * Where each habitat is.
  */
 export interface LifeHabitat {
@@ -8383,6 +8430,10 @@ export interface LifeKind {
    * Whether at dusk it heads for the nearest colony, or the nearest land without one.
    */
   homeward?: boolean;
+  /**
+   * Whether, with a boat, it flutters low over the boat's wake, its feet pattering on the water.
+   */
+  patters?: boolean;
   habitats: LifeHabitats;
   /**
    * Its weight times this within the habitat's colony distance of a colony.
@@ -8446,6 +8497,7 @@ export interface LifeKind {
   reach: number;
   look?: BirdLook;
   swim?: SwimLook;
+  glow?: LifeGlow;
 }
 /**
  * A group that comes with another: its kind, by its id; the share of the other's groups it comes with; and how many in it.
@@ -8539,10 +8591,62 @@ export interface SwimLook {
    */
   dive?: [number, number];
   /**
-   * What is heard of it: its breath, or nothing but its splashes.
+   * A whale's time from one blow to the next at the surface, the least and the most, in s.
+   *
+   * @minItems 2
+   * @maxItems 2
    */
-  call: "breath" | "silent";
+  blowEvery?: [number, number];
+  blow?: LifeBlow;
+  /**
+   * The share of a whale's dives on which it raises its flukes.
+   */
+  fluke?: number;
+  /**
+   * The share of a whale's surfacings in which it breaches.
+   */
+  breach?: number;
+  /**
+   * The share of a whale's surfacings in which it slaps the water with its tail.
+   */
+  slap?: number;
+  /**
+   * Whether it lies still at the surface between its breaths, logging, rather than rolling under.
+   */
+  logs?: boolean;
+  asleep?: LifeBody;
+  /**
+   * What is heard of it: its breath, a whale's blow, or nothing but its splashes.
+   */
+  call: "breath" | "blow" | "silent";
+}
+/**
+ * A whale's blow: how high it rises, the least and the most, and how wide it spreads, in m; how far it leans forward of upright and to the left, in degrees; and how long it lasts, in s.
+ *
+ * This interface was referenced by `Catalog`'s JSON-Schema
+ * via the `definition` "LifeBlow".
+ */
+export interface LifeBlow {
+  /**
+   * @minItems 2
+   * @maxItems 2
+   */
+  height: [number, number];
+  width: number;
+  lean: number;
+  left: number;
+  last: number;
+}
+/**
+ * Water that glows where it is disturbed, on a dark night: its light's colour; and how lit the sky may be for it to show, the moon's lit share times its height's sine above the horizon at the most, the sun below the horizon.
+ *
+ * This interface was referenced by `Catalog`'s JSON-Schema
+ * via the `definition` "LifeGlow".
+ */
+export interface LifeGlow {
+  colour: Colour3;
+  moon: number;
 }
 
 /** The catalog version (tools/catalog). */
-export const CATALOG_VERSION = '730d4c4ea4fde401';
+export const CATALOG_VERSION = 'b5d32d65abdf99b2';

@@ -469,3 +469,43 @@ export function newMainLight(): MainLight {
 export function luminance(c: Rgb | number[]): number {
   return 0.2126 * (c[0] ?? 0) + 0.7152 * (c[1] ?? 0) + 0.0722 * (c[2] ?? 0);
 }
+
+/** Glowing water fades in as the sun sinks through this height below the true horizon, in radians. */
+export const GLOW_SUNSET = 2 * DEG;
+
+/** And fades out across this last share of the moon's light below its limit. */
+export const GLOW_MOON_FADE = 0.1;
+
+/**
+ * How dark the sky is for glowing water to show, 0 (not at all) to 1: the
+ * sun below the true horizon, and the moon's light, its lit share (0 new,
+ * 1 full) times the sine of its height above the horizon (nothing while it
+ * is down), below the limit. Heights in radians. It fades in over the
+ * sun's first GLOW_SUNSET below the horizon and over the limit's last
+ * GLOW_MOON_FADE, so it never pops. A dinoflagellate's flash is faint
+ * against twilight or a high full moon (catalog: life's glow.moon).
+ */
+export function glowDark(
+  sunHeight: number,
+  moonHeight: number,
+  moonLit: number,
+  limit: number,
+): number {
+  const sun = smoothUnit(-sunHeight / GLOW_SUNSET);
+  if (sun <= 0 || !(limit > 0)) {
+    return 0;
+  }
+  const lit = Math.min(Math.max(moonLit, 0), 1);
+  const moon = moonHeight > 0 ? lit * Math.sin(Math.min(moonHeight, Math.PI / 2)) : 0;
+  const fade = limit * GLOW_MOON_FADE;
+  return sun * smoothUnit((limit - moon) / fade);
+}
+
+/** Hermite's smooth step of t clamped to 0 to 1. */
+function smoothUnit(t: number): number {
+  if (!(t > 0)) {
+    return 0;
+  }
+  const x = Math.min(t, 1);
+  return x * x * (3 - 2 * x);
+}

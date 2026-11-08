@@ -6,11 +6,13 @@
 // comes to a point 200 m ahead of the boat 40 s after the load: one that
 // passes crosses there, square to the boat's heading; one that soars or
 // works has come in by then and stays over it for the most its kind
-// stays. A kind that follows boats or rides their bows is with the own
-// boat (with: 1), in by 40 s and staying its kind's most. A kind that
-// brings others brings each of them; a ground of flying fish is kept
-// apart, on the boat, and flushes fish ahead of it as it sails. The tests
-// raise one again at now with keel.raiseLife, its middle there at once.
+// stays. A kind that follows boats, rides their bows or perches on them
+// is with the own boat (with: 1), in by 40 s and staying its kind's most.
+// A kind that brings others brings each of them; a ground of flying fish
+// is kept apart, on the boat, and flushes fish ahead of it as it sails;
+// glowing water lies about the boat. ?life=aboard lands the fish that come
+// aboard lit boats on the own boat's deck. The tests raise one again at
+// now with keel.raiseLife, its middle there at once, or keel.raiseAboard.
 
 import type { Life } from '../catalog/types.gen';
 import type { LifeFrame } from '../life/draw';
@@ -29,6 +31,38 @@ export const DELAY = 40;
 export function lifeKindFromQuery(query: URLSearchParams, life: Life): number {
   const id = query.get('life');
   return id === null ? -1 : life.kinds.findIndex((k) => k.id === id);
+}
+
+/** Whether ?life asks for a fish landed on the own boat's deck. */
+export function aboardFromQuery(query: URLSearchParams): boolean {
+  return query.get('life') === 'aboard';
+}
+
+/**
+ * A fish of the catalog's that land aboard lit boats, landed on the own
+ * boat's deck delay s after tick now, lying its stay; the n-th raised.
+ */
+export function aboardScene(life: Life, now: number, n: number, delay = DELAY): LifeSeen | null {
+  const kind = life.kinds.findIndex((k) => k.id === life.aboard.kind);
+  if (kind < 0) {
+    return null;
+  }
+  const start = Math.floor(now + delay * STEPS);
+  return {
+    id: `sandbox-aboard-${n}`,
+    rev: 0,
+    kind,
+    start,
+    end: start + Math.ceil(life.aboard.stay * STEPS),
+    east: 0,
+    north: 0,
+    heading: 0,
+    speed: 0,
+    count: 1,
+    seed: hash32(kind * 7919 + n + 101),
+    with: 1,
+    over: '',
+  };
 }
 
 /** The boat a scene's group is placed by: m east and north, and its heading, radians clockwise from north. */
@@ -63,9 +97,10 @@ export function lifeScene(
   const lo = k.group[0] ?? 1;
   const hi = k.group[1] ?? lo;
   const at = now + delay * STEPS;
-  const bound = !free && (k.binds === 'follow' || k.binds === 'ride');
-  const east = boat.east + (offset?.east ?? Math.sin(boat.heading) * AHEAD);
-  const north = boat.north + (offset?.north ?? Math.cos(boat.heading) * AHEAD);
+  const bound = !free && (k.binds === 'follow' || k.binds === 'ride' || k.binds === 'perch');
+  const about = k.form === 'glow' ? 0 : AHEAD;
+  const east = boat.east + (offset?.east ?? Math.sin(boat.heading) * about);
+  const north = boat.north + (offset?.north ?? Math.cos(boat.heading) * about);
   // Each is at its point a, its coming in, after it begins: one that
   // passes crosses square to the boat's heading and goes on as far; one
   // that follows or rides comes up from astern along it, and one that

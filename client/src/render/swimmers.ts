@@ -301,8 +301,9 @@ export class Swimmers {
    * surface m; heading radians clockwise from north, its pitch nose up and
    * roll right side down, radians; its tail's wave 0 to 1 and beat's
    * phase, radians; its wings' fold and its paddles' stroke, 0 to 1; size
-   * a share of its length. False once the draw is full or its body is not
-   * held.
+   * a share of its length; and the body drawn, if not the look's own (a
+   * bird asleep), at the look's body's scale. False once the draw is full
+   * or its body is not held.
    */
   add(
     look: SwimLook,
@@ -318,13 +319,15 @@ export class Swimmers {
     fold: number,
     stroke: number,
     size = 1,
+    body: string = look.body,
   ): boolean {
-    const b = this.#bodies.get(look.body);
-    if (this.#count >= SWIMMERS || b === undefined) {
+    const own = this.#bodies.get(look.body);
+    const b = body === look.body ? own : this.#bodies.get(body);
+    if (this.#count >= SWIMMERS || b === undefined || own === undefined) {
       return false;
     }
     const paint = paintOf(look);
-    const scale = (look.length / b.length) * size;
+    const scale = (look.length / own.length) * size;
     const d = this.#array;
     const o = this.#count * STRIDE;
     d[o] = east - this.#ox;

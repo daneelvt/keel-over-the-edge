@@ -3002,6 +3002,76 @@ breathing within 40 m; `wake_on: ["life"]` wakes a wait as a group first
 comes into sight, a ground's flushes once (not in the default set). The world page marks each group alive at its
 middle (the layer **Life at sea**).
 
+### The big, the rare and the night
+
+- **Whales** (`form: whale`) are seen by their blows. Each whale of a
+  group keeps a round of its own (`internal/life/whale.go`, its twin
+  `client/src/life/whale.ts`, held to `internal/life/testdata/whales.json`):
+  down `swim.dive` s, up for a bout of `swim.breaths` blows `swim.blowEvery`
+  s apart, and down again, its flukes raised on `swim.fluke` of its dives;
+  in `swim.breach` of its bouts it breaches between two blows, in
+  `swim.slap` it slaps the water with its tail. A whale that drifts (the
+  sperm whale) is met for its one long bout and flukes up at its end; one
+  that `logs` lies awash between blows. The page draws its back rolling
+  over after each blow, the breach two thirds out of the water and over
+  onto its side, the slap, the flukes going up and over; each blow is
+  thrown as mist in the spray from its blowhole (`SprayDrops.blow`:
+  rising and hanging where it rises to, bushy at its top, leaning by
+  `swim.blow.lean` and `left`, bent by the wind), a breach as a wall of
+  white water; its fluke stroke leaves a smooth patch in the foam map's
+  track channel (`FoamMap.print`). Blows are heard within 600 m, a breach's
+  boom within 1,500 m (`art/sound/swimmers.json`). All are drawn in the
+  swimmers' one draw, their bodies within the 320 triangles every body is
+  padded to.
+- **Rays** (`form: ray`) glide in a loose school under the surface, their
+  wings paddles that beat, and now and then leap a metre or two and fall
+  back flat; **a shark** (`form: fin`) swims slowly at the surface on a
+  weaving course, its fin out.
+- **Storm petrels** (`patters: true`) follow a boat as gulls do, fluttering
+  low over its wake.
+- **A booby that perches** (`binds: perch`) takes, as it begins, the
+  nearest boat within its `range`, whatever her speed or course, and only
+  one not quiet; with none it is not met. It flies in along its record's
+  heading to the boat's `perch` (`shared/catalog/boats.yaml`, a point in
+  her model's frame), lands a little clumsily, stands facing the wind,
+  sleeps with its head under its wing by night (its `swim.asleep` body),
+  and flies on (`client/src/life/perch.ts`, which places a point of a
+  boat's model as the page draws her: heeled, pitched and lifted).
+- **A flying fish aboard**: every `life.aboard.every` s each boat sailing
+  at `bind.speed` with the sun below the horizon where she is (her lights
+  lit), over water the `aboard.kind` lives in, has one land on her `deck`
+  at `aboard.chance`, by a draw of her id and that slot; it lies there
+  `aboard.stay` s, flapping at first, and lands with a thump. Its id has
+  both the raised and the flushed bits (`life.Aboard`).
+- **Glowing water** (`form: glow`, the night family) is a patch of
+  `patch` m; inside it, while the sun is below the horizon and the moon's
+  light (its lit share times the sine of its height) is under
+  `glow.moon`, the wake's white water, its track and the bow's spray are
+  drawn as its light (`Ocean.setGlow`, `SprayView.setGlow`, `glowDark` in
+  `render/daylight.ts`): the tint only, the foam's shapes are the wake's
+  own. The animals swimming through it lay faint white water where they
+  are, which it lights: dolphins trailing light.
+
+A machine sailor sees a whale blowing, breaching, slapping or fluking (and
+nothing of one on a dive), a shark's fin, a booby flying in, perched on its
+boat or leaving, a fish landed on its deck, the water glowing where its
+wake breaks, and by night a pod trailing light through glowing water
+within 300 m; `Hear` names a whale blowing within 600 m and breaching or
+slapping within 1,500 m. Each kind's `reach` is sent from how far from its
+centre it may be drawn too (`Kind.Travel`: its range, the way it drifts,
+its patch).
+
+```sh
+# https://localhost:5173/?sandbox&life=aboard   a flying fish landed on the boat's deck, 40 s in
+# POST http://127.0.0.1:9090/debug/life?aboard=1&at=boat   (KEEL_DEV_COMMANDS=1) one on the first player's deck
+```
+
+`keel.raiseAboard()` lands one on the page's own boat; `keel.lifeGlow()`
+reports the glow about the camera and the last frame's blows, footprints,
+trails and sounds. `go run ./tools/life -tally -lulls 60,600,2400,1200`
+tallies with other lulls than the catalog's, s for birds, water, big and
+night.
+
 ### Adding a kind
 
 A kind is data: add it to `shared/catalog/life.yaml` with its `form`,

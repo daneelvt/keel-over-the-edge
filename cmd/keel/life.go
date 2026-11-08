@@ -65,11 +65,13 @@ func lifeOf(cat *catalog.Catalog, b *worldgen.Bundle, disk float64, epoch time.T
 }
 
 // lifeReach is how far each kind of the sea's life is sent: within its
-// reach of where it is drawn and its range, which it comes in from.
+// reach of where it is drawn and how far from its centre it is drawn: its
+// range, which it comes in from, the way it drifts and its patch.
 func lifeReach(cat *catalog.Catalog) *edge.LifeReach {
 	r := &edge.LifeReach{Drop: cat.Life.Drop}
-	for _, k := range cat.Life.Kinds {
-		r.Reach = append(r.Reach, k.Reach+k.Range)
+	_, kinds := life.Prepare(cat)
+	for _, k := range kinds {
+		r.Reach = append(r.Reach, k.Reach+k.Travel())
 	}
 	return r
 }
@@ -81,11 +83,14 @@ func lifeReach(cat *catalog.Catalog) *edge.LifeReach {
 // at the next tick. A kind that follows boats or rides their bows takes
 // the boat if it is under way on a steady course, quiet or not; one that
 // brings others brings them; a ground of fish is raised reaching its
-// kind's furthest, unseen but for the fish the boats in it flush. It
-// answers with the kind and where.
+// kind's furthest, unseen but for the fish the boats in it flush. With
+// aboard=1 the catalog's fish that land aboard lands on the deck of the
+// boat nearest instead (with at=boat, ahead=0). It answers with the kind
+// and where.
 //
 //	POST /debug/life?kind=…&east=…&north=…
 //	POST /debug/life?kind=…&at=boat[&boat=…][&ahead=m]
+//	POST /debug/life?aboard=1&at=boat[&boat=…]
 func lifeRoute(b *bus.Bus, cat *catalog.Catalog, log *slog.Logger) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
@@ -93,6 +98,13 @@ func lifeRoute(b *bus.Bus, cat *catalog.Catalog, log *slog.Logger) http.Handler 
 			return
 		}
 		q := r.URL.Query()
+		aboard := q.Get("aboard") == "1"
+		if aboard && !q.Has("kind") {
+			q.Set("kind", cat.Life.Aboard.Kind)
+			if !q.Has("ahead") {
+				q.Set("ahead", "0")
+			}
+		}
 		kind := -1
 		for i := range cat.Life.Kinds {
 			if cat.Life.Kinds[i].ID == q.Get("kind") || strconv.Itoa(i) == q.Get("kind") {
@@ -148,6 +160,9 @@ func lifeRoute(b *bus.Bus, cat *catalog.Catalog, log *slog.Logger) http.Handler 
 			}
 		}
 		c := bus.Command{Op: bus.RaiseLife, LifeKind: uint16(kind), State: physics.State{X: east, Y: north}}
+		if aboard {
+			c.LifeKind |= bus.LifeAboard
+		}
 		if err := b.Commands.Developer().TrySend(c); err != nil {
 			http.Error(w, err.Error(), http.StatusServiceUnavailable)
 			return
