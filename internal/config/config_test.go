@@ -94,7 +94,7 @@ func TestLoadValid(t *testing.T) {
 		AgentsURL:   "https://agents.keelovertheedge.com/mcp",
 		PasskeyRPID: "keelovertheedge.com", PasskeyOrigins: []string{"https://play.keelovertheedge.com"},
 		MetricsAddr: "0.0.0.0:9091", LogLevel: slog.LevelDebug, TraceDir: "/tmp/traces", ReplayDir: "/tmp/replays", ClientDir: "/srv/keel/client", DevSailors: 1000, DatabaseURL: dbURL,
-		BoatLimit: 2, SpectatorLimit: 1, AISilence: 90 * time.Second, Bell: 0, Land: false, WorldSeed: 18446744073709551615, HasWorldSeed: true,
+		BoatLimit: 2, SpectatorLimit: 1, CrewLimit: DefaultCrewLimit, AISilence: 90 * time.Second, Bell: 0, Land: false, WorldSeed: 18446744073709551615, HasWorldSeed: true,
 		Schedule: c.Schedule, WorldKeep: 2 * time.Hour,
 	}
 	if c.Schedule.Every != 10*time.Minute {

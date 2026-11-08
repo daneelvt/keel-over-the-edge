@@ -100,7 +100,9 @@ func (v *viewer) holding(want bool) {
 // helm sends controls stamped a few ticks ahead.
 func (v *viewer) helm(s *Server, helm uint32) {
 	v.t.Helper()
-	seq := uint32(s.World.Now() + 3)
+	f := s.World.Bus().Frames.Acquire()
+	seq := uint32(f.Tick + 3)
+	f.Release()
 	v.send(&pb.ClientMessage{Body: &pb.ClientMessage_Input{Input: &pb.Input{Seq: seq, Helm: helm, Sheet: 512, AckTick: v.snap.Tick}}})
 }
 

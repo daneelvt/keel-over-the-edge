@@ -418,6 +418,11 @@ func (enc *encoder) encode(c *conn, f *bus.Frame) {
 			return
 		}
 	}
+	if f.Kind[s] != c.toldKind && c.crew.Load() {
+		// The skipper swapped the boat for another in port: aboard her.
+		enc.aboardWelcome(c, f, s, "")
+		return
+	}
 	if f.Kind[s] != c.toldKind && !c.swapped(f) {
 		return
 	}
