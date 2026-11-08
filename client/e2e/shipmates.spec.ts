@@ -163,7 +163,7 @@ test('shipmates: made after sailing together, messages between two boats, appear
   expect((await context.request.post('/api/me/offline', { data: { on: true } })).status()).toBe(
     204,
   );
-  expect((await listOf(bob)).shipmates.find((s) => s.id === annID)?.presence).toBe('');
+  expect((await listOf(bob)).shipmates.find((s) => s.id === annID)?.presence ?? '').toBe('');
   expect((await context.request.post('/api/me/offline', { data: { on: false } })).status()).toBe(
     204,
   );

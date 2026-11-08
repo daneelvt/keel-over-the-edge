@@ -543,7 +543,7 @@ func runServer(ctx context.Context, getenv func(string) string, stdout io.Writer
 	}
 	p.current.Store(first)
 	if weatherHandler != nil {
-		log.Warn("developer commands are on: POST /debug/wind, /debug/weather, /debug/encounter, /debug/place, /debug/chart and /debug/life on the internal listener")
+		log.Warn("developer commands are on: POST /debug/wind, /debug/weather, /debug/encounter, /debug/place, /debug/chart, /debug/life and /debug/sailed on the internal listener")
 	}
 	health.Beat()
 	play := newServer(p.playRoutes, log)

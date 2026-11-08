@@ -420,8 +420,9 @@ export function ShipmatesPanel({ deck, view }: { deck: DeckView; view: Shipmates
     );
   };
 
+  // A shipmate's question stands in their shipmate's row alone.
   const recentRow = (r: RecentCrew) =>
-    asked(r.id, r.name) ?? (
+    (list?.shipmates.some((s) => s.id === r.id) ? null : asked(r.id, r.name)) ?? (
       <li class="deck-row" key={`recent-${r.id}`} data-shipmate={r.id} data-row="recent">
         <Face look={r.look} />
         <Who name={r.name} star={r.shipmate} faint={r.offered && !r.shipmate ? OFFERED_TAG : ''} />
