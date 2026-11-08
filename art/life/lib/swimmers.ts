@@ -2,8 +2,9 @@
 // Art: all rights reserved, not covered by the AGPL. See art/README.md.
 
 // The bodies of the life in the water: a dolphin, a sea turtle, a flying
-// fish and a tarpon, each lofted from its real proportions at a length of
-// its own and written as one mesh, a node of that name whose extras give
+// fish and a tarpon here, the whales, the ray and the shark in big.ts, and
+// a brown booby perched, awake and asleep, in booby.ts; each built from
+// its real proportions at a length of its own and written as one mesh, a node of that name whose extras give
 // the length it was built at and how its spine bends. The page scales each to a kind's length,
 // paints it in the kind's colours by its vertices' (see body.ts) and bends
 // its spine by a wave that grows toward the tail.
@@ -16,7 +17,9 @@ import { execFileSync } from 'node:child_process';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { type MaterialDef, type NodeDef, readGlbJson, writeGlb } from '../../lib/gltf.ts';
 import type { Vec3 } from '../../lib/mesh.ts';
+import { humpback, pilot, ray, shark, sperm } from './big.ts';
 import { Body, type Corner } from './body.ts';
+import { booby, boobyAsleep } from './booby.ts';
 
 /**
  * A body as it is built: its name, its length, m, its triangles' budget,
@@ -543,6 +546,16 @@ const SWIMMERS: Swimmer[] = [
   { name: 'turtle', bend: 'none', length: 1.0, budget: 320, build: turtle },
   { name: 'flyingfish', bend: 'sideways', length: 0.3, budget: 160, build: flyingfish },
   { name: 'tarpon', bend: 'sideways', length: 1.5, budget: 320, build: tarpon },
+  { name: 'humpback', bend: 'upright', length: 14, budget: 320, build: humpback },
+  { name: 'sperm', bend: 'upright', length: 12, budget: 320, build: sperm },
+  { name: 'pilot', bend: 'upright', length: 4.5, budget: 320, build: pilot },
+  { name: 'ray', bend: 'none', length: 1.1, budget: 320, build: ray },
+  { name: 'shark', bend: 'sideways', length: 2.7, budget: 320, build: shark },
+  { name: 'booby', bend: 'none', length: 0.75, budget: 320, build: booby },
+  // The roosting bird is shorter than the standing one: its head is laid
+  // back and its bill hidden. Its length is its own at the standing bird's
+  // scale, so that the page draws both of a kind's 0.75 m the same size.
+  { name: 'booby-asleep', bend: 'none', length: 0.56, budget: 320, build: boobyAsleep },
 ];
 
 /** Each mesh's extent along x, y and z, m, and its triangles, as the glb's accessors give them. */

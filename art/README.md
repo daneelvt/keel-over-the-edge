@@ -206,15 +206,21 @@ a shade. Everything is real size: a storey is 3 m.
 
 `life/build.ts` (with `life/lib/`) builds the bodies of the sea's swimmers
 from their real proportions into `life/swimmers.glb`, the catalog's
-`life.art.model`: four meshes, each a node of its name, `dolphin` (built
-2.2 m long), `turtle` (1.0 m), `flyingfish` (0.3 m, its wings spread) and
-`tarpon` (1.5 m), whose `extras` give its `length`; the page scales each to
-a kind's own length and paints it in the kind's colours. They are laid out
-as the boats are, their origin halfway along their length on the spine, and
-faceted, each face its own vertices. Their vertices' colour is the back's
+`life.art.model`: eleven meshes, each a node of its name, `dolphin` (built
+2.2 m long), `turtle` (1.0 m), `flyingfish` (0.3 m, its wings spread),
+`tarpon` (1.5 m), `humpback` (14 m), `sperm` (12 m), `pilot` (4.5 m),
+`ray` (1.1 m, its disc 2 m across), `shark` (2.7 m), `booby` (0.75 m,
+standing) and `booby-asleep` (0.56 m, roosting, at the standing bird's
+scale), whose `extras` give its `length` and how its spine bends; the page
+scales each to a kind's own length and paints it in the kind's colours.
+They are laid out as the boats are, their origin halfway along their length
+on the spine (the boobies' on the deck under them, their feet at y = 0),
+and faceted, each face its own vertices; none is over 320 triangles, as
+every body is drawn padded to the largest. Their vertices' colour is the back's
 share (r: 1 the back's colour, 0 the belly's), a dark mark (g: an eye, a
 mouth, a fin's edge, a seam) and whether the part is a paddle that strokes
-on its own (b: flippers, the flying fish's wings); their first texture
+on its own (b: flippers, the flying fish's wings, the ray's wings, the
+shark's pectorals); their first texture
 coordinate is the share along the body, snout tip to tail tip, by z (u),
 and a paddle's share out from its root to its tip (v). The script fails if
 a body is not as long as it was built or is over its triangles' budget;
