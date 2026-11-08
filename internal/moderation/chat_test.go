@@ -463,7 +463,7 @@ func TestChatListsWellFormed(t *testing.T) {
 // direction character, at most MaxChat code points when it passes, and its
 // own clean form.
 func FuzzCheckChat(f *testing.F) {
-	for _, s := range append(append(contacts, innocents...), "a\u0301\u0302\u0303\u0304\u0305", "👩\u200d🚀", "\xff\xfe", "Ⓐ\ufe0f\u0301", "\u0301\u200d", "1\ufe0f\u20e3") {
+	for _, s := range append(append(contacts, innocents...), "a\u0301\u0302\u0303\u0304\u0305", "👩\u200d🚀", "\xff\xfe", "Ⓐ\ufe0f\u0301", "\u0301\u200d", "1\ufe0f\u20e3", "0\ufe0f\u20e3\ufe2c\ufe0f\u20e3") {
 		f.Add(s)
 	}
 	f.Fuzz(func(t *testing.T, s string) {

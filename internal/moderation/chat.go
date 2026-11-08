@@ -71,6 +71,20 @@ func CheckChat(text string) (clean string, refused ChatReason) {
 
 // cleanChat is a line as shown.
 func cleanChat(s string) string {
+	// Each round only drops or folds characters: tidying away a fifth
+	// mark can leave a presentation selector with nothing to present, so
+	// the rounds go on until one changes nothing.
+	for {
+		next := cleanRound(s)
+		if next == s {
+			return s
+		}
+		s = next
+	}
+}
+
+// cleanRound is one round of cleanChat.
+func cleanRound(s string) string {
 	s = dropInvisible(strings.ToValidUTF8(s, ""))
 	for {
 		// Normalising can turn a character into a space, or an emoji into a
@@ -84,7 +98,7 @@ func cleanChat(s string) string {
 	}
 	s = tidy(s)
 	if !norm.NFKC.IsNormalString(s) {
-		return cleanChat(s)
+		return cleanRound(s)
 	}
 	return s
 }
