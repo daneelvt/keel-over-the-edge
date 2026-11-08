@@ -22,6 +22,8 @@ var validBoats = `boats:
     beam: 1.2
     lights: [tricolour]
     lookout: 2
+    perch: [0, 0.4, -1.9]
+    deck: [0.3, 0.1, -0.3]
     startSheet: [[110, 0.25]]
     controls:
       sheet: { name: Sheet, trim: Trim, ease: Ease }
@@ -547,6 +549,8 @@ func TestCanonicalJSONIgnoresFileOrderAndLayout(t *testing.T) {
     lights:
       - tricolour
     lookout: 2.0
+    perch: [0, 0.4, -1.9]
+    deck: [0.3, 0.1, -0.3]
     startSheet: [[110, 0.25]]
     id: test-boat
 ` + realPhysics()
