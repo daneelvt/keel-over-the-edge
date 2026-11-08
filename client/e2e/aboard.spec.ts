@@ -58,7 +58,9 @@ test('a link opened by a friend who has never played: a sailor made, let aboard,
   const errors: string[] = [];
   bob.on('pageerror', (e) => errors.push(e.message));
   await bob.goto(`${path}${GAME.slice(1)}`);
-  await expect(bob.getByRole('heading', { name: 'Keel Over the Edge' })).toBeVisible({ timeout: 60_000 });
+  await expect(bob.getByRole('heading', { name: 'Keel Over the Edge' })).toBeVisible({
+    timeout: 60_000,
+  });
   const name = `Friend ${stamp()}`;
   await bob.getByLabel('Your sailor’s name').fill(name);
   await answerBorn(bob, 'June', '1999');
@@ -80,18 +82,24 @@ test('a link opened by a friend who has never played: a sailor made, let aboard,
   // The skipper's card, and Let aboard.
   await expect(page.getByText(`${name} asks to come aboard`)).toBeVisible({ timeout: 30_000 });
   await page.getByRole('button', { name: 'Let aboard' }).click();
-  await bob.waitForFunction(() => globalThis.keel.deck().aboard !== null, null, { timeout: 30_000 });
+  await bob.waitForFunction(() => globalThis.keel.deck().aboard !== null, null, {
+    timeout: 30_000,
+  });
   const aboard = await deck(bob);
   expect(aboard.aboard?.skipper).toBe(ann.name);
   expect(aboard.boat).not.toBe(bobBoat);
   expect(aboard.holding).toBe(false);
-  await expect.poll(async () => (await deck(page)).crew?.people.length, { timeout: 30_000 }).toBe(2);
+  await expect
+    .poll(async () => (await deck(page)).crew?.people.length, { timeout: 30_000 })
+    .toBe(2);
   await expect.poll(async () => (await deck(bob)).crew?.people.length, { timeout: 30_000 }).toBe(2);
 
   // Handed: nothing moves until the friend takes them.
   await page.getByRole('button', { name: 'Crew' }).first().click();
   await page.getByRole('button', { name: `Hand over the controls: ${name}` }).click();
-  await expect(bob.getByText(`${ann.name} hands you the controls`)).toBeVisible({ timeout: 30_000 });
+  await expect(bob.getByText(`${ann.name} hands you the controls`)).toBeVisible({
+    timeout: 30_000,
+  });
   expect((await deck(page)).holding).toBe(true);
   await bob.getByRole('button', { name: 'Take them' }).click();
   await bob.waitForFunction(() => globalThis.keel.deck().holding, null, { timeout: 30_000 });
@@ -117,7 +125,9 @@ test('a link opened by a friend who has never played: a sailor made, let aboard,
   // Ashore: the friend's own boat in the water again.
   await bob.getByRole('button', { name: 'Go ashore' }).first().click();
   await bob.getByRole('button', { name: 'Go ashore' }).last().click();
-  await bob.waitForFunction(() => globalThis.keel.deck().aboard === null, null, { timeout: 30_000 });
+  await bob.waitForFunction(() => globalThis.keel.deck().aboard === null, null, {
+    timeout: 30_000,
+  });
   await bob.waitForFunction(() => globalThis.keel.deck().holding, null, { timeout: 30_000 });
   await expect.poll(async () => (await deck(page)).crew, { timeout: 30_000 }).toBeNull();
   expect(errors).toEqual([]);

@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/daneelvt/keel-over-the-edge/internal/auth"
+	"github.com/daneelvt/keel-over-the-edge/internal/catalog"
 	"github.com/daneelvt/keel-over-the-edge/internal/client"
 	"github.com/daneelvt/keel-over-the-edge/internal/protocol/pb"
 )
@@ -36,9 +37,11 @@ type Crewing struct {
 	Refused  int // knocks told anything but waiting or let aboard
 }
 
-// crew is a group's link, once its skipper has made it.
+// crew is a group's link: ready is closed once its skipper has made it,
+// token then its token.
 type crew struct {
-	token chan string
+	ready chan struct{}
+	token string
 }
 
 // readyToBoard answers, for an older bot, the age question once (as an
@@ -60,6 +63,56 @@ func (a *httpAccounts) readyToBoard(ctx context.Context, cookie string) error {
 	}
 	if res.StatusCode != http.StatusNoContent {
 		return fmt.Errorf("POST /api/me/rules answered %s: %s", res.Status, body)
+	}
+	return nil
+}
+
+// roomyBoat takes, from the bot's fleet, the smallest boat that carries
+// at least n, for its next voyage, as the start screen's Change boat does.
+func (a *httpAccounts) roomyBoat(ctx context.Context, cookie string, n int) error {
+	cat, err := catalog.Load()
+	if err != nil {
+		return err
+	}
+	room := map[string]int{}
+	for _, b := range cat.Boats {
+		room[string(b.ID)] = b.Capacity
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, a.base+"/api/fleet", nil)
+	if err != nil {
+		return err
+	}
+	req.AddCookie(&http.Cookie{Name: auth.CookieName, Value: cookie})
+	res, err := a.client.Do(req)
+	if err != nil {
+		return err
+	}
+	defer res.Body.Close()
+	var f struct {
+		Boats []struct {
+			ID   string `json:"id"`
+			Kind string `json:"kind"`
+		} `json:"boats"`
+	}
+	if err := json.NewDecoder(res.Body).Decode(&f); err != nil {
+		return err
+	}
+	best, most := "", 0
+	for _, b := range f.Boats {
+		if c := room[b.Kind]; c >= n && (best == "" || c < most) {
+			best, most = b.ID, c
+		}
+	}
+	if best == "" {
+		return fmt.Errorf("no boat in the fleet carries %d", n)
+	}
+	body, _ := json.Marshal(map[string]string{"boat": best})
+	r, reply, err := a.post(ctx, "/api/boat", body, []*http.Cookie{{Name: auth.CookieName, Value: cookie}})
+	if err != nil {
+		return err
+	}
+	if r.StatusCode != http.StatusOK {
+		return fmt.Errorf("POST /api/boat answered %s: %s", r.Status, reply)
 	}
 	return nil
 }
@@ -90,6 +143,7 @@ func (a *httpAccounts) link(ctx context.Context, cookie string) (string, error) 
 type Boarder interface {
 	readyToBoard(ctx context.Context, cookie string) error
 	link(ctx context.Context, cookie string) (string, error)
+	roomyBoat(ctx context.Context, cookie string, n int) error
 }
 
 var _ Boarder = (*httpAccounts)(nil)
@@ -109,19 +163,20 @@ func crewOne(ctx context.Context, cfg Config, groups []*crew, i int, cookie stri
 	skipper := i%cfg.Crews == 0
 	token := ""
 	if skipper {
+		if err := b.roomyBoat(ctx, cookie, cfg.Crews); err != nil {
+			return nil, err
+		}
 		t, err := b.link(ctx, cookie)
 		if err != nil {
 			return nil, err
 		}
 		token = t
-		g.token <- t
-		close(g.token)
+		g.token = t
+		close(g.ready)
 	} else {
 		select {
-		case t, ok := <-g.token:
-			if ok {
-				token = t
-			}
+		case <-g.ready:
+			token = g.token
 		case <-ctx.Done():
 			return nil, ctx.Err()
 		}

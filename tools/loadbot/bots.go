@@ -137,7 +137,7 @@ func Run(ctx context.Context, cfg Config) (*Report, error) {
 	var groups []*crew
 	if cfg.Crews > 1 {
 		for range (cfg.N + cfg.Crews - 1) / cfg.Crews {
-			groups = append(groups, &crew{token: make(chan string, 1)})
+			groups = append(groups, &crew{ready: make(chan struct{})})
 		}
 	}
 	start := time.Now()
