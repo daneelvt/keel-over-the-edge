@@ -80,6 +80,55 @@ type Together struct {
 	Shipmates bool
 }
 
+// Member is someone aboard a boat, or coming aboard, as the boarding rule
+// reads them: a machine sailor or a person, and their human (a machine
+// sailor's owner, a person themselves; zero for not known).
+type Member struct {
+	Machine bool
+	Human   [16]byte
+}
+
+// MayJoin reports whether joiner may come aboard a boat whose company,
+// its skipper first, is company. People and machine sailors never mix
+// aboard, but for one person with only their own machine sailors: a
+// boat's company is people only, machine sailors only (of any owners), or
+// one owner with their own machine sailors. So no machine sailor boards a
+// person's boat; a person comes aboard a machine sailor's boat only if
+// they own every machine sailor aboard; and with a person aboard, only
+// that person's machine sailors are let aboard. A refusal reads as the
+// boat not taking crew.
+func MayJoin(company []Member, joiner Member) bool {
+	if len(company) == 0 {
+		return false
+	}
+	if !company[0].Machine {
+		// A person's boat: people alone.
+		if joiner.Machine {
+			return false
+		}
+		for _, m := range company {
+			if m.Machine {
+				return false
+			}
+		}
+		return true
+	}
+	if joiner.Machine {
+		for _, m := range company {
+			if !m.Machine && m.Human != joiner.Human {
+				return false
+			}
+		}
+		return true
+	}
+	for _, m := range company {
+		if !m.Machine || m.Human != joiner.Human || m.Human == ([16]byte{}) {
+			return false
+		}
+	}
+	return true
+}
+
 // SpectatorReads reports whether someone not aboard a boat, watching it,
 // may read the chat aboard it: only while everyone aboard is a machine
 // sailor, and only an owner of one of them. With a person aboard, a

@@ -292,21 +292,32 @@ func TestAMachinesKnockLapses(t *testing.T) {
 	})
 }
 
-// TestAPersonAboardKeepsTheChatPrivate: while only machine sailors are
-// aboard Iron Mary's boat, Bob, watching his Rover aboard it, reads their
-// chat; once Ann comes aboard, nobody who is not aboard reads a word of it,
-// Bob included, and Ann does.
-func TestAPersonAboardKeepsTheChatPrivate(t *testing.T) {
+// TestPeopleAndMachineSailorsMix: people and machine sailors mix aboard
+// only as one owner with their own. Bob's Rover is let aboard Ann's Iron
+// Mary, and both owners, watching, read the machine sailors' chat; with
+// Rover aboard, Ann may not come aboard herself. Rover put ashore, Ann
+// comes aboard: then Bob's Gull is refused, as not taking crew, while
+// Ann's own Pearl is let aboard; and from then on no spectator reads a
+// word of the chat aboard, while Ann, aboard, does.
+func TestPeopleAndMachineSailorsMix(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		srv, helms := machinesWorld(t)
 		annToken, ann := srv.Sailor("Ann Bonny")
 		bobToken, bob := srv.Sailor("Bob Read")
+		carlToken, _ := srv.Sailor("Carl Vane")
 		mary, maryBoat := srv.MachineKind(t, "Iron Mary", ann, keelboat(t), near(0))
 		rover, _ := srv.MachineKind(t, "Rover", bob, keelboat(t), near(2))
-		helms.names[bus.Account(rover)] = "Rover"
+		gull, _ := srv.MachineKind(t, "Gull", bob, keelboat(t), near(4))
+		pearl, _ := srv.MachineKind(t, "Pearl", ann, keelboat(t), near(6))
 		hub := srv.Chat
-		hub.Join(aboard.Speaker{Account: bus.Account(mary), Human: bus.Account(ann), Machine: true, Band: aboard.Adult, Rules: true}, "Iron Mary")
-		hub.Join(aboard.Speaker{Account: bus.Account(rover), Human: bus.Account(bob), Machine: true, Band: aboard.Adult, Rules: true}, "Rover")
+		for _, m := range []struct {
+			id    store.AccountID
+			owner store.AccountID
+			name  string
+		}{{mary, ann, "Iron Mary"}, {rover, bob, "Rover"}, {gull, bob, "Gull"}, {pearl, ann, "Pearl"}} {
+			helms.names[bus.Account(m.id)] = m.name
+			hub.Join(aboard.Speaker{Account: bus.Account(m.id), Human: bus.Account(m.owner), Machine: true, Band: aboard.Adult, Rules: true}, m.name)
+		}
 
 		a := dial(t, srv, annToken, client.HelloWatch("Iron Mary"))
 		a.welcomed()
@@ -314,6 +325,9 @@ func TestAPersonAboardKeepsTheChatPrivate(t *testing.T) {
 		b := dial(t, srv, bobToken, client.HelloWatch("Rover"))
 		b.welcomed()
 		b.keepAlive()
+		c := dial(t, srv, carlToken, client.HelloWatch("Iron Mary"))
+		c.welcomed()
+		c.keepAlive()
 		link := srv.MachineLink(mary, ann, "Iron Mary")
 		if got := b.machineKnock(link, "Rover"); got != pb.KnockState_KNOCK_STATE_WAITING {
 			t.Fatalf("Rover's knock: %v", b.knocking)
@@ -330,22 +344,49 @@ func TestAPersonAboardKeepsTheChatPrivate(t *testing.T) {
 				t.Fatalf("an owner watching did not read the machine sailors' chat: %v", v.lines)
 			}
 		}
-		// Ann comes aboard: from then on Bob, watching, reads nothing.
+		// Another owner's machine sailor aboard: Ann may not come aboard.
+		time.Sleep(time.Second)
+		if got := a.comeAboard(); got != pb.KnockState_KNOCK_STATE_CLOSED {
+			t.Fatalf("Ann coming aboard with Bob's Rover aboard: %v", got)
+		}
+		// Rover put ashore, she comes aboard.
+		a.command(&pb.Command{Body: &pb.Command_Ashore{Ashore: &pb.GoAshore{Who: 1}}})
+		b.welcomed()
 		time.Sleep(time.Second)
 		if got := a.comeAboard(); got != pb.KnockState_KNOCK_STATE_LET {
-			t.Fatalf("Ann coming aboard: %v", got)
+			t.Fatalf("Ann coming aboard her own machine sailor's boat: %v", got)
 		}
 		a.welcomed()
-		time.Sleep(time.Second / 2)
+		time.Sleep(time.Second)
+		// With Ann aboard, Bob's Gull is refused; her own Pearl is let aboard.
+		b.send(client.Watch("Gull"))
+		b.welcomed()
+		time.Sleep(time.Second)
+		if got := b.machineKnock(link, "Gull"); got != pb.KnockState_KNOCK_STATE_CLOSED {
+			t.Fatalf("Bob's Gull with Ann aboard: %v", got)
+		}
+		if len(a.cards) != 0 {
+			t.Fatalf("Ann was shown a card she could not accept: %v", a.cards)
+		}
+		if got := a.machineKnock(link, "Pearl"); got != pb.KnockState_KNOCK_STATE_WAITING {
+			t.Fatalf("Ann's Pearl: %v", a.knocking)
+		}
+		card = a.card()
+		a.command(&pb.Command{Body: &pb.Command_Answer{Answer: &pb.Answer{Knock: card.GetId(), Let: true}}})
+		if !a.read(5*time.Second, func() bool { return a.crew != nil && len(a.crew.GetPeople()) == 3 }) {
+			t.Fatalf("Pearl not aboard: %v", a.crew)
+		}
+		// With a person aboard, no spectator reads the chat.
+		before := len(c.lines)
 		if s := hub.Say(bus.Account(mary), "Ann is aboard now"); s.Refused != 0 || s.Heard != 2 {
 			t.Fatalf("Iron Mary's line with Ann aboard: %+v", s)
 		}
-		if !a.read(5*time.Second, func() bool { return len(a.lines) == 2 }) {
+		if !a.read(5*time.Second, func() bool { return len(a.lines) >= 2 }) {
 			t.Fatalf("Ann, aboard, did not hear: %v", a.lines)
 		}
-		b.read(2*time.Second, nil)
-		if len(b.lines) != 1 {
-			t.Fatalf("a spectator read the chat of a boat with a person aboard: %v", b.lines)
+		c.read(2*time.Second, nil)
+		if len(c.lines) != before || before != 0 {
+			t.Fatalf("a spectator read the chat aboard: %v", c.lines)
 		}
 	})
 }

@@ -5844,8 +5844,16 @@ as said by its sender alone, and a mute.
 ### Machine sailors together
 
 A machine sailor's agent chats aboard as a person does, and its owner may
-come aboard its boat as crew. No other person comes aboard a machine
-sailor's boat, and no machine sailor comes aboard a person's.
+come aboard its boat as crew. People and machine sailors never mix
+aboard, but for one owner with their own machine sailors
+(`aboard.MayJoin`, asked by the owner's coming aboard and by every
+machine sailor's knock): a boat's company is people only, machine sailors
+only (of any owners), or one owner with only their own machine sailors.
+So no machine sailor comes aboard a person's boat; an owner comes aboard a
+machine sailor's boat only while every machine sailor aboard is theirs;
+and with an owner aboard, another owner's machine sailor is refused as
+not taking crew, and its knock never shown. With a person aboard, nobody
+who is not aboard reads the chat (`aboard.SpectatorReads`).
 
 **Chat for agents** (`internal/agentapi/chat.go`). Each world's `Sea`
 carries its chat hub and a `Talker`, the store's: a machine sailor's

@@ -132,6 +132,34 @@ func TestDeliveredRefusals(t *testing.T) {
 	}
 }
 
+func TestMayJoin(t *testing.T) {
+	ann, bob := [16]byte{1}, [16]byte{2}
+	person := func(h [16]byte) Member { return Member{Human: h} }
+	machine := func(h [16]byte) Member { return Member{Machine: true, Human: h} }
+	for _, c := range []struct {
+		name    string
+		company []Member
+		joiner  Member
+		want    bool
+	}{
+		{"a person aboard a person's boat", []Member{person(ann)}, person(bob), true},
+		{"a machine sailor aboard a person's boat", []Member{person(ann)}, machine(ann), false},
+		{"the owner aboard their machine sailor's boat", []Member{machine(ann)}, person(ann), true},
+		{"another person aboard a machine sailor's boat", []Member{machine(ann)}, person(bob), false},
+		{"another owner's machine sailor aboard a machine sailor's boat", []Member{machine(ann)}, machine(bob), true},
+		{"the owner aboard, with their own second machine sailor let aboard", []Member{machine(ann), person(ann)}, machine(ann), true},
+		{"the owner aboard, another owner's machine sailor refused", []Member{machine(ann), person(ann)}, machine(bob), false},
+		{"another owner's machine sailor aboard, the skipper's owner refused", []Member{machine(ann), machine(bob)}, person(ann), false},
+		{"only the owner's machine sailors aboard, the owner let aboard", []Member{machine(ann), machine(ann)}, person(ann), true},
+		{"an owner not known", []Member{machine([16]byte{})}, person([16]byte{}), false},
+		{"nobody aboard", nil, person(ann), false},
+	} {
+		if got := MayJoin(c.company, c.joiner); got != c.want {
+			t.Errorf("%s: %v, want %v", c.name, got, c.want)
+		}
+	}
+}
+
 func TestSpectatorReads(t *testing.T) {
 	for _, c := range []struct {
 		machines []bool

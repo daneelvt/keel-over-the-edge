@@ -66,6 +66,12 @@ func (c *conn) comeAboardCommand() {
 		kn = knock{boat: f.Boat[s], skipper: f.Owner[s], by: c, name: who.Name, look: who.Look, skipperName: t.Name,
 			kind: f.Kind[s], boatName: f.BoatName[s]}
 		state = e.roomAboard(f, s)
+		if state == pb.KnockState_KNOCK_STATE_UNSPECIFIED &&
+			!aboard.MayJoin(e.company(f, s, bus.Account(t.Owner)), aboard.Member{Human: c.account}) {
+			// Another's machine sailor is aboard: people and machine
+			// sailors mix aboard only as one owner with their own.
+			state = pb.KnockState_KNOCK_STATE_CLOSED
+		}
 	}
 	f.Release()
 	if state != pb.KnockState_KNOCK_STATE_UNSPECIFIED {
@@ -75,6 +81,33 @@ func (c *conn) comeAboardCommand() {
 	e.decks.knowName(kn.skipper, t.Name)
 	e.decks.knowName(c.account, who.Name)
 	c.board(&kn)
+}
+
+// company is who is aboard the boat in slot s of f, its skipper first, as
+// the boarding rule reads them: a machine sailor's human is its owner, as
+// the chat hub has it (a machine sailor at sea is a speaker there), or
+// skipperOwner for the skipper's; zero for one not known.
+func (e *Edge) company(f *bus.Frame, s int32, skipperOwner bus.Account) []aboard.Member {
+	lo, hi := f.CrewOf(s)
+	out := make([]aboard.Member, 0, hi-lo+1)
+	skipper := aboard.Member{Machine: f.Machine[s], Human: f.Owner[s]}
+	if f.Machine[s] {
+		skipper.Human = skipperOwner
+	}
+	out = append(out, skipper)
+	for _, a := range f.Crew[lo:hi] {
+		m := aboard.Member{Machine: a.Machine, Human: a.Account}
+		if a.Machine {
+			m.Human = [16]byte{}
+			if e.cfg.Chat != nil {
+				if sp, ok := e.cfg.Chat.Speaker(a.Account); ok {
+					m.Human = sp.Human
+				}
+			}
+		}
+		out = append(out, m)
+	}
+	return out
 }
 
 // roomAboard is why the boat in slot s of f takes nobody more aboard, or
@@ -290,6 +323,9 @@ func (e *Edge) machineBoardable(f *bus.Frame, s int32, m, owner, skipperOwner bu
 	case !f.Machine[s]:
 		return pb.KnockState_KNOCK_STATE_CLOSED
 	case e.refuses(f.Owner[s], m) || e.refuses(skipperOwner, owner):
+		return pb.KnockState_KNOCK_STATE_CLOSED
+	case !aboard.MayJoin(e.company(f, s, skipperOwner), aboard.Member{Machine: true, Human: owner}):
+		// A person aboard who is not its owner.
 		return pb.KnockState_KNOCK_STATE_CLOSED
 	}
 	return e.roomAboard(f, s)
