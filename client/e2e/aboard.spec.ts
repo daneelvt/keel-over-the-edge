@@ -131,6 +131,19 @@ test('a link opened by a friend who has never played: a sailor made, let aboard,
   await expect(bob.getByRole('textbox', { name: 'Your line' })).toHaveValue(
     'Find me at example.com/sue',
   );
+  // An email and a phone number: refused the same way, and never heard.
+  for (const contact of ['write to sue at gmail dot com', 'ring me on 021 555 0192']) {
+    await bob.getByRole('textbox', { name: 'Your line' }).fill('');
+    await bob.waitForTimeout(2_100);
+    await say(bob, contact);
+    await expect(bob.getByRole('textbox', { name: 'Your line' })).toHaveValue(contact, {
+      timeout: 30_000,
+    });
+    await expect(bob.locator('.chat-note')).toHaveText(
+      'Links and contact details can’t be sent aboard',
+    );
+  }
+  await bob.getByRole('textbox', { name: 'Your line' }).fill('');
   // A line refused for a word: seen as said by its sender alone.
   await bob.waitForTimeout(2_100);
   await say(bob, 'Shit happens');
@@ -145,6 +158,8 @@ test('a link opened by a friend who has never played: a sailor made, let aboard,
   const heard = await lines(page);
   expect(heard).toContain('Fair winds, skipper');
   expect(heard).not.toContain('example.com');
+  expect(heard).not.toContain('gmail');
+  expect(heard).not.toContain('0192');
   expect(heard).not.toContain('Shit happens');
   // A mute from a line: the muted sender's lines hidden at once, and their
   // next line never reaches the skipper.
