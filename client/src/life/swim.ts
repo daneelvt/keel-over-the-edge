@@ -699,7 +699,8 @@ export function swimAt(
   // Pitched by its way up or down against its way along, as if it went
   // at least so fast along (2 m/s for a pod, half a metre a second for
   // the rest): a slow animal rising does not stand on its tail.
-  out.pitch = span > 0 ? Math.atan2(b.up - a.up, Math.max(flat, (k.form === 'pod' ? 2 : 0.5) * span)) : 0;
+  out.pitch =
+    span > 0 ? Math.atan2(b.up - a.up, Math.max(flat, (k.form === 'pod' ? 2 : 0.5) * span)) : 0;
   const v = span > 0 ? flat / span : 0;
   const s = swimSeed(e.seed, i);
   const swim = k.swim;
