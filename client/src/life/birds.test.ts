@@ -74,10 +74,10 @@ describe('the birds of the sea’s life', () => {
           const pose = boat ? boatAt(e, t) : null;
           expect(birdAt(e, k, b, t, pose, sea, p)).toBe(true);
           if (!p.plunge) {
-            // A petrel pattering over a wake flies lower, still over it.
+            // A petrel pattering over a wake flies lower, still over it (the
+            // least is at least 0.3 m).
             const least = boat && k.patters === true ? floor * 0.6 : floor;
             expect(p.up).toBeGreaterThanOrEqual(least - 1e-9);
-            expect(p.up).toBeGreaterThan(0);
           }
           expect(p.under).toBe(p.up < 0);
           if (p.under) {
