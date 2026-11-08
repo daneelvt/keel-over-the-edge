@@ -116,6 +116,12 @@ type Config struct {
 	Chat     func(*bus.Frames) *chat.Hub
 	Talker   func(ctx context.Context, a bus.Account) (aboard.Speaker, string, error)
 	Machines edge.Machines
+	// Tie and Report are the edge's: a mute or a block kept, a report
+	// kept. Log, if not nil, is the edge's log, which is otherwise
+	// discarded.
+	Tie    func(ctx context.Context, account, other bus.Account, block, on bool) error
+	Report func(ctx context.Context, r edge.ReportIn) error
+	Log    *slog.Logger
 }
 
 // Server is the game's server in a test.
@@ -289,6 +295,9 @@ func (s *Server) start(t testing.TB, w *sim.World) {
 	t.Helper()
 	cfg, m := s.cfg, s.Metrics
 	log := slog.New(slog.DiscardHandler)
+	if cfg.Log != nil {
+		log = cfg.Log
+	}
 	s.World = w
 	s.Loop = loop.New(loop.Config{World: w, Epoch: Epoch, Log: log, Metrics: m})
 	if cfg.Chat != nil {
@@ -305,7 +314,7 @@ func (s *Server) start(t testing.TB, w *sim.World) {
 		Watch: s.Sessions.Target, SpectatorLimit: cfg.SpectatorLimit,
 		Agent: cfg.Agent, BoatOf: cfg.BoatOf,
 		Link: s.link, Knocker: s.knocker, Switches: cfg.Switches, Refuser: cfg.Refuser, Capacities: s.Capacities, CrewLimit: cfg.CrewLimit,
-		Chat: s.Chat, Talker: cfg.Talker, Machines: cfg.Machines,
+		Chat: s.Chat, Talker: cfg.Talker, Machines: cfg.Machines, Tie: cfg.Tie, Report: cfg.Report,
 	})
 	var recorders []sim.Recorder
 	if cfg.Record != nil {

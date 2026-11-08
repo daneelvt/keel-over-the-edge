@@ -365,8 +365,11 @@ func (h *Hub) say(from bus.Account, text string) Said {
 	case moderation.ChatContact:
 		return h.count(Said{Refused: RefusedContact, Seat: seat, Rest: h.refused(s)})
 	case moderation.ChatWords:
+		if name == "" {
+			name = h.Name(from)
+		}
 		out := Said{Seat: seat, Words: true, Rest: h.refused(s)}
-		out.Line = Line{Room: Boat(boat), From: s.Account, Machine: s.Machine, At: now, Text: clean}
+		out.Line = Line{Room: Boat(boat), From: s.Account, Name: name, Machine: s.Machine, At: now, Text: clean}
 		h.counts[refusals].Add(1)
 		return out
 	}

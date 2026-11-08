@@ -406,6 +406,7 @@ function Report({
           <>
             <dt>Its human</dt>
             <dd data-field="report-owner">
+              {report.ownerName ?? ''}{' '}
               <Opens id={report.owner} open={openAccount}>
                 the machine sailor’s owner’s card
               </Opens>
@@ -479,15 +480,15 @@ function Report({
           <h3>The notice</h3>
           <dl data-field="report-notice">
             <dt>From</dt>
-            <dd class="said">{n.Who}</dd>
+            <dd class="said">{n.who}</dd>
             <dt>Reached at</dt>
-            <dd class="said">{n.Contact}</dd>
+            <dd class="said">{n.contact}</dd>
             <dt>The sailor named</dt>
-            <dd class="said">{n.Sailor === '' ? '—' : n.Sailor}</dd>
+            <dd class="said">{n.sailor === '' ? '—' : n.sailor}</dd>
             <dt>Where and when</dt>
-            <dd class="said">{n.Happened === '' ? '—' : n.Happened}</dd>
+            <dd class="said">{n.happened === '' ? '—' : n.happened}</dd>
             <dt>What</dt>
-            <dd class="said">{n.What}</dd>
+            <dd class="said">{n.what}</dd>
           </dl>
         </>
       ) : null}

@@ -253,6 +253,7 @@ type NewReport struct {
 	ReportedName string
 	Owner        AccountID
 	HasOwner     bool
+	OwnerName    string
 	Place        string
 	People       []ReportPerson
 	FollowUntil  time.Time
@@ -305,8 +306,9 @@ func (s *Store) MakeReport(ctx context.Context, r NewReport) (Made, error) {
 			return nil
 		}
 		out.Subject = r.Reported
+		name := r.ReportedName
 		if r.HasOwner {
-			out.Subject = r.Owner
+			out.Subject, name = r.Owner, r.OwnerName
 		}
 		c, err := q.ReportersOfInDay(ctx, uuidOf(out.Subject))
 		if err != nil {
@@ -321,7 +323,7 @@ func (s *Store) MakeReport(ctx context.Context, r NewReport) (Made, error) {
 		}
 		out.Rested = true
 		return insertAction(ctx, q, Action{
-			Action: ActionRest, Account: out.Subject, HasAccount: true, Kind: Human, Name: r.ReportedName,
+			Action: ActionRest, Account: out.Subject, HasAccount: true, Kind: Human, Name: name,
 			Detail: "reports rested the player's chat and knocks until the owner looks", Source: SourceGame,
 			Report: out.ID, HasReport: true,
 		})
@@ -365,12 +367,12 @@ func (s *Store) EndFollows(ctx context.Context) error { return s.q.EndFollows(ct
 
 // Notice is a notice from outside the game, from anyone.
 type Notice struct {
-	Who      string // who they are
-	Contact  string // how to reach them
-	Sailor   string // the sailor's name, if they know it
-	Happened string // where and when
-	Reason   string // one of ReportReasons
-	What     string // what happened, and why it is wrong
+	Who      string `json:"who"`      // who they are
+	Contact  string `json:"contact"`  // how to reach them
+	Sailor   string `json:"sailor"`   // the sailor's name, if they know it
+	Happened string `json:"happened"` // where and when
+	Reason   string `json:"reason"`   // one of ReportReasons
+	What     string `json:"what"`     // what happened, and why it is wrong
 }
 
 // MakeNotice keeps a notice in the reports' queue.
@@ -465,16 +467,18 @@ type Report struct {
 	ReportedName string
 	Owner        AccountID
 	HasOwner     bool
-	Place        string
-	People       []ReportPerson
-	FollowUntil  time.Time
-	Closed       time.Time
-	Outcome      string
-	HeldUntil    time.Time
-	Referred     string
-	Notice       *Notice
-	Lines        []ReportLine
-	Notes        []ReportNote
+	// OwnerName is the owner's sailor's name, as the reader looks it up.
+	OwnerName   string
+	Place       string
+	People      []ReportPerson
+	FollowUntil time.Time
+	Closed      time.Time
+	Outcome     string
+	HeldUntil   time.Time
+	Referred    string
+	Notice      *Notice
+	Lines       []ReportLine
+	Notes       []ReportNote
 }
 
 // ReportNote is a note on a report: the owner's, or the player's answer.

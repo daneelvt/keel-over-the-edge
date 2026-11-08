@@ -165,6 +165,9 @@ func (s *Service) Report(ctx context.Context, in In) error {
 	}
 	if reported.Kind == store.AI {
 		r.Owner, r.HasOwner = reported.Human, true
+		if o, err := s.cfg.Store.Talker(ctx, reported.Human); err == nil {
+			r.OwnerName = o.Name
+		}
 	}
 	hub := s.cfg.Hub()
 	room := chat.Boat(in.Boat)
@@ -332,7 +335,13 @@ func (s *Service) Queue(ctx context.Context) ([]store.QueueItem, error) {
 
 // Read is a report whole.
 func (s *Service) Read(ctx context.Context, id store.ReportID) (store.Report, error) {
-	return s.cfg.Store.Report(ctx, id)
+	r, err := s.cfg.Store.Report(ctx, id)
+	if err == nil && r.HasOwner {
+		if o, err := s.cfg.Store.Talker(ctx, r.Owner); err == nil {
+			r.OwnerName = o.Name
+		}
+	}
+	return r, err
 }
 
 // The owner's actions on a report.
@@ -403,6 +412,14 @@ func (s *Service) Do(ctx context.Context, a Act) (Done, error) {
 		if t, err := s.cfg.Store.Talker(ctx, who); err == nil {
 			whoName = t.Name
 		}
+	}
+	switch {
+	case utf8.RuneCountInString(a.Note) > store.MaxAnswer:
+		return Done{}, fmt.Errorf("%w: a note is at most %d characters", ErrAction, store.MaxAnswer)
+	case len(a.Referred) > 400:
+		return Done{}, fmt.Errorf("%w: whom it was referred to is at most 400 bytes", ErrAction)
+	case len(a.Rule) > 40:
+		return Done{}, fmt.Errorf("%w: a rule's name is at most 40 bytes", ErrAction)
 	}
 	rule := a.Rule
 	if rule == "" {

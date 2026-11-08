@@ -1272,14 +1272,14 @@ export interface ReportLine {
   reported?: boolean;
 }
 
-/** A notice from outside the game, its fields named as keel gives them. */
+/** A notice from outside the game. */
 export interface ReportNotice {
-  Who: string;
-  Contact: string;
-  Sailor: string;
-  Happened: string;
-  Reason: string;
-  What: string;
+  who: string;
+  contact: string;
+  sailor: string;
+  happened: string;
+  reason: string;
+  what: string;
 }
 
 /** report.json: a report whole. */
@@ -1295,6 +1295,7 @@ export interface ReportPage {
   account?: string;
   machine?: boolean;
   owner?: string;
+  ownerName?: string;
   place?: string;
   people: ReportPerson[];
   /** Until when it still takes the conversation after it. */

@@ -51,6 +51,7 @@ type ReportJSON struct {
 	Account  string               `json:"account,omitempty"`
 	Machine  bool                 `json:"machine,omitempty"`
 	Owner    string               `json:"owner,omitempty"`
+	OwnerOf  string               `json:"ownerName,omitempty"`
 	Place    string               `json:"place,omitempty"`
 	People   []store.ReportPerson `json:"people"`
 	Taking   string               `json:"taking,omitempty"`
@@ -149,7 +150,7 @@ func reportJSON(rep store.Report) ReportJSON {
 		out.Account = rep.Reported.String()
 	}
 	if rep.HasOwner {
-		out.Owner = rep.Owner.String()
+		out.Owner, out.OwnerOf = rep.Owner.String(), rep.OwnerName
 	}
 	if rep.FollowUntil.After(time.Now()) {
 		out.Taking = iso(rep.FollowUntil)

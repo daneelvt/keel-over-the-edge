@@ -188,8 +188,7 @@ func (o *Owner) setSettings(w http.ResponseWriter, r *http.Request) {
 	}
 	said := strings.Join(words, "; ")
 	if req.Check {
-		writeJSON(w, SettingsAnswer{Settings: after, Ended: ended,
-			Words: fmt.Sprintf("Would set: %s. It stops %s at once.", said, workingLinks(ended))})
+		writeJSON(w, SettingsAnswer{Settings: after, Ended: ended, Words: "Would set: " + said + "." + linksWords(req, "stops", ended)})
 		return
 	}
 	a := store.Action{Source: sourceOf(r), From: r.RemoteAddr}
@@ -262,6 +261,14 @@ func (o *Owner) setSettings(w http.ResponseWriter, r *http.Request) {
 			o.cfg.ChatChanged()
 		}
 	}
-	writeJSON(w, SettingsAnswer{Settings: settingsOf(sw), Ended: ended,
-		Words: fmt.Sprintf("Done: %s. It stopped %s at once.", said, workingLinks(ended))})
+	writeJSON(w, SettingsAnswer{Settings: settingsOf(sw), Ended: ended, Words: "Done: " + said + "." + linksWords(req, "stopped", ended)})
+}
+
+// linksWords are a change's words for the links it stops, for a change
+// that touches links: " It stops 2 working links at once."
+func linksWords(req SettingsRequest, verb string, ended int64) string {
+	if req.LinkLifetime == nil && req.Links == nil && req.Boarding == nil {
+		return ""
+	}
+	return fmt.Sprintf(" It %s %s at once.", verb, workingLinks(ended))
 }
