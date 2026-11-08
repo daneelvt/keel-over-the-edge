@@ -32,7 +32,7 @@ import { STEPS_PER_SECOND } from '../game/clock';
 import type { DrawnBoat } from '../game/fleet';
 import type { Land } from '../land/land';
 import type { BoatAt } from '../life/birds';
-import { type GullSource, LifeDraw, type LifeFrame } from '../life/draw';
+import { type GullSource, LifeDraw, type LifeFrame, type SurfaceAt } from '../life/draw';
 import { LifeStore } from '../life/store';
 import { HULL_REACH, HULLS, hullShape, hulls } from '../ocean/hulls';
 import { foamAt, KNOT, newFoamLook, SPRAY, transomFrom } from '../ocean/look';
@@ -91,6 +91,7 @@ import {
 import { Stage } from './stage';
 import { FEW_STARS, Stars } from './stars';
 import { type FrameStats, Stats, WINDOW } from './stats';
+import { Swimmers } from './swimmers';
 import { Wrecks } from './wrecks';
 
 /** The staged end's timings, from the catalog. */
@@ -138,6 +139,8 @@ export function sailorLookOf(cat: Looks, code: number): SailorLook {
 const NO_BOATS: readonly DrawnBoat[] = [];
 /** A hull sits at most this much deeper or higher than at rest for its wake's waves, metres. */
 const SINK_MOST = 0.08;
+/** The foam map's hull for a splash of the sea's life, past any boat kind's. */
+const SPLASH_HULL = 250;
 
 /**
  * What can cover the sea, drawn by the same renderer in its place while it
@@ -218,6 +221,10 @@ export class SeaScene {
   /** The sea's life the page has been told of, and how it is drawn. */
   readonly life = new LifeStore();
   readonly lifeDraw = new LifeDraw(catalog.life, catalog.world.towns.buildings);
+  /** Every animal in the water drawn, one draw. */
+  readonly swimmers = new Swimmers();
+  /** Called with each frame's life before it is drawn: the sandbox's scenes keep their grounds of fish by it. */
+  onLife: ((f: LifeFrame) => void) | null = null;
   /** The wrecks, stranded and sunk. */
   readonly wrecks = new Wrecks(
     catalog.world.places.rigs,
@@ -397,7 +404,12 @@ export class SeaScene {
     scene.add(this.flags.mesh, this.smoke.mesh, this.cones.mesh);
     scene.add(this.lighthouses.towers, this.lighthouses.glows);
     scene.add(this.wrecks.root);
-    scene.add(this.birds.mesh);
+    scene.add(this.birds.mesh, this.swimmers.mesh);
+    // What breaks the water leaves a little white water on the foam map.
+    this.ocean.wakes.setHull(
+      { aft: 0.7, fore: -0.7, halfBeam: 0.7, transomFrom: 0.3 },
+      SPLASH_HULL,
+    );
     this.wrecks.depthAt = (east, north) => {
       const h = this.land?.heightAt(east, north) ?? null;
       return h === null ? null : -h;
@@ -964,6 +976,8 @@ export class SeaScene {
       }
     }
     this.spray.capacity = tier.spray;
+    // The low tier draws only what of the animals breaks the surface.
+    this.swimmers.setTint(tier.name !== 'low');
     this.weather.setCapacity(tier.puffs, tier.streaks);
     this.onQuality?.(tier.number, this.stage.pixelRatio());
     await Promise.all([
@@ -1069,6 +1083,7 @@ export class SeaScene {
     waves.add(p.east, p.north, p.heading, sink, own);
     const fs = this.fleetSource;
     if (fs === null) {
+      this.#stampLife();
       return;
     }
     // Every boat drawn makes a wake; the map and the waves keep those within
@@ -1083,6 +1098,8 @@ export class SeaScene {
         waves.add(b.east, b.north, b.heading, 0, b.kind);
       }
     }
+    // The sea's life's after the boats', in what room is left.
+    this.#stampLife();
     // The nearest, kept in order of distance as they are found.
     const near = this.#near;
     const dist = this.#nearDist;
@@ -1356,6 +1373,9 @@ export class SeaScene {
     own: null,
     fleet: NO_BOATS,
     count: 0,
+    bowOf: (kind) => (catalog.boats[kind] ?? this.kind).physics.hull.waterlineLength / 2,
+    ownKind: 0,
+    dt: 0,
   };
 
   /** The life's frame at the camera now: the boats a group may be with, the sea, the tier. */
@@ -1377,8 +1397,26 @@ export class SeaScene {
     f.own = this.boat === null ? null : own;
     f.fleet = this.fleetSource?.drawn ?? NO_BOATS;
     f.count = this.fleetSource?.count ?? 0;
+    f.ownKind = this.kindIndex;
+    f.dt = this.timeStep;
     return f;
   }
+
+  /** The sea's surface under the animals in the water, from the module's sea now. */
+  readonly #surface: SurfaceAt = (points, count, out) => {
+    const src = this.ocean.source;
+    const slot = this.ocean.slot;
+    if (src === null || slot < 0) {
+      out.fill(0, 0, count);
+      return;
+    }
+    src.physics.seaDrawAt(this.ticks);
+    const sea = src.physics.seaSample(slot, points.subarray(0, 2 * count));
+    for (let i = 0; i < count; i++) {
+      out[i] = sea[i * 4] ?? 0;
+    }
+  };
+  readonly #sunAt = new Vector3();
 
   /** The sea's life near, and the towns' gulls by day, into the birds' draw. */
   #drawLife(camera: Vector3, night: boolean): void {
@@ -1387,8 +1425,78 @@ export class SeaScene {
     if (land !== null) {
       this.#gullSource.version = this.#lands * 1e9 + land.towns.features().version;
     }
-    this.lifeDraw.frame(this.life, this.lifeFrame(camera, night), this.birds, towns);
+    const light = this.sky.light;
+    const sun = this.#sunAt.copy(light.position).sub(light.target.position);
+    if (sun.lengthSq() > 0) {
+      this.swimmers.sun.value.copy(sun.normalize());
+    }
+    this.swimmers.begin(this.origin.world, this.ticks / STEPS_PER_SECOND, this.birds.light.value);
+    const f = this.lifeFrame(camera, night);
+    this.onLife?.(f);
+    this.lifeDraw.frame(this.life, f, this.birds, towns, this.swimmers, this.#surface);
+    this.swimmers.end();
   }
+
+  /** The sea's life's splashes thrown as spray, and flecks over the boils of bait. */
+  #sprayLife(dt: number): void {
+    const d = this.lifeDraw;
+    for (let i = 0; i < d.splashCount; i++) {
+      const s = d.splashes[i];
+      if (s !== undefined) {
+        this.spray.splash(s.east, s.north, 0, s.size);
+      }
+    }
+    for (let i = 0; i < d.boilCount; i++) {
+      const b = d.boils[i];
+      if (b === undefined) {
+        continue;
+      }
+      // Small fish breaking the surface, driven up from below.
+      let owed = dt * 6 * b.strength;
+      while (owed > 0) {
+        this.#boilSeed = (Math.imul(this.#boilSeed, 1103515245) + 12345) >>> 0;
+        if (owed < 1 && this.#boilSeed / 4294967296 > owed) {
+          break;
+        }
+        owed -= 1;
+        const a = ((this.#boilSeed >>> 4) / 268435456) * 2 * Math.PI;
+        const r = b.reach * Math.sqrt(((this.#boilSeed >>> 8) & 0xffff) / 65536);
+        this.spray.splash(b.east + Math.sin(a) * r, b.north + Math.cos(a) * r, 0, 0.08);
+      }
+    }
+  }
+
+  /** The splashes and boils of the sea's life on the foam map: white water where something broke the water. */
+  #stampLife(): void {
+    const d = this.lifeDraw;
+    const wakes = this.ocean.wakes;
+    for (let i = 0; i < d.splashCount; i++) {
+      const s = d.splashes[i];
+      if (s !== undefined) {
+        wakes.add(s.east, s.north, 0, 0.6 + 1.6 * s.size, SPLASH_HULL);
+      }
+    }
+    for (let i = 0; i < d.boilCount; i++) {
+      const b = d.boils[i];
+      if (b === undefined) {
+        continue;
+      }
+      // The water boiling at the flock's edge: white here and there across it.
+      for (let k = 0; k < 3; k++) {
+        this.#boilSeed = (Math.imul(this.#boilSeed, 1103515245) + 12345) >>> 0;
+        const a = (this.#boilSeed / 4294967296) * 2 * Math.PI;
+        const r = b.reach * Math.sqrt(((this.#boilSeed >>> 8) & 0xffff) / 65536);
+        wakes.add(
+          b.east + Math.sin(a) * r,
+          b.north + Math.cos(a) * r,
+          a,
+          1.2 * b.strength,
+          SPLASH_HULL,
+        );
+      }
+    }
+  }
+  #boilSeed = 7;
 
   /** The winds asked of the module about the towns, by place, and when. */
   readonly #townWinds = new Map<string, { speed: number; from: number; asked: number }>();
@@ -1776,6 +1884,7 @@ export class SeaScene {
       w.crestRate = look.spray;
       w.spindrift = look.spindrift;
       this.spray.step(dt, sources, w, this.#crests, n, crests);
+      this.#sprayLife(dt);
     }
     this.sprayView.draw(this.spray, this.origin);
     if (this.sprayHidden) {

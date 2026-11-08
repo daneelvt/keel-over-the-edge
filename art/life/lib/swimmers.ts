@@ -4,7 +4,7 @@
 // The bodies of the life in the water: a dolphin, a sea turtle, a flying
 // fish and a tarpon, each lofted from its real proportions at a length of
 // its own and written as one mesh, a node of that name whose extras give
-// the length it was built at. The page scales each to a kind's length,
+// the length it was built at and how its spine bends. The page scales each to a kind's length,
 // paints it in the kind's colours by its vertices' (see body.ts) and bends
 // its spine by a wave that grows toward the tail.
 //
@@ -18,11 +18,16 @@ import { type MaterialDef, type NodeDef, readGlbJson, writeGlb } from '../../lib
 import type { Vec3 } from '../../lib/mesh.ts';
 import { Body, type Corner } from './body.ts';
 
-/** A body as it is built: its name, its length, m, and its triangles' budget. */
+/**
+ * A body as it is built: its name, its length, m, its triangles' budget,
+ * and how its spine bends as it swims: a whale's or a dolphin's flukes up
+ * and down, a fish's tail from side to side, a turtle's shell not at all.
+ */
 interface Swimmer {
   name: string;
   length: number;
   budget: number;
+  bend: 'upright' | 'sideways' | 'none';
   build: (length: number) => Body;
 }
 
@@ -534,10 +539,10 @@ function tarpon(length: number): Body {
 
 /** The bodies, the length each is built at and its budget of triangles. */
 const SWIMMERS: Swimmer[] = [
-  { name: 'dolphin', length: 2.2, budget: 320, build: dolphin },
-  { name: 'turtle', length: 1.0, budget: 320, build: turtle },
-  { name: 'flyingfish', length: 0.3, budget: 160, build: flyingfish },
-  { name: 'tarpon', length: 1.5, budget: 320, build: tarpon },
+  { name: 'dolphin', bend: 'upright', length: 2.2, budget: 320, build: dolphin },
+  { name: 'turtle', bend: 'none', length: 1.0, budget: 320, build: turtle },
+  { name: 'flyingfish', bend: 'sideways', length: 0.3, budget: 160, build: flyingfish },
+  { name: 'tarpon', bend: 'sideways', length: 1.5, budget: 320, build: tarpon },
 ];
 
 /** Each mesh's extent along x, y and z, m, and its triangles, as the glb's accessors give them. */
@@ -579,7 +584,7 @@ export function buildSwimmers(): void {
   };
   const nodes: NodeDef[] = SWIMMERS.map((s) => ({
     name: s.name,
-    extras: { length: s.length },
+    extras: { length: s.length, bend: s.bend },
     primitives: [s.build(s.length).m.primitive({ colors: true })],
   }));
   // One material: the page makes its own from the vertices' colours.

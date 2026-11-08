@@ -104,7 +104,7 @@ import { rungName, TIERS } from '../render/quality';
 import { CAMERA_PRESETS, type CameraView, type SeaScene } from '../render/scene';
 import { look } from '../render/sky';
 import type { SandboxForecast } from '../sandbox/forecast';
-import { lifeScene } from '../sandbox/lifescene';
+import { lifeScene, raiseScene } from '../sandbox/lifescene';
 import { KNOT, type Sandbox, SEA_STATES } from '../sandbox/sandbox';
 import { startWakeScene, type WakeSceneName, wakeSceneHost } from '../sandbox/wakescenes';
 import { hourAt, moonAgeAt, skyPeriods } from '../sky/skytime';
@@ -1951,7 +1951,7 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
           : { east: eastOff ?? 0, north: northOff ?? 0 };
       const e = lifeScene(catalog.life, kind, world.ticks, world.pose, ++lifeRaised, 0, offset);
       if (e !== null) {
-        world.life.set([e], []);
+        raiseScene(world, e, catalog.life);
       }
       return e;
     },

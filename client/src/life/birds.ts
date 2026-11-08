@@ -58,9 +58,10 @@ const CATCH = 2.5;
 /** The most a bank is, radians. */
 const BANK = 0.9;
 
-/** A boat a group is with: its pose, and its speed over the ground along its heading, m/s, if known. */
+/** A boat a group is with: its pose, its speed over the ground along its heading, m/s, and how far its stem is ahead of its middle, m, if known. */
 export interface BoatAt extends Pose {
   speed?: number;
+  bow?: number;
 }
 
 /** Where a bird is and how it flies. */

@@ -6,12 +6,17 @@
 // comes to a point 200 m ahead of the boat 40 s after the load: one that
 // passes crosses there, square to the boat's heading; one that soars or
 // works has come in by then and stays over it for the most its kind
-// stays. A kind that follows boats is with the own boat (with: 1), in
-// astern of it by 40 s and staying its kind's most. The tests raise one
-// again at now with keel.raiseLife, its middle there at once.
+// stays. A kind that follows boats or rides their bows is with the own
+// boat (with: 1), in by 40 s and staying its kind's most. A kind that
+// brings others brings each of them; a ground of flying fish is kept
+// apart, on the boat, and flushes fish ahead of it as it sails. The tests
+// raise one again at now with keel.raiseLife, its middle there at once.
 
 import type { Life } from '../catalog/types.gen';
-import { arrive, hash32, lingers } from '../life/flock';
+import type { LifeFrame } from '../life/draw';
+import { arrive, hash32, lingers, type Pose } from '../life/flock';
+import { flush, flushSlot, inGround, patchOf } from '../life/flush';
+import type { LifeStore } from '../life/store';
 import type { LifeSeen } from '../net/messages';
 
 /** Ticks a second of world time. */
@@ -57,16 +62,18 @@ export function lifeScene(
   const lo = k.group[0] ?? 1;
   const hi = k.group[1] ?? lo;
   const at = now + delay * STEPS;
-  const follows = k.binds === 'follow';
+  const bound = k.binds === 'follow' || k.binds === 'ride';
   const east = boat.east + (offset?.east ?? Math.sin(boat.heading) * AHEAD);
   const north = boat.north + (offset?.north ?? Math.cos(boat.heading) * AHEAD);
   // Each is at its point a, its coming in, after it begins: one that
   // passes crosses square to the boat's heading and goes on as far; one
-  // that follows comes up from astern along it, and one that stays comes
-  // in so, and each stays its kind's most before going on.
-  const stays = follows || lingers(k);
-  const start = Math.floor(at - a * STEPS);
-  const span = stays ? 2 * a + stay : 2 * a;
+  // that follows or rides comes up from astern along it, and one that
+  // stays comes in so, and each stays its kind's most before going on;
+  // one that drifts begins there and drifts its stay.
+  const drifts = k.path === 'drift';
+  const stays = bound || lingers(k);
+  const start = drifts ? Math.floor(at) : Math.floor(at - a * STEPS);
+  const span = drifts ? stay : stays ? 2 * a + stay : 2 * a;
   return {
     id: `sandbox-${n}`,
     rev: 0,
@@ -75,11 +82,148 @@ export function lifeScene(
     end: start + Math.ceil(span * STEPS),
     east,
     north,
-    heading: stays ? boat.heading : boat.heading + Math.PI / 2,
+    heading: stays || drifts ? boat.heading : boat.heading + Math.PI / 2,
     speed,
     count: Math.max(lo, Math.ceil((lo + hi) / 2)),
     seed: hash32((kind + 1) * 7919 + n),
-    with: follows ? 1 : 0,
+    with: bound ? 1 : 0,
     over: '',
   };
 }
+
+/**
+ * The groups that come with a scene's group, on its patch, from its start
+ * to its end: every one its kind brings, each of the middle of its count.
+ */
+export function broughtWith(life: Life, e: LifeSeen): LifeSeen[] {
+  const k = life.kinds[e.kind];
+  const out: LifeSeen[] = [];
+  (k?.brings ?? []).forEach((b, j) => {
+    const kind = life.kinds.findIndex((o) => o.id === b.kind);
+    const o = life.kinds[kind];
+    if (o === undefined) {
+      return;
+    }
+    out.push({
+      ...e,
+      id: `${e.id}-${j + 1}`,
+      kind,
+      heading: e.heading + (j + 1) * 1.3,
+      speed: ((o.speed[0] ?? 10) + (o.speed[1] ?? 10)) / 2,
+      count: Math.ceil(((b.count[0] ?? 1) + (b.count[1] ?? 1)) / 2),
+      seed: hash32((e.seed ^ hash32(j + 1)) >>> 0),
+      with: 0,
+      over: e.id,
+    });
+  });
+  return out;
+}
+
+/**
+ * A scene's grounds of flying fish, which the server would keep: each
+ * flushes fish ahead of the page's own boat as it sails through, by the
+ * server's own draw (flush.ts), as if the boat's id were the scene's.
+ */
+export class SceneFlushes {
+  readonly #grounds: LifeSeen[] = [];
+  readonly #life: Life;
+  #slot = Number.NaN;
+
+  constructor(life: Life) {
+    this.#life = life;
+  }
+
+  /** Keeps a ground, its middle on the boat. */
+  add(ground: LifeSeen, boat: SceneBoat): void {
+    this.#grounds.push({ ...ground, east: boat.east, north: boat.north, with: 0 });
+  }
+
+  /** Whether it keeps any ground. */
+  get size(): number {
+    return this.#grounds.length;
+  }
+
+  /**
+   * At each flushes' slot, the fish the boat at bow, sailing at speed m/s,
+   * flushes from each ground it is in at tick now: into the store.
+   */
+  step(store: LifeStore, bow: Pose, speed: number, now: number): void {
+    const slot = flushSlot(this.#life, now);
+    if (slot === this.#slot) {
+      return;
+    }
+    this.#slot = slot;
+    if (speed < this.#life.bind.speed) {
+      return;
+    }
+    const out: LifeSeen[] = [];
+    this.#grounds.forEach((g, n) => {
+      const k = this.#life.kinds[g.kind];
+      if (
+        k === undefined ||
+        now < g.start ||
+        now >= g.end ||
+        !inGround(g, patchOf(k, g.seed), bow.east, bow.north)
+      ) {
+        return;
+      }
+      const f = flush(this.#life, k, g, SCENE_BOAT, slot, bow, now);
+      if (f !== null) {
+        out.push({ ...f, id: `${g.id}-flush-${n}-${slot}` });
+      }
+    });
+    if (out.length > 0) {
+      store.set(out, []);
+    }
+  }
+}
+
+/** The boat's id a scene's flushes are drawn by. */
+const SCENE_BOAT = 1;
+
+/** What a scene's groups are put into: the page's life, and its hook for each frame's life. */
+export interface SceneWorld {
+  life: LifeStore;
+  pose: SceneBoat;
+  onLife: ((f: LifeFrame) => void) | null;
+}
+
+/**
+ * Puts a scene's group in the world: with the groups it brings, or, a
+ * ground of flying fish, kept apart to flush fish ahead of the own boat
+ * each frame.
+ */
+export function raiseScene(world: SceneWorld, e: LifeSeen, life: Life): void {
+  const k = life.kinds[e.kind];
+  if (k?.binds === 'flush') {
+    let flushes = scenes.get(world);
+    if (flushes === undefined) {
+      const made = new SceneFlushes(life);
+      flushes = made;
+      scenes.set(world, made);
+      const before = world.onLife;
+      world.onLife = (f) => {
+        before?.(f);
+        const own = f.own;
+        if (own !== null) {
+          const bow = f.bowOf(f.ownKind);
+          made.step(
+            world.life,
+            {
+              east: own.east + Math.sin(own.heading) * bow,
+              north: own.north + Math.cos(own.heading) * bow,
+              heading: own.heading,
+            },
+            own.speed ?? 0,
+            f.ticks,
+          );
+        }
+      };
+    }
+    flushes.add(e, world.pose);
+    return;
+  }
+  world.life.set([e, ...broughtWith(life, e)], []);
+}
+
+const scenes = new WeakMap<SceneWorld, SceneFlushes>();
