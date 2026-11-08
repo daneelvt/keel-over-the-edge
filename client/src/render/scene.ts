@@ -50,6 +50,7 @@ import { Birds } from './birds';
 import { Boat, lampsLit, lazyArtUrl, type SailorLook } from './boat';
 import { CAMERA_PRESETS, type CameraView, ChaseCamera, lookSizeOf, sizeOf } from './camera';
 import { FloatingOrigin, type ScenePoint } from './coords';
+import { glowDark } from './daylight';
 import { DirtyAir } from './dirtyair';
 import { type FlagSeen, Flags } from './flags';
 import { FleetViews, PERSON_DEFAULT } from './fleet';
@@ -1233,6 +1234,21 @@ export class SeaScene {
     this.skyRecord.set(physics.skyAt(this.skyAt, this.focus.east, this.focus.north));
     this.sky.read(this.skyRecord);
     this.stars.turn(this.skyRecord, SKY.stars);
+  }
+
+  /**
+   * How dark the sky is for glowing water to show, 0 to 1 (glowDark), by
+   * the sky as last read at the focus: the sun's and the moon's true
+   * heights and the moon's lit share. The moon's light at the most for it
+   * to show is the limit (the catalog's glow.moon). 0 while the sky is not
+   * drawn (the tests). Allocates nothing.
+   */
+  skyDark(limit: number): number {
+    if (!this.drawSky) {
+      return 0;
+    }
+    const n = this.sky.now;
+    return glowDark(n.sunHeight, n.moonHeight, n.lit, limit);
   }
 
   /** The lanterns of the player's boat and of the others, each lit by the sun at its own boat. */

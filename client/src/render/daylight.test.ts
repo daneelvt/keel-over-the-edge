@@ -3,6 +3,9 @@
 import { describe, expect, test } from 'vitest';
 import {
   DUSK_FLOOR,
+  GLOW_MOON_FADE,
+  GLOW_SUNSET,
+  glowDark,
   LIFTED,
   LIGHT_TABLE,
   type Light,
@@ -184,5 +187,71 @@ describe('the night’s floor', () => {
     // The moon's light is the hour's: no brighter for the floor.
     const moon = (v: LightValues) => mainLight(v, -30 * DEG, 40 * DEG, 1, newMainLight()).strength;
     expect(moon(lifted)).toBe(moon(night));
+  });
+});
+
+describe('the dark for glowing water', () => {
+  const LIMIT = 0.33;
+  const night = -20 * DEG;
+
+  test('is none by day, nor with the sun just on the horizon', () => {
+    expect(glowDark(30 * DEG, -40 * DEG, 0, LIMIT)).toBe(0);
+    expect(glowDark(0.5 * DEG, -40 * DEG, 0, LIMIT)).toBe(0);
+    expect(glowDark(0, -40 * DEG, 0, LIMIT)).toBe(0);
+  });
+
+  test('is whole on a dark night of a new moon, up or down', () => {
+    expect(glowDark(night, -40 * DEG, 0, LIMIT)).toBe(1);
+    expect(glowDark(night, 60 * DEG, 0, LIMIT)).toBe(1);
+  });
+
+  test('is none under a full moon high', () => {
+    expect(glowDark(night, 60 * DEG, 1, LIMIT)).toBe(0);
+    expect(glowDark(night, 90 * DEG, 1, LIMIT)).toBe(0);
+  });
+
+  test('is whole with a full moon down', () => {
+    expect(glowDark(night, -5 * DEG, 1, LIMIT)).toBe(1);
+    expect(glowDark(night, 0, 1, LIMIT)).toBe(1);
+  });
+
+  test('is whole under a moon whose light is below the limit, and none above it', () => {
+    // A full moon 15° up: sin 15° = 0.26, below 0.33 less a tenth of it.
+    expect(glowDark(night, 15 * DEG, 1, LIMIT)).toBe(1);
+    // A half moon 60° up: 0.5 × 0.87 = 0.43, above.
+    expect(glowDark(night, 60 * DEG, 0.5, LIMIT)).toBe(0);
+  });
+
+  test('fades in as the sun sinks, without a step', () => {
+    let last = 0;
+    for (let d = 0; d <= 3; d += 0.05) {
+      const g = glowDark(-d * DEG, -40 * DEG, 0, LIMIT);
+      expect(g).toBeGreaterThanOrEqual(last);
+      expect(g - last).toBeLessThan(0.06);
+      last = g;
+    }
+    expect(glowDark(-GLOW_SUNSET / 2, -40 * DEG, 0, LIMIT)).toBeCloseTo(0.5, 10);
+    expect(glowDark(-GLOW_SUNSET, -40 * DEG, 0, LIMIT)).toBe(1);
+  });
+
+  test('fades out across the limit’s last tenth as the moon rises', () => {
+    const at = (light: number) => glowDark(night, Math.asin(light), 1, LIMIT);
+    expect(at(LIMIT * (1 - GLOW_MOON_FADE))).toBe(1);
+    expect(at(LIMIT * (1 - GLOW_MOON_FADE / 2))).toBeCloseTo(0.5, 10);
+    expect(at(LIMIT)).toBe(0);
+    let last = 1;
+    for (let k = 0; k <= 60; k++) {
+      const g = glowDark(night, (k / 2) * DEG, 1, LIMIT);
+      expect(g).toBeLessThanOrEqual(last);
+      expect(last - g).toBeLessThan(0.5);
+      last = g;
+    }
+  });
+
+  test('is none for a limit of nothing, and for numbers that are not', () => {
+    expect(glowDark(night, -40 * DEG, 0, 0)).toBe(0);
+    expect(glowDark(Number.NaN, -40 * DEG, 0, LIMIT)).toBe(0);
+    expect(glowDark(night, Number.NaN, 0, LIMIT)).toBe(1);
+    expect(glowDark(night, 60 * DEG, Number.NaN, LIMIT)).toBe(0);
   });
 });

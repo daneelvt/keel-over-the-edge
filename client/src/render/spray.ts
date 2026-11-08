@@ -13,13 +13,19 @@
 //
 // The drops are stepped here, on the CPU, by a seeded generator, so the same
 // sail throws the same spray (the pictures). Nothing is allocated once made.
+//
+// In glowing water the drops flash too, as the water they were thrown from
+// does where it breaks: their colour goes toward the glow's (setGlow).
 
 import {
+  Color,
   DynamicDrawUsage,
   InstancedBufferAttribute,
   InstancedBufferGeometry,
   Mesh,
   PlaneGeometry,
+  SRGBColorSpace,
+  Vector4,
 } from 'three';
 import {
   attribute,
@@ -27,8 +33,10 @@ import {
   dot,
   Fn,
   float,
+  mix,
   positionGeometry,
   smoothstep,
+  uniform,
   varying,
   vec3,
 } from 'three/tsl';
@@ -292,9 +300,15 @@ export class SprayDrops {
   }
 }
 
+/** How much more opaque a drop is drawn at the glow's full strength: a flash, not a mist. */
+const GLOW_OPACITY = 0.15;
+
 /** The spray as it is drawn: one instanced mesh of camera-facing sprites. */
 export class SprayView {
   readonly mesh: Mesh;
+  /** The glow: its colour (linear) and strength, 0 to 1 (setGlow). */
+  readonly glow = uniform(new Vector4(0, 0, 0, 0));
+  readonly #colour = new Color();
   readonly #data: Float32Array;
   readonly #attr: InstancedBufferAttribute;
   readonly #geometry: InstancedBufferGeometry;
@@ -323,18 +337,32 @@ export class SprayView {
     const corner = varying(positionGeometry.xy);
     // A drop's sign carries its fading: a fresh drop is whole, an old one thin.
     const fade = varying(drop.w.sign().mul(0.5).add(0.5));
-    m.colorNode = vec3(0.95, 0.97, 0.97);
+    const glowing = this.glow.w;
+    m.colorNode = mix(vec3(0.95, 0.97, 0.97), this.glow.xyz, glowing);
     m.opacityNode = Fn(() => {
       const r = dot(corner, corner).mul(4);
       return float(1)
         .sub(smoothstep(0.3, 1, r))
-        .mul(fade.mul(0.45).add(0.4));
+        .mul(fade.mul(0.45).add(0.4))
+        .mul(glowing.mul(GLOW_OPACITY).add(1));
     })() as unknown as Node<'float'>;
     m.name = 'spray';
     this.mesh = new Mesh(g, m);
     this.mesh.name = 'spray';
     this.mesh.frustumCulled = false;
     this.mesh.renderOrder = 2;
+  }
+
+  /**
+   * Glowing water: the drops drawn in a colour (display values, 0 to 1, as
+   * the sea's glow takes it), by a strength from 0 (white spray, as without
+   * it) to 1. Only a uniform changes, so it may be called every frame:
+   * nothing is allocated and no shader is remade.
+   */
+  setGlow(r: number, g: number, b: number, strength: number): void {
+    const c = this.#colour.setRGB(r, g, b, SRGBColorSpace);
+    const s = Math.min(Math.max(strength, 0), 1);
+    (this.glow.value as Vector4).set(c.r, c.g, c.b, Number.isFinite(s) ? s : 0);
   }
 
   /** Puts the drops in the scene about the floating origin. */

@@ -31,7 +31,16 @@
 // On top comes the foam (foam.ts), held within each tile, and the boats'
 // white water, softer; and against the land (shore.ts) the bed through
 // shallow water, surf where the waves break, and calmer water in the lee.
+//
+// In glowing water on a dark night the boats' white water and their track
+// are drawn as light (seaGlow): dinoflagellates flash blue-green where the
+// water is disturbed, so a bow wave, a wake's breaking and the lane behind
+// a boat shine (Haddock, Moline and Case, "Bioluminescence in the Sea",
+// Annual Review of Marine Science, 2010). The shapes are the foam map's
+// own; only their colour goes toward the glow's, which is not lit by the
+// night's light as foam is.
 
+import { Vector4 } from 'three';
 import {
   abs,
   cameraPosition,
@@ -89,6 +98,20 @@ import type { TileVaryings } from './tiles';
 
 /** Seconds, wrapped, for the shimmer. */
 export const seaTime = uniform(0);
+
+/**
+ * The water's glow: its colour (display values, drawn as they are, unlit)
+ * and its strength, 0 (none: the sea as without it) to 1. At 1 the boats'
+ * white water is the glow's colour where it covers, and the track's
+ * bubbles are. Set by setSeaGlow.
+ */
+export const seaGlow = uniform(new Vector4(0, 0, 0, 0));
+
+/** Sets the water's glow: a colour (display values, 0 to 1) and a strength, 0 to 1. Allocates nothing. */
+export function setSeaGlow(r: number, g: number, b: number, strength: number): void {
+  const s = Math.min(Math.max(strength, 0), 1);
+  (seaGlow.value as Vector4).set(r, g, b, Number.isFinite(s) ? s : 0);
+}
 
 /** 1 to give each tile its own tint and shimmer; 0 to draw every tile alike (for tests). */
 export const tileIdentity = uniform(1);
@@ -493,11 +516,15 @@ export function tileLook(v: TileVaryings, parts: SeaParts, probe?: Probe): Node<
     If(top, () => {
       // And darker, as the whole patch reads from a distance.
       col.mulAssign(float(1).sub(gusty.mul(GUST_LOOK.dark)));
-      // The bubbles under the track lighten it toward the water's scattering colour.
-      col.assign(mix(col, look.scatter, churn.mul(TRACK.bubbles)));
+      // The bubbles under the track lighten it toward the water's scattering
+      // colour; in glowing water toward the glow's, the bubbles alight.
+      const glow = seaGlow.xyz;
+      const glowing = seaGlow.w;
+      col.assign(mix(col, mix(look.scatter, glow, glowing), churn.mul(TRACK.bubbles)));
       col.assign(greyed(col, rain.mul(RAIN_LOOK.grey)));
       col.assign(mix(col, foamColour(N), cover.mul(FOAM.cover)));
-      col.assign(mix(col, wakeColour(N, white), whiteCover.mul(FOAM.cover)));
+      // The boats' white water, foam; or in glowing water, light.
+      col.assign(mix(col, mix(wakeColour(N, white), glow, glowing), whiteCover.mul(FOAM.cover)));
       // The panel's overlay, where asked for.
       const up = clamp(wakeHeight.mul(20), -1, 1);
       const shown = select(
