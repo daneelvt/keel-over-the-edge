@@ -199,7 +199,7 @@ export function deckScene(
     look: look(n),
     // A spectator is told no names.
     name: owner ? '' : who,
-    machine: false,
+    machine: owner,
     you,
     muted: name === 'chat-list' && who === 'Bosun Bly',
     blocked: false,

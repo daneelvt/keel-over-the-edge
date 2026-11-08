@@ -291,3 +291,61 @@ func TestAMachinesKnockLapses(t *testing.T) {
 		}
 	})
 }
+
+// TestAPersonAboardKeepsTheChatPrivate: while only machine sailors are
+// aboard Iron Mary's boat, Bob, watching his Rover aboard it, reads their
+// chat; once Ann comes aboard, nobody who is not aboard reads a word of it,
+// Bob included, and Ann does.
+func TestAPersonAboardKeepsTheChatPrivate(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		srv, helms := machinesWorld(t)
+		annToken, ann := srv.Sailor("Ann Bonny")
+		bobToken, bob := srv.Sailor("Bob Read")
+		mary, maryBoat := srv.MachineKind(t, "Iron Mary", ann, keelboat(t), near(0))
+		rover, _ := srv.MachineKind(t, "Rover", bob, keelboat(t), near(2))
+		helms.names[bus.Account(rover)] = "Rover"
+		hub := srv.Chat
+		hub.Join(aboard.Speaker{Account: bus.Account(mary), Human: bus.Account(ann), Machine: true, Band: aboard.Adult, Rules: true}, "Iron Mary")
+		hub.Join(aboard.Speaker{Account: bus.Account(rover), Human: bus.Account(bob), Machine: true, Band: aboard.Adult, Rules: true}, "Rover")
+
+		a := dial(t, srv, annToken, client.HelloWatch("Iron Mary"))
+		a.welcomed()
+		a.keepAlive()
+		b := dial(t, srv, bobToken, client.HelloWatch("Rover"))
+		b.welcomed()
+		b.keepAlive()
+		link := srv.MachineLink(mary, ann, "Iron Mary")
+		if got := b.machineKnock(link, "Rover"); got != pb.KnockState_KNOCK_STATE_WAITING {
+			t.Fatalf("Rover's knock: %v", b.knocking)
+		}
+		card := a.card()
+		a.command(&pb.Command{Body: &pb.Command_Answer{Answer: &pb.Answer{Knock: card.GetId(), Let: true}}})
+		if w := b.welcomed(); w.GetBoat() != maryBoat {
+			t.Fatalf("Bob's watch aboard: %v", w)
+		}
+		// Machine sailors alone aboard: both owners, watching, read.
+		hub.Say(bus.Account(mary), "Welcome aboard, Rover")
+		for _, v := range []*viewer{a, b} {
+			if !v.read(5*time.Second, func() bool { return len(v.lines) == 1 }) {
+				t.Fatalf("an owner watching did not read the machine sailors' chat: %v", v.lines)
+			}
+		}
+		// Ann comes aboard: from then on Bob, watching, reads nothing.
+		time.Sleep(time.Second)
+		if got := a.comeAboard(); got != pb.KnockState_KNOCK_STATE_LET {
+			t.Fatalf("Ann coming aboard: %v", got)
+		}
+		a.welcomed()
+		time.Sleep(time.Second / 2)
+		if s := hub.Say(bus.Account(mary), "Ann is aboard now"); s.Refused != 0 || s.Heard != 2 {
+			t.Fatalf("Iron Mary's line with Ann aboard: %+v", s)
+		}
+		if !a.read(5*time.Second, func() bool { return len(a.lines) == 2 }) {
+			t.Fatalf("Ann, aboard, did not hear: %v", a.lines)
+		}
+		b.read(2*time.Second, nil)
+		if len(b.lines) != 1 {
+			t.Fatalf("a spectator read the chat of a boat with a person aboard: %v", b.lines)
+		}
+	})
+}

@@ -5689,7 +5689,10 @@ neither blocking the other, nor the receiver muting the sender; and the
 two aboard the same boat (later, shipmates too, with their own switch). A
 machine sailor's line reaches no human but its owner and the boat's
 skipper's human, and an owner watching their own machine sailor reads its
-boat's chat and says nothing (`Together.Owns`). Mutes and blocks are held
+boat's chat and says nothing (`Together.Owns`), but only while everyone
+aboard is a machine sailor: with a person aboard, a boat's chat is its
+company's alone, and no spectator reads a word of it
+(`aboard.SpectatorReads`, the one place that decides it). Mutes and blocks are held
 in memory (`aboard.Ties`, loaded as keel starts, changed after the
 database), which is also the knocks' `Refuser`: a block refuses knocks both
 ways, a human's watch (`watch.Boat.Blocked`, and the watch list leaves the

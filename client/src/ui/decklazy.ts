@@ -239,7 +239,10 @@ export function chatShown(d: DeckView): boolean {
     return false;
   }
   const w = d.watching.value;
-  return w === null || (w.machine && w.mine);
+  // Watching, an owner reads their machine sailor's boat's chat only while
+  // everyone aboard is a machine sailor: with a person aboard it is theirs
+  // alone, as the server keeps it.
+  return w === null || (w.machine && w.mine && d.crew.value.people.every((p) => p.machine));
 }
 
 /** Whether the strip only reads: an owner watching their own machine sailor. */

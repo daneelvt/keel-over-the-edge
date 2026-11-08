@@ -80,6 +80,24 @@ type Together struct {
 	Shipmates bool
 }
 
+// SpectatorReads reports whether someone not aboard a boat, watching it,
+// may read the chat aboard it: only while everyone aboard is a machine
+// sailor, and only an owner of one of them. With a person aboard, a
+// boat's chat is its company's alone: no spectator reads a word of it.
+// Spectators never say anything. machines says whether each one aboard is
+// a machine sailor; owns whether the viewer owns one of them.
+func SpectatorReads(machines []bool, owns bool) bool {
+	if len(machines) == 0 || !owns {
+		return false
+	}
+	for _, m := range machines {
+		if !m {
+			return false
+		}
+	}
+	return true
+}
+
 // Rules is chat's rule over the owner's switches and the ties between
 // players.
 type Rules struct {

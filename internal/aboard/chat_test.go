@@ -132,6 +132,25 @@ func TestDeliveredRefusals(t *testing.T) {
 	}
 }
 
+func TestSpectatorReads(t *testing.T) {
+	for _, c := range []struct {
+		machines []bool
+		owns     bool
+		want     bool
+	}{
+		{[]bool{true, true}, true, true},
+		{[]bool{true}, true, true},
+		{[]bool{true, true}, false, false},
+		{[]bool{true, false}, true, false},
+		{[]bool{false, true, true}, true, false},
+		{nil, true, false},
+	} {
+		if got := SpectatorReads(c.machines, c.owns); got != c.want {
+			t.Errorf("SpectatorReads(%v, %v) = %v, want %v", c.machines, c.owns, got, c.want)
+		}
+	}
+}
+
 func TestMaySay(t *testing.T) {
 	now := time.Now()
 	r := Rules{Switches: NewSwitches(DefaultLifetime)}

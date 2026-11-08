@@ -228,6 +228,14 @@ func (o chatOut) Deliver(l chat.Line, seat uint32, boat uint64, to []bus.Account
 	if !ok {
 		return
 	}
+	// With a person aboard, nobody who is not aboard reads its chat.
+	machines := make([]bool, len(people))
+	for i, p := range people {
+		machines[i] = p.Machine
+	}
+	if !aboard.SpectatorReads(machines, true) {
+		return
+	}
 	t := e.cfg.Chat.Together(people)
 	t.Aboard, t.Owns = false, true
 	for _, c := range watchers {
