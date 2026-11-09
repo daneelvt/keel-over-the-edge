@@ -85,6 +85,8 @@ export class Stage {
   #scenePass: PassNode | null = null;
   #last = 0;
   #frozen = false;
+  /** Those waiting for a copy of the next frame drawn. */
+  #captures: ((c: HTMLCanvasElement | null) => void)[] = [];
 
   constructor(container: HTMLElement, wanted: Wanted, hooks: StageHooks) {
     this.#container = container;
@@ -155,6 +157,45 @@ export class Stage {
   /** Updates and draws one frame now, at time now; updates it alone without a renderer. */
   renderOnce(now: number): void {
     this.#draw(now, 1 / 60, true);
+  }
+
+  /**
+   * A copy of the next frame drawn, on a canvas of its own: taken in the
+   * same task as the draw, before the browser shows the frame and may
+   * clear the canvas (as WebGPU's and WebGL's both are). A loop that draws
+   * nothing on its own (a page under test, or frozen) draws one now. Null
+   * with no renderer, or once the renderer is lost.
+   */
+  capture(): Promise<HTMLCanvasElement | null> {
+    if (this.gfx === null) {
+      return Promise.resolve(null);
+    }
+    return new Promise((resolve) => {
+      this.#captures.push(resolve);
+      if (!this.loopDraws || this.#frozen) {
+        this.renderOnce(performance.now());
+      }
+    });
+  }
+
+  /** Hands the frame just drawn to those waiting for it. */
+  #copy(canvas: HTMLCanvasElement): void {
+    const waiting = this.#captures;
+    this.#captures = [];
+    const copy = document.createElement('canvas');
+    copy.width = canvas.width;
+    copy.height = canvas.height;
+    const ctx = copy.getContext('2d');
+    if (ctx === null) {
+      for (const w of waiting) {
+        w(null);
+      }
+      return;
+    }
+    ctx.drawImage(canvas, 0, 0);
+    for (const w of waiting) {
+      w(copy);
+    }
   }
 
   setAntialias(a: Antialias): void {
@@ -267,11 +308,17 @@ export class Stage {
       return;
     }
     this.#pipeline.render();
+    if (this.#captures.length > 0) {
+      this.#copy(g.canvas);
+    }
     this.#hooks.drawn?.(g, performance.now() - start);
   }
 
   async #recover(reason: string): Promise<void> {
     this.lastLoss = reason;
+    for (const w of this.#captures.splice(0)) {
+      w(null);
+    }
     const old = this.gfx;
     this.gfx = null;
     old?.dispose();

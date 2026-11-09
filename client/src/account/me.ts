@@ -9,6 +9,14 @@
 // again.
 
 import type { Look } from '../catalog/looks';
+import type { LinkRefusal } from '../ui/watchwords';
+
+/** A link to watch the page was opened at that opened no watch: why, and its code to follow by. */
+export interface LinkNote {
+  refusal: LinkRefusal;
+  /** The sailor's link's code; '' for a fleet's. */
+  code: string;
+}
 
 /** The player's own account, as GET /api/me gives it. */
 export interface Me extends Look {
@@ -36,6 +44,14 @@ export interface Me extends Look {
   born?: boolean;
   /** Whether the player has accepted the Rules of the sea, asked once before their first knock or link. */
   rules?: boolean;
+  /** The codes of the player's own links to watch: their boat's, and their fleet's of machine sailors. */
+  watchCode?: string;
+  fleetCode?: string;
+  /**
+   * Not the server's: the link to watch the page was opened at, which
+   * opened no watch, told at the head of the player's own panel.
+   */
+  linkNote?: LinkNote;
   /**
    * Not the server's: the sailor the player chose on the start screen to
    * watch rather than sail; none to sail.

@@ -11,12 +11,14 @@
 // page says so and asks again. Then the net
 // worker opens the game connection, and the sea appears with the boat's
 // first snapshot; the page goes on predicting it, and says so when the
-// connection is poor or lost. A page opened with ?watch=Iron%20Mary, or a
-// sailor chosen to watch on the start screen, watches that sailor's boat
-// instead, from its own place: nothing steers it, and the player may
-// watch another or sail from there. A page opened at a link to come aboard
-// (/sail/<token>) offers, once signed in, to knock on the skipper's boat
-// rather than plain Set sail. Each change of boat goes through the
+// connection is poor or lost. A page opened at a link to watch, a
+// sailor's (?w=<code>) or a fleet's (?f=<code>), or a sailor chosen to
+// watch on the start screen, watches that sailor's boat instead, from its
+// own place: nothing steers it, and the player may watch another or sail
+// from there; a link that opens no watch lands on the player's own panel,
+// saying why. A page opened at a link to come aboard (?s=<token>) offers,
+// once signed in, to knock on the skipper's boat rather than plain Set
+// sail. Each change of boat goes through the
 // cover again: down over the screen, the world changed under it, and up
 // once the new boat's world is ready.
 //
@@ -45,16 +47,20 @@
 //   ?chart=sight      the sandbox's world charted as its lookout sees it, by the
 //                     server's sight table, rather than whole (?chart=all)
 //   ?test             the hooks the browser tests drive
-//   ?watch=Iron%20Mary  watches that sailor's boat rather than sail, once signed in
+//   ?w=<code>         watches the sailor of that link rather than sail, once signed in
+//   ?f=<code>         watches the liveliest of that fleet's machine sailors at sea
+//   ?s=<token>        asks to come aboard the skipper's boat of that link
 //
 // F flies the free camera off the boat and back, Escape brings it back: in
 // the sandbox for anyone, online for an account with the owner's flag.
 
 import './game.css';
 import { effect, signal } from '@preact/signals';
-import { sailFromPath } from '../account/comeaboardwords';
+import { sailFromQuery } from '../account/comeaboardwords';
 import { NOT_WATCHED, watchRefused } from '../account/letwatch';
+import { forgetParams } from '../account/links';
 import { type Me, resolveSailor } from '../account/me';
+import { openLink } from '../account/openlink';
 import { backSoon, showAddPasskey, showSailor, showStartScreen } from '../account/start';
 import { SETTING_SAIL } from '../account/yoursailor';
 import { CATALOG_VERSION, catalog } from '../catalog';
@@ -140,7 +146,7 @@ import { settingsSignal } from '../ui/settings';
 import { shipmatesOf } from '../ui/shipmatesview';
 import { checkStatements, statementsOf } from '../ui/statementlazy';
 import { loadWatch, type WatchView } from '../ui/watchlazy';
-import { watchFromQuery } from '../ui/watchwords';
+import { FLEET_PARAM, linkFromQuery, SAILOR_PARAM } from '../ui/watchwords';
 import { type Cover, DROP, LIFT, LIFT_REDUCED, QUIET, takeCover } from './cover';
 import { browserEnv, fullScreen } from './fullscreen';
 import { Gate, type Revealed, WAITING_WORDS, type Waiting } from './gate';
@@ -614,10 +620,10 @@ async function start(): Promise<void> {
   // The physics module compiles while the renderer starts and the sailor is
   // found, so none waits on another; the controls listen only at sea, so
   // typing a name steers nothing. Every way to sea ends at the player's own
-  // sailor and its Set sail; a link to watch a sailor goes straight to the
-  // watch.
+  // sailor and its Set sail; a link to watch goes straight to the watch, or,
+  // refused, to the player's own sailor, saying why.
   const notice = backSoon(document.body);
-  const linked = watchFromQuery(query);
+  const linked = linkFromQuery(query);
   // The wait begins at the tap that sets sail, or at once with no screen
   // to tap; the cover answers the tap at once.
   let tapped = performance.now();
@@ -637,13 +643,26 @@ async function start(): Promise<void> {
   // The picker's stage behind the start screen and the player's own panel,
   // on a page that draws.
   const stage = world.drawsWhenReady ? lookStage(world, cover) : undefined;
-  // A link to come aboard (/sail/<token>): once signed in, or the sailor
+  // A link to come aboard (?s=<token>): once signed in, or the sailor
   // made, the skipper's boat and the knock in place of Set sail.
-  const sailLink = linked === '' ? sailFromPath(location.pathname) : '';
+  const sailLink = linked === null ? sailFromQuery(query) : '';
   const aboard = (me: Me): Promise<Me> =>
     import('../account/comeaboard').then((m) =>
       m.showComeAboard(document.body, own(me), sailLink, catalog, catalog),
     );
+  // A link to watch, once signed in: the sailor it opens, watched at once;
+  // or, opening none, the player's own sailor with why at its head.
+  const watchLinked = async (me: Me): Promise<Me> => {
+    if (linked === null) {
+      return me;
+    }
+    const o = await openLink(linked);
+    if ('watch' in o) {
+      return { ...me, watch: o.watch };
+    }
+    const linkNote = { refusal: o.refusal, code: linked.kind === 'sailor' ? linked.code : '' };
+    return showSailor(document.body, own({ ...me, linkNote }), catalog, stage, catalog).then(set);
+  };
   const [, physics, me] = await Promise.all([
     world.start(),
     loadPhysics(fetch(wasmUrl)),
@@ -653,24 +672,27 @@ async function start(): Promise<void> {
           looks: catalog,
           boats: catalog,
           ...(stage === undefined ? {} : { stage }),
-          ...(linked === '' && sailLink === '' ? {} : { panel: false }),
-          ...(sailLink === '' ? {} : { straight: true }),
+          ...(linked === null && sailLink === '' ? {} : { panel: false, straight: true }),
+          ...(linked === null ? {} : { watching: true }),
         })
-          .then((me) => (sailLink === '' ? me : aboard(me)))
+          .then((me) => (sailLink !== '' ? aboard(me) : linked !== null ? watchLinked(me) : me))
           .then(set),
       addPasskey: (me) => showAddPasskey(document.body, me),
-      ...(linked === ''
-        ? {
-            sailor: (me: Me) =>
-              sailLink === ''
-                ? showSailor(document.body, own(me), catalog, stage, catalog).then(set)
-                : aboard(me).then(set),
-          }
-        : {}),
+      sailor: (me: Me) =>
+        sailLink !== ''
+          ? aboard(me).then(set)
+          : linked !== null
+            ? watchLinked(me)
+            : showSailor(document.body, own(me), catalog, stage, catalog).then(set),
       backSoon: notice,
     }).then(own),
   ]);
-  const watchFirst = linked !== '' ? linked : (me.watch ?? '');
+  const watchFirst = me.watch ?? '';
+  // Sailing, the link to watch is done with: a reload sails. Watching the
+  // sailor it opened, it stays, so that a reload watches again.
+  if (watchFirst === '') {
+    forgetParams(SAILOR_PARAM, FLEET_PARAM);
+  }
   const predictor = new Predictor(
     physics,
     catalog.boats.map((b) => b.physics),
@@ -891,18 +913,22 @@ async function start(): Promise<void> {
     boatPlace: online.place,
     watchers: online.watchers,
     list: signal(false),
-    watch: (sailor) => void changeBoat(() => online.watch(sailor)),
+    watch: (sailor) => {
+      // Another sailor watched: a reload no longer opens the link.
+      forgetParams(SAILOR_PARAM, FLEET_PARAM);
+      void changeBoat(() => online.watch(sailor));
+    },
     sail: () => {
       // A reload from now on sails, not watches the sailor linked.
-      if (query.has('watch')) {
-        query.delete('watch');
-        const q = query.toString();
-        history.replaceState(history.state, '', `${location.pathname}${q === '' ? '' : `?${q}`}`);
-      }
+      forgetParams(SAILOR_PARAM, FLEET_PARAM);
       void changeBoat(() => online.sail());
     },
     unwatch: () => online.unwatch(),
     comeAboard: () => online.comeAboard(),
+    sharing: signal(false),
+    // A picture of the view shared with a link, on a page that draws.
+    ...(world.stage.wanted !== 'none' ? { capture: () => world.stage.capture() } : {}),
+    ...(linked?.kind === 'fleet' ? { fleet: linked.code } : {}),
   };
   // A boat watched: the camera stays where the player puts it. The boat in
   // view's sailor is drawn in its look, as the server tells it: a machine
