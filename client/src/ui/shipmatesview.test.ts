@@ -278,10 +278,10 @@ describe('the scenes', () => {
       return s;
     };
     expect(v('shipmates').panel.value).toBe(true);
-    expect(v('shipmates-thread').thread.value).toBe('bosun');
-    expect(v('shipmates-thread').threads.lines('bosun')).toHaveLength(4);
+    expect(v('shipmates-thread').thread.value).toBe('bly');
+    expect(v('shipmates-thread').threads.lines('bly')).toHaveLength(4);
     expect(v('shipmates-away').threads.note('meg')).toMatchObject({ why: 'away' });
-    expect(v('shipmates-notice').notices.value).toMatchObject([{ kind: 'message', id: 'bosun' }]);
+    expect(v('shipmates-notice').notices.value).toMatchObject([{ kind: 'message', id: 'bly' }]);
     expect(v('shipmates-offer-notice').notices.value).toMatchObject([{ kind: 'offer' }]);
     expect(v('shipmates-offline').list.value?.offline).toBe(true);
     expect(v('shipmates-empty').list.value?.shipmates).toEqual([]);

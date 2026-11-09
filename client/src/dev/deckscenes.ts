@@ -475,7 +475,7 @@ function shipmatesListOf(name: DeckSceneName, sailor: string): ShipmatesList {
   const made = name === 'shipmates-made';
   const shipmates = [
     { id: 'iron', name: sailor, look: look(0.1), presence: 'sea' as const, skipper: true },
-    { id: 'bosun', name: 'Bosun Bly', look: look(0.5), presence: 'game' as const, skipper: false },
+    { id: 'bly', name: 'Bosun Bly', look: look(0.5), presence: 'game' as const, skipper: false },
     { id: 'meg', name: 'Marlinspike Meg', look: look(0.7), presence: '' as const, skipper: false },
   ];
   if (made) {
@@ -511,7 +511,7 @@ function shipmatesListOf(name: DeckSceneName, sailor: string): ShipmatesList {
         can: name !== 'shipmates-offered',
       },
       {
-        id: 'bosun',
+        id: 'bly',
         name: 'Bosun Bly',
         look: look(0.5),
         shipmate: true,
@@ -659,7 +659,7 @@ function shipmatesScene(
   if (threaded || name === 'shipmates-notice') {
     message(
       threads,
-      'bosun',
+      'bly',
       'Bosun Bly',
       'Ahoy! Are you out on the water today?',
       now - 300_000,
@@ -667,9 +667,9 @@ function shipmatesScene(
     );
   }
   if (threaded) {
-    echo('bosun', threads.say('bosun', 'Just left Port Royal, reaching north.', self, now), now);
-    message(threads, 'bosun', 'Bosun Bly', 'Shall I knock? I’d crew for you.', now - 60_000, 2);
-    echo('bosun', threads.say('bosun', 'Do! Ask from your shipmates list.', self, now), now);
+    echo('bly', threads.say('bly', 'Just left Port Royal, reaching north.', self, now), now);
+    message(threads, 'bly', 'Bosun Bly', 'Shall I knock? I’d crew for you.', now - 60_000, 2);
+    echo('bly', threads.say('bly', 'Do! Ask from your shipmates list.', self, now), now);
   }
   if (name === 'shipmates-away') {
     // A message to a shipmate not in the game: refused, its words back in the field.
@@ -690,7 +690,7 @@ function shipmatesScene(
       now,
     );
   }
-  view.thread.value = threaded ? 'bosun' : name === 'shipmates-away' ? 'meg' : null;
+  view.thread.value = threaded ? 'bly' : name === 'shipmates-away' ? 'meg' : null;
   view.panel.value = ![
     'shipmates-thread',
     'shipmates-away',
