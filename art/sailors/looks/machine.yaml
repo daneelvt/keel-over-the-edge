@@ -166,6 +166,8 @@ clips:
   [
     helm,
     helm-wheel,
+    trapeze,
+    trapeze-low,
     machine-habit-wheel,
     hiking-1,
     hiking-2,

@@ -107,6 +107,20 @@ stage:
     grips:
       wheel-left: [-45, 0.4]
       wheel-right: [45, 0.4]
+  # A boat sailed from the trapeze (build/stage.py's Trapeze): its model,
+  # set this far forward of the dinghy in the stage's scene, clear of it
+  # and of the wheel; its `trapeze` node gives the rack's edge the feet
+  # stand on (on the starboard side, at the helm's station), each side's
+  # ring and the hounds the wires come down from. The clips placed there
+  # are placed from the rack's edge on their side, as the game places them
+  # from the model's node. The harness the wire hooks to (build/gear.py's
+  # harness), worn only there: a belt this wide and thick round the
+  # clothes under a coat or an apron, its middle this far above the waist,
+  # and its hook standing this far out before it.
+  trapeze:
+    boat: boats/skiff.glb
+    at: [0.0, 24.0, 0.0]
+    harness: { width: 0.075, thick: 0.005, columns: 32, up: -0.02, hook: 0.055 }
 
 # The portraits (build/portraits.py), every look's taken alike: head and
 # shoulders, three-quarter, the camera on the figure's left at the height

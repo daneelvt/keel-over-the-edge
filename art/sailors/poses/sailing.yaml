@@ -410,6 +410,86 @@ poses:
       - [head, z, 20]
       - [head, x, -6]
 
+  # On the trapeze, fully out: standing on the rack's edge facing inboard
+  # (as seated on the starboard side deck: the left hand and foot aft),
+  # lying back out over the water nearly flat, the legs straight, the
+  # forward foot ahead of the aft one, each pressing on the edge with its
+  # ball; the chest turned a little toward the bow and the head lifted to
+  # look forward along the boat. The aft hand at the hip on the tiller
+  # extension, the forward one before the chest on the mainsheet. The wire
+  # from the hounds to the harness's hook holds the body: the game draws
+  # it. The cloth hangs from the body as it lies (the build turns the
+  # skirts' chains down).
+  trapeze-out:
+    place: trapeze
+    lie: 72
+    turn:
+      - [spine_02, z, -5]
+      - [spine_03, z, -7]
+      - [neck_01, x, 20]
+      - [head, x, 14]
+      - [neck_01, z, -14]
+      - [head, z, -26]
+    ik:
+      hand_l: { at: bone, bone: spine_03, offset: [0.21, -0.18, -0.13], pole: [0.7, 0.2, -0.2] }
+      hand_r: { at: bone, bone: spine_03, offset: [-0.1, -0.22, -0.08], pole: [-0.7, 0.2, -0.3] }
+      foot_l: { at: rack, offset: [-0.15, -0.05, 0.07] }
+      foot_r: { at: rack, offset: [0.17, -0.05, 0.07] }
+
+  # Looking up at the sails' luffs, and further forward past the bow.
+  trapeze-luff:
+    from: trapeze-out
+    turn:
+      - [spine_03, z, 4]
+      - [neck_01, z, 14]
+      - [head, z, 30]
+      - [head, x, -18]
+
+  trapeze-ahead:
+    from: trapeze-out
+    turn:
+      - [spine_03, z, -4]
+      - [neck_01, z, -10]
+      - [head, z, -20]
+      - [head, x, 6]
+
+  # Part out on the trapeze: crouched on the rack's edge, the knees bent,
+  # the hips out beyond it and the body leaning back half way, as a sailor
+  # going out or coming in, or riding a lull.
+  trapeze-crouch:
+    place: trapeze
+    lie: 50
+    turn:
+      - [thigh_l, x, -30]
+      - [thigh_r, x, -30]
+      - [calf_l, x, 64]
+      - [calf_r, x, 64]
+      - [spine_02, z, -4]
+      - [spine_03, z, -6]
+      - [neck_01, x, 10]
+      - [head, x, 8]
+      - [neck_01, z, -12]
+      - [head, z, -24]
+    ik:
+      hand_l: { at: bone, bone: spine_03, offset: [0.21, -0.2, -0.1], pole: [0.7, 0.2, -0.2] }
+      hand_r: { at: bone, bone: spine_03, offset: [-0.1, -0.24, -0.06], pole: [-0.7, 0.2, -0.3] }
+      foot_l: { at: rack, planted: true }
+      foot_r: { at: rack, planted: true }
+
+  trapeze-crouch-luff:
+    from: trapeze-crouch
+    turn:
+      - [neck_01, z, 14]
+      - [head, z, 30]
+      - [head, x, -18]
+
+  trapeze-crouch-ahead:
+    from: trapeze-crouch
+    turn:
+      - [neck_01, z, -10]
+      - [head, z, -20]
+      - [head, x, 6]
+
 clips:
   # At the wheel: looking ahead, aloft, ahead and to windward. Its -port
   # is for the wind over the port side.
@@ -431,6 +511,32 @@ clips:
       - { pose: wheel-stand, hold: 0.2, ramp: 1.8, arc: [0.06, 0.04], anticipate: 0.06 }
       - { pose: wheel-ahead, hold: 1.0, ramp: 1.8, lead: head }
       - { pose: wheel-stand, hold: 0.3, ramp: 1.8, lead: head }
+
+  # On the trapeze: fully out, and part out, each looking ahead, up at the
+  # sails and ahead again. Their -port are for the port side's wire. The
+  # game blends them after the hiking ones by how far out the physics puts
+  # the sailor.
+  trapeze:
+    loop: true
+    idle: true
+    sides: true
+    keys:
+      - { pose: trapeze-out, hold: 1.6, ramp: 1.5, lead: head }
+      - { pose: trapeze-luff, hold: 1.4, ramp: 1.6, lead: head, anticipate: 0.05 }
+      - { pose: trapeze-out, hold: 1.2, ramp: 1.5, lead: head }
+      - { pose: trapeze-ahead, hold: 1.2, ramp: 1.4, lead: head, anticipate: 0.05 }
+
+  trapeze-low:
+    loop: true
+    idle: true
+    sides: true
+    # Crouched, the thighs rise from the hips: only the back hangs free.
+    hang: { back: 1.0 }
+    keys:
+      - { pose: trapeze-crouch, hold: 1.6, ramp: 1.5, lead: head }
+      - { pose: trapeze-crouch-luff, hold: 1.4, ramp: 1.6, lead: head, anticipate: 0.05 }
+      - { pose: trapeze-crouch, hold: 1.2, ramp: 1.5, lead: head }
+      - { pose: trapeze-crouch-ahead, hold: 1.2, ramp: 1.4, lead: head, anticipate: 0.05 }
 
   helm:
     loop: true

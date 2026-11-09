@@ -252,6 +252,8 @@ clips:
   [
     helm,
     helm-wheel,
+    trapeze,
+    trapeze-low,
     cavalier-habit-wheel,
     hiking-1,
     hiking-2,

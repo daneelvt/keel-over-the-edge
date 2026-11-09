@@ -91,7 +91,8 @@ def build_look(job):
     if job.get("add"):
         # Only the clips added are made and written: theirs are the gates
         # that count, and the clips' file's.
-        report["failures"] = [f for g in judged.values() for f in g.failures(("clips", "clips wheel"))]
+        report["failures"] = [f for g in judged.values()
+                              for f in g.failures(("clips", "clips wheel", "clips trapeze", "harness"))]
     return report
 
 
@@ -452,7 +453,7 @@ def build_version(job, v, run):
         if level == "close":
             sheet.seconds += time.time() - start
             lap("sheet")
-            clips = make_clips(job, v, fig, lib, kinds, gates, renderer, lookmat, work, worn)
+            clips = make_clips(job, v, fig, lib, kinds, gates, renderer, lookmat, work, worn, marks)
             lap("clips")
             start = time.time()
         if level == "deck":
@@ -496,7 +497,7 @@ def build_version(job, v, run):
     }, gates, sheet
 
 
-def make_clips(job, v, fig, lib, kinds, gates, renderer, lookmat, work, worn=()):
+def make_clips(job, v, fig, lib, kinds, gates, renderer, lookmat, work, worn=(), marks=None):
     """The look's clips, made or retargeted on this version, each skirt's
     chains turned clear of the legs (motion.clear_skirts), judged, drawn
     and exported together. Returns each clip's measures."""
@@ -536,9 +537,16 @@ def make_clips(job, v, fig, lib, kinds, gates, renderer, lookmat, work, worn=())
         actions.append((act, slot))
         fig.made[name] = (act, slot, clip)
         # A clip at the wheel is placed from the helmsman's place, as the
-        # game places it from the boat's `sailor` node.
-        places[f"place-{as_(name)}"] = (Matrix.Translation(-fig.stage.wheel.at) @ clip.place
-                                        if getattr(clip, "standing", False) else clip.place.copy())
+        # game places it from the boat's `sailor` node; one on the trapeze
+        # from the rack's edge on its side, as the game places it from the
+        # model's `trapeze` node.
+        if getattr(clip, "standing", False):
+            places[f"place-{as_(name)}"] = Matrix.Translation(-fig.stage.wheel.at) @ clip.place
+        elif getattr(clip, "trapeze", False):
+            side = -1 if name.endswith(motion.PORT) else 1
+            places[f"place-{as_(name)}"] = Matrix.Translation(-fig.stage.point("rack", side)) @ clip.place
+        else:
+            places[f"place-{as_(name)}"] = clip.place.copy()
         fig.quiet()
         measures, track = judge.check(fig, clip, act, slot, m["gate"], m["ranges"], proxies)
         fig.quiet(False)
@@ -553,10 +561,14 @@ def make_clips(job, v, fig, lib, kinds, gates, renderer, lookmat, work, worn=())
     clip_seat(gates, "close", fig, out)
     clip_wheel(gates, fig, out)
     clip_skirts(gates, fig, worn, out)
-    # The files: the clips at a wheel apart from the rest, as only a boat
-    # steered by one loads them.
-    groups = (("clips", [n for n in names if not getattr(fig.made[n][2], "standing", False)]),
-              ("wheel", [n for n in names if getattr(fig.made[n][2], "standing", False)]))
+    # The files: the clips at a wheel and those on the trapeze apart from
+    # the rest, as only a boat steered by one or sailed from the other
+    # loads them.
+    def group_of(n):
+        c = fig.made[n][2]
+        return "wheel" if getattr(c, "standing", False) else "trapeze" if getattr(c, "trapeze", False) else "clips"
+
+    groups = tuple((g, [n for n in names if group_of(n) == g]) for g in ("clips", "wheel", "trapeze"))
     exported = False
     for group, members in groups:
         if not members:
@@ -607,7 +619,31 @@ def make_clips(job, v, fig, lib, kinds, gates, renderer, lookmat, work, worn=())
         if n not in last:
             act, slot, clip = fig.made[n]
             fig.made[n] = motion.write_action(fig.arm, as_(n), clip.frames, clip.fps) + (clip,)
+    if marks is not None and any(group_of(n) == "trapeze" for n in names):
+        harness(job, v, fig, marks, worn, gates, work)
     return out
+
+
+def harness(job, v, fig, marks, worn, gates, work):
+    """The trapeze's harness on the figure at rest (build/gear.py), in a
+    file of its own beside the clips on the trapeze: only a boat sailed
+    from the trapeze loads it. Its node `place-hook` is the hook's eye, in
+    the figure's space at rest, where the wire's ring hangs."""
+    import bpy
+
+    fig.reset()
+    tables = job["tables"]
+    obj, eye = gears.harness(tables["stage"]["trapeze"]["harness"], marks, fig.arm, worn, fig.meshes[0],
+                             tables["ease"])
+    rig.limit_weights(obj, rig.bone_names(fig.arm))
+    path = os.path.join(job["out"], f"{v}.harness.glb")
+    tris = export.write_plain(path, [obj], fig.arm, job["gltfpack"], work, {"place-hook": Matrix.Translation(eye)})
+    n = sum(tris.values())
+    budget = tables["budgets"]["close"]["gear"]
+    gates.add("harness", "triangles", n, budget, n <= budget)
+    gltf, _ = export.read(path)
+    metrics.skeleton(gates, "harness", gltf, tables["skeleton"])
+    bpy.data.objects.remove(obj, do_unlink=True)
 
 
 def clip_seat(gates, level, fig, measures=None):
@@ -623,7 +659,8 @@ def clip_seat(gates, level, fig, measures=None):
         fig.reset()
         motion.play(fig.arm, act, slot)
         fig.arm.matrix_world = clip.place
-        standing = getattr(clip, "standing", False)
+        # Standing at the wheel or on the trapeze, nothing lies on a seat.
+        standing = getattr(clip, "standing", False) or getattr(clip, "trapeze", False)
         fig.on_seat(not standing)
         through = []
         total = 0
@@ -717,8 +754,10 @@ def clip_skirts(gates, fig, worn, measures):
         fig.reset()
         motion.play(fig.arm, act, slot)
         fig.arm.matrix_world = clip.place
-        # Standing at the wheel the cloth hangs as it does standing anywhere.
-        seated = clip.place != Matrix() and not getattr(clip, "standing", False)
+        # Standing at the wheel the cloth hangs as it does standing anywhere;
+        # on the trapeze, from the body lying out.
+        seated = clip.place != Matrix() and not getattr(clip, "standing", False) and \
+            not getattr(clip, "trapeze", False)
         frames = []
         for f in range(len(clip.frames)):
             bpy.context.scene.frame_set(f)

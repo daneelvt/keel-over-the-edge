@@ -27,6 +27,12 @@ figure by casting onto it, never by eye.
   its head resting on the belt's top;
 - pencil: a pencil behind one ear, along the side of the head; on the
   head.
+- harness: a trapeze harness, worn only on a boat sailed from the
+  trapeze: a broad leather belt round the clothes at the waist, under a
+  coat's or an apron's (between what is under it and what is over it, by
+  rays in toward the middle), and a bronze hook standing out from its front
+  clear of everything, which the wire's ring hangs on. It is not in the
+  atlas: its own two materials, leather and bronze, in a file of its own.
 
 The spectacles, dividers, earrings, book and pencil are too fine to see
 from the deck: they are props (the deck level leaves them out); the case is seen from far off and
@@ -971,3 +977,132 @@ def pencil(spec, p, marks, arm, skin):
     _materials(obj, spec, [spec.get("colour", "#B8894E"), colours.get("point", "#D8C3A0")], [False, False])
     _rigid(obj, arm, "head")
     return obj
+
+
+# --- The trapeze's harness ------------------------------------------------
+
+# The harness's colours (sRGB) and the bronze's metal.
+LEATHER = "#4A3020"
+BRONZE = "#8C6B3D"
+
+
+def harness(spec, marks, arm, worn, skin, ease):
+    """A trapeze harness on the dressed figure at rest: a band round the
+    waist (spec: width, thick, columns, up: its middle above the waist;
+    hook: how far its hook stands out before the band), over the body and
+    what is worn under a coat (by ease, less than a coat's) and under the
+    coat, an apron and what is carried over them, squeezed thinner where
+    they lie close; and a hook at the front, out past whatever is before
+    it. Returns the mesh, skinned as the cloth under it, and the hook's
+    eye, where the ring hangs, in the figure's space."""
+    coat = ease["coat"]
+
+    def layer(w):
+        return ease.get((w.spec.get("params") or {}).get("layer", w.spec.get("family")), 0.0)
+
+    under = [skin] + [w.obj for w in worn if w.kind in ("garment", "plate") and layer(w) < coat]
+    over = [w.obj for w in worn if (w.kind == "garment" and layer(w) >= coat) or w.kind == "gear"]
+    under_t, _ = _host_tree(under, TORSO + ("skirt",))
+    over_t, _ = _host_tree(over, TORSO + ("skirt",)) if over else (None, None)
+    every = [skin] + [w.obj for w in worn if w.kind not in ("hair", "beard", "face")]
+    every_t, _ = _host_tree(every, TORSO + ("skirt",))
+    m = marks.measure()
+    width, thick, columns = spec["width"], spec["thick"], spec["columns"]
+    mid_z = m["heights"]["waist"] + spec.get("up", 0.0)
+    rows = 3
+    zs = [mid_z - width / 2 + width * r / (rows - 1) for r in range(rows)]
+
+    def outward(a):
+        return Vector((np.sin(a), -np.cos(a), 0.0))
+
+    def out_at(tree, z, a, far=True):
+        """How far out from the torso's middle the first surface a ray in
+        toward it meets (far: from outside; else the nearest out from
+        the middle, a ray outward), or None."""
+        c = Vector((0.0, marks.near(z)[1], z))
+        d = outward(a)
+        for dz in (0.0, 0.002, -0.002):
+            if far:
+                hit = tree.ray_cast(c + d * 0.6 + Vector((0, 0, dz)), -d, 0.6)[0]
+            else:
+                hit = tree.ray_cast(c + Vector((0, 0, dz)), d, 0.6)[0]
+            if hit is not None:
+                return (hit - c).dot(d)
+        return None
+
+    inner, outer = [], []
+    for k in range(columns):
+        a = 2 * np.pi * k / columns
+        found = [x for x in (out_at(under_t, z, a) for z in zs) if x is not None]
+        lo = max(found) if found else None
+        hi = None
+        if over_t is not None:
+            # The inside of what is over it: the nearest out from the middle.
+            got = [x for x in (out_at(over_t, z, a, far=False) for z in zs) if x is not None]
+            hi = min(got) if got else None
+        inner.append(lo)
+        outer.append(hi)
+    if all(x is None for x in inner):
+        raise AssertionError("nothing under the harness")
+    for k in range(columns):
+        if inner[k] is None:
+            k0 = next(j for j in range(1, columns) if inner[(k - j) % columns] is not None)
+            k1 = next(j for j in range(1, columns) if inner[(k + j) % columns] is not None)
+            inner[k] = (inner[(k - k0) % columns] * k1 + inner[(k + k1) % columns] * k0) / (k0 + k1)
+    bands = []
+    for k in range(columns):
+        a_in = inner[k] + OFF
+        a_out = a_in + thick
+        if outer[k] is not None and outer[k] > inner[k]:
+            # Under what is over it: squeezed, never through it.
+            a_out = min(a_out, outer[k] - 0.002)
+            a_out = max(a_out, a_in + 0.001)
+        bands.append((a_in, a_out))
+
+    bm = bmesh.new()
+    uv = bm.loops.layers.uv.new("uv")
+    vin, vout = [], []
+    for z in zs:
+        c = Vector((0.0, marks.near(z)[1], z))
+        vin.append([bm.verts.new(c + outward(2 * np.pi * k / columns) * bands[k][0]) for k in range(columns)])
+        vout.append([bm.verts.new(c + outward(2 * np.pi * k / columns) * bands[k][1]) for k in range(columns)])
+
+    def face(vs, slot=0):
+        f = bm.faces.new(vs)
+        f.material_index = slot
+        return f
+
+    for r in range(rows - 1):
+        for k in range(columns):
+            n = (k + 1) % columns
+            face((vout[r][k], vout[r][n], vout[r + 1][n], vout[r + 1][k]))
+            face((vin[r][n], vin[r][k], vin[r + 1][k], vin[r + 1][n]))
+    for k in range(columns):
+        n = (k + 1) % columns
+        face((vin[0][k], vin[0][n], vout[0][n], vout[0][k]))
+        face((vout[-1][k], vout[-1][n], vin[-1][n], vin[-1][k]))
+
+    # The hook: from a bronze plate on the band's front, out past whatever
+    # is before it (a coat's front, an apron), and turned up toward the
+    # head, the ring's eye in its crook.
+    front = Vector((0.0, marks.near(mid_z)[1], mid_z)) + outward(0.0) * bands[0][1]
+    clear = max([bands[0][1]] + [x for x in (out_at(every_t, z, 0.0) for z in zs) if x is not None])
+    reach = max(spec["hook"], clear - bands[0][1] + 0.03)
+    ahead = Vector((0.0, -1.0, 0.0))
+    up = Vector((0.0, 0.0, 1.0))
+    plate = [front + up * dz + ahead * dy for dy, dz in ((0.0, 0.0), (0.004, 0.0))]
+    _tube(bm, uv, plate, 0.022, sides=10, slot=1)
+    tip = front + ahead * reach
+    path = [front + ahead * 0.004, tip, tip + ahead * 0.012 + up * 0.012, tip + up * 0.03, tip + up * 0.034 + ahead * -0.008]
+    _tube(bm, uv, path, 0.005, sides=6, slot=1)
+    eye = tip + ahead * 0.006 + up * 0.012
+    obj = _new("harness", bm)
+    for name, colour, metal in (("harness-leather", LEATHER, 0.0), ("harness-bronze", BRONZE, 1.0)):
+        mat = bpy.data.materials.new(name)
+        bsdf = mat.node_tree.nodes.get("Principled BSDF")
+        bsdf.inputs["Base Color"].default_value = (*atlas.linear(colour), 1.0)
+        bsdf.inputs["Metallic"].default_value = metal
+        bsdf.inputs["Roughness"].default_value = 0.75 if metal == 0.0 else 0.4
+        obj.data.materials.append(mat)
+    _weigh_from(obj, [skin] + [o for o in under if o is not skin], arm)
+    return obj, eye

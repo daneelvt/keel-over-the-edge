@@ -85,6 +85,35 @@ def write(path, meshes, arm, mat, mask_png, gltfpack, work, places=None):
     return triangles(gltf)
 
 
+def write_plain(path, meshes, arm, gltfpack, work, places=None):
+    materials = [m.name for o in meshes for m in o.data.materials]
+    """Writes meshes in their own materials, colours with no texture
+    (gear outside the atlas: the trapeze's harness), skinned to the
+    skeleton arm, and the places by name (add_places)."""
+    for o in bpy.context.view_layer.objects:
+        o.select_set(False)
+    for o in meshes + [arm]:
+        o.select_set(True)
+    bpy.context.view_layer.objects.active = meshes[0]
+    raw = os.path.join(work, os.path.basename(path).replace(".glb", ".raw.glb"))
+    bpy.ops.export_scene.gltf(
+        filepath=raw, export_format="GLB", use_selection=True, export_yup=True, export_apply=False,
+        export_texcoords=False, export_normals=True, export_vertex_color="NONE", export_extras=False,
+        export_skins=True, export_def_bones=False, export_influence_nb=4, export_all_influences=False,
+        export_leaf_bone=False, export_rest_position_armature=True, export_morph=False, export_animations=False)
+    names = sorted(o.name for o in meshes)
+    bones = [b.name for b in arm.data.bones]
+    gltf, binary = read(raw)
+    check(raw, gltf, names, bones, textures=0, materials=materials)
+    add_places(gltf, places or {})
+    placed = raw.replace(".raw.glb", ".placed.glb")
+    write_glb(placed, gltf, binary)
+    subprocess.run([gltfpack, "-i", placed, "-o", path, "-c", "-kn", "-km", "-vpf"], check=True, capture_output=True)
+    gltf, _ = read(path)
+    check(path, gltf, names, bones, textures=0, materials=materials)
+    return triangles(gltf)
+
+
 def read(path):
     """A glTF binary's JSON and binary chunk."""
     with open(path, "rb") as f:
@@ -158,8 +187,9 @@ def place_names(gltf):
     return {n["name"]: n.get("matrix") for n in gltf.get("nodes", []) if n.get("name", "").startswith("place")}
 
 
-def check(path, gltf, meshes, bones, textures):
-    """Fails unless the file holds exactly what the level should."""
+def check(path, gltf, meshes, bones, textures, materials=(MATERIAL,)):
+    """Fails unless the file holds exactly what the level should (in the
+    one material, or those named)."""
     problems = []
     named = mesh_names(gltf)
     got = sorted(named.values())
@@ -173,8 +203,8 @@ def check(path, gltf, meshes, bones, textures):
                 problems.append(f"{named.get(i)} is not triangles")
     if gltf.get("animations"):
         problems.append("it has animations")
-    if [mt.get("name") for mt in gltf.get("materials", [])] != [MATERIAL]:
-        problems.append(f"materials {[mt.get('name') for mt in gltf.get('materials', [])]}, not one {MATERIAL!r}")
+    if [mt.get("name") for mt in gltf.get("materials", [])] != list(materials):
+        problems.append(f"materials {[mt.get('name') for mt in gltf.get('materials', [])]}, not {list(materials)}")
     if len(gltf.get("textures", [])) != textures:
         problems.append(f"{len(gltf.get('textures', []))} textures, not {textures}")
     skins = gltf.get("skins", [])

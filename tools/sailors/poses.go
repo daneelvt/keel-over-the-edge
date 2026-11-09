@@ -28,9 +28,12 @@ type pose struct {
 	From  string `yaml:"from" json:"from,omitempty"`
 	Place string `yaml:"place" json:"place,omitempty"`
 	// Shift moves the placed figure forward, inboard and up from its place.
-	Shift []float64         `yaml:"shift" json:"shift,omitempty"`
-	Turn  [][]any           `yaml:"turn" json:"turn,omitempty"`
-	IK    map[string]target `yaml:"ik" json:"ik,omitempty"`
+	Shift []float64 `yaml:"shift" json:"shift,omitempty"`
+	// Lie leans the placed figure back about its own left-right axis, in
+	// degrees: a body lying out on the trapeze, its joints' turns its own.
+	Lie  float64           `yaml:"lie" json:"lie,omitempty"`
+	Turn [][]any           `yaml:"turn" json:"turn,omitempty"`
+	IK   map[string]target `yaml:"ik" json:"ik,omitempty"`
 }
 
 // target is a place on the stage, or a bone of the figure's own, and an
@@ -73,7 +76,11 @@ type clip struct {
 	// the ends of their ranges, as the hike does; the motion gate gives
 	// them more of it.
 	Strain []string `yaml:"strain" json:"strain,omitempty"`
-	Keys   []key    `yaml:"keys" json:"keys"`
+	// Hang turns the skirts' chains, by name (back, side, front), this
+	// share of the way to hang straight down from a body lying out on the
+	// trapeze; the build's own shares if not said.
+	Hang map[string]float64 `yaml:"hang" json:"hang,omitempty"`
+	Keys []key              `yaml:"keys" json:"keys"`
 }
 
 // portSuffix names a clip's port side, made with Sides.
@@ -105,7 +112,7 @@ type retarget struct {
 }
 
 var (
-	places    = []string{"", "seat", "gunwale", "cockpit", "outside", "wheel"}
+	places    = []string{"", "seat", "gunwale", "cockpit", "outside", "wheel", "trapeze"}
 	effectors = []string{"hand_l", "hand_r", "foot_l", "foot_r"}
 	stageAt   = []string{"seat", "gunwale", "floor", "strap", "free"}
 	keySides  = []string{"", "port", "starboard"}
@@ -164,6 +171,13 @@ func (lib poseLibrary) check(t tables, sources map[string]source) error {
 	if st, ok := t.Tables["stage"].(map[string]any); ok {
 		if ps, ok := st["points"].(map[string]any); ok {
 			for p := range ps {
+				points[p] = true
+			}
+		}
+		// On the trapeze: the rack's edge the feet stand on, the hounds,
+		// the ring, the extension's hinge and the mainsheet's block.
+		if _, ok := st["trapeze"].(map[string]any); ok {
+			for _, p := range []string{"rack", "hounds", "ring", "trapeze-hinge", "trapeze-sheet"} {
 				points[p] = true
 			}
 		}
