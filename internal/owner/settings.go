@@ -29,18 +29,21 @@ type SailSettings interface {
 type ChatSettings interface {
 	SetChatSwitch(ctx context.Context, on bool, a store.Action) error
 	SetShipmateMessages(ctx context.Context, on bool, a store.Action) error
+	SetSpectatorChat(ctx context.Context, on bool, a store.Action) error
 	SetChatCountries(ctx context.Context, countries []string, a store.Action) error
 }
 
 // SettingsJSON is settings.json: how long a link lasts, s, and whether
-// links and boarding are on for everyone; and whether chat and shipmates'
-// messages are, and the countries where chat is off.
+// links and boarding are on for everyone; and whether chat, shipmates'
+// messages and spectators' reading of machine sailors' chat are, and the
+// countries where chat is off.
 type SettingsJSON struct {
 	LinkLifetime     int64    `json:"linkLifetime"`
 	Links            bool     `json:"links"`
 	Boarding         bool     `json:"boarding"`
 	Chat             bool     `json:"chat"`
 	ShipmateMessages bool     `json:"shipmateMessages"`
+	SpectatorChat    bool     `json:"spectatorChat"`
 	ChatCountries    []string `json:"chatCountries"`
 }
 
@@ -50,9 +53,11 @@ type SettingsRequest struct {
 	LinkLifetime *int64 `json:"linkLifetime,omitempty"`
 	Links        *bool  `json:"links,omitempty"`
 	Boarding     *bool  `json:"boarding,omitempty"`
-	// Chat, ShipmateMessages and ChatCountries are chat's switches.
+	// Chat, ShipmateMessages, SpectatorChat and ChatCountries are chat's
+	// switches.
 	Chat             *bool     `json:"chat,omitempty"`
 	ShipmateMessages *bool     `json:"shipmateMessages,omitempty"`
+	SpectatorChat    *bool     `json:"spectatorChat,omitempty"`
 	ChatCountries    *[]string `json:"chatCountries,omitempty"`
 	Check            bool      `json:"check,omitempty"`
 }
@@ -71,7 +76,7 @@ func settingsOf(s *aboard.Switches) SettingsJSON {
 		c = []string{}
 	}
 	return SettingsJSON{LinkLifetime: int64(s.Lifetime() / time.Second), Links: s.Links(), Boarding: s.Boarding(),
-		Chat: s.Chat(), ShipmateMessages: s.ShipmateMessages(), ChatCountries: c}
+		Chat: s.Chat(), ShipmateMessages: s.ShipmateMessages(), SpectatorChat: s.SpectatorChat(), ChatCountries: c}
 }
 
 // settings serves settings.json, the switches in force.
@@ -116,9 +121,9 @@ func (o *Owner) setSettings(w http.ResponseWriter, r *http.Request) {
 		o.refuse(w, "settings", http.StatusServiceUnavailable, "sailing together is not running")
 		return
 	}
-	chatAsked := req.Chat != nil || req.ShipmateMessages != nil || req.ChatCountries != nil
+	chatAsked := req.Chat != nil || req.ShipmateMessages != nil || req.SpectatorChat != nil || req.ChatCountries != nil
 	if req.LinkLifetime == nil && req.Links == nil && req.Boarding == nil && !chatAsked {
-		o.refuse(w, "settings", http.StatusBadRequest, "nothing to change: give linkLifetime, links, boarding, chat, shipmateMessages or chatCountries")
+		o.refuse(w, "settings", http.StatusBadRequest, "nothing to change: give linkLifetime, links, boarding, chat, shipmateMessages, spectatorChat or chatCountries")
 		return
 	}
 	if chatAsked && o.cfg.ChatSettings == nil {
@@ -177,6 +182,10 @@ func (o *Owner) setSettings(w http.ResponseWriter, r *http.Request) {
 	if req.ShipmateMessages != nil {
 		after.ShipmateMessages = *req.ShipmateMessages
 		words = append(words, "shipmates' messages "+onOff(*req.ShipmateMessages)+" for everyone")
+	}
+	if req.SpectatorChat != nil {
+		after.SpectatorChat = *req.SpectatorChat
+		words = append(words, "spectators reading machine sailors' chat "+onOff(*req.SpectatorChat)+" for everyone")
 	}
 	if req.ChatCountries != nil {
 		after.ChatCountries = append([]string{}, countries...)
@@ -244,6 +253,16 @@ func (o *Owner) setSettings(w http.ResponseWriter, r *http.Request) {
 			sw.SetShipmateMessages(*req.ShipmateMessages)
 			o.count(store.ActionShipmateMessages)
 			o.cfg.Log.Info("owner: shipmates' messages switched", "action", store.ActionShipmateMessages, "on", *req.ShipmateMessages, "from", r.RemoteAddr)
+		}
+		if req.SpectatorChat != nil {
+			a.Detail = onOff(*req.SpectatorChat)
+			if err := cs.SetSpectatorChat(ctx, *req.SpectatorChat, a); err != nil {
+				http.Error(w, "the database: "+err.Error(), http.StatusServiceUnavailable)
+				return
+			}
+			sw.SetSpectatorChat(*req.SpectatorChat)
+			o.count(store.ActionSpectatorChat)
+			o.cfg.Log.Info("owner: spectators' reading of machine sailors' chat switched", "action", store.ActionSpectatorChat, "on", *req.SpectatorChat, "from", r.RemoteAddr)
 		}
 		if req.ChatCountries != nil {
 			a.Detail = strings.Join(countries, ",")

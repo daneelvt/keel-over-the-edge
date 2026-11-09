@@ -57,3 +57,5 @@ func (noAccounts) MakeNotice(context.Context, store.Notice) (store.ReportID, err
 func (noAccounts) SetChatSwitch(context.Context, bool, store.Action) error        { return nil }
 func (noAccounts) SetShipmateMessages(context.Context, bool, store.Action) error  { return nil }
 func (noAccounts) SetChatCountries(context.Context, []string, store.Action) error { return nil }
+func (noAccounts) SpectatorChat(context.Context) (bool, error)                    { return true, nil }
+func (noAccounts) SetSpectatorChat(context.Context, bool, store.Action) error     { return nil }

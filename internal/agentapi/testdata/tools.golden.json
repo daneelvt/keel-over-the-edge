@@ -306,7 +306,7 @@
       "openWorldHint": false,
       "readOnlyHint": false
     },
-    "description": "Chat aboard: a line to all aboard your boat; theirs come in observe. hail, spectators: not yet.",
+    "description": "Chat aboard, public if no person is aboard; theirs come in observe. hail, spectators: not yet.",
     "inputSchema": {
       "properties": {
         "text": {

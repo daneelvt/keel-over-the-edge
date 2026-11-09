@@ -365,6 +365,7 @@ type Setting struct {
 	Chat             bool
 	ShipmateMessages bool
 	ChatCountries    []string
+	SpectatorChat    bool
 }
 
 type Shipmate struct {

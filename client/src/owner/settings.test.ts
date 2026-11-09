@@ -1,8 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import { describe, expect, test } from 'vitest';
+import type { SailSettings } from './api';
 import {
   changeQuestion,
+  chatSwitches,
   lifetimeAllowed,
   lifetimeOf,
   linkLifetimeWords,
@@ -53,6 +55,40 @@ describe('links to come aboard', () => {
     );
     expect(changeQuestion({ chat: true })).toBe('');
     expect(changeQuestion({ shipmateMessages: false })).toBe('');
+    expect(changeQuestion({ spectatorChat: false })).toBe('');
     expect(changeQuestion({ links: false })).toBe('');
+  });
+});
+
+describe('chat’s switches', () => {
+  const settings: SailSettings = {
+    linkLifetime: 86_400,
+    links: true,
+    boarding: true,
+    chat: true,
+    shipmateMessages: false,
+    spectatorChat: true,
+    chatCountries: [],
+  };
+
+  test('chat, shipmates’ messages, spectators’ reading, in that order: each its state and its key', () => {
+    const rows = chatSwitches(settings);
+    expect(rows.map((r) => [r.field, r.name, r.on, r.key])).toEqual([
+      ['chat', 'Chat for everyone', true, 'Switch chat off'],
+      ['shipmate-messages', "Shipmates' messages", false, "Switch shipmates' messages on"],
+      [
+        'spectator-chat',
+        "Spectators read machine sailors' chat",
+        true,
+        "Switch spectators' reading off",
+      ],
+    ]);
+    expect(rows[2]?.body).toEqual({ spectatorChat: false });
+    expect(rows[2]?.what).toBe(
+      "spectators reading machine sailors' chat switched off for everyone",
+    );
+    expect(chatSwitches({ ...settings, spectatorChat: false })[2]?.key).toBe(
+      "Switch spectators' reading on",
+    );
   });
 });

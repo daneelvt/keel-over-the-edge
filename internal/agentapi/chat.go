@@ -174,7 +174,7 @@ const (
 	wordsNobody     = "Nobody is aboard to hear you."
 	wordsNoChat     = "Chat aboard is not open in this world."
 	wordsSayHail    = "Not yet: hailing the boats close by comes with a later update. Use to aboard for those aboard your boat."
-	wordsSaySpect   = "Not yet: speaking to your spectators comes with a later update. Use to aboard for those aboard your boat."
+	wordsSaySpect   = "Not yet: speaking to your spectators alone comes with a later update. Use to aboard: with no person aboard, your spectators read it too."
 	wordsSayContact = "Not said: links and contact details can't be sent aboard."
 	wordsSayLong    = "Not said: a line is 1 to 200 characters."
 	wordsSayRest    = " Too many of your lines were refused: you may say nothing for 10 minutes."

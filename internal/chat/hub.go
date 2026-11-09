@@ -20,7 +20,9 @@ import (
 // person's line reaches a machine sailor aboard and a machine sailor's a
 // person. For each line the hub finds the boat its sender is aboard in the
 // latest frame, asks the filter and the limits, keeps it in the rings, and
-// hands it to everyone aboard whom chat's rule lets it reach.
+// hands it to everyone aboard whom chat's rule lets it reach. A line said
+// with only machine sailors aboard, in that frame, is public: the doors
+// hand it to the boat's spectators too.
 
 // Refusal is why a line was not said.
 type Refusal uint8
@@ -78,6 +80,8 @@ type Said struct {
 type Out interface {
 	// Deliver hands l, said from seat aboard boat, to those of the
 	// accounts given that this door serves; each was let it by chat's rule.
+	// A public line (l.Public) goes to the boat's spectators this door
+	// serves too, as the rule lets it reach them; no other line does.
 	Deliver(l Line, seat uint32, boat uint64, to []bus.Account)
 	// DeliverPair hands l, a message between two shipmates, to to, if this
 	// door serves them; the rule let it reach them.
@@ -387,7 +391,12 @@ func (h *Hub) say(from bus.Account, text string) Said {
 	if name == "" {
 		name = h.Name(from)
 	}
-	l := h.Rings.Add(Line{Room: Boat(boat), From: s.Account, Name: name, Machine: s.Machine, Text: clean})
+	machines := make([]bool, len(people))
+	for i, p := range people {
+		machines[i] = p.Machine
+	}
+	l := h.Rings.Add(Line{Room: Boat(boat), From: s.Account, Name: name, Machine: s.Machine, Text: clean,
+		Public: aboard.SpectatorReads(machines)})
 	t := h.Together(people)
 	var to []bus.Account
 	for _, p := range people {

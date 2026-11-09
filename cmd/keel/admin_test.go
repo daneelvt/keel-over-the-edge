@@ -362,7 +362,7 @@ func TestAdminReports(t *testing.T) {
 func TestAdminChat(t *testing.T) {
 	f := newAdminFixture(t)
 	ctx := context.Background()
-	if out, _, err := f.admin(t, "", "settings"); err != nil || !strings.HasSuffix(out, "\nchat on; shipmates' messages on; chat off in no country\n") {
+	if out, _, err := f.admin(t, "", "settings"); err != nil || !strings.HasSuffix(out, "\nchat on; shipmates' messages on; spectators reading machine sailors' chat on; chat off in no country\n") {
 		t.Fatalf("settings: %v %q", err, out)
 	}
 	if out, _, err := f.admin(t, "", "chat", "off"); err != nil || !strings.Contains(out, "Would set: chat off for everyone") ||
@@ -377,6 +377,13 @@ func TestAdminChat(t *testing.T) {
 	}
 	if out, _, err := f.admin(t, "", "shipmates", "off"); err != nil || f.switches.ShipmateMessages() || !strings.Contains(out, "shipmates' messages off") {
 		t.Fatalf("shipmates off: %v\n%s", err, out)
+	}
+	if out, _, err := f.admin(t, "", "spectators", "off"); err != nil || f.switches.SpectatorChat() ||
+		!strings.Contains(out, "spectators reading machine sailors' chat off") {
+		t.Fatalf("spectators off: %v\n%s", err, out)
+	}
+	if on, err := f.st.SpectatorChat(ctx); err != nil || on {
+		t.Fatalf("spectators off in the database: %v %v", on, err)
 	}
 	if out, _, err := f.admin(t, "", "countries", "br, AU"); err != nil || !strings.Contains(out, "chat off in AU, BR") || !f.switches.ChatOffIn("BR") {
 		t.Fatalf("countries: %v\n%s", err, out)
@@ -394,13 +401,19 @@ func TestAdminChat(t *testing.T) {
 	if err != nil || !on || ship || len(countries) != 0 {
 		t.Fatalf("the database: %v %v %v %v", on, ship, countries, err)
 	}
-	for _, c := range [][]string{{"chat"}, {"chat", "maybe"}, {"shipmates", "on", "now"}, {"countries"}, {"countries", "BR", "AU"}} {
+	if out, _, err := f.admin(t, "", "spectators", "on"); err != nil || !f.switches.SpectatorChat() || !strings.Contains(out, "Done: spectators reading machine sailors' chat on") {
+		t.Fatalf("spectators on: %v\n%s", err, out)
+	}
+	if on, err := f.st.SpectatorChat(ctx); err != nil || !on {
+		t.Fatalf("spectators on in the database: %v %v", on, err)
+	}
+	for _, c := range [][]string{{"chat"}, {"chat", "maybe"}, {"shipmates", "on", "now"}, {"spectators"}, {"spectators", "maybe"}, {"countries"}, {"countries", "BR", "AU"}} {
 		if _, _, err := f.admin(t, "", c...); !errors.Is(err, errUsage) {
 			t.Errorf("%v: %v", c, err)
 		}
 	}
 	acts, err := f.st.Actions(ctx, nil, 10)
-	if err != nil || len(acts) != 5 {
+	if err != nil || len(acts) != 7 || acts[0].Action != store.ActionSpectatorChat || acts[0].Detail != "on" || acts[0].HasAccount {
 		t.Fatalf("the record: %+v %v", acts, err)
 	}
 }

@@ -160,7 +160,7 @@ func tools() []toolDef {
 		}},
 		{budget: looks, tool: &mcp.Tool{
 			Name: toolSay, Title: "Say",
-			Description: "Chat aboard: a line to all aboard your boat; theirs come in observe. hail, spectators: not yet.",
+			Description: "Chat aboard, public if no person is aboard; theirs come in observe. hail, spectators: not yet.",
 			Annotations: hints("Say", false, false, false),
 			InputSchema: schema(`{"type":"object","properties":{` +
 				`"text":{"type":"string","maxLength":200},` +

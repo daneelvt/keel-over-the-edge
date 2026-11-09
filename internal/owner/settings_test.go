@@ -124,7 +124,7 @@ func yes(b bool) *bool               { return &b }
 func TestSettings(t *testing.T) {
 	r, f := sailRig(t)
 	code, body := r.do(t, "GET", "/owner/api/settings.json", nil)
-	if code != 200 || strings.TrimSpace(string(body)) != `{"linkLifetime":86400,"links":true,"boarding":true,"chat":true,"shipmateMessages":true,"chatCountries":[]}` {
+	if code != 200 || strings.TrimSpace(string(body)) != `{"linkLifetime":86400,"links":true,"boarding":true,"chat":true,"shipmateMessages":true,"spectatorChat":true,"chatCountries":[]}` {
 		t.Fatalf("settings.json: %d %s", code, body)
 	}
 	for _, s := range []int64{299, 604801, 0, -300} {
@@ -140,7 +140,7 @@ func TestSettings(t *testing.T) {
 	}
 	// Checked: an hour stops two; links off three; nothing changes.
 	code, a, _ := settingsCall(t, r, SettingsRequest{LinkLifetime: seconds(time.Hour), Check: true})
-	if code != 200 || a.Ended != 2 || !reflect.DeepEqual(a.Settings, SettingsJSON{LinkLifetime: 3600, Links: true, Boarding: true, Chat: true, ShipmateMessages: true, ChatCountries: []string{}}) || !strings.HasPrefix(a.Words, "Would set: a link lasts 1h0m0s.") {
+	if code != 200 || a.Ended != 2 || !reflect.DeepEqual(a.Settings, SettingsJSON{LinkLifetime: 3600, Links: true, Boarding: true, Chat: true, ShipmateMessages: true, SpectatorChat: true, ChatCountries: []string{}}) || !strings.HasPrefix(a.Words, "Would set: a link lasts 1h0m0s.") {
 		t.Fatalf("an hour checked: %d %+v", code, a)
 	}
 	code, a, _ = settingsCall(t, r, SettingsRequest{Links: yes(false), Check: true})
@@ -164,7 +164,7 @@ func TestSettings(t *testing.T) {
 	if rec.Code != 200 {
 		t.Fatalf("set: %d %s", rec.Code, rec.Body)
 	}
-	if err := json.Unmarshal(rec.Body.Bytes(), &a); err != nil || a.Ended != 2 || !reflect.DeepEqual(a.Settings, SettingsJSON{LinkLifetime: 3600, Links: true, Chat: true, ShipmateMessages: true, ChatCountries: []string{}}) ||
+	if err := json.Unmarshal(rec.Body.Bytes(), &a); err != nil || a.Ended != 2 || !reflect.DeepEqual(a.Settings, SettingsJSON{LinkLifetime: 3600, Links: true, Chat: true, ShipmateMessages: true, SpectatorChat: true, ChatCountries: []string{}}) ||
 		!strings.HasPrefix(a.Words, "Done: a link lasts 1h0m0s; boarding off for everyone.") {
 		t.Fatalf("set: %+v %v", a, err)
 	}
@@ -193,7 +193,7 @@ func TestSettings(t *testing.T) {
 		t.Fatalf("a lower lifetime, links off: %d %+v", code, a)
 	}
 	code, body = r.do(t, "GET", "/owner/api/settings.json", nil)
-	if code != 200 || strings.TrimSpace(string(body)) != `{"linkLifetime":3600,"links":false,"boarding":false,"chat":true,"shipmateMessages":true,"chatCountries":[]}` {
+	if code != 200 || strings.TrimSpace(string(body)) != `{"linkLifetime":3600,"links":false,"boarding":false,"chat":true,"shipmateMessages":true,"spectatorChat":true,"chatCountries":[]}` {
 		t.Fatalf("settings.json after: %d %s", code, body)
 	}
 	for action, n := range map[string]float64{"link-lifetime": 1, "links": 1, "boarding": 1} {
@@ -253,6 +253,11 @@ func (f *fakeChat) SetShipmateMessages(_ context.Context, on bool, a store.Actio
 	return nil
 }
 
+func (f *fakeChat) SetSpectatorChat(_ context.Context, on bool, a store.Action) error {
+	f.wrote("spectators "+onOff(on), a)
+	return nil
+}
+
 func (f *fakeChat) SetChatCountries(_ context.Context, c []string, a store.Action) error {
 	f.wrote("countries "+strings.Join(c, ","), a)
 	return nil
@@ -304,7 +309,7 @@ func TestSettingsChat(t *testing.T) {
 		t.Fatalf("memory after: %v %+v", sw.ChatCountries(), f.actions)
 	}
 	code, body := r.do(t, "GET", "/owner/api/settings.json", nil)
-	if code != 200 || strings.TrimSpace(string(body)) != `{"linkLifetime":86400,"links":true,"boarding":true,"chat":false,"shipmateMessages":false,"chatCountries":["AU","BR"]}` {
+	if code != 200 || strings.TrimSpace(string(body)) != `{"linkLifetime":86400,"links":true,"boarding":true,"chat":false,"shipmateMessages":false,"spectatorChat":true,"chatCountries":["AU","BR"]}` {
 		t.Fatalf("settings.json after: %d %s", code, body)
 	}
 	none := []string{}
@@ -312,11 +317,24 @@ func TestSettingsChat(t *testing.T) {
 		!a.Settings.Chat || !strings.Contains(a.Words, "chat off in no country") || sw.ChatOffIn("BR") {
 		t.Fatalf("countries cleared: %d %+v", code, a)
 	}
+	// Spectators' reading of machine sailors' chat: off and on again,
+	// written first, then memory, every connection told.
+	if code, a, _ = settingsCall(t, r, SettingsRequest{SpectatorChat: yes(false), Check: true}); code != 200 || a.Settings.SpectatorChat ||
+		a.Words != "Would set: spectators reading machine sailors' chat off for everyone." || !sw.SpectatorChat() || told != 3 {
+		t.Fatalf("spectators off checked: %d %+v", code, a)
+	}
+	if code, a, _ = settingsCall(t, r, SettingsRequest{SpectatorChat: yes(false)}); code != 200 || a.Settings.SpectatorChat || sw.SpectatorChat() || told != 4 ||
+		f.writes[len(f.writes)-1] != "spectators off over on/off/" || f.actions[len(f.actions)-1].Detail != "off" {
+		t.Fatalf("spectators off: %d %+v, %v", code, a, f.writes)
+	}
+	if code, a, _ = settingsCall(t, r, SettingsRequest{SpectatorChat: yes(true)}); code != 200 || !a.Settings.SpectatorChat || !sw.SpectatorChat() || told != 5 {
+		t.Fatalf("spectators on: %d %+v", code, a)
+	}
 	// Links' switches alone tell no connection about chat.
-	if code, _, _ = settingsCall(t, r, SettingsRequest{Boarding: yes(false)}); code != 200 || told != 3 || len(sail.writes) != 1 {
+	if code, _, _ = settingsCall(t, r, SettingsRequest{Boarding: yes(false)}); code != 200 || told != 5 || len(sail.writes) != 1 {
 		t.Fatalf("boarding off told chat: %d, told %d", code, told)
 	}
-	for action, n := range map[string]float64{store.ActionChat: 2, store.ActionShipmateMessages: 1, store.ActionChatCountries: 2} {
+	for action, n := range map[string]float64{store.ActionChat: 2, store.ActionShipmateMessages: 1, store.ActionChatCountries: 2, store.ActionSpectatorChat: 2} {
 		if got := testutil.ToFloat64(r.metrics.OwnerActions.WithLabelValues(action)); got != n {
 			t.Errorf("%s counted %v", action, got)
 		}

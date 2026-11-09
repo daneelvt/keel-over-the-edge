@@ -56,6 +56,7 @@ func TestDeliveredEveryPair(t *testing.T) {
 func TestDeliveredRefusals(t *testing.T) {
 	now := time.Date(2026, 11, 9, 0, 0, 0, 0, time.UTC)
 	aboard := Together{Aboard: true}
+	watches := Together{Watches: true}
 	adult := func(n byte) Speaker { return speaker(n, Adult) }
 	cases := []struct {
 		name  string
@@ -108,12 +109,46 @@ func TestDeliveredRefusals(t *testing.T) {
 			from.Machine, from.Human = true, [16]byte{8}
 			to.Machine, to.Human = true, [16]byte{9}
 		}, aboard, true},
-		{"another's machine sailor to an owner watching theirs aboard", func(_ Rules, from, _ *Speaker) {
+		{"a machine sailor to a spectator of its boat", func(_ Rules, from, _ *Speaker) {
 			from.Machine, from.Human = true, [16]byte{9}
-		}, Together{Owns: true, BoatHuman: [16]byte{9}}, true},
-		{"an owner watching says nothing to the machine sailors", func(_ Rules, _, to *Speaker) {
+		}, watches, true},
+		{"a person's line never to a spectator", func(Rules, *Speaker, *Speaker) {}, watches, false},
+		{"a spectator says nothing to the machine sailors", func(_ Rules, _, to *Speaker) {
 			to.Machine, to.Human = true, [16]byte{9}
-		}, Together{Owns: true, BoatHuman: [16]byte{9}}, false},
+		}, watches, false},
+		{"a block between a spectator and the machine sailor's owner hides nothing", func(r Rules, from, to *Speaker) {
+			from.Machine, from.Human = true, [16]byte{9}
+			r.Ties.SetBlock([16]byte{9}, to.Account, true)
+		}, watches, true},
+		{"the spectator blocks the machine sailor", func(r Rules, from, to *Speaker) {
+			from.Machine, from.Human = true, [16]byte{9}
+			r.Ties.SetBlock(to.Account, from.Account, true)
+		}, watches, false},
+		{"the spectator mutes the machine sailor", func(r Rules, from, to *Speaker) {
+			from.Machine, from.Human = true, [16]byte{9}
+			r.Ties.SetMute(to.Account, from.Account, true)
+		}, watches, false},
+		{"spectators' reading off by the owner", func(r Rules, from, _ *Speaker) {
+			from.Machine, from.Human = true, [16]byte{9}
+			r.Switches.SetSpectatorChat(false)
+		}, watches, false},
+		{"spectators' reading off leaves those aboard", func(r Rules, from, to *Speaker) {
+			from.Machine, from.Human = true, to.Account
+			r.Switches.SetSpectatorChat(false)
+		}, aboard, true},
+		{"chat off for everyone, spectators too", func(r Rules, from, _ *Speaker) {
+			from.Machine, from.Human = true, [16]byte{9}
+			r.Switches.SetChat(false)
+		}, watches, false},
+		{"a spectator's own chat off", func(_ Rules, from, to *Speaker) {
+			from.Machine, from.Human = true, [16]byte{9}
+			to.ChatSet, to.Chat = true, false
+		}, watches, false},
+		{"a spectator with chat off in their country", func(r Rules, from, to *Speaker) {
+			from.Machine, from.Human = true, [16]byte{9}
+			to.Country = "NZ"
+			r.Switches.SetChatCountries([]string{"NZ"})
+		}, watches, false},
 		{"a block between their humans", func(r Rules, from, to *Speaker) {
 			from.Machine, from.Human = true, [16]byte{8}
 			to.Machine, to.Human = true, [16]byte{9}
@@ -163,18 +198,18 @@ func TestMayJoin(t *testing.T) {
 func TestSpectatorReads(t *testing.T) {
 	for _, c := range []struct {
 		machines []bool
-		owns     bool
 		want     bool
 	}{
-		{[]bool{true, true}, true, true},
-		{[]bool{true}, true, true},
-		{[]bool{true, true}, false, false},
-		{[]bool{true, false}, true, false},
-		{[]bool{false, true, true}, true, false},
-		{nil, true, false},
+		{[]bool{true, true}, true},
+		{[]bool{true}, true},
+		{[]bool{true, true, true}, true},
+		{[]bool{true, false}, false},
+		{[]bool{false, true, true}, false},
+		{[]bool{false}, false},
+		{nil, false},
 	} {
-		if got := SpectatorReads(c.machines, c.owns); got != c.want {
-			t.Errorf("SpectatorReads(%v, %v) = %v, want %v", c.machines, c.owns, got, c.want)
+		if got := SpectatorReads(c.machines); got != c.want {
+			t.Errorf("SpectatorReads(%v) = %v, want %v", c.machines, got, c.want)
 		}
 	}
 }

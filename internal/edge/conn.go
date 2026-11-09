@@ -649,6 +649,12 @@ func (c *conn) send(m *pb.ServerMessage, kind int) bool {
 		c.close(websocket.StatusInternalError, "encoding")
 		return false
 	}
+	return c.sendEncoded(b, kind)
+}
+
+// sendEncoded queues a message already encoded, which neither the writer
+// nor anyone else changes after: it may go to many connections at once.
+func (c *conn) sendEncoded(b []byte, kind int) bool {
 	select {
 	case c.queue <- outgoing{b: b, kind: kind}:
 		return true

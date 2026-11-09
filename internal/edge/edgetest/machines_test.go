@@ -162,8 +162,8 @@ func (v *viewer) machineKnock(token, machine string) pb.KnockState {
 // boat may come. Ann, sailing her own boat, is shown the knock with the
 // machine mark and its owner's name, and lets Rover aboard: its own boat
 // leaves the water, and Bob's watch follows it aboard, where he reads the
-// chat aboard; Carl, watching Iron Mary, sees the crew on deck and no
-// chat. Ann puts Rover ashore from watching Iron Mary: its boat is in the
+// chat aboard; Carl, watching Iron Mary, sees the crew on deck and reads
+// the machine sailors' chat too. Ann puts Rover ashore from watching Iron Mary: its boat is in the
 // water again, and Bob's watch with it.
 func TestMachineSailorsBoard(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
@@ -226,16 +226,15 @@ func TestMachineSailorsBoard(t *testing.T) {
 			t.Fatalf("Carl's crew: %v", c.crew)
 		}
 
-		// The chat aboard: Bob reads it, Carl does not.
+		// The chat aboard, with only machine sailors aboard: Bob reads it,
+		// and so does Carl, who owns neither.
 		if s := hub.Say(bus.Account(mary), "Welcome aboard, Rover"); s.Refused != 0 || s.Heard != 1 {
 			t.Fatalf("Iron Mary's line: %+v", s)
 		}
-		if !b.read(5*time.Second, func() bool { return len(b.lines) > 0 }) || b.lines[0].GetText() != "Welcome aboard, Rover" || !b.lines[0].GetMachine() {
-			t.Fatalf("what Bob read: %v", b.lines)
-		}
-		c.read(time.Second, nil)
-		if len(c.lines) > 0 {
-			t.Fatalf("a spectator read the chat aboard: %v", c.lines)
+		for _, v := range []*viewer{b, c} {
+			if !v.read(5*time.Second, func() bool { return len(v.lines) > 0 }) || v.lines[0].GetText() != "Welcome aboard, Rover" || !v.lines[0].GetMachine() {
+				t.Fatalf("what a spectator read: %v", v.lines)
+			}
 		}
 
 		// Ann, watching Iron Mary, puts Rover ashore.
@@ -294,7 +293,8 @@ func TestAMachinesKnockLapses(t *testing.T) {
 
 // TestPeopleAndMachineSailorsMix: people and machine sailors mix aboard
 // only as one owner with their own. Bob's Rover is let aboard Ann's Iron
-// Mary, and both owners, watching, read the machine sailors' chat; with
+// Mary, and both owners and Carl, watching, read the machine sailors'
+// chat; with
 // Rover aboard, Ann may not come aboard herself. Rover put ashore, Ann
 // comes aboard: then Bob's Gull is refused, as not taking crew, while
 // Ann's own Pearl is let aboard; and from then on no spectator reads a
@@ -337,11 +337,11 @@ func TestPeopleAndMachineSailorsMix(t *testing.T) {
 		if w := b.welcomed(); w.GetBoat() != maryBoat {
 			t.Fatalf("Bob's watch aboard: %v", w)
 		}
-		// Machine sailors alone aboard: both owners, watching, read.
+		// Machine sailors alone aboard: every spectator reads.
 		hub.Say(bus.Account(mary), "Welcome aboard, Rover")
-		for _, v := range []*viewer{a, b} {
+		for _, v := range []*viewer{a, b, c} {
 			if !v.read(5*time.Second, func() bool { return len(v.lines) == 1 }) {
-				t.Fatalf("an owner watching did not read the machine sailors' chat: %v", v.lines)
+				t.Fatalf("a spectator did not read the machine sailors' chat: %v", v.lines)
 			}
 		}
 		// Another owner's machine sailor aboard: Ann may not come aboard.
@@ -385,7 +385,7 @@ func TestPeopleAndMachineSailorsMix(t *testing.T) {
 			t.Fatalf("Ann, aboard, did not hear: %v", a.lines)
 		}
 		c.read(2*time.Second, nil)
-		if len(c.lines) != before || before != 0 {
+		if len(c.lines) != before || before != 1 {
 			t.Fatalf("a spectator read the chat aboard: %v", c.lines)
 		}
 	})

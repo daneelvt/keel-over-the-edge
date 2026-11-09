@@ -25,6 +25,7 @@ const (
 	ActionChat             = "chat"
 	ActionShipmateMessages = "shipmate-messages"
 	ActionChatCountries    = "chat-countries"
+	ActionSpectatorChat    = "spectator-chat"
 	ActionDismiss          = "dismiss"
 	ActionWarn             = "warn"
 	ActionMuteChat         = "mute-chat"
@@ -744,6 +745,19 @@ func (s *Store) SetChatSwitch(ctx context.Context, on bool, a Action) error {
 func (s *Store) SetShipmateMessages(ctx context.Context, on bool, a Action) error {
 	a.Action = ActionShipmateMessages
 	return s.setting(ctx, a, func(q *db.Queries) error { _, err := q.SetShipmateMessages(ctx, on); return err })
+}
+
+// SpectatorChat is the owner's switch for spectators reading machine
+// sailors' chat, as kept.
+func (s *Store) SpectatorChat(ctx context.Context) (bool, error) {
+	return s.q.SpectatorChat(ctx)
+}
+
+// SetSpectatorChat switches spectators reading machine sailors' chat on or
+// off for everyone, with its record.
+func (s *Store) SetSpectatorChat(ctx context.Context, on bool, a Action) error {
+	a.Action = ActionSpectatorChat
+	return s.setting(ctx, a, func(q *db.Queries) error { _, err := q.SetSpectatorChat(ctx, on); return err })
 }
 
 // SetChatCountries sets the countries where chat is off, with its record.

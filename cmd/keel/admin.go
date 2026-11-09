@@ -71,6 +71,8 @@ const adminUsage = `usage: keel admin [-addr host:port] [-json] <command> [argum
   chat on|off [-yes]   chat aboard on or off for everyone: off stops every
                        line at once
   shipmates on|off     shipmates' messages on or off for everyone
+  spectators on|off    spectators reading machine sailors' chat aboard, on
+                       or off for everyone
   countries CODES      chat off in these countries, two letters each,
                        comma separated: BR,AU; "" clears them
   reports              the reports open, a child's safety first
@@ -402,17 +404,20 @@ func adminWith(ctx context.Context, args []string, getenv func(string) string, s
 			req.Boarding = &on
 		}
 		return c.settings(ctx, req, stderr)
-	case "chat", "shipmates":
+	case "chat", "shipmates", "spectators":
 		if len(pos) != 1 || (pos[0] != "on" && pos[0] != "off") {
 			fmt.Fprintf(stderr, "keel admin %s: on|off\n", verb)
 			return errUsage
 		}
 		on := pos[0] == "on"
 		req := owner.SettingsRequest{Check: verb == "chat" && !on && !*yes}
-		if verb == "chat" {
+		switch verb {
+		case "chat":
 			req.Chat = &on
-		} else {
+		case "shipmates":
 			req.ShipmateMessages = &on
+		default:
+			req.SpectatorChat = &on
 		}
 		return c.settings(ctx, req, stderr)
 	case "countries":
@@ -538,7 +543,8 @@ func writeSettings(w io.Writer, s owner.SettingsJSON) {
 	if len(s.ChatCountries) > 0 {
 		countries = strings.Join(s.ChatCountries, ", ")
 	}
-	fmt.Fprintf(w, "chat %s; shipmates' messages %s; chat off in %s\n", onOff[s.Chat], onOff[s.ShipmateMessages], countries)
+	fmt.Fprintf(w, "chat %s; shipmates' messages %s; spectators reading machine sailors' chat %s; chat off in %s\n",
+		onOff[s.Chat], onOff[s.ShipmateMessages], onOff[s.SpectatorChat], countries)
 }
 
 func (c *adminClient) search(ctx context.Context, req owner.SearchRequest, stderr io.Writer) error {

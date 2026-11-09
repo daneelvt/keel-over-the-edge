@@ -11,6 +11,7 @@ import (
 	"github.com/daneelvt/keel-over-the-edge/internal/aboard"
 	"github.com/daneelvt/keel-over-the-edge/internal/bus"
 	"github.com/daneelvt/keel-over-the-edge/internal/chat"
+	"github.com/daneelvt/keel-over-the-edge/internal/protocol"
 	"github.com/daneelvt/keel-over-the-edge/internal/protocol/pb"
 	"github.com/daneelvt/keel-over-the-edge/internal/store"
 )
@@ -18,8 +19,9 @@ import (
 // Chat aboard, on the game connection. A connection says a line (Say)
 // through the hub, which checks it and hands it to everyone aboard whom
 // chat's rule lets it reach, through each door's Out: this edge's sends it
-// to their connections (Chat), and to the connections of owners watching
-// their own machine sailor aboard, who read it and say nothing. The sender
+// to their connections (Chat), and, for a line said with only machine
+// sailors aboard, to the connections watching the boat, who read it and
+// say nothing: what machine sailors say is public. The sender
 // is sent its line back, said or refused. Nothing of a line's text is
 // ever logged or counted here.
 //
@@ -77,14 +79,14 @@ type connChat struct {
 	tolds bool
 }
 
-// mineWatch is who watches their own machine sailor, by the boat: they
-// read the chat aboard it.
-type mineWatch struct {
+// boatWatchers are the connections watching each boat: they read the
+// chat aboard it while everyone aboard is a machine sailor.
+type boatWatchers struct {
 	mu sync.Mutex
 	by map[uint64]map[*conn]bool
 }
 
-func (m *mineWatch) set(c *conn, boat uint64, on bool) {
+func (m *boatWatchers) set(c *conn, boat uint64, on bool) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if m.by == nil {
@@ -103,10 +105,10 @@ func (m *mineWatch) set(c *conn, boat uint64, on bool) {
 	}
 }
 
-func (m *mineWatch) of(boat uint64) []*conn {
+// of appends the connections watching boat to out.
+func (m *boatWatchers) of(boat uint64, out []*conn) []*conn {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	var out []*conn
 	for c := range m.by[boat] {
 		out = append(out, c)
 	}
@@ -137,11 +139,11 @@ func (c *conn) leaveChat() {
 	if c.chat.in {
 		c.e.cfg.Chat.Leave(c.account)
 	}
-	c.e.mine.set(c, 0, false)
 }
 
 // chatState tells the connection how chat stands for it, if that has
-// changed since it was last told, or always with force.
+// changed since it was last told, or always with force. To a spectator,
+// the owner's switch for spectators' reading off reads as chat off.
 func (c *conn) chatState(force bool) bool {
 	h := c.e.cfg.Chat
 	if h == nil {
@@ -162,6 +164,11 @@ func (c *conn) chatState(force bool) bool {
 	case aboard.NoRules:
 		st.Rules = true
 	}
+	if sw := h.Rules.Switches; c.spectating.Load() && sw != nil && !sw.SpectatorChat() {
+		// A spectator reads no chat at all while the owner has
+		// spectators' reading off: their page puts the strip away.
+		st = pb.ChatState{Status: pb.ChatStatus_CHAT_STATUS_OFF}
+	}
 	c.chat.mu.Lock()
 	same := c.chat.tolds && c.chat.told.Status == st.Status && c.chat.told.UntilUs == st.UntilUs && c.chat.told.Rules == st.Rules
 	if same && !force {
@@ -177,15 +184,31 @@ func (c *conn) chatState(force bool) bool {
 // between shipmates (the other's account), and keeps its number to be
 // named.
 func (c *conn) line(l chat.Line, seat uint32, thread string) {
+	c.heardOf(l.ID)
+	c.send(lineMessage(l, seat, thread), outChat)
+}
+
+// lineBytes sends the connection a line already encoded, the same for
+// every spectator of a boat, and keeps its number to be named.
+func (c *conn) lineBytes(id uint64, b []byte) {
+	c.heardOf(id)
+	c.sendEncoded(b, outChat)
+}
+
+func (c *conn) heardOf(id uint64) {
 	c.chat.mu.Lock()
 	if len(c.chat.heard) == heardLines {
 		c.chat.heard = append(c.chat.heard[:0], c.chat.heard[1:]...)
 	}
-	c.chat.heard = append(c.chat.heard, l.ID)
+	c.chat.heard = append(c.chat.heard, id)
 	c.chat.mu.Unlock()
-	c.send(&pb.ServerMessage{Body: &pb.ServerMessage_Chat{Chat: &pb.Chat{
+}
+
+// lineMessage is a line as the connection is sent it.
+func lineMessage(l chat.Line, seat uint32, thread string) *pb.ServerMessage {
+	return &pb.ServerMessage{Body: &pb.ServerMessage_Chat{Chat: &pb.Chat{
 		Id: l.ID, Seat: seat, Name: l.Name, Machine: l.Machine, AtUs: l.At.UnixMicro(), Text: l.Text, Thread: thread,
-	}}}, outChat)
+	}}}
 }
 
 // heard reports whether the connection was sent line id.
@@ -214,8 +237,10 @@ func (c *conn) onBoat(boat uint64) bool {
 type chatOut struct{ e *Edge }
 
 // Deliver sends a line to the connections of the accounts given that sail
-// or are aboard its boat, and to owners watching their own machine sailor
-// aboard it whom the rule lets it reach.
+// or are aboard its boat, and a public line to the connections watching
+// the boat whom the rule lets it reach: the line was said with only
+// machine sailors aboard. With a person aboard, nobody who is not aboard
+// reads a word.
 func (o chatOut) Deliver(l chat.Line, seat uint32, boat uint64, to []bus.Account) {
 	e := o.e
 	for _, a := range to {
@@ -223,28 +248,26 @@ func (o chatOut) Deliver(l chat.Line, seat uint32, boat uint64, to []bus.Account
 			c.line(l, seat, "")
 		}
 	}
-	watchers := e.mine.of(boat)
+	if !l.Public || !l.Machine {
+		return
+	}
+	watchers := e.watchers.of(boat, nil)
 	if len(watchers) == 0 {
 		return
 	}
-	people, ok := e.cfg.Chat.Company(boat)
-	if !ok {
-		return
-	}
-	// With a person aboard, nobody who is not aboard reads its chat.
-	machines := make([]bool, len(people))
-	for i, p := range people {
-		machines[i] = p.Machine
-	}
-	if !aboard.SpectatorReads(machines, true) {
-		return
-	}
-	t := e.cfg.Chat.Together(people)
-	t.Aboard, t.Owns = false, true
+	from := bus.Account(l.From)
+	var b []byte
 	for _, c := range watchers {
-		if c.account != bus.Account(l.From) && e.registry.get(c.account) == c && e.cfg.Chat.Reaches(bus.Account(l.From), c.account, t) {
-			c.line(l, seat, "")
+		if e.registry.get(c.account) != c || !e.cfg.Chat.Reaches(from, c.account, aboard.Together{Watches: true}) {
+			continue
 		}
+		if b == nil {
+			var err error
+			if b, err = protocol.AppendServer(nil, lineMessage(l, seat, "")); err != nil {
+				return
+			}
+		}
+		c.lineBytes(l.ID, b)
 	}
 }
 
@@ -318,7 +341,8 @@ var chatRefusals = [...]pb.ChatRefusal{
 func (c *conn) sayCommand(text string, id uint32) {
 	h := c.e.cfg.Chat
 	m := &pb.Chat{You: true, Echo: id, Refused: pb.ChatRefusal_CHAT_REFUSAL_SILENT}
-	if h != nil && c.chat.in {
+	// A spectator says nothing, whatever its client sends.
+	if h != nil && c.chat.in && !c.spectating.Load() {
 		s := h.Say(c.account, text)
 		m.Refused = chatRefusals[s.Refused]
 		m.Seat = s.Seat

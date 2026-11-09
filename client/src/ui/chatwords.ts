@@ -103,8 +103,8 @@ export function whenText(at: number, now: number, zone?: string): string {
   return day(at) === day(now) ? time : `${day(at)}, ${time}`;
 }
 
-/** An owner watching their own machine sailor aboard a boat: they read, and say nothing. */
-export function ownerReadsWords(machine: string): Words {
+/** Anyone watching a machine sailor aboard a boat of machine sailors: they read, and say nothing. */
+export function spectatorReadsWords(machine: string): Words {
   return ['Watching ', p(machine), ': you read its chat aboard'];
 }
 

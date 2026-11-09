@@ -262,9 +262,7 @@ func (enc *encoder) beginWatch(c *conn, f *bus.Frame, t watch.Target) {
 	c.toldLamp = pb.Lamp_LAMP_UNSPECIFIED
 	c.spectating.Store(true)
 	c.watched.Store(&t.Name)
-	if c.w.mine {
-		e.mine.set(c, c.w.boat, true)
-	}
+	e.watchers.set(c, c.w.boat, true)
 	e.spect.watching(bus.Account(t.ID), 1)
 	if !c.welcomeWatch(f) {
 		return
@@ -293,9 +291,9 @@ func (enc *encoder) follow(c *conn, f *bus.Frame) bool {
 		return true
 	}
 	e := enc.e
-	e.mine.set(c, boat, false)
+	e.watchers.set(c, boat, false)
 	c.w.slot, c.w.boat = at, f.Boat[at]
-	e.mine.set(c, c.w.boat, true)
+	e.watchers.set(c, c.w.boat, true)
 	c.toldLamp = pb.Lamp_LAMP_UNSPECIFIED
 	if !c.welcomeWatch(f) {
 		c.active = false
@@ -334,9 +332,7 @@ func (enc *encoder) endWatch(c *conn, why pb.WatchEnd, name string) {
 	}
 	e := enc.e
 	e.spect.watching(bus.Account(c.w.target.ID), -1)
-	if c.w.mine {
-		e.mine.set(c, c.w.boat, false)
-	}
+	e.watchers.set(c, c.w.boat, false)
 	c.w = watching{}
 	c.toldLamp = pb.Lamp_LAMP_UNSPECIFIED
 	c.spectating.Store(false)

@@ -7,8 +7,8 @@
 // sender's name and words as player text, with the machine mark for a
 // machine sailor; a long press on another's line (a right-click on a
 // computer) opens the sheet of mute, block and report, as the keys on
-// each row of who is aboard do. An owner watching their own machine
-// sailor aboard a boat reads the lines and has no field. Before a first
+// each row of who is aboard do. Anyone watching a boat where everyone
+// aboard is a machine sailor reads the lines and has no field. Before a first
 // line, the Rules of the sea; with the player's own chat off, a key to
 // turn it on (the card first for a player of 13 to 17).
 //
@@ -46,7 +46,6 @@ import {
   NOT_REPORTED,
   NOTHING_SAID,
   OPEN_CHAT,
-  ownerReadsWords,
   REPORT,
   REPORT_DETAIL,
   REPORT_NOTE,
@@ -59,6 +58,7 @@ import {
   SAY_SOMETHING,
   SEND,
   SEND_REPORT,
+  spectatorReadsWords,
   TURN_CHAT_ON,
   tiedWords,
   UNBLOCK,
@@ -421,7 +421,7 @@ export function ChatStrip({ deck, sailor }: { deck: DeckView; sailor: string | n
     >
       <div class="chat-head">
         <span class="chat-title">
-          {readOnly && w !== null ? <Said words={ownerReadsWords(w.sailor)} /> : CHAT_ABOARD}
+          {readOnly && w !== null ? <Said words={spectatorReadsWords(w.sailor)} /> : CHAT_ABOARD}
         </span>
         {fold('head')}
       </div>

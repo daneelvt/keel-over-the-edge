@@ -870,6 +870,29 @@ func (q *Queries) SetShipmateMessages(ctx context.Context, shipmateMessages bool
 	return result.RowsAffected(), nil
 }
 
+const setSpectatorChat = `-- name: SetSpectatorChat :execrows
+UPDATE setting SET spectator_chat = $1
+`
+
+func (q *Queries) SetSpectatorChat(ctx context.Context, spectatorChat bool) (int64, error) {
+	result, err := q.db.Exec(ctx, setSpectatorChat, spectatorChat)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const spectatorChat = `-- name: SpectatorChat :one
+SELECT spectator_chat FROM setting
+`
+
+func (q *Queries) SpectatorChat(ctx context.Context) (bool, error) {
+	row := q.db.QueryRow(ctx, spectatorChat)
+	var spectator_chat bool
+	err := row.Scan(&spectator_chat)
+	return spectator_chat, err
+}
+
 const statementsOf = `-- name: StatementsOf :many
 SELECT id, made_at, action, rule, seen, until, read_at, answer, answered_at FROM statement
 WHERE account_id = $1 ORDER BY made_at DESC LIMIT 20
