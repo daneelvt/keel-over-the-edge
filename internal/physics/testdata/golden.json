@@ -20352,7 +20352,7 @@
   },
   {
    "name": "skiff-beat",
-   "digest": "a80cb6a50462e4cebf5dad54d45b7009109e4fe704a47ddd73679abcb00d4853",
+   "digest": "f4d55fd1a7a14bdb2494e2b3a5d183b393b8210ee55b034bbccd3b51f5009157",
    "checkpoints": [
     {
      "step": 600,
@@ -20622,7 +20622,7 @@
   },
   {
    "name": "skiff-tacks",
-   "digest": "5563e5b7b09d7cdea2b1cf8e8f52a721adf4dc05067807272009605954a4b783",
+   "digest": "f1faebc0a4e8f12e397e2e2564419da486eaed15e0e425fe04778fd2ccd9d35d",
    "checkpoints": [
     {
      "step": 600,
@@ -21068,7 +21068,7 @@
   },
   {
    "name": "skiff-bear-away",
-   "digest": "ac426a39c9cc863db3bd45fe03085febaa9ac219616760ab0ac7273c24d8c56f",
+   "digest": "13eb2e49207dd58459225a1ed2230341345e24a5fea850356a009de38e9c02e3",
    "checkpoints": [
     {
      "step": 600,
@@ -21828,7 +21828,7 @@
   },
   {
    "name": "skiff-capsize",
-   "digest": "ca0f64958e3f13b2ec0951f000b91a92524a9e9d8e36de2af08b919cbb3a4b2a",
+   "digest": "c6bfdfef491acc4b3260edce158b27edfecd41f51d1cc9a7c527df36afd90dde",
    "checkpoints": [
     {
      "step": 600,
@@ -22186,7 +22186,7 @@
   },
   {
    "name": "skiff-lull",
-   "digest": "b22f71596c0571f52c0648f07c07de5b64b6fb957dc483a824b3100a983705b0",
+   "digest": "abdf271859495236cdda6d7a1d18826282027188c1b14fd40aa179588031ef1f",
    "checkpoints": [
     {
      "step": 600,
@@ -22456,7 +22456,7 @@
   },
   {
    "name": "skiff-gennaker-in",
-   "digest": "c9e3e47bdd70facb21f5d126041dbc5aeddd8c986b77a99fee29989294b51736",
+   "digest": "cfb0aac3853e8b5bc5b2387b8b9d0628612fac523da5779d220a0f7ac1019b42",
    "checkpoints": [
     {
      "step": 600,
@@ -22814,7 +22814,7 @@
   },
   {
    "name": "skiff-reef",
-   "digest": "99b21f0cac73620f146119407eefdf829452c8d42eb8e668f0e98245de2eb935",
+   "digest": "97f8c297fae77e55060409ceff987d3c0c98471e757bf0bee1cf35a3d0648fca",
    "checkpoints": [
     {
      "step": 600,

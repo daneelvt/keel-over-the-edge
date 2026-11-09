@@ -167,8 +167,10 @@ func (b *Prepared) substep(s *State, wind, sinW, cosW, dt float64, g *rig, v *wa
 	var l loads
 	var sail sailResult
 	b.sailLoads(s, &m, flat, twist, g, &l, &sail)
+	// The downwind sail's loads while it is hoisted at all; in its bag its
+	// clew hangs by its weight alone.
 	var kite kiteResult
-	if b.kite {
+	if b.kite && s.Hoist > 0 {
 		b.kiteLoads(s, &m, g, &l, &kite)
 	}
 
