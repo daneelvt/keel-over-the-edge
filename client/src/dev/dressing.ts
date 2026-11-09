@@ -26,8 +26,10 @@
 // first; the clips moved to its seat as the game moves them). A clip at a
 // wheel stands each sailor at the wheel of a boat that has one, as the game
 // stands it; in a boat that has none, on the quay behind a wheel made to the
-// numbers the ships' models are built to. The back
-// end is the game's choice, and
+// numbers the ships' models are built to. A clip on a trapeze's wire hangs
+// each sailor from the wire of the boat whose model has one, whatever boat
+// says, placed from its rack's edge, the harness worn and the wire drawn
+// from the hounds to its hook. The back end is the game's choice, and
 // ?backend=webgl2 or ?compat as in the game.
 //
 // Drag turns the camera about what it looks at, the wheel or a pinch sets
@@ -36,6 +38,7 @@
 import './dressing.css';
 import {
   type AnimationAction,
+  type AnimationClip,
   AnimationMixer,
   BoxGeometry,
   type BufferGeometry,
@@ -65,10 +68,26 @@ import { TIERS } from '../render/quality';
 import { chooseBackend, wantsCompat } from '../render/renderer';
 import { readSailorLight, type SailorColours, sailorColours } from '../render/sailors/material';
 import { loadClips, loadSailor, type SailorClips, type SailorModel } from '../render/sailors/model';
-import { boneNames } from '../render/sailors/onboat';
+import {
+  boneNames,
+  type Harness,
+  loadHarness,
+  setWire,
+  wireColour,
+  wireMesh,
+} from '../render/sailors/onboat';
 import { restageAnimation, restageOf, restagePlace } from '../render/sailors/restage';
 import { Rig } from '../render/sailors/rig';
 import { atWheel, CLIPS } from '../render/sailors/runtime';
+import {
+  onPelvis,
+  onWire,
+  TRAPEZE_CLIPS,
+  trapezeData,
+  wireNode,
+  wirePlace,
+  wireSide,
+} from '../render/sailors/trapeze';
 import { frameIn, wheelOf } from '../render/sailors/wheel';
 import { Shadows } from '../render/shadows';
 import { Sky, look as skyLook, toLinear } from '../render/sky';
@@ -92,14 +111,26 @@ export type LightName = 'noon' | 'dusk' | 'night' | 'morning';
 /** A look's files: each version's levels and clips, by URL. */
 export interface LookFiles {
   look: string;
-  versions: Map<string, { levels: Partial<Record<Level, string>>; clips?: string; wheel?: string }>;
+  versions: Map<
+    string,
+    {
+      levels: Partial<Record<Level, string>>;
+      clips?: string;
+      wheel?: string;
+      trapeze?: string;
+      harness?: string;
+    }
+  >;
 }
 
 /** The looks the build has written, in the order of their folders' names. */
 export function builtLooks(files: Record<string, string>): LookFiles[] {
   const looks = new Map<string, LookFiles>();
   for (const [path, url] of Object.entries(files)) {
-    const m = /\/art\/sailors\/([^/]+)\/([a-z]+)(?:\.(deck|far|clips|wheel))?\.glb$/.exec(path);
+    const m =
+      /\/art\/sailors\/([^/]+)\/([a-z]+)(?:\.(deck|far|clips|wheel|trapeze|harness))?\.glb$/.exec(
+        path,
+      );
     if (m === null) {
       continue;
     }
@@ -112,6 +143,10 @@ export function builtLooks(files: Record<string, string>): LookFiles[] {
       v.clips = url;
     } else if (kind === 'wheel') {
       v.wheel = url;
+    } else if (kind === 'trapeze') {
+      v.trapeze = url;
+    } else if (kind === 'harness') {
+      v.harness = url;
     } else {
       v.levels[(kind ?? 'close') as Level] = url;
     }
@@ -292,6 +327,9 @@ interface Figure {
   boat: Boat | null;
   /** The wheel it stands at on the quay, when its clip is at a wheel and the boat has none. */
   wheel: Object3D | null;
+  /** On a trapeze's wire: the harness it wears, played with its clip; and the wire drawn to its hook. */
+  harness: { root: Object3D; mixer: AnimationMixer; meshes: Mesh[]; hook: Vector3 | null } | null;
+  wire: { mesh: Mesh; side: number; hounds: Vector3; hook: Vector3 } | null;
 }
 
 /** The wheel stood at on the quay: its hub ahead of and above the helmsman's place, its rim, spokes and their handles beyond it, as the ships' models are built. */
@@ -413,6 +451,9 @@ export class DressingRoom {
   readonly #figures: Figure[] = [];
   readonly #protos = new Map<string, Promise<SailorModel>>();
   readonly #clips = new Map<string, Promise<SailorClips>>();
+  readonly #harnesses = new Map<string, Promise<Harness>>();
+  /** The catalog's boat whose model has a trapeze, once found; −1 if none has. */
+  #wireBoat: number | null = null;
   /** The boats made, by the catalog's boat and the place in the room, and their models' loads. */
   readonly #boats = new Map<string, { boat: Boat; loaded: Promise<void> }>();
   readonly #props = new Group();
@@ -643,6 +684,12 @@ export class DressingRoom {
       f.mixer?.stopAllAction();
       f.boat?.root.removeFromParent();
       f.wheel?.removeFromParent();
+      f.harness?.root.removeFromParent();
+      f.harness?.mixer.stopAllAction();
+      f.wire?.mesh.removeFromParent();
+    }
+    if (onWire(r.clip)) {
+      await this.#findWireBoat();
     }
     const made = await Promise.all(
       wanted.map((w) => this.#figure(w.look, w.version, w.level, w.colours, w.at)),
@@ -686,8 +733,12 @@ export class DressingRoom {
       this.#protos.set(url, proto);
     }
     let clips: Promise<SailorClips> | null = null;
-    // The clips at a wheel are a file of their own.
-    const clipsUrl = atWheel(this.room.clip) ? files?.wheel : files?.clips;
+    // The clips at a wheel, and those on a trapeze's wire, are files of their own.
+    const clipsUrl = onWire(this.room.clip)
+      ? files?.trapeze
+      : atWheel(this.room.clip)
+        ? files?.wheel
+        : files?.clips;
     if (clipsUrl !== undefined) {
       clips = this.#clips.get(clipsUrl) ?? loadClips(clipsUrl, renderer);
       this.#clips.set(clipsUrl, clips);
@@ -721,14 +772,67 @@ export class DressingRoom {
       offset: at * 0.7,
       boat: null,
       wheel: null,
+      harness: null,
+      wire: null,
     };
     const clip = c?.clips.find((k) => k.name === this.room.clip);
     if (model.skeleton !== null && clip !== undefined) {
       f.mixer = new AnimationMixer(root);
       f.action = f.mixer.clipAction(clip);
       f.action.play();
+      if (onWire(clip.name) && files?.harness !== undefined) {
+        f.harness = await this.#harness(files.harness, root, clip);
+      }
     }
     return f;
+  }
+
+  /**
+   * A figure's harness: its own copy of the file's, played with the
+   * figure's clip; its hook's eye against the pelvis at rest (the figure
+   * not yet posed).
+   */
+  async #harness(
+    url: string,
+    figure: Object3D,
+    clip: AnimationClip,
+  ): Promise<NonNullable<Figure['harness']>> {
+    const renderer = this.stage.renderer;
+    let proto = this.#harnesses.get(url);
+    if (proto === undefined && renderer !== null) {
+      proto = loadHarness(url, renderer);
+      this.#harnesses.set(url, proto);
+    }
+    const h = await (proto as Promise<Harness>);
+    const root = cloneSkinned(h.root);
+    const meshes: Mesh[] = [];
+    root.traverse((o) => {
+      if (o instanceof Mesh) {
+        o.castShadow = true;
+        o.receiveShadow = true;
+        meshes.push(o);
+      }
+    });
+    const mixer = new AnimationMixer(root);
+    mixer.clipAction(clip).play();
+    const hook = h.hook === null ? null : onPelvis(Rig.from(figure, boneNames(figure)), h.hook);
+    return { root, mixer, meshes, hook };
+  }
+
+  /** Finds the catalog's boat whose model has a trapeze, loading the boats' models in turn. */
+  async #findWireBoat(): Promise<void> {
+    if (this.#wireBoat !== null) {
+      return;
+    }
+    for (let k = 0; k < catalog.boats.length; k++) {
+      const { boat, loaded } = this.#boatAt(k, 0);
+      await loaded;
+      if (trapezeData(boat.parts.get('trapeze')?.userData) !== null) {
+        this.#wireBoat = k;
+        return;
+      }
+    }
+    this.#wireBoat = -1;
   }
 
   /** Where a figure stands, or sits: on the quay or the disc, or in its boat. */
@@ -736,6 +840,7 @@ export class DressingRoom {
     const r = this.room;
     let seat = this.#seat(f);
     const wheeled = seat !== null && atWheel(r.clip);
+    const wired = seat !== null && onWire(r.clip) && f.model.skeleton !== null;
     if (seat !== null && wheeled) {
       // At a wheel: the boat's, from its helmsman's place; or on the quay.
       const { boat, loaded } = this.#boat(i);
@@ -750,13 +855,37 @@ export class DressingRoom {
     if (seat !== null) {
       const { boat, loaded } = this.#boat(i);
       await loaded;
-      if (!wheeled) {
+      // Both wires as they hang, but the one a sailor is hooked on.
+      for (const s of [1, -1]) {
+        const node = wireNode(boat.parts, s);
+        if (node !== undefined) {
+          node.visible = true;
+        }
+      }
+      const trapeze = wired ? trapezeData(boat.parts.get('trapeze')?.userData) : null;
+      if (trapeze !== null && seat !== null) {
+        // On the wire: from the rack's edge on the clip's side, never moved.
+        const side = wireSide(r.clip);
+        seat = wirePlace(seat, trapeze.rackEdge, side);
+        const node = wireNode(boat.parts, side);
+        const mesh = wireMesh(wireColour(node));
+        mesh.castShadow = true;
+        boat.model.add(mesh);
+        if (node !== undefined) {
+          node.visible = false;
+        }
+        f.wire = { mesh, side, hounds: trapeze.hounds, hook: new Vector3() };
+      } else if (!wheeled) {
         seat = this.#restage(f, boat, seat);
       }
       f.boat = boat;
       boat.model.add(f.root);
       f.root.matrixAutoUpdate = true;
       seat.decompose(f.root.position, f.root.quaternion, f.root.scale);
+      if (f.harness !== null) {
+        boat.model.add(f.harness.root);
+        seat.decompose(f.harness.root.position, f.harness.root.quaternion, f.harness.root.scale);
+      }
       const scene = this.stage.scene;
       scene.add(boat.root);
       if (r.view === 'deck') {
@@ -859,9 +988,15 @@ export class DressingRoom {
     return moved.place;
   }
 
-  /** The room's boats' kind, and the room between them moored. */
+  /** The room's boats' kind: on a trapeze's wire, the boat with one; and the room between them moored. */
   #kind() {
-    return catalog.boats[this.room.boat] ?? catalog.boats[0];
+    return catalog.boats[this.#boatIndex()] ?? catalog.boats[0];
+  }
+
+  /** The room's boats' place in the catalog's. */
+  #boatIndex(): number {
+    const wire = this.#wireBoat;
+    return onWire(this.room.clip) && wire !== null && wire >= 0 ? wire : this.room.boat;
   }
 
   #boatSpacing(): number {
@@ -870,8 +1005,13 @@ export class DressingRoom {
 
   /** The room's i-th boat of its kind, made once and kept, and its model's load. */
   #boat(i: number): { boat: Boat; loaded: Promise<void> } {
-    const kind = this.#kind();
-    const key = `${this.room.boat}:${i}`;
+    return this.#boatAt(this.#boatIndex(), i);
+  }
+
+  /** The i-th boat of the catalog's k-th, made once and kept, and its model's load. */
+  #boatAt(k: number, i: number): { boat: Boat; loaded: Promise<void> } {
+    const kind = catalog.boats[k] ?? (catalog.boats[0] as (typeof catalog.boats)[number]);
+    const key = `${k}:${i}`;
     let b = this.#boats.get(key);
     if (b === undefined) {
       const boat = new Boat(kind, catalog);
@@ -904,6 +1044,11 @@ export class DressingRoom {
       }
       for (const m of f.meshes) {
         m.material = this.room.black ? this.#black : this.room.mask ? mask : made;
+      }
+      // The harness keeps its own colours, but black in the silhouettes.
+      for (const m of f.harness?.meshes ?? []) {
+        m.userData.made ??= m.material;
+        m.material = this.room.black ? this.#black : (m.userData.made as Material);
       }
     }
   }
@@ -967,7 +1112,9 @@ export class DressingRoom {
     for (const f of this.#figures) {
       if (f.mixer !== null && f.action !== null) {
         const length = f.action.getClip().duration;
-        f.mixer.setTime(r.t ?? (this.#time + f.offset) % length);
+        const t = r.t ?? (this.#time + f.offset) % length;
+        f.mixer.setTime(t);
+        f.harness?.mixer.setTime(t);
       }
     }
     // The boats at rest, their sails set.
@@ -978,7 +1125,7 @@ export class DressingRoom {
     // (half a metre out at the seat).
     const kind = this.#kind();
     const lever =
-      (this.#boats.get(`${r.boat}:0`)?.boat.parts.get('sailor')?.position.z ?? 0) +
+      (this.#boats.get(`${this.#boatIndex()}:0`)?.boat.parts.get('sailor')?.position.z ?? 0) +
       kind.physics.rig.mastPosition;
     pose.boom = r.view === 'deck' ? -0.35 : Math.min(0.35, Math.atan2(0.5, Math.max(lever, 0.1)));
     for (const f of this.#figures) {
@@ -991,6 +1138,7 @@ export class DressingRoom {
         b.root.rotation.set(0, turn, 0);
       }
     }
+    this.#wires();
     const o = this.#orbit;
     if (r.view === 'face') {
       const f = this.#figures[0];
@@ -1021,6 +1169,29 @@ export class DressingRoom {
     cam.lookAt(this.#look);
     this.sky.follow(cam.position, this.#look);
     readSailorLight(this.sky.light, this.sky.hemisphere);
+  }
+
+  /** Each wire on a trapeze from the hounds to its sailor's hook, as the figure is posed. */
+  #wires(): void {
+    const hooked = this.#figures.filter((f) => f.wire !== null && f.harness?.hook != null);
+    if (hooked.length === 0) {
+      return;
+    }
+    this.stage.scene.updateMatrixWorld(true);
+    for (const f of hooked) {
+      const wire = f.wire as NonNullable<Figure['wire']>;
+      const pelvis = f.root.getObjectByName('pelvis');
+      const model = f.boat?.model;
+      if (pelvis === undefined || model === undefined) {
+        continue;
+      }
+      // The hook, carried by the pelvis, into the boat model's frame.
+      wire.hook
+        .copy(f.harness?.hook as Vector3)
+        .applyMatrix4(pelvis.matrixWorld)
+        .applyMatrix4(new Matrix4().copy(model.matrixWorld).invert());
+      setWire(wire.mesh, wire.hounds, wire.hook);
+    }
   }
 
   #project(i: number, bone: string): { x: number; y: number } {
@@ -1168,10 +1339,16 @@ export class DressingRoom {
         names.add(c.name);
       }
     }
-    // The clips at a wheel, from their own file.
+    // The clips at a wheel, and those on a trapeze's wire, from their own files.
     if (this.#shown().some((l) => [...l.versions.values()].some((v) => v.wheel !== undefined))) {
       for (const c of [CLIPS.wheel, `${CLIPS.wheel}-port`, CLIPS.wheelHabit]) {
         names.add(c);
+      }
+    }
+    if (this.#shown().some((l) => [...l.versions.values()].some((v) => v.trapeze !== undefined))) {
+      for (const c of [TRAPEZE_CLIPS.out, TRAPEZE_CLIPS.low]) {
+        names.add(c);
+        names.add(`${c}-port`);
       }
     }
     group(

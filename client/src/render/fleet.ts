@@ -39,6 +39,12 @@
 // yards' turns packed in the instance's rig in place of the sail's side;
 // its stern gallery glows by night.
 //
+// A kind with a trapeze has its wires drawn as lines, every boat's in one
+// draw: from the hounds to the sailor's hook while the sailor hangs on it
+// (near, the moving figure's hook; far, the hook of the figure on the
+// wire), else down to its ring. The fleet's sailors wear no harness: it
+// would be too small to see.
+//
 // The looks are the fleet's, one set for every kind: their figures are
 // seated in the boat the clips were placed in, and each instance's seat is
 // its own kind's.
@@ -48,17 +54,20 @@
 // allocated.
 
 import {
-  type BufferGeometry,
+  BufferAttribute,
+  BufferGeometry,
+  type Color,
   DoubleSide,
   DynamicDrawUsage,
   FrontSide,
   Group,
   InstancedInterleavedBuffer,
   InstancedMesh,
+  LineSegments,
   type Material,
   type Mesh,
   type Texture,
-  type Vector3,
+  Vector3,
 } from 'three';
 import {
   attribute,
@@ -129,7 +138,7 @@ import {
   squareNode,
 } from './fleetparts';
 import { chordAt, chordAtHalf, markPlace } from './machinemark';
-import { litMaterial, sailGlow } from './materials';
+import { lineMaterial, litMaterial, sailGlow } from './materials';
 import { placeSailor, SAILING, type SailorFrame, type SailorPlace } from './sailor';
 import { type ArtFiles, type FleetLook, FleetLooks } from './sailors/fleetlooks';
 import {
@@ -142,9 +151,10 @@ import {
   swayOf,
 } from './sailors/fleetsailors';
 import { type SailorColours, sailorColours, sailorMaterial } from './sailors/material';
-import { NO_SOLID } from './sailors/onboat';
+import { NO_SOLID, wireColour } from './sailors/onboat';
 import { seating } from './sailors/restage';
 import { hullSolid } from './sailors/solid';
+import { type Trapeze, trapezeOf, wireNode } from './sailors/trapeze';
 import { wheelOf } from './sailors/wheel';
 import { kiteRig, kiteRipple, kiteShown } from './sailshape';
 import { Shadows } from './shadows';
@@ -406,6 +416,58 @@ class Level {
   }
 }
 
+/**
+ * A kind's trapeze wires, both of every boat drawn, as line segments in
+ * the scene, written each frame: one draw. A faded boat's are dithered as
+ * its other parts are.
+ */
+class WireLines {
+  readonly mesh: LineSegments;
+  readonly #position: BufferAttribute;
+  readonly #opacity: BufferAttribute;
+  count = 0;
+
+  constructor(colour: Color | null, name: string) {
+    const g = new BufferGeometry();
+    this.#position = new BufferAttribute(new Float32Array(FLEET_CAPACITY * 2 * 2 * 3), 3);
+    this.#opacity = new BufferAttribute(new Float32Array(FLEET_CAPACITY * 2 * 2), 1);
+    this.#position.setUsage(DynamicDrawUsage);
+    this.#opacity.setUsage(DynamicDrawUsage);
+    g.setAttribute('position', this.#position);
+    g.setAttribute('opacity', this.#opacity);
+    const m = lineMaterial({ color: colour ?? 0x000000 });
+    m.alphaHash = true;
+    (m as unknown as { opacityNode: Node<'float'> }).opacityNode = attribute(
+      'opacity',
+      'float',
+    ) as unknown as Node<'float'>;
+    m.name = `fleet ${name} trapeze wires`;
+    this.mesh = new LineSegments(g, m);
+    this.mesh.name = m.name;
+    this.mesh.frustumCulled = false;
+    this.mesh.visible = false;
+  }
+
+  /** A wire from a to b (the scene's), as faded as its boat. */
+  add(a: Vector3, b: Vector3, opacity: number): void {
+    if (this.count >= FLEET_CAPACITY * 2) {
+      return;
+    }
+    const k = 2 * this.count++;
+    this.#position.setXYZ(k, a.x, a.y, a.z);
+    this.#position.setXYZ(k + 1, b.x, b.y, b.z);
+    this.#opacity.setX(k, opacity);
+    this.#opacity.setX(k + 1, opacity);
+  }
+
+  commit(): void {
+    this.mesh.geometry.setDrawRange(0, 2 * this.count);
+    this.#position.needsUpdate = true;
+    this.#opacity.needsUpdate = true;
+    this.mesh.visible = this.count > 0;
+  }
+}
+
 /** The lean's buffer's values an instance: its lean, then its look. */
 export const LEAN_STRIDE = 8;
 
@@ -533,6 +595,12 @@ export class FleetView {
   #squareRig = false;
   /** Its kind's downwind sail's numbers; null for a kind without one. */
   readonly #kite: ReturnType<typeof kiteRig>;
+  /** Its kind's trapeze, null for a kind without one; and its wires, drawn. */
+  #trapeze: Trapeze | null = null;
+  wires: WireLines | null = null;
+  /** The boat being written's sailor's hook (the model's frame) and the side it hangs on, 0 if not. */
+  readonly #hook = new Vector3();
+  #hookSide = 0;
 
   constructor(kind: BoatKind, index: number, shared: Shared) {
     this.kind = kind;
@@ -611,6 +679,21 @@ export class FleetView {
     this.#frame.seatZ = nearParts.seatZ;
     this.#frame.seatOut = g.x;
     this.#frame.seatY = g.y;
+    // A boat with a trapeze: its sailor goes out on the wire, and its wires are drawn.
+    const { hikeReach } = kind.physics.sailor;
+    this.#trapeze = trapezeOf(nearParts.objects, hikeReach);
+    if (this.#trapeze !== null) {
+      const t = this.#trapeze;
+      this.#frame.trapeze = {
+        x: t.rackEdge.x,
+        y: t.rackEdge.y,
+        z: t.rackEdge.z,
+        rail: seating(nearParts.objects, hikeReach).hike.full,
+        reach: t.reach,
+      };
+      this.wires = new WireLines(wireColour(wireNode(nearParts.objects, 1)), kind.name);
+      this.root.add(this.wires.mesh);
+    }
     // A boat steered by a wheel has its sailor standing at it.
     const stand = nearParts.nodes.get('sailor');
     this.#frame.wheel =
@@ -706,6 +789,7 @@ export class FleetView {
               solid,
               climbTime: kind.physics.sailor.climbTime,
               ...seating(nearParts.objects, kind.physics.sailor.hikeReach),
+              trapeze: this.#trapeze,
             }
           : null;
     if (looks.near !== null && boat !== null) {
@@ -744,6 +828,9 @@ export class FleetView {
       level.sailorTriangles = 0;
       level.kites = 0;
     }
+    if (this.wires !== null) {
+      this.wires.count = 0;
+    }
     this.nearSailors?.frame(time);
   }
 
@@ -751,10 +838,47 @@ export class FleetView {
   write(b: DrawnBoat, near: boolean, origin: FloatingOrigin, ease: number, dt: number): void {
     const level = near ? this.near : this.far;
     if (level.count < FLEET_CAPACITY) {
-      this.#write(level, level.count++, b, origin, ease, near, dt);
+      const n = level.count++;
+      this.#hookSide = 0;
+      this.#write(level, n, b, origin, ease, near, dt);
       if (b.machine === 1) {
         level.machines++;
       }
+      this.#wires(level, n, b);
+    }
+  }
+
+  /**
+   * A boat's trapeze wires: from the hounds to its sailor's hook on the
+   * side it hangs on, else to the ring; each placed as the boat is (the
+   * parts' placePoint, on the CPU).
+   */
+  #wires(level: Level, n: number, b: DrawnBoat): void {
+    const t = this.#trapeze;
+    const wires = this.wires;
+    if (t === null || wires === null) {
+      return;
+    }
+    const o = n * 4;
+    const ol = n * LEAN_STRIDE;
+    const pose = level.pose.array as Float32Array;
+    const lean = level.lean.array as Float32Array;
+    const at = (p: Vector3, out: Vector3): Vector3 =>
+      placeOnCpu(
+        p,
+        this.#cog,
+        pose[o] as number,
+        pose[o + 1] as number,
+        pose[o + 2] as number,
+        pose[o + 3] as number,
+        lean[ol + 1] as number,
+        lean[ol + 2] as number,
+        out,
+      );
+    at(t.hounds, wireA);
+    for (const side of [1, -1]) {
+      const end = side === this.#hookSide ? this.#hook : side > 0 ? t.rings[0] : t.rings[1];
+      wires.add(wireA, at(end, wireB), b.opacity);
     }
   }
 
@@ -766,6 +890,7 @@ export class FleetView {
       this.skinned.count = this.near.count > this.near.rigid ? this.near.count : 0;
     }
     this.nearSailors?.commit();
+    this.wires?.commit();
   }
 
   #write(
@@ -901,12 +1026,30 @@ export class FleetView {
       return;
     }
     const look = d.look;
-    shared.looks?.want(look, near);
+    shared.looks?.want(look, near, this.#trapeze !== null);
     const drawn = look.layer >= 0 ? look : shared.first;
     const ns = near ? this.nearSailors : null;
     const skinned = ns?.write(n, b, look, dt) === true;
+    // Out on a wire: the figure on the wire, if its look's is made; else on the rail.
+    let wire = skinned ? 0 : (p.wire ?? 0);
+    if (wire !== 0 && (drawn.wire === null || drawn.wireHooks === null)) {
+      placeSailor(b.sailor, b.mode, b.heel, this.#frame, side, p, false);
+      seat[o] = p.x;
+      seat[o + 1] = p.y;
+      seat[o + 2] = p.z;
+      seat[o + 3] = p.facing;
+      lean[ol] = p.tilt;
+      wire = 0;
+    }
+    if (skinned && ns !== null) {
+      this.#hookSide = ns.hook(b.slot, this.#hook);
+    } else if (wire !== 0 && drawn.wireHooks !== null) {
+      this.#hook.copy(drawn.wireHooks[wire > 0 ? 0 : 1]).add(wireB.set(p.x, p.y, p.z));
+      this.#hookSide = wire;
+    }
     const rows = level.rows;
-    this.#head(rows.data, rows.width * n, n, level, d.colours, drawn, !skinned, false, b);
+    const figure = wire > 0 ? 1 : wire < 0 ? 2 : 0;
+    this.#head(rows.data, rows.width * n, n, level, d.colours, drawn, !skinned, false, b, figure);
     if (ns !== null) {
       this.#head(ns.data, ns.width * n, n, level, d.colours, drawn, false, skinned, b);
     }
@@ -933,6 +1076,8 @@ export class FleetView {
     rigid: boolean,
     skinned: boolean,
     b: DrawnBoat,
+    /** The rigid figure's pose: seated (0), or out on a wire to starboard (1) or port (2). */
+    pose = 0,
   ): void {
     const r = 4 * at;
     const o = 4 * n;
@@ -953,7 +1098,7 @@ export class FleetView {
     d[r + 20] = c.hair.r;
     d[r + 21] = c.hair.g;
     d[r + 22] = c.hair.b;
-    d[r + 23] = rigid ? 1 : 0;
+    d[r + 23] = rigid ? 1 + pose : 0;
     if (skinned && this.nearSailors !== null) {
       swayOf(this.#shared.windFrom, this.#shared.windSpeed, b, this.#sway);
       d[r + 24] = this.#sway.x;
@@ -1301,6 +1446,12 @@ export class FleetViews {
       }
       triangles += level.sailorTriangles;
     }
+    // The trapeze wires: a draw of lines a kind.
+    for (const v of this.#loaded()) {
+      if (v.wires?.mesh.visible === true) {
+        drawCalls++;
+      }
+    }
     return { drawCalls, triangles };
   }
 
@@ -1322,6 +1473,42 @@ export class FleetViews {
     this.#ms = 0;
     return r;
   }
+}
+
+const wireA = new Vector3();
+const wireB = new Vector3();
+
+/**
+ * A point of a boat's model placed as the parts' placePoint places it:
+ * heeled and pitched about the centre of gravity's height, turned to the
+ * heading, and set at the scene's x and z, lifted by the heave.
+ */
+function placeOnCpu(
+  p: Vector3,
+  cog: number,
+  x: number,
+  z: number,
+  heading: number,
+  heel: number,
+  heave: number,
+  pitch: number,
+  out: Vector3,
+): Vector3 {
+  // About the pivot: a turn of −heel about z, then pitch about x.
+  let px = p.x;
+  let py = p.y - cog;
+  let pz = p.z;
+  let c = Math.cos(-heel);
+  let s = Math.sin(-heel);
+  [px, py] = [px * c - py * s, px * s + py * c];
+  c = Math.cos(pitch);
+  s = Math.sin(pitch);
+  [py, pz] = [py * c - pz * s, py * s + pz * c];
+  py += cog;
+  // The heading: a turn of −heading about y.
+  c = Math.cos(-heading);
+  s = Math.sin(-heading);
+  return out.set(px * c + pz * s + x, py + heave, pz * c - px * s + z);
 }
 
 function trianglesOf(g: BufferGeometry | null): number {

@@ -2431,7 +2431,11 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
       const busy = () =>
         world.fleet.loading ||
         (world.fleet.looks?.looks.some(
-          (l) => l.state === 'loading' || l.clipsState === 'loading',
+          (l) =>
+            l.state === 'loading' ||
+            l.clipsState === 'loading' ||
+            l.wheelState === 'loading' ||
+            l.trapezeState === 'loading',
         ) ??
           false);
       while (busy()) {

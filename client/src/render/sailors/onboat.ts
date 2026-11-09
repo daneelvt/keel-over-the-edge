@@ -11,6 +11,12 @@
 // at it, its hands on the spokes as the wheel turns: no extension, no
 // mainsheet.
 //
+// On a boat with a trapeze (its model's `trapeze` node), the sailor wears
+// the harness, skinned to the same bones, and goes out on the wire beyond
+// the rail: then the wire on that side is drawn from the hounds to the
+// harness's hook, the model's own wire hidden; else the model's wires hang
+// as they are.
+//
 // The figure is a child of the boat's model, placed by the runtime's root
 // (the clips' places, from the build, moved to this boat's seat if it is
 // not the boat they were placed in): what it sits on is the boat model's
@@ -38,20 +44,29 @@ import { RECORDS } from '../../predict/layout.gen';
 import { fallToEdge, glowMaterial, litMaterial } from '../materials';
 import { Clip } from './clips';
 import { type SailorColours, sailorColours, sailorLight } from './material';
-import { loadClips, loadSailor, type SailorModel } from './model';
+import {
+  gltfLoader,
+  loadClips,
+  loadSailor,
+  placesOf,
+  type SailorClips,
+  type SailorModel,
+} from './model';
 import { seating } from './restage';
 import { bonesFor, Rig } from './rig';
 import { type SailorBoat, type SailorMoment, SailorRuntime } from './runtime';
 import { type HullSolid, hullSolid } from './solid';
+import { trapezeOf, wireNode } from './trapeze';
 import { turnIn, wheelOf, wheelTurnOf } from './wheel';
 
 /** Nearer than this to the camera the close level is drawn, metres; back to the deck level beyond the second. */
 export const CLOSE_IN = 6;
 const CLOSE_OUT = 6.5;
 
-/** The mainsheet's radius, and the sides of its tube. */
+/** The mainsheet's radius, and the sides of its tube; a trapeze wire's radius. */
 const ROPE_RADIUS = 0.006;
 const ROPE_SIDES = 5;
+const WIRE_RADIUS = 0.004;
 
 /** A sailor's art as the catalog names it, as URLs. */
 export interface SailorUrls {
@@ -61,6 +76,9 @@ export interface SailorUrls {
   clips: string;
   /** The clips at a wheel's URL, fetched for a boat steered by one. */
   wheel?: () => Promise<string>;
+  /** The clips on a trapeze's wire and the harness's URLs, fetched for a boat with a trapeze. */
+  trapeze?: () => Promise<string>;
+  harness?: () => Promise<string>;
   colours: { main: string; skin: string; hair: string };
 }
 
@@ -106,6 +124,10 @@ export class BoatSailor {
   /** The wheel's node and its turn at rest, on a boat steered by one. */
   readonly #wheelNode: Object3D | null;
   readonly #wheelRest = new Quaternion();
+  /** On a boat with a trapeze: the harness worn, its bones, and the wire drawn to its hook. */
+  readonly #harness: Harness | null;
+  readonly #harnessBones: (Object3D | null)[] = [];
+  readonly #wire: Mesh | null = null;
   #time = 0;
 
   private constructor(
@@ -119,6 +141,7 @@ export class BoatSailor {
     renderer: WebGPURenderer,
     seed: number,
     machine: boolean,
+    harness: Harness | null = null,
   ) {
     this.#model = model;
     this.#machine = machine;
@@ -139,6 +162,18 @@ export class BoatSailor {
     model.add(deck.root);
     this.#rope = rope();
     model.add(this.#rope);
+    this.#harness = boat.trapeze ? harness : null;
+    if (this.#harness !== null) {
+      const h = this.#harness;
+      h.root.name = 'sailor harness';
+      h.root.matrixAutoUpdate = false;
+      this.#harnessBones = bonesFor(rig, h.root);
+      model.add(h.root);
+      this.runtime.hook(h.hook);
+      this.#wire = wireMesh(wireColour(wireNode(parts, 1)));
+      this.#wire.visible = false;
+      model.add(this.#wire);
+    }
     const lantern = deck.places.get('place-lantern');
     if (machine && lantern !== undefined) {
       // The lantern's place against its bone (the back's) at rest: it
@@ -194,11 +229,17 @@ export class BoatSailor {
     const clips = new Map<string, Clip>();
     const identity = new Matrix4();
     const wheel = wheelOf(parts, model);
-    // At a wheel, its clips too.
+    const { foils, sailor } = kind.physics;
+    const trapeze = trapezeOf(parts, sailor.hikeReach);
+    // At a wheel, its clips too; on a trapeze, those on the wire and the harness.
     const files =
       wheel !== null && urls.wheel !== undefined
         ? [clipFile, await loadClips(await urls.wheel(), renderer)]
         : [clipFile];
+    const wire = trapeze !== null ? await onTheWire(urls, renderer) : null;
+    if (wire !== null) {
+      files.push(wire.clips);
+    }
     for (const file of files) {
       for (const a of file.clips) {
         const place = file.places.get(`place-${a.name}`) ?? null;
@@ -212,7 +253,6 @@ export class BoatSailor {
       const o = parts.get(name);
       return o === undefined ? null : modelPosition(o, model, new Vector3());
     };
-    const { foils, sailor } = kind.physics;
     const solid = hullSolid(parts.get('hull')?.userData, at('board-root'), {
       span: foils.boardSpan,
       chord: foils.boardChord,
@@ -254,8 +294,21 @@ export class BoatSailor {
       solid,
       climbTime: sailor.climbTime,
       ...seating(parts, sailor.hikeReach),
+      trapeze: wire !== null ? trapeze : null,
     };
-    return new BoatSailor(model, parts, deck, rig, clips, boat, urls, renderer, seed, machine);
+    return new BoatSailor(
+      model,
+      parts,
+      deck,
+      rig,
+      clips,
+      boat,
+      urls,
+      renderer,
+      seed,
+      machine,
+      wire?.harness ?? null,
+    );
   }
 
   /** Takes new colours, #RRGGBB: its main colour, skin or metal, and hair or lamps' light. */
@@ -290,6 +343,19 @@ export class BoatSailor {
   set shown(on: boolean) {
     this.#shown = on;
     this.#rope.visible = on;
+    if (this.#harness !== null) {
+      this.#harness.root.visible = on;
+    }
+    if (this.#wire !== null && !on) {
+      // Its wire put away, the model's own hanging again.
+      this.#wire.visible = false;
+      for (const side of [1, -1]) {
+        const node = wireNode(this.#parts, side);
+        if (node !== undefined) {
+          node.visible = true;
+        }
+      }
+    }
     if (this.#glow !== null) {
       this.#glow.visible = on;
     }
@@ -373,6 +439,12 @@ export class BoatSailor {
       this.#close.root.matrix.copy(rt.root);
       this.#close.root.matrixWorldNeedsUpdate = true;
     }
+    if (this.#harness !== null) {
+      this.rig.write(this.#harnessBones);
+      this.#harness.root.matrix.copy(rt.root);
+      this.#harness.root.matrixWorldNeedsUpdate = true;
+      this.#drawWire();
+    }
     // The extension swung on its hinge to the aft hand.
     if (ext !== undefined && rt.hands.tiller && ext.parent !== null) {
       // The hand in the tiller's frame.
@@ -383,6 +455,30 @@ export class BoatSailor {
       }
     }
     this.#drawRope(rt.hands.sheet ? rt.hands.sheetAt : null);
+  }
+
+  /**
+   * The trapeze's wires: on the side the sailor hangs from, from the hounds
+   * to the hook, the model's own hidden; else the model's as they hang.
+   */
+  #drawWire(): void {
+    const rt = this.runtime;
+    const trapeze = this.#boat.trapeze;
+    const wire = this.#wire;
+    if (!trapeze || wire === null) {
+      return;
+    }
+    const hooked = rt.hands.hooked;
+    for (const side of [1, -1]) {
+      const node = wireNode(this.#parts, side);
+      if (node !== undefined) {
+        node.visible = !hooked || side !== rt.side;
+      }
+    }
+    wire.visible = hooked && this.#shown;
+    if (hooked) {
+      setWire(wire, trapeze.hounds, rt.hands.hook);
+    }
   }
 
   /** The mainsheet: boom block, floor block, and the hand (or lying on the floor). */
@@ -409,6 +505,29 @@ export class BoatSailor {
   }
 }
 
+/**
+ * A look's clips on a trapeze's wire and its harness, from their URLs;
+ * null if it has none (the sailor then sits out on the rail only).
+ */
+async function onTheWire(
+  urls: SailorUrls,
+  renderer: WebGPURenderer,
+): Promise<{ clips: SailorClips; harness: Harness } | null> {
+  if (urls.trapeze === undefined || urls.harness === undefined) {
+    return null;
+  }
+  try {
+    const [clips, harness] = await Promise.all([
+      urls.trapeze().then((u) => loadClips(u, renderer)),
+      (urls.harness as () => Promise<string>)().then((u) => loadHarness(u, renderer)),
+    ]);
+    return { clips, harness };
+  } catch (e) {
+    console.warn('the sailor’s clips on the trapeze did not load: on the rail only', e);
+    return null;
+  }
+}
+
 /** A hull with nothing in it: a boat at whose wheel the sailor stands needs none. */
 export const NO_SOLID: HullSolid = {
   stations: [],
@@ -416,6 +535,50 @@ export const NO_SOLID: HullSolid = {
   cockpit: { fore: 0, aft: 0, halfWidth: 0, floor: 0 },
   board: { y: 0, z: 0, span: 0, chord: 0, thickness: 0 },
 };
+
+/**
+ * A look's trapeze harness, as loaded: its scene (a skeleton of its own,
+ * its bones named as the figure's), its meshes in the factory's material in
+ * the file's colours, and its hook's eye (where the wire's ring hangs) in
+ * the figure's space at rest; null if the file has none.
+ */
+export interface Harness {
+  root: Object3D;
+  meshes: Mesh[];
+  hook: Vector3 | null;
+}
+
+/** Loads a look's harness from url. */
+export async function loadHarness(url: string, renderer: WebGPURenderer): Promise<Harness> {
+  const gltf = await gltfLoader(renderer).loadAsync(url);
+  const root = gltf.scene;
+  const hook = placesOf(root).get('place-hook');
+  const meshes: Mesh[] = [];
+  root.traverse((o) => {
+    if (o instanceof Mesh) {
+      meshes.push(o);
+    }
+  });
+  for (const o of meshes) {
+    const src = o.material as MeshStandardMaterial;
+    const made = litMaterial({
+      color: src.color,
+      roughness: src.roughness,
+      metalness: src.metalness,
+      side: src.side,
+    });
+    made.name = src.name;
+    src.dispose();
+    o.material = made;
+    // Bones move it beyond its rest pose's bounds.
+    o.frustumCulled = false;
+  }
+  return {
+    root,
+    meshes,
+    hook: hook === undefined ? null : new Vector3().setFromMatrixPosition(hook),
+  };
+}
 
 /** The bone a machine's lantern rides on. */
 const LANTERN_BONE = 'spine_03';
@@ -496,8 +659,60 @@ function parentToModel(o: Object3D, model: Object3D, out: Matrix4): Matrix4 {
 
 /** The mainsheet's mesh: a tube along three points, its vertices set each frame. */
 function rope(): Mesh {
+  const mesh = new Mesh(
+    tubeGeometry(3),
+    litMaterial({
+      color: 0x4d3b2a,
+      roughness: 0.9,
+      metalness: 0,
+    }) as unknown as MeshStandardMaterial,
+  );
+  mesh.name = 'mainsheet';
+  mesh.frustumCulled = false;
+  return mesh;
+}
+
+/**
+ * A trapeze wire drawn to the hook: a tube between two points, set each
+ * frame (setWire), in a model's wire's colour (black if none is given).
+ */
+export function wireMesh(colour: Color | null): Mesh {
+  const mesh = new Mesh(
+    tubeGeometry(2),
+    litMaterial({
+      color: colour ?? 0x000000,
+      roughness: 0.9,
+      metalness: 0,
+    }) as unknown as MeshStandardMaterial,
+  );
+  mesh.name = 'trapeze wire';
+  mesh.frustumCulled = false;
+  return mesh;
+}
+
+/** A wire's ends: from the hounds to the hook. */
+export function setWire(mesh: Mesh, from: Vector3, to: Vector3): void {
+  wireEnds[0].copy(from);
+  wireEnds[1].copy(to);
+  tube(mesh.geometry, wireEnds, WIRE_RADIUS);
+}
+
+const wireEnds: [Vector3, Vector3] = [new Vector3(), new Vector3()];
+
+/** The colour of a model's wire: its first mesh's material's. */
+export function wireColour(node: Object3D | undefined): Color | null {
+  let colour: Color | null = null;
+  node?.traverse((o) => {
+    if (colour === null && o instanceof Mesh) {
+      colour = (o.material as MeshStandardMaterial).color?.clone() ?? null;
+    }
+  });
+  return colour;
+}
+
+/** A tube's geometry along so many points, ROPE_SIDES round, its vertices set each frame. */
+function tubeGeometry(rings: number): BufferGeometry {
   const g = new BufferGeometry();
-  const rings = 3;
   const n = rings * ROPE_SIDES;
   g.setAttribute('position', new BufferAttribute(new Float32Array(3 * n), 3));
   g.setAttribute('normal', new BufferAttribute(new Float32Array(3 * n), 3));
@@ -512,17 +727,7 @@ function rope(): Mesh {
     }
   }
   g.setIndex(index);
-  const mesh = new Mesh(
-    g,
-    litMaterial({
-      color: 0x4d3b2a,
-      roughness: 0.9,
-      metalness: 0,
-    }) as unknown as MeshStandardMaterial,
-  );
-  mesh.name = 'mainsheet';
-  mesh.frustumCulled = false;
-  return mesh;
+  return g;
 }
 
 const t = new Vector3();

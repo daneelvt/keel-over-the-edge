@@ -42,6 +42,8 @@ import {
   vec4,
 } from 'three/tsl';
 import {
+  LineBasicNodeMaterial,
+  type LineBasicNodeMaterialParameters,
   MeshBasicNodeMaterial,
   type MeshBasicNodeMaterialParameters,
   MeshStandardNodeMaterial,
@@ -133,6 +135,13 @@ export function basicMaterial(
 ): MeshBasicNodeMaterial {
   const m = new MeshBasicNodeMaterial(params);
   m.positionNode = bendLocal(vertex ?? positionLocal);
+  return register(m, 'basic', 'vertex');
+}
+
+/** An unlit material for line segments: a pixel wide however far, for what is thinner than that (the fleet's trapeze wires). */
+export function lineMaterial(params: LineBasicNodeMaterialParameters = {}): LineBasicNodeMaterial {
+  const m = new LineBasicNodeMaterial(params);
+  m.positionNode = bendLocal(positionLocal);
   return register(m, 'basic', 'vertex');
 }
 

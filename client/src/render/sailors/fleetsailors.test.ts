@@ -4,7 +4,8 @@
 // level made one geometry skins, from the matrices the near tier writes,
 // to where three.js's own skinning puts every vertex at the same pose; what
 // hangs on the cloth's chains carries a sway, the rest none; and each near
-// sailor runs 20 times a second, whatever the frame rate.
+// sailor runs 20 times a second, whatever the frame rate. At a wheel, and on
+// a trapeze's wire, each waits for its clips there.
 
 import { readFileSync } from 'node:fs';
 import {
@@ -29,8 +30,10 @@ import { deckLook, FleetLook } from './fleetlooks';
 import { NEAR_RATE, NearSailors, ROW_HEAD } from './fleetsailors';
 import { placesOf } from './model';
 import { boneNames, NO_SOLID } from './onboat';
+import { seating } from './restage';
 import { bonesFor, Rig } from './rig';
 import { hullSolid } from './solid';
+import { harnessFile, trapezeClips, trapezeOf } from './trapeze';
 import { wheelClips } from './wheel';
 
 const ART = new URL('../../../../art/', import.meta.url);
@@ -293,4 +296,84 @@ test('a near sailor at a wheel waits for its clips at the wheel, then stands at 
   expect(at.y - stand.y).toBeGreaterThan(0.8);
   expect(at.z).toBeLessThan(stand.z + 0.05);
   expect(at.z).toBeGreaterThan(wheel.hub.z);
+});
+
+test('a near sailor on a trapeze waits for its clips on the wire, then goes out on it, its hook where the wire hangs', async () => {
+  const kind = catalog.boats.find((b) => b.name === 'Skiff');
+  const sailor = catalog.sailors[0]?.versions[0];
+  if (kind === undefined || sailor === undefined) {
+    throw new Error('no skiff or sailor');
+  }
+  const deck = await load(sailor.art.model);
+  const boat = await load(kind.art.model);
+  boat.scene.updateMatrixWorld(true);
+  const parts = new Map<string, Object3D>();
+  boat.scene.traverse((o) => {
+    if (o.name !== '') {
+      parts.set(o.name, o);
+    }
+  });
+  const node = (name: string): Vector3 =>
+    (boat.scene.getObjectByName(name) as Object3D).getWorldPosition(new Vector3());
+  const solid = hullSolid(boat.scene.getObjectByName('hull')?.userData, node('board-root'), {
+    span: kind.physics.foils.boardSpan,
+    chord: kind.physics.foils.boardChord,
+  });
+  const { hikeReach } = kind.physics.sailor;
+  const trapeze = trapezeOf(parts, hikeReach);
+  if (solid === null || trapeze === null) {
+    throw new Error('no solid or trapeze');
+  }
+  const rig = Rig.from(deck.scene, boneNames(deck.scene));
+  const look = new FleetLook(0, sailor.art, false);
+  look.deck = deckLook(meshesOf(deck.scene), rig, new Matrix3(), 0);
+  look.clips = new Map();
+  for (const path of [sailor.art.clips, trapezeClips(sailor.art.clips)]) {
+    const file = await load(path);
+    const places = placesOf(file.scene);
+    for (const a of file.animations) {
+      look.clips.set(a.name, Clip.from(a, rig, places.get(`place-${a.name}`) ?? null));
+    }
+  }
+  const harness = await load(harnessFile(sailor.art.clips));
+  look.hook = new Vector3().setFromMatrixPosition(
+    placesOf(harness.scene).get('place-hook') as Matrix4,
+  );
+  const near = new NearSailors(rig.names.length, 4, {
+    stock: node('rudder'),
+    hinge: node('extension'),
+    extension: node('extension').distanceTo(node('grip')),
+    seatY: node('gunwale').y,
+    seatIn: solid.cockpit.halfWidth,
+    seatOut: node('gunwale').x,
+    seatZ: node('sailor').z,
+    cog: kind.physics.hull.centreOfGravity,
+    solid,
+    climbTime: kind.physics.sailor.climbTime,
+    ...seating(parts, hikeReach),
+    trapeze,
+  });
+  const b = { ...newDrawnBoat(), slot: 0, sailor: hikeReach, opacity: 1 };
+  // Until its clips on the wire have loaded, drawn rigid.
+  look.trapezeState = 'loading';
+  expect(near.write(0, b, look, 1 / 30)).toBe(false);
+  look.trapezeState = 'ready';
+  for (let f = 0; f < 30; f++) {
+    near.frame(f / 30);
+    expect(near.write(0, b, look, 1 / 30)).toBe(true);
+  }
+  // On the wire: not seated, its hook out beyond the rack's edge, at a hanging sailor's hips.
+  expect(near.seated(0)).toBe(0);
+  const hook = new Vector3();
+  expect(near.hook(0, hook)).toBe(1);
+  expect(hook.x).toBeGreaterThan(trapeze.rackEdge.x + 0.4);
+  expect(hook.y).toBeGreaterThan(trapeze.rackEdge.y);
+  // Sat on the rail: seated, no hook on the wire.
+  b.sailor = 0.6;
+  for (let f = 30; f < 60; f++) {
+    near.frame(f / 30);
+    near.write(0, b, look, 1 / 30);
+  }
+  expect(near.seated(0)).toBe(1);
+  expect(near.hook(0, hook)).toBe(0);
 });

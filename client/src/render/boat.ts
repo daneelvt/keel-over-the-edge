@@ -92,6 +92,7 @@ import { litMaterial, sailGlow } from './materials';
 import { Pennant } from './pennant';
 import type { Gfx } from './renderer';
 import { BoatSailor } from './sailors/onboat';
+import { harnessFile, trapezeClips } from './sailors/trapeze';
 import { wheelClips } from './sailors/wheel';
 import {
   headsailFrame,
@@ -620,6 +621,8 @@ export class Boat {
         close: () => lazyArtUrl(a.close),
         clips: await lazyArtUrl(a.clips),
         wheel: () => lazyArtUrl(wheelClips(a.clips)),
+        trapeze: () => lazyArtUrl(trapezeClips(a.clips)),
+        harness: () => lazyArtUrl(harnessFile(a.clips)),
         colours: look.colours,
       },
       renderer,
