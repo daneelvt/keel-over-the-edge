@@ -1003,7 +1003,7 @@ def make(fig, lib, name):
         # nor the legs', whose feet stay where they press on the rack.
         last = clip.frames[-1]
         for b in names:
-            if kind(b) in ("pelvis", "thigh", "calf", "foot", "ball") or b.startswith("thigh_corrector"):
+            if kind(b) in ("Root", "pelvis", "thigh", "calf", "foot", "ball") or b.startswith("thigh_corrector"):
                 continue
             q0, q1 = clip.frames[0]["rot"][b], last["rot"][b]
             gap = q1.inverted() @ (q0 if q0.dot(q1) >= 0 else -q0)

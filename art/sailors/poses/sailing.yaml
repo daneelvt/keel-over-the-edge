@@ -473,8 +473,6 @@ poses:
     ik:
       hand_l: { at: bone, bone: spine_03, offset: [0.21, -0.2, -0.1], pole: [0.7, 0.2, -0.2] }
       hand_r: { at: bone, bone: spine_03, offset: [-0.1, -0.24, -0.06], pole: [-0.7, 0.2, -0.3] }
-      foot_l: { at: rack, planted: true }
-      foot_r: { at: rack, planted: true }
 
   trapeze-crouch-luff:
     from: trapeze-crouch
