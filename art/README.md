@@ -37,6 +37,11 @@ built files are committed; the catalog's `art.model` names them, and
   with tops and crosstrees, square sails on yards, headsails, the mizzen
   on its gaff and boom, shrouds with ratlines and deadeyes, her wheel and
   her lanterns.
+- `boats/skiff/build.ts`: the skiff, clinker planked on a trapeze skiff's
+  lines with an open transom, racks of ash with a hemp net out to her beam,
+  a fractional rig with swept spreaders, deadeyes and trapeze wires, a
+  square-headed, fully battened main, a self-tacking jib on its horse, a
+  gennaker on a bowsprit, a centreboard and a kick-up rudder.
 - `town/lib/kit.ts` and `town/<biome>/build.ts`: each biome's kit of town
   buildings and props, `town/<biome>.glb`.
 - `icon/icon.ts` and `icon/build.ts`: the game's icon, the boat on sky and
@@ -51,7 +56,15 @@ A model's nodes are named, and the client finds its parts by those names:
 with `tiller`, `daggerboard` (a fixed keel too, its bulb a child), and
 `sailor`, an empty node where the sailor sits. A boat with headsails has
 `jib`, at its tack, its luff up the forestay to its head, `rake` (its
-`extras`) aft of the tack. The boat's origin is at its centre of gravity's
+`extras`) aft of the tack. A boat with a downwind sail has `kite`, built as
+the jib is, at its tack on the bowsprit's end, which the game hides in its
+bag and hoists from the tack. A boat with a trapeze has `trapeze`: its
+wires and rings, and in its `extras` the `hounds`, the `rings` (starboard
+first) and the starboard rack's outer edge at the helm (`rackEdge`), in the
+model's frame. A fully battened main's `sail` names its battens' heights,
+fractions of its luff, in its `extras`. A hull whose beam is over its
+racks says so: its `extras.plan.over` names the materials it is measured
+across. The boat's origin is at its centre of gravity's
 station, on the centreline at the waterline; the bow points to -z and
 starboard is +x. The sails, telltales and pennant carry their fractions (of
 the chord and luff, along each ribbon) in their texture coordinates, and

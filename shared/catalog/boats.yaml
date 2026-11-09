@@ -943,11 +943,12 @@ boats:
     name: Skiff
     description: Two-person dinghy
     capacity: 2
-    # Where the people aboard are: the helmsman on the starboard rack aft,
-    # facing in, and a second on the port rack forward of them.
+    # Where the people aboard are: the helmsman on the starboard rack's
+    # rail aft, facing in, and a second on the port rack's rail forward of
+    # them, by the shrouds.
     stations:
-      - { at: [0.83, 0.45, 0.55], pose: seated, facing: 270 }
-      - { at: [-0.83, 0.45, -0.25], pose: seated, facing: 90 }
+      - { at: [0.881, 0.448, 0.55], pose: seated, facing: 270 }
+      - { at: [-0.854, 0.4587, -0.25], pose: seated, facing: 90 }
     lengthOverall: 4.45 # 29er class
     beam: 1.77 # over the racks (29er class)
     # A sailing vessel of less than 7 m shows her sidelights and sternlight
@@ -958,8 +959,8 @@ boats:
     lookout: 2
     # A seabird aboard perches on her foredeck, ahead of the mast; a flying
     # fish lands in her cockpit.
-    perch: [0, 0.48, -1.75]
-    deck: [0.2, 0.3, -0.2]
+    perch: [0, 0.431, -1.75]
+    deck: [0.25, 0.255, 0.2]
     # Her sheet for a start from rest, by the angle off the wind: from
     # tools/polar's sweep from rest (-start), each within 85% of the best
     # sheet's speed after 20 s in 3, 5 and 8 knots.
