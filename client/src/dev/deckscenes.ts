@@ -657,14 +657,7 @@ function shipmatesScene(
   view.list.value = structuredClone(list);
   const threaded = name === 'shipmates-thread' || name === 'shipmates-keyboard';
   if (threaded || name === 'shipmates-notice') {
-    message(
-      threads,
-      'bly',
-      'Bosun Bly',
-      'Ahoy! Are you out on the water today?',
-      now - 300_000,
-      1,
-    );
+    message(threads, 'bly', 'Bosun Bly', 'Ahoy! Are you out on the water today?', now - 300_000, 1);
   }
   if (threaded) {
     echo('bly', threads.say('bly', 'Just left Port Royal, reaching north.', self, now), now);
