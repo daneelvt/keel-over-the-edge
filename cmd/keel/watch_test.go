@@ -5,6 +5,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"slices"
@@ -25,10 +26,110 @@ import (
 	"github.com/daneelvt/keel-over-the-edge/internal/store"
 )
 
-// memWatching is who follows whom, in a memDB.
+// memWatching is who follows whom, in a memDB, and the codes of the
+// accounts' links to watch, made as they are first asked for.
 type memWatching struct {
 	mu      sync.Mutex
 	follows map[store.AccountID]map[store.AccountID]bool
+	codes   map[store.AccountID]string
+	fleets  map[store.AccountID]string
+	made    int
+}
+
+// codeOf is an account's sailor's code, or with fleet its fleet's, made
+// if it has none yet.
+func (d *memDB) codeOf(id store.AccountID, fleet bool) string {
+	d.watching.mu.Lock()
+	defer d.watching.mu.Unlock()
+	if d.watching.codes == nil {
+		d.watching.codes, d.watching.fleets = map[store.AccountID]string{}, map[store.AccountID]string{}
+	}
+	m, prefix := d.watching.codes, "w"
+	if fleet {
+		m, prefix = d.watching.fleets, "f"
+	}
+	if c, ok := m[id]; ok {
+		return c
+	}
+	d.watching.made++
+	m[id] = fmt.Sprintf("%s%d", prefix, d.watching.made)
+	return m[id]
+}
+
+// byCode is the account whose sailor's code, or with fleet whose fleet's,
+// is code.
+func (d *memDB) byCode(code string, fleet bool) (store.AccountID, bool) {
+	d.watching.mu.Lock()
+	defer d.watching.mu.Unlock()
+	m := d.watching.codes
+	if fleet {
+		m = d.watching.fleets
+	}
+	for id, c := range m {
+		if c == code {
+			return id, true
+		}
+	}
+	return store.AccountID{}, false
+}
+
+func (d *memDB) sailorOf(ctx context.Context, id store.AccountID) (store.Sailor, bool) {
+	sl, ok := d.SailorsByID(ctx, []store.AccountID{id})
+	s, found := sl[id]
+	return s, ok == nil && found
+}
+
+func (d *memDB) LinkCodes(ctx context.Context, id store.AccountID) (store.LinkCodes, error) {
+	s, ok := d.sailorOf(ctx, id)
+	if !ok {
+		return store.LinkCodes{}, store.ErrNotFound
+	}
+	c := store.LinkCodes{Sailor: s.Code}
+	if s.Kind == store.Human {
+		c.Fleet = d.codeOf(id, true)
+	}
+	return c, nil
+}
+
+func (d *memDB) LinkTarget(ctx context.Context, code string) (store.WatchTarget, error) {
+	id, ok := d.byCode(code, false)
+	if !ok {
+		return store.WatchTarget{}, store.ErrNotFound
+	}
+	s, ok := d.sailorOf(ctx, id)
+	if !ok {
+		return store.WatchTarget{}, store.ErrNotFound
+	}
+	return d.WatchTarget(ctx, moderation.Key(s.Name))
+}
+
+func (d *memDB) FleetLinkOwner(_ context.Context, code string) (store.AccountID, error) {
+	if id, ok := d.byCode(code, true); ok {
+		return id, nil
+	}
+	return store.AccountID{}, store.ErrNotFound
+}
+
+func (d *memDB) NewWatchCode(ctx context.Context, owner, id store.AccountID) (string, error) {
+	s, ok := d.sailorOf(ctx, id)
+	if !ok || (id == owner) != (s.Kind == store.Human) || id != owner && s.Owner != owner {
+		return "", store.ErrNotFound
+	}
+	d.watching.mu.Lock()
+	delete(d.watching.codes, id)
+	d.watching.mu.Unlock()
+	return d.codeOf(id, false), nil
+}
+
+func (d *memDB) NewFleetCode(ctx context.Context, id store.AccountID) (string, error) {
+	if s, ok := d.sailorOf(ctx, id); !ok || s.Kind != store.Human {
+		return "", store.ErrNotFound
+	}
+	d.codeOf(id, true)
+	d.watching.mu.Lock()
+	delete(d.watching.fleets, id)
+	d.watching.mu.Unlock()
+	return d.codeOf(id, true), nil
 }
 
 func (d *memDB) WatchTarget(ctx context.Context, key string) (store.WatchTarget, error) {
@@ -65,8 +166,10 @@ func (d *memDB) Follows(ctx context.Context, follower store.AccountID) ([]store.
 		return nil, err
 	}
 	var out []store.Followed
-	for id, sl := range sailors {
-		out = append(out, store.Followed{ID: id, Sailor: sl})
+	for _, id := range ids {
+		if sl, ok := sailors[id]; ok {
+			out = append(out, store.Followed{ID: id, Sailor: sl})
+		}
 	}
 	return out, nil
 }
@@ -109,6 +212,10 @@ func (d *memDB) SailorsByID(ctx context.Context, ids []store.AccountID) (map[sto
 		for id, a := range accs {
 			out[id] = store.Sailor{Name: a.Name, Kind: a.Kind}
 		}
+	}
+	for id, s := range out {
+		s.Code = d.codeOf(id, false)
+		out[id] = s
 	}
 	return out, nil
 }
@@ -304,6 +411,123 @@ func TestWatchingFromThePlayRoutes(t *testing.T) {
 		})
 		if again.GetWatching() != nil || again.GetBoat() == first || again.GetRejoined() {
 			t.Fatalf("sailing again: %v", again)
+		}
+		s.stop(t)
+	})
+}
+
+// TestLinksToWatch: the codes of a human's own links on GET /api/me; a
+// sailor's link found, refused alike for a human not allowing, and a
+// machine sailor's; a fleet's link finds its machine sailors and never
+// names their human, nor puts the human's own boat among them; the list's
+// fleet filter; following by a link whatever the sailor's state; a
+// machine sailor's card carries its code and a human's does not; a link
+// made anew stops the old one; and none of it without a session.
+func TestLinksToWatch(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		db := &memDB{epoch: bubbleEpoch, sessions: edgetest.NewSessions()}
+		ann, annID := db.sessions.Add("Ann", "human")
+		bob, _ := db.sessions.Add("Bob", "human")
+		cid, _ := db.sessions.Add("Cid", "human")
+		s := again(t, map[string]string{"KEEL_WORLD_SEED": "1"}, db)
+		var mary store.AccountID
+		token := db.machineFor("Iron Mary", annID, &mary)
+		if text, refused := callTool(t, agentSession(t, s, token), "observe", nil); refused || !strings.Contains(text, "At sea") {
+			t.Fatalf("observe: %v %q", refused, text)
+		}
+		annWS, _, _ := connect(t, s, ann)
+		defer annWS.CloseNow()
+		bobWS, _, _ := connect(t, s, bob)
+		defer bobWS.CloseNow()
+		time.Sleep(3 * time.Second)
+
+		codes := func(cookie string) (string, string) {
+			t.Helper()
+			status, body := asked(t, s, cookie, "GET", "/api/me", nil)
+			var m struct {
+				WatchCode string `json:"watchCode"`
+				FleetCode string `json:"fleetCode"`
+			}
+			if err := json.Unmarshal([]byte(body), &m); status != 200 || err != nil || m.WatchCode == "" || m.FleetCode == "" {
+				t.Fatalf("the codes: %d %s", status, body)
+			}
+			return m.WatchCode, m.FleetCode
+		}
+		annCode, annFleet := codes(ann)
+		bobCode, _ := codes(bob)
+		_, c := func() (int, map[string]any) {
+			status, body := asked(t, s, cid, "GET", "/api/watch/sailor?name=Iron%20Mary", nil)
+			var c map[string]any
+			_ = json.Unmarshal([]byte(body), &c)
+			return status, c
+		}()
+		maryCode, _ := c["code"].(string)
+		if maryCode == "" {
+			t.Fatalf("Iron Mary's card: %v", c)
+		}
+		link := func(cookie, query string, want int, has ...string) string {
+			t.Helper()
+			status, body := asked(t, s, cookie, "GET", "/api/watch/link?"+query, nil)
+			if status != want {
+				t.Fatalf("%s: %d %s", query, status, body)
+			}
+			for _, h := range has {
+				if !strings.Contains(body, h) {
+					t.Fatalf("%s: %s, want %s", query, body, h)
+				}
+			}
+			return body
+		}
+		link(cid, "w="+bobCode, 404, `"error":"cannot"`, `"name":"Bob"`)
+		link(cid, "w="+annCode, 404, `"error":"cannot"`, `"name":"Ann"`)
+		link(cid, "w="+maryCode, 200, `{"name":"Iron Mary","machine":true}`)
+		link(ann, "w="+annCode, 404, `"error":"own"`)
+		link(cid, "w=nobody", 404, `{"error":"no-link"}`)
+		link(cid, "", 400, `"link"`)
+		if body := link(cid, "f="+annFleet, 200, `{"sailors":[{"name":"Iron Mary","machine":true,"mine":false`); strings.Contains(body, "Ann") {
+			t.Fatalf("the fleet names its human: %s", body)
+		}
+		if status, _ := asked(t, s, cid+"x", "GET", "/api/watch/link?w="+maryCode, nil); status != 401 {
+			t.Fatalf("with no session: %d", status)
+		}
+		if status, body := asked(t, s, cid, "GET", "/api/watch?fleet="+annFleet, nil); status != 200 || !strings.Contains(body, "Iron Mary") || strings.Contains(body, "Bob") {
+			t.Fatalf("the fleet's list: %d %s", status, body)
+		}
+		if status, body := asked(t, s, cid, "GET", "/api/watch?fleet=nobody", nil); status != 404 || !strings.Contains(body, "no-link") {
+			t.Fatalf("no fleet: %d %s", status, body)
+		}
+
+		// Cid follows Bob by his link while Bob does not allow: the same
+		// answer as for one who does.
+		if status, body := asked(t, s, cid, "POST", "/api/watch/follow", map[string]any{"code": bobCode, "on": true}); status != 200 || body != `{"following":1}`+"\n" {
+			t.Fatalf("following Bob by his link: %d %s", status, body)
+		}
+		if status, body := asked(t, s, cid, "POST", "/api/watch/follow", map[string]any{"code": maryCode, "on": true}); status != 200 || body != `{"following":2}`+"\n" {
+			t.Fatalf("following Iron Mary by her link: %d %s", status, body)
+		}
+		if status, _ := asked(t, s, bob, "POST", "/api/me/spectators", map[string]string{"allow": "voyage"}); status != 200 {
+			t.Fatal("Bob allows")
+		}
+		time.Sleep(3 * time.Second)
+		link(cid, "w="+bobCode, 200, `{"name":"Bob","machine":false}`)
+		if status, body := asked(t, s, cid, "GET", "/api/watch/sailor?name=Bob", nil); status != 200 || strings.Contains(body, `"code"`) {
+			t.Fatalf("Bob's card: %d %s", status, body)
+		}
+
+		// Made anew, the old links find nothing.
+		for _, which := range []map[string]string{{"which": "me"}, {"which": "fleet"}, {"which": "machine", "machine": mary.String()}} {
+			if status, body := asked(t, s, ann, "POST", "/api/me/link/new", which); status != 200 || !strings.Contains(body, `"code"`) {
+				t.Fatalf("%v anew: %d %s", which, status, body)
+			}
+		}
+		link(cid, "w="+annCode, 404, "no-link")
+		link(cid, "f="+annFleet, 404, "no-link")
+		link(cid, "w="+maryCode, 404, "no-link")
+		if status, _ := asked(t, s, bob, "POST", "/api/me/link/new", map[string]string{"which": "machine", "machine": mary.String()}); status != 404 {
+			t.Fatalf("another's machine sailor: %d", status)
+		}
+		if status, _ := asked(t, s, bob, "POST", "/api/me/link/new", map[string]string{"which": "all"}); status != 400 {
+			t.Fatalf("none of the links: %d", status)
 		}
 		s.stop(t)
 	})

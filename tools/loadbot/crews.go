@@ -10,7 +10,7 @@ import (
 	"io"
 	"math/rand/v2"
 	"net/http"
-	"strings"
+	"net/url"
 	"time"
 
 	"github.com/daneelvt/keel-over-the-edge/internal/auth"
@@ -148,11 +148,15 @@ func (a *httpAccounts) link(ctx context.Context, cookie string) (string, error) 
 	if err := json.Unmarshal(body, &l); err != nil {
 		return "", err
 	}
-	i := strings.LastIndex(l.URL, "/sail/")
-	if i < 0 {
-		return "", errors.New("a link with no /sail/ in it: " + l.URL)
+	u, err := url.Parse(l.URL)
+	if err != nil {
+		return "", err
 	}
-	return l.URL[i+len("/sail/"):], nil
+	token := u.Query().Get("s")
+	if token == "" {
+		return "", errors.New("a link with no token in it: " + l.URL)
+	}
+	return token, nil
 }
 
 // Boarder is what crews need of the accounts: the HTTP accounts have it.
