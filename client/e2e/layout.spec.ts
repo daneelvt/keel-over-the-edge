@@ -373,17 +373,17 @@ async function caseFaults(page: Page, upright: boolean): Promise<string[]> {
  * aback (its legend then aback): its words out of the frame, or over the
  * ends.
  */
-async function sheetFaults(page: Page, aback = 'Aback'): Promise<string[]> {
+async function sheetFaults(page: Page, aback = 'Aback', kite = ''): Promise<string[]> {
   const found: string[] = [];
   for (const [state, legend, lit] of [
-    ['luffing', 'Luffing', 'trim'],
-    ['stalled', 'Stalled', 'ease'],
+    ['luffing', `${kite}Luffing`, 'trim'],
+    ['stalled', `${kite}Stalled`, 'ease'],
     ['aback', aback, null],
   ] as const) {
     found.push(
       ...(await page.evaluate(
-        async ({ state, legend, lit }) => {
-          globalThis.keel.sail(state);
+        async ({ state, legend, lit, kite }) => {
+          globalThis.keel.sail(state, kite !== '');
           globalThis.keel.render();
           await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
           const out: string[] = [];
@@ -446,7 +446,7 @@ async function sheetFaults(page: Page, aback = 'Aback'): Promise<string[]> {
           }
           return out;
         },
-        { state, legend, lit },
+        { state, legend, lit, kite },
       )),
     );
   }
@@ -1157,8 +1157,11 @@ for (const upright of [true, false]) {
 // and a desktop's, no part covers either, held upright save the case's
 // face and pushers over its masthead, as the Jolly boat's. The tall ship's
 // sheet is her braces, from Brace up to Square, its legend aback the
-// longest: "Braces · Aback", within the sheet's frame.
-test('the keelboat and the tall ship are framed as the Jolly boat is, clear of every part, on every screen', async ({
+// longest: "Braces · Aback", within the sheet's frame. The skiff's
+// gennaker set, the legend names it ("Gennaker · Stalled"), and the case's
+// last line says what it does at its longest ("Gennaker coming in")
+// within the case.
+test('the keelboat, the tall ship and the skiff are framed as the Jolly boat is, clear of every part, on every screen', async ({
   page,
 }) => {
   test.setTimeout(150_000);
@@ -1169,11 +1172,17 @@ test('the keelboat and the tall ship are framed as the Jolly boat is, clear of e
   // Every boat but the first, whose screens the other tests hold: aback,
   // the braces of square sails name themselves.
   const larger = data.boats.slice(1).map((kind) => {
-    const { square } = kind.physics;
+    const { square, downwind } = kind.physics;
     const braces = square.squareForeArea + square.squareAfterArea > 0;
-    return { kind, braces, aback: braces ? `${kind.controls.sheet.name} · Aback` : 'Aback' };
+    const kite = downwind.downwindArea > 0 ? 'Gennaker · ' : '';
+    return {
+      kind,
+      braces,
+      kite,
+      aback: braces ? `${kind.controls.sheet.name} · Aback` : `${kite}Aback`,
+    };
   });
-  for (const { kind, braces, aback } of larger) {
+  for (const { kind, braces, aback, kite } of larger) {
     const id = kind.name;
     await page.setViewportSize({ width: SCREENS[0].width, height: SCREENS[0].height });
     await page.evaluate(async (index) => {
@@ -1183,6 +1192,10 @@ test('the keelboat and the tall ship are framed as the Jolly boat is, clear of e
       k.setControls(0, 0);
       k.setReef(1);
       k.advance(30);
+      // Every boat at the heel the first two reach a second after setting
+      // off, 7°: the skiff, slower to get her sailor out on the wire,
+      // heels 11° by then, and her taller mast leans further.
+      k.setState({ heel: 0.12, rollRate: 0 });
       k.render();
       k.camera('chase');
       k.render();
@@ -1248,8 +1261,31 @@ test('the keelboat and the tall ship are framed as the Jolly boat is, clear of e
       if (JSON.stringify(words) !== JSON.stringify([sheet.trim, sheet.ease, sheet.name])) {
         found.push(`${id}, ${s.name}: the sheet reads ${JSON.stringify(words)}`);
       }
-      for (const f of await sheetFaults(page, aback)) {
+      for (const f of await sheetFaults(page, braces ? aback : 'Aback')) {
         found.push(`${id}, ${s.name}: ${f}`);
+      }
+      if (kite !== '') {
+        for (const f of await sheetFaults(page, aback, kite)) {
+          found.push(`${id}, ${s.name}, the gennaker set: ${f}`);
+        }
+        const line = await page.evaluate(async () => {
+          globalThis.keel.readouts('longest');
+          await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+          const b = document.querySelector('[data-readout=reef]');
+          const c = document.querySelector('.case-top');
+          if (b === null || c === null) {
+            return 'no line';
+          }
+          const r = b.getBoundingClientRect();
+          const k = c.getBoundingClientRect();
+          return r.left >= k.left - 0.5 && r.right <= k.right + 0.5
+            ? ''
+            : `“${b.textContent}” runs out of the case (${[r.left, r.right].map(Math.round)} in ${[k.left, k.right].map(Math.round)})`;
+        });
+        if (line !== '') {
+          found.push(`${id}, ${s.name}, the gennaker's line: ${line}`);
+        }
+        await page.evaluate(() => globalThis.keel.readouts(null));
       }
     }
   }

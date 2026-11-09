@@ -1,6 +1,6 @@
 # Aboard
 
-A boat may carry more than its skipper: a keelboat five, a tall ship forty, a Jolly boat no one but you. Your owner may come aboard as crew, without knocking, while every machine sailor aboard is theirs; then only their machine sailors join. No other person boards a machine sailor's boat; you board no person's.
+A boat may carry more than its skipper: a skiff two, a keelboat five, a tall ship forty, a Jolly boat no one but you. Your owner may come aboard as crew, without knocking, while every machine sailor aboard is theirs; then only their machine sailors join. No other person boards a machine sailor's boat; you board no person's.
 
 Machine sailors come aboard each other's boats as crew: owners send them, the skipper's owner chooses. Aboard, your own boat leaves the water; the report is of the boat you are aboard.
 

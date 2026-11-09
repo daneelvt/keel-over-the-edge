@@ -254,6 +254,8 @@ export interface HudControls {
    * names the control, since the yards are aback, not a sail on a sheet.
    */
   braces: boolean;
+  /** Whether the boat carries a downwind sail, which its crew sets and takes in. */
+  downwind: boolean;
 }
 
 /** A kind of boat as the screen reads it. */
@@ -263,12 +265,13 @@ export interface HudKind {
     rig: { reefs: readonly number[] };
     headsails?: { headsailReefs: readonly number[] };
     square?: { squareForeArea: number; squareAfterArea: number; squareReefs: readonly number[] };
+    downwind?: { downwindArea: number };
   };
 }
 
 /** The controls' words and the reef for a kind of boat. */
 export function controlsOf(kind: HudKind): HudControls {
-  const { rig, headsails, square } = kind.physics;
+  const { rig, headsails, square, downwind } = kind.physics;
   const braces = square !== undefined && square.squareForeArea + square.squareAfterArea > 0;
   const shares = [
     ...rig.reefs,
@@ -280,21 +283,45 @@ export function controlsOf(kind: HudKind): HudControls {
     reef: kind.controls.reef,
     reefs: shares.some((share) => share < 1),
     braces,
+    downwind: (downwind?.downwindArea ?? 0) > 0,
   };
 }
 
-/** The sheet's legend for what the sail is doing, but for its own name while it draws. */
-export function sheetLegend(c: HudControls | null, sail: SailState): string {
+/** The downwind sail's name on the screen. */
+export const DOWNWIND_NAME = 'Gennaker';
+
+/**
+ * What the downwind sail is doing, for the case's last line, from how far
+ * it is hoisted (0 … 1) and where the crew is taking it (1 or 0): going up,
+ * set or coming in; empty in its bag, or on a boat with none.
+ */
+export function downwindLine(c: HudControls | null, hoist: number, target: number): string {
+  if (c === null || !c.downwind || (hoist <= 0 && target <= 0)) {
+    return '';
+  }
+  if (target > 0) {
+    return hoist >= 1 ? `${DOWNWIND_NAME} set` : `${DOWNWIND_NAME} going up`;
+  }
+  return `${DOWNWIND_NAME} coming in`;
+}
+
+/**
+ * The sheet's legend for what the sail is doing, but for its own name while
+ * it draws. While the downwind sail is set (kite) the word is its own, and
+ * names it: the one sheet trims it with the main.
+ */
+export function sheetLegend(c: HudControls | null, sail: SailState, kite = false): string {
   const name = c?.sheet.name ?? SHEET_WORDS.name;
+  const of = (word: string) => (kite && c?.downwind === true ? `${DOWNWIND_NAME} · ${word}` : word);
   switch (sail) {
     case '':
       return name;
     case 'luffing':
-      return 'Luffing';
+      return of('Luffing');
     case 'stalled':
-      return 'Stalled';
+      return of('Stalled');
     case 'aback':
-      return c?.braces === true ? `${name} · Aback` : 'Aback';
+      return c?.braces === true ? `${name} · Aback` : of('Aback');
   }
 }
 
@@ -332,8 +359,14 @@ export class HudModel {
   readonly controls = signal<HudControls | null>(null);
   /** The reef asked for, 0 … 2: what the Reef key shows. */
   readonly reef = signal(0);
-  /** The reef the main has, in words, for the case; empty at full sail. */
+  /**
+   * The reef the main has, in words, for the case; empty at full sail. On a
+   * boat with a downwind sail, while it is going up, set or coming in, what
+   * it is doing instead.
+   */
   readonly reefed = signal('');
+  /** Whether the downwind sail is set, more than half hoisted: the sheet's word is its own. */
+  readonly kite = signal(false);
   #bumpUntil = 0;
   /** How many times the signals were written. */
   writes = 0;
@@ -438,7 +471,9 @@ export class HudModel {
       pose.sailorMode === 0 && aground !== 0 ? AGROUND : (SAILOR_LINES[pose.sailorMode] ?? '');
     this.pilot.value = pilotText(pilot, way, watch, left);
     this.sail.value = this.sailHold.shown;
-    this.reefed.value = reefLine(this.controls.peek(), pose.reef);
+    const c = this.controls.peek();
+    this.reefed.value = downwindLine(c, pose.hoist, pose.hoistTarget) || reefLine(c, pose.reef);
+    this.kite.value = c?.downwind === true && pose.hoist >= 0.5;
     if (this.bump.value !== '' && now >= this.#bumpUntil) {
       this.bump.value = '';
     }

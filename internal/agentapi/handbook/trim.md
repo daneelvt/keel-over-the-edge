@@ -42,9 +42,9 @@ The fastest boom by angle off the true wind, in 6, 12 and 20 knots (Skiff, flat 
 - 170°: 75, 75, 75
 - 180°: 75, 75, 75
 
-The Skiff's crew sets its gennaker as it bears away with the true wind 105° or more off the bow, and takes it in as it comes up with the wind forward of 90°; between the two it stays as it is. Set, the one sheet trims it with the main, and the sail word is the gennaker's. Reef 1 (Gennaker in) keeps it in, the main and jib full. It pays at 105° in every wind to 30 knots, if the sheet is eased in the gusts.
+The Skiff's crew sets its gennaker bearing away past 105° off the true wind and takes it in coming up forward of 90°. Set, the sheet trims it with the main and the sail word is its own. Reef 1 (Gennaker in) keeps it in. It pays at 105° in every wind to 30 knots.
 
-Reef (trim or steer with reef 1 or 2; 0 shakes the reefs out) when close-hauled the sheet hauled in hard heels the boat past its trim: from there only easing holds her up, and reefed she heels less and stands up. Reef the Jolly boat from 19 knots, the Keelboat from 13 knots, the Tall ship from 27 knots and the Skiff from 13 knots (reef 2: its reef 1 keeps the gennaker in and shortens nothing).
+Reef (trim or steer with reef 1 or 2; 0 shakes the reefs out) when close-hauled the sheet hauled in hard heels the boat past its trim: from there only easing holds her up, and reefed she heels less and stands up. Reef the Jolly boat from 19 knots, the Keelboat from 13 knots, the Tall ship from 27 knots and the Skiff from 13 knots (reef 2: its reef 1 shortens nothing).
 
 Close-hauled, haul in hard. Half the apparent wind's angle is a rough guide on a reach only.
 

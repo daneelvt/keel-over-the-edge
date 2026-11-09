@@ -8,7 +8,7 @@ import { BufferAttribute, BufferGeometry } from 'three';
 import { describe, expect, test } from 'vitest';
 import { catalog } from '../catalog';
 import { transomFrom } from '../ocean/look';
-import { controlsOf, reefLine, sheetLegend, sheetText } from '../ui/model';
+import { controlsOf, downwindLine, reefLine, sheetLegend, sheetText } from '../ui/model';
 import { reefRows, reefShare } from './boat';
 import { CHASE, lookSizeOf, MAX_CHASE, mastOf, sizeOf } from './camera';
 
@@ -128,5 +128,31 @@ describe('the controls’ words', () => {
     expect(sheetText(0.4, 'luffing', ship?.controls.sheet)).toBe('Braces 40%, luffing: brace up');
     expect(sheetText(0.4, 'stalled', ship?.controls.sheet)).toBe('Braces 40%, stalled: square');
     expect(sheetText(0.4, 'aback', ship?.controls.sheet)).toBe('Braces 40%, aback');
+  });
+
+  test('a boat with a downwind sail names it while it goes up, is set and comes in, and its legend is its own while set', () => {
+    const kites = catalog.boats.filter((b) => b.physics.downwind.downwindArea > 0);
+    expect(kites.length).toBeGreaterThan(0);
+    for (const boat of catalog.boats) {
+      const c = controlsOf(boat);
+      expect(c.downwind).toBe(boat.physics.downwind.downwindArea > 0);
+      if (!c.downwind) {
+        expect(downwindLine(c, 1, 1)).toBe('');
+        expect(sheetLegend(c, 'luffing', true)).toBe('Luffing');
+        continue;
+      }
+      expect(downwindLine(c, 0, 0)).toBe('');
+      expect(downwindLine(c, 0, 1)).toBe('Gennaker going up');
+      expect(downwindLine(c, 0.5, 1)).toBe('Gennaker going up');
+      expect(downwindLine(c, 1, 1)).toBe('Gennaker set');
+      expect(downwindLine(c, 0.5, 0)).toBe('Gennaker coming in');
+      expect(sheetLegend(c, 'luffing', true)).toBe('Gennaker · Luffing');
+      expect(sheetLegend(c, 'stalled', true)).toBe('Gennaker · Stalled');
+      expect(sheetLegend(c, 'luffing', false)).toBe('Luffing');
+      expect(sheetLegend(c, '', true)).toBe(boat.controls.sheet.name);
+      // Its first reef keeps the gennaker in, in its words.
+      expect(reefLine(c, 1)).toBe(boat.controls.reef[1]);
+    }
+    expect(downwindLine(null, 1, 1)).toBe('');
   });
 });

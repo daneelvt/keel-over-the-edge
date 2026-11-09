@@ -195,12 +195,12 @@ func kiteWind(k *kind) float64 {
 // the kiteWind.
 func kiteAdvice(k *kind, wind float64) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "The %s's crew sets its gennaker as it bears away with the true wind %g° or more off the bow, and takes it in as it comes up with the wind forward of %g°; between the two it stays as it is. Set, the one sheet trims it with the main, and the sail word is the gennaker's. Reef 1 (%s) keeps it in, the main and jib full.",
+	fmt.Fprintf(&b, "The %s's crew sets its gennaker bearing away past %g° off the true wind and takes it in coming up forward of %g°. Set, the sheet trims it with the main and the sail word is its own. Reef 1 (%s) keeps it in.",
 		k.name, k.p.SetAngle, k.p.DropAngle, k.reefWords[1])
 	if wind > 0 {
-		fmt.Fprintf(&b, " From %g knots it no longer pays at %g°, where they set it: bear away further, or keep it in.", wind, k.p.SetAngle)
+		fmt.Fprintf(&b, " From %g knots it no longer pays at %g°: bear away further, or keep it in.", wind, k.p.SetAngle)
 	} else {
-		fmt.Fprintf(&b, " It pays at %g° in every wind to %d knots, if the sheet is eased in the gusts.", k.p.SetAngle, reefTo)
+		fmt.Fprintf(&b, " It pays at %g° in every wind to %d knots.", k.p.SetAngle, reefTo)
 	}
 	b.WriteString("\n")
 	return b.String()
@@ -221,7 +221,7 @@ func reefAdvice(kinds []*kind, winds []float64) string {
 		}
 		fmt.Fprintf(&b, "the %s from %g knots", k.name, winds[i])
 		if k.p.DownwindArea > 0 && k.p.Reefs[1] == 1 && k.p.HeadsailReefs[1] == 1 {
-			b.WriteString(" (reef 2: its reef 1 keeps the gennaker in and shortens nothing)")
+			b.WriteString(" (reef 2: its reef 1 shortens nothing)")
 		}
 	}
 	b.WriteString(".\n")

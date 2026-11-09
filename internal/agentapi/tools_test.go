@@ -127,8 +127,12 @@ func TestHandbookPages(t *testing.T) {
 			t.Fatalf("%s: %v", topic, r)
 		}
 		// The longest, start and tools, are about 510 and 565 o200k
-		// tokens.
-		if n := estimateTokens(page); n < 100 || n > 690 {
+		// tokens; trim, a table for each boat, about 850.
+		most := 690
+		if topic == "trim" {
+			most = 900
+		}
+		if n := estimateTokens(page); n < 100 || n > most {
 			t.Errorf("%s is about %d tokens", topic, n)
 		}
 		if strings.Contains(page, "{{") {

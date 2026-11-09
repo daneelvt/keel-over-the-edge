@@ -113,7 +113,7 @@ import type { Barometer } from '../ui/barometer';
 import type { ShipsClock } from '../ui/clock';
 import type { Countdown } from '../ui/countdown';
 import type { DeckView } from '../ui/decklazy';
-import type { SailState } from '../ui/model';
+import { downwindLine, type SailState } from '../ui/model';
 import type { Settings } from '../ui/settings';
 import type { StatementsView } from '../ui/statementlazy';
 import type { WatchView } from '../ui/watchlazy';
@@ -1730,18 +1730,29 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
       h.wind.value = long ? 'WNW 88 kn · F12' : 'N 0 kn · F0';
       h.pilot.value = long ? 'Wind 135° P' : '';
       h.tack.value = long ? 'Starboard tack' : '';
-      // The longest a reef is said in, reefed.
-      const reefs = (h.controls.value?.reef ?? []).slice(1);
-      h.reefed.value = long ? reefs.reduce((a, b) => (b.length > a.length ? b : a), '') : '';
+      // The longest a reef is said in, reefed, or a downwind sail going
+      // up, set or coming in.
+      const c = h.controls.value;
+      const lines = [
+        ...(c?.reef ?? []).slice(1),
+        ...[
+          [0, 1],
+          [1, 1],
+          [0.5, 0],
+        ].map(([hoist, target]) => downwindLine(c, hoist ?? 0, target ?? 0)),
+      ];
+      h.reefed.value = long ? lines.reduce((a, b) => (b.length > a.length ? b : a), '') : '';
     },
     /**
      * Holds the sheet's legend at what the sail is doing, '' for nothing,
-     * the readouts held with it; null lets them all follow the boat again.
+     * the readouts held with it, and with kite the downwind sail set; null
+     * lets them all follow the boat again.
      */
-    sail(state: SailState | null): void {
+    sail(state: SailState | null, kite = false): void {
       const h = game.hud;
       h.held = state !== null;
       h.sail.value = state ?? '';
+      h.kite.value = kite;
       if (state === null) {
         h.flush();
       }
