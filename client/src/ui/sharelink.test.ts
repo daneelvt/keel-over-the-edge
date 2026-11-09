@@ -157,7 +157,11 @@ describe('the picture', () => {
   });
 
   test('saved and the link copied where a file cannot be shared, or the share refuses', async () => {
-    for (const s of [sharer({ canShare: false }), sharer({ share: false }), sharer({ fails: 'NotAllowedError' })]) {
+    for (const s of [
+      sharer({ canShare: false }),
+      sharer({ share: false }),
+      sharer({ fails: 'NotAllowedError' }),
+    ]) {
       const saved: Blob[] = [];
       expect(await sharePicture(blob, 'Daneel', link.url, s, (b) => saved.push(b))).toBe('saved');
       expect(saved).toEqual([blob]);

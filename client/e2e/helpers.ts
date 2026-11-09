@@ -248,7 +248,9 @@ export async function sailor(context: BrowserContext, word = 'Sailor'): Promise<
 }
 
 /** The codes of the context's sailor's links to watch, as GET /api/me tells them: its own, and its fleet's. */
-export async function linkCodes(context: BrowserContext): Promise<{ watch: string; fleet: string }> {
+export async function linkCodes(
+  context: BrowserContext,
+): Promise<{ watch: string; fleet: string }> {
   const res = await context.request.get('/api/me');
   expect(res.status(), await res.text()).toBe(200);
   const me = (await res.json()) as { watchCode?: string; fleetCode?: string };

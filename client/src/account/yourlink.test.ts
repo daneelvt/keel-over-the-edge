@@ -43,13 +43,17 @@ function server(status: number, body: unknown): { f: Fetch; asked: string[] } {
 describe('a link opened', () => {
   test('a sailor’s: the sailor to watch, asked by its code', async () => {
     const s = server(200, { name: 'Daneel', machine: false });
-    expect(await openLink({ kind: 'sailor', code: 'k3x7q2mbwa' }, s.f)).toEqual({ watch: 'Daneel' });
+    expect(await openLink({ kind: 'sailor', code: 'k3x7q2mbwa' }, s.f)).toEqual({
+      watch: 'Daneel',
+    });
     expect(s.asked).toEqual(['GET /api/watch/link?w=k3x7q2mbwa']);
   });
 
   test('a fleet’s: the first of its sailors at sea, or none', async () => {
     const s = server(200, { sailors: [{ name: 'Iron Mary' }, { name: 'Brass Bess' }] });
-    expect(await openLink({ kind: 'fleet', code: 'abcdefgh23' }, s.f)).toEqual({ watch: 'Iron Mary' });
+    expect(await openLink({ kind: 'fleet', code: 'abcdefgh23' }, s.f)).toEqual({
+      watch: 'Iron Mary',
+    });
     expect(s.asked).toEqual(['GET /api/watch/link?f=abcdefgh23']);
     expect(await openLink({ kind: 'fleet', code: 'x' }, server(200, { sailors: [] }).f)).toEqual({
       refusal: { why: 'no-fleet' },
@@ -58,13 +62,20 @@ describe('a link opened', () => {
 
   test('refused: why, and whose; a link no longer in use; one that cannot be read', async () => {
     const link = { kind: 'sailor', code: 'k3x7q2mbwa' } as const;
-    expect(await openLink(link, server(404, { error: 'cannot', name: 'Daneel', machine: false }).f)).toEqual({
+    expect(
+      await openLink(link, server(404, { error: 'cannot', name: 'Daneel', machine: false }).f),
+    ).toEqual({
       refusal: { why: 'cannot', name: 'Daneel', machine: false },
     });
     expect(
-      await openLink(link, server(404, { error: 'not-at-sea', name: 'Iron Mary', machine: true }).f),
+      await openLink(
+        link,
+        server(404, { error: 'not-at-sea', name: 'Iron Mary', machine: true }).f,
+      ),
     ).toEqual({ refusal: { why: 'not-at-sea', name: 'Iron Mary', machine: true } });
-    expect(await openLink(link, server(404, { error: 'no-link' }).f)).toEqual({ refusal: { why: 'no-link' } });
+    expect(await openLink(link, server(404, { error: 'no-link' }).f)).toEqual({
+      refusal: { why: 'no-link' },
+    });
     expect(await openLink(link, server(503, { error: 'unavailable' }).f)).toEqual({
       refusal: { why: 'unread' },
     });
@@ -149,8 +160,16 @@ describe('a link that opened no watch, on the player’s own panel', () => {
     const v = voyage(daneel, async () => new Response('{}'));
     const visitor: Me = { ...daneel, name: 'Visitor', watchCode: 'zzzzzzzzzz' };
     const cases: [LinkNote, string, string[]][] = [
-      [note({ why: 'cannot', name: 'Daneel', machine: false }), 'Daneel cannot be watched now.', ['☆ Follow']],
-      [note({ why: 'not-at-sea', name: 'Iron Mary', machine: true }), 'Iron Mary is not at sea.', ['☆ Follow']],
+      [
+        note({ why: 'cannot', name: 'Daneel', machine: false }),
+        'Daneel cannot be watched now.',
+        ['☆ Follow'],
+      ],
+      [
+        note({ why: 'not-at-sea', name: 'Iron Mary', machine: true }),
+        'Iron Mary is not at sea.',
+        ['☆ Follow'],
+      ],
       [note({ why: 'own', name: 'Visitor', machine: false }), 'That is your own boat.', []],
       [note({ why: 'no-link' }), 'This link is no longer in use.', []],
       [note({ why: 'no-fleet' }, ''), 'None of this fleet is at sea now.', []],

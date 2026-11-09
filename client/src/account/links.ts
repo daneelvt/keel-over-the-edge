@@ -8,16 +8,14 @@
 
 /** The query without keys, as a search string, "" or "?…", the rest as it was written. */
 export function withoutParams(search: string, ...keys: string[]): string {
-  const kept = (search.startsWith('?') ? search.slice(1) : search)
-    .split('&')
-    .filter((part) => {
-      if (part === '') {
-        return false;
-      }
-      const eq = part.indexOf('=');
-      const key = decodeURIComponent(eq < 0 ? part : part.slice(0, eq));
-      return !keys.includes(key);
-    });
+  const kept = (search.startsWith('?') ? search.slice(1) : search).split('&').filter((part) => {
+    if (part === '') {
+      return false;
+    }
+    const eq = part.indexOf('=');
+    const key = decodeURIComponent(eq < 0 ? part : part.slice(0, eq));
+    return !keys.includes(key);
+  });
   return kept.length === 0 ? '' : `?${kept.join('&')}`;
 }
 
