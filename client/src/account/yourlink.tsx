@@ -44,24 +44,26 @@ export function YourLink({
   const url = watchLink(location.origin, st.code.value);
   return (
     <div class="share-links your-link">
-      <ShareLink
-        label={SHARE_ME}
-        cls="start-sign-in"
-        copied={st.copied}
-        shared={() => ({ url, text: shareText(me.name, url) })}
-        {...(sharer === undefined ? {} : { sharer })}
-      />
+      <div class="share-links-row">
+        <ShareLink
+          label={SHARE_ME}
+          cls="start-sign-in"
+          copied={st.copied}
+          shared={() => ({ url, text: shareText(me.name, url) })}
+          {...(sharer === undefined ? {} : { sharer })}
+        />
+        <NewLink
+          which={{ which: 'me' }}
+          state={st}
+          cls="start-sign-in"
+          {...(f === undefined ? {} : { f })}
+        />
+      </div>
       {ticked ? null : (
         <p class="start-text start-faint" data-readout="shown-when-watched">
           {SHOWN_WHEN_WATCHED}
         </p>
       )}
-      <NewLink
-        which={{ which: 'me' }}
-        state={st}
-        cls="start-sign-in"
-        {...(f === undefined ? {} : { f })}
-      />
     </div>
   );
 }

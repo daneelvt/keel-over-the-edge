@@ -6,14 +6,19 @@
 // it is taken out of the address, the rest of the query kept, so that a
 // reload just sails.
 
-/** The query without keys, as a search string: "" or "?…". */
+/** The query without keys, as a search string, "" or "?…", the rest as it was written. */
 export function withoutParams(search: string, ...keys: string[]): string {
-  const q = new URLSearchParams(search);
-  for (const k of keys) {
-    q.delete(k);
-  }
-  const s = q.toString();
-  return s === '' ? '' : `?${s}`;
+  const kept = (search.startsWith('?') ? search.slice(1) : search)
+    .split('&')
+    .filter((part) => {
+      if (part === '') {
+        return false;
+      }
+      const eq = part.indexOf('=');
+      const key = decodeURIComponent(eq < 0 ? part : part.slice(0, eq));
+      return !keys.includes(key);
+    });
+  return kept.length === 0 ? '' : `?${kept.join('&')}`;
 }
 
 /** Takes keys out of the page's address, its path, the rest of its query and its hash kept. */

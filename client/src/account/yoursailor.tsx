@@ -65,8 +65,8 @@ export function SetSail({
  * sent the box's choice; watch opens the list of sailors to watch, null
  * while it cannot yet. At its head, a link to watch the page was opened at
  * that opened no watch, and why; watchName watches a sailor followed from
- * it once it may be watched. Under the box, the player's own link to
- * watch them, to share. With a chooser, their portrait beside their name
+ * it once it may be watched. Under Set sail, the player's own link to
+ * watch them, to share: below it, so that Set sail stays in view. With a chooser, their portrait beside their name
  * and, ashore, Change your look; or the picker, as the chooser has it.
  * With boats, the boat they sail and, ashore, Your boat and Change boat;
  * or the boat's look chosen, or the fleet's boats, as boats has it.
@@ -138,8 +138,8 @@ export function YourSailor({
         </p>
       ) : null}
       <LetWatch voyage={voyage} />
-      <YourLink me={me} ticked={voyage.on.value} />
       <SetSail name={me.name} voyage={voyage} sail={sail} />
+      <YourLink me={me} ticked={voyage.on.value} />
       <button
         type="button"
         class="start-sign-in"

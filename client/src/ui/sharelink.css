@@ -57,3 +57,13 @@
 .share-links-row > button {
   flex: 1 1 auto;
 }
+
+/* Make a new link beside a share, when there is room. */
+.share-links-row > .new-link {
+  flex: 0 1 auto;
+  justify-content: center;
+}
+
+.your-link .start-sign-in {
+  padding: 0 12px;
+}

@@ -206,3 +206,34 @@ func TestNewCode(t *testing.T) {
 		t.Fatalf("none of the links: %v", err)
 	}
 }
+
+// TestLinkJustSailed: a sailor whose boat has just come into the water,
+// newer than the boats the list keeps a moment, is found by their link
+// and their fleet's.
+func TestLinkJustSailed(t *testing.T) {
+	w := newWorld(t)
+	ctx := context.Background()
+	viewer := w.account(1, "Viewer", store.AccountID{})
+	ann := w.account(2, "Ann Bonny", store.AccountID{})
+	mary := w.account(3, "Iron Mary", ann)
+	w.edge.voyage[bus.Account(ann)] = true
+	w.sail()
+	w.list(viewer, Query{})
+	// Into the water, the boats kept not yet made again.
+	f := bus.NewFrame(256)
+	for i, id := range []store.AccountID{ann, mary} {
+		f.Live = append(f.Live, int32(i))
+		f.Owner[i] = bus.Account(id)
+		f.Boat[i] = uint64(100 + i)
+	}
+	w.frames.Publish(f)
+	if got, err := w.s.Link(ctx, viewer, "w2"); err != nil || got.Name != "Ann Bonny" {
+		t.Fatalf("Ann just sailed: %v %v", got, err)
+	}
+	w.frames.Publish(bus.NewFrame(256))
+	w.list(viewer, Query{})
+	w.frames.Publish(f)
+	if rows, err := w.s.Fleet(ctx, viewer, "f2"); err != nil || len(rows) != 1 {
+		t.Fatalf("Iron Mary just sailed: %v %v", rows, err)
+	}
+}

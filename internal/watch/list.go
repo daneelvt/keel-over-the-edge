@@ -592,16 +592,14 @@ func (s *Service) Link(ctx context.Context, viewer store.AccountID, code string)
 	if err != nil {
 		return Target{}, err
 	}
-	boats, err := s.read(ctx)
+	v, err := s.linkVerdict(ctx, t, viewer, false)
+	if err == nil && v != Yes && v != Own {
+		// The boats are kept a moment: one that has just set sail is
+		// looked for again before the link is refused.
+		v, err = s.linkVerdict(ctx, t, viewer, true)
+	}
 	if err != nil {
 		return Target{}, err
-	}
-	v := Allowed(t, Boat{}, viewer)
-	for i := range boats {
-		if b := &boats[i]; b.owner == t.ID && b.sailor.Name != "" {
-			v = Allowed(b.target(), s.boatOf(b, viewer), viewer)
-			break
-		}
 	}
 	switch v {
 	case Yes:
@@ -614,11 +612,43 @@ func (s *Service) Link(ctx context.Context, viewer store.AccountID, code string)
 	return t, ErrCannot
 }
 
+// linkVerdict is the rule's verdict on viewer watching t, from the boats
+// kept, or with fresh from the latest frame.
+func (s *Service) linkVerdict(ctx context.Context, t Target, viewer store.AccountID, fresh bool) (Verdict, error) {
+	if fresh {
+		s.forgetBoats()
+	}
+	boats, err := s.read(ctx)
+	if err != nil {
+		return Cannot, err
+	}
+	for i := range boats {
+		if b := &boats[i]; b.owner == t.ID && b.sailor.Name != "" {
+			return Allowed(b.target(), s.boatOf(b, viewer), viewer), nil
+		}
+	}
+	return Allowed(t, Boat{}, viewer), nil
+}
+
+// forgetBoats has the next read make the boats again from the latest
+// frame.
+func (s *Service) forgetBoats() {
+	s.mu.Lock()
+	s.boats = nil
+	s.mu.Unlock()
+}
+
 // Fleet is the fleet's machine sailors whose link has code that viewer
 // may watch now, liveliest first; ErrNoLink for a code no account has.
-// Nothing in it says whose they are.
+// Nothing in it says whose they are. With none, the boats are looked for
+// again, in case one has just set sail.
 func (s *Service) Fleet(ctx context.Context, viewer store.AccountID, code string) ([]Item, error) {
-	p, err := s.List(ctx, viewer, Query{Sort: SortLiveliest, Fleet: code})
+	q := Query{Sort: SortLiveliest, Fleet: code}
+	p, err := s.List(ctx, viewer, q)
+	if err == nil && len(p.Sailors) == 0 {
+		s.forgetBoats()
+		p, err = s.List(ctx, viewer, q)
+	}
 	return p.Sailors, err
 }
 
