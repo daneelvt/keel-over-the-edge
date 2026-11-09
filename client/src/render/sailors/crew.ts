@@ -788,9 +788,10 @@ export class CrewDeck {
   /**
    * Where each person drawn is in the scene, as the boat was last drawn:
    * their head's height over their station (a standing person's 1.6 m, a
-   * seated one's 0.9), and the level they are drawn at.
+   * seated one's 0.9), the level they are drawn at, and how far out from
+   * the centreline they are (+ starboard) in the boat's frame.
    */
-  heads(): { at: Vector3; near: boolean; station: number }[] {
+  heads(): { at: Vector3; near: boolean; station: number; across: number }[] {
     const parent = this.group.parent;
     if (parent === null) {
       return [];
@@ -803,6 +804,7 @@ export class CrewDeck {
         at: new Vector3(at[0], at[1] + up, at[2]).applyMatrix4(parent.matrixWorld),
         near: p.near,
         station: this.#stations.indexOf(p.station),
+        across: at[0],
       };
     });
   }
