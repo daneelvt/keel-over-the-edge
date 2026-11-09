@@ -41,14 +41,15 @@ import {
   vec3,
 } from 'three/tsl';
 import type { Node, UniformNode } from 'three/webgpu';
+import { BOAT_KINDS } from '../predict/layout.gen';
 import { DOME_RADIUS, domeCentre } from '../render/materials';
 
 /** The most hulls the sea is kept out of: the player's own and the nearest others. */
 export const HULLS = 8;
 /** Stations along a hull. */
 export const STATIONS = 8;
-/** The most kinds of hull the sea knows at once. */
-export const HULL_SHAPES = 3;
+/** The most kinds of hull the sea knows at once: every kind a world may sail. */
+export const HULL_SHAPES = BOAT_KINDS;
 /** Other boats further than this from the player's are left to the sea, metres. */
 export const HULL_REACH = 150;
 /** The volume is this fraction of the hull's width, so the sea meets the planking. */

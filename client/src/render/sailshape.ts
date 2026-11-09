@@ -20,6 +20,13 @@
 // height's chord turned about its luff point on the raked stay by the
 // clew's angle plus its twist up the luff, with camber and ripple, and
 // never reefed.
+//
+// The downwind sail (kitePoint) is a headsail about its tack, set flying:
+// far fuller, its luff sagging to the side it fills to, the chord drawn in
+// toward the luff while its clew is inside its sheeted-in angle (a gybe
+// taking it across, ahead of the forestay), and the whole sail drawn at
+// its hoist's share of its size about the tack, from nothing in its bag
+// to full set.
 
 import type { Object3D } from 'three';
 import { cos, float, max, mix, normalize, select, sin, smoothstep, uniform, vec3 } from 'three/tsl';
@@ -180,6 +187,128 @@ export function jibPoint(
     y,
   );
   return { ...p, position: p.position.add(vec3(0, 0, rake.mul(fv))) };
+}
+
+/** A downwind sail's luff's sag to the side it fills to, at half its height, metres at full size. */
+export const KITE_LUFF_SAG = 0.3;
+
+/**
+ * The downwind sail's shape's inputs: a headsail's, and how far it is
+ * hoisted (0 in its bag, 1 set) and the share of its chord drawn out (1
+ * but while its clew is taken across).
+ */
+export type KiteInputs = JibInputs & { hoist: Node<'float'>; reach: Node<'float'> };
+
+/** The downwind sail's camber, as a fraction of its chord: far fuller than a headsail's. */
+export const KITE_CAMBER = 0.17;
+/** The share of its chord a downwind sail is drawn with, its clew on the centreline. */
+export const KITE_REACH_IN = 0.3;
+/** How hard a downwind sail ripples as it goes up, half hoisted, 0 to 1: it fills as it is set. */
+export const KITE_FLOG = 0.8;
+
+/** A kind's downwind sail's numbers as its shape reads them: its sheeted-in angle and its twist, the main's twist's turn, its strips' heights. */
+export interface KiteRig {
+  /** Its clew's angle sheeted in, radians. */
+  kiteIn: number;
+  /** The twist's turn over as its clew crosses the centreline, radians (the main's). */
+  twistTurn: number;
+  footV: number;
+  headV: number;
+}
+
+/** A kind's downwind sail's numbers, from its catalog physics; null for a kind without one. */
+export function kiteRig(physics: {
+  downwind: {
+    downwindArea: number;
+    downwindIn: number;
+    downwindFootStrip: number;
+    downwindHeadStrip: number;
+  };
+  rig: { twistTurn: number };
+}): KiteRig | null {
+  const d = physics.downwind;
+  if (!(d.downwindArea > 0)) {
+    return null;
+  }
+  return {
+    kiteIn: (d.downwindIn * Math.PI) / 180,
+    twistTurn: (physics.rig.twistTurn * Math.PI) / 180,
+    footV: d.downwindFootStrip,
+    headV: d.downwindHeadStrip,
+  };
+}
+
+/** Whether a downwind sail is drawn at a hoist: from the first of it out of its bag. */
+export function kiteShown(hoist: number): boolean {
+  return hoist > 1e-3;
+}
+
+/**
+ * How hard the downwind sail ripples: as its strips' flow says (want, 0 to
+ * 1), or as it flogs going up or coming down, hardest out of its bag and
+ * none once set.
+ */
+export function kiteRipple(want: number, hoist: number): number {
+  const h = Math.max(0, Math.min(1, hoist));
+  return Math.max(want, h < 1 ? KITE_FLOG * (1 - h) : 0);
+}
+
+/**
+ * The downwind sail's shape's inputs as nodes, for the own boat's
+ * uniforms or another boat's instance values: its clew's angle, its
+ * signed twist, its strips' ripples and its hoist; the side it fills to and the
+ * share of its chord drawn worked out from the clew's angle.
+ */
+export function kiteInputs(
+  clew: Node<'float'>,
+  twist: Node<'float'>,
+  rippleFoot: Node<'float'>,
+  rippleHead: Node<'float'>,
+  hoist: Node<'float'>,
+  rig: KiteRig,
+  time: Node<'float'>,
+): KiteInputs {
+  const side = clew.div(rig.twistTurn > 0 ? rig.twistTurn : 1).clamp(-1, 1);
+  const reach = float(KITE_REACH_IN).add(
+    smoothstep(float(0), float(rig.kiteIn > 0 ? rig.kiteIn : 1), clew.abs()).mul(1 - KITE_REACH_IN),
+  );
+  return {
+    boom: clew,
+    twist,
+    camber: float(KITE_CAMBER),
+    side: side as unknown as Node<'float'>,
+    rippleFoot,
+    rippleHead,
+    footV: float(rig.footV),
+    headV: float(rig.headV),
+    time,
+    hoist,
+    reach: reach as unknown as Node<'float'>,
+  };
+}
+
+/** The share of its chord a downwind sail is drawn with at its clew's angle (radians): kiteInputs' reach, on the CPU. */
+export function kiteReach(clew: number, kiteIn: number): number {
+  const x = Math.max(0, Math.min(1, Math.abs(clew) / (kiteIn > 0 ? kiteIn : 1)));
+  return KITE_REACH_IN + (1 - KITE_REACH_IN) * x * x * (3 - 2 * x);
+}
+
+/**
+ * The point of the shaped downwind sail, as jibPoint's, its chord drawn to
+ * its reach, its luff sagging to the side it fills to, and the whole drawn
+ * at its hoist's share about the tack: nothing at a hoist of 0.
+ */
+export function kitePoint(
+  t: KiteInputs,
+  along: Node<'float'>,
+  fu: Node<'float'>,
+  fv: Node<'float'>,
+  y: Node<'float'>,
+  rake: Node<'float'>,
+): SailPoint {
+  const p = jibPoint(t, along.mul(t.reach), fu, fv, y, rake);
+  const sag = sin(fv.mul(Math.PI)).mul(KITE_LUFF_SAG).mul(t.side);
+  return { ...p, position: p.position.add(vec3(sag, 0, 0)).mul(t.hoist) };
 }
 
 /**

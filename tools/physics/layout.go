@@ -317,6 +317,7 @@ export const RECORDS = {
 		fmt.Fprintf(&b, " %s: %d%s", c.name, c.value, sep)
 	}
 	fmt.Fprintf(&b, " } as const;\nexport const SEA_SPEED_STEP = %v;\n", physics.SeaSpeedStep)
+	fmt.Fprintf(&b, "\n/** The most kinds of boat a world sails: the module holds each one's prepared constants. */\nexport const BOAT_KINDS = %d;\n", physics.BoatKinds)
 	b.WriteString("\n/**\n * The weather's sizes: the spells the module holds, the steps in a turn of a\n * spell's directions, the most samples of the wave wind, and the octaves of\n * the gust field.\n */\nexport const WEATHER = {")
 	for i, c := range weatherConstants {
 		sep := ","

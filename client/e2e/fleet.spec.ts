@@ -4,10 +4,11 @@
 // looks as the player's own boat looks at that pose, heeled, gybing,
 // capsized, luffing, with the rudder hard over, its sailor a person's or a
 // machine's; a keelboat of the fleet as the own keelboat, its jib and its
-// reef, and a tall ship as the own tall ship, her yards braced and her
-// topgallants furled; the fleet's 64 boats keep to their draw calls and
-// triangles, and a mixed 64 of Jolly boats, keelboats and tall ships to
-// theirs,
+// reef, a tall ship as the own tall ship, her yards braced and her
+// topgallants furled, and a skiff as the own skiff, her gennaker set, part
+// way up and in, her sailor out past her rack; the fleet's 64 boats keep to
+// their draw calls and triangles, and a mixed 64 of Jolly boats, keelboats,
+// tall ships and skiffs, some with their gennakers set, to theirs,
 // their sailors, near and far, of every look, to at most 6; every fleet
 // material is the factory's, with the bend; faded boats dither and none
 // sorts; and a picture of a fleet at fixed poses, near and far models,
@@ -17,6 +18,8 @@ import { expect, type Page, test } from '@playwright/test';
 import { openScene, picture, pictureDifference } from './helpers';
 
 const DEG = Math.PI / 180;
+/** The catalog's skiff's place among its boats: the kind with a gennaker. */
+const SKIFF = 3;
 /** How far apart the own boat's picture and a fleet boat's at one pose may be, 0 to 255 a channel. */
 const LIKE = 0.25;
 
@@ -102,6 +105,8 @@ async function both(page: Page, pose: Pose, kind = 0) {
       return {
         kind,
         jib: b.jib,
+        kite: b.kite,
+        hoist: b.hoist,
         reef: Math.round(b.reef),
         // The yards by their nodes' turns (yardsTurn): π/2 less the angle,
         // the port arm forward for a positive angle.
@@ -197,7 +202,7 @@ test('64 boats keep to 22 draw calls and 200,000 triangles', async ({ page }) =>
   test.info().annotations.push({ type: 'measured', description: JSON.stringify(budget) });
 });
 
-test('a mixed 64, Jolly boats, keelboats and tall ships, keep to 32 draw calls and 320,000 triangles', async ({
+test('a mixed 64, Jolly boats, keelboats, tall ships and skiffs, keep to 36 draw calls and 320,000 triangles', async ({
   page,
 }) => {
   await openScene(page);
@@ -206,12 +211,15 @@ test('a mixed 64, Jolly boats, keelboats and tall ships, keep to 32 draw calls a
     const b = k.boat().state;
     const boats = [];
     for (let i = 0; i < 64; i++) {
-      // The start line again: of every sixteen, three keelboats and a tall
-      // ship, the keelboats' jibs drawing and every other one reefed, the
-      // ships braced up, one with her topgallants in, the first near.
+      // The start line again: of every sixteen, three keelboats, a tall
+      // ship and four skiffs, the keelboats' jibs drawing and every other
+      // one reefed, the ships braced up, one with her topgallants in, every
+      // other skiff with her gennaker set and one with it half way up, the
+      // first of each near.
       const ship = i % 16 === 3;
       const keel = !ship && i % 4 === 3;
-      const kind = ship ? 2 : keel ? 1 : 0;
+      const skiff = i % 4 === 1;
+      const kind = ship ? 2 : keel ? 1 : skiff ? 3 : 0;
       boats.push({
         kind,
         east: b.x - 70 + (i % 8) * 20,
@@ -219,6 +227,8 @@ test('a mixed 64, Jolly boats, keelboats and tall ships, keep to 32 draw calls a
         heading: 1.5708,
         boom: 0.6,
         jib: kind > 0 ? 0.3 : 0,
+        kite: skiff ? 0.9 : 0,
+        hoist: skiff && i % 8 === 1 ? (i === 9 ? 0.5 : 1) : 0,
         reef: (keel && i % 8 === 3) || (ship && i === 19) ? 1 : 0,
         yardsTurn: ship ? -0.9 : 0,
         foreYardsTurn: ship ? -0.9 : 0,
@@ -227,19 +237,25 @@ test('a mixed 64, Jolly boats, keelboats and tall ships, keep to 32 draw calls a
     }
     k.setFleet(boats);
     k.render();
-    // The keelboats' and the ships' kinds load as their first boats come into view.
+    // The keelboats', the ships' and the skiffs' kinds load as their first boats come into view.
     await k.fleetLoaded();
     k.render();
-    return k.fleetBudget();
+    const set = k.fleetBudget();
+    // Every gennaker in its bag: none drawn, near or far.
+    k.setFleet(boats.map((boat) => ({ ...boat, hoist: 0 })));
+    k.render();
+    return { ...set, bagged: k.fleetBudget().drawCalls };
   });
   test.info().annotations.push({ type: 'measured', description: JSON.stringify(budget) });
   expect(budget.near + budget.far).toBe(64);
   expect(budget.near).toBeLessThanOrEqual(12);
-  expect(budget.drawCalls).toBeLessThanOrEqual(32);
+  // Each kind's draws a level, a skiff's gennaker one more where one is set.
+  expect(budget.drawCalls).toBeLessThanOrEqual(36);
   expect(budget.triangles).toBeLessThanOrEqual(320_000);
+  expect(budget.bagged).toBe(budget.drawCalls - 2);
 });
 
-test('a keelboat and a tall ship of the fleet look as the own ones do, the jib, the yards and the reefs', async ({
+test('a keelboat, a tall ship and a skiff of the fleet look as the own ones do, the jib, the yards, the reefs and the gennaker', async ({
   page,
 }) => {
   await openScene(page, 'boat=keelboat');
@@ -282,6 +298,40 @@ test('a keelboat and a tall ship of the fleet look as the own ones do, the jib, 
     },
   ]) {
     const { own, fleet } = await both(page, pose, 2);
+    diffs[pose.name] = pictureDifference(own, fleet);
+  }
+  // A skiff, the wind from the north: on a broad reach with her gennaker
+  // set, half way up and in its bag; close-hauled, her sailor out on the
+  // trapeze past her rack, drawn hiked at its edge. Seen from her lee bow,
+  // near enough that the fleet draws her full model.
+  await page.evaluate(async (kind) => {
+    await globalThis.keel.useBoat(kind);
+  }, SKIFF);
+  const reach = { ...rest, heading: 2.2, heel: 5 * DEG, boom: 0.9, jib: 0.3, sailor: -0.6 };
+  const lee = { azimuth: -2.2, elevation: 0.2, distance: 9 };
+  for (const pose of [
+    {
+      name: 'a skiff with her gennaker set',
+      state: { ...reach, kite: 0.9, hoist: 1, hoistTarget: 1 },
+      view: lee,
+    },
+    {
+      name: 'a skiff setting her gennaker',
+      state: { ...reach, kite: 0.9, hoist: 0.5, hoistTarget: 1 },
+      view: lee,
+    },
+    {
+      name: 'a skiff with her gennaker in',
+      state: { ...reach, kite: 0.9, hoist: 0, hoistTarget: 0, reef: 1 },
+      view: lee,
+    },
+    {
+      name: 'a skiff close-hauled, her sailor out',
+      state: { ...rest, heading: 0.8, heel: 8 * DEG, boom: 0.12, jib: 0.15, sailor: -1.7 },
+      view: { azimuth: 0.6, elevation: 0.2, distance: 8 },
+    },
+  ]) {
+    const { own, fleet } = await both(page, pose, SKIFF);
     diffs[pose.name] = pictureDifference(own, fleet);
   }
   test.info().annotations.push({ type: 'measured', description: JSON.stringify(diffs) });

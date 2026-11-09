@@ -101,6 +101,9 @@ export const FN = { sin: 0, cos: 1, exp: 2, log: 3, atan: 4, atan2: 5 } as const
 export const SEA = { components: 256, areaSize: 463, areas: 37, window: 5, slots: 2, fromSteps: 65536, sampleCapacity: 512 } as const;
 export const SEA_SPEED_STEP = 0.01;
 
+/** The most kinds of boat a world sails: the module holds each one's prepared constants. */
+export const BOAT_KINDS = 8;
+
 /**
  * The weather's sizes: the spells the module holds, the steps in a turn of a
  * spell's directions, the most samples of the wave wind, and the octaves of

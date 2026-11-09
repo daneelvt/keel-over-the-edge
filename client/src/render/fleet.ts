@@ -6,8 +6,12 @@
 // rig, sail and sailor in per-instance values that the parts' vertex nodes
 // read (fleetparts.ts). Each kind has its own view, made when a boat of the
 // kind first comes into view; its headsail is shaped about its stay and its
-// main reefed as the wire says. Two levels of detail: the full model for the few
-// nearest the camera, the far model, with few segments, for the rest.
+// main reefed as the wire says. A kind with a downwind sail has one more
+// draw a level, its gennaker, shaped about its tack from each boat's clew
+// and drawn as far as it is hoisted: nothing in its bag, and no draw at all
+// while no boat of the level has it up. Two levels of detail: the full
+// model for the few nearest the camera, the far model, with few segments,
+// for the rest.
 // Boats fade in and out dithered (alphaHash), so they stay in the opaque
 // pass, in the same draw, with no sorting. The telltales and pennant of
 // other boats are too small to see, and not drawn; their sails carry the
@@ -16,9 +20,10 @@
 // the parts' fragments colour by, from the catalog's palette and one
 // texture of masks a kind; so the draws are the same whatever the looks.
 // A machine sailor's sail carries the machine mark too (machinemark.ts),
-// a mask its flag inks. The near boats carry their names, each lettered
-// into a row of one small texture for the whole fleet, redrawn only when
-// a row is given another name; the far ones carry none.
+// a mask its flag inks, on its gennaker as on its main. The near boats
+// carry their names, each lettered into a row of one small texture for the
+// whole fleet, redrawn only when a row is given another name; the far ones
+// carry none.
 //
 // The sailors (sailors/fleetsailors.ts): on the near boats, skinned and
 // moving, every look in one draw; on the far ones, and on near ones whose
@@ -116,6 +121,7 @@ import {
   HEADSAIL_UV,
   type Instances,
   jibNode,
+  kiteNode,
   loadBoatParts,
   machineOf,
   sailNode,
@@ -140,6 +146,7 @@ import { NO_SOLID } from './sailors/onboat';
 import { seating } from './sailors/restage';
 import { hullSolid } from './sailors/solid';
 import { wheelOf } from './sailors/wheel';
+import { kiteRig, kiteRipple, kiteShown } from './sailshape';
 import { Shadows } from './shadows';
 import { packYards, squareVertex } from './squarerig';
 import { FLOW_LUFFING } from './telltales';
@@ -158,6 +165,8 @@ const DEG = Math.PI / 180;
 const RIPPLE = 0.7;
 /** Seconds over which a ripple grows and dies away. */
 const RIPPLE_EASE = 0.25;
+/** The ripples eased for each view slot: the main's foot and head, the headsail's, the downwind sail's. */
+const RIPPLES = 4;
 
 /** One level of detail: its meshes and their instances' values. */
 class Level {
@@ -170,6 +179,11 @@ class Level {
   /** Each instance's lean (four values) and its look (four more), one buffer, which the parts read as one. */
   readonly lean = attr(LEAN_STRIDE);
   readonly jib = attr();
+  /** Each instance's downwind sail: its clew's angle, signed twist, ripple and hoist. */
+  readonly kite = attr();
+  /** The downwind sail's meshes, none for a kind without one; and how many boats drawn have it up. */
+  readonly kiteMeshes: InstancedMesh[] = [];
+  kites = 0;
   /** Each instance's sailor's row (fleetsailors.ts's first eight texels), which the rigid figures read. */
   readonly rows: SailorRows;
   count = 0;
@@ -202,6 +216,7 @@ class Level {
       skin: vec4(0),
       hair: vec4(0),
       jib: node(this.jib),
+      kite: node(this.kite),
     };
   }
 
@@ -214,6 +229,7 @@ class Level {
     time: Node<'float'>,
     palette: LookPalette,
     name: HullName | null,
+    kiteCloth: SailPrint | null = null,
   ): void {
     const { hull, rig, headsails, foils } = kind.physics;
     const cog = hull.centreOfGravity;
@@ -299,6 +315,22 @@ class Level {
       m.emissiveNode = sailGlow(c);
       this.add(jib.geometry, m, n === 0 ? 'jib' : `jib ${n + 1}`);
     });
+    // The downwind sail: a draw for each of its meshes (the models have one).
+    const kite = kiteRig(kind.physics);
+    parts.kites.forEach((sail, n) => {
+      if (kite === null || kiteCloth === null) {
+        return;
+      }
+      const m = litMaterial(
+        { roughness: sail.material.roughness, metalness: 0, side: DoubleSide },
+        kiteNode(i, sail, cog, kite, time),
+      );
+      const cloth = attribute(HEADSAIL_UV, 'vec4').xy as unknown as Node<'vec2'>;
+      const c = vec4(clothColour(palette, look, cloth, kiteCloth), 1) as unknown as Node<'vec4'>;
+      m.colorNode = c;
+      m.emissiveNode = sailGlow(c);
+      this.kiteMeshes.push(this.add(sail.geometry, m, n === 0 ? 'kite' : `kite ${n + 1}`));
+    });
     if (parts.square !== null && squareCloth !== null) {
       const m = litMaterial(
         { roughness: parts.square.material.roughness, metalness: 0, side: DoubleSide },
@@ -361,7 +393,13 @@ class Level {
     if (this.figures !== null && this.rigid === 0) {
       this.figures.count = 0;
     }
-    for (const b of [this.pose, this.rig, this.sail, this.seat, this.lean, this.jib]) {
+    // Nor a gennaker no boat has up.
+    if (this.kites === 0) {
+      for (const m of this.kiteMeshes) {
+        m.count = 0;
+      }
+    }
+    for (const b of [this.pose, this.rig, this.sail, this.seat, this.lean, this.jib, this.kite]) {
       b.needsUpdate = true;
     }
     this.rows.texture.needsUpdate = true;
@@ -485,14 +523,16 @@ export class FleetView {
   readonly #shared: Shared;
   readonly #frame: SailorFrame;
   readonly #place: SailorPlace = { x: 0, y: 0, z: 0, facing: 0, tilt: 0 };
-  /** Each view slot's ripple, foot and head, eased, and its headsail's. */
-  readonly #ripple = new Float32Array(64 * 3);
+  /** Each view slot's ripple, foot and head, eased, its headsail's and its downwind sail's. */
+  readonly #ripple = new Float32Array(64 * RIPPLES);
   /** Each view slot's sailor's side, kept while the sailor crosses. */
   readonly #side = new Float32Array(64);
   readonly #sway = { x: 0, z: 0 };
   readonly #cog: number;
   /** Whether its kind has square sails: its instances' rig.w carries their yards. */
   #squareRig = false;
+  /** Its kind's downwind sail's numbers; null for a kind without one. */
+  readonly #kite: ReturnType<typeof kiteRig>;
 
   constructor(kind: BoatKind, index: number, shared: Shared) {
     this.kind = kind;
@@ -502,6 +542,7 @@ export class FleetView {
     this.root.name = `fleet ${kind.name}`;
     this.root.add(this.near.group, this.far.group);
     this.#cog = hull.centreOfGravity;
+    this.#kite = kiteRig(kind.physics);
     this.#frame = {
       seatOut: 0,
       seatY: 0,
@@ -546,6 +587,27 @@ export class FleetView {
             ),
             number: nearParts.numbered === 'jib' ? number : null,
           };
+    // The downwind sail: the cloth's band, and the machine mark at its own half-luff.
+    const { downwind } = kind.physics;
+    const kiteCloth: SailPrint | null =
+      nearParts.kites.length === 0
+        ? null
+        : {
+            masks: clothMasks(
+              {
+                insignia: '',
+                reefRows: [],
+                mark: markPlace(
+                  downwind.downwindFoot,
+                  downwind.downwindLuff,
+                  nearParts.kites[0]?.chordHalf ?? 0.5,
+                ),
+              },
+              MASK_WIDTH / 2,
+              MASK_HEIGHT / 2,
+            ),
+            number: null,
+          };
     this.#frame.seatZ = nearParts.seatZ;
     this.#frame.seatOut = g.x;
     this.#frame.seatY = g.y;
@@ -564,8 +626,28 @@ export class FleetView {
         : { texture: names.texture, rows: names.rows.rows, place: nearParts.name };
     // The square sails' print by the near model's sails, for both levels.
     const squareCloth = nearParts.square === null ? null : squarePrint(nearParts.square.sails);
-    this.near.build(nearParts, kind, cloth, jibCloth, squareCloth, time, shared.palette, name);
-    this.far.build(farParts, kind, cloth, jibCloth, squareCloth, time, shared.palette, null);
+    this.near.build(
+      nearParts,
+      kind,
+      cloth,
+      jibCloth,
+      squareCloth,
+      time,
+      shared.palette,
+      name,
+      kiteCloth,
+    );
+    this.far.build(
+      farParts,
+      kind,
+      cloth,
+      jibCloth,
+      squareCloth,
+      time,
+      shared.palette,
+      null,
+      kiteCloth,
+    );
     this.#squareRig = nearParts.square !== null;
     this.parts = nearParts;
     this.loaded = true;
@@ -660,6 +742,7 @@ export class FleetView {
       level.machines = 0;
       level.rigid = 0;
       level.sailorTriangles = 0;
+      level.kites = 0;
     }
     this.nearSailors?.frame(time);
   }
@@ -719,8 +802,9 @@ export class FleetView {
     let footRipple = 0;
     let headRipple = 0;
     let jibRipple = 0;
+    let kiteRippled = 0;
     if (b.slot >= 0) {
-      const k = b.slot * 3;
+      const k = b.slot * RIPPLES;
       const foot = ((b.sail >> 4) & 3) === FLOW_LUFFING ? RIPPLE : 0;
       const head = ((b.sail >> 6) & 3) === FLOW_LUFFING ? RIPPLE : 0;
       footRipple = (this.#ripple[k] ?? 0) + (foot - (this.#ripple[k] ?? 0)) * ease;
@@ -728,9 +812,13 @@ export class FleetView {
       // The headsail luffs with the main's luff: the wire says nothing of its own flow.
       const luffs = Math.max(foot, head);
       jibRipple = (this.#ripple[k + 2] ?? 0) + (luffs - (this.#ripple[k + 2] ?? 0)) * ease;
+      // The downwind sail too, and flogging as it goes up or comes down.
+      const kite = kiteRipple(luffs, b.hoist);
+      kiteRippled = (this.#ripple[k + 3] ?? 0) + (kite - (this.#ripple[k + 3] ?? 0)) * ease;
       this.#ripple[k] = footRipple;
       this.#ripple[k + 1] = headRipple;
       this.#ripple[k + 2] = jibRipple;
+      this.#ripple[k + 3] = kiteRippled;
     }
     const s = level.sail.array as Float32Array;
     s[o] = twist * turn;
@@ -752,6 +840,27 @@ export class FleetView {
     j[o + 1] = jibTwist * jibTurn;
     j[o + 2] = jibTurn;
     j[o + 3] = jibRipple;
+    // The downwind sail: its clew's angle, its twist by its angle as the
+    // physics has it, to the side it is out on; its ripple and its hoist.
+    const kite = this.#kite;
+    if (kite !== null) {
+      const { downwind } = this.kind.physics;
+      const kiteTurn = Math.max(-1, Math.min(1, b.kite / kite.twistTurn));
+      const kiteTwist =
+        downwind.downwindTwist * DEG +
+        (downwind.downwindOut > 0
+          ? (downwind.downwindTwistEased / downwind.downwindOut) * Math.abs(b.kite)
+          : 0);
+      const kv = level.kite.array as Float32Array;
+      const hoist = Math.max(0, Math.min(1, b.hoist));
+      kv[o] = b.kite;
+      kv[o + 1] = kiteTwist * kiteTurn;
+      kv[o + 2] = kiteRippled;
+      kv[o + 3] = hoist;
+      if (kiteShown(hoist)) {
+        level.kites++;
+      }
+    }
     // The sailor: on the side they sat on last while crossing; one who
     // has not sat yet sits to windward, away from the boom.
     let side = b.slot >= 0 ? (this.#side[b.slot] ?? 0) : 0;

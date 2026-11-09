@@ -4,8 +4,19 @@ import { readFileSync } from 'node:fs';
 import { Group, Object3D, Vector3 } from 'three';
 import { describe, expect, test } from 'vitest';
 import { catalog } from '../catalog';
+import { BOAT_KINDS } from '../predict/layout.gen';
 import { placeBoatNodes } from '../render/boat';
-import { HULL_FILL, type HullShape, hullShape, insideHull, STATIONS, toHullFrame } from './hulls';
+import {
+  HULL_FILL,
+  HULL_SHAPES,
+  type HullShape,
+  HullVolumes,
+  hullShape,
+  insideHull,
+  STATIONS,
+  toHullFrame,
+} from './hulls';
+import { WakeWaves } from './wakewaves';
 
 /** A model's hull node's own data, from its file. */
 function hullData(path: string): unknown {
@@ -120,5 +131,26 @@ describe('a hull’s volume', () => {
       expect(m.y + cg).toBeCloseTo(-0.05, 12);
       expect(m.z).toBeCloseTo(-1.2, 12);
     }
+  });
+});
+
+describe('the sea’s hulls', () => {
+  test('hold every kind the catalog has and the physics module may sail', () => {
+    // Past the arrays' end a kind's hull is skipped: the sea would show
+    // inside it, and it would make no wake.
+    expect(catalog.boats.length).toBeLessThanOrEqual(HULL_SHAPES);
+    expect(BOAT_KINDS).toBeLessThanOrEqual(HULL_SHAPES);
+  });
+
+  test('know each of the catalog’s kinds’ hulls, in the sea and in the wake', () => {
+    const volumes = new HullVolumes();
+    const wake = new WakeWaves();
+    catalog.boats.forEach((boat, kind) => {
+      const shape = hullShape(hullData(boat.art.model)) as HullShape;
+      volumes.setShape(shape, boat.physics.hull.centreOfGravity, kind);
+      wake.setShape(shape, kind);
+      expect(volumes.has(kind), boat.name).toBe(true);
+      expect(wake.has(kind), boat.name).toBe(true);
+    });
   });
 });

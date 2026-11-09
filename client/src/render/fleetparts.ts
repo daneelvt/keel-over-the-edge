@@ -16,7 +16,9 @@
 // turned about their joints, the heel about the centre of gravity's height,
 // then the heading and position; then the material factory's bend. A
 // headsail is shaped about its stay as the sail is about the mast, and a
-// reefed main drawn short, from each instance's values.
+// reefed main drawn short, from each instance's values. A downwind sail
+// (the model's `kite`) is shaped about its tack as a headsail, from its
+// instance's clew, twist, ripple and hoist, drawn at nothing in its bag.
 //
 // A square rig (squarerig.ts): its yards' nodes are joints too, turned
 // about their masts by the instance's yards, the wheel about its axle with
@@ -57,12 +59,16 @@ import {
 import type { Node, WebGPURenderer } from 'three/webgpu';
 import { artUrl, FULL_CAMBER, GALLERY } from './boat';
 import { type NamePlace, namePlace, numberedSail, TOPSIDES } from './boatlook';
+import { chordAtHalf } from './machinemark';
 import type { SailorColours } from './sailors/material';
 import { loadSailor } from './sailors/model';
 import {
   headsailFrame,
   type JibInputs,
   jibPoint,
+  type KiteRig,
+  kiteInputs,
+  kitePoint,
   LUFF_OFFSET,
   type SailInputs,
   sailPoint,
@@ -137,12 +143,14 @@ export function headsailUv(g: BufferGeometry): Float32BufferAttribute {
   return new Float32BufferAttribute(out, 4);
 }
 
-/** A headsail, in its frame at its tack: its geometry, its source material, its head's rake aft of its tack, and its tack's place in the model. */
+/** A headsail, in its frame at its tack: its geometry, its source material, its head's rake aft of its tack, its tack's place in the model, and its chord at half height. */
 export interface Headsail {
   geometry: BufferGeometry;
   material: MeshStandardMaterial;
   rake: number;
   at: Vector3;
+  /** Its chord at half its luff, as a fraction of its foot (machinemark.ts's chordAtHalf), read before its cloth's coordinates were packed. */
+  chordHalf: number;
 }
 
 /** A model's parts, its solids merged. */
@@ -165,6 +173,8 @@ export interface BoatParts {
   jibAt: Vector3;
   /** Every headsail, each in its own frame at its tack, and where that is in the model's frame. */
   jibs: Headsail[];
+  /** The downwind sail's meshes, each in its frame at its tack (none for a model without one). */
+  kites: Headsail[];
   /** Every named node's place in the model's frame: the lanterns', among others. */
   nodes: Map<string, Vector3>;
   /** Every named node, as loaded: what the sailor's seating reads. */
@@ -284,6 +294,7 @@ export function boatParts(scene: Object3D, path: string): BoatParts {
     jib: null,
     jibAt: new Vector3(),
     jibs: [],
+    kites: [],
     nodes: new Map(),
     objects: new Map(),
     gooseneck: new Vector3(),
@@ -356,24 +367,32 @@ export function boatParts(scene: Object3D, path: string): BoatParts {
       squareMaterial ??= material;
       return;
     }
-    if (within(o, { jib: true }) !== null) {
+    const kite = within(o, { kite: true }) !== null;
+    if (kite || within(o, { jib: true }) !== null) {
       // Each headsail is shaped in its own frame, at its tack: its
       // geometry taken there. Its two texture coordinates go in one
       // attribute (HEADSAIL_UV), so its draw keeps the model's normals,
       // which its lighting needs, within the vertex buffers a device must
-      // allow.
+      // allow. The downwind sail likewise, at its own tack.
       const frame = headsailFrame(o);
       scene.updateMatrixWorld(true);
       const inFrame = new Matrix4().copy(frame.node.matrixWorld).invert().multiply(o.matrixWorld);
       const g = o.geometry.clone().applyMatrix4(inFrame);
       g.setAttribute(HEADSAIL_UV, headsailUv(g));
+      const chordHalf = chordAtHalf(g);
       keep(g, ['position', 'normal', HEADSAIL_UV]);
-      parts.jibs.push({
+      const sail = {
         geometry: g,
         material,
         rake: frame.rake,
         at: frame.node.getWorldPosition(new Vector3()),
-      });
+        chordHalf,
+      };
+      if (kite) {
+        parts.kites.push(sail);
+        return;
+      }
+      parts.jibs.push(sail);
       parts.jib ??= parts.jibs[0] ?? null;
       if (parts.jibs.length === 1) {
         frame.node.getWorldPosition(parts.jibAt);
@@ -532,6 +551,8 @@ export function seatFigure(
  * boats; near ones whose look's skinned figure has not loaded);
  * jib, read by the headsail alone: the clew's angle, the head's twist
  * (signed), the side it fills to (−1 … 1), and its ripple.
+ * kite, read by the downwind sail alone: its clew's angle, its head's
+ * twist (signed), its ripple, and how far it is hoisted (0 … 1).
  * lean's last carries the main's reef level too: 1 for a machine, plus 2
  * for each reef;
  * look, the boat's own (boatlook.ts): its paint's place, its cloth's, its
@@ -547,6 +568,7 @@ export interface Instances {
   skin: Node<'vec4'>;
   hair: Node<'vec4'>;
   jib?: Node<'vec4'>;
+  kite?: Node<'vec4'>;
   look?: Node<'vec4'>;
 }
 
@@ -813,6 +835,34 @@ export function jibNode(
   })() as unknown as Node<'vec3'>;
 }
 
+/** The downwind sail's vertex node: shaped about its tack from the instance's kite values, as far as it is hoisted, then placed. */
+export function kiteNode(
+  i: Instances,
+  kite: Headsail,
+  cog: number,
+  rig: KiteRig,
+  time: Node<'float'>,
+): Node<'vec3'> {
+  const at = kite.at;
+  const k = i.kite ?? vec4(0);
+  const rake = float(kite.rake);
+  const inputs = kiteInputs(k.x, k.y, k.z, k.z, k.w, rig, time);
+  return Fn(() => {
+    const shape = attribute(HEADSAIL_UV, 'vec4');
+    const fv = shape.w;
+    const shaped = kitePoint(
+      inputs,
+      positionGeometry.z.sub(rake.mul(fv)),
+      shape.z,
+      fv,
+      positionGeometry.y,
+      rake,
+    );
+    normalLocal.assign(placeNormal(shaped.normal, i));
+    return placePoint(shaped.position.add(vec3(at.x, at.y, at.z)), i, cog);
+  })() as unknown as Node<'vec3'>;
+}
+
 /**
  * The sailor's vertex node: turned to face, tilted, put in its place in
  * the model's frame, then the boat placed (Euler order ZYX, as boat.ts
@@ -834,7 +884,7 @@ export function disposeParts(parts: BoatParts): void {
     (s.material as Material).dispose();
   }
   parts.sail?.geometry.dispose();
-  for (const j of parts.jibs) {
+  for (const j of [...parts.jibs, ...parts.kites]) {
     j.geometry.dispose();
   }
 }

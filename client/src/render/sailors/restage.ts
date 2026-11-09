@@ -17,7 +17,9 @@
 // Boats with a hiking strap hike to the strap's depth (the hiking clips in
 // turn, as the physics puts the sailor further out); boats without one only
 // sit out on the rail: the first hiking clip, at the physics' furthest
-// reach.
+// reach, or where the clip reaches if the physics puts the sailor further
+// out than it does (on a trapeze, beyond the rail): the figure stops at
+// the rail, hiked, and never floats beside the boat.
 
 import { type AnimationClip, Matrix4, type Object3D, Quaternion, Vector3 } from 'three';
 import { Clip, Pose } from './clips';
@@ -34,6 +36,12 @@ export interface Hike {
 export const STRAPPED: Hike = { from: 0.55, full: 0.95, depth: 3 };
 /** On the rail: the sailor comes out to the rail over this much of its reach. */
 const RAIL = 0.2;
+/**
+ * Where the first hiking clip puts the sailor in the stage, as the physics'
+ * offset (m): a strapped hike's first of its depths. A boat's seat further
+ * out (its restage) puts it as much further.
+ */
+export const RAIL_REACH = STRAPPED.from + (STRAPPED.full - STRAPPED.from) / STRAPPED.depth;
 
 /** How a boat's sailor sits: the move from the stage's seat, if any, and how it hikes. */
 export interface Seating {
@@ -47,11 +55,12 @@ export interface Seating {
  * physics' furthest reach out to windward.
  */
 export function seating(parts: Map<string, Object3D>, hikeReach: number): Seating {
+  const restage = restageOf(parts.get('sailor')?.userData);
+  // On the rail at the physics' reach, or at the clip's if that is nearer.
+  const full = Math.min(hikeReach, RAIL_REACH + (restage?.x ?? 0));
   return {
-    restage: restageOf(parts.get('sailor')?.userData),
-    hike: parts.has('strap')
-      ? STRAPPED
-      : { from: Math.max(0, hikeReach - RAIL), full: hikeReach, depth: 1 },
+    restage,
+    hike: parts.has('strap') ? STRAPPED : { from: Math.max(0, full - RAIL), full, depth: 1 },
   };
 }
 
