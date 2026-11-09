@@ -39,6 +39,10 @@ export interface BoatPose {
   jib: number;
   /** How far the main is reefed: 0 at full sail, up to 2. */
   reef: number;
+  /** The downwind sail: how far it is hoisted, 0 … 1, where the crew is taking it, 1 or 0, and its clew's angle, positive to starboard, radians; 0 on a boat with none. */
+  hoist: number;
+  hoistTarget: number;
+  kite: number;
   /**
    * The after and fore yards' nodes' turns about the vertical, radians
    * (yardsTurn of State.Yards and State.ForeYards):
@@ -65,6 +69,9 @@ export function newPose(): BoatPose {
     rollRate: 0,
     jib: 0,
     reef: 0,
+    hoist: 0,
+    hoistTarget: 0,
+    kite: 0,
     yardsTurn: 0,
     foreYardsTurn: 0,
   };
@@ -135,6 +142,9 @@ export class StatePair {
     out.rollRate = this.#at(S.rollRate, alpha);
     out.jib = this.#at(S.jib, alpha);
     out.reef = this.#at(S.reef, alpha);
+    out.hoist = this.#at(S.hoist, alpha);
+    out.hoistTarget = this.current[S.hoistTarget] ?? 0;
+    out.kite = this.#at(S.kite, alpha);
     // Blended by their turns, which run smoothly through square, where the
     // angles' sign flips.
     out.yardsTurn = lerp(

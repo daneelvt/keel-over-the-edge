@@ -37,7 +37,7 @@ const (
 	// block if it is falling over the lip, then the view's entries; flag
 	// bit 4 while the boat stays, bit 6 while the connection does not
 	// hold its controls.
-	SnapshotLayout = 14
+	SnapshotLayout = 15
 	// MaxEntries is the most entries a snapshot may hold.
 	MaxEntries = 128
 	// MaxSnapshotSize is the longest snapshot this package writes: an

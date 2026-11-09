@@ -82,6 +82,8 @@ type goldenBoat struct {
 	Jib     int16  `json:"jib"`
 	Yards   int16  `json:"yards"`
 	Fore    int16  `json:"fore"`
+	Kite    int16  `json:"kite"`
+	Hoist   uint8  `json:"hoist"`
 }
 
 func f64bits(v float64) string { return fmt.Sprintf("%#016x", math.Float64bits(v)) }
@@ -174,7 +176,11 @@ func goldens() []golden {
 	// field at once; a jib alone, to change alone.
 	v1.Boats[5].Jib, v1.Boats[5].Flags = 1234, v1.Boats[5].Flags|1<<reefShift
 	v1.Boats[63].Jib, v1.Boats[63].Yards, v1.Boats[63].Fore = -1, -3000, 500
+	v1.Boats[63].Kite, v1.Boats[63].Hoist = -7000, 255
 	v1.Boats[63].Flags |= 2 << reefShift
+	// A boat under its downwind sail, set part of the way.
+	v1.Put(6, ptr(boat(3, false, physics.Sailing, -500, 600, 200, 300, -9000, 10, -100, 0x15)))
+	v1.Boats[6].Jib, v1.Boats[6].Kite, v1.Boats[6].Hoist = -2500, -11000, 128
 	v1.Put(4, ptr(boat(1, false, physics.Sailing, 300, 400, 100, 0, 0, 0, 0, 0x11)))
 	v1.Boats[4].Jib = 2000
 
@@ -188,7 +194,9 @@ func goldens() []golden {
 	v2.Boats[0].Look = 0x35214                                                  // a look changed: an enter
 	v2.Boats[1].Jib, v2.Boats[1].Yards, v2.Boats[1].Fore = 77, -88, 99          // and the rig's, reefed
 	v2.Boats[1].Flags |= 2 << reefShift
-	v2.Boats[4].Jib = 2100 // the rig's alone: the second byte alone
+	v2.Boats[4].Jib = 2100    // the rig's alone: the second byte alone
+	v2.Boats[6].Hoist = 255   // the hoist alone
+	v2.Boats[6].Kite = -11500 // and the clew
 	// Slot 5 is far, and not sampled: unchanged.
 
 	v3 := v1
@@ -227,6 +235,9 @@ func goldens() []golden {
 	reefed := header(1022, 0, 0, physics.State{Y: -20, Heading: math.Pi / 2})
 	reefed.Reef = 2
 	jib := header(1024, 2, 0, physics.State{Y: -21, Heading: 1, Jib: 0.3, JibRate: -0.1, JibLimit: 0.35, Reef: 0.25})
+	// A skiff setting her gennaker: the hoist and its clew in the rig's block.
+	kite := header(1026, 2, 0, physics.State{Y: -22, Heading: 2, Jib: 0.2, JibLimit: 0.3,
+		Hoist: 0.4, HoistTarget: 1, Kite: 0.9, KiteRate: 0.05, KiteLimit: 1.1})
 
 	return []golden{
 		{"full", header(1000, 0, 0, physics.State{Y: -20, Heading: math.Pi / 2}), v1, v1.Used, 0},
@@ -250,6 +261,7 @@ func goldens() []golden {
 		{"staying with every block", stayingAll, v7, 0, v7.Used},
 		{"reefed", reefed, v1, v1.Used, 0},
 		{"a jib swinging", jib, v1, 0, v1.Used},
+		{"a gennaker going up", kite, v1, 0, v1.Used},
 	}
 }
 
@@ -270,7 +282,8 @@ func viewOf(v *View) []goldenBoat {
 	for _, slot := range slotsOf(v.Used) {
 		q := v.Boats[slot]
 		out = append(out, goldenBoat{Slot: slot, Kind: q.Kind, Flags: q.Flags, X: q.X, Y: q.Y, Heading: q.Heading,
-			Heel: q.Heel, Boom: q.Boom, Rudder: q.Rudder, Sailor: q.Sailor, Sail: q.Sail, Jib: q.Jib, Yards: q.Yards, Fore: q.Fore})
+			Heel: q.Heel, Boom: q.Boom, Rudder: q.Rudder, Sailor: q.Sailor, Sail: q.Sail, Jib: q.Jib, Yards: q.Yards, Fore: q.Fore,
+			Kite: q.Kite, Hoist: q.Hoist})
 	}
 	return out
 }
