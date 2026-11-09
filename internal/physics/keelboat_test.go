@@ -189,7 +189,10 @@ func TestReefingHeelsLess(t *testing.T) {
 		two, made, m := heel(2)
 		t.Logf("%s, %g knots at %.0f°: heel %.1f° at full sail, %.1f° with a reef, %.1f° with two, %.2f and %.2f knots, %.2f and %.2f to windward; the luff's share %.3f",
 			boat.id, knots, angle, full, one, two, m0.speed()/knot, m.speed()/knot, made0/knot, made/knot, m.o.ReefShare)
-		if !(two < one && one < full) {
+		// A boat whose first reef only keeps its downwind sail in, which
+		// is not set close-hauled, heels as at full sail with it.
+		first := boat.b.reefs[1] < 1 || boat.b.jib && boat.b.jibReefs[1] < 1 || boat.b.square && boat.b.squareReefs[1] < 1
+		if !(two < one && (one < full || !first && one == full)) {
 			t.Errorf("%s: heel %.1f°, %.1f°, %.1f° with no reef, one and two: not less as she reefs", boat.id, full, one, two)
 		}
 		switch {

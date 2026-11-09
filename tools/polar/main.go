@@ -65,6 +65,8 @@ func main() {
 			fail(fmt.Errorf("%s: %s's reference data has no height", referencePath, boat.ID))
 		}
 		kinds[i] = newKind(string(boat.ID), boat.Name, &prepared[i], &params, ref.Height, boat.StartSheet)
+		kinds[i].reefWords = boat.Controls.Reef
+		kindsByID[kinds[i].id] = kinds[i]
 	}
 	if *handbook {
 		if err := runHandbook(kinds); err != nil {
@@ -97,6 +99,10 @@ func main() {
 		}
 	}
 }
+
+// kindsByID are the catalog's boats as the tool sails them, by id: a
+// reference's course is sailed against another boat's.
+var kindsByID = map[string]*kind{}
 
 func fail(err error) {
 	fmt.Fprintln(os.Stderr, "polar:", err)

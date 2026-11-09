@@ -47,6 +47,7 @@ func checkBoats(doc map[string]any) error {
 				last = x
 			}
 		}
+		problems = append(problems, checkDownwind(i, ph)...)
 		problems = append(problems, checkStations(i, m)...)
 		pairs, _ := m["startSheet"].([]any)
 		last := -1.0
@@ -70,6 +71,35 @@ func checkBoats(doc map[string]any) error {
 		return fmt.Errorf("the boats:\n%s", strings.Join(problems, "\n"))
 	}
 	return nil
+}
+
+// checkDownwind checks boat i's downwind sail, if it has one: its reefs
+// each 1, set, or 0, kept in, at full sail 1, for a downwind sail is kept
+// in by the reef, never shortened; and the crew's band, setting it further
+// off the wind than it takes it in.
+func checkDownwind(i int, ph map[string]any) []string {
+	var problems []string
+	g, _ := ph["downwind"].(map[string]any)
+	num := func(v any) float64 {
+		f, _ := v.(json.Number).Float64()
+		return f
+	}
+	if !(num(g["downwindArea"]) > 0) {
+		return nil
+	}
+	reefs, _ := g["downwindReefs"].([]any)
+	for j, v := range reefs {
+		if x := num(v); x != 0 && x != 1 || j == 0 && x != 1 {
+			problems = append(problems, fmt.Sprintf("  boats[%d].physics.downwind.downwindReefs[%d]: %v is neither set at full sail, 1, nor kept in, 0", i, j, x))
+		}
+	}
+	if set, drop := num(g["setAngle"]), num(g["dropAngle"]); !(set > drop) {
+		problems = append(problems, fmt.Sprintf("  boats[%d].physics.downwind: setAngle %v is not beyond dropAngle %v", i, set, drop))
+	}
+	if !(num(g["hoistTime"]) > 0 && num(g["dropTime"]) > 0 && num(g["downwindInertia"]) > 0 && num(g["downwindOut"]) > 0) {
+		problems = append(problems, fmt.Sprintf("  boats[%d].physics.downwind: a downwind sail needs its hoist and drop times, its clew's inertia and its travel", i))
+	}
+	return problems
 }
 
 // stationsApart is how near two people's stations may be, in m: about a

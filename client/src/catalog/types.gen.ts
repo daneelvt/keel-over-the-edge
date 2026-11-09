@@ -296,7 +296,7 @@ export interface BoatStation {
   facing: number;
 }
 /**
- * The words the boat's controls are shown with. Every boat has the helm, the sheet and the reef; the sheet sets the main's limit, the headsails' in the same share, and the yards' brace.
+ * The words the boat's controls are shown with. Every boat has the helm, the sheet and the reef; the sheet sets the main's limit, the headsails' and the downwind sail's in the same share, and the yards' brace.
  *
  * This interface was referenced by `Catalog`'s JSON-Schema
  * via the `definition` "BoatControls".
@@ -338,6 +338,7 @@ export interface BoatPhysics {
   rig: PhysicsRig;
   headsails: PhysicsHeadsails;
   square: PhysicsSquare;
+  downwind: PhysicsDownwind;
   foils: PhysicsFoils;
   sailor: PhysicsSailor;
   rates: PhysicsRates;
@@ -969,6 +970,144 @@ export interface PhysicsSquare {
    * @maxItems 3
    */
   squareReefs: [number, number, number];
+}
+/**
+ * The downwind sail: a gennaker tacked on the centreline at a bowsprit's end, its clew free to its own sheet's limit as the headsails' is, set and taken in by the crew's rule as the boat bears away and comes up, and kept in by the reef. A boat with none has an area of 0, and its other values 0.
+ *
+ * This interface was referenced by `Catalog`'s JSON-Schema
+ * via the `definition` "PhysicsDownwind".
+ */
+export interface PhysicsDownwind {
+  /**
+   * Its area, in m²; 0 for none.
+   */
+  downwindArea: number;
+  /**
+   * The head's height above the tack, in m.
+   */
+  downwindLuff: number;
+  /**
+   * Length of the foot, in m.
+   */
+  downwindFoot: number;
+  /**
+   * The tack's height above the waterline, in m.
+   */
+  downwindTackHeight: number;
+  /**
+   * The tack's distance ahead of the centre of gravity, in m: the bowsprit's end.
+   */
+  downwindTack: number;
+  /**
+   * Height of the lower strip's centre of effort above the tack, as a fraction of the luff.
+   */
+  downwindFootStrip: number;
+  /**
+   * Height of the upper strip's centre of effort above the tack, as a fraction of the luff.
+   */
+  downwindHeadStrip: number;
+  /**
+   * Centre of pressure aft of the tack with the flow attached, as a fraction of the foot.
+   */
+  downwindPressureAttached: number;
+  /**
+   * Centre of pressure aft of the tack with the flow separated, as a fraction of the foot.
+   */
+  downwindPressureSeparated: number;
+  /**
+   * Greatest lift coefficient.
+   */
+  downwindMaxLift: number;
+  /**
+   * Angle of attack of the greatest lift, in degrees.
+   */
+  downwindStallAngle: number;
+  /**
+   * Angle past the stall over which the flow separates, in degrees.
+   */
+  downwindStallWidth: number;
+  /**
+   * Viscous drag coefficient.
+   */
+  downwindDrag: number;
+  /**
+   * Normal force coefficient of separated flow, every 10° of angle of attack from 0° to 180°.
+   *
+   * @minItems 19
+   * @maxItems 19
+   */
+  downwindNormalForce: [
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number
+  ];
+  /**
+   * The upper strip's twist beyond the clew's line, sheeted in, in degrees.
+   */
+  downwindTwist: number;
+  /**
+   * Extra twist as the sheet lets the clew out, growing in proportion to its angle, in degrees.
+   */
+  downwindTwistEased: number;
+  /**
+   * The clew's angle off the centreline, seen from the tack, with the sheet hauled in hard, in degrees.
+   */
+  downwindIn: number;
+  /**
+   * The clew's angle with the sheet let fly, in degrees.
+   */
+  downwindOut: number;
+  /**
+   * Moment of inertia of the sail and its clew about the tack, in kg·m².
+   */
+  downwindInertia: number;
+  /**
+   * Their mass times the distance of their centre of gravity aft of the tack, in kg·m.
+   */
+  downwindMoment: number;
+  /**
+   * Friction of the clew's swing, in N·m·s/rad.
+   */
+  downwindDamping: number;
+  /**
+   * Time for the crew to set it from its bag, in s.
+   */
+  hoistTime: number;
+  /**
+   * Time for the crew to take it in, in s.
+   */
+  dropTime: number;
+  /**
+   * The crew sets it as the boat bears away with the true wind this far off her bow or more, in degrees.
+   */
+  setAngle: number;
+  /**
+   * And takes it in as she comes up with the true wind forward of this, in degrees: less than setAngle, the two a band in which a steady course neither sets nor takes it in.
+   */
+  dropAngle: number;
+  /**
+   * At full sail, with one reef and with two: 1 where the crew may set it, 0 where the reef keeps it in. A downwind sail is never shortened.
+   *
+   * @minItems 3
+   * @maxItems 3
+   */
+  downwindReefs: [number, number, number];
 }
 /**
  * The daggerboard or fixed keel, and the rudder.
@@ -8683,4 +8822,4 @@ export interface LifeGlow {
 }
 
 /** The catalog version (tools/catalog). */
-export const CATALOG_VERSION = 'ef1768cdcb0d0393';
+export const CATALOG_VERSION = '28943c715462585b';

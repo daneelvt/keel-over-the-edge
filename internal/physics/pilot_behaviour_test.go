@@ -130,11 +130,18 @@ func TestPilotHoldsAnAngleThroughTheShifts(t *testing.T) {
 	for i, boat := range testBoats(t) {
 		// The boats after the first are held in a spell of each regime,
 		// its second, the windier.
-		t.Run(boat.id, func(t *testing.T) { holdsAnAngle(t, p, boat.b, i > 0) })
+		t.Run(boat.id, func(t *testing.T) { holdsAnAngle(t, p, boat.b, testBoats(t)[0].b, i > 0) })
 	}
 }
 
-func holdsAnAngle(t *testing.T, p *WeatherPrepared, b *Prepared, short bool) {
+// holdsAnAngle sails b at each angle with a sheet set for it: the sheets
+// below are the first boat's, and another boat's sheet lets its boom out as
+// far, within its own travel. A boat with a downwind sail sails the stormy
+// spells at its last reef, its main reefed and its gennaker kept in, as a
+// sailor would; reefed, the skiff still capsizes once in ten minutes on a
+// beam reach in a stormy spell's gusts of 36 knots with its sheet fixed,
+// and is held there only in the unsettled spells, the next calmer.
+func holdsAnAngle(t *testing.T, p *WeatherPrepared, b, first *Prepared, short bool) {
 	type point struct{ angle, sheet float64 }
 	light := []point{{45, 0.02}, {90, 0.23}, {150, 0.75}}
 	// Close-hauled in a trade spell's upper winds, a sheet hauled in hard
@@ -157,8 +164,17 @@ func holdsAnAngle(t *testing.T, p *WeatherPrepared, b *Prepared, short bool) {
 			if b.square && pt.angle == 45 {
 				// A ship sails no closer than close-hauled, braced up sharp.
 				pt = point{b.closeHauled / deg, 0}
+			} else if b.kite {
+				if c.regime == "stormy" && pt.angle == 90 {
+					continue
+				}
+				boom := first.boomIn + pt.sheet*(first.boomOut-first.boomIn)
+				pt.sheet = clamp((boom-b.boomIn)/(b.boomOut-b.boomIn), 0, 1)
 			}
 			m := onPilot(t, b, weatherOf(p, s), pt.angle, pt.sheet, PilotWind)
+			if b.kite && c.regime == "stormy" {
+				m.c.Reef, m.s.Reef = 2, 2
+			}
 			r := holdAngle(m, 600, pt.angle)
 			follows := correlation(unwrap(r.heading), unwrap(r.mean))
 			resid := make([]float64, len(r.heading))
@@ -246,6 +262,13 @@ func TestPilotTacksAndGybes(t *testing.T) {
 			{"trade", 160, 0.75, WayTack, 30, 0},
 		}
 		settle, secs := 60.0, 30.0
+		if boat.b.kite {
+			// Under a gennaker a gybe passes through a dead run, where
+			// the main blankets it, and the boat slows more than a
+			// dinghy under her main alone: from a broad reach in a trade
+			// spell she keeps 72% of her speed.
+			cases[2].least, cases[3].least = 0.7, 0.7
+		}
 		if boat.b.square {
 			close := boat.b.closeHauled / deg
 			cases = []turnCase{
@@ -260,7 +283,18 @@ func TestPilotTacksAndGybes(t *testing.T) {
 		}
 		for _, c := range cases {
 			s := steadyOf(t, p, c.regime)
-			m := onPilot(t, boat.b, weatherOf(p, s), c.angle, c.sheet, PilotWind)
+			sheet := c.sheet
+			if boat.b.kite {
+				// As in holdsAnAngle: the first boat's boom, and in a
+				// stormy spell the last reef, the gennaker kept in.
+				first := testBoats(t)[0].b
+				boom := first.boomIn + sheet*(first.boomOut-first.boomIn)
+				sheet = clamp((boom-boat.b.boomIn)/(boat.b.boomOut-boat.b.boomIn), 0, 1)
+			}
+			m := onPilot(t, boat.b, weatherOf(p, s), c.angle, sheet, PilotWind)
+			if boat.b.kite && c.regime == "stormy" {
+				m.c.Reef, m.s.Reef = 2, 2
+			}
 			m.run(settle, nil)
 			within, least, nearest, furthest, capsized := turnFor(m, c.angle, c.way, secs)
 			t.Logf("%s, %s, %.1f knots: from %.0f°, way %v: within 5° after %.1f s, keeping %.0f%% of the speed, between %.0f° and %.0f° off the wind, heeling to %.0f°",

@@ -31,6 +31,8 @@ type kind struct {
 	// at this height.
 	height     float64
 	startSheet [][]float64
+	// reefWords are the reef's levels in the catalog's words.
+	reefWords []string
 	// steerRate is the tool's helmsman's helm per rad/s of turn, and
 	// settle and measure how long it sails a point before measuring and
 	// how long it measures, s: a dinghy's or a keelboat's, or longer for a

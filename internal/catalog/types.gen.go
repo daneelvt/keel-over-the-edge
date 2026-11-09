@@ -239,8 +239,8 @@ type BoatCloth struct {
 }
 
 // The words the boat's controls are shown with. Every boat has the helm, the sheet
-// and the reef; the sheet sets the main's limit, the headsails' in the same share,
-// and the yards' brace.
+// and the reef; the sheet sets the main's limit, the headsails' and the downwind
+// sail's in the same share, and the yards' brace.
 type BoatControls struct {
 	// The reef's three levels in words: full sail, one reef, two.
 	Reef []string `json:"reef"`
@@ -287,6 +287,9 @@ type BoatPaint struct {
 type BoatPhysics struct {
 	// Autopilot corresponds to the JSON schema field "autopilot".
 	Autopilot PhysicsAutopilot `json:"autopilot"`
+
+	// Downwind corresponds to the JSON schema field "downwind".
+	Downwind PhysicsDownwind `json:"downwind"`
 
 	// Foils corresponds to the JSON schema field "foils".
 	Foils PhysicsFoils `json:"foils"`
@@ -2060,6 +2063,102 @@ type PhysicsAutopilot struct {
 	// Time for the standing helm to take up a steady error, in s: gain over this is
 	// its growth per radian-second.
 	TrimTime float64 `json:"trimTime"`
+}
+
+// The downwind sail: a gennaker tacked on the centreline at a bowsprit's end, its
+// clew free to its own sheet's limit as the headsails' is, set and taken in by the
+// crew's rule as the boat bears away and comes up, and kept in by the reef. A boat
+// with none has an area of 0, and its other values 0.
+type PhysicsDownwind struct {
+	// Its area, in m²; 0 for none.
+	DownwindArea float64 `json:"downwindArea"`
+
+	// Friction of the clew's swing, in N·m·s/rad.
+	DownwindDamping float64 `json:"downwindDamping"`
+
+	// Viscous drag coefficient.
+	DownwindDrag float64 `json:"downwindDrag"`
+
+	// Length of the foot, in m.
+	DownwindFoot float64 `json:"downwindFoot"`
+
+	// Height of the lower strip's centre of effort above the tack, as a fraction of
+	// the luff.
+	DownwindFootStrip float64 `json:"downwindFootStrip"`
+
+	// Height of the upper strip's centre of effort above the tack, as a fraction of
+	// the luff.
+	DownwindHeadStrip float64 `json:"downwindHeadStrip"`
+
+	// The clew's angle off the centreline, seen from the tack, with the sheet hauled
+	// in hard, in degrees.
+	DownwindIn float64 `json:"downwindIn"`
+
+	// Moment of inertia of the sail and its clew about the tack, in kg·m².
+	DownwindInertia float64 `json:"downwindInertia"`
+
+	// The head's height above the tack, in m.
+	DownwindLuff float64 `json:"downwindLuff"`
+
+	// Greatest lift coefficient.
+	DownwindMaxLift float64 `json:"downwindMaxLift"`
+
+	// Their mass times the distance of their centre of gravity aft of the tack, in
+	// kg·m.
+	DownwindMoment float64 `json:"downwindMoment"`
+
+	// Normal force coefficient of separated flow, every 10° of angle of attack from
+	// 0° to 180°.
+	DownwindNormalForce []float64 `json:"downwindNormalForce"`
+
+	// The clew's angle with the sheet let fly, in degrees.
+	DownwindOut float64 `json:"downwindOut"`
+
+	// Centre of pressure aft of the tack with the flow attached, as a fraction of the
+	// foot.
+	DownwindPressureAttached float64 `json:"downwindPressureAttached"`
+
+	// Centre of pressure aft of the tack with the flow separated, as a fraction of
+	// the foot.
+	DownwindPressureSeparated float64 `json:"downwindPressureSeparated"`
+
+	// At full sail, with one reef and with two: 1 where the crew may set it, 0 where
+	// the reef keeps it in. A downwind sail is never shortened.
+	DownwindReefs []float64 `json:"downwindReefs"`
+
+	// Angle of attack of the greatest lift, in degrees.
+	DownwindStallAngle float64 `json:"downwindStallAngle"`
+
+	// Angle past the stall over which the flow separates, in degrees.
+	DownwindStallWidth float64 `json:"downwindStallWidth"`
+
+	// The tack's distance ahead of the centre of gravity, in m: the bowsprit's end.
+	DownwindTack float64 `json:"downwindTack"`
+
+	// The tack's height above the waterline, in m.
+	DownwindTackHeight float64 `json:"downwindTackHeight"`
+
+	// The upper strip's twist beyond the clew's line, sheeted in, in degrees.
+	DownwindTwist float64 `json:"downwindTwist"`
+
+	// Extra twist as the sheet lets the clew out, growing in proportion to its angle,
+	// in degrees.
+	DownwindTwistEased float64 `json:"downwindTwistEased"`
+
+	// And takes it in as she comes up with the true wind forward of this, in degrees:
+	// less than setAngle, the two a band in which a steady course neither sets nor
+	// takes it in.
+	DropAngle float64 `json:"dropAngle"`
+
+	// Time for the crew to take it in, in s.
+	DropTime float64 `json:"dropTime"`
+
+	// Time for the crew to set it from its bag, in s.
+	HoistTime float64 `json:"hoistTime"`
+
+	// The crew sets it as the boat bears away with the true wind this far off her bow
+	// or more, in degrees.
+	SetAngle float64 `json:"setAngle"`
 }
 
 // The daggerboard or fixed keel, and the rudder.
@@ -5336,4 +5435,4 @@ type WorldZones struct {
 }
 
 // Version is the catalog version (tools/catalog).
-const Version = "ef1768cdcb0d0393"
+const Version = "28943c715462585b"

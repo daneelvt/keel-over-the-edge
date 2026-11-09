@@ -123,6 +123,30 @@ type Prepared struct {
 	squareTrimBelow   float64 // rad: below this angle of attack the square sails lift, for Out.Sail
 	squareEaseAbove   float64 // rad: past this they are stalled
 
+	// The downwind sail, if the boat has one, and the crew's rule that
+	// sets it.
+	kite                  bool
+	kiteStrip             float64 // ½ρ_air × the area of one strip set, kg/m
+	kiteInduced           float64 // the induced drag its area adds to every sail set, per lift coefficient squared
+	kiteSail              sailCoefficients
+	kiteX                 float64 // the tack ahead of the centre of gravity, m
+	kiteFootZ, kiteHeadZ  float64 // each strip's centre of effort's depth below the centre of gravity, m
+	kitePressureAttached  float64 // m aft of the tack
+	kitePressureSeparated float64
+	kiteTwist             float64 // rad
+	kiteTwistPerAngle     float64 // rad of extra twist per radian of the clew's angle
+	kiteIn, kiteOut       float64 // rad
+	kiteInvInertia        float64
+	kiteMoment            float64
+	kiteDamping           float64
+	kiteReefs             [3]float64
+	kiteHaulRate          float64 // rad/s
+	kiteEaseRate          float64 // rad/s
+	hoistRate, dropRate   float64 // of the hoist, a second
+	setAngle, dropAngle   float64 // rad
+	kiteTrimBelow         float64 // rad: below this angle of attack it luffs, for Out.Sail
+	kiteEaseAbove         float64 // rad: past this it is stalled
+
 	// Foils.
 	board, rudder     foil
 	foilStall         float64
@@ -287,6 +311,7 @@ func Prepare(p *Params, w *Waves, b *Prepared) {
 	b.sailWaterDamping = p.SailWaterDamping
 	b.prepareHeadsails(p)
 	b.prepareSquare(p)
+	b.prepareDownwind(p)
 
 	// The foils' centres of pressure are at PressureDepth of their span
 	// below the hull (Keuning and Vermeulen 2003, as used by Day 2017).
@@ -483,4 +508,47 @@ func (b *Prepared) prepareSquare(p *Params) {
 		}
 	}
 	b.squareEaseAbove = float64(1.75 * b.squareStall)
+}
+
+// prepareDownwind derives the downwind sail's constants, if the boat has
+// one. It is worked as the headsails are, two strips about its tack each
+// half its area, with the main's luffing angle and flogging drag; while it
+// is set its area joins the whole rig's induced drag (ORC VPP 2023, eq.
+// 5.34). Its sheet hauls and eases at the main's rates over its own travel.
+func (b *Prepared) prepareDownwind(p *Params) {
+	if !(p.DownwindArea > 0) {
+		return
+	}
+	b.kite = true
+	b.kiteStrip = float64(float64(0.5*airDensity) * (0.5 * p.DownwindArea))
+	b.kiteInduced = p.DownwindArea / float64(math.Pi*float64(p.EffectiveHeight*p.EffectiveHeight))
+	b.kiteSail.prepare(p.DownwindMaxLift, p.DownwindStallAngle, p.DownwindStallWidth, p.DownwindDrag,
+		&p.DownwindNormalForce, b.sail.liftDrag, p.LuffAngle, p.FlogDrag)
+	b.kiteX = p.DownwindTack
+	tackZ := p.CentreOfGravity - p.DownwindTackHeight
+	b.kiteFootZ = tackZ - float64(p.DownwindFootStrip*p.DownwindLuff)
+	b.kiteHeadZ = tackZ - float64(p.DownwindHeadStrip*p.DownwindLuff)
+	b.kitePressureAttached = float64(p.DownwindPressureAttached * p.DownwindFoot)
+	b.kitePressureSeparated = float64(p.DownwindPressureSeparated * p.DownwindFoot)
+	b.kiteTwist = float64(p.DownwindTwist * degree)
+	b.kiteTwistPerAngle = p.DownwindTwistEased / p.DownwindOut
+	b.kiteIn = float64(p.DownwindIn * degree)
+	b.kiteOut = float64(p.DownwindOut * degree)
+	b.kiteInvInertia = 1 / p.DownwindInertia
+	b.kiteMoment = p.DownwindMoment
+	b.kiteDamping = p.DownwindDamping
+	b.kiteReefs = p.DownwindReefs
+	b.kiteHaulRate = (b.kiteOut - b.kiteIn) / p.SheetHaulTime
+	b.kiteEaseRate = (b.kiteOut - b.kiteIn) / p.SheetEaseTime
+	b.hoistRate = 1 / p.HoistTime
+	b.dropRate = 1 / p.DropTime
+	b.setAngle = float64(p.SetAngle * degree)
+	b.dropAngle = float64(p.DropAngle * degree)
+	// It luffs, for the sailor, below half its stall angle, as the main;
+	// it stalls past three times it. Trimmed for the most drive, a
+	// gennaker's flow is already partly separated, its foot's attack up to
+	// two and a half times the stall angle on a broad reach (tools/polar
+	// -sail).
+	b.kiteTrimBelow = float64(0.5 * b.kiteSail.stallAngle)
+	b.kiteEaseAbove = float64(3 * b.kiteSail.stallAngle)
 }

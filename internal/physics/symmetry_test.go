@@ -23,6 +23,7 @@ func mirror(s State) State {
 	s.Heel, s.RollRate, s.Boom, s.BoomRate = -s.Heel, -s.RollRate, -s.Boom, -s.BoomRate
 	s.Sailor, s.Rudder = -s.Sailor, -s.Rudder
 	s.Jib, s.JibRate, s.Yards, s.ForeYards = -s.Jib, -s.JibRate, -s.Yards, -s.ForeYards
+	s.Kite, s.KiteRate = -s.Kite, -s.KiteRate
 	return s
 }
 
@@ -112,6 +113,7 @@ func TestMirrorSymmetry(t *testing.T) {
 					p.PilotTrim - m.PilotTrim, p.PilotWay - m.PilotWay, p.PilotOrder - m.PilotOrder,
 					p.Jib - m.Jib, p.JibRate - m.JibRate, p.JibLimit - m.JibLimit, p.Reef - m.Reef,
 					p.Yards - m.Yards, p.ForeYards - m.ForeYards,
+					p.Hoist - m.Hoist, p.HoistTarget - m.HoistTarget, p.Kite - m.Kite, p.KiteRate - m.KiteRate, p.KiteLimit - m.KiteLimit,
 				} {
 					if math.Abs(d) > 1e-12 {
 						t.Fatalf("step %d: the mirrored run differs by %g:\n plain    %+v\n mirrored %+v", i, d, p, m)
