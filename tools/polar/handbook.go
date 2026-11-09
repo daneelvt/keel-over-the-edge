@@ -220,7 +220,7 @@ func reefAdvice(kinds []*kind, winds []float64) string {
 			b.WriteString(", ")
 		}
 		fmt.Fprintf(&b, "the %s from %g knots", k.name, winds[i])
-		if k.p.DownwindArea > 0 && k.p.Reefs[1] == 1 && k.p.HeadsailReefs[1] == 1 {
+		if k.p != nil && k.p.DownwindArea > 0 && k.p.Reefs[1] == 1 && k.p.HeadsailReefs[1] == 1 {
 			b.WriteString(" (reef 2: its reef 1 shortens nothing)")
 		}
 	}
