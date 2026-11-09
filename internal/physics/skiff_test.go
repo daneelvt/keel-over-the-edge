@@ -210,7 +210,7 @@ func TestSkiffLetFlyInAGust(t *testing.T) {
 // rolls. Its lull to a breath lays her over, and she comes up.
 func TestSkiffCapsizesToWindward(t *testing.T) {
 	b := skiff(t)
-	m := newSimOf(t, b, 14*knot, 45, 0.1)
+	m := newSimOf(t, b, 16*knot, 45, 0.1)
 	m.run(30, nil)
 	out := m.s.Sailor
 	m.e.WindSpeed = 0

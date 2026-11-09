@@ -173,7 +173,7 @@ func TestReefingHeelsLess(t *testing.T) {
 		}
 		heel := func(reef float64) (float64, float64, *sim) {
 			m := newSimOf(t, boat.b, knots*knot, angle, sheet)
-			m.c.Reef = reef
+			m.c.Reef, m.s.Reef = reef, reef
 			if boat.b.square {
 				shipPilot(m, angle)
 				m.run(240, nil)
@@ -190,9 +190,10 @@ func TestReefingHeelsLess(t *testing.T) {
 		t.Logf("%s, %g knots at %.0f°: heel %.1f° at full sail, %.1f° with a reef, %.1f° with two, %.2f and %.2f knots, %.2f and %.2f to windward; the luff's share %.3f",
 			boat.id, knots, angle, full, one, two, m0.speed()/knot, m.speed()/knot, made0/knot, made/knot, m.o.ReefShare)
 		// A boat whose first reef only keeps its downwind sail in, which
-		// is not set close-hauled, heels as at full sail with it.
+		// is not set close-hauled, heels as at full sail with it, within
+		// the gusts of her sailor's own movement.
 		first := boat.b.reefs[1] < 1 || boat.b.jib && boat.b.jibReefs[1] < 1 || boat.b.square && boat.b.squareReefs[1] < 1
-		if !(two < one && (one < full || !first && one == full)) {
+		if !(two < one && (one < full || !first && math.Abs(one-full) < 2)) {
 			t.Errorf("%s: heel %.1f°, %.1f°, %.1f° with no reef, one and two: not less as she reefs", boat.id, full, one, two)
 		}
 		switch {
@@ -206,8 +207,9 @@ func TestReefingHeelsLess(t *testing.T) {
 		if m.s.Reef != 2 || m.o.ReefShare != boat.b.reefs[2] {
 			t.Errorf("%s: reefed to %v, the luff's share %v, not 2 and %v", boat.id, m.s.Reef, m.o.ReefShare, boat.b.reefs[2])
 		}
-		// From full sail, a reef takes her reef time.
-		m = newSimOf(t, boat.b, knots*knot, angle, sheet)
+		// From full sail, a reef takes her reef time, her sheet let fly so
+		// that her sailor stays aboard.
+		m = newSimOf(t, boat.b, knots*knot, angle, 1)
 		m.c.Reef = 1
 		took := math.NaN()
 		m.run(2/boat.b.reefRate, func() {

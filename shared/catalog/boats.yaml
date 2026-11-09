@@ -1031,9 +1031,11 @@ boats:
         # 3.5, fully battened with a square head, its foot 2.1 m (rule
         # C.4.2), on a 6.25 m mast stepped on deck.
         sailArea: 9.0
-        luff: 5.5
+        luff: 5.35 # estimate: from the boom to the masthead, 6.55 m above the water
         foot: 2.1
-        boomHeight: 1.0 # estimate
+        # Estimate: the boom clears the helm's head as they sit on the rack,
+        # whose rail is 0.45 m above the water.
+        boomHeight: 1.2
         mastPosition: 0.70 # estimate: about 1.7 m aft of the stem
         # The two strips' centres of effort, a square head's higher than a
         # triangle's.

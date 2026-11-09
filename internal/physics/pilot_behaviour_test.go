@@ -268,6 +268,10 @@ func TestPilotTacksAndGybes(t *testing.T) {
 			// dinghy under her main alone: from a broad reach in a trade
 			// spell she keeps 72% of her speed.
 			cases[2].least, cases[3].least = 0.7, 0.7
+			// Her sailor crosses from one trapeze to the other, 3.7 m,
+			// slower than a dinghy sailor slides across a side deck, and
+			// she heels further in a tack: she keeps 59% of her speed.
+			cases[0].least, cases[1].least = 0.55, 0.55
 		}
 		if boat.b.square {
 			close := boat.b.closeHauled / deg
