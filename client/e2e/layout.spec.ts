@@ -1161,28 +1161,28 @@ for (const upright of [true, false]) {
 // gennaker set, the legend names it ("Gennaker · Stalled"), and the case's
 // last line says what it does at its longest ("Gennaker coming in")
 // within the case.
-test('the keelboat, the tall ship and the skiff are framed as the Jolly boat is, clear of every part, on every screen', async ({
-  page,
-}) => {
-  test.setTimeout(150_000);
-  await page.setViewportSize({ width: SCREENS[0].width, height: SCREENS[0].height });
-  await page.emulateMedia({ reducedMotion: 'reduce' });
-  await openScene(page, 'boat=keelboat', true);
-  const found: string[] = [];
-  // Every boat but the first, whose screens the other tests hold: aback,
-  // the braces of square sails name themselves.
-  const larger = data.boats.slice(1).map((kind) => {
-    const { square, downwind } = kind.physics;
-    const braces = square.squareForeArea + square.squareAfterArea > 0;
-    const kite = downwind.downwindArea > 0 ? 'Gennaker · ' : '';
-    return {
-      kind,
-      braces,
-      kite,
-      aback: braces ? `${kind.controls.sheet.name} · Aback` : `${kite}Aback`,
-    };
-  });
-  for (const { kind, braces, aback, kite } of larger) {
+// Every boat but the first, whose screens the other tests hold, each a
+// test of its own (a boat's five screens are about a minute on a slow
+// runner): aback, the braces of square sails name themselves.
+for (const { kind, braces, aback, kite } of data.boats.slice(1).map((kind) => {
+  const { square, downwind } = kind.physics;
+  const braces = square.squareForeArea + square.squareAfterArea > 0;
+  const kite = downwind.downwindArea > 0 ? 'Gennaker · ' : '';
+  return {
+    kind,
+    braces,
+    kite,
+    aback: braces ? `${kind.controls.sheet.name} · Aback` : `${kite}Aback`,
+  };
+})) {
+  test(`the ${kind.name} is framed as the Jolly boat is, clear of every part, on every screen`, async ({
+    page,
+  }) => {
+    test.setTimeout(150_000);
+    await page.setViewportSize({ width: SCREENS[0].width, height: SCREENS[0].height });
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await openScene(page, `boat=${kind.id}`, true);
+    const found: string[] = [];
     const id = kind.name;
     await page.setViewportSize({ width: SCREENS[0].width, height: SCREENS[0].height });
     await page.evaluate(async (index) => {
@@ -1288,9 +1288,9 @@ test('the keelboat, the tall ship and the skiff are framed as the Jolly boat is,
         await page.evaluate(() => globalThis.keel.readouts(null));
       }
     }
-  }
-  expect(found).toEqual([]);
-});
+    expect(found).toEqual([]);
+  });
+}
 
 /** A row of the list as full as it gets. */
 function row(name: string, i: number) {
