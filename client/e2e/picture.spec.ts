@@ -22,13 +22,10 @@ test('the view shared as a picture: 1200 × 675, a JPEG under 1 MB, the sea in i
   ]) {
     await page.setViewportSize(size);
     // The canvas follows the window on its resize, a frame later.
-    await page.waitForFunction(
-      ({ width, height }) => {
-        const c = globalThis.keel.world.stage.gfx?.canvas;
-        return c !== undefined && Math.abs(c.width / c.height - width / height) < 0.02;
-      },
-      size,
-    );
+    await page.waitForFunction(({ width, height }) => {
+      const c = globalThis.keel.world.stage.gfx?.canvas;
+      return c !== undefined && Math.abs(c.width / c.height - width / height) < 0.02;
+    }, size);
     await page.evaluate(() => globalThis.keel.render());
     const p = await page.evaluate(() => globalThis.keel.picture('Iron Mary'));
     pictures.push(p?.bytes ?? 0);
