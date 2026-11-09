@@ -457,6 +457,17 @@ export class SailorRuntime {
     return this.#cross !== null;
   }
 
+  /** The side deck the sailor is crossing from, or sits on: + starboard, − port. */
+  get crossFrom(): number {
+    return this.#cross === null ? this.#side : this.#crossFrom;
+  }
+
+  /** How far through crossing the boat the sailor is, 0 to 1; 1 when not crossing. */
+  get crossed(): number {
+    const c = this.#cross;
+    return c === null ? 1 : Math.min(1, this.#crossT / Math.max(c.duration, 1e-3));
+  }
+
   /**
    * Forgets the moments before: the next one seats the sailor afresh, on
    * the side its offset says, as a sailor first met (a boat moved at once).

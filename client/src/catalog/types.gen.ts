@@ -16,12 +16,12 @@ export type Id = string;
  */
 export type BoatPoint = [number, number, number];
 /**
- * How a person is at a station: standing, or seated.
+ * How a person is at a station: standing, seated, or hiking (sitting out on the rail and leaning out, as a dinghy's crew).
  *
  * This interface was referenced by `Catalog`'s JSON-Schema
  * via the `definition` "StationPose".
  */
-export type StationPose = "standing" | "seated";
+export type StationPose = "standing" | "seated" | "hiking";
 /**
  * A navigation light a boat shows from sunset to sunrise, by the arc it shows over (International Regulations for Preventing Collisions at Sea, Rule 21): a red sidelight to port and a green to starboard, each from right ahead to 22.5° abaft the beam; a white sternlight over the 135° astern; or the three combined in one lantern at the masthead, which Rule 25(b) allows a sailing vessel of less than 20 m.
  *
@@ -282,7 +282,7 @@ export interface Boat {
   art: BoatArt;
 }
 /**
- * A place aboard where a person is drawn: standing on the deck, or seated as a dinghy's helmsman sits on the side deck.
+ * A place aboard where a person is drawn: standing on the deck, seated as a dinghy's helmsman sits on the side deck, or hiking out on its rail; on a dinghy's windward side, if it says so.
  *
  * This interface was referenced by `Catalog`'s JSON-Schema
  * via the `definition` "BoatStation".
@@ -294,6 +294,10 @@ export interface BoatStation {
    * The way the person faces, in degrees clockwise from the bow seen from above: 0 forward, 90 to starboard, 180 aft, 270 to port.
    */
   facing: number;
+  /**
+   * Whether the person sits to windward as a dinghy's crew does: on the side the helm sits on, the station's mirror across the centreline (and its facing's) when the helm is on the other side, and crossing with the helm in a tack or a gybe. Not said, the station is where it is.
+   */
+  windward?: boolean;
 }
 /**
  * The words the boat's controls are shown with. Every boat has the helm, the sheet and the reef; the sheet sets the main's limit, the headsails' and the downwind sail's in the same share, and the yards' brace.
@@ -8822,4 +8826,4 @@ export interface LifeGlow {
 }
 
 /** The catalog version (tools/catalog). */
-export const CATALOG_VERSION = '12b19e1141a11c30';
+export const CATALOG_VERSION = 'f00e874226287574';

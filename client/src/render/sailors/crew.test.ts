@@ -27,7 +27,7 @@ import { describe, expect, test } from 'vitest';
 import { catalog } from '../../catalog';
 import { seatFigure } from '../fleetparts';
 import { Clip } from './clips';
-import { crewPlaces, helmLook, poseDeck, poseFar } from './crew';
+import { crewPlaces, helmLook, poseDeck, poseFar, stationPlace } from './crew';
 import { deckLook, FleetLook } from './fleetlooks';
 import { placesOf } from './model';
 import { boneNames } from './onboat';
@@ -92,6 +92,81 @@ describe('who is drawn where', () => {
 
   test('nobody holding: nobody at the helm', () => {
     expect(helmLook({ people, holder: 7 })).toBeNull();
+  });
+});
+
+describe('a crew to windward', () => {
+  /** The kinds with a station to windward: a dinghy's crew on its rack. */
+  const dinghies = catalog.boats.filter((b) => b.stations.some((s) => s.windward === true));
+  const place = () => ({ at: [0, 0, 0] as [number, number, number], facing: 0 });
+
+  test('some kind has one, and no kind but a dinghy’s second person', () => {
+    expect(dinghies.length).toBeGreaterThan(0);
+    for (const b of catalog.boats) {
+      expect(b.stations[0]?.windward ?? false, b.id).toBe(false);
+    }
+  });
+
+  test.each(dinghies.map((b) => [b.name, b] as const))(
+    '%s: the crew on the helm’s side after a tack, and crossing with the helm, facing forward half way',
+    (_, boat) => {
+      const i = boat.stations.findIndex((s) => s.windward === true);
+      const s = boat.stations[i] as (typeof boat.stations)[number];
+      for (const side of [1, -1]) {
+        const at = stationPlace(s, side, 1, place());
+        expect(Math.sign(at.at[0])).toBe(side);
+        expect(Math.abs(at.at[0])).toBeCloseTo(Math.abs(s.at[0] as number), 9);
+        expect(at.at[1]).toBe(s.at[1]);
+        expect(at.at[2]).toBe(s.at[2]);
+        // Facing inboard: to port from the starboard rack, to starboard from the port's.
+        expect(at.facing).toBeCloseTo(side > 0 ? 270 : 90, 9);
+        // Half way across, on the centreline facing forward; done, on the other side.
+        const half = stationPlace(s, side, 0.5, place());
+        expect(Math.abs(half.at[0])).toBeLessThan(1e-9);
+        expect(Math.min(half.facing, 360 - half.facing)).toBeLessThan(1e-6);
+        expect(Math.sign(stationPlace(s, -side, 1, place()).at[0])).toBe(-side);
+      }
+    },
+  );
+
+  test.each(dinghies.map((b) => [b.name, b] as const))(
+    '%s: handed over, the two change places: the old helm at the crew’s station on the helm’s side',
+    (_, boat) => {
+      const i = boat.stations.findIndex((s) => s.windward === true);
+      const people = [
+        { seat: 0, look: 7 },
+        { seat: i, look: 9 },
+      ];
+      // The skipper helming: the other at the crew's station.
+      expect(helmLook({ people, holder: 0 })).toBe(7);
+      expect(crewPlaces({ people, holder: 0 }, boat.stations.length)).toEqual([
+        { station: i, look: 9 },
+      ]);
+      // Handed over: the other helms, the skipper is crew, on the helm's side.
+      expect(helmLook({ people, holder: i })).toBe(9);
+      const after = crewPlaces({ people, holder: i }, boat.stations.length);
+      expect(after).toEqual([{ station: i, look: 7 }]);
+      for (const side of [1, -1]) {
+        const s = boat.stations[after[0]?.station ?? -1] as (typeof boat.stations)[number];
+        expect(Math.sign(stationPlace(s, side, 1, place()).at[0])).toBe(side);
+      }
+    },
+  );
+
+  test('a station not to windward is where the catalog has it, whatever the helm’s side', () => {
+    for (const b of catalog.boats) {
+      for (const s of b.stations.filter((x) => x.windward !== true)) {
+        for (const [side, crossed] of [
+          [1, 1],
+          [-1, 1],
+          [1, 0.5],
+        ] as const) {
+          const at = stationPlace(s, side, crossed, place());
+          expect(at.at).toEqual(s.at);
+          expect(at.facing).toBe(s.facing);
+        }
+      }
+    }
   });
 });
 
@@ -201,8 +276,8 @@ describe.each([
   test('standing, near and far: on the station’s point, upright, facing +z', async () => {
     const { look, seat } = await fleetLook(art as NonNullable<typeof art>);
     const boxes = [
-      poseDeck(look, false, seat) as Float32Array,
-      poseFar(look, false, seat) as Float32Array,
+      poseDeck(look, 'standing', seat) as Float32Array,
+      poseFar(look, 'standing', seat) as Float32Array,
     ].map((f) => {
       expect(f.length % 24).toBe(0);
       const { all, feet } = bounds(f);
@@ -226,8 +301,8 @@ describe.each([
   test('seated, near and far: on the seat at the station’s point, the legs reaching the way it faces, the feet below it', async () => {
     const { look, seat } = await fleetLook(art as NonNullable<typeof art>);
     for (const f of [
-      poseDeck(look, true, seat) as Float32Array,
-      poseFar(look, true, seat) as Float32Array,
+      poseDeck(look, 'seated', seat) as Float32Array,
+      poseFar(look, 'seated', seat) as Float32Array,
     ]) {
       const { all, feet } = bounds(f);
       // The feet 0.1 to 0.35 m under the seat, some 0.4 to 0.9 m ahead of it.
@@ -239,5 +314,33 @@ describe.each([
       expect(all.max.y).toBeGreaterThan(0.6);
       expect(all.max.y).toBeLessThan(1.2);
     }
+  });
+
+  test('hiking, near and far: sat out on the rail, leaning back out over the water, the feet in the boat', async () => {
+    const { look, seat } = await fleetLook(art as NonNullable<typeof art>);
+    const leans = [
+      poseDeck(look, 'hiking', seat) as Float32Array,
+      poseFar(look, 'hiking', seat) as Float32Array,
+    ].map((f) => {
+      const { all, feet } = bounds(f);
+      // The feet ahead of the seat, inboard, and below it; the head a seated person's height up.
+      expect((feet.min.z + feet.max.z) / 2).toBeGreaterThan(0.2);
+      expect(feet.min.y).toBeLessThan(0);
+      expect(all.max.y).toBeGreaterThan(0.5);
+      expect(all.max.y).toBeLessThan(1.2);
+      let z = 0;
+      let k = 0;
+      for (let o = 0; o < f.length; o += 8) {
+        if ((f[o + 1] as number) > all.max.y - 0.35) {
+          z += f[o + 2] as number;
+          k++;
+        }
+      }
+      return z / k;
+    });
+    // Leaning out: the shoulders and head behind the seat (−z, outboard);
+    // the far figure, coarser, as the deck level within some centimetres.
+    expect(leans[0]).toBeLessThan(-0.02);
+    expect(Math.abs((leans[0] as number) - (leans[1] as number))).toBeLessThan(0.12);
   });
 });

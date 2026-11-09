@@ -15,6 +15,7 @@ export type {
   NamedStar,
   SailorArt,
   Sky,
+  StationPose,
 } from './types.gen';
 export { CATALOG_VERSION } from './types.gen';
 
