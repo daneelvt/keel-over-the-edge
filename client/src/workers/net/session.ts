@@ -138,6 +138,8 @@ const REFUSALS: Record<number, ChatRefusalTold> = {
   [ChatRefusal.FAST]: 'fast',
   [ChatRefusal.SILENT]: 'silent',
   [ChatRefusal.NOBODY]: 'nobody',
+  [ChatRefusal.AWAY]: 'away',
+  [ChatRefusal.RESTING]: 'resting',
 };
 
 /** How chat stands, as the page names it; an unknown status reads as off. */
@@ -195,6 +197,8 @@ export type Received =
   | { kind: 'chatState'; state: ChatStateTold }
   | { kind: 'tied'; tied: TiedTold }
   | { kind: 'reported'; ok: boolean }
+  /** The account's shipmates changed: the list is read again. */
+  | { kind: 'shipmates' }
   /** Whether the AI of the own machine sailor watched attends to it. */
   | { kind: 'lamp'; state: LampState }
   /** The sailor of the boat sailed or watched changed their look: its code. */
@@ -357,6 +361,7 @@ export class Session {
             look: k.look,
             gone: k.gone,
             ...(k.machine ? { machine: { owner: k.owner, skipper: k.skipper } } : {}),
+            ...(k.shipmate ? { shipmate: true } : {}),
           },
         };
       }
@@ -387,6 +392,7 @@ export class Session {
               you: p.you,
               muted: p.muted,
               blocked: p.blocked,
+              shipmate: p.shipmate,
             })),
             holder: m.body.value.holder,
           },
@@ -414,6 +420,7 @@ export class Session {
             you: c.you,
             echo: c.echo,
             refused: REFUSALS[c.refused] ?? '',
+            thread: c.thread,
           },
         };
       }
@@ -440,6 +447,9 @@ export class Session {
       case 'reported':
         this.#lastHeard = now;
         return { kind: 'reported', ok: m.body.value.ok };
+      case 'shipmates':
+        this.#lastHeard = now;
+        return { kind: 'shipmates' };
       case 'lookChanged':
         this.#lastHeard = now;
         return { kind: 'look', look: m.body.value.look };
@@ -659,10 +669,13 @@ export class Session {
     });
   }
 
-  /** Asks to come aboard by a link's token. */
-  knockCommand(now: number, token: string, machine = ''): Uint8Array<ArrayBuffer> {
+  /** Asks to come aboard by a link's token, or, token empty, the boat a shipmate skippers. */
+  knockCommand(now: number, token: string, machine = '', shipmate = ''): Uint8Array<ArrayBuffer> {
     return this.#encode(now, {
-      body: { case: 'command', value: { body: { case: 'knock', value: { token, machine } } } },
+      body: {
+        case: 'command',
+        value: { body: { case: 'knock', value: { token, machine, shipmate } } },
+      },
     });
   }
 
@@ -718,10 +731,10 @@ export class Session {
     });
   }
 
-  /** Says a line aboard; id is the page's own, which its echo carries. */
-  sayCommand(now: number, text: string, id: number): Uint8Array<ArrayBuffer> {
+  /** Says a line aboard, or, to a shipmate, a message; id is the page's own, which its echo carries. */
+  sayCommand(now: number, text: string, id: number, to = ''): Uint8Array<ArrayBuffer> {
     return this.#encode(now, {
-      body: { case: 'command', value: { body: { case: 'say', value: { text, id } } } },
+      body: { case: 'command', value: { body: { case: 'say', value: { text, id, to } } } },
     });
   }
 

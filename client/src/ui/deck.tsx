@@ -15,8 +15,10 @@
 // what the player may do to that person, by who the player is and who
 // holds the controls; and the skipper's link (sailwithme.tsx).
 //
-// Who is aboard also mutes, blocks and reports each other person, and chat
-// aboard (chat.tsx) stands with these parts under the case.
+// Who is aboard also mutes, blocks and reports each other person, offers
+// to be shipmates or ends it, and chat aboard (chat.tsx) stands with these
+// parts under the case; so do shipmates' notices, and their panel and
+// threads (shipmates.tsx) are among the windows.
 //
 // Loaded only when first needed (decklazy.ts): none of it is in the
 // game's first download.
@@ -80,6 +82,8 @@ import { MachineCrew, MachineLink } from './machinelink';
 import { machineAsksWords, machineKnockingWords } from './machinewords';
 import { PlayerText } from './player';
 import { SailWithMe } from './sailwithme';
+import { ShipmateNotices, ShipmatesWindows, Star } from './shipmates';
+import { BE_SHIPMATES, endWords, KEEP, NO_LONGER } from './shipmatewords';
 
 export { SailWithMe } from './sailwithme';
 
@@ -141,7 +145,9 @@ export type RowAction =
   | 'unmute'
   | 'block'
   | 'unblock'
-  | 'report';
+  | 'report'
+  | 'shipmates'
+  | 'unship';
 
 /**
  * The keys on the row of the person in seat: whoever holds the controls
@@ -149,10 +155,11 @@ export type RowAction =
  * row) while another holds them, and puts anyone else ashore; one of the
  * crew who holds them gives them back (on their own row). And anyone
  * aboard mutes, blocks and reports anyone else, or ends a mute or a
- * block, as the account has them. Nothing for a spectator, who is not
- * aboard.
+ * block, as the account has them. With ships, anyone aboard offers to be
+ * shipmates with another person, never a machine sailor, or ends it.
+ * Nothing for a spectator, who is not aboard.
  */
-export function rowActions(crew: CrewTold, seat: number): RowAction[] {
+export function rowActions(crew: CrewTold, seat: number, ships = false): RowAction[] {
   const me = selfOf(crew);
   const person = crew.people.find((p) => p.seat === seat);
   if (me === null || person === undefined) {
@@ -173,6 +180,9 @@ export function rowActions(crew: CrewTold, seat: number): RowAction[] {
   if (holds) {
     out.push('hand');
   }
+  if (ships && person.name !== '' && !person.machine && !me.machine && !person.blocked) {
+    out.push(person.shipmate ? 'unship' : 'shipmates');
+  }
   if (skipper) {
     out.push('putAshore');
   }
@@ -183,10 +193,13 @@ export function rowActions(crew: CrewTold, seat: number): RowAction[] {
 }
 
 /**
- * The actions a row keeps behind its ⋯ key, rarely used: putting someone
- * ashore, mute, block and report. The controls' keys stand on the row.
+ * The actions a row keeps behind its ⋯ key, rarely used: shipmates,
+ * putting someone ashore, mute, block and report. The controls' keys
+ * stand on the row.
  */
 export const MORE_ACTIONS: ReadonlySet<RowAction> = new Set<RowAction>([
+  'shipmates',
+  'unship',
   'putAshore',
   'mute',
   'unmute',
@@ -214,6 +227,8 @@ const ACTION_WORDS: Record<RowAction, string> = {
   block: BLOCK,
   unblock: UNBLOCK,
   report: REPORT,
+  shipmates: BE_SHIPMATES,
+  unship: NO_LONGER,
 };
 
 /** The name of whoever holds the controls; "" for none known. */
@@ -247,7 +262,14 @@ export function KnockCards({ deck }: { deck: DeckView }) {
       <div class="deck-knock-who">
         <Face look={k.look} />
         <p>
-          <Said words={words} />
+          {k.shipmate === true ? (
+            <>
+              <Said words={words.slice(0, 1)} /> <Star />
+              <Said words={words.slice(1)} />
+            </>
+          ) : (
+            <Said words={words} />
+          )}
         </p>
       </div>
       <div class="deck-keys">
@@ -461,14 +483,20 @@ export function PersonRow({
   act,
   open = false,
   toggle,
+  ships = false,
+  note = null,
 }: {
   person: PersonTold;
   crew: CrewTold;
   act: (a: RowAction, p: PersonTold) => void;
   open?: boolean;
   toggle?: () => void;
+  /** Shipmates are offered and ended from the row. */
+  ships?: boolean;
+  /** What came of the player's last act on the row, under it. */
+  note?: Words | null;
 }) {
-  const { keys: actions, more } = splitActions(rowActions(crew, person.seat));
+  const { keys: actions, more } = splitActions(rowActions(crew, person.seat, ships));
   const key = (a: RowAction) => (
     <button
       key={a}
@@ -499,6 +527,7 @@ export function PersonRow({
               ⚙
             </span>
           ) : null}
+          {person.shipmate ? <Star /> : null}
           {crew.holder === person.seat ? <HelmMark /> : null}
         </p>
         {tags.length > 0 ? <p class="deck-faint">{tags.join(' · ')}</p> : null}
@@ -520,6 +549,11 @@ export function PersonRow({
         </span>
       ) : null}
       {open && more.length > 0 ? <div class="deck-row-more">{more.map(key)}</div> : null}
+      {note !== null ? (
+        <p class="deck-row-note" role="status">
+          <Said words={note} />
+        </p>
+      ) : null}
     </li>
   );
 }
@@ -532,6 +566,12 @@ export function PersonRow({
 export function AboardList({ deck }: { deck: DeckView }) {
   const crew = deck.crew.value;
   const [putting, setPutting] = useState<PersonTold | null>(null);
+  // No longer shipmates' one question, in the row's place.
+  const [unshipping, setUnshipping] = useState<PersonTold | null>(null);
+  // What came of the last offer or ending, under its row, by seat.
+  const [told, setTold] = useState<{ seat: number; words: Words } | null>(null);
+  const shipmates = deck.shipmates;
+  const ships = shipmates !== null && deck.watching.value === null;
   // The one row whose ⋯ is open, by seat; -1 for none.
   const [opened, setOpened] = useState(deck.openRow ?? -1);
   const close = () => (deck.list.value = false);
@@ -559,6 +599,14 @@ export function AboardList({ deck }: { deck: DeckView }) {
         break;
       case 'putAshore':
         setPutting(p);
+        break;
+      case 'shipmates':
+        void shipmates?.offer({ seat: p.seat }, p.name).then((words) => {
+          setTold({ seat: p.seat, words });
+        });
+        break;
+      case 'unship':
+        setUnshipping(p);
         break;
       case 'mute':
       case 'unmute':
@@ -606,6 +654,29 @@ export function AboardList({ deck }: { deck: DeckView }) {
                 </button>
               </span>
             </li>
+          ) : unshipping?.seat === p.seat && crew !== null ? (
+            <li class="deck-row deck-putting" key={p.seat} data-seat={p.seat}>
+              <p>
+                <Said words={endWords(p.name)} />
+              </p>
+              <span class="deck-row-keys">
+                <button
+                  type="button"
+                  class="plate-key key-main"
+                  onClick={() => {
+                    setUnshipping(null);
+                    void shipmates?.end({ seat: p.seat }, p.name).then((words) => {
+                      setTold({ seat: p.seat, words });
+                    });
+                  }}
+                >
+                  {NO_LONGER}
+                </button>
+                <button type="button" class="plate-key" onClick={() => setUnshipping(null)}>
+                  {KEEP}
+                </button>
+              </span>
+            </li>
           ) : crew !== null ? (
             <PersonRow
               key={p.seat}
@@ -614,6 +685,8 @@ export function AboardList({ deck }: { deck: DeckView }) {
               act={act}
               open={opened === p.seat}
               toggle={() => setOpened(opened === p.seat ? -1 : p.seat)}
+              ships={ships}
+              note={told?.seat === p.seat ? told.words : null}
             />
           ) : null,
         )}
@@ -641,6 +714,7 @@ export function DeckTop({ deck }: { deck: DeckView }) {
       <>
         <KnockCards deck={deck} />
         <KnockingCard deck={deck} />
+        {deck.shipmates !== null ? <ShipmateNotices view={deck.shipmates} /> : null}
       </>
     );
   }
@@ -650,6 +724,7 @@ export function DeckTop({ deck }: { deck: DeckView }) {
       <KnockCards deck={deck} />
       <KnockingCard deck={deck} />
       <DeckLine deck={deck} />
+      {deck.shipmates !== null ? <ShipmateNotices view={deck.shipmates} /> : null}
     </>
   );
 }
@@ -671,13 +746,17 @@ export function DeckFoot({ deck }: { deck: DeckView }) {
   );
 }
 
-/** The windows over the sea: chat's, going ashore's question, who is aboard, the skipper's link. */
+/** The windows over the sea: chat's, going ashore's question, shipmates', who is aboard, the skipper's link. */
 export function DeckWindows({ deck, sailor }: { deck: DeckView; sailor: string | null }) {
   if (deck.chat.ask.value !== null || deck.chat.sheet.value !== null) {
     return <ChatWindows deck={deck} sailor={sailor} />;
   }
   if (deck.ashore.value && deck.aboard.value !== null) {
     return <AshoreQuestion deck={deck} />;
+  }
+  const ships = deck.shipmates;
+  if (ships !== null && (ships.thread.value !== null || ships.panel.value)) {
+    return <ShipmatesWindows deck={deck} view={ships} sailor={sailor} />;
   }
   if (deck.list.value && deck.crew.value !== null && deck.watching.value === null) {
     return <AboardList deck={deck} />;

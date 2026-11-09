@@ -137,6 +137,7 @@ import { AGROUND } from '../ui/model';
 import { saveNoticesOff } from '../ui/notices';
 import { showQueue } from '../ui/queue';
 import { settingsSignal } from '../ui/settings';
+import { shipmatesOf } from '../ui/shipmatesview';
 import { checkStatements, statementsOf } from '../ui/statementlazy';
 import { loadWatch, type WatchView } from '../ui/watchlazy';
 import { watchFromQuery } from '../ui/watchwords';
@@ -1036,7 +1037,14 @@ async function start(): Promise<void> {
       boats: harbourBoats(catalog, online),
     },
     watch: watchView,
-    deck: deckOf(online, (act) => void changeBoat(act)),
+    deck: deckOf(
+      online,
+      (act) => void changeBoat(act),
+      shipmatesOf(online, {
+        change: (act) => void changeBoat(act),
+        hide: (name) => online.chat.tie(name, 'block', true),
+      }),
+    ),
     statements,
     lamp: online.lamp,
     camera,

@@ -452,8 +452,14 @@ func (p *process) lifecycleJobs() []jobs.Job {
 				if err != nil {
 					return jobs.Result{}, err
 				}
-				return jobs.Result{Detail: fmt.Sprintf("%d sessions, %d ceremonies, %d recorded actions, %d links and %d reports deleted", n, c, a, l, rp),
-					Skipped: n == 0 && c == 0 && a == 0 && l == 0 && rp == 0}, nil
+				// Who sailed with whom, a month on, and offers to be
+				// shipmates lapsed.
+				sw, err := p.db.DeleteSailedAndOffers(ctx, due)
+				if err != nil {
+					return jobs.Result{}, err
+				}
+				return jobs.Result{Detail: fmt.Sprintf("%d sessions, %d ceremonies, %d recorded actions, %d links, %d reports and %d sailed together or offers deleted", n, c, a, l, rp, sw),
+					Skipped: n == 0 && c == 0 && a == 0 && l == 0 && rp == 0 && sw == 0}, nil
 			},
 		},
 		{

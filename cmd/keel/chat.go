@@ -43,6 +43,7 @@ type chatStore interface {
 	SetChatSwitch(ctx context.Context, on bool, a store.Action) error
 	SetShipmateMessages(ctx context.Context, on bool, a store.Action) error
 	SetChatCountries(ctx context.Context, countries []string, a store.Action) error
+	shipmateStore
 }
 
 // loadChat reads the owner's switches for chat into the switches, and
@@ -82,7 +83,7 @@ func speakerOf(a bus.Account, t store.Talker, now time.Time) aboard.Speaker {
 	}
 	return aboard.Speaker{
 		Account: a, Human: t.Human, Machine: t.Kind == store.AI, Band: band, ChatSet: t.ChatSet, Chat: t.Chat,
-		Rules: t.Rules, MutedUntil: t.MutedUntil, Rested: t.Rested,
+		Rules: t.Rules, MutedUntil: t.MutedUntil, Rested: t.Rested, Offline: t.Offline,
 	}
 }
 
@@ -114,6 +115,10 @@ func (p *process) tie(ctx context.Context, account, other bus.Account, block, on
 			return err
 		}
 		p.ties.SetBlock(account, other, on)
+		if on {
+			// A block ends shipmates.
+			p.unship(ctx, account, other)
+		}
 		return nil
 	}
 	if err := db.Mute(ctx, store.AccountID(account), store.AccountID(other), on); err != nil {

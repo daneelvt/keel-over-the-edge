@@ -2,8 +2,8 @@
 
 // Chat on the account page: the switch "Chat with other players" (turned
 // on, the age question first if it was never answered, and the card for a
-// player of 13 to 17), the account's mutes and blocks with an end to each,
-// and the page on chat and privacy. Loaded as the account page opens: the
+// player of 13 to 17), "Appear offline" to shipmates, the account's mutes
+// and blocks with an end to each, and the page on chat and privacy. Loaded as the account page opens: the
 // game's first download holds none of it.
 
 import { useEffect, useState } from 'preact/hooks';
@@ -19,9 +19,11 @@ import {
   TIES_TITLE,
   tieKindText,
 } from '../ui/chatwords';
+import { APPEAR_OFFLINE, APPEAR_OFFLINE_DETAIL } from '../ui/shipmatewords';
 import { type ChatServer, type ChatSetting, chatServer, type Tie } from './chatapi';
 import { ChatTurnOn } from './chatcard';
 import { reasonText } from './reasons';
+import { type ShipmatesServer, shipmatesServer } from './shipmatesapi';
 
 /** The switch, and turning chat on when it is switched on. */
 export function ChatSwitch({ server }: { server: ChatServer }) {
@@ -79,6 +81,56 @@ export function ChatSwitch({ server }: { server: ChatServer }) {
           name="chat"
           checked={setting?.on === true}
           disabled={setting === null}
+          onChange={(e) => void set(e.currentTarget.checked)}
+        />
+      </label>
+      {problem !== '' ? (
+        <p class="account-faint" aria-live="polite">
+          {problem}
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
+/** "Appear offline": shipmates don't see the player in the game. */
+export function OfflineSwitch({ server }: { server: ShipmatesServer }) {
+  const [on, setOn] = useState<boolean | null>(null);
+  const [problem, setProblem] = useState('');
+  useEffect(() => {
+    let live = true;
+    void server.list().then((l) => {
+      if (live) {
+        setOn(l?.offline ?? null);
+        if (l === null) {
+          setProblem(reasonText('unavailable'));
+        }
+      }
+    });
+    return () => {
+      live = false;
+    };
+  }, []);
+  const set = async (next: boolean) => {
+    setProblem('');
+    setOn(next);
+    if (!(await server.offline(next))) {
+      setOn(!next);
+      setProblem(reasonText('unavailable'));
+    }
+  };
+  return (
+    <div class="chat-switch">
+      <label class="chat-switch-row">
+        <span>
+          {APPEAR_OFFLINE}
+          <span class="account-faint chat-switch-detail">{APPEAR_OFFLINE_DETAIL}</span>
+        </span>
+        <input
+          type="checkbox"
+          name="appear-offline"
+          checked={on === true}
+          disabled={on === null}
           onChange={(e) => void set(e.currentTarget.checked)}
         />
       </label>
@@ -149,11 +201,18 @@ export function TiesList({ server }: { server: ChatServer }) {
 }
 
 /** Chat's part of the account page. */
-export function ChatAccount({ server = chatServer() }: { server?: ChatServer }) {
+export function ChatAccount({
+  server = chatServer(),
+  shipmates = shipmatesServer(),
+}: {
+  server?: ChatServer;
+  shipmates?: ShipmatesServer;
+}) {
   return (
     <>
       <h3>{CHAT_HEADING}</h3>
       <ChatSwitch server={server} />
+      <OfflineSwitch server={shipmates} />
       <TiesList server={server} />
       <p class="account-faint chat-privacy">
         <a href={PRIVACY_PAGE} target="_blank" rel="noopener">

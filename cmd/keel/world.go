@@ -36,6 +36,7 @@ import (
 	"github.com/daneelvt/keel-over-the-edge/internal/replay"
 	"github.com/daneelvt/keel-over-the-edge/internal/review"
 	"github.com/daneelvt/keel-over-the-edge/internal/scripted"
+	"github.com/daneelvt/keel-over-the-edge/internal/shipmates"
 	"github.com/daneelvt/keel-over-the-edge/internal/sim"
 	"github.com/daneelvt/keel-over-the-edge/internal/sim/loop"
 	"github.com/daneelvt/keel-over-the-edge/internal/store"
@@ -95,6 +96,9 @@ type process struct {
 	// owner's hand on them, across worlds.
 	ties    *aboard.Ties
 	reports *review.Service
+	// shipmates is shipmates, across worlds; who is a shipmate is held in
+	// ties.
+	shipmates *shipmates.Service
 
 	// The routes the world half serves, set as each opens.
 	replayRoutes, devRoutes, ownerRoutes, playRoutes *lateHandler
@@ -276,7 +280,9 @@ type worldHalf struct {
 	// watch is the world's watching: the list, the card and follows.
 	watch *watch.Service
 	// chat is the world's chat aboard: every line is said through it.
-	chat  *chat.Hub
+	chat *chat.Hub
+	// tally finds who sails together aboard the world's boats.
+	tally *shipmates.Tally
 	tools *owner.Owner
 	play  http.Handler
 
@@ -361,6 +367,7 @@ func (p *process) openWorld(ctx context.Context, rw *readyWorld) (*worldHalf, er
 	h.forecasts = p.forecastsOf(rw, row, timeline)
 	h.chat = chat.NewHub(b.Frames, aboard.Rules{Switches: p.switches, Ties: p.ties}, time.Now)
 	h.chat.Metrics = p.metrics
+	h.tally = shipmates.NewTally(b.Frames, p.chatDB(), time.Now, p.log, p.metrics)
 	h.game = edge.New(edge.Config{
 		LookCode: p.lookCode,
 		BoatOf:   p.boatOf,
@@ -426,6 +433,9 @@ func (p *process) openWorld(ctx context.Context, rw *readyWorld) (*worldHalf, er
 		Origin:   cfg.PlayOrigin,
 		Deck:     h.game,
 		Chat:     chatting{p},
+	}
+	if p.shipmates != nil {
+		playCfg.Shipmates = p.shipmates
 	}
 	h.watch = watch.New(watch.Config{Store: p.db, Frames: b.Frames, Edge: h.game, Kinds: boatIDs(cat), Sea: h.sea, Agent: p.agentAttends,
 		Blocks: func(a, b bus.Account) bool { return p.ties.Blocks(a, b) }})
@@ -544,6 +554,7 @@ func (h *worldHalf) start() {
 		wg.Go(func() { h.forecasts.Run(encoderCtx) })
 		wg.Go(func() { p.publishStatus(encoderCtx, h) })
 		wg.Go(func() { h.chat.Run(encoderCtx) })
+		wg.Go(func() { h.tally.Run(encoderCtx) })
 		h.game.Run(encoderCtx)
 		wg.Wait()
 	}()
@@ -561,9 +572,14 @@ func (h *worldHalf) start() {
 	if p.devRoutes != nil {
 		dev := devRoutes(sailorsCtx, h.bus, p.cat, h.ready.charts, p.log)
 		end := endRoute(p, h)
+		sailed := sailedRoute(h)
 		p.devRoutes.set(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if r.URL.Path == "/debug/end" {
+			switch r.URL.Path {
+			case "/debug/end":
 				end.ServeHTTP(w, r)
+				return
+			case "/debug/sailed":
+				sailed.ServeHTTP(w, r)
 				return
 			}
 			dev.ServeHTTP(w, r)

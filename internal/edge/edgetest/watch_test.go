@@ -64,6 +64,8 @@ type viewer struct {
 	chatState *pb.ChatState
 	tied      *pb.Tied
 	reported  *pb.Reported
+	// shipmates counts the Shipmates told: the list changed.
+	shipmates int
 }
 
 // dial opens the game connection with the cookie and says hello.
@@ -160,6 +162,8 @@ func (v *viewer) take(r client.Received) {
 		v.tied = m.Tied
 	case *pb.ServerMessage_Reported:
 		v.reported = m.Reported
+	case *pb.ServerMessage_Shipmates:
+		v.shipmates++
 	case *pb.ServerMessage_BoatNames:
 		if v.names == nil {
 			v.names = map[uint32]string{}

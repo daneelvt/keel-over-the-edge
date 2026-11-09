@@ -38,7 +38,8 @@ const heardLines = 64
 
 // ReportIn is a report from the game connection: the reporter, the
 // account reported, the boat it was about, and the line it was made from
-// (0 for one made from a name aboard).
+// (0 for one made from a name aboard). Thread is a report about the
+// messages between the two, as shipmates, rather than a boat's chat.
 type ReportIn struct {
 	Reporter bus.Account
 	Reported bus.Account
@@ -46,6 +47,7 @@ type ReportIn struct {
 	Line     uint64
 	Reason   string
 	Note     string
+	Thread   bool
 }
 
 // Report reasons on the wire, as the store names them.
@@ -171,9 +173,10 @@ func (c *conn) chatState(force bool) bool {
 	return c.send(&pb.ServerMessage{Body: &pb.ServerMessage_ChatState{ChatState: &st}}, outChat)
 }
 
-// line sends the connection a line said aboard, and keeps its number to
-// be named.
-func (c *conn) line(l chat.Line, seat uint32) {
+// line sends the connection a line said aboard, or with thread a message
+// between shipmates (the other's account), and keeps its number to be
+// named.
+func (c *conn) line(l chat.Line, seat uint32, thread string) {
 	c.chat.mu.Lock()
 	if len(c.chat.heard) == heardLines {
 		c.chat.heard = append(c.chat.heard[:0], c.chat.heard[1:]...)
@@ -181,7 +184,7 @@ func (c *conn) line(l chat.Line, seat uint32) {
 	c.chat.heard = append(c.chat.heard, l.ID)
 	c.chat.mu.Unlock()
 	c.send(&pb.ServerMessage{Body: &pb.ServerMessage_Chat{Chat: &pb.Chat{
-		Id: l.ID, Seat: seat, Name: l.Name, Machine: l.Machine, AtUs: l.At.UnixMicro(), Text: l.Text,
+		Id: l.ID, Seat: seat, Name: l.Name, Machine: l.Machine, AtUs: l.At.UnixMicro(), Text: l.Text, Thread: thread,
 	}}}, outChat)
 }
 
@@ -217,7 +220,7 @@ func (o chatOut) Deliver(l chat.Line, seat uint32, boat uint64, to []bus.Account
 	e := o.e
 	for _, a := range to {
 		if c := e.registry.get(a); c != nil && c.onBoat(boat) {
-			c.line(l, seat)
+			c.line(l, seat, "")
 		}
 	}
 	watchers := e.mine.of(boat)
@@ -240,9 +243,22 @@ func (o chatOut) Deliver(l chat.Line, seat uint32, boat uint64, to []bus.Account
 	t.Aboard, t.Owns = false, true
 	for _, c := range watchers {
 		if c.account != bus.Account(l.From) && e.registry.get(c.account) == c && e.cfg.Chat.Reaches(bus.Account(l.From), c.account, t) {
-			c.line(l, seat)
+			c.line(l, seat, "")
 		}
 	}
+}
+
+// DeliverPair sends a message between shipmates to the receiver's
+// connection, wherever it is in the game, while the two are shipmates
+// still: a message in flight as they stop being shipmates is not
+// delivered.
+func (o chatOut) DeliverPair(l chat.Line, to bus.Account) {
+	e := o.e
+	c := e.registry.get(to)
+	if c == nil || !e.cfg.Chat.Shipmates(bus.Account(l.From), to) {
+		return
+	}
+	c.line(l, 0, store.AccountID(l.From).String())
 }
 
 // Changed tells the connections of the accounts given, or every one, how
@@ -271,6 +287,8 @@ func (o chatOut) Changed(accounts []bus.Account) {
 // chatCommand does what a Command asks of chat, if it asks anything.
 func (c *conn) chatCommand(cmd *pb.Command) {
 	switch {
+	case cmd.GetSay() != nil && cmd.GetSay().GetTo() != "":
+		c.sayToCommand(cmd.GetSay().GetTo(), cmd.GetSay().GetText(), cmd.GetSay().GetId())
 	case cmd.GetSay() != nil:
 		c.sayCommand(cmd.GetSay().GetText(), cmd.GetSay().GetId())
 	case cmd.GetMute() != nil:
@@ -291,6 +309,8 @@ var chatRefusals = [...]pb.ChatRefusal{
 	chat.RefusedFast:    pb.ChatRefusal_CHAT_REFUSAL_FAST,
 	chat.RefusedSilent:  pb.ChatRefusal_CHAT_REFUSAL_SILENT,
 	chat.RefusedNobody:  pb.ChatRefusal_CHAT_REFUSAL_NOBODY,
+	chat.RefusedAway:    pb.ChatRefusal_CHAT_REFUSAL_AWAY,
+	chat.RefusedResting: pb.ChatRefusal_CHAT_REFUSAL_RESTING,
 }
 
 // sayCommand says a line, and sends it back to its sender as said, or
@@ -306,6 +326,33 @@ func (c *conn) sayCommand(text string, id uint32) {
 			m.Id, m.Name, m.Machine, m.AtUs, m.Text = s.Line.ID, s.Line.Name, s.Line.Machine, s.Line.At.UnixMicro(), s.Line.Text
 			if s.Words {
 				// Said to its sender alone: it has no number to name.
+				m.Id = 0
+			}
+		}
+		if s.Refused == chat.RefusedSilent || !s.Rest.IsZero() {
+			defer c.chatState(false)
+		}
+	}
+	c.send(&pb.ServerMessage{Body: &pb.ServerMessage_Chat{Chat: m}}, outChat)
+}
+
+// sayToCommand says a message to a shipmate, named by their account's ID,
+// and sends it back to its sender as said, or why not: a shipmate not in
+// the game, or no longer one, reads as away.
+func (c *conn) sayToCommand(to, text string, id uint32) {
+	h := c.e.cfg.Chat
+	m := &pb.Chat{You: true, Echo: id, Thread: to, Refused: pb.ChatRefusal_CHAT_REFUSAL_SILENT}
+	who, ok := store.ParseID(to)
+	switch {
+	case h == nil || !c.chat.in:
+	case !ok:
+		m.Refused = pb.ChatRefusal_CHAT_REFUSAL_AWAY
+	default:
+		s := h.SayTo(c.account, bus.Account(who), text)
+		m.Refused = chatRefusals[s.Refused]
+		if s.Refused == chat.NotRefused {
+			m.Id, m.Name, m.Machine, m.AtUs, m.Text = s.Line.ID, s.Line.Name, s.Line.Machine, s.Line.At.UnixMicro(), s.Line.Text
+			if s.Words {
 				m.Id = 0
 			}
 		}
@@ -375,11 +422,26 @@ func (c *conn) tieCommand(w *pb.Who, block, on bool) {
 	if !block || !on || full {
 		return
 	}
-	// The skipper's block puts the person ashore from their boat.
+	c.putAshoreBlocked(a, boat)
+}
+
+// PutAshoreBlocked puts other ashore from the boat skipper sails, if they
+// are aboard it: a skipper's block, made outside the game connection.
+func (e *Edge) PutAshoreBlocked(skipper, other bus.Account) {
+	if c := e.registry.get(skipper); c != nil {
+		c.putAshoreBlocked(other, 0)
+	}
+}
+
+// putAshoreBlocked puts a, whom the connection's account has blocked,
+// ashore from the connection's own boat, if they are aboard it: on boat
+// (the boat they were named on), or any for 0.
+func (c *conn) putAshoreBlocked(a bus.Account, boat uint64) {
+	e := c.e
 	f := e.cfg.Bus.Frames.Acquire()
 	h, aboard := c.handsOf(f)
 	in := false
-	if aboard && h.mine && h.boat == boat {
+	if aboard && h.mine && (boat == 0 || h.boat == boat) {
 		lo, hi := f.CrewOf(h.slot)
 		for _, x := range f.Crew[lo:hi] {
 			in = in || x.Account == a
@@ -417,7 +479,9 @@ func (c *conn) reportCommand(w *pb.Who, reason pb.ReportReason, note string) {
 	}
 	ctx, cancel := context.WithTimeout(e.ctx, ChatLookup)
 	defer cancel()
-	err := e.cfg.Report(ctx, ReportIn{Reporter: c.account, Reported: a, Boat: boat, Line: line, Reason: why, Note: note})
+	// A line with no boat is a message between shipmates.
+	thread := line != 0 && boat == 0
+	err := e.cfg.Report(ctx, ReportIn{Reporter: c.account, Reported: a, Boat: boat, Line: line, Reason: why, Note: note, Thread: thread})
 	if err != nil {
 		e.cfg.Log.Warn("keeping a report", "request_id", c.reqID, "conn", c.id, "err", err)
 		return

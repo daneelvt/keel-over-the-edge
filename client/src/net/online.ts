@@ -46,6 +46,7 @@ import {
 import { ChatLog } from '../ui/chatlog';
 import type { WorldEnd } from '../ui/countdown';
 import { queueLines } from '../ui/queue';
+import { ShipmateThreads } from '../ui/shipmatelog';
 import { BOAT_IN_THE_WATER, endedText, type WatchEndWhy } from '../ui/watchwords';
 import {
   Ahead,
@@ -187,6 +188,10 @@ export class Online {
   readonly chat = new ChatLog();
   /** How chat stands for the connection, as last told; null before it is. */
   readonly chatState = signal<ChatStateTold | null>(null);
+  /** The messages between the player and their shipmates, in the page's memory for its life. */
+  readonly threads = new ShipmateThreads();
+  /** How many times the server has said the account's shipmates changed: each, the list is read again. */
+  readonly shipmatesChanged = signal(0);
   /** Why the connection last left a boat it was aboard, until its own boat's Welcome. */
   #ashore: AshoreWhyTold | null = null;
   /** What the server last told of the AI of the own machine sailor watched, and of which watch. */
@@ -347,6 +352,11 @@ export class Online {
     this.#port.postMessage({ type: 'knock', token, machine });
   }
 
+  /** Asks to come aboard the boat a shipmate (their account ID) skippers, without a link. */
+  knockShipmate(shipmate: string): void {
+    this.#port.postMessage({ type: 'knock', token: '', machine: '', shipmate });
+  }
+
   /** The skipper's answer to a knock: let them aboard, or not now. */
   answer(knock: number, let_: boolean): void {
     this.#port.postMessage({ type: 'answer', knock, let: let_ });
@@ -396,6 +406,16 @@ export class Online {
       return false;
     }
     this.#port.postMessage({ type: 'say', text: s.text, id: s.id });
+    return true;
+  }
+
+  /** Writes to a shipmate (their account ID) as self: shown at once, its echo awaited; false for nothing to send. */
+  sayTo(to: string, text: string, self: string): boolean {
+    const s = this.threads.say(to, text, self, Date.now());
+    if (s === null) {
+      return false;
+    }
+    this.#port.postMessage({ type: 'say', text: s.text, id: s.id, to });
     return true;
   }
 
@@ -521,7 +541,14 @@ export class Online {
         this.chat.crew(m.crew.people);
         break;
       case 'chat':
-        this.chat.receive(m.chat, Date.now());
+        if (this.threads.answers(m.chat)) {
+          this.threads.receive(m.chat, Date.now());
+        } else {
+          this.chat.receive(m.chat, Date.now());
+        }
+        break;
+      case 'shipmates':
+        this.shipmatesChanged.value++;
         break;
       case 'chatState':
         this.chatState.value = m.state;

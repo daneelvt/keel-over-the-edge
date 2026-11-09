@@ -30,12 +30,23 @@ function line(id: number, name: string, text: string, more: Partial<ChatTold> = 
     you: false,
     echo: 0,
     refused: '',
+    thread: '',
     ...more,
   };
 }
 
 function person(seat: number, name: string, more: Partial<PersonTold> = {}): PersonTold {
-  return { seat, look: 0, name, machine: false, you: false, muted: false, blocked: false, ...more };
+  return {
+    seat,
+    look: 0,
+    name,
+    machine: false,
+    you: false,
+    muted: false,
+    blocked: false,
+    shipmate: false,
+    ...more,
+  };
 }
 
 describe('the lines kept', () => {

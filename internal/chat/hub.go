@@ -39,10 +39,16 @@ const (
 	RefusedSilent
 	// RefusedNobody: the sender is aboard no boat with anyone else.
 	RefusedNobody
+	// RefusedAway: a message to a shipmate who is not in the game (or
+	// appears offline, or is no longer a shipmate): it is never kept for
+	// later.
+	RefusedAway
+	// RefusedResting: the owner has shipmates' messages off.
+	RefusedResting
 	refusals
 )
 
-var refusalNames = [refusals]string{"said", "contact", "long", "fast", "silent", "nobody"}
+var refusalNames = [refusals]string{"said", "contact", "long", "fast", "silent", "nobody", "away", "resting"}
 
 // Name is the refusal's name for a metric label: "said" for none.
 func (r Refusal) Name() string {
@@ -64,6 +70,8 @@ type Said struct {
 	Rest    time.Time
 	// Heard is how many it was handed to.
 	Heard int
+	// To is the shipmate a message was to; zero for a line aboard.
+	To bus.Account
 }
 
 // Out is a door that hands lines to the people it serves.
@@ -71,6 +79,9 @@ type Out interface {
 	// Deliver hands l, said from seat aboard boat, to those of the
 	// accounts given that this door serves; each was let it by chat's rule.
 	Deliver(l Line, seat uint32, boat uint64, to []bus.Account)
+	// DeliverPair hands l, a message between two shipmates, to to, if this
+	// door serves them; the rule let it reach them.
+	DeliverPair(l Line, to bus.Account)
 	// Changed says how chat may stand differently for the accounts given,
 	// or for everyone when nil: the owner's switches, a player's own.
 	Changed(accounts []bus.Account)
@@ -473,4 +484,93 @@ func (h *Hub) tidy() {
 }
 
 // CountNames are the names of Counts' lines, for a metric label.
-var CountNames = [refusals + 1]string{"said", "contact", "long", "fast", "silent", "nobody", "words"}
+var CountNames = [refusals + 1]string{"said", "contact", "long", "fast", "silent", "nobody", "away", "resting", "words"}
+
+// OfflineAnswers is how long someone who appears offline still receives a
+// shipmate's messages after writing to them: they chose to be seen by
+// that one shipmate, for the conversation.
+const OfflineAnswers = 30 * time.Minute
+
+// Shipmates reports whether a and b are shipmates, as the rule's ties
+// hold them.
+func (h *Hub) Shipmates(a, b bus.Account) bool {
+	return h.Rules.Ties != nil && h.Rules.Ties.Shipmates(a, b)
+}
+
+// SayTo says a message from an account to one of its shipmates, wherever
+// each is in the game: checked, limited, kept in the pair's ring and
+// handed to the shipmate if the rule lets it reach them. A message to a
+// shipmate not in the game is refused (RefusedAway) and kept nowhere;
+// so is one to someone who appears offline, unless they wrote to the
+// sender within OfflineAnswers, or to someone no longer a shipmate.
+func (h *Hub) SayTo(from, to bus.Account, text string) Said {
+	start := time.Now()
+	s := h.sayTo(from, to, text)
+	if m := h.Metrics; m != nil {
+		m.ChatSay.Observe(time.Since(start).Seconds())
+		name := s.Refused.Name()
+		if s.Words {
+			name = CountNames[refusals]
+		}
+		m.ChatLines.WithLabelValues(name).Inc()
+		m.ChatDeliveries.Add(float64(s.Heard))
+	}
+	return s
+}
+
+func (h *Hub) sayTo(from, to bus.Account, text string) Said {
+	now := h.now()
+	s, ok := h.Speaker(from)
+	if !ok || h.Rules.MaySay(s, now) != aboard.Speaks {
+		return h.count(Said{Refused: RefusedSilent, To: to})
+	}
+	if h.Rules.Switches != nil && !h.Rules.Switches.ShipmateMessages() {
+		return h.count(Said{Refused: RefusedResting, To: to})
+	}
+	if from == to || !h.Shipmates(from, to) {
+		return h.count(Said{Refused: RefusedAway, To: to})
+	}
+	ts, ok := h.Speaker(to)
+	room := Pair(from, to)
+	if !ok || ts.Offline && !h.wrote(room, to, now) {
+		return h.count(Said{Refused: RefusedAway, To: to})
+	}
+	if !h.Limiter.Allow(s.Account) {
+		return h.count(Said{Refused: RefusedFast, To: to})
+	}
+	clean, why := moderation.CheckChat(text)
+	switch why {
+	case moderation.ChatEmpty, moderation.ChatLong:
+		return h.count(Said{Refused: RefusedLong, To: to})
+	case moderation.ChatContact:
+		return h.count(Said{Refused: RefusedContact, To: to, Rest: h.refused(s)})
+	case moderation.ChatWords:
+		out := Said{Words: true, To: to, Rest: h.refused(s)}
+		out.Line = Line{Room: room, From: s.Account, Name: h.Name(from), Machine: s.Machine, At: now, Text: clean}
+		h.counts[refusals].Add(1)
+		return out
+	}
+	l := h.Rings.Add(Line{Room: room, From: s.Account, Name: h.Name(from), Machine: s.Machine, Text: clean})
+	out := Said{Line: l, To: to}
+	if h.Rules.Delivered(s, ts, aboard.Together{Shipmates: true}, now) {
+		out.Heard = 1
+		h.mu.RLock()
+		outs := append([]Out(nil), h.outs...)
+		h.mu.RUnlock()
+		for _, o := range outs {
+			o.DeliverPair(l, to)
+		}
+		h.deliveries.Add(1)
+	}
+	return h.count(out)
+}
+
+// wrote reports whether a wrote in room within OfflineAnswers of now.
+func (h *Hub) wrote(room Room, a bus.Account, now time.Time) bool {
+	for _, l := range h.Rings.Lines(room, now.Add(-OfflineAnswers)) {
+		if l.From == a {
+			return true
+		}
+	}
+	return false
+}

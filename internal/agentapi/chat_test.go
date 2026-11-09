@@ -38,6 +38,8 @@ func (p *people) Deliver(l chat.Line, _ uint32, _ uint64, to []bus.Account) {
 	}
 }
 
+func (*people) DeliverPair(chat.Line, bus.Account) {}
+
 func (*people) Changed([]bus.Account) {}
 
 func (p *people) of(a bus.Account) []chat.Line {

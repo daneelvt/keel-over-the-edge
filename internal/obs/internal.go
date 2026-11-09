@@ -13,7 +13,7 @@ var InternalPaths = []string{
 	"/livez", "/readyz", "/metrics",
 	"/debug/pprof/", "/debug/pprof/cmdline", "/debug/pprof/profile", "/debug/pprof/symbol",
 	"/debug/pprof/trace", "/debug/pprof/goroutine", "/debug/pprof/goroutineleak",
-	"/debug/flightrecorder", "/debug/replay", "/debug/wind", "/debug/weather", "/debug/place", "/debug/chart", "/debug/end", "/debug/life",
+	"/debug/flightrecorder", "/debug/replay", "/debug/wind", "/debug/weather", "/debug/place", "/debug/chart", "/debug/end", "/debug/life", "/debug/sailed",
 	// The owner's tools' (internal/owner's Paths).
 	"/owner/", "/owner/index.html", "/owner/assets/x.js",
 	"/owner/api/world.json", "/owner/api/gusts.bin", "/owner/api/islands.json", "/owner/api/current.json",
@@ -36,7 +36,7 @@ var InternalPaths = []string{
 // server never serves. flight, replay, weather and owner may be nil, and
 // their routes then answer 404; weather, the developer's commands, is POST
 // /debug/wind, /debug/weather, /debug/encounter, /debug/place, /debug/chart,
-// /debug/end and /debug/life; owner is
+// /debug/end, /debug/life and /debug/sailed; owner is
 // everything under /owner/, which guards itself.
 func Internal(h *Health, m *Metrics, flight, replay, weather, owner http.Handler) http.Handler {
 	mux := http.NewServeMux()
@@ -65,6 +65,7 @@ func Internal(h *Health, m *Metrics, flight, replay, weather, owner http.Handler
 		mux.Handle("POST /debug/end", weather)
 		mux.Handle("POST /debug/chart", weather)
 		mux.Handle("POST /debug/life", weather)
+		mux.Handle("POST /debug/sailed", weather)
 	}
 	if owner != nil {
 		mux.Handle("/owner/", owner)

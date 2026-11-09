@@ -39,6 +39,10 @@ export function refusedText(why: Exclude<ChatRefusalTold, ''>): string {
       return 'You can’t chat just now';
     case 'nobody':
       return 'Nobody is aboard to hear you';
+    case 'away':
+      return 'They aren’t in the game; messages aren’t kept for later';
+    case 'resting':
+      return 'Messages between shipmates are resting';
   }
 }
 

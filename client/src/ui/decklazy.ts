@@ -2,7 +2,8 @@
 
 // Sailing together, as the screens see it: the knocks on the skipper's
 // boat, the player's own knock, being aboard another's boat as crew, who
-// is aboard and who holds the controls, and the skipper's link. Its parts
+// is aboard and who holds the controls, the skipper's link, and shipmates
+// (shipmatesview.ts). Its parts
 // (deck.tsx) are loaded the first time one is needed: the game's first
 // download holds none of them.
 
@@ -23,12 +24,15 @@ import type {
   WhoTold,
 } from '../net/messages';
 import type { ChatLog } from './chatlog';
+import { type ShipmatesView, shipmatesShown } from './shipmatesview';
 
 /** Whom the sheet of mute, block and report is about, and how far along it is. */
 export interface ChatSheet {
   who: WhoTold;
   name: string;
   machine: boolean;
+  /** Someone on the shipmates panel, by account ID, reported over HTTP rather than on the game connection. */
+  shipmate?: string;
   /** The sheet's keys; the one question before a block; the report's form. */
   step: 'menu' | 'block' | 'report';
 }
@@ -130,6 +134,8 @@ export interface DeckView {
   closeKnocks(closed: boolean): void;
   /** Chat aboard. */
   chat: ChatView;
+  /** Shipmates; null where there are none (the offline sandbox). */
+  shipmates: ShipmatesView | null;
 }
 
 /** The game connection's side of it, as Online has it. */
@@ -161,6 +167,7 @@ export interface DeckSource extends ChatSource {
 export function deckOf(
   o: DeckSource,
   change: (act: () => void) => void = (act) => act(),
+  shipmates: ShipmatesView | null = null,
 ): DeckView {
   const closed = signal(false);
   const list = signal(false);
@@ -198,6 +205,7 @@ export function deckOf(
       o.closeKnocks(c);
     },
     chat: chatOf(o),
+    shipmates,
   };
 }
 
@@ -252,7 +260,12 @@ export function chatReadOnly(d: DeckView): boolean {
 
 /** Whether any part of sailing together is on the screen. */
 export function deckShown(d: DeckView): boolean {
-  if (chatShown(d) || d.chat.sheet.value !== null || d.chat.ask.value !== null) {
+  if (
+    chatShown(d) ||
+    d.chat.sheet.value !== null ||
+    d.chat.ask.value !== null ||
+    shipmatesShown(d.shipmates)
+  ) {
     return true;
   }
   const k = d.knocking.value;

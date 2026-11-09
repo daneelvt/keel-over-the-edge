@@ -94,6 +94,9 @@ type knock struct {
 	approver  bus.Account
 	machine   bus.Account
 	ownerName string
+	// shipmate: a shipmate of the skipper's, knocking from their list
+	// without a link.
+	shipmate bool
 }
 
 // who is the account the knock brings aboard.
@@ -239,6 +242,8 @@ func (e *Edge) tidyDecks(now time.Time) {
 func (c *conn) deckCommand(cmd *pb.Command) {
 	now := time.Now()
 	switch {
+	case cmd.GetKnock() != nil && cmd.GetKnock().GetShipmate() != "":
+		c.shipmateKnock(cmd.GetKnock().GetShipmate(), now)
 	case cmd.GetKnock() != nil && cmd.GetKnock().GetMachine() != "":
 		c.machineKnock(cmd.GetKnock().GetToken(), cmd.GetKnock().GetMachine(), now)
 	case cmd.GetKnock() != nil:
@@ -277,7 +282,7 @@ func (c *conn) knockedAs(machine string, state pb.KnockState, skipper string, ki
 // card shows whoever answers a knock the knock, or that it no longer
 // waits.
 func (c *conn) card(k *knock, gone bool) {
-	m := &pb.KnockCard{Id: k.id, Sailor: k.name, Look: k.look, Gone: gone}
+	m := &pb.KnockCard{Id: k.id, Sailor: k.name, Look: k.look, Gone: gone, Shipmate: k.shipmate}
 	if k.machine != (bus.Account{}) {
 		m.Machine, m.Owner, m.Skipper = true, k.ownerName, k.skipperName
 	}
@@ -292,21 +297,10 @@ func (c *conn) knockCommand(token string, now time.Time) {
 		c.knocked(pb.KnockState_KNOCK_STATE_ENDED, "", 0, "")
 		return
 	}
-	d := &e.decks
-	d.mu.Lock()
-	ts := d.hour[c.account]
-	for len(ts) > 0 && now.Sub(ts[0]) > time.Hour {
-		ts = ts[1:]
-	}
-	if len(ts) >= KnocksAnHour {
-		d.hour[c.account] = ts
-		d.mu.Unlock()
+	if c.knocksTooOften(now) {
 		c.knocked(pb.KnockState_KNOCK_STATE_OFTEN, "", 0, "")
 		return
 	}
-	d.hour[c.account] = append(ts, now)
-	d.mu.Unlock()
-
 	hash, err := aboard.TokenHash(token)
 	if err != nil {
 		c.knocked(pb.KnockState_KNOCK_STATE_ENDED, "", 0, "")
@@ -339,6 +333,61 @@ func (c *conn) knockCommand(token string, now time.Time) {
 		c.knocked(pb.KnockState_KNOCK_STATE_CLOSED, l.Name, 0, "")
 		return
 	}
+	c.knockOn(ctx, l.Skipper, l.Name, now)
+}
+
+// knocksTooOften counts a knock against the account's hour, and reports
+// whether it is past KnocksAnHour.
+func (c *conn) knocksTooOften(now time.Time) bool {
+	d := &c.e.decks
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	ts := d.hour[c.account]
+	for len(ts) > 0 && now.Sub(ts[0]) > time.Hour {
+		ts = ts[1:]
+	}
+	if len(ts) >= KnocksAnHour {
+		d.hour[c.account] = ts
+		return true
+	}
+	d.hour[c.account] = append(ts, now)
+	return false
+}
+
+// shipmateKnock is a knock on the boat a shipmate skippers, from the
+// shipmates list, without a link: every rule of a knock asked as for one
+// by a link, and the skipper answers it. A shipmate who appears offline,
+// or is not skippering a boat at sea, is not at sea; someone not a
+// shipmate is answered the same.
+func (c *conn) shipmateKnock(id string, now time.Time) {
+	e := c.e
+	if e.cfg.Knocker == nil || e.cfg.Chat == nil {
+		c.knocked(pb.KnockState_KNOCK_STATE_NOT_AT_SEA, "", 0, "")
+		return
+	}
+	if c.knocksTooOften(now) {
+		c.knocked(pb.KnockState_KNOCK_STATE_OFTEN, "", 0, "")
+		return
+	}
+	who, ok := store.ParseID(id)
+	skipper := bus.Account(who)
+	sp, in := e.cfg.Chat.Speaker(skipper)
+	if !ok || !e.cfg.Chat.Shipmates(c.account, skipper) || !in || sp.Offline {
+		c.knocked(pb.KnockState_KNOCK_STATE_NOT_AT_SEA, "", 0, "")
+		return
+	}
+	ctx, cancel := context.WithTimeout(e.ctx, DeckLookup)
+	defer cancel()
+	c.knockOn(ctx, skipper, e.cfg.Chat.Name(skipper), now)
+}
+
+// knockOn knocks on the boat skipper sails, named skipperName, once the
+// link (or the shipmates' tie) has let the knock this far: the knocker's
+// own rules, the boat's, and then the card to its skipper.
+func (c *conn) knockOn(ctx context.Context, skipper bus.Account, skipperName string, now time.Time) {
+	e := c.e
+	d := &e.decks
+	l := LinkFound{Skipper: skipper, Name: skipperName}
 	who, err := e.cfg.Knocker(ctx, c.account)
 	if err != nil {
 		c.knocked(pb.KnockState_KNOCK_STATE_TRY_AGAIN, l.Name, 0, "")
@@ -401,7 +450,7 @@ func (c *conn) knockCommand(token string, now time.Time) {
 	}
 	d.next++
 	kn := &knock{id: d.next, boat: boat, skipper: l.Skipper, by: c, name: who.Name, look: who.Look, skipperName: l.Name, kind: kind, boatName: boatName,
-		approver: l.Skipper}
+		approver: l.Skipper, shipmate: e.cfg.Chat != nil && e.cfg.Chat.Shipmates(l.Skipper, c.account)}
 	k.knocks = append(k.knocks, kn)
 	d.knocks[kn.id] = kn
 	d.knocking[c] = kn
@@ -438,7 +487,8 @@ func (e *Edge) boardable(f *bus.Frame, s int32, knocker bus.Account) pb.KnockSta
 	switch {
 	case s < 0:
 		return pb.KnockState_KNOCK_STATE_NOT_AT_SEA
-	case f.Machine[s]:
+	case !aboard.MayJoin(e.company(f, s, bus.Account{}), aboard.Member{Human: knocker}):
+		// A machine sailor's boat: no person knocks on it.
 		return pb.KnockState_KNOCK_STATE_CLOSED
 	case e.refuses(f.Owner[s], knocker):
 		return pb.KnockState_KNOCK_STATE_CLOSED
