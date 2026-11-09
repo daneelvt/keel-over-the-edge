@@ -7,9 +7,11 @@ import (
 	"sync"
 	"time"
 
+	"github.com/daneelvt/keel-over-the-edge/internal/aboard"
 	"github.com/daneelvt/keel-over-the-edge/internal/bus"
 	"github.com/daneelvt/keel-over-the-edge/internal/catalog"
 	"github.com/daneelvt/keel-over-the-edge/internal/chart"
+	"github.com/daneelvt/keel-over-the-edge/internal/chat"
 	"github.com/daneelvt/keel-over-the-edge/internal/fleet"
 	"github.com/daneelvt/keel-over-the-edge/internal/forecast"
 	"github.com/daneelvt/keel-over-the-edge/internal/life"
@@ -92,6 +94,14 @@ type Sea struct {
 	// from, swaps and changes the look of; nil for none: it sails the kind
 	// each sailor brings, of the first look.
 	Fleet *fleet.Fleet
+	// Chat is the world's chat aboard, through which a machine sailor says
+	// its lines and is handed those said to it; Talker what chat's rule
+	// needs of a machine sailor, its human's, and its name. Nil for none.
+	Chat   *chat.Hub
+	Talker func(ctx context.Context, a bus.Account) (aboard.Speaker, string, error)
+	// Deck, if not nil, is the game's own side of sailing together, which
+	// a skipper's agent puts someone ashore through.
+	Deck Deck
 
 	overlays overlays
 

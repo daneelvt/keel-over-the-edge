@@ -660,3 +660,46 @@ dd.card-look {
   align-items: center;
   gap: 10px;
 }
+
+/* The Reports tab: the queue beside the report open, a child's safety
+   marked plainly; what players wrote kept as written, wrapped. */
+table.reports tbody tr {
+  cursor: pointer;
+}
+
+table.reports tr.urgent {
+  background: rgb(213 94 0 / 22%);
+}
+
+table.reports tr.chosen {
+  background: rgb(232 180 80 / 25%);
+}
+
+.urgent-mark {
+  color: #ff9e7a;
+  font-weight: 500;
+}
+
+.said {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+table.lines td {
+  vertical-align: top;
+}
+
+table.lines tr.reported {
+  background: rgb(213 94 0 / 22%);
+}
+
+.sail-with input[type="text"] {
+  width: 16em;
+  margin: 2px 4px 2px 0;
+  padding: 4px 8px;
+  border: 0;
+  border-radius: 6px;
+  background: rgb(255 255 255 / 12%);
+  color: var(--ink);
+  font: inherit;
+}

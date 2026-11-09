@@ -107,3 +107,31 @@
 .hud .menu-accounts button {
   flex: 1;
 }
+
+/* Chat's part: the switch's meaning under it, the page on privacy. */
+.chat-switch-detail {
+  display: block;
+}
+
+.account .chat-privacy a {
+  color: inherit;
+}
+
+.chat-switch {
+  margin: 6px 0;
+}
+
+.chat-switch-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 44px;
+}
+
+.chat-switch-row input {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  accent-color: var(--gold);
+}

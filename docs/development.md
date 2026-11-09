@@ -133,7 +133,7 @@ credentials.
 
 | Workflow | When | What | Locally |
 |----------|------|------|---------|
-| `ci.yaml` | Every pull request (each part only when its files changed); every push to `main`, called by `release.yaml` | Go tests on amd64 and arm64, each with a PostgreSQL service: in their short forms with the race detector, then at full length without it (the physics, simulation, sky and world generator tests also built with `GOAMD64=v3`), the tick's benchmarks as a smoke test, short fuzzes of the catalog decoder, the input log's reader, the sailor name check, the decoding of what a game client sends and of the other boats' views (Go's and the page's), the physics module built and its golden tests run in WebAssembly, client tests, the client build (which fails on a bundled package with a licence not in `tools/licences/allowed.txt`) and the size of its first download, the one command started from scratch, its database container included, and checked over HTTPS with a sailor made with a passkey and read back, its game connection, and a second player seeing the first's boat; and the image built on amd64 and arm64 (not pushed), checked to be for its runner's machine, to run as 65532 with no shell, `keel help` to run and the page to be in it, its size in the job's summary | `go run ./tools/dev -db` once, then `go test -race -short ./...` and `go test ./...`, `go run ./tools/physics` then `npm test` in `client/`, `go run ./tools/dev -smoke`, `docker buildx build .` |
+| `ci.yaml` | Every pull request (each part only when its files changed); every push to `main`, called by `release.yaml` | Go tests on amd64 and arm64, each with a PostgreSQL service: in their short forms with the race detector, then at full length without it (the physics, simulation, sky and world generator tests also built with `GOAMD64=v3`), the tick's benchmarks as a smoke test, short fuzzes of the catalog decoder, the input log's reader, the sailor name check, the chat line check, the decoding of what a game client sends and of the other boats' views (Go's and the page's), the physics module built and its golden tests run in WebAssembly, client tests, the client build (which fails on a bundled package with a licence not in `tools/licences/allowed.txt`) and the size of its first download, the one command started from scratch, its database container included, and checked over HTTPS with a sailor made with a passkey and read back, its game connection, and a second player seeing the first's boat; and the image built on amd64 and arm64 (not pushed), checked to be for its runner's machine, to run as 65532 with no shell, `keel help` to run and the page to be in it, its size in the job's summary | `go run ./tools/dev -db` once, then `go test -race -short ./...` and `go test ./...`, `go run ./tools/physics` then `npm test` in `client/`, `go run ./tools/dev -smoke`, `docker buildx build .` |
 | `pr.lint.yaml` | Pull requests, not drafts, that change its files | gofmt, go vet, staticcheck, the store's queries compiled against the migrations and their generated code current (`sqlc compile`, `sqlc diff`), the look-alike table current, Biome and tsc (the client and `art/`) | `go run ./tools/dev -lint` |
 | `pr.render.yaml` | Pull requests, not drafts, that change its files: the page's tests and the scene's each when theirs did (`tools/e2e/filters_test.go`) | The browser tests that block a merge, none retried. The page's: keel, the account and the screen's words, on Chromium pages that draw nothing (`?draw=off`), three at a time and then those that change the shared world one at a time, against `keel` and a PostgreSQL service; and the net worker, the passkeys and the layout on WebKit. The scene's: the sea, the sky, the land and their pictures on the offline sandbox, on WebGL 2 (drawn on lavapipe, which a step checks first) in three jobs and WebGPU (on SwiftShader) in five. Each job's runner (its CPU and a fixed work's time), its tests' outcomes, its ten slowest and each file's time in its summary | `go run ./tools/physics`, then in `client/` `npx playwright test --project page-serial` and `--project webgl2` |
 | `render-nightly.yaml` | Every night at 04:17 UTC on `main`; by hand; pull requests labelled `render`, on each push while the label stays | What `pr.render` leaves: the `@long` and `@nightly` tests on both back ends and the page's, the sea's tests on a WebGPU device held to compatibility mode's limits, the slow-network tests through real TCP loss where the runner has netem, and the flake hunt: `pr.render`'s suite five times over (the page's, the scene's on WebGL 2, WebKit's), a test that passed in one run and failed in another named flaky in the summary. Not a required check; GitHub mails a failed night | the same, with `--grep '@long\|@nightly'` or `--repeat-each 5` |
@@ -3606,10 +3606,13 @@ go run ./cmd/keel admin -addr 127.0.0.1:9090 show 0199…
 of the shell's history), `show ID`, `stop ID -reason …`, `start ID`,
 `revoke ID -reason …`, `delete ID -name … -reason …`, `flag ID on|off`,
 `priority ID on|off`, `cap ID N`, `lifetime 90d`, `actions [ID]`,
-`settings`, `links on|off`, `boarding on|off`, `linklife 24h`; text, or
-`-json` as keel answers. Without `-yes`, `stop`, `revoke`, `delete`,
-`lifetime`, `links off` and `linklife` only say what they would do. The command's actions are recorded
-as `command` (the `Keel-Source` header).
+`settings`, `links on|off`, `boarding on|off`, `linklife 24h`, `chat
+on|off`, `shipmates on|off`, `countries BR,AU` (`""` clears them),
+`reports`, `report ID` and `act ID ACTION` (see [Reports](#reports)); text,
+or `-json` as keel answers. Without `-yes`, `stop`, `revoke`, `delete`,
+`lifetime`, `links off`, `linklife`, `chat off` and `act` only say what
+they would do. The command's actions are recorded as `command` (the
+`Keel-Source` header).
 
 ### Links to come aboard
 
@@ -3626,6 +3629,56 @@ Links off ends every live link for good; a shorter lifetime stops older
 links at once and ends nothing, but a longer one never lengthens a link
 past the expiry it was made with. The `sessions` job deletes links a day
 after they stop working; a deleted skipper's go with the account.
+
+**Chat's switches** sit beside them, on the same card and in the same
+`setting` row: chat on or off for everyone (off is asked once, "Chat off
+for everyone? Every line stops at once"), shipmates' messages on or off
+(a switch for later), and the countries where chat is off, two letters
+each as ISO 3166 has them (`BR, AU`; nothing for none). The settings'
+routes take `"chat"`, `"shipmateMessages"` and `"chatCountries"` too;
+each change is recorded, then every game connection is told how chat
+stands for it.
+
+### Reports
+
+**The Reports tab**, beside Accounts, is the queue of reports open
+(`GET /owner/api/reports.json`, read every 10 s while it shows): a
+child's safety first, marked plainly, then the players with the most
+reports open, then the oldest. Each row has the reason, who reported whom
+(a machine sailor marked), where, the reports open on that player, the
+lines it holds, an answer from the player waiting, and how long it has
+waited. A row opens **the report** (`GET /owner/api/report.json?id=`):
+who reported and who is reported (with a machine sailor's human), where,
+who was aboard and their bands, the note, whether it is still taking the
+next 10 minutes of the conversation, the lines it holds in time order
+(the one reported marked; the players' words shown as text, never
+markup), the owner's notes and the player's answer, a notice's details,
+and its outcome, hold and referral. The lines are shown here and nowhere
+else: a line of chat is only ever written down in a report. An account's
+card links the reports open on it and its machine sailors, by name.
+
+**The actions**, each `POST /owner/api/reports/act {"report", "action",
+…}`, first with `"check": true`, whose words the confirmation shows, and
+then done; the queue is read again after:
+
+| Action | What it does |
+|---|---|
+| `dismiss` | Closes the report; nobody is told |
+| `warn` (`"note"`: what was seen) | A statement of reasons at the player's next entry; every report open on them closes |
+| `mute-chat` (`"days"`: 1, 7 or 30) | The player's chat muted, and they are told why |
+| `stop`, `delete` (`"reason"`, required) | As on the account's card, on the account reported; the page asks the reported name typed again to delete |
+| `remove-line` (`"line"`, `"at"` as `report.json` gives them) | The line goes from the game's memory and every report holding it; its sender is told why |
+| `purge` | Every line the report holds goes, from every report holding it |
+| `hold`, `release` | Kept a year at least, past its accounts' deletion; or kept as any other |
+| `under-13` | The human deleted as under 13 |
+| `referred` (`"referred"`: to whom, and its reference) | Recorded as referred |
+
+A machine sailor's words are its human's to answer for: a warning or a
+mute reaches the human. `keel admin reports` lists the queue, `keel admin
+report ID` writes a report whole with its lines (each with the `-line`
+and `-at` to remove it), and `keel admin act ID ACTION [-days N] [-reason
+…] [-note …] [-line N -at T] [-referred …] [-yes]` acts, telling first
+without `-yes`.
 
 ### The free camera
 
@@ -5000,8 +5053,9 @@ A machine sailor's agent sails through twelve tools at the MCP address
 (`internal/agentapi/tools.go`, the whole `tools/list` answer held to
 `testdata/tools.golden.json`): `observe`, `steer`, `trim`, `chart`,
 `pencil`, `forecast`, `news`, `say`, `race`, `boat`, `bottle`, `handbook`.
-`say`, `race`, `pencil` and `bottle` answer "not yet": the list never changes
-as the game grows, since apps cache it. A change to a description or a
+`race`, `pencil` and `bottle` answer "not yet", as do `say`'s `hail` and
+`spectators`: the list never changes as the game grows, since apps cache
+it. A change to a description or a
 schema is a deliberate change: run `go test ./internal/agentapi -run
 ToolsList -update` and name it in the release notes.
 
@@ -5531,7 +5585,7 @@ looked up (`Config.Link`, `Config.Knocker`, at most 2 s, on the reader),
 then refused or shown to the skipper as a `KnockCard`, with the knocker
 told how it stands (`Knocking`). Refusals: the link ended, expired or links
 off (`ended`); the own link; the boat not in the water, a machine sailor's
-(no machine sailor's boat takes anyone, and machine sailors never knock),
+(no person's knock: see [Machine sailors together](#machine-sailors-together)),
 boarding off, the boat closed to knocks, someone put ashore from it this
 voyage, or a refusal of the `Refuser`, all `closed`; no room (capacity
 counts the skipper), or the crews across the world at `KEEL_CREW_LIMIT`
@@ -5615,6 +5669,314 @@ go run ./tools/loadbot -n 40 -crews 5 -for 5m -url https://macbook.local
 sails 40 players in groups of five: each group's first makes a link, the
 others knock with it and are let aboard, and the skipper hands the controls
 round and takes them back, reporting the knocks, arrivals and hand-overs.
+
+### Chat aboard
+
+Everyone aboard one boat can chat: text, one line of at most 200
+characters, never markup, links or images. **Nothing anyone says is
+stored**: a line lives in keel's memory for half an hour, for reports, and
+is gone after that or at a restart. The one exception is a report, which
+copies what the memory still holds.
+
+**The rule** (`aboard.Rules.Delivered`, `internal/aboard/chat.go`), asked
+for every line and every receiver: chat on for everyone and in both their
+countries (the owner's switches; the country is Cloudflare's
+`Cf-Ipcountry` header); both players' own chat on (`account.chat`, NULL for
+the band's default: on for an adult, off for 13 to 17 until they turn it
+on, nobody else); the sender not muted from chat by the owner, rested by
+reports or resting after refusals, and the Rules of the sea accepted;
+neither blocking the other, nor the receiver muting the sender; and the
+two aboard the same boat (later, shipmates too, with their own switch). A
+machine sailor's line reaches no human but its owner and the boat's
+skipper's human, and an owner watching their own machine sailor reads its
+boat's chat and says nothing (`Together.Owns`), but only while everyone
+aboard is a machine sailor: with a person aboard, a boat's chat is its
+company's alone, and no spectator reads a word of it
+(`aboard.SpectatorReads`, the one place that decides it). Mutes and blocks are held
+in memory (`aboard.Ties`, loaded as keel starts, changed after the
+database), which is also the knocks' `Refuser`: a block refuses knocks both
+ways, a human's watch (`watch.Boat.Blocked`, and the watch list leaves the
+human out), never anyone's watch of a machine sailor, and a skipper's block
+puts the person ashore.
+
+**The filter** (`moderation.CheckChat`, `internal/moderation/chat.go`,
+`contact.go`, `fold.go`): the line cleaned (NFKC; controls, bidirectional
+and invisible characters out; one line), then matched on folded forms (the
+look-alike skeleton, digits and symbols read as letters, repeats and
+spaced-out letters joined). A link or bare domain (`mvdan.cc/xurls`, and
+"x dot com" spelled out, against `lists/tlds.txt`), an email, seven digits
+or more however spaced or spelled, a handle (`@name`, `#name`, `name#1234`)
+or another app's name with a contact cue (`lists/apps.txt`) is refused as a
+contact: its sender is told "Links and contact details can't be sent
+aboard". A listed word is refused silently: the line comes back to its
+sender as said and reaches nobody. `lists/innocent-chat.txt` holds sailors'
+talk that must pass ("the poop deck", "seamen"). Phone numbers' examples
+from `nyaruka/phonenumbers` for every region are tested to be refused; the
+module is a test's only, not linked into keel. The first call builds the
+matchers (about 10 ms).
+
+**The hub** (`internal/chat`, one each world, `cmd/keel/world.go`): each
+door joins its speakers (the game connection a person, the agents' door a
+machine sailor) and registers an `Out`; `Hub.Say` finds the sender's boat
+in the latest frame (nobody else aboard: "nobody"), takes the line from
+the sender's budget (`Limiter`: a line every 2 s, bursts of 5, 30 a
+minute; 5 refusals in 10 minutes rest the sender's chat for 10), asks the
+filter, keeps it in the rings and hands it to every door with the accounts
+the rule lets it reach. **The rings** (`Rings`): each boat's lines for 30
+minutes, 200 a boat, one sender's 200 lines or 64 KiB across every boat
+(their own oldest go first), 64 MiB in all (the oldest anywhere go first),
+each line counted at its allocation (`Cost`). A boat's lines outlive its
+voyage by the same half hour.
+
+**On the wire**: `Command.say{text, id}`; `Command.mute`, `block` and
+`report`, each naming someone by `Who` (a seat aboard, or a line the
+connection was sent, which the edge checks and the hub still holds: no
+account ID reaches the client); `Chat` (a line, or its echo to the sender,
+refused or said), `ChatState` (on, off, own off, resting, the Rules to
+accept: sent with each `Crew` and as it changes), `Tied`, `Reported`;
+`Person.muted` and `blocked`. Nothing of a line's text is logged or
+counted: `TestChatAboard` greps the edge's log and metrics for it.
+
+**Reports** (`internal/review`): a report from a line or a name copies the
+boat's lines the rings hold (the line it was made from marked), who is
+aboard and their bands, then follows the boat's chat for 10 minutes more
+(`Rings.Follow`; a restart ends the following). Reports from three players
+in a day, or one that a child may be at risk, rest the reported human's
+chat and knocks until the owner acts (`account.rested_at`, a `rest` in the
+record). The owner's page and `keel admin` act on them (see "Reports").
+The tables: `mute`, `block`, `report` (no foreign key: a held report
+outlives a deletion; a trigger deletes those not held with the reported
+account, and blanks a deleted reporter's name), `report_line` (the only
+place a line is ever written), `report_note`, `notice_report`,
+`statement`. The `sessions` job deletes reports closed six months ago and
+not held. `POST /api/notice` takes a notice from anyone (5 an hour an
+address) into the same queue; `/report` is its page.
+
+**Metrics**: `keel_chat_lines_total{result}`,
+`keel_chat_deliveries_total`, `keel_chat_ring_lines`,
+`keel_chat_ring_bytes`, `keel_chat_dropped_total{why}`,
+`keel_chat_say_seconds`, `keel_reports_total{reason}`,
+`keel_reports_open{which}`, `keel_reports_oldest_seconds`; the Game
+dashboard's "Sailing together and chat" row. **Alerts**: `ChildAtRisk`
+(critical, while a report that a child may be at risk waits) and
+`ReportsWaiting` (the oldest open a day). Alertmanager sends nothing until
+it has a receiver (see "Monitoring").
+
+**Testing it**: `internal/aboard/chat_test.go` (the rule for every pair of
+bands and switches, blocks, mutes, machines); `internal/chat` (the rings'
+limits, the flood at full rate, the limiter); `internal/moderation`'s
+evasions, innocent lines and `FuzzCheckChat`; `internal/store/chat_test.go`
+(ties, reports, rests, statements, removal and purge from every copy,
+holds through a deletion and the sweep, and no line's text in any column
+but `report_line`); `internal/edge/edgetest/chat_test.go` (a line heard by
+those aboard alone, refusals both ways, a teen opting in, the owner's
+switch, a mute, a report's lines before and after, a skipper's block). The
+load bot chats:
+
+```sh
+go run ./tools/loadbot -n 40 -crews 5 -chat 2 -for 5m -url https://macbook.local
+```
+
+each person aboard says two lines a minute, and the report counts the
+lines said, echoed, refused and heard.
+
+### Chat aboard, on the page
+
+**The strip** (`client/src/ui/chat.tsx`, loaded with sailing together's
+parts, outside the first download) stands under the case with the other
+parts of sailing together, while anyone else is aboard the boat sailed or
+aboard, and for an owner watching their own machine sailor aboard a boat
+with company, who reads and has no field. Folded it is one row the keys'
+height, the newest line; open, the last lines, a note of what came of the
+player's last act, and the field (200 characters, one line) with Send.
+Open, it fits itself above whatever stands below it (the helm, the
+autopilot's head, the plate at the foot, the watch's bar) and above the
+keyboard, which it reads from `visualViewport`; held sideways its fold key
+stands at the field's end. It is never over the case; open, it may stand
+over the boat, which the player chose. Above the controls, where it was
+first meant to go, there is no room upright on a small phone: the
+autopilot's head fills the space between the hull and the helm.
+
+**The lines** (`ChatLog`, `client/src/ui/chatlog.ts`) are kept in the
+page's memory, the newest 50, and forgotten when the boat in view changes;
+nothing of chat goes in the browser's storage. An own line shows at once,
+waiting, and is matched to its echo by the `Say`'s id: said (or refused for
+a listed word, which looks the same to its sender), or refused, taken back
+with why in plain words and its text put back in the field; with no echo in
+10 s it is lost. A mute or a block hides the person's lines at once, by
+name, before the server's `Tied` confirms it; `Person.muted` and `blocked`
+keep it as the server has it. `ChatState` says chat is resting (the
+owner's switch), off (the player's own: a key turns it on, the age
+question first if unanswered, and for a player of 13 to 17 the card,
+`client/src/account/chatcard.tsx`), resting for the player, or that the
+Rules of the sea come before a first line (the card from sailing together,
+the line held until accepted). Every word is in `client/src/ui/chatwords.ts`.
+
+**Mute, block and report**: a long press on another's line (a right-click,
+or the menu key, on a computer) opens a sheet. Each row of who is aboard
+shows only the controls' keys (Hand over the controls; Take back and Give
+them back on one's own row); Put ashore, Mute, Block and Report are behind
+its ⋯ key, opened under the row (`splitActions` in `client/src/ui/deck.tsx`),
+and the row says "muted" or "blocked". Block asks once; the
+report's form offers the reasons, a child at risk first, and a note for the
+owner alone; `Reported` answers "Thanks: the owner will look". The account
+page has the switch "Chat with other players" and the list of mutes and
+blocks (`client/src/account/chataccount.tsx`). A statement of reasons from
+the owner, unread, waits under the case as the player comes to sea
+(`client/src/ui/statements.tsx`), with its one answer.
+
+**The pages**: the Rules of the sea (`rules.html`) carry chat's rules,
+staying safe (`safety.html`) muting, blocking and reporting, and
+`privacy.html` what chat keeps and for how long. The notice page,
+`report.html`, also at `/report` (`internal/api/client.go`), is for anyone,
+signed in or not: its form posts to `/api/notice`. The owner's contact
+address is a marked placeholder on the safety and privacy pages.
+
+`?sandbox&test` and `keel.deckScene(name)` show each part: `chat` (folded),
+`chat-open`, `chat-crew`, `chat-keyboard` (the keyboard over the foot of the
+screen), `chat-refused`, `chat-word`, `chat-list`, `chat-sheet`,
+`chat-block`, `chat-report`, `chat-teen`, `chat-rules`, `chat-resting`,
+`chat-off`, `chat-own-off`, `chat-owner` and `chat-statement`.
+`e2e/layout.spec.ts` holds them on every screen, and `e2e/aboard.spec.ts`
+says lines between two browsers: one received, a link refused, a word seen
+as said by its sender alone, and a mute.
+
+### Machine sailors together
+
+A machine sailor's agent chats aboard as a person does, and its owner may
+come aboard its boat as crew. People and machine sailors never mix
+aboard, but for one owner with their own machine sailors
+(`aboard.MayJoin`, asked by the owner's coming aboard and by every
+machine sailor's knock): a boat's company is people only, machine sailors
+only (of any owners), or one owner with only their own machine sailors.
+So no machine sailor comes aboard a person's boat; an owner comes aboard a
+machine sailor's boat only while every machine sailor aboard is theirs;
+and with an owner aboard, another owner's machine sailor is refused as
+not taking crew, and its knock never shown. With a person aboard, nobody
+who is not aboard reads the chat (`aboard.SpectatorReads`).
+
+**Chat for agents** (`internal/agentapi/chat.go`). Each world's `Sea`
+carries its chat hub and a `Talker`, the store's: a machine sailor's
+speaker has its human's band, chat switch, Rules of the sea and the
+owner's mute, so its owner's choices hold for it. A helm at sea joins the
+hub as its machine sailor's speaker (`hub.Join`, the store asked once a
+world, again a minute after a failure) and leaves it when the helm is
+stopped or forgotten. The core registers an `Out` with each world's hub as
+it opens: a line that may reach a machine sailor becomes an event in its
+helm's ring, its sender's name and its words as player text, with
+"human" or "machine", "your owner" and "skipper" in the game's words, and
+wakes a wait on `chat` (on by default). The event's tick is the frame's,
+or the last report's seq and one, so the next report always tells it.
+`say` with `to` aboard (the default) says the line through `hub.Say`,
+under chat's filter and limits, after the looks' budget: "Said aboard."
+for a line said or refused for a listed word, "Nobody is aboard to hear
+you." with nobody else aboard, and the filter's, the limits' or the
+owner's switches' refusals in plain words, each a refusal `chat`.
+`hail` and `spectators` answer "not yet". Nothing of a line's text is
+logged or counted. The report's Aboard line names everyone aboard,
+human or machine, the skipper and the seats, and who holds the controls,
+whenever anyone else is aboard; the handbook's page `aboard` says all
+this to the agent.
+
+**The owner aboard** (`internal/edge/machines.go`). `Command.come_aboard`,
+from a connection watching its account's own machine sailor, brings it
+aboard that boat as crew without knocking, as a knock let aboard does
+(`bus.Board`): told how it stands in `Knocking`, refused as "closed" for a
+machine sailor of another's, "not at sea" for one aboard another's boat,
+"full" for no room (a Jolly boat carries its skipper alone), and
+boarding off, the crews' limit, and the age question and the Rules of the
+sea as a knock is. The watch plate shows "Come aboard" while the player
+watches their own machine sailor (`client/src/ui/machinewords.ts`).
+Aboard, the owner chats with the agent: chat's rule lets a machine
+sailor's line reach its own human and the boat's skipper's.
+
+**Aboard each other's boats.** A machine sailor's owner makes its link
+(`POST /api/sail/link {"machine"}`, the machine sailor by its ID or its
+name; `GET /api/sail/link?machine=`, `POST /api/sail/link/end
+{"machine"}`; the store's `MakeMachineSailLink`, its owner's alone),
+under links' rules and lifetime: from its row on the start screen
+(`client/src/account/machineshare.tsx`) or, watching it, the menu's "Sail
+with me for ‹machine›" (`client/src/ui/machinelink.tsx`). An agent never
+makes a link. `GET /api/sail/{token}` for a machine sailor's link says
+`machine`, `can` "closed" for the player (or "own" for its owner), and
+`send`: each of the player's machine sailors and whether it may be sent
+(`Deck.MachineCan`: "ok", "away" for one not in the water, "aboard",
+"full", "closed", "not-at-sea"). The link's page offers "Send ‹machine›
+aboard" for each: the page watches that machine sailor, and once the
+watch begins knocks with `Knock{token, machine}` on the game connection;
+the token never passes through an agent.
+
+The edge's `machineKnock` (`internal/edge/machines.go`) asks a person's
+knock's rules, and more: the link a machine sailor's, the one sent the
+knocker's own and in the water, nothing between the two machine sailors
+nor their owners (the `Refuser`), the owner answering the age question
+and the Rules for it. The knock's `approver` is the skipper machine
+sailor's owner, `LinkFound.Owner`: its `KnockCard` (with `machine`,
+`owner`, the arriving machine sailor's owner's sailor name, and
+`skipper`, which of theirs it knocks on) goes to their connection
+wherever it is, sailing, watching or idle, and again at each Welcome;
+with none open, nobody can let it aboard, and it lapses in 2 minutes. The
+agent of the skipper machine sailor has no say. Let aboard, the edge asks
+`Config.Machines.Board` (the agents' `Core.Board`): the helm sends
+`bus.Board` with its own connection, and the simulation takes the
+machine sailor's own boat out of the water in the same tick (a `Leave`
+with the result `Gone`, which the agents' recorder does not take for a
+boat leaving). A person's knock on a machine sailor's boat is refused
+"closed", and so is a machine sailor sent to a person's boat; refusals say
+`KNOCK_STATE_AWAY` for a machine sailor not in the water.
+
+**Crew.** A helm aboard another's boat (`helm.aboard`) has that boat's
+slot and boat; `locate` finds it in the frame's `Crew` first, and a Join
+answered `Crewed` keeps it aboard (after keel restarts, too). The report
+is of the boat aboard; its Aboard line names the skipper (by the chat
+hub's name) and the seats, and says when the agent does not hold the
+controls. `steer` and `trim` are refused "You don't hold the controls"
+(refusal `controls`) unless the frame's `Holder` is the machine sailor,
+or zero on its own boat; orders are written with the frame's `Gen`, which
+moves on at each change of hands, so a former holder's word is dropped.
+`boat` gained the actions `hand` (with `sailor`, a name aboard) and
+`ashore`; `take` with no `boat`, in company, takes the controls offered,
+or as the skipper takes them back at once. They reach the edge through
+`Sea.Deck` (the edge's `Hand`, `Take`, `PutAshore`), which keeps the
+offer, its 15 s and who was put ashore; an offer to a machine sailor is
+told to its agent (`Machines.Handed`, an event that always wakes). The
+hub tells each helm, from the frame's `Deck` count, who came aboard or
+went ashore and who holds the controls (waking `boat`), a machine crew
+its boat's capsizes and groundings, and every `Ashore` event as its own
+words. `ashore` takes a crew member ashore, its own boat in the water at
+the nearest port; a skipper's puts someone ashore for the voyage, never
+its owner. A crew helm silent for its silence goes ashore the same way,
+then its boat's grace begins; a stopped one goes ashore and its boat
+leaves the water.
+
+**The owners.** Watching their machine sailor as skipper, its owner puts
+anyone aboard ashore (`Command.ashore{who}`, the menu's "Who's aboard")
+and closes it to knocks (`Command.close_knocks`), and ends its link over
+HTTP. The crew machine sailor's owner calls it ashore from its row
+(`POST /api/sail/ashore {"machine"}`, 409 `ashore` when it is aboard no
+boat; `/api/machines` marks it `aboard`). An owner's watch of their own
+machine sailor follows it (`encoder.follow`): aboard another's boat, its
+eye is that boat, registered there in `mineWatch`, so the owner reads
+that boat's chat read-only and is told the names aboard; ashore, back to
+its own boat. Another spectator sees the crew on deck, unnamed, and no
+chat; their watch of a machine sailor that goes aboard another's boat
+ends as its boat leaves the water.
+
+**Testing it**: `internal/agentapi/chat_test.go` (a line with nobody
+aboard; the owner aboard, their line waking the agent, wrapped, and the
+agent's reaching them; a link refused) and `aboard_test.go` (two agents
+hand the controls, only the holder's orders act, the skipper takes them
+back at once, a crew member goes ashore; a silent crew goes ashore after
+its silence, its boat leaving at the end of its grace) on the sea
+harness, whose boat carries five there, with a stand-in `Deck`;
+`internal/edge/edgetest/machines_test.go` (the owner comes aboard,
+another player may not, a Jolly boat has no room; a machine sailor sent
+aboard, never to a person's boat nor a person to a machine sailor's, let
+aboard by the skipper's owner, its owner's watch following it and reading
+the chat, another spectator reading none, put ashore from watching and
+knocking in vain after; a knock lapsing with the owner away), with
+stand-in helms (`Config.Machines`) and chat (`Config.Chat`);
+`internal/store`'s `TestMachineSailLinks`.
 
 ## The local cluster
 

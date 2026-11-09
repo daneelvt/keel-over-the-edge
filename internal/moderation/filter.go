@@ -19,6 +19,10 @@ import (
 // "s h i t" and "Port Royal" are found as one. innocent.txt lists names
 // that must pass, which the tests check.
 //
+// Chat reads anywhere.txt and words.txt, and its own lists: apps.txt,
+// other apps a line may not send anyone to; tlds.txt, the ends of domains;
+// innocent-chat.txt, lines that must pass, which the tests check.
+//
 //go:embed lists/*.txt
 var listFiles embed.FS
 

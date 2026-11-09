@@ -1,0 +1,75 @@
+<!doctype html>
+<!-- SPDX-License-Identifier: AGPL-3.0-only -->
+<html lang="en-GB">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#1a242c" />
+    <link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png" />
+    <title>Tell the owner · Keel Over the Edge</title>
+    <link rel="stylesheet" href="/src/pages/pages.css" />
+  </head>
+  <body class="words-body">
+    <main class="words">
+      <p class="words-game"><a href="/">Keel Over the Edge</a></p>
+      <h1>Tell the owner</h1>
+      <p>
+        Tell the game’s owner about something that happened in the game: anyone can, with a sailor
+        or without one. The owner reads every notice, and may write back.
+      </p>
+      <p class="words-help">
+        If anyone is in danger now, call your local emergency number first. More help is on
+        <a href="/safety.html">Staying safe</a>.
+      </p>
+
+      <form id="notice" class="words-form" novalidate>
+        <label>
+          <span>Who you are</span>
+          <span class="words-faint">A parent, a teacher, a player: whatever helps.</span>
+          <input name="who" type="text" maxlength="200" autocomplete="name" required />
+        </label>
+        <label>
+          <span>How to reach you</span>
+          <span class="words-faint">An email address or a phone number. Only the owner sees it.</span>
+          <input name="contact" type="text" maxlength="200" autocomplete="email" required />
+        </label>
+        <label>
+          <span>The sailor’s name, if you know it</span>
+          <input name="sailor" type="text" maxlength="80" autocomplete="off" />
+        </label>
+        <label>
+          <span>Where and when</span>
+          <span class="words-faint">Aboard whose boat, on what day, at about what time.</span>
+          <input name="happened" type="text" maxlength="200" autocomplete="off" />
+        </label>
+        <label>
+          <span>What is wrong</span>
+          <select name="reason" required>
+            <option value="">Choose one</option>
+            <option value="child">A child may be at risk</option>
+            <option value="sexual">Sexual content</option>
+            <option value="bullying">Bullying or harassment</option>
+            <option value="hate">Hate</option>
+            <option value="threats">Threats or self-harm</option>
+            <option value="scam">Scams or spam</option>
+            <option value="cheating">Cheating</option>
+            <option value="other">Something else</option>
+          </select>
+        </label>
+        <label>
+          <span>What happened</span>
+          <textarea name="what" rows="6" maxlength="2000" required></textarea>
+        </label>
+        <p id="notice-problem" class="words-problem" aria-live="polite"></p>
+        <button type="submit" class="words-go">Send to the owner</button>
+      </form>
+      <p id="notice-sent" class="words-sent" role="status" tabindex="-1" hidden></p>
+
+      <p class="words-foot">
+        <a href="/safety.html">Staying safe</a> · <a href="/rules.html">The Rules of the sea</a> ·
+        <a href="/privacy.html">Chat and your privacy</a>
+      </p>
+    </main>
+    <script type="module" src="/src/pages/report.ts"></script>
+  </body>
+</html>

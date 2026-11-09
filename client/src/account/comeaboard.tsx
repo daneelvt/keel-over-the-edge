@@ -16,6 +16,7 @@ import { useEffect, useState } from 'preact/hooks';
 import { sailFullScreen } from '../boot/fullscreen';
 import { boatNamed } from '../catalog/boatlooks';
 import { type Looks, lookOf } from '../catalog/looks';
+import { cantSendText, MACHINE_TAKES_NO_ONE, sendAboardText } from '../ui/machinewords';
 import {
   ASK_ABOARD,
   askAboardText,
@@ -137,6 +138,18 @@ export function ComeAboard({
     }
   };
 
+  // Send a machine sailor of the player's aboard: the page watches it go,
+  // and knocks for it; the player's own boat stays ashore.
+  const send = (machine: string) => {
+    if (going) {
+      return;
+    }
+    setGoing(true);
+    sailFullScreen();
+    forgetLink();
+    done({ ...me, watch: machine, knock: token, knockMachine: machine });
+  };
+
   if (view.kind === 'asks') {
     return (
       <div class="start">
@@ -159,7 +172,10 @@ export function ComeAboard({
         ? LINK_ENDED
         : read.kind === 'failed'
           ? LINK_UNREAD
-          : cantKnockText(read.link.can, read.link.skipper);
+          : read.link.machine === true && read.link.can !== 'own'
+            ? MACHINE_TAKES_NO_ONE
+            : cantKnockText(read.link.can, read.link.skipper);
+  const sendable = link?.machine === true && link.can !== 'own' ? (link.send ?? []) : [];
   const look = link === null || looks === undefined ? null : lookOf(looks, link.look);
   return (
     <div class="start">
@@ -212,6 +228,27 @@ export function ComeAboard({
             {why}
           </p>
         )}
+        {link === null
+          ? null
+          : sendable.map((m) => {
+              const cant = cantSendText(m.can, m.name, link.skipper);
+              return cant === '' ? (
+                <button
+                  key={m.name}
+                  type="button"
+                  class="start-go your-sailor-go"
+                  disabled={going}
+                  data-send={m.name}
+                  onClick={() => send(m.name)}
+                >
+                  {sendAboardText(m.name)}
+                </button>
+              ) : (
+                <p key={m.name} class="start-text start-faint" data-send={m.name}>
+                  {cant}
+                </p>
+              );
+            })}
         <button
           type="button"
           class="start-sign-in"

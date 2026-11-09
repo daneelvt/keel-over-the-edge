@@ -6,8 +6,9 @@
 // asked to come aboard in the same flow; the skipper's card and Let
 // aboard; the friend's boat out of the water and the friend on deck,
 // steering nothing; the controls handed over, taken, given back, handed
-// again and taken back at once; and Go ashore, the friend's own boat in the
-// water again.
+// again and taken back at once; chat aboard: a line said and received, a
+// link refused, a line refused for a word seen as said by its sender alone,
+// and a mute; and Go ashore, the friend's own boat in the water again.
 
 import { type Browser, expect, type Page, test } from '@playwright/test';
 import data from '../src/catalog/catalog.gen.json' with { type: 'json' };
@@ -17,6 +18,25 @@ type Deck = ReturnType<typeof globalThis.keel.deck>;
 
 function deck(page: Page): Promise<Deck> {
   return page.evaluate(() => globalThis.keel.deck());
+}
+
+/** Says a line aboard from the chat strip, opening it first. */
+async function say(page: Page, text: string): Promise<void> {
+  const folded = page.locator('.chat-strip .chat-folded');
+  if (await folded.isVisible()) {
+    await folded.click();
+  }
+  await page.getByRole('textbox', { name: 'Your line' }).fill(text);
+  await page.getByRole('button', { name: 'Send', exact: true }).click();
+}
+
+/** The strip's lines as the page shows them, opening it first. */
+async function lines(page: Page): Promise<string> {
+  const folded = page.locator('.chat-strip .chat-folded');
+  if (await folded.isVisible()) {
+    await folded.click();
+  }
+  return ((await page.locator('.chat-lines').textContent()) ?? '').replace(/\s+/g, ' ');
 }
 
 /** A friend's page in a browser of its own, its prompt answered by Playwright, holding no passkey. */
@@ -93,6 +113,72 @@ test('a link opened by a friend who has never played: a sailor made, let aboard,
     .poll(async () => (await deck(page)).crew?.people.length, { timeout: 30_000 })
     .toBe(2);
   await expect.poll(async () => (await deck(bob)).crew?.people.length, { timeout: 30_000 }).toBe(2);
+
+  // Chat aboard: a line said and received.
+  await expect(bob.locator('.chat-strip')).toBeVisible({ timeout: 30_000 });
+  await expect(page.locator('.chat-strip')).toBeVisible({ timeout: 30_000 });
+  await say(bob, 'Fair winds, skipper');
+  await expect(page.locator('.chat-strip')).toContainText('Fair winds, skipper', {
+    timeout: 30_000,
+  });
+  await expect(bob.locator('.chat-line.mine:not(.pending)')).toContainText('Fair winds, skipper');
+  // A link: refused, its sender told, its words back in the field.
+  await say(bob, 'Find me at example.com/sue');
+  await expect(bob.locator('.chat-note')).toHaveText(
+    'Links and contact details can’t be sent aboard',
+    { timeout: 30_000 },
+  );
+  await expect(bob.getByRole('textbox', { name: 'Your line' })).toHaveValue(
+    'Find me at example.com/sue',
+  );
+  // An email and a phone number: refused the same way, and never heard.
+  for (const contact of ['write to sue at gmail dot com', 'ring me on 021 555 0192']) {
+    await bob.getByRole('textbox', { name: 'Your line' }).fill('');
+    await bob.waitForTimeout(2_100);
+    await say(bob, contact);
+    await expect(bob.getByRole('textbox', { name: 'Your line' })).toHaveValue(contact, {
+      timeout: 30_000,
+    });
+    await expect(bob.locator('.chat-note')).toHaveText(
+      'Links and contact details can’t be sent aboard',
+    );
+  }
+  await bob.getByRole('textbox', { name: 'Your line' }).fill('');
+  // A line refused for a word: seen as said by its sender alone.
+  await bob.waitForTimeout(2_100);
+  await say(bob, 'Shit happens');
+  await expect(bob.locator('.chat-line.mine:not(.pending)').last()).toContainText('Shit happens', {
+    timeout: 30_000,
+  });
+  await bob.waitForTimeout(2_100);
+  await say(bob, 'Steady as she goes');
+  await expect(page.locator('.chat-strip')).toContainText('Steady as she goes', {
+    timeout: 30_000,
+  });
+  const heard = await lines(page);
+  expect(heard).toContain('Fair winds, skipper');
+  expect(heard).not.toContain('example.com');
+  expect(heard).not.toContain('gmail');
+  expect(heard).not.toContain('0192');
+  expect(heard).not.toContain('Shit happens');
+  // A mute from a line: the muted sender's lines hidden at once, and their
+  // next line never reaches the skipper.
+  await page.locator('.chat-line', { hasText: 'Steady as she goes' }).click({ button: 'right' });
+  await page.getByRole('button', { name: 'Mute', exact: true }).click();
+  await expect(page.locator('.chat-note')).toContainText(`${name} is muted`, { timeout: 30_000 });
+  expect(await lines(page)).not.toContain('Steady as she goes');
+  await bob.waitForTimeout(2_100);
+  await say(bob, 'Can you hear me?');
+  await expect(bob.locator('.chat-line.mine:not(.pending)').last()).toContainText(
+    'Can you hear me?',
+    { timeout: 30_000 },
+  );
+  await page.waitForTimeout(2_000);
+  expect(await lines(page)).not.toContain('Can you hear me?');
+  // Folded again, both.
+  for (const p of [page, bob]) {
+    await p.getByRole('button', { name: 'Fold the chat' }).first().click();
+  }
 
   // Handed: nothing moves until the friend takes them.
   await page.getByRole('button', { name: 'Crew' }).first().click();

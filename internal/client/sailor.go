@@ -149,8 +149,8 @@ type Sailor struct {
 	// OnView, if not nil, is given each snapshot as it is decoded, with the
 	// view after it, what its entries did and the slots it samples.
 	OnView func(ev *Event)
-	// OnDeck, if not nil, is given each message of sailing together, and
-	// each Welcome, as they come.
+	// OnDeck, if not nil, is given each message of sailing together and
+	// of chat aboard, and each Welcome, as they come.
 	OnDeck func(m *pb.ServerMessage)
 	// Tools is the account's owner's flag, as the Welcome and Tools last
 	// said.

@@ -1,0 +1,99 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# Other apps, where a player could be asked to go: a chat line naming one
+# with a contact cue ("add me on", "my snap is", "on discord") is refused.
+# Each entry is a name, lowercase letters and digits as the chat filter folds
+# them ("snap chat" and "snapchat" are both found as snapchat), then how
+# much it takes to refuse it:
+#
+#	any    a name that is no ordinary word: any cue, even "on" before it
+#	       ("on snap"), or "got" or "have" with the name last ("got
+#	       insta?")
+#	named  a short form, a word that is also a name, or somewhere that is
+#	       no way to someone by itself ("I watched it on youtube"): a cue
+#	       that names it as a contact ("add me on steam", "my steam id",
+#	       "sc me", "my youtube channel")
+#	on     an ordinary word at sea: only a message verb and "on" or "via"
+#	       ("add me on line", "message me on signal"), or "my line id"
+#	mail   a mail service: as named, and "at" or "@" before it
+#
+# A word sailors use for something else stays out, or is only "on": "the
+# line squall", "fog signal", "full steam ahead" and "my snap shackle" pass.
+amino any
+bereal any
+discord any
+facebook any
+facetime any
+fb any
+fortnite any
+groupme any
+houseparty any
+imessage any
+insta any
+instagram any
+kakao any
+kakaotalk any
+kik any
+messenger any
+minecraft any
+omegle any
+ometv any
+onlyfans any
+playstation any
+psn any
+roblox any
+skype any
+snap any
+snapchat any
+telegram any
+threema any
+tiktok any
+tumblr any
+twitch any
+twitter any
+viber any
+vrchat any
+wechat any
+weixin any
+whatsapp any
+wickr any
+xbox any
+yubo any
+bluesky named
+linkedin named
+pinterest named
+reddit named
+dc named
+email named
+ig named
+nintendo named
+sc named
+steam named
+tg named
+ttv named
+twt named
+vk named
+wa named
+youtube named
+yt named
+aol mail
+gmail mail
+gmx mail
+googlemail mail
+hotmail mail
+icloud mail
+outlook mail
+proton mail
+protonmail mail
+yahoo mail
+yandex mail
+ymail mail
+epic on
+line on
+matrix on
+session on
+signal on
+slack on
+teams on
+threads on
+x on
+zoom on

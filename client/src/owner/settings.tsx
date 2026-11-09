@@ -2,14 +2,17 @@
 
 // Links to come aboard on the world page's Accounts tab: how long a
 // skipper's link lasts, set in minutes, hours or days, and links and
-// boarding switched on or off for everyone. Each change is first checked,
-// then confirmed in the card with what it would do and how many live links
-// it ends, so that no stray click cuts every crew off.
+// boarding switched on or off for everyone; and chat's switches beside
+// them: chat and shipmates' messages on or off for everyone, and the
+// countries where chat is off. Each change is first checked, then
+// confirmed in the card with what it would do and how many live links it
+// ends, so that no stray click cuts every crew off or silences everyone.
 
 import { useEffect, useState } from 'preact/hooks';
 import { control, getJSON, type SailSettings, type SettingsAnswer } from './api';
 import type { Act } from './lifecycle';
 import { plural } from './machines';
+import { countriesOf, countriesWords } from './reportwords';
 
 /** The link lifetime's bounds, s, as keel holds them. */
 export const MIN_LINK_LIFETIME = 300;
@@ -60,6 +63,16 @@ export function lifetimeAllowed(seconds: number): boolean {
   return seconds >= MIN_LINK_LIFETIME && seconds <= MAX_LINK_LIFETIME;
 }
 
+/** Whether a change reaches links, so that the links it ends are told. */
+export function touchesLinks(body: Partial<SailSettings>): boolean {
+  return body.linkLifetime !== undefined || body.links !== undefined;
+}
+
+/** The question a change asks before keel's words, or "": chat off asks plainly. */
+export function changeQuestion(body: Partial<SailSettings>): string {
+  return body.chat === false ? 'Chat off for everyone? Every line stops at once.' : '';
+}
+
 /** A change asked for, and what its check answered. */
 interface Asked {
   body: Partial<SailSettings>;
@@ -76,6 +89,7 @@ export function SailWithSettings({ act }: { act: Act }) {
   const [settings, setSettings] = useState<SailSettings | null>(null);
   const [amount, setAmount] = useState('');
   const [unit, setUnit] = useState<Unit>('hours');
+  const [countries, setCountries] = useState('');
   const [asked, setAsked] = useState<Asked | null>(null);
   const [checking, setChecking] = useState(false);
   const [sending, setSending] = useState(false);
@@ -99,6 +113,7 @@ export function SailWithSettings({ act }: { act: Act }) {
 
   const seconds = lifetimeOf(amount, unit);
   const outOfBounds = seconds !== 0 && !lifetimeAllowed(seconds);
+  const typedCountries = countriesOf(countries);
 
   const check = (body: Partial<SailSettings>, what: string): void => {
     setChecking(true);
@@ -123,6 +138,9 @@ export function SailWithSettings({ act }: { act: Act }) {
       setAsked(null);
       if (ok) {
         setAmount('');
+        if (c.body.chatCountries !== undefined) {
+          setCountries('');
+        }
       }
       read();
     });
@@ -215,12 +233,86 @@ export function SailWithSettings({ act }: { act: Act }) {
           {settings.boarding ? 'Switch boarding off' : 'Switch boarding on'}
         </button>
       </p>
+      <h3>Chat</h3>
+      <dl>
+        <dt>Chat</dt>
+        <dd data-field="chat">{onOff(settings.chat)}</dd>
+        <dt>Shipmates' messages</dt>
+        <dd data-field="shipmate-messages">{onOff(settings.shipmateMessages)}</dd>
+        <dt>Chat off in</dt>
+        <dd data-field="chat-countries">{countriesWords(settings.chatCountries)}</dd>
+      </dl>
+      <p>
+        <button
+          type="button"
+          name="chat"
+          class={settings.chat ? 'danger' : ''}
+          disabled={checking}
+          onClick={() =>
+            check({ chat: !settings.chat }, `chat switched ${onOff(!settings.chat)} for everyone`)
+          }
+        >
+          {settings.chat ? 'Switch chat off' : 'Switch chat on'}
+        </button>{' '}
+        <button
+          type="button"
+          name="shipmate-messages"
+          disabled={checking}
+          onClick={() =>
+            check(
+              { shipmateMessages: !settings.shipmateMessages },
+              `shipmates' messages switched ${onOff(!settings.shipmateMessages)} for everyone`,
+            )
+          }
+        >
+          {settings.shipmateMessages
+            ? "Switch shipmates' messages off"
+            : "Switch shipmates' messages on"}
+        </button>
+      </p>
+      <form
+        onSubmit={(e) => {
+          e.preventDefault();
+          const codes = typedCountries.codes;
+          check(
+            { chatCountries: codes },
+            codes.length === 0 ? 'chat off in no country' : `chat off in ${codes.join(', ')}`,
+          );
+        }}
+      >
+        <input
+          type="text"
+          name="chat-countries"
+          autocomplete="off"
+          spellcheck={false}
+          placeholder="BR, AU; nothing for none"
+          aria-label="The countries where chat is off, two letters each, comma separated"
+          value={countries}
+          onInput={(e) => {
+            setCountries(e.currentTarget.value);
+            setAsked(null);
+          }}
+        />
+        <button type="submit" name="set-chat-countries" disabled={!typedCountries.ok || checking}>
+          Set the countries
+        </button>
+      </form>
+      {!typedCountries.ok ? (
+        <p class="small" data-field="chat-countries-why">
+          Two letters each, as ISO 3166 has them, comma separated: BR, AU.
+        </p>
+      ) : null}
       {why !== '' ? <p class="small error">{why}</p> : null}
       {asked !== null ? (
         <div class="confirm" data-field="settings-confirmation">
+          {changeQuestion(asked.body) !== '' ? (
+            <p>
+              <strong data-field="settings-question">{changeQuestion(asked.body)}</strong>
+            </p>
+          ) : null}
           <p>
             {asked.answer.words}{' '}
-            {asked.answer.ended > 0 ? (
+            {!touchesLinks(asked.body) ? null : asked.answer.ended > 0 ? (
               <strong data-field="settings-ends">
                 It ends {plural(asked.answer.ended, 'live link')} at once.
               </strong>

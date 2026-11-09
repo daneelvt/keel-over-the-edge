@@ -51,6 +51,8 @@ func lookOfRow(look, version, skin, hair, colour, finish string, chosen bool) Lo
 // force too: aboard.Live.
 type SailLink struct {
 	Skipper AccountID
+	// Owner is a machine sailor skipper's human; zero for a human's link.
+	Owner   AccountID
 	Name    string
 	Look    Look
 	Kind    Kind
@@ -69,7 +71,7 @@ func (s *Store) SailLink(ctx context.Context, hash [32]byte) (SailLink, error) {
 		return SailLink{}, err
 	}
 	return SailLink{
-		Skipper: r.SkipperID.Bytes, Name: r.Name, Kind: Kind(r.Kind), Made: r.MadeAt, Expires: r.ExpiresAt, Ended: r.Ended,
+		Skipper: r.SkipperID.Bytes, Owner: r.OwnerID.Bytes, Name: r.Name, Kind: Kind(r.Kind), Made: r.MadeAt, Expires: r.ExpiresAt, Ended: r.Ended,
 		Look: lookOfRow(r.Look, r.Version, r.Skin, r.Hair, r.Colour, r.Finish, r.LookChosen),
 	}, nil
 }
@@ -83,6 +85,9 @@ type Knocker struct {
 	Kind  Kind
 	Born  int32
 	Rules bool
+	// Rested: reports rested the player's chat and knocks until the owner
+	// looks.
+	Rested bool
 }
 
 // Knocker finds an account as a knock shows it: ErrNotFound for none.
@@ -95,7 +100,7 @@ func (s *Store) Knocker(ctx context.Context, id AccountID) (Knocker, error) {
 		return Knocker{}, err
 	}
 	return Knocker{
-		Name: r.Name, Kind: Kind(r.Kind), Born: r.Born, Rules: r.Rules,
+		Name: r.Name, Kind: Kind(r.Kind), Born: r.Born, Rules: r.Rules, Rested: r.Rested,
 		Look: lookOfRow(r.Look, r.Version, r.Skin, r.Hair, r.Colour, r.Finish, r.LookChosen),
 	}, nil
 }
@@ -122,6 +127,42 @@ func (s *Store) MakeSailLink(ctx context.Context, skipper AccountID, hash [32]by
 		return ErrTokenTaken
 	}
 	return err
+}
+
+// MakeMachineSailLink keeps a new link of a machine sailor's, made by its
+// owner, as MakeSailLink does a human's: ErrNotFound for a machine sailor
+// that is not the owner's (or none).
+func (s *Store) MakeMachineSailLink(ctx context.Context, owner, machine AccountID, hash [32]byte, made, expires time.Time) error {
+	err := s.inTx(ctx, func(q *db.Queries) error {
+		mine, err := q.OwnsMachine(ctx, db.OwnsMachineParams{ID: uuidOf(machine), OwnerID: uuidOf(owner)})
+		if err != nil {
+			return err
+		}
+		if !mine {
+			return ErrNotFound
+		}
+		if _, err := q.EndLiveSailLink(ctx, uuidOf(machine)); err != nil {
+			return err
+		}
+		n, err := q.InsertMachineSailLink(ctx, db.InsertMachineSailLinkParams{Hash: hash[:], MadeAt: made, ExpiresAt: expires,
+			SkipperID: uuidOf(machine), OwnerID: uuidOf(owner)})
+		if err != nil {
+			return err
+		}
+		if n == 0 {
+			return ErrNotFound
+		}
+		return nil
+	})
+	if uniqueViolation(err, "sail_link_hash_key") {
+		return ErrTokenTaken
+	}
+	return err
+}
+
+// OwnsMachine reports whether machine is one of owner's machine sailors.
+func (s *Store) OwnsMachine(ctx context.Context, owner, machine AccountID) (bool, error) {
+	return s.q.OwnsMachine(ctx, db.OwnsMachineParams{ID: uuidOf(machine), OwnerID: uuidOf(owner)})
 }
 
 // EndSailLink ends the skipper's live link, and reports whether it had

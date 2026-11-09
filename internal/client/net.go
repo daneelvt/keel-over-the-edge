@@ -139,7 +139,8 @@ func (n *Net) Receive(now float64, b []byte) ([][]byte, Event, error) {
 	case *pb.ServerMessage_Forecast:
 		n.lastHeard = now
 		return nil, Event{Forecast: b.Forecast}, nil
-	case *pb.ServerMessage_Knock, *pb.ServerMessage_Knocking, *pb.ServerMessage_Crew, *pb.ServerMessage_Handed, *pb.ServerMessage_Ashore:
+	case *pb.ServerMessage_Knock, *pb.ServerMessage_Knocking, *pb.ServerMessage_Crew, *pb.ServerMessage_Handed, *pb.ServerMessage_Ashore,
+		*pb.ServerMessage_Chat, *pb.ServerMessage_ChatState, *pb.ServerMessage_Tied, *pb.ServerMessage_Reported:
 		n.lastHeard = now
 		return nil, Event{Deck: &pb.ServerMessage{Body: m.Body}}, nil
 	}

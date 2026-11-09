@@ -56,7 +56,12 @@ type conn struct {
 	seat     uint8
 	toldDeck [2]uint64
 	toldCrew bool
-	ready    atomic.Bool // the Welcome to its own boat is queued: inputs steer the boat from now on
+	// recrew: a mute or a block changed what the connection is to be told
+	// of those aboard.
+	recrew atomic.Bool
+	// chat is the connection's side of chat aboard.
+	chat  connChat
+	ready atomic.Bool // the Welcome to its own boat is queued: inputs steer the boat from now on
 	// queued: the connection waits in the simulation's queue for a boat.
 	// The encoder alone reads the rest.
 	queued                    atomic.Bool
@@ -241,6 +246,7 @@ func (c *conn) run() {
 	if !hello.Stop() || !ok || !c.hello(data) || !c.claim() {
 		return
 	}
+	c.joinChat()
 	c.enc = e.encoderFor()
 	if c.helloWatch != "" {
 		c.watchCommand(c.helloWatch, time.Now())
@@ -497,6 +503,7 @@ func (c *conn) handle(data []byte) bool {
 			c.unwatchCommand()
 		}
 		c.deckCommand(b.Command)
+		c.chatCommand(b.Command)
 	}
 	return true
 }
@@ -778,6 +785,7 @@ func (c *conn) finish() {
 	e.registry.release(c)
 	e.spect.release(c)
 	e.knockerGone(c)
+	c.leaveChat()
 	if c.enc != nil {
 		c.ask(ask{kind: askGone})
 	}

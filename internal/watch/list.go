@@ -115,6 +115,9 @@ type Config struct {
 	// Agent, if not nil, says whether a machine sailor's AI app is
 	// connected, by the sailor's account: told on its owner's card.
 	Agent func(bus.Account) bool
+	// Blocks, if not nil, says whether two accounts block one another:
+	// a human blocked is never on the viewer's list.
+	Blocks func(a, b bus.Account) bool
 }
 
 // Service is a world's watching: the list, the card, following, and the
@@ -267,7 +270,7 @@ func (s *Service) List(ctx context.Context, viewer store.AccountID, q Query) (Pa
 		}
 		t := b.target()
 		_, followed := fol[b.owner]
-		if v := Allowed(t, s.boatOf(b), viewer); v != Yes {
+		if v := Allowed(t, s.boatOf(b, viewer), viewer); v != Yes {
 			if followed {
 				gone[b.owner] = v
 			}
@@ -501,7 +504,7 @@ func (s *Service) watchable(ctx context.Context, boats []boat, viewer store.Acco
 			continue
 		}
 		t := b.target()
-		switch Allowed(t, s.boatOf(b), viewer) {
+		switch Allowed(t, s.boatOf(b, viewer), viewer) {
 		case Yes:
 			return b, t, nil
 		case NotAtSea:
@@ -672,9 +675,10 @@ func (b *boat) target() Target {
 	return Target{ID: b.owner, Kind: b.sailor.Kind, Owner: b.sailor.Owner, Name: b.sailor.Name}
 }
 
-// boatOf is what the rule is told of boat b.
-func (s *Service) boatOf(b *boat) Boat {
-	return Boat{InWater: true, Unseen: b.unseen, Voyage: s.cfg.Edge.VoyageAllows(bus.Account(b.owner), b.id)}
+// boatOf is what the rule is told of boat b, for viewer.
+func (s *Service) boatOf(b *boat, viewer store.AccountID) Boat {
+	return Boat{InWater: true, Unseen: b.unseen, Voyage: s.cfg.Edge.VoyageAllows(bus.Account(b.owner), b.id),
+		Blocked: s.cfg.Blocks != nil && s.cfg.Blocks(bus.Account(b.owner), bus.Account(viewer))}
 }
 
 // kindOf is a kind of boat's catalog id, "" for one out of range.

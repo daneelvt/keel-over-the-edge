@@ -122,6 +122,12 @@ type Config struct {
 	Metrics *obs.Metrics
 	// Now is the clock, time.Now unless set.
 	Now func() time.Time
+	// Young, if not nil, puts an account the game stopped, its player
+	// having said they are under 13, in the reports' queue.
+	Young func(ctx context.Context, id store.AccountID) error
+	// Forget, if not nil, is told of accounts deleted: their mutes and
+	// blocks go from memory.
+	Forget func(ids ...store.AccountID)
 }
 
 // Accounts is the operator's hand on accounts.
@@ -317,7 +323,13 @@ const YoungReason = "Stopped by the game: its player said they are under 13. Rev
 // review and delete.
 func (a *Accounts) StopYoung(ctx context.Context, id store.AccountID) error {
 	_, err := a.stop(ctx, Request{Account: id, Reason: YoungReason, Source: store.SourceGame}, store.ActionYoung)
-	return err
+	if err != nil || a.cfg.Young == nil {
+		return err
+	}
+	if err := a.cfg.Young(ctx, id); err != nil {
+		a.cfg.Log.Warn("putting a stop for being under 13 in the reports' queue", "err", err)
+	}
+	return nil
 }
 
 func (a *Accounts) stop(ctx context.Context, req Request, action string) (Done, error) {
@@ -514,6 +526,9 @@ func (a *Accounts) DeleteMachineByPlayer(ctx context.Context, owner, id store.Ac
 func (a *Accounts) deleted(id store.AccountID, kind store.Kind, ms []store.AccountID, by string) {
 	ids := append([]store.AccountID{id}, ms...)
 	a.cfg.Stopped.remove(ids...)
+	if a.cfg.Forget != nil {
+		a.cfg.Forget(ids...)
+	}
 	a.cfg.Sessions.ForgetAccount(id)
 	if a.cfg.Door != nil {
 		a.cfg.Door.ForgetAccounts(ids...)

@@ -126,6 +126,12 @@ func (p *process) seaOf(h *worldHalf, rw *readyWorld, sighting *sim.Sight) *agen
 	if h.game != nil {
 		s.Watchers = h.game.Watchers
 	}
+	if h.chat != nil {
+		s.Chat, s.Talker = h.chat, p.talker
+	}
+	if h.game != nil {
+		s.Deck = h.game
+	}
 	if t := rw.terrain; t != nil {
 		s.Ground, s.Shelter = t.Ground, t.Shelter
 	}
@@ -191,7 +197,9 @@ func (p *process) atSea(id store.AccountID) bool {
 			return true
 		}
 	}
-	return false
+	// Aboard another's boat as crew, it is at sea too: its owner watches
+	// it there.
+	return f.Aboard(bus.Account(id)) >= 0
 }
 
 // The oauth job's time of day, UTC, after the sessions' and the worlds'.

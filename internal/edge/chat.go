@@ -1,0 +1,426 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+
+package edge
+
+import (
+	"context"
+	"errors"
+	"sync"
+	"time"
+
+	"github.com/daneelvt/keel-over-the-edge/internal/aboard"
+	"github.com/daneelvt/keel-over-the-edge/internal/bus"
+	"github.com/daneelvt/keel-over-the-edge/internal/chat"
+	"github.com/daneelvt/keel-over-the-edge/internal/protocol/pb"
+	"github.com/daneelvt/keel-over-the-edge/internal/store"
+)
+
+// Chat aboard, on the game connection. A connection says a line (Say)
+// through the hub, which checks it and hands it to everyone aboard whom
+// chat's rule lets it reach, through each door's Out: this edge's sends it
+// to their connections (Chat), and to the connections of owners watching
+// their own machine sailor aboard, who read it and say nothing. The sender
+// is sent its line back, said or refused. Nothing of a line's text is
+// ever logged or counted here.
+//
+// Mute, block and report name someone aboard by their seat, or by a line
+// of theirs the connection was sent and the hub still holds; the account
+// behind it never reaches the client. A mute or a block is kept by
+// Config.Tie, a report by Config.Report.
+
+// ChatLookup is how long the store may take to find what chat needs of an
+// account as it connects, or to keep a mute, a block or a report.
+const ChatLookup = 2 * time.Second
+
+// heardLines is how many of the lines a connection was sent it may name in
+// a mute, a block or a report: as many as the page keeps, and more.
+const heardLines = 64
+
+// ReportIn is a report from the game connection: the reporter, the
+// account reported, the boat it was about, and the line it was made from
+// (0 for one made from a name aboard).
+type ReportIn struct {
+	Reporter bus.Account
+	Reported bus.Account
+	Boat     uint64
+	Line     uint64
+	Reason   string
+	Note     string
+}
+
+// Report reasons on the wire, as the store names them.
+var reportReasons = map[pb.ReportReason]string{
+	pb.ReportReason_REPORT_REASON_CHILD:    store.ReasonChild,
+	pb.ReportReason_REPORT_REASON_SEXUAL:   store.ReasonSexual,
+	pb.ReportReason_REPORT_REASON_BULLYING: store.ReasonBullying,
+	pb.ReportReason_REPORT_REASON_HATE:     store.ReasonHate,
+	pb.ReportReason_REPORT_REASON_THREATS:  store.ReasonThreats,
+	pb.ReportReason_REPORT_REASON_SCAM:     store.ReasonScam,
+	pb.ReportReason_REPORT_REASON_CHEATING: store.ReasonCheating,
+	pb.ReportReason_REPORT_REASON_OTHER:    store.ReasonOther,
+}
+
+// connChat is a connection's side of chat.
+type connChat struct {
+	// in: the connection joined the hub as its account's speaker.
+	in bool
+	// country is where the connection comes from, from the edge's header.
+	country string
+
+	mu sync.Mutex
+	// heard are the lines the connection was sent, newest last.
+	heard []uint64
+	// told is the state it was last told, and whether it was.
+	told  pb.ChatState
+	tolds bool
+}
+
+// mineWatch is who watches their own machine sailor, by the boat: they
+// read the chat aboard it.
+type mineWatch struct {
+	mu sync.Mutex
+	by map[uint64]map[*conn]bool
+}
+
+func (m *mineWatch) set(c *conn, boat uint64, on bool) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.by == nil {
+		m.by = map[uint64]map[*conn]bool{}
+	}
+	if on {
+		if m.by[boat] == nil {
+			m.by[boat] = map[*conn]bool{}
+		}
+		m.by[boat][c] = true
+		return
+	}
+	delete(m.by[boat], c)
+	if len(m.by[boat]) == 0 {
+		delete(m.by, boat)
+	}
+}
+
+func (m *mineWatch) of(boat uint64) []*conn {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	var out []*conn
+	for c := range m.by[boat] {
+		out = append(out, c)
+	}
+	return out
+}
+
+// joinChat makes the connection its account's speaker in the hub, with
+// what the store has of the account.
+func (c *conn) joinChat() {
+	e := c.e
+	if e.cfg.Chat == nil || e.cfg.Talker == nil {
+		return
+	}
+	ctx, cancel := context.WithTimeout(e.ctx, ChatLookup)
+	defer cancel()
+	s, name, err := e.cfg.Talker(ctx, c.account)
+	if err != nil {
+		e.cfg.Log.Warn("looking up a sailor for chat", "request_id", c.reqID, "conn", c.id, "err", err)
+		return
+	}
+	s.Country = c.chat.country
+	e.cfg.Chat.Join(s, name)
+	c.chat.in = true
+}
+
+// leaveChat is the connection's end in the hub.
+func (c *conn) leaveChat() {
+	if c.chat.in {
+		c.e.cfg.Chat.Leave(c.account)
+	}
+	c.e.mine.set(c, 0, false)
+}
+
+// chatState tells the connection how chat stands for it, if that has
+// changed since it was last told, or always with force.
+func (c *conn) chatState(force bool) bool {
+	h := c.e.cfg.Chat
+	if h == nil {
+		return true
+	}
+	why, until := h.State(c.account)
+	st := pb.ChatState{Status: pb.ChatStatus_CHAT_STATUS_ON}
+	switch why {
+	case aboard.ChatOff:
+		st.Status = pb.ChatStatus_CHAT_STATUS_OFF
+	case aboard.OwnOff:
+		st.Status = pb.ChatStatus_CHAT_STATUS_OWN_OFF
+	case aboard.Silenced:
+		st.Status = pb.ChatStatus_CHAT_STATUS_RESTING
+		if !until.IsZero() {
+			st.UntilUs = until.UnixMicro()
+		}
+	case aboard.NoRules:
+		st.Rules = true
+	}
+	c.chat.mu.Lock()
+	same := c.chat.tolds && c.chat.told.Status == st.Status && c.chat.told.UntilUs == st.UntilUs && c.chat.told.Rules == st.Rules
+	if same && !force {
+		c.chat.mu.Unlock()
+		return true
+	}
+	c.chat.told.Status, c.chat.told.UntilUs, c.chat.told.Rules, c.chat.tolds = st.Status, st.UntilUs, st.Rules, true
+	c.chat.mu.Unlock()
+	return c.send(&pb.ServerMessage{Body: &pb.ServerMessage_ChatState{ChatState: &st}}, outChat)
+}
+
+// line sends the connection a line said aboard, and keeps its number to
+// be named.
+func (c *conn) line(l chat.Line, seat uint32) {
+	c.chat.mu.Lock()
+	if len(c.chat.heard) == heardLines {
+		c.chat.heard = append(c.chat.heard[:0], c.chat.heard[1:]...)
+	}
+	c.chat.heard = append(c.chat.heard, l.ID)
+	c.chat.mu.Unlock()
+	c.send(&pb.ServerMessage{Body: &pb.ServerMessage_Chat{Chat: &pb.Chat{
+		Id: l.ID, Seat: seat, Name: l.Name, Machine: l.Machine, AtUs: l.At.UnixMicro(), Text: l.Text,
+	}}}, outChat)
+}
+
+// heard reports whether the connection was sent line id.
+func (c *conn) heardLine(id uint64) bool {
+	c.chat.mu.Lock()
+	defer c.chat.mu.Unlock()
+	for _, h := range c.chat.heard {
+		if h == id {
+			return true
+		}
+	}
+	return false
+}
+
+// onBoat reports whether the connection sails or is aboard boat.
+func (c *conn) onBoat(boat uint64) bool {
+	if !c.joined.Load() && !c.crew.Load() {
+		return false
+	}
+	c.wmu.Lock()
+	defer c.wmu.Unlock()
+	return c.boat == boat
+}
+
+// chatOut is the edge's door for the hub.
+type chatOut struct{ e *Edge }
+
+// Deliver sends a line to the connections of the accounts given that sail
+// or are aboard its boat, and to owners watching their own machine sailor
+// aboard it whom the rule lets it reach.
+func (o chatOut) Deliver(l chat.Line, seat uint32, boat uint64, to []bus.Account) {
+	e := o.e
+	for _, a := range to {
+		if c := e.registry.get(a); c != nil && c.onBoat(boat) {
+			c.line(l, seat)
+		}
+	}
+	watchers := e.mine.of(boat)
+	if len(watchers) == 0 {
+		return
+	}
+	people, ok := e.cfg.Chat.Company(boat)
+	if !ok {
+		return
+	}
+	// With a person aboard, nobody who is not aboard reads its chat.
+	machines := make([]bool, len(people))
+	for i, p := range people {
+		machines[i] = p.Machine
+	}
+	if !aboard.SpectatorReads(machines, true) {
+		return
+	}
+	t := e.cfg.Chat.Together(people)
+	t.Aboard, t.Owns = false, true
+	for _, c := range watchers {
+		if c.account != bus.Account(l.From) && e.registry.get(c.account) == c && e.cfg.Chat.Reaches(bus.Account(l.From), c.account, t) {
+			c.line(l, seat)
+		}
+	}
+}
+
+// Changed tells the connections of the accounts given, or every one, how
+// chat stands for them now.
+func (o chatOut) Changed(accounts []bus.Account) {
+	e := o.e
+	if accounts != nil {
+		for _, a := range accounts {
+			if c := e.registry.get(a); c != nil {
+				c.chatState(false)
+			}
+		}
+		return
+	}
+	e.registry.mu.Lock()
+	all := make([]*conn, 0, len(e.registry.by))
+	for _, c := range e.registry.by {
+		all = append(all, c)
+	}
+	e.registry.mu.Unlock()
+	for _, c := range all {
+		c.chatState(false)
+	}
+}
+
+// chatCommand does what a Command asks of chat, if it asks anything.
+func (c *conn) chatCommand(cmd *pb.Command) {
+	switch {
+	case cmd.GetSay() != nil:
+		c.sayCommand(cmd.GetSay().GetText(), cmd.GetSay().GetId())
+	case cmd.GetMute() != nil:
+		c.tieCommand(cmd.GetMute().GetWho(), false, cmd.GetMute().GetOn())
+	case cmd.GetBlock() != nil:
+		c.tieCommand(cmd.GetBlock().GetWho(), true, cmd.GetBlock().GetOn())
+	case cmd.GetReport() != nil:
+		r := cmd.GetReport()
+		c.reportCommand(r.GetWho(), r.GetReason(), r.GetNote())
+	}
+}
+
+// refusals on the wire.
+var chatRefusals = [...]pb.ChatRefusal{
+	chat.NotRefused:     pb.ChatRefusal_CHAT_REFUSAL_UNSPECIFIED,
+	chat.RefusedContact: pb.ChatRefusal_CHAT_REFUSAL_CONTACT,
+	chat.RefusedLong:    pb.ChatRefusal_CHAT_REFUSAL_LONG,
+	chat.RefusedFast:    pb.ChatRefusal_CHAT_REFUSAL_FAST,
+	chat.RefusedSilent:  pb.ChatRefusal_CHAT_REFUSAL_SILENT,
+	chat.RefusedNobody:  pb.ChatRefusal_CHAT_REFUSAL_NOBODY,
+}
+
+// sayCommand says a line, and sends it back to its sender as said, or
+// why not. A line refused for a word comes back as said.
+func (c *conn) sayCommand(text string, id uint32) {
+	h := c.e.cfg.Chat
+	m := &pb.Chat{You: true, Echo: id, Refused: pb.ChatRefusal_CHAT_REFUSAL_SILENT}
+	if h != nil && c.chat.in {
+		s := h.Say(c.account, text)
+		m.Refused = chatRefusals[s.Refused]
+		m.Seat = s.Seat
+		if s.Refused == chat.NotRefused {
+			m.Id, m.Name, m.Machine, m.AtUs, m.Text = s.Line.ID, s.Line.Name, s.Line.Machine, s.Line.At.UnixMicro(), s.Line.Text
+			if s.Words {
+				// Said to its sender alone: it has no number to name.
+				m.Id = 0
+			}
+		}
+		if s.Refused == chat.RefusedSilent || !s.Rest.IsZero() {
+			defer c.chatState(false)
+		}
+	}
+	c.send(&pb.ServerMessage{Body: &pb.ServerMessage_Chat{Chat: m}}, outChat)
+}
+
+// whoOf is the account a Who names for the connection, its name and the
+// boat it was named on; ok false for nobody it may name.
+func (c *conn) whoOf(w *pb.Who) (a bus.Account, name string, boat uint64, line uint64, ok bool) {
+	e := c.e
+	switch {
+	case w == nil:
+	case w.GetLine() != 0:
+		if e.cfg.Chat == nil || !c.heardLine(w.GetLine()) {
+			return a, "", 0, 0, false
+		}
+		l, found := e.cfg.Chat.Rings.Line(w.GetLine())
+		if !found {
+			return a, "", 0, 0, false
+		}
+		b, _ := l.Room.Boat()
+		return bus.Account(l.From), l.Name, b, l.ID, true
+	default:
+		f := e.cfg.Bus.Frames.Acquire()
+		defer f.Release()
+		h, aboard := c.handsOf(f)
+		if !aboard {
+			return a, "", 0, 0, false
+		}
+		var found bool
+		a, name, found = e.personAt(f, h.slot, w.GetSeat())
+		return a, name, h.boat, 0, found
+	}
+	return a, "", 0, 0, false
+}
+
+// tieCommand mutes or blocks someone aboard, or no longer. A skipper's
+// block puts the person ashore.
+func (c *conn) tieCommand(w *pb.Who, block, on bool) {
+	e := c.e
+	if e.cfg.Tie == nil {
+		return
+	}
+	a, name, boat, _, ok := c.whoOf(w)
+	if !ok || a == c.account {
+		return
+	}
+	ctx, cancel := context.WithTimeout(e.ctx, ChatLookup)
+	defer cancel()
+	err := e.cfg.Tie(ctx, c.account, a, block, on)
+	full := errors.Is(err, store.ErrTooManyTies)
+	if err != nil && !full {
+		e.cfg.Log.Warn("keeping a mute or a block", "request_id", c.reqID, "conn", c.id, "err", err)
+		return
+	}
+	c.recrew.Store(true)
+	ties := e.cfg.Chat.Rules.Ties
+	m := &pb.Tied{Name: name, Full: full}
+	if ties != nil {
+		m.Muted, m.Blocked = ties.Mutes(c.account, a), ties.Blocked(c.account, a)
+	}
+	c.send(&pb.ServerMessage{Body: &pb.ServerMessage_Tied{Tied: m}}, outChat)
+	if !block || !on || full {
+		return
+	}
+	// The skipper's block puts the person ashore from their boat.
+	f := e.cfg.Bus.Frames.Acquire()
+	h, aboard := c.handsOf(f)
+	in := false
+	if aboard && h.mine && h.boat == boat {
+		lo, hi := f.CrewOf(h.slot)
+		for _, x := range f.Crew[lo:hi] {
+			in = in || x.Account == a
+		}
+	}
+	f.Release()
+	if in {
+		d := &e.decks
+		d.mu.Lock()
+		k := d.deckOf(h.boat, c.account)
+		if k.put == nil {
+			k.put = map[bus.Account]bool{}
+		}
+		k.put[a] = true
+		d.mu.Unlock()
+		e.disconnect(bus.Command{Op: bus.Ashore, Account: a, Boat: h.boat, Why: bus.AshorePut})
+	}
+}
+
+// reportCommand reports someone aboard, or someone whose line the
+// connection was sent.
+func (c *conn) reportCommand(w *pb.Who, reason pb.ReportReason, note string) {
+	e := c.e
+	ok := false
+	defer func() {
+		c.send(&pb.ServerMessage{Body: &pb.ServerMessage_Reported{Reported: &pb.Reported{Ok: ok}}}, outChat)
+	}()
+	why, known := reportReasons[reason]
+	if e.cfg.Report == nil || !known {
+		return
+	}
+	a, _, boat, line, found := c.whoOf(w)
+	if !found || a == c.account {
+		return
+	}
+	ctx, cancel := context.WithTimeout(e.ctx, ChatLookup)
+	defer cancel()
+	err := e.cfg.Report(ctx, ReportIn{Reporter: c.account, Reported: a, Boat: boat, Line: line, Reason: why, Note: note})
+	if err != nil {
+		e.cfg.Log.Warn("keeping a report", "request_id", c.reqID, "conn", c.id, "err", err)
+		return
+	}
+	ok = true
+}

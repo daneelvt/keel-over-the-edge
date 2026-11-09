@@ -1,13 +1,16 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 // Package moderation checks what players write for others to read: sailor
-// names now, and the word filter that chat, boat names and messages will
-// share.
+// and boat names, chat lines, and the word filter they share.
 //
 // A name has a display form, shown as the player wrote it, and a key, by
 // which names are compared: two sailors cannot share a key. The key ignores
 // case, width, spacing and separators, and look-alike letters, so a name
 // cannot pass for another.
+//
+// A chat line (CheckChat) is cleaned to one line as shown, then refused if
+// it has a link or any way to reach someone elsewhere, or a word of the
+// lists.
 package moderation
 
 import (

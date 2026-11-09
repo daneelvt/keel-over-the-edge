@@ -446,8 +446,14 @@ func (p *process) lifecycleJobs() []jobs.Job {
 				if err != nil {
 					return jobs.Result{}, err
 				}
-				return jobs.Result{Detail: fmt.Sprintf("%d sessions, %d ceremonies, %d recorded actions and %d links deleted", n, c, a, l),
-					Skipped: n == 0 && c == 0 && a == 0 && l == 0}, nil
+				// Reports closed half a year ago and not held, or held past
+				// their hold.
+				rp, err := p.db.DeleteReports(ctx, due.Add(-store.ReportKeep))
+				if err != nil {
+					return jobs.Result{}, err
+				}
+				return jobs.Result{Detail: fmt.Sprintf("%d sessions, %d ceremonies, %d recorded actions, %d links and %d reports deleted", n, c, a, l, rp),
+					Skipped: n == 0 && c == 0 && a == 0 && l == 0 && rp == 0}, nil
 			},
 		},
 		{

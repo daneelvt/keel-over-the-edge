@@ -166,6 +166,9 @@ jobs:
       - name: Fuzz the sailor name check
         if: runner.arch == 'X64'
         run: go test -run '^$' -fuzz FuzzCheckName -fuzztime 30s ./internal/moderation
+      - name: Fuzz the chat line check
+        if: runner.arch == 'X64'
+        run: go test -run '^$' -fuzz FuzzCheckChat -fuzztime 30s ./internal/moderation
       - name: Fuzz the decoding of what a game client sends
         if: runner.arch == 'X64'
         run: go test -run '^$' -fuzz FuzzDecodeClient -fuzztime 30s ./internal/protocol

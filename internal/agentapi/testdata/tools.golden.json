@@ -261,7 +261,7 @@
       "openWorldHint": false,
       "readOnlyHint": true
     },
-    "description": "The next 90 minutes' forecast, as every chart shows it, and the truth: gale warnings in force, each weather system's wind, where it is now and in 30, 60 and 90 minutes, and when fronts reach you. With place, a charted place's local weather and outlook, as its harbourmaster's board gives them.",
+    "description": "The next 90 minutes' forecast, as every chart shows it, and the truth: gale warnings in force, each weather system's wind, where it is now and in 30, 60 and 90 minutes, and when fronts reach you. With place, a charted place's local weather and outlook.",
     "inputSchema": {
       "properties": {
         "place": {
@@ -306,7 +306,7 @@
       "openWorldHint": false,
       "readOnlyHint": false
     },
-    "description": "Chat aboard, hail boats close by, or speak to spectators. Not yet.",
+    "description": "Chat aboard: a line to all aboard your boat; theirs come in observe. hail, spectators: not yet.",
     "inputSchema": {
       "properties": {
         "text": {
@@ -314,7 +314,7 @@
           "type": "string"
         },
         "to": {
-          "description": "Default hail.",
+          "description": "Default aboard.",
           "enum": [
             "aboard",
             "hail",
@@ -365,7 +365,7 @@
       "openWorldHint": false,
       "readOnlyHint": false
     },
-    "description": "Your owner's fleet, shared by its sailors: list its boats; take one available; look paints, numbers and names yours. At sea both only in port (Port Royal or a port, not a village). leave quits the water; observe, steer and trim sail anyway. sailor_look: your own look, at Port Royal.",
+    "description": "Your owner's fleet, shared by its sailors: list its boats; take one; look paints, numbers and names yours. At sea both only in port (not a village). leave quits the water. sailor_look: your look, at Port Royal. With others aboard: hand the controls to a sailor, take them, ashore.",
     "inputSchema": {
       "properties": {
         "action": {
@@ -375,7 +375,9 @@
             "take",
             "leave",
             "look",
-            "sailor_look"
+            "sailor_look",
+            "hand",
+            "ashore"
           ],
           "type": "string"
         },
@@ -404,6 +406,10 @@
           "type": "integer"
         },
         "paint": {
+          "type": "string"
+        },
+        "sailor": {
+          "description": "For hand, ashore: a name.",
           "type": "string"
         },
         "version": {
@@ -444,7 +450,7 @@
       "openWorldHint": false,
       "readOnlyHint": true
     },
-    "description": "How to sail and how the game works, a short page a topic: start, sailing, trim, autopilot, articles, charting, edge, weather, tools, limits. With no topic, the list, and which machine sailor you sail as. Read start first.",
+    "description": "How to sail and how the game works, a short page a topic. With no topic, the list, and which machine sailor you sail as. Read start first.",
     "inputSchema": {
       "properties": {
         "topic": {
@@ -458,6 +464,7 @@
             "charting",
             "edge",
             "weather",
+            "aboard",
             "tools",
             "limits"
           ],

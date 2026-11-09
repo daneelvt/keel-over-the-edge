@@ -47,6 +47,7 @@ import type { Notices } from './notices';
 import { Pilot } from './pilot';
 import { type CameraKeys, SeaKeys } from './seakeys';
 import type { SettingsSignal } from './settings';
+import { type StatementsView, statementsShown, useStatements } from './statementlazy';
 import { useWatch, type WatchView } from './watchlazy';
 import { watchersText } from './watchwords';
 
@@ -106,7 +107,7 @@ function LazyDeck({
   sailor,
 }: {
   deck: DeckView;
-  part: 'top' | 'foot' | 'windows';
+  part: 'top' | 'chat' | 'foot' | 'windows';
   sailor: string | null;
 }) {
   const shown = deckShown(deck);
@@ -116,11 +117,23 @@ function LazyDeck({
   }
   return part === 'top' ? (
     <m.DeckTop deck={deck} />
+  ) : part === 'chat' ? (
+    <m.DeckChat deck={deck} sailor={sailor} />
   ) : part === 'foot' ? (
     <m.DeckFoot deck={deck} />
   ) : (
     <m.DeckWindows deck={deck} sailor={sailor} />
   );
+}
+
+/** A statement of reasons from the game's owner: its line under the case, or its window. */
+function LazyStatements({ view, part }: { view: StatementsView; part: 'line' | 'window' }) {
+  const shown = statementsShown(view);
+  const m = useStatements(shown);
+  if (m === null || !shown) {
+    return null;
+  }
+  return part === 'line' ? <m.StatementLine view={view} /> : <m.StatementWindow view={view} />;
 }
 
 /** The controls that act on the boat: the helm, the autopilot and the sheet; none on a boat watched. */
@@ -212,6 +225,8 @@ export interface ScreenProps {
   watch?: WatchView | null;
   /** Sailing together; null in the offline sandbox. */
   deck?: DeckView | null;
+  /** The statements of reasons from the game's owner; null in the offline sandbox. */
+  statements?: StatementsView | null;
   /** The running light of the own machine sailor's AI, while watching it; null in the offline sandbox. */
   lamp?: ReadonlySignal<Lamp> | null;
   /** The full screen's switch and key; null where it is not run. */
@@ -324,6 +339,8 @@ function Screen(props: ScreenProps) {
         <BumpLine model={model} />
         {notices !== null && !cleared ? <NoticeLine notices={notices} /> : null}
         {deck !== null ? <LazyDeck deck={deck} part="top" sailor={props.sailor} /> : null}
+        {deck !== null ? <LazyDeck deck={deck} part="chat" sailor={props.sailor} /> : null}
+        {props.statements != null ? <LazyStatements view={props.statements} part="line" /> : null}
         {props.connection !== null ? (
           <ConnectionLine view={props.connection} takeover={steer} />
         ) : null}
@@ -418,6 +435,9 @@ function Screen(props: ScreenProps) {
         settings={settings}
       />
       {deck !== null ? <LazyDeck deck={deck} part="windows" sailor={props.sailor} /> : null}
+      {props.statements?.open.value != null ? (
+        <LazyStatements view={props.statements} part="window" />
+      ) : null}
     </div>
   );
 }

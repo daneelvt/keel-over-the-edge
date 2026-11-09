@@ -2,12 +2,14 @@
 
 import { describe, expect, test } from 'vitest';
 import {
+  changeQuestion,
   lifetimeAllowed,
   lifetimeOf,
   linkLifetimeWords,
   MAX_LINK_LIFETIME,
   MIN_LINK_LIFETIME,
   onOff,
+  touchesLinks,
 } from './settings';
 
 describe('links to come aboard', () => {
@@ -35,5 +37,22 @@ describe('links to come aboard', () => {
     expect(lifetimeAllowed(8 * 86_400)).toBe(false);
     expect(onOff(true)).toBe('on');
     expect(onOff(false)).toBe('off');
+  });
+
+  test('tells the links a change ends only when it reaches links', () => {
+    expect(touchesLinks({ links: false })).toBe(true);
+    expect(touchesLinks({ linkLifetime: 3600 })).toBe(true);
+    expect(touchesLinks({ boarding: false })).toBe(false);
+    expect(touchesLinks({ chat: false })).toBe(false);
+    expect(touchesLinks({ chatCountries: ['BR'] })).toBe(false);
+  });
+
+  test('asks plainly before chat goes off for everyone, and only then', () => {
+    expect(changeQuestion({ chat: false })).toBe(
+      'Chat off for everyone? Every line stops at once.',
+    );
+    expect(changeQuestion({ chat: true })).toBe('');
+    expect(changeQuestion({ shipmateMessages: false })).toBe('');
+    expect(changeQuestion({ links: false })).toBe('');
   });
 });

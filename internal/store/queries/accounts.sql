@@ -133,8 +133,8 @@ SELECT account_id FROM session WHERE token_hash = @token_hash;
 -- An action recorded at the moment it is taken, under its account's lock,
 -- not as its transaction began: two actions on one account are recorded
 -- in the order they were taken.
-INSERT INTO account_action (at, action, account_id, kind, name, detail, source, from_addr)
-VALUES (clock_timestamp(), @action, @account_id, @kind, @name, @detail, @source, @from_addr);
+INSERT INTO account_action (at, action, account_id, kind, name, detail, source, from_addr, report_id)
+VALUES (clock_timestamp(), @action, @account_id, @kind, @name, @detail, @source, @from_addr, sqlc.narg(report_id));
 
 -- name: ActionsOf :many
 -- The record of an account, the newest first.

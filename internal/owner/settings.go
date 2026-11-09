@@ -24,12 +24,24 @@ type SailSettings interface {
 	SailLinksEndedBy(ctx context.Context, now, d time.Duration) (int64, error)
 }
 
+// ChatSettings are the owner's switches for chat as the database keeps
+// them, each written with its entry in the record.
+type ChatSettings interface {
+	SetChatSwitch(ctx context.Context, on bool, a store.Action) error
+	SetShipmateMessages(ctx context.Context, on bool, a store.Action) error
+	SetChatCountries(ctx context.Context, countries []string, a store.Action) error
+}
+
 // SettingsJSON is settings.json: how long a link lasts, s, and whether
-// links and boarding are on for everyone.
+// links and boarding are on for everyone; and whether chat and shipmates'
+// messages are, and the countries where chat is off.
 type SettingsJSON struct {
-	LinkLifetime int64 `json:"linkLifetime"`
-	Links        bool  `json:"links"`
-	Boarding     bool  `json:"boarding"`
+	LinkLifetime     int64    `json:"linkLifetime"`
+	Links            bool     `json:"links"`
+	Boarding         bool     `json:"boarding"`
+	Chat             bool     `json:"chat"`
+	ShipmateMessages bool     `json:"shipmateMessages"`
+	ChatCountries    []string `json:"chatCountries"`
 }
 
 // SettingsRequest changes any of the switches; with Check, it only says
@@ -38,7 +50,11 @@ type SettingsRequest struct {
 	LinkLifetime *int64 `json:"linkLifetime,omitempty"`
 	Links        *bool  `json:"links,omitempty"`
 	Boarding     *bool  `json:"boarding,omitempty"`
-	Check        bool   `json:"check,omitempty"`
+	// Chat, ShipmateMessages and ChatCountries are chat's switches.
+	Chat             *bool     `json:"chat,omitempty"`
+	ShipmateMessages *bool     `json:"shipmateMessages,omitempty"`
+	ChatCountries    *[]string `json:"chatCountries,omitempty"`
+	Check            bool      `json:"check,omitempty"`
 }
 
 // SettingsAnswer is what a change did, or checked would do: the switches
@@ -50,7 +66,12 @@ type SettingsAnswer struct {
 }
 
 func settingsOf(s *aboard.Switches) SettingsJSON {
-	return SettingsJSON{LinkLifetime: int64(s.Lifetime() / time.Second), Links: s.Links(), Boarding: s.Boarding()}
+	c := s.ChatCountries()
+	if c == nil {
+		c = []string{}
+	}
+	return SettingsJSON{LinkLifetime: int64(s.Lifetime() / time.Second), Links: s.Links(), Boarding: s.Boarding(),
+		Chat: s.Chat(), ShipmateMessages: s.ShipmateMessages(), ChatCountries: c}
 }
 
 // settings serves settings.json, the switches in force.
@@ -95,9 +116,22 @@ func (o *Owner) setSettings(w http.ResponseWriter, r *http.Request) {
 		o.refuse(w, "settings", http.StatusServiceUnavailable, "sailing together is not running")
 		return
 	}
-	if req.LinkLifetime == nil && req.Links == nil && req.Boarding == nil {
-		o.refuse(w, "settings", http.StatusBadRequest, "nothing to change: give linkLifetime, links or boarding")
+	chatAsked := req.Chat != nil || req.ShipmateMessages != nil || req.ChatCountries != nil
+	if req.LinkLifetime == nil && req.Links == nil && req.Boarding == nil && !chatAsked {
+		o.refuse(w, "settings", http.StatusBadRequest, "nothing to change: give linkLifetime, links, boarding, chat, shipmateMessages or chatCountries")
 		return
+	}
+	if chatAsked && o.cfg.ChatSettings == nil {
+		o.refuse(w, "settings", http.StatusServiceUnavailable, "chat is not running")
+		return
+	}
+	var countries []string
+	if req.ChatCountries != nil {
+		var ok bool
+		if countries, ok = aboard.Countries(*req.ChatCountries); !ok {
+			o.refuse(w, "settings", http.StatusBadRequest, "chatCountries: two letters each, as ISO 3166 has them (BR, AU)")
+			return
+		}
 	}
 	sw := o.cfg.Switches
 	was, life := sw.Lifetime(), sw.Lifetime()
@@ -136,10 +170,25 @@ func (o *Owner) setSettings(w http.ResponseWriter, r *http.Request) {
 		after.Boarding = *req.Boarding
 		words = append(words, "boarding "+onOff(*req.Boarding)+" for everyone")
 	}
+	if req.Chat != nil {
+		after.Chat = *req.Chat
+		words = append(words, "chat "+onOff(*req.Chat)+" for everyone")
+	}
+	if req.ShipmateMessages != nil {
+		after.ShipmateMessages = *req.ShipmateMessages
+		words = append(words, "shipmates' messages "+onOff(*req.ShipmateMessages)+" for everyone")
+	}
+	if req.ChatCountries != nil {
+		after.ChatCountries = append([]string{}, countries...)
+		if len(countries) == 0 {
+			words = append(words, "chat off in no country")
+		} else {
+			words = append(words, "chat off in "+strings.Join(countries, ", "))
+		}
+	}
 	said := strings.Join(words, "; ")
 	if req.Check {
-		writeJSON(w, SettingsAnswer{Settings: after, Ended: ended,
-			Words: fmt.Sprintf("Would set: %s. It stops %s at once.", said, workingLinks(ended))})
+		writeJSON(w, SettingsAnswer{Settings: after, Ended: ended, Words: "Would set: " + said + "." + linksWords(req, "stops", ended)})
 		return
 	}
 	a := store.Action{Source: sourceOf(r), From: r.RemoteAddr}
@@ -174,6 +223,52 @@ func (o *Owner) setSettings(w http.ResponseWriter, r *http.Request) {
 		o.count(store.ActionBoarding)
 		o.cfg.Log.Info("owner: boarding switched", "action", store.ActionBoarding, "on", *req.Boarding, "from", r.RemoteAddr)
 	}
-	writeJSON(w, SettingsAnswer{Settings: settingsOf(sw), Ended: ended,
-		Words: fmt.Sprintf("Done: %s. It stopped %s at once.", said, workingLinks(ended))})
+	if chatAsked {
+		cs := o.cfg.ChatSettings
+		if req.Chat != nil {
+			a.Detail = onOff(*req.Chat)
+			if err := cs.SetChatSwitch(ctx, *req.Chat, a); err != nil {
+				http.Error(w, "the database: "+err.Error(), http.StatusServiceUnavailable)
+				return
+			}
+			sw.SetChat(*req.Chat)
+			o.count(store.ActionChat)
+			o.cfg.Log.Info("owner: chat switched", "action", store.ActionChat, "on", *req.Chat, "from", r.RemoteAddr)
+		}
+		if req.ShipmateMessages != nil {
+			a.Detail = onOff(*req.ShipmateMessages)
+			if err := cs.SetShipmateMessages(ctx, *req.ShipmateMessages, a); err != nil {
+				http.Error(w, "the database: "+err.Error(), http.StatusServiceUnavailable)
+				return
+			}
+			sw.SetShipmateMessages(*req.ShipmateMessages)
+			o.count(store.ActionShipmateMessages)
+			o.cfg.Log.Info("owner: shipmates' messages switched", "action", store.ActionShipmateMessages, "on", *req.ShipmateMessages, "from", r.RemoteAddr)
+		}
+		if req.ChatCountries != nil {
+			a.Detail = strings.Join(countries, ",")
+			if err := cs.SetChatCountries(ctx, countries, a); err != nil {
+				http.Error(w, "the database: "+err.Error(), http.StatusServiceUnavailable)
+				return
+			}
+			sw.SetChatCountries(countries)
+			o.count(store.ActionChatCountries)
+			o.cfg.Log.Info("owner: chat's countries set", "action", store.ActionChatCountries, "countries", a.Detail, "from", r.RemoteAddr)
+		}
+		// Every connection is told how chat stands for it now: the next
+		// line is refused already, the switches being read for each.
+		if o.cfg.ChatChanged != nil {
+			o.cfg.ChatChanged()
+		}
+	}
+	writeJSON(w, SettingsAnswer{Settings: settingsOf(sw), Ended: ended, Words: "Done: " + said + "." + linksWords(req, "stopped", ended)})
+}
+
+// linksWords are a change's words for the links it stops, for a change
+// that touches links: " It stops 2 working links at once."
+func linksWords(req SettingsRequest, verb string, ended int64) string {
+	if req.LinkLifetime == nil && req.Links == nil && req.Boarding == nil {
+		return ""
+	}
+	return fmt.Sprintf(" It %s %s at once.", verb, workingLinks(ended))
 }

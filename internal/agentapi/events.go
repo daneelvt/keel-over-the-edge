@@ -51,13 +51,19 @@ const (
 	evWatched   // the first to watch the boat came
 	evUnwatched // the last went
 	evLife      // a group of the sea's life came into sight
+	evChat      // a line said aboard reached the machine sailor
+	evOffered   // the controls are offered it
+	evOfferGone // the offer lapsed
+	evDeck      // someone came aboard or went ashore, or the controls changed hands
+	evAboard    // it came aboard another's boat, or went ashore
 )
 
 // always are the events that end any wait: a sailor would notice them
 // whatever they were watching for.
 func (k evKind) always() bool {
 	switch k {
-	case evCapsized, evAground, evBump, evLip, evOver, evTaken, evRestart, evAdmitted, evLeft, evNewWorld, evWorldEnded, evFalls, evGale:
+	case evCapsized, evAground, evBump, evLip, evOver, evTaken, evRestart, evAdmitted, evLeft, evNewWorld, evWorldEnded, evFalls, evGale,
+		evOffered, evAboard:
 		return true
 	}
 	return false
@@ -79,6 +85,10 @@ func (k evKind) wake() string {
 		return wakeWeather
 	case evLife:
 		return wakeLife
+	case evChat:
+		return wakeChat
+	case evDeck:
+		return wakeBoat
 	}
 	return ""
 }
@@ -142,6 +152,14 @@ func (k evKind) word() string {
 		return "watchers"
 	case evLife:
 		return "life in sight"
+	case evChat:
+		return "chat"
+	case evOffered:
+		return "the controls offered"
+	case evOfferGone, evDeck:
+		return "aboard"
+	case evAboard:
+		return "aboard"
 	}
 	return "event"
 }

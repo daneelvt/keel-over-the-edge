@@ -118,6 +118,8 @@ export function knockingWords(
       return ['That knock didn’t reach the skipper; try again.'];
     case 'withdrawn':
       return ['Your knock was withdrawn.'];
+    case 'away':
+      return ['Your machine sailor isn’t in the water now.'];
     default:
       return ['You can’t come aboard now.'];
   }
@@ -168,6 +170,12 @@ export function putAshoreWords(name: string): Words {
 /** A key's full name for a screen reader, the person it acts on named. */
 export function actionName(action: string, name: string): string {
   return `${action}: ${name}`;
+}
+
+/** The key on a person's row that opens what is rarely done to them, and its label. */
+export const MORE = '⋯';
+export function moreFor(name: string): string {
+  return name === '' ? 'More' : `More: ${name}`;
 }
 
 /** The controls offered: "Iron Mary hands you the controls". */

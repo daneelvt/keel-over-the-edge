@@ -25,6 +25,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks';
 import type { Fetch, Me } from '../account/me';
 import { call, reasonOf } from '../account/passkeys';
 import { reasonText } from '../account/reasons';
+import { COME_ABOARD, comeAboardText } from './machinewords';
 import { PlayerText } from './player';
 import { queueLines } from './queue';
 import { loadSettings, saveWatchChoice, type WatchSort, type WatchWho } from './settings';
@@ -709,7 +710,8 @@ export function WatchList({
 /**
  * The plate at the foot of the screen while a boat is watched, where the
  * controls are while sailing, one row in the control head's brass: whose
- * boat it is, Watch another and Sail; or, with none watched, why the last
+ * boat it is, Watch another and Sail, and Come aboard the player's own
+ * machine sailor's; or, with none watched, why the last
  * watch ended or the place in the spectators' queue, with the same.
  * Nothing while the own boat sails. A long name ends in an ellipsis, and
  * the plate's label says it whole.
@@ -727,6 +729,18 @@ export function WatchBar({ view }: { view: WatchView }) {
       {WATCH_ANOTHER}
     </button>
   );
+  // The player's own machine sailor: its boat is theirs to come aboard.
+  const come =
+    w?.mine === true && w.machine && view.comeAboard !== undefined ? (
+      <button
+        type="button"
+        class="head-key watch-aboard"
+        aria-label={comeAboardText(w.sailor)}
+        onClick={view.comeAboard}
+      >
+        {COME_ABOARD}
+      </button>
+    ) : null;
   const sail =
     boat === null ? (
       <button type="button" class="head-key watch-go" onClick={() => view.sail()}>
@@ -766,6 +780,7 @@ export function WatchBar({ view }: { view: WatchView }) {
         ) : null}
       </div>
       {another}
+      {come}
       {sail}
     </section>
   );

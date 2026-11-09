@@ -222,6 +222,13 @@ type Config struct {
 	// (both needed for the settings' routes).
 	Switches *aboard.Switches
 	Sail     SailSettings
+	// ChatSettings, if not nil, keeps chat's switches, and ChatChanged
+	// tells every game connection how chat stands for it after one
+	// changes. Reports, if not nil, is the reports' queue and the owner's
+	// actions on them.
+	ChatSettings ChatSettings
+	ChatChanged  func()
+	Reports      Reports
 
 	// PlaceKinds and Characters are the catalog's kinds of place and
 	// lights' characters, by their indices, as the page shows them.
@@ -394,6 +401,9 @@ func (o *Owner) Handler() http.Handler {
 	mux.HandleFunc("POST /owner/api/machines", o.machineCap)
 	mux.HandleFunc("GET /owner/api/settings.json", o.settings)
 	mux.HandleFunc("POST /owner/api/settings", o.setSettings)
+	mux.HandleFunc("GET /owner/api/reports.json", o.reports)
+	mux.HandleFunc("GET /owner/api/report.json", o.report)
+	mux.HandleFunc("POST /owner/api/reports/act", o.actOnReport)
 	mux.HandleFunc("POST /owner/api/accounts/search", o.searchAccounts)
 	mux.HandleFunc("GET /owner/api/account.json", o.accountCard)
 	mux.HandleFunc("GET /owner/api/actions.json", o.actions)

@@ -1,0 +1,76 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# Chat lines that must pass the chat filter, as written: the sea's words and
+# sailors' talk that come near a listed word, a link or a contact. The tests
+# check each.
+Meet me on the poop deck
+Everyone into the cockpit
+The seamen are aloft
+Dick, take the helm
+Ann Bonny and Dick Turpin
+Moby Dick off the bow
+Cockburn Sound is ahead
+Pay it out to the bitter end
+A booby on the yard
+Look, boobies on the rocks
+A blue tit, blown out to sea
+A shag drying its wings
+Shag Rock to port
+Hard on the wind now
+Ready to come about
+Coming about
+The head is blocked again
+Pump the head
+Who's in the head?
+Hoist the spanker
+Make fast to the bitts
+Ease the sheet
+Haul on the main sheet
+Cockle shells on the beach
+Cockbill the anchor
+Close the seacocks
+Take a sight with the sextant
+Spick and span, Bosun
+Shiver my timbers
+Splice the mainbrace
+Heave to and wait
+Gybe ho!
+Ready about, lee-ho
+Pass me the line
+Fog signal to starboard
+The line squall is coming
+Full steam ahead
+Under steam
+Add more sail
+Call the tack
+Follow me round the point
+Round the point and up to Port Royal
+St. Ives by nightfall
+Heading 270, wind 15 knots gusting 22
+We're 3.2 NM off the light
+At 12:30 we start, 13:00 we finish
+The race is on 2026-11-15
+I'm number 7 on the list
+Snap shackle on the halyard
+The halyard snapped
+Bell End is off to port
+Penistone, Scunthorpe and Sussex
+The Arsenal fans are here
+Seacocks shut, hatches down
+The bosun's mate is aloft
+Shoot the breeze while we wait
+A sheet bend and a bowline
+Dead reckoning puts us 4.5 NM east
+Pricked off our position on the chart
+Watch out for the Twatt rocks
+The Uranus rises at dawn
+Drop the hook in 5 m of water
+Two reefs in the main, Captain
+The spinnaker is up
+Let fly the jib sheet!
+Mind the boom
+Passing Assisi Rock
+Check the barometer: 1012 and falling
+We made 8.5 knots on that reach
+The keel is fine
+Everyone aboard? Staff the bilge pump
+Ok.so who's on watch?

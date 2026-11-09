@@ -115,6 +115,7 @@ import type { Countdown } from '../ui/countdown';
 import type { DeckView } from '../ui/decklazy';
 import type { SailState } from '../ui/model';
 import type { Settings } from '../ui/settings';
+import type { StatementsView } from '../ui/statementlazy';
 import type { WatchView } from '../ui/watchlazy';
 import {
   cellHex,
@@ -265,7 +266,11 @@ export type Sailing = (
   /** The full screen's switch and key. */
   fullScreen?: FullScreen;
   /** The sandbox's screen drawn again, with a watch's parts or without, and sailing together's. */
-  remount?: (watch: WatchView | null, deck?: DeckView | null) => void;
+  remount?: (
+    watch: WatchView | null,
+    deck?: DeckView | null,
+    statements?: StatementsView | null,
+  ) => void;
   /** What the page did from the tap to the world's reveal; null before it. */
   revealed?: () => Revealed | null;
 };
@@ -1632,12 +1637,12 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
      * with the cog, the list of sailors to watch open over it if asked;
      * null as it is while sailing.
      */
-    watchPlate(sailor: string | null, machine = true, list = false): void {
+    watchPlate(sailor: string | null, machine = true, list = false, mine = false): void {
       sailing.remount?.(
         sailor === null
           ? null
           : {
-              watching: signal({ sailor, machine, mine: false, look: -1 }),
+              watching: signal({ sailor, machine, mine, look: -1 }),
               spectating: signal(true),
               status: signal('sailing'),
               ended: signal(null),
@@ -1648,6 +1653,7 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
               watch: () => {},
               sail: () => {},
               unwatch: () => {},
+              comeAboard: () => {},
             },
       );
     },
@@ -1665,7 +1671,7 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
       }
       const scene = deckScene(name, sailor, state);
       deckCalls = scene.calls;
-      sailing.remount?.(scene.watch, scene.deck);
+      sailing.remount?.(scene.watch, scene.deck, scene.statements);
     },
     /** What the screen of the latest deckScene asked of it, in order. */
     deckCalls(): string[] {

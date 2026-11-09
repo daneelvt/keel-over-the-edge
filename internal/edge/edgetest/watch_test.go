@@ -58,6 +58,12 @@ type viewer struct {
 	crew     *pb.Crew
 	handed   *pb.Handed
 	ashore   *pb.Ashore
+	// lines are the lines said aboard it was sent, in order; chatState,
+	// tied and reported the latest of each told.
+	lines     []*pb.Chat
+	chatState *pb.ChatState
+	tied      *pb.Tied
+	reported  *pb.Reported
 }
 
 // dial opens the game connection with the cookie and says hello.
@@ -146,6 +152,14 @@ func (v *viewer) take(r client.Received) {
 		v.handed = m.Handed
 	case *pb.ServerMessage_Ashore:
 		v.ashore = m.Ashore
+	case *pb.ServerMessage_Chat:
+		v.lines = append(v.lines, m.Chat)
+	case *pb.ServerMessage_ChatState:
+		v.chatState = m.ChatState
+	case *pb.ServerMessage_Tied:
+		v.tied = m.Tied
+	case *pb.ServerMessage_Reported:
+		v.reported = m.Reported
 	case *pb.ServerMessage_BoatNames:
 		if v.names == nil {
 			v.names = map[uint32]string{}

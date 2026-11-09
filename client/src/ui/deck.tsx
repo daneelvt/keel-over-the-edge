@@ -15,6 +15,9 @@
 // what the player may do to that person, by who the player is and who
 // holds the controls; and the skipper's link (sailwithme.tsx).
 //
+// Who is aboard also mutes, blocks and reports each other person, and chat
+// aboard (chat.tsx) stands with these parts under the case.
+//
 // Loaded only when first needed (decklazy.ts): none of it is in the
 // game's first download.
 
@@ -24,8 +27,17 @@ import { Portrait } from '../account/portraits';
 import { catalog } from '../catalog';
 import { lookOf } from '../catalog/looks';
 import type { CrewTold, PersonTold } from '../net/messages';
+import { ChatStrip, ChatWindows } from './chat';
+import { BLOCK, BLOCKED, MUTE, MUTED, REPORT, UNBLOCK, UNMUTE } from './chatwords';
 import { Decal } from './decals';
-import { type DeckView, deckPlate, selfOf, skipperAway } from './decklazy';
+import {
+  chatShown,
+  type DeckView,
+  deckPlate,
+  machineShared,
+  selfOf,
+  skipperAway,
+} from './decklazy';
 import {
   ABOARD,
   AT_THE_HELM,
@@ -46,6 +58,8 @@ import {
   KEEP_ABOARD,
   knockingWords,
   LET_ABOARD,
+  MORE,
+  moreFor,
   moreWaitingText,
   NOT_NOW,
   PUT_ASHORE,
@@ -62,6 +76,8 @@ import {
   YOU,
   YOU_HOLD,
 } from './deckwords';
+import { MachineCrew, MachineLink } from './machinelink';
+import { machineAsksWords, machineKnockingWords } from './machinewords';
 import { PlayerText } from './player';
 import { SailWithMe } from './sailwithme';
 
@@ -116,14 +132,25 @@ export function HelmMark() {
 }
 
 /** What the player may do to a person aboard, by who the player is and who holds the controls. */
-export type RowAction = 'hand' | 'take' | 'giveBack' | 'putAshore';
+export type RowAction =
+  | 'hand'
+  | 'take'
+  | 'giveBack'
+  | 'putAshore'
+  | 'mute'
+  | 'unmute'
+  | 'block'
+  | 'unblock'
+  | 'report';
 
 /**
  * The keys on the row of the person in seat: whoever holds the controls
  * hands them to anyone else; the skipper takes them back (on their own
  * row) while another holds them, and puts anyone else ashore; one of the
- * crew who holds them gives them back (on their own row). Nothing for a
- * spectator, who is not aboard.
+ * crew who holds them gives them back (on their own row). And anyone
+ * aboard mutes, blocks and reports anyone else, or ends a mute or a
+ * block, as the account has them. Nothing for a spectator, who is not
+ * aboard.
  */
 export function rowActions(crew: CrewTold, seat: number): RowAction[] {
   const me = selfOf(crew);
@@ -149,7 +176,31 @@ export function rowActions(crew: CrewTold, seat: number): RowAction[] {
   if (skipper) {
     out.push('putAshore');
   }
+  if (person.name !== '') {
+    out.push(person.muted ? 'unmute' : 'mute', person.blocked ? 'unblock' : 'block', 'report');
+  }
   return out;
+}
+
+/**
+ * The actions a row keeps behind its ⋯ key, rarely used: putting someone
+ * ashore, mute, block and report. The controls' keys stand on the row.
+ */
+export const MORE_ACTIONS: ReadonlySet<RowAction> = new Set<RowAction>([
+  'putAshore',
+  'mute',
+  'unmute',
+  'block',
+  'unblock',
+  'report',
+]);
+
+/** A row's actions split: the keys on the row, and those behind its ⋯ key. */
+export function splitActions(actions: RowAction[]): { keys: RowAction[]; more: RowAction[] } {
+  return {
+    keys: actions.filter((a) => !MORE_ACTIONS.has(a)),
+    more: actions.filter((a) => MORE_ACTIONS.has(a)),
+  };
 }
 
 /** A key's words for each action. */
@@ -158,6 +209,11 @@ const ACTION_WORDS: Record<RowAction, string> = {
   take: TAKE_BACK,
   giveBack: GIVE_BACK,
   putAshore: PUT_ASHORE,
+  mute: MUTE,
+  unmute: UNMUTE,
+  block: BLOCK,
+  unblock: UNBLOCK,
+  report: REPORT,
 };
 
 /** The name of whoever holds the controls; "" for none known. */
@@ -177,7 +233,10 @@ export function KnockCards({ deck }: { deck: DeckView }) {
     return null;
   }
   const more = moreWaitingText(knocks.length - 1);
-  const words = asksWords(k.sailor);
+  const words =
+    k.machine === undefined
+      ? asksWords(k.sailor)
+      : machineAsksWords(k.sailor, k.machine.owner, k.machine.skipper);
   return (
     <section
       class={`panel deck-knock${more === '' ? '' : ' stacked'}`}
@@ -217,7 +276,13 @@ export function KnockingCard({ deck }: { deck: DeckView }) {
   return (
     <p class="panel deck-knocking" role="status" data-knocking={k.state}>
       <span>
-        <Said words={knockingWords(k.state, k.skipper, k.boat, kindNameOf(k.kind))} />
+        <Said
+          words={
+            k.machine === undefined || k.machine === ''
+              ? knockingWords(k.state, k.skipper, k.boat, kindNameOf(k.kind))
+              : machineKnockingWords(k.state, k.machine, k.skipper, k.boat, kindNameOf(k.kind))
+          }
+        />
       </span>
       <button
         type="button"
@@ -385,18 +450,42 @@ export function DeckPlate({ deck }: { deck: DeckView }) {
   );
 }
 
-/** One person aboard: their portrait and name, who they are, the helm's mark, and the keys. */
+/**
+ * One person aboard: their portrait and name, who they are, the helm's
+ * mark, and the controls' keys; what is rarely done to them behind a ⋯
+ * key, opened under the row.
+ */
 export function PersonRow({
   person,
   crew,
   act,
+  open = false,
+  toggle,
 }: {
   person: PersonTold;
   crew: CrewTold;
   act: (a: RowAction, p: PersonTold) => void;
+  open?: boolean;
+  toggle?: () => void;
 }) {
-  const actions = rowActions(crew, person.seat);
-  const tags = [person.seat === 0 ? SKIPPER : '', person.you ? YOU : ''].filter((t) => t !== '');
+  const { keys: actions, more } = splitActions(rowActions(crew, person.seat));
+  const key = (a: RowAction) => (
+    <button
+      key={a}
+      type="button"
+      class={`plate-key${a === 'take' ? ' key-main' : ''}`}
+      aria-label={person.you ? ACTION_WORDS[a] : actionName(ACTION_WORDS[a], person.name)}
+      onClick={() => act(a, person)}
+    >
+      {ACTION_WORDS[a]}
+    </button>
+  );
+  const tags = [
+    person.seat === 0 ? SKIPPER : '',
+    person.you ? YOU : '',
+    person.muted ? MUTED : '',
+    person.blocked ? BLOCKED : '',
+  ].filter((t) => t !== '');
   return (
     <li class="deck-row" data-seat={person.seat}>
       <Face look={person.look} />
@@ -414,19 +503,23 @@ export function PersonRow({
         </p>
         {tags.length > 0 ? <p class="deck-faint">{tags.join(' · ')}</p> : null}
       </div>
-      <span class="deck-row-keys">
-        {actions.map((a) => (
-          <button
-            key={a}
-            type="button"
-            class={`plate-key${a === 'take' ? ' key-main' : ''}`}
-            aria-label={person.you ? ACTION_WORDS[a] : actionName(ACTION_WORDS[a], person.name)}
-            onClick={() => act(a, person)}
-          >
-            {ACTION_WORDS[a]}
-          </button>
-        ))}
-      </span>
+      {actions.length > 0 || more.length > 0 ? (
+        <span class="deck-row-keys">
+          {actions.map(key)}
+          {more.length > 0 ? (
+            <button
+              type="button"
+              class="plate-key deck-more"
+              aria-label={moreFor(person.name)}
+              aria-expanded={open}
+              onClick={() => toggle?.()}
+            >
+              {MORE}
+            </button>
+          ) : null}
+        </span>
+      ) : null}
+      {open && more.length > 0 ? <div class="deck-row-more">{more.map(key)}</div> : null}
     </li>
   );
 }
@@ -439,6 +532,8 @@ export function PersonRow({
 export function AboardList({ deck }: { deck: DeckView }) {
   const crew = deck.crew.value;
   const [putting, setPutting] = useState<PersonTold | null>(null);
+  // The one row whose ⋯ is open, by seat; -1 for none.
+  const [opened, setOpened] = useState(deck.openRow ?? -1);
   const close = () => (deck.list.value = false);
   useLayoutEffect(() => {
     const key = (e: KeyboardEvent) => {
@@ -451,6 +546,7 @@ export function AboardList({ deck }: { deck: DeckView }) {
     return () => document.removeEventListener('keydown', key);
   }, []);
   const act = (a: RowAction, p: PersonTold) => {
+    setOpened(-1);
     switch (a) {
       case 'hand':
         deck.hand(p.seat);
@@ -463,6 +559,22 @@ export function AboardList({ deck }: { deck: DeckView }) {
         break;
       case 'putAshore':
         setPutting(p);
+        break;
+      case 'mute':
+      case 'unmute':
+        deck.chat.mute({ seat: p.seat }, p.name, a === 'mute');
+        break;
+      case 'unblock':
+        deck.chat.block({ seat: p.seat }, p.name, false);
+        break;
+      case 'block':
+      case 'report':
+        deck.chat.sheet.value = {
+          who: { seat: p.seat },
+          name: p.name,
+          machine: p.machine,
+          step: a,
+        };
         break;
     }
   };
@@ -495,7 +607,14 @@ export function AboardList({ deck }: { deck: DeckView }) {
               </span>
             </li>
           ) : crew !== null ? (
-            <PersonRow key={p.seat} person={p} crew={crew} act={act} />
+            <PersonRow
+              key={p.seat}
+              person={p}
+              crew={crew}
+              act={act}
+              open={opened === p.seat}
+              toggle={() => setOpened(opened === p.seat ? -1 : p.seat)}
+            />
           ) : null,
         )}
       </ul>
@@ -516,7 +635,14 @@ export function AboardList({ deck }: { deck: DeckView }) {
 /** What the screen shows of sailing together under the case: the controls offered, the knocks, the own knock, the line. */
 export function DeckTop({ deck }: { deck: DeckView }) {
   if (deck.watching.value !== null) {
-    return null;
+    // Watching: the knocks of machine sailors on the player's own, and the
+    // player's machine sailor's own knock.
+    return (
+      <>
+        <KnockCards deck={deck} />
+        <KnockingCard deck={deck} />
+      </>
+    );
   }
   return (
     <>
@@ -526,6 +652,11 @@ export function DeckTop({ deck }: { deck: DeckView }) {
       <DeckLine deck={deck} />
     </>
   );
+}
+
+/** Chat aboard's strip, under the case, while anyone else is aboard. */
+export function DeckChat({ deck, sailor }: { deck: DeckView; sailor: string | null }) {
+  return chatShown(deck) ? <ChatStrip deck={deck} sailor={sailor} /> : null;
 }
 
 /** At the foot of the screen, in the controls' place: the plate. */
@@ -540,13 +671,24 @@ export function DeckFoot({ deck }: { deck: DeckView }) {
   );
 }
 
-/** The windows over the sea: going ashore's question, who is aboard, the skipper's link. */
+/** The windows over the sea: chat's, going ashore's question, who is aboard, the skipper's link. */
 export function DeckWindows({ deck, sailor }: { deck: DeckView; sailor: string | null }) {
+  if (deck.chat.ask.value !== null || deck.chat.sheet.value !== null) {
+    return <ChatWindows deck={deck} sailor={sailor} />;
+  }
   if (deck.ashore.value && deck.aboard.value !== null) {
     return <AshoreQuestion deck={deck} />;
   }
   if (deck.list.value && deck.crew.value !== null && deck.watching.value === null) {
     return <AboardList deck={deck} />;
+  }
+  // Watching their own machine sailor, its owner's windows.
+  const machine = machineShared(deck);
+  if (machine !== null && deck.list.value && deck.crew.value !== null) {
+    return <MachineCrew deck={deck} machine={machine} />;
+  }
+  if (machine !== null && deck.link.value) {
+    return <MachineLink machine={machine} deck={deck} close={() => (deck.link.value = false)} />;
   }
   if (deck.link.value) {
     return <SailWithMe deck={deck} sailor={sailor} close={() => (deck.link.value = false)} />;

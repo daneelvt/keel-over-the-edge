@@ -18,6 +18,20 @@ import (
 // AccountID is an account's key: a UUID, version 7.
 type AccountID [16]byte
 
+// ParseAccountID reads an ID in the UUID's usual form, or without its
+// dashes.
+func ParseAccountID(s string) (AccountID, error) {
+	var id AccountID
+	raw := strings.ReplaceAll(s, "-", "")
+	if len(raw) != 32 {
+		return id, ErrNotFound
+	}
+	if _, err := hex.Decode(id[:], []byte(raw)); err != nil {
+		return id, ErrNotFound
+	}
+	return id, nil
+}
+
 // String writes the ID in the UUID's usual form.
 func (id AccountID) String() string {
 	var b [36]byte

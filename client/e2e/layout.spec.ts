@@ -778,13 +778,33 @@ async function clearFaults(page: Page): Promise<string[]> {
   return found;
 }
 
-/** Watching: the plate one row at the foot of the screen, over nothing, the case where it is when sailing. */
+/**
+ * Watching: the plate one row at the foot of the screen, over nothing, the
+ * case where it is when sailing; another's boat, and the player's own
+ * machine sailor's with its Come aboard.
+ */
 async function plateFaults(page: Page, boat: Box | null): Promise<string[]> {
+  const found: string[] = [];
+  for (const mine of [false, true]) {
+    for (const f of await onePlateFaults(page, boat, mine)) {
+      found.push(mine ? `the own machine sailor’s plate: ${f}` : f);
+    }
+  }
+  return found;
+}
+
+async function onePlateFaults(page: Page, boat: Box | null, mine: boolean): Promise<string[]> {
   const caseTop = () =>
     page.evaluate(() => document.querySelector('.case-top')?.getBoundingClientRect().top ?? null);
   const sailing = await caseTop();
-  await page.evaluate((name) => globalThis.keel.watchPlate(name), LONG);
+  await page.evaluate(({ name, mine }) => globalThis.keel.watchPlate(name, true, false, mine), {
+    name: LONG,
+    mine,
+  });
   const plate = page.locator('.watch-plate');
+  if (mine) {
+    await expect(plate.getByRole('button', { name: /^Come aboard/ })).toBeVisible();
+  }
   await expect(plate).toBeVisible();
   await expect(plate).toHaveAttribute('aria-label', `Watching ${LONG}`);
   await page.evaluate(() => globalThis.keel.render());
@@ -2259,6 +2279,7 @@ test('sailing together’s parts stand clear of the instruments and the boat on 
     { name: 'handed', steers: false },
     { name: 'list', steers: false },
     { name: 'list-skipper', steers: false },
+    { name: 'list-more', steers: true },
     { name: 'ashore', steers: false },
     { name: 'link', steers: true },
   ] as const;
@@ -2277,6 +2298,11 @@ test('sailing together’s parts stand clear of the instruments and the boat on 
       const sel =
         '.deck-knock, .deck-knocking, .deck-line, .deck-plate, .deck-handed, .deck-window';
       await expect(page.locator(sel).first()).toBeVisible();
+      // Two frames for the screen to settle at its new size (a slow
+      // runner lays out a resized screen a frame late), then drawn.
+      await page.evaluate(
+        () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))),
+      );
       await page.evaluate(() => globalThis.keel.render());
       const seen = await parts(page);
       const where = `${s.name}, ${scene.name}`;
@@ -2361,6 +2387,183 @@ test('sailing together’s parts stand clear of the instruments and the boat on 
         found.push(`${where}: ${f}`);
       }
       if (s.name === 'small Android phone upright') {
+        await test.info().attach(`${where}.png`, {
+          body: await page.screenshot(),
+          contentType: 'image/png',
+        });
+      }
+    }
+  }
+  await page.evaluate(() => globalThis.keel.deckScene(null));
+  expect(found).toEqual([]);
+});
+
+// Chat aboard, on every screen: the strip under the case with sailing
+// together's other parts. Folded, one row the keys' height, clear of every
+// part and, upright, over no more of the boat than its masthead; open, its
+// lines as many as there is room for above the controls, the plate at the
+// foot or the watch's bar, never over the case, the pocket chart or the
+// keys; with the keyboard up, its field above the keyboard. The sheet of
+// mute, block and report, the report's form, the teens' card, the Rules
+// before a first line and a statement of reasons within the screen. Every
+// key 44 pixels a touch, its face the instruments' height.
+test('chat aboard’s strip and windows stand clear of the instruments, above the keyboard, their keys a 44 px touch', async ({
+  page,
+}) => {
+  test.skip(test.info().project.name === 'webgpu', 'the panels are the same on either back end');
+  test.setTimeout(240_000);
+  await page.setViewportSize({ width: SCREENS[0].width, height: SCREENS[0].height });
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await openScene(page, '', true);
+  await page.evaluate(() => {
+    const k = globalThis.keel;
+    k.setState({ sheetLimit: 0.05, boom: 0, surge: 0 });
+    k.setControls(0, 0);
+    k.render();
+  });
+  const SCENES = [
+    { name: 'chat', steers: true, open: false },
+    { name: 'chat-open', steers: true, open: true },
+    { name: 'chat-crew', steers: false, open: true },
+    { name: 'chat-keyboard', steers: true, open: true },
+    { name: 'chat-refused', steers: true, open: true },
+    { name: 'chat-word', steers: true, open: true },
+    { name: 'chat-resting', steers: true, open: true },
+    { name: 'chat-off', steers: true, open: true },
+    { name: 'chat-own-off', steers: true, open: true },
+    { name: 'chat-owner', steers: false, open: true },
+    { name: 'chat-list', steers: true, open: false },
+    { name: 'chat-sheet', steers: true, open: true },
+    { name: 'chat-block', steers: true, open: true },
+    { name: 'chat-report', steers: true, open: true },
+    { name: 'chat-teen', steers: true, open: true },
+    { name: 'chat-rules', steers: true, open: true },
+    { name: 'chat-statement', steers: true, open: false },
+  ] as const;
+  const found: string[] = [];
+  for (const s of SCREENS) {
+    await page.setViewportSize({ width: s.width, height: s.height });
+    await page.waitForFunction(
+      ({ width, height }) => innerWidth === width && innerHeight === height,
+      { width: s.width, height: s.height },
+    );
+    for (const scene of SCENES) {
+      await page.evaluate(({ name, sailor }) => globalThis.keel.deckScene(name, sailor), {
+        name: scene.name,
+        sailor: LONG,
+      });
+      await expect(page.locator('.chat-strip').first()).toBeVisible();
+      if (
+        scene.name !== 'chat' &&
+        scene.name.match(/list|sheet|block|report|teen|rules|statement/)
+      ) {
+        await expect(page.locator('.deck-window').first()).toBeVisible();
+      }
+      // The open strip fits itself after it is drawn: a frame or two.
+      await page.evaluate(
+        () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))),
+      );
+      await page.evaluate(() => globalThis.keel.render());
+      const seen = await parts(page);
+      const where = `${s.name}, ${scene.name}`;
+      const keyboard =
+        scene.name === 'chat-keyboard'
+          ? Math.round(s.height * (s.height >= s.width ? 0.42 : 0.55))
+          : 0;
+      const faults = await page.evaluate(
+        ({ boat, others, upright, steers, open, keyboard }) => {
+          const out: string[] = [];
+          const covers = (
+            a: { left: number; top: number; right: number; bottom: number },
+            b: { left: number; top: number; right: number; bottom: number },
+          ) =>
+            Math.min(a.right, b.right) - Math.max(a.left, b.left) > 0.5 &&
+            Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top) > 0.5;
+          const shown = innerHeight - keyboard;
+          for (const e of document.querySelectorAll<HTMLElement>(
+            '.chat-strip, .deck-window, .statement-line',
+          )) {
+            const r = e.getBoundingClientRect();
+            const name = `.${[...e.classList].join('.')}`;
+            if (
+              r.left < -0.5 ||
+              r.top < -0.5 ||
+              r.right > innerWidth + 0.5 ||
+              r.bottom > innerHeight + 0.5
+            ) {
+              out.push(
+                `${name} is off the screen (${[r.left, r.top, r.right, r.bottom].map(Math.round)})`,
+              );
+            }
+            for (const b of e.querySelectorAll('button')) {
+              const k = b.getBoundingClientRect();
+              if (k.width === 0) {
+                continue;
+              }
+              const reach = Number.parseFloat(getComputedStyle(b, '::after').top) || 0;
+              if (k.width < 43.5 || k.height < 37.5 || k.height - 2 * reach < 43.5) {
+                out.push(
+                  `${name}: “${b.textContent}” is ${Math.round(k.width)} × ${Math.round(k.height)}`,
+                );
+              }
+            }
+            if (e.classList.contains('deck-window')) {
+              continue;
+            }
+            const strip = e.classList.contains('chat-strip');
+            if (strip && open !== e.classList.contains('open')) {
+              out.push(open ? 'the strip is folded' : 'the strip is open');
+            }
+            if (strip && !e.classList.contains('open') && r.height > 48) {
+              out.push(`the folded strip is ${Math.round(r.height)} px tall: more than a row`);
+            }
+            // Under the case, beside the other lines there, it may stand
+            // over them, never over a part.
+            for (const o of others) {
+              if (covers(r, o) && !o.name.startsWith('the line') && keyboard === 0) {
+                out.push(`${name} covers ${o.name}`);
+              }
+            }
+            for (const sel of ['.deck-plate', '.watch-bar']) {
+              const p = document.querySelector(sel)?.getBoundingClientRect();
+              if (p !== undefined && p.width > 0 && covers(r, p)) {
+                out.push(`${name} covers ${sel}`);
+              }
+            }
+            // Folded, as every line under the case: upright over no more
+            // of the boat than its masthead. Open, the player's to read.
+            if (boat !== null && !(strip && e.classList.contains('open'))) {
+              const hull = upright ? { ...boat, top: (boat.top + boat.bottom) / 2 } : boat;
+              if (covers(r, hull)) {
+                out.push(`${name} covers the boat`);
+              }
+            }
+          }
+          const field = document.querySelector('.chat-foot input')?.getBoundingClientRect();
+          if (field !== undefined && field.bottom > shown + 0.5) {
+            out.push(`the field is under the keyboard (${Math.round(field.bottom)} > ${shown})`);
+          }
+          const steering =
+            document.querySelector('[data-control=helm], [data-control=sheet], .pilot-head') !==
+            null;
+          if (steering !== steers) {
+            out.push(steers ? 'the controls are gone' : 'a control that steers shows');
+          }
+          return out;
+        },
+        {
+          boat: seen.boat,
+          others: seen.parts,
+          upright: s.upright,
+          steers: scene.steers,
+          open: scene.open,
+          keyboard,
+        },
+      );
+      for (const f of faults) {
+        found.push(`${where}: ${f}`);
+      }
+      if (s.name === 'small Android phone upright' || s.name === 'small Android phone sideways') {
         await test.info().attach(`${where}.png`, {
           body: await page.screenshot(),
           contentType: 'image/png',

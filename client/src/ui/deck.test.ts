@@ -10,8 +10,9 @@ import { signal } from '@preact/signals';
 import type { ComponentChildren, VNode } from 'preact';
 import { describe, expect, test } from 'vitest';
 import { deckScene } from '../dev/deckscenes';
-import type { CrewTold, PersonTold } from '../net/messages';
-import { DeckPlate, holderName, KnockCards, rowActions, secondsLeft } from './deck';
+import type { CrewTold, PersonTold, WhoTold } from '../net/messages';
+import { ChatLog } from './chatlog';
+import { DeckPlate, holderName, KnockCards, rowActions, secondsLeft, splitActions } from './deck';
 import { canShareLink, deckOf, deckPlate, deckShown, selfOf, skipperAway } from './decklazy';
 import {
   keepLink,
@@ -23,8 +24,19 @@ import {
 } from './sailwithme';
 
 function person(seat: number, you = false): PersonTold {
-  return { seat, look: 0, name: `Sailor ${seat}`, machine: false, you };
+  return {
+    seat,
+    look: 0,
+    name: `Sailor ${seat}`,
+    machine: false,
+    you,
+    muted: false,
+    blocked: false,
+  };
 }
+
+/** What anyone aboard may do to anyone else: mute, block, report. */
+const TIES = ['mute', 'block', 'report'];
 
 /** Three aboard, the player in seat me, the controls held by holder. */
 function crew(me: number | null, holder: number): CrewTold {
@@ -35,29 +47,43 @@ describe('who is aboard: what each row offers', () => {
   test('the skipper holding the controls hands them to anyone and puts anyone ashore', () => {
     const c = crew(0, 0);
     expect(rowActions(c, 0)).toEqual([]);
-    expect(rowActions(c, 1)).toEqual(['hand', 'putAshore']);
-    expect(rowActions(c, 2)).toEqual(['hand', 'putAshore']);
+    expect(rowActions(c, 1)).toEqual(['hand', 'putAshore', ...TIES]);
+    expect(rowActions(c, 2)).toEqual(['hand', 'putAshore', ...TIES]);
   });
 
   test('the skipper while another holds them takes them back, at once, and still puts anyone ashore', () => {
     const c = crew(0, 1);
     expect(rowActions(c, 0)).toEqual(['take']);
-    expect(rowActions(c, 1)).toEqual(['putAshore']);
-    expect(rowActions(c, 2)).toEqual(['putAshore']);
+    expect(rowActions(c, 1)).toEqual(['putAshore', ...TIES]);
+    expect(rowActions(c, 2)).toEqual(['putAshore', ...TIES]);
   });
 
   test('one of the crew holding them hands them on or gives them back; puts no one ashore', () => {
     const c = crew(2, 2);
     expect(rowActions(c, 2)).toEqual(['giveBack']);
-    expect(rowActions(c, 0)).toEqual(['hand']);
-    expect(rowActions(c, 1)).toEqual(['hand']);
+    expect(rowActions(c, 0)).toEqual(['hand', ...TIES]);
+    expect(rowActions(c, 1)).toEqual(['hand', ...TIES]);
   });
 
-  test('one of the crew not holding them may do nothing to anyone', () => {
+  test('one of the crew not holding them may only mute, block and report the others', () => {
     for (const holder of [0, 1]) {
       const c = crew(2, holder);
-      expect([0, 1, 2].map((s) => rowActions(c, s))).toEqual([[], [], []]);
+      expect([0, 1, 2].map((s) => rowActions(c, s))).toEqual([TIES, TIES, []]);
     }
+  });
+
+  test('a mute or a block in force is offered to be ended', () => {
+    const c = crew(0, 0);
+    c.people[1] = { ...person(1), muted: true };
+    c.people[2] = { ...person(2), blocked: true };
+    expect(rowActions(c, 1)).toEqual(['hand', 'putAshore', 'unmute', 'block', 'report']);
+    expect(rowActions(c, 2)).toEqual(['hand', 'putAshore', 'mute', 'unblock', 'report']);
+    // The controls stand on the row; the rest is behind its ⋯ key.
+    expect(splitActions(rowActions(c, 1))).toEqual({
+      keys: ['hand'],
+      more: ['putAshore', 'unmute', 'block', 'report'],
+    });
+    expect(splitActions(['take'])).toEqual({ keys: ['take'], more: [] });
   });
 
   test('a spectator, who is not aboard, may do nothing; nor to a seat no one has', () => {
@@ -168,6 +194,12 @@ function source() {
     goAshore: () => told.push('ashore'),
     putAshore: (s: number) => told.push(`put ashore ${s}`),
     closeKnocks: (c: boolean) => told.push(`closed ${c}`),
+    chat: new ChatLog(),
+    chatState: signal(null),
+    sayAboard: (t: string) => told.push(`say ${t}`) > 0,
+    mute: (_w: WhoTold, n: string, on: boolean) => told.push(`mute ${n} ${on}`),
+    block: (_w: WhoTold, n: string, on: boolean) => told.push(`block ${n} ${on}`),
+    report: (_w: WhoTold, r: string) => told.push(`report ${r}`),
   };
 }
 
@@ -314,7 +346,11 @@ describe('the skipper’s link', () => {
       return a;
     });
     expect(await s.asks()).toEqual(['rules']);
-    expect(await s.status()).toEqual({ live: true, expires: Date.parse('2026-11-09T12:00:00Z') });
+    expect(await s.status()).toEqual({
+      live: true,
+      closed: false,
+      expires: Date.parse('2026-11-09T12:00:00Z'),
+    });
     expect(await s.make()).toEqual({
       link: { url: 'https://play.example/sail/abc', expires: Date.parse('2026-11-09T12:00:00Z') },
     });

@@ -56,9 +56,12 @@ type report struct {
 	Woke  string `json:"woke,omitempty"`
 	// Cut is how long the last wait ran, s, before the app cut its call;
 	// Watched how many watch the boat.
-	Cut     int           `json:"lastWaitCutAfter,omitempty"`
-	Watched int           `json:"watchedBy,omitempty"`
-	Notices []string      `json:"notices,omitempty"`
+	Cut     int      `json:"lastWaitCutAfter,omitempty"`
+	Watched int      `json:"watchedBy,omitempty"`
+	Notices []string `json:"notices,omitempty"`
+	// Aboard is who is aboard with the machine sailor, and who holds the
+	// controls; "" with nobody else aboard.
+	Aboard  string        `json:"aboard,omitempty"`
 	Boat    *boatFacts    `json:"boat,omitempty"`
 	Wind    *windFacts    `json:"wind,omitempty"`
 	Shoal   *shoalFacts   `json:"shoal,omitempty"`
@@ -160,6 +163,7 @@ func (h *helm) reportFor(s *Sea, f *bus.Frame, sl int32, detail string, since in
 	in := &f.Instruments[sl]
 	r := &report{brief: detail != detailFull}
 	r.Clock = clockOf(s, f, st.X, st.Y)
+	r.Aboard = h.aboardWords(s, f, sl)
 
 	// The boat.
 	kind := s.boat(f.Kind[sl])
@@ -860,6 +864,9 @@ func (r *report) text() string {
 	b.WriteByte('\n')
 	for _, n := range r.Notices {
 		b.WriteString(n + "\n")
+	}
+	if r.Aboard != "" {
+		b.WriteString("Aboard: " + r.Aboard + "\n")
 	}
 	if bt := r.Boat; bt != nil {
 		heel := fmt.Sprintf("heel %d°", bt.Heel)

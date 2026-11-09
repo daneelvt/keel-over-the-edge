@@ -5,7 +5,8 @@
 // each was made and when it was last used, with one more added on this
 // device or another, or one removed while another stays; the recovery code,
 // made anew; the machine sailors, with their approved apps and connection
-// tokens; who may watch the sailor's boat; signing out, here or
+// tokens; who may watch the sailor's boat; chat with other players, and
+// the mutes and blocks the account keeps; signing out, here or
 // everywhere else; and deleting the sailor for
 // good. What cannot be undone (removing a passkey, a new code, deleting)
 // first asks for one of the account's own passkeys, which allows it for
@@ -18,6 +19,7 @@ import { useEffect, useState } from 'preact/hooks';
 import { catalog } from '../catalog';
 import { lookFrom } from '../catalog/looks';
 import { useWatch } from '../ui/watchlazy';
+import { useChatAccount } from './chatlazy';
 import { RULES_PAGE, RULES_TITLE, SAFETY_PAGE, STAYING_SAFE } from './firstwords';
 import { useMachines } from './lazy';
 import {
@@ -47,6 +49,12 @@ function MachinesSection() {
 function SpectatorsSection() {
   const m = useWatch();
   return m === null ? null : <m.SpectatorsChoice />;
+}
+
+/** Chat with other players, and the mutes and blocks, once their module is loaded. */
+function ChatSection() {
+  const m = useChatAccount();
+  return m === null ? null : <m.ChatAccount />;
 }
 
 /** The menu's panel of machine sailors, once their module is loaded. */
@@ -276,6 +284,7 @@ export function AccountPanel({
           </button>
           <MachinesSection />
           <SpectatorsSection />
+          <ChatSection />
           <h3>Signed in</h3>
           <div class="account-row">
             <button type="button" disabled={busy} onClick={() => void run(signOut, reload)}>

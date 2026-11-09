@@ -35,6 +35,22 @@ type Crewing struct {
 	Taken    int // the controls taken when handed
 	Back     int // the controls taken back by the skipper
 	Refused  int // knocks told anything but waiting or let aboard
+	// Chat, with -chat: lines said, said lines that came back said,
+	// lines refused, and lines heard from others aboard.
+	Said, Echoed, Silenced, Heard int
+}
+
+// chatLines are what the bots say aboard: sailors' talk, 30 to 160
+// bytes, nothing the filter refuses.
+var chatLines = []string{
+	"Ready about? I will ease the sheet as we come through the wind.",
+	"The breeze is filling in from the west, we should be able to lay the point on this tack.",
+	"Mind the boom when she gybes.",
+	"There is a squall line on the horizon, maybe reef now before it reaches us and the sea builds up.",
+	"Nice puff, she is really moving now, look at the wake.",
+	"Can you take the helm for a bit while I sort out the lines in the cockpit and coil the main sheet?",
+	"Land ho, fine on the port bow.",
+	"Shall we head for the harbour before dark, or stay out and watch the stars come up over the water tonight?",
 }
 
 // crew is a group's link: ready is closed once its skipper has made it,
@@ -185,7 +201,12 @@ func crewOne(ctx context.Context, cfg Config, groups []*crew, i int, cookie stri
 	return func(s *client.Sailor) {
 		var aboard bool
 		var people int
-		var knockAt, handAt, backAt time.Time
+		var knockAt, handAt, backAt, sayAt time.Time
+		var said uint32
+		every := time.Duration(0)
+		if cfg.Chat > 0 {
+			every = time.Duration(float64(time.Minute) / cfg.Chat)
+		}
 		knock := func() {
 			if time.Now().Before(knockAt) {
 				return
@@ -219,6 +240,15 @@ func crewOne(ctx context.Context, cfg Config, groups []*crew, i int, cookie stri
 				}
 			case *pb.ServerMessage_Crew:
 				people = len(b.Crew.GetPeople())
+			case *pb.ServerMessage_Chat:
+				switch c := b.Chat; {
+				case !c.GetYou():
+					p.Crewing.Heard++
+				case c.GetRefused() == pb.ChatRefusal_CHAT_REFUSAL_UNSPECIFIED:
+					p.Crewing.Echoed++
+				default:
+					p.Crewing.Silenced++
+				}
 			case *pb.ServerMessage_Handed:
 				if !b.Handed.GetGone() {
 					p.Crewing.Taken++
@@ -228,6 +258,14 @@ func crewOne(ctx context.Context, cfg Config, groups []*crew, i int, cookie stri
 		}
 		s.OnView = chainView(s.OnView, func(ev *client.Event) {
 			now := time.Now()
+			if every > 0 && people > 1 && (aboard || skipper) && now.After(sayAt) {
+				if !sayAt.IsZero() {
+					said++
+					p.Crewing.Said++
+					_ = s.Command(ctx, &pb.Command{Body: &pb.Command_Say{Say: &pb.Say{Text: chatLines[rng.IntN(len(chatLines))], Id: said}}})
+				}
+				sayAt = now.Add(every/2 + time.Duration(rng.Int64N(int64(every))))
+			}
 			switch {
 			case !skipper:
 				if !aboard {
@@ -270,10 +308,17 @@ func (r *Report) printCrews(w io.Writer) {
 		c.Taken += x.Taken
 		c.Back += x.Back
 		c.Refused += x.Refused
+		c.Said += x.Said
+		c.Echoed += x.Echoed
+		c.Silenced += x.Silenced
+		c.Heard += x.Heard
 	}
 	if c.Knocks == 0 && c.Handed == 0 {
 		return
 	}
 	fmt.Fprintf(w, "crews: %d knocks (%d refused), %d let aboard, %d welcomed aboard; the controls handed %d times, taken %d, taken back %d\n",
 		c.Knocks, c.Refused, c.Answered, c.Aboard, c.Handed, c.Taken, c.Back)
+	if c.Said > 0 {
+		fmt.Fprintf(w, "chat: %d lines said, %d said back to their sender, %d refused, %d heard by others aboard\n", c.Said, c.Echoed, c.Silenced, c.Heard)
+	}
 }

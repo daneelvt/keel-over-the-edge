@@ -43,6 +43,7 @@ import {
   sheetIndex,
   sheetOf,
 } from '../predict/predictor';
+import { ChatLog } from '../ui/chatlog';
 import type { WorldEnd } from '../ui/countdown';
 import { queueLines } from '../ui/queue';
 import { BOAT_IN_THE_WATER, endedText, type WatchEndWhy } from '../ui/watchwords';
@@ -62,6 +63,7 @@ import type {
   BumpTold,
   CapSeen,
   ChartEntry,
+  ChatStateTold,
   ChunksHanded,
   CrewTold,
   ForecastTold,
@@ -75,12 +77,14 @@ import type {
   LightSeen,
   PastTold,
   PlaceSeen,
+  ReportReasonTold,
   Status,
   ToWorker,
   Traffic,
   WatchingTold,
   WeatherKeyframe,
   WeatherSpells,
+  WhoTold,
 } from './messages';
 import { NO_MARGIN, newSnapshot, type OwnSnapshot, readSnapshot } from './snapshot';
 import { FLEET_META, fleetOf } from './view';
@@ -179,6 +183,10 @@ export class Online {
   readonly handed = signal<HandedTold | null>(null);
   /** The connection holds the controls of the boat it sails or is aboard, as the latest snapshot says. */
   readonly holding = signal(true);
+  /** The lines said aboard the boat in view, for this voyage, and the mutes and blocks that hide some. */
+  readonly chat = new ChatLog();
+  /** How chat stands for the connection, as last told; null before it is. */
+  readonly chatState = signal<ChatStateTold | null>(null);
   /** Why the connection last left a boat it was aboard, until its own boat's Welcome. */
   #ashore: AshoreWhyTold | null = null;
   /** What the server last told of the AI of the own machine sailor watched, and of which watch. */
@@ -334,9 +342,9 @@ export class Online {
     this.#port.postMessage({ type: 'watch', sailor });
   }
 
-  /** Asks to come aboard by a link's token: knocking tells how it stands. */
-  knock(token: string): void {
-    this.#port.postMessage({ type: 'knock', token });
+  /** Asks to come aboard by a link's token, or sends the player's machine sailor named machine: knocking tells how it stands. */
+  knock(token: string, machine = ''): void {
+    this.#port.postMessage({ type: 'knock', token, machine });
   }
 
   /** The skipper's answer to a knock: let them aboard, or not now. */
@@ -374,6 +382,40 @@ export class Online {
   /** The skipper's: closes the boat to knocks for this voyage, or opens it. */
   closeKnocks(closed: boolean): void {
     this.#port.postMessage({ type: 'closeKnocks', closed });
+  }
+
+  /** Comes aboard the own machine sailor watched, without knocking: knocking tells how it stands. */
+  comeAboard(): void {
+    this.#port.postMessage({ type: 'comeAboard' });
+  }
+
+  /** Says a line aboard as self: shown at once, its echo awaited; false for nothing to send. */
+  sayAboard(text: string, self: string): boolean {
+    const s = this.chat.say(text, self, Date.now());
+    if (s === null) {
+      return false;
+    }
+    this.#port.postMessage({ type: 'say', text: s.text, id: s.id });
+    return true;
+  }
+
+  /** Mutes someone aboard, by name for the strip, or no longer: their lines hidden at once. */
+  mute(who: WhoTold, name: string, on: boolean): void {
+    this.chat.tie(name, 'mute', on);
+    this.#port.postMessage({ type: 'mute', who, on });
+  }
+
+  /** Blocks someone aboard, or no longer: their lines hidden at once. */
+  block(who: WhoTold, name: string, on: boolean): void {
+    if (on) {
+      this.chat.tie(name, 'block', true);
+    }
+    this.#port.postMessage({ type: 'block', who, on });
+  }
+
+  /** Reports someone aboard, with a note for the game's owner. */
+  report(who: WhoTold, reason: ReportReasonTold, note: string): void {
+    this.#port.postMessage({ type: 'report', who, reason, note });
   }
 
   /** A boat: a new one at the start, or a place in the queue, while a watch goes on. */
@@ -476,6 +518,19 @@ export class Online {
         break;
       case 'crew':
         this.crew.value = m.crew.people.length > 1 ? m.crew : null;
+        this.chat.crew(m.crew.people);
+        break;
+      case 'chat':
+        this.chat.receive(m.chat, Date.now());
+        break;
+      case 'chatState':
+        this.chatState.value = m.state;
+        break;
+      case 'tied':
+        this.chat.tied(m.tied, Date.now());
+        break;
+      case 'reported':
+        this.chat.reported(m.ok, Date.now());
         break;
       case 'handed':
         this.handed.value = m.handed.gone ? null : m.handed;
@@ -567,6 +622,10 @@ export class Online {
           this.#hadBoat = true;
           this.#away = false;
           this.place.value = null;
+        }
+        if (m.boat !== this.boat) {
+          // Another boat, another voyage: its chat is not this one's.
+          this.chat.clear();
         }
         this.boat = m.boat;
         this.#watcher.kind = m.kind;

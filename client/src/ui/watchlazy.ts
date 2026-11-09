@@ -31,6 +31,8 @@ export interface WatchView {
   watch(sailor: string): void;
   sail(): void;
   unwatch(): void;
+  /** Come aboard the own machine sailor watched, without knocking; absent where nobody may. */
+  comeAboard?: () => void;
 }
 
 /** Whether the own boat sails on this connection: watching takes it out of the water. */

@@ -37,6 +37,10 @@ func (s *sailing) SailLink(ctx context.Context, hash [32]byte) (store.SailLink, 
 type deck struct{ can string }
 
 func (d deck) LinkCan(_, _ store.AccountID) (string, uint16, string) { return d.can, 1, "Swift" }
+func (d deck) MachineCan(_, _, _, _ store.AccountID) string          { return d.can }
+func (deck) CallAshore(store.AccountID) bool                         { return false }
+func (d deck) Closed(store.AccountID) bool                           { return d.can == CanClosed }
+func (deck) Aboard(store.AccountID) bool                             { return false }
 
 // aboardServer is a server with sailing together: the store, the owner's
 // switches, links made at an origin of its own, and the sessions' cache.
@@ -521,6 +525,14 @@ type deckOf struct{ d *atomic.Pointer[deck] }
 func (d deckOf) LinkCan(skipper, viewer store.AccountID) (string, uint16, string) {
 	return d.d.Load().LinkCan(skipper, viewer)
 }
+
+func (d deckOf) MachineCan(skipper, skipperOwner, machine, owner store.AccountID) string {
+	return d.d.Load().MachineCan(skipper, skipperOwner, machine, owner)
+}
+
+func (d deckOf) CallAshore(m store.AccountID) bool { return d.d.Load().CallAshore(m) }
+func (d deckOf) Closed(s store.AccountID) bool     { return d.d.Load().Closed(s) }
+func (d deckOf) Aboard(id store.AccountID) bool    { return d.d.Load().Aboard(id) }
 
 // browserOf is a browser on srv with b's session.
 func (srv *testServer) browserOf(t *testing.T, b *browser) *browser {
