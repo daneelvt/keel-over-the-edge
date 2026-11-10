@@ -492,8 +492,9 @@ poses:
   # the starboard side, the left hand and foot forward), the legs over the
   # side, the backs of the knees just past the edge and the shins hanging
   # down the topsides, a little out from them, the feet loose; the coat's
-  # skirts as seated, the front over the thighs and the sides on the deck,
-  # the back folded short of the cuddy's side behind. Upright, the hands resting on the thighs, the forward one by its
+  # skirts as seated, the front over the thighs and the sides on the deck;
+  # the back hangs down behind (the clips' hang), laid on the deck there
+  # short of the cuddy's side. Upright, the hands resting on the thighs, the forward one by its
   # knee; looking forward along the boat. (Sat upright, the deck is beyond
   # an easy reach.)
   rail-sit:
@@ -515,8 +516,8 @@ poses:
       - [skirt_front_r_01, x, -78]
       - [skirt_side_l_01, y, 80]
       - [skirt_side_r_01, y, -80]
-      - [skirt_back_l_01, x, 45]
-      - [skirt_back_r_01, x, 45]
+      - [skirt_back_l_01, x, 82]
+      - [skirt_back_r_01, x, 82]
     ik:
       hand_l: { at: bone, bone: thigh_l, offset: [0.03, -0.13, -0.32], pole: [0.5, 0.3, -0.3] }
       hand_r: { at: bone, bone: thigh_r, offset: [-0.03, -0.13, -0.2], pole: [-0.5, 0.3, -0.3] }
@@ -596,6 +597,7 @@ clips:
     loop: true
     idle: true
     sides: true
+    hang: { back: 1.0 }
     keys:
       - { pose: rail-sit, hold: 1.6, ramp: 1.5, lead: head }
       - { pose: rail-sit-luff, hold: 1.4, ramp: 1.3, lead: head, anticipate: 0.05 }
@@ -606,6 +608,7 @@ clips:
     loop: true
     idle: true
     sides: true
+    hang: { back: 1.0 }
     keys:
       - { pose: rail-lean, hold: 1.6, ramp: 1.5, lead: head }
       - { pose: rail-lean-luff, hold: 1.4, ramp: 1.3, lead: head, anticipate: 0.05 }

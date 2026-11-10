@@ -80,8 +80,9 @@ type clip struct {
 	// them more of it.
 	Strain []string `yaml:"strain" json:"strain,omitempty"`
 	// Hang turns the skirts' chains, by name (back, side, front), this
-	// share of the way to hang straight down from a body lying out on the
-	// trapeze; the build's own shares if not said.
+	// share of the way to hang straight down from the body (lying out on
+	// the trapeze, sat on a rail); on the trapeze, the build's own shares
+	// if not said.
 	Hang map[string]float64 `yaml:"hang" json:"hang,omitempty"`
 	Keys []key              `yaml:"keys" json:"keys"`
 }

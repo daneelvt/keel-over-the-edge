@@ -907,8 +907,9 @@ def make(fig, lib, name):
     clip.standing = all(lib.poses[k["pose"]]["place"] == STANDS for k in keys)
     clip.trapeze = all(lib.poses[k["pose"]]["place"] == TRAPEZE for k in keys)
     clip.rail = all(lib.poses[k["pose"]]["place"] == RAIL for k in keys)
-    # On the trapeze the skirts hang from the body as it lies (Figure.hang).
-    fig.hang = (spec.get("hang") or HANG) if clip.trapeze else None
+    # On the trapeze the skirts hang from the body as it lies (Figure.hang);
+    # any clip may hang its chains so (on the rail, the coat's back).
+    fig.hang = spec.get("hang") or (HANG if clip.trapeze else None)
     # Feet that stay where they are: in the boat, never stepping elsewhere.
     still = all(p["place"] == place for p in kp)
     clip.planted = ["foot_l", "foot_r"] if all(p["place"] for p in kp) and still else []
