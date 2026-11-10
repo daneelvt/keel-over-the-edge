@@ -57,7 +57,7 @@ const COCKPIT_FORE = 0.35;
 /** How far out from the cockpit's side (and the cuddy's, as wide at its after end) a walk along the side deck keeps beside them, m. */
 const COCKPIT_SIDE = 0.28;
 /** How near the boom may cross the side deck to a station, m, for its person to wait before crossing: it is over them. */
-export const BOOM_OVER = 0.45;
+export const BOOM_OVER = 0.3;
 /** Whether those forward of the cockpit go aft through it when the boom lies forward of them. */
 const AFT_WAY = false;
 /** The longest a person waits for the boom to move off before crossing all the same, seconds. */
