@@ -121,6 +121,20 @@ stage:
     boat: boats/skiff.glb
     at: [0.0, 24.0, 0.0]
     harness: { width: 0.075, thick: 0.005, columns: 32, up: -0.02, hook: 0.055 }
+  # A keelboat whose crew sit on the rail, legs over the side (build/
+  # stage.py's Rail): her model, set this far forward of the dinghy in the
+  # stage's scene, clear of it, the wheel and the trapeze's boat; her
+  # `rail` node is the starboard deck's edge they sit on. The clips placed
+  # there are placed from the deck's edge on their side, as the game places
+  # them from a station on the rail; sat there, the knees' joints this far
+  # out from the edge, the backs of the knees just past it. The cloth they
+  # sit on is laid on her deck this far fore and aft of the edge's station,
+  # inboard of the edge.
+  rail:
+    boat: boats/keelboat.glb
+    at: [0.0, 36.0, 0.0]
+    knee: 0.12
+    span: 1.2
 
 # The portraits (build/portraits.py), every look's taken alike: head and
 # shoulders, three-quarter, the camera on the figure's left at the height
@@ -223,6 +237,9 @@ motion:
     reach: 0.9
     contact: 0.001
     ankle-drift: 0.005
+    # A foot bearing on a deck, set on one: how far it may slide over it
+    # while it bears, beyond the walk's own speed.
+    slide: 0.01
     hand-clearance: 0.03
     # A hand on the hat, settling it: outside it by at least this.
     hat-clearance: 0.01
@@ -238,7 +255,8 @@ motion:
   # the hip flexes 120–135° with the knee bent (at 120, a man sitting on the
   # dinghy's low side deck, an ordinary seat at about 100°, is past 80% of
   # it), the knee 135°, the shoulder 180°, the elbow 150°, the neck turns
-  # 80°.
+  # 80°, the ankle 60° (on the toes under a deep crouch, 55°), the toes
+  # bend back 70° (a crouch on the balls of the feet bends them 50°).
   ranges:
     pelvis: 60
     spine_01: 35
@@ -257,8 +275,8 @@ motion:
     pinky: 90
     thigh: 135
     calf: 135
-    foot: 50
-    ball: 40
+    foot: 60
+    ball: 70
 
 # The skeleton every sailor and clip file shares: its joints, in the
 # order the files list them (the order the game's bone texture keeps).

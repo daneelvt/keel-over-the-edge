@@ -69,6 +69,8 @@ TORSO = ("pelvis", "spine_01", "spine_02", "spine_03", "neck_01", "head")
 # Where the holds drift.
 DRIFTS = ("spine_02", "spine_03", "neck_01", "head")
 FINGERS = ("thumb", "index", "middle", "ring", "pinky")
+# The arms' bones, by kind, the collarbone to the fingers.
+ARMS = ("clavicle", "upperarm", "lowerarm", "lowerarm_twist", "hand") + FINGERS
 
 # How far round the pelvis the buttocks are looked for, seating a figure,
 # how far over the deck they sit, and how far in from its outer edge.
@@ -301,8 +303,15 @@ class Figure:
                 continue
             lift = o.vertex_groups.get(SEAT_GROUP) or o.vertex_groups.new(name=SEAT_GROUP)
             lift.add(range(len(o.data.vertices)), 1.0, "REPLACE")
-            for name, target, mode in ((SEAT_GROUP, self.stage.plane, "ABOVE_SURFACE"),
-                                       (SEAT_GROUP + "-deck", self.stage.solid[0], "OUTSIDE_SURFACE")):
+            # The dinghy's seat and deck; and the rail's deck, if staged:
+            # each lifts only what is straight under it.
+            lifts = [(SEAT_GROUP, self.stage.plane, "ABOVE_SURFACE"),
+                     (SEAT_GROUP + "-deck", self.stage.solid[0], "OUTSIDE_SURFACE")]
+            if self.stage.rail is not None:
+                lifts += [(SEAT_GROUP + "-rail", self.stage.rail.plane, "ABOVE_SURFACE"),
+                          (SEAT_GROUP + "-rail-deck", self.stage.rail.solid[0], "OUTSIDE_SURFACE")]
+            planes = (self.stage.plane,) + ((self.stage.rail.plane,) if self.stage.rail is not None else ())
+            for name, target, mode in lifts:
                 m = o.modifiers.get(name) or o.modifiers.new(name, "SHRINKWRAP")
                 m.target = target
                 m.wrap_method = "PROJECT"
@@ -312,9 +321,9 @@ class Figure:
                 m.wrap_mode = mode
                 # From under the deck its underside faces the ray: only its
                 # top is found.
-                m.cull_face = "FRONT" if target is not self.stage.plane else "OFF"
+                m.cull_face = "FRONT" if target not in planes else "OFF"
                 m.offset = SEAT_CLEAR + (above or {}).get(o.name, 0.0)
-                m.project_limit = 2.0 if target is self.stage.plane else 0.3
+                m.project_limit = 2.0 if target in planes else 0.3
                 m.vertex_group = SEAT_GROUP
                 m.show_viewport = m.show_render = False
                 self.seat_mods.append((o, m.name))
@@ -414,6 +423,36 @@ class Figure:
             at = st.point("rack", side) + Vector((0.0, 0.0, ANKLE_UP))
             back = Matrix.Rotation(math.radians(-lie), 4, "X")
             return Matrix.Translation(at) @ st.facing(side) @ back @ Matrix.Translation(-feet)
+        if place == RAIL:
+            # On the rail: sat on the deck's edge facing outboard, the legs
+            # over the side, the backs of the knees just past the edge (the
+            # knees' joints the tables' `knee` out from it) and the lowest
+            # of what is under the hips (the body and its fitted clothes)
+            # on the deck; lifted, as on the seat, until nothing lying on
+            # the cambered deck is under it.
+            rail = st.rail
+            # The thighs lie on the deck: their cloth as the derived bones
+            # (the hips' correctors) put it.
+            self.derive()
+            pelvis = self.bones["pelvis"].head
+            co = self.dressed(self.sitting)
+            near = np.hypot(co[:, 0] - pelvis.x, co[:, 1] - pelvis.y) < SEAT_REACH
+            below = near & (co[:, 2] < pelvis.z)
+            low = float(co[below, 2].min()) - SEAT_CLEAR
+            knees = (self.bones["calf_l"].head + self.bones["calf_r"].head) / 2
+            contact = Vector((pelvis.x, knees.y, low))
+            at = st.point("rail", side) + Vector((side * rail.spec["knee"], 0.0, 0.0))
+            m = Matrix.Translation(at) @ st.facing(-side) @ Matrix.Translation(-contact)
+            # The arms hang as they rest till the IK takes the hands where
+            # they go: they lie on nothing.
+            placed = (co @ np.array(m)[:3, :3].T + np.array(m)[:3, 3])[~self.armed(self.sitting)]
+            lift = 0.0
+            for x, y, z in placed:
+                if rail.inner + 0.05 <= side * x <= rail.edge.x:
+                    top = rail.down(x, y)
+                    if top is not None and top - 0.15 < z < top + SEAT_CLEAR:
+                        lift = max(lift, top + SEAT_CLEAR - z)
+            return Matrix.Translation((0, 0, lift)) @ m
         if place == "outside":
             # In the water at the side, facing in, the chest at the gunwale:
             # where a sailor climbing back in starts.
@@ -460,6 +499,20 @@ class Figure:
                 if top is not None and top - 0.15 < z < top + SEAT_CLEAR:
                     lift = max(lift, top + SEAT_CLEAR - z)
         return Matrix.Translation((0, 0, lift)) @ m
+
+    def armed(self, meshes=None):
+        """Which vertices of the figure (or of meshes), in dressed()'s
+        order, the arms carry: those an arm's bone (the collarbone to the
+        fingers) weighs most on."""
+        cache = self.__dict__.setdefault("_armed", {})
+        out = []
+        for o in meshes or self.meshes:
+            if o.name not in cache:
+                names = {g.index: g.name for g in o.vertex_groups}
+                cache[o.name] = np.array([bool(v.groups) and kind(max(
+                    (g.weight, names.get(g.group, "")) for g in v.groups)[1]) in ARMS for v in o.data.vertices])
+            out.append(cache[o.name])
+        return np.concatenate(out)
 
     def dressed(self, meshes=None):
         """Every vertex of the figure (or of meshes) as posed, in the
@@ -793,6 +846,9 @@ class Clip:
         # Placed on the trapeze, every key: nothing lies on a seat, and the
         # cloth hangs from a body lying out.
         self.trapeze = False
+        # Placed on the rail, every key: sat on the deck's edge, the legs
+        # over the side.
+        self.rail = False
 
 
 def make(fig, lib, name):
@@ -850,6 +906,7 @@ def make(fig, lib, name):
     clip.place = place
     clip.standing = all(lib.poses[k["pose"]]["place"] == STANDS for k in keys)
     clip.trapeze = all(lib.poses[k["pose"]]["place"] == TRAPEZE for k in keys)
+    clip.rail = all(lib.poses[k["pose"]]["place"] == RAIL for k in keys)
     # On the trapeze the skirts hang from the body as it lies (Figure.hang).
     fig.hang = (spec.get("hang") or HANG) if clip.trapeze else None
     # Feet that stay where they are: in the boat, never stepping elsewhere.
@@ -1024,6 +1081,9 @@ def make(fig, lib, name):
 STANDS = "wheel"
 # The place a figure stands on and lies out from: the trapeze's rack.
 TRAPEZE = "trapeze"
+# The place a figure sits at facing outboard, its legs over the side: a
+# keelboat's rail.
+RAIL = "rail"
 # On the trapeze, the ankles this far above the rack's edge their feet
 # press on.
 ANKLE_UP = 0.08
@@ -1060,7 +1120,7 @@ SKIRT_SHARE = 0.25
 SKIRT_TOUCH = 0.003
 
 
-def clear_skirts(fig, clip, under, skirts, rounds=16, passes=5):
+def clear_skirts(fig, clip, under, skirts, rounds=16, passes=5, most=None):
     """Turns a clip's skirt chains, frame by frame, out of the way of what
     they hang over: a thigh swung back in a stride, a knee raised climbing,
     a leg kicking in the water. Where a ray in from a vertex of the thighs
@@ -1069,8 +1129,9 @@ def clear_skirts(fig, clip, under, skirts, rounds=16, passes=5):
     from is turned about its head to carry the cloth out; each bone's turns
     held and eased over the frames around, so the cloth moves as cloth
     does; and again, a few passes, where the easing left a frame short.
-    The skirts laid on the seat as the game lays them. Returns how many
-    frames were changed."""
+    No bone turned further than most off the clip's pose (SKIRT_MOST if not
+    said). The skirts laid on the seat as the game lays them. Returns how
+    many frames were changed."""
     if not under or not skirts:
         return 0
     chains = {s.name: _chains_of(s) for s in skirts}
@@ -1090,7 +1151,7 @@ def clear_skirts(fig, clip, under, skirts, rounds=16, passes=5):
         turns = []
         for fr in clip.frames[:m]:
             before = {b: q.copy() for b, q in fr["rot"].items() if b.startswith("skirt_")}
-            turns.append(_solve_frame(fig, clip, fr, under, skirts, chains, seated, rounds))
+            turns.append(_solve_frame(fig, clip, fr, under, skirts, chains, seated, rounds, most or SKIRT_MOST))
             fr["rot"].update(before)
         names = sorted({c for t in turns for c in t})
         if not names:
@@ -1173,7 +1234,7 @@ def _chains_of(obj):
     return out
 
 
-def _solve_frame(fig, clip, fr, under, skirts, chains, seated, rounds):
+def _solve_frame(fig, clip, fr, under, skirts, chains, seated, rounds, most=None):
     """One frame's skirt bones turned clear, in place in the frame: the
     bone that carries most of the cloth met, about its head (turning the
     bones below it). Returns each bone turned and its turn, a rotation
@@ -1231,9 +1292,10 @@ def _solve_frame(fig, clip, fr, under, skirts, chains, seated, rounds):
             pb.location = (0.0, 0.0, 0.0)
             pb.scale = (1.0, 1.0, 1.0)
             # Never further than the most off the clip's pose.
+            most = most or SKIRT_MOST
             off = start[c].rotation_difference(pb.rotation_quaternion)
-            if off.angle > SKIRT_MOST:
-                pb.rotation_quaternion = start[c].slerp(pb.rotation_quaternion, SKIRT_MOST / off.angle)
+            if off.angle > most:
+                pb.rotation_quaternion = start[c].slerp(pb.rotation_quaternion, most / off.angle)
         fig.update()
     out = {}
     for c, q in start.items():

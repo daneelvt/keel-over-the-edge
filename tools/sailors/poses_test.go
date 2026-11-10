@@ -74,6 +74,11 @@ func TestPosesRefused(t *testing.T) {
 		"an input not listed":         {good + "retarget:\n  r:\n    file: vendor/other.glb\n", "is not in SOURCES.md"},
 		"a hand locked":               {good + "retarget:\n  r:\n    file: vendor/clip.glb\n    lock: [hand_r]\n", "only feet"},
 		"a name twice":                {good + "clips:\n  sit:\n    keys:\n      - { pose: sit, hold: 1 }\n", "named twice"},
+		"a file of no group":          {good + "retarget:\n  r:\n    file: vendor/clip.glb\n    group: mast\n", "no file"},
+		"a speed off any deck":        {good + "retarget:\n  r:\n    file: vendor/clip.glb\n    speed: 0.5\n", "and it has none"},
+		"a head off any deck":         {good + "retarget:\n  r:\n    file: vendor/clip.glb\n    head: 0.7\n", "and it has none"},
+		"feet locked on a deck":       {good + "retarget:\n  r:\n    file: vendor/clip.glb\n    deck: true\n    lock: [foot_l]\n", "not locked"},
+		"a speed too fast":            {good + "retarget:\n  r:\n    file: vendor/clip.glb\n    deck: true\n    speed: 5\n", "not 0 to 2"},
 	} {
 		t.Run(name, func(t *testing.T) {
 			dir := t.TempDir()

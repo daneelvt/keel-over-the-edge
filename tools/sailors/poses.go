@@ -61,6 +61,9 @@ type target struct {
 type grip struct {
 	Aim  []float64 `yaml:"aim" json:"aim"`
 	Palm []float64 `yaml:"palm" json:"palm"`
+	// Weight is how far the hand is turned so, from its own turn: all
+	// the way if not said.
+	Weight float64 `yaml:"weight" json:"weight,omitempty"`
 }
 
 type clip struct {
@@ -109,10 +112,30 @@ type retarget struct {
 	Loop bool     `yaml:"loop" json:"loop,omitempty"`
 	Idle bool     `yaml:"idle" json:"idle,omitempty"`
 	Lock []string `yaml:"lock" json:"lock,omitempty"`
+	// Deck sets it on a flat deck: the soles on it, and each foot that
+	// bears on it held there by IK.
+	Deck bool `yaml:"deck" json:"deck,omitempty"`
+	// Speed is how fast it walks over the deck, m/s: a foot that bears on
+	// it moves back at this speed.
+	Speed float64 `yaml:"speed" json:"speed,omitempty"`
+	// Head keeps the head's joint under this height over the deck while
+	// the hips are down in a crouch, by bending the back.
+	Head float64 `yaml:"head" json:"head,omitempty"`
+	// Strain names the joints it takes toward the ends of their ranges
+	// (a deep crouch's knees), as a clip's Strain does.
+	Strain []string `yaml:"strain" json:"strain,omitempty"`
+	// Seconds plays it over this long, slowed or quickened from its own.
+	Seconds float64 `yaml:"seconds" json:"seconds,omitempty"`
+	// Group is the file it is written to beside the look's clips (rail:
+	// <version>.rail.glb), if not the clips' own.
+	Group string `yaml:"group" json:"group,omitempty"`
 }
 
 var (
-	places    = []string{"", "seat", "gunwale", "cockpit", "outside", "wheel", "trapeze"}
+	places = []string{"", "seat", "gunwale", "cockpit", "outside", "wheel", "trapeze", "rail"}
+	// groups are the files a clip may be written to apart from the
+	// look's clips.
+	groups    = []string{"", "rail"}
 	effectors = []string{"hand_l", "hand_r", "foot_l", "foot_r"}
 	stageAt   = []string{"seat", "gunwale", "floor", "strap", "free"}
 	keySides  = []string{"", "port", "starboard"}
@@ -181,6 +204,10 @@ func (lib poseLibrary) check(t tables, sources map[string]source) error {
 				points[p] = true
 			}
 		}
+		// On the rail: the deck's edge the crew sit on.
+		if _, ok := st["rail"].(map[string]any); ok {
+			points["rail"] = true
+		}
 		// At the wheel: the deck the helmsman stands on, and the grips.
 		if w, ok := st["wheel"].(map[string]any); ok {
 			points["deck"] = true
@@ -237,6 +264,20 @@ func (lib poseLibrary) check(t tables, sources map[string]source) error {
 			if !strings.HasPrefix(e, "foot_") || !slices.Contains(effectors, e) {
 				return fmt.Errorf("the retarget %s: only feet are locked, not %q", name, e)
 			}
+		}
+		switch {
+		case !slices.Contains(groups, r.Group):
+			return fmt.Errorf("the retarget %s: no file %q beside the clips", name, r.Group)
+		case (r.Speed != 0 || r.Head != 0) && !r.Deck:
+			return fmt.Errorf("the retarget %s: a speed or a head's height is over a deck, and it has none", name)
+		case r.Deck && len(r.Lock) > 0:
+			return fmt.Errorf("the retarget %s: its feet are on the deck, not locked", name)
+		case r.Speed < 0 || r.Speed > 2:
+			return fmt.Errorf("the retarget %s: a speed of %v m/s is not 0 to 2", name, r.Speed)
+		case r.Seconds < 0 || r.Seconds > 60:
+			return fmt.Errorf("the retarget %s: %v seconds is not 0 to 60", name, r.Seconds)
+		case r.Head < 0 || r.Head > 2:
+			return fmt.Errorf("the retarget %s: a head %v m over the deck is not 0 to 2", name, r.Head)
 		}
 	}
 	return nil

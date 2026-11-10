@@ -485,7 +485,8 @@ def clip_sheet(r, fig, look, clip, act, slot, track, path, chains, frames=8, siz
     n = len(clip.frames)
     picks = [round(i * (n - 1) / (frames - 1)) for i in range(frames)]
     in_boat = clip.place != Matrix()
-    fig.stage.show(in_boat, wheel=getattr(clip, "standing", False), trapeze=getattr(clip, "trapeze", False))
+    fig.stage.show(in_boat, wheel=getattr(clip, "standing", False), trapeze=getattr(clip, "trapeze", False),
+                   rail=getattr(clip, "rail", False))
     look.use(look.look)
     pts = []
     for f in picks:
