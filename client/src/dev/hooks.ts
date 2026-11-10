@@ -2533,7 +2533,14 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
       helmAway: boolean;
       helmShown: boolean;
       /** Everyone under the crew's rules: seat, station (-1 the helm), side, how far they lean, and what they are doing (seconds into it). */
-      members: { seat: number; station: number; side: number; lean: number; moving: string | null; t: number }[];
+      members: {
+        seat: number;
+        station: number;
+        side: number;
+        lean: number;
+        moving: string | null;
+        t: number;
+      }[];
       heads: {
         x: number;
         y: number;
@@ -2558,7 +2565,7 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
         tack: rules?.side.tack ?? true,
         changes: rules?.side.changes ?? 0,
         helmAway: c.helmAway,
-        helmShown: sailor !== null && sailor.shown && !sailor.away,
+        helmShown: sailor?.shown === true && !sailor.away,
         members: (rules?.members ?? []).map((m) => ({
           seat: m.seat,
           station: m.station,

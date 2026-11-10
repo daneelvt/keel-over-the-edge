@@ -205,7 +205,10 @@ test('five aboard the keelboat: to windward on both tacks, through a tack and a 
     expect(c.aboard, name).toBe(4);
     expect(c.side, name).toBe(side);
     expect(c.helmShown, name).toBe(true);
-    expect(c.members.filter((m) => m.station > 0).map((m) => m.side), name).toEqual([side, side, side, side]);
+    expect(
+      c.members.filter((m) => m.station > 0).map((m) => m.side),
+      name,
+    ).toEqual([side, side, side, side]);
     for (const h of c.heads) {
       expect(h.moving, name).toBe(false);
       expect(Math.sign(h.across), `${name}: station ${h.station}`).toBe(side);
@@ -250,7 +253,12 @@ test('five aboard the keelboat: to windward on both tacks, through a tack and a 
   const walking = await sail(0.6, gybe, 30);
   expect(walking.helmAway).toBe(true);
   expect(walking.helmShown).toBe(false);
-  expect(walking.members.filter((m) => m.moving === 'change').map((m) => m.seat).sort()).toEqual([0, 2]);
+  expect(
+    walking.members
+      .filter((m) => m.moving === 'change')
+      .map((m) => m.seat)
+      .sort(),
+  ).toEqual([0, 2]);
   await picture('changing places', -1);
   const handed = await sail(0.6, gybe, 240);
   toWindward(handed, -1, 'after a handover');
