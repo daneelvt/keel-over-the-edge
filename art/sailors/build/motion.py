@@ -209,11 +209,12 @@ class Library:
             out = {"turn": base["turn"] + list(p.get("turn") or []),
                    "place": p.get("place", base["place"]),
                    "shift": p.get("shift", base["shift"]),
+                   "lie": p.get("lie", base["lie"]),
                    "ik": dict(base["ik"])}
             out["ik"].update(p.get("ik") or {})
             return out
         return {"turn": list(p.get("turn") or []), "place": p.get("place"), "shift": p.get("shift"),
-                "ik": dict(p.get("ik") or {})}
+                "lie": p.get("lie", 0.0), "ik": dict(p.get("ik") or {})}
 
 
 # A clip made on the port side is named with this after the starboard one's.
@@ -249,7 +250,7 @@ def mirrored(pose):
         if t.get("pole") is not None:
             t["pole"] = across(t["pole"])
         ik[other(eff)] = t
-    return {"turn": turn, "place": pose["place"], "shift": pose.get("shift"), "ik": ik}
+    return {"turn": turn, "place": pose["place"], "shift": pose.get("shift"), "lie": pose.get("lie", 0.0), "ik": ik}
 
 
 class Figure:
@@ -375,7 +376,7 @@ class Figure:
 
     # --- Placing -------------------------------------------------------
 
-    def placement(self, place, side=1):
+    def placement(self, place, side=1, lie=0.0):
         """Where a posed figure stands in the boat: on the seat or the
         gunwale facing inboard, its lowest point under the hips on the
         deck (the body's and its fitted clothes', not a skirt's, which lies
@@ -404,6 +405,15 @@ class Figure:
             contact = Vector((pelvis.x, pelvis.y, low))
             at = st.point("deck", side)
             return Matrix.Translation(at) @ Matrix.Rotation(math.pi, 4, "Z") @ Matrix.Translation(-contact)
+        if place == TRAPEZE:
+            # On the trapeze: standing on the rack's edge facing inboard, as
+            # a sailor sits facing inboard on a side deck, and lying back
+            # out over the water (the pose's lie, about the feet): the
+            # ankles' middle above the edge, as high as a heel stands.
+            feet = (self.bones["foot_l"].head + self.bones["foot_r"].head) / 2
+            at = st.point("rack", side) + Vector((0.0, 0.0, ANKLE_UP))
+            back = Matrix.Rotation(math.radians(-lie), 4, "X")
+            return Matrix.Translation(at) @ st.facing(side) @ back @ Matrix.Translation(-feet)
         if place == "outside":
             # In the water at the side, facing in, the chest at the gunwale:
             # where a sailor climbing back in starts.
@@ -665,6 +675,27 @@ class Figure:
                     rest = bones[name].matrix_local.to_quaternion()
                     self.bones[name].rotation_quaternion = rest.inverted() @ part @ rest
         self.update()
+        if getattr(self, "hang", None):
+            self._hang(self.hang)
+
+    def _hang(self, shares):
+        """The skirt chains turned toward the world's down, each about its
+        head, root first, by its chain's share: cloth hanging from a body
+        lying out."""
+        down = (self.arm.matrix_world.inverted().to_3x3() @ Vector((0.0, 0.0, -1.0))).normalized()
+        for place, share in shares.items():
+            for s in ("l", "r"):
+                for i in (1, 2):
+                    pb = self.bones.get(f"skirt_{place}_{s}_0{i}")
+                    if pb is None:
+                        continue
+                    along = pb.tail - pb.head
+                    if along.length < 1e-6:
+                        continue
+                    q = Quaternion().slerp(along.normalized().rotation_difference(down), share)
+                    head = pb.head.copy()
+                    pb.matrix = Matrix.Translation(head) @ q.to_matrix().to_4x4() @ Matrix.Translation(-head) @ pb.matrix
+                    self.update()
 
     # --- A pose, whole -------------------------------------------------
 
@@ -677,13 +708,13 @@ class Figure:
         self.reset()
         self.turn(pose["turn"])
         rot = self.rotations()
-        place = self.placement(pose["place"], side)
+        place = self.placement(pose["place"], side, pose.get("lie", 0.0))
         if pose.get("shift"):
             # Moved forward, inboard and up in the seat's frame.
             place = Matrix.Translation(self.stage.frame(side).to_3x3() @ Vector(pose["shift"])) @ place
         self.arm.matrix_world = place
-        # Standing at a wheel, nothing lies on a seat.
-        self.on_seat(pose["place"] not in (None, STANDS))
+        # Standing at a wheel or on the trapeze, nothing lies on a seat.
+        self.on_seat(pose["place"] not in (None, STANDS, TRAPEZE))
         self.update()
         at = {}
         for eff in EFFECTORS:
@@ -759,6 +790,9 @@ class Clip:
         self.ik = []
         # Placed standing at the wheel, every key: nothing lies on a seat.
         self.standing = False
+        # Placed on the trapeze, every key: nothing lies on a seat, and the
+        # cloth hangs from a body lying out.
+        self.trapeze = False
 
 
 def make(fig, lib, name):
@@ -815,6 +849,9 @@ def make(fig, lib, name):
     clip = Clip(name, fps, loop, bool(spec.get("idle")))
     clip.place = place
     clip.standing = all(lib.poses[k["pose"]]["place"] == STANDS for k in keys)
+    clip.trapeze = all(lib.poses[k["pose"]]["place"] == TRAPEZE for k in keys)
+    # On the trapeze the skirts hang from the body as it lies (Figure.hang).
+    fig.hang = (spec.get("hang") or HANG) if clip.trapeze else None
     # Feet that stay where they are: in the boat, never stepping elsewhere.
     still = all(p["place"] == place for p in kp)
     clip.planted = ["foot_l", "foot_r"] if all(p["place"] for p in kp) and still else []
@@ -959,6 +996,19 @@ def make(fig, lib, name):
         # A loop of one key returns to itself: no move.
         if a is not None and ramp > 0 and a != ki:
             clip.ramps.append((int(round(start * fps)), int(round((start + ramp) * fps)), k.get("lead", "hips")))
+    if loop and clip.trapeze:
+        # The IK's turns follow the frame before: round a loop they come
+        # back a few tenths of a degree from where they began. The gap is
+        # shared out over the loop, so its seam is smooth; not the hips'
+        # nor the legs', whose feet stay where they press on the rack.
+        last = clip.frames[-1]
+        for b in names:
+            if kind(b) in ("Root", "pelvis", "thigh", "calf", "foot", "ball") or b.startswith("thigh_corrector"):
+                continue
+            q0, q1 = clip.frames[0]["rot"][b], last["rot"][b]
+            gap = q1.inverted() @ (q0 if q0.dot(q1) >= 0 else -q0)
+            for i, fr in enumerate(clip.frames):
+                fr["rot"][b] = fr["rot"][b] @ Quaternion().slerp(gap, i / frames)
     if loop:
         # The end is the start.
         clip.frames[-1] = {"rot": {b: q.copy() for b, q in clip.frames[0]["rot"].items()},
@@ -966,11 +1016,21 @@ def make(fig, lib, name):
     clip.notes["clamped"] = fig.clamped
     clip.made = True
     clip.ik = effs
+    fig.hang = None
     return clip
 
 
 # The place a figure stands at, not sits: at the wheel.
 STANDS = "wheel"
+# The place a figure stands on and lies out from: the trapeze's rack.
+TRAPEZE = "trapeze"
+# On the trapeze, the ankles this far above the rack's edge their feet
+# press on.
+ANKLE_UP = 0.08
+# On the trapeze, how far each skirt chain is turned from where it follows
+# the thighs to hang straight down: the back and the sides hang from the
+# body lying out; the front lies along the thighs, as it does standing.
+HANG = {"back": 1.0, "side": 0.85}
 
 
 # The channel of the hips' place, beside the bones' turns.
@@ -1262,7 +1322,9 @@ def _surface(fig, kp, segs, e, s, length, loop):
     heights = []
     for key in (kp[ki],) + ((kp[a],) if a is not None and s < start + ramp else ()):
         t = key["ik"].get(e)
-        if t is not None and t["at"] not in ("bone", "free"):
+        # A foot against the rack's edge on the trapeze presses on it with
+        # its ball, its sole across the rail: it stands on no floor.
+        if t is not None and t["at"] not in ("bone", "free", "rack"):
             heights.append(fig.stage.point(t["at"], key["side"]).z)
     return max(heights) if heights else None
 

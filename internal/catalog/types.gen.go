@@ -316,8 +316,9 @@ type BoatPhysics struct {
 // A point on a boat, in m in its model's frame: x to starboard, y up, z aft.
 type BoatPoint []float64
 
-// A place aboard where a person is drawn: standing on the deck, or seated as a
-// dinghy's helmsman sits on the side deck.
+// A place aboard where a person is drawn: standing on the deck, seated as a
+// dinghy's helmsman sits on the side deck, or hiking out on its rail; on a
+// dinghy's windward side, if it says so.
 type BoatStation struct {
 	// In m in the model's frame. Standing, the deck between the feet; seated, the
 	// seat's back edge, as the gunwale is to a dinghy's helmsman: the hips just
@@ -331,6 +332,12 @@ type BoatStation struct {
 
 	// Pose corresponds to the JSON schema field "pose".
 	Pose StationPose `json:"pose"`
+
+	// Whether the person sits to windward as a dinghy's crew does: on the side the
+	// helm sits on, the station's mirror across the centreline (and its facing's)
+	// when the helm is on the other side, and crossing with the helm in a tack or a
+	// gybe. Not said, the station is where it is.
+	Windward *bool `json:"windward,omitempty,omitzero"`
 }
 
 // The most triangles each of the boat's models may have.
@@ -3421,6 +3428,7 @@ type StartMoorings struct {
 
 type StationPose string
 
+const StationPoseHiking StationPose = "hiking"
 const StationPoseSeated StationPose = "seated"
 const StationPoseStanding StationPose = "standing"
 
@@ -5435,4 +5443,4 @@ type WorldZones struct {
 }
 
 // Version is the catalog version (tools/catalog).
-const Version = "12b19e1141a11c30"
+const Version = "f00e874226287574"

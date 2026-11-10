@@ -28,6 +28,16 @@ a spoke grips it), and what of the figure is too near the wheel is
 measured apart (Wheel.near). A clip placed at the wheel is placed from that
 point, as the game places it from the boat's node.
 
+A boat sailed from the trapeze has a stage of its own too (tables.yaml's
+`trapeze`): its model, imported and set well forward of the dinghy and the
+wheel. Its `trapeze` node says where the rack's edge is that the feet stand
+on (at the helm's station, on the starboard side), where the hounds are
+that the wires come down from, and where each ring hangs. The figure stands
+on the rack's edge facing inboard, as it sits facing inboard on a side
+deck, and lies back out over the water. A clip placed there is placed from
+the rack's edge on its side, as the game places it from the model's node;
+the model's hull, its racks and their net are solid as the dinghy's are.
+
 The cockpit runs between the side decks' inner edges (`edge` out from the
 centreline). A figure is seated with its face inboard; a vertex is through the boat
 when the line from its bone to it crosses the hull, and a bone is when the
@@ -66,7 +76,10 @@ class Stage:
         self.solid = [bpy.data.objects["boat-" + n] for n in SOLID]
         # The wheel's stage, if the tables give one: its deck is solid too.
         self.wheel = Wheel(spec["wheel"]) if spec.get("wheel") else None
-        self.tree = _tree(self.solid + ([self.wheel.deck] if self.wheel else []))
+        # The trapeze's, likewise: its hull is solid too.
+        self.trapeze = Trapeze(root, spec["trapeze"]) if spec.get("trapeze") else None
+        self.tree = _tree(self.solid + ([self.wheel.deck] if self.wheel else []) +
+                          (self.trapeze.solid if self.trapeze else []))
 
         # The side deck under the hips, and the gunwale: the outermost
         # point of the hull at the seat's station, looking down.
@@ -147,6 +160,8 @@ class Stage:
             return self.strap.copy()
         if self.wheel is not None and name in self.wheel.points:
             return self.wheel_point(name, side)
+        if self.trapeze is not None and name in Trapeze.POINTS:
+            return self.trapeze.point(name, side)
         fwd, inb, up = self.spec["points"][name]
         p = self.frame(side) @ Vector((fwd, inb, up))
         if name.startswith("tiller"):
@@ -160,13 +175,17 @@ class Stage:
         own axes, x to its left."""
         return Matrix.Rotation(np.radians(-90.0 * side), 4, "Z")
 
-    def show(self, shown, wheel=False):
-        """Shows the dinghy's hull (shown), or the wheel's stage."""
+    def show(self, shown, wheel=False, trapeze=False):
+        """Shows the dinghy's hull (shown), or the wheel's stage, or the
+        trapeze's boat."""
         for o in self.objects:
-            o.hide_render = not shown or wheel or o not in self.solid
+            o.hide_render = not shown or wheel or trapeze or o not in self.solid
         if self.wheel is not None:
             for o in self.wheel.objects:
                 o.hide_render = not (shown and wheel)
+        if self.trapeze is not None:
+            for o in self.trapeze.objects:
+                o.hide_render = not (shown and trapeze) or o.type != "MESH"
 
     def under(self, p):
         """Whether a point is under a top of the boat: straight up, the
@@ -323,6 +342,49 @@ class Wheel:
         if skip is not None:
             hit &= ~np.asarray(skip, bool)
         return np.flatnonzero(hit)
+
+
+class Trapeze:
+    """The trapeze's stage: a boat's model sailed from the trapeze (spec
+    `boat`), imported and moved by `at` in the stage's scene (x to
+    starboard, y forward, z up). Its places, from its model: the rack's
+    edge (`rack`), the hounds, each side's ring, the tiller extension's
+    hinge and length, and the mainsheet's block on the floor
+    (`trapeze-sheet`); each on a side, mirrored across the centreline for
+    port."""
+
+    POINTS = ("rack", "hounds", "ring", "trapeze-hinge", "trapeze-sheet")
+
+    def __init__(self, root, spec):
+        self.spec = spec
+        before = set(bpy.data.objects)
+        bpy.ops.import_scene.gltf(filepath=os.path.join(root, "art", spec["boat"]))
+        self.objects = [o for o in bpy.data.objects if o not in before]
+        self.at = Vector(spec["at"])
+        for o in self.objects:
+            o.name = "trapeze-" + o.name
+            o.hide_render = True
+            if o.parent is None:
+                o.location = o.location + self.at
+        bpy.context.view_layer.update()
+        node = bpy.data.objects["trapeze-trapeze"]
+
+        def blender(p):
+            # The model's frame (x to starboard, y up, z aft) as the scene's.
+            return Vector((p[0], -p[2], p[1])) + self.at
+
+        self.rack = blender(list(node["rackEdge"]))
+        self.hounds = blender(list(node["hounds"]))
+        self.ring = blender(list(node["rings"][0]))
+        self.hinge = bpy.data.objects["trapeze-extension"].matrix_world.translation.copy()
+        self.extension = (bpy.data.objects["trapeze-grip"].matrix_world.translation - self.hinge).length
+        self.sheet = bpy.data.objects["trapeze-sheet"].matrix_world.translation.copy()
+        self.solid = [bpy.data.objects["trapeze-hull"]]
+
+    def point(self, name, side=1):
+        p = {"rack": self.rack, "hounds": self.hounds, "ring": self.ring, "trapeze-hinge": self.hinge,
+             "trapeze-sheet": self.sheet}[name]
+        return Vector((side * p.x, p.y, p.z))
 
 
 def _tree(objs):

@@ -24,6 +24,13 @@
 // to a point. The looks' atlases and masks are the fleet's layers
 // (fleetlooks.ts), so every look draws in one material.
 //
+// A station that says it is to windward (a dinghy's crew, hiking on the
+// rack) is on the side the helm sits: its mirror across the centreline when
+// the helm is on the other side, and moving across with the helm as it
+// crosses the boat in a tack or a gybe, over the helm's own crossing, facing
+// forward on the way. Handing the controls over changes who is at the helm
+// and who at the station, so the two change places.
+//
 // The group is a child of the boat's model: the people heel, pitch and
 // heave with it. Allocation-free from frame to frame once each figure is
 // posed.
@@ -64,7 +71,7 @@ import {
   vertexIndex,
 } from 'three/tsl';
 import type { Node } from 'three/webgpu';
-import type { BoatStation } from '../../catalog';
+import type { BoatStation, StationPose } from '../../catalog';
 import type { SailorLook } from '../boat';
 import { Pose } from './clips';
 import type { FleetLook, FleetLooks, FleetSeat } from './fleetlooks';
@@ -139,6 +146,64 @@ const m = new Matrix4();
 const m2 = new Matrix4();
 const v = new Vector3();
 const n = new Vector3();
+
+/** The clip a station's pose is drawn in: the helm's seated, the first hiking depth's hiking, standing-idle standing. */
+function clipOf(pose: StationPose): string {
+  return pose === 'seated'
+    ? CLIPS.helm
+    : pose === 'hiking'
+      ? (CLIPS.hiking[0] as string)
+      : CLIPS.standing;
+}
+
+/** How high a crossing person is lifted at the middle of the boat, metres: over the cockpit's floor and the case. */
+const CROSS_LIFT = 0.12;
+
+/**
+ * Where a station's person is drawn, into out: the station's own point and
+ * facing; or, to windward, on the side side (+1 starboard) — the station's
+ * mirror on the other side — and, while the helm crosses from side to the
+ * other, crossed of the way across (0 to 1), facing forward half way.
+ */
+export function stationPlace(
+  s: BoatStation,
+  side: number,
+  crossed: number,
+  out: { at: [number, number, number]; facing: number },
+): { at: [number, number, number]; facing: number } {
+  const [x, y, z] = s.at as [number, number, number];
+  if (s.windward !== true) {
+    out.at[0] = x;
+    out.at[1] = y;
+    out.at[2] = z;
+    out.facing = s.facing;
+    return out;
+  }
+  const own = x < 0 ? -1 : 1;
+  const xa = side === own ? x : -x;
+  const fa = side === own ? s.facing : 360 - s.facing;
+  if (crossed >= 1) {
+    out.at[0] = xa;
+    out.at[1] = y;
+    out.at[2] = z;
+    out.facing = fa;
+    return out;
+  }
+  // Across, through the bow's way: a facing under a half turn goes round
+  // through 0, one over it through 360.
+  const f = smooth(crossed);
+  const fb = fa < 180 ? -fa : 720 - fa;
+  out.at[0] = xa + (-xa - xa) * f;
+  out.at[1] = y + CROSS_LIFT * Math.sin(Math.PI * crossed);
+  out.at[2] = z;
+  out.facing = (((fa + (fb - fa) * f) % 360) + 360) % 360;
+  return out;
+}
+
+function smooth(x: number): number {
+  const t = Math.max(0, Math.min(1, x));
+  return t * t * (3 - 2 * t);
+}
 
 /** Each bone's matrix (column-major, sixteen a bone) from a look's deck level's bind to a clip's pose at t seconds; null without the clip. */
 function boneMatrices(look: FleetLook, clip: string, t: number): Float32Array | null {
@@ -241,13 +306,17 @@ function skinDeck(look: FleetLook, bones: Float32Array, origin: Vector3): Float3
  * seated, the clips' helm, moved so that its seat (the clips' boat's seat
  * under it) is at the origin. Null until the look's clips have loaded.
  */
-export function poseDeck(look: FleetLook, seated: boolean, seat: FleetSeat): Float32Array | null {
-  const clip = seated ? CLIPS.helm : CLIPS.standing;
+export function poseDeck(look: FleetLook, pose: StationPose, seat: FleetSeat): Float32Array | null {
+  const clip = clipOf(pose);
   const bones = boneMatrices(look, clip, 0);
   if (bones === null || look.deck === null) {
     return null;
   }
-  const skinned = skinDeck(look, bones, seated ? seatUnder(look, clip, seat) : new Vector3());
+  const skinned = skinDeck(
+    look,
+    bones,
+    pose !== 'standing' ? seatUnder(look, clip, seat) : new Vector3(),
+  );
   const uv = look.deck.geometry.getAttribute('uv');
   return triangles(look.deck.geometry, (i, out, o) => {
     for (let k = 0; k < 3; k++) {
@@ -268,7 +337,8 @@ export function poseDeck(look: FleetLook, seated: boolean, seat: FleetSeat): Flo
  * standing-idle, as the deck level does; until the look's clips have
  * loaded, null.
  */
-export function poseFar(look: FleetLook, seated: boolean, seat: FleetSeat): Float32Array | null {
+export function poseFar(look: FleetLook, pose: StationPose, seat: FleetSeat): Float32Array | null {
+  const seated = pose === 'seated';
   const g = look.far;
   if (g === null) {
     return null;
@@ -291,17 +361,20 @@ export function poseFar(look: FleetLook, seated: boolean, seat: FleetSeat): Floa
     return out;
   }
   const helm = boneMatrices(look, CLIPS.helm, 0);
-  const stand = boneMatrices(look, CLIPS.standing, 0);
+  const stand = boneMatrices(look, clipOf(pose), 0);
   if (helm === null || stand === null || look.deck === null) {
     return null;
   }
   const origin = seatUnder(look, CLIPS.helm, seat);
+  // Hiking, seated on the rail as the clip has it: its seat at the origin.
+  const at = pose === 'hiking' ? seatUnder(look, clipOf(pose), seat) : new Vector3();
   const seatedDeck = skinDeck(look, helm, origin);
   // Each bone from seated at the helm (in the station's frame) to standing.
   const to = new Float32Array(helm.length);
   const back = new Matrix4().makeTranslation(origin.x, origin.y, origin.z);
+  const off = new Matrix4().makeTranslation(-at.x, -at.y, -at.z);
   for (let b = 0; b < helm.length; b += 16) {
-    m.fromArray(stand, b).multiply(m2.fromArray(helm, b).invert()).multiply(back);
+    m.fromArray(stand, b).multiply(m2.fromArray(helm, b).invert()).multiply(back).premultiply(off);
     m.toArray(to, b);
   }
   const deck = look.deck.geometry;
@@ -343,6 +416,9 @@ export function poseFar(look: FleetLook, seated: boolean, seat: FleetSeat): Floa
     out[o + 4] = moved[3] as number;
     out[o + 5] = moved[4] as number;
     out[o + 6] = moved[5] as number;
+  }
+  if (pose === 'hiking') {
+    return out;
   }
   // Its soles on the deck: the far figure's feet are coarser than the deck level's.
   let low = Number.POSITIVE_INFINITY;
@@ -606,6 +682,8 @@ function crewNodes(
 /** Someone drawn: their station, look and colours, and the level drawn at. */
 interface Drawn {
   station: BoatStation;
+  /** Where it is drawn now: the station's point and facing, or to windward the helm's side's. */
+  place: { at: [number, number, number]; facing: number };
   look: FleetLook;
   colours: { main: Color; skin: Color; hair: Color };
   near: boolean;
@@ -629,6 +707,9 @@ export class CrewDeck {
   #stations: readonly BoatStation[] = [];
   #crew: CrewShown | null = null;
   #people: Drawn[] = [];
+  /** The helm's side deck (+1 starboard), or the one it is crossing from, and how far across (1 when not). */
+  #side = 1;
+  #crossed = 1;
   /** Each figure posed, by key: the deck level's by look and pose, the far's by look. */
   readonly #figures = new Map<string, Float32Array>();
   /** The levels' rows must be written again: the people, a look or the nearest changed. */
@@ -662,6 +743,27 @@ export class CrewDeck {
     this.#show();
   }
 
+  /**
+   * The side deck the helm sits on (+1 starboard, −1 port), or crosses
+   * from, and how far across it is (0 to 1; 1 when not crossing): the
+   * people at stations to windward sit on its side and cross with it.
+   */
+  windward(side: number, crossed: number): void {
+    const s = side < 0 ? -1 : 1;
+    const c = Math.max(0, Math.min(1, crossed));
+    if (s === this.#side && c === this.#crossed) {
+      return;
+    }
+    this.#side = s;
+    this.#crossed = c;
+    for (const p of this.#people) {
+      if (p.station.windward === true) {
+        stationPlace(p.station, s, c, p.place);
+        this.#dirty = true;
+      }
+    }
+  }
+
   /** The people aboard; null for nobody but the one at the helm. */
   set(crew: CrewShown | null): void {
     this.#crew = crew;
@@ -686,21 +788,23 @@ export class CrewDeck {
   /**
    * Where each person drawn is in the scene, as the boat was last drawn:
    * their head's height over their station (a standing person's 1.6 m, a
-   * seated one's 0.9), and the level they are drawn at.
+   * seated one's 0.9), the level they are drawn at, and how far out from
+   * the centreline they are (+ starboard) in the boat's frame.
    */
-  heads(): { at: Vector3; near: boolean; station: number }[] {
+  heads(): { at: Vector3; near: boolean; station: number; across: number }[] {
     const parent = this.group.parent;
     if (parent === null) {
       return [];
     }
     parent.updateMatrixWorld();
     return this.#people.map((p) => {
-      const at = p.station.at;
+      const at = p.place.at;
       const up = p.station.pose === 'standing' ? 1.6 : 0.9;
       return {
         at: new Vector3(at[0], at[1] + up, at[2]).applyMatrix4(parent.matrixWorld),
         near: p.near,
         station: this.#stations.indexOf(p.station),
+        across: at[0],
       };
     });
   }
@@ -713,8 +817,10 @@ export class CrewDeck {
         const l = this.sailorLookOf(place.look);
         const look = looks.add(l.art, l.machine);
         looks.want(look, true);
+        const station = this.#stations[place.station] as BoatStation;
         this.#people.push({
-          station: this.#stations[place.station] as BoatStation,
+          station,
+          place: stationPlace(station, this.#side, this.#crossed, { at: [0, 0, 0], facing: 0 }),
           look,
           colours: {
             main: new Color(l.colours.main),
@@ -763,7 +869,7 @@ export class CrewDeck {
     const model = this.group.parent.matrixWorld;
     const d2 = this.#d2;
     for (let i = 0; i < people.length; i++) {
-      const at = (people[i] as Drawn).station.at;
+      const at = (people[i] as Drawn).place.at;
       d2[i] = world.set(at[0], at[1], at[2]).applyMatrix4(model).distanceToSquared(camera);
     }
     const order = this.#order;
@@ -802,10 +908,11 @@ export class CrewDeck {
     const nearKeys: string[] = [];
     const farKeys: string[] = [];
     for (const p of people) {
-      const seated = p.station.pose === 'seated';
+      const pose = p.station.pose;
+      const seated = pose !== 'standing';
       if (p.near) {
-        p.key = deckKey(p.look, seated);
-        if (this.#figure(p.key, () => poseDeck(p.look, seated, seat)) !== null) {
+        p.key = deckKey(p.look, pose);
+        if (this.#figure(p.key, () => poseDeck(p.look, pose, seat)) !== null) {
           nearKeys.push(p.key);
           continue;
         }
@@ -813,12 +920,12 @@ export class CrewDeck {
       }
       // Standing far off: the far figure stood up once the look's clips
       // have loaded; till then, seated and raised to a standing height.
-      p.key = farKey(p.look, seated);
+      p.key = farKey(p.look, pose);
       p.raised = false;
-      if (this.#figure(p.key, () => poseFar(p.look, seated, seat)) === null && !seated) {
-        p.key = farKey(p.look, true);
+      if (this.#figure(p.key, () => poseFar(p.look, pose, seat)) === null && !seated) {
+        p.key = farKey(p.look, 'seated');
         p.raised = true;
-        this.#figure(p.key, () => poseFar(p.look, true, seat));
+        this.#figure(p.key, () => poseFar(p.look, 'seated', seat));
       }
       if (this.#figures.has(p.key)) {
         farKeys.push(p.key);
@@ -832,7 +939,7 @@ export class CrewDeck {
     let tn = 0;
     let tf = 0;
     for (const p of people) {
-      const s = p.station;
+      const s = p.place;
       // The figure faces +z; turned to face the station's way.
       const turn = Math.PI - (s.facing * Math.PI) / 180;
       const level = p.near ? near : far;
@@ -872,10 +979,10 @@ export class CrewDeck {
   drawn = { near: 0, far: 0, nearTriangles: 0, farTriangles: 0 };
 }
 
-function deckKey(look: FleetLook, seated: boolean): string {
-  return `deck ${look.index} ${seated ? 'seated' : 'standing'}`;
+function deckKey(look: FleetLook, pose: StationPose): string {
+  return `deck ${look.index} ${pose}`;
 }
 
-function farKey(look: FleetLook, seated: boolean): string {
-  return `far ${look.index} ${seated ? 'seated' : 'standing'}`;
+function farKey(look: FleetLook, pose: StationPose): string {
+  return `far ${look.index} ${pose}`;
 }

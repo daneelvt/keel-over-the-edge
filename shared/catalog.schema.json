@@ -909,20 +909,21 @@
     },
     "BoatStation": {
       "title": "BoatStation",
-      "description": "A place aboard where a person is drawn: standing on the deck, or seated as a dinghy's helmsman sits on the side deck.",
+      "description": "A place aboard where a person is drawn: standing on the deck, seated as a dinghy's helmsman sits on the side deck, or hiking out on its rail; on a dinghy's windward side, if it says so.",
       "type": "object",
       "additionalProperties": false,
       "required": ["at", "pose", "facing"],
       "properties": {
         "at": { "description": "In m in the model's frame. Standing, the deck between the feet; seated, the seat's back edge, as the gunwale is to a dinghy's helmsman: the hips just within it, the legs reaching 0.7 m the way the person faces, the feet 0.2 m below it.", "$ref": "#/$defs/BoatPoint" },
         "pose": { "$ref": "#/$defs/StationPose" },
-        "facing": { "description": "The way the person faces, in degrees clockwise from the bow seen from above: 0 forward, 90 to starboard, 180 aft, 270 to port.", "type": "number", "minimum": 0, "exclusiveMaximum": 360 }
+        "facing": { "description": "The way the person faces, in degrees clockwise from the bow seen from above: 0 forward, 90 to starboard, 180 aft, 270 to port.", "type": "number", "minimum": 0, "exclusiveMaximum": 360 },
+        "windward": { "description": "Whether the person sits to windward as a dinghy's crew does: on the side the helm sits on, the station's mirror across the centreline (and its facing's) when the helm is on the other side, and crossing with the helm in a tack or a gybe. Not said, the station is where it is.", "type": "boolean" }
       }
     },
     "StationPose": {
       "title": "StationPose",
-      "description": "How a person is at a station: standing, or seated.",
-      "type": "string", "enum": ["standing", "seated"]
+      "description": "How a person is at a station: standing, seated, or hiking (sitting out on the rail and leaning out, as a dinghy's crew).",
+      "type": "string", "enum": ["standing", "seated", "hiking"]
     },
     "BoatControls": {
       "title": "BoatControls",

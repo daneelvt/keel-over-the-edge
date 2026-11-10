@@ -98,6 +98,7 @@ go run ./tools/sailors              # or: cd client && npm run art:sailors
 go run ./tools/sailors -look test   # one look
 go run ./tools/sailors -setup       # check Blender, install MPFB and gltfpack
 go run ./tools/sailors -add helm-wheel,habit-wheel   # only these clips, on every look
+go run ./tools/sailors -add trapeze,trapeze-low      # and the harness with them
 ```
 
 It needs Blender 5.2 LTS installed; the first run installs the pinned MPFB
@@ -192,6 +193,23 @@ the wheel turns with the rudder. `-add` makes only the clips named (as the
 game asks for them) on each committed look and writes their file, adding
 them to it if it has others, those kept byte for byte; nothing else is
 written, and garments it must make again go into `.dev`.
+
+A boat sailed from the trapeze has a node `trapeze` whose extras give the
+hounds, each side's ring (starboard first) and `rackEdge`, the starboard
+rack's edge at the helm's station, in the model's frame; each side's wire
+is a node of its own under it (`trapeze-starboard`, `trapeze-port`). Its
+clips (`trapeze`, fully out on the wire, lying back nearly flat with the
+legs straight; `trapeze-low`, crouched on the rack's edge half way out;
+each with its `-port`) are made against that boat's own model, imported
+into the stage's scene (`tables.yaml`'s `stage.trapeze`): a pose's `lie`
+leans the placed figure back about its feet, and the skirts' chains hang
+from the body as it lies (a clip's `hang`). They are placed from the
+rack's edge on their side and written to `<version>.trapeze.glb`; the
+harness the wire hooks to (`build/gear.py`'s harness: a leather belt under
+a coat or an apron, a bronze hook out before it) to
+`<version>.harness.glb`, skinned to the skeleton in its own two materials,
+its node `place-hook` the hook's eye at rest. Only a boat with a trapeze
+loads either.
 
 Every build is judged before anyone looks at it: the gates
 (`review/metrics.py`: budgets, clean meshes and weights, nothing through

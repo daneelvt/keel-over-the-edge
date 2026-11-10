@@ -948,7 +948,9 @@ boats:
     # them, by the shrouds.
     stations:
       - { at: [0.881, 0.448, 0.55], pose: seated, facing: 270 }
-      - { at: [-0.854, 0.4587, -0.25], pose: seated, facing: 90 }
+      # The crew forward on the rack by the shrouds, hiking, on whichever
+      # side the helm sits: to windward, crossing with the helm.
+      - { at: [-0.854, 0.4587, -0.25], pose: hiking, facing: 90, windward: true }
     lengthOverall: 4.45 # 29er class
     beam: 1.77 # over the racks (29er class)
     # A sailing vessel of less than 7 m shows her sidelights and sternlight

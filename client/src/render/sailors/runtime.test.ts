@@ -9,7 +9,7 @@
 // the clips moved to its seat: at the helm, hiking and crossing, nothing
 // through its hull, the hips on its side deck and the hand on its tiller.
 
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { type AnimationClip, Matrix4, type Object3D, Vector3 } from 'three';
 import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
@@ -29,6 +29,7 @@ import {
   type WheelHelm,
 } from './runtime';
 import { ballInside, hullSolid } from './solid';
+import { trapezeData, trapezeOf } from './trapeze';
 import { wheelData, wheelOf } from './wheel';
 
 const ART = new URL('../../../../art/', import.meta.url);
@@ -53,6 +54,8 @@ async function sailor(
   version: 'female' | 'male',
   look = 'rover',
   model = 'boats/jolly-boat.glb',
+  /** On a boat with a trapeze, its clips on the wire too, and the trapeze. */
+  wire = false,
 ): Promise<{
   rig: Rig;
   clips: Map<string, Clip>;
@@ -61,8 +64,12 @@ async function sailor(
   const gltf = await load(`sailors/${look}/${version}.clips.glb`);
   const rig = Rig.from(gltf.scene, boneNames(gltf.scene));
   const clips = new Map<string, Clip>();
-  // And its clips at a wheel, a file of their own.
-  for (const file of [gltf, await load(`sailors/${look}/${version}.wheel.glb`)]) {
+  // And its clips at a wheel, and on the wire, files of their own.
+  const files = [gltf, await load(`sailors/${look}/${version}.wheel.glb`)];
+  if (wire) {
+    files.push(await load(`sailors/${look}/${version}.trapeze.glb`));
+  }
+  for (const file of files) {
     const places = placesOf(file.scene);
     for (const a of file.animations) {
       const place = places.get(`place-${a.name}`) ?? null;
@@ -115,6 +122,7 @@ async function sailor(
       solid,
       climbTime: kind.physics.sailor.climbTime,
       ...seating(parts, kind.physics.sailor.hikeReach),
+      trapeze: wire ? trapezeOf(parts, kind.physics.sailor.hikeReach) : null,
     },
   };
 }
@@ -595,6 +603,141 @@ describe.each(LOOKS.flatMap((l) => (['female', 'male'] as const).map((v) => [l, 
       expect(rt.windward).toBe(-1);
       // The machine and the Old Salt keep both hands on the wheel in theirs.
       expect(off).toBe(!(look === 'machine' || look === 'oldsalt'));
+    });
+  },
+);
+
+/** The boat whose model has a trapeze: a node whose data says it is one. */
+const trapezeBoat = catalog.boats.find((b) => {
+  const glb = readFileSync(new URL(b.art.model, ART));
+  const gltf = JSON.parse(glb.subarray(20, 20 + glb.readUInt32LE(12)).toString('utf8')) as {
+    nodes?: { name?: string; extras?: unknown }[];
+  };
+  return (gltf.nodes ?? []).some((n) => n.name === 'trapeze' && trapezeData(n.extras) !== null);
+});
+
+/** Every look's version whose clips on the wire and harness are built. */
+const WIRED = LOOKS.flatMap((l) =>
+  (['female', 'male'] as const).map((v) => [l, v] as const),
+).filter(
+  ([l, v]) =>
+    existsSync(new URL(`sailors/${l}/${v}.trapeze.glb`, ART)) &&
+    existsSync(new URL(`sailors/${l}/${v}.harness.glb`, ART)),
+);
+
+/** A look's harness's hook's eye, in the figure's space at rest. */
+async function hookOf(look: string, version: string): Promise<Vector3> {
+  const h = await load(`sailors/${look}/${version}.harness.glb`);
+  const at = placesOf(h.scene).get('place-hook');
+  if (at === undefined) {
+    throw new Error('no hook');
+  }
+  return new Vector3().setFromMatrixPosition(at);
+}
+
+describe.runIf(trapezeBoat !== undefined && WIRED.length > 0).each(WIRED)(
+  'on the trapeze, the %s, %s',
+  (look, version) => {
+    const model = trapezeBoat?.art.model as string;
+    const reach = trapezeBoat?.physics.sailor.hikeReach as number;
+    const hips = (rt: SailorRuntime, rig: Rig): Vector3 =>
+      rig.position(rig.bone('pelvis'), new Vector3()).applyMatrix4(rt.root);
+
+    test.each([1, -1])(
+      'goes out on the wire beyond the rail to side %i, its places and hips blended without a jump',
+      async (side) => {
+        const { rig, clips, boat } = await sailor(version, look, model, true);
+        expect(boat.trapeze).not.toBeNull();
+        const rt = new SailorRuntime(rig, clips, boat, 9, look === 'machine');
+        let t = 0;
+        let last: Vector3 | null = null;
+        let lastHips: Vector3 | null = null;
+        let most = 0;
+        let mostHips = 0;
+        const steps = 400;
+        for (let f = 0; f <= steps; f++, t += 1 / 30) {
+          // From the side deck the sailor is already on.
+          const out = Math.max(0.06, (reach * f) / steps);
+          rt.update(moment({ time: t, offset: side * out, still: true }));
+          const at = rt.place.at.clone();
+          const h = hips(rt, rig);
+          if (last !== null && lastHips !== null) {
+            most = Math.max(most, at.distanceTo(last));
+            mostHips = Math.max(mostHips, h.distanceTo(lastHips));
+          }
+          last = at;
+          lastHips = h;
+        }
+        // A step of the offset is under 5 mm: no place moves more than 2 cm for it.
+        expect(most).toBeLessThan(0.02);
+        expect(mostHips).toBeLessThan(0.02);
+        // Out fully: on the wire, the hips well beyond the rack's edge.
+        expect(rt.hands.wire).toBeCloseTo(1, 5);
+        expect(side * (lastHips as Vector3).x).toBeGreaterThan(boat.trapeze?.rackEdge.x ?? 0);
+        // At the rail, still sat on it.
+        rt.update(moment({ time: t, offset: side * (boat.hike?.full ?? 0), still: true }));
+        expect(rt.hands.wire).toBe(0);
+      },
+    );
+
+    test('the aft hand on the extension as the rudder swings it, part out and out fully', async () => {
+      // Steering from the wire: the hinge swung toward the sailor, or a
+      // little away; further away, it swings beyond the reach of a tall
+      // sailor out fully, who holds the extension's end at arm's length.
+      const { rig, clips, boat } = await sailor(version, look, model, true);
+      const rt = new SailorRuntime(rig, clips, boat, 10, look === 'machine');
+      const rudder = foils(model).rudderPosition;
+      const arm = boat.hingeRest.z - rudder;
+      let t = 0;
+      for (const out of [(reach + (boat.hike?.full ?? 0)) / 2, reach]) {
+        for (const swing of [0, 0.04, -0.3]) {
+          boat.hinge.set(arm * Math.sin(swing), boat.hingeRest.y, rudder + arm * Math.cos(swing));
+          for (let f = 0; f < 10; f++, t += 1 / 30) {
+            rt.update(moment({ time: t, offset: out }));
+          }
+          expect(rt.hands.tiller).toBe(true);
+          expect(rt.hands.tillerAt.distanceTo(boat.hinge)).toBeLessThanOrEqual(
+            boat.extension + 1e-3,
+          );
+          const hand = rig.position(rig.bone('hand_l'), new Vector3()).applyMatrix4(rt.root);
+          expect(hand.distanceTo(rt.hands.tillerAt), `out ${out}, swing ${swing}`).toBeLessThan(
+            1e-4,
+          );
+          expect(rt.hands.sheet).toBe(true);
+        }
+      }
+    });
+
+    test('hangs from the harness’s hook, beside the hips, nothing of the hips through the hull', async () => {
+      const { rig, clips, boat } = await sailor(version, look, model, true);
+      const rt = new SailorRuntime(rig, clips, boat, 11, look === 'machine');
+      rt.hook(await hookOf(look, version));
+      let t = 0;
+      rt.update(moment({ time: t, offset: 0.4 }));
+      expect(rt.hands.hooked).toBe(false);
+      const bad: string[] = [];
+      for (const out of [1.1, 1.36, 1.6, reach, -reach]) {
+        // Long enough to cross the boat, when the side changes.
+        for (let f = 0; f < 150; f++, t += 1 / 30) {
+          rt.update(moment({ time: t, offset: out, heel: -Math.sign(out) * 0.15 }));
+        }
+        expect(rt.hands.hooked).toBe(true);
+        const h = hips(rt, rig);
+        expect(rt.hands.hook.distanceTo(h), `out ${out}`).toBeLessThan(0.3);
+        // Its hips' and thighs' capsules clear of the hull's solid.
+        for (const [from, to, r] of CAPSULES.filter(([a]) => /^(pelvis|thigh)/.test(a))) {
+          rig.position(rig.bone(from), a).applyMatrix4(rt.root);
+          rig.position(rig.bone(to), b).applyMatrix4(rt.root);
+          for (let k = 0; k <= 4; k++) {
+            c.lerpVectors(a, b, k / 4);
+            if (ballInside(boat.solid, c.x, c.y, c.z, r)) {
+              bad.push(`out ${out}: ${from}→${to} at ${c.x.toFixed(2)}, ${c.y.toFixed(2)}`);
+              break;
+            }
+          }
+        }
+      }
+      expect(bad).toEqual([]);
     });
   },
 );

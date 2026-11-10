@@ -33,6 +33,9 @@ interface Gltf {
       number?: boolean;
       yard?: string;
       wheel?: { radius: number; spokes: number };
+      hounds?: number[];
+      rings?: number[][];
+      rackEdge?: number[];
     };
   }[];
   meshes: {
@@ -486,6 +489,39 @@ describe.each(catalog.boats.map((b) => [b.name, b] as const))('%s', (_, boat) =>
     expect(Math.abs((b.max[0] ?? 0) - 0.9)).toBeLessThan(CM);
     expect(Math.abs((b.max[1] ?? 0) - 0.9)).toBeLessThan(CM);
   });
+
+  test.runIf(has('trapeze'))(
+    'her trapeze: its points by her rig and rack, each side’s wire a node of its own, and an extension to steer from the wire',
+    () => {
+      const t = node('trapeze');
+      const { hounds, rings, rackEdge } = t.extras ?? {};
+      const mast = place('mast');
+      // The hounds on the mast's axis, below its head; each ring the other's mirror.
+      expect(Math.abs(hounds?.[0] ?? 1)).toBeLessThan(CM);
+      expect(Math.abs((hounds?.[2] ?? 0) - (mast[2] ?? 1))).toBeLessThan(CM);
+      expect(hounds?.[1]).toBeLessThan(rig.boomHeight + rig.luff);
+      expect(rings).toHaveLength(2);
+      const [starboard, port] = rings ?? [];
+      expect(starboard?.[0]).toBeGreaterThan(0);
+      expect(port?.[0]).toBeCloseTo(-(starboard?.[0] ?? 0), 5);
+      expect(port?.[1]).toBeCloseTo(starboard?.[1] ?? 0, 5);
+      // The rack's edge at the helm's station, on its top, out at the rail's plan.
+      const gunwale = place('gunwale');
+      expect(Math.abs((rackEdge?.[1] ?? 0) - (gunwale[1] ?? 1))).toBeLessThan(CM);
+      expect(Math.abs((rackEdge?.[2] ?? 0) - (place('sailor')[2] ?? 1))).toBeLessThan(CM);
+      expect(rackEdge?.[0]).toBeGreaterThanOrEqual(gunwale[0] ?? 0);
+      // Each side's wire, lanyard and ring a node under it, on its side; the far model has none.
+      const sides = (t.children ?? []).map((c) => g.nodes[c]?.name);
+      expect(sides.sort()).toEqual(['trapeze-port', 'trapeze-starboard']);
+      expect(bounds('trapeze-starboard').min[0]).toBeGreaterThan(0);
+      expect(bounds('trapeze-port').max[0]).toBeLessThan(0);
+      expect(far.nodes.find((n) => n.name === 'trapeze')?.extras?.rackEdge).toEqual(rackEdge);
+      // The extension reaches a sailor's aft hand out fully on the wire, 1.8 m from its hinge.
+      const length = Math.hypot(...at('grip'));
+      expect(length).toBeGreaterThanOrEqual(1.8);
+      expect(length).toBeCloseTo(1.9, 3);
+    },
+  );
 
   test('the sail carries its fraction of chord and luff, for its vertex node', () => {
     const sail = g.meshes[node('sail').mesh ?? -1]?.primitives[0];

@@ -5,7 +5,8 @@
 // one skeleton, the far level one rigid figure with the place it sits in,
 // one material whose base colour is the atlas and whose occlusion texture
 // is the mask, both KTX2; and the clips with a place each, those at a wheel
-// in a file of their own.
+// and those on a trapeze's wire in files of their own; and the trapeze
+// harness, skinned to the same skeleton, with its hook.
 
 import { readdirSync, readFileSync } from 'node:fs';
 import { describe, expect, test } from 'vitest';
@@ -16,7 +17,7 @@ interface Gltf {
   skins?: { joints: number[] }[];
   materials?: {
     name: string;
-    pbrMetallicRoughness?: { baseColorTexture?: { index: number } };
+    pbrMetallicRoughness?: { baseColorTexture?: { index: number }; baseColorFactor?: number[] };
     occlusionTexture?: { index: number };
   }[];
   images?: { mimeType?: string }[];
@@ -109,6 +110,47 @@ describe.each(looks)('%s', (look) => {
         expect(Math.abs(m[13] ?? 9), name).toBeLessThan(0.1);
         expect(m[10], name).toBeLessThan(-0.99);
       }
+    });
+
+    test('its clips on a trapeze’s wire, a file of their own on its skeleton, placed from the rack’s edge', () => {
+      if (look === 'test') {
+        return;
+      }
+      const wire = readGltf(`${look}/${version}.trapeze.glb`);
+      const names = (wire.animations ?? []).map((a) => a.name).sort();
+      expect(names).toEqual(['trapeze', 'trapeze-low', 'trapeze-low-port', 'trapeze-port']);
+      expect(joints(wire)).toEqual(joints(clips));
+      for (const name of names) {
+        const m = wire.nodes.find((n) => n.name === `place-${name}`)?.matrix ?? [];
+        // About the rack's edge, the figure's up lying back outboard on its side.
+        expect(Math.hypot(m[12] ?? 9, m[13] ?? 9, m[14] ?? 9), name).toBeLessThan(0.3);
+        const side = name.endsWith('-port') ? -1 : 1;
+        expect(side * (m[4] ?? 0), name).toBeGreaterThan(0.5);
+      }
+    });
+
+    test('its trapeze harness: one mesh on its skeleton, leather and bronze, and its hook', () => {
+      if (look === 'test') {
+        return;
+      }
+      const harness = readGltf(`${look}/${version}.harness.glb`);
+      expect(harness.nodes.filter((n) => n.mesh !== undefined).map((n) => n.name)).toEqual([
+        'harness',
+      ]);
+      expect(harness.nodes.find((n) => n.name === 'harness')?.skin).toBe(0);
+      expect(joints(harness)).toEqual(joints(clips));
+      expect(harness.materials?.map((m) => m.name)).toEqual(['harness-leather', 'harness-bronze']);
+      for (const m of harness.materials ?? []) {
+        expect(m.pbrMetallicRoughness?.baseColorFactor).toHaveLength(4);
+        expect(m.pbrMetallicRoughness?.baseColorTexture).toBeUndefined();
+      }
+      expect(harness.images ?? []).toEqual([]);
+      // The hook's eye before the waist, standing at rest.
+      const hook = harness.nodes.find((n) => n.name === 'place-hook')?.matrix ?? [];
+      expect(hook).toHaveLength(16);
+      expect(hook[13]).toBeGreaterThan(0.7);
+      expect(hook[13]).toBeLessThan(1.3);
+      expect(hook[14]).toBeGreaterThan(0.05);
     });
 
     test('every clip has its place', () => {

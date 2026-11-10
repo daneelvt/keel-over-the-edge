@@ -4,11 +4,13 @@
 // panel before setting sail: another boat chosen is theirs for the voyage,
 // a look saved is kept, a name the server refuses is said in words beside
 // the field, and at sea away from a port the look is not changed. The tall
-// ship, chosen the same way, sails with her yards braced.
+// ship, chosen the same way, sails with her yards braced. The skiff, chosen
+// the same way, has her crew set the gennaker as she bears away on the
+// autopilot and take it in as she comes up, and keep it in once reefed.
 
 import { expect, type Page, test } from '@playwright/test';
 import data from '../src/catalog/catalog.gen.json' with { type: 'json' };
-import { GAME, sailor, setSail } from './helpers';
+import { alone, GAME, heldRegime, sailor, setSail } from './helpers';
 
 type FleetBoat = {
   id: string;
@@ -31,6 +33,34 @@ async function fleet(page: Page): Promise<{ boat: string; boats: FleetBoat[] }> 
 const keelboat = data.boats.find((b) => b.fleet === 'account');
 /** The account's ship of square sails. */
 const ship = data.boats.find((b) => b.fleet === 'account' && b.physics.square.squareAfterArea > 0);
+/** The account's boat with a downwind sail its crew sets. */
+const skiff = data.boats.find((b) => b.fleet === 'account' && b.physics.downwind.downwindArea > 0);
+
+/** keel's internal listener, as tools/e2e serves it: its developer commands. */
+const internal = 'http://127.0.0.1:19090';
+
+/**
+ * Turns what the autopilot holds to an angle off the wind, degrees (positive
+ * with the wind over starboard), as a player does on the keyboard: Q a degree
+ * to port, E to starboard, ten with Shift.
+ */
+async function pilotTo(page: Page, degrees: number): Promise<void> {
+  const held = () => page.evaluate(() => globalThis.keel.boat().pilot.degrees);
+  for (let d = await held(), n = 0; d !== degrees && n < 40; d = await held(), n++) {
+    const step = Math.abs(degrees - d) >= 10 ? 'Shift+' : '';
+    await page.keyboard.press(`${step}${degrees > d ? 'q' : 'e'}`);
+  }
+  expect(await held()).toBe(degrees);
+}
+
+/** The boat's angle off the mean wind, degrees, positive with the wind over starboard. */
+function angleOff(page: Page): Promise<number> {
+  return page.evaluate(() => {
+    const b = globalThis.keel.boat();
+    const a = ((b.wind.meanFrom - b.state.heading) * 180) / Math.PI;
+    return ((((a + 180) % 360) + 360) % 360) - 180;
+  });
+}
 
 test('a boat chosen and its look set from the player’s own panel, then sailed', async ({
   context,
@@ -122,4 +152,73 @@ test('the tall ship chosen from the fleet and sailed, her yards braced', async (
       timeout: 30_000,
     })
     .toBeGreaterThanOrEqual(sharp - 1e-6);
+});
+
+test('the skiff chosen from the fleet: her crew sets the gennaker bearing away, takes it in coming up, and keeps it in reefed', {
+  tag: '@world',
+}, async ({ context, page, request }) => {
+  test.skip(skiff === undefined, 'the catalog has no boat with a downwind sail');
+  const set = skiff?.physics.downwind.setAngle ?? 0;
+  const drop = skiff?.physics.downwind.dropAngle ?? 0;
+  await sailor(context, 'Skiff');
+  await page.goto(GAME);
+  const readout = page.locator('.your-sailor [data-readout=boat]');
+  await expect(readout).toBeVisible({ timeout: 90_000 });
+  await page.getByRole('button', { name: 'Change boat', exact: true }).click();
+  const choice = page.locator('.change-boat-choice', { hasText: skiff?.name ?? '' }).first();
+  await expect(choice).toContainText('available');
+  await choice.click();
+  await expect(readout).toContainText(skiff?.name ?? '');
+  expect((await fleet(page)).boats.find((b) => b.yours)?.kind).toBe(skiff?.id);
+
+  await setSail(page);
+  await page.waitForFunction(() => globalThis.keel?.net().status === 'sailing', null, {
+    timeout: 60_000,
+  });
+  // A steady breeze from the north, whatever the world's weather is at
+  // this hour: the crew's angles are off the true wind.
+  expect((await request.post(`${internal}/debug/wind?knots=10&from=0`)).status()).toBe(204);
+  try {
+    await page.waitForFunction(() => Math.cos(globalThis.keel.boat().wind.meanFrom) > 0.99, null, {
+      timeout: 10_000,
+    });
+    // In clean air, at rest on a beam reach with the wind over starboard;
+    // the autopilot on at that angle, and way gathered.
+    await alone(page, 90);
+    await page.keyboard.press('p');
+    await expect.poll(() => page.evaluate(() => globalThis.keel.boat().pilot.mode)).toBe(1);
+    await page.waitForFunction(() => globalThis.keel.boat().out.speedOverGround > 1.5, null, {
+      timeout: 20_000,
+    });
+    const reef = page.locator('[data-readout=reef]');
+    const hoist = () => page.evaluate(() => globalThis.keel.boat().state.hoist);
+
+    // Bearing away onto a broad reach: the crew sets the gennaker.
+    await pilotTo(page, set + 45);
+    await expect(reef).toHaveText('Gennaker set', { timeout: 30_000 });
+    expect(await hoist()).toBe(1);
+    expect(await angleOff(page)).toBeGreaterThanOrEqual(set);
+
+    // Coming up onto a close reach: they take it in.
+    await pilotTo(page, drop - 20);
+    await expect(reef).toHaveText('Gennaker coming in', { timeout: 20_000 });
+    await expect.poll(hoist, { timeout: 20_000 }).toBe(0);
+    await expect(reef).toHaveCount(0);
+
+    // One reef, as the Reef key says it: the gennaker kept in its bag,
+    // bearing away again.
+    await page.getByRole('button', { name: /^Reef: / }).click();
+    const key = page.locator('[data-control=reef] .reef-level').first();
+    await expect(key).toHaveText(skiff?.controls.reef[1] ?? '');
+    await pilotTo(page, set + 45);
+    await expect.poll(() => angleOff(page), { timeout: 20_000 }).toBeGreaterThanOrEqual(set);
+    await expect(reef).toHaveText(skiff?.controls.reef[1] ?? '', { timeout: 30_000 });
+    // Still sailing, her sailor aboard: a capsize would bag it too.
+    const s = await page.evaluate(() => globalThis.keel.boat().state);
+    expect([s.hoist, s.hoistTarget, s.sailorMode]).toEqual([0, 0, 0]);
+    expect(await angleOff(page)).toBeGreaterThanOrEqual(set);
+  } finally {
+    // Back to the breeze tools/e2e holds.
+    await request.post(`${internal}/debug/weather?regime=${heldRegime()}`);
+  }
 });

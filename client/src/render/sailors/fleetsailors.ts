@@ -21,7 +21,8 @@
 //   2 rig: boom, rudder, opacity, the sail's side
 //   3 main colour (linear), the look's layer
 //   4 skin colour, 1 for a machine
-//   5 hair colour, 1 if the row is drawn as a rigid figure
+//   5 hair colour, 1 if the row is drawn as a rigid figure (2 out on a
+//     trapeze's wire to starboard, 3 to port)
 //   6 the sway: the apparent wind's push in the model's frame (x, z,
 //     metres at full sway), the seat's side (±1 seated, 0 not), 1 if the
 //     row is drawn skinned
@@ -31,7 +32,8 @@
 // Rigid: the far level's figure of each look, posed seated by figureNode
 // (fleetparts.ts) from the first eight texels of its instance's row: every
 // far boat, and near ones whose look has not loaded its deck level and
-// clips yet.
+// clips yet. On a boat with a trapeze, out on the wire, the look's figure
+// out on the wire on that side instead, from the same pool.
 //
 // The sailors' meshes read their instances' values from these rows, not
 // from instanced attributes they would share with the boats' meshes: three.js
@@ -78,6 +80,7 @@ import type { FleetLook } from './fleetlooks';
 import { type Hike, STRAPPED } from './restage';
 import { Rig } from './rig';
 import {
+  OFF_SEAT,
   type SailorBoat,
   type SailorMoment,
   SailorRuntime,
@@ -85,6 +88,7 @@ import {
   wheelTurn,
 } from './runtime';
 import type { HullSolid } from './solid';
+import type { Trapeze } from './trapeze';
 
 /** How often a near sailor's runtime runs, a second. */
 export const NEAR_RATE = 20;
@@ -118,6 +122,8 @@ export interface NearBoat {
   /** The wheel the sailor stands at, on a boat steered by one (wheel.ts's wheelOf), and the rudder's most (radians) that turns it hard over. */
   wheel?: WheelHelm | null;
   rudderMax?: number;
+  /** The trapeze, on a boat with one (trapeze.ts's trapezeOf): its sailors go out on the wire. */
+  trapeze?: Trapeze | null;
 }
 
 /** A near boat's sailor: its runtime, and its bones' matrices as last run. */
@@ -162,8 +168,12 @@ class Sailor {
       hike: near.hike ?? STRAPPED,
       // Each its own, turned by its own boat's rudder.
       wheel: near.wheel ? { ...near.wheel, turn: 0 } : null,
+      trapeze: near.trapeze ?? null,
     };
     this.runtime = new SailorRuntime(rig, clips, this.boat, seed, look.machine, false);
+    if (near.trapeze) {
+      this.runtime.hook(look.hook);
+    }
     this.bones = new Float32Array(12 * t.names.length);
     this.moment = {
       dt: 0,
@@ -245,6 +255,10 @@ export class NearSailors extends SailorRows {
       // At a wheel: rigid until its clips at the wheel have loaded.
       return false;
     }
+    if (this.boat.trapeze && look.trapezeState !== 'ready' && look.trapezeState !== 'failed') {
+      // On a trapeze: rigid until its clips on the wire have loaded (or failed to: then on the rail).
+      return false;
+    }
     let s = this.#slots[b.slot] ?? null;
     if (s === null || s.look !== look) {
       s = new Sailor(look, this.boat, b.slot * 131 + look.index * 17 + 1, this.#still);
@@ -318,12 +332,31 @@ export class NearSailors extends SailorRows {
     }
   }
 
-  /** Whether a slot's sailor is seated, and on which side: ±1, or 0 if not seated. */
+  /** Whether a slot's sailor is seated, and on which side: ±1, or 0 if not seated (out on a wire, or not sailing). */
   seated(slot: number): number {
     const s = slot >= 0 && slot < SLOTS ? this.#slots[slot] : null;
-    if (s === null || s === undefined || s.moment.mode !== SAILING || s.runtime.crossing) {
+    if (
+      s === null ||
+      s === undefined ||
+      s.moment.mode !== SAILING ||
+      s.runtime.crossing ||
+      s.runtime.hands.wire >= OFF_SEAT
+    ) {
       return 0;
     }
+    return s.runtime.side;
+  }
+
+  /**
+   * Where a slot's sailor's hook is (the model's frame, as last run), into
+   * out, and on which side, if it hangs from a trapeze's wire; else 0.
+   */
+  hook(slot: number, out: Vector3): number {
+    const s = slot >= 0 && slot < SLOTS ? this.#slots[slot] : null;
+    if (s === null || s === undefined || !s.runtime.hands.hooked) {
+      return 0;
+    }
+    out.copy(s.runtime.hands.hook);
     return s.runtime.side;
   }
 
@@ -441,12 +474,17 @@ function colours(i: Instances): Omit<FleetSailorNodes, 'vertex'> {
 /**
  * The rigid figures' vertex: its look's far figure placed as figureNode
  * does, from its instance's row of rows; folded to a point where the row's
- * look is not the vertex's, or the row is not drawn rigid.
+ * look is not the vertex's, or the row is not drawn rigid, or in the pose
+ * the vertex's figure is (seated, or out on a wire on its side).
  */
 export function rigidSailorNodes(rows: Texture, row: Node<'int'>, cog: number): FleetSailorNodes {
   const i = rowInstances(texture(rows), row);
   const tag = attribute('tag', 'vec2') as unknown as Node<'vec2'>;
-  const here = abs(tag.x.sub(i.main.w)).lessThan(0.5).and(i.hair.w.greaterThan(0.5));
+  // Its look's, and its pose's: seated (0), or on a wire to starboard (1) or port (2).
+  const here = abs(tag.x.sub(i.main.w))
+    .lessThan(0.5)
+    .and(i.hair.w.greaterThan(0.5))
+    .and(abs(tag.y.sub(i.hair.w.sub(1))).lessThan(0.5));
   return { vertex: figureNode(i, cog).mul(float(here)) as unknown as Node<'vec3'>, ...colours(i) };
 }
 

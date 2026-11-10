@@ -6,7 +6,8 @@
 // within the budget of a frame at 60 Hz on a real GPU and little dearer
 // than with her one sailor on any; the keelboat's five each on her deck.
 // Far off, as the chase camera sees the ship, the crew are the looks' far
-// figures; close, the nearest twelve their deck level.
+// figures; close, the nearest twelve their deck level. Two aboard the
+// skiff: the crew hiking on the helm's side, after a tack and a handover.
 
 import { expect, type Page, test } from '@playwright/test';
 import data from '../src/catalog/catalog.gen.json' with { type: 'json' };
@@ -173,4 +174,47 @@ test('five aboard the keelboat, each on her deck', async ({ page }) => {
     expect(h.y).toBeGreaterThan(boat.top);
     expect(h.y).toBeLessThan(boat.bottom);
   }
+});
+
+test('two aboard the skiff: the crew on the helm’s side, after a tack and after a handover', async ({
+  page,
+}) => {
+  const skiff = data.boats.find((b) => b.stations.some((s) => 'windward' in s && s.windward));
+  test.skip(skiff === undefined, 'no kind has a crew to windward');
+  await openScene(page, `boat=${skiff?.id}&crew=2`);
+  const out = await page.evaluate(async () => {
+    const k = globalThis.keel;
+    await k.crewReady();
+    // Frames with the sailor held this far out, world time passing.
+    const sail = (sailor: number, frames: number) => {
+      for (let i = 0; i < frames; i++) {
+        k.setState({ sailor });
+        k.sailFrames(1, 1);
+      }
+      return k.crew();
+    };
+    // Met on the starboard rack.
+    k.setState({ sailor: 0.8 });
+    k.settleSailor();
+    const starboard = sail(0.8, 10);
+    // A tack: the helm crosses to the port rack, and the crew with it.
+    const tacked = sail(-0.8, 150);
+    // Handed over: the other holds the controls, the first is crew.
+    await k.showCrew(2, 0);
+    await k.crewReady();
+    const handed = sail(-0.8, 10);
+    return { starboard, tacked, handed };
+  });
+  for (const [name, c, side] of [
+    ['on the starboard rack', out.starboard, 1],
+    ['after a tack', out.tacked, -1],
+    ['after a handover', out.handed, -1],
+  ] as const) {
+    expect(c.aboard, name).toBe(1);
+    expect(c.helmSide, name).toBe(side);
+    expect(Math.sign(c.heads[0]?.across ?? 0), name).toBe(side);
+    expect(Math.abs(c.heads[0]?.across ?? 0), name).toBeGreaterThan(0.5);
+  }
+  // The two changed places: another look at the helm.
+  expect(out.handed.helm).not.toBe(out.tacked.helm);
 });

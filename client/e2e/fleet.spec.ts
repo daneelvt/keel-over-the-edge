@@ -8,8 +8,9 @@
 // topgallants furled, and a skiff as the own skiff, her gennaker set, part
 // way up and in, her sailor out past her rack; the fleet's 64 boats keep to
 // their draw calls and triangles, and a mixed 64 of Jolly boats, keelboats,
-// tall ships and skiffs, some with their gennakers set, to theirs,
-// their sailors, near and far, of every look, to at most 6; every fleet
+// tall ships and skiffs, some with their gennakers set and their sailors
+// out on the wire, to theirs, their sailors, near and far, of every look,
+// on the wire or not, to at most 6; every fleet
 // material is the factory's, with the bend; faded boats dither and none
 // sorts; and a picture of a fleet at fixed poses, near and far models,
 // matches its reference.
@@ -202,7 +203,7 @@ test('64 boats keep to 22 draw calls and 200,000 triangles', async ({ page }) =>
   test.info().annotations.push({ type: 'measured', description: JSON.stringify(budget) });
 });
 
-test('a mixed 64, Jolly boats, keelboats, tall ships and skiffs, keep to 36 draw calls and 320,000 triangles', async ({
+test('a mixed 64, Jolly boats, keelboats, tall ships and skiffs, keep to 37 draw calls and 320,000 triangles', async ({
   page,
 }) => {
   await openScene(page);
@@ -214,8 +215,8 @@ test('a mixed 64, Jolly boats, keelboats, tall ships and skiffs, keep to 36 draw
       // The start line again: of every sixteen, three keelboats, a tall
       // ship and four skiffs, the keelboats' jibs drawing and every other
       // one reefed, the ships braced up, one with her topgallants in, every
-      // other skiff with her gennaker set and one with it half way up, the
-      // first of each near.
+      // other skiff with her gennaker set and one with it half way up, every
+      // skiff's sailor out on the wire, the first of each near.
       const ship = i % 16 === 3;
       const keel = !ship && i % 4 === 3;
       const skiff = i % 4 === 1;
@@ -232,6 +233,7 @@ test('a mixed 64, Jolly boats, keelboats, tall ships and skiffs, keep to 36 draw
         reef: (keel && i % 8 === 3) || (ship && i === 19) ? 1 : 0,
         yardsTurn: ship ? -0.9 : 0,
         foreYardsTurn: ship ? -0.9 : 0,
+        sailor: skiff ? -1.8 : 0,
         sail: 15 | (1 << 4) | (1 << 6),
       });
     }
@@ -249,8 +251,9 @@ test('a mixed 64, Jolly boats, keelboats, tall ships and skiffs, keep to 36 draw
   test.info().annotations.push({ type: 'measured', description: JSON.stringify(budget) });
   expect(budget.near + budget.far).toBe(64);
   expect(budget.near).toBeLessThanOrEqual(12);
-  // Each kind's draws a level, a skiff's gennaker one more where one is set.
-  expect(budget.drawCalls).toBeLessThanOrEqual(36);
+  // Each kind's draws a level, a skiff's gennaker one more where one is
+  // set, and the skiffs' trapeze wires one.
+  expect(budget.drawCalls).toBeLessThanOrEqual(37);
   expect(budget.triangles).toBeLessThanOrEqual(320_000);
   expect(budget.bagged).toBe(budget.drawCalls - 2);
 });
@@ -342,26 +345,30 @@ test('a keelboat, a tall ship and a skiff of the fleet look as the own ones do, 
 
 test('every sailor, near and far, person or machine, in at most 6 draws', async ({ page }) => {
   await openScene(page);
-  const r = await page.evaluate(async () => {
+  const r = await page.evaluate(async (SKIFF) => {
     const k = globalThis.keel;
     const b = k.boat().state;
-    const fleet = async (machine: (i: number) => number) => {
+    const fleet = async (machine: (i: number) => number, kind = 0, sailor = -0.6) => {
       const boats = [];
       for (let i = 0; i < 64; i++) {
         // A start line, the nearest rows within the near models' range.
         boats.push({
+          kind,
           east: b.x - 35 + (i % 8) * 10,
           north: b.y + 12 + Math.floor(i / 8) * 14,
           heading: 1.5708,
           boom: 0.6,
-          sailor: -0.6,
+          sailor,
           sail: 15 | (1 << 4) | (1 << 6),
           machine: machine(i),
         });
       }
       k.setFleet(boats);
       k.render();
-      // Each look loaded as its first boat comes into view.
+      // Each look loaded as its first boat comes into view; its clips on
+      // the wire once its kind's first boat with a trapeze is drawn.
+      await k.fleetLoaded();
+      k.render();
       await k.fleetLoaded();
       k.render();
       return k.fleetBudget();
@@ -370,13 +377,17 @@ test('every sailor, near and far, person or machine, in at most 6 draws', async 
       none: await fleet(() => 0),
       half: await fleet((i) => i % 2),
       all: await fleet(() => 1),
+      // Skiffs, their sailors out on the wire: the far ones' figures on the
+      // wire in the same draw as the seated ones.
+      wire: await fleet((i) => i % 2, SKIFF, -1.8),
     };
-  });
+  }, SKIFF);
   test.info().annotations.push({ type: 'measured', description: JSON.stringify(r) });
   expect([r.none.people, r.none.machines]).toEqual([64, 0]);
   expect([r.half.people, r.half.machines]).toEqual([32, 32]);
   expect([r.all.people, r.all.machines]).toEqual([0, 64]);
-  for (const f of [r.none, r.half, r.all]) {
+  expect([r.wire.people, r.wire.machines]).toEqual([32, 32]);
+  for (const f of [r.none, r.half, r.all, r.wire]) {
     // The near ones skinned in one draw, the far ones rigid in another,
     // whatever their looks.
     expect(f.near).toBe(12);

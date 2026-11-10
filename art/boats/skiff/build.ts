@@ -1102,33 +1102,37 @@ function rigging(): { rope: MeshBuilder; bronze: MeshBuilder; wood: MeshBuilder 
 }
 
 /**
- * The trapeze, in the boat's frame: a wire of tarred hemp each side from
- * the hounds down to a short lanyard and a bronze ring, which hangs, at
- * rest, by the shrouds.
+ * A side's trapeze (s, +1 starboard), in the boat's frame: a wire of
+ * tarred hemp from the hounds down to a short lanyard and a bronze ring,
+ * which hangs, at rest, by the shrouds.
  */
-function trapeze(): { rope: MeshBuilder; bronze: MeshBuilder } {
+function trapeze(s: number): { rope: MeshBuilder; bronze: MeshBuilder } {
   const rope = new MeshBuilder('rope');
   const bronze = new MeshBuilder('bronze');
-  for (const s of [1, -1]) {
-    const from: Vec3 = [s * mastR(HOUNDS), HOUNDS - 0.03, MAST_Z];
-    const at = ring(s);
-    const top = add(at, [0, RING_R, 0]);
-    const dir = normalize(sub(from, top));
-    const join = add(top, scale(dir, 0.14));
-    rope.tube([from, join], [0.004], 4);
-    rope.tube([join, top], [0.003], 4);
-    // The ring, in the plane of the wire and the athwartships line.
-    const across = normalize(cross(dir, [0, 0, 1]));
-    const up = normalize(cross(across, [0, 0, 1]));
-    const loop: Vec3[] = [];
-    const n = 12;
-    for (let i = 0; i <= n; i++) {
-      const a = (i / n) * 2 * Math.PI;
-      loop.push(add(at, add(scale(across, RING_R * Math.cos(a)), scale(up, RING_R * Math.sin(a)))));
-    }
-    bronze.tube(loop, [0.006], 4);
+  const from: Vec3 = [s * mastR(HOUNDS), HOUNDS - 0.03, MAST_Z];
+  const at = ring(s);
+  const top = add(at, [0, RING_R, 0]);
+  const dir = normalize(sub(from, top));
+  const join = add(top, scale(dir, 0.14));
+  rope.tube([from, join], [0.004], 4);
+  rope.tube([join, top], [0.003], 4);
+  // The ring, in the plane of the wire and the athwartships line.
+  const across = normalize(cross(dir, [0, 0, 1]));
+  const up = normalize(cross(across, [0, 0, 1]));
+  const loop: Vec3[] = [];
+  const n = 12;
+  for (let i = 0; i <= n; i++) {
+    const a = (i / n) * 2 * Math.PI;
+    loop.push(add(at, add(scale(across, RING_R * Math.cos(a)), scale(up, RING_R * Math.sin(a)))));
   }
+  bronze.tube(loop, [0.006], 4);
   return { rope, bronze };
+}
+
+/** A side's trapeze as a node of its own, named. */
+function trapezeSide(name: string, s: number): NodeDef {
+  const t = trapeze(s);
+  return { name, primitives: [t.rope.primitive(), t.bronze.primitive()] };
 }
 
 function boom(): { spar: MeshBuilder; iron: MeshBuilder } {
@@ -1363,8 +1367,12 @@ function tiller(): MeshBuilder {
   return m;
 }
 
-/** The tiller extension, hinged at the tiller's end: long, to steer from the rack or the wire; at rest along it, forward. */
-const EXTENSION = 1.4;
+/**
+ * The tiller extension, hinged at the tiller's end; at rest along it,
+ * forward. Long enough to steer from the wire: the sailor's aft hand, out
+ * on the trapeze, is about 1.8 m from the hinge.
+ */
+const EXTENSION = 1.9;
 
 function extension(): MeshBuilder {
   const m = new MeshBuilder('spar');
@@ -1863,12 +1871,13 @@ function model(): NodeDef[] {
       primitives: [l.brass.primitive(), l.glass.primitive({ colors: true })],
     });
   }
-  // The trapeze: its wires, lanyards and rings, and its points for the sailor on the wire.
-  const t = trapeze();
+  // The trapeze: its points for the sailor on the wire, and each side's
+  // wire, lanyard and ring a node of its own, which the game hides for the
+  // side its sailor is hooked on.
   nodes.push({
     name: 'trapeze',
     extras: TRAPEZE,
-    primitives: D.small ? [t.rope.primitive(), t.bronze.primitive()] : [],
+    children: D.small ? [trapezeSide('trapeze-starboard', 1), trapezeSide('trapeze-port', -1)] : [],
   });
   const rudderPrims = [rudderParts.oak.primitive()];
   if (D.small) {

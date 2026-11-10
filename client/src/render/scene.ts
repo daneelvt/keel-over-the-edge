@@ -1767,6 +1767,11 @@ export class SeaScene {
     this.boat?.draw(bs, this.pose, this.out, this.time, this.timeStep);
     // The sailor drawn close when the camera is near it.
     this.boat?.sailor?.near(camera.position.distanceTo(this.#v.set(bs.x, bs.y + 0.8, bs.z)));
+    // A crew to windward sits on the helm's side and crosses with it.
+    const helm = this.boat?.sailor?.runtime;
+    if (helm !== undefined) {
+      this.crew.windward(helm.crossFrom, helm.crossed);
+    }
     this.crew.frame(camera.position);
     const fs = this.fleetSource;
     if (this.fleet.loaded) {

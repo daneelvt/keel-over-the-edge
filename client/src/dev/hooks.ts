@@ -2484,7 +2484,11 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
       const busy = () =>
         world.fleet.loading ||
         (world.fleet.looks?.looks.some(
-          (l) => l.state === 'loading' || l.clipsState === 'loading',
+          (l) =>
+            l.state === 'loading' ||
+            l.clipsState === 'loading' ||
+            l.wheelState === 'loading' ||
+            l.trapezeState === 'loading',
         ) ??
           false);
       while (busy()) {
@@ -2494,10 +2498,15 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
 
     /**
      * Puts n people aboard the boat in view as the sandbox's ?crew does (the
-     * second at the helm), or none but its sailor for 0.
+     * second at the helm, or the seat holder holds the controls), or none
+     * but its sailor for 0.
      */
-    showCrew(n: number): Promise<void> {
-      return world.showCrew(n > 0 ? sandboxCrew(Math.min(n, world.kind.capacity), catalog) : null);
+    showCrew(n: number, holder?: number): Promise<void> {
+      if (n <= 0) {
+        return world.showCrew(null);
+      }
+      const crew = sandboxCrew(Math.min(n, world.kind.capacity), catalog);
+      return world.showCrew(holder === undefined ? crew : { ...crew, holder });
     },
 
     /**
@@ -2514,7 +2523,9 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
       nearTriangles: number;
       farTriangles: number;
       helm: string | null;
-      heads: { x: number; y: number; near: boolean; station: number }[];
+      /** The side deck the helm sits on, + starboard, − port, or crosses from. */
+      helmSide: number;
+      heads: { x: number; y: number; near: boolean; station: number; across: number }[];
     } {
       const c = world.crew;
       const canvas = stage.gfx?.canvas;
@@ -2524,6 +2535,7 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
         ready: c.ready,
         ...c.drawn,
         helm: world.boat?.drawnLook()?.model ?? null,
+        helmSide: world.boat?.sailor?.runtime.crossFrom ?? 0,
         heads: c.heads().map((h) => {
           const p = h.at;
           p.y -= domeDrop(Math.hypot(p.x - bs.x, p.z - bs.z));
@@ -2533,6 +2545,7 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
             y: ((1 - p.y) / 2) * (canvas?.clientHeight ?? 0),
             near: h.near,
             station: h.station,
+            across: h.across,
           };
         }),
       };
