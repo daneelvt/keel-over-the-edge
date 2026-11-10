@@ -75,6 +75,11 @@ type Boat struct {
 	Jib   int16
 	Yards int16
 	Fore  int16
+	// Kite is the downwind sail's clew's angle off the centreline, in
+	// AngleSteps, while it is hoisted at all, and Hoist how far it is
+	// hoisted, 0 in its bag … 255 set: 0 on a boat without one.
+	Kite  int16
+	Hoist uint8
 }
 
 // Relooked says whether a view slot's boat, the same boat, is drawn
@@ -118,7 +123,16 @@ func Quantise(st *physics.State, kind uint16, sail uint8, far bool, q *Boat) {
 	q.Jib = int16(angleSteps(st.Jib))
 	q.Yards = int16(angleSteps(st.Yards))
 	q.Fore = int16(angleSteps(st.ForeYards) - angleSteps(st.Yards))
+	q.Hoist = uint8(steps(st.Hoist*HoistSteps, 0, HoistSteps))
+	q.Kite = 0
+	if q.Hoist != 0 {
+		q.Kite = int16(angleSteps(st.Kite))
+	}
 }
+
+// HoistSteps is how many steps a boat's downwind sail's hoist is sent in,
+// from 0, in its bag, to set.
+const HoistSteps = 255
 
 // steps rounds v to the nearest whole step within lo … hi; NaN is 0.
 func steps(v float64, lo, hi int64) int64 {
@@ -189,7 +203,9 @@ const (
 	ChangeJib
 	ChangeYards
 	ChangeFore
-	changeUsed = ChangeFore<<1 - 1
+	ChangeKite
+	ChangeHoist
+	changeUsed = ChangeHoist<<1 - 1
 )
 
 // An enter's rig: which of the rig's fields follow it, those not zero, in
@@ -198,15 +214,17 @@ const (
 	enterJib   = 1
 	enterYards = 2
 	enterFore  = 4
-	enterRig   = enterJib | enterYards | enterFore
-	kindShift  = 3
+	enterKite  = 8
+	enterHoist = 16
+	enterRig   = enterJib | enterYards | enterFore | enterKite | enterHoist
+	kindShift  = 5
 )
 
 // maxEntrySize is the longest entry this package writes: an enter of a
 // kind of 3 bytes, a look of 3 (a look code holds 20 bits), a boat look of
 // 4 (22 bits) and every rig field; an update of every field, its position
 // changes 4 bytes each, is shorter.
-const maxEntrySize = 34
+const maxEntrySize = 37
 
 // Entry is one entry of a snapshot.
 type Entry struct {
@@ -262,6 +280,12 @@ func Diff(base, q *Boat) uint16 {
 	if q.Fore != base.Fore {
 		m |= ChangeFore
 	}
+	if q.Kite != base.Kite {
+		m |= ChangeKite
+	}
+	if q.Hoist != base.Hoist {
+		m |= ChangeHoist
+	}
 	return m
 }
 
@@ -311,10 +335,13 @@ func AppendEntry(b []byte, e *Entry) []byte {
 	switch e.Op {
 	case OpEnter:
 		var rig uint64
-		for i, v := range [...]int16{q.Jib, q.Yards, q.Fore} {
+		for i, v := range [...]int16{q.Jib, q.Yards, q.Fore, q.Kite} {
 			if v != 0 {
 				rig |= 1 << i
 			}
+		}
+		if q.Hoist != 0 {
+			rig |= enterHoist
 		}
 		b = binary.AppendUvarint(b, uint64(q.Kind)<<kindShift|rig)
 		b = binary.AppendUvarint(b, uint64(q.Look))
@@ -326,10 +353,13 @@ func AppendEntry(b []byte, e *Entry) []byte {
 			b = binary.LittleEndian.AppendUint16(b, v)
 		}
 		b = append(b, byte(q.Sailor), q.Sail)
-		for i, v := range [...]int16{q.Jib, q.Yards, q.Fore} {
+		for i, v := range [...]int16{q.Jib, q.Yards, q.Fore, q.Kite} {
 			if rig&(1<<i) != 0 {
 				b = binary.LittleEndian.AppendUint16(b, uint16(v))
 			}
+		}
+		if rig&enterHoist != 0 {
+			b = append(b, q.Hoist)
 		}
 	case OpUpdate, OpUpdateRig:
 		m := e.Mask
@@ -351,10 +381,13 @@ func AppendEntry(b []byte, e *Entry) []byte {
 				b = append(b, v)
 			}
 		}
-		for i, v := range [...]int16{q.Jib, q.Yards, q.Fore} {
+		for i, v := range [...]int16{q.Jib, q.Yards, q.Fore, q.Kite} {
 			if m&(ChangeJib<<i) != 0 {
 				b = binary.LittleEndian.AppendUint16(b, uint16(v))
 			}
+		}
+		if m&ChangeHoist != 0 {
+			b = append(b, q.Hoist)
 		}
 	}
 	return b
@@ -418,7 +451,7 @@ func ReadEntry(b []byte, e *Entry) ([]byte, error) {
 		q.Rudder = int16(binary.LittleEndian.Uint16(b[13:]))
 		q.Sailor, q.Sail = int8(b[15]), b[16]
 		b = b[enterFields:]
-		for i, v := range [...]*int16{&q.Jib, &q.Yards, &q.Fore} {
+		for i, v := range [...]*int16{&q.Jib, &q.Yards, &q.Fore, &q.Kite} {
 			if rig&(1<<i) == 0 {
 				continue
 			}
@@ -429,6 +462,15 @@ func ReadEntry(b []byte, e *Entry) ([]byte, error) {
 				return b, errors.New("protocol: an enter's rig field of 0 sent")
 			}
 			b = b[2:]
+		}
+		if rig&enterHoist != 0 {
+			if len(b) < 1 {
+				return b, ErrEntryShort
+			}
+			if q.Hoist = b[0]; q.Hoist == 0 {
+				return b, errors.New("protocol: an enter's rig field of 0 sent")
+			}
+			b = b[1:]
 		}
 	case OpUpdate, OpUpdateRig:
 		width := 1
@@ -496,7 +538,7 @@ func ReadEntry(b []byte, e *Entry) ([]byte, error) {
 			}
 			b = b[1:]
 		}
-		for i, v := range [...]*int16{&q.Jib, &q.Yards, &q.Fore} {
+		for i, v := range [...]*int16{&q.Jib, &q.Yards, &q.Fore, &q.Kite} {
 			if m&(ChangeJib<<i) == 0 {
 				continue
 			}
@@ -505,6 +547,13 @@ func ReadEntry(b []byte, e *Entry) ([]byte, error) {
 			}
 			*v = int16(binary.LittleEndian.Uint16(b))
 			b = b[2:]
+		}
+		if m&ChangeHoist != 0 {
+			if len(b) < 1 {
+				return b, ErrEntryShort
+			}
+			q.Hoist = b[0]
+			b = b[1:]
 		}
 	default:
 		return b, fmt.Errorf("protocol: an entry of op %d", e.Op)
@@ -596,6 +645,12 @@ func (v *View) Apply(e *Entry, ch *Changes) error {
 	}
 	if m&ChangeFore != 0 {
 		q.Fore = u.Fore
+	}
+	if m&ChangeKite != 0 {
+		q.Kite = u.Kite
+	}
+	if m&ChangeHoist != 0 {
+		q.Hoist = u.Hoist
 	}
 	if ch.Entered&bit == 0 {
 		ch.Updated |= bit

@@ -117,6 +117,32 @@ func PhysicsParams(b *Boat) physics.Params {
 	p.Hauls = b.Physics.Square.Hauls
 	p.LetGo = b.Physics.Square.LetGo
 	copy(p.SquareReefs[:], b.Physics.Square.SquareReefs)
+	p.DownwindArea = b.Physics.Downwind.DownwindArea
+	p.DownwindLuff = b.Physics.Downwind.DownwindLuff
+	p.DownwindFoot = b.Physics.Downwind.DownwindFoot
+	p.DownwindTackHeight = b.Physics.Downwind.DownwindTackHeight
+	p.DownwindTack = b.Physics.Downwind.DownwindTack
+	p.DownwindFootStrip = b.Physics.Downwind.DownwindFootStrip
+	p.DownwindHeadStrip = b.Physics.Downwind.DownwindHeadStrip
+	p.DownwindPressureAttached = b.Physics.Downwind.DownwindPressureAttached
+	p.DownwindPressureSeparated = b.Physics.Downwind.DownwindPressureSeparated
+	p.DownwindMaxLift = b.Physics.Downwind.DownwindMaxLift
+	p.DownwindStallAngle = b.Physics.Downwind.DownwindStallAngle
+	p.DownwindStallWidth = b.Physics.Downwind.DownwindStallWidth
+	p.DownwindDrag = b.Physics.Downwind.DownwindDrag
+	copy(p.DownwindNormalForce[:], b.Physics.Downwind.DownwindNormalForce)
+	p.DownwindTwist = b.Physics.Downwind.DownwindTwist
+	p.DownwindTwistEased = b.Physics.Downwind.DownwindTwistEased
+	p.DownwindIn = b.Physics.Downwind.DownwindIn
+	p.DownwindOut = b.Physics.Downwind.DownwindOut
+	p.DownwindInertia = b.Physics.Downwind.DownwindInertia
+	p.DownwindMoment = b.Physics.Downwind.DownwindMoment
+	p.DownwindDamping = b.Physics.Downwind.DownwindDamping
+	p.HoistTime = b.Physics.Downwind.HoistTime
+	p.DropTime = b.Physics.Downwind.DropTime
+	p.SetAngle = b.Physics.Downwind.SetAngle
+	p.DropAngle = b.Physics.Downwind.DropAngle
+	copy(p.DownwindReefs[:], b.Physics.Downwind.DownwindReefs)
 	p.BoardSpan = b.Physics.Foils.BoardSpan
 	p.BoardChord = b.Physics.Foils.BoardChord
 	p.BoardPosition = b.Physics.Foils.BoardPosition

@@ -154,6 +154,22 @@
         "The start braces [[90, 0.3], [110, 0.65], [130, 1]] from tools/polar -start, each within 95% of the best after 20 s from rest in 3, 5 and 8 knots.",
         "Where she differs from her original: no stability booklet or polar of hers is published, so her references are her logged passages and the seamanship of square rig. Her speed falls steeply past 8 knots in flat water by her drag table, which holds her to her passages' speeds; in a sea she would surf, as she did at 13 knots in 2012. Her lateral plane is a foil and the Munk moment, tuned for her balance, not measured."
       ]
+    },
+    {
+      "boat": "skiff",
+      "original": "29er, raced by its crew of two, flat water",
+      "height": 10,
+      "crew": {"mass": 130, "reach": 1.55, "source": "The 29er's ideal racing weight of 110 to 130 kg (Ovington); the helm hiking from the rack about 1.3 m out and the crew on the trapeze 1.84 m out (Day 2017's bound from the rack's edge; ORC VPP 2023, §4.4.3), about 200 kg·m from 130 kg."},
+      "points": [
+        {"measure": "course", "against": "jolly-boat", "atMost": true, "wind": 8, "value": 0.816, "tolerance": 0.08, "source": "RYA Portsmouth Number List 2026: 29er 900, ILCA 7 1103, their ratio 0.816. A beat, a beam reach, a broad reach at 135° and a run, equal legs, each at its best. At most: the yardstick is of club racing, its starts, marks, manoeuvres and mistakes in it, which a course sailed at the polar's best leaves out."},
+        {"measure": "course", "against": "jolly-boat", "atMost": true, "wind": 12, "value": 0.816, "tolerance": 0.08, "source": "RYA Portsmouth Number List 2026"},
+        {"measure": "course", "against": "jolly-boat", "atMost": true, "wind": 16, "value": 0.816, "tolerance": 0.08, "source": "RYA Portsmouth Number List 2026"}
+      ],
+      "notes": [
+        "No polar, tank test or VPP of a 29er is published. Its one published measure of speed is its Portsmouth Number, from club racing: it is checked round a course against the Jolly boat, which is held to the ILCA 7's measured speeds, raced by its crew of two as the yardstick's boats are. The game's skiff, sailed by one 80 kg sailor, is reported beside it.",
+        "Held at most, not within: sailed at its best in flat water, on the Musto Skiff's measured resistance and ORC's sails, the 29er raced goes round the course in 0.73 of the Jolly boat's time in 8 knots, 0.66 in 12 and 0.61 in 16, where the yardstick has 0.816 in every wind. 15% more drag at every speed and no planing, the most the hull's data allow, still left it at 0.67 in 16 knots: the gap is the yardstick's, a club fleet's average over its races, in which a skiff loses most at the marks and in a breeze. The check holds that the boat as raced is never slower than its yardstick.",
+        "Weather helm is light, as the Jolly boat's: neutral to 1° close-hauled with the board just aft of the mast and the rudder working in its downwash (0.8, as the keelboat's)."
+      ]
     }
-  ]
+]
 }

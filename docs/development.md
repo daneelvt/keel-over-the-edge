@@ -313,7 +313,7 @@ boom may swing out; it never pulls the boom in, so an eased sail luffs, a
 trimmed one presses on the sheet, and a sail with the wind behind its leech
 swings across. On a ship the sheet is the braces (below).
 
-**The sail groups.** A boat's rig is up to four groups, each in its own
+**The sail groups.** A boat's rig is up to five groups, each in its own
 `Params` fields, and a group of no area is skipped, so a boat with the main
 alone steps as it always did:
 
@@ -350,6 +350,32 @@ alone steps as it always did:
   sails': aback, lifting below the attack of a quarter of the greatest
   lift (brace up), stalled past 1.75 times the attack of the greatest lift
   with the yards not square (square them), or drawing.
+
+- **The downwind sail**, a gennaker tacked on the centreline at a
+  bowsprit's end (`downwindTack`, `downwindTackHeight`), two strips about
+  its tack as the headsails are, its clew a body (`State.Kite`,
+  `KiteRate`) swinging free to its own sheet's limit (`KiteLimit`), the one
+  sheet trimming it in the same share as the main over its own travel
+  (`downwindIn` … `downwindOut`). It is never flattened. `State.Hoist`,
+  from 0 in its bag to 1 set, scales its area; while it is set its area
+  joins the whole rig's induced drag. `Out.KiteFootAttack`,
+  `KiteHeadAttack`, `KiteFootFlow`, `KiteHeadFlow` and `KiteTwist` are its
+  strips'; while it is more than half set, `Out.Sail` is its word
+  (`kiteState`), on a run stalled only past 130° of attack, where it
+  stands across the wind at its fastest.
+
+**The crew and the gennaker.** No control sets it: the crew does, a rule
+in the physics as a ship's braces are. They set it (`State.HoistTarget`
+1) as the boat bears away with the mean wind `setAngle` or more off her
+bow, and take it in (0) as she comes up forward of `dropAngle`; between
+the two they carry on, so a steady heading through the wind's shifts
+leaves it as it is. They keep it in while the reef ordered keeps none of
+it (`downwindReefs`, 1 set or 0 kept in, a level each: the skiff's
+"Gennaker in" is its first reef, its main full), and take it in when the
+sailor is out of the boat. The hoist follows at `hoistTime` up and
+`dropTime` down. In a gybe, once the wind is 10° over the side its clew
+is on, they take the clew round through aft to the new side, at 70° a
+second.
 
 **The braces.** On a boat with square sails the sheet, 0 … 1, is the
 braces: the yards' angle off the centreline is `braceSharp` (braced up
@@ -391,8 +417,10 @@ takes two slab reefs, 0.85 and 0.70, and its jib none. The tall ship's
 first reef takes her topgallants in and her second reefs her topsails twice
 and takes her spritsail in (Beaufort's man-of-war scale at forces 6 and 7):
 her square sails' shares 0.91 and 0.83, her headsails' 1 and 0.79; her
-mizzen is not reefed, and her crew takes a level in 120 s. The autopilot
-never reefs.
+mizzen is not reefed, and her crew takes a level in 120 s. The skiff's
+first reef shortens nothing and keeps her gennaker in, "Gennaker in"; her
+second slab reefs her main to 0.80 of its luff (a licence: a 29er has no
+reefs). The autopilot never reefs.
 
 **The fixed keel.** A boat with `fixed` 1 has a fin keel where the Jolly
 boat has its daggerboard: the ground never pushes it up, its tip meets the
@@ -506,6 +534,48 @@ balance that gave her weather helm close-hauled left her, slow and sliding
 sideways after a tack or a wear, rounding up into the wind until she
 tacked back.
 
+### The skiff's numbers
+
+The skiff is a 29er, the two-person trapeze skiff of 1998, with its racks,
+a fully battened main, a self-tacking jib and a gennaker on a bowsprit,
+sailed by one 80 kg sailor who helms from the trapeze. No polar, tank test
+or VPP of a 29er is published. Each value in `shared/catalog/boats.yaml`
+says where it comes from:
+
+- **Published:** its length, 4.45 m, and beam over the racks, 1.77 m; the
+  hull's least weight, 74 kg (class rule C.7.5(a)), to which the game adds
+  20 kg of rig and foils and its sailor's 80 kg; 12.5 m² upwind and a
+  16.83 m² gennaker (the class and its builder); the main's foot, 2.1 m.
+- **Measured on the nearest hull:** its resistance, the Musto Skiff's at
+  167.5 kg (Day, Cameron and Dai 2019) to 8 knots, falling past the hump
+  to an estimated planing value held to 18 knots, its table every three
+  quarters of a knot.
+- **Fitted:** the main and jib as the keelboat's; the gennaker to ORC's
+  asymmetric spinnaker tacked on the centreline (Table 5.7) from 41° to
+  180° of apparent wind (`tools/polar -sail`).
+- **Estimates:** the split of the upwind area (main 9.0, jib 3.5 m²), the
+  rig's heights, the gennaker's luff and foot, the foils, the righting
+  lever, the inertias; the sailor's reach on the wire, 1.84 m (Day's bound
+  beyond the rack's edge), moving at 0.8 m/s with a lag of 0.6 s, so that
+  the wind dying at once under her sailor on the wire takes her over to
+  windward; the crew's angles, setting the gennaker at 105° and taking it
+  in at 90°, inside the band where it pays (tools/polar's report: from 90°
+  in 6 knots to 115° in 20, as the 470's spinnaker does, Masuyama and
+  Ogihara 2020); her hoist and drop times, 5 and 6 s.
+
+She is checked as raced (`reference.json`): `tools/polar` sails her with
+the 29er's crew of two in place of her sailor (130 kg, their centre of
+mass 1.55 m to windward) round a course of four equal legs, a beat, a beam
+reach, a broad reach at 135° and a run, each at its best, against the
+Jolly boat's own time, and holds the time at most the ratio of their 2026
+Portsmouth Numbers, 900 and 1103, and 8% (0.88). Sailed at its best in
+flat water she goes round in 0.61 to 0.73 of the Jolly boat's time: the
+yardstick, a club fleet's average over its races, holds no closer, and
+the check holds only that she is never slower than it. Printed beside it,
+not checked: the course sailed by her one sailor; her speeds in 8 m/s of
+wind beside the 470's measured ones; where her gennaker pays in each wind;
+her best downwind angle. Weather helm is light, as the Jolly boat's.
+
 ### `tools/polar`
 
 ```sh
@@ -549,7 +619,9 @@ measurements and hollow ones upper bounds.
 compares it with its source: the main with ORC's low-lift mainsail (Table
 5.1), held from 28° to 180° of apparent wind and its side force at 28° and
 60°; the headsails with ORC's low-lift jib (Table 5.4), held from 27° to
-100° and their side force at 27°, 50° and 60°. From 150° aft ORC's jib
+100° and their side force at 27°, 50° and 60°; a downwind sail with ORC's
+asymmetric spinnaker tacked on the centreline (Table 5.7), set, its area
+in the rig's induced drag, held from 41° to 180° on its drive alone. From 150° aft ORC's jib
 stands across the wind as if poled out; a jib sheeted to the rail stands
 behind the main, and is not held there. A ship's square sails, held by
 their yards at each angle of attack, are compared with the wind tunnel's
@@ -557,6 +629,13 @@ foremast of six (Tadano and others 1991, Figure 9) from 5° to 90°, within
 5% of its whole force there. Her mizzen and headsails are shown against
 ORC's but not held: in her rig, whose induced drag is three times a
 sloop's, the trim that drives her best near the wind is not ORC's.
+
+A reference may name a `crew` to sail its points with in place of the
+catalog's sailor, and a `course` point the time round a course of a beat,
+a beam reach, a broad reach and a run over another boat's (`against`).
+For a boat with a downwind sail `-check` also prints, without failing, the
+course sailed by its own sailor, where its downwind sail pays in each wind
+and its best downwind angle.
 
 `-handbook` writes each boat's table of the fastest boom, at 6, 12 and 20
 knots 10 m up, under a line naming the boat, and when to reef: the least
@@ -567,9 +646,11 @@ table is of her braces, the yards' angle off the centreline from braced up
 sharp to 90°, square (an AI app's `boom` on a ship), "aback" where she
 cannot sail; her yards stay braced up sharp close-hauled in any wind, and
 she reefs from the wind in which, close-hauled at full sail, she heels past
-10°, where her crew takes her topgallants in (Beaufort's force 6). It
-prints how each boat sails close-hauled with no reef, one and two in that
-wind and above.
+10°, where her crew takes her topgallants in (Beaufort's force 6). Under the
+table of a boat with a downwind sail it writes where her crew sets it and
+takes it in, and the wind from which it no longer pays where they set it.
+It prints how each boat sails close-hauled with no reef, one and two in
+that wind and above.
 
 `-manoeuvres` tacks from close-hauled, 45° or the boat's own angle if she
 cannot sail so close, and gybes from 150°; for a ship it then sails her own
@@ -8096,6 +8177,7 @@ shadow's), some 11,500 triangles.
 # https://localhost:5173/?sandbox&boat=keelboat        the keelboat in the sandbox: R reefs her, F shakes a reef out
 # https://localhost:5173/?sandbox&boat=keelboat&dev    with the panel, to change the boat
 # https://localhost:5173/?sandbox&boat=keelboat&sky=midnight   her tricolour lit at the masthead
+# https://localhost:5173/?sandbox&boat=skiff           the skiff: bear away past 105° and her crew sets the gennaker
 ```
 
 ### The developer panel
@@ -8313,7 +8395,9 @@ keelboat's five on her deck.
 `fleet.spec.ts` draws other boats in the sandbox: a boat of the fleet as
 the own boat at seven poses, and a keelboat as the own keelboat with her
 jib and reefed, 64 boats within 22 draw calls and 200,000 triangles, a
-mixed 64 of Jolly boats and keelboats within 32 and 320,000, the materials
+mixed 64 of every kind, skiffs with their gennakers set and one half way
+up, within 36 and 320,000 (bagged, every gennaker is two draws fewer), the
+own skiff's gennaker set, rising and in beside the fleet's, the materials
 dithered, and a picture. `sky.spec.ts` finds each
 named star where the GPU draws it, within 0.1° of where the module's rule
 and the camera put it, from the centre, half way and the rim; no star by day

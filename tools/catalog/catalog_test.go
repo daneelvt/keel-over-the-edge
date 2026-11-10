@@ -768,6 +768,8 @@ func TestEncounters(t *testing.T) {
 			files["art/boats/keelboat.far.glb"] = "glTF"
 			files["art/boats/tall-ship.glb"] = glb("hull", "port", "starboard", "stern")
 			files["art/boats/tall-ship.far.glb"] = "glTF"
+			files["art/boats/skiff.glb"] = glb("hull", "tricolour")
+			files["art/boats/skiff.far.glb"] = "glTF"
 			root := fixture(t, files)
 			err := checkAll(root)
 			if err == nil {

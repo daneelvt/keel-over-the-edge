@@ -87,10 +87,14 @@ type boatFacts struct {
 	// Yards are a ship's yards: "braced sharp", "square", an angle off
 	// the centreline, or "hauling round" while the fore yards and the
 	// after stand apart in a turn; "" on a boat without them.
-	Yards   string  `json:"yards,omitempty"`
-	State   string  `json:"state"`
-	Heading int     `json:"heading"`
-	Speed   float64 `json:"speedKnots"`
+	Yards string `json:"yards,omitempty"`
+	// Gennaker is a boat's downwind sail while it is not in its bag, as its
+	// crew works it: "gennaker going up", "gennaker set" or "gennaker
+	// coming in"; "" in its bag, or on a boat without one.
+	Gennaker string  `json:"gennaker,omitempty"`
+	State    string  `json:"state"`
+	Heading  int     `json:"heading"`
+	Speed    float64 `json:"speedKnots"`
 	// Astern says the boat makes sternway, NoSteerage that the water
 	// passes its rudder too slowly to steer by; Depth is the water under
 	// it while that is shoal, m.
@@ -179,6 +183,9 @@ func (h *helm) reportFor(s *Sea, f *bus.Frame, sl int32, detail string, since in
 		if math.Abs(st.ForeYards-st.Yards) > math.Pi/180 {
 			b.Yards = "yards hauling round"
 		}
+	}
+	if kind.Physics.Downwind.DownwindArea > 0 {
+		b.Gennaker = gennakerWords(st)
 	}
 	if d := float64(in.Depth); d < shoalUnder {
 		d = math.Floor(max(d, 0)*10+0.5) / 10
@@ -892,11 +899,17 @@ func (r *report) text() string {
 			if bt.Yards != "" {
 				reef += bt.Yards + " · "
 			}
+			if bt.Gennaker != "" {
+				reef += bt.Gennaker + " · "
+			}
 			fmt.Fprintf(&b, "Boat: %s%s · heading %s · %s · %s · %s", reef, bt.State, three(bt.Heading), speed, heel, bt.Tack)
 		} else {
 			kind := bt.Kind + ", " + bt.Reef
 			if bt.Yards != "" {
 				kind += ", " + bt.Yards
+			}
+			if bt.Gennaker != "" {
+				kind += ", " + bt.Gennaker
 			}
 			fmt.Fprintf(&b, "Boat: %s · %s · heading %s · %s · %s · %s\n", kind, bt.State, three(bt.Heading), speed, heel, bt.Tack)
 		}

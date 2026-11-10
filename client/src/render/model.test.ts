@@ -2,8 +2,9 @@
 
 // Every boat's model against the catalog: its named parts sit where the
 // physics puts them, within 1 cm, its headsail's tack and head where the
-// headsails' are, a ship's square sails on her yards' joints where her
-// square groups are, and each level is within the catalog's triangle budget.
+// headsails' are, its downwind sail's where the downwind sail's are, a
+// ship's square sails on her yards' joints where her square groups are, and
+// each level is within the catalog's triangle budget.
 // Every sailor's art is the sailors' build's: its deck level skinned and
 // within its budget, its far level one posed figure seated by its place, and
 // its clips every one the runtime sails with.
@@ -25,7 +26,7 @@ interface Gltf {
     mesh?: number;
     children?: number[];
     extras?: {
-      plan?: { deviation: number; widest?: boolean };
+      plan?: { deviation: number; widest?: boolean; over?: string[] };
       rake?: number;
       restage?: number[];
       square?: { group: string; strip: number; split?: number; reefs?: number[] };
@@ -105,39 +106,47 @@ describe.each(catalog.boats.map((b) => [b.name, b] as const))('%s', (_, boat) =>
   /**
    * The bounds of a node's primitives of some materials (all, if none
    * given), in the node's frame; with its children's that have no place of
-   * their own, if asked.
+   * their own, if asked; in the near model, or the one given.
    */
   const bounds = (
     name: string,
     materials?: string[],
     children = false,
+    model = g,
   ): { min: number[]; max: number[] } => {
     const min = [Infinity, Infinity, Infinity];
     const max = [-Infinity, -Infinity, -Infinity];
     const add = (n: Gltf['nodes'][number]): void => {
-      for (const p of g.meshes[n.mesh ?? -1]?.primitives ?? []) {
-        if (materials !== undefined && !materials.includes(g.materials[p.material]?.name ?? '')) {
+      for (const p of model.meshes[n.mesh ?? -1]?.primitives ?? []) {
+        if (
+          materials !== undefined &&
+          !materials.includes(model.materials[p.material]?.name ?? '')
+        ) {
           continue;
         }
-        const a = g.accessors[p.attributes.POSITION ?? -1];
+        const a = model.accessors[p.attributes.POSITION ?? -1];
         for (let k = 0; k < 3; k++) {
           min[k] = Math.min(min[k] as number, a?.min?.[k] ?? Infinity);
           max[k] = Math.max(max[k] as number, a?.max?.[k] ?? -Infinity);
         }
       }
       for (const c of children ? (n.children ?? []) : []) {
-        const child = g.nodes[c];
+        const child = model.nodes[c];
         if (child !== undefined && child.translation === undefined) {
           add(child);
         }
       }
     };
-    add(node(name));
+    const n = model.nodes.find((x) => x.name === name);
+    if (n === undefined) {
+      throw new Error(`no node ${name}`);
+    }
+    add(n);
     return { min, max };
   };
   /** The hull's shell: its planking, painted or bright, and its sheathing. */
   const SHELL = ['timber', 'topsides', 'paint', 'copper'];
-  const { rig, foils, hull, sailor, headsails, square } = boat.physics;
+  const { rig, foils, hull, sailor, headsails, square, downwind } = boat.physics;
   const has = (name: string): boolean => g.nodes.some((n) => n.name === name);
   /** A node's place in the model's frame: its own and its parents'. */
   const place = (name: string): number[] => {
@@ -273,9 +282,17 @@ describe.each(catalog.boats.map((b) => [b.name, b] as const))('%s', (_, boat) =>
 
   test('its hull, sail and foils have the physics’ dimensions', () => {
     // The beam across the deck; or, where the model says its plan is at the
-    // hull's widest (she tumbles home above it), across the planking.
+    // hull's widest (she tumbles home above it), across the planking; or,
+    // where it says its plan is over parts of other stuff (racks' rails),
+    // across those.
     const planks = bounds('hull', SHELL);
-    const across = node('hull').extras?.plan?.widest === true ? planks : bounds('hull', ['deck']);
+    const plan = node('hull').extras?.plan;
+    const across =
+      plan?.over !== undefined
+        ? bounds('hull', plan.over)
+        : plan?.widest === true
+          ? planks
+          : bounds('hull', ['deck']);
     expect(Math.abs((across.max[0] ?? 0) - (across.min[0] ?? 0) - boat.beam)).toBeLessThan(CM);
     expect(Math.abs((planks.max[2] ?? 0) - (planks.min[2] ?? 0) - boat.lengthOverall)).toBeLessThan(
       CM,
@@ -326,13 +343,15 @@ describe.each(catalog.boats.map((b) => [b.name, b] as const))('%s', (_, boat) =>
       expect(Math.abs((tack[1] ?? 0) - headsails.headsailTackHeight)).toBeLessThan(CM);
       expect(Math.abs((tack[2] ?? 0) + headsails.headsailTack)).toBeLessThan(CM);
       // The head: the luff's height above the tack, rake aft of it, ahead of
-      // the mast; the foot from the tack, aft along the deck.
+      // the mast; the foot from the tack, aft along the deck (the head, a
+      // jib's narrow one, may lie aft of the clew, as a self-tacker's does).
       const jib = bounds('jib');
       const rake = node('jib').extras?.rake ?? -1;
       expect(Math.abs((jib.min[1] ?? 1) - 0)).toBeLessThan(CM);
       expect(Math.abs((jib.max[1] ?? 0) - headsails.headsailLuff)).toBeLessThan(CM);
       expect(Math.abs(jib.min[2] ?? 1)).toBeLessThan(CM);
-      expect(Math.abs((jib.max[2] ?? 0) - headsails.headsailFoot)).toBeLessThan(CM);
+      expect(jib.max[2] ?? 0).toBeGreaterThan(headsails.headsailFoot - CM);
+      expect(jib.max[2] ?? 0).toBeLessThan(Math.max(headsails.headsailFoot, rake + 0.1) + CM);
       expect(rake).toBeGreaterThan(0);
       const head = (tack[2] ?? 0) + rake;
       expect(head).toBeLessThan(-rig.mastPosition);
@@ -343,6 +362,37 @@ describe.each(catalog.boats.map((b) => [b.name, b] as const))('%s', (_, boat) =>
       expect(p?.attributes.TEXCOORD_1).toBeDefined();
     },
   );
+
+  test('has its downwind sail, near and far, tacked and headed where the downwind sail is, flat', () => {
+    const kite = downwind.downwindArea > 0;
+    expect(has('kite')).toBe(kite);
+    expect(far.nodes.some((n) => n.name === 'kite')).toBe(kite);
+    if (!kite) {
+      return;
+    }
+    for (const model of [g, far]) {
+      const n = model.nodes.find((x) => x.name === 'kite');
+      // The tack: the node, ahead of the centre of gravity at its height.
+      const tack = n?.translation ?? [1, 1, 1];
+      expect(Math.abs(tack[0] ?? 1)).toBeLessThan(CM);
+      expect(Math.abs((tack[1] ?? 0) - downwind.downwindTackHeight)).toBeLessThan(CM);
+      expect(Math.abs((tack[2] ?? 0) + downwind.downwindTack)).toBeLessThan(CM);
+      // The head the luff's height above the tack, rake aft of it, ahead of
+      // the mast; the foot, its longest chord, aft from the tack.
+      const b = bounds('kite', undefined, false, model);
+      const rake = n?.extras?.rake ?? -1;
+      expect(Math.abs(b.min[1] ?? 1)).toBeLessThan(CM);
+      expect(Math.abs((b.max[1] ?? 0) - downwind.downwindLuff)).toBeLessThan(CM);
+      expect(Math.abs(b.min[2] ?? 1)).toBeLessThan(CM);
+      expect(Math.abs((b.max[2] ?? 0) - (b.min[2] ?? 0) - downwind.downwindFoot)).toBeLessThan(CM);
+      expect(rake).toBeGreaterThan(0);
+      expect((tack[2] ?? 0) + rake).toBeLessThan(-rig.mastPosition);
+      // Flat in the centreline plane, shaped by its fractions of chord and luff.
+      expect(Math.max(Math.abs(b.min[0] ?? 1), Math.abs(b.max[0] ?? 1))).toBeLessThan(1e-4);
+      const p = model.meshes[n?.mesh ?? -1]?.primitives[0];
+      expect(p?.attributes.TEXCOORD_1).toBeDefined();
+    }
+  });
 
   test.runIf(squareRigged)(
     'her headsails are about their tack, the jib with their luff and foot, flat on their stays',

@@ -69,6 +69,32 @@ var orcJib = orcSail{
 	side:      []float64{27, 50, 60},
 }
 
+// orcGennaker is ORC's asymmetric spinnaker tacked on the centreline
+// (Table 5.7, "asc"): a gennaker on a bowsprit. It is held to from 41° to
+// 180°: closer to the wind it collapses, its lift gone and its drag left,
+// and the crew has it in long before. Its side force depends on which of
+// several nearly equal trims is best, and is shown but not held.
+var orcGennaker = orcSail{
+	name: "ORC's asymmetric spinnaker",
+	points: []struct{ awa, cl, cd float64 }{
+		{28, 0.01738, 0.15405},
+		{41, 0.69825, 0.23925},
+		{50, 0.89933, 0.30877},
+		{60, 1.04000, 0.38852},
+		{67, 1.07200, 0.43624},
+		{75, 1.07500, 0.47713},
+		{100, 0.98500, 0.54530},
+		{115, 0.80500, 0.56574},
+		{130, 0.37200, 0.47500},
+		{150, 0.10000, 0.35200},
+		{170, 0.02000, 0.29000},
+		{180, 0, 0.26200},
+	},
+	quadratic: 0.02648,
+	from:      41,
+	to:        180,
+}
+
 // sailTolerance is how far a trimmed sail's drive may be from its source's
 // at the angles it is held at, and its side force where that is held, as a
 // fraction of the source's total force there.
@@ -101,6 +127,15 @@ func headsailsOf(k *kind) coefficients {
 	}
 }
 
+// downwindOf is the boat's downwind sail, set.
+func downwindOf(k *kind) coefficients {
+	return coefficients{
+		at:    func(a float64) (float64, float64) { return physics.DownwindCoefficients(k.b, a) },
+		twist: func(d float64) float64 { return physics.DownwindTwist(k.b, d) },
+		in:    k.p.DownwindIn, out: k.p.DownwindOut,
+	}
+}
+
 // trimmed returns the sail's coefficients at apparent wind angle awa
 // (radians) with its foot set for the most drive within its limits: both
 // strips, the head twisted beyond the foot.
@@ -130,7 +165,7 @@ func trimmed(c coefficients, awa float64) (cl, cd, angle float64) {
 // force where they are held is further from the source's than
 // sailTolerance; and its square sails, if it has any, against the wind
 // tunnel's. Induced drag is the whole rig's, as in the step: its area on
-// its effective height.
+// its effective height, a downwind sail's with it while that is set.
 //
 // A ship's mizzen and headsails keep the main's and the jib's coefficients
 // as the other boats fit them, and are shown against ORC's, but not held:
@@ -146,6 +181,11 @@ func runSail(k *kind) error {
 	failed := compareSail("the main", mainOf(k), orcMain, induced)
 	if k.p.HeadsailArea > 0 {
 		failed = append(failed, compareSail("the headsails", headsailsOf(k), orcJib, induced)...)
+	}
+	if k.p.DownwindArea > 0 {
+		// Set, its area joins the rig's induced drag.
+		set := induced + k.p.DownwindArea/(math.Pi*k.p.EffectiveHeight*k.p.EffectiveHeight)
+		failed = append(failed, compareSail("the downwind sail", downwindOf(k), orcGennaker, set)...)
 	}
 	if square {
 		for _, f := range failed {

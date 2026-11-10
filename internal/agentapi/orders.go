@@ -176,6 +176,20 @@ func reefState(b *catalog.Boat, st *physics.State, r uint8) string {
 	return w
 }
 
+// gennakerWords is what the crew is doing with a boat's downwind sail in
+// state st: going up, set or coming in; "" in its bag.
+func gennakerWords(st *physics.State) string {
+	switch {
+	case st.Hoist <= 0 && st.HoistTarget <= 0:
+		return ""
+	case st.HoistTarget > 0 && st.Hoist >= 1:
+		return "gennaker set"
+	case st.HoistTarget > 0:
+		return "gennaker going up"
+	}
+	return "gennaker coming in"
+}
+
 // pending reports whether the boat in slot sl has an order count it has
 // not taken, or a turn under way. A turn that stalled is done with: the
 // same order again turns again.

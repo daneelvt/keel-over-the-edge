@@ -20,7 +20,12 @@
 // main; a machine sailor's boat carries the machine mark on its sail, as
 // the fleet's do. A boat with a headsail has it shaped as the main is, about
 // its stay, from the clew's angle and its flows; a reefed main is drawn
-// short (sailshape.ts), the reef points painted along each reef's row.
+// short (sailshape.ts), the reef points painted along each reef's row. A
+// boat with a downwind sail (the model's `kite`) has it shaped about its
+// tack as a headsail, far fuller, from its clew's angle and its flows, and
+// drawn as far as it is hoisted: nothing in its bag, rising from the tack
+// as it is set. It carries the boat's cloth and band, and the machine mark as
+// the main does: set, it hides the main from ahead and to leeward.
 //
 // A square rig (squarerig.ts): the yards' nodes turned by the braces as
 // the physics holds them, the square sails bellied by each strip's wind,
@@ -88,7 +93,19 @@ import { Pennant } from './pennant';
 import type { Gfx } from './renderer';
 import { BoatSailor } from './sailors/onboat';
 import { wheelClips } from './sailors/wheel';
-import { headsailFrame, jibPoint, LUFF_OFFSET, sailPoint, sailUniforms } from './sailshape';
+import {
+  headsailFrame,
+  jibPoint,
+  type KiteRig,
+  kiteInputs,
+  kitePoint,
+  kiteRig,
+  kiteRipple,
+  kiteShown,
+  LUFF_OFFSET,
+  sailPoint,
+  sailUniforms,
+} from './sailshape';
 import {
   type Belly,
   bandTaken,
@@ -257,6 +274,14 @@ export class Boat {
   /** The headsail's shape, and how far aft of its tack its head is (its node's rake). */
   readonly jib = sailUniforms();
   readonly jibRake = uniform(0);
+  /** The downwind sail's clew's angle, its signed twist, its strips' ripples and its hoist. */
+  readonly kite = {
+    clew: uniform(0),
+    twist: uniform(0),
+    rippleFoot: uniform(0),
+    rippleHead: uniform(0),
+    hoist: uniform(0),
+  };
   readonly telltales = new Telltales();
   readonly pennant = new Pennant();
   /** The sailor aboard and drawn, once loaded, in the look last asked for (or the one before, while it loads). */
@@ -293,6 +318,10 @@ export class Boat {
   readonly #squareMeshes = new Set<Object3D>();
   /** Each headsail's mesh, and its head's rake aft of its tack. */
   readonly #headsails = new Map<Object3D, number>();
+  /** The downwind sail's meshes, and its head's rake aft of its tack; its kind's numbers, null for a kind without one. */
+  readonly #kites = new Map<Object3D, number>();
+  readonly #kiteRig: KiteRig | null;
+  readonly #kiteRipple = new Float64Array(2);
   /** The yards that come down as their sails' bands are taken in: each, its height at rest and its drop. */
   readonly #yards: { node: Object3D; rest: number; drop: number; sail: SquareSail }[] = [];
   readonly #belly: Belly = { depth: 0, ripple: 0 };
@@ -342,6 +371,7 @@ export class Boat {
     const { headsails } = kind.physics;
     this.jib.footV.value = headsails.headsailFootStrip;
     this.jib.headV.value = headsails.headsailHeadStrip;
+    this.#kiteRig = kiteRig(kind.physics);
   }
 
   /** The boat put somewhere at once: what eases with the wind is drawn as the wind is at the next frame. */
@@ -389,8 +419,11 @@ export class Boat {
     this.sail.reefGather.value = rows === null ? 0 : 1;
     // Each headsail in its own frame, at its tack: a mesh hung below that
     // frame's node is taken into it, so its own vertices are the frame's.
+    // The downwind sail likewise, at its own tack.
     this.#headsails.clear();
+    this.#kites.clear();
     const headsails: Mesh[] = [];
+    const kites: Mesh[] = [];
     // A square sail under the headsails' node (a spritsail) is not one.
     const square = new Set(squareSails(model).flatMap((s) => s.meshes));
     this.parts.get('jib')?.traverse((o) => {
@@ -398,8 +431,15 @@ export class Boat {
         headsails.push(o);
       }
     });
+    if (this.#kiteRig !== null) {
+      this.parts.get('kite')?.traverse((o) => {
+        if (o instanceof Mesh) {
+          kites.push(o);
+        }
+      });
+    }
     model.updateMatrixWorld(true);
-    for (const m of headsails) {
+    for (const m of [...headsails, ...kites]) {
       const frame = headsailFrame(m);
       if (frame.node !== m) {
         const inFrame = new Matrix4().copy(frame.node.matrixWorld).invert().multiply(m.matrixWorld);
@@ -409,7 +449,7 @@ export class Boat {
         m.quaternion.identity();
         m.scale.set(1, 1, 1);
       }
-      this.#headsails.set(m, frame.rake);
+      (kites.includes(m) ? this.#kites : this.#headsails).set(m, frame.rake);
     }
     const rake = this.#headsails.values().next().value;
     this.jibRake.value = rake ?? 0;
@@ -438,6 +478,27 @@ export class Boat {
           number: numbered === 'jib' ? number : null,
         }
       : null;
+    // The downwind sail: the cloth's band, and the machine mark at its own half-luff.
+    const { downwind } = this.#kind.physics;
+    const kiteCloth: SailPrint | null =
+      kites.length > 0
+        ? {
+            masks: clothMasks(
+              {
+                insignia: '',
+                reefRows: [],
+                mark: markPlace(
+                  downwind.downwindFoot,
+                  downwind.downwindLuff,
+                  chordAtHalf(kites[0]?.geometry),
+                ),
+              },
+              MASK_WIDTH / 2,
+              MASK_HEIGHT / 2,
+            ),
+            number: null,
+          }
+        : null;
     this.#names = new NameAtlas(1, this.#looks.boatLooks.lettering);
     // The square sails: each mesh given its shape's values.
     this.#squareSails = squareSails(model);
@@ -456,7 +517,14 @@ export class Boat {
     }
     model.traverse((o) => {
       if (o instanceof Mesh) {
-        o.material = this.#replace(o, o.material as Material, cloth, jibCloth, squareCloth);
+        o.material = this.#replace(
+          o,
+          o.material as Material,
+          cloth,
+          jibCloth,
+          squareCloth,
+          kiteCloth,
+        );
         // The shaped sail, the ribbons and the pennant leave their rest bounds.
         o.frustumCulled = false;
       }
@@ -630,6 +698,7 @@ export class Boat {
     const share = out[RECORDS.out.reefShare] ?? 1;
     this.sail.reefShare.value = share > 0 ? share : 1;
     this.#drawJib(pose, out, flat, ease);
+    this.#drawKite(pose, out, ease);
     this.#drawSquare(pose, out, ease);
     this.telltales.update(out, pose.boom, dt);
     this.pennant.update(out, dt);
@@ -656,6 +725,39 @@ export class Boat {
     }
     j.rippleFoot.value = this.#jibRipple[0] ?? 0;
     j.rippleHead.value = this.#jibRipple[1] ?? 0;
+  }
+
+  /**
+   * The downwind sail from its clew's angle, its twist, its flows and its
+   * hoist: nothing in its bag, and flogging as it goes up or comes down.
+   */
+  #drawKite(pose: BoatPose, out: Float64Array, ease: number): void {
+    const rig = this.#kiteRig;
+    if (rig === null || this.#kites.size === 0) {
+      return;
+    }
+    // In its bag it is drawn at nothing, about its tack: kept in the scene,
+    // so that its shader is made with the boat's and none waits for the
+    // first time it goes up.
+    const shown = kiteShown(pose.hoist);
+    const k = this.kite;
+    const turn = Math.max(-1, Math.min(1, pose.kite / rig.twistTurn));
+    k.clew.value = pose.kite;
+    k.twist.value = (out[RECORDS.out.kiteTwist] ?? 0) * turn;
+    k.hoist.value = Math.max(0, Math.min(1, pose.hoist));
+    const { luffAngle } = this.#kind.physics.rig;
+    for (let i = 0; i < 2; i++) {
+      const flow = out[i === 0 ? RECORDS.out.kiteFootFlow : RECORDS.out.kiteHeadFlow] ?? 1;
+      const attack = out[i === 0 ? RECORDS.out.kiteFootAttack : RECORDS.out.kiteHeadAttack] ?? 0;
+      const want = kiteRipple(
+        flow === FLOW_LUFFING ? luffing(attack, luffAngle * DEG) : 0,
+        pose.hoist,
+      );
+      const r = this.#kiteRipple[i] ?? 0;
+      this.#kiteRipple[i] = shown ? r + (want - r) * ease : want;
+    }
+    k.rippleFoot.value = this.#kiteRipple[0] ?? 0;
+    k.rippleHead.value = this.#kiteRipple[1] ?? 0;
   }
 
   /** The yards turned, the square sails filled by each strip's wind, and the wheel turned with the rudder. */
@@ -708,6 +810,7 @@ export class Boat {
     cloth: SailPrint,
     jibCloth: SailPrint | null,
     squareCloth: SailPrint | null,
+    kiteCloth: SailPrint | null,
   ): Material {
     const src = m as MeshStandardMaterial;
     const vertexColors = mesh.geometry.hasAttribute('color');
@@ -736,6 +839,15 @@ export class Boat {
         vertexColors,
       });
       (made as MeshStandardNodeMaterial).emissiveNode = vec3(...LAMPLIGHT).mul(lampsLit);
+    } else if (kiteCloth !== null && this.#kites.has(mesh)) {
+      // The downwind sail: the boat's cloth, and the machine mark as the main's.
+      made = litMaterial(
+        { roughness: src.roughness, metalness: 0, side: DoubleSide },
+        this.#kiteNode(this.#kites.get(mesh) ?? 0),
+      );
+      const c = vec4(clothColour(palette, look, uv(), kiteCloth), 1);
+      (made as MeshStandardNodeMaterial).colorNode = c;
+      (made as MeshStandardNodeMaterial).emissiveNode = sailGlow(c);
     } else if (jibCloth !== null && this.#within(mesh, 'jib')) {
       made = litMaterial(
         { roughness: src.roughness, metalness: 0, side: DoubleSide },
@@ -852,6 +964,34 @@ export class Boat {
         positionGeometry as unknown as Node<'vec3'>,
         uv().x,
         sv.down,
+      );
+      normalLocal.assign(at.normal);
+      return at.position;
+    })() as unknown as Node<'vec3'>;
+  }
+
+  /** The downwind sail's vertex node: each vertex at its place on the shaped sail, as far as it is hoisted. */
+  #kiteNode(rake: number): Node<'vec3'> {
+    const r = float(rake);
+    const k = this.kite;
+    const inputs = kiteInputs(
+      k.clew,
+      k.twist,
+      k.rippleFoot,
+      k.rippleHead,
+      k.hoist,
+      this.#kiteRig as KiteRig,
+      this.sail.time,
+    );
+    return Fn(() => {
+      const fv = uv(1).y;
+      const at = kitePoint(
+        inputs,
+        positionGeometry.z.sub(r.mul(fv)),
+        uv(1).x,
+        fv,
+        positionGeometry.y,
+        r,
       );
       normalLocal.assign(at.normal);
       return at.position;

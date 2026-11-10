@@ -199,6 +199,33 @@ boats:
         hauls: 0
         letGo: 0
         squareReefs: [0, 0, 0]
+      downwind: &noDownwind
+        downwindArea: 0
+        downwindLuff: 0
+        downwindFoot: 0
+        downwindTackHeight: 0
+        downwindTack: 0
+        downwindFootStrip: 0
+        downwindHeadStrip: 0
+        downwindPressureAttached: 0
+        downwindPressureSeparated: 0
+        downwindMaxLift: 0
+        downwindStallAngle: 0
+        downwindStallWidth: 0
+        downwindDrag: 0
+        downwindNormalForce: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+        downwindTwist: 0
+        downwindTwistEased: 0
+        downwindIn: 0
+        downwindOut: 0
+        downwindInertia: 0
+        downwindMoment: 0
+        downwindDamping: 0
+        hoistTime: 0
+        dropTime: 0
+        setAngle: 0
+        dropAngle: 0
+        downwindReefs: [0, 0, 0]
       foils:
         boardSpan: 0.69 # 0.787 m below the waterline, less the hull's draught
         boardChord: 0.34
@@ -451,6 +478,7 @@ boats:
         headsailDamping: 8 # estimate
         headsailReefs: [1, 1, 1] # the jib is not reefed
       square: *noSquare
+      downwind: *noDownwind
       foils:
         # The fin keel: the certificate's draft of 1.179 m less the hull's.
         boardSpan: 0.879
@@ -798,6 +826,7 @@ boats:
         # (Beaufort's man-of-war scale at forces 6 and 7): the shares of the
         # luff whose squares are what is left of the area.
         squareReefs: [1, 0.91, 0.83]
+      downwind: *noDownwind
       foils:
         # The keel and deadwood below the hull's body, as a fixed keel, and
         # the rudder on the sternpost: estimates. Both reach her draught of
@@ -884,4 +913,303 @@ boats:
         # (Willis 2003).
         steerage: 1.5
         stallTime: 20
+        stallGain: 5
+
+  # The 29er, the two-person trapeze skiff of 1998 (Julian Bethwaite), with
+  # its racks, a fully battened main, a self-tacking jib and a gennaker on a
+  # bowsprit, sailed by one 80 kg sailor who helms from the trapeze. Its
+  # values are the 29er's where they are published; the rest are estimates
+  # as the Jolly boat's were, tuned only by tools/polar. No polar, tank test
+  # or VPP of a 29er is published: tools/polar checks it as raced, its crew
+  # of two in place of its one sailor, round a course against the Jolly
+  # boat's time by the RYA's Portsmouth Numbers. Sources:
+  #   International 29er Class Association, The Boat (2026): length, beam,
+  #     hull weight, mast, upwind and spinnaker areas.
+  #   Ovington Boats, 29er (2026): fitted weight, the areas, the
+  #     self-tacking jib and fully battened sails.
+  #   International 29er Class Rules (2019): the hull's least weight,
+  #     74.0 kg with its bowsprit, rudder stock and tiller (C.7.5(a)); the
+  #     main's foot taken as 2,100 mm (C.4.2); one crew on the trapeze.
+  #   Day, Cameron and Dai (2019), Hydrodynamic testing of a high
+  #     performance skiff at model and full scale, Journal of Sailing
+  #     Technology: the Musto Skiff's resistance at 167.5 kg, the nearest
+  #     measured hull.
+  #   Day (2017), Performance prediction for sailing dinghies, Ocean
+  #     Engineering: the sailor's reach.
+  #   Offshore Racing Congress (2023), ORC VPP Documentation: the sails, the
+  #     asymmetric spinnaker tacked on the centreline (Table 5.7).
+  #   RYA Portsmouth Number List (2026): 29er 900, ILCA 7 1103.
+  - id: skiff
+    name: Skiff
+    description: Two-person dinghy
+    capacity: 2
+    # Where the people aboard are: the helmsman on the starboard rack's
+    # rail aft, facing in, and a second on the port rack's rail forward of
+    # them, by the shrouds.
+    stations:
+      - { at: [0.881, 0.448, 0.55], pose: seated, facing: 270 }
+      - { at: [-0.854, 0.4587, -0.25], pose: seated, facing: 90 }
+    lengthOverall: 4.45 # 29er class
+    beam: 1.77 # over the racks (29er class)
+    # A sailing vessel of less than 7 m shows her sidelights and sternlight
+    # in one lantern at the masthead "if practicable" (Collision
+    # Regulations, Rule 25(b) and (d)(i)): she does, as the Jolly boat.
+    lights: [tricolour]
+    # Her lookout is the sailor on her rack, the eye 2 m above the sea.
+    lookout: 2
+    # A seabird aboard perches on her foredeck, ahead of the mast; a flying
+    # fish lands in her cockpit.
+    perch: [0, 0.431, -1.75]
+    deck: [0.25, 0.255, 0.2]
+    # Her sheet for a start from rest, by the angle off the wind: from
+    # tools/polar's sweep from rest (-start), each within 85% of the best
+    # sheet's speed after 20 s in 3, 5 and 8 knots.
+    startSheet: [[90, 0.25], [110, 0.3], [130, 0.5]]
+    controls:
+      sheet: { name: Sheet, trim: Trim, ease: Ease }
+      reef: [Full sail, Gennaker in, One reef]
+    fleet: account
+    art:
+      model: boats/skiff.glb
+      far: boats/skiff.far.glb
+      budget: { near: 15000, far: 1000 }
+    physics:
+      hull:
+        # The hull 74 kg (rule C.7.5(a)), the rig, sails, board and blade
+        # about 20 kg (an estimate: the Musto Skiff sails at 82.5 kg
+        # all-up), and the sailor's 80 kg.
+        displacement: 174
+        waterlineLength: 4.3 # estimate: a plumb bow and an open transom on 4.45 m
+        hullDraught: 0.13 # estimate: the Musto Skiff's 0.127 to 0.146 m at 167.5 kg
+        centreOfGravity: 0.32 # estimate: the sailor seated on the centreline
+        # Three quarters of a knot, in m/s.
+        dragAreaStep: 0.38583333333333336
+        # Day, Cameron and Dai (2019), Figure 15: the Musto Skiff's total
+        # resistance at 167.5 kg, scaled from the model and read off the
+        # plot to about ±3 N, from 2.9 to 8 knots (14 N at 2.9 knots, 79 at
+        # 5.8, 146 at 8.0): every three quarters of a knot from 0 to 18
+        # knots. Below 3 knots, toward an estimate at rest; from 8 knots
+        # falling past the hump, as a planing hull's does, to an estimated
+        # 0.0115 m² at 18 knots.
+        dragArea: [0.0135, 0.0131, 0.0128, 0.0125, 0.0123, 0.0130, 0.0141,
+          0.0157, 0.0174, 0.0177, 0.0169, 0.0163, 0.0157, 0.0150, 0.0143,
+          0.0137, 0.0132, 0.0128, 0.0125, 0.0122, 0.0120, 0.0118, 0.0117,
+          0.0116, 0.0115]
+        crossFlowDrag: 1.0 # estimate: a flat-bottomed body moving sideways
+        addedMassSurge: 9 # estimate: about 5% of the mass
+        addedMassSway: 95 # estimate: the Jolly boat's by mass and length
+        munk: 58 # estimate: the hull's own added masses, less in surge
+        yawInertia: 305 # estimate: the Jolly boat's by mass and the length's square
+        # Estimate: the Jolly boat's, and the sailor on the trapeze, 80 kg
+        # about 1.8 m out.
+        rollInertia: 420
+        rollDamping: 70 # estimate
+        yawDamping: 0 # a short hull: its board and rudder damp its turning
+        # Estimate, with the sailor on the centreline: a light, flat hull
+        # with flared topsides, its racks meeting the water at about 30°,
+        # near the Jolly boat's. Every 10° from 0° to 180°.
+        rightingLever: [0, 0.07, 0.11, 0.10, 0.05, -0.02, -0.10, -0.19, -0.27,
+          -0.35, -0.41, -0.46, -0.50, -0.47, -0.40, -0.30, -0.20, -0.10, 0]
+        waterlineBeam: 0.9 # estimate: the Musto Skiff's 0.89 to 0.94 m
+        waterplaneArea: 2.71 # estimate: a waterplane coefficient of 0.70 on 4.3 m × 0.9 m
+        waterplanePitch: 3.5 # estimate: an ellipse's π L³ B / 64
+        addedMassHeave: 420 # estimate
+        pitchInertia: 500 # estimate
+        heaveDamping: 0.4 # estimate
+        pitchDamping: 0.4 # estimate
+        waveForce: 1.0
+        waveYaw: 0
+        # The plan at the sheer, every tenth of the length from the transom
+        # to the stem, the racks' rails where they reach past the gunwale:
+        # out to the 1.77 m beam from 0.2 to 0.4 of the length, a fine,
+        # plumb bow (art/boats/skiff/build.ts builds from it).
+        outline: [0.66, 0.80, 0.885, 0.885, 0.885, 0.87, 0.80, 0.68, 0.52, 0.29, 0]
+        transom: 2.05
+        stem: 2.40 # the length overall forward of the transom
+      rig:
+        # The main: the class's 12.5 m² upwind less an estimate of the jib's
+        # 3.5, fully battened with a square head, its foot 2.1 m (rule
+        # C.4.2), on a 6.25 m mast stepped on deck.
+        sailArea: 9.0
+        luff: 5.35 # estimate: from the boom to the masthead, 6.55 m above the water
+        foot: 2.1
+        # Estimate: the boom clears the helm's head as they sit on the rack,
+        # whose rail is 0.45 m above the water.
+        boomHeight: 1.2
+        mastPosition: 0.70 # estimate: about 1.7 m aft of the stem
+        # The two strips' centres of effort, a square head's higher than a
+        # triangle's.
+        footStrip: 0.17
+        headStrip: 0.60
+        pressureAttached: 0.33 # ORC
+        pressureSeparated: 0.50
+        effectiveHeight: 6.6 # the head's height above the water (ORC 2023, 5.34)
+        quadraticDrag: 0.01379 # ORC 2023, Table 5.1
+        # Fitted by tools/polar -sail to ORC's low-lift mainsail, as the
+        # Jolly boat's.
+        maxLift: 1.48
+        stallAngle: 28
+        stallWidth: 20
+        sailDrag: 0.026
+        luffAngle: 3
+        flogDrag: 0.05
+        normalForce: [0, 0.5, 0.9, 1.07, 1.21, 1.31, 1.37, 1.39, 1.38, 1.35,
+          1.28, 1.19, 1.07, 0.93, 0.77, 0.59, 0.40, 0.20, 0]
+        twistPowered: 5 # estimate
+        twistDepowered: 15 # estimate
+        twistEased: 18 # estimate: a vang holds the boom down
+        twistTurn: 3 # estimate
+        headBacked: 90 # estimate
+        headBackedWidth: 20 # estimate
+        boomIn: 4 # estimate
+        boomOut: 75 # estimate: the swept spreaders stop the boom
+        boomInertia: 11 # estimate: boom and sail about 6 kg, and the air the sail carries
+        boomMoment: 6 # estimate
+        boomDamping: 5 # estimate
+        # Estimates by Day's method: the sailor, the hull, the racks and the
+        # mast.
+        windageFront: 0.95
+        windageSide: 1.3
+        windageHeight: 0.8
+        sailFloat: 1500 # estimate
+        sailWaterDamping: 300 # estimate
+        closeHauled: 45 # tools/polar's best upwind VMG: 45° to the true wind from 9 to 20 knots
+        # The main is full at "Gennaker in", the crew keeping the gennaker
+        # in its bag, and slab reefed to 0.80 of its luff at "One reef". A
+        # licence: a 29er has no reefs.
+        reefs: [1, 1, 0.80]
+        reefTime: 30 # estimate
+      headsails:
+        headsailArea: 3.5 # estimate: the class's 12.5 m² upwind less the main
+        headsailLuff: 4.6 # estimate: from the stem to the hounds
+        headsailFoot: 1.5 # estimate
+        headsailTackHeight: 0.45 # estimate: the stem's sheer
+        headsailTack: 2.35
+        # A triangle's two halves of its area.
+        headsailFootStrip: 0.137
+        headsailHeadStrip: 0.53
+        headsailPressureAttached: 0.33
+        headsailPressureSeparated: 0.50
+        # ORC's low-lift jib, as the keelboat's.
+        headsailMaxLift: 2.1
+        headsailStallAngle: 17
+        headsailStallWidth: 19
+        headsailDrag: 0.034
+        headsailNormalForce: [0, 0.5, 0.83, 1.01, 1.10, 1.14, 1.14, 1.11, 1.08,
+          1.05, 1.04, 1.01, 0.97, 0.90, 0.77, 0.59, 0.40, 0.20, 0]
+        headsailTwist: 8
+        headsailTwistEased: 10
+        headsailIn: 10 # estimate: the self-tacker's horse
+        headsailOut: 20 # estimate: the horse's end
+        headsailInertia: 4 # estimate
+        headsailMoment: 1.5 # estimate
+        headsailDamping: 3 # estimate
+        headsailReefs: [1, 1, 1] # the jib is not reefed
+      square: *noSquare
+      downwind:
+        # The gennaker, 16.83 m² (the builder's; the class's 181.2 sq ft),
+        # tacked at the bowsprit's end about 1.05 m ahead of the stem, its
+        # head near the hounds: its luff and foot estimates.
+        downwindArea: 16.83
+        downwindLuff: 5.8
+        downwindFoot: 3.6
+        downwindTackHeight: 0.5
+        downwindTack: 3.45
+        downwindFootStrip: 0.2
+        downwindHeadStrip: 0.6
+        downwindPressureAttached: 0.4
+        downwindPressureSeparated: 0.5
+        # Fitted by tools/polar -sail to ORC's asymmetric spinnaker tacked
+        # on the centreline (2023, Table 5.7) from 41° to 180° of apparent
+        # wind.
+        downwindMaxLift: 1.32
+        downwindStallAngle: 17
+        downwindStallWidth: 11
+        downwindDrag: 0.11
+        downwindNormalForce: [0, 0.21, 0.43, 0.68, 0.97, 0.54, 0.13, 0.12, 0.22,
+          0.14, 0.16, 0.12, 0.16, 0.24, 0.24, 0.21, 0.16, 0.08, 0]
+        downwindTwist: 13
+        downwindTwistEased: 10
+        # Its clew sheeted in hard and let fly, seen from the tack: the
+        # sheet's lead aft on the quarter, and the clew out ahead of the
+        # shrouds.
+        downwindIn: 24
+        downwindOut: 72
+        downwindInertia: 6 # estimate: light cloth and the air it carries
+        downwindMoment: 2 # estimate
+        downwindDamping: 4 # estimate
+        hoistTime: 5 # estimate: a pump halyard from the chute
+        dropTime: 6 # estimate
+        # The crew's angles off the true wind, tuned by tools/polar to where
+        # the gennaker pays: from 90° to 120° by the wind (Masuyama and
+        # Ogihara 2020, the 470's spinnaker).
+        setAngle: 105
+        dropAngle: 90
+        downwindReefs: [1, 0, 0] # kept in at "Gennaker in" and "One reef"
+      foils:
+        boardSpan: 1.0 # estimate: about 1.13 m below the waterline
+        boardChord: 0.30 # estimate
+        boardPosition: 0.6 # estimate: just aft of the mast
+        rudderSpan: 0.75 # estimate
+        rudderChord: 0.22 # estimate
+        rudderPosition: 2.15 # estimate: hung on the transom
+        rudderAngle: 40 # estimate
+        foilStall: 13 # estimate for thin sections at these Reynolds numbers
+        foilStallWidth: 6 # estimate
+        foilDrag: 0.010 # ITTC 1957 at Re ≈ 10⁶, both faces
+        plateNormal: 1.2 # a flat plate
+        pressureDepth: 0.43 # Keuning and Vermeulen (2003), via Day
+        carryOver: 1.80 # Keuning and Verwerft (2009)
+        heelLoss: 0.382 # Keuning and Verwerft (2009)
+        rudderInflow: 0.9 # Day
+        downwash: 0.8 # estimate: tuned for weather helm, as the keelboat's
+        foilWetHeel: 60 # estimate
+        foilDryHeel: 90 # estimate
+        fixed: 0 # a centreboard: the ground pushes it up
+      sailor:
+        sailorMass: 80 # the game's sailor, Day's baseline
+        sailorSeatHeight: 0.3 # estimate
+        # On the trapeze, feet on the rack's edge 0.885 m out: Day's bound,
+        # 0.95 × 0.55 × 1.83 m, beyond it, 1.84 m (ORC 2023, §4.4.3, takes
+        # a trapezing crew 1.2 m outside the rail).
+        hikeReach: 1.84
+        leeReach: 0.30 # estimate
+        # Estimates: hooking on and stepping out is slower than sliding
+        # along a side deck. Tuned so that the wind dying at once under her
+        # sailor on the wire takes her over to windward, and a lull to 3
+        # knots lays her over 35°, while the gusts of a stormy spell, the
+        # sheet fixed, never do (her behaviour tests).
+        hikeSpeed: 0.8
+        hikeLag: 0.6
+        heelGain: 1.0
+        rollRateGain: 0.6
+        # Estimates, as the Jolly boat's, tuned by tools/polar.
+        flattenFrom: 6
+        flattenTo: 11
+        flattenMin: 0.62
+        fallOutHeel: 70 # estimate
+        climbInHeel: 30 # estimate
+        boardReach: 1.3 # board span and 0.3 m
+        sailorDrag: 600 # estimate
+        swimTime: 10 # estimate
+        climbTime: 4 # estimate
+      rates:
+        rudderTime: 0.25 # estimate
+        sheetHaulTime: 2.5 # estimate
+        sheetEaseTime: 1.0 # estimate
+      # The autopilot: the Jolly boat's until tools/polar and the step in
+      # the catalog's spells tune it.
+      autopilot:
+        gain: 2
+        damping: 0.8
+        trimTime: 10
+        trimLimit: 0.3
+        trimBand: 10
+        tackHelm: 1.0
+        gybeHelm: 0.5
+        byTheLee: 15
+        onCourse: 10
+        astern: 0.05
+        steerage: 0.26
+        stallTime: 8
         stallGain: 5

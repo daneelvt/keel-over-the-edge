@@ -764,12 +764,25 @@ func TestStepAllocatesNothing(t *testing.T) {
 }
 
 // BenchmarkStep times one step of Substeps substeps, on a beam reach, of
-// every boat.
+// every boat, and of a boat with a downwind sail on a broad reach with it
+// set.
 func BenchmarkStep(bm *testing.B) {
 	for _, boat := range testBoats(bm) {
 		bm.Run(boat.id, func(bm *testing.B) {
 			s := State{Heading: math.Pi / 2, Surge: 3, SheetLimit: 0.6, JibLimit: 0.3}
 			c := Control{Sheet: 0.35}
+			e := Env{WindSpeed: 7, WindFrom: 0}
+			var o Out
+			for bm.Loop() {
+				Step(&s, &c, &e, nil, nil, boat.b, &o)
+			}
+		})
+		if !boat.b.kite {
+			continue
+		}
+		bm.Run(boat.id+"-set", func(bm *testing.B) {
+			s := State{Heading: 2.1, Surge: 4, SheetLimit: 1, JibLimit: 0.3, Hoist: 1, HoistTarget: 1, Kite: 0.9, KiteLimit: 1}
+			c := Control{Sheet: 0.6}
 			e := Env{WindSpeed: 7, WindFrom: 0}
 			var o Out
 			for bm.Loop() {

@@ -80,6 +80,15 @@ type State struct {
 	// Reef is how far the sail is reefed, from 0, full sail, to 2: the crew
 	// takes a reef in or shakes it out over the rig's reef time.
 	Reef float64
+	// The downwind sail: how far it is hoisted, from 0, in its bag, to 1,
+	// set; where the crew is taking it, 1 setting it or 0 taking it in;
+	// and its clew, which swings free to its sheet's limit as the
+	// headsails' does. All 0 on a boat with none.
+	Hoist       float64
+	HoistTarget float64
+	Kite        float64 // rad
+	KiteRate    float64 // rad/s
+	KiteLimit   float64 // rad
 }
 
 // Control holds what the player sets. Helm and Sheet are targets: the rudder
@@ -230,6 +239,40 @@ type Params struct {
 	LetGo             float64     // and the fore yards once the wind is this far on the new bow, or, wearing, on the new quarter, degrees
 	SquareReefs       [3]float64  // the share of their luff kept at full sail, one reef and two
 
+	// The downwind sail, a gennaker tacked on the centreline at a
+	// bowsprit's end: its clew free to its own sheet's limit as the
+	// headsails' is, set and taken in by the crew's rule. They set it as
+	// the boat bears away with the true wind at least SetAngle off her
+	// bow, and take it in as she comes up with the wind forward of
+	// DropAngle, or when the reef ordered keeps it in. None where the area
+	// is 0.
+	DownwindArea              float64     // m²
+	DownwindLuff              float64     // the head's height above the tack, m
+	DownwindFoot              float64     // m
+	DownwindTackHeight        float64     // the tack's height above the waterline, m
+	DownwindTack              float64     // the tack's distance ahead of the centre of gravity, m
+	DownwindFootStrip         float64     // height of the lower strip's centre of effort above the tack, fraction of the luff
+	DownwindHeadStrip         float64     // and the upper strip's
+	DownwindPressureAttached  float64     // centre of pressure aft of the tack with the flow attached, fraction of the foot
+	DownwindPressureSeparated float64     // and with the flow separated
+	DownwindMaxLift           float64     // greatest lift coefficient
+	DownwindStallAngle        float64     // angle of attack of greatest lift, degrees
+	DownwindStallWidth        float64     // angle over which the flow separates past the stall, degrees
+	DownwindDrag              float64     // viscous drag coefficient
+	DownwindNormalForce       [19]float64 // normal force coefficient of separated flow, every 10° of attack from 0° to 180°
+	DownwindTwist             float64     // the upper strip's twist beyond the clew's line sheeted in, degrees
+	DownwindTwistEased        float64     // extra twist as the sheet lets the clew out, growing with its angle, degrees
+	DownwindIn                float64     // the clew's angle off the centreline sheeted in hard, degrees
+	DownwindOut               float64     // and let fly, degrees
+	DownwindInertia           float64     // sail and clew about the tack, kg·m²
+	DownwindMoment            float64     // their mass times its distance aft of the tack, kg·m
+	DownwindDamping           float64     // friction of the clew's swing, N·m·s/rad
+	HoistTime                 float64     // s for the crew to set it from its bag
+	DropTime                  float64     // s to take it in
+	SetAngle                  float64     // the crew sets it with the true wind this far off the bow or more, degrees
+	DropAngle                 float64     // and takes it in with the wind forward of this, degrees
+	DownwindReefs             [3]float64  // 1 where the crew may set it at full sail, one reef and two; 0 where the reef keeps it in
+
 	// Foils.
 	BoardSpan      float64 // daggerboard below the hull, m
 	BoardChord     float64 // m
@@ -374,6 +417,13 @@ type Out struct {
 	// ReefShare is the share of its luff the main keeps as reefed: 1 at
 	// full sail.
 	ReefShare float64
+	// The downwind sail's strips, as the headsails': 0 on a boat with
+	// none, or with it in its bag.
+	KiteFootAttack float64 // rad
+	KiteHeadAttack float64 // rad
+	KiteFootFlow   float64
+	KiteHeadFlow   float64
+	KiteTwist      float64 // the upper strip's twist beyond the clew's line, rad
 }
 
 // GroundParams describe how a boat meets the ground: the catalog's world

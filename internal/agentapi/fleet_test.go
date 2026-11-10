@@ -12,6 +12,7 @@ import (
 	"github.com/daneelvt/keel-over-the-edge/internal/catalog"
 	"github.com/daneelvt/keel-over-the-edge/internal/fleet"
 	"github.com/daneelvt/keel-over-the-edge/internal/fleet/fleettest"
+	"github.com/daneelvt/keel-over-the-edge/internal/physics"
 	"github.com/daneelvt/keel-over-the-edge/internal/store"
 )
 
@@ -26,11 +27,13 @@ func TestFleet(t *testing.T) {
 	ann := store.AccountID{0x02}
 	keel, ship := 0, 0
 	for i := range h.sea.Boats {
-		if h.sea.Boats[i].Fleet == catalog.FleetAccount {
-			if keel == 0 {
-				keel = i
-			}
+		sq := &h.sea.Boats[i].Physics.Square
+		switch {
+		case h.sea.Boats[i].Fleet != catalog.FleetAccount:
+		case sq.SquareForeArea+sq.SquareAfterArea > 0:
 			ship = i
+		case keel == 0:
+			keel = i
 		}
 	}
 	if ship == keel {
@@ -123,5 +126,19 @@ func TestFleet(t *testing.T) {
 	text, _ = h.call(t, mary, toolObserve, map[string]any{"detail": "full"})
 	if !strings.Contains(text, "Boat: Tall ship, plain sail, yards ") {
 		t.Fatalf("her report: %s", text)
+	}
+}
+
+// A boat's downwind sail is told as its crew works it, and not at all in
+// its bag.
+func TestGennakerWords(t *testing.T) {
+	for _, c := range []struct {
+		hoist, target float64
+		want          string
+	}{{0, 0, ""}, {0, 1, "gennaker going up"}, {0.6, 1, "gennaker going up"}, {1, 1, "gennaker set"}, {0.4, 0, "gennaker coming in"}} {
+		st := physics.State{Hoist: c.hoist, HoistTarget: c.target}
+		if got := gennakerWords(&st); got != c.want {
+			t.Errorf("hoisted %v, aimed %v: %q, not %q", c.hoist, c.target, got, c.want)
+		}
 	}
 }

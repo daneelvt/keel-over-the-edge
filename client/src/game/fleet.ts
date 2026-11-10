@@ -82,8 +82,10 @@ const F = {
   reef: 13,
   yardsTurn: 14,
   foreYardsTurn: 15,
+  kite: 16,
+  hoist: 17,
 } as const;
-const FIELDS = 16;
+const FIELDS = 18;
 
 /**
  * The slot fields the wire may carry beyond those every boat has: the
@@ -150,6 +152,9 @@ export interface DrawnBoat {
    */
   yardsTurn: number;
   foreYardsTurn: number;
+  /** The downwind sail's clew's angle, radians, positive to starboard, and how far it is hoisted, 0 … 1; 0 for a boat with none. */
+  kite: number;
+  hoist: number;
   /** 0 … 1: how far it has faded in. */
   opacity: number;
   /** 0 near … 1 far: where its delay is between the bands'. */
@@ -191,6 +196,8 @@ export function newDrawnBoat(): DrawnBoat {
     reef: 0,
     yardsTurn: 0,
     foreYardsTurn: 0,
+    kite: 0,
+    hoist: 0,
     opacity: 0,
     far: 0,
     motion: 0,
@@ -279,6 +286,8 @@ class Boat {
     // the angles' sign flips: blended, they never pass the centreline.
     r[k + F.yardsTurn] = yardsTurn(f[o + SLOT.yards] ?? 0);
     r[k + F.foreYardsTurn] = yardsTurn(f[o + SLOT.foreYards] ?? 0);
+    r[k + F.kite] = f[o + SLOT.kite] ?? 0;
+    r[k + F.hoist] = f[o + SLOT.hoist] ?? 0;
     const falling = f[o + SLOT.falling] ?? 0;
     r[k + F.falling] = falling;
     if (falling === 0) {
@@ -330,6 +339,10 @@ class Boat {
       out.jib = this.#mix(i, F.jib, t);
       out.yardsTurn = this.#mix(i, F.yardsTurn, t);
       out.foreYardsTurn = this.#mix(i, F.foreYardsTurn, t);
+      out.hoist = this.#mix(i, F.hoist, t);
+      // The clew's angle blended as the jib's: it crosses in a gybe through
+      // aft, as the crew takes it round.
+      out.kite = this.#mix(i, F.kite, t);
       const discrete = t < 0.5 ? i + 1 : i;
       out.mode = this.at(discrete, F.mode);
       out.sail = this.at(discrete, F.sail);
@@ -371,6 +384,8 @@ class Boat {
     out.reef = this.at(i, F.reef);
     out.yardsTurn = this.at(i, F.yardsTurn);
     out.foreYardsTurn = this.at(i, F.foreYardsTurn);
+    out.kite = this.at(i, F.kite);
+    out.hoist = this.at(i, F.hoist);
   }
 }
 
@@ -682,6 +697,8 @@ function copyDrawn(a: DrawnBoat, b: DrawnBoat): void {
   b.reef = a.reef;
   b.yardsTurn = a.yardsTurn;
   b.foreYardsTurn = a.foreYardsTurn;
+  b.kite = a.kite;
+  b.hoist = a.hoist;
   b.opacity = a.opacity;
   b.far = a.far;
   b.motion = a.motion;

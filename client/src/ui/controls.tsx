@@ -119,7 +119,7 @@ export function Sheet({ input, model }: { input: SheetInput; model: HudModel }) 
   const trim = sail === 'luffing';
   const ease = sail === 'stalled';
   const words = model.controls.value?.sheet ?? SHEET_WORDS;
-  const legend = sheetLegend(model.controls.value, sail);
+  const legend = sheetLegend(model.controls.value, sail, model.kite.value);
   return (
     <div
       class={`control sheet${dimmed ? ' dimmed' : ''}`}

@@ -57,6 +57,11 @@ type rig struct {
 	afterStrip   float64
 	squareFootZ  float64
 	squareHeadZ  float64
+	// The downwind sail as far as it is hoisted: ½ρ_air × the area of one
+	// of its strips, and the induced drag its area adds to every sail
+	// (ORC's whole rig).
+	kiteStrip float64
+	induced   float64
 }
 
 // rigAt fills r with the sails' shape at reef reef, from 0 to 2.
@@ -102,7 +107,7 @@ func (b *Prepared) sailLoads(s *State, m *motion, flat, twist float64, g *rig, l
 		swing := float64(d * s.BoomRate)
 		pf := b.flow(m, b.mastX+float64(d*cx), float64(d*cy), z, float64(swing*sinB), float64(swing*cosB), true)
 		a, side, sinA, cosA := attack(&pf, cx, cy)
-		cl, cd, sep := b.sail.coefficients(a, sinA, cosA, flat)
+		cl, cd, sep := b.sail.coefficients(a, sinA, cosA, flat, g.induced)
 		fx, fy := force(&pf, float64(side*cl), cd, g.strip)
 		l.add(m, fx, fy, b.mastX, 0, z)
 
@@ -280,7 +285,7 @@ func (b *Prepared) jibLoads(s *State, m *motion, flat float64, g *rig, l *loads,
 		swing := float64(d * s.JibRate)
 		pf := b.flow(m, b.jibX+float64(d*cx), float64(d*cy), z, float64(swing*sinJ), float64(swing*cosJ), true)
 		a, side, sinA, cosA := attack(&pf, cx, cy)
-		cl, cd, sep := b.jibSail.coefficients(a, sinA, cosA, flat)
+		cl, cd, sep := b.jibSail.coefficients(a, sinA, cosA, flat, g.induced)
 		fx, fy := force(&pf, float64(side*cl), cd, g.jibStrip)
 		l.add(m, fx, fy, b.jibX, 0, z)
 		cp := b.jibPressureAttached + float64(sep*(b.jibPressureSeparated-b.jibPressureAttached))
@@ -294,6 +299,53 @@ func (b *Prepared) jibLoads(s *State, m *motion, flat float64, g *rig, l *loads,
 		}
 		r.jibAttack[i] = float64(side * a)
 		r.jibFlow[i] = b.jibSail.flowOf(a, sep)
+	}
+}
+
+// kiteResult is what the downwind sail did during a substep. It is kept
+// apart from sailResult, which the step holds on its stack.
+type kiteResult struct {
+	moment     float64 // moment swinging the clew to starboard, N·m
+	wetDamping float64
+	drive      float64 // N
+	side       float64 // level force to starboard, N
+	twist      float64 // rad
+	attack     [2]float64
+	flow       [2]float64
+}
+
+// kiteLoads adds the downwind sail's strips' forces to l, at the tack, and
+// fills r. They are the headsails' strips about the tack, as far as the
+// sail is hoisted, never flattened: a gennaker is eased, not flattened.
+func (b *Prepared) kiteLoads(s *State, m *motion, g *rig, l *loads, r *kiteResult) {
+	turn := clamp(float64(s.Kite*b.invTwistTurn), -1, 1)
+	twist := b.kiteTwist + float64(b.kiteTwistPerAngle*math.Abs(s.Kite))
+	r.twist = twist
+	for i := range 2 {
+		angle, z := s.Kite, b.kiteFootZ
+		if i == 1 {
+			angle, z = s.Kite+float64(twist*turn), b.kiteHeadZ
+		}
+		sinK, cosK := SinCos(angle)
+		cx, cy := -cosK, sinK
+		d := b.kitePressureAttached
+		swing := float64(d * s.KiteRate)
+		pf := b.flow(m, b.kiteX+float64(d*cx), float64(d*cy), z, float64(swing*sinK), float64(swing*cosK), true)
+		a, side, sinA, cosA := attack(&pf, cx, cy)
+		cl, cd, sep := b.kiteSail.coefficients(a, sinA, cosA, 1, g.induced)
+		fx, fy := force(&pf, float64(side*cl), cd, g.kiteStrip)
+		l.add(m, fx, fy, b.kiteX, 0, z)
+		cp := b.kitePressureAttached + float64(sep*(b.kitePressureSeparated-b.kitePressureAttached))
+		r.moment += float64(cp * (float64(fx*sinK) + float64(fy*cosK)))
+		r.drive += fx
+		r.side += float64(fy * m.cosHeel)
+		if pf.height < 0 && s.Hoist > 0 {
+			fz := float64(float64(b.sailFloat*pf.height)-float64(b.sailWaterDamping*pf.vz)) * s.Hoist
+			l.K += float64(pf.side * fz)
+			r.wetDamping += float64(float64(float64(b.sailWaterDamping*d)*d) * s.Hoist)
+		}
+		r.attack[i] = float64(side * a)
+		r.flow[i] = b.kiteSail.flowOf(a, sep)
 	}
 }
 
@@ -312,17 +364,18 @@ func (k *sailCoefficients) flowOf(a, sep float64) float64 {
 
 // coefficients returns a strip's lift and drag coefficients at angle of
 // attack a in [0, π], whose sine and cosine are sinA and cosA, with the sail
-// flattened to flat; and how far its flow has separated, from 0 to 1.
+// flattened to flat and induced the induced drag a set downwind sail adds;
+// and how far its flow has separated, from 0 to 1.
 //
 // Attached flow: lift f·C_Lmax·sin(π/2 · a/a_s), and drag C_D0 + (k_i +
 // k_pm)·C_L², the induced and quadratic drag of ORC's VPP (2023, eq. 5.34).
 // Below the luffing angle the cloth flogs: little lift, a little more drag.
 // Separated flow: a normal force from the table, acting across the chord.
-func (k *sailCoefficients) coefficients(a, sinA, cosA, flat float64) (cl, cd, sep float64) {
+func (k *sailCoefficients) coefficients(a, sinA, cosA, flat, induced float64) (cl, cd, sep float64) {
 	luff := smooth(float64(a * k.invLuffAngle))
 	t := min2(float64(a*k.invStallAngle), 2)
 	clAttached := float64(float64(float64(flat*k.maxLift)*Sin(float64(math.Pi/2*t))) * luff)
-	cdAttached := (k.drag + float64(float64(k.liftDrag*clAttached)*clAttached)) + float64(k.flogDrag*(1-luff))
+	cdAttached := (k.drag + float64(float64((k.liftDrag+induced)*clAttached)*clAttached)) + float64(k.flogDrag*(1-luff))
 	n := lookup(k.normalForce[:], a, 18/math.Pi)
 	clSeparated := float64(n * cosA)
 	cdSeparated := k.drag + float64(n*sinA)
@@ -337,7 +390,7 @@ func (k *sailCoefficients) coefficients(a, sinA, cosA, flat float64) (cl, cd, se
 // tools/polar, which compares the trimmed sail with ORC's.
 func SailCoefficients(b *Prepared, a, flat float64) (cl, cd float64) {
 	sinA, cosA := SinCos(a)
-	cl, cd, _ = b.sail.coefficients(a, sinA, cosA, flat)
+	cl, cd, _ = b.sail.coefficients(a, sinA, cosA, flat, 0)
 	return cl, cd
 }
 
@@ -345,8 +398,23 @@ func SailCoefficients(b *Prepared, a, flat float64) (cl, cd float64) {
 // tools/polar, which compares it with ORC's jib.
 func HeadsailCoefficients(b *Prepared, a, flat float64) (cl, cd float64) {
 	sinA, cosA := SinCos(a)
-	cl, cd, _ = b.jibSail.coefficients(a, sinA, cosA, flat)
+	cl, cd, _ = b.jibSail.coefficients(a, sinA, cosA, flat, 0)
 	return cl, cd
+}
+
+// DownwindCoefficients returns the same of the downwind sail's strip set,
+// its area in the rig's induced drag, for tools/polar, which compares it
+// with ORC's asymmetric spinnaker.
+func DownwindCoefficients(b *Prepared, a float64) (cl, cd float64) {
+	sinA, cosA := SinCos(a)
+	cl, cd, _ = b.kiteSail.coefficients(a, sinA, cosA, 1, b.kiteInduced)
+	return cl, cd
+}
+
+// DownwindTwist returns the downwind sail's upper strip's twist beyond
+// the clew's line with the clew at angle radians, for tools/polar.
+func DownwindTwist(b *Prepared, angle float64) float64 {
+	return b.kiteTwist + float64(b.kiteTwistPerAngle*math.Abs(angle))
 }
 
 // HeadsailTwist returns a headsail's upper strip's twist beyond the clew's

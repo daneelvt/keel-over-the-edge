@@ -34,8 +34,11 @@ export const Q = {
   fore: 13,
   /** The boat's own look code, its paint, cloth and sail number, which only an enter carries. */
   boatLook: 14,
+  /** The downwind sail: its clew in angle steps while it is hoisted at all, and its hoist, 0 … 255; 0 without. */
+  kite: 15,
+  hoist: 16,
 } as const;
-export const VIEW_STRIDE = 15;
+export const VIEW_STRIDE = 17;
 
 /**
  * A boat's flags: in the far band; the sailor's mode is bits 1–2; falling
@@ -52,6 +55,8 @@ export const RELOOK = 32;
 export const REEF_SHIFT = 6;
 const MAX_REEF = 2;
 
+/** The hoist's steps: 255 is set. */
+export const HOIST_STEPS = 255;
 /** The steps of the fields: the heading's, heel's, boom's and rudder's, and the position's. */
 export const ANGLE_STEP = (2 * Math.PI) / 65536;
 export const POSITION_STEP = 0.01;
@@ -66,10 +71,12 @@ const OP_LEAVE = 2;
 /** An update whose change mask has a second byte, for the rig's fields. */
 const OP_UPDATE_RIG = 3;
 
-/** An enter's kind is its kind × RIG_KINDS plus which rig fields follow: 1 the jib, 2 the yards, 4 the fore yards. */
-const RIG_KINDS = 8;
-/** The rig's fields, in their order after an enter's and in an update's second mask byte. */
-const RIG_FIELDS = [Q.jib, Q.yards, Q.fore] as const;
+/** An enter's kind is its kind × RIG_KINDS plus which rig fields follow: 1 the jib, 2 the yards, 4 the fore yards, 8 the downwind sail's clew, 16 its hoist. */
+const RIG_KINDS = 32;
+/** The rig's two-byte fields, in their order after an enter's and in an update's second mask byte; the hoist, one byte, after them. */
+const RIG_FIELDS = [Q.jib, Q.yards, Q.fore, Q.kite] as const;
+/** The hoist's bit among the rig's. */
+const RIG_HOIST = 1 << RIG_FIELDS.length;
 
 /** The boats a player sees after a snapshot, as the wire carries them. */
 export class View {
@@ -239,6 +246,14 @@ export function applyEntries(
             }
             q[o + (RIG_FIELDS[i] as number)] = value;
           }
+          let hoist = 0;
+          if ((rig & RIG_HOIST) !== 0) {
+            hoist = r.byte();
+            if (hoist === 0) {
+              return "an enter's rig field of 0 sent";
+            }
+          }
+          q[o + Q.hoist] = hoist;
           view.used[slot] = 1;
           changes[slot] = CHANGE.entered;
           break;
@@ -248,7 +263,7 @@ export function applyEntries(
           let m = r.byte();
           if (op === OP_UPDATE_RIG) {
             const rigMask = r.byte();
-            if (rigMask === 0 || rigMask > 7) {
+            if (rigMask === 0 || rigMask >= 2 * RIG_HOIST) {
               return `a rig's update of mask ${rigMask}`;
             }
             m |= rigMask << 8;
@@ -302,6 +317,9 @@ export function applyEntries(
             if ((m & (256 << i)) !== 0) {
               q[o + (RIG_FIELDS[i] as number)] = ((r.byte() | (r.byte() << 8)) << 16) >> 16;
             }
+          }
+          if ((m & (256 * RIG_HOIST)) !== 0) {
+            q[o + Q.hoist] = r.byte();
           }
           if (changes[slot] !== CHANGE.entered) {
             changes[slot] = CHANGE.updated;
@@ -454,8 +472,11 @@ export const SLOT = {
   foreYards: 21,
   /** The boat's own look code: its paint, cloth and sail number. */
   boatLook: 22,
+  /** Radians, positive to starboard: the downwind sail's clew's angle off the centreline, and how far it is hoisted, 0 … 1; 0 without one. */
+  kite: 23,
+  hoist: 24,
 } as const;
-export const SLOT_FIELDS = 23;
+export const SLOT_FIELDS = 25;
 /** A record's length in bytes. */
 export const FLEET_RECORD_BYTES = MAX_HEADER_SIZE + 8 * (META_FIELDS + VIEW_SLOTS * SLOT_FIELDS);
 
@@ -527,6 +548,8 @@ export function writeRecord(
     f[o + SLOT.yards] = yards * ANGLE_STEP;
     f[o + SLOT.foreYards] = (yards + (q[b + Q.fore] ?? 0)) * ANGLE_STEP;
     f[o + SLOT.boatLook] = q[b + Q.boatLook] ?? 0;
+    f[o + SLOT.kite] = (q[b + Q.kite] ?? 0) * ANGLE_STEP;
+    f[o + SLOT.hoist] = (q[b + Q.hoist] ?? 0) / HOIST_STEPS;
   }
   f[FLEET_META.boats] = boats;
 }
