@@ -734,11 +734,13 @@ class Figure:
     def _hang(self, shares):
         """The skirt chains turned toward the world's down, each about its
         head, root first, by its chain's share: cloth hanging from a body
-        lying out."""
+        lying out. A chain named with its bone's number (front_02) turns
+        that bone only: the cloth beyond a knee falling over it."""
         down = (self.arm.matrix_world.inverted().to_3x3() @ Vector((0.0, 0.0, -1.0))).normalized()
-        for place, share in shares.items():
+        for name, share in shares.items():
+            place, _, only = name.partition("_0")
             for s in ("l", "r"):
-                for i in (1, 2):
+                for i in ((int(only),) if only else (1, 2)):
                     pb = self.bones.get(f"skirt_{place}_{s}_0{i}")
                     if pb is None:
                         continue
