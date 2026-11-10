@@ -180,10 +180,10 @@ test('five aboard the keelboat: to windward on both tacks, through a tack and a 
         for (let i = 0; i < frames; i++) {
           k.setState({ boom, sailor: 0, heading });
           k.sailFrames(1, 1);
-          // When each began to cross, in frames.
+          // When each began to cross, in frames, by the station they left.
           for (const m of k.crew().members) {
-            if (m.moving !== null && m.t > 0 && !starts.has(m.station)) {
-              starts.set(m.station, i);
+            if (m.moving !== null && m.t > 0 && !starts.has(m.from)) {
+              starts.set(m.from, i);
             }
           }
         }
@@ -221,18 +221,23 @@ test('five aboard the keelboat: to windward on both tacks, through a tack and a 
   const port = await sail(0.2, tack, 240);
   toWindward(port, -1, 'on port');
   await picture('to windward on port', -1);
-  // A tack: each crosses in turn, the trimmer first and the bow hand last.
+  // A tack: each crosses in turn, the trimmer and the quarter first, then
+  // the two forward in file round the mast, the bow hand leading; the two
+  // forward in each other's places after it.
   const tacked = await sail(-0.2, tack, 300);
   expect(tacked.tack).toBe(true);
   const order = Object.entries(tacked.starts)
     .sort(([, a], [, b]) => (a as number) - (b as number))
     .map(([s]) => Number(s));
-  expect(order).toEqual([1, 4, 3, 2]);
+  expect(order).toEqual([1, 4, 2, 3]);
+  const seatAt = (c: Awaited<ReturnType<typeof sail>>, station: number) =>
+    c.members.find((m) => m.station === station)?.seat;
+  expect([seatAt(tacked, 2), seatAt(tacked, 3)]).toEqual([3, 2]);
   toWindward(tacked, 1, 'after a tack');
   await picture('to windward on starboard, after a tack', 1);
   // A gybe, from a run, the boom at 29° where it lies over none of them
-  // (the boom right over one, they wait for it): the bow hand first, the
-  // trimmer last.
+  // (the boom right over one, they wait for it): the one forward first,
+  // the trimmer last; the two forward back in their own places.
   await sail(-0.5, gybe, 60);
   const gybed = await sail(0.5, gybe, 300);
   expect(gybed.tack).toBe(false);
@@ -241,6 +246,7 @@ test('five aboard the keelboat: to windward on both tacks, through a tack and a 
     .map(([s]) => Number(s));
   expect(gybeOrder[0]).toBe(2);
   expect(gybeOrder.at(-1)).toBe(1);
+  expect([seatAt(gybed, 2), seatAt(gybed, 3)]).toEqual([2, 3]);
   toWindward(gybed, -1, 'after a gybe');
   await picture('to windward on port, after a gybe', -1);
   // The skipper hands over to the bow hand: the two walk to each other's

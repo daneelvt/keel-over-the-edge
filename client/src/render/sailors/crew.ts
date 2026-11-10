@@ -98,17 +98,21 @@ export { stationPlace } from './crewpose';
 const down = new Vector3(0, -1, 0);
 const from = new Vector3();
 
+/** The materials of what is walked on: the deck and the cockpit's floor, and a cuddy's canvas roof. */
+const WALKED = ['deck', 'canvas'];
+
 /**
  * The deck of a boat's model, as a height under (x, z) in the model's
- * frame: the highest of its meshes drawn in the deck's material (the deck
- * and the cockpit's floor) there, or null.
+ * frame: the highest of its hull's meshes walked on (the deck, the
+ * cockpit's floor, a cuddy's roof) there, or null.
  */
 export function modelDeck(model: Object3D): (x: number, z: number) => number | null {
   model.updateMatrixWorld(true);
   const inverse = model.matrixWorld.clone().invert();
   const meshes: Mesh[] = [];
-  model.traverse((o) => {
-    if (o instanceof Mesh && (o.material as { name?: string }).name === 'deck') {
+  const hull = model.getObjectByName('hull') ?? model;
+  hull.traverse((o) => {
+    if (o instanceof Mesh && WALKED.includes((o.material as { name?: string }).name ?? '')) {
       meshes.push(o);
     }
   });
@@ -119,6 +123,25 @@ export function modelDeck(model: Object3D): (x: number, z: number) => number | n
     const hit = ray.intersectObjects(meshes, false)[0];
     return hit === undefined ? null : hit.point.applyMatrix4(inverse).y;
   };
+}
+
+/** How far the tiller's top is over its nodes (its head and the extension's hinge), m: its half-depth. */
+const TILLER_HALF = 0.03;
+
+/**
+ * A boat's tiller, in its model's frame, from its nodes: its head (the
+ * tiller's), the extension's hinge on it, and its top; null without one.
+ */
+export function tillerOf(model: Object3D): CrewPlan['tiller'] {
+  const tiller = model.getObjectByName('tiller');
+  const hinge = model.getObjectByName('extension');
+  if (tiller === undefined || hinge === undefined) {
+    return null;
+  }
+  model.updateMatrixWorld(true);
+  const a = model.worldToLocal(tiller.getWorldPosition(new Vector3()));
+  const b = model.worldToLocal(hinge.getWorldPosition(new Vector3()));
+  return { head: a.z, hinge: b.z, top: Math.max(a.y, b.y) + TILLER_HALF };
 }
 
 const world = new Vector3();

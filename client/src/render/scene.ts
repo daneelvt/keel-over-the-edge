@@ -79,7 +79,7 @@ import {
 } from './quality';
 import { type Gfx, type Wanted, wantsCompat } from './renderer';
 import { RightOfWay, type Seen } from './rightofway';
-import { CrewDeck, type CrewShown, helmLook, modelDeck } from './sailors/crew';
+import { CrewDeck, type CrewShown, helmLook, modelDeck, tillerOf } from './sailors/crew';
 import { type CrewPlan, crewPlan } from './sailors/crewrules';
 import { hullSolid } from './sailors/solid';
 import { Shadows } from './shadows';
@@ -725,6 +725,7 @@ export class SeaScene {
       boat.nodeAt('boom'),
       kind.physics.rig.foot,
       model === undefined ? null : modelDeck(model),
+      model === undefined ? null : tillerOf(model),
     );
   }
 

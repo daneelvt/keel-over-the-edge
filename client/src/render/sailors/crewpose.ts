@@ -54,6 +54,9 @@ export const BY_THE_BOW = Math.PI;
 /** How high the body is carried, at the middle of getting up or sitting down, over the line between: the legs brought in over the deck's edge, m. */
 export const RISE_ARC = 0.3;
 
+/** How high the body is lifted at the middle of stepping over something, m. */
+export const OVER_ARC = 0.15;
+
 const m = new Matrix4();
 const m2 = new Matrix4();
 const v = new Vector3();
@@ -207,10 +210,21 @@ export function walkStance(
   const c = clips.get(CROUCH_CLIPS.walk) ?? null;
   const yaw = path.at(s, along);
   into.clip = c;
-  // Whole steps along the path, so that it ends as it began, both feet down.
-  const steps = Math.max(1, Math.round(path.length / STRIDE));
-  const pace = path.length > 0 ? (steps * STRIDE) / path.length : 1;
-  into.t = (c === null ? 0 : feetTogether(c, rig)) + (s * pace) / CROUCH_SPEED;
+  // Whole steps along the path; from its start, or from the end of the last
+  // step or stretch stepped over before s (or the start of the next), with
+  // the feet together there, so that each is stepped from feet together to
+  // feet together.
+  const pace = path.length > 0 ? (path.paces * STRIDE) / path.length : 1;
+  let from = 0;
+  for (const o of path.anchors) {
+    if (o[1] <= s) {
+      from = o[1];
+    } else if (s <= o[0] && from === 0) {
+      from = o[0];
+      break;
+    }
+  }
+  into.t = (c === null ? 0 : feetTogether(c, rig)) + ((s - from) * pace) / CROUCH_SPEED;
   into.at.set(along.x, along.y, along.z);
   into.yaw = yaw;
   into.tilt.identity();
@@ -231,6 +245,7 @@ export function poseMember(body: CrewBody, member: CrewMember, input: PoseInput)
   how.narrowA = 0;
   how.narrowB = 0;
   how.carry = false;
+  how.top = Number.NEGATIVE_INFINITY;
   let upright = input.life.upright;
   if (mv === null || mv.t < 0) {
     const at: CrewSpot = mv === null ? { station: member.station, side: member.side } : mv.from;
@@ -265,6 +280,11 @@ export function poseMember(body: CrewBody, member: CrewMember, input: PoseInput)
         how.f = smooth((s - step[0]) / (step[1] - step[0]));
         how.narrowB = 1;
         how.carry = true;
+        how.top = mv.path.overAt(s);
+        if (how.top > Number.NEGATIVE_INFINITY) {
+          // Over something: the body lifted with the feet, the knees over it.
+          how.arc = OVER_ARC;
+        }
       }
     } else {
       walkStance(input.clips, body.rig, mv.path, mv.path.length, a);

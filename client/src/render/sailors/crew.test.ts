@@ -35,7 +35,7 @@ import { CrewBody, stance } from './crewbody';
 import { deckFigure, farFigure } from './crewfigures';
 import { STRIDE } from './crewlevel';
 import { type PoseInput, poseMember } from './crewpose';
-import type { CrewMember } from './crewrules';
+import { type CrewMember, RISE, SIT } from './crewrules';
 import { deckLook, FleetLook } from './fleetlooks';
 import { placesOf } from './model';
 import { boneNames } from './onboat';
@@ -486,6 +486,9 @@ const HEAD_R = 0.12;
 /** The boom's and the mast's radii, m. */
 const BOOM_R = 0.05;
 const MAST_R = 0.06;
+/** The tiller's and its extension's radii, and the extension's length (the keelboat's), m. */
+const TILLER_R = 0.03;
+const EXTENSION = 1.27;
 
 /** The nearest two segments come, a–b and c–d. */
 function segments(a: Vector3, b: Vector3, c: Vector3, d: Vector3): number {
@@ -517,8 +520,7 @@ const keel = await (async () => {
     crossingWay,
     crossPath,
     duckFor,
-    PASS,
-    walkPath,
+    changePath,
     SIDE_HYSTERESIS,
   } = await import('./crewrules');
   const { CROUCH_SPEED } = await import('./rail');
@@ -535,12 +537,14 @@ const keel = await (async () => {
     throw new Error('the keelboat has no solid');
   }
   const { modelDeck } = await import('./crew');
+  const { tillerOf } = await import('./crew');
   const plan = crewPlan(
     boat.stations,
     solid,
     node('boom'),
     boat.physics.rig.foot,
     modelDeck(model.scene),
+    tillerOf(model.scene),
   );
   // What stands on her deck: the cuddy, the deadeyes and trim; not the deck, the hull or the rigging.
   const standing: Mesh[] = [];
@@ -643,7 +647,38 @@ const keel = await (async () => {
   ];
   const out = boat.physics.rig.boomOut * DEG;
 
-  /** What a posed body passes through, but the boom: the hull, the cuddy, the deadeyes, the mast. */
+  /**
+   * How near a point comes to the tiller, beyond its radius, wherever the
+   * rudder swings it (to 30° either way); and to the extension, held by
+   * the helm at their place on the side extension is told, if it is.
+   */
+  const tillerAt = plan.tiller as NonNullable<typeof plan.tiller>;
+  let extension = 0;
+  const tillerNear = (p: Vector3): number => {
+    const t = tillerAt;
+    let d = Number.POSITIVE_INFINITY;
+    const head = new Vector3(0, t.top - TILLER_R, t.head);
+    const length = t.head - t.hinge;
+    for (const a of [-30, -15, 0, 15, 30]) {
+      const hinge = new Vector3(
+        length * Math.sin(a * DEG),
+        t.top - TILLER_R,
+        t.head - length * Math.cos(a * DEG),
+      );
+      d = Math.min(d, segments(p, p, head, hinge) - TILLER_R);
+      if (extension !== 0 && a === 0) {
+        // To the helm's aft hand, by the gunwale forward of the hinge.
+        const grip = new Vector3(extension * 0.95, 1.0, 1.3)
+          .sub(hinge)
+          .setLength(EXTENSION)
+          .add(hinge);
+        d = Math.min(d, segments(p, p, hinge, grip) - TILLER_R);
+      }
+    }
+    return d;
+  };
+
+  /** What a posed body passes through, but the boom: the hull, the cuddy, the deadeyes, the mast, the tiller. */
   function through(body: CrewBody): string[] {
     const bad: string[] = [];
     const a = new Vector3();
@@ -676,6 +711,13 @@ const keel = await (async () => {
         }
         if (c.y > plan.sheer(c.z) && Math.hypot(c.x, c.z - plan.mastZ) < MAST_R + r) {
           bad.push(`${from} through the mast`);
+          break;
+        }
+        const tiller = tillerNear(c);
+        if (tiller < r) {
+          bad.push(
+            `${from} through the tiller at ${c.x.toFixed(2)}, ${c.y.toFixed(2)}, ${c.z.toFixed(2)}`,
+          );
           break;
         }
         const hit = [
@@ -736,8 +778,7 @@ const keel = await (async () => {
     crossingWay,
     crossPath,
     duckFor,
-    PASS,
-    walkPath,
+    changePath,
     SIDE_HYSTERESIS,
     CROUCH_SPEED,
     plan,
@@ -746,9 +787,21 @@ const keel = await (async () => {
     boomClear,
     out,
     part: (): string => boomPart,
+    tillerNear,
+    /** The extension held by a helm at their place on side (+1 starboard); 0 for none. */
+    holdExtension: (side: number): void => {
+      extension = side;
+    },
   };
 })();
 
+/**
+ * How far apart any two aboard keep, beyond their radii, m: walking; and
+ * getting up or sitting down beside someone, no nearer than two sat
+ * shoulder to shoulder on the rail come (their capsules are generous).
+ */
+const PEOPLE_APART = 0.02;
+const SAT_CLOSE = -0.07;
 /** How clear of the boom everyone keeps, crossing, beyond their radii and its, m. */
 const BOOM_MARGIN = 0.01;
 
@@ -779,8 +832,7 @@ describe('on the keelboat, nothing through anything', () => {
     crossingWay,
     crossPath,
     duckFor,
-    PASS,
-    walkPath,
+    changePath,
     SIDE_HYSTERESIS,
     CROUCH_SPEED,
     plan,
@@ -789,14 +841,26 @@ describe('on the keelboat, nothing through anything', () => {
     boomClear,
     out,
     part,
+    holdExtension,
+    tillerNear,
   } = keel;
 
-  test('the checks see the cuddy and a deadeye, and not the open deck or the cockpit', () => {
+  test('the checks see the cuddy, a deadeye, the tiller and the extension, and not the open deck or the cockpit', () => {
     expect(inStanding(new Vector3(0.3, 0.85, -0.3))).toBe(true);
     expect(inStanding(new Vector3(1.218, 0.85, -1.02))).toBe(true);
     expect(inStanding(new Vector3(0.9, 0.85, -0.3))).toBe(false);
     expect(inStanding(new Vector3(0.3, 0.6, 1))).toBe(false);
     expect(inStanding(new Vector3(0.5, 0.85, -1.6))).toBe(false);
+    // The tiller wherever the rudder swings it, and the extension only while held.
+    const t = plan.tiller as NonNullable<typeof plan.tiller>;
+    expect(tillerNear(new Vector3(0, t.top - 0.03, (t.head + t.hinge) / 2))).toBeLessThan(0);
+    expect(tillerNear(new Vector3(0.4, t.top, t.hinge + 0.4))).toBeLessThan(0.05);
+    expect(tillerNear(new Vector3(0.9, t.top, t.hinge))).toBeGreaterThan(0.3);
+    const onExtension = new Vector3(0.3, 0.88, t.hinge - 0.2);
+    expect(tillerNear(onExtension)).toBeGreaterThan(0.1);
+    holdExtension(1);
+    expect(tillerNear(onExtension)).toBeLessThan(0.06);
+    holdExtension(0);
   });
 
   describe.each(keelLooks.map((l) => [l.name, l.version, l] as const))(
@@ -827,7 +891,7 @@ describe('on the keelboat, nothing through anything', () => {
         return boomClear(body, boom);
       };
 
-      test('at every station, both sides, sitting up and leaning out, the boom anywhere to leeward or just over to windward', () => {
+      test('at every station, both sides, sitting up and leaning out, the boom anywhere to leeward or just over to windward, clear of the tiller and the helm’s extension', () => {
         const bad: string[] = [];
         for (let i = 1; i < boat.stations.length; i++) {
           for (const side of [1, -1]) {
@@ -836,9 +900,12 @@ describe('on the keelboat, nothing through anything', () => {
                 inp.time = t;
                 const m = at(i, side, lean);
                 upright(m);
+                // The helm beside them to windward, the extension in their aft hand.
+                holdExtension(side);
                 for (const b of through(body)) {
                   bad.push(`${i} ${side} ${lean} ${t}: ${b}`);
                 }
+                holdExtension(0);
                 for (let a = -SIDE_HYSTERESIS; a <= out + 1e-6; a += 5 * DEG) {
                   const boom = -side * Math.max(-SIDE_HYSTERESIS, a);
                   const clear = ducked(m, boom);
@@ -864,36 +931,50 @@ describe('on the keelboat, nothing through anything', () => {
           const st = boat.stations[i] as (typeof boat.stations)[number];
           for (const from of [1, -1]) {
             // Each way across, with the angles of the boom it is taken at.
-            const ways = new Map<string, { path: ReturnType<typeof crossPath>; booms: number[] }>();
-            for (let a = SIDE_HYSTERESIS; a <= out + 1e-6; a += 5 * DEG) {
-              const boom = from * a;
-              const path = crossPath(plan, st, from, boom);
-              const key = `${path.length.toFixed(4)} ${path.z[1]?.toFixed(3)}`;
-              const way = ways.get(key) ?? { path, booms: [] };
-              way.booms.push(boom);
-              ways.set(key, way);
+            // To their own place, or, round the mast in file, to another's of the same way.
+            const ways = new Map<
+              string,
+              { path: ReturnType<typeof crossPath>; booms: number[]; to: number }
+            >();
+            const sameWay = boat.stations
+              .map((_, k) => k)
+              .filter(
+                (k) =>
+                  k > 0 &&
+                  crossingWay(plan, boat.stations[k] as typeof st) === crossingWay(plan, st) &&
+                  (k === i || crossingWay(plan, st) === 'mast'),
+              );
+            for (const to of sameWay) {
+              for (let a = SIDE_HYSTERESIS; a <= out + 1e-6; a += 5 * DEG) {
+                const boom = from * a;
+                const path = crossPath(plan, st, from, boom, boat.stations[to] as typeof st);
+                const key = `${to} ${path.length.toFixed(4)} ${path.z[1]?.toFixed(3)}`;
+                const way = ways.get(key) ?? { path, booms: [], to };
+                way.booms.push(boom);
+                ways.set(key, way);
+              }
             }
-            for (const { path, booms } of ways.values()) {
+            for (const { path, booms, to } of ways.values()) {
               const move = {
                 path,
                 from: { station: i, side: from },
-                to: { station: i, side: -from },
+                to: { station: to, side: -from },
                 t: 0,
                 duration: 1 + path.length,
                 kind: 'cross' as const,
                 waited: 0,
               };
-              const m: CrewMember = { ...at(i, from), moving: move };
+              const m: CrewMember = { ...at(to, from), moving: move };
               for (let t = 0; t <= move.duration + 1e-6; t += 0.1) {
                 move.t = t;
                 upright(m);
                 for (const b of through(body)) {
-                  bad.push(`${i} from ${from} at ${t.toFixed(1)}: ${b}`);
+                  bad.push(`${i}→${to} from ${from} at ${t.toFixed(1)}: ${b}`);
                 }
                 for (const boom of booms) {
                   const waits0 = crossingWay(plan, st) === 'mast' && boomOver(plan, st, from, boom);
                   if (waits0 && t === 0) {
-                    waits.push(`${i} from ${from} at ${(boom / DEG).toFixed(0)}°`);
+                    waits.push(`${i}→${to} from ${from} at ${(boom / DEG).toFixed(0)}°`);
                   }
                   const clear = ducked(m, boom);
                   if (waits0) {
@@ -904,7 +985,7 @@ describe('on the keelboat, nothing through anything', () => {
                   }
                   if (clear < BOOM_MARGIN) {
                     bad.push(
-                      `${i} from ${from} at ${t.toFixed(1)}${waits0 ? ' after the wait' : ''}: the boom at ${(boom / DEG).toFixed(0)}° ${clear.toFixed(3)} near, ${part()} (ducked ${inp.duck.toFixed(2)})`,
+                      `${i}→${to} from ${from} at ${t.toFixed(1)}${waits0 ? ' after the wait' : ''}: the boom at ${(boom / DEG).toFixed(0)}° ${clear.toFixed(3)} near, ${part()} (ducked ${inp.duck.toFixed(2)})`,
                     );
                   }
                 }
@@ -918,7 +999,7 @@ describe('on the keelboat, nothing through anything', () => {
         expect(bad).toEqual([]);
       });
 
-      test('changing places along the windward side deck, the boom anywhere to leeward', () => {
+      test('changing places on the windward side, the boom anywhere to leeward', () => {
         const bad: string[] = [];
         for (let i = 1; i < boat.stations.length; i++) {
           for (const side of [1, -1]) {
@@ -928,7 +1009,7 @@ describe('on the keelboat, nothing through anything', () => {
             ] as const) {
               const z = (k: number): number =>
                 (boat.stations[Math.max(0, k)]?.at[2] as number) ?? 0;
-              const path = walkPath(plan, side, z(from), z(to), z(to) < z(from) ? -PASS : PASS);
+              const path = changePath(plan, side, z(from), z(to));
               const move = {
                 path,
                 from: { station: from, side },
@@ -1064,3 +1145,212 @@ describe('on the keelboat, nothing through anything', () => {
     },
   );
 }, 20_000);
+
+/** The capsules of a posed body in the boat's model, the head as a ball: [a, b, radius]. */
+function capsulesOf(body: CrewBody): [Vector3, Vector3, number][] {
+  const rig = body.rig;
+  const pos = (bone: string): Vector3 =>
+    rig.position(rig.bone(bone), new Vector3()).applyMatrix4(body.root);
+  const out: [Vector3, Vector3, number][] = CAPSULES.map(([a, b, r]) => [pos(a), pos(b), r]);
+  const neck = pos('neck_01');
+  const head = pos('head');
+  const centre = head.clone().addScaledVector(head.clone().sub(neck).normalize(), HEAD_UP);
+  out.push([centre, centre, HEAD_R]);
+  return out;
+}
+
+/** How far apart two posed bodies are, beyond their radii: negative, one through the other. */
+function apart(a: [Vector3, Vector3, number][], b: [Vector3, Vector3, number][]): number {
+  let least = Number.POSITIVE_INFINITY;
+  for (const [a0, a1, ra] of a) {
+    for (const [b0, b1, rb] of b) {
+      least = Math.min(least, segments(a0, a1, b0, b1) - ra - rb);
+    }
+  }
+  return least;
+}
+
+describe('on the keelboat, nobody through anybody', () => {
+  const { boat, plan, duckFor } = keel;
+  /** Two looks: a woman's and the male machine, the tallest. */
+  const looks = keelLooks.filter(
+    (l) =>
+      (l.name === 'rover' && l.version === 'female') ||
+      (l.name === 'machine' && l.version === 'male'),
+  );
+
+  /**
+   * Sails a crew under the rules for seconds, the boom (radians) and the
+   * wind off the bow as boomAt gives them at each moment, posing everyone
+   * aboard ten times a second, each in their own look: the least any two
+   * come to each other, and when.
+   */
+  async function sailApart(
+    people: number,
+    script: (
+      rules: import('./crewrules').CrewRules,
+      t: number,
+    ) => { boom: number; windOffBow: number },
+    seconds: number,
+  ): Promise<{
+    least: number;
+    at: string;
+    seated: number;
+    walking: number;
+    walkingAt: string;
+  }> {
+    const { CrewRules, duckStep } = await import('./crewrules');
+    const rules = new CrewRules(plan);
+    rules.set(
+      {
+        people: Array.from({ length: people }, (_, seat) => ({ seat, look: seat })),
+        holder: 0,
+      },
+      false,
+    );
+    const bodies = new Map<number, { body: CrewBody; inp: PoseInput; duck: number }>();
+    const dt = 1 / 30;
+    let least = Number.POSITIVE_INFINITY;
+    let when = '';
+    let boom = 0;
+    /** The nearest any two sat at their places come, as their places put them. */
+    let seated = Number.POSITIVE_INFINITY;
+    let walking = Number.POSITIVE_INFINITY;
+    let walkingAt = '';
+    for (let k = 0; k * dt <= seconds; k++) {
+      const t = k * dt;
+      const now = script(rules, t);
+      const rate = (now.boom - boom) / dt;
+      boom = now.boom;
+      rules.step({ dt, boom: now.boom, windOffBow: now.windOffBow, depth: 0 });
+      if (k % 3 !== 0) {
+        continue;
+      }
+      const posed: {
+        seat: number;
+        caps: [Vector3, Vector3, number][];
+        moving: boolean;
+        /** Walking along their path, not getting up or sitting down. */
+        walking: boolean;
+        what: string;
+      }[] = [];
+      for (const m of rules.members) {
+        if (m.station <= 0 && m.moving === null) {
+          continue;
+        }
+        const l = looks[m.seat % looks.length] as (typeof looks)[number];
+        let b = bodies.get(m.seat);
+        if (b === undefined) {
+          b = {
+            body: new CrewBody(
+              l.look.deck as NonNullable<typeof l.look.deck>,
+              m.seat + 1,
+              l.machine,
+            ),
+            inp: input(boat.stations, l.look, l.seat),
+            duck: 0,
+          };
+          bodies.set(m.seat, b);
+        }
+        b.inp.time = t;
+        b.inp.duck = b.duck;
+        poseMember(b.body, m, b.inp);
+        b.duck = duckStep(b.duck, duckFor(plan, boom, rate, b.body.headUp), 3 * dt);
+        const mv = m.moving;
+        posed.push({
+          seat: m.seat,
+          caps: capsulesOf(b.body),
+          moving: mv !== null && mv.t >= 0,
+          walking: mv !== null && mv.t >= RISE && mv.t <= mv.duration - SIT,
+          what:
+            mv === null
+              ? `at ${m.station}`
+              : `${mv.kind} ${mv.from.station}→${mv.to.station} ${mv.t.toFixed(1)}/${mv.duration.toFixed(1)}`,
+        });
+      }
+      for (let i = 0; i < posed.length; i++) {
+        for (let j = i + 1; j < posed.length; j++) {
+          const d = apart(
+            (posed[i] as (typeof posed)[number]).caps,
+            (posed[j] as (typeof posed)[number]).caps,
+          );
+          if (!posed[i]?.moving && !posed[j]?.moving) {
+            // Two sat at their places, as close as their places put them.
+            seated = Math.min(seated, d);
+            continue;
+          }
+          if (posed[i]?.walking && posed[j]?.walking && d < walking) {
+            walking = d;
+            walkingAt = `seats ${posed[i]?.seat} (${posed[i]?.what}) and ${posed[j]?.seat} (${posed[j]?.what}) at ${t.toFixed(1)} s`;
+          }
+          if (d < least) {
+            least = d;
+            when = `seats ${posed[i]?.seat} (${posed[i]?.what}) and ${posed[j]?.seat} (${posed[j]?.what}) at ${t.toFixed(1)} s`;
+          }
+        }
+      }
+    }
+    return { least, at: when, seated, walking, walkingAt };
+  }
+
+  const tack = (to: number) => (_r: unknown, t: number) => ({
+    boom: t < 1 ? -to : to,
+    windOffBow: 30 * DEG,
+  });
+  const gybe = (to: number) => (_r: unknown, t: number) => ({
+    boom: t < 1 ? -to : to,
+    windOffBow: 160 * DEG,
+  });
+
+  test.each([
+    ['a tack', tack(0.2)],
+    ['a gybe, the boom out to 40°', gybe(40 * DEG)],
+    ['a gybe, the boom out to 60°', gybe(60 * DEG)],
+    ['a gybe, the boom out to 80°', gybe(80 * DEG)],
+  ] as const)(
+    'five aboard crossing in %s: everyone moving apart from everyone',
+    async (what, script) => {
+      const r = await sailApart(5, script, 14);
+      process.stdout.write(
+        `five aboard, ${what}: nearest ${r.least.toFixed(3)} m, ${r.at}; two walking ${r.walking.toFixed(3)} m; sat shoulder to shoulder ${r.seated.toFixed(3)} m\n`,
+      );
+      // Two walking apart; getting up or sitting down beside someone, no nearer than two sit.
+      expect(r.walking, r.walkingAt).toBeGreaterThan(PEOPLE_APART);
+      expect(r.least, r.at).toBeGreaterThan(SAT_CLOSE);
+    },
+  );
+
+  test.each([
+    [5, 1, true],
+    [5, 4, true],
+    [3, 1, true],
+    [2, 1, true],
+    [5, 2, false],
+    [5, 3, false],
+    [3, 2, false],
+  ])(
+    '%i aboard, the skipper handing the controls to the one in seat %i: beside the cockpit (%s), the two change places apart from each other and from everyone else; forward of it, measured',
+    async (n, holder, beside) => {
+      const r = await sailApart(
+        n,
+        (rules, t) => {
+          if (Math.abs(t - 1) < 1e-6) {
+            rules.set({
+              people: Array.from({ length: n }, (_, seat) => ({ seat, look: seat })),
+              holder,
+            });
+          }
+          return { boom: -0.25, windOffBow: 40 * DEG };
+        },
+        7,
+      );
+      process.stdout.write(
+        `${n} aboard, handed to seat ${holder}${beside ? '' : ' (forward of the cockpit: passing on the side deck)'}: nearest ${r.least.toFixed(3)} m, ${r.at}; two walking ${r.walking.toFixed(3)} m; sat ${r.seated.toFixed(3)} m\n`,
+      );
+      if (beside) {
+        expect(r.walking, r.walkingAt).toBeGreaterThan(PEOPLE_APART);
+        expect(r.least, r.at).toBeGreaterThan(SAT_CLOSE);
+      }
+    },
+  );
+}, 60_000);

@@ -102,11 +102,21 @@ export interface Blend {
   narrowB: number;
   /** Whether the feet are carried from where one end has them to where the other does (up, across, down), not swung through between. */
   carry: boolean;
+  /** At least how high carried feet go, stepping over something, m in the boat's model; −∞ for no more than a step. */
+  top: number;
 }
 
 /** A blend with nothing set: the first pose alone. */
 export function blend(): Blend {
-  return { f: 0, via: null, arc: 0, narrowA: 0, narrowB: 0, carry: false };
+  return {
+    f: 0,
+    via: null,
+    arc: 0,
+    narrowA: 0,
+    narrowB: 0,
+    carry: false,
+    top: Number.NEGATIVE_INFINITY,
+  };
 }
 
 /** How high a carried foot is lifted over the higher of its ends, m. */
@@ -117,8 +127,8 @@ const STEP_UP = 0.08;
  * higher end in the first third, across in the second, set down in the
  * last; so it goes round an edge between, not through it.
  */
-function carried(a: Vector3, b: Vector3, f: number, out: Vector3): Vector3 {
-  const top = Math.max(a.y, b.y) + STEP_UP;
+function carried(a: Vector3, b: Vector3, f: number, out: Vector3, over: number): Vector3 {
+  const top = Math.max(a.y + STEP_UP, b.y + STEP_UP, over);
   const up = smooth3(3 * f);
   const across = smooth3(3 * f - 1);
   const down = smooth3(3 * f - 2);
@@ -126,6 +136,11 @@ function carried(a: Vector3, b: Vector3, f: number, out: Vector3): Vector3 {
   out.z = a.z + (b.z - a.z) * across;
   out.y = f < 2 / 3 ? a.y + (top - a.y) * up : top + (b.y - top) * down;
   return out;
+}
+
+/** t into a loop of duration d: within [0, d), before its start too. */
+function loopTime(t: number, d: number): number {
+  return d > 0 ? ((t % d) + d) % d : 0;
 }
 
 function smooth3(x: number): number {
@@ -220,7 +235,7 @@ export class CrewBody {
     const pa = this.#a;
     pa.rest(rig);
     if (a.clip !== null) {
-      a.clip.sample(a.t % a.clip.duration, pa);
+      a.clip.sample(loopTime(a.t, a.clip.duration), pa);
     }
     const g = b === null ? 0 : Math.max(0, Math.min(1, blend.f));
     const carry = b !== null && blend.carry && g > 0 && g < 1;
@@ -228,7 +243,7 @@ export class CrewBody {
       const pb = this.#b;
       pb.rest(rig);
       if (b.clip !== null) {
-        b.clip.sample(b.t % b.clip.duration, pb);
+        b.clip.sample(loopTime(b.t, b.clip.duration), pb);
       }
       if (carry) {
         // Where each end has its feet, in the boat's model.
@@ -279,7 +294,9 @@ export class CrewBody {
       // The feet carried from one end's to the other's: up, across, down.
       inv.copy(this.root).invert();
       this.#legs.forEach(([thigh, calf, foot], k) => {
-        carried(this.#feetA[k] as Vector3, this.#feetB[k] as Vector3, g, w).applyMatrix4(inv);
+        carried(this.#feetA[k] as Vector3, this.#feetB[k] as Vector3, g, w, blend.top).applyMatrix4(
+          inv,
+        );
         twoBone(rig, thigh, calf, foot, w);
       });
     }

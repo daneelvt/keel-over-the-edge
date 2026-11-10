@@ -2532,13 +2532,14 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
       /** Whether the helm is away from the tiller, walking to or from it as the controls change hands, and drawn. */
       helmAway: boolean;
       helmShown: boolean;
-      /** Everyone under the crew's rules: seat, station (-1 the helm), side, how far they lean, and what they are doing (seconds into it). */
+      /** Everyone under the crew's rules: seat, station (-1 the helm), side, how far they lean, and what they are doing (seconds into it, from which station). */
       members: {
         seat: number;
         station: number;
         side: number;
         lean: number;
         moving: string | null;
+        from: number;
         t: number;
       }[];
       heads: {
@@ -2572,6 +2573,7 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
           side: m.side,
           lean: m.lean,
           moving: m.moving?.kind ?? null,
+          from: m.moving?.from.station ?? m.station,
           t: m.moving?.t ?? 0,
         })),
         heads: c.heads().map((h) => {
