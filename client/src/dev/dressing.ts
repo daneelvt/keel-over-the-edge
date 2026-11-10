@@ -29,7 +29,11 @@
 // numbers the ships' models are built to. A clip on a trapeze's wire hangs
 // each sailor from the wire of the boat whose model has one, whatever boat
 // says, placed from its rack's edge, the harness worn and the wire drawn
-// from the hounds to its hook. The back end is the game's choice, and
+// from the hounds to its hook. A clip on a rail seats each sailor on the
+// rail of the boat whose model has one (the keelboat), placed from her
+// deck's edge on the clip's side, the boat turned so the sailor faces the
+// front; a crouch's clip puts each on her side deck, the walk going forward
+// along it at its speed. The back end is the game's choice, and
 // ?backend=webgl2 or ?compat as in the game.
 //
 // Drag turns the camera about what it looks at, the wheel or a pinch sets
@@ -50,6 +54,7 @@ import {
   Mesh,
   type Object3D,
   PlaneGeometry,
+  Raycaster,
   TorusGeometry,
   Vector2,
   Vector3,
@@ -76,6 +81,16 @@ import {
   wireColour,
   wireMesh,
 } from '../render/sailors/onboat';
+import {
+  CROUCH_CLIPS,
+  CROUCH_SPEED,
+  inRailFile,
+  onRail,
+  RAIL_CLIPS,
+  railEdge,
+  railPlace,
+  railSide,
+} from '../render/sailors/rail';
 import { restageAnimation, restageOf, restagePlace } from '../render/sailors/restage';
 import { Rig } from '../render/sailors/rig';
 import { atWheel, CLIPS } from '../render/sailors/runtime';
@@ -119,6 +134,7 @@ export interface LookFiles {
       wheel?: string;
       trapeze?: string;
       harness?: string;
+      rail?: string;
     }
   >;
 }
@@ -128,7 +144,7 @@ export function builtLooks(files: Record<string, string>): LookFiles[] {
   const looks = new Map<string, LookFiles>();
   for (const [path, url] of Object.entries(files)) {
     const m =
-      /\/art\/sailors\/([^/]+)\/([a-z]+)(?:\.(deck|far|clips|wheel|trapeze|harness))?\.glb$/.exec(
+      /\/art\/sailors\/([^/]+)\/([a-z]+)(?:\.(deck|far|clips|wheel|trapeze|harness|rail))?\.glb$/.exec(
         path,
       );
     if (m === null) {
@@ -147,6 +163,8 @@ export function builtLooks(files: Record<string, string>): LookFiles[] {
       v.trapeze = url;
     } else if (kind === 'harness') {
       v.harness = url;
+    } else if (kind === 'rail') {
+      v.rail = url;
     } else {
       v.levels[(kind ?? 'close') as Level] = url;
     }
@@ -330,6 +348,8 @@ interface Figure {
   /** On a trapeze's wire: the harness it wears, played with its clip; and the wire drawn to its hook. */
   harness: { root: Object3D; mixer: AnimationMixer; meshes: Mesh[]; hook: Vector3 | null } | null;
   wire: { mesh: Mesh; side: number; hounds: Vector3; hook: Vector3 } | null;
+  /** Walking at a crouch along a side deck: where it starts, and how far it goes before it starts again. */
+  walk: { from: Vector3; length: number } | null;
 }
 
 /** The wheel stood at on the quay: its hub ahead of and above the helmsman's place, its rim, spokes and their handles beyond it, as the ships' models are built. */
@@ -344,6 +364,16 @@ const MOORED_Z = 2.6;
 const BOAT_SPACING = 4.2;
 /** The picker's disc of planks: its top. */
 const DISC_TOP = 0.4;
+/**
+ * Crouched on the rail boat's side deck: this far in from her deck's edge,
+ * from this far aft of the rail's station, walking this far forward along
+ * it (short of her shrouds).
+ */
+const SIDE_DECK_IN = 0.3;
+const WALK_FROM = 0.75;
+const WALK = 0.9;
+/** What the camera looks at, seated on the rail boat moored: this high, and this far out from her middle toward the quay. */
+const RAIL_LOOK = { y: 1.0, out: 1.0 };
 
 /** The fleet in the deck view: east and north of the own boat (m) and heading (rad). */
 const FLEET: [number, number, number][] = [
@@ -454,6 +484,8 @@ export class DressingRoom {
   readonly #harnesses = new Map<string, Promise<Harness>>();
   /** The catalog's boat whose model has a trapeze, once found; −1 if none has. */
   #wireBoat: number | null = null;
+  /** The catalog's boat whose model has a rail, once found; −1 if none has. */
+  #railBoat: number | null = null;
   /** The boats made, by the catalog's boat and the place in the room, and their models' loads. */
   readonly #boats = new Map<string, { boat: Boat; loaded: Promise<void> }>();
   readonly #props = new Group();
@@ -691,6 +723,9 @@ export class DressingRoom {
     if (onWire(r.clip)) {
       await this.#findWireBoat();
     }
+    if (inRailFile(r.clip)) {
+      await this.#findRailBoat();
+    }
     const made = await Promise.all(
       wanted.map((w) => this.#figure(w.look, w.version, w.level, w.colours, w.at)),
     );
@@ -733,12 +768,15 @@ export class DressingRoom {
       this.#protos.set(url, proto);
     }
     let clips: Promise<SailorClips> | null = null;
-    // The clips at a wheel, and those on a trapeze's wire, are files of their own.
+    // The clips at a wheel, those on a trapeze's wire and those on a rail
+    // (and the crouch) are files of their own.
     const clipsUrl = onWire(this.room.clip)
       ? files?.trapeze
-      : atWheel(this.room.clip)
-        ? files?.wheel
-        : files?.clips;
+      : inRailFile(this.room.clip)
+        ? files?.rail
+        : atWheel(this.room.clip)
+          ? files?.wheel
+          : files?.clips;
     if (clipsUrl !== undefined) {
       clips = this.#clips.get(clipsUrl) ?? loadClips(clipsUrl, renderer);
       this.#clips.set(clipsUrl, clips);
@@ -774,6 +812,7 @@ export class DressingRoom {
       wheel: null,
       harness: null,
       wire: null,
+      walk: null,
     };
     const clip = c?.clips.find((k) => k.name === this.room.clip);
     if (model.skeleton !== null && clip !== undefined) {
@@ -835,9 +874,100 @@ export class DressingRoom {
     this.#wireBoat = -1;
   }
 
+  /** Finds the catalog's boat whose model has a rail, loading the boats' models in turn. */
+  async #findRailBoat(): Promise<void> {
+    if (this.#railBoat !== null) {
+      return;
+    }
+    for (let k = 0; k < catalog.boats.length; k++) {
+      const { boat, loaded } = this.#boatAt(k, 0);
+      await loaded;
+      if (railEdge(boat.parts) !== null) {
+        this.#railBoat = k;
+        return;
+      }
+    }
+    this.#railBoat = -1;
+  }
+
+  /**
+   * A figure on the rail boat: sat on her rail from her deck's edge on the
+   * clip's side; or crouched on her starboard side deck facing forward, half
+   * way from the cuddy's side to the edge, the walk going forward along it.
+   * False if the room has no rail boat or the figure no clip.
+   */
+  async #onRailBoat(f: Figure, i: number): Promise<boolean> {
+    const r = this.room;
+    if (!inRailFile(r.clip) || f.action === null || this.#railBoat === null || this.#railBoat < 0) {
+      return false;
+    }
+    const { boat, loaded } = this.#boat(i);
+    await loaded;
+    const edge = railEdge(boat.parts);
+    if (edge === null) {
+      return false;
+    }
+    let seat: Matrix4;
+    if (onRail(r.clip)) {
+      const place = f.clips?.places.get(`place-${r.clip}`);
+      if (place === undefined) {
+        return false;
+      }
+      seat = railPlace(place, edge, railSide(r.clip));
+    } else {
+      const from = new Vector3(
+        edge.x - SIDE_DECK_IN,
+        this.#deckAt(boat, edge.x - SIDE_DECK_IN, edge.z + WALK_FROM),
+        edge.z + WALK_FROM,
+      );
+      seat = new Matrix4()
+        .makeTranslation(from.x, from.y, from.z)
+        .multiply(new Matrix4().makeRotationY(Math.PI));
+      f.walk = r.clip === CROUCH_CLIPS.walk ? { from, length: WALK } : null;
+    }
+    f.boat = boat;
+    boat.model.add(f.root);
+    f.root.matrixAutoUpdate = true;
+    seat.decompose(f.root.position, f.root.quaternion, f.root.scale);
+    this.stage.scene.add(boat.root);
+    if (r.view === 'deck') {
+      const [east, north, heading] = FLEET[i] as [number, number, number];
+      boat.root.position.set(east, 0, -north);
+      boat.root.rotation.set(0, -heading, 0);
+    } else {
+      // Moored before the quay, turned so the sailor faces the front: her
+      // starboard side to it, or her port for a clip on the port rail.
+      const n = this.#figuresWanted();
+      boat.root.position.set(
+        (i - (n - 1) / 2) * this.#boatSpacing(),
+        0,
+        r.view === 'picker' ? 0 : MOORED_Z,
+      );
+      boat.root.rotation.set(0, (-railSide(r.clip) * Math.PI) / 2, 0);
+    }
+    return true;
+  }
+
+  /** The height of a boat's deck at (x, z) in her model's frame: what a ray down meets first of her hull. */
+  #deckAt(boat: Boat, x: number, z: number): number {
+    const hull = boat.parts.get('hull');
+    if (hull === undefined) {
+      return 0;
+    }
+    boat.model.updateMatrixWorld(true);
+    const toWorld = boat.model.matrixWorld;
+    const from = new Vector3(x, 5, z).applyMatrix4(toWorld);
+    const down = new Vector3(0, -1, 0).transformDirection(toWorld);
+    const hit = new Raycaster(from, down).intersectObject(hull, true)[0];
+    return hit === undefined ? 0 : hit.point.applyMatrix4(new Matrix4().copy(toWorld).invert()).y;
+  }
+
   /** Where a figure stands, or sits: on the quay or the disc, or in its boat. */
   async #place(f: Figure, i: number): Promise<void> {
     const r = this.room;
+    if (await this.#onRailBoat(f, i)) {
+      return;
+    }
     let seat = this.#seat(f);
     const wheeled = seat !== null && atWheel(r.clip);
     const wired = seat !== null && onWire(r.clip) && f.model.skeleton !== null;
@@ -996,6 +1126,10 @@ export class DressingRoom {
   /** The room's boats' place in the catalog's. */
   #boatIndex(): number {
     const wire = this.#wireBoat;
+    const rail = this.#railBoat;
+    if (inRailFile(this.room.clip) && rail !== null && rail >= 0) {
+      return rail;
+    }
     return onWire(this.room.clip) && wire !== null && wire >= 0 ? wire : this.room.boat;
   }
 
@@ -1071,10 +1205,12 @@ export class DressingRoom {
         restageOf(
           this.#figures.find((f) => f.boat !== null)?.boat?.parts.get('sailor')?.userData,
         ) ?? new Vector3();
+      // On a rail boat, the crew are on her side nearest the quay.
+      const railed = seated && inRailFile(r.clip);
       o.target.set(
         0,
-        seated ? 0.9 + by.y : QUAY_TOP + 0.95,
-        seated ? MOORED_Z - 0.5 - by.x : ROW_Z,
+        railed ? RAIL_LOOK.y : seated ? 0.9 + by.y : QUAY_TOP + 0.95,
+        railed ? MOORED_Z + RAIL_LOOK.out : seated ? MOORED_Z - 0.5 - by.x : ROW_Z,
       );
       if (reset) {
         o.azimuth = back;
@@ -1115,6 +1251,14 @@ export class DressingRoom {
         const t = r.t ?? (this.#time + f.offset) % length;
         f.mixer.setTime(t);
         f.harness?.mixer.setTime(t);
+        if (f.walk !== null) {
+          // Forward along the side deck at the walk's speed, and again.
+          const along =
+            r.t !== null
+              ? r.t * CROUCH_SPEED
+              : ((this.#time + f.offset) * CROUCH_SPEED) % f.walk.length;
+          f.root.position.copy(f.walk.from).setZ(f.walk.from.z - (along % f.walk.length));
+        }
       }
     }
     // The boats at rest, their sails set.
@@ -1127,7 +1271,12 @@ export class DressingRoom {
     const lever =
       (this.#boats.get(`${this.#boatIndex()}:0`)?.boat.parts.get('sailor')?.position.z ?? 0) +
       kind.physics.rig.mastPosition;
-    pose.boom = r.view === 'deck' ? -0.35 : Math.min(0.35, Math.atan2(0.5, Math.max(lever, 0.1)));
+    pose.boom = inRailFile(r.clip)
+      ? // Off to leeward of the crew on the rail.
+        -railSide(r.clip) * 0.35
+      : r.view === 'deck'
+        ? -0.35
+        : Math.min(0.35, Math.atan2(0.5, Math.max(lever, 0.1)));
     for (const f of this.#figures) {
       const b = f.boat;
       if (b !== null) {
@@ -1349,6 +1498,15 @@ export class DressingRoom {
       for (const c of [TRAPEZE_CLIPS.out, TRAPEZE_CLIPS.low]) {
         names.add(c);
         names.add(`${c}-port`);
+      }
+    }
+    if (this.#shown().some((l) => [...l.versions.values()].some((v) => v.rail !== undefined))) {
+      for (const c of [RAIL_CLIPS.up, RAIL_CLIPS.out]) {
+        names.add(c);
+        names.add(`${c}-port`);
+      }
+      for (const c of Object.values(CROUCH_CLIPS)) {
+        names.add(c);
       }
     }
     group(
