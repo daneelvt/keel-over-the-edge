@@ -48,7 +48,7 @@ export const LEAN_STAGGER = 0.3;
 /** How far round the front of the mast a crossing goes, from its centre, m. */
 export const MAST_CLEAR = 0.45;
 /** How far inboard of the deck's edge a walk along the side deck goes, forward of the cockpit, m. */
-export const EDGE_IN = 0.25;
+export const EDGE_IN = 0.29;
 /** How far in from the cockpit's sides and ends a crossing through it goes, m. */
 export const COCKPIT_IN = 0.25;
 const COCKPIT_END = 0.2;

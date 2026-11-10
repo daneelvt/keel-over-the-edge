@@ -43,7 +43,7 @@ const X = new Vector3(1, 0, 0);
 const Z = new Vector3(0, 0, 1);
 const foot = new Vector3();
 /** How far in, of their spread, a narrow deck brings the knees, feet and hands; the hands further by this. */
-export const NARROW = 0.6;
+export const NARROW = 0.7;
 const ARM_IN = 0.8;
 const v = new Vector3();
 const w = new Vector3();
@@ -141,7 +141,9 @@ const DUCK: readonly [string, number][] = [
   ['neck_01', 0.1],
 ];
 /** How far a full duck lowers someone walking, m: the knees bent more. */
-export const DUCK_DROP = 0.04;
+export const DUCK_DROP = 0.08;
+/** How much of a step's lift a full duck takes away from someone walking under a boom. */
+export const STEP_LOW = 0.8;
 /** How far a full duck bends the back forward, radians. */
 export const DUCK_ANGLE = (70 * Math.PI) / 180;
 
@@ -260,6 +262,14 @@ export class CrewBody {
         rig.position(foot, this.#feetA[k] as Vector3).applyMatrix4(this.root);
       });
       this.root.elements[13] = (this.root.elements[13] as number) - DUCK_DROP * low;
+      if (!carry && this.#feetA.length === 2) {
+        // A step kept low: the foot in the air nearer the deck, its knee lower.
+        const [f0, f1] = this.#feetA as [Vector3, Vector3];
+        const floor = Math.min(f0.y, f1.y);
+        for (const f of this.#feetA) {
+          f.y = floor + (f.y - floor) * (1 - STEP_LOW * low);
+        }
+      }
       inv.copy(this.root).invert();
       this.#legs.forEach(([thigh, calf, foot], k) => {
         twoBone(rig, thigh, calf, foot, w.copy(this.#feetA[k] as Vector3).applyMatrix4(inv));

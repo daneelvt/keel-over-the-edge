@@ -749,14 +749,15 @@ const keel = await (async () => {
   };
 })();
 
-/** The looks the keelboat's checks pose, each as the fleet holds it. */
+/** How clear of the boom everyone keeps, crossing, beyond their radii and its, m. */
+const BOOM_MARGIN = 0.01;
+
+/** The looks the keelboat's checks pose, every one, the machines too, each as the fleet holds it. */
 const keelLooks = await Promise.all(
-  (
-    [
-      ['rover', 'female'],
-      ['machine', 'male'],
-    ] as const
-  ).map(async ([name, version]) => {
+  [
+    ...catalog.sailors.flatMap((s) => s.versions.map((v) => [s.id, v.id] as const)),
+    ...catalog.machine.versions.map((v) => ['machine', v.id] as const),
+  ].map(async ([name, version]) => {
     const machine = name === 'machine';
     const art = machine
       ? catalog.machine.versions.find((v) => v.id === version)?.art
@@ -854,7 +855,7 @@ describe('on the keelboat, nothing through anything', () => {
         expect(bad).toEqual([]);
       });
 
-      test('crossing, every way across, from either side, the boom anywhere on the side left; waiting while it lies over the place', () => {
+      test('crossing, every way across, from either side, the boom anywhere on the side left, clear of it by a centimetre; waiting while it lies over the place, and clear of it after the wait', () => {
         const bad: string[] = [];
         let least = Number.POSITIVE_INFINITY;
         let afterWait = Number.POSITIVE_INFINITY;
@@ -896,14 +897,14 @@ describe('on the keelboat, nothing through anything', () => {
                   }
                   const clear = ducked(m, boom);
                   if (waits0) {
-                    // Gone all the same after the longest wait: measured.
+                    // Gone all the same after the longest wait.
                     afterWait = Math.min(afterWait, clear);
-                    continue;
+                  } else {
+                    least = Math.min(least, clear);
                   }
-                  least = Math.min(least, clear);
-                  if (clear < 0) {
+                  if (clear < BOOM_MARGIN) {
                     bad.push(
-                      `${i} from ${from} at ${t.toFixed(1)}: the boom at ${(boom / DEG).toFixed(0)}° ${clear.toFixed(3)} through, ${part()} (ducked ${inp.duck.toFixed(2)})`,
+                      `${i} from ${from} at ${t.toFixed(1)}${waits0 ? ' after the wait' : ''}: the boom at ${(boom / DEG).toFixed(0)}° ${clear.toFixed(3)} near, ${part()} (ducked ${inp.duck.toFixed(2)})`,
                     );
                   }
                 }
