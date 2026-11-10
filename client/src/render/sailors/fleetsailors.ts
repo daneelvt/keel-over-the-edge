@@ -401,20 +401,9 @@ export function nearSailorNodes(
     If(abs(tag.x.sub(main.w)).lessThan(0.5).and(sway.w.greaterThan(0.5)), () => {
       const index = attribute('skinIndex', 'vec4') as unknown as Node<'vec4'>;
       const weight = attribute('skinWeight', 'vec4') as unknown as Node<'vec4'>;
-      const r0 = vec4(0, 0, 0, 0).toVar();
-      const r1 = vec4(0, 0, 0, 0).toVar();
-      const r2 = vec4(0, 0, 0, 0).toVar();
-      for (const c of ['x', 'y', 'z', 'w'] as const) {
-        const x = int(index[c].add(0.5)).mul(3).add(ROW_HEAD);
-        const w = weight[c];
-        r0.addAssign(t.load(ivec2(x, row)).mul(w));
-        r1.addAssign(t.load(ivec2(x.add(1), row)).mul(w));
-        r2.addAssign(t.load(ivec2(x.add(2), row)).mul(w));
-      }
-      const p4 = vec4(positionGeometry, 1);
-      const p = vec3(dot(r0, p4), dot(r1, p4), dot(r2, p4)).toVar();
-      const n = normalGeometry;
-      const skinned = vec3(dot(r0.xyz, n), dot(r1.xyz, n), dot(r2.xyz, n));
+      const s0 = skinRow(t, row, index, weight, positionGeometry, normalGeometry);
+      const p = s0.p.toVar();
+      const skinned = s0.n;
       // What hangs on the chains streams with the wind, unsteadily.
       const s = tag.y;
       const gust = sin(time.mul(2.3).add(p.y.mul(5)).add(pose.x.mul(0.7)))
@@ -440,6 +429,44 @@ export function nearSailorNodes(
     return out;
   })() as unknown as Node<'vec3'>;
   return { vertex, ...colours(i) };
+}
+
+/**
+ * A point and its normal skinned by the bones in a row of rows (three texels
+ * a bone from ROW_HEAD on, the rows of its matrix), by four bones and their
+ * weights.
+ */
+export function skinRow(
+  t: ReturnType<typeof texture>,
+  row: Node<'int'>,
+  index: Node<'vec4'>,
+  weight: Node<'vec4'>,
+  point: Node<'vec3'>,
+  normal: Node<'vec3'>,
+): { p: Node<'vec3'>; n: Node<'vec3'> } {
+  const rows: Node<'vec4'>[][] = [[], [], []];
+  for (const c of ['x', 'y', 'z', 'w'] as const) {
+    const x = int(index[c].add(0.5)).mul(3).add(ROW_HEAD);
+    const w = weight[c];
+    for (let k = 0; k < 3; k++) {
+      rows[k]?.push((t.load(ivec2(x.add(k), row)) as unknown as Node<'vec4'>).mul(w));
+    }
+  }
+  const [r0, r1, r2] = rows.map(([a, b, c, d]) =>
+    (a as Node<'vec4'>)
+      .add(b as Node<'vec4'>)
+      .add(c as Node<'vec4'>)
+      .add(d as Node<'vec4'>),
+  ) as [Node<'vec4'>, Node<'vec4'>, Node<'vec4'>];
+  const p4 = vec4(point, 1);
+  return {
+    p: vec3(dot(r0, p4), dot(r1, p4), dot(r2, p4)) as unknown as Node<'vec3'>,
+    n: vec3(
+      dot(r0.xyz, normal),
+      dot(r1.xyz, normal),
+      dot(r2.xyz, normal),
+    ) as unknown as Node<'vec3'>,
+  };
 }
 
 /** A row's first texels, as the fleet's instance values (fleetparts.ts). */

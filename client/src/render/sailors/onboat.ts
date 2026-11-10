@@ -362,11 +362,26 @@ export class BoatSailor {
     this.#levels();
   }
 
+  /** Whether the sailor is away from the helm, drawn by the crew as they change places: not drawn here meanwhile. */
+  get away(): boolean {
+    return this.#away;
+  }
+
+  set away(on: boolean) {
+    if (on !== this.#away) {
+      this.#away = on;
+      this.#levels();
+    }
+  }
+
+  #away = false;
+
   #levels(): void {
     const close = this.#near && this.#close !== null;
-    this.#deck.root.visible = this.#shown && !close;
+    const drawn = this.#shown && !this.#away;
+    this.#deck.root.visible = drawn && !close;
     if (this.#close !== null) {
-      this.#close.root.visible = this.#shown && close;
+      this.#close.root.visible = drawn && close;
     }
   }
 

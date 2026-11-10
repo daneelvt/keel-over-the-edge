@@ -317,13 +317,14 @@ type BoatPhysics struct {
 type BoatPoint []float64
 
 // A place aboard where a person is drawn: standing on the deck, seated as a
-// dinghy's helmsman sits on the side deck, or hiking out on its rail; on a
-// dinghy's windward side, if it says so.
+// dinghy's helmsman sits on the side deck, hiking out on its rail, or sat on a
+// keelboat's rail with the legs over the side; to windward, if it says so.
 type BoatStation struct {
 	// In m in the model's frame. Standing, the deck between the feet; seated, the
 	// seat's back edge, as the gunwale is to a dinghy's helmsman: the hips just
 	// within it, the legs reaching 0.7 m the way the person faces, the feet 0.2 m
-	// below it.
+	// below it; on the rail, the deck's edge at the sheer under the person, who sits
+	// facing outboard, the hips just within it and the legs over the side.
 	At BoatPoint `json:"at"`
 
 	// The way the person faces, in degrees clockwise from the bow seen from above: 0
@@ -333,10 +334,10 @@ type BoatStation struct {
 	// Pose corresponds to the JSON schema field "pose".
 	Pose StationPose `json:"pose"`
 
-	// Whether the person sits to windward as a dinghy's crew does: on the side the
-	// helm sits on, the station's mirror across the centreline (and its facing's)
-	// when the helm is on the other side, and crossing with the helm in a tack or a
-	// gybe. Not said, the station is where it is.
+	// Whether the person sits to windward, as a crew does: on the side away from the
+	// boom, the station's mirror across the centreline (and its facing's) when that
+	// is the other side, and crossing the boat at a crouch in a tack or a gybe. Not
+	// said, the station is where it is.
 	Windward *bool `json:"windward,omitempty,omitzero"`
 }
 
@@ -3429,6 +3430,7 @@ type StartMoorings struct {
 type StationPose string
 
 const StationPoseHiking StationPose = "hiking"
+const StationPoseRail StationPose = "rail"
 const StationPoseSeated StationPose = "seated"
 const StationPoseStanding StationPose = "standing"
 
@@ -5443,4 +5445,4 @@ type WorldZones struct {
 }
 
 // Version is the catalog version (tools/catalog).
-const Version = "f00e874226287574"
+const Version = "0e5e1240a73a066f"

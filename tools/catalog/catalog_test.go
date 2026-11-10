@@ -488,6 +488,18 @@ func TestRejects(t *testing.T) {
 			want: "boats[0].stations[1]: within 0.45 m of stations[0]",
 		},
 		{
+			name: "a station on the rail away from the deck's edge",
+			files: map[string]string{"shared/catalog/boats.yaml": strings.Replace(validBoats,
+				"pose: standing", "pose: rail", 1)},
+			want: "boats[0].stations[1]: on the rail 0.3 m out, but the deck's edge is",
+		},
+		{
+			name: "a station to windward on another when the wind is on the other side",
+			files: map[string]string{"shared/catalog/boats.yaml": strings.Replace(validBoats,
+				"{ at: [-0.3, 0.3, -0.5], pose: standing, facing: 0 }", "{ at: [-0.55, 0.3, 0.1], pose: seated, facing: 90, windward: true }", 1)},
+			want: "boats[0].stations[1]: to windward on the other side, within 0.45 m of stations[0]",
+		},
+		{
 			name:  "a station's pose unknown",
 			files: map[string]string{"shared/catalog/boats.yaml": strings.Replace(validBoats, "pose: standing", "pose: kneeling", 1)},
 			want:  "/boats/0/stations/1/pose",

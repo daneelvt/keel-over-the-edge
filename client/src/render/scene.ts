@@ -79,7 +79,9 @@ import {
 } from './quality';
 import { type Gfx, type Wanted, wantsCompat } from './renderer';
 import { RightOfWay, type Seen } from './rightofway';
-import { CrewDeck, type CrewShown, helmLook } from './sailors/crew';
+import { CrewDeck, type CrewShown, helmLook, modelDeck } from './sailors/crew';
+import { type CrewPlan, crewPlan } from './sailors/crewrules';
+import { hullSolid } from './sailors/solid';
 import { Shadows } from './shadows';
 import { StormCones } from './signals';
 import { look, Sky, toLinear } from './sky';
@@ -691,7 +693,7 @@ export class SeaScene {
       this.stage.scene.remove(was.root);
     }
     boat.model.add(this.overlays.onBoat);
-    this.crew.aboard(boat.model, kind.stations);
+    this.crew.aboard(boat.model, this.#crewPlan(boat));
     Shadows.cast(boat.model, this.shadows.on, this.shadows.lit);
     this.overlays.setKind(kind);
     this.rightOfWay.setKind(kind);
@@ -707,6 +709,23 @@ export class SeaScene {
     if (was !== null && was !== boat) {
       void this.#apply(false);
     }
+  }
+
+  /** A boat's crew's plan: its kind's stations, its deck (its model's hull solid) and its boom. */
+  #crewPlan(boat: Boat): CrewPlan {
+    const kind = boat.kind;
+    const solid = hullSolid(boat.parts.get('hull')?.userData, boat.nodeAt('board-root'), {
+      span: kind.physics.foils.boardSpan,
+      chord: kind.physics.foils.boardChord,
+    });
+    const model = boat.model.children[0];
+    return crewPlan(
+      kind.stations,
+      solid,
+      boat.nodeAt('boom'),
+      kind.physics.rig.foot,
+      model === undefined ? null : modelDeck(model),
+    );
   }
 
   /**
@@ -1767,12 +1786,23 @@ export class SeaScene {
     this.boat?.draw(bs, this.pose, this.out, this.time, this.timeStep);
     // The sailor drawn close when the camera is near it.
     this.boat?.sailor?.near(camera.position.distanceTo(this.#v.set(bs.x, bs.y + 0.8, bs.z)));
-    // A crew to windward sits on the helm's side and crosses with it.
-    const helm = this.boat?.sailor?.runtime;
-    if (helm !== undefined) {
-      this.crew.windward(helm.crossFrom, helm.crossed);
+    // The crew to windward of the boom, crossing in a tack or a gybe,
+    // leaning out as the helm hikes; the helm not drawn while it walks
+    // to or from the tiller in a change of hands.
+    const helm = this.boat?.sailor ?? null;
+    this.crew.sail(
+      {
+        dt: this.timeStep,
+        boom: this.pose.boom,
+        windOffBow: this.wind.meanFrom - this.pose.heading,
+        depth: helm?.runtime.depth ?? 0,
+      },
+      this.pose.heel,
+    );
+    if (helm !== null) {
+      helm.away = this.crew.helmAway;
     }
-    this.crew.frame(camera.position);
+    this.crew.frame(camera.position, this.timeStep);
     const fs = this.fleetSource;
     if (this.fleet.loaded) {
       this.fleet.windFrom = this.wind.meanFrom;

@@ -2525,17 +2525,55 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
       helm: string | null;
       /** The side deck the helm sits on, + starboard, − port, or crosses from. */
       helmSide: number;
-      heads: { x: number; y: number; near: boolean; station: number; across: number }[];
+      /** The crew's windward side (away from the boom), + starboard; whether its last change was a tack; how often it has changed. */
+      side: number;
+      tack: boolean;
+      changes: number;
+      /** Whether the helm is away from the tiller, walking to or from it as the controls change hands, and drawn. */
+      helmAway: boolean;
+      helmShown: boolean;
+      /** Everyone under the crew's rules: seat, station (-1 the helm), side, how far they lean, and what they are doing (seconds into it). */
+      members: {
+        seat: number;
+        station: number;
+        side: number;
+        lean: number;
+        moving: string | null;
+        t: number;
+      }[];
+      heads: {
+        x: number;
+        y: number;
+        near: boolean;
+        station: number;
+        across: number;
+        moving: boolean;
+      }[];
     } {
       const c = world.crew;
       const canvas = stage.gfx?.canvas;
       const bs = world.boatScene;
+      const rules = c.rules;
+      const sailor = world.boat?.sailor ?? null;
       return {
         aboard: c.count,
         ready: c.ready,
         ...c.drawn,
         helm: world.boat?.drawnLook()?.model ?? null,
-        helmSide: world.boat?.sailor?.runtime.crossFrom ?? 0,
+        helmSide: sailor?.runtime.crossFrom ?? 0,
+        side: rules?.side.side ?? 0,
+        tack: rules?.side.tack ?? true,
+        changes: rules?.side.changes ?? 0,
+        helmAway: c.helmAway,
+        helmShown: sailor?.shown === true && !sailor.away,
+        members: (rules?.members ?? []).map((m) => ({
+          seat: m.seat,
+          station: m.station,
+          side: m.side,
+          lean: m.lean,
+          moving: m.moving?.kind ?? null,
+          t: m.moving?.t ?? 0,
+        })),
         heads: c.heads().map((h) => {
           const p = h.at;
           p.y -= domeDrop(Math.hypot(p.x - bs.x, p.z - bs.z));
@@ -2546,6 +2584,7 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
             near: h.near,
             station: h.station,
             across: h.across,
+            moving: h.moving,
           };
         }),
       };

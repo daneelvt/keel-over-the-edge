@@ -324,6 +324,8 @@ export class SailorRuntime {
   readonly #wired: boolean;
   /** The harness's hook against the pelvis, when given. */
   #hookRest: Vector3 | null = null;
+  /** How far the sailor hiked at the last moment (depth). */
+  #depth = 0;
 
   constructor(
     readonly rig: Rig,
@@ -452,6 +454,15 @@ export class SailorRuntime {
     return this.#windward;
   }
 
+  /**
+   * How far the sailor hikes: 0 sat in at the helm, 1 on the first hiking
+   * depth, more beyond it (or out on a wire); 0 while crossing or not
+   * sailing.
+   */
+  get depth(): number {
+    return this.#depth;
+  }
+
   /** Whether the sailor is crossing the boat. */
   get crossing(): boolean {
     return this.#cross !== null;
@@ -506,6 +517,7 @@ export class SailorRuntime {
     const place = this.#place;
     let seated = false;
     this.hands.wire = 0;
+    this.#depth = 0;
     const wheel = this.boat.wheel;
     if (wheel) {
       this.#atWheel(s, dt, wheel, pose, place);
@@ -672,6 +684,7 @@ export class SailorRuntime {
       // Out to the rail on the first hiking clip, then onto the wire.
       h = Math.min(h, 1) + wireDepth(out, hike.full, trapeze.reach);
     }
+    this.#depth = h;
     const t = s.time + this.#helmOffset;
     // The helm and the hiking depths (or out on the wire), each by its
     // weight, and their places.

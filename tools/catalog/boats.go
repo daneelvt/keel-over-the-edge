@@ -5,6 +5,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"math"
 	"strings"
 
 	"github.com/daneelvt/keel-over-the-edge/internal/physics"
@@ -106,10 +107,38 @@ func checkDownwind(i int, ph map[string]any) []string {
 // person's breadth.
 const stationsApart = 0.45
 
+// railFromEdge is how far a station on the rail may be from the deck's edge,
+// in m: its point is the edge under the person.
+const railFromEdge = 0.1
+
+// deckEdge returns how far out from the centreline boat m's deck reaches at
+// z, in m: its hull's outline, half-beams from the transom (z = transom) to
+// the stem over its length overall.
+func deckEdge(m map[string]any, z float64) float64 {
+	num := func(v any) float64 {
+		f, _ := v.(json.Number).Float64()
+		return f
+	}
+	ph, _ := m["physics"].(map[string]any)
+	hull, _ := ph["hull"].(map[string]any)
+	outline, _ := hull["outline"].([]any)
+	length := num(m["lengthOverall"])
+	if len(outline) < 2 || length <= 0 {
+		return 0
+	}
+	u := min(1, max(0, (num(hull["transom"])-z)/length))
+	x := u * float64(len(outline)-1)
+	i := min(len(outline)-2, int(x))
+	f := x - float64(i)
+	return num(outline[i])*(1-f) + num(outline[i+1])*f
+}
+
 // checkStations checks boat i's stations: one for each person it carries,
 // each on its deck within its hull (within its beam and its length, above
-// the waterline and below the boom), none on another. The client's tests
-// hold each to the model's deck itself.
+// the waterline and below the boom), none on another, nor a windward one's
+// mirror (where it is drawn when the wind is on the other side) on one on
+// the other side; and one on the rail at the deck's edge. The client's
+// tests hold each to the model's deck itself.
 func checkStations(i int, m map[string]any) []string {
 	var problems []string
 	stations, _ := m["stations"].([]any)
@@ -126,6 +155,7 @@ func checkStations(i int, m map[string]any) []string {
 	rig, _ := ph["rig"].(map[string]any)
 	boom := num(rig["boomHeight"])
 	at := make([][3]float64, 0, len(stations))
+	windward := make([]bool, 0, len(stations))
 	for j, s := range stations {
 		st, _ := s.(map[string]any)
 		p, _ := st["at"].([]any)
@@ -133,19 +163,34 @@ func checkStations(i int, m map[string]any) []string {
 			continue
 		}
 		x, y, z := num(p[0]), num(p[1]), num(p[2])
+		if st["pose"] == "rail" {
+			if edge := deckEdge(m, z); math.Abs(math.Abs(x)-edge) > railFromEdge {
+				problems = append(problems, fmt.Sprintf("  boats[%d].stations[%d]: on the rail %v m out, but the deck's edge is %v m out there", i, j, math.Abs(x), math.Round(edge*1000)/1000))
+			}
+		}
 		if 2*x > beam || 2*x < -beam || 2*z > length || 2*z < -length {
 			problems = append(problems, fmt.Sprintf("  boats[%d].stations[%d]: (%v, %v) is outside the hull's %v by %v m", i, j, x, z, beam, length))
 		}
 		if !(y > 0 && y < boom) {
 			problems = append(problems, fmt.Sprintf("  boats[%d].stations[%d]: %v m up is not on a deck above the waterline and below the boom (%v m)", i, j, y, boom))
 		}
+		w, _ := st["windward"].(bool)
+		near := func(a, b [3]float64) bool {
+			dx, dy, dz := a[0]-b[0], a[1]-b[1], a[2]-b[2]
+			return dx*dx+dy*dy+dz*dz < stationsApart*stationsApart
+		}
+		here := [3]float64{x, y, z}
 		for k, o := range at {
-			dx, dy, dz := x-o[0], y-o[1], z-o[2]
-			if dx*dx+dy*dy+dz*dz < stationsApart*stationsApart {
+			if near(here, o) {
 				problems = append(problems, fmt.Sprintf("  boats[%d].stations[%d]: within %v m of stations[%d]", i, j, stationsApart, k))
 			}
+			// A windward station drawn on the other side: its mirror, against those there.
+			if (w || windward[k]) && (x < 0) != (o[0] < 0) && near([3]float64{-x, y, z}, o) {
+				problems = append(problems, fmt.Sprintf("  boats[%d].stations[%d]: to windward on the other side, within %v m of stations[%d]", i, j, stationsApart, k))
+			}
 		}
-		at = append(at, [3]float64{x, y, z})
+		at = append(at, here)
+		windward = append(windward, w)
 	}
 	return problems
 }
