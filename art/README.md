@@ -222,7 +222,9 @@ the same leaning out over the water from the hips; each with its `-port`)
 are made against her own model, imported into the stage's scene
 (`tables.yaml`'s `stage.rail`): her `rail` node is the deck's edge they sit
 on, the knees' joints `knee` out from it, the cloth under them laid on her
-deck inboard of the edge and hanging free outboard of it. They are placed
+deck inboard of the edge and hanging free outboard of it: a coat's back
+hangs down behind and its front, beyond the knees, down the topsides (a
+clip's `hang`, which may name one bone of a chain, `front_02`). They are placed
 from the deck's edge on their side. The crouch's (`crouch-enter`,
 `crouch-walk`, `crouch-exit`) are Quaternius' (`Crouch_Enter`,
 `Crouch_Fwd_Loop`, `Crouch_Exit`), retargeted and set on a flat deck (a
