@@ -230,10 +230,11 @@ test('five aboard the keelboat: to windward on both tacks, through a tack and a 
   expect(order).toEqual([1, 4, 3, 2]);
   toWindward(tacked, 1, 'after a tack');
   await picture('to windward on starboard, after a tack', 1);
-  // A gybe, from a run, the boom eased so far that it lies over none of
-  // them as it comes across: the bow hand first, the trimmer last.
-  await sail(-0.6, gybe, 60);
-  const gybed = await sail(0.6, gybe, 300);
+  // A gybe, from a run, the boom at 29° where it lies over none of them
+  // (the boom right over one, they wait for it): the bow hand first, the
+  // trimmer last.
+  await sail(-0.5, gybe, 60);
+  const gybed = await sail(0.5, gybe, 300);
   expect(gybed.tack).toBe(false);
   const gybeOrder = Object.entries(gybed.starts)
     .sort(([, a], [, b]) => (a as number) - (b as number))
@@ -250,7 +251,7 @@ test('five aboard the keelboat: to windward on both tacks, through a tack and a 
     await k.showCrew(5, 2);
     await k.crewReady();
   });
-  const walking = await sail(0.6, gybe, 30);
+  const walking = await sail(0.5, gybe, 30);
   expect(walking.helmAway).toBe(true);
   expect(walking.helmShown).toBe(false);
   expect(
@@ -260,7 +261,7 @@ test('five aboard the keelboat: to windward on both tacks, through a tack and a 
       .sort(),
   ).toEqual([0, 2]);
   await picture('changing places', -1);
-  const handed = await sail(0.6, gybe, 240);
+  const handed = await sail(0.5, gybe, 240);
   toWindward(handed, -1, 'after a handover');
   expect(handed.helm).not.toBe(before);
   // The skipper where the bow hand was; the bow hand at the helm.
