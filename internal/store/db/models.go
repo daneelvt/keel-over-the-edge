@@ -33,6 +33,8 @@ type Account struct {
 	ChatMutedUntil pgtype.Timestamptz
 	RestedAt       pgtype.Timestamptz
 	AppearOffline  bool
+	WatchCode      string
+	FleetCode      pgtype.Text
 }
 
 type AccountAction struct {

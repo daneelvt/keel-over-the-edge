@@ -349,7 +349,7 @@ func links(t *testing.T, u string) string {
 // tokenOf is a link's token, from its address.
 func tokenOf(t *testing.T, url string) string {
 	t.Helper()
-	token, ok := strings.CutPrefix(url, "https://keel.example/sail/")
+	token, ok := strings.CutPrefix(url, "https://keel.example/?s=")
 	if !ok {
 		t.Fatalf("the link's address: %s", url)
 	}
@@ -579,7 +579,7 @@ func TestLinksOften(t *testing.T) {
 func TestLinkPage(t *testing.T) {
 	srv := pageServer(t)
 	token := strings.Repeat("A", 22)
-	res, body := raw(t, srv, "GET", "/sail/"+token)
+	res, body := raw(t, srv, "GET", "/?s="+token)
 	if res.StatusCode != 200 || body != "<!doctype html><title>Keel Over the Edge</title>" {
 		t.Fatalf("the page: %d %q", res.StatusCode, body)
 	}
@@ -589,7 +589,7 @@ func TestLinkPage(t *testing.T) {
 		t.Fatalf("headers %v", h)
 	}
 	// A session's cookie is not even read: the database is never asked.
-	req, _ := http.NewRequest("GET", srv.URL+"/sail/"+token, nil)
+	req, _ := http.NewRequest("GET", srv.URL+"/?s="+token, nil)
 	req.AddCookie(&http.Cookie{Name: auth.CookieName, Value: strings.Repeat("A", 43)})
 	r2, err := http.DefaultClient.Do(req)
 	if err != nil {
@@ -599,10 +599,16 @@ func TestLinkPage(t *testing.T) {
 	if r2.StatusCode != 200 {
 		t.Fatalf("with a cookie: %d", r2.StatusCode)
 	}
-	if res, _ := raw(t, srv, "GET", "/sail/"); res.StatusCode != 404 {
-		t.Fatalf("no token: %d", res.StatusCode)
+	if res, _ := raw(t, srv, "GET", "/sail/"+token); res.StatusCode != 404 {
+		t.Fatalf("a path for a link: %d", res.StatusCode)
 	}
-	if res, body := raw(t, srv, "GET", "/robots.txt"); res.StatusCode != 200 || !strings.Contains(body, "Disallow: /sail/") {
+	// The page opened at a link to watch is the page as it always is.
+	for _, q := range []string{"/", "/?w=abcdefghij", "/?f=abcdefghij"} {
+		if res, _ := raw(t, srv, "GET", q); res.StatusCode != 200 || res.Header.Get("Referrer-Policy") != "" || res.Header.Get("X-Robots-Tag") != "" {
+			t.Fatalf("%s: %d %v", q, res.StatusCode, res.Header)
+		}
+	}
+	if res, body := raw(t, srv, "GET", "/robots.txt"); res.StatusCode != 200 || !strings.Contains(body, "Disallow: /?s=") || strings.Contains(body, "?w=") {
 		t.Fatalf("robots: %d %s", res.StatusCode, body)
 	}
 }

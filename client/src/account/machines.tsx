@@ -26,8 +26,21 @@ import type { ComponentChildren, JSX } from 'preact';
 import { useEffect, useState } from 'preact/hooks';
 import { catalog } from '../catalog';
 import { MACHINE } from '../catalog/looks';
+import { linkState, NewLink, ShareLink } from '../ui/sharelink';
 import { useWatch } from '../ui/watchlazy';
-import { COPIED, COPY_WATCH_LINK, WATCH, watchersText, watchLink } from '../ui/watchwords';
+import {
+  FLEET_DETAIL,
+  fleetLink,
+  fleetShareText,
+  MAKE_NEW_LINK,
+  SHARE_FLEET,
+  SHARE_SAILOR,
+  shareSailorFor,
+  shareText,
+  WATCH,
+  watchersText,
+  watchLink,
+} from '../ui/watchwords';
 import type { BoatChooser } from './boatchooser';
 import type { LookChooser } from './chooser';
 import { Cog } from './cog';
@@ -67,7 +80,13 @@ import { YourSailor } from './yoursailor';
  * game's operator stopped it on its own, 0 for not; and how many watch it
  * now, 0 when none or not at sea.
  */
-export type Machine = MachineItem & { stopped?: number; watchers?: number; aboard?: boolean };
+export type Machine = MachineItem & {
+  stopped?: number;
+  watchers?: number;
+  aboard?: boolean;
+  /** The code of its link to watch, for the player to share. */
+  watchCode?: string;
+};
 
 /** GET /api/machines: the account's machine sailors and what goes with them. */
 export interface MachinesPage {
@@ -79,6 +98,8 @@ export interface MachinesPage {
   fleet: Record<string, number>;
   looks: MachineLooks;
   confirmedUntil: number;
+  /** The code of the link to watch the account's fleet of machine sailors. */
+  fleetCode?: string;
 }
 
 const browserFetch: Fetch = (input, init) => fetch(input, init);
@@ -246,21 +267,56 @@ export function MakeMachine({
 
 type View = { kind: 'list' } | { kind: 'form' } | { kind: 'connect'; name: string };
 
-/** Copies the address that opens the game watching a machine sailor. */
-function WatchLinkCopy({ name }: { name: string }) {
-  const [copied, setCopied] = useState(false);
+/**
+ * A machine sailor's link to watch, shared, and Make a new link; nothing
+ * until its code is known. Its link never says whose it is.
+ */
+export function MachineWatchLink({ m, cls }: { m: Machine; cls: string }) {
+  const told = m.watchCode ?? '';
+  if (told === '') {
+    return null;
+  }
+  const st = linkState(`machine:${m.id}`, told);
+  const url = watchLink(location.origin, st.code.value);
   return (
-    <button
-      type="button"
-      onClick={() =>
-        void navigator.clipboard.writeText(watchLink(location.origin, name)).then(
-          () => setCopied(true),
-          () => setCopied(false),
-        )
-      }
-    >
-      {copied ? COPIED : COPY_WATCH_LINK}
-    </button>
+    <span class="machine-links">
+      <ShareLink
+        label={SHARE_SAILOR}
+        name={shareSailorFor(m.name)}
+        cls={cls}
+        copied={st.copied}
+        shared={() => ({ url, text: shareText(m.name, url) })}
+      />
+      <NewLink
+        which={{ which: 'machine', machine: m.id }}
+        state={st}
+        cls={cls}
+        name={`${MAKE_NEW_LINK}: ${m.name}`}
+      />
+    </span>
+  );
+}
+
+/** The link to watch the player's fleet of machine sailors, shared, its line, and Make a new link. */
+export function FleetWatchLink({ code, cls }: { code: string; cls: string }) {
+  const st = linkState('fleet', code);
+  const url = fleetLink(location.origin, st.code.value);
+  return (
+    <div class="share-links fleet-link">
+      <ShareLink
+        label={SHARE_FLEET}
+        cls={cls}
+        copied={st.copied}
+        shared={() => ({ url, text: fleetShareText(url) })}
+      />
+      <p class="start-text start-faint">{FLEET_DETAIL}</p>
+      <NewLink
+        which={{ which: 'fleet' }}
+        state={st}
+        cls={cls}
+        name={`${MAKE_NEW_LINK}: ${SHARE_FLEET}`}
+      />
+    </div>
   );
 }
 
@@ -294,6 +350,9 @@ export function MachineList({
     <section aria-labelledby="machines-title">
       <h2 id="machines-title">{heading}</h2>
       {line !== '' ? <p class="start-text start-faint">{line}</p> : null}
+      {page.machines.length > 0 && (page.fleetCode ?? '') !== '' ? (
+        <FleetWatchLink code={page.fleetCode ?? ''} cls="start-sign-in" />
+      ) : null}
       {page.machines.length === 0 ? (
         <p class="start-text start-faint">None yet.</p>
       ) : (
@@ -317,14 +376,17 @@ export function MachineList({
               {stoppedOn(m) !== '' ? (
                 <p class="start-text start-faint">{stoppedOn(m)}.</p>
               ) : (
-                <button
-                  type="button"
-                  class="start-sign-in"
-                  aria-expanded={open === m.id}
-                  onClick={() => toggle(m.id)}
-                >
-                  How to connect
-                </button>
+                <>
+                  <MachineWatchLink m={m} cls="start-sign-in" />
+                  <button
+                    type="button"
+                    class="start-sign-in"
+                    aria-expanded={open === m.id}
+                    onClick={() => toggle(m.id)}
+                  >
+                    How to connect
+                  </button>
+                </>
               )}
               {open === m.id ? <Connect mcp={page.mcp} name={m.name} /> : null}
             </li>
@@ -434,6 +496,7 @@ export function StartPair({
   voyage,
   sail,
   list,
+  watchName,
   children,
   chooser,
   boats,
@@ -442,6 +505,7 @@ export function StartPair({
   voyage: Voyage;
   sail: () => void;
   list: () => void;
+  watchName?: (name: string) => void;
   children: ComponentChildren;
   chooser?: LookChooser | undefined;
   boats?: BoatChooser | undefined;
@@ -453,6 +517,7 @@ export function StartPair({
         voyage={voyage}
         sail={sail}
         watch={list}
+        {...(watchName === undefined ? {} : { watchName })}
         {...(chooser === undefined ? {} : { chooser })}
         boats={boats}
       />
@@ -496,6 +561,7 @@ export function MachineStart({
       voyage={voyage}
       sail={() => done()}
       list={() => setListing(true)}
+      watchName={(name) => done(name)}
       chooser={chooser}
       boats={boats}
     >
@@ -761,7 +827,7 @@ export function MachinesAccount({ now = Date.now() }: { now?: number }) {
                 )}
               </span>
               <div class="account-row">
-                <WatchLinkCopy name={m.name} />
+                <MachineWatchLink m={m} cls="" />
               </div>
               <div class="account-row">
                 <button

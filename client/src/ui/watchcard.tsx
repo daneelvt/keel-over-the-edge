@@ -103,6 +103,8 @@ export interface CardFacts extends WatchRow {
   };
   /** The viewer's own machine sailor's: whether its AI app is connected. */
   agent?: boolean;
+  /** A machine sailor's link's code; never a human's, whose link is theirs to share. */
+  code?: string;
 }
 
 /** The card's answer: its facts, gone by kind, or null if it cannot be read. */
@@ -205,15 +207,15 @@ export function Sky({ sky, night }: { sky: PocketSky; night: boolean }) {
   );
 }
 
-/** Copies the address that opens the game watching a sailor. */
-export function CopyWatchLink({ sailor }: { sailor: string }) {
+/** Copies the address that opens the game watching a machine sailor, by its link's code. */
+export function CopyWatchLink({ code }: { code: string }) {
   const [copied, setCopied] = useState(false);
   return (
     <button
       type="button"
       class="watch-link"
       onClick={() =>
-        void navigator.clipboard.writeText(watchLink(location.origin, sailor)).then(
+        void navigator.clipboard.writeText(watchLink(location.origin, code)).then(
           () => setCopied(true),
           () => setCopied(false),
         )
@@ -398,7 +400,7 @@ export function SailorCard({
       </div>
       {gone === null ? (
         <div class="watch-card-foot">
-          <CopyWatchLink sailor={c.name} />
+          {c.machine && (c.code ?? '') !== '' ? <CopyWatchLink code={c.code ?? ''} /> : null}
           <button type="button" class="watch-go" onClick={watch}>
             {WATCH}
           </button>

@@ -270,8 +270,8 @@ type linkMade struct {
 	Expires string `json:"expires"`
 }
 
-// linkPath is where a link's page is, before its token.
-const linkPath = "/sail/"
+// linkPath is a link's address on the game's origin, before its token.
+const linkPath = "/?s="
 
 // mayLink is whether a human account may make a link, answering 403 when
 // it may not: its player's age asked first, then the Rules of the sea.

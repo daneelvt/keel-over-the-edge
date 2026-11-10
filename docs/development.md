@@ -4810,10 +4810,10 @@ go test -run '^$' -bench 'Tick|Workers' ./internal/sim
 | `GET /api/me` | The session's account, `{"name", "look", "kind", "noticesOff", "addPasskey"?, "machines"?, "born", "rules"}` (how many machine sailors it has; whether its player has given a month of birth and accepted the Rules of the sea), or 401; a session held to adding a passkey is answered too |
 | `POST /api/me/born` | `{"year", "month"}`, once, for an account made before the question: 204; 409 `answered`; 400 `born`; 403 `young` under 13: nothing of the answer kept, the cookie set, and the account stopped as the owner's Stop does (recorded `young`, by the `game`), for the owner to review; its player is told only "This sailor has been stopped." |
 | `POST /api/me/rules` | The Rules of the sea accepted: 204, again too |
-| `POST /api/sail/link` | A new "sail with me" link, the old one ended: 201 `{"url", "expires"}`, at the play origin, `/sail/` and 128 random bits in base64url; the database keeps the token's SHA-256 alone. 403 `born` (no month of birth, or not 13 or over) and `rules`; 409 `links-off`; 429 `often` past 10 an hour (in memory) |
+| `POST /api/sail/link` | A new "sail with me" link, the old one ended: 201 `{"url", "expires"}`, at the play origin, `/?s=` and 128 random bits in base64url; the database keeps the token's SHA-256 alone. 403 `born` (no month of birth, or not 13 or over) and `rules`; 409 `links-off`; 429 `often` past 10 an hour (in memory) |
 | `POST /api/sail/link/end`, `GET /api/sail/link` | The skipper's link ended (204); whether it works, `{"live", "expires"?}` |
 | `GET /api/sail/{token}` | What a link's page shows, with a session: `{"skipper", "look", "kind", "boat", "can"}` (`ok`, `not-at-sea`, `full`, `closed` or `own`, from the world sailed); 410 `ended` for an unknown, ended or expired link, one past the lifetime in force, or links off. A token not of the game's form never reaches the database. It changes nothing |
-| `GET /sail/{token}` | The game's page, `index.html`, whatever the token: no session read, no referrer sent on, no index kept (`robots.txt` disallows `/sail/`) |
+| `GET /?s={token}` | The game's page, `index.html`, whatever the token: no session read, no referrer sent on, no index kept (`robots.txt` disallows `/?s=`). Links to watch, `/?w=` and `/?f=`, are served as the page always is, so the sites they are posted on can read its card |
 | `GET /api/account` | The account page: `{"name", "look", "created", "recoveryMade", "passkeys", "confirmedUntil"}`, each passkey `{"id", "madeOn", "created", "lastUsed", "synced"}` |
 | `POST /api/account/passkeys/begin`, `…/finish` | One more passkey; after the recovery code, the session let go and `recoveryCode` in the answer |
 | `POST /api/account/confirm/begin`, `…/finish` | One of the account's own passkeys, user verification required: 200 `{"confirmedUntil"}`, the session confirmed for 5 minutes |
@@ -5608,7 +5608,10 @@ machine sailor, `404 cannot` for anyone else.
 **Following**, `POST /api/watch/follow {"name", "on"}`: a bookmark on the
 list, kept on the account (`follow`, migration 00019, gone with either
 account), at most 100 (`409 too-many`), and only of a sailor the player
-may watch now. The sailor followed is never told, and no count of
+may watch now. By a link's code, `{"code", "on"}`, the sailor is followed
+whatever their state, with the same answer (`404 no-link` for a code no
+account has, `own` for the player's own), so following by a link never
+tells whether a human is at sea. The sailor followed is never told, and no count of
 followers is shown. Read once a world into the watch service's cache and
 written through; `who=following` lists after the watchable follows those
 that cannot be watched now, with `gone` in the refusal's words by kind.
@@ -5622,8 +5625,8 @@ never told.
 **On the phone.** The start screen shows "Watch" beside each machine
 sailor at sea, with how many watch it, and "Watch another sailor"; the
 menu has "Watch a sailor" for everyone, asking first, from a boat at sea,
-"Leave the water to watch?"; a link, `/?watch=Iron%20Mary`, signs in or
-makes a sailor first, then watches. Watching, the page drives the watched
+"Leave the water to watch?"; a link to watch (below) signs in or makes a
+sailor first, then watches. Watching, the page drives the watched
 boat with a third driver, `client/src/game/watch.ts`: interpolated from the
 snapshots' headers on the near band's delay, so it and the boats about it
 are drawn on one timeline, its instruments from one step of the physics
@@ -5634,6 +5637,66 @@ a bar names the boat ("Watching Iron Mary ⚙") with "Watch another" and
 "Sail"; the camera does not ease back astern, and "Behind the boat" brings
 it there. The list, the bar and the setting are loaded only when needed.
 Every word is in `client/src/ui/watchwords.ts`.
+
+**Links to watch** are random codes, never names, so a name freed by a
+deleted account never leads an old link to someone else. Every account's
+sailor has one (`account.watch_code`) and every human account a second for
+its fleet of machine sailors (`account.fleet_code`), ten characters of
+lower-case base32 (50 bits) made by the database's `link_code()`
+(migration 00029: the column's default, and a trigger for the fleet's), so
+an account made any way has its codes; both unique, and gone with the
+account. `/?w=<code>` opens a watch of the sailor, `/?f=<code>` of the
+liveliest of the fleet's machine sailors at sea. `GET /api/me` and
+`GET /api/machines` give the account its own codes (`watchCode`,
+`fleetCode`, each machine sailor's `watchCode`); `POST /api/me/link/new
+{"which": "me" | "fleet" | "machine", "machine"?}` gives one a new code,
+the old one then answering `no-link` (`400 which`, `404 machine` for
+another's). A machine sailor's card carries its `code`; a human's never
+does, their link being theirs to share.
+
+`GET /api/watch/link?w=` (or `?f=`), behind a session and for humans only,
+so codes are not looked up by anyone without a sailor: a sailor's link
+answers `{"name", "machine"}` to watch by name over the game connection as
+before, or `404 {"error", "name", "machine"}` with `cannot` (a human,
+whatever the reason), `not-at-sea` or `own`; a fleet's answers its
+rows as the list's, liveliest first and possibly none, never naming whose
+they are; a code no account has is `404 no-link`. The boats kept 2 s are
+read again before a link is refused, so a boat that has just set sail is
+found. `GET /api/watch?fleet=<code>` keeps only that fleet's machine
+sailors: the list's "This fleet", first and chosen, on a page opened by a
+fleet's link.
+
+On the phone (`client/src/account/yourlink.tsx`, `ui/sharelink.tsx`),
+"Share a link to watch me" sits under Set sail on "Your sailor" (with "Your
+link shows your boat only on voyages you let others watch." while the box
+is unticked) and under the spectators switch in the menu; the machine
+sailors' panel shares each one's and the fleet's. Each goes through
+`navigator.share` with the link at the end of its text, or is copied
+("Copied"); "Make a new link" asks first. A visitor opening a link with no
+session is told "Make a sailor, and you will be watching." on the start
+screen and goes from the recovery code straight on; refused, they land on
+their own Set sail with why at its head and, for a sailor's link,
+☆ Follow, which asks after the sailors followed while the panel is shown
+and says when the sailor can be watched. The link stays in the address
+until the player sails or watches another, so a reload tries it again.
+
+**Share with a picture** (`client/src/ui/snapshot.ts`, loaded on the tap):
+at sea from the menu, and watching a machine sailor from the bar's Share,
+the stage copies the next frame drawn into a 2D canvas in the same task as
+the draw (`Stage.capture`): a copy a task later is black on both back
+ends, the canvas cleared once shown. It is cut to 16:9 from the middle
+(upright, the full width and the middle band), drawn at 1200 × 675 with a
+strip naming the game and "Watch *Name* sail", and made a JPEG under 1 MB;
+then `navigator.share({files, text})` where `canShare` allows, otherwise
+saved as a download with the link copied ("Picture saved, link copied").
+Nothing is sent to the server. `e2e/picture.spec.ts` checks it on both
+back ends, upright and sideways (`keel.picture(name)`).
+
+**The card** a link shows where it is posted: static Open Graph and
+Twitter tags in `client/index.html`, the same for every address, with the
+512 px icon at `play.keelovertheedge.com`. No `og:url`: one address for all
+would send a site's card to the front page without the code. The server
+writes nothing into the page.
 
 **The world page** shows how many watch and wait, against the limit, each
 boat's spectators, and on the Accounts card whose boat an account watches.
@@ -5727,7 +5790,7 @@ aboard ashore the same way (an `Ashore` of why 3, which the tick makes
 itself). The connection is told why (`Ashore`), then welcomed to its boat.
 
 **The page**: the age question as a sailor is made, and once for an older
-account; the link's landing at `/sail/<token>` (`client/src/account/comeaboard.tsx`);
+account; the link's landing at `/?s=<token>` (`client/src/account/comeaboard.tsx`);
 the Rules of the sea and the safety pages (`rules.html`, `safety.html`);
 the deck's panels (`client/src/ui/deck.tsx`, `sailwithme.tsx`, their words in
 `deckwords.ts`); `Online`'s `aboard`, `crew`, `knocks`, `knocking`,

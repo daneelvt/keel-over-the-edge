@@ -24,6 +24,7 @@ import { type JSX, render } from 'preact';
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { drawLook, type Looks } from '../catalog/looks';
 import { useWatch } from '../ui/watchlazy';
+import { MAKE_TO_WATCH } from '../ui/watchwords';
 import { BoatChooser } from './boatchooser';
 import { LookChooser } from './chooser';
 import { AgeQuestion, BornFields } from './firstasks';
@@ -64,6 +65,8 @@ export interface StartProps {
    * choice of making a machine sailor first: one come by a link to come aboard.
    */
   straight?: boolean;
+  /** Whether the page was opened at a link to watch: the visitor is told they will be watching once they make a sailor. */
+  watching?: boolean;
   random?: () => number;
   /** The server and the browser's prompt; the browser's own unless a test stands in. */
   reach?: Reach;
@@ -98,6 +101,7 @@ export function StartScreen({
   stage,
   panel = true,
   straight = false,
+  watching = false,
 }: StartProps) {
   const [view, setView] = useState<View>({ kind: 'form' });
   const [support, setSupport] = useState<Support | null>(null);
@@ -457,6 +461,11 @@ export function StartScreen({
         noValidate
       >
         <h1 id="start-title">Keel Over the Edge</h1>
+        {watching ? (
+          <p class="start-text start-watching" data-readout="make-to-watch">
+            {MAKE_TO_WATCH}
+          </p>
+        ) : null}
         {support?.kind === 'maybe' ? (
           <p class="start-warning" role="note">
             This browser may not be able to make a passkey. If Set sail fails, try your phone’s own
@@ -599,6 +608,7 @@ function Sailor({
       voyage={v}
       sail={go}
       watch={machines ? null : () => setListing(true)}
+      watchName={(name) => go(name)}
       {...(chooser === undefined ? {} : { chooser })}
       boats={boats}
     />

@@ -113,7 +113,7 @@ func TestTallShipMigration(t *testing.T) {
 func TestSkiffMigration(t *testing.T) {
 	ctx := context.Background()
 	u := storetest.Empty(t)
-	if _, err := store.Migrate(ctx, u, 28); err != nil {
+	if _, err := store.Migrate(ctx, u, 29); err != nil {
 		t.Fatal(err)
 	}
 	pool := storetest.PoolOn(t, u)

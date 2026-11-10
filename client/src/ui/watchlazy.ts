@@ -33,6 +33,12 @@ export interface WatchView {
   unwatch(): void;
   /** Come aboard the own machine sailor watched, without knocking; absent where nobody may. */
   comeAboard?: () => void;
+  /** Whether the share of the machine sailor watched is open; absent where it is not offered. */
+  sharing?: Signal<boolean>;
+  /** A copy of the next frame drawn, for a picture shared; absent on a page that draws nothing. */
+  capture?: () => Promise<HTMLCanvasElement | null>;
+  /** The code of the fleet's link the page was opened by: the list offers This fleet; absent for none. */
+  fleet?: string;
 }
 
 /** Whether the own boat sails on this connection: watching takes it out of the water. */
