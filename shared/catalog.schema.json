@@ -909,21 +909,21 @@
     },
     "BoatStation": {
       "title": "BoatStation",
-      "description": "A place aboard where a person is drawn: standing on the deck, seated as a dinghy's helmsman sits on the side deck, or hiking out on its rail; on a dinghy's windward side, if it says so.",
+      "description": "A place aboard where a person is drawn: standing on the deck, seated as a dinghy's helmsman sits on the side deck, hiking out on its rail, or sat on a keelboat's rail with the legs over the side; to windward, if it says so.",
       "type": "object",
       "additionalProperties": false,
       "required": ["at", "pose", "facing"],
       "properties": {
-        "at": { "description": "In m in the model's frame. Standing, the deck between the feet; seated, the seat's back edge, as the gunwale is to a dinghy's helmsman: the hips just within it, the legs reaching 0.7 m the way the person faces, the feet 0.2 m below it.", "$ref": "#/$defs/BoatPoint" },
+        "at": { "description": "In m in the model's frame. Standing, the deck between the feet; seated, the seat's back edge, as the gunwale is to a dinghy's helmsman: the hips just within it, the legs reaching 0.7 m the way the person faces, the feet 0.2 m below it; on the rail, the deck's edge at the sheer under the person, who sits facing outboard, the hips just within it and the legs over the side.", "$ref": "#/$defs/BoatPoint" },
         "pose": { "$ref": "#/$defs/StationPose" },
         "facing": { "description": "The way the person faces, in degrees clockwise from the bow seen from above: 0 forward, 90 to starboard, 180 aft, 270 to port.", "type": "number", "minimum": 0, "exclusiveMaximum": 360 },
-        "windward": { "description": "Whether the person sits to windward as a dinghy's crew does: on the side the helm sits on, the station's mirror across the centreline (and its facing's) when the helm is on the other side, and crossing with the helm in a tack or a gybe. Not said, the station is where it is.", "type": "boolean" }
+        "windward": { "description": "Whether the person sits to windward, as a crew does: on the side away from the boom, the station's mirror across the centreline (and its facing's) when that is the other side, and crossing the boat at a crouch in a tack or a gybe. Not said, the station is where it is.", "type": "boolean" }
       }
     },
     "StationPose": {
       "title": "StationPose",
-      "description": "How a person is at a station: standing, seated, or hiking (sitting out on the rail and leaning out, as a dinghy's crew).",
-      "type": "string", "enum": ["standing", "seated", "hiking"]
+      "description": "How a person is at a station: standing; seated (leaning out as hiking in a breeze); hiking (sitting out on the rail and leaning out, as a dinghy's crew); or on the rail (sat on a keelboat's deck edge facing outboard with the legs over the side, upright, leaning out in a breeze).",
+      "type": "string", "enum": ["standing", "seated", "hiking", "rail"]
     },
     "BoatControls": {
       "title": "BoatControls",

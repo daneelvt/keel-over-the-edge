@@ -311,15 +311,22 @@ boats:
     name: Keelboat
     description: Day-sailing keelboat
     capacity: 5
-    # Where the people aboard are: the helmsman on the starboard gunwale,
-    # then the crew on the side decks forward and aft of the helm, their
-    # feet in the cockpit, and one standing by the starboard shrouds.
+    # Where the people aboard are, as a J/22 is crewed: the helmsman on the
+    # starboard gunwale; then the crew along the rail, all to windward
+    # (laid out here on the starboard side), in the order seats fill: the
+    # trimmer on the gunwale aft of the cuddy, as the helm sits, legs in the
+    # cockpit, clear of the cuddy's after end;
+    # the bow hand beside the cuddy a foot aft of the shrouds, legs over
+    # the side, on the deck's edge (her model's rail node); the middle
+    # between them, a rail's width (0.53 m) aft of the bow hand; and a
+    # fifth on the quarter, aft of the helm and clear of the tiller. Those
+    # on the rail are on the deck's edge at their station.
     stations:
       - { at: [1.15, 0.7, 1.25], pose: seated, facing: 270 }
-      - { at: [-0.95, 0.71, 0.45], pose: seated, facing: 90 }
-      - { at: [0.95, 0.71, 0.45], pose: seated, facing: 270 }
-      - { at: [-0.95, 0.7, 2.1], pose: seated, facing: 90 }
-      - { at: [0.95, 0.71, -0.45], pose: standing, facing: 0 }
+      - { at: [1.1912, 0.6957, 0.8], pose: seated, facing: 270, windward: true }
+      - { at: [1.2136, 0.6944, -0.66], pose: rail, facing: 90, windward: true }
+      - { at: [1.2219, 0.6945, -0.13], pose: rail, facing: 90, windward: true }
+      - { at: [1.0612, 0.6983, 1.9], pose: rail, facing: 90, windward: true }
     lengthOverall: 6.86 # ORC certificate
     beam: 2.446 # ORC certificate
     # A sailing vessel of less than 20 m may combine her lights in one
