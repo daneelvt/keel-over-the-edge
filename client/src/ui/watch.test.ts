@@ -55,15 +55,22 @@ import {
 import {
   bumpedLine,
   endedText,
+  fleetLink,
+  fleetShareText,
+  type LinkRefusal,
+  linkFromQuery,
+  linkRefusedText,
+  nowWatchableText,
   SAIL,
   STOP_WATCHING,
+  shareText,
   spectatorQueueLine,
   WATCH_A_SAILOR,
   WATCH_ANOTHER,
   type WatchEndWhy,
   watchersText,
-  watchFromQuery,
   watchLink,
+  watchSailText,
 } from './watchwords';
 
 describe('watching’s words', () => {
@@ -104,11 +111,51 @@ describe('watching’s words', () => {
     expect(bumpedLine('Iron Mary')).toBe('Iron Mary was bumped');
   });
 
-  test('the link to watch, and the page opened by it', () => {
-    const link = watchLink('https://play.keelovertheedge.com', 'Iron Mary');
-    expect(link).toBe('https://play.keelovertheedge.com/?watch=Iron%20Mary');
-    expect(watchFromQuery(new URL(link).searchParams)).toBe('Iron Mary');
-    expect(watchFromQuery(new URLSearchParams('test'))).toBe('');
+  test('the links to watch, by codes, and the page opened by them', () => {
+    const link = watchLink('https://play.keelovertheedge.com', 'k3x7q2mbwa');
+    expect(link).toBe('https://play.keelovertheedge.com/?w=k3x7q2mbwa');
+    expect(linkFromQuery(new URL(link).searchParams)).toEqual({
+      kind: 'sailor',
+      code: 'k3x7q2mbwa',
+    });
+    const fleet = fleetLink('https://play.keelovertheedge.com', 'abcdefgh23');
+    expect(fleet).toBe('https://play.keelovertheedge.com/?f=abcdefgh23');
+    expect(linkFromQuery(new URL(fleet).searchParams)).toEqual({
+      kind: 'fleet',
+      code: 'abcdefgh23',
+    });
+    expect(linkFromQuery(new URLSearchParams('test&w=k3x7q2mbwa'))?.code).toBe('k3x7q2mbwa');
+    // None, and never a name: a link by name is no link at all.
+    expect(linkFromQuery(new URLSearchParams('test'))).toBeNull();
+    expect(linkFromQuery(new URLSearchParams('watch=Iron%20Mary'))).toBeNull();
+    expect(linkFromQuery(new URLSearchParams('w=Iron%20Mary'))).toBeNull();
+    expect(linkFromQuery(new URLSearchParams('w='))).toBeNull();
+    expect(linkFromQuery(new URLSearchParams(`w=${'a'.repeat(33)}`))).toBeNull();
+  });
+
+  test('a link shared: its text, the link last; and a picture’s words', () => {
+    expect(shareText('Daneel', 'https://p/?w=abc')).toBe(
+      'Watch Daneel sail on Keel Over the Edge: https://p/?w=abc',
+    );
+    expect(fleetShareText('https://p/?f=abc')).toBe(
+      'Watch my machine sailors on Keel Over the Edge: https://p/?f=abc',
+    );
+    expect(watchSailText('Iron Mary')).toBe('Watch Iron Mary sail');
+  });
+
+  test('a link that opened no watch, in words; and a sailor followed from it sailing', () => {
+    const words: [LinkRefusal, string][] = [
+      [{ why: 'cannot', name: 'Daneel', machine: false }, 'Daneel cannot be watched now.'],
+      [{ why: 'not-at-sea', name: 'Iron Mary', machine: true }, 'Iron Mary is not at sea.'],
+      [{ why: 'own', name: 'Daneel', machine: false }, 'That is your own boat.'],
+      [{ why: 'no-fleet' }, 'None of this fleet is at sea now.'],
+      [{ why: 'no-link' }, 'This link is no longer in use.'],
+      [{ why: 'unread' }, 'The link cannot be read just now. Open it again in a moment.'],
+    ];
+    for (const [r, text] of words) {
+      expect(linkRefusedText(r)).toBe(text);
+    }
+    expect(nowWatchableText('Daneel')).toBe('Daneel is sailing, and can be watched now.');
   });
 
   test('a boat’s kind by the catalog’s name', () => {
@@ -476,6 +523,18 @@ describe('the list of sailors to watch', () => {
       'Machine sailors',
       'Human sailors',
     ]);
+    // Opened by a fleet's link: This fleet first, and chosen.
+    const fleet = Choices({
+      sort: 'liveliest',
+      who: 'fleet',
+      withheld: false,
+      fleet: true,
+      setSort: none,
+      setWho: none,
+    });
+    const pick = find(fleet, (v) => v.type === 'select');
+    expect(pick[0]?.props.value).toBe('fleet');
+    expect(find(pick, (v) => v.type === 'option').map(text)[0]).toBe('This fleet');
   });
 
   test('the order and whom are kept on the device, and read defensively', () => {
@@ -516,6 +575,9 @@ describe('the list of sailors to watch', () => {
     expect(read?.sailors).toEqual([mary, mary]);
     expect(read?.atSea).toBe(14);
     expect(read?.withheld).toBe(true);
+    // This fleet: everyone of the fleet of the link's code.
+    await server.page({ q: '', page: 0, sort: 'liveliest', who: 'fleet', fleet: 'abc23' });
+    expect(asked[3]).toBe('/api/watch?q=&page=0&sort=liveliest&who=all&fleet=abc23');
     // A page it cannot read.
     const broken = watchServer(async () => new Response('{}', { status: 200 }));
     expect(await broken.page({ q: '', page: 0, sort: 'name', who: 'all' })).toBeNull();
@@ -591,9 +653,16 @@ describe('the card about a sailor', () => {
     ).map(text);
 
   test('the weather, where, and this voyage; Follow, Copy a link and Watch at the bottom', () => {
-    const t = drawn(card);
+    const t = drawn({ ...card, code: 'k3x7q2mbwa' });
     expect(buttons(t)).toEqual(['‹ Back', '☆ Follow', 'Watch']);
-    expect(find(t, (v) => v.type === CopyWatchLink)).toHaveLength(1);
+    const copy = find(t, (v) => v.type === CopyWatchLink);
+    expect(copy).toHaveLength(1);
+    expect(copy[0]?.props.code).toBe('k3x7q2mbwa');
+    // A human's card never offers their link: it is theirs to share.
+    const human = drawn({ ...card, name: 'Ann Bonny', machine: false, code: 'k3x7q2mbwa' });
+    expect(find(human, (v) => v.type === CopyWatchLink)).toHaveLength(0);
+    // Nor a machine sailor's before its code is read.
+    expect(find(drawn(card), (v) => v.type === CopyWatchLink)).toHaveLength(0);
     expect(text(find(t, (v) => v.props.class === 'watch-card-name'))).toBe(
       'Iron Mary⚙ · Jolly boat',
     );
@@ -669,7 +738,7 @@ describe('the card about a sailor', () => {
   });
 
   test('gone: greyed with a refused watch’s words, no Watch, and Follow only to undo one', () => {
-    const t = drawn(card, { gone: 'not-at-sea' });
+    const t = drawn({ ...card, code: 'k3x7q2mbwa' }, { gone: 'not-at-sea' });
     expect(text(t)).toContain('Iron Mary is not at sea.');
     expect(buttons(t)).toEqual(['‹ Back']);
     expect(find(t, (v) => v.type === CopyWatchLink)).toHaveLength(0);

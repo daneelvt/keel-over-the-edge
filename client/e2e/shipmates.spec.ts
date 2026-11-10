@@ -69,14 +69,14 @@ test('shipmates: made after sailing together, messages between two boats, appear
   await sail(page);
   const made = await context.request.post('/api/sail/link', { data: {} });
   expect(made.status(), await made.text()).toBe(201);
-  const path = new URL(((await made.json()) as { url: string }).url).pathname;
+  const link = new URL(((await made.json()) as { url: string }).url).search.slice(1);
 
   // A friend makes a sailor from the link and is let aboard.
   const bob = await friendOf(browser);
   const errors: string[] = [];
   bob.on('pageerror', (e) => errors.push(e.message));
   page.on('pageerror', (e) => errors.push(e.message));
-  await bob.goto(`${path}${GAME.slice(1)}`);
+  await bob.goto(`${GAME}&${link}`);
   const name = `Friend ${stamp()}`;
   await bob.getByLabel('Your sailor’s name').fill(name, { timeout: 60_000 });
   await answerBorn(bob, 'June', '1999');

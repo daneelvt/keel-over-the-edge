@@ -2275,6 +2275,87 @@ test('the player’s own panel keeps Set sail in view with their boat, and the b
   expect(found).toEqual([]);
 });
 
+test('a link’s parts on the player’s own panel fit every screen: a refused link’s words and ☆ Follow at its head, Set sail in view, the share within reach', async ({
+  page,
+}) => {
+  test.skip(test.info().project.name === 'webgpu', 'the panels are the same on either back end');
+  test.setTimeout(120_000);
+  const o = data.sailorOptions;
+  await page.route(
+    (url) => url.pathname === '/api/me',
+    (r) =>
+      r.fulfill({
+        json: {
+          name: LONG,
+          look: data.sailors[0]?.id,
+          version: data.sailors[0]?.versions[0]?.id,
+          skin: o.skins[0]?.id,
+          hair: o.hairs[0]?.id,
+          colour: o.colours[0]?.id,
+          lookChosen: true,
+          kind: data.boats[0]?.id,
+          spectators: 'no',
+          atSea: false,
+          watchCode: 'k3x7q2mbwa',
+          fleetCode: 'abcdefgh23',
+        },
+      }),
+  );
+  await page.route(
+    (url) => url.pathname === '/api/fleet',
+    (r) => r.fulfill({ json: longFleet() }),
+  );
+  await page.route(
+    (url) => url.pathname === '/api/watch/link',
+    (r) => r.fulfill({ status: 404, json: { error: 'cannot', name: LONG, machine: false } }),
+  );
+  await page.setViewportSize({ width: SCREENS[0].width, height: SCREENS[0].height });
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await page.goto(`${GAME}&w=zzzzzzzzzz`);
+  const head = page.locator('.your-sailor [data-readout=link-refused]');
+  await expect(head).toContainText(`${LONG} cannot be watched now.`, { timeout: 90_000 });
+  const found: string[] = [];
+  for (const s of SCREENS) {
+    await page.setViewportSize({ width: s.width, height: s.height });
+    await page.waitForFunction(
+      ({ width, height }) => innerWidth === width && innerHeight === height,
+      { width: s.width, height: s.height },
+    );
+    await page.waitForTimeout(100);
+    await page.locator('.your-sailor').evaluate((e) => e.scrollTo(0, 0));
+    // Set sail and the refusal's words and Follow in view as the panel opens.
+    for (const k of ['.your-sailor-go', '.link-refused-line', '.link-follow']) {
+      const b = await page.locator(k).first().boundingBox();
+      if (
+        b === null ||
+        b.y < -0.5 ||
+        b.y + b.height > s.height + 0.5 ||
+        b.x < -0.5 ||
+        b.x + b.width > s.width + 0.5
+      ) {
+        found.push(`${s.name}: ${k} is out of view (${JSON.stringify(b)})`);
+      }
+    }
+    // The share and Make a new link within the screen's width, in view as the panel scrolls to them.
+    for (const name of ['Share a link to watch me', 'Make a new link']) {
+      const key = page.getByRole('button', { name, exact: true });
+      await key.scrollIntoViewIfNeeded();
+      const b = await key.boundingBox();
+      if (
+        b === null ||
+        b.y < -0.5 ||
+        b.y + b.height > s.height + 0.5 ||
+        b.x + b.width > s.width + 0.5
+      ) {
+        found.push(`${s.name}: ${name} is out of reach (${JSON.stringify(b)})`);
+      } else if (b.height < 39.5) {
+        found.push(`${s.name}: ${name} is ${b.height} px tall`);
+      }
+    }
+  }
+  expect(found).toEqual([]);
+});
+
 // Sailing together, on every screen: the controls offered, the knocks on
 // the skipper's boat, the player's own knock and the line while they hold
 // the controls with others aboard stand under the case, clear of every

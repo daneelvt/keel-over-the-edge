@@ -658,6 +658,59 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
       }
     },
 
+    /**
+     * The picture a link is shared with, made of the next frame as the
+     * player's tap makes it, naming name: its size, its type and weight,
+     * and of the view above its strip, the share of pixels lit and the
+     * spread of their brightness (a cleared canvas is black and even);
+     * null if no frame came.
+     */
+    async picture(name: string): Promise<{
+      width: number;
+      height: number;
+      bytes: number;
+      type: string;
+      lit: number;
+      spread: number;
+    } | null> {
+      const m = await import('../ui/snapshot');
+      const blob = await m.picture(() => stage.capture(), name);
+      if (blob === null) {
+        return null;
+      }
+      const bmp = await createImageBitmap(blob);
+      const c = document.createElement('canvas');
+      c.width = bmp.width;
+      c.height = bmp.height;
+      const ctx = c.getContext('2d', { willReadFrequently: true });
+      if (ctx === null) {
+        return null;
+      }
+      ctx.drawImage(bmp, 0, 0);
+      const d = ctx.getImageData(0, 0, c.width, c.height - m.STRIP).data;
+      let lit = 0;
+      let n = 0;
+      let low = 255;
+      let high = 0;
+      for (let i = 0; i < d.length; i += 4 * 97) {
+        const l = ((d[i] ?? 0) + (d[i + 1] ?? 0) + (d[i + 2] ?? 0)) / 3;
+        n++;
+        if (l > 12) {
+          lit++;
+        }
+        low = Math.min(low, l);
+        high = Math.max(high, l);
+      }
+      return {
+        width: bmp.width,
+        height: bmp.height,
+        bytes: blob.size,
+        type: blob.type,
+        lit: n === 0 ? 0 : lit / n,
+        spread: high - low,
+      };
+    },
+
     /** Draws one frame now, with the screen's words up to date; on a page that draws nothing, updates it. */
     render(): void {
       game.hud.flush();

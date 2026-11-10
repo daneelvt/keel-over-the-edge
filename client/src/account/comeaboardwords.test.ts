@@ -7,19 +7,21 @@ import {
   LINK_ENDED,
   linkOf,
   OWN_LINK,
-  sailFromPath,
+  sailFromQuery,
   theKind,
 } from './comeaboardwords';
 
 describe('a link to come aboard', () => {
-  test('its token from the page’s path, and none from any other', () => {
-    expect(sailFromPath('/sail/AbC_d-19')).toBe('AbC_d-19');
-    expect(sailFromPath('/')).toBe('');
-    expect(sailFromPath('/sail/')).toBe('');
-    expect(sailFromPath('/sail/a/b')).toBe('');
-    expect(sailFromPath('/sail/a%20b')).toBe('');
-    expect(sailFromPath('/sailing/abc')).toBe('');
-    expect(sailFromPath('/rules.html')).toBe('');
+  test('its token from the page’s query, and none from any other', () => {
+    const q = (s: string) => sailFromQuery(new URL(s, 'https://play.example').searchParams);
+    expect(q('/?s=AbC_d-19')).toBe('AbC_d-19');
+    expect(q('/?test&s=AbC_d-19')).toBe('AbC_d-19');
+    expect(q('/')).toBe('');
+    expect(q('/?s=')).toBe('');
+    expect(q('/?s=a/b')).toBe('');
+    expect(q('/?s=a%20b')).toBe('');
+    expect(q('/?w=abc')).toBe('');
+    expect(q('/sail/abc')).toBe('');
   });
 
   test('read from the server’s answer', () => {

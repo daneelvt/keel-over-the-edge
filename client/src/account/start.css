@@ -614,3 +614,37 @@
     white-space: nowrap;
   }
 }
+
+/* A panel taller than the screen starts at its top, and the screen
+   scrolls to the rest: centred, its top would be out of reach. */
+.start > .start-panel {
+  align-self: start;
+  margin-block: auto;
+}
+
+/* A link to watch that opened no watch: why, with ☆ Follow beside it. */
+.link-refused {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px 12px;
+  padding: 6px 6px 6px 12px;
+}
+
+.link-refused-line {
+  flex: 1 1 12em;
+  margin: 0;
+}
+
+.link-refused .start-sign-in {
+  min-height: 40px;
+  padding: 0 14px;
+}
+
+/* Held sideways, the game's name gives its room to the link's words. */
+@media (max-height: 420px) {
+  .your-sailor:has(.link-refused) > h1 {
+    display: none;
+  }
+}

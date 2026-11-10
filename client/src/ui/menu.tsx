@@ -10,7 +10,8 @@
 // page can take it, with how to install the game where that gives more of
 // the screen. Online, the player's shipmates, a sailor to watch, the link
 // that asks others to sail with the player (while their own boat is in
-// the water), and who may watch the player's own boat. It stands over everything at
+// the water), who may watch the player's own boat and their link to watch
+// them, shared with a picture of the view. It stands over everything at
 // sea, within the screen held either way, its head and its close at the
 // top while the rest scrolls; a tap beside it closes it.
 
@@ -30,10 +31,15 @@ import { SHIPMATES } from './shipmatewords';
 import { useWatch, type WatchView } from './watchlazy';
 import { STOP_WATCHING, WATCH_A_SAILOR } from './watchwords';
 
-/** "Allow spectators", once its module is loaded. */
-function LazySpectators() {
+/**
+ * "Allow spectators", once its module is loaded, with the player's own
+ * link to share; and a picture of the view with it while their own boat
+ * is drawn, not one watched.
+ */
+function LazySpectators({ watch }: { watch: WatchView }) {
   const m = useWatch();
-  return m === null ? null : <m.SpectatorsChoice />;
+  const capture = watch.spectating.value ? null : (watch.capture ?? null);
+  return m === null ? null : <m.SpectatorsChoice share={{ capture }} />;
 }
 
 function Toggle({
@@ -393,7 +399,7 @@ export function Menu({
             set={(seaMotion) => settings.set({ seaMotion })}
           />
           {notices !== null ? <NoticeSwitches notices={notices} /> : null}
-          {watch !== null ? <LazySpectators /> : null}
+          {watch !== null ? <LazySpectators watch={watch} /> : null}
           {fly !== null ? (
             <button type="button" class="menu-fly" onClick={fly}>
               Free camera (F)

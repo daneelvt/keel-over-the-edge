@@ -231,6 +231,8 @@ func Handler(cfg Config) http.Handler {
 		mux.Handle("GET /api/watch", required(a.watchList))
 		mux.Handle("GET /api/watch/sailor", required(a.watchSailor))
 		mux.Handle("POST /api/watch/follow", required(a.watchFollow))
+		mux.Handle("GET /api/watch/link", required(a.watchLink))
+		mux.Handle("POST /api/me/link/new", required(a.newLink))
 		mux.Handle("POST /api/me/spectators", required(a.setSpectators))
 	}
 	if cfg.News != nil {

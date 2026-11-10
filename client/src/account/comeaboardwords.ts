@@ -1,19 +1,16 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
-// A link to come aboard, as the page is opened at it: /sail/<token>. The
+// A link to come aboard, as the page is opened at it: /?s=<token>. The
 // skipper's boat and how it stands, in a sailor's words, are read from the
 // server once the player is signed in; the link itself names nobody.
 
-/** The path a link to come aboard is opened at, its token after it. */
-export const SAIL_PATH = '/sail/';
+/** The query a link to come aboard carries its token in. */
+export const SAIL_PARAM = 's';
 
-/** A link's token from the page's path, or '' when the page was not opened at one. */
-export function sailFromPath(path: string): string {
-  if (!path.startsWith(SAIL_PATH)) {
-    return '';
-  }
-  const token = path.slice(SAIL_PATH.length);
-  // A token is one segment of URL-safe characters.
+/** A link's token from the page's query, or '' when the page was not opened at one. */
+export function sailFromQuery(query: URLSearchParams): string {
+  const token = query.get(SAIL_PARAM) ?? '';
+  // A token is URL-safe characters.
   return /^[A-Za-z0-9_-]{1,256}$/.test(token) ? token : '';
 }
 

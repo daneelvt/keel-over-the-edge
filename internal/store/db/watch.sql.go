@@ -11,6 +11,18 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const fleetLinkOwner = `-- name: FleetLinkOwner :one
+SELECT id FROM account WHERE fleet_code = $1 AND kind = 'human'
+`
+
+// The human account whose fleet's link has a code.
+func (q *Queries) FleetLinkOwner(ctx context.Context, code pgtype.Text) (pgtype.UUID, error) {
+	row := q.db.QueryRow(ctx, fleetLinkOwner, code)
+	var id pgtype.UUID
+	err := row.Scan(&id)
+	return id, err
+}
+
 const follow = `-- name: Follow :exec
 INSERT INTO follow (follower_id, followed_id) VALUES ($1, $2)
 ON CONFLICT DO NOTHING
@@ -69,21 +81,105 @@ func (q *Queries) Follows(ctx context.Context, followerID pgtype.UUID) ([]Follow
 	return items, nil
 }
 
+const linkCodes = `-- name: LinkCodes :one
+SELECT watch_code, coalesce(fleet_code, '')::text AS fleet_code FROM account WHERE id = $1
+`
+
+type LinkCodesRow struct {
+	WatchCode string
+	FleetCode string
+}
+
+// An account's codes for its links to watch: its sailor's, and, for a
+// human, its fleet's (” for a machine sailor).
+func (q *Queries) LinkCodes(ctx context.Context, id pgtype.UUID) (LinkCodesRow, error) {
+	row := q.db.QueryRow(ctx, linkCodes, id)
+	var i LinkCodesRow
+	err := row.Scan(&i.WatchCode, &i.FleetCode)
+	return i, err
+}
+
+const linkTarget = `-- name: LinkTarget :one
+SELECT a.id, a.kind, coalesce(a.owner_id, '00000000-0000-0000-0000-000000000000')::uuid AS owner_id, sl.name,
+  (a.stopped_at IS NOT NULL OR o.stopped_at IS NOT NULL)::boolean AS stopped
+FROM account a
+JOIN sailor sl ON sl.account_id = a.id
+LEFT JOIN account o ON o.id = a.owner_id
+WHERE a.watch_code = $1
+`
+
+type LinkTargetRow struct {
+	ID      pgtype.UUID
+	Kind    string
+	OwnerID pgtype.UUID
+	Name    string
+	Stopped bool
+}
+
+// The sailor whose link has a code, as WatchTarget has it.
+func (q *Queries) LinkTarget(ctx context.Context, code string) (LinkTargetRow, error) {
+	row := q.db.QueryRow(ctx, linkTarget, code)
+	var i LinkTargetRow
+	err := row.Scan(
+		&i.ID,
+		&i.Kind,
+		&i.OwnerID,
+		&i.Name,
+		&i.Stopped,
+	)
+	return i, err
+}
+
+const newFleetCode = `-- name: NewFleetCode :one
+UPDATE account SET fleet_code = link_code() WHERE id = $1 AND kind = 'human'
+RETURNING fleet_code
+`
+
+// A new code for the link to a human's fleet. The old code stops working.
+func (q *Queries) NewFleetCode(ctx context.Context, id pgtype.UUID) (pgtype.Text, error) {
+	row := q.db.QueryRow(ctx, newFleetCode, id)
+	var fleet_code pgtype.Text
+	err := row.Scan(&fleet_code)
+	return fleet_code, err
+}
+
+const newWatchCode = `-- name: NewWatchCode :one
+UPDATE account SET watch_code = link_code()
+WHERE id = $1 AND ((id = $2 AND kind = 'human') OR (owner_id = $2 AND kind = 'ai'))
+RETURNING watch_code
+`
+
+type NewWatchCodeParams struct {
+	ID    pgtype.UUID
+	Owner pgtype.UUID
+}
+
+// A new code for the link to a sailor: a human account's own, or one of its
+// machine sailors'. The old code stops working.
+func (q *Queries) NewWatchCode(ctx context.Context, arg NewWatchCodeParams) (string, error) {
+	row := q.db.QueryRow(ctx, newWatchCode, arg.ID, arg.Owner)
+	var watch_code string
+	err := row.Scan(&watch_code)
+	return watch_code, err
+}
+
 const sailorsByID = `-- name: SailorsByID :many
-SELECT a.id, a.kind, coalesce(a.owner_id, '00000000-0000-0000-0000-000000000000')::uuid AS owner_id, sl.name
+SELECT a.id, a.kind, coalesce(a.owner_id, '00000000-0000-0000-0000-000000000000')::uuid AS owner_id, sl.name, a.watch_code
 FROM account a
 JOIN sailor sl ON sl.account_id = a.id
 WHERE a.id = ANY($1::uuid[])
 `
 
 type SailorsByIDRow struct {
-	ID      pgtype.UUID
-	Kind    string
-	OwnerID pgtype.UUID
-	Name    string
+	ID        pgtype.UUID
+	Kind      string
+	OwnerID   pgtype.UUID
+	Name      string
+	WatchCode string
 }
 
-// The sailors of the accounts of ids: their names, kinds and owners.
+// The sailors of the accounts of ids: their names, kinds, owners and
+// the codes of their links.
 func (q *Queries) SailorsByID(ctx context.Context, ids []pgtype.UUID) ([]SailorsByIDRow, error) {
 	rows, err := q.db.Query(ctx, sailorsByID, ids)
 	if err != nil {
@@ -98,6 +194,7 @@ func (q *Queries) SailorsByID(ctx context.Context, ids []pgtype.UUID) ([]Sailors
 			&i.Kind,
 			&i.OwnerID,
 			&i.Name,
+			&i.WatchCode,
 		); err != nil {
 			return nil, err
 		}

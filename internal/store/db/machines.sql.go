@@ -249,7 +249,8 @@ func (q *Queries) MachineOf(ctx context.Context, arg MachineOfParams) (MachineOf
 
 const machinesOf = `-- name: MachinesOf :many
 SELECT a.id, sl.name, coalesce(sl.version, '')::text AS version, coalesce(sl.finish, '')::text AS finish,
-  coalesce(sl.colour, '')::text AS colour, a.created_at, coalesce(a.stopped_at, 'epoch')::timestamptz AS stopped_at
+  coalesce(sl.colour, '')::text AS colour, a.created_at, coalesce(a.stopped_at, 'epoch')::timestamptz AS stopped_at,
+  a.watch_code
 FROM account a
 JOIN sailor sl ON sl.account_id = a.id
 WHERE a.owner_id = $1 AND a.kind = 'ai'
@@ -264,6 +265,7 @@ type MachinesOfRow struct {
 	Colour    string
 	CreatedAt time.Time
 	StoppedAt time.Time
+	WatchCode string
 }
 
 // A human account's machine sailors, the oldest first, and when each was
@@ -285,6 +287,7 @@ func (q *Queries) MachinesOf(ctx context.Context, ownerID pgtype.UUID) ([]Machin
 			&i.Colour,
 			&i.CreatedAt,
 			&i.StoppedAt,
+			&i.WatchCode,
 		); err != nil {
 			return nil, err
 		}

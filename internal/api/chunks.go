@@ -182,9 +182,11 @@ func (w *countingWriter) Write(b []byte) (int, error) {
 	return n, err
 }
 
-// robots keeps search engines off the chunks' addresses: they are
-// capabilities, and no use to anyone not sailing.
-const robots = "User-agent: *\nDisallow: /w/\nDisallow: /sail/\n"
+// robots keeps search engines off the chunks' addresses and the skippers'
+// links to come aboard: they are capabilities, and no use to anyone not
+// sailing. The links to watch are left to the sites they are posted on,
+// whose cards read the page.
+const robots = "User-agent: *\nDisallow: /w/\nDisallow: /?s=\n"
 
 func serveRobots(w http.ResponseWriter, _ *http.Request) {
 	h := w.Header()
