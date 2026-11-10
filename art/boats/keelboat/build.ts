@@ -848,6 +848,14 @@ const SPREADER_SWEEP = (8 * Math.PI) / 180;
 const CAP_Z = MAST_Z + 0.12;
 const LOWER_Z = MAST_Z + 0.18;
 const LOWER_Y = SPREADER_Y - 0.15;
+/**
+ * Where the crew sit on the rail with their legs over the side: the
+ * starboard deck's edge, the sheer at the outline's half-beam, beside the
+ * cuddy a foot aft of the lower shrouds' chainplates (the port side's is
+ * its mirror).
+ */
+const RAIL_Z = LOWER_Z + 0.3;
+const RAIL: Vec3 = [halfBeam(uAt(RAIL_Z)), sheer(uAt(RAIL_Z)), RAIL_Z];
 /** The deadeyes, above the gunwale: the upper's and the lower's height above the sheer. */
 const DEADEYE_UP = 0.24;
 const DEADEYE_DOWN = 0.1;
@@ -1679,6 +1687,8 @@ function model(): NodeDef[] {
     // side's are their mirror): the gunwale at the seat's station, and
     // where the keel leaves the bottom.
     { name: 'gunwale', translation: GUNWALE },
+    // The deck's edge where the crew sit on the rail, legs over the side.
+    { name: 'rail', translation: RAIL },
     {
       name: 'board-root',
       translation: [0, -keelDepth(uAt(-foils.boardPosition)), -foils.boardPosition],

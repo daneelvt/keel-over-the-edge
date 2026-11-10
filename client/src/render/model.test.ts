@@ -523,6 +523,24 @@ describe.each(catalog.boats.map((b) => [b.name, b] as const))('%s', (_, boat) =>
     },
   );
 
+  test.runIf(has('rail'))(
+    'her rail: the starboard deck’s edge the crew sit on, on the sheer at the outline’s half-beam, forward of the cockpit',
+    () => {
+      const r = place('rail');
+      const u = (hull.transom - (r[2] ?? 0)) / boat.lengthOverall;
+      const o = hull.outline;
+      const x = u * (o.length - 1);
+      const i = Math.floor(x);
+      const half = (o[i] ?? 0) + ((o[i + 1] ?? 0) - (o[i] ?? 0)) * (x - i);
+      expect(r[0] ?? 0).toBeCloseTo(half, 3);
+      // As high as the gunwale's sheer, within the sheer's own rise.
+      expect(Math.abs((r[1] ?? 0) - (place('gunwale')[1] ?? 1))).toBeLessThan(2 * CM);
+      // Forward of the helm, aft of the mast.
+      expect(r[2] ?? 0).toBeLessThan(place('sailor')[2] ?? 0);
+      expect(r[2] ?? 0).toBeGreaterThan(place('mast')[2] ?? 0);
+    },
+  );
+
   test('the sail carries its fraction of chord and luff, for its vertex node', () => {
     const sail = g.meshes[node('sail').mesh ?? -1]?.primitives[0];
     expect(sail?.attributes.TEXCOORD_1).toBeDefined();
