@@ -33,6 +33,8 @@ type Machine struct {
 	Created                 time.Time
 	// Stopped is when the operator stopped it on its own; zero if not.
 	Stopped time.Time
+	// WatchCode is the code of its link to watch, for its owner alone.
+	WatchCode string
 }
 
 // ErrCap is a machine sailor refused: its owner has as many as it may.
@@ -115,7 +117,7 @@ func (s *Store) Machines(ctx context.Context, owner AccountID) ([]Machine, error
 	out := make([]Machine, len(rows))
 	for i, r := range rows {
 		out[i] = Machine{ID: r.ID.Bytes, Name: r.Name, Version: r.Version, Finish: r.Finish, Colour: r.Colour, Created: r.CreatedAt,
-			Stopped: notEpoch(r.StoppedAt)}
+			Stopped: notEpoch(r.StoppedAt), WatchCode: r.WatchCode}
 	}
 	return out, nil
 }

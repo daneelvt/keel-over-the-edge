@@ -23,6 +23,7 @@ import { LetWatch, type Voyage } from './letwatch';
 import type { Me } from './me';
 import { Picker } from './picker';
 import { Portrait } from './portraits';
+import { LinkRefused, YourLink } from './yourlink';
 
 /** The button that sails the player's own sailor, by its name. */
 export function setSailAs(name: string): string {
@@ -62,7 +63,10 @@ export function SetSail({
 /**
  * The player's panel: sail sets their own sailor to sea, once voyage has
  * sent the box's choice; watch opens the list of sailors to watch, null
- * while it cannot yet. With a chooser, their portrait beside their name
+ * while it cannot yet. At its head, a link to watch the page was opened at
+ * that opened no watch, and why; watchName watches a sailor followed from
+ * it once it may be watched. Under Set sail, the player's own link to
+ * watch them, to share: below it, so that Set sail stays in view. With a chooser, their portrait beside their name
  * and, ashore, Change your look; or the picker, as the chooser has it.
  * With boats, the boat they sail and, ashore, Your boat and Change boat;
  * or the boat's look chosen, or the fleet's boats, as boats has it.
@@ -72,6 +76,7 @@ export function YourSailor({
   voyage,
   sail,
   watch,
+  watchName,
   chooser,
   boats,
 }: {
@@ -79,6 +84,7 @@ export function YourSailor({
   voyage: Voyage;
   sail: () => void;
   watch: (() => void) | null;
+  watchName?: (name: string) => void;
   chooser?: LookChooser;
   boats?: BoatChooser | undefined;
 }) {
@@ -97,6 +103,9 @@ export function YourSailor({
   return (
     <section class="start-panel your-sailor" aria-labelledby="start-title">
       <h1 id="start-title">Keel Over the Edge</h1>
+      {me.linkNote !== undefined ? (
+        <LinkRefused note={me.linkNote} watch={(name) => watchName?.(name)} />
+      ) : null}
       <h2 id="your-sailor-title">Your sailor</h2>
       <div class="your-sailor-rows">
         <div class="your-sailor-who">
@@ -130,6 +139,7 @@ export function YourSailor({
       ) : null}
       <LetWatch voyage={voyage} />
       <SetSail name={me.name} voyage={voyage} sail={sail} />
+      <YourLink me={me} ticked={voyage.on.value} />
       <button
         type="button"
         class="start-sign-in"

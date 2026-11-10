@@ -50,6 +50,9 @@ type machinesPage struct {
 	// ConfirmedUntil is when the passkey last confirmed on this session
 	// stops allowing what cannot be undone, ms; 0 for none.
 	ConfirmedUntil int64 `json:"confirmedUntil"`
+	// FleetCode is the code of the link to watch the account's fleet of
+	// machine sailors, for the account to share.
+	FleetCode string `json:"fleetCode,omitempty"`
 }
 
 func (a *api) lifetime() time.Duration {
@@ -81,6 +84,13 @@ func (a *api) machinesOf(ctx context.Context, cur auth.Current) (machinesPage, e
 		}
 	}
 	p := machinesPage{MCP: a.cfg.MCP, Cap: limit, Machines: items, Fleet: fleet, Looks: a.cfg.MachineLooks}
+	if a.cfg.Watch != nil {
+		codes, err := a.cfg.Watch.Codes(ctx, cur.ID)
+		if err != nil {
+			return machinesPage{}, err
+		}
+		p.FleetCode = codes.Fleet
+	}
 	if cur.Confirmed(time.Now()) {
 		p.ConfirmedUntil = ms(cur.ConfirmedUntil)
 	}

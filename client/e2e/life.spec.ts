@@ -14,7 +14,7 @@
 import { type BrowserContext, expect, type Page, test } from '@playwright/test';
 import data from '../src/catalog/catalog.gen.json' with { type: 'json' };
 import type { LifeSeen } from '../src/net/messages';
-import { alone, GAME, heldRegime, sail, sailor, setSail } from './helpers';
+import { alone, GAME, heldRegime, linkCodes, sail, sailor, setSail } from './helpers';
 
 /** keel's internal listener, as tools/e2e serves it: its developer commands. */
 const internal = 'http://127.0.0.1:19090';
@@ -66,7 +66,7 @@ test('two players and a spectator see the same birds in the same places', async 
     contexts.push(cat);
     await sailor(cat, 'Cat');
     const c = await cat.newPage();
-    await c.goto(`${GAME}&watch=${encodeURIComponent(made.name)}`);
+    await c.goto(`${GAME}&w=${(await linkCodes(ann)).watch}`);
     await c.waitForFunction((n) => globalThis.keel?.watch().watching?.sailor === n, made.name, {
       timeout: 90_000,
     });
@@ -232,7 +232,7 @@ test('a pod rides one boat’s bow, at that bow on every page', { tag: '@world' 
     contexts.push(cat);
     await sailor(cat, 'Cat');
     const c = await cat.newPage();
-    await c.goto(`${GAME}&watch=${encodeURIComponent(made.name)}`);
+    await c.goto(`${GAME}&w=${(await linkCodes(ann)).watch}`);
     await c.waitForFunction((n) => globalThis.keel?.watch().watching?.sailor === n, made.name, {
       timeout: 90_000,
     });

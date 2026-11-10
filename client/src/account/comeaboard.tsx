@@ -28,6 +28,7 @@ import {
   linkOf,
   READING_LINK,
   SAIL_ON_MY_OWN,
+  SAIL_PARAM,
   type SailLink,
   theKind,
 } from './comeaboardwords';
@@ -35,6 +36,7 @@ import { FirstAsks, firstAsks } from './firstasks';
 import type { FirstAsk } from './firstwords';
 import type { BoatCatalog } from './fleet';
 import { voyage } from './letwatch';
+import { forgetParams } from './links';
 import { checkSession, type Fetch, type Me } from './me';
 import { Portrait } from './portraits';
 
@@ -57,9 +59,9 @@ export async function readLink(token: string, f: Fetch = fetch): Promise<LinkRea
   }
 }
 
-/** The page's address without the link, its query kept: a reload just sails. */
+/** The page's address without the link, the rest of its query kept: a reload just sails. */
 export function forgetLink(): void {
-  history.replaceState(history.state, '', `/${location.search}${location.hash}`);
+  forgetParams(SAIL_PARAM);
 }
 
 type View =

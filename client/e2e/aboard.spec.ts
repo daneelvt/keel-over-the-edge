@@ -69,15 +69,15 @@ test('a link opened by a friend who has never played: a sailor made, let aboard,
   const made = await context.request.post('/api/sail/link', { data: {} });
   expect(made.status(), await made.text()).toBe(201);
   const { url } = (await made.json()) as { url: string };
-  const path = new URL(url).pathname;
-  expect(path).toMatch(/^\/sail\/[A-Za-z0-9_-]{22}$/);
+  const link = new URL(url);
+  expect(`${link.pathname}${link.search}`).toMatch(/^\/\?s=[A-Za-z0-9_-]{22}$/);
 
   // A friend opens it: the start screen first, the age question with the
   // name, a passkey; then whose boat it is, and the Rules before the knock.
   const bob = await friendOf(browser);
   const errors: string[] = [];
   bob.on('pageerror', (e) => errors.push(e.message));
-  await bob.goto(`${path}${GAME.slice(1)}`);
+  await bob.goto(`${GAME}&${link.search.slice(1)}`);
   await expect(bob.getByRole('heading', { name: 'Keel Over the Edge' })).toBeVisible({
     timeout: 60_000,
   });
@@ -96,7 +96,7 @@ test('a link opened by a friend who has never played: a sailor made, let aboard,
     timeout: 60_000,
   });
   // The link is gone from the address: a reload sails.
-  expect(new URL(bob.url()).pathname).toBe('/');
+  expect(new URL(bob.url()).searchParams.has('s')).toBe(false);
   const bobBoat = (await deck(bob)).boat;
 
   // The skipper's card, and Let aboard.
