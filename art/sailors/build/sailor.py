@@ -6,6 +6,7 @@ each level by the gates (review/metrics.py), drawn on the review sheet
 fails on any gate after everything is written."""
 
 import json
+import math
 import os
 import time
 
@@ -90,9 +91,11 @@ def build_look(job):
     report["failures"] = [f for g in judged.values() for f in g.failures()]
     if job.get("add"):
         # Only the clips added are made and written: theirs are the gates
-        # that count, and the clips' file's.
+        # that count, and the clips' file's; with nothing of them through
+        # the boat (the only clips the close level's seat gates judge).
         report["failures"] = [f for g in judged.values()
-                              for f in g.failures(("clips", "clips wheel", "clips trapeze", "harness"))]
+                              for f in g.failures(("clips", "clips wheel", "clips trapeze", "clips rail", "harness"))] + \
+            [f for g in judged.values() for f in g.failures(("close",)) if f" close seat " in f]
     return report
 
 
@@ -532,19 +535,28 @@ def make_clips(job, v, fig, lib, kinds, gates, renderer, lookmat, work, worn=(),
         made = time.time() - start
         # The skirts turned clear of the legs, frame by frame.
         fig.quiet(False)
-        clip.notes["skirt frames turned"] = motion.clear_skirts(fig, clip, under, skirts)
+        # A deep crouch on a deck lifts the knees into the cloth: turned
+        # clear no further than cloth falls, not flung out (what is left is
+        # measured, as in a tack's cross).
+        deep = getattr(clip, "deck", False)
+        clip.notes["skirt frames turned"] = motion.clear_skirts(fig, clip, under, skirts,
+                                                                most=DEEP_SKIRT if deep else None)
         act, slot = motion.write_action(fig.arm, as_(name), clip.frames, clip.fps)
         actions.append((act, slot))
         fig.made[name] = (act, slot, clip)
         # A clip at the wheel is placed from the helmsman's place, as the
         # game places it from the boat's `sailor` node; one on the trapeze
         # from the rack's edge on its side, as the game places it from the
-        # model's `trapeze` node.
+        # model's `trapeze` node; one on the rail from the deck's edge on
+        # its side, as the game places it from a station on the rail.
         if getattr(clip, "standing", False):
             places[f"place-{as_(name)}"] = Matrix.Translation(-fig.stage.wheel.at) @ clip.place
         elif getattr(clip, "trapeze", False):
             side = -1 if name.endswith(motion.PORT) else 1
             places[f"place-{as_(name)}"] = Matrix.Translation(-fig.stage.point("rack", side)) @ clip.place
+        elif getattr(clip, "rail", False):
+            side = -1 if name.endswith(motion.PORT) else 1
+            places[f"place-{as_(name)}"] = Matrix.Translation(-fig.stage.point("rail", side)) @ clip.place
         else:
             places[f"place-{as_(name)}"] = clip.place.copy()
         fig.quiet()
@@ -561,14 +573,18 @@ def make_clips(job, v, fig, lib, kinds, gates, renderer, lookmat, work, worn=(),
     clip_seat(gates, "close", fig, out)
     clip_wheel(gates, fig, out)
     clip_skirts(gates, fig, worn, out)
-    # The files: the clips at a wheel and those on the trapeze apart from
-    # the rest, as only a boat steered by one or sailed from the other
-    # loads them.
+    # The files: the clips at a wheel, those on the trapeze and those of
+    # the crew on the rail (sat on it, and the crouch they move about the
+    # deck in) apart from the rest, as only a boat steered by one, sailed
+    # from the other, or with someone at a station on her rail loads them.
     def group_of(n):
         c = fig.made[n][2]
-        return "wheel" if getattr(c, "standing", False) else "trapeze" if getattr(c, "trapeze", False) else "clips"
+        if getattr(c, "group", None):
+            return c.group
+        return "wheel" if getattr(c, "standing", False) else "trapeze" if getattr(c, "trapeze", False) else \
+            "rail" if getattr(c, "rail", False) else "clips"
 
-    groups = tuple((g, [n for n in names if group_of(n) == g]) for g in ("clips", "wheel", "trapeze"))
+    groups = tuple((g, [n for n in names if group_of(n) == g]) for g in ("clips", "wheel", "trapeze", "rail"))
     exported = False
     for group, members in groups:
         if not members:
@@ -782,15 +798,21 @@ def clip_skirts(gates, fig, worn, measures):
             lines = motion.skirt_lines(fig, body, pairs[0][2], [s for _, s, _ in pairs])[:8]
         motion.stop(fig.arm)
         fig.reset()
-        # Placed in the boat (seated, crossing, climbing in), the hips'
-        # own cloth meets the thighs turned hard into it, which the chains
-        # cannot carry away: measured, not yet held to nothing.
-        held = not seated
+        # Placed in the boat (seated, crossing, climbing in), or crouched
+        # low on a deck, the hips' own cloth meets the thighs turned hard
+        # into it, which the chains cannot carry away: measured, not yet
+        # held to nothing.
+        held = not seated and not getattr(clip, "deck", False)
         ok = total == 0 or not held
         gates.add("clips", f"{name} under the skirt", total, 0 if held else None, ok, frames=len(frames),
                   worst=worst, lines=lines, measured=not held, seconds=round(time.time() - start, 1))
         if name in measures:
             measures[name]["under the skirt"] = {"value": total, "limit": 0 if held else None, "ok": ok}
+
+
+# The most a skirt's chain is turned off a crouch's pose to clear the
+# knees, in radians: further, and an apron stands out like a board.
+DEEP_SKIRT = math.radians(40)
 
 
 def _bone_of(obj, i):

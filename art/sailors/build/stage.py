@@ -38,6 +38,15 @@ deck, and lies back out over the water. A clip placed there is placed from
 the rack's edge on its side, as the game places it from the model's node;
 the model's hull, its racks and their net are solid as the dinghy's are.
 
+A keelboat whose crew sit on the rail has a stage of its own as well
+(tables.yaml's `rail`): her model, imported and set forward of the
+others. Its `rail` node is the starboard deck's edge where the crew sit,
+legs over the side, facing outboard; the topsides fall away below it. A
+clip placed there is placed from the deck's edge on its side, as the game
+places it from a station on the rail; her hull (with her deck and cuddy)
+is solid, and the cloth a figure sits on is laid on her deck inboard of
+the edge (Rail.plane), hanging free outboard of it.
+
 The cockpit runs between the side decks' inner edges (`edge` out from the
 centreline). A figure is seated with its face inboard; a vertex is through the boat
 when the line from its bone to it crosses the hull, and a bone is when the
@@ -78,8 +87,10 @@ class Stage:
         self.wheel = Wheel(spec["wheel"]) if spec.get("wheel") else None
         # The trapeze's, likewise: its hull is solid too.
         self.trapeze = Trapeze(root, spec["trapeze"]) if spec.get("trapeze") else None
+        # The rail's, likewise: the keelboat's hull is solid too.
+        self.rail = Rail(root, spec["rail"]) if spec.get("rail") else None
         self.tree = _tree(self.solid + ([self.wheel.deck] if self.wheel else []) +
-                          (self.trapeze.solid if self.trapeze else []))
+                          (self.trapeze.solid if self.trapeze else []) + (self.rail.solid if self.rail else []))
 
         # The side deck under the hips, and the gunwale: the outermost
         # point of the hull at the seat's station, looking down.
@@ -162,6 +173,8 @@ class Stage:
             return self.wheel_point(name, side)
         if self.trapeze is not None and name in Trapeze.POINTS:
             return self.trapeze.point(name, side)
+        if self.rail is not None and name in Rail.POINTS:
+            return self.rail.point(name, side)
         fwd, inb, up = self.spec["points"][name]
         p = self.frame(side) @ Vector((fwd, inb, up))
         if name.startswith("tiller"):
@@ -175,17 +188,20 @@ class Stage:
         own axes, x to its left."""
         return Matrix.Rotation(np.radians(-90.0 * side), 4, "Z")
 
-    def show(self, shown, wheel=False, trapeze=False):
+    def show(self, shown, wheel=False, trapeze=False, rail=False):
         """Shows the dinghy's hull (shown), or the wheel's stage, or the
-        trapeze's boat."""
+        trapeze's boat, or the rail's."""
         for o in self.objects:
-            o.hide_render = not shown or wheel or trapeze or o not in self.solid
+            o.hide_render = not shown or wheel or trapeze or rail or o not in self.solid
         if self.wheel is not None:
             for o in self.wheel.objects:
                 o.hide_render = not (shown and wheel)
         if self.trapeze is not None:
             for o in self.trapeze.objects:
                 o.hide_render = not (shown and trapeze) or o.type != "MESH"
+        if self.rail is not None:
+            for o in self.rail.objects:
+                o.hide_render = not (shown and rail) or o.type != "MESH" or o is self.rail.plane
 
     def under(self, p):
         """Whether a point is under a top of the boat: straight up, the
@@ -385,6 +401,66 @@ class Trapeze:
         p = {"rack": self.rack, "hounds": self.hounds, "ring": self.ring, "trapeze-hinge": self.hinge,
              "trapeze-sheet": self.sheet}[name]
         return Vector((side * p.x, p.y, p.z))
+
+
+class Rail:
+    """The rail's stage: a keelboat's model (spec `boat`), imported and
+    moved by `at` in the stage's scene (x to starboard, y forward, z up).
+    Its places, from its model: the starboard deck's edge where the crew
+    sit (`rail`, its node), mirrored across the centreline for port. The
+    cloth under a figure seated there is laid on `plane`, the deck's
+    height at the edge, from the cuddy's side out to the edge and no
+    further (`span` fore and aft of the station): outboard of it, the cloth
+    hangs down the topsides."""
+
+    POINTS = ("rail",)
+
+    def __init__(self, root, spec):
+        self.spec = spec
+        before = set(bpy.data.objects)
+        bpy.ops.import_scene.gltf(filepath=os.path.join(root, "art", spec["boat"]))
+        self.objects = [o for o in bpy.data.objects if o not in before]
+        self.at = Vector(spec["at"])
+        for o in self.objects:
+            o.name = "rail-" + o.name
+            o.hide_render = True
+            if o.parent is None:
+                o.location = o.location + self.at
+        bpy.context.view_layer.update()
+        self.edge = bpy.data.objects["rail-rail"].matrix_world.translation.copy()
+        self.solid = [bpy.data.objects["rail-hull"]]
+        self.tree = _tree(self.solid)
+        # Inboard from the edge, the side deck to the cuddy's side: where a
+        # ray down first meets something more than a hand's breadth above
+        # the edge.
+        x = self.edge.x
+        while x > 0.0:
+            hit = self.tree.ray_cast(Vector((x, self.edge.y, self.edge.z + ABOVE)), Vector((0, 0, -1)), 2 * ABOVE)
+            if hit[0] is None or hit[0].z > self.edge.z + 0.1:
+                break
+            x -= 0.005
+        self.inner = x
+        me = bpy.data.meshes.new("rail-plane")
+        y0, y1 = self.edge.y - spec["span"], self.edge.y + spec["span"]
+        z = self.edge.z
+        verts = []
+        for s in (1, -1):
+            verts += [(s * self.inner, y0, z), (s * self.edge.x, y0, z), (s * self.edge.x, y1, z), (s * self.inner, y1, z)]
+        me.from_pydata(verts, [], [(0, 1, 2, 3), (7, 6, 5, 4)])
+        self.plane = bpy.data.objects.new("rail-plane", me)
+        bpy.context.scene.collection.objects.link(self.plane)
+        self.plane.hide_render = True
+        self.objects.append(self.plane)
+
+    def point(self, name, side=1):
+        p = {"rail": self.edge}[name]
+        return Vector((side * p.x, p.y, p.z))
+
+    def down(self, x, y):
+        """The height of the first surface of the keelboat a ray straight
+        down at (x, y) meets, or None."""
+        hit = self.tree.ray_cast(Vector((x, y, self.edge.z + ABOVE)), Vector((0, 0, -1)), 2 * ABOVE)
+        return None if hit[0] is None else hit[0].z
 
 
 def _tree(objs):

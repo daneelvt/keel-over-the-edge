@@ -13,6 +13,11 @@
 // the same places: the far figures read the deck atlas, at the size they
 // are drawn.
 //
+// A look someone at a station on a keelboat's rail wears has its clips on
+// the rail and its crouch loaded too (rail.ts), and its far figures sat on
+// the rail, upright and leaning out, each side, made from its far level as
+// those on the wire are; kept by the look for whoever draws them.
+//
 // A look sailed on a boat with a trapeze has its clips on the wire loaded
 // too, and its far figure posed out on the wire on each side, made from its
 // far level: each vertex carried by its nearest bone from the helm's first
@@ -49,6 +54,7 @@ import { Clip, Pose } from './clips';
 import { LayeredTexture } from './layers2d';
 import { gltfLoader, placesOf } from './model';
 import { boneNames } from './onboat';
+import { RAIL_CLIPS, railClips } from './rail';
 import { Rig } from './rig';
 import { CHAINS } from './springs';
 import { harnessFile, TRAPEZE_CLIPS, trapezeClips } from './trapeze';
@@ -85,6 +91,10 @@ export class FleetLook {
   trapezeState: LookState = 'none';
   /** Whether a boat with a trapeze carries it: its clips are wanted, near or far. */
   wired = false;
+  /** Its clips on a rail and its crouch, added to its clips when someone wearing it is at a station on a rail; and its far figures there made. */
+  railState: LookState = 'none';
+  /** Whether someone wearing it is at a station on a rail: its clips are wanted, near or far. */
+  railed = false;
   /** Whether a boat with it has come near: its clips are wanted. */
   near = false;
   deck: DeckLook | null = null;
@@ -99,6 +109,8 @@ export class FleetLook {
   /** The harness's hook's eye on each of the wire figures (starboard, port), from the rack's edge on its side; and on the clips' figure at rest. */
   wireHooks: [Vector3, Vector3] | null = null;
   hook: Vector3 | null = null;
+  /** The far figures on a rail (upright and leaning out, each side; railFigures), by clip; null until its clips there have loaded. */
+  rail: Map<string, BufferGeometry> | null = null;
   clips: Map<string, Clip> | null = null;
 
   constructor(
@@ -148,11 +160,13 @@ export class FleetLooks {
   /**
    * Starts loading a look's deck and far levels, if not yet; and its
    * clips, if near; and those on the wire, if a boat with a trapeze carries
-   * it (wired).
+   * it (wired); and those on a rail and the crouch, if someone wearing it is
+   * at a station on one (railed).
    */
-  want(look: FleetLook, near: boolean, wired = false): void {
+  want(look: FleetLook, near: boolean, wired = false, railed = false): void {
     look.near ||= near;
     look.wired ||= wired;
+    look.railed ||= railed;
     if (look.state === 'none') {
       look.state = 'loading';
       this.#load(look).then(
@@ -169,7 +183,7 @@ export class FleetLooks {
       );
     }
     if (
-      (look.near || look.wired) &&
+      (look.near || look.wired || look.railed) &&
       look.state === 'ready' &&
       look.clipsState === 'none' &&
       look.deck !== null
@@ -179,7 +193,7 @@ export class FleetLooks {
         () => {
           look.clipsState = 'ready';
           this.onLoad(look);
-          // Its clips at a wheel or on the wire at once, if wanted.
+          // Its clips at a wheel, on the wire or on a rail at once, if wanted.
           this.want(look, false);
         },
         (e: unknown) => {
@@ -228,6 +242,30 @@ export class FleetLooks {
         },
       );
     }
+    if (
+      look.railed &&
+      look.clipsState === 'ready' &&
+      look.railState === 'none' &&
+      look.deck !== null
+    ) {
+      look.railState = 'loading';
+      const rig = look.deck.rig;
+      const path = railClips(look.art.clips);
+      this.#loadClips(look, rig, path).then(
+        () => {
+          look.rail =
+            look.far === null || look.clips === null
+              ? null
+              : railFigures(look.far, this.seat, look.clips, rig);
+          look.railState = 'ready';
+          this.onLoad(look);
+        },
+        (e: unknown) => {
+          look.railState = 'failed';
+          console.error(`the fleet's sailor's clips ${path} did not load`, e);
+        },
+      );
+    }
   }
 
   /** Loads a look in full, at once: for a look the first frame needs. */
@@ -241,7 +279,8 @@ export class FleetLooks {
       while (
         look.clipsState === 'loading' ||
         look.wheelState === 'loading' ||
-        look.trapezeState === 'loading'
+        look.trapezeState === 'loading' ||
+        look.railState === 'loading'
       ) {
         await new Promise((r) => setTimeout(r, 10));
         this.want(look, true);
@@ -562,29 +601,28 @@ function toSegment(p: Vector3, a: Vector3, b: Vector3): number {
 }
 
 /**
- * A look's far figure out fully on a trapeze's wire, each side, from its
- * seated far figure (in figureNode's frame, seated at seat): each vertex
- * given to its nearest bone in the helm clip's first frame, and carried
- * rigidly to the wire clip's first frame (the bone there times its inverse
- * at the helm), placed by that clip's place from the rack's edge. The two
- * merged, tagged 1 (starboard) and 2 (port); and the hook's eye (hook, in
- * the figure's space at rest, carried by the pelvis) on each. Null if the
- * clips are not all there.
+ * A look's far figure posed in clips, from its seated far figure (in
+ * figureNode's frame, seated at seat): each vertex given to its nearest
+ * bone in the helm clip's first frame, and carried rigidly to each clip's
+ * first frame (the bone there times its inverse at the helm), placed by
+ * that clip's place. Each figure in the frame its clip's place is to (on
+ * the trapeze, the rack's edge; on the rail, the deck's edge); and, with
+ * each, its bones' carry from the helm and its clip's frame. Null if the
+ * helm's or any of the clips is not there, or one is not placed.
  */
-export function wireFigures(
+export function carriedFigures(
   far: BufferGeometry,
   seat: FleetSeat,
   clips: Map<string, Clip>,
   rig: Rig,
-  hook: Vector3 | null,
-): { geometry: BufferGeometry; hooks: [Vector3, Vector3] } | null {
+  names: readonly string[],
+): { geometry: BufferGeometry; clip: Clip; frame: Float32Array }[] | null {
   const helm = clips.get('helm');
-  const sides = [TRAPEZE_CLIPS.out, `${TRAPEZE_CLIPS.out}-port`].map((n) => clips.get(n));
-  if (helm?.place == null || sides.some((c) => c?.place == null)) {
+  const posed = names.map((n) => clips.get(n));
+  if (helm?.place == null || posed.some((c) => c?.place == null)) {
     return null;
   }
   const atHelm = frameOf(rig, helm);
-  const atRest = frameOf(rig, null);
   // From figureNode's frame back to the boat model's (the stage's, as the
   // clips' places are), then into the helm clip's figure.
   const toHelm = new Matrix4()
@@ -614,23 +652,20 @@ export function wireFigures(
       }
     }
   }
-  const pelvis = rig.bone('pelvis');
-  const hooks: Vector3[] = [];
-  const parts = sides.map((clip, side) => {
+  return posed.map((clip) => {
     const c = clip as Clip;
-    const atWire = frameOf(rig, c);
-    // Each bone's carry: placed on the wire, the bone there, its inverse at the helm.
+    const frame = frameOf(rig, c);
+    // Each bone's carry: placed by the clip, the bone there, its inverse at the helm.
     const carry = rig.names.map((_, b) =>
       new Matrix4()
         .copy(c.place as Matrix4)
-        .multiply(new Matrix4().fromArray(atWire, 16 * b))
+        .multiply(new Matrix4().fromArray(frame, 16 * b))
         .multiply(new Matrix4().fromArray(atHelm, 16 * b).invert())
         .multiply(toHelm),
     );
     const g = far.clone();
     const gp = g.getAttribute('position') as BufferAttribute;
     const gn = g.getAttribute('normal') as BufferAttribute;
-    const tag = g.getAttribute('tag') as BufferAttribute;
     const normal = new Matrix3();
     for (let k = 0; k < n; k++) {
       const m = carry[carrier[k] as number] as Matrix4;
@@ -638,17 +673,62 @@ export function wireFigures(
       gp.setXYZ(k, p.x, p.y, p.z);
       p.fromBufferAttribute(gn, k).applyMatrix3(normal.getNormalMatrix(m)).normalize();
       gn.setXYZ(k, p.x, p.y, p.z);
+    }
+    return { geometry: g, clip: c, frame };
+  });
+}
+
+/**
+ * A look's far figure out fully on a trapeze's wire, each side, from its
+ * seated far figure (carriedFigures), placed from the rack's edge. The two
+ * merged, tagged 1 (starboard) and 2 (port); and the hook's eye (hook, in
+ * the figure's space at rest, carried by the pelvis) on each. Null if the
+ * clips are not all there.
+ */
+export function wireFigures(
+  far: BufferGeometry,
+  seat: FleetSeat,
+  clips: Map<string, Clip>,
+  rig: Rig,
+  hook: Vector3 | null,
+): { geometry: BufferGeometry; hooks: [Vector3, Vector3] } | null {
+  const made = carriedFigures(far, seat, clips, rig, [
+    TRAPEZE_CLIPS.out,
+    `${TRAPEZE_CLIPS.out}-port`,
+  ]);
+  if (made === null) {
+    return null;
+  }
+  const atRest = frameOf(rig, null);
+  const pelvis = rig.bone('pelvis');
+  const hooks = made.map(({ geometry, clip, frame }, side) => {
+    const tag = geometry.getAttribute('tag') as BufferAttribute;
+    for (let k = 0; k < tag.count; k++) {
       tag.setY(k, side + 1);
     }
     // The hook, carried by the pelvis from rest to the wire.
-    hooks.push(
-      (hook ?? new Vector3().fromArray(atRest, 16 * pelvis + 12))
-        .clone()
-        .applyMatrix4(new Matrix4().fromArray(atRest, 16 * pelvis).invert())
-        .applyMatrix4(new Matrix4().fromArray(atWire, 16 * pelvis))
-        .applyMatrix4(c.place as Matrix4),
-    );
-    return g;
+    return (hook ?? new Vector3().fromArray(atRest, 16 * pelvis + 12))
+      .clone()
+      .applyMatrix4(new Matrix4().fromArray(atRest, 16 * pelvis).invert())
+      .applyMatrix4(new Matrix4().fromArray(frame, 16 * pelvis))
+      .applyMatrix4(clip.place as Matrix4);
   });
-  return { geometry: merge(parts), hooks: hooks as [Vector3, Vector3] };
+  return { geometry: merge(made.map((m) => m.geometry)), hooks: hooks as [Vector3, Vector3] };
+}
+
+/**
+ * A look's far figures on a rail, from its seated far figure
+ * (carriedFigures): sat upright and leaning out, on each side, each placed
+ * from the deck's edge on its side (rail.ts), by clip name. Null if the
+ * clips are not all there.
+ */
+export function railFigures(
+  far: BufferGeometry,
+  seat: FleetSeat,
+  clips: Map<string, Clip>,
+  rig: Rig,
+): Map<string, BufferGeometry> | null {
+  const names = [RAIL_CLIPS.up, RAIL_CLIPS.out].flatMap((n) => [n, `${n}-port`]);
+  const made = carriedFigures(far, seat, clips, rig, names);
+  return made === null ? null : new Map(made.map((m, i) => [names[i] as string, m.geometry]));
 }

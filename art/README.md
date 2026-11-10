@@ -61,7 +61,10 @@ the jib is, at its tack on the bowsprit's end, which the game hides in its
 bag and hoists from the tack. A boat with a trapeze has `trapeze`: its
 wires and rings, and in its `extras` the `hounds`, the `rings` (starboard
 first) and the starboard rack's outer edge at the helm (`rackEdge`), in the
-model's frame. A fully battened main's `sail` names its battens' heights,
+model's frame. A boat whose crew sit on her rail with their legs over the
+side has `rail`, an empty node at the starboard deck's edge where they
+sit (on the sheer at the outline's half-beam; the port side's is its
+mirror). A fully battened main's `sail` names its battens' heights,
 fractions of its luff, in its `extras`. A hull whose beam is over its
 racks says so: its `extras.plan.over` names the materials it is measured
 across. The boat's origin is at its centre of gravity's
@@ -99,6 +102,7 @@ go run ./tools/sailors -look test   # one look
 go run ./tools/sailors -setup       # check Blender, install MPFB and gltfpack
 go run ./tools/sailors -add helm-wheel,habit-wheel   # only these clips, on every look
 go run ./tools/sailors -add trapeze,trapeze-low      # and the harness with them
+go run ./tools/sailors -add rail,rail-out,crouch-enter,crouch-walk,crouch-exit
 ```
 
 It needs Blender 5.2 LTS installed; the first run installs the pinned MPFB
@@ -211,11 +215,33 @@ a coat or an apron, a bronze hook out before it) to
 its node `place-hook` the hook's eye at rest. Only a boat with a trapeze
 loads either.
 
+A keelboat's crew sit on her rail, and move about her deck at a crouch.
+Their clips on the rail (`rail`, sat on the deck's edge facing outboard,
+the legs over the side and the hands on the thighs, upright; `rail-out`,
+the same leaning out over the water from the hips; each with its `-port`)
+are made against her own model, imported into the stage's scene
+(`tables.yaml`'s `stage.rail`): her `rail` node is the deck's edge they sit
+on, the knees' joints `knee` out from it, the cloth under them laid on her
+deck inboard of the edge and hanging free outboard of it: a coat's back
+hangs down behind and its front, beyond the knees, down the topsides (a
+clip's `hang`, which may name one bone of a chain, `front_02`). They are placed
+from the deck's edge on their side. The crouch's (`crouch-enter`,
+`crouch-walk`, `crouch-exit`) are Quaternius' (`Crouch_Enter`,
+`Crouch_Fwd_Loop`, `Crouch_Exit`), retargeted and set on a flat deck (a
+retarget's `deck`): the soles on it, each foot held there by IK while it
+bears, the walk's moving back at its `speed` (0.7 m/s at the clip's own
+rate) so a figure moved forward at that speed keeps its feet still; the
+back bent as far as keeps the head's joint under `head` (0.7 m) over the
+deck while crouched, and the elbows as far as keeps the fingers off it;
+the coat's chains hanging from the body as it bends. They are not placed.
+All seven are written to `<version>.rail.glb`, which only a boat with
+someone at a station on her rail loads.
+
 Every build is judged before anyone looks at it: the gates
 (`review/metrics.py`: budgets, clean meshes and weights, nothing through
 the clothes in any judged pose, nothing through the boat seated, the
 figure kept under its clothes, symmetry, the atlas, the files) and the
-clips' gate (`review/motion.py`: jerk, speed, reach, contacts, ranges,
+clips' gate (`review/motion.py`: jerk, speed, reach, contacts, feet on a deck, ranges,
 loops, onsets) write `metrics.json` in the run (`.dev/sailors/runs/<look>/<n>`),
 with what moved since the last run, and fail the build on any; the sheet
 (`sheet.png` a version, `compare.png` beside the last run's) and each

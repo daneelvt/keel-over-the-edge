@@ -4,9 +4,10 @@
 // the game will load them: each version's close and deck levels skinned to
 // one skeleton, the far level one rigid figure with the place it sits in,
 // one material whose base colour is the atlas and whose occlusion texture
-// is the mask, both KTX2; and the clips with a place each, those at a wheel
-// and those on a trapeze's wire in files of their own; and the trapeze
-// harness, skinned to the same skeleton, with its hook.
+// is the mask, both KTX2; and the clips with a place each, those at a
+// wheel, those on a trapeze's wire and those on a rail (with the crouch) in
+// files of their own; and the trapeze harness, skinned to the same
+// skeleton, with its hook.
 
 import { readdirSync, readFileSync } from 'node:fs';
 import { describe, expect, test } from 'vitest';
@@ -126,6 +127,36 @@ describe.each(looks)('%s', (look) => {
         expect(Math.hypot(m[12] ?? 9, m[13] ?? 9, m[14] ?? 9), name).toBeLessThan(0.3);
         const side = name.endsWith('-port') ? -1 : 1;
         expect(side * (m[4] ?? 0), name).toBeGreaterThan(0.5);
+      }
+    });
+
+    test('its clips on a rail and its crouch, a file of their own on its skeleton: those on the rail placed from the deck’s edge facing outboard, the crouch not placed', () => {
+      if (look === 'test') {
+        return;
+      }
+      const rail = readGltf(`${look}/${version}.rail.glb`);
+      const names = (rail.animations ?? []).map((a) => a.name).sort();
+      expect(names).toEqual([
+        'crouch-enter',
+        'crouch-exit',
+        'crouch-walk',
+        'rail',
+        'rail-out',
+        'rail-out-port',
+        'rail-port',
+      ]);
+      expect(joints(rail)).toEqual(joints(clips));
+      for (const name of names) {
+        const m = rail.nodes.find((n) => n.name === `place-${name}`)?.matrix ?? [];
+        if (name.startsWith('crouch')) {
+          expect(m, name).toEqual([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]);
+          continue;
+        }
+        // About the deck's edge, upright, the figure's front (+z) outboard on its side.
+        expect(Math.hypot(m[12] ?? 9, m[13] ?? 9, m[14] ?? 9), name).toBeLessThan(1.2);
+        expect(m[5] ?? 0, name).toBeGreaterThan(0.99);
+        const side = name.endsWith('-port') ? -1 : 1;
+        expect(side * (m[8] ?? 0), name).toBeGreaterThan(0.99);
       }
     });
 

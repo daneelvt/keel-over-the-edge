@@ -92,3 +92,34 @@ retarget:
   treading-water:
     file: vendor/quaternius/Swim_Idle_Loop.glb
     loop: true
+  # Crouched low on the deck, to move about under a boom: going down into
+  # the crouch from standing, walking in it, and up out of it (going down
+  # and up over a second, a little slower than the library's). Set on a
+  # flat deck: the feet that bear on it held there, the walk's moving back
+  # at its speed over the deck; the back bent as far as keeps the head's
+  # joint under 0.7 m over the deck while crouched; the knees and ankles
+  # taken near the ends of their ranges, as in any deep crouch. They go
+  # with the clips on the rail, as only a boat whose crew sit there wants
+  # them.
+  crouch-enter:
+    file: vendor/quaternius/Crouch_Enter.glb
+    seconds: 1.0
+    deck: true
+    head: 0.7
+    strain: [thigh, calf, foot]
+    group: rail
+  crouch-walk:
+    file: vendor/quaternius/Crouch_Fwd_Loop.glb
+    loop: true
+    deck: true
+    speed: 0.7
+    head: 0.7
+    strain: [thigh, calf, foot]
+    group: rail
+  crouch-exit:
+    file: vendor/quaternius/Crouch_Exit.glb
+    seconds: 1.0
+    deck: true
+    head: 0.7
+    strain: [thigh, calf, foot]
+    group: rail

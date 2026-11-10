@@ -174,6 +174,14 @@ def check(fig, clip, act, slot, gate, ranges, proxies):
                 worst, where = d, f"{e} at frame {f}"
     add("contacts", worst, gate["contact"], worst <= gate["contact"], frames=sum(1 for c in clip.contacts if c),
         at=where)
+    # A clip set on a deck: each foot, while it bears on it, on it, and
+    # not sliding over it beyond what the walk's speed accounts for.
+    if "slide" in clip.notes:
+        slide, off = clip.notes["slide"], clip.notes["off the deck"]
+        add("feet slide", slide, gate["slide"], slide <= gate["slide"], speed=clip.notes["speed"])
+        add("feet on the deck", off, gate["contact"], off <= gate["contact"])
+        clear = clip.notes["clear of the deck"]
+        add("clear of the deck", clear, 0.0, clear >= 0.0)
     drift = 0.0
     for e in clip.planted:
         p = tr.pos[motion.EFFECTORS[e][2]]
@@ -233,16 +241,25 @@ def check(fig, clip, act, slot, gate, ranges, proxies):
     if clip.loop:
         pose = speed = 0.0
         where = None
+        # The same measure at every frame of the loop, the worst bone's: a
+        # seam is judged against the motion's own, as a walk's legs change
+        # speed through every step.
+        n = len(next(iter(tr.basis.values()))) - 1
+        own = np.zeros(n)
         for b, qs in tr.basis.items():
             pose = max(pose, math.degrees(motion.angle(qs[0], qs[-1])))
             ring = qs[:-1]
-            v = [motion.log(ring[k].inverted() @ ring[(k + 1) % len(ring)]) * fps for k in (-3, -2, -1, 0, 1)]
-            before, across, after = v[1] - v[0], v[3] - v[2], v[4] - v[3]
-            d = math.degrees(float(np.linalg.norm(across - (before + after) / 2)))
-            if d > speed:
-                speed, where = d, b
+            v = [motion.log(ring[k].inverted() @ ring[(k + 1) % n]) * fps for k in range(n)]
+            for k in range(n):
+                before, across, after = v[k - 2] - v[k - 3], v[k] - v[k - 1], v[(k + 1) % n] - v[k]
+                d = math.degrees(float(np.linalg.norm(across - (before + after) / 2)))
+                own[k] = max(own[k], d)
+                if k == 0 and d > speed:
+                    speed, where = d, b
+        steady = float(np.median(own))
+        limit = max(gate["loop-speed"], steady)
         add("loop pose", pose, gate["loop-degrees"], pose <= gate["loop-degrees"])
-        add("loop speed", speed, gate["loop-speed"], speed <= gate["loop-speed"], at=where)
+        add("loop speed", speed, limit, speed <= limit, at=where, steady=steady)
 
     # Onsets down the chains, in each ramp.
     bad = []

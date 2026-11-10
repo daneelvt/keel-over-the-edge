@@ -22,6 +22,18 @@ is moved as the source's, scaled by the hips' heights. Bones the source
 does not have (our own, the face) rest, but for those that follow others
 (motion.Figure.derive).
 
+A clip on a deck (`deck`) is set on a flat one, the soles at its height:
+the whole body moved down or up by where the soles mostly are, its back
+bent (and the neck and head the other way, so the eyes keep their line)
+as far as keeps the head's joint under `head` over the deck while the hips
+are down in a crouch, and each foot, while it bears on the deck, held to
+it by IK: its lowest point (the heel under the ankle, or the sole under
+the ball or the toes, as the build stands feet: motion.HEEL_CLEAR,
+TOE_CLEAR) on the deck, and moving back at the clip's `speed`, the speed
+it walks at over the ground (still, if none). What the IK takes up is let
+go again while the foot is in the air. A foot bears on the deck while its
+lowest point is within PLANTED of it, and is free past FREE.
+
 The check, read back from the frames as set: every arm bone's direction
 against the source's, and every other bone's turn from rest against the
 source's, at every frame; the build fails over CHECK degrees (MPFB's pose
@@ -34,7 +46,7 @@ import math
 
 import bpy
 import numpy as np
-from mathutils import Vector
+from mathutils import Matrix, Quaternion, Vector
 
 import inputs
 import motion
@@ -66,6 +78,9 @@ def retarget(fig, name, spec, fps):
     scene.render.fps_base = 1.0
     fig.reset()
     fig.quiet()
+    # On a deck, crouched, the coat hangs from the body as it bends
+    # (motion.Figure.hang).
+    fig.hang = CROUCH_HANG if spec.get("deck") else None
     before = set(bpy.data.objects)
     actions = set(bpy.data.actions)
     bpy.ops.import_scene.gltf(filepath=inputs.path(spec["file"]), bone_heuristic="TEMPERANCE")
@@ -105,8 +120,13 @@ def retarget(fig, name, spec, fps):
 
     clip = motion.Clip(name, fps, bool(spec.get("loop")), bool(spec.get("idle")))
     sources = []
-    for f in range(first, last + 1):
-        scene.frame_set(f)
+    # Played over its own length, or slowed (or quickened) to `seconds`.
+    count = last - first + 1
+    if spec.get("seconds"):
+        count = int(round(spec["seconds"] * fps)) + 1
+    for i in range(count):
+        t = first + (last - first) * i / max(count - 1, 1)
+        scene.frame_set(int(math.floor(t)), subframe=t - math.floor(t))
         world = {}
         rot = {}
         for b in order:
@@ -154,10 +174,26 @@ def retarget(fig, name, spec, fps):
         raise AssertionError(f"{name}: {where} points {worst:.1f}° off the source's (the most is {CHECK}°)")
 
     smooth(clip, SMOOTH)
+    # The file it is written to, beside the look's clips, if not theirs.
+    clip.group = spec.get("group")
     lock = spec.get("lock") or []
-    if lock:
+    clip.deck = bool(spec.get("deck"))
+    if spec.get("deck"):
+        _ground(fig, clip)
+        if spec.get("head") is not None:
+            _stoop(fig, clip, spec["head"])
+        _plant(fig, clip, spec.get("speed", 0.0))
+        _hands_up(fig, clip)
+        _clearance(fig, clip)
+        if clip.loop:
+            _steady_seam(clip)
+    elif lock:
         _lock(fig, clip, lock)
         clip.planted = list(lock)
+    # The joints it takes toward the ends of their ranges, as the hike
+    # does (a deep crouch's knees and ankles).
+    clip.notes["strain"] = list(spec.get("strain") or [])
+    fig.hang = None
     fig.quiet(False)
     return clip
 
@@ -256,6 +292,423 @@ def check(fig, clip, sources, child, rest):
 def _rotation(m):
     """A matrix's rotation, its scale taken out first."""
     return m.to_3x3().normalized().to_quaternion()
+
+
+# A foot bears on the deck with its lowest point within this of it, and
+# none past FREE: between, by a smooth share. Walking, it bears only while
+# it moves back at BACK of the walk's speed or more.
+PLANTED = 0.015
+FREE = 0.035
+BACK = 0.5
+# Which of a foot's points bears is softened over this height, and how
+# much a foot bears, and what the IK takes up, eased over this many frames
+# (a Gaussian's sigma).
+SOFT = 0.01
+EASE = 1.5
+# How far the coat's chains hang toward straight down from the body as it
+# bends in a crouch: all the way, a coat's or an apron's front falling
+# between the knees rather than laid along the raised thighs.
+CROUCH_HANG = {"back": 1.0, "side": 1.0, "front": 1.0}
+# A knee's thickness under its joint; and how far clear of the deck the
+# fingers' tips are kept.
+KNEE = 0.06
+HANDS = 0.015
+# The hips are down in a crouch this share of their height standing under
+# where they stand.
+CROUCH = 0.45
+# The back is bent this far, at most, to keep the head down (degrees).
+STOOP_MOST = 30.0
+
+
+def _sole(fig, s):
+    """A foot's points on what it stands on, as the build stands feet: the
+    ankle above the heel, the ball and the toes' tip above the sole; each
+    with how far above the deck it is when the foot bears there."""
+    m = fig.arm.matrix_world
+    return [(m @ fig.bones[f"foot_{s}"].head, motion.HEEL_CLEAR),
+            (m @ fig.bones[f"ball_{s}"].head, motion.TOE_CLEAR),
+            (m @ fig.bones[f"ball_{s}"].tail, motion.TOE_CLEAR)]
+
+
+def _lowest(fig, s):
+    """The foot's lowest point's height over the deck, and which it is."""
+    pts = _sole(fig, s)
+    k = min(range(len(pts)), key=lambda i: pts[i][0].z - pts[i][1])
+    return pts[k][0].z - pts[k][1], k
+
+
+def _ring(clip):
+    """The frames that differ: a loop's last is its first."""
+    return clip.frames[:-1] if clip.loop else clip.frames
+
+
+def _close(clip):
+    if clip.loop:
+        clip.frames[-1] = {"rot": dict(clip.frames[0]["rot"]), "pelvis": clip.frames[0]["pelvis"].copy()}
+
+
+def _steady_seam(clip):
+    """A loop begun where its bones turn most steadily, so its seam falls
+    in the smooth of the motion, not on a foot coming down: the frame
+    where the change of any bone's turning across it is least beyond what
+    the changes either side account for (as the clips' gate judges a
+    seam). Its contacts go round with it."""
+    ring = clip.frames[:-1]
+    n = len(ring)
+    worst = np.zeros(n)
+    for b in ring[0]["rot"]:
+        v = [motion.log(ring[k]["rot"][b].inverted() @ ring[(k + 1) % n]["rot"][b]) for k in range(n)]
+        for k in range(n):
+            before = v[k - 2] - v[k - 3]
+            across = v[k] - v[k - 1]
+            after = v[(k + 1) % n] - v[k]
+            worst[k] = max(worst[k], float(np.linalg.norm(across - (before + after) / 2)))
+    k = int(np.argmin(worst))
+    ring = ring[k:] + ring[:k]
+    clip.frames = ring + [{"rot": dict(ring[0]["rot"]), "pelvis": ring[0]["pelvis"].copy()}]
+    if clip.contacts:
+        contacts = clip.contacts[:-1]
+        contacts = contacts[k:] + contacts[:k]
+        clip.contacts = contacts + [dict(contacts[0])]
+    clip.notes["begun at frame"] = k
+
+
+def _ground(fig, clip):
+    """The body moved down (or up) so the soles are mostly on the deck:
+    the median, over the frames, of the lower foot's lowest point."""
+    lows = []
+    for fr in _ring(clip):
+        fig.set_rotations(fr["rot"], fr["pelvis"])
+        lows.append(min(_lowest(fig, s)[0] for s in ("l", "r")))
+    g = float(np.median(lows))
+    pb = fig.bones["pelvis"]
+    for fr in _ring(clip):
+        fig.set_rotations(fr["rot"], fr["pelvis"])
+        pb.location = _local_move(pb, Vector((0.0, 0.0, -g)))
+        fig.update()
+        fr["pelvis"] = pb.location.copy()
+    _close(clip)
+    clip.notes["grounded by"] = round(-g, 4)
+
+
+def _stoop(fig, clip, most):
+    """The back's bend shared evenly among its three joints (the chest
+    turned as the source has it), then bent forward, the neck and head
+    back as far, by the share of a crouch the hips are down: as far as
+    keeps the head's joint under most over the deck in every frame
+    crouched."""
+    rest = fig.arm.data.bones["pelvis"].head_local.z
+    frames = _ring(clip)
+    spine = ("spine_01", "spine_02", "spine_03")
+    bones = fig.arm.data.bones
+    rest_q = {b: bones[b].matrix_local.to_quaternion() for b in ("pelvis",) + spine}
+    for fr in frames:
+        fig.set_rotations(fr["rot"], fr["pelvis"])
+        chest = fig.world_matrix("spine_03").to_quaternion()
+        pelvis = fig.world_matrix("pelvis").to_quaternion()
+        for b in spine:
+            fig.bones[b].rotation_quaternion = Quaternion()
+        fig.update()
+        # The chest's turn on the hips, as one turn about one axis.
+        carried = pelvis @ rest_q["pelvis"].inverted() @ rest_q["spine_03"]
+        turn = chest @ carried.inverted()
+        axis, angle = turn.to_axis_angle()
+        for b in spine:
+            pb = fig.bones[b]
+            head = pb.matrix.to_translation()
+            r = Matrix.Rotation(angle / 3, 4, axis)
+            pb.matrix = Matrix.Translation(head) @ r @ Matrix.Translation(-head) @ pb.matrix
+            fig.update()
+        fr["rot"] = fig.rotations()
+    base = [dict(fr["rot"]) for fr in frames]
+
+    def bent(fr, rot, degrees):
+        fig.set_rotations(rot, fr["pelvis"])
+        down = min(max((rest - fig.world("pelvis").z) / (CROUCH * rest), 0.0), 1.0)
+        d = degrees * down * down * (3 - 2 * down)
+        fig.turn([("spine_01", "x", d / 3), ("spine_02", "x", d / 3), ("spine_03", "x", d / 3),
+                  ("neck_01", "x", -d / 2), ("head", "x", -d / 2)])
+        return down
+
+    def over(degrees):
+        worst = -math.inf
+        for fr, rot in zip(frames, base):
+            if bent(fr, rot, degrees) >= 1.0:
+                worst = max(worst, fig.world("head").z - most)
+        return worst
+
+    degrees = 0.0
+    while over(degrees) > 0:
+        degrees += 0.5
+        if degrees > STOOP_MOST:
+            raise AssertionError(f"{clip.name}: the head stays {over(degrees):.3f} m over {most} m "
+                                 f"with the back bent {STOOP_MOST}°")
+    top = -math.inf
+    for fr, rot in zip(frames, base):
+        if bent(fr, rot, degrees) >= 1.0:
+            top = max(top, fig.world("head").z)
+        fig.derive()
+        fr["rot"] = fig.rotations()
+    _close(clip)
+    clip.notes["back bent"] = degrees
+    clip.notes["head over the deck"] = round(top, 4) if top > -math.inf else None
+
+
+def _plant(fig, clip, speed):
+    """Each foot, while it bears on the deck, held to it by IK: its lowest
+    point on the deck and moving back (the figure's +y: it faces -y) at
+    speed; let go again in the air. Records each frame's contacts (the
+    ankles' targets while it bears fully), the speed the source walked
+    at, and how far a foot's point on the deck slides (over the deck as it
+    moves back at speed) while it bears, and how far off the deck it is."""
+    frames = _ring(clip)
+    n = len(frames)
+    dt = 1.0 / clip.fps
+    back = Vector((0.0, speed * dt, 0.0))
+    sides = ("l", "r")
+    loop = clip.loop
+
+    def at(f):
+        return f % n if loop else min(max(f, 0), n - 1)
+
+    # Each foot's sole as the source moves it: its lowest point's height,
+    # and its points (the heel, the ball, the toes) with how much each is
+    # the one bearing (the lowest, softly, so a roll from heel to toe is
+    # smooth).
+    soles = {s: [] for s in sides}
+    for fr in frames:
+        fig.set_rotations(fr["rot"], fr["pelvis"])
+        for s in sides:
+            soles[s].append(_bearing(fig, s) + (fig.world(f"foot_{s}"),))
+    walked = []
+    moves = {}
+    for s in sides:
+        sole = soles[s]
+
+        def moved(f, g):
+            """The foot's bearing point's move from frame f to g, on the deck."""
+            _, pts, share, _ = sole[f]
+            m = sum(((sole[g][1][i] - pts[i]) * share[i] for i in range(len(pts))), Vector())
+            m.z = 0.0
+            return m
+
+        # Low on the deck; and, walking, moving back as a foot that bears
+        # does (one passing low in the air moves forward). Smoothed, so it
+        # comes down and lifts off over a few frames.
+        w = []
+        for f in range(n):
+            share = 1.0 - _smooth((sole[f][0] - PLANTED) / (FREE - PLANTED))
+            if speed > 0:
+                going = (moved(f, at(f + 1)) + moved(at(f - 1), f)).y / (2 * dt)
+                share *= _smooth(going / (BACK * speed))
+            w.append(share)
+        w = _gauss(w, EASE, loop)
+        bearing = [x > 1e-3 for x in w]
+        # Gone through from where the foot leaves the deck (round a loop),
+        # so each time it bears is whole.
+        start = 0
+        if loop:
+            start = next((f for f in range(n) if not bearing[f] and bearing[(f - 1) % n]), 0)
+        order = [(start + i) % n for i in range(n)]
+        # The correction, gathered while the foot bears: the bearing
+        # point's own move undone, and the walk's put in its place.
+        c = [None] * n
+        acc = Vector()
+        for i, f in enumerate(order):
+            if not bearing[f]:
+                acc = Vector()
+                continue
+            c[f] = acc.copy()
+            g = order[i + 1] if i + 1 < n else (order[0] if loop else None)
+            if g is None or not bearing[g]:
+                continue
+            m = moved(f, g)
+            if min(w[f], w[g]) > 0.99:
+                walked.append(m.y / dt)
+            acc = acc + (back - m) * min(w[f], w[g])
+        # In the air, what was taken up is let go before the foot comes
+        # down again.
+        i = 0
+        while i < n:
+            if c[order[i]] is not None:
+                i += 1
+                continue
+            j = i
+            while j < n and c[order[j]] is None:
+                j += 1
+            before = order[i - 1] if i > 0 else (order[-1] if loop else None)
+            gone = c[before] if before is not None and c[before] is not None else Vector()
+            span = j - i + 1
+            for k in range(i, j):
+                c[order[k]] = gone * (1.0 - _smooth((k - i + 1) / span))
+            i = j
+        c = [Vector(v) for v in zip(*(_gauss([v[d] for v in c], EASE, loop) for d in range(3)))]
+        moves[s] = (w, c)
+    clip.contacts = []
+    for f, fr in enumerate(frames):
+        fig.set_rotations(fr["rot"], fr["pelvis"])
+        contacts = {}
+        for s in sides:
+            w, c = moves[s]
+            low = soles[s][f][0]
+            lift = -low * w[f] if low > 0 else -low
+            target = soles[s][f][3] + c[f] + Vector((0.0, 0.0, lift))
+            _leg(fig, s, target, fig.world(f"calf_{s}"), w[f])
+            if w[f] >= 0.999:
+                contacts[f"foot_{s}"] = target.copy()
+        fig.derive()
+        fr["rot"] = fig.rotations()
+        clip.contacts.append(contacts)
+    _close(clip)
+    if loop:
+        clip.contacts.append(dict(clip.contacts[0]))
+    # The result, read back: each time a foot bears fully, how far its
+    # bearing points have slid over the deck (as it moves back at speed)
+    # since it came down, and how far off the deck it is.
+    slide = off = 0.0
+    for s in sides:
+        w = moves[s][0]
+        after = []
+        for fr in frames:
+            fig.set_rotations(fr["rot"], fr["pelvis"])
+            after.append(_bearing(fig, s))
+        start = next((f for f in range(n) if w[f] < 0.999), 0) if loop else 0
+        acc = None
+        for i in range(n + (1 if loop else 0)):
+            f = (start + i) % n
+            if w[f] < 0.999:
+                acc = None
+                continue
+            off = max(off, abs(after[f][0]))
+            if acc is None:
+                acc = Vector()
+            else:
+                e = (start + i - 1) % n
+                _, pts, share = after[e]
+                m = sum(((after[f][1][k] - pts[k]) * share[k] for k in range(len(pts))), Vector()) - back
+                m.z = 0.0
+                acc = acc + m
+                slide = max(slide, acc.length)
+    clip.notes["speed"] = speed
+    clip.notes["speed walked"] = round(float(np.mean(walked)), 4) if walked else 0.0
+    clip.notes["slide"] = round(slide, 4)
+    clip.notes["off the deck"] = round(off, 4)
+
+
+def _bearing(fig, s):
+    """A foot's lowest point's height over the deck; its points (the heel,
+    the ball, the toes' tip, each as far over the deck as the sole under
+    it); and how much each bears: the lowest most, softly (by SOFT)."""
+    pts = _sole(fig, s)
+    heights = [p.z - clear for p, clear in pts]
+    low = min(heights)
+    e = [math.exp(-(h - low) / SOFT) for h in heights]
+    total = sum(e)
+    return low, [p.copy() for p, _ in pts], [x / total for x in e]
+
+
+def _gauss(values, sigma, loop):
+    """A series through a Gaussian of sigma frames: round a loop, or held
+    at its ends."""
+    a = np.array(values, float)
+    n = len(a)
+    r = int(math.ceil(3 * sigma))
+    k = np.exp(-0.5 * (np.arange(-r, r + 1) / sigma) ** 2)
+    k /= k.sum()
+    if loop:
+        out = sum(wt * np.roll(a, -(i - r)) for i, wt in enumerate(k))
+    else:
+        pad = np.concatenate([np.repeat(a[:1], r), a, np.repeat(a[-1:], r)])
+        out = sum(wt * pad[i:i + n] for i, wt in enumerate(k))
+    return list(out)
+
+
+def _clearance(fig, clip):
+    """Nothing but the feet on the deck: how far clear of it the fingers'
+    tips and the knees (their joints less a knee's thickness) are, and
+    which is nearest."""
+    clear, nearest = math.inf, None
+    sides = ("l", "r")
+    tips = [f"{d}_03_{s}" for d in motion.FINGERS for s in sides]
+    for f, fr in enumerate(_ring(clip)):
+        fig.set_rotations(fr["rot"], fr["pelvis"])
+        for name, z in [(b, fig.world(b, "tail").z) for b in tips] + \
+                [(f"calf_{s}", fig.world(f"calf_{s}").z - KNEE) for s in sides]:
+            if z < clear:
+                clear, nearest = z, f"{name} at frame {f}"
+    clip.notes["clear of the deck"] = round(clear, 4)
+    clip.notes["nearest the deck"] = nearest
+
+
+def _hands_up(fig, clip):
+    """The elbows bent a little more, both alike through the clip, as far
+    as keeps the fingers' tips HANDS clear of the deck: long arms hanging
+    in a crouch."""
+    frames = _ring(clip)
+    tips = [f"{d}_03_{s}" for d in motion.FINGERS for s in ("l", "r")]
+    base = [dict(fr["rot"]) for fr in frames]
+
+    def lowest(degrees):
+        low = math.inf
+        for fr, rot in zip(frames, base):
+            fig.set_rotations(rot, fr["pelvis"])
+            if degrees:
+                fig.turn([(f"lowerarm_{s}", "lx", degrees) for s in ("l", "r")])
+            low = min([low] + [fig.world(b, "tail").z for b in tips])
+        return low
+
+    degrees = 0.0
+    if lowest(0.0) < HANDS:
+        # Which way the elbow bends the hand up: the forearm's own x.
+        way = 1.0 if lowest(5.0) > lowest(-5.0) else -1.0
+        while lowest(degrees) < HANDS:
+            degrees += way
+            if abs(degrees) > 30:
+                raise AssertionError(f"{clip.name}: the fingers stay on the deck with the elbows bent 30° more")
+        for fr, rot in zip(frames, base):
+            fig.set_rotations(rot, fr["pelvis"])
+            fig.turn([(f"lowerarm_{s}", "lx", degrees) for s in ("l", "r")])
+            fig.derive()
+            fr["rot"] = fig.rotations()
+        _close(clip)
+    clip.notes["elbows bent"] = abs(degrees)
+
+
+def _smooth(x):
+    x = min(max(x, 0.0), 1.0)
+    return x * x * (3 - 2 * x)
+
+
+def _leg(fig, s, target, knee, bears=1.0):
+    """A leg's ankle to target, its knee in the plane it bent in (through
+    the hip, the target and knee); the foot turned as it was in the world
+    while it bears on the deck (bears 1), as it was on the shin in the air
+    (0), and the toes as they were on the foot."""
+    thigh, calf, foot, ball = (f"thigh_{s}", f"calf_{s}", f"foot_{s}", f"ball_{s}")
+    world = fig.world_matrix(foot).to_quaternion()
+    own = {b: fig.bones[b].rotation_quaternion.copy() for b in (foot, ball)}
+    hip = fig.world(thigh)
+    l1 = fig.arm.data.bones[thigh].length
+    l2 = fig.arm.data.bones[calf].length
+    d = Vector(target) - hip
+    most = l1 + l2 - 1e-4
+    if d.length > most:
+        d = d.normalized() * most
+    dn = d.normalized()
+    toward = knee - hip
+    toward = (toward - dn * toward.dot(dn)).normalized()
+    a = (l1 * l1 - l2 * l2 + d.length_squared) / (2 * d.length)
+    h = math.sqrt(max(l1 * l1 - a * a, 0.0))
+    fig._aim(thigh, hip + dn * a + toward * h)
+    fig._aim(calf, hip + d)
+    for b, q in own.items():
+        fig.bones[b].rotation_quaternion = q
+    fig.update()
+    if bears > 0:
+        m = fig.world_matrix(foot)
+        q = m.to_quaternion().slerp(world, bears)
+        fig.bones[foot].matrix = fig.arm.matrix_world.inverted() @ Matrix.LocRotScale(m.to_translation(), q, None)
+        fig.update()
 
 
 def _lock(fig, clip, effectors):

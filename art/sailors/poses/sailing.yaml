@@ -488,6 +488,85 @@ poses:
       - [head, z, -20]
       - [head, x, 6]
 
+  # On the rail of a keelboat: sat on the deck's edge facing outboard (on
+  # the starboard side, the left hand and foot forward), the legs over the
+  # side, the backs of the knees just past the edge and the shins hanging
+  # down the topsides, a little out from them, the feet loose; the coat's
+  # skirts as seated, the front over the thighs and the sides on the deck;
+  # the back hangs down behind (the clips' hang), laid on the deck there
+  # short of the cuddy's side. Upright, the hands resting on the thighs, the forward one by its
+  # knee; looking forward along the boat. (Sat upright, the deck is beyond
+  # an easy reach.)
+  rail-sit:
+    place: rail
+    turn:
+      - [thigh_l, x, -88]
+      - [thigh_r, x, -88]
+      - [thigh_l, z, 5]
+      - [thigh_r, z, -5]
+      - [calf_l, x, 76]
+      - [calf_r, x, 76]
+      - [foot_l, x, 22]
+      - [foot_r, x, 22]
+      - [spine_01, x, 4]
+      - [spine_02, x, 4]
+      - [neck_01, z, 10]
+      - [head, z, 22]
+      - [skirt_front_l_01, x, -78]
+      - [skirt_front_r_01, x, -78]
+      - [skirt_side_l_01, y, 80]
+      - [skirt_side_r_01, y, -80]
+      - [skirt_back_l_01, x, 82]
+      - [skirt_back_r_01, x, 82]
+    ik:
+      hand_l: { at: bone, bone: thigh_l, offset: [0.03, -0.13, -0.32], pole: [0.5, 0.3, -0.3] }
+      hand_r: { at: bone, bone: thigh_r, offset: [-0.03, -0.13, -0.2], pole: [-0.5, 0.3, -0.3] }
+
+  rail-sit-luff:
+    from: rail-sit
+    turn:
+      - [spine_03, z, 4]
+      - [neck_01, z, 14]
+      - [head, z, 20]
+      - [head, x, -18]
+
+  rail-sit-sea:
+    from: rail-sit
+    turn:
+      - [neck_01, z, -8]
+      - [head, z, -20]
+      - [head, x, 6]
+
+  # Leaning out on the rail: the same, the body bent out over the water
+  # from the hips, the hands braced on the knees, the head kept up looking
+  # forward.
+  rail-lean:
+    from: rail-sit
+    turn:
+      - [spine_01, x, 12]
+      - [spine_02, x, 10]
+      - [spine_03, x, 8]
+      - [neck_01, x, -10]
+      - [head, x, -12]
+    ik:
+      hand_l: { at: bone, bone: thigh_l, offset: [0.03, -0.12, -0.38], pole: [0.5, 0.3, -0.3] }
+      hand_r: { at: bone, bone: thigh_r, offset: [-0.03, -0.12, -0.36], pole: [-0.5, 0.3, -0.3] }
+
+  rail-lean-luff:
+    from: rail-lean
+    turn:
+      - [spine_03, z, 4]
+      - [neck_01, z, 14]
+      - [head, z, 20]
+      - [head, x, -14]
+
+  rail-lean-sea:
+    from: rail-lean
+    turn:
+      - [neck_01, z, -8]
+      - [head, z, -20]
+      - [head, x, 6]
+
 clips:
   # At the wheel: looking ahead, aloft, ahead and to windward. Its -port
   # is for the wind over the port side.
@@ -509,6 +588,32 @@ clips:
       - { pose: wheel-stand, hold: 0.2, ramp: 1.8, arc: [0.06, 0.04], anticipate: 0.06 }
       - { pose: wheel-ahead, hold: 1.0, ramp: 1.8, lead: head }
       - { pose: wheel-stand, hold: 0.3, ramp: 1.8, lead: head }
+
+  # On the rail, upright and leaning out: each looking forward along the
+  # boat, up at the jib and out over the sea to windward. Their -port are
+  # for the port side's rail. The game blends the one into the other by the
+  # wind.
+  rail:
+    loop: true
+    idle: true
+    sides: true
+    hang: { back: 1.0, front_02: 1.0 }
+    keys:
+      - { pose: rail-sit, hold: 1.6, ramp: 1.5, lead: head }
+      - { pose: rail-sit-luff, hold: 1.4, ramp: 1.3, lead: head, anticipate: 0.05 }
+      - { pose: rail-sit, hold: 1.2, ramp: 1.5, lead: head }
+      - { pose: rail-sit-sea, hold: 1.2, ramp: 1.4, lead: head, anticipate: 0.05 }
+
+  rail-out:
+    loop: true
+    idle: true
+    sides: true
+    hang: { back: 1.0, front_02: 1.0 }
+    keys:
+      - { pose: rail-lean, hold: 1.6, ramp: 1.5, lead: head }
+      - { pose: rail-lean-luff, hold: 1.4, ramp: 1.3, lead: head, anticipate: 0.05 }
+      - { pose: rail-lean, hold: 1.2, ramp: 1.5, lead: head }
+      - { pose: rail-lean-sea, hold: 1.2, ramp: 1.4, lead: head, anticipate: 0.05 }
 
   # On the trapeze: fully out, and part out, each looking ahead, up at the
   # sails and ahead again. Their -port are for the port side's wire. The
