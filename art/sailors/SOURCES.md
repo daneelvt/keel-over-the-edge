@@ -34,8 +34,11 @@ in its Source edition: only the clips the build uses are copied, each
 into a file of its own with the library's skeleton and nothing else, by
 `go run ./tools/sailors -vendor UAL1.glb -into quaternius -pack "..." -clips
 Idle_Loop,...` from the edition's `Unreal-Godot/UAL1.glb` (SHA-256
-d1cb4537efa4c06a953ca951e5935062f88c2580ac68e45045592d587bddb43d), which
-prints their rows. The library's licence comes with them.
+d1cb4537efa4c06a953ca951e5935062f88c2580ac68e45045592d587bddb43d), or from
+its second volume's `Unreal-Godot/UAL2.glb` (Source edition, SHA-256
+ad3ae049c7d3d4846133b59dba6218fdabebe05d3aec646caef6665f6c540684, under the
+same licence), which prints their rows. The library's licence comes with
+them.
 
 | File                                         | Pack                                                                      | Licence | SHA-256                                                          |
 | -------------------------------------------- | ------------------------------------------------------------------------- | ------- | ---------------------------------------------------------------- |

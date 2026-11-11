@@ -504,6 +504,8 @@ class Ship:
     # middle this far inboard of the fall.
     BRACE_AT = 1.6
     HAUL_BESIDE = 0.03
+    # The fall as it is hauled, this far over the lead on her rail.
+    BRACE_UP = 0.1
     # Where a figure stands in the top: this far out from her middle toward
     # her shrouds; and the topmast shroud it holds, this share of the way
     # up from the top's rim.
@@ -552,7 +554,8 @@ class Ship:
         self.footrope = [node.matrix_world @ Vector((p[0], -p[2], p[1])) for p in rows(y["footrope"])]
         self.yard_at = node.matrix_world.translation.copy()
         b = c["brace"]
-        self.brace = (blender(list(b["lead"])), blender(list(b["fall"])))
+        up = Vector((0.0, 0.0, self.BRACE_UP))
+        self.brace = (blender(list(b["lead"])) + up, blender(list(b["fall"])) + up)
         objs = [bpy.data.objects["ship-" + n] for n in self.SOLID]
         # Her hull, decks and all: what cloth hanging to her deck is laid on.
         self.deck = objs[0]

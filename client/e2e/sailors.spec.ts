@@ -4,8 +4,8 @@
 // sailor's files load with their skin, skeleton, atlas and mask; every
 // material in the room is the factory's, with the bend; and the figures are
 // drawn posed by the GPU where the skeleton on the CPU says, standing on the
-// quay, seated in a dinghy and on a keelboat's rail, and crouched on her
-// deck. The silhouettes are drawn black, so a pixel
+// quay, seated in a dinghy and on a keelboat's rail, crouched on her
+// deck, and aboard the tall ship. The silhouettes are drawn black, so a pixel
 // says whether a sailor is there: a figure drawn unposed would leave the
 // places its pose takes it to empty, and cover the places it left.
 //
@@ -230,6 +230,24 @@ test('the Rover stands and sits in both versions, dressed, skinned and posed', a
     ).toBe(true);
     for (const [name, at] of Object.entries(await bones(page, parts))) {
       expect(darkest(railed, at), `${name}, ${clip}`).toBeLessThanOrEqual(DARK);
+    }
+  }
+});
+
+test('the Rover aboard the tall ship in both versions: leaning on her rail, sat on her hatch, hauling, in her top and on her yard', async ({
+  page,
+}) => {
+  test.setTimeout(240_000);
+  await openRoom(page, 'view=lineup&black=1&t=1&clip=leaning&look=rover');
+  const parts = ['head', 'pelvis', 'hand_l', 'hand_r'];
+  for (const clip of ['leaning', 'hatch-sit', 'walk', 'haul-port', 'aloft', 'yard']) {
+    const aboard = await show(page, { clip, t: 1 });
+    expect(
+      (await page.evaluate(() => globalThis.dressing.figures())).every((f) => f.inBoat),
+      clip,
+    ).toBe(true);
+    for (const [name, at] of Object.entries(await bones(page, parts))) {
+      expect(darkest(aboard, at), `${name}, ${clip}`).toBeLessThanOrEqual(DARK);
     }
   }
 });

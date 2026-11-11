@@ -17,7 +17,8 @@ poses:
   # hands on it; the feet forward of the hips, the left ahead, the knees
   # bent, and the body leaning back from them on the rope, the chest turned a little to the
   # fall. Targets on the fall are along it toward the lead, across it
-  # inboard, and up; the feet's likewise from the deck under the hauler.
+  # inboard, and up, each brought along it toward the lead to an easy reach
+  # of its shoulder; the feet's likewise from the deck under the hauler.
   haul-grip:
     place: brace
     turn:
@@ -45,10 +46,10 @@ poses:
       - [pinky_01_r, lx, 50]
       - [pinky_02_r, lx, 65]
       - [pinky_03_r, lx, 40]
-      - [thigh_l, x, -16]
-      - [thigh_r, x, -20]
-      - [calf_l, x, 22]
-      - [calf_r, x, 30]
+      - [thigh_l, x, -26]
+      - [thigh_r, x, -30]
+      - [calf_l, x, 38]
+      - [calf_r, x, 46]
       - [pelvis, x, -6]
       - [spine_02, z, 6]
       - [spine_03, z, 10]
@@ -57,7 +58,7 @@ poses:
       - [neck_01, z, -6]
       - [head, z, -8]
     ik:
-      foot_l: { at: haul-deck, offset: [0.26, -0.06, 0.1] }
+      foot_l: { at: haul-deck, offset: [0.16, -0.06, 0.1] }
       foot_r: { at: haul-deck, offset: [0.0, 0.12, 0.1] }
 
   # The left hand reached over the right along the fall, the body coming
@@ -113,10 +114,12 @@ poses:
       hand_r: { at: brace, offset: [0.04, 0.0, 0.0], reach: 0.72, pole: [-0.5, 0.4, -0.5] }
 
   # Standing in the main top, out toward the starboard shrouds, facing
-  # forward: the right hand on a topmast shroud at the shoulder's height,
-  # the left at the side; looking ahead.
+  # forward, the knees soft, as far out as leaves the right hand an easy
+  # reach to a topmast shroud about the shoulder's height; the left at the
+  # side; looking ahead.
   aloft-stand:
     place: top
+    shift: [0.0, 0.0, -0.04]
     turn:
       - [upperarm_l, y, 30]
       - [lowerarm_l, x, 14]
@@ -134,8 +137,8 @@ poses:
       - [pinky_03_r, lx, 40]
     ik:
       hand_r: { at: topmast-shroud, offset: [0.0, 0.04, 0.0], pole: [-0.8, 0.2, -0.3] }
-      foot_l: { at: aloft, offset: [0.1, 0.13, 0.1] }
-      foot_r: { at: aloft, offset: [-0.05, -0.13, 0.1] }
+      foot_l: { at: aloft, offset: [0.08, 0.12, 0.1] }
+      foot_r: { at: aloft, offset: [-0.04, -0.12, 0.1] }
 
   # Out over the sea to starboard, down at the deck, and up at the
   # topsail.
@@ -195,8 +198,8 @@ poses:
       - [pinky_01_r, lx, 30]
       - [pinky_02_r, lx, 40]
     ik:
-      hand_l: { at: yard, offset: [0.18, 0.18, 0.05], pole: [0.7, 0.3, 0.0] }
-      hand_r: { at: yard, offset: [0.18, -0.18, 0.05], pole: [-0.7, 0.3, 0.0] }
+      hand_l: { at: yard, offset: [0.18, 0.18, 0.05], reach: 0.74, pole: [0.7, 0.3, 0.0] }
+      hand_r: { at: yard, offset: [0.18, -0.18, 0.05], reach: 0.74, pole: [-0.7, 0.3, 0.0] }
       foot_l: { at: yard-foot-in, offset: [-0.1, 0.0, 0.09], pole: [0.6, -0.3, 0.0] }
       foot_r: { at: yard-foot-out, offset: [-0.1, 0.0, 0.09], pole: [-0.6, -0.3, 0.0] }
 
@@ -208,8 +211,8 @@ poses:
       - [neck_01, x, 8]
       - [head, x, 6]
     ik:
-      hand_l: { at: yard, offset: [0.14, 0.2, 0.13], pole: [0.7, 0.3, 0.0] }
-      hand_r: { at: yard, offset: [0.14, -0.2, 0.13], pole: [-0.7, 0.3, 0.0] }
+      hand_l: { at: yard, offset: [0.14, 0.2, 0.13], reach: 0.74, pole: [0.7, 0.3, 0.0] }
+      hand_r: { at: yard, offset: [0.14, -0.2, 0.13], reach: 0.74, pole: [-0.7, 0.3, 0.0] }
 
   # Looking out along the yard to its arm.
   yard-out:
@@ -240,6 +243,8 @@ clips:
     loop: true
     idle: true
     sides: true
+    # The elbow of the arm on the shroud is bent near the end of its range.
+    strain: [lowerarm]
     group: aloft
     keys:
       - { pose: aloft-stand, hold: 1.6, ramp: 1.5, lead: head }
@@ -310,6 +315,7 @@ retarget:
     idle: true
     deck: true
     stage: ship-hatch
+    strain: [hand]
     group: ship
   hatch-shift:
     file: vendor/quaternius/Sitting_Idle02_Loop.glb
@@ -325,6 +331,7 @@ retarget:
     idle: true
     deck: true
     stage: ship-hatch
+    strain: [hand]
     group: ship
   hatch-talk:
     file: vendor/quaternius/Sitting_Talking_Loop.glb

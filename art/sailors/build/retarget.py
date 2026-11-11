@@ -781,7 +781,7 @@ SHIP_HATCH = "ship-hatch"
 # forearms' line than this share of its upper arm (the back bent further if
 # it would be), nor lower than this share; and how far the back may bend.
 LEAN_CLEAR = 0.015
-LEAN_HIGH = 0.9
+LEAN_HIGH = 0.97
 LEAN_LOW = 0.25
 LEAN_MOST = 35.0
 # A hand is on the rail while its wrist is within this of where it rests on

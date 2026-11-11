@@ -95,6 +95,17 @@ import { restageAnimation, restageOf, restagePlace } from '../render/sailors/res
 import { Rig } from '../render/sailors/rig';
 import { atWheel, CLIPS } from '../render/sailors/runtime';
 import {
+  company,
+  DECK_CLIPS,
+  inAloftFile,
+  inShipFile,
+  shipAnchor,
+  shipPlace,
+  shipPoint,
+  shipSide,
+  WALK_SPEED,
+} from '../render/sailors/ship';
+import {
   onPelvis,
   onWire,
   TRAPEZE_CLIPS,
@@ -135,6 +146,8 @@ export interface LookFiles {
       trapeze?: string;
       harness?: string;
       rail?: string;
+      ship?: string;
+      aloft?: string;
     }
   >;
 }
@@ -144,7 +157,7 @@ export function builtLooks(files: Record<string, string>): LookFiles[] {
   const looks = new Map<string, LookFiles>();
   for (const [path, url] of Object.entries(files)) {
     const m =
-      /\/art\/sailors\/([^/]+)\/([a-z]+)(?:\.(deck|far|clips|wheel|trapeze|harness|rail))?\.glb$/.exec(
+      /\/art\/sailors\/([^/]+)\/([a-z]+)(?:\.(deck|far|clips|wheel|trapeze|harness|rail|ship|aloft))?\.glb$/.exec(
         path,
       );
     if (m === null) {
@@ -165,6 +178,10 @@ export function builtLooks(files: Record<string, string>): LookFiles[] {
       v.harness = url;
     } else if (kind === 'rail') {
       v.rail = url;
+    } else if (kind === 'ship') {
+      v.ship = url;
+    } else if (kind === 'aloft') {
+      v.aloft = url;
     } else {
       v.levels[(kind ?? 'close') as Level] = url;
     }
@@ -349,7 +366,7 @@ interface Figure {
   harness: { root: Object3D; mixer: AnimationMixer; meshes: Mesh[]; hook: Vector3 | null } | null;
   wire: { mesh: Mesh; side: number; hounds: Vector3; hook: Vector3 } | null;
   /** Walking at a crouch along a side deck: where it starts, and how far it goes before it starts again. */
-  walk: { from: Vector3; length: number } | null;
+  walk: { from: Vector3; length: number; speed: number } | null;
 }
 
 /** The wheel stood at on the quay: its hub ahead of and above the helmsman's place, its rim, spokes and their handles beyond it, as the ships' models are built. */
@@ -372,6 +389,15 @@ const DISC_TOP = 0.4;
 const SIDE_DECK_IN = 0.3;
 const WALK_FROM = 0.75;
 const WALK = 0.9;
+/** Aboard the ship, standing about this far inboard of her rail, and walking this far forward. */
+const SHIP_STAND_IN = 1.1;
+const SHIP_WALK = 2.4;
+
+/** Whether a clip is the ship's company's: about her decks, or her work and aloft. */
+function onShip(clip: string): boolean {
+  return inShipFile(clip) || inAloftFile(clip);
+}
+
 /** What the camera looks at, seated on the rail boat moored: this high, and this far out from her middle toward the quay. */
 const RAIL_LOOK = { y: 1.0, out: 1.0 };
 
@@ -486,6 +512,8 @@ export class DressingRoom {
   #wireBoat: number | null = null;
   /** The catalog's boat whose model has a rail, once found; −1 if none has. */
   #railBoat: number | null = null;
+  /** The catalog's boat whose model marks her company's places (the tall ship), once found; −1 if none does. */
+  #ship: number | null = null;
   /** The boats made, by the catalog's boat and the place in the room, and their models' loads. */
   readonly #boats = new Map<string, { boat: Boat; loaded: Promise<void> }>();
   readonly #props = new Group();
@@ -726,6 +754,9 @@ export class DressingRoom {
     if (inRailFile(r.clip)) {
       await this.#findRailBoat();
     }
+    if (onShip(r.clip)) {
+      await this.#findShip();
+    }
     const made = await Promise.all(
       wanted.map((w) => this.#figure(w.look, w.version, w.level, w.colours, w.at)),
     );
@@ -774,9 +805,13 @@ export class DressingRoom {
       ? files?.trapeze
       : inRailFile(this.room.clip)
         ? files?.rail
-        : atWheel(this.room.clip)
-          ? files?.wheel
-          : files?.clips;
+        : inShipFile(this.room.clip)
+          ? files?.ship
+          : inAloftFile(this.room.clip)
+            ? files?.aloft
+            : atWheel(this.room.clip)
+              ? files?.wheel
+              : files?.clips;
     if (clipsUrl !== undefined) {
       clips = this.#clips.get(clipsUrl) ?? loadClips(clipsUrl, renderer);
       this.#clips.set(clipsUrl, clips);
@@ -874,6 +909,100 @@ export class DressingRoom {
     this.#wireBoat = -1;
   }
 
+  /** Finds the catalog's boat whose model marks her company's places, loading the boats' models in turn. */
+  async #findShip(): Promise<void> {
+    if (this.#ship !== null) {
+      return;
+    }
+    for (let k = 0; k < catalog.boats.length; k++) {
+      const { boat, loaded } = this.#boatAt(k, 0);
+      await loaded;
+      if (company(boat.parts) !== null) {
+        this.#ship = k;
+        return;
+      }
+    }
+    this.#ship = -1;
+  }
+
+  /**
+   * A figure aboard the ship: a clip placed on her at her place of its
+   * kind, on its side (the yard's under the yard's node); standing about
+   * on her quarterdeck inboard of her rail, facing outboard; walking along
+   * it, forward, at the walk's speed. Her square sails are left out, so a
+   * figure aloft is seen. The ship is turned so the figure faces the front.
+   * False if the room has no ship or the figure no clip.
+   */
+  async #onShip(f: Figure, i: number): Promise<boolean> {
+    const r = this.room;
+    if (!onShip(r.clip) || f.action === null || this.#ship === null || this.#ship < 0) {
+      return false;
+    }
+    // Every figure aboard the one ship, each a little apart from the last.
+    const { boat, loaded } = this.#boatAt(this.#ship, 0);
+    await loaded;
+    const c = company(boat.parts);
+    if (c === null) {
+      return false;
+    }
+    const n = this.#figuresWanted();
+    const anchor = shipAnchor(r.clip);
+    let parent: Object3D = boat.model;
+    let seat: Matrix4;
+    // Which way the figure faces on her: outboard (+x), forward (−z) or aft (+z).
+    let facing = Math.PI / 2;
+    // Apart: forward along her rail and deck, along the hatch's edge, to
+    // the next topmast shroud forward, out along the yard.
+    const apart =
+      anchor === 'hatch'
+        ? new Vector3((i - (n - 1) / 2) * 0.55, 0, 0)
+        : anchor === 'top'
+          ? new Vector3(0, 0, -0.5 * i)
+          : anchor === 'yard'
+            ? new Vector3(0.9 * i, 0, 0)
+            : new Vector3(0, 0, -1.4 * i);
+    if (anchor === null) {
+      const at = new Vector3(c.rail.x - SHIP_STAND_IN, 0, c.rail.z).add(apart);
+      at.y = this.#deckAt(boat, at.x, at.z);
+      if (r.clip === DECK_CLIPS.walk) {
+        facing = Math.PI;
+        f.walk = { from: at, length: SHIP_WALK, speed: WALK_SPEED };
+        seat = new Matrix4()
+          .makeTranslation(at.x, at.y, at.z)
+          .multiply(new Matrix4().makeRotationY(Math.PI));
+      } else {
+        seat = new Matrix4()
+          .makeTranslation(at.x, at.y, at.z)
+          .multiply(new Matrix4().makeRotationY(facing));
+      }
+    } else {
+      const place = f.clips?.places.get(`place-${r.clip}`);
+      if (place === undefined) {
+        return false;
+      }
+      const p = shipPoint(c, anchor);
+      if (p.node !== null) {
+        parent = boat.parts.get(p.node) ?? boat.model;
+      }
+      seat = shipPlace(place, p.at.add(apart), shipSide(r.clip));
+      facing = anchor === 'brace' ? 0 : anchor === 'rail' ? Math.PI / 2 : Math.PI;
+    }
+    boat.model.traverse((o) => {
+      if (o instanceof Mesh && (o.material as Material).name === 'flax') {
+        o.visible = false;
+      }
+    });
+    f.boat = boat;
+    parent.add(f.root);
+    f.root.matrixAutoUpdate = true;
+    seat.decompose(f.root.position, f.root.quaternion, f.root.scale);
+    this.stage.scene.add(boat.root);
+    boat.root.position.set(0, 0, MOORED_Z);
+    // Turned so the figure faces +z, the front.
+    boat.root.rotation.set(0, -facing * shipSide(r.clip), 0);
+    return true;
+  }
+
   /** Finds the catalog's boat whose model has a rail, loading the boats' models in turn. */
   async #findRailBoat(): Promise<void> {
     if (this.#railBoat !== null) {
@@ -923,7 +1052,7 @@ export class DressingRoom {
       seat = new Matrix4()
         .makeTranslation(from.x, from.y, from.z)
         .multiply(new Matrix4().makeRotationY(Math.PI));
-      f.walk = r.clip === CROUCH_CLIPS.walk ? { from, length: WALK } : null;
+      f.walk = r.clip === CROUCH_CLIPS.walk ? { from, length: WALK, speed: CROUCH_SPEED } : null;
     }
     f.boat = boat;
     boat.model.add(f.root);
@@ -965,7 +1094,7 @@ export class DressingRoom {
   /** Where a figure stands, or sits: on the quay or the disc, or in its boat. */
   async #place(f: Figure, i: number): Promise<void> {
     const r = this.room;
-    if (await this.#onRailBoat(f, i)) {
+    if ((await this.#onRailBoat(f, i)) || (await this.#onShip(f, i))) {
       return;
     }
     let seat = this.#seat(f);
@@ -1130,6 +1259,9 @@ export class DressingRoom {
     if (inRailFile(this.room.clip) && rail !== null && rail >= 0) {
       return rail;
     }
+    if (onShip(this.room.clip) && this.#ship !== null && this.#ship >= 0) {
+      return this.#ship;
+    }
     return onWire(this.room.clip) && wire !== null && wire >= 0 ? wire : this.room.boat;
   }
 
@@ -1207,6 +1339,24 @@ export class DressingRoom {
         ) ?? new Vector3();
       // On a rail boat, the crew are on her side nearest the quay.
       const railed = seated && inRailFile(r.clip);
+      const aboard = seated && onShip(r.clip);
+      if (aboard) {
+        // Aboard the ship: among the figures, wherever on her they are.
+        o.target.set(0, 0, 0);
+        const p = new Vector3();
+        for (const f of this.#figures) {
+          f.root.updateWorldMatrix(true, false);
+          o.target.add(f.root.getWorldPosition(p));
+        }
+        o.target.divideScalar(Math.max(1, this.#figures.length));
+        o.target.y += 0.85;
+        if (reset) {
+          o.azimuth = back;
+          o.elevation = 0.12;
+          o.distance = 3.2 + 1.2 * n;
+        }
+        return;
+      }
       o.target.set(
         0,
         railed ? RAIL_LOOK.y : seated ? 0.9 + by.y : QUAY_TOP + 0.95,
@@ -1255,8 +1405,8 @@ export class DressingRoom {
           // Forward along the side deck at the walk's speed, and again.
           const along =
             r.t !== null
-              ? r.t * CROUCH_SPEED
-              : ((this.#time + f.offset) * CROUCH_SPEED) % f.walk.length;
+              ? r.t * f.walk.speed
+              : ((this.#time + f.offset) * f.walk.speed) % f.walk.length;
           f.root.position.copy(f.walk.from).setZ(f.walk.from.z - (along % f.walk.length));
         }
       }
