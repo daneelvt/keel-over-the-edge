@@ -1372,10 +1372,12 @@ export class DressingRoom {
         o.target.y += 0.85;
         if (reset) {
           // Hauling, from the side, the hands along the fall seen; sat on
-          // the hatch, from abeam and above, over her bulwark and clear of
-          // the foremast before it; else from the front, a little above.
+          // the hatch, from above and a little forward of abeam, inboard of
+          // her shrouds, clear of the foremast and with neither figure
+          // behind the other; else from the front, a little above.
           const anchor = shipAnchor(r.clip);
-          o.azimuth = back + (anchor === 'brace' || anchor === 'hatch' ? Math.PI / 2 : 0);
+          o.azimuth =
+            back + (anchor === 'brace' ? Math.PI / 2 : anchor === 'hatch' ? Math.PI / 2 + 0.6 : 0);
           o.elevation = anchor === 'hatch' ? 0.5 : 0.2;
           o.distance = 3.2 + 1.2 * n;
         }
