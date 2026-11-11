@@ -81,6 +81,7 @@ import { type Gfx, type Wanted, wantsCompat } from './renderer';
 import { RightOfWay, type Seen } from './rightofway';
 import { CrewDeck, type CrewShown, helmLook, modelDeck, tillerOf } from './sailors/crew';
 import { type CrewPlan, crewPlan } from './sailors/crewrules';
+import { FleetCrews, kindCrew } from './sailors/fleetcrews';
 import { hullSolid } from './sailors/solid';
 import { Shadows } from './shadows';
 import { StormCones } from './signals';
@@ -193,6 +194,8 @@ export class SeaScene {
   readonly fleet = new FleetViews(catalog.boats, catalog);
   /** The people aboard the boat in view besides its sailor at the helm, at their stations. */
   readonly crew = new CrewDeck((code) => sailorLookOf(catalog, code));
+  /** The other boats' crews. */
+  readonly crews = new FleetCrews(catalog.boats, (code) => sailorLookOf(catalog, code));
   /** Where the other boats' poses come from: the game's fleet online, or a test's. */
   fleetSource: FleetSource | null = null;
   /** The world's land, once there is a world whose land may be drawn. */
@@ -400,7 +403,12 @@ export class SeaScene {
       void this.stage.compile(v.root).catch(() => undefined);
       const nodes = v.parts?.nodes;
       this.#kindParts(v.index, (name) => nodes?.get(name) ?? null, v.parts?.hullData);
+      // Its boats' crews drawn by its model's deck and stations.
+      if (v.parts !== null) {
+        this.crews.useKind(v.index, kindCrew(v.kind, v.parts));
+      }
     };
+    this.fleet.root.add(this.crews.group);
     scene.add(this.overlays.world);
     scene.add(this.gustRings.group);
     scene.add(this.dirtyAir.group, this.rightOfWay.group);
@@ -582,6 +590,7 @@ export class SeaScene {
     const looks = this.fleet.looks;
     if (looks !== null) {
       this.crew.useLooks(looks, Math.max(...catalog.boats.map((b) => b.stations.length)));
+      this.crews.useLooks(looks);
     }
     Shadows.cast(boat.model, this.shadows.on, this.shadows.lit);
     // A change of kind meanwhile seats its own boat's sailor.
@@ -1805,6 +1814,9 @@ export class SeaScene {
     }
     this.crew.frame(camera.position, this.timeStep);
     const fs = this.fleetSource;
+    // The other boats' crews, before the fleet: whose helm walks with them.
+    this.crews.windFrom = this.wind.meanFrom;
+    this.crews.frame(fs?.drawn ?? [], fs?.count ?? 0, this.origin, camera.position, this.timeStep);
     if (this.fleet.loaded) {
       this.fleet.windFrom = this.wind.meanFrom;
       this.fleet.windSpeed = this.wind.meanSpeed;

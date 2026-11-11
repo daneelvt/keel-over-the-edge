@@ -580,6 +580,9 @@ export class Online {
       case 'boatNames':
         this.fleet.names(m.names);
         break;
+      case 'crews':
+        this.fleet.crews(m.crews);
+        break;
       case 'lamp': {
         const w = this.watching.value;
         this.#lamp.value = w?.machine && w.mine ? { state: m.state, of: w } : null;

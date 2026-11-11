@@ -292,6 +292,13 @@ export interface CrewTold {
   holder: number;
 }
 
+/** Who is aboard a boat in view, by its view slot: each person's seat, look and machine mark, and the holder's seat; never a name. */
+export interface ViewCrewTold {
+  slot: number;
+  people: { seat: number; look: number; machine: boolean }[];
+  holder: number;
+}
+
 /** A knock waiting for the skipper's answer, or, gone, no longer waiting. */
 export interface KnockCardTold {
   id: number;
@@ -592,6 +599,8 @@ export type FromWorker =
   | { type: 'boatLook'; look: number; name: string }
   /** The names of boats in view, by view slot, as of the next snapshot: player text, "" for none. */
   | { type: 'boatNames'; names: { slot: number; name: string }[] }
+  /** Who is aboard boats in view, by view slot, as of the next snapshot: no people for nobody but the skipper. */
+  | { type: 'crews'; crews: ViewCrewTold[] }
   /** The server is about to restart, in about inMs: the bell. */
   | { type: 'restart'; inMs: number }
   /** The sea about the boat, for the prediction and the drawing. */

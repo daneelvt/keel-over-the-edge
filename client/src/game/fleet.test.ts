@@ -384,3 +384,48 @@ describe('another boat’s speed', () => {
     expect(smoothedSpeed(0, 100, 1)).toBeLessThanOrEqual(12);
   });
 });
+
+describe('the crews of boats in view', () => {
+  test('told by view slot, of the boat the slot holds as of the next snapshot; nobody but the skipper is none; another boat in the slot, another count; a new connection forgets them', () => {
+    const fleet = new Fleet();
+    fleet.add(record(10, [{ slot: 2, change: CHANGE.entered }]), 10 * TICK_US);
+    fleet.add(record(12, [{ slot: 2 }]), 12 * TICK_US);
+    fleet.update(30 * TICK_US, FRAME);
+    const drawn = () => fleet.drawn.slice(0, fleet.count).find((b) => b.slot === 2);
+    expect(drawn()?.crew).toBeNull();
+    const entered = drawn()?.entered ?? -1;
+    const people = [
+      { seat: 0, look: 5, machine: false },
+      { seat: 1, look: 6, machine: true },
+    ];
+    fleet.crews([{ slot: 2, people, holder: 1 }]);
+    // Not before the snapshot it is of.
+    fleet.update(31 * TICK_US, FRAME);
+    expect(drawn()?.crew).toBeNull();
+    fleet.add(record(14, [{ slot: 2 }]), 14 * TICK_US);
+    fleet.update(32 * TICK_US, FRAME);
+    expect(drawn()?.crew).toEqual({
+      people: [
+        { seat: 0, look: 5 },
+        { seat: 1, look: 6 },
+      ],
+      holder: 1,
+    });
+    // Nobody but the skipper: none.
+    fleet.crews([{ slot: 2, people: [{ seat: 0, look: 5, machine: false }], holder: 0 }]);
+    fleet.add(record(16, [{ slot: 2 }]), 16 * TICK_US);
+    fleet.update(33 * TICK_US, FRAME);
+    expect(drawn()?.crew).toBeNull();
+    // Another boat entering the slot: another count.
+    fleet.add(record(18, [{ slot: 2, change: CHANGE.entered }]), 18 * TICK_US);
+    fleet.add(record(20, [{ slot: 2 }]), 20 * TICK_US);
+    fleet.update(40 * TICK_US, FRAME);
+    expect(drawn()?.entered).not.toBe(entered);
+    fleet.crews([{ slot: 2, people, holder: 0 }]);
+    fleet.clear();
+    fleet.add(record(22, [{ slot: 2, change: CHANGE.entered }]), 22 * TICK_US);
+    fleet.add(record(24, [{ slot: 2 }]), 24 * TICK_US);
+    fleet.update(45 * TICK_US, FRAME);
+    expect(drawn()?.crew ?? null).toBeNull();
+  });
+});

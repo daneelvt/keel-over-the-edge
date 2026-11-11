@@ -46,6 +46,7 @@ import type {
   ChatTold,
   ChunksHanded,
   CrewTold,
+  ViewCrewTold,
   ForecastTold,
   HandedTold,
   KnockCardTold,
@@ -207,6 +208,8 @@ export type Received =
   | { kind: 'boatLook'; look: number; name: string }
   /** The names of boats in view, by view slot, as of the next snapshot. */
   | { kind: 'boatNames'; names: { slot: number; name: string }[] }
+  /** Who is aboard boats in view, by view slot, as of the next snapshot. */
+  | { kind: 'crews'; crews: ViewCrewTold[] }
   /** The server is about to restart, in about inMs. */
   | { kind: 'restart'; inMs: number }
   /** The sea about the boat. */
@@ -456,6 +459,16 @@ export class Session {
       case 'boatLookChanged':
         this.#lastHeard = now;
         return { kind: 'boatLook', look: m.body.value.look, name: m.body.value.name };
+      case 'crews':
+        this.#lastHeard = now;
+        return {
+          kind: 'crews',
+          crews: m.body.value.crews.map((c) => ({
+            slot: c.slot,
+            people: c.people.map((p) => ({ seat: p.seat, look: p.look, machine: p.machine })),
+            holder: c.holder,
+          })),
+        };
       case 'boatNames':
         this.#lastHeard = now;
         return {

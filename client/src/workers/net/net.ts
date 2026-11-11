@@ -446,6 +446,9 @@ export class NetWorker {
         case 'boatNames':
           this.#d.post({ type: 'boatNames', names: r.names });
           break;
+        case 'crews':
+          this.#d.post({ type: 'crews', crews: r.crews });
+          break;
         case 'lamp':
           this.#d.post({ type: 'lamp', state: r.state });
           break;

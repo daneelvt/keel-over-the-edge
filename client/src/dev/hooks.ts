@@ -101,6 +101,7 @@ import {
   seaMaterial,
 } from '../render/materials';
 import { rungName, TIERS } from '../render/quality';
+import { CREW_MOST } from '../render/sailors/fleetcrews';
 import { CAMERA_PRESETS, type CameraView, type SeaScene } from '../render/scene';
 import { look } from '../render/sky';
 import { sandboxCrew } from '../sandbox/crewscene';
@@ -2476,6 +2477,14 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
       world.fleet.forgetSailors();
     },
 
+    /** Changes a boat of the fleet setFleet gave, where it is: its sailors and crew go on as they were. */
+    moveFleet(i: number, b: Partial<DrawnBoat>): void {
+      const d = world.fleetSource?.drawn[i];
+      if (d !== undefined) {
+        Object.assign(d, b);
+      }
+    },
+
     /**
      * Resolves once every kind and every look a boat of the fleet has been
      * drawn with has loaded (or failed).
@@ -2623,6 +2632,87 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
     },
 
     /** Resolves once everyone aboard is drawn in their own look, the helm's too, drawing frames meanwhile. */
+    /**
+     * A crew for a boat of the fleet (setFleet's crew), as the sandbox makes
+     * one: n aboard in looks drawn from seed, the seat holder holding the
+     * controls; and the look its helm is drawn in.
+     */
+    fleetCrew(
+      n: number,
+      holder = 0,
+      seed = 1,
+    ): { crew: { people: { seat: number; look: number }[]; holder: number }; look: number } {
+      const crew = sandboxCrew(n, catalog, 0x5eed + seed);
+      const people = crew.people.map((p) => ({ seat: p.seat, look: p.look }));
+      return { crew: { people, holder }, look: people[holder]?.look ?? -1 };
+    },
+
+    /**
+     * The other boats' crews: each crewed boat in view by its view slot,
+     * whether its crew is drawn and at which level, its helm away, its
+     * crew's side, everyone under the rules, and where each head drawn is
+     * on screen (CSS pixels, with the dome's drop); how many are drawn at
+     * each level, and the posing's cost since last asked.
+     */
+    fleetCrews(): {
+      boats: {
+        slot: number;
+        drawn: boolean;
+        near: boolean;
+        helmAway: boolean;
+        side: number;
+        tack: boolean;
+        members: {
+          seat: number;
+          station: number;
+          side: number;
+          moving: string | null;
+          from: number;
+          t: number;
+        }[];
+        heads: { x: number; y: number }[];
+      }[];
+      drawn: { near: number; far: number };
+      stats: { frames: number; posed: number; ms: number };
+    } {
+      const canvas = stage.gfx?.canvas;
+      const bs = world.boatScene;
+      const c = world.crews;
+      const stats = c.stats;
+      c.stats = { frames: 0, posed: 0, ms: 0 };
+      return {
+        boats: c.boats().map((b) => ({
+          ...b,
+          heads: b.heads.map((p) => {
+            p.y -= domeDrop(Math.hypot(p.x - bs.x, p.z - bs.z));
+            p.project(stage.camera);
+            return {
+              x: ((p.x + 1) / 2) * (canvas?.clientWidth ?? 0),
+              y: ((1 - p.y) / 2) * (canvas?.clientHeight ?? 0),
+            };
+          }),
+        })),
+        drawn: c.drawn,
+        stats,
+      };
+    },
+
+    /** Resolves once every crew of the fleet drawn is drawn in its own looks. */
+    async fleetCrewsReady(): Promise<void> {
+      for (;;) {
+        stage.renderOnce(performance.now());
+        if (world.crews.ready && !world.fleet.loading) {
+          return;
+        }
+        await new Promise((r) => setTimeout(r, 50));
+      }
+    },
+
+    /** The most people drawn on other boats; null for the game's own cap. */
+    fleetCrewMost(most: number | null): void {
+      world.crews.most = most ?? CREW_MOST;
+    },
+
     async crewReady(): Promise<void> {
       const c = world.crew;
       for (;;) {
