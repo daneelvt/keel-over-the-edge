@@ -558,7 +558,13 @@ export class Fleet {
    * boat its slot holds as of the next snapshot, no people for nobody but
    * its skipper.
    */
-  crews(list: readonly { slot: number; people: readonly { seat: number; look: number }[]; holder: number }[]): void {
+  crews(
+    list: readonly {
+      slot: number;
+      people: readonly { seat: number; look: number; machine?: boolean }[];
+      holder: number;
+    }[],
+  ): void {
     for (const c of list) {
       if (c.slot >= 0 && c.slot < VIEW_SLOTS) {
         this.#crews[c.slot] =
