@@ -609,6 +609,21 @@ class Figure:
             inboard = Vector((-side, 0.0, 0.0))
             inboard = (inboard - along * inboard.dot(along)).normalized()
             p = p + along * off[0] + inboard * off[1] + Vector((0.0, 0.0, off[2]))
+            if spec.get("reach") and effector:
+                # Brought back along the fall toward the hauler until the
+                # arm is that share of its length from the shoulder: the
+                # same stretch on any body.
+                upper, lower, _ = EFFECTORS[effector]
+                root = self.world(upper)
+                length = spec["reach"] * (self.arm.data.bones[upper].length + self.arm.data.bones[lower].length)
+                d = p - root
+                if d.length > length:
+                    b = d.dot(along)
+                    c = d.length_squared - length * length
+                    disc = b * b - c
+                    t = b - math.sqrt(disc) if disc > 0 else b
+                    p = p - along * t
+            return p
         elif off:
             p = p + frame @ Vector(off)
         if spec.get("reach") and effector:
@@ -1147,14 +1162,16 @@ def make(fig, lib, name):
         # A loop of one key returns to itself: no move.
         if a is not None and ramp > 0 and a != ki:
             clip.ramps.append((int(round(start * fps)), int(round((start + ramp) * fps)), k.get("lead", "hips")))
-    if loop and clip.trapeze:
+    if loop and (clip.trapeze or clip.ship):
         # The IK's turns follow the frame before: round a loop they come
         # back a few tenths of a degree from where they began. The gap is
         # shared out over the loop, so its seam is smooth; not the hips'
-        # nor the legs', whose feet stay where they press on the rack.
+        # nor the legs', whose feet stay where they press on the rack (or
+        # the ship's deck, her top or her footrope).
         last = clip.frames[-1]
         for b in names:
-            if kind(b) in ("Root", "pelvis", "thigh", "calf", "foot", "ball") or b.startswith("thigh_corrector"):
+            legs = kind(b) in ("thigh", "calf", "foot", "ball") or b.startswith("thigh_corrector")
+            if kind(b) in ("Root", "pelvis") or legs and clip.trapeze:
                 continue
             q0, q1 = clip.frames[0]["rot"][b], last["rot"][b]
             gap = q1.inverted() @ (q0 if q0.dot(q1) >= 0 else -q0)

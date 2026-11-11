@@ -210,12 +210,12 @@ def retarget(fig, name, spec, fps):
             clip.place = _rail_place(fig, rail)
         elif clip.seated:
             clip.place = _hatch_place(fig, clip)
-        if clip.ship:
-            # Its contacts, made in the figure's space, where it is placed.
-            clip.contacts = [{e: clip.place @ p for e, p in cs.items()} for cs in clip.contacts]
     elif lock:
         _lock(fig, clip, lock)
         clip.planted = list(lock)
+    if clip.ship:
+        # Its contacts, made in the figure's space, where it is placed.
+        clip.contacts = [{e: clip.place @ p for e, p in cs.items()} for cs in clip.contacts]
     # The joints it takes toward the ends of their ranges, as the hike
     # does (a deep crouch's knees and ankles).
     clip.notes["strain"] = list(spec.get("strain") or [])
@@ -1037,3 +1037,4 @@ def _still(fig, clip, s):
         fig.derive()
         fr["rot"] = fig.rotations()
     clip.notes["still"] = clip.notes.get("still", []) + [f"arm_{s}"]
+

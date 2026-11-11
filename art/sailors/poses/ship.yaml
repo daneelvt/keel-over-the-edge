@@ -13,9 +13,9 @@
 # the port side.
 poses:
   # Hauling on the main brace's fall, facing its lead (aft, on the
-  # quarterdeck): the fall before the left hip at the waist's height, both
-  # hands on it; the feet forward of the hips, the left ahead, and the body
-  # leaning back from them on the rope, the chest turned a little to the
+  # quarterdeck): the fall before the body at the waist's height, both
+  # hands on it; the feet forward of the hips, the left ahead, the knees
+  # bent, and the body leaning back from them on the rope, the chest turned a little to the
   # fall. Targets on the fall are along it toward the lead, across it
   # inboard, and up; the feet's likewise from the deck under the hauler.
   haul-grip:
@@ -45,7 +45,11 @@ poses:
       - [pinky_01_r, lx, 50]
       - [pinky_02_r, lx, 65]
       - [pinky_03_r, lx, 40]
-      - [pelvis, x, -10]
+      - [thigh_l, x, -16]
+      - [thigh_r, x, -20]
+      - [calf_l, x, 22]
+      - [calf_r, x, 30]
+      - [pelvis, x, -6]
       - [spine_02, z, 6]
       - [spine_03, z, 10]
       - [neck_01, x, 8]
@@ -53,7 +57,7 @@ poses:
       - [neck_01, z, -6]
       - [head, z, -8]
     ik:
-      foot_l: { at: haul-deck, offset: [0.3, -0.06, 0.1] }
+      foot_l: { at: haul-deck, offset: [0.26, -0.06, 0.1] }
       foot_r: { at: haul-deck, offset: [0.0, 0.12, 0.1] }
 
   # The left hand reached over the right along the fall, the body coming
@@ -68,8 +72,8 @@ poses:
       - [neck_01, x, -10]
       - [head, x, -8]
     ik:
-      hand_l: { at: brace, offset: [0.24, 0.0, 0.0], pole: [0.6, 0.3, -0.5] }
-      hand_r: { at: brace, offset: [0.04, 0.0, 0.0], pole: [-0.5, 0.4, -0.5] }
+      hand_l: { at: brace, offset: [0.16, 0.0, 0.0], reach: 0.72, pole: [0.6, 0.3, -0.5] }
+      hand_r: { at: brace, offset: [0.02, 0.0, 0.0], reach: 0.72, pole: [-0.5, 0.4, -0.5] }
 
   # Heaving: leaning back, both hands come back with the fall; a glance
   # aloft at the yards.
@@ -78,11 +82,11 @@ poses:
     turn:
       - [spine_01, x, -4]
       - [spine_02, x, -2]
-      - [neck_01, x, -8]
-      - [head, x, -14]
+      - [neck_01, x, 4]
+      - [head, x, -16]
     ik:
-      hand_l: { at: brace, offset: [0.06, 0.0, 0.0], pole: [0.6, 0.3, -0.5] }
-      hand_r: { at: brace, offset: [-0.14, 0.0, 0.0], pole: [-0.5, 0.4, -0.5] }
+      hand_l: { at: brace, offset: [0.04, 0.0, 0.0], reach: 0.72, pole: [0.6, 0.3, -0.5] }
+      hand_r: { at: brace, offset: [-0.1, 0.0, 0.0], reach: 0.72, pole: [-0.5, 0.4, -0.5] }
 
   haul-right-over:
     from: haul-grip
@@ -94,8 +98,8 @@ poses:
       - [neck_01, x, -10]
       - [head, x, -8]
     ik:
-      hand_l: { at: brace, offset: [0.04, 0.0, 0.0], pole: [0.6, 0.3, -0.5] }
-      hand_r: { at: brace, offset: [0.24, 0.0, 0.0], pole: [-0.5, 0.4, -0.5] }
+      hand_l: { at: brace, offset: [0.0, 0.0, 0.0], reach: 0.72, pole: [0.6, 0.3, -0.5] }
+      hand_r: { at: brace, offset: [0.16, 0.0, 0.0], reach: 0.72, pole: [-0.5, 0.4, -0.5] }
 
   haul-right-heave:
     from: haul-grip
@@ -105,8 +109,8 @@ poses:
       - [neck_01, x, 4]
       - [head, x, 2]
     ik:
-      hand_l: { at: brace, offset: [-0.14, 0.0, 0.0], pole: [0.6, 0.3, -0.5] }
-      hand_r: { at: brace, offset: [0.06, 0.0, 0.0], pole: [-0.5, 0.4, -0.5] }
+      hand_l: { at: brace, offset: [-0.12, 0.0, 0.0], reach: 0.72, pole: [0.6, 0.3, -0.5] }
+      hand_r: { at: brace, offset: [0.04, 0.0, 0.0], reach: 0.72, pole: [-0.5, 0.4, -0.5] }
 
   # Standing in the main top, out toward the starboard shrouds, facing
   # forward: the right hand on a topmast shroud at the shoulder's height,
@@ -225,7 +229,7 @@ clips:
     strain: [lowerarm]
     group: aloft
     keys:
-      - { pose: haul-left-over, hold: 0.25, ramp: 0.8, arc: [0.06, 0.08] }
+      - { pose: haul-left-over, hold: 0.35, ramp: 0.8, arc: [0.06, 0.08] }
       - { pose: haul-left-heave, hold: 0.3, ramp: 0.8 }
       - { pose: haul-right-over, hold: 0.25, ramp: 0.8, arc: [0.06, 0.08] }
       - { pose: haul-right-heave, hold: 0.3, ramp: 0.8 }
@@ -264,7 +268,7 @@ clips:
 retarget:
   # Standing about, looking round (the right hand kept at the side: the
   # source raises it to the brow, where a hat's brim is); arms folded;
-  # talking (the hands moving as one speaks); weary, the weight shifting.
+  # talking (the hands moving as one speaks).
   look-about:
     file: vendor/quaternius/Idle_LookAround_Loop.glb
     loop: true
@@ -284,16 +288,9 @@ retarget:
     idle: true
     deck: true
     group: ship
-  tired:
-    file: vendor/quaternius/Idle_Tired_Loop.glb
-    loop: true
-    idle: true
-    deck: true
-    group: ship
   # Leaning on the ship's rail, facing outboard, the forearms on the cap
   # rail's top (the clip's line re-locked to her rail's height over her
-  # deck); and calling out from it, a hand raised to the mouth and back.
-  # Placed from the rail's point (the cap's inner edge on its top).
+  # deck). Placed from the rail's point (the cap's inner edge on its top).
   # The elbows folded on the rail are near the ends of their range.
   leaning:
     file: vendor/quaternius/Idle_Rail_Loop.glb
@@ -303,15 +300,10 @@ retarget:
     stage: ship-rail
     strain: [lowerarm]
     group: ship
-  leaning-call:
-    file: vendor/quaternius/Idle_Rail_Call.glb
-    deck: true
-    stage: ship-rail
-    strain: [lowerarm]
-    group: ship
   # Sat on the fore hatch's forward edge facing forward, the feet on the
-  # deck before it, the buttocks on the grating: still, shifting, at ease,
-  # nodding off, talking. Placed from the hatch's edge on her centreline.
+  # deck before it, the buttocks on the grating: still, shifting, nodding
+  # off, talking (the wrists bent near the ends of their range as the
+  # hands move). Placed from the hatch's edge on her centreline.
   hatch-sit:
     file: vendor/quaternius/Sitting_Idle_Loop.glb
     loop: true
@@ -325,13 +317,7 @@ retarget:
     idle: true
     deck: true
     stage: ship-hatch
-    group: ship
-  hatch-ease:
-    file: vendor/quaternius/Sitting_Idle03_Loop.glb
-    loop: true
-    idle: true
-    deck: true
-    stage: ship-hatch
+    strain: [hand]
     group: ship
   hatch-nod:
     file: vendor/quaternius/Sitting_Nodding_Loop.glb
@@ -346,6 +332,7 @@ retarget:
     idle: true
     deck: true
     stage: ship-hatch
+    strain: [hand]
     group: ship
   # Walking about her decks, in place: a foot bearing on the deck moves
   # back at the walk's speed.

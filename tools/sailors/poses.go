@@ -300,7 +300,7 @@ func (lib poseLibrary) check(t tables, sources map[string]source) error {
 		case !slices.Contains(shipStages, r.Stage):
 			return fmt.Errorf("the retarget %s: no place %q on the ship", name, r.Stage)
 		case r.Stage != "" && !r.Deck:
-			return fmt.Errorf("the retarget %s: set on the ship, it is on a deck", name)
+			return fmt.Errorf("the retarget %s: set on the ship's %s, it is on a deck", name, r.Stage)
 		case (r.Speed != 0 || r.Head != 0) && !r.Deck:
 			return fmt.Errorf("the retarget %s: a speed or a head's height is over a deck, and it has none", name)
 		case r.Deck && len(r.Lock) > 0:

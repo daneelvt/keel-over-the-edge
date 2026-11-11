@@ -587,9 +587,9 @@ def make_clips(job, v, fig, lib, kinds, gates, renderer, lookmat, work, worn=(),
     # deck in) apart from the rest, as only a boat steered by one, sailed
     # from the other, or with someone at a station on her rail loads them;
     # and the ship's company's, on her decks (standing about, leaning on her
-    # rail, sat on her hatch, walking, on her ladder) and at her work and
-    # aloft (hauling, climbing, in the top, on the yard), loaded only when
-    # someone is drawn who needs them.
+    # rail, sat on her hatch, walking) and at her work and aloft (hauling,
+    # in the top, on the yard), loaded only when someone is drawn who needs
+    # them.
     def group_of(n):
         c = fig.made[n][2]
         if getattr(c, "group", None):
@@ -768,7 +768,7 @@ def clip_wheel(gates, fig, measures):
 
 # The ship's place a clip set there is placed from, by where it is set.
 SHIP_ANCHORS = {"ship-rail": "ship-rail", "ship-hatch": "ship-hatch", "brace": "brace", "top": "top",
-                "yard": "yard", "ladder": "ladder-foot", "ratlines": "shroud", "futtock": "top"}
+                "yard": "yard"}
 # What of a figure holds a rope or stands on one: the hands (and the cuffs
 # at the wrists) and the feet; only they may meet the ship's ropes.
 ON_ROPES = ON_WHEEL + ("foot", "ball")
@@ -812,7 +812,12 @@ def clip_ship(gates, fig, measures):
             segs = [(fig.world(b), fig.world(b, "tail")) for b in bones]
             a = np.array([np.array(x[0]) for x in segs])
             b = np.array([np.array(x[1]) for x in segs])
-            crossed = [bones[i] for i in _crossed(ship.tree, segs)]
+            if clip.ship == motion.YARD:
+                # What holds the yard may meet it.
+                crossed = [bones[i] for i, b in enumerate(bones)
+                           if _crossed(ship.unheld if motion.kind(b) in ON_ROPES else ship.tree, [segs[i]])]
+            else:
+                crossed = [bones[i] for i in _crossed(ship.tree, segs)]
             crossed += [free[i] for i in _crossed(ship.ropes, [(fig.world(n), fig.world(n, "tail")) for n in free])]
             for o in fig.meshes:
                 co, _ = motion.coords_posed(o)

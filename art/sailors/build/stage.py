@@ -503,7 +503,7 @@ class Ship:
     # The hauler's place along the brace's fall, from its lead; the feet's
     # middle this far inboard of the fall.
     BRACE_AT = 1.6
-    HAUL_BESIDE = 0.08
+    HAUL_BESIDE = 0.03
     # Where a figure stands in the top: this far out from her middle toward
     # her shrouds; and the topmast shroud it holds, this share of the way
     # up from the top's rim.
