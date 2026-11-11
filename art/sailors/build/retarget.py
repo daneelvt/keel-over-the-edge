@@ -786,6 +786,8 @@ LEAN_CLEAR = 0.015
 LEAN_HIGH = 0.97
 LEAN_LOW = 0.25
 LEAN_MOST = 35.0
+# How much of the forearms' crossing before the chest is kept.
+LEAN_CROSS = 0.7
 # A hand is on the rail while its wrist is within this of where it rests on
 # it, and off it past this more (raised to call out).
 ON_RAIL = (0.03, 0.08)
@@ -794,6 +796,10 @@ ON_RAIL = (0.03, 0.08)
 # frames looked at for it.
 BULWARK_IN = 0.04
 BULWARK_CLEAR = 0.02
+# What of the body is kept off the bulwark: the hips, the back, the legs and
+# the cloth on them (the arms reach over the rail, the head leans over it).
+BULWARK_BODY = ("pelvis", "spine_01", "spine_02", "spine_03", "thigh", "thigh_corrector", "calf", "foot", "ball",
+                "skirt")
 SAMPLE = 6
 # Sat on the hatch: the buttocks this far over its grating; the hatch's
 # edge this far from the knees' joints, under the thighs.
@@ -939,7 +945,11 @@ def _on_rail(fig, clip, rail):
             if flat.length < 1e-6:
                 flat = Vector((0.0, -1.0, 0.0))
             e = Vector((sh.x, sh.y, height)) + flat.normalized() * rho
-            heading = Vector((wr.x - el.x, wr.y - el.y, 0.0)).normalized()
+            heading = Vector((wr.x - el.x, wr.y - el.y, 0.0))
+            # Less crossed before the chest than the source's, so a hand
+            # keeps off a broad chest.
+            heading.x *= LEAN_CROSS
+            heading.normalize()
             wrist = e + heading * l2[s]
             e = el.lerp(e, w)
             wrist = wr.lerp(wrist, w)
@@ -979,7 +989,8 @@ def _rail_place(fig, rail):
     ship = fig.stage.ship
     top = rail["height"] - rail["clear"]
     # The bulwark's inner face under the cap's overhang: the body (not its
-    # arms, which reach over the rail) kept BULWARK_CLEAR off it, the rail
+    # arms or head, which reach and lean over the rail) kept BULWARK_CLEAR
+    # off it, the rail
     # moved out from the figure as far as that takes.
     face = rail["y"] - BULWARK_IN
     fig.quiet(False)
@@ -987,7 +998,7 @@ def _rail_place(fig, rail):
     for fr in _ring(clip_of(fig))[::SAMPLE]:
         fig.set_rotations(fr["rot"], fr["pelvis"])
         fig.derive()
-        co = fig.dressed()[~fig.armed()]
+        co = fig.dressed()[fig.carried(BULWARK_BODY)]
         below = co[co[:, 2] < top]
         if len(below):
             near = min(near, float((below[:, 1] - face).min()))

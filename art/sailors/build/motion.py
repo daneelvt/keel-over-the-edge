@@ -327,7 +327,8 @@ class Figure:
                 # From under the deck its underside faces the ray: only its
                 # top is found.
                 m.cull_face = "FRONT" if target not in planes else "OFF"
-                m.offset = SEAT_CLEAR + (above or {}).get(o.name, 0.0)
+                m.offset = SEAT_CLEAR + (above or {}).get(o.name, 0.0) + \
+                    (SHIP_DECK_CLEAR if name == SEAT_GROUP + "-ship-deck" else 0.0)
                 m.project_limit = 2.0 if target in planes else 0.3
                 m.vertex_group = SEAT_GROUP
                 m.show_viewport = m.show_render = False
@@ -1298,15 +1299,18 @@ ON_ROPE = ("yard-foot-in", "yard-foot-out")
 # it, the body (not its arms) this far clear of it beyond its radius.
 # In the top, the hand on the shroud this share of the arm from the
 # shoulder.
-TOP_REACH = 0.78
+TOP_REACH = 0.75
 YARD_HIPS = 0.26
+# Cloth laid on the ship's deck this much further off it than on a seat:
+# her planks' seams are uneven.
+SHIP_DECK_CLEAR = 0.006
 # A foot standing on the ship's deck or top, this much higher than a foot
 # set on a floor: it is held where its key sets it, and a boot's sole is
 # thick.
 SHIP_SOLE = 0.012
 # The legs on the footrope straight to this share of their length.
 YARD_LEGS = 0.92
-YARD_AFT = 0.34
+YARD_AFT = 0.42
 YARD_CLEAR = 0.03
 # What of the body lies on the yard: what the hips, the back and the thighs
 # carry (and the cloth on them); not the arms or the head.
