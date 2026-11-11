@@ -215,7 +215,7 @@ clips:
     look-about,
     fold-arms,
     talking,
-    leaning,
+    bosun-leaning,
     hatch-sit,
     hatch-shift,
     hatch-nod,
@@ -236,4 +236,10 @@ clips:
     righting,
     climbing-in,
   ]
-names: { bosun-habit: habit, bosun-habit-standing: habit-standing, bosun-habit-wheel: habit-wheel }
+names:
+  {
+    bosun-habit: habit,
+    bosun-habit-standing: habit-standing,
+    bosun-habit-wheel: habit-wheel,
+    bosun-leaning: leaning,
+  }

@@ -189,7 +189,7 @@ def retarget(fig, name, spec, fps):
         if spec.get("head") is not None:
             _stoop(fig, clip, spec["head"])
         if clip.ship == SHIP_RAIL:
-            rail = _lean(fig, clip)
+            rail = _lean(fig, clip, spec.get("clear", LEAN_CLEAR))
         elif clip.seated:
             _sit(fig, clip)
         before = [{"rot": dict(fr["rot"]), "pelvis": fr["pelvis"].copy()} for fr in clip.frames]
@@ -845,7 +845,7 @@ def _owners(fig):
     return np.array(out)
 
 
-def _lean(fig, clip):
+def _lean(fig, clip, clear=None):
     """Leaning on the ship's rail (stage.Ship's `rail`): the rail, a line
     across the figure before it at the height of the cap rail's top over
     the deck the feet are on, the forearms' bones over it by the sleeve's
@@ -857,7 +857,8 @@ def _lean(fig, clip):
     inboard = Vector((ship.rail.x - 0.45, ship.rail.y, ship.rail.z + 0.5))
     deck = ship.down(inboard.x, inboard.y, inboard.z)
     depth = _sleeve_depth(fig)
-    height = ship.rail.z - deck + depth + LEAN_CLEAR
+    clear = LEAN_CLEAR if clear is None else clear
+    height = ship.rail.z - deck + depth + clear
     frames = _ring(clip)
     spine = ("spine_01", "spine_02", "spine_03")
     bones = fig.arm.data.bones
@@ -904,7 +905,7 @@ def _lean(fig, clip):
     clip.notes["sleeve depth"] = round(depth, 4)
     clip.notes["rail over the deck"] = round(ship.rail.z - deck, 4)
     return {"height": height, "y": float(np.median(mids)), "feet": float(np.median(feet)),
-            "deck": deck, "clear": depth + LEAN_CLEAR}
+            "deck": deck, "clear": depth + clear}
 
 
 def _on_rail(fig, clip, rail):

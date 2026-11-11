@@ -139,6 +139,9 @@ type retarget struct {
 	// Still keeps the arm of each hand named as the clip's first frame has
 	// it: a gesture of the source's left out.
 	Still []string `yaml:"still" json:"still,omitempty"`
+	// Clear sets, leaning on the ship's rail, how far the forearms' sleeves
+	// are kept over its top, if not the build's own.
+	Clear float64 `yaml:"clear" json:"clear,omitempty"`
 }
 
 var (
@@ -299,6 +302,8 @@ func (lib poseLibrary) check(t tables, sources map[string]source) error {
 			return fmt.Errorf("the retarget %s: no file %q beside the clips", name, r.Group)
 		case !slices.Contains(shipStages, r.Stage):
 			return fmt.Errorf("the retarget %s: no place %q on the ship", name, r.Stage)
+		case r.Clear < 0 || r.Clear > 0.1 || r.Clear > 0 && r.Stage != "ship-rail":
+			return fmt.Errorf("the retarget %s: a clearance over the rail is 0 to 0.1 m, and only on it", name)
 		case r.Stage != "" && !r.Deck:
 			return fmt.Errorf("the retarget %s: set on the ship's %s, it is on a deck", name, r.Stage)
 		case (r.Speed != 0 || r.Head != 0) && !r.Deck:

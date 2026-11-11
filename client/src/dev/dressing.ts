@@ -99,6 +99,7 @@ import {
   DECK_CLIPS,
   inAloftFile,
   inShipFile,
+  STAGED,
   shipAnchor,
   shipPlace,
   shipPoint,
@@ -985,6 +986,25 @@ export class DressingRoom {
         parent = boat.parts.get(p.node) ?? boat.model;
       }
       seat = shipPlace(place, p.at.add(apart), shipSide(r.clip));
+      if (anchor === 'brace' && i === 0) {
+        // The fall, which her model does not draw: from its lead along the
+        // deck past the haulers.
+        const side = shipSide(r.clip);
+        const lead = c.brace.lead.clone().setX(side * c.brace.lead.x);
+        lead.y += STAGED.braceUp;
+        const fall = c.brace.fall.clone().setX(side * c.brace.fall.x);
+        fall.y += STAGED.braceUp;
+        const along = fall.clone().sub(lead).normalize();
+        const end = lead.clone().addScaledVector(along, STAGED.braceAt + 1.4 * n);
+        const rope = new Mesh(
+          new CylinderGeometry(0.014, 0.014, end.distanceTo(lead), 6),
+          litMaterial({ color: 0x33261a, roughness: 0.9, metalness: 0 }),
+        );
+        rope.position.copy(lead).add(end).multiplyScalar(0.5);
+        rope.quaternion.setFromUnitVectors(new Vector3(0, 1, 0), along);
+        boat.model.add(rope);
+        f.wheel = rope;
+      }
       facing = anchor === 'brace' ? 0 : anchor === 'rail' ? Math.PI / 2 : Math.PI;
     }
     boat.model.traverse((o) => {
@@ -1351,7 +1371,8 @@ export class DressingRoom {
         o.target.divideScalar(Math.max(1, this.#figures.length));
         o.target.y += 0.85;
         if (reset) {
-          o.azimuth = back;
+          // Hauling, from the side, the hands along the fall seen.
+          o.azimuth = back + (shipAnchor(r.clip) === 'brace' ? Math.PI / 2 : 0);
           o.elevation = 0.12;
           o.distance = 3.2 + 1.2 * n;
         }
