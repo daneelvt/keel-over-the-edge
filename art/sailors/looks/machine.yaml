@@ -160,9 +160,8 @@ garments:
 palette:
   main: "#1E1E1E"
   skin: "#D9A957"
-# The clips the machines sail with: every sailor's, and their own habit
-# and hauling (stood a little further off the fall, for the plates), which
-# the game asks for as any sailor's.
+# The clips the machines sail with: every sailor's, and their own habit,
+# which the game asks for as any sailor's.
 clips:
   [
     helm,
@@ -180,7 +179,6 @@ clips:
     hatch-shift,
     hatch-nod,
     walk,
-    machine-haul,
     aloft,
     yard,
     machine-habit-wheel,
@@ -200,7 +198,6 @@ names:
     machine-habit: habit,
     machine-habit-standing: habit-standing,
     machine-habit-wheel: habit-wheel,
-    machine-haul: haul,
   }
 # The head takes less of the atlas: its face is planes of metal.
 atlas-head: 0.3

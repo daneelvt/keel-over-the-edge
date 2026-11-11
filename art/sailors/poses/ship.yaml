@@ -114,34 +114,6 @@ poses:
       hand_l: { at: brace, offset: [-0.12, 0.0, 0.0], reach: 0.73, pole: [0.6, 0.3, -0.5] }
       hand_r: { at: brace, offset: [0.04, 0.0, 0.0], reach: 0.76, pole: [-0.5, 0.4, -0.5] }
 
-  machine-haul-left-over:
-    from: haul-left-over
-    shift: [0.0, 0.06, 0.0]
-    ik:
-      foot_l: { at: haul-deck, offset: [0.16, 0.0, 0.1] }
-      foot_r: { at: haul-deck, offset: [0.0, 0.18, 0.1] }
-
-  machine-haul-left-heave:
-    from: haul-left-heave
-    shift: [0.0, 0.06, 0.0]
-    ik:
-      foot_l: { at: haul-deck, offset: [0.16, 0.0, 0.1] }
-      foot_r: { at: haul-deck, offset: [0.0, 0.18, 0.1] }
-
-  machine-haul-right-over:
-    from: haul-right-over
-    shift: [0.0, 0.06, 0.0]
-    ik:
-      foot_l: { at: haul-deck, offset: [0.16, 0.0, 0.1] }
-      foot_r: { at: haul-deck, offset: [0.0, 0.18, 0.1] }
-
-  machine-haul-right-heave:
-    from: haul-right-heave
-    shift: [0.0, 0.06, 0.0]
-    ik:
-      foot_l: { at: haul-deck, offset: [0.16, 0.0, 0.1] }
-      foot_r: { at: haul-deck, offset: [0.0, 0.18, 0.1] }
-
   # Standing in the main top, out toward the starboard shrouds, facing
   # forward, the knees soft, as far out as leaves the right hand an easy
   # reach to a topmast shroud about the shoulder's height; the left at the
@@ -263,19 +235,6 @@ clips:
       - { pose: haul-left-heave, hold: 0.3, ramp: 0.8 }
       - { pose: haul-right-over, hold: 0.25, ramp: 0.8, arc: [0.06, 0.08] }
       - { pose: haul-right-heave, hold: 0.3, ramp: 0.8 }
-
-  # Hauling, as the machines do it: the same, stood a little further off
-  # the fall, so the hands keep off the plates of the chest.
-  machine-haul:
-    loop: true
-    sides: true
-    strain: [lowerarm]
-    group: aloft
-    keys:
-      - { pose: machine-haul-left-over, hold: 0.25, ramp: 0.8 }
-      - { pose: machine-haul-left-heave, hold: 0.3, ramp: 0.8 }
-      - { pose: machine-haul-right-over, hold: 0.25, ramp: 0.8 }
-      - { pose: machine-haul-right-heave, hold: 0.3, ramp: 0.8 }
 
   # In the top, a hand on a shroud: looking ahead, out to sea, down at the
   # deck and aloft. Its -port is for the port side of the top.

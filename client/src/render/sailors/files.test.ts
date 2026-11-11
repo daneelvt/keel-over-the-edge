@@ -177,6 +177,7 @@ describe.each(looks)('%s', (look) => {
       expect(names(aloft)).toEqual(
         Object.values(ALOFT_CLIPS)
           .flatMap((c) => [c, `${c}-port`])
+          .filter((c) => look !== 'machine' || !NOT_FOR_MACHINES.includes(c))
           .sort(),
       );
       for (const g of [deck, aloft]) {
@@ -187,9 +188,10 @@ describe.each(looks)('%s', (look) => {
             expect(m, name).toEqual([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]);
             continue;
           }
-          // Upright, near its place on the ship.
+          // Upright, near its place on the ship (in the top, out from her
+          // middle toward the shrouds).
           expect(m[5] ?? 0, name).toBeGreaterThan(0.99);
-          expect(Math.hypot(m[12] ?? 9, m[13] ?? 9, m[14] ?? 9), name).toBeLessThan(1.5);
+          expect(Math.hypot(m[12] ?? 9, m[13] ?? 9, m[14] ?? 9), name).toBeLessThan(2);
         }
       }
       // Leaning on the starboard rail facing outboard (+x); sat on the hatch
@@ -197,11 +199,15 @@ describe.each(looks)('%s', (look) => {
       // aft along the fall (+z).
       const facing = (g: Gltf, n: string) =>
         g.nodes.find((x) => x.name === `place-${n}`)?.matrix ?? [];
-      expect(facing(deck, 'leaning')[8]).toBeGreaterThan(0.99);
+      if (look !== 'machine') {
+        expect(facing(deck, 'leaning')[8]).toBeGreaterThan(0.99);
+      }
       expect(facing(deck, 'hatch-sit')[10]).toBeLessThan(-0.99);
       expect(facing(aloft, 'aloft')[10]).toBeLessThan(-0.99);
       expect(facing(aloft, 'yard-port')[10]).toBeLessThan(-0.99);
-      expect(facing(aloft, 'haul')[10]).toBeGreaterThan(0.95);
+      if (look !== 'machine') {
+        expect(facing(aloft, 'haul')[10]).toBeGreaterThan(0.95);
+      }
     });
 
     test('its trapeze harness: one mesh on its skeleton, leather and bronze, and its hook', () => {
