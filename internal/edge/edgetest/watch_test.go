@@ -50,6 +50,10 @@ type viewer struct {
 	welcomes  int
 	boatLooks []*pb.BoatLookChanged
 	names     map[uint32]string
+	// crews are the other boats' crews by view slot, as last told (an empty
+	// one deleted), and allCrews every one told, in order.
+	crews    map[uint32]*pb.Crew
+	allCrews []*pb.Crew
 	// What is told of sailing together: the knocks waiting by ID, the own
 	// knock's latest state, the latest crew, the controls offered, and the
 	// latest going ashore.
@@ -124,7 +128,7 @@ func (v *viewer) take(r client.Received) {
 	case *pb.ServerMessage_Welcome:
 		v.welcome, v.snaps, v.queued = m.Welcome, 0, nil
 		v.welcomes++
-		v.names = nil
+		v.names, v.crews = nil, nil
 	case *pb.ServerMessage_WatchEnded:
 		v.ended = m.WatchEnded
 	case *pb.ServerMessage_Queued:
@@ -164,6 +168,18 @@ func (v *viewer) take(r client.Received) {
 		v.reported = m.Reported
 	case *pb.ServerMessage_Shipmates:
 		v.shipmates++
+	case *pb.ServerMessage_Crews:
+		if v.crews == nil {
+			v.crews = map[uint32]*pb.Crew{}
+		}
+		for _, c := range m.Crews.GetCrews() {
+			v.allCrews = append(v.allCrews, c)
+			if len(c.GetPeople()) == 0 {
+				delete(v.crews, c.GetSlot())
+			} else {
+				v.crews[c.GetSlot()] = c
+			}
+		}
 	case *pb.ServerMessage_BoatNames:
 		if v.names == nil {
 			v.names = map[uint32]string{}

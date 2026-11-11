@@ -1025,6 +1025,16 @@ export class FleetView {
     if (d === null || shared.first === null || level.figures === null) {
       return;
     }
+    if (b.helmAway) {
+      // Its helm walking with its crew as the controls change hands: drawn by them, not here.
+      const rows = level.rows;
+      this.#head(rows.data, rows.width * n, n, level, d.colours, shared.first, false, false, b);
+      const ns = near ? this.nearSailors : null;
+      if (ns !== null) {
+        this.#head(ns.data, ns.width * n, n, level, d.colours, shared.first, false, false, b);
+      }
+      return;
+    }
     const look = d.look;
     shared.looks?.want(look, near, this.#trapeze !== null);
     const drawn = look.layer >= 0 ? look : shared.first;

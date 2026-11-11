@@ -460,7 +460,7 @@ func (enc *encoder) encode(c *conn, f *bus.Frame) {
 	// The weather, the sea, the land's chunks and the bumps first: they are
 	// queued, and what is queued goes out before the snapshot.
 	if !c.weather(f) || !c.seaAreas(f, x, y) || !c.chunks(chunks, x, y) || !c.bumps(f, next, s, boat) || !c.lookOf(f, s) ||
-		!c.boatLookOf(f, s) || !c.boatNames(f, next) || !c.life(f, next, s, x, y) || !c.crewOf(f, s) {
+		!c.boatLookOf(f, s) || !c.boatNames(f, next) || !c.crews(f, next) || !c.life(f, next, s, x, y) || !c.crewOf(f, s) {
 		return
 	}
 	b = b[:protocol.MaxHeaderSize]
@@ -513,11 +513,12 @@ func (c *conn) swapped(f *bus.Frame) bool {
 }
 
 // toldBoat notes the boat in slot s of f as a Welcome tells it: its kind,
-// look and name; and that the client holds no boats' names, as a Welcome
-// clears them.
+// look and name; and that the client holds no boats' names nor crews, as a
+// Welcome clears them.
 func (c *conn) toldBoat(f *bus.Frame, s int32) {
 	c.toldKind, c.toldBoatLook, c.toldBoatName = f.Kind[s], f.BoatLook[s], f.BoatName[s]
 	c.toldNames = [protocol.ViewSlots]toldName{}
+	c.toldCrews, c.crewed, c.crewKnown = [protocol.ViewSlots]toldCrew{}, 0, 0
 }
 
 // boatLookOf tells c that the boat in slot s of f, its own or the one it
@@ -557,6 +558,76 @@ func (c *conn) boatNames(f *bus.Frame, v *connView) bool {
 		return true
 	}
 	return c.send(&pb.ServerMessage{Body: &pb.ServerMessage_BoatNames{BoatNames: &pb.BoatNames{Names: names}}}, outBoatNames)
+}
+
+// crews tells c who is aboard the boats in its view v of f with anyone
+// aboard besides their skipper, while they are in its near band: each
+// boat's crew as it comes near or into the view near, and again when who
+// is aboard, who holds the controls or the skipper's look changes; and a
+// crew of nobody for a slot told one whose boat has left the band or the
+// view, has nobody aboard now but its skipper, or is another boat. The
+// connection is aboard none of them, so each person goes with their seat,
+// look and machine mark only: never a name, nor any tie to the
+// connection's account. All the changes of a frame go in one message.
+func (c *conn) crews(f *bus.Frame, v *connView) bool {
+	if len(f.Crew) == 0 && c.crewed == 0 {
+		return true
+	}
+	var crews []*pb.Crew
+	for m := v.view.Used | c.crewed; m != 0; m &= m - 1 {
+		vs := bits.TrailingZeros64(m)
+		bit := uint64(1) << vs
+		if v.view.Used&bit == 0 || v.view.Boats[vs].Far() {
+			if c.crewed&bit != 0 {
+				crews = append(crews, &pb.Crew{Slot: uint32(vs)})
+			}
+			c.crewed &^= bit
+			c.crewKnown &^= bit
+			continue
+		}
+		// Unchanged since told: nothing to look up.
+		s := v.slot[vs]
+		now := toldCrew{boat: v.boat[vs], deck: f.Deck[s], look: f.Look[s]}
+		if c.crewKnown&bit != 0 && c.toldCrews[vs] == now {
+			continue
+		}
+		c.toldCrews[vs] = now
+		c.crewKnown |= bit
+		lo, hi := f.CrewOf(s)
+		if lo == hi {
+			if c.crewed&bit != 0 {
+				crews = append(crews, &pb.Crew{Slot: uint32(vs)})
+			}
+			c.crewed &^= bit
+			continue
+		}
+		c.crewed |= bit
+		crews = append(crews, crewIn(f, s, lo, hi, vs))
+	}
+	if len(crews) == 0 {
+		return true
+	}
+	return c.send(&pb.ServerMessage{Body: &pb.ServerMessage_Crews{Crews: &pb.Crews{Crews: crews}}}, outCrews)
+}
+
+// crewIn is the crew of the boat in slot s of f, f.Crew[lo:hi] its crew
+// but its skipper, as those aboard no boat are told it, for view slot vs:
+// the skipper at seat 0, then the rest in seat order, and the seat of
+// whoever holds the controls, 0 for the skipper.
+func crewIn(f *bus.Frame, s int32, lo, hi, vs int) *pb.Crew {
+	people := make([]pb.Person, hi-lo+1)
+	list := make([]*pb.Person, hi-lo+1)
+	people[0] = pb.Person{Look: f.Look[s], Machine: f.Machine[s]}
+	list[0] = &people[0]
+	holder := uint32(0)
+	for i, a := range f.Crew[lo:hi] {
+		people[i+1] = pb.Person{Seat: uint32(a.Seat), Look: a.Look, Machine: a.Machine}
+		list[i+1] = &people[i+1]
+		if f.Holder[s] == a.Account {
+			holder = uint32(a.Seat)
+		}
+	}
+	return &pb.Crew{People: list, Holder: holder, Slot: uint32(vs)}
 }
 
 // bumps sends c the bumps of f after the last it was sent: with the

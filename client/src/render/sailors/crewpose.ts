@@ -12,7 +12,7 @@ import { Matrix4, Vector3 } from 'three';
 import type { BoatStation, StationPose } from '../../catalog';
 import { type Clip, Pose } from './clips';
 import { blend, type CrewBody, type Life, placeStance, type Stance } from './crewbody';
-import { type CrewMember, type CrewPath, type CrewSpot, moveAt } from './crewrules';
+import { type CrewMember, type CrewPath, type CrewSpot, moveAt, STRIDE } from './crewrules';
 import type { FleetSeat } from './fleetlooks';
 import { CROUCH_CLIPS, CROUCH_SPEED, RAIL_CLIPS, railPlace } from './rail';
 import type { Rig } from './rig';
@@ -53,6 +53,9 @@ export function stationPlace(
 export const BY_THE_BOW = Math.PI;
 /** How high the body is carried, at the middle of getting up or sitting down, over the line between: the legs brought in over the deck's edge, m. */
 export const RISE_ARC = 0.3;
+
+/** How high the body is lifted at the middle of stepping over something, m. */
+export const OVER_ARC = 0.15;
 
 const m = new Matrix4();
 const m2 = new Matrix4();
@@ -153,28 +156,41 @@ export function spotStance(
   return true;
 }
 
-/** Each walk's time with the feet side by side, its steps begun and ended there. */
+/** Each walk's time with both feet down and nearest side by side, its steps begun and ended there. */
 const together = new WeakMap<Clip, number>();
 
-/** The time in a walk where its feet are nearest side by side, fore and aft: found once. */
+/** How near its lowest the higher foot must be for both to be down, m. */
+const FEET_DOWN = 0.02;
+
+/** The time in a walk where both its feet are down, nearest side by side fore and aft: found once. */
 export function feetTogether(clip: Clip, rig: Rig): number {
   let t0 = together.get(clip);
   if (t0 === undefined) {
     const pose = new Pose(rig.names.length);
     const l = rig.bone('foot_l');
     const r = rig.bone('foot_r');
-    let best = Number.POSITIVE_INFINITY;
-    t0 = 0;
+    // Each moment's feet: how far apart fore and aft, and how high the higher is.
+    const apart: number[] = [];
+    const high: number[] = [];
     for (let k = 0; k < 120; k++) {
       const t = (clip.duration * k) / 120;
       pose.rest(rig);
       clip.sample(t, pose);
       pose.to(rig);
       rig.fk();
-      const d = Math.abs(rig.position(l, v).z - rig.position(r, w).z);
-      if (d < best) {
-        best = d;
-        t0 = t;
+      rig.position(l, v);
+      rig.position(r, w);
+      apart.push(Math.abs(v.z - w.z));
+      high.push(Math.max(v.y, w.y));
+    }
+    // Both feet down (the higher within FEET_DOWN of its lowest), nearest side by side.
+    const low = Math.min(...high);
+    let best = Number.POSITIVE_INFINITY;
+    t0 = 0;
+    for (let k = 0; k < 120; k++) {
+      if ((high[k] as number) <= low + FEET_DOWN && (apart[k] as number) < best) {
+        best = apart[k] as number;
+        t0 = (clip.duration * k) / 120;
       }
     }
     rig.reset();
@@ -194,7 +210,21 @@ export function walkStance(
   const c = clips.get(CROUCH_CLIPS.walk) ?? null;
   const yaw = path.at(s, along);
   into.clip = c;
-  into.t = (c === null ? 0 : feetTogether(c, rig)) + s / CROUCH_SPEED;
+  // Whole steps along the path; from its start, or from the end of the last
+  // step or stretch stepped over before s (or the start of the next), with
+  // the feet together there, so that each is stepped from feet together to
+  // feet together.
+  const pace = path.length > 0 ? (path.paces * STRIDE) / path.length : 1;
+  let from = 0;
+  for (const o of path.anchors) {
+    if (o[1] <= s) {
+      from = o[1];
+    } else if (s <= o[0] && from === 0) {
+      from = o[0];
+      break;
+    }
+  }
+  into.t = (c === null ? 0 : feetTogether(c, rig)) + ((s - from) * pace) / CROUCH_SPEED;
   into.at.set(along.x, along.y, along.z);
   into.yaw = yaw;
   into.tilt.identity();
@@ -215,6 +245,7 @@ export function poseMember(body: CrewBody, member: CrewMember, input: PoseInput)
   how.narrowA = 0;
   how.narrowB = 0;
   how.carry = false;
+  how.top = Number.NEGATIVE_INFINITY;
   let upright = input.life.upright;
   if (mv === null || mv.t < 0) {
     const at: CrewSpot = mv === null ? { station: member.station, side: member.side } : mv.from;
@@ -249,6 +280,11 @@ export function poseMember(body: CrewBody, member: CrewMember, input: PoseInput)
         how.f = smooth((s - step[0]) / (step[1] - step[0]));
         how.narrowB = 1;
         how.carry = true;
+        how.top = mv.path.overAt(s);
+        if (how.top > Number.NEGATIVE_INFINITY) {
+          // Over something: the body lifted with the feet, the knees over it.
+          how.arc = OVER_ARC;
+        }
       }
     } else {
       walkStance(input.clips, body.rig, mv.path, mv.path.length, a);

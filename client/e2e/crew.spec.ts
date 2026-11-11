@@ -180,10 +180,10 @@ test('five aboard the keelboat: to windward on both tacks, through a tack and a 
         for (let i = 0; i < frames; i++) {
           k.setState({ boom, sailor: 0, heading });
           k.sailFrames(1, 1);
-          // When each began to cross, in frames.
+          // When each began to cross, in frames, by the station they left.
           for (const m of k.crew().members) {
-            if (m.moving !== null && m.t > 0 && !starts.has(m.station)) {
-              starts.set(m.station, i);
+            if (m.moving !== null && m.t > 0 && !starts.has(m.from)) {
+              starts.set(m.from, i);
             }
           }
         }
@@ -221,18 +221,23 @@ test('five aboard the keelboat: to windward on both tacks, through a tack and a 
   const port = await sail(0.2, tack, 240);
   toWindward(port, -1, 'on port');
   await picture('to windward on port', -1);
-  // A tack: each crosses in turn, the trimmer first and the bow hand last.
+  // A tack: each crosses in turn, the trimmer and the quarter first, then
+  // the two forward in file round the mast, the bow hand leading; the two
+  // forward in each other's places after it.
   const tacked = await sail(-0.2, tack, 300);
   expect(tacked.tack).toBe(true);
   const order = Object.entries(tacked.starts)
     .sort(([, a], [, b]) => (a as number) - (b as number))
     .map(([s]) => Number(s));
-  expect(order).toEqual([1, 4, 3, 2]);
+  expect(order).toEqual([1, 4, 2, 3]);
+  const seatAt = (c: Awaited<ReturnType<typeof sail>>, station: number) =>
+    c.members.find((m) => m.station === station)?.seat;
+  expect([seatAt(tacked, 2), seatAt(tacked, 3)]).toEqual([3, 2]);
   toWindward(tacked, 1, 'after a tack');
   await picture('to windward on starboard, after a tack', 1);
   // A gybe, from a run, the boom at 29° where it lies over none of them
-  // (the boom right over one, they wait for it): the bow hand first, the
-  // trimmer last.
+  // (the boom right over one, they wait for it): the one forward first,
+  // the trimmer last; the two forward back in their own places.
   await sail(-0.5, gybe, 60);
   const gybed = await sail(0.5, gybe, 300);
   expect(gybed.tack).toBe(false);
@@ -241,6 +246,7 @@ test('five aboard the keelboat: to windward on both tacks, through a tack and a 
     .map(([s]) => Number(s));
   expect(gybeOrder[0]).toBe(2);
   expect(gybeOrder.at(-1)).toBe(1);
+  expect([seatAt(gybed, 2), seatAt(gybed, 3)]).toEqual([2, 3]);
   toWindward(gybed, -1, 'after a gybe');
   await picture('to windward on port, after a gybe', -1);
   // The skipper hands over to the bow hand: the two walk to each other's
@@ -319,4 +325,158 @@ test('two aboard the skiff: the crew to windward of the boom, after a tack and a
   expect(out.crossing.members.find((m) => m.station > 0)?.moving).toBe('cross');
   // The two changed places: another look at the helm.
   expect(out.handed.helm).not.toBe(out.tacked.helm);
+});
+
+test('a friend’s boat near a crewed keelboat, skiff and tall ship sees their crews: to windward, through a tack and a handover', async ({
+  page,
+}, info) => {
+  test.setTimeout(180_000);
+  const kindOf = (pred: (b: (typeof data.boats)[number]) => boolean) => data.boats.findIndex(pred);
+  const keelboat = kindOf((b) => b.stations.some((s) => s.pose === 'rail'));
+  const skiff = kindOf(
+    (b) => b.capacity === 2 && b.stations.some((s) => 'windward' in s && s.windward),
+  );
+  const ship = kindOf((b) => b.capacity >= 40);
+  await openScene(page, 'boat=jolly-boat');
+  await page.evaluate(
+    async ({ keelboat, skiff, ship }) => {
+      const k = globalThis.keel;
+      k.setSky(12);
+      const from = k.world.wind.meanFrom;
+      const me = k.boat().state;
+      const at = (ahead: number, beam: number) => ({
+        east: me.x + Math.sin(me.heading) * ahead + Math.cos(me.heading) * beam,
+        north: me.y + Math.cos(me.heading) * ahead - Math.sin(me.heading) * beam,
+      });
+      // Each close-hauled on port, the boom to starboard: her crew on the port rail.
+      const boat = (kind: number, n: number, seed: number, ahead: number, beam: number) => {
+        const { crew, look } = k.fleetCrew(n, 0, seed);
+        return {
+          kind,
+          crew,
+          look,
+          ...at(ahead, beam),
+          heading: from - 0.7,
+          boom: 0.25,
+          sailor: -0.3,
+        };
+      };
+      k.setFleet([
+        boat(keelboat, 5, 1, 12, 6),
+        boat(skiff, 2, 2, 22, -6),
+        boat(ship, 40, 3, 60, 25),
+      ]);
+      await k.fleetLoaded();
+      await k.fleetCrewsReady();
+      k.freezeTick(k.world.ticks);
+    },
+    { keelboat, skiff, ship },
+  );
+  /** Sails frames, the keelboat's boom and heading as given, and the crews as they then are. */
+  const sail = (frames: number, boom: number, off: number) =>
+    page.evaluate(
+      ({ frames, boom, off }) => {
+        const k = globalThis.keel;
+        const starts = new Map<number, number>();
+        for (let i = 0; i < frames; i++) {
+          k.moveFleet(0, { boom, heading: k.world.wind.meanFrom + off });
+          k.sailFrames(1, 1);
+          for (const m of k.fleetCrews().boats.find((b) => b.slot === 0)?.members ?? []) {
+            if (m.moving !== null && m.t > 0 && !starts.has(m.from)) {
+              starts.set(m.from, i);
+            }
+          }
+        }
+        return { ...k.fleetCrews(), starts: Object.fromEntries(starts) };
+      },
+      { frames, boom, off },
+    );
+  const picture = async (
+    name: string,
+    view: { azimuth: number; elevation: number; distance: number },
+  ) => {
+    await page.evaluate(async (v) => {
+      const k = globalThis.keel;
+      k.camera(v);
+      await k.show();
+    }, view);
+    await info.attach(name, { body: await page.screenshot(), contentType: 'image/png' });
+  };
+  const boatOf = (c: Awaited<ReturnType<typeof sail>>, slot: number) => {
+    const b = c.boats.find((x) => x.slot === slot);
+    expect(b, `the boat in slot ${slot}`).toBeDefined();
+    return b as NonNullable<typeof b>;
+  };
+  const toWindward = (
+    c: Awaited<ReturnType<typeof sail>>,
+    slot: number,
+    n: number,
+    side: number,
+    name: string,
+  ) => {
+    const b = boatOf(c, slot);
+    expect(b.drawn, name).toBe(true);
+    expect(b.side, name).toBe(side);
+    const crew = b.members.filter((m) => m.station > 0);
+    expect(crew, name).toHaveLength(n);
+    expect(
+      crew.every((m) => m.moving === null),
+      name,
+    ).toBe(true);
+    expect(b.heads, name).toHaveLength(n);
+  };
+  const met = await sail(60, 0.25, -0.7);
+  // The keelboat's four and the skiff's one to windward (port); the ship's thirty-nine at their stations.
+  toWindward(met, 0, 4, -1, 'the keelboat');
+  toWindward(met, 1, 1, -1, 'the skiff');
+  expect(boatOf(met, 2).members.filter((m) => m.station > 0)).toHaveLength(39);
+  expect(boatOf(met, 2).heads).toHaveLength(39);
+  expect(met.drawn.near + met.drawn.far).toBe(44);
+  await picture('a friend near a keelboat of five, a skiff of two and a tall ship of forty', {
+    azimuth: 2.6,
+    elevation: 0.35,
+    distance: 30,
+  });
+  // The keelboat tacks: her crew cross in turn, to the starboard rail.
+  const tacking = await sail(40, -0.25, 0.7);
+  await picture('the keelboat tacking, her crew crossing', {
+    azimuth: 2.6,
+    elevation: 0.5,
+    distance: 18,
+  });
+  const tacked = await sail(300, -0.25, 0.7);
+  // When each began, counting on from the first forty frames.
+  const later = Object.fromEntries(
+    Object.entries(tacked.starts).map(([s, i]) => [s, (i as number) + 40]),
+  );
+  const order = Object.entries({ ...later, ...tacking.starts })
+    .sort(([, a], [, b]) => (a as number) - (b as number))
+    .map(([s]) => Number(s));
+  // The trimmer and the quarter first, then the two forward in file.
+  expect(order).toEqual([1, 4, 2, 3]);
+  toWindward(tacked, 0, 4, 1, 'the keelboat after her tack');
+  await picture('the keelboat after her tack, her crew on the starboard rail', {
+    azimuth: 2.6,
+    elevation: 0.5,
+    distance: 18,
+  });
+  // Her skipper hands the controls to her trimmer: the two change places, her helm away from the tiller meanwhile.
+  await page.evaluate(() => {
+    const k = globalThis.keel;
+    const { crew } = k.fleetCrew(5, 1, 1);
+    k.moveFleet(0, { crew, look: crew.people[1]?.look ?? -1 });
+  });
+  const walking = await sail(20, -0.25, 0.7);
+  expect(boatOf(walking, 0).helmAway).toBe(true);
+  expect(
+    boatOf(walking, 0)
+      .members.filter((m) => m.moving === 'change')
+      .map((m) => m.seat)
+      .sort(),
+  ).toEqual([0, 1]);
+  await picture('the keelboat changing hands', { azimuth: 2.6, elevation: 0.5, distance: 18 });
+  const handed = await sail(240, -0.25, 0.7);
+  expect(boatOf(handed, 0).helmAway).toBe(false);
+  expect(boatOf(handed, 0).members.find((m) => m.seat === 0)?.station).toBe(1);
+  toWindward(handed, 0, 4, 1, 'the keelboat after the handover');
 });

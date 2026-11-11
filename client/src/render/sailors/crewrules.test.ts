@@ -15,6 +15,7 @@ import {
   type CrewPlan,
   CrewRules,
   CrewSide,
+  changePath,
   crewPlan,
   crossingWay,
   crossPath,
@@ -27,7 +28,6 @@ import {
   LEAN_TIME,
   moveAt,
   SIDE_HYSTERESIS,
-  walkPath,
 } from './crewrules';
 
 const DEG = Math.PI / 180;
@@ -166,7 +166,7 @@ describe('the crew to windward', () => {
     }
   });
 
-  test('a tack: each crosses in turn, through the cockpit first, then round the mast aft first; all on the new side after', () => {
+  test('a tack: each crosses in turn, through the cockpit first, then round the mast in file, the bow hand leading; all on the new side after, the two forward in each other’s places', () => {
     const plan = keelPlan();
     const r = new CrewRules(plan);
     r.set(aboard(5));
@@ -174,18 +174,26 @@ describe('the crew to windward', () => {
     r.step({ dt: 1 / 30, boom: 0.2, windOffBow: 30 * DEG, depth: 0 });
     expect(r.side.tack).toBe(true);
     const start = (station: number): number => {
-      const m = r.members.find((x) => x.station === station)?.moving;
+      const m = r.members.find((x) => x.moving?.from.station === station)?.moving;
       return -(m?.t ?? Number.NaN);
     };
-    // Trimmer, quarter, middle, bow hand: 0.4 s apart.
-    expect([1, 4, 3, 2].map(start).map((t) => Math.round((t + 1 / 30) / CROSS_GAP))).toEqual([
+    // Trimmer, quarter, bow hand, middle: 0.4 s apart.
+    expect([1, 4, 2, 3].map(start).map((t) => Math.round((t + 1 / 30) / CROSS_GAP))).toEqual([
       0, 1, 2, 3,
     ]);
+    // The bow hand leads round the mast to the middle's place, the middle following to the bow hand's.
+    const seatAt = (station: number): number | undefined =>
+      r.members.find((x) => x.station === station)?.seat;
+    expect([seatAt(2), seatAt(3)]).toEqual([3, 2]);
     sail(r, 10, 0.2, 30 * DEG);
     for (const m of r.members.filter((x) => x.station > 0)) {
       expect(m.side).toBe(-1);
       expect(m.moving).toBeNull();
     }
+    expect([seatAt(2), seatAt(3)]).toEqual([3, 2]);
+    // Told the crew afresh, they keep their places.
+    r.set(aboard(5));
+    expect([seatAt(2), seatAt(3)]).toEqual([3, 2]);
   });
 
   test('a gybe: the other way about, the bow hand first and the trimmer last', () => {
@@ -197,7 +205,7 @@ describe('the crew to windward', () => {
     const order = r.members
       .filter((m) => m.moving !== null)
       .sort((a, b) => (b.moving?.t ?? 0) - (a.moving?.t ?? 0))
-      .map((m) => m.station);
+      .map((m) => m.moving?.from.station);
     expect(order).toEqual([2, 3, 4, 1]);
   });
 
@@ -285,7 +293,7 @@ describe('sitting up and leaning out with the helm', () => {
 });
 
 describe('a change of hands', () => {
-  test('the old helm and the new one walk to each other’s places along the windward side deck; the helm away meanwhile', () => {
+  test('the old helm and the bow hand walk to each other’s places along the windward side deck, one inboard of the other; the helm away meanwhile', () => {
     const plan = keelPlan();
     const r = new CrewRules(plan);
     r.set(aboard(3));
@@ -302,11 +310,12 @@ describe('a change of hands', () => {
     expect(skipper?.moving?.from.station).toBe(-1);
     expect(bow?.moving?.from.station).toBe(2);
     expect(r.helmAway).toBe(true);
-    // Along the windward (port) side deck, one inboard of the other.
+    // Along the windward (port) side deck, one inboard of the other, at once.
     for (const m of [skipper, bow]) {
       const p = m?.moving?.path;
       expect(p).toBeDefined();
       expect(Math.max(...(p?.x ?? [0]))).toBeLessThan(-0.5);
+      expect(m?.moving?.t).toBeCloseTo(0, 9);
     }
     expect(skipper?.moving?.path.x[0]).not.toBeCloseTo(bow?.moving?.path.x.at(-1) ?? 0, 2);
     // About 2 m at 1 m/s and the getting up and down.
@@ -320,12 +329,52 @@ describe('a change of hands', () => {
     expect(r.members.find((m) => m.seat === 1)?.station).toBe(1);
   });
 
-  test('the walk’s path, forward and aft, stays on the side deck', () => {
+  test('the helm and the trimmer beside the cockpit: the new helm along the side deck, the old one on the cockpit’s floor, in turn to keep apart', () => {
     const plan = keelPlan();
-    const p = walkPath(plan, 1, 1.25, -0.66, -0.08);
-    expect(Math.min(...p.x)).toBeGreaterThan(0.7);
-    expect(Math.max(...p.x)).toBeLessThan(1.15);
-    expect(Math.min(...p.y)).toBeGreaterThan(0.69);
+    const r = new CrewRules(plan);
+    r.set(aboard(2));
+    sail(r, 1, 0.3);
+    r.set(aboard(2, 1));
+    const skipper = r.members.find((m) => m.seat === 0)?.moving;
+    const trimmer = r.members.find((m) => m.seat === 1)?.moving;
+    expect(skipper).toBeDefined();
+    expect(trimmer).toBeDefined();
+    // The trimmer along the side deck, the skipper inboard on the floor, in its lane to leeward of the middle.
+    expect(Math.min(...(trimmer?.path.x.map((x) => -x) ?? [0]))).toBeGreaterThan(0.8);
+    expect(Math.min(...(skipper?.path.y ?? [1]))).toBeLessThan(0.55);
+    expect(Math.max(...(skipper?.path.x ?? [0]))).toBeGreaterThan(0.2);
+    // One goes at once, the other waits.
+    expect(Math.max(skipper?.t ?? 1, trimmer?.t ?? 1)).toBeCloseTo(0, 9);
+    expect(Math.min(skipper?.t ?? 0, trimmer?.t ?? 0)).toBeLessThan(0);
+    sail(r, 8, 0.3);
+    expect(r.members.every((m) => m.moving === null)).toBe(true);
+    expect(r.members.find((m) => m.seat === 0)?.station).toBe(1);
+  });
+
+  test('the walk’s path: beside the cockpit, on its floor in the lanes for each way, apart; forward of it, along the side deck', () => {
+    const plan = keelPlan();
+    const forward = changePath(plan, 1, 1.25, 0.8);
+    const aft = changePath(plan, 1, 0.8, 1.25);
+    for (const p of [forward, aft]) {
+      expect(Math.max(...p.y)).toBeLessThan(0.55);
+      expect(Math.max(...p.x)).toBeLessThan(0.6);
+    }
+    const laneAt = (p: typeof forward, z: number): number => {
+      let best = 0;
+      let d = Number.POSITIVE_INFINITY;
+      p.z.forEach((zz, i) => {
+        if (Math.abs(zz - z) < d) {
+          d = Math.abs(zz - z);
+          best = p.x[i] as number;
+        }
+      });
+      return best;
+    };
+    expect(laneAt(aft, 1.02) - laneAt(forward, 1.02)).toBeGreaterThan(0.4);
+    const deck = changePath(plan, 1, 1.25, -0.66, -0.08);
+    expect(Math.min(...deck.x)).toBeGreaterThan(0.7);
+    expect(Math.max(...deck.x)).toBeLessThan(1.15);
+    expect(Math.min(...deck.y)).toBeGreaterThan(0.69);
   });
 
   test('someone coming aboard is put at their station at once; nobody walks', () => {

@@ -24,8 +24,8 @@ export function crewFromQuery(
 }
 
 /** n people aboard in looks drawn from a fixed seed, the second holding the controls. */
-export function sandboxCrew(n: number, cat: Looks): CrewShown {
-  const random = seeded(0x5eed);
+export function sandboxCrew(n: number, cat: Looks, seed = 0x5eed): CrewShown {
+  const random = seeded(seed);
   const people = Array.from({ length: n }, (_, seat) => {
     const look: Look =
       seat % 6 === 5

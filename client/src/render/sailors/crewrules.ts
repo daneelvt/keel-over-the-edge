@@ -48,7 +48,7 @@ export const LEAN_STAGGER = 0.3;
 /** How far round the front of the mast a crossing goes, from its centre, m. */
 export const MAST_CLEAR = 0.45;
 /** How far inboard of the deck's edge a walk along the side deck goes, forward of the cockpit, m. */
-export const EDGE_IN = 0.25;
+export const EDGE_IN = 0.29;
 /** How far in from the cockpit's sides and ends a crossing through it goes, m. */
 export const COCKPIT_IN = 0.25;
 const COCKPIT_END = 0.2;
@@ -62,8 +62,11 @@ export const BOOM_OVER = 0.45;
 const AFT_WAY = false;
 /** The longest a person waits for the boom to move off before crossing all the same, seconds. */
 export const WAIT_MOST = 3;
-/** How far two people changing places along the side deck keep from each other's line, m. */
+/** How far two people changing places along the side deck keep from each other's line, m; and how far aft of the helm's place one coming forward to it stops before sitting. */
 export const PASS = 0.04;
+const APPROACH = 0.15;
+/** How far one crossing behind another along the same way keeps behind them, m. */
+export const FOLLOW = 0.6;
 /** The corners of a path rounded to this radius, m. */
 const CORNER = 0.3;
 /** A path's points at most this far apart, m. */
@@ -85,6 +88,12 @@ export interface CrewPlan {
   boom: { y: number; z: number; length: number };
   /** The deck's height under (x, z) as the model has it, crown and all; null where it has none there. */
   deck: ((x: number, z: number) => number | null) | null;
+  /**
+   * The tiller, over the cockpit on the centreline: its head (z, at the
+   * rudder's stock), the extension's hinge on it (z), and the height of its
+   * top; null for a boat with none (a wheel, or no cockpit).
+   */
+  tiller: { head: number; hinge: number; top: number } | null;
 }
 
 /** A boat's plan from its kind's stations, its model's hull solid, its boom's gooseneck and, if it can be read, its deck. */
@@ -94,6 +103,7 @@ export function crewPlan(
   gooseneck: { y: number; z: number } | null,
   boomLength: number,
   deck: CrewPlan['deck'] = null,
+  tiller: CrewPlan['tiller'] = null,
 ): CrewPlan {
   const st = solid?.stations ?? [];
   const along = (z: number, k: number): number => {
@@ -124,6 +134,7 @@ export function crewPlan(
     mastZ: gooseneck?.z ?? 0,
     boom: { y: gooseneck?.y ?? 0, z: gooseneck?.z ?? 0, length: boomLength },
     deck,
+    tiller,
   };
   return plan;
 }
@@ -168,8 +179,23 @@ export class CrewPath {
   readonly length: number;
   /** Where along it the deck steps up or down (into the cockpit or out of it): each step's start and end, metres along. */
   readonly steps: [number, number][] = [];
+  /** Where along it something lying across it is stepped over: each step's start and end, metres along, and how high the feet go. */
+  readonly overs: [number, number, number][] = [];
+  /** How many whole steps of the walk it takes. */
+  readonly paces: number;
 
-  constructor(points: readonly [number, number, number][]) {
+  /** The steps and the stretches stepped over, in order along it: their starts and ends. */
+  get anchors(): readonly (readonly [number, number])[] {
+    return [...this.steps, ...this.overs.map((o): [number, number] => [o[0], o[1]])].sort(
+      (a, b) => a[0] - b[0],
+    );
+  }
+
+  constructor(
+    points: readonly [number, number, number][],
+    /** Stretches of the path, (x, z) to (x, z), over which something is stepped, and how high. */
+    over: readonly { from: [number, number]; to: [number, number]; top: number }[] = [],
+  ) {
     const n = points.length;
     this.x = new Float32Array(n);
     this.y = new Float32Array(n);
@@ -196,16 +222,56 @@ export class CrewPath {
         ]);
       }
     }
+    // Each stretch stepped over: from the point nearest its start to the point nearest its end.
+    const nearest = ([x, z]: [number, number]): number => {
+      let best = 0;
+      let d = Number.POSITIVE_INFINITY;
+      for (let i = 0; i < n; i++) {
+        const e = Math.hypot((this.x[i] as number) - x, (this.z[i] as number) - z);
+        if (e < d) {
+          d = e;
+          best = this.s[i] as number;
+        }
+      }
+      return best;
+    };
+    this.paces = Math.max(1, Math.round(this.length / STRIDE));
+    for (const o of over) {
+      const a = nearest(o.from);
+      const b = nearest(o.to);
+      this.overs.push([Math.min(a, b), Math.max(a, b), o.top]);
+    }
+    // A step of the deck within a stretch stepped over is taken with it.
+    const inOver = (st: [number, number]): boolean =>
+      this.overs.some((o) => st[1] > o[0] && st[0] < o[1]);
+    const steps = this.steps.filter((st) => !inOver(st));
+    this.steps.length = 0;
+    this.steps.push(...steps);
   }
 
-  /** The step s lies on, if it lies on one. */
+  /** The step s lies on, if it lies on one: a step of the deck, or a stretch stepped over. */
   stepAt(s: number): [number, number] | null {
     for (const step of this.steps) {
       if (s > step[0] && s < step[1]) {
         return step;
       }
     }
+    for (const o of this.overs) {
+      if (s > o[0] && s < o[1]) {
+        return [o[0], o[1]];
+      }
+    }
     return null;
+  }
+
+  /** How high the feet are carried at s, stepping over something there; −∞ if nothing is. */
+  overAt(s: number): number {
+    for (const o of this.overs) {
+      if (s > o[0] && s < o[1]) {
+        return o[2];
+      }
+    }
+    return Number.NEGATIVE_INFINITY;
   }
 
   /**
@@ -246,7 +312,11 @@ export class CrewPath {
  * points STEP apart at most, each at the deck's height (a step into the
  * cockpit or out of it taken over STEP_SPREAD: CrewPath's steps).
  */
-export function pathThrough(plan: CrewPlan, way: readonly [number, number][]): CrewPath {
+export function pathThrough(
+  plan: CrewPlan,
+  way: readonly [number, number][],
+  over: ConstructorParameters<typeof CrewPath>[1] = [],
+): CrewPath {
   // The corners rounded: each replaced by an arc from the line before to the line after.
   const flat: [number, number][] = [];
   for (let i = 0; i < way.length; i++) {
@@ -300,7 +370,7 @@ export function pathThrough(plan: CrewPlan, way: readonly [number, number][]): C
   }
   // The deck's height under each: a step is taken as a step (CrewPath's steps).
   const points = dense.map(([x, z]): [number, number, number] => [x, deckY(plan, x, z), z]);
-  return new CrewPath(points);
+  return new CrewPath(points, over);
 }
 
 /** A station's point on a side (+1 starboard), as the windward rule draws it: its own, or its mirror. */
@@ -340,17 +410,72 @@ export function boomOver(
   return at !== null && Math.abs(at - z) < BOOM_OVER;
 }
 
+/** A crossing through the cockpit this near the tiller's hinge, or aft of it, goes over the deck aft of the cockpit instead, m. */
+export const TILLER_CLEAR = 0.3;
+/**
+ * How far either side of the centreline a crossing behind the cockpit
+ * steps over the tiller, m: from where the walk's feet are clear of it
+ * wherever the rudder swings it, to where they are again; and how high
+ * over its top the feet go.
+ */
+export const TILLER_SWING = 0.45;
+export const TILLER_STEP = 0.12;
+/** How far in from the deck's edge a crossing behind the cockpit walks beside it, m: the side deck there is narrow. */
+export const QUARTER_IN = 0.14;
+
 /**
  * The path a station's person takes across the boat, from the side from
- * to the other: straight through the cockpit at the station (kept clear
- * of its ends); or, forward of it, along the side deck to the front of
- * the mast, round it and back along the other side deck, or, when the
- * boom (radians, + starboard) out on the side left crosses the side deck
- * forward of the station, aft along it and through the cockpit's fore end.
+ * to the other, to the station to (their own, or another of the same way
+ * across): straight through the cockpit at the station (kept clear of its
+ * ends); aft of the tiller's hinge, aft along the side deck and over the
+ * deck aft of the cockpit, stepping over the tiller; or, forward of the
+ * cockpit, along the side deck to the front of the mast, round it and back
+ * along the other side deck, or, when the boom (radians, + starboard) out
+ * on the side left crosses the side deck forward of the station, aft
+ * along it and through the cockpit's fore end.
  */
-export function crossPath(plan: CrewPlan, station: BoatStation, from: number, boom = 0): CrewPath {
+export function crossPath(
+  plan: CrewPlan,
+  station: BoatStation,
+  from: number,
+  boom = 0,
+  to: BoatStation = station,
+): CrewPath {
   const z = station.at[2] as number;
+  const z1 = to.at[2] as number;
   const c = plan.cockpit;
+  const t = plan.tiller;
+  if (
+    crossingWay(plan, station) === 'cockpit' &&
+    c !== null &&
+    t !== null &&
+    z > t.hinge - TILLER_CLEAR
+  ) {
+    // Behind the cockpit, between its after end and the tiller's head.
+    const za = (c.aft + t.head) / 2;
+    const zs = c.aft;
+    const xa = sideDeckX(plan, za);
+    // Along the side deck beside the cockpit's after end, as far out as the walk goes.
+    const out = (zz: number): number => plan.edge(zz) - QUARTER_IN;
+    return pathThrough(
+      plan,
+      [
+        [from * out(z), z],
+        [from * out(zs), zs],
+        [from * xa, za],
+        [-from * xa, za],
+        [-from * out(zs), zs],
+        [-from * out(z1), z1],
+      ],
+      [
+        {
+          from: [from * TILLER_SWING, za],
+          to: [-from * TILLER_SWING, za],
+          top: t.top + TILLER_STEP,
+        },
+      ],
+    );
+  }
   // Across the cockpit's floor, COCKPIT_IN in from its sides at most, in whole steps.
   const across = (): number =>
     c === null
@@ -382,7 +507,7 @@ export function crossPath(plan: CrewPlan, station: BoatStation, from: number, bo
     [from * sideDeckX(plan, z), z],
     [from * sideDeckX(plan, zf), zf],
     [-from * sideDeckX(plan, zf), zf],
-    [-from * sideDeckX(plan, z), z],
+    [-from * sideDeckX(plan, z1), z1],
   ]);
 }
 
@@ -409,6 +534,191 @@ export function walkPath(
     way.push([side * (sideDeckX(plan, z) + off), z]);
   }
   return pathThrough(plan, way);
+}
+
+/**
+ * The cockpit floor's lanes for a change of places, out from the
+ * centreline to windward as fractions of the floor's half-width: the one
+ * walking aft's, about the middle, and the one walking forward's, to
+ * leeward; so that two changing places pass each other apart, inboard of
+ * the feet of anyone sat on the windward side. A walk on the floor begins
+ * and ends at LANE_ENDS, inboard of the feet of whoever sits there.
+ */
+export const LANE_AFT = 0.14;
+export const LANE_FORE = -0.5;
+export const LANE_ENDS = 0.34;
+/** How far along a walk on the cockpit's floor goes into its lane and out of it, m; and how far past the place it goes to one walking forward goes before coming back to it. */
+const LANE_TURN = 0.2;
+const LANE_PAST = 0.4;
+/**
+ * The path someone changing places takes on side, from a place at z0 to
+ * one at z1. Both beside the cockpit: on its floor, in the lane for the way
+ * they walk, from inboard of their place to inboard of the other (kept
+ * forward of the tiller); walking forward, on past the place forward and
+ * back to it, while the one there goes aft. Otherwise, along the side
+ * deck, kept off its line by off (outboard, +), as walkPath has it.
+ */
+export function changePath(
+  plan: CrewPlan,
+  side: number,
+  z0: number,
+  z1: number,
+  off = 0,
+): CrewPath {
+  const c = plan.cockpit;
+  if (c === null || Math.min(z0, z1) < c.fore) {
+    return walkPath(plan, side, z0, z1, off);
+  }
+  const lane = (z1 > z0 ? LANE_AFT : LANE_FORE) * c.halfWidth;
+  const near = LANE_ENDS * c.halfWidth;
+  const lo = c.fore + COCKPIT_FORE;
+  const hi = Math.min(
+    c.aft - COCKPIT_END,
+    plan.tiller === null ? Number.POSITIVE_INFINITY : plan.tiller.hinge - TILLER_CLEAR,
+  );
+  const floorZ = (z: number): number => Math.max(lo, Math.min(hi, z));
+  const start = floorZ(Math.min(z0, z1));
+  const stop = floorZ(Math.max(z0, z1));
+  const turn = Math.min(LANE_TURN, (stop - start) / 3);
+  const past = z1 < z0 ? Math.max(lo, start - LANE_PAST) : start + turn;
+  // From the forward place aft, + to windward.
+  const way: [number, number][] = [
+    [near, start],
+    [lane, past],
+    [lane, stop - turn],
+    [near, stop],
+  ];
+  if (z1 < z0) {
+    way.reverse();
+  }
+  return pathThrough(
+    plan,
+    way.map(([x, z]): [number, number] => [side * x, z]),
+  );
+}
+
+/** How far apart, m, two people changing places keep while both move, and while one waits at their place or is at their new one; and the most a walk waits for another to pass, s. */
+export const KEEP = 0.8;
+export const KEEP_STILL = 0.35;
+const KEEP_WAIT = 8;
+
+/** Where someone moving is at t seconds into a move, in (x, z): at their place, along the path, at their new place. */
+function moveSpot(plan: CrewPlan, mv: CrewMove, t: number, out: { x: number; z: number }): void {
+  const place = (spot: CrewSpot, o: { x: number; z: number }): void => {
+    const st = plan.stations[Math.max(0, spot.station)];
+    const x = Math.abs((st?.at[0] as number | undefined) ?? 0);
+    o.x = spot.side * x;
+    o.z = (st?.at[2] as number | undefined) ?? 0;
+  };
+  const at = { x: 0, y: 0, z: 0 };
+  const w = moveAt({ ...mv, t }, { rise: 0, along: 0, sit: 0 });
+  if (t <= 0) {
+    place(mv.from, out);
+  } else if (w.rise < 1) {
+    place(mv.from, out);
+    mv.path.at(0, at);
+    out.x += (at.x - out.x) * w.rise;
+    out.z += (at.z - out.z) * w.rise;
+  } else if (w.sit <= 0) {
+    mv.path.at(w.along, at);
+    out.x = at.x;
+    out.z = at.z;
+  } else {
+    mv.path.at(mv.path.length, at);
+    place(mv.to, out);
+    out.x = at.x + (out.x - at.x) * w.sit;
+    out.z = at.z + (out.z - at.z) * w.sit;
+  }
+}
+
+/**
+ * How near two moves made at once come to keeping apart, the second delay
+ * seconds after the first: the least of their distance less KEEP while
+ * both move, and less KEEP_STILL while one waits at their place or has
+ * come to their new one; at least 0, kept apart.
+ */
+function nearestOf(plan: CrewPlan, mv: CrewMove, delay: number, other: CrewMove): number {
+  const a = { x: 0, z: 0 };
+  const b = { x: 0, z: 0 };
+  const still = (u: number, m: CrewMove): boolean => u <= 0 || u >= m.duration;
+  let least = Number.POSITIVE_INFINITY;
+  for (let t = 0; t <= mv.duration + delay; t += 0.1) {
+    const ot = t + other.t;
+    const sa = still(t - delay, mv);
+    const sb = still(ot, other);
+    if (sa && sb) {
+      continue;
+    }
+    moveSpot(plan, mv, t - delay, a);
+    moveSpot(plan, other, ot, b);
+    least = Math.min(least, Math.hypot(a.x - b.x, a.z - b.z) - (sa || sb ? KEEP_STILL : KEEP));
+  }
+  return least;
+}
+
+/**
+ * Delays for moves made at once: in whichever order lets them start
+ * soonest, each as little as lets it keep KEEP from those before it while
+ * either moves; the first goes at once. If no order does, the order and
+ * delays that keep them furthest apart.
+ */
+function keepApart(plan: CrewPlan, moves: CrewMove[]): void {
+  const orders: CrewMove[][] = [];
+  const permute = (rest: CrewMove[], done: CrewMove[]): void => {
+    if (rest.length === 0) {
+      orders.push(done);
+      return;
+    }
+    rest.forEach((m, i) => {
+      permute([...rest.slice(0, i), ...rest.slice(i + 1)], [...done, m]);
+    });
+  };
+  permute(moves.slice(0, 4), []);
+  let best: { delays: number[]; order: CrewMove[]; least: number; wait: number } | null = null;
+  for (const order of orders) {
+    const delays: number[] = [0];
+    let least = Number.POSITIVE_INFINITY;
+    if (order[0] !== undefined) {
+      order[0].t = 0;
+    }
+    for (let i = 1; i < order.length; i++) {
+      const mv = order[i] as CrewMove;
+      let pick = 0;
+      let pickLeast = Number.NEGATIVE_INFINITY;
+      for (let delay = 0; delay <= KEEP_WAIT + 1e-9; delay += 0.1) {
+        let near = Number.POSITIVE_INFINITY;
+        for (let k = 0; k < i; k++) {
+          near = Math.min(near, nearestOf(plan, mv, delay, order[k] as CrewMove));
+        }
+        if (near >= 0) {
+          pick = delay;
+          pickLeast = near;
+          break;
+        }
+        if (near > pickLeast) {
+          pickLeast = near;
+          pick = delay;
+        }
+      }
+      mv.t = -pick;
+      delays.push(pick);
+      least = Math.min(least, pickLeast);
+    }
+    const wait = Math.max(...delays);
+    const ok = (x: { least: number }): boolean => x.least >= 0;
+    if (
+      best === null ||
+      (ok({ least }) && (!ok(best) || wait < best.wait)) ||
+      (!ok({ least }) && !ok(best) && least > best.least)
+    ) {
+      best = { delays, order, least, wait };
+    }
+  }
+  if (best !== null) {
+    best.order.forEach((m, i) => {
+      m.t = -(best.delays[i] as number);
+    });
+  }
 }
 
 /** The boom's nearest approach to a point, m: the boom a segment from its gooseneck out its length at its angle (+ starboard). */
@@ -526,6 +836,8 @@ export interface CrewMove {
   kind: 'cross' | 'change';
   /** Seconds waited, ducked, for the boom to move off the place it goes from. */
   waited: number;
+  /** Who goes ahead of them along the same way, whom they keep FOLLOW behind; null for none. */
+  after?: CrewMember | null;
 }
 
 /** Where along a move someone is, into out: rising (0 to 1), along the path (metres), sitting (0 to 1). */
@@ -556,6 +868,7 @@ function moveOf(
     duration: RISE + path.length / CROSS_SPEED + SIT,
     kind,
     waited: 0,
+    after: null,
   };
 }
 
@@ -594,24 +907,37 @@ export class CrewRules {
   /** Whether the helm leans out now, and seconds since that last changed. */
   #out = false;
   #since = Number.POSITIVE_INFINITY;
-  /** Each windward station's place in the crossing order in a tack; and each station's in the leaning order (aft first). */
-  readonly #crossRank: number[];
+  /** Each windward station's place in the crossing order, in a tack and in a gybe; and each station's in the leaning order (aft first). */
+  readonly #tackRank: number[];
+  readonly #gybeRank: number[];
   readonly #leanRank: number[];
+  /**
+   * Where each station's person is now, by the station their seat gives
+   * (placeOf): those round the mast go in file, so each crossing sends the
+   * one forward to the place aft and so on; unlisted, their own.
+   */
+  readonly #moved = new Map<number, number>();
 
   constructor(readonly plan: CrewPlan) {
     const st = plan.stations;
     const windward = st.map((s, i) => ({ s, i })).filter(({ s }) => s.windward === true);
-    const key = ({ s }: { s: BoatStation }): number => {
-      const z = s.at[2] as number;
-      // Through the cockpit first, forward ones first; then round the mast, aft ones first.
-      return crossingWay(plan, s) === 'cockpit' ? z : 1000 - z;
-    };
-    this.#crossRank = st.map(() => 0);
-    windward
-      .sort((a, b) => key(a) - key(b))
-      .forEach(({ i }, k) => {
-        this.#crossRank[i] = k;
+    const z = ({ s }: { s: BoatStation }): number => s.at[2] as number;
+    const cockpit = windward.filter(({ s }) => crossingWay(plan, s) === 'cockpit');
+    const mast = windward.filter(({ s }) => crossingWay(plan, s) === 'mast');
+    // In a tack, through the cockpit first, forward ones first, then round
+    // the mast; in a gybe, round the mast first, then through the cockpit,
+    // aft ones first. Round the mast, the forward one leads: in file, nobody
+    // passes anybody.
+    const byZ = (a: { s: BoatStation }, b: { s: BoatStation }): number => z(a) - z(b);
+    const rank = (order: { i: number }[]): number[] => {
+      const r = st.map(() => 0);
+      order.forEach(({ i }, k) => {
+        r[i] = k;
       });
+      return r;
+    };
+    this.#tackRank = rank([...[...cockpit].sort(byZ), ...[...mast].sort(byZ)]);
+    this.#gybeRank = rank([...[...mast].sort(byZ), ...[...cockpit].sort(byZ).reverse()]);
     this.#leanRank = st.map(() => 0);
     st.map((s, i) => ({ z: s.at[2] as number, i }))
       .filter(({ i }) => i > 0)
@@ -667,13 +993,16 @@ export class CrewRules {
     const handed = walks && same && old !== null && old.holder !== crew.holder;
     const before = new Map(this.members.map((m) => [m.seat, m]));
     const members: CrewMember[] = [];
+    const walking: { m: CrewMember; from: CrewSpot; to: CrewSpot }[] = [];
+    const moved = (station: number | undefined): number | undefined =>
+      station === undefined || station < 0 ? station : (this.#moved.get(station) ?? station);
     for (const p of crew.people) {
-      const now = placeOf(crew, p.seat, stations);
+      const now = moved(placeOf(crew, p.seat, stations));
       if (now === undefined) {
         continue;
       }
       const was = before.get(p.seat);
-      const then = old === null ? undefined : placeOf(old, p.seat, stations);
+      const then = old === null ? undefined : moved(placeOf(old, p.seat, stations));
       const side = this.sideFor(now);
       const m: CrewMember = was ?? {
         seat: p.seat,
@@ -686,14 +1015,10 @@ export class CrewRules {
       };
       m.look = p.look;
       if (handed && then !== undefined && then !== now) {
-        // Walks from where they were to their new place, along the windward side deck.
+        // Walks from where they were to their new place, on the windward side.
         const from: CrewSpot = { station: then, side: m.side };
         const to: CrewSpot = { station: now, side };
-        const z0 = this.#spotZ(from.station);
-        const z1 = this.#spotZ(to.station);
-        // The one going forward inboard of the one going aft.
-        const off = z1 < z0 ? -PASS : PASS;
-        m.moving = moveOf(walkPath(this.plan, side, z0, z1, off), from, to, 0, 'change');
+        walking.push({ m, from, to });
       } else if (m.station !== now) {
         // Put there at once: someone come aboard, or a crew told afresh.
         m.moving = null;
@@ -703,6 +1028,46 @@ export class CrewRules {
       members.push(m);
     }
     this.members = members;
+    if (walking.length > 0) {
+      // Each by the way for where they walk, past those who sit where they
+      // stay, as soon as each can keep apart from the others.
+      walking.sort(
+        (a, b) =>
+          this.#spotZ(b.to.station) -
+          this.#spotZ(b.from.station) -
+          (this.#spotZ(a.to.station) - this.#spotZ(a.from.station)),
+      );
+      // Beside the cockpit with nobody sat between: whoever walks to the
+      // helm along the side deck, the other on the cockpit's floor. To or
+      // from a place forward of it, both along the side deck, the one going
+      // forward inboard of the other.
+      const c = this.plan.cockpit;
+      const sat = members
+        .filter((m) => m.moving === null && m.station > 0)
+        .map((m) => this.#spotZ(m.station));
+      let floor = false;
+      const moves = walking.map(({ m, from, to }) => {
+        const z0 = this.#spotZ(from.station);
+        const z1 = this.#spotZ(to.station);
+        const zf = Math.min(z0, z1);
+        const za = Math.max(z0, z1);
+        const beside = c !== null && zf >= c.fore && !sat.some((z) => z > zf && z < za);
+        // Coming forward to the helm, they stop short of it and sit forward into it.
+        const path =
+          beside && to.station < 0
+            ? walkPath(this.plan, to.side, z0, z1 < z0 ? z1 + APPROACH : z1, 0)
+            : changePath(this.plan, to.side, z0, z1, z1 < z0 ? -PASS : PASS);
+        floor ||= beside;
+        const mv = moveOf(path, from, to, 0, 'change');
+        m.moving = mv;
+        return mv;
+      });
+      // Those changing places beside the cockpit go in turn to keep apart;
+      // along the side deck, at once, passing.
+      if (floor) {
+        keepApart(this.plan, moves);
+      }
+    }
   }
 
   /** The z of a place's walk on the side deck: a station's, or the helm's (station 0's). */
@@ -717,6 +1082,7 @@ export class CrewRules {
     const first = this.side.side === 0;
     const changed = this.side.step(m.boom, m.windOffBow);
     const side = this.side.side || 1;
+    const stations = this.plan.stations;
     if (first) {
       // The side first known: everyone is on it already.
       for (const p of this.members) {
@@ -733,51 +1099,91 @@ export class CrewRules {
     } else {
       this.#since += dt;
     }
-    const n = this.crossers;
+    // Moving: on along the path; there, at the new place. A crossing takes
+    // its way when it begins, by the boom then, and waits while the boom is
+    // over the place it goes from (for WAIT_MOST at most); one in file keeps
+    // FOLLOW behind the one ahead.
     for (const p of this.members) {
-      const station = this.plan.stations[p.station];
-      // Moving: on along the path; there, at the new place. A crossing
-      // takes its way when it begins, by the boom then, and waits while the
-      // boom is over the place it goes from (for WAIT_MOST at most).
       const mv = p.moving;
-      if (mv !== null) {
-        const was = mv.t;
-        mv.t += dt;
-        if (mv.kind === 'cross' && station !== undefined && was < 0 && mv.t >= 0) {
-          if (
-            crossingWay(this.plan, station) === 'mast' &&
-            mv.waited < WAIT_MOST &&
-            boomOver(this.plan, station, mv.from.side, m.boom)
-          ) {
-            mv.waited += dt;
-            mv.t = was;
-          } else {
-            mv.path = crossPath(this.plan, station, mv.from.side, m.boom);
-            mv.duration = RISE + mv.path.length / CROSS_SPEED + SIT;
-          }
-        }
-        if (mv.t >= mv.duration) {
-          p.side = mv.to.side;
-          p.moving = null;
+      if (mv === null) {
+        continue;
+      }
+      const was = mv.t;
+      mv.t += dt;
+      const lead = mv.after?.moving ?? null;
+      if (lead !== null && lead.kind === mv.kind) {
+        mv.t = Math.min(mv.t, lead.t - FOLLOW / CROSS_SPEED);
+      }
+      const from = stations[mv.from.station];
+      const to = stations[mv.to.station];
+      if (mv.kind === 'cross' && from !== undefined && to !== undefined && was < 0 && mv.t >= 0) {
+        if (
+          crossingWay(this.plan, from) === 'mast' &&
+          mv.waited < WAIT_MOST &&
+          boomOver(this.plan, from, mv.from.side, m.boom)
+        ) {
+          mv.waited += dt;
+          mv.t = was;
+        } else {
+          mv.path = crossPath(this.plan, from, mv.from.side, m.boom, to);
+          mv.duration = RISE + mv.path.length / CROSS_SPEED + SIT;
         }
       }
+      if (mv.t >= mv.duration) {
+        p.side = mv.to.side;
+        p.moving = null;
+      }
+    }
+    for (const p of this.members) {
       // At the helm: on the helm's side, the windward one, for a walk from it.
       if (p.station < 0 && p.moving === null) {
         p.side = side;
       }
-      // The side changed: those to windward cross, in turn.
-      if (station?.windward === true && p.station > 0 && p.moving === null && p.side !== side) {
-        const rank = this.#crossRank[p.station] ?? 0;
-        const order = this.side.tack ? rank : n - 1 - rank;
-        const delay = changed ? order * CROSS_GAP : 0;
-        p.moving = moveOf(
-          crossPath(this.plan, station, p.side, m.boom),
+    }
+    // The side changed: those to windward cross, in turn; those round the
+    // mast in file, the one forward leading, to the places in the same
+    // order from aft, so that nobody passes anybody.
+    const crossing = this.members.filter(
+      (p) =>
+        stations[p.station]?.windward === true &&
+        p.station > 0 &&
+        p.moving === null &&
+        p.side !== side,
+    );
+    if (crossing.length > 0) {
+      const z = (p: CrewMember): number => stations[p.station]?.at[2] as number;
+      const file = crossing
+        .filter((p) => crossingWay(this.plan, stations[p.station] as BoatStation) === 'mast')
+        .sort((a, b) => z(a) - z(b));
+      const places = file.map((p) => p.station).reverse();
+      const rank = this.side.tack ? this.#tackRank : this.#gybeRank;
+      const ranked = [...crossing].sort((a, b) => (rank[a.station] ?? 0) - (rank[b.station] ?? 0));
+      for (const p of crossing) {
+        const order = ranked.indexOf(p);
+        const k = file.indexOf(p);
+        const dest = k < 0 ? p.station : (places[k] as number);
+        const from = stations[p.station] as BoatStation;
+        const mv = moveOf(
+          crossPath(this.plan, from, p.side, m.boom, stations[dest] as BoatStation),
           { station: p.station, side: p.side },
-          { station: p.station, side },
-          delay,
+          { station: dest, side },
+          changed ? order * CROSS_GAP : 0,
           'cross',
         );
+        mv.after = k > 0 ? (file[k - 1] as CrewMember) : null;
+        p.moving = mv;
       }
+      // Each now at the place they go to, as the crew is told afresh.
+      const n = stations.length;
+      for (const [k, p] of file.entries()) {
+        const home = this.#crew === null ? undefined : placeOf(this.#crew, p.seat, n);
+        if (home !== undefined && home >= 0) {
+          this.#moved.set(home, places[k] as number);
+        }
+        p.station = places[k] as number;
+      }
+    }
+    for (const p of this.members) {
       // Leaning: each in their turn after the helm, aft first.
       const turn = (this.#leanRank[p.station] ?? 0) * LEAN_STAGGER;
       if (this.#since >= turn) {
