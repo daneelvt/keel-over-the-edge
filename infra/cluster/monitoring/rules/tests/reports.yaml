@@ -1,0 +1,51 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# The reports' alerts (apps/keel/rules.yaml, group reports), each made to
+# fire and shown quiet first. go test runs them with vmalert-tool
+# unittest, against the rules as production renders them.
+evaluation_interval: 1m
+tests:
+  - name: a report that a child may be at risk waits, then the owner acts
+    interval: 1m
+    input_series:
+      - series: keel_reports_open{which="child"}
+        values: 0x3 1x5 0x3
+    alert_rule_test:
+      - eval_time: 2m
+        groupname: reports
+        alertname: ChildAtRisk
+        exp_alerts: []
+      - eval_time: 5m
+        groupname: reports
+        alertname: ChildAtRisk
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              component: reports
+              summary: "A player reported that a child may be at risk."
+            exp_annotations:
+              description: "1 such reports wait. Read them first on the owner's page, Reports tab: the lines are kept with the report, and the reported player's chat and knocks rest until you act."
+      - eval_time: 11m
+        groupname: reports
+        alertname: ChildAtRisk
+        exp_alerts: []
+
+  - name: the oldest report waits more than a day
+    interval: 1h
+    input_series:
+      - series: keel_reports_oldest_seconds
+        values: 0 3600 82800 90000
+    alert_rule_test:
+      - eval_time: 2h
+        groupname: reports
+        alertname: ReportsWaiting
+        exp_alerts: []
+      - eval_time: 3h
+        groupname: reports
+        alertname: ReportsWaiting
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              component: reports
+              summary: "A report has waited a day for the owner."
+            exp_annotations:
+              description: "The oldest open report has waited 1d 1h 0m 0s. The owner's page, Reports tab, lists them, a child's safety first."

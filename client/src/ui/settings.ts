@@ -34,6 +34,8 @@ export interface Settings {
   detail: 'auto' | 'low';
   /** The barometer out of the instruments' case. */
   barometer: boolean;
+  /** The ship's clock, the world's time of day, out of the instruments' case. */
+  clock: boolean;
   /**
    * How light the night is drawn, 0 to 1: 0 the night as dark as it is, 1
    * as light as dusk.
@@ -61,6 +63,7 @@ export const DEFAULTS: Settings = {
   seaMotion: true,
   detail: 'auto',
   barometer: false,
+  clock: false,
   nightLight: 2 / 3,
   pilotHead: false,
   pocketWeather: true,
@@ -123,6 +126,7 @@ export function loadSettings(store: Store | null = defaultStore()): Settings {
     'cameraBack',
     'seaMotion',
     'barometer',
+    'clock',
     'pilotHead',
     'pocketWeather',
     'fullScreen',

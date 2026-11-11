@@ -26,6 +26,7 @@ import {
   picture,
   StartPair,
 } from './machines';
+import { MachineShare } from './machineshare';
 import { type Fetch, type Me, resolveSailor } from './me';
 import { Portrait, portraitFiles } from './portraits';
 import { MACHINE_REASONS, machineReasonText, REASONS } from './reasons';
@@ -223,6 +224,10 @@ function expand(node: ComponentChildren): ComponentChildren {
     return node;
   }
   const v = node as VNode<{ children?: ComponentChildren }>;
+  if (v.type === MachineShare) {
+    // Its own state: tested apart.
+    return null;
+  }
   if (typeof v.type === 'function') {
     return expand((v.type as (p: unknown) => ComponentChildren)(v.props));
   }

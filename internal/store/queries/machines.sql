@@ -25,7 +25,7 @@ SELECT count(*) FROM account WHERE owner_id = @owner_id AND kind = 'ai';
 SELECT count(*) FROM boat WHERE account_id = @account_id AND kind = @kind;
 
 -- name: CreateBoat :exec
-INSERT INTO boat (account_id, kind) VALUES (@account_id, @kind);
+INSERT INTO boat (account_id, kind, number) VALUES (@account_id, @kind, @number);
 
 -- name: Fleet :many
 -- A human account's boats, by kind: how many of each.
@@ -35,7 +35,8 @@ SELECT kind, count(*) AS boats FROM boat WHERE account_id = @account_id GROUP BY
 -- A human account's machine sailors, the oldest first, and when each was
 -- stopped on its own, if it was.
 SELECT a.id, sl.name, coalesce(sl.version, '')::text AS version, coalesce(sl.finish, '')::text AS finish,
-  coalesce(sl.colour, '')::text AS colour, a.created_at, coalesce(a.stopped_at, 'epoch')::timestamptz AS stopped_at
+  coalesce(sl.colour, '')::text AS colour, a.created_at, coalesce(a.stopped_at, 'epoch')::timestamptz AS stopped_at,
+  a.watch_code
 FROM account a
 JOIN sailor sl ON sl.account_id = a.id
 WHERE a.owner_id = @owner_id AND a.kind = 'ai'

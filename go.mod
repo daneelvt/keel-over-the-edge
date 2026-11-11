@@ -2,7 +2,7 @@ module github.com/daneelvt/keel-over-the-edge
 
 go 1.27.0
 
-toolchain go1.27.3
+toolchain go1.27.4
 
 tool (
 	filippo.io/mkcert
@@ -25,6 +25,7 @@ require (
 	github.com/jackc/pgx/v5 v5.12.0
 	github.com/mdp/qrterminal/v4 v4.0.0
 	github.com/modelcontextprotocol/go-sdk v1.8.0
+	github.com/nyaruka/phonenumbers v1.8.1
 	github.com/pressly/goose/v3 v3.29.0
 	github.com/prometheus/client_golang v1.25.0
 	github.com/prometheus/client_model v0.6.3
@@ -36,6 +37,7 @@ require (
 	golang.org/x/text v0.43.0
 	golang.org/x/time v0.16.0
 	google.golang.org/protobuf v1.36.12
+	mvdan.cc/xurls/v2 v2.6.0
 	sigs.k8s.io/kustomize/api v0.21.3
 	sigs.k8s.io/kustomize/kyaml v0.21.3
 )

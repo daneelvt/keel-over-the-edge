@@ -189,3 +189,62 @@ test('the internal listener refuses a page that is not this computer’s', async
   });
   expect(res.status()).toBe(403);
 });
+
+// Chat's switches, together on the Accounts tab: chat for everyone,
+// shipmates' messages, spectators reading machine sailors' chat, then the
+// countries; each its state and its key, the keys as tall as the page's
+// others. Spectators' reading off is checked, confirmed and kept, and on
+// again. @world: it changes what every sailor's chat does.
+test('the owner’s chat switches stand together, each its state and its key @world', async ({
+  page,
+  request,
+}) => {
+  const errors: string[] = [];
+  page.on('pageerror', (e) => errors.push(e.message));
+  await page.goto(owner);
+  await expect(page.locator('[data-field="tick"]')).toHaveText(/^\d+$/, { timeout: 30_000 });
+  await page.locator('button[name="tab-accounts"]').click();
+  const group = page.locator('[data-field="chat-switches"]');
+  await expect(group).toBeVisible({ timeout: 15_000 });
+  const rows = group.locator('.switch-row');
+  await expect(rows).toHaveCount(4);
+  expect(await rows.evaluateAll((r) => r.map((e) => (e as HTMLElement).dataset.switch))).toEqual([
+    'chat',
+    'shipmate-messages',
+    'spectator-chat',
+    'chat-countries',
+  ]);
+  const links = await page.locator('button[name="links"]').boundingBox();
+  for (const name of ['chat', 'shipmate-messages', 'spectator-chat']) {
+    await expect(group.locator(`[data-field="${name}"]`)).toHaveText(/^(on|off)$/);
+    const key = await group.locator(`button[name="${name}"]`).boundingBox();
+    expect(key?.height).toBeGreaterThanOrEqual((links?.height ?? 0) - 0.5);
+  }
+  // The three rows' keys line up in one column.
+  const lefts = await group
+    .locator('.switch-row > button')
+    .evaluateAll((b) => b.map((e) => Math.round(e.getBoundingClientRect().left)));
+  expect(new Set(lefts).size).toBe(1);
+
+  const spectators = group.locator('[data-field="spectator-chat"]');
+  await expect(spectators).toHaveText('on');
+  await group.locator('button[name="spectator-chat"]').click();
+  const confirmation = page.locator('[data-field="settings-confirmation"]');
+  await expect(confirmation).toContainText(
+    "Would set: spectators reading machine sailors' chat off for everyone.",
+  );
+  await confirmation.locator('button[name="confirm"]').click();
+  await expect(spectators).toHaveText('off');
+  const read = async () =>
+    (
+      (await (await request.get(`${internal}/owner/api/settings.json`)).json()) as {
+        spectatorChat: boolean;
+      }
+    ).spectatorChat;
+  expect(await read()).toBe(false);
+  await group.locator('button[name="spectator-chat"]').click();
+  await confirmation.locator('button[name="confirm"]').click();
+  await expect(spectators).toHaveText('on');
+  expect(await read()).toBe(true);
+  expect(errors).toEqual([]);
+});

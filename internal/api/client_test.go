@@ -25,6 +25,7 @@ func builtPage(t *testing.T) string {
 	for name, body := range map[string]string{
 		"index.html":                   "<!doctype html><title>Keel Over the Edge</title>",
 		"dev.html":                     "<!doctype html><title>dev</title>",
+		"report.html":                  "<!doctype html><title>Tell the owner</title>",
 		"third-party-licences.txt":     "licences",
 		"manifest.webmanifest":         `{"name":"Keel Over the Edge"}`,
 		"icon-192.png":                 "\x89PNG",
@@ -169,7 +170,7 @@ func TestPageLeavesTheOtherRoutes(t *testing.T) {
 	if res, _ := raw(t, srv, "GET", "/ws"); res.StatusCode != http.StatusTeapot {
 		t.Errorf("/ws: %d", res.StatusCode)
 	}
-	status, body, _ := post(t, nil, srv.URL+"/account/begin", "application/json", `{"name":"Al","look":"rover","version":"female","skin":"tone-2","hair":"brown","colour":"madder-red"}`)
+	status, body, _ := post(t, nil, srv.URL+"/account/begin", "application/json", `{"name":"Al","look":"rover","version":"female","skin":"tone-2","hair":"brown","colour":"madder-red","born":{"year":1990,"month":1}}`)
 	if status != 422 || body != `{"error":"short"}` {
 		t.Errorf("/account/begin: %d %s", status, body)
 	}
@@ -184,6 +185,39 @@ func TestPageNeedsNoSession(t *testing.T) {
 		if status, _ := get(t, http.DefaultClient, srv.URL+path, cookie); status != want {
 			t.Errorf("%s with a cookie and no database: %d, want %d", path, status, want)
 		}
+	}
+}
+
+// TestNoticePage: the notice page at its short address and by its file's
+// name, for anyone, with no session asked even when the database is down.
+func TestNoticePage(t *testing.T) {
+	srv := pageServerWith(t, downSessions{})
+	cookie := &http.Cookie{Name: auth.CookieName, Value: strings.Repeat("A", 43)}
+	for _, path := range []string{"/report", "/report.html"} {
+		res, body := raw(t, srv, "GET", path)
+		if res.StatusCode != http.StatusOK || body != "<!doctype html><title>Tell the owner</title>" {
+			t.Errorf("%s: %d %q", path, res.StatusCode, body)
+			continue
+		}
+		h := res.Header
+		if h.Get("Content-Type") != "text/html; charset=utf-8" || h.Get("Cache-Control") != "no-cache" || h.Get("X-Content-Type-Options") != "nosniff" {
+			t.Errorf("%s: headers %v", path, h)
+		}
+		if status, _ := get(t, http.DefaultClient, srv.URL+path, cookie); status != http.StatusOK {
+			t.Errorf("%s with a cookie and no database: %d", path, status)
+		}
+	}
+	for _, path := range []string{"/report/", "/report/x"} {
+		if res, _ := raw(t, srv, "GET", path); res.StatusCode != http.StatusNotFound {
+			t.Errorf("%s: %d, want 404", path, res.StatusCode)
+		}
+	}
+	if res, _ := raw(t, srv, "POST", "/report"); res.StatusCode != http.StatusMethodNotAllowed {
+		t.Errorf("POST /report: %d, want 405", res.StatusCode)
+	}
+	// A page built without it has none.
+	if res, _ := raw(t, newTestServer(t, noDatabase{}, nil), "GET", "/report"); res.StatusCode != http.StatusNotFound {
+		t.Errorf("no page: %d", res.StatusCode)
 	}
 }
 

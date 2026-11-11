@@ -122,6 +122,31 @@ type BiomeZones struct {
 	Rim float64 `json:"rim"`
 }
 
+// How a bird looks, flies and calls: a colony's birds and the birds met at sea
+// alike.
+type BirdLook struct {
+	// Body corresponds to the JSON schema field "body".
+	Body Colour `json:"body"`
+
+	// Its call; silent for a bird not heard at sea.
+	Call Call `json:"call"`
+
+	// Its wingbeats, in Hz.
+	Flap float64 `json:"flap"`
+
+	// The share of the time it glides.
+	Glide float64 `json:"glide"`
+
+	// Its wingspan, in m.
+	Span float64 `json:"span"`
+
+	// Tip corresponds to the JSON schema field "tip".
+	Tip Colour `json:"tip"`
+
+	// Wing corresponds to the JSON schema field "wing".
+	Wing Colour `json:"wing"`
+}
+
 type Boat struct {
 	// Art corresponds to the JSON schema field "art".
 	Art BoatArt `json:"art"`
@@ -132,8 +157,18 @@ type Boat struct {
 	// Most people aboard, the skipper included.
 	Capacity int `json:"capacity"`
 
+	// Controls corresponds to the JSON schema field "controls".
+	Controls BoatControls `json:"controls"`
+
+	// Where a flying fish lands on its deck, in m in its model's frame.
+	Deck BoatPoint `json:"deck"`
+
 	// What the boat is, in a few words.
 	Description string `json:"description"`
+
+	// How many of the boat an account's fleet holds: one for each of its sailors, or
+	// one for the account, shared by them.
+	Fleet Fleet `json:"fleet"`
 
 	// ID corresponds to the JSON schema field "id".
 	ID ID `json:"id"`
@@ -152,6 +187,10 @@ type Boat struct {
 	// Display name.
 	Name string `json:"name"`
 
+	// Where a seabird perches on it, in m in its model's frame (x to starboard, y up
+	// from the model's origin, z aft).
+	Perch BoatPoint `json:"perch"`
+
 	// Physics corresponds to the JSON schema field "physics".
 	Physics BoatPhysics `json:"physics"`
 
@@ -159,18 +198,89 @@ type Boat struct {
 	// and the sheet there, from 0 hauled in to 1 let fly, by rising angle, read
 	// linearly between them.
 	StartSheet [][]float64 `json:"startSheet"`
+
+	// Where the people aboard are drawn, one a person it can carry (capacity), in
+	// seat order: the first the helm, where whoever holds the controls is, then each
+	// seat's.
+	Stations []BoatStation `json:"stations"`
 }
 
 // A boat's art. Every art object's values are paths under art/, checked to exist.
 type BoatArt struct {
+	// The most triangles each of the boat's models may have.
+	Budget Budget `json:"budget"`
+
 	// The boat's far model, drawn for boats seen from afar among many: the model's
 	// nodes but telltales, pennant and lights, with few segments.
 	Far ArtPath `json:"far"`
 
 	// The boat's model: a glTF binary with the nodes hull, mast, boom, sail,
-	// telltales, pennant, rudder, tiller, daggerboard and sailor, and a node for each
-	// of the boat's lights, named as the light, where its lantern is.
+	// telltales, pennant, rudder, tiller, daggerboard and sailor, a jib on a boat
+	// with headsails, and a node for each of the boat's lights, named as the light,
+	// where its lantern is.
 	Model ArtPath `json:"model"`
+}
+
+type BoatCloth struct {
+	// A band of another colour across the sail, if it is striped, sRGB, #rrggbb.
+	Band *string `json:"band,omitempty,omitzero"`
+
+	// The cloth's colour, sRGB, #rrggbb.
+	Colour string `json:"colour"`
+
+	// ID corresponds to the JSON schema field "id".
+	ID ID `json:"id"`
+
+	// The colour its sail number and the machine mark are painted in, sRGB, #rrggbb.
+	Ink string `json:"ink"`
+
+	// Display name, as the player reads it.
+	Name string `json:"name"`
+}
+
+// The words the boat's controls are shown with. Every boat has the helm, the sheet
+// and the reef; the sheet sets the main's limit, the headsails' and the downwind
+// sail's in the same share, and the yards' brace.
+type BoatControls struct {
+	// The reef's three levels in words: full sail, one reef, two.
+	Reef []string `json:"reef"`
+
+	// The sheet's control: its name, and its two ends' words.
+	Sheet Sheet `json:"sheet"`
+}
+
+// The looks a boat takes: its hull's paints and its sails' cloths, the gold its
+// name is lettered in, and the highest sail number. At most 16 paints and 16
+// cloths: a boat's look code holds each in 4 bits. The first of each is a new
+// boat's.
+type BoatLooks struct {
+	// Sail cloths, in the chooser's order.
+	Cloths []BoatCloth `json:"cloths"`
+
+	// The colour a boat's name is lettered in, sRGB, #rrggbb.
+	Lettering string `json:"lettering"`
+
+	// The highest sail number: numbers run from 1 to it, each kind's its own. At most
+	// 16383, a look code's 14 bits.
+	Numbers int `json:"numbers"`
+
+	// Hull paints, in the chooser's order.
+	Paints []BoatPaint `json:"paints"`
+}
+
+type BoatPaint struct {
+	// Its colour, sRGB, #rrggbb.
+	Colour string `json:"colour"`
+
+	// The wood shows through it: the hull is drawn with its grain.
+	Grain *bool `json:"grain,omitempty,omitzero"`
+
+	// ID corresponds to the JSON schema field "id".
+	ID ID `json:"id"`
+
+	// Display name, as the player reads it: lowercase but for a name such as
+	// "Prussian blue".
+	Name string `json:"name"`
 }
 
 // The boat's physics, in SI units with angles in degrees. Every value is required.
@@ -178,8 +288,14 @@ type BoatPhysics struct {
 	// Autopilot corresponds to the JSON schema field "autopilot".
 	Autopilot PhysicsAutopilot `json:"autopilot"`
 
+	// Downwind corresponds to the JSON schema field "downwind".
+	Downwind PhysicsDownwind `json:"downwind"`
+
 	// Foils corresponds to the JSON schema field "foils".
 	Foils PhysicsFoils `json:"foils"`
+
+	// Headsails corresponds to the JSON schema field "headsails".
+	Headsails PhysicsHeadsails `json:"headsails"`
 
 	// Hull corresponds to the JSON schema field "hull".
 	Hull PhysicsHull `json:"hull"`
@@ -192,6 +308,46 @@ type BoatPhysics struct {
 
 	// Sailor corresponds to the JSON schema field "sailor".
 	Sailor PhysicsSailor `json:"sailor"`
+
+	// Square corresponds to the JSON schema field "square".
+	Square PhysicsSquare `json:"square"`
+}
+
+// A point on a boat, in m in its model's frame: x to starboard, y up, z aft.
+type BoatPoint []float64
+
+// A place aboard where a person is drawn: standing on the deck, seated as a
+// dinghy's helmsman sits on the side deck, hiking out on its rail, or sat on a
+// keelboat's rail with the legs over the side; to windward, if it says so.
+type BoatStation struct {
+	// In m in the model's frame. Standing, the deck between the feet; seated, the
+	// seat's back edge, as the gunwale is to a dinghy's helmsman: the hips just
+	// within it, the legs reaching 0.7 m the way the person faces, the feet 0.2 m
+	// below it; on the rail, the deck's edge at the sheer under the person, who sits
+	// facing outboard, the hips just within it and the legs over the side.
+	At BoatPoint `json:"at"`
+
+	// The way the person faces, in degrees clockwise from the bow seen from above: 0
+	// forward, 90 to starboard, 180 aft, 270 to port.
+	Facing float64 `json:"facing"`
+
+	// Pose corresponds to the JSON schema field "pose".
+	Pose StationPose `json:"pose"`
+
+	// Whether the person sits to windward, as a crew does: on the side away from the
+	// boom, the station's mirror across the centreline (and its facing's) when that
+	// is the other side, and crossing the boat at a crouch in a tack or a gybe. Not
+	// said, the station is where it is.
+	Windward *bool `json:"windward,omitempty,omitzero"`
+}
+
+// The most triangles each of the boat's models may have.
+type Budget struct {
+	// The far model's.
+	Far int `json:"far"`
+
+	// The model's.
+	Near int `json:"near"`
 }
 
 // A kind of building, or a prop, of a town.
@@ -248,17 +404,26 @@ type BuildingKind struct {
 type Call string
 
 const CallHarsh Call = "harsh"
+const CallLaugh Call = "laugh"
 const CallRattle Call = "rattle"
+const CallSilent Call = "silent"
+const CallTern Call = "tern"
 const CallWhistle Call = "whistle"
 
 // Every list of kinds in the game. Kinds are data: code reads their properties,
 // never their names.
 type Catalog struct {
+	// BoatLooks corresponds to the JSON schema field "boatLooks".
+	BoatLooks BoatLooks `json:"boatLooks"`
+
 	// Boat types.
 	Boats []Boat `json:"boats"`
 
 	// Encounters corresponds to the JSON schema field "encounters".
 	Encounters Encounters `json:"encounters"`
+
+	// Life corresponds to the JSON schema field "life".
+	Life Life `json:"life"`
 
 	// Machine corresponds to the JSON schema field "machine".
 	Machine Machine `json:"machine"`
@@ -506,29 +671,11 @@ const CloudFormStorm CloudForm = "storm"
 
 // A colony's birds: where they nest, and how they look, fly and call.
 type ColonyBirds struct {
-	// Body corresponds to the JSON schema field "body".
-	Body Colour `json:"body"`
-
-	// Their call.
-	Call Call `json:"call"`
-
-	// Their wingbeats, in Hz.
-	Flap float64 `json:"flap"`
-
-	// The share of the time they glide.
-	Glide float64 `json:"glide"`
+	// Look corresponds to the JSON schema field "look".
+	Look BirdLook `json:"look"`
 
 	// Where they nest.
 	Nests []Nest `json:"nests"`
-
-	// Their wingspan, in m.
-	Span float64 `json:"span"`
-
-	// Tip corresponds to the JSON schema field "tip".
-	Tip Colour `json:"tip"`
-
-	// Wing corresponds to the JSON schema field "wing".
-	Wing Colour `json:"wing"`
 }
 
 // A colour, as #rrggbb in sRGB.
@@ -911,6 +1058,11 @@ type FeatureStreams struct {
 
 const FeatureSulphur Feature = "sulphur"
 
+type Fleet string
+
+const FleetAccount Fleet = "account"
+const FleetSailor Fleet = "sailor"
+
 // Their models.
 type FloraArt struct {
 	// Model corresponds to the JSON schema field "model".
@@ -1106,6 +1258,433 @@ type Level string
 
 const LevelActive Level = "active"
 const LevelPassive Level = "passive"
+
+// The sea's life: the kinds of animal met at sea, and the schedule that says where
+// and when each is met. The server draws it from the world's seed, the place, the
+// time, the habitat there and the weather; every player near is told of each
+// encounter.
+type Life struct {
+	// A flying fish drawn to a boat's lights by night, landing on its deck: the kind
+	// of fish, by its id; every so many s, by a draw of the boat and that slot, at
+	// this chance, a boat lit and sailing over water the kind lives in has one land
+	// aboard, where it lies this long, in s.
+	Aboard LifeAboard `json:"aboard"`
+
+	// The bodies of the life in the water, one model each.
+	Art LifeArt `json:"art"`
+
+	// Which boat a group that follows boats takes as it begins: the nearest within
+	// this, sailing this fast or faster on a course steady this long.
+	Bind LifeBind `json:"bind"`
+
+	// The schedule's cells' side, in m.
+	Cell float64 `json:"cell"`
+
+	// An encounter sent is dropped once the eye is this far beyond its reach, in m.
+	Drop float64 `json:"drop"`
+
+	// The sun's height from which dusk and dawn begin to where they end, in degrees.
+	Dusk []float64 `json:"dusk"`
+
+	// How a boat sailing through a ground flushes its fish: every so many s, by a
+	// draw of the boat, the ground and that slot, at this chance, if it sails at the
+	// bind's speed or faster; the fish come up this long after, this far ahead of its
+	// bow and up to this far either side of its course, in m.
+	Flush LifeFlush `json:"flush"`
+
+	// Where each habitat is.
+	Habitat LifeHabitat `json:"habitat"`
+
+	// The kinds of animal.
+	Kinds []LifeKind `json:"kinds"`
+
+	// How long after an encounter of a family begins no other of the family begins in
+	// its cell or the eight about it, in s.
+	Lulls LifeLulls `json:"lulls"`
+
+	// A boat followed, ridden or perched on is not again until this long after, in s.
+	Quiet float64 `json:"quiet"`
+
+	// Rain this heavy or heavier thins life as its kind's rain says, in mm an hour.
+	Rainy float64 `json:"rainy"`
+
+	// How far a group that rides bows comes from to a boat, in m, by the bind's other
+	// rules; and when it leaves the bow at once: the boat slower than this, in m/s,
+	// or turned more than this from its heading as the ride began, in degrees.
+	Ride LifeRide `json:"ride"`
+
+	// The share of water life seen at each Beaufort force from 0, the last for every
+	// force beyond it.
+	Sea []float64 `json:"sea"`
+
+	// The schedule's slots of world time, in s.
+	Slot int `json:"slot"`
+
+	// The gulls that wheel over each town by day, as a colony's birds wheel over it:
+	// the kind they are, by its id; how many; how far out and how high they wheel, in
+	// m.
+	Towns LifeTowns `json:"towns"`
+}
+
+// A flying fish drawn to a boat's lights by night, landing on its deck: the kind
+// of fish, by its id; every so many s, by a draw of the boat and that slot, at
+// this chance, a boat lit and sailing over water the kind lives in has one land
+// aboard, where it lies this long, in s.
+type LifeAboard struct {
+	// Chance corresponds to the JSON schema field "chance".
+	Chance float64 `json:"chance"`
+
+	// Every corresponds to the JSON schema field "every".
+	Every float64 `json:"every"`
+
+	// Kind corresponds to the JSON schema field "kind".
+	Kind string `json:"kind"`
+
+	// Stay corresponds to the JSON schema field "stay".
+	Stay float64 `json:"stay"`
+}
+
+// The bodies of the life in the water, one model each.
+type LifeArt struct {
+	// Model corresponds to the JSON schema field "model".
+	Model ArtPath `json:"model"`
+}
+
+// Which boat a group that follows boats takes as it begins: the nearest within
+// this, sailing this fast or faster on a course steady this long.
+type LifeBind struct {
+	// In m/s.
+	Speed float64 `json:"speed"`
+
+	// In s.
+	Steady float64 `json:"steady"`
+
+	// A course is steady while the heading stays within this of where it was, in
+	// degrees.
+	Turn float64 `json:"turn"`
+
+	// In m.
+	Within float64 `json:"within"`
+}
+
+type LifeBinds string
+
+const LifeBindsFlush LifeBinds = "flush"
+const LifeBindsFollow LifeBinds = "follow"
+const LifeBindsPerch LifeBinds = "perch"
+const LifeBindsRide LifeBinds = "ride"
+
+// A whale's blow: how high it rises, the least and the most, and how wide it
+// spreads, in m; how far it leans forward of upright and to the left, in degrees;
+// and how long it lasts, in s.
+type LifeBlow struct {
+	// Height corresponds to the JSON schema field "height".
+	Height []float64 `json:"height"`
+
+	// Last corresponds to the JSON schema field "last".
+	Last float64 `json:"last"`
+
+	// Lean corresponds to the JSON schema field "lean".
+	Lean float64 `json:"lean"`
+
+	// Left corresponds to the JSON schema field "left".
+	Left float64 `json:"left"`
+
+	// Width corresponds to the JSON schema field "width".
+	Width float64 `json:"width"`
+}
+
+type LifeBody string
+
+const LifeBodyBooby LifeBody = "booby"
+const LifeBodyBoobyAsleep LifeBody = "booby-asleep"
+const LifeBodyDolphin LifeBody = "dolphin"
+const LifeBodyFlyingfish LifeBody = "flyingfish"
+const LifeBodyHumpback LifeBody = "humpback"
+const LifeBodyPilot LifeBody = "pilot"
+const LifeBodyRay LifeBody = "ray"
+const LifeBodyShark LifeBody = "shark"
+const LifeBodySperm LifeBody = "sperm"
+const LifeBodyTarpon LifeBody = "tarpon"
+const LifeBodyTurtle LifeBody = "turtle"
+
+// A group that comes with another: its kind, by its id; the share of the other's
+// groups it comes with; and how many in it.
+type LifeBring struct {
+	// Count corresponds to the JSON schema field "count".
+	Count []int `json:"count"`
+
+	// Kind corresponds to the JSON schema field "kind".
+	Kind string `json:"kind"`
+
+	// Share corresponds to the JSON schema field "share".
+	Share float64 `json:"share"`
+}
+
+type LifeFamily string
+
+const LifeFamilyBig LifeFamily = "big"
+const LifeFamilyBirds LifeFamily = "birds"
+const LifeFamilyNight LifeFamily = "night"
+const LifeFamilyWater LifeFamily = "water"
+
+// How a boat sailing through a ground flushes its fish: every so many s, by a draw
+// of the boat, the ground and that slot, at this chance, if it sails at the bind's
+// speed or faster; the fish come up this long after, this far ahead of its bow and
+// up to this far either side of its course, in m.
+type LifeFlush struct {
+	// Ahead corresponds to the JSON schema field "ahead".
+	Ahead []float64 `json:"ahead"`
+
+	// Beside corresponds to the JSON schema field "beside".
+	Beside float64 `json:"beside"`
+
+	// Chance corresponds to the JSON schema field "chance".
+	Chance float64 `json:"chance"`
+
+	// Every corresponds to the JSON schema field "every".
+	Every float64 `json:"every"`
+
+	// Lead corresponds to the JSON schema field "lead".
+	Lead float64 `json:"lead"`
+}
+
+type LifeForm string
+
+const LifeFormBait LifeForm = "bait"
+const LifeFormBird LifeForm = "bird"
+const LifeFormFin LifeForm = "fin"
+const LifeFormGlider LifeForm = "glider"
+const LifeFormGlow LifeForm = "glow"
+const LifeFormPod LifeForm = "pod"
+const LifeFormRay LifeForm = "ray"
+const LifeFormTurtle LifeForm = "turtle"
+const LifeFormWhale LifeForm = "whale"
+
+// Water that glows where it is disturbed, on a dark night: its light's colour; and
+// how lit the sky may be for it to show, the moon's lit share times its height's
+// sine above the horizon at the most, the sun below the horizon.
+type LifeGlow struct {
+	// Colour corresponds to the JSON schema field "colour".
+	Colour Colour `json:"colour"`
+
+	// Moon corresponds to the JSON schema field "moon".
+	Moon float64 `json:"moon"`
+}
+
+// Where each habitat is.
+type LifeHabitat struct {
+	// Within this of a colony a kind's nearColony counts, in m.
+	Colony float64 `json:"colony"`
+
+	// The habitat's field's cells' side, built as the world loads, in m.
+	Field float64 `json:"field"`
+
+	// Water within this of a town is its harbour, in m.
+	Harbour float64 `json:"harbour"`
+
+	// Water this far from the centre or further is the outer water, in m.
+	Outer float64 `json:"outer"`
+
+	// Water within this of a reef or a lagoon is the reef's, in m.
+	Reef float64 `json:"reef"`
+
+	// Water shallower than this is the shelf, deeper the deep, in m.
+	Shelf float64 `json:"shelf"`
+}
+
+// Its weight in each habitat: a point is its harbour's if within one, else its
+// reef's, else the outer water's, else the shelf's or the deep's.
+type LifeHabitats struct {
+	// Deep corresponds to the JSON schema field "deep".
+	Deep float64 `json:"deep"`
+
+	// Harbour corresponds to the JSON schema field "harbour".
+	Harbour float64 `json:"harbour"`
+
+	// Outer corresponds to the JSON schema field "outer".
+	Outer float64 `json:"outer"`
+
+	// Reef corresponds to the JSON schema field "reef".
+	Reef float64 `json:"reef"`
+
+	// Shelf corresponds to the JSON schema field "shelf".
+	Shelf float64 `json:"shelf"`
+}
+
+// A kind of animal met at sea: what it is and how it moves, where and when it is
+// met, and how often.
+type LifeKind struct {
+	// Binds corresponds to the JSON schema field "binds".
+	Binds *LifeBinds `json:"binds,omitempty,omitzero"`
+
+	// The groups that come with it, on its patch, from its start to its end.
+	Brings []LifeBring `json:"brings,omitempty,omitzero"`
+
+	// Whether it is seen less as the sea rises, by the life's sea.
+	BySea bool `json:"bySea"`
+
+	// What a group of it is called, as a pod of dolphins.
+	Collective *string `json:"collective,omitempty,omitzero"`
+
+	// Its plunges, each bird a minute.
+	Dives *float64 `json:"dives,omitempty,omitzero"`
+
+	// Family corresponds to the JSON schema field "family".
+	Family LifeFamily `json:"family"`
+
+	// Form corresponds to the JSON schema field "form".
+	Form LifeForm `json:"form"`
+
+	// Glow corresponds to the JSON schema field "glow".
+	Glow *LifeGlow `json:"glow,omitempty,omitzero"`
+
+	// How many in a group, the least and the most.
+	Group []int `json:"group"`
+
+	// Its weight in each habitat: a point is its harbour's if within one, else its
+	// reef's, else the outer water's, else the shelf's or the deep's.
+	Habitats LifeHabitats `json:"habitats"`
+
+	// How high it flies, the least and the most, in m.
+	Height []float64 `json:"height"`
+
+	// Whether at dusk it heads for the nearest colony, or the nearest land without
+	// one.
+	Homeward *bool `json:"homeward,omitempty,omitzero"`
+
+	// ID corresponds to the JSON schema field "id".
+	ID string `json:"id"`
+
+	// Whether a group flies in a line, one behind another.
+	Line *bool `json:"line,omitempty,omitzero"`
+
+	// Look corresponds to the JSON schema field "look".
+	Look *BirdLook `json:"look,omitempty,omitzero"`
+
+	// Name corresponds to the JSON schema field "name".
+	Name string `json:"name"`
+
+	// Its weight times this within the habitat's colony distance of a colony.
+	NearColony *float64 `json:"nearColony,omitempty,omitzero"`
+
+	// Over corresponds to the JSON schema field "over".
+	Over *LifeOver `json:"over,omitempty,omitzero"`
+
+	// How far its patch reaches from its middle, the least and the most, in m: a
+	// ground of flying fish, a boil of bait.
+	Patch []float64 `json:"patch,omitempty,omitzero"`
+
+	// Path corresponds to the JSON schema field "path".
+	Path LifePath `json:"path"`
+
+	// Whether, with a boat, it flutters low over the boat's wake, its feet pattering
+	// on the water.
+	Patters *bool `json:"patters,omitempty,omitzero"`
+
+	// Its name for more than one.
+	Plural string `json:"plural"`
+
+	// The share of it met in rain.
+	Rain float64 `json:"rain"`
+
+	// How far out it comes from and goes to, in m.
+	Range float64 `json:"range"`
+
+	// Its encounters a km² an hour at a weight of 1.
+	Rate float64 `json:"rate"`
+
+	// It is drawn within this, in m.
+	Reach float64 `json:"reach"`
+
+	// How fast it goes, the least and the most, in m/s.
+	Speed []float64 `json:"speed"`
+
+	// How long it stays over its patch or with a boat, the least and the most, in s.
+	Stay []float64 `json:"stay"`
+
+	// Swim corresponds to the JSON schema field "swim".
+	Swim *SwimLook `json:"swim,omitempty,omitzero"`
+
+	// Its weight by the sun: by day, at dusk and dawn, and at night.
+	When LifeWhen `json:"when"`
+
+	// The least wind it is met in and the most, 10 m up, in m/s.
+	Wind []float64 `json:"wind"`
+}
+
+// How long after an encounter of a family begins no other of the family begins in
+// its cell or the eight about it, in s.
+type LifeLulls struct {
+	// Big corresponds to the JSON schema field "big".
+	Big float64 `json:"big"`
+
+	// Birds corresponds to the JSON schema field "birds".
+	Birds float64 `json:"birds"`
+
+	// Night corresponds to the JSON schema field "night".
+	Night float64 `json:"night"`
+
+	// Water corresponds to the JSON schema field "water".
+	Water float64 `json:"water"`
+}
+
+type LifeOver string
+
+const LifeOverStay LifeOver = "stay"
+const LifeOverWork LifeOver = "work"
+
+type LifePath string
+
+const LifePathDrift LifePath = "drift"
+const LifePathPass LifePath = "pass"
+const LifePathSkim LifePath = "skim"
+const LifePathSoar LifePath = "soar"
+const LifePathStay LifePath = "stay"
+const LifePathWork LifePath = "work"
+
+// How far a group that rides bows comes from to a boat, in m, by the bind's other
+// rules; and when it leaves the bow at once: the boat slower than this, in m/s, or
+// turned more than this from its heading as the ride began, in degrees.
+type LifeRide struct {
+	// Slower corresponds to the JSON schema field "slower".
+	Slower float64 `json:"slower"`
+
+	// Turn corresponds to the JSON schema field "turn".
+	Turn float64 `json:"turn"`
+
+	// Within corresponds to the JSON schema field "within".
+	Within float64 `json:"within"`
+}
+
+// The gulls that wheel over each town by day, as a colony's birds wheel over it:
+// the kind they are, by its id; how many; how far out and how high they wheel, in
+// m.
+type LifeTowns struct {
+	// Count corresponds to the JSON schema field "count".
+	Count []int `json:"count"`
+
+	// Height corresponds to the JSON schema field "height".
+	Height []float64 `json:"height"`
+
+	// Kind corresponds to the JSON schema field "kind".
+	Kind string `json:"kind"`
+
+	// Wheel corresponds to the JSON schema field "wheel".
+	Wheel []float64 `json:"wheel"`
+}
+
+// Its weight by the sun: by day, at dusk and dawn, and at night.
+type LifeWhen struct {
+	// Day corresponds to the JSON schema field "day".
+	Day float64 `json:"day"`
+
+	// Dusk corresponds to the JSON schema field "dusk".
+	Dusk float64 `json:"dusk"`
+
+	// Night corresponds to the JSON schema field "night".
+	Night float64 `json:"night"`
+}
 
 type Light string
 
@@ -1494,9 +2073,105 @@ type PhysicsAutopilot struct {
 	TrimTime float64 `json:"trimTime"`
 }
 
-// The daggerboard or keel, and the rudder.
+// The downwind sail: a gennaker tacked on the centreline at a bowsprit's end, its
+// clew free to its own sheet's limit as the headsails' is, set and taken in by the
+// crew's rule as the boat bears away and comes up, and kept in by the reef. A boat
+// with none has an area of 0, and its other values 0.
+type PhysicsDownwind struct {
+	// Its area, in m²; 0 for none.
+	DownwindArea float64 `json:"downwindArea"`
+
+	// Friction of the clew's swing, in N·m·s/rad.
+	DownwindDamping float64 `json:"downwindDamping"`
+
+	// Viscous drag coefficient.
+	DownwindDrag float64 `json:"downwindDrag"`
+
+	// Length of the foot, in m.
+	DownwindFoot float64 `json:"downwindFoot"`
+
+	// Height of the lower strip's centre of effort above the tack, as a fraction of
+	// the luff.
+	DownwindFootStrip float64 `json:"downwindFootStrip"`
+
+	// Height of the upper strip's centre of effort above the tack, as a fraction of
+	// the luff.
+	DownwindHeadStrip float64 `json:"downwindHeadStrip"`
+
+	// The clew's angle off the centreline, seen from the tack, with the sheet hauled
+	// in hard, in degrees.
+	DownwindIn float64 `json:"downwindIn"`
+
+	// Moment of inertia of the sail and its clew about the tack, in kg·m².
+	DownwindInertia float64 `json:"downwindInertia"`
+
+	// The head's height above the tack, in m.
+	DownwindLuff float64 `json:"downwindLuff"`
+
+	// Greatest lift coefficient.
+	DownwindMaxLift float64 `json:"downwindMaxLift"`
+
+	// Their mass times the distance of their centre of gravity aft of the tack, in
+	// kg·m.
+	DownwindMoment float64 `json:"downwindMoment"`
+
+	// Normal force coefficient of separated flow, every 10° of angle of attack from
+	// 0° to 180°.
+	DownwindNormalForce []float64 `json:"downwindNormalForce"`
+
+	// The clew's angle with the sheet let fly, in degrees.
+	DownwindOut float64 `json:"downwindOut"`
+
+	// Centre of pressure aft of the tack with the flow attached, as a fraction of the
+	// foot.
+	DownwindPressureAttached float64 `json:"downwindPressureAttached"`
+
+	// Centre of pressure aft of the tack with the flow separated, as a fraction of
+	// the foot.
+	DownwindPressureSeparated float64 `json:"downwindPressureSeparated"`
+
+	// At full sail, with one reef and with two: 1 where the crew may set it, 0 where
+	// the reef keeps it in. A downwind sail is never shortened.
+	DownwindReefs []float64 `json:"downwindReefs"`
+
+	// Angle of attack of the greatest lift, in degrees.
+	DownwindStallAngle float64 `json:"downwindStallAngle"`
+
+	// Angle past the stall over which the flow separates, in degrees.
+	DownwindStallWidth float64 `json:"downwindStallWidth"`
+
+	// The tack's distance ahead of the centre of gravity, in m: the bowsprit's end.
+	DownwindTack float64 `json:"downwindTack"`
+
+	// The tack's height above the waterline, in m.
+	DownwindTackHeight float64 `json:"downwindTackHeight"`
+
+	// The upper strip's twist beyond the clew's line, sheeted in, in degrees.
+	DownwindTwist float64 `json:"downwindTwist"`
+
+	// Extra twist as the sheet lets the clew out, growing in proportion to its angle,
+	// in degrees.
+	DownwindTwistEased float64 `json:"downwindTwistEased"`
+
+	// And takes it in as she comes up with the true wind forward of this, in degrees:
+	// less than setAngle, the two a band in which a steady course neither sets nor
+	// takes it in.
+	DropAngle float64 `json:"dropAngle"`
+
+	// Time for the crew to take it in, in s.
+	DropTime float64 `json:"dropTime"`
+
+	// Time for the crew to set it from its bag, in s.
+	HoistTime float64 `json:"hoistTime"`
+
+	// The crew sets it as the boat bears away with the true wind this far off her bow
+	// or more, in degrees.
+	SetAngle float64 `json:"setAngle"`
+}
+
+// The daggerboard or fixed keel, and the rudder.
 type PhysicsFoils struct {
-	// Chord of the daggerboard, in m.
+	// Chord of the daggerboard, or of a fixed keel along its length, in m.
 	BoardChord float64 `json:"boardChord"`
 
 	// Distance of the daggerboard ahead of the centre of gravity, in m.
@@ -1512,6 +2187,10 @@ type PhysicsFoils struct {
 	// Share of the sideways flow from leeway that the daggerboard's downwash cancels
 	// at the rudder.
 	Downwash float64 `json:"downwash"`
+
+	// 1 for a fixed keel, which the ground meets at its tip, stopping the boat, and
+	// never pushes up; 0 for a daggerboard the ground pushes up as the water shoals.
+	Fixed float64 `json:"fixed"`
 
 	// Viscous drag coefficient of the foils, on plan area.
 	FoilDrag float64 `json:"foilDrag"`
@@ -1552,6 +2231,85 @@ type PhysicsFoils struct {
 
 	// Span of the rudder below the hull, in m.
 	RudderSpan float64 `json:"rudderSpan"`
+}
+
+// The headsails: sails tacked on a stay ahead of the mast, their clew free to
+// their own sheet's limit, with no boom, set and trimmed together as one. A boat
+// with none has an area of 0, and its other values 0.
+type PhysicsHeadsails struct {
+	// Their area, in m²; 0 for none.
+	HeadsailArea float64 `json:"headsailArea"`
+
+	// Friction of the clew's swing, in N·m·s/rad.
+	HeadsailDamping float64 `json:"headsailDamping"`
+
+	// Viscous drag coefficient.
+	HeadsailDrag float64 `json:"headsailDrag"`
+
+	// Length of the foot, in m.
+	HeadsailFoot float64 `json:"headsailFoot"`
+
+	// Height of the lower strip's centre of effort above the tack, as a fraction of
+	// the luff.
+	HeadsailFootStrip float64 `json:"headsailFootStrip"`
+
+	// Height of the upper strip's centre of effort above the tack, as a fraction of
+	// the luff.
+	HeadsailHeadStrip float64 `json:"headsailHeadStrip"`
+
+	// The clew's angle off the centreline, seen from the tack, with the sheet hauled
+	// in hard, in degrees.
+	HeadsailIn float64 `json:"headsailIn"`
+
+	// Moment of inertia of the sail and its clew about the stay, in kg·m².
+	HeadsailInertia float64 `json:"headsailInertia"`
+
+	// The head's height above the tack, in m.
+	HeadsailLuff float64 `json:"headsailLuff"`
+
+	// Greatest lift coefficient.
+	HeadsailMaxLift float64 `json:"headsailMaxLift"`
+
+	// Their mass times the distance of their centre of gravity aft of the stay, in
+	// kg·m.
+	HeadsailMoment float64 `json:"headsailMoment"`
+
+	// Normal force coefficient of separated flow, every 10° of angle of attack from
+	// 0° to 180°.
+	HeadsailNormalForce []float64 `json:"headsailNormalForce"`
+
+	// The clew's angle with the sheet let fly, in degrees.
+	HeadsailOut float64 `json:"headsailOut"`
+
+	// Centre of pressure aft of the tack with the flow attached, as a fraction of the
+	// foot.
+	HeadsailPressureAttached float64 `json:"headsailPressureAttached"`
+
+	// Centre of pressure aft of the tack with the flow separated, as a fraction of
+	// the foot.
+	HeadsailPressureSeparated float64 `json:"headsailPressureSeparated"`
+
+	// The share of their luff kept at full sail, with one reef and with two.
+	HeadsailReefs []float64 `json:"headsailReefs"`
+
+	// Angle of attack of the greatest lift, in degrees.
+	HeadsailStallAngle float64 `json:"headsailStallAngle"`
+
+	// Angle past the stall over which the flow separates, in degrees.
+	HeadsailStallWidth float64 `json:"headsailStallWidth"`
+
+	// The tack's distance ahead of the centre of gravity, in m.
+	HeadsailTack float64 `json:"headsailTack"`
+
+	// The tack's height above the waterline, in m.
+	HeadsailTackHeight float64 `json:"headsailTackHeight"`
+
+	// The upper strip's twist beyond the clew's line, sheeted in, in degrees.
+	HeadsailTwist float64 `json:"headsailTwist"`
+
+	// Extra twist as the sheet lets the clew out, growing in proportion to its angle,
+	// in degrees.
+	HeadsailTwistEased float64 `json:"headsailTwistEased"`
 }
 
 // The hull: its mass, resistance, inertia and stability.
@@ -1642,6 +2400,11 @@ type PhysicsHull struct {
 	// water of an oblique wave.
 	WaveYaw float64 `json:"waveYaw"`
 
+	// The hull's resistance to turning, from the water flowing across it as it turns,
+	// in N·m per (rad/s)²: its moment against the rate of turn times the rate's size.
+	// 0 where the foils alone damp the turning.
+	YawDamping float64 `json:"yawDamping"`
+
 	// Moment of inertia in yaw, added inertia included, in kg·m².
 	YawInertia float64 `json:"yawInertia"`
 }
@@ -1658,7 +2421,7 @@ type PhysicsRates struct {
 	SheetHaulTime float64 `json:"sheetHaulTime"`
 }
 
-// The sail, boom and windage.
+// The main, its boom and reefs, and the windage.
 type PhysicsRig struct {
 	// Friction of the boom about the mast, in N·m·s/rad.
 	BoomDamping float64 `json:"boomDamping"`
@@ -1735,6 +2498,13 @@ type PhysicsRig struct {
 
 	// Drag growing with the square of the lift coefficient (k_pm).
 	QuadraticDrag float64 `json:"quadraticDrag"`
+
+	// Time for the crew to take a reef in or shake it out, in s.
+	ReefTime float64 `json:"reefTime"`
+
+	// The share of its luff the main keeps at full sail, with one reef and with two:
+	// its area goes as the square of the share, its centre of effort down with it.
+	Reefs []float64 `json:"reefs"`
 
 	// Sail area, in m².
 	SailArea float64 `json:"sailArea"`
@@ -1832,6 +2602,77 @@ type PhysicsSailor struct {
 
 	// Time to swim to the daggerboard after falling in, in s.
 	SwimTime float64 `json:"swimTime"`
+}
+
+// Square sails on yards the braces hold at an angle, in a fore group and an after
+// group, and the crew that hauls the yards round in a turn. A boat with none has
+// areas of 0, and its other values 0.
+type PhysicsSquare struct {
+	// The yards' least angle off the centreline, braced up sharp, in degrees.
+	BraceSharp float64 `json:"braceSharp"`
+
+	// Time for the crew to swing the yards from braced up sharp on one side to the
+	// other, in s.
+	BraceTime float64 `json:"braceTime"`
+
+	// In a tack, the after yards swing as the head comes this near the wind, in
+	// degrees.
+	Hauls float64 `json:"hauls"`
+
+	// And the fore yards once the wind is this far on the new bow; wearing, every
+	// yard once the wind is this far on the new quarter, in degrees.
+	LetGo float64 `json:"letGo"`
+
+	// The after group's area, in m²; 0 for none.
+	SquareAfterArea float64 `json:"squareAfterArea"`
+
+	// The after group's centre of effort ahead of the centre of gravity, in m:
+	// between its masts, by their sails' areas.
+	SquareAfterMast float64 `json:"squareAfterMast"`
+
+	// Drag coefficient of the sails drawing, every 5° of angle of attack off the
+	// yards' line from 0° to 90°.
+	SquareDrag []float64 `json:"squareDrag"`
+
+	// The lowest sails' foot above the waterline, in m.
+	SquareFootHeight float64 `json:"squareFootHeight"`
+
+	// Height of the lower strip's centre of effort above the sails' foot, as a
+	// fraction of the luff.
+	SquareFootStrip float64 `json:"squareFootStrip"`
+
+	// The fore group's area, in m²; 0 for none.
+	SquareForeArea float64 `json:"squareForeArea"`
+
+	// The fore group's mast ahead of the centre of gravity, in m.
+	SquareForeMast float64 `json:"squareForeMast"`
+
+	// Height of the upper strip's centre of effort above the sails' foot, as a
+	// fraction of the luff.
+	SquareHeadStrip float64 `json:"squareHeadStrip"`
+
+	// Lift coefficient of the sails drawing, the wind on their after face, every 5°
+	// of angle of attack off the yards' line from 0° to 90°.
+	SquareLift []float64 `json:"squareLift"`
+
+	// The sails' height from that foot to the highest yard, in m.
+	SquareLuff float64 `json:"squareLuff"`
+
+	// Normal force coefficient of the sails aback, pressed flat against their mast,
+	// every 10° of angle of attack from 0° to 180°.
+	SquareNormalForce []float64 `json:"squareNormalForce"`
+
+	// Centre of pressure out along the yards from the mast toward the arm the wind
+	// meets first, with the flow attached, as a fraction of the sails' half-width
+	// (half their area over their luff); with the flow separated it is at the mast.
+	SquarePressure float64 `json:"squarePressure"`
+
+	// The share of their luff kept at full sail, with one reef and with two.
+	SquareReefs []float64 `json:"squareReefs"`
+
+	// The upper strip's yards braced this much squarer than the lower's, in degrees:
+	// the wind aloft is freer.
+	SquareTwist float64 `json:"squareTwist"`
 }
 
 // How long a wreck has lain: how much of her is left.
@@ -2448,6 +3289,18 @@ const ShapeLine Shape = "line"
 const ShapeLow Shape = "low"
 const ShapeNone Shape = "none"
 
+// The sheet's control: its name, and its two ends' words.
+type Sheet struct {
+	// The word at its end that lets out.
+	Ease string `json:"ease"`
+
+	// What the control is called.
+	Name string `json:"name"`
+
+	// The word at its end that hauls in.
+	Trim string `json:"trim"`
+}
+
 type Site string
 
 const SiteAnchorage Site = "anchorage"
@@ -2574,6 +3427,13 @@ type StartMoorings struct {
 	Spacing float64 `json:"spacing"`
 }
 
+type StationPose string
+
+const StationPoseHiking StationPose = "hiking"
+const StationPoseRail StationPose = "rail"
+const StationPoseSeated StationPose = "seated"
+const StationPoseStanding StationPose = "standing"
+
 // What the ground is covered with.
 type Surface struct {
 	// How high its plants stand over the ground, as the wind feels them, in m.
@@ -2614,6 +3474,80 @@ type SurfaceLook struct {
 	// A column's top.
 	Top Colour `json:"top"`
 }
+
+// How an animal in the water looks and moves: its body, scaled to its length; its
+// back's and belly's colours; its tail's or flippers' beats; its leaps a minute
+// and the spins in each; a glider's glides; its breaths at each surfacing and its
+// dives between them; and what is heard of it.
+type SwimLook struct {
+	// Asleep corresponds to the JSON schema field "asleep".
+	Asleep *LifeBody `json:"asleep,omitempty,omitzero"`
+
+	// Back corresponds to the JSON schema field "back".
+	Back Colour `json:"back"`
+
+	// Its tail's or flippers' beats, in Hz.
+	Beat float64 `json:"beat"`
+
+	// Belly corresponds to the JSON schema field "belly".
+	Belly Colour `json:"belly"`
+
+	// Blow corresponds to the JSON schema field "blow".
+	Blow *LifeBlow `json:"blow,omitempty,omitzero"`
+
+	// A whale's time from one blow to the next at the surface, the least and the
+	// most, in s.
+	BlowEvery []float64 `json:"blowEvery,omitempty,omitzero"`
+
+	// Body corresponds to the JSON schema field "body".
+	Body LifeBody `json:"body"`
+
+	// The share of a whale's surfacings in which it breaches.
+	Breach *float64 `json:"breach,omitempty,omitzero"`
+
+	// Its breaths at each surfacing, the least and the most.
+	Breaths []int `json:"breaths,omitempty,omitzero"`
+
+	// What is heard of it: its breath, a whale's blow, or nothing but its splashes.
+	Call SwimLookCall `json:"call"`
+
+	// How deep it swims between its breaths, in m.
+	Depth float64 `json:"depth"`
+
+	// How long it is down between surfacings, the least and the most, in s.
+	Dive []float64 `json:"dive,omitempty,omitzero"`
+
+	// The share of a whale's dives on which it raises its flukes.
+	Fluke *float64 `json:"fluke,omitempty,omitzero"`
+
+	// A glide's length, the least and the most, in m.
+	Glide []float64 `json:"glide,omitempty,omitzero"`
+
+	// Its leaps clear of the water, each animal a minute.
+	Leaps *float64 `json:"leaps,omitempty,omitzero"`
+
+	// Its length, in m.
+	Length float64 `json:"length"`
+
+	// The longest glides linked one after another, in m.
+	Linked *float64 `json:"linked,omitempty,omitzero"`
+
+	// Whether it lies still at the surface between its breaths, logging, rather than
+	// rolling under.
+	Logs *bool `json:"logs,omitempty,omitzero"`
+
+	// The share of a whale's surfacings in which it slaps the water with its tail.
+	Slap *float64 `json:"slap,omitempty,omitzero"`
+
+	// The spins in a leap, the least and the most.
+	Spins []int `json:"spins,omitempty,omitzero"`
+}
+
+type SwimLookCall string
+
+const SwimLookCallBlow SwimLookCall = "blow"
+const SwimLookCallBreath SwimLookCall = "breath"
+const SwimLookCallSilent SwimLookCall = "silent"
 
 type Symbol string
 
@@ -4511,4 +5445,4 @@ type WorldZones struct {
 }
 
 // Version is the catalog version (tools/catalog).
-const Version = "418585d325a5300d"
+const Version = "0e5e1240a73a066f"

@@ -4,15 +4,20 @@
 // words. Each is named; the chosen one is ringed and its name is shown
 // under the group. The arrow keys move the choice, as a radio group's do;
 // Tab reaches the group once. A swatch's colour is set by script: the
-// approval page, which shows them too, allows no inline style.
+// approval page, which shows them too, allows no inline style. A swatch of
+// a striped cloth shows its band across the middle.
 
 import './choices.css';
 
-/** One of a group's choices: its id, its name in words, and its colour (#rrggbb) for a swatch. */
+/**
+ * One of a group's choices: its id, its name in words, and its colour
+ * (#rrggbb) for a swatch, with a band of another across it for a stripe.
+ */
 export interface Choice {
   id: string;
   name: string;
   colour?: string;
+  band?: string;
 }
 
 /** Moves a choice by the arrow keys within a radio group: the next or the previous, round. */
@@ -34,14 +39,18 @@ function step(
   return choices[next] ?? null;
 }
 
-/** A swatch's disc of colour. */
-function SwatchColour({ colour }: { colour: string }) {
+/** A swatch's disc of colour, banded across its middle for a stripe. */
+function SwatchColour({ colour, band }: { colour: string; band?: string | undefined }) {
   return (
     <span
       class="swatch-colour"
       ref={(el) => {
         if (el !== null) {
           el.style.backgroundColor = colour;
+          el.style.backgroundImage =
+            band === undefined
+              ? ''
+              : `linear-gradient(transparent 36%, ${band} 36%, ${band} 64%, transparent 64%)`;
         }
       }}
     />
@@ -104,7 +113,7 @@ export function Choices({
               }
             }}
           >
-            {swatches ? <SwatchColour colour={c.colour ?? ''} /> : c.name}
+            {swatches ? <SwatchColour colour={c.colour ?? ''} band={c.band} /> : c.name}
           </button>
         ))}
       </div>

@@ -1028,7 +1028,7 @@ world:
         mark: "#e8e6dc"
         worth: 2
         symbol: birds
-        birds: { nests: [stack, cliff], span: 1.75, body: "#f2f0e8", wing: "#f2f0e8", tip: "#1e1c1a", flap: 3, glide: 0.5, call: harsh }
+        birds: { nests: [stack, cliff], look: { span: 1.75, body: "#f2f0e8", wing: "#f2f0e8", tip: "#1e1c1a", flap: 3, glide: 0.5, call: harsh } }
       - id: booby-colony
         name: Booby colony
         site: colony
@@ -1039,7 +1039,7 @@ world:
         mark: "#b89a70"
         worth: 2
         symbol: birds
-        birds: { nests: [cay, cliff], span: 1.4, body: "#efece4", wing: "#5a4634", tip: "#4a3a2a", flap: 3.5, glide: 0.4, call: whistle }
+        birds: { nests: [cay, cliff], look: { span: 1.4, body: "#efece4", wing: "#5a4634", tip: "#4a3a2a", flap: 3.5, glide: 0.4, call: whistle } }
       - id: frigatebird-roost
         name: Frigatebird roost
         site: colony
@@ -1050,7 +1050,7 @@ world:
         mark: "#3a3436"
         worth: 2
         symbol: birds
-        birds: { nests: [trees], span: 2.3, body: "#1c1a1a", wing: "#1c1a1a", tip: "#1c1a1a", flap: 2, glide: 0.85, call: rattle }
+        birds: { nests: [trees], look: { span: 2.3, body: "#1c1a1a", wing: "#1c1a1a", tip: "#1c1a1a", flap: 2, glide: 0.85, call: rattle } }
     # On a headland whose coast stands cliff m or higher: a cave depth
     # hexagons in from the cliff's foot, its roof's underside underside m
     # above the sea with roof m of rock over it at least, facing open m of

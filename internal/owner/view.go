@@ -13,6 +13,8 @@ import (
 
 	"github.com/daneelvt/keel-over-the-edge/internal/bus"
 	"github.com/daneelvt/keel-over-the-edge/internal/edge"
+	"github.com/daneelvt/keel-over-the-edge/internal/life"
+	"github.com/daneelvt/keel-over-the-edge/internal/looks"
 	"github.com/daneelvt/keel-over-the-edge/internal/physics"
 	"github.com/daneelvt/keel-over-the-edge/internal/sky"
 	"github.com/daneelvt/keel-over-the-edge/internal/store"
@@ -44,6 +46,8 @@ type boatCopy struct {
 	conn           uint64
 	grace          int64
 	kind           uint16
+	boatLook       uint32
+	boatName       string
 	x, y, heading  float64
 	speed          float64 // over the ground, m/s
 	falling, stays bool
@@ -71,6 +75,7 @@ type builder struct {
 	// Copied from the latest frame.
 	tick     int64
 	boats    []boatCopy
+	life     []bus.LifeEncounter
 	queue    []bus.Waiting
 	spells   [physics.WeatherSpells]physics.Spell
 	nspells  int32
@@ -92,6 +97,7 @@ func (b *builder) init(cfg *Config) {
 	b.cfg = cfg
 	capacity := cfg.Frames.Latest().Capacity()
 	b.boats = make([]boatCopy, 0, capacity)
+	b.life = make([]bus.LifeEncounter, 0, bus.LifeRoom)
 	b.queue = make([]bus.Waiting, 0, bus.QueueLimit)
 	b.weathers = make([]bus.Weather, 0, bus.WeatherHistory)
 	b.weather.Prepared = cfg.Weather
@@ -114,12 +120,21 @@ func (b *builder) copyFrame() {
 		st := &f.State[s]
 		b.boats = append(b.boats, boatCopy{
 			boat: f.Boat[s], owner: f.Owner[s], conn: f.Conn[s], grace: f.Grace[s], kind: f.Kind[s],
+			boatLook: f.BoatLook[s], boatName: f.BoatName[s],
 			x: st.X, y: st.Y, heading: st.Heading, speed: math.Hypot(st.Surge, st.Sway),
 			falling: f.Voyage[s].Falling(), stays: f.Stay[s], unseen: f.Unseen[s],
 			machine: f.Machine[s], priority: f.Priority[s],
 		})
 	}
 	b.queue = append(b.queue[:0], f.Queue...)
+	b.life = append(b.life[:0], f.Life...)
+	for i := range b.life {
+		// A group with a boat is where that boat is.
+		if e := &b.life[i]; e.Boat != 0 && e.Slot >= 0 && int(e.Slot) < len(f.State) && f.Boat[e.Slot] == e.Boat {
+			st := &f.State[e.Slot]
+			e.East, e.North, e.Heading = st.X, st.Y, st.Heading
+		}
+	}
 	b.spells, b.nspells = f.Spells, f.NSpells
 	b.weathers = append(b.weathers[:0], f.Weathers...)
 	b.keys = f.Keys
@@ -170,6 +185,11 @@ func (b *builder) build(ctx context.Context) *view {
 			Falling: bc.falling, Stays: bc.stays, Unseen: bc.unseen, Tools: n.acc.Tools,
 			Machine: bc.machine, Priority: n.acc.Priority, Admitted: bc.priority, Watchers: watched[bc.owner],
 		}
+		bl := looks.BoatOf(bc.boatLook)
+		j.Number, j.BoatName = bl.Number, bc.boatName
+		if l := b.cfg.BoatLooks; l != nil {
+			j.Paint, j.Cloth = l.PaintName(bl.Paint), l.ClothName(bl.Cloth)
+		}
 		if bc.machine {
 			w.Admission.Machines++
 			if a := b.cfg.Agents; a != nil {
@@ -210,6 +230,7 @@ func (b *builder) build(ctx context.Context) *view {
 			Machine: q.Machine, Priority: n.acc.Priority, Admitted: q.Priority, Position: position,
 		})
 	}
+	w.Life = b.lifeNow()
 	w.Weather = b.weatherNow()
 	w.Wind = b.windArrows()
 	b.gustGrid()
@@ -430,6 +451,48 @@ type worldJSON struct {
 	Admission admissionJSON `json:"admission"`
 	// Spectators is how many watch boats, how many wait to, and the limit.
 	Spectators edge.Spectators `json:"spectators"`
+	// Life is the sea's life alive: each group where its middle is now.
+	Life []lifeJSON `json:"life"`
+}
+
+// lifeJSON is a group of the sea's life as the page marks it: its kind's
+// name, how many, its middle, m east and north, and the boat it is with,
+// 0 for none.
+type lifeJSON struct {
+	ID    jsonUint `json:"id"`
+	Kind  string   `json:"kind"`
+	Form  string   `json:"form"`
+	Count int      `json:"count"`
+	East  float64  `json:"east"`
+	North float64  `json:"north"`
+	Up    float64  `json:"up"`
+	Boat  uint64   `json:"boat,omitempty"`
+}
+
+// lifeNow is the sea's life alive at the frame's tick, where each group's
+// middle is.
+func (b *builder) lifeNow() []lifeJSON {
+	s := b.cfg.SeaLife
+	out := make([]lifeJSON, 0, len(b.life))
+	if s == nil {
+		return out
+	}
+	kinds := s.Kinds()
+	for i := range b.life {
+		e := &b.life[i]
+		if int(e.Kind) >= len(kinds) {
+			continue
+		}
+		k := &kinds[e.Kind]
+		pose := &life.Pose{X: e.East, Y: e.North, Heading: e.Heading}
+		x, y, z, ok := life.FlockAt(e, k, float64(b.tick), pose)
+		if !ok {
+			continue
+		}
+		out = append(out, lifeJSON{ID: jsonUint(e.ID), Kind: k.Name, Form: string(k.Form), Count: int(e.Count),
+			East: round2(x), North: round2(y), Up: round2(z), Boat: e.Boat})
+	}
+	return out
 }
 
 // admissionJSON is world.json's admission by kind: the boats at sea and
@@ -481,11 +544,17 @@ type windJSON struct {
 }
 
 type boatJSON struct {
-	Boat      uint64      `json:"boat"`
-	Account   string      `json:"account"`
-	Sailor    string      `json:"sailor"`
-	Human     bool        `json:"human"`
-	Kind      string      `json:"kind"`
+	Boat    uint64 `json:"boat"`
+	Account string `json:"account"`
+	Sailor  string `json:"sailor"`
+	Human   bool   `json:"human"`
+	Kind    string `json:"kind"`
+	// Number and BoatName are the boat's sail number and name, player
+	// text; Paint and Cloth its paint's and cloth's names.
+	Number    int         `json:"number"`
+	BoatName  string      `json:"boatName,omitempty"`
+	Paint     string      `json:"paint,omitempty"`
+	Cloth     string      `json:"cloth,omitempty"`
 	East      float64     `json:"east"`
 	North     float64     `json:"north"`
 	Heading   float64     `json:"heading"` // degrees

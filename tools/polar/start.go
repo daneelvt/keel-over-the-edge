@@ -21,7 +21,8 @@ var (
 )
 
 // runStart prints the sweep.
-func runStart(b *physics.Prepared, name string, table [][]float64) error {
+func runStart(k *kind) error {
+	b, name, table := k.b, k.name, k.startSheet
 	fmt.Printf("%s from rest, untouched: knots through the water 20 s on, by the sheet; * the best\n", name)
 	sheets := make([]float64, 0, 21)
 	for s := 0; s <= 20; s++ {

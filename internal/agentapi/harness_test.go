@@ -320,7 +320,7 @@ func (b *browser) post(path, body string) (int, string) {
 // sailor makes a player's sailor with a new passkey, signed in.
 func (b *browser) sailor(name string) {
 	b.t.Helper()
-	status, opts := b.post("/account/begin", `{"name":"`+name+`","look":"rover","version":"female","skin":"tone-2","hair":"brown","colour":"madder-red"}`)
+	status, opts := b.post("/account/begin", `{"name":"`+name+`","look":"rover","version":"female","skin":"tone-2","hair":"brown","colour":"madder-red","born":{"year":1990,"month":1}}`)
 	if status != 200 {
 		b.t.Fatalf("begin: %d %s", status, opts)
 	}

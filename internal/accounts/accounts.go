@@ -18,6 +18,7 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/daneelvt/keel-over-the-edge/internal/fleet"
 	"github.com/daneelvt/keel-over-the-edge/internal/looks"
 	"github.com/daneelvt/keel-over-the-edge/internal/moderation"
 	"github.com/daneelvt/keel-over-the-edge/internal/oauth"
@@ -112,12 +113,21 @@ type Config struct {
 	// Book every sailor's, as the card shows them.
 	Looks oauth.MachineLooks
 	Book  *looks.Book
+	// Fleet, if not nil, is the accounts' fleets, as a human's card lists
+	// its boats.
+	Fleet *fleet.Fleet
 	// Stopped is the set loaded as keel started.
 	Stopped *Set
 	Log     *slog.Logger
 	Metrics *obs.Metrics
 	// Now is the clock, time.Now unless set.
 	Now func() time.Time
+	// Young, if not nil, puts an account the game stopped, its player
+	// having said they are under 13, in the reports' queue.
+	Young func(ctx context.Context, id store.AccountID) error
+	// Forget, if not nil, is told of accounts deleted: their mutes and
+	// blocks go from memory.
+	Forget func(ids ...store.AccountID)
 }
 
 // Accounts is the operator's hand on accounts.
@@ -231,7 +241,7 @@ func (a *Accounts) operation(req Request, action, detail string) store.Operation
 }
 
 func source(s string) string {
-	if s == store.SourceCommand {
+	if s == store.SourceCommand || s == store.SourceGame {
 		return s
 	}
 	return store.SourcePage
@@ -300,11 +310,34 @@ func (a *Accounts) done(req Request, action string, t *store.Target, e Effects, 
 // are revoked, and a human's machine sailors stop with it. A reason is
 // required.
 func (a *Accounts) Stop(ctx context.Context, req Request) (Done, error) {
+	return a.stop(ctx, req, store.ActionStop)
+}
+
+// YoungReason is the stop's reason when a player says they are under 13:
+// the owner's to read, never the player's, who is told only that the
+// sailor has been stopped.
+const YoungReason = "Stopped by the game: its player said they are under 13. Review it, and delete the account."
+
+// StopYoung stops a human's account whose player said they are under 13,
+// as the owner's Stop does, recorded as the game's, for the owner to
+// review and delete.
+func (a *Accounts) StopYoung(ctx context.Context, id store.AccountID) error {
+	_, err := a.stop(ctx, Request{Account: id, Reason: YoungReason, Source: store.SourceGame}, store.ActionYoung)
+	if err != nil || a.cfg.Young == nil {
+		return err
+	}
+	if err := a.cfg.Young(ctx, id); err != nil {
+		a.cfg.Log.Warn("putting a stop for being under 13 in the reports' queue", "err", err)
+	}
+	return nil
+}
+
+func (a *Accounts) stop(ctx context.Context, req Request, action string) (Done, error) {
 	why, err := reason(req.Reason, true)
 	if err != nil {
 		return Done{}, err
 	}
-	out, err := a.cfg.Store.Stop(ctx, a.operation(req, store.ActionStop, why))
+	out, err := a.cfg.Store.Stop(ctx, a.operation(req, action, why))
 	if err != nil {
 		return Done{}, storeErr(err)
 	}
@@ -315,7 +348,7 @@ func (a *Accounts) Stop(ctx context.Context, req Request) (Done, error) {
 		verb(len(ids), "stops", "stop"), plural(int(out.Sessions), "session"), verb(int(out.Sessions), "ends", "end"),
 		plural(int(out.Grants), "grant"), verb(int(out.Grants), "is", "are"), plural(e.Boats, "boat"), verb(e.Boats, "leaves", "leave"))
 	if req.Check {
-		return a.done(req, store.ActionStop, t, e, words), nil
+		return a.done(req, action, t, e, words), nil
 	}
 	// The set first, so that a connection that claims its account from
 	// now on is refused; then every cache forgets, so that nothing waits
@@ -337,9 +370,9 @@ func (a *Accounts) Stop(ctx context.Context, req Request) (Done, error) {
 			a.cfg.Agents.Stop(id, AgentStopped)
 		}
 	}
-	a.cfg.Log.Info("owner: an account stopped", "action", store.ActionStop, "account", t.ID.String(), "kind", string(t.Kind),
+	a.cfg.Log.Info("owner: an account stopped", "action", action, "account", t.ID.String(), "kind", string(t.Kind),
 		"machines", len(t.Machines), "sessions", out.Sessions, "grants", out.Grants, "reason", why, "source", source(req.Source), "from", req.From)
-	return a.done(req, store.ActionStop, t, e, words), nil
+	return a.done(req, action, t, e, words), nil
 }
 
 // Start starts a stopped account again: it may sign in, with its passkey
@@ -493,6 +526,9 @@ func (a *Accounts) DeleteMachineByPlayer(ctx context.Context, owner, id store.Ac
 func (a *Accounts) deleted(id store.AccountID, kind store.Kind, ms []store.AccountID, by string) {
 	ids := append([]store.AccountID{id}, ms...)
 	a.cfg.Stopped.remove(ids...)
+	if a.cfg.Forget != nil {
+		a.cfg.Forget(ids...)
+	}
 	a.cfg.Sessions.ForgetAccount(id)
 	if a.cfg.Door != nil {
 		a.cfg.Door.ForgetAccounts(ids...)

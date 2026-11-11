@@ -104,6 +104,7 @@ export class Recorder {
   #steps = 0;
   #helm = 0;
   #sheet = 0;
+  #reef = 0;
   readonly #pilot = { mode: 0, target: 0, order: 0, way: 0 };
 
   /** Starts a recording from this state and these controls. */
@@ -115,6 +116,7 @@ export class Recorder {
     this.#steps = 0;
     this.#helm = control[RECORDS.control.helm] ?? 0;
     this.#sheet = control[RECORDS.control.sheet] ?? 0;
+    this.#reef = control[RECORDS.control.reef] ?? 0;
     this.#pilot.mode = control[RECORDS.control.pilot] ?? 0;
     this.#pilot.target = control[RECORDS.control.target] ?? 0;
     this.#pilot.order = control[RECORDS.control.order] ?? 0;
@@ -129,6 +131,7 @@ export class Recorder {
     sea: StepSea,
     weather: StepWeather,
     pilot: PilotControl = PILOT_IDLE,
+    reef = 0,
   ): void {
     if (this.#start === null) {
       return;
@@ -183,6 +186,11 @@ export class Recorder {
       was.target = pilot.target;
       was.order = pilot.order;
       was.way = pilot.way;
+    }
+    if (reef !== this.#reef) {
+      const c = this.#change();
+      c.control = { ...c.control, reef };
+      this.#reef = reef;
     }
     this.#steps++;
   }

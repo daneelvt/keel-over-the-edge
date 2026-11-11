@@ -3,12 +3,14 @@
 package api
 
 import (
+	"encoding/json/jsontext"
 	"errors"
 	"net/http"
 	"time"
 
 	"github.com/go-webauthn/webauthn/protocol"
 
+	"github.com/daneelvt/keel-over-the-edge/internal/aboard"
 	"github.com/daneelvt/keel-over-the-edge/internal/accounts"
 	"github.com/daneelvt/keel-over-the-edge/internal/auth"
 	"github.com/daneelvt/keel-over-the-edge/internal/moderation"
@@ -26,6 +28,8 @@ const ConfirmFor = 5 * time.Minute
 type sailorRequest struct {
 	Name string `json:"name"`
 	lookRequest
+	// Born is when its player was born: {"year", "month"}.
+	Born jsontext.Value `json:"born"`
 }
 
 // lookRequest is a person's look as a request gives it, by the catalog's
@@ -80,21 +84,41 @@ type sailorResponse struct {
 // passkey their account is made with. Nothing is made yet, and the name is
 // not held: a player who closes the prompt leaves nothing behind.
 //
+// The player's month of birth is asked first: under 13, nothing is made
+// or kept, not even in the log, and the browser is given a cookie that
+// answers the same for 30 days, before anything else.
+//
 //	200 options             {"publicKey": …} for navigator.credentials.create()
 //	400 {"error"}           malformed, an unknown member, or a look not made
 //	                        of the catalog's choices
+//	400 {"error":"born"}    no month of birth, or not one
+//	403 {"error":"young"}   under 13, or the cookie that says so
 //	409 {"error":"session"} the request already has a session
 //	415                     not application/json
 //	422 {"error": reason}   the name is refused: short, long, characters,
 //	                        scripts, words or taken
 //	503                     the database could not be asked
 func (a *api) beginAccount(w http.ResponseWriter, r *http.Request) {
+	if young(r) {
+		refuseYoung(w)
+		return
+	}
 	if _, ok := auth.SessionFromContext(r.Context()); ok {
 		writeError(w, http.StatusConflict, "session")
 		return
 	}
 	var req sailorRequest
 	if !readJSON(w, r, &req) {
+		return
+	}
+	now := time.Now()
+	born, ok := bornFrom(req.Born, now)
+	if !ok {
+		writeError(w, http.StatusBadRequest, "born")
+		return
+	}
+	if aboard.BandOf(born, now) == aboard.Child {
+		refuseYoung(w)
 		return
 	}
 	if l := req.look(); l.Look == store.MachineLook || a.cfg.Looks == nil || !a.cfg.Looks.Valid(l) {
@@ -120,7 +144,7 @@ func (a *api) beginAccount(w http.ResponseWriter, r *http.Request) {
 		a.unavailable(w, r, "beginning a passkey", err)
 		return
 	}
-	a.begin(w, r, store.Ceremony{Kind: store.CeremonyCreate, Name: name.Display, NameKey: name.Key, Look: req.look(), UserHandle: u.Handle}, b)
+	a.begin(w, r, store.Ceremony{Kind: store.CeremonyCreate, Name: name.Display, NameKey: name.Key, Look: req.look(), UserHandle: u.Handle, Born: born.Code()}, b)
 }
 
 // checkName checks a sailor's name by the game's rules, answering 422 with
@@ -151,6 +175,10 @@ func (a *api) checkName(w http.ResponseWriter, typed string) (moderation.Name, b
 //	                         the browser may forget the passkey just made
 //	503                      the database could not be asked
 func (a *api) finishAccount(w http.ResponseWriter, r *http.Request) {
+	if young(r) {
+		refuseYoung(w)
+		return
+	}
 	if _, ok := auth.SessionFromContext(r.Context()); ok {
 		writeError(w, http.StatusConflict, "session")
 		return
@@ -176,7 +204,7 @@ func (a *api) finishAccount(w http.ResponseWriter, r *http.Request) {
 		var err error
 		id, err = a.cfg.Accounts.CreateAccount(r.Context(), store.NewAccount{
 			Name: c.Name, NameKey: c.NameKey, Look: chosen(c.Look), UserHandle: c.UserHandle,
-			Passkey: key, RecoveryHash: recovery, TokenHash: d.Hash, Boat: a.cfg.Boat,
+			Passkey: key, RecoveryHash: recovery, TokenHash: d.Hash, Boat: a.cfg.Boat, Shared: a.cfg.SharedBoats, Born: c.Born,
 		})
 		return err
 	})
@@ -197,7 +225,7 @@ func (a *api) finishAccount(w http.ResponseWriter, r *http.Request) {
 	a.ceremonyCounted(c.Kind, "finished")
 	a.cfg.Metrics.AccountsCreated.Inc()
 	obs.SetAccount(r.Context(), id.String())
-	a.cfg.Sessions.Add(hash, store.Session{Account: store.Account{ID: id, Kind: store.Human, Name: c.Name, Look: chosen(c.Look), NoticesOff: []string{}}})
+	a.cfg.Sessions.Add(hash, store.Session{Account: store.Account{ID: id, Kind: store.Human, Name: c.Name, Look: chosen(c.Look), NoticesOff: []string{}, Born: c.Born}})
 	http.SetCookie(w, auth.SessionCookie(token))
 	writeJSON(w, http.StatusCreated, sailorResponse{Name: c.Name, lookShown: a.shown(id, chosen(c.Look)), RecoveryCode: code})
 }

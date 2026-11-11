@@ -535,3 +535,116 @@
     height: 50px;
   }
 }
+
+/* The player's sailor and their boat: one above the other; side by side
+   on a screen held sideways, the panel tighter and the boat's picture
+   left out, so Set sail stays in view. */
+.your-sailor-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+@media (max-height: 420px) {
+  .your-sailor-rows {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: start;
+    gap: 10px;
+  }
+  .start-panel.your-sailor {
+    gap: 6px;
+    padding: 12px 18px 14px;
+  }
+  .start-panel.your-sailor h1 {
+    margin: 0;
+    font-size: 24px;
+  }
+  .start-panel.your-sailor h2 {
+    margin: 2px 0 0;
+  }
+  .your-sailor-name {
+    font-size: 20px;
+  }
+  /* The boat's words alone, its keys side by side under them. */
+  .your-boat .boat-picture {
+    display: none;
+  }
+  .your-boat-name {
+    font-size: 16px;
+  }
+  /* How many it takes is the chooser's to say; and a boat in the water,
+     which is not changed from here, gives its room to the sailor's name. */
+  .your-boat-words .start-faint,
+  .your-boat-afloat {
+    display: none;
+  }
+  .your-sailor-rows:has(.your-boat-afloat) {
+    display: flex;
+  }
+  .your-boat-actions {
+    column-gap: 12px;
+  }
+}
+
+/* A screen held sideways on a phone: the name and when its player was born
+   side by side, the month and year's legend left to their boxes' own
+   words, so Set sail stays in view. */
+@media (orientation: landscape) and (max-height: 480px) {
+  form.start-panel {
+    display: grid;
+    grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.15fr);
+    align-items: center;
+  }
+  form.start-panel .born-boxes {
+    grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr);
+  }
+  form.start-panel > * {
+    grid-column: 1 / -1;
+  }
+  form.start-panel > .start-name,
+  form.start-panel > .born {
+    grid-column: auto;
+  }
+  form.start-panel .born-legend {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+}
+
+/* A panel taller than the screen starts at its top, and the screen
+   scrolls to the rest: centred, its top would be out of reach. */
+.start > .start-panel {
+  align-self: start;
+  margin-block: auto;
+}
+
+/* A link to watch that opened no watch: why, with ☆ Follow beside it. */
+.link-refused {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px 12px;
+  padding: 6px 6px 6px 12px;
+}
+
+.link-refused-line {
+  flex: 1 1 12em;
+  margin: 0;
+}
+
+.link-refused .start-sign-in {
+  min-height: 40px;
+  padding: 0 14px;
+}
+
+/* Held sideways, the game's name gives its room to the link's words. */
+@media (max-height: 420px) {
+  .your-sailor:has(.link-refused) > h1 {
+    display: none;
+  }
+}

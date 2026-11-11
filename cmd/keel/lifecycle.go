@@ -57,6 +57,10 @@ const sessionLife = 400 * 24 * time.Hour
 // jobRunKeep is how long jobs' runs are kept.
 const jobRunKeep = 90 * 24 * time.Hour
 
+// linkKeep is how long a skipper's link is kept after it stopped working:
+// ended, expired, or past the lifetime in force.
+const linkKeep = 24 * time.Hour
+
 // nextSeeds is how many seeds the next world is tried with in one run
 // before the run fails, to be tried again.
 const nextSeeds = 5
@@ -437,8 +441,25 @@ func (p *process) lifecycleJobs() []jobs.Job {
 				if err != nil {
 					return jobs.Result{}, err
 				}
-				return jobs.Result{Detail: fmt.Sprintf("%d sessions, %d ceremonies and %d recorded actions deleted", n, c, a),
-					Skipped: n == 0 && c == 0 && a == 0}, nil
+				// Skippers' links, a day after they stopped working.
+				l, err := p.db.DeleteSailLinks(ctx, due.Add(-linkKeep), p.switches.Lifetime())
+				if err != nil {
+					return jobs.Result{}, err
+				}
+				// Reports closed half a year ago and not held, or held past
+				// their hold.
+				rp, err := p.db.DeleteReports(ctx, due.Add(-store.ReportKeep))
+				if err != nil {
+					return jobs.Result{}, err
+				}
+				// Who sailed with whom, a month on, and offers to be
+				// shipmates lapsed.
+				sw, err := p.db.DeleteSailedAndOffers(ctx, due)
+				if err != nil {
+					return jobs.Result{}, err
+				}
+				return jobs.Result{Detail: fmt.Sprintf("%d sessions, %d ceremonies, %d recorded actions, %d links, %d reports and %d sailed together or offers deleted", n, c, a, l, rp, sw),
+					Skipped: n == 0 && c == 0 && a == 0 && l == 0 && rp == 0 && sw == 0}, nil
 			},
 		},
 		{

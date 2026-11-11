@@ -157,7 +157,7 @@ func (b *browser) session() *http.Cookie { return b.jar.get(auth.CookieName) }
 // create makes a sailor with a new passkey, returning the finish's answer.
 func (b *browser) create(name string) (int, string) {
 	b.t.Helper()
-	status, opts := b.post("/account/begin", `{"name":"`+name+`","look":"rover","version":"female","skin":"tone-2","hair":"brown","colour":"madder-red"}`)
+	status, opts := b.post("/account/begin", `{"name":"`+name+`","look":"rover","version":"female","skin":"tone-2","hair":"brown","colour":"madder-red","born":{"year":1990,"month":1}}`)
 	if status != 200 {
 		return status, opts
 	}
@@ -278,7 +278,7 @@ func TestMakeAnAccount(t *testing.T) {
 	if status, body := b.do("GET", "/api/me", ""); status != 401 || body != `{"error":"session"}` {
 		t.Fatalf("me without a session: %d %s", status, body)
 	}
-	status, opts := b.post("/account/begin", `{"name":"  Ann   Bonny ","look":"rover","version":"female","skin":"tone-2","hair":"brown","colour":"madder-red"}`)
+	status, opts := b.post("/account/begin", `{"name":"  Ann   Bonny ","look":"rover","version":"female","skin":"tone-2","hair":"brown","colour":"madder-red","born":{"year":1990,"month":1}}`)
 	if status != 200 {
 		t.Fatalf("begin: %d %s", status, opts)
 	}
@@ -326,7 +326,7 @@ func TestMakeAnAccount(t *testing.T) {
 	if b.session() == nil || b.jar.get(auth.CeremonyCookieName("create")) != nil {
 		t.Fatalf("cookies: session %v, ceremony %v", b.session(), b.jar.get(auth.CeremonyCookieName("create")))
 	}
-	if status, body := b.do("GET", "/api/me", ""); status != 200 || body != `{"name":"Ann Bonny","look":"rover","version":"female","skin":"tone-2","hair":"brown","colour":"madder-red","lookChosen":true,"kind":"human","noticesOff":[]}` {
+	if status, body := b.do("GET", "/api/me", ""); status != 200 || body != `{"name":"Ann Bonny","look":"rover","version":"female","skin":"tone-2","hair":"brown","colour":"madder-red","lookChosen":true,"kind":"human","noticesOff":[],"born":true,"rules":false}` {
 		t.Fatalf("me: %d %s", status, body)
 	}
 	status, page := b.do("GET", "/api/account", "")
@@ -344,7 +344,7 @@ func TestMakeAnAccount(t *testing.T) {
 		t.Fatalf("finished twice: %d %s", status, body)
 	}
 	// With a session, no second account, and no ceremony begun.
-	if status, body := b.post("/account/begin", `{"name":"Mary Read","look":"rover","version":"female","skin":"tone-2","hair":"brown","colour":"madder-red"}`); status != 409 || body != `{"error":"session"}` {
+	if status, body := b.post("/account/begin", `{"name":"Mary Read","look":"rover","version":"female","skin":"tone-2","hair":"brown","colour":"madder-red","born":{"year":1990,"month":1}}`); status != 409 || body != `{"error":"session"}` {
 		t.Fatalf("a second account: %d %s", status, body)
 	}
 	if n := count(t, u, "account"); n != 1 {
@@ -383,7 +383,7 @@ func TestNamesRefusedBeforeAnyCeremony(t *testing.T) {
 		"Al": "short", "Abcdefghijklmnopqrstu": "long", "Harbourmaster": "words", "Guest": "words",
 		"Ann Bonny": "taken", "ann-bonny": "taken", "AnnBonny": "taken", "Ann B0nny": "taken", "Ａｎｎ Ｂｏｎｎｙ": "taken",
 	} {
-		if status, body := b.post("/account/begin", `{"name":"`+name+`","look":"rover","version":"female","skin":"tone-2","hair":"brown","colour":"madder-red"}`); status != 422 || body != `{"error":"`+want+`"}` {
+		if status, body := b.post("/account/begin", `{"name":"`+name+`","look":"rover","version":"female","skin":"tone-2","hair":"brown","colour":"madder-red","born":{"year":1990,"month":1}}`); status != 422 || body != `{"error":"`+want+`"}` {
 			t.Errorf("%q: %d %s", name, status, body)
 		}
 	}
@@ -401,8 +401,8 @@ func TestNamesRefusedBeforeAnyCeremony(t *testing.T) {
 func TestNameTakenMeanwhile(t *testing.T) {
 	srv, _, u := accountServer(t)
 	first, second := newBrowser(t, srv), newBrowser(t, srv)
-	_, opts1 := first.post("/account/begin", `{"name":"Calico Jack","look":"rover","version":"female","skin":"tone-2","hair":"brown","colour":"madder-red"}`)
-	_, opts2 := second.post("/account/begin", `{"name":"Calico Jack","look":"rover","version":"female","skin":"tone-2","hair":"brown","colour":"madder-red"}`)
+	_, opts1 := first.post("/account/begin", `{"name":"Calico Jack","look":"rover","version":"female","skin":"tone-2","hair":"brown","colour":"madder-red","born":{"year":1990,"month":1}}`)
+	_, opts2 := second.post("/account/begin", `{"name":"Calico Jack","look":"rover","version":"female","skin":"tone-2","hair":"brown","colour":"madder-red","born":{"year":1990,"month":1}}`)
 	_, a1, _ := softkey.Create([]byte(opts1), testOrigin)
 	key2, a2, _ := softkey.Create([]byte(opts2), testOrigin)
 	if status, body := first.post("/account/finish", string(a1)); status != 201 {
@@ -460,7 +460,7 @@ func TestCeremonyLeftOrForeign(t *testing.T) {
 	older := newTestServer(t, st, func(c *Config) { c.Version.Build = "older" })
 
 	b := newBrowser(t, older)
-	_, opts := b.post("/account/begin", `{"name":"Ann Bonny","look":"rover","version":"female","skin":"tone-2","hair":"brown","colour":"madder-red"}`)
+	_, opts := b.post("/account/begin", `{"name":"Ann Bonny","look":"rover","version":"female","skin":"tone-2","hair":"brown","colour":"madder-red","born":{"year":1990,"month":1}}`)
 	_, answer, _ := softkey.Create([]byte(opts), testOrigin)
 	b.srv = srv
 	if status, body := b.post("/account/finish", string(answer)); status != 409 || body != `{"error":"again"}` {
@@ -469,7 +469,7 @@ func TestCeremonyLeftOrForeign(t *testing.T) {
 
 	// Left: a row, until it expires and the job runs.
 	left := newBrowser(t, srv)
-	left.post("/account/begin", `{"name":"Mary Read","look":"rover","version":"female","skin":"tone-2","hair":"brown","colour":"madder-red"}`)
+	left.post("/account/begin", `{"name":"Mary Read","look":"rover","version":"female","skin":"tone-2","hair":"brown","colour":"madder-red","born":{"year":1990,"month":1}}`)
 	left.post("/signin/begin?mediation=conditional", "")
 	if n := count(t, u, "webauthn_ceremony"); n != 2 {
 		t.Fatalf("%d ceremonies left", n)
@@ -510,7 +510,7 @@ func TestSignIn(t *testing.T) {
 	if status != 200 || !strings.Contains(opts, `"mediation":"conditional"`) || strings.Contains(opts, "allowCredentials") {
 		t.Fatalf("autofill begun: %d %s", status, opts)
 	}
-	if status, _ := phone.post("/account/begin", `{"name":"Mary Read","look":"rover","version":"female","skin":"tone-2","hair":"brown","colour":"madder-red"}`); status != 200 {
+	if status, _ := phone.post("/account/begin", `{"name":"Mary Read","look":"rover","version":"female","skin":"tone-2","hair":"brown","colour":"madder-red","born":{"year":1990,"month":1}}`); status != 200 {
 		t.Fatalf("a create beside it: %d", status)
 	}
 	// A passkey whose backup-eligible flag changed is refused: it is not

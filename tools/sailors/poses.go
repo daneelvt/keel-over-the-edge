@@ -28,9 +28,12 @@ type pose struct {
 	From  string `yaml:"from" json:"from,omitempty"`
 	Place string `yaml:"place" json:"place,omitempty"`
 	// Shift moves the placed figure forward, inboard and up from its place.
-	Shift []float64         `yaml:"shift" json:"shift,omitempty"`
-	Turn  [][]any           `yaml:"turn" json:"turn,omitempty"`
-	IK    map[string]target `yaml:"ik" json:"ik,omitempty"`
+	Shift []float64 `yaml:"shift" json:"shift,omitempty"`
+	// Lie leans the placed figure back about its own left-right axis, in
+	// degrees: a body lying out on the trapeze, its joints' turns its own.
+	Lie  float64           `yaml:"lie" json:"lie,omitempty"`
+	Turn [][]any           `yaml:"turn" json:"turn,omitempty"`
+	IK   map[string]target `yaml:"ik" json:"ik,omitempty"`
 }
 
 // target is a place on the stage, or a bone of the figure's own, and an
@@ -48,6 +51,19 @@ type target struct {
 	// end, on the stage's surface it names (a crouch's feet on the floor),
 	// or anywhere (at free: a leg hanging over the side).
 	Planted bool `yaml:"planted" json:"planted,omitempty"`
+	// Grip turns a hand on its target so its fingers point along Aim and
+	// its palm faces Palm (forward, inboard and up in the stage's frame):
+	// a hand round a wheel's spoke.
+	Grip *grip `yaml:"grip" json:"grip,omitempty"`
+}
+
+// grip is which way a hand's fingers point and its palm faces.
+type grip struct {
+	Aim  []float64 `yaml:"aim" json:"aim"`
+	Palm []float64 `yaml:"palm" json:"palm"`
+	// Weight is how far the hand is turned so, from its own turn: all
+	// the way if not said.
+	Weight float64 `yaml:"weight" json:"weight,omitempty"`
 }
 
 type clip struct {
@@ -63,7 +79,12 @@ type clip struct {
 	// the ends of their ranges, as the hike does; the motion gate gives
 	// them more of it.
 	Strain []string `yaml:"strain" json:"strain,omitempty"`
-	Keys   []key    `yaml:"keys" json:"keys"`
+	// Hang turns the skirts' chains, by name (back, side, front), this
+	// share of the way to hang straight down from the body (lying out on
+	// the trapeze, sat on a rail); on the trapeze, the build's own shares
+	// if not said.
+	Hang map[string]float64 `yaml:"hang" json:"hang,omitempty"`
+	Keys []key              `yaml:"keys" json:"keys"`
 }
 
 // portSuffix names a clip's port side, made with Sides.
@@ -92,15 +113,37 @@ type retarget struct {
 	Loop bool     `yaml:"loop" json:"loop,omitempty"`
 	Idle bool     `yaml:"idle" json:"idle,omitempty"`
 	Lock []string `yaml:"lock" json:"lock,omitempty"`
+	// Deck sets it on a flat deck: the soles on it, and each foot that
+	// bears on it held there by IK.
+	Deck bool `yaml:"deck" json:"deck,omitempty"`
+	// Speed is how fast it walks over the deck, m/s: a foot that bears on
+	// it moves back at this speed.
+	Speed float64 `yaml:"speed" json:"speed,omitempty"`
+	// Head keeps the head's joint under this height over the deck while
+	// the hips are down in a crouch, by bending the back.
+	Head float64 `yaml:"head" json:"head,omitempty"`
+	// Strain names the joints it takes toward the ends of their ranges
+	// (a deep crouch's knees), as a clip's Strain does.
+	Strain []string `yaml:"strain" json:"strain,omitempty"`
+	// Seconds plays it over this long, slowed or quickened from its own.
+	Seconds float64 `yaml:"seconds" json:"seconds,omitempty"`
+	// Group is the file it is written to beside the look's clips (rail:
+	// <version>.rail.glb), if not the clips' own.
+	Group string `yaml:"group" json:"group,omitempty"`
 }
 
 var (
-	places     = []string{"", "seat", "gunwale", "cockpit", "outside"}
-	effectors  = []string{"hand_l", "hand_r", "foot_l", "foot_r"}
-	stageAt    = []string{"seat", "gunwale", "floor", "strap", "free"}
-	keySides   = []string{"", "port", "starboard"}
-	leads      = []string{"", "hips", "head"}
-	turnAxes   = []string{"x", "y", "z"}
+	places = []string{"", "seat", "gunwale", "cockpit", "outside", "wheel", "trapeze", "rail"}
+	// groups are the files a clip may be written to apart from the
+	// look's clips.
+	groups    = []string{"", "rail"}
+	effectors = []string{"hand_l", "hand_r", "foot_l", "foot_r"}
+	stageAt   = []string{"seat", "gunwale", "floor", "strap", "free"}
+	keySides  = []string{"", "port", "starboard"}
+	leads     = []string{"", "hips", "head"}
+	// turnAxes are the figure's axes, and lx a bone's own x axis (a
+	// finger's curl toward the palm).
+	turnAxes   = []string{"x", "y", "z", "lx"}
 	maxDegrees = 180.0
 )
 
@@ -155,6 +198,26 @@ func (lib poseLibrary) check(t tables, sources map[string]source) error {
 				points[p] = true
 			}
 		}
+		// On the trapeze: the rack's edge the feet stand on, the hounds,
+		// the ring, the extension's hinge and the mainsheet's block.
+		if _, ok := st["trapeze"].(map[string]any); ok {
+			for _, p := range []string{"rack", "hounds", "ring", "trapeze-hinge", "trapeze-sheet"} {
+				points[p] = true
+			}
+		}
+		// On the rail: the deck's edge the crew sit on.
+		if _, ok := st["rail"].(map[string]any); ok {
+			points["rail"] = true
+		}
+		// At the wheel: the deck the helmsman stands on, and the grips.
+		if w, ok := st["wheel"].(map[string]any); ok {
+			points["deck"] = true
+			if gs, ok := w["grips"].(map[string]any); ok {
+				for g := range gs {
+					points[g] = true
+				}
+			}
+		}
 	}
 	for _, s := range stageAt {
 		points[s] = true
@@ -203,6 +266,20 @@ func (lib poseLibrary) check(t tables, sources map[string]source) error {
 				return fmt.Errorf("the retarget %s: only feet are locked, not %q", name, e)
 			}
 		}
+		switch {
+		case !slices.Contains(groups, r.Group):
+			return fmt.Errorf("the retarget %s: no file %q beside the clips", name, r.Group)
+		case (r.Speed != 0 || r.Head != 0) && !r.Deck:
+			return fmt.Errorf("the retarget %s: a speed or a head's height is over a deck, and it has none", name)
+		case r.Deck && len(r.Lock) > 0:
+			return fmt.Errorf("the retarget %s: its feet are on the deck, not locked", name)
+		case r.Speed < 0 || r.Speed > 2:
+			return fmt.Errorf("the retarget %s: a speed of %v m/s is not 0 to 2", name, r.Speed)
+		case r.Seconds < 0 || r.Seconds > 60:
+			return fmt.Errorf("the retarget %s: %v seconds is not 0 to 60", name, r.Seconds)
+		case r.Head < 0 || r.Head > 2:
+			return fmt.Errorf("the retarget %s: a head %v m over the deck is not 0 to 2", name, r.Head)
+		}
 	}
 	return nil
 }
@@ -230,7 +307,7 @@ func (p pose) check(bones []string, points map[string]bool, all map[string]pose)
 		case !slices.Contains(bones, bone):
 			return fmt.Errorf("the turn %v: no bone %q", tr, tr[0])
 		case !slices.Contains(turnAxes, axis):
-			return fmt.Errorf("the turn %v: the axis is x, y or z", tr)
+			return fmt.Errorf("the turn %v: the axis is x, y, z or lx", tr)
 		case !ok || math.Abs(deg) > maxDegrees:
 			return fmt.Errorf("the turn %v: the degrees are a number within ±%v", tr, maxDegrees)
 		}
@@ -247,6 +324,8 @@ func (p pose) check(bones []string, points map[string]bool, all map[string]pose)
 			return fmt.Errorf("IK on %s: an offset or a pole is three numbers", e)
 		case tg.Reach < 0 || tg.Reach > 1 || tg.Reach > 0 && tg.At == "bone":
 			return fmt.Errorf("IK on %s: a reach is a share of a limb, on a stage target", e)
+		case tg.Grip != nil && (!strings.HasPrefix(e, "hand") || len(tg.Grip.Aim) != 3 || len(tg.Grip.Palm) != 3):
+			return fmt.Errorf("IK on %s: a grip is a hand's, its aim and palm three numbers each", e)
 		}
 	}
 	return nil

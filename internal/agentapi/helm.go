@@ -13,6 +13,7 @@ import (
 	"golang.org/x/time/rate"
 
 	"github.com/daneelvt/keel-over-the-edge/internal/bus"
+	"github.com/daneelvt/keel-over-the-edge/internal/chat"
 	"github.com/daneelvt/keel-over-the-edge/internal/lookout"
 	"github.com/daneelvt/keel-over-the-edge/internal/oauth"
 	"github.com/daneelvt/keel-over-the-edge/internal/obs"
@@ -124,6 +125,9 @@ func (c *Core) Limits() Limits { return c.cfg.Limits }
 // joins the new world at its agent's next call, told of the new world.
 func (c *Core) Open(s *Sea) *Recorder {
 	c.sea.Store(s)
+	if s.Chat != nil {
+		s.Chat.AddOut(chatOut{core: c, sea: s})
+	}
 	return c.hub.recorder(s)
 }
 
@@ -235,10 +239,11 @@ func (c *Core) Stop(id store.AccountID, words string) {
 	if h == nil {
 		return
 	}
+	defer h.unspeak()
 	r := refuse(refusedStopped, words)
 	h.mu.Lock()
 	h.ended, h.waitEnd = r, r
-	w, s, boat, queued := h.waiter, h.sea, h.boat, h.queued
+	w, s, boat, queued, aboard := h.waiter, h.sea, h.boat, h.queued, h.aboard
 	h.boat, h.queued, h.away = 0, false, true
 	h.mu.Unlock()
 	if w != nil {
@@ -249,6 +254,15 @@ func (c *Core) Stop(id store.AccountID, words string) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
+	if aboard {
+		// Ashore from the boat it is aboard, then its own boat out of the
+		// water: the boat aboard sails on.
+		r, err := h.ashore(ctx, s, boat)
+		boat, queued = 0, err == nil && r.Result == bus.Queued
+		if err == nil && r.Result == bus.Joined {
+			boat = r.Boat
+		}
+	}
 	switch {
 	case boat != 0:
 		_ = send(ctx, s, bus.Command{Op: bus.Leave, Boat: boat})
@@ -305,7 +319,7 @@ func (c *Core) Run(ctx context.Context) {
 // helms with neither a boat nor a call for an hour.
 func (c *Core) sweep(now time.Time) {
 	c.mu.Lock()
-	var silent []*helm
+	var silent, forgotten []*helm
 	for id, h := range c.helms {
 		h.mu.Lock()
 		quiet := now.Sub(h.lastCall)
@@ -315,6 +329,7 @@ func (c *Core) sweep(now time.Time) {
 		}
 		if !afloat && h.waiter == nil && quiet >= forgetIdle {
 			delete(c.helms, id)
+			forgotten = append(forgotten, h)
 		}
 		h.mu.Unlock()
 	}
@@ -322,6 +337,9 @@ func (c *Core) sweep(now time.Time) {
 		c.cfg.Metrics.AgentHelms.Set(float64(len(c.helms)))
 	}
 	c.mu.Unlock()
+	for _, h := range forgotten {
+		h.unspeak()
+	}
 	for _, h := range silent {
 		h.mu.Lock()
 		h.left = leftSilent
@@ -374,6 +392,16 @@ type helm struct {
 	// away: its agent fell silent and its boat's grace has begun, or its
 	// place is given up; the next call joins again.
 	away bool
+	// aboard: slot and boat are another's boat, which the machine sailor
+	// is aboard as crew, its own boat out of the water.
+	aboard bool
+	// What the hub last saw of the company aboard the boat: on which boat,
+	// at which count of its changes, who was aboard, and who held the
+	// controls.
+	deckOn   uint64
+	deckSeen uint32
+	company  map[bus.Account]string
+	heldBy   bus.Account
 	// left is why its boat last left the water, until a call is told.
 	left string
 	// ended is a stopped machine sailor's refusal, for every call still
@@ -385,6 +413,12 @@ type helm struct {
 	refusals uint64
 	// apps are the apps that have called, each logged once.
 	apps map[string]bool
+	// spoke is the chat the machine sailor speaks in, nil for none;
+	// spokeTried when the store last failed to say what chat needs of it;
+	// human its human, as chat's rule has it.
+	spoke      *chat.Hub
+	spokeTried time.Time
+	human      [16]byte
 
 	// What the reports keep: the seq of the last report, the numbers of
 	// the boats in sight, and the wind readout's samples.
@@ -399,6 +433,12 @@ type helm struct {
 	// landSeen are the land, places and lights in sight at the last
 	// report: a brief report tells those that are new.
 	landSeen map[int32]bool
+	// lifeTold are the groups of the sea's life the last report told, by
+	// their ids: a brief report tells those that are new. lifeSeen are
+	// those that have come into sight, each raised once as an event, with
+	// the tick each was last in the frame.
+	lifeTold map[uint64]bool
+	lifeSeen map[uint64]int64
 	// turning is the autopilot's turn under way at the hub's last look.
 	turning uint8
 	// goal is the charted place the agent's last wait watched, by its
@@ -487,7 +527,7 @@ func (h *helm) atSea(ctx context.Context) (*Sea, *bus.Frame, joinResult, error) 
 			h.ring, h.seq = ring{}, 0
 			h.ring.add(event{Tick: f.Tick, Kind: evNewWorld, Words: "a new world began"})
 		}
-		h.sea, h.boat, h.queued, h.away = s, 0, false, false
+		h.sea, h.boat, h.queued, h.away, h.aboard = s, 0, false, false, false
 		clear(h.contacts)
 	}
 	res.told, h.left = h.left, ""
@@ -495,8 +535,11 @@ func (h *helm) atSea(ctx context.Context) (*Sea, *bus.Frame, joinResult, error) 
 	// A boat found that the helm does not sail (one restored as keel
 	// started, in its grace, or one another process's helm joined) is
 	// taken over with a Join, which ends its grace.
-	need := !found || h.away || f.Conn[h.slot] != h.conn || f.Grace[h.slot] != 0
+	need := !found || h.away || !h.sails(f)
 	h.mu.Unlock()
+	// At sea, the machine sailor speaks in the world's chat: those aboard
+	// with it hear it, and it hears them.
+	h.speak(ctx, s)
 	if !need {
 		return s, f, res, nil
 	}
@@ -508,8 +551,12 @@ func (h *helm) atSea(ctx context.Context) (*Sea, *bus.Frame, joinResult, error) 
 	h.mu.Lock()
 	h.away = false
 	switch r.Result {
+	case bus.Crewed:
+		// Aboard another's boat: aboard again through this helm.
+		h.slot, h.gen, h.boat, h.queued, h.aboard = r.Slot, r.Gen, r.Boat, false, true
+		res.rejoined = true
 	case bus.Joined, bus.Rejoined:
-		h.slot, h.gen, h.boat, h.queued = r.Slot, r.Gen, r.Boat, false
+		h.slot, h.gen, h.boat, h.queued, h.aboard = r.Slot, r.Gen, r.Boat, false, false
 		res.joined, res.rejoined = r.Result == bus.Joined, r.Result == bus.Rejoined
 		if r.Result == bus.Joined {
 			h.ordered = false
@@ -543,6 +590,18 @@ func (h *helm) atSea(ctx context.Context) (*Sea, *bus.Frame, joinResult, error) 
 // a place in the queue gives it one; and reports whether it sails. With mu
 // held.
 func (h *helm) locate(f *bus.Frame) bool {
+	if i := f.Aboard(bus.Account(h.account)); i >= 0 {
+		a := &f.Crew[i]
+		if !h.aboard || h.boat != a.Boat {
+			h.ordered = false
+		}
+		h.slot, h.gen, h.boat, h.queued, h.aboard = a.Slot, f.Gen[a.Slot], a.Boat, false, true
+		return true
+	}
+	if h.aboard {
+		// Ashore since: its own boat, if it has one, is found below.
+		h.aboard, h.boat = false, 0
+	}
 	if h.boat != 0 && h.slot >= 0 && int(h.slot) < len(f.Occupied) && f.Occupied[h.slot] && f.Boat[h.slot] == h.boat {
 		h.queued = false
 		return true
@@ -572,6 +631,17 @@ func (h *helm) locate(f *bus.Frame) bool {
 	return false
 }
 
+// sails reports whether the helm's connection sails its boat in f, or is
+// aboard the boat it is aboard through it, with no grace running. With mu
+// held, the boat located.
+func (h *helm) sails(f *bus.Frame) bool {
+	if h.aboard {
+		i := f.Aboard(bus.Account(h.account))
+		return i >= 0 && f.Crew[i].Conn == h.conn && f.Crew[i].Grace == 0
+	}
+	return f.Conn[h.slot] == h.conn && f.Grace[h.slot] == 0
+}
+
 // join asks the simulation for the helm's boat, and waits for its answer.
 func (h *helm) join(ctx context.Context, s *Sea) (bus.Reply, error) {
 	h.mu.Lock()
@@ -582,7 +652,12 @@ func (h *helm) join(ctx context.Context, s *Sea) (bus.Reply, error) {
 		code = s.Looks.Code(machineLook(s.Looks, h.account, look))
 	}
 	reply := make(chan bus.Reply, 1)
-	cmd := bus.Command{Op: bus.Join, Account: bus.Account(h.account), Conn: h.conn, Machine: true, Priority: priority, Look: code, Reply: reply}
+	cmd := bus.Command{Op: bus.Join, Account: bus.Account(h.account), Conn: h.conn, Machine: true, Priority: priority, Look: code, Reply: reply,
+		BoatKind: joinedKind}
+	if s.Fleet != nil {
+		j := s.Fleet.ForJoin(ctx, h.account)
+		cmd.BoatKind, cmd.BoatLook, cmd.BoatName = j.Kind, j.Look, j.Name
+	}
 	if err := send(ctx, s, cmd); err != nil {
 		return bus.Reply{}, err
 	}
@@ -622,7 +697,7 @@ func send(ctx context.Context, s *Sea, c bus.Command) error {
 // place in the queue is given up; it reports whether it had either.
 func (h *helm) disconnect() bool {
 	h.mu.Lock()
-	s, had := h.sea, h.boat != 0 || h.queued
+	s, had, aboard, boat := h.sea, h.boat != 0 || h.queued, h.aboard, h.boat
 	h.away = true
 	h.mu.Unlock()
 	if s == nil || !had {
@@ -630,7 +705,46 @@ func (h *helm) disconnect() bool {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
+	if aboard {
+		// Aboard another's boat, it goes ashore first, its own boat put in
+		// the water at the nearest port, whose grace then begins.
+		h.ashore(ctx, s, boat)
+	}
 	return send(ctx, s, bus.Command{Op: bus.Disconnect, Account: bus.Account(h.account), Conn: h.conn}) == nil
+}
+
+// ashore takes the machine sailor ashore from boat, which it is aboard:
+// its own boat is put in the water at the nearest port, or it waits for
+// one in the queue. It reports how that went once the simulation has
+// answered.
+func (h *helm) ashore(ctx context.Context, s *Sea, boat uint64) (bus.Reply, error) {
+	reply := make(chan bus.Reply, 1)
+	if err := send(ctx, s, bus.Command{Op: bus.Ashore, Account: bus.Account(h.account), Boat: boat, Why: bus.AshoreChose, Reply: reply}); err != nil {
+		return bus.Reply{}, err
+	}
+	t := time.NewTimer(joinWait)
+	defer t.Stop()
+	var r bus.Reply
+	select {
+	case r = <-reply:
+	case <-t.C:
+		return bus.Reply{}, errBusy
+	case <-ctx.Done():
+		return bus.Reply{}, ctx.Err()
+	}
+	h.mu.Lock()
+	h.aboard = false
+	switch r.Result {
+	case bus.Joined:
+		h.slot, h.gen, h.boat, h.queued = r.Slot, r.Gen, r.Boat, false
+		h.ordered = false
+	case bus.Queued:
+		h.boat, h.queued, h.position = 0, true, r.Position
+	default:
+		h.boat = 0
+	}
+	h.mu.Unlock()
+	return r, nil
 }
 
 // leave takes the helm's boat out of the water, as its agent asks.

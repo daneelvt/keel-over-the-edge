@@ -39,6 +39,7 @@ type Card struct {
 	RecoveryMade int64          `json:"recoveryMade"`
 	Sessions     *SessionsCard  `json:"sessions,omitempty"`
 	Fleet        map[string]int `json:"fleet,omitempty"`
+	Boats        []BoatCard     `json:"boats,omitempty"`
 	Cap          int            `json:"cap"`
 	Machines     []Card         `json:"machines,omitempty"`
 
@@ -48,6 +49,20 @@ type Card struct {
 	Token *oauth.TokenItem `json:"token,omitempty"`
 
 	Actions []ActionCard `json:"actions,omitempty"`
+}
+
+// BoatCard is one of a human account's boats: its kind's name, its sail
+// number and name, its paint and cloth by their names, and the sailor whose
+// boat it is, if any, whether a machine sailor, and whether in the water.
+type BoatCard struct {
+	Kind    string `json:"kind"`
+	Number  int    `json:"number"`
+	Name    string `json:"name,omitempty"`
+	Paint   string `json:"paint"`
+	Cloth   string `json:"cloth"`
+	Sailor  string `json:"sailor,omitempty"`
+	Machine bool   `json:"machine,omitempty"`
+	AtSea   bool   `json:"atSea,omitempty"`
 }
 
 // Stopped is when an account was stopped and why; ByOwner, for a machine
@@ -202,6 +217,22 @@ func (a *Accounts) humanCard(ctx context.Context, c *store.Card) (Card, error) {
 	out.Sessions = &SessionsCard{Count: c.Sessions, Latest: ms(c.SessionSeen)}
 	if out.Fleet, err = a.cfg.Store.Fleet(ctx, c.ID); err != nil {
 		return Card{}, err
+	}
+	if f := a.cfg.Fleet; f != nil {
+		v, err := f.Of(ctx, c.ID)
+		if err != nil {
+			return Card{}, err
+		}
+		bl := f.Looks()
+		for i := range v.Boats {
+			b := &v.Boats[i]
+			bc := BoatCard{Kind: bl.KindName(b.Kind), Number: b.Number, Name: b.Name, Paint: bl.PaintName(b.Paint), Cloth: bl.ClothName(b.Cloth),
+				AtSea: b.AtSea}
+			if b.Held {
+				bc.Sailor, bc.Machine = b.SailorName, b.Machine
+			}
+			out.Boats = append(out.Boats, bc)
+		}
 	}
 	out.Cap = c.Cap
 	items, err := a.listMachines(ctx, c.ID)

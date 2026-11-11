@@ -32,6 +32,7 @@ import { Floater } from '../game/float';
 import { WatchDriver } from '../game/watch';
 import { type PilotControl, PilotInput } from '../input/pilot';
 import { quantiseHelm, quantiseSheet } from '../input/quantise';
+import { reefLevel } from '../input/reef';
 import { RECORDS } from '../predict/layout.gen';
 import type { Harbour } from '../predict/physics';
 import {
@@ -42,8 +43,10 @@ import {
   sheetIndex,
   sheetOf,
 } from '../predict/predictor';
+import { ChatLog } from '../ui/chatlog';
 import type { WorldEnd } from '../ui/countdown';
 import { queueLines } from '../ui/queue';
+import { ShipmateThreads } from '../ui/shipmatelog';
 import { BOAT_IN_THE_WATER, endedText, type WatchEndWhy } from '../ui/watchwords';
 import {
   Ahead,
@@ -56,23 +59,33 @@ import {
   worldUs,
 } from './clock';
 import type {
+  AboardTold,
+  AshoreWhyTold,
   BumpTold,
   CapSeen,
   ChartEntry,
+  ChatStateTold,
   ChunksHanded,
+  CrewTold,
   ForecastTold,
   FromWorker,
+  HandedTold,
   HelloVersions,
+  KnockCardTold,
+  KnockingTold,
   LampState,
+  LifeSeen,
   LightSeen,
   PastTold,
   PlaceSeen,
+  ReportReasonTold,
   Status,
   ToWorker,
   Traffic,
   WatchingTold,
   WeatherKeyframe,
   WeatherSpells,
+  WhoTold,
 } from './messages';
 import { NO_MARGIN, newSnapshot, type OwnSnapshot, readSnapshot } from './snapshot';
 import { FLEET_META, fleetOf } from './view';
@@ -88,6 +101,8 @@ export interface Helmsman {
   readonly helm: { target: number };
   readonly sheet: { target: number };
   readonly pilot: PilotInput;
+  /** The reef the player asks for, 0 … 2 (ReefInput); none is full sail. */
+  readonly reef?: { level: number };
   /** Called before each step (the browser tests script controls). */
   beforeStep: (() => void) | null;
   readonly clock: { steps: number; alpha: number };
@@ -141,6 +156,14 @@ export class Online {
   readonly watching = signal<WatchingTold | null>(null);
   /** The look code of the boat in view's sailor, the own or the one watched, as last told; null before a Welcome. */
   readonly look = signal<number | null>(null);
+  /**
+   * The boat in view's own look, the own or the one watched: its boat look
+   * code (paint, cloth and sail number) and its name, "" for none; null
+   * before a Welcome.
+   */
+  readonly boatLook = signal<{ look: number; name: string } | null>(null);
+  /** The kind of the boat in view, the own or the one watched, as the last Welcome told it: an index into the catalog's boats. */
+  readonly kind = signal(0);
   /** The world's harbour, Port Royal's, as the last Welcome named it; null for none. */
   harbour: Harbour | null = null;
   /** The last watch ended or refused, until the next Welcome. */
@@ -149,6 +172,28 @@ export class Online {
   readonly watchPlace = signal<Place | null>(null);
   /** How many watch the own boat. */
   readonly watchers = signal(0);
+  /** Whose boat the connection is aboard, as its crew, from its Welcome; null while it sails its own, watches or is idle. */
+  readonly aboard = signal<AboardTold | null>(null);
+  /** Who is aboard the boat sailed, aboard or watched, as last told; null for nobody but its skipper. */
+  readonly crew = signal<CrewTold | null>(null);
+  /** The knocks waiting on the own boat for the skipper's answer, oldest first. */
+  readonly knocks = signal<KnockCardTold[]>([]);
+  /** How the connection's own knock stands, as last told; null for none. */
+  readonly knocking = signal<KnockingTold | null>(null);
+  /** The controls offered to the connection, while the offer stands; null for none. */
+  readonly handed = signal<HandedTold | null>(null);
+  /** The connection holds the controls of the boat it sails or is aboard, as the latest snapshot says. */
+  readonly holding = signal(true);
+  /** The lines said aboard the boat in view, for this voyage, and the mutes and blocks that hide some. */
+  readonly chat = new ChatLog();
+  /** How chat stands for the connection, as last told; null before it is. */
+  readonly chatState = signal<ChatStateTold | null>(null);
+  /** The messages between the player and their shipmates, in the page's memory for its life. */
+  readonly threads = new ShipmateThreads();
+  /** How many times the server has said the account's shipmates changed: each, the list is read again. */
+  readonly shipmatesChanged = signal(0);
+  /** Why the connection last left a boat it was aboard, until its own boat's Welcome. */
+  #ashore: AshoreWhyTold | null = null;
   /** What the server last told of the AI of the own machine sailor watched, and of which watch. */
   readonly #lamp = signal<{ state: LampState; of: WatchingTold } | null>(null);
   /**
@@ -175,6 +220,8 @@ export class Online {
   boat = 0;
   /** The world's epoch, in microseconds of UTC since 1970, as the latest Welcome told it. */
   epochUs = 0;
+  /** Called with the boat in view's kind at each Welcome: an index into the catalog's boats. */
+  onKind: ((kind: number) => void) | null = null;
   /** Called with the world's epoch at each Welcome: the sky is counted from it. */
   onEpoch: ((epochUs: number) => void) | null = null;
   /** Told of each bump the server tells of: the game knocks, shakes and says the verdict. */
@@ -201,6 +248,8 @@ export class Online {
   onWeather: ((spells: WeatherSpells | null, keyframes: WeatherKeyframe[]) => void) | null = null;
   /** Told of lights come into range, and lights to drop; and at each Welcome, of the main port's light, with all others dropped. */
   onLights: ((lights: LightSeen[], drop: number[] | 'all') => void) | null = null;
+  /** Told of the sea's life come within reach or changed, and encounters to drop; at a new connection's Welcome, of every one dropped. */
+  onLife: ((life: LifeSeen[], drop: string[] | 'all') => void) | null = null;
   /** Islands' caps come into sight, and those to drop: all of them for a new connection. */
   onCaps: ((caps: CapSeen[], drop: number[] | 'all') => void) | null = null;
   /** The latest margin a snapshot carried, and the lowest of the last few seconds. */
@@ -234,6 +283,8 @@ export class Online {
   #sent = [-1, -1];
   /** The autopilot's control last sent, as the first snapshot after a Welcome sets it. */
   readonly #sentPilot = new PilotInput();
+  /** The reef last sent, as the first snapshot after a Welcome sets it. */
+  #sentReef = 0;
   #fresh = false;
   #hadBoat = false;
   /** A new boat's Welcome named its world's harbour: its first snapshot may open on the mouth. */
@@ -294,6 +345,97 @@ export class Online {
   /** Watches a sailor's boat: a boat sailed leaves the water at once. */
   watch(sailor: string): void {
     this.#port.postMessage({ type: 'watch', sailor });
+  }
+
+  /** Asks to come aboard by a link's token, or sends the player's machine sailor named machine: knocking tells how it stands. */
+  knock(token: string, machine = ''): void {
+    this.#port.postMessage({ type: 'knock', token, machine });
+  }
+
+  /** Asks to come aboard the boat a shipmate (their account ID) skippers, without a link. */
+  knockShipmate(shipmate: string): void {
+    this.#port.postMessage({ type: 'knock', token: '', machine: '', shipmate });
+  }
+
+  /** The skipper's answer to a knock: let them aboard, or not now. */
+  answer(knock: number, let_: boolean): void {
+    this.#port.postMessage({ type: 'answer', knock, let: let_ });
+    this.knocks.value = this.knocks.value.filter((k) => k.id !== knock);
+  }
+
+  /** Offers the controls to the person in seat. */
+  hand(seat: number): void {
+    this.#port.postMessage({ type: 'hand', to: seat });
+  }
+
+  /** Takes the controls offered; the skipper's, takes them back at once. */
+  take(): void {
+    this.#port.postMessage({ type: 'take' });
+    this.handed.value = null;
+  }
+
+  /** Gives the controls back to the skipper. */
+  giveBack(): void {
+    this.#port.postMessage({ type: 'giveBack' });
+  }
+
+  /** Goes ashore from the boat the connection is aboard. */
+  goAshore(): void {
+    this.#port.postMessage({ type: 'ashore', who: 0 });
+  }
+
+  /** The skipper's: puts the person in seat ashore. */
+  putAshore(seat: number): void {
+    this.#port.postMessage({ type: 'ashore', who: seat });
+  }
+
+  /** The skipper's: closes the boat to knocks for this voyage, or opens it. */
+  closeKnocks(closed: boolean): void {
+    this.#port.postMessage({ type: 'closeKnocks', closed });
+  }
+
+  /** Comes aboard the own machine sailor watched, without knocking: knocking tells how it stands. */
+  comeAboard(): void {
+    this.#port.postMessage({ type: 'comeAboard' });
+  }
+
+  /** Says a line aboard as self: shown at once, its echo awaited; false for nothing to send. */
+  sayAboard(text: string, self: string): boolean {
+    const s = this.chat.say(text, self, Date.now());
+    if (s === null) {
+      return false;
+    }
+    this.#port.postMessage({ type: 'say', text: s.text, id: s.id });
+    return true;
+  }
+
+  /** Writes to a shipmate (their account ID) as self: shown at once, its echo awaited; false for nothing to send. */
+  sayTo(to: string, text: string, self: string): boolean {
+    const s = this.threads.say(to, text, self, Date.now());
+    if (s === null) {
+      return false;
+    }
+    this.#port.postMessage({ type: 'say', text: s.text, id: s.id, to });
+    return true;
+  }
+
+  /** Mutes someone aboard, by name for the strip, or no longer: their lines hidden at once. */
+  mute(who: WhoTold, name: string, on: boolean): void {
+    this.chat.tie(name, 'mute', on);
+    this.#port.postMessage({ type: 'mute', who, on });
+  }
+
+  /** Blocks someone aboard, or no longer: their lines hidden at once. */
+  block(who: WhoTold, name: string, on: boolean): void {
+    if (on) {
+      this.chat.tie(name, 'block', true);
+    }
+    this.#port.postMessage({ type: 'block', who, on });
+  }
+
+  /** Reports someone aboard, with a note for the game's owner. */
+  report(who: WhoTold, reason: ReportReasonTold, note: string): void {
+    this.#port.postMessage({ type: 'report', who, reason, note });
   }
 
   /** A boat: a new one at the start, or a place in the queue, while a watch goes on. */
@@ -386,8 +528,60 @@ export class Online {
       case 'watchers':
         this.watchers.value = m.count;
         break;
+      case 'knockCard': {
+        const rest = this.knocks.value.filter((k) => k.id !== m.card.id);
+        this.knocks.value = m.card.gone ? rest : [...rest, m.card];
+        break;
+      }
+      case 'knocking':
+        this.knocking.value = m.knocking;
+        break;
+      case 'crew':
+        this.crew.value = m.crew.people.length > 1 ? m.crew : null;
+        this.chat.crew(m.crew.people);
+        if (this.watching.value !== null && m.crew.people.some((p) => !p.machine)) {
+          // A person aboard the boat watched: its chat is theirs alone,
+          // and the strip begins again empty once they go ashore.
+          this.chat.clear();
+        }
+        break;
+      case 'chat':
+        if (this.threads.answers(m.chat)) {
+          this.threads.receive(m.chat, Date.now());
+        } else {
+          this.chat.receive(m.chat, Date.now());
+        }
+        break;
+      case 'shipmates':
+        this.shipmatesChanged.value++;
+        break;
+      case 'chatState':
+        this.chatState.value = m.state;
+        break;
+      case 'tied':
+        this.chat.tied(m.tied, Date.now());
+        break;
+      case 'reported':
+        this.chat.reported(m.ok, Date.now());
+        break;
+      case 'handed':
+        this.handed.value = m.handed.gone ? null : m.handed;
+        break;
+      case 'ashore':
+        this.#ashore = m.why;
+        this.handed.value = null;
+        break;
       case 'look':
         this.look.value = m.look;
+        break;
+      case 'boatLook':
+        this.boatLook.value = { look: m.look, name: m.name };
+        break;
+      case 'boatNames':
+        this.fleet.names(m.names);
+        break;
+      case 'crews':
+        this.fleet.crews(m.crews);
         break;
       case 'lamp': {
         const w = this.watching.value;
@@ -422,6 +616,9 @@ export class Online {
       case 'lights':
         this.onLights?.(m.lights, m.drop);
         break;
+      case 'life':
+        this.onLife?.(m.life, m.drop);
+        break;
       case 'caps':
         this.onCaps?.(m.caps, m.drop);
         break;
@@ -434,12 +631,17 @@ export class Online {
       case 'welcome':
         // A new boat in the water at the start, not one back from the edge.
         this.#opening =
-          m.watching === null && !m.rejoined && (this.#away || !this.#hadBoat) ? m.harbour : null;
-        if (m.watching !== null) {
+          m.watching === null && m.aboard === null && !m.rejoined && (this.#away || !this.#hadBoat)
+            ? m.harbour
+            : null;
+        if (m.watching !== null || m.aboard !== null) {
           if (this.#bell) {
             this.notice.value = null;
           }
           this.#away = true;
+        } else if (this.#ashore !== null) {
+          // Ashore from a boat aboard: the own boat at the nearest port.
+          this.say(ashoreText(this.#ashore));
         } else if (this.#away) {
           // From watching, or idle: the own boat in the water at the start.
           this.say(BOAT_IN_THE_WATER);
@@ -450,13 +652,30 @@ export class Online {
           this.notice.value = null;
         }
         this.#bell = false;
-        if (m.watching === null) {
+        this.#ashore = null;
+        if (m.watching === null && m.aboard === null) {
           this.#hadBoat = true;
           this.#away = false;
           this.place.value = null;
         }
+        if (m.boat !== this.boat) {
+          // Another boat, another voyage: its chat is not this one's.
+          this.chat.clear();
+        }
         this.boat = m.boat;
+        this.#watcher.kind = m.kind;
+        this.onKind?.(m.kind);
         this.look.value = m.look;
+        this.boatLook.value = { look: m.boatLook, name: m.boatName };
+        this.kind.value = m.kind;
+        if (m.watching === null) {
+          this.#predictor.kind = m.kind;
+        }
+        this.aboard.value = m.aboard;
+        this.crew.value = null;
+        this.knocks.value = [];
+        this.handed.value = null;
+        this.holding.value = m.watching === null && m.aboard === null;
         this.epochUs = m.epochUs;
         this.onEpoch?.(m.epochUs);
         this.onWorld?.(m.world, m.land);
@@ -473,6 +692,7 @@ export class Online {
           // A new connection is sent the lights in range again; a later
           // Welcome on it, nothing it holds.
           this.onLights?.(m.light === null ? [] : [m.light], 'all');
+          this.onLife?.([], 'all');
           this.onCaps?.([], 'all');
         }
         this.tools.value = m.tools;
@@ -483,8 +703,9 @@ export class Online {
         this.#lamp.value = null;
         this.ended.value = null;
         this.watchPlace.value = null;
-        if (m.watching !== null) {
-          // Another boat's headers: none of the last one's, and no prediction.
+        if (m.watching !== null || m.aboard !== null) {
+          // Another boat's headers: none of the last one's, and no
+          // prediction until the connection holds the controls.
           this.watchers.value = 0;
           this.#watcher.reset();
           if (!this.watched) {
@@ -575,9 +796,13 @@ export class Online {
       this.#sent[0] = sn.helm;
       this.#sent[1] = sn.sheet;
       this.#sentPilot.set(sn);
+      this.#sentReef = sn.reef;
       this.#helmsman.helm.target = helmOf(sn.helm);
       this.#helmsman.sheet.target = sheetOf(sn.sheet);
       this.#helmsman.pilot.set(sn);
+      if (this.#helmsman.reef !== undefined) {
+        this.#helmsman.reef.level = sn.reef;
+      }
       const h = this.#opening;
       this.#opening = null;
       const east = sn.state[RECORDS.state.x] ?? 0;
@@ -595,6 +820,7 @@ export class Online {
     this.#latest.way = sn.way;
     this.#latest.order = sn.order;
     this.#latest.target = sn.target;
+    this.#latest.reef = sn.reef;
     this.#latest.margin = sn.margin;
     this.#latest.state.set(sn.state);
     this.#haveLatest = true;
@@ -611,6 +837,29 @@ export class Online {
     return o;
   }
 
+  /**
+   * The controls change hands: from this snapshot the boat sailed or
+   * aboard is predicted while the connection holds its controls, its
+   * controls starting from those in force, and drawn from the snapshots
+   * while someone else aboard holds them. A watch never holds them.
+   */
+  #holds(holding: boolean): void {
+    if (this.watching.value !== null || holding === this.holding.value) {
+      return;
+    }
+    this.holding.value = holding;
+    if (holding) {
+      this.#predictor.started = false;
+      this.#fresh = true;
+      this.#use(this.#predictor);
+    } else if (!this.watched) {
+      this.#watcher.reset();
+      this.#watcher.holdFrom(this.#predictor);
+      this.#predictor.started = false;
+      this.#use(this.#watcher);
+    }
+  }
+
   /** Reads a snapshot's record: its own boat reconciled, its other boats to the fleet; then hands it back. */
   #take(data: ArrayBuffer, now: number): void {
     if (readSnapshot(new DataView(data), this.#scratch) === null) {
@@ -618,6 +867,7 @@ export class Online {
       // The other boats' samples first: the steps the reconciliation
       // replays sail in their shadow, and the watched boat's step.
       this.#predictor.wakes.observe(f);
+      this.#holds(this.#scratch.holding);
       if (this.watched) {
         this.#watcher.receive(this.#scratch);
         this.#ready();
@@ -739,18 +989,25 @@ export class Online {
     const h = this.#helmsman;
     for (let n = Math.min(MAX_STEPS, target - p.tick); n > 0; n--) {
       if (p.tick + 1 < reach) {
-        p.stepIndices(this.#sent[0] ?? 512, this.#sent[1] ?? 512, this.#sentPilot);
+        p.stepIndices(this.#sent[0] ?? 512, this.#sent[1] ?? 512, this.#sentPilot, this.#sentReef);
         continue;
       }
       h.beforeStep?.();
       const helm = helmIndex(quantiseHelm(h.helm.target));
       const sheet = sheetIndex(quantiseSheet(h.sheet.target));
       const pilot = h.pilot;
-      p.stepIndices(helm, sheet, pilot);
-      if (helm !== this.#sent[0] || sheet !== this.#sent[1] || !samePilot(pilot, this.#sentPilot)) {
+      const reef = reefLevel(h.reef?.level ?? 0);
+      p.stepIndices(helm, sheet, pilot, reef);
+      if (
+        helm !== this.#sent[0] ||
+        sheet !== this.#sent[1] ||
+        !samePilot(pilot, this.#sentPilot) ||
+        reef !== this.#sentReef
+      ) {
         this.#sent[0] = helm;
         this.#sent[1] = sheet;
         this.#sentPilot.set(pilot);
+        this.#sentReef = reef;
         this.#port.postMessage({
           type: 'input',
           seq: p.tick,
@@ -760,6 +1017,7 @@ export class Online {
           target: pilot.target,
           order: pilot.order,
           way: pilot.way,
+          reef,
         });
       }
     }
@@ -779,6 +1037,18 @@ export class Online {
     const n = Math.min(this.#frameN, this.#frames.length);
     const v = Array.from(this.#frames.subarray(0, n)).sort((a, b) => a - b);
     this.#port.postMessage({ type: 'frame', ms: v[Math.ceil(0.95 * n) - 1] ?? 0 });
+  }
+}
+
+/** The line as the connection's own boat comes into the water after going ashore. */
+export function ashoreText(why: AshoreWhyTold): string {
+  switch (why) {
+    case 'put':
+      return 'The skipper put you ashore. Your boat is in the water at the nearest port.';
+    case 'left':
+      return "The skipper's boat has left the water. Yours is in the water at the nearest port.";
+    default:
+      return 'You are ashore. Your boat is in the water at the nearest port.';
   }
 }
 

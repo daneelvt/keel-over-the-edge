@@ -15,6 +15,55 @@ import { FLEET_RECORD_BYTES, writeRecord } from '../../net/view';
 import { afterClose } from './policy';
 import { harbourOf, lightSeen, Session } from './session';
 
+/** The command for something the page asks of the boat's deck. */
+type DeckAsk = Extract<
+  ToWorker,
+  {
+    type:
+      | 'knock'
+      | 'answer'
+      | 'hand'
+      | 'take'
+      | 'giveBack'
+      | 'ashore'
+      | 'closeKnocks'
+      | 'comeAboard'
+      | 'say'
+      | 'mute'
+      | 'block'
+      | 'report';
+  }
+>;
+
+function deckCommand(s: Session, now: number, m: DeckAsk): Uint8Array<ArrayBuffer> {
+  switch (m.type) {
+    case 'knock':
+      return s.knockCommand(now, m.token, m.machine, m.shipmate ?? '');
+    case 'answer':
+      return s.answerCommand(now, m.knock, m.let);
+    case 'hand':
+      return s.handCommand(now, m.to);
+    case 'take':
+      return s.takeCommand(now);
+    case 'giveBack':
+      return s.giveBackCommand(now);
+    case 'ashore':
+      return s.ashoreCommand(now, m.who);
+    case 'closeKnocks':
+      return s.closeKnocksCommand(now, m.closed);
+    case 'comeAboard':
+      return s.comeAboardCommand(now);
+    case 'say':
+      return s.sayCommand(now, m.text, m.id, m.to ?? '');
+    case 'mute':
+      return s.muteCommand(now, m.who, m.on);
+    case 'block':
+      return s.blockCommand(now, m.who, m.on);
+    case 'report':
+      return s.reportCommand(now, m.who, m.reason, m.note);
+  }
+}
+
 /** The part of a WebSocket the worker uses. */
 export interface Socket {
   binaryType: BinaryType;
@@ -95,12 +144,14 @@ export class NetWorker {
         if (this.#session?.welcomed && this.#sailing) {
           this.#traffic.controls++;
           this.#send(
-            this.#session.input(this.#d.now(), m.seq, m.helm, m.sheet, {
-              mode: m.pilot,
-              target: m.target,
-              order: m.order,
-              way: m.way,
-            }),
+            this.#session.input(
+              this.#d.now(),
+              m.seq,
+              m.helm,
+              m.sheet,
+              { mode: m.pilot, target: m.target, order: m.order, way: m.way },
+              m.reef,
+            ),
           );
           this.#arm();
         }
@@ -135,6 +186,23 @@ export class NetWorker {
         if (this.#watching) {
           this.#watching = false;
           this.#setStatus(this.#boatQueued ? 'queued' : 'idle');
+        }
+        break;
+      case 'knock':
+      case 'answer':
+      case 'hand':
+      case 'take':
+      case 'giveBack':
+      case 'ashore':
+      case 'closeKnocks':
+      case 'comeAboard':
+      case 'say':
+      case 'mute':
+      case 'block':
+      case 'report':
+        if (this.#session !== null) {
+          this.#send(deckCommand(this.#session, this.#d.now(), m));
+          this.#arm();
         }
         break;
       case 'frame':
@@ -239,7 +307,9 @@ export class NetWorker {
           this.#attempt = 0;
           const w = r.welcome;
           const watching = w.watching ?? null;
+          const aboard = w.aboard ?? null;
           this.#watching = watching !== null;
+          // Aboard, the page sends controls only while it holds them.
           this.#sailing = !this.#watching;
           if (this.#sailing) {
             this.#boatQueued = false;
@@ -269,7 +339,13 @@ export class NetWorker {
                     mine: watching.mine,
                     look: watching.look,
                   },
+            aboard:
+              aboard === null
+                ? null
+                : { skipper: aboard.skipper, look: aboard.look, seat: aboard.seat },
             look: w.look,
+            boatLook: w.boatLook,
+            boatName: w.boatName,
             first,
           });
           this.#d.post({ type: 'clock', clock: { ...s.clock.state } });
@@ -331,8 +407,47 @@ export class NetWorker {
         case 'watchers':
           this.#d.post({ type: 'watchers', count: r.count });
           break;
+        case 'knockCard':
+          this.#d.post({ type: 'knockCard', card: r.card });
+          break;
+        case 'knocking':
+          this.#d.post({ type: 'knocking', knocking: r.knocking });
+          break;
+        case 'crew':
+          this.#d.post({ type: 'crew', crew: r.crew });
+          break;
+        case 'handed':
+          this.#d.post({ type: 'handed', handed: r.handed });
+          break;
+        case 'ashore':
+          this.#d.post({ type: 'ashore', why: r.why });
+          break;
+        case 'chat':
+          this.#d.post({ type: 'chat', chat: r.chat });
+          break;
+        case 'chatState':
+          this.#d.post({ type: 'chatState', state: r.state });
+          break;
+        case 'tied':
+          this.#d.post({ type: 'tied', tied: r.tied });
+          break;
+        case 'reported':
+          this.#d.post({ type: 'reported', ok: r.ok });
+          break;
+        case 'shipmates':
+          this.#d.post({ type: 'shipmates' });
+          break;
         case 'look':
           this.#d.post({ type: 'look', look: r.look });
+          break;
+        case 'boatLook':
+          this.#d.post({ type: 'boatLook', look: r.look, name: r.name });
+          break;
+        case 'boatNames':
+          this.#d.post({ type: 'boatNames', names: r.names });
+          break;
+        case 'crews':
+          this.#d.post({ type: 'crews', crews: r.crews });
           break;
         case 'lamp':
           this.#d.post({ type: 'lamp', state: r.state });
@@ -372,6 +487,9 @@ export class NetWorker {
           break;
         case 'lights':
           this.#d.post({ type: 'lights', lights: r.lights, drop: r.drop });
+          break;
+        case 'life':
+          this.#d.post({ type: 'life', life: r.life, drop: r.drop });
           break;
         case 'chart':
           this.#d.post({ type: 'chart', entries: r.entries, whole: r.whole });

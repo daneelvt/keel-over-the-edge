@@ -25,6 +25,7 @@ import (
 //	generations             uvarint n, then n × (slot, generation) uvarints, slots ascending, none zero
 //	boats                   uvarint n, then n × the boat below, slots ascending
 //	queue                   uvarint n, then n × the connection waiting below, the head first
+//	crew                    uvarint n, then n × the person aboard below, by their boat's slot, then seat
 //	pairs                   uvarint n, then n × the pair below, by their slots, ascending
 //
 // A developer's weather is the tick it takes effect from as a varint, then
@@ -38,7 +39,8 @@ import (
 // Each boat is its slot and ID as uvarints, its owner's 16 bytes, its
 // connection as a uvarint, the tick its grace ends as a varint, its kind as a
 // uvarint, its account's kind as a uvarint of flags (1: a machine sailor's,
-// 2: a priority account's), its sailor's look code as a uvarint, its control word and its pilot word in 8 bytes each, its state's
+// 2: a priority account's), its sailor's look code as a uvarint, its own
+// look code as a uvarint and its name as a uvarint length and its bytes, its control word, its pilot word and its rig word in 8 bytes each, its state's
 // fields in 8 bytes each, then its course's, the same, then its voyage at
 // the edge: the tick it went over the lip as a varint (0 afloat), a uvarint
 // of flags (1: an approach under way, 2: one survived), and for each flag
@@ -46,11 +48,18 @@ import (
 // connection waiting is its account's 16
 // bytes, the connection as a uvarint, the tick it was queued at and the tick
 // its place is given up at (0 while connected) as varints, and its account's
-// kind, the boat's flags, and its look code. Each pair is its
+// kind, the boat's flags, its look code, and the kind of boat it is to
+// have as a uvarint, with that boat's look code and name as a boat's. Each pair is its
 // two slots and two boats, its keep-clear boat, Article and whose action as
 // uvarints, and the tick its keep-clear boat changed and the tick it last
 // touched as varints. The boats' winds and wakes follow from their states,
-// and the bumps are events: neither is stored.
+// and the bumps are events: neither is stored. Each person aboard is their
+// boat's slot and ID and their seat as uvarints, their account's 16 bytes,
+// their connection as a uvarint, the tick they came aboard and the tick
+// their grace ends as varints, a uvarint of flags (1: a machine sailor's, 2:
+// a priority account's, 4: they hold the boat's controls), their look code
+// as a uvarint, their name as a uvarint length and its bytes, and their own
+// boat's kind as a uvarint with its look and name as a boat's.
 //
 // Then, only if a boat has any, the owner's tools' marks: a uvarint n, then
 // n × the slot and a uvarint of flags (1: it stays, 2: it is unseen, 4: its
@@ -60,7 +69,7 @@ import (
 // A checkpoint stores this snapshot without the owner's tools' marks
 // (AppendCheckpoint), so a world is restored only by a build that reads its
 // version, and a restart clears them.
-const SnapshotVersion = 14
+const SnapshotVersion = 18
 
 // The owner's tools' marks of a boat, in a snapshot.
 const (
@@ -75,6 +84,8 @@ const (
 	kindMachine  = 1
 	kindPriority = 2
 	kindAll      = kindMachine | kindPriority
+	// crewHolds, in a person aboard's flags: they hold the boat's controls.
+	crewHolds = 4
 )
 
 func kindFlags(machine, priority bool) uint64 {
@@ -180,8 +191,10 @@ func AppendCheckpoint(dst []byte, f *bus.Frame) []byte {
 		dst = binary.AppendUvarint(dst, uint64(f.Kind[s]))
 		dst = binary.AppendUvarint(dst, kindFlags(f.Machine[s], f.Priority[s]))
 		dst = binary.AppendUvarint(dst, uint64(f.Look[s]))
+		dst = appendBoatLook(dst, f.BoatLook[s], f.BoatName[s])
 		dst = binary.LittleEndian.AppendUint64(dst, uint64(f.Control[s]))
 		dst = binary.LittleEndian.AppendUint64(dst, uint64(f.Pilot[s]))
+		dst = binary.LittleEndian.AppendUint64(dst, uint64(f.Rig[s]))
 		for _, v := range StateFields(&f.State[s]) {
 			dst = appendF64(dst, *v)
 		}
@@ -198,6 +211,27 @@ func AppendCheckpoint(dst []byte, f *bus.Frame) []byte {
 		dst = binary.AppendVarint(dst, q.Grace)
 		dst = binary.AppendUvarint(dst, kindFlags(q.Machine, q.Priority))
 		dst = binary.AppendUvarint(dst, uint64(q.Look))
+		dst = binary.AppendUvarint(dst, uint64(q.BoatKind))
+		dst = appendBoatLook(dst, q.BoatLook, q.BoatName)
+	}
+	dst = binary.AppendUvarint(dst, uint64(len(f.Crew)))
+	for _, a := range f.Crew {
+		dst = binary.AppendUvarint(dst, uint64(a.Slot))
+		dst = binary.AppendUvarint(dst, a.Boat)
+		dst = binary.AppendUvarint(dst, uint64(a.Seat))
+		dst = append(dst, a.Account[:]...)
+		dst = binary.AppendUvarint(dst, a.Conn)
+		dst = binary.AppendVarint(dst, a.Since)
+		dst = binary.AppendVarint(dst, a.Grace)
+		flags := kindFlags(a.Machine, a.Priority)
+		if f.Holder[a.Slot] == a.Account {
+			flags |= crewHolds
+		}
+		dst = binary.AppendUvarint(dst, flags)
+		dst = binary.AppendUvarint(dst, uint64(a.Look))
+		dst = appendString(dst, a.Name)
+		dst = binary.AppendUvarint(dst, uint64(a.BoatKind))
+		dst = appendBoatLook(dst, a.BoatLook, a.BoatName)
 	}
 	dst = binary.AppendUvarint(dst, uint64(len(f.Pairs)))
 	for _, p := range f.Pairs {
@@ -353,8 +387,10 @@ func ReadSnapshot(data []byte, f *bus.Frame) error {
 		var owner bus.Account
 		r.bytes(owner[:])
 		conn, grace, kind, flags, look := r.uvarint(), r.varint(), r.uvarint(), r.uvarint(), r.uvarint()
+		boatLook, boatName := r.boatLook()
 		word := bus.Word(r.u64())
 		pilot := bus.PilotWord(r.u64())
+		rig := bus.RigWord(r.u64())
 		if r.err != nil {
 			return r.err
 		}
@@ -364,10 +400,11 @@ func ReadSnapshot(data []byte, f *bus.Frame) error {
 		last = int64(s)
 		f.Live = append(f.Live, int32(s))
 		f.Occupied[s] = true
-		f.Boat[s], f.Owner[s], f.Kind[s], f.Control[s], f.Pilot[s] = boat, owner, uint16(kind), word, pilot
+		f.Boat[s], f.Owner[s], f.Kind[s], f.Control[s], f.Pilot[s], f.Rig[s] = boat, owner, uint16(kind), word, pilot, rig
 		f.Conn[s], f.Grace[s] = conn, grace
 		f.Machine[s], f.Priority[s] = flags&kindMachine != 0, flags&kindPriority != 0
 		f.Look[s] = uint32(look)
+		f.BoatLook[s], f.BoatName[s] = boatLook, boatName
 		for _, v := range StateFields(&f.State[s]) {
 			*v = r.f64()
 		}
@@ -384,12 +421,52 @@ func ReadSnapshot(data []byte, f *bus.Frame) error {
 		var q bus.Waiting
 		r.bytes(q.Account[:])
 		q.Conn, q.Since, q.Grace = r.uvarint(), r.varint(), r.varint()
-		flags, look := r.uvarint(), r.uvarint()
-		if r.err == nil && (q.Grace < 0 || q.Conn != 0 && q.Grace != 0 || flags&^kindAll != 0 || look > math.MaxUint32) {
+		flags, look, boatKind := r.uvarint(), r.uvarint(), r.uvarint()
+		q.BoatLook, q.BoatName = r.boatLook()
+		if r.err == nil && (q.Grace < 0 || q.Conn != 0 && q.Grace != 0 || flags&^kindAll != 0 || look > math.MaxUint32 || boatKind > math.MaxUint16) {
 			return fmt.Errorf("sim: snapshot: a place in the queue with connection %d, grace %d and kind %d", q.Conn, q.Grace, flags)
 		}
-		q.Machine, q.Priority, q.Look = flags&kindMachine != 0, flags&kindPriority != 0, uint32(look)
+		q.Machine, q.Priority, q.Look, q.BoatKind = flags&kindMachine != 0, flags&kindPriority != 0, uint32(look), uint16(boatKind)
 		f.Queue = append(f.Queue, q)
+	}
+	clear(f.Holder)
+	clear(f.Deck)
+	f.Crew = f.Crew[:0]
+	n = r.count(capacity * (bus.MaxCrew + 1))
+	for range n {
+		var a bus.Aboard
+		slot, boat, seat := r.uvarint(), r.uvarint(), r.uvarint()
+		r.bytes(a.Account[:])
+		a.Conn, a.Since, a.Grace = r.uvarint(), r.varint(), r.varint()
+		flags, look := r.uvarint(), r.uvarint()
+		a.Name = r.str()
+		boatKind := r.uvarint()
+		a.BoatLook, a.BoatName = r.boatLook()
+		if r.err != nil {
+			return r.err
+		}
+		ok := slot < capacity && f.Occupied[slot] && f.Boat[slot] == boat && seat >= 1 && seat <= bus.MaxCrew && a.Grace >= 0 &&
+			flags&^(kindAll|crewHolds) == 0 && look <= math.MaxUint32 && boatKind <= math.MaxUint16 && f.Owner[slot] != a.Account &&
+			len(a.Name) <= MaxBoatName
+		if k := len(f.Crew); ok && k > 0 {
+			last := f.Crew[k-1]
+			ok = uint64(last.Slot) < slot || uint64(last.Slot) == slot && uint64(last.Seat) < seat
+		}
+		if ok && f.Aboard(a.Account) >= 0 {
+			ok = false
+		}
+		if !ok {
+			return fmt.Errorf("sim: snapshot: someone aboard the boat in slot %d, seat %d", slot, seat)
+		}
+		a.Slot, a.Boat, a.Seat = int32(slot), boat, uint8(seat)
+		a.Machine, a.Priority, a.Look, a.BoatKind = flags&kindMachine != 0, flags&kindPriority != 0, uint32(look), uint16(boatKind)
+		if flags&crewHolds != 0 {
+			if f.Holder[slot] != (bus.Account{}) {
+				return fmt.Errorf("sim: snapshot: two hold the controls of the boat in slot %d", slot)
+			}
+			f.Holder[slot] = a.Account
+		}
+		f.Crew = append(f.Crew, a)
 	}
 	f.Pairs = f.Pairs[:0]
 	f.Bumps = f.Bumps[:0]
@@ -511,6 +588,49 @@ func (r *reader) bytes(b []byte) {
 	}
 	copy(b, r.b)
 	r.b = r.b[len(b):]
+}
+
+// MaxBoatName is the longest boat's name a snapshot holds, in bytes.
+const MaxBoatName = 80
+
+// appendBoatLook appends a boat's own look code and its name.
+func appendBoatLook(dst []byte, look uint32, name string) []byte {
+	dst = binary.AppendUvarint(dst, uint64(look))
+	dst = binary.AppendUvarint(dst, uint64(len(name)))
+	return append(dst, name...)
+}
+
+// appendString appends a string of at most MaxBoatName bytes, a uvarint
+// length and its bytes.
+func appendString(dst []byte, s string) []byte {
+	dst = binary.AppendUvarint(dst, uint64(len(s)))
+	return append(dst, s...)
+}
+
+// str reads a string written by appendString.
+func (r *reader) str() string {
+	n := r.count(MaxBoatName)
+	b := make([]byte, n)
+	r.bytes(b)
+	if r.err != nil {
+		return ""
+	}
+	return string(b)
+}
+
+// boatLook reads a boat's own look code and its name.
+func (r *reader) boatLook() (uint32, string) {
+	look := r.uvarint()
+	n := r.count(MaxBoatName)
+	if r.err == nil && look > math.MaxUint32 {
+		r.err = fmt.Errorf("sim: snapshot: a boat's look %d", look)
+	}
+	b := make([]byte, n)
+	r.bytes(b)
+	if r.err != nil {
+		return 0, ""
+	}
+	return uint32(look), string(b)
 }
 
 // count reads a count of at most limit.

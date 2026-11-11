@@ -38,8 +38,10 @@ import (
 	"github.com/coder/websocket"
 	"golang.org/x/time/rate"
 
+	"github.com/daneelvt/keel-over-the-edge/internal/aboard"
 	"github.com/daneelvt/keel-over-the-edge/internal/auth"
 	"github.com/daneelvt/keel-over-the-edge/internal/bus"
+	"github.com/daneelvt/keel-over-the-edge/internal/chat"
 	"github.com/daneelvt/keel-over-the-edge/internal/obs"
 	"github.com/daneelvt/keel-over-the-edge/internal/protocol/pb"
 	"github.com/daneelvt/keel-over-the-edge/internal/store"
@@ -155,6 +157,10 @@ type Config struct {
 	// LookCode, if not nil, is an account's sailor's look as the world
 	// holds it, a look code, which its boat is drawn in; else the first.
 	LookCode func(store.Account) uint32
+	// BoatOf, if not nil, is the boat of its account's fleet a sailor
+	// takes to sea, its kind, look and name, as it connects; else the
+	// first kind, with no look.
+	BoatOf func(context.Context, store.Account) Boat
 	// World is the world's ID, as Welcome names it, and Epoch the moment
 	// its time counts from, which Welcome carries too.
 	World string
@@ -226,6 +232,38 @@ type Config struct {
 	// wait of its is under way. An owner watching their own machine
 	// sailor is told from it whether the agent attends.
 	Agent func(bus.Account) (last time.Time, waiting bool)
+	// Life, if not nil, is how far each kind of the sea's life is sent:
+	// its encounters go to a connection whose eye comes within reach.
+	Life *LifeReach
+	// Link and Knocker, if not nil, find a link to come aboard by its
+	// token's hash (store.ErrNotFound for none), and a knocking sailor:
+	// without them every knock reads as an ended link. Switches are the
+	// owner's for links and boarding, nil for always on; Refuser, if not
+	// nil, says who keeps whom off their boat; Capacities are each kind's
+	// people aboard, its skipper included; CrewLimit how many may be aboard
+	// boats not their own at once, DefaultCrewLimit if zero.
+	Link       func(ctx context.Context, hash [32]byte) (LinkFound, error)
+	Knocker    func(ctx context.Context, account bus.Account) (Knocker, error)
+	Switches   *aboard.Switches
+	Refuser    aboard.Refuser
+	Capacities []int
+	CrewLimit  int
+	// Chat, if not nil, is chat aboard: the hub every line is said through,
+	// whose rule's ties are the mutes and blocks. Talker reads what chat
+	// needs of an account, and its name, as it connects; Tie keeps a mute
+	// or a block (store.ErrTooManyTies past the limit); Report keeps a
+	// report. CountryHeader is the request's header that names where a
+	// player is, "" for none.
+	Chat          *chat.Hub
+	Talker        func(ctx context.Context, a bus.Account) (aboard.Speaker, string, error)
+	Tie           func(ctx context.Context, account, other bus.Account, block, on bool) error
+	Report        func(ctx context.Context, r ReportIn) error
+	CountryHeader string
+	// Machines, if not nil, are the machine sailors' helms, which bring a
+	// machine sailor sent aboard by its owner aboard, and tell its agent of
+	// the controls offered it; without them no machine sailor is sent
+	// aboard.
+	Machines Machines
 }
 
 // Edge serves the game connection.
@@ -250,6 +288,8 @@ type Edge struct {
 	encs     []*encoder
 	spect    spectators
 	voyages  voyages
+	decks    decks
+	watchers boatWatchers
 
 	mu      sync.Mutex
 	closing bool
@@ -285,6 +325,10 @@ func New(cfg Config) *Edge {
 	e.registry.init()
 	e.spect.init(cfg.SpectatorLimit)
 	e.voyages.m = map[bus.Account]uint64{}
+	e.decks.init()
+	if cfg.Chat != nil {
+		cfg.Chat.AddOut(chatOut{e})
+	}
 	e.m.spectatorLimit.Set(float64(e.spect.limit))
 	e.SetEnds(cfg.Ends, cfg.Closing)
 	n := cfg.Encoders
@@ -317,6 +361,7 @@ func (e *Edge) Run(ctx context.Context) {
 		wg.Go(func() { enc.run(ctx) })
 	}
 	wg.Go(func() { e.tellSpectators(ctx) })
+	wg.Go(func() { e.countAboard(ctx) })
 	wg.Wait()
 }
 
@@ -391,8 +436,14 @@ func (e *Edge) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if e.cfg.LookCode != nil {
 		c.look = e.cfg.LookCode(acc)
 	}
+	if e.cfg.BoatOf != nil {
+		c.joinBoat = e.cfg.BoatOf(r.Context(), acc)
+	}
 	if cur, ok := auth.SessionFromContext(r.Context()); ok {
 		c.session = cur.Hash
+	}
+	if e.cfg.CountryHeader != "" {
+		c.chat.country = r.Header.Get(e.cfg.CountryHeader)
 	}
 	if !e.track(c) {
 		_ = ws.Close(websocket.StatusServiceRestart, "the server is restarting")
@@ -400,6 +451,31 @@ func (e *Edge) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	defer e.untrack(c)
 	c.run()
+}
+
+// Boat is a fleet's boat as a sailor takes it to sea: its kind, an index
+// into the world's kinds; its look, a boat look code (internal/looks); and
+// its name, player text, "" for none.
+type Boat struct {
+	Kind uint16
+	Look uint32
+	Name string
+}
+
+// toldName is a view slot's boat's name as a client was last told it, and
+// the boat it was told for.
+type toldName struct {
+	boat uint64
+	name string
+}
+
+// toldCrew is what a client was last told of the crew of a view slot's
+// boat: the boat, its deck's count of changes aboard, and its skipper's
+// look.
+type toldCrew struct {
+	boat uint64
+	deck uint32
+	look uint32
 }
 
 // stopped reports whether an account is stopped by the game's operator.

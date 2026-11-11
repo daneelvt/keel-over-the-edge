@@ -56,6 +56,35 @@ func step(s *State, c *Control, e *Env, sea *Sea, g *Ground, b *Prepared, o *Out
 		rate = b.easeRate
 	}
 	s.SheetLimit = approach(clamp(s.SheetLimit, b.boomIn, b.boomOut), limit, float64(rate*Dt))
+	letFly := false
+	if b.square {
+		letFly = b.brace(s, e, sheet)
+	}
+	if b.jib {
+		// The crew trims the headsails to the main: their sheet's limit
+		// over its own travel, in the same share; a ship's crew lets them
+		// fly in a tack.
+		limit = b.jibIn + float64(sheet*(b.jibOut-b.jibIn))
+		if letFly {
+			limit = b.jibOut
+		}
+		rate = b.jibHaulRate
+		if limit > s.JibLimit {
+			rate = b.jibEaseRate
+		}
+		s.JibLimit = approach(clamp(s.JibLimit, b.jibIn, b.jibOut), limit, float64(rate*Dt))
+	}
+	if s.SailorMode == Sailing {
+		// The crew takes a reef in or shakes one out a level at a time.
+		s.Reef = approach(s.Reef, control(c.Reef, 0, 2), float64(b.reefRate*Dt))
+	}
+	var sails rig
+	b.rigAt(s.Reef, &sails)
+	if b.kite {
+		b.hoist(s, c, e, sheet)
+		sails.kiteStrip = float64(b.kiteStrip * s.Hoist)
+		sails.induced = float64(b.kiteInduced * s.Hoist)
+	}
 
 	wind := e.WindSpeed
 	if !(wind > 0) {
@@ -68,7 +97,7 @@ func step(s *State, c *Control, e *Env, sea *Sea, g *Ground, b *Prepared, o *Out
 	var v wave
 	if sea != nil {
 		sinH, cosH := SinCos(s.Heading)
-		v.read(sea, s, sinH, cosH, b.halfLength, b.halfBeam, &b.foilDecay)
+		v.read(sea, s.X, s.Y, s.Surge, s.Sway, sinH, cosH, b.halfLength, b.halfBeam, &b.foilDecay)
 		v.capDepth(sea, g, s.X, s.Y)
 		v.twist = float64(v.twist * b.twistArm)
 	}
@@ -87,7 +116,7 @@ func step(s *State, c *Control, e *Env, sea *Sea, g *Ground, b *Prepared, o *Out
 	}
 	dt := Dt / float64(n)
 	for i := range n {
-		b.substep(s, wind, sinW, cosW, dt, &v, &bd, o, i == n-1)
+		b.substep(s, wind, sinW, cosW, dt, &sails, &v, &bd, o, i == n-1)
 		v.advance(dt)
 	}
 	s.Heading = wrapAngle(s.Heading)
@@ -101,7 +130,7 @@ func step(s *State, c *Control, e *Env, sea *Sea, g *Ground, b *Prepared, o *Out
 	b.ground(s, e, g, &bd, o, x, y)
 }
 
-func (b *Prepared) substep(s *State, wind, sinW, cosW, dt float64, v *wave, bd *bed, o *Out, last bool) {
+func (b *Prepared) substep(s *State, wind, sinW, cosW, dt float64, g *rig, v *wave, bd *bed, o *Out, last bool) {
 	sinH, cosH := SinCos(s.Heading)
 	m := motion{u: s.Surge, v: s.Sway, r: s.YawRate, p: s.RollRate, q: s.PitchRate}
 	m.sinHeel, m.cosHeel = SinCos(s.Heel)
@@ -130,14 +159,20 @@ func (b *Prepared) substep(s *State, wind, sinW, cosW, dt float64, v *wave, bd *
 
 	// The sailor flattens the sail by the apparent wind at its centre of
 	// effort, which flattening also twists.
-	ce := b.flow(&m, b.mastX, 0, b.effortZ, 0, 0, true)
+	ce := b.flow(&m, b.mastX, 0, g.effortZ, 0, 0, true)
 	sailWind := ce.speed()
 	flat := b.flattening(sailWind)
 	twist := b.twist(s.Boom, flat)
 
 	var l loads
 	var sail sailResult
-	b.sailLoads(s, &m, flat, twist, &l, &sail)
+	b.sailLoads(s, &m, flat, twist, g, &l, &sail)
+	// The downwind sail's loads while it is hoisted at all; in its bag its
+	// clew hangs by its weight alone.
+	var kite kiteResult
+	if b.kite && s.Hoist > 0 {
+		b.kiteLoads(s, &m, g, &l, &kite)
+	}
 
 	// Windage of hull, sailor and spars: ½ρ (A_front |cos β| + A_side |sin β|) V
 	// times the flow (Day 2017).
@@ -183,6 +218,32 @@ func (b *Prepared) substep(s *State, wind, sinW, cosW, dt float64, v *wave, bd *
 		s.Boom, s.BoomRate = float64(out*s.SheetLimit), 0
 		l.N -= float64(boomMoment * m.cosHeel)
 	}
+	// The headsails' clew, as the boom: its sheet holds it at its limit.
+	var jibMoment float64
+	jibHeld := true
+	if b.jib {
+		jibMoment = (sail.jibMoment + float64(float64(b.jibMoment*gravity)*float64(m.sinHeel*Cos(s.Jib)))) -
+			float64((b.jibDamping+sail.jibWetDamping)*s.JibRate)
+		out := sign(s.Jib)
+		jibHeld = math.Abs(s.Jib) >= s.JibLimit && float64(jibMoment*out) >= 0 && float64(s.JibRate*out) >= 0
+		if jibHeld {
+			s.Jib, s.JibRate = float64(out*s.JibLimit), 0
+			l.N -= float64(jibMoment * m.cosHeel)
+		}
+	}
+	// The downwind sail's clew, as the headsails'.
+	var kiteMoment float64
+	kiteHeld := true
+	if b.kite {
+		kiteMoment = (kite.moment + float64(float64(b.kiteMoment*gravity)*float64(m.sinHeel*Cos(s.Kite)))) -
+			float64((b.kiteDamping+kite.wetDamping)*s.KiteRate)
+		out := sign(s.Kite)
+		kiteHeld = math.Abs(s.Kite) >= s.KiteLimit && float64(kiteMoment*out) >= 0 && float64(s.KiteRate*out) >= 0
+		if kiteHeld {
+			s.Kite, s.KiteRate = float64(out*s.KiteLimit), 0
+			l.N -= float64(kiteMoment * m.cosHeel)
+		}
+	}
 
 	if v.current {
 		// In a current the added masses' share of the terms of turning is
@@ -202,6 +263,22 @@ func (b *Prepared) substep(s *State, wind, sinW, cosW, dt float64, v *wave, bd *
 		s.BoomRate += float64(float64(boomMoment*b.invBoomInertia) * dt)
 		s.Boom += float64(s.BoomRate * dt)
 		b.boomStop(s, m.cosHeel)
+	}
+	if !jibHeld {
+		s.JibRate += float64(float64(jibMoment*b.jibInvInertia) * dt)
+		s.Jib += float64(s.JibRate * dt)
+		if math.Abs(s.Jib) > s.JibLimit {
+			// The sheet stops the clew: the sail is light, and what it
+			// carries is lost in the cloth.
+			s.Jib, s.JibRate = float64(sign(s.Jib)*s.JibLimit), 0
+		}
+	}
+	if !kiteHeld {
+		s.KiteRate += float64(float64(kiteMoment*b.kiteInvInertia) * dt)
+		s.Kite += float64(s.KiteRate * dt)
+		if math.Abs(s.Kite) > s.KiteLimit {
+			s.Kite, s.KiteRate = float64(sign(s.Kite)*s.KiteLimit), 0
+		}
 	}
 	s.Heading += float64(s.YawRate * dt)
 	s.Heel += float64(s.RollRate * dt)
@@ -230,7 +307,214 @@ func (b *Prepared) substep(s *State, wind, sinW, cosW, dt float64, v *wave, bd *
 		tu, tv := s.Surge-m.waterX, s.Sway-m.waterY
 		o.SpeedThroughWater = math.Sqrt(float64(tu*tu) + float64(tv*tv))
 		o.Sail = b.sailState(s, o)
+		o.JibFootAttack, o.JibHeadAttack = sail.jibAttack[0], sail.jibAttack[1]
+		o.JibFootFlow, o.JibHeadFlow = sail.jibFlow[0], sail.jibFlow[1]
+		o.JibTwist = sail.jibTwist
+		o.ReefShare = g.share
+		o.ForeFootAttack, o.ForeHeadAttack = sail.foreAttack[0], sail.foreAttack[1]
+		o.ForeFootFlow, o.ForeHeadFlow = sail.foreFlow[0], sail.foreFlow[1]
+		o.AfterFootAttack, o.AfterHeadAttack = sail.afterAttack[0], sail.afterAttack[1]
+		o.AfterFootFlow, o.AfterHeadFlow = sail.afterFlow[0], sail.afterFlow[1]
+		if b.square {
+			o.Sail = b.squareState(s, o)
+		}
+		if b.kite {
+			o.Drive, o.SideForce = o.Drive+kite.drive, o.SideForce+kite.side
+			o.KiteFootAttack, o.KiteHeadAttack = kite.attack[0], kite.attack[1]
+			o.KiteFootFlow, o.KiteHeadFlow = kite.flow[0], kite.flow[1]
+			o.KiteTwist = kite.twist
+			if s.Hoist >= 0.5 {
+				o.Sail = b.kiteState(s, o)
+			}
+		}
 	}
+}
+
+// hoist is the crew's rule for the downwind sail, and its sheet. They set
+// it as the boat bears away with the true wind setAngle off her bow or
+// more, and take it in as she comes up with the wind forward of
+// dropAngle, as a crew sets a gennaker bearing away round the windward
+// mark and takes it in before rounding up at the leeward one. Between the
+// two angles they carry on with what they are doing, so a steady course
+// through the wind's shifts neither sets it nor takes it in. They keep it
+// in while the reef ordered keeps none of it, and take it in when the
+// sailor is out of the boat. The hoist follows at the crew's rate, up in
+// the hoist time and down in the drop time. Its sheet's limit is the
+// main's share over its own travel, as the headsails'.
+func (b *Prepared) hoist(s *State, c *Control, e *Env, sheet float64) {
+	off := math.Abs(wrapAngle(e.MeanFrom - s.Heading))
+	switch {
+	case s.SailorMode != Sailing || lookup(b.kiteReefs[:], control(c.Reef, 0, 2), 1) < 1 || off < b.dropAngle:
+		s.HoistTarget = 0
+	case off >= b.setAngle:
+		s.HoistTarget = 1
+	}
+	rate := b.hoistRate
+	if s.HoistTarget < s.Hoist {
+		rate = b.dropRate
+	}
+	s.Hoist = approach(s.Hoist, s.HoistTarget, float64(rate*Dt))
+	// In a gybe they take its clew round to the new side: once the wind is
+	// kiteGybed over the side its clew is on, they haul it across,
+	// through aft, at kiteGybeRate, and it fills on the new side.
+	w := wrapAngle(e.MeanFrom - s.Heading)
+	if float64(s.Kite*w) > 0 && math.Abs(w) < math.Pi-kiteGybed {
+		s.Kite = float64(sign(w) * max2(math.Abs(s.Kite)-float64(kiteGybeRate*Dt), 0))
+		if s.Kite == 0 {
+			s.Kite = float64(-sign(w) * 1e-3)
+		}
+		s.KiteRate = 0
+	}
+	limit := b.kiteIn + float64(sheet*(b.kiteOut-b.kiteIn))
+	rate = b.kiteHaulRate
+	if limit > s.KiteLimit {
+		rate = b.kiteEaseRate
+	}
+	s.KiteLimit = approach(clamp(s.KiteLimit, b.kiteIn, b.kiteOut), limit, float64(rate*Dt))
+}
+
+// The crew takes the downwind sail's clew across in a gybe once the wind
+// is this far over its side, rad, and at this rate, rad/s: from let fly on
+// one side to let fly on the other in about two seconds.
+const (
+	kiteGybed    = 10 * degree
+	kiteGybeRate = 70 * degree
+)
+
+// kiteState is what the downwind sail wants of the sheet while it is set,
+// for Out.Sail, as sailState is the main's: aback, the wind on its back
+// with its clew to windward; luffing, its foot's angle of attack under
+// kiteTrimBelow, its luff curling in; stalled, past kiteEaseAbove with the
+// sheet able to go out, and on a run only hauled in past kiteSquare; or
+// drawing. With nobody in the boat to trim, or at rest, it is
+// drawing.
+func (b *Prepared) kiteState(s *State, o *Out) float64 {
+	a := math.Abs(o.KiteFootAttack)
+	switch {
+	case s.SailorMode != Sailing || o.SpeedThroughWater < sailRestSpeed:
+		return SailDrawing
+	case o.KiteFootFlow == FlowAback && float64(s.Kite*o.ApparentWindAngle) > 0:
+		return SailAback
+	case o.KiteFootFlow == FlowLuffing || a < b.kiteTrimBelow:
+		return SailLuffing
+	case a > b.kiteEaseAbove && s.KiteLimit < b.kiteOut-float64(0.05*(b.kiteOut-b.kiteIn)) &&
+		(math.Abs(o.ApparentWindAngle) < sailRunFrom || a > kiteSquare):
+		return SailStalled
+	}
+	return SailDrawing
+}
+
+// brace swings the yards toward the braces' angle, sheet, from 0 braced
+// up sharp to 1 square, on the side the crew hauls them to, at the
+// crew's rate. Yards never braced, on a boat just made, are braced at
+// once.
+//
+// The crew braces each group of yards for the wind over the other side,
+// the side it fills from, and hauls them round in a turn as a ship's
+// crew does (Willis 2003). In a tack, as the ship's head comes within
+// hauls of the wind and turns on through it, the after yards swing to
+// the new side, "mainsail haul"; the fore yards stay, aback, and push her
+// head round, until the wind is letGo on the new bow, "let go and haul".
+// A ship that stops short falls back, and the after yards come back to
+// her old side. Wearing, both groups keep their side until the wind is
+// letGo on the new quarter. Each rule keeps its side within its margin,
+// so a yawing ship never braces back and forth.
+//
+// It reports whether the crew lets the headsails' sheets fly: in a tack,
+// from the time the ship comes up within hauls and letGo of the wind,
+// turning on, until the fore yards are hauled round, "raise tacks and
+// sheets", so that the headsails never hold her head off the wind.
+func (b *Prepared) brace(s *State, e *Env, sheet float64) bool {
+	angle := b.braceSharp + float64(sheet*(math.Pi/2-b.braceSharp))
+	w := wrapAngle(e.WindFrom - s.Heading)
+	a := math.Abs(w)
+	filled := -sign(w) // the side that fills from the wind
+	after, fore := sign(s.Yards), sign(s.ForeYards)
+	// Yards never braced are braced for the side the wind fills.
+	if after == 0 {
+		after = filled
+	}
+	if fore == 0 {
+		fore = filled
+	}
+	if a < math.Pi-b.letGo {
+		switch {
+		case a > b.hauls:
+			after = filled
+		case math.Abs(s.YawRate) > hauling && float64(s.YawRate*w) > 0:
+			// Turning on through the wind: the side she is coming to.
+			after = -filled
+		case math.Abs(s.YawRate) > hauling:
+			// Turning away from the wind: the side she is going off on,
+			// the new one past head to wind, or her old one falling back.
+			after = filled
+		}
+		if a > b.letGo {
+			fore = filled
+		}
+	}
+	step := float64(b.braceRate * Dt)
+	s.Yards = swingYards(s.Yards, after, angle, step)
+	s.ForeYards = swingYards(s.ForeYards, fore, angle, step)
+	coming := a < b.hauls+b.letGo && math.Abs(s.YawRate) > hauling && float64(s.YawRate*w) > 0
+	return coming || sign(s.Yards) != sign(s.ForeYards)
+}
+
+// hauling is the least rate of turn at which the crew takes a ship to be
+// coming round through the wind, rad/s.
+const hauling = 0.5 * degree
+
+// swingYards moves yards, an angle off the centreline signed by the side they
+// are braced for, toward angle on side side by at most step. To change
+// sides they swing through square, where either sign is the same yards.
+// Yards at 0, never braced, or with no side to go to, are set at once.
+func swingYards(yards, side, angle, step float64) float64 {
+	if side == 0 {
+		side = sign(yards)
+	}
+	if yards == 0 || side == 0 {
+		if side == 0 {
+			side = 1
+		}
+		return float64(side * angle)
+	}
+	at := math.Abs(yards)
+	if sign(yards) == side {
+		return float64(side * approach(at, angle, step))
+	}
+	if left := step - (math.Pi/2 - at); left > 0 {
+		return float64(side * approach(math.Pi/2, angle, left))
+	}
+	return float64(-side * (at + step))
+}
+
+// squareState is what a ship's square sails want of the braces, for
+// Out.Sail, as squareState's watcher would say of the after yards' lower
+// sails: aback, the wind on their fore face; lifting, their angle of
+// attack under squareTrimBelow, the yards braced too square for the wind
+// (brace up); stalled, past squareEaseAbove with the yards not yet
+// square (square them); or drawing. At rest head to wind they are drawing:
+// no bracing mends it.
+func (b *Prepared) squareState(s *State, o *Out) float64 {
+	a := math.Abs(o.AfterFootAttack)
+	still := o.SpeedThroughWater < sailRestSpeed
+	headToWind := math.Abs(o.ApparentWindAngle) < sailHeadToWind
+	switch {
+	case o.AfterFootFlow == FlowAback:
+		if still && headToWind {
+			return SailDrawing
+		}
+		return SailAback
+	case a < b.squareTrimBelow:
+		if still && headToWind {
+			return SailDrawing
+		}
+		return SailLuffing
+	case a > b.squareEaseAbove && math.Abs(s.Yards) < math.Pi/2-float64(0.05*(math.Pi/2-b.braceSharp)) &&
+		math.Abs(o.ApparentWindAngle) < sailRunFrom:
+		return SailStalled
+	}
+	return SailDrawing
 }
 
 // sailState is what the sail wants of its sheet, for Out.Sail, as a sailor
@@ -274,7 +558,12 @@ func (b *Prepared) sailState(s *State, o *Out) float64 {
 // A sail is on a run with the apparent wind abaft sailRunFrom, and hauled
 // in past square there when its foot's angle of attack passes sailSquare,
 // rad: at its fastest sheet on a run (tools/polar) the angle is 65° to 95°.
+//
+// A gennaker on a run, at its fastest sheet, stands across the wind with
+// its foot's angle of attack up to 120° (tools/polar -sail): there it is
+// stalled only past kiteSquare.
 const (
+	kiteSquare     = 130 * degree
 	sailRestSpeed  = 0.25
 	sailHeadToWind = 35 * degree
 	sailRunFrom    = 120 * degree

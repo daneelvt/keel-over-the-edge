@@ -35,14 +35,17 @@ const (
 	wakePilot     = "pilot"
 	wakeSky       = "sky"
 	wakeWeather   = "weather"
+	// wakeLife wakes for the sea's life come into sight: not by default,
+	// as birds about a harbour come and go all day.
+	wakeLife = "life"
 )
 
 // wakeWords lists wake_on's words, in their order.
 var wakeWords = []string{wakeGust, wakeBoat, wakeLand, wakeSighting, wakeHeel, wakeWindShift, wakeBearing, wakeNear, wakeChat, wakeRace, wakePilot,
-	wakeSky, wakeWeather}
+	wakeSky, wakeWeather, wakeLife}
 
 // wakeDefault are what a wait wakes on when wake_on is not given: all but
-// those that need a value.
+// those that need a value, and life.
 var wakeDefault = []string{wakeGust, wakeBoat, wakeLand, wakeSighting, wakeChat, wakeRace, wakePilot, wakeSky, wakeWeather}
 
 // The limits of a wait.
@@ -183,7 +186,7 @@ func (h *helm) look(s *Sea, f *bus.Frame, sight bool) {
 	in := &f.Instruments[sl]
 	h.readout.Add(float64(f.Tick)*1000/physics.StepsPerSecond, float64(in.WindSpeed), float64(in.WindFrom))
 	turned := h.turnDone(f, sl)
-	moments := h.moments(s, f, sl, sight)
+	moments := append(h.deckEvents(s, f, sl), h.moments(s, f, sl, sight)...)
 	w := h.waiter
 	why := ""
 	if w != nil {

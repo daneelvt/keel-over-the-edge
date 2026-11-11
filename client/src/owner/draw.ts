@@ -9,9 +9,10 @@
 // them, its tracks, cones, fronts' bands and gales; the lightning; the
 // rings of the calm water, the mist band and the lip; the start area; the
 // islands' names; the lights, with those sounding their fog signals and
-// those lit by day marked; the boats, each pointing its heading, the
-// owner's picked out, with its free camera's eye; and the point clicked. The marks are in Okabe and
-// Ito's colours, distinguishable in colour-blind vision.
+// those lit by day marked; the sea's life, a mark a group; the boats,
+// each pointing its heading, the owner's picked out, with its free
+// camera's eye; and the point clicked. The marks are in Okabe and Ito's
+// colours, distinguishable in colour-blind vision.
 
 import type {
   Boat,
@@ -21,6 +22,7 @@ import type {
   ForecastPage,
   Group,
   Island,
+  LifeGroup,
   Light,
   PlacesData,
   SeaPage,
@@ -49,6 +51,7 @@ export const COLOURS = {
   current: '#56b4e9',
   eye: '#e69f00',
   pick: '#ffffff',
+  life: '#f0e442',
 };
 
 /** The layers, each shown or hidden. */
@@ -74,6 +77,7 @@ export interface Layers {
   classes: boolean;
   lights: boolean;
   boats: boolean;
+  life: boolean;
   charted: boolean;
 }
 
@@ -99,6 +103,7 @@ export const LAYER_NAMES: Record<keyof Layers, string> = {
   classes: 'Islands worth seeing',
   lights: 'Lighthouses',
   boats: 'Boats',
+  life: 'Life at sea',
   charted: 'Charted',
 };
 
@@ -125,6 +130,7 @@ export function allLayers(): Layers {
     classes: true,
     lights: true,
     boats: true,
+    life: true,
     charted: true,
   };
 }
@@ -517,6 +523,9 @@ export function drawMap(ctx: CanvasRenderingContext2D, v: View, d: MapData, laye
       }
     }
   }
+  if (layers.life && now !== null) {
+    drawLife(ctx, v, now.life ?? []);
+  }
   if (layers.boats && now !== null) {
     for (const b of now.boats) {
       const [x, y] = toScreen(v, b.east, b.north);
@@ -610,4 +619,40 @@ function drawLight(ctx: CanvasRenderingContext2D, v: View, l: Light, d: MapData)
   ctx.arc(x, y, l.role === 'main' ? 6 : 4.5, 0, 2 * Math.PI);
   ctx.fill();
   ctx.stroke();
+}
+
+/**
+ * The sea's life: each group a small diamond at its middle, sized by how
+ * many it is, labelled with its kind and count when zoomed in; a group
+ * with a boat ringed, as it is drawn about that boat.
+ */
+export function drawLife(ctx: CanvasRenderingContext2D, v: View, life: readonly LifeGroup[]): void {
+  ctx.lineWidth = 1.5;
+  ctx.font = '10px "Alegreya Sans", sans-serif';
+  for (const g of life) {
+    const [x, y] = toScreen(v, g.east, g.north);
+    const r = 3 + Math.min(4, Math.log2(Math.max(1, g.count)));
+    ctx.strokeStyle = COLOURS.life;
+    ctx.fillStyle = COLOURS.life;
+    ctx.beginPath();
+    ctx.moveTo(x, y - r);
+    ctx.lineTo(x + r, y);
+    ctx.lineTo(x, y + r);
+    ctx.lineTo(x - r, y);
+    ctx.closePath();
+    ctx.fill();
+    if (g.boat !== undefined && g.boat !== 0) {
+      ctx.beginPath();
+      ctx.arc(x, y, r + 4, 0, 2 * Math.PI);
+      ctx.stroke();
+    }
+    if (v.scale < 8) {
+      const label = `${g.kind} ×${g.count}`;
+      ctx.lineWidth = 3;
+      ctx.strokeStyle = '#000000';
+      ctx.strokeText(label, x + r + 3, y + 3);
+      ctx.fillText(label, x + r + 3, y + 3);
+      ctx.lineWidth = 1.5;
+    }
+  }
 }

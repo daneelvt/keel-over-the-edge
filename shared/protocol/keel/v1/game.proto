@@ -64,6 +64,10 @@ message Input {
   uint32 order = 8;
   // The way of the latest order: 0 hold, 1 tack, 2 gybe.
   uint32 way = 9;
+  // The reef the crew is to take: 0 full sail, 1 or 2 reefs. A target the
+  // crew works to over the rig's reef time, applied at the input's tick as
+  // the helm is.
+  uint32 reef = 10;
 }
 
 // Ping asks for the server's world time, for the client's clock.
@@ -90,7 +94,161 @@ message Command {
     Watch watch = 3;
     Sail sail = 4;
     Unwatch unwatch = 5;
+    Knock knock = 6;
+    Answer answer = 7;
+    Hand hand = 8;
+    Take take = 9;
+    GiveBack give_back = 10;
+    GoAshore ashore = 11;
+    CloseKnocks close_knocks = 12;
+    Say say = 13;
+    Mute mute = 14;
+    Block block = 15;
+    Report report = 16;
+    ComeAboard come_aboard = 17;
   }
+}
+
+// ComeAboard brings an owner watching their own machine sailor aboard its
+// boat, as crew, without knocking: the boat is theirs. It is told how it
+// stands as a knock is (Knocking): let aboard, a Welcome to the boat
+// follows and the watch ends; or why not (the boat full, boarding off, the
+// age question or the Rules of the sea first, the machine sailor not its
+// boat's skipper).
+message ComeAboard {}
+
+// Say says a line to everyone aboard the boat the connection sails or is
+// aboard, or, with to, a message to one shipmate wherever they are in the
+// game: at most 200 characters, one line, text only. The server checks
+// it, and the sender is sent the line back as it was said (Chat, with
+// echo), or why it was not (Chat.refused). A line refused for a word
+// comes back as said and reaches nobody. A message reaches a shipmate
+// only while they are in the game; it is never kept for later.
+message Say {
+  string text = 1;
+  // The client's own number for the line, which its Chat echoes.
+  uint32 id = 2;
+  // A shipmate's account, as the shipmates list names it (its ID in UUID
+  // text); "" to say it aboard.
+  string to = 3;
+}
+
+// Who is someone aboard, for mute, block and report: by their seat on the
+// boat the connection sails or is aboard, or by a line of theirs the
+// connection was sent (its Chat.id), which the server still holds.
+message Who {
+  oneof who {
+    uint32 seat = 1;
+    uint64 line = 2;
+  }
+}
+
+// Mute hides one player's lines from the connection's account, everywhere,
+// or shows them again; they are not told.
+message Mute {
+  Who who = 1;
+  bool on = 2;
+}
+
+// Block hides each one's lines from the other, everywhere, refuses their
+// knocks both ways and their watch of the account's sailor, and puts them
+// ashore from the account's boat; or ends the block. They are not told.
+message Block {
+  Who who = 1;
+  bool on = 2;
+}
+
+// Report reports a player, from a line of theirs or from their name
+// aboard: the server keeps what it still holds of the boat's chat with
+// the report, for the game's owner. The reporter is told it was received
+// (Reported); the reported is never told who.
+message Report {
+  Who who = 1;
+  ReportReason reason = 2;
+  // Seen only by the game's owner: at most 200 characters.
+  string note = 3;
+}
+
+// ReportReason is why a player is reported.
+enum ReportReason {
+  REPORT_REASON_UNSPECIFIED = 0;
+  // A child may be at risk: ahead of every other report.
+  REPORT_REASON_CHILD = 1;
+  REPORT_REASON_SEXUAL = 2;
+  REPORT_REASON_BULLYING = 3;
+  REPORT_REASON_HATE = 4;
+  // Threats or self-harm.
+  REPORT_REASON_THREATS = 5;
+  // Scams or spam.
+  REPORT_REASON_SCAM = 6;
+  REPORT_REASON_CHEATING = 7;
+  REPORT_REASON_OTHER = 8;
+}
+
+// Knock asks to come aboard another sailor's boat, by the token of the
+// link its skipper shared (the last part of /sail/<token>). The skipper is
+// shown a card and answers it; the knocker is told how it stands
+// (Knocking), and once let aboard is welcomed to the boat as its crew
+// (Welcome.aboard): a boat it sails leaves the water then, at once, and a
+// watch ends. A connection knocks on one boat at a time: a second knock
+// withdraws the first.
+message Knock {
+  string token = 1;
+  // The name of one of the account's machine sailors, to send it aboard
+  // rather than come aboard oneself: the link must be a machine sailor's,
+  // the machine sailor sent in the water, and the knock is answered by
+  // the skipper machine sailor's owner, wherever they are in the game,
+  // never by its agent. Let aboard, the machine sailor's own boat leaves
+  // the water and it is crew there; the connection is told as a knocker
+  // is.
+  string machine = 2;
+  // A shipmate's account, as the shipmates list names it, to knock on the
+  // boat they skipper without a link: token is then empty. Their skipper's
+  // answer is asked as for any knock.
+  string shipmate = 3;
+}
+
+// Answer is the skipper's answer to a knock: let them aboard, or not now.
+// Only the boat's skipper answers its knocks, never whoever holds the
+// controls.
+message Answer {
+  // The knock's ID, as its KnockCard has it.
+  uint64 knock = 1;
+  bool let = 2;
+}
+
+// Hand offers the boat's controls, all of them, to someone aboard, by
+// their seat (Crew): from whoever holds them. The receiver is told
+// (Handed) and has 15 seconds to take them; until then the controls stay
+// where they are.
+message Hand {
+  uint32 to = 1;
+}
+
+// Take takes the controls offered to the connection; from the boat's
+// skipper, it takes them back at once, from whoever holds them, offered or
+// not.
+message Take {}
+
+// GiveBack hands the controls back to the skipper at once, from whoever
+// holds them.
+message GiveBack {}
+
+// GoAshore leaves the boat the connection is aboard, its own boat put in
+// the water at the nearest port; or, from the skipper, puts the crew
+// member in seat who ashore. A skipper cannot go ashore from their own
+// boat: they leave the water.
+message GoAshore {
+  // The seat of the crew member the skipper puts ashore; 0 to go ashore
+  // oneself.
+  uint32 who = 1;
+}
+
+// CloseKnocks closes the skipper's boat to knocks, or opens it again, for
+// this voyage: closed, every knock is refused quietly, as "not taking
+// crew".
+message CloseKnocks {
+  bool closed = 1;
 }
 
 // Watch asks to watch another sailor's boat from that boat's own place: a
@@ -162,7 +320,253 @@ message ServerMessage {
     Watchers watchers = 17;
     AgentLamp agent_lamp = 18;
     LookChanged look_changed = 19;
+    BoatLookChanged boat_look_changed = 20;
+    BoatNames boat_names = 21;
+    Life life = 22;
+    KnockCard knock = 23;
+    Knocking knocking = 24;
+    Crew crew = 25;
+    Handed handed = 26;
+    Ashore ashore = 27;
+    Chat chat = 28;
+    ChatState chat_state = 29;
+    Tied tied = 30;
+    Reported reported = 31;
+    Shipmates shipmates = 32;
+    Crews crews = 33;
   }
+}
+
+// Shipmates says the account's shipmates have changed: an offer made to
+// it, an offer accepted, or a shipmate no longer one. Never what changed
+// or why: the shipmates list is read again over HTTP.
+message Shipmates {}
+
+// KnockCard tells a skipper that a sailor asks to come aboard, for them to
+// answer (Answer) within two minutes; with gone, the knock is no longer
+// waiting: answered, lapsed or withdrawn. Never an age.
+message KnockCard {
+  uint64 id = 1;
+  // The sailor's name and look, as players see them.
+  string sailor = 2;
+  uint32 look = 3;
+  bool gone = 4;
+  // A machine sailor sent aboard by its owner, named owner (their sailor's
+  // name), knocking on the boat of skipper, the connection's own machine
+  // sailor: the card goes to that machine sailor's owner wherever they are
+  // in the game.
+  bool machine = 5;
+  string owner = 6;
+  string skipper = 7;
+  // A shipmate of the skipper's, knocking from their shipmates list.
+  bool shipmate = 8;
+}
+
+// Knocking tells a knocker how their knock stands. Let aboard, a Welcome
+// to the boat follows.
+message Knocking {
+  KnockState state = 1;
+  // The skipper's name, their boat's kind (an index into the catalog's
+  // boats) and its name, player text: what the knock is for.
+  string skipper = 2;
+  uint32 kind = 3;
+  string boat = 4;
+  // The machine sailor the knock sends aboard, "" for the knocker's own.
+  string machine = 5;
+}
+
+// KnockState is how a knock stands, or why it was refused. A refusal never
+// says that a block refused it.
+enum KnockState {
+  KNOCK_STATE_UNSPECIFIED = 0;
+  // The skipper has the card.
+  KNOCK_STATE_WAITING = 1;
+  // Let aboard: a Welcome follows.
+  KNOCK_STATE_LET = 2;
+  // The skipper said not now.
+  KNOCK_STATE_NOT_NOW = 3;
+  // The skipper did not answer within two minutes.
+  KNOCK_STATE_LAPSED = 4;
+  // The link has expired, or was ended, or links are off.
+  KNOCK_STATE_ENDED = 5;
+  // The skipper's boat is not in the water.
+  KNOCK_STATE_NOT_AT_SEA = 6;
+  // The boat has no room aboard.
+  KNOCK_STATE_FULL = 7;
+  // The boat is not taking crew.
+  KNOCK_STATE_CLOSED = 8;
+  // The skipper has knocks waiting: try again soon.
+  KNOCK_STATE_BUSY = 9;
+  // Too many knocks in the last hour, or on this boat again too soon.
+  KNOCK_STATE_OFTEN = 10;
+  // Too many people are aboard boats across the sea.
+  KNOCK_STATE_CROWDED = 11;
+  // The link is the connection's own.
+  KNOCK_STATE_OWN = 12;
+  // The age question or the Rules of the sea must be answered first.
+  KNOCK_STATE_FIRST = 13;
+  // The game could not look the link up in time: try again.
+  KNOCK_STATE_TRY_AGAIN = 14;
+  // Withdrawn by a knock on another boat, or the knocker went elsewhere.
+  KNOCK_STATE_WITHDRAWN = 15;
+  // The machine sailor sent aboard is not in the water: its AI app sails
+  // it there first.
+  KNOCK_STATE_AWAY = 16;
+}
+
+// Crew is who is aboard the boat the connection sails, is aboard or
+// watches, and who holds its controls: sent as it changes, and once at
+// each Welcome to a boat with anyone aboard but its skipper. Names only to
+// those aboard. In Crews, it is another boat's, by its view slot.
+message Crew {
+  // Everyone aboard, the skipper first, in seat order.
+  repeated Person people = 1;
+  // The seat of whoever holds the controls.
+  uint32 holder = 2;
+  // In Crews: the view slot of the boat it is for, the boat that slot
+  // holds as of the next snapshot. Unused in a Crew sent alone.
+  uint32 slot = 3;
+}
+
+// Crews are who is aboard the other boats in the connection's near band
+// with anyone aboard besides their skipper, so that their crews are drawn:
+// each boat's sent as it comes into the band, and again when who is aboard
+// or who holds its controls changes; and with nobody (no people) when it
+// leaves the band, everyone but its skipper goes ashore, or its slot holds
+// another boat. Each person carries their seat, look and machine mark
+// only: never a name, nor anything of the connection's own.
+message Crews {
+  repeated Crew crews = 1;
+}
+
+// Person is someone aboard: their seat, the station on deck they stand at
+// (the skipper's, 0, is the helm's), and their look; whoever holds the
+// controls stands at the helm, and the skipper at the holder's station.
+message Person {
+  uint32 seat = 1;
+  uint32 look = 2;
+  // As players see it; "" for a spectator.
+  string name = 3;
+  // A machine sailor, sailed by an AI agent.
+  bool machine = 4;
+  // The connection's own.
+  bool you = 5;
+  // The connection's account mutes them, or blocks them.
+  bool muted = 6;
+  bool blocked = 7;
+  // A shipmate of the connection's account.
+  bool shipmate = 8;
+}
+
+// Chat is a line said aboard the boat the connection sails, is aboard,
+// or (its owner's machine sailor aboard it) watches: player text, from the
+// person in seat. To its sender it comes back with echo, said or refused.
+message Chat {
+  // The line's number, for mute, block and report (Who.line).
+  uint64 id = 1;
+  uint32 seat = 2;
+  // The sender's name as players see it, and whether a machine sailor
+  // said it.
+  string name = 3;
+  bool machine = 4;
+  // When it was said, µs of UTC.
+  int64 at_us = 5;
+  string text = 6;
+  // The connection's own line, its Say's id; refused, it reached nobody.
+  bool you = 7;
+  uint32 echo = 8;
+  ChatRefusal refused = 9;
+  // A message between shipmates, not a line aboard: the other shipmate's
+  // account, as the shipmates list names it (to its sender, whom it was
+  // to; to its receiver, who sent it). Seat is then 0.
+  string thread = 10;
+}
+
+// ChatRefusal is why a line was not said. A line refused for a word is
+// never told so: it comes back as said.
+enum ChatRefusal {
+  CHAT_REFUSAL_UNSPECIFIED = 0;
+  // A link or a contact detail: those can't be sent aboard.
+  CHAT_REFUSAL_CONTACT = 1;
+  // Longer than 200 characters, or empty.
+  CHAT_REFUSAL_LONG = 2;
+  // Too many lines too fast.
+  CHAT_REFUSAL_FAST = 3;
+  // The sender may say nothing now (ChatState says why).
+  CHAT_REFUSAL_SILENT = 4;
+  // Nobody is aboard to hear it.
+  CHAT_REFUSAL_NOBODY = 5;
+  // The shipmate isn't in the game: messages aren't kept for later.
+  CHAT_REFUSAL_AWAY = 6;
+  // The game's owner has shipmates' messages off for everyone.
+  CHAT_REFUSAL_RESTING = 7;
+}
+
+// ChatState is whether the connection may chat aboard now, sent at each
+// Welcome and as it changes.
+message ChatState {
+  ChatStatus status = 1;
+  // Until when it rests, µs of UTC; 0 for until the game's owner looks.
+  int64 until_us = 2;
+  // The Rules of the sea are to be accepted before a first line.
+  bool rules = 3;
+}
+
+// ChatStatus is how chat stands for a connection.
+enum ChatStatus {
+  CHAT_STATUS_UNSPECIFIED = 0;
+  // Lines go and come.
+  CHAT_STATUS_ON = 1;
+  // The game's owner has chat off, for everyone or where the player is:
+  // "Chat is resting".
+  CHAT_STATUS_OFF = 2;
+  // The player's own chat is off (a player of 13 to 17 until they turn it
+  // on).
+  CHAT_STATUS_OWN_OFF = 3;
+  // The player's chat rests: too many lines refused, a report, or the
+  // game's owner.
+  CHAT_STATUS_RESTING = 4;
+}
+
+// Tied says a mute or a block is in force, or ended, for the person named.
+message Tied {
+  string name = 1;
+  bool muted = 2;
+  bool blocked = 3;
+  // The account has as many as it may keep: nothing changed.
+  bool full = 4;
+}
+
+// Reported says a report was received, or (ok false) could not be kept:
+// try again.
+message Reported {
+  bool ok = 1;
+}
+
+// Handed offers the connection the boat's controls, from whoever holds
+// them: a Take within the seconds given takes them. With gone, the offer
+// has lapsed or been withdrawn.
+message Handed {
+  string from = 1;
+  uint32 seconds = 2;
+  bool gone = 3;
+}
+
+// Ashore says the connection has left the boat it was aboard, and why: a
+// Welcome to its own boat follows, at the nearest port, or a Queued.
+message Ashore {
+  AshoreWhy why = 1;
+}
+
+// AshoreWhy is why someone left a boat they were aboard.
+enum AshoreWhy {
+  ASHORE_WHY_UNSPECIFIED = 0;
+  // They chose to go ashore.
+  ASHORE_WHY_CHOSE = 1;
+  // The skipper put them ashore.
+  ASHORE_WHY_PUT = 2;
+  // The skipper's boat left the water.
+  ASHORE_WHY_LEFT = 3;
 }
 
 // WatchEnded says a watch has ended, or was refused: the connection is
@@ -196,6 +600,8 @@ enum WatchEnd {
   WATCH_END_QUICK = 7;
   // The game could not look the sailor up in time: try again.
   WATCH_END_BUSY = 8;
+  // The connection is aboard a boat: it goes ashore first.
+  WATCH_END_ABOARD = 9;
 }
 
 // Watchers says how many watch the connection's boat, as it changes, at
@@ -210,6 +616,33 @@ message Watchers {
 message LookChanged {
   // The sailor's look: a look code, as an enter in a snapshot has it.
   uint32 look = 1;
+}
+
+// BoatLookChanged says the boat the connection sails or watches was given
+// a new look in port, its paint, cloth, sail number or name: as of the
+// next snapshot, it is drawn so. Other connections see it as an enter of
+// the boat, and its name in BoatNames. A boat swapped for another kind
+// comes as a Welcome instead.
+message BoatLookChanged {
+  // The boat's look: a boat look code, as an enter in a snapshot has it.
+  uint32 look = 1;
+  // The boat's name, player text; "" for none.
+  string name = 2;
+}
+
+// BoatNames are the names of boats in the connection's view, each sent once
+// as the boat comes into the near band, and again if it changes: player
+// text, drawn on the boat's topsides or transom. A boat with no name is
+// sent "" only to clear a name the slot was told before.
+message BoatNames {
+  repeated BoatName names = 1;
+}
+
+// BoatName is a boat's name by its view slot: the boat that slot holds as
+// of the next snapshot.
+message BoatName {
+  uint32 slot = 1;
+  string name = 2;
 }
 
 // AgentLamp says whether the AI agent of the machine sailor a connection
@@ -461,6 +894,54 @@ message Lights {
   repeated Light lights = 1;
   // The numbers of lights to drop.
   repeated uint32 drop = 2;
+}
+
+// Life is the sea's life about the connection's eye: the encounters come
+// within their reach, each once and again when it changes, and those to
+// drop, by id, once the eye is further than their reach by a margin. The
+// eye is the boat's, or the watched boat's for a spectator. An encounter
+// not dropped ends at its end. A new connection's Welcome drops every
+// encounter it held; a later Welcome on it, none.
+message Life {
+  repeated LifeEncounter encounters = 1;
+  repeated uint64 drop = 2;
+}
+
+// LifeEncounter is a group of one kind of the sea's life, met from its
+// start to its end: the phone draws each animal of it from this record and
+// world time, as every other phone near does. A group with no boat follows
+// its kind's path through its centre; one with a boat moves about that
+// boat as the phone draws it.
+message LifeEncounter {
+  // Its id, the same for every connection; and how many times it has
+  // changed: a later revision replaces an earlier.
+  uint64 id = 1;
+  uint32 rev = 2;
+  // Its kind: an index into the catalog's life kinds.
+  uint32 kind = 3;
+  // Its start and its end, in ticks of world time.
+  int64 start = 4;
+  int64 end = 5;
+  // Its centre, in centimetres east and north of the world's centre.
+  sint32 east = 6;
+  sint32 north = 7;
+  // The way it goes, in radians clockwise from north, and how fast, in
+  // m/s.
+  float heading = 8;
+  float speed = 9;
+  // How many there are, and its own number, which each animal's path is
+  // drawn from.
+  uint32 count = 10;
+  uint32 seed = 11;
+  // The boat it is with, as this connection sees boats: 0 none, 1 the
+  // connection's own boat or the one it watches, 2 + n the boat in view
+  // slot n, and 255 a boat this connection does not see, so it is drawn
+  // nowhere.
+  uint32 with = 12;
+  // The encounter on whose patch it comes, 0 for none: the birds and the
+  // dolphins with bait, the flying fish a boat flushes from a ground. One
+  // with a kind that moves otherwise over another's patch moves so.
+  uint64 over = 13;
 }
 
 // Light is a lighthouse's light. It shows its character's light and dark
@@ -806,6 +1287,25 @@ message Welcome {
   // The look of the boat's sailor, the connection's own or the one it
   // watches: a look code, as an enter in a snapshot has it.
   uint32 look = 17;
+  // The boat's own look, its paint, cloth and sail number: a boat look
+  // code, as an enter in a snapshot has it; and its name, player text, ""
+  // for none.
+  uint32 boat_look = 18;
+  string boat_name = 19;
+  // The connection is aboard another sailor's boat, as its crew: boat and
+  // kind are that boat's, and so are the snapshots, as when watching; its
+  // inputs steer the boat only while it holds the controls (the
+  // snapshot's holding flag). A Welcome to the connection's own boat comes
+  // when it goes ashore.
+  Aboard aboard = 20;
+}
+
+// Aboard is whose boat a connection is aboard, and its seat there.
+message Aboard {
+  // The skipper's name and look.
+  string skipper = 1;
+  uint32 look = 2;
+  uint32 seat = 3;
 }
 
 // Harbour is a world's harbour, in decimetres east and north of the

@@ -13,20 +13,17 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { describe, expect, test } from 'vitest';
 import { catalog } from '../catalog';
 import { newDrawnBoat } from '../game/fleet';
-import { CLOTH } from './boat';
 import type { FloatingOrigin } from './coords';
-import { FleetView } from './fleet';
+import { FleetViews } from './fleet';
 import {
   COG_ACROSS,
   COG_HOLE,
   COG_ROOT,
   COG_TEETH,
+  chordAt,
   chordAtHalf,
   cogOutline,
   luminance,
-  MARK_DARK,
-  MARK_GOLD,
-  markInk,
   markPlace,
   onCog,
 } from './machinemark';
@@ -98,16 +95,14 @@ describe('the cog', () => {
 });
 
 describe('the ink', () => {
-  test('is dark on the light cloth, gold on a dark one, and stands out from either', () => {
-    expect(markInk(CLOTH)).toBe(MARK_DARK);
-    expect(markInk('#2a3348')).toBe(MARK_GOLD);
-    expect(markInk('#5b2a22')).toBe(MARK_GOLD);
+  test('is each cloth’s own, and stands out from it', () => {
     const contrast = (a: string, b: string) => {
       const [hi, lo] = [luminance(a), luminance(b)].sort((p, q) => q - p);
       return ((hi ?? 0) + 0.05) / ((lo ?? 0) + 0.05);
     };
-    expect(contrast(CLOTH, markInk(CLOTH))).toBeGreaterThan(7);
-    expect(contrast('#2a3348', markInk('#2a3348'))).toBeGreaterThan(4.5);
+    for (const c of catalog.boatLooks.cloths) {
+      expect(contrast(c.colour, c.ink), c.name).toBeGreaterThan(4.5);
+    }
   });
 });
 
@@ -192,10 +187,13 @@ describe('the mark’s place', () => {
         }
       }
       expect(p.u + p.ru).toBeLessThan(leech.x);
-      // The near model's chord at half height: the foot's half and the roach.
+      // The near model's chord at half height: the foot's half and the
+      // roach; a gaff sail's, its head along the gaff, half its foot and
+      // its head together.
       if (path === boat.art.model) {
+        const head = chordAt(sail, 1);
         expect(chordAtHalf(sail)).toBeGreaterThan(0.5);
-        expect(chordAtHalf(sail)).toBeLessThan(0.6);
+        expect(chordAtHalf(sail)).toBeLessThan(head > 0.2 ? 0.6 + head / 2 : 0.6);
       }
     });
   });
@@ -203,7 +201,10 @@ describe('the mark’s place', () => {
 
 describe('the fleet’s flag', () => {
   test('follows each drawn boat’s, instance by instance', () => {
-    const view = new FleetView(catalog.boats[0] as (typeof catalog.boats)[number]);
+    const views = new FleetViews(catalog.boats, catalog);
+    // Its models are not loaded here: the instances' values are written all the same.
+    const view = views.first;
+    view.loaded = true;
     const origin = { world: { x: 0, y: 0 } } as unknown as FloatingOrigin;
     const camera = new Vector3();
     const boats = [0, 1, 0].map((machine, i) => ({
@@ -215,15 +216,15 @@ describe('the fleet’s flag', () => {
     }));
     const flags = () => {
       const lean = view.near.lean.array as Float32Array;
-      return [0, 1, 2].map((n) => lean[n * 4 + 3]);
+      return [0, 1, 2].map((n) => lean[n * 8 + 3]);
     };
-    view.draw(boats, 3, origin, camera, 0, 0);
+    views.draw(boats, 3, origin, camera, 0, 0);
     expect(view.near.count).toBe(3);
     expect(flags()).toEqual([0, 1, 0]);
     // The machine sailor's slot taken by a human's boat: no mark.
     (boats[1] as (typeof boats)[number]).machine = 0;
     (boats[2] as (typeof boats)[number]).machine = 1;
-    view.draw(boats, 3, origin, camera, 0, 0);
+    views.draw(boats, 3, origin, camera, 0, 0);
     expect(flags()).toEqual([0, 0, 1]);
   });
 });

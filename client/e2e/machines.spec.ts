@@ -17,7 +17,7 @@
 import { createHash, randomBytes } from 'node:crypto';
 import { type BrowserContext, expect, type Page, test } from '@playwright/test';
 import data from '../src/catalog/catalog.gen.json' with { type: 'json' };
-import { GAME, holdPasskeys, type Made, sailor, setSail, stamp } from './helpers';
+import { answerBorn, GAME, holdPasskeys, type Made, sailor, setSail, stamp } from './helpers';
 import { assertPasskey } from './passkey';
 
 /**
@@ -151,6 +151,7 @@ test('a new sailor’s machine sailor: the choice, the form, how to connect, and
   // A name of the most letters a sailor may have, which wraps on a phone.
   const player = `Wavecrestmak ${stamp()}`;
   await page.getByLabel('Your sailor’s name').fill(player);
+  await answerBorn(page);
   await page.getByRole('button', { name: 'Set sail' }).click();
   await page.getByRole('button', { name: 'I’ve written it down' }).click({ timeout: 30_000 });
 
@@ -260,9 +261,15 @@ test('the account page: an app revoked, a connection token made once and revoked
   await page.getByRole('button', { name: 'Account' }).click();
   const row = page.locator('.machines-account li[data-machine]', { hasText: name });
   await expect(row).toBeVisible();
-  const boat = data.boats[0]?.name ?? '';
-  // A boat for the player, and one for the machine sailor.
-  await expect(page.locator('.machines-account')).toContainText(`Your fleet: 2 ${boat}s`);
+  // A Jolly boat for the player and one for the machine sailor, and the
+  // boats the account shares: the machine sailor takes the last, the
+  // largest, the tall ship.
+  const each = data.boats.find((b) => b.fleet === 'sailor');
+  const shares = data.boats.filter((b) => b.fleet === 'account');
+  const shared = shares.at(-1);
+  const fleetRows = page.locator('.fleet-account li[data-boat]');
+  await expect(fleetRows).toHaveCount(2 + shares.length);
+  await expect(fleetRows.filter({ hasText: each?.name ?? '' })).toHaveCount(2);
 
   // The app: its host, approved today, ending in the grant's lifetime.
   const app = row.locator('.machine-apps li', { hasText: 'Test app' });
@@ -301,6 +308,27 @@ test('the account page: an app revoked, a connection token made once and revoked
     },
   };
   expect((await mcp(init)).status()).not.toBe(401);
+  // Through it, the machine sailor takes the boat the account shares to
+  // sea, and the fleet says it sails it.
+  if (shared !== undefined) {
+    const call = await mcp({
+      jsonrpc: '2.0',
+      id: 2,
+      method: 'tools/call',
+      params: { name: 'boat', arguments: { action: 'take', boat: shared.name } },
+    });
+    expect(call.status()).toBe(200);
+    expect(await call.text()).toContain(`Your boat is ${shared.name}`);
+    await expect
+      .poll(async () => {
+        const res = await context.request.get('/api/fleet');
+        const f = (await res.json()) as {
+          boats: { kind: string; sailor: string; atSea: boolean }[];
+        };
+        return f.boats.find((b) => b.kind === shared.id);
+      })
+      .toMatchObject({ sailor: name, atSea: true });
+  }
   await page.getByRole('button', { name: 'Done' }).click();
   await expect(row).toContainText(/Connection token: made on \d+ \w+/);
   await expect(page.locator('[data-token]')).toHaveCount(0);

@@ -14,12 +14,12 @@ import (
 // and systems (each one's ticks, kind, point, slot, heading and speed),
 // the sea in effect and next (each run of areas with the same inputs, and
 // its length), whether admission is held, each occupied slot's number, boat, generation,
-// owner, connection, grace, control word, pilot word, state, course, its account's
+// owner, connection, grace, control word, pilot word, rig word, state, course, its account's
 // kind unless a human's alone, and, if it has
 // anything, its voyage at the edge (the tick it went over, its flags and its six
 // distances and places), and, if it has any, the owner's tools' marks, each waiting
-// connection's account, connection, tick of joining the queue, grace and
-// kind unless a human's alone,
+// connection's account, connection, tick of joining the queue, grace,
+// kind unless a human's alone, look unless the first and kind of boat unless the first,
 // and each pair's slots, boats, keep-clear boat, Article, whose action and
 // ticks, as little-endian bits. Two worlds with the
 // same digest at a tick are, all but certainly, the same world; a replay
@@ -62,6 +62,7 @@ func Digest(f *bus.Frame) uint64 {
 		h.u64(uint64(f.Grace[s]))
 		h.u64(uint64(f.Control[s]))
 		h.u64(uint64(f.Pilot[s]))
+		h.u64(uint64(f.Rig[s]))
 		for _, v := range StateFields(&f.State[s]) {
 			h.f64(*v)
 		}
@@ -91,6 +92,7 @@ func Digest(f *bus.Frame) uint64 {
 		if l := f.Look[s]; l != 0 {
 			h.u64(uint64(l) << 16)
 		}
+		h.boatLook(f.BoatLook[s], f.BoatName[s])
 	}
 	for _, q := range f.Queue {
 		for _, b := range q.Account {
@@ -105,6 +107,30 @@ func Digest(f *bus.Frame) uint64 {
 		if q.Look != 0 {
 			h.u64(uint64(q.Look) << 16)
 		}
+		if q.BoatKind != 0 {
+			h.u64(uint64(q.BoatKind) << 48)
+		}
+		h.boatLook(q.BoatLook, q.BoatName)
+	}
+	for _, a := range f.Crew {
+		h.u64(uint64(a.Slot))
+		h.u64(a.Boat)
+		h.byte(a.Seat)
+		for _, b := range a.Account {
+			h.byte(b)
+		}
+		h.u64(a.Conn)
+		h.u64(uint64(a.Since))
+		h.u64(uint64(a.Grace))
+		k := kindFlags(a.Machine, a.Priority)
+		if f.Holder[a.Slot] == a.Account {
+			k |= crewHolds
+		}
+		h.u64(k)
+		h.u64(uint64(a.Look))
+		h.u64(uint64(a.BoatKind))
+		h.boatLook(a.BoatLook, a.BoatName)
+		h.boatLook(0, a.Name)
 	}
 	for _, p := range f.Pairs {
 		h.u64(uint64(p.A))
@@ -158,6 +184,18 @@ func (h *fnv) sea(areas []physics.SeaInput) {
 	}
 }
 
+// boatLook hashes a boat's own look and name once it has either, so a
+// world of boats with none hashes as before.
+func (h *fnv) boatLook(look uint32, name string) {
+	if look == 0 && name == "" {
+		return
+	}
+	h.u64(uint64(look) << 24)
+	for i := range len(name) {
+		h.byte(name[i])
+	}
+}
+
 func (h *fnv) byte(b byte) {
 	*h ^= fnv(b)
 	*h *= fnvPrime
@@ -173,17 +211,21 @@ func StateFields(s *physics.State) [StateSize]*float64 {
 		&s.Heave, &s.HeaveRate, &s.Pitch, &s.PitchRate,
 		&s.PilotTrim, &s.PilotWay, &s.PilotOrder, &s.PilotWatch, &s.PilotMark, &s.PilotLeft,
 		&s.GroundTimer, &s.DeepX, &s.DeepY,
+		&s.Jib, &s.JibRate, &s.JibLimit, &s.Yards, &s.ForeYards, &s.Reef,
+		&s.Hoist, &s.HoistTarget, &s.Kite, &s.KiteRate, &s.KiteLimit,
 	}
 }
 
 // StateSize is the number of a state's fields: BoatSize of the boat's, then
 // PilotSize of what its autopilot remembers, then GroundSize of how long it
-// has been aground.
+// has been aground, then RigSize of its headsails, yards, reef and
+// downwind sail.
 const (
-	StateSize  = BoatSize + PilotSize + GroundSize
+	StateSize  = BoatSize + PilotSize + GroundSize + RigSize
 	BoatSize   = 19
 	PilotSize  = 6
 	GroundSize = 3
+	RigSize    = 11
 )
 
 // CourseFields lists a course's fields, in their order, as StateFields does

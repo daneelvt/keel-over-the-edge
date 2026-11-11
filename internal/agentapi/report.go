@@ -14,6 +14,7 @@ import (
 	"github.com/daneelvt/keel-over-the-edge/internal/catalog"
 	"github.com/daneelvt/keel-over-the-edge/internal/chart"
 	"github.com/daneelvt/keel-over-the-edge/internal/lookout"
+	sailorlooks "github.com/daneelvt/keel-over-the-edge/internal/looks"
 	"github.com/daneelvt/keel-over-the-edge/internal/physics"
 	"github.com/daneelvt/keel-over-the-edge/internal/sight"
 	"github.com/daneelvt/keel-over-the-edge/internal/sky"
@@ -55,9 +56,12 @@ type report struct {
 	Woke  string `json:"woke,omitempty"`
 	// Cut is how long the last wait ran, s, before the app cut its call;
 	// Watched how many watch the boat.
-	Cut     int           `json:"lastWaitCutAfter,omitempty"`
-	Watched int           `json:"watchedBy,omitempty"`
-	Notices []string      `json:"notices,omitempty"`
+	Cut     int      `json:"lastWaitCutAfter,omitempty"`
+	Watched int      `json:"watchedBy,omitempty"`
+	Notices []string `json:"notices,omitempty"`
+	// Aboard is who is aboard with the machine sailor, and who holds the
+	// controls; "" with nobody else aboard.
+	Aboard  string        `json:"aboard,omitempty"`
 	Boat    *boatFacts    `json:"boat,omitempty"`
 	Wind    *windFacts    `json:"wind,omitempty"`
 	Shoal   *shoalFacts   `json:"shoal,omitempty"`
@@ -75,10 +79,22 @@ type report struct {
 }
 
 type boatFacts struct {
-	Kind    string  `json:"kind"`
-	State   string  `json:"state"`
-	Heading int     `json:"heading"`
-	Speed   float64 `json:"speedKnots"`
+	Kind string `json:"kind"`
+	// Reef is how the sail stands: "full sail", "one reef", or, while the
+	// crew is at work, "reefing to two reefs".
+	Reef   string `json:"reef,omitempty"`
+	reefed bool   // reefed, or the crew at work
+	// Yards are a ship's yards: "braced sharp", "square", an angle off
+	// the centreline, or "hauling round" while the fore yards and the
+	// after stand apart in a turn; "" on a boat without them.
+	Yards string `json:"yards,omitempty"`
+	// Gennaker is a boat's downwind sail while it is not in its bag, as its
+	// crew works it: "gennaker going up", "gennaker set" or "gennaker
+	// coming in"; "" in its bag, or on a boat without one.
+	Gennaker string  `json:"gennaker,omitempty"`
+	State    string  `json:"state"`
+	Heading  int     `json:"heading"`
+	Speed    float64 `json:"speedKnots"`
 	// Astern says the boat makes sternway, NoSteerage that the water
 	// passes its rudder too slowly to steer by; Depth is the water under
 	// it while that is shoal, m.
@@ -151,14 +167,26 @@ func (h *helm) reportFor(s *Sea, f *bus.Frame, sl int32, detail string, since in
 	in := &f.Instruments[sl]
 	r := &report{brief: detail != detailFull}
 	r.Clock = clockOf(s, f, st.X, st.Y)
+	r.Aboard = h.aboardWords(s, f, sl)
 
 	// The boat.
-	b := &boatFacts{Kind: s.boat(f.Kind[sl]).Name, State: stateOf(f, sl), Heading: degrees(st.Heading),
+	kind := s.boat(f.Kind[sl])
+	b := &boatFacts{Kind: kind.Name, Reef: reefState(kind, st, f.Rig[sl].Reef()), reefed: f.Rig[sl].Reef() != 0 || st.Reef != 0,
+		State: stateOf(f, sl), Heading: degrees(st.Heading),
 		Speed: math.Floor(knots(float64(in.SpeedOverGround))*10+0.5) / 10, Heel: degrees(math.Abs(st.Heel))}
 	if b.Heel > 0 {
 		b.HeelTo = side(st.Heel)
 	}
 	b.Tack = ownTack(f, sl)
+	if braced(kind) {
+		b.Yards = "yards " + yardsWords(kind, math.Abs(st.Yards)*180/math.Pi)
+		if math.Abs(st.ForeYards-st.Yards) > math.Pi/180 {
+			b.Yards = "yards hauling round"
+		}
+	}
+	if kind.Physics.Downwind.DownwindArea > 0 {
+		b.Gennaker = gennakerWords(st)
+	}
 	if d := float64(in.Depth); d < shoalUnder {
 		d = math.Floor(max(d, 0)*10+0.5) / 10
 		b.Depth = &d
@@ -483,9 +511,10 @@ func leeOf(s *Sea, x, y, from float64) string {
 
 // sightLines are what the boat's lookout sees: the boats nearest first,
 // those within lookNear with their sailors' looks, the first mostContacts
-// of them and the rest summed; then the land, the places and the lights,
-// charted ones by name. A brief report gives of these only those new
-// since the last report or within landNear, and counts the rest. With mu
+// of them and the rest summed; then the sea's life, nearest first; then
+// the land, the places and the lights, charted ones by name. A brief
+// report gives of the life only the groups new since the last report, and
+// of the land those new or within landNear, and counts the rest. With mu
 // held.
 func (h *helm) sightLines(s *Sea, f *bus.Frame, sl int32, brief bool) (lines []string, more string) {
 	st := &f.State[sl]
@@ -511,9 +540,12 @@ func (h *helm) sightLines(s *Sea, f *bus.Frame, sl int32, brief bool) (lines []s
 		if f.Machine[c.slot] {
 			kind = "machine"
 		}
-		if c.d <= lookNear && s.Looks != nil {
-			if l, ok := s.Looks.Of(f.Look[c.slot]); ok {
-				kind += " · " + s.Looks.Seen(l)
+		if c.d <= lookNear {
+			kind += " · " + boatSeen(s, f, c.slot)
+			if s.Looks != nil {
+				if l, ok := s.Looks.Of(f.Look[c.slot]); ok {
+					kind += " · " + s.Looks.Seen(l)
+				}
 			}
 		}
 		line := fmt.Sprintf("B%d %s · %s %s · %s, heading %s, %s", n, kind, three(bearing5(bear)), rangeWords(c.d),
@@ -537,10 +569,22 @@ func (h *helm) sightLines(s *Sea, f *bus.Frame, sl int32, brief bool) (lines []s
 		more = fmt.Sprintf("and %d more boats", len(seen)-mostContacts)
 		lines = append(lines, more)
 	}
+	// The sea's life, nearest first: a brief report tells the groups new
+	// since the last.
+	left := 0
+	told := h.lifeTold
+	h.lifeTold = map[uint64]bool{}
+	for _, g := range s.lifeInSight(f, sl) {
+		h.lifeTold[g.id] = true
+		if brief && told[g.id] {
+			left++
+			continue
+		}
+		lines = append(lines, g.text)
+	}
 	land := s.landLines(f, sl)
 	was := h.landSeen
 	h.landSeen = map[int32]bool{}
-	left := 0
 	for _, l := range land {
 		h.landSeen[l.subject] = true
 		// The place the agent's wait watched is always told: it is what
@@ -828,6 +872,9 @@ func (r *report) text() string {
 	for _, n := range r.Notices {
 		b.WriteString(n + "\n")
 	}
+	if r.Aboard != "" {
+		b.WriteString("Aboard: " + r.Aboard + "\n")
+	}
 	if bt := r.Boat; bt != nil {
 		heel := fmt.Sprintf("heel %d°", bt.Heel)
 		if bt.HeelTo != "" {
@@ -844,9 +891,27 @@ func (r *report) text() string {
 			speed += fmt.Sprintf(" · %.1f m under you", *bt.Depth)
 		}
 		if r.brief {
-			fmt.Fprintf(&b, "Boat: %s · heading %s · %s · %s · %s", bt.State, three(bt.Heading), speed, heel, bt.Tack)
+			// The reef only while the sail is reefed, or the crew at work.
+			reef := ""
+			if bt.reefed {
+				reef = bt.Reef + " · "
+			}
+			if bt.Yards != "" {
+				reef += bt.Yards + " · "
+			}
+			if bt.Gennaker != "" {
+				reef += bt.Gennaker + " · "
+			}
+			fmt.Fprintf(&b, "Boat: %s%s · heading %s · %s · %s · %s", reef, bt.State, three(bt.Heading), speed, heel, bt.Tack)
 		} else {
-			fmt.Fprintf(&b, "Boat: %s · %s · heading %s · %s · %s · %s\n", bt.Kind, bt.State, three(bt.Heading), speed, heel, bt.Tack)
+			kind := bt.Kind + ", " + bt.Reef
+			if bt.Yards != "" {
+				kind += ", " + bt.Yards
+			}
+			if bt.Gennaker != "" {
+				kind += ", " + bt.Gennaker
+			}
+			fmt.Fprintf(&b, "Boat: %s · %s · heading %s · %s · %s · %s\n", kind, bt.State, three(bt.Heading), speed, heel, bt.Tack)
 		}
 	}
 	if p := r.Pilot; p != nil {
@@ -998,3 +1063,10 @@ func (s *Sea) landWords(biome string) []string {
 
 // woodedFrom is the canopy, m, from which high ground is wooded.
 const woodedFrom = 8.0
+
+// boatSeen is the boat in slot of f as a sailor near it reads it: its kind,
+// its name, player text in «», and its sail number: "Keelboat «Saltpeter»
+// 311".
+func boatSeen(s *Sea, f *bus.Frame, slot int32) string {
+	return sailorlooks.Named(s.boat(f.Kind[slot]).Name, f.BoatName[slot], sailorlooks.BoatOf(f.BoatLook[slot]).Number)
+}

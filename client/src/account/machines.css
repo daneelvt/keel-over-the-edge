@@ -257,3 +257,30 @@
 .machine-watch .start-sign-in {
   padding: 0 16px;
 }
+
+/* A machine sailor's link to watch, shared, with Make a new link beside it. */
+.machine-links {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 12px;
+}
+
+.machine-links .start-sign-in {
+  padding: 0 16px;
+}
+
+/* The fleet's link, above the list. */
+.fleet-link {
+  margin: 4px 0 8px;
+}
+
+/* The account page's fleet: a line for each boat. */
+.fleet-list {
+  margin: 4px 0 12px;
+  padding-left: 20px;
+}
+.fleet-list li {
+  margin: 2px 0;
+  overflow-wrap: anywhere;
+}

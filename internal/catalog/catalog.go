@@ -66,6 +66,16 @@ func (c *Catalog) PrepareSky() *sky.Prepared {
 	return s
 }
 
+// Capacities are each boat's most people aboard, its skipper included, by
+// its index.
+func (c *Catalog) Capacities() []int {
+	out := make([]int, len(c.Boats))
+	for i := range c.Boats {
+		out[i] = c.Boats[i].Capacity
+	}
+	return out
+}
+
 // StartSheets are each boat's sheet for a start from rest, by its index:
 // pairs of an angle off the wind, degrees, and the sheet there.
 func (c *Catalog) StartSheets() [][][2]float64 {

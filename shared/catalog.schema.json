@@ -5,7 +5,7 @@
   "description": "Every list of kinds in the game. Kinds are data: code reads their properties, never their names.",
   "type": "object",
   "additionalProperties": false,
-  "required": ["boats", "sailors", "sailorOptions", "machine", "weather", "sky", "encounters", "world", "notices", "news"],
+  "required": ["boats", "boatLooks", "sailors", "sailorOptions", "machine", "weather", "sky", "encounters", "world", "notices", "news", "life"],
   "properties": {
     "boats": {
       "description": "Boat types.",
@@ -13,6 +13,7 @@
       "minItems": 1,
       "items": { "$ref": "#/$defs/Boat" }
     },
+    "boatLooks": { "$ref": "#/$defs/BoatLooks" },
     "sailors": {
       "description": "The looks sailors choose from, in the picker's order. At most 15: a look code holds a look's place in 4 bits, the 16th place the machine's.",
       "type": "array",
@@ -27,7 +28,8 @@
     "encounters": { "$ref": "#/$defs/Encounters" },
     "world": { "$ref": "#/$defs/World" },
     "notices": { "$ref": "#/$defs/Notices" },
-    "news": { "$ref": "#/$defs/News" }
+    "news": { "$ref": "#/$defs/News" },
+    "life": { "$ref": "#/$defs/Life" }
   },
   "$defs": {
     "Weather": {
@@ -730,10 +732,20 @@
       "description": "A boat's art. Every art object's values are paths under art/, checked to exist.",
       "type": "object",
       "additionalProperties": false,
-      "required": ["model", "far"],
+      "required": ["model", "far", "budget"],
       "properties": {
-        "model": { "description": "The boat's model: a glTF binary with the nodes hull, mast, boom, sail, telltales, pennant, rudder, tiller, daggerboard and sailor, and a node for each of the boat's lights, named as the light, where its lantern is.", "$ref": "#/$defs/ArtPath" },
-        "far": { "description": "The boat's far model, drawn for boats seen from afar among many: the model's nodes but telltales, pennant and lights, with few segments.", "$ref": "#/$defs/ArtPath" }
+        "model": { "description": "The boat's model: a glTF binary with the nodes hull, mast, boom, sail, telltales, pennant, rudder, tiller, daggerboard and sailor, a jib on a boat with headsails, and a node for each of the boat's lights, named as the light, where its lantern is.", "$ref": "#/$defs/ArtPath" },
+        "far": { "description": "The boat's far model, drawn for boats seen from afar among many: the model's nodes but telltales, pennant and lights, with few segments.", "$ref": "#/$defs/ArtPath" },
+        "budget": {
+          "description": "The most triangles each of the boat's models may have.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["near", "far"],
+          "properties": {
+            "near": { "description": "The model's.", "type": "integer", "minimum": 1, "maximum": 100000 },
+            "far": { "description": "The far model's.", "type": "integer", "minimum": 1, "maximum": 10000 }
+          }
+        }
       }
     },
     "SailorArt": {
@@ -790,6 +802,44 @@
         "colour": { "description": "Its colour, sRGB, #rrggbb.", "type": "string", "pattern": "^#[0-9a-f]{6}$" }
       }
     },
+    "BoatLooks": {
+      "title": "BoatLooks",
+      "description": "The looks a boat takes: its hull's paints and its sails' cloths, the gold its name is lettered in, and the highest sail number. At most 16 paints and 16 cloths: a boat's look code holds each in 4 bits. The first of each is a new boat's.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["paints", "cloths", "lettering", "numbers"],
+      "properties": {
+        "paints": { "description": "Hull paints, in the chooser's order.", "type": "array", "minItems": 1, "maxItems": 16, "items": { "$ref": "#/$defs/BoatPaint" } },
+        "cloths": { "description": "Sail cloths, in the chooser's order.", "type": "array", "minItems": 1, "maxItems": 16, "items": { "$ref": "#/$defs/BoatCloth" } },
+        "lettering": { "description": "The colour a boat's name is lettered in, sRGB, #rrggbb.", "type": "string", "pattern": "^#[0-9a-f]{6}$" },
+        "numbers": { "description": "The highest sail number: numbers run from 1 to it, each kind's its own. At most 16383, a look code's 14 bits.", "type": "integer", "minimum": 1, "maximum": 16383 }
+      }
+    },
+    "BoatPaint": {
+      "title": "BoatPaint",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "name", "colour"],
+      "properties": {
+        "id": { "$ref": "#/$defs/Id" },
+        "name": { "description": "Display name, as the player reads it: lowercase but for a name such as \"Prussian blue\".", "type": "string", "minLength": 1 },
+        "colour": { "description": "Its colour, sRGB, #rrggbb.", "type": "string", "pattern": "^#[0-9a-f]{6}$" },
+        "grain": { "description": "The wood shows through it: the hull is drawn with its grain.", "type": "boolean" }
+      }
+    },
+    "BoatCloth": {
+      "title": "BoatCloth",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "name", "colour", "ink"],
+      "properties": {
+        "id": { "$ref": "#/$defs/Id" },
+        "name": { "description": "Display name, as the player reads it.", "type": "string", "minLength": 1 },
+        "colour": { "description": "The cloth's colour, sRGB, #rrggbb.", "type": "string", "pattern": "^#[0-9a-f]{6}$" },
+        "band": { "description": "A band of another colour across the sail, if it is striped, sRGB, #rrggbb.", "type": "string", "pattern": "^#[0-9a-f]{6}$" },
+        "ink": { "description": "The colour its sail number and the machine mark are painted in, sRGB, #rrggbb.", "type": "string", "pattern": "^#[0-9a-f]{6}$" }
+      }
+    },
     "SailorOptions": {
       "title": "SailorOptions",
       "description": "The options a sailor's look takes: skins, hair colours, greys for the looks of greying sailors, and main colours, which the machines' coats take too. At most 16 of each: a look code holds each choice in 4 bits.",
@@ -819,16 +869,22 @@
     "Boat": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["id", "name", "description", "capacity", "lengthOverall", "beam", "lights", "lookout", "startSheet", "physics", "art"],
+      "required": ["id", "name", "description", "capacity", "stations", "lengthOverall", "beam", "lights", "lookout", "perch", "deck", "startSheet", "controls", "fleet", "physics", "art"],
       "properties": {
         "id": { "$ref": "#/$defs/Id" },
         "name": { "description": "Display name.", "type": "string", "minLength": 1 },
         "description": { "description": "What the boat is, in a few words.", "type": "string", "minLength": 1 },
         "capacity": { "description": "Most people aboard, the skipper included.", "type": "integer", "minimum": 1 },
+        "stations": {
+          "description": "Where the people aboard are drawn, one a person it can carry (capacity), in seat order: the first the helm, where whoever holds the controls is, then each seat's.",
+          "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/BoatStation" }
+        },
         "lengthOverall": { "description": "Length overall, in metres.", "type": "number", "exclusiveMinimum": 0 },
         "beam": { "description": "Greatest width of the hull, in metres.", "type": "number", "exclusiveMinimum": 0, "maximum": 30 },
         "lights": { "description": "The navigation lights the boat shows by night. Together their arcs make the full circle once.", "type": "array", "minItems": 1, "uniqueItems": true, "items": { "$ref": "#/$defs/Light" } },
         "lookout": { "description": "How high its lookout's eye is above the sea, in m: what it sees over the horizon.", "type": "number", "exclusiveMinimum": 0, "maximum": 60 },
+        "perch": { "description": "Where a seabird perches on it, in m in its model's frame (x to starboard, y up from the model's origin, z aft).", "$ref": "#/$defs/BoatPoint" },
+        "deck": { "description": "Where a flying fish lands on its deck, in m in its model's frame.", "$ref": "#/$defs/BoatPoint" },
         "startSheet": {
           "description": "Its sheet for a start from rest: pairs of an angle off the wind, in degrees, and the sheet there, from 0 hauled in to 1 let fly, by rising angle, read linearly between them.",
           "type": "array",
@@ -840,8 +896,54 @@
             "items": { "type": "number", "minimum": 0, "maximum": 180 }
           }
         },
+        "controls": { "$ref": "#/$defs/BoatControls" },
+        "fleet": { "description": "How many of the boat an account's fleet holds: one for each of its sailors, or one for the account, shared by them.", "type": "string", "enum": ["sailor", "account"] },
         "physics": { "$ref": "#/$defs/BoatPhysics" },
         "art": { "$ref": "#/$defs/BoatArt" }
+      }
+    },
+    "BoatPoint": {
+      "title": "BoatPoint",
+      "description": "A point on a boat, in m in its model's frame: x to starboard, y up, z aft.",
+      "type": "array", "minItems": 3, "maxItems": 3, "items": { "type": "number", "minimum": -60, "maximum": 60 }
+    },
+    "BoatStation": {
+      "title": "BoatStation",
+      "description": "A place aboard where a person is drawn: standing on the deck, seated as a dinghy's helmsman sits on the side deck, hiking out on its rail, or sat on a keelboat's rail with the legs over the side; to windward, if it says so.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["at", "pose", "facing"],
+      "properties": {
+        "at": { "description": "In m in the model's frame. Standing, the deck between the feet; seated, the seat's back edge, as the gunwale is to a dinghy's helmsman: the hips just within it, the legs reaching 0.7 m the way the person faces, the feet 0.2 m below it; on the rail, the deck's edge at the sheer under the person, who sits facing outboard, the hips just within it and the legs over the side.", "$ref": "#/$defs/BoatPoint" },
+        "pose": { "$ref": "#/$defs/StationPose" },
+        "facing": { "description": "The way the person faces, in degrees clockwise from the bow seen from above: 0 forward, 90 to starboard, 180 aft, 270 to port.", "type": "number", "minimum": 0, "exclusiveMaximum": 360 },
+        "windward": { "description": "Whether the person sits to windward, as a crew does: on the side away from the boom, the station's mirror across the centreline (and its facing's) when that is the other side, and crossing the boat at a crouch in a tack or a gybe. Not said, the station is where it is.", "type": "boolean" }
+      }
+    },
+    "StationPose": {
+      "title": "StationPose",
+      "description": "How a person is at a station: standing; seated (leaning out as hiking in a breeze); hiking (sitting out on the rail and leaning out, as a dinghy's crew); or on the rail (sat on a keelboat's deck edge facing outboard with the legs over the side, upright, leaning out in a breeze).",
+      "type": "string", "enum": ["standing", "seated", "hiking", "rail"]
+    },
+    "BoatControls": {
+      "title": "BoatControls",
+      "description": "The words the boat's controls are shown with. Every boat has the helm, the sheet and the reef; the sheet sets the main's limit, the headsails' and the downwind sail's in the same share, and the yards' brace.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["sheet", "reef"],
+      "properties": {
+        "sheet": {
+          "description": "The sheet's control: its name, and its two ends' words.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["name", "trim", "ease"],
+          "properties": {
+            "name": { "description": "What the control is called.", "type": "string", "minLength": 1, "maxLength": 12 },
+            "trim": { "description": "The word at its end that hauls in.", "type": "string", "minLength": 1, "maxLength": 12 },
+            "ease": { "description": "The word at its end that lets out.", "type": "string", "minLength": 1, "maxLength": 12 }
+          }
+        },
+        "reef": { "description": "The reef's three levels in words: full sail, one reef, two.", "type": "array", "minItems": 3, "maxItems": 3, "items": { "type": "string", "minLength": 1, "maxLength": 16 } }
       }
     },
     "BoatPhysics": {
@@ -849,10 +951,13 @@
       "description": "The boat's physics, in SI units with angles in degrees. Every value is required.",
       "type": "object",
       "additionalProperties": false,
-      "required": ["hull", "rig", "foils", "sailor", "rates", "autopilot"],
+      "required": ["hull", "rig", "headsails", "square", "downwind", "foils", "sailor", "rates", "autopilot"],
       "properties": {
         "hull": { "$ref": "#/$defs/PhysicsHull" },
         "rig": { "$ref": "#/$defs/PhysicsRig" },
+        "headsails": { "$ref": "#/$defs/PhysicsHeadsails" },
+        "square": { "$ref": "#/$defs/PhysicsSquare" },
+        "downwind": { "$ref": "#/$defs/PhysicsDownwind" },
         "foils": { "$ref": "#/$defs/PhysicsFoils" },
         "sailor": { "$ref": "#/$defs/PhysicsSailor" },
         "rates": { "$ref": "#/$defs/PhysicsRates" },
@@ -864,14 +969,14 @@
       "description": "The hull: its mass, resistance, inertia and stability.",
       "type": "object",
       "additionalProperties": false,
-      "required": ["displacement", "waterlineLength", "hullDraught", "centreOfGravity", "dragAreaStep", "dragArea", "crossFlowDrag", "addedMassSurge", "addedMassSway", "munk", "yawInertia", "rollInertia", "rollDamping", "rightingLever", "waterlineBeam", "waterplaneArea", "waterplanePitch", "addedMassHeave", "pitchInertia", "heaveDamping", "pitchDamping", "waveForce", "waveYaw", "outline", "transom", "stem"],
+      "required": ["displacement", "waterlineLength", "hullDraught", "centreOfGravity", "dragAreaStep", "dragArea", "crossFlowDrag", "addedMassSurge", "addedMassSway", "munk", "yawInertia", "rollInertia", "rollDamping", "yawDamping", "rightingLever", "waterlineBeam", "waterplaneArea", "waterplanePitch", "addedMassHeave", "pitchInertia", "heaveDamping", "pitchDamping", "waveForce", "waveYaw", "outline", "transom", "stem"],
       "properties": {
         "displacement": { "description": "Boat, rig and sailor, in kg.", "type": "number", "exclusiveMinimum": 0, "maximum": 1000000 },
         "waterlineLength": { "description": "Length on the waterline, in m.", "type": "number", "exclusiveMinimum": 0, "maximum": 100 },
         "hullDraught": { "description": "The hull's own draught, foils aside, in m.", "type": "number", "exclusiveMinimum": 0, "maximum": 10 },
         "centreOfGravity": { "description": "Height of the centre of gravity above the waterline, in m.", "type": "number", "minimum": -10, "maximum": 20 },
         "dragAreaStep": { "description": "Speed between entries of dragArea, in m/s.", "type": "number", "exclusiveMinimum": 0, "maximum": 10 },
-        "dragArea": { "description": "Upright resistance as a drag area (C_D A), at speeds 0, 1, 2 … times dragAreaStep, in m². Beyond the last, the last.", "type": "array", "items": { "type": "number", "minimum": 0, "maximum": 10 }, "minItems": 25, "maxItems": 25 },
+        "dragArea": { "description": "Upright resistance as a drag area (C_D A), at speeds 0, 1, 2 … times dragAreaStep, in m². Beyond the last, the last.", "type": "array", "items": { "type": "number", "minimum": 0, "maximum": 50 }, "minItems": 25, "maxItems": 25 },
         "crossFlowDrag": { "description": "Drag coefficient of the hull moving sideways, on waterline length times draught.", "type": "number", "minimum": 0, "maximum": 5 },
         "addedMassSurge": { "description": "Added mass moving ahead, in kg.", "type": "number", "minimum": 0, "maximum": 1000000 },
         "addedMassSway": { "description": "Added mass moving sideways, hull and foils, in kg.", "type": "number", "minimum": 0, "maximum": 1000000 },
@@ -879,6 +984,7 @@
         "yawInertia": { "description": "Moment of inertia in yaw, added inertia included, in kg·m².", "type": "number", "exclusiveMinimum": 0, "maximum": 100000000 },
         "rollInertia": { "description": "Moment of inertia in roll, added inertia included, in kg·m².", "type": "number", "exclusiveMinimum": 0, "maximum": 100000000 },
         "rollDamping": { "description": "The hull's own roll damping, in N·m·s/rad. The foils and sails damp through their flow.", "type": "number", "minimum": 0, "maximum": 10000000 },
+        "yawDamping": { "description": "The hull's resistance to turning, from the water flowing across it as it turns, in N·m per (rad/s)²: its moment against the rate of turn times the rate's size. 0 where the foils alone damp the turning.", "type": "number", "minimum": 0, "maximum": 1000000000 },
         "rightingLever": { "description": "Righting lever (GZ) with the sailor on the centreline, every 10° of heel from 0° to 180°, in m.", "type": "array", "items": { "type": "number", "minimum": -10, "maximum": 10 }, "minItems": 19, "maxItems": 19 },
         "waterlineBeam": { "description": "Beam on the waterline, in m.", "type": "number", "exclusiveMinimum": 0, "maximum": 50 },
         "waterplaneArea": { "description": "Area of the waterplane, in m²: the heave stiffness is the water's weight per metre of it.", "type": "number", "exclusiveMinimum": 0, "maximum": 5000 },
@@ -896,10 +1002,10 @@
     },
     "PhysicsRig": {
       "title": "PhysicsRig",
-      "description": "The sail, boom and windage.",
+      "description": "The main, its boom and reefs, and the windage.",
       "type": "object",
       "additionalProperties": false,
-      "required": ["sailArea", "luff", "foot", "boomHeight", "mastPosition", "footStrip", "headStrip", "pressureAttached", "pressureSeparated", "effectiveHeight", "quadraticDrag", "maxLift", "stallAngle", "stallWidth", "sailDrag", "luffAngle", "flogDrag", "normalForce", "twistPowered", "twistDepowered", "twistEased", "twistTurn", "headBacked", "headBackedWidth", "boomIn", "boomOut", "boomInertia", "boomMoment", "boomDamping", "windageFront", "windageSide", "windageHeight", "sailFloat", "sailWaterDamping", "closeHauled"],
+      "required": ["sailArea", "luff", "foot", "boomHeight", "mastPosition", "footStrip", "headStrip", "pressureAttached", "pressureSeparated", "effectiveHeight", "quadraticDrag", "maxLift", "stallAngle", "stallWidth", "sailDrag", "luffAngle", "flogDrag", "normalForce", "twistPowered", "twistDepowered", "twistEased", "twistTurn", "headBacked", "headBackedWidth", "boomIn", "boomOut", "boomInertia", "boomMoment", "boomDamping", "windageFront", "windageSide", "windageHeight", "sailFloat", "sailWaterDamping", "closeHauled", "reefs", "reefTime"],
       "properties": {
         "sailArea": { "description": "Sail area, in m².", "type": "number", "exclusiveMinimum": 0, "maximum": 2000 },
         "luff": { "description": "Length of the luff, in m.", "type": "number", "exclusiveMinimum": 0, "maximum": 100 },
@@ -935,18 +1041,113 @@
         "windageHeight": { "description": "Height of the windage's centre above the waterline, in m.", "type": "number", "minimum": 0, "maximum": 50 },
         "sailFloat": { "description": "Upward force per metre a sail strip is pushed under the water, in N/m.", "type": "number", "minimum": 0, "maximum": 10000000 },
         "sailWaterDamping": { "description": "Vertical damping of a sail strip in the water, in N·s/m.", "type": "number", "minimum": 0, "maximum": 10000000 },
-        "closeHauled": { "description": "The boat's close-hauled course: its heading off the true wind sailing as close to it as it sails well, in degrees.", "type": "number", "minimum": 25, "maximum": 60 }
+        "closeHauled": { "description": "The boat's close-hauled course: its heading off the true wind sailing as close to it as it sails well, in degrees.", "type": "number", "minimum": 25, "maximum": 80 },
+        "reefs": { "description": "The share of its luff the main keeps at full sail, with one reef and with two: its area goes as the square of the share, its centre of effort down with it.", "type": "array", "items": { "type": "number", "exclusiveMinimum": 0, "maximum": 1 }, "minItems": 3, "maxItems": 3 },
+        "reefTime": { "description": "Time for the crew to take a reef in or shake it out, in s.", "type": "number", "exclusiveMinimum": 0, "maximum": 600 }
+      }
+    },
+    "PhysicsHeadsails": {
+      "title": "PhysicsHeadsails",
+      "description": "The headsails: sails tacked on a stay ahead of the mast, their clew free to their own sheet's limit, with no boom, set and trimmed together as one. A boat with none has an area of 0, and its other values 0.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["headsailArea", "headsailLuff", "headsailFoot", "headsailTackHeight", "headsailTack", "headsailFootStrip", "headsailHeadStrip", "headsailPressureAttached", "headsailPressureSeparated", "headsailMaxLift", "headsailStallAngle", "headsailStallWidth", "headsailDrag", "headsailNormalForce", "headsailTwist", "headsailTwistEased", "headsailIn", "headsailOut", "headsailInertia", "headsailMoment", "headsailDamping", "headsailReefs"],
+      "properties": {
+        "headsailArea": { "description": "Their area, in m²; 0 for none.", "type": "number", "minimum": 0, "maximum": 2000 },
+        "headsailLuff": { "description": "The head's height above the tack, in m.", "type": "number", "minimum": 0, "maximum": 100 },
+        "headsailFoot": { "description": "Length of the foot, in m.", "type": "number", "minimum": 0, "maximum": 100 },
+        "headsailTackHeight": { "description": "The tack's height above the waterline, in m.", "type": "number", "minimum": 0, "maximum": 20 },
+        "headsailTack": { "description": "The tack's distance ahead of the centre of gravity, in m.", "type": "number", "minimum": -50, "maximum": 50 },
+        "headsailFootStrip": { "description": "Height of the lower strip's centre of effort above the tack, as a fraction of the luff.", "type": "number", "minimum": 0, "maximum": 1 },
+        "headsailHeadStrip": { "description": "Height of the upper strip's centre of effort above the tack, as a fraction of the luff.", "type": "number", "minimum": 0, "maximum": 1 },
+        "headsailPressureAttached": { "description": "Centre of pressure aft of the tack with the flow attached, as a fraction of the foot.", "type": "number", "minimum": 0, "maximum": 1 },
+        "headsailPressureSeparated": { "description": "Centre of pressure aft of the tack with the flow separated, as a fraction of the foot.", "type": "number", "minimum": 0, "maximum": 1 },
+        "headsailMaxLift": { "description": "Greatest lift coefficient.", "type": "number", "minimum": 0, "maximum": 3 },
+        "headsailStallAngle": { "description": "Angle of attack of the greatest lift, in degrees.", "type": "number", "minimum": 0, "maximum": 60 },
+        "headsailStallWidth": { "description": "Angle past the stall over which the flow separates, in degrees.", "type": "number", "minimum": 0, "maximum": 60 },
+        "headsailDrag": { "description": "Viscous drag coefficient.", "type": "number", "minimum": 0, "maximum": 1 },
+        "headsailNormalForce": { "description": "Normal force coefficient of separated flow, every 10° of angle of attack from 0° to 180°.", "type": "array", "items": { "type": "number", "minimum": 0, "maximum": 3 }, "minItems": 19, "maxItems": 19 },
+        "headsailTwist": { "description": "The upper strip's twist beyond the clew's line, sheeted in, in degrees.", "type": "number", "minimum": 0, "maximum": 45 },
+        "headsailTwistEased": { "description": "Extra twist as the sheet lets the clew out, growing in proportion to its angle, in degrees.", "type": "number", "minimum": 0, "maximum": 45 },
+        "headsailIn": { "description": "The clew's angle off the centreline, seen from the tack, with the sheet hauled in hard, in degrees.", "type": "number", "minimum": 0, "maximum": 45 },
+        "headsailOut": { "description": "The clew's angle with the sheet let fly, in degrees.", "type": "number", "minimum": 0, "maximum": 120 },
+        "headsailInertia": { "description": "Moment of inertia of the sail and its clew about the stay, in kg·m².", "type": "number", "minimum": 0, "maximum": 1000000 },
+        "headsailMoment": { "description": "Their mass times the distance of their centre of gravity aft of the stay, in kg·m.", "type": "number", "minimum": 0, "maximum": 1000000 },
+        "headsailDamping": { "description": "Friction of the clew's swing, in N·m·s/rad.", "type": "number", "minimum": 0, "maximum": 1000000 },
+        "headsailReefs": { "description": "The share of their luff kept at full sail, with one reef and with two.", "type": "array", "items": { "type": "number", "minimum": 0, "maximum": 1 }, "minItems": 3, "maxItems": 3 }
+      }
+    },
+    "PhysicsDownwind": {
+      "title": "PhysicsDownwind",
+      "description": "The downwind sail: a gennaker tacked on the centreline at a bowsprit's end, its clew free to its own sheet's limit as the headsails' is, set and taken in by the crew's rule as the boat bears away and comes up, and kept in by the reef. A boat with none has an area of 0, and its other values 0.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["downwindArea", "downwindLuff", "downwindFoot", "downwindTackHeight", "downwindTack", "downwindFootStrip", "downwindHeadStrip", "downwindPressureAttached", "downwindPressureSeparated", "downwindMaxLift", "downwindStallAngle", "downwindStallWidth", "downwindDrag", "downwindNormalForce", "downwindTwist", "downwindTwistEased", "downwindIn", "downwindOut", "downwindInertia", "downwindMoment", "downwindDamping", "hoistTime", "dropTime", "setAngle", "dropAngle", "downwindReefs"],
+      "properties": {
+        "downwindArea": { "description": "Its area, in m²; 0 for none.", "type": "number", "minimum": 0, "maximum": 2000 },
+        "downwindLuff": { "description": "The head's height above the tack, in m.", "type": "number", "minimum": 0, "maximum": 100 },
+        "downwindFoot": { "description": "Length of the foot, in m.", "type": "number", "minimum": 0, "maximum": 100 },
+        "downwindTackHeight": { "description": "The tack's height above the waterline, in m.", "type": "number", "minimum": 0, "maximum": 20 },
+        "downwindTack": { "description": "The tack's distance ahead of the centre of gravity, in m: the bowsprit's end.", "type": "number", "minimum": -50, "maximum": 50 },
+        "downwindFootStrip": { "description": "Height of the lower strip's centre of effort above the tack, as a fraction of the luff.", "type": "number", "minimum": 0, "maximum": 1 },
+        "downwindHeadStrip": { "description": "Height of the upper strip's centre of effort above the tack, as a fraction of the luff.", "type": "number", "minimum": 0, "maximum": 1 },
+        "downwindPressureAttached": { "description": "Centre of pressure aft of the tack with the flow attached, as a fraction of the foot.", "type": "number", "minimum": 0, "maximum": 1 },
+        "downwindPressureSeparated": { "description": "Centre of pressure aft of the tack with the flow separated, as a fraction of the foot.", "type": "number", "minimum": 0, "maximum": 1 },
+        "downwindMaxLift": { "description": "Greatest lift coefficient.", "type": "number", "minimum": 0, "maximum": 3 },
+        "downwindStallAngle": { "description": "Angle of attack of the greatest lift, in degrees.", "type": "number", "minimum": 0, "maximum": 60 },
+        "downwindStallWidth": { "description": "Angle past the stall over which the flow separates, in degrees.", "type": "number", "minimum": 0, "maximum": 60 },
+        "downwindDrag": { "description": "Viscous drag coefficient.", "type": "number", "minimum": 0, "maximum": 1 },
+        "downwindNormalForce": { "description": "Normal force coefficient of separated flow, every 10° of angle of attack from 0° to 180°.", "type": "array", "items": { "type": "number", "minimum": 0, "maximum": 3 }, "minItems": 19, "maxItems": 19 },
+        "downwindTwist": { "description": "The upper strip's twist beyond the clew's line, sheeted in, in degrees.", "type": "number", "minimum": 0, "maximum": 45 },
+        "downwindTwistEased": { "description": "Extra twist as the sheet lets the clew out, growing in proportion to its angle, in degrees.", "type": "number", "minimum": 0, "maximum": 45 },
+        "downwindIn": { "description": "The clew's angle off the centreline, seen from the tack, with the sheet hauled in hard, in degrees.", "type": "number", "minimum": 0, "maximum": 90 },
+        "downwindOut": { "description": "The clew's angle with the sheet let fly, in degrees.", "type": "number", "minimum": 0, "maximum": 150 },
+        "downwindInertia": { "description": "Moment of inertia of the sail and its clew about the tack, in kg·m².", "type": "number", "minimum": 0, "maximum": 1000000 },
+        "downwindMoment": { "description": "Their mass times the distance of their centre of gravity aft of the tack, in kg·m.", "type": "number", "minimum": 0, "maximum": 1000000 },
+        "downwindDamping": { "description": "Friction of the clew's swing, in N·m·s/rad.", "type": "number", "minimum": 0, "maximum": 1000000 },
+        "hoistTime": { "description": "Time for the crew to set it from its bag, in s.", "type": "number", "minimum": 0, "maximum": 600 },
+        "dropTime": { "description": "Time for the crew to take it in, in s.", "type": "number", "minimum": 0, "maximum": 600 },
+        "setAngle": { "description": "The crew sets it as the boat bears away with the true wind this far off her bow or more, in degrees.", "type": "number", "minimum": 0, "maximum": 180 },
+        "dropAngle": { "description": "And takes it in as she comes up with the true wind forward of this, in degrees: less than setAngle, the two a band in which a steady course neither sets nor takes it in.", "type": "number", "minimum": 0, "maximum": 180 },
+        "downwindReefs": { "description": "At full sail, with one reef and with two: 1 where the crew may set it, 0 where the reef keeps it in. A downwind sail is never shortened.", "type": "array", "items": { "type": "number", "minimum": 0, "maximum": 1 }, "minItems": 3, "maxItems": 3 }
+      }
+    },
+    "PhysicsSquare": {
+      "title": "PhysicsSquare",
+      "description": "Square sails on yards the braces hold at an angle, in a fore group and an after group, and the crew that hauls the yards round in a turn. A boat with none has areas of 0, and its other values 0.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["squareForeArea", "squareAfterArea", "squareForeMast", "squareAfterMast", "squareFootHeight", "squareLuff", "squareFootStrip", "squareHeadStrip", "squarePressure", "squareLift", "squareDrag", "squareNormalForce", "squareTwist", "braceSharp", "braceTime", "hauls", "letGo", "squareReefs"],
+      "properties": {
+        "squareForeArea": { "description": "The fore group's area, in m²; 0 for none.", "type": "number", "minimum": 0, "maximum": 5000 },
+        "squareAfterArea": { "description": "The after group's area, in m²; 0 for none.", "type": "number", "minimum": 0, "maximum": 5000 },
+        "squareForeMast": { "description": "The fore group's mast ahead of the centre of gravity, in m.", "type": "number", "minimum": -50, "maximum": 50 },
+        "squareAfterMast": { "description": "The after group's centre of effort ahead of the centre of gravity, in m: between its masts, by their sails' areas.", "type": "number", "minimum": -50, "maximum": 50 },
+        "squareFootHeight": { "description": "The lowest sails' foot above the waterline, in m.", "type": "number", "minimum": 0, "maximum": 50 },
+        "squareLuff": { "description": "The sails' height from that foot to the highest yard, in m.", "type": "number", "minimum": 0, "maximum": 100 },
+        "squareFootStrip": { "description": "Height of the lower strip's centre of effort above the sails' foot, as a fraction of the luff.", "type": "number", "minimum": 0, "maximum": 1 },
+        "squareHeadStrip": { "description": "Height of the upper strip's centre of effort above the sails' foot, as a fraction of the luff.", "type": "number", "minimum": 0, "maximum": 1 },
+        "squarePressure": { "description": "Centre of pressure out along the yards from the mast toward the arm the wind meets first, with the flow attached, as a fraction of the sails' half-width (half their area over their luff); with the flow separated it is at the mast.", "type": "number", "minimum": 0, "maximum": 1 },
+        "squareLift": { "description": "Lift coefficient of the sails drawing, the wind on their after face, every 5° of angle of attack off the yards' line from 0° to 90°.", "type": "array", "items": { "type": "number", "minimum": -1, "maximum": 3 }, "minItems": 19, "maxItems": 19 },
+        "squareDrag": { "description": "Drag coefficient of the sails drawing, every 5° of angle of attack off the yards' line from 0° to 90°.", "type": "array", "items": { "type": "number", "minimum": 0, "maximum": 3 }, "minItems": 19, "maxItems": 19 },
+        "squareNormalForce": { "description": "Normal force coefficient of the sails aback, pressed flat against their mast, every 10° of angle of attack from 0° to 180°.", "type": "array", "items": { "type": "number", "minimum": 0, "maximum": 3 }, "minItems": 19, "maxItems": 19 },
+        "squareTwist": { "description": "The upper strip's yards braced this much squarer than the lower's, in degrees: the wind aloft is freer.", "type": "number", "minimum": 0, "maximum": 30 },
+        "braceSharp": { "description": "The yards' least angle off the centreline, braced up sharp, in degrees.", "type": "number", "minimum": 0, "maximum": 90 },
+        "braceTime": { "description": "Time for the crew to swing the yards from braced up sharp on one side to the other, in s.", "type": "number", "minimum": 0, "maximum": 600 },
+        "hauls": { "description": "In a tack, the after yards swing as the head comes this near the wind, in degrees.", "type": "number", "minimum": 0, "maximum": 90 },
+        "letGo": { "description": "And the fore yards once the wind is this far on the new bow; wearing, every yard once the wind is this far on the new quarter, in degrees.", "type": "number", "minimum": 0, "maximum": 90 },
+        "squareReefs": { "description": "The share of their luff kept at full sail, with one reef and with two.", "type": "array", "items": { "type": "number", "minimum": 0, "maximum": 1 }, "minItems": 3, "maxItems": 3 }
       }
     },
     "PhysicsFoils": {
       "title": "PhysicsFoils",
-      "description": "The daggerboard or keel, and the rudder.",
+      "description": "The daggerboard or fixed keel, and the rudder.",
       "type": "object",
       "additionalProperties": false,
-      "required": ["boardSpan", "boardChord", "boardPosition", "rudderSpan", "rudderChord", "rudderPosition", "rudderAngle", "foilStall", "foilStallWidth", "foilDrag", "plateNormal", "pressureDepth", "carryOver", "heelLoss", "rudderInflow", "downwash", "foilWetHeel", "foilDryHeel"],
+      "required": ["boardSpan", "boardChord", "boardPosition", "rudderSpan", "rudderChord", "rudderPosition", "rudderAngle", "foilStall", "foilStallWidth", "foilDrag", "plateNormal", "pressureDepth", "carryOver", "heelLoss", "rudderInflow", "downwash", "foilWetHeel", "foilDryHeel", "fixed"],
       "properties": {
         "boardSpan": { "description": "Span of the daggerboard below the hull, in m.", "type": "number", "exclusiveMinimum": 0, "maximum": 20 },
-        "boardChord": { "description": "Chord of the daggerboard, in m.", "type": "number", "exclusiveMinimum": 0, "maximum": 20 },
+        "boardChord": { "description": "Chord of the daggerboard, or of a fixed keel along its length, in m.", "type": "number", "exclusiveMinimum": 0, "maximum": 50 },
         "boardPosition": { "description": "Distance of the daggerboard ahead of the centre of gravity, in m.", "type": "number", "minimum": -50, "maximum": 50 },
         "rudderSpan": { "description": "Span of the rudder below the hull, in m.", "type": "number", "exclusiveMinimum": 0, "maximum": 20 },
         "rudderChord": { "description": "Chord of the rudder, in m.", "type": "number", "exclusiveMinimum": 0, "maximum": 20 },
@@ -962,7 +1163,8 @@
         "rudderInflow": { "description": "The rudder's share of the boat's speed through the water.", "type": "number", "minimum": 0, "maximum": 1.5 },
         "downwash": { "description": "Share of the sideways flow from leeway that the daggerboard's downwash cancels at the rudder.", "type": "number", "minimum": 0, "maximum": 1 },
         "foilWetHeel": { "description": "Heel up to which the foils are fully in the water, in degrees.", "type": "number", "minimum": 0, "maximum": 180 },
-        "foilDryHeel": { "description": "Heel from which the foils are out of the water, in degrees.", "type": "number", "minimum": 0, "maximum": 180 }
+        "foilDryHeel": { "description": "Heel from which the foils are out of the water, in degrees.", "type": "number", "minimum": 0, "maximum": 180 },
+        "fixed": { "description": "1 for a fixed keel, which the ground meets at its tip, stopping the boat, and never pushes up; 0 for a daggerboard the ground pushes up as the water shoals.", "type": "number", "minimum": 0, "maximum": 1 }
       }
     },
     "PhysicsSailor": {
@@ -1017,7 +1219,7 @@
         "trimBand": { "description": "The standing helm grows only this near the course, in degrees.", "type": "number", "exclusiveMinimum": 0, "maximum": 45 },
         "tackHelm": { "description": "The most helm in a tack.", "type": "number", "exclusiveMinimum": 0, "maximum": 1 },
         "gybeHelm": { "description": "The most helm in a gybe.", "type": "number", "exclusiveMinimum": 0, "maximum": 1 },
-        "byTheLee": { "description": "How far by the lee the boat sails before the autopilot counts it gybed, in degrees. Below the angle at which the boom goes over by itself, about 17° on a dinghy.", "type": "number", "minimum": 0, "exclusiveMaximum": 17 },
+        "byTheLee": { "description": "How far by the lee the boat sails before the autopilot counts it gybed, in degrees. Below the angle at which the boom goes over by itself, about 17° on a dinghy.", "type": "number", "minimum": 0, "maximum": 60 },
         "onCourse": { "description": "A tack or gybe ends this near its target, in degrees.", "type": "number", "exclusiveMinimum": 0, "maximum": 45 },
         "astern": { "description": "Going astern faster than this through the water, in m/s, the boat is told it goes astern: the water reaches the rudder from behind and works it in reverse.", "type": "number", "minimum": 0, "maximum": 1 },
         "steerage": { "description": "Slower than this through the water, either way, in m/s, the rudder has no steerage: the report says so, and a turn may stall.", "type": "number", "exclusiveMinimum": 0, "maximum": 2 },
@@ -4134,21 +4336,309 @@
       "type": "string",
       "enum": ["cave", "arch", "blowhole", "waterfall", "spring", "crater", "fumarole", "ruin", "colony"]
     },
+    "Life": {
+      "title": "Life",
+      "description": "The sea's life: the kinds of animal met at sea, and the schedule that says where and when each is met. The server draws it from the world's seed, the place, the time, the habitat there and the weather; every player near is told of each encounter.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["art", "cell", "slot", "lulls", "quiet", "bind", "ride", "flush", "aboard", "drop", "dusk", "rainy", "habitat", "sea", "towns", "kinds"],
+      "properties": {
+        "art": {
+          "title": "LifeArt",
+          "description": "The bodies of the life in the water, one model each.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["model"],
+          "properties": { "model": { "$ref": "#/$defs/ArtPath" } }
+        },
+        "cell": { "description": "The schedule's cells' side, in m.", "type": "number", "minimum": 100, "maximum": 10000 },
+        "slot": { "description": "The schedule's slots of world time, in s.", "type": "integer", "minimum": 1, "maximum": 3600 },
+        "lulls": {
+          "title": "LifeLulls",
+          "description": "How long after an encounter of a family begins no other of the family begins in its cell or the eight about it, in s.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["birds", "water", "big", "night"],
+          "properties": {
+            "birds": { "type": "number", "minimum": 0, "maximum": 86400 },
+            "water": { "type": "number", "minimum": 0, "maximum": 86400 },
+            "big": { "type": "number", "minimum": 0, "maximum": 86400 },
+            "night": { "type": "number", "minimum": 0, "maximum": 86400 }
+          }
+        },
+        "quiet": { "description": "A boat followed, ridden or perched on is not again until this long after, in s.", "type": "number", "minimum": 0, "maximum": 86400 },
+        "bind": {
+          "title": "LifeBind",
+          "description": "Which boat a group that follows boats takes as it begins: the nearest within this, sailing this fast or faster on a course steady this long.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["within", "speed", "steady", "turn"],
+          "properties": {
+            "within": { "description": "In m.", "type": "number", "minimum": 0, "maximum": 5000 },
+            "speed": { "description": "In m/s.", "type": "number", "minimum": 0, "maximum": 20 },
+            "steady": { "description": "In s.", "type": "number", "minimum": 0, "maximum": 600 },
+            "turn": { "description": "A course is steady while the heading stays within this of where it was, in degrees.", "type": "number", "minimum": 1, "maximum": 180 }
+          }
+        },
+        "ride": {
+          "title": "LifeRide",
+          "description": "How far a group that rides bows comes from to a boat, in m, by the bind's other rules; and when it leaves the bow at once: the boat slower than this, in m/s, or turned more than this from its heading as the ride began, in degrees.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["within", "slower", "turn"],
+          "properties": {
+            "within": { "type": "number", "minimum": 0, "maximum": 5000 },
+            "slower": { "type": "number", "minimum": 0, "maximum": 20 },
+            "turn": { "type": "number", "minimum": 1, "maximum": 180 }
+          }
+        },
+        "flush": {
+          "title": "LifeFlush",
+          "description": "How a boat sailing through a ground flushes its fish: every so many s, by a draw of the boat, the ground and that slot, at this chance, if it sails at the bind's speed or faster; the fish come up this long after, this far ahead of its bow and up to this far either side of its course, in m.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["every", "chance", "lead", "ahead", "beside"],
+          "properties": {
+            "every": { "type": "number", "minimum": 0.5, "maximum": 60 },
+            "chance": { "type": "number", "minimum": 0, "maximum": 1 },
+            "lead": { "type": "number", "minimum": 0, "maximum": 10 },
+            "ahead": { "type": "array", "minItems": 2, "maxItems": 2, "items": { "type": "number", "minimum": 0, "maximum": 200 } },
+            "beside": { "type": "number", "minimum": 0, "maximum": 200 }
+          }
+        },
+        "aboard": {
+          "title": "LifeAboard",
+          "description": "A flying fish drawn to a boat's lights by night, landing on its deck: the kind of fish, by its id; every so many s, by a draw of the boat and that slot, at this chance, a boat lit and sailing over water the kind lives in has one land aboard, where it lies this long, in s.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "every", "chance", "stay"],
+          "properties": {
+            "kind": { "type": "string", "pattern": "^[a-z][a-z0-9-]*$" },
+            "every": { "type": "number", "minimum": 1, "maximum": 3600 },
+            "chance": { "type": "number", "minimum": 0, "maximum": 1 },
+            "stay": { "type": "number", "minimum": 1, "maximum": 3600 }
+          }
+        },
+        "drop": { "description": "An encounter sent is dropped once the eye is this far beyond its reach, in m.", "type": "number", "minimum": 0, "maximum": 5000 },
+        "dusk": { "description": "The sun's height from which dusk and dawn begin to where they end, in degrees.", "type": "array", "minItems": 2, "maxItems": 2, "items": { "type": "number", "minimum": -90, "maximum": 90 } },
+        "rainy": { "description": "Rain this heavy or heavier thins life as its kind's rain says, in mm an hour.", "type": "number", "minimum": 0, "maximum": 200 },
+        "habitat": {
+          "title": "LifeHabitat",
+          "description": "Where each habitat is.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["harbour", "reef", "shelf", "outer", "colony", "field"],
+          "properties": {
+            "harbour": { "description": "Water within this of a town is its harbour, in m.", "type": "number", "minimum": 0, "maximum": 5000 },
+            "reef": { "description": "Water within this of a reef or a lagoon is the reef's, in m.", "type": "number", "minimum": 0, "maximum": 5000 },
+            "shelf": { "description": "Water shallower than this is the shelf, deeper the deep, in m.", "type": "number", "minimum": 1, "maximum": 500 },
+            "outer": { "description": "Water this far from the centre or further is the outer water, in m.", "type": "number", "minimum": 0, "maximum": 20000 },
+            "colony": { "description": "Within this of a colony a kind's nearColony counts, in m.", "type": "number", "minimum": 0, "maximum": 20000 },
+            "field": { "description": "The habitat's field's cells' side, built as the world loads, in m.", "type": "number", "minimum": 10, "maximum": 1000 }
+          }
+        },
+        "sea": { "description": "The share of water life seen at each Beaufort force from 0, the last for every force beyond it.", "type": "array", "minItems": 1, "maxItems": 13, "items": { "type": "number", "minimum": 0, "maximum": 1 } },
+        "towns": {
+          "title": "LifeTowns",
+          "description": "The gulls that wheel over each town by day, as a colony's birds wheel over it: the kind they are, by its id; how many; how far out and how high they wheel, in m.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "count", "wheel", "height"],
+          "properties": {
+            "kind": { "type": "string", "pattern": "^[a-z][a-z0-9-]*$" },
+            "count": { "type": "array", "minItems": 2, "maxItems": 2, "items": { "type": "integer", "minimum": 0, "maximum": 50 } },
+            "wheel": { "type": "array", "minItems": 2, "maxItems": 2, "items": { "type": "number", "minimum": 5, "maximum": 500 } },
+            "height": { "type": "array", "minItems": 2, "maxItems": 2, "items": { "type": "number", "minimum": 1, "maximum": 200 } }
+          }
+        },
+        "kinds": { "description": "The kinds of animal.", "type": "array", "minItems": 1, "maxItems": 255, "items": { "$ref": "#/$defs/LifeKind" } }
+      }
+    },
+    "LifeKind": {
+      "title": "LifeKind",
+      "description": "A kind of animal met at sea: what it is and how it moves, where and when it is met, and how often.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "name", "plural", "form", "family", "path", "habitats", "when", "wind", "rain", "bySea", "rate", "group", "stay", "speed", "height", "range", "reach"],
+      "properties": {
+        "id": { "type": "string", "pattern": "^[a-z][a-z0-9-]*$" },
+        "name": { "type": "string" },
+        "plural": { "description": "Its name for more than one.", "type": "string" },
+        "form": { "$ref": "#/$defs/LifeForm" },
+        "family": { "$ref": "#/$defs/LifeFamily" },
+        "path": { "$ref": "#/$defs/LifePath" },
+        "binds": { "$ref": "#/$defs/LifeBinds" },
+        "over": { "$ref": "#/$defs/LifeOver" },
+        "brings": { "description": "The groups that come with it, on its patch, from its start to its end.", "type": "array", "items": { "$ref": "#/$defs/LifeBring" } },
+        "patch": { "description": "How far its patch reaches from its middle, the least and the most, in m: a ground of flying fish, a boil of bait.", "type": "array", "minItems": 2, "maxItems": 2, "items": { "type": "number", "minimum": 0, "maximum": 5000 } },
+        "collective": { "description": "What a group of it is called, as a pod of dolphins.", "type": "string" },
+        "dives": { "description": "Its plunges, each bird a minute.", "type": "number", "minimum": 0, "maximum": 60 },
+        "line": { "description": "Whether a group flies in a line, one behind another.", "type": "boolean" },
+        "homeward": { "description": "Whether at dusk it heads for the nearest colony, or the nearest land without one.", "type": "boolean" },
+        "patters": { "description": "Whether, with a boat, it flutters low over the boat's wake, its feet pattering on the water.", "type": "boolean" },
+        "habitats": {
+          "title": "LifeHabitats",
+          "description": "Its weight in each habitat: a point is its harbour's if within one, else its reef's, else the outer water's, else the shelf's or the deep's.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["harbour", "reef", "shelf", "deep", "outer"],
+          "properties": {
+            "harbour": { "type": "number", "minimum": 0, "maximum": 10 },
+            "reef": { "type": "number", "minimum": 0, "maximum": 10 },
+            "shelf": { "type": "number", "minimum": 0, "maximum": 10 },
+            "deep": { "type": "number", "minimum": 0, "maximum": 10 },
+            "outer": { "type": "number", "minimum": 0, "maximum": 10 }
+          }
+        },
+        "nearColony": { "description": "Its weight times this within the habitat's colony distance of a colony.", "type": "number", "minimum": 0, "maximum": 10 },
+        "when": {
+          "title": "LifeWhen",
+          "description": "Its weight by the sun: by day, at dusk and dawn, and at night.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["day", "dusk", "night"],
+          "properties": {
+            "day": { "type": "number", "minimum": 0, "maximum": 10 },
+            "dusk": { "type": "number", "minimum": 0, "maximum": 10 },
+            "night": { "type": "number", "minimum": 0, "maximum": 10 }
+          }
+        },
+        "wind": { "description": "The least wind it is met in and the most, 10 m up, in m/s.", "type": "array", "minItems": 2, "maxItems": 2, "items": { "type": "number", "minimum": 0, "maximum": 100 } },
+        "rain": { "description": "The share of it met in rain.", "type": "number", "minimum": 0, "maximum": 1 },
+        "bySea": { "description": "Whether it is seen less as the sea rises, by the life's sea.", "type": "boolean" },
+        "rate": { "description": "Its encounters a km² an hour at a weight of 1.", "type": "number", "minimum": 0, "maximum": 100 },
+        "group": { "description": "How many in a group, the least and the most.", "type": "array", "minItems": 2, "maxItems": 2, "items": { "type": "integer", "minimum": 1, "maximum": 1000 } },
+        "stay": { "description": "How long it stays over its patch or with a boat, the least and the most, in s.", "type": "array", "minItems": 2, "maxItems": 2, "items": { "type": "number", "minimum": 0, "maximum": 86400 } },
+        "speed": { "description": "How fast it goes, the least and the most, in m/s.", "type": "array", "minItems": 2, "maxItems": 2, "items": { "type": "number", "minimum": 0, "maximum": 100 } },
+        "height": { "description": "How high it flies, the least and the most, in m.", "type": "array", "minItems": 2, "maxItems": 2, "items": { "type": "number", "minimum": -500, "maximum": 2000 } },
+        "range": { "description": "How far out it comes from and goes to, in m.", "type": "number", "minimum": 0, "maximum": 5000 },
+        "reach": { "description": "It is drawn within this, in m.", "type": "number", "minimum": 100, "maximum": 5000 },
+        "look": { "$ref": "#/$defs/BirdLook" },
+        "swim": { "$ref": "#/$defs/SwimLook" },
+        "glow": { "$ref": "#/$defs/LifeGlow" }
+      }
+    },
+    "LifeGlow": {
+      "title": "LifeGlow",
+      "description": "Water that glows where it is disturbed, on a dark night: its light's colour; and how lit the sky may be for it to show, the moon's lit share times its height's sine above the horizon at the most, the sun below the horizon.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["colour", "moon"],
+      "properties": {
+        "colour": { "$ref": "#/$defs/Colour" },
+        "moon": { "type": "number", "minimum": 0, "maximum": 1 }
+      }
+    },
+    "LifeBlow": {
+      "title": "LifeBlow",
+      "description": "A whale's blow: how high it rises, the least and the most, and how wide it spreads, in m; how far it leans forward of upright and to the left, in degrees; and how long it lasts, in s.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["height", "width", "lean", "left", "last"],
+      "properties": {
+        "height": { "type": "array", "minItems": 2, "maxItems": 2, "items": { "type": "number", "minimum": 0.1, "maximum": 20 } },
+        "width": { "type": "number", "minimum": 0.1, "maximum": 20 },
+        "lean": { "type": "number", "minimum": 0, "maximum": 90 },
+        "left": { "type": "number", "minimum": 0, "maximum": 90 },
+        "last": { "type": "number", "minimum": 0.1, "maximum": 10 }
+      }
+    },
+    "LifeOver": {
+      "title": "LifeOver",
+      "description": "How it moves over the patch of a group it comes with, if not by its own path: working it, or staying over it.",
+      "type": "string", "enum": ["work", "stay"]
+    },
+    "LifeBring": {
+      "title": "LifeBring",
+      "description": "A group that comes with another: its kind, by its id; the share of the other's groups it comes with; and how many in it.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "share", "count"],
+      "properties": {
+        "kind": { "type": "string", "pattern": "^[a-z][a-z0-9-]*$" },
+        "share": { "type": "number", "minimum": 0, "maximum": 1 },
+        "count": { "type": "array", "minItems": 2, "maxItems": 2, "items": { "type": "integer", "minimum": 1, "maximum": 1000 } }
+      }
+    },
+    "LifeBody": {
+      "title": "LifeBody",
+      "description": "A body of the life in the water, a model in the life's art.",
+      "type": "string", "enum": ["dolphin", "turtle", "flyingfish", "tarpon", "humpback", "sperm", "pilot", "ray", "shark", "booby", "booby-asleep"]
+    },
+    "SwimLook": {
+      "title": "SwimLook",
+      "description": "How an animal in the water looks and moves: its body, scaled to its length; its back's and belly's colours; its tail's or flippers' beats; its leaps a minute and the spins in each; a glider's glides; its breaths at each surfacing and its dives between them; and what is heard of it.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["body", "length", "back", "belly", "beat", "depth", "call"],
+      "properties": {
+        "body": { "$ref": "#/$defs/LifeBody" },
+        "length": { "description": "Its length, in m.", "type": "number", "minimum": 0.05, "maximum": 40 },
+        "back": { "$ref": "#/$defs/Colour" },
+        "belly": { "$ref": "#/$defs/Colour" },
+        "beat": { "description": "Its tail's or flippers' beats, in Hz.", "type": "number", "minimum": 0.05, "maximum": 60 },
+        "depth": { "description": "How deep it swims between its breaths, in m.", "type": "number", "minimum": 0, "maximum": 50 },
+        "leaps": { "description": "Its leaps clear of the water, each animal a minute.", "type": "number", "minimum": 0, "maximum": 60 },
+        "spins": { "description": "The spins in a leap, the least and the most.", "type": "array", "minItems": 2, "maxItems": 2, "items": { "type": "integer", "minimum": 0, "maximum": 10 } },
+        "glide": { "description": "A glide's length, the least and the most, in m.", "type": "array", "minItems": 2, "maxItems": 2, "items": { "type": "number", "minimum": 1, "maximum": 1000 } },
+        "linked": { "description": "The longest glides linked one after another, in m.", "type": "number", "minimum": 1, "maximum": 1000 },
+        "breaths": { "description": "Its breaths at each surfacing, the least and the most.", "type": "array", "minItems": 2, "maxItems": 2, "items": { "type": "integer", "minimum": 1, "maximum": 100 } },
+        "dive": { "description": "How long it is down between surfacings, the least and the most, in s.", "type": "array", "minItems": 2, "maxItems": 2, "items": { "type": "number", "minimum": 1, "maximum": 7200 } },
+        "blowEvery": { "description": "A whale's time from one blow to the next at the surface, the least and the most, in s.", "type": "array", "minItems": 2, "maxItems": 2, "items": { "type": "number", "minimum": 1, "maximum": 600 } },
+        "blow": { "$ref": "#/$defs/LifeBlow" },
+        "fluke": { "description": "The share of a whale's dives on which it raises its flukes.", "type": "number", "minimum": 0, "maximum": 1 },
+        "breach": { "description": "The share of a whale's surfacings in which it breaches.", "type": "number", "minimum": 0, "maximum": 1 },
+        "slap": { "description": "The share of a whale's surfacings in which it slaps the water with its tail.", "type": "number", "minimum": 0, "maximum": 1 },
+        "logs": { "description": "Whether it lies still at the surface between its breaths, logging, rather than rolling under.", "type": "boolean" },
+        "asleep": { "$ref": "#/$defs/LifeBody" },
+        "call": { "description": "What is heard of it: its breath, a whale's blow, or nothing but its splashes.", "type": "string", "enum": ["breath", "blow", "silent"] }
+      }
+    },
     "ColonyBirds": {
       "title": "ColonyBirds",
       "description": "A colony's birds: where they nest, and how they look, fly and call.",
       "type": "object",
       "additionalProperties": false,
-      "required": ["nests", "span", "body", "wing", "tip", "flap", "glide", "call"],
+      "required": ["nests", "look"],
       "properties": {
         "nests": { "description": "Where they nest.", "type": "array", "items": { "type": "string", "enum": ["stack", "cliff", "cay", "trees"] } },
-        "span": { "description": "Their wingspan, in m.", "type": "number", "minimum": 0.1, "maximum": 5 },
+        "look": { "$ref": "#/$defs/BirdLook" }
+      }
+    },
+    "LifeForm": {
+      "title": "LifeForm",
+      "description": "What it is, as the phone draws it.",
+      "type": "string", "enum": ["bird", "glider", "bait", "pod", "turtle", "whale", "ray", "fin", "glow"]
+    },
+    "LifeFamily": {
+      "title": "LifeFamily",
+      "description": "Its family, whose lull it keeps.",
+      "type": "string", "enum": ["birds", "water", "big", "night"]
+    },
+    "LifePath": {
+      "title": "LifePath",
+      "description": "How it moves when it is with no boat: passing through, soaring in circles, skimming the swell in arcs, working a patch of water, staying about its patch, or drifting from where it began.",
+      "type": "string", "enum": ["pass", "soar", "skim", "work", "stay", "drift"]
+    },
+    "LifeBinds": {
+      "title": "LifeBinds",
+      "description": "What it does with a boat it meets, if anything: follows its stern, rides its bow, perches on it, or, a ground of fish, is flushed by every boat sailing through it.",
+      "type": "string", "enum": ["follow", "ride", "perch", "flush"]
+    },
+    "BirdLook": {
+      "title": "BirdLook",
+      "description": "How a bird looks, flies and calls: a colony's birds and the birds met at sea alike.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["span", "body", "wing", "tip", "flap", "glide", "call"],
+      "properties": {
+        "span": { "description": "Its wingspan, in m.", "type": "number", "minimum": 0.1, "maximum": 5 },
         "body": { "$ref": "#/$defs/Colour" },
         "wing": { "$ref": "#/$defs/Colour" },
         "tip": { "$ref": "#/$defs/Colour" },
-        "flap": { "description": "Their wingbeats, in Hz.", "type": "number", "minimum": 0.1, "maximum": 20 },
-        "glide": { "description": "The share of the time they glide.", "type": "number", "minimum": 0, "maximum": 1 },
-        "call": { "description": "Their call.", "type": "string", "enum": ["harsh", "whistle", "rattle"] }
+        "flap": { "description": "Its wingbeats, in Hz.", "type": "number", "minimum": 0.1, "maximum": 20 },
+        "glide": { "description": "The share of the time it glides.", "type": "number", "minimum": 0, "maximum": 1 },
+        "call": { "description": "Its call; silent for a bird not heard at sea.", "type": "string", "enum": ["harsh", "whistle", "rattle", "laugh", "tern", "silent"] }
       }
     },
     "WorldFlora": {

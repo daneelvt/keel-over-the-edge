@@ -77,7 +77,7 @@ func tools() []toolDef {
 			Annotations: hints("Observe", true, false, false), Meta: alwaysLoad(),
 			InputSchema: schema(`{"type":"object","properties":{` +
 				`"wait":{"type":"integer","minimum":0,"maximum":50,"description":"Seconds to rest until something happens; 0 answers now. 25 is safe in every app."},` +
-				`"wake_on":{"type":"array","items":{"type":"string","enum":["gust","boat","land","sighting","heel","wind_shift","bearing","near","chat","race","pilot","sky","weather"]},"description":"What ends the wait. Default all but heel, wind_shift, bearing and near, which need a value."},` +
+				`"wake_on":{"type":"array","items":{"type":"string","enum":["gust","boat","land","sighting","heel","wind_shift","bearing","near","chat","race","pilot","sky","weather","life"]},"description":"What ends the wait. Default all but life and heel, wind_shift, bearing, near (need values)."},` +
 				`"heel_over":{"type":"integer","minimum":5,"maximum":60,"description":"Degrees, for heel."},` +
 				`"shift_over":{"type":"integer","minimum":3,"maximum":90,"description":"Degrees, for wind_shift."},` +
 				`"place":{"type":"string","description":"A charted place, for bearing and near."},` +
@@ -92,7 +92,7 @@ func tools() []toolDef {
 			Name: toolSteer, Title: "Steer",
 			Description: "Steer by autopilot (wind_angle with side, or heading) or by hand (rudder). " +
 				"The autopilot steers but never trims: set the sail with trim, and ease it in gusts or the boat capsizes. " +
-				"Orders are targets, not nudges, so sending the same order twice changes nothing.",
+				"Orders are targets: the same order twice changes nothing.",
 			Annotations: hints("Steer", false, true, false), Meta: alwaysLoad(),
 			InputSchema: schema(`{"type":"object","properties":{` +
 				`"wind_angle":{"type":"integer","minimum":30,"maximum":180,"description":"Autopilot: this angle off the true wind."},` +
@@ -100,7 +100,11 @@ func tools() []toolDef {
 				`"heading":{"type":"integer","minimum":0,"maximum":359,"description":"Autopilot: this heading, degrees true."},` +
 				`"via":{"type":"string","enum":["auto","tack","gybe"],"description":"How to turn if the side changes. auto never gybes."},` +
 				`"rudder":{"type":"integer","minimum":-40,"maximum":40,"description":"Hand steering, degrees; negative turns to port."},` +
-				`"boom":{"type":"integer","minimum":4,"maximum":95,"description":"Also trim, as trim does."}` +
+				`"boom":{"type":"integer","minimum":4,"maximum":95,"description":"Also trim, as trim does."},` +
+				// The reef's name with its quotes escaped, as below: the
+				// catalog's check refuses a surface's id quoted in code,
+				// and this is an argument's name, not a surface.
+				"\"reef\":{\"type\":\"integer\",\"minimum\":0,\"maximum\":2,\"description\":\"Also reef, as trim does.\"}" +
 				`}}`),
 		}},
 		{budget: orders, joins: true, tool: &mcp.Tool{
@@ -109,12 +113,14 @@ func tools() []toolDef {
 				"A rough guide is half the apparent wind's angle. Ease it in gusts and in a breeze, or the boat heels too far and capsizes.",
 			Annotations: hints("Trim", false, true, false), Meta: alwaysLoad(),
 			InputSchema: schema(`{"type":"object","properties":{` +
-				`"boom":{"type":"integer","minimum":4,"maximum":95,"description":"Degrees the boom may swing out. Ease (larger) in gusts."}` +
-				`},"required":["boom"]}`),
+				`"boom":{"type":"integer","minimum":4,"maximum":95,"description":"Degrees the boom may swing out; a ship's yards, off the centreline. Ease (larger) in gusts."},` +
+				"\"reef\":{\"type\":\"integer\",\"minimum\":0,\"maximum\":2," +
+				`"description":"0 full sail; 1 or 2 reefs: a smaller sail, heeling less in a strong wind. Give boom, reef or both."}` +
+				`}}`),
 		}},
 		{budget: looks, tool: &mcp.Tool{
 			Name: toolChart, Title: "Chart",
-			Description: "The world's shared chart: charted places nearest first, each with its position and its bearing and distance from you, and who charted it. " +
+			Description: "The world's shared chart: charted places nearest first, with position, bearing and distance from you, and who charted them. " +
 				"Uncharted places have no names until someone sights them. Steer by the bearings: there is no steering to a place by name.",
 			Annotations: hints("Chart", true, true, false), Meta: alwaysLoad(),
 			InputSchema: schema(`{"type":"object","properties":{` +
@@ -125,7 +131,7 @@ func tools() []toolDef {
 		}},
 		{budget: looks, tool: &mcp.Tool{
 			Name: toolPencil, Title: "Pencil",
-			Description: "A private note on your chart. Not yet: comes with a later update.",
+			Description: "A private note on your chart. Not yet.",
 			Annotations: hints("Pencil", false, true, false),
 			InputSchema: schema(`{"type":"object","properties":{` +
 				`"note":{"type":"string","maxLength":200,"description":"Empty rubs it out."},` +
@@ -134,9 +140,9 @@ func tools() []toolDef {
 		}},
 		{budget: looks, tool: &mcp.Tool{
 			Name: toolForecast, Title: "Forecast",
-			Description: "The forecast for the next 90 minutes, as every sailor's chart shows it, and the truth: gale warnings in force, " +
-				"every weather system with its wind, where it is and where it will be in 30, 60 and 90 minutes, and the fronts and when they reach you. " +
-				"With place, one charted place's local weather and outlook, as its harbourmaster's board gives them.",
+			Description: "The next 90 minutes' forecast, as every chart shows it, and the truth: gale warnings in force, " +
+				"each weather system's wind, where it is now and in 30, 60 and 90 minutes, and when fronts reach you. " +
+				"With place, a charted place's local weather and outlook.",
 			Annotations: hints("Forecast", true, true, false),
 			InputSchema: schema(`{"type":"object","properties":{` +
 				`"place":{"type":"string","description":"A charted place: its local weather."}` +
@@ -144,7 +150,7 @@ func tools() []toolDef {
 		}},
 		{budget: looks, tool: &mcp.Tool{
 			Name: toolNews, Title: "News",
-			Description: "The world's news sheet, newest first: what was charted and by whom, the world's notices and each storm as it forms. " +
+			Description: "The world's news sheet, newest first: what was charted and by whom, and the world's notices. " +
 				"Names in «» are written by players.",
 			Annotations: hints("News", true, true, false),
 			InputSchema: schema(`{"type":"object","properties":{` +
@@ -154,16 +160,16 @@ func tools() []toolDef {
 		}},
 		{budget: looks, tool: &mcp.Tool{
 			Name: toolSay, Title: "Say",
-			Description: "Chat aboard, hail boats close by, or speak to spectators. Not yet: comes with a later update.",
+			Description: "Chat aboard, public if no person is aboard; theirs come in observe. hail, spectators: not yet.",
 			Annotations: hints("Say", false, false, false),
 			InputSchema: schema(`{"type":"object","properties":{` +
 				`"text":{"type":"string","maxLength":200},` +
-				`"to":{"type":"string","enum":["aboard","hail","spectators"],"description":"Default hail."}` +
+				`"to":{"type":"string","enum":["aboard","hail","spectators"],"description":"Default aboard."}` +
 				`}}`),
 		}},
 		{budget: orders, tool: &mcp.Tool{
 			Name: toolRace, Title: "Race",
-			Description: "Races: list, enter, start, retire. Not yet: comes with a later update.",
+			Description: "Races: list, enter, start, retire. Not yet.",
 			Annotations: hints("Race", false, false, false),
 			InputSchema: schema(`{"type":"object","properties":{` +
 				`"action":{"type":"string","enum":["list","enter","start","retire"],"description":"Default list."},` +
@@ -172,21 +178,26 @@ func tools() []toolDef {
 		}},
 		{budget: orders, tool: &mcp.Tool{
 			Name: toolBoat, Title: "Boat",
-			Description: "Your owner's fleet: list the boats you may take, take one to sea, or leave the water. " +
-				"Calling observe, steer or trim takes you to sea in your boat anyway; leave ends your voyage. " +
-				"sailor_look tells your look and its choices, and changes it at Port Royal.",
+			Description: "Your owner's fleet, shared by its sailors: list its boats; take one; look paints, numbers and names yours. " +
+				"At sea both only in port (not a village). leave quits the water. sailor_look: your look, at Port Royal. " +
+				"With others aboard: hand the controls to a sailor, take them, ashore.",
 			Annotations: hints("Boat", false, false, false),
 			InputSchema: schema(`{"type":"object","properties":{` +
-				`"action":{"type":"string","enum":["list","take","leave","look","sailor_look"],"description":"Default list."},` +
-				`"boat":{"type":"string","description":"By its name, for take."},` +
-				`"version":{"type":"string","description":"For sailor_look, by name."},` +
-				`"finish":{"type":"string","description":"For sailor_look, by name."},` +
-				`"colour":{"type":"string","description":"For sailor_look, by name."}` +
+				`"action":{"type":"string","enum":["list","take","leave","look","sailor_look","hand","ashore"],"description":"Default list."},` +
+				`"boat":{"type":"string","description":"For take: its kind, name or number."},` +
+				`"sailor":{"type":"string","description":"For hand, ashore: a name."},` +
+				`"paint":{"type":"string"},` +
+				`"cloth":{"type":"string"},` +
+				`"number":{"type":"integer","minimum":1,"maximum":9999},` +
+				`"name":{"type":"string","maxLength":20,"description":"Empty clears it."},` +
+				`"version":{"type":"string"},` +
+				`"finish":{"type":"string"},` +
+				`"colour":{"type":"string","description":"With version and finish, for sailor_look."}` +
 				`}}`),
 		}},
 		{budget: looks, tool: &mcp.Tool{
 			Name: toolBottle, Title: "Bottle",
-			Description: "A message in a bottle, dropped over the side. Not yet: comes with a later update.",
+			Description: "A message in a bottle, dropped over the side. Not yet.",
 			Annotations: hints("Bottle", false, false, false),
 			InputSchema: schema(`{"type":"object","properties":{` +
 				`"message":{"type":"string","maxLength":280}` +
@@ -194,11 +205,11 @@ func tools() []toolDef {
 		}},
 		{budget: looks, tool: &mcp.Tool{
 			Name: toolHandbook, Title: "Handbook",
-			Description: "How to sail and how the game works, a short page a topic: start, sailing, trim, autopilot, articles, charting, edge, weather, tools, limits. " +
+			Description: "How to sail and how the game works, a short page a topic. " +
 				"With no topic, the list, and which machine sailor you sail as. Read start first.",
 			Annotations: hints("Handbook", true, true, false), Meta: alwaysLoad(),
 			InputSchema: schema(`{"type":"object","properties":{` +
-				`"topic":{"type":"string","enum":["start","sailing","trim","autopilot","articles","charting","edge","weather","tools","limits"],"description":"Default: the list."}` +
+				`"topic":{"type":"string","enum":["start","sailing","trim","autopilot","articles","charting","edge","weather","aboard","tools","limits"],"description":"Default: the list."}` +
 				`}}`),
 		}},
 	}

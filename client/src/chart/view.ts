@@ -36,6 +36,7 @@ import {
 import type { WebGPURenderer } from 'three/webgpu';
 import type { ChartEntry } from '../net/messages';
 import { chartMaterial } from '../render/materials';
+import { ARROW_HEIGHT, ARROW_NOSE, ARROW_TAIL, arrowSize, placeChartCamera } from './arrow';
 import type { IslandModel, Models } from './model';
 import { PAPER_MARGIN, type PaperLook, paintPaper } from './paper';
 import { type ChartStore, keyOf } from './store';
@@ -371,6 +372,27 @@ export class ChartView {
     return { x: (this.#v.x * 0.5 + 0.5) * this.#width, y: (-this.#v.y * 0.5 + 0.5) * this.#height };
   }
 
+  /** The boat's arrow as drawn: its nose and its tail on the screen, CSS pixels, and its scale (the tests). */
+  arrowEnds(): { nose: { x: number; y: number }; tail: { x: number; y: number }; scale: number } {
+    this.#placeCamera();
+    const b = this.#boatAt();
+    const k = this.#boat.scale.x;
+    const point = (along: number) => {
+      this.#v
+        .set(
+          b.east + Math.sin(b.heading) * along * k,
+          ARROW_HEIGHT * k,
+          -(b.north + Math.cos(b.heading) * along * k),
+        )
+        .project(this.camera);
+      return {
+        x: (this.#v.x * 0.5 + 0.5) * this.#width,
+        y: (-this.#v.y * 0.5 + 0.5) * this.#height,
+      };
+    };
+    return { nose: point(ARROW_NOSE), tail: point(-ARROW_TAIL), scale: k };
+  }
+
   /** Draws the chart, if it is due and something has changed. */
   draw(renderer: WebGPURenderer | null, dt: number, now: number): void {
     const canvas = renderer?.domElement;
@@ -435,7 +457,13 @@ export class ChartView {
       this.#boat.rotation.y = -b.heading;
       this.#dirty = true;
     }
-    this.#boat.scale.setScalar(Math.max(this.#distance / 9000, 0.25));
+    // The arrow the world's size, bounded on the screen.
+    this.#placeCamera();
+    const scale = arrowSize(this.camera, this.#width, this.#height, b);
+    if (Math.abs(this.#boat.scale.x - scale) > 1e-4) {
+      this.#boat.scale.setScalar(scale);
+      this.#dirty = true;
+    }
     if (this.open && this.#weather?.update(now)) {
       if (this.#weatherTexture !== null) {
         this.#weatherTexture.needsUpdate = true;
@@ -463,15 +491,7 @@ export class ChartView {
   }
 
   #placeCamera(): void {
-    const t = this.#target;
-    const d = this.#distance;
-    const up = Math.sin(TILT) * d;
-    const back = Math.cos(TILT) * d;
-    const s = Math.sin(this.#bearing);
-    const c = Math.cos(this.#bearing);
-    this.camera.position.set(t.x - s * back, up, -(t.y - c * back));
-    this.camera.lookAt(t.x, 0, -t.y);
-    this.camera.updateMatrixWorld();
+    placeChartCamera(this.camera, this.#target, this.#distance, this.#bearing, TILT);
   }
 
   /** Asks for each charted island's model. */
@@ -519,12 +539,14 @@ export class ChartView {
     this.#dirty = true;
   }
 
+  /** The boat's arrow: a cone from its nose to its tail, ahead of the boat and behind, and a ball at its tail. */
   #makeBoat(): Mesh {
-    const g = new ConeGeometry(70, 260, 12);
+    const length = ARROW_NOSE + ARROW_TAIL;
+    const g = new ConeGeometry(70, length, 12);
     g.rotateX(-Math.PI / 2);
-    g.translate(0, 120, -60);
+    g.translate(0, ARROW_HEIGHT, (ARROW_TAIL - ARROW_NOSE) / 2);
     const head = new SphereGeometry(55, 12, 8);
-    head.translate(0, 120, 70);
+    head.translate(0, ARROW_HEIGHT, ARROW_TAIL);
     const merged = mergeGeometries([g, head]);
     const m = new Mesh(merged, chartMaterial({ color: this.#look.boat }));
     m.name = 'boat';

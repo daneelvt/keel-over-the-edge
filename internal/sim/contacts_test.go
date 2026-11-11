@@ -303,7 +303,7 @@ func BenchmarkTickEncounters(b *testing.B) {
 							angle := 50 + float64(i%101)
 							target := uint16(int64(math.Round(angle*physics.TurnSteps/360)) & (physics.TurnSteps - 1))
 							w.Bus().Controls.Store(s, bus.Pack(seq, bus.Steps/2, 512, f.Gen[s]),
-								bus.PackPilot(seq, bus.PilotWind, bus.WayHold, 0, target, f.Gen[s]))
+								bus.PackPilot(seq, bus.PilotWind, bus.WayHold, 0, target, f.Gen[s]), bus.PackRig(seq, 0, f.Gen[s]))
 						}
 					}
 					w.Tick()

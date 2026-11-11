@@ -5,8 +5,9 @@
 // flat-topped teeth stand on a solid ring about a round hole, a quarter of
 // the foot across, at half the luff's height on the middle of the chord
 // there. It is printed into the cloth, so it shows on both faces, the
-// back's mirrored, which a cog's symmetry hides. It is dark on a light
-// cloth and gold on a dark one, and nothing the player sets takes it off.
+// back's mirrored, which a cog's symmetry hides. It is in the cloth's ink
+// (the catalog's, dark on a pale cloth and pale on a dark one), and
+// nothing the player sets takes it off.
 
 import type { BufferGeometry } from 'three';
 
@@ -23,10 +24,6 @@ const TOOTH_TIP = 0.17;
 /** Points along the ring between two teeth. */
 const GAP_POINTS = 3;
 
-/** The mark's inks: for a light cloth, and for a dark one. */
-export const MARK_DARK = '#2b2118';
-export const MARK_GOLD = '#d4a72c';
-
 /** The relative luminance of an sRGB colour written #rrggbb, 0 black … 1 white (WCAG 2). */
 export function luminance(hex: string): number {
   const n = Number.parseInt(hex.slice(1), 16);
@@ -35,11 +32,6 @@ export function luminance(hex: string): number {
     return s <= 0.04045 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
   };
   return 0.2126 * lin((n >> 16) & 255) + 0.7152 * lin((n >> 8) & 255) + 0.0722 * lin(n & 255);
-}
-
-/** The mark's ink on a cloth of this colour: dark on a light cloth, gold on a dark one. */
-export function markInk(cloth: string): string {
-  return luminance(cloth) > 0.18 ? MARK_DARK : MARK_GOLD;
 }
 
 /**
@@ -96,37 +88,42 @@ export interface MarkPlace {
 }
 
 /**
- * The sail's chord at half the luff's height, as a fraction of the foot,
- * from its model: the leech's vertices (the chord's far end, uv1.x of 1)
- * hold the distance along the foot over its length in uv.x, at the
- * fraction of the luff in uv1.y. A sail without them is taken for a
- * straight-leeched triangle: half the foot.
+ * The sail's chord at a height v, a fraction of the luff from the foot, as
+ * a fraction of the foot, from its model: the leech's vertices (the
+ * chord's far end, uv1.x of 1) hold the distance along the foot over its
+ * length in uv.x, at the fraction of the luff in uv1.y. A sail without
+ * them is taken for a straight-leeched triangle: 1 − v of the foot.
  */
-export function chordAtHalf(sail: BufferGeometry | undefined): number {
+export function chordAt(sail: BufferGeometry | undefined, v: number): number {
   const uv = sail?.getAttribute('uv');
   const uv1 = sail?.getAttribute('uv1');
   if (uv === undefined || uv1 === undefined) {
-    return 0.5;
+    return 1 - v;
   }
-  let below = { v: Number.NEGATIVE_INFINITY, u: 0.5 };
-  let above = { v: Number.POSITIVE_INFINITY, u: 0.5 };
+  let below = { v: Number.NEGATIVE_INFINITY, u: 1 - v };
+  let above = { v: Number.POSITIVE_INFINITY, u: 1 - v };
   for (let i = 0; i < uv1.count; i++) {
     if (uv1.getX(i) < 0.999) {
       continue;
     }
-    const v = uv1.getY(i);
-    if (v <= 0.5 && v > below.v) {
-      below = { v, u: uv.getX(i) };
+    const at = uv1.getY(i);
+    if (at <= v && at > below.v) {
+      below = { v: at, u: uv.getX(i) };
     }
-    if (v >= 0.5 && v < above.v) {
-      above = { v, u: uv.getX(i) };
+    if (at >= v && at < above.v) {
+      above = { v: at, u: uv.getX(i) };
     }
   }
   if (!Number.isFinite(below.v) || !Number.isFinite(above.v)) {
-    return 0.5;
+    return 1 - v;
   }
-  const t = above.v > below.v ? (0.5 - below.v) / (above.v - below.v) : 0;
+  const t = above.v > below.v ? (v - below.v) / (above.v - below.v) : 0;
   return below.u + (above.u - below.u) * t;
+}
+
+/** The sail's chord at half the luff's height, as a fraction of the foot (chordAt). */
+export function chordAtHalf(sail: BufferGeometry | undefined): number {
+  return chordAt(sail, 0.5);
 }
 
 /** The mark's place on a sail of this foot and luff, metres, whose chord at half height is this fraction of the foot. */

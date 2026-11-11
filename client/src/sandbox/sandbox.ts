@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
-// The offline sandbox: one boat, stepped by the physics module in the
+// The offline sandbox: one boat, of any of the catalog's kinds (every kind
+// is prepared; the one sailed is stepped), stepped by the physics module in the
 // page, in a weather of its own making, by the server's rules, and the sea
 // it raises (localsea.ts): a steady wind that is the same everywhere, or a
 // spell of one of the catalog's regimes with its shifts and gusts. No
@@ -16,11 +17,13 @@
 // again at the sandbox's start, at rest. Its current runs the world's way
 // round the disk: a world file's, or clockwise.
 
+import { BOAT_NAME_MOST, type BoatLooks, boatCode, clothAt, paintAt } from '../catalog/boatlooks';
 import type { BoatPhysics, Weather } from '../catalog/types.gen';
 import type { BoatDriver, Wind } from '../game/driver';
 import { PILOT_IDLE, type PilotControl } from '../input/pilot';
 import { StatePair } from '../predict/blend';
 import { RECORDS, SEA_SPEED_STEP, SIZES, WEATHER } from '../predict/layout.gen';
+import { writeParams } from '../predict/params.gen';
 import { loadPhysics, type Physics, type PhysicsSource } from '../predict/physics';
 import { preparePhysics } from '../predict/predictor';
 import { Seas } from '../predict/seas';
@@ -239,9 +242,13 @@ export class Sandbox implements BoatDriver {
   restarts = 0;
   /** The boat stays where it is while the free camera flies: not stepped, as a server keeps it. */
   stays = false;
+  /** The reef asked for: 0 at full sail, 1 or 2 (the Reef key and R and F). */
+  reef = 0;
 
   readonly #physics: Physics;
-  readonly #boat: BoatPhysics;
+  readonly #boats: readonly BoatPhysics[];
+  /** The kind sailed: its index among the boats prepared. */
+  #kind: number;
   readonly #catalog: Weather;
   /** What of a regime's spell is on: its gusts, and its shifts and its difference across the disk. */
   readonly tuning = { gusts: true, shifts: true };
@@ -255,16 +262,20 @@ export class Sandbox implements BoatDriver {
 
   constructor(
     physics: Physics,
-    boat: BoatPhysics,
+    boats: BoatPhysics | readonly BoatPhysics[],
     weather: Weather,
     world: VisibilityWorld,
     start: SandboxStart = START,
+    kind = 0,
   ) {
     this.#physics = physics;
-    this.#boat = boat;
+    this.#boats = Array.isArray(boats) ? boats : [boats as BoatPhysics];
+    this.#kind = this.#boats[kind] === undefined ? 0 : kind;
     this.#catalog = weather;
     this.start = start;
-    preparePhysics(physics, boat, weather, world);
+    preparePhysics(physics, this.#boats, weather, world);
+    // The params record holds the boat sailed's: what a recording keeps.
+    writeParams(physics.records.params, this.#boat);
     this.seas = new Seas(physics);
     this.sea = new LocalSea(physics, this.seas, Math.round(weather.keyframe.every * 30));
     this.weather = new Spells(physics);
@@ -291,6 +302,27 @@ export class Sandbox implements BoatDriver {
     this.seas.recirculate();
   }
 
+  /** The boat sailed's physics. */
+  get #boat(): BoatPhysics {
+    return this.#boats[this.#kind] as BoatPhysics;
+  }
+
+  /** The kind sailed: its index among the catalog's boats. */
+  get kind(): number {
+    return this.#kind;
+  }
+
+  /** Sails another of the kinds prepared, from the start, at full sail. */
+  setKind(kind: number): void {
+    if (this.#boats[kind] === undefined) {
+      return;
+    }
+    this.#kind = kind;
+    writeParams(this.#physics.records.params, this.#boat);
+    this.reef = 0;
+    this.reset();
+  }
+
   /** The physics module, for whoever draws its sea. */
   get physics(): Physics {
     return this.#physics;
@@ -312,6 +344,7 @@ export class Sandbox implements BoatDriver {
     r.state[S.heading] = this.start.heading;
     r.control[RECORDS.control.helm] = this.start.helm;
     r.control[RECORDS.control.sheet] = this.start.sheet;
+    r.control[RECORDS.control.reef] = this.reef;
     this.out.fill(0);
     this.#settle();
   }
@@ -711,7 +744,10 @@ export class Sandbox implements BoatDriver {
     this.stays = on;
   }
 
-  step(helm: number, sheet: number, pilot: PilotControl = PILOT_IDLE): void {
+  step(helm: number, sheet: number, pilot: PilotControl = PILOT_IDLE, reef?: number): void {
+    if (reef !== undefined) {
+      this.reef = reef;
+    }
     const r = this.#physics.records;
     const tick = this.clock === null ? this.tick + 1 : this.clock.steps + 2;
     if (this.#pending !== null) {
@@ -744,7 +780,7 @@ export class Sandbox implements BoatDriver {
     const east = r.state[S.x] ?? 0;
     const north = r.state[S.y] ?? 0;
     this.sea.advance(tick, east, north);
-    this.recorder.step(helm, sheet, tick, this.sea, this.#stepWeather, pilot);
+    this.recorder.step(helm, sheet, tick, this.sea, this.#stepWeather, pilot, this.reef);
     // The wind the step sails in: the wind where the boat is as it begins.
     this.weather.read(tick, east, north, this.wind);
     r.control[RECORDS.control.helm] = helm;
@@ -753,9 +789,10 @@ export class Sandbox implements BoatDriver {
     r.control[RECORDS.control.target] = pilot.target;
     r.control[RECORDS.control.order] = pilot.order;
     r.control[RECORDS.control.way] = pilot.way;
+    r.control[RECORDS.control.reef] = this.reef;
     this.weather.use(tick);
     this.seas.use(tick);
-    this.#physics.step();
+    this.#physics.step(this.#kind);
     this.tick = tick;
     if (this.edge !== null && this.#physics.over()) {
       this.over = tick;
@@ -800,15 +837,54 @@ export class Sandbox implements BoatDriver {
   }
 }
 
-/** Compiles the physics module and starts a sandbox for a boat. */
+/** Compiles the physics module and starts a sandbox for a boat, or every boat and the kind sailed. */
 export async function startSandbox(
   source: PhysicsSource,
-  boat: BoatPhysics,
+  boats: BoatPhysics | readonly BoatPhysics[],
   weather: Weather,
   world: VisibilityWorld,
   start: SandboxStart = START,
+  kind = 0,
 ): Promise<Sandbox> {
-  return new Sandbox(await loadPhysics(source), boat, weather, world, start);
+  return new Sandbox(await loadPhysics(source), boats, weather, world, start, kind);
+}
+
+/**
+ * The kind ?boat names: the index of the catalog's boat of that id, or
+ * null for none given or one the catalog has not.
+ */
+export function boatFromQuery(query: URLSearchParams, ids: readonly string[]): number | null {
+  const id = query.get('boat');
+  if (id === null) {
+    return null;
+  }
+  const i = ids.indexOf(id);
+  return i >= 0 ? i : null;
+}
+
+/**
+ * The own boat's look the query gives: ?paint and ?cloth by the catalog's
+ * ids, ?number, and ?boatname; a look code of −1 (none told) when it gives
+ * none of the first three, and "" for no name. One the catalog has not is
+ * its first; a number out of range none.
+ */
+export function boatLookFromQuery(
+  query: URLSearchParams,
+  cat: BoatLooks,
+): { look: number; name: string } {
+  const name = [...(query.get('boatname') ?? '')].slice(0, BOAT_NAME_MOST).join('');
+  if (!query.has('paint') && !query.has('cloth') && !query.has('number')) {
+    return { look: -1, name };
+  }
+  const n = Math.floor(Number(query.get('number') ?? 0));
+  return {
+    look: boatCode({
+      paint: Math.max(paintAt(cat, query.get('paint') ?? ''), 0),
+      cloth: Math.max(clothAt(cat, query.get('cloth') ?? ''), 0),
+      number: n >= 1 && n <= cat.boatLooks.numbers ? n : 0,
+    }),
+    name,
+  };
 }
 
 function wrap(a: number): number {

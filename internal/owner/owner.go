@@ -33,10 +33,13 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/daneelvt/keel-over-the-edge/internal/aboard"
 	"github.com/daneelvt/keel-over-the-edge/internal/accounts"
 	"github.com/daneelvt/keel-over-the-edge/internal/api"
 	"github.com/daneelvt/keel-over-the-edge/internal/bus"
 	"github.com/daneelvt/keel-over-the-edge/internal/edge"
+	"github.com/daneelvt/keel-over-the-edge/internal/life"
+	"github.com/daneelvt/keel-over-the-edge/internal/looks"
 	"github.com/daneelvt/keel-over-the-edge/internal/obs"
 	"github.com/daneelvt/keel-over-the-edge/internal/physics"
 	"github.com/daneelvt/keel-over-the-edge/internal/sky"
@@ -175,9 +178,15 @@ type Config struct {
 	// ids, by their indices.
 	Kinds   []string
 	Regimes []string
-	World   World
-	Sky     *sky.Prepared
-	Clock   Clock
+	// SeaLife is the world's life schedule, whose kinds the frames' sea
+	// life is of; nil for a sea with nothing alive in it.
+	SeaLife *life.Schedule
+	// BoatLooks are the catalog's boat looks, which name each boat's
+	// paint and cloth; nil for none.
+	BoatLooks *looks.Boats
+	World     World
+	Sky       *sky.Prepared
+	Clock     Clock
 	// Calm is the calm water's ring about the main port, m.
 	Calm float64
 
@@ -208,6 +217,18 @@ type Config struct {
 	Machines        AISailors
 	Lifetime        Lifetime
 	LifetimeChanged func()
+	// Switches, if not nil, are the owner's switches for sailing together
+	// in memory, which every knock and link reads, and Sail the database's
+	// (both needed for the settings' routes).
+	Switches *aboard.Switches
+	Sail     SailSettings
+	// ChatSettings, if not nil, keeps chat's switches, and ChatChanged
+	// tells every game connection how chat stands for it after one
+	// changes. Reports, if not nil, is the reports' queue and the owner's
+	// actions on them.
+	ChatSettings ChatSettings
+	ChatChanged  func()
+	Reports      Reports
 
 	// PlaceKinds and Characters are the catalog's kinds of place and
 	// lights' characters, by their indices, as the page shows them.
@@ -378,6 +399,11 @@ func (o *Owner) Handler() http.Handler {
 	mux.HandleFunc("POST /owner/api/priority", o.priority)
 	mux.HandleFunc("POST /owner/api/lifetime", o.lifetime)
 	mux.HandleFunc("POST /owner/api/machines", o.machineCap)
+	mux.HandleFunc("GET /owner/api/settings.json", o.settings)
+	mux.HandleFunc("POST /owner/api/settings", o.setSettings)
+	mux.HandleFunc("GET /owner/api/reports.json", o.reports)
+	mux.HandleFunc("GET /owner/api/report.json", o.report)
+	mux.HandleFunc("POST /owner/api/reports/act", o.actOnReport)
 	mux.HandleFunc("POST /owner/api/accounts/search", o.searchAccounts)
 	mux.HandleFunc("GET /owner/api/account.json", o.accountCard)
 	mux.HandleFunc("GET /owner/api/actions.json", o.actions)

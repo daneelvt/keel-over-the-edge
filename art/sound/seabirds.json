@@ -1,0 +1,25 @@
+{
+  "licence": "SPDX-License-Identifier: LicenseRef-All-Rights-Reserved. Art: all rights reserved, not covered by the AGPL. See art/README.md.",
+  "description": "The sea's life's calls by day, each from a group there, perMinute a minute from each group, heard within reach metres and kept quiet beside the wind and the sea. The laughing gull's laugh: a run of short, nasal notes, 'ha-ha-ha-ha', a harmonic voice its band near 1.1 to 1.6 kHz, falling at its end (the Cornell Lab's All About Birds: 'a raucous, laughing ha-ha-ha'); a note lasts note seconds, notes notes a call, gap seconds apart, each falling to fall of its pitch, the band's sharpness q. The sooty tern's 'ker-wacki-wah' or 'wide-awake': three nasal syllables, higher and harsher than a gannet's rasp, near 2 to 2.8 kHz, the last the longest and falling (BirdLife International; Audubon's Guide to North American Birds); each syllable lasts its syllables' seconds, gap apart. The brown booby's whistle: the male's thin, high whistle, short, rising a little at its end (Cornell Lab's Birds of the World), as a colony's boobies whistle. Frequencies in Hz, times in seconds, levels as gains.",
+  "laugh": {
+    "pitch": [1100, 1600],
+    "note": [0.09, 0.14],
+    "notes": [4, 9],
+    "gap": 0.07,
+    "fall": 0.85,
+    "q": 5,
+    "perMinute": 4
+  },
+  "tern": {
+    "pitch": [2000, 2800],
+    "syllables": [0.07, 0.11, 0.2],
+    "gap": 0.05,
+    "fall": 0.8,
+    "q": 4,
+    "perMinute": 8
+  },
+  "whistle": { "pitch": [1800, 2600], "note": [0.12, 0.25], "rise": 1.1, "perMinute": 3 },
+  "near": 20,
+  "reach": 300,
+  "level": 0.2
+}

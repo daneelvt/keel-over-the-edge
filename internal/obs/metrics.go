@@ -141,22 +141,41 @@ type Metrics struct {
 	WorldSwitches  *prometheus.CounterVec // by how: scheduled, late, by_hand
 	WorldSwitch    prometheus.Gauge
 
-	EdgeConnections     prometheus.Gauge
-	EdgeUpgrades        *prometheus.CounterVec // by result
-	EdgeHellos          *prometheus.CounterVec // by result
-	EdgeJoins           *prometheus.CounterVec // by result
-	EdgeCloses          *prometheus.CounterVec // by code
-	EdgeMessages        *prometheus.CounterVec // by direction and kind
-	EdgeBytes           *prometheus.CounterVec // by direction
-	EdgeDropped         *prometheus.CounterVec // by reason
-	EdgeEncodeDuration  prometheus.Histogram
-	EdgeWriteDuration   prometheus.Histogram
-	EdgeEncoders        prometheus.Gauge
-	EdgeQueued          prometheus.Gauge
-	EdgeWatches         *prometheus.CounterVec // by result
-	EdgeSpectators      *prometheus.GaugeVec   // by state
-	EdgeSpectatorLimit  prometheus.Gauge
-	EdgeWatchers        prometheus.Histogram
+	EdgeConnections    prometheus.Gauge
+	EdgeUpgrades       *prometheus.CounterVec // by result
+	EdgeHellos         *prometheus.CounterVec // by result
+	EdgeJoins          *prometheus.CounterVec // by result
+	EdgeCloses         *prometheus.CounterVec // by code
+	EdgeMessages       *prometheus.CounterVec // by direction and kind
+	EdgeBytes          *prometheus.CounterVec // by direction
+	EdgeDropped        *prometheus.CounterVec // by reason
+	EdgeEncodeDuration prometheus.Histogram
+	EdgeWriteDuration  prometheus.Histogram
+	EdgeEncoders       prometheus.Gauge
+	EdgeQueued         prometheus.Gauge
+	EdgeWatches        *prometheus.CounterVec // by result
+	EdgeSpectators     *prometheus.GaugeVec   // by state
+	EdgeSpectatorLimit prometheus.Gauge
+	EdgeWatchers       prometheus.Histogram
+	EdgeKnocks         *prometheus.CounterVec // by result
+	EdgeDeck           *prometheus.CounterVec // by what changed
+	EdgeAboard         prometheus.Gauge
+	// Chat aboard: lines by what came of them, never their text; how
+	// often a line was handed to someone; what the memory holds and what
+	// its limits dropped; how long a line took the server; reports by
+	// reason, the reports open and the oldest's age.
+	ChatLines      *prometheus.CounterVec // by result
+	ChatDeliveries prometheus.Counter
+	ChatRingLines  prometheus.Gauge
+	ChatRingBytes  prometheus.Gauge
+	ChatDropped    *prometheus.CounterVec // by why
+	ChatSay        prometheus.Histogram
+	Reports        *prometheus.CounterVec // by reason
+	ReportsOpen    *prometheus.GaugeVec   // all, child
+	ReportsOldest  prometheus.Gauge
+	// Shipmates counts two people found to have sailed together five
+	// minutes or more, offers, shipmates made and ended.
+	Shipmates           *prometheus.CounterVec   // by what
 	EdgeRefused         *prometheus.CounterVec   // by what
 	EdgeViewBoats       *prometheus.HistogramVec // by band
 	EdgeSnapshotBytes   prometheus.Histogram
@@ -364,6 +383,46 @@ func NewMetrics(build, catalog string) *Metrics {
 		Name: "keel_edge_watchers", Help: "Spectators of each boat watched, sampled once a second.",
 		Buckets: []float64{1, 2, 5, 10, 20, 50, 100, 200, 500, 1000},
 	})
+	m.EdgeKnocks = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "keel_edge_knocks_total", Help: "Knocks to come aboard a boat, by what came of them.",
+	}, []string{"result"})
+	m.EdgeDeck = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "keel_edge_deck_total", Help: "Changes aboard boats: arrivals, the controls handed, taken and given back, and people going ashore, by why.",
+	}, []string{"what"})
+	m.EdgeAboard = prometheus.NewGauge(prometheus.GaugeOpts{
+		Name: "keel_edge_aboard", Help: "People aboard boats not their own, their connections' graces included.",
+	})
+	m.ChatLines = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "keel_chat_lines_total", Help: "Lines of chat and messages between shipmates said, by what came of them: said, refused for a contact detail, too long, too fast, silent, nobody to hear, a shipmate away, shipmates' messages resting, or a word.",
+	}, []string{"result"})
+	m.ChatDeliveries = prometheus.NewCounter(prometheus.CounterOpts{
+		Name: "keel_chat_deliveries_total", Help: "Lines of chat handed to someone: a line heard by three counts three.",
+	})
+	m.ChatRingLines = prometheus.NewGauge(prometheus.GaugeOpts{
+		Name: "keel_chat_ring_lines", Help: "Lines of chat held in memory for reports, every boat's together.",
+	})
+	m.ChatRingBytes = prometheus.NewGauge(prometheus.GaugeOpts{
+		Name: "keel_chat_ring_bytes", Help: "The memory chat's lines are counted at, every boat's together: at most 64 MiB.",
+	})
+	m.ChatDropped = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "keel_chat_dropped_total", Help: "Lines of chat gone from memory, by why: their half hour passed, their boat's, their sender's or the whole memory's limit, or removed by the owner.",
+	}, []string{"why"})
+	m.ChatSay = prometheus.NewHistogram(prometheus.HistogramOpts{
+		Name: "keel_chat_say_seconds", Help: "How long the server took over a line of chat: the filter, the limits, the memory and handing it out.",
+		Buckets: []float64{0.00001, 0.00003, 0.0001, 0.0003, 0.001, 0.003, 0.01},
+	})
+	m.Reports = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "keel_reports_total", Help: "Reports made, by players and from outside the game, by reason: child is a report that a child may be at risk.",
+	}, []string{"reason"})
+	m.ReportsOpen = prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "keel_reports_open", Help: "Reports waiting for the owner: all of them, and those that say a child may be at risk.",
+	}, []string{"which"})
+	m.ReportsOldest = prometheus.NewGauge(prometheus.GaugeOpts{
+		Name: "keel_reports_oldest_seconds", Help: "How long the oldest report waiting for the owner has waited, 0 for none.",
+	})
+	m.Shipmates = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "keel_shipmates_total", Help: "Shipmates: two people found to have sailed together five minutes or more (sailed), offers made (offered), shipmates made (made) and ended (ended).",
+	}, []string{"what"})
 	m.EdgeRefused = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Name: "keel_edge_refused_total", Help: "What a game connection sent that it may not, dropped: controls from a connection that sails no boat.",
 	}, []string{"what"})
@@ -467,7 +526,8 @@ func NewMetrics(build, catalog string) *Metrics {
 	reg.MustRegister(m.LeaseEpoch, m.LeaseWait, m.LeaseLost, m.Restores, m.RestoredBoats, m.RestoreGap, m.PersistBatch, m.PersistCheckpoint, m.PersistWrites)
 	reg.MustRegister(m.Grace, m.EdgeConnections, m.EdgeUpgrades, m.EdgeHellos, m.EdgeJoins, m.EdgeCloses, m.EdgeMessages,
 		m.EdgeBytes, m.EdgeDropped, m.EdgeEncodeDuration, m.EdgeWriteDuration, m.EdgeInputMargin, m.ClientRTT, m.ClientFrame, m.ClientTier, m.ClientRenderScale,
-		m.EdgeEncoders, m.EdgeQueued, m.EdgeWatches, m.EdgeSpectators, m.EdgeSpectatorLimit, m.EdgeWatchers, m.EdgeRefused, m.EdgeViewBoats, m.EdgeSnapshotBytes, m.EdgeSnapshotEntries, m.EdgeSnapshotLag, m.EdgeResyncs)
+		m.EdgeEncoders, m.EdgeQueued, m.EdgeWatches, m.EdgeSpectators, m.EdgeSpectatorLimit, m.EdgeWatchers, m.EdgeKnocks, m.EdgeDeck, m.EdgeAboard,
+		m.ChatLines, m.ChatDeliveries, m.ChatRingLines, m.ChatRingBytes, m.ChatDropped, m.ChatSay, m.Reports, m.ReportsOpen, m.ReportsOldest, m.Shipmates, m.EdgeRefused, m.EdgeViewBoats, m.EdgeSnapshotBytes, m.EdgeSnapshotEntries, m.EdgeSnapshotLag, m.EdgeResyncs)
 	reg.MustRegister(info, m.Tick, m.TickDuration, m.PhaseDuration, m.Ticks, m.TicksLate, m.TicksSkipped,
 		m.ClockDrift, m.Boats, m.BoatLimit, m.QueueLength, m.BoatsByKind, m.QueueByKind, m.QueueOldest, m.AICap, m.AIReserve, m.Admissions, m.QueueWait, m.GridDuration, m.Workers, m.Commands, m.Snapshots,
 		m.DBQueryDuration, m.DBQueryErrors, m.SchemaVersion, m.AccountsCreated, m.NamesRefused, m.Ceremonies, m.SignIns,
@@ -582,11 +642,11 @@ func NewMetrics(build, catalog string) *Metrics {
 	reg.MustRegister(m.MachinesCreated, m.MachinesDeleted, m.OAuthAuthorize, m.OAuthTokens, m.OAuthReuse, m.OAuthRegistered,
 		m.ClientFetches, m.ClientFetchTime, m.DoorRequests, m.DoorDuration, m.GrantsLive)
 	for _, a := range []string{"flag", "unflag", "place", "unseen", "seen", "world", "remake", "lifetime", "cap", "priority", "unpriority",
-		"stop", "start", "revoke", "delete", "search", "card"} {
+		"stop", "start", "revoke", "delete", "search", "card", "link-lifetime", "links", "boarding"} {
 		m.OwnerActions.WithLabelValues(a)
 	}
 	for _, w := range []string{"roam", "place", "flag", "unseen", "request", "world", "remake", "lifetime", "cap", "priority",
-		"stop", "start", "revoke", "delete", "search", "card"} {
+		"stop", "start", "revoke", "delete", "search", "card", "settings"} {
 		m.OwnerRefused.WithLabelValues(w)
 	}
 	reg.MustRegister(m.OwnerActions, m.OwnerRefused, m.OwnerView)

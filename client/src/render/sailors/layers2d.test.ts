@@ -31,6 +31,8 @@ test('each texture is a layer, the array deeper as they come', () => {
   expect(t.add(compressed(16, 1))).toBe(0);
   const first = t.texture;
   expect(first?.image.depth).toBe(2);
+  // Sent to the GPU, as a renderer tells it.
+  first?.onUpdate?.(first);
   expect(t.add(compressed(16, 2))).toBe(1);
   // Room for the second: the same texture, only its layer sent.
   expect(t.texture).toBe(first);
@@ -53,6 +55,18 @@ test('each texture is a layer, the array deeper as they come', () => {
     expect(d.length).toBe(4 * bytes);
     expect([d[0], d[bytes], d[2 * bytes], d[3 * bytes]]).toEqual([1, 2, 3, 0]);
   }
+});
+
+test('a layer added before the texture is first sent goes with it whole, not alone', () => {
+  const t = new LayeredTexture('test');
+  t.add(compressed(16, 1));
+  const first = t.texture;
+  // Two looks loaded between frames: the second's layer in place, but
+  // nothing sent yet, so the whole texture is sent, every layer in it.
+  expect(t.add(compressed(16, 2))).toBe(1);
+  expect(t.texture).toBe(first);
+  expect(first?.layerUpdates.size).toBe(0);
+  expect(first?.version).toBeGreaterThan(0);
 });
 
 test('a texture of another size or format is refused', () => {

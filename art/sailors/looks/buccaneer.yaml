@@ -262,6 +262,15 @@ palette:
 clips:
   [
     helm,
+    helm-wheel,
+    trapeze,
+    trapeze-low,
+    rail,
+    rail-out,
+    crouch-enter,
+    crouch-walk,
+    crouch-exit,
+    buccaneer-habit-wheel,
     hiking-1,
     hiking-2,
     hiking-3,
@@ -273,4 +282,9 @@ clips:
     righting,
     climbing-in,
   ]
-names: { buccaneer-habit: habit, buccaneer-habit-standing: habit-standing }
+names:
+  {
+    buccaneer-habit: habit,
+    buccaneer-habit-standing: habit-standing,
+    buccaneer-habit-wheel: habit-wheel,
+  }

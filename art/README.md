@@ -26,7 +26,22 @@ built files are committed; the catalog's `art.model` names them, and
 
 - `lib/gltf.ts`: writes a glTF binary from nodes, meshes and materials.
 - `lib/mesh.ts`: a mesh builder: vertices, faces, normals, tubes and boxes.
+- `lib/fittings.ts`: what every boat carries alike: the tricolour lantern,
+  the pennant, the mainsail's telltales, the foils' blades.
 - `boats/jolly-boat/build.ts`: the Jolly boat.
+- `boats/keelboat/build.ts`: the keelboat, carvel planked with a copper
+  bottom, a fin keel and bulb, a cuddy, a sloop rig with its standing
+  rigging; its helm laid out as the sailors' stage boat's (below).
+- `boats/tall-ship/build.ts`: the tall ship, a ship-rigged collier with a
+  quarterdeck, a forecastle and a stern gallery, three masts in sections
+  with tops and crosstrees, square sails on yards, headsails, the mizzen
+  on its gaff and boom, shrouds with ratlines and deadeyes, her wheel and
+  her lanterns.
+- `boats/skiff/build.ts`: the skiff, clinker planked on a trapeze skiff's
+  lines with an open transom, racks of ash with a hemp net out to her beam,
+  a fractional rig with swept spreaders, deadeyes and trapeze wires, a
+  square-headed, fully battened main, a self-tacking jib on its horse, a
+  gennaker on a bowsprit, a centreboard and a kick-up rudder.
 - `town/lib/kit.ts` and `town/<biome>/build.ts`: each biome's kit of town
   buildings and props, `town/<biome>.glb`.
 - `icon/icon.ts` and `icon/build.ts`: the game's icon, the boat on sky and
@@ -38,12 +53,42 @@ built files are committed; the catalog's `art.model` names them, and
 A model's nodes are named, and the client finds its parts by those names:
 `hull`, `mast`, `boom` (its origin at the gooseneck), `sail` and `telltales`
 (also at the gooseneck), `pennant` (at the masthead), `rudder` (at its stock)
-with `tiller`, `daggerboard`, and `sailor`, an empty node where the sailor
-sits. The boat's origin is at its centre of gravity's station, on the
-centreline at the waterline; the bow points to -z and starboard is +x. The
-sail, telltales and pennant carry their fractions (of the chord and luff,
-along each ribbon) in their texture coordinates, and the client shapes them
-on the GPU.
+with `tiller`, `daggerboard` (a fixed keel too, its bulb a child), and
+`sailor`, an empty node where the sailor sits. A boat with headsails has
+`jib`, at its tack, its luff up the forestay to its head, `rake` (its
+`extras`) aft of the tack. A boat with a downwind sail has `kite`, built as
+the jib is, at its tack on the bowsprit's end, which the game hides in its
+bag and hoists from the tack. A boat with a trapeze has `trapeze`: its
+wires and rings, and in its `extras` the `hounds`, the `rings` (starboard
+first) and the starboard rack's outer edge at the helm (`rackEdge`), in the
+model's frame. A boat whose crew sit on her rail with their legs over the
+side has `rail`, an empty node at the starboard deck's edge where they
+sit (on the sheer at the outline's half-beam; the port side's is its
+mirror). A fully battened main's `sail` names its battens' heights,
+fractions of its luff, in its `extras`. A hull whose beam is over its
+racks says so: its `extras.plan.over` names the materials it is measured
+across. The boat's origin is at its centre of gravity's
+station, on the centreline at the waterline; the bow points to -z and
+starboard is +x. The sails, telltales and pennant carry their fractions (of
+the chord and luff, along each ribbon) in their texture coordinates, and
+the client shapes them on the GPU. Each level's triangles are within the
+catalog's `art.budget`.
+
+A square-rigged ship has more. Each mast's yards and their sails are a joint
+at the mast's axis, `fore-yards`, `main-yards` and `mizzen-yards`, at the
+courses' foot, square athwartships at rest, which the client turns about the
+vertical to brace them. Each square sail is a flat grid in its yard's
+upright plane, u from the port arm to the starboard and v from the head to
+the foot, whose `extras` name its `square` group and strip (a topsail's
+`split` is where its foot, of the lower strip, begins, and its `reefs` its
+reef bands); the main topsail carries the number (`{"number": true}`). Her
+`jib` node holds her headsails, each at its own tack with its `rake`, and
+the `spritsail` under the bowsprit. The mizzen's `boom` has its `gaff` at
+the throat. The `wheel` turns about its own z axis, fore and aft, its
+`extras` its radius and spokes; the `sailor` stands behind it. The
+`gallery` is the stern windows' panes, and her name goes on the transom
+(`{"name": {"on": "transom"}}` on the hull). Her lanterns are the nodes
+named as her lights.
 
 ## Sailors in Blender
 
@@ -55,6 +100,9 @@ packed by Python under `blender -b`, by script and nothing by hand:
 go run ./tools/sailors              # or: cd client && npm run art:sailors
 go run ./tools/sailors -look test   # one look
 go run ./tools/sailors -setup       # check Blender, install MPFB and gltfpack
+go run ./tools/sailors -add helm-wheel,habit-wheel   # only these clips, on every look
+go run ./tools/sailors -add trapeze,trapeze-low      # and the harness with them
+go run ./tools/sailors -add rail,rail-out,crouch-enter,crouch-walk,crouch-exit
 ```
 
 It needs Blender 5.2 LTS installed; the first run installs the pinned MPFB
@@ -127,13 +175,73 @@ figure's own space to the boat model's (`art/boats/jolly-boat.glb`): the
 far level's `place`, for the pose it is made in, and in the clips' file
 `place-<clip>` for each clip, the identity for one not placed in the boat.
 The game puts the figure under the boat's model with it, so it sits where
-the gates judged it.
+the gates judged it. Another boat lays out its helm as that dinghy does
+about the seat (the side deck as wide, the cockpit's floor as deep below
+the gunwale, the tiller's hinge as far from the seat), and its `sailor`
+node's `extras.restage` is how far its seat is from the dinghy's; the game
+moves the clips by it (a tack's cross widened to its beam), and a boat
+without a hiking strap is hiked only to the rail.
+
+A boat steered by a wheel has a node `wheel` with `extras.wheel` (its
+radius and spokes; the node's origin the hub, its axle fore and aft, a
+spoke straight up at rest) and its `sailor` node where the helmsman stands,
+on the deck between the feet, facing forward. Its clips (`helm-wheel`,
+and `-port` for the wind over the port side; `habit-wheel`, each look's
+habit at the wheel) are made at the stage's wheel (`tables.yaml`'s
+`stage.wheel`: the hub 0.55 m ahead of that place and 1.05 m above the
+deck, 0.75 m to the rim, 8 spokes), placed from the helmsman's place
+(`place-helm-wheel` is from the figure's space to the `sailor` node's),
+and written to a file of their own, `<version>.wheel.glb`, which only a
+boat steered by a wheel loads. The game keeps the hands on the spokes as
+the wheel turns with the rudder. `-add` makes only the clips named (as the
+game asks for them) on each committed look and writes their file, adding
+them to it if it has others, those kept byte for byte; nothing else is
+written, and garments it must make again go into `.dev`.
+
+A boat sailed from the trapeze has a node `trapeze` whose extras give the
+hounds, each side's ring (starboard first) and `rackEdge`, the starboard
+rack's edge at the helm's station, in the model's frame; each side's wire
+is a node of its own under it (`trapeze-starboard`, `trapeze-port`). Its
+clips (`trapeze`, fully out on the wire, lying back nearly flat with the
+legs straight; `trapeze-low`, crouched on the rack's edge half way out;
+each with its `-port`) are made against that boat's own model, imported
+into the stage's scene (`tables.yaml`'s `stage.trapeze`): a pose's `lie`
+leans the placed figure back about its feet, and the skirts' chains hang
+from the body as it lies (a clip's `hang`). They are placed from the
+rack's edge on their side and written to `<version>.trapeze.glb`; the
+harness the wire hooks to (`build/gear.py`'s harness: a leather belt under
+a coat or an apron, a bronze hook out before it) to
+`<version>.harness.glb`, skinned to the skeleton in its own two materials,
+its node `place-hook` the hook's eye at rest. Only a boat with a trapeze
+loads either.
+
+A keelboat's crew sit on her rail, and move about her deck at a crouch.
+Their clips on the rail (`rail`, sat on the deck's edge facing outboard,
+the legs over the side and the hands on the thighs, upright; `rail-out`,
+the same leaning out over the water from the hips; each with its `-port`)
+are made against her own model, imported into the stage's scene
+(`tables.yaml`'s `stage.rail`): her `rail` node is the deck's edge they sit
+on, the knees' joints `knee` out from it, the cloth under them laid on her
+deck inboard of the edge and hanging free outboard of it: a coat's back
+hangs down behind and its front, beyond the knees, down the topsides (a
+clip's `hang`, which may name one bone of a chain, `front_02`). They are placed
+from the deck's edge on their side. The crouch's (`crouch-enter`,
+`crouch-walk`, `crouch-exit`) are Quaternius' (`Crouch_Enter`,
+`Crouch_Fwd_Loop`, `Crouch_Exit`), retargeted and set on a flat deck (a
+retarget's `deck`): the soles on it, each foot held there by IK while it
+bears, the walk's moving back at its `speed` (0.7 m/s at the clip's own
+rate) so a figure moved forward at that speed keeps its feet still; the
+back bent as far as keeps the head's joint under `head` (0.7 m) over the
+deck while crouched, and the elbows as far as keeps the fingers off it;
+the coat's chains hanging from the body as it bends. They are not placed.
+All seven are written to `<version>.rail.glb`, which only a boat with
+someone at a station on her rail loads.
 
 Every build is judged before anyone looks at it: the gates
 (`review/metrics.py`: budgets, clean meshes and weights, nothing through
 the clothes in any judged pose, nothing through the boat seated, the
 figure kept under its clothes, symmetry, the atlas, the files) and the
-clips' gate (`review/motion.py`: jerk, speed, reach, contacts, ranges,
+clips' gate (`review/motion.py`: jerk, speed, reach, contacts, feet on a deck, ranges,
 loops, onsets) write `metrics.json` in the run (`.dev/sailors/runs/<look>/<n>`),
 with what moved since the last run, and fail the build on any; the sheet
 (`sheet.png` a version, `compare.png` beside the last run's) and each
@@ -150,6 +258,30 @@ doors, glass, stone, wood, cloth, iron) and its role (fixed; a storey's
 own, its windows and bands; or above the walls); its first's x a window's
 number. Its colour is the part's own, or for the parts the palette colours,
 a shade. Everything is real size: a storey is 3 m.
+
+## Life in the water
+
+`life/build.ts` (with `life/lib/`) builds the bodies of the sea's swimmers
+from their real proportions into `life/swimmers.glb`, the catalog's
+`life.art.model`: eleven meshes, each a node of its name, `dolphin` (built
+2.2 m long), `turtle` (1.0 m), `flyingfish` (0.3 m, its wings spread),
+`tarpon` (1.5 m), `humpback` (14 m), `sperm` (12 m), `pilot` (4.5 m),
+`ray` (1.1 m, its disc 2 m across), `shark` (2.7 m), `booby` (0.75 m,
+standing) and `booby-asleep` (0.56 m, roosting, at the standing bird's
+scale), whose `extras` give its `length` and how its spine bends; the page
+scales each to a kind's own length and paints it in the kind's colours.
+They are laid out as the boats are, their origin halfway along their length
+on the spine (the boobies' on the deck under them, their feet at y = 0),
+and faceted, each face its own vertices; none is over 320 triangles, as
+every body is drawn padded to the largest. Their vertices' colour is the back's
+share (r: 1 the back's colour, 0 the belly's), a dark mark (g: an eye, a
+mouth, a fin's edge, a seam) and whether the part is a paddle that strokes
+on its own (b: flippers, the flying fish's wings, the ray's wings, the
+shark's pectorals); their first texture
+coordinate is the share along the body, snout tip to tail tip, by z (u),
+and a paddle's share out from its root to its tip (v). The script fails if
+a body is not as long as it was built or is over its triangles' budget;
+`client/build/swimmers.test.ts` checks the committed file.
 
 ## Sound
 

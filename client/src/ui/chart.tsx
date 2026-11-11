@@ -9,7 +9,7 @@
 // boat now; and the notice line.
 
 import './chart.css';
-import { useEffect, useRef, useState } from 'preact/hooks';
+import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks';
 import { Raycaster, Vector2 } from 'three';
 import type { Chart, TappedWeather } from '../chart/chart';
 import type { Forecasting } from '../chart/forecasting';
@@ -25,9 +25,12 @@ import {
 } from '../chart/store';
 import { hitTest, type SystemBox, tappedBox, type WeatherHit } from '../chart/systembox';
 import type { BoatAt, ChartView } from '../chart/view';
+import { momentOf } from '../chart/weather';
 import type { ChartEntry } from '../net/messages';
 import { Pusher, useUpright } from './case';
 import { PlaceWeatherLines, TimeBar } from './chartweather';
+import { clockAngles, worldTimeText } from './clock';
+import { ClockFace } from './clockdial';
 import { type Countdown, endText } from './countdown';
 import { WeatherDecal } from './decals';
 import { threeDigits, wholeDegrees } from './format';
@@ -39,6 +42,10 @@ export interface ChartSea {
   chart: Chart;
   /** The boat, where it is and which way it heads. */
   boat: () => BoatAt;
+  /** The world's tick now. */
+  tick: () => number;
+  /** The hour of the world's day at a tick, as the sky is drawn at it, noon at 12; null before the world's time is known. */
+  hour: (tick: number) => number | null;
   /** The degrees the pole sinks a nautical mile, and the lip, m. */
   scale: number;
   lip: number;
@@ -499,7 +506,7 @@ export function ChartList({ sea }: { sea: ChartSea }) {
   );
 }
 
-/** An item of the news. */
+/** An item of the news: what is charted and by whom, or a notice of the world's own (its end). */
 export interface NewsItem {
   id: string;
   column: string;
@@ -578,18 +585,12 @@ function ChartedItem({ sea, it, now }: { sea: ChartSea; it: NewsItem; now: numbe
   );
 }
 
-/** An item of the Notices to Mariners: the world's end, in the reader's own time. */
-function WorldItem({ sea, it, zone }: { sea: ChartSea; it: NewsItem; zone: string }) {
-  if (it.subject === 'gale') {
-    // A gale warning: where its strongest wind was forecast, on the chart at a tap.
-    return (
-      <li class="news-world news-gale">
-        <button type="button" onClick={() => sea.chart.showPoint(it.east, it.north)}>
-          <span class="news-title">{it.title.toUpperCase()}.</span> {it.what}.
-        </button>
-      </li>
-    );
-  }
+/**
+ * An item of the Notices to Mariners: a notice of the world's own, its end,
+ * in the reader's own time. The weather is never in the news: the chart,
+ * the forecast and the gale warning's notice tell of it.
+ */
+function WorldItem({ it, zone }: { it: NewsItem; zone: string }) {
   return (
     <li class="news-world">
       <span class="news-title">{it.title.toUpperCase()}.</span> The falls take this world on{' '}
@@ -644,7 +645,7 @@ export function NewsSheet({ sea, end = null }: { sea: ChartSea; end?: Countdown 
           <h3>{sea.columns.find((c) => c.of === 'world')?.title}</h3>
           <ol class="news-items">
             {notices.map((it) => (
-              <WorldItem key={it.id} sea={sea} it={it} zone={zone} />
+              <WorldItem key={it.id} it={it} zone={zone} />
             ))}
           </ol>
         </section>
@@ -693,8 +694,53 @@ function RimCountdown({ end }: { end: Countdown | null }) {
   );
 }
 
-/** The chart over the whole screen, its list, or the news. */
-export function ChartScreen({ sea, end = null }: { sea: ChartSea; end?: Countdown | null }) {
+/**
+ * The strip's ship's clock: the world's time of the moment the chart
+ * shows, now or the slider's, its hands sweeping on as Play plays and back
+ * with Now; its rim gold while it reads ahead, as the slider's knob is.
+ */
+function StripClock({ sea }: { sea: ChartSea }) {
+  const minutes = sea.chart.minutes.value;
+  const [, tick] = useState(0);
+  useEffect(() => {
+    // The world's time now moves on.
+    const t = setInterval(() => tick((n) => n + 1), 500);
+    return () => clearInterval(t);
+  }, []);
+  const src = sea.forecasting;
+  const m = src === null ? null : momentOf(minutes, src);
+  const hour = sea.hour(m?.tick ?? sea.tick());
+  if (hour === null) {
+    return null;
+  }
+  const ahead = m !== null && m.kind === 'ahead' ? m.minutes : 0;
+  const words = `${worldTimeText(hour)}${ahead > 0 ? `, in ${ahead} minutes` : ''}`;
+  return (
+    <span
+      class={`chart-clock${ahead > 0 ? ' ahead' : ''}`}
+      role="img"
+      aria-label={words}
+      title={words}
+      data-readout="chart-clock"
+    >
+      <ClockFace id="chart-clock-face" angles={clockAngles(hour)} numerals="none" />
+    </span>
+  );
+}
+
+/**
+ * The chart over the whole screen, its list, or the news; the notices
+ * under its top, out of the way of its working foot.
+ */
+export function ChartScreen({
+  sea,
+  end = null,
+  notices = null,
+}: {
+  sea: ChartSea;
+  end?: Countdown | null;
+  notices?: Notices | null;
+}) {
   const chart = sea.chart;
   const surface = useGestures(sea);
   const labels = useRef<HTMLDivElement | null>(null);
@@ -702,17 +748,37 @@ export function ChartScreen({ sea, end = null }: { sea: ChartSea; end?: Countdow
     chart.view.attachLabels(labels.current);
     return () => chart.view.attachLabels(null);
   }, [chart]);
+  // How far down the top reaches, strip, countdown and notice: the boxes
+  // and the key keep below it.
+  const screen = useRef<HTMLDivElement | null>(null);
+  const top = useRef<HTMLElement | null>(null);
+  useLayoutEffect(() => {
+    const s = screen.current;
+    const t = top.current;
+    if (s === null || t === null) {
+      return;
+    }
+    const foot = () => s.style.setProperty('--chart-head', `${t.getBoundingClientRect().bottom}px`);
+    foot();
+    if (typeof ResizeObserver === 'undefined') {
+      return;
+    }
+    const sized = new ResizeObserver(foot);
+    sized.observe(t);
+    return () => sized.disconnect();
+  }, []);
   const mode = chart.mode.value;
   const picked = chart.picked.value;
   const tapped = chart.tapped.value;
   return (
-    <div class="chart-screen" data-mode={mode}>
+    <div class="chart-screen" data-mode={mode} ref={screen}>
       <div class="chart-surface" ref={surface} hidden={mode !== 'chart'} />
       <div class="chart-labels" ref={labels} hidden={mode !== 'chart'} />
-      <header class="chart-top">
+      <header class="chart-top" ref={top}>
         <div class="chart-case chart-strip">
           <Tabs sea={sea} />
           <Position sea={sea} />
+          <StripClock sea={sea} />
           <button
             type="button"
             class="chart-button chart-back"
@@ -724,6 +790,11 @@ export function ChartScreen({ sea, end = null }: { sea: ChartSea; end?: Countdow
           </button>
         </div>
         <RimCountdown end={end} />
+        {notices !== null ? (
+          <div class="chart-notices">
+            <NoticeLine notices={notices} />
+          </div>
+        ) : null}
       </header>
       {mode === 'chart' && picked !== null ? (
         <ChartBox sea={sea} e={picked} close={() => (chart.picked.value = null)} />
@@ -854,7 +925,7 @@ export function drawPocket(
   const w = c.width;
   const h = c.height;
   // The disk nearly the canvas's width, room left at the rim for the
-  // boat's mark; the canvas cut to the disk's shape.
+  // boat's mark; its weather cut to the disk's shape.
   const k = (w * 0.48) / sea.lip;
   const tilt = 0.62;
   const x = (east: number) => w / 2 + east * k;
@@ -876,7 +947,13 @@ export function drawPocket(
   ctx.stroke();
   ctx.setLineDash([]);
   if (weather !== null) {
+    // The weather within the rim: a storm on it is cut by the world's edge.
+    ctx.save();
+    ctx.beginPath();
+    ctx.ellipse(w / 2, h / 2, sea.lip * k - 1, sea.lip * k * tilt - 1, 0, 0, 2 * Math.PI);
+    ctx.clip();
     drawPocketWeather(ctx, weather, x, y, k, tilt);
+    ctx.restore();
   }
   for (const e of sea.chart.store.entries) {
     if (e.subject === 'island' && e.bounds !== null) {

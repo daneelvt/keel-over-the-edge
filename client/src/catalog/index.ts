@@ -8,12 +8,14 @@ import type { Catalog } from './types.gen';
 
 export type {
   Boat,
+  BoatStation,
   Catalog,
   EncountersOverlay,
   Light,
   NamedStar,
   SailorArt,
   Sky,
+  StationPose,
 } from './types.gen';
 export { CATALOG_VERSION } from './types.gen';
 

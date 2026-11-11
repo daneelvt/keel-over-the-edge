@@ -3,6 +3,7 @@
 package bus
 
 import (
+	"slices"
 	"sync/atomic"
 
 	"github.com/daneelvt/keel-over-the-edge/internal/physics"
@@ -58,11 +59,16 @@ type Frame struct {
 	Machine  []bool
 	Priority []bool
 	// Look is per slot its sailor's look: a look code (internal/looks).
-	Look    []uint32
-	Control []Word // per slot: the controls in force
-	Pilot   []PilotWord
-	State   []physics.State
-	Sail    []uint8 // per slot: physics.SailByte of the boat's last step, for drawing
+	// BoatLook is the boat's own look, its paint, cloth and sail number (a
+	// boat look code), and BoatName its name, player text, "" for none.
+	Look     []uint32
+	BoatLook []uint32
+	BoatName []string
+	Control  []Word // per slot: the controls in force: the helm and sheet, the autopilot's and the rig's
+	Pilot    []PilotWord
+	Rig      []RigWord
+	State    []physics.State
+	Sail     []uint8 // per slot: physics.SailByte of the boat's last step, for drawing
 	// Course is per slot what the Articles keep of a boat between ticks.
 	Course []physics.Course
 	// Voyage is per slot what the edge keeps of a boat's voyage: whether
@@ -102,6 +108,11 @@ type Frame struct {
 	// digest.
 	Charted []Charted
 
+	// Life is the sea's life alive at the tick: each encounter from its
+	// start to its end, the oldest first. It follows from the world's life
+	// schedule and the boats, so it is in no snapshot or digest.
+	Life []LifeEncounter
+
 	// Ended says this tick was the world's last: the falls took every boat
 	// afloat (their EdgeTaken events are in Edges), and no tick follows.
 	Ended bool
@@ -113,6 +124,16 @@ type Frame struct {
 	// Queue is who waits for a boat while the world is at its limit, the
 	// head first.
 	Queue []Waiting
+
+	// Crew is everyone aboard a boat not their own, by their boat's slot,
+	// then their seat. Holder is per slot who holds the boat's controls:
+	// one of its crew, or the zero account for its skipper, its Owner.
+	// Deck is per slot a count of the changes to who is aboard and who
+	// holds the controls, for those who tell of them: it is in no snapshot
+	// or digest.
+	Crew   []Aboard
+	Holder []Account
+	Deck   []uint32
 
 	// What the tick applied, in the order it applied it: the input log
 	// records these.
@@ -240,8 +261,40 @@ type Charted struct {
 	X, Y    float64
 }
 
+// LifeEncounter is a group of one kind of the sea's life met from Start to
+// End, its record as every phone draws it: where it is and which way it
+// goes, how fast, how many, its own seed, and the boat it is with, if any.
+// A free group's path is a function of the record and world time alone; a
+// group with a boat moves about that boat as it is drawn. Rev counts its
+// changes: a binding ended early, or its end moved.
+type LifeEncounter struct {
+	ID    uint64
+	Kind  uint16 // an index into the catalog's life kinds
+	Rev   uint32
+	Start int64 // ticks
+	End   int64
+	// East and North are its centre, m from the world's centre, in whole
+	// centimetres; Heading the way it goes, rad clockwise from north, and
+	// Speed how fast, m/s, each a float32's.
+	East, North    float64
+	Heading, Speed float64
+	Count          uint16
+	Seed           uint32
+	// Boat is the boat it is with, 0 for none, and Slot that boat's slot,
+	// −1 for none.
+	Boat uint64
+	Slot int32
+	// Over is the encounter on whose patch it comes, 0 for none: the
+	// birds and the dolphins with bait, the flying fish of a ground.
+	Over uint64
+}
+
 // BumpTicks is how many ticks a frame keeps a bump: a second.
 const BumpTicks = 30
+
+// LifeRoom is how many encounters with the sea's life a frame has room for
+// without growing.
+const LifeRoom = 256
 
 // Cells is the number of the grid's cells.
 const Cells = physics.GridCells * physics.GridCells
@@ -258,10 +311,80 @@ type Waiting struct {
 	// at, unless its account joins first; 0 while connected.
 	Grace int64
 	// Machine and Priority are its account's kind, as the Join gave it,
-	// and Look its sailor's look.
+	// Look its sailor's look and BoatKind the kind of boat it is to have,
+	// BoatLook and BoatName that boat's own look and name.
 	Machine  bool
 	Priority bool
 	Look     uint32
+	BoatKind uint16
+	BoatLook uint32
+	BoatName string
+}
+
+// Aboard is someone aboard another sailor's boat, as its crew: they have
+// no boat of their own in the world, and hold no place against the boat
+// limit. Seat is their station on deck, 1 up to the boat's capacity less
+// one (the skipper's is 0).
+type Aboard struct {
+	Slot    int32  // the boat's slot
+	Boat    uint64 // the boat
+	Seat    uint8
+	Account Account
+	Conn    uint64 // the connection they are aboard through, 0 for none
+	// Grace is the tick they go ashore at, their connection gone, unless
+	// they come back first; 0 while connected.
+	Grace int64
+	Since int64 // the tick they came aboard
+	// Machine and Priority are their account's kind; Look their sailor's
+	// look and Name their name, as players see it.
+	Machine  bool
+	Priority bool
+	Look     uint32
+	Name     string
+	// BoatKind, BoatLook and BoatName are their own boat's, for when they
+	// go ashore.
+	BoatKind uint16
+	BoatLook uint32
+	BoatName string
+}
+
+// MaxCrew is the most people aboard one boat but its skipper.
+const MaxCrew = 63
+
+// CrewOf is the crew of the boat in slot s: f.Crew[lo:hi].
+func (f *Frame) CrewOf(s int32) (lo, hi int) {
+	lo, _ = slices.BinarySearchFunc(f.Crew, s, func(a Aboard, s int32) int { return int(a.Slot - s) })
+	hi = lo
+	for hi < len(f.Crew) && f.Crew[hi].Slot == s {
+		hi++
+	}
+	return lo, hi
+}
+
+// Aboard is the index in f.Crew of account, or −1 if it is aboard no boat.
+func (f *Frame) Aboard(account Account) int {
+	for i := range f.Crew {
+		if f.Crew[i].Account == account {
+			return i
+		}
+	}
+	return -1
+}
+
+// HelmLook is the look of whoever holds the controls of the boat in slot
+// s, drawn at its helm: its skipper's, or the crew member's they handed
+// them to.
+func (f *Frame) HelmLook(s int32) uint32 {
+	if f.Holder[s] == (Account{}) {
+		return f.Look[s]
+	}
+	lo, hi := f.CrewOf(s)
+	for i := lo; i < hi; i++ {
+		if f.Crew[i].Account == f.Holder[s] {
+			return f.Crew[i].Look
+		}
+	}
+	return f.Look[s]
 }
 
 // QueuePlace is the place in the queue of q[i] among those of its kind, human
@@ -331,11 +454,12 @@ func (f *Frame) SpellsInPlay() []physics.Spell { return f.Spells[:f.NSpells] }
 // QueueLimit is the most connections that may wait for a boat.
 const QueueLimit = 4096
 
-// SlotWord is a pair of control words applied to a slot.
+// SlotWord is the control words applied to a slot.
 type SlotWord struct {
 	Slot  int32
 	Word  Word
 	Pilot PilotWord
+	Rig   RigWord
 }
 
 // An Event is a command the tick applied and what came of it. Its Reply
@@ -359,8 +483,11 @@ func NewFrame(capacity int) *Frame {
 		Machine:  make([]bool, capacity),
 		Priority: make([]bool, capacity),
 		Look:     make([]uint32, capacity),
+		BoatLook: make([]uint32, capacity),
+		BoatName: make([]string, capacity),
 		Control:  make([]Word, capacity),
 		Pilot:    make([]PilotWord, capacity),
+		Rig:      make([]RigWord, capacity),
 		State:    make([]physics.State, capacity),
 		Sea: Sea{
 			Now:  make([]physics.SeaInput, physics.SeaAreas*physics.SeaAreas),
@@ -378,12 +505,16 @@ func NewFrame(capacity int) *Frame {
 		Instruments: make([]Instruments, capacity),
 		Pairs:       make([]Pair, 0, capacity),
 		Bumps:       make([]Bump, 0, 64),
+		Life:        make([]LifeEncounter, 0, LifeRoom),
 		Grid: Grid{
 			Start: make([]int32, Cells+1),
 			Slots: make([]int32, 0, capacity),
 			Cell:  make([]int32, capacity),
 		},
 		Queue:    make([]Waiting, 0, QueueLimit),
+		Crew:     make([]Aboard, 0, 64),
+		Holder:   make([]Account, capacity),
+		Deck:     make([]uint32, capacity),
 		Weathers: make([]Weather, 0, WeatherHistory),
 		Systems:  make([]System, 0, SystemSlots),
 		Changed:  make([]SlotWord, 0, capacity),

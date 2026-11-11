@@ -87,6 +87,54 @@ stage:
     sheet: [0.3, 0.3, 0.3]
     tiller-hiking: [-0.3, 0.05, 0.22]
     sheet-hiking: [0.3, 0.12, 0.28]
+  # The ship's helm, where the sailor stands at a wheel (build/stage.py's
+  # Wheel): the point the helmsman stands at, between the feet on a flat
+  # deck (set this far forward of the dinghy, clear of it); the hub this
+  # far ahead of it and up from the deck, its axle fore and aft; the rim,
+  # the spokes (the first straight up at rest) and their handles beyond the
+  # rim, as the ship's model is built; and where the hands hold the
+  # spokes, each the spoke's angle from the top (degrees, to starboard as
+  # the helmsman sees it) and how far out along it from the hub. The clips
+  # placed here are placed from the helmsman's point, as the game places
+  # them from the model's `sailor` node.
+  wheel:
+    at: [0.0, 12.0, 0.0]
+    deck: { width: 3.0, length: 3.0, thickness: 0.2 }
+    hub: { ahead: 0.55, up: 1.05 }
+    radius: 0.75
+    spokes: 8
+    handles: 0.15
+    grips:
+      wheel-left: [-45, 0.4]
+      wheel-right: [45, 0.4]
+  # A boat sailed from the trapeze (build/stage.py's Trapeze): its model,
+  # set this far forward of the dinghy in the stage's scene, clear of it
+  # and of the wheel; its `trapeze` node gives the rack's edge the feet
+  # stand on (on the starboard side, at the helm's station), each side's
+  # ring and the hounds the wires come down from. The clips placed there
+  # are placed from the rack's edge on their side, as the game places them
+  # from the model's node. The harness the wire hooks to (build/gear.py's
+  # harness), worn only there: a belt this wide and thick round the
+  # clothes under a coat or an apron, its middle this far above the waist,
+  # and its hook standing this far out before it.
+  trapeze:
+    boat: boats/skiff.glb
+    at: [0.0, 24.0, 0.0]
+    harness: { width: 0.075, thick: 0.005, columns: 32, up: -0.02, hook: 0.055 }
+  # A keelboat whose crew sit on the rail, legs over the side (build/
+  # stage.py's Rail): her model, set this far forward of the dinghy in the
+  # stage's scene, clear of it, the wheel and the trapeze's boat; her
+  # `rail` node is the starboard deck's edge they sit on. The clips placed
+  # there are placed from the deck's edge on their side, as the game places
+  # them from a station on the rail; sat there, the knees' joints this far
+  # out from the edge, the backs of the knees just past it. The cloth they
+  # sit on is laid on her deck this far fore and aft of the edge's station,
+  # inboard of the edge.
+  rail:
+    boat: boats/keelboat.glb
+    at: [0.0, 36.0, 0.0]
+    knee: 0.12
+    span: 1.2
 
 # The portraits (build/portraits.py), every look's taken alike: head and
 # shoulders, three-quarter, the camera on the figure's left at the height
@@ -189,6 +237,9 @@ motion:
     reach: 0.9
     contact: 0.001
     ankle-drift: 0.005
+    # A foot bearing on a deck, set on one: how far it may slide over it
+    # while it bears, beyond the walk's own speed.
+    slide: 0.01
     hand-clearance: 0.03
     # A hand on the hat, settling it: outside it by at least this.
     hat-clearance: 0.01
@@ -204,7 +255,8 @@ motion:
   # the hip flexes 120–135° with the knee bent (at 120, a man sitting on the
   # dinghy's low side deck, an ordinary seat at about 100°, is past 80% of
   # it), the knee 135°, the shoulder 180°, the elbow 150°, the neck turns
-  # 80°.
+  # 80°, the ankle 60° (on the toes under a deep crouch, 55°), the toes
+  # bend back 70° (a crouch on the balls of the feet bends them 50°).
   ranges:
     pelvis: 60
     spine_01: 35
@@ -223,8 +275,8 @@ motion:
     pinky: 90
     thigh: 135
     calf: 135
-    foot: 50
-    ball: 40
+    foot: 60
+    ball: 70
 
 # The skeleton every sailor and clip file shares: its joints, in the
 # order the files list them (the order the game's bone texture keeps).

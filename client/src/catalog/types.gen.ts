@@ -9,12 +9,40 @@
  */
 export type Id = string;
 /**
+ * In m in the model's frame. Standing, the deck between the feet; seated, the seat's back edge, as the gunwale is to a dinghy's helmsman: the hips just within it, the legs reaching 0.7 m the way the person faces, the feet 0.2 m below it; on the rail, the deck's edge at the sheer under the person, who sits facing outboard, the hips just within it and the legs over the side.
+ *
+ * @minItems 3
+ * @maxItems 3
+ */
+export type BoatPoint = [number, number, number];
+/**
+ * How a person is at a station: standing; seated (leaning out as hiking in a breeze); hiking (sitting out on the rail and leaning out, as a dinghy's crew); or on the rail (sat on a keelboat's deck edge facing outboard with the legs over the side, upright, leaning out in a breeze).
+ *
+ * This interface was referenced by `Catalog`'s JSON-Schema
+ * via the `definition` "StationPose".
+ */
+export type StationPose = "standing" | "seated" | "hiking" | "rail";
+/**
  * A navigation light a boat shows from sunset to sunrise, by the arc it shows over (International Regulations for Preventing Collisions at Sea, Rule 21): a red sidelight to port and a green to starboard, each from right ahead to 22.5° abaft the beam; a white sternlight over the 135° astern; or the three combined in one lantern at the masthead, which Rule 25(b) allows a sailing vessel of less than 20 m.
  *
  * This interface was referenced by `Catalog`'s JSON-Schema
  * via the `definition` "Light".
  */
 export type Light = "tricolour" | "port" | "starboard" | "stern";
+/**
+ * Where a seabird perches on it, in m in its model's frame (x to starboard, y up from the model's origin, z aft).
+ *
+ * @minItems 3
+ * @maxItems 3
+ */
+export type BoatPoint1 = [number, number, number];
+/**
+ * Where a flying fish lands on its deck, in m in its model's frame.
+ *
+ * @minItems 3
+ * @maxItems 3
+ */
+export type BoatPoint2 = [number, number, number];
 /**
  * A cloud's form, which names how it is drawn: fair cumulus, a towering cumulonimbus with its anvil and shelf, a storm's deck with its towers, fog, or none.
  *
@@ -72,6 +100,69 @@ export type FeatureSite1 =
  * A colour, as #rrggbb in sRGB.
  */
 export type Colour4 = string;
+/**
+ * What it is, as the phone draws it.
+ *
+ * This interface was referenced by `Catalog`'s JSON-Schema
+ * via the `definition` "LifeForm".
+ */
+export type LifeForm = "bird" | "glider" | "bait" | "pod" | "turtle" | "whale" | "ray" | "fin" | "glow";
+/**
+ * Its family, whose lull it keeps.
+ *
+ * This interface was referenced by `Catalog`'s JSON-Schema
+ * via the `definition` "LifeFamily".
+ */
+export type LifeFamily = "birds" | "water" | "big" | "night";
+/**
+ * How it moves when it is with no boat: passing through, soaring in circles, skimming the swell in arcs, working a patch of water, staying about its patch, or drifting from where it began.
+ *
+ * This interface was referenced by `Catalog`'s JSON-Schema
+ * via the `definition` "LifePath".
+ */
+export type LifePath = "pass" | "soar" | "skim" | "work" | "stay" | "drift";
+/**
+ * What it does with a boat it meets, if anything: follows its stern, rides its bow, perches on it, or, a ground of fish, is flushed by every boat sailing through it.
+ *
+ * This interface was referenced by `Catalog`'s JSON-Schema
+ * via the `definition` "LifeBinds".
+ */
+export type LifeBinds = "follow" | "ride" | "perch" | "flush";
+/**
+ * How it moves over the patch of a group it comes with, if not by its own path: working it, or staying over it.
+ *
+ * This interface was referenced by `Catalog`'s JSON-Schema
+ * via the `definition` "LifeOver".
+ */
+export type LifeOver = "work" | "stay";
+/**
+ * A body of the life in the water, a model in the life's art.
+ *
+ * This interface was referenced by `Catalog`'s JSON-Schema
+ * via the `definition` "LifeBody".
+ */
+export type LifeBody =
+  | "dolphin"
+  | "turtle"
+  | "flyingfish"
+  | "tarpon"
+  | "humpback"
+  | "sperm"
+  | "pilot"
+  | "ray"
+  | "shark"
+  | "booby"
+  | "booby-asleep";
+/**
+ * A point on a boat, in m in its model's frame: x to starboard, y up, z aft.
+ *
+ * @minItems 3
+ * @maxItems 3
+ *
+ * This interface was referenced by `Catalog`'s JSON-Schema
+ * via the `definition` "BoatPoint".
+ */
+export type BoatPoint3 = [number, number, number];
 
 /**
  * Every list of kinds in the game. Kinds are data: code reads their properties, never their names.
@@ -83,6 +174,7 @@ export interface Catalog {
    * @minItems 1
    */
   boats: [Boat, ...Boat[]];
+  boatLooks: BoatLooks;
   /**
    * The looks sailors choose from, in the picker's order. At most 15: a look code holds a look's place in 4 bits, the 16th place the machine's.
    *
@@ -129,6 +221,7 @@ export interface Catalog {
   world: World;
   notices: Notices;
   news: News;
+  life: Life;
 }
 /**
  * This interface was referenced by `Catalog`'s JSON-Schema
@@ -149,6 +242,12 @@ export interface Boat {
    */
   capacity: number;
   /**
+   * Where the people aboard are drawn, one a person it can carry (capacity), in seat order: the first the helm, where whoever holds the controls is, then each seat's.
+   *
+   * @minItems 1
+   */
+  stations: [BoatStation, ...BoatStation[]];
+  /**
    * Length overall, in metres.
    */
   lengthOverall: number;
@@ -166,14 +265,71 @@ export interface Boat {
    * How high its lookout's eye is above the sea, in m: what it sees over the horizon.
    */
   lookout: number;
+  perch: BoatPoint1;
+  deck: BoatPoint2;
   /**
    * Its sheet for a start from rest: pairs of an angle off the wind, in degrees, and the sheet there, from 0 hauled in to 1 let fly, by rising angle, read linearly between them.
    *
    * @minItems 1
    */
   startSheet: [[number, number], ...[number, number][]];
+  controls: BoatControls;
+  /**
+   * How many of the boat an account's fleet holds: one for each of its sailors, or one for the account, shared by them.
+   */
+  fleet: "sailor" | "account";
   physics: BoatPhysics;
   art: BoatArt;
+}
+/**
+ * A place aboard where a person is drawn: standing on the deck, seated as a dinghy's helmsman sits on the side deck, hiking out on its rail, or sat on a keelboat's rail with the legs over the side; to windward, if it says so.
+ *
+ * This interface was referenced by `Catalog`'s JSON-Schema
+ * via the `definition` "BoatStation".
+ */
+export interface BoatStation {
+  at: BoatPoint;
+  pose: StationPose;
+  /**
+   * The way the person faces, in degrees clockwise from the bow seen from above: 0 forward, 90 to starboard, 180 aft, 270 to port.
+   */
+  facing: number;
+  /**
+   * Whether the person sits to windward, as a crew does: on the side away from the boom, the station's mirror across the centreline (and its facing's) when that is the other side, and crossing the boat at a crouch in a tack or a gybe. Not said, the station is where it is.
+   */
+  windward?: boolean;
+}
+/**
+ * The words the boat's controls are shown with. Every boat has the helm, the sheet and the reef; the sheet sets the main's limit, the headsails' and the downwind sail's in the same share, and the yards' brace.
+ *
+ * This interface was referenced by `Catalog`'s JSON-Schema
+ * via the `definition` "BoatControls".
+ */
+export interface BoatControls {
+  /**
+   * The sheet's control: its name, and its two ends' words.
+   */
+  sheet: {
+    /**
+     * What the control is called.
+     */
+    name: string;
+    /**
+     * The word at its end that hauls in.
+     */
+    trim: string;
+    /**
+     * The word at its end that lets out.
+     */
+    ease: string;
+  };
+  /**
+   * The reef's three levels in words: full sail, one reef, two.
+   *
+   * @minItems 3
+   * @maxItems 3
+   */
+  reef: [string, string, string];
 }
 /**
  * The boat's physics, in SI units with angles in degrees. Every value is required.
@@ -184,6 +340,9 @@ export interface Boat {
 export interface BoatPhysics {
   hull: PhysicsHull;
   rig: PhysicsRig;
+  headsails: PhysicsHeadsails;
+  square: PhysicsSquare;
+  downwind: PhysicsDownwind;
   foils: PhysicsFoils;
   sailor: PhysicsSailor;
   rates: PhysicsRates;
@@ -278,6 +437,10 @@ export interface PhysicsHull {
    */
   rollDamping: number;
   /**
+   * The hull's resistance to turning, from the water flowing across it as it turns, in N·m per (rad/s)²: its moment against the rate of turn times the rate's size. 0 where the foils alone damp the turning.
+   */
+  yawDamping: number;
+  /**
    * Righting lever (GZ) with the sailor on the centreline, every 10° of heel from 0° to 180°, in m.
    *
    * @minItems 19
@@ -357,7 +520,7 @@ export interface PhysicsHull {
   stem: number;
 }
 /**
- * The sail, boom and windage.
+ * The main, its boom and reefs, and the windage.
  *
  * This interface was referenced by `Catalog`'s JSON-Schema
  * via the `definition` "PhysicsRig".
@@ -526,9 +689,432 @@ export interface PhysicsRig {
    * The boat's close-hauled course: its heading off the true wind sailing as close to it as it sails well, in degrees.
    */
   closeHauled: number;
+  /**
+   * The share of its luff the main keeps at full sail, with one reef and with two: its area goes as the square of the share, its centre of effort down with it.
+   *
+   * @minItems 3
+   * @maxItems 3
+   */
+  reefs: [number, number, number];
+  /**
+   * Time for the crew to take a reef in or shake it out, in s.
+   */
+  reefTime: number;
 }
 /**
- * The daggerboard or keel, and the rudder.
+ * The headsails: sails tacked on a stay ahead of the mast, their clew free to their own sheet's limit, with no boom, set and trimmed together as one. A boat with none has an area of 0, and its other values 0.
+ *
+ * This interface was referenced by `Catalog`'s JSON-Schema
+ * via the `definition` "PhysicsHeadsails".
+ */
+export interface PhysicsHeadsails {
+  /**
+   * Their area, in m²; 0 for none.
+   */
+  headsailArea: number;
+  /**
+   * The head's height above the tack, in m.
+   */
+  headsailLuff: number;
+  /**
+   * Length of the foot, in m.
+   */
+  headsailFoot: number;
+  /**
+   * The tack's height above the waterline, in m.
+   */
+  headsailTackHeight: number;
+  /**
+   * The tack's distance ahead of the centre of gravity, in m.
+   */
+  headsailTack: number;
+  /**
+   * Height of the lower strip's centre of effort above the tack, as a fraction of the luff.
+   */
+  headsailFootStrip: number;
+  /**
+   * Height of the upper strip's centre of effort above the tack, as a fraction of the luff.
+   */
+  headsailHeadStrip: number;
+  /**
+   * Centre of pressure aft of the tack with the flow attached, as a fraction of the foot.
+   */
+  headsailPressureAttached: number;
+  /**
+   * Centre of pressure aft of the tack with the flow separated, as a fraction of the foot.
+   */
+  headsailPressureSeparated: number;
+  /**
+   * Greatest lift coefficient.
+   */
+  headsailMaxLift: number;
+  /**
+   * Angle of attack of the greatest lift, in degrees.
+   */
+  headsailStallAngle: number;
+  /**
+   * Angle past the stall over which the flow separates, in degrees.
+   */
+  headsailStallWidth: number;
+  /**
+   * Viscous drag coefficient.
+   */
+  headsailDrag: number;
+  /**
+   * Normal force coefficient of separated flow, every 10° of angle of attack from 0° to 180°.
+   *
+   * @minItems 19
+   * @maxItems 19
+   */
+  headsailNormalForce: [
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number
+  ];
+  /**
+   * The upper strip's twist beyond the clew's line, sheeted in, in degrees.
+   */
+  headsailTwist: number;
+  /**
+   * Extra twist as the sheet lets the clew out, growing in proportion to its angle, in degrees.
+   */
+  headsailTwistEased: number;
+  /**
+   * The clew's angle off the centreline, seen from the tack, with the sheet hauled in hard, in degrees.
+   */
+  headsailIn: number;
+  /**
+   * The clew's angle with the sheet let fly, in degrees.
+   */
+  headsailOut: number;
+  /**
+   * Moment of inertia of the sail and its clew about the stay, in kg·m².
+   */
+  headsailInertia: number;
+  /**
+   * Their mass times the distance of their centre of gravity aft of the stay, in kg·m.
+   */
+  headsailMoment: number;
+  /**
+   * Friction of the clew's swing, in N·m·s/rad.
+   */
+  headsailDamping: number;
+  /**
+   * The share of their luff kept at full sail, with one reef and with two.
+   *
+   * @minItems 3
+   * @maxItems 3
+   */
+  headsailReefs: [number, number, number];
+}
+/**
+ * Square sails on yards the braces hold at an angle, in a fore group and an after group, and the crew that hauls the yards round in a turn. A boat with none has areas of 0, and its other values 0.
+ *
+ * This interface was referenced by `Catalog`'s JSON-Schema
+ * via the `definition` "PhysicsSquare".
+ */
+export interface PhysicsSquare {
+  /**
+   * The fore group's area, in m²; 0 for none.
+   */
+  squareForeArea: number;
+  /**
+   * The after group's area, in m²; 0 for none.
+   */
+  squareAfterArea: number;
+  /**
+   * The fore group's mast ahead of the centre of gravity, in m.
+   */
+  squareForeMast: number;
+  /**
+   * The after group's centre of effort ahead of the centre of gravity, in m: between its masts, by their sails' areas.
+   */
+  squareAfterMast: number;
+  /**
+   * The lowest sails' foot above the waterline, in m.
+   */
+  squareFootHeight: number;
+  /**
+   * The sails' height from that foot to the highest yard, in m.
+   */
+  squareLuff: number;
+  /**
+   * Height of the lower strip's centre of effort above the sails' foot, as a fraction of the luff.
+   */
+  squareFootStrip: number;
+  /**
+   * Height of the upper strip's centre of effort above the sails' foot, as a fraction of the luff.
+   */
+  squareHeadStrip: number;
+  /**
+   * Centre of pressure out along the yards from the mast toward the arm the wind meets first, with the flow attached, as a fraction of the sails' half-width (half their area over their luff); with the flow separated it is at the mast.
+   */
+  squarePressure: number;
+  /**
+   * Lift coefficient of the sails drawing, the wind on their after face, every 5° of angle of attack off the yards' line from 0° to 90°.
+   *
+   * @minItems 19
+   * @maxItems 19
+   */
+  squareLift: [
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number
+  ];
+  /**
+   * Drag coefficient of the sails drawing, every 5° of angle of attack off the yards' line from 0° to 90°.
+   *
+   * @minItems 19
+   * @maxItems 19
+   */
+  squareDrag: [
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number
+  ];
+  /**
+   * Normal force coefficient of the sails aback, pressed flat against their mast, every 10° of angle of attack from 0° to 180°.
+   *
+   * @minItems 19
+   * @maxItems 19
+   */
+  squareNormalForce: [
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number
+  ];
+  /**
+   * The upper strip's yards braced this much squarer than the lower's, in degrees: the wind aloft is freer.
+   */
+  squareTwist: number;
+  /**
+   * The yards' least angle off the centreline, braced up sharp, in degrees.
+   */
+  braceSharp: number;
+  /**
+   * Time for the crew to swing the yards from braced up sharp on one side to the other, in s.
+   */
+  braceTime: number;
+  /**
+   * In a tack, the after yards swing as the head comes this near the wind, in degrees.
+   */
+  hauls: number;
+  /**
+   * And the fore yards once the wind is this far on the new bow; wearing, every yard once the wind is this far on the new quarter, in degrees.
+   */
+  letGo: number;
+  /**
+   * The share of their luff kept at full sail, with one reef and with two.
+   *
+   * @minItems 3
+   * @maxItems 3
+   */
+  squareReefs: [number, number, number];
+}
+/**
+ * The downwind sail: a gennaker tacked on the centreline at a bowsprit's end, its clew free to its own sheet's limit as the headsails' is, set and taken in by the crew's rule as the boat bears away and comes up, and kept in by the reef. A boat with none has an area of 0, and its other values 0.
+ *
+ * This interface was referenced by `Catalog`'s JSON-Schema
+ * via the `definition` "PhysicsDownwind".
+ */
+export interface PhysicsDownwind {
+  /**
+   * Its area, in m²; 0 for none.
+   */
+  downwindArea: number;
+  /**
+   * The head's height above the tack, in m.
+   */
+  downwindLuff: number;
+  /**
+   * Length of the foot, in m.
+   */
+  downwindFoot: number;
+  /**
+   * The tack's height above the waterline, in m.
+   */
+  downwindTackHeight: number;
+  /**
+   * The tack's distance ahead of the centre of gravity, in m: the bowsprit's end.
+   */
+  downwindTack: number;
+  /**
+   * Height of the lower strip's centre of effort above the tack, as a fraction of the luff.
+   */
+  downwindFootStrip: number;
+  /**
+   * Height of the upper strip's centre of effort above the tack, as a fraction of the luff.
+   */
+  downwindHeadStrip: number;
+  /**
+   * Centre of pressure aft of the tack with the flow attached, as a fraction of the foot.
+   */
+  downwindPressureAttached: number;
+  /**
+   * Centre of pressure aft of the tack with the flow separated, as a fraction of the foot.
+   */
+  downwindPressureSeparated: number;
+  /**
+   * Greatest lift coefficient.
+   */
+  downwindMaxLift: number;
+  /**
+   * Angle of attack of the greatest lift, in degrees.
+   */
+  downwindStallAngle: number;
+  /**
+   * Angle past the stall over which the flow separates, in degrees.
+   */
+  downwindStallWidth: number;
+  /**
+   * Viscous drag coefficient.
+   */
+  downwindDrag: number;
+  /**
+   * Normal force coefficient of separated flow, every 10° of angle of attack from 0° to 180°.
+   *
+   * @minItems 19
+   * @maxItems 19
+   */
+  downwindNormalForce: [
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number
+  ];
+  /**
+   * The upper strip's twist beyond the clew's line, sheeted in, in degrees.
+   */
+  downwindTwist: number;
+  /**
+   * Extra twist as the sheet lets the clew out, growing in proportion to its angle, in degrees.
+   */
+  downwindTwistEased: number;
+  /**
+   * The clew's angle off the centreline, seen from the tack, with the sheet hauled in hard, in degrees.
+   */
+  downwindIn: number;
+  /**
+   * The clew's angle with the sheet let fly, in degrees.
+   */
+  downwindOut: number;
+  /**
+   * Moment of inertia of the sail and its clew about the tack, in kg·m².
+   */
+  downwindInertia: number;
+  /**
+   * Their mass times the distance of their centre of gravity aft of the tack, in kg·m.
+   */
+  downwindMoment: number;
+  /**
+   * Friction of the clew's swing, in N·m·s/rad.
+   */
+  downwindDamping: number;
+  /**
+   * Time for the crew to set it from its bag, in s.
+   */
+  hoistTime: number;
+  /**
+   * Time for the crew to take it in, in s.
+   */
+  dropTime: number;
+  /**
+   * The crew sets it as the boat bears away with the true wind this far off her bow or more, in degrees.
+   */
+  setAngle: number;
+  /**
+   * And takes it in as she comes up with the true wind forward of this, in degrees: less than setAngle, the two a band in which a steady course neither sets nor takes it in.
+   */
+  dropAngle: number;
+  /**
+   * At full sail, with one reef and with two: 1 where the crew may set it, 0 where the reef keeps it in. A downwind sail is never shortened.
+   *
+   * @minItems 3
+   * @maxItems 3
+   */
+  downwindReefs: [number, number, number];
+}
+/**
+ * The daggerboard or fixed keel, and the rudder.
  *
  * This interface was referenced by `Catalog`'s JSON-Schema
  * via the `definition` "PhysicsFoils".
@@ -539,7 +1125,7 @@ export interface PhysicsFoils {
    */
   boardSpan: number;
   /**
-   * Chord of the daggerboard, in m.
+   * Chord of the daggerboard, or of a fixed keel along its length, in m.
    */
   boardChord: number;
   /**
@@ -606,6 +1192,10 @@ export interface PhysicsFoils {
    * Heel from which the foils are out of the water, in degrees.
    */
   foilDryHeel: number;
+  /**
+   * 1 for a fixed keel, which the ground meets at its tip, stopping the boat, and never pushes up; 0 for a daggerboard the ground pushes up as the water shoals.
+   */
+  fixed: number;
 }
 /**
  * What the sailor does by themselves: hiking, flattening the sail, righting the boat. The same for every player.
@@ -771,13 +1361,304 @@ export interface PhysicsAutopilot {
  */
 export interface BoatArt {
   /**
-   * The boat's model: a glTF binary with the nodes hull, mast, boom, sail, telltales, pennant, rudder, tiller, daggerboard and sailor, and a node for each of the boat's lights, named as the light, where its lantern is.
+   * The boat's model: a glTF binary with the nodes hull, mast, boom, sail, telltales, pennant, rudder, tiller, daggerboard and sailor, a jib on a boat with headsails, and a node for each of the boat's lights, named as the light, where its lantern is.
    */
   model: string;
   /**
    * The boat's far model, drawn for boats seen from afar among many: the model's nodes but telltales, pennant and lights, with few segments.
    */
   far: string;
+  /**
+   * The most triangles each of the boat's models may have.
+   */
+  budget: {
+    /**
+     * The model's.
+     */
+    near: number;
+    /**
+     * The far model's.
+     */
+    far: number;
+  };
+}
+/**
+ * The looks a boat takes: its hull's paints and its sails' cloths, the gold its name is lettered in, and the highest sail number. At most 16 paints and 16 cloths: a boat's look code holds each in 4 bits. The first of each is a new boat's.
+ *
+ * This interface was referenced by `Catalog`'s JSON-Schema
+ * via the `definition` "BoatLooks".
+ */
+export interface BoatLooks {
+  /**
+   * Hull paints, in the chooser's order.
+   *
+   * @minItems 1
+   * @maxItems 16
+   */
+  paints:
+    | [BoatPaint]
+    | [BoatPaint, BoatPaint]
+    | [BoatPaint, BoatPaint, BoatPaint]
+    | [BoatPaint, BoatPaint, BoatPaint, BoatPaint]
+    | [BoatPaint, BoatPaint, BoatPaint, BoatPaint, BoatPaint]
+    | [BoatPaint, BoatPaint, BoatPaint, BoatPaint, BoatPaint, BoatPaint]
+    | [BoatPaint, BoatPaint, BoatPaint, BoatPaint, BoatPaint, BoatPaint, BoatPaint]
+    | [BoatPaint, BoatPaint, BoatPaint, BoatPaint, BoatPaint, BoatPaint, BoatPaint, BoatPaint]
+    | [BoatPaint, BoatPaint, BoatPaint, BoatPaint, BoatPaint, BoatPaint, BoatPaint, BoatPaint, BoatPaint]
+    | [BoatPaint, BoatPaint, BoatPaint, BoatPaint, BoatPaint, BoatPaint, BoatPaint, BoatPaint, BoatPaint, BoatPaint]
+    | [
+        BoatPaint,
+        BoatPaint,
+        BoatPaint,
+        BoatPaint,
+        BoatPaint,
+        BoatPaint,
+        BoatPaint,
+        BoatPaint,
+        BoatPaint,
+        BoatPaint,
+        BoatPaint
+      ]
+    | [
+        BoatPaint,
+        BoatPaint,
+        BoatPaint,
+        BoatPaint,
+        BoatPaint,
+        BoatPaint,
+        BoatPaint,
+        BoatPaint,
+        BoatPaint,
+        BoatPaint,
+        BoatPaint,
+        BoatPaint
+      ]
+    | [
+        BoatPaint,
+        BoatPaint,
+        BoatPaint,
+        BoatPaint,
+        BoatPaint,
+        BoatPaint,
+        BoatPaint,
+        BoatPaint,
+        BoatPaint,
+        BoatPaint,
+        BoatPaint,
+        BoatPaint,
+        BoatPaint
+      ]
+    | [
+        BoatPaint,
+        BoatPaint,
+        BoatPaint,
+        BoatPaint,
+        BoatPaint,
+        BoatPaint,
+        BoatPaint,
+        BoatPaint,
+        BoatPaint,
+        BoatPaint,
+        BoatPaint,
+        BoatPaint,
+        BoatPaint,
+        BoatPaint
+      ]
+    | [
+        BoatPaint,
+        BoatPaint,
+        BoatPaint,
+        BoatPaint,
+        BoatPaint,
+        BoatPaint,
+        BoatPaint,
+        BoatPaint,
+        BoatPaint,
+        BoatPaint,
+        BoatPaint,
+        BoatPaint,
+        BoatPaint,
+        BoatPaint,
+        BoatPaint
+      ]
+    | [
+        BoatPaint,
+        BoatPaint,
+        BoatPaint,
+        BoatPaint,
+        BoatPaint,
+        BoatPaint,
+        BoatPaint,
+        BoatPaint,
+        BoatPaint,
+        BoatPaint,
+        BoatPaint,
+        BoatPaint,
+        BoatPaint,
+        BoatPaint,
+        BoatPaint,
+        BoatPaint
+      ];
+  /**
+   * Sail cloths, in the chooser's order.
+   *
+   * @minItems 1
+   * @maxItems 16
+   */
+  cloths:
+    | [BoatCloth]
+    | [BoatCloth, BoatCloth]
+    | [BoatCloth, BoatCloth, BoatCloth]
+    | [BoatCloth, BoatCloth, BoatCloth, BoatCloth]
+    | [BoatCloth, BoatCloth, BoatCloth, BoatCloth, BoatCloth]
+    | [BoatCloth, BoatCloth, BoatCloth, BoatCloth, BoatCloth, BoatCloth]
+    | [BoatCloth, BoatCloth, BoatCloth, BoatCloth, BoatCloth, BoatCloth, BoatCloth]
+    | [BoatCloth, BoatCloth, BoatCloth, BoatCloth, BoatCloth, BoatCloth, BoatCloth, BoatCloth]
+    | [BoatCloth, BoatCloth, BoatCloth, BoatCloth, BoatCloth, BoatCloth, BoatCloth, BoatCloth, BoatCloth]
+    | [BoatCloth, BoatCloth, BoatCloth, BoatCloth, BoatCloth, BoatCloth, BoatCloth, BoatCloth, BoatCloth, BoatCloth]
+    | [
+        BoatCloth,
+        BoatCloth,
+        BoatCloth,
+        BoatCloth,
+        BoatCloth,
+        BoatCloth,
+        BoatCloth,
+        BoatCloth,
+        BoatCloth,
+        BoatCloth,
+        BoatCloth
+      ]
+    | [
+        BoatCloth,
+        BoatCloth,
+        BoatCloth,
+        BoatCloth,
+        BoatCloth,
+        BoatCloth,
+        BoatCloth,
+        BoatCloth,
+        BoatCloth,
+        BoatCloth,
+        BoatCloth,
+        BoatCloth
+      ]
+    | [
+        BoatCloth,
+        BoatCloth,
+        BoatCloth,
+        BoatCloth,
+        BoatCloth,
+        BoatCloth,
+        BoatCloth,
+        BoatCloth,
+        BoatCloth,
+        BoatCloth,
+        BoatCloth,
+        BoatCloth,
+        BoatCloth
+      ]
+    | [
+        BoatCloth,
+        BoatCloth,
+        BoatCloth,
+        BoatCloth,
+        BoatCloth,
+        BoatCloth,
+        BoatCloth,
+        BoatCloth,
+        BoatCloth,
+        BoatCloth,
+        BoatCloth,
+        BoatCloth,
+        BoatCloth,
+        BoatCloth
+      ]
+    | [
+        BoatCloth,
+        BoatCloth,
+        BoatCloth,
+        BoatCloth,
+        BoatCloth,
+        BoatCloth,
+        BoatCloth,
+        BoatCloth,
+        BoatCloth,
+        BoatCloth,
+        BoatCloth,
+        BoatCloth,
+        BoatCloth,
+        BoatCloth,
+        BoatCloth
+      ]
+    | [
+        BoatCloth,
+        BoatCloth,
+        BoatCloth,
+        BoatCloth,
+        BoatCloth,
+        BoatCloth,
+        BoatCloth,
+        BoatCloth,
+        BoatCloth,
+        BoatCloth,
+        BoatCloth,
+        BoatCloth,
+        BoatCloth,
+        BoatCloth,
+        BoatCloth,
+        BoatCloth
+      ];
+  /**
+   * The colour a boat's name is lettered in, sRGB, #rrggbb.
+   */
+  lettering: string;
+  /**
+   * The highest sail number: numbers run from 1 to it, each kind's its own. At most 16383, a look code's 14 bits.
+   */
+  numbers: number;
+}
+/**
+ * This interface was referenced by `Catalog`'s JSON-Schema
+ * via the `definition` "BoatPaint".
+ */
+export interface BoatPaint {
+  id: Id;
+  /**
+   * Display name, as the player reads it: lowercase but for a name such as "Prussian blue".
+   */
+  name: string;
+  /**
+   * Its colour, sRGB, #rrggbb.
+   */
+  colour: string;
+  /**
+   * The wood shows through it: the hull is drawn with its grain.
+   */
+  grain?: boolean;
+}
+/**
+ * This interface was referenced by `Catalog`'s JSON-Schema
+ * via the `definition` "BoatCloth".
+ */
+export interface BoatCloth {
+  id: Id;
+  /**
+   * Display name, as the player reads it.
+   */
+  name: string;
+  /**
+   * The cloth's colour, sRGB, #rrggbb.
+   */
+  colour: string;
+  /**
+   * A band of another colour across the sail, if it is striped, sRGB, #rrggbb.
+   */
+  band?: string;
+  /**
+   * The colour its sail number and the machine mark are painted in, sRGB, #rrggbb.
+   */
+  ink: string;
 }
 /**
  * A look: its name, its habit, which hair colours it takes, and its versions.
@@ -6390,25 +7271,34 @@ export interface ColonyBirds {
    * Where they nest.
    */
   nests: ("stack" | "cliff" | "cay" | "trees")[];
+  look: BirdLook;
+}
+/**
+ * How a bird looks, flies and calls: a colony's birds and the birds met at sea alike.
+ *
+ * This interface was referenced by `Catalog`'s JSON-Schema
+ * via the `definition` "BirdLook".
+ */
+export interface BirdLook {
   /**
-   * Their wingspan, in m.
+   * Its wingspan, in m.
    */
   span: number;
   body: Colour3;
   wing: Colour3;
   tip: Colour3;
   /**
-   * Their wingbeats, in Hz.
+   * Its wingbeats, in Hz.
    */
   flap: number;
   /**
-   * The share of the time they glide.
+   * The share of the time it glides.
    */
   glide: number;
   /**
-   * Their call.
+   * Its call; silent for a bird not heard at sea.
    */
-  call: "harsh" | "whistle" | "rattle";
+  call: "harsh" | "whistle" | "rattle" | "laugh" | "tern" | "silent";
 }
 /**
  * Caves, arches and blowholes, cut into cliffed headlands.
@@ -7485,6 +8375,455 @@ export interface NewsColumn {
    */
   of: "charting" | "world";
 }
+/**
+ * The sea's life: the kinds of animal met at sea, and the schedule that says where and when each is met. The server draws it from the world's seed, the place, the time, the habitat there and the weather; every player near is told of each encounter.
+ *
+ * This interface was referenced by `Catalog`'s JSON-Schema
+ * via the `definition` "Life".
+ */
+export interface Life {
+  art: LifeArt;
+  /**
+   * The schedule's cells' side, in m.
+   */
+  cell: number;
+  /**
+   * The schedule's slots of world time, in s.
+   */
+  slot: number;
+  lulls: LifeLulls;
+  /**
+   * A boat followed, ridden or perched on is not again until this long after, in s.
+   */
+  quiet: number;
+  bind: LifeBind;
+  ride: LifeRide;
+  flush: LifeFlush;
+  aboard: LifeAboard;
+  /**
+   * An encounter sent is dropped once the eye is this far beyond its reach, in m.
+   */
+  drop: number;
+  /**
+   * The sun's height from which dusk and dawn begin to where they end, in degrees.
+   *
+   * @minItems 2
+   * @maxItems 2
+   */
+  dusk: [number, number];
+  /**
+   * Rain this heavy or heavier thins life as its kind's rain says, in mm an hour.
+   */
+  rainy: number;
+  habitat: LifeHabitat;
+  /**
+   * The share of water life seen at each Beaufort force from 0, the last for every force beyond it.
+   *
+   * @minItems 1
+   * @maxItems 13
+   */
+  sea:
+    | [number]
+    | [number, number]
+    | [number, number, number]
+    | [number, number, number, number]
+    | [number, number, number, number, number]
+    | [number, number, number, number, number, number]
+    | [number, number, number, number, number, number, number]
+    | [number, number, number, number, number, number, number, number]
+    | [number, number, number, number, number, number, number, number, number]
+    | [number, number, number, number, number, number, number, number, number, number]
+    | [number, number, number, number, number, number, number, number, number, number, number]
+    | [number, number, number, number, number, number, number, number, number, number, number, number]
+    | [number, number, number, number, number, number, number, number, number, number, number, number, number];
+  towns: LifeTowns;
+  /**
+   * The kinds of animal.
+   *
+   * @minItems 1
+   * @maxItems 255
+   */
+  kinds: [LifeKind, ...LifeKind[]];
+}
+/**
+ * The bodies of the life in the water, one model each.
+ */
+export interface LifeArt {
+  model: ArtPath;
+}
+/**
+ * How long after an encounter of a family begins no other of the family begins in its cell or the eight about it, in s.
+ */
+export interface LifeLulls {
+  birds: number;
+  water: number;
+  big: number;
+  night: number;
+}
+/**
+ * Which boat a group that follows boats takes as it begins: the nearest within this, sailing this fast or faster on a course steady this long.
+ */
+export interface LifeBind {
+  /**
+   * In m.
+   */
+  within: number;
+  /**
+   * In m/s.
+   */
+  speed: number;
+  /**
+   * In s.
+   */
+  steady: number;
+  /**
+   * A course is steady while the heading stays within this of where it was, in degrees.
+   */
+  turn: number;
+}
+/**
+ * How far a group that rides bows comes from to a boat, in m, by the bind's other rules; and when it leaves the bow at once: the boat slower than this, in m/s, or turned more than this from its heading as the ride began, in degrees.
+ */
+export interface LifeRide {
+  within: number;
+  slower: number;
+  turn: number;
+}
+/**
+ * How a boat sailing through a ground flushes its fish: every so many s, by a draw of the boat, the ground and that slot, at this chance, if it sails at the bind's speed or faster; the fish come up this long after, this far ahead of its bow and up to this far either side of its course, in m.
+ */
+export interface LifeFlush {
+  every: number;
+  chance: number;
+  lead: number;
+  /**
+   * @minItems 2
+   * @maxItems 2
+   */
+  ahead: [number, number];
+  beside: number;
+}
+/**
+ * A flying fish drawn to a boat's lights by night, landing on its deck: the kind of fish, by its id; every so many s, by a draw of the boat and that slot, at this chance, a boat lit and sailing over water the kind lives in has one land aboard, where it lies this long, in s.
+ */
+export interface LifeAboard {
+  kind: string;
+  every: number;
+  chance: number;
+  stay: number;
+}
+/**
+ * Where each habitat is.
+ */
+export interface LifeHabitat {
+  /**
+   * Water within this of a town is its harbour, in m.
+   */
+  harbour: number;
+  /**
+   * Water within this of a reef or a lagoon is the reef's, in m.
+   */
+  reef: number;
+  /**
+   * Water shallower than this is the shelf, deeper the deep, in m.
+   */
+  shelf: number;
+  /**
+   * Water this far from the centre or further is the outer water, in m.
+   */
+  outer: number;
+  /**
+   * Within this of a colony a kind's nearColony counts, in m.
+   */
+  colony: number;
+  /**
+   * The habitat's field's cells' side, built as the world loads, in m.
+   */
+  field: number;
+}
+/**
+ * The gulls that wheel over each town by day, as a colony's birds wheel over it: the kind they are, by its id; how many; how far out and how high they wheel, in m.
+ */
+export interface LifeTowns {
+  kind: string;
+  /**
+   * @minItems 2
+   * @maxItems 2
+   */
+  count: [number, number];
+  /**
+   * @minItems 2
+   * @maxItems 2
+   */
+  wheel: [number, number];
+  /**
+   * @minItems 2
+   * @maxItems 2
+   */
+  height: [number, number];
+}
+/**
+ * A kind of animal met at sea: what it is and how it moves, where and when it is met, and how often.
+ *
+ * This interface was referenced by `Catalog`'s JSON-Schema
+ * via the `definition` "LifeKind".
+ */
+export interface LifeKind {
+  id: string;
+  name: string;
+  /**
+   * Its name for more than one.
+   */
+  plural: string;
+  form: LifeForm;
+  family: LifeFamily;
+  path: LifePath;
+  binds?: LifeBinds;
+  over?: LifeOver;
+  /**
+   * The groups that come with it, on its patch, from its start to its end.
+   */
+  brings?: LifeBring[];
+  /**
+   * How far its patch reaches from its middle, the least and the most, in m: a ground of flying fish, a boil of bait.
+   *
+   * @minItems 2
+   * @maxItems 2
+   */
+  patch?: [number, number];
+  /**
+   * What a group of it is called, as a pod of dolphins.
+   */
+  collective?: string;
+  /**
+   * Its plunges, each bird a minute.
+   */
+  dives?: number;
+  /**
+   * Whether a group flies in a line, one behind another.
+   */
+  line?: boolean;
+  /**
+   * Whether at dusk it heads for the nearest colony, or the nearest land without one.
+   */
+  homeward?: boolean;
+  /**
+   * Whether, with a boat, it flutters low over the boat's wake, its feet pattering on the water.
+   */
+  patters?: boolean;
+  habitats: LifeHabitats;
+  /**
+   * Its weight times this within the habitat's colony distance of a colony.
+   */
+  nearColony?: number;
+  when: LifeWhen;
+  /**
+   * The least wind it is met in and the most, 10 m up, in m/s.
+   *
+   * @minItems 2
+   * @maxItems 2
+   */
+  wind: [number, number];
+  /**
+   * The share of it met in rain.
+   */
+  rain: number;
+  /**
+   * Whether it is seen less as the sea rises, by the life's sea.
+   */
+  bySea: boolean;
+  /**
+   * Its encounters a km² an hour at a weight of 1.
+   */
+  rate: number;
+  /**
+   * How many in a group, the least and the most.
+   *
+   * @minItems 2
+   * @maxItems 2
+   */
+  group: [number, number];
+  /**
+   * How long it stays over its patch or with a boat, the least and the most, in s.
+   *
+   * @minItems 2
+   * @maxItems 2
+   */
+  stay: [number, number];
+  /**
+   * How fast it goes, the least and the most, in m/s.
+   *
+   * @minItems 2
+   * @maxItems 2
+   */
+  speed: [number, number];
+  /**
+   * How high it flies, the least and the most, in m.
+   *
+   * @minItems 2
+   * @maxItems 2
+   */
+  height: [number, number];
+  /**
+   * How far out it comes from and goes to, in m.
+   */
+  range: number;
+  /**
+   * It is drawn within this, in m.
+   */
+  reach: number;
+  look?: BirdLook;
+  swim?: SwimLook;
+  glow?: LifeGlow;
+}
+/**
+ * A group that comes with another: its kind, by its id; the share of the other's groups it comes with; and how many in it.
+ *
+ * This interface was referenced by `Catalog`'s JSON-Schema
+ * via the `definition` "LifeBring".
+ */
+export interface LifeBring {
+  kind: string;
+  share: number;
+  /**
+   * @minItems 2
+   * @maxItems 2
+   */
+  count: [number, number];
+}
+/**
+ * Its weight in each habitat: a point is its harbour's if within one, else its reef's, else the outer water's, else the shelf's or the deep's.
+ */
+export interface LifeHabitats {
+  harbour: number;
+  reef: number;
+  shelf: number;
+  deep: number;
+  outer: number;
+}
+/**
+ * Its weight by the sun: by day, at dusk and dawn, and at night.
+ */
+export interface LifeWhen {
+  day: number;
+  dusk: number;
+  night: number;
+}
+/**
+ * How an animal in the water looks and moves: its body, scaled to its length; its back's and belly's colours; its tail's or flippers' beats; its leaps a minute and the spins in each; a glider's glides; its breaths at each surfacing and its dives between them; and what is heard of it.
+ *
+ * This interface was referenced by `Catalog`'s JSON-Schema
+ * via the `definition` "SwimLook".
+ */
+export interface SwimLook {
+  body: LifeBody;
+  /**
+   * Its length, in m.
+   */
+  length: number;
+  back: Colour3;
+  belly: Colour3;
+  /**
+   * Its tail's or flippers' beats, in Hz.
+   */
+  beat: number;
+  /**
+   * How deep it swims between its breaths, in m.
+   */
+  depth: number;
+  /**
+   * Its leaps clear of the water, each animal a minute.
+   */
+  leaps?: number;
+  /**
+   * The spins in a leap, the least and the most.
+   *
+   * @minItems 2
+   * @maxItems 2
+   */
+  spins?: [number, number];
+  /**
+   * A glide's length, the least and the most, in m.
+   *
+   * @minItems 2
+   * @maxItems 2
+   */
+  glide?: [number, number];
+  /**
+   * The longest glides linked one after another, in m.
+   */
+  linked?: number;
+  /**
+   * Its breaths at each surfacing, the least and the most.
+   *
+   * @minItems 2
+   * @maxItems 2
+   */
+  breaths?: [number, number];
+  /**
+   * How long it is down between surfacings, the least and the most, in s.
+   *
+   * @minItems 2
+   * @maxItems 2
+   */
+  dive?: [number, number];
+  /**
+   * A whale's time from one blow to the next at the surface, the least and the most, in s.
+   *
+   * @minItems 2
+   * @maxItems 2
+   */
+  blowEvery?: [number, number];
+  blow?: LifeBlow;
+  /**
+   * The share of a whale's dives on which it raises its flukes.
+   */
+  fluke?: number;
+  /**
+   * The share of a whale's surfacings in which it breaches.
+   */
+  breach?: number;
+  /**
+   * The share of a whale's surfacings in which it slaps the water with its tail.
+   */
+  slap?: number;
+  /**
+   * Whether it lies still at the surface between its breaths, logging, rather than rolling under.
+   */
+  logs?: boolean;
+  asleep?: LifeBody;
+  /**
+   * What is heard of it: its breath, a whale's blow, or nothing but its splashes.
+   */
+  call: "breath" | "blow" | "silent";
+}
+/**
+ * A whale's blow: how high it rises, the least and the most, and how wide it spreads, in m; how far it leans forward of upright and to the left, in degrees; and how long it lasts, in s.
+ *
+ * This interface was referenced by `Catalog`'s JSON-Schema
+ * via the `definition` "LifeBlow".
+ */
+export interface LifeBlow {
+  /**
+   * @minItems 2
+   * @maxItems 2
+   */
+  height: [number, number];
+  width: number;
+  lean: number;
+  left: number;
+  last: number;
+}
+/**
+ * Water that glows where it is disturbed, on a dark night: its light's colour; and how lit the sky may be for it to show, the moon's lit share times its height's sine above the horizon at the most, the sun below the horizon.
+ *
+ * This interface was referenced by `Catalog`'s JSON-Schema
+ * via the `definition` "LifeGlow".
+ */
+export interface LifeGlow {
+  colour: Colour3;
+  moon: number;
+}
 
 /** The catalog version (tools/catalog). */
-export const CATALOG_VERSION = '418585d325a5300d';
+export const CATALOG_VERSION = '0e5e1240a73a066f';

@@ -107,7 +107,15 @@ type bed struct {
 	friction    [3]float64 // the bottom's coefficient under each point
 	onBottom    bool
 	pressedLoad float64 // N: the weight each point carries when fully pressed
+	// A fixed keel is never pushed up: its tip meets the bottom and drags
+	// on it, carrying the boat's weight once it is keelPress into it.
+	keelPressed  float64
+	keelFriction float64
 }
+
+// keelPress is how far a fixed keel's tip reaches into the bottom before it
+// carries the boat's whole weight, m.
+const keelPress = 0.2
 
 // The hull's three points on the bottom, ahead of the centre of gravity as
 // shares of half its waterline length.
@@ -119,7 +127,13 @@ func (bd *bed) read(g *Ground, s *State, b *Prepared, sinH, cosH float64) {
 	at := pointGround(g, s.X, s.Y, b.board.x, sinH, cosH)
 	bd.depth = -at.elevation
 	bd.boardCut, bd.rudderCut = 1, 1
-	if bd.depth < b.boardDepth {
+	switch {
+	case !(bd.depth < b.boardDepth):
+	case b.fixed:
+		bd.active, bd.onBottom = true, true
+		bd.keelPressed = clamp((b.boardDepth-bd.depth)/keelPress, 0, 1)
+		bd.keelFriction = gp.friction[min(max(at.surface, 0), GroundSurfaces-1)]
+	default:
 		bd.active = true
 		bd.boardCut = clamp(float64((bd.depth-b.hullDraught)*b.invBoardSpan), 0, 1)
 	}
@@ -174,6 +188,19 @@ func (bd *bed) loads(m *motion, b *Prepared, l *loads) {
 		l.X += fx
 		l.Y += fy
 		l.N += float64(x * fy)
+	}
+	if bd.keelPressed > 0 {
+		x := b.board.x
+		vx, vy := m.u, m.v+float64(m.r*x)
+		speed := math.Sqrt((float64(vx*vx) + float64(vy*vy)) + bedFrictionSpeed*bedFrictionSpeed)
+		f := float64(float64(bd.keelFriction*b.weight)*bd.keelPressed) / speed
+		fx, fy := float64(-f*vx), float64(-f*vy)
+		l.X += fx
+		l.Y += fy
+		l.N += float64(x * fy)
+		// The tip is below the centre of gravity: dragged, it rolls the
+		// boat over it.
+		l.K -= float64((b.centreOfGravity + b.boardDepth) * fy)
 	}
 }
 
@@ -329,60 +356,76 @@ const (
 // of water and no land beside it that is nearest where the boat left water
 // that deep, the way it came in, or nearest the boat if it never did; or,
 // on a shore so gentle that there is none, to the deepest such hexagon
-// within reach, if it is deeper than where the boat lies. There it is at rest, pointing a little off
+// within reach, if it is deeper than where the boat lies. A boat larger
+// than a hexagon takes such a hexagon with water deeper than its hull's
+// draught under its whole hull, if there is one, lest its ends lie on the
+// bank again. There it is at rest, pointing a little off
 // close-hauled in the wind from from, on the tack that leads away from
 // where it lay: a boat left head to wind is in irons, and drifts back
 // astern onto the shore. It reports whether it moved the boat.
 func (b *Prepared) pushOff(s *State, g *Ground, from float64) bool {
 	gp := g.Prepared
 	q0, r0 := HexAt(s.X, s.Y)
-	deep := toInt32(math.Floor(float64(-gp.pushDepth*10) + 0.5))
+	deep := toInt32(math.Floor(float64(-b.pushDepth(gp)*10) + 0.5))
 	cx, cy := s.X, s.Y
 	if s.DeepX != 0 || s.DeepY != 0 {
 		cx, cy = s.DeepX, s.DeepY
 	}
 	here, _ := g.cellAt(q0, r0)
-	best, found := math.Inf(1), false
-	shallowest := here // the deepest found short of the push's depth
-	var bx, by, sx, sy float64
-	for dq := -gp.pushRings; dq <= gp.pushRings; dq++ {
-		for dr := max(-gp.pushRings, -dq-gp.pushRings); dr <= min(gp.pushRings, -dq+gp.pushRings); dr++ {
-			q, r := q0+dq, r0+dr
-			e, _ := g.cellAt(q, r)
-			if e >= 0 || int32(e) > deep && e >= shallowest {
-				continue
-			}
-			hx, hy := HexCentre(q, r)
-			dx, dy := hx-s.X, hy-s.Y
-			if float64(dx*dx)+float64(dy*dy) > float64(gp.pushReach*gp.pushReach) {
-				continue
-			}
-			dx, dy = hx-cx, hy-cy
-			d := float64(dx*dx) + float64(dy*dy)
-			if int32(e) <= deep && d >= best {
-				continue
-			}
-			clear := true
-			for _, n := range hexNeighbours {
-				if ne, _ := g.cellAt(q+n[0], r+n[1]); ne > 0 {
-					clear = false
-					break
+	// A boat larger than a hexagon looks first for water clear under its
+	// whole hull, then, finding none, as a small one does.
+	hull := b.outline.radius > HexAcross
+	var bx, by float64
+	for {
+		best, found := math.Inf(1), false
+		shallowest := here // the deepest found short of the push's depth
+		var sx, sy float64
+		for dq := -gp.pushRings; dq <= gp.pushRings; dq++ {
+			for dr := max(-gp.pushRings, -dq-gp.pushRings); dr <= min(gp.pushRings, -dq+gp.pushRings); dr++ {
+				q, r := q0+dq, r0+dr
+				e, _ := g.cellAt(q, r)
+				if e >= 0 || int32(e) > deep && e >= shallowest {
+					continue
+				}
+				hx, hy := HexCentre(q, r)
+				dx, dy := hx-s.X, hy-s.Y
+				if float64(dx*dx)+float64(dy*dy) > float64(gp.pushReach*gp.pushReach) {
+					continue
+				}
+				dx, dy = hx-cx, hy-cy
+				d := float64(dx*dx) + float64(dy*dy)
+				if int32(e) <= deep && d >= best {
+					continue
+				}
+				clear := true
+				for _, n := range hexNeighbours {
+					if ne, _ := g.cellAt(q+n[0], r+n[1]); ne > 0 {
+						clear = false
+						break
+					}
+				}
+				if clear && hull {
+					clear = b.hullClear(g, q, r)
+				}
+				switch {
+				case !clear:
+				case int32(e) <= deep:
+					best, bx, by, found = d, hx, hy, true
+				default:
+					shallowest, sx, sy = e, hx, hy
 				}
 			}
-			switch {
-			case !clear:
-			case int32(e) <= deep:
-				best, bx, by, found = d, hx, hy, true
-			default:
-				shallowest, sx, sy = e, hx, hy
-			}
 		}
-	}
-	if !found {
-		if shallowest >= here {
+		if !found && shallowest < here {
+			bx, by, found = sx, sy, true
+		}
+		if found {
+			break
+		}
+		if !hull {
 			return false
 		}
-		bx, by = sx, sy
+		hull = false
 	}
 	// Of the two headings, the one that points further from where the
 	// boat lay.
@@ -402,12 +445,35 @@ func (b *Prepared) pushOff(s *State, g *Ground, from float64) bool {
 	return true
 }
 
+// hullClear reports whether a boat larger than a hexagon may be pushed off
+// to hexagon (q, r) whichever way it heads: every hexagon within its
+// radius water deeper than its hull's draught, so that neither its ends
+// nor its sides lie on the bottom or the land there.
+func (b *Prepared) hullClear(g *Ground, q, r int32) bool {
+	shallow := toInt32(math.Floor(float64(-b.hullDraught*10) + 0.5))
+	rings := toInt32(math.Ceil(b.outline.radius / hexRing))
+	x0, y0 := HexCentre(q, r)
+	for dq := -rings; dq <= rings; dq++ {
+		for dr := max(-rings, -dq-rings); dr <= min(rings, -dq+rings); dr++ {
+			x, y := HexCentre(q+dq, r+dr)
+			dx, dy := x-x0, y-y0
+			if float64(dx*dx)+float64(dy*dy) > float64(b.outline.radius*b.outline.radius) {
+				continue
+			}
+			if e, _ := g.cellAt(q+dq, r+dr); int32(e) > shallow {
+				return false
+			}
+		}
+	}
+	return true
+}
+
 // ground is a step's dealings with the ground after its substeps: where
 // the boat left deep water, which it was at (x, y) as the step began; the
 // land's contacts, the time aground and still, and pushing off.
 func (b *Prepared) ground(s *State, e *Env, g *Ground, bd *bed, o *Out, x, y float64) {
 	switch {
-	case !(bd.depth < g.Prepared.pushDepth):
+	case !(bd.depth < b.pushDepth(g.Prepared)):
 		s.DeepX, s.DeepY = 0, 0
 	case s.DeepX == 0 && s.DeepY == 0:
 		s.DeepX, s.DeepY = x, y
@@ -435,3 +501,16 @@ func (b *Prepared) ground(s *State, e *Env, g *Ground, bd *bed, o *Out, x, y flo
 		o.PushedOff = 1
 	}
 }
+
+// pushDepth is how deep the water a boat is pushed off into is: the
+// ground's depth, or the boat's draught and a metre, whichever is deeper.
+func (b *Prepared) pushDepth(gp *GroundPrepared) float64 {
+	return max2(gp.pushDepth, b.draught+1)
+}
+
+// PushDepth is the depth of water boat b is pushed off into on ground gp,
+// m: for the simulation's start places and tools.
+func PushDepth(b *Prepared, gp *GroundPrepared) float64 { return b.pushDepth(gp) }
+
+// Draught is the deepest boat b reaches below the water, m.
+func Draught(b *Prepared) float64 { return b.draught }

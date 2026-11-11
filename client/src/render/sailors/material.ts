@@ -137,6 +137,10 @@ export function sailorColours(main: string, skin: string, hair: string): SailorC
 export interface SailorMaterialOptions {
   /** Placed by this vertex node (the fleet's), else where its skin puts it. */
   vertex?: Node<'vec3'>;
+  /** Where in the atlas and mask a fragment reads, else the geometry's uv (a figure read from a texture by its vertex node has none). */
+  uv?: Node<'vec2'>;
+  /** The fragment's normal in the world, where the vertex node reads it from elsewhere than the geometry; else the geometry's. */
+  normal?: Node<'vec3'>;
   /** A machine's: its blue glows. */
   machine?: boolean;
   /** A machine's lamps' strength, 0 to 1 (the fleet's, which pulse together); else each object's userData glow. */
@@ -171,8 +175,8 @@ export function sailorMaterial(
   // Garments are single surfaces, seen from inside at a cuff or a hem.
   const m = litMaterial({ roughness: 0.8, metalness: 0, side: DoubleSide }, vertex);
   m.name = 'sailor';
-  let base = texture(atlas);
-  let regions = texture(mask);
+  let base = texture(atlas, options.uv);
+  let regions = texture(mask, options.uv);
   if (instance !== undefined) {
     instance.users.atlas.push(base);
     instance.users.mask.push(regions);
@@ -205,7 +209,7 @@ export function sailorMaterial(
   m.roughnessNode = mix(mix(float(0.82), skinRough, isSkin), float(0.35), metal);
 
   m.emissiveNode = Fn(() => {
-    const n = normalize(normalWorld);
+    const n = normalize(options.normal ?? normalWorld);
     const v = normalize(cameraPosition.sub(positionWorld));
     const l = sailorLight.toward;
     const nl = dot(n, l);

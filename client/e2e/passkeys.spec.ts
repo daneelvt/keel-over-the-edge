@@ -13,7 +13,17 @@
 // session: its tests do not wait for the sea.
 
 import { type BrowserContext, expect, type Page, test } from '@playwright/test';
-import { aLook, GAME, holdPasskeys, sailor, setSail, signInWith, stamp } from './helpers';
+import {
+  aLook,
+  answerBorn,
+  BORN,
+  GAME,
+  holdPasskeys,
+  sailor,
+  setSail,
+  signInWith,
+  stamp,
+} from './helpers';
 
 const chromium = () => test.info().project.name !== 'webkit';
 
@@ -203,7 +213,7 @@ test('the account page: a passkey added and one removed, signed out, and the sai
   // Its name is free at once.
   const next = await browser.newContext();
   const begun = await next.request.post('/account/begin', {
-    data: { name: made.name, ...aLook() },
+    data: { name: made.name, ...aLook(), born: BORN },
   });
   expect(begun.status()).toBe(200);
   await next.close();
@@ -232,6 +242,7 @@ test('Chrome’s own authenticator: a passkey made and used at localhost, forgot
   await openStart(page);
   const name = `Chrome ${stamp()}`;
   await page.getByLabel('Your sailor’s name').fill(name);
+  await answerBorn(page);
   await page.getByRole('button', { name: 'Set sail' }).click();
   await expect(page.getByRole('heading', { name: 'Keep your recovery code' })).toBeVisible({
     timeout: 30_000,

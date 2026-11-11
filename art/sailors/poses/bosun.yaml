@@ -43,6 +43,23 @@ poses:
       - [neck_01, z, -7]
       - [head, z, -16]
 
+  # At the wheel, the left hand on its spoke: the right to the small of
+  # the back, an arch and a twist to windward and back.
+  bosun-wheel-arch:
+    from: wheel-grip-left
+    turn:
+      - [spine_03, x, -8]
+      - [neck_01, x, -4]
+      - [head, x, -12]
+    ik:
+      hand_r: { at: bone, bone: pelvis, offset: [-0.22, 0.1, 0.12], pole: [-0.8, 0.5, 0.1] }
+
+  bosun-wheel-twist:
+    from: bosun-wheel-arch
+    turn:
+      - [neck_01, z, -7]
+      - [head, z, -18]
+
 clips:
   bosun-habit:
     sides: true
@@ -61,3 +78,11 @@ clips:
       - { pose: bosun-stand-right, hold: 0.4, ramp: 1.4, lead: head }
       - { pose: bosun-stand-arch, hold: 0.2, ramp: 1.0, lead: head }
       - { pose: stand, hold: 0.3, ramp: 1.4, lead: head }
+
+  bosun-habit-wheel:
+    keys:
+      - { pose: wheel-stand, hold: 0.3 }
+      - { pose: bosun-wheel-arch, hold: 0.6, ramp: 1.4 }
+      - { pose: bosun-wheel-twist, hold: 0.5, ramp: 1.0, lead: head }
+      - { pose: bosun-wheel-arch, hold: 0.3, ramp: 1.0, lead: head }
+      - { pose: wheel-stand, hold: 0.3, ramp: 1.4, lead: head }

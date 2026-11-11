@@ -9,6 +9,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 
 	"github.com/daneelvt/keel-over-the-edge/internal/obs"
+	"github.com/daneelvt/keel-over-the-edge/internal/protocol/pb"
 )
 
 // The labels' values, resolved once so that counting allocates nothing.
@@ -108,10 +109,41 @@ const (
 	outWatchers
 	outAgentLamp
 	outLook
+	outBoatLook
+	outBoatNames
+	outLife
+	outKnock
+	outKnocking
+	outCrew
+	outHanded
+	outAshore
+	outChat
+	outCrews
 	outs
 )
 
-var outNames = [outs]string{"welcome", "pong", "snapshot", "queued", "restart", "sea_areas", "weather_systems", "bump", "chunks", "tools", "places", "lights", "chart", "charted", "island_caps", "forecast", "watch_ended", "watchers", "agent_lamp", "look_changed"}
+var outNames = [outs]string{"welcome", "pong", "snapshot", "queued", "restart", "sea_areas", "weather_systems", "bump", "chunks", "tools", "places", "lights", "chart", "charted", "island_caps", "forecast", "watch_ended", "watchers", "agent_lamp", "look_changed",
+	"boat_look_changed", "boat_names", "life", "knock", "knocking", "crew", "handed", "ashore", "chat", "crews"}
+
+// Changes aboard boats.
+const (
+	deckArrived = iota
+	deckOffered
+	deckTaken
+	deckTakenBack
+	deckGivenBack
+	deckAshoreChose
+	deckAshorePut
+	deckAshoreLeft
+	deckAshoreGone
+	decks_
+)
+
+var deckNames = [decks_]string{"arrived", "offered", "taken", "taken_back", "given_back", "ashore_chose", "ashore_put", "ashore_left", "ashore_gone"}
+
+// knockNames are what came of knocks, by the state the knocker was told.
+var knockNames = [...]string{"other", "waiting", "let", "not_now", "lapsed", "ended", "not_at_sea", "full", "closed", "busy", "often",
+	"crowded", "own", "first", "try_again", "withdrawn"}
 
 // The entries of a snapshot, by op.
 const (
@@ -168,6 +200,18 @@ type metrics struct {
 	spectatorLimit                prometheus.Gauge
 	watchers                      prometheus.Observer
 	refusedInput                  prometheus.Counter
+	knocks                        [len(knockNames)]prometheus.Counter
+	deck                          [decks_]prometheus.Counter
+	aboard                        prometheus.Gauge
+}
+
+// knock counts what a knocker was told.
+func (x *metrics) knock(s pb.KnockState) {
+	i := int(s)
+	if i < 0 || i >= len(x.knocks) {
+		i = 0
+	}
+	x.knocks[i].Inc()
 }
 
 // tierNames are the tiers a client says it draws at, by their number in a
@@ -241,6 +285,13 @@ func newMetrics(m *obs.Metrics) metrics {
 	x.spectatorLimit = m.EdgeSpectatorLimit
 	x.watchers = m.EdgeWatchers
 	x.refusedInput = m.EdgeRefused.WithLabelValues("input")
+	for i, n := range knockNames {
+		x.knocks[i] = m.EdgeKnocks.WithLabelValues(n)
+	}
+	for i, n := range deckNames {
+		x.deck[i] = m.EdgeDeck.WithLabelValues(n)
+	}
+	x.aboard = m.EdgeAboard
 	return x
 }
 

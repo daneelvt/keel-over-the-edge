@@ -48,6 +48,11 @@ export const REASONS: Readonly<Record<string, string>> = {
   'passkey-domain': 'This address cannot hold a passkey. Open the game at its usual address.',
   'no-passkeys': 'This browser cannot make passkeys. Try your phone’s own browser.',
   'passkey-failed': 'The passkey could not be made. Try again.',
+  // When the sailor was born, and the Rules of the sea.
+  born: 'Choose the month and year you were born.',
+  young: 'Sorry, a sailor can’t be made.',
+  answered: 'That is answered already.',
+  rules: 'Accept the Rules of the sea first.',
   // Machine sailors.
   cap: 'You have as many machine sailors as you may.',
   'too-many-apps':

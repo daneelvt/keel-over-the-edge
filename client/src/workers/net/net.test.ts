@@ -8,7 +8,7 @@
 import { describe, expect, test } from 'vitest';
 import { applied, Clock, SET_BEYOND } from '../../net/clock';
 import { decodeClient, encodeServer } from '../../net/frame';
-import { WatchEnd } from '../../net/gen/keel/v1/game_pb';
+import { ChatRefusal, ChatStatus, ReportReason, WatchEnd } from '../../net/gen/keel/v1/game_pb';
 import type { FromWorker } from '../../net/messages';
 import { HEADER_SIZE, newSnapshot, writeSnapshot } from '../../net/snapshot';
 import { FLEET_META, FLEET_RECORD_BYTES, fleetOf } from '../../net/view';
@@ -189,6 +189,172 @@ describe('the session', () => {
     expect(decodeClient(s.unwatchCommand(3)).body).toMatchObject({
       case: 'command',
       value: { body: { case: 'unwatch' } },
+    });
+  });
+
+  test('chat aboard: a line, its echo refused, how chat stands, a mute told and a report received', () => {
+    const s = welcomed();
+    const line = s.receive(
+      1,
+      encodeServer({
+        body: {
+          case: 'chat',
+          value: {
+            id: 7n,
+            seat: 2,
+            name: 'Iron Mary',
+            machine: true,
+            atUs: 1_000_000_000n,
+            text: 'Ahoy',
+          },
+        },
+      }),
+    );
+    expect(line).toEqual({
+      kind: 'chat',
+      chat: {
+        id: 7,
+        seat: 2,
+        name: 'Iron Mary',
+        machine: true,
+        at: 1_000_000,
+        text: 'Ahoy',
+        you: false,
+        echo: 0,
+        refused: '',
+        thread: '',
+      },
+    });
+    const refused = s.receive(
+      2,
+      encodeServer({
+        body: { case: 'chat', value: { you: true, echo: 3, refused: ChatRefusal.CONTACT } },
+      }),
+    );
+    expect(refused).toMatchObject({
+      kind: 'chat',
+      chat: { you: true, echo: 3, refused: 'contact' },
+    });
+    expect(
+      s.receive(
+        3,
+        encodeServer({
+          body: { case: 'chatState', value: { status: ChatStatus.RESTING, untilUs: 5_000_000n } },
+        }),
+      ),
+    ).toEqual({ kind: 'chatState', state: { status: 'resting', until: 5_000, rules: false } });
+    expect(
+      s.receive(4, encodeServer({ body: { case: 'chatState', value: { rules: true } } })),
+    ).toEqual({ kind: 'chatState', state: { status: 'off', until: 0, rules: true } });
+    expect(
+      s.receive(5, encodeServer({ body: { case: 'tied', value: { name: 'Gull', muted: true } } })),
+    ).toEqual({ kind: 'tied', tied: { name: 'Gull', muted: true, blocked: false, full: false } });
+    expect(s.receive(6, encodeServer({ body: { case: 'reported', value: { ok: true } } }))).toEqual(
+      { kind: 'reported', ok: true },
+    );
+  });
+
+  test('shipmates: a message heard, one refused away, the list changed, a shipmate aboard and knocking', () => {
+    const s = welcomed();
+    const id = '0b6a2f9e-1c1d-4e55-9a51-8d2f0e3b7c41';
+    expect(
+      s.receive(
+        1,
+        encodeServer({
+          body: {
+            case: 'chat',
+            value: { id: 9n, name: 'Iron Mary', atUs: 2_000_000n, text: 'Ahoy', thread: id },
+          },
+        }),
+      ),
+    ).toMatchObject({
+      kind: 'chat',
+      chat: { id: 9, seat: 0, name: 'Iron Mary', text: 'Ahoy', you: false, thread: id },
+    });
+    expect(
+      s.receive(
+        2,
+        encodeServer({
+          body: {
+            case: 'chat',
+            value: { you: true, echo: 2147483649, refused: ChatRefusal.AWAY, thread: id },
+          },
+        }),
+      ),
+    ).toMatchObject({ kind: 'chat', chat: { you: true, refused: 'away', thread: id } });
+    expect(
+      s.receive(
+        3,
+        encodeServer({
+          body: { case: 'chat', value: { you: true, refused: ChatRefusal.RESTING } },
+        }),
+      ),
+    ).toMatchObject({ kind: 'chat', chat: { refused: 'resting' } });
+    expect(s.receive(4, encodeServer({ body: { case: 'shipmates', value: {} } }))).toEqual({
+      kind: 'shipmates',
+    });
+    expect(
+      s.receive(
+        5,
+        encodeServer({
+          body: {
+            case: 'crew',
+            value: { people: [{ seat: 1, name: 'Iron Mary', shipmate: true }], holder: 0 },
+          },
+        }),
+      ),
+    ).toMatchObject({ kind: 'crew', crew: { people: [{ seat: 1, shipmate: true }] } });
+    expect(
+      s.receive(
+        6,
+        encodeServer({
+          body: { case: 'knock', value: { id: 4n, sailor: 'Iron Mary', shipmate: true } },
+        }),
+      ),
+    ).toEqual({
+      kind: 'knockCard',
+      card: { id: 4, sailor: 'Iron Mary', look: 0, gone: false, shipmate: true },
+    });
+    expect(decodeClient(s.sayCommand(7, 'Fair winds', 2147483650, id)).body).toMatchObject({
+      case: 'command',
+      value: { body: { case: 'say', value: { text: 'Fair winds', id: 2147483650, to: id } } },
+    });
+    expect(decodeClient(s.knockCommand(8, '', '', id)).body).toMatchObject({
+      case: 'command',
+      value: { body: { case: 'knock', value: { token: '', machine: '', shipmate: id } } },
+    });
+  });
+
+  test('the commands of chat: a line, a mute by seat, a block by line, a report', () => {
+    const s = welcomed();
+    expect(decodeClient(s.sayCommand(1, 'Fair winds', 4)).body).toMatchObject({
+      case: 'command',
+      value: { body: { case: 'say', value: { text: 'Fair winds', id: 4 } } },
+    });
+    expect(decodeClient(s.muteCommand(2, { seat: 3 }, true)).body).toMatchObject({
+      case: 'command',
+      value: {
+        body: { case: 'mute', value: { who: { who: { case: 'seat', value: 3 } }, on: true } },
+      },
+    });
+    expect(decodeClient(s.blockCommand(3, { line: 12 }, false)).body).toMatchObject({
+      case: 'command',
+      value: {
+        body: { case: 'block', value: { who: { who: { case: 'line', value: 12n } }, on: false } },
+      },
+    });
+    expect(decodeClient(s.reportCommand(4, { line: 12 }, 'child', 'worried')).body).toMatchObject({
+      case: 'command',
+      value: {
+        body: {
+          case: 'report',
+          value: {
+            who: { who: { case: 'line', value: 12n } },
+            reason: ReportReason.CHILD,
+            note: 'worried',
+          },
+        },
+      },
     });
   });
 });
@@ -601,8 +767,10 @@ describe('watching, in the net worker', () => {
       target: 0,
       order: 0,
       way: 0,
+      reef: 2,
     });
     expect(inputs(s).filter((i) => !i.ackOnly)).toHaveLength(1);
+    expect(inputs(s).find((i) => !i.ackOnly)?.reef).toBe(2);
     // Asked to watch: the command goes at once, and a Welcome for the watch.
     h.net.handle({ type: 'watch', sailor: 'Iron Mary' });
     expect(s.sent.map(decodeClient).at(-1)?.body).toMatchObject({
@@ -621,6 +789,7 @@ describe('watching, in the net worker', () => {
       target: 0,
       order: 0,
       way: 0,
+      reef: 0,
     });
     expect(inputs(s).filter((i) => !i.ackOnly)).toHaveLength(1);
   });

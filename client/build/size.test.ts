@@ -41,6 +41,10 @@ describe.each(looks)('the %s look', (look) => {
     expect(at('.deck') + at('.far')).toBeLessThanOrEqual(SAILOR_BUDGETS.deckFar);
     expect(at('')).toBeLessThanOrEqual(SAILOR_BUDGETS.close);
     expect(at('.clips')).toBeLessThanOrEqual(SAILOR_BUDGETS.clips);
+    // Its clips at a wheel, which a boat steered by one loads with them.
+    expect(at('.clips') + at('.wheel')).toBeLessThanOrEqual(
+      SAILOR_BUDGETS.clips + SAILOR_BUDGETS.wheel,
+    );
   });
 
   test.each(versions)('%s’s portraits keep to their budgets', (version) => {

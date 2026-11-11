@@ -26,6 +26,7 @@ func PhysicsParams(b *Boat) physics.Params {
 	p.YawInertia = b.Physics.Hull.YawInertia
 	p.RollInertia = b.Physics.Hull.RollInertia
 	p.RollDamping = b.Physics.Hull.RollDamping
+	p.YawDamping = b.Physics.Hull.YawDamping
 	copy(p.RightingLever[:], b.Physics.Hull.RightingLever)
 	p.WaterlineBeam = b.Physics.Hull.WaterlineBeam
 	p.WaterplaneArea = b.Physics.Hull.WaterplaneArea
@@ -74,6 +75,74 @@ func PhysicsParams(b *Boat) physics.Params {
 	p.SailFloat = b.Physics.Rig.SailFloat
 	p.SailWaterDamping = b.Physics.Rig.SailWaterDamping
 	p.CloseHauled = b.Physics.Rig.CloseHauled
+	copy(p.Reefs[:], b.Physics.Rig.Reefs)
+	p.ReefTime = b.Physics.Rig.ReefTime
+	p.HeadsailArea = b.Physics.Headsails.HeadsailArea
+	p.HeadsailLuff = b.Physics.Headsails.HeadsailLuff
+	p.HeadsailFoot = b.Physics.Headsails.HeadsailFoot
+	p.HeadsailTackHeight = b.Physics.Headsails.HeadsailTackHeight
+	p.HeadsailTack = b.Physics.Headsails.HeadsailTack
+	p.HeadsailFootStrip = b.Physics.Headsails.HeadsailFootStrip
+	p.HeadsailHeadStrip = b.Physics.Headsails.HeadsailHeadStrip
+	p.HeadsailPressureAttached = b.Physics.Headsails.HeadsailPressureAttached
+	p.HeadsailPressureSeparated = b.Physics.Headsails.HeadsailPressureSeparated
+	p.HeadsailMaxLift = b.Physics.Headsails.HeadsailMaxLift
+	p.HeadsailStallAngle = b.Physics.Headsails.HeadsailStallAngle
+	p.HeadsailStallWidth = b.Physics.Headsails.HeadsailStallWidth
+	p.HeadsailDrag = b.Physics.Headsails.HeadsailDrag
+	copy(p.HeadsailNormalForce[:], b.Physics.Headsails.HeadsailNormalForce)
+	p.HeadsailTwist = b.Physics.Headsails.HeadsailTwist
+	p.HeadsailTwistEased = b.Physics.Headsails.HeadsailTwistEased
+	p.HeadsailIn = b.Physics.Headsails.HeadsailIn
+	p.HeadsailOut = b.Physics.Headsails.HeadsailOut
+	p.HeadsailInertia = b.Physics.Headsails.HeadsailInertia
+	p.HeadsailMoment = b.Physics.Headsails.HeadsailMoment
+	p.HeadsailDamping = b.Physics.Headsails.HeadsailDamping
+	copy(p.HeadsailReefs[:], b.Physics.Headsails.HeadsailReefs)
+	p.SquareForeArea = b.Physics.Square.SquareForeArea
+	p.SquareAfterArea = b.Physics.Square.SquareAfterArea
+	p.SquareForeMast = b.Physics.Square.SquareForeMast
+	p.SquareAfterMast = b.Physics.Square.SquareAfterMast
+	p.SquareFootHeight = b.Physics.Square.SquareFootHeight
+	p.SquareLuff = b.Physics.Square.SquareLuff
+	p.SquareFootStrip = b.Physics.Square.SquareFootStrip
+	p.SquareHeadStrip = b.Physics.Square.SquareHeadStrip
+	p.SquarePressure = b.Physics.Square.SquarePressure
+	copy(p.SquareLift[:], b.Physics.Square.SquareLift)
+	copy(p.SquareDrag[:], b.Physics.Square.SquareDrag)
+	copy(p.SquareNormalForce[:], b.Physics.Square.SquareNormalForce)
+	p.SquareTwist = b.Physics.Square.SquareTwist
+	p.BraceSharp = b.Physics.Square.BraceSharp
+	p.BraceTime = b.Physics.Square.BraceTime
+	p.Hauls = b.Physics.Square.Hauls
+	p.LetGo = b.Physics.Square.LetGo
+	copy(p.SquareReefs[:], b.Physics.Square.SquareReefs)
+	p.DownwindArea = b.Physics.Downwind.DownwindArea
+	p.DownwindLuff = b.Physics.Downwind.DownwindLuff
+	p.DownwindFoot = b.Physics.Downwind.DownwindFoot
+	p.DownwindTackHeight = b.Physics.Downwind.DownwindTackHeight
+	p.DownwindTack = b.Physics.Downwind.DownwindTack
+	p.DownwindFootStrip = b.Physics.Downwind.DownwindFootStrip
+	p.DownwindHeadStrip = b.Physics.Downwind.DownwindHeadStrip
+	p.DownwindPressureAttached = b.Physics.Downwind.DownwindPressureAttached
+	p.DownwindPressureSeparated = b.Physics.Downwind.DownwindPressureSeparated
+	p.DownwindMaxLift = b.Physics.Downwind.DownwindMaxLift
+	p.DownwindStallAngle = b.Physics.Downwind.DownwindStallAngle
+	p.DownwindStallWidth = b.Physics.Downwind.DownwindStallWidth
+	p.DownwindDrag = b.Physics.Downwind.DownwindDrag
+	copy(p.DownwindNormalForce[:], b.Physics.Downwind.DownwindNormalForce)
+	p.DownwindTwist = b.Physics.Downwind.DownwindTwist
+	p.DownwindTwistEased = b.Physics.Downwind.DownwindTwistEased
+	p.DownwindIn = b.Physics.Downwind.DownwindIn
+	p.DownwindOut = b.Physics.Downwind.DownwindOut
+	p.DownwindInertia = b.Physics.Downwind.DownwindInertia
+	p.DownwindMoment = b.Physics.Downwind.DownwindMoment
+	p.DownwindDamping = b.Physics.Downwind.DownwindDamping
+	p.HoistTime = b.Physics.Downwind.HoistTime
+	p.DropTime = b.Physics.Downwind.DropTime
+	p.SetAngle = b.Physics.Downwind.SetAngle
+	p.DropAngle = b.Physics.Downwind.DropAngle
+	copy(p.DownwindReefs[:], b.Physics.Downwind.DownwindReefs)
 	p.BoardSpan = b.Physics.Foils.BoardSpan
 	p.BoardChord = b.Physics.Foils.BoardChord
 	p.BoardPosition = b.Physics.Foils.BoardPosition
@@ -92,6 +161,7 @@ func PhysicsParams(b *Boat) physics.Params {
 	p.Downwash = b.Physics.Foils.Downwash
 	p.FoilWetHeel = b.Physics.Foils.FoilWetHeel
 	p.FoilDryHeel = b.Physics.Foils.FoilDryHeel
+	p.Fixed = b.Physics.Foils.Fixed
 	p.SailorMass = b.Physics.Sailor.SailorMass
 	p.SailorSeatHeight = b.Physics.Sailor.SailorSeatHeight
 	p.HikeReach = b.Physics.Sailor.HikeReach

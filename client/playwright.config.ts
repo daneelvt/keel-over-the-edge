@@ -53,8 +53,11 @@ const linux = process.platform === 'linux';
 // keel's world is a minute old: it is the page project's first file.
 export const pageFiles = [
   'connect',
+  'aboard',
+  'boats',
   'discover',
   'lag',
+  'life',
   'looks',
   'machines',
   'oauth-approve',
@@ -62,6 +65,7 @@ export const pageFiles = [
   'owner',
   'passkeys',
   'roam',
+  'shipmates',
   'start',
   'stopped',
   'together',
@@ -78,10 +82,12 @@ export const pageFiles = [
 // tests' times on CI's runners (Playwright's own --shard splits by the
 // number of tests, and these files take from seconds to minutes).
 export const shardFiles: Record<string, string[][]> = {
-  // About 5.4 minutes each on lavapipe, 16 in all (November 2026).
+  // About 8.5 minutes each on lavapipe, 26 in all (November 2026). The
+  // layout's file measures every screen and the sailors' grows with every
+  // look: out of the last shard, which ran to its 20 minutes.
   webgl2: [
-    ['ending', 'features', 'forecast', 'freecam', 'look', 'machine-mark'],
-    ['edge', 'lights', 'sea', 'sighting', 'weatherchart', 'wind'],
+    ['ending', 'features', 'forecast', 'freecam', 'look', 'machine-mark', 'layout'],
+    ['edge', 'lights', 'sea', 'sighting', 'weatherchart', 'wind', 'sailors'],
   ],
   // About 7 minutes each on SwiftShader, 34.5 in all.
   webgpu: [

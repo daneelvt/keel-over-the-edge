@@ -9,8 +9,6 @@ import (
 	"os"
 	"slices"
 	"strings"
-
-	"github.com/daneelvt/keel-over-the-edge/internal/physics"
 )
 
 // referenceFile is internal/physics/testdata/reference.json.
@@ -21,14 +19,24 @@ type referenceFile struct {
 
 // reference is the measured performance of one boat's original.
 type reference struct {
-	Boat     string     `json:"boat"`
-	Original string     `json:"original"`
-	Points   []refPoint `json:"points"`
-	Notes    []string   `json:"notes"`
+	Boat     string `json:"boat"`
+	Original string `json:"original"`
+	// Height is the height its winds are given at, m.
+	Height float64 `json:"height"`
+	// Crew, if set, sails the reference's points in place of the
+	// catalog's sailor (course.go).
+	Crew   *crew      `json:"crew,omitempty"`
+	Points []refPoint `json:"points"`
+	Notes  []string   `json:"notes"`
 }
 
 type refPoint struct {
-	Measure   string  `json:"measure"` // speed, upwindVMG or downwindVMG
+	// Measure is speed (at TWA), upwindVMG or downwindVMG, in knots;
+	// upwindAngle, the true wind angle of the best upwind VMG, degrees;
+	// upwindLeeway, the leeway there, degrees; or course, the time round
+	// the course over the boat Against's, its wind 10 m up (course.go).
+	Measure   string  `json:"measure"`
+	Against   string  `json:"against,omitempty"`
 	AtMost    bool    `json:"atMost,omitempty"`
 	TWA       float64 `json:"twa,omitempty"`
 	Wind      float64 `json:"wind"`
@@ -64,16 +72,20 @@ func (p refPoint) model(polars []polar) (float64, error) {
 		if pl.Wind != p.Wind {
 			continue
 		}
-		up, _, down, _ := vmg(pl)
+		up, upAngle, down, _ := vmg(pl)
 		switch p.Measure {
 		case "upwindVMG":
 			return up, nil
+		case "upwindAngle":
+			return upAngle, nil
+		case "upwindLeeway":
+			return at(pl, upAngle).Leeway, nil
 		case "downwindVMG":
 			return down, nil
 		case "speed":
 			pt := at(pl, p.TWA)
 			if !pt.OK {
-				return 0, fmt.Errorf("the boat capsizes at %g° in %g knots", p.TWA, p.Wind)
+				return 0, fmt.Errorf("at %g° in %g knots the boat %s", p.TWA, p.Wind, pt.cannot())
 			}
 			return pt.Speed, nil
 		}
@@ -94,37 +106,75 @@ func (p refPoint) verdict(got float64) (ok bool, text string) {
 }
 
 func (p refPoint) label() string {
-	if p.Measure == "speed" {
+	switch p.Measure {
+	case "speed":
 		return fmt.Sprintf("speed at %g°", p.TWA)
+	case "upwindAngle":
+		return "upwind angle"
+	case "upwindLeeway":
+		return "upwind leeway"
+	case "course":
+		return "course / " + p.Against
 	}
 	return p.Measure
 }
 
 // runCheck sails the polar at the reference's winds and angles and fails
 // outside the tolerances, then at the chart's winds, and fails unless the
-// sail says drawing at the fastest sheet and, for the boat of the handbook,
-// unless its trim table is the polar's.
-func runCheck(b *physics.Prepared, id string, handbook bool) error {
-	r, err := readReference()
-	if err != nil {
-		return err
+// sail says drawing at the fastest sheet, and unless the handbook's trim
+// table and reefing advice for the kind are the polar's. Every wind and
+// angle is sailed once, together.
+func runCheck(k *kind, ref *reference) error {
+	winds := append(slices.Clone(chartWinds), k.trimWinds()...)
+	angles := slices.Clone(chartAngles)
+	// The reference's points, sailed by its crew if it names one.
+	rk := k
+	if ref.Crew != nil {
+		rk = k.crewed(ref.Crew)
 	}
-	ref := r.boat(id)
-	if ref == nil {
-		return fmt.Errorf("%s has no reference data for %s", referencePath, id)
-	}
-	var winds []float64
+	var refWinds []float64
 	for _, p := range ref.Points {
-		if !slices.Contains(winds, p.Wind) {
-			winds = append(winds, p.Wind)
+		if p.Measure == "course" {
+			continue
+		}
+		refWinds = append(refWinds, p.Wind)
+		if p.Measure == "speed" {
+			angles = append(angles, p.TWA)
 		}
 	}
+	if rk == k {
+		winds = append(winds, refWinds...)
+	}
 	slices.Sort(winds)
-	polars := sailPolars(b, winds, chartAngles)
+	slices.Sort(angles)
+	angles = slices.Compact(angles)
+	polars := sailPolars(k, slices.Compact(winds), angles)
+	refPolars := polars
+	if rk != k && len(refWinds) > 0 {
+		slices.Sort(refWinds)
+		refPolars = sailPolars(rk, slices.Compact(refWinds), angles)
+	}
 	var failed []string
-	fmt.Printf("%s against %s\n", id, ref.Original)
+	fmt.Printf("%s against %s, winds %s\n", k.id, ref.Original, k.heightWords())
+	if ref.Crew != nil {
+		fmt.Printf("  raced by a crew of %g kg reaching %g m to windward\n", ref.Crew.Mass, ref.Crew.Reach)
+	}
 	for _, p := range ref.Points {
-		got, err := p.model(polars)
+		var got float64
+		var err error
+		if p.Measure == "course" {
+			other := kindsByID[p.Against]
+			if other == nil {
+				return fmt.Errorf("a course against %q, which is not a boat of the catalog", p.Against)
+			}
+			var legs string
+			got, legs, err = courseRatio(rk, other, p.Wind)
+			if err == nil {
+				fmt.Printf("       %4g knots  %s\n", p.Wind, legs)
+			}
+		} else {
+			got, err = p.model(refPolars)
+		}
 		if err != nil {
 			failed = append(failed, err.Error())
 			continue
@@ -137,15 +187,28 @@ func runCheck(b *physics.Prepared, id string, handbook bool) error {
 		}
 		fmt.Printf("  %s %4g knots  %-16s %s\n", mark, p.Wind, p.label(), text)
 	}
+	if k.p.DownwindArea > 0 {
+		var courseWinds []float64
+		other := ""
+		for _, p := range ref.Points {
+			if p.Measure == "course" {
+				courseWinds, other = append(courseWinds, p.Wind), p.Against
+			}
+		}
+		if o := kindsByID[other]; o != nil {
+			reportDownwind(k, o, courseWinds)
+		}
+	}
 	if len(failed) > 0 {
 		return errors.New("outside the reference's tolerances:\n  " + strings.Join(failed, "\n  "))
 	}
-	all := sailPolars(b, chartWinds, chartAngles)
-	if err := checkWords(all); err != nil {
+	var chart []polar
+	for _, w := range chartWinds {
+		p, _ := polarAt(polars, w)
+		chart = append(chart, p)
+	}
+	if err := checkWords(chart); err != nil {
 		return err
 	}
-	if handbook {
-		return checkHandbook(all)
-	}
-	return nil
+	return checkHandbook(k, polars)
 }

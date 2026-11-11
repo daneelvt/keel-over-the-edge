@@ -57,7 +57,7 @@ func TestTeleport(t *testing.T) {
 	placeAtEdge(t, w, b.Boat, spawnAt(int64(a.Slot)).X, spawnAt(int64(a.Slot)).Y, math.Pi/2, 0)
 	owned(t, w, bus.Command{Op: bus.Teleport, Boat: a.Boat, Start: true})
 	f = w.Latest()
-	if d := math.Hypot(f.State[a.Slot].X-f.State[b.Slot].X, f.State[a.Slot].Y-f.State[b.Slot].Y); d < spawnClear {
+	if d := math.Hypot(f.State[a.Slot].X-f.State[b.Slot].X, f.State[a.Slot].Y-f.State[b.Slot].Y); d < 2*physics.Radius(&w.kinds[0])+startClear {
 		t.Fatalf("at the start %v m from the other boat", d)
 	}
 	if r := owned(t, w, bus.Command{Op: bus.Teleport, Boat: 999}); r.Result != bus.NoBoat {

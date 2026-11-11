@@ -247,20 +247,20 @@ func TestNewSailorRefusesMalformed(t *testing.T) {
 		code                    string
 	}{
 		{"a form", "application/x-www-form-urlencoded", "name=Ann&look=figure", 415, "content-type"},
-		{"no type", "", `{"name":"Ann","look":"rover","version":"female","skin":"tone-2","hair":"brown","colour":"madder-red"}`, 415, "content-type"},
+		{"no type", "", `{"name":"Ann","look":"rover","version":"female","skin":"tone-2","hair":"brown","colour":"madder-red","born":{"year":1990,"month":1}}`, 415, "content-type"},
 		{"an unknown member", "application/json", `{"name":"Ann","look":"rover","version":"female","skin":"tone-2","hair":"brown","colour":"madder-red","admin":true}`, 400, "malformed"},
-		{"a name twice", "application/json", `{"name":"Ann","name":"Admin","look":"rover","version":"female","skin":"tone-2","hair":"brown","colour":"madder-red"}`, 400, "malformed"},
+		{"a name twice", "application/json", `{"name":"Ann","name":"Admin","look":"rover","version":"female","skin":"tone-2","hair":"brown","colour":"madder-red","born":{"year":1990,"month":1}}`, 400, "malformed"},
 		{"invalid UTF-8", "application/json", "{\"name\":\"A\xffn\",\"look\":\"rover\"}", 400, "malformed"},
 		{"not an object", "application/json", `["Ann"]`, 400, "malformed"},
-		{"trailing data", "application/json", `{"name":"Ann","look":"rover","version":"female","skin":"tone-2","hair":"brown","colour":"madder-red"} {}`, 400, "malformed"},
-		{"a look not in the catalog", "application/json", `{"name":"Ann","look":"pirate-king"}`, 400, "look"},
-		{"too large", "application/json", `{"name":"` + strings.Repeat("A", 17<<10) + `","look":"rover","version":"female","skin":"tone-2","hair":"brown","colour":"madder-red"}`, 413, "too-large"},
-		{"a short name", "application/json", `{"name":"Al","look":"rover","version":"female","skin":"tone-2","hair":"brown","colour":"madder-red"}`, 422, "short"},
-		{"no name", "application/json", `{"look":"rover","version":"female","skin":"tone-2","hair":"brown","colour":"madder-red"}`, 422, "short"},
-		{"a long name", "application/json", `{"name":"Abcdefghijklmnopqrstu","look":"rover","version":"female","skin":"tone-2","hair":"brown","colour":"madder-red"}`, 422, "long"},
-		{"a symbol", "application/json", `{"name":"Ann ⚓","look":"rover","version":"female","skin":"tone-2","hair":"brown","colour":"madder-red"}`, 422, "characters"},
-		{"mixed scripts", "application/json", `{"name":"Pаypal","look":"rover","version":"female","skin":"tone-2","hair":"brown","colour":"madder-red"}`, 422, "scripts"},
-		{"a reserved name", "application/json", `{"name":"Harbourmaster","look":"rover","version":"female","skin":"tone-2","hair":"brown","colour":"madder-red"}`, 422, "words"},
+		{"trailing data", "application/json", `{"name":"Ann","look":"rover","version":"female","skin":"tone-2","hair":"brown","colour":"madder-red","born":{"year":1990,"month":1}} {}`, 400, "malformed"},
+		{"a look not in the catalog", "application/json", `{"name":"Ann","look":"pirate-king","born":{"year":1990,"month":1}}`, 400, "look"},
+		{"too large", "application/json", `{"name":"` + strings.Repeat("A", 17<<10) + `","look":"rover","version":"female","skin":"tone-2","hair":"brown","colour":"madder-red","born":{"year":1990,"month":1}}`, 413, "too-large"},
+		{"a short name", "application/json", `{"name":"Al","look":"rover","version":"female","skin":"tone-2","hair":"brown","colour":"madder-red","born":{"year":1990,"month":1}}`, 422, "short"},
+		{"no name", "application/json", `{"look":"rover","version":"female","skin":"tone-2","hair":"brown","colour":"madder-red","born":{"year":1990,"month":1}}`, 422, "short"},
+		{"a long name", "application/json", `{"name":"Abcdefghijklmnopqrstu","look":"rover","version":"female","skin":"tone-2","hair":"brown","colour":"madder-red","born":{"year":1990,"month":1}}`, 422, "long"},
+		{"a symbol", "application/json", `{"name":"Ann ⚓","look":"rover","version":"female","skin":"tone-2","hair":"brown","colour":"madder-red","born":{"year":1990,"month":1}}`, 422, "characters"},
+		{"mixed scripts", "application/json", `{"name":"Pаypal","look":"rover","version":"female","skin":"tone-2","hair":"brown","colour":"madder-red","born":{"year":1990,"month":1}}`, 422, "scripts"},
+		{"a reserved name", "application/json", `{"name":"Harbourmaster","look":"rover","version":"female","skin":"tone-2","hair":"brown","colour":"madder-red","born":{"year":1990,"month":1}}`, 422, "words"},
 	}
 	for _, c := range cases {
 		status, body, res := post(t, nil, srv.URL+"/account/begin", c.contentType, c.body)

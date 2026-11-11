@@ -1,0 +1,223 @@
+/* SPDX-License-Identifier: AGPL-3.0-only */
+
+/* A boat side on: its masts and the water's line pale on the dark panel. */
+.boat-picture {
+  flex: none;
+  overflow: visible;
+}
+.boat-picture-water {
+  stroke: rgb(242 239 231 / 30%);
+}
+.boat-picture-mast {
+  stroke: rgb(242 239 231 / 80%);
+  stroke-linecap: round;
+}
+.boat-picture-sail,
+.boat-picture-hull {
+  stroke: rgb(0 0 0 / 45%);
+  stroke-linejoin: round;
+}
+.boat-picture-grain {
+  stroke: rgb(60 32 12 / 50%);
+}
+.boat-picture-number {
+  font-family: "IM Fell English SC", Georgia, serif;
+  font-weight: 700;
+}
+
+/* The player's boat on their panel: its picture beside its words. */
+.your-boat {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.your-boat-words {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.your-boat-words p {
+  margin: 0;
+}
+.your-boat-name {
+  font-size: 17px;
+  font-weight: 700;
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+}
+.your-boat-actions {
+  display: flex;
+  flex-wrap: wrap;
+  column-gap: 18px;
+}
+.your-boat-actions .start-link {
+  align-self: flex-start;
+  padding: 0;
+  text-align: left;
+}
+.your-boat-reading {
+  min-height: 1.35em;
+}
+
+/* The look's chooser: the picture and the name as chosen, the swatches, the fields. */
+.boat-look,
+.change-boat {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.boat-look-top {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.boat-look-name {
+  margin: 0;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+.boat-look-fields {
+  display: grid;
+  grid-template-columns: 7em minmax(0, 1fr);
+  gap: 8px;
+}
+.boat-look-field {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.boat-look-field input {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+}
+.boat-faint {
+  color: rgb(242 239 231 / 66%);
+  font-size: 14px;
+}
+
+/* The fleet's boats to choose from: a row each, the player's ringed. */
+.change-boat-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.change-boat-choice {
+  border: 1px solid rgb(242 239 231 / 35%);
+  border-radius: 8px;
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+.change-boat-choice,
+.hud .board .change-boat-choice {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 56px;
+  padding: 6px 10px;
+  text-align: left;
+}
+.change-boat-choice:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+.change-boat-choice[aria-current="true"],
+.hud .board .change-boat-choice[aria-current="true"] {
+  box-shadow: inset 0 0 0 2px #e8b450;
+}
+.change-boat-words {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.change-boat-name {
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+.change-boat-faint {
+  color: rgb(242 239 231 / 66%);
+  font-size: 14px;
+}
+
+/* On the start screen, alone on it: the panel scrolls within the screen. */
+.start > .start-panel:is(.boat-look, .change-boat) {
+  max-height: calc(100dvh - 32px);
+  overflow-y: auto;
+  padding: 12px 16px 14px;
+}
+.start > .start-panel:is(.boat-look, .change-boat) h1 {
+  margin: 0;
+  font-size: 22px;
+}
+
+/* Why it was refused, and Cancel and Save, at the panel's foot, in view as
+   it scrolls: on the start screen and over the sea alike. */
+.boat-look-foot {
+  position: sticky;
+  bottom: -14px;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0 -16px -14px;
+  padding: 8px 16px 14px;
+  background: rgb(26 36 44 / 96%);
+}
+.board .boat-look-foot {
+  bottom: -12px;
+  margin: 0 -14px -12px;
+  padding: 8px 14px 12px;
+  background: var(--panel);
+}
+.boat-look-problem {
+  margin: 0;
+  color: #f3b3a6;
+  font-size: 14px;
+}
+.boat-look-problem:empty {
+  display: none;
+}
+.boat-look-actions {
+  display: flex;
+  gap: 8px;
+}
+.boat-look-actions > button {
+  flex: 1;
+  margin: 0;
+}
+.hud .boat-look-actions > button {
+  margin: 0;
+}
+
+/* A screen held sideways: the picture smaller and the swatches lower, as
+   the sailor's picker has them, so more of the chooser is in view. */
+@media (max-height: 420px) {
+  .boat-look-top .boat-picture {
+    width: 56px;
+    height: auto;
+  }
+  .boat-look .choices-row .swatch {
+    height: 38px;
+  }
+  .boat-look .picker-note {
+    display: none;
+  }
+  .change-boat-choice .boat-picture {
+    width: 44px;
+    height: auto;
+  }
+  .change-boat-choice,
+  .hud .board .change-boat-choice {
+    min-height: 48px;
+    padding: 2px 10px;
+  }
+}

@@ -71,6 +71,9 @@ func (b *Prepared) prepareOutline(p *Params) {
 	o.aft = p.Transom
 }
 
+// Bow is how far the boat's stem is ahead of its centre of gravity, m.
+func (b *Prepared) Bow() float64 { return b.outline.bow }
+
 // OutlineConvex reports whether a catalog's outline makes a convex polygon
 // whose stem is a point: each half-beam at least the mean of its
 // neighbours', none negative, and the last nothing.
@@ -125,3 +128,7 @@ func (h *hullFrame) lowest(nx, ny float64) float64 {
 	}
 	return m
 }
+
+// Radius is how far boat b's outline reaches from its centre of gravity,
+// m: the circle about its hull, for the simulation's start places.
+func Radius(b *Prepared) float64 { return b.outline.radius }

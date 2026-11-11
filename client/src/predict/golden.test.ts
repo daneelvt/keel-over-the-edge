@@ -14,6 +14,7 @@ import {
   type GoldenFile,
   runScenario,
   type ScenarioFile,
+  scenarioBoat,
   type TerrainLoader,
   toHex,
 } from './golden';
@@ -109,23 +110,26 @@ describe('memory', () => {
 });
 
 describe('params', () => {
-  test("writeParams writes the catalog's values exactly as the Go golden tests read them", () => {
-    const want = new Float64Array(physics.records.params.length);
+  test("writeParams writes each boat's catalog values exactly as the Go golden tests read them", () => {
     const scenarios = readJSON<ScenarioFile>('scenarios.json');
-    const lengths: Record<string, number> = {};
-    for (const [name, value] of Object.entries(scenarios.params)) {
-      const index = (RECORDS.params as Record<string, number>)[name];
-      expect(index, name).toBeDefined();
-      if (Array.isArray(value)) {
-        want.set(value, index);
-        lengths[name] = value.length;
-      } else {
-        want[index ?? 0] = value;
+    expect(Object.keys(scenarios.params)).toEqual(catalog.boats.map((b) => b.id));
+    for (const [i, boat] of catalog.boats.entries()) {
+      const want = new Float64Array(physics.records.params.length);
+      const { kind, params } = scenarioBoat(scenarios, boat.id);
+      expect(kind).toBe(i);
+      for (const [name, value] of Object.entries(params)) {
+        const index = (RECORDS.params as Record<string, number>)[name];
+        expect(index, name).toBeDefined();
+        if (Array.isArray(value)) {
+          want.set(value, index);
+        } else {
+          want[index ?? 0] = value;
+        }
       }
+      const got = new Float64Array(want.length);
+      writeParams(got, boat.physics);
+      expect(new Uint8Array(got.buffer), boat.id).toEqual(new Uint8Array(want.buffer));
     }
-    const got = new Float64Array(want.length);
-    writeParams(got, catalog.boats[0].physics);
-    expect(new Uint8Array(got.buffer)).toEqual(new Uint8Array(want.buffer));
   });
 });
 

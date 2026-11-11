@@ -1,0 +1,69 @@
+/* SPDX-License-Identifier: AGPL-3.0-only */
+
+/* Make a new link: a faint text key, its question and its answers beneath. */
+.new-link {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+}
+
+.new-link-key {
+  min-height: 40px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--faint, rgb(242 239 231 / 65%));
+  font: inherit;
+  font-size: 14px;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.new-link-line {
+  margin: 0;
+  color: var(--faint, rgb(242 239 231 / 65%));
+  font-size: 14px;
+}
+
+.new-link-ask {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.new-link-keys {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+/* The shares and their faint lines, in a column. */
+.share-links {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.share-links-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.share-links-row > button {
+  flex: 1 1 auto;
+}
+
+/* Make a new link beside a share, when there is room. */
+.share-links-row > .new-link {
+  flex: 0 1 auto;
+  justify-content: center;
+}
+
+.your-link .start-sign-in {
+  padding: 0 12px;
+}

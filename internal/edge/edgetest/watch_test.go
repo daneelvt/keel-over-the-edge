@@ -45,6 +45,31 @@ type viewer struct {
 	lamps  []pb.Lamp
 	looks  []uint32
 	closed bool
+	// welcomes counts the Welcomes; boatLooks are the boat's looks told,
+	// in order, and names the boats' names by view slot, as last told.
+	welcomes  int
+	boatLooks []*pb.BoatLookChanged
+	names     map[uint32]string
+	// crews are the other boats' crews by view slot, as last told (an empty
+	// one deleted), and allCrews every one told, in order.
+	crews    map[uint32]*pb.Crew
+	allCrews []*pb.Crew
+	// What is told of sailing together: the knocks waiting by ID, the own
+	// knock's latest state, the latest crew, the controls offered, and the
+	// latest going ashore.
+	cards    map[uint64]*pb.KnockCard
+	knocking *pb.Knocking
+	crew     *pb.Crew
+	handed   *pb.Handed
+	ashore   *pb.Ashore
+	// lines are the lines said aboard it was sent, in order; chatState,
+	// tied and reported the latest of each told.
+	lines     []*pb.Chat
+	chatState *pb.ChatState
+	tied      *pb.Tied
+	reported  *pb.Reported
+	// shipmates counts the Shipmates told: the list changed.
+	shipmates int
 }
 
 // dial opens the game connection with the cookie and says hello.
@@ -102,6 +127,8 @@ func (v *viewer) take(r client.Received) {
 	switch m := r.Message.Body.(type) {
 	case *pb.ServerMessage_Welcome:
 		v.welcome, v.snaps, v.queued = m.Welcome, 0, nil
+		v.welcomes++
+		v.names, v.crews = nil, nil
 	case *pb.ServerMessage_WatchEnded:
 		v.ended = m.WatchEnded
 	case *pb.ServerMessage_Queued:
@@ -112,6 +139,54 @@ func (v *viewer) take(r client.Received) {
 		v.lamps = append(v.lamps, m.AgentLamp.GetState())
 	case *pb.ServerMessage_LookChanged:
 		v.looks = append(v.looks, m.LookChanged.GetLook())
+	case *pb.ServerMessage_BoatLookChanged:
+		v.boatLooks = append(v.boatLooks, m.BoatLookChanged)
+	case *pb.ServerMessage_Knock:
+		if v.cards == nil {
+			v.cards = map[uint64]*pb.KnockCard{}
+		}
+		if m.Knock.GetGone() {
+			delete(v.cards, m.Knock.GetId())
+		} else {
+			v.cards[m.Knock.GetId()] = m.Knock
+		}
+	case *pb.ServerMessage_Knocking:
+		v.knocking = m.Knocking
+	case *pb.ServerMessage_Crew:
+		v.crew = m.Crew
+	case *pb.ServerMessage_Handed:
+		v.handed = m.Handed
+	case *pb.ServerMessage_Ashore:
+		v.ashore = m.Ashore
+	case *pb.ServerMessage_Chat:
+		v.lines = append(v.lines, m.Chat)
+	case *pb.ServerMessage_ChatState:
+		v.chatState = m.ChatState
+	case *pb.ServerMessage_Tied:
+		v.tied = m.Tied
+	case *pb.ServerMessage_Reported:
+		v.reported = m.Reported
+	case *pb.ServerMessage_Shipmates:
+		v.shipmates++
+	case *pb.ServerMessage_Crews:
+		if v.crews == nil {
+			v.crews = map[uint32]*pb.Crew{}
+		}
+		for _, c := range m.Crews.GetCrews() {
+			v.allCrews = append(v.allCrews, c)
+			if len(c.GetPeople()) == 0 {
+				delete(v.crews, c.GetSlot())
+			} else {
+				v.crews[c.GetSlot()] = c
+			}
+		}
+	case *pb.ServerMessage_BoatNames:
+		if v.names == nil {
+			v.names = map[uint32]string{}
+		}
+		for _, n := range m.BoatNames.GetNames() {
+			v.names[n.GetSlot()] = n.GetName()
+		}
 	}
 }
 

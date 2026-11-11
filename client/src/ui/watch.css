@@ -5,18 +5,16 @@
    before the own boat leaves the water, and the switch that lets others
    watch. Every button is 44 px or more. */
 
-/* The plate: one row where the controls are while sailing, in the
-   control head's frame and lacquer, its keys the head's. Held upright it
-   spans the screen between its edges; held sideways it stands where the
-   head stands. */
+/* The plate: one compact row in the plate's brass and lacquer, as wide as
+   its words, centred along the foot of every screen (watching, nothing
+   else stands there), its keys the head's. */
 .hud .watch-plate {
   position: absolute;
   bottom: var(--edge-bottom);
-  left: calc(var(--edge-left) + 190px + 8px + var(--pilot-tab) + 8px);
-  width: min(
-    380px,
-    calc(100vw - var(--edge-left) - var(--edge-right) - 190px - var(--pilot-tab) - 64px - 24px)
-  );
+  left: 50%;
+  translate: -50% 0;
+  width: max-content;
+  max-width: calc(100vw - var(--edge-left) - var(--edge-right));
   box-sizing: border-box;
   display: flex;
   align-items: center;
@@ -24,19 +22,9 @@
   padding: 2px 2px 2px 12px;
   border: 1px solid var(--brass-dark);
   border-radius: 12px;
-  background: linear-gradient(rgb(34 44 52 / 92%), rgb(14 20 25 / 92%));
-  box-shadow:
-    inset 0 0 0 1px rgb(243 223 160 / 18%),
-    0 2px 10px rgb(0 0 0 / 30%);
+  background: var(--lacquer);
+  box-shadow: var(--plate-shadow);
   pointer-events: auto;
-}
-
-@media (orientation: portrait) {
-  .hud .watch-plate {
-    left: var(--edge-left);
-    width: auto;
-    right: var(--edge-right);
-  }
 }
 
 .hud .watch-plate .head-key {
@@ -46,9 +34,12 @@
   padding: 0 12px;
 }
 
+/* The name a slot of up to twenty letters, ending in an ellipsis; the
+   queue's or an ended watch's words in the same slot, two lines at most. */
 .watch-plate-words {
-  flex: 1 1 auto;
+  flex: 0 1 auto;
   min-width: 0;
+  max-width: 21ch;
   padding: 2px 8px 2px 0;
 }
 
@@ -110,31 +101,13 @@
   gap: 8px;
 }
 
-/* The list's and the card's, wherever they are shown. */
+/* The list's and the card's, wherever they are shown; over the sea they
+   are the plate's keys. */
 .watch-panel button {
   min-width: 44px;
   min-height: 44px;
   font: inherit;
   cursor: pointer;
-}
-
-.hud .watch-list button {
-  min-width: 44px;
-  min-height: 44px;
-  padding: 0 14px;
-  border: 0;
-  border-radius: 8px;
-  background: rgb(255 255 255 / 12%);
-  color: var(--ink);
-  font: inherit;
-  cursor: pointer;
-}
-
-.hud .watch-plate .watch-go,
-.hud .watch-list .watch-go {
-  background: var(--gold);
-  color: #1a242c;
-  font-weight: 500;
 }
 
 .watch-list {
@@ -155,6 +128,20 @@
     Georgia,
     serif;
   color: var(--gold);
+}
+
+/* The question before the own boat leaves the water: a window of its own
+   in the list's place, its words and keys centred. */
+.watch-list.watch-asking {
+  width: min(360px, calc(100vw - var(--edge-left) - var(--edge-right)));
+}
+
+.watch-question {
+  text-align: center;
+}
+
+.watch-question .watch-buttons {
+  justify-content: center;
 }
 
 /*
@@ -472,7 +459,7 @@
 }
 
 .watch-question p {
-  margin: 0 0 10px;
+  margin: 0 0 12px;
 }
 
 /* Let others watch me sail (this voyage): a switch, as the menu's are. */
@@ -500,13 +487,6 @@
   z-index: 21;
 }
 
-@media (orientation: landscape) {
-  .hud.watch-waiting .watch-plate {
-    left: 50%;
-    translate: -50% 0;
-  }
-}
-
 /* The list on the start screen: in the start screen's own panel. */
 .start .watch-list-start button {
   min-height: 44px;
@@ -524,4 +504,37 @@
   background: var(--gold);
   color: #1a242c;
   font-weight: 500;
+}
+
+/* The share of a machine sailor watched: a small window in the list's place. */
+.watch-share-panel {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: min(360px, calc(100vw - var(--edge-left) - var(--edge-right)));
+  padding: 12px 16px;
+  box-sizing: border-box;
+}
+
+.watch-share-panel h2 {
+  margin: 0;
+  font:
+    20px "IM Fell English SC",
+    Georgia,
+    serif;
+  color: var(--gold);
+  overflow-wrap: anywhere;
+}
+
+.watch-share-panel .watch-close {
+  align-self: flex-end;
+}
+
+/* The player's own link under the spectators' switch. */
+.watch-your-link {
+  margin: 0 0 6px;
 }

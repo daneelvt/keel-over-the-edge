@@ -23,9 +23,7 @@
 
 .account h3 {
   margin: 14px 0 4px;
-  font-size: 15px;
-  font-weight: 500;
-  color: var(--gold);
+  font-size: 17px;
 }
 
 .account p {
@@ -35,18 +33,12 @@
   cursor: auto;
 }
 
-.account button {
-  min-height: 44px;
-  padding: 0 12px;
-  border: 0;
-  border-radius: 8px;
-  background: rgb(255 255 255 / 12%);
-  color: var(--ink);
-  font: inherit;
+.account .account-pages {
+  margin: 14px 0 0;
 }
 
-.account button:disabled {
-  opacity: 0.6;
+.account .account-pages a {
+  color: inherit;
 }
 
 .account-passkeys {
@@ -80,22 +72,15 @@
   min-height: 1.35em;
 }
 
-.hud .account-danger {
+.hud .account .account-danger {
   margin-top: 12px;
   width: 100%;
-  background: rgb(200 70 60 / 55%);
+  background: linear-gradient(#8a3a30, #5c241d);
 }
 
 .account-name input {
   flex: 1;
   min-width: 0;
-  min-height: 40px;
-  padding: 0 8px;
-  border: 1px solid rgb(242 239 231 / 35%);
-  border-radius: 6px;
-  background: rgb(255 255 255 / 10%);
-  color: var(--ink);
-  font: inherit;
 }
 
 /* The recovery code's panel, inside this one. */
@@ -119,12 +104,34 @@
   margin: 0 0 8px;
 }
 
-.menu-accounts button {
+.hud .menu-accounts button {
   flex: 1;
-  min-height: 40px;
-  border: 0;
-  border-radius: 8px;
-  background: rgb(255 255 255 / 12%);
-  color: var(--ink);
-  font: inherit;
+}
+
+/* Chat's part: the switch's meaning under it, the page on privacy. */
+.chat-switch-detail {
+  display: block;
+}
+
+.account .chat-privacy a {
+  color: inherit;
+}
+
+.chat-switch {
+  margin: 6px 0;
+}
+
+.chat-switch-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 44px;
+}
+
+.chat-switch-row input {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  accent-color: var(--gold);
 }

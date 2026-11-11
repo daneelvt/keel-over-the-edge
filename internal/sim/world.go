@@ -27,6 +27,7 @@ import (
 	"slices"
 
 	"github.com/daneelvt/keel-over-the-edge/internal/bus"
+	"github.com/daneelvt/keel-over-the-edge/internal/life"
 	"github.com/daneelvt/keel-over-the-edge/internal/physics"
 	"github.com/daneelvt/keel-over-the-edge/internal/weather"
 )
@@ -84,6 +85,13 @@ type Config struct {
 	// Sight is what the boats' lookouts see by, to chart the world; nil is
 	// a world nobody charts.
 	Sight *Sight
+	// Life is the world's life schedule: the sea's life met about its
+	// boats; nil is a sea with nothing alive in it.
+	Life *life.Schedule
+	// Capacities are how many people each kind of boat carries, its
+	// skipper included, by its index; a kind with none carries its skipper
+	// alone.
+	Capacities []int
 }
 
 // Terrain is a world's land: the ground boats run aground on, the land's
@@ -108,6 +116,9 @@ type Terrain struct {
 	// start's breeze does not; nil for none. The world's timeline must be
 	// in it (weather.Timeline.InHarbour), as every game connection is told.
 	Harbour *physics.Harbour
+	// Ports are the harbours where a boat may be changed, Port Royal's and
+	// each port's, as discs of water: none in a world without land.
+	Ports []Disc
 }
 
 // A Phase is a part of a tick.
@@ -121,7 +132,7 @@ const (
 	PhasePhysics               // step every boat, in the shadow of the boats near it
 	PhaseGrid                  // sort the boats into the grid's cells
 	PhaseContacts              // pairs, contacts and bumps, under the Articles
-	PhaseRules                 // the edge: boats over the lip, and their approaches to it; and what the lookouts sight
+	PhaseRules                 // the edge: boats over the lip, and their approaches to it; what the lookouts sight; and the sea's life
 	PhasePublish               // publish the frame, hand it to the recorder
 	Phases                     // the number of phases
 )
@@ -158,20 +169,25 @@ type Input struct {
 // World is a world's boats and weather, and the machinery that ticks them.
 // Everything but Bus and Close is for the one goroutine that ticks.
 type World struct {
-	bus       *bus.Bus
-	capacity  int
-	limit     int
-	kinds     []physics.Prepared
-	sheets    [][][2]float64
-	sea       sea
-	timeline  *weather.Timeline
-	keyMemo   keyMemo
-	weather   physics.Weather
-	wind      physics.WeatherTick
-	grace     int64
-	observer  Observer
-	recorders []Recorder
-	ctx       context.Context // for trace regions
+	bus      *bus.Bus
+	capacity int
+	limit    int
+	kinds    []physics.Prepared
+	sheets   [][][2]float64
+	// capacities are each kind's people aboard, its skipper included;
+	// landed those going ashore from a boat that left the water, whose own
+	// boats are still to be put in the water.
+	capacities []int
+	landed     []landing
+	sea        sea
+	timeline   *weather.Timeline
+	keyMemo    keyMemo
+	weather    physics.Weather
+	wind       physics.WeatherTick
+	grace      int64
+	observer   Observer
+	recorders  []Recorder
+	ctx        context.Context // for trace regions
 
 	// The tick in progress.
 	cur, next *bus.Frame
@@ -186,6 +202,9 @@ type World struct {
 	// harbour is Port Royal's, where a sailor at sea may change their
 	// look; nil for a world with none.
 	harbour *physics.Harbour
+	// ports are where a sailor at sea may swap their boat or change its
+	// look.
+	ports   []Disc
 	shelter *physics.Shelter
 	start   []physics.State
 	away    []float64
@@ -211,6 +230,11 @@ type World struct {
 
 	// The chart: what is charted, and what the lookouts see by.
 	chart chartState
+
+	// life is the sea's life, nil for none, and lifeWeather what it reads
+	// the weather by.
+	life        *life.World
+	lifeWeather lifeWeather
 
 	// endAt is the world's last tick, once an End has set it; 0 until then.
 	// It is in no snapshot: a process that restores the world is told its
@@ -249,15 +273,16 @@ func New(cfg Config) (*World, error) {
 		cfg.Weather = weather.Fixed(DefaultSpell)
 	}
 	w := &World{
-		bus:      bus.New(cfg.Capacity),
-		capacity: cfg.Capacity,
-		limit:    cfg.Limit,
-		kinds:    cfg.Kinds,
-		sheets:   cfg.StartSheets,
-		grace:    cfg.Grace,
-		timeline: cfg.Weather,
-		ctx:      context.Background(),
-		enc:      cfg.Encounters,
+		bus:        bus.New(cfg.Capacity),
+		capacity:   cfg.Capacity,
+		limit:      cfg.Limit,
+		kinds:      cfg.Kinds,
+		capacities: cfg.Capacities,
+		sheets:     cfg.StartSheets,
+		grace:      cfg.Grace,
+		timeline:   cfg.Weather,
+		ctx:        context.Background(),
+		enc:        cfg.Encounters,
 	}
 	if w.enc != nil {
 		for i := range w.kinds {
@@ -270,6 +295,7 @@ func New(cfg Config) (*World, error) {
 	if t := cfg.Terrain; t != nil {
 		w.ground, w.shelter, w.start, w.circulation = t.Ground, t.Shelter, t.Start, t.Circulation
 		w.harbour = t.Harbour
+		w.ports = t.Ports
 		if len(t.Away) == len(t.Start) {
 			w.away = t.Away
 		}
@@ -290,6 +316,15 @@ func New(cfg Config) (*World, error) {
 		w.restarted = make([]int32, 0, cfg.Capacity)
 	}
 	w.initChart(cfg.Sight, len(cfg.Kinds))
+	if cfg.Life != nil {
+		w.life = life.NewWorld(cfg.Life, cfg.Capacity)
+		bows := make([]float64, len(cfg.Kinds))
+		for i := range cfg.Kinds {
+			bows[i] = cfg.Kinds[i].Bow()
+		}
+		w.life.SetBows(bows)
+		w.lifeWeather.w = w
+	}
 	w.inputsFn, w.seaFn, w.physicsFn, w.gridFn, w.contactsFn, w.rulesFn, w.publishFn = w.inputs, w.seaPhase, w.physics, w.grid, w.contacts, w.rules, w.publish
 	w.sea.init(cfg.Waves, cfg.Weather)
 	if cfg.Terrain != nil {
@@ -369,7 +404,7 @@ func (w *World) load(snapshot []byte, adjust func(*bus.Frame)) error {
 	w.sea.under(&f.Sea, f.Tick, devOf(f))
 	// Each slot holds the controls in force until its sailor writes again.
 	for _, s := range f.Live {
-		w.bus.Controls.Store(s, f.Control[s], f.Pilot[s])
+		w.bus.Controls.Store(s, f.Control[s], f.Pilot[s], f.Rig[s])
 	}
 	// The wind and the wakes follow from the state, as the tick that made
 	// it left them.
@@ -430,8 +465,13 @@ const spawnSpacing = 20
 // spawnRow is how many new boats stand side by side in a row.
 const spawnRow = 64
 
-// spawnClear is how far a new boat's place must be from every hull, m.
-const spawnClear = 10
+// startClear is how far a new boat's hull must be from every other's, m,
+// each taken as the circle about its outline; and startDeep how much
+// deeper than the boat's draught the water at its place must be.
+const (
+	startClear = 5
+	startDeep  = 1
+)
 
 // spawnAt is the place p of the spawn grid: south of the world's centre,
 // spawnSpacing apart, spawnRow to a row, heading east, at rest. The grid is
@@ -456,34 +496,43 @@ func (w *World) placeAt(p int64) physics.State {
 }
 
 // spawn is where a new boat in slot s of f appears: the first place of the
-// start from its slot's, along the row then the next, with no hull within
-// spawnClear, so that no boat appears inside another; in a world of
-// ghosts, its slot's place. It faces a reach off the wind there (onReach).
+// start from its slot's, along the row then the next, where it fits, so
+// that no boat appears inside another or aground; in a world of ghosts,
+// its slot's place. It faces a reach off the wind there (onReach).
 func (w *World) spawn(f *bus.Frame, s int32) physics.State {
-	p := w.placeOf(f, s)
-	st := w.placeAt(p)
-	w.onReach(&st, p)
+	if w.enc != nil {
+		for p, end := int64(s), int64(s)+int64(w.capacity); p < end; p++ {
+			st := w.placeAt(p)
+			if !w.clear(f, s, f.Kind[s], &st) {
+				continue
+			}
+			w.onReach(&st, p)
+			if w.room(f, s, f.Kind[s], &st) {
+				return st
+			}
+		}
+	}
+	st := w.placeAt(int64(s))
+	w.onReach(&st, int64(s))
 	return st
 }
 
-// placeOf is the place of the start a new boat in slot s of f appears at.
-func (w *World) placeOf(f *bus.Frame, s int32) int64 {
-	p := int64(s)
-	if w.enc == nil {
-		return p
-	}
-	for end := p + int64(w.capacity); p < end; p++ {
-		st := w.placeAt(p)
-		free := true
-		for _, o := range f.Live {
-			if o != s && physics.Within(&f.State[o], st.X, st.Y, spawnClear) {
-				free = false
-				break
-			}
-		}
-		if free {
-			return p
+// clear reports whether a boat of kind may lie at st, whichever way it
+// heads, beside the boats of f but the one in slot s: its hull startClear
+// clear of every other boat's, each taken as the circle about its outline,
+// and the water under its middle its draught and startDeep deep.
+func (w *World) clear(f *bus.Frame, s int32, kind uint16, st *physics.State) bool {
+	b := &w.kinds[kind]
+	if w.ground != nil {
+		if e, _ := w.ground.At(st.X, st.Y); e > -(physics.Draught(b) + startDeep) {
+			return false
 		}
 	}
-	return int64(s)
+	r := physics.Radius(b) + startClear
+	for _, o := range f.Live {
+		if o != s && physics.Within(&f.State[o], st.X, st.Y, r+physics.Radius(&w.kinds[f.Kind[o]])) {
+			return false
+		}
+	}
+	return true
 }

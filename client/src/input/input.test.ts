@@ -3,6 +3,7 @@
 import { describe, expect, test } from 'vitest';
 import { DOUBLE_TAP_MS, HELM_TRAVEL, HelmInput } from './helm';
 import { HELM_KEY_TIME, KeyInput, SHEET_KEY_TIME } from './keys';
+import { MAX_REEF, ReefInput, reefLevel } from './reef';
 import { SHEET_TRAVEL, SheetInput } from './sheet';
 
 describe('the helm', () => {
@@ -160,5 +161,46 @@ describe('the keyboard', () => {
     expect(h.target).toBeGreaterThan(0);
     k.up('KeyD');
     expect(h.target).toBe(0);
+  });
+});
+
+describe('the reef', () => {
+  test('R takes a reef more and F shakes one out, a level at a time, kept to its range', () => {
+    const r = new ReefInput();
+    let taken = 0;
+    r.onTake = () => taken++;
+    const k = new KeyInput(new HelmInput(), new SheetInput(), null, r);
+    expect(r.level).toBe(0);
+    expect(k.down('KeyR')).toBe(true);
+    expect(r.level).toBe(1);
+    k.down('KeyR');
+    k.down('KeyR');
+    expect(r.level).toBe(MAX_REEF);
+    k.down('KeyF');
+    expect(r.level).toBe(1);
+    k.down('KeyF');
+    k.down('KeyF');
+    expect(r.level).toBe(0);
+    // Shift and R shake one out too, where F flies the free camera.
+    k.down('KeyR');
+    k.down('KeyR', true);
+    expect(r.level).toBe(0);
+    expect(k.up('KeyR')).toBe(true);
+    expect(taken).toBe(8);
+    // Without a reef to hold, the keys are still the game's, and do nothing.
+    expect(new KeyInput(new HelmInput(), new SheetInput()).down('KeyR')).toBe(true);
+  });
+
+  test('a level is a whole number the wire carries', () => {
+    const r = new ReefInput();
+    r.set(1.4);
+    expect(r.level).toBe(1);
+    r.set(7);
+    expect(r.level).toBe(2);
+    r.set(-1);
+    expect(r.level).toBe(0);
+    expect([reefLevel(Number.NaN), reefLevel(0.5), reefLevel(1.5), reefLevel(2)]).toEqual([
+      0, 1, 2, 2,
+    ]);
   });
 });

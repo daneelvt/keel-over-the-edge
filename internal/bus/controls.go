@@ -175,27 +175,72 @@ func (w PilotWord) Control() (pilot, target, order, way float64) {
 	return float64(w.Mode()), float64(w.Target()), float64(w.Order()), float64(w.Way())
 }
 
-// Controls is a held control slot for every boat slot: a Word and a
-// PilotWord. Each slot has one writer, the boat's sailor; the simulation
-// reads every occupied slot at the start of a tick and applies what it
-// finds.
+// A RigWord is a boat's rig controls packed into 64 bits, the third word
+// of its slot, stamped with the same tick as the Word beside it:
+//
+//	bits 63–32  input sequence, as the Word's
+//	bits 31–30  reef: 0 full sail, 1 or 2 reefs
+//	bits 29–10  spare, 0: room for the rig's later controls
+//	bits  9–0   generation of the slot the word is meant for
+//
+// The reef is a target the crew works to over the rig's reef time, so it
+// is part of the held control, applied at the tick the client stepped it
+// for, as the helm is.
+type RigWord uint64
+
+const (
+	rigReefShift = 30
+	rigReefMask  = 3
+)
+
+// MaxReef is the deepest reef.
+const MaxReef = 2
+
+// PackRig makes a rig word. A reef above MaxReef is MaxReef; the generation
+// is taken modulo GenMask + 1.
+func PackRig(seq uint32, reef uint8, gen uint16) RigWord {
+	return RigWord(seq)<<32 | RigWord(min(reef, MaxReef))<<rigReefShift | RigWord(gen&genMask)
+}
+
+// FullSail is the rig word of a boat that has just appeared: no reef.
+func FullSail(gen uint16) RigWord { return PackRig(0, 0, gen) }
+
+// Seq is the low 32 bits of the tick the word is for.
+func (w RigWord) Seq() uint32 { return uint32(w >> 32) }
+
+// Reef is the reef the crew is to take, 0 … MaxReef.
+func (w RigWord) Reef() uint8 { return min(uint8(w>>rigReefShift)&rigReefMask, MaxReef) }
+
+// Gen is the generation of the slot the word is meant for.
+func (w RigWord) Gen() uint16 { return uint16(w) & genMask }
+
+// Restamp is the word with the same controls stamped seq, for a slot of
+// generation gen.
+func (w RigWord) Restamp(seq uint32, gen uint16) RigWord { return PackRig(seq, w.Reef(), gen) }
+
+// Controls is a held control slot for every boat slot: a Word, a PilotWord
+// and a RigWord. Each slot has one writer, the boat's sailor; the
+// simulation reads every occupied slot at the start of a tick and applies
+// what it finds.
 type Controls struct {
 	slots  []atomic.Uint64
 	pilots []atomic.Uint64
+	rigs   []atomic.Uint64
 }
 
 // NewControls makes n slots.
 func NewControls(n int) *Controls {
-	return &Controls{slots: make([]atomic.Uint64, n), pilots: make([]atomic.Uint64, n)}
+	return &Controls{slots: make([]atomic.Uint64, n), pilots: make([]atomic.Uint64, n), rigs: make([]atomic.Uint64, n)}
 }
 
-// Store sets a slot's words, the pilot word first. The latest pair stored
-// before a tick reads it is the one applied, at the first tick by which it
-// is Due; until then the boat keeps the pair in force. The two stores are
-// separate, so a tick may read between them: it takes a pair only when both
-// words carry the same tick, and otherwise keeps the pair in force a tick
-// longer.
-func (c *Controls) Store(slot int32, w Word, p PilotWord) {
+// Store sets a slot's words, the rig word first, then the pilot word. The
+// latest three stored before a tick reads them are the ones applied, at the
+// first tick by which they are Due; until then the boat keeps the words in
+// force. The stores are separate, so a tick may read between them: it takes
+// the words only when all three carry the same tick, and otherwise keeps
+// those in force a tick longer.
+func (c *Controls) Store(slot int32, w Word, p PilotWord, r RigWord) {
+	c.rigs[slot].Store(uint64(r))
 	c.pilots[slot].Store(uint64(p))
 	c.slots[slot].Store(uint64(w))
 }
@@ -204,14 +249,18 @@ func (c *Controls) Store(slot int32, w Word, p PilotWord) {
 // autopilot off, stamped as w is.
 func HandPilot(w Word) PilotWord { return PackPilot(w.Seq(), PilotOff, WayHold, 0, 0, w.Gen()) }
 
-// StoreHand sets a slot's words for a sailor steering by hand: w, and the
-// autopilot off.
-func (c *Controls) StoreHand(slot int32, w Word) { c.Store(slot, w, HandPilot(w)) }
+// HandRig is the rig word beside w of a sailor under full sail, stamped as
+// w is.
+func HandRig(w Word) RigWord { return PackRig(w.Seq(), 0, w.Gen()) }
+
+// StoreHand sets a slot's words for a sailor steering by hand under full
+// sail: w, the autopilot off and no reef.
+func (c *Controls) StoreHand(slot int32, w Word) { c.Store(slot, w, HandPilot(w), HandRig(w)) }
 
 // Load reads a slot's words.
-func (c *Controls) Load(slot int32) (Word, PilotWord) {
+func (c *Controls) Load(slot int32) (Word, PilotWord, RigWord) {
 	w := Word(c.slots[slot].Load())
-	return w, PilotWord(c.pilots[slot].Load())
+	return w, PilotWord(c.pilots[slot].Load()), RigWord(c.rigs[slot].Load())
 }
 
 // Len is the number of slots.

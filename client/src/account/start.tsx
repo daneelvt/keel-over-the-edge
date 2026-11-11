@@ -24,12 +24,17 @@ import { type JSX, render } from 'preact';
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { drawLook, type Looks } from '../catalog/looks';
 import { useWatch } from '../ui/watchlazy';
+import { MAKE_TO_WATCH } from '../ui/watchwords';
+import { BoatChooser } from './boatchooser';
 import { LookChooser } from './chooser';
+import { AgeQuestion, BornFields } from './firstasks';
+import { bornOf, CANT_BE_MADE, youngCookie } from './firstwords';
+import type { BoatCatalog } from './fleet';
 import { type InApp, passkeySupport, type Support } from './inapp';
 import { useMachines } from './lazy';
 import { type Voyage, voyage } from './letwatch';
 import type { LookStage } from './lookstage';
-import { checkSession, type Me } from './me';
+import { checkSession, type Fetch, type Me } from './me';
 import {
   codeForm,
   makeSailor,
@@ -50,9 +55,18 @@ export interface StartProps {
   looks: Looks;
   /** The picker's stage, which draws the sailor behind the form; none on a page that draws nothing. */
   stage?: LookStage;
+  /** The catalog's boats and their looks, the player's boat chosen from the fleet with; none for no choice. */
+  boats?: BoatCatalog;
   done: (me: Me) => void;
-  /** Whether a sailor signed in is shown their own before the sea: not one come by a link to watch. */
+  /** Whether a sailor signed in is shown their own before the sea: not one come by a link. */
   panel?: boolean;
+  /**
+   * Whether a sailor made goes on once its recovery code is shown, with no
+   * choice of making a machine sailor first: one come by a link to come aboard.
+   */
+  straight?: boolean;
+  /** Whether the page was opened at a link to watch: the visitor is told they will be watching once they make a sailor. */
+  watching?: boolean;
   random?: () => number;
   /** The server and the browser's prompt; the browser's own unless a test stands in. */
   reach?: Reach;
@@ -78,11 +92,29 @@ type View =
   | { kind: 'recovered'; me: Me; at: number }
   | { kind: 'add-passkey'; me: Me };
 
-export function StartScreen({ looks, done, random, reach, stage, panel = true }: StartProps) {
+export function StartScreen({
+  looks,
+  boats,
+  done,
+  random,
+  reach,
+  stage,
+  panel = true,
+  straight = false,
+  watching = false,
+}: StartProps) {
   const [view, setView] = useState<View>({ kind: 'form' });
   const [support, setSupport] = useState<Support | null>(null);
   const [anyway, setAnyway] = useState(false);
   const [name, setName] = useState('');
+  // When the player was born: both boxes empty to start.
+  const [month, setMonth] = useState('');
+  const [year, setYear] = useState('');
+  // A sailor that can't be made, now or by this browser's earlier answer:
+  // the same answer, and signing in still offered.
+  const [young, setYoung] = useState(() =>
+    typeof document === 'undefined' ? false : youngCookie(document.cookie),
+  );
   // The look drawn at random on arrival, chosen in the picker.
   const [pick, setPick] = useState<PickerState>(() => chosen(drawLook(looks, random)));
   const look = pick.look;
@@ -172,10 +204,10 @@ export function StartScreen({ looks, done, random, reach, stage, panel = true }:
   };
 
   const blocked = support?.kind === 'none' || (support?.kind === 'in-app' && !anyway);
-  const formShown = view.kind === 'form' && support !== null && !blocked;
+  const formShown = view.kind === 'form' && support !== null && !blocked && !young;
   // The picker's stage behind the form while it is shown, with its look;
   // the cover back over the page once it is not.
-  const picking = view.kind === 'form' && !blocked;
+  const picking = view.kind === 'form' && !blocked && !young;
   useEffect(() => {
     if (stage !== undefined && picking) {
       stage.show(look);
@@ -213,14 +245,22 @@ export function StartScreen({ looks, done, random, reach, stage, panel = true }:
       setTaken(false);
       return;
     }
+    const born = bornOf(month, year);
+    if (born === null) {
+      setProblem(reasonText('born'));
+      setTaken(false);
+      return;
+    }
     stopAutofill();
     setBusy('create');
     setProblem('');
     setTaken(false);
-    const res = await makeSailor(name, look, reach);
+    const res = await makeSailor(name, look, born, reach);
     setBusy('');
     if (res.ok) {
       setView({ kind: 'code', me: res.value.me, code: res.value.recoveryCode });
+    } else if (res.reason === 'young') {
+      setYoung(true);
     } else {
       failed(res);
     }
@@ -267,7 +307,9 @@ export function StartScreen({ looks, done, random, reach, stage, panel = true }:
             code={view.code}
             name={view.me.name}
             done={() =>
-              setView({ kind: 'choose', me: view.me, voyage: voyage(view.me, reach?.fetch) })
+              straight
+                ? done(view.me)
+                : setView({ kind: 'choose', me: view.me, voyage: voyage(view.me, reach?.fetch) })
             }
           />
         </div>
@@ -292,6 +334,8 @@ export function StartScreen({ looks, done, random, reach, stage, panel = true }:
           done={done}
           looks={looks}
           stage={stage}
+          boats={boats}
+          fetcher={reach?.fetch}
         />
       );
     case 'recovered':
@@ -379,6 +423,33 @@ export function StartScreen({ looks, done, random, reach, stage, panel = true }:
     );
   }
 
+  if (young) {
+    return (
+      <div class="start">
+        <section class="start-panel" aria-labelledby="start-title">
+          <h1 id="start-title">Keel Over the Edge</h1>
+          <p class="start-text" role="status" data-readout="cant-be-made">
+            {CANT_BE_MADE}
+          </p>
+          <p class="start-problem" aria-live="polite">
+            {problem}
+          </p>
+          <div class="start-or">
+            <span>Sailed before?</span>
+            <button
+              type="button"
+              class="start-sign-in"
+              disabled={busy !== ''}
+              onClick={() => void signInNow()}
+            >
+              Sign in with a passkey
+            </button>
+          </div>
+        </section>
+      </div>
+    );
+  }
+
   return (
     <div class={stage === undefined ? 'start' : 'start picking'}>
       {stage === undefined ? null : <StageFront looks={looks} look={pick.look} stage={stage} />}
@@ -390,6 +461,11 @@ export function StartScreen({ looks, done, random, reach, stage, panel = true }:
         noValidate
       >
         <h1 id="start-title">Keel Over the Edge</h1>
+        {watching ? (
+          <p class="start-text start-watching" data-readout="make-to-watch">
+            {MAKE_TO_WATCH}
+          </p>
+        ) : null}
         {support?.kind === 'maybe' ? (
           <p class="start-warning" role="note">
             This browser may not be able to make a passkey. If Set sail fails, try your phone’s own
@@ -414,6 +490,15 @@ export function StartScreen({ looks, done, random, reach, stage, panel = true }:
           aria-invalid={problem !== ''}
           aria-describedby="start-problem"
           onInput={(e) => setName(e.currentTarget.value)}
+        />
+        <BornFields
+          id="start-born"
+          month={month}
+          year={year}
+          setMonth={setMonth}
+          setYear={setYear}
+          invalid={problem === reasonText('born')}
+          describedBy="start-problem"
         />
         <p id="start-problem" class="start-problem" aria-live="polite">
           {problem}
@@ -466,6 +551,9 @@ export function StartScreen({ looks, done, random, reach, stage, panel = true }:
   );
 }
 
+/** Whether the age question was asked of this page's sailor yet: once each time the game is opened. */
+let askedAge = false;
+
 /**
  * The player's own sailor before the sea; done is given me to sail, or with
  * the sailor chosen to watch. With no machine sailors it stands alone,
@@ -473,7 +561,11 @@ export function StartScreen({ looks, done, random, reach, stage, panel = true }:
  * sailor to make), the start screen with machine sailors, once its module
  * is loaded; until then the player's own panel stands where it will be,
  * with its Set sail. Alone, Watch another sailor opens the list of
- * sailors to watch in its place, once that module is loaded.
+ * sailors to watch in its place, once that module is loaded. With the
+ * catalog's boats, the fleet is read, and the player's boat shown on
+ * their panel; its look's chooser and the fleet's boats stand alone.
+ * A sailor made before the game asked when its player was born is asked
+ * first, once each time the game is opened; Not now sails as before.
  */
 function Sailor({
   first,
@@ -482,6 +574,8 @@ function Sailor({
   done,
   looks,
   stage,
+  boats: cat,
+  fetcher,
 }: {
   first: boolean;
   me: Me;
@@ -489,7 +583,11 @@ function Sailor({
   done: (me: Me) => void;
   looks?: Looks;
   stage?: LookStage | undefined;
+  boats?: BoatCatalog | undefined;
+  fetcher?: Fetch | undefined;
 }) {
+  const [asking, setAsking] = useState(() => given.born === false && !askedAge);
+  askedAge ||= asking;
   const machines = first || (given.machines ?? 0) > 0;
   const m = useMachines(machines);
   const [listing, setListing] = useState(false);
@@ -500,6 +598,8 @@ function Sailor({
     [],
   );
   useEffect(() => () => stage?.hide(), []);
+  const boats = useMemo(() => (cat === undefined ? undefined : new BoatChooser(cat, fetcher)), []);
+  useEffect(() => void boats?.load(), []);
   const me = chooser === undefined ? given : chooser.applied(given);
   const go = (watch?: string) => done(watch === undefined ? me : { ...me, watch });
   const yours = (
@@ -508,16 +608,32 @@ function Sailor({
       voyage={v}
       sail={go}
       watch={machines ? null : () => setListing(true)}
+      watchName={(name) => go(name)}
       {...(chooser === undefined ? {} : { chooser })}
+      boats={boats}
     />
   );
   const picking = chooser !== undefined && chooser.mode.value !== 'shown' && stage !== undefined;
+  // The boat's look chosen, or another boat: alone on the screen, over the cover.
+  const boating = boats !== undefined && boats.mode.value !== 'shown';
+  if (asking) {
+    return (
+      <div class="start">
+        <AgeQuestion
+          onAnswered={() => setAsking(false)}
+          onYoung={() => {}}
+          onNotNow={() => setAsking(false)}
+          {...(fetcher === undefined ? {} : { fetch: fetcher })}
+        />
+      </div>
+    );
+  }
   return (
     <div class={picking ? 'start picking' : 'start'}>
       {picking && stage !== undefined && chooser !== undefined ? (
         <StageFront looks={chooser.looks} look={chooser.pick.value.look} stage={stage} />
       ) : null}
-      {picking ? (
+      {picking || boating ? (
         yours
       ) : m !== null ? (
         <m.MachineStart
@@ -526,6 +642,7 @@ function Sailor({
           me={me}
           voyage={v}
           {...(chooser === undefined ? {} : { chooser })}
+          boats={boats}
         />
       ) : listing ? (
         w !== null && (
@@ -608,13 +725,15 @@ export function showStartScreen(parent: HTMLElement, props: Omit<StartProps, 'do
 /**
  * Shows the player's own sailor in parent until Set sail, or a sailor
  * chosen to watch, then removes it; with the catalog's looks, the player
- * may change theirs there, on the picker's stage if there is one.
+ * may change theirs there, on the picker's stage if there is one; with its
+ * boats, choose their boat from the fleet and set its look.
  */
 export function showSailor(
   parent: HTMLElement,
   me: Me,
   looks?: Looks,
   stage?: LookStage,
+  boats?: BoatCatalog,
 ): Promise<Me> {
   return mount(parent, (done) => (
     <Sailor
@@ -624,6 +743,7 @@ export function showSailor(
       done={done}
       {...(looks === undefined ? {} : { looks })}
       stage={stage}
+      boats={boats}
     />
   ));
 }

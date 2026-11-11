@@ -3,8 +3,14 @@
 // The other boats drawn, on each back end: a boat of the fleet at a pose
 // looks as the player's own boat looks at that pose, heeled, gybing,
 // capsized, luffing, with the rudder hard over, its sailor a person's or a
-// machine's; the fleet's 64 boats keep to their draw calls and triangles,
-// their sailors, near and far, of every look, to at most 6; every fleet
+// machine's; a keelboat of the fleet as the own keelboat, its jib and its
+// reef, a tall ship as the own tall ship, her yards braced and her
+// topgallants furled, and a skiff as the own skiff, her gennaker set, part
+// way up and in, her sailor out past her rack; the fleet's 64 boats keep to
+// their draw calls and triangles, and a mixed 64 of Jolly boats, keelboats,
+// tall ships and skiffs, some with their gennakers set and their sailors
+// out on the wire, to theirs, their sailors, near and far, of every look,
+// on the wire or not, to at most 6; every fleet
 // material is the factory's, with the bend; faded boats dither and none
 // sorts; and a picture of a fleet at fixed poses, near and far models,
 // matches its reference.
@@ -13,6 +19,8 @@ import { expect, type Page, test } from '@playwright/test';
 import { openScene, picture, pictureDifference } from './helpers';
 
 const DEG = Math.PI / 180;
+/** The catalog's skiff's place among its boats: the kind with a gennaker. */
+const SKIFF = 3;
 /** How far apart the own boat's picture and a fleet boat's at one pose may be, 0 to 255 a channel. */
 const LIKE = 0.25;
 
@@ -23,6 +31,8 @@ interface Pose {
   wind?: number;
   /** A machine sailor's boat. */
   machine?: boolean;
+  /** The view, if not the chase camera's: near enough that the fleet draws its full model. */
+  view?: { azimuth: number; elevation: number; distance: number };
 }
 
 /** A whole pose: every field the poses set, at rest. */
@@ -74,50 +84,71 @@ const poses: Pose[] = [
  * place, the own boat hidden, and returns both pictures. The telltales and
  * pennant, which the fleet does not draw, are hidden on the own boat.
  */
-async function both(page: Page, pose: Pose) {
+async function both(page: Page, pose: Pose, kind = 0) {
   await page.evaluate((m) => globalThis.keel.machineAboard(m), pose.machine === true);
-  const sail = await page.evaluate((p) => {
-    const k = globalThis.keel;
-    k.setFleet(null);
-    k.showOwnBoat(true);
-    k.setWind(p.wind ?? 12, 0);
-    k.setState(p.state);
-    k.advance(1);
-    k.setState(p.state);
-    // Its sailor seated afresh at the pose, as the fleet's is when met.
-    k.settleSailor();
-    k.render();
-    k.camera('chase');
-    const o = k.boat().out;
-    const b = k.boat().state;
-    const flat = Math.max(0, Math.min(15, Math.round(o.flattening * 15)));
-    return {
-      sail: flat | (o.footFlow << 4) | (o.headFlow << 6),
-      east: b.x,
-      north: b.y,
-      heading: b.heading,
-      heel: b.heel,
-      boom: b.boom,
-      rudder: b.rudder,
-      sailor: b.sailor,
-      mode: b.sailorMode,
-      machine: p.machine === true ? 1 : 0,
-    };
-  }, pose);
+  const sail = await page.evaluate(
+    ({ kind, ...p }) => {
+      const k = globalThis.keel;
+      k.setFleet(null);
+      k.showOwnBoat(true);
+      k.setWind(p.wind ?? 12, 0);
+      k.setReef(Math.round(p.state.reef ?? 0));
+      k.setState(p.state);
+      k.advance(1);
+      k.setState(p.state);
+      // Its sailor seated afresh at the pose, as the fleet's is when met.
+      k.settleSailor();
+      k.render();
+      k.camera(p.view ?? 'chase');
+      const o = k.boat().out;
+      const b = k.boat().state;
+      const flat = Math.max(0, Math.min(15, Math.round(o.flattening * 15)));
+      return {
+        kind,
+        jib: b.jib,
+        kite: b.kite,
+        hoist: b.hoist,
+        reef: Math.round(b.reef),
+        // The yards by their nodes' turns (yardsTurn): π/2 less the angle,
+        // the port arm forward for a positive angle.
+        yardsTurn: b.yards === 0 ? 0 : -Math.sign(b.yards) * (Math.PI / 2 - Math.abs(b.yards)),
+        foreYardsTurn:
+          b.foreYards === 0 ? 0 : -Math.sign(b.foreYards) * (Math.PI / 2 - Math.abs(b.foreYards)),
+        sail: flat | (o.footFlow << 4) | (o.headFlow << 6),
+        east: b.x,
+        north: b.y,
+        heading: b.heading,
+        heel: b.heel,
+        // How it lies on the waves, as the own boat does: else the sea under
+        // it says, and a long hull lies otherwise.
+        heave: b.heave,
+        pitch: b.pitch,
+        boom: b.boom,
+        rudder: b.rudder,
+        sailor: b.sailor,
+        mode: b.sailorMode,
+        machine: p.machine === true ? 1 : 0,
+      };
+    },
+    { ...pose, kind },
+  );
   await page.evaluate(() => globalThis.keel.hideSmallParts(true));
   const own = await picture(page);
-  await page.evaluate(async (s) => {
-    const k = globalThis.keel;
-    k.showOwnBoat(false);
-    k.setFleet([s]);
-    // Its look loaded, if this is its first boat.
-    k.render();
-    await k.fleetLoaded();
-    // The camera where it was for the own boat's picture: it eases between
-    // frames drawn on real time.
-    k.camera('chase');
-    k.render();
-  }, sail);
+  await page.evaluate(
+    async ({ s, view }) => {
+      const k = globalThis.keel;
+      k.showOwnBoat(false);
+      k.setFleet([s]);
+      // Its look loaded, if this is its first boat.
+      k.render();
+      await k.fleetLoaded();
+      // The camera where it was for the own boat's picture: it eases between
+      // frames drawn on real time.
+      k.camera(view ?? 'chase');
+      k.render();
+    },
+    { s: sail, view: pose.view },
+  );
   const fleet = await picture(page);
   await page.evaluate(() => {
     const k = globalThis.keel;
@@ -172,28 +203,172 @@ test('64 boats keep to 22 draw calls and 200,000 triangles', async ({ page }) =>
   test.info().annotations.push({ type: 'measured', description: JSON.stringify(budget) });
 });
 
-test('every sailor, near and far, person or machine, in at most 6 draws', async ({ page }) => {
+test('a mixed 64, Jolly boats, keelboats, tall ships and skiffs, keep to 37 draw calls and 320,000 triangles', async ({
+  page,
+}) => {
   await openScene(page);
-  const r = await page.evaluate(async () => {
+  const budget = await page.evaluate(async () => {
     const k = globalThis.keel;
     const b = k.boat().state;
-    const fleet = async (machine: (i: number) => number) => {
+    const boats = [];
+    for (let i = 0; i < 64; i++) {
+      // The start line again: of every sixteen, three keelboats, a tall
+      // ship and four skiffs, the keelboats' jibs drawing and every other
+      // one reefed, the ships braced up, one with her topgallants in, every
+      // other skiff with her gennaker set and one with it half way up, every
+      // skiff's sailor out on the wire, the first of each near.
+      const ship = i % 16 === 3;
+      const keel = !ship && i % 4 === 3;
+      const skiff = i % 4 === 1;
+      const kind = ship ? 2 : keel ? 1 : skiff ? 3 : 0;
+      boats.push({
+        kind,
+        east: b.x - 70 + (i % 8) * 20,
+        north: b.y + 20 + Math.floor(i / 8) * 20,
+        heading: 1.5708,
+        boom: 0.6,
+        jib: kind > 0 ? 0.3 : 0,
+        kite: skiff ? 0.9 : 0,
+        hoist: skiff && i % 8 === 1 ? (i === 9 ? 0.5 : 1) : 0,
+        reef: (keel && i % 8 === 3) || (ship && i === 19) ? 1 : 0,
+        yardsTurn: ship ? -0.9 : 0,
+        foreYardsTurn: ship ? -0.9 : 0,
+        sailor: skiff ? -1.8 : 0,
+        sail: 15 | (1 << 4) | (1 << 6),
+      });
+    }
+    k.setFleet(boats);
+    k.render();
+    // The keelboats', the ships' and the skiffs' kinds load as their first boats come into view.
+    await k.fleetLoaded();
+    k.render();
+    const set = k.fleetBudget();
+    // Every gennaker in its bag: none drawn, near or far.
+    k.setFleet(boats.map((boat) => ({ ...boat, hoist: 0 })));
+    k.render();
+    return { ...set, bagged: k.fleetBudget().drawCalls };
+  });
+  test.info().annotations.push({ type: 'measured', description: JSON.stringify(budget) });
+  expect(budget.near + budget.far).toBe(64);
+  expect(budget.near).toBeLessThanOrEqual(12);
+  // Each kind's draws a level, a skiff's gennaker one more where one is
+  // set, and the skiffs' trapeze wires one.
+  expect(budget.drawCalls).toBeLessThanOrEqual(37);
+  expect(budget.triangles).toBeLessThanOrEqual(320_000);
+  expect(budget.bagged).toBe(budget.drawCalls - 2);
+});
+
+test('a keelboat, a tall ship and a skiff of the fleet look as the own ones do, the jib, the yards, the reefs and the gennaker', async ({
+  page,
+}) => {
+  await openScene(page, 'boat=keelboat');
+  const diffs: Record<string, number> = {};
+  for (const pose of [
+    {
+      name: 'a keelboat close-hauled',
+      state: { ...rest, heading: 1.5708, heel: 15 * DEG, boom: 0.15, jib: 0.2, sailor: -0.9 },
+    },
+    {
+      name: 'a keelboat reefed, reaching',
+      state: { ...rest, heading: 1.5708, heel: 10 * DEG, boom: 0.7, jib: 0.35, reef: 1 },
+    },
+  ]) {
+    const { own, fleet } = await both(page, pose, 1);
+    diffs[pose.name] = pictureDifference(own, fleet);
+  }
+  // The same page, its own boat a tall ship: the wind on her port beam, her
+  // yards braced up and drawing; then running square before it, her
+  // topgallants furled. Seen from her quarter, near enough that the fleet
+  // draws her full model, as the chase camera's distance would not.
+  await page.evaluate(async () => {
+    const k = globalThis.keel;
+    await k.useBoat(2);
+    // Her foam and wake are the sea's, drawn by each boat's speed and its
+    // history, the own boat's and the fleet's apart: the hull's the same.
+    k.setParts({ foam: false, wakes: false });
+  });
+  const near = { azimuth: 0.5, elevation: 0.25, distance: 6 };
+  for (const pose of [
+    {
+      name: 'a tall ship braced up',
+      state: { ...rest, heading: 1.5708, heel: 4 * DEG, boom: 0.4, yards: 0.6, foreYards: 0.6 },
+      view: near,
+    },
+    {
+      name: 'a tall ship running, her topgallants in',
+      state: { ...rest, heading: Math.PI, boom: 1.0, yards: 1.5, foreYards: 1.5, reef: 1 },
+      view: near,
+    },
+  ]) {
+    const { own, fleet } = await both(page, pose, 2);
+    diffs[pose.name] = pictureDifference(own, fleet);
+  }
+  // A skiff, the wind from the north: on a broad reach with her gennaker
+  // set, half way up and in its bag; close-hauled, her sailor out on the
+  // trapeze past her rack, drawn hiked at its edge. Seen from her lee bow,
+  // near enough that the fleet draws her full model.
+  await page.evaluate(async (kind) => {
+    await globalThis.keel.useBoat(kind);
+  }, SKIFF);
+  const reach = { ...rest, heading: 2.2, heel: 5 * DEG, boom: 0.9, jib: 0.3, sailor: -0.6 };
+  const lee = { azimuth: -2.2, elevation: 0.2, distance: 9 };
+  for (const pose of [
+    {
+      name: 'a skiff with her gennaker set',
+      state: { ...reach, kite: 0.9, hoist: 1, hoistTarget: 1 },
+      view: lee,
+    },
+    {
+      name: 'a skiff setting her gennaker',
+      state: { ...reach, kite: 0.9, hoist: 0.5, hoistTarget: 1 },
+      view: lee,
+    },
+    {
+      name: 'a skiff with her gennaker in',
+      state: { ...reach, kite: 0.9, hoist: 0, hoistTarget: 0, reef: 1 },
+      view: lee,
+    },
+    {
+      name: 'a skiff close-hauled, her sailor out',
+      state: { ...rest, heading: 0.8, heel: 8 * DEG, boom: 0.12, jib: 0.15, sailor: -1.7 },
+      view: { azimuth: 0.6, elevation: 0.2, distance: 8 },
+    },
+  ]) {
+    const { own, fleet } = await both(page, pose, SKIFF);
+    diffs[pose.name] = pictureDifference(own, fleet);
+  }
+  test.info().annotations.push({ type: 'measured', description: JSON.stringify(diffs) });
+  for (const [name, d] of Object.entries(diffs)) {
+    expect(d, name).toBeLessThan(LIKE);
+  }
+});
+
+test('every sailor, near and far, person or machine, in at most 6 draws', async ({ page }) => {
+  await openScene(page);
+  const r = await page.evaluate(async (SKIFF) => {
+    const k = globalThis.keel;
+    const b = k.boat().state;
+    const fleet = async (machine: (i: number) => number, kind = 0, sailor = -0.6) => {
       const boats = [];
       for (let i = 0; i < 64; i++) {
         // A start line, the nearest rows within the near models' range.
         boats.push({
+          kind,
           east: b.x - 35 + (i % 8) * 10,
           north: b.y + 12 + Math.floor(i / 8) * 14,
           heading: 1.5708,
           boom: 0.6,
-          sailor: -0.6,
+          sailor,
           sail: 15 | (1 << 4) | (1 << 6),
           machine: machine(i),
         });
       }
       k.setFleet(boats);
       k.render();
-      // Each look loaded as its first boat comes into view.
+      // Each look loaded as its first boat comes into view; its clips on
+      // the wire once its kind's first boat with a trapeze is drawn.
+      await k.fleetLoaded();
+      k.render();
       await k.fleetLoaded();
       k.render();
       return k.fleetBudget();
@@ -202,13 +377,17 @@ test('every sailor, near and far, person or machine, in at most 6 draws', async 
       none: await fleet(() => 0),
       half: await fleet((i) => i % 2),
       all: await fleet(() => 1),
+      // Skiffs, their sailors out on the wire: the far ones' figures on the
+      // wire in the same draw as the seated ones.
+      wire: await fleet((i) => i % 2, SKIFF, -1.8),
     };
-  });
+  }, SKIFF);
   test.info().annotations.push({ type: 'measured', description: JSON.stringify(r) });
   expect([r.none.people, r.none.machines]).toEqual([64, 0]);
   expect([r.half.people, r.half.machines]).toEqual([32, 32]);
   expect([r.all.people, r.all.machines]).toEqual([0, 64]);
-  for (const f of [r.none, r.half, r.all]) {
+  expect([r.wire.people, r.wire.machines]).toEqual([32, 32]);
+  for (const f of [r.none, r.half, r.all, r.wire]) {
     // The near ones skinned in one draw, the far ones rigid in another,
     // whatever their looks.
     expect(f.near).toBe(12);

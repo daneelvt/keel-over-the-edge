@@ -293,7 +293,9 @@ func (b *Book) Machines() MachineChoices {
 	return MachineChoices{Versions: versions, Finishes: opts(b.machine.Finishes), Colours: opts(b.opts.Colours)}
 }
 
-// Begin is POST /account/begin's body for a new sailor of a name and look.
-func Begin(name string, l store.Look) map[string]string {
-	return map[string]string{"name": name, "look": l.Look, "version": l.Version, "skin": l.Skin, "hair": l.Hair, "colour": l.Colour}
+// Begin is POST /account/begin's body for a new sailor of a name and look,
+// whose player was born in January 1990.
+func Begin(name string, l store.Look) map[string]any {
+	return map[string]any{"name": name, "look": l.Look, "version": l.Version, "skin": l.Skin, "hair": l.Hair, "colour": l.Colour,
+		"born": map[string]int{"year": 1990, "month": 1}}
 }

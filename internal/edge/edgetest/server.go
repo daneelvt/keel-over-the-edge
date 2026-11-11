@@ -19,10 +19,12 @@ import (
 	"testing"
 	"time"
 
+	"github.com/daneelvt/keel-over-the-edge/internal/aboard"
 	"github.com/daneelvt/keel-over-the-edge/internal/api"
 	"github.com/daneelvt/keel-over-the-edge/internal/auth"
 	"github.com/daneelvt/keel-over-the-edge/internal/bus"
 	"github.com/daneelvt/keel-over-the-edge/internal/catalog"
+	"github.com/daneelvt/keel-over-the-edge/internal/chat"
 	"github.com/daneelvt/keel-over-the-edge/internal/edge"
 	"github.com/daneelvt/keel-over-the-edge/internal/looks"
 	"github.com/daneelvt/keel-over-the-edge/internal/moderation"
@@ -56,6 +58,9 @@ type Config struct {
 	Encoders int // the edge's encoders; GOMAXPROCS if 0
 	Limits   edge.Limits
 	Ends     time.Time // the world's end, as Welcome tells it
+	// BoatOf, if not nil, is the boat a sailor takes to sea, as the edge's
+	// Config has it.
+	BoatOf func(context.Context, store.Account) edge.Boat
 	// Kinds are the world's boats, prepared, and Waves the sea they were
 	// prepared for; the catalog's if Kinds is nil.
 	Kinds []physics.Prepared
@@ -99,6 +104,24 @@ type Config struct {
 	// Agent is the edge's: a machine sailor's agent's last call, and
 	// whether a wait of its is under way.
 	Agent func(bus.Account) (time.Time, bool)
+	// Switches, Refuser and CrewLimit are the edge's: the owner's for
+	// links and boarding, who keeps whom off their boat, and how many may
+	// be aboard boats not their own.
+	Switches  *aboard.Switches
+	Refuser   aboard.Refuser
+	CrewLimit int
+	// Chat and Talker are the edge's chat aboard, its hub on the world's
+	// frames made by NewChat if not nil; Machines its machine sailors'
+	// helms.
+	Chat     func(*bus.Frames) *chat.Hub
+	Talker   func(ctx context.Context, a bus.Account) (aboard.Speaker, string, error)
+	Machines edge.Machines
+	// Tie and Report are the edge's: a mute or a block kept, a report
+	// kept. Log, if not nil, is the edge's log, which is otherwise
+	// discarded.
+	Tie    func(ctx context.Context, account, other bus.Account, block, on bool) error
+	Report func(ctx context.Context, r edge.ReportIn) error
+	Log    *slog.Logger
 }
 
 // Server is the game's server in a test.
@@ -114,7 +137,12 @@ type Server struct {
 	Weather  *weather.Timeline
 	// Encounters are how the world's boats meet.
 	Encounters *physics.EncounterPrepared
+	// Capacities are each kind's people aboard, the catalog's.
+	Capacities []int
+	// Chat is the world's chat aboard, if the config asked for one.
+	Chat *chat.Hub
 
+	links    sync.Map // a link's token's hash: its edge.LinkFound
 	cfg      Config
 	sessions *auth.Cache
 	handler  atomic.Pointer[http.Handler] // the game's routes, replaced by a restart
@@ -184,7 +212,8 @@ func NewServer(t testing.TB, cfg Config) *Server {
 		cfg.Edge = &CatalogEdge
 	}
 	m := obs.NewMetrics("test", catalog.Version)
-	s := &Server{Metrics: m, Sessions: NewSessions(), Kinds: cfg.Kinds, Waves: cfg.Waves, Weather: cfg.Weather, Encounters: cfg.Encounters, cfg: cfg}
+	s := &Server{Metrics: m, Sessions: NewSessions(), Kinds: cfg.Kinds, Waves: cfg.Waves, Weather: cfg.Weather, Encounters: cfg.Encounters, cfg: cfg,
+		Capacities: cat.Capacities()}
 	s.sessions = auth.NewCache(s.Sessions, auth.CacheConfig{Log: slog.New(slog.DiscardHandler)})
 	s.start(t, s.newWorld(t))
 	s.HTTP = httptest.NewTestServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -198,11 +227,67 @@ func (s *Server) newWorld(t testing.TB) *sim.World {
 	t.Helper()
 	cfg := s.cfg
 	w, err := sim.New(sim.Config{Capacity: cfg.Capacity, Kinds: cfg.Kinds, StartSheets: cfg.StartSheets, Waves: cfg.Waves, Encounters: cfg.Encounters, Workers: 1,
-		Tick: loop.TickAt(time.Now(), Epoch), Grace: cfg.Grace, Limit: cfg.Limit, Weather: cfg.Weather, Terrain: cfg.Terrain, Edge: cfg.Edge})
+		Tick: loop.TickAt(time.Now(), Epoch), Grace: cfg.Grace, Limit: cfg.Limit, Weather: cfg.Weather, Terrain: cfg.Terrain, Edge: cfg.Edge, Capacities: s.Capacities})
 	if err != nil {
 		t.Fatal(err)
 	}
 	return w
+}
+
+// Link makes a link to come aboard skipper's boat, made now and lasting
+// a day, and returns its token.
+func (s *Server) Link(skipper store.AccountID, name string) string {
+	token, hash := aboard.NewToken()
+	s.links.Store(hash, edge.LinkFound{Skipper: bus.Account(skipper), Name: name, Made: time.Now(), Expires: time.Now().Add(24 * time.Hour)})
+	return token
+}
+
+// MachineLink makes a link to come aboard a machine sailor's boat, its
+// owner's, made now and lasting a day, and returns its token.
+func (s *Server) MachineLink(skipper, owner store.AccountID, name string) string {
+	token, hash := aboard.NewToken()
+	s.links.Store(hash, edge.LinkFound{Skipper: bus.Account(skipper), Machine: true, Owner: bus.Account(owner), Name: name,
+		Made: time.Now(), Expires: time.Now().Add(24 * time.Hour)})
+	return token
+}
+
+// EndLink ends a link made by Link.
+func (s *Server) EndLink(token string) {
+	hash, _ := aboard.TokenHash(token)
+	if v, ok := s.links.Load(hash); ok {
+		l := v.(edge.LinkFound)
+		l.Ended = true
+		s.links.Store(hash, l)
+	}
+}
+
+func (s *Server) link(_ context.Context, hash [32]byte) (edge.LinkFound, error) {
+	v, ok := s.links.Load(hash)
+	if !ok {
+		return edge.LinkFound{}, store.ErrNotFound
+	}
+	return v.(edge.LinkFound), nil
+}
+
+// knocker is a sailor as a knock finds them: every sailor of the test's
+// sessions answered the age question as an adult and accepted the Rules,
+// unless their account says otherwise (Born -1: not answered).
+func (s *Server) knocker(_ context.Context, a bus.Account) (edge.Knocker, error) {
+	acc, err := s.Sessions.Accounts(context.Background(), []store.AccountID{store.AccountID(a)})
+	if err != nil {
+		return edge.Knocker{}, err
+	}
+	x, ok := acc[store.AccountID(a)]
+	if !ok {
+		return edge.Knocker{}, store.ErrNotFound
+	}
+	k := edge.Knocker{Name: x.Name, Look: lookCode(x), Born: 197001, Rules: true}
+	if x.Born < 0 {
+		k.Born, k.Rules = 0, false
+	} else if x.Born > 0 {
+		k.Born, k.Rules = x.Born, x.Rules
+	}
+	return k, nil
 }
 
 // start runs w: its loop, an edge, and the game's routes.
@@ -210,8 +295,14 @@ func (s *Server) start(t testing.TB, w *sim.World) {
 	t.Helper()
 	cfg, m := s.cfg, s.Metrics
 	log := slog.New(slog.DiscardHandler)
+	if cfg.Log != nil {
+		log = cfg.Log
+	}
 	s.World = w
 	s.Loop = loop.New(loop.Config{World: w, Epoch: Epoch, Log: log, Metrics: m})
+	if cfg.Chat != nil {
+		s.Chat = cfg.Chat(w.Bus().Frames)
+	}
 	s.Edge = edge.New(edge.Config{
 		LookCode: lookCode,
 		Bus:      w.Bus(), World: WorldID, Epoch: Epoch, Ends: cfg.Ends, Clock: s.Loop,
@@ -221,7 +312,9 @@ func (s *Server) start(t testing.TB, w *sim.World) {
 		Lip: cfg.Weather.Prepared().Edge(), RoamChunks: cfg.RoamChunks, Forecast: cfg.Forecast,
 		Stopped: cfg.Stopped, Seen: cfg.Seen, LongAfter: cfg.LongAfter,
 		Watch: s.Sessions.Target, SpectatorLimit: cfg.SpectatorLimit,
-		Agent: cfg.Agent,
+		Agent: cfg.Agent, BoatOf: cfg.BoatOf,
+		Link: s.link, Knocker: s.knocker, Switches: cfg.Switches, Refuser: cfg.Refuser, Capacities: s.Capacities, CrewLimit: cfg.CrewLimit,
+		Chat: s.Chat, Talker: cfg.Talker, Machines: cfg.Machines, Tie: cfg.Tie, Report: cfg.Report,
 	})
 	var recorders []sim.Recorder
 	if cfg.Record != nil {
@@ -468,17 +561,30 @@ func (s *Server) Machines(t testing.TB, n int, at func(i int) physics.State) []u
 // is; and returns its account and its boat's ID.
 func (s *Server) Machine(t testing.TB, name string, owner store.AccountID, st physics.State) (store.AccountID, uint64) {
 	t.Helper()
+	return s.MachineKind(t, name, owner, 0, st)
+}
+
+// MachineKind is Machine with a boat of the kind given.
+func (s *Server) MachineKind(t testing.TB, name string, owner store.AccountID, kind uint16, st physics.State) (store.AccountID, uint64) {
+	t.Helper()
 	id := s.Sessions.addMachine(name, owner)
-	return id, s.Launch(t, id, true, st)
+	return id, s.LaunchKind(t, id, true, kind, st)
 }
 
 // Launch puts an account's boat in the world at st with no connection, a
 // machine sailor's or not, and returns its ID.
 func (s *Server) Launch(t testing.TB, id store.AccountID, machine bool, st physics.State) uint64 {
 	t.Helper()
+	return s.LaunchKind(t, id, machine, 0, st)
+}
+
+// LaunchKind is Launch with a boat of the kind given, by its place in the
+// catalog.
+func (s *Server) LaunchKind(t testing.TB, id store.AccountID, machine bool, kind uint16, st physics.State) uint64 {
+	t.Helper()
 	dev := s.World.Bus().Commands.Developer()
 	reply := make(chan bus.Reply, 1)
-	for dev.TrySend(bus.Command{Op: bus.Join, Account: bus.Account(id), Machine: machine, Reply: reply}) != nil {
+	for dev.TrySend(bus.Command{Op: bus.Join, Account: bus.Account(id), Machine: machine, BoatKind: kind, Reply: reply}) != nil {
 		time.Sleep(time.Second / 30)
 	}
 	r := <-reply

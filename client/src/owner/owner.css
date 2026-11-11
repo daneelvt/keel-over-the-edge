@@ -660,3 +660,78 @@ dd.card-look {
   align-items: center;
   gap: 10px;
 }
+
+/* The Reports tab: the queue beside the report open, a child's safety
+   marked plainly; what players wrote kept as written, wrapped. */
+table.reports tbody tr {
+  cursor: pointer;
+}
+
+table.reports tr.urgent {
+  background: rgb(213 94 0 / 22%);
+}
+
+table.reports tr.chosen {
+  background: rgb(232 180 80 / 25%);
+}
+
+.urgent-mark {
+  color: #ff9e7a;
+  font-weight: 500;
+}
+
+.said {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+table.lines td {
+  vertical-align: top;
+}
+
+table.lines tr.reported {
+  background: rgb(213 94 0 / 22%);
+}
+
+.sail-with input[type="text"] {
+  width: 16em;
+  margin: 2px 4px 2px 0;
+  padding: 4px 8px;
+  border: 0;
+  border-radius: 6px;
+  background: rgb(255 255 255 / 12%);
+  color: var(--ink);
+  font: inherit;
+}
+
+/* Chat's switches for everyone, one row each: its name, its state, its key. */
+.chat-switches {
+  display: grid;
+  grid-template-columns: minmax(0, max-content) 3em max-content;
+  justify-content: start;
+  align-items: center;
+  gap: 4px 12px;
+  margin: 8px 0;
+}
+
+.chat-switches h3 {
+  grid-column: 1 / -1;
+  margin: 0;
+}
+
+.switch-row {
+  display: contents;
+}
+
+.switch-state {
+  font-weight: bold;
+  min-width: 3em;
+}
+
+.switch-state.wide {
+  grid-column: 2 / -1;
+}
+
+.switch-state.off {
+  color: rgb(213 94 0);
+}

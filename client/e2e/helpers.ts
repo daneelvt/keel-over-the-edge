@@ -220,6 +220,15 @@ export function aLook(): {
   };
 }
 
+/** When a sailor's player was born, as the start screen sends it. */
+export const BORN = { year: 2001, month: 4 };
+
+/** Answers the start screen's "When were you born?", as a player would. */
+export async function answerBorn(page: Page, month = 'April', year = '2001'): Promise<void> {
+  await page.getByRole('combobox', { name: 'Month' }).selectOption({ label: month });
+  await page.getByRole('combobox', { name: 'Year' }).selectOption(year);
+}
+
 /**
  * Makes a sailor in the context, as the start screen does, through the
  * server's routes, with a passkey of the test's own: its session's cookie
@@ -228,7 +237,7 @@ export function aLook(): {
 export async function sailor(context: BrowserContext, word = 'Sailor'): Promise<Made> {
   const name = `${word} ${stamp()}`;
   const begun = await context.request.post('/account/begin', {
-    data: { name, ...aLook() },
+    data: { name, ...aLook(), born: BORN },
   });
   expect(begun.status(), await begun.text()).toBe(200);
   const { passkey, answer } = createPasskey(await begun.json(), new URL(begun.url()).origin);
@@ -236,6 +245,16 @@ export async function sailor(context: BrowserContext, word = 'Sailor'): Promise<
   expect(done.status(), await done.text()).toBe(201);
   const body = (await done.json()) as { name: string; recoveryCode: string };
   return { name: body.name, passkey, recoveryCode: body.recoveryCode };
+}
+
+/** The codes of the context's sailor's links to watch, as GET /api/me tells them: its own, and its fleet's. */
+export async function linkCodes(
+  context: BrowserContext,
+): Promise<{ watch: string; fleet: string }> {
+  const res = await context.request.get('/api/me');
+  expect(res.status(), await res.text()).toBe(200);
+  const me = (await res.json()) as { watchCode?: string; fleetCode?: string };
+  return { watch: me.watchCode ?? '', fleet: me.fleetCode ?? '' };
 }
 
 /**

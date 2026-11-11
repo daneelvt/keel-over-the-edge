@@ -42,6 +42,7 @@ jobs:
               - 'internal/sim/**'
               - 'internal/bus/**'
               - 'internal/worldgen/**'
+              - 'internal/life/**'
               - 'tools/internal/**'
               - 'tools/physics/**'
               - 'tools/polar/**'

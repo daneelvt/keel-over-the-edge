@@ -18,14 +18,24 @@ var validBoats = `boats:
     name: Test boat
     description: A boat for tests
     capacity: 2
+    stations:
+      - { at: [0.55, 0.3, 0.4], pose: seated, facing: 270 }
+      - { at: [-0.3, 0.3, -0.5], pose: standing, facing: 0 }
     lengthOverall: 3.5
     beam: 1.2
     lights: [tricolour]
     lookout: 2
+    perch: [0, 0.4, -1.9]
+    deck: [0.3, 0.1, -0.3]
     startSheet: [[110, 0.25]]
+    controls:
+      sheet: { name: Sheet, trim: Trim, ease: Ease }
+      reef: [Full sail, One reef, Two reefs]
+    fleet: sailor
     art:
       model: boats/test-boat/model.glb
       far: boats/test-boat/far.glb
+      budget: { near: 15000, far: 1000 }
 ` + realPhysics()
 
 const (
@@ -35,16 +45,19 @@ const (
 
 // The sailors every fixture has unless it gives its own, and their art.
 const (
-	validSailors  = "sailors:\n  - id: test-sailor\n    name: Test sailor\n    habit: tests\n    hair: colours\n    versions:\n      - id: test-version\n        name: version\n        art:\n          model: sailors/test.deck.glb\n          far: sailors/test.far.glb\n          close: sailors/test.glb\n          clips: sailors/test.clips.glb\n          portrait: sailors/test.portrait.avif\n          portraitFallback: sailors/test.portrait.webp\n          portraitMask: sailors/test.portrait-mask.webp\n          ink: sailors/test.ink.webp\n" + validOptions + validMachine
-	validOptions  = "sailorOptions:\n  skins:\n    - {id: test-skin, name: skin, colour: \"#cda385\"}\n  hairs:\n    - {id: test-hair, name: hair, colour: \"#654a37\"}\n  greys:\n    - {id: test-grey, name: grey, colour: \"#817b76\"}\n  colours:\n    - {id: test-colour, name: colour, colour: \"#9b2226\"}\n"
-	validMachine  = "machine:\n  habit: tests\n  lamp: \"#ffb347\"\n  versions:\n    - id: test-machine\n      name: version\n      art:\n        model: sailors/m.deck.glb\n        far: sailors/m.far.glb\n        close: sailors/m.glb\n        clips: sailors/m.clips.glb\n        portrait: sailors/m.portrait.avif\n        portraitFallback: sailors/m.portrait.webp\n        portraitMask: sailors/m.portrait-mask.webp\n        ink: sailors/m.ink.webp\n  finishes:\n    - {id: test-finish, name: finish, colour: \"#808080\"}\n"
-	sailorsPath   = "shared/catalog/sailors.yaml"
-	weatherPath   = "shared/catalog/weather.yaml"
-	skyPath       = "shared/catalog/sky.yaml"
-	boatsPath     = "shared/catalog/boats.yaml"
-	encounterPath = "shared/catalog/encounters.yaml"
-	worldPath     = "shared/catalog/world.yaml"
-	noticesPath   = "shared/catalog/notices.yaml"
+	validSailors   = "sailors:\n  - id: test-sailor\n    name: Test sailor\n    habit: tests\n    hair: colours\n    versions:\n      - id: test-version\n        name: version\n        art:\n          model: sailors/test.deck.glb\n          far: sailors/test.far.glb\n          close: sailors/test.glb\n          clips: sailors/test.clips.glb\n          portrait: sailors/test.portrait.avif\n          portraitFallback: sailors/test.portrait.webp\n          portraitMask: sailors/test.portrait-mask.webp\n          ink: sailors/test.ink.webp\n" + validOptions + validMachine
+	validBoatLooks = "boatLooks:\n  paints:\n    - {id: test-paint, name: paint, colour: \"#e9e2d0\"}\n  cloths:\n    - {id: test-cloth, name: cloth, colour: \"#efe7d2\", ink: \"#2b2622\"}\n  lettering: \"#c9a447\"\n  numbers: 9999\n"
+	validOptions   = "sailorOptions:\n  skins:\n    - {id: test-skin, name: skin, colour: \"#cda385\"}\n  hairs:\n    - {id: test-hair, name: hair, colour: \"#654a37\"}\n  greys:\n    - {id: test-grey, name: grey, colour: \"#817b76\"}\n  colours:\n    - {id: test-colour, name: colour, colour: \"#9b2226\"}\n"
+	validMachine   = "machine:\n  habit: tests\n  lamp: \"#ffb347\"\n  versions:\n    - id: test-machine\n      name: version\n      art:\n        model: sailors/m.deck.glb\n        far: sailors/m.far.glb\n        close: sailors/m.glb\n        clips: sailors/m.clips.glb\n        portrait: sailors/m.portrait.avif\n        portraitFallback: sailors/m.portrait.webp\n        portraitMask: sailors/m.portrait-mask.webp\n        ink: sailors/m.ink.webp\n  finishes:\n    - {id: test-finish, name: finish, colour: \"#808080\"}\n"
+	sailorsPath    = "shared/catalog/sailors.yaml"
+	weatherPath    = "shared/catalog/weather.yaml"
+	skyPath        = "shared/catalog/sky.yaml"
+	boatsPath      = "shared/catalog/boats.yaml"
+	boatLooksPath  = "shared/catalog/boatlooks.yaml"
+	encounterPath  = "shared/catalog/encounters.yaml"
+	worldPath      = "shared/catalog/world.yaml"
+	noticesPath    = "shared/catalog/notices.yaml"
+	lifePath       = "shared/catalog/life.yaml"
 )
 
 // glb is a glTF binary holding only its JSON: nodes of the given names.
@@ -160,6 +173,9 @@ func fixture(t *testing.T, files map[string]string) string {
 			}
 		}
 	}
+	if _, ok := files[boatLooksPath]; !ok {
+		files[boatLooksPath] = validBoatLooks
+	}
 	if _, ok := files[weatherPath]; !ok {
 		files[weatherPath] = realWeather()
 	}
@@ -175,14 +191,20 @@ func fixture(t *testing.T, files map[string]string) string {
 	if _, ok := files[worldPath]; !ok {
 		files[worldPath] = realFile(worldPath)
 	}
-	// The real world's town kits and plants.
+	if _, ok := files[lifePath]; !ok {
+		files[lifePath] = realFile(lifePath)
+	}
+	// The real world's town kits.
 	for _, kit := range []string{"wooded", "tropical", "rocky", "sandy", "volcanic"} {
 		if p := "art/town/" + kit + ".glb"; files[p] == "" {
 			files[p] = "glTF"
 		}
 	}
-	if p := "art/flora/plants.glb"; files[p] == "" {
-		files[p] = "glTF"
+	// The real plants and the life's bodies.
+	for _, p := range []string{"art/flora/plants.glb", "art/life/swimmers.glb"} {
+		if files[p] == "" {
+			files[p] = "glTF"
+		}
 	}
 	for p, content := range files {
 		full := filepath.Join(root, filepath.FromSlash(p))
@@ -334,8 +356,8 @@ func TestRejects(t *testing.T) {
 			want:  "/boats/0/physics/autopilot/damping",
 		},
 		{
-			name:  "an autopilot let by the lee as far as the boom gybes",
-			files: map[string]string{"shared/catalog/boats.yaml": strings.Replace(validBoats, "        byTheLee: ", "        byTheLee: 17 #", 1)},
+			name:  "an autopilot let by the lee past a beam reach",
+			files: map[string]string{"shared/catalog/boats.yaml": strings.Replace(validBoats, "        byTheLee: ", "        byTheLee: 61 #", 1)},
 			want:  "/boats/0/physics/autopilot/byTheLee",
 		},
 		{
@@ -430,7 +452,7 @@ func TestRejects(t *testing.T) {
 		{
 			name: "no art",
 			files: map[string]string{"shared/catalog/boats.yaml": strings.Replace(validBoats,
-				"    art:\n      model: boats/test-boat/model.glb\n      far: boats/test-boat/far.glb\n", "", 1)},
+				"    art:\n      model: boats/test-boat/model.glb\n      far: boats/test-boat/far.glb\n      budget: { near: 15000, far: 1000 }\n", "", 1)},
 			want: "/boats/0: &{[art]}",
 		},
 		{
@@ -440,6 +462,47 @@ func TestRejects(t *testing.T) {
 				sailorsPath:                 "sailors: []\n" + validOptions + validMachine,
 			},
 			want: "/sailors: ",
+		},
+		{
+			name: "a station short",
+			files: map[string]string{"shared/catalog/boats.yaml": strings.Replace(validBoats,
+				"      - { at: [-0.3, 0.3, -0.5], pose: standing, facing: 0 }\n", "", 1)},
+			want: "boats[0].stations: 1, not one for each of the 2 it carries",
+		},
+		{
+			name: "a station outside the hull",
+			files: map[string]string{"shared/catalog/boats.yaml": strings.Replace(validBoats,
+				"at: [-0.3, 0.3, -0.5]", "at: [-0.7, 0.3, -0.5]", 1)},
+			want: "boats[0].stations[1]: (-0.7, -0.5) is outside the hull",
+		},
+		{
+			name: "a station under the water",
+			files: map[string]string{"shared/catalog/boats.yaml": strings.Replace(validBoats,
+				"at: [-0.3, 0.3, -0.5]", "at: [-0.3, -0.1, -0.5]", 1)},
+			want: "boats[0].stations[1]: -0.1 m up is not on a deck",
+		},
+		{
+			name: "two stations at one place",
+			files: map[string]string{"shared/catalog/boats.yaml": strings.Replace(validBoats,
+				"at: [-0.3, 0.3, -0.5]", "at: [0.3, 0.3, 0.3]", 1)},
+			want: "boats[0].stations[1]: within 0.45 m of stations[0]",
+		},
+		{
+			name: "a station on the rail away from the deck's edge",
+			files: map[string]string{"shared/catalog/boats.yaml": strings.Replace(validBoats,
+				"pose: standing", "pose: rail", 1)},
+			want: "boats[0].stations[1]: on the rail 0.3 m out, but the deck's edge is",
+		},
+		{
+			name: "a station to windward on another when the wind is on the other side",
+			files: map[string]string{"shared/catalog/boats.yaml": strings.Replace(validBoats,
+				"{ at: [-0.3, 0.3, -0.5], pose: standing, facing: 0 }", "{ at: [-0.55, 0.3, 0.1], pose: seated, facing: 90, windward: true }", 1)},
+			want: "boats[0].stations[1]: to windward on the other side, within 0.45 m of stations[0]",
+		},
+		{
+			name:  "a station's pose unknown",
+			files: map[string]string{"shared/catalog/boats.yaml": strings.Replace(validBoats, "pose: standing", "pose: kneeling", 1)},
+			want:  "/boats/0/stations/1/pose",
 		},
 		{
 			name: "id in code",
@@ -520,14 +583,19 @@ func TestCanonicalJSONIgnoresFileOrderAndLayout(t *testing.T) {
 	a := fixture(t, map[string]string{"shared/catalog/boats.yaml": validBoats})
 	reordered := `boats:
   - lengthOverall: 3.50
-    art: {model: boats/test-boat/model.glb, far: boats/test-boat/far.glb}
+    art: {model: boats/test-boat/model.glb, far: boats/test-boat/far.glb, budget: {far: 1000, near: 15000}}
+    fleet: sailor
+    controls: {reef: [Full sail, One reef, Two reefs], sheet: {trim: Trim, name: Sheet, ease: Ease}}
     beam: 1.20
     capacity: 2
+    stations: [{facing: 270, pose: seated, at: [0.55, 0.30, 0.4]}, {pose: standing, at: [-0.3, 0.3, -0.5], facing: 0}]
     description: A boat for tests
     name: Test boat
     lights:
       - tricolour
     lookout: 2.0
+    perch: [0, 0.4, -1.9]
+    deck: [0.3, 0.1, -0.3]
     startSheet: [[110, 0.25]]
     id: test-boat
 ` + realPhysics()
@@ -688,10 +756,10 @@ func TestEncounters(t *testing.T) {
 		{name: "not convex", boats: strings.Replace(boats, outline, "outline: [0.528, 0.592, 0.646, 0.682, 0.695, 0.685, 0.651, 0.40, 0.492, 0.342, 0]", 1), want: "not convex"},
 		{name: "a blunt stem", boats: strings.Replace(boats, outline, "outline: [0.528, 0.592, 0.646, 0.682, 0.695, 0.685, 0.651, 0.590, 0.492, 0.342, 0.1]", 1), want: "not convex"},
 		{name: "ten stations", boats: strings.Replace(boats, outline, "outline: [0.528, 0.592, 0.646, 0.682, 0.695, 0.685, 0.651, 0.590, 0.492, 0]", 1), want: "/boats/0/physics/hull/outline"},
-		{name: "wider than the beam", boats: strings.Replace(boats, "beam: 1.39", "beam: 1.2", 1), want: "wider than half the beam"},
+		{name: "wider than the beam", boats: strings.Replace(strings.Replace(boats, "beam: 1.39", "beam: 1.2", 1), "at: [0.69, 0.31, 0.35]", "at: [0.59, 0.31, 0.35]", 1), want: "wider than half the beam"},
 		{name: "longer than the boat", boats: strings.Replace(boats, "stem: 2.25", "stem: 2.5", 1), want: "not the length overall"},
 		{name: "close-hauled at 20°", boats: strings.Replace(boats, "closeHauled: 40", "closeHauled: 20", 1), want: "/boats/0/physics/rig/closeHauled"},
-		{name: "close-hauled at 61°", boats: strings.Replace(boats, "closeHauled: 40", "closeHauled: 61", 1), want: "/boats/0/physics/rig/closeHauled"},
+		{name: "close-hauled at 81°", boats: strings.Replace(boats, "closeHauled: 40", "closeHauled: 81", 1), want: "/boats/0/physics/rig/closeHauled"},
 		{name: "a restitution above 1", enc: strings.Replace(realEncounters(), "restitution: 0.3", "restitution: 1.2", 1), want: "/encounters/contact/restitution"},
 		{name: "a restitution below 0", enc: strings.Replace(realEncounters(), "restitution: 0.3", "restitution: -0.1", 1), want: "/encounters/contact/restitution"},
 		{name: "a taper past the reach", enc: strings.Replace(realEncounters(), "taper: 8", "taper: 12", 1), want: "taper"},
@@ -708,6 +776,12 @@ func TestEncounters(t *testing.T) {
 			// The real boat's art, so that only the encounters can fail.
 			files["art/boats/jolly-boat.glb"] = glb("hull", "tricolour")
 			files["art/boats/jolly-boat.far.glb"] = "glTF"
+			files["art/boats/keelboat.glb"] = glb("hull", "tricolour")
+			files["art/boats/keelboat.far.glb"] = "glTF"
+			files["art/boats/tall-ship.glb"] = glb("hull", "port", "starboard", "stern")
+			files["art/boats/tall-ship.far.glb"] = "glTF"
+			files["art/boats/skiff.glb"] = glb("hull", "tricolour")
+			files["art/boats/skiff.far.glb"] = "glTF"
 			root := fixture(t, files)
 			err := checkAll(root)
 			if err == nil {

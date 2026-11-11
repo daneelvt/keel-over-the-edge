@@ -56,7 +56,7 @@ func TestPosesRefused(t *testing.T) {
 	for name, c := range map[string]struct{ body, want string }{
 		"a field no pose has":         {good + "    colour: red\n", "not found"},
 		"a bone the skeleton has not": {strings.Replace(good, "thigh_l", "tail", 1), `no bone "tail"`},
-		"an axis":                     {strings.Replace(good, ", x,", ", w,", 1), "the axis is x, y or z"},
+		"an axis":                     {strings.Replace(good, ", x,", ", w,", 1), "the axis is x, y, z or lx"},
 		"too far a turn":              {strings.Replace(good, "-80", "-200", 1), "within ±180"},
 		"a place":                     {good + "    place: mast\n", "none of seat, gunwale, cockpit, outside"},
 		"IK on the head":              {strings.Replace(good, "hand_r:", "head:", 1), "only hand_l"},
@@ -74,6 +74,11 @@ func TestPosesRefused(t *testing.T) {
 		"an input not listed":         {good + "retarget:\n  r:\n    file: vendor/other.glb\n", "is not in SOURCES.md"},
 		"a hand locked":               {good + "retarget:\n  r:\n    file: vendor/clip.glb\n    lock: [hand_r]\n", "only feet"},
 		"a name twice":                {good + "clips:\n  sit:\n    keys:\n      - { pose: sit, hold: 1 }\n", "named twice"},
+		"a file of no group":          {good + "retarget:\n  r:\n    file: vendor/clip.glb\n    group: mast\n", "no file"},
+		"a speed off any deck":        {good + "retarget:\n  r:\n    file: vendor/clip.glb\n    speed: 0.5\n", "and it has none"},
+		"a head off any deck":         {good + "retarget:\n  r:\n    file: vendor/clip.glb\n    head: 0.7\n", "and it has none"},
+		"feet locked on a deck":       {good + "retarget:\n  r:\n    file: vendor/clip.glb\n    deck: true\n    lock: [foot_l]\n", "not locked"},
+		"a speed too fast":            {good + "retarget:\n  r:\n    file: vendor/clip.glb\n    deck: true\n    speed: 5\n", "not 0 to 2"},
 	} {
 		t.Run(name, func(t *testing.T) {
 			dir := t.TempDir()

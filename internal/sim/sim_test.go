@@ -177,7 +177,7 @@ func TestJoin(t *testing.T) {
 	if !sameState(f.State[0], stepped(t, start, bus.Centred(0), defaultEnv)) {
 		t.Fatalf("state after the join %+v", f.State[0])
 	}
-	if got, pilot := w.Bus().Controls.Load(0); got != bus.Centred(0) || pilot != bus.PilotOffWord(0) {
+	if got, pilot, rig := w.Bus().Controls.Load(0); got != bus.Centred(0) || pilot != bus.PilotOffWord(0) || rig != bus.FullSail(0) {
 		t.Fatalf("the control slot holds %#x", got)
 	}
 
@@ -258,7 +258,7 @@ func TestLeave(t *testing.T) {
 	word := bus.Pack(1, 0, 1024, 1)
 	controls.StoreHand(0, word)
 	w.Tick()
-	if f := w.Latest(); f.Control[0] != word || !slices.Equal(f.Changed, []bus.SlotWord{{Slot: 0, Word: word, Pilot: bus.HandPilot(word)}}) {
+	if f := w.Latest(); f.Control[0] != word || !slices.Equal(f.Changed, []bus.SlotWord{{Slot: 0, Word: word, Pilot: bus.HandPilot(word), Rig: bus.HandRig(word)}}) {
 		t.Fatalf("the new boat's word was not applied: %#x, %v", f.Control[0], f.Changed)
 	}
 	w.Tick()
@@ -675,7 +675,7 @@ func TestWordWaitsForItsTick(t *testing.T) {
 				w.Tick()
 				f := w.Latest()
 				if f.Control[0] == word {
-					if !slices.Equal(f.Changed, []bus.SlotWord{{Slot: 0, Word: word, Pilot: bus.HandPilot(word)}}) {
+					if !slices.Equal(f.Changed, []bus.SlotWord{{Slot: 0, Word: word, Pilot: bus.HandPilot(word), Rig: bus.HandRig(word)}}) {
 						t.Fatalf("changed %v", f.Changed)
 					}
 					return f.Tick
@@ -736,7 +736,7 @@ func TestRejoinDropsWaitingWord(t *testing.T) {
 	stale := bus.Pack(uint32(w.Now()+10), 0, 0, 0)
 	w.Bus().Controls.StoreHand(0, stale)
 	do(t, w, bus.Command{Op: bus.Join, Account: acct(1), Conn: 2})
-	if got, _ := w.Bus().Controls.Load(0); got != inForce {
+	if got, _, _ := w.Bus().Controls.Load(0); got != inForce {
 		t.Fatalf("the slot holds %#x after the rejoin, not the word in force %#x", got, inForce)
 	}
 	for range 20 {
@@ -857,21 +857,22 @@ func TestPilotPairs(t *testing.T) {
 	pilot := bus.PackPilot(at, bus.PilotWind, bus.WayHold, 0, 16384, 0)
 	// The pilot word of the tick before beside it, as a tick that reads
 	// between a writer's two stores finds them: the pair waits.
-	controls.Store(0, word, bus.PackPilot(at-1, bus.PilotWind, bus.WayHold, 0, 16384, 0))
+	rig := bus.PackRig(at, 0, 0)
+	controls.Store(0, word, bus.PackPilot(at-1, bus.PilotWind, bus.WayHold, 0, 16384, 0), rig)
 	w.Tick()
 	if f := w.Latest(); f.Control[0] == word || len(f.Changed) != 0 {
 		t.Fatalf("a pair of two ticks was taken: %#x, %v", f.Control[0], f.Changed)
 	}
 	// Of another generation: ignored.
-	controls.Store(0, word, bus.PackPilot(at, bus.PilotWind, bus.WayHold, 0, 16384, 1))
+	controls.Store(0, word, bus.PackPilot(at, bus.PilotWind, bus.WayHold, 0, 16384, 1), rig)
 	w.Tick()
 	if f := w.Latest(); f.Control[0] == word || len(f.Changed) != 0 {
 		t.Fatalf("a pilot word of another generation was taken: %v", f.Changed)
 	}
-	controls.Store(0, word, pilot)
+	controls.Store(0, word, pilot, rig)
 	w.Tick()
 	f := w.Latest()
-	if f.Control[0] != word || f.Pilot[0] != pilot || !slices.Equal(f.Changed, []bus.SlotWord{{Slot: 0, Word: word, Pilot: pilot}}) {
+	if f.Control[0] != word || f.Pilot[0] != pilot || !slices.Equal(f.Changed, []bus.SlotWord{{Slot: 0, Word: word, Pilot: pilot, Rig: rig}}) {
 		t.Fatalf("the pair was not taken: %#x %#x, %v", f.Control[0], f.Pilot[0], f.Changed)
 	}
 	// Its step sailed on the autopilot: it holds an angle, and the helm is
@@ -880,5 +881,32 @@ func TestPilotPairs(t *testing.T) {
 	c.Pilot, c.Target, c.Order, c.Way = f.Pilot[0].Control()
 	if !physics.PilotOn(&c) || c.Target != 16384 {
 		t.Fatalf("the pilot word in force reads as %+v", c)
+	}
+}
+
+// TestRigWords: a rig word is taken with the others of its tick, never
+// apart, and its reef reaches the step: the crew starts to reef.
+func TestRigWords(t *testing.T) {
+	w := newWorld(t, 4, 1)
+	do(t, w, bus.Command{Op: bus.Join, Account: acct(1), Conn: 1})
+	controls := w.Bus().Controls
+	at := uint32(w.Now() + 1)
+	word := bus.Pack(at, bus.Steps/2, 300, 0)
+	pilot := bus.HandPilot(word)
+	rig := bus.PackRig(at, 2, 0)
+	// A rig word of the tick before: the three wait.
+	controls.Store(0, word, pilot, bus.PackRig(at-1, 2, 0))
+	w.Tick()
+	if f := w.Latest(); f.Control[0] == word || f.Rig[0].Reef() != 0 || len(f.Changed) != 0 {
+		t.Fatalf("words of two ticks were taken: %#x %#x, %v", f.Control[0], f.Rig[0], f.Changed)
+	}
+	controls.Store(0, word, pilot, rig)
+	w.Tick()
+	f := w.Latest()
+	if f.Rig[0] != rig || !slices.Equal(f.Changed, []bus.SlotWord{{Slot: 0, Word: word, Pilot: pilot, Rig: rig}}) {
+		t.Fatalf("the rig word was not taken: %#x, %v", f.Rig[0], f.Changed)
+	}
+	if r := f.State[0].Reef; !(r > 0 && r < 1) {
+		t.Errorf("a tick after the reef was asked for the sail is at %v", r)
 	}
 }

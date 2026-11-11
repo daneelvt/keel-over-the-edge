@@ -658,7 +658,24 @@ func (b *Bundle) Terrain(ground *physics.GroundPrepared) *sim.Terrain {
 	if h, ok := b.Harbour(); ok {
 		t.Harbour = &h
 	}
+	t.Ports = b.Ports()
 	return t
+}
+
+// Ports are the harbours where a boat may be changed, as the simulation
+// tests them: Port Royal's and each port's, not a fishing village's.
+func (b *Bundle) Ports() []sim.Disc {
+	var out []sim.Disc
+	for i := range b.Towns {
+		t := &b.Towns[i]
+		if t.Kind != townMain && t.Kind != townPort {
+			continue
+		}
+		for _, d := range t.Harbour {
+			out = append(out, sim.Disc{X: d.X, Y: d.Y, R: d.R})
+		}
+	}
+	return out
 }
 
 // Harbour is the world's harbour, Port Royal's, as the wind is computed

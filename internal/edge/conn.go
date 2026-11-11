@@ -44,7 +44,24 @@ type conn struct {
 	rejoined bool
 	joinTick int64
 	joined   atomic.Bool // the simulation gave the connection a boat it sails
-	ready    atomic.Bool // the Welcome to its own boat is queued: inputs steer the boat from now on
+	// crew: the connection is aboard another sailor's boat, slot and boat
+	// that boat's; boarded, it has been let aboard one, so its end is told
+	// to the simulation by its account. The encoder alone reads the rest:
+	// holding, whether its inputs steer the boat as of its last frame;
+	// seat, its seat aboard; toldDeck, the boat and its deck's count as the
+	// client was last told its crew, and toldCrew whether it was told any.
+	crew     atomic.Bool
+	boarded  atomic.Bool
+	holding  bool
+	seat     uint8
+	toldDeck [2]uint64
+	toldCrew bool
+	// recrew: a mute or a block changed what the connection is to be told
+	// of those aboard.
+	recrew atomic.Bool
+	// chat is the connection's side of chat aboard.
+	chat  connChat
+	ready atomic.Bool // the Welcome to its own boat is queued: inputs steer the boat from now on
 	// queued: the connection waits in the simulation's queue for a boat.
 	// The encoder alone reads the rest.
 	queued                    atomic.Bool
@@ -84,6 +101,22 @@ type conn struct {
 	// of the boat its snapshots are about, as the client was last told.
 	look, toldLook uint32
 	toldLamp       pb.Lamp
+	// joinBoat is the fleet's boat the account takes to sea, as it joins:
+	// its kind, look and name. toldKind, toldBoatLook and toldBoatName
+	// are those of the boat its snapshots are about, as the client was
+	// last told; toldNames the names of the boats in its view, by view
+	// slot, as the client was last told them; toldCrews what was last
+	// looked at of the crews of the boats in its near band, by view slot,
+	// for the slots crewKnown marks, and crewed the slots whose crew the
+	// client holds: the encoder's.
+	joinBoat     Boat
+	toldKind     uint16
+	toldBoatLook uint32
+	toldBoatName string
+	toldNames    [protocol.ViewSlots]toldName
+	toldCrews    [protocol.ViewSlots]toldCrew
+	crewed       uint64
+	crewKnown    uint64
 
 	// The control slot's writer, stopped once another connection has
 	// taken the boat over: a word is stored only under wmu while not
@@ -97,7 +130,7 @@ type conn struct {
 	wmu      sync.Mutex
 	stopped  bool
 	steering bool
-	held     [heldWords]heldPair
+	held     [heldWords]heldInput
 	first    int // held's oldest
 	nheld    int
 	waiting  atomic.Int32 // nheld, for the encoder to skip connections with none
@@ -118,6 +151,9 @@ type conn struct {
 	handout connChunks // what of the land the client has been handed: the encoder's
 	// lightsSent is which lights the client has been sent: the encoder's.
 	lightsSent connLights
+	// lifeSent is which of the sea's life the client has been sent: the
+	// encoder's.
+	lifeSent connLife
 	// capsSent is which islands' caps the client has been sent: the
 	// encoder's.
 	capsSent connCaps
@@ -216,6 +252,7 @@ func (c *conn) run() {
 	if !hello.Stop() || !ok || !c.hello(data) || !c.claim() {
 		return
 	}
+	c.joinChat()
 	c.enc = e.encoderFor()
 	if c.helloWatch != "" {
 		c.watchCommand(c.helloWatch, time.Now())
@@ -361,7 +398,8 @@ func (c *conn) join() bool {
 		c.wmu.Unlock()
 		return false
 	}
-	err := e.cfg.Bus.Commands.Players().TrySend(bus.Command{Op: bus.Join, Account: c.account, Conn: c.id, Priority: c.priority, Look: c.look, Reply: reply})
+	err := e.cfg.Bus.Commands.Players().TrySend(bus.Command{Op: bus.Join, Account: c.account, Conn: c.id, Priority: c.priority, Look: c.look,
+		BoatKind: c.joinBoat.Kind, BoatLook: c.joinBoat.Look, BoatName: c.joinBoat.Name, Reply: reply})
 	c.wmu.Unlock()
 	if err != nil {
 		e.m.join[joinBusy].Inc()
@@ -384,6 +422,10 @@ func (c *conn) join() bool {
 	}
 	switch r.Result {
 	case bus.Joined, bus.Rejoined:
+	case bus.Crewed:
+		e.m.join[joinRejoined].Inc()
+		c.joinedAboard(r)
+		return true
 	case bus.Queued:
 		// The sea is full: the connection waits, and its encoder tells it
 		// its place, and welcomes it once the queue gives it a boat.
@@ -425,6 +467,8 @@ func (c *conn) lateJoin(reply <-chan bus.Reply) {
 			switch r.Result {
 			case bus.Joined, bus.Rejoined:
 				e.disconnect(bus.Command{Op: bus.Disconnect, Boat: r.Boat, Conn: c.id})
+			case bus.Crewed:
+				e.disconnect(bus.Command{Op: bus.Disconnect, Account: c.account, Conn: c.id})
 			case bus.Queued:
 				e.disconnect(bus.Command{Op: bus.Disconnect, Account: c.account, Conn: c.id})
 			}
@@ -464,6 +508,8 @@ func (c *conn) handle(data []byte) bool {
 		if b.Command.GetUnwatch() != nil {
 			c.unwatchCommand()
 		}
+		c.deckCommand(b.Command)
+		c.chatCommand(b.Command)
 	}
 	return true
 }
@@ -510,12 +556,14 @@ func (c *conn) input(in *pb.Input) {
 	if c.stopped || !c.steering {
 		return
 	}
-	w := heldPair{
+	w := heldInput{
 		word: bus.Pack(in.GetSeq(), uint16(min(in.GetHelm(), bus.Steps)), uint16(min(in.GetSheet(), bus.Steps)), c.gen),
 		// A target is taken modulo a whole turn, the order count modulo
 		// its range; a mode or way out of range is off or hold.
 		pilot: bus.PackPilot(in.GetSeq(), uint8(min(in.GetPilot(), 255)), uint8(min(in.GetWay(), 255)),
 			uint8(in.GetOrder()), uint16(in.GetTarget()), c.gen),
+		// A reef past the deepest is the deepest.
+		rig: bus.PackRig(in.GetSeq(), uint8(min(in.GetReef(), bus.MaxReef)), c.gen),
 	}
 	if c.nheld == heldWords {
 		c.first = (c.first + 1) % heldWords
@@ -526,13 +574,14 @@ func (c *conn) input(in *pb.Input) {
 	c.releaseLocked(latest + 1)
 }
 
-// heldPair is an input's two words, held for their tick.
-type heldPair struct {
+// heldInput is an input's three words, held for their tick.
+type heldInput struct {
 	word  bus.Word
 	pilot bus.PilotWord
+	rig   bus.RigWord
 }
 
-// release stores the newest held pair due by tick next, and forgets it and
+// release stores the newest held input due by tick next, and forgets it and
 // those before it.
 func (c *conn) release(next int64) {
 	c.wmu.Lock()
@@ -554,7 +603,7 @@ func (c *conn) releaseLocked(next int64) {
 	}
 	if due >= 0 {
 		p := c.held[(c.first+due)%heldWords]
-		c.e.cfg.Bus.Controls.Store(c.slot, p.word, p.pilot)
+		c.e.cfg.Bus.Controls.Store(c.slot, p.word, p.pilot, p.rig)
 		c.first = (c.first + due + 1) % heldWords
 		c.nheld -= due + 1
 	}
@@ -606,6 +655,12 @@ func (c *conn) send(m *pb.ServerMessage, kind int) bool {
 		c.close(websocket.StatusInternalError, "encoding")
 		return false
 	}
+	return c.sendEncoded(b, kind)
+}
+
+// sendEncoded queues a message already encoded, which neither the writer
+// nor anyone else changes after: it may go to many connections at once.
+func (c *conn) sendEncoded(b []byte, kind int) bool {
 	select {
 	case c.queue <- outgoing{b: b, kind: kind}:
 		return true
@@ -741,6 +796,8 @@ func (c *conn) finish() {
 	c.gone.Store(true)
 	e.registry.release(c)
 	e.spect.release(c)
+	e.knockerGone(c)
+	c.leaveChat()
 	if c.enc != nil {
 		c.ask(ask{kind: askGone})
 	}
@@ -756,6 +813,7 @@ func (c *conn) finish() {
 	case c.queued.Load():
 		e.disconnect(bus.Command{Op: bus.Disconnect, Account: c.account, Conn: c.id})
 	}
+	c.noMoreAboard()
 	if e.cfg.Seen != nil && c.session != ([32]byte{}) && time.Since(c.opened) >= e.cfg.LongAfter {
 		e.helpers.Go(func() { e.cfg.Seen(c.session) })
 	}

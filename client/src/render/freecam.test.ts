@@ -1,6 +1,12 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import { describe, expect, test } from 'vitest';
+import { catalog } from '../catalog';
+import { Solids } from '../land/solids';
+import { GROUND } from '../predict/layout.gen';
+import { cellHex, cellOf, chunkCorner, hexCentre } from '../workers/mesh/build';
+import type { ChunkGrids } from '../workers/mesh/chunk';
+import { CLEARANCE } from './camera';
 import {
   FLY_FAST,
   FLY_HIGH,
@@ -118,5 +124,93 @@ describe('the free camera', () => {
       [true, ROAM_EVERY_METRES + 1],
       [false, 0],
     ]);
+  });
+});
+
+/** Solids over the chunk at the world's centre: a 30.4 m column on the centre's hexagon, a roof from 10 m to 14 m 20 m north, a house 40 m north-east. */
+function solids(): Solids {
+  const n = 136;
+  const [c0, j0] = chunkCorner(n);
+  const [cc, cj] = cellOf(0, 0);
+  const [rc, rj] = cellOf(0, 20);
+  const e = new Int16Array(GROUND.chunkHexes);
+  for (let i = 0; i < e.length; i++) {
+    const c = c0 + Math.floor(i / GROUND.chunkRows);
+    const j = j0 + (i % GROUND.chunkRows);
+    e[i] = c === cc && j === cj ? 304 : -40;
+  }
+  const g: ChunkGrids = {
+    number: n,
+    elevation: e,
+    surface: new Uint8Array(GROUND.chunkHexes),
+    shelter: null,
+    town: {
+      buildings: [
+        {
+          kind: 0,
+          kit: 0,
+          east: 40,
+          north: 40,
+          heading: 0.4,
+          level: 1,
+          top: 8,
+          storeys: 2,
+          seed: 0,
+          wall: 0,
+          roof: 0,
+          shutter: 0,
+          flag: 0,
+          frontage: 8,
+          depth: 6,
+          town: 0,
+        },
+      ],
+      harbour: [],
+    },
+    features: { roofs: [{ column: rc, row: rj, under: 10, top: 14 }], parts: [] },
+  };
+  const s = new Solids(catalog.world.look.terrace);
+  s.add(n, g);
+  return s;
+}
+
+describe('the free camera among the solids', () => {
+  test('it keeps 2 m above a taller neighbour within the clearance, not one beyond it', () => {
+    const c = new FreeCamera();
+    c.solids = solids();
+    // The column's northern edge is 2 m north of its centre.
+    c.enter(0, 2 + CLEARANCE - 0.1, 10, 0, 0);
+    expect(c.height).toBeCloseTo(30.4 + ROAM_LOW, 9);
+    c.enter(0, 2 + CLEARANCE + 0.1, 10, 0, 0);
+    expect(c.height).toBe(10);
+    c.enter(0, 2 + CLEARANCE + 0.1, 1, 0, 0);
+    expect(c.height).toBe(ROAM_LOW);
+    // And the hexagon it is over, as the ground alone kept it.
+    const [q, r] = cellHex(...cellOf(0, 0));
+    const [e, n] = hexCentre(q, r);
+    c.enter(e, n, 5, 0, 0);
+    expect(c.height).toBeCloseTo(30.4 + ROAM_LOW, 9);
+  });
+
+  test('under a roof it keeps below its underside, or goes over its top, whichever is nearer', () => {
+    const c = new FreeCamera();
+    c.solids = solids();
+    c.enter(0, 20, 9.8, 0, 0);
+    expect(c.height).toBeCloseTo(10 - CLEARANCE, 9);
+    c.enter(0, 20, 13.2, 0, 0);
+    expect(c.height).toBeCloseTo(14 + ROAM_LOW, 9);
+    c.enter(0, 20, 5, 0, 0);
+    expect(c.height).toBe(5);
+    c.enter(0, 20, 20, 0, 0);
+    expect(c.height).toBe(20);
+  });
+
+  test('it keeps over a house, and its chimney', () => {
+    const c = new FreeCamera();
+    c.solids = solids();
+    c.enter(40, 40, 3, 0, 0);
+    expect(c.height).toBeCloseTo(8 + 0.6 + ROAM_LOW, 9);
+    c.enter(60, 60, 3, 0, 0);
+    expect(c.height).toBe(3);
   });
 });

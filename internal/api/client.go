@@ -127,10 +127,27 @@ func (p *Page) Size() int {
 var servedElsewhere = map[string]bool{"approve.html": true}
 
 // pageRoutes are the page's routes: GET, and so HEAD. They need no session.
-var pageRoutes = map[string]bool{"GET /{$}": true, "GET /{file}": true, "GET /assets/{file}": true}
+var pageRoutes = map[string]bool{"GET /{$}": true, "GET /{file}": true, "GET /assets/{file}": true, noticePageRoute: true}
+
+// sailParam is the query of a skipper's link to come aboard, ?s=<token>:
+// the game's own page, whatever the token, which reads the link itself
+// once its player is signed in. Opened at one, its address is told to no
+// other site, and no search engine keeps it. The links to watch, ?w= and
+// ?f=, are made to be posted anywhere, and are served as the page is.
+const sailParam = "s"
+
+// noticePageRoute is the notice page's short address, for anyone, signed
+// in or not, to tell the game's owner about something in the game: the
+// built report.html, as /report.html serves it.
+const noticePageRoute = "GET /report"
 
 func (p *Page) register(mux *http.ServeMux) {
 	mux.HandleFunc("GET /{$}", func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Query().Has(sailParam) {
+			h := w.Header()
+			h.Set("Referrer-Policy", "no-referrer")
+			h.Set("X-Robots-Tag", "noindex")
+		}
 		p.serve(w, r, "index.html", pageCache)
 	})
 	mux.HandleFunc("GET /{file}", func(w http.ResponseWriter, r *http.Request) {
@@ -143,6 +160,9 @@ func (p *Page) register(mux *http.ServeMux) {
 	})
 	mux.HandleFunc("GET /assets/{file}", func(w http.ResponseWriter, r *http.Request) {
 		p.serve(w, r, "assets/"+r.PathValue("file"), assetCache)
+	})
+	mux.HandleFunc(noticePageRoute, func(w http.ResponseWriter, r *http.Request) {
+		p.serve(w, r, "report.html", pageCache)
 	})
 }
 

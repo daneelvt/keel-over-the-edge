@@ -28,21 +28,26 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"golang.org/x/sync/errgroup"
 
+	"github.com/daneelvt/keel-over-the-edge/internal/aboard"
 	"github.com/daneelvt/keel-over-the-edge/internal/accounts"
 	"github.com/daneelvt/keel-over-the-edge/internal/api"
 	"github.com/daneelvt/keel-over-the-edge/internal/auth"
 	"github.com/daneelvt/keel-over-the-edge/internal/bus"
 	"github.com/daneelvt/keel-over-the-edge/internal/catalog"
+	"github.com/daneelvt/keel-over-the-edge/internal/chat"
 	"github.com/daneelvt/keel-over-the-edge/internal/config"
 	"github.com/daneelvt/keel-over-the-edge/internal/edge"
+	"github.com/daneelvt/keel-over-the-edge/internal/fleet"
 	"github.com/daneelvt/keel-over-the-edge/internal/forecast"
 	"github.com/daneelvt/keel-over-the-edge/internal/jobs"
+	"github.com/daneelvt/keel-over-the-edge/internal/life"
 	"github.com/daneelvt/keel-over-the-edge/internal/looks"
 	"github.com/daneelvt/keel-over-the-edge/internal/oauth"
 	"github.com/daneelvt/keel-over-the-edge/internal/obs"
 	"github.com/daneelvt/keel-over-the-edge/internal/owner"
 	"github.com/daneelvt/keel-over-the-edge/internal/persist"
 	"github.com/daneelvt/keel-over-the-edge/internal/physics"
+	"github.com/daneelvt/keel-over-the-edge/internal/review"
 	"github.com/daneelvt/keel-over-the-edge/internal/scripted"
 	"github.com/daneelvt/keel-over-the-edge/internal/sim"
 	"github.com/daneelvt/keel-over-the-edge/internal/sim/loop"
@@ -123,7 +128,11 @@ Configured from the environment:
                        POST /debug/weather?auto (the world's own) and
                        POST /debug/encounter?situation=…[&boat=…] (a scripted
                        boat meeting that player's, or the first sailing
-                       player's) (default 0)
+                       player's) and POST /debug/life?kind=…&east=…&north=…
+                       or &at=boat (a group of the sea's life of that kind
+                       there) and POST /debug/sailed (everyone aboard
+                       together now counted as having sailed together five
+                       minutes) (default 0)
 `
 
 func serve(ctx context.Context, args []string, getenv func(string) string, stdout, stderr io.Writer) error {
@@ -166,7 +175,6 @@ type database interface {
 	WorldsToDrop(ctx context.Context, before time.Time) ([]store.World, error)
 	DropWorld(ctx context.Context, lease int64, w store.World) error
 	WriteWorldNews(ctx context.Context, lease int64, world [16]byte, n store.WorldNews) error
-	WriteGaleNews(ctx context.Context, lease int64, world [16]byte, n store.GaleNews) (bool, error)
 	oauth.Store
 	api.Machines
 	accounts.Store
@@ -185,7 +193,19 @@ type database interface {
 	api.Notices
 	owner.Accounts
 	watch.Store
+	fleet.Store
 	WatchTarget(ctx context.Context, key string) (store.WatchTarget, error)
+	// Sailing together: a month of birth and the Rules of the sea,
+	// skippers' links, a knock's look at its knocker, and the owner's
+	// switches.
+	api.Sailing
+	owner.SailSettings
+	Knocker(ctx context.Context, id store.AccountID) (store.Knocker, error)
+	SailSettings(ctx context.Context) (lifetime time.Duration, links, boarding bool, err error)
+	DeleteSailLinks(ctx context.Context, before time.Time, lifetime time.Duration) (int64, error)
+	// Chat aboard: the owner's switches, mutes and blocks, players'
+	// switches, reports and statements of reasons.
+	chatStore
 	Stats() store.PoolStats
 	Close()
 }
@@ -440,6 +460,22 @@ func runServer(ctx context.Context, getenv func(string) string, stdout io.Writer
 		replayRoutes: replayHandler, devRoutes: weatherHandler, ownerRoutes: ownerHandler, playRoutes: &lateHandler{},
 		fail: make(chan error, 1), making: make(chan struct{}, 1),
 	}
+	p.fleet = fleet.New(fleet.Config{Store: db, Catalog: cat, World: p.worldBus, Log: log})
+	// The owner's switches for sailing together, as the database has
+	// them: one set in memory for the routes, the owner's page and the
+	// game connection.
+	if p.switches, err = loadSwitches(ctx, db); err != nil {
+		if ctx.Err() != nil {
+			return stopEarly(side, flight, nil)
+		}
+		return stopEarly(side, flight, fmt.Errorf("the settings for sailing together: %w", err))
+	}
+	if p.ties, err = loadChat(ctx, db, p.switches); err != nil {
+		if ctx.Err() != nil {
+			return stopEarly(side, flight, nil)
+		}
+		return stopEarly(side, flight, fmt.Errorf("the settings for chat, mutes and blocks: %w", err))
+	}
 	p.registerWorldMetrics()
 	// The accounts stopped, before anyone is let in.
 	stopped, err := accounts.Load(ctx, db)
@@ -458,7 +494,22 @@ func runServer(ctx context.Context, getenv func(string) string, stdout io.Writer
 	p.hand = accounts.New(accounts.Config{
 		Store: db, Sessions: p.sessions, Door: p.agents.grants, Agents: p.agents.core, World: p.accountsWorld,
 		Lifetime: p.agents.lifetime.Get, Looks: p.agents.looks, Book: p.looks, Stopped: stopped, Log: log, Metrics: metrics,
+		Fleet: p.fleet,
+		Young: db.MakeYoungReport,
+		Forget: func(ids ...store.AccountID) {
+			for _, id := range ids {
+				p.ties.Forget(id)
+			}
+		},
 	})
+	p.reports = review.New(review.Config{Store: db, Hand: p.hand, Hub: p.hub, Log: log, Metrics: metrics})
+	if err := p.loadShipmates(ctx); err != nil {
+		if ctx.Err() != nil {
+			return stopEarly(side, flight, nil)
+		}
+		return stopEarly(side, flight, fmt.Errorf("the shipmates: %w", err))
+	}
+	p.shipmates = p.newShipmates()
 	for _, k := range []store.Kind{store.Human, store.AI} {
 		metrics.GaugeFunc("keel_accounts_stopped", "Accounts stopped by the operator, by kind; a stopped human's machine sailors among the AI accounts.",
 			prometheus.Labels{"kind": string(k)}, func() float64 { return float64(stopped.Count(k)) })
@@ -492,7 +543,7 @@ func runServer(ctx context.Context, getenv func(string) string, stdout io.Writer
 	}
 	p.current.Store(first)
 	if weatherHandler != nil {
-		log.Warn("developer commands are on: POST /debug/wind, /debug/weather, /debug/encounter, /debug/place and /debug/chart on the internal listener")
+		log.Warn("developer commands are on: POST /debug/wind, /debug/weather, /debug/encounter, /debug/place, /debug/chart, /debug/life and /debug/sailed on the internal listener")
 	}
 	health.Beat()
 	play := newServer(p.playRoutes, log)
@@ -534,6 +585,7 @@ func runServer(ctx context.Context, getenv func(string) string, stdout io.Writer
 		wg.Go(func() { p.agents.usage.Run(jobsCtx) })
 		wg.Go(func() { p.agents.core.Run(jobsCtx) })
 		wg.Go(func() { p.countGrants(jobsCtx) })
+		wg.Go(func() { p.reports.Run(jobsCtx) })
 		p.jobs.Run(jobsCtx)
 		wg.Wait()
 		return nil
@@ -619,6 +671,7 @@ type ownerConfig struct {
 	wcfg     *weather.Config
 	timeline *weather.Timeline // nil for a world whose week is not yet made
 	terrain  *sim.Terrain      // nil with land off
+	life     *life.Schedule    // nil for the next world
 	db       database
 	sessions *auth.Cache
 	game     *edge.Edge
@@ -633,6 +686,14 @@ type ownerConfig struct {
 	from      *owner.Owner
 	// forecasts is the world's forecast issuer; nil for the next world.
 	forecasts *forecast.Issuer
+	// switches are the owner's for sailing together; nil for the next
+	// world.
+	switches *aboard.Switches
+	// chat is the store's side of chat's switches, reports the reports'
+	// queue, and hub the world's chat; nil for the next world.
+	chat    owner.ChatSettings
+	reports owner.Reports
+	hub     *chat.Hub
 	// agents is sign-in for AI apps, whose lifetime and caps the owner
 	// sets.
 	agents *agents
@@ -660,8 +721,9 @@ func ownerTools(c ownerConfig) *owner.Owner {
 		prepared = c.timeline.Prepared()
 	}
 	cfg := owner.Config{
+		Switches: c.switches, Sail: c.db, ChatSettings: c.chat, Reports: c.reports,
 		Bundle: c.bundle, Weather: prepared, Timeline: c.timeline, SystemKinds: systemKindNames(c.cat), Waves: waves,
-		Kinds: kinds, Regimes: regimes, Sky: c.cat.PrepareSky(),
+		Kinds: kinds, Regimes: regimes, Sky: c.cat.PrepareSky(), BoatLooks: looks.NewBoats(c.cat), SeaLife: c.life,
 		World:    owner.World{Number: c.sailed.Number, ID: c.sailed.ID, Epoch: c.sailed.Epoch, Made: c.made},
 		Calm:     c.cat.World.MainPort.Calm * 1852,
 		Accounts: c.db, Page: c.page, Log: c.log, Metrics: c.metrics,
@@ -674,6 +736,10 @@ func ownerTools(c ownerConfig) *owner.Owner {
 		l := a.core.Limits()
 		cfg.AIOrders = fmt.Sprintf("%g a second, a burst of %d", float64(l.Orders), l.OrderBurst)
 		cfg.AILooks = fmt.Sprintf("%g a second, a burst of %d", float64(l.Looks), l.LookBurst)
+	}
+	if c.hub != nil {
+		hub := c.hub
+		cfg.ChatChanged = func() { hub.Changed(nil) }
 	}
 	cfg.AICap, cfg.AIReserve = c.aiCap, c.aiReserve
 	if c.bus != nil {
@@ -804,8 +870,11 @@ func devRoutes(ctx context.Context, b *bus.Bus, cat *catalog.Catalog, charts *wo
 	enc := encounterRoute(ctx, b, cat, log)
 	place := placeRoute(b, log)
 	chartIt := chartRoute(b, charts, log)
+	raise := lifeRoute(b, cat, log)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
+		case "/debug/life":
+			raise.ServeHTTP(w, r)
 		case "/debug/encounter":
 			enc.ServeHTTP(w, r)
 		case "/debug/place":
@@ -902,7 +971,11 @@ func placeRoute(b *bus.Bus, log *slog.Logger) http.Handler {
 //
 //	POST /debug/encounter?situation=port-starboard|windward-leeward|overtaking|tacking|luffing|capsized[&boat=…]
 func encounterRoute(ctx context.Context, b *bus.Bus, cat *catalog.Catalog, log *slog.Logger) http.Handler {
-	cfg := scripted.EncounterConfig{Bus: b, Weather: cat.PrepareWeather(), Length: cat.Boats[0].LengthOverall, Log: log}
+	lengths := make([]float64, len(cat.Boats))
+	for i := range cat.Boats {
+		lengths[i] = cat.Boats[i].LengthOverall
+	}
+	cfg := scripted.EncounterConfig{Bus: b, Weather: cat.PrepareWeather(), Lengths: lengths, Log: log}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		situation := r.URL.Query().Get("situation")
 		if _, ok := scripted.Situations[situation]; !ok {

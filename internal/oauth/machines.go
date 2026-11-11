@@ -104,11 +104,15 @@ type MachineItem struct {
 	Name  string `json:"name"`
 	Look  Look   `json:"look"`
 	AtSea bool   `json:"atSea"`
-	// Watchers is how many watch it now, filled by the game's own page.
+	// Watchers is how many watch it now, and Aboard whether it is crew
+	// aboard another's boat, filled by the game's own page.
 	Watchers int        `json:"watchers"`
+	Aboard   bool       `json:"aboard,omitempty"`
 	Stopped  int64      `json:"stopped"`
 	Apps     []AppItem  `json:"apps"`
 	Token    *TokenItem `json:"token"`
+	// WatchCode is the code of its link to watch, for its owner to share.
+	WatchCode string `json:"watchCode,omitempty"`
 }
 
 // Machines are what the lists of an account's machine sailors are made
@@ -143,7 +147,7 @@ func ListMachines(ctx context.Context, st Machines, owner store.AccountID, looks
 	for i, m := range ms0 {
 		out[i] = MachineItem{
 			ID: m.ID.String(), Name: m.Name, Look: looks.LookOf(m.Version, m.Finish, m.Colour), Apps: []AppItem{},
-			AtSea: atSea != nil && atSea(m.ID), Stopped: ms(m.Stopped),
+			AtSea: atSea != nil && atSea(m.ID), Stopped: ms(m.Stopped), WatchCode: m.WatchCode,
 		}
 		index[m.ID] = i
 	}

@@ -171,6 +171,32 @@ export interface LightSeen {
   fogSignal: number;
 }
 
+/**
+ * An encounter with the sea's life, as the server tells of it once the eye
+ * is within its reach, and again when it changes: its id and revision, its
+ * kind (the catalog's index), its start and end (ticks), its centre (metres
+ * east and north), its heading (radians clockwise from north) and speed
+ * (m/s), how many, its own seed, and the boat it is with: 0 none, 1 the
+ * page's own boat or the one it watches, 2 + n the boat in view slot n,
+ * 255 a boat the page does not see; and the encounter on whose patch it
+ * comes, '' for none.
+ */
+export interface LifeSeen {
+  id: string;
+  rev: number;
+  kind: number;
+  start: number;
+  end: number;
+  east: number;
+  north: number;
+  heading: number;
+  speed: number;
+  count: number;
+  seed: number;
+  with: number;
+  over: string;
+}
+
 /** What can be charted: an island, a place or a feature. */
 export type ChartSubject = 'island' | 'place' | 'feature';
 
@@ -231,6 +257,168 @@ export interface WatchingTold {
   look: number;
 }
 
+/** Whose boat the connection is aboard, as its crew, and its seat there. */
+export interface AboardTold {
+  /** The skipper's name, as players see it, and look code. */
+  skipper: string;
+  look: number;
+  seat: number;
+}
+
+/**
+ * Someone aboard a boat: their seat, look, name ("" for a spectator), a
+ * machine sailor, the connection's own; whether the connection's account
+ * mutes or blocks them; and whether they are its shipmate.
+ */
+export interface PersonTold {
+  seat: number;
+  look: number;
+  name: string;
+  machine: boolean;
+  you: boolean;
+  muted: boolean;
+  blocked: boolean;
+  shipmate: boolean;
+}
+
+/**
+ * Who is aboard the boat sailed, aboard or watched, the skipper (seat 0)
+ * first, and the seat of whoever holds the controls. Whoever holds them
+ * stands at the helm (station 0), the skipper at the holder's station,
+ * everyone else at the station of their seat.
+ */
+export interface CrewTold {
+  people: PersonTold[];
+  holder: number;
+}
+
+/** Who is aboard a boat in view, by its view slot: each person's seat, look and machine mark, and the holder's seat; never a name. */
+export interface ViewCrewTold {
+  slot: number;
+  people: { seat: number; look: number; machine: boolean }[];
+  holder: number;
+}
+
+/** A knock waiting for the skipper's answer, or, gone, no longer waiting. */
+export interface KnockCardTold {
+  id: number;
+  sailor: string;
+  look: number;
+  gone: boolean;
+  /** A machine sailor sent aboard by its owner (their sailor's name), knocking on skipper's boat, the player's own machine sailor's. */
+  machine?: { owner: string; skipper: string };
+  /** A shipmate of the skipper's, knocking from their shipmates list. */
+  shipmate?: boolean;
+}
+
+/** How the connection's own knock stands, or why it was refused. */
+export type KnockStateTold =
+  | 'waiting'
+  | 'let'
+  | 'not-now'
+  | 'lapsed'
+  | 'ended'
+  | 'not-at-sea'
+  | 'full'
+  | 'closed'
+  | 'busy'
+  | 'often'
+  | 'crowded'
+  | 'own'
+  | 'first'
+  | 'try-again'
+  | 'withdrawn'
+  | 'away'
+  | 'other';
+
+/** The connection's own knock: how it stands, and the boat it is for. */
+export interface KnockingTold {
+  state: KnockStateTold;
+  skipper: string;
+  kind: number;
+  boat: string;
+  /** The player's machine sailor the knock sends aboard; absent or "" for the player. */
+  machine?: string;
+}
+
+/** The controls offered to the connection, by whom and for how long; or, gone, no longer. */
+export interface HandedTold {
+  from: string;
+  seconds: number;
+  gone: boolean;
+}
+
+/** Why a line was not said; '' for a line said (or refused for a word, which is never told). */
+export type ChatRefusalTold =
+  | ''
+  | 'contact'
+  | 'long'
+  | 'fast'
+  | 'silent'
+  | 'nobody'
+  /** A shipmate's message: they aren't in the game, and nothing is kept for later. */
+  | 'away'
+  /** A shipmate's message: the game's owner has shipmates' messages off. */
+  | 'resting';
+
+/**
+ * A line said aboard: its number (for mute, block and report), the
+ * sender's seat, name and whether a machine sailor said it, when (ms of
+ * UTC), and its text, all player text. To its sender it comes back with
+ * you and echo (its Say's id), said or refused. A message between
+ * shipmates names its thread: the other shipmate's account ID (to its
+ * sender, whom it was to; to its receiver, who sent it); "" for a line
+ * aboard.
+ */
+export interface ChatTold {
+  id: number;
+  seat: number;
+  name: string;
+  machine: boolean;
+  at: number;
+  text: string;
+  you: boolean;
+  echo: number;
+  refused: ChatRefusalTold;
+  thread: string;
+}
+
+/**
+ * How chat stands for the connection: on; off by the game's owner; off by
+ * the player's own switch; resting, until a time (ms of UTC, 0 until the
+ * owner looks); and whether the Rules of the sea are still to be accepted.
+ */
+export interface ChatStateTold {
+  status: 'on' | 'off' | 'own-off' | 'resting';
+  until: number;
+  rules: boolean;
+}
+
+/** A mute or a block in force or ended, for the person named; full: the list is full and nothing changed. */
+export interface TiedTold {
+  name: string;
+  muted: boolean;
+  blocked: boolean;
+  full: boolean;
+}
+
+/** Someone aboard, for mute, block and report: by their seat, or by a line of theirs. */
+export type WhoTold = { seat: number } | { line: number };
+
+/** Why a player is reported, in the order offered. */
+export type ReportReasonTold =
+  | 'child'
+  | 'sexual'
+  | 'bullying'
+  | 'hate'
+  | 'threats'
+  | 'scam'
+  | 'cheating'
+  | 'other';
+
+/** Why the connection left the boat it was aboard. */
+export type AshoreWhyTold = 'chose' | 'put' | 'left' | 'other';
+
 /** What the net worker's Hello carries besides the protocol version. */
 export interface HelloVersions {
   catalog: string;
@@ -241,7 +429,7 @@ export interface HelloVersions {
 export type ToWorker =
   /** Connect to url, and keep connecting. */
   | { type: 'start'; url: string; versions: HelloVersions }
-  /** The controls stepped for tick seq: the helm and sheet indices, and the autopilot's control. */
+  /** The controls stepped for tick seq: the helm and sheet indices, the autopilot's control and the reef. */
   | {
       type: 'input';
       seq: number;
@@ -251,6 +439,7 @@ export type ToWorker =
       target: number;
       order: number;
       way: number;
+      reef: number;
     }
   /** The page's frame time's 95th percentile, ms, for the server's metrics. */
   | { type: 'frame'; ms: number }
@@ -274,6 +463,33 @@ export type ToWorker =
   | { type: 'sail' }
   /** Stop watching, without sailing: the connection is idle. */
   | { type: 'unwatch' }
+  /** Ask to come aboard by a link's token, or, without one, the boat a shipmate (their account ID) skippers. */
+  | { type: 'knock'; token: string; machine: string; shipmate?: string }
+  /** The skipper's answer to a knock. */
+  | { type: 'answer'; knock: number; let: boolean }
+  /** Offer the controls to the person in that seat. */
+  | { type: 'hand'; to: number }
+  /** Take the controls offered; the skipper's, take them back at once. */
+  | { type: 'take' }
+  /** Give the controls back to the skipper. */
+  | { type: 'giveBack' }
+  /** Go ashore (who 0), or, the skipper's, put the person in seat who ashore. */
+  | { type: 'ashore'; who: number }
+  /** Close the boat to knocks for this voyage, or open it again. */
+  | { type: 'closeKnocks'; closed: boolean }
+  /** Come aboard the own machine sailor watched, without knocking: knocking tells how it stands. */
+  | { type: 'comeAboard' }
+  /**
+   * Say a line aboard, or, with to (a shipmate's account ID), a message to
+   * that shipmate; id is the page's own number, which its echo carries.
+   */
+  | { type: 'say'; text: string; id: number; to?: string }
+  /** Mute someone aboard, or no longer. */
+  | { type: 'mute'; who: WhoTold; on: boolean }
+  /** Block someone aboard, or no longer. */
+  | { type: 'block'; who: WhoTold; on: boolean }
+  /** Report someone aboard, with a note for the game's owner. */
+  | { type: 'report'; who: WhoTold; reason: ReportReasonTold; note: string }
   /** The page is going: close with 1000. */
   | { type: 'stop' }
   /** A snapshot record read, for the worker to fill again. */
@@ -331,8 +547,13 @@ export type FromWorker =
       zone: string;
       /** The boat watched, whose the boat and kind are; null for the connection's own. */
       watching: WatchingTold | null;
+      /** The boat the connection is aboard as crew, whose the boat and kind are; null for none. */
+      aboard: AboardTold | null;
       /** The look code of the boat's sailor: the connection's own, or the one watched. */
       look: number;
+      /** The boat's own look code, its paint, cloth and sail number; and its name, "" for none. */
+      boatLook: number;
+      boatName: string;
       /**
        * The connection's first Welcome. A later one, a watch begun or the
        * own boat back, is sent nothing again that the connection was
@@ -350,10 +571,36 @@ export type FromWorker =
   | { type: 'watchEnded'; why: WatchEndWhy; sailor: string }
   /** How many watch the connection's own boat. */
   | { type: 'watchers'; count: number }
+  /** A knock on the skipper's boat, or one no longer waiting. */
+  | { type: 'knockCard'; card: KnockCardTold }
+  /** How the connection's own knock stands. */
+  | { type: 'knocking'; knocking: KnockingTold }
+  /** Who is aboard the boat sailed, aboard or watched. */
+  | { type: 'crew'; crew: CrewTold }
+  /** The controls offered to the connection, or the offer gone. */
+  | { type: 'handed'; handed: HandedTold }
+  /** The connection left the boat it was aboard: its own boat's Welcome, or a Queued, follows. */
+  | { type: 'ashore'; why: AshoreWhyTold }
+  /** A line said aboard, or the connection's own back, said or refused. */
+  | { type: 'chat'; chat: ChatTold }
+  /** How chat stands for the connection. */
+  | { type: 'chatState'; state: ChatStateTold }
+  /** A mute or a block in force, or ended. */
+  | { type: 'tied'; tied: TiedTold }
+  /** A report received, or (ok false) not kept. */
+  | { type: 'reported'; ok: boolean }
+  /** The account's shipmates changed: the list is to be read again. Never what changed. */
+  | { type: 'shipmates' }
   /** Whether the AI of the own machine sailor watched attends to it: at the helm, or quiet. */
   | { type: 'lamp'; state: LampState }
   /** The sailor of the boat sailed or watched changed their look, at Port Royal: its code. */
   | { type: 'look'; look: number }
+  /** The boat sailed or watched was given a new look in port: its boat look code and name. */
+  | { type: 'boatLook'; look: number; name: string }
+  /** The names of boats in view, by view slot, as of the next snapshot: player text, "" for none. */
+  | { type: 'boatNames'; names: { slot: number; name: string }[] }
+  /** Who is aboard boats in view, by view slot, as of the next snapshot: no people for nobody but the skipper. */
+  | { type: 'crews'; crews: ViewCrewTold[] }
   /** The server is about to restart, in about inMs: the bell. */
   | { type: 'restart'; inMs: number }
   /** The sea about the boat, for the prediction and the drawing. */
@@ -380,6 +627,8 @@ export type FromWorker =
   | { type: 'places'; places: PlaceSeen[] }
   /** Lights come into range, and lights to drop, by number. */
   | { type: 'lights'; lights: LightSeen[]; drop: number[] }
+  /** The sea's life come within reach or changed, and encounters to drop, by id. */
+  | { type: 'life'; life: LifeSeen[]; drop: string[] }
   /** The world's chart: whole after a Welcome, or what was charted since. */
   | { type: 'chart'; entries: ChartEntry[]; whole: boolean }
   /** The forecast as it is issued, with what has been after a Welcome. */

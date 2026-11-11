@@ -5,7 +5,9 @@ package lookout
 import (
 	"math"
 
+	"github.com/daneelvt/keel-over-the-edge/internal/bus"
 	"github.com/daneelvt/keel-over-the-edge/internal/catalog"
+	"github.com/daneelvt/keel-over-the-edge/internal/life"
 	"github.com/daneelvt/keel-over-the-edge/internal/physics"
 )
 
@@ -15,8 +17,10 @@ import (
 // waterfall's roar; the water lapping at a quay. Sounds played once: a
 // blowhole's boom as its spout begins; a colony's calls by day; the
 // harbour bell striking the watches by the world's clock, the gulls by
-// day and the shipyard's mallets by day, all heard in port or near a
-// town's buildings; a lighthouse's fog signal's blasts while the
+// day, each call from one of the gulls wheeling over the nearest town,
+// and the shipyard's mallets by day, all heard in port or near a town's
+// buildings; by day, the calls of the sea's life about the boat, each from
+// a group there, at its middle; a lighthouse's fog signal's blasts while the
 // visibility at its light is under the catalog's limit as a blast begins,
 // heard within the catalog's range the distance over the speed of sound
 // after they sound; and the thunder after each flash within the catalog's
@@ -29,7 +33,7 @@ import (
 // or none: the phone plays no surf.
 //
 // The page's twins are client/src/audio/voices.ts (the falls),
-// features.ts, harbour.ts, fogsignals.ts and thunder.ts; they are held to
+// features.ts, harbour.ts, life.ts, fogsignals.ts and thunder.ts; they are held to
 // testdata/sounds.json. The recipes' numbers are art/sound's, which the
 // tests check.
 
@@ -46,22 +50,25 @@ var (
 	gullsRecipe     = pointRecipe{near: 20, reach: 300, level: 0.18}
 	malletsRecipe   = pointRecipe{near: 15, reach: 300, level: 0.35}
 	lappingRecipe   = pointRecipe{near: 6, reach: 60}
+	seabirdsRecipe  = pointRecipe{near: 20, reach: 300, level: 0.2}
 	fallsRecipe     = struct{ near, reach, most, falling float64 }{near: 10, reach: 1000, most: 0.6, falling: 0.8}
 	thunderRecipe   = struct{ stretch, near, level float64 }{stretch: 4000, near: 200, level: 0.7}
 	// A waterfall roars whole from this drop, m; a blowhole booms whole
 	// from this sea, m; a colony calls this often a minute, the gulls this
 	// often.
-	waterfallHeight  = 15.0
-	blowholeSea      = 2.0
-	colonyPerMinute  = 18.0
-	gullsPerMinute   = 3.0
-	bellStroke       = 0.55
-	bellPair         = 1.5
-	malletBeat       = 0.65
-	malletRun        = [2]float64{3, 8}
-	lappingLevel     = struct{ calm, most, seaHeight float64 }{calm: 0.05, most: 0.3, seaHeight: 1.5}
-	lappingPeriod    = [2]float64{2.5, 6}
-	fogDeviceRecipes = map[catalog.FogSignalDevice]pointRecipe{
+	waterfallHeight = 15.0
+	blowholeSea     = 2.0
+	colonyPerMinute = 18.0
+	gullsPerMinute  = 3.0
+	// Each group of the sea's life calls this often a minute, by its call.
+	seabirdsPerMinute = map[catalog.Call]float64{catalog.CallLaugh: 4, catalog.CallTern: 8, catalog.CallWhistle: 3}
+	bellStroke        = 0.55
+	bellPair          = 1.5
+	malletBeat        = 0.65
+	malletRun         = [2]float64{3, 8}
+	lappingLevel      = struct{ calm, most, seaHeight float64 }{calm: 0.05, most: 0.3, seaHeight: 1.5}
+	lappingPeriod     = [2]float64{2.5, 6}
+	fogDeviceRecipes  = map[catalog.FogSignalDevice]pointRecipe{
 		catalog.FogSignalDeviceTwotone:  {near: 30, level: 0.6},
 		catalog.FogSignalDeviceDiaphone: {near: 30, level: 0.55},
 		catalog.FogSignalDeviceSiren:    {near: 30, level: 0.45},
@@ -99,15 +106,24 @@ type FeatureHeard struct {
 // HarbourHeard is what the harbour sounds from: whether the boat is in
 // port; whether a town's buildings are near, and how far the nearest is,
 // m; the nearest bell, shipyard slip and quay's edge (nil for none); and
-// the world's hour, 0 to 24, noon at 12.
+// the world's hour, 0 to 24, noon at 12; and the gulls of the towns near
+// (life.GullTowns).
 type HarbourHeard struct {
-	InPort   bool    `json:"inPort"`
-	Town     bool    `json:"town"`
-	NearTown float64 `json:"nearTown"`
-	Bell     *Point  `json:"bell"`
-	Yard     *Point  `json:"yard"`
-	Quay     *Point  `json:"quay"`
-	Hour     float64 `json:"hour"`
+	InPort   bool            `json:"inPort"`
+	Town     bool            `json:"town"`
+	NearTown float64         `json:"nearTown"`
+	Bell     *Point          `json:"bell"`
+	Yard     *Point          `json:"yard"`
+	Quay     *Point          `json:"quay"`
+	Hour     float64         `json:"hour"`
+	Gulls    []life.GullTown `json:"gulls"`
+}
+
+// LifeHeard is a group of the sea's life that may be heard: its record,
+// and the pose of the boat it is with, nil for none.
+type LifeHeard struct {
+	Group bus.LifeEncounter
+	Pose  *life.Pose
 }
 
 // FogLight is a lighthouse as its fog signal is heard: its number, where
@@ -153,6 +169,8 @@ type Heard struct {
 	// weather, when no fog signal sounds.
 	Visibility func(east, north, tick float64) float64
 	Flashes    []Flash
+	// Life are the groups of the sea's life near.
+	Life []LifeHeard
 }
 
 // SoundKind is what a sound is.
@@ -170,7 +188,15 @@ const (
 	SoundMallet
 	SoundFogSignal
 	SoundThunder
+	// The sea's life's calls: a laughing gull's laugh, sooty terns'
+	// "wide-awake", a booby's whistle.
+	SoundLaugh
+	SoundTern
+	SoundWhistle
 )
+
+// lifeSounds are the sea's life's sounds, by their call.
+var lifeSounds = map[catalog.Call]SoundKind{catalog.CallLaugh: SoundLaugh, catalog.CallTern: SoundTern, catalog.CallWhistle: SoundWhistle}
 
 // String is a kind of sound in a sailor's words.
 func (k SoundKind) String() string {
@@ -195,6 +221,12 @@ func (k SoundKind) String() string {
 		return "a fog signal"
 	case SoundThunder:
 		return "thunder"
+	case SoundLaugh:
+		return "a gull's laugh"
+	case SoundTern:
+		return "terns calling"
+	case SoundWhistle:
+		return "a booby's whistle"
 	}
 	return "a sound"
 }
@@ -205,7 +237,7 @@ func (k SoundKind) Held() bool { return k <= SoundLapping }
 // Sound is a sound the phone plays.
 type Sound struct {
 	Kind SoundKind `json:"-"`
-	// Call is a colony's call; Device and Light a fog signal's device and
+	// Call is a colony's call or a group's of the sea's life; Device and Light a fog signal's device and
 	// its light's number.
 	Call   catalog.Call            `json:"call,omitempty"`
 	Device catalog.FogSignalDevice `json:"device,omitempty"`
@@ -238,16 +270,22 @@ type Hearing struct {
 	thunder       catalog.WeatherThunder
 	// secondsPerHour is how long an hour of the world's day lasts, s.
 	secondsPerHour float64
+	// kinds are the sea's life's kinds; towns the towns' gulls' rule.
+	kinds []life.Kind
+	towns catalog.LifeTowns
 }
 
 // NewHearing is the rule of what is heard, from the catalog.
 func NewHearing(cat *catalog.Catalog) *Hearing {
 	r := &cat.World.Lights.FogSignal
+	_, kinds := life.Prepare(cat)
 	return &Hearing{
 		signals: cat.World.Lights.FogSignals,
 		sounds:  r.Sounds * nauticalMile, heard: r.Heard * nauticalMile,
 		thunder:        cat.Weather.Thunder,
 		secondsPerHour: cat.Sky.Day * 60 / 24,
+		kinds:          kinds,
+		towns:          cat.Life.Towns,
 	}
 }
 
@@ -269,6 +307,7 @@ func (h *Hearing) Sounds(in *Heard, from, to float64) []Sound {
 	if to > from {
 		h.features(in, from, to, add)
 		h.harbour(in, from, to, add)
+		h.lifeCalls(in, from, to, add)
 		h.fogSignals(in, from, to, add)
 		h.thunderAfter(in, from, to, add)
 	}
@@ -384,15 +423,19 @@ func (h *Hearing) harbour(in *Heard, from, to float64, add func(Sound)) {
 	if !in.Day {
 		return
 	}
-	slot := 60 / math.Max(gullsPerMinute, 0.01) / 2
-	for n := math.Ceil(from / slot); n*slot < to; n++ {
-		if draw(n, 1) < 0.5 {
-			a := draw(n, 2) * 2 * math.Pi
-			dist := 25 + float64(draw(n, 3)*120)
-			s, c := physics.Sin(a), physics.Cos(a)
-			e, nn := in.East+float64(dist*s), in.North+float64(dist*c)
-			add(Sound{Kind: SoundGull, Degrees: degreesTo(e-in.East, nn-in.North), Distance: dist, At: n * slot,
-				Level: gullsRecipe.level * pointLevel(dist, gullsRecipe.near, gullsRecipe.reach), Seed: n})
+	// The gulls: in each slot of a few seconds, a call or none, from one
+	// of the gulls wheeling over the nearest town, where it is then.
+	if t := nearestGulls(in); t != nil {
+		count := life.GullCount(t, &h.towns)
+		slot := 60 / math.Max(gullsPerMinute, 0.01) / 2
+		for n := math.Ceil(from / slot); n*slot < to && count > 0; n++ {
+			if draw(n, 1) < 0.5 {
+				k := min(int(math.Floor(float64(draw(n, 2)*float64(count)))), count-1)
+				g := life.GullAt(t, &h.towns, k, n*slot)
+				dist := distance(in.East, in.North, g.East, g.North)
+				add(Sound{Kind: SoundGull, Degrees: degreesTo(g.East-in.East, g.North-in.North), Distance: dist, At: n * slot,
+					Level: gullsRecipe.level * pointLevel(dist, gullsRecipe.near, gullsRecipe.reach), Seed: n})
+			}
 		}
 	}
 	if y := x.Yard; y != nil {
@@ -409,6 +452,65 @@ func (h *Hearing) harbour(in *Heard, from, to float64, add func(Sound)) {
 		}
 	}
 }
+
+// nearestGulls is the town whose gulls wheel nearest the listener within
+// the gulls' reach, nil for none.
+func nearestGulls(in *Heard) *life.GullTown {
+	var best *life.GullTown
+	bd := gullsRecipe.reach
+	for i := range in.Harbour.Gulls {
+		t := &in.Harbour.Gulls[i]
+		if d := distance(in.East, in.North, t.East, t.North); d <= bd {
+			best, bd = t, d
+		}
+	}
+	return best
+}
+
+// lifeCalls adds, by day, the calls of the sea's life: each group's of a
+// kind that calls, a few a minute, in slots of world time, at most one a
+// slot, drawn from the slot and the group's own number, and heard from
+// its middle where it is as it calls.
+func (h *Hearing) lifeCalls(in *Heard, from, to float64, add func(Sound)) {
+	if !in.Day {
+		return
+	}
+	for i := range in.Life {
+		g := &in.Life[i]
+		e := &g.Group
+		if int(e.Kind) >= len(h.kinds) {
+			continue
+		}
+		k := &h.kinds[e.Kind]
+		if k.Look == nil {
+			continue
+		}
+		kind, ok := lifeSounds[k.Look.Call]
+		per := seabirdsPerMinute[k.Look.Call]
+		if !ok || !(per > 0) {
+			continue
+		}
+		slot := 60 / per
+		voice := 300 + float64(life.Own(e.Seed, lifeVoice)*100)
+		for n := math.Ceil(from / slot); n*slot < to; n++ {
+			if !(draw(n, voice) < 0.7) {
+				continue
+			}
+			at := float64(n*slot) + float64(float64(draw(n, voice+1)*slot)*0.5)
+			x, y, _, alive := life.FlockAt(e, k, float64(at*stepsPerSecond), g.Pose)
+			if !alive {
+				continue
+			}
+			dist := distance(in.East, in.North, x, y)
+			add(Sound{Kind: kind, Call: k.Look.Call, Degrees: degreesTo(x-in.East, y-in.North), Distance: dist, At: at,
+				Level: seabirdsRecipe.level * pointLevel(dist, seabirdsRecipe.near, seabirdsRecipe.reach), Seed: n})
+		}
+	}
+}
+
+// lifeVoice is which of a group's own numbers its calls' slots are drawn
+// by.
+const lifeVoice = 21
 
 // fogSignals adds the blasts heard: each light's within the catalog's
 // range whose blast began while the visibility at its light was under the

@@ -15,10 +15,27 @@
 // watched from it; and a human sailor, who comes to Set sail on every
 // entry, is found on the list only once they tick the box that lets
 // others watch them sail.
+//
+// Then the links to watch: a stranger with no account opens a sailor's
+// link, is told they will be watching once they make a sailor, makes one
+// with a passkey and is watching; unticked, the link lands on their own
+// Set sail with why and ☆ Follow, they follow, and are told there once the
+// sailor lets others watch, and a reload watches. A fleet's link watches
+// its machine sailor without saying whose, This fleet in the list; Make a
+// new link stops the old one.
 
 import { type BrowserContext, expect, type Page, test } from '@playwright/test';
 import data from '../src/catalog/catalog.gen.json' with { type: 'json' };
-import { GAME, holdPasskeys, type Made, sailor, setSail, stamp } from './helpers';
+import {
+  answerBorn,
+  GAME,
+  holdPasskeys,
+  linkCodes,
+  type Made,
+  sailor,
+  setSail,
+  stamp,
+} from './helpers';
 import { assertPasskey } from './passkey';
 
 /** A machine sailor made through the server's route, its look the catalog's first; its id. */
@@ -391,5 +408,131 @@ test('a human sailor comes to Set sail on entry; watchable only once they tick t
     });
   } finally {
     await other.close();
+  }
+});
+
+test('a stranger opens a sailor’s link: refused while unticked, follows, is told, and watches; with the box ticked, straight to the watch', async ({
+  browser,
+  context,
+  page,
+}) => {
+  test.setTimeout(240_000);
+  // The sailor shares their link from Set sail, unticked, and sails.
+  const them = await sailor(context, 'Linked');
+  await holdPasskeys(context, them.passkey);
+  await page.goto(GAME);
+  const yours = page.locator('.your-sailor');
+  await expect(yours).toContainText(them.name, { timeout: 90_000 });
+  await expect(yours.getByRole('button', { name: 'Share a link to watch me' })).toBeVisible();
+  await expect(yours.locator('[data-readout="shown-when-watched"]')).toHaveText(
+    'Your link shows your boat only on voyages you let others watch.',
+  );
+  await setSail(page);
+  await page.waitForFunction(() => globalThis.keel?.net().status === 'sailing', null, {
+    timeout: 60_000,
+  });
+  const { watch: code } = await linkCodes(context);
+  expect(code).toMatch(/^[a-z2-7]{10}$/);
+
+  // A stranger, no account: told they will be watching, makes a sailor.
+  const strangers = await browser.newContext({ viewport: { width: 360, height: 640 } });
+  try {
+    await strangers.credentials.install();
+    const s = await strangers.newPage();
+    const errors: string[] = [];
+    s.on('pageerror', (e) => errors.push(e.message));
+    await s.goto(`${GAME}&w=${code}`);
+    await expect(s.locator('[data-readout="make-to-watch"]')).toHaveText(
+      'Make a sailor, and you will be watching.',
+      { timeout: 90_000 },
+    );
+    const name = `Stranger ${stamp()}`;
+    await s.getByLabel('Your sailor’s name').fill(name);
+    await answerBorn(s);
+    await s.getByRole('button', { name: 'Set sail' }).click();
+    await s.getByRole('button', { name: 'I’ve written it down' }).click({ timeout: 60_000 });
+
+    // Unticked: their own Set sail, why at its head, and ☆ Follow.
+    const refused = s.locator('[data-readout="link-refused"]');
+    await expect(refused).toContainText(`${them.name} cannot be watched now.`, { timeout: 60_000 });
+    await expect(s.locator('.your-sailor')).toContainText(name);
+    await expect(s.getByRole('button', { name: `Set sail as ${name}` })).toBeVisible();
+    await refused.getByRole('button', { name: '☆ Follow' }).click();
+    await expect(refused.getByRole('button', { name: '★ Following' })).toBeVisible();
+    expect(new URL(s.url()).searchParams.get('w')).toBe(code);
+
+    // The sailor lets others watch: the stranger is told on their panel.
+    const allowed = await context.request.post('/api/me/spectators', { data: { allow: 'voyage' } });
+    expect(allowed.status(), await allowed.text()).toBe(200);
+    await expect(refused).toContainText(`${them.name} is sailing, and can be watched now.`, {
+      timeout: 75_000,
+    });
+
+    // The link again: straight to the watch.
+    await s.reload();
+    await s.waitForFunction(() => globalThis.keel !== undefined, null, { timeout: 90_000 });
+    await s.waitForFunction((n) => globalThis.keel.watch().watching?.sailor === n, them.name, {
+      timeout: 60_000,
+    });
+    expect((await watch(s)).watching).toMatchObject({ sailor: them.name, machine: false });
+    expect(errors).toEqual([]);
+  } finally {
+    await strangers.close();
+  }
+});
+
+test('a fleet’s link watches its machine sailor, nothing saying whose, This fleet in the list; a new link stops the old', async ({
+  browser,
+  context,
+}) => {
+  test.setTimeout(240_000);
+  const owner = await sailor(context, 'Fleet');
+  const name = `Fleet Hand ${stamp()}`;
+  const id = await machine(context, name);
+  const bearer = await token(context, owner, id);
+  await tool(context, bearer, 'boat', { action: 'take' });
+  await tool(context, bearer, 'observe', {});
+  await expect.poll(() => atSea(context, name), { timeout: 30_000 }).toBe(true);
+  const { fleet, watch: ownerCode } = await linkCodes(context);
+  // The machine sailor's own link, as the panel shares it.
+  const listed = (await (await context.request.get('/api/machines')).json()) as {
+    fleetCode: string;
+    machines: { name: string; watchCode: string }[];
+  };
+  expect(listed.fleetCode).toBe(fleet);
+  expect(listed.machines.find((m) => m.name === name)?.watchCode).toMatch(/^[a-z2-7]{10}$/);
+  expect(listed.machines[0]?.watchCode).not.toBe(ownerCode);
+
+  const viewers = await browser.newContext({ viewport: { width: 360, height: 640 } });
+  try {
+    const viewer = await sailor(viewers, 'Viewer');
+    await holdPasskeys(viewers, viewer.passkey);
+    const v = await viewers.newPage();
+    await v.goto(`${GAME}&f=${fleet}`);
+    await v.waitForFunction(() => globalThis.keel !== undefined, null, { timeout: 90_000 });
+    await v.waitForFunction((n) => globalThis.keel.watch().watching?.sailor === n, name, {
+      timeout: 60_000,
+    });
+    expect((await watch(v)).watching).toMatchObject({ sailor: name, machine: true, mine: false });
+    // Nothing on the screen names whose it is.
+    await expect(v.locator('body')).not.toContainText(owner.name);
+    await v.getByRole('button', { name: 'Watch another' }).click();
+    const who = v.getByRole('combobox', { name: 'Show' });
+    await expect(who).toHaveValue('fleet', { timeout: 30_000 });
+    await expect(v.locator(`.watch-row[data-sailor="${name}"]`)).toBeVisible({ timeout: 30_000 });
+    await expect(v.locator('.watch-row')).toHaveCount(1);
+    await expect(v.locator('body')).not.toContainText(owner.name);
+
+    // A new link: the old one is no longer in use.
+    const made = await context.request.post('/api/me/link/new', { data: { which: 'fleet' } });
+    expect(made.status(), await made.text()).toBe(200);
+    await v.goto(`${GAME}&f=${fleet}`);
+    await expect(v.locator('[data-readout="link-refused"]')).toHaveText(
+      'This link is no longer in use.',
+      { timeout: 90_000 },
+    );
+    await expect(v.locator('.your-sailor')).toContainText(viewer.name);
+  } finally {
+    await viewers.close();
   }
 });

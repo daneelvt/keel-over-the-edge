@@ -69,6 +69,17 @@ func (w *World) apply(c *bus.Command) {
 	case bus.Hold:
 		f.Held = c.Held
 		r = bus.Reply{Result: bus.Done, Slot: -1}
+	case bus.RaiseLife:
+		r = bus.Reply{Result: bus.NoBoat, Slot: -1}
+		switch {
+		case w.life == nil:
+		case c.LifeKind&bus.LifeAboard != 0:
+			if w.life.RaiseAboard(f, c.State.X, c.State.Y) {
+				r.Result = bus.Done
+			}
+		case w.life.Raise(f, int(c.LifeKind), c.State.X, c.State.Y):
+			r.Result = bus.Done
+		}
 	case bus.Chart:
 		r = bus.Reply{Result: bus.Done, Slot: -1}
 		w.chartByHand(f, c.Subject, c.On)
@@ -77,6 +88,16 @@ func (w *World) apply(c *bus.Command) {
 		w.endAt = max(c.At, f.Tick)
 	case bus.SetLook:
 		r = w.setLook(c.Account, c.Look)
+	case bus.SetBoat:
+		r = w.setBoat(c)
+	case bus.SetBoatLook:
+		r = w.setBoatLook(c)
+	case bus.Board:
+		r = w.board(c)
+	case bus.Ashore:
+		r = w.ashore(c)
+	case bus.SetHolder:
+		r = w.setHolder(c)
 	default:
 		return
 	}
@@ -93,6 +114,7 @@ func (w *World) apply(c *bus.Command) {
 		default:
 		}
 	}
+	w.launch()
 }
 
 // setLook changes account's sailor's look, where it may be: its boat's in
@@ -149,6 +171,7 @@ func (w *World) expire() {
 		}
 	}
 	f.Queue = kept
+	w.crewGone()
 	for i := 0; i < len(f.Live); {
 		s := f.Live[i]
 		if g := f.Grace[s]; g == 0 || f.Tick < g {
@@ -161,6 +184,7 @@ func (w *World) expire() {
 		w.free(s)
 		f.Events = append(f.Events, bus.Event{Command: bus.Command{Op: bus.Leave, Boat: boat, Account: sailor}, Reply: r})
 	}
+	w.launch()
 }
 
 // free ends the voyage of the boat in slot s of the next frame, unless it
@@ -170,6 +194,8 @@ func (w *World) free(s int32) {
 	if w.edge != nil && !f.Voyage[s].Falling() {
 		w.voyageEnds(f, s)
 	}
+	w.landCrew(f, s, bus.AshoreLeft)
+	f.Holder[s] = bus.Account{}
 	f.Occupied[s] = false
 	f.Stay[s], f.Unseen[s] = false, false
 	f.Gen[s] = (f.Gen[s] + 1) & bus.GenMask

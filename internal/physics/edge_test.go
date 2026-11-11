@@ -115,7 +115,11 @@ func TestEdgeScenario(t *testing.T) {
 		if sc.Name != "edge" {
 			continue
 		}
-		g, err := runScenario(sf.Sea, sf.Params, sf.Wind, sf.Ground, sc)
+		params, err := sf.Params.of(sc.Boat)
+		if err != nil {
+			t.Fatal(err)
+		}
+		g, err := runScenario(sf.Sea, params, sf.Wind, sf.Ground, sc)
 		if err != nil {
 			t.Fatal(err)
 		}

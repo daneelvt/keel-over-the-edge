@@ -112,6 +112,9 @@ func (enc *encoder) frame() {
 			enc.active = enc.active[:last]
 			continue
 		}
+		if c.joined.Load() || c.crew.Load() {
+			enc.hands(c, f)
+		}
 		if c.waiting.Load() > 0 {
 			c.release(next)
 		}
@@ -169,7 +172,7 @@ func (enc *encoder) adopt(f *bus.Frame) {
 	enc.mu.Unlock()
 	var later []ask
 	for _, a := range asks {
-		if a.kind == askJoined && a.r.Tick > f.Tick || slices.ContainsFunc(later, func(l ask) bool { return l.c == a.c }) {
+		if (a.kind == askJoined || a.kind == askAboard) && a.r.Tick > f.Tick || slices.ContainsFunc(later, func(l ask) bool { return l.c == a.c }) {
 			later = append(later, a)
 			continue
 		}
@@ -209,6 +212,8 @@ func (enc *encoder) do(a ask, f *bus.Frame) {
 		enc.sail(c, f)
 	case askWatch:
 		enc.beginWatch(c, f, a.target)
+	case askAboard:
+		enc.aboardWelcome(c, f, a.r.Slot, a.name)
 	case askUnwatch:
 		if c.w.on {
 			enc.stopWatching(c, pb.WatchEnd_WATCH_END_UNSPECIFIED)
@@ -353,10 +358,14 @@ func (c *conn) welcome(f *bus.Frame) bool {
 	}
 	e.voyages.sails(c.account, c.boat)
 	c.wmu.Lock()
-	c.steering = true
+	c.gen = f.Gen[s]
+	c.steering = f.Holder[s] == (bus.Account{})
+	c.holding = c.steering
 	c.wmu.Unlock()
+	c.toldDeck, c.toldCrew = [2]uint64{}, false
 	c.toldWatchers = 0
 	c.toldLook = f.Look[s]
+	c.toldBoat(f, s)
 	wt, _ := e.cfg.Clock.WorldTime()
 	// Under rmu, so that a Tools for a change of the flag after this one
 	// read it comes after it.
@@ -366,13 +375,16 @@ func (c *conn) welcome(f *bus.Frame) bool {
 		Boat: c.boat, Kind: uint32(f.Kind[s]), Rejoined: c.rejoined,
 		EpochUs: e.cfg.Epoch.UnixMicro(), Land: e.cfg.Land, Circulation: e.cfg.Circulation, Harbour: e.cfg.Harbour,
 		Tools: c.tools.Load(), Light: e.cfg.MainLight, EndsUs: e.endsUs.Load(), ClosingUs: e.closingUs.Load(), Zone: e.cfg.Zone,
-		Look: c.toldLook,
+		Look: c.toldLook, BoatLook: c.toldBoatLook, BoatName: c.toldBoatName,
 	}}}, outWelcome)
 	ok = ok && c.firstChart()
 	c.rmu.Unlock()
 	c.ready.Store(ok)
 	c.box.restart()
 	c.bumped = f.Tick
+	if ok {
+		c.resendKnocks()
+	}
 	// The land about the boat, at once after the Welcome: the client draws
 	// what is near before it shows the sea.
 	return ok && c.chunks(e.cfg.Chunks, f.State[s].X, f.State[s].Y)
@@ -386,10 +398,17 @@ func (c *conn) welcome(f *bus.Frame) bool {
 // the boat it watches, or its free camera while it roams. A watched boat
 // gone, or no longer to be watched, ends the watch.
 func (enc *encoder) encode(c *conn, f *bus.Frame) {
+	if c.w.on && c.w.mine && !enc.follow(c, f) {
+		return
+	}
 	s, boat := c.eyeSlot()
 	if !f.Occupied[s] || f.Boat[s] != boat {
 		if c.w.on {
 			enc.stopWatching(c, pb.WatchEnd_WATCH_END_LEFT)
+			return
+		}
+		if c.crew.Load() {
+			// Ashore with the next frame.
 			return
 		}
 		c.gone.Store(true)
@@ -401,6 +420,14 @@ func (enc *encoder) encode(c *conn, f *bus.Frame) {
 			enc.stopWatching(c, why)
 			return
 		}
+	}
+	if f.Kind[s] != c.toldKind && c.crew.Load() {
+		// The skipper swapped the boat for another in port: aboard her.
+		enc.aboardWelcome(c, f, s, "")
+		return
+	}
+	if f.Kind[s] != c.toldKind && !c.swapped(f) {
+		return
 	}
 	x, y, chunks := f.State[s].X, f.State[s].Y, c.e.cfg.Chunks
 	if p := c.eye.Load(); p != nil {
@@ -423,17 +450,21 @@ func (enc *encoder) encode(c *conn, f *bus.Frame) {
 	if farSampled(c.id, f.Tick) {
 		flags = protocol.FarSampled
 	}
+	if c.w.on || !c.holding {
+		flags |= protocol.Elsewhere
+	}
 	baseView, dist := &enc.empty.view, uint16(0)
 	if base != nil {
 		baseView, dist = &base.view, uint16(f.Tick-base.tick)
 	}
 	// The weather, the sea, the land's chunks and the bumps first: they are
 	// queued, and what is queued goes out before the snapshot.
-	if !c.weather(f) || !c.seaAreas(f, x, y) || !c.chunks(chunks, x, y) || !c.bumps(f, next, s, boat) || !c.lookOf(f, s) {
+	if !c.weather(f) || !c.seaAreas(f, x, y) || !c.chunks(chunks, x, y) || !c.bumps(f, next, s, boat) || !c.lookOf(f, s) ||
+		!c.boatLookOf(f, s) || !c.boatNames(f, next) || !c.crews(f, next) || !c.life(f, next, s, x, y) || !c.crewOf(f, s) {
 		return
 	}
 	b = b[:protocol.MaxHeaderSize]
-	b = b[:protocol.PutHeader(b, f.Tick, dist, flags, f.Control[s], f.Pilot[s], c.marginNow(), f.Voyage[s].Over, f.Stay[s], &f.State[s])]
+	b = b[:protocol.PutHeader(b, f.Tick, dist, flags, f.Control[s], f.Pilot[s], f.Rig[s], c.marginNow(), f.Voyage[s].Over, f.Stay[s], &f.State[s])]
 	b, n := protocol.AppendEntries(b, baseView, &next.view, enter, sample)
 	protocol.SetEntries(b, n)
 
@@ -466,6 +497,137 @@ func (c *conn) lookOf(f *bus.Frame, s int32) bool {
 		return c.send(&pb.ServerMessage{Body: &pb.ServerMessage_LookChanged{LookChanged: &pb.LookChanged{Look: l}}}, outLook)
 	}
 	return true
+}
+
+// swapped welcomes c again to the boat in slot s of f, its own or the one
+// it watches, swapped in port for a boat of another kind: the boat it now
+// is, its snapshots afresh.
+func (c *conn) swapped(f *bus.Frame) bool {
+	if c.w.on {
+		return c.welcomeWatch(f)
+	}
+	c.wmu.Lock()
+	c.rejoined = true
+	c.wmu.Unlock()
+	return c.welcome(f)
+}
+
+// toldBoat notes the boat in slot s of f as a Welcome tells it: its kind,
+// look and name; and that the client holds no boats' names nor crews, as a
+// Welcome clears them.
+func (c *conn) toldBoat(f *bus.Frame, s int32) {
+	c.toldKind, c.toldBoatLook, c.toldBoatName = f.Kind[s], f.BoatLook[s], f.BoatName[s]
+	c.toldNames = [protocol.ViewSlots]toldName{}
+	c.toldCrews, c.crewed, c.crewKnown = [protocol.ViewSlots]toldCrew{}, 0, 0
+}
+
+// boatLookOf tells c that the boat in slot s of f, its own or the one it
+// watches, was given a new look or name in port, if it was since it was
+// last told.
+func (c *conn) boatLookOf(f *bus.Frame, s int32) bool {
+	if l, n := f.BoatLook[s], f.BoatName[s]; l != c.toldBoatLook || n != c.toldBoatName {
+		c.toldBoatLook, c.toldBoatName = l, n
+		return c.send(&pb.ServerMessage{Body: &pb.ServerMessage_BoatLookChanged{BoatLookChanged: &pb.BoatLookChanged{Look: l, Name: n}}}, outBoatLook)
+	}
+	return true
+}
+
+// boatNames tells c the names of the boats in its view v of f that it has
+// not been told: of each boat in the near band once, and again if it
+// changes. A far boat keeps a name told while it was near; a slot whose
+// told name is not its boat's is told it has none.
+func (c *conn) boatNames(f *bus.Frame, v *connView) bool {
+	var names []*pb.BoatName
+	for m := v.view.Used; m != 0; m &= m - 1 {
+		vs := bits.TrailingZeros64(m)
+		told := &c.toldNames[vs]
+		boat := v.boat[vs]
+		var name string
+		switch {
+		case !v.view.Boats[vs].Far():
+			name = f.BoatName[v.slot[vs]]
+		case told.boat == boat:
+			name = told.name
+		}
+		if name != told.name {
+			names = append(names, &pb.BoatName{Slot: uint32(vs), Name: name})
+		}
+		told.boat, told.name = boat, name
+	}
+	if len(names) == 0 {
+		return true
+	}
+	return c.send(&pb.ServerMessage{Body: &pb.ServerMessage_BoatNames{BoatNames: &pb.BoatNames{Names: names}}}, outBoatNames)
+}
+
+// crews tells c who is aboard the boats in its view v of f with anyone
+// aboard besides their skipper, while they are in its near band: each
+// boat's crew as it comes near or into the view near, and again when who
+// is aboard, who holds the controls or the skipper's look changes; and a
+// crew of nobody for a slot told one whose boat has left the band or the
+// view, has nobody aboard now but its skipper, or is another boat. The
+// connection is aboard none of them, so each person goes with their seat,
+// look and machine mark only: never a name, nor any tie to the
+// connection's account. All the changes of a frame go in one message.
+func (c *conn) crews(f *bus.Frame, v *connView) bool {
+	if len(f.Crew) == 0 && c.crewed == 0 {
+		return true
+	}
+	var crews []*pb.Crew
+	for m := v.view.Used | c.crewed; m != 0; m &= m - 1 {
+		vs := bits.TrailingZeros64(m)
+		bit := uint64(1) << vs
+		if v.view.Used&bit == 0 || v.view.Boats[vs].Far() {
+			if c.crewed&bit != 0 {
+				crews = append(crews, &pb.Crew{Slot: uint32(vs)})
+			}
+			c.crewed &^= bit
+			c.crewKnown &^= bit
+			continue
+		}
+		// Unchanged since told: nothing to look up.
+		s := v.slot[vs]
+		now := toldCrew{boat: v.boat[vs], deck: f.Deck[s], look: f.Look[s]}
+		if c.crewKnown&bit != 0 && c.toldCrews[vs] == now {
+			continue
+		}
+		c.toldCrews[vs] = now
+		c.crewKnown |= bit
+		lo, hi := f.CrewOf(s)
+		if lo == hi {
+			if c.crewed&bit != 0 {
+				crews = append(crews, &pb.Crew{Slot: uint32(vs)})
+			}
+			c.crewed &^= bit
+			continue
+		}
+		c.crewed |= bit
+		crews = append(crews, crewIn(f, s, lo, hi, vs))
+	}
+	if len(crews) == 0 {
+		return true
+	}
+	return c.send(&pb.ServerMessage{Body: &pb.ServerMessage_Crews{Crews: &pb.Crews{Crews: crews}}}, outCrews)
+}
+
+// crewIn is the crew of the boat in slot s of f, f.Crew[lo:hi] its crew
+// but its skipper, as those aboard no boat are told it, for view slot vs:
+// the skipper at seat 0, then the rest in seat order, and the seat of
+// whoever holds the controls, 0 for the skipper.
+func crewIn(f *bus.Frame, s int32, lo, hi, vs int) *pb.Crew {
+	people := make([]pb.Person, hi-lo+1)
+	list := make([]*pb.Person, hi-lo+1)
+	people[0] = pb.Person{Look: f.Look[s], Machine: f.Machine[s]}
+	list[0] = &people[0]
+	holder := uint32(0)
+	for i, a := range f.Crew[lo:hi] {
+		people[i+1] = pb.Person{Seat: uint32(a.Seat), Look: a.Look, Machine: a.Machine}
+		list[i+1] = &people[i+1]
+		if f.Holder[s] == a.Account {
+			holder = uint32(a.Seat)
+		}
+	}
+	return &pb.Crew{People: list, Holder: holder, Slot: uint32(vs)}
 }
 
 // bumps sends c the bumps of f after the last it was sent: with the

@@ -15,36 +15,113 @@
 // and posed from the physics (sailors/onboat.ts), the tiller extension in
 // one hand and the mainsheet in the other.
 // The sailor is drawn in its look, loaded the first time it is asked for;
-// a machine sailor's boat carries the machine mark on its sail, as the
-// fleet's do.
+// the boat in its own (boatlook.ts): its topsides in its paint with its
+// name on them, its sails in their cloth with its sail number on the
+// main; a machine sailor's boat carries the machine mark on its sail, as
+// the fleet's do. A boat with a headsail has it shaped as the main is, about
+// its stay, from the clew's angle and its flows; a reefed main is drawn
+// short (sailshape.ts), the reef points painted along each reef's row. A
+// boat with a downwind sail (the model's `kite`) has it shaped about its
+// tack as a headsail, far fuller, from its clew's angle and its flows, and
+// drawn as far as it is hoisted: nothing in its bag, rising from the tack
+// as it is set. It carries the boat's cloth and band, and the machine mark as
+// the main does: set, it hides the main from ahead and to leeward.
+//
+// A square rig (squarerig.ts): the yards' nodes turned by the braces as
+// the physics holds them, the square sails bellied by each strip's wind,
+// lifting or aback, and taken in as the boat reefs, their cloth the boat's
+// with the sail number on the sail the model says; the wheel turned with
+// the rudder; and the stern gallery's panes lit by night.
 
 import {
-  CanvasTexture,
+  type BufferGeometry,
   type Color,
   DoubleSide,
   FrontSide,
   Group,
   type Material,
+  Matrix4,
   Mesh,
   type MeshStandardMaterial,
   type Object3D,
-  SRGBColorSpace,
+  type Texture,
+  Vector3,
 } from 'three';
 import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { Fn, normalLocal, positionGeometry, uv } from 'three/tsl';
+import {
+  Fn,
+  float,
+  normalLocal,
+  positionGeometry,
+  select,
+  uniform,
+  uv,
+  varying,
+  vec2,
+  vec3,
+  vec4,
+} from 'three/tsl';
 import type { MeshStandardNodeMaterial, Node, WebGPURenderer } from 'three/webgpu';
 import type { Boat as BoatKind, SailorArt } from '../catalog';
+import type { BoatLooks } from '../catalog/boatlooks';
 import { type HullShape, hullShape } from '../ocean/hulls';
 import type { BoatPose } from '../predict/blend';
 import { RECORDS } from '../predict/layout.gen';
+import {
+  clothColour,
+  clothMasks,
+  digits,
+  type HullName,
+  hullColour,
+  type LookNodes,
+  lookPalette,
+  MASK_HEIGHT,
+  MASK_WIDTH,
+  NameAtlas,
+  namePlace,
+  numberedSail,
+  numberPlace,
+  type SailPrint,
+  TOPSIDES,
+  writeLook,
+} from './boatlook';
 import { headingToRotationY, type ScenePoint } from './coords';
-import { chordAtHalf, type MarkPlace, markInk, markPlace, paintMark } from './machinemark';
+import { chordAt, chordAtHalf, markPlace } from './machinemark';
 import { litMaterial, sailGlow } from './materials';
 import { Pennant } from './pennant';
 import type { Gfx } from './renderer';
 import { BoatSailor } from './sailors/onboat';
-import { LUFF_OFFSET, sailPoint, sailUniforms } from './sailshape';
+import { harnessFile, trapezeClips } from './sailors/trapeze';
+import { wheelClips } from './sailors/wheel';
+import {
+  headsailFrame,
+  jibPoint,
+  type KiteRig,
+  kiteInputs,
+  kitePoint,
+  kiteRig,
+  kiteRipple,
+  kiteShown,
+  LUFF_OFFSET,
+  sailPoint,
+  sailUniforms,
+} from './sailshape';
+import {
+  type Belly,
+  bandTaken,
+  readsMirrored,
+  type SquareSail,
+  shapeSquare,
+  squareBelly,
+  squarePoint,
+  squareSails,
+  squareVertex,
+  toNode,
+  wheelTurn,
+  YARDS_NODES,
+  yardDrop,
+} from './squarerig';
 import { FLOW_LUFFING, Telltales } from './telltales';
 
 /**
@@ -106,6 +183,19 @@ export const FULL_CAMBER = 0.09;
 const RIPPLE_EASE = 0.25;
 const DEG = Math.PI / 180;
 
+/** The node whose meshes are the stern gallery's panes, lit by night. */
+export const GALLERY = 'gallery';
+/** The gallery's lamplight, display values, at its brightest. */
+export const LAMPLIGHT = [1.6, 0.95, 0.45] as const;
+/**
+ * How lit the boats' cabin lamps are, 0 by day to 1 by night: the scene
+ * sets it as the sun sets, and every boat's gallery glows by it.
+ */
+export const lampsLit = uniform(0);
+
+/** The square sails' cloth's masks' size: wider than high, as the sails are. */
+const SQUARE_MASK = { width: 512, height: 320 } as const;
+
 /**
  * Places a boat's nodes: root at the scene point, lifted by the heave and
  * turned to the heading; and heel pitched, then rolled, about its own
@@ -138,6 +228,42 @@ export function luffing(attack: number, luffAngle: number): number {
   return 0.4 + 0.6 * Math.max(0, Math.min(1, 1 - Math.abs(attack) / luffAngle));
 }
 
+/**
+ * The heights of a sail's reef rows, as fractions of its luff from the
+ * foot, where its geometry has a row of vertices at each reef's height (a
+ * slab reef: the cloth below is gathered along the boom); null where it
+ * has not, or the sail does not reef (a smaller rig, drawn smaller).
+ */
+export function reefRows(
+  geometry: BufferGeometry | undefined,
+  reefs: readonly number[],
+): number[] | null {
+  const uv1 = geometry?.getAttribute('uv1');
+  const rows = reefs.filter((share) => share < 1).map((share) => 1 - share);
+  if (uv1 === undefined || rows.length === 0) {
+    return null;
+  }
+  const has = (v: number): boolean => {
+    for (let i = 0; i < uv1.count; i++) {
+      if (Math.abs(uv1.getY(i) - v) < 1e-3) {
+        return true;
+      }
+    }
+    return false;
+  };
+  return rows.every(has) ? rows : null;
+}
+
+/** The share of its luff a main keeps at a reef level, 0 … 2 and between, by the catalog's reefs. */
+export function reefShare(reefs: readonly number[], level: number): number {
+  const top = reefs.length - 1;
+  const l = Math.min(Math.max(level, 0), top);
+  const i = Math.min(Math.floor(l), top - 1);
+  const a = reefs[i] ?? 1;
+  const b = reefs[i + 1] ?? a;
+  return a + (b - a) * (l - i);
+}
+
 export class Boat {
   readonly root = new Group();
   /** Rolled by the heel about the centre of gravity's height. */
@@ -146,6 +272,17 @@ export class Boat {
   readonly model = new Group();
   readonly parts = new Map<string, Object3D>();
   readonly sail = sailUniforms();
+  /** The headsail's shape, and how far aft of its tack its head is (its node's rake). */
+  readonly jib = sailUniforms();
+  readonly jibRake = uniform(0);
+  /** The downwind sail's clew's angle, its signed twist, its strips' ripples and its hoist. */
+  readonly kite = {
+    clew: uniform(0),
+    twist: uniform(0),
+    rippleFoot: uniform(0),
+    rippleHead: uniform(0),
+    hoist: uniform(0),
+  };
   readonly telltales = new Telltales();
   readonly pennant = new Pennant();
   /** The sailor aboard and drawn, once loaded, in the look last asked for (or the one before, while it loads). */
@@ -171,13 +308,43 @@ export class Boat {
   hullShape: HullShape | null = null;
 
   readonly #kind: BoatKind;
+  /** The square sails' strips' bellies and ripples (fore foot, fore head, after foot, after head), the reef and the time. */
+  readonly square = {
+    depth: [uniform(0), uniform(0), uniform(0), uniform(0)],
+    ripple: [uniform(0), uniform(0), uniform(0), uniform(0)],
+    reef: uniform(0),
+  };
+  /** The model's square sails, and their meshes. */
+  #squareSails: SquareSail[] = [];
+  readonly #squareMeshes = new Set<Object3D>();
+  /** Each headsail's mesh, and its head's rake aft of its tack. */
+  readonly #headsails = new Map<Object3D, number>();
+  /** The downwind sail's meshes, and its head's rake aft of its tack; its kind's numbers, null for a kind without one. */
+  readonly #kites = new Map<Object3D, number>();
+  readonly #kiteRig: KiteRig | null;
+  readonly #kiteRipple = new Float64Array(2);
+  /** The yards that come down as their sails' bands are taken in: each, its height at rest and its drop. */
+  readonly #yards: { node: Object3D; rest: number; drop: number; sail: SquareSail }[] = [];
+  readonly #belly: Belly = { depth: 0, ripple: 0 };
+  /** Set when the boat is put somewhere at once: its sails take the wind as it is at the next frame. */
+  #settled = false;
   readonly #ripple = new Float64Array(2);
-  /** The sail's cloth, what is printed on it, and where the machine mark goes. */
-  #cloth: CanvasTexture | null = null;
-  #number = '';
-  #insignia = '';
-  #mark: MarkPlace | null = null;
-  #marked = false;
+  readonly #jibRipple = new Float64Array(2);
+  /** The main's reef rows, where its reefs are slab reefs; else none. */
+  #reefRows: number[] = [];
+  /** The catalog's looks, and the boat's own as its shaders read it. */
+  readonly #looks: BoatLooks;
+  readonly #look = {
+    paint: uniform(0),
+    cloth: uniform(0),
+    number: uniform(0),
+    row: uniform(-1),
+    machine: uniform(0),
+  };
+  readonly #lookValues = new Float32Array(3);
+  /** The boat's name, lettered on its topsides from a texture of one row; null until loaded. */
+  #names: NameAtlas | null = null;
+  #name = '';
   /** The sailors loaded, by their art, and those loading. */
   readonly #sailors = new Map<SailorArt, BoatSailor>();
   readonly #loading = new Set<SailorArt>();
@@ -185,11 +352,14 @@ export class Boat {
   #shown: BoatSailor | null = null;
   #shownMachine = false;
   #wanted: SailorLook | null = null;
+  /** Whether the sail carries the machine mark, as last asked. */
+  #wantedMark = false;
   #renderer: WebGPURenderer | null = null;
   #seed = 1;
 
-  constructor(kind: BoatKind) {
+  constructor(kind: BoatKind, looks: BoatLooks) {
     this.#kind = kind;
+    this.#looks = looks;
     const { hull, rig } = kind.physics;
     this.root.name = 'boat';
     this.heel.position.y = hull.centreOfGravity;
@@ -198,10 +368,37 @@ export class Boat {
     this.heel.add(this.model);
     this.sail.footV.value = rig.footStrip;
     this.sail.headV.value = rig.headStrip;
+    this.sail.luff.value = rig.luff;
+    const { headsails } = kind.physics;
+    this.jib.footV.value = headsails.headsailFootStrip;
+    this.jib.headV.value = headsails.headsailHeadStrip;
+    this.#kiteRig = kiteRig(kind.physics);
   }
 
-  /** Loads the boat's model from the catalog's art path. */
-  async load(sailNumber: string, insignia: string): Promise<void> {
+  /** The boat put somewhere at once: what eases with the wind is drawn as the wind is at the next frame. */
+  settle(): void {
+    this.#settled = true;
+  }
+
+  /** A named node's place in the model's frame, wherever it hangs; null for none. */
+  nodeAt(name: string): Vector3 | null {
+    const o = this.parts.get(name);
+    const model = this.model.children[0];
+    if (o === undefined || model === undefined) {
+      return null;
+    }
+    model.updateMatrixWorld(true);
+    const inModel = new Matrix4().copy(model.matrixWorld).invert().multiply(o.matrixWorld);
+    return new Vector3().setFromMatrixPosition(inModel);
+  }
+
+  /** The kind of boat it is. */
+  get kind(): BoatKind {
+    return this.#kind;
+  }
+
+  /** Loads the boat's model from the catalog's art path; its sails carry the class insignia. */
+  async load(insignia: string): Promise<void> {
     const loader = new GLTFLoader();
     loader.setMeshoptDecoder(MeshoptDecoder);
     const gltf = await loader.loadAsync(artUrl(this.#kind.art.model));
@@ -211,37 +408,178 @@ export class Boat {
         this.parts.set(o.name, o);
       }
     });
-    const cloth = sailCloth(sailNumber, insignia);
-    this.#cloth = cloth;
-    this.#number = sailNumber;
-    this.#insignia = insignia;
     let sail: Mesh | undefined;
     this.parts.get('sail')?.traverse((o) => {
       if (sail === undefined && o instanceof Mesh) {
         sail = o;
       }
     });
-    const { foot, luff } = this.#kind.physics.rig;
-    this.#mark = markPlace(foot, luff, chordAtHalf(sail?.geometry));
+    const { foot, luff, reefs } = this.#kind.physics.rig;
+    const rows = reefRows(sail?.geometry, reefs);
+    this.#reefRows = rows ?? [];
+    this.sail.reefGather.value = rows === null ? 0 : 1;
+    // Each headsail in its own frame, at its tack: a mesh hung below that
+    // frame's node is taken into it, so its own vertices are the frame's.
+    // The downwind sail likewise, at its own tack.
+    this.#headsails.clear();
+    this.#kites.clear();
+    const headsails: Mesh[] = [];
+    const kites: Mesh[] = [];
+    // A square sail under the headsails' node (a spritsail) is not one.
+    const square = new Set(squareSails(model).flatMap((s) => s.meshes));
+    this.parts.get('jib')?.traverse((o) => {
+      if (o instanceof Mesh && !square.has(o)) {
+        headsails.push(o);
+      }
+    });
+    if (this.#kiteRig !== null) {
+      this.parts.get('kite')?.traverse((o) => {
+        if (o instanceof Mesh) {
+          kites.push(o);
+        }
+      });
+    }
+    model.updateMatrixWorld(true);
+    for (const m of [...headsails, ...kites]) {
+      const frame = headsailFrame(m);
+      if (frame.node !== m) {
+        const inFrame = new Matrix4().copy(frame.node.matrixWorld).invert().multiply(m.matrixWorld);
+        m.geometry = m.geometry.clone().applyMatrix4(inFrame);
+        frame.node.add(m);
+        m.position.set(0, 0, 0);
+        m.quaternion.identity();
+        m.scale.set(1, 1, 1);
+      }
+      (kites.includes(m) ? this.#kites : this.#headsails).set(m, frame.rake);
+    }
+    const rake = this.#headsails.values().next().value;
+    this.jibRake.value = rake ?? 0;
+    // The sail that carries the number, by the model's word.
+    const numbered = numberedSail(this.parts.values());
+    const number = {
+      place: numberPlace(foot, luff, (v) => chordAt(sail?.geometry, v)),
+      digits: digits(),
+      mirrored: NUMBER_MIRRORED,
+    };
+    const cloth: SailPrint = {
+      masks: clothMasks({
+        insignia,
+        reefRows: this.#reefRows,
+        mark: markPlace(foot, luff, chordAtHalf(sail?.geometry)),
+      }),
+      number: numbered === 'sail' ? number : null,
+    };
+    const jibCloth: SailPrint | null = this.parts.has('jib')
+      ? {
+          masks: clothMasks(
+            { insignia: '', reefRows: [], mark: null },
+            MASK_WIDTH / 2,
+            MASK_HEIGHT / 2,
+          ),
+          number: numbered === 'jib' ? number : null,
+        }
+      : null;
+    // The downwind sail: the cloth's band, and the machine mark at its own half-luff.
+    const { downwind } = this.#kind.physics;
+    const kiteCloth: SailPrint | null =
+      kites.length > 0
+        ? {
+            masks: clothMasks(
+              {
+                insignia: '',
+                reefRows: [],
+                mark: markPlace(
+                  downwind.downwindFoot,
+                  downwind.downwindLuff,
+                  chordAtHalf(kites[0]?.geometry),
+                ),
+              },
+              MASK_WIDTH / 2,
+              MASK_HEIGHT / 2,
+            ),
+            number: null,
+          }
+        : null;
+    this.#names = new NameAtlas(1, this.#looks.boatLooks.lettering);
+    // The square sails: each mesh given its shape's values.
+    this.#squareSails = squareSails(model);
+    let squareCloth: SailPrint | null = null;
+    for (const s of this.#squareSails) {
+      for (const m of s.meshes) {
+        shapeSquare(m.geometry, s, toNode(m, s, model));
+        this.#squareMeshes.add(m);
+      }
+      if (s.yard !== null && yardDrop(s) > 0) {
+        this.#yards.push({ node: s.yard, rest: s.yard.position.y, drop: yardDrop(s), sail: s });
+      }
+    }
+    if (this.#squareSails.length > 0) {
+      squareCloth = squarePrint(this.#squareSails);
+    }
     model.traverse((o) => {
       if (o instanceof Mesh) {
-        o.material = this.#replace(o, o.material as Material, cloth);
+        o.material = this.#replace(
+          o,
+          o.material as Material,
+          cloth,
+          jibCloth,
+          squareCloth,
+          kiteCloth,
+        );
         // The shaped sail, the ribbons and the pennant leave their rest bounds.
         o.frustumCulled = false;
       }
     });
     this.model.add(model);
     this.hullShape = hullShape(this.parts.get('hull')?.userData);
+    this.#letter();
+  }
+
+  /**
+   * The boat takes its own look: a boat look code (negative for none told:
+   * the first paint and cloth, no number) and its name ("" for none).
+   */
+  setBoatLook(code: number, name: string): void {
+    writeLook(this.#looks, code, this.#lookValues, 0);
+    this.#look.paint.value = this.#lookValues[0] ?? 0;
+    this.#look.cloth.value = this.#lookValues[1] ?? 0;
+    this.#look.number.value = this.#lookValues[2] ?? 0;
+    this.#name = name;
+    this.#letter();
+  }
+
+  /** The look drawn: the paint's and cloth's places, the sail number, the name lettered and its row (−1 for none). */
+  drawnBoatLook(): { paint: number; cloth: number; number: number; name: string; row: number } {
+    return {
+      paint: this.#look.paint.value,
+      cloth: this.#look.cloth.value,
+      number: this.#look.number.value,
+      name: this.#names?.rows.names[this.#look.row.value] ?? '',
+      row: this.#look.row.value,
+    };
+  }
+
+  /** Letters the name into its texture, if it has changed. */
+  #letter(): void {
+    const names = this.#names;
+    if (names === null) {
+      return;
+    }
+    this.#look.row.value = names.rowOf(this.#name, 0);
+    names.commit();
   }
 
   /**
    * The sailor aboard takes a look: its art, loaded the first time (the
    * sailor drawn till then stays), and its colours; a machine sailor's look
-   * prints the machine mark on the sail. Resolves once the look is drawn.
+   * prints the machine mark on the sail (or as mark says: the boat's
+   * skipper's, while another is at the helm). Resolves once the look is
+   * drawn.
    */
-  async setLook(look: SailorLook): Promise<void> {
+  async setLook(look: SailorLook, mark = look.machine): Promise<void> {
     this.#wanted = look;
-    this.#printMark(look.machine);
+    this.#wantedMark = mark;
+    this.#printMark(mark);
     const renderer = this.#renderer;
     if (renderer === null) {
       return;
@@ -263,7 +601,7 @@ export class Boat {
     if (wanted === null || wanted.art !== look.art) {
       // Another look was asked for meanwhile: it is drawn when it loads.
       if (wanted !== null && this.#sailors.has(wanted.art)) {
-        await this.setLook(wanted);
+        await this.setLook(wanted, this.#wantedMark);
       }
       return;
     }
@@ -282,6 +620,9 @@ export class Boat {
         model: await lazyArtUrl(a.model),
         close: () => lazyArtUrl(a.close),
         clips: await lazyArtUrl(a.clips),
+        wheel: () => lazyArtUrl(wheelClips(a.clips)),
+        trapeze: () => lazyArtUrl(trapezeClips(a.clips)),
+        harness: () => lazyArtUrl(harnessFile(a.clips)),
         colours: look.colours,
       },
       renderer,
@@ -298,17 +639,7 @@ export class Boat {
 
   /** Prints the machine mark on the sail, or takes it off. */
   #printMark(on: boolean): void {
-    const cloth = this.#cloth;
-    if (on === this.#marked || cloth === null || this.#mark === null) {
-      return;
-    }
-    this.#marked = on;
-    const g = (cloth.image as HTMLCanvasElement).getContext('2d') as CanvasRenderingContext2D;
-    paintCloth(g, this.#number, this.#insignia);
-    if (on) {
-      paintMark(g, this.#mark, CLOTH_WIDTH, CLOTH_HEIGHT, markInk(CLOTH));
-    }
-    cloth.needsUpdate = true;
+    this.#look.machine.value = on ? 1 : 0;
   }
 
   /**
@@ -320,7 +651,9 @@ export class Boat {
     this.#renderer = renderer;
     this.#seed = seed;
     // A look asked for before (the boat watched) is the one drawn.
-    await this.setLook(this.#wanted ?? look);
+    await (this.#wanted === null
+      ? this.setLook(look)
+      : this.setLook(this.#wanted, this.#wantedMark));
   }
 
   /**
@@ -364,27 +697,200 @@ export class Boat {
     }
     this.sail.rippleFoot.value = this.#ripple[0] ?? 0;
     this.sail.rippleHead.value = this.#ripple[1] ?? 0;
+    // Reefed, the main keeps a share of its luff; an Out not yet stepped says 0.
+    const share = out[RECORDS.out.reefShare] ?? 1;
+    this.sail.reefShare.value = share > 0 ? share : 1;
+    this.#drawJib(pose, out, flat, ease);
+    this.#drawKite(pose, out, ease);
+    this.#drawSquare(pose, out, ease);
     this.telltales.update(out, pose.boom, dt);
     this.pennant.update(out, dt);
 
     this.sailor?.draw(pose, out, dt);
   }
 
+  /** The headsail from the clew's angle, its twist and its flows, as the main is drawn. */
+  #drawJib(pose: BoatPose, out: Float64Array, flat: number, ease: number): void {
+    const { rig } = this.#kind.physics;
+    const j = this.jib;
+    const turn = Math.max(-1, Math.min(1, pose.jib / (rig.twistTurn * DEG)));
+    j.boom.value = pose.jib;
+    j.side.value = turn;
+    j.twist.value = (out[RECORDS.out.jibTwist] ?? 0) * turn;
+    j.camber.value = FULL_CAMBER * (flat > 0 ? flat : 1);
+    j.time.value = this.sail.time.value;
+    for (let i = 0; i < 2; i++) {
+      const flow = out[i === 0 ? RECORDS.out.jibFootFlow : RECORDS.out.jibHeadFlow] ?? 1;
+      const attack = out[i === 0 ? RECORDS.out.jibFootAttack : RECORDS.out.jibHeadAttack] ?? 0;
+      const want = flow === FLOW_LUFFING ? luffing(attack, rig.luffAngle * DEG) : 0;
+      const r = this.#jibRipple[i] ?? 0;
+      this.#jibRipple[i] = r + (want - r) * ease;
+    }
+    j.rippleFoot.value = this.#jibRipple[0] ?? 0;
+    j.rippleHead.value = this.#jibRipple[1] ?? 0;
+  }
+
+  /**
+   * The downwind sail from its clew's angle, its twist, its flows and its
+   * hoist: nothing in its bag, and flogging as it goes up or comes down.
+   */
+  #drawKite(pose: BoatPose, out: Float64Array, ease: number): void {
+    const rig = this.#kiteRig;
+    if (rig === null || this.#kites.size === 0) {
+      return;
+    }
+    // In its bag it is drawn at nothing, about its tack: kept in the scene,
+    // so that its shader is made with the boat's and none waits for the
+    // first time it goes up.
+    const shown = kiteShown(pose.hoist);
+    const k = this.kite;
+    const turn = Math.max(-1, Math.min(1, pose.kite / rig.twistTurn));
+    k.clew.value = pose.kite;
+    k.twist.value = (out[RECORDS.out.kiteTwist] ?? 0) * turn;
+    k.hoist.value = Math.max(0, Math.min(1, pose.hoist));
+    const { luffAngle } = this.#kind.physics.rig;
+    for (let i = 0; i < 2; i++) {
+      const flow = out[i === 0 ? RECORDS.out.kiteFootFlow : RECORDS.out.kiteHeadFlow] ?? 1;
+      const attack = out[i === 0 ? RECORDS.out.kiteFootAttack : RECORDS.out.kiteHeadAttack] ?? 0;
+      const want = kiteRipple(
+        flow === FLOW_LUFFING ? luffing(attack, luffAngle * DEG) : 0,
+        pose.hoist,
+      );
+      const r = this.#kiteRipple[i] ?? 0;
+      this.#kiteRipple[i] = shown ? r + (want - r) * ease : want;
+    }
+    k.rippleFoot.value = this.#kiteRipple[0] ?? 0;
+    k.rippleHead.value = this.#kiteRipple[1] ?? 0;
+  }
+
+  /** The yards turned, the square sails filled by each strip's wind, and the wheel turned with the rudder. */
+  #drawSquare(pose: BoatPose, out: Float64Array, ease: number): void {
+    for (const name of Object.keys(YARDS_NODES) as (keyof typeof YARDS_NODES)[]) {
+      const node = this.parts.get(name);
+      if (node !== undefined) {
+        node.rotation.y = YARDS_NODES[name] === 'fore' ? pose.foreYardsTurn : pose.yardsTurn;
+      }
+    }
+    const wheel = this.parts.get('wheel');
+    if (wheel !== undefined) {
+      wheel.rotation.z = wheelTurn(pose.rudder, this.#kind.physics.foils.rudderAngle);
+    }
+    if (this.#squareSails.length === 0) {
+      return;
+    }
+    const o = RECORDS.out;
+    const strips = [
+      [o.foreFootAttack, o.foreFootFlow],
+      [o.foreHeadAttack, o.foreHeadFlow],
+      [o.afterFootAttack, o.afterFootFlow],
+      [o.afterHeadAttack, o.afterHeadFlow],
+    ] as const;
+    const sq = this.square;
+    // Eased as the wind changes; a frame with no time gone (held, or the
+    // first), or the first after the boat is settled, shows the wind as it is.
+    const k = ease > 0 && !this.#settled ? ease : 1;
+    this.#settled = false;
+    for (let i = 0; i < 4; i++) {
+      const [attack, flow] = strips[i] as readonly [number, number];
+      const b = squareBelly(out[attack] ?? 0, out[flow] ?? 1, this.#belly);
+      const d = sq.depth[i] as typeof sq.reef;
+      const r = sq.ripple[i] as typeof sq.reef;
+      d.value += (b.depth - d.value) * k;
+      r.value += (b.ripple - r.value) * k;
+    }
+    sq.reef.value = pose.reef;
+    for (const y of this.#yards) {
+      y.node.position.y = y.rest - y.drop * bandTaken(y.sail.reef, pose.reef);
+    }
+  }
+
   /** After a new renderer: everything is kept on the CPU side and uploaded again by itself. */
   attached(_gfx: Gfx): void {}
 
-  #replace(mesh: Mesh, m: Material, cloth: CanvasTexture): Material {
+  #replace(
+    mesh: Mesh,
+    m: Material,
+    cloth: SailPrint,
+    jibCloth: SailPrint | null,
+    squareCloth: SailPrint | null,
+    kiteCloth: SailPrint | null,
+  ): Material {
     const src = m as MeshStandardMaterial;
     const vertexColors = mesh.geometry.hasAttribute('color');
+    const look = this.#look as unknown as LookNodes;
+    const palette = lookPalette(this.#looks);
     let made: Material;
-    if (this.#within(mesh, 'sail')) {
+    if (squareCloth !== null && this.#squareMeshes.has(mesh)) {
+      // The square sails: their cloth's v runs down from the head; the
+      // number only on the sail that carries it.
+      made = litMaterial(
+        { roughness: src.roughness, metalness: 0, side: DoubleSide },
+        this.#squareNode(),
+      );
+      const sv = squareVertex();
+      const numbered = { ...look, number: look.number.mul(varying(sv.numbered)) } as LookNodes;
+      const at = vec2(uv().x, float(1).sub(uv().y));
+      const c = vec4(clothColour(palette, numbered, at, squareCloth), 1);
+      (made as MeshStandardNodeMaterial).colorNode = c;
+      (made as MeshStandardNodeMaterial).emissiveNode = sailGlow(c);
+    } else if (this.#within(mesh, GALLERY)) {
+      // The stern gallery's panes: dark glass by day, lamplit by night.
+      made = litMaterial({
+        color: (src.color as Color).clone(),
+        roughness: src.roughness,
+        metalness: src.metalness,
+        vertexColors,
+      });
+      (made as MeshStandardNodeMaterial).emissiveNode = vec3(...LAMPLIGHT).mul(lampsLit);
+    } else if (kiteCloth !== null && this.#kites.has(mesh)) {
+      // The downwind sail: the boat's cloth, and the machine mark as the main's.
+      made = litMaterial(
+        { roughness: src.roughness, metalness: 0, side: DoubleSide },
+        this.#kiteNode(this.#kites.get(mesh) ?? 0),
+      );
+      const c = vec4(clothColour(palette, look, uv(), kiteCloth), 1);
+      (made as MeshStandardNodeMaterial).colorNode = c;
+      (made as MeshStandardNodeMaterial).emissiveNode = sailGlow(c);
+    } else if (jibCloth !== null && this.#within(mesh, 'jib')) {
+      made = litMaterial(
+        { roughness: src.roughness, metalness: 0, side: DoubleSide },
+        this.#jibNode(this.#headsails.get(mesh) ?? this.jibRake.value),
+      );
+      const c = vec4(clothColour(palette, look, uv(), jibCloth), 1);
+      (made as MeshStandardNodeMaterial).colorNode = c;
+      (made as MeshStandardNodeMaterial).emissiveNode = sailGlow(c);
+    } else if (this.#within(mesh, 'sail')) {
       // Daylight comes through flax: its shaded side glows a little, with the
       // insignia and number showing through, as much as the hour gives.
       made = litMaterial(
-        { map: cloth, roughness: src.roughness, metalness: 0, side: DoubleSide },
+        { roughness: src.roughness, metalness: 0, side: DoubleSide },
         this.#sailNode(),
       );
-      (made as MeshStandardNodeMaterial).emissiveNode = sailGlow(cloth);
+      const c = vec4(clothColour(palette, look, uv(), cloth), 1);
+      (made as MeshStandardNodeMaterial).colorNode = c;
+      (made as MeshStandardNodeMaterial).emissiveNode = sailGlow(c);
+    } else if (src.name === TOPSIDES) {
+      // The topsides in the boat's paint, times each plank's tone, with
+      // its name on them.
+      made = litMaterial({
+        roughness: src.roughness,
+        metalness: src.metalness,
+        vertexColors,
+        side: src.side === DoubleSide ? DoubleSide : FrontSide,
+      });
+      const place = namePlace(
+        mesh.geometry.getAttribute('position').array,
+        this.parts.get('hull')?.userData,
+      );
+      const names = this.#names;
+      const name: HullName | null =
+        place === null || names === null
+          ? null
+          : { texture: names.texture as Texture, rows: names.rows.rows, place };
+      (made as MeshStandardNodeMaterial).colorNode = vec4(
+        hullColour(palette, look, varying(positionGeometry), name),
+        1,
+      );
     } else if (this.#within(mesh, 'telltales')) {
       made = litMaterial(
         { vertexColors: true, roughness: 0.9, metalness: 0, side: DoubleSide },
@@ -433,66 +939,116 @@ export class Boat {
       return at.position;
     })() as unknown as Node<'vec3'>;
   }
-}
 
-/** The sail's cloth's colour: cream flax. */
-export const CLOTH = '#efe6d2';
-/** The cloth's canvas: its width the foot, its height the luff, at the same scale. */
-export const CLOTH_WIDTH = 512;
-export const CLOTH_HEIGHT = 960;
+  /** The square sails' vertex node: each vertex bellied by its strip's wind, and taken in by the reef. */
+  #squareNode(): Node<'vec3'> {
+    const sq = this.square;
+    return Fn(() => {
+      const sv = squareVertex();
+      const slot = sv.index.sub(sv.index.div(4).floor().mul(4));
+      const pick = (u: readonly Node<'float'>[]): Node<'float'> =>
+        select(
+          slot.lessThan(0.5),
+          u[0] as Node<'float'>,
+          select(
+            slot.lessThan(1.5),
+            u[1] as Node<'float'>,
+            select(slot.lessThan(2.5), u[2] as Node<'float'>, u[3] as Node<'float'>),
+          ),
+        ) as unknown as Node<'float'>;
+      const at = squarePoint(
+        {
+          depth: pick(sq.depth as unknown as Node<'float'>[]),
+          ripple: pick(sq.ripple as unknown as Node<'float'>[]),
+          reef: sq.reef as unknown as Node<'float'>,
+          time: this.sail.time as unknown as Node<'float'>,
+        },
+        sv,
+        positionGeometry as unknown as Node<'vec3'>,
+        uv().x,
+        sv.down,
+      );
+      normalLocal.assign(at.normal);
+      return at.position;
+    })() as unknown as Node<'vec3'>;
+  }
+
+  /** The downwind sail's vertex node: each vertex at its place on the shaped sail, as far as it is hoisted. */
+  #kiteNode(rake: number): Node<'vec3'> {
+    const r = float(rake);
+    const k = this.kite;
+    const inputs = kiteInputs(
+      k.clew,
+      k.twist,
+      k.rippleFoot,
+      k.rippleHead,
+      k.hoist,
+      this.#kiteRig as KiteRig,
+      this.sail.time,
+    );
+    return Fn(() => {
+      const fv = uv(1).y;
+      const at = kitePoint(
+        inputs,
+        positionGeometry.z.sub(r.mul(fv)),
+        uv(1).x,
+        fv,
+        positionGeometry.y,
+        r,
+      );
+      normalLocal.assign(at.normal);
+      return at.position;
+    })() as unknown as Node<'vec3'>;
+  }
+
+  /** A headsail's vertex node: each vertex at its place on the shaped headsail, its head rake aft of its tack. */
+  #jibNode(rake: number): Node<'vec3'> {
+    const r = float(rake);
+    return Fn(() => {
+      const fv = uv(1).y;
+      const at = jibPoint(
+        this.jib,
+        positionGeometry.z.sub(r.mul(fv)),
+        uv(1).x,
+        fv,
+        positionGeometry.y,
+        r,
+      );
+      normalLocal.assign(at.normal);
+      return at.position;
+    })() as unknown as Node<'vec3'>;
+  }
+}
 
 /**
- * The sail's cloth, drawn into a canvas: cream flax in crosscut panels,
- * the class insignia near the head and the sail number, if any, below it.
- * The canvas's width is the foot and its height the luff, at the same
- * scale.
+ * The square sails' print: their cloth's masks (no insignia, no reef rows:
+ * they are many sails of one mask), and the number's place on the sail
+ * that carries it, by its width and height, read the way its face reads.
  */
-export function sailCloth(number: string, insignia: string): CanvasTexture {
-  const canvas = document.createElement('canvas');
-  canvas.width = CLOTH_WIDTH;
-  canvas.height = CLOTH_HEIGHT;
-  paintCloth(canvas.getContext('2d') as CanvasRenderingContext2D, number, insignia);
-  return clothTexture(canvas);
-}
-
-/** Paints the cloth into a canvas's CLOTH_WIDTH × CLOTH_HEIGHT from its origin, as sailCloth has it. */
-export function paintCloth(g: CanvasRenderingContext2D, number: string, insignia: string): void {
-  const width = CLOTH_WIDTH;
-  const height = CLOTH_HEIGHT;
-  g.fillStyle = CLOTH;
-  g.fillRect(0, 0, width, height);
-  // Panel seams, square to the leech, and a faint weave.
-  g.strokeStyle = 'rgba(120, 100, 70, 0.28)';
-  g.lineWidth = 2;
-  for (let y = 40; y < height; y += 62) {
-    g.beginPath();
-    g.moveTo(0, y);
-    g.lineTo(width, y - 70);
-    g.stroke();
+export function squarePrint(sails: readonly SquareSail[]): SailPrint {
+  const masks = clothMasks(
+    { insignia: '', reefRows: [], mark: null, upright: true },
+    SQUARE_MASK.width,
+    SQUARE_MASK.height,
+  );
+  const numbered = sails.find((s) => s.numbered);
+  if (numbered === undefined) {
+    return { masks, number: null };
   }
-  // The insignia in a ring, 22% of the foot across, near the head.
-  const cx = 0.115 * width;
-  const cy = 0.2 * height;
-  const r = 0.085 * width;
-  g.strokeStyle = '#a3362a';
-  g.fillStyle = '#a3362a';
-  g.lineWidth = 7;
-  g.beginPath();
-  g.arc(cx, cy, r, 0, 2 * Math.PI);
-  g.stroke();
-  g.font = `bold ${Math.round(r * 1.3)}px Georgia, serif`;
-  g.textAlign = 'center';
-  g.textBaseline = 'middle';
-  g.fillText(insignia, cx, cy + r * 0.06);
-  g.fillStyle = '#2b2118';
-  g.font = `${Math.round(r * 1.25)}px Georgia, serif`;
-  g.fillText(number, 0.16 * width, 0.38 * height);
+  const geometry = numbered.meshes[0]?.geometry;
+  return {
+    masks,
+    number: {
+      place: numberPlace(numbered.width, numbered.head - numbered.foot, () => 1),
+      digits: digits(),
+      mirrored: geometry === undefined ? false : readsMirrored(geometry),
+    },
+  };
 }
 
-/** A cloth's canvas as the sail's texture. */
-export function clothTexture(canvas: HTMLCanvasElement): CanvasTexture {
-  const t = new CanvasTexture(canvas);
-  t.colorSpace = SRGBColorSpace;
-  t.anisotropy = 4;
-  return t;
-}
+/**
+ * Whether a sail's front face reads its cloth's u (along the foot from the
+ * luff) from right to left, as the boats' models are made: its number's
+ * digits are laid out the other way on that face.
+ */
+export const NUMBER_MIRRORED = true;

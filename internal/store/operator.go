@@ -64,6 +64,9 @@ type Action struct {
 	Detail     string
 	Source     string
 	From       string
+	// Report is the report the action was on, if HasReport.
+	Report    ReportID
+	HasReport bool
 }
 
 func insertAction(ctx context.Context, q *db.Queries, a Action) error {
@@ -71,6 +74,9 @@ func insertAction(ctx context.Context, q *db.Queries, a Action) error {
 	if a.HasAccount {
 		p.AccountID = uuidOf(a.Account)
 		p.Kind = text(string(a.Kind))
+	}
+	if a.HasReport {
+		p.ReportID = uuidOf(AccountID(a.Report))
 	}
 	if len(p.Name) > 80 {
 		p.Name = p.Name[:80]

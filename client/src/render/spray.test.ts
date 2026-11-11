@@ -1,8 +1,16 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
+import type { Material, Vector4 } from 'three';
 import { describe, expect, it } from 'vitest';
 import { foamAt, KNOT, newFoamLook } from '../ocean/look';
-import { type CrestSample, SprayDrops, type SpraySource, type SprayWeather, seeded } from './spray';
+import {
+  type CrestSample,
+  SprayDrops,
+  type SpraySource,
+  SprayView,
+  type SprayWeather,
+  seeded,
+} from './spray';
 
 const weather = (knots: number, hs = 1): SprayWeather => {
   const look = foamAt(knots, newFoamLook());
@@ -172,5 +180,38 @@ describe('spray', () => {
     sail(drops, 5, 40, 3);
     expect(drops.count).toBeLessThanOrEqual(96);
     expect(seeded(1)()).toBe(seeded(1)());
+  });
+});
+
+describe('the spray’s glow', () => {
+  it('set every frame, changes only its uniform’s value, in place', () => {
+    const view = new SprayView(16);
+    const material = view.mesh.material as Material;
+    const version = material.version;
+    const colour = (material as unknown as { colorNode: unknown }).colorNode;
+    const opacity = (material as unknown as { opacityNode: unknown }).opacityNode;
+    const value = view.glow.value;
+    expect((value as Vector4).toArray()).toEqual([0, 0, 0, 0]);
+    for (let i = 0; i < 1000; i++) {
+      view.setGlow(0.38, 0.94, 0.81, (i % 100) / 99);
+    }
+    expect(view.mesh.material).toBe(material);
+    expect(material.version).toBe(version);
+    expect((material as unknown as { colorNode: unknown }).colorNode).toBe(colour);
+    expect((material as unknown as { opacityNode: unknown }).opacityNode).toBe(opacity);
+    expect(view.glow.value).toBe(value);
+    expect((value as Vector4).w).toBe(1);
+  });
+
+  it('takes its colour as display values, and holds its strength from 0 to 1', () => {
+    const view = new SprayView(16);
+    view.setGlow(1, 0.5, 0, 3);
+    const v = view.glow.value as Vector4;
+    expect(v.x).toBeCloseTo(1, 6);
+    expect(v.y).toBeCloseTo(0.214, 3);
+    expect(v.z).toBeCloseTo(0, 6);
+    expect(v.w).toBe(1);
+    view.setGlow(1, 0.5, 0, -1);
+    expect(v.w).toBe(0);
   });
 });

@@ -77,8 +77,12 @@ func TestHeelFollowsTheGusts(t *testing.T) {
 	p := testWeather(t)
 	var sf scenarioFile
 	readJSON(t, scenariosFile, &sf)
+	values, err := sf.Params.of("")
+	if err != nil {
+		t.Fatal(err)
+	}
 	var params Params
-	if err := setParams(&params, sf.Params); err != nil {
+	if err := setParams(&params, values); err != nil {
 		t.Fatal(err)
 	}
 	params.HikeReach, params.LeeReach = 0, 0

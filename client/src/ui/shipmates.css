@@ -1,0 +1,155 @@
+/* SPDX-License-Identifier: AGPL-3.0-only */
+
+/* Shipmates: the panel over the sea in who is aboard's rows, a thread in
+   chat's lines and field, kept above the keyboard, and the notices under
+   the case as sailing together's line is. Every key the instruments'
+   head keys' size, as sailing together's are (deck.css). */
+
+/* The mark beside a shipmate's name. */
+.deck-star {
+  flex: none;
+  color: var(--gold);
+  font-size: 14px;
+  line-height: 1;
+}
+
+.hud .shipmates-panel h3.shipmates-head {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 6px 0 0;
+  color: var(--faint);
+  font:
+    15px / 1.2 "IM Fell English SC",
+    Georgia,
+    serif;
+  letter-spacing: 0.04em;
+}
+
+.shipmates-detail {
+  font:
+    13px / 1.2 "Alegreya Sans",
+    system-ui,
+    sans-serif;
+  letter-spacing: 0;
+}
+
+.shipmates-panel > .deck-faint {
+  font-size: 14px;
+}
+
+/* What came of an act on a row: under it, the row's width. */
+.deck-row-note {
+  flex: 1 1 100%;
+  color: var(--brass-light);
+  font-size: 14px;
+  overflow-wrap: anywhere;
+}
+
+.deck-row-note .player-text {
+  color: var(--gold);
+}
+
+.shipmates-offline {
+  flex: none;
+  padding-top: 4px;
+  border-top: 1px solid rgb(255 255 255 / 12%);
+}
+
+/* A thread: its head, the lines that scroll, the note and the field; the
+   window never scrolls, its lines do. */
+.hud .shipmate-thread {
+  gap: 6px;
+  min-height: min(260px, calc(100dvh - 32px));
+  padding: 8px 10px 10px;
+  overflow: hidden;
+}
+
+.hud .shipmate-thread.keyboard {
+  min-height: 0;
+}
+
+.shipmate-thread-head {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.hud .shipmate-thread-name {
+  flex: 0 1 auto;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.shipmate-thread-name .player-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--gold);
+}
+
+.shipmate-presence {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 14px;
+  white-space: nowrap;
+}
+
+.shipmate-thread-head .head-close {
+  flex: none;
+  margin-left: auto;
+}
+
+.hud .shipmate-lines {
+  flex: 1 1 auto;
+  min-height: 40px;
+}
+
+.shipmate-thread .chat-note,
+.shipmate-thread .chat-foot {
+  flex: none;
+}
+
+.shipmate-thread .foot-close {
+  display: none;
+}
+
+/* On a short screen, a phone held sideways, Close at the field's end:
+   the head's row is the lines'. */
+@media (max-height: 499px) {
+  .hud .shipmate-thread {
+    padding-top: 8px;
+    min-height: 0;
+  }
+
+  .hud .shipmate-thread .shipmate-thread-head {
+    display: none;
+  }
+
+  .hud .shipmate-thread .foot-close {
+    display: block;
+  }
+}
+
+/* Under the case: one notice, its words, its key and its ✕. */
+.hud .shipmate-notice .deck-line-words {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 6px 0;
+  overflow-wrap: anywhere;
+  font-weight: 500;
+}
+
+.shipmate-notice .player-text {
+  color: var(--gold);
+}
+
+.hud .shipmate-notice .notice-dismiss {
+  flex: none;
+  padding: 0;
+}

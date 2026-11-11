@@ -81,6 +81,21 @@ var (
 	ErrCannot = errors.New("watch: cannot be watched")
 	// ErrTooMany is a follow past MaxFollows.
 	ErrTooMany = errors.New("watch: following too many")
+	// ErrNoLink is a link to watch whose code no account has: never made,
+	// made new since, or its account deleted.
+	ErrNoLink = errors.New("watch: no such link")
+	// ErrOwn is a link to the viewer's own boat.
+	ErrOwn = errors.New("watch: the viewer's own boat")
+	// ErrWhich is a link to replace that is none of the links.
+	ErrWhich = errors.New("watch: not one of the links")
+)
+
+// The links an account may make anew: its own sailor's, its fleet's, or
+// one of its machine sailors'.
+const (
+	LinkMe      = "me"
+	LinkFleet   = "fleet"
+	LinkMachine = "machine"
 )
 
 // Store is what watching reads and writes in the database.
@@ -90,6 +105,11 @@ type Store interface {
 	Follows(ctx context.Context, follower store.AccountID) ([]store.Followed, error)
 	Follow(ctx context.Context, follower, followed store.AccountID) error
 	Unfollow(ctx context.Context, follower, followed store.AccountID) error
+	LinkCodes(ctx context.Context, id store.AccountID) (store.LinkCodes, error)
+	LinkTarget(ctx context.Context, code string) (store.WatchTarget, error)
+	FleetLinkOwner(ctx context.Context, code string) (store.AccountID, error)
+	NewWatchCode(ctx context.Context, owner, id store.AccountID) (string, error)
+	NewFleetCode(ctx context.Context, id store.AccountID) (string, error)
 }
 
 // Edge is what watching asks of the game connection: who allows
@@ -115,6 +135,9 @@ type Config struct {
 	// Agent, if not nil, says whether a machine sailor's AI app is
 	// connected, by the sailor's account: told on its owner's card.
 	Agent func(bus.Account) bool
+	// Blocks, if not nil, says whether two accounts block one another:
+	// a human blocked is never on the viewer's list.
+	Blocks func(a, b bus.Account) bool
 }
 
 // Service is a world's watching: the list, the card, following, and the
@@ -193,13 +216,15 @@ type Page struct {
 
 // Query is what a page of the list is asked for with: part of a name,
 // the page, the order and the filter; or, for a refresh, the names of
-// the sailors shown, which take the others' place.
+// the sailors shown, which take the others' place. Fleet, the code of a
+// fleet's link, keeps only that fleet's machine sailors.
 type Query struct {
 	Q     string
 	Page  int
 	Sort  string
 	Who   string
 	Names []string
+	Fleet string
 }
 
 // SailorCard is the card about a sailor: its row, the weather at its
@@ -211,6 +236,9 @@ type SailorCard struct {
 	Where   *CardWhere   `json:"where,omitempty"`
 	Voyage  *CardVoyage  `json:"voyage,omitempty"`
 	Agent   *bool        `json:"agent,omitempty"`
+	// Code is a machine sailor's link's code, to share its link; never a
+	// human's, whose link is theirs alone to share.
+	Code string `json:"code,omitempty"`
 }
 
 // CardVoyage is this voyage: its closest pass to the lip it survived, m,
@@ -244,6 +272,12 @@ func (s *Service) List(ctx context.Context, viewer store.AccountID, q Query) (Pa
 	if err != nil {
 		return Page{}, err
 	}
+	var fleet store.AccountID
+	if q.Fleet != "" {
+		if fleet, err = s.fleetOf(ctx, q.Fleet); err != nil {
+			return Page{}, err
+		}
+	}
 	withheld := inWater(boats, viewer)
 	order := q.Sort
 	if withheld && order == SortEdge {
@@ -267,7 +301,7 @@ func (s *Service) List(ctx context.Context, viewer store.AccountID, q Query) (Pa
 		}
 		t := b.target()
 		_, followed := fol[b.owner]
-		if v := Allowed(t, s.boatOf(b), viewer); v != Yes {
+		if v := Allowed(t, s.boatOf(b, viewer), viewer); v != Yes {
 			if followed {
 				gone[b.owner] = v
 			}
@@ -281,6 +315,8 @@ func (s *Service) List(ctx context.Context, viewer store.AccountID, q Query) (Pa
 			}
 		case key != "" && !strings.Contains(b.key, key), !q.keeps(t, followed):
 			continue
+		case q.Fleet != "" && (!t.Machine() || t.Owner != fleet):
+			continue
 		}
 		rows = append(rows, s.entry(b, t, viewer, followed, withheld, watched))
 	}
@@ -289,7 +325,7 @@ func (s *Service) List(ctx context.Context, viewer store.AccountID, q Query) (Pa
 	for _, r := range rows {
 		items = append(items, r.item)
 	}
-	if q.Who == WhoFollowing && names == nil {
+	if q.Who == WhoFollowing && names == nil && q.Fleet == "" {
 		items = append(items, goneItems(fol, gone, key, viewer)...)
 	}
 	p := Page{Sailors: []Item{}, AtSea: len(boats), Withheld: withheld}
@@ -452,6 +488,9 @@ func (s *Service) Card(ctx context.Context, viewer store.AccountID, name string)
 		on := s.cfg.Agent(bus.Account(b.owner))
 		out.Agent = &on
 	}
+	if t.Machine() {
+		out.Code = b.sailor.Code
+	}
 	return out, nil
 }
 
@@ -501,7 +540,7 @@ func (s *Service) watchable(ctx context.Context, boats []boat, viewer store.Acco
 			continue
 		}
 		t := b.target()
-		switch Allowed(t, s.boatOf(b), viewer) {
+		switch Allowed(t, s.boatOf(b, viewer), viewer) {
 		case Yes:
 			return b, t, nil
 		case NotAtSea:
@@ -524,6 +563,154 @@ func (s *Service) watchable(ctx context.Context, boats []boat, viewer store.Acco
 		return nil, t, ErrNotAtSea
 	}
 	return nil, t, ErrCannot
+}
+
+// fleetOf is the human whose fleet's link has code; ErrNoLink for none.
+func (s *Service) fleetOf(ctx context.Context, code string) (store.AccountID, error) {
+	id, err := s.cfg.Store.FleetLinkOwner(ctx, code)
+	if errors.Is(err, store.ErrNotFound) {
+		return store.AccountID{}, ErrNoLink
+	}
+	return id, err
+}
+
+// targetOf is the sailor whose link has code; ErrNoLink for none.
+func (s *Service) targetOf(ctx context.Context, code string) (Target, error) {
+	wt, err := s.cfg.Store.LinkTarget(ctx, code)
+	if errors.Is(err, store.ErrNotFound) {
+		return Target{}, ErrNoLink
+	}
+	return Target(wt), err
+}
+
+// Link is the sailor whose link has code, and whether viewer may watch it
+// now: nil, or ErrOwn, ErrNotAtSea or ErrCannot as a watch is refused,
+// with the sailor; ErrNoLink, with none, for a code no account has. A
+// human is refused alike whatever the reason.
+func (s *Service) Link(ctx context.Context, viewer store.AccountID, code string) (Target, error) {
+	t, err := s.targetOf(ctx, code)
+	if err != nil {
+		return Target{}, err
+	}
+	v, err := s.linkVerdict(ctx, t, viewer, false)
+	if err == nil && v != Yes && v != Own {
+		// The boats are kept a moment: one that has just set sail is
+		// looked for again before the link is refused.
+		v, err = s.linkVerdict(ctx, t, viewer, true)
+	}
+	if err != nil {
+		return Target{}, err
+	}
+	switch v {
+	case Yes:
+		return t, nil
+	case Own:
+		return t, ErrOwn
+	case NotAtSea:
+		return t, ErrNotAtSea
+	}
+	return t, ErrCannot
+}
+
+// linkVerdict is the rule's verdict on viewer watching t, from the boats
+// kept, or with fresh from the latest frame.
+func (s *Service) linkVerdict(ctx context.Context, t Target, viewer store.AccountID, fresh bool) (Verdict, error) {
+	if fresh {
+		s.forgetBoats()
+	}
+	boats, err := s.read(ctx)
+	if err != nil {
+		return Cannot, err
+	}
+	for i := range boats {
+		if b := &boats[i]; b.owner == t.ID && b.sailor.Name != "" {
+			return Allowed(b.target(), s.boatOf(b, viewer), viewer), nil
+		}
+	}
+	return Allowed(t, Boat{}, viewer), nil
+}
+
+// forgetBoats has the next read make the boats again from the latest
+// frame.
+func (s *Service) forgetBoats() {
+	s.mu.Lock()
+	s.boats = nil
+	s.mu.Unlock()
+}
+
+// Fleet is the fleet's machine sailors whose link has code that viewer
+// may watch now, liveliest first; ErrNoLink for a code no account has.
+// Nothing in it says whose they are. With none, the boats are looked for
+// again, in case one has just set sail.
+func (s *Service) Fleet(ctx context.Context, viewer store.AccountID, code string) ([]Item, error) {
+	q := Query{Sort: SortLiveliest, Fleet: code}
+	p, err := s.List(ctx, viewer, q)
+	if err == nil && len(p.Sailors) == 0 {
+		s.forgetBoats()
+		p, err = s.List(ctx, viewer, q)
+	}
+	return p.Sailors, err
+}
+
+// FollowLink follows the sailor whose link has code, or with on false
+// stops following it, and says how many the viewer follows then. Unlike
+// Follow, the sailor is followed whatever their state, with the same
+// answer, so that following by a link never tells whether a human is at
+// sea; within MaxFollows. ErrNoLink for a code no account has, ErrOwn for
+// the viewer's own.
+func (s *Service) FollowLink(ctx context.Context, viewer store.AccountID, code string, on bool) (int, error) {
+	t, err := s.targetOf(ctx, code)
+	if err != nil {
+		return 0, err
+	}
+	if t.ID == viewer {
+		return 0, ErrOwn
+	}
+	fol, err := s.followsOf(ctx, viewer)
+	if err != nil {
+		return 0, err
+	}
+	_, had := fol[t.ID]
+	switch {
+	case !on && !had, on && had:
+		return len(fol), nil
+	case !on:
+		if err := s.cfg.Store.Unfollow(ctx, viewer, t.ID); err != nil {
+			return 0, err
+		}
+		return s.followed(viewer, t.ID, store.Sailor{}, false), nil
+	case len(fol) >= MaxFollows:
+		return 0, ErrTooMany
+	}
+	if err := s.cfg.Store.Follow(ctx, viewer, t.ID); err != nil {
+		return 0, err
+	}
+	return s.followed(viewer, t.ID, store.Sailor{Name: t.Name, Kind: t.Kind, Owner: t.Owner}, true), nil
+}
+
+// Codes are the codes of an account's own links: its sailor's and, for a
+// human, its fleet's.
+func (s *Service) Codes(ctx context.Context, id store.AccountID) (store.LinkCodes, error) {
+	return s.cfg.Store.LinkCodes(ctx, id)
+}
+
+// NewCode gives one of a human's links a new code, and returns it: which
+// is LinkMe, LinkFleet, or LinkMachine for its machine sailor machine.
+// The old link stops working. ErrWhich for none of them; store.ErrNotFound
+// for a machine sailor not the human's.
+func (s *Service) NewCode(ctx context.Context, owner store.AccountID, which string, machine store.AccountID) (string, error) {
+	switch which {
+	case LinkMe:
+		return s.cfg.Store.NewWatchCode(ctx, owner, owner)
+	case LinkFleet:
+		return s.cfg.Store.NewFleetCode(ctx, owner)
+	case LinkMachine:
+		if machine == owner {
+			return "", store.ErrNotFound
+		}
+		return s.cfg.Store.NewWatchCode(ctx, owner, machine)
+	}
+	return "", ErrWhich
 }
 
 // Follow follows the sailor named name, or with on false stops following
@@ -672,9 +859,10 @@ func (b *boat) target() Target {
 	return Target{ID: b.owner, Kind: b.sailor.Kind, Owner: b.sailor.Owner, Name: b.sailor.Name}
 }
 
-// boatOf is what the rule is told of boat b.
-func (s *Service) boatOf(b *boat) Boat {
-	return Boat{InWater: true, Unseen: b.unseen, Voyage: s.cfg.Edge.VoyageAllows(bus.Account(b.owner), b.id)}
+// boatOf is what the rule is told of boat b, for viewer.
+func (s *Service) boatOf(b *boat, viewer store.AccountID) Boat {
+	return Boat{InWater: true, Unseen: b.unseen, Voyage: s.cfg.Edge.VoyageAllows(bus.Account(b.owner), b.id),
+		Blocked: s.cfg.Blocks != nil && s.cfg.Blocks(bus.Account(b.owner), bus.Account(viewer))}
 }
 
 // kindOf is a kind of boat's catalog id, "" for one out of range.

@@ -10,6 +10,10 @@
 // moon and the stars stand from the focus at that time, lights everything
 // by the hour, and draws it. The focus is the boat; or, while the free
 // camera flies, the point beneath it, and the boat is drawn where it is.
+// Every boat is drawn as its own kind: the player's own by the kind the
+// server welcomed it with (or the sandbox's), the others by theirs, each
+// with its own model, lanterns, hull in the sea and wake, and the camera
+// and the shadows sized to the own boat.
 //
 // Nothing is drawn until the world is ready under the page's cover: its
 // frames update the scene alone until the page lets them draw.
@@ -18,7 +22,7 @@ import { signal } from '@preact/signals';
 import { type Color, type Vector2, Vector3, type Vector4 } from 'three';
 import { exp, float, fog, length, max, mix, positionView, positionWorld } from 'three/tsl';
 import type { WebGPURenderer } from 'three/webgpu';
-import { catalog } from '../catalog';
+import { type Boat as BoatKind, catalog } from '../catalog';
 import { artOf, coloursOf, isMachine, type Look, type Looks, lookOf } from '../catalog/looks';
 import { endLook } from '../edge/broken';
 import { EdgeScene } from '../edge/edge';
@@ -27,8 +31,12 @@ import { closedIn, EndSlabs, type EndStage, endStage, risen } from '../edge/take
 import { STEPS_PER_SECOND } from '../game/clock';
 import type { DrawnBoat } from '../game/fleet';
 import type { Land } from '../land/land';
-import { HULL_REACH, HULLS, type HullShape, hulls } from '../ocean/hulls';
-import { foamAt, KNOT, newFoamLook, SPRAY } from '../ocean/look';
+import type { BoatAt } from '../life/birds';
+import { type GullSource, LifeDraw, type LifeFrame, type SurfaceAt } from '../life/draw';
+import type { Aboard } from '../life/perch';
+import { LifeStore } from '../life/store';
+import { HULL_REACH, HULLS, hullShape, hulls } from '../ocean/hulls';
+import { foamAt, KNOT, newFoamLook, SPRAY, transomFrom } from '../ocean/look';
 import { Ocean } from '../ocean/ocean';
 import { rainShare } from '../ocean/water';
 import { type BoatPose, newPose } from '../predict/blend';
@@ -39,16 +47,18 @@ import { type BoatWind, newBoatWind } from '../predict/weather';
 import { SkyTime } from '../sky/skytime';
 import starsUrl from '../sky/stars.bin?url';
 import { SkyWeather } from '../sky/weather';
-import { Boat, lazyArtUrl, type SailorLook } from './boat';
-import { CAMERA_PRESETS, type CameraView, ChaseCamera } from './camera';
+import { Birds } from './birds';
+import { Boat, lampsLit, lazyArtUrl, type SailorLook } from './boat';
+import { CAMERA_PRESETS, type CameraView, ChaseCamera, lookSizeOf, sizeOf } from './camera';
 import { FloatingOrigin, type ScenePoint } from './coords';
+import { glowDark } from './daylight';
 import { DirtyAir } from './dirtyair';
 import { type FlagSeen, Flags } from './flags';
-import { FleetView, PERSON_DEFAULT } from './fleet';
+import { FleetViews, PERSON_DEFAULT } from './fleet';
 import { AIR_REACH, airLook, depthTo, heldRain, setAirSources } from './fog';
 import { FreeCamera } from './freecam';
 import { GustRings } from './gustring';
-import { Lanterns, lanternLit, TOWN_LANTERNS } from './lanterns';
+import { type BoatLantern, Lanterns, lanternLit, TOWN_LANTERNS } from './lanterns';
 import { Lightning } from './lightning';
 import { Lighthouses } from './lights';
 import { domeCentre } from './materials';
@@ -69,6 +79,10 @@ import {
 } from './quality';
 import { type Gfx, type Wanted, wantsCompat } from './renderer';
 import { RightOfWay, type Seen } from './rightofway';
+import { CrewDeck, type CrewShown, helmLook, modelDeck, tillerOf } from './sailors/crew';
+import { type CrewPlan, crewPlan } from './sailors/crewrules';
+import { FleetCrews, kindCrew } from './sailors/fleetcrews';
+import { hullSolid } from './sailors/solid';
 import { Shadows } from './shadows';
 import { StormCones } from './signals';
 import { look, Sky, toLinear } from './sky';
@@ -83,6 +97,7 @@ import {
 import { Stage } from './stage';
 import { FEW_STARS, Stars } from './stars';
 import { type FrameStats, Stats, WINDOW } from './stats';
+import { Swimmers } from './swimmers';
 import { Wrecks } from './wrecks';
 
 /** The staged end's timings, from the catalog. */
@@ -128,6 +143,8 @@ export function sailorLookOf(cat: Looks, code: number): SailorLook {
 
 /** No boats: the fleet before the game is online. */
 const NO_BOATS: readonly DrawnBoat[] = [];
+/** A hull sits at most this much deeper or higher than at rest for its wake's waves, metres. */
+const SINK_MOST = 0.08;
 
 /**
  * What can cover the sea, drawn by the same renderer in its place while it
@@ -153,8 +170,8 @@ export class SeaScene {
   readonly camera = new ChaseCamera();
   /** The free camera: while it flies, the scene follows it, not the boat. */
   readonly freeCam = new FreeCamera();
-  /** The catalog's first boat, the one a new sailor starts in. */
-  readonly kind = catalog.boats[0];
+  /** The own boat's kind: its index among the catalog's boats. */
+  kindIndex = 0;
   /** The catalog's sea: the spectrum both bands of waves are drawn from. */
   readonly catalogSea = catalog.weather.sea;
   readonly overlays: Overlays;
@@ -167,14 +184,18 @@ export class SeaScene {
     catalog.encounters.overlay.wedges,
   );
   /** The beginners' right-of-way overlay. */
-  readonly rightOfWay = new RightOfWay(this.kind, catalog.encounters.overlay);
+  readonly rightOfWay = new RightOfWay(catalog.boats[0], catalog.encounters.overlay);
   readonly boatScene: ScenePoint = { x: 0, y: 0, z: 0 };
   /** What the scene follows, in the world and the scene: the boat, or the point beneath the free camera. */
   readonly focus = { east: 0, north: 0 };
   readonly focusScene: ScenePoint = { x: 0, y: 0, z: 0 };
   boat: Boat | null = null;
-  /** The other boats, drawn many at once. */
-  readonly fleet = new FleetView(this.kind);
+  /** The other boats, drawn many at once, a view for each kind. */
+  readonly fleet = new FleetViews(catalog.boats, catalog);
+  /** The people aboard the boat in view besides its sailor at the helm, at their stations. */
+  readonly crew = new CrewDeck((code) => sailorLookOf(catalog, code));
+  /** The other boats' crews. */
+  readonly crews = new FleetCrews(catalog.boats, (code) => sailorLookOf(catalog, code));
   /** Where the other boats' poses come from: the game's fleet online, or a test's. */
   fleetSource: FleetSource | null = null;
   /** The world's land, once there is a world whose land may be drawn. */
@@ -203,6 +224,15 @@ export class SeaScene {
     catalog.world.lights,
     catalog.world.places.kinds.findIndex((k) => k.site === 'light'),
   );
+  /** Every bird drawn, one draw: the colonies', the sea's life's and the towns' gulls. */
+  readonly birds = new Birds();
+  /** The sea's life the page has been told of, and how it is drawn. */
+  readonly life = new LifeStore();
+  readonly lifeDraw = new LifeDraw(catalog.life, catalog.world.towns.buildings);
+  /** Every animal in the water drawn, one draw. */
+  readonly swimmers = new Swimmers();
+  /** Called with each frame's life before it is drawn: the sandbox's scenes keep their grounds of fish by it. */
+  onLife: ((f: LifeFrame) => void) | null = null;
   /** The wrecks, stranded and sunk. */
   readonly wrecks = new Wrecks(
     catalog.world.places.rigs,
@@ -273,9 +303,8 @@ export class SeaScene {
   readonly #nearDist = new Float64Array(HULLS);
   readonly #query: URLSearchParams;
   readonly #store: Store | null;
-  /** The hull every boat has, for now: where its stern is and how wide it is, for the wakes. */
-  #aft = 0;
-  #halfBeam = 0.5;
+  /** The current at the boat, as the module gives it. */
+  readonly #current: number[] = [0, 0];
   /** The fade going over the lip, and the world's end's veil, 0 to 1; whether its words show. */
   #fadeOver = 0;
   #veil = 0;
@@ -358,6 +387,8 @@ export class SeaScene {
     });
     this.edge.on = this.#query.get('edge') !== 'off';
     this.freeCam.lip = catalog.world.disk.radius;
+    // The chase camera's arm reads the land in the world: the origin's offset.
+    this.camera.origin = this.origin.world;
     this.fade = document.createElement('div');
     this.fade.className = 'edge-fade';
     const words = document.createElement('p');
@@ -367,6 +398,17 @@ export class SeaScene {
     scene.add(this.endSlabs.mesh);
     scene.add(this.sprayView.mesh);
     this.overlays = new Overlays(this.kind);
+    // A kind's boats, first seen, are compiled off the frame.
+    this.fleet.onView = (v) => {
+      void this.stage.compile(v.root).catch(() => undefined);
+      const nodes = v.parts?.nodes;
+      this.#kindParts(v.index, (name) => nodes?.get(name) ?? null, v.parts?.hullData);
+      // Its boats' crews drawn by its model's deck and stations.
+      if (v.parts !== null) {
+        this.crews.useKind(v.index, kindCrew(v.kind, v.parts));
+      }
+    };
+    this.fleet.root.add(this.crews.group);
     scene.add(this.overlays.world);
     scene.add(this.gustRings.group);
     scene.add(this.dirtyAir.group, this.rightOfWay.group);
@@ -375,6 +417,7 @@ export class SeaScene {
     scene.add(this.flags.mesh, this.smoke.mesh, this.cones.mesh);
     scene.add(this.lighthouses.towers, this.lighthouses.glows);
     scene.add(this.wrecks.root);
+    scene.add(this.birds.mesh, this.swimmers.mesh);
     this.wrecks.depthAt = (east, north) => {
       const h = this.land?.heightAt(east, north) ?? null;
       return h === null ? null : -h;
@@ -468,10 +511,56 @@ export class SeaScene {
     }
   }
 
-  /** Draws the sailor of the boat in view in a look: the player's own, or the one watched. */
+  /**
+   * Draws the sailor of the boat in view in a look: the player's own, or the
+   * one watched; while others are aboard, the sailor at the helm is whoever
+   * holds the controls, in their look (showCrew).
+   */
   showLook(code: number): Promise<void> {
-    return this.boat?.setLook(sailorLookOf(catalog, code)) ?? Promise.resolve();
+    this.#lookShown = code;
+    return this.#drawHelm();
   }
+
+  /**
+   * Who is aboard the boat in view: whoever holds the controls drawn at the
+   * helm, as its one sailor is, the others at their stations; null for
+   * nobody but the one sailor.
+   */
+  showCrew(crew: CrewShown | null): Promise<void> {
+    this.#crewShown = crew;
+    this.crew.set(crew);
+    return this.#drawHelm();
+  }
+
+  /** The look the sailor at the helm is drawn in: whoever holds the controls', else the look last asked for. */
+  #helmCode(): number {
+    const crew = this.#crewShown;
+    return (
+      (crew === null ? null : helmLook(crew)) ?? this.#lookShown ?? this.#ownLook ?? PERSON_DEFAULT
+    );
+  }
+
+  /** Whether the sailor at the helm is drawn in the look it is to be: whoever holds the controls'. */
+  get helmDrawn(): boolean {
+    return this.boat?.drawnLook()?.model === sailorLookOf(catalog, this.#helmCode()).art.model;
+  }
+
+  #drawHelm(): Promise<void> {
+    if (this.#crewShown === null && this.#lookShown === null && this.#ownLook === null) {
+      return Promise.resolve();
+    }
+    // The sail's mark is the skipper's: a machine sailor's boat carries it.
+    const crew = this.#crewShown;
+    const skipper = crew?.people.find((p) => p.seat === 0);
+    const helm = sailorLookOf(catalog, this.#helmCode());
+    const mark = skipper === undefined ? helm.machine : sailorLookOf(catalog, skipper.look).machine;
+    return this.boat?.setLook(helm, mark) ?? Promise.resolve();
+  }
+
+  /** The look the boat in view's sailor was last asked to be drawn in; null for the player's own. */
+  #lookShown: number | null = null;
+  /** Who is aboard the boat in view, as last told; null for nobody but its sailor. */
+  #crewShown: CrewShown | null = null;
 
   /**
    * The sailors seated, the own boat's and the fleet's first look, once the
@@ -491,11 +580,23 @@ export class SeaScene {
     await this.#lookAsked;
     const look = sailorLookOf(catalog, this.#ownLook ?? PERSON_DEFAULT);
     await Promise.all([
-      boat.loadSailor(look, renderer, 1),
+      // At the helm, whoever holds the controls, if others are aboard.
+      boat.loadSailor(sailorLookOf(catalog, this.#helmCode()), renderer, 1),
       this.fleet.loadSailors(catalog, look, renderer, lazyArtUrl),
     ]);
+    if (this.#crewShown !== null) {
+      await this.#drawHelm();
+    }
+    const looks = this.fleet.looks;
+    if (looks !== null) {
+      this.crew.useLooks(looks, Math.max(...catalog.boats.map((b) => b.stations.length)));
+      this.crews.useLooks(looks);
+    }
     Shadows.cast(boat.model, this.shadows.on, this.shadows.lit);
-    this.sailorReady = true;
+    // A change of kind meanwhile seats its own boat's sailor.
+    if (this.#loadingKind < 0 && this.boat === boat) {
+      this.sailorReady = true;
+    }
   }
 
   #ownLook: number | null = null;
@@ -504,35 +605,176 @@ export class SeaScene {
     this.#lookKnown = resolve;
   });
 
+  /** The own boat's kind. */
+  get kind(): BoatKind {
+    return catalog.boats[this.kindIndex] ?? catalog.boats[0];
+  }
+
+  /** The own boat's model for each kind it has been, kept for a change back. */
+  readonly #boats = new Map<number, Boat>();
+  /** The kind being loaded, the latest asked for. */
+  #loadingKind = -1;
+
+  /**
+   * The boat in view's own look: a boat look code (negative for none told)
+   * and its name, drawn on every kind the own boat has been, and on each
+   * it becomes.
+   */
+  setBoatLook(look: number, name: string): void {
+    this.#boatLook = { look, name };
+    for (const b of this.#boats.values()) {
+      b.setBoatLook(look, name);
+    }
+  }
+
+  #boatLook = { look: -1, name: '' };
+
   /**
    * Loads the boat, and its sailor once the player's look is known
-   * (sailAs). Its sail number and insignia are fixed until boats can be
-   * customised.
+   * (sailAs). Its sails carry its kind's insignia.
    */
   async loadBoat(): Promise<void> {
-    const boat = new Boat(this.kind);
-    await Promise.all([boat.load('17', this.kind.name.slice(0, 1)), this.fleet.load()]);
+    const [boat] = await Promise.all([this.#boatOf(this.kindIndex), this.fleet.load()]);
     this.sailorsLoaded = this.#loadSailors(boat).catch((e: unknown) => {
       console.error('the sailors did not load', e);
     });
+    this.#show(boat);
+  }
+
+  /** A kind's own boat: loaded the first time it is asked for. */
+  async #boatOf(kind: number): Promise<Boat> {
+    const had = this.#boats.get(kind);
+    if (had !== undefined) {
+      return had;
+    }
+    const k = catalog.boats[kind] ?? catalog.boats[0];
+    const boat = new Boat(k, catalog);
+    await boat.load(k.name.slice(0, 1));
+    boat.setBoatLook(this.#boatLook.look, this.#boatLook.name);
+    this.#boats.set(kind, boat);
+    return boat;
+  }
+
+  /**
+   * The own boat becomes one of another kind: its model, its sailor, the
+   * overlays, lanterns, hull and wake, the camera and the shadows, all of
+   * the kind's. Its sailor is seated again, so the world under the cover
+   * waits for it (sailorReady). Resolves once it is drawn.
+   */
+  async useKind(kind: number): Promise<void> {
+    if (catalog.boats[kind] === undefined) {
+      return;
+    }
+    if (kind === this.kindIndex && this.boat !== null && this.#loadingKind < 0) {
+      return;
+    }
+    this.kindIndex = kind;
+    this.#loadingKind = kind;
+    if (this.boat === null) {
+      // Not started yet: start() loads this kind.
+      this.#loadingKind = -1;
+      return;
+    }
+    this.sailorReady = false;
+    const boat = await this.#boatOf(kind);
+    if (this.#loadingKind !== kind) {
+      // Another kind was asked for meanwhile.
+      return;
+    }
+    this.#loadingKind = -1;
+    const renderer = this.stage.renderer;
+    if (boat.sailor === null && renderer !== null) {
+      await this.#lookAsked;
+      await boat.loadSailor(sailorLookOf(catalog, this.#helmCode()), renderer, 1);
+    }
+    if (this.kindIndex !== kind) {
+      return;
+    }
+    this.#show(boat);
+    this.sailorReady = true;
+  }
+
+  /** Puts a boat on the sea as the own one, and sizes everything to it. */
+  #show(boat: Boat): void {
+    const kind = boat.kind;
+    const was = this.boat;
+    if (was !== null && was !== boat) {
+      this.stage.scene.remove(was.root);
+    }
     boat.model.add(this.overlays.onBoat);
+    this.crew.aboard(boat.model, this.#crewPlan(boat));
     Shadows.cast(boat.model, this.shadows.on, this.shadows.lit);
-    const light = this.kind.lights[0];
-    const lantern = light === undefined ? undefined : boat.parts.get(light);
-    if (lantern !== undefined) {
-      this.lanterns.setLantern(
-        lantern.position,
-        this.kind.physics.hull.centreOfGravity,
-        this.kind.lights,
-      );
-    }
-    if (boat.hullShape !== null) {
-      // Every boat is of this kind, for now: one hull's volume serves them all.
-      hulls.setShape(boat.hullShape, this.kind.physics.hull.centreOfGravity);
-      this.#hull(boat.hullShape);
-    }
+    this.overlays.setKind(kind);
+    this.rightOfWay.setKind(kind);
+    // Its lights at their nodes' places in the model, wherever they hang.
+    this.#kindParts(this.kindIndex, (name) => boat.nodeAt(name), boat.parts.get('hull')?.userData);
+    // The camera and the shadows' box sized to the boat.
+    const size = sizeOf(kind, catalog.boats[0]);
+    this.camera.size = size;
+    this.camera.lookSize = lookSizeOf(kind, catalog.boats[0]);
+    this.shadows.scale = size;
     this.boat = boat;
     this.stage.scene.add(boat.root);
+    if (was !== null && was !== boat) {
+      void this.#apply(false);
+    }
+  }
+
+  /** A boat's crew's plan: its kind's stations, its deck (its model's hull solid) and its boom. */
+  #crewPlan(boat: Boat): CrewPlan {
+    const kind = boat.kind;
+    const solid = hullSolid(boat.parts.get('hull')?.userData, boat.nodeAt('board-root'), {
+      span: kind.physics.foils.boardSpan,
+      chord: kind.physics.foils.boardChord,
+    });
+    const model = boat.model.children[0];
+    return crewPlan(
+      kind.stations,
+      solid,
+      boat.nodeAt('boom'),
+      kind.physics.rig.foot,
+      model === undefined ? null : modelDeck(model),
+      model === undefined ? null : tillerOf(model),
+    );
+  }
+
+  /**
+   * A kind's parts the sea and the lanterns place by: its lanterns at its
+   * lights' nodes, its hull for the sea and the wake. Each is told once.
+   */
+  #kindParts(kind: number, node: (name: string) => Vector3 | null, hullData: unknown): void {
+    const k = catalog.boats[kind];
+    if (k === undefined) {
+      return;
+    }
+    const cog = k.physics.hull.centreOfGravity;
+    if (!this.lanterns.has(kind)) {
+      const lanterns: BoatLantern[] = [];
+      for (const light of k.lights) {
+        const at = node(light);
+        if (at !== null) {
+          lanterns.push({ at: at.clone(), lights: [light] });
+        }
+      }
+      if (lanterns.length > 0) {
+        this.lanterns.setKind(kind, lanterns, cog);
+      }
+    }
+    const shape = hullShape(hullData);
+    if (shape !== null && !hulls.has(kind)) {
+      hulls.setShape(shape, cog, kind);
+      const s = shape.stations;
+      this.ocean.wakes.setHull(
+        {
+          aft: s[0]?.[0] ?? 0,
+          fore: s[s.length - 1]?.[0] ?? 0,
+          halfBeam: Math.max(...s.map((st) => st[1] ?? 0)),
+          transomFrom: transomFrom(k.physics.hull.waterlineLength),
+        },
+        kind,
+      );
+      this.ocean.wakeWaves.setShape(shape, kind);
+    }
   }
 
   /** Draws a world's land, as the land is handed. */
@@ -542,6 +784,11 @@ export class SeaScene {
     }
     this.land = land;
     this.stage.scene.add(land.group);
+    // Both cameras keep out of the land's solids and the lighthouses' towers.
+    land.solids.towers = this.lighthouses;
+    this.camera.solids = land.solids;
+    this.freeCam.solids = land.solids;
+    this.#lands++;
   }
 
   setUsePass(on: boolean): void {
@@ -701,14 +948,11 @@ export class SeaScene {
     }
   }
 
-  #hull(shape: HullShape): void {
-    this.#aft = shape.stations[0]?.[0] ?? 0;
-    this.#halfBeam = Math.max(...shape.stations.map((s) => s[1] ?? 0));
-  }
-
   #attached(gfx: Gfx): void {
     this.shadows.attached(gfx.renderer);
     this.ocean.detail.attached();
+    this.ocean.compute = gfx.backend === 'webgpu';
+    this.ocean.wakeWaves.clear();
     this.ocean.choose(this.usePass, gfx.floatTargets);
     this.boat?.attached(gfx);
     const now = performance.now();
@@ -793,7 +1037,7 @@ export class SeaScene {
     }
     // The other boats receive on every rung the light casts, so that their
     // shaders never change; they cast only where the tier has them do so.
-    Shadows.cast(this.fleet.near.group, sh.fleet, sh.lit);
+    this.fleet.castShadows(sh.fleet, sh.lit);
     // The light's casting changes every lit material's shader: compiled off
     // the frame first, and swapped in once ready. The compiler reads the
     // light as it is when called, so the light is changed for that call and
@@ -809,12 +1053,19 @@ export class SeaScene {
       }
     }
     this.spray.capacity = tier.spray;
+    // The low tier draws only what of the animals breaks the surface.
+    this.swimmers.setTint(tier.name !== 'low');
     this.weather.setCapacity(tier.puffs, tier.streaks);
     this.onQuality?.(tier.number, this.stage.pixelRatio());
     await Promise.all([
       lit,
       this.ocean.setQuality(
-        { detail: rung.detail, anisotropy: tier.anisotropy, foamMap: tier.foamMap },
+        {
+          detail: rung.detail,
+          anisotropy: tier.anisotropy,
+          foamMap: tier.foamMap,
+          wakeWaves: tier.wakeWaves,
+        },
         ahead ? (o) => this.stage.compile(o) : null,
         this.stage.gfx?.renderer ?? null,
       ),
@@ -874,28 +1125,58 @@ export class SeaScene {
 
   /**
    * Tells the sea which hulls to keep out of: the player's own, and the
-   * nearest others within reach that have faded in.
+   * nearest others within reach that have faded in; and every boat drawn
+   * to the wakes: the wake's waves it pushes on, and the foam map's track
+   * and white water, by its speed through the water.
    */
   #placeHulls(): void {
     const p = this.pose;
     const bs = this.boatScene;
     const speed = this.out[RECORDS.out.speedThroughWater] ?? 0;
+    const own = this.kindIndex;
     hulls.begin();
-    hulls.add(bs.x, bs.y + p.heave, bs.z, p.heading, p.heel, p.pitch, speed);
-    const wakes = this.ocean.wakes;
+    hulls.add(bs.x, bs.y + p.heave, bs.z, p.heading, p.heel, p.pitch, own);
+    const ocean = this.ocean;
+    // The current at the boat, in which the wakes drift.
+    const physics = ocean.source?.physics ?? null;
+    const current = ocean.current;
+    if (physics !== null) {
+      physics.current(p.east, p.north, this.#current);
+      current.east = this.#current[0] ?? 0;
+      current.north = this.#current[1] ?? 0;
+    } else {
+      current.east = 0;
+      current.north = 0;
+    }
+    ocean.heading = p.heading;
+    const wakes = ocean.wakes;
+    const waves = ocean.wakeWaves;
     wakes.begin();
-    wakes.add(p.east, p.north, p.heading, speed, this.#aft, this.#halfBeam);
+    waves.begin();
+    wakes.add(p.east, p.north, p.heading, speed, own);
+    // The hull deeper than at rest where the sea under it stands above it:
+    // a boat that bobs makes rings.
+    const sink = Math.min(Math.max(this.#seaUnderBoat() - p.heave, -SINK_MOST), SINK_MOST);
+    waves.add(p.east, p.north, p.heading, sink, own);
     const fs = this.fleetSource;
     if (fs === null) {
+      this.#stampLife();
       return;
     }
-    // Every boat drawn lays a wake; the map keeps those within its square.
+    // Every boat drawn makes a wake; the map and the waves keep those within
+    // their squares. A boat's drawn speed is over the ground: through the
+    // water it is that less the current.
     for (let i = 0; i < fs.count; i++) {
       const b = fs.drawn[i] as DrawnBoat;
       if (b.opacity >= 0.5) {
-        wakes.add(b.east, b.north, b.heading, b.speed, this.#aft, this.#halfBeam);
+        const ve = b.speed * Math.sin(b.heading) - current.east;
+        const vn = b.speed * Math.cos(b.heading) - current.north;
+        wakes.add(b.east, b.north, b.heading, Math.hypot(ve, vn), b.kind);
+        waves.add(b.east, b.north, b.heading, 0, b.kind);
       }
     }
+    // The sea's life's after the boats', in what room is left.
+    this.#stampLife();
     // The nearest, kept in order of distance as they are found.
     const near = this.#near;
     const dist = this.#nearDist;
@@ -921,7 +1202,7 @@ export class SeaScene {
     const o = this.origin.world;
     for (let k = 0; k < n; k++) {
       const b = fs.drawn[near[k] ?? 0] as DrawnBoat;
-      hulls.add(b.east - o.x, b.heave, -(b.north - o.y), b.heading, b.heel, b.pitch, b.speed);
+      hulls.add(b.east - o.x, b.heave, -(b.north - o.y), b.heading, b.heel, b.pitch, b.kind);
     }
   }
 
@@ -1038,6 +1319,21 @@ export class SeaScene {
     this.stars.turn(this.skyRecord, SKY.stars);
   }
 
+  /**
+   * How dark the sky is for glowing water to show, 0 to 1 (glowDark), by
+   * the sky as last read at the focus: the sun's and the moon's true
+   * heights and the moon's lit share. The moon's light at the most for it
+   * to show is the limit (the catalog's glow.moon). 0 while the sky is not
+   * drawn (the tests). Allocates nothing.
+   */
+  skyDark(limit: number): number {
+    if (!this.drawSky) {
+      return 0;
+    }
+    const n = this.sky.now;
+    return glowDark(n.sunHeight, n.moonHeight, n.lit, limit);
+  }
+
   /** The lanterns of the player's boat and of the others, each lit by the sun at its own boat. */
   #drawLanterns(height: number, camera: Vector3): void {
     const l = this.lanterns;
@@ -1046,8 +1342,10 @@ export class SeaScene {
     const p = this.pose;
     const bs = this.boatScene;
     const own = this.sky.now.sunHeight;
+    // The cabins' lamps, as the lanterns are lit: every gallery by the sun here.
+    lampsLit.value = this.drawSky ? lanternLit(own) : 0;
     if (this.drawSky && this.boat?.root.visible) {
-      l.add(p, bs.x, bs.z, camera, lanternLit(own));
+      l.add(p, bs.x, bs.z, camera, lanternLit(own), this.kindIndex);
     }
     const fs = this.fleetSource;
     const o = this.origin.world;
@@ -1058,7 +1356,7 @@ export class SeaScene {
       }
       const at = this.skyFrom(b.east, b.north);
       const height = at === null ? own : (at[sun] ?? 0);
-      l.add(b, b.east - o.x, -(b.north - o.y), camera, lanternLit(height) * b.opacity);
+      l.add(b, b.east - o.x, -(b.north - o.y), camera, lanternLit(height) * b.opacity, b.kind);
     }
     // The lanterns ashore, the nearest, lit by the sun at the camera.
     const land = this.land;
@@ -1119,6 +1417,7 @@ export class SeaScene {
       seaHeight: this.sea.height,
       windSpeed: wind.speed,
       windFrom: wind.from,
+      birds: this.birds,
     });
     const features = land.towns.features();
     const time = this.ticks / STEPS_PER_SECOND;
@@ -1145,6 +1444,203 @@ export class SeaScene {
     );
     this.smoke.frame(chimneys, o, time, 0.25 + 0.75 * (1 - night));
   }
+
+  /** The lands used, so the towns' gulls are found again in a new one. */
+  #lands = 0;
+  /** The towns' buildings as the gulls' wheels are found from them. */
+  readonly #gullSource: GullSource = {
+    version: 0,
+    buildings: () => this.land?.towns.buildings() ?? [],
+  };
+  /** The own boat as the life with it reads it, and the life's frame, reused. */
+  readonly #lifeOwn: BoatAt = { east: 0, north: 0, heading: 0, speed: 0 };
+  readonly #lifeFrame: LifeFrame = {
+    ticks: 0,
+    cameraEast: 0,
+    cameraNorth: 0,
+    cameraUp: 0,
+    seaHeight: 0,
+    low: false,
+    night: false,
+    own: null,
+    fleet: NO_BOATS,
+    count: 0,
+    bowOf: (kind) => (catalog.boats[kind] ?? this.kind).physics.hull.waterlineLength / 2,
+    aboardOf: (kind) => this.#aboardOf(kind),
+    windFrom: 0,
+    skyDark: (moon) => this.skyDark(moon),
+    ownKind: 0,
+    dt: 0,
+  };
+  /** Each boat kind's perch, deck and centre of gravity, by its index, made once. */
+  readonly #aboard: (Aboard | undefined)[] = catalog.boats.map((b) => ({
+    perch: b.perch,
+    deck: b.deck,
+    cog: b.physics.hull.centreOfGravity,
+  }));
+  #aboardOf(kind: number): Aboard | undefined {
+    return this.#aboard[kind];
+  }
+
+  /** The life's frame at the camera now: the boats a group may be with, the sea, the tier. */
+  lifeFrame(camera: Vector3, night: boolean): LifeFrame {
+    const o = this.origin.world;
+    const f = this.#lifeFrame;
+    f.ticks = this.ticks;
+    f.cameraEast = camera.x + o.x;
+    f.cameraNorth = -camera.z + o.y;
+    f.cameraUp = camera.y;
+    f.seaHeight = this.sea.height;
+    f.low = this.rung.tier === 'low';
+    f.night = night;
+    const own = this.#lifeOwn;
+    own.east = this.pose.east;
+    own.north = this.pose.north;
+    own.heading = this.pose.heading;
+    own.heave = this.pose.heave;
+    own.heel = this.pose.heel;
+    own.pitch = this.pose.pitch;
+    f.windFrom = this.wind.meanFrom;
+    own.speed = this.out[RECORDS.out.speedOverGround] ?? 0;
+    f.own = this.boat === null ? null : own;
+    f.fleet = this.fleetSource?.drawn ?? NO_BOATS;
+    f.count = this.fleetSource?.count ?? 0;
+    f.ownKind = this.kindIndex;
+    f.dt = this.timeStep;
+    return f;
+  }
+
+  /** The sea's surface under the animals in the water, from the module's sea now. */
+  readonly #surface: SurfaceAt = (points, count, out) => {
+    const src = this.ocean.source;
+    const slot = this.ocean.slot;
+    if (src === null || slot < 0) {
+      out.fill(0, 0, count);
+      return;
+    }
+    src.physics.seaDrawAt(this.ticks);
+    const sea = src.physics.seaSample(slot, points.subarray(0, 2 * count));
+    for (let i = 0; i < count; i++) {
+      out[i] = sea[i * 4] ?? 0;
+    }
+  };
+  readonly #sunAt = new Vector3();
+
+  /** The sea's life near, and the towns' gulls by day, into the birds' draw. */
+  #drawLife(camera: Vector3, night: boolean): void {
+    const land = this.land;
+    const towns = land === null ? null : this.#gullSource;
+    if (land !== null) {
+      this.#gullSource.version = this.#lands * 1e9 + land.towns.features().version;
+    }
+    const light = this.sky.light;
+    const sun = this.#sunAt.copy(light.position).sub(light.target.position);
+    if (sun.lengthSq() > 0) {
+      this.swimmers.sun.value.copy(sun.normalize());
+    }
+    this.swimmers.begin(this.origin.world, this.ticks / STEPS_PER_SECOND, this.birds.light.value);
+    const f = this.lifeFrame(camera, night);
+    this.onLife?.(f);
+    this.lifeDraw.frame(this.life, f, this.birds, towns, this.swimmers, this.#surface);
+    this.swimmers.end();
+    // Glowing water about the camera: the wake's white water, the track and
+    // the bow's spray drawn as its light.
+    const g = this.lifeDraw.glow;
+    this.ocean.setGlow(g.r, g.g, g.b, g.strength);
+    this.sprayView.setGlow(g.r, g.g, g.b, g.strength);
+  }
+
+  /** The sea's life's splashes thrown as spray, and flecks over the boils of bait. */
+  #sprayLife(dt: number): void {
+    const d = this.lifeDraw;
+    const share = this.rung.tier === 'low' ? 0.5 : 1;
+    for (let i = 0; i < d.splashCount; i++) {
+      const s = d.splashes[i];
+      if (s === undefined) {
+        continue;
+      }
+      if (s.size > 1) {
+        // A whale's: a wall of white water thrown up as it falls back.
+        this.spray.blow(s.east, s.north, 0, 2.5 * s.size, 2.2 * s.size, 0, 0, 0, share);
+      } else {
+        this.spray.splash(s.east, s.north, 0, s.size);
+      }
+    }
+    for (let i = 0; i < d.blowCount; i++) {
+      const b = d.blows[i];
+      if (b !== undefined) {
+        this.spray.blow(
+          b.east,
+          b.north,
+          b.sea,
+          b.height,
+          b.width,
+          b.heading,
+          b.lean,
+          b.left,
+          share,
+        );
+      }
+    }
+    for (let i = 0; i < d.boilCount; i++) {
+      const b = d.boils[i];
+      if (b === undefined) {
+        continue;
+      }
+      // Small fish breaking the surface, driven up from below.
+      let owed = dt * 20 * b.strength;
+      while (owed > 0) {
+        this.#boilSeed = (Math.imul(this.#boilSeed, 1103515245) + 12345) >>> 0;
+        if (owed < 1 && this.#boilSeed / 4294967296 > owed) {
+          break;
+        }
+        owed -= 1;
+        const a = ((this.#boilSeed >>> 4) / 268435456) * 2 * Math.PI;
+        const r = b.reach * Math.sqrt(((this.#boilSeed >>> 8) & 0xffff) / 65536);
+        this.spray.splash(b.east + Math.sin(a) * r, b.north + Math.cos(a) * r, 0, 0.35);
+      }
+    }
+  }
+
+  /** The splashes and boils of the sea's life on the foam map: white water where something broke the water. */
+  #stampLife(): void {
+    const d = this.lifeDraw;
+    const wakes = this.ocean.wakes;
+    for (let i = 0; i < d.splashCount; i++) {
+      const s = d.splashes[i];
+      if (s !== undefined) {
+        wakes.spot(s.east, s.north, 0.5 + 1.5 * s.size, 0.9, s.size <= 1);
+      }
+    }
+    for (let i = 0; i < d.printCount; i++) {
+      const p = d.prints[i];
+      if (p !== undefined) {
+        wakes.print(p.east, p.north, p.size, 0.8);
+      }
+    }
+    // Glowing water lit where the animals swimming through it disturb it.
+    for (let i = 0; i < d.trailCount; i++) {
+      const p = d.trails[i];
+      if (p !== undefined) {
+        wakes.spot(p.east, p.north, 0.6 + 0.6 * p.size, 0.35 * p.size);
+      }
+    }
+    for (let i = 0; i < d.boilCount; i++) {
+      const b = d.boils[i];
+      if (b === undefined) {
+        continue;
+      }
+      // The water boiling at the flock's edge: white here and there across it.
+      for (let k = 0; k < 5; k++) {
+        this.#boilSeed = (Math.imul(this.#boilSeed, 1103515245) + 12345) >>> 0;
+        const a = (this.#boilSeed / 4294967296) * 2 * Math.PI;
+        const r = b.reach * Math.sqrt(((this.#boilSeed >>> 8) & 0xffff) / 65536);
+        const size = 2 + (3 * ((this.#boilSeed >>> 3) & 7)) / 7;
+        wakes.spot(b.east + Math.sin(a) * r, b.north + Math.cos(a) * r, size, 0.5 * b.strength);
+      }
+    }
+  }
+  #boilSeed = 7;
 
   /** The winds asked of the module about the towns, by place, and when. */
   readonly #townWinds = new Map<string, { speed: number; from: number; asked: number }>();
@@ -1300,7 +1796,27 @@ export class SeaScene {
     this.boat?.draw(bs, this.pose, this.out, this.time, this.timeStep);
     // The sailor drawn close when the camera is near it.
     this.boat?.sailor?.near(camera.position.distanceTo(this.#v.set(bs.x, bs.y + 0.8, bs.z)));
+    // The crew to windward of the boom, crossing in a tack or a gybe,
+    // leaning out as the helm hikes; the helm not drawn while it walks
+    // to or from the tiller in a change of hands.
+    const helm = this.boat?.sailor ?? null;
+    this.crew.sail(
+      {
+        dt: this.timeStep,
+        boom: this.pose.boom,
+        windOffBow: this.wind.meanFrom - this.pose.heading,
+        depth: helm?.runtime.depth ?? 0,
+      },
+      this.pose.heel,
+    );
+    if (helm !== null) {
+      helm.away = this.crew.helmAway;
+    }
+    this.crew.frame(camera.position, this.timeStep);
     const fs = this.fleetSource;
+    // The other boats' crews, before the fleet: whose helm walks with them.
+    this.crews.windFrom = this.wind.meanFrom;
+    this.crews.frame(fs?.drawn ?? [], fs?.count ?? 0, this.origin, camera.position, this.timeStep);
     if (this.fleet.loaded) {
       this.fleet.windFrom = this.wind.meanFrom;
       this.fleet.windSpeed = this.wind.meanSpeed;
@@ -1313,7 +1829,11 @@ export class SeaScene {
         this.timeStep,
       );
     }
+    const night = this.drawSky ? lanternLit(this.sky.now.sunHeight) : 0;
+    this.birds.begin(this.origin.world, this.ticks / STEPS_PER_SECOND, 0.25 + 0.75 * (1 - night));
     this.#drawTowns(camera.position, now);
+    this.#drawLife(camera.position, night > 0.5);
+    this.birds.end();
     this.#drawLanterns(view.height, camera.position);
     this.#drawLights(view.height, camera.position, now);
     this.wrecks.frame(this.origin);
@@ -1357,6 +1877,7 @@ export class SeaScene {
     own.mode = this.pose.sailorMode;
     own.vEast = boatAt.velEast;
     own.vNorth = boatAt.velNorth;
+    own.kind = this.kindIndex;
     const drawn = this.fleetSource?.drawn ?? NO_BOATS;
     const count = this.fleetSource?.count ?? 0;
     const physics = source?.physics ?? null;
@@ -1439,8 +1960,8 @@ export class SeaScene {
     const sources = this.#sources;
     const pts = this.#points;
     const p = this.pose;
-    const half = this.kind.physics.hull.waterlineLength / 2;
-    // The player's bow, and the nearest others' within reach.
+    // The player's bow, and the nearest others' within reach, each at its own
+    // waterline's forward end.
     let n = 0;
     const bow = (
       east: number,
@@ -1449,7 +1970,9 @@ export class SeaScene {
       heave: number,
       pitch: number,
       speed: number,
+      kind: number,
     ) => {
+      const half = (catalog.boats[kind] ?? this.kind).physics.hull.waterlineLength / 2;
       const s = sources[n] as SpraySource;
       s.east = east + Math.sin(heading) * half;
       s.north = north + Math.cos(heading) * half;
@@ -1460,7 +1983,15 @@ export class SeaScene {
       pts[n * 2 + 1] = s.north;
       n++;
     };
-    bow(p.east, p.north, p.heading, p.heave, p.pitch, this.out[RECORDS.out.speedThroughWater] ?? 0);
+    bow(
+      p.east,
+      p.north,
+      p.heading,
+      p.heave,
+      p.pitch,
+      this.out[RECORDS.out.speedThroughWater] ?? 0,
+      this.kindIndex,
+    );
     const fs = this.fleetSource;
     if (fs !== null) {
       for (let k = 0; k < tier.sprayBoats && k < HULLS - 1; k++) {
@@ -1469,7 +2000,7 @@ export class SeaScene {
         if (b === undefined || (this.#nearDist[k] ?? Infinity) > HULL_REACH) {
           break;
         }
-        bow(b.east, b.north, b.heading, b.heave, b.pitch, b.speed);
+        bow(b.east, b.north, b.heading, b.heave, b.pitch, b.speed, b.kind);
       }
     }
     const wind = this.wind;
@@ -1517,6 +2048,7 @@ export class SeaScene {
       w.crestRate = look.spray;
       w.spindrift = look.spindrift;
       this.spray.step(dt, sources, w, this.#crests, n, crests);
+      this.#sprayLife(dt);
     }
     this.sprayView.draw(this.spray, this.origin);
     if (this.sprayHidden) {

@@ -9,7 +9,9 @@
 // module: the boat's own fields from the header, what its autopilot
 // remembers from the autopilot's block that follows it while there is any,
 // and how long it has been aground and where it left deep water from the
-// ground block after that while it has either, or nothing; and, while it is falling over the lip, the
+// ground block after that while it has either, or nothing; its headsails,
+// yards, reef and downwind sail, and the reef in force, from the rig's
+// block after that while any is not zero; and, while it is falling over the lip, the
 // tick it went over from the over block after those; while it stays where
 // it is as its owner's free camera roams, a flag says so. The other boats'
 // entries after them are view.ts's.
@@ -24,12 +26,14 @@ export const HEADER_SIZE = 176;
 export const PILOT_SIZE = 56;
 /** The ground block's length. */
 export const GROUND_SIZE = 24;
+/** The rig's block's length. */
+export const RIG_SIZE = 96;
 /** The over block's length. */
 export const OVER_SIZE = 8;
 /** The header's length with every block. */
-export const MAX_HEADER_SIZE = HEADER_SIZE + PILOT_SIZE + GROUND_SIZE + OVER_SIZE;
-/** The layout this client reads: the own boat's state as float64, its autopilot's, ground and over blocks, then the view's entries; flag bit 4 while the boat stays. */
-export const SNAPSHOT_LAYOUT = 11;
+export const MAX_HEADER_SIZE = HEADER_SIZE + PILOT_SIZE + GROUND_SIZE + RIG_SIZE + OVER_SIZE;
+/** The layout this client reads: the own boat's state as float64, its autopilot's, ground, rig's and over blocks, then the view's entries; flag bit 4 while the boat stays, bit 6 while the connection does not hold its controls. */
+export const SNAPSHOT_LAYOUT = 15;
 /** The most entries a snapshot may hold. */
 export const MAX_ENTRIES = 128;
 /** A header's flag: the far band's boats are sampled by this snapshot. */
@@ -42,15 +46,25 @@ export const GROUND_HELD = 4;
 export const OVER_HELD = 8;
 /** A header's flag: the boat stays where it is, not stepped, while its owner's free camera roams. */
 export const STAYING = 16;
+/** A header's flag: the rig's block follows it and the autopilot's and ground blocks, if they are there. */
+export const RIG_HELD = 32;
+/** A header's flag: the connection does not hold the boat's controls: its inputs steer nothing, and the page predicts nothing. */
+export const ELSEWHERE = 64;
+const HEADER_FLAGS =
+  FAR_SAMPLED | PILOT_HELD | GROUND_HELD | OVER_HELD | STAYING | RIG_HELD | ELSEWHERE;
 /** A snapshot's margin when no input arrived since the one before. */
 export const NO_MARGIN = -32768;
-/** The boat's state's fields, as the physics module lays them out: the boat's own, then its autopilot's, then how long it has been aground and where it left deep water. */
-export const STATE_FIELDS = 28;
-/** Those of them the header holds; the autopilot's block holds those up to PILOT_FIELDS, and the ground block the last. */
+/** The boat's state's fields, as the physics module lays them out: the boat's own, then its autopilot's, then how long it has been aground and where it left deep water, then its rig's. */
+export const STATE_FIELDS = 39;
+/** Those of them the header holds; the autopilot's block holds those up to PILOT_FIELDS, the ground block those up to RIG_FIELD, and the rig's block the last. */
 export const BOAT_FIELDS = 19;
 export const PILOT_FIELDS = 25;
 /** The first of the fields the ground block holds: how long the boat has been aground and all but still, then where it left deep water, east and north. */
 export const GROUND_TIMER = 25;
+/** The first of the fields the rig's block holds: the headsails' angle, rate and limit, the yards, the fore yards, the reef, and the downwind sail's hoist, the crew's aim for it, and its clew's angle, rate and limit. */
+export const RIG_FIELD = 28;
+/** The deepest reef. */
+export const MAX_REEF = 2;
 
 /** A snapshot's header: the player's own boat as the server last stepped it. */
 export interface OwnSnapshot {
@@ -71,12 +85,16 @@ export interface OwnSnapshot {
   way: number;
   order: number;
   target: number;
+  /** The rig word in force: the reef, 0 … 2. */
+  reef: number;
   /** The lowest arrival margin since the previous snapshot, in ticks, or NO_MARGIN. */
   margin: number;
   /** The tick the boat went over the lip while it is falling, or 0 while it is afloat. */
   over: number;
   /** The boat stays where it is while its owner's free camera roams. */
   stays: boolean;
+  /** The connection holds the boat's controls: no ELSEWHERE flag. */
+  holding: boolean;
   /** The boat's state, in the physics module's order. */
   readonly state: Float64Array;
 }
@@ -95,9 +113,11 @@ export function newSnapshot(): OwnSnapshot {
     way: 0,
     order: 0,
     target: 0,
+    reef: 0,
     margin: NO_MARGIN,
     over: 0,
     stays: false,
+    holding: true,
     state: new Float64Array(STATE_FIELDS),
   };
 }
@@ -136,8 +156,19 @@ export function headerLength(flags: number): number {
     HEADER_SIZE +
     ((flags & PILOT_HELD) !== 0 ? PILOT_SIZE : 0) +
     ((flags & GROUND_HELD) !== 0 ? GROUND_SIZE : 0) +
+    ((flags & RIG_HELD) !== 0 ? RIG_SIZE : 0) +
     ((flags & OVER_HELD) !== 0 ? OVER_SIZE : 0)
   );
+}
+
+/** Where the ground block of a snapshot whose flags are these begins, if it has one. */
+function groundAt(flags: number): number {
+  return HEADER_SIZE + ((flags & PILOT_HELD) !== 0 ? PILOT_SIZE : 0);
+}
+
+/** Where the rig's block of a snapshot whose flags are these begins, if it has one. */
+function rigAt(flags: number): number {
+  return groundAt(flags) + ((flags & GROUND_HELD) !== 0 ? GROUND_SIZE : 0);
 }
 
 /** The header's length of a snapshot's bytes, its kind byte first. */
@@ -171,7 +202,7 @@ export function readSnapshot(v: DataView, out: OwnSnapshot): string | null {
     return 'a snapshot with controls out of range';
   }
   const flags = v.getUint8(FLAGS);
-  if ((flags & ~(FAR_SAMPLED | PILOT_HELD | GROUND_HELD | OVER_HELD | STAYING)) !== 0) {
+  if ((flags & ~HEADER_FLAGS) !== 0) {
     return 'a snapshot with flags it should not have';
   }
   const entries = v.getUint8(ENTRIES);
@@ -194,6 +225,20 @@ export function readSnapshot(v: DataView, out: OwnSnapshot): string | null {
       return 'a snapshot with an autopilot out of range';
     }
   }
+  const rigged = (flags & RIG_HELD) !== 0;
+  const rig = rigAt(flags);
+  let reef = 0;
+  if (rigged) {
+    reef = v.getUint8(rig);
+    for (let i = 1; i < 8; i++) {
+      if (v.getUint8(rig + i) !== 0) {
+        return "a snapshot with a rig's spare byte set";
+      }
+    }
+    if (reef > MAX_REEF) {
+      return 'a snapshot with a reef out of range';
+    }
+  }
   const tick = getInt64(v, TICK);
   let over = 0;
   if ((flags & OVER_HELD) !== 0) {
@@ -205,6 +250,7 @@ export function readSnapshot(v: DataView, out: OwnSnapshot): string | null {
   out.tick = tick;
   out.over = over;
   out.stays = (flags & STAYING) !== 0;
+  out.holding = (flags & ELSEWHERE) === 0;
   out.base = v.getUint16(BASE, true);
   out.flags = flags;
   out.entries = entries;
@@ -212,6 +258,7 @@ export function readSnapshot(v: DataView, out: OwnSnapshot): string | null {
   out.margin = v.getInt16(MARGIN, true);
   out.helm = helm;
   out.sheet = sheet;
+  out.reef = reef;
   out.header = header;
   const s = out.state;
   for (let i = 0; i < BOAT_FIELDS; i++) {
@@ -232,9 +279,12 @@ export function readSnapshot(v: DataView, out: OwnSnapshot): string | null {
     out.target = 0;
     s.fill(0, BOAT_FIELDS, PILOT_FIELDS);
   }
-  const groundAt = header - GROUND_SIZE - ((flags & OVER_HELD) !== 0 ? OVER_SIZE : 0);
-  for (let i = GROUND_TIMER; i < STATE_FIELDS; i++) {
-    s[i] = (flags & GROUND_HELD) !== 0 ? v.getFloat64(groundAt + 8 * (i - GROUND_TIMER), true) : 0;
+  const ground = groundAt(flags);
+  for (let i = GROUND_TIMER; i < RIG_FIELD; i++) {
+    s[i] = (flags & GROUND_HELD) !== 0 ? v.getFloat64(ground + 8 * (i - GROUND_TIMER), true) : 0;
+  }
+  for (let i = RIG_FIELD; i < STATE_FIELDS; i++) {
+    s[i] = rigged ? v.getFloat64(rig + 8 + 8 * (i - RIG_FIELD), true) : 0;
   }
   return null;
 }
@@ -254,7 +304,20 @@ export function pilotHeld(s: OwnSnapshot): boolean {
 
 /** Whether a snapshot of s carries the ground block: whether its time aground or where it left deep water is not zero (-0 counts). */
 export function groundHeld(s: OwnSnapshot): boolean {
-  for (let i = GROUND_TIMER; i < STATE_FIELDS; i++) {
+  for (let i = GROUND_TIMER; i < RIG_FIELD; i++) {
+    if (notZero(s.state[i] ?? 0)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/** Whether a snapshot of s carries the rig's block: whether the reef in force or the state's rig is not zero (-0 counts). */
+export function rigHeld(s: OwnSnapshot): boolean {
+  if (s.reef !== 0) {
+    return true;
+  }
+  for (let i = RIG_FIELD; i < STATE_FIELDS; i++) {
     if (notZero(s.state[i] ?? 0)) {
       return true;
     }
@@ -274,13 +337,16 @@ function notZero(x: number): boolean {
 export function writeSnapshot(s: OwnSnapshot, v: DataView): number {
   const held = pilotHeld(s);
   const aground = groundHeld(s);
+  const rigged = rigHeld(s);
   const falling = s.over !== 0;
   const flags =
-    (s.flags & ~(PILOT_HELD | GROUND_HELD | OVER_HELD | STAYING)) |
+    (s.flags & ~(PILOT_HELD | GROUND_HELD | RIG_HELD | OVER_HELD | STAYING | ELSEWHERE)) |
     (held ? PILOT_HELD : 0) |
     (aground ? GROUND_HELD : 0) |
+    (rigged ? RIG_HELD : 0) |
     (falling ? OVER_HELD : 0) |
-    (s.stays ? STAYING : 0);
+    (s.stays ? STAYING : 0) |
+    (s.holding ? 0 : ELSEWHERE);
   v.setUint8(0, KIND_SNAPSHOT);
   v.setUint8(1, SNAPSHOT_LAYOUT);
   setInt64(v, TICK, s.tick);
@@ -309,10 +375,20 @@ export function writeSnapshot(s: OwnSnapshot, v: DataView): number {
     at += PILOT_SIZE;
   }
   if (aground) {
-    for (let i = GROUND_TIMER; i < STATE_FIELDS; i++) {
+    for (let i = GROUND_TIMER; i < RIG_FIELD; i++) {
       v.setFloat64(at + 8 * (i - GROUND_TIMER), s.state[i] ?? 0, true);
     }
     at += GROUND_SIZE;
+  }
+  if (rigged) {
+    for (let i = 0; i < 8; i++) {
+      v.setUint8(at + i, 0);
+    }
+    v.setUint8(at, s.reef);
+    for (let i = RIG_FIELD; i < STATE_FIELDS; i++) {
+      v.setFloat64(at + 8 + 8 * (i - RIG_FIELD), s.state[i] ?? 0, true);
+    }
+    at += RIG_SIZE;
   }
   if (falling) {
     setInt64(v, at, s.over);

@@ -1,0 +1,97 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# The ends of domains, for the chat filter. Any domain written whole, with
+# no space ("example.boats"), is refused whatever it ends in, unless its end
+# is marked word below; one with a path, a port, a scheme or "www." always
+# is. This list says which ends are refused when the domain is spaced or
+# spelled out, and which pass when written whole:
+#
+#	plain   refused spaced or spelled out too: "example . com",
+#	        "example dot com", "example(dot)com", "e x a m p l e . c o m"
+#	always  as plain, and after a sentence's full stop as well
+#	        ("example. com"), or a comma ("example,com"): no word of chat
+#	        ends a sentence and starts the next like these
+#	word    a word of chat that a full stop with no space after it may run
+#	        into ("ok.so", "oh.no"): passes written whole, without a path
+#
+# An end not listed is refused written whole and passes spaced, as "St. Ives"
+# and "the point. Me too" must.
+com always
+org always
+xyz always
+app plain
+au plain
+biz plain
+ca plain
+cc plain
+cf plain
+cn plain
+co plain
+de plain
+dev plain
+edu plain
+ee plain
+eu plain
+fm plain
+fr plain
+ga plain
+gd plain
+gg plain
+gl plain
+gov plain
+gq plain
+info plain
+io plain
+jp plain
+kr plain
+link plain
+ly plain
+ml plain
+net plain
+nl plain
+nz plain
+onion plain
+online plain
+pl plain
+ru plain
+site plain
+su plain
+tk plain
+tv plain
+uk plain
+ws plain
+am word
+as word
+at word
+be word
+best word
+by word
+cool word
+day word
+do word
+fast word
+fun word
+help word
+here word
+how word
+in word
+is word
+it word
+like word
+lol word
+love word
+my word
+new word
+no word
+now word
+one word
+play word
+run word
+so word
+team word
+today word
+us word
+watch word
+win word
+wow word
+you word
+next word

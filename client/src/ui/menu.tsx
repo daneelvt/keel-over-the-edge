@@ -8,8 +8,10 @@
 // the helm returns to the centre when let go, and whether the camera comes
 // back behind the boat by itself. The full screen where the
 // page can take it, with how to install the game where that gives more of
-// the screen. Online, a sailor to watch,
-// and who may watch the player's own boat. It stands over everything at
+// the screen. Online, the player's shipmates, a sailor to watch, the link
+// that asks others to sail with the player (while their own boat is in
+// the water), who may watch the player's own boat and their link to watch
+// them, shared with a picture of the view. It stands over everything at
 // sea, within the screen held either way, its head and its close at the
 // top while the rest scrolls; a tap beside it closes it.
 
@@ -19,16 +21,25 @@ import type { ChartMode } from '../chart/chart';
 import { NoticeSwitches } from './chart';
 import { type ConnectionView, RoundTrip } from './connection';
 import type { Countdown } from './countdown';
+import { canShareLink, type DeckView, machineShared } from './decklazy';
+import { SAIL_WITH_ME, WHO_IS_ABOARD } from './deckwords';
+import { sailWithMeFor } from './machinewords';
 import type { Notices } from './notices';
 import { PlayerText } from './player';
 import type { SettingsSignal } from './settings';
+import { SHIPMATES } from './shipmatewords';
 import { useWatch, type WatchView } from './watchlazy';
 import { STOP_WATCHING, WATCH_A_SAILOR } from './watchwords';
 
-/** "Allow spectators", once its module is loaded. */
-function LazySpectators() {
+/**
+ * "Allow spectators", once its module is loaded, with the player's own
+ * link to share; and a picture of the view with it while their own boat
+ * is drawn, not one watched.
+ */
+function LazySpectators({ watch }: { watch: WatchView }) {
   const m = useWatch();
-  return m === null ? null : <m.SpectatorsChoice />;
+  const capture = watch.spectating.value ? null : (watch.capture ?? null);
+  return m === null ? null : <m.SpectatorsChoice share={{ capture }} />;
 }
 
 function Toggle({
@@ -166,6 +177,7 @@ export function Menu({
   account = null,
   machines = null,
   watch = null,
+  deck = null,
   fullScreen = null,
 }: {
   settings: SettingsSignal;
@@ -186,6 +198,8 @@ export function Menu({
   machines?: (() => void) | null;
   /** Watching another sailor's boat; null in the offline sandbox. */
   watch?: WatchView | null;
+  /** Sailing together; null in the offline sandbox. */
+  deck?: DeckView | null;
   /** The full screen's switch; null where it is not run. */
   fullScreen?: FullScreen | null;
 }) {
@@ -228,7 +242,59 @@ export function Menu({
               ) : null}
             </div>
           ) : null}
-          {watch !== null ? (
+          {deck?.shipmates != null && sailor !== null ? (
+            <div class="menu-chart">
+              <button
+                type="button"
+                onClick={() => {
+                  if (deck.shipmates !== null) {
+                    deck.shipmates.panel.value = true;
+                  }
+                  close();
+                }}
+              >
+                {SHIPMATES}
+              </button>
+            </div>
+          ) : null}
+          {deck !== null && canShareLink(deck) ? (
+            <div class="menu-chart">
+              <button
+                type="button"
+                onClick={() => {
+                  deck.link.value = true;
+                  close();
+                }}
+              >
+                {SAIL_WITH_ME}
+              </button>
+            </div>
+          ) : null}
+          {deck !== null && machineShared(deck) !== null ? (
+            <div class="menu-chart">
+              <button
+                type="button"
+                onClick={() => {
+                  deck.link.value = true;
+                  close();
+                }}
+              >
+                {sailWithMeFor(machineShared(deck) ?? '')}
+              </button>
+              {deck.crew.value !== null ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    deck.list.value = true;
+                    close();
+                  }}
+                >
+                  {WHO_IS_ABOARD}
+                </button>
+              ) : null}
+            </div>
+          ) : null}
+          {watch !== null && deck?.aboard.value == null ? (
             <div class="menu-chart">
               <button
                 type="button"
@@ -333,7 +399,7 @@ export function Menu({
             set={(seaMotion) => settings.set({ seaMotion })}
           />
           {notices !== null ? <NoticeSwitches notices={notices} /> : null}
-          {watch !== null ? <LazySpectators /> : null}
+          {watch !== null ? <LazySpectators watch={watch} /> : null}
           {fly !== null ? (
             <button type="button" class="menu-fly" onClick={fly}>
               Free camera (F)

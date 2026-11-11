@@ -15,6 +15,7 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/daneelvt/keel-over-the-edge/internal/catalog"
+	"github.com/daneelvt/keel-over-the-edge/internal/life"
 	"github.com/daneelvt/keel-over-the-edge/internal/oauth"
 	"github.com/daneelvt/keel-over-the-edge/internal/physics"
 	"github.com/daneelvt/keel-over-the-edge/internal/sim"
@@ -35,6 +36,13 @@ type harness struct {
 // from degrees, ticking at the world's pace; it stops as the test ends.
 func newHarness(t *testing.T, limit int, knots, from float64) *harness {
 	t.Helper()
+	return newHarnessOf(t, limit, knots, from, nil)
+}
+
+// newHarnessOf is newHarness's world with the sea's life of the schedule
+// sea makes from the catalog, nil for none.
+func newHarnessOf(t *testing.T, limit int, knots, from float64, sea func(*catalog.Catalog) *life.Schedule) *harness {
+	t.Helper()
 	cat, err := catalog.Load()
 	if err != nil {
 		t.Fatal(err)
@@ -42,12 +50,16 @@ func newHarness(t *testing.T, limit int, knots, from float64) *harness {
 	waves, kinds := cat.Prepare()
 	tl := weather.FixedIn(cat.PrepareWeather(), physics.SteadySpell(knots*nm/3600, from*3.141592653589793/180, 0))
 	enc := cat.PrepareEncounters()
-	w, err := sim.New(sim.Config{Capacity: 64, Kinds: kinds, Waves: waves, Weather: tl, Encounters: enc, Limit: limit, Tick: 1000})
+	var ls *life.Schedule
+	if sea != nil {
+		ls = sea(cat)
+	}
+	w, err := sim.New(sim.Config{Capacity: 64, Kinds: kinds, Waves: waves, Weather: tl, Encounters: enc, Limit: limit, Tick: 1000, Life: ls, Capacities: crewed(cat)})
 	if err != nil {
 		t.Fatal(err)
 	}
 	s := &Sea{Number: 1, Epoch: time.Now(), Bus: w.Bus(), Boats: cat.Boats, Limit: limit, AICap: w.AICap(), AIReserve: w.AIReserve(),
-		Timeline: tl, Waves: waves, Words: weather.WordsOf(cat), Catalog: cat, Kinds: kinds, Encounters: enc}
+		Timeline: tl, Waves: waves, Words: weather.WordsOf(cat), Catalog: cat, Kinds: kinds, Encounters: enc, Life: ls}
 	h := &harness{core: NewCore(CoreConfig{Silence: time.Minute, Log: slog.New(slog.DiscardHandler)}), sea: s, w: w, done: make(chan struct{})}
 	w.Record(h.core.Open(s))
 	ctx, cancel := context.WithCancel(context.Background())
@@ -70,6 +82,14 @@ func newHarness(t *testing.T, limit int, knots, from float64) *harness {
 		w.Close()
 	})
 	return h
+}
+
+// crewed are the kinds' capacities, the boat a Join gives carrying five
+// as a keelboat does, so the tests' crews fit aboard it.
+func crewed(cat *catalog.Catalog) []int {
+	c := cat.Capacities()
+	c[joinedKind] = max(c[joinedKind], 5)
+	return c
 }
 
 // sailor is a machine sailor the door accepted.
@@ -287,6 +307,8 @@ func TestOrdersOutOfBounds(t *testing.T) {
 			{"steer", map[string]any{"tiller": 3}, "not this tool's"},
 			{"trim", map[string]any{"boom": 120}, "out of range"},
 			{"trim", nil, "trim takes boom"},
+			{"trim", map[string]any{"reef": 3}, "reef is 0 (full sail), 1 (one reef) or 2 (two reefs): 3 is out of range."},
+			{"steer", map[string]any{"wind_angle": 90, "reef": -1}, "reef is 0 (full sail)"},
 			{"observe", map[string]any{"wake_on": []string{"heel"}}, "needs heel_over"},
 			{"observe", map[string]any{"wait": 90}, "wait is 0 to 50"},
 			{"chart", map[string]any{"place": "Nowhere"}, "No charted place"},
@@ -296,6 +318,39 @@ func TestOrdersOutOfBounds(t *testing.T) {
 				t.Errorf("%s %v: %v %q", c.tool, c.args, refused, text)
 			}
 			time.Sleep(time.Second)
+		}
+	})
+}
+
+// A reef is a target the crew works to: trim and steer take it, the order
+// line and the report say how the sail stands, and the same reef again
+// changes nothing.
+func TestReefOrders(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		h := newHarness(t, 8, 12, 0)
+		a := sailor(1, "Iron Mary")
+		if text, _ := h.call(t, a, "observe", map[string]any{"detail": "full"}); !strings.Contains(text, "Boat: Jolly boat, full sail · ") {
+			t.Fatalf("the first look: %q", text)
+		}
+		if text, refused := h.call(t, a, "trim", map[string]any{"reef": 1}); refused || !strings.Contains(text, " · reefing to one reef · ") {
+			t.Fatalf("a reef: %v %q", refused, text)
+		}
+		time.Sleep(time.Second)
+		if text, _ := h.call(t, a, "trim", map[string]any{"reef": 1}); !strings.Contains(text, "already holding") {
+			t.Fatalf("the reef again: %q", text)
+		}
+		time.Sleep(40 * time.Second)
+		if text, _ := h.call(t, a, "observe", nil); !strings.Contains(text, "Boat: one reef · sailing") {
+			t.Fatalf("reefed: %q", text)
+		}
+		if text, refused := h.call(t, a, "steer", map[string]any{"wind_angle": 120, "reef": 0}); refused || !strings.Contains(text, " · shaking out to full sail · ") {
+			t.Fatalf("shaking it out: %v %q", refused, text)
+		}
+		time.Sleep(time.Second)
+		f := h.sea.Bus.Frames.Acquire()
+		defer f.Release()
+		if sl := f.Live[0]; f.Rig[sl].Reef() != 0 || !(f.State[sl].Reef > 0.9) {
+			t.Fatalf("the boat holds reef %d, its sail at %v", f.Rig[sl].Reef(), f.State[sl].Reef)
 		}
 	})
 }

@@ -25,9 +25,19 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks';
 import type { Fetch, Me } from '../account/me';
 import { call, reasonOf } from '../account/passkeys';
 import { reasonText } from '../account/reasons';
+import { SHARE } from './deckwords';
+import { COME_ABOARD, comeAboardText } from './machinewords';
 import { PlayerText } from './player';
 import { queueLines } from './queue';
 import { loadSettings, saveWatchChoice, type WatchSort, type WatchWho } from './settings';
+import {
+  type Capture,
+  linkState,
+  NewLink,
+  preloadPicture,
+  ShareLink,
+  SharePicture,
+} from './sharelink';
 import {
   Around,
   browserFetch,
@@ -66,6 +76,8 @@ import {
 import {
   CLOSE,
   endedText,
+  fleetLink,
+  fleetShareText,
   LEAVE,
   LEAVE_DETAIL,
   LEAVE_QUESTION,
@@ -73,14 +85,22 @@ import {
   READING,
   SAIL,
   SEARCH,
+  SHARE_FLEET,
+  SHARE_ME,
+  SHARE_SAILOR,
+  SHOWN_WHEN_WATCHED,
   type Spectators,
   STAY,
+  shareSailorFor,
+  shareText,
   spectatorQueueLine,
+  THIS_FLEET,
   UNREADABLE,
   WATCH,
   WATCH_A_SAILOR,
   WATCH_ANOTHER,
   WATCHING,
+  watchLink,
 } from './watchwords';
 
 export { Cog, CopyWatchLink, kindName, type WatchRow } from './watchcard';
@@ -95,12 +115,16 @@ export interface WatchPage {
   withheld: boolean;
 }
 
-/** What the list is asked for. */
+/** Whom the list shows: the filters kept in the settings, or the fleet the page was opened by. */
+export type ListWho = WatchWho | 'fleet';
+
+/** What the list is asked for; with who 'fleet', the fleet's link's code. */
 export interface WatchQuery {
   q: string;
   page: number;
   sort: WatchSort;
-  who: WatchWho;
+  who: ListWho;
+  fleet?: string;
 }
 
 /** The server's side of the list and the card; a test stands in for it. */
@@ -142,7 +166,15 @@ const NAMES = 100;
 export function watchServer(f: Fetch = browserFetch): WatchServer {
   return {
     page: (w) =>
-      readPage(new URLSearchParams({ q: w.q, page: String(w.page), sort: w.sort, who: w.who }), f),
+      readPage(
+        new URLSearchParams({
+          q: w.q,
+          page: String(w.page),
+          sort: w.sort,
+          ...(w.who === 'fleet' ? { who: 'all', fleet: w.fleet ?? '' } : { who: w.who }),
+        }),
+        f,
+      ),
     async names(names) {
       const out: WatchPage = { sailors: [], more: false, atSea: 0, withheld: false };
       for (let i = 0; i < names.length; i += NAMES) {
@@ -205,8 +237,19 @@ export function pickOne(rows: readonly WatchRow[], random = Math.random): string
   return top[Math.min(top.length - 1, Math.floor(random() * top.length))]?.name ?? null;
 }
 
-/** The question before the own boat leaves the water to watch. */
+/** The question before the own boat leaves the water to watch; Escape is Stay. */
 export function LeaveQuestion({ leave, stay }: { leave: () => void; stay: () => void }) {
+  // Heard as soon as it is drawn.
+  useLayoutEffect(() => {
+    const key = (e: KeyboardEvent) => {
+      if (e.code === 'Escape') {
+        e.preventDefault();
+        stay();
+      }
+    };
+    document.addEventListener('keydown', key);
+    return () => document.removeEventListener('keydown', key);
+  }, [stay]);
   return (
     <section class="watch-question" role="alertdialog" aria-labelledby="watch-leave-title">
       <h2 id="watch-leave-title">{LEAVE_QUESTION}</h2>
@@ -220,6 +263,26 @@ export function LeaveQuestion({ leave, stay }: { leave: () => void; stay: () => 
         </button>
       </div>
     </section>
+  );
+}
+
+/**
+ * The question as a window of its own, in the list's place: narrower than
+ * the list, its words and its two keys centred.
+ */
+export function LeaveWindow({
+  className,
+  leave,
+  stay,
+}: {
+  className: string;
+  leave: () => void;
+  stay: () => void;
+}) {
+  return (
+    <div class={`${className} watch-panel watch-asking`}>
+      <LeaveQuestion leave={leave} stay={stay} />
+    </div>
   );
 }
 
@@ -294,7 +357,7 @@ export function ListRow({
 }
 
 /** The list with no one on it: why, and how many boats are in the water. */
-export function EmptyList({ q, who, atSea }: { q: string; who: WatchWho; atSea: number }) {
+export function EmptyList({ q, who, atSea }: { q: string; who: ListWho; atSea: number }) {
   if (q !== '') {
     return (
       <p class="watch-faint watch-empty">
@@ -320,15 +383,21 @@ export function Choices({
   sort,
   who,
   withheld,
+  fleet = false,
   setSort,
   setWho,
 }: {
   sort: WatchSort;
-  who: WatchWho;
+  who: ListWho;
   withheld: boolean;
+  /** Whether the page was opened by a fleet's link: This fleet is offered first. */
+  fleet?: boolean;
   setSort: (s: WatchSort) => void;
-  setWho: (w: WatchWho) => void;
+  setWho: (w: ListWho) => void;
 }) {
+  const whos: readonly { value: ListWho; words: string }[] = fleet
+    ? [{ value: 'fleet', words: THIS_FLEET }, ...WHOS]
+    : WHOS;
   // Nearest the edge is not offered while where is withheld: the server
   // orders it as the liveliest then.
   const shown = withheld && sort === 'edge' ? 'liveliest' : sort;
@@ -352,13 +421,13 @@ export function Choices({
         aria-label={SHOW}
         value={who}
         onChange={(e) => {
-          const v = WHOS.find((w) => w.value === e.currentTarget.value);
+          const v = whos.find((w) => w.value === e.currentTarget.value);
           if (v !== undefined) {
             setWho(v.value);
           }
         }}
       >
-        {WHOS.map((w) => (
+        {whos.map((w) => (
           <option key={w.value} value={w.value}>
             {w.words}
           </option>
@@ -399,16 +468,19 @@ export function WatchList({
   close,
   from = server,
   className = 'panel watch-list',
+  fleet = '',
 }: {
   choose: (sailor: string) => void;
   ask: () => boolean;
   close: () => void;
   from?: WatchServer;
   className?: string;
+  /** The code of the fleet's link the page was opened by: This fleet, first and chosen; '' for none. */
+  fleet?: string;
 }) {
   const [q, setQ] = useState('');
   const [sort, setSort] = useState<WatchSort>(() => loadSettings().watchSort);
-  const [who, setWho] = useState<WatchWho>(() => loadSettings().watchWho);
+  const [who, setWho] = useState<ListWho>(() => (fleet !== '' ? 'fleet' : loadSettings().watchWho));
   const [list, setList] = useState<Listing | null>(null);
   const [failed, setFailed] = useState(false);
   const [asking, setAsking] = useState<string | null>(null);
@@ -421,7 +493,7 @@ export function WatchList({
   const now = useRef<{ list: Listing | null; card: boolean; query: WatchQuery; gen: number }>({
     list: null,
     card: false,
-    query: { q, page: 0, sort, who },
+    query: { q, page: 0, sort, who, fleet },
     gen: 0,
   });
   now.current.list = list;
@@ -429,7 +501,7 @@ export function WatchList({
 
   useEffect(() => {
     let live = true;
-    const query: WatchQuery = { q, page: 0, sort, who };
+    const query: WatchQuery = { q, page: 0, sort, who, fleet };
     const gen = now.current.gen + 1;
     now.current.query = query;
     now.current.gen = gen;
@@ -521,7 +593,7 @@ export function WatchList({
     if (list === null) {
       return;
     }
-    const p = await from.page({ q, page: list.page + 1, sort, who });
+    const p = await from.page({ q, page: list.page + 1, sort, who, fleet });
     if (p === null) {
       setFailed(true);
       return;
@@ -564,9 +636,7 @@ export function WatchList({
 
   if (asking !== null) {
     return (
-      <div class={`${className} watch-panel`}>
-        <LeaveQuestion leave={() => go(asking)} stay={() => setAsking(null)} />
-      </div>
+      <LeaveWindow className={className} leave={() => go(asking)} stay={() => setAsking(null)} />
     );
   }
 
@@ -609,13 +679,16 @@ export function WatchList({
           sort={sort}
           who={who}
           withheld={list?.withheld ?? false}
+          fleet={fleet !== ''}
           setSort={(s) => {
             setSort(s);
             saveWatchChoice({ watchSort: s });
           }}
           setWho={(w) => {
             setWho(w);
-            saveWatchChoice({ watchWho: w });
+            if (w !== 'fleet') {
+              saveWatchChoice({ watchWho: w });
+            }
           }}
         />
         {rows.length > 0 ? (
@@ -680,7 +753,8 @@ export function WatchList({
 /**
  * The plate at the foot of the screen while a boat is watched, where the
  * controls are while sailing, one row in the control head's brass: whose
- * boat it is, Watch another and Sail; or, with none watched, why the last
+ * boat it is, Watch another and Sail, and Come aboard the player's own
+ * machine sailor's; or, with none watched, why the last
  * watch ended or the place in the spectators' queue, with the same.
  * Nothing while the own boat sails. A long name ends in an ellipsis, and
  * the plate's label says it whole.
@@ -698,10 +772,38 @@ export function WatchBar({ view }: { view: WatchView }) {
       {WATCH_ANOTHER}
     </button>
   );
+  // The player's own machine sailor: its boat is theirs to come aboard.
+  const come =
+    w?.mine === true && w.machine && view.comeAboard !== undefined ? (
+      <button
+        type="button"
+        class="head-key watch-aboard"
+        aria-label={comeAboardText(w.sailor)}
+        onClick={view.comeAboard}
+      >
+        {COME_ABOARD}
+      </button>
+    ) : null;
   const sail =
     boat === null ? (
       <button type="button" class="head-key watch-go" onClick={() => view.sail()}>
         {SAIL}
+      </button>
+    ) : null;
+  // A machine sailor's link, and the view of it, to share; never a human's.
+  const share =
+    w?.machine === true && view.sharing !== undefined ? (
+      <button
+        type="button"
+        class="head-key watch-share"
+        aria-label={shareSailorFor(w.sailor)}
+        onClick={() => {
+          if (view.sharing !== undefined) {
+            view.sharing.value = true;
+          }
+        }}
+      >
+        {SHARE}
       </button>
     ) : null;
   return (
@@ -737,20 +839,132 @@ export function WatchBar({ view }: { view: WatchView }) {
         ) : null}
       </div>
       {another}
+      {share}
+      {come}
       {sail}
     </section>
   );
 }
 
-/** The list over the sea: watching from the own boat at sea asks first. */
+/** The list over the sea: watching from the own boat at sea asks first. Or the share of a machine sailor watched. */
 export function SeaWatchList({ view }: { view: WatchView }) {
+  const w = view.watching.value;
+  if (view.sharing?.value === true && w !== null && w.machine) {
+    return (
+      <WatchShare
+        name={w.sailor}
+        mine={w.mine}
+        capture={view.capture ?? null}
+        close={() => {
+          if (view.sharing !== undefined) {
+            view.sharing.value = false;
+          }
+        }}
+      />
+    );
+  }
   return view.list.value ? (
     <WatchList
       choose={(sailor) => view.watch(sailor)}
       ask={() => sailsOwn(view)}
       close={() => (view.list.value = false)}
+      fleet={view.fleet ?? ''}
     />
   ) : null;
+}
+
+/** GET /api/me's fleet's code, or '' if it is not read. */
+async function readFleetCode(f: Fetch): Promise<string> {
+  try {
+    const res = await f('/api/me', { cache: 'no-store', credentials: 'same-origin' });
+    return res.status === 200 ? (((await res.json()) as Me).fleetCode ?? '') : '';
+  } catch {
+    return '';
+  }
+}
+
+/**
+ * The share of a machine sailor watched: its link, the view of it now as
+ * a picture with the link, and, for the player's own, their fleet's link.
+ * Nothing in it says whose the sailor is.
+ */
+export function WatchShare({
+  name,
+  mine,
+  capture,
+  close,
+  read = readCard,
+  f = browserFetch,
+}: {
+  name: string;
+  mine: boolean;
+  capture: Capture | null;
+  close: () => void;
+  read?: (name: string) => Promise<CardAnswer>;
+  f?: Fetch;
+}) {
+  const [code, setCode] = useState('');
+  const [fleet, setFleet] = useState('');
+  useEffect(() => {
+    let live = true;
+    void read(name).then((a) => {
+      if (live && a !== null && 'card' in a) {
+        setCode(a.card.code ?? '');
+      }
+    });
+    if (mine) {
+      void readFleetCode(f).then((c) => {
+        if (live) {
+          setFleet(c);
+        }
+      });
+    }
+    return () => {
+      live = false;
+    };
+  }, [name]);
+  useEffect(preloadPicture, []);
+  // A machine sailor's link is the same wherever it is shared from.
+  const st = linkState(`watched:${name}`, code);
+  const fst = linkState('fleet', fleet);
+  const url = code === '' ? null : watchLink(location.origin, code);
+  const fleetUrl = fleet === '' ? null : fleetLink(location.origin, fleet);
+  return (
+    <section class="panel watch-share-panel" aria-labelledby="watch-share-title">
+      <h2 id="watch-share-title">
+        <PlayerText text={name} />
+        <Cog />
+      </h2>
+      <div class="share-links">
+        <ShareLink
+          label={SHARE_SAILOR}
+          name={shareSailorFor(name)}
+          cls="plate-key"
+          copied={st.copied}
+          shared={url === null ? null : () => ({ url, text: shareText(name, url) })}
+        />
+        {capture !== null ? (
+          <SharePicture name={name} url={url} capture={capture} cls="plate-key" state={st} />
+        ) : null}
+        {fleetUrl !== null ? (
+          <ShareLink
+            label={SHARE_FLEET}
+            cls="plate-key"
+            copied={fst.copied}
+            shared={() => ({ url: fleetUrl, text: fleetShareText(fleetUrl) })}
+          />
+        ) : null}
+        {st.said.value !== '' ? (
+          <p class="watch-faint" role="status">
+            {st.said.value}
+          </p>
+        ) : null}
+      </div>
+      <button type="button" class="plate-key watch-close" onClick={close}>
+        {CLOSE}
+      </button>
+    </section>
+  );
 }
 
 /** What the screen shows of watching before the sea: the plate, and the list while it is open. */
@@ -779,18 +993,64 @@ export function showWatchWaiting(parent: HTMLElement, view: WatchView): () => vo
   };
 }
 
-/** GET /api/me's choice of who may watch the account's boat, "no" if it says none. */
-async function readSpectators(f: Fetch): Promise<Spectators | null> {
+/** GET /api/me's choice of who may watch the account's boat, "no" if it says none; and the player's name and link's code. */
+async function readSpectators(
+  f: Fetch,
+): Promise<{ allow: Spectators; name: string; code: string } | null> {
   try {
     const res = await f('/api/me', { cache: 'no-store', credentials: 'same-origin' });
     if (res.status !== 200) {
       return null;
     }
     const me = (await res.json()) as Me;
-    return me.spectators === 'voyage' ? 'voyage' : 'no';
+    return {
+      allow: me.spectators === 'voyage' ? 'voyage' : 'no',
+      name: me.name,
+      code: me.watchCode ?? '',
+    };
   } catch {
     return null;
   }
+}
+
+/**
+ * The player's own link at sea, under the switch: Share a link to watch me,
+ * and with a frame of their own boat on the screen, Share with a picture;
+ * the faint line while the switch is off; and Make a new link.
+ */
+export function YourSeaLink({
+  name,
+  code,
+  allowed,
+  capture,
+}: {
+  name: string;
+  code: string;
+  allowed: boolean;
+  capture: Capture | null;
+}) {
+  const st = linkState('me', code);
+  const url = watchLink(location.origin, st.code.value);
+  if (capture !== null) {
+    preloadPicture();
+  }
+  return (
+    <div class="share-links watch-your-link">
+      <div class="share-links-row">
+        <ShareLink
+          label={SHARE_ME}
+          cls="plate-key"
+          copied={st.copied}
+          shared={() => ({ url, text: shareText(name, url) })}
+        />
+        {capture !== null ? (
+          <SharePicture name={name} url={url} capture={capture} cls="plate-key" state={st} />
+        ) : null}
+      </div>
+      {allowed ? null : <p class="watch-faint">{SHOWN_WHEN_WATCHED}</p>}
+      <NewLink which={{ which: 'me' }} state={st} cls="plate-key" />
+    </div>
+  );
 }
 
 /**
@@ -831,14 +1091,23 @@ export function SpectatorsSwitch({
  * "Let others watch me sail (this voyage)": the account's choice for the
  * voyage under way, saved as it is switched. It ends with the voyage.
  */
-export function SpectatorsChoice({ f = browserFetch }: { f?: Fetch }) {
+export function SpectatorsChoice({
+  f = browserFetch,
+  share = null,
+}: {
+  f?: Fetch;
+  /** The player's own link shared under the switch, with the frame's capture while their own boat is drawn; null for none. */
+  share?: { capture: Capture | null } | null;
+}) {
   const [allow, setAllow] = useState<Spectators | null>(null);
   const [problem, setProblem] = useState('');
+  const [you, setYou] = useState<{ name: string; code: string } | null>(null);
   useEffect(() => {
     let live = true;
     void readSpectators(f).then((a) => {
       if (live) {
-        setAllow(a);
+        setAllow(a?.allow ?? null);
+        setYou(a === null ? null : { name: a.name, code: a.code });
       }
     });
     return () => {
@@ -856,5 +1125,17 @@ export function SpectatorsChoice({ f = browserFetch }: { f?: Fetch }) {
       setProblem(reasonText(reasonOf(a)));
     }
   };
-  return <SpectatorsSwitch allow={allow} problem={problem} set={(on) => void set(on)} />;
+  return (
+    <>
+      <SpectatorsSwitch allow={allow} problem={problem} set={(on) => void set(on)} />
+      {share !== null && you !== null && you.code !== '' ? (
+        <YourSeaLink
+          name={you.name}
+          code={you.code}
+          allowed={allow === 'voyage'}
+          capture={share.capture}
+        />
+      ) : null}
+    </>
+  );
 }

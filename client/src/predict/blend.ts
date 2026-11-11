@@ -35,6 +35,21 @@ export interface BoatPose {
   sailorTimer: number;
   /** The heel's rate, radians a second. */
   rollRate: number;
+  /** The headsails' clew's angle, positive to starboard, radians; 0 on a boat with none. */
+  jib: number;
+  /** How far the main is reefed: 0 at full sail, up to 2. */
+  reef: number;
+  /** The downwind sail: how far it is hoisted, 0 … 1, where the crew is taking it, 1 or 0, and its clew's angle, positive to starboard, radians; 0 on a boat with none. */
+  hoist: number;
+  hoistTarget: number;
+  kite: number;
+  /**
+   * The after and fore yards' nodes' turns about the vertical, radians
+   * (yardsTurn of State.Yards and State.ForeYards):
+   * 0 square, and on a boat with none.
+   */
+  yardsTurn: number;
+  foreYardsTurn: number;
 }
 
 export function newPose(): BoatPose {
@@ -52,6 +67,13 @@ export function newPose(): BoatPose {
     sailorMode: 0,
     sailorTimer: 0,
     rollRate: 0,
+    jib: 0,
+    reef: 0,
+    hoist: 0,
+    hoistTarget: 0,
+    kite: 0,
+    yardsTurn: 0,
+    foreYardsTurn: 0,
   };
 }
 
@@ -64,6 +86,22 @@ export function lerpAngle(a: number, b: number, t: number): number {
     d += 2 * Math.PI;
   }
   return a + d * t;
+}
+
+/**
+ * A square rig's yards' node's turn about the vertical, radians, as
+ * Object3D.rotation.y takes it, for the physics's yards' angle off the
+ * centreline (signed by the side they are braced for, positive with the
+ * port yardarm forward; ±π/2 square): π/2 less the angle, the port arm
+ * forward (a negative turn: the bow is at −z, starboard at +x) for a
+ * positive angle; 0 square, and for yards never braced (0).
+ */
+export function yardsTurn(angle: number): number {
+  if (angle === 0 || !Number.isFinite(angle)) {
+    return 0;
+  }
+  const a = Math.min(Math.abs(angle), Math.PI / 2);
+  return -Math.sign(angle) * (Math.PI / 2 - a);
 }
 
 function lerp(a: number, b: number, t: number): number {
@@ -102,6 +140,23 @@ export class StatePair {
     out.sailorMode = this.current[S.sailorMode] ?? 0;
     out.sailorTimer = this.current[S.sailorTimer] ?? 0;
     out.rollRate = this.#at(S.rollRate, alpha);
+    out.jib = this.#at(S.jib, alpha);
+    out.reef = this.#at(S.reef, alpha);
+    out.hoist = this.#at(S.hoist, alpha);
+    out.hoistTarget = this.current[S.hoistTarget] ?? 0;
+    out.kite = this.#at(S.kite, alpha);
+    // Blended by their turns, which run smoothly through square, where the
+    // angles' sign flips.
+    out.yardsTurn = lerp(
+      yardsTurn(this.previous[S.yards] ?? 0),
+      yardsTurn(this.current[S.yards] ?? 0),
+      alpha,
+    );
+    out.foreYardsTurn = lerp(
+      yardsTurn(this.previous[S.foreYards] ?? 0),
+      yardsTurn(this.current[S.foreYards] ?? 0),
+      alpha,
+    );
     return out;
   }
 

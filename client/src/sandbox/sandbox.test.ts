@@ -8,6 +8,7 @@
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { beforeAll, describe, expect, test } from 'vitest';
 import { catalog } from '../catalog';
+import { boatCode } from '../catalog/boatlooks';
 import { PILOT_WIND, PilotInput } from '../input/pilot';
 import { quantiseHelm, quantiseSheet } from '../input/quantise';
 import {
@@ -15,6 +16,7 @@ import {
   type GoldenFile,
   runScenario,
   type ScenarioFile,
+  scenarioBoat,
   spellOf,
   steer,
   toHex,
@@ -25,6 +27,8 @@ import { newBoatWind } from '../predict/weather';
 import { swellFromQuery } from './localsea';
 import type { Recording } from './record';
 import {
+  boatFromQuery,
+  boatLookFromQuery,
   FRONT,
   KNOT,
   Sandbox,
@@ -315,7 +319,12 @@ describe('the sandbox', () => {
     let ran = 0;
     for (const [k, sc] of scenarios.scenarios.entries()) {
       const weather = sc.weather;
-      if (weather === undefined || sc.sea !== undefined || sc.terrain !== undefined) {
+      if (
+        weather === undefined ||
+        sc.sea !== undefined ||
+        sc.terrain !== undefined ||
+        scenarioBoat(scenarios, sc.boat).kind !== 0
+      ) {
         // The sandbox makes its own wind and sea, on open water: a scenario
         // with a wind given step by step, a sea or a terrain is not its to
         // sail. A recorded sail, below, has both of the first.
@@ -426,6 +435,63 @@ async function scriptedSail(): Promise<Recording> {
   return s.recorded('sandbox-sail');
 }
 
+describe('the sandbox’s boat', () => {
+  test('is any of the catalog’s, by ?boat’s id, and none it has not is the first', () => {
+    const ids = catalog.boats.map((b) => b.id);
+    expect(boatFromQuery(new URLSearchParams(''), ids)).toBeNull();
+    expect(boatFromQuery(new URLSearchParams('boat=no-such-boat'), ids)).toBeNull();
+    ids.forEach((id, i) => {
+      expect(boatFromQuery(new URLSearchParams(`boat=${id}`), ids)).toBe(i);
+    });
+  });
+
+  test('is in the look ?paint, ?cloth, ?number and ?boatname give, or none told', () => {
+    const q = (s: string) => boatLookFromQuery(new URLSearchParams(s), catalog);
+    expect(q('')).toEqual({ look: -1, name: '' });
+    expect(q('boatname=Saltpeter')).toEqual({ look: -1, name: 'Saltpeter' });
+    const { paints, cloths } = catalog.boatLooks;
+    const p = paints[2]?.id ?? '';
+    const c = cloths[3]?.id ?? '';
+    expect(q(`paint=${p}&cloth=${c}&number=311`)).toEqual({
+      look: boatCode({ paint: 2, cloth: 3, number: 311 }),
+      name: '',
+    });
+    // One the catalog has not is its first; a number out of range none.
+    expect(q('paint=no-such-paint&number=99999').look).toBe(
+      boatCode({ paint: 0, cloth: 0, number: 0 }),
+    );
+    expect([...q(`boatname=${'x'.repeat(30)}`).name]).toHaveLength(20);
+  });
+
+  test('every kind prepared, it steps the one sailed, keeps its params for a recording, and reefs it', async () => {
+    const all = catalog.boats.map((b) => b.physics);
+    for (const [kind, b] of catalog.boats.entries()) {
+      const s = await startSandbox(bytes, all, sea, catalog.world, START, kind);
+      expect(s.kind).toBe(kind);
+      const p = s.records.params;
+      expect(p[RECORDS.params.waterlineLength]).toBe(b.physics.hull.waterlineLength);
+      // A reef asked for comes in at the crew's pace, and the main keeps its share.
+      s.reef = 1;
+      const steps = Math.ceil(b.physics.rig.reefTime * 30) + 30;
+      for (let i = 0; i < steps; i++) {
+        s.step(0, 0.5);
+      }
+      const r = s.records.state[RECORDS.state.reef] ?? 0;
+      expect(r).toBeCloseTo(1, 6);
+      expect(s.out[RECORDS.out.reefShare]).toBeCloseTo(b.physics.rig.reefs[1] ?? 1, 6);
+      // Another kind, from the start, at full sail.
+      const other = (kind + 1) % catalog.boats.length;
+      s.setKind(other);
+      expect(s.kind).toBe(other);
+      expect(s.reef).toBe(0);
+      expect(s.records.state[RECORDS.state.reef]).toBe(0);
+      expect(p[RECORDS.params.waterlineLength]).toBe(
+        catalog.boats[other]?.physics.hull.waterlineLength,
+      );
+    }
+  });
+});
+
 describe('a recorded sail', () => {
   test('replays in the golden runner to the state the sandbox reached', async () => {
     const rec = await scriptedSail();
@@ -437,7 +503,12 @@ describe('a recorded sail', () => {
     // Changes only where a control, the weather or the sea changed.
     expect(sc.changes.length).toBeGreaterThan(5);
     expect(sc.changes.length).toBeLessThan(700);
-    const replay = await runScenario(await loadPhysics(bytes), rec, sc);
+    // The recording's params are the one boat it sailed.
+    const replay = await runScenario(
+      await loadPhysics(bytes),
+      { ...rec, params: { sailed: rec.params } },
+      sc,
+    );
     expect(replay.checkpoints.at(-1)?.state).toEqual(sc.end);
     // It began in a steady 10 knots and its sea.
     expect(sc.sea.tick).toBe(2);
@@ -478,7 +549,7 @@ describe('a recorded sail', () => {
   test('its params are the catalog boat’s, as the golden scenarios have them', async () => {
     const rec = await scriptedSail();
     const scenarios = readJSON<ScenarioFile>(new URL('scenarios.json', testdata));
-    expect(rec.params).toEqual(scenarios.params);
+    expect(rec.params).toEqual(scenarioBoat(scenarios).params);
     expect(rec.sea).toEqual(scenarios.sea);
     expect(rec.wind).toEqual(scenarios.wind);
     expect(rec.scenarios[0]?.end.heading).toBe(toHex(fromHex(rec.scenarios[0]?.end.heading ?? '')));

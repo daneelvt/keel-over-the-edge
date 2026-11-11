@@ -40,7 +40,7 @@ func TestBeginRefusesALook(t *testing.T) {
 		`"look":"machine","version":"female","skin":"tone-2","hair":"brown","colour":"madder-red"`,
 		`"look":"rover","version":"female","skin":"tone-9","hair":"brown","colour":"madder-red"`,
 	} {
-		if status, body := b.post("/account/begin", `{"name":"Ann Bonny",`+look+`}`); status != 400 || body != `{"error":"look"}` {
+		if status, body := b.post("/account/begin", `{"name":"Ann Bonny","born":{"year":1990,"month":1},`+look+`}`); status != 400 || body != `{"error":"look"}` {
 			t.Errorf("%s: %d %s", look, status, body)
 		}
 	}

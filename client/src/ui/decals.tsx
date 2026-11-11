@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
-// The engraved decals of the case's pushers, the pocket chart's weather
-// pusher and the autopilot's control head, and the sky on a watched
-// sailor's card: small line drawings on a 24-unit face, in the colour of
-// their text (gold while what they open is out, faint while it is in),
-// never words.
+// The engraved decals of the case's pushers (the barometer's, the clock's
+// and the harbour board's), the pocket chart's weather pusher and the
+// autopilot's control head, and the sky on a watched sailor's card: small
+// line drawings on a 24-unit face, in the colour of their text (gold while
+// what they open is out, faint while it is in), never words.
 
 import './decals.css';
 import type { ComponentChildren } from 'preact';
@@ -52,6 +52,25 @@ export function AneroidDecal() {
       />
       <line class="decal-line bold" x1="0" y1="0" x2={hx} y2={hy} />
       <circle class="decal-fill" r="1.6" />
+    </Decal>
+  );
+}
+
+/** The clock's: a small engraved clock face, its hands at ten past ten. */
+export function ClockDecal() {
+  const [hx, hy] = at(4.5, -60);
+  const [mx, my] = at(6.5, 60);
+  return (
+    <Decal>
+      <circle class="decal-line" r="8.5" />
+      {[0, 90, 180, 270].map((a) => {
+        const [x1, y1] = at(6.5, a);
+        const [x2, y2] = at(8.5, a);
+        return <line key={a} class="decal-line thin" x1={x1} y1={y1} x2={x2} y2={y2} />;
+      })}
+      <line class="decal-line bold" x1="0" y1="0" x2={hx} y2={hy} />
+      <line class="decal-line" x1="0" y1="0" x2={mx} y2={my} />
+      <circle class="decal-fill" r="1.4" />
     </Decal>
   );
 }

@@ -20,29 +20,49 @@ import { PILOT_IDLE, type PilotControl } from '../../input/pilot';
 import { Clock } from '../../net/clock';
 import { decodeServer, encodeClient } from '../../net/frame';
 import {
+  AshoreWhy,
   BumpPart,
   type ChartEntry as ChartEntryWire,
   ChartSubject,
+  ChatRefusal,
+  ChatStatus,
   type Harbour as HarbourTold,
+  KnockState,
   Lamp,
+  type LifeEncounter,
   type Light,
   type Place,
+  ReportReason,
   WatchEnd,
   type Welcome,
 } from '../../net/gen/keel/v1/game_pb';
 import type {
+  AshoreWhyTold,
   BumpTold,
   CapSeen,
   ChartEntry,
+  ChatRefusalTold,
+  ChatStateTold,
+  ChatTold,
   ChunksHanded,
+  CrewTold,
   ForecastTold,
+  HandedTold,
+  KnockCardTold,
+  KnockingTold,
+  KnockStateTold,
   LampState,
+  LifeSeen,
   LightSeen,
   PastTold,
   PlaceSeen,
+  ReportReasonTold,
   SeaAreas,
+  TiedTold,
+  ViewCrewTold,
   WeatherKeyframe,
   WeatherSpells,
+  WhoTold,
 } from '../../net/messages';
 import { KIND_SNAPSHOT, newSnapshot, readSnapshot } from '../../net/snapshot';
 import { PROTOCOL_VERSION } from '../../net/version.gen';
@@ -88,6 +108,72 @@ const ENDS: Record<number, WatchEndWhy> = {
   [WatchEnd.OWN]: 'own',
   [WatchEnd.QUICK]: 'quick',
   [WatchEnd.BUSY]: 'busy',
+  [WatchEnd.ABOARD]: 'aboard',
+};
+
+/** How a knock stands, as the page names it. */
+const KNOCKS: Record<number, KnockStateTold> = {
+  [KnockState.WAITING]: 'waiting',
+  [KnockState.LET]: 'let',
+  [KnockState.NOT_NOW]: 'not-now',
+  [KnockState.LAPSED]: 'lapsed',
+  [KnockState.ENDED]: 'ended',
+  [KnockState.NOT_AT_SEA]: 'not-at-sea',
+  [KnockState.FULL]: 'full',
+  [KnockState.CLOSED]: 'closed',
+  [KnockState.BUSY]: 'busy',
+  [KnockState.OFTEN]: 'often',
+  [KnockState.CROWDED]: 'crowded',
+  [KnockState.OWN]: 'own',
+  [KnockState.FIRST]: 'first',
+  [KnockState.TRY_AGAIN]: 'try-again',
+  [KnockState.WITHDRAWN]: 'withdrawn',
+  [KnockState.AWAY]: 'away',
+};
+
+/** Why someone left a boat, as the page names it. */
+/** Why a line was not said, as the page names it. */
+const REFUSALS: Record<number, ChatRefusalTold> = {
+  [ChatRefusal.CONTACT]: 'contact',
+  [ChatRefusal.LONG]: 'long',
+  [ChatRefusal.FAST]: 'fast',
+  [ChatRefusal.SILENT]: 'silent',
+  [ChatRefusal.NOBODY]: 'nobody',
+  [ChatRefusal.AWAY]: 'away',
+  [ChatRefusal.RESTING]: 'resting',
+};
+
+/** How chat stands, as the page names it; an unknown status reads as off. */
+const CHAT_STATUS: Record<number, ChatStateTold['status']> = {
+  [ChatStatus.ON]: 'on',
+  [ChatStatus.OFF]: 'off',
+  [ChatStatus.OWN_OFF]: 'own-off',
+  [ChatStatus.RESTING]: 'resting',
+};
+
+/** Why a player is reported, on the wire. */
+const REASONS: Record<ReportReasonTold, ReportReason> = {
+  child: ReportReason.CHILD,
+  sexual: ReportReason.SEXUAL,
+  bullying: ReportReason.BULLYING,
+  hate: ReportReason.HATE,
+  threats: ReportReason.THREATS,
+  scam: ReportReason.SCAM,
+  cheating: ReportReason.CHEATING,
+  other: ReportReason.OTHER,
+};
+
+/** Someone aboard on the wire: by seat, or by a line's number. */
+function whoOf(w: WhoTold) {
+  return 'seat' in w
+    ? { who: { case: 'seat' as const, value: w.seat } }
+    : { who: { case: 'line' as const, value: BigInt(w.line) } };
+}
+
+const ASHORE: Record<number, AshoreWhyTold> = {
+  [AshoreWhy.CHOSE]: 'chose',
+  [AshoreWhy.PUT]: 'put',
+  [AshoreWhy.LEFT]: 'left',
 };
 
 /** What a message from the server was. */
@@ -103,10 +189,27 @@ export type Received =
   | { kind: 'watchEnded'; why: WatchEndWhy; sailor: string }
   /** How many watch the connection's own boat. */
   | { kind: 'watchers'; count: number }
+  | { kind: 'knockCard'; card: KnockCardTold }
+  | { kind: 'knocking'; knocking: KnockingTold }
+  | { kind: 'crew'; crew: CrewTold }
+  | { kind: 'handed'; handed: HandedTold }
+  | { kind: 'ashore'; why: AshoreWhyTold }
+  | { kind: 'chat'; chat: ChatTold }
+  | { kind: 'chatState'; state: ChatStateTold }
+  | { kind: 'tied'; tied: TiedTold }
+  | { kind: 'reported'; ok: boolean }
+  /** The account's shipmates changed: the list is read again. */
+  | { kind: 'shipmates' }
   /** Whether the AI of the own machine sailor watched attends to it. */
   | { kind: 'lamp'; state: LampState }
   /** The sailor of the boat sailed or watched changed their look: its code. */
   | { kind: 'look'; look: number }
+  /** The boat sailed or watched was given a new look in port: its boat look code and name. */
+  | { kind: 'boatLook'; look: number; name: string }
+  /** The names of boats in view, by view slot, as of the next snapshot. */
+  | { kind: 'boatNames'; names: { slot: number; name: string }[] }
+  /** Who is aboard boats in view, by view slot, as of the next snapshot. */
+  | { kind: 'crews'; crews: ViewCrewTold[] }
   /** The server is about to restart, in about inMs. */
   | { kind: 'restart'; inMs: number }
   /** The sea about the boat. */
@@ -126,6 +229,7 @@ export type Received =
   | { kind: 'places'; places: PlaceSeen[] }
   /** Lights come into range, and lights to drop. */
   | { kind: 'lights'; lights: LightSeen[]; drop: number[] }
+  | { kind: 'life'; life: LifeSeen[]; drop: string[] }
   /** The account's owner's flag was set or cleared. */
   | { kind: 'tools'; on: boolean }
   /** The world's chart: whole, or what was charted since. */
@@ -249,9 +353,128 @@ export class Session {
       case 'watchers':
         this.#lastHeard = now;
         return { kind: 'watchers', count: m.body.value.count };
+      case 'knock': {
+        this.#lastHeard = now;
+        const k = m.body.value;
+        return {
+          kind: 'knockCard',
+          card: {
+            id: Number(k.id),
+            sailor: k.sailor,
+            look: k.look,
+            gone: k.gone,
+            ...(k.machine ? { machine: { owner: k.owner, skipper: k.skipper } } : {}),
+            ...(k.shipmate ? { shipmate: true } : {}),
+          },
+        };
+      }
+      case 'knocking': {
+        this.#lastHeard = now;
+        const k = m.body.value;
+        return {
+          kind: 'knocking',
+          knocking: {
+            state: KNOCKS[k.state] ?? 'other',
+            skipper: k.skipper,
+            kind: k.kind,
+            boat: k.boat,
+            machine: k.machine,
+          },
+        };
+      }
+      case 'crew':
+        this.#lastHeard = now;
+        return {
+          kind: 'crew',
+          crew: {
+            people: m.body.value.people.map((p) => ({
+              seat: p.seat,
+              look: p.look,
+              name: p.name,
+              machine: p.machine,
+              you: p.you,
+              muted: p.muted,
+              blocked: p.blocked,
+              shipmate: p.shipmate,
+            })),
+            holder: m.body.value.holder,
+          },
+        };
+      case 'handed': {
+        this.#lastHeard = now;
+        const h = m.body.value;
+        return { kind: 'handed', handed: { from: h.from, seconds: h.seconds, gone: h.gone } };
+      }
+      case 'ashore':
+        this.#lastHeard = now;
+        return { kind: 'ashore', why: ASHORE[m.body.value.why] ?? 'other' };
+      case 'chat': {
+        this.#lastHeard = now;
+        const c = m.body.value;
+        return {
+          kind: 'chat',
+          chat: {
+            id: Number(c.id),
+            seat: c.seat,
+            name: c.name,
+            machine: c.machine,
+            at: Number(c.atUs) / 1000,
+            text: c.text,
+            you: c.you,
+            echo: c.echo,
+            refused: REFUSALS[c.refused] ?? '',
+            thread: c.thread,
+          },
+        };
+      }
+      case 'chatState': {
+        this.#lastHeard = now;
+        const c = m.body.value;
+        return {
+          kind: 'chatState',
+          state: {
+            status: CHAT_STATUS[c.status] ?? 'off',
+            until: Number(c.untilUs) / 1000,
+            rules: c.rules,
+          },
+        };
+      }
+      case 'tied': {
+        this.#lastHeard = now;
+        const t = m.body.value;
+        return {
+          kind: 'tied',
+          tied: { name: t.name, muted: t.muted, blocked: t.blocked, full: t.full },
+        };
+      }
+      case 'reported':
+        this.#lastHeard = now;
+        return { kind: 'reported', ok: m.body.value.ok };
+      case 'shipmates':
+        this.#lastHeard = now;
+        return { kind: 'shipmates' };
       case 'lookChanged':
         this.#lastHeard = now;
         return { kind: 'look', look: m.body.value.look };
+      case 'boatLookChanged':
+        this.#lastHeard = now;
+        return { kind: 'boatLook', look: m.body.value.look, name: m.body.value.name };
+      case 'crews':
+        this.#lastHeard = now;
+        return {
+          kind: 'crews',
+          crews: m.body.value.crews.map((c) => ({
+            slot: c.slot,
+            people: c.people.map((p) => ({ seat: p.seat, look: p.look, machine: p.machine })),
+            holder: c.holder,
+          })),
+        };
+      case 'boatNames':
+        this.#lastHeard = now;
+        return {
+          kind: 'boatNames',
+          names: m.body.value.names.map((n) => ({ slot: n.slot, name: n.name })),
+        };
       case 'agentLamp': {
         this.#lastHeard = now;
         const state = m.body.value.state;
@@ -343,6 +566,13 @@ export class Session {
           lights: m.body.value.lights.map(lightSeen),
           drop: [...m.body.value.drop],
         };
+      case 'life':
+        this.#lastHeard = now;
+        return {
+          kind: 'life',
+          life: m.body.value.encounters.map(lifeSeen),
+          drop: m.body.value.drop.map((d) => d.toString()),
+        };
       case 'chart':
         this.#lastHeard = now;
         return { kind: 'chart', entries: m.body.value.entries.map(chartEntry), whole: true };
@@ -375,13 +605,14 @@ export class Session {
     return { kind: 'other' };
   }
 
-  /** The page's controls for tick seq: the helm's and sheet's indices, and the autopilot's control. */
+  /** The page's controls for tick seq: the helm's and sheet's indices, the autopilot's control and the reef. */
   input(
     now: number,
     seq: number,
     helm: number,
     sheet: number,
     pilot: PilotControl = PILOT_IDLE,
+    reef = 0,
   ): Uint8Array<ArrayBuffer> {
     return this.#encode(now, {
       body: {
@@ -395,6 +626,7 @@ export class Session {
           target: pilot.target,
           order: pilot.order,
           way: pilot.way,
+          reef,
         },
       },
     });
@@ -447,6 +679,109 @@ export class Session {
   unwatchCommand(now: number): Uint8Array<ArrayBuffer> {
     return this.#encode(now, {
       body: { case: 'command', value: { body: { case: 'unwatch', value: {} } } },
+    });
+  }
+
+  /** Asks to come aboard by a link's token, or, token empty, the boat a shipmate skippers. */
+  knockCommand(now: number, token: string, machine = '', shipmate = ''): Uint8Array<ArrayBuffer> {
+    return this.#encode(now, {
+      body: {
+        case: 'command',
+        value: { body: { case: 'knock', value: { token, machine, shipmate } } },
+      },
+    });
+  }
+
+  /** The skipper's answer to a knock. */
+  answerCommand(now: number, knock: number, let_: boolean): Uint8Array<ArrayBuffer> {
+    return this.#encode(now, {
+      body: {
+        case: 'command',
+        value: { body: { case: 'answer', value: { knock: BigInt(knock), let: let_ } } },
+      },
+    });
+  }
+
+  /** Offers the controls to the person in seat to. */
+  handCommand(now: number, to: number): Uint8Array<ArrayBuffer> {
+    return this.#encode(now, {
+      body: { case: 'command', value: { body: { case: 'hand', value: { to } } } },
+    });
+  }
+
+  /** Takes the controls offered, or, the skipper's, takes them back. */
+  takeCommand(now: number): Uint8Array<ArrayBuffer> {
+    return this.#encode(now, {
+      body: { case: 'command', value: { body: { case: 'take', value: {} } } },
+    });
+  }
+
+  /** Gives the controls back to the skipper. */
+  giveBackCommand(now: number): Uint8Array<ArrayBuffer> {
+    return this.#encode(now, {
+      body: { case: 'command', value: { body: { case: 'giveBack', value: {} } } },
+    });
+  }
+
+  /** Goes ashore (who 0), or puts the person in seat who ashore. */
+  ashoreCommand(now: number, who: number): Uint8Array<ArrayBuffer> {
+    return this.#encode(now, {
+      body: { case: 'command', value: { body: { case: 'ashore', value: { who } } } },
+    });
+  }
+
+  /** Closes the boat to knocks, or opens it. */
+  closeKnocksCommand(now: number, closed: boolean): Uint8Array<ArrayBuffer> {
+    return this.#encode(now, {
+      body: { case: 'command', value: { body: { case: 'closeKnocks', value: { closed } } } },
+    });
+  }
+
+  /** Comes aboard the own machine sailor watched, without knocking. */
+  comeAboardCommand(now: number): Uint8Array<ArrayBuffer> {
+    return this.#encode(now, {
+      body: { case: 'command', value: { body: { case: 'comeAboard', value: {} } } },
+    });
+  }
+
+  /** Says a line aboard, or, to a shipmate, a message; id is the page's own, which its echo carries. */
+  sayCommand(now: number, text: string, id: number, to = ''): Uint8Array<ArrayBuffer> {
+    return this.#encode(now, {
+      body: { case: 'command', value: { body: { case: 'say', value: { text, id, to } } } },
+    });
+  }
+
+  /** Mutes someone aboard, or no longer. */
+  muteCommand(now: number, who: WhoTold, on: boolean): Uint8Array<ArrayBuffer> {
+    return this.#encode(now, {
+      body: { case: 'command', value: { body: { case: 'mute', value: { who: whoOf(who), on } } } },
+    });
+  }
+
+  /** Blocks someone aboard, or no longer. */
+  blockCommand(now: number, who: WhoTold, on: boolean): Uint8Array<ArrayBuffer> {
+    return this.#encode(now, {
+      body: {
+        case: 'command',
+        value: { body: { case: 'block', value: { who: whoOf(who), on } } },
+      },
+    });
+  }
+
+  /** Reports someone aboard, with a note for the game's owner. */
+  reportCommand(
+    now: number,
+    who: WhoTold,
+    reason: ReportReasonTold,
+    note: string,
+  ): Uint8Array<ArrayBuffer> {
+    return this.#encode(now, {
+      body: {
+        case: 'command',
+        value: {
+          body: { case: 'report', value: { who: whoOf(who), reason: REASONS[reason], note } },
+        },
+      },
     });
   }
 
@@ -550,6 +885,25 @@ export function placeSeen(p: Place): PlaceSeen {
     age: p.age,
     sunk: p.sunk,
     heel: p.heel * TURN,
+  };
+}
+
+/** An encounter with the sea's life as the page draws it, from the server's. */
+export function lifeSeen(e: LifeEncounter): LifeSeen {
+  return {
+    id: e.id.toString(),
+    rev: e.rev,
+    kind: e.kind,
+    start: Number(e.start),
+    end: Number(e.end),
+    east: e.east / 100,
+    north: e.north / 100,
+    heading: e.heading,
+    speed: e.speed,
+    count: e.count,
+    seed: e.seed,
+    with: e.with,
+    over: e.over === 0n ? '' : e.over.toString(),
   };
 }
 

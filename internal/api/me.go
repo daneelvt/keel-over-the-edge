@@ -31,6 +31,16 @@ type me struct {
 	// the water, which watching would take out.
 	Spectators string `json:"spectators,omitempty"`
 	AtSea      bool   `json:"atSea,omitempty"`
+	// WatchCode and FleetCode are the codes of the human's own links to
+	// watch: their boat's, and their fleet's of machine sailors. Shown to
+	// the account alone, to share.
+	WatchCode string `json:"watchCode,omitempty"`
+	FleetCode string `json:"fleetCode,omitempty"`
+	// Born is whether the player has said when they were born, and Rules
+	// whether they have accepted the Rules of the sea: until both, they
+	// sail alone. When is never told.
+	Born  bool `json:"born"`
+	Rules bool `json:"rules"`
 }
 
 // me answers GET /api/me, behind auth.Signed: a session held to adding a
@@ -50,6 +60,14 @@ func (a *api) me(w http.ResponseWriter, r *http.Request) {
 	if a.cfg.Watch != nil && cur.Kind == store.Human {
 		m.Spectators = a.cfg.Watch.Spectators(cur.ID)
 		m.AtSea = a.cfg.Watch.AtSea(cur.ID)
+		if !cur.Held {
+			codes, err := a.cfg.Watch.Codes(r.Context(), cur.ID)
+			if err != nil {
+				a.unavailable(w, r, "reading the links to watch", err)
+				return
+			}
+			m.WatchCode, m.FleetCode = codes.Sailor, codes.Fleet
+		}
 	}
 	writeJSON(w, http.StatusOK, m)
 }
@@ -59,7 +77,7 @@ func (a *api) meOf(acc store.Account) me {
 	if off == nil {
 		off = []string{}
 	}
-	return me{Name: acc.Name, lookShown: a.shown(acc.ID, acc.Look), Kind: string(acc.Kind), NoticesOff: off}
+	return me{Name: acc.Name, lookShown: a.shown(acc.ID, acc.Look), Kind: string(acc.Kind), NoticesOff: off, Born: acc.Born != 0, Rules: acc.Rules}
 }
 
 // Notices sets an account's notices switched off: the store.

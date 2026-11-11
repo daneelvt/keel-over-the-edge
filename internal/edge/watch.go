@@ -62,6 +62,9 @@ const (
 	askUnwatch
 	// askGone: the connection has ended.
 	askGone
+	// askAboard: the connection is aboard another sailor's boat, by r, its
+	// skipper named name: it is welcomed aboard from the frame of r's tick.
+	askAboard
 )
 
 // ask is something a connection's reader, or the spectators, ask of its
@@ -88,6 +91,10 @@ func (c *conn) ask(a ask) {
 // for; a refusal is told, the connection as it was.
 func (c *conn) watchCommand(name string, now time.Time) {
 	e := c.e
+	if c.crew.Load() {
+		c.refuse(pb.WatchEnd_WATCH_END_ABOARD, name)
+		return
+	}
 	if !c.lastWatch.IsZero() && now.Sub(c.lastWatch) < watchEvery {
 		e.m.watch[watchQuick].Inc()
 		c.refuse(pb.WatchEnd_WATCH_END_QUICK, name)
@@ -137,8 +144,10 @@ func (c *conn) watchCommand(name string, now time.Time) {
 
 // verdict is the rule for viewer watching t, as f has t's boat.
 func (e *Edge) verdict(f *bus.Frame, t watch.Target, viewer bus.Account) watch.Verdict {
-	s := findBoat(f, bus.Account(t.ID))
-	return watch.Allowed(t, e.boatOf(f, s), store.AccountID(viewer))
+	s := watchSlot(f, t, viewer)
+	b := e.boatOf(f, s)
+	b.Blocked = e.refuses(bus.Account(t.ID), viewer)
+	return watch.Allowed(t, b, store.AccountID(viewer))
 }
 
 // boatOf is what the rule is told of the boat in slot s of f, −1 for none.
@@ -147,6 +156,16 @@ func (e *Edge) boatOf(f *bus.Frame, s int32) watch.Boat {
 		return watch.Boat{}
 	}
 	return watch.Boat{InWater: true, Unseen: f.Unseen[s], Voyage: e.voyages.allows(f.Owner[s], f.Boat[s])}
+}
+
+// watchSlot is the slot of the boat viewer watches t on in f: its own,
+// or, for the viewer's own machine sailor, the boat it is aboard; −1 for
+// none.
+func watchSlot(f *bus.Frame, t watch.Target, viewer bus.Account) int32 {
+	if t.Mine(store.AccountID(viewer)) {
+		return whereMachine(f, bus.Account(t.ID))
+	}
+	return findBoat(f, bus.Account(t.ID))
 }
 
 // findBoat is the slot of an account's boat in f, or −1.
@@ -210,7 +229,7 @@ func (c *conn) unwatchCommand() {
 // the watch goes on until the boat is given. One that sails or waits
 // already is answered nothing. False ends the connection.
 func (c *conn) sailCommand() bool {
-	if c.joined.Load() || c.queued.Load() {
+	if c.joined.Load() || c.queued.Load() || c.crew.Load() {
 		return true
 	}
 	c.e.m.join[joinSail].Inc()
@@ -222,7 +241,7 @@ func (c *conn) sailCommand() bool {
 // at once, and the connection is welcomed to the watched boat.
 func (enc *encoder) beginWatch(c *conn, f *bus.Frame, t watch.Target) {
 	e := enc.e
-	s := findBoat(f, bus.Account(t.ID))
+	s := watchSlot(f, t, c.account)
 	if v := e.verdict(f, t, c.account); v != watch.Yes {
 		// Refused since the reader asked: a watch under way ends too.
 		enc.stopWatching(c, pb.WatchEnd_WATCH_END_UNSPECIFIED)
@@ -243,11 +262,43 @@ func (enc *encoder) beginWatch(c *conn, f *bus.Frame, t watch.Target) {
 	c.toldLamp = pb.Lamp_LAMP_UNSPECIFIED
 	c.spectating.Store(true)
 	c.watched.Store(&t.Name)
+	e.watchers.set(c, c.w.boat, true)
 	e.spect.watching(bus.Account(t.ID), 1)
 	if !c.welcomeWatch(f) {
 		return
 	}
 	enc.activate(c)
+}
+
+// follow keeps an owner's watch of their own machine sailor on it: on its
+// own boat, or the boat it is aboard, welcomed to whichever it is on now,
+// and reading its chat; a machine sailor aboard no boat any longer ends
+// the watch. It reports whether c is encoded with f.
+func (enc *encoder) follow(c *conn, f *bus.Frame) bool {
+	m := bus.Account(c.w.target.ID)
+	at := whereMachine(f, m)
+	s, boat := c.w.slot, c.w.boat
+	if at == s && f.Boat[at] == boat {
+		return true
+	}
+	if at < 0 {
+		if f.Occupied[s] && f.Boat[s] == boat && f.Owner[s] != m {
+			// Gone ashore from the boat it was aboard, with no boat of its
+			// own.
+			enc.stopWatching(c, pb.WatchEnd_WATCH_END_LEFT)
+			return false
+		}
+		return true
+	}
+	e := enc.e
+	e.watchers.set(c, boat, false)
+	c.w.slot, c.w.boat = at, f.Boat[at]
+	e.watchers.set(c, c.w.boat, true)
+	c.toldLamp = pb.Lamp_LAMP_UNSPECIFIED
+	if !c.welcomeWatch(f) {
+		c.active = false
+	}
+	return false
 }
 
 // leaveWater takes the boat the connection sails, or its account has in
@@ -281,6 +332,7 @@ func (enc *encoder) endWatch(c *conn, why pb.WatchEnd, name string) {
 	}
 	e := enc.e
 	e.spect.watching(bus.Account(c.w.target.ID), -1)
+	e.watchers.set(c, c.w.boat, false)
 	c.w = watching{}
 	c.toldLamp = pb.Lamp_LAMP_UNSPECIFIED
 	c.spectating.Store(false)
@@ -309,7 +361,7 @@ func (enc *encoder) stillWatchable(c *conn, f *bus.Frame, s int32) pb.WatchEnd {
 	if f.Unseen[s] {
 		return pb.WatchEnd_WATCH_END_CANNOT
 	}
-	if !enc.e.voyages.allows(f.Owner[s], f.Boat[s]) {
+	if !enc.e.voyages.allows(f.Owner[s], f.Boat[s]) || enc.e.refuses(f.Owner[s], c.account) {
 		return pb.WatchEnd_WATCH_END_OFF
 	}
 	return pb.WatchEnd_WATCH_END_UNSPECIFIED
@@ -322,10 +374,12 @@ func (c *conn) welcomeWatch(f *bus.Frame) bool {
 	s := c.w.slot
 	wt, _ := e.cfg.Clock.WorldTime()
 	c.toldLook = f.Look[s]
+	c.toldBoat(f, s)
+	c.toldDeck, c.toldCrew = [2]uint64{}, false
 	c.rmu.Lock()
 	ok := c.send(&pb.ServerMessage{Body: &pb.ServerMessage_Welcome{Welcome: &pb.Welcome{
 		World: e.cfg.World, Tick: f.Tick, WorldTimeUs: wt.Microseconds(),
-		Boat: c.w.boat, Kind: uint32(f.Kind[s]), Look: c.toldLook,
+		Boat: c.w.boat, Kind: uint32(f.Kind[s]), Look: c.toldLook, BoatLook: c.toldBoatLook, BoatName: c.toldBoatName,
 		EpochUs: e.cfg.Epoch.UnixMicro(), Land: e.cfg.Land, Circulation: e.cfg.Circulation, Harbour: e.cfg.Harbour,
 		Tools: c.tools.Load(), Light: e.cfg.MainLight, EndsUs: e.endsUs.Load(), ClosingUs: e.closingUs.Load(), Zone: e.cfg.Zone,
 		Watching: &pb.Watching{Sailor: c.w.target.Name, Machine: c.w.target.Machine(), Mine: c.w.mine, Look: c.toldLook},
@@ -334,6 +388,9 @@ func (c *conn) welcomeWatch(f *bus.Frame) bool {
 	c.rmu.Unlock()
 	c.box.restart()
 	c.bumped = f.Tick
+	if ok {
+		c.resendKnocks()
+	}
 	return ok && c.chunks(e.cfg.Chunks, f.State[s].X, f.State[s].Y)
 }
 

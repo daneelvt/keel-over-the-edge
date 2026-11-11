@@ -19,6 +19,21 @@
 // It never goes below 1.6 m above the sea under the boat, and with reduced
 // motion its springs are stiffer.
 //
+// It keeps out of the land, as a game's camera keeps out of its walls, by a
+// spring arm (Unreal's Spring Arm, Cinemachine's Deoccluder): its line from
+// the point it looks at out to where its view puts it is marched in metre
+// steps, and it stands at the farthest point on that line clear of every
+// solid by CLEARANCE all the way from the look point: never inside an
+// island's columns, an arch's roof, a house or a tower, nor so near that
+// its near plane cuts in, and never with the land between it and the boat.
+// It comes in at once, the frame the land comes into its line, and goes
+// back out by a critically damped spring over ARM_TIME, never past its
+// view. Where the clear reach is shorter than SHORTEST it rises, at the
+// same azimuth, to the first elevation that gives that much, or the
+// longest it finds, and comes down again the same way when it may. The
+// player's view is never changed by the land: the arm only shortens and
+// lifts it for as long as it must. Away from land it is not there at all.
+//
 // It can look up. A drag that would take it lower than its lowest goes on
 // into a tilt: the camera stays where it is and lifts its gaze from the
 // boat toward the sky, up to the zenith; the opposite drag brings the gaze
@@ -27,6 +42,10 @@
 //
 // Watching another sailor's boat, it never eases back by itself: the
 // player looks where they choose, and Back to the boat brings it back.
+//
+// Its views are framed for the catalog's first boat: for a larger one its
+// distance scales with the boat (sizeOf), and the height it looks at with
+// its masthead (lookSizeOf), so the boat fills the frame as the first does.
 //
 // As the world is shown it comes down into its first view, from twice its
 // height and distance, and a touch ends the descent where it is.
@@ -39,6 +58,7 @@
 // eases it behind the boat at once, and a touch of the sea is a look round
 // like any other, easing back five seconds after the last.
 
+import type { SolidLookup } from '../land/solids';
 import { SEA_MOTION } from '../ocean/look';
 
 /** A view of the boat: azimuth from astern (radians, toward the port quarter positive), elevation above the horizon, distance in metres. */
@@ -93,6 +113,70 @@ const RESTING_DISTANCE = 0.1;
 export const DESCENT_FROM = 2;
 /** Radians a CSS pixel of drag swings the camera. */
 const DRAG_SCALE = 0.006;
+/** The arm: the camera keeps this far from anything solid, m, all along its line to the boat: the near plane's corners and a bump's shake. */
+export const CLEARANCE = 0.5;
+/** Where the clear reach is shorter than this, m, the camera rises. */
+export const SHORTEST = 4;
+/** The arm goes back out over this long, s: a critically damped spring, settled within 1% of the way. */
+export const ARM_TIME = 0.6;
+const ARM_OMEGA = 6.64 / ARM_TIME;
+/** The march's longest step along the line, m, and how often the first blocked step is halved back toward the last clear one. */
+const ARM_STEP = 1;
+const ARM_REFINE = 5;
+/** Within this of the view's distance, m, and of its elevation, radians, the arm lets go. */
+const ARM_DONE = 0.001;
+const RISE_DONE = 1e-4;
+/** The rise tries this many elevations, evenly, from the view's up to the highest. */
+const RISE_STEPS = 6;
+
+/** A boat's size, as the camera frames it: its length over all, and its sails' heights, metres. */
+export interface FramedBoat {
+  lengthOverall: number;
+  physics: {
+    rig: { boomHeight: number; luff: number };
+    headsails?: { headsailArea: number; headsailTackHeight: number; headsailLuff: number };
+    square?: {
+      squareForeArea: number;
+      squareAfterArea: number;
+      squareFootHeight: number;
+      squareLuff: number;
+    };
+  };
+}
+
+/** The farthest the chase camera stands from any boat at rest, metres. */
+export const MAX_CHASE = 140;
+
+/** The height of a boat's highest sail's head above the water: its main's, its headsails', or its square sails'. */
+export function mastOf(b: FramedBoat): number {
+  const { rig, headsails, square } = b.physics;
+  let top = rig.boomHeight + rig.luff;
+  if (headsails !== undefined && headsails.headsailArea > 0) {
+    top = Math.max(top, headsails.headsailTackHeight + headsails.headsailLuff);
+  }
+  if (square !== undefined && square.squareForeArea + square.squareAfterArea > 0) {
+    top = Math.max(top, square.squareFootHeight + square.squareLuff);
+  }
+  return top;
+}
+
+/**
+ * How much farther the camera stands from a boat than from the one its
+ * views are framed for: by the boat's length or its masthead's height,
+ * whichever is the more, the chase view never past MAX_CHASE.
+ */
+export function sizeOf(boat: FramedBoat, framed: FramedBoat): number {
+  if (boat === framed) {
+    return 1;
+  }
+  const size = Math.max(boat.lengthOverall / framed.lengthOverall, mastOf(boat) / mastOf(framed));
+  return Math.min(size, MAX_CHASE / CHASE.distance);
+}
+
+/** How much higher the camera looks above a boat than above the one its views are framed for: by its masthead. */
+export function lookSizeOf(boat: FramedBoat, framed: FramedBoat): number {
+  return boat === framed ? 1 : mastOf(boat) / mastOf(framed);
+}
 
 /** The view the game starts with, behind and above the boat. */
 export const CHASE: CameraView = { azimuth: 0, elevation: 0.3, distance: 16 };
@@ -124,22 +208,38 @@ function clamp(v: number, lo: number, hi: number): number {
   return v < lo ? lo : v > hi ? hi : v;
 }
 
-/** v turned by angle radians about the unit axis, right-handed (Rodrigues's formula). */
+/** (x, y, z) turned by angle radians about the unit axis (a, b, c), right-handed (Rodrigues's formula), into out. */
 function turn(
-  v: [number, number, number],
-  axis: [number, number, number],
+  out: Float64Array,
+  x: number,
+  y: number,
+  z: number,
+  a: number,
+  b: number,
+  c: number,
   angle: number,
-): [number, number, number] {
-  const [x, y, z] = v;
-  const [a, b, c] = axis;
+): void {
   const cos = Math.cos(angle);
   const sin = Math.sin(angle);
   const dot = (a * x + b * y + c * z) * (1 - cos);
-  return [
-    x * cos + (b * z - c * y) * sin + a * dot,
-    y * cos + (c * x - a * z) * sin + b * dot,
-    z * cos + (a * y - b * x) * sin + c * dot,
-  ];
+  out[0] = x * cos + (b * z - c * y) * sin + a * dot;
+  out[1] = y * cos + (c * x - a * z) * sin + b * dot;
+  out[2] = z * cos + (a * y - b * x) * sin + c * dot;
+}
+
+/** The rate after springStep's step. */
+let springRate = 0;
+
+/**
+ * The exact step over dt of a critically damped spring, x″ = −ω²(x − to)
+ * − 2ωx′, from x moving at rate: never past to from rest.
+ */
+function springStep(x: number, rate: number, to: number, w: number, dt: number): number {
+  const e = x - to;
+  const k = Math.exp(-w * dt);
+  const c = (rate + w * e) * dt;
+  springRate = (rate - w * c) * k;
+  return to + (e + c) * k;
 }
 
 export interface Vec3Like {
@@ -165,6 +265,10 @@ export class ChaseCamera {
   sea = 0;
   /** Whether it eases back to its resting view untouched, as the player chooses. */
   easesBack = true;
+  /** How much larger the boat is than the one the views are framed for (sizeOf): its distances scale by it. */
+  size = 1;
+  /** How much taller its masthead is (lookSizeOf): the height looked at scales by it. */
+  lookSize = 1;
   /** Another's boat watched: it never eases back by itself, and there is no opening view. */
   watching = false;
   /** Where the camera holds, in the scene, looking at the boat wherever it goes: going over the lip. */
@@ -190,6 +294,26 @@ export class ChaseCamera {
   #opening: number | null = null;
   /** The descent into the first view: how far through it, and how long it takes, s; null when none. */
   #descent: { at: number; time: number } | null = null;
+  /** What the camera keeps out of; null for nothing (the open sea). */
+  solids: SolidLookup | null = null;
+  /** The world point the scene's origin is at, m east (x) and north (y); null for the world's centre. */
+  origin: { readonly x: number; readonly y: number } | null = null;
+  /** The arm: how far along its line from the look point the camera stands, m, and how fast that grows; ∞ while the line is clear to the view. */
+  #reach = Number.POSITIVE_INFINITY;
+  #reachRate = 0;
+  /** The elevation the arm has lifted the camera to, radians, and how fast it comes down; −∞ when not lifted. */
+  #rise = Number.NEGATIVE_INFINITY;
+  #riseRate = 0;
+  /** The seconds the arm has to move by at the next placing. */
+  #armDt = 0;
+  /** The camera's point as a view puts it, before the shake and after, in the scene: the arm's scratch. */
+  #px = 0;
+  #py = 0;
+  #pz = 0;
+  #sx = 0;
+  #sy = 0;
+  #sz = 0;
+  readonly #turned = new Float64Array(3);
 
   /**
    * Puts the camera at a view, behind a boat heading this way and heaved
@@ -205,9 +329,29 @@ export class ChaseCamera {
     this.lift = heave;
     this.sea = sea;
     this.#level();
+    this.#letGo();
     this.#touched = Number.NEGATIVE_INFINITY;
     this.#opening = null;
     this.#descent = null;
+  }
+
+  /** The arm lets go: at the next placing it takes whatever land is in its line at once. */
+  #letGo(): void {
+    this.#reach = Number.POSITIVE_INFINITY;
+    this.#reachRate = 0;
+    this.#rise = Number.NEGATIVE_INFINITY;
+    this.#riseRate = 0;
+    this.#armDt = 0;
+  }
+
+  /** How far along its line the arm holds the camera, m: ∞ while the line is clear to the view (the tests, the panel). */
+  get armReach(): number {
+    return this.#reach;
+  }
+
+  /** The elevation the arm has lifted the camera to, radians; −∞ when not lifted. */
+  get armRise(): number {
+    return this.#rise;
   }
 
   /** Takes none of the boat's pitch and roll: a boat set down anew starts level. */
@@ -229,6 +373,7 @@ export class ChaseCamera {
     this.lift = heave;
     this.sea = sea;
     this.#level();
+    this.#letGo();
   }
 
   /**
@@ -383,6 +528,7 @@ export class ChaseCamera {
     if (dt <= 0) {
       return;
     }
+    this.#armDt += dt;
     const big = hs > SEA_MOTION.quick ? SEA_MOTION.heave : HEAVE_TIME;
     const follow = this.reducedMotion ? HEAVE_TIME / 3 : big;
     this.lift += (heave - this.lift) * (1 - Math.exp(-dt / follow));
@@ -468,6 +614,11 @@ export class ChaseCamera {
     this.#shakeAt = now;
   }
 
+  /** The height above the boat the camera looks at, metres. */
+  get lookHeight(): number {
+    return LOOK_HEIGHT * this.lookSize;
+  }
+
   /** The shake's displacement at now (ms): a wobble dying away over SHAKE_TIME. */
   shakeAt(now: number): number {
     const t = (now - this.#shakeAt) / 1000;
@@ -482,6 +633,7 @@ export class ChaseCamera {
    * Writes the camera's position into position and the point it looks at
    * into target, for a boat at scene (x, y, z); and, given up, which way is
    * up for it: turned with the share of the boat's pitch and roll it takes.
+   * The arm keeps it out of the solids.
    */
   place3(
     x: number,
@@ -492,13 +644,12 @@ export class ChaseCamera {
     up?: Vec3Like,
   ): void {
     const v = this.view;
-    const distance = v.distance * this.#scale;
+    const distance = v.distance * this.#scale * this.size;
     // The stern's direction in the scene's x–z plane is the heading plus a
     // quarter turn (x east, z south, both turning clockwise from above).
     const a = this.yaw + Math.PI / 2 + v.azimuth;
-    const ce = Math.cos(v.elevation);
     const tx = x;
-    const ty = y + this.lift + LOOK_HEIGHT;
+    const ty = y + this.lift + this.lookHeight;
     const tz = z;
     target.set(tx, ty, tz);
     up?.set(0, 1, 0);
@@ -506,32 +657,42 @@ export class ChaseCamera {
       position.set(this.held.x, this.held.y, this.held.z);
       return;
     }
-    let ox = Math.cos(a) * ce * distance;
-    let oy = Math.sin(v.elevation) * distance;
-    let oz = Math.sin(a) * ce * distance;
-    if (this.pitch !== 0 || this.roll !== 0) {
-      // Turned about the boat as the boat turns: by the roll about its
-      // fore-and-aft line, then by the pitch about its athwartships line.
-      // The scene's x runs east and z south: the bow points (sin h, 0,
-      // −cos h) and starboard (cos h, 0, sin h).
+    if ((this.pitch !== 0 || this.roll !== 0) && up !== undefined) {
       const h = this.#heading;
-      const fore: [number, number, number] = [Math.sin(h), 0, -Math.cos(h)];
-      const side: [number, number, number] = [Math.cos(h), 0, Math.sin(h)];
-      const o = turn(turn([ox, oy, oz], fore, this.roll), side, this.pitch);
-      ox = o[0];
-      oy = o[1];
-      oz = o[2];
-      if (up !== undefined) {
-        const u = turn(turn([0, 1, 0], fore, this.roll), side, this.pitch);
-        up.set(u[0], u[1], u[2]);
-      }
+      const u = this.#turned;
+      turn(u, 0, 1, 0, Math.sin(h), 0, -Math.cos(h), this.roll);
+      turn(u, u[0] ?? 0, u[1] ?? 0, u[2] ?? 0, Math.cos(h), 0, Math.sin(h), this.pitch);
+      up.set(u[0] ?? 0, u[1] ?? 1, u[2] ?? 0);
     }
-    const py = Math.max(ty + oy, y + this.sea + MIN_HEIGHT);
-    const px = tx + ox;
-    const pz = tz + oz;
     // A bump's shake moves the camera across the line to the boat and up.
     const s = this.shakeAt(this.#now);
-    position.set(px - Math.sin(a) * s, py + 0.6 * s, pz + Math.cos(a) * s);
+    const solids = this.solids;
+    const dt = this.#armDt;
+    this.#armDt = 0;
+    const elevation =
+      solids === null ? v.elevation : this.#lift(solids, a, distance, tx, ty, tz, y, s, dt);
+    this.#aim(elevation, a, distance, tx, ty, tz, y, s);
+    let px = this.#px;
+    let py = this.#py;
+    let pz = this.#pz;
+    if (solids === null) {
+      position.set(this.#sx, this.#sy, this.#sz);
+    } else {
+      // Along the line from the look point, as far as the arm reaches.
+      const share = this.#arm(solids, tx, ty, tz, dt);
+      if (share < 1) {
+        px = tx + (px - tx) * share;
+        py = ty + (py - ty) * share;
+        pz = tz + (pz - tz) * share;
+        position.set(
+          tx + (this.#sx - tx) * share,
+          ty + (this.#sy - ty) * share,
+          tz + (this.#sz - tz) * share,
+        );
+      } else {
+        position.set(this.#sx, this.#sy, this.#sz);
+      }
+    }
     if (this.tilt <= 0) {
       return;
     }
@@ -543,5 +704,231 @@ export class ChaseCamera {
     const gaze = Math.min(Math.atan2(ty - py, level) + this.tilt, MAX_GAZE);
     const k = Math.cos(gaze) / Math.max(level, 1e-9);
     target.set(px + hx * k, py + Math.sin(gaze), pz + hz * k);
+  }
+
+  /**
+   * Where the view puts the camera at this elevation, for the look point at
+   * (tx, ty, tz) over a boat at scene height y: before the shake s into
+   * #px, #py, #pz, and after it into #sx, #sy, #sz.
+   */
+  #aim(
+    elevation: number,
+    a: number,
+    distance: number,
+    tx: number,
+    ty: number,
+    tz: number,
+    y: number,
+    s: number,
+  ): void {
+    const ce = Math.cos(elevation);
+    let ox = Math.cos(a) * ce * distance;
+    let oy = Math.sin(elevation) * distance;
+    let oz = Math.sin(a) * ce * distance;
+    if (this.pitch !== 0 || this.roll !== 0) {
+      // Turned about the boat as the boat turns: by the roll about its
+      // fore-and-aft line, then by the pitch about its athwartships line.
+      // The scene's x runs east and z south: the bow points (sin h, 0,
+      // −cos h) and starboard (cos h, 0, sin h).
+      const h = this.#heading;
+      const o = this.#turned;
+      turn(o, ox, oy, oz, Math.sin(h), 0, -Math.cos(h), this.roll);
+      turn(o, o[0] ?? 0, o[1] ?? 0, o[2] ?? 0, Math.cos(h), 0, Math.sin(h), this.pitch);
+      ox = o[0] ?? 0;
+      oy = o[1] ?? 0;
+      oz = o[2] ?? 0;
+    }
+    const py = Math.max(ty + oy, y + this.sea + MIN_HEIGHT);
+    const px = tx + ox;
+    const pz = tz + oz;
+    this.#px = px;
+    this.#py = py;
+    this.#pz = pz;
+    this.#sx = px - Math.sin(a) * s;
+    this.#sy = py + 0.6 * s;
+    this.#sz = pz + Math.cos(a) * s;
+  }
+
+  /**
+   * The elevation the camera stands at, radians: the view's, or higher
+   * where the clear reach at the view's is shorter than SHORTEST: the
+   * first of the elevations up to the highest whose reach is that long, or
+   * the one that reaches farthest. It rises at once and comes down by the
+   * arm's spring over dt seconds.
+   */
+  #lift(
+    solids: SolidLookup,
+    a: number,
+    distance: number,
+    tx: number,
+    ty: number,
+    tz: number,
+    y: number,
+    s: number,
+    dt: number,
+  ): number {
+    const e0 = this.view.elevation;
+    let want = e0;
+    const near = this.#nearReach(solids, e0, a, distance, tx, ty, tz, y, s);
+    if (near < Number.POSITIVE_INFINITY) {
+      let best = near;
+      let found = false;
+      for (let k = 1; k <= RISE_STEPS; k++) {
+        const e = e0 + ((MAX_ELEVATION - e0) * k) / RISE_STEPS;
+        const r = this.#nearReach(solids, e, a, distance, tx, ty, tz, y, s);
+        if (r === Number.POSITIVE_INFINITY) {
+          want = e;
+          found = true;
+          break;
+        }
+        if (r > best) {
+          best = r;
+          want = e;
+        }
+      }
+      if (!found && best === near) {
+        want = e0;
+      }
+    }
+    let rise = this.#rise;
+    if (want > e0 && want >= rise) {
+      rise = want;
+      this.#riseRate = 0;
+    } else if (rise > e0) {
+      rise = springStep(rise, this.#riseRate, Math.max(want, e0), ARM_OMEGA, dt);
+      this.#riseRate = springRate;
+      if (want <= e0 && rise - e0 < RISE_DONE) {
+        rise = Number.NEGATIVE_INFINITY;
+        this.#riseRate = 0;
+      }
+    } else {
+      rise = Number.NEGATIVE_INFINITY;
+      this.#riseRate = 0;
+    }
+    this.#rise = rise;
+    return Math.max(rise, e0);
+  }
+
+  /** The clear reach of the line at this elevation if it is shorter than SHORTEST (or the line), m; ∞ if not. */
+  #nearReach(
+    solids: SolidLookup,
+    elevation: number,
+    a: number,
+    distance: number,
+    tx: number,
+    ty: number,
+    tz: number,
+    y: number,
+    s: number,
+  ): number {
+    this.#aim(elevation, a, distance, tx, ty, tz, y, s);
+    const dx = this.#sx - tx;
+    const dy = this.#sy - ty;
+    const dz = this.#sz - tz;
+    const length = Math.sqrt(dx * dx + dy * dy + dz * dz);
+    const need = Math.min(SHORTEST, length);
+    if (!(need > 0)) {
+      return Number.POSITIVE_INFINITY;
+    }
+    const r = this.#clearReach(solids, tx, ty, tz, dx / length, dy / length, dz / length, need);
+    return r >= need ? Number.POSITIVE_INFINITY : r;
+  }
+
+  /**
+   * The arm along the line from the look point (tx, ty, tz) to the camera's
+   * point after the shake: it comes in at once to the line's clear reach,
+   * and goes back out by its spring over dt seconds. Returns the share of
+   * the line the camera stands at: exactly 1 when the arm lets it be.
+   */
+  #arm(solids: SolidLookup, tx: number, ty: number, tz: number, dt: number): number {
+    const dx = this.#sx - tx;
+    const dy = this.#sy - ty;
+    const dz = this.#sz - tz;
+    const length = Math.sqrt(dx * dx + dy * dy + dz * dz);
+    if (!(length > 0)) {
+      return 1;
+    }
+    const clear = this.#clearReach(
+      solids,
+      tx,
+      ty,
+      tz,
+      dx / length,
+      dy / length,
+      dz / length,
+      length,
+    );
+    let reach = this.#reach;
+    if (clear < reach) {
+      reach = clear;
+      this.#reachRate = 0;
+    } else if (reach < Number.POSITIVE_INFINITY) {
+      reach = Math.min(springStep(reach, this.#reachRate, clear, ARM_OMEGA, dt), clear);
+      this.#reachRate = springRate;
+    }
+    if (clear >= length && reach >= length - ARM_DONE) {
+      reach = Number.POSITIVE_INFINITY;
+      this.#reachRate = 0;
+    }
+    this.#reach = reach;
+    return reach >= length ? 1 : reach / length;
+  }
+
+  /**
+   * How far along the line from the scene point (lx, ly, lz), the unit
+   * (ux, uy, uz), up to length m, every point is clear of the solids by
+   * CLEARANCE, m: marched in steps of ARM_STEP at most, the first blocked
+   * one halved back toward the last clear. Where the look point itself is
+   * nearer a solid than that, as near as it is.
+   */
+  #clearReach(
+    solids: SolidLookup,
+    lx: number,
+    ly: number,
+    lz: number,
+    ux: number,
+    uy: number,
+    uz: number,
+    length: number,
+  ): number {
+    const ceiling = solids.ceiling;
+    if (Math.min(ly, ly + uy * length) >= ceiling + CLEARANCE) {
+      return length;
+    }
+    const oe = this.origin?.x ?? 0;
+    const on = this.origin?.y ?? 0;
+    let r = CLEARANCE;
+    while (!solids.clear(lx + oe, on - lz, ly, r)) {
+      r /= 2;
+      if (r < CLEARANCE / 16) {
+        // The look point is in a solid: there is no line to keep clear.
+        return length;
+      }
+    }
+    const steps = Math.ceil(length / ARM_STEP);
+    let ok = 0;
+    for (let i = 1; i <= steps; i++) {
+      const t = i === steps ? length : (i * length) / steps;
+      const h = ly + uy * t;
+      if (h >= ceiling + r && uy >= 0) {
+        // Above everything, and rising: clear to the end.
+        return length;
+      }
+      if (!solids.clear(lx + ux * t + oe, on - (lz + uz * t), h, r)) {
+        let lo = ok;
+        let hi = t;
+        for (let k = 0; k < ARM_REFINE; k++) {
+          const m = (lo + hi) / 2;
+          if (solids.clear(lx + ux * m + oe, on - (lz + uz * m), ly + uy * m, r)) {
+            lo = m;
+          } else {
+            hi = m;
+          }
+        }
+        return lo;
+      }
+      ok = t;
+    }
+    return length;
   }
 }

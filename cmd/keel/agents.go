@@ -56,6 +56,30 @@ func machineLooks(cat *catalog.Catalog) oauth.MachineLooks {
 	return oauth.MachineLooks{Versions: versions, Finishes: of(m.Finishes), Colours: of(cat.SailorOptions.Colours)}
 }
 
+// sailorsBoat is the kind of boat each sailor brings to the fleet: the
+// catalog's first boat of fleet sailor, one for every sailor, or its first
+// boat if none is.
+func sailorsBoat(cat *catalog.Catalog) string {
+	for i := range cat.Boats {
+		if cat.Boats[i].Fleet == catalog.FleetSailor {
+			return string(cat.Boats[i].ID)
+		}
+	}
+	return string(cat.Boats[0].ID)
+}
+
+// sharedBoats are the kinds of boat an account's fleet holds one of, for
+// its sailors to share: the catalog's boats of fleet account.
+func sharedBoats(cat *catalog.Catalog) []string {
+	var out []string
+	for i := range cat.Boats {
+		if cat.Boats[i].Fleet == catalog.FleetAccount {
+			out = append(out, string(cat.Boats[i].ID))
+		}
+	}
+	return out
+}
+
 // newAgents makes sign-in for AI apps, the lifetime read from the
 // database.
 func (p *process) newAgents(ctx context.Context, stopped *accounts.Set) (*agents, error) {
@@ -63,7 +87,7 @@ func (p *process) newAgents(ctx context.Context, stopped *accounts.Set) (*agents
 	if err != nil {
 		return nil, fmt.Errorf("the grant lifetime: %w", err)
 	}
-	a := &agents{lifetime: oauth.NewLifetime(d), looks: machineLooks(p.cat), boat: string(p.cat.Boats[0].ID)}
+	a := &agents{lifetime: oauth.NewLifetime(d), looks: machineLooks(p.cat), boat: sailorsBoat(p.cat)}
 	a.grants = oauth.NewGrants(p.db, a.lifetime, p.cfg.Schedule.Zone, nil)
 	var page func(w http.ResponseWriter, r *http.Request)
 	if p.page != nil && p.page.Has(approvePage) {
@@ -95,12 +119,18 @@ func (p *process) seaOf(h *worldHalf, rw *readyWorld, sighting *sim.Sight) *agen
 	s := &agentapi.Sea{
 		Number: h.row.Number, Epoch: h.row.Epoch, Ends: h.ends, Bus: h.bus, Boats: cat.Boats,
 		Limit: h.world.Limit(), AICap: h.world.AICap(), AIReserve: h.world.AIReserve(),
-		Timeline: rw.timeline, Waves: p.waves, Sky: cat.PrepareSky(), Bundle: rw.bundle,
-		Forecast: h.forecasts, Words: weather.WordsOf(cat), Catalog: cat, Looks: p.looks, Kinds: p.kinds, Encounters: cat.PrepareEncounters(),
+		Timeline: rw.timeline, Waves: p.waves, Sky: cat.PrepareSky(), Bundle: rw.bundle, Life: rw.life,
+		Forecast: h.forecasts, Words: weather.WordsOf(cat), Catalog: cat, Looks: p.looks, Kinds: p.kinds, Encounters: cat.PrepareEncounters(), Fleet: p.fleet,
 		News: news{db: p.db, world: h.row.ID}.News, Columns: map[string]string{}, Biomes: map[string]string{},
 	}
 	if h.game != nil {
 		s.Watchers = h.game.Watchers
+	}
+	if h.chat != nil {
+		s.Chat, s.Talker = h.chat, p.talker
+	}
+	if h.game != nil {
+		s.Deck = h.game
 	}
 	if t := rw.terrain; t != nil {
 		s.Ground, s.Shelter = t.Ground, t.Shelter
@@ -151,6 +181,7 @@ const approvePage = "approve.html"
 func (a *agents) apiConfig(cfg *api.Config, p *process) {
 	cfg.OAuth, cfg.Grants, cfg.MCP, cfg.Lifetime = a.server, a.grants, p.cfg.AgentsURL, a.lifetime
 	cfg.MachineLooks, cfg.Boat, cfg.AtSea, cfg.Machines = a.looks, a.boat, p.atSea, p.db
+	cfg.SharedBoats = sharedBoats(p.cat)
 }
 
 // atSea reports whether an account's boat is at sea in the world sailed.
@@ -166,7 +197,9 @@ func (p *process) atSea(id store.AccountID) bool {
 			return true
 		}
 	}
-	return false
+	// Aboard another's boat as crew, it is at sea too: its owner watches
+	// it there.
+	return f.Aboard(bus.Account(id)) >= 0
 }
 
 // The oauth job's time of day, UTC, after the sessions' and the worlds'.

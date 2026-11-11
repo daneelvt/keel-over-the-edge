@@ -14,19 +14,46 @@
 // comes up, each placed against the hull's solid; a change of mode is
 // blended, the figure carried along a path that stays out of the hull.
 //
+// A boat with a trapeze (its model's `trapeze` node) has its sailor go on
+// out beyond the rail onto the wire as the physics puts it further out:
+// at the helm, sat out on the rail, then crouched on the rack's edge part
+// out, then out fully, lying back on the wire with its legs straight; the
+// aft hand on the extension and the forward hand on the mainsheet as
+// seated. The clips on the wire are placed from the rack's edge, never
+// moved to another seat; the hook of the harness rides on the hips.
+//
+// A boat steered by a wheel (its model's `wheel` node) has its sailor
+// standing at it instead, at the model's `sailor` node, facing forward,
+// playing the wheel's clip: looking ahead, aloft at the sails and to
+// windward, its windward side by the apparent wind; now and then its look's
+// habit at the wheel. The hands are kept on the spokes as the wheel turns
+// with the rudder, each following its spoke so far and then taking the next,
+// hand over hand. Such a sailor never hikes, crosses or falls in.
+//
 // Everything here is in the boat model's frame (x to starboard, y up, z
-// aft), unheeled; the boat's heel turns the model. Allocation-free once
-// made.
+// aft), unheeled; the boat's heel turns the model. A boat other than the
+// one the clips were placed in moves them to its own seat (restage.ts).
+// Allocation-free once made.
 
 import { Euler, Matrix4, Quaternion, Vector3 } from 'three';
 import { CLIMBING, IN_WATER, ON_BOARD } from '../sailor';
-import { type Clip, Pose } from './clips';
-import { twoBone } from './ik';
+import { Clip, Pose } from './clips';
+import { REACH, twoBone } from './ik';
 import { Layers, random, type SailorLayers } from './layers';
 import { MachineLayers } from './machinelayers';
+import { type Hike, restageClip, STRAPPED } from './restage';
 import type { Rig } from './rig';
 import { type HullSolid, reach } from './solid';
 import { Springs, type SpringWorld } from './springs';
+import {
+  onPelvis,
+  onWire,
+  TRAPEZE_CLIPS,
+  type Trapeze,
+  wireDepth,
+  wirePlace,
+  wireSide,
+} from './trapeze';
 
 /** The clips a sailor sails with, by name; the -port ones are the starboard ones' mirror. */
 export const CLIPS = {
@@ -39,14 +66,69 @@ export const CLIPS = {
   water: 'treading-water',
   board: 'righting',
   climb: 'climbing-in',
+  /** At a wheel: its -port is for the wind over the port side. */
+  wheel: 'helm-wheel',
+  wheelHabit: 'habit-wheel',
 } as const;
+/** The clips placed at the wheel, from the helmsman's place: never moved to another seat. */
+const AT_WHEEL: readonly string[] = [CLIPS.wheel, `${CLIPS.wheel}-port`, CLIPS.wheelHabit];
+
+/** Whether a clip is placed at a wheel (from the helmsman's place), not in the dinghy the others are. */
+export function atWheel(clip: string): boolean {
+  return AT_WHEEL.includes(clip);
+}
+
+/** How many turns a wheel makes from amidships to hard over. */
+export const WHEEL_TURNS = 1.25;
+
+/**
+ * A wheel's turn for the rudder's angle (both radians; rudderMax the
+ * rudder's most): WHEEL_TURNS turns at hard over, the top of the wheel to
+ * starboard for a rudder that turns the boat to starboard (positive).
+ */
+export function wheelTurn(rudder: number, rudderMax: number): number {
+  return rudderMax > 0 ? (rudder / rudderMax) * WHEEL_TURNS * 2 * Math.PI : 0;
+}
+
+/** A boat's wheel, as the sailor at it needs it, in the boat model's frame. */
+export interface WheelHelm {
+  /** From the helmsman's place (the `sailor` node: on the deck between the feet, facing forward) into the model's frame. */
+  stand: Matrix4;
+  /** The hub. Its axle runs fore and aft; its spokes turn across the boat. */
+  hub: Vector3;
+  /** The rim's radius, metres, and how many spokes. */
+  radius: number;
+  spokes: number;
+  /** Its turn now, radians: positive, the top to starboard (wheelTurn's). Set before each moment. */
+  turn: number;
+}
+
+/** A hand follows its spoke this far (radians) from where its clip holds it; then takes the next. */
+const SPOKE_LEAD = 0.6;
+/** Beyond this it lets go and takes the next even while the other hand is changing. */
+const SPOKE_MOST = 1.2;
+/** Seconds a hand takes to go to the next spoke, and how far aft of the wheel it lifts on the way. */
+const REGRIP = 0.35;
+const REGRIP_LIFT = 0.06;
+/** A hand of the clip this near its grip (m) holds the spoke; let go fully this far beyond. */
+const HOLD_NEAR = 0.04;
+const HOLD_FAR = 0.12;
+/** Seconds the wheel's windward side takes to change. */
+const WINDWARD_CHANGE = 1.5;
 const PORT = '-port';
 /** The helm and the hiking depths, blended by how far out the sailor is. */
 const SEATED: readonly string[] = [CLIPS.helm, ...CLIPS.hiking];
-
-/** Where the hiking poses come in: from this far out (m) to fully out at HIKE_FULL. */
-const HIKE_FROM = 0.55;
-const HIKE_FULL = 0.95;
+/** On a boat with a trapeze: the helm, sat out on the rail, then part out and out fully on the wire. */
+const WIRED: readonly string[] = [
+  CLIPS.helm,
+  CLIPS.hiking[0],
+  TRAPEZE_CLIPS.low,
+  TRAPEZE_CLIPS.out,
+];
+/** The first of WIRED on the wire. */
+const FIRST_ON_WIRE = 2;
+/** Further out on the wire than this, the cloth hangs free of the seat. */
+export const OFF_SEAT = 0.5;
 /** How far out and up of both ends a change of mode's path bows. */
 const ARC_OUT = 0.35;
 const ARC_UP = 0.6;
@@ -80,6 +162,18 @@ export interface SailorBoat {
   solid: HullSolid;
   /** The physics' climbing time, seconds. */
   climbTime: number;
+  /**
+   * How far this boat's seat is from that of the boat the clips were
+   * placed in, on the starboard side: the clips are moved by it. None (or
+   * null) for that boat itself.
+   */
+  restage?: Vector3 | null;
+  /** How it hikes: a dinghy's strap if not said. */
+  hike?: Hike;
+  /** The wheel the sailor stands at, on a boat steered by one; then it never hikes, crosses or falls in. */
+  wheel?: WheelHelm | null;
+  /** The trapeze, on a boat with one: the sailor goes out on its wire beyond the rail, if it has the clips on the wire. */
+  trapeze?: Trapeze | null;
 }
 
 /** The physics' moment for the sailor. */
@@ -110,12 +204,34 @@ export interface Hands {
   /** The forward hand on the mainsheet. */
   sheet: boolean;
   sheetAt: Vector3;
+  /** At a wheel: how many hands hold its spokes (0 to 2), and where each is (left, right). */
+  wheel: number;
+  wheelAt: [Vector3, Vector3];
+  /** On a trapeze: how far the sailor is out on the wire, 0 (not) to 1 (fully on its clips). */
+  wire: number;
+  /** The harness's hook's eye, where the wire hangs from it, when the runtime has been given it (see hook()). */
+  hook: Vector3;
+  /** Whether the sailor hangs on the wire from its hook: on the wire, with a hook. */
+  hooked: boolean;
+}
+
+/** A hand at the wheel: the spoke it holds (counted from the top at rest), and a change to the next. */
+interface WheelHand {
+  spoke: number;
+  /** The spoke it is going to, and how far there (0 to 1); -1 when not changing. Spokes count 0 to n − 1. */
+  next: number;
+  change: number;
+  /** Its grip at rest in the helmsman's frame: the clip's hand at the start of its wheel clip. */
+  home: Vector3;
+  /** The grip's angle from the top (to starboard) and its distance from the hub, at rest. */
+  angle: number;
 }
 
 const v = new Vector3();
 const w = new Vector3();
 const u = new Vector3();
 const p = new Vector3();
+const o = new Vector3();
 const q = new Quaternion();
 const q2 = new Quaternion();
 const m = new Matrix4();
@@ -155,6 +271,11 @@ export class SailorRuntime {
     tillerAt: new Vector3(),
     sheet: false,
     sheetAt: new Vector3(),
+    wheel: 0,
+    wheelAt: [new Vector3(), new Vector3()],
+    wire: 0,
+    hook: new Vector3(),
+    hooked: false,
   };
 
   readonly #clips: Map<string, Clip>;
@@ -195,6 +316,16 @@ export class SailorRuntime {
   #effort = 0;
   #high = 1;
   #rebase = false;
+  /** At a wheel: the windward side the clip looks to (+1 starboard), and how far its change has gone (0 to 1). */
+  #windward = 1;
+  #windwardChange = 1;
+  readonly #wheelHands: WheelHand[] = [];
+  /** Whether the sailor goes out on a trapeze's wire: its boat has one, and the clips on the wire are here. */
+  readonly #wired: boolean;
+  /** The harness's hook against the pelvis, when given. */
+  #hookRest: Vector3 | null = null;
+  /** How far the sailor hiked at the last moment (depth). */
+  #depth = 0;
 
   constructor(
     readonly rig: Rig,
@@ -205,7 +336,34 @@ export class SailorRuntime {
     /** Whether the cloth and hair move on springs (the boat in view's); else as the clips have them. */
     readonly springs = true,
   ) {
-    this.#clips = clips;
+    const by = boat.restage;
+    const trapeze = boat.trapeze;
+    this.#clips =
+      (by === undefined || by === null) && !trapeze
+        ? clips
+        : new Map(
+            [...clips].map(([name, c]) => [
+              name,
+              // On the wire, placed from the rack's edge on its side.
+              onWire(name)
+                ? trapeze && c.place !== null
+                  ? new Clip(
+                      c.name,
+                      c.duration,
+                      c.tracks,
+                      wirePlace(c.place, trapeze.rackEdge, wireSide(name)),
+                    )
+                  : c
+                : AT_WHEEL.includes(name) || by === undefined || by === null
+                  ? c
+                  : restageClip(c, rig, by),
+            ]),
+          );
+    this.#wired =
+      !!trapeze &&
+      [TRAPEZE_CLIPS.low, TRAPEZE_CLIPS.out].every(
+        (n) => this.#clips.get(n)?.place && this.#clips.get(n + PORT)?.place,
+      );
     const n = rig.names.length;
     this.#pose = new Pose(n).rest(rig);
     this.#scratch = new Pose(n).rest(rig);
@@ -222,6 +380,50 @@ export class SailorRuntime {
         (b) => [b, rig.bone(b)],
       ),
     );
+    if (boat.wheel) {
+      this.#gripsAtRest(boat.wheel);
+    }
+  }
+
+  /**
+   * Where the wheel's clip holds the spokes at rest: each hand's grip at
+   * its start, in the helmsman's frame, its angle from the top and the
+   * spoke nearest it.
+   */
+  #gripsAtRest(wheel: WheelHelm): void {
+    const n = wheel.spokes;
+    const c = this.#clip(CLIPS.wheel, 1);
+    const rig = this.rig;
+    const pose = this.#scratch;
+    pose.rest(rig);
+    c?.sample(0, pose);
+    pose.to(rig);
+    rig.fk();
+    // The hub in the helmsman's frame.
+    inv.copy(wheel.stand).invert();
+    o.copy(wheel.hub).applyMatrix4(inv);
+    const step = (2 * Math.PI) / wheel.spokes;
+    for (const b of ['hand_l', 'hand_r']) {
+      const home = rig.position(rig.bone(b), new Vector3()).applyMatrix4(c?.place ?? m.identity());
+      const angle = Math.atan2(home.x - o.x, home.y - o.y);
+      this.#wheelHands.push({
+        spoke: ((Math.round(angle / step) % n) + n) % n,
+        next: -1,
+        change: 0,
+        home,
+        angle,
+      });
+    }
+    rig.reset();
+  }
+
+  /**
+   * The harness's hook's eye, in the figure's space at rest (the file's
+   * place): carried by the pelvis from now on, hands.hook where it is. The
+   * rig is left at rest.
+   */
+  hook(point: Vector3 | null): void {
+    this.#hookRest = point === null ? null : onPelvis(this.rig, point);
   }
 
   /** A clip's pose at t (looped, or held at its end) into out, from rest. */
@@ -247,9 +449,34 @@ export class SailorRuntime {
     return this.#side;
   }
 
+  /** At a wheel, the side its clip looks to windward on: +1 starboard, −1 port. */
+  get windward(): number {
+    return this.#windward;
+  }
+
+  /**
+   * How far the sailor hikes: 0 sat in at the helm, 1 on the first hiking
+   * depth, more beyond it (or out on a wire); 0 while crossing or not
+   * sailing.
+   */
+  get depth(): number {
+    return this.#depth;
+  }
+
   /** Whether the sailor is crossing the boat. */
   get crossing(): boolean {
     return this.#cross !== null;
+  }
+
+  /** The side deck the sailor is crossing from, or sits on: + starboard, − port. */
+  get crossFrom(): number {
+    return this.#cross === null ? this.#side : this.#crossFrom;
+  }
+
+  /** How far through crossing the boat the sailor is, 0 to 1; 1 when not crossing. */
+  get crossed(): number {
+    const c = this.#cross;
+    return c === null ? 1 : Math.min(1, this.#crossT / Math.max(c.duration, 1e-3));
   }
 
   /**
@@ -278,14 +505,23 @@ export class SailorRuntime {
     }
     this.#effort = Math.max(
       0,
-      Math.min(1, this.#effort + (Math.abs(s.offset) > HIKE_FROM ? dt / 20 : -dt / 40)),
+      Math.min(
+        1,
+        this.#effort +
+          (Math.abs(s.offset) > (this.boat.hike ?? STRAPPED).from ? dt / 20 : -dt / 40),
+      ),
     );
 
     // The mode's pose and place.
     const pose = this.#pose;
     const place = this.#place;
     let seated = false;
-    if (mode === IN_WATER) {
+    this.hands.wire = 0;
+    this.#depth = 0;
+    const wheel = this.boat.wheel;
+    if (wheel) {
+      this.#atWheel(s, dt, wheel, pose, place);
+    } else if (mode === IN_WATER) {
       this.#sample(CLIPS.water, 1, s.time + this.#helmOffset, true, pose);
       this.#waterPlace(s, place);
     } else if (mode === ON_BOARD) {
@@ -335,11 +571,14 @@ export class SailorRuntime {
       effort: this.#effort,
       heelAxis: this.#heelAxis,
       heel: s.heel,
-      upright: seated && this.#cross === null ? 0.5 : 0,
+      upright: (seated && this.#cross === null) || wheel ? 0.5 : 0,
       still: s.still,
     });
 
     // The hands.
+    if (wheel) {
+      this.#wheelHandsStep(dt, wheel);
+    }
     this.#tillerHand(seated);
 
     // The springs.
@@ -347,6 +586,20 @@ export class SailorRuntime {
       this.#springStep(s, dt, seated);
     }
     this.#forwardHand(seated);
+    this.#hookStep();
+  }
+
+  /** The hook where the pelvis carries it now, and whether the wire hangs from it. */
+  #hookStep(): void {
+    const hands = this.hands;
+    const rest = this.#hookRest;
+    hands.hooked = rest !== null && hands.wire > 0;
+    if (rest === null) {
+      return;
+    }
+    const pelvis = this.#bones.pelvis as number;
+    m.fromArray(this.rig.world, 16 * pelvis);
+    hands.hook.copy(rest).applyMatrix4(m).applyMatrix4(this.root);
   }
 
   /** Starts a new mode: the old pose and place kept to blend from. */
@@ -422,13 +675,24 @@ export class SailorRuntime {
     }
     const side = this.#side;
     const out = Math.max(0, s.offset * side);
-    const h = Math.max(0, Math.min(1, (out - HIKE_FROM) / (HIKE_FULL - HIKE_FROM))) * 3;
+    const hike = this.boat.hike ?? STRAPPED;
+    let h = Math.max(0, Math.min(1, (out - hike.from) / (hike.full - hike.from))) * hike.depth;
+    // On a trapeze, beyond the rail onto the wire.
+    const trapeze = this.boat.trapeze;
+    const wired = this.#wired && trapeze;
+    if (wired) {
+      // Out to the rail on the first hiking clip, then onto the wire.
+      h = Math.min(h, 1) + wireDepth(out, hike.full, trapeze.reach);
+    }
+    this.#depth = h;
     const t = s.time + this.#helmOffset;
-    // The helm and the hiking depths, each by its weight, and their places.
+    // The helm and the hiking depths (or out on the wire), each by its
+    // weight, and their places.
     const scratch = this.#scratch;
     pose.clear();
     let total = 0;
-    const names = SEATED;
+    let hanging = 0;
+    const names = wired ? WIRED : SEATED;
     p.set(0, 0, 0);
     q.set(0, 0, 0, 0);
     for (let k = 0; k < names.length; k++) {
@@ -453,25 +717,136 @@ export class SailorRuntime {
       }
       q.set(q.x + q2.x * weight, q.y + q2.y * weight, q.z + q2.z * weight, q.w + q2.w * weight);
       total += weight;
+      if (wired && k >= FIRST_ON_WIRE) {
+        hanging += weight;
+      }
     }
     if (total <= 0) {
       pose.rest(this.rig);
       place.set(m.identity());
       return false;
     }
+    this.hands.wire = hanging / total;
     pose.normalize(total);
     place.at.copy(p).divideScalar(total);
     place.turn.copy(q).normalize();
     return true;
   }
 
+  /**
+   * At the wheel: its clip looking to windward (the two sides' blended
+   * while the wind changes side), now and then the habit over it; placed
+   * from the helmsman's place.
+   */
+  #atWheel(s: SailorMoment, dt: number, wheel: WheelHelm, pose: Pose, place: Place): void {
+    // The windward side, by the apparent wind (from starboard, positive),
+    // held through a calm or a wind from dead ahead or astern.
+    const want =
+      Math.abs(Math.sin(s.windAngle)) > 0.1 ? Math.sign(Math.sin(s.windAngle)) : this.#windward;
+    if (want !== this.#windward && this.#windwardChange >= 1) {
+      this.#windward = want;
+      this.#windwardChange = 0;
+    }
+    this.#windwardChange = Math.min(1, this.#windwardChange + dt / WINDWARD_CHANGE);
+    const t = s.time + this.#helmOffset;
+    this.#sample(CLIPS.wheel, this.#windward, t, true, pose);
+    if (this.#windwardChange < 1) {
+      this.#sample(CLIPS.wheel, -this.#windward, t, true, this.#scratch);
+      this.#scratch.mix(pose, smooth(this.#windwardChange));
+      pose.copy(this.#scratch);
+    }
+    if (this.#habit === null) {
+      this.#maybeHabit(s, dt, 0, CLIPS.wheelHabit, 1);
+    }
+    if (this.#habit !== null) {
+      this.#habitStep(dt, pose);
+    }
+    const c = this.#clip(CLIPS.wheel, 1);
+    place.set(m.multiplyMatrices(wheel.stand, c?.place ?? m2.identity()));
+  }
+
+  /**
+   * The hands kept on the wheel's spokes as it turns: each where its clip
+   * holds it (but as far as it has let go, in a habit), turned with its
+   * spoke; past SPOKE_LEAD from its grip at rest it takes the spoke after,
+   * one hand at a time, lifted aft of the wheel on the way.
+   */
+  #wheelHandsStep(dt: number, wheel: WheelHelm): void {
+    const rig = this.rig;
+    const hands = this.hands;
+    hands.wheel = 0;
+    const step = (2 * Math.PI) / wheel.spokes;
+    inv.copy(this.root).invert();
+    for (let k = 0; k < 2; k++) {
+      const h = this.#wheelHands[k];
+      const hand = k === 0 ? this.#bones.hand_l : this.#bones.hand_r;
+      const upper = k === 0 ? this.#bones.upperarm_l : this.#bones.upperarm_r;
+      const lower = k === 0 ? this.#bones.lowerarm_l : this.#bones.lowerarm_r;
+      if (h === undefined || hand === undefined || upper === undefined || lower === undefined) {
+        continue;
+      }
+      // The clip's hand, in the model's frame, against the wheel's hub.
+      rig.position(hand, v).applyMatrix4(this.root);
+      w.copy(h.home).applyMatrix4(wheel.stand);
+      const hold = 1 - smooth((v.distanceTo(w) - HOLD_NEAR) / (HOLD_FAR - HOLD_NEAR));
+      u.subVectors(v, wheel.hub);
+      // Its place against its grip at rest: across the spoke and off the wheel.
+      const r = Math.hypot(u.x, u.y);
+      const drift = Math.atan2(u.x, u.y) - h.angle;
+      // The spoke it holds: changed for the next when the wheel has carried
+      // it too far, the other hand holding meanwhile.
+      const other = this.#wheelHands[1 - k];
+      const at = wheel.turn + h.spoke * step;
+      const off = wrap(at - h.angle);
+      if (
+        h.next < 0 &&
+        (Math.abs(off) > SPOKE_MOST || (Math.abs(off) > SPOKE_LEAD && (other?.next ?? -1) < 0))
+      ) {
+        const n = wheel.spokes;
+        h.next = (((Math.round((h.angle - wheel.turn) / step) % n) + n) % n) as number;
+        h.change = 0;
+        if (h.next === h.spoke) {
+          h.next = -1;
+        }
+      }
+      let angle = at;
+      let lift = 0;
+      if (h.next >= 0) {
+        h.change = Math.min(1, h.change + dt / REGRIP);
+        const to = wheel.turn + h.next * step;
+        angle = at + wrap(to - at) * smooth(h.change);
+        lift = REGRIP_LIFT * Math.sin(Math.PI * h.change);
+        if (h.change >= 1) {
+          h.spoke = h.next;
+          h.next = -1;
+        }
+      }
+      if (hold <= 0) {
+        continue;
+      }
+      const a = angle + drift;
+      p.set(wheel.hub.x + r * Math.sin(a), wheel.hub.y + r * Math.cos(a), wheel.hub.z + u.z + lift);
+      twoBone(rig, upper, lower, hand, p.applyMatrix4(inv), hold);
+      rig.position(hand, hands.wheelAt[k] as Vector3).applyMatrix4(this.root);
+      if (hold >= 1 && h.next < 0) {
+        hands.wheel++;
+      }
+    }
+  }
+
   /** The habit begins in a steady boat, at the helm, now and then. */
-  #maybeHabit(s: SailorMoment, dt: number, hike: number): void {
+  #maybeHabit(
+    s: SailorMoment,
+    dt: number,
+    hike: number,
+    name: string = CLIPS.habit,
+    side = this.#side,
+  ): void {
     const steady = hike <= 0 && Math.abs(s.rollRate) < 0.08 && !s.still;
     this.#steady = steady ? this.#steady + dt : 0;
     this.#nextHabit -= dt;
     if (this.#steady > STEADY_FOR && this.#nextHabit <= 0) {
-      this.#habit = this.#clip(CLIPS.habit, this.#side);
+      this.#habit = this.#clip(name, side);
       this.#habitT = 0;
       this.#nextHabit = HABIT_MIN + (HABIT_MAX - HABIT_MIN) * this.#rand();
     }
@@ -578,7 +953,9 @@ export class SailorRuntime {
   /**
    * The aft hand brought to the extension, which the rudder swings: kept
    * as far from its hinge as the clip has it, along the line to where the
-   * clip puts it. Seated and not crossing only.
+   * clip puts it; slid along the extension toward the clip's hand, no
+   * further than its end, where the arm could not reach so far (a long
+   * tiller swung away from the sailor). Seated and not crossing only.
    */
   #tillerHand(seated: boolean): void {
     const hands = this.hands;
@@ -601,8 +978,41 @@ export class SailorRuntime {
     }
     const b = this.boat;
     this.rig.position(hand, v).applyMatrix4(this.root);
-    const hold = Math.min(b.extension, v.distanceTo(b.hingeRest));
-    w.subVectors(v, b.hinge).normalize().multiplyScalar(hold).add(b.hinge);
+    let hold = Math.min(b.extension, v.distanceTo(b.hingeRest));
+    u.subVectors(v, b.hinge).normalize();
+    // Out of the arm's reach there, the hold slides along the extension to
+    // the nearest point within it: |hinge + h·u − shoulder| = the reach.
+    const rig = this.rig;
+    const most =
+      REACH *
+      (rig.position(upper, p).distanceTo(rig.position(lower, w)) +
+        w.distanceTo(rig.position(hand, o)));
+    rig.position(upper, p).applyMatrix4(this.root);
+    w.copy(u).multiplyScalar(hold).add(b.hinge);
+    if (w.distanceTo(p) > most) {
+      o.subVectors(b.hinge, p);
+      const od = o.dot(u);
+      const disc = od * od - o.lengthSq() + most * most;
+      if (disc >= 0) {
+        const r = Math.sqrt(disc);
+        const near = Math.abs(-od - r - hold) < Math.abs(-od + r - hold) ? -od - r : -od + r;
+        hold = Math.max(0, Math.min(b.extension, near));
+      }
+    }
+    w.copy(u).multiplyScalar(hold).add(b.hinge);
+    if (w.distanceTo(p) > most) {
+      // Nowhere along it within reach (the rudder has swung the hinge away
+      // from a sailor far out): the extension turned toward the shoulder,
+      // held as far toward the hinge as the arm reaches; at its end, the
+      // arm stretched to it, if it is not so long.
+      o.subVectors(b.hinge, p);
+      const far = o.length() - most * (1 - 1e-3);
+      if (far > 0) {
+        u.copy(o).normalize().negate();
+        hold = Math.min(far, b.extension);
+        w.copy(u).multiplyScalar(hold).add(b.hinge);
+      }
+    }
     hands.tillerAt.copy(w);
     if (!crossing && w.distanceToSquared(v) > 1e-8) {
       inv.copy(this.root).invert();
@@ -634,7 +1044,8 @@ export class SailorRuntime {
     wd.wind.set(-Math.sin(s.windAngle), 0, Math.cos(s.windAngle)).multiplyScalar(s.windSpeed);
     wd.accel.set(0, 0, 0);
     wd.seatY = this.boat.seatY;
-    wd.seated = seated && this.#mode === 0 && this.#cross === null;
+    // Out on the wire the cloth hangs free of the seat.
+    wd.seated = seated && this.#mode === 0 && this.#cross === null && this.hands.wire < OFF_SEAT;
     wd.side = this.#side;
     wd.seatIn = this.boat.seatIn;
     wd.seatOut = this.boat.seatOut;
@@ -648,6 +1059,11 @@ export class SailorRuntime {
 }
 
 const Y = new Vector3(0, 1, 0);
+
+/** An angle brought within ±π. */
+function wrap(a: number): number {
+  return a - 2 * Math.PI * Math.round(a / (2 * Math.PI));
+}
 
 function smooth(x: number): number {
   const t = Math.max(0, Math.min(1, x));

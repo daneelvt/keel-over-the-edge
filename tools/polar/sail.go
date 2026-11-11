@@ -11,83 +11,264 @@ import (
 	"github.com/daneelvt/keel-over-the-edge/internal/physics"
 )
 
-// The low-lift mainsail of the Offshore Racing Congress's VPP (2023,
-// Table 5.1): the greatest lift coefficient a trimmed mainsail reaches at each
-// apparent wind angle, and its viscous drag. Day (2017) found it matches a
-// Laser's sail in a wind tunnel: 1.30 to 1.36 at 28°, against ORC's 1.347.
-var orc = []struct{ awa, cl, cd float64 }{
-	{7, 0.862, 0.026},
-	{9, 1.052, 0.023},
-	{12, 1.164, 0.023},
-	{28, 1.347, 0.033},
-	{60, 1.353, 0.113},
-	{90, 1.267, 0.383},
-	{120, 0.931, 0.969},
-	{150, 0.388, 1.316},
-	{180, -0.112, 1.345},
+// orcSail is one of the Offshore Racing Congress's VPP sails (2023, §5.2):
+// the greatest lift coefficient it reaches trimmed at each apparent wind
+// angle, its viscous drag, and its drag growing with lift squared.
+type orcSail struct {
+	name      string
+	points    []struct{ awa, cl, cd float64 }
+	quadratic float64
+	// from and to are the angles between which drive is held to the
+	// source; side the angles at which side force is too.
+	from, to float64
+	side     []float64
 }
 
-// orcQuadratic is ORC's drag growing with lift squared, kpm (Table 5.1).
-const orcQuadratic = 0.01379
+// orcMain is ORC's low-lift mainsail (Table 5.1). Day (2017) found it
+// matches a Laser's sail in a wind tunnel: 1.30 to 1.36 at 28°, against
+// ORC's 1.347.
+var orcMain = orcSail{
+	name: "ORC's mainsail",
+	points: []struct{ awa, cl, cd float64 }{
+		{7, 0.862, 0.026},
+		{9, 1.052, 0.023},
+		{12, 1.164, 0.023},
+		{28, 1.347, 0.033},
+		{60, 1.353, 0.113},
+		{90, 1.267, 0.383},
+		{120, 0.931, 0.969},
+		{150, 0.388, 1.316},
+		{180, -0.112, 1.345},
+	},
+	quadratic: 0.01379,
+	from:      28,
+	to:        180,
+	side:      []float64{28, 60},
+}
 
-// sailTolerance is how far the trimmed sail's drive may be from ORC's at 28°
-// and above, and its side force at 28° and 60°, as a fraction of ORC's total
-// force there.
+// orcJib is ORC's low-lift jib, of a forestay that cannot be adjusted
+// while racing (Table 5.4). It is held to from 27° to 100°: from a broad
+// reach aft ORC's jib stands across the wind as if poled out, where a jib
+// sheeted to the rail, as the game's is, stands behind the main.
+var orcJib = orcSail{
+	name: "ORC's jib",
+	points: []struct{ awa, cl, cd float64 }{
+		{7, 0, 0.05},
+		{15, 1.0, 0.032},
+		{20, 1.375, 0.031},
+		{27, 1.45, 0.037},
+		{50, 1.45, 0.25},
+		{60, 1.25, 0.35},
+		{100, 0.40, 0.73},
+		{150, 0, 0.95},
+		{180, -0.10, 0.90},
+	},
+	quadratic: 0.016,
+	from:      27,
+	to:        100,
+	side:      []float64{27, 50, 60},
+}
+
+// orcGennaker is ORC's asymmetric spinnaker tacked on the centreline
+// (Table 5.7, "asc"): a gennaker on a bowsprit. It is held to from 41° to
+// 180°: closer to the wind it collapses, its lift gone and its drag left,
+// and the crew has it in long before. Its side force depends on which of
+// several nearly equal trims is best, and is shown but not held.
+var orcGennaker = orcSail{
+	name: "ORC's asymmetric spinnaker",
+	points: []struct{ awa, cl, cd float64 }{
+		{28, 0.01738, 0.15405},
+		{41, 0.69825, 0.23925},
+		{50, 0.89933, 0.30877},
+		{60, 1.04000, 0.38852},
+		{67, 1.07200, 0.43624},
+		{75, 1.07500, 0.47713},
+		{100, 0.98500, 0.54530},
+		{115, 0.80500, 0.56574},
+		{130, 0.37200, 0.47500},
+		{150, 0.10000, 0.35200},
+		{170, 0.02000, 0.29000},
+		{180, 0, 0.26200},
+	},
+	quadratic: 0.02648,
+	from:      41,
+	to:        180,
+}
+
+// sailTolerance is how far a trimmed sail's drive may be from its source's
+// at the angles it is held at, and its side force where that is held, as a
+// fraction of the source's total force there.
 const sailTolerance = 0.05
 
+// coefficients is a sail of the boat's as the tool trims it: its
+// coefficients at an angle of attack, its upper strip's twist with its
+// foot at an angle off the centreline, and that angle's limits, degrees.
+type coefficients struct {
+	at      func(a float64) (cl, cd float64)
+	twist   func(angle float64) float64
+	in, out float64
+}
+
+// mainOf is the boat's main, unflattened.
+func mainOf(k *kind) coefficients {
+	return coefficients{
+		at:    func(a float64) (float64, float64) { return physics.SailCoefficients(k.b, a, 1) },
+		twist: func(d float64) float64 { return physics.SailTwist(k.b, d, 1) },
+		in:    k.p.BoomIn, out: k.p.BoomOut,
+	}
+}
+
+// headsailsOf is the boat's headsails, unflattened.
+func headsailsOf(k *kind) coefficients {
+	return coefficients{
+		at:    func(a float64) (float64, float64) { return physics.HeadsailCoefficients(k.b, a, 1) },
+		twist: func(d float64) float64 { return physics.HeadsailTwist(k.b, d) },
+		in:    k.p.HeadsailIn, out: k.p.HeadsailOut,
+	}
+}
+
+// downwindOf is the boat's downwind sail, set.
+func downwindOf(k *kind) coefficients {
+	return coefficients{
+		at:    func(a float64) (float64, float64) { return physics.DownwindCoefficients(k.b, a) },
+		twist: func(d float64) float64 { return physics.DownwindTwist(k.b, d) },
+		in:    k.p.DownwindIn, out: k.p.DownwindOut,
+	}
+}
+
 // trimmed returns the sail's coefficients at apparent wind angle awa
-// (radians) with the boom set for the most drive within its limits: both
-// strips, the head twisted beyond the boom at full power.
-func trimmed(b *physics.Prepared, p *physics.Params, awa float64) (cl, cd, boom float64) {
+// (radians) with its foot set for the most drive within its limits: both
+// strips, the head twisted beyond the foot.
+func trimmed(c coefficients, awa float64) (cl, cd, angle float64) {
 	bestDrive := math.Inf(-1)
 	sinA, cosA := math.Sincos(awa)
-	for d := p.BoomIn; d <= p.BoomOut+1e-9; d += 0.25 {
-		var l, c float64
-		for _, twist := range []float64{0, physics.SailTwist(b, d*deg, 1)} {
+	for d := c.in; d <= c.out+1e-9; d += 0.25 {
+		var l, cc float64
+		for _, twist := range []float64{0, c.twist(d * deg)} {
 			a := awa - d*deg - twist
-			sl, sc := physics.SailCoefficients(b, math.Abs(a), 1)
+			sl, sc := c.at(math.Abs(a))
 			if a < 0 {
 				sl = -sl
 			}
 			l += sl / 2
-			c += sc / 2
+			cc += sc / 2
 		}
-		if drive := l*sinA - c*cosA; drive > bestDrive {
-			bestDrive, cl, cd, boom = drive, l, c, d
+		if drive := l*sinA - cc*cosA; drive > bestDrive {
+			bestDrive, cl, cd, angle = drive, l, cc, d
 		}
 	}
-	return cl, cd, boom
+	return cl, cd, angle
 }
 
-// runSail prints the trimmed sail against ORC's, as lift and drag and as
-// drive and side force, and fails if drive or side force at 28° and above
-// is further from ORC's than sailTolerance.
-func runSail(b *physics.Prepared, p *physics.Params) error {
-	induced := p.SailArea / (math.Pi * p.EffectiveHeight * p.EffectiveHeight)
-	fmt.Println("  AWA  boom |   lift    ORC |   drag    ORC |  drive    ORC |   side    ORC")
+// runSail prints each of the boat's sails trimmed against its source, as
+// lift and drag and as drive and side force, and fails if drive or side
+// force where they are held is further from the source's than
+// sailTolerance; and its square sails, if it has any, against the wind
+// tunnel's. Induced drag is the whole rig's, as in the step: its area on
+// its effective height, a downwind sail's with it while that is set.
+//
+// A ship's mizzen and headsails keep the main's and the jib's coefficients
+// as the other boats fit them, and are shown against ORC's, but not held:
+// in a ship's rig, whose induced drag is three times a sloop's, the trim
+// that drives her best near the wind is not the one ORC's sails, trimmed
+// for a sloop's lift, are taken at, and a ship never sails so close to
+// the apparent wind.
+func runSail(k *kind) error {
+	area := ((k.p.SailArea + k.p.HeadsailArea) + k.p.SquareForeArea) + k.p.SquareAfterArea
+	induced := area / (math.Pi * k.p.EffectiveHeight * k.p.EffectiveHeight)
+	fmt.Printf("%s\n", k.name)
+	square := k.p.SquareForeArea > 0 || k.p.SquareAfterArea > 0
+	failed := compareSail("the main", mainOf(k), orcMain, induced)
+	if k.p.HeadsailArea > 0 {
+		failed = append(failed, compareSail("the headsails", headsailsOf(k), orcJib, induced)...)
+	}
+	if k.p.DownwindArea > 0 {
+		// Set, its area joins the rig's induced drag.
+		set := induced + k.p.DownwindArea/(math.Pi*k.p.EffectiveHeight*k.p.EffectiveHeight)
+		failed = append(failed, compareSail("the downwind sail", downwindOf(k), orcGennaker, set)...)
+	}
+	if square {
+		for _, f := range failed {
+			fmt.Println("  not held in a ship's rig:", f)
+		}
+		failed = compareSquare(k)
+	}
+	if len(failed) > 0 {
+		return errors.New("the trimmed sails are not ORC's:\n  " + strings.Join(failed, "\n  "))
+	}
+	return nil
+}
+
+// compareSail prints one sail against its source and returns the angles at
+// which it is not within sailTolerance.
+func compareSail(name string, c coefficients, src orcSail, induced float64) []string {
+	fmt.Printf("%s against %s\n", name, src.name)
+	fmt.Println("  AWA  trim |   lift    ORC |   drag    ORC |  drive    ORC |   side    ORC")
 	var failed []string
-	for _, o := range orc {
+	for _, o := range src.points {
 		awa := o.awa * deg
-		cl, cd, boom := trimmed(b, p, awa)
-		orcCD := o.cd + (orcQuadratic+induced)*o.cl*o.cl
+		cl, cd, angle := trimmed(c, awa)
+		orcCD := o.cd + (src.quadratic+induced)*o.cl*o.cl
 		sinA, cosA := math.Sincos(awa)
 		drive, side := cl*sinA-cd*cosA, cl*cosA+cd*sinA
 		orcDrive, orcSide := o.cl*sinA-orcCD*cosA, o.cl*cosA+orcCD*sinA
 		fmt.Printf("  %3.0f %5.1f | %6.3f %6.3f | %6.3f %6.3f | %6.3f %6.3f | %6.3f %6.3f\n",
-			o.awa, boom, cl, o.cl, cd, orcCD, drive, orcDrive, side, orcSide)
+			o.awa, angle, cl, o.cl, cd, orcCD, drive, orcDrive, side, orcSide)
 		// From a beam reach aft the drive changes little between an attached
 		// trim and a stalled one, so the side force depends on which of two
-		// nearly equal trims is best; it is shown but not held to ORC's.
-		if o.awa >= 28 {
+		// nearly equal trims is best; it is shown but held to the source only
+		// at its side angles.
+		if o.awa >= src.from && o.awa <= src.to {
 			total := math.Hypot(orcDrive, orcSide)
-			sideOff := math.Abs(side-orcSide) > sailTolerance*total && o.awa <= 60
+			sideOff := false
+			for _, a := range src.side {
+				sideOff = sideOff || (a == o.awa && math.Abs(side-orcSide) > sailTolerance*total)
+			}
 			if math.Abs(drive-orcDrive) > sailTolerance*total || sideOff {
-				failed = append(failed, fmt.Sprintf("%g°: drive %.3f against %.3f, side %.3f against %.3f", o.awa, drive, orcDrive, side, orcSide))
+				failed = append(failed, fmt.Sprintf("%s at %g°: drive %.3f against %.3f, side %.3f against %.3f", name, o.awa, drive, orcDrive, side, orcSide))
 			}
 		}
 	}
-	if len(failed) > 0 {
-		return errors.New("the trimmed sail is not ORC's:\n  " + strings.Join(failed, "\n  "))
+	return failed
+}
+
+// tadano is a foremast of six square sails in a wind tunnel (Tadano,
+// Ohsugi, Amemiya and Yoshimura 1991, Figure 9): its lift and drag at
+// each angle of attack off the yards' line, degrees, read from the
+// figure's points.
+var tadano = []struct{ attack, cl, cd float64 }{
+	{5, 0.262, 0.132},
+	{10, 0.444, 0.161},
+	{15, 0.624, 0.219},
+	{20, 0.814, 0.274},
+	{25, 0.968, 0.356},
+	{30, 1.012, 0.422},
+	{35, 1.005, 0.48},
+	{40, 0.922, 0.532},
+	{45, 0.841, 0.591},
+	{50, 0.80, 0.643},
+	{55, 0.75, 0.70},
+	{60, 0.65, 0.755},
+	{70, 0.45, 0.82},
+	{80, 0.20, 0.86},
+	{90, 0, 0.88},
+}
+
+// compareSquare prints the square sails' coefficients at each of the wind
+// tunnel's angles of attack beside its own, and returns the angles at
+// which lift or drag is further from it than sailTolerance of its whole
+// force there. A strip's yards hold it at its attack: there is no trim.
+func compareSquare(k *kind) []string {
+	fmt.Println("the square sails against Tadano's foremast of six")
+	fmt.Println("  attack |   lift  Tadano |   drag  Tadano")
+	var failed []string
+	for _, t := range tadano {
+		cl, cd := physics.SquareCoefficients(k.b, t.attack*deg)
+		fmt.Printf("  %6.0f | %6.3f %6.3f | %6.3f %6.3f\n", t.attack, cl, t.cl, cd, t.cd)
+		total := math.Hypot(t.cl, t.cd)
+		if math.Abs(cl-t.cl) > sailTolerance*total || math.Abs(cd-t.cd) > sailTolerance*total {
+			failed = append(failed, fmt.Sprintf("the square sails at %g°: lift %.3f against %.3f, drag %.3f against %.3f", t.attack, cl, t.cl, cd, t.cd))
+		}
 	}
-	return nil
+	return failed
 }

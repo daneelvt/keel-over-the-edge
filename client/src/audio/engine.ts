@@ -7,7 +7,8 @@
 // wave's hiss), the sea about the boat (a wide, low band), and the falls (a
 // low band through a low-pass, panned toward the lip), and in port the
 // water lapping at the quays (audio/harbour.ts, with the bell, the gulls
-// and the mallets, each played once). The frame loop sets their parameters at most every 50 ms,
+// and the mallets, each played once), and by day the calls of the sea's
+// life about the boat (audio/life.ts), each played once. The frame loop sets their parameters at most every 50 ms,
 // each gliding to its target with setTargetAtTime. A bump's knock is played
 // once, from the same noise and a tone, and let go when it has died away;
 // so are a lighthouse's fog signal's blasts in fog (audio/fogsignals.ts),
@@ -48,6 +49,16 @@ import {
   lappingNow,
 } from './harbour';
 import type { Knock } from './knock';
+import {
+  LIFE_RECIPES,
+  type LifeEvent,
+  type LifeInput,
+  type LifeRecipes,
+  lifeEvents,
+  WATER_RECIPES,
+  type WaterRecipes,
+  type WaterSound,
+} from './life';
 import {
   THUNDER_RECIPE,
   THUNDER_RULE,
@@ -485,6 +496,170 @@ export class SoundEngine {
         }
       };
     }
+  }
+
+  /** The sea's life's recipes, the world seconds its calls are played to, and how many were played (tests). */
+  readonly #life: LifeRecipes = LIFE_RECIPES;
+  #lifeTo = Number.NaN;
+  readonly #lifeThrottle = new Throttle(SOUND_INTERVAL);
+  lifeEvents = 0;
+
+  /**
+   * Plays the calls of the sea's life about the listener due since the last
+   * time (ms), each once at its world time.
+   */
+  life(now: number, x: LifeInput): void {
+    const g = this.#graph;
+    if (g === null || g.ctx.state !== 'running' || !this.#lifeThrottle.due(now)) {
+      return;
+    }
+    if (!(x.seconds - this.#lifeTo < 2) || x.seconds < this.#lifeTo) {
+      this.#lifeTo = x.seconds;
+      return;
+    }
+    const at = g.ctx.currentTime;
+    for (const e of lifeEvents(this.#life, x, this.#lifeTo, x.seconds)) {
+      this.#playLife(g, e, at + Math.max(0, e.at - x.seconds));
+    }
+    this.#lifeTo = x.seconds;
+  }
+
+  readonly #water: WaterRecipes = WATER_RECIPES;
+  /** The splashes and breaths played (tests). */
+  waterSounds = 0;
+
+  /** Plays the life in the water's splashes and breaths of a frame, each once, now. */
+  water(sounds: readonly WaterSound[]): void {
+    const g = this.#graph;
+    if (g === null || g.ctx.state !== 'running') {
+      return;
+    }
+    for (const s of sounds) {
+      this.#playWater(g, s);
+    }
+  }
+
+  /** A splash or a breath: a burst of the noise through a falling band, dying away. */
+  #playWater(g: Graph, s: WaterSound): void {
+    if (!(s.level > 0)) {
+      return;
+    }
+    this.waterSounds++;
+    const ctx = g.ctx;
+    const c = this.#water[s.kind];
+    const unit = (k: number): number => {
+      const v = Math.sin(s.seed * 3.7 + k * 1.3) * 43758.5453;
+      return v - Math.floor(v);
+    };
+    const at = ctx.currentTime;
+    const length =
+      (c.length[0] ?? 0.2) + unit(1) * ((c.length[1] ?? 0.4) - (c.length[0] ?? 0.2)) * s.size;
+    const f = (c.band[0] ?? 800) + unit(2) * ((c.band[1] ?? 1600) - (c.band[0] ?? 800));
+    const burst = ctx.createBufferSource();
+    burst.buffer = g.noise;
+    const band = ctx.createBiquadFilter();
+    band.type = 'bandpass';
+    band.Q.value = c.q;
+    band.frequency.setValueAtTime(f, at);
+    band.frequency.exponentialRampToValueAtTime(f * c.fall, at + length);
+    const v = ctx.createGain();
+    v.gain.setValueAtTime(0, at);
+    v.gain.linearRampToValueAtTime(s.level, at + 0.012);
+    v.gain.exponentialRampToValueAtTime(0.0001, at + length);
+    const pan = ctx.createStereoPanner();
+    pan.pan.value = s.pan;
+    burst.connect(band);
+    band.connect(v);
+    v.connect(pan);
+    pan.connect(g.master);
+    burst.start(at, unit(3) * 2);
+    burst.stop(at + length + 0.05);
+    burst.onended = () => {
+      for (const n of [burst, band, v, pan]) {
+        n.disconnect();
+      }
+    };
+  }
+
+  #playLife(g: Graph, e: LifeEvent, at: number): void {
+    if (!(e.level > 0)) {
+      return;
+    }
+    this.lifeEvents++;
+    const ctx = g.ctx;
+    const r = this.#life;
+    const unit = (k: number): number => {
+      const v = Math.sin(e.seed * 3.7 + k * 1.3) * 43758.5453;
+      return v - Math.floor(v);
+    };
+    const between = (p: readonly number[], k: number): number =>
+      (p[0] ?? 0) + unit(k) * ((p[1] ?? 0) - (p[0] ?? 0));
+    const pan = ctx.createStereoPanner();
+    pan.pan.value = e.pan;
+    pan.connect(g.master);
+    const o = ctx.createOscillator();
+    const v = ctx.createGain();
+    v.gain.setValueAtTime(0, at);
+    const nodes: AudioNode[] = [pan, o, v];
+    let t = at;
+    // One note of a call: from pitch at t, gliding to end over its length.
+    const note = (pitch: number, end: number, length: number): void => {
+      o.frequency.setValueAtTime(pitch, t);
+      o.frequency.exponentialRampToValueAtTime(end, t + length);
+      v.gain.setValueAtTime(0, t);
+      v.gain.linearRampToValueAtTime(e.level, t + Math.min(0.015, length / 4));
+      v.gain.linearRampToValueAtTime(0, t + length);
+    };
+    if (e.kind === 'whistle') {
+      // A thin whistle, rising a little at its end.
+      const c = r.whistle;
+      const pitch = between(c.pitch, 1);
+      const length = between(c.note, 2);
+      o.type = 'sine';
+      note(pitch, pitch * c.rise, length);
+      o.connect(v);
+      t += length;
+    } else {
+      // A nasal voice: a harmonic tone through a band at the call's pitch,
+      // its fundamental an octave under it.
+      const c = e.kind === 'laugh' ? r.laugh : r.tern;
+      const pitch = between(c.pitch, 1);
+      o.type = 'sawtooth';
+      const band = ctx.createBiquadFilter();
+      band.type = 'bandpass';
+      band.frequency.value = pitch;
+      band.Q.value = c.q;
+      o.connect(band);
+      band.connect(v);
+      nodes.push(band);
+      if (e.kind === 'laugh') {
+        // "Ha-ha-ha": a run of short notes, each a little lower.
+        const l = r.laugh;
+        const notes = Math.round(between(l.notes, 2));
+        for (let k = 0; k < notes; k++) {
+          const length = between(l.note, 3 + k);
+          const f = (pitch / 2) * (1 - 0.02 * k);
+          note(f, f * l.fall, length);
+          t += length + l.gap;
+        }
+      } else {
+        // "Ker-wacki-wah": short, shorter and higher, then long and falling.
+        const tn = r.tern;
+        tn.syllables.forEach((length, k) => {
+          const f = (pitch / 2) * (k === 1 ? 1.12 : 1);
+          note(f, k === tn.syllables.length - 1 ? f * tn.fall : f * 0.97, length);
+          t += length + tn.gap;
+        });
+      }
+    }
+    v.connect(pan);
+    o.start(at);
+    o.stop(t);
+    o.onended = () => {
+      for (const n of nodes) {
+        n.disconnect();
+      }
+    };
   }
 
   #play(g: Graph, e: HarbourEvent, at: number): void {

@@ -12,6 +12,7 @@
 
 import { signal } from '@preact/signals';
 import {
+  Color,
   DataTexture,
   FloatType,
   Mesh,
@@ -56,8 +57,10 @@ import { STEPS_PER_SECOND } from '../game/clock';
 import type { BoatDriver } from '../game/driver';
 import { type DrawnBoat, newDrawnBoat } from '../game/fleet';
 import type { Game } from '../game/game';
+import type { LifeBird } from '../life/draw';
+import type { GullTown } from '../life/gulls';
 import { nowUs, worldUs } from '../net/clock';
-import type { BumpTold, ChartEntry, ChartSubject } from '../net/messages';
+import type { BumpTold, ChartEntry, ChartSubject, KnockStateTold, LifeSeen } from '../net/messages';
 import type { Online } from '../net/online';
 import type { Cascade } from '../ocean/detail';
 import { FieldMaker, newFields } from '../ocean/field';
@@ -65,7 +68,7 @@ import { foamOn } from '../ocean/foam';
 import { gustAt } from '../ocean/gusts';
 import { hexAt, hexCentre, NEIGHBOURS, TILE_APOTHEM, TILE_RADIUS, tileHash } from '../ocean/hex';
 import { HULL_FILL, hulls, insideHull, toHullFrame } from '../ocean/hulls';
-import { type FoamLook, WAKE } from '../ocean/look';
+import { type FoamLook, WAKE, WAKE_WAVES } from '../ocean/look';
 import {
   detailOn,
   farLook,
@@ -77,13 +80,16 @@ import {
 import { groundWindow, leeTexture, shelterTexture, shore, waveLeeAt } from '../ocean/shore';
 import { GROUND_ROW, GUST_ROW, PASS_WIDTH } from '../ocean/tilepass';
 import { SKIRT_DEPTH } from '../ocean/tiles';
+import { wakeDamping } from '../ocean/wakewaves';
+import { WakeWavesReference } from '../ocean/wakewavescpu';
 import { boatBandAt } from '../ocean/wave';
 import { type RecordValues, spellOf, steer, toHex } from '../predict/golden';
-import { RECORDS, SEA, WEATHER } from '../predict/layout.gen';
+import { GROUND, RECORDS, SEA, WEATHER } from '../predict/layout.gen';
 import { BODY, SKY, WIND_VALUE, WIND_VALUES } from '../predict/physics';
 import type { Predictor } from '../predict/predictor';
 import { heldSpell, placedRecord } from '../predict/weather';
-import { MACHINE_DEFAULT, PERSON_DEFAULT } from '../render/fleet';
+import { lookPalette } from '../render/boatlook';
+import { LEAN_STRIDE, MACHINE_DEFAULT, PERSON_DEFAULT } from '../render/fleet';
 import { airLook } from '../render/fog';
 import { flashNear } from '../render/lightning';
 import {
@@ -95,15 +101,22 @@ import {
   seaMaterial,
 } from '../render/materials';
 import { rungName, TIERS } from '../render/quality';
+import { CREW_MOST } from '../render/sailors/fleetcrews';
 import { CAMERA_PRESETS, type CameraView, type SeaScene } from '../render/scene';
 import { look } from '../render/sky';
+import { sandboxCrew } from '../sandbox/crewscene';
 import type { SandboxForecast } from '../sandbox/forecast';
+import { aboardScene, lifeScene, raiseScene } from '../sandbox/lifescene';
 import { KNOT, type Sandbox, SEA_STATES } from '../sandbox/sandbox';
+import { startWakeScene, type WakeSceneName, wakeSceneHost } from '../sandbox/wakescenes';
 import { hourAt, moonAgeAt, skyPeriods } from '../sky/skytime';
 import type { Barometer } from '../ui/barometer';
+import type { ShipsClock } from '../ui/clock';
 import type { Countdown } from '../ui/countdown';
-import type { SailState } from '../ui/model';
+import type { DeckView } from '../ui/decklazy';
+import { downwindLine, type SailState } from '../ui/model';
 import type { Settings } from '../ui/settings';
+import type { StatementsView } from '../ui/statementlazy';
 import type { WatchView } from '../ui/watchlazy';
 import {
   cellHex,
@@ -111,6 +124,7 @@ import {
   drawnHeight,
   hexCentre as landHexCentre,
 } from '../workers/mesh/build';
+import { type DeckSceneName, deckScene } from './deckscenes';
 import { setSky } from './skypanel';
 
 export interface Info {
@@ -245,12 +259,19 @@ export type Sailing = (
   forecast?: SandboxForecast;
   barometer?: Barometer;
   readBarometer?: () => void;
+  /** The ship's clock, and its reading now, as its timer does. */
+  clock?: ShipsClock;
+  readClock?: () => void;
   /** The countdown to the world's end, which the sandbox's tests set. */
   countdown?: Countdown;
   /** The full screen's switch and key. */
   fullScreen?: FullScreen;
-  /** The sandbox's screen drawn again, with a watch's parts or without. */
-  remount?: (watch: WatchView | null) => void;
+  /** The sandbox's screen drawn again, with a watch's parts or without, and sailing together's. */
+  remount?: (
+    watch: WatchView | null,
+    deck?: DeckView | null,
+    statements?: StatementsView | null,
+  ) => void;
   /** What the page did from the tap to the world's reveal; null before it. */
   revealed?: () => Revealed | null;
 };
@@ -277,6 +298,10 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
     before?.();
     seaFrames++;
   };
+  // The sea's life raised by hand, counted: each its own id and seed.
+  let lifeRaised = 0;
+  // What the screen of the latest scene of sailing together asked of it.
+  let deckCalls: string[] = [];
   // Every notice shown, in order, for tests that look after it has gone.
   const noticesShown: string[] = [];
   sailing.chart?.notices.shown.subscribe((s) => {
@@ -559,6 +584,8 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
     return px;
   };
 
+  /** What stops the wake scene running, if one is. */
+  let stopWakeScene: (() => void) | null = null;
   const hooks = {
     world,
 
@@ -630,6 +657,59 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
       if (!on) {
         stage.resumed();
       }
+    },
+
+    /**
+     * The picture a link is shared with, made of the next frame as the
+     * player's tap makes it, naming name: its size, its type and weight,
+     * and of the view above its strip, the share of pixels lit and the
+     * spread of their brightness (a cleared canvas is black and even);
+     * null if no frame came.
+     */
+    async picture(name: string): Promise<{
+      width: number;
+      height: number;
+      bytes: number;
+      type: string;
+      lit: number;
+      spread: number;
+    } | null> {
+      const m = await import('../ui/snapshot');
+      const blob = await m.picture(() => stage.capture(), name);
+      if (blob === null) {
+        return null;
+      }
+      const bmp = await createImageBitmap(blob);
+      const c = document.createElement('canvas');
+      c.width = bmp.width;
+      c.height = bmp.height;
+      const ctx = c.getContext('2d', { willReadFrequently: true });
+      if (ctx === null) {
+        return null;
+      }
+      ctx.drawImage(bmp, 0, 0);
+      const d = ctx.getImageData(0, 0, c.width, c.height - m.STRIP).data;
+      let lit = 0;
+      let n = 0;
+      let low = 255;
+      let high = 0;
+      for (let i = 0; i < d.length; i += 4 * 97) {
+        const l = ((d[i] ?? 0) + (d[i + 1] ?? 0) + (d[i + 2] ?? 0)) / 3;
+        n++;
+        if (l > 12) {
+          lit++;
+        }
+        low = Math.min(low, l);
+        high = Math.max(high, l);
+      }
+      return {
+        width: bmp.width,
+        height: bmp.height,
+        bytes: blob.size,
+        type: blob.type,
+        lit: n === 0 ? 0 : lit / n,
+        spread: high - low,
+      };
     },
 
     /** Draws one frame now, with the screen's words up to date; on a page that draws nothing, updates it. */
@@ -1327,12 +1407,40 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
       }
       await world.setRung(0, 'test');
       world.ocean.detail.finishBake();
+      stopWakeScene?.();
+      stopWakeScene = null;
       world.ocean.wakes.clear();
+      world.ocean.wakeWaves.clear();
+      world.ocean.wakeWaves.gain.value = WAKE_WAVES.gain;
       world.ocean.detail.clearFoam();
       world.spray.reset(1);
     },
     setState(values: Record<string, number>): void {
       offline().setState(values);
+      floatBoat();
+    },
+    /** Asks for the main reefed to a level, 0 … 2, as the Reef key does. */
+    setReef(level: number): void {
+      game.setReef(level);
+    },
+    /**
+     * Sails another of the catalog's boats, by its id or its place among
+     * them, from the start: the sandbox steps it and the scene draws it.
+     * Resolves once it is drawn.
+     */
+    async useBoat(id: string | number): Promise<void> {
+      const kind =
+        typeof id === 'number'
+          ? catalog.boats[id] === undefined
+            ? -1
+            : id
+          : catalog.boats.findIndex((b) => b.id === id);
+      if (kind < 0) {
+        throw new Error(`the catalog has no boat ${id}`);
+      }
+      offline().setKind(kind);
+      game.setReef(0);
+      await game.useKind(kind);
       floatBoat();
     },
     /** The sandbox's wind, steady and at once, in knots and the degrees it comes from. */
@@ -1580,26 +1688,68 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
     /**
      * The sandbox's screen as it is while a boat is watched (the plate at
      * its foot, nothing that steers), that sailor's, a machine sailor's
-     * with the cog; null as it is while sailing.
+     * with the cog, the list of sailors to watch open over it if asked;
+     * null as it is while sailing.
      */
-    watchPlate(sailor: string | null, machine = true): void {
+    watchPlate(sailor: string | null, machine = true, list = false, mine = false): void {
       sailing.remount?.(
         sailor === null
           ? null
           : {
-              watching: signal({ sailor, machine, mine: false, look: -1 }),
+              watching: signal({ sailor, machine, mine, look: -1 }),
               spectating: signal(true),
               status: signal('sailing'),
               ended: signal(null),
               place: signal(null),
               boatPlace: signal(null),
               watchers: signal(0),
-              list: signal(false),
+              list: signal(list),
               watch: () => {},
               sail: () => {},
               unwatch: () => {},
+              comeAboard: () => {},
             },
       );
+    },
+    /**
+     * The sandbox's screen as it is in a scene of sailing together (see
+     * deckscenes.ts), the sailor named in it, and a knock's state; null as
+     * it is while sailing alone. What the screen asks of it is kept, for
+     * deckCalls.
+     */
+    deckScene(name: DeckSceneName | null, sailor?: string, state?: KnockStateTold): void {
+      if (name === null) {
+        deckCalls = [];
+        sailing.remount?.(null, null);
+        return;
+      }
+      const scene = deckScene(name, sailor, state);
+      deckCalls = scene.calls;
+      sailing.remount?.(scene.watch, scene.deck, scene.statements);
+    },
+    /** What the screen of the latest deckScene asked of it, in order. */
+    deckCalls(): string[] {
+      return [...deckCalls];
+    },
+    /**
+     * The question asked before the own boat leaves the water to watch, in
+     * its window over the screen at sea, as the list shows it; false takes
+     * it away. Resolves once it is drawn.
+     */
+    async leaveQuestion(on: boolean): Promise<void> {
+      document.querySelector('.hud.leave-test')?.remove();
+      if (!on) {
+        return;
+      }
+      const [{ h, render }, { LeaveWindow }] = await Promise.all([
+        import('preact'),
+        import('../ui/watch'),
+      ]);
+      const host = document.createElement('div');
+      host.className = 'hud leave-test';
+      document.body.append(host);
+      const gone = () => host.remove();
+      render(h(LeaveWindow, { className: 'panel watch-list', leave: gone, stay: gone }), host);
     },
     /** What the page did from the tap to the world's reveal; null before it, or in the sandbox. */
     revealed(): Revealed | null {
@@ -1634,15 +1784,29 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
       h.wind.value = long ? 'WNW 88 kn · F12' : 'N 0 kn · F0';
       h.pilot.value = long ? 'Wind 135° P' : '';
       h.tack.value = long ? 'Starboard tack' : '';
+      // The longest a reef is said in, reefed, or a downwind sail going
+      // up, set or coming in.
+      const c = h.controls.value;
+      const lines = [
+        ...(c?.reef ?? []).slice(1),
+        ...[
+          [0, 1],
+          [1, 1],
+          [0.5, 0],
+        ].map(([hoist, target]) => downwindLine(c, hoist ?? 0, target ?? 0)),
+      ];
+      h.reefed.value = long ? lines.reduce((a, b) => (b.length > a.length ? b : a), '') : '';
     },
     /**
      * Holds the sheet's legend at what the sail is doing, '' for nothing,
-     * the readouts held with it; null lets them all follow the boat again.
+     * the readouts held with it, and with kite the downwind sail set; null
+     * lets them all follow the boat again.
      */
-    sail(state: SailState | null): void {
+    sail(state: SailState | null, kite = false): void {
       const h = game.hud;
       h.held = state !== null;
       h.sail.value = state ?? '';
+      h.kite.value = kite;
       if (state === null) {
         h.flush();
       }
@@ -1735,6 +1899,30 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
         east: s[RECORDS.state.x] ?? 0,
         north: s[RECORDS.state.y] ?? 0,
         ticks: world.ticks,
+      };
+    },
+    /**
+     * Sailing together: whose boat the connection is aboard, who is aboard
+     * the boat in view and who holds its controls, the knocks waiting on
+     * the own boat, how the own knock stands, the controls offered, and
+     * whether the connection holds the controls; with the controls held
+     * in force, as the screen shows them.
+     */
+    deck() {
+      const o = sailing.online;
+      if (o === undefined) {
+        throw new Error('the boat is sailed offline');
+      }
+      return {
+        aboard: o.aboard.value,
+        crew: o.crew.value,
+        knocks: o.knocks.value,
+        knocking: o.knocking.value,
+        handed: o.handed.value,
+        holding: o.holding.value,
+        spectating: o.spectating.value,
+        boat: o.boat,
+        controls: o.traffic.controls,
       };
     },
     /** Asks to watch a sailor's boat, as the list does. */
@@ -1836,6 +2024,120 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
         return null;
       }
       return { ...f.stats, steam: f.steam.count };
+    },
+    /**
+     * The sea's life held, the birds of it drawn last frame and the towns'
+     * gulls; and every bird in the birds' one draw, colonies' too, with its
+     * draws (0 or 1).
+     */
+    life(): {
+      records: LifeSeen[];
+      birds: number;
+      gulls: number;
+      drawn: number;
+      draws: number;
+      towns: GullTown[];
+      swimmers: number;
+      swimDraws: number;
+      swimLoaded: boolean;
+      swimTriangles: number;
+      tinted: boolean;
+      splashes: number;
+      boils: number;
+    } {
+      const s = world.lifeDraw.stats;
+      const w = world.swimmers.stats;
+      return {
+        towns: world.lifeDraw.towns.map((t) => ({ ...t })),
+        records: [...world.life.values()],
+        birds: s.birds,
+        gulls: s.gulls,
+        drawn: world.birds.stats.birds,
+        draws: world.birds.stats.draws,
+        swimmers: w.swimmers,
+        swimDraws: w.draws,
+        swimLoaded: w.loaded,
+        swimTriangles: w.triangles,
+        tinted: world.swimmers.tinted,
+        splashes: world.lifeDraw.splashCount,
+        boils: world.lifeDraw.boilCount,
+      };
+    },
+    /**
+     * The birds of the sea's life within reach of the camera at a tick, now
+     * by default, each one's group, number and place, found as the frame
+     * finds them: two pages compared at one tick see the same birds.
+     */
+    lifeBirds(tick?: number): LifeBird[] {
+      const f = world.lifeFrame(stage.camera.position, false);
+      return world.lifeDraw.birdsAt(world.life, f, tick ?? world.ticks);
+    },
+    /** The boat a group of the sea's life is with, as this page draws it now; null for none or one not drawn. */
+    lifeWith(id: string): { east: number; north: number; heading: number } | null {
+      const e = world.life.get(id);
+      if (e === undefined) {
+        return null;
+      }
+      const p = world.lifeDraw.pose(e, world.lifeFrame(stage.camera.position, false));
+      return p === null || p === undefined
+        ? null
+        : { east: p.east, north: p.north, heading: p.heading };
+    },
+    /**
+     * The animals of the sea's life in the water within reach of the camera
+     * at a tick, now by default, each one's group, number and place, up from
+     * the water's surface: two pages compared at one tick see the same.
+     */
+    lifeSwimmers(tick?: number): LifeBird[] {
+      const f = world.lifeFrame(stage.camera.position, false);
+      return world.lifeDraw.swimmersAt(world.life, f, tick ?? world.ticks);
+    },
+    /**
+     * Raises a group of a kind, by its id, by the boat now: its middle
+     * east and north of the boat by so many m (200 m ahead by default)
+     * at once, as ?life raises one 40 s after the load; free, a kind that
+     * follows or rides boats passes by as if there were none. Its record,
+     * or null for a kind not in the catalog.
+     */
+    raiseLife(kindId: string, eastOff?: number, northOff?: number, free = false): LifeSeen | null {
+      const kind = catalog.life.kinds.findIndex((k) => k.id === kindId);
+      const offset =
+        eastOff === undefined && northOff === undefined
+          ? undefined
+          : { east: eastOff ?? 0, north: northOff ?? 0 };
+      const e = lifeScene(
+        catalog.life,
+        kind,
+        world.ticks,
+        world.pose,
+        ++lifeRaised,
+        0,
+        offset,
+        free,
+      );
+      if (e !== null) {
+        raiseScene(world, e, catalog.life);
+      }
+      return e;
+    },
+    /** Lands a fish of the catalog's that come aboard lit boats on the own boat's deck, now. */
+    raiseAboard(): LifeSeen | null {
+      const e = aboardScene(catalog.life, world.ticks, ++lifeRaised, 0);
+      if (e !== null) {
+        world.life.set([e], []);
+      }
+      return e;
+    },
+    /** The glow of the water drawn about the camera now: its colour and strength; the blows, footprints and trails of the last frame. */
+    lifeGlow() {
+      const d = world.lifeDraw;
+      return {
+        ...d.glow,
+        blows: d.blowCount,
+        prints: d.printCount,
+        trails: d.trailCount,
+        heard: d.heardCount,
+      };
     },
     /** The towns drawn: their buildings near and far, props, draws and triangles; the buildings held. */
     towns() {
@@ -1961,6 +2263,90 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
       };
     },
 
+    /**
+     * The chase camera's arm: where its eye and the point it looks at are in
+     * the world (m east, north and up), how far along its line the arm
+     * holds it (∞ while the line is clear to the view) and the elevation it
+     * has lifted it to (−∞ for none); and the player's view.
+     */
+    arm() {
+      const c = stage.camera.position;
+      const o = world.origin.world;
+      const cam = world.camera;
+      // The look point: the camera's look height above the boat and its followed heave.
+      const bs = world.boatScene;
+      const look = {
+        east: bs.x + o.x,
+        north: -bs.z + o.y,
+        up: bs.y + cam.lift + world.camera.lookHeight,
+      };
+      return {
+        eye: { east: c.x + o.x, north: -c.z + o.y, up: c.y },
+        look,
+        reach: cam.armReach,
+        rise: cam.armRise,
+        view: { ...cam.view },
+      };
+    },
+
+    /** Whether the cameras keep out of the land's solids: off, they stand as their views put them. */
+    cameraSolids(on: boolean): void {
+      const solids = on ? (world.land?.solids ?? null) : null;
+      world.camera.solids = solids;
+      world.freeCam.solids = solids;
+    },
+
+    /**
+     * The land's solids as the grids hold them within reach of (east,
+     * north), for a test's own lookup: each hexagon of land's centre and
+     * elevation (decimetres), each roof's centre, underside and top, each
+     * building's middle, heading, frontage, depth, level and top, each
+     * lighthouse tower's site; and the terrace.
+     */
+    solidsNear(east: number, north: number, reach: number) {
+      const hexes: number[] = [];
+      const roofs: number[] = [];
+      const buildings: number[] = [];
+      const towers: number[] = [];
+      for (const [n, g] of world.land?.grids ?? []) {
+        const [c0, j0] = chunkCorner(n);
+        const e = g.elevation;
+        if (e !== null) {
+          for (let i = 0; i < e.length; i++) {
+            if ((e[i] ?? 0) <= 0) {
+              continue;
+            }
+            const [q, r] = cellHex(
+              c0 + Math.floor(i / GROUND.chunkRows),
+              j0 + (i % GROUND.chunkRows),
+            );
+            const [he, hn] = landHexCentre(q, r);
+            if (Math.hypot(he - east, hn - north) <= reach) {
+              hexes.push(he, hn, e[i] ?? 0);
+            }
+          }
+        }
+        for (const f of g.features?.roofs ?? []) {
+          const [q, r] = cellHex(f.column, f.row);
+          const [he, hn] = landHexCentre(q, r);
+          if (Math.hypot(he - east, hn - north) <= reach) {
+            roofs.push(he, hn, f.under, f.top);
+          }
+        }
+        for (const b of g.town?.buildings ?? []) {
+          if (Math.hypot(b.east - east, b.north - north) <= reach) {
+            buildings.push(b.east, b.north, b.heading, b.frontage, b.depth, b.level, b.top);
+          }
+        }
+      }
+      for (const p of world.lighthouses.sites.values()) {
+        if (p.tower > 0 && Math.hypot(p.east - east, p.north - north) <= reach) {
+          towers.push(p.east, p.north, p.ground, p.tower);
+        }
+      }
+      return { hexes, roofs, buildings, towers, terrace: catalog.world.look.terrace };
+    },
+
     /** Where the camera's eye is: m east and north in the world, and m above the sea. */
     eye(): { east: number; north: number; height: number } {
       const c = stage.camera.position;
@@ -2069,10 +2455,11 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
       // Each lies on the sea drawn, unless told how it lies.
       const physics = driver.physics;
       const slot = world.ocean.source?.seas.slotAt(Math.floor(world.ticks) + 1) ?? -1;
-      const hull = world.kind.physics.hull;
       if (physics !== undefined && slot >= 0) {
         physics.seaDrawAt(game.clock.steps + game.clock.alpha);
         drawn.forEach((d, i) => {
+          // Each on the sea under its own kind's waterline.
+          const hull = (catalog.boats[d.kind] ?? world.kind).physics.hull;
           const w = physics.waveUnder(
             slot,
             d.east,
@@ -2087,15 +2474,252 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
       }
       world.fleetSource = { drawn, count: drawn.length };
       // Boats put somewhere at once: their sailors met afresh.
-      world.fleet.nearSailors?.forget();
+      world.fleet.forgetSailors();
     },
 
-    /** Resolves once every look a boat of the fleet has been drawn with has loaded (or failed). */
+    /** Changes a boat of the fleet setFleet gave, where it is: its sailors and crew go on as they were. */
+    moveFleet(i: number, b: Partial<DrawnBoat>): void {
+      const d = world.fleetSource?.drawn[i];
+      if (d !== undefined) {
+        Object.assign(d, b);
+      }
+    },
+
+    /**
+     * Resolves once every kind and every look a boat of the fleet has been
+     * drawn with has loaded (or failed).
+     */
     async fleetLoaded(): Promise<void> {
       const busy = () =>
-        world.fleet.looks?.looks.some((l) => l.state === 'loading' || l.clipsState === 'loading') ??
-        false;
+        world.fleet.loading ||
+        (world.fleet.looks?.looks.some(
+          (l) =>
+            l.state === 'loading' ||
+            l.clipsState === 'loading' ||
+            l.wheelState === 'loading' ||
+            l.trapezeState === 'loading',
+        ) ??
+          false);
       while (busy()) {
+        await new Promise((r) => setTimeout(r, 50));
+      }
+    },
+
+    /**
+     * Puts n people aboard the boat in view as the sandbox's ?crew does (the
+     * second at the helm, or the seat holder holds the controls), or none
+     * but its sailor for 0.
+     */
+    showCrew(n: number, holder?: number): Promise<void> {
+      if (n <= 0) {
+        return world.showCrew(null);
+      }
+      const crew = sandboxCrew(Math.min(n, world.kind.capacity), catalog);
+      return world.showCrew(holder === undefined ? crew : { ...crew, holder });
+    },
+
+    /**
+     * The people aboard drawn besides the one at the helm: how many, at
+     * which level, their figures' triangles, whether all are drawn in their
+     * own looks, the helm's look, and where each one's head is on screen
+     * (CSS pixels, with the dome's drop).
+     */
+    crew(): {
+      aboard: number;
+      ready: boolean;
+      near: number;
+      far: number;
+      nearTriangles: number;
+      farTriangles: number;
+      helm: string | null;
+      /** The side deck the helm sits on, + starboard, − port, or crosses from. */
+      helmSide: number;
+      /** The crew's windward side (away from the boom), + starboard; whether its last change was a tack; how often it has changed. */
+      side: number;
+      tack: boolean;
+      changes: number;
+      /** Whether the helm is away from the tiller, walking to or from it as the controls change hands, and drawn. */
+      helmAway: boolean;
+      helmShown: boolean;
+      /** Everyone under the crew's rules: seat, station (-1 the helm), side, how far they lean, and what they are doing (seconds into it, from which station). */
+      members: {
+        seat: number;
+        station: number;
+        side: number;
+        lean: number;
+        moving: string | null;
+        from: number;
+        t: number;
+      }[];
+      heads: {
+        x: number;
+        y: number;
+        near: boolean;
+        station: number;
+        across: number;
+        moving: boolean;
+      }[];
+    } {
+      const c = world.crew;
+      const canvas = stage.gfx?.canvas;
+      const bs = world.boatScene;
+      const rules = c.rules;
+      const sailor = world.boat?.sailor ?? null;
+      return {
+        aboard: c.count,
+        ready: c.ready,
+        ...c.drawn,
+        helm: world.boat?.drawnLook()?.model ?? null,
+        helmSide: sailor?.runtime.crossFrom ?? 0,
+        side: rules?.side.side ?? 0,
+        tack: rules?.side.tack ?? true,
+        changes: rules?.side.changes ?? 0,
+        helmAway: c.helmAway,
+        helmShown: sailor?.shown === true && !sailor.away,
+        members: (rules?.members ?? []).map((m) => ({
+          seat: m.seat,
+          station: m.station,
+          side: m.side,
+          lean: m.lean,
+          moving: m.moving?.kind ?? null,
+          from: m.moving?.from.station ?? m.station,
+          t: m.moving?.t ?? 0,
+        })),
+        heads: c.heads().map((h) => {
+          const p = h.at;
+          p.y -= domeDrop(Math.hypot(p.x - bs.x, p.z - bs.z));
+          p.project(stage.camera);
+          return {
+            x: ((p.x + 1) / 2) * (canvas?.clientWidth ?? 0),
+            y: ((1 - p.y) / 2) * (canvas?.clientHeight ?? 0),
+            near: h.near,
+            station: h.station,
+            across: h.across,
+            moving: h.moving,
+          };
+        }),
+      };
+    },
+
+    /**
+     * Draws n frames one after another, each waited for on the GPU before
+     * the next (no animation frames between), and returns the milliseconds
+     * a frame took: its main thread's work and its GPU's, end to end.
+     */
+    async frameCost(n: number): Promise<number> {
+      const backend = stage.gfx?.renderer.backend as
+        | { device?: GPUDevice; gl?: WebGL2RenderingContext }
+        | undefined;
+      const pixel = new Uint8Array(4);
+      const done = async (): Promise<void> => {
+        if (backend?.device !== undefined) {
+          await backend.device.queue.onSubmittedWorkDone();
+        } else if (backend?.gl !== undefined) {
+          // Reading a pixel back waits for everything drawn before it.
+          const gl = backend.gl;
+          gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+          gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, pixel);
+        }
+      };
+      stage.renderOnce(performance.now());
+      await done();
+      const t0 = performance.now();
+      for (let i = 0; i < n; i++) {
+        stage.renderOnce(performance.now());
+        await done();
+      }
+      return (performance.now() - t0) / n;
+    },
+
+    /** Resolves once everyone aboard is drawn in their own look, the helm's too, drawing frames meanwhile. */
+    /**
+     * A crew for a boat of the fleet (setFleet's crew), as the sandbox makes
+     * one: n aboard in looks drawn from seed, the seat holder holding the
+     * controls; and the look its helm is drawn in.
+     */
+    fleetCrew(
+      n: number,
+      holder = 0,
+      seed = 1,
+    ): { crew: { people: { seat: number; look: number }[]; holder: number }; look: number } {
+      const crew = sandboxCrew(n, catalog, 0x5eed + seed);
+      const people = crew.people.map((p) => ({ seat: p.seat, look: p.look }));
+      return { crew: { people, holder }, look: people[holder]?.look ?? -1 };
+    },
+
+    /**
+     * The other boats' crews: each crewed boat in view by its view slot,
+     * whether its crew is drawn and at which level, its helm away, its
+     * crew's side, everyone under the rules, and where each head drawn is
+     * on screen (CSS pixels, with the dome's drop); how many are drawn at
+     * each level, and the posing's cost since last asked.
+     */
+    fleetCrews(): {
+      boats: {
+        slot: number;
+        drawn: boolean;
+        near: boolean;
+        helmAway: boolean;
+        side: number;
+        tack: boolean;
+        members: {
+          seat: number;
+          station: number;
+          side: number;
+          moving: string | null;
+          from: number;
+          t: number;
+        }[];
+        heads: { x: number; y: number }[];
+      }[];
+      drawn: { near: number; far: number };
+      stats: { frames: number; posed: number; ms: number };
+    } {
+      const canvas = stage.gfx?.canvas;
+      const bs = world.boatScene;
+      const c = world.crews;
+      const stats = c.stats;
+      c.stats = { frames: 0, posed: 0, ms: 0 };
+      return {
+        boats: c.boats().map((b) => ({
+          ...b,
+          heads: b.heads.map((p) => {
+            p.y -= domeDrop(Math.hypot(p.x - bs.x, p.z - bs.z));
+            p.project(stage.camera);
+            return {
+              x: ((p.x + 1) / 2) * (canvas?.clientWidth ?? 0),
+              y: ((1 - p.y) / 2) * (canvas?.clientHeight ?? 0),
+            };
+          }),
+        })),
+        drawn: c.drawn,
+        stats,
+      };
+    },
+
+    /** Resolves once every crew of the fleet drawn is drawn in its own looks. */
+    async fleetCrewsReady(): Promise<void> {
+      for (;;) {
+        stage.renderOnce(performance.now());
+        if (world.crews.ready && !world.fleet.loading) {
+          return;
+        }
+        await new Promise((r) => setTimeout(r, 50));
+      }
+    },
+
+    /** The most people drawn on other boats; null for the game's own cap. */
+    fleetCrewMost(most: number | null): void {
+      world.crews.most = most ?? CREW_MOST;
+    },
+
+    async crewReady(): Promise<void> {
+      const c = world.crew;
+      for (;;) {
+        stage.renderOnce(performance.now());
+        if (c.ready && world.helmDrawn) {
+          return;
+        }
         await new Promise((r) => setTimeout(r, 50));
       }
     },
@@ -2103,6 +2727,7 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
     /** Seats the sailor in view afresh at the boat's pose, as the fleet meets a boat's. */
     settleSailor(): void {
       world.boat?.sailor?.runtime.reset();
+      world.boat?.settle();
     },
 
     /**
@@ -2219,7 +2844,7 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
     /** Fleet materials that would sort or fade otherwise than dithered: none, if all is well. */
     fleetMaterials(): string[] {
       const problems: string[] = [];
-      for (const level of [world.fleet.near, world.fleet.far]) {
+      for (const level of world.fleet.levels()) {
         for (const m of level.meshes) {
           const material = m.material as { name: string; alphaHash: boolean; transparent: boolean };
           if (!material.alphaHash || material.transparent) {
@@ -2239,13 +2864,77 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
     fleetBudget() {
       return {
         ...world.fleet.budget(),
-        near: world.fleet.near.count,
-        far: world.fleet.far.count,
-        nearMeshes: world.fleet.near.meshes.length,
-        farMeshes: world.fleet.far.meshes.length,
+        ...world.fleet.counts(),
         ...world.fleet.figures(),
         sailorDraws: world.fleet.sailorDraws(),
-        skinned: world.fleet.near.count - world.fleet.near.rigid,
+      };
+    },
+    /**
+     * The boat in view takes its own look, a boat look code (negative for
+     * none told: the first paint and cloth, no number), and its name, as
+     * the server tells them. The fleet's boats take theirs by setFleet's
+     * boatLook and name.
+     */
+    setBoatLook(look: number, name = ''): void {
+      world.setBoatLook(look, name);
+    },
+    /**
+     * The boats' own looks as drawn: the own boat's, from its shaders'
+     * uniforms, and each fleet boat's by kind, level and instance, from its
+     * instance values: the paint's and cloth's places, the sail number and
+     * the name's row (−1 for none); with the colours (sRGB) the palette
+     * draws them in, and the names lettered and how often a row was.
+     */
+    boatLooksDrawn() {
+      const palette = lookPalette(catalog);
+      const hex = (list: number, i: number): string => {
+        const v = palette.values[list * 16 + i];
+        return v === undefined ? '' : `#${new Color(v.x, v.y, v.z).getHexString()}`;
+      };
+      const colours = (paint: number, cloth: number) => ({
+        hull: hex(0, paint),
+        grain: (palette.values[paint]?.w ?? 0) === 1,
+        sail: hex(1, cloth),
+        band: (palette.values[16 + cloth]?.w ?? 0) === 1 ? hex(2, cloth) : null,
+        ink: hex(3, cloth),
+      });
+      const own = world.boat?.drawnBoatLook() ?? null;
+      const fleet: {
+        kind: number;
+        level: string;
+        paint: number;
+        cloth: number;
+        number: number;
+        row: number;
+        colours: ReturnType<typeof colours>;
+      }[] = [];
+      for (const v of world.fleet.views) {
+        if (v?.loaded !== true) {
+          continue;
+        }
+        for (const level of [v.near, v.far]) {
+          const a = level.lean.array as Float32Array;
+          for (let n = 0; n < level.count; n++) {
+            const o = n * LEAN_STRIDE + 4;
+            const paint = a[o] ?? 0;
+            const cloth = a[o + 1] ?? 0;
+            fleet.push({
+              kind: v.index,
+              level: level.name,
+              paint,
+              cloth,
+              number: a[o + 2] ?? 0,
+              row: a[o + 3] ?? -1,
+              colours: colours(paint, cloth),
+            });
+          }
+        }
+      }
+      const names = world.fleet.names;
+      return {
+        own: own === null ? null : { ...own, colours: colours(own.paint, own.cloth) },
+        fleet,
+        names: names === null ? null : { rows: [...names.rows.names], drawn: names.drawn },
       };
     },
     /**
@@ -2442,12 +3131,13 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
     /**
      * The bytes the GPU holds for the look's textures on the rung in use, as
      * three.js counts them once it has made them: the detail band's, the
-     * foam map's, the shadow map's (its depth and its colour target) and the
+     * foam map's, the wake's waves', the shadow map's (its depth and its colour target) and the
      * pattern's; and every texture's, the whole scene's.
      */
     textureBytes(): {
       detail: number;
       foamMap: number;
+      wakeWaves: number;
       shadowMap: number;
       pattern: number;
       all: number;
@@ -2465,6 +3155,7 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
       return {
         detail: sum(ocean.detail.textures),
         foamMap: sum(ocean.wakes.targets.map((t) => t.texture)),
+        wakeWaves: sum(ocean.wakeWaves.textures),
         shadowMap: world.shadows.light.castShadow ? sum([map?.texture, map?.depthTexture]) : 0,
         pattern: size(ocean.pattern),
         all: info.memory.texturesSize,
@@ -2519,7 +3210,7 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
       const f = ocean.frame;
       for (let i = 0; i < Math.round(seconds * rate); i++) {
         ocean.wakes.begin();
-        ocean.wakes.update(gfx().renderer, { ...f, dt: 1 / rate });
+        ocean.wakes.update(gfx().renderer, { ...f, dt: 1 / rate, currentEast: 0, currentNorth: 0 });
       }
     },
     /** Runs the detail band on for seconds of world time, in steps, from the time drawn. */
@@ -2592,6 +3283,7 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
       detail: number[];
       foam: number[];
       crest: number[];
+      wake: number[];
     }> {
       const o = world.origin.world;
       const bs = at === null ? world.boatScene : { x: at.east - o.x, y: 0, z: -(at.north - o.y) };
@@ -2606,6 +3298,7 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
         detail: Array.from(await probe(bs.x, bs.z, size, span, false, 'detail')),
         foam: Array.from(await probe(bs.x, bs.z, size, span, false, 'foam')),
         crest: Array.from(await probe(bs.x, bs.z, size, span, false, 'crest')),
+        wake: Array.from(await probe(bs.x, bs.z, size, span, false, 'wake')),
       };
     },
     /**
@@ -2686,21 +3379,26 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
       m.dispose();
       return Array.from(px);
     },
-    /** The foam map: its side in texels, its centre in the world, the side of a texel in metres, and its texels from the south-west, 0 to 255. */
+    /**
+     * The foam map: its side in texels, its centre in the world, the side of
+     * a texel in metres, and its texels from the south-west, 0 to 255: the
+     * white water (data) and the track's churn (churn).
+     */
     async wakes(): Promise<{
       size: number;
       east: number;
       north: number;
       texel: number;
       data: number[];
+      churn: number[];
     }> {
       const w = world.ocean.wakes;
-      // Copied into a float target first: WebGL reads an 8-bit red target
-      // back only where the driver says it can.
+      // Copied into a float target first: WebGL reads an 8-bit target back
+      // only where the driver says it can.
       const n = w.size;
       const m = new MeshBasicNodeMaterial();
       const texel = textureLoad(w.texture as never, ivec2(floor(screenCoordinate)));
-      m.fragmentNode = vec4(texel.x, 0, 0, 1);
+      m.fragmentNode = vec4(texel.x, texel.y, 0, 1);
       const target = new RenderTarget(n, n, {
         type: FloatType,
         format: RGBAFormat,
@@ -2716,8 +3414,10 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
       m.dispose();
       // readTarget gives the copy's rows top first, which are the map's from the south.
       const data: number[] = new Array(n * n);
+      const churn: number[] = new Array(n * n);
       for (let i = 0; i < n * n; i++) {
         data[i] = Math.round(255 * (got[i * 4] ?? 0));
+        churn[i] = Math.round(255 * (got[i * 4 + 1] ?? 0));
       }
       return {
         size: w.size,
@@ -2725,9 +3425,247 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
         north: w.centre.north,
         texel: WAKE.span / w.size,
         data,
+        churn,
       };
     },
-
+    /**
+     * The wake's waves as they were last made: the square's side in texels
+     * and metres, its centre in the world, and for each texel from the
+     * south-west the slope east and north, the convergence and the height,
+     * as linear theory has them (without the look's gain).
+     */
+    async wakeWaves(): Promise<{
+      kind: string;
+      size: number;
+      span: number;
+      east: number;
+      north: number;
+      data: number[];
+    }> {
+      const ww = world.ocean.wakeWaves;
+      const k = ww.kind;
+      if (k === null) {
+        throw new Error('no wake waves');
+      }
+      const n = k.size;
+      const data: number[] = new Array(n * n * 4);
+      const ref = ww.reference;
+      if (ref !== null) {
+        for (let i = 0; i < n * n; i++) {
+          data[i * 4] = ref.east[i] ?? 0;
+          data[i * 4 + 1] = ref.north[i] ?? 0;
+          data[i * 4 + 2] = ref.convergence[i] ?? 0;
+          data[i * 4 + 3] = ref.h[i] ?? 0;
+        }
+      } else {
+        const t = ww.transformed;
+        if (t === null) {
+          throw new Error('no wake waves');
+        }
+        const m = new MeshBasicNodeMaterial();
+        m.fragmentNode = textureLoad(t.out as never, ivec2(floor(screenCoordinate)));
+        const target = new RenderTarget(n, n, {
+          type: FloatType,
+          format: RGBAFormat,
+          depthBuffer: false,
+        });
+        const r = gfx().renderer;
+        const before = r.getRenderTarget();
+        r.setRenderTarget(target);
+        new QuadMesh(m).render(r);
+        r.setRenderTarget(before);
+        const got = await readTarget(r, target, n, n, webgl());
+        target.dispose();
+        m.dispose();
+        for (let i = 0; i < n * n * 4; i++) {
+          data[i] = got[i] ?? 0;
+        }
+      }
+      return {
+        kind: k.kind,
+        size: n,
+        span: k.span,
+        east: ww.centre.east,
+        north: ww.centre.north,
+        data,
+      };
+    },
+    /**
+     * The wake's waves run on the GPU beside the reference on the CPU, in
+     * float64, from still water for so many steps of 1/30 s, a hull sailing
+     * at 2 m/s across the square: the root mean square of each, and of
+     * their difference, for the height and the slope east, away from the
+     * hull (where the pressure's half floats would count); and the largest
+     * difference of height. Null where the waves are the CPU's already.
+     */
+    async wakeWavesAgainstCPU(steps: number): Promise<{
+      height: [number, number];
+      slope: [number, number];
+      worst: number;
+    } | null> {
+      const ww = world.ocean.wakeWaves;
+      const k = ww.kind;
+      if (k === null || k.kind !== 'fft' || world.boat?.hullShape === undefined) {
+        return null;
+      }
+      const shape = world.boat.hullShape;
+      if (shape === null) {
+        return null;
+      }
+      const n = k.size;
+      const ref = new WakeWavesReference(n, k.span, wakeDamping());
+      const heading = 0.3;
+      const speed = 2;
+      hooks.runWakeWaves(steps / 30, [{ east: 0, north: 0, heading, speed }]);
+      const texel = k.span / n;
+      let east = 0;
+      let north = 0;
+      for (let i = 0; i <= steps; i++) {
+        const dt = i === 0 ? 0 : 1 / 30;
+        east += speed * Math.sin(heading) * dt;
+        north += speed * Math.cos(heading) * dt;
+        const back = WAKE_WAVES.astern * k.span;
+        const ce = Math.round((east - Math.sin(heading) * back) / texel) * texel;
+        const cn = Math.round((north - Math.cos(heading) * back) / texel) * texel;
+        ref.press(shape, [{ east, north, heading, sink: 0 }], ce, cn);
+        ref.step(dt, ce, cn);
+      }
+      const got = (await hooks.wakeWaves()).data;
+      let hh = 0;
+      let dh = 0;
+      let ss = 0;
+      let ds = 0;
+      let worst = 0;
+      let count = 0;
+      for (let i = 0; i < n * n; i++) {
+        const at = ref.at(i % n, Math.floor(i / n));
+        const near = Math.hypot(at.east - east, at.north - north);
+        if (near < 3) {
+          continue;
+        }
+        const h = ref.h[i] ?? 0;
+        const e = ref.east[i] ?? 0;
+        hh += h * h;
+        ss += e * e;
+        dh += ((got[i * 4 + 3] ?? 0) - h) ** 2;
+        ds += ((got[i * 4] ?? 0) - e) ** 2;
+        worst = Math.max(worst, Math.abs((got[i * 4 + 3] ?? 0) - h));
+        count++;
+      }
+      return {
+        height: [Math.sqrt(hh / count), Math.sqrt(dh / count)],
+        slope: [Math.sqrt(ss / count), Math.sqrt(ds / count)],
+        worst,
+      };
+    },
+    /**
+     * Runs the foam map on alone for seconds of world time at rate steps a
+     * second, with hulls of the boat's kind moving as given (east, north,
+     * heading and speed through the water each, stamping until stopAt
+     * seconds), in a current, the map following the first; the scene's own
+     * hulls are let be. Returns where each ended.
+     */
+    runTrack(
+      seconds: number,
+      boats: { east: number; north: number; heading: number; speed: number; stopAt?: number }[],
+      current: { east: number; north: number } = { east: 0, north: 0 },
+      rate = 15,
+    ): { east: number; north: number }[] {
+      const ocean = world.ocean;
+      const map = ocean.wakes;
+      const o = world.origin.world;
+      const at = boats.map((b) => ({ ...b }));
+      const steps = Math.round(seconds * rate);
+      for (let i = 1; i <= steps; i++) {
+        const dt = 1 / rate;
+        const t = i * dt;
+        map.begin();
+        for (const b of at) {
+          // Through the water at its speed, and with the water over the ground.
+          b.east += (b.speed * Math.sin(b.heading) + current.east) * dt;
+          b.north += (b.speed * Math.cos(b.heading) + current.north) * dt;
+          if (b.stopAt === undefined || t < b.stopAt) {
+            map.add(b.east, b.north, b.heading, b.speed);
+          }
+        }
+        const first = at[0] ?? { east: 0, north: 0 };
+        map.update(gfx().renderer, {
+          originEast: o.x,
+          originNorth: o.y,
+          boatEast: first.east,
+          boatNorth: first.north,
+          dt,
+          currentEast: current.east,
+          currentNorth: current.north,
+        });
+      }
+      return at.map((b) => ({ east: b.east, north: b.north }));
+    },
+    /**
+     * Starts one of the sandbox's wake scenes (?sandbox&wake=…) in a sea,
+     * the boat steered from now on; null stops the one running.
+     */
+    wakeScene(name: WakeSceneName | null, sea = 'breeze'): void {
+      stopWakeScene?.();
+      stopWakeScene = null;
+      if (name !== null) {
+        stopWakeScene = startWakeScene(wakeSceneHost(game, offline(), world), name, sea);
+      }
+    },
+    /**
+     * Runs the wake's waves on alone for seconds of world time at rate steps
+     * a second, from still water, with hulls of the boat's kind moving as
+     * given (east, north, heading and speed through the water each), the
+     * square following the first; the scene's own hulls are let be. Returns
+     * where the first one ended.
+     */
+    runWakeWaves(
+      seconds: number,
+      boats: {
+        east: number;
+        north: number;
+        heading: number;
+        speed: number;
+        turn?: number;
+        turnFrom?: number;
+        stopAt?: number;
+      }[],
+      rate = 30,
+      current: { east: number; north: number } = { east: 0, north: 0 },
+    ): { east: number; north: number; heading: number }[] {
+      const ocean = world.ocean;
+      const ww = ocean.wakeWaves;
+      const o = world.origin.world;
+      const at = boats.map((b) => ({ ...b }));
+      ww.clear();
+      const steps = Math.round(seconds * rate);
+      for (let i = 0; i <= steps; i++) {
+        const dt = i === 0 ? 0 : 1 / rate;
+        ww.begin();
+        for (const b of at) {
+          if (i > 0) {
+            const speed = b.stopAt !== undefined && i / rate > b.stopAt ? 0 : b.speed;
+            const turning = speed > 0 && i / rate > (b.turnFrom ?? 0);
+            b.heading += (turning ? (b.turn ?? 0) : 0) * dt;
+            b.east += (speed * Math.sin(b.heading) + current.east) * dt;
+            b.north += (speed * Math.cos(b.heading) + current.north) * dt;
+          }
+          ww.add(b.east, b.north, b.heading, 0);
+        }
+        const first = at[0] ?? { east: 0, north: 0, heading: 0 };
+        ww.update(gfx().renderer, {
+          originEast: o.x,
+          originNorth: o.y,
+          boatEast: first.east,
+          boatNorth: first.north,
+          heading: first.heading,
+          dt,
+          currentEast: current.east,
+          currentNorth: current.north,
+        });
+      }
+      return at.map((b) => ({ east: b.east, north: b.north, heading: b.heading }));
+    },
     /**
      * Draws the sky at an hour of the day at the centre of the disk (0 to
      * 24, noon at 12) and, if given, a moon's age (0 new, 0.5 full), from
@@ -3237,6 +4175,34 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
       sailing.forecast?.again();
     },
 
+    /**
+     * A storm at its strongest now on the disk's rim, east of the centre,
+     * its ring reaching past the world's edge; the forecast issued again.
+     * The sandbox only.
+     */
+    stormAtRim(): void {
+      const s = offline();
+      const c = catalog.weather;
+      const physics = s.physics;
+      const now = s.tick;
+      const minute = 60 * 30;
+      const fair = Math.max(
+        0,
+        c.regimes.findIndex((r) => !r.frontal),
+      );
+      const base = heldSpell(physics, c, fair, now - 240 * minute);
+      base[RECORDS.spell.still] = 0;
+      const kind = Math.max(
+        0,
+        c.systems.findIndex((k) => k.symbol === 'spiral'),
+      );
+      const lip = catalog.world.disk.radius;
+      physics.setRecords([placedRecord(c, kind, lip * 0.97, 0, now - 20 * minute, now, base)]);
+      s.systems = 1;
+      s.weather.set([base]);
+      sailing.forecast?.again();
+    },
+
     /** Ticks the sandbox's forecast and reads the barometer now, as their timers do: the sandbox only. */
     weatherNow(): void {
       sailing.forecast?.tick();
@@ -3267,6 +4233,22 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
     /** Where a point of the water lies on the chart's screen, CSS pixels; null off it. */
     chartScreenOf(east: number, north: number): { x: number; y: number } | null {
       return chartParts().chart.view.screenOf(east, north);
+    },
+
+    /** The boat's arrow on the chart: its nose and tail on the screen, CSS pixels, and its scale. */
+    chartArrow() {
+      return chartParts().chart.view.arrowEnds();
+    },
+
+    /** Zooms the chart by a factor about what it looks at: under 1 nearer. */
+    zoomChart(f: number): void {
+      chartParts().chart.view.zoom(f);
+    },
+
+    /** Looks at the boat on the chart from distance m. */
+    chartFromBoat(distance: number): void {
+      const v = chartParts().chart.view;
+      v.lookAt(world.pose.east, world.pose.north, distance);
     },
 
     /** The weather system or front whose box is open, or null. */
@@ -3347,6 +4329,26 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
         set: b.set,
         hand: b.hand.el?.style.transform ?? '',
         setHand: b.setHand.el?.style.transform ?? '',
+      };
+    },
+
+    /** The ship's clock, read now: its hour, its words, and its hands' and disc's turns as drawn. */
+    clock() {
+      const c = sailing.clock;
+      if (c === undefined) {
+        return null;
+      }
+      sailing.readClock?.();
+      const drawn = (part: 'hour' | 'minute' | 'disc') =>
+        document.querySelector(`#case-clock [data-hand=${part}]`)?.getAttribute('transform') ??
+        null;
+      return {
+        hour: c.hour,
+        words: c.words.value,
+        sun: c.sun.value,
+        hand: drawn('hour'),
+        minuteHand: drawn('minute'),
+        disc: drawn('disc'),
       };
     },
 

@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 // A new sailor's start, against keel and its database: the start screen,
-// names refused in words, a sailor made with a passkey (Playwright's
+// names refused in words, when the player was born asked with nothing
+// chosen and every answer taking the same steps, a sailor that can't be
+// made told only that (and again from its cookie), a sailor made with a passkey (Playwright's
 // virtual authenticator standing in for the browser's prompt), its recovery
 // code shown once, Set sail with the voyage watched, its cookie, and the
 // sailor kept across a reload, where its Set sail shows that voyage's
@@ -14,7 +16,7 @@
 
 import { type BrowserContext, expect, type Page, test } from '@playwright/test';
 import data from '../src/catalog/catalog.gen.json' with { type: 'json' };
-import { GAME, holdPasskeys, sailor, setSail, stamp } from './helpers';
+import { answerBorn, GAME, holdPasskeys, sailor, setSail, stamp } from './helpers';
 
 test.beforeEach(async ({ context }) => {
   // The browser's prompt, answered by Playwright: it holds no passkey yet.
@@ -36,6 +38,7 @@ async function openStart(page: Page): Promise<void> {
 /** The first form's Set sail, with a name: it makes the sailor, if the name will do. */
 async function makeAs(page: Page, name: string): Promise<void> {
   await page.getByLabel('Your sailor’s name').fill(name);
+  await answerBorn(page);
   await page.getByRole('button', { name: 'Set sail' }).click();
 }
 
@@ -125,6 +128,113 @@ test('names refused are explained in words, before any passkey is made', async (
   }
   expect(await page.context().credentials.get()).toEqual([]);
   expect(await sessionCookie(page.context())).toBeUndefined();
+});
+
+test('when the sailor’s player was born: both boxes empty, and asked before anything is sent', async ({
+  page,
+}) => {
+  await openStart(page);
+  const month = page.getByRole('combobox', { name: 'Month' });
+  const year = page.getByRole('combobox', { name: 'Year' });
+  await expect(page.getByRole('group', { name: 'When were you born?' })).toBeVisible();
+  // Nothing chosen to start, and nothing said of any age.
+  await expect(month).toHaveValue('');
+  await expect(year).toHaveValue('');
+  await expect(month.locator('option')).toHaveCount(13);
+  await expect(month.locator('option').nth(1)).toHaveText('January');
+  const thisYear = new Date().getFullYear();
+  await expect(year.locator('option')).toHaveCount(122);
+  await expect(year.locator('option').nth(1)).toHaveText(String(thisYear));
+  await expect(year.locator('option').last()).toHaveText(String(thisYear - 120));
+  await expect(page.getByRole('group', { name: 'When were you born?' })).not.toContainText(
+    /\b(age|old|must|at least|under|over)\b/i,
+  );
+  // A name with no answer: told so, and nothing sent.
+  let begun = 0;
+  page.on('request', (r) => {
+    if (r.url().endsWith('/account/begin')) {
+      begun++;
+    }
+  });
+  await page.getByLabel('Your sailor’s name').fill(freshName('Unborn'));
+  await page.getByRole('button', { name: 'Set sail' }).click();
+  await expect(page.locator('#start-problem')).toHaveText(
+    'Choose the month and year you were born.',
+  );
+  await month.selectOption({ label: 'March' });
+  await page.getByRole('button', { name: 'Set sail' }).click();
+  await expect(page.locator('#start-problem')).toHaveText(
+    'Choose the month and year you were born.',
+  );
+  expect(begun).toBe(0);
+});
+
+test('every answer takes the same steps: one Set sail, the answer sent with the name', async ({
+  page,
+}) => {
+  const sent: unknown[] = [];
+  // The harbour stands still, whatever the answer: what the page does
+  // before it answers is the same.
+  await page.route('**/account/begin', async (route) => {
+    sent.push(route.request().postDataJSON());
+    await route.fulfill({ status: 503, json: { error: 'unavailable' } });
+  });
+  await openStart(page);
+  const thisYear = new Date().getFullYear();
+  for (const [month, year] of [
+    ['April', '2001'],
+    ['December', String(thisYear - 5)],
+    ['January', String(thisYear - 90)],
+  ] as const) {
+    await page.getByLabel('Your sailor’s name').fill(freshName('Same'));
+    await answerBorn(page, month, year);
+    await page.getByRole('button', { name: 'Set sail' }).click();
+    await expect(page.locator('#start-problem')).toHaveText(
+      'The harbour cannot answer just now. Try again in a moment.',
+    );
+  }
+  expect(sent).toHaveLength(3);
+  expect(sent.map((b) => (b as { born: unknown }).born)).toEqual([
+    { year: 2001, month: 4 },
+    { year: thisYear - 5, month: 12 },
+    { year: thisYear - 90, month: 1 },
+  ]);
+});
+
+test('a sailor that can’t be made: only that said, and the same answer from the cookie', async ({
+  page,
+  context,
+}) => {
+  await page.route('**/account/begin', (route) =>
+    route.fulfill({ status: 403, json: { error: 'young' } }),
+  );
+  await openStart(page);
+  await page.getByLabel('Your sailor’s name').fill(freshName('Small'));
+  await answerBorn(page, 'June', String(new Date().getFullYear() - 6));
+  await page.getByRole('button', { name: 'Set sail' }).click();
+  const panel = page.locator('.start-panel');
+  await expect(panel.getByText('Sorry, a sailor can’t be made.')).toBeVisible();
+  // No reason, no age, nothing to try again: the form is gone.
+  await expect(page.getByLabel('Your sailor’s name')).toHaveCount(0);
+  await expect(page.getByRole('combobox')).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Set sail' })).toHaveCount(0);
+  await expect(panel).not.toContainText(/\d|age|old|try again/i);
+  await expect(page.getByRole('button', { name: 'Sign in with a passkey' })).toBeVisible();
+  expect(await context.credentials.get()).toEqual([]);
+
+  // The server's cookie: the screen answers the same at once.
+  const fresh = await page.context().browser()?.newContext();
+  if (fresh === undefined) {
+    throw new Error('no browser');
+  }
+  const other = await fresh.newPage();
+  await other.goto(GAME);
+  await fresh.addCookies([{ name: 'keel-young', value: '1', url: new URL(other.url()).origin }]);
+  await other.goto(GAME);
+  await expect(other.getByText('Sorry, a sailor can’t be made.')).toBeVisible({ timeout: 30_000 });
+  await expect(other.getByLabel('Your sailor’s name')).toHaveCount(0);
+  await expect(other.getByRole('button', { name: 'Sign in with a passkey' })).toBeVisible();
+  await fresh.close();
 });
 
 test('a sailor made: the passkey, the recovery code once, the sea, the cookie, a reload', async ({

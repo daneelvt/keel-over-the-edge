@@ -24,6 +24,55 @@ type fakeStore struct {
 	sailors map[store.AccountID]store.Sailor
 	follows map[store.AccountID][]store.AccountID
 	reads   int
+	// fleets are the humans' fleets' codes; a sailor's is in its Sailor.
+	fleets map[store.AccountID]string
+	made   int
+}
+
+func (d *fakeStore) LinkCodes(_ context.Context, id store.AccountID) (store.LinkCodes, error) {
+	s, ok := d.sailors[id]
+	if !ok {
+		return store.LinkCodes{}, store.ErrNotFound
+	}
+	return store.LinkCodes{Sailor: s.Code, Fleet: d.fleets[id]}, nil
+}
+
+func (d *fakeStore) LinkTarget(_ context.Context, code string) (store.WatchTarget, error) {
+	for id, s := range d.sailors {
+		if s.Code == code {
+			return store.WatchTarget{ID: id, Kind: s.Kind, Owner: s.Owner, Name: s.Name}, nil
+		}
+	}
+	return store.WatchTarget{}, store.ErrNotFound
+}
+
+func (d *fakeStore) FleetLinkOwner(_ context.Context, code string) (store.AccountID, error) {
+	for id, c := range d.fleets {
+		if c == code {
+			return id, nil
+		}
+	}
+	return store.AccountID{}, store.ErrNotFound
+}
+
+func (d *fakeStore) NewWatchCode(_ context.Context, owner, id store.AccountID) (string, error) {
+	s, ok := d.sailors[id]
+	if !ok || (id == owner) == (s.Kind == store.AI) || id != owner && s.Owner != owner {
+		return "", store.ErrNotFound
+	}
+	d.made++
+	s.Code = fmt.Sprintf("new%d", d.made)
+	d.sailors[id] = s
+	return s.Code, nil
+}
+
+func (d *fakeStore) NewFleetCode(_ context.Context, id store.AccountID) (string, error) {
+	if _, ok := d.fleets[id]; !ok {
+		return "", store.ErrNotFound
+	}
+	d.made++
+	d.fleets[id] = fmt.Sprintf("newfleet%d", d.made)
+	return d.fleets[id], nil
 }
 
 func (d *fakeStore) SailorsByID(_ context.Context, ids []store.AccountID) (map[store.AccountID]store.Sailor, error) {
@@ -120,7 +169,7 @@ type world struct {
 }
 
 func newWorld(t *testing.T) *world {
-	w := &world{t: t, frames: bus.NewFrames(256), db: &fakeStore{sailors: map[store.AccountID]store.Sailor{}},
+	w := &world{t: t, frames: bus.NewFrames(256), db: &fakeStore{sailors: map[store.AccountID]store.Sailor{}, fleets: map[store.AccountID]string{}},
 		edge: &fakeEdge{voyage: map[bus.Account]bool{}, watched: map[bus.Account]int{}}, sea: &fakeSea{facts: map[bus.Account]Facts{}}}
 	w.frames.Publish(bus.NewFrame(256))
 	w.s = New(Config{Store: w.db, Frames: w.frames, Edge: w.edge, Kinds: []string{"jolly"}, Sea: w.sea,
@@ -128,14 +177,17 @@ func newWorld(t *testing.T) *world {
 	return w
 }
 
-// account makes an account with its sailor; owner zero for a human.
+// account makes an account with its sailor; owner zero for a human. Its
+// link's code is "w" and n, and a human's fleet's "f" and n.
 func (w *world) account(n byte, name string, owner store.AccountID) store.AccountID {
 	id := store.AccountID{n}
 	kind := store.Human
 	if owner != (store.AccountID{}) {
 		kind = store.AI
+	} else {
+		w.db.fleets[id] = fmt.Sprintf("f%d", n)
 	}
-	w.db.sailors[id] = store.Sailor{Name: name, Kind: kind, Owner: owner}
+	w.db.sailors[id] = store.Sailor{Name: name, Kind: kind, Owner: owner, Code: fmt.Sprintf("w%d", n)}
 	return id
 }
 

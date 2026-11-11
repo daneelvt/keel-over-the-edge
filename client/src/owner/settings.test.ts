@@ -1,0 +1,94 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+
+import { describe, expect, test } from 'vitest';
+import type { SailSettings } from './api';
+import {
+  changeQuestion,
+  chatSwitches,
+  lifetimeAllowed,
+  lifetimeOf,
+  linkLifetimeWords,
+  MAX_LINK_LIFETIME,
+  MIN_LINK_LIFETIME,
+  onOff,
+  touchesLinks,
+} from './settings';
+
+describe('links to come aboard', () => {
+  test('a link lifetime in words: days from two, else hours and minutes', () => {
+    expect(linkLifetimeWords(86_400)).toBe('24 hours');
+    expect(linkLifetimeWords(2 * 86_400)).toBe('2 days');
+    expect(linkLifetimeWords(7 * 86_400)).toBe('7 days');
+    expect(linkLifetimeWords(25 * 3600)).toBe('25 hours');
+    expect(linkLifetimeWords(5400)).toBe('1 hour 30 minutes');
+    expect(linkLifetimeWords(300)).toBe('5 minutes');
+    expect(linkLifetimeWords(2 * 86_400 + 60)).toBe('48 hours 1 minute');
+    expect(linkLifetimeWords(0)).toBe('0 seconds');
+  });
+
+  test('the amount typed, in its unit, within 5 minutes and 7 days', () => {
+    expect(lifetimeOf('24', 'hours')).toBe(86_400);
+    expect(lifetimeOf('5', 'minutes')).toBe(300);
+    expect(lifetimeOf('7', 'days')).toBe(MAX_LINK_LIFETIME);
+    expect(lifetimeOf('', 'hours')).toBe(0);
+    expect(lifetimeOf('1.5', 'hours')).toBe(0);
+    expect(lifetimeOf('-2', 'hours')).toBe(0);
+    expect(lifetimeAllowed(MIN_LINK_LIFETIME)).toBe(true);
+    expect(lifetimeAllowed(MIN_LINK_LIFETIME - 60)).toBe(false);
+    expect(lifetimeAllowed(MAX_LINK_LIFETIME)).toBe(true);
+    expect(lifetimeAllowed(8 * 86_400)).toBe(false);
+    expect(onOff(true)).toBe('on');
+    expect(onOff(false)).toBe('off');
+  });
+
+  test('tells the links a change ends only when it reaches links', () => {
+    expect(touchesLinks({ links: false })).toBe(true);
+    expect(touchesLinks({ linkLifetime: 3600 })).toBe(true);
+    expect(touchesLinks({ boarding: false })).toBe(false);
+    expect(touchesLinks({ chat: false })).toBe(false);
+    expect(touchesLinks({ chatCountries: ['BR'] })).toBe(false);
+  });
+
+  test('asks plainly before chat goes off for everyone, and only then', () => {
+    expect(changeQuestion({ chat: false })).toBe(
+      'Chat off for everyone? Every line stops at once.',
+    );
+    expect(changeQuestion({ chat: true })).toBe('');
+    expect(changeQuestion({ shipmateMessages: false })).toBe('');
+    expect(changeQuestion({ spectatorChat: false })).toBe('');
+    expect(changeQuestion({ links: false })).toBe('');
+  });
+});
+
+describe('chat’s switches', () => {
+  const settings: SailSettings = {
+    linkLifetime: 86_400,
+    links: true,
+    boarding: true,
+    chat: true,
+    shipmateMessages: false,
+    spectatorChat: true,
+    chatCountries: [],
+  };
+
+  test('chat, shipmates’ messages, spectators’ reading, in that order: each its state and its key', () => {
+    const rows = chatSwitches(settings);
+    expect(rows.map((r) => [r.field, r.name, r.on, r.key])).toEqual([
+      ['chat', 'Chat for everyone', true, 'Switch chat off'],
+      ['shipmate-messages', "Shipmates' messages", false, "Switch shipmates' messages on"],
+      [
+        'spectator-chat',
+        "Spectators read machine sailors' chat",
+        true,
+        "Switch spectators' reading off",
+      ],
+    ]);
+    expect(rows[2]?.body).toEqual({ spectatorChat: false });
+    expect(rows[2]?.what).toBe(
+      "spectators reading machine sailors' chat switched off for everyone",
+    );
+    expect(chatSwitches({ ...settings, spectatorChat: false })[2]?.key).toBe(
+      "Switch spectators' reading on",
+    );
+  });
+});

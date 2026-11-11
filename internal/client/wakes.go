@@ -22,6 +22,7 @@ type Wakes struct {
 	tick  [protocol.ViewSlots][2]int64
 	x, y  [protocol.ViewSlots][2]float64 // [0] the newest, [1] the one before
 	pose  [protocol.ViewSlots][3]float64 // the newest's heading, heel and boom
+	kind  [protocol.ViewSlots]uint16
 	order [protocol.ViewSlots]int32
 	d2    [protocol.ViewSlots]float64
 	src   physics.Sources
@@ -57,6 +58,7 @@ func (w *Wakes) Observe(tick int64, v *protocol.View, ch protocol.Changes, sampl
 		w.x[slot][0] = float64(q.X) * protocol.PositionStep
 		w.y[slot][0] = float64(q.Y) * protocol.PositionStep
 		w.pose[slot] = [3]float64{headingOf(q.Heading), float64(q.Heel) * protocol.AngleStep, float64(q.Boom) * protocol.AngleStep}
+		w.kind[slot] = q.Kind
 		w.n[slot] = min(w.n[slot]+1, 2)
 	}
 }
@@ -68,8 +70,9 @@ func headingOf(steps uint16) float64 {
 
 // Shadow changes e, the wind at (x, y) for a step into tick, by the wakes
 // of the nearest boats, as they were at tick − 1, and returns how many
-// reach. weather is the weather in play; kind the boats' kind.
-func (w *Wakes) Shadow(e *physics.Env, x, y float64, tick int64, weather *physics.Weather, kind *physics.Prepared, enc *physics.EncounterPrepared) int {
+// reach. weather is the weather in play; kinds every kind of boat, each
+// boat's wake its own kind's (the first for a kind out of range).
+func (w *Wakes) Shadow(e *physics.Env, x, y float64, tick int64, weather *physics.Weather, kinds []physics.Prepared, enc *physics.EncounterPrepared) int {
 	n := 0
 	for slot := range protocol.ViewSlots {
 		if w.n[slot] == 0 {
@@ -100,6 +103,10 @@ func (w *Wakes) Shadow(e *physics.Env, x, y float64, tick int64, weather *physic
 		px, py, vx, vy := w.place(slot, at)
 		physics.WindPointAt(&w.wind, px, py, &p, nil)
 		pose := &w.pose[slot]
+		kind := &kinds[0]
+		if k := int(w.kind[slot]); k < len(kinds) {
+			kind = &kinds[k]
+		}
 		wake := physics.WakeAt(px, py, pose[0], pose[1], pose[2], vx, vy, p.Speed, p.From, kind, enc)
 		w.src.Consider(&wake, int32(i), x, y, enc)
 	}

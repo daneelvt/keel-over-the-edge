@@ -36,6 +36,8 @@ export class Shadows {
   size = 0;
   box = 0;
   fleet = false;
+  /** How much larger the boat is than the one the tiers' boxes are for: the box grows with it. */
+  scale = 1;
 
   constructor(light: DirectionalLight) {
     this.light = light;
@@ -93,13 +95,14 @@ export class Shadows {
       s.map?.dispose();
       s.map = null;
     }
-    if (this.box !== tier.shadowBox) {
-      this.box = tier.shadowBox;
+    const box = tier.shadowBox * this.scale;
+    if (this.box !== box) {
+      this.box = box;
       const c = s.camera;
-      c.left = -tier.shadowBox / 2;
-      c.right = tier.shadowBox / 2;
-      c.top = tier.shadowBox / 2;
-      c.bottom = -tier.shadowBox / 2;
+      c.left = -box / 2;
+      c.right = box / 2;
+      c.top = box / 2;
+      c.bottom = -box / 2;
       c.updateProjectionMatrix();
     }
   }

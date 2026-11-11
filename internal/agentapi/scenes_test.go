@@ -175,7 +175,7 @@ func (sc *scene) steer(sl int32, angle, boom float64) {
 	f := sc.w.Latest()
 	seq := uint32(f.Tick + 1)
 	sheet := sheetOf(&sc.cat.Boats[0], boom)
-	sc.w.Bus().Controls.Store(sl, bus.Pack(seq, bus.Steps/2, sheet, f.Gen[sl]), bus.PackPilot(seq, bus.PilotWind, bus.WayHold, 0, turnTarget(angle), f.Gen[sl]))
+	sc.w.Bus().Controls.Store(sl, bus.Pack(seq, bus.Steps/2, sheet, f.Gen[sl]), bus.PackPilot(seq, bus.PilotWind, bus.WayHold, 0, turnTarget(angle), f.Gen[sl]), bus.PackRig(seq, 0, f.Gen[sl]))
 }
 
 // report is the full report of the machine sailor's boat in slot sl.
@@ -295,8 +295,8 @@ func TestSceneACrossing(t *testing.T) {
 	sc.parity(me, text)
 }
 
-// A boat within 60 m is named by its sailor's look, as a sailor on deck
-// sees it; one beyond is not.
+// A boat within 60 m is named by its kind, name and number and its
+// sailor's look, as a sailor on deck sees it; one beyond is not.
 func TestSceneLooksClose(t *testing.T) {
 	sc := newScene(t, 12, 0)
 	at := sc.start()
@@ -312,7 +312,7 @@ func TestSceneLooksClose(t *testing.T) {
 	f := sc.w.Latest()
 	nearLook, _ := sc.sea.Looks.Of(f.Look[n])
 	farLook, _ := sc.sea.Looks.Of(f.Look[m])
-	if !strings.Contains(text, "human · "+sc.sea.Looks.Seen(nearLook)+" · ") {
+	if !strings.Contains(text, "human · Jolly boat · "+sc.sea.Looks.Seen(nearLook)+" · ") {
 		t.Fatalf("the near boat is not named %q:\n%s", sc.sea.Looks.Seen(nearLook), text)
 	}
 	if !strings.Contains(text, "B2 machine · ") || strings.Contains(text, sc.sea.Looks.Seen(farLook)) || strings.Contains(text, "machine sailor in") {

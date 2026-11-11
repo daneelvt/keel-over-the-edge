@@ -66,12 +66,14 @@ import (
 )
 
 var (
-	state    physics.State
-	control  physics.Control
-	env      physics.Env
-	params   physics.Params
-	out      physics.Out
-	prepared physics.Prepared
+	state   physics.State
+	control physics.Control
+	env     physics.Env
+	params  physics.Params
+	out     physics.Out
+	// prepared holds each kind of boat's constants, by its place in the
+	// catalog.
+	prepared [physics.BoatKinds]physics.Prepared
 
 	seaParams physics.SeaParams
 	waves     physics.Waves
@@ -289,11 +291,16 @@ func waveAddr() uint32 { return addr(unsafe.Pointer(&wave)) }
 //go:wasmexport seaPrepare
 func seaPrepare() { physics.PrepareSea(&seaParams, &waves) }
 
-// prepare derives the boat's constants from params, for the sea's waves.
-// Call it after writing params and after seaPrepare, and before stepping.
+// prepare derives kind's constants from params, for the sea's waves.
+// Call it for each kind of boat after writing its params and after
+// seaPrepare, and before stepping.
 //
 //go:wasmexport prepare
-func prepare() { physics.Prepare(&params, &waves, &prepared) }
+func prepare(kind uint32) { physics.Prepare(&params, &waves, kindOf(kind)) }
+
+// kindOf is the prepared constants of kind, the last kind's for a kind past
+// the most.
+func kindOf(kind uint32) *physics.Prepared { return &prepared[min(kind, physics.BoatKinds-1)] }
 
 func slot(i uint32) *seaWindow { return &windows[min(i, seaSlots-1)] }
 
@@ -475,17 +482,17 @@ func groundInUse() *physics.Ground {
 	return nil
 }
 
-// step advances the state by one step and writes out.
+// step advances the state, a boat of kind, by one step and writes out.
 //
 //go:wasmexport step
-func step() {
+func step(kind uint32) {
 	g := groundInUse()
 	if use < 0 {
-		physics.Step(&state, &control, &env, nil, g, &prepared, &out)
+		physics.Step(&state, &control, &env, nil, g, kindOf(kind), &out)
 		return
 	}
 	sea := physics.Sea{Waves: &waves, Window: &windows[use].win, Tick: &stepTime, Lee: shelterInUse()}
-	physics.Step(&state, &control, &env, &sea, g, &prepared, &out)
+	physics.Step(&state, &control, &env, &sea, g, kindOf(kind), &out)
 }
 
 //go:wasmexport groundParams
@@ -1095,20 +1102,20 @@ func encounterPrepare() { physics.PrepareEncounters(&encounterParams, &encounter
 //go:wasmexport wake
 func wakeAddr() uint32 { return addr(unsafe.Pointer(&wake1)) }
 
-// wakeOf writes to the wake record the wake of a boat of the prepared kind
-// at (x, y) heading heading, heeled heel with its boom at boom, moving at
-// (vx, vy), in a true wind of speed from from.
+// wakeOf writes to the wake record the wake of a boat of kind at (x, y)
+// heading heading, heeled heel with its boom at boom, moving at (vx, vy),
+// in a true wind of speed from from.
 //
 //go:wasmexport wakeOf
-func wakeOf(x, y, heading, heel, boom, vx, vy, speed, from float64) {
-	wake1 = physics.WakeAt(x, y, heading, heel, boom, vx, vy, speed, from, &prepared, &encounterPrepared)
+func wakeOf(kind uint32, x, y, heading, heel, boom, vx, vy, speed, from float64) {
+	wake1 = physics.WakeAt(x, y, heading, heel, boom, vx, vy, speed, from, kindOf(kind), &encounterPrepared)
 }
 
-// wakeOfState writes to the wake record the wake the state leaves in the
-// wind of env, as the server's step leaves it.
+// wakeOfState writes to the wake record the wake the state, a boat of
+// kind, leaves in the wind of env, as the server's step leaves it.
 //
 //go:wasmexport wakeOfState
-func wakeOfState() { wake1 = physics.WakeOf(&state, &env, &prepared, &encounterPrepared) }
+func wakeOfState(kind uint32) { wake1 = physics.WakeOf(&state, &env, kindOf(kind), &encounterPrepared) }
 
 // wakes is wakeCapacity wake records, the wakes shadowAt considers.
 //
@@ -1135,23 +1142,27 @@ func shadowAt(n uint32) uint32 {
 //go:wasmexport course
 func courseAddr() uint32 { return addr(unsafe.Pointer(&course)) }
 
-// courseTrack brings the course record to the state, in the true wind from
-// windFrom.
+// courseTrack brings the course record to the state, a boat of kind, in
+// the true wind from windFrom.
 //
 //go:wasmexport courseTrack
-func courseTrack(windFrom float64) {
-	physics.TrackCourse(&course, &state, windFrom, &prepared, &encounterPrepared)
+func courseTrack(kind uint32, windFrom float64) {
+	physics.TrackCourse(&course, &state, windFrom, kindOf(kind), &encounterPrepared)
 }
 
-// courseOf brings the course record to a boat heading heading with its
-// boom at boom, in the true wind from windFrom: another boat's, drawn from
-// its samples.
+// courseOf brings the course record to a boat of kind heading heading with
+// its boom at boom, in the true wind from windFrom: another boat's, drawn
+// from its samples.
 //
 //go:wasmexport courseOf
-func courseOf(heading, boom, windFrom float64) {
-	s := physics.State{Heading: heading, Boom: boom}
-	physics.TrackCourse(&course, &s, windFrom, &prepared, &encounterPrepared)
+func courseOf(kind uint32, heading, boom, windFrom float64) {
+	courseState.Heading, courseState.Boom = heading, boom
+	physics.TrackCourse(&course, &courseState, windFrom, kindOf(kind), &encounterPrepared)
 }
+
+// courseState is the state courseOf tracks: kept here, as a State is
+// larger than the module keeps on its stack.
+var courseState physics.State
 
 //go:wasmexport encounter
 func encounterAddr() uint32 { return addr(unsafe.Pointer(&encounter)) }
@@ -1160,23 +1171,22 @@ func encounterAddr() uint32 { return addr(unsafe.Pointer(&encounter)) }
 func verdictAddr() uint32 { return addr(unsafe.Pointer(&verdict)) }
 
 // articlesJudge writes to the verdict record the Articles' verdict on the
-// encounter record's two boats, both of the prepared kind.
+// encounter record's two boats, of kinds a and b.
 //
 //go:wasmexport articlesJudge
-func articlesJudge() {
-	verdict = physics.Judge(&encounter, &prepared, &prepared, &encounterPrepared)
+func articlesJudge(a, b uint32) {
+	verdict = physics.Judge(&encounter, kindOf(a), kindOf(b), &encounterPrepared)
 }
 
 //go:wasmexport contact
 func contactAddr() uint32 { return addr(unsafe.Pointer(&contact)) }
 
 // collide resolves a contact between the state and other records, boats of
-// the prepared kind, writing the contact record; it returns 1 if they
-// touched.
+// kinds a and b, writing the contact record; it returns 1 if they touched.
 //
 //go:wasmexport collide
-func collide() uint32 {
-	if hulls.Collide(&state, &other, &prepared, &prepared, &encounterPrepared, &contact) {
+func collide(a, b uint32) uint32 {
+	if hulls.Collide(&state, &other, kindOf(a), kindOf(b), &encounterPrepared, &contact) {
 		return 1
 	}
 	return 0

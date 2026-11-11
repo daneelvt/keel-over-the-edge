@@ -3,7 +3,10 @@
 // The free camera: the owner's, and anyone's in the sandbox. Detached from
 // the boat, it flies anywhere over the disk and up to 500 m beyond its lip,
 // from 2 m to 500 m above the sea and never into the land held under it,
-// while the boat stays where it was. The keyboard flies it level (W A S D
+// while the boat stays where it was. It keeps out of what the chase camera
+// keeps out of: 2 m above the highest solid within CLEARANCE of its point
+// (a column, a house, a tower), and under a roof CLEARANCE below its
+// underside or over its top, whichever is nearer. The keyboard flies it level (W A S D
 // or the arrows, Q and E down and up, Shift three times faster) and the
 // mouse dragged turns it to look; on a phone one finger looks, two fingers
 // fly it over the water, and a pinch climbs and descends. Its speed rises
@@ -12,6 +15,8 @@
 // unless motion is reduced. The scene follows the point beneath it, so the
 // sea, the land and the sky's dome are drawn about it, not about the boat.
 
+import type { SolidLookup } from '../land/solids';
+import { CLEARANCE } from './camera';
 import { type ScenePoint, worldToScene } from './coords';
 
 /** How far it roams: metres past the lip, and its lowest and highest above the sea. */
@@ -78,6 +83,8 @@ export class FreeCamera {
   };
   /** The ground's height under a point, m, or null where none is known: it keeps 2 m above it. */
   ground: ((east: number, north: number) => number | null) | null = null;
+  /** What it keeps out of; null for nothing but the ground. */
+  solids: SolidLookup | null = null;
   /** A glide, m/s east and north, and climbing. */
   readonly #glide = { east: 0, north: 0, up: 0 };
 
@@ -182,8 +189,27 @@ export class FreeCamera {
       this.north *= most / r;
     }
     const under = this.ground?.(this.east, this.north) ?? null;
-    const low = Math.max(ROAM_LOW, (under ?? 0) + ROAM_LOW);
+    let low = Math.max(ROAM_LOW, (under ?? 0) + ROAM_LOW);
+    const solids = this.solids;
+    if (solids !== null) {
+      low = Math.max(low, solids.highest(this.east, this.north, CLEARANCE) + ROAM_LOW);
+    }
     this.height = Math.min(Math.max(this.height, low), ROAM_HIGH);
+    if (solids === null) {
+      return;
+    }
+    // Under a roof, or in it: below its underside, or over its top,
+    // whichever is nearer; over its top if below would be too low.
+    for (
+      let k = 0;
+      k < 4 && solids.roofAt(this.east, this.north, this.height, CLEARANCE, ROAM_LOW);
+      k++
+    ) {
+      const below = solids.band.under - CLEARANCE;
+      const above = solids.band.top + ROAM_LOW;
+      this.height = below >= low && this.height - below <= above - this.height ? below : above;
+    }
+    this.height = Math.min(this.height, ROAM_HIGH);
   }
 
   /**

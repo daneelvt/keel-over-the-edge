@@ -192,6 +192,7 @@ func (r *Report) print(w io.Writer, cfg Config) {
 		fmt.Fprintf(w, "  connections ended early: %s\n", strings.Join(parts, ", "))
 	}
 	r.printReturns(w)
+	r.printCrews(w)
 	if s := r.Server; s.Read {
 		fmt.Fprintf(w, "server: %.0f boats, %.0f connections, %.0f encoders; tick p99 ≤ %.1f ms (mean %.2f ms); encoding a frame p99 ≤ %.2f ms (mean %.3f ms) an encoder; %.0f frames allocated; %.0f B/s out in all\n",
 			s.Boats, s.Connections, s.Encoders, s.TickP99*1000, s.TickMean*1000, s.EncodeP99*1000, s.EncodeMean*1000, s.FramesAllocated, s.BytesOut)

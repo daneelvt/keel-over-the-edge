@@ -124,7 +124,8 @@ func TestSailorLook(t *testing.T) {
 				t.Fatalf("told: %v %q, without %q", refused, text, want)
 			}
 		}
-		if text, _ := ls.call(t, a, "boat", map[string]any{"action": "look"}); text != "Not yet: boat looks come with a later update." {
+		// The boat's own look is another action's.
+		if text, _ := ls.call(t, a, "boat", map[string]any{"action": "look"}); strings.Contains(text, "machine sailor:") {
 			t.Fatalf("the boat's look: %q", text)
 		}
 

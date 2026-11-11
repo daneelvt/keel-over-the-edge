@@ -45,23 +45,30 @@ import (
 //	            strings as a uvarint length and bytes
 //	S snapshot  tick, then sim's snapshot of the world after it: a segment starts
 //	T tick      tick, ticks skipped before it, the control words applied
-//	            (count, then slot, word and pilot word for each), the commands applied in order with
+//	            (count, then slot, word, pilot word and rig word for each), the commands applied in order with
 //	            their results (count, then each: op, its fields (a Join's account, connection,
-//	            kind: a byte, 1 for a machine sailor's, 2 a priority account's, and look code;
-//	            a SetLook's account and look code), result, slot, boat, generation,
+//	            kind: a byte, 1 for a machine sailor's, 2 a priority account's, look code, kind of boat,
+//	            its look code and its name; a SetLook's account and look code; a SetBoat's account,
+//	            kind of boat, its look code and name; a SetBoatLook's account, look code and name), result, slot, boat, generation,
 //	            place in the queue, tick queued at); an account is its 16 bytes; a yes or
 //	            no a byte, 1 or 0; a Teleport its boat, whether to the start and its state;
 //	            a Stay or Unseen its boat and whether on; an End its last tick; a developer's
 //	            weather its mode, regime, speed and direction, and a system's its kind, point and
 //	            ticks to it; a boat whose
 //	            grace ended is a Leave with the result Expired, and a connection given a boat
-//	            from the queue a Join with the result Admitted, which the tick makes itself
+//	            from the queue a Join with the result Admitted, which the tick makes itself;
+//	            a Board its account, connection, boat, kind, look code, name, and the kind of
+//	            its own boat with that boat's look code and name; an Ashore its account,
+//	            connection, boat and why as a byte; a SetHolder its boat and account; a boat
+//	            that left the water as its sailor came aboard another is a Leave with the
+//	            result Gone, and someone put ashore as their boat left the water or their
+//	            grace ended an Ashore of why 3 or 4, which the tick makes itself too
 //	D digest    tick, sim.Digest of the world after it, 8 bytes
 //	X broken    the first tick whose records were lost: the segment holds
 //	            nothing reliable from that tick on
 const (
 	magic         = "KEELLOG\n"
-	formatVersion = 13
+	formatVersion = 17
 
 	kindHeader   = 'H'
 	kindSnapshot = 'S'
@@ -166,6 +173,7 @@ func appendTick(dst []byte, f *bus.Frame) []byte {
 		dst = binary.AppendUvarint(dst, uint64(sw.Slot))
 		dst = binary.LittleEndian.AppendUint64(dst, uint64(sw.Word))
 		dst = binary.LittleEndian.AppendUint64(dst, uint64(sw.Pilot))
+		dst = binary.LittleEndian.AppendUint64(dst, uint64(sw.Rig))
 	}
 	dst = binary.AppendUvarint(dst, uint64(len(f.Events)))
 	for i := range f.Events {
@@ -199,9 +207,21 @@ func appendEvent(dst []byte, e *bus.Event) []byte {
 		dst = binary.AppendUvarint(dst, e.Conn)
 		dst = append(dst, joinKind(e.Machine, e.Priority))
 		dst = binary.AppendUvarint(dst, uint64(e.Look))
+		dst = binary.AppendUvarint(dst, uint64(e.BoatKind))
+		dst = binary.AppendUvarint(dst, uint64(e.BoatLook))
+		dst = appendString(dst, e.BoatName)
 	case bus.SetLook:
 		dst = append(dst, e.Account[:]...)
 		dst = binary.AppendUvarint(dst, uint64(e.Look))
+	case bus.SetBoat:
+		dst = append(dst, e.Account[:]...)
+		dst = binary.AppendUvarint(dst, uint64(e.BoatKind))
+		dst = binary.AppendUvarint(dst, uint64(e.BoatLook))
+		dst = appendString(dst, e.BoatName)
+	case bus.SetBoatLook:
+		dst = append(dst, e.Account[:]...)
+		dst = binary.AppendUvarint(dst, uint64(e.BoatLook))
+		dst = appendString(dst, e.BoatName)
 	case bus.Leave:
 		dst = binary.AppendUvarint(dst, e.Boat)
 	case bus.Disconnect:
@@ -240,6 +260,28 @@ func appendEvent(dst []byte, e *bus.Event) []byte {
 		dst = append(dst, flag(e.On))
 	case bus.End:
 		dst = binary.AppendVarint(dst, e.At)
+	case bus.RaiseLife:
+		dst = binary.AppendUvarint(dst, uint64(e.LifeKind))
+		dst = appendF64(dst, e.State.X)
+		dst = appendF64(dst, e.State.Y)
+	case bus.Board:
+		dst = append(dst, e.Account[:]...)
+		dst = binary.AppendUvarint(dst, e.Conn)
+		dst = binary.AppendUvarint(dst, e.Boat)
+		dst = append(dst, joinKind(e.Machine, e.Priority))
+		dst = binary.AppendUvarint(dst, uint64(e.Look))
+		dst = appendString(dst, e.Name)
+		dst = binary.AppendUvarint(dst, uint64(e.BoatKind))
+		dst = binary.AppendUvarint(dst, uint64(e.BoatLook))
+		dst = appendString(dst, e.BoatName)
+	case bus.Ashore:
+		dst = append(dst, e.Account[:]...)
+		dst = binary.AppendUvarint(dst, e.Conn)
+		dst = binary.AppendUvarint(dst, e.Boat)
+		dst = append(dst, e.Why)
+	case bus.SetHolder:
+		dst = binary.AppendUvarint(dst, e.Boat)
+		dst = append(dst, e.Account[:]...)
 	}
 	dst = append(dst, byte(e.Reply.Result))
 	dst = binary.AppendVarint(dst, int64(e.Reply.Slot))
@@ -398,11 +440,12 @@ func (f *File) add(kind byte, p *payload) error {
 		r := Record{Kind: kindTick, Tick: p.varint(), Skipped: int64(p.count(math.MaxInt64))}
 		// Counts are bounded by the bytes left, so a damaged count cannot
 		// make the reader allocate more than the log could hold.
-		r.Changed = make([]bus.SlotWord, p.count(min(uint64(f.Header.Capacity), uint64(len(p.b)/17))))
+		r.Changed = make([]bus.SlotWord, p.count(min(uint64(f.Header.Capacity), uint64(len(p.b)/25))))
 		for i := range r.Changed {
 			slot := int32(p.count(uint64(f.Header.Capacity) - 1))
 			word := bus.Word(p.u64())
-			r.Changed[i] = bus.SlotWord{Slot: slot, Word: word, Pilot: bus.PilotWord(p.u64())}
+			pilot := bus.PilotWord(p.u64())
+			r.Changed[i] = bus.SlotWord{Slot: slot, Word: word, Pilot: pilot, Rig: bus.RigWord(p.u64())}
 		}
 		r.Events = make([]bus.Event, p.count(uint64(len(p.b)/6)))
 		for i := range r.Events {
@@ -564,9 +607,18 @@ func (p *payload) event(e *bus.Event) {
 			e.Machine, e.Priority = k&joinMachine != 0, k&joinPriority != 0
 		}
 		e.Look = p.look()
+		e.BoatKind = uint16(p.count(math.MaxUint16))
+		e.BoatLook, e.BoatName = p.boatLook()
 	case bus.SetLook:
 		p.bytes(e.Account[:])
 		e.Look = p.look()
+	case bus.SetBoat:
+		p.bytes(e.Account[:])
+		e.BoatKind = uint16(p.count(math.MaxUint16))
+		e.BoatLook, e.BoatName = p.boatLook()
+	case bus.SetBoatLook:
+		p.bytes(e.Account[:])
+		e.BoatLook, e.BoatName = p.boatLook()
 	case bus.Leave:
 		e.Boat = p.uvarint()
 	case bus.Disconnect:
@@ -611,6 +663,33 @@ func (p *payload) event(e *bus.Event) {
 		e.On = p.flag("every subject charted")
 	case bus.End:
 		e.At = p.varint()
+	case bus.RaiseLife:
+		e.LifeKind = uint16(p.count(math.MaxUint16))
+		e.State.X = p.f64()
+		e.State.Y = p.f64()
+	case bus.Board:
+		p.bytes(e.Account[:])
+		e.Conn = p.uvarint()
+		e.Boat = p.uvarint()
+		if k := p.byte(); k&^(joinMachine|joinPriority) != 0 {
+			p.err = fmt.Errorf("a board of kind %d", k)
+		} else {
+			e.Machine, e.Priority = k&joinMachine != 0, k&joinPriority != 0
+		}
+		e.Look = p.look()
+		if e.Name = p.string(); p.err == nil && len(e.Name) > sim.MaxBoatName {
+			p.err = fmt.Errorf("a name of %d bytes", len(e.Name))
+		}
+		e.BoatKind = uint16(p.count(math.MaxUint16))
+		e.BoatLook, e.BoatName = p.boatLook()
+	case bus.Ashore:
+		p.bytes(e.Account[:])
+		e.Conn = p.uvarint()
+		e.Boat = p.uvarint()
+		e.Why = p.byte()
+	case bus.SetHolder:
+		e.Boat = p.uvarint()
+		p.bytes(e.Account[:])
 	default:
 		if p.err == nil {
 			p.err = fmt.Errorf("unknown command %d", e.Op)
@@ -630,6 +709,16 @@ func (p *payload) event(e *bus.Event) {
 }
 
 // look reads a look code.
+// boatLook reads a boat's own look code and its name.
+func (p *payload) boatLook() (uint32, string) {
+	look := uint32(p.count(math.MaxUint32))
+	name := p.string()
+	if p.err == nil && len(name) > sim.MaxBoatName {
+		p.err = fmt.Errorf("a boat's name of %d bytes", len(name))
+	}
+	return look, name
+}
+
 func (p *payload) look() uint32 {
 	l := p.uvarint()
 	if p.err == nil && l > math.MaxUint32 {
@@ -638,13 +727,26 @@ func (p *payload) look() uint32 {
 	return uint32(l)
 }
 
+// Made reports whether an event is the tick's own doing, not a command's:
+// a boat whose grace ended, a connection the queue gave a boat, a boat that
+// left the water as its sailor came aboard another, and someone going
+// ashore as their boat left the water or their grace ended. A replay does
+// not apply them again, since the tick does them.
+func Made(e *bus.Event) bool {
+	switch e.Reply.Result {
+	case bus.Expired, bus.Admitted, bus.Gone:
+		return true
+	}
+	return e.Op == bus.Ashore && (e.Why == bus.AshoreLeft || e.Why == bus.AshoreGone)
+}
+
 // Commands are the commands of a tick record's events, to apply again:
 // all but the boats whose grace ended, which the tick takes out itself, and
 // the connections the queue gave boats, which it admits itself.
 func (r *Record) Commands() []bus.Command {
 	cs := make([]bus.Command, 0, len(r.Events))
 	for i := range r.Events {
-		if res := r.Events[i].Reply.Result; res != bus.Expired && res != bus.Admitted {
+		if !Made(&r.Events[i]) {
 			cs = append(cs, r.Events[i].Command)
 		}
 	}

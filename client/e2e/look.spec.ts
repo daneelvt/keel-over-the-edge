@@ -7,6 +7,7 @@
 
 import { test as base, expect, type Page } from '@playwright/test';
 import { FOAM, foamAt, newFoamLook, whitecapCoverage } from '../src/ocean/look';
+import { trackWavelength, type WakeGrid, wakeAngle } from '../src/ocean/wakemeasure';
 import { openScene, picture, softwareGPU } from './helpers';
 
 /**
@@ -163,13 +164,14 @@ test.describe('the tiers', () => {
       expect(info.vertexStorageTextures).toBe(0);
       expect(info.tier).toBe('medium');
       expect(info.detail).toBe('fft 128 × 1');
-      expect(info.dispatches).toBe(4);
+      // The detail band's four, and the wake's waves' four in one call.
+      expect(info.dispatches).toBe(5);
     } else {
       expect(info.compat).toBe(false);
       expect(info.workgroup).toBeGreaterThanOrEqual(256);
       expect(info.tier).toBe('high');
       expect(info.detail).toBe('fft 256 × 2');
-      expect(info.dispatches).toBe(8);
+      expect(info.dispatches).toBe(9);
     }
   });
 
@@ -423,23 +425,25 @@ async function settled(page: Page): Promise<void> {
 test.describe('foam', () => {
   test.beforeEach(heavy);
 
-  test('in a calm, only round the hull', async ({ page }) => {
+  test('in a calm, none about a boat at rest', async ({ page }) => {
     await openLook(page, 'sea=calm');
+    await page.evaluate(() => {
+      const k = globalThis.keel;
+      k.setState({ surge: 0, sway: 0 });
+      k.setControls(0, 1);
+      // Two seconds' frames, time running.
+      k.sailFrames(30);
+    });
     await settled(page);
     const s: Surface = await page.evaluate(() => globalThis.keel.surface(256, 24));
     let foam = 0;
-    let away = 0;
+    let white = 0;
     for (let p = 0; p < s.tile.length; p++) {
-      if ((s.foam[p * 4 + 1] ?? 0) > 0.01) {
-        foam++;
-        if ((s.crest[p * 4 + 3] ?? 0) <= 0) {
-          away++;
-        }
-      }
+      foam = Math.max(foam, s.foam[p * 4 + 1] ?? 0);
+      white = Math.max(white, s.wake[p * 4] ?? 0, s.crest[p * 4 + 3] ?? 0);
     }
-    // The ring at the boat's waterline.
-    expect(foam).toBeGreaterThan(20);
-    expect(away).toBe(0);
+    expect(foam).toBe(0);
+    expect(white).toBe(0);
   });
 
   test('whitecaps only on the crests, lower down them the stronger the wind; streaks only from force 7, long down the wind', async ({
@@ -585,124 +589,335 @@ test.describe('foam', () => {
   });
 });
 
-test.describe('the wakes and the hulls', () => {
+/** The wake's waves read back, laid out about a hull's straight track northward from (east, north): rows astern, columns off it. */
+async function wakeGrid(
+  page: Page,
+  boat: { east: number; north: number },
+): Promise<WakeGrid & { span: number; kind: string }> {
+  const w = await page.evaluate(() => globalThis.keel.wakeWaves());
+  const n = w.size;
+  const texel = w.span / n;
+  const astern: number[] = [];
+  const off: number[] = [];
+  const height: number[] = [];
+  const slope: number[] = [];
+  for (let col = 0; col < n; col++) {
+    off.push(w.east + (col + 0.5 - n / 2) * texel - boat.east);
+  }
+  for (let row = 0; row < n; row++) {
+    astern.push(boat.north - (w.north + (row + 0.5 - n / 2) * texel));
+    for (let col = 0; col < n; col++) {
+      const i = (row * n + col) * 4;
+      height.push(w.data[i + 3] ?? 0);
+      slope.push(Math.hypot(w.data[i] ?? 0, w.data[i + 1] ?? 0));
+    }
+  }
+  return { astern, off, height, slope, span: w.span, kind: w.kind };
+}
+
+/** A hull sailed northward from still water at speed for seconds, with the wake's waves alone: their grid about its track. */
+async function sailedWake(
+  page: Page,
+  speed: number,
+  seconds = 40,
+): Promise<WakeGrid & { span: number; kind: string }> {
+  const end = await page.evaluate(
+    ([speed, seconds]) =>
+      globalThis.keel.runWakeWaves(seconds as number, [
+        { east: 0, north: 0, heading: 0, speed: speed as number },
+      ]),
+    [speed, seconds],
+  );
+  return wakeGrid(page, end[0] as { east: number; north: number });
+}
+
+/** The length of the waves across a track at a speed, by deep water's dispersion. */
+const acrossTrack = (speed: number): number => (2 * Math.PI * speed * speed) / 9.81;
+
+/** The largest height within so far of a distance astern, metres. */
+function heightAstern(g: WakeGrid, at: number, within = 0.6): number {
+  const cols = g.off.length;
+  let most = 0;
+  g.astern.forEach((a, row) => {
+    if (Math.abs(a - at) <= within) {
+      for (let col = 0; col < cols; col++) {
+        most = Math.max(most, Math.abs(g.height[row * cols + col] as number));
+      }
+    }
+  });
+  return most;
+}
+
+test.describe('the wake’s waves', () => {
   test.beforeEach(heavy);
 
-  test('a boat lays a track that fades, fixed on the water as the map follows the boat', async ({
+  test('on the GPU are the CPU’s', async ({ page }) => {
+    await openLook(page, 'sea=calm');
+    const r = await page.evaluate(() => globalThis.keel.wakeWavesAgainstCPU(300));
+    test.skip(r === null, 'the waves are the CPU’s own on this tier');
+    if (r === null) {
+      return;
+    }
+    // The outputs and the hulls' pressure are half floats: within two thousandths.
+    expect(r.height[0]).toBeGreaterThan(1e-4);
+    expect(r.height[1] / r.height[0]).toBeLessThan(2e-3);
+    expect(r.slope[1] / r.slope[0]).toBeLessThan(2e-3);
+    expect(r.worst / r.height[0]).toBeLessThan(0.05);
+  });
+
+  test('make Kelvin’s V, waves across the track 2πU²/g long, narrowing when fast', async ({
+    page,
+  }) => {
+    await openLook(page, 'sea=calm');
+    const low = (await page.evaluate(() => globalThis.keel.info().tier)) === 'low';
+    const smooth = acrossTrack(2) / 2;
+    const angles: Record<number, number> = {};
+    const lengths: Record<number, number> = {};
+    const heights: string[] = [];
+    const length = 4.2;
+    for (const speed of [2, 2.5, 3.5, 4.6]) {
+      const g = await sailedWake(page, speed);
+      const most = (g.span / 2) * 0.85;
+      angles[speed] = wakeAngle(g, 5, 30, most, smooth);
+      const want = acrossTrack(speed);
+      lengths[speed] = trackWavelength(g, 3, 30, 0.6 * want, 1.5 * want);
+      heights.push(
+        `${speed} m/s: ${[1, 2, 5].map((l) => `${(heightAstern(g, l * length) * 100).toFixed(1)}`).join(', ')} cm`,
+      );
+    }
+    test.info().annotations.push(
+      {
+        type: 'angles',
+        description: Object.entries(angles)
+          .map(([u, a]) => `${u} m/s ${a.toFixed(1)}°`)
+          .join('; '),
+      },
+      {
+        type: 'lengths',
+        description: Object.entries(lengths)
+          .map(
+            ([u, l]) => `${u} m/s ${l.toFixed(2)} m, 2πU²/g ${acrossTrack(Number(u)).toFixed(2)} m`,
+          )
+          .join('; '),
+      },
+      { type: 'heights at 1, 2 and 5 lengths astern, linear', description: heights.join('; ') },
+    );
+    // Kelvin's arcsin ⅓ at a Froude number of a third.
+    expect(Math.abs((angles[2] ?? 0) - 19.47)).toBeLessThan(low ? 3 : 2);
+    for (const speed of [2.5, 3.5]) {
+      const want = acrossTrack(speed);
+      expect(Math.abs((lengths[speed] ?? 0) - want) / want).toBeLessThan(0.1);
+    }
+    // Rabaud and Moisy: narrower above a Froude number of a half.
+    expect(angles[4.6] ?? 0).toBeLessThan((angles[2] ?? 0) - 3);
+  });
+
+  test('run on ahead and fade after a stop, and make no new V', async ({ page }) => {
+    await openLook(page, 'sea=calm');
+    // At 3 m/s for 20 s, then stopped dead; looked at 10 and 30 s after.
+    const look = async (seconds: number) => {
+      const end = await page.evaluate(
+        (s) =>
+          globalThis.keel.runWakeWaves(s, [
+            { east: 0, north: 0, heading: 0, speed: 3, stopAt: 20 },
+          ]),
+        seconds,
+      );
+      const g = await wakeGrid(page, end[0] as { east: number; north: number });
+      let ahead = 0;
+      let astern = 0;
+      let all = 0;
+      g.astern.forEach((a, row) => {
+        for (let col = 0; col < g.off.length; col++) {
+          const s = (g.slope[row * g.off.length + col] ?? 0) ** 2;
+          all += s;
+          if (a < -4) {
+            ahead = Math.max(ahead, Math.sqrt(s));
+          } else if (a > 4 && a < 12 && Math.abs(g.off[col] ?? 0) < 1.5) {
+            astern = Math.max(astern, Math.sqrt(s));
+          }
+        }
+      });
+      return { ahead, astern, all };
+    };
+    const under = await look(19);
+    const after = await look(30);
+    const later = await look(50);
+    // The waves that followed the boat run on past it.
+    expect(after.ahead).toBeGreaterThan(2 * under.ahead);
+    // And fade: no new V forms behind a boat at rest.
+    expect(later.all).toBeLessThan(0.5 * after.all);
+    expect(later.astern).toBeLessThan(0.5 * under.astern);
+  });
+
+  test('curve with the track through a turn', async ({ page }) => {
+    await openLook(page, 'sea=calm');
+    // At 3 m/s, 15 s straight north, then a quarter turn to starboard over 10 s.
+    const turn = Math.PI / 2 / 10;
+    const end = await page.evaluate(
+      (turn) =>
+        globalThis.keel.runWakeWaves(25, [
+          { east: 0, north: 0, heading: 0, speed: 3, turn, turnFrom: 15 },
+        ]),
+      turn,
+    );
+    const w = await page.evaluate(() => globalThis.keel.wakeWaves());
+    const n = w.size;
+    const texel = w.span / n;
+    const slopeAt = (east: number, north: number): number => {
+      const col = Math.round((east - w.east) / texel + n / 2 - 0.5);
+      const row = Math.round((north - w.north) / texel + n / 2 - 0.5);
+      if (col < 0 || col >= n || row < 0 || row >= n) {
+        return 0;
+      }
+      const i = (row * n + col) * 4;
+      return Math.hypot(w.data[i] ?? 0, w.data[i + 1] ?? 0);
+    };
+    // Across the path sailed in the turn, 2 to 7 s back, the waves lie
+    // about it: their slopes' middle on each section within 2 m of the
+    // path on average, and never 4 m off. A V drawn rigidly behind the hull
+    // as it heads now would lie 4 to 10 m off it 4 to 7 s back.
+    const last = end[0] as { east: number; north: number; heading: number };
+    const r = 3 / turn;
+    const cx = last.east + r * Math.cos(last.heading);
+    const cy = last.north - r * Math.sin(last.heading);
+    const middles: number[] = [];
+    // As far back as the square holds: the low tier's is smaller.
+    const back = Math.min(7, w.span / 2 / 3);
+    for (let t = 2; t <= back; t += 0.5) {
+      const h = last.heading - turn * t;
+      const pe = cx - r * Math.cos(h);
+      const pn = cy + r * Math.sin(h);
+      let sum = 0;
+      let moment = 0;
+      for (let o = -6; o <= 6; o += 0.25) {
+        const v = slopeAt(pe + Math.cos(h) * o, pn - Math.sin(h) * o) ** 2;
+        sum += v;
+        moment += v * o;
+      }
+      middles.push(moment / sum);
+    }
+    test.info().annotations.push({
+      type: 'middles across the turn, m',
+      description: middles.map((m) => m.toFixed(2)).join(', '),
+    });
+    const mean = middles.reduce((a, m) => a + Math.abs(m), 0) / middles.length;
+    expect(mean).toBeLessThan(2);
+    expect(Math.max(...middles.map(Math.abs))).toBeLessThan(4);
+  });
+});
+
+test.describe('the track', () => {
+  test.beforeEach(heavy);
+
+  test('lies on the water where the boat sailed, fades, and drifts with the current', async ({
     page,
   }) => {
     await openLook(page, 'sea=breeze');
     const r = await page.evaluate(async () => {
       const k = globalThis.keel;
-      k.setState({ heading: 1.5708, surge: 3, sheetLimit: 0.5 });
-      k.setControls(0, 0.3);
-      k.script('steer', 1.5708);
-      // Eight seconds of sailing, drawn frame by frame however slow the machine.
-      k.sailFrames(120);
-      k.script(null);
-      const strong = (w: Awaited<ReturnType<typeof k.wakes>>) => {
-        const out = new Map<string, number>();
+      const lane = (w: Awaited<ReturnType<typeof k.wakes>>) => {
+        let sum = 0;
+        let east = 0;
+        let north = 0;
         let most = 0;
-        for (let i = 0; i < w.data.length; i++) {
-          const v = w.data[i] ?? 0;
+        for (let i = 0; i < w.churn.length; i++) {
+          const v = w.churn[i] ?? 0;
           most = Math.max(most, v);
-          if (v > 40) {
-            const e = w.east + ((i % w.size) - w.size / 2 + 0.5) * w.texel;
-            const n = w.north + (Math.floor(i / w.size) - w.size / 2 + 0.5) * w.texel;
-            out.set(`${e.toFixed(2)},${n.toFixed(2)}`, v);
+          if (v > 4) {
+            sum += v;
+            east += v * (w.east + ((i % w.size) - w.size / 2 + 0.5) * w.texel);
+            north += v * (w.north + (Math.floor(i / w.size) - w.size / 2 + 0.5) * w.texel);
           }
         }
-        return { out, most, east: w.east };
+        return { sum, most, east: east / sum, north: north / sum };
       };
-      const a = strong(await k.wakes());
-      // The boat put down elsewhere, and the floating origin moved.
-      const b0 = k.boat().state;
-      k.placeBoat(b0.x + 7.3, b0.y + 3.1);
-      const c = k.info().centre;
-      k.setOrigin(c.q, c.r);
-      k.render();
-      const b = strong(await k.wakes());
-      let moved = 0;
-      for (const [at, v] of a.out) {
-        if (Math.abs((b.out.get(at) ?? 0) - v) > 1) {
-          moved++;
-        }
-      }
-      // Thirty seconds on, with no boat stamping it.
-      k.runWakes(30);
-      const later = strong(await k.wakes());
-      // The track's area, square metres.
-      const area = a.out.size * (await k.wakes()).texel ** 2;
-      return { area, most: a.most, moved, shifted: b.east !== a.east, later: later.most };
+      k.wakes();
+      // Held still in the water in a current of 1 m/s northward: no track.
+      k.world.ocean.wakes.clear();
+      k.runTrack(10, [{ east: 0, north: 0, heading: 0, speed: 0 }], { east: 0, north: 1 });
+      const held = lane(await k.wakes());
+      // Eastward at 3 m/s through the water for 10 s, in the same current;
+      // then the hull is gone, and 60 s pass.
+      k.world.ocean.wakes.clear();
+      k.runTrack(10, [{ east: 0, north: 0, heading: Math.PI / 2, speed: 3, stopAt: 10 }], {
+        east: 0,
+        north: 1,
+      });
+      const laid = lane(await k.wakes());
+      k.runTrack(10, [{ east: 0, north: 0, heading: Math.PI / 2, speed: 0 }], {
+        east: 0,
+        north: 1,
+      });
+      const drifted = lane(await k.wakes());
+      k.runTrack(50, [{ east: 0, north: 0, heading: Math.PI / 2, speed: 0 }], {
+        east: 0,
+        north: 1,
+      });
+      const later = lane(await k.wakes());
+      return { held, laid, drifted, later };
     });
-    expect(r.area).toBeGreaterThan(10);
-    expect(r.shifted).toBe(true);
-    expect(r.moved).toBe(0);
-    expect(r.later).toBeLessThan(0.05 * r.most);
+    expect(r.held.most).toBe(0);
+    expect(r.laid.most).toBeGreaterThan(40);
+    // Ten seconds on, the lane has drifted ten metres north, give or take a texel.
+    expect(Math.abs(r.drifted.north - r.laid.north - 10)).toBeLessThan(1.5);
+    expect(Math.abs(r.drifted.east - r.laid.east)).toBeLessThan(1.5);
+    // A minute on, it is nearly gone.
+    expect(r.later.most).toBeLessThan(0.15 * r.laid.most);
   });
 
-  test('a stopped boat has a ring of foam and no arms; a moving one, arms at Kelvin’s angle', async ({
-    page,
-  }) => {
+  test('follows the path the boat sailed through a turn', async ({ page }) => {
     await openLook(page, 'sea=calm');
-    const stopped: Surface = await page.evaluate(() => globalThis.keel.surface(256, 16));
-    let ring = 0;
-    let far = 0;
-    for (let p = 0; p < stopped.tile.length; p++) {
-      const x = ((p % 256) + 0.5) / 16 - 8;
-      const y = (Math.floor(p / 256) + 0.5) / 16 - 8;
-      const v = stopped.crest[p * 4 + 3] ?? 0;
-      if (v > 0.1) {
-        ring++;
-        far = Math.max(far, Math.hypot(x, y));
-      }
-    }
-    expect(ring).toBeGreaterThan(50);
-    // Nothing trails astern: the ring alone, within a few metres.
-    expect(far).toBeLessThan(3);
-    // Another boat at 4 m/s, heading north; the picture spans 12 m about a point 3 m astern of it.
-    const arms = await page.evaluate(async () => {
+    const r = await page.evaluate(async () => {
       const k = globalThis.keel;
-      k.setFleet([{ east: 40, north: 0, heading: 0, speed: 4 }]);
-      k.render();
-      return k.surface(256, 12, { east: 40, north: -3 });
+      k.wakeScene('turn', 'calm');
+      const path: { east: number; north: number }[] = [];
+      // 20 s on the reach and 8 s into the turn, a frame a fifteenth of a second.
+      for (let i = 0; i < 420; i++) {
+        k.sailFrames(1);
+        const s = k.boat().state;
+        path.push({ east: s.x, north: s.y });
+      }
+      k.wakeScene(null);
+      return { path, map: await k.wakes() };
     });
-    // On each row from three metres to six and a half astern, past the
-    // ring at its waterline, the arm to starboard: where the hull's foam is
-    // greatest.
-    const pts: [number, number][] = [];
-    for (let row = 0; row < 256; row++) {
-      const north = -3 + 6 - ((row + 0.5) * 12) / 256;
-      if (north > -3 || north < -6.5) {
-        continue;
+    const w = r.map;
+    const at = (east: number, north: number): number => {
+      const col = Math.round((east - w.east) / w.texel + w.size / 2 - 0.5);
+      const row = Math.round((north - w.north) / w.texel + w.size / 2 - 0.5);
+      return w.churn[row * w.size + col] ?? 0;
+    };
+    // At each place sailed 3 to 20 s ago, the lane's middle across the
+    // path is within a beam of it.
+    const beam = 1.39;
+    let checked = 0;
+    let worst = 0;
+    for (let i = r.path.length - 300; i < r.path.length - 45; i += 15) {
+      const p = r.path[i] as { east: number; north: number };
+      const q = r.path[i + 1] as { east: number; north: number };
+      const d = Math.hypot(q.east - p.east, q.north - p.north);
+      const ax = -(q.north - p.north) / d;
+      const ay = (q.east - p.east) / d;
+      let sum = 0;
+      let moment = 0;
+      for (let o = -5; o <= 5; o += 0.25) {
+        const v = at(p.east + ax * o, p.north + ay * o);
+        sum += v;
+        moment += v * o;
       }
-      let best = 0;
-      let at = -1;
-      for (let col = 128; col < 256; col++) {
-        const v = arms.crest[(row * 256 + col) * 4 + 3] ?? 0;
-        if (v > best) {
-          best = v;
-          at = col;
-        }
-      }
-      if (best > 0.03) {
-        pts.push([-north, ((at + 0.5) * 12) / 256 - 6]);
+      if (sum > 0) {
+        worst = Math.max(worst, Math.abs(moment / sum));
+        checked++;
       }
     }
-    expect(pts.length).toBeGreaterThan(30);
-    // The arm's slope, by least squares.
-    const n = pts.length;
-    const mx = pts.reduce((s, p) => s + p[0], 0) / n;
-    const my = pts.reduce((s, p) => s + p[1], 0) / n;
-    const slope =
-      pts.reduce((s, p) => s + (p[0] - mx) * (p[1] - my), 0) /
-      pts.reduce((s, p) => s + (p[0] - mx) ** 2, 0);
-    const angle = (Math.atan(slope) * 180) / Math.PI;
-    test.info().annotations.push({ type: 'Kelvin', description: `${angle.toFixed(1)}°` });
-    expect(Math.abs(angle - 19.47)).toBeLessThan(2);
+    expect(checked).toBeGreaterThan(12);
+    expect(worst).toBeLessThan(beam);
   });
+});
 
+test.describe('the hulls', () => {
   test('eight boats cost the draw calls one does', async ({ page }) => {
+    heavy();
     await openLook(page, 'sea=fresh');
     const calls = await page.evaluate(async () => {
       const k = globalThis.keel;
@@ -851,8 +1066,12 @@ test.describe('budgets', () => {
           dispatches: now.dispatches,
           triangles: now.triangles,
           // What the look adds, the shadow map included, as three.js counts it.
-          megabytes: (bytes.detail + bytes.foamMap + bytes.pattern + bytes.shadowMap) / 2 ** 20,
+          megabytes:
+            (bytes.detail + bytes.foamMap + bytes.pattern + bytes.shadowMap + bytes.wakeWaves) /
+            2 ** 20,
           detail: bytes.detail / 2 ** 20,
+          wakeWaves: bytes.wakeWaves / 2 ** 20,
+          foamMap: bytes.foamMap / 2 ** 20,
           shadow: bytes.shadowMap / 2 ** 20,
           all: bytes.all / 2 ** 20,
         });
@@ -863,9 +1082,13 @@ test.describe('budgets', () => {
     for (const t of r) {
       expect(t.drawCalls as number).toBeLessThan(150);
       const rung = t.rung as string;
-      expect(t.dispatches).toBe(rung.includes('× 2') ? 8 : rung.includes('²') ? 4 : 0);
-      // Everything this look adds to a phone's GPU memory.
-      expect(t.megabytes as number).toBeLessThan(12);
+      // The detail band's four calls a patch, and the wake's waves' four
+      // dispatches in one call.
+      expect(t.dispatches).toBe(rung.includes('× 2') ? 9 : rung.includes('²') ? 5 : 0);
+      // Everything this look adds to a phone's GPU memory: the wake's waves
+      // and the foam map's track 6 MB of it at most.
+      expect(t.megabytes as number).toBeLessThan(18);
+      expect((t.wakeWaves as number) + (t.foamMap as number)).toBeLessThan(6.5);
       expect(t.megabytes as number).toBeGreaterThan(1);
     }
   });

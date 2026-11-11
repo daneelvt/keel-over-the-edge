@@ -15,7 +15,8 @@ import (
 const accountByID = `-- name: AccountByID :one
 SELECT a.id, a.kind, a.tools, a.priority, a.notices_off, coalesce(a.user_handle, '')::bytea AS user_handle, sl.name, sl.look, coalesce(sl.version, '')::text AS version, coalesce(sl.skin, '')::text AS skin,
   coalesce(sl.hair, '')::text AS hair, coalesce(sl.colour, '')::text AS colour, coalesce(sl.finish, '')::text AS finish, sl.look_chosen,
-  a.created_at, a.recovery_made_at, (a.recovery_hash IS NOT NULL)::boolean AS has_recovery
+  a.created_at, a.recovery_made_at, (a.recovery_hash IS NOT NULL)::boolean AS has_recovery,
+  coalesce(a.born, 0)::integer AS born, (a.rules_at IS NOT NULL)::boolean AS rules
 FROM account a
 JOIN sailor sl ON sl.account_id = a.id
 WHERE a.id = $1
@@ -39,6 +40,8 @@ type AccountByIDRow struct {
 	CreatedAt      time.Time
 	RecoveryMadeAt pgtype.Timestamptz
 	HasRecovery    bool
+	Born           int32
+	Rules          bool
 }
 
 func (q *Queries) AccountByID(ctx context.Context, id pgtype.UUID) (AccountByIDRow, error) {
@@ -62,6 +65,8 @@ func (q *Queries) AccountByID(ctx context.Context, id pgtype.UUID) (AccountByIDR
 		&i.CreatedAt,
 		&i.RecoveryMadeAt,
 		&i.HasRecovery,
+		&i.Born,
+		&i.Rules,
 	)
 	return i, err
 }
@@ -69,7 +74,7 @@ func (q *Queries) AccountByID(ctx context.Context, id pgtype.UUID) (AccountByIDR
 const accountByUserHandle = `-- name: AccountByUserHandle :one
 SELECT a.id, a.kind, a.tools, a.priority, a.notices_off, a.user_handle, sl.name, sl.look, coalesce(sl.version, '')::text AS version, coalesce(sl.skin, '')::text AS skin,
   coalesce(sl.hair, '')::text AS hair, coalesce(sl.colour, '')::text AS colour, coalesce(sl.finish, '')::text AS finish, sl.look_chosen,
-  (a.stopped_at IS NOT NULL)::boolean AS stopped
+  (a.stopped_at IS NOT NULL)::boolean AS stopped, coalesce(a.born, 0)::integer AS born, (a.rules_at IS NOT NULL)::boolean AS rules
 FROM account a
 JOIN sailor sl ON sl.account_id = a.id
 WHERE a.user_handle = $1 AND a.kind = 'human'
@@ -91,6 +96,8 @@ type AccountByUserHandleRow struct {
 	Finish     string
 	LookChosen bool
 	Stopped    bool
+	Born       int32
+	Rules      bool
 }
 
 // The account a passkey's user handle names, as a sign-in finds it, and
@@ -114,6 +121,8 @@ func (q *Queries) AccountByUserHandle(ctx context.Context, userHandle []byte) (A
 		&i.Finish,
 		&i.LookChosen,
 		&i.Stopped,
+		&i.Born,
+		&i.Rules,
 	)
 	return i, err
 }
@@ -368,19 +377,20 @@ func (q *Queries) CountSessions(ctx context.Context, accountID pgtype.UUID) (int
 }
 
 const createAccount = `-- name: CreateAccount :one
-INSERT INTO account (kind, saved_at, user_handle, recovery_hash, recovery_made_at)
-VALUES ('human', now(), $1, $2, now())
+INSERT INTO account (kind, saved_at, user_handle, recovery_hash, recovery_made_at, born)
+VALUES ('human', now(), $1, $2, now(), $3)
 RETURNING id
 `
 
 type CreateAccountParams struct {
 	UserHandle   []byte
 	RecoveryHash []byte
+	Born         pgtype.Int4
 }
 
 // A human's account, made with its first passkey: saved from the start.
 func (q *Queries) CreateAccount(ctx context.Context, arg CreateAccountParams) (pgtype.UUID, error) {
-	row := q.db.QueryRow(ctx, createAccount, arg.UserHandle, arg.RecoveryHash)
+	row := q.db.QueryRow(ctx, createAccount, arg.UserHandle, arg.RecoveryHash, arg.Born)
 	var id pgtype.UUID
 	err := row.Scan(&id)
 	return id, err
@@ -546,8 +556,8 @@ func (q *Queries) HumansByActiveOldest(ctx context.Context, arg HumansByActiveOl
 }
 
 const insertAction = `-- name: InsertAction :exec
-INSERT INTO account_action (at, action, account_id, kind, name, detail, source, from_addr)
-VALUES (clock_timestamp(), $1, $2, $3, $4, $5, $6, $7)
+INSERT INTO account_action (at, action, account_id, kind, name, detail, source, from_addr, report_id)
+VALUES (clock_timestamp(), $1, $2, $3, $4, $5, $6, $7, $8)
 `
 
 type InsertActionParams struct {
@@ -558,6 +568,7 @@ type InsertActionParams struct {
 	Detail    string
 	Source    string
 	FromAddr  string
+	ReportID  pgtype.UUID
 }
 
 // An action recorded at the moment it is taken, under its account's lock,
@@ -572,6 +583,7 @@ func (q *Queries) InsertAction(ctx context.Context, arg InsertActionParams) erro
 		arg.Detail,
 		arg.Source,
 		arg.FromAddr,
+		arg.ReportID,
 	)
 	return err
 }

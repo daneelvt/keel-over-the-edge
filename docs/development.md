@@ -133,13 +133,13 @@ credentials.
 
 | Workflow | When | What | Locally |
 |----------|------|------|---------|
-| `ci.yaml` | Every pull request (each part only when its files changed); every push to `main`, called by `release.yaml` | Go tests on amd64 and arm64, each with a PostgreSQL service: in their short forms with the race detector, then at full length without it (the physics, simulation, sky and world generator tests also built with `GOAMD64=v3`), the tick's benchmarks as a smoke test, short fuzzes of the catalog decoder, the input log's reader, the sailor name check, the decoding of what a game client sends and of the other boats' views (Go's and the page's), the physics module built and its golden tests run in WebAssembly, client tests, the client build (which fails on a bundled package with a licence not in `tools/licences/allowed.txt`) and the size of its first download, the one command started from scratch, its database container included, and checked over HTTPS with a sailor made with a passkey and read back, its game connection, and a second player seeing the first's boat; and the image built on amd64 and arm64 (not pushed), checked to be for its runner's machine, to run as 65532 with no shell, `keel help` to run and the page to be in it, its size in the job's summary | `go run ./tools/dev -db` once, then `go test -race -short ./...` and `go test ./...`, `go run ./tools/physics` then `npm test` in `client/`, `go run ./tools/dev -smoke`, `docker buildx build .` |
+| `ci.yaml` | Every pull request (each part only when its files changed); every push to `main`, called by `release.yaml` | Go tests on amd64 and arm64, each with a PostgreSQL service: in their short forms with the race detector, then at full length without it (the physics, simulation, sky and world generator tests also built with `GOAMD64=v3`), the tick's benchmarks as a smoke test, short fuzzes of the catalog decoder, the input log's reader, the sailor name check, the chat line check, the decoding of what a game client sends and of the other boats' views (Go's and the page's), the physics module built and its golden tests run in WebAssembly, client tests, the client build (which fails on a bundled package with a licence not in `tools/licences/allowed.txt`) and the size of its first download, the one command started from scratch, its database container included, and checked over HTTPS with a sailor made with a passkey and read back, its game connection, and a second player seeing the first's boat; and the image built on amd64 and arm64 (not pushed), checked to be for its runner's machine, to run as 65532 with no shell, `keel help` to run and the page to be in it, its size in the job's summary | `go run ./tools/dev -db` once, then `go test -race -short ./...` and `go test ./...`, `go run ./tools/physics` then `npm test` in `client/`, `go run ./tools/dev -smoke`, `docker buildx build .` |
 | `pr.lint.yaml` | Pull requests, not drafts, that change its files | gofmt, go vet, staticcheck, the store's queries compiled against the migrations and their generated code current (`sqlc compile`, `sqlc diff`), the look-alike table current, Biome and tsc (the client and `art/`) | `go run ./tools/dev -lint` |
 | `pr.render.yaml` | Pull requests, not drafts, that change its files: the page's tests and the scene's each when theirs did (`tools/e2e/filters_test.go`) | The browser tests that block a merge, none retried. The page's: keel, the account and the screen's words, on Chromium pages that draw nothing (`?draw=off`), three at a time and then those that change the shared world one at a time, against `keel` and a PostgreSQL service; and the net worker, the passkeys and the layout on WebKit. The scene's: the sea, the sky, the land and their pictures on the offline sandbox, on WebGL 2 (drawn on lavapipe, which a step checks first) in three jobs and WebGPU (on SwiftShader) in five. Each job's runner (its CPU and a fixed work's time), its tests' outcomes, its ten slowest and each file's time in its summary | `go run ./tools/physics`, then in `client/` `npx playwright test --project page-serial` and `--project webgl2` |
 | `render-nightly.yaml` | Every night at 04:17 UTC on `main`; by hand; pull requests labelled `render`, on each push while the label stays | What `pr.render` leaves: the `@long` and `@nightly` tests on both back ends and the page's, the sea's tests on a WebGPU device held to compatibility mode's limits, the slow-network tests through real TCP loss where the runner has netem, and the flake hunt: `pr.render`'s suite five times over (the page's, the scene's on WebGL 2, WebKit's), a test that passed in one run and failed in another named flaky in the summary. Not a required check; GitHub mails a failed night | the same, with `--grep '@long\|@nightly'` or `--repeat-each 5` |
 | `pr.licences.yaml` | Pull requests, not drafts, that change its files | The licence header in every source file (and the art header in `art/`'s scripts and sound recipes); licences of Go packages linked into `keel` | `go run ./tools/licences` |
 | `pr.catalog.yaml` | Pull requests, not drafts, that change its files | The catalog against its schema, unique ids, art present, generated files current, no kind's id used as a string in code | `go run ./tools/catalog -check` |
-| `pr.physics.yaml` | Pull requests, not drafts, that change its files | The physics package's rules (imports, `math` functions, no fused multiply-add in the source or the compiled code for arm64 and amd64, nor in the simulation's), the world generator's float rules, its layout files current, and the module built with no heap allocation and within its size budget; each boat's polar against its original's measured data, the trimmed sail against ORC's mainsail, and the polar in a breeze's sea and a gale's, printed and not checked | `go run ./tools/physics -check`, `go run ./tools/polar -check`, `go run ./tools/polar -sail`, `go run ./tools/polar -sea 12` |
+| `pr.physics.yaml` | Pull requests, not drafts, that change its files | The physics package's rules (imports, `math` functions, no fused multiply-add in the source or the compiled code for arm64 and amd64, nor in the simulation's), the world generator's and the sea's life's float rules, its layout files current, and the module built with no heap allocation and within its size budget; each boat's polar against its original's measured data, each boat's trimmed sails against ORC's mainsail and jib, and the polar in a breeze's sea and a gale's, printed and not checked | `go run ./tools/physics -check`, `go run ./tools/polar -check`, `go run ./tools/polar -sail`, `go run ./tools/polar -sea 12` |
 | `pr.infra.yaml` | Pull requests, not drafts, that change its files | Every entry point of both clusters in `infra/cluster` rendered with kustomize, as a release renders it, checked against the manifests' rules (each rule also broken on purpose) and with kubeconform against its kinds' schemas (a field no schema knows, and a kind with no schema, also tried); no Secret under `infra/`; the release's signer accepted and every other refused; a promotion's refusals; `tools/cluster`'s and `tools/release`'s steps against fake commands, a fake registry and a fake GitHub; the pinned tools' downloads; Renovate's patterns finding every pin; every alert rule made to fire and to stay quiet, with VictoriaMetrics' `vmalert-tool`; the dashboards and the vendored manifests against their records; and the signatures Flux cannot check, of cert-manager's chart and images and Kured's image, with cosign (see [The local cluster](#the-local-cluster), [Releases](#releases) and [Monitoring](#monitoring)) | `go test ./tools/cluster ./tools/release ./tools/dashboards ./tools/vendored ./tools/ops ./tools/internal/...`, `go run ./tools/release -verify-keyed` |
 | `pr.machine.yaml` | Pull requests, not drafts, that change its files | The tailnet policy's rules (each broken on purpose); `tools/machine`'s and `tools/tailnet`'s steps against fake programs, a fake registry, a fake Infisical and a fake Tailscale; `join.sh` in bash and shellcheck; Ansible and ansible-lint from hashed requirements, the playbooks' syntax and the `production` profile, in a couple of minutes | `go test ./tools/machine ./tools/tailnet`, `go run ./tools/tailnet -check` |
 | `pr.accounts.yaml` | Pull requests, not drafts, that change its files | `infra/tofu` formatted, initialised without a backend from the lock file alone, and valid; the lock file what OpenTofu writes for every platform; `tools/accounts` against a fake OpenTofu and a fake Infisical (the credentials in tofu's environment alone, masked first; no value of a plan shown; addresses scrubbed from errors; a plan from elsewhere refused). No credential | `go run ./tools/accounts -check`, `go test ./tools/accounts` |
@@ -196,6 +196,18 @@ schema's fields must match the physics package's `Params` field for field;
 the tool checks that and generates `catalog.PhysicsParams` for the server and
 `writeParams` (`client/src/predict/params.gen.ts`) for the client, so the
 three cannot drift.
+
+A boat's `stations` are where the people aboard are drawn, one for each
+person it can carry (`capacity`), in seat order: the first is the helm,
+where its sailor is today (the gunwale's seat of a boat with a tiller, the
+`sailor` node of one with a wheel), then each seat's; each a point in the
+model's frame, standing (the deck between the feet) or seated (the seat's
+edge, as a dinghy's helmsman sits), and the way the person faces. The tool
+checks that there is one for each person, within the hull's beam and
+length, above the waterline and below the boom, and none within 0.45 m of
+another; `render/sailors/crew.test.ts` holds each to its model's deck
+within 1 cm, the first to the helm, with nothing of the hull where a
+person stands.
 
 ## The physics package
 
@@ -256,7 +268,10 @@ not a record: the module keeps it, and the client fills it through exports
 The golden tests run the scenarios in `internal/physics/testdata/scenarios.json`
 natively (`go test ./internal/physics`) and in the module (`npm test` in
 `client/`), and compare every step's state and `Out`, and a table of
-function values, with `testdata/golden.json`. A scenario can steer with a
+function values, with `testdata/golden.json`. The file's `params` hold every
+catalog boat's values by id, in the catalog's order (`catalog_test.go` checks
+them against the catalog bit for bit); a scenario names its `boat`, the first
+if it names none, and the module runs it as that kind. A scenario can steer with a
 simple heading-hold (`steer`), which both runners compute with exactly
 rounded operations only. CI runs them on amd64 and arm64. After a deliberate
 change to the physics, rewrite the file and review the diff:
@@ -274,8 +289,8 @@ inputs each; CI draws four thousand.
 ### The model
 
 A boat is a rigid body in surge, sway, yaw and roll, heaving and pitching on
-the waves ([Waves](#waves)), with the boom as a body of its own and the
-sailor's position as state. In flat water it neither heaves nor pitches, and
+the waves ([Waves](#waves)), with the boom, and the headsails' clew, as bodies
+of their own and the sailor's position as state. In flat water it neither heaves nor pitches, and
 sails exactly as it did before it knew of waves. Each part of the boat computes its
 force from the flow it meets, including the flow from the boat's own turning
 and rolling, so tacks, gybes, luffing, weather helm and capsizes follow from
@@ -285,18 +300,145 @@ semi-implicit Euler (`Substeps`).
 | File | What |
 |------|------|
 | `wind.go` | The frames; the wind at each height by the open sea's log profile (z₀ = 0.0002 m; the game's wind is 10 m up); the apparent flow at any point of the boat, turned into the heeled body's plane |
-| `sail.go` | The sail as two strips, foot and head, the head twisted further out (more as the sailor flattens the sail and as the boom goes out); lift and drag from each strip's angle of attack; the boom on its sheet; the backed head that drags the boom across in an accidental gybe; a capsized sail floating on the water |
-| `foils.go` | Daggerboard and rudder: Helmbold's lift slope, the stall to a flat plate, reversed flow, the hull's carry-over, the board's downwash at the rudder |
-| `hull.go` | Upright resistance from the towed hull's drag area, cross-flow drag, the Munk moment, the righting lever |
-| `sailor.go` | The automatic sailor: hiking to the position that balances the boat, flattening the sail by the apparent wind, falling in past 70° of heel, swimming to the board, righting the boat, climbing back in |
-| `boat.go` | The step: the rudder and sheet following the controls at the hands' rates, the substeps, the boom's stop, `Out` |
+| `sail.go` | The sail groups, each two strips, foot and head, the head twisted further out (more as the sailor flattens the sail and as the boom or clew goes out); lift and drag from each strip's angle of attack; the boom on its sheet; the backed head that drags the boom across in an accidental gybe; the headsails about their tack; the square sails on their yards, drawing or aback; the reef; a capsized sail floating on the water |
+| `foils.go` | Daggerboard or fixed keel, and rudder: Helmbold's lift slope, the stall to a flat plate, reversed flow, the hull's carry-over, the board's downwash at the rudder |
+| `hull.go` | Upright resistance from the towed hull's drag area, cross-flow drag, the Munk moment, a long hull's resistance to turning, the righting lever |
+| `sailor.go` | The automatic sailor: hiking to the position that balances the boat, flattening the sail by the apparent wind, falling in past the boat's fall-out heel (70° in the Jolly boat; never in the keelboat), swimming to the board, righting the boat, climbing back in |
+| `boat.go` | The step: the rudder, sheets and reef following the controls at the hands' rates, a ship's braces and her crew's rule, the substeps, the boom's and clew's stops, `Out` |
 | `prepare.go` | `Prepare`: every derived constant |
 | `sea.go`, `waves.go` | The sea and the boat in it: see [Waves](#waves) |
 
-The player has two controls, `Helm` and `Sheet`. The sheet sets how far the
+The player has three controls, `Helm`, `Sheet` and `Reef`. The sheet sets how far the
 boom may swing out; it never pulls the boom in, so an eased sail luffs, a
 trimmed one presses on the sheet, and a sail with the wind behind its leech
-swings across.
+swings across. On a ship the sheet is the braces (below).
+
+**The sail groups.** A boat's rig is up to five groups, each in its own
+`Params` fields, and a group of no area is skipped, so a boat with the main
+alone steps as it always did:
+
+- **The main**, on its boom about the mast (the Jolly boat's one sail, the
+  keelboat's main).
+- **The headsails**, tacked at a stay ahead of the mast (`headsailTack`,
+  `headsailTackHeight`), two strips about the tack. Their clew is a body as
+  the boom is (`State.Jib`, `JibRate`), lighter, swinging free to its own
+  sheet's limit (`JibLimit`) and crossing in a tack by itself. The one sheet
+  trims them in the same share as the main, over their own travel
+  (`headsailIn` … `headsailOut`), the crew trimming the jib to the main.
+  They have no backed head. Induced drag is the whole rig's: its area on
+  its effective height (ORC VPP 2023, eq. 5.34). `Out.JibFootAttack`,
+  `JibHeadAttack`, `JibFootFlow`, `JibHeadFlow` and `JibTwist` are theirs.
+- **Fore and after square sails**, on yards held at the braces' angle, in
+  a fore group (the foremast's) and an after group (the main and mizzen
+  masts' and the staysails between them, at their centre by area), each
+  two strips, the lower sails and the upper, the upper braced
+  `squareTwist` squarer. A square sail is the same from either yardarm: the
+  flow meets it at an angle of attack off the yards' line, 0 to 90°. On
+  its after face it draws, its lift and drag from tables every 5° of
+  attack (`squareLift`, `squareDrag`), a wind tunnel's foremast of six
+  square sails (Tadano, Ohsugi, Amemiya and Yoshimura 1991): bellied, they
+  lift even along their yards' line, their lift rising steadily to its
+  greatest, 1.01, at 30° and falling gently past it, with no sudden stall,
+  and their drag, the mast's own induced drag in it, rising to 0.88 square
+  to the wind. On its fore face it is aback: it lies flat against its mast
+  and gives a normal force (`squareNormalForce`), driving her astern. Its
+  centre of pressure lies out along the yards toward the arm the wind
+  meets first, a tenth of the sails' half-width with the flow attached
+  (`squarePressure`), in to the mast as the flow separates.
+  `Out.ForeFootAttack` … `AfterHeadFlow` are each group's strips', negative
+  and `FlowAback` aback; `Out.Sail` on a ship is the after yards' lower
+  sails': aback, lifting below the attack of a quarter of the greatest
+  lift (brace up), stalled past 1.75 times the attack of the greatest lift
+  with the yards not square (square them), or drawing.
+
+- **The downwind sail**, a gennaker tacked on the centreline at a
+  bowsprit's end (`downwindTack`, `downwindTackHeight`), two strips about
+  its tack as the headsails are, its clew a body (`State.Kite`,
+  `KiteRate`) swinging free to its own sheet's limit (`KiteLimit`), the one
+  sheet trimming it in the same share as the main over its own travel
+  (`downwindIn` … `downwindOut`). It is never flattened. `State.Hoist`,
+  from 0 in its bag to 1 set, scales its area; while it is set its area
+  joins the whole rig's induced drag. `Out.KiteFootAttack`,
+  `KiteHeadAttack`, `KiteFootFlow`, `KiteHeadFlow` and `KiteTwist` are its
+  strips'; while it is more than half set, `Out.Sail` is its word
+  (`kiteState`), on a run stalled only past 130° of attack, where it
+  stands across the wind at its fastest.
+
+**The crew and the gennaker.** No control sets it: the crew does, a rule
+in the physics as a ship's braces are. They set it (`State.HoistTarget`
+1) as the boat bears away with the mean wind `setAngle` or more off her
+bow, and take it in (0) as she comes up forward of `dropAngle`; between
+the two they carry on, so a steady heading through the wind's shifts
+leaves it as it is. They keep it in while the reef ordered keeps none of
+it (`downwindReefs`, 1 set or 0 kept in, a level each: the skiff's
+"Gennaker in" is its first reef, its main full), and take it in when the
+sailor is out of the boat. The hoist follows at `hoistTime` up and
+`dropTime` down. In a gybe, once the wind is 10° over the side its clew
+is on, they take the clew round through aft to the new side, at 70° a
+second.
+
+**The braces.** On a boat with square sails the sheet, 0 … 1, is the
+braces: the yards' angle off the centreline is `braceSharp` (braced up
+sharp, where they meet the lee shrouds) + sheet × (90° − `braceSharp`),
+square at 1. The same sheet still sets the mizzen's boom and the
+headsails' clew as on the other boats: the crew trims them to the braces.
+`State.Yards` and `State.ForeYards` are the after and fore yards' angle
+off the centreline, signed by the side they are braced for: positive braced
+for the wind over port, the port yardarm forward. To change sides they
+swing through square, where either sign is the same yards; 0 is never
+braced, and such yards are braced at once for the side the wind fills.
+
+**The crew's rule.** The crew is a rule in the physics, as the dinghy's
+sailor's hiking is: it braces each group of yards for the side the wind
+fills, swinging them at `braceRate`, the travel from sharp up on one side
+to sharp up on the other in `braceTime`, and hauls them round in a turn as
+a ship's crew does (Willis 2003). In a tack, as her head comes within
+`hauls` of the wind and turns on through it, the after yards swing to the
+new side, "mainsail haul", and stay there as she turns on past head to
+wind; the fore yards stay, aback, and push her head round, until the wind
+is `letGo` on the new bow, "let go and haul". From the time she comes up
+within `hauls` and `letGo` of the wind until the fore yards come round, the
+crew lets the headsails' sheets fly, so that they never hold her head off
+the wind. A ship that stops short falls back, and the after yards come
+back to her old side. Wearing, both groups keep their side until the wind
+is `letGo` on the new quarter. Each rule keeps its side within its margin,
+so a yawing ship never braces back and forth. A tack the autopilot orders
+without way enough (`steerage`) stalls by its stall rule, "Tack stalled",
+and she pays off on her old tack.
+
+**The reef.** `Control.Reef` is a target, 0 (full sail), 1 or 2; `State.Reef`
+follows it continuously at `reefTime` seconds a level while the sailor is
+sailing, so prediction replays it. Each group's `reefs [3]` is the share of
+its luff kept at each level: its area goes as the share's square, its strips'
+heights above the boom, or the tack, with it (ORC's `rfm`). `Out.ReefShare`
+is the main's share. The Jolly boat reefs as the ILCA 6 and 4 rigs, 0.903
+and 0.816 (a licence: an ILCA changes its rig ashore); the keelboat's main
+takes two slab reefs, 0.85 and 0.70, and its jib none. The tall ship's
+first reef takes her topgallants in and her second reefs her topsails twice
+and takes her spritsail in (Beaufort's man-of-war scale at forces 6 and 7):
+her square sails' shares 0.91 and 0.83, her headsails' 1 and 0.79; her
+mizzen is not reefed, and her crew takes a level in 120 s. The skiff's
+first reef shortens nothing and keeps her gennaker in, "Gennaker in"; her
+second slab reefs her main to 0.80 of its luff (a licence: a 29er has no
+reefs). The autopilot never reefs.
+
+**The fixed keel.** A boat with `fixed` 1 has a fin keel where the Jolly
+boat has its daggerboard: the ground never pushes it up, its tip meets the
+bottom and drags there (`ground.go`), and the boat stops where the water is
+its draught (`physics.Draught`: the hull's and the keel's). Its ballast is
+in its centre of gravity and its righting lever. A boat pushed off the
+ground is put in water its draught and a metre deep, or the ground's
+`pushDepth`, whichever is deeper (`physics.PushDepth`). A boat whose
+`fallOutHeel` is 180° never loses its sailor: a knockdown leaves the helm
+and sheet live, and the sails in the water and the keel bring her back.
+
+**A long hull's turning.** `yawDamping` is a hull's resistance to turning
+by the water flowing across it as it turns, its moment against the rate of
+turn times the rate's size, ½ρ C_D T L⁴/32 for a hull of draught T and
+length L. A dinghy's and a keelboat's are 0: their board or keel and rudder
+damp their turning. The tall ship's keel is one foil at one place, which
+gives her almost none, and without it a tack's turn carried her on round
+with no way to stop it.
 
 ### The Jolly boat's numbers
 
@@ -319,50 +461,240 @@ from:
 - **Estimates, left as argued:** the righting lever beyond the data, added
   masses and inertias, the rudder's size, the sail on the water.
 
+### The keelboat's numbers
+
+The keelboat is a J/22, a fractionally rigged day-sailing keelboat of 1983,
+sailed by one 80 kg sailor under main and jib, with no spinnaker, after its
+ORC International One Design certificate (2021). Each value in
+`shared/catalog/boats.yaml` says where it comes from:
+
+- **Published (the certificate):** length, beam and draft; the displacement,
+  857 kg, to which the game adds its sailor's 80 kg; the main's and jib's
+  areas, 13.76 and 9.49 m²; the rig's P, E and J; the righting moment at 1°,
+  15.9 kg·m, and the limit of positive stability, 105°; the freeboards; the
+  rated speeds `tools/polar -check` holds it to. ORC's VPP (2023): induced
+  and quadratic drag, flattening to its floor of 0.6, the reef.
+- **Fitted:** the main to ORC's low-lift mainsail, as the Jolly boat's (the
+  same coefficients, its eased twist its own), and the jib to ORC's
+  low-lift jib from 27° to 100° of apparent wind (`tools/polar -sail`),
+  with its clew stopped at the rail.
+- **Estimates, tuned against the certificate:** the keel's position and its
+  downwash at the rudder (weather helm), the flattening (the beat VMG), the
+  hull's drag area (the reaches above 12 knots), the autopilot's gain and
+  damping (its holding in a stormy spell), the start sheet (`-start`).
+- **Estimated from a simple hull:** the righting lever, from sections on
+  the plan at the sheer and the certificate's freeboards, a canoe body, the
+  cuddy, the fin and its lead, heeled in still water, its centre of gravity
+  set for the certificate's moment at 1° and its sections' fullness for the
+  limit of positive stability; then the sailor seated on the centreline.
+  Its greatest lever is 0.41 m from 40° to 60°.
+- **Estimates, left as argued:** added masses and inertias, the waterplane,
+  the rudder's size, the jib's clew as a body, the reefs' shares and time.
+
+`reference.json`'s notes give each value's change and its reason.
+
+### The tall ship's numbers
+
+The tall ship is the HM Bark Endeavour replica (1994), after the collier
+bark of 1768, under her plain sail: courses, topsails and topgallants on
+the fore and main, a mizzen topsail and the mizzen on its gaff and boom,
+the jib, fore topmast staysail and spritsail. She is steered from a wheel
+by one sailor standing on her quarterdeck, and her crew is the rule above.
+No stability booklet or polar of hers is published. Each value in
+`shared/catalog/boats.yaml` says where it comes from:
+
+- **Published:** her length on deck, 33.3 m, beam 9.28 m, draught 3.4 m,
+  displacement 550 t and the area of her plain sail (Australian National
+  Maritime Museum).
+- **Fitted:** her square sails' lift and drag, the wind tunnel's foremast
+  of six (`tools/polar -sail`), and their centre of pressure near the mast.
+  Her mizzen and headsails keep the main's and the jib's coefficients as
+  the other boats fit them.
+- **Estimates from her sail plan and lines:** her groups' areas and
+  centres (the fore 275 m² on the foremast, 11.4 m ahead of her centre of
+  gravity; the after 435 m² centred 0.7 m aft of it; the mizzen 80 m² on
+  its boom 9.6 m aft; the headsails 120 m² tacked 21 m ahead), their
+  heights, the hull's outline, waterplane and masses.
+- **Estimates, tuned against her references and the seamanship of square
+  rig** (`tools/polar`): how sharp her yards brace (42°, so that her best
+  VMG is 65° off the wind), her lateral plane (the keel and deadwood the
+  foil below a 0.8 m body, its centre a metre aft of her centre of gravity,
+  its carry-over and the Munk moment, for her leeway and her balance), her
+  rudder's flow, the hull's drag past 7.5 knots (her passages' speeds), her
+  resistance to turning, her crew's brace time, and her autopilot's gain,
+  damping, gybe helm, steerage and tack by the lee (her tacks and wears).
+- **Estimates, left as argued:** her righting lever, a metacentric height
+  of 1.2 m, the greatest lever 0.68 m at 50° and a range of 110°, past the
+  90° large sailing vessels are held to, so that a squall that lays her on
+  her beam ends never leaves her there; her inertias, the reefs' shares and
+  time.
+
+She carries about 4° of lee helm close-hauled and none reaching: every
+balance that gave her weather helm close-hauled left her, slow and sliding
+sideways after a tack or a wear, rounding up into the wind until she
+tacked back.
+
+### The skiff's numbers
+
+The skiff is a 29er, the two-person trapeze skiff of 1998, with its racks,
+a fully battened main, a self-tacking jib and a gennaker on a bowsprit,
+sailed by one 80 kg sailor who helms from the trapeze. No polar, tank test
+or VPP of a 29er is published. Each value in `shared/catalog/boats.yaml`
+says where it comes from:
+
+- **Published:** its length, 4.45 m, and beam over the racks, 1.77 m; the
+  hull's least weight, 74 kg (class rule C.7.5(a)), to which the game adds
+  20 kg of rig and foils and its sailor's 80 kg; 12.5 m² upwind and a
+  16.83 m² gennaker (the class and its builder); the main's foot, 2.1 m.
+- **Measured on the nearest hull:** its resistance, the Musto Skiff's at
+  167.5 kg (Day, Cameron and Dai 2019) to 8 knots, falling past the hump
+  to an estimated planing value held to 18 knots, its table every three
+  quarters of a knot.
+- **Fitted:** the main and jib as the keelboat's; the gennaker to ORC's
+  asymmetric spinnaker tacked on the centreline (Table 5.7) from 41° to
+  180° of apparent wind (`tools/polar -sail`).
+- **Estimates:** the split of the upwind area (main 9.0, jib 3.5 m²), the
+  rig's heights, the gennaker's luff and foot, the foils, the righting
+  lever, the inertias; the sailor's reach on the wire, 1.84 m (Day's bound
+  beyond the rack's edge), moving at 0.8 m/s with a lag of 0.6 s, so that
+  the wind dying at once under her sailor on the wire takes her over to
+  windward; the crew's angles, setting the gennaker at 105° and taking it
+  in at 90°, inside the band where it pays (tools/polar's report: from 90°
+  in 6 knots to 115° in 20, as the 470's spinnaker does, Masuyama and
+  Ogihara 2020); her hoist and drop times, 5 and 6 s.
+
+She is checked as raced (`reference.json`): `tools/polar` sails her with
+the 29er's crew of two in place of her sailor (130 kg, their centre of
+mass 1.55 m to windward) round a course of four equal legs, a beat, a beam
+reach, a broad reach at 135° and a run, each at its best, against the
+Jolly boat's own time, and holds the time at most the ratio of their 2026
+Portsmouth Numbers, 900 and 1103, and 8% (0.88). Sailed at its best in
+flat water she goes round in 0.61 to 0.73 of the Jolly boat's time: the
+yardstick, a club fleet's average over its races, holds no closer, and
+the check holds only that she is never slower than it. Printed beside it,
+not checked: the course sailed by her one sailor; her speeds in 8 m/s of
+wind beside the 470's measured ones; where her gennaker pays in each wind;
+her best downwind angle. Weather helm is light, as the Jolly boat's.
+
 ### `tools/polar`
 
 ```sh
-go run ./tools/polar               # the polar at 6 to 20 knots: a table, and .dev/polar/<boat>.json and .svg
+go run ./tools/polar               # every boat's polar at 6 to 20 knots: a table, and .dev/polar/<boat>.json and .svg
 go run ./tools/polar -check        # against internal/physics/testdata/reference.json; fails outside its tolerances,
                                    # unless the sail says drawing at its fastest sheet, or unless the
-                                   # machine sailors' handbook's trim table is the polar's
-go run ./tools/polar -handbook     # that trim table, for internal/agentapi/handbook/trim.md
-go run ./tools/polar -sail         # the trimmed sail against ORC's mainsail
+                                   # machine sailors' handbook's trim tables and reefing advice are the polar's
+go run ./tools/polar -handbook     # writes those tables and the reefing advice into internal/agentapi/handbook/trim.md
+go run ./tools/polar -sail         # each boat's trimmed sails against ORC's mainsail and jib
 go run ./tools/polar -manoeuvres   # tacks and gybes at 6, 12 and 18 knots, and where an accidental gybe comes
+go run ./tools/polar -start        # starts from rest by the sheet, beside the catalog's start sheet
 go run ./tools/polar -sea 12       # the polar in 12 knots and the sea it raises over open water, beside flat water
 ```
 
-The tool steers with a heading-hold of its own, tries the sheet from hauled
+Every mode sails every boat of the catalog, or `-boat` one of them by its
+id (but `-handbook`, which writes every boat's). The tool steers with a heading-hold of its own, tries the sheet from hauled
 in to let fly at every true wind angle, and measures each point after 60 s
-of sailing. Winds are given at sail height, 3 m, where the reference data's
-wind was measured; the table shows the 10 m wind beside them. Its columns:
+of sailing; a boat whose sailor stays aboard counts as capsized past 75° of
+heel. A boat slow to answer her helm and her sails, one whose hull's drag
+takes more than two minutes to change her speed at 1.5 m/s, the tall ship,
+is sailed as she answers: the helmsman meets her turn as far ahead as her
+wheel takes and learns the standing helm she needs; each sail begins at 30%
+of the wind's speed, no faster than a Froude number of 0.19, and settles
+for as long as her hull takes to change her speed there, two to eight
+minutes; her braces are searched every fifth of their travel, then about
+the best. A ship counts as not sailing a point where her square sails are
+aback or lifting, where she is out of hand, her helm held past half its
+travel, or where she goes more sideways than ahead; her VMG is what she
+makes good over the ground, her leeway in it, and her boom column is her
+yards' angle. Its winds are given at each boat's reference height, its entry's
+`height` in `reference.json`: the Jolly boat's 3 m, its sail's, where the
+reference data's wind was measured, the table showing the 10 m wind beside
+them; the keelboat's 10 m, where its certificate rates it, the game's own.
+Its columns:
 speed and VMG in knots; heel, positive to leeward; rudder, positive for
 weather helm; leeway; boom; the foot's angle of attack; how far out the
 sailor is; the flattening; the best sheet. In the chart, filled points are
-measurements and hollow ones upper bounds (speeds measured with surfing,
-which flat water cannot reach).
+measurements and hollow ones upper bounds.
+
+`-sail` trims each sail for the most drive within its sheet's travel and
+compares it with its source: the main with ORC's low-lift mainsail (Table
+5.1), held from 28° to 180° of apparent wind and its side force at 28° and
+60°; the headsails with ORC's low-lift jib (Table 5.4), held from 27° to
+100° and their side force at 27°, 50° and 60°; a downwind sail with ORC's
+asymmetric spinnaker tacked on the centreline (Table 5.7), set, its area
+in the rig's induced drag, held from 41° to 180° on its drive alone. From 150° aft ORC's jib
+stands across the wind as if poled out; a jib sheeted to the rail stands
+behind the main, and is not held there. A ship's square sails, held by
+their yards at each angle of attack, are compared with the wind tunnel's
+foremast of six (Tadano and others 1991, Figure 9) from 5° to 90°, within
+5% of its whole force there. Her mizzen and headsails are shown against
+ORC's but not held: in her rig, whose induced drag is three times a
+sloop's, the trim that drives her best near the wind is not ORC's.
+
+A reference may name a `crew` to sail its points with in place of the
+catalog's sailor, and a `course` point the time round a course of a beat,
+a beam reach, a broad reach and a run over another boat's (`against`).
+For a boat with a downwind sail `-check` also prints, without failing, the
+course sailed by its own sailor, where its downwind sail pays in each wind
+and its best downwind angle.
+
+`-handbook` writes each boat's table of the fastest boom, at 6, 12 and 20
+knots 10 m up, under a line naming the boat, and when to reef: the least
+wind in which the boat heels past its trim at full sail, the wind in which,
+close-hauled, its fastest sheet is no longer hauled in hard (eased more than
+2.5°), since hauled in it heels further than its sailor can hold. A ship's
+table is of her braces, the yards' angle off the centreline from braced up
+sharp to 90°, square (an AI app's `boom` on a ship), "aback" where she
+cannot sail; her yards stay braced up sharp close-hauled in any wind, and
+she reefs from the wind in which, close-hauled at full sail, she heels past
+10°, where her crew takes her topgallants in (Beaufort's force 6). Under the
+table of a boat with a downwind sail it writes where her crew sets it and
+takes it in, and the wind from which it no longer pays where they set it.
+It prints how each boat sails close-hauled with no reef, one and two in
+that wind and above.
+
+`-manoeuvres` tacks from close-hauled, 45° or the boat's own angle if she
+cannot sail so close, and gybes from 150°; for a ship it then sails her own
+autopilot and crew in 12 knots, braced up sharp: her tack from her full
+speed, which must come round; her tack from 2.5 knots, which must stall and
+leave her on her old tack; and her wear, which must stay within four of
+her lengths of where it began, as the best ships wore (Willis 2003). It
+fails if any does not.
 
 `-sea` sails each angle for two minutes in the sea the wind raises, with the
 sheet that sails it fastest among those that keep the boat upright, and
 prints the mean speed with its 10th and 90th percentiles, the VMG, and the
 greatest heel, heave and pitch, beside the flat-water speed. Nothing is
-checked: no published polar of a dinghy in known waves exists to check
-against. Off the wind the boat surfs and gains; to windward it loses a
+checked: no published polar of these boats in known waves exists to check
+against. Off the wind a dinghy surfs and gains; to windward it loses a
 little.
 
-The reference data (`reference.json`) holds each point with its source:
-Day's VPP for upwind and downwind VMG (±5% and ±10%), Binns, Bethwaite and
-Saunders's measured close-hauled and beam-reach speeds (±10%), and their
-broad-reach and run speeds as upper bounds.
+The reference data (`reference.json`) holds each point with its source,
+as a speed at an angle, the best upwind or downwind VMG, the angle of the
+best upwind VMG (`upwindAngle`) or the leeway there (`upwindLeeway`). The
+Jolly boat's: Day's VPP for upwind and downwind VMG (±5% and ±10%), Binns,
+Bethwaite and Saunders's measured close-hauled and beam-reach speeds (±10%),
+and their broad-reach and run speeds as upper bounds. The keelboat's, from
+the J/22's certificate: the beat VMG and the speeds at 52°, 60° and 75°
+within ±10% from 6 to 12 knots; above 12 knots at most the rating upwind,
+since one 80 kg sailor carries less righting moment than the rated crew of
+up to 275 kg; and from 90° aft at most the rating at every wind, since the
+rating sets a spinnaker there, which the game's keelboat has not. The tall
+ship's, from the seamanship of square rig and her passages: her best VMG
+65° to 70° off the wind in 10, 15 and 20 knots, as the best ships sailed six
+points (Willis 2003; replicas 60° to 65°, Whitewright 2011), and her leeway
+there 6° to 12°; 7 to 8 knots with the wind on the quarter in 15 and 18
+knots, her long passages; at most 9 knots off the wind in 20 knots of flat
+water.
 
 ### Recalibrating
 
 When a parameter changes, or better data arrive:
 
-1. Fit the sail first: `go run ./tools/polar -sail` must hold drive within 5%
-   of ORC's from 28° to 180°, and side force at 28° and 60°. Change only
-   `maxLift`, `stallAngle`, `stallWidth`, `sailDrag`, `normalForce` and
-   `twistEased`.
+1. Fit the sails first: `go run ./tools/polar -sail` must hold each sail
+   within 5% of its source where it is held. Change only the coefficients
+   (`maxLift`, `stallAngle`, `stallWidth`, `sailDrag`, `normalForce` and
+   their `headsail` twins), the twists (`twistEased`, `headsailTwist`,
+   `headsailTwistEased`) and the jib's sheet travel.
 2. The board's position and the downwash, for weather helm upwind
    (`go run ./tools/polar`, the rudder column).
 3. `headBacked`, for accidental gybes 10° to 25° by the lee
@@ -370,9 +702,19 @@ When a parameter changes, or better data arrive:
 4. The flattening, against the upwind VMG above 9 knots (`-check`).
 5. The drag area above 9 knots, only if the reaches miss by more than 10%.
 
-Then run the behaviour tests (`go test ./internal/physics`), rewrite the
-golden file, and copy the catalog's new values into `scenarios.json`'s
-`params` (a test fails until they match). Note each change and its reason in
+For a ship: fit the square sails to their tables first, then the braces'
+sharpest angle for her pointing, the lateral plane (the keel's place, its
+carry-over, the Munk moment) for her leeway and her balance, the drag area
+for her passages' speeds, and last her crew's times and her autopilot by
+`-manoeuvres` and the behaviour tests (`ship_test.go`): her tack with way,
+her stalled tack and her wear.
+
+Never change the Jolly boat's values for another boat, nor the published
+ones (dimensions, areas, rig, displacement, draft), nor the geometry the
+boat's model is built from. Then run the behaviour tests (`go test ./internal/physics`), rewrite the
+golden file, and copy the catalog's new values into that boat's
+`scenarios.json` `params` (a test fails until they match). Rewrite the
+handbook's tables (`-handbook`), and set the start sheet from `-start`. Note each change and its reason in
 `reference.json`'s notes.
 
 ### Where the model and the data differ
@@ -387,6 +729,31 @@ golden file, and copy the catalog's new values into `scenarios.json`'s
 - **The sail's side force from a beam reach aft** is not ORC's: there, an
   attached trim and a stalled one give nearly the same drive, and which is
   best decides the side force. Drive matches.
+- **The keelboat's jib from a broad reach aft** gives a third to a half of
+  the drive ORC's jib gives, which stands across the wind as if poled out.
+  With no spinnaker either, she is 3% to 26% slower than her rating from
+  90° aft.
+- **Heel costs the keelboat's hull nothing**, as the Jolly boat's: in 20
+  knots her beat VMG is near the rating's with the full crew sitting out,
+  and only the flattening holds it under. Her weather helm is light too,
+  within a degree of neutral close-hauled.
+- **The keelboat's righting lever** is from a simple hull: matching the
+  certificate's moment at 1° and its limit of positive stability puts her
+  centre of gravity near the waterline, higher than her lead suggests.
+- **The tall ship's lateral plane** is a foil at one place and the Munk
+  moment, tuned for her balance and her tacks, not measured; it gives her
+  a little lee helm close-hauled where a ship carried a little weather
+  helm. Her square sails are a wind tunnel's model foremast; at full scale
+  they "stalled at about 25°" and gave more lift and drag (Ohsugi and
+  Amemiya 1988).
+- **The tall ship's speed past 8 knots** is held down by a steep drag table,
+  to her passages' 7 to 8 knots in 15 to 18 knots: in flat water she makes
+  at most 8.3 knots in 20 knots, where in a sea she would surf, as she did
+  at 13 knots in 2012.
+- **The tall ship tacks slowly and nearly stops**: from 4.3 knots in 12
+  knots of wind she is within 5° of her new course in about a minute and a
+  half, her speed down to a quarter of a knot through the wind, and pays
+  off 40° past it before she gathers way.
 
 ## Wind and weather
 
@@ -1092,8 +1459,12 @@ charted island or place to its strongest point: "Gale warning: Northerly
 gale 8 soon, north of Galley Packet Cay" (`weather.WarningText`). A warning
 keeps its key, the issue it came into force at, for as long as it is
 issued again, so it is told once: a notice on the phone (`gale-warnings`,
-which the menu can switch off) and an item in the world's news (subject
-`gale`, one by world and key, migration 00013).
+which the menu can switch off), and the gale hatched on the chart. Neither
+a warning nor a storm is in the world's news: the weather is the chart's,
+the forecast's and the notice's. Migration 00013 let the news hold items of
+subject `gale`; migration 00022 deleted those written (each storm as it
+formed) in every world, and nothing writes one now. The subject's check and
+the `news_item_gale` index stay, for a build before it.
 
 ### On the wire
 
@@ -1359,10 +1730,11 @@ The behaviour tests say what must stay true
 (`go test ./internal/physics -run 'BoatsBump|DirtyAir|Shadow|Contact|Articles' -v`):
 boats bump at every crossing angle and part, the wake follows the apparent
 wind, and dirty air costs a boat a share of its way to windward (logged in
-three winds). The snapshot is version 10 (8 with the pilot word, 9 with the
-time aground, 10 with each boat's voyage at the edge): a change to the
-courses, the pairs or the control words is a new version, and a reset at the
-deploy.
+three winds). The snapshot is version 15 (8 with the pilot word, 9 with the
+time aground, 10 with each boat's voyage at the edge, 15 with the rig word,
+the state's rig and the kind of boat a place in the queue is to have): a
+change to the courses, the pairs or the control words is a new version, and
+a reset at the deploy.
 
 ## The autopilot
 
@@ -1416,17 +1788,21 @@ with the input's tick like the helm, so the page predicts them. The page
 mirrors the target as it orders the turn: the angle's sign, or in heading
 mode the heading about the mean wind.
 
-### The two words, and what the state carries
+### The three words, and what the state carries
 
-A control slot is two 64-bit words, each with the input's tick and the
-slot's generation: the helm and sheet (`bus.Word`), and the autopilot's
-mode, way, order count and target in 65536ths of a turn (`bus.PilotWord`).
-The edge stores the pilot word, then the other; the tick takes the pair only
-when both carry the same tick, and otherwise keeps the pair in force a tick
-longer: a read between the two stores costs a late input, never a mismatch.
-A writer that steers by hand stores its word with the autopilot off
-(`Controls.StoreHand`). The frames (`Frame.Pilot`), the input log, the
-digest and checkpoints (snapshot version 8, now 9) carry the pilot word.
+A control slot is three 64-bit words, each with the input's tick and the
+slot's generation: the helm and sheet (`bus.Word`); the autopilot's mode,
+way, order count and target in 65536ths of a turn (`bus.PilotWord`); and the
+rig's (`bus.RigWord`): the reef, 0 full sail, 1 or 2, in two bits, and 20
+spare bits kept 0 for the rig's later controls. The edge stores the rig
+word, then the pilot word, then the other; the tick takes the three only
+when all carry the same tick, and otherwise keeps those in force a tick
+longer: a read between the stores costs a late input, never a mismatch. A
+writer that steers by hand stores its word with the autopilot off and the
+reefs shaken out (`Controls.StoreHand`). The frames (`Frame.Pilot`,
+`Frame.Rig`), the input log, the digest and checkpoints carry every word.
+The tick applies the rig word's reef as `Control.Reef`; the autopilot never
+reefs.
 
 What the autopilot remembers is in `State`: `PilotTrim`, `PilotWay` and
 `PilotOrder`, so a replay from the server's state steers as the server did.
@@ -1886,6 +2262,58 @@ rest. The developer panel lists the chunks handed, held, built and drawn,
 fetched and cached, and their times. `client/e2e/land.spec.ts` runs on seed
 1's world, which `pr.render` makes in the job.
 
+### The camera against the land
+
+The chase camera keeps out of the land by a **spring arm**
+(`render/camera.ts`, as Unreal's spring arm and Cinemachine's deoccluder
+do): each frame its line from the point it looks at, 1.8 m above the boat,
+out to where the player's view puts it is marched in steps of at most 1 m,
+and it stands at the farthest point clear of every solid by **0.5 m** all
+the way from the look point. So it is never in the land nor under it, its
+0.2 m near plane never cuts a wall, and the land never stands between it
+and the boat. It comes in at once, the frame the land comes into its line,
+and goes back out by a critically damped spring, settled in **0.6 s**,
+never past the view. Where the clear reach is under **4 m** it rises at
+the same azimuth, to the first of six elevations up to the highest that
+reaches 4 m, or the one that reaches farthest; under a roof that is no
+help, and it stays at its reach, however short. The player's view, its
+rest and its ease back are never changed by the land: the arm only
+shortens and lifts it while it must. It works the same for the opening
+view, the descent, another's boat watched and the gaze lifted to the sky;
+the camera held going over the lip is left where it is. Away from land it
+is not there: the camera stands where it stood without it, to the bit.
+
+The **solids** (`land/solids.ts`) are the land's columns, each hexagon to
+the higher of its elevation and its drawn terrace; the roofs, from their
+undersides to their tops; the buildings, each a box turned by its heading
+from its plot's level to its top and chimney, its eaves a tenth beyond its
+walls; and the lighthouses' towers. Trees, bushes, props, boats and the
+sailors are not solid. Where no grids are held it is the open sea. Each
+chunk's grids are indexed as they arrive, in blocks 16 m square holding
+the highest top of anything within 1 m of them and the buildings that
+are, and dropped as they are let go; a lookup reads the hexagon under the
+point and those beside it within the radius, and allocates nothing. The
+arm costs about 1 to 4 µs a frame on the Mac at Port Royal, the camera at
+160 m included. The **free camera** keeps 2 m above the highest solid
+within 0.5 m of its point, and under a roof 0.5 m below its underside or
+over its top, whichever is nearer.
+
+```sh
+go run ./tools/dev -world 1                       # then, in a calm on seed 1's world:
+# https://localhost:5173/?sandbox&camera=stack     beside the 24.5 m stack south-west of Port Royal, the camera through it
+# https://localhost:5173/?sandbox&camera=cliff     under Port Royal's 18 m northern cliffs, the camera into them
+# https://localhost:5173/?sandbox&camera=harbour   in the cove on its western shore, the camera among the houses above
+# https://localhost:5173/?sandbox&camera=arch      under an arch's span, the camera up along it into its rock
+```
+
+Each scene holds the camera at a view that goes into the land without the
+arm; drag to swing it round. `client/e2e/camera.spec.ts` swings it round
+each scene in 10° steps at its lowest, resting and highest elevations and
+at 5, 16 and 80 m and checks every eye and line against a lookup of its
+own over the grids read back, sails past the stack, compares the open sea
+with the arm off to the millimetre, and flies the free camera at the stack
+and into a house.
+
 ## The edge
 
 The disk ends at the lip of the falls, `world.disk.radius` (8,334 m, 4.5
@@ -2279,7 +2707,14 @@ reach 110° off the mean wind at its place, on the side with the more open
 water ahead out to 150 m, on that reach and on the close reach its weather
 helm rounds it up to, then on the side leading away from the coast; its
 sheet its kind's start sheet for the angle (`boats[].startSheet`, chosen by
-`go run ./tools/polar -start`), its helm centred, its autopilot off. A boat
+`go run ./tools/polar -start`), its helm centred, its autopilot off and
+its reefs shaken out. A boat takes a place only where it fits by its size
+(`World.fits`): the circle about its outline 5 m clear of every other
+boat's, and the water there its draught (`physics.Draught`) and a metre
+deep; from its slot's place it takes the first that does, so a keelboat
+passes places a dinghy takes. A `Join` names the kind of boat a new boat is
+(`Command.BoatKind`, kept with a place in the queue): online every sailor's
+names none, the world's first, the Jolly boat; tests name others. A boat
 back from the edge, or restored onto land, starts the same way, and the
 phone takes the controls from the Welcome that follows. A world with no
 start area (open sea, or its land sailed off) starts boats on the spawn
@@ -2468,6 +2903,325 @@ go test ./internal/worldgen -run '^TestSeeds$' -v -seeds 1 -seeds-from SEED
 go run ./tools/worldgen-preview -seed SEED
 ```
 
+## Life at sea
+
+The sea has life in it, met from time to time: birds passing, soaring,
+skimming the swell and working a patch of water, gulls following a boat
+out of harbour, and gulls wheeling over every town by day. What is in the
+sea, where and when, is the server's, and every player near is told of it:
+two players side by side, and anyone watching either, see the same birds
+in the same places. Nothing alive changes how a boat sails.
+
+### The schedule
+
+`internal/life` draws the sea's life from the world's seed, a cell of the
+world, a slot of world time, the habitat at a point and the weather there
+(`Schedule.Slot`). The world is cut into squares (`life.cell`, 1 km) in its
+east/north frame and world time into slots (`life.slot`, 30 s); in each
+cell and slot each kind draws from an integer hash of the life seed, the
+cell, the slot and its index whether an encounter of it may begin there (a
+candidate), when in the slot, where in the cell, its heading, its group's
+size, its speed and its own seed. Integer draws decide every whether: the
+chance is the kind's `rate` (encounters a km² an hour) times the habitat's
+weight at the drawn point, as a draw's threshold. Then:
+
+- **A lull**: a candidate is dropped if a candidate of its family (`birds`,
+  `water`, `big`, `night`) began in its cell or the eight about it within
+  the family's lull before it (`life.lulls`). Candidates, not the
+  encounters kept, are counted, so a slot needs nothing but the slots
+  before it within a lull, and the schedule stays a pure function.
+- **The conditions** thin what is left: the kind's weight by the sun at the
+  point (`when`: by day, at dusk and dawn, at night), nothing outside the
+  wind it is met in (`wind`), its share in rain (`rain`, from `life.rainy`
+  mm an hour), and, for life in the water (`bySea`), the share seen at the
+  sea's Beaufort force (`life.sea`). A kind flying home at dusk
+  (`homeward`) heads for the nearest colony, or the nearest island.
+
+The package is held to the physics package's float rules (`go run
+./tools/physics -check` checks it with the generator's), to the
+simulation's determinism rules (`internal/sim/rules_test.go`), and to
+`internal/life/testdata/slots.json`, a seed's slots under the sky, on every
+machine.
+
+### The habitat
+
+Read where an encounter is drawn: its depth from the world's ground, and,
+from a field of 100 m cells built as the world loads (from its bundle,
+whether its land is sailed or not), whether it is within `harbour` m of a
+town, within `reef` m of a reef or a lagoon place (and half its length),
+and within `colony` m of a colony. A point is in one habitat, the first
+that holds of **harbour**, **reef**, **outer** (from `outer` m from the
+centre), **shelf** (shallower than `shelf` m) and **deep**; nothing starts
+on land. A kind's `habitats` weigh each, and `nearColony` multiplies its
+weight near a colony.
+
+### In the simulation
+
+The rules phase draws each slot as it begins, in the weather at that tick
+(the mean wind and the rain at a point), keeps the encounters drawn until
+each begins, and keeps those alive in `Frame.Life` (`bus.LifeEncounter`:
+id, kind, start and end ticks, centre, heading, speed, count, own seed, the
+boat it is with and a revision). A kind that follows boats (`binds:
+follow`) takes, as it begins, the nearest boat within `life.bind.within` m
+of its centre sailing at `bind.speed` m/s or faster on a course steady for
+`bind.steady` s, its heading within `bind.turn`° (ties to the lower boat),
+and only a boat that has had none for `life.quiet` s after its last; with
+none it passes. A group whose boat leaves, falls over the lip, stays or is
+made unseen goes on alone from where it was, its revision raised.
+
+A pod that rides bows (`binds: ride`) takes a boat by the same rule, from
+within `life.ride.within` m, and shares the boat's one quiet with the
+followers; it comes in to the bow itself and keeps there for its stay. It
+leaves at once when its boat is slower than `ride.slower` m/s or has turned
+more than `ride.turn`° from its heading as the pod reached the bow, going
+on from where it is, back toward where it met the boat. A kind that
+`brings` others (bait) comes with them: for each bring whose share passes
+a draw of its seed, a group of the bring's kind over its patch from its
+start to its end, `Over` its id, drawn in the slot's output right after it
+(`Schedule.Bring`); a group over another's patch moves by its kind's
+`over` path, and takes no boat. Each second a boil of bait with a boat
+within its patch (`life.Patch`, from its seed) of its middle breaks up: it
+ends a minute later, and the groups over it leave from where they are. A
+ground of fish (`binds: flush`) is drawn as any encounter but is kept
+apart, never in the frame: every `flush.every` s each boat sailing through
+its patch at `bind.speed` or faster flushes some of its fish at
+`flush.chance`, by a draw of the ground's seed, the boat's id and that slot
+of time (`life.Flush`, a pure function), an encounter of its own over the
+ground, ahead of the bow, alive while its fish glide. An encounter's id
+says where it came from (`internal/life/schedule.go`): a slot's, one
+raised by hand, one that comes with another, or fish flushed.
+
+Nothing is checkpointed: a world opened again draws the encounters still
+alive from the schedule, the grounds of fish too, and none is with a
+boat; no flush is kept. A tick of 64 boats takes as long with the sea's
+life as without it (`BenchmarkTickWithLife`).
+
+### On the wire
+
+`Life` messages (`shared/protocol/keel/v1/game.proto`): each encounter is
+sent once the connection's eye (its boat's, or the watched boat's for a
+spectator) is within its kind's `reach` and `range` of its centre, or of
+the boat it is with; again on a new revision, or when the boat it is with
+is seen otherwise; and dropped once the eye is `life.drop` m further
+(`internal/edge/life.go`). An encounter that ends is let go with no word.
+The boat an encounter is with goes as the connection sees it: none, its
+own (or the watched) boat, a view slot, or a boat it does not see, which
+is drawn nowhere. A new connection's Welcome drops every one it held.
+
+### On the phone
+
+Every motion is a function of the record and world time, the same on
+every phone: `client/src/life/flock.ts` finds a group's middle (the
+server's `internal/life/flock.go`, held to
+`internal/life/testdata/flocks.json`): through its centre at the middle of
+its life for a kind that passes; in along its heading, over its centre for
+its stay and out again for one that soars or works; in to a place astern of
+its boat, keeping there, and out for one with a boat. Each comes in from
+its kind's `range` and goes out to it, so nothing appears near anyone.
+`client/src/life/birds.ts` spreads each bird about the middle by its path:
+passing in a loose flock (or in a line, `line`), soaring in wide circles,
+skimming the swell in banked arcs, wheeling over a patch, hanging astern
+of a boat, and plunging (`dives` a bird a minute), always over the water
+but in a plunge. `client/src/render/birds.ts` draws every bird, the
+colonies', the sea's life's and the towns' gulls, in one instanced draw,
+wings flapped at the look's `flap` Hz in the vertex stage; within the
+kind's `reach` of the camera, shrinking over its last 15%; half of each
+group on the low tier. The towns' gulls (`client/src/life/gulls.ts`, the
+server's `internal/life/gulls.go`) wheel by day over each town's square, or
+its quay where it has none, and the harbour's gull calls come from them.
+The sea's birds call from where their group is (`client/src/audio/life.ts`,
+`art/sound/seabirds.json`); the server's twin
+(`internal/lookout/sounds.go`) is held to the same cases.
+
+### The life in the water on the phone
+
+Each animal in the water is a function of its group's record, its own
+number and world time, as a bird is (`client/src/life/swim.ts`), its
+height from the water's surface where it is:
+
+- **a pod** (`form: pod`: dolphins, a school of tarpon) swims a little
+  apart, down at its kind's `swim.depth` between breaths, and rolls up to
+  breathe, `swim.breaths` at a time every `swim.dive` s; faster than
+  3.5 m/s a kind that rides bows porpoises, each leap a ballistic arc
+  under gravity; `swim.leaps` a minute one leaps clear, spinning
+  `swim.spins` times; staying, it mills about its patch; riding, up to
+  eight hold a metre or two ahead of the stem of the boat as the page
+  draws it, to either side, the rest alongside, coming in and leaving over
+  12 s;
+- **a turtle** wanders slowly about its patch, down `swim.dive` s, up for
+  `swim.breaths` breaths;
+- **a glider** (the fish of a flush) breaks the surface where the flush
+  begins, taxis half a second and glides `swim.glide` m, sometimes linked
+  to `swim.linked` m, at its speed, under its height;
+- **a boil** (`form: bait`) is drawn as white water over its patch on the
+  foam map and small fish breaking the surface in the spray, stronger over
+  its first half minute and fading over its last minute.
+
+`client/src/render/swimmers.ts` draws every animal in the water in one
+draw, whatever its body: the bodies of `art/life/swimmers.glb` (built by
+`art/life/build.ts`, one node each, `extras.length` and `extras.bend`)
+are laid in one float texture, a row of corners each, padded to the
+largest, and each instance reads its body's corners by the vertex's
+number. The spine bends in a wave toward the tail (up and down for
+flukes, side to side for a fish's tail, not at all for a shell), paddles
+stroke and a flying fish's wings fold, all in the vertex stage; painted in
+the kind's `swim.back` and `swim.belly` by the vertices' colours. Under
+the surface and within 2 m of it an animal is drawn through the water:
+each corner under the surface is moved along the camera's line to where
+it meets the surface, so the sea's crests, boats and land still hide it,
+and it takes the water's colour and fades as it goes deeper. The low tier
+(and WebGL 2, whose top tier is low) draws it solid, and the sea hides what
+is under it: only what breaks the surface is seen. At most 24 of a group,
+half on the low tier. An animal not riding is drawn deeper where it meets
+a hull.
+
+What breaks the water (a leap's fall, a flying fish's taxi, a bird's
+plunge) is a splash: drops thrown in the spray and a ring of white water
+on the foam map (`FoamMap.spot`), and heard within 150 m; a dolphin
+rolling within 40 m is heard breathing (`art/sound/swimmers.json`).
+
+A phone with no server (the sandbox) flushes the same fish from the same
+inputs as the server: `client/src/life/flush.ts` is `life.Flush`'s twin,
+held to `internal/life/testdata/flushes.json`.
+
+A machine sailor's `observe` names the life in sight by day, by bearing
+and distance ("a few sooty terns working the water to the SW, ~400 m",
+"laughing gulls following your boat", "a pod of spotted dolphins passing
+to the NE, ~600 m", "spotted dolphins riding your bow", "flying fish
+skittering away from your bow", "a boil of bait to the SW, ~500 m"), a
+kind of the water only while the sea at its Beaufort force shows it
+(`life.sea`), and in its `Hear` line the calls heard and the dolphins
+breathing within 40 m; `wake_on: ["life"]` wakes a wait as a group first
+comes into sight, a ground's flushes once (not in the default set). The world page marks each group alive at its
+middle (the layer **Life at sea**).
+
+### The big, the rare and the night
+
+- **Whales** (`form: whale`) are seen by their blows. Each whale of a
+  group keeps a round of its own (`internal/life/whale.go`, its twin
+  `client/src/life/whale.ts`, held to `internal/life/testdata/whales.json`):
+  down `swim.dive` s, up for a bout of `swim.breaths` blows `swim.blowEvery`
+  s apart, and down again, its flukes raised on `swim.fluke` of its dives;
+  in `swim.breach` of its bouts it breaches between two blows, in
+  `swim.slap` it slaps the water with its tail. A whale that drifts (the
+  sperm whale) is met for its one long bout and flukes up at its end; one
+  that `logs` lies awash between blows. The page draws its back rolling
+  over after each blow, the breach two thirds out of the water and over
+  onto its side, the slap, the flukes going up and over; each blow is
+  thrown as mist in the spray from its blowhole (`SprayDrops.blow`:
+  rising and hanging where it rises to, bushy at its top, leaning by
+  `swim.blow.lean` and `left`, bent by the wind), a breach as a wall of
+  white water; its fluke stroke leaves a smooth patch in the foam map's
+  track channel (`FoamMap.print`). Blows are heard within 600 m, a breach's
+  boom within 1,500 m (`art/sound/swimmers.json`). All are drawn in the
+  swimmers' one draw, their bodies within the 320 triangles every body is
+  padded to.
+- **Rays** (`form: ray`) glide in a loose school under the surface, their
+  wings paddles that beat, and now and then leap a metre or two and fall
+  back flat; **a shark** (`form: fin`) swims slowly at the surface on a
+  weaving course, its fin out.
+- **Storm petrels** (`patters: true`) follow a boat as gulls do, fluttering
+  low over its wake.
+- **A booby that perches** (`binds: perch`) takes, as it begins, the
+  nearest boat within its `range`, whatever her speed or course, and only
+  one not quiet; with none it is not met. It flies in along its record's
+  heading to the boat's `perch` (`shared/catalog/boats.yaml`, a point in
+  her model's frame), lands a little clumsily, stands facing the wind,
+  sleeps with its head under its wing by night (its `swim.asleep` body),
+  and flies on (`client/src/life/perch.ts`, which places a point of a
+  boat's model as the page draws her: heeled, pitched and lifted).
+- **A flying fish aboard**: every `life.aboard.every` s each boat sailing
+  at `bind.speed` with the sun below the horizon where she is (her lights
+  lit), over water the `aboard.kind` lives in, has one land on her `deck`
+  at `aboard.chance`, by a draw of her id and that slot; it lies there
+  `aboard.stay` s, flapping at first, and lands with a thump. Its id has
+  both the raised and the flushed bits (`life.Aboard`).
+- **Glowing water** (`form: glow`, the night family) is a patch of
+  `patch` m; inside it, while the sun is below the horizon and the moon's
+  light (its lit share times the sine of its height) is under
+  `glow.moon`, the wake's white water, its track and the bow's spray are
+  drawn as its light (`Ocean.setGlow`, `SprayView.setGlow`, `glowDark` in
+  `render/daylight.ts`): the tint only, the foam's shapes are the wake's
+  own. The animals swimming through it lay faint white water where they
+  are, which it lights: dolphins trailing light.
+
+A machine sailor sees a whale blowing, breaching, slapping or fluking (and
+nothing of one on a dive), a shark's fin, a booby flying in, perched on its
+boat or leaving, a fish landed on its deck, the water glowing where its
+wake breaks, and by night a pod trailing light through glowing water
+within 300 m; `Hear` names a whale blowing within 600 m and breaching or
+slapping within 1,500 m. Each kind's `reach` is sent from how far from its
+centre it may be drawn too (`Kind.Travel`: its range, the way it drifts,
+its patch).
+
+```sh
+# https://localhost:5173/?sandbox&life=aboard   a flying fish landed on the boat's deck, 40 s in
+# POST http://127.0.0.1:9090/debug/life?aboard=1&at=boat   (KEEL_DEV_COMMANDS=1) one on the first player's deck
+```
+
+`keel.raiseAboard()` lands one on the page's own boat; `keel.lifeGlow()`
+reports the glow about the camera and the last frame's blows, footprints,
+trails and sounds. `go run ./tools/life -tally -lulls 60,600,2400,1200`
+tallies with other lulls than the catalog's, s for birds, water, big and
+night.
+
+### Adding a kind
+
+A kind is data: add it to `shared/catalog/life.yaml` with its `form`,
+`family`, `path` and the rest (the schema's `LifeKind`), run `go run
+./tools/catalog`, and the schedule draws it. Code reads a kind's
+properties, never its id: a new way of moving is a new `path` (in the
+schema, `internal/life/kinds.go`, `flock.go` and `flock.ts` if it moves the
+middle, `birds.ts` or a body's own drawing), a new form a drawing of its
+own on the phone. A catalog change starts the world empty at the next
+promote, and the recorded edge traces must be written again (`go test
+-short -run 'TestTraces|TestFleetTraces|TestOverTheLipOnline'
+./internal/edge/edgetest/ -update`), with the life's golden files (`go test
+./internal/life -run 'Golden|Flocks' -update`, then `GOARCH=amd64 go test
+./internal/life` and, from `client/`, `npx vitest run src/life`).
+
+### The tally
+
+Rates are set so that a sailor meets something from time to time and
+never constantly. `go run ./tools/life -tally` makes 100 worlds as keel
+does, with their weeks of weather, and sails 20 routes in each at 5 kn
+through open water at hours spread over the week, the world's life kept
+tick by tick as the simulation keeps it: it prints a table of how many
+groups of each kind come into sight an hour by day, near the islands and
+in the outer water, the gaps between sightings and the longest empty
+stretches (`-kinds` by habitat too; `-seeds 20` for a quick look, about 20
+s), and for the life in the water the pods of kinds that ride bows in
+sight, those at the boat's bow, the grounds it flushed fish from, the
+boils of bait and the turtles an hour sailed on a reef. A ground's flushes
+are one sighting, and keep it in sight while the boat crosses it; the
+groups over another's patch are one sighting with it, and one flock
+working the water. Run it after changing a rate, a lull, a habitat or a kind.
+
+### Looking at it
+
+```sh
+# https://localhost:5173/?sandbox&life=sooty-tern   a group of that kind by the boat, 40 s in
+# POST http://127.0.0.1:9090/debug/life?kind=sooty-tern&at=boat   (KEEL_DEV_COMMANDS=1) one by the first player's boat
+# POST http://127.0.0.1:9090/debug/life?kind=2&east=…&north=…        one there, by the kind's index
+```
+
+Raised at a boat under way on a steady course, a pod that rides bows takes
+it, quiet or not; bait brings the groups that come with it; a ground of
+fish is raised reaching its kind's furthest, seen only as the boats in it
+flush its fish.
+
+The keel hooks `keel.life()`, `keel.lifeBirds(tick)`,
+`keel.lifeSwimmers(tick)`, `keel.lifeWith(id)` and `keel.raiseLife(kindId,
+east, north, free)` report what is drawn and raise one on the page (free,
+a pod that rides bows passes instead; a ground of flying fish is kept by
+the page and flushes fish ahead of its boat as it sails through it);
+`client/e2e/life.spec.ts` holds two players and a spectator to the same
+birds, and to the same pod at the same boat's bow;
+`client/e2e/seabirds.spec.ts` holds sixty birds to the budgets, and
+`client/e2e/swimmers.spec.ts` a group of every kind in the water with
+sixty birds; `?life=<kind id>` puts one of the water's kinds by the boat
+too.
+
 ## Sighting and the chart
 
 No player knows any of the world by name until it is charted. The server
@@ -2533,7 +3287,9 @@ worth; the key (world, subject, number) leaves a second write as it was.
 A charting credited to a sailor, not charted with another, makes a news
 item (`news_item`): an island, a port, a lighthouse or a wreck one of its
 own; a sailor's other places and features about one island within
-`news.fold` minutes are folded into its item.
+`news.fold` minutes are folded into its item. The news carries what is
+charted and by whom, and the world's own notices (its end, subject
+`world`, in the Notices to Mariners); never the weather.
 
 Only what is written is shown: persist hands each written batch's chartings
 to the chart's model (`chart.Model`), which publishes the chart whole by an
@@ -2907,8 +3663,10 @@ sees the reason's words, not the owner's reason, which may name a report or
 another player.
 
 **The record** (`account_action`): every stop, start, revoke and delete,
-and every flag, priority, cap and lifetime set, with the sailor's name as
-it was, the reason or value, `page` or `command`, and the address. It has
+and every flag, priority, cap and lifetime set, and every switch for
+sailing together, with the sailor's name as it was, the reason or value,
+`page` or `command` (or `game`, for an account the game stopped because
+its player said they are under 13: `young`), and the address. It has
 no foreign key, so it outlives a deletion; the `sessions` job deletes
 entries older than two years. The logs keep 14 days: a stop's reason must
 outlive them. `GET /owner/api/actions.json[?account=…]` lists the latest
@@ -2928,10 +3686,86 @@ go run ./cmd/keel admin -addr 127.0.0.1:9090 show 0199…
 `search [TEXT]` (`-` reads it from the standard input, so a token stays out
 of the shell's history), `show ID`, `stop ID -reason …`, `start ID`,
 `revoke ID -reason …`, `delete ID -name … -reason …`, `flag ID on|off`,
-`priority ID on|off`, `cap ID N`, `lifetime 90d`, `actions [ID]`; text, or
-`-json` as keel answers. Without `-yes`, `stop`, `revoke`, `delete` and
-`lifetime` only say what they would do. The command's actions are recorded
-as `command` (the `Keel-Source` header).
+`priority ID on|off`, `cap ID N`, `lifetime 90d`, `actions [ID]`,
+`settings`, `links on|off`, `boarding on|off`, `linklife 24h`, `chat
+on|off`, `shipmates on|off`, `spectators on|off`, `countries BR,AU` (`""` clears them),
+`reports`, `report ID` and `act ID ACTION` (see [Reports](#reports)); text,
+or `-json` as keel answers. Without `-yes`, `stop`, `revoke`, `delete`,
+`lifetime`, `links off`, `linklife`, `chat off` and `act` only say what
+they would do. The command's actions are recorded as `command` (the
+`Keel-Source` header).
+
+### Links to come aboard
+
+The owner's switches for everyone, on the Accounts tab and in `keel
+admin`: how long a skipper's link lasts from when it is made (24 hours to
+start, 5 minutes to 7 days), whether links work, and whether anyone may
+come aboard. They live in the `setting` row and, loaded as keel starts, in
+one set in memory (`aboard.Switches`) that the play routes, the owner's
+page and the game connection read. `GET /owner/api/settings.json`; `POST
+/owner/api/settings {"linkLifetime"?, "links"?, "boarding"?, "check"?}`
+answers `{"settings", "words", "ended"}`, the working links it stops. Each
+change is written with its record in one transaction, then to memory.
+Links off ends every live link for good; a shorter lifetime stops older
+links at once and ends nothing, but a longer one never lengthens a link
+past the expiry it was made with. The `sessions` job deletes links a day
+after they stop working; a deleted skipper's go with the account.
+
+**Chat's switches** sit beside them, on the same card as one group, Chat,
+each row its name, its state and its key, and in the same `setting` row:
+chat on or off for everyone (off is asked once, "Chat off for everyone?
+Every line stops at once"), shipmates' messages on or off (off: every
+message between shipmates is refused as resting, at once), spectators
+reading machine sailors' chat on or off (`spectator_chat`, on to start;
+off: no spectator reads a line from the next one, owners watching their
+own machine sailor included, and each is told chat is off, which puts
+their strip away; those aboard still talk), then the countries where chat
+is off, two letters each as ISO 3166 has them (`BR, AU`; nothing for
+none). Chat off for everyone silences spectators too. The settings'
+routes take `"chat"`, `"shipmateMessages"`, `"spectatorChat"` and
+`"chatCountries"` too; each change is recorded, then every game
+connection is told how chat stands for it.
+
+### Reports
+
+**The Reports tab**, beside Accounts, is the queue of reports open
+(`GET /owner/api/reports.json`, read every 10 s while it shows): a
+child's safety first, marked plainly, then the players with the most
+reports open, then the oldest. Each row has the reason, who reported whom
+(a machine sailor marked), where, the reports open on that player, the
+lines it holds, an answer from the player waiting, and how long it has
+waited. A row opens **the report** (`GET /owner/api/report.json?id=`):
+who reported and who is reported (with a machine sailor's human), where,
+who was aboard and their bands, the note, whether it is still taking the
+next 10 minutes of the conversation, the lines it holds in time order
+(the one reported marked; the players' words shown as text, never
+markup), the owner's notes and the player's answer, a notice's details,
+and its outcome, hold and referral. The lines are shown here and nowhere
+else: a line of chat is only ever written down in a report. An account's
+card links the reports open on it and its machine sailors, by name.
+
+**The actions**, each `POST /owner/api/reports/act {"report", "action",
+…}`, first with `"check": true`, whose words the confirmation shows, and
+then done; the queue is read again after:
+
+| Action | What it does |
+|---|---|
+| `dismiss` | Closes the report; nobody is told |
+| `warn` (`"note"`: what was seen) | A statement of reasons at the player's next entry; every report open on them closes |
+| `mute-chat` (`"days"`: 1, 7 or 30) | The player's chat muted, and they are told why |
+| `stop`, `delete` (`"reason"`, required) | As on the account's card, on the account reported; the page asks the reported name typed again to delete |
+| `remove-line` (`"line"`, `"at"` as `report.json` gives them) | The line goes from the game's memory and every report holding it; its sender is told why |
+| `purge` | Every line the report holds goes, from every report holding it |
+| `hold`, `release` | Kept a year at least, past its accounts' deletion; or kept as any other |
+| `under-13` | The human deleted as under 13 |
+| `referred` (`"referred"`: to whom, and its reference) | Recorded as referred |
+
+A machine sailor's words are its human's to answer for: a warning or a
+mute reaches the human. `keel admin reports` lists the queue, `keel admin
+report ID` writes a report whole with its lines (each with the `-line`
+and `-at` to remove it), and `keel admin act ID ACTION [-days N] [-reason
+…] [-note …] [-line N -at T] [-referred …] [-yes]` acts, telling first
+without `-yes`.
 
 ### The free camera
 
@@ -3316,7 +4150,9 @@ A boat's lights are the catalog's: `lights`, a list of `tricolour`, `port`,
 the lantern is. `tools/catalog -check` fails on a light without its node, on
 a tricolour on a boat of 20 m or more, and on lights that do not make the
 full circle once. The Jolly boat carries a brass tricolour lantern at the
-masthead, with the pennant's staff above it.
+masthead, with the pennant's staff above it, and the keelboat hers at her
+masthead, 9.56 m up. `render/lanterns.ts` places each light of each boat
+at its own kind's node, from the model as it loads, up to three a boat.
 
 ### Seeing it
 
@@ -3491,9 +4327,10 @@ measures it with `spectrum.ts`). Its height counts in metres, over
 lighten the water. The detail band's spectrum is stretched as the boat
 band's is.
 
-**Foam** (`foam.ts`) has five sources: folding in the detail band; whitecaps
-on the boat band's crests; streaks down the wind, from force 7; the hulls;
-and the wakes. Their sum sets how much of a pattern of lace shows
+**Foam** (`foam.ts`) has four sources of the sea's own: folding in the
+detail band; whitecaps on the boat band's crests; streaks down the wind,
+from force 7; and the surf. (The boats' white water is drawn apart, softer:
+see the wake, below.) Their sum sets how much of a pattern of lace shows
 (`pattern.ts`: one small texture made at start, lace and noise, read once a
 fragment), and the cover fades to a seventh over each tile's rim, so a
 patch of foam reads as white tiles. The whitecaps sit where the crest stands
@@ -3515,16 +4352,111 @@ all of it at forces 9 and 10. `internal/lookout/whitecaps.go` has the
 whitecaps' column for the machine sailors' report, held to the page's by
 `whitecaps.json`.
 
-**Round a hull** (`hulls.ts`), in the same walk that keeps the water out of
-it: a ring at the waterline, more at the bow, and two arms that trail at
-Kelvin's 19.5°, growing with the hull's speed through the water. Another
-boat's speed is how fast its drawn position moves, smoothed over 0.5 s.
-**The wakes** are a foam map (`foammap.ts`): a square 256 m a side that
-follows the boat in whole texels, 512 × 512 (256 × 256 on the low tier),
-8-bit. Each frame a pass moves it, fades it over 6 s, spreads it a little,
-and stamps every boat in it under its stern; its 8 bits are dithered, so it
-fades at the right rate at any frame rate. **Spray**
-(`client/src/render/spray.ts`) is sprites in one draw: from a bow the sea
+**The wake is water, not paint**: the waves a hull makes, the churned lane
+it leaves, and white water only where the water breaks. Nothing of it is
+felt or sent: no boat rides a wake, and no tile is lifted by one.
+
+**The wake's waves** (`client/src/ocean/wakewaves.ts`, the physics and its
+float64 reference in `wakewavescpu.ts`) are a small square of water that
+follows the boat, its centre a quarter of its side astern along the
+heading (eased over 2 s), moved in whole texels. Every boat drawn in it
+pushes on it: a pressure of ρg times the hull's immersion, from the
+stations the model's script measured (the hull's dent, which at rest makes
+no waves; the own boat's sits deeper or higher by its heave against the sea
+under it, so a boat that bobs makes rings). The waves run by deep water's
+own dispersion: Tessendorf's eWave (2014), as Grapeshot's Atlas drew its
+wakes (Mihelich and Tcheblokov, GDC 2019). For each wave of the square's
+transform, u = h + d and the velocity potential turn at ω = √(g|k|) over a
+step, exactly, whatever its length. So Kelvin's V at arcsin ⅓ (Thomson,
+1887), the waves across the track 2πU²/g long, the V narrowing above a
+Froude number of a half (Rabaud and Moisy, 2013; Darmon, Benzaquen and
+Raphaël, 2014), the curve of a turn, the waves running on after a stop and
+two wakes crossing all follow, none drawn by hand. The square's outer
+eighth damps its waves (its solution is periodic), and every wave fades a
+little, the shortest most. The water drifts with the current at the boat,
+in whole texels as they add up.
+
+| | High | Medium | Low |
+|---|---|---|---|
+| Square | 256² over 64 m | 128² over 48 m | 64² over 28 m |
+| Made by | four compute passes | four compute passes | the reference, on the CPU |
+
+On WebGPU a step is four compute passes, by the detail band's transform:
+every row of u = h + d (the height moved and damped, the hulls' pressure
+drawn first into a half-float target, one instance a hull), every column
+and then each wave turned with the potential's transform (kept between
+steps, in two textures that take turns), every row back, every column back:
+the height kept, and the slopes, the convergence of the horizontal shift and
+the height for the material, `rgba16float` with mipmaps. On the low tier,
+and wherever compute passes are not to be had, the reference itself steps
+on the CPU at most 30 times a second (about half a millisecond a step on
+the Mac), its outputs uploaded as half floats with mipmaps it makes.
+Tessendorf's iWave, which the low tier could run as one fragment pass, does
+not keep deep water's dispersion over a dinghy's longer waves: with a
+13 × 13 kernel fitted by least squares its waves across the track came out
+8 to 10% short at 2.5 and 3.5 m/s, and its V too narrow at 2.5 m/s.
+
+On a tile they are drawn as the detail band is: read at the tile's centre
+from the mipmap of about 2.5 m texels they tilt the whole tile, read at the
+fragment (at its own place: a wake is where it is) and faded to nothing at
+the rim they ripple it, and their height lights its crest. Linear theory
+gives the Jolly boat waves of 1 to 9 cm, steep at most 0.25, which read
+faintly from the chase camera; they are drawn `WAKE_WAVES.gain` (3) times
+that.
+
+**The foam map** (`foammap.ts`) is a square 256 m a side that follows the
+boat in whole texels, 512 × 512 (256 × 256 on the low tier), two 8-bit
+channels, dithered so they fade at the right rate at any frame rate. Each
+frame a pass moves it (and drifts it with the current), fades and spreads
+it, then stamps every boat in it:
+
+- **the track** (green): every hull under way churns its whole waterline,
+  as strong as its speed through the water (another boat's is its drawn
+  speed less the current there), full from 2.5 m/s. It fades over 20 s (5%
+  is left after a minute) and widens from a beam to about four. Where it
+  runs, the wind's ripples, the shimmer and a gust's roughening are smoothed
+  by up to 75%, so the lane mirrors the sky as a real wake's slick does
+  (Glessmer, "Turbulent wake"), and the water is lightened toward its
+  scattering colour by up to 25%, the bubbles under it (`TRACK`);
+- **white water** (red): born where the wake's waves fold (the Jacobian of
+  their shift, drawn, under 0.72: the bow's wave among them), and behind a
+  transom driven past hull speed (look.ts's `transomFrom`: a Froude number
+  of 0.39 on each hull's own waterline, 2.4 m/s on the Jolly boat's,
+  3.0 on the keelboat's), more the faster; it fades over
+  3 s. It is drawn softer than the sea's foam: the lace through a window
+  0.35 wide, its cover as thin as its amount, going toward the water's
+  colour as it thins, lit by the surface the wake's waves tilt. A boat at
+  rest has none.
+
+The developer panel's **Wakes** switch turns the waves, the track and the
+white water off. The wake's numbers are in `look.ts` (`WAKE`, `TRACK`,
+`WAKE_WAVES`); the tiers' sizes in `quality.ts`. To look at them and tune
+them, sail the sandbox's wake scenes, the boat steered on its own:
+
+```sh
+# https://localhost:5173/?sandbox&wake=reach&sea=breeze   a steady beam reach
+# https://localhost:5173/?sandbox&wake=turn&sea=calm      the reach, then a 90° turn to the south
+# https://localhost:5173/?sandbox&wake=stop&sea=breeze    the reach, then head to wind with the sheet let fly
+# https://localhost:5173/?sandbox&wake=cross&sea=fresh    a second boat crossing the track 10 m astern
+# https://localhost:5173/?sandbox&wake=turn&tier=low      the low tier's
+```
+
+`npx vitest run src/ocean/wakewaves.test.ts` checks the physics on the
+reference: a wave's speed and energy whatever the step, the drift, a hull
+at rest making no waves, Kelvin's angle, the waves' length and the
+narrowing. `look.spec.ts` checks the GPU's waves against the reference and
+the same physics on every tier (the angle at 2 m/s within 2°, 3° on the low
+tier), the stop, the turn, the track's place, fade and drift, and that a
+boat at rest wears no foam.
+
+Each kind's hull is its own (`ocean/hulls.ts`, `wakewaves.ts`,
+`foammap.ts`): its model's stations keep the sea out of it and press its
+wake's waves, its waterline lays its track, up to three kinds at once, each
+hull drawn naming its kind's.
+
+**Spray**
+(`client/src/render/spray.ts`) is sprites in one draw: from a bow (each
+boat's own, half its waterline ahead) the sea
 rises against faster than 0.2 m/s, more with speed, whitecaps and the sea's
 height, blown down the wind for about a second; torn off the crests near
 the camera from force 7, from a drop or so a crest a second to sheets of
@@ -3563,8 +4495,9 @@ A tier is a set of values (`client/src/render/quality.ts`):
 | Starts on | WebGPU, core features | WebGPU, compatibility mode | WebGL 2 |
 | Render scale, at most | 2 | 1.5 | 1 |
 | Detail band | Transform 256², two patches | Transform 128², one patch; shimmer | The loop; shimmer |
-| Compute dispatches a frame | 8 | 4 | 0 |
-| Foam map | 512² | 512² | 256² |
+| Compute dispatches a frame | 12 | 8 | 0 |
+| Foam map | 512², two channels | 512², two channels | 256², two channels |
+| The wake's waves | 256² over 64 m, compute | 128² over 48 m, compute | 64² over 28 m, CPU |
 | Shadows | 1,024², 40 m, other boats too | 1,024², 12 m, own boat | None |
 | Spray | 512, own boat and 3 nearest, off the crests | 512, own, off the crests | 96, own |
 | Clouds' puffs, at most | 1,024 | 768 | 512 |
@@ -3660,6 +4593,7 @@ own (9091 in the cluster) it reads the metrics alone. The other variables:
 | `KEEL_CLIENT_DIR` | none | The game's built page (`client/dist`), served by the `play.` listener (see [Routes and middleware](#routes-and-middleware)); it must hold `index.html`, or the server does not start. Its `owner/` folder, the world page, is served by the internal listener alone, if it is there. The image sets it; in development Vite serves the pages instead |
 | `KEEL_BOAT_LIMIT` | 1000 | The most boats at sea at once, from 1 to 4,096; beyond it players wait in a queue of up to 4,096. A starting value, until load tests on the server's machine set it. Machine sailors sail at most half of them, with half of that kept for them |
 | `KEEL_SPECTATOR_LIMIT` | 1000 | The most players watching boats at once, from 0 to 100,000; beyond it they wait in a queue of their own of up to 4,096. A priority account, an owner watching their own machine sailor and a player waiting for a boat never wait (see [Watching a boat](#watching-a-boat)) |
+| `KEEL_CREW_LIMIT` | 1000 | The most players aboard boats not their own at once, from 1 to 100,000: each is a connection encoded as a spectator's is. A knock let aboard past it is refused (see [Sailing together](#sailing-together)) |
 | `KEEL_AI_SILENCE` | `3m` | How long a machine sailor's boat stays at sea with no call from its agent before its minute's grace begins, from 1s to 1h |
 | `KEEL_BELL` | `3s` | How long the world sails on, as the server stops, once every phone has been told it is restarting; from `0s` to `10s`. `tools/dev` and `tools/e2e` set `0s` |
 | `KEEL_DEV_SAILORS` | 0 | Scripted sailors, up to 4,096; any beyond the boat limit stay ashore |
@@ -3802,7 +4736,8 @@ A second request while one is being written gets 409.
 
 The tick is deterministic, so what it was given reproduces what it did. The
 input log records, tick by tick, what each tick **applied**: the control words
-that changed and the commands with their results, and any ticks skipped. It
+that changed (all three of a slot: format 14) and the commands with their
+results (a `Join` with the kind of boat it names), and any ticks skipped. It
 is binary, in segments of 30 s, each opening with a snapshot of the whole
 world, with a digest of the world every second. The tick hands its records to
 a writer goroutine and never waits for it: if the writer falls 10 s behind,
@@ -3867,12 +4802,18 @@ go test -run '^$' -bench 'Tick|Workers' ./internal/sim
 | Route | What |
 |-------|------|
 | `GET /api/version` | The build and the catalog's version |
-| `POST /account/begin` | `{"name", "look"}` begins making a sailor: 200 with the creation options (`{"publicKey": …}`) and the ceremony's cookie; 422 `{"error": reason}` for a refused name, before any passkey; 409 when the request already has a session; 400 for a malformed body, an unknown member or a look not in the catalog; 415 for anything but JSON; 413 past 16 KB |
+| `POST /account/begin` | `{"name", "look", "born": {"year", "month"}}` begins making a sailor: 200 with the creation options (`{"publicKey": …}`) and the ceremony's cookie, which keeps the month of birth until finish writes it on the account; 400 `born` for no month of birth or not one; 403 `young` under 13, with nothing made or kept (not even in the log) and the cookie `keel-young` (30 days, readable by the page), which answers 403 `young` before anything else, here and at finish; 422 `{"error": reason}` for a refused name, before any passkey; 409 when the request already has a session; 400 for a malformed body, an unknown member or a look not in the catalog; 415 for anything but JSON; 413 past 16 KB |
 | `POST /account/finish` | The browser's answer (`PublicKeyCredential.toJSON()`): 201 `{"name", "look", "recoveryCode"}` and the session cookie, the account made with its passkey; 400 `refused`; 409 `again`; 422 `taken` with `unknown`, the passkey for the browser to forget, when another sailor took the name meanwhile |
 | `POST /signin/begin`, `/signin/finish` | A sign-in with any of the game's passkeys the browser holds (`?mediation=conditional` on both for autofill): 200 `{"name", "look", "accepted", "recovered"?}` and a new session's cookie; 404 `unknown-passkey` with `unknown` for a passkey no account has |
 | `POST /recovery` | `{"code"}`: 200 `{"name", "look", "addPasskey": true}` and a session held to adding a passkey; 422 `code` |
 | `POST /logout` | This session ends: 204, the cookie cleared |
-| `GET /api/me` | The session's account, `{"name", "look", "kind", "noticesOff", "addPasskey"?, "machines"?}` (how many machine sailors it has), or 401; a session held to adding a passkey is answered too |
+| `GET /api/me` | The session's account, `{"name", "look", "kind", "noticesOff", "addPasskey"?, "machines"?, "born", "rules"}` (how many machine sailors it has; whether its player has given a month of birth and accepted the Rules of the sea), or 401; a session held to adding a passkey is answered too |
+| `POST /api/me/born` | `{"year", "month"}`, once, for an account made before the question: 204; 409 `answered`; 400 `born`; 403 `young` under 13: nothing of the answer kept, the cookie set, and the account stopped as the owner's Stop does (recorded `young`, by the `game`), for the owner to review; its player is told only "This sailor has been stopped." |
+| `POST /api/me/rules` | The Rules of the sea accepted: 204, again too |
+| `POST /api/sail/link` | A new "sail with me" link, the old one ended: 201 `{"url", "expires"}`, at the play origin, `/?s=` and 128 random bits in base64url; the database keeps the token's SHA-256 alone. 403 `born` (no month of birth, or not 13 or over) and `rules`; 409 `links-off`; 429 `often` past 10 an hour (in memory) |
+| `POST /api/sail/link/end`, `GET /api/sail/link` | The skipper's link ended (204); whether it works, `{"live", "expires"?}` |
+| `GET /api/sail/{token}` | What a link's page shows, with a session: `{"skipper", "look", "kind", "boat", "can"}` (`ok`, `not-at-sea`, `full`, `closed` or `own`, from the world sailed); 410 `ended` for an unknown, ended or expired link, one past the lifetime in force, or links off. A token not of the game's form never reaches the database. It changes nothing |
+| `GET /?s={token}` | The game's page, `index.html`, whatever the token: no session read, no referrer sent on, no index kept (`robots.txt` disallows `/?s=`). Links to watch, `/?w=` and `/?f=`, are served as the page always is, so the sites they are posted on can read its card |
 | `GET /api/account` | The account page: `{"name", "look", "created", "recoveryMade", "passkeys", "confirmedUntil"}`, each passkey `{"id", "madeOn", "created", "lastUsed", "synced"}` |
 | `POST /api/account/passkeys/begin`, `…/finish` | One more passkey; after the recovery code, the session let go and `recoveryCode` in the answer |
 | `POST /api/account/confirm/begin`, `…/finish` | One of the account's own passkeys, user verification required: 200 `{"confirmedUntil"}`, the session confirmed for 5 minutes |
@@ -4199,8 +5140,9 @@ A machine sailor's agent sails through twelve tools at the MCP address
 (`internal/agentapi/tools.go`, the whole `tools/list` answer held to
 `testdata/tools.golden.json`): `observe`, `steer`, `trim`, `chart`,
 `pencil`, `forecast`, `news`, `say`, `race`, `boat`, `bottle`, `handbook`.
-`say`, `race`, `pencil` and `bottle` answer "not yet": the list never changes
-as the game grows, since apps cache it. A change to a description or a
+`race`, `pencil` and `bottle` answer "not yet", as do `say`'s `hail` and
+`spectators`: the list never changes as the game grows, since apps cache
+it. A change to a description or a
 schema is a deliberate change: run `go test ./internal/agentapi -run
 ToolsList -update` and name it in the release notes.
 
@@ -4271,7 +5213,14 @@ gybe raises the autopilot's order count only when the side changes and no
 turn is under way or waiting, so a retried tack turns once. A new mode or
 target ends a stalled turn (`physics.PilotHeld`), so the answer tells the
 order, not the stall; a turn's answer says how far round it goes. `trim`'s
-degrees map to the sheet by the catalog's boom range.
+degrees map to the sheet by the boat's own kind's boom range. `trim` and
+`steer` take `reef` (0 full sail, 1 or 2), written in the rig word; the
+order line and the report's Boat line say how the sail stands in the
+boat's words (`controls.reef`: "one reef", or "reefing to two reefs" while
+the crew is at work). The full report's Boat line names the boat's kind
+and its reef; the brief one its reef while the sail is reefed. The boat a
+machine sailor takes is the kind its `Join` gives, the world's first
+(`joinedKind`); at sea the tools read the boat's own kind.
 
 **Limits** (`limits.go`): orders 2 a second (burst 5), looks 4 a second
 (burst 10). `internal/scripted`'s `TestHandSteeringAgainstTheAutopilot`
@@ -4304,9 +5253,15 @@ check WebSockets' origins, keel does). A message may be 1 KB at most.
 message; its first byte is its kind: `1`, a Protocol Buffers envelope
 (`keel/v1/game.proto`: `Hello`, `Input`, `Ping`, `Command` from the client;
 `Welcome`, `Pong`, `Queued`, `Restart`, `SeaAreas`, `WeatherSystems` from
-the server), or `2`, the packed snapshot (`snapshot.txt`: a 176-byte header
-with the own boat's state as float64, its heave and pitch included, then the
-other boats' entries; see [Other boats](#other-boats)). `SeaAreas` is the
+the server), or `2`, the packed snapshot (`snapshot.txt`, layout 12: a
+176-byte header with the own boat's state as float64, its heave and pitch
+included; blocks after it only while they are not zero, the autopilot's, the
+time aground, and the rig's (the headsails' clew, the yards, the reef the
+sail is at, and the reef in force: 56 bytes, which a Jolly boat under full
+sail never sends); then the other boats' entries; see [Other
+boats](#other-boats)). The own boat's state is sent whole, every field of
+`physics.State` (`sim.StateFields`, 34), so the page replays it bit for
+bit. `SeaAreas` is the
 sea about the boat ([Waves](#waves)) and `WeatherSystems` the spells of
 weather its wind is computed from ([Wind and weather](#wind-and-weather)). `go run
 ./tools/protocol` generates the Go (`internal/protocol/pb`) and TypeScript
@@ -4325,7 +5280,8 @@ through one connection: a newer one stops the older writing the boat's
 control slot, closes it with 4001 ("playing on another device", with **Take
 over**), then joins. `Welcome` comes with the first frame that holds the
 boat; a snapshot follows on every even tick (15 a second). The client sends
-an `Input` when its quantised controls change, stamped with the tick it
+an `Input` (the helm, the sheet, the autopilot's control and the reef, 0 to
+2) when its quantised controls change, stamped with the tick it
 stepped them for; the edge holds it until the tick before that is
 published, and the simulation never applies a word before its tick, so the
 server steps the boat with the controls the page stepped it with. Each
@@ -4375,8 +5331,11 @@ once, once a round trip; 5 s of margins of 3 or more lower it by one. Steps
 for ticks an input could no longer reach in time (catching up, or before the
 first `Pong`) keep the controls the server holds.
 
-**Prediction** (`client/src/predict/predictor.ts`). The page keeps 64 ticks
-of its steps' controls and states. A snapshot equal to the state predicted
+**Prediction** (`client/src/predict/predictor.ts`). The module holds every
+kind of boat in the catalog (`preparePhysics` with `catalog.boats`), and the
+predictor steps the own boat's, `Welcome.kind` (`Predictor.kind`); other
+boats' wakes are each their own kind's. The page keeps 64 ticks
+of its steps' controls (the reef among them) and states. A snapshot equal to the state predicted
 for its tick, bit for bit, changes nothing, as it is whenever the inputs
 arrived in time; one that differs puts the boat back to the server's state
 and steps it again to the present, and the drawn boat eases the difference
@@ -4421,12 +5380,22 @@ third of the connections sample their far band on each.
 what can be seen: position to the centimetre, heading, heel, boom and rudder
 in 65,536 steps a turn (coarser angles, which change only every few
 snapshots, make a boat drawn between them heel and swing its boom in
-jerks), the sailor's offset in centimetres, its mode,
+jerks), the sailor's offset in centimetres, its mode, the reef its sail is
+at rounded to a level (flags bits 6–7),
 and the **sail byte**, which the physics workers keep for every boat: the
 sail's flattening and the flow over its two strips (luffing, drawing,
-stalled, aback), which the state cannot tell. The entries change the view of
-a **base**: an `enter` (the boat in full, 19 bytes), an `update` of the
+stalled, aback), which the state cannot tell; and the **rig**: the
+headsails' clew (`jib`), the yards and the fore yards' difference from them
+while the crew hauls them round apart, each in the same steps, sent only
+while not zero. The entries change the view of
+a **base**: an `enter` (the boat in full, 20 bytes with its entry's byte;
+its kind's uvarint is the kind × 8 plus which rig fields follow, so a
+keelboat's jib costs 2 bytes more), an `update` of the
 fields that changed (a moving near boat costs about 10 bytes), or a `leave`.
+An update of a rig field is op 3, whose change mask has a second byte for
+them, so a boat with no rig never pays for it: a Jolly boat's snapshot is
+byte for byte what it was before layout 12 (a keelboat's moving update is
+about 13 bytes, and its own snapshot carries the rig's block, 56 bytes).
 A boat that has not changed sends nothing. The game connection is TCP, and
 one writer writes a connection's messages in turn, so the base is the newest
 snapshot the writer has **taken** from the mailbox: the client will hold it
@@ -4457,17 +5426,24 @@ its last velocity and turn for 250 ms, then held; when data comes the
 difference is eased away over 100 ms. Boats fade in and out over half a
 second, dithered (`alphaHash`), so they stay in the opaque pass.
 
-**Drawing** (`client/src/render/fleet.ts`, `fleetparts.ts`). Each model is
-merged by material, each vertex tagged with the joint it turns on (the
-hull's frame, the boom, the rudder), and drawn as one `InstancedMesh` a
-material; the parts' vertex nodes place each boat themselves from
-per-instance attributes, since the sail's own node discards the instance
-matrix. The full model is drawn for the 12 boats nearest the camera within
-60 m, the **far model** (the catalog's `art.far`, built by the same script
-with few segments) for the rest: 64 boats in 15 draw calls and about
-163,000 triangles. Other boats carry the class insignia and no number, and
-no telltales or pennant. `e2e/fleet.spec.ts` checks a boat of the fleet
-looks as the own boat does at the same pose.
+**Drawing** (`client/src/render/fleet.ts`, `fleetparts.ts`). Each kind has
+its view (`FleetView`), made when a boat of the kind first comes into
+view (the first kind's at once: its model seats the fleet's sailors, whose
+looks every kind shares). A model's solids are merged into one geometry,
+each vertex carrying its material's colour, roughness and metalness and
+tagged with the joint it turns on (the hull's frame, the boom, the
+rudder), and drawn as one `InstancedMesh`; its sail and its headsail one
+each, shaped from per-instance values (the headsail's angle from the
+wire's `jib`, the main reefed by its `reef`); the parts' vertex nodes place
+each boat themselves from per-instance attributes, since the sail's own
+node discards the instance matrix. The full model is drawn for the 12
+boats nearest the camera within 60 m, whatever their kind, the **far
+model** (the catalog's `art.far`, built by the same script with few
+segments) for the rest: 64 Jolly boats in 6 draw calls and about 187,000
+triangles; 48 Jolly boats and 16 keelboats in 14 and about 186,000. Other
+boats carry the class insignia and no number, and no telltales or pennant.
+`e2e/fleet.spec.ts` checks a boat of the fleet looks as the own boat does
+at the same pose, the keelboat's with her jib and reefed too.
 
 **The queue.** At most `KEEL_BOAT_LIMIT` boats sail, those in their grace
 included. A `Join` that admission would not give the next place waits in
@@ -4479,8 +5455,9 @@ fewer than half of that (their reserve) the first of them waiting goes
 before any human. No boat at sea is ever taken out for another. A
 **priority account** (the world page's box) never waits: it gets a boat
 beyond the limit and the cap, while a slot is free. A place's kind and
-priority are kept with it, and with every boat, in the checkpoint (format
-12) and the input log. The edge tells a waiting
+priority are kept with it, and with every boat, in the checkpoint
+(snapshot version 15) and the input log, as is the kind of boat it is to
+have. The edge tells a waiting
 connection its place (`Queued`) when it changes, at most once a second, and
 welcomes it when its boat appears. The page shows "The sea is full. You are
 12th in line." over the "Back soon" screen; while waiting the net worker
@@ -4631,7 +5608,10 @@ machine sailor, `404 cannot` for anyone else.
 **Following**, `POST /api/watch/follow {"name", "on"}`: a bookmark on the
 list, kept on the account (`follow`, migration 00019, gone with either
 account), at most 100 (`409 too-many`), and only of a sailor the player
-may watch now. The sailor followed is never told, and no count of
+may watch now. By a link's code, `{"code", "on"}`, the sailor is followed
+whatever their state, with the same answer (`404 no-link` for a code no
+account has, `own` for the player's own), so following by a link never
+tells whether a human is at sea. The sailor followed is never told, and no count of
 followers is shown. Read once a world into the watch service's cache and
 written through; `who=following` lists after the watchable follows those
 that cannot be watched now, with `gone` in the refusal's words by kind.
@@ -4645,8 +5625,8 @@ never told.
 **On the phone.** The start screen shows "Watch" beside each machine
 sailor at sea, with how many watch it, and "Watch another sailor"; the
 menu has "Watch a sailor" for everyone, asking first, from a boat at sea,
-"Leave the water to watch?"; a link, `/?watch=Iron%20Mary`, signs in or
-makes a sailor first, then watches. Watching, the page drives the watched
+"Leave the water to watch?"; a link to watch (below) signs in or makes a
+sailor first, then watches. Watching, the page drives the watched
 boat with a third driver, `client/src/game/watch.ts`: interpolated from the
 snapshots' headers on the near band's delay, so it and the boats about it
 are drawn on one timeline, its instruments from one step of the physics
@@ -4657,6 +5637,66 @@ a bar names the boat ("Watching Iron Mary ⚙") with "Watch another" and
 "Sail"; the camera does not ease back astern, and "Behind the boat" brings
 it there. The list, the bar and the setting are loaded only when needed.
 Every word is in `client/src/ui/watchwords.ts`.
+
+**Links to watch** are random codes, never names, so a name freed by a
+deleted account never leads an old link to someone else. Every account's
+sailor has one (`account.watch_code`) and every human account a second for
+its fleet of machine sailors (`account.fleet_code`), ten characters of
+lower-case base32 (50 bits) made by the database's `link_code()`
+(migration 00029: the column's default, and a trigger for the fleet's), so
+an account made any way has its codes; both unique, and gone with the
+account. `/?w=<code>` opens a watch of the sailor, `/?f=<code>` of the
+liveliest of the fleet's machine sailors at sea. `GET /api/me` and
+`GET /api/machines` give the account its own codes (`watchCode`,
+`fleetCode`, each machine sailor's `watchCode`); `POST /api/me/link/new
+{"which": "me" | "fleet" | "machine", "machine"?}` gives one a new code,
+the old one then answering `no-link` (`400 which`, `404 machine` for
+another's). A machine sailor's card carries its `code`; a human's never
+does, their link being theirs to share.
+
+`GET /api/watch/link?w=` (or `?f=`), behind a session and for humans only,
+so codes are not looked up by anyone without a sailor: a sailor's link
+answers `{"name", "machine"}` to watch by name over the game connection as
+before, or `404 {"error", "name", "machine"}` with `cannot` (a human,
+whatever the reason), `not-at-sea` or `own`; a fleet's answers its
+rows as the list's, liveliest first and possibly none, never naming whose
+they are; a code no account has is `404 no-link`. The boats kept 2 s are
+read again before a link is refused, so a boat that has just set sail is
+found. `GET /api/watch?fleet=<code>` keeps only that fleet's machine
+sailors: the list's "This fleet", first and chosen, on a page opened by a
+fleet's link.
+
+On the phone (`client/src/account/yourlink.tsx`, `ui/sharelink.tsx`),
+"Share a link to watch me" sits under Set sail on "Your sailor" (with "Your
+link shows your boat only on voyages you let others watch." while the box
+is unticked) and under the spectators switch in the menu; the machine
+sailors' panel shares each one's and the fleet's. Each goes through
+`navigator.share` with the link at the end of its text, or is copied
+("Copied"); "Make a new link" asks first. A visitor opening a link with no
+session is told "Make a sailor, and you will be watching." on the start
+screen and goes from the recovery code straight on; refused, they land on
+their own Set sail with why at its head and, for a sailor's link,
+☆ Follow, which asks after the sailors followed while the panel is shown
+and says when the sailor can be watched. The link stays in the address
+until the player sails or watches another, so a reload tries it again.
+
+**Share with a picture** (`client/src/ui/snapshot.ts`, loaded on the tap):
+at sea from the menu, and watching a machine sailor from the bar's Share,
+the stage copies the next frame drawn into a 2D canvas in the same task as
+the draw (`Stage.capture`): a copy a task later is black on both back
+ends, the canvas cleared once shown. It is cut to 16:9 from the middle
+(upright, the full width and the middle band), drawn at 1200 × 675 with a
+strip naming the game and "Watch *Name* sail", and made a JPEG under 1 MB;
+then `navigator.share({files, text})` where `canShare` allows, otherwise
+saved as a download with the link copied ("Picture saved, link copied").
+Nothing is sent to the server. `e2e/picture.spec.ts` checks it on both
+back ends, upright and sideways (`keel.picture(name)`).
+
+**The card** a link shows where it is posted: static Open Graph and
+Twitter tags in `client/index.html`, the same for every address, with the
+512 px icon at `play.keelovertheedge.com`. No `og:url`: one address for all
+would send a site's card to the front page without the code. The server
+writes nothing into the page.
 
 **The world page** shows how many watch and wait, against the limit, each
 boat's spectators, and on the Accounts card whose boat an account watches.
@@ -4669,6 +5709,563 @@ second).
 2m -url https://macbook.local` has 200 headless spectators watch one boat
 (the Go client's `Spectator`), reporting as the sailing bots do;
 `BenchmarkEncodeSpectators` encodes 100 and 1,000 spectators of one boat.
+
+### Sailing together
+
+A skipper shares a **link** ("Sail with me" in the menu: share, copy, a new
+link, links off, closed to knocks); whoever opens it, signed in or after
+making a sailor, **knocks** on the game connection, and the skipper lets
+each arrival aboard, every time. Aboard, one person **holds the boat's
+controls**, all of them: the skipper unless they hand them on.
+
+**The rules** (`internal/aboard`): a month and a year of birth (`Born`, kept
+on the account as year × 100 + month) and the band worked out from it at
+each entry (`BandOf`: under 13, 13 to 17, 18 and over, a year older on the
+first of the month); the owner's switches in memory (`Switches`: links,
+boarding, the link's lifetime); links' tokens (16 random bytes, base64url,
+22 characters; only the SHA-256 kept, `TokenHash` refusing anything that
+cannot be one before the database is asked); `Live`, a link's validity
+under the lifetime in force; and `Refuser`, who keeps whom off their boats
+without saying why, which nothing fills yet (`NoBlocks`). A knock needs the
+age question answered, 13 or over, and the Rules of the sea accepted.
+
+**Knocks** (`internal/edge/deck.go`, in memory, lost harmlessly at a
+restart): `Command.knock{token}` is rate-limited (10 an hour an account),
+looked up (`Config.Link`, `Config.Knocker`, at most 2 s, on the reader),
+then refused or shown to the skipper as a `KnockCard`, with the knocker
+told how it stands (`Knocking`). Refusals: the link ended, expired or links
+off (`ended`); the own link; the boat not in the water, a machine sailor's
+(no person's knock: see [Machine sailors together](#machine-sailors-together)),
+boarding off, the boat closed to knocks, someone put ashore from it this
+voyage, or a refusal of the `Refuser`, all `closed`; no room (capacity
+counts the skipper), or the crews across the world at `KEEL_CREW_LIMIT`
+(1,000); five already waiting (`busy`); the same boat within 10 minutes of
+"not now" (`often`). A knock lapses after 2 minutes; a second knock
+withdraws the first; a knocker's connection ending withdraws theirs; the
+skipper is shown the knocks waiting again at each Welcome. Only the
+skipper answers (`Command.answer`), never whoever holds the controls.
+
+**Aboard** (`internal/sim/crew.go`): let aboard, the edge sends
+`bus.Board`; the simulation takes the knocker's own boat out of the water
+in the same tick (a `Leave` with the result `Gone`), gives up any place it
+held in the queue, and adds them to the frame's `Crew` at the lowest free
+seat (the skipper's is 0). Crew have no boat and hold no place against the
+boat limit. Who is aboard and who holds the controls (`Holder`, the zero
+account for the skipper) are world state, in the snapshot (version 17),
+the digest and the input log (format 16), so a restart keeps everyone
+aboard: each comes back within the grace a boat has. A crew member's
+connection is welcomed with `Welcome.aboard` and encoded as a spectator's
+is, the boat its eye, with a margin; `Crew` tells those aboard, and the
+boat's spectators without names, who is aboard and who holds the controls,
+as that changes (the frame's `Deck` counts the changes). Other connections
+see one sailor on each boat: whoever holds its controls (`Frame.HelmLook`).
+
+**The controls** pass whole, never in part. `Command.hand{to}` (a seat),
+from whoever holds them, offers them for 15 s (`Handed`); only the
+receiver's `Command.take` moves them; the skipper's `take` takes them back
+at once from anyone, offered or not; `Command.giveBack` gives them back. In
+the simulation each change of hands (`bus.SetHolder`) moves the slot's
+generation on and stamps the controls in force with it, written back to the
+slot: a word the former holder's connection wrote, or is still to write,
+carries the old generation and is never applied, however late, and the new
+holder starts from the controls in force, so the boat does not jump and an
+autopilot engaged steers on. Each encoder reads every frame who holds each
+boat its connections sail or are aboard, and lets a connection steer, with
+that frame's generation, only while it holds them; the snapshot's flag
+`Elsewhere` (bit 6) tells a connection that does not, and the page then
+draws the boat from the snapshots as when watching, and predicts it again
+from the controls in force when it holds them. A holder whose connection
+ends gives the controls back the same tick; a skipper whose connection ends
+leaves the boat its grace, the holder sailing on. A swap of boat in port
+gives them back too, and puts ashore whoever the new boat has no room for.
+
+**Ashore**: `Command.ashore{who}`, 0 for oneself, a seat from the skipper
+(the only one who puts anyone ashore; there are no votes). The simulation
+puts the person's own boat in the water at the port nearest where they
+were (`portPlace`: the first place from the middle of the nearest port's
+harbour outward where a new boat fits, on rings 10 m apart, at bearings
+written out so that no trigonometry runs), ahead of anyone waiting, or at
+the head of the queue at the limit; a boat leaving the water puts everyone
+aboard ashore the same way (an `Ashore` of why 3, which the tick makes
+itself). The connection is told why (`Ashore`), then welcomed to its boat.
+
+**The page**: the age question as a sailor is made, and once for an older
+account; the link's landing at `/?s=<token>` (`client/src/account/comeaboard.tsx`);
+the Rules of the sea and the safety pages (`rules.html`, `safety.html`);
+the deck's panels (`client/src/ui/deck.tsx`, `sailwithme.tsx`, their words in
+`deckwords.ts`); `Online`'s `aboard`, `crew`, `knocks`, `knocking`,
+`handed` and `holding`. `?sandbox&test` and `keel.deckScene(name)` show
+each panel with a scene of its own, for the layout's tests and pictures.
+
+**Metrics**: `keel_edge_knocks_total{result}`, `keel_edge_deck_total{what}`
+(arrivals, the controls offered, taken, taken back and given back, and
+going ashore by why) and `keel_edge_aboard`.
+
+**Testing it**: `internal/sim/crew_test.go` (boarding, room, the
+controls changing hands and the former holder's words dropped, ashore, the
+grace, the snapshot); `internal/edge/edgetest/aboard_test.go` (two and
+three sailors on the in-memory network: a knock, let aboard, handed,
+taken, taken back, given back, ashore; knocks lapsing, the sixth refused,
+not now, an ended link, closed to knocks, the age question first, a
+machine sailor's boat; the holder's connection ending, a crew member who
+was not handed the controls taking nothing, the skipper's boat leaving);
+`BenchmarkEncodeCrew` (forty aboard one boat, encoded as spectators are).
+The load bot sails crews:
+
+```sh
+go run ./tools/loadbot -n 40 -crews 5 -for 5m -url https://macbook.local
+```
+
+sails 40 players in groups of five: each group's first makes a link, the
+others knock with it and are let aboard, and the skipper hands the controls
+round and takes them back, reporting the knocks, arrivals and hand-overs.
+
+### Chat aboard
+
+Everyone aboard one boat can chat: text, one line of at most 200
+characters, never markup, links or images. **Nothing anyone says is
+stored**: a line lives in keel's memory for half an hour, for reports, and
+is gone after that or at a restart. The one exception is a report, which
+copies what the memory still holds.
+
+**The rule** (`aboard.Rules.Delivered`, `internal/aboard/chat.go`), asked
+for every line and every receiver: chat on for everyone and in both their
+countries (the owner's switches; the country is Cloudflare's
+`Cf-Ipcountry` header); both players' own chat on (`account.chat`, NULL for
+the band's default: on for an adult, off for 13 to 17 until they turn it
+on, nobody else); the sender not muted from chat by the owner, rested by
+reports or resting after refusals, and the Rules of the sea accepted;
+neither blocking the other, nor the receiver muting the sender; and the
+two aboard the same boat, or shipmates with shipmates' messages on. A
+machine sailor's line reaches no human aboard but its owner and the
+boat's skipper's human. What machine sailors say is public: while
+everyone aboard is a machine sailor, anyone watching the boat reads its
+chat and says nothing (`Together.Watches`: a machine sailor's lines only,
+never a person's), unless the owner has spectators' reading off. With a person aboard, a boat's chat is its company's
+alone, and no spectator reads a word of it, an owner watching their own
+machine sailor included (`aboard.SpectatorReads`, the one place that
+decides it). A block between a spectator and a machine sailor's owner
+hides none of the machine sailor's lines, as it ends no watch of a
+machine sailor; the spectator's own mute or block of the machine sailor
+does. Mutes and blocks are held
+in memory (`aboard.Ties`, loaded as keel starts, changed after the
+database), which is also the knocks' `Refuser`: a block refuses knocks both
+ways, a human's watch (`watch.Boat.Blocked`, and the watch list leaves the
+human out), never anyone's watch of a machine sailor, and a skipper's block
+puts the person ashore.
+
+**The filter** (`moderation.CheckChat`, `internal/moderation/chat.go`,
+`contact.go`, `fold.go`): the line cleaned (NFKC; controls, bidirectional
+and invisible characters out; one line), then matched on folded forms (the
+look-alike skeleton, digits and symbols read as letters, repeats and
+spaced-out letters joined). A link or bare domain (`mvdan.cc/xurls`, and
+"x dot com" spelled out, against `lists/tlds.txt`), an email, seven digits
+or more however spaced or spelled, a handle (`@name`, `#name`, `name#1234`)
+or another app's name with a contact cue (`lists/apps.txt`) is refused as a
+contact: its sender is told "Links and contact details can't be sent
+aboard". A listed word is refused silently: the line comes back to its
+sender as said and reaches nobody. `lists/innocent-chat.txt` holds sailors'
+talk that must pass ("the poop deck", "seamen"). Phone numbers' examples
+from `nyaruka/phonenumbers` for every region are tested to be refused; the
+module is a test's only, not linked into keel. The first call builds the
+matchers (about 10 ms).
+
+**The hub** (`internal/chat`, one each world, `cmd/keel/world.go`): each
+door joins its speakers (the game connection a person, the agents' door a
+machine sailor) and registers an `Out`; `Hub.Say` finds the sender's boat
+in the latest frame (nobody else aboard: "nobody"), takes the line from
+the sender's budget (`Limiter`: a line every 2 s, bursts of 5, 30 a
+minute; 5 refusals in 10 minutes rest the sender's chat for 10), asks the
+filter, keeps it in the rings and hands it to every door with the accounts
+the rule lets it reach. A line said while everyone aboard is a machine
+sailor, in that frame, is marked `Line.Public`: the edge's door hands it
+to every connection watching the boat (`boatWatchers`, kept by the
+encoders as watches begin, follow and end) that the rule lets it reach,
+encoded once for all of them. No other line, and no message between
+shipmates, reaches a spectator, and a spectator's `Say` is refused at the
+door, whatever its client sends. A spectator reads the lines said from
+the moment they watch: the rings' earlier lines are not sent on arrival.
+Delivering a line to 1,000 spectators takes about 116 µs on an M5
+(`BenchmarkDeliverPublic`), on the sender's goroutine, not the tick's.
+**The rings** (`Rings`): each boat's lines for 30
+minutes, 200 a boat, one sender's 200 lines or 64 KiB across every boat
+(their own oldest go first), 64 MiB in all (the oldest anywhere go first),
+each line counted at its allocation (`Cost`). A boat's lines outlive its
+voyage by the same half hour.
+
+**On the wire**: `Command.say{text, id}`; `Command.mute`, `block` and
+`report`, each naming someone by `Who` (a seat aboard, or a line the
+connection was sent, which the edge checks and the hub still holds: no
+account ID reaches the client); `Chat` (a line, or its echo to the sender,
+refused or said), `ChatState` (on, off, own off, resting, the Rules to
+accept: sent with each `Crew` and as it changes), `Tied`, `Reported`;
+`Person.muted` and `blocked`. Nothing of a line's text is logged or
+counted: `TestChatAboard` greps the edge's log and metrics for it.
+
+**Reports** (`internal/review`): a report from a line or a name copies the
+boat's lines the rings hold (the line it was made from marked), who is
+aboard and their bands, then follows the boat's chat for 10 minutes more
+(`Rings.Follow`; a restart ends the following). Reports from three players
+in a day, or one that a child may be at risk, rest the reported human's
+chat and knocks until the owner acts (`account.rested_at`, a `rest` in the
+record). The owner's page and `keel admin` act on them (see "Reports").
+The tables: `mute`, `block`, `report` (no foreign key: a held report
+outlives a deletion; a trigger deletes those not held with the reported
+account, and blanks a deleted reporter's name), `report_line` (the only
+place a line is ever written), `report_note`, `notice_report`,
+`statement`. The `sessions` job deletes reports closed six months ago and
+not held. `POST /api/notice` takes a notice from anyone (5 an hour an
+address) into the same queue; `/report` is its page.
+
+**Metrics**: `keel_chat_lines_total{result}`,
+`keel_chat_deliveries_total`, `keel_chat_ring_lines`,
+`keel_chat_ring_bytes`, `keel_chat_dropped_total{why}`,
+`keel_chat_say_seconds`, `keel_reports_total{reason}`,
+`keel_reports_open{which}`, `keel_reports_oldest_seconds`; the Game
+dashboard's "Sailing together and chat" row. **Alerts**: `ChildAtRisk`
+(critical, while a report that a child may be at risk waits) and
+`ReportsWaiting` (the oldest open a day). Alertmanager sends nothing until
+it has a receiver (see "Monitoring").
+
+**Testing it**: `internal/aboard/chat_test.go` (the rule for every pair of
+bands and switches, blocks, mutes, machines); `internal/chat` (the rings'
+limits, the flood at full rate, the limiter); `internal/moderation`'s
+evasions, innocent lines and `FuzzCheckChat`; `internal/store/chat_test.go`
+(ties, reports, rests, statements, removal and purge from every copy,
+holds through a deletion and the sweep, and no line's text in any column
+but `report_line`); `internal/edge/edgetest/chat_test.go` (a line heard by
+those aboard alone, refusals both ways, a teen opting in, the owner's
+switch, a mute, a report's lines before and after, a skipper's block). The
+load bot chats:
+
+```sh
+go run ./tools/loadbot -n 40 -crews 5 -chat 2 -for 5m -url https://macbook.local
+```
+
+each person aboard says two lines a minute, and the report counts the
+lines said, echoed, refused and heard.
+
+### Chat aboard, on the page
+
+**The strip** (`client/src/ui/chat.tsx`, loaded with sailing together's
+parts, outside the first download) stands under the case with the other
+parts of sailing together, while anyone else is aboard the boat sailed or
+aboard, and for anyone watching a boat with company where everyone aboard
+is a machine sailor, who reads and has no field (`chatShown`,
+`chatReadOnly`). Watching, a person coming aboard takes the strip away
+and forgets its lines: it begins again empty once they go ashore. Folded it is one row the keys'
+height, the newest line; open, the last lines, a note of what came of the
+player's last act, and the field (200 characters, one line) with Send.
+Open, it fits itself above whatever stands below it (the helm, the
+autopilot's head, the plate at the foot, the watch's bar) and above the
+keyboard, which it reads from `visualViewport`; held sideways its fold key
+stands at the field's end. It is never over the case; open, it may stand
+over the boat, which the player chose. Above the controls, where it was
+first meant to go, there is no room upright on a small phone: the
+autopilot's head fills the space between the hull and the helm.
+
+**The lines** (`ChatLog`, `client/src/ui/chatlog.ts`) are kept in the
+page's memory, the newest 50, and forgotten when the boat in view changes;
+nothing of chat goes in the browser's storage. An own line shows at once,
+waiting, and is matched to its echo by the `Say`'s id: said (or refused for
+a listed word, which looks the same to its sender), or refused, taken back
+with why in plain words and its text put back in the field; with no echo in
+10 s it is lost. A mute or a block hides the person's lines at once, by
+name, before the server's `Tied` confirms it; `Person.muted` and `blocked`
+keep it as the server has it. `ChatState` says chat is resting (the
+owner's switch), off (the player's own: a key turns it on, the age
+question first if unanswered, and for a player of 13 to 17 the card,
+`client/src/account/chatcard.tsx`), resting for the player, or that the
+Rules of the sea come before a first line (the card from sailing together,
+the line held until accepted). Every word is in `client/src/ui/chatwords.ts`.
+
+**Mute, block and report**: a long press on another's line (a right-click,
+or the menu key, on a computer) opens a sheet. Each row of who is aboard
+shows only the controls' keys (Hand over the controls; Take back and Give
+them back on one's own row); Put ashore, Mute, Block and Report are behind
+its ⋯ key, opened under the row (`splitActions` in `client/src/ui/deck.tsx`),
+and the row says "muted" or "blocked". Block asks once; the
+report's form offers the reasons, a child at risk first, and a note for the
+owner alone; `Reported` answers "Thanks: the owner will look". The account
+page has the switch "Chat with other players" and the list of mutes and
+blocks (`client/src/account/chataccount.tsx`). A statement of reasons from
+the owner, unread, waits under the case as the player comes to sea
+(`client/src/ui/statements.tsx`), with its one answer.
+
+**The pages**: the Rules of the sea (`rules.html`) carry chat's rules,
+staying safe (`safety.html`) muting, blocking and reporting, and
+`privacy.html` what chat keeps and for how long. The notice page,
+`report.html`, also at `/report` (`internal/api/client.go`), is for anyone,
+signed in or not: its form posts to `/api/notice`. The owner's contact
+address is a marked placeholder on the safety and privacy pages.
+
+`?sandbox&test` and `keel.deckScene(name)` show each part: `chat` (folded),
+`chat-open`, `chat-crew`, `chat-keyboard` (the keyboard over the foot of the
+screen), `chat-refused`, `chat-word`, `chat-list`, `chat-sheet`,
+`chat-block`, `chat-report`, `chat-teen`, `chat-rules`, `chat-resting`,
+`chat-off`, `chat-own-off`, `chat-owner` and `chat-statement`.
+`e2e/layout.spec.ts` holds them on every screen, and `e2e/aboard.spec.ts`
+says lines between two browsers: one received, a link refused, a word seen
+as said by its sender alone, and a mute.
+
+### Machine sailors together
+
+A machine sailor's agent chats aboard as a person does, and its owner may
+come aboard its boat as crew. People and machine sailors never mix
+aboard, but for one owner with their own machine sailors
+(`aboard.MayJoin`, asked by the owner's coming aboard and by every
+machine sailor's knock): a boat's company is people only, machine sailors
+only (of any owners), or one owner with only their own machine sailors.
+So no machine sailor comes aboard a person's boat; an owner comes aboard a
+machine sailor's boat only while every machine sailor aboard is theirs;
+and with an owner aboard, another owner's machine sailor is refused as
+not taking crew, and its knock never shown. With a person aboard, nobody
+who is not aboard reads the chat (`aboard.SpectatorReads`).
+
+**Chat for agents** (`internal/agentapi/chat.go`). Each world's `Sea`
+carries its chat hub and a `Talker`, the store's: a machine sailor's
+speaker has its human's band, chat switch, Rules of the sea and the
+owner's mute, so its owner's choices hold for it. A helm at sea joins the
+hub as its machine sailor's speaker (`hub.Join`, the store asked once a
+world, again a minute after a failure) and leaves it when the helm is
+stopped or forgotten. The core registers an `Out` with each world's hub as
+it opens: a line that may reach a machine sailor becomes an event in its
+helm's ring, its sender's name and its words as player text, with
+"human" or "machine", "your owner" and "skipper" in the game's words, and
+wakes a wait on `chat` (on by default). The event's tick is the frame's,
+or the last report's seq and one, so the next report always tells it.
+`say` with `to` aboard (the default) says the line through `hub.Say`,
+under chat's filter and limits, after the looks' budget: "Said aboard."
+for a line said or refused for a listed word, "Nobody is aboard to hear
+you." with nobody else aboard, and the filter's, the limits' or the
+owner's switches' refusals in plain words, each a refusal `chat`.
+`hail` and `spectators` answer "not yet". Nothing of a line's text is
+logged or counted. The report's Aboard line names everyone aboard,
+human or machine, the skipper and the seats, and who holds the controls,
+whenever anyone else is aboard; the handbook's page `aboard` says all
+this to the agent.
+
+**The owner aboard** (`internal/edge/machines.go`). `Command.come_aboard`,
+from a connection watching its account's own machine sailor, brings it
+aboard that boat as crew without knocking, as a knock let aboard does
+(`bus.Board`): told how it stands in `Knocking`, refused as "closed" for a
+machine sailor of another's, "not at sea" for one aboard another's boat,
+"full" for no room (a Jolly boat carries its skipper alone), and
+boarding off, the crews' limit, and the age question and the Rules of the
+sea as a knock is. The watch plate shows "Come aboard" while the player
+watches their own machine sailor (`client/src/ui/machinewords.ts`).
+Aboard, the owner chats with the agent: chat's rule lets a machine
+sailor's line reach its own human and the boat's skipper's.
+
+**Aboard each other's boats.** A machine sailor's owner makes its link
+(`POST /api/sail/link {"machine"}`, the machine sailor by its ID or its
+name; `GET /api/sail/link?machine=`, `POST /api/sail/link/end
+{"machine"}`; the store's `MakeMachineSailLink`, its owner's alone),
+under links' rules and lifetime: from its row on the start screen
+(`client/src/account/machineshare.tsx`) or, watching it, the menu's "Sail
+with me for ‹machine›" (`client/src/ui/machinelink.tsx`). An agent never
+makes a link. `GET /api/sail/{token}` for a machine sailor's link says
+`machine`, `can` "closed" for the player (or "own" for its owner), and
+`send`: each of the player's machine sailors and whether it may be sent
+(`Deck.MachineCan`: "ok", "away" for one not in the water, "aboard",
+"full", "closed", "not-at-sea"). The link's page offers "Send ‹machine›
+aboard" for each: the page watches that machine sailor, and once the
+watch begins knocks with `Knock{token, machine}` on the game connection;
+the token never passes through an agent.
+
+The edge's `machineKnock` (`internal/edge/machines.go`) asks a person's
+knock's rules, and more: the link a machine sailor's, the one sent the
+knocker's own and in the water, nothing between the two machine sailors
+nor their owners (the `Refuser`), the owner answering the age question
+and the Rules for it. The knock's `approver` is the skipper machine
+sailor's owner, `LinkFound.Owner`: its `KnockCard` (with `machine`,
+`owner`, the arriving machine sailor's owner's sailor name, and
+`skipper`, which of theirs it knocks on) goes to their connection
+wherever it is, sailing, watching or idle, and again at each Welcome;
+with none open, nobody can let it aboard, and it lapses in 2 minutes. The
+agent of the skipper machine sailor has no say. Let aboard, the edge asks
+`Config.Machines.Board` (the agents' `Core.Board`): the helm sends
+`bus.Board` with its own connection, and the simulation takes the
+machine sailor's own boat out of the water in the same tick (a `Leave`
+with the result `Gone`, which the agents' recorder does not take for a
+boat leaving). A person's knock on a machine sailor's boat is refused
+"closed", and so is a machine sailor sent to a person's boat; refusals say
+`KNOCK_STATE_AWAY` for a machine sailor not in the water.
+
+**Crew.** A helm aboard another's boat (`helm.aboard`) has that boat's
+slot and boat; `locate` finds it in the frame's `Crew` first, and a Join
+answered `Crewed` keeps it aboard (after keel restarts, too). The report
+is of the boat aboard; its Aboard line names the skipper (by the chat
+hub's name) and the seats, and says when the agent does not hold the
+controls. `steer` and `trim` are refused "You don't hold the controls"
+(refusal `controls`) unless the frame's `Holder` is the machine sailor,
+or zero on its own boat; orders are written with the frame's `Gen`, which
+moves on at each change of hands, so a former holder's word is dropped.
+`boat` gained the actions `hand` (with `sailor`, a name aboard) and
+`ashore`; `take` with no `boat`, in company, takes the controls offered,
+or as the skipper takes them back at once. They reach the edge through
+`Sea.Deck` (the edge's `Hand`, `Take`, `PutAshore`), which keeps the
+offer, its 15 s and who was put ashore; an offer to a machine sailor is
+told to its agent (`Machines.Handed`, an event that always wakes). The
+hub tells each helm, from the frame's `Deck` count, who came aboard or
+went ashore and who holds the controls (waking `boat`), a machine crew
+its boat's capsizes and groundings, and every `Ashore` event as its own
+words. `ashore` takes a crew member ashore, its own boat in the water at
+the nearest port; a skipper's puts someone ashore for the voyage, never
+its owner. A crew helm silent for its silence goes ashore the same way,
+then its boat's grace begins; a stopped one goes ashore and its boat
+leaves the water.
+
+**The owners.** Watching their machine sailor as skipper, its owner puts
+anyone aboard ashore (`Command.ashore{who}`, the menu's "Who's aboard")
+and closes it to knocks (`Command.close_knocks`), and ends its link over
+HTTP. The crew machine sailor's owner calls it ashore from its row
+(`POST /api/sail/ashore {"machine"}`, 409 `ashore` when it is aboard no
+boat; `/api/machines` marks it `aboard`). An owner's watch of their own
+machine sailor follows it (`encoder.follow`): aboard another's boat, its
+eye is that boat, registered there in `boatWatchers`, so the owner reads
+that boat's chat read-only and is told the names aboard; ashore, back to
+its own boat. Another spectator sees the crew on deck, unnamed, and reads
+the chat while everyone aboard is a machine sailor; their watch of a
+machine sailor that goes aboard another's boat ends as its boat leaves
+the water.
+
+**Testing it**: `internal/agentapi/chat_test.go` (a line with nobody
+aboard; the owner aboard, their line waking the agent, wrapped, and the
+agent's reaching them; a link refused) and `aboard_test.go` (two agents
+hand the controls, only the holder's orders act, the skipper takes them
+back at once, a crew member goes ashore; a silent crew goes ashore after
+its silence, its boat leaving at the end of its grace) on the sea
+harness, whose boat carries five there, with a stand-in `Deck`;
+`internal/edge/edgetest/machines_test.go` (the owner comes aboard,
+another player may not, a Jolly boat has no room; a machine sailor sent
+aboard, never to a person's boat nor a person to a machine sailor's, let
+aboard by the skipper's owner, its owner's watch following it and reading
+the chat, another spectator reading it too, put ashore from watching and
+knocking in vain after; a knock lapsing with the owner away), with
+stand-in helms (`Config.Machines`) and chat (`Config.Chat`);
+`internal/edge/edgetest/public_test.go` (a spectator who owns none of the
+machine sailors reads them, their lines marked; their line refused; a
+block between them and an owner hiding nothing, their mute of a machine
+sailor hiding its lines; a report from a spectator, about the machine
+sailor, its owner's to answer; a shipmates' message reaching no
+spectator; the owner aboard, nothing read, and ashore again, only the
+lines said after; a boat of people read by no spectator);
+`internal/edge`'s `TestDeliverPublic` and `BenchmarkDeliverPublic`;
+`internal/store`'s `TestMachineSailLinks`.
+
+### Shipmates
+
+Two people who have sailed aboard one boat together for five minutes or
+more, in the last 30 days, may become **shipmates**: one offers (*Be
+shipmates*, from the row of who is aboard or from *Recent crew*), the
+other accepts. Shipmates see when the other is in the game, knock on the
+boat the other skippers without a link (its skipper still answers), and
+message each other anywhere in the game while both are in it. Nothing is
+kept for a shipmate who is away. Machine sailors are never shipmates.
+
+**Who sailed together** (`internal/shipmates/tally.go`, one each world):
+every 15 s the tally reads the latest frame for the people aboard each
+boat with company (a machine sailor is never counted) and records each
+pair in `sailed_with` (the lesser ID first): `seen_at` as they are first
+seen together, `sailed_at` once they have been together five minutes in
+one stretch, and both again every half hour; `boat` is the boat, for a
+report from *Recent crew*. A stretch is held in memory, and begins again
+after a restart or a break. Rows are kept 30 days (the `sessions` job).
+`POST /debug/sailed` (`KEEL_DEV_COMMANDS=1`) counts everyone aboard
+together now as having sailed five minutes, for a trial.
+
+**The rules** (`internal/shipmates/shipmates.go`, over `aboard.Ties`, which
+hold every pair in memory as keel starts): an offer needs `sailed_at`
+within 30 days, both players people, fewer than 200 shipmates and 20 offers
+waiting (`store.MaxShipmates`, `MaxOffers`), and lapses after 7 days.
+**Shipmates only within one age band** (`aboard.MayBeShipmates`: both
+adults or both 13 to 17): an offer between the bands, or with a block
+between the two, is kept `silent`. It never reaches its receiver and
+cannot be accepted, and its sender sees it waiting as any other, so
+nothing on any screen says why or says anything of an age; a teen's
+shipmates stay when they turn 18. An offer back makes the two shipmates
+at once. *Decline* silences an offer the same way. **No longer
+shipmates** deletes the `shipmate` row and every offer between the two,
+clears `sailed_at`, so an offer again needs sailing together again, and
+takes effect at once for both: the other's connection is told only that
+its list changed (`Shipmates`, an empty message). Nothing else records
+it. A block ends shipmates, from anywhere (`process.tie`). `Ties.Forget`
+drops an account's pairs as it is deleted; the rows cascade.
+
+**Messages** (`chat.Hub.SayTo`): `Command.say{text, id, to}`, `to` a
+shipmate's account ID, goes through the same rule (`aboard.Rules.Delivered`
+with `Together.Shipmates`, so chat's switch and shipmates' messages'
+switch both stop it at once), filter, limits and memory as a line aboard,
+in the pair's ring (`chat.Pair`). Refused as `away` ("‹name› isn't in the
+game; messages aren't kept for later"), and kept nowhere, when the
+receiver is not in the game, not a shipmate (or no longer), or appears
+offline, unless they wrote to the sender in the last half hour
+(`chat.OfflineAnswers`); `resting` with shipmates' messages off. The
+receiver's connection is sent `Chat` with `thread` (the sender's ID), seat
+0, wherever it is in the game; a message whose two stop being shipmates
+before it is handed out is not delivered. A report of a message (`Who.line`
+of a thread) copies the pair's ring and follows it for ten minutes, with
+the two and their bands; the review page shows it as "messages between
+shipmates".
+
+**Knocking without a link**: `Command.knock{shipmate}` knocks on the boat
+the shipmate skippers, asking every rule a link's knock asks (the edge's
+`knockOn`, `boardable` through `aboard.MayJoin`); a shipmate who appears
+offline, is not skippering a boat at sea, or is no shipmate reads as not
+at sea. `KnockCard.shipmate` and `Person.shipmate` mark shipmates (★) on
+the skipper's card and in who is aboard.
+
+**The routes** (`internal/api/shipmates.go`, people only): `GET
+/api/shipmates` is the account's shipmates by name with where each is
+(`game`, `sea`, or nothing for one not in the game or appearing offline;
+`skipper` while they skipper a boat at sea, from `edge.Presence`), the
+offers waiting for its answer, *Recent crew* (aboard together in the last
+24 hours, newest first, with `can`, `offered` and `shipmate`), its own
+`offline` and the owner's `messages` switch. Nobody else ever sees a
+player's shipmates or where they are. `POST /api/shipmates/offer` (`{"id"}`
+or `{"seat"}` aboard: `offered`, `made`, `not-yet`, `full`, `offers`,
+`already`), `accept` (409 `gone` or `full`), `decline`, `end` (`{"id"}` or
+`{"seat"}`), `block` and `report` (`{"id", "reason", "note"}`: a shipmate's
+thread, or the boat last sailed on with someone of recent crew), and `POST
+/api/me/offline {"on"}`, *Appear offline*.
+
+**Metrics**: `keel_shipmates_total{what}` (`sailed`, `offered`, `made`,
+`ended`); messages are counted with chat's lines,
+`keel_chat_lines_total{result}` gaining `away` and `resting`.
+
+**On the page** (`client/src/ui/shipmates.tsx`, loaded with sailing
+together's parts): the menu's *Shipmates* opens the list: offers first
+(*Accept*, ✕), then shipmates with where they are, then *Recent crew*.
+Each row shows its one key (*Message*; *Be shipmates* for recent crew)
+and keeps the rest behind ⋯ (*Ask to come aboard*, *Watch*, *No longer
+shipmates*, *Block*, *Report*); ending and blocking ask once in the row.
+*Appear offline* is at the list's foot and on the account panel. A thread
+(`ShipmateThreads`, `client/src/ui/shipmatelog.ts`) keeps each shipmate's
+newest 50 messages in the page's memory only, and closes silently when the
+name leaves the list. A message that comes while its thread is shut, and
+an offer, show a notice under the case. The list is read when the
+connection is first welcomed, at each `Shipmates`, and every 20 s while
+it or a thread is open (`client/src/ui/shipmatesview.ts`); every word is
+in `client/src/ui/shipmatewords.ts`. `?sandbox&test` and
+`keel.deckScene(name)` show `shipmates`, `shipmates-more`,
+`shipmates-offered`, `shipmates-made`, `shipmates-thread`,
+`shipmates-away`, `shipmates-keyboard`, `shipmates-notice`,
+`shipmates-offer-notice`, `shipmates-end`, `shipmates-offline`,
+`shipmates-empty` and `chat-list-shipmate`; `e2e/layout.spec.ts` holds them
+on every screen, and `e2e/shipmates.spec.ts` sails two browsers together.
+
+**Testing it**: `internal/shipmates` (against the test database: no offer
+before five minutes in 30 days, an offer across the bands reaching nobody
+and looking waiting, two teens, ending it for both and needing to sail
+again, a decline, a block, reports from the lists, deletion and the sweep,
+and no message's text in any column); `internal/edge/edgetest/shipmates_test.go`
+(messages between two boats, a stranger's and an absent shipmate's
+refused and kept nowhere, appearing offline, both switches, a report of a
+thread, ending it mid-conversation, knocks without a link and the marks,
+the tally's five minutes, and no text in the log or metrics);
+`internal/api`'s `TestShipmatesRoutes`; `internal/aboard`'s
+`TestMayBeShipmates`.
 
 ## The local cluster
 
@@ -6472,6 +8069,8 @@ things and their pictures stay in one wind. The developer page is
 | Query | What |
 |-------|------|
 | `?sandbox` | The offline sandbox alone: no server, no session, no start screen. The browser tests of the scene use it |
+| `?boat=keelboat` | The sandbox's boat: any of the catalog's boats, by its id (the first if the catalog has none of that id). Every kind is prepared in the module; the developer panel changes it |
+| `?crew=5` | That many people aboard the sandbox's boat, its capacity at most, each in a look of their own, the same at every load, every sixth a machine; with more than one, the second holds the controls (below) |
 | `?wind=12,45` | The sandbox's wind, steady: knots 10 m up, and the degrees it comes from |
 | `?weather=stormy` | The sandbox's weather: one of the catalog's regimes (`settled`, `trade`, `unsettled`, `stormy`), or `steady` |
 | `?dev` | The developer panel (a lazy import, outside the first download); see below |
@@ -6487,8 +8086,10 @@ things and their pictures stay in one wind. The developer page is
 | Control | Touch | Keyboard and mouse |
 |---------|-------|--------------------|
 | Helm | The arc bottom left: drag left to turn the bow to port, right to starboard, relative to where the thumb lands (140 px is the full travel). A double tap centres it | ← and → (or A and D), the full travel in 0.6 s while held; C centres it |
-| Sheet | The slider bottom right: drag up to trim (haul in), down to ease, relative to where the thumb lands (160 px from hauled in to let fly) | W trims and S eases, the whole range in 2 s while held |
+| Sheet | The slider bottom right: drag up to trim (haul in), down to ease, relative to where the thumb lands (160 px from hauled in to let fly). Its name and its ends' words are the boat's (the catalog's `controls.sheet`: "Sheet", Trim and Ease on the Jolly boat and the keelboat) | W trims and S eases, the whole range in 2 s while held |
+| Reef | The brass Reef key at the sheet's top (held sideways beside it, toward the boat): a tap reefs one more, its face the reef asked for in the boat's words (`controls.reef`: Full sail, One reef, Two reefs); once reefed a second key, Shake, beside it (upright over it) shakes one out. The crew takes the catalog's `reefTime` a reef; the case's last line names the reef the main has. On a boat whose main does not reef, no key | R reefs one more, F shakes one out |
 | Autopilot | The button between them: on at the boat's angle to the wind, and its dial; touching the helm takes the helm back | P on or off; Q and E turn its target a degree to port or starboard, ten with Shift; T tacks, G gybes; the helm's keys take the helm back |
+| Reef | The Reef key (`Game.reef.set(level)`) | R takes one more reef, F shakes one out (Shift and R too, since F flies the free camera where it may); the crew takes the boat's reef time a level, and the reef goes out in each `Input` |
 | Camera | Drag on the sea to swing it round and up or down; pinch for its distance (5 to 80 m). It eases back behind the boat 5 s after the last touch | Drag with the mouse; the wheel for the distance |
 
 Both controls take a thumb each at once. Each shows its target (the knob)
@@ -6510,6 +8111,13 @@ the true wind's arrow on the water upwind, the apparent wind's above the
 masthead, and a dashed ring round each gust heading for the boat; **sail forces**: drive and side force at the sail's centre of
 effort, and a clinometer), and the helm's release.
 
+On a small phone held upright the sheet is 150 px tall (160 on a screen
+420 px tall or less, 196 otherwise), so that the Reef key and its Shake
+stand over it below the keys under the pocket chart; a drag moves the
+sheet as far whatever its track's length. `e2e/layout.spec.ts` holds the
+keys at 44 px, on the sheet's top or beside it, covering nothing, on its
+five phone screens and the tests' (and the keelboat framed on every one).
+
 ### The frame
 
 | File | What |
@@ -6519,11 +8127,58 @@ effort, and a clinometer), and the helm's release.
 | `client/src/predict/blend.ts` | The state before and after the latest step; the boat is drawn between them, the heading the short way round |
 | `client/src/game/driver.ts`, `client/src/sandbox/` | The boat driver: controls in, states and `Out` to draw. The sandbox is the offline driver |
 | `client/src/game/game.ts` | The frame: keys, steps, the pose, the instruments, the sound. Input events only move targets; the frame reads them. The frame allocates nothing |
-| `client/src/render/camera.ts` | The chase camera: its yaw follows the heading through a critically damped spring (ω = 4 s⁻¹, 12 with reduced motion); it rises and falls with the boat's heave, over half a second, but not with its heel or pitch, and stays 1.6 m above the sea under the boat |
-| `client/src/render/boat.ts`, `sailshape.ts`, `telltales.ts`, `pennant.ts`, `sailor.ts` | The boat from the physics: lifted by its heave, pitched and heeled about its centre of gravity; the boom, rudder and tiller; the sail's twist from `Out.Twist`, camber from `Out.Flattening`, rippling where a strip luffs; the telltales from each strip's flow (attached: both stream aft; luffing: the windward one lifts; stalled: the leeward one droops; aback: both stream forward); the pennant downwind of the apparent wind at the masthead; the sailor by mode |
+| `client/src/render/camera.ts` | The chase camera: its yaw follows the heading through a critically damped spring (ω = 4 s⁻¹, 12 with reduced motion); it rises and falls with the boat's heave, over half a second, but not with its heel or pitch, and stays 1.6 m above the sea under the boat; its distances and the height it looks at scale with the boat's size |
+| `client/src/render/boat.ts`, `sailshape.ts`, `telltales.ts`, `pennant.ts`, `sailor.ts` | The boat from the physics, as its kind's model: lifted by its heave, pitched and heeled about its centre of gravity; the boom, rudder and tiller; the sail's twist from `Out.Twist`, camber from `Out.Flattening`, rippling where a strip luffs; a headsail (the model's `jib`, its node at the tack, `extras.rake` how far aft of it the head is) shaped the same way from `State.Jib`, `Out.JibTwist` and its flows, each height's chord turned about its point on the raked stay; a reefed main drawn to `Out.ReefShare` of its luff (below); the telltales from each strip's flow (attached: both stream aft; luffing: the windward one lifts; stalled: the leeward one droops; aback: both stream forward); the pennant downwind of the apparent wind at the masthead; the sailor by mode |
 | `client/src/render/overlays.ts` | The beginners' arrows, each its own shape with a label |
 | `client/src/ui/` | The screen at sea in Preact: instruments, sailor line, helm, sheet, menu. Words and numbers are signals written at most ten times a second; what moves every frame moves by `style.transform` |
 | `client/src/audio/` | Sound, synthesised with Web Audio from the recipes in `art/sound/` (below) |
+
+**A reefed main** is drawn short. Where its model has a row of vertices at
+each reef's height (`1 − reefs[n]` of the luff: the keelboat's slab reefs
+at 0.15 and 0.30), the cloth above the row comes down to the boom keeping
+its shape, the cloth below gathered along the boom in a fold, and the
+cloth carries its reef points painted along each row. Where it has none
+(the Jolly boat's reefs are the ILCA 6 and ILCA 4 rigs) the whole sail is
+drawn smaller, its luff and chord alike. The own boat's share is
+`Out.ReefShare`; another boat's, the catalog's `reefs` at the level the wire
+sends. At full sail the shape is the one it was.
+
+**Every kind** (`client/src/render/scene.ts`): the own boat is drawn, and
+the predictor and the sandbox step it, as the kind its Welcome names (the
+sandbox's `?boat=`, or the panel's); a change of kind goes through the
+cover, as any other change of boat, the gate waiting for the new boat's
+sailor. Each kind's lanterns, hull and wake are its own (below); the chase
+camera's distance and the height it looks at, and the shadow map's box,
+scale with the boat's length or its masthead's height, whichever is the
+more, against the catalog's first boat's (`sizeOf` in `camera.ts`): about
+1.4 for the keelboat.
+
+**People aboard** (`client/src/render/sailors/crew.ts`): when others are
+aboard the boat in view (the connection's `crew`), whoever holds the
+controls is its sailor at the helm, in their look, as the one sailor is
+drawn otherwise; the skipper, while another holds them, stands at that
+one's station; everyone else at their seat's (the catalog's `stations`).
+The sail's machine mark stays the skipper's. The people are posed once and
+drawn still and rigid, each level in one instanced draw however many looks:
+the nearest 12 within 60 m of the camera as their looks' deck level,
+skinned once on the CPU (the clips' `helm` seated, `standing-idle`
+standing); the rest as their looks' far level, stood up for a standing
+station by moving each of its vertices with the bones of the deck level's
+vertex nearest it seated. Each level's figures are triangle lists in a
+float texture its vertex stage reads by vertex and instance, so an
+instance runs its level's largest figure's vertices, those past its own
+folded away. The fleet's looks' layered atlases colour them. From the
+tall ship's chase camera her forty are all far: one more draw (and its
+shadow's), some 11,500 triangles.
+
+```sh
+# https://localhost:5173/?sandbox&boat=tall-ship&crew=40   forty aboard the tall ship
+# https://localhost:5173/?sandbox&boat=keelboat&crew=5     five aboard the keelboat
+# https://localhost:5173/?sandbox&boat=keelboat        the keelboat in the sandbox: R reefs her, F shakes a reef out
+# https://localhost:5173/?sandbox&boat=keelboat&dev    with the panel, to change the boat
+# https://localhost:5173/?sandbox&boat=keelboat&sky=midnight   her tricolour lit at the masthead
+# https://localhost:5173/?sandbox&boat=skiff           the skiff: bear away past 105° and her crew sets the gennaker
+```
 
 ### The developer panel
 
@@ -6540,8 +8195,8 @@ a swell of its own (`?swell=height,period,from`, e.g. `?sea=breeze&swell=0.6,6,2
 `?weather=storm` brings a storm 45 minutes off, whose swell comes first);
 the sea's parts at the boat (the wind sea's and the swell's Hs and period,
 the current's factor and the lee's);
-the boat, reset to the start, placed at a position and heading, or
-jumped to the rim; time, paused, stepped once or slowed to ½ or ¼; the live
+the boat: any of the catalog's (sailed from the start), reset to the start,
+placed at a position and heading, or jumped to the rim; time, paused, stepped once or slowed to ½ or ¼; the live
 `State` and `Out`; camera presets; the back end, render scale,
 tile pass and antialiasing; the quality: the rung of the ladder (any can be
 chosen), adaptive quality on or off, the detail band, the foam and the
@@ -6618,8 +8273,13 @@ the `hull` node's `extras`: the sea is not drawn inside it
 
 Commit the rebuilt `.glb`. `npm test` checks each boat's model against the
 catalog: its hull's volume against its waterline's length, beam and draught; its named parts sit where the physics puts them, within 1 cm, its
-telltales at each sail strip's height, and it is under 15,000 triangles; and
-each sailor's model has its parts and is under 2,000. A kind's `art.model`
+telltales at each sail strip's height, its jib's tack and head where the
+headsails' are, and each level within the catalog's `art.budget`; and
+each sailor's model has its parts and is under 2,000. The sailors' clips
+are placed in the Jolly boat; another boat's model says how far its seat is
+from it (`art/README.md`), and `render/sailors/restage.ts` moves them there; on a boat with a
+wheel (its `wheel` node's data) the sailor stands at its `sailor` node instead, the hands
+kept on the spokes as the wheel turns (`render/sailors/runtime.ts`). A kind's `art.model`
 must name a file that exists (`go run ./tools/catalog -check`). The catalog's
 `sailors` list names the figures; the first is drawn.
 
@@ -6634,8 +8294,9 @@ back, and in a dinghy each when the clip seats them; `face`, a head
 close; `deck`, a fleet at the game's chase camera, the near sailors at the
 deck level and the far at the far one; `picker`, a sailor on a disc of
 planks. The **Room** button opens the rest: the light (noon, morning,
-dusk, night), the level, the clip, the skin, hair and main colour, the
-silhouettes in black, and a phone's 360 × 640. All of it is in the hash
+dusk, night), the level, the clip, the boat the sailors sit in (`boat=1`,
+the catalog's second), the skin, hair and main colour, the silhouettes in
+black, and a phone's 360 × 640. All of it is in the hash
 (`#sailors&view=deck&light=dusk&clip=helm-idle&black=1`), so a view can be
 linked to; `?backend=webgl2` and `?compat` as in the game. Drag turns the
 camera, the wheel or a pinch sets its distance. `e2e/sailors.spec.ts`
@@ -6652,10 +8313,13 @@ centre and level rise with the apparent wind, full at 34 knots, so it
 swells with the gusts the boat feels; in a gusty wind it breathes too, as
 deep as the wind's gust factor (none in a steady wind), and in a storm it
 howls, its centre rising by a third from 23 to 39 knots; **rigging**, a narrow band at
-the sheet's Aeolian tone, 0.2 × apparent wind ÷ 10 mm; **flogging**, the
+the sheet's Aeolian tone, 0.2 × apparent wind ÷ its diameter, 10 mm on a
+main of 7 m² and thicker as the fourth root of the main's area (12 mm on
+the keelboat); **flogging**, the
 cloth's band beaten at a flap rate, only while a sail strip luffs;
 **water**, low-passed noise rising with speed and a bow wave's hiss past the
-hull speed; **sea**, a wide, low band that rises and brightens with the
+hull speed, 2.4 m/s on the Jolly boat's waterline and faster as the square
+root of a longer one's; **sea**, a wide, low band that rises and brightens with the
 significant height of the waves under the boat, louder with its whitecaps
 and with the boat's speed through the water, and silent on flat water. `client/src/audio/voices.ts` maps them onto the physics;
 `engine.ts` plays them, setting parameters at most every 50 ms. Audio starts
@@ -6722,9 +8386,19 @@ where the server has it at the tick it is drawn at, sees it turn, and still
 sees it through its grace after its page closes; and, through the lag proxy
 (or netem), for a minute no near boat held in more than 1% of frames but in
 retransmission timeouts, which it reports, and no correction drawn at once.
+`crew.spec.ts` puts people aboard at a phone's 360 × 640: forty aboard the
+tall ship, each at their station on her deck and one at the wheel, in a
+draw or two more than her one sailor, her frames, each drawn and waited
+for, little dearer than with her one sailor and, on a real GPU, within a
+frame at 60 Hz, from the chase camera and close (`@long`); and the
+keelboat's five on her deck.
 `fleet.spec.ts` draws other boats in the sandbox: a boat of the fleet as
-the own boat at seven poses, 64 boats within 22 draw calls and 200,000
-triangles, the materials dithered, and a picture. `sky.spec.ts` finds each
+the own boat at seven poses, and a keelboat as the own keelboat with her
+jib and reefed, 64 boats within 22 draw calls and 200,000 triangles, a
+mixed 64 of every kind, skiffs with their gennakers set and one half way
+up, within 36 and 320,000 (bagged, every gennaker is two draws fewer), the
+own skiff's gennaker set, rising and in beside the fleet's, the materials
+dithered, and a picture. `sky.spec.ts` finds each
 named star where the GPU draws it, within 0.1° of where the module's rule
 and the camera put it, from the centre, half way and the rim; no star by day
 and the brightest first at dusk; a moonless night with nothing bright and

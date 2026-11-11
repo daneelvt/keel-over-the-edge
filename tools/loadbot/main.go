@@ -58,6 +58,8 @@ func main() {
 	agents := flag.Int("agents", 0, "instead of sailing on phones, sail this many machine sailors over the MCP address for -for, each with a connection token")
 	watchers := flag.Int("watchers", 0, "instead of sailing, this many players watch the boat of the sailor -watch names, for -for")
 	watch := flag.String("watch", "", "with -watchers, the sailor whose boat they watch")
+	crews := flag.Int("crews", 0, "sail the players in groups of this many: a skipper and the crew it lets aboard by its link, the controls handed round")
+	chat := flag.Float64("chat", 0, "with -crews, the lines of chat each person aboard says a minute")
 	flag.Parse()
 	if *watchers > 0 {
 		if *watch == "" {
@@ -87,13 +89,13 @@ func main() {
 		}
 		return
 	}
-	if err := run(ctx, *n, *base, *lagFlag, *sail, *ramp, *fps, *pilot, *metrics, *sessions, *ca, *watch); err != nil {
+	if err := run(ctx, *n, *base, *lagFlag, *sail, *ramp, *fps, *pilot, *metrics, *sessions, *ca, *watch, *crews, *chat); err != nil {
 		fmt.Fprintln(os.Stderr, "loadbot:", err)
 		os.Exit(1)
 	}
 }
 
-func run(ctx context.Context, n int, base, lagFlag string, sail, ramp time.Duration, fps int, pilot float64, metrics, sessions, ca, watch string) error {
+func run(ctx context.Context, n int, base, lagFlag string, sail, ramp time.Duration, fps int, pilot float64, metrics, sessions, ca, watch string, crews int, chat float64) error {
 	if n < 1 || fps < 1 {
 		return errors.New("-n and -fps must be at least 1")
 	}
@@ -112,6 +114,8 @@ func run(ctx context.Context, n int, base, lagFlag string, sail, ramp time.Durat
 		Dial:       wsDialer(hc, base),
 		Out:        os.Stdout,
 		Watch:      watch,
+		Crews:      crews,
+		Chat:       chat,
 	}
 	if lagFlag != "" {
 		l, err := client.ParseLag(lagFlag)

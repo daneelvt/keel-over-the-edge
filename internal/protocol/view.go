@@ -9,6 +9,7 @@ import (
 	"math"
 	"math/bits"
 
+	"github.com/daneelvt/keel-over-the-edge/internal/bus"
 	"github.com/daneelvt/keel-over-the-edge/internal/physics"
 )
 
@@ -28,9 +29,11 @@ const (
 	Falling   = 1 << 3 // the boat has gone over the lip and is falling
 	Machine   = 1 << 4 // the boat is a machine sailor's, sailed by an AI agent
 	// Relook marks an enter of the boat the view slot already holds: its
-	// sailor's look changed, and nothing else about it.
+	// sailor's look, its own look or its kind changed (a swap in port),
+	// and nothing else about it.
 	Relook    = 1 << 5
-	flagsUsed = FarBand | 3<<modeShift | Falling | Machine | Relook
+	reefShift = 6 // the reef, rounded to a level, in bits 6–7
+	flagsUsed = FarBand | 3<<modeShift | Falling | Machine | Relook | 3<<reefShift
 )
 
 // The steps of a Boat's fields.
@@ -53,17 +56,37 @@ const (
 // Boat is a boat in a view, as the wire carries it.
 type Boat struct {
 	Kind uint16
-	// Look is the sailor's look code (internal/looks), which only an enter
-	// carries: a look changed is sent as an enter.
-	Look    uint32
-	Flags   uint8 // FarBand, the sailor's mode, Falling, Machine and Relook
-	X, Y    int32 // cm, east and north
-	Heading uint16
-	Heel    int16
-	Boom    int16
-	Rudder  int16
-	Sailor  int8 // cm
-	Sail    uint8
+	// Look is the sailor's look code (internal/looks), and BoatLook the
+	// boat's own look code, its paint, cloth and sail number, which only an
+	// enter carries: a look changed is sent as an enter.
+	Look     uint32
+	BoatLook uint32
+	Flags    uint8 // FarBand, the sailor's mode, Falling, Machine and Relook
+	X, Y     int32 // cm, east and north
+	Heading  uint16
+	Heel     int16
+	Boom     int16
+	Rudder   int16
+	Sailor   int8 // cm
+	Sail     uint8
+	// Jib is the headsails' clew's angle off the centreline, Yards the
+	// after yards' and Fore the fore yards' less the after yards', each in
+	// AngleSteps: 0 on a boat without them.
+	Jib   int16
+	Yards int16
+	Fore  int16
+	// Kite is the downwind sail's clew's angle off the centreline, in
+	// AngleSteps, while it is hoisted at all, and Hoist how far it is
+	// hoisted, 0 in its bag … 255 set: 0 on a boat without one.
+	Kite  int16
+	Hoist uint8
+}
+
+// Relooked says whether a view slot's boat, the same boat, is drawn
+// otherwise in q than in base: its sailor's look, its own look or its kind
+// changed. It is sent as an enter.
+func Relooked(base, q *Boat) bool {
+	return q.Look != base.Look || q.BoatLook != base.BoatLook || q.Kind != base.Kind
 }
 
 // Far says whether the boat is in the far band.
@@ -78,11 +101,14 @@ func (q *Boat) IsMachine() bool { return q.Flags&Machine != 0 }
 // Mode is the sailor's mode: physics.Sailing, InWater, OnBoard or Climbing.
 func (q *Boat) Mode() uint8 { return q.Flags >> modeShift & 3 }
 
+// Reef is the reef the sail is at, rounded to a level: 0 full sail, 1 or 2.
+func (q *Boat) Reef() uint8 { return q.Flags >> reefShift }
+
 // Quantise sets q to a boat of kind in state st, whose last step's sail
 // byte was sail, in the far band or not.
 func Quantise(st *physics.State, kind uint16, sail uint8, far bool, q *Boat) {
 	q.Kind = kind
-	q.Flags = uint8(clampInt(int64(st.SailorMode), 0, 3)) << modeShift
+	q.Flags = uint8(clampInt(int64(st.SailorMode), 0, 3))<<modeShift | uint8(steps(st.Reef, 0, bus.MaxReef))<<reefShift
 	if far {
 		q.Flags |= FarBand
 	}
@@ -94,7 +120,19 @@ func Quantise(st *physics.State, kind uint16, sail uint8, far bool, q *Boat) {
 	q.Rudder = int16(angleSteps(st.Rudder))
 	q.Sailor = int8(steps(st.Sailor/SailorStep, math.MinInt8, math.MaxInt8))
 	q.Sail = sail
+	q.Jib = int16(angleSteps(st.Jib))
+	q.Yards = int16(angleSteps(st.Yards))
+	q.Fore = int16(angleSteps(st.ForeYards) - angleSteps(st.Yards))
+	q.Hoist = uint8(steps(st.Hoist*HoistSteps, 0, HoistSteps))
+	q.Kite = 0
+	if q.Hoist != 0 {
+		q.Kite = int16(angleSteps(st.Kite))
+	}
 }
+
+// HoistSteps is how many steps a boat's downwind sail's hoist is sent in,
+// from 0, in its bag, to set.
+const HoistSteps = 255
 
 // steps rounds v to the nearest whole step within lo … hi; NaN is 0.
 func steps(v float64, lo, hi int64) int64 {
@@ -141,14 +179,18 @@ func (v *View) Remove(slot int) {
 	v.Boats[slot] = Boat{}
 }
 
-// The entries' ops, in an entry's first byte's top two bits.
+// The entries' ops, in an entry's first byte's top two bits. OpUpdateRig
+// is an update whose change mask has a second byte, for the rig's fields:
+// an update of the others alone costs what it did before the rig was sent.
 const (
-	OpUpdate = 0
-	OpEnter  = 1
-	OpLeave  = 2
+	OpUpdate    = 0
+	OpEnter     = 1
+	OpLeave     = 2
+	OpUpdateRig = 3
 )
 
-// An update's change mask: which fields follow.
+// An update's change mask: which fields follow. The rig's are in its
+// second byte, which only an OpUpdateRig has.
 const (
 	ChangePosition = 1 << iota
 	ChangeHeading
@@ -158,12 +200,31 @@ const (
 	ChangeSailor
 	ChangeSail
 	ChangeFlags
+	ChangeJib
+	ChangeYards
+	ChangeFore
+	ChangeKite
+	ChangeHoist
+	changeUsed = ChangeHoist<<1 - 1
+)
+
+// An enter's rig: which of the rig's fields follow it, those not zero, in
+// the low bits of the uvarint of its kind.
+const (
+	enterJib   = 1
+	enterYards = 2
+	enterFore  = 4
+	enterKite  = 8
+	enterHoist = 16
+	enterRig   = enterJib | enterYards | enterFore | enterKite | enterHoist
+	kindShift  = 5
 )
 
 // maxEntrySize is the longest entry this package writes: an enter of a
-// kind of 3 bytes and a look of 3 (a look code holds 20 bits); an update
-// of every field, its position changes 4 bytes each, is shorter.
-const maxEntrySize = 24
+// kind of 3 bytes, a look of 3 (a look code holds 20 bits), a boat look of
+// 4 (22 bits) and every rig field; an update of every field, its position
+// changes 4 bytes each, is shorter.
+const maxEntrySize = 37
 
 // Entry is one entry of a snapshot.
 type Entry struct {
@@ -171,7 +232,7 @@ type Entry struct {
 	Op   uint8
 	// Mask is an update's change mask; DX and DY its position's change, in
 	// steps.
-	Mask   uint8
+	Mask   uint16
 	DX, DY int64
 	// Boat is an enter's boat, or an update's fields that the mask sets.
 	Boat Boat
@@ -184,8 +245,8 @@ type Changes struct {
 }
 
 // Diff is the change mask from base to q.
-func Diff(base, q *Boat) uint8 {
-	var m uint8
+func Diff(base, q *Boat) uint16 {
+	var m uint16
 	if q.X != base.X || q.Y != base.Y {
 		m |= ChangePosition
 	}
@@ -210,6 +271,21 @@ func Diff(base, q *Boat) uint8 {
 	if q.Flags != base.Flags {
 		m |= ChangeFlags
 	}
+	if q.Jib != base.Jib {
+		m |= ChangeJib
+	}
+	if q.Yards != base.Yards {
+		m |= ChangeYards
+	}
+	if q.Fore != base.Fore {
+		m |= ChangeFore
+	}
+	if q.Kite != base.Kite {
+		m |= ChangeKite
+	}
+	if q.Hoist != base.Hoist {
+		m |= ChangeHoist
+	}
 	return m
 }
 
@@ -218,7 +294,8 @@ func Diff(base, q *Boat) uint8 {
 // replaces any boat base has there, and for each slot both hold whose
 // sailor's look changed; a leave for each slot base holds and next does
 // not; and, for each other slot both hold that sample names, an update of
-// what changed, if anything did. A slot neither entered nor
+// what changed, if anything did. A boat whose sailor's look, own look or
+// kind changed is entered again. A slot neither entered nor
 // sampled must hold the same in both. It allocates nothing when b has room
 // for MaxSnapshotSize.
 func AppendEntries(b []byte, base, next *View, enter, sample uint64) ([]byte, int) {
@@ -226,7 +303,7 @@ func AppendEntries(b []byte, base, next *View, enter, sample uint64) ([]byte, in
 	for slot := range ViewSlots {
 		bit := uint64(1) << slot
 		switch {
-		case next.Used&bit != 0 && (enter&bit != 0 || base.Used&bit != 0 && next.Boats[slot].Look != base.Boats[slot].Look):
+		case next.Used&bit != 0 && (enter&bit != 0 || base.Used&bit != 0 && Relooked(&base.Boats[slot], &next.Boats[slot])):
 			b = AppendEntry(b, &Entry{Slot: uint8(slot), Op: OpEnter, Boat: next.Boats[slot]})
 		case next.Used&bit != 0 && base.Used&bit != 0 && sample&bit != 0:
 			q, p := &next.Boats[slot], &base.Boats[slot]
@@ -234,7 +311,11 @@ func AppendEntries(b []byte, base, next *View, enter, sample uint64) ([]byte, in
 			if m == 0 {
 				continue
 			}
-			b = AppendEntry(b, &Entry{Slot: uint8(slot), Op: OpUpdate, Mask: m,
+			op := uint8(OpUpdate)
+			if m > 0xff {
+				op = OpUpdateRig
+			}
+			b = AppendEntry(b, &Entry{Slot: uint8(slot), Op: op, Mask: m,
 				DX: int64(q.X) - int64(p.X), DY: int64(q.Y) - int64(p.Y), Boat: *q})
 		case base.Used&bit != 0 && next.Used&bit == 0:
 			b = AppendEntry(b, &Entry{Slot: uint8(slot), Op: OpLeave})
@@ -246,14 +327,25 @@ func AppendEntries(b []byte, base, next *View, enter, sample uint64) ([]byte, in
 	return b, n
 }
 
-// AppendEntry appends one entry.
+// AppendEntry appends one entry. An update's mask must fit its op: a
+// second byte only in an OpUpdateRig.
 func AppendEntry(b []byte, e *Entry) []byte {
 	b = append(b, e.Op<<6|e.Slot&63)
 	q := &e.Boat
 	switch e.Op {
 	case OpEnter:
-		b = binary.AppendUvarint(b, uint64(q.Kind))
+		var rig uint64
+		for i, v := range [...]int16{q.Jib, q.Yards, q.Fore, q.Kite} {
+			if v != 0 {
+				rig |= 1 << i
+			}
+		}
+		if q.Hoist != 0 {
+			rig |= enterHoist
+		}
+		b = binary.AppendUvarint(b, uint64(q.Kind)<<kindShift|rig)
 		b = binary.AppendUvarint(b, uint64(q.Look))
+		b = binary.AppendUvarint(b, uint64(q.BoatLook))
 		b = append(b, q.Flags)
 		b = appendInt24(b, q.X)
 		b = appendInt24(b, q.Y)
@@ -261,9 +353,20 @@ func AppendEntry(b []byte, e *Entry) []byte {
 			b = binary.LittleEndian.AppendUint16(b, v)
 		}
 		b = append(b, byte(q.Sailor), q.Sail)
-	case OpUpdate:
+		for i, v := range [...]int16{q.Jib, q.Yards, q.Fore, q.Kite} {
+			if rig&(1<<i) != 0 {
+				b = binary.LittleEndian.AppendUint16(b, uint16(v))
+			}
+		}
+		if rig&enterHoist != 0 {
+			b = append(b, q.Hoist)
+		}
+	case OpUpdate, OpUpdateRig:
 		m := e.Mask
-		b = append(b, m)
+		b = append(b, byte(m))
+		if e.Op == OpUpdateRig {
+			b = append(b, byte(m>>8))
+		}
 		if m&ChangePosition != 0 {
 			b = binary.AppendVarint(b, e.DX)
 			b = binary.AppendVarint(b, e.DY)
@@ -277,6 +380,14 @@ func AppendEntry(b []byte, e *Entry) []byte {
 			if m&(ChangeSailor<<i) != 0 {
 				b = append(b, v)
 			}
+		}
+		for i, v := range [...]int16{q.Jib, q.Yards, q.Fore, q.Kite} {
+			if m&(ChangeJib<<i) != 0 {
+				b = binary.LittleEndian.AppendUint16(b, uint16(v))
+			}
+		}
+		if m&ChangeHoist != 0 {
+			b = append(b, q.Hoist)
 		}
 	}
 	return b
@@ -303,10 +414,11 @@ func ReadEntry(b []byte, e *Entry) ([]byte, error) {
 	case OpLeave:
 		return b, nil
 	case OpEnter:
-		kind, n, err := uvarint(b)
+		kindRig, n, err := uvarint(b)
 		if err != nil {
 			return b, err
 		}
+		kind, rig := kindRig>>kindShift, kindRig&enterRig
 		if kind > math.MaxUint16 {
 			return b, fmt.Errorf("protocol: a boat of kind %d", kind)
 		}
@@ -319,10 +431,18 @@ func ReadEntry(b []byte, e *Entry) ([]byte, error) {
 			return b, fmt.Errorf("protocol: a sailor's look %d", look)
 		}
 		b = b[n:]
+		boatLook, n, err := uvarint(b)
+		if err != nil {
+			return b, err
+		}
+		if boatLook >= 1<<22 {
+			return b, fmt.Errorf("protocol: a boat's look %d", boatLook)
+		}
+		b = b[n:]
 		if len(b) < enterFields {
 			return b, ErrEntryShort
 		}
-		q.Kind, q.Look = uint16(kind), uint32(look)
+		q.Kind, q.Look, q.BoatLook = uint16(kind), uint32(look), uint32(boatLook)
 		q.Flags = b[0]
 		q.X, q.Y = int24(b[1:]), int24(b[4:])
 		q.Heading = binary.LittleEndian.Uint16(b[7:])
@@ -331,14 +451,45 @@ func ReadEntry(b []byte, e *Entry) ([]byte, error) {
 		q.Rudder = int16(binary.LittleEndian.Uint16(b[13:]))
 		q.Sailor, q.Sail = int8(b[15]), b[16]
 		b = b[enterFields:]
-	case OpUpdate:
-		if len(b) == 0 {
+		for i, v := range [...]*int16{&q.Jib, &q.Yards, &q.Fore, &q.Kite} {
+			if rig&(1<<i) == 0 {
+				continue
+			}
+			if len(b) < 2 {
+				return b, ErrEntryShort
+			}
+			if *v = int16(binary.LittleEndian.Uint16(b)); *v == 0 {
+				return b, errors.New("protocol: an enter's rig field of 0 sent")
+			}
+			b = b[2:]
+		}
+		if rig&enterHoist != 0 {
+			if len(b) < 1 {
+				return b, ErrEntryShort
+			}
+			if q.Hoist = b[0]; q.Hoist == 0 {
+				return b, errors.New("protocol: an enter's rig field of 0 sent")
+			}
+			b = b[1:]
+		}
+	case OpUpdate, OpUpdateRig:
+		width := 1
+		if e.Op == OpUpdateRig {
+			width = 2
+		}
+		if len(b) < width {
 			return b, ErrEntryShort
 		}
-		m := b[0]
-		b = b[1:]
-		if m == 0 {
+		m := uint16(b[0])
+		if width == 2 {
+			m |= uint16(b[1]) << 8
+		}
+		b = b[width:]
+		switch {
+		case m == 0:
 			return b, errors.New("protocol: an update of nothing")
+		case width == 2 && (m <= 0xff || m&^changeUsed != 0):
+			return b, fmt.Errorf("protocol: a rig's update of mask %#04x", m)
 		}
 		e.Mask = m
 		if m&ChangePosition != 0 {
@@ -387,10 +538,27 @@ func ReadEntry(b []byte, e *Entry) ([]byte, error) {
 			}
 			b = b[1:]
 		}
+		for i, v := range [...]*int16{&q.Jib, &q.Yards, &q.Fore, &q.Kite} {
+			if m&(ChangeJib<<i) == 0 {
+				continue
+			}
+			if len(b) < 2 {
+				return b, ErrEntryShort
+			}
+			*v = int16(binary.LittleEndian.Uint16(b))
+			b = b[2:]
+		}
+		if m&ChangeHoist != 0 {
+			if len(b) < 1 {
+				return b, ErrEntryShort
+			}
+			q.Hoist = b[0]
+			b = b[1:]
+		}
 	default:
 		return b, fmt.Errorf("protocol: an entry of op %d", e.Op)
 	}
-	if q.Flags&^flagsUsed != 0 {
+	if q.Flags&^flagsUsed != 0 || q.Reef() > bus.MaxReef {
 		return b, fmt.Errorf("protocol: a boat's flags %#02x", q.Flags)
 	}
 	return b, nil
@@ -468,6 +636,21 @@ func (v *View) Apply(e *Entry, ch *Changes) error {
 	}
 	if m&ChangeFlags != 0 {
 		q.Flags = u.Flags
+	}
+	if m&ChangeJib != 0 {
+		q.Jib = u.Jib
+	}
+	if m&ChangeYards != 0 {
+		q.Yards = u.Yards
+	}
+	if m&ChangeFore != 0 {
+		q.Fore = u.Fore
+	}
+	if m&ChangeKite != 0 {
+		q.Kite = u.Kite
+	}
+	if m&ChangeHoist != 0 {
+		q.Hoist = u.Hoist
 	}
 	if ch.Entered&bit == 0 {
 		ch.Updated |= bit

@@ -4,8 +4,8 @@
 
 -- name: CreateAccount :one
 -- A human's account, made with its first passkey: saved from the start.
-INSERT INTO account (kind, saved_at, user_handle, recovery_hash, recovery_made_at)
-VALUES ('human', now(), @user_handle, @recovery_hash, now())
+INSERT INTO account (kind, saved_at, user_handle, recovery_hash, recovery_made_at, born)
+VALUES ('human', now(), @user_handle, @recovery_hash, now(), @born)
 RETURNING id;
 
 -- name: CreateSailor :exec
@@ -35,7 +35,7 @@ WHERE a.id = ANY(@ids::uuid[]);
 -- whether it is stopped.
 SELECT a.id, a.kind, a.tools, a.priority, a.notices_off, a.user_handle, sl.name, sl.look, coalesce(sl.version, '')::text AS version, coalesce(sl.skin, '')::text AS skin,
   coalesce(sl.hair, '')::text AS hair, coalesce(sl.colour, '')::text AS colour, coalesce(sl.finish, '')::text AS finish, sl.look_chosen,
-  (a.stopped_at IS NOT NULL)::boolean AS stopped
+  (a.stopped_at IS NOT NULL)::boolean AS stopped, coalesce(a.born, 0)::integer AS born, (a.rules_at IS NOT NULL)::boolean AS rules
 FROM account a
 JOIN sailor sl ON sl.account_id = a.id
 WHERE a.user_handle = @user_handle AND a.kind = 'human';
@@ -43,7 +43,8 @@ WHERE a.user_handle = @user_handle AND a.kind = 'human';
 -- name: AccountByID :one
 SELECT a.id, a.kind, a.tools, a.priority, a.notices_off, coalesce(a.user_handle, '')::bytea AS user_handle, sl.name, sl.look, coalesce(sl.version, '')::text AS version, coalesce(sl.skin, '')::text AS skin,
   coalesce(sl.hair, '')::text AS hair, coalesce(sl.colour, '')::text AS colour, coalesce(sl.finish, '')::text AS finish, sl.look_chosen,
-  a.created_at, a.recovery_made_at, (a.recovery_hash IS NOT NULL)::boolean AS has_recovery
+  a.created_at, a.recovery_made_at, (a.recovery_hash IS NOT NULL)::boolean AS has_recovery,
+  coalesce(a.born, 0)::integer AS born, (a.rules_at IS NOT NULL)::boolean AS rules
 FROM account a
 JOIN sailor sl ON sl.account_id = a.id
 WHERE a.id = @id;
@@ -132,8 +133,8 @@ SELECT account_id FROM session WHERE token_hash = @token_hash;
 -- An action recorded at the moment it is taken, under its account's lock,
 -- not as its transaction began: two actions on one account are recorded
 -- in the order they were taken.
-INSERT INTO account_action (at, action, account_id, kind, name, detail, source, from_addr)
-VALUES (clock_timestamp(), @action, @account_id, @kind, @name, @detail, @source, @from_addr);
+INSERT INTO account_action (at, action, account_id, kind, name, detail, source, from_addr, report_id)
+VALUES (clock_timestamp(), @action, @account_id, @kind, @name, @detail, @source, @from_addr, sqlc.narg(report_id));
 
 -- name: ActionsOf :many
 -- The record of an account, the newest first.

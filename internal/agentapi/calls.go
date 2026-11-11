@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"math"
 	"strings"
 	"time"
 
@@ -170,14 +169,15 @@ func (c *Core) call(ctx context.Context, d toolDef, h *helm, a *oauth.Accepted, 
 	case toolTrim:
 		var o struct {
 			Boom *int `json:"boom"`
+			Reef *int `json:"reef,omitempty"`
 		}
 		if r := args(req, &o); r != nil {
 			return "", nil, r
 		}
-		if o.Boom == nil {
-			return "", nil, refuse(refusedArgs, "trim takes boom: how far out the boom may swing, 4 to 95 degrees.")
+		if o.Boom == nil && o.Reef == nil {
+			return "", nil, refuse(refusedArgs, "trim takes boom, how far out the boom may swing, 4 to 95 degrees; or reef, 0 to 2; or both.")
 		}
-		return c.order(ctx, h, func(s *Sea, f *bus.Frame, sl int32) (written, string) { return h.trim(s, f, sl, *o.Boom) })
+		return c.order(ctx, h, func(s *Sea, f *bus.Frame, sl int32) (written, string) { return h.trim(s, f, sl, o.Boom, o.Reef) })
 	case toolChart:
 		var o chartArgs
 		if r := args(req, &o); r != nil {
@@ -215,20 +215,41 @@ func (c *Core) call(ctx context.Context, d toolDef, h *helm, a *oauth.Accepted, 
 		return text, nil, r
 	case toolBoat:
 		var o struct {
-			Action  string `json:"action,omitempty"`
-			Boat    string `json:"boat,omitempty"`
-			Version string `json:"version,omitempty"`
-			Finish  string `json:"finish,omitempty"`
-			Colour  string `json:"colour,omitempty"`
+			Action  string  `json:"action,omitempty"`
+			Boat    string  `json:"boat,omitempty"`
+			Paint   string  `json:"paint,omitempty"`
+			Cloth   string  `json:"cloth,omitempty"`
+			Number  *int    `json:"number,omitempty"`
+			Name    *string `json:"name,omitempty"`
+			Version string  `json:"version,omitempty"`
+			Finish  string  `json:"finish,omitempty"`
+			Colour  string  `json:"colour,omitempty"`
+			Sailor  string  `json:"sailor,omitempty"`
 		}
 		if r := args(req, &o); r != nil {
+			return "", nil, r
+		}
+		if o.Action == "hand" || o.Action == "ashore" || o.Action == "take" && o.Boat == "" && h.inCompany(c.sea.Load()) {
+			return c.controls(ctx, h, o.Action, o.Sailor)
+		}
+		if r := h.crewRefusal(o.Action); r != nil {
 			return "", nil, r
 		}
 		look := lookArgs{Version: o.Version, Finish: o.Finish, Colour: o.Colour}
 		if o.Action == "sailor_look" || (o.Action == "" && look.changes()) {
 			return c.sailorLook(ctx, h, &look)
 		}
-		return c.boat(ctx, h, o.Action, o.Boat)
+		fa := fleetArgs{Boat: o.Boat, Paint: o.Paint, Cloth: o.Cloth, Number: o.Number, Name: o.Name}
+		if o.Action == "" && fa.changes() {
+			o.Action = "look"
+		}
+		return c.boat(ctx, h, o.Action, &fa)
+	case toolSay:
+		var o sayArgs
+		if r := args(req, &o); r != nil {
+			return "", nil, r
+		}
+		return c.say(ctx, h, &o)
 	case toolHandbook:
 		var o handbookArgs
 		if r := args(req, &o); r != nil {
@@ -258,8 +279,9 @@ func (h *helm) holding() string {
 		return ""
 	}
 	p := pilotOf(f, sl)
-	word, _ := held(s, f, sl)
-	line := fmt.Sprintf("%s, boom out to %d°", p.Holds, int(math.Round(boomOf(s.boat(f.Kind[sl]), word.SheetIndex()))))
+	word, _, _ := held(s, f, sl)
+	b := s.boat(f.Kind[sl])
+	line := p.Holds + ", " + trimWords(b, boomOf(b, word.SheetIndex()))
 	if sail := f.Instruments[sl].Sail; f.Machine[sl] && sail != bus.SailDrawing {
 		line += ", " + sailWords[sail]
 	}
@@ -326,7 +348,11 @@ func (c *Core) order(ctx context.Context, h *helm, give func(s *Sea, f *bus.Fram
 	}
 	h.mu.Lock()
 	sl := h.slot
+	r := h.controlsRefusal(s, f, sl)
 	h.mu.Unlock()
+	if r != nil {
+		return "", nil, r
+	}
 	if f.Voyage[sl].Falling() {
 		return "", nil, refuse(refusedFalling, wordsFalling)
 	}
@@ -338,39 +364,27 @@ func (c *Core) order(ctx context.Context, h *helm, give func(s *Sea, f *bus.Fram
 	return strings.Join(lines, "\n"), nil, nil
 }
 
-// boat answers boat: the fleet, going to sea, leaving the water; the
-// sailor's look is sailorLook's.
-func (c *Core) boat(ctx context.Context, h *helm, action, which string) (string, any, *refusal) {
+// boat answers boat: the fleet, taking a boat, its look, leaving the
+// water; the sailor's look is sailorLook's.
+func (c *Core) boat(ctx context.Context, h *helm, action string, o *fleetArgs) (string, any, *refusal) {
 	s := c.sea.Load()
 	if s == nil {
 		return "", nil, refuse(refusedNoWorld, wordsNoWorld)
 	}
-	name := s.Boats[0].Name
+	if s.Fleet == nil && action != "leave" && action != "take" {
+		return "Not yet: the fleet comes with a later update.", nil, nil
+	}
 	switch action {
 	case "", "list":
-		_, _, _, atSea := c.where(h)
-		state := "ashore"
-		if atSea {
-			state = "in the water, sailed by you"
+		v, err := s.Fleet.Of(ctx, h.account)
+		if err != nil {
+			return "", nil, refuse(refusedBusy, wordsBusy)
 		}
-		return fmt.Sprintf("Your owner's fleet: %s (%s). Take it with action take; leave the water with action leave.", name, state), nil, nil
+		return c.fleetList(s, &v), nil, nil
 	case "take":
-		if which != "" && fold(which) != fold(name) {
-			return "", nil, refuse(refusedArgs, fmt.Sprintf("No boat called %q in your owner's fleet: it has %s.", which, name))
-		}
-		s, f, jr, err := h.atSea(ctx)
-		if r := atSeaRefusal(err, jr); r != nil {
-			return "", nil, r
-		}
-		defer f.Release()
-		if jr.queued {
-			return queuedWords(jr.position), nil, nil
-		}
-		lines := c.noticesOf(s, jr)
-		if !jr.joined {
-			lines = append(lines, "Already at sea in your "+name+".")
-		}
-		return strings.Join(lines, "\n"), nil, nil
+		return c.takeBoat(ctx, h, s, o.Boat)
+	case "look":
+		return c.boatLook(ctx, h, s, o)
 	case "leave":
 		left, err := h.leave(ctx, s)
 		switch {
@@ -380,8 +394,6 @@ func (c *Core) boat(ctx context.Context, h *helm, action, which string) (string,
 			return "Not at sea: your boat is ashore already.", nil, nil
 		}
 		return "Your boat has left the water: your voyage is over. Calling observe, steer or trim takes you to sea again, at the start.", nil, nil
-	case "look":
-		return "Not yet: boat looks come with a later update.", nil, nil
 	}
 	return "", nil, refuse(refusedArgs, "action is list, take, leave, look or sailor_look.")
 }

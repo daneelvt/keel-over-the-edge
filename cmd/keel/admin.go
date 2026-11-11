@@ -21,6 +21,7 @@ import (
 	"github.com/daneelvt/keel-over-the-edge/internal/accounts"
 	"github.com/daneelvt/keel-over-the-edge/internal/config"
 	"github.com/daneelvt/keel-over-the-edge/internal/owner"
+	"github.com/daneelvt/keel-over-the-edge/internal/review"
 	"github.com/daneelvt/keel-over-the-edge/internal/store"
 )
 
@@ -59,9 +60,33 @@ const adminUsage = `usage: keel admin [-addr host:port] [-json] <command> [argum
   lifetime DURATION [-yes]
                        how long an AI app's approval lasts: 90d, 12h, 30m
   actions [ID]         the record of the owner's actions
+  settings             links to come aboard: how long a link lasts, and
+                       whether links and boarding are on for everyone
+  links on|off [-yes]  every skipper's links work, or none does: off ends
+                       every live link for good
+  boarding on|off      anyone may come aboard a boat, or nobody
+  linklife DURATION [-yes]
+                       how long a new link lasts, from 5m to 7d: 24h, 2d;
+                       a shorter one stops older links at once
+  chat on|off [-yes]   chat aboard on or off for everyone: off stops every
+                       line at once
+  shipmates on|off     shipmates' messages on or off for everyone
+  spectators on|off    spectators reading machine sailors' chat aboard, on
+                       or off for everyone
+  countries CODES      chat off in these countries, two letters each,
+                       comma separated: BR,AU; "" clears them
+  reports              the reports open, a child's safety first
+  report ID            a report whole, with the lines it holds
+  act ID ACTION [-days N] [-reason TEXT] [-line N -at TIME]
+      [-referred TEXT] [-note TEXT] [-yes]
+                       act on a report: dismiss, warn (-note: what was
+                       seen), mute-chat (-days 1, 7 or 30), stop and delete
+                       (-reason), remove-line (-line and -at as report
+                       shows them), purge, hold, release, under-13,
+                       referred (-referred: to whom, and its reference)
 
-Without -yes, stop, revoke, delete and lifetime say what they would do,
-and do nothing.
+Without -yes, stop, revoke, delete, lifetime, links off, linklife, chat off
+and act say what they would do, and do nothing.
 
   -addr  keel's internal listener (default KEEL_INTERNAL_ADDR, or
          127.0.0.1:9090)
@@ -218,6 +243,11 @@ func adminWith(ctx context.Context, args []string, getenv func(string) string, s
 	yes := fs.Bool("yes", false, "")
 	sort := fs.String("sort", "", "")
 	page := fs.Int("page", 0, "")
+	days := fs.Int("days", 0, "")
+	line := fs.Uint64("line", 0, "")
+	at := fs.String("at", "", "")
+	referred := fs.String("referred", "", "")
+	note := fs.String("note", "", "")
 	pos, err := parseMixed(fs, rest)
 	if err != nil {
 		return errUsage
@@ -230,6 +260,17 @@ func adminWith(ctx context.Context, args []string, getenv func(string) string, s
 		}
 		if _, ok := store.ParseID(pos[0]); !ok {
 			fmt.Fprintf(stderr, "keel admin %s: %q is not an account's ID\n", verb, pos[0])
+			return "", errUsage
+		}
+		return pos[0], nil
+	}
+	reportID := func() (string, error) {
+		if len(pos) < 1 {
+			fmt.Fprintf(stderr, "keel admin %s: a report's ID is required\n", verb)
+			return "", errUsage
+		}
+		if _, ok := store.ParseID(pos[0]); !ok {
+			fmt.Fprintf(stderr, "keel admin %s: %q is not a report's ID\n", verb, pos[0])
 			return "", errUsage
 		}
 		return pos[0], nil
@@ -343,6 +384,111 @@ func adminWith(ctx context.Context, args []string, getenv func(string) string, s
 			}
 			fmt.Fprintf(stdout, "A lifetime of %s ends %d live grants at once.\nNothing is done yet: run it again with -yes.\n", d, out.Ends)
 		})
+	case "settings":
+		raw, err := c.do(ctx, http.MethodGet, "/owner/api/settings.json", nil, stderr)
+		if err != nil {
+			return err
+		}
+		var out owner.SettingsJSON
+		return c.show(raw, &out, func() { writeSettings(stdout, out) })
+	case "links", "boarding":
+		if len(pos) != 1 || (pos[0] != "on" && pos[0] != "off") {
+			fmt.Fprintf(stderr, "keel admin %s: on|off\n", verb)
+			return errUsage
+		}
+		on := pos[0] == "on"
+		req := owner.SettingsRequest{Check: verb == "links" && !on && !*yes}
+		if verb == "links" {
+			req.Links = &on
+		} else {
+			req.Boarding = &on
+		}
+		return c.settings(ctx, req, stderr)
+	case "chat", "shipmates", "spectators":
+		if len(pos) != 1 || (pos[0] != "on" && pos[0] != "off") {
+			fmt.Fprintf(stderr, "keel admin %s: on|off\n", verb)
+			return errUsage
+		}
+		on := pos[0] == "on"
+		req := owner.SettingsRequest{Check: verb == "chat" && !on && !*yes}
+		switch verb {
+		case "chat":
+			req.Chat = &on
+		case "shipmates":
+			req.ShipmateMessages = &on
+		default:
+			req.SpectatorChat = &on
+		}
+		return c.settings(ctx, req, stderr)
+	case "countries":
+		if len(pos) != 1 {
+			fmt.Fprintln(stderr, `keel admin countries: CODES, two letters each, comma separated: BR,AU; "" clears them`)
+			return errUsage
+		}
+		codes := []string{}
+		for _, s := range strings.Split(pos[0], ",") {
+			if s = strings.TrimSpace(s); s != "" {
+				codes = append(codes, s)
+			}
+		}
+		return c.settings(ctx, owner.SettingsRequest{ChatCountries: &codes}, stderr)
+	case "reports":
+		if len(pos) != 0 {
+			fmt.Fprintln(stderr, "keel admin reports: no arguments; report ID shows one")
+			return errUsage
+		}
+		raw, err := c.do(ctx, http.MethodGet, "/owner/api/reports.json", nil, stderr)
+		if err != nil {
+			return err
+		}
+		var rows []owner.QueueRow
+		return c.show(raw, &rows, func() { writeQueue(stdout, rows, time.Now()) })
+	case "report":
+		r, err := reportID()
+		if err != nil {
+			return err
+		}
+		raw, err := c.do(ctx, http.MethodGet, "/owner/api/report.json?id="+url.QueryEscape(r), nil, stderr)
+		if err != nil {
+			return err
+		}
+		var rep owner.ReportJSON
+		return c.show(raw, &rep, func() { writeReport(stdout, &rep) })
+	case "act":
+		r, err := reportID()
+		if err != nil {
+			return err
+		}
+		if len(pos) != 2 {
+			fmt.Fprintln(stderr, "keel admin act: ID ACTION, one of", strings.Join(review.Actions, ", "))
+			return errUsage
+		}
+		req := owner.ActRequest{Report: r, Action: pos[1], Reason: *reason, Days: *days, Line: *line, At: *at,
+			Referred: *referred, Note: *note, Check: !*yes}
+		raw, err := c.do(ctx, http.MethodPost, "/owner/api/reports/act", req, stderr)
+		if err != nil {
+			return err
+		}
+		var done review.Done
+		return c.show(raw, &done, func() {
+			if done.Done {
+				fmt.Fprintf(stdout, "Done: %s\n", done.Words)
+				return
+			}
+			fmt.Fprintf(stdout, "%s\nNothing is done yet: run it again with -yes.\n", done.Words)
+		})
+	case "linklife":
+		if len(pos) != 1 {
+			fmt.Fprintln(stderr, "keel admin linklife: DURATION, as 24h, 2d or 30m")
+			return errUsage
+		}
+		d, err := parseLifetime(pos[0])
+		if err != nil {
+			fmt.Fprintln(stderr, "keel admin linklife:", err)
+			return errUsage
+		}
+		secs := int64(d / time.Second)
+		return c.settings(ctx, owner.SettingsRequest{LinkLifetime: &secs, Check: !*yes}, stderr)
 	case "actions":
 		path := "/owner/api/actions.json"
 		if len(pos) > 0 {
@@ -367,6 +513,38 @@ func adminWith(ctx context.Context, args []string, getenv func(string) string, s
 	}
 	fmt.Fprintf(stderr, "keel admin: unknown command %q\n\n%s", verb, adminUsage)
 	return errUsage
+}
+
+// settings changes the switches for sailing together, or with a check
+// says what it would do.
+func (c *adminClient) settings(ctx context.Context, req owner.SettingsRequest, stderr io.Writer) error {
+	raw, err := c.do(ctx, http.MethodPost, "/owner/api/settings", req, stderr)
+	if err != nil {
+		return err
+	}
+	var out owner.SettingsAnswer
+	return c.show(raw, &out, func() {
+		fmt.Fprintln(c.stdout, out.Words)
+		if req.Check {
+			fmt.Fprintln(c.stdout, "Nothing is done yet: run it again with -yes.")
+			return
+		}
+		writeSettings(c.stdout, out.Settings)
+	})
+}
+
+// writeSettings writes the switches for sailing together and chat's as
+// text.
+func writeSettings(w io.Writer, s owner.SettingsJSON) {
+	onOff := map[bool]string{true: "on", false: "off"}
+	fmt.Fprintf(w, "a link lasts %s; links %s; boarding %s\n", time.Duration(s.LinkLifetime)*time.Second,
+		onOff[s.Links], onOff[s.Boarding])
+	countries := "no country"
+	if len(s.ChatCountries) > 0 {
+		countries = strings.Join(s.ChatCountries, ", ")
+	}
+	fmt.Fprintf(w, "chat %s; shipmates' messages %s; spectators reading machine sailors' chat %s; chat off in %s\n",
+		onOff[s.Chat], onOff[s.ShipmateMessages], onOff[s.SpectatorChat], countries)
 }
 
 func (c *adminClient) search(ctx context.Context, req owner.SearchRequest, stderr io.Writer) error {

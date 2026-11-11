@@ -19,7 +19,8 @@ export type RecordValues = Record<string, number | number[]>;
 export interface ScenarioFile {
   /** The catalog's sea values. */
   sea: Values;
-  params: RecordValues;
+  /** Each catalog boat's params, by its id, in the catalog's order. */
+  params: Record<string, RecordValues>;
   /** The catalog's wind values, for the scenarios that sail in spells of weather. */
   wind?: RecordValues;
   /** The catalog's grounding values, for the scenarios that sail on a terrain. */
@@ -66,6 +67,8 @@ export interface ScenarioChange {
 
 export interface Scenario {
   name: string;
+  /** The boat it sails, by its id among the file's params; the first if absent. */
+  boat?: string;
   steps: number;
   state?: Values;
   control?: Values;
@@ -98,6 +101,23 @@ export interface ScenarioResult {
 }
 
 /**
+ * A scenario's boat: its params and its kind, its index among the file's
+ * params, which the module is prepared and stepped as.
+ */
+export function scenarioBoat(
+  file: Pick<ScenarioFile, 'params'>,
+  boat?: string,
+): { kind: number; params: RecordValues } {
+  const ids = Object.keys(file.params);
+  const kind = boat === undefined ? 0 : ids.indexOf(boat);
+  const params = file.params[ids[kind] ?? ''];
+  if (kind < 0 || params === undefined) {
+    throw new Error(`no params for the boat ${boat}`);
+  }
+  return { kind, params };
+}
+
+/**
  * Steps a scenario as the Go test does, hashing the state and Out after
  * every step.
  */
@@ -125,8 +145,9 @@ export async function runScenario(
   }
   setFields(physics, 'seaParams', file.sea);
   physics.prepareSea();
-  setRecord(physics.records.params, 'params', file.params);
-  physics.prepare();
+  const { kind, params } = scenarioBoat(file, scenario.boat);
+  setRecord(physics.records.params, 'params', params);
+  physics.prepare(kind);
   const weather = scenario.weather;
   if (weather !== undefined) {
     if (file.wind === undefined) {
@@ -216,7 +237,7 @@ export async function runScenario(
     if (weather !== undefined) {
       physics.windAt(weather.tick + i);
     }
-    physics.step();
+    physics.step(kind);
     const { state: s, out: o } = physics.records;
     all.set(new Uint8Array(s.buffer, s.byteOffset, s.byteLength), i * stepBytes);
     all.set(new Uint8Array(o.buffer, o.byteOffset, o.byteLength), i * stepBytes + stateBytes);

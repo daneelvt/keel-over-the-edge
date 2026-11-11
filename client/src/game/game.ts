@@ -21,10 +21,18 @@
 
 import { effect, signal } from '@preact/signals';
 import { SoundEngine } from '../audio/engine';
-import type { FeaturesInput } from '../audio/features';
+import { type FeaturesInput, isColonyCall } from '../audio/features';
 import { FOG_SIGNAL_RULES, type FogSignalsInput, poorBy } from '../audio/fogsignals';
 import { groundSound, SCRAPE, scrapeOf } from '../audio/ground';
 import { KNOCK, knockOf } from '../audio/knock';
+import {
+  isLifeCall,
+  type LifeGroup,
+  type LifeInput,
+  WATER_RECIPES,
+  type WaterSound,
+  waterSounds,
+} from '../audio/life';
 import type { ThunderInput } from '../audio/thunder';
 import { edgeInput, type SoundInput, soundInput } from '../audio/voices';
 import { catalog } from '../catalog';
@@ -51,7 +59,9 @@ import {
   WAY_TACK_STALLED,
 } from '../input/pilot';
 import { quantiseHelm, quantiseSheet } from '../input/quantise';
+import { ReefInput } from '../input/reef';
 import { SheetInput } from '../input/sheet';
+import { type GullTown, gullTowns } from '../life/gulls';
 import type { BumpTold } from '../net/messages';
 import { RECORDS } from '../predict/layout.gen';
 import { wavePeriod } from '../render/features';
@@ -74,7 +84,9 @@ export class Game implements PilotActions {
   readonly helm = new HelmInput();
   readonly sheet = new SheetInput();
   readonly pilot = new PilotInput();
-  readonly keys = new KeyInput(this.helm, this.sheet, this);
+  /** The reef the player asks for: the Reef key calls reef.set(level). */
+  readonly reef = new ReefInput();
+  readonly keys = new KeyInput(this.helm, this.sheet, this, this.reef);
   readonly hud = new HudModel();
   readonly sound = new SoundEngine();
   readonly world: SeaScene;
@@ -114,7 +126,6 @@ export class Game implements PilotActions {
   #back = Number.NEGATIVE_INFINITY;
   /** How a boat over the lip is drawn falling: the own and the others. */
   readonly fallShape: FallShape;
-  readonly #halfLength: number;
 
   readonly #sound: SoundInput = {
     apparentWind: 0,
@@ -132,22 +143,56 @@ export class Game implements PilotActions {
   #aground = 0;
   #speed = 0;
   #pushes = 0;
-  readonly #rudderMax: number;
-  readonly #boomIn: number;
-  readonly #boomOut: number;
   #lastTime = 0;
+
+  /** The own boat's kind's rudder's travel and the boom's least and most, radians. */
+  get #rudderMax(): number {
+    return this.world.kind.physics.foils.rudderAngle * DEG;
+  }
+
+  get #boomIn(): number {
+    return this.world.kind.physics.rig.boomIn * DEG;
+  }
+
+  get #boomOut(): number {
+    return this.world.kind.physics.rig.boomOut * DEG;
+  }
+
+  /** Half the own boat's waterline, metres. */
+  get #halfLength(): number {
+    return this.world.kind.physics.hull.waterlineLength / 2;
+  }
+
+  /**
+   * Asks for the main reefed to a level, 0 (full sail) … 2: the Reef key's
+   * and its Shake out's. The level goes out with the controls (and into a
+   * sandbox's step) as R and F set it.
+   */
+  setReef(level: number): void {
+    this.reef.set(level);
+  }
+
+  /**
+   * The own boat becomes one of another kind (or the boat watched is one):
+   * the scene draws it, the autopilot's dial and the controls' words are
+   * its. Resolves once it is drawn.
+   */
+  useKind(kind: number): Promise<void> {
+    const drawn = this.world.useKind(kind);
+    const k = this.world.kind;
+    this.pilot.least = (k.physics.rig.closeHauled - 10) * DEG;
+    this.hud.setKind(k);
+    return drawn;
+  }
 
   constructor(world: SeaScene, settings: SettingsSignal) {
     this.world = world;
     this.settings = settings;
     this.loop = new StepLoop(this.clock, () => this.#step());
-    const { foils, rig } = world.kind.physics;
-    this.#rudderMax = foils.rudderAngle * DEG;
-    this.#boomIn = rig.boomIn * DEG;
-    this.#boomOut = rig.boomOut * DEG;
     // The dial and the keys go no closer to the wind than ten degrees
     // inside close-hauled.
-    this.pilot.least = (rig.closeHauled - 10) * DEG;
+    this.pilot.least = (world.kind.physics.rig.closeHauled - 10) * DEG;
+    this.hud.setKind(world.kind);
     const edge = world.edge;
     this.approach = new ApproachWatch(edge.lip, edge.band, catalog.world.edge.clear);
     const slabs = catalog.world.edge.look.slabs;
@@ -157,9 +202,12 @@ export class Game implements PilotActions {
       gravity: slabs.gravity,
       tip: [slabs.tip[0] ?? 0.3, slabs.tip[1] ?? 1.9],
     };
-    this.#halfLength = world.kind.physics.hull.waterlineLength / 2;
     this.helm.onTake = () => this.takeHelm();
     this.sheet.onTake = () => this.controlsTouched();
+    this.reef.onTake = () => {
+      this.hud.reef.value = this.reef.level;
+      this.controlsTouched();
+    };
     this.sheet.target = 0.5;
     world.tick = (dt, now) => this.#frame(dt, now);
     effect(() => {
@@ -502,7 +550,12 @@ export class Game implements PilotActions {
       return;
     }
     this.beforeStep?.();
-    d.step(quantiseHelm(this.helm.target), quantiseSheet(this.sheet.target), this.pilot);
+    d.step(
+      quantiseHelm(this.helm.target),
+      quantiseSheet(this.sheet.target),
+      this.pilot,
+      this.reef.level,
+    );
   }
 
   #frame(dt: number, now: number): void {
@@ -583,9 +636,15 @@ export class Game implements PilotActions {
     this.#sound.endNear = w.endStage.sound;
     this.#sound.rain = w.weather.rain;
     this.#sound.gustFactor = w.wind.factor;
+    this.#sound.waterline = w.kind.physics.hull.waterlineLength;
+    // The rigging's rope by the sails it holds up: the main's, and a square
+    // rig's yards too (a headsail's stay is not the rigging that sings).
+    const { rig, square } = w.kind.physics;
+    this.#sound.sailArea = rig.sailArea + square.squareForeArea + square.squareAfterArea;
     this.sound.update(now, soundInput(w.out, w.sea, time, this.#sound));
     this.#harbour(now, look);
     this.#features(now, look);
+    this.#life(now, look);
     this.#fogSignals(now, look);
     this.#thunder(now, look);
   }
@@ -623,7 +682,10 @@ export class Game implements PilotActions {
       } else if (kind.site === 'blowhole') {
         x.blowholes.push({ ...at, seed: part.seed });
       } else if (kind.site === 'colony' && kind.birds !== undefined) {
-        x.colonies.push({ ...at, call: kind.birds.call, seed: part.seed });
+        const call = kind.birds.look.call;
+        if (isColonyCall(call)) {
+          x.colonies.push({ ...at, call, seed: part.seed });
+        }
       }
     }
     this.sound.features(now, x);
@@ -648,12 +710,91 @@ export class Game implements PilotActions {
         listener: { east: p.east, north: p.north },
         look,
         ...heard,
+        gulls: this.#gullTowns(land.towns),
         seaHeight: w.sea.height,
         period: 4,
       },
       this.#secondsPerHour,
     );
   }
+
+  /** The towns' gulls, found again when the towns held change. */
+  #gulls: { version: number; towns: GullTown[] } = { version: -1, towns: [] };
+
+  #gullTowns(towns: NonNullable<SeaScene['land']>['towns']): GullTown[] {
+    const version = towns.features().version;
+    if (version !== this.#gulls.version) {
+      this.#gulls = { version, towns: gullTowns(towns.buildings(), towns.kinds) };
+    }
+    return this.#gulls.towns;
+  }
+
+  /** The sea's life near the boat, its calls heard by day. */
+  readonly #lifeInput: LifeInput = {
+    seconds: 0,
+    day: false,
+    listener: { east: 0, north: 0 },
+    look: 0,
+    groups: [],
+  };
+
+  readonly #lifeGroups: LifeGroup[] = [];
+  readonly #ownPose: NonNullable<LifeGroup['pose']> = { east: 0, north: 0, heading: 0 };
+
+  #life(now: number, look: number): void {
+    const w = this.world;
+    const x = this.#lifeInput;
+    const p = w.pose;
+    x.seconds = w.ticks / STEPS_PER_SECOND;
+    x.day = w.sky.now.sunHeight > 0;
+    x.listener.east = p.east;
+    x.listener.north = p.north;
+    x.look = look;
+    const own = this.#ownPose;
+    own.east = p.east;
+    own.north = p.north;
+    own.heading = p.heading;
+    // The groups' entries are kept from frame to frame, and filled again.
+    const pool = this.#lifeGroups;
+    let n = 0;
+    for (const record of w.life.values()) {
+      const kind = catalog.life.kinds[record.kind];
+      const call = kind?.look?.call;
+      // A group with a boat is heard about the page's own; the others'
+      // boats are not drawn here.
+      if (kind === undefined || call === undefined || !isLifeCall(call) || record.with > 1) {
+        continue;
+      }
+      const g = pool[n] ?? { record, kind, pose: null };
+      pool[n++] = g;
+      g.record = record;
+      g.kind = kind;
+      g.pose = record.with === 1 ? own : null;
+    }
+    pool.length = n;
+    x.groups = pool;
+    this.sound.life(now, x);
+    // What broke the water, and the dolphins' breaths, as the frame drew them.
+    const d = w.lifeDraw;
+    if (d.splashCount > 0 || d.breathCount > 0 || d.heardCount > 0) {
+      this.sound.water(
+        waterSounds(
+          WATER_RECIPES,
+          x.listener,
+          look,
+          d.splashes,
+          d.splashCount,
+          d.breaths,
+          d.breathCount,
+          this.#waterSounds,
+          d.heard,
+          d.heardCount,
+        ),
+      );
+    }
+  }
+
+  readonly #waterSounds: WaterSound[] = [];
 
   /** The lights' fog signals, heard at the boat in fog. */
   readonly #fogInput: FogSignalsInput = {

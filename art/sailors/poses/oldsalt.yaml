@@ -48,6 +48,28 @@ poses:
     turn:
       - [head, x, 6]
 
+  # At the wheel, both hands on its spokes: the same squint at the sky.
+  oldsalt-wheel-sky:
+    from: wheel-stand
+    turn:
+      - [spine_03, x, -4]
+      - [neck_01, x, -10]
+      - [head, x, -20]
+      - [neck_01, z, 6]
+      - [head, z, 12]
+
+  oldsalt-wheel-clouds:
+    from: oldsalt-wheel-sky
+    turn:
+      - [neck_01, z, -10]
+      - [head, z, -20]
+      - [head, x, 4]
+
+  oldsalt-wheel-nod:
+    from: oldsalt-wheel-clouds
+    turn:
+      - [head, x, 6]
+
 clips:
   oldsalt-habit:
     sides: true
@@ -65,3 +87,11 @@ clips:
       - { pose: oldsalt-stand-clouds, hold: 0.4, ramp: 1.9, lead: head }
       - { pose: oldsalt-stand-nod, hold: 0.4, ramp: 0.8, lead: head }
       - { pose: stand, hold: 0.4, ramp: 1.6, lead: head }
+
+  oldsalt-habit-wheel:
+    keys:
+      - { pose: wheel-stand, hold: 0.4 }
+      - { pose: oldsalt-wheel-sky, hold: 0.9, ramp: 1.6, lead: head }
+      - { pose: oldsalt-wheel-clouds, hold: 0.4, ramp: 1.9, lead: head }
+      - { pose: oldsalt-wheel-nod, hold: 0.4, ramp: 0.8, lead: head }
+      - { pose: wheel-stand, hold: 0.4, ramp: 1.6, lead: head }

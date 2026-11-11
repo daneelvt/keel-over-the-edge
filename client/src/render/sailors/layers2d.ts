@@ -41,6 +41,8 @@ export class LayeredTexture {
   #colorSpace: ColorSpace = NoColorSpace;
   #width = 0;
   #height = 0;
+  /** Whether the texture now has been sent to the GPU whole. */
+  #sent = false;
 
   constructor(readonly name: string) {}
 
@@ -85,9 +87,14 @@ export class LayeredTexture {
     const layer = this.#layers.length - 1;
     const depth = this.texture?.image.depth ?? 0;
     if (layer < depth && this.texture !== null) {
-      // Room for it: its bytes in place, and only its layer sent.
+      // Room for it: its bytes in place, and only its layer sent, once the
+      // texture has been sent whole. Before, three.js would send the layers
+      // named and leave the rest of a new texture empty (black): several
+      // looks may load between two frames.
       this.#copy(this.texture, layer);
-      this.texture.addLayerUpdate(layer);
+      if (this.#sent) {
+        this.texture.addLayerUpdate(layer);
+      }
       this.texture.needsUpdate = true;
     } else {
       this.#grow(Math.max(MIN_LAYERS, depth * 2, layer + 1));
@@ -121,6 +128,12 @@ export class LayeredTexture {
       this.#copy(t, l);
     }
     t.needsUpdate = true;
+    this.#sent = false;
+    t.onUpdate = () => {
+      if (this.texture === t) {
+        this.#sent = true;
+      }
+    };
     this.texture = t;
     for (const u of this.users) {
       u.value = t;

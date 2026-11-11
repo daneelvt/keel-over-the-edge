@@ -36,7 +36,10 @@ type ringEntry struct {
 // (client-side prediction and server reconciliation). It is
 // client/src/predict/predictor.ts's twin.
 type Predictor struct {
-	kind *physics.Prepared
+	// kinds are every kind of boat, prepared, and Kind the boat's: an
+	// index into them, from the Welcome.
+	kinds []physics.Prepared
+	Kind  uint16
 	// Seas is the sea the boat is stepped in, from the server's SeaAreas;
 	// Weather the spells of weather, from its WeatherSystems.
 	Seas    *Seas
@@ -74,12 +77,20 @@ type Predictor struct {
 	Stays bool
 }
 
-// NewPredictor predicts a boat of kind in the sea of waves, with which the
-// kind was prepared, and in the wind computed with weather; with no waves,
-// in flat water. Until the server sends its spells of weather, there is no
-// wind.
-func NewPredictor(kind *physics.Prepared, waves *physics.Waves, weather *physics.WeatherPrepared) *Predictor {
-	return &Predictor{kind: kind, Seas: NewSeas(waves, weather), Weather: physics.Weather{Prepared: weather}, shared: weather}
+// NewPredictor predicts a boat of one of kinds, the first until Kind is
+// set, in the sea of waves, with which the kinds were prepared, and in the
+// wind computed with weather; with no waves, in flat water. Until the
+// server sends its spells of weather, there is no wind.
+func NewPredictor(kinds []physics.Prepared, waves *physics.Waves, weather *physics.WeatherPrepared) *Predictor {
+	return &Predictor{kinds: kinds, Seas: NewSeas(waves, weather), Weather: physics.Weather{Prepared: weather}, shared: weather}
+}
+
+// kind is the boat's kind, prepared: the first for a kind out of range.
+func (p *Predictor) kind() *physics.Prepared {
+	if int(p.Kind) < len(p.kinds) {
+		return &p.kinds[p.Kind]
+	}
+	return &p.kinds[0]
 }
 
 // SetHarbour sets the world's harbour, from the Welcome: the wind is
@@ -149,17 +160,18 @@ func (p *Predictor) step(tick int64, in Input) {
 	w := bus.Pack(0, in.Helm, in.Sheet, 0)
 	c := physics.Control{Helm: w.Helm(), Sheet: w.Sheet()}
 	c.Pilot, c.Target, c.Order, c.Way = in.Pilot(0, 0).Control()
+	c.Reef = float64(in.Rig(0, 0).Reef())
 	if p.wind.Tick != float64(tick) {
 		physics.WeatherAt(&p.Weather, &p.wind, float64(tick))
 	}
 	e := physics.WindAt(&p.wind, p.State.X, p.State.Y, p.Shelter)
 	e.CurrentEast, e.CurrentNorth = physics.CurrentAt(p.Weather.Prepared, p.Circulation, p.State.X, p.State.Y, p.Ground)
 	if p.Encounters != nil {
-		if p.Wakes.Shadow(&e, p.State.X, p.State.Y, tick, &p.Weather, p.kind, p.Encounters) > 0 {
+		if p.Wakes.Shadow(&e, p.State.X, p.State.Y, tick, &p.Weather, p.kinds, p.Encounters) > 0 {
 			p.Shadowed++
 		}
 	}
-	physics.Step(&p.State, &c, &e, p.Seas.At(tick, p.Shelter), p.Ground, p.kind, &p.out)
+	physics.Step(&p.State, &c, &e, p.Seas.At(tick, p.Shelter), p.Ground, p.kind(), &p.out)
 	if physics.OverEdge(p.Weather.Prepared, p.State.X, p.State.Y) {
 		p.Over = tick
 	}

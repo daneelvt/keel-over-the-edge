@@ -7,10 +7,14 @@ import (
 	"sync"
 	"time"
 
+	"github.com/daneelvt/keel-over-the-edge/internal/aboard"
 	"github.com/daneelvt/keel-over-the-edge/internal/bus"
 	"github.com/daneelvt/keel-over-the-edge/internal/catalog"
 	"github.com/daneelvt/keel-over-the-edge/internal/chart"
+	"github.com/daneelvt/keel-over-the-edge/internal/chat"
+	"github.com/daneelvt/keel-over-the-edge/internal/fleet"
 	"github.com/daneelvt/keel-over-the-edge/internal/forecast"
+	"github.com/daneelvt/keel-over-the-edge/internal/life"
 	sailorlooks "github.com/daneelvt/keel-over-the-edge/internal/looks"
 	"github.com/daneelvt/keel-over-the-edge/internal/physics"
 	"github.com/daneelvt/keel-over-the-edge/internal/sim"
@@ -44,6 +48,9 @@ type Sea struct {
 	// Bundle is the world's terrain as made: its islands, places and
 	// lights.
 	Bundle *worldgen.Bundle
+	// Life is the world's life schedule, whose kinds a frame's life is of;
+	// nil for a sea with nothing alive in it.
+	Life *life.Schedule
 	// Chart is the world's chart as written, Sight what the lookouts see
 	// by; nil for a world nobody charts.
 	Chart *chart.Model
@@ -83,6 +90,18 @@ type Sea struct {
 	// by; nil for none.
 	Looks      *sailorlooks.Book
 	Encounters *physics.EncounterPrepared
+	// Fleet is the accounts' fleets, which a machine sailor takes its boat
+	// from, swaps and changes the look of; nil for none: it sails the kind
+	// each sailor brings, of the first look.
+	Fleet *fleet.Fleet
+	// Chat is the world's chat aboard, through which a machine sailor says
+	// its lines and is handed those said to it; Talker what chat's rule
+	// needs of a machine sailor, its human's, and its name. Nil for none.
+	Chat   *chat.Hub
+	Talker func(ctx context.Context, a bus.Account) (aboard.Speaker, string, error)
+	// Deck, if not nil, is the game's own side of sailing together, which
+	// a skipper's agent puts someone ashore through.
+	Deck Deck
 
 	overlays overlays
 
@@ -156,12 +175,18 @@ func (s *Sea) weatherAtTick(f *bus.Frame, tick int64) *physics.WeatherTick {
 	return t
 }
 
-// boat is a kind of boat by its index, the first for one out of range.
+// joinedKind is the kind of boat a machine sailor's Join gives it, as a
+// player's does: a Join names none, so the world's first, the boat every
+// sailor takes to sea.
+const joinedKind = 0
+
+// boat is a kind of boat by its index; one out of range, which no boat of
+// the world is, is the kind a Join gives.
 func (s *Sea) boat(kind uint16) *catalog.Boat {
 	if int(kind) < len(s.Boats) {
 		return &s.Boats[kind]
 	}
-	return &s.Boats[0]
+	return &s.Boats[joinedKind]
 }
 
 // ends is when the world ends, zero for none known.

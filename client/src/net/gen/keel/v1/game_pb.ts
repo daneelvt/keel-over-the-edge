@@ -20,7 +20,7 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file keel/v1/game.proto.
  */
 export const file_keel_v1_game: GenFile = /*@__PURE__*/
-  fileDesc("ChJrZWVsL3YxL2dhbWUucHJvdG8SB2tlZWwudjEinQEKDUNsaWVudE1lc3NhZ2USHwoFaGVsbG8YASABKAsyDi5rZWVsLnYxLkhlbGxvSAASHwoFaW5wdXQYAiABKAsyDi5rZWVsLnYxLklucHV0SAASHQoEcGluZxgDIAEoCzINLmtlZWwudjEuUGluZ0gAEiMKB2NvbW1hbmQYBCABKAsyEC5rZWVsLnYxLkNvbW1hbmRIAEIGCgRib2R5ImAKBUhlbGxvEhAKCHByb3RvY29sGAEgASgJEg8KB2NhdGFsb2cYAiABKAkSFgoOcGh5c2ljc19sYXlvdXQYAyABKA0SDQoFYnVpbGQYBCABKAkSDQoFd2F0Y2gYBSABKAkikAEKBUlucHV0EgsKA3NlcRgBIAEoDRIMCgRoZWxtGAIgASgNEg0KBXNoZWV0GAMgASgNEhAKCGFja190aWNrGAQgASgDEhAKCGFja19vbmx5GAUgASgIEg0KBXBpbG90GAYgASgNEg4KBnRhcmdldBgHIAEoDRINCgVvcmRlchgIIAEoDRILCgN3YXkYCSABKA0idgoEUGluZxIWCg5jbGllbnRfdGltZV91cxgBIAEoAxIQCghhY2tfdGljaxgCIAEoAxIOCgZydHRfbXMYAyABKA0SEAoIZnJhbWVfbXMYBCABKA0SDAoEdGllchgFIAEoDRIUCgxyZW5kZXJfc2NhbGUYBiABKA0iuAEKB0NvbW1hbmQSIQoGcmVzeW5jGAEgASgLMg8ua2VlbC52MS5SZXN5bmNIABIdCgRyb2FtGAIgASgLMg0ua2VlbC52MS5Sb2FtSAASHwoFd2F0Y2gYAyABKAsyDi5rZWVsLnYxLldhdGNoSAASHQoEc2FpbBgEIAEoCzINLmtlZWwudjEuU2FpbEgAEiMKB3Vud2F0Y2gYBSABKAsyEC5rZWVsLnYxLlVud2F0Y2hIAEIGCgRib2R5IhcKBVdhdGNoEg4KBnNhaWxvchgBIAEoCSIGCgRTYWlsIgkKB1Vud2F0Y2giCAoGUmVzeW5jIj8KBFJvYW0SCgoCb24YASABKAgSDAoEZWFzdBgCIAEoERINCgVub3J0aBgDIAEoERIOCgZoZWlnaHQYBCABKA0i7AUKDVNlcnZlck1lc3NhZ2USIwoHd2VsY29tZRgBIAEoCzIQLmtlZWwudjEuV2VsY29tZUgAEh0KBHBvbmcYAiABKAsyDS5rZWVsLnYxLlBvbmdIABIhCgZxdWV1ZWQYAyABKAsyDy5rZWVsLnYxLlF1ZXVlZEgAEiMKB3Jlc3RhcnQYBCABKAsyEC5rZWVsLnYxLlJlc3RhcnRIABImCglzZWFfYXJlYXMYBSABKAsyES5rZWVsLnYxLlNlYUFyZWFzSAASMgoPd2VhdGhlcl9zeXN0ZW1zGAYgASgLMhcua2VlbC52MS5XZWF0aGVyU3lzdGVtc0gAEh0KBGJ1bXAYByABKAsyDS5rZWVsLnYxLkJ1bXBIABIhCgZjaHVua3MYCCABKAsyDy5rZWVsLnYxLkNodW5rc0gAEh8KBXRvb2xzGAkgASgLMg4ua2VlbC52MS5Ub29sc0gAEiEKBnBsYWNlcxgKIAEoCzIPLmtlZWwudjEuUGxhY2VzSAASIQoGbGlnaHRzGAsgASgLMg8ua2VlbC52MS5MaWdodHNIABIfCgVjaGFydBgMIAEoCzIOLmtlZWwudjEuQ2hhcnRIABIjCgdjaGFydGVkGA0gASgLMhAua2VlbC52MS5DaGFydGVkSAASKgoLaXNsYW5kX2NhcHMYDiABKAsyEy5rZWVsLnYxLklzbGFuZENhcHNIABIlCghmb3JlY2FzdBgPIAEoCzIRLmtlZWwudjEuRm9yZWNhc3RIABIqCgt3YXRjaF9lbmRlZBgQIAEoCzITLmtlZWwudjEuV2F0Y2hFbmRlZEgAEiUKCHdhdGNoZXJzGBEgASgLMhEua2VlbC52MS5XYXRjaGVyc0gAEigKCmFnZW50X2xhbXAYEiABKAsyEi5rZWVsLnYxLkFnZW50TGFtcEgAEiwKDGxvb2tfY2hhbmdlZBgTIAEoCzIULmtlZWwudjEuTG9va0NoYW5nZWRIAEIGCgRib2R5IjwKCldhdGNoRW5kZWQSHgoDd2h5GAEgASgOMhEua2VlbC52MS5XYXRjaEVuZBIOCgZzYWlsb3IYAiABKAkiGQoIV2F0Y2hlcnMSDQoFY291bnQYASABKA0iGwoLTG9va0NoYW5nZWQSDAoEbG9vaxgBIAEoDSIpCglBZ2VudExhbXASHAoFc3RhdGUYASABKA4yDS5rZWVsLnYxLkxhbXAihwIKCEZvcmVjYXN0Eg0KBWlzc3VlGAEgASgD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Z2h0GAsgASgLMg4ua2VlbC52MS5MaWdodBIPCgdlbmRzX3VzGAwgASgDEhIKCmNsb3NpbmdfdXMYDSABKAMSDAoEem9uZRgOIAEoCRIjCgh3YXRjaGluZxgPIAEoCzIRLmtlZWwudjEuV2F0Y2hpbmcSIQoHaGFyYm91chgQIAEoCzIQLmtlZWwudjEuSGFyYm91chIMCgRsb29rGBEgASgNInAKB0hhcmJvdXISDAoEZWFzdBgBIAEoERINCgVub3J0aBgCIAEoERIOCgZyYWRpdXMYAyABKA0SEgoKbW91dGhfZWFzdBgEIAEoERITCgttb3V0aF9ub3J0aBgFIAEoERIPCgduYXJyb3dzGAYgASgNIkcKCFdhdGNoaW5nEg4KBnNhaWxvchgBIAEoCRIPCgdtYWNoaW5lGAIgASgIEgwKBG1pbmUYAyABKAgSDAoEbG9vaxgEIAEoDSI1CgRQb25nEhYKDmNsaWVudF90aW1lX3VzGAEgASgDEhUKDXdvcmxkX3RpbWVfdXMYAiABKAMq0QEKCFdhdGNoRW5kEhkKFVdBVENIX0VORF9VTlNQRUNJRklFRBAAEhIKDldBVENIX0VORF9MRUZUEAESEQoNV0FUQ0hfRU5EX09GRhACEhQKEFdBVENIX0VORF9DQU5OT1QQAxIYChRXQVRDSF9FTkRfTk9UX0FUX1NFQRAEEhcKE1dBVENIX0VORF9OT19TQUlMT1IQBRIRCg1XQVRDSF9FTkRfT1dOEAYSEwoPV0FUQ0hfRU5EX1FVSUNLEAcSEgoOV0FUQ0hfRU5EX0JVU1kQCCo+CgRMYW1wEhQKEExBTVBfVU5TUEVDSUZJRUQQABIQCgxMQU1QX0FUX0hFTE0QARIOCgpMQU1QX1FVSUVUEAIqewoMQ2hhcnRTdWJqZWN0Eh0KGUNIQVJUX1NVQkpFQ1RfVU5TUEVDSUZJRUQQABIYChRDSEFSVF9TVUJKRUNUX0lTTEFORBABEhcKE0NIQVJUX1NVQkpFQ1RfUExBQ0UQAhIZChVDSEFSVF9TVUJKRUNUX0ZFQVRVUkUQAypkCghCdW1wUGFydBIZChVCVU1QX1BBUlRfVU5TUEVDSUZJRUQQABITCg9CVU1QX1BBUlRfWU9VUlMQARIUChBCVU1QX1BBUlRfVEhFSVJTEAISEgoOQlVNUF9QQVJUX05PTkUQA0I9WjtnaXRodWIuY29tL2RhbmVlbHZ0L2tlZWwtb3Zlci10aGUtZWRnZS9pbnRlcm5hbC9wcm90b2NvbC9wYmIGcHJvdG8z");
+  fileDesc("ChJrZWVsL3YxL2dhbWUucHJvdG8SB2tlZWwudjEinQEKDUNsaWVudE1lc3NhZ2USHwoFaGVsbG8YASABKAsyDi5rZWVsLnYxLkhlbGxvSAASHwoFaW5wdXQYAiABKAsyDi5rZWVsLnYxLklucHV0SAASHQoEcGluZxgDIAEoCzINLmtlZWwudjEuUGluZ0gAEiMKB2NvbW1hbmQYBCABKAsyEC5rZWVsLnYxLkNvbW1hbmRIAEIGCgRib2R5ImAKBUhlbGxvEhAKCHByb3RvY29sGAEgASgJEg8KB2NhdGFsb2cYAiABKAkSFgoOcGh5c2ljc19sYXlvdXQYAyABKA0SDQoFYnVpbGQYBCABKAkSDQoFd2F0Y2gYBSABKAkingEKBUlucHV0EgsKA3NlcRgBIAEoDRIMCgRoZWxtGAIgASgNEg0KBXNoZWV0GAMgASgNEhAKCGFja190aWNrGAQgASgDEhAKCGFja19vbmx5GAUgASgIEg0KBXBpbG90GAYgASgNEg4KBnRhcmdldBgHIAEoDRINCgVvcmRlchgIIAEoDRILCgN3YXkYCSABKA0SDAoEcmVlZhgKIAEoDSJ2CgRQaW5nEhYKDmNsaWVudF90aW1lX3VzGAEgASgDEhAKCGFja190aWNrGAIgASgDEg4KBnJ0dF9tcxgDIAEoDRIQCghmcmFtZV9tcxgEIAEoDRIMCgR0aWVyGAUgASgNEhQKDHJlbmRlcl9zY2FsZRgGIAEoDSLhBAoHQ29tbWFuZBIhCgZyZXN5bmMYASABKAsyDy5rZWVsLnYxLlJlc3luY0gAEh0KBHJvYW0YAiABKAsyDS5rZWVsLnYxLlJvYW1IABIfCgV3YXRjaBgDIAEoCzIOLmtlZWwudjEuV2F0Y2hIABIdCgRzYWlsGAQgASgLMg0ua2VlbC52MS5TYWlsSAASIwoHdW53YXRjaBgFIAEoCzIQLmtlZWwudjEuVW53YXRjaEgAEh8KBWtub2NrGAYgASgLMg4ua2VlbC52MS5Lbm9ja0gAEiEKBmFuc3dlchgHIAEoCzIPLmtlZWwudjEuQW5zd2VySAASHQoEaGFuZBgIIAEoCzINLmtlZWwudjEuSGFuZEgAEh0KBHRha2UYCSABKAsyDS5rZWVsLnYxLlRha2VIABImCglnaXZlX2JhY2sYCiABKAsyES5rZWVsLnYxLkdpdmVCYWNrSAASIwoGYXNob3JlGAsgASgLMhEua2VlbC52MS5Hb0FzaG9yZUgAEiwKDGNsb3NlX2tub2NrcxgMIAEoCzIULmtlZWwudjEuQ2xvc2VLbm9ja3NIABIbCgNzYXkYDSABKAsyDC5rZWVsLnYxLlNheUgAEh0KBG11dGUYDiABKAsyDS5rZWVsLnYxLk11dGVIABIfCgVibG9jaxgPIAEoCzIOLmtlZWwudjEuQmxvY2tIABIhCgZyZXBvcnQYECABKAsyDy5rZWVsLnYxLlJlcG9ydEgAEioKC2NvbWVfYWJvYXJkGBEgASgLMhMua2VlbC52MS5Db21lQWJvYXJkSABCBgoEYm9keSIMCgpDb21lQWJvYXJkIisKA1NheRIMCgR0ZXh0GAEgASgJEgoKAmlkGAIgASgNEgoKAnRvGAMgASgJIiwKA1dobxIOCgRzZWF0GAEgASgNSAASDgoEbGluZRgCIAEoBEgAQgUKA3dobyItCgRNdXRlEhkKA3dobxgBIAEoCzIMLmtlZWwudjEuV2hvEgoKAm9uGAIgASgIIi4KBUJsb2NrEhkKA3dobxgBIAEoCzIMLmtlZWwudjEuV2hvEgoKAm9uGAIgASgIIlgKBlJlcG9ydBIZCgN3aG8YASABKAsyDC5rZWVsLnYxLldobxIlCgZyZWFzb24YAiABKA4yFS5rZWVsLnYxLlJlcG9ydFJlYXNvbhIMCgRub3RlGAMgASgJIjkKBUtub2NrEg0KBXRva2VuGAEgASgJEg8KB21hY2hpbmUYAiABKAkSEAoIc2hpcG1hdGUYAyABKAkiJAoGQW5zd2VyEg0KBWtub2NrGAEgASgEEgsKA2xldBgCIAEoCCISCgRIYW5kEgoKAnRvGAEgASgNIgYKBFRha2UiCgoIR2l2ZUJhY2siFwoIR29Bc2hvcmUSCwoDd2hvGAEgASgNIh0KC0Nsb3NlS25vY2tzEg4KBmNsb3NlZBgBIAEoCCIXCgVXYXRjaBIOCgZzYWlsb3IYASABKAkiBgoEU2FpbCIJCgdVbndhdGNoIggKBlJlc3luYyI/CgRSb2FtEgoKAm9uGAEgASgIEgwKBGVhc3QYAiABKBESDQoFbm9ydGgYAyABKBESDgoGaGVpZ2h0GAQgASgNIvYJCg1TZXJ2ZXJNZXNzYWdlEiMKB3dlbGNvbWUYASABKAsyEC5rZWVsLnYxLldlbGNvbWVIABIdCgRwb25nGAIgASgLMg0ua2VlbC52MS5Qb25nSAASIQoGcXVldWVkGAMgASgLMg8ua2VlbC52MS5RdWV1ZWRIABIjCgdyZXN0YXJ0GAQgASgLMhAua2VlbC52MS5SZXN0YXJ0SAASJgoJc2VhX2FyZWFzGAUgASgLMhEua2VlbC52MS5TZWFBcmVhc0gAEjIKD3dlYXRoZXJfc3lzdGVtcxgGIAEoCzIXLmtlZWwudjEuV2VhdGhlclN5c3RlbXNIABIdCgRidW1wGAcgASgLMg0ua2VlbC52MS5CdW1wSAASIQoGY2h1bmtzGAggASgLMg8ua2VlbC52MS5DaHVua3NIABIfCgV0b29scxgJIAEoCzIOLmtlZWwudjEuVG9vbHNIABIhCgZwbGFjZXMYCiABKAsyDy5rZWVsLnYxLlBsYWNlc0gAEiEKBmxpZ2h0cxgLIAEoCzIPLmtlZWwudjEuTGlnaHRzSAASHwoFY2hhcnQYDCABKAsyDi5rZWVsLnYxLkNoYXJ0SAASIwoHY2hhcnRlZBgNIAEoCzIQLmtlZWwudjEuQ2hhcnRlZEgAEioKC2lzbGFuZF9jYXBzGA4gASgLMhMua2VlbC52MS5Jc2xhbmRDYXBzSAASJQoIZm9yZWNhc3QYDyABKAsyES5rZWVsLnYxLkZvcmVjYXN0SAASKgoLd2F0Y2hfZW5kZWQYECABKAsyEy5rZWVsLnYxLldhdGNoRW5kZWRIABIlCgh3YXRjaGVycxgRIAEoCzIRLmtlZWwudjEuV2F0Y2hlcnNIABIoCgphZ2VudF9sYW1wGBIgASgLMhIua2VlbC52MS5BZ2VudExhbXBIABIsCgxsb29rX2NoYW5nZWQYEyABKAsyFC5rZWVsLnYxLkxvb2tDaGFuZ2VkSAASNQoRYm9hdF9sb29rX2NoYW5nZWQYFCABKAsyGC5rZWVsLnYxLkJvYXRMb29rQ2hhbmdlZEgAEigKCmJvYXRfbmFtZXMYFSABKAsyEi5rZWVsLnYxLkJvYXROYW1lc0gAEh0KBGxpZmUYFiABKAsyDS5rZWVsLnYxLkxpZmVIABIjCgVrbm9jaxgXIAEoCzISLmtlZWwudjEuS25vY2tDYXJkSAASJQoIa25vY2tp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bmQYBSABKA0SEAoIcmVqb2luZWQYBiABKAgSEAoIZXBvY2hfdXMYByABKAMSDAoEbGFuZBgIIAEoCBITCgtjaXJjdWxhdGlvbhgJIAEoERINCgV0b29scxgKIAEoCBIdCgVsaWdodBgLIAEoCzIOLmtlZWwudjEuTGlnaHQSDwoHZW5kc191cxgMIAEoAxISCgpjbG9zaW5nX3VzGA0gASgDEgwKBHpvbmUYDiABKAkSIwoId2F0Y2hpbmcYDyABKAsyES5rZWVsLnYxLldhdGNoaW5nEiEKB2hhcmJvdXIYECABKAsyEC5rZWVsLnYxLkhhcmJvdXISDAoEbG9vaxgRIAEoDRIRCglib2F0X2xvb2sYEiABKA0SEQoJYm9hdF9uYW1lGBMgASgJEh8KBmFib2FyZBgUIAEoCzIPLmtlZWwudjEuQWJvYXJkIjUKBkFib2FyZBIPCgdza2lwcGVyGAEgASgJEgwKBGxvb2sYAiABKA0SDAoEc2VhdBgDIAEoDSJwCgdIYXJib3VyEgwKBGVhc3QYASABKBESDQoFbm9ydGgYAiABKBESDgoGcmFkaXVzGAMgASgNEhIKCm1vdXRoX2Vhc3QYBCABKBESEwoLbW91dGhfbm9ydGgYBSABKBESDwoHbmFycm93cxgGIAEoDSJHCghXYXRjaGluZxIOCgZzYWlsb3IYASABKAkSDwoHbWFjaGluZRgCIAEoCBIMCgRtaW5lGAMgASgIEgwKBGxvb2sYBCABKA0iNQoEUG9uZxIWCg5jbGllbnRfdGltZV91cxgBIAEoAxIVCg13b3JsZF90aW1lX3VzGAIgASgDKvwBCgxSZXBvcnRSZWFzb24SHQoZUkVQT1JUX1JFQVNPTl9VTlNQRUNJRklFRBAAEhcKE1JFUE9SVF9SRUFTT05fQ0hJTEQQARIYChRSRVBPUlRfUkVBU09OX1NFWFVBTBACEhoKFlJFUE9SVF9SRUFTT05fQlVMTFlJTkcQAxIWChJSRVBPUlRfUkVBU09OX0hBVEUQBBIZChVSRVBPUlRfUkVBU09OX1RIUkVBVFMQBRIWChJSRVBPUlRfUkVBU09OX1NDQU0QBhIaChZSRVBPUlRfUkVBU09OX0NIRUFUSU5HEAcSFwoTUkVQT1JUX1JFQVNPTl9PVEhFUhAIKqcDCgpLbm9ja1N0YXRlEhsKF0tOT0NLX1NUQVRFX1VOU1BFQ0lGSUVEEAASFwoTS05PQ0tfU1RBVEVfV0FJVElORxABEhMKD0tOT0NLX1NUQVRFX0xFVBACEhcKE0tOT0NLX1NUQVRFX05PVF9OT1cQAxIWChJLTk9DS19TVEFURV9MQVBTRUQQBBIVChFLTk9DS19TVEFURV9FTkRFRBAFEhoKFktOT0NLX1NUQVRFX05PVF9BVF9TRUEQBhIUChBLTk9DS19TVEFURV9GVUxMEAcSFgoSS05PQ0tfU1RBVEVfQ0xPU0VEEAgSFAoQS05PQ0tfU1RBVEVfQlVTWRAJEhUKEUtOT0NLX1NUQVRFX09GVEVOEAoSFwoTS05PQ0tfU1RBVEVfQ1JPV0RFRBALEhMKD0tOT0NLX1NUQVRFX09XThAMEhUKEUtOT0NLX1NUQVRFX0ZJUlNUEA0SGQoVS05PQ0tfU1RBVEVfVFJZX0FHQUlOEA4SGQoVS05PQ0tfU1RBVEVfV0lUSERSQVdOEA8SFAoQS05PQ0tfU1RBVEVfQVdBWRAQKtYBCgtDaGF0UmVmdXNhbBIcChhDSEFUX1JFRlVTQUxfVU5TUEVDSUZJRUQQABIYChRDSEFUX1JFRlVTQUxfQ09OVEFDVBABEhUKEUNIQVRfUkVGVVNBTF9MT05HEAISFQoRQ0hBVF9SRUZVU0FMX0ZBU1QQAxIXChNDSEFUX1JFRlVTQUxfU0lMRU5UEAQSFwoTQ0hBVF9SRUZVU0FMX05PQk9EWRAFEhUKEUNIQVRfUkVGVVNBTF9BV0FZEAYSGAoUQ0hBVF9SRUZVU0FMX1JFU1RJTkcQByqEAQoKQ2hhdFN0YXR1cxIbChdDSEFUX1NUQVRVU19VTlNQRUNJRklFRBAAEhIKDkNIQVRfU1RBVFVTX09OEAESEwoPQ0hBVF9TVEFUVVNfT0ZGEAISFwoTQ0hBVF9TVEFUVVNfT1dOX09GRhADEhcKE0NIQVRfU1RBVFVTX1JFU1RJTkcQBCpmCglBc2hvcmVXaHkSGgoWQVNIT1JFX1dIWV9VTlNQRUNJRklFRBAAEhQKEEFTSE9SRV9XSFlfQ0hPU0UQARISCg5BU0hPUkVfV0hZX1BVVBACEhMKD0FTSE9SRV9XSFlfTEVGVBADKucBCghXYXRjaEVuZBIZChVXQVRDSF9FTkRfVU5TUEVDSUZJRUQQABISCg5XQVRDSF9FTkRfTEVGVBABEhEKDVdBVENIX0VORF9PRkYQAhIUChBXQVRDSF9FTkRfQ0FOTk9UEAMSGAoUV0FUQ0hfRU5EX05PVF9BVF9TRUEQBBIXChNXQVRDSF9FTkRfTk9fU0FJTE9SEAUSEQoNV0FUQ0hfRU5EX09XThAGEhMKD1dBVENIX0VORF9RVUlDSxAHEhIKDldBVENIX0VORF9CVVNZEAgSFAoQV0FUQ0hfRU5EX0FCT0FSRBAJKj4KBExhbXASFAoQTEFNUF9VTlNQRUNJRklFRBAAEhAKDExBTVBfQVRfSEVMTRABEg4KCkxBTVBfUVVJRVQQAip7CgxDaGFydFN1YmplY3QSHQoZQ0hBUlRfU1VCSkVDVF9VTlNQRUNJRklFRBAAEhgKFENIQVJUX1NVQkpFQ1RfSVNMQU5EEAESFwoTQ0hBUlRfU1VCSkVDVF9QTEFDRRACEhkKFUNIQVJUX1NVQkpFQ1RfRkVBVFVSRRADKmQKCEJ1bXBQYXJ0EhkKFUJVTVBfUEFSVF9VTlNQRUNJRklFRBAAEhMKD0JVTVBfUEFSVF9ZT1VSUxABEhQKEEJVTVBfUEFSVF9USEVJUlMQAhISCg5CVU1QX1BBUlRfTk9ORRADQj1aO2dpdGh1Yi5jb20vZGFuZWVsdnQva2VlbC1vdmVyLXRoZS1lZGdlL2ludGVybmFsL3Byb3RvY29sL3BiYgZwcm90bzM");
 
 /**
  * ClientMessage is everything a client sends, after the kind byte 1.
@@ -189,6 +189,15 @@ export type Input = Message<"keel.v1.Input"> & {
    * @generated from field: uint32 way = 9;
    */
   way: number;
+
+  /**
+   * The reef the crew is to take: 0 full sail, 1 or 2 reefs. A target the
+   * crew works to over the rig's reef time, applied at the input's tick as
+   * the helm is.
+   *
+   * @generated from field: uint32 reef = 10;
+   */
+  reef: number;
 };
 
 /**
@@ -293,6 +302,78 @@ export type Command = Message<"keel.v1.Command"> & {
      */
     value: Unwatch;
     case: "unwatch";
+  } | {
+    /**
+     * @generated from field: keel.v1.Knock knock = 6;
+     */
+    value: Knock;
+    case: "knock";
+  } | {
+    /**
+     * @generated from field: keel.v1.Answer answer = 7;
+     */
+    value: Answer;
+    case: "answer";
+  } | {
+    /**
+     * @generated from field: keel.v1.Hand hand = 8;
+     */
+    value: Hand;
+    case: "hand";
+  } | {
+    /**
+     * @generated from field: keel.v1.Take take = 9;
+     */
+    value: Take;
+    case: "take";
+  } | {
+    /**
+     * @generated from field: keel.v1.GiveBack give_back = 10;
+     */
+    value: GiveBack;
+    case: "giveBack";
+  } | {
+    /**
+     * @generated from field: keel.v1.GoAshore ashore = 11;
+     */
+    value: GoAshore;
+    case: "ashore";
+  } | {
+    /**
+     * @generated from field: keel.v1.CloseKnocks close_knocks = 12;
+     */
+    value: CloseKnocks;
+    case: "closeKnocks";
+  } | {
+    /**
+     * @generated from field: keel.v1.Say say = 13;
+     */
+    value: Say;
+    case: "say";
+  } | {
+    /**
+     * @generated from field: keel.v1.Mute mute = 14;
+     */
+    value: Mute;
+    case: "mute";
+  } | {
+    /**
+     * @generated from field: keel.v1.Block block = 15;
+     */
+    value: Block;
+    case: "block";
+  } | {
+    /**
+     * @generated from field: keel.v1.Report report = 16;
+     */
+    value: Report;
+    case: "report";
+  } | {
+    /**
+     * @generated from field: keel.v1.ComeAboard come_aboard = 17;
+     */
+    value: ComeAboard;
+    case: "comeAboard";
   } | { case: undefined; value?: undefined };
 };
 
@@ -302,6 +383,360 @@ export type Command = Message<"keel.v1.Command"> & {
  */
 export const CommandSchema: GenMessage<Command> = /*@__PURE__*/
   messageDesc(file_keel_v1_game, 4);
+
+/**
+ * ComeAboard brings an owner watching their own machine sailor aboard its
+ * boat, as crew, without knocking: the boat is theirs. It is told how it
+ * stands as a knock is (Knocking): let aboard, a Welcome to the boat
+ * follows and the watch ends; or why not (the boat full, boarding off, the
+ * age question or the Rules of the sea first, the machine sailor not its
+ * boat's skipper).
+ *
+ * @generated from message keel.v1.ComeAboard
+ */
+export type ComeAboard = Message<"keel.v1.ComeAboard"> & {
+};
+
+/**
+ * Describes the message keel.v1.ComeAboard.
+ * Use `create(ComeAboardSchema)` to create a new message.
+ */
+export const ComeAboardSchema: GenMessage<ComeAboard> = /*@__PURE__*/
+  messageDesc(file_keel_v1_game, 5);
+
+/**
+ * Say says a line to everyone aboard the boat the connection sails or is
+ * aboard, or, with to, a message to one shipmate wherever they are in the
+ * game: at most 200 characters, one line, text only. The server checks
+ * it, and the sender is sent the line back as it was said (Chat, with
+ * echo), or why it was not (Chat.refused). A line refused for a word
+ * comes back as said and reaches nobody. A message reaches a shipmate
+ * only while they are in the game; it is never kept for later.
+ *
+ * @generated from message keel.v1.Say
+ */
+export type Say = Message<"keel.v1.Say"> & {
+  /**
+   * @generated from field: string text = 1;
+   */
+  text: string;
+
+  /**
+   * The client's own number for the line, which its Chat echoes.
+   *
+   * @generated from field: uint32 id = 2;
+   */
+  id: number;
+
+  /**
+   * A shipmate's account, as the shipmates list names it (its ID in UUID
+   * text); "" to say it aboard.
+   *
+   * @generated from field: string to = 3;
+   */
+  to: string;
+};
+
+/**
+ * Describes the message keel.v1.Say.
+ * Use `create(SaySchema)` to create a new message.
+ */
+export const SaySchema: GenMessage<Say> = /*@__PURE__*/
+  messageDesc(file_keel_v1_game, 6);
+
+/**
+ * Who is someone aboard, for mute, block and report: by their seat on the
+ * boat the connection sails or is aboard, or by a line of theirs the
+ * connection was sent (its Chat.id), which the server still holds.
+ *
+ * @generated from message keel.v1.Who
+ */
+export type Who = Message<"keel.v1.Who"> & {
+  /**
+   * @generated from oneof keel.v1.Who.who
+   */
+  who: {
+    /**
+     * @generated from field: uint32 seat = 1;
+     */
+    value: number;
+    case: "seat";
+  } | {
+    /**
+     * @generated from field: uint64 line = 2;
+     */
+    value: bigint;
+    case: "line";
+  } | { case: undefined; value?: undefined };
+};
+
+/**
+ * Describes the message keel.v1.Who.
+ * Use `create(WhoSchema)` to create a new message.
+ */
+export const WhoSchema: GenMessage<Who> = /*@__PURE__*/
+  messageDesc(file_keel_v1_game, 7);
+
+/**
+ * Mute hides one player's lines from the connection's account, everywhere,
+ * or shows them again; they are not told.
+ *
+ * @generated from message keel.v1.Mute
+ */
+export type Mute = Message<"keel.v1.Mute"> & {
+  /**
+   * @generated from field: keel.v1.Who who = 1;
+   */
+  who?: Who | undefined;
+
+  /**
+   * @generated from field: bool on = 2;
+   */
+  on: boolean;
+};
+
+/**
+ * Describes the message keel.v1.Mute.
+ * Use `create(MuteSchema)` to create a new message.
+ */
+export const MuteSchema: GenMessage<Mute> = /*@__PURE__*/
+  messageDesc(file_keel_v1_game, 8);
+
+/**
+ * Block hides each one's lines from the other, everywhere, refuses their
+ * knocks both ways and their watch of the account's sailor, and puts them
+ * ashore from the account's boat; or ends the block. They are not told.
+ *
+ * @generated from message keel.v1.Block
+ */
+export type Block = Message<"keel.v1.Block"> & {
+  /**
+   * @generated from field: keel.v1.Who who = 1;
+   */
+  who?: Who | undefined;
+
+  /**
+   * @generated from field: bool on = 2;
+   */
+  on: boolean;
+};
+
+/**
+ * Describes the message keel.v1.Block.
+ * Use `create(BlockSchema)` to create a new message.
+ */
+export const BlockSchema: GenMessage<Block> = /*@__PURE__*/
+  messageDesc(file_keel_v1_game, 9);
+
+/**
+ * Report reports a player, from a line of theirs or from their name
+ * aboard: the server keeps what it still holds of the boat's chat with
+ * the report, for the game's owner. The reporter is told it was received
+ * (Reported); the reported is never told who.
+ *
+ * @generated from message keel.v1.Report
+ */
+export type Report = Message<"keel.v1.Report"> & {
+  /**
+   * @generated from field: keel.v1.Who who = 1;
+   */
+  who?: Who | undefined;
+
+  /**
+   * @generated from field: keel.v1.ReportReason reason = 2;
+   */
+  reason: ReportReason;
+
+  /**
+   * Seen only by the game's owner: at most 200 characters.
+   *
+   * @generated from field: string note = 3;
+   */
+  note: string;
+};
+
+/**
+ * Describes the message keel.v1.Report.
+ * Use `create(ReportSchema)` to create a new message.
+ */
+export const ReportSchema: GenMessage<Report> = /*@__PURE__*/
+  messageDesc(file_keel_v1_game, 10);
+
+/**
+ * Knock asks to come aboard another sailor's boat, by the token of the
+ * link its skipper shared (the last part of /sail/<token>). The skipper is
+ * shown a card and answers it; the knocker is told how it stands
+ * (Knocking), and once let aboard is welcomed to the boat as its crew
+ * (Welcome.aboard): a boat it sails leaves the water then, at once, and a
+ * watch ends. A connection knocks on one boat at a time: a second knock
+ * withdraws the first.
+ *
+ * @generated from message keel.v1.Knock
+ */
+export type Knock = Message<"keel.v1.Knock"> & {
+  /**
+   * @generated from field: string token = 1;
+   */
+  token: string;
+
+  /**
+   * The name of one of the account's machine sailors, to send it aboard
+   * rather than come aboard oneself: the link must be a machine sailor's,
+   * the machine sailor sent in the water, and the knock is answered by
+   * the skipper machine sailor's owner, wherever they are in the game,
+   * never by its agent. Let aboard, the machine sailor's own boat leaves
+   * the water and it is crew there; the connection is told as a knocker
+   * is.
+   *
+   * @generated from field: string machine = 2;
+   */
+  machine: string;
+
+  /**
+   * A shipmate's account, as the shipmates list names it, to knock on the
+   * boat they skipper without a link: token is then empty. Their skipper's
+   * answer is asked as for any knock.
+   *
+   * @generated from field: string shipmate = 3;
+   */
+  shipmate: string;
+};
+
+/**
+ * Describes the message keel.v1.Knock.
+ * Use `create(KnockSchema)` to create a new message.
+ */
+export const KnockSchema: GenMessage<Knock> = /*@__PURE__*/
+  messageDesc(file_keel_v1_game, 11);
+
+/**
+ * Answer is the skipper's answer to a knock: let them aboard, or not now.
+ * Only the boat's skipper answers its knocks, never whoever holds the
+ * controls.
+ *
+ * @generated from message keel.v1.Answer
+ */
+export type Answer = Message<"keel.v1.Answer"> & {
+  /**
+   * The knock's ID, as its KnockCard has it.
+   *
+   * @generated from field: uint64 knock = 1;
+   */
+  knock: bigint;
+
+  /**
+   * @generated from field: bool let = 2;
+   */
+  let: boolean;
+};
+
+/**
+ * Describes the message keel.v1.Answer.
+ * Use `create(AnswerSchema)` to create a new message.
+ */
+export const AnswerSchema: GenMessage<Answer> = /*@__PURE__*/
+  messageDesc(file_keel_v1_game, 12);
+
+/**
+ * Hand offers the boat's controls, all of them, to someone aboard, by
+ * their seat (Crew): from whoever holds them. The receiver is told
+ * (Handed) and has 15 seconds to take them; until then the controls stay
+ * where they are.
+ *
+ * @generated from message keel.v1.Hand
+ */
+export type Hand = Message<"keel.v1.Hand"> & {
+  /**
+   * @generated from field: uint32 to = 1;
+   */
+  to: number;
+};
+
+/**
+ * Describes the message keel.v1.Hand.
+ * Use `create(HandSchema)` to create a new message.
+ */
+export const HandSchema: GenMessage<Hand> = /*@__PURE__*/
+  messageDesc(file_keel_v1_game, 13);
+
+/**
+ * Take takes the controls offered to the connection; from the boat's
+ * skipper, it takes them back at once, from whoever holds them, offered or
+ * not.
+ *
+ * @generated from message keel.v1.Take
+ */
+export type Take = Message<"keel.v1.Take"> & {
+};
+
+/**
+ * Describes the message keel.v1.Take.
+ * Use `create(TakeSchema)` to create a new message.
+ */
+export const TakeSchema: GenMessage<Take> = /*@__PURE__*/
+  messageDesc(file_keel_v1_game, 14);
+
+/**
+ * GiveBack hands the controls back to the skipper at once, from whoever
+ * holds them.
+ *
+ * @generated from message keel.v1.GiveBack
+ */
+export type GiveBack = Message<"keel.v1.GiveBack"> & {
+};
+
+/**
+ * Describes the message keel.v1.GiveBack.
+ * Use `create(GiveBackSchema)` to create a new message.
+ */
+export const GiveBackSchema: GenMessage<GiveBack> = /*@__PURE__*/
+  messageDesc(file_keel_v1_game, 15);
+
+/**
+ * GoAshore leaves the boat the connection is aboard, its own boat put in
+ * the water at the nearest port; or, from the skipper, puts the crew
+ * member in seat who ashore. A skipper cannot go ashore from their own
+ * boat: they leave the water.
+ *
+ * @generated from message keel.v1.GoAshore
+ */
+export type GoAshore = Message<"keel.v1.GoAshore"> & {
+  /**
+   * The seat of the crew member the skipper puts ashore; 0 to go ashore
+   * oneself.
+   *
+   * @generated from field: uint32 who = 1;
+   */
+  who: number;
+};
+
+/**
+ * Describes the message keel.v1.GoAshore.
+ * Use `create(GoAshoreSchema)` to create a new message.
+ */
+export const GoAshoreSchema: GenMessage<GoAshore> = /*@__PURE__*/
+  messageDesc(file_keel_v1_game, 16);
+
+/**
+ * CloseKnocks closes the skipper's boat to knocks, or opens it again, for
+ * this voyage: closed, every knock is refused quietly, as "not taking
+ * crew".
+ *
+ * @generated from message keel.v1.CloseKnocks
+ */
+export type CloseKnocks = Message<"keel.v1.CloseKnocks"> & {
+  /**
+   * @generated from field: bool closed = 1;
+   */
+  closed: boolean;
+};
+
+/**
+ * Describes the message keel.v1.CloseKnocks.
+ * Use `create(CloseKnocksSchema)` to create a new message.
+ */
+export const CloseKnocksSchema: GenMessage<CloseKnocks> = /*@__PURE__*/
+  messageDesc(file_keel_v1_game, 17);
 
 /**
  * Watch asks to watch another sailor's boat from that boat's own place: a
@@ -330,7 +765,7 @@ export type Watch = Message<"keel.v1.Watch"> & {
  * Use `create(WatchSchema)` to create a new message.
  */
 export const WatchSchema: GenMessage<Watch> = /*@__PURE__*/
-  messageDesc(file_keel_v1_game, 5);
+  messageDesc(file_keel_v1_game, 18);
 
 /**
  * Sail asks for a boat, as a connection that opens to sail does: a new one
@@ -347,7 +782,7 @@ export type Sail = Message<"keel.v1.Sail"> & {
  * Use `create(SailSchema)` to create a new message.
  */
 export const SailSchema: GenMessage<Sail> = /*@__PURE__*/
-  messageDesc(file_keel_v1_game, 6);
+  messageDesc(file_keel_v1_game, 19);
 
 /**
  * Unwatch ends the watch: the connection is idle, sent no snapshots, until
@@ -363,7 +798,7 @@ export type Unwatch = Message<"keel.v1.Unwatch"> & {
  * Use `create(UnwatchSchema)` to create a new message.
  */
 export const UnwatchSchema: GenMessage<Unwatch> = /*@__PURE__*/
-  messageDesc(file_keel_v1_game, 7);
+  messageDesc(file_keel_v1_game, 20);
 
 /**
  * Resync asks for the next snapshot in full: the client lacks the base of
@@ -379,7 +814,7 @@ export type Resync = Message<"keel.v1.Resync"> & {
  * Use `create(ResyncSchema)` to create a new message.
  */
 export const ResyncSchema: GenMessage<Resync> = /*@__PURE__*/
-  messageDesc(file_keel_v1_game, 8);
+  messageDesc(file_keel_v1_game, 21);
 
 /**
  * Roam is the owner's free camera, from an account that carries the
@@ -426,7 +861,7 @@ export type Roam = Message<"keel.v1.Roam"> & {
  * Use `create(RoamSchema)` to create a new message.
  */
 export const RoamSchema: GenMessage<Roam> = /*@__PURE__*/
-  messageDesc(file_keel_v1_game, 9);
+  messageDesc(file_keel_v1_game, 22);
 
 /**
  * ServerMessage is everything the server sends but snapshots, after the
@@ -552,6 +987,90 @@ export type ServerMessage = Message<"keel.v1.ServerMessage"> & {
      */
     value: LookChanged;
     case: "lookChanged";
+  } | {
+    /**
+     * @generated from field: keel.v1.BoatLookChanged boat_look_changed = 20;
+     */
+    value: BoatLookChanged;
+    case: "boatLookChanged";
+  } | {
+    /**
+     * @generated from field: keel.v1.BoatNames boat_names = 21;
+     */
+    value: BoatNames;
+    case: "boatNames";
+  } | {
+    /**
+     * @generated from field: keel.v1.Life life = 22;
+     */
+    value: Life;
+    case: "life";
+  } | {
+    /**
+     * @generated from field: keel.v1.KnockCard knock = 23;
+     */
+    value: KnockCard;
+    case: "knock";
+  } | {
+    /**
+     * @generated from field: keel.v1.Knocking knocking = 24;
+     */
+    value: Knocking;
+    case: "knocking";
+  } | {
+    /**
+     * @generated from field: keel.v1.Crew crew = 25;
+     */
+    value: Crew;
+    case: "crew";
+  } | {
+    /**
+     * @generated from field: keel.v1.Handed handed = 26;
+     */
+    value: Handed;
+    case: "handed";
+  } | {
+    /**
+     * @generated from field: keel.v1.Ashore ashore = 27;
+     */
+    value: Ashore;
+    case: "ashore";
+  } | {
+    /**
+     * @generated from field: keel.v1.Chat chat = 28;
+     */
+    value: Chat;
+    case: "chat";
+  } | {
+    /**
+     * @generated from field: keel.v1.ChatState chat_state = 29;
+     */
+    value: ChatState;
+    case: "chatState";
+  } | {
+    /**
+     * @generated from field: keel.v1.Tied tied = 30;
+     */
+    value: Tied;
+    case: "tied";
+  } | {
+    /**
+     * @generated from field: keel.v1.Reported reported = 31;
+     */
+    value: Reported;
+    case: "reported";
+  } | {
+    /**
+     * @generated from field: keel.v1.Shipmates shipmates = 32;
+     */
+    value: Shipmates;
+    case: "shipmates";
+  } | {
+    /**
+     * @generated from field: keel.v1.Crews crews = 33;
+     */
+    value: Crews;
+    case: "crews";
   } | { case: undefined; value?: undefined };
 };
 
@@ -560,7 +1079,484 @@ export type ServerMessage = Message<"keel.v1.ServerMessage"> & {
  * Use `create(ServerMessageSchema)` to create a new message.
  */
 export const ServerMessageSchema: GenMessage<ServerMessage> = /*@__PURE__*/
-  messageDesc(file_keel_v1_game, 10);
+  messageDesc(file_keel_v1_game, 23);
+
+/**
+ * Shipmates says the account's shipmates have changed: an offer made to
+ * it, an offer accepted, or a shipmate no longer one. Never what changed
+ * or why: the shipmates list is read again over HTTP.
+ *
+ * @generated from message keel.v1.Shipmates
+ */
+export type Shipmates = Message<"keel.v1.Shipmates"> & {
+};
+
+/**
+ * Describes the message keel.v1.Shipmates.
+ * Use `create(ShipmatesSchema)` to create a new message.
+ */
+export const ShipmatesSchema: GenMessage<Shipmates> = /*@__PURE__*/
+  messageDesc(file_keel_v1_game, 24);
+
+/**
+ * KnockCard tells a skipper that a sailor asks to come aboard, for them to
+ * answer (Answer) within two minutes; with gone, the knock is no longer
+ * waiting: answered, lapsed or withdrawn. Never an age.
+ *
+ * @generated from message keel.v1.KnockCard
+ */
+export type KnockCard = Message<"keel.v1.KnockCard"> & {
+  /**
+   * @generated from field: uint64 id = 1;
+   */
+  id: bigint;
+
+  /**
+   * The sailor's name and look, as players see them.
+   *
+   * @generated from field: string sailor = 2;
+   */
+  sailor: string;
+
+  /**
+   * @generated from field: uint32 look = 3;
+   */
+  look: number;
+
+  /**
+   * @generated from field: bool gone = 4;
+   */
+  gone: boolean;
+
+  /**
+   * A machine sailor sent aboard by its owner, named owner (their sailor's
+   * name), knocking on the boat of skipper, the connection's own machine
+   * sailor: the card goes to that machine sailor's owner wherever they are
+   * in the game.
+   *
+   * @generated from field: bool machine = 5;
+   */
+  machine: boolean;
+
+  /**
+   * @generated from field: string owner = 6;
+   */
+  owner: string;
+
+  /**
+   * @generated from field: string skipper = 7;
+   */
+  skipper: string;
+
+  /**
+   * A shipmate of the skipper's, knocking from their shipmates list.
+   *
+   * @generated from field: bool shipmate = 8;
+   */
+  shipmate: boolean;
+};
+
+/**
+ * Describes the message keel.v1.KnockCard.
+ * Use `create(KnockCardSchema)` to create a new message.
+ */
+export const KnockCardSchema: GenMessage<KnockCard> = /*@__PURE__*/
+  messageDesc(file_keel_v1_game, 25);
+
+/**
+ * Knocking tells a knocker how their knock stands. Let aboard, a Welcome
+ * to the boat follows.
+ *
+ * @generated from message keel.v1.Knocking
+ */
+export type Knocking = Message<"keel.v1.Knocking"> & {
+  /**
+   * @generated from field: keel.v1.KnockState state = 1;
+   */
+  state: KnockState;
+
+  /**
+   * The skipper's name, their boat's kind (an index into the catalog's
+   * boats) and its name, player text: what the knock is for.
+   *
+   * @generated from field: string skipper = 2;
+   */
+  skipper: string;
+
+  /**
+   * @generated from field: uint32 kind = 3;
+   */
+  kind: number;
+
+  /**
+   * @generated from field: string boat = 4;
+   */
+  boat: string;
+
+  /**
+   * The machine sailor the knock sends aboard, "" for the knocker's own.
+   *
+   * @generated from field: string machine = 5;
+   */
+  machine: string;
+};
+
+/**
+ * Describes the message keel.v1.Knocking.
+ * Use `create(KnockingSchema)` to create a new message.
+ */
+export const KnockingSchema: GenMessage<Knocking> = /*@__PURE__*/
+  messageDesc(file_keel_v1_game, 26);
+
+/**
+ * Crew is who is aboard the boat the connection sails, is aboard or
+ * watches, and who holds its controls: sent as it changes, and once at
+ * each Welcome to a boat with anyone aboard but its skipper. Names only to
+ * those aboard. In Crews, it is another boat's, by its view slot.
+ *
+ * @generated from message keel.v1.Crew
+ */
+export type Crew = Message<"keel.v1.Crew"> & {
+  /**
+   * Everyone aboard, the skipper first, in seat order.
+   *
+   * @generated from field: repeated keel.v1.Person people = 1;
+   */
+  people: Person[];
+
+  /**
+   * The seat of whoever holds the controls.
+   *
+   * @generated from field: uint32 holder = 2;
+   */
+  holder: number;
+
+  /**
+   * In Crews: the view slot of the boat it is for, the boat that slot
+   * holds as of the next snapshot. Unused in a Crew sent alone.
+   *
+   * @generated from field: uint32 slot = 3;
+   */
+  slot: number;
+};
+
+/**
+ * Describes the message keel.v1.Crew.
+ * Use `create(CrewSchema)` to create a new message.
+ */
+export const CrewSchema: GenMessage<Crew> = /*@__PURE__*/
+  messageDesc(file_keel_v1_game, 27);
+
+/**
+ * Crews are who is aboard the other boats in the connection's near band
+ * with anyone aboard besides their skipper, so that their crews are drawn:
+ * each boat's sent as it comes into the band, and again when who is aboard
+ * or who holds its controls changes; and with nobody (no people) when it
+ * leaves the band, everyone but its skipper goes ashore, or its slot holds
+ * another boat. Each person carries their seat, look and machine mark
+ * only: never a name, nor anything of the connection's own.
+ *
+ * @generated from message keel.v1.Crews
+ */
+export type Crews = Message<"keel.v1.Crews"> & {
+  /**
+   * @generated from field: repeated keel.v1.Crew crews = 1;
+   */
+  crews: Crew[];
+};
+
+/**
+ * Describes the message keel.v1.Crews.
+ * Use `create(CrewsSchema)` to create a new message.
+ */
+export const CrewsSchema: GenMessage<Crews> = /*@__PURE__*/
+  messageDesc(file_keel_v1_game, 28);
+
+/**
+ * Person is someone aboard: their seat, the station on deck they stand at
+ * (the skipper's, 0, is the helm's), and their look; whoever holds the
+ * controls stands at the helm, and the skipper at the holder's station.
+ *
+ * @generated from message keel.v1.Person
+ */
+export type Person = Message<"keel.v1.Person"> & {
+  /**
+   * @generated from field: uint32 seat = 1;
+   */
+  seat: number;
+
+  /**
+   * @generated from field: uint32 look = 2;
+   */
+  look: number;
+
+  /**
+   * As players see it; "" for a spectator.
+   *
+   * @generated from field: string name = 3;
+   */
+  name: string;
+
+  /**
+   * A machine sailor, sailed by an AI agent.
+   *
+   * @generated from field: bool machine = 4;
+   */
+  machine: boolean;
+
+  /**
+   * The connection's own.
+   *
+   * @generated from field: bool you = 5;
+   */
+  you: boolean;
+
+  /**
+   * The connection's account mutes them, or blocks them.
+   *
+   * @generated from field: bool muted = 6;
+   */
+  muted: boolean;
+
+  /**
+   * @generated from field: bool blocked = 7;
+   */
+  blocked: boolean;
+
+  /**
+   * A shipmate of the connection's account.
+   *
+   * @generated from field: bool shipmate = 8;
+   */
+  shipmate: boolean;
+};
+
+/**
+ * Describes the message keel.v1.Person.
+ * Use `create(PersonSchema)` to create a new message.
+ */
+export const PersonSchema: GenMessage<Person> = /*@__PURE__*/
+  messageDesc(file_keel_v1_game, 29);
+
+/**
+ * Chat is a line said aboard the boat the connection sails, is aboard,
+ * or (its owner's machine sailor aboard it) watches: player text, from the
+ * person in seat. To its sender it comes back with echo, said or refused.
+ *
+ * @generated from message keel.v1.Chat
+ */
+export type Chat = Message<"keel.v1.Chat"> & {
+  /**
+   * The line's number, for mute, block and report (Who.line).
+   *
+   * @generated from field: uint64 id = 1;
+   */
+  id: bigint;
+
+  /**
+   * @generated from field: uint32 seat = 2;
+   */
+  seat: number;
+
+  /**
+   * The sender's name as players see it, and whether a machine sailor
+   * said it.
+   *
+   * @generated from field: string name = 3;
+   */
+  name: string;
+
+  /**
+   * @generated from field: bool machine = 4;
+   */
+  machine: boolean;
+
+  /**
+   * When it was said, µs of UTC.
+   *
+   * @generated from field: int64 at_us = 5;
+   */
+  atUs: bigint;
+
+  /**
+   * @generated from field: string text = 6;
+   */
+  text: string;
+
+  /**
+   * The connection's own line, its Say's id; refused, it reached nobody.
+   *
+   * @generated from field: bool you = 7;
+   */
+  you: boolean;
+
+  /**
+   * @generated from field: uint32 echo = 8;
+   */
+  echo: number;
+
+  /**
+   * @generated from field: keel.v1.ChatRefusal refused = 9;
+   */
+  refused: ChatRefusal;
+
+  /**
+   * A message between shipmates, not a line aboard: the other shipmate's
+   * account, as the shipmates list names it (to its sender, whom it was
+   * to; to its receiver, who sent it). Seat is then 0.
+   *
+   * @generated from field: string thread = 10;
+   */
+  thread: string;
+};
+
+/**
+ * Describes the message keel.v1.Chat.
+ * Use `create(ChatSchema)` to create a new message.
+ */
+export const ChatSchema: GenMessage<Chat> = /*@__PURE__*/
+  messageDesc(file_keel_v1_game, 30);
+
+/**
+ * ChatState is whether the connection may chat aboard now, sent at each
+ * Welcome and as it changes.
+ *
+ * @generated from message keel.v1.ChatState
+ */
+export type ChatState = Message<"keel.v1.ChatState"> & {
+  /**
+   * @generated from field: keel.v1.ChatStatus status = 1;
+   */
+  status: ChatStatus;
+
+  /**
+   * Until when it rests, µs of UTC; 0 for until the game's owner looks.
+   *
+   * @generated from field: int64 until_us = 2;
+   */
+  untilUs: bigint;
+
+  /**
+   * The Rules of the sea are to be accepted before a first line.
+   *
+   * @generated from field: bool rules = 3;
+   */
+  rules: boolean;
+};
+
+/**
+ * Describes the message keel.v1.ChatState.
+ * Use `create(ChatStateSchema)` to create a new message.
+ */
+export const ChatStateSchema: GenMessage<ChatState> = /*@__PURE__*/
+  messageDesc(file_keel_v1_game, 31);
+
+/**
+ * Tied says a mute or a block is in force, or ended, for the person named.
+ *
+ * @generated from message keel.v1.Tied
+ */
+export type Tied = Message<"keel.v1.Tied"> & {
+  /**
+   * @generated from field: string name = 1;
+   */
+  name: string;
+
+  /**
+   * @generated from field: bool muted = 2;
+   */
+  muted: boolean;
+
+  /**
+   * @generated from field: bool blocked = 3;
+   */
+  blocked: boolean;
+
+  /**
+   * The account has as many as it may keep: nothing changed.
+   *
+   * @generated from field: bool full = 4;
+   */
+  full: boolean;
+};
+
+/**
+ * Describes the message keel.v1.Tied.
+ * Use `create(TiedSchema)` to create a new message.
+ */
+export const TiedSchema: GenMessage<Tied> = /*@__PURE__*/
+  messageDesc(file_keel_v1_game, 32);
+
+/**
+ * Reported says a report was received, or (ok false) could not be kept:
+ * try again.
+ *
+ * @generated from message keel.v1.Reported
+ */
+export type Reported = Message<"keel.v1.Reported"> & {
+  /**
+   * @generated from field: bool ok = 1;
+   */
+  ok: boolean;
+};
+
+/**
+ * Describes the message keel.v1.Reported.
+ * Use `create(ReportedSchema)` to create a new message.
+ */
+export const ReportedSchema: GenMessage<Reported> = /*@__PURE__*/
+  messageDesc(file_keel_v1_game, 33);
+
+/**
+ * Handed offers the connection the boat's controls, from whoever holds
+ * them: a Take within the seconds given takes them. With gone, the offer
+ * has lapsed or been withdrawn.
+ *
+ * @generated from message keel.v1.Handed
+ */
+export type Handed = Message<"keel.v1.Handed"> & {
+  /**
+   * @generated from field: string from = 1;
+   */
+  from: string;
+
+  /**
+   * @generated from field: uint32 seconds = 2;
+   */
+  seconds: number;
+
+  /**
+   * @generated from field: bool gone = 3;
+   */
+  gone: boolean;
+};
+
+/**
+ * Describes the message keel.v1.Handed.
+ * Use `create(HandedSchema)` to create a new message.
+ */
+export const HandedSchema: GenMessage<Handed> = /*@__PURE__*/
+  messageDesc(file_keel_v1_game, 34);
+
+/**
+ * Ashore says the connection has left the boat it was aboard, and why: a
+ * Welcome to its own boat follows, at the nearest port, or a Queued.
+ *
+ * @generated from message keel.v1.Ashore
+ */
+export type Ashore = Message<"keel.v1.Ashore"> & {
+  /**
+   * @generated from field: keel.v1.AshoreWhy why = 1;
+   */
+  why: AshoreWhy;
+};
+
+/**
+ * Describes the message keel.v1.Ashore.
+ * Use `create(AshoreSchema)` to create a new message.
+ */
+export const AshoreSchema: GenMessage<Ashore> = /*@__PURE__*/
+  messageDesc(file_keel_v1_game, 35);
 
 /**
  * WatchEnded says a watch has ended, or was refused: the connection is
@@ -590,7 +1586,7 @@ export type WatchEnded = Message<"keel.v1.WatchEnded"> & {
  * Use `create(WatchEndedSchema)` to create a new message.
  */
 export const WatchEndedSchema: GenMessage<WatchEnded> = /*@__PURE__*/
-  messageDesc(file_keel_v1_game, 11);
+  messageDesc(file_keel_v1_game, 36);
 
 /**
  * Watchers says how many watch the connection's boat, as it changes, at
@@ -610,7 +1606,7 @@ export type Watchers = Message<"keel.v1.Watchers"> & {
  * Use `create(WatchersSchema)` to create a new message.
  */
 export const WatchersSchema: GenMessage<Watchers> = /*@__PURE__*/
-  messageDesc(file_keel_v1_game, 12);
+  messageDesc(file_keel_v1_game, 37);
 
 /**
  * LookChanged says the sailor of the boat the connection sails or watches
@@ -633,7 +1629,86 @@ export type LookChanged = Message<"keel.v1.LookChanged"> & {
  * Use `create(LookChangedSchema)` to create a new message.
  */
 export const LookChangedSchema: GenMessage<LookChanged> = /*@__PURE__*/
-  messageDesc(file_keel_v1_game, 13);
+  messageDesc(file_keel_v1_game, 38);
+
+/**
+ * BoatLookChanged says the boat the connection sails or watches was given
+ * a new look in port, its paint, cloth, sail number or name: as of the
+ * next snapshot, it is drawn so. Other connections see it as an enter of
+ * the boat, and its name in BoatNames. A boat swapped for another kind
+ * comes as a Welcome instead.
+ *
+ * @generated from message keel.v1.BoatLookChanged
+ */
+export type BoatLookChanged = Message<"keel.v1.BoatLookChanged"> & {
+  /**
+   * The boat's look: a boat look code, as an enter in a snapshot has it.
+   *
+   * @generated from field: uint32 look = 1;
+   */
+  look: number;
+
+  /**
+   * The boat's name, player text; "" for none.
+   *
+   * @generated from field: string name = 2;
+   */
+  name: string;
+};
+
+/**
+ * Describes the message keel.v1.BoatLookChanged.
+ * Use `create(BoatLookChangedSchema)` to create a new message.
+ */
+export const BoatLookChangedSchema: GenMessage<BoatLookChanged> = /*@__PURE__*/
+  messageDesc(file_keel_v1_game, 39);
+
+/**
+ * BoatNames are the names of boats in the connection's view, each sent once
+ * as the boat comes into the near band, and again if it changes: player
+ * text, drawn on the boat's topsides or transom. A boat with no name is
+ * sent "" only to clear a name the slot was told before.
+ *
+ * @generated from message keel.v1.BoatNames
+ */
+export type BoatNames = Message<"keel.v1.BoatNames"> & {
+  /**
+   * @generated from field: repeated keel.v1.BoatName names = 1;
+   */
+  names: BoatName[];
+};
+
+/**
+ * Describes the message keel.v1.BoatNames.
+ * Use `create(BoatNamesSchema)` to create a new message.
+ */
+export const BoatNamesSchema: GenMessage<BoatNames> = /*@__PURE__*/
+  messageDesc(file_keel_v1_game, 40);
+
+/**
+ * BoatName is a boat's name by its view slot: the boat that slot holds as
+ * of the next snapshot.
+ *
+ * @generated from message keel.v1.BoatName
+ */
+export type BoatName = Message<"keel.v1.BoatName"> & {
+  /**
+   * @generated from field: uint32 slot = 1;
+   */
+  slot: number;
+
+  /**
+   * @generated from field: string name = 2;
+   */
+  name: string;
+};
+
+/**
+ * Describes the message keel.v1.BoatName.
+ * Use `create(BoatNameSchema)` to create a new message.
+ */
+export const BoatNameSchema: GenMessage<BoatName> = /*@__PURE__*/
+  messageDesc(file_keel_v1_game, 41);
 
 /**
  * AgentLamp says whether the AI agent of the machine sailor a connection
@@ -657,7 +1732,7 @@ export type AgentLamp = Message<"keel.v1.AgentLamp"> & {
  * Use `create(AgentLampSchema)` to create a new message.
  */
 export const AgentLampSchema: GenMessage<AgentLamp> = /*@__PURE__*/
-  messageDesc(file_keel_v1_game, 14);
+  messageDesc(file_keel_v1_game, 42);
 
 /**
  * Forecast is the forecast, issued at each boundary of ten minutes of world
@@ -749,7 +1824,7 @@ export type Forecast = Message<"keel.v1.Forecast"> & {
  * Use `create(ForecastSchema)` to create a new message.
  */
 export const ForecastSchema: GenMessage<Forecast> = /*@__PURE__*/
-  messageDesc(file_keel_v1_game, 15);
+  messageDesc(file_keel_v1_game, 43);
 
 /**
  * ForecastSystem is a system of the forecast: its slot, as its keyframes',
@@ -919,7 +1994,7 @@ export type ForecastSystem = Message<"keel.v1.ForecastSystem"> & {
  * Use `create(ForecastSystemSchema)` to create a new message.
  */
 export const ForecastSystemSchema: GenMessage<ForecastSystem> = /*@__PURE__*/
-  messageDesc(file_keel_v1_game, 16);
+  messageDesc(file_keel_v1_game, 44);
 
 /**
  * GaleWarning is a gale warning in force: issued from the forecast's
@@ -992,7 +2067,7 @@ export type GaleWarning = Message<"keel.v1.GaleWarning"> & {
  * Use `create(GaleWarningSchema)` to create a new message.
  */
 export const GaleWarningSchema: GenMessage<GaleWarning> = /*@__PURE__*/
-  messageDesc(file_keel_v1_game, 17);
+  messageDesc(file_keel_v1_game, 45);
 
 /**
  * ForecastPast is what has been, for a client just come: the forecast
@@ -1023,7 +2098,7 @@ export type ForecastPast = Message<"keel.v1.ForecastPast"> & {
  * Use `create(ForecastPastSchema)` to create a new message.
  */
 export const ForecastPastSchema: GenMessage<ForecastPast> = /*@__PURE__*/
-  messageDesc(file_keel_v1_game, 18);
+  messageDesc(file_keel_v1_game, 46);
 
 /**
  * Chart is the world's chart so far: every subject charted, once a
@@ -1044,7 +2119,7 @@ export type Chart = Message<"keel.v1.Chart"> & {
  * Use `create(ChartSchema)` to create a new message.
  */
 export const ChartSchema: GenMessage<Chart> = /*@__PURE__*/
-  messageDesc(file_keel_v1_game, 19);
+  messageDesc(file_keel_v1_game, 47);
 
 /**
  * Charted is what has been charted since, sent to every connection as each
@@ -1064,7 +2139,7 @@ export type Charted = Message<"keel.v1.Charted"> & {
  * Use `create(ChartedSchema)` to create a new message.
  */
 export const ChartedSchema: GenMessage<Charted> = /*@__PURE__*/
-  messageDesc(file_keel_v1_game, 20);
+  messageDesc(file_keel_v1_game, 48);
 
 /**
  * ChartEntry is a subject of the world's chart: an island, a place or a
@@ -1238,7 +2313,7 @@ export type ChartEntry = Message<"keel.v1.ChartEntry"> & {
  * Use `create(ChartEntrySchema)` to create a new message.
  */
 export const ChartEntrySchema: GenMessage<ChartEntry> = /*@__PURE__*/
-  messageDesc(file_keel_v1_game, 21);
+  messageDesc(file_keel_v1_game, 49);
 
 /**
  * Places are the places in chunks of the land the connection has just been
@@ -1261,7 +2336,7 @@ export type Places = Message<"keel.v1.Places"> & {
  * Use `create(PlacesSchema)` to create a new message.
  */
 export const PlacesSchema: GenMessage<Places> = /*@__PURE__*/
-  messageDesc(file_keel_v1_game, 22);
+  messageDesc(file_keel_v1_game, 50);
 
 /**
  * Place is a place of the world: a port, a lighthouse, a reef, a wreck.
@@ -1349,7 +2424,7 @@ export type Place = Message<"keel.v1.Place"> & {
  * Use `create(PlaceSchema)` to create a new message.
  */
 export const PlaceSchema: GenMessage<Place> = /*@__PURE__*/
-  messageDesc(file_keel_v1_game, 23);
+  messageDesc(file_keel_v1_game, 51);
 
 /**
  * Lights are the lighthouses' lights the connection is to show, and those
@@ -1378,7 +2453,143 @@ export type Lights = Message<"keel.v1.Lights"> & {
  * Use `create(LightsSchema)` to create a new message.
  */
 export const LightsSchema: GenMessage<Lights> = /*@__PURE__*/
-  messageDesc(file_keel_v1_game, 24);
+  messageDesc(file_keel_v1_game, 52);
+
+/**
+ * Life is the sea's life about the connection's eye: the encounters come
+ * within their reach, each once and again when it changes, and those to
+ * drop, by id, once the eye is further than their reach by a margin. The
+ * eye is the boat's, or the watched boat's for a spectator. An encounter
+ * not dropped ends at its end. A new connection's Welcome drops every
+ * encounter it held; a later Welcome on it, none.
+ *
+ * @generated from message keel.v1.Life
+ */
+export type Life = Message<"keel.v1.Life"> & {
+  /**
+   * @generated from field: repeated keel.v1.LifeEncounter encounters = 1;
+   */
+  encounters: LifeEncounter[];
+
+  /**
+   * @generated from field: repeated uint64 drop = 2;
+   */
+  drop: bigint[];
+};
+
+/**
+ * Describes the message keel.v1.Life.
+ * Use `create(LifeSchema)` to create a new message.
+ */
+export const LifeSchema: GenMessage<Life> = /*@__PURE__*/
+  messageDesc(file_keel_v1_game, 53);
+
+/**
+ * LifeEncounter is a group of one kind of the sea's life, met from its
+ * start to its end: the phone draws each animal of it from this record and
+ * world time, as every other phone near does. A group with no boat follows
+ * its kind's path through its centre; one with a boat moves about that
+ * boat as the phone draws it.
+ *
+ * @generated from message keel.v1.LifeEncounter
+ */
+export type LifeEncounter = Message<"keel.v1.LifeEncounter"> & {
+  /**
+   * Its id, the same for every connection; and how many times it has
+   * changed: a later revision replaces an earlier.
+   *
+   * @generated from field: uint64 id = 1;
+   */
+  id: bigint;
+
+  /**
+   * @generated from field: uint32 rev = 2;
+   */
+  rev: number;
+
+  /**
+   * Its kind: an index into the catalog's life kinds.
+   *
+   * @generated from field: uint32 kind = 3;
+   */
+  kind: number;
+
+  /**
+   * Its start and its end, in ticks of world time.
+   *
+   * @generated from field: int64 start = 4;
+   */
+  start: bigint;
+
+  /**
+   * @generated from field: int64 end = 5;
+   */
+  end: bigint;
+
+  /**
+   * Its centre, in centimetres east and north of the world's centre.
+   *
+   * @generated from field: sint32 east = 6;
+   */
+  east: number;
+
+  /**
+   * @generated from field: sint32 north = 7;
+   */
+  north: number;
+
+  /**
+   * The way it goes, in radians clockwise from north, and how fast, in
+   * m/s.
+   *
+   * @generated from field: float heading = 8;
+   */
+  heading: number;
+
+  /**
+   * @generated from field: float speed = 9;
+   */
+  speed: number;
+
+  /**
+   * How many there are, and its own number, which each animal's path is
+   * drawn from.
+   *
+   * @generated from field: uint32 count = 10;
+   */
+  count: number;
+
+  /**
+   * @generated from field: uint32 seed = 11;
+   */
+  seed: number;
+
+  /**
+   * The boat it is with, as this connection sees boats: 0 none, 1 the
+   * connection's own boat or the one it watches, 2 + n the boat in view
+   * slot n, and 255 a boat this connection does not see, so it is drawn
+   * nowhere.
+   *
+   * @generated from field: uint32 with = 12;
+   */
+  with: number;
+
+  /**
+   * The encounter on whose patch it comes, 0 for none: the birds and the
+   * dolphins with bait, the flying fish a boat flushes from a ground. One
+   * with a kind that moves otherwise over another's patch moves so.
+   *
+   * @generated from field: uint64 over = 13;
+   */
+  over: bigint;
+};
+
+/**
+ * Describes the message keel.v1.LifeEncounter.
+ * Use `create(LifeEncounterSchema)` to create a new message.
+ */
+export const LifeEncounterSchema: GenMessage<LifeEncounter> = /*@__PURE__*/
+  messageDesc(file_keel_v1_game, 54);
 
 /**
  * Light is a lighthouse's light. It shows its character's light and dark
@@ -1449,7 +2660,7 @@ export type Light = Message<"keel.v1.Light"> & {
  * Use `create(LightSchema)` to create a new message.
  */
 export const LightSchema: GenMessage<Light> = /*@__PURE__*/
-  messageDesc(file_keel_v1_game, 25);
+  messageDesc(file_keel_v1_game, 55);
 
 /**
  * Tools says the account's owner's flag has been set or cleared while the
@@ -1471,7 +2682,7 @@ export type Tools = Message<"keel.v1.Tools"> & {
  * Use `create(ToolsSchema)` to create a new message.
  */
 export const ToolsSchema: GenMessage<Tools> = /*@__PURE__*/
-  messageDesc(file_keel_v1_game, 26);
+  messageDesc(file_keel_v1_game, 56);
 
 /**
  * Chunks hands the client the addresses of chunks of the world's land: each
@@ -1504,7 +2715,7 @@ export type Chunks = Message<"keel.v1.Chunks"> & {
  * Use `create(ChunksSchema)` to create a new message.
  */
 export const ChunksSchema: GenMessage<Chunks> = /*@__PURE__*/
-  messageDesc(file_keel_v1_game, 27);
+  messageDesc(file_keel_v1_game, 57);
 
 /**
  * Bump is two boats touching after being apart: a correction the
@@ -1563,7 +2774,7 @@ export type Bump = Message<"keel.v1.Bump"> & {
  * Use `create(BumpSchema)` to create a new message.
  */
 export const BumpSchema: GenMessage<Bump> = /*@__PURE__*/
-  messageDesc(file_keel_v1_game, 28);
+  messageDesc(file_keel_v1_game, 58);
 
 /**
  * WeatherSystems is the weather in play about the present: the spells and
@@ -1618,7 +2829,7 @@ export type WeatherSystems = Message<"keel.v1.WeatherSystems"> & {
  * Use `create(WeatherSystemsSchema)` to create a new message.
  */
 export const WeatherSystemsSchema: GenMessage<WeatherSystems> = /*@__PURE__*/
-  messageDesc(file_keel_v1_game, 29);
+  messageDesc(file_keel_v1_game, 59);
 
 /**
  * ComingFront is a front before its spell is in play: its line alone,
@@ -1653,7 +2864,7 @@ export type ComingFront = Message<"keel.v1.ComingFront"> & {
  * Use `create(ComingFrontSchema)` to create a new message.
  */
 export const ComingFrontSchema: GenMessage<ComingFront> = /*@__PURE__*/
-  messageDesc(file_keel_v1_game, 30);
+  messageDesc(file_keel_v1_game, 60);
 
 /**
  * IslandCaps are the islands whose cap of cumulus the connection is to
@@ -1683,7 +2894,7 @@ export type IslandCaps = Message<"keel.v1.IslandCaps"> & {
  * Use `create(IslandCapsSchema)` to create a new message.
  */
 export const IslandCapsSchema: GenMessage<IslandCaps> = /*@__PURE__*/
-  messageDesc(file_keel_v1_game, 31);
+  messageDesc(file_keel_v1_game, 61);
 
 /**
  * IslandCap is an island's cap.
@@ -1722,7 +2933,7 @@ export type IslandCap = Message<"keel.v1.IslandCap"> & {
  * Use `create(IslandCapSchema)` to create a new message.
  */
 export const IslandCapSchema: GenMessage<IslandCap> = /*@__PURE__*/
-  messageDesc(file_keel_v1_game, 32);
+  messageDesc(file_keel_v1_game, 62);
 
 /**
  * Keyframe is the weather systems at a tick: each one's place, motion,
@@ -1752,7 +2963,7 @@ export type Keyframe = Message<"keel.v1.Keyframe"> & {
  * Use `create(KeyframeSchema)` to create a new message.
  */
 export const KeyframeSchema: GenMessage<Keyframe> = /*@__PURE__*/
-  messageDesc(file_keel_v1_game, 33);
+  messageDesc(file_keel_v1_game, 63);
 
 /**
  * SystemKey is a weather system at a keyframe.
@@ -1853,7 +3064,7 @@ export type SystemKey = Message<"keel.v1.SystemKey"> & {
  * Use `create(SystemKeySchema)` to create a new message.
  */
 export const SystemKeySchema: GenMessage<SystemKey> = /*@__PURE__*/
-  messageDesc(file_keel_v1_game, 34);
+  messageDesc(file_keel_v1_game, 64);
 
 /**
  * Spell is a spell of weather: a stretch of time with one base wind, its
@@ -2023,7 +3234,7 @@ export type Spell = Message<"keel.v1.Spell"> & {
  * Use `create(SpellSchema)` to create a new message.
  */
 export const SpellSchema: GenMessage<Spell> = /*@__PURE__*/
-  messageDesc(file_keel_v1_game, 35);
+  messageDesc(file_keel_v1_game, 65);
 
 /**
  * SeaAreas is what raises the waves about the boat: a square of sea areas,
@@ -2115,7 +3326,7 @@ export type SeaAreas = Message<"keel.v1.SeaAreas"> & {
  * Use `create(SeaAreasSchema)` to create a new message.
  */
 export const SeaAreasSchema: GenMessage<SeaAreas> = /*@__PURE__*/
-  messageDesc(file_keel_v1_game, 36);
+  messageDesc(file_keel_v1_game, 66);
 
 /**
  * Restart says the server is about to restart, as a new version is
@@ -2139,7 +3350,7 @@ export type Restart = Message<"keel.v1.Restart"> & {
  * Use `create(RestartSchema)` to create a new message.
  */
 export const RestartSchema: GenMessage<Restart> = /*@__PURE__*/
-  messageDesc(file_keel_v1_game, 37);
+  messageDesc(file_keel_v1_game, 67);
 
 /**
  * Queued says the sea is full: the client waits for a boat. It comes after
@@ -2176,7 +3387,7 @@ export type Queued = Message<"keel.v1.Queued"> & {
  * Use `create(QueuedSchema)` to create a new message.
  */
 export const QueuedSchema: GenMessage<Queued> = /*@__PURE__*/
-  messageDesc(file_keel_v1_game, 38);
+  messageDesc(file_keel_v1_game, 68);
 
 /**
  * Welcome says the client has its boat; its snapshots follow.
@@ -2321,6 +3532,31 @@ export type Welcome = Message<"keel.v1.Welcome"> & {
    * @generated from field: uint32 look = 17;
    */
   look: number;
+
+  /**
+   * The boat's own look, its paint, cloth and sail number: a boat look
+   * code, as an enter in a snapshot has it; and its name, player text, ""
+   * for none.
+   *
+   * @generated from field: uint32 boat_look = 18;
+   */
+  boatLook: number;
+
+  /**
+   * @generated from field: string boat_name = 19;
+   */
+  boatName: string;
+
+  /**
+   * The connection is aboard another sailor's boat, as its crew: boat and
+   * kind are that boat's, and so are the snapshots, as when watching; its
+   * inputs steer the boat only while it holds the controls (the
+   * snapshot's holding flag). A Welcome to the connection's own boat comes
+   * when it goes ashore.
+   *
+   * @generated from field: keel.v1.Aboard aboard = 20;
+   */
+  aboard?: Aboard | undefined;
 };
 
 /**
@@ -2328,7 +3564,38 @@ export type Welcome = Message<"keel.v1.Welcome"> & {
  * Use `create(WelcomeSchema)` to create a new message.
  */
 export const WelcomeSchema: GenMessage<Welcome> = /*@__PURE__*/
-  messageDesc(file_keel_v1_game, 39);
+  messageDesc(file_keel_v1_game, 69);
+
+/**
+ * Aboard is whose boat a connection is aboard, and its seat there.
+ *
+ * @generated from message keel.v1.Aboard
+ */
+export type Aboard = Message<"keel.v1.Aboard"> & {
+  /**
+   * The skipper's name and look.
+   *
+   * @generated from field: string skipper = 1;
+   */
+  skipper: string;
+
+  /**
+   * @generated from field: uint32 look = 2;
+   */
+  look: number;
+
+  /**
+   * @generated from field: uint32 seat = 3;
+   */
+  seat: number;
+};
+
+/**
+ * Describes the message keel.v1.Aboard.
+ * Use `create(AboardSchema)` to create a new message.
+ */
+export const AboardSchema: GenMessage<Aboard> = /*@__PURE__*/
+  messageDesc(file_keel_v1_game, 70);
 
 /**
  * Harbour is a world's harbour, in decimetres east and north of the
@@ -2375,7 +3642,7 @@ export type Harbour = Message<"keel.v1.Harbour"> & {
  * Use `create(HarbourSchema)` to create a new message.
  */
 export const HarbourSchema: GenMessage<Harbour> = /*@__PURE__*/
-  messageDesc(file_keel_v1_game, 40);
+  messageDesc(file_keel_v1_game, 71);
 
 /**
  * Watching is whose boat a connection watches.
@@ -2414,7 +3681,7 @@ export type Watching = Message<"keel.v1.Watching"> & {
  * Use `create(WatchingSchema)` to create a new message.
  */
 export const WatchingSchema: GenMessage<Watching> = /*@__PURE__*/
-  messageDesc(file_keel_v1_game, 41);
+  messageDesc(file_keel_v1_game, 72);
 
 /**
  * Pong answers a Ping.
@@ -2442,7 +3709,359 @@ export type Pong = Message<"keel.v1.Pong"> & {
  * Use `create(PongSchema)` to create a new message.
  */
 export const PongSchema: GenMessage<Pong> = /*@__PURE__*/
-  messageDesc(file_keel_v1_game, 42);
+  messageDesc(file_keel_v1_game, 73);
+
+/**
+ * ReportReason is why a player is reported.
+ *
+ * @generated from enum keel.v1.ReportReason
+ */
+export enum ReportReason {
+  /**
+   * @generated from enum value: REPORT_REASON_UNSPECIFIED = 0;
+   */
+  UNSPECIFIED = 0,
+
+  /**
+   * A child may be at risk: ahead of every other report.
+   *
+   * @generated from enum value: REPORT_REASON_CHILD = 1;
+   */
+  CHILD = 1,
+
+  /**
+   * @generated from enum value: REPORT_REASON_SEXUAL = 2;
+   */
+  SEXUAL = 2,
+
+  /**
+   * @generated from enum value: REPORT_REASON_BULLYING = 3;
+   */
+  BULLYING = 3,
+
+  /**
+   * @generated from enum value: REPORT_REASON_HATE = 4;
+   */
+  HATE = 4,
+
+  /**
+   * Threats or self-harm.
+   *
+   * @generated from enum value: REPORT_REASON_THREATS = 5;
+   */
+  THREATS = 5,
+
+  /**
+   * Scams or spam.
+   *
+   * @generated from enum value: REPORT_REASON_SCAM = 6;
+   */
+  SCAM = 6,
+
+  /**
+   * @generated from enum value: REPORT_REASON_CHEATING = 7;
+   */
+  CHEATING = 7,
+
+  /**
+   * @generated from enum value: REPORT_REASON_OTHER = 8;
+   */
+  OTHER = 8,
+}
+
+/**
+ * Describes the enum keel.v1.ReportReason.
+ */
+export const ReportReasonSchema: GenEnum<ReportReason> = /*@__PURE__*/
+  enumDesc(file_keel_v1_game, 0);
+
+/**
+ * KnockState is how a knock stands, or why it was refused. A refusal never
+ * says that a block refused it.
+ *
+ * @generated from enum keel.v1.KnockState
+ */
+export enum KnockState {
+  /**
+   * @generated from enum value: KNOCK_STATE_UNSPECIFIED = 0;
+   */
+  UNSPECIFIED = 0,
+
+  /**
+   * The skipper has the card.
+   *
+   * @generated from enum value: KNOCK_STATE_WAITING = 1;
+   */
+  WAITING = 1,
+
+  /**
+   * Let aboard: a Welcome follows.
+   *
+   * @generated from enum value: KNOCK_STATE_LET = 2;
+   */
+  LET = 2,
+
+  /**
+   * The skipper said not now.
+   *
+   * @generated from enum value: KNOCK_STATE_NOT_NOW = 3;
+   */
+  NOT_NOW = 3,
+
+  /**
+   * The skipper did not answer within two minutes.
+   *
+   * @generated from enum value: KNOCK_STATE_LAPSED = 4;
+   */
+  LAPSED = 4,
+
+  /**
+   * The link has expired, or was ended, or links are off.
+   *
+   * @generated from enum value: KNOCK_STATE_ENDED = 5;
+   */
+  ENDED = 5,
+
+  /**
+   * The skipper's boat is not in the water.
+   *
+   * @generated from enum value: KNOCK_STATE_NOT_AT_SEA = 6;
+   */
+  NOT_AT_SEA = 6,
+
+  /**
+   * The boat has no room aboard.
+   *
+   * @generated from enum value: KNOCK_STATE_FULL = 7;
+   */
+  FULL = 7,
+
+  /**
+   * The boat is not taking crew.
+   *
+   * @generated from enum value: KNOCK_STATE_CLOSED = 8;
+   */
+  CLOSED = 8,
+
+  /**
+   * The skipper has knocks waiting: try again soon.
+   *
+   * @generated from enum value: KNOCK_STATE_BUSY = 9;
+   */
+  BUSY = 9,
+
+  /**
+   * Too many knocks in the last hour, or on this boat again too soon.
+   *
+   * @generated from enum value: KNOCK_STATE_OFTEN = 10;
+   */
+  OFTEN = 10,
+
+  /**
+   * Too many people are aboard boats across the sea.
+   *
+   * @generated from enum value: KNOCK_STATE_CROWDED = 11;
+   */
+  CROWDED = 11,
+
+  /**
+   * The link is the connection's own.
+   *
+   * @generated from enum value: KNOCK_STATE_OWN = 12;
+   */
+  OWN = 12,
+
+  /**
+   * The age question or the Rules of the sea must be answered first.
+   *
+   * @generated from enum value: KNOCK_STATE_FIRST = 13;
+   */
+  FIRST = 13,
+
+  /**
+   * The game could not look the link up in time: try again.
+   *
+   * @generated from enum value: KNOCK_STATE_TRY_AGAIN = 14;
+   */
+  TRY_AGAIN = 14,
+
+  /**
+   * Withdrawn by a knock on another boat, or the knocker went elsewhere.
+   *
+   * @generated from enum value: KNOCK_STATE_WITHDRAWN = 15;
+   */
+  WITHDRAWN = 15,
+
+  /**
+   * The machine sailor sent aboard is not in the water: its AI app sails
+   * it there first.
+   *
+   * @generated from enum value: KNOCK_STATE_AWAY = 16;
+   */
+  AWAY = 16,
+}
+
+/**
+ * Describes the enum keel.v1.KnockState.
+ */
+export const KnockStateSchema: GenEnum<KnockState> = /*@__PURE__*/
+  enumDesc(file_keel_v1_game, 1);
+
+/**
+ * ChatRefusal is why a line was not said. A line refused for a word is
+ * never told so: it comes back as said.
+ *
+ * @generated from enum keel.v1.ChatRefusal
+ */
+export enum ChatRefusal {
+  /**
+   * @generated from enum value: CHAT_REFUSAL_UNSPECIFIED = 0;
+   */
+  UNSPECIFIED = 0,
+
+  /**
+   * A link or a contact detail: those can't be sent aboard.
+   *
+   * @generated from enum value: CHAT_REFUSAL_CONTACT = 1;
+   */
+  CONTACT = 1,
+
+  /**
+   * Longer than 200 characters, or empty.
+   *
+   * @generated from enum value: CHAT_REFUSAL_LONG = 2;
+   */
+  LONG = 2,
+
+  /**
+   * Too many lines too fast.
+   *
+   * @generated from enum value: CHAT_REFUSAL_FAST = 3;
+   */
+  FAST = 3,
+
+  /**
+   * The sender may say nothing now (ChatState says why).
+   *
+   * @generated from enum value: CHAT_REFUSAL_SILENT = 4;
+   */
+  SILENT = 4,
+
+  /**
+   * Nobody is aboard to hear it.
+   *
+   * @generated from enum value: CHAT_REFUSAL_NOBODY = 5;
+   */
+  NOBODY = 5,
+
+  /**
+   * The shipmate isn't in the game: messages aren't kept for later.
+   *
+   * @generated from enum value: CHAT_REFUSAL_AWAY = 6;
+   */
+  AWAY = 6,
+
+  /**
+   * The game's owner has shipmates' messages off for everyone.
+   *
+   * @generated from enum value: CHAT_REFUSAL_RESTING = 7;
+   */
+  RESTING = 7,
+}
+
+/**
+ * Describes the enum keel.v1.ChatRefusal.
+ */
+export const ChatRefusalSchema: GenEnum<ChatRefusal> = /*@__PURE__*/
+  enumDesc(file_keel_v1_game, 2);
+
+/**
+ * ChatStatus is how chat stands for a connection.
+ *
+ * @generated from enum keel.v1.ChatStatus
+ */
+export enum ChatStatus {
+  /**
+   * @generated from enum value: CHAT_STATUS_UNSPECIFIED = 0;
+   */
+  UNSPECIFIED = 0,
+
+  /**
+   * Lines go and come.
+   *
+   * @generated from enum value: CHAT_STATUS_ON = 1;
+   */
+  ON = 1,
+
+  /**
+   * The game's owner has chat off, for everyone or where the player is:
+   * "Chat is resting".
+   *
+   * @generated from enum value: CHAT_STATUS_OFF = 2;
+   */
+  OFF = 2,
+
+  /**
+   * The player's own chat is off (a player of 13 to 17 until they turn it
+   * on).
+   *
+   * @generated from enum value: CHAT_STATUS_OWN_OFF = 3;
+   */
+  OWN_OFF = 3,
+
+  /**
+   * The player's chat rests: too many lines refused, a report, or the
+   * game's owner.
+   *
+   * @generated from enum value: CHAT_STATUS_RESTING = 4;
+   */
+  RESTING = 4,
+}
+
+/**
+ * Describes the enum keel.v1.ChatStatus.
+ */
+export const ChatStatusSchema: GenEnum<ChatStatus> = /*@__PURE__*/
+  enumDesc(file_keel_v1_game, 3);
+
+/**
+ * AshoreWhy is why someone left a boat they were aboard.
+ *
+ * @generated from enum keel.v1.AshoreWhy
+ */
+export enum AshoreWhy {
+  /**
+   * @generated from enum value: ASHORE_WHY_UNSPECIFIED = 0;
+   */
+  UNSPECIFIED = 0,
+
+  /**
+   * They chose to go ashore.
+   *
+   * @generated from enum value: ASHORE_WHY_CHOSE = 1;
+   */
+  CHOSE = 1,
+
+  /**
+   * The skipper put them ashore.
+   *
+   * @generated from enum value: ASHORE_WHY_PUT = 2;
+   */
+  PUT = 2,
+
+  /**
+   * The skipper's boat left the water.
+   *
+   * @generated from enum value: ASHORE_WHY_LEFT = 3;
+   */
+  LEFT = 3,
+}
+
+/**
+ * Describes the enum keel.v1.AshoreWhy.
+ */
+export const AshoreWhySchema: GenEnum<AshoreWhy> = /*@__PURE__*/
+  enumDesc(file_keel_v1_game, 4);
 
 /**
  * WatchEnd is why a watch ended or was refused.
@@ -2511,13 +4130,20 @@ export enum WatchEnd {
    * @generated from enum value: WATCH_END_BUSY = 8;
    */
   BUSY = 8,
+
+  /**
+   * The connection is aboard a boat: it goes ashore first.
+   *
+   * @generated from enum value: WATCH_END_ABOARD = 9;
+   */
+  ABOARD = 9,
 }
 
 /**
  * Describes the enum keel.v1.WatchEnd.
  */
 export const WatchEndSchema: GenEnum<WatchEnd> = /*@__PURE__*/
-  enumDesc(file_keel_v1_game, 0);
+  enumDesc(file_keel_v1_game, 5);
 
 /**
  * Lamp is the agent's attention to its boat.
@@ -2549,7 +4175,7 @@ export enum Lamp {
  * Describes the enum keel.v1.Lamp.
  */
 export const LampSchema: GenEnum<Lamp> = /*@__PURE__*/
-  enumDesc(file_keel_v1_game, 1);
+  enumDesc(file_keel_v1_game, 6);
 
 /**
  * ChartSubject is a kind of subject of the chart.
@@ -2582,7 +4208,7 @@ export enum ChartSubject {
  * Describes the enum keel.v1.ChartSubject.
  */
 export const ChartSubjectSchema: GenEnum<ChartSubject> = /*@__PURE__*/
-  enumDesc(file_keel_v1_game, 2);
+  enumDesc(file_keel_v1_game, 7);
 
 /**
  * BumpPart is a connection's part in a bump.
@@ -2623,5 +4249,5 @@ export enum BumpPart {
  * Describes the enum keel.v1.BumpPart.
  */
 export const BumpPartSchema: GenEnum<BumpPart> = /*@__PURE__*/
-  enumDesc(file_keel_v1_game, 3);
+  enumDesc(file_keel_v1_game, 8);
 

@@ -23,7 +23,7 @@
 import { type FallShape, fallPose } from '../edge/over';
 import { TICKS_PER_SECOND } from '../net/clock';
 import { CHANGE, FLEET_META, SLOT, slotAt, VIEW_SLOTS } from '../net/view';
-import { lerpAngle } from '../predict/blend';
+import { lerpAngle, yardsTurn } from '../predict/blend';
 
 /** The near band's delay, ticks: two snapshots at 15 a second, 133 ms. */
 export const NEAR_DELAY = 4;
@@ -78,8 +78,20 @@ const F = {
   sail: 9,
   far: 10,
   falling: 11,
+  jib: 12,
+  reef: 13,
+  yardsTurn: 14,
+  foreYardsTurn: 15,
+  kite: 16,
+  hoist: 17,
 } as const;
-const FIELDS = 12;
+const FIELDS = 18;
+
+/**
+ * The slot fields the wire may carry beyond those every boat has: the
+ * headsails' clew angle and the reef level, read as 0 where it does not.
+ */
+const SLOT_MORE = SLOT as typeof SLOT & { jib?: number; reef?: number };
 /** Samples kept a boat. */
 export const SAMPLES = 8;
 
@@ -130,6 +142,19 @@ export interface DrawnBoat {
   sailor: number;
   mode: number;
   sail: number;
+  /** The headsails' clew's angle, radians, positive to starboard; 0 for a boat with none. */
+  jib: number;
+  /** The main's reef level: 0 at full sail, 1 or 2. */
+  reef: number;
+  /**
+   * Its after and fore yards' nodes' turns about their masts, radians
+   * (yardsTurn of the wire's yards): 0 square, and on a boat with none.
+   */
+  yardsTurn: number;
+  foreYardsTurn: number;
+  /** The downwind sail's clew's angle, radians, positive to starboard, and how far it is hoisted, 0 … 1; 0 for a boat with none. */
+  kite: number;
+  hoist: number;
   /** 0 … 1: how far it has faded in. */
   opacity: number;
   /** 0 near … 1 far: where its delay is between the bands'. */
@@ -144,6 +169,22 @@ export interface DrawnBoat {
   machine: number;
   /** Its sailor's look code; −1 for none given (a test's boat), drawn in the default look. */
   look: number;
+  /** Its own look code, its paint, cloth and sail number; −1 for none given (a test's boat), drawn in the first paint and cloth with no number. */
+  boatLook: number;
+  /** Its name, player text, as the server told it once the boat came near; "" for none. */
+  name: string;
+  /** Who is aboard it, as the server told it while it is near: null for nobody but its skipper. Never a name. */
+  crew: BoatCrew | null;
+  /** Counts the boats its slot has held: another boat in the slot, another count. */
+  entered: number;
+  /** Whether its helm is drawn elsewhere this frame, walking with the crew as the controls change hands: set by the crew's drawing. */
+  helmAway: boolean;
+}
+
+/** Who is aboard a boat in view: each person's seat and look, the skipper (seat 0) first, and the seat of whoever holds the controls. */
+export interface BoatCrew {
+  people: readonly { seat: number; look: number }[];
+  holder: number;
 }
 
 /** A drawn boat at the origin, faded out. */
@@ -163,6 +204,12 @@ export function newDrawnBoat(): DrawnBoat {
     sailor: 0,
     mode: 0,
     sail: 0,
+    jib: 0,
+    reef: 0,
+    yardsTurn: 0,
+    foreYardsTurn: 0,
+    kite: 0,
+    hoist: 0,
     opacity: 0,
     far: 0,
     motion: 0,
@@ -171,6 +218,11 @@ export function newDrawnBoat(): DrawnBoat {
     fall: -1,
     machine: 0,
     look: -1,
+    boatLook: -1,
+    name: '',
+    crew: null,
+    entered: 0,
+    helmAway: false,
   };
 }
 
@@ -182,6 +234,12 @@ class Boat {
   machine = 0;
   /** Its sailor's look code. */
   look = 0;
+  /** Its own look code, and its name. */
+  boatLook = 0;
+  name = '';
+  crew: BoatCrew | null = null;
+  /** Counts the boats this slot has held. */
+  entered = 0;
   readonly ring = new Float64Array(SAMPLES * FIELDS);
   /** Samples held, and where the next goes. */
   count = 0;
@@ -204,6 +262,8 @@ class Boat {
 
   reset(kind: number): void {
     this.present = true;
+    this.entered++;
+    this.crew = null;
     this.kind = kind;
     this.machine = 0;
     this.count = 0;
@@ -240,6 +300,14 @@ class Boat {
     r[k + F.mode] = f[o + SLOT.mode] ?? 0;
     r[k + F.sail] = f[o + SLOT.sail] ?? 0;
     r[k + F.far] = f[o + SLOT.far] ?? 0;
+    r[k + F.jib] = SLOT_MORE.jib === undefined ? 0 : (f[o + SLOT_MORE.jib] ?? 0);
+    r[k + F.reef] = SLOT_MORE.reef === undefined ? 0 : (f[o + SLOT_MORE.reef] ?? 0);
+    // The yards by their turns, which run smoothly through square, where
+    // the angles' sign flips: blended, they never pass the centreline.
+    r[k + F.yardsTurn] = yardsTurn(f[o + SLOT.yards] ?? 0);
+    r[k + F.foreYardsTurn] = yardsTurn(f[o + SLOT.foreYards] ?? 0);
+    r[k + F.kite] = f[o + SLOT.kite] ?? 0;
+    r[k + F.hoist] = f[o + SLOT.hoist] ?? 0;
     const falling = f[o + SLOT.falling] ?? 0;
     r[k + F.falling] = falling;
     if (falling === 0) {
@@ -260,6 +328,10 @@ class Boat {
     out.kind = this.kind;
     out.machine = this.machine;
     out.look = this.look;
+    out.boatLook = this.boatLook;
+    out.name = this.name;
+    out.crew = this.crew;
+    out.entered = this.entered;
     out.tick = rt;
     out.fall = rt >= this.fallTick ? (rt - this.fallTick) / TICKS_PER_SECOND : -1;
     const newest = this.at(0, F.tick);
@@ -286,9 +358,17 @@ class Boat {
       out.boom = this.#mix(i, F.boom, t);
       out.rudder = this.#mix(i, F.rudder, t);
       out.sailor = this.#mix(i, F.sailor, t);
+      out.jib = this.#mix(i, F.jib, t);
+      out.yardsTurn = this.#mix(i, F.yardsTurn, t);
+      out.foreYardsTurn = this.#mix(i, F.foreYardsTurn, t);
+      out.hoist = this.#mix(i, F.hoist, t);
+      // The clew's angle blended as the jib's: it crosses in a gybe through
+      // aft, as the crew takes it round.
+      out.kite = this.#mix(i, F.kite, t);
       const discrete = t < 0.5 ? i + 1 : i;
       out.mode = this.at(discrete, F.mode);
       out.sail = this.at(discrete, F.sail);
+      out.reef = this.at(discrete, F.reef);
       return MOTION.interpolated;
     }
     // Past the newest: carried on by the last two samples' velocity and
@@ -322,6 +402,12 @@ class Boat {
     out.sailor = this.at(i, F.sailor);
     out.mode = this.at(i, F.mode);
     out.sail = this.at(i, F.sail);
+    out.jib = this.at(i, F.jib);
+    out.reef = this.at(i, F.reef);
+    out.yardsTurn = this.at(i, F.yardsTurn);
+    out.foreYardsTurn = this.at(i, F.foreYardsTurn);
+    out.kite = this.at(i, F.kite);
+    out.hoist = this.at(i, F.hoist);
   }
 }
 
@@ -392,6 +478,10 @@ export class Fleet {
   #entriesRate = 0;
   /** World time the latest snapshot came at, µs. */
   arrived = 0;
+  /** The boats' names by view slot, as the server told them: of the boat the slot holds as of the next snapshot. */
+  readonly #names: string[] = Array.from({ length: VIEW_SLOTS }, () => '');
+  /** The crews by view slot, as the server told them: of the boat the slot holds as of the next snapshot. */
+  readonly #crews: (BoatCrew | null)[] = Array.from({ length: VIEW_SLOTS }, () => null);
 
   /** The boats drawn this frame: drawn[0 … count). */
   readonly drawn: DrawnBoat[] = Array.from({ length: 2 * VIEW_SLOTS }, newDrawnBoat);
@@ -423,8 +513,8 @@ export class Fleet {
       if (change !== CHANGE.none) {
         this.#entries++;
       }
-      // An enter of the boat the slot holds, its sailor's look changed,
-      // keeps it; any other enter replaces it.
+      // An enter of the boat the slot holds, its sailor's look, its own
+      // look or its kind changed, keeps it; any other enter replaces it.
       const relook = change === CHANGE.entered && b.present && f[o + SLOT.relook] === 1;
       if (change === CHANGE.left || (change === CHANGE.entered && b.present && !relook)) {
         this.#fadeOut(b);
@@ -436,6 +526,10 @@ export class Fleet {
       if (f[o + SLOT.present] === 1 && b.present) {
         b.machine = f[o + SLOT.machine] === 1 ? 1 : 0;
         b.look = f[o + SLOT.look] ?? 0;
+        b.boatLook = f[o + SLOT.boatLook] ?? 0;
+        b.kind = f[o + SLOT.kind] ?? 0;
+        b.name = this.#names[i] ?? '';
+        b.crew = this.#crews[i] ?? null;
       }
       if (f[o + SLOT.present] === 1 && f[o + SLOT.sampled] === 1 && b.present) {
         b.add(f, o, tick);
@@ -443,8 +537,48 @@ export class Fleet {
     }
   }
 
+  /**
+   * Takes boats' names by view slot: each the name of the boat its slot
+   * holds as of the next snapshot, "" to clear one.
+   */
+  names(list: readonly { slot: number; name: string }[]): void {
+    for (const n of list) {
+      if (n.slot >= 0 && n.slot < VIEW_SLOTS) {
+        this.#names[n.slot] = n.name;
+        const b = this.#boats[n.slot] as Boat;
+        if (b.present) {
+          b.name = n.name;
+        }
+      }
+    }
+  }
+
+  /**
+   * Takes who is aboard boats in view, by view slot: each the crew of the
+   * boat its slot holds as of the next snapshot, no people for nobody but
+   * its skipper.
+   */
+  crews(
+    list: readonly {
+      slot: number;
+      people: readonly { seat: number; look: number; machine?: boolean }[];
+      holder: number;
+    }[],
+  ): void {
+    for (const c of list) {
+      if (c.slot >= 0 && c.slot < VIEW_SLOTS) {
+        this.#crews[c.slot] =
+          c.people.length > 1
+            ? { people: c.people.map((p) => ({ seat: p.seat, look: p.look })), holder: c.holder }
+            : null;
+      }
+    }
+  }
+
   /** Forgets every boat, fading them out: a new connection. */
   clear(): void {
+    this.#names.fill('');
+    this.#crews.fill(null);
     for (const b of this.#boats) {
       if (b.present) {
         this.#fadeOut(b);
@@ -607,6 +741,12 @@ function copyDrawn(a: DrawnBoat, b: DrawnBoat): void {
   b.sailor = a.sailor;
   b.mode = a.mode;
   b.sail = a.sail;
+  b.jib = a.jib;
+  b.reef = a.reef;
+  b.yardsTurn = a.yardsTurn;
+  b.foreYardsTurn = a.foreYardsTurn;
+  b.kite = a.kite;
+  b.hoist = a.hoist;
   b.opacity = a.opacity;
   b.far = a.far;
   b.motion = a.motion;
@@ -615,4 +755,9 @@ function copyDrawn(a: DrawnBoat, b: DrawnBoat): void {
   b.fall = a.fall;
   b.machine = a.machine;
   b.look = a.look;
+  b.boatLook = a.boatLook;
+  b.name = a.name;
+  b.crew = a.crew;
+  b.entered = a.entered;
+  b.helmAway = a.helmAway;
 }

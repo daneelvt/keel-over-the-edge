@@ -25,6 +25,8 @@ import {
   OVER_HELD,
   PILOT_HELD,
   PILOT_SIZE,
+  RIG_HELD,
+  RIG_SIZE,
   readSnapshot,
   snapshotTick,
   writeSnapshot,
@@ -76,6 +78,11 @@ interface GoldenBoat {
   rudder: number;
   sailor: number;
   sail: number;
+  jib: number;
+  yards: number;
+  fore: number;
+  kite: number;
+  hoist: number;
 }
 
 /** A view's boats as the golden vectors list them. */
@@ -98,6 +105,11 @@ function boatsOf(v: View): GoldenBoat[] {
       rudder: at(Q.rudder),
       sailor: at(Q.sailor),
       sail: at(Q.sail),
+      jib: at(Q.jib),
+      yards: at(Q.yards),
+      fore: at(Q.fore),
+      kite: at(Q.kite),
+      hoist: at(Q.hoist),
     });
   }
   return out;
@@ -123,7 +135,19 @@ describe('the snapshot', () => {
       expect(s.tick, g.name).toBe(Number(g.tick));
       expect(snapshotTick(new DataView(b.buffer)), g.name).toBe(Number(g.tick));
       expect(
-        [s.base, s.flags, s.seq, s.margin, s.helm, s.sheet, s.mode, s.way, s.order, s.target],
+        [
+          s.base,
+          s.flags,
+          s.seq,
+          s.margin,
+          s.helm,
+          s.sheet,
+          s.mode,
+          s.way,
+          s.order,
+          s.target,
+          s.reef,
+        ],
         g.name,
       ).toEqual([
         g.base,
@@ -136,6 +160,7 @@ describe('the snapshot', () => {
         g.way,
         g.order,
         g.target,
+        g.reef,
       ]);
       expect(s.over, g.name).toBe(Number((g as { over?: string }).over ?? 0));
       expect(s.stays, g.name).toBe((g as { stays?: boolean }).stays ?? false);
@@ -225,7 +250,7 @@ describe('the snapshot', () => {
     helm[20] = 0x04;
     expect(refused(helm)).not.toBeNull();
     const flags = good.slice();
-    flags[12] = 32 | PILOT_HELD | GROUND_HELD;
+    flags[12] = 128 | PILOT_HELD | GROUND_HELD | RIG_HELD;
     expect(refused(flags)).not.toBeNull();
     const eight = good.slice();
     eight[1] = 8;
@@ -233,18 +258,30 @@ describe('the snapshot', () => {
     const entries = good.slice();
     entries[HEADER_SIZE - 1] = 129;
     expect(refused(entries)).not.toBeNull();
-    // The second golden snapshot is on the autopilot and aground: both
-    // blocks follow.
-    expect(s.header).toBe(HEADER_SIZE + PILOT_SIZE + GROUND_SIZE);
-    expect(refused(good.slice(0, HEADER_SIZE + PILOT_SIZE + GROUND_SIZE - 1))).not.toBeNull();
+    // The second golden snapshot is on the autopilot, aground and rigged:
+    // the three blocks follow.
+    const blocks = HEADER_SIZE + PILOT_SIZE + GROUND_SIZE + RIG_SIZE;
+    expect(s.header).toBe(blocks);
+    expect(refused(good.slice(0, blocks - 1))).not.toBeNull();
+    // The rig's block: the reef in force 0 to 2, then seven spare bytes.
+    const rigAt = HEADER_SIZE + PILOT_SIZE + GROUND_SIZE;
+    for (const [at, v] of [
+      [rigAt, 3],
+      [rigAt + 1, 1],
+      [rigAt + 7, 1],
+    ] as const) {
+      const rig = good.slice();
+      rig[at] = v;
+      expect(refused(rig), `byte ${at} at ${v}`).not.toBeNull();
+    }
     // Falling: the over block follows them, its tick above 0 and at most
     // the snapshot's.
     const falling = good.slice();
-    falling[12] = PILOT_HELD | GROUND_HELD | OVER_HELD;
+    falling[12] = PILOT_HELD | GROUND_HELD | RIG_HELD | OVER_HELD;
     expect(refused(falling)).not.toBeNull();
     const fall = new Uint8Array(MAX_HEADER_SIZE);
-    fall.set(good.subarray(0, HEADER_SIZE + PILOT_SIZE + GROUND_SIZE));
-    fall[12] = PILOT_HELD | GROUND_HELD | OVER_HELD;
+    fall.set(good.subarray(0, blocks));
+    fall[12] = PILOT_HELD | GROUND_HELD | RIG_HELD | OVER_HELD;
     fall[HEADER_SIZE - 1] = 0;
     const fv = new DataView(fall.buffer);
     const tick = Number(snapshots[1]?.tick);
@@ -309,6 +346,25 @@ describe('the snapshot', () => {
     expect(f[two + SLOT.heading]).toBeCloseTo(-ANGLE_STEP, 12);
     expect(f[two + SLOT.heel]).toBeCloseTo(-Math.PI, 12);
     expect(f[slotAt(3) + SLOT.present]).toBe(0);
+    // The rig: a jib and a reef; yards, the fore yards hauled round apart.
+    const five = slotAt(5);
+    expect(f[five + SLOT.jib]).toBeCloseTo(1234 * ANGLE_STEP, 12);
+    expect([f[five + SLOT.reef], f[five + SLOT.yards], f[five + SLOT.foreYards]]).toEqual([
+      1, 0, 0,
+    ]);
+    const last = slotAt(63);
+    expect(f[last + SLOT.reef]).toBe(2);
+    expect(f[last + SLOT.jib]).toBeCloseTo(-ANGLE_STEP, 12);
+    expect(f[last + SLOT.yards]).toBeCloseTo(-3000 * ANGLE_STEP, 12);
+    expect(f[last + SLOT.foreYards]).toBeCloseTo(-2500 * ANGLE_STEP, 12);
+    // A downwind sail: its clew and its hoist, part set and all the way.
+    const six = slotAt(6);
+    expect(f[six + SLOT.kind]).toBe(3);
+    expect(f[six + SLOT.kite]).toBeCloseTo(-11000 * ANGLE_STEP, 12);
+    expect(f[six + SLOT.hoist]).toBeCloseTo(128 / 255, 12);
+    expect(f[last + SLOT.hoist]).toBe(1);
+    expect([f[one + SLOT.kite], f[one + SLOT.hoist]]).toEqual([0, 0]);
+    expect([f[one + SLOT.jib], f[one + SLOT.reef]]).toEqual([0, 0]);
     // The own boat reads from the record as from the snapshot.
     const own = newSnapshot();
     expect(readSnapshot(new DataView(record), own)).toBeNull();
@@ -354,6 +410,12 @@ describe('the envelopes', () => {
           order: 3,
           way: 2,
         },
+      },
+    },
+    {
+      body: {
+        case: 'input',
+        value: { seq: 727706172, helm: 500, sheet: 310, ackTick: 727706166n, reef: 2 },
       },
     },
     {

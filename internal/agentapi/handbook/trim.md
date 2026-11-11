@@ -4,13 +4,47 @@
 
 The fastest boom by angle off the true wind, in 6, 12 and 20 knots (Jolly boat, flat water):
 
-- 40°: 4, 4, 10
-- 60°: 5, 10, 20
+- 40°: 4, 4, 5
+- 60°: 4, 10, 15
 - 90°: 20, 25, 30
-- 120°: 45, 50, 45
-- 150°: 75, 80, 60
+- 120°: 45, 50, 50
+- 150°: 75, 80, 70
 - 170°: 80, 80, 80
 - 180°: 85, 85, 85
+
+The fastest boom by angle off the true wind, in 6, 12 and 20 knots (Keelboat, flat water):
+
+- 40°: 4, 4, 10
+- 60°: 4, 15, 20
+- 90°: 20, 30, 30
+- 120°: 45, 50, 55
+- 150°: 75, 80, 65
+- 170°: 80, 80, 80
+- 180°: 80, 80, 80
+
+The fastest braces, the yards' angle off the centreline, by angle off the true wind, in 6, 12 and 20 knots (Tall ship, flat water):
+
+- 40°: aback, aback, aback
+- 60°: 42, 42, 42
+- 90°: 42, 42, 42
+- 120°: 50, 55, 65
+- 150°: 90, 90, 90
+- 170°: 90, 90, 90
+- 180°: 90, 90, 90
+
+The fastest boom by angle off the true wind, in 6, 12 and 20 knots (Skiff, flat water):
+
+- 40°: 4, 4, 10
+- 60°: 4, 10, 20
+- 90°: 15, 15, 35
+- 120°: 20, 25, 45
+- 150°: 65, 70, 65
+- 170°: 75, 75, 75
+- 180°: 75, 75, 75
+
+The Skiff's crew sets its gennaker bearing away past 105° off the true wind and takes it in coming up forward of 90°. Set, the sheet trims it with the main and the sail word is its own. Reef 1 (Gennaker in) keeps it in. It pays at 105° in every wind to 30 knots.
+
+Reef (trim or steer with reef 1 or 2; 0 shakes the reefs out) when close-hauled the sheet hauled in hard heels the boat past its trim: from there only easing holds her up, and reefed she heels less and stands up. Reef the Jolly boat from 19 knots, the Keelboat from 13 knots, the Tall ship from 27 knots and the Skiff from 13 knots (reef 2: its reef 1 shortens nothing).
 
 Close-hauled, haul in hard. Half the apparent wind's angle is a rough guide on a reach only.
 
