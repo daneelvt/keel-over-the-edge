@@ -75,7 +75,7 @@ poses:
       - [head, x, -8]
     ik:
       hand_l: { at: brace, offset: [0.16, 0.0, 0.0], reach: 0.76, pole: [0.6, 0.3, -0.5] }
-      hand_r: { at: brace, offset: [0.02, 0.0, 0.0], reach: 0.7, pole: [-0.5, 0.4, -0.5] }
+      hand_r: { at: brace, offset: [0.02, 0.0, 0.0], reach: 0.73, pole: [-0.5, 0.4, -0.5] }
 
   # Heaving: leaning back, both hands come back with the fall; a glance
   # aloft at the yards.
@@ -88,7 +88,7 @@ poses:
       - [head, x, -16]
     ik:
       hand_l: { at: brace, offset: [0.04, 0.0, 0.0], reach: 0.76, pole: [0.6, 0.3, -0.5] }
-      hand_r: { at: brace, offset: [-0.1, 0.0, 0.0], reach: 0.7, pole: [-0.5, 0.4, -0.5] }
+      hand_r: { at: brace, offset: [-0.1, 0.0, 0.0], reach: 0.73, pole: [-0.5, 0.4, -0.5] }
 
   haul-right-over:
     from: haul-grip
@@ -100,7 +100,7 @@ poses:
       - [neck_01, x, -10]
       - [head, x, -8]
     ik:
-      hand_l: { at: brace, offset: [0.0, 0.0, 0.0], reach: 0.7, pole: [0.6, 0.3, -0.5] }
+      hand_l: { at: brace, offset: [0.0, 0.0, 0.0], reach: 0.73, pole: [0.6, 0.3, -0.5] }
       hand_r: { at: brace, offset: [0.16, 0.0, 0.0], reach: 0.76, pole: [-0.5, 0.4, -0.5] }
 
   haul-right-heave:
@@ -111,7 +111,7 @@ poses:
       - [neck_01, x, 4]
       - [head, x, 2]
     ik:
-      hand_l: { at: brace, offset: [-0.12, 0.0, 0.0], reach: 0.7, pole: [0.6, 0.3, -0.5] }
+      hand_l: { at: brace, offset: [-0.12, 0.0, 0.0], reach: 0.73, pole: [0.6, 0.3, -0.5] }
       hand_r: { at: brace, offset: [0.04, 0.0, 0.0], reach: 0.76, pole: [-0.5, 0.4, -0.5] }
 
   # Standing in the main top, out toward the starboard shrouds, facing

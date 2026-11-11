@@ -207,12 +207,6 @@ def retarget(fig, name, spec, fps):
         if clip.loop:
             _steady_seam(clip)
         if clip.ship == SHIP_RAIL:
-            # The hands where they rest on the rail as the clip has them
-            # now, the rail's lock judged apart (the forearms on its line).
-            for fr, cs in zip(clip.frames, clip.contacts):
-                fig.set_rotations(fr["rot"], fr["pelvis"])
-                for e in [e for e in cs if e.startswith("hand")]:
-                    cs[e] = fig.world(e).copy()
             fig.clip = clip
             clip.place = _rail_place(fig, rail)
             clip.notes["rail moved out"] = round(rail["out"], 4)
@@ -788,7 +782,7 @@ SHIP_HATCH = "ship-hatch"
 # along the forearms); each shoulder no higher over the
 # forearms' line than this share of its upper arm (the back bent further if
 # it would be), nor lower than this share; and how far the back may bend.
-LEAN_CLEAR = 0.015
+LEAN_CLEAR = 0.02
 LEAN_HIGH = 0.97
 LEAN_LOW = 0.25
 LEAN_MOST = 35.0
@@ -802,6 +796,8 @@ ON_RAIL = (0.03, 0.08)
 # frames looked at for it.
 BULWARK_IN = 0.04
 BULWARK_CLEAR = 0.05
+# The cap rail's depth, its inner edge standing over the bulwark.
+CAP = 0.09
 # What of the body is kept off the bulwark: the hips, the back, the legs and
 # the cloth on them (the arms reach over the rail, the head leans over it).
 BULWARK_BODY = ("pelvis", "spine_01", "spine_02", "spine_03", "thigh", "thigh_corrector", "calf", "foot", "ball",
@@ -915,9 +911,9 @@ def _on_rail(fig, clip, rail):
     """The forearms laid on the rail's line: each elbow where its upper arm
     reaches the line's height nearest the source's elbow, the forearm level
     along the source's heading from it, by as much as the hand is on the
-    rail (ON_RAIL: the source's wrist near where it rests). The wrists so
-    placed are the clip's contacts; and how far each forearm's bone is off
-    the line where it crosses it, and where along it, is recorded."""
+    rail (ON_RAIL: the source's wrist near where it rests). How far each
+    forearm's bone is off the line where it crosses it, and where along it,
+    is recorded: the gate's lock on the rail."""
     frames = _ring(clip)
     height = rail["height"]
     sides = ("l", "r")
@@ -965,7 +961,6 @@ def _on_rail(fig, clip, rail):
             fig.bones[f"hand_{s}"].rotation_quaternion = hand
             fig.update()
             if w >= 0.999:
-                contacts[f"hand_{s}"] = fig.world(f"hand_{s}").copy()
                 a, b = fig.world(f"lowerarm_{s}"), fig.world(f"hand_{s}")
                 if abs(b.y - a.y) > 1e-6:
                     t = (rail["y"] - a.y) / (b.y - a.y)
@@ -1005,9 +1000,11 @@ def _rail_place(fig, rail):
         fig.set_rotations(fr["rot"], fr["pelvis"])
         fig.derive()
         co = fig.dressed()[fig.carried(BULWARK_BODY)]
-        below = co[co[:, 2] < top]
-        if len(below):
-            near = min(near, float((below[:, 1] - face).min()))
+        below = co[:, 2] < top
+        if below.any():
+            # Under the cap itself, its inner edge.
+            edge = np.where(co[below, 2] > top - CAP, rail["y"], face)
+            near = min(near, float((co[below, 1] - edge).min()))
     fig.quiet()
     out = max(0.0, BULWARK_CLEAR - near) if near < math.inf else 0.0
     rail["out"] = out

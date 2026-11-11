@@ -794,6 +794,13 @@ def clip_ship(gates, fig, measures):
         held[o.name] = np.array([bool(v.groups) and motion.kind(max((g.weight, names.get(g.group, ""))
                                                                     for g in v.groups)[1]) in ON_ROPES
                                  for v in o.data.vertices])
+    # In the top, the forearm of the hand on a shroud lies along it too.
+    held_top = {}
+    for o in fig.meshes:
+        names = {g.index: g.name for g in o.vertex_groups}
+        held_top[o.name] = np.array([bool(v.groups) and motion.kind(max((g.weight, names.get(g.group, ""))
+                                                                        for g in v.groups)[1]) in
+                                     ON_ROPES + ("lowerarm",) for v in o.data.vertices])
     bones = [b.name for b in fig.arm.data.bones if motion.kind(b.name) in metrics.BODY_BONES]
     free = [b for b in bones if motion.kind(b) not in ON_ROPES]
     # A vertex the arms do not carry is anchored on the body, never on an
@@ -824,7 +831,8 @@ def clip_ship(gates, fig, measures):
                            if _crossed(ship.unheld if motion.kind(b) in ON_ROPES else ship.tree, [segs[i]])]
             else:
                 crossed = [bones[i] for i in _crossed(ship.tree, segs)]
-            crossed += [free[i] for i in _crossed(ship.ropes, [(fig.world(n), fig.world(n, "tail")) for n in free])]
+            loose = [n for n in free if clip.ship != motion.TOP or motion.kind(n) != "lowerarm"]
+            crossed += [loose[i] for i in _crossed(ship.ropes, [(fig.world(n), fig.world(n, "tail")) for n in loose])]
             for o in fig.meshes:
                 co, _ = motion.coords_posed(o)
                 anchors = None
@@ -835,7 +843,7 @@ def clip_ship(gates, fig, measures):
                     body = ~armed[o.name]
                     if body.any():
                         anchors[body] = metrics._nearest_on_segments(co[body], a[trunk], b[trunk])
-                    keep = ~held[o.name]
+                    keep = ~(held_top[o.name] if clip.ship == motion.TOP else held[o.name])
                     if clip.ship == motion.YARD:
                         # On the yard the hands hold it: they may meet it,
                         # and nothing else of hers.
