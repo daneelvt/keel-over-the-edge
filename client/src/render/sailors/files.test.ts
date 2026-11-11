@@ -12,7 +12,7 @@
 
 import { readdirSync, readFileSync } from 'node:fs';
 import { describe, expect, test } from 'vitest';
-import { ALOFT_CLIPS, DECK_CLIPS, shipAnchor } from './ship';
+import { ALOFT_CLIPS, DECK_CLIPS, NOT_FOR_MACHINES, shipAnchor } from './ship';
 
 interface Gltf {
   extensionsUsed?: string[];
@@ -170,7 +170,9 @@ describe.each(looks)('%s', (look) => {
       const aloft = readGltf(`${look}/${version}.aloft.glb`);
       const names = (g: Gltf) => (g.animations ?? []).map((a) => a.name).sort();
       expect(names(deck)).toEqual(
-        [...DECK_CLIPS.idles, ...DECK_CLIPS.leaning, ...DECK_CLIPS.seated, DECK_CLIPS.walk].sort(),
+        [...DECK_CLIPS.idles, ...DECK_CLIPS.leaning, ...DECK_CLIPS.seated, DECK_CLIPS.walk]
+          .filter((c) => look !== 'machine' || !NOT_FOR_MACHINES.includes(c))
+          .sort(),
       );
       expect(names(aloft)).toEqual(
         Object.values(ALOFT_CLIPS)

@@ -251,12 +251,14 @@ ropes too but to what holds them (the hands, the feet; on the yard, the
 hands hold it). Their clips are in two files. `<version>.ship.glb`, about her
 decks: Quaternius' `Idle_LookAround_Loop` (`look-about`, the hand the source
 raises to the brow kept down: a hat's brim is in its way),
-`Idle_FoldArms_Loop` (`fold-arms`), `Idle_Talking_Loop` (`talking`) and
+`Idle_FoldArms_Loop` (`fold-arms`; not the machines', whose hands would meet
+their plates), `Idle_Talking_Loop` (`talking`) and
 `Walk_Loop` (`walk`, a foot bearing on the deck moving back at 0.9 m/s), set
 on a flat deck and not placed; `Idle_Rail_Loop` (`leaning`), leaning on her
 rail facing outboard with the forearms laid on the cap rail's top at her
 rail's height over her deck (the back bent as far as brings the shoulders
-within reach of it), placed from the rail's point; and `Sitting_Idle_Loop`,
+within reach of it, and the body kept off the bulwark under it), placed
+from the rail's point; and `Sitting_Idle_Loop`,
 `Sitting_Idle02_Loop`, `Sitting_Nodding_Loop` and `Sitting_Talking_Loop`
 (`hatch-sit`, `hatch-shift`, `hatch-nod`, `hatch-talk`), sat on the hatch's
 forward edge facing forward, the buttocks on its grating and the cloth laid

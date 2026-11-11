@@ -5,7 +5,8 @@
 //
 // `<version>.ship.glb`, about her decks:
 //  - standing about, not placed (the figure at its origin facing +z, the
-//    soles on a flat deck): `look-about`, `fold-arms`, `talking`;
+//    soles on a flat deck): `look-about`, `fold-arms` (not a machine's),
+//    `talking`;
 //  - leaning on her rail facing outboard, the forearms on the cap rail's
 //    top (`leaning`), placed from the cap rail's inner edge on its top;
 //  - sat on her fore hatch's forward edge facing forward (`hatch-sit`,
@@ -39,6 +40,9 @@ export const DECK_CLIPS = {
   seated: ['hatch-sit', 'hatch-shift', 'hatch-nod', 'hatch-talk'],
   walk: 'walk',
 } as const;
+
+/** The idles a machine sailor has not: its hands would meet its own plates. */
+export const NOT_FOR_MACHINES: readonly string[] = ['fold-arms'];
 
 /** Her work and aloft, by name; each has its -port mirror. */
 export const ALOFT_CLIPS = {

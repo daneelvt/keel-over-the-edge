@@ -207,7 +207,9 @@ def retarget(fig, name, spec, fps):
         if clip.loop:
             _steady_seam(clip)
         if clip.ship == SHIP_RAIL:
+            fig.clip = clip
             clip.place = _rail_place(fig, rail)
+            clip.notes["rail moved out"] = round(rail["out"], 4)
         elif clip.seated:
             clip.place = _hatch_place(fig, clip)
     elif lock:
@@ -787,6 +789,12 @@ LEAN_MOST = 35.0
 # A hand is on the rail while its wrist is within this of where it rests on
 # it, and off it past this more (raised to call out).
 ON_RAIL = (0.03, 0.08)
+# The bulwark's inner face this far out beyond the cap rail's inner edge
+# (under its overhang), and the body kept this far off it; every this many
+# frames looked at for it.
+BULWARK_IN = 0.04
+BULWARK_CLEAR = 0.02
+SAMPLE = 6
 # Sat on the hatch: the buttocks this far over its grating; the hatch's
 # edge this far from the knees' joints, under the thighs.
 SIT_CLEAR = 0.006
@@ -959,12 +967,34 @@ def _on_rail(fig, clip, rail):
     clip.notes["rail along the forearms"] = [round(worst_t[0], 3), round(worst_t[1], 3)]
 
 
+def clip_of(fig):
+    """The clip the figure is being set in."""
+    return fig.clip
+
+
 def _rail_place(fig, rail):
     """From the figure's space to the ship's, leaning on the starboard
     rail facing outboard: the rail's line before the feet at the rail's
     point (the cap's inner edge on its top), the deck under the feet."""
     ship = fig.stage.ship
-    contact = Vector((0.0, rail["y"], rail["height"] - rail["clear"]))
+    top = rail["height"] - rail["clear"]
+    # The bulwark's inner face under the cap's overhang: the body (not its
+    # arms, which reach over the rail) kept BULWARK_CLEAR off it, the rail
+    # moved out from the figure as far as that takes.
+    face = rail["y"] - BULWARK_IN
+    fig.quiet(False)
+    near = math.inf
+    for fr in _ring(clip_of(fig))[::SAMPLE]:
+        fig.set_rotations(fr["rot"], fr["pelvis"])
+        fig.derive()
+        co = fig.dressed()[~fig.armed()]
+        below = co[co[:, 2] < top]
+        if len(below):
+            near = min(near, float((below[:, 1] - face).min()))
+    fig.quiet()
+    out = max(0.0, BULWARK_CLEAR - near) if near < math.inf else 0.0
+    rail["out"] = out
+    contact = Vector((0.0, rail["y"] - out, top))
     return Matrix.Translation(ship.point(SHIP_RAIL)) @ Matrix.Rotation(math.radians(90.0), 4, "Z") @ \
         Matrix.Translation(-contact)
 

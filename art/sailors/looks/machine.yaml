@@ -174,7 +174,6 @@ clips:
     crouch-walk,
     crouch-exit,
     look-about,
-    fold-arms,
     talking,
     leaning,
     hatch-sit,

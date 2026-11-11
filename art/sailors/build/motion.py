@@ -348,6 +348,12 @@ class Figure:
                 o.hide_viewport = on
 
     def update(self):
+        # Only the pelvis moves: what setting a bone's matrix leaves in
+        # another's place (its rounding) is not the clip's, which keeps
+        # turns alone.
+        for pb in self.bones:
+            if pb.name != "pelvis" and pb.location.length_squared > 0.0:
+                pb.location = (0.0, 0.0, 0.0)
         bpy.context.view_layer.update()
 
     def turn(self, turns):
@@ -369,10 +375,6 @@ class Figure:
     def set_rotations(self, rot, pelvis=None):
         for pb in self.bones:
             pb.rotation_quaternion = rot[pb.name]
-            # Only the pelvis moves: what an IK's aim leaves in another's
-            # place (its rounding, frame on frame) is not the clip's.
-            if pb.name != "pelvis":
-                pb.location = (0.0, 0.0, 0.0)
         if pelvis is not None:
             self.bones["pelvis"].location = pelvis
         self.update()
@@ -912,6 +914,10 @@ class Figure:
             for eff, spec in pose["ik"].items():
                 if eff.startswith("foot") and spec["at"] not in ("bone", "free") and not spec.get("planted"):
                     surface = self.stage.point(spec["at"], side).z
+                    if pose["place"] in SHIP_STANDS:
+                        # On the ship, held there whatever the clip does
+                        # after: a boot's sole kept clear.
+                        surface += SHIP_SOLE
                     for _ in range(3):
                         self.solve(eff, at[eff], spec.get("pole"))
                         self.level_foot(eff)
@@ -1294,10 +1300,14 @@ ON_ROPE = ("yard-foot-in", "yard-foot-out")
 # shoulder.
 TOP_REACH = 0.78
 YARD_HIPS = 0.26
+# A foot standing on the ship's deck or top, this much higher than a foot
+# set on a floor: it is held where its key sets it, and a boot's sole is
+# thick.
+SHIP_SOLE = 0.012
 # The legs on the footrope straight to this share of their length.
 YARD_LEGS = 0.92
 YARD_AFT = 0.34
-YARD_CLEAR = 0.02
+YARD_CLEAR = 0.03
 # What of the body lies on the yard: what the hips, the back and the thighs
 # carry (and the cloth on them); not the arms or the head.
 YARD_BODY = ("pelvis", "spine_01", "spine_02", "spine_03", "thigh", "thigh_corrector", "skirt")

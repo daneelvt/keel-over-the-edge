@@ -925,11 +925,11 @@ def clip_skirts(gates, fig, worn, measures):
             lines = motion.skirt_lines(fig, body, pairs[0][2], [s for _, s, _ in pairs])[:8]
         motion.stop(fig.arm)
         fig.reset()
-        # Placed in the boat (seated, crossing, climbing in), or crouched
-        # low on a deck, the hips' own cloth meets the thighs turned hard
-        # into it, which the chains cannot carry away: measured, not yet
-        # held to nothing.
-        held = not seated and not getattr(clip, "deck", False)
+        # Placed in the boat (seated, crossing, climbing in), crouched low
+        # on a deck, or bent over a yard, the hips' own cloth meets the
+        # thighs turned hard into it, which the chains cannot carry away:
+        # measured, not yet held to nothing.
+        held = not seated and not getattr(clip, "deck", False) and getattr(clip, "ship", None) != motion.YARD
         ok = total == 0 or not held
         gates.add("clips", f"{name} under the skirt", total, 0 if held else None, ok, frames=len(frames),
                   worst=worst, lines=lines, measured=not held, seconds=round(time.time() - start, 1))
