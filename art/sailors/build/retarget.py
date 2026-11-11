@@ -172,21 +172,47 @@ def retarget(fig, name, spec, fps):
     clip.notes["direction error"] = round(worst, 3)
     if worst > CHECK:
         raise AssertionError(f"{name}: {where} points {worst:.1f}° off the source's (the most is {CHECK}°)")
+    for e in spec.get("still") or []:
+        _still(fig, clip, e[-1])
 
     smooth(clip, SMOOTH)
     # The file it is written to, beside the look's clips, if not theirs.
     clip.group = spec.get("group")
     lock = spec.get("lock") or []
     clip.deck = bool(spec.get("deck"))
+    # Where on the ship it is set, if anywhere: leaning on her rail, sat on
+    # her hatch.
+    clip.ship = spec.get("stage")
+    clip.seated = clip.ship == SHIP_HATCH
     if spec.get("deck"):
         _ground(fig, clip)
         if spec.get("head") is not None:
             _stoop(fig, clip, spec["head"])
+        if clip.ship == SHIP_RAIL:
+            rail = _lean(fig, clip)
+        elif clip.seated:
+            _sit(fig, clip)
+        before = [{"rot": dict(fr["rot"]), "pelvis": fr["pelvis"].copy()} for fr in clip.frames]
         _plant(fig, clip, spec.get("speed", 0.0))
+        if clip.notes["off the deck"] > 0.0005:
+            # A straight leg short of the deck it pushes off: the body
+            # lowered by as much, and the feet planted again.
+            clip.frames = before
+            _lower(fig, clip, clip.notes["off the deck"] + 0.001)
+            _plant(fig, clip, spec.get("speed", 0.0))
+        if clip.ship == SHIP_RAIL:
+            _on_rail(fig, clip, rail)
         _hands_up(fig, clip)
         _clearance(fig, clip)
         if clip.loop:
             _steady_seam(clip)
+        if clip.ship == SHIP_RAIL:
+            clip.place = _rail_place(fig, rail)
+        elif clip.seated:
+            clip.place = _hatch_place(fig, clip)
+        if clip.ship:
+            # Its contacts, made in the figure's space, where it is placed.
+            clip.contacts = [{e: clip.place @ p for e, p in cs.items()} for cs in clip.contacts]
     elif lock:
         _lock(fig, clip, lock)
         clip.planted = list(lock)
@@ -389,6 +415,18 @@ def _ground(fig, clip):
         fr["pelvis"] = pb.location.copy()
     _close(clip)
     clip.notes["grounded by"] = round(-g, 4)
+
+
+def _lower(fig, clip, by):
+    """The body moved down by this much, every frame."""
+    pb = fig.bones["pelvis"]
+    for fr in _ring(clip):
+        fig.set_rotations(fr["rot"], fr["pelvis"])
+        pb.location = _local_move(pb, Vector((0.0, 0.0, -by)))
+        fig.update()
+        fr["pelvis"] = pb.location.copy()
+    _close(clip)
+    clip.notes["lowered"] = round(by, 4)
 
 
 def _stoop(fig, clip, most):
@@ -729,3 +767,273 @@ def _lock(fig, clip, effectors):
         fr["rot"] = fig.rotations()
         clip.contacts.append(dict(at))
 
+
+
+# --- On the ship ----------------------------------------------------------
+
+# The ship's places a retargeted clip is set at (stage.Ship's): leaning on
+# her rail, facing outboard; sat on her hatch's forward edge, facing forward.
+SHIP_RAIL = "ship-rail"
+SHIP_HATCH = "ship-hatch"
+# Leaning on the rail: the forearms' bones this far over the cap rail's top
+# beyond the sleeve's own depth under them (the rail rises with her sheer
+# along the forearms); each shoulder no higher over the
+# forearms' line than this share of its upper arm (the back bent further if
+# it would be), nor lower than this share; and how far the back may bend.
+LEAN_CLEAR = 0.015
+LEAN_HIGH = 0.9
+LEAN_LOW = 0.25
+LEAN_MOST = 35.0
+# A hand is on the rail while its wrist is within this of where it rests on
+# it, and off it past this more (raised to call out).
+ON_RAIL = (0.03, 0.08)
+# Sat on the hatch: the buttocks this far over its grating; the hatch's
+# edge this far from the knees' joints, under the thighs.
+SIT_CLEAR = 0.006
+SIT_KNEE = 0.12
+
+
+def _sleeve_depth(fig):
+    """How far the sleeve stands out from the forearm's bone, at most, over
+    both arms: the dressed vertices the forearm (or its twist) carries,
+    their distance from its line, at rest."""
+    fig.quiet(False)
+    fig.reset()
+    co = fig.dressed()
+    owners = _owners(fig)
+    most = 0.0
+    for s in ("l", "r"):
+        a, b = fig.world(f"lowerarm_{s}"), fig.world(f"hand_{s}")
+        d = np.array(b - a)
+        length = float(np.linalg.norm(d))
+        d /= length
+        pick = np.isin(owners, [f"lowerarm_{s}", f"lowerarm_twist_{s}", f"hand_{s}"])
+        rel = co[pick] - np.array(a)
+        t = rel @ d
+        # Along the forearm and over the wrist, where a cuff flares.
+        inside = (t > 0.15 * length) & (t < 1.1 * length)
+        perp = rel[inside] - np.outer(t[inside], d)
+        if len(perp):
+            most = max(most, float(np.linalg.norm(perp, axis=1).max()))
+    fig.quiet()
+    return most
+
+
+def _owners(fig):
+    """Each vertex's bone, in dressed()'s order: the one weighing most on it."""
+    out = []
+    for o in fig.meshes:
+        names = {g.index: g.name for g in o.vertex_groups}
+        out.extend(max(((g.weight, names.get(g.group, "")) for g in v.groups), default=(0, ""))[1]
+                   for v in o.data.vertices)
+    return np.array(out)
+
+
+def _lean(fig, clip):
+    """Leaning on the ship's rail (stage.Ship's `rail`): the rail, a line
+    across the figure before it at the height of the cap rail's top over
+    the deck the feet are on, the forearms' bones over it by the sleeve's
+    depth; the back bent until each shoulder is within reach of it. Returns
+    the rail's line: its height and its distance before the feet's middle
+    (the figure faces -y), as the source's forearms rest."""
+    ship = fig.stage.ship
+    # The deck the feet stand on, a pace in from the rail, under its top.
+    inboard = Vector((ship.rail.x - 0.45, ship.rail.y, ship.rail.z + 0.5))
+    deck = ship.down(inboard.x, inboard.y, inboard.z)
+    depth = _sleeve_depth(fig)
+    height = ship.rail.z - deck + depth + LEAN_CLEAR
+    frames = _ring(clip)
+    spine = ("spine_01", "spine_02", "spine_03")
+    bones = fig.arm.data.bones
+    upper = {s: bones[f"upperarm_{s}"].length for s in ("l", "r")}
+    base = [dict(fr["rot"]) for fr in frames]
+
+    def bent(fr, rot, degrees):
+        fig.set_rotations(rot, fr["pelvis"])
+        if degrees:
+            fig.turn([(b, "x", degrees / 3) for b in spine] + [("neck_01", "x", -degrees / 3),
+                                                                ("head", "x", -degrees / 3)])
+
+    def worst(degrees):
+        hi, lo = -math.inf, math.inf
+        for fr, rot in zip(frames, base):
+            bent(fr, rot, degrees)
+            for s in ("l", "r"):
+                over = (fig.world(f"upperarm_{s}").z - height) / upper[s]
+                hi, lo = max(hi, over), min(lo, over)
+        return hi, lo
+
+    degrees = 0.0
+    hi, lo = worst(degrees)
+    step = 0.5 if hi > LEAN_HIGH else -0.5 if lo < LEAN_LOW else 0.0
+    while step and (hi > LEAN_HIGH if step > 0 else lo < LEAN_LOW):
+        degrees += step
+        if abs(degrees) > LEAN_MOST:
+            raise AssertionError(f"{clip.name}: the shoulders stay {hi:.2f}–{lo:.2f} upper arms over the rail "
+                                 f"with the back bent {degrees - step}° more")
+        hi, lo = worst(degrees)
+    # The rail before the feet, under the forearms' middles as the source
+    # has them (their median over the clip).
+    mids = []
+    feet = []
+    for fr, rot in zip(frames, base):
+        bent(fr, rot, degrees)
+        fig.derive()
+        fr["rot"] = fig.rotations()
+        for s in ("l", "r"):
+            mids.append(((fig.world(f"lowerarm_{s}") + fig.world(f"hand_{s}")) / 2).y)
+        feet.append(((fig.world("foot_l") + fig.world("foot_r")) / 2).y)
+    _close(clip)
+    clip.notes["back bent at the rail"] = degrees
+    clip.notes["sleeve depth"] = round(depth, 4)
+    clip.notes["rail over the deck"] = round(ship.rail.z - deck, 4)
+    return {"height": height, "y": float(np.median(mids)), "feet": float(np.median(feet)),
+            "deck": deck, "clear": depth + LEAN_CLEAR}
+
+
+def _on_rail(fig, clip, rail):
+    """The forearms laid on the rail's line: each elbow where its upper arm
+    reaches the line's height nearest the source's elbow, the forearm level
+    along the source's heading from it, by as much as the hand is on the
+    rail (ON_RAIL: the source's wrist near where it rests). The wrists so
+    placed are the clip's contacts; and how far each forearm's bone is off
+    the line where it crosses it, and where along it, is recorded."""
+    frames = _ring(clip)
+    height = rail["height"]
+    sides = ("l", "r")
+    bones = fig.arm.data.bones
+    l1 = {s: bones[f"upperarm_{s}"].length for s in sides}
+    l2 = {s: bones[f"lowerarm_{s}"].length for s in sides}
+    # Where each wrist rests on the rail, as the source has it: its median
+    # height; above that it is lifted off.
+    rest = {}
+    for s in sides:
+        zs = []
+        for fr in frames:
+            fig.set_rotations(fr["rot"], fr["pelvis"])
+            zs.append(fig.world(f"hand_{s}").z)
+        rest[s] = float(np.median(zs))
+    off, worst_t = 0.0, (1.0, 0.0)
+    for f, fr in enumerate(frames):
+        fig.set_rotations(fr["rot"], fr["pelvis"])
+        contacts = clip.contacts[f] if f < len(clip.contacts) else {}
+        for s in sides:
+            sh = fig.world(f"upperarm_{s}")
+            el = fig.world(f"lowerarm_{s}")
+            wr = fig.world(f"hand_{s}")
+            lift = wr.z - rest[s]
+            w = 1.0 - _smooth((lift - ON_RAIL[0]) / (ON_RAIL[1] - ON_RAIL[0]))
+            if w <= 0.0:
+                continue
+            drop = sh.z - height
+            rho = math.sqrt(max(l1[s] ** 2 - drop ** 2, 1e-8))
+            flat = Vector((el.x - sh.x, el.y - sh.y, 0.0))
+            if flat.length < 1e-6:
+                flat = Vector((0.0, -1.0, 0.0))
+            e = Vector((sh.x, sh.y, height)) + flat.normalized() * rho
+            heading = Vector((wr.x - el.x, wr.y - el.y, 0.0)).normalized()
+            wrist = e + heading * l2[s]
+            e = el.lerp(e, w)
+            wrist = wr.lerp(wrist, w)
+            hand = fig.bones[f"hand_{s}"].rotation_quaternion.copy()
+            fig._aim(f"upperarm_{s}", e)
+            fig._aim(f"lowerarm_{s}", wrist)
+            fig.bones[f"hand_{s}"].rotation_quaternion = hand
+            fig.update()
+            if w >= 0.999:
+                contacts[f"hand_{s}"] = fig.world(f"hand_{s}").copy()
+                a, b = fig.world(f"lowerarm_{s}"), fig.world(f"hand_{s}")
+                if abs(b.y - a.y) > 1e-6:
+                    t = (rail["y"] - a.y) / (b.y - a.y)
+                    z = a.z + (b.z - a.z) * t
+                    off = max(off, abs(z - height))
+                    worst_t = (min(worst_t[0], t), max(worst_t[1], t))
+        fig.derive()
+        fr["rot"] = fig.rotations()
+        if f < len(clip.contacts):
+            clip.contacts[f] = contacts
+    _close(clip)
+    if clip.loop and clip.contacts:
+        clip.contacts[-1] = dict(clip.contacts[0])
+    clip.notes["forearms off the rail"] = round(off, 4)
+    clip.notes["rail along the forearms"] = [round(worst_t[0], 3), round(worst_t[1], 3)]
+
+
+def _rail_place(fig, rail):
+    """From the figure's space to the ship's, leaning on the starboard
+    rail facing outboard: the rail's line before the feet at the rail's
+    point (the cap's inner edge on its top), the deck under the feet."""
+    ship = fig.stage.ship
+    contact = Vector((0.0, rail["y"], rail["height"] - rail["clear"]))
+    return Matrix.Translation(ship.point(SHIP_RAIL)) @ Matrix.Rotation(math.radians(90.0), 4, "Z") @ \
+        Matrix.Translation(-contact)
+
+
+def _seat_height(fig):
+    """The lowest of what the figure sits on (the body and its fitted
+    clothes) under the hips, in its space."""
+    pelvis = fig.bones["pelvis"].head
+    co = fig.dressed(fig.sitting)
+    near = np.hypot(co[:, 0] - pelvis.x, co[:, 1] - pelvis.y) < motion.SEAT_REACH
+    below = near & (co[:, 2] < pelvis.z)
+    return float(co[below, 2].min())
+
+
+def _sit(fig, clip):
+    """Sat on the ship's hatch: the body moved down or up, frame by frame
+    (sampled, then eased), so the buttocks are on its grating, its height
+    over the deck the feet are on."""
+    ship = fig.stage.ship
+    seat = ship.hatch.z - ship.down(ship.hatch.x + 0.15, ship.hatch.y + 0.3, ship.hatch.z) + SIT_CLEAR
+    frames = _ring(clip)
+    n = len(frames)
+    every = 5
+    picks = sorted(set(list(range(0, n, every)) + [n - 1]))
+    fig.quiet(False)
+    moves = []
+    for f in picks:
+        fr = frames[f]
+        fig.set_rotations(fr["rot"], fr["pelvis"])
+        fig.derive()
+        moves.append(seat - _seat_height(fig))
+    fig.quiet()
+    move = np.interp(np.arange(n), picks, moves)
+    move = _gauss(list(move), 2.0, clip.loop)
+    pb = fig.bones["pelvis"]
+    for fr, d in zip(frames, move):
+        fig.set_rotations(fr["rot"], fr["pelvis"])
+        pb.location = _local_move(pb, Vector((0.0, 0.0, float(d))))
+        fig.update()
+        fr["pelvis"] = pb.location.copy()
+    _close(clip)
+    clip.notes["seat over the deck"] = round(seat - SIT_CLEAR, 4)
+    clip.notes["seated by"] = [round(float(min(move)), 4), round(float(max(move)), 4)]
+    clip.notes["seat"] = seat - SIT_CLEAR
+
+
+def _hatch_place(fig, clip):
+    """From the figure's space to the ship's, sat on the hatch's forward
+    edge facing forward: the edge under the thighs SIT_KNEE from the knees'
+    joints (their median), at the grating's height."""
+    ship = fig.stage.ship
+    ys = []
+    for fr in _ring(clip):
+        fig.set_rotations(fr["rot"], fr["pelvis"])
+        ys.append(((fig.world("calf_l") + fig.world("calf_r")) / 2).y)
+    edge = Vector((0.0, float(np.median(ys)) + SIT_KNEE, clip.notes["seat"]))
+    return Matrix.Translation(ship.point(SHIP_HATCH)) @ Matrix.Rotation(math.pi, 4, "Z") @ Matrix.Translation(-edge)
+
+
+def _still(fig, clip, s):
+    """An arm (s, its side) kept as the clip's first frame has it, on the
+    body as it moves: a gesture of the source's left out (a hand raised to
+    the brow, which a hat's brim is in the way of)."""
+    first = clip.frames[0]["rot"]
+    bones = [b for b in first if b.endswith("_" + s) and motion.kind(b) in motion.ARMS and motion.kind(b) != "clavicle"]
+    for fr in clip.frames:
+        fig.set_rotations(fr["rot"], fr["pelvis"])
+        for b in bones:
+            fig.bones[b].rotation_quaternion = first[b]
+        fig.derive()
+        fr["rot"] = fig.rotations()
+    clip.notes["still"] = clip.notes.get("still", []) + [f"arm_{s}"]

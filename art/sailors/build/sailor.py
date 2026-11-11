@@ -94,7 +94,8 @@ def build_look(job):
         # that count, and the clips' file's; with nothing of them through
         # the boat (the only clips the close level's seat gates judge).
         report["failures"] = [f for g in judged.values()
-                              for f in g.failures(("clips", "clips wheel", "clips trapeze", "clips rail", "harness"))] + \
+                              for f in g.failures(("clips", "clips wheel", "clips trapeze", "clips rail", "clips ship",
+                                                   "clips aloft", "harness"))] + \
             [f for g in judged.values() for f in g.failures(("close",)) if f" close seat " in f]
     return report
 
@@ -557,6 +558,13 @@ def make_clips(job, v, fig, lib, kinds, gates, renderer, lookmat, work, worn=(),
         elif getattr(clip, "rail", False):
             side = -1 if name.endswith(motion.PORT) else 1
             places[f"place-{as_(name)}"] = Matrix.Translation(-fig.stage.point("rail", side)) @ clip.place
+        elif getattr(clip, "ship", None):
+            # On the ship, from her place it is set at on its side (the
+            # starboard's, for a clip with no -port), as the game places it
+            # from that place of her model's `company` node.
+            side = -1 if name.endswith(motion.PORT) else 1
+            places[f"place-{as_(name)}"] = Matrix.Translation(-fig.stage.point(SHIP_ANCHORS[clip.ship], side)) \
+                @ clip.place
         else:
             places[f"place-{as_(name)}"] = clip.place.copy()
         fig.quiet()
@@ -572,11 +580,16 @@ def make_clips(job, v, fig, lib, kinds, gates, renderer, lookmat, work, worn=(),
         fig.reset()
     clip_seat(gates, "close", fig, out)
     clip_wheel(gates, fig, out)
+    clip_ship(gates, fig, out)
     clip_skirts(gates, fig, worn, out)
     # The files: the clips at a wheel, those on the trapeze and those of
     # the crew on the rail (sat on it, and the crouch they move about the
     # deck in) apart from the rest, as only a boat steered by one, sailed
-    # from the other, or with someone at a station on her rail loads them.
+    # from the other, or with someone at a station on her rail loads them;
+    # and the ship's company's, on her decks (standing about, leaning on her
+    # rail, sat on her hatch, walking, on her ladder) and at her work and
+    # aloft (hauling, climbing, in the top, on the yard), loaded only when
+    # someone is drawn who needs them.
     def group_of(n):
         c = fig.made[n][2]
         if getattr(c, "group", None):
@@ -584,7 +597,8 @@ def make_clips(job, v, fig, lib, kinds, gates, renderer, lookmat, work, worn=(),
         return "wheel" if getattr(c, "standing", False) else "trapeze" if getattr(c, "trapeze", False) else \
             "rail" if getattr(c, "rail", False) else "clips"
 
-    groups = tuple((g, [n for n in names if group_of(n) == g]) for g in ("clips", "wheel", "trapeze", "rail"))
+    groups = tuple((g, [n for n in names if group_of(n) == g])
+                   for g in ("clips", "wheel", "trapeze", "rail", "ship", "aloft"))
     exported = False
     for group, members in groups:
         if not members:
@@ -669,7 +683,8 @@ def clip_seat(gates, level, fig, measures=None):
     import bpy
 
     for name, (act, slot, clip) in fig.made.items():
-        if clip.place == Matrix():
+        # On the ship, judged against her (clip_ship).
+        if clip.place == Matrix() or getattr(clip, "ship", None):
             continue
         start = time.time()
         fig.reset()
@@ -751,6 +766,113 @@ def clip_wheel(gates, fig, measures):
             measures[name]["wheel"] = {"value": total, "limit": 0, "ok": total == 0}
 
 
+# The ship's place a clip set there is placed from, by where it is set.
+SHIP_ANCHORS = {"ship-rail": "ship-rail", "ship-hatch": "ship-hatch", "brace": "brace", "top": "top",
+                "yard": "yard", "ladder": "ladder-foot", "ratlines": "shroud", "futtock": "top"}
+# What of a figure holds a rope or stands on one: the hands (and the cuffs
+# at the wrists) and the feet; only they may meet the ship's ropes.
+ON_ROPES = ON_WHEEL + ("foot", "ball")
+
+
+def clip_ship(gates, fig, measures):
+    """Nothing of the figure through the ship in any frame of a clip set on
+    her (stage.Ship): the line from each vertex's nearest bone to it, and
+    each bone's line, crossing none of her hull, spars, top or yards; nor
+    her ropes, but for what holds them or stands on them (the hands and the
+    feet); nor, on the yard, the yard but for the hands that hold it. Sat on her hatch, the cloth laid on it is through her if it is
+    under a top of hers, as on any seat."""
+    import bpy
+
+    ship = fig.stage.ship
+    if ship is None:
+        return
+    held = {}
+    for o in fig.meshes:
+        names = {g.index: g.name for g in o.vertex_groups}
+        held[o.name] = np.array([bool(v.groups) and motion.kind(max((g.weight, names.get(g.group, ""))
+                                                                    for g in v.groups)[1]) in ON_ROPES
+                                 for v in o.data.vertices])
+    bones = [b.name for b in fig.arm.data.bones if motion.kind(b.name) in metrics.BODY_BONES]
+    free = [b for b in bones if motion.kind(b) not in ON_ROPES]
+    for name, (act, slot, clip) in fig.made.items():
+        if not getattr(clip, "ship", None):
+            continue
+        start = time.time()
+        fig.reset()
+        motion.play(fig.arm, act, slot)
+        fig.arm.matrix_world = clip.place
+        fig.on_seat(clip.seated)
+        frames = []
+        examples = []
+        total = 0
+        for f in range(len(clip.frames)):
+            bpy.context.scene.frame_set(f)
+            fig.update()
+            hits = {}
+            segs = [(fig.world(b), fig.world(b, "tail")) for b in bones]
+            a = np.array([np.array(x[0]) for x in segs])
+            b = np.array([np.array(x[1]) for x in segs])
+            crossed = [bones[i] for i in _crossed(ship.tree, segs)]
+            crossed += [free[i] for i in _crossed(ship.ropes, [(fig.world(n), fig.world(n, "tail")) for n in free])]
+            for o in fig.meshes:
+                co, _ = motion.coords_posed(o)
+                anchors = None
+                if clip.seated and motion.SEAT_GROUP in o.vertex_groups:
+                    idx = [i for i, p in enumerate(co) if _under(ship.tree, p)]
+                else:
+                    anchors = metrics._nearest_on_segments(co, a, b)
+                    keep = ~held[o.name]
+                    if clip.ship == motion.YARD:
+                        # On the yard the hands hold it: they may meet it,
+                        # and nothing else of hers.
+                        idx = _crossed(ship.tree, [(anchors[i], co[i]) for i in np.flatnonzero(keep)],
+                                       np.flatnonzero(keep))
+                        idx += _crossed(ship.unheld, [(anchors[i], co[i]) for i in np.flatnonzero(~keep)],
+                                        np.flatnonzero(~keep))
+                    else:
+                        idx = _crossed(ship.tree, list(zip(anchors, co)))
+                    idx += [i for i in _crossed(ship.ropes, [(anchors[i], co[i]) for i in np.flatnonzero(keep)],
+                                                np.flatnonzero(keep))]
+                if idx:
+                    hits[o.name] = len(set(idx))
+                    if len(examples) < 4:
+                        examples.append([f, o.name, [round(float(x), 3) for x in co[idx[0]]]] +
+                                        ([[round(float(x), 3) for x in anchors[idx[0]]]] if anchors is not None else []))
+            n = sum(hits.values()) + len(crossed)
+            if n:
+                total += n
+                frames.append([f, hits] + crossed[:2])
+        motion.stop(fig.arm)
+        fig.reset()
+        worst = sorted(frames, key=lambda fr: -sum(fr[1].values()))[:3]
+        gates.add("clips", f"{name} clear of the ship", total, 0, total == 0, frames=frames[:3] + worst,
+                  all=[[fr[0], sum(fr[1].values())] for fr in frames], examples=examples,
+                  seconds=round(time.time() - start, 1))
+        if name in measures:
+            measures[name]["ship"] = {"value": total, "limit": 0, "ok": total == 0}
+
+
+def _crossed(tree, segs, index=None):
+    """Which of the segments (each a pair of points) cross what the tree
+    holds: their indices, or index's entries for them."""
+    out = []
+    for i, (p, q) in enumerate(segs):
+        d = Vector(q) - Vector(p)
+        length = d.length
+        if length < 1e-6:
+            continue
+        if tree.ray_cast(Vector(p), d / length, length)[0] is not None:
+            out.append(int(index[i]) if index is not None else i)
+    return out
+
+
+def _under(tree, p):
+    """Whether a point is under a top of what the tree holds: straight up,
+    the first surface it meets faces up."""
+    hit = tree.ray_cast(Vector(p), Vector((0, 0, 1)), 2.0)
+    return hit[0] is not None and hit[1].z > 0
+
+
 def clip_skirts(gates, fig, worn, measures):
     """Nothing of the thighs or knees through a skirt in any frame of a
     clip that stands, treads water or rights the boat: a thigh swung back
@@ -773,7 +895,7 @@ def clip_skirts(gates, fig, worn, measures):
         # Standing at the wheel the cloth hangs as it does standing anywhere;
         # on the trapeze, from the body lying out.
         seated = clip.place != Matrix() and not getattr(clip, "standing", False) and \
-            not getattr(clip, "trapeze", False)
+            not getattr(clip, "trapeze", False) and (not getattr(clip, "ship", None) or clip.seated)
         frames = []
         for f in range(len(clip.frames)):
             bpy.context.scene.frame_set(f)
