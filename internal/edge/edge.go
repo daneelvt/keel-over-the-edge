@@ -469,6 +469,15 @@ type toldName struct {
 	name string
 }
 
+// toldCrew is what a client was last told of the crew of a view slot's
+// boat: the boat, its deck's count of changes aboard, and its skipper's
+// look.
+type toldCrew struct {
+	boat uint64
+	deck uint32
+	look uint32
+}
+
 // stopped reports whether an account is stopped by the game's operator.
 func (e *Edge) stopped(a bus.Account) bool { return e.cfg.Stopped != nil && e.cfg.Stopped(a) }
 

@@ -333,6 +333,7 @@ message ServerMessage {
     Tied tied = 30;
     Reported reported = 31;
     Shipmates shipmates = 32;
+    Crews crews = 33;
   }
 }
 
@@ -416,12 +417,26 @@ enum KnockState {
 // Crew is who is aboard the boat the connection sails, is aboard or
 // watches, and who holds its controls: sent as it changes, and once at
 // each Welcome to a boat with anyone aboard but its skipper. Names only to
-// those aboard.
+// those aboard. In Crews, it is another boat's, by its view slot.
 message Crew {
   // Everyone aboard, the skipper first, in seat order.
   repeated Person people = 1;
   // The seat of whoever holds the controls.
   uint32 holder = 2;
+  // In Crews: the view slot of the boat it is for, the boat that slot
+  // holds as of the next snapshot. Unused in a Crew sent alone.
+  uint32 slot = 3;
+}
+
+// Crews are who is aboard the other boats in the connection's near band
+// with anyone aboard besides their skipper, so that their crews are drawn:
+// each boat's sent as it comes into the band, and again when who is aboard
+// or who holds its controls changes; and with nobody (no people) when it
+// leaves the band, everyone but its skipper goes ashore, or its slot holds
+// another boat. Each person carries their seat, look and machine mark
+// only: never a name, nor anything of the connection's own.
+message Crews {
+  repeated Crew crews = 1;
 }
 
 // Person is someone aboard: their seat, the station on deck they stand at

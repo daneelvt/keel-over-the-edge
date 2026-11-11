@@ -105,12 +105,18 @@ type conn struct {
 	// its kind, look and name. toldKind, toldBoatLook and toldBoatName
 	// are those of the boat its snapshots are about, as the client was
 	// last told; toldNames the names of the boats in its view, by view
-	// slot, as the client was last told them: the encoder's.
+	// slot, as the client was last told them; toldCrews what was last
+	// looked at of the crews of the boats in its near band, by view slot,
+	// for the slots crewKnown marks, and crewed the slots whose crew the
+	// client holds: the encoder's.
 	joinBoat     Boat
 	toldKind     uint16
 	toldBoatLook uint32
 	toldBoatName string
 	toldNames    [protocol.ViewSlots]toldName
+	toldCrews    [protocol.ViewSlots]toldCrew
+	crewed       uint64
+	crewKnown    uint64
 
 	// The control slot's writer, stopped once another connection has
 	// taken the boat over: a word is stored only under wmu while not
