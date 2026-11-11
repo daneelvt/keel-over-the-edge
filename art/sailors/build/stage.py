@@ -495,7 +495,7 @@ class Ship:
     # Where a figure stands on the footrope, out along it from the yard's
     # middle (a share of its run), and how far apart its feet are.
     YARD_AT = 0.2
-    YARD_FEET = 0.3
+    YARD_FEET = 0.24
     # The shrouds a figure climbs between, fore and aft (the main's second
     # and third), and how high up the ratlines it is staged.
     SHROUDS = (1, 2)
@@ -503,7 +503,7 @@ class Ship:
     # The hauler's place along the brace's fall, from its lead; the feet's
     # middle this far inboard of the fall.
     BRACE_AT = 1.6
-    HAUL_BESIDE = 0.1
+    HAUL_BESIDE = 0.06
     # The fall as it is hauled, this far over the lead on her rail.
     BRACE_UP = 0.1
     # Where a figure stands in the top: this far out from her middle toward

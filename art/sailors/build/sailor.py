@@ -769,6 +769,8 @@ def clip_wheel(gates, fig, measures):
 # The ship's place a clip set there is placed from, by where it is set.
 SHIP_ANCHORS = {"ship-rail": "ship-rail", "ship-hatch": "ship-hatch", "brace": "brace", "top": "top",
                 "yard": "yard"}
+# The arms' bones, from the collarbone to the hand.
+ARM_KINDS = ("clavicle", "upperarm", "lowerarm", "hand")
 # What of a figure holds a rope or stands on one: the hands (and the cuffs
 # at the wrists) and the feet; only they may meet the ship's ropes.
 ON_ROPES = ON_WHEEL + ("foot", "ball")
@@ -794,6 +796,10 @@ def clip_ship(gates, fig, measures):
                                  for v in o.data.vertices])
     bones = [b.name for b in fig.arm.data.bones if motion.kind(b.name) in metrics.BODY_BONES]
     free = [b for b in bones if motion.kind(b) not in ON_ROPES]
+    # A vertex the arms do not carry is anchored on the body, never on an
+    # arm reaching over it (a coat's skirt under a forearm on the rail).
+    trunk = np.array([motion.kind(b) not in ARM_KINDS for b in bones])
+    armed = {o.name: fig.armed([o]) for o in fig.meshes}
     for name, (act, slot, clip) in fig.made.items():
         if not getattr(clip, "ship", None):
             continue
@@ -826,6 +832,9 @@ def clip_ship(gates, fig, measures):
                     idx = [i for i, p in enumerate(co) if _under(ship.tree, p)]
                 else:
                     anchors = metrics._nearest_on_segments(co, a, b)
+                    body = ~armed[o.name]
+                    if body.any():
+                        anchors[body] = metrics._nearest_on_segments(co[body], a[trunk], b[trunk])
                     keep = ~held[o.name]
                     if clip.ship == motion.YARD:
                         # On the yard the hands hold it: they may meet it,

@@ -644,13 +644,12 @@ class Figure:
             inboard = (inboard - along * inboard.dot(along)).normalized()
             p = p + along * off[0] + inboard * off[1] + Vector((0.0, 0.0, off[2]))
             if spec.get("reach") and effector:
-                p = self._along(p, along, spec["reach"], effector)
+                p = self._along(p, along, spec["reach"], effector, exact=True)
             return p
         if off and spec["at"] == YARD and spec.get("reach") and effector:
-            # Up or down the yard's fore side until the arm is no more than
-            # that share of its length from the shoulder.
-            return self._along(p + frame @ Vector(off), Vector((0.0, 0.0, 1.0)), spec["reach"], effector,
-                               nearer=True)
+            # Brought straight toward the shoulder until the arm is no more
+            # than that share of its length from it.
+            return self._along(p + frame @ Vector(off), None, spec["reach"], effector)
         elif off:
             p = p + frame @ Vector(off)
         if spec.get("reach") and effector:
@@ -669,23 +668,31 @@ class Figure:
                 p.x = -side * far
         return p
 
-    def _along(self, p, way, reach, effector, nearer=False):
-        """A target moved along a line (a rope) until the arm is that share
-        of its length from its shoulder, the same stretch on any body: to
-        the furthest such point along the line's way, or (nearer) only if
-        it is further than that, and then by the least move."""
+    def _along(self, p, way, reach, effector, least=None, exact=False):
+        """A target moved along a line (a rope) until the arm is no more
+        than reach and no less than least (shares of its length) from its
+        shoulder, the same stretch on any body: by the least move when too
+        far, out along the line's way when too near; or (exact) to the
+        furthest point along the way at reach. Where the line never comes so
+        near, its nearest point; or straight toward the shoulder (way
+        None)."""
         upper, lower, _ = EFFECTORS[effector]
         root = self.world(upper)
-        length = reach * (self.arm.data.bones[upper].length + self.arm.data.bones[lower].length)
+        arm = self.arm.data.bones[upper].length + self.arm.data.bones[lower].length
         d = p - root
-        if nearer and d.length <= length:
+        want = reach * arm if exact or d.length > reach * arm else \
+            (least * arm if least and d.length < least * arm else None)
+        if want is None:
             return p
+        if way is None:
+            return root + d.normalized() * want
         b = d.dot(way)
-        disc = b * b - (d.length_squared - length * length)
+        disc = b * b - (d.length_squared - want * want)
         if disc <= 0:
             return p - way * b
         roots = (-b + math.sqrt(disc), -b - math.sqrt(disc))
-        t = min(roots, key=abs) if nearer else roots[0]
+        # Too near: out along the line's way; too far: the least move.
+        t = roots[0] if exact or want > d.length else min(roots, key=abs)
         return p + way * t
 
     def solve(self, effector, target, pole=None, grip=None, side=1):
@@ -1299,7 +1306,7 @@ ON_ROPE = ("yard-foot-in", "yard-foot-out")
 # it, the body (not its arms) this far clear of it beyond its radius.
 # In the top, the hand on the shroud this share of the arm from the
 # shoulder.
-TOP_REACH = 0.75
+TOP_REACH = 0.77
 YARD_HIPS = 0.26
 # Cloth laid on the ship's deck this much further off it than on a seat:
 # her planks' seams are uneven.
@@ -1309,7 +1316,7 @@ SHIP_DECK_CLEAR = 0.006
 # thick.
 SHIP_SOLE = 0.012
 # The legs on the footrope straight to this share of their length.
-YARD_LEGS = 0.92
+YARD_LEGS = 0.9
 YARD_AFT = 0.42
 YARD_CLEAR = 0.03
 # What of the body lies on the yard: what the hips, the back and the thighs

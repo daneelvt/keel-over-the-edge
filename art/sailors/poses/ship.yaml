@@ -17,8 +17,9 @@ poses:
   # hands on it; the feet forward of the hips, the left ahead, the knees
   # bent, and the body leaning back from them on the rope, the chest turned a little to the
   # fall. Targets on the fall are along it toward the lead, across it
-  # inboard, and up, each brought along it toward the lead to an easy reach
-  # of its shoulder; the feet's likewise from the deck under the hauler.
+  # inboard, and up, each brought along it toward the lead to its share of
+  # the arm from its shoulder (the forward hand's the further), so every
+  # body hauls with the same stretch; the feet's likewise from the deck under the hauler.
   haul-grip:
     place: brace
     turn:
@@ -73,8 +74,8 @@ poses:
       - [neck_01, x, -10]
       - [head, x, -8]
     ik:
-      hand_l: { at: brace, offset: [0.16, 0.0, 0.0], reach: 0.72, pole: [0.6, 0.3, -0.5] }
-      hand_r: { at: brace, offset: [0.02, 0.0, 0.0], reach: 0.72, pole: [-0.5, 0.4, -0.5] }
+      hand_l: { at: brace, offset: [0.16, 0.0, 0.0], reach: 0.76, pole: [0.6, 0.3, -0.5] }
+      hand_r: { at: brace, offset: [0.02, 0.0, 0.0], reach: 0.7, pole: [-0.5, 0.4, -0.5] }
 
   # Heaving: leaning back, both hands come back with the fall; a glance
   # aloft at the yards.
@@ -86,8 +87,8 @@ poses:
       - [neck_01, x, 4]
       - [head, x, -16]
     ik:
-      hand_l: { at: brace, offset: [0.04, 0.0, 0.0], reach: 0.72, pole: [0.6, 0.3, -0.5] }
-      hand_r: { at: brace, offset: [-0.1, 0.0, 0.0], reach: 0.72, pole: [-0.5, 0.4, -0.5] }
+      hand_l: { at: brace, offset: [0.04, 0.0, 0.0], reach: 0.76, pole: [0.6, 0.3, -0.5] }
+      hand_r: { at: brace, offset: [-0.1, 0.0, 0.0], reach: 0.7, pole: [-0.5, 0.4, -0.5] }
 
   haul-right-over:
     from: haul-grip
@@ -99,8 +100,8 @@ poses:
       - [neck_01, x, -10]
       - [head, x, -8]
     ik:
-      hand_l: { at: brace, offset: [0.0, 0.0, 0.0], reach: 0.72, pole: [0.6, 0.3, -0.5] }
-      hand_r: { at: brace, offset: [0.16, 0.0, 0.0], reach: 0.72, pole: [-0.5, 0.4, -0.5] }
+      hand_l: { at: brace, offset: [0.0, 0.0, 0.0], reach: 0.7, pole: [0.6, 0.3, -0.5] }
+      hand_r: { at: brace, offset: [0.16, 0.0, 0.0], reach: 0.76, pole: [-0.5, 0.4, -0.5] }
 
   haul-right-heave:
     from: haul-grip
@@ -110,8 +111,8 @@ poses:
       - [neck_01, x, 4]
       - [head, x, 2]
     ik:
-      hand_l: { at: brace, offset: [-0.12, 0.0, 0.0], reach: 0.72, pole: [0.6, 0.3, -0.5] }
-      hand_r: { at: brace, offset: [0.04, 0.0, 0.0], reach: 0.72, pole: [-0.5, 0.4, -0.5] }
+      hand_l: { at: brace, offset: [-0.12, 0.0, 0.0], reach: 0.7, pole: [0.6, 0.3, -0.5] }
+      hand_r: { at: brace, offset: [0.04, 0.0, 0.0], reach: 0.76, pole: [-0.5, 0.4, -0.5] }
 
   # Standing in the main top, out toward the starboard shrouds, facing
   # forward, the knees soft, as far out as leaves the right hand an easy
@@ -153,17 +154,15 @@ poses:
   aloft-down:
     from: aloft-stand
     turn:
-      - [spine_03, x, 6]
-      - [neck_01, x, 14]
+      - [neck_01, x, 18]
       - [head, x, 20]
       - [head, z, 10]
 
   aloft-up:
     from: aloft-stand
     turn:
-      - [spine_03, x, -4]
-      - [neck_01, x, -14]
-      - [head, x, -24]
+      - [neck_01, x, -16]
+      - [head, x, -26]
 
   # Lying out on the main topsail yard, on its starboard arm, facing
   # forward over it: the hips aft of the yard and above it, the body bent

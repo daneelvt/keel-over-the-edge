@@ -41,8 +41,8 @@ export const DECK_CLIPS = {
   walk: 'walk',
 } as const;
 
-/** The idles a machine sailor has not: its hands would meet its own plates. */
-export const NOT_FOR_MACHINES: readonly string[] = ['fold-arms'];
+/** The idles a machine sailor has not: its hands would meet its plates, its long coat's hem the deck. */
+export const NOT_FOR_MACHINES: readonly string[] = ['fold-arms', 'hatch-talk'];
 
 /** Her work and aloft, by name; each has its -port mirror. */
 export const ALOFT_CLIPS = {

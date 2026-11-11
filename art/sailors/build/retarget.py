@@ -207,6 +207,12 @@ def retarget(fig, name, spec, fps):
         if clip.loop:
             _steady_seam(clip)
         if clip.ship == SHIP_RAIL:
+            # The hands where they rest on the rail as the clip has them
+            # now, the rail's lock judged apart (the forearms on its line).
+            for fr, cs in zip(clip.frames, clip.contacts):
+                fig.set_rotations(fr["rot"], fr["pelvis"])
+                for e in [e for e in cs if e.startswith("hand")]:
+                    cs[e] = fig.world(e).copy()
             fig.clip = clip
             clip.place = _rail_place(fig, rail)
             clip.notes["rail moved out"] = round(rail["out"], 4)
@@ -795,7 +801,7 @@ ON_RAIL = (0.03, 0.08)
 # (under its overhang), and the body kept this far off it; every this many
 # frames looked at for it.
 BULWARK_IN = 0.04
-BULWARK_CLEAR = 0.02
+BULWARK_CLEAR = 0.05
 # What of the body is kept off the bulwark: the hips, the back, the legs and
 # the cloth on them (the arms reach over the rail, the head leans over it).
 BULWARK_BODY = ("pelvis", "spine_01", "spine_02", "spine_03", "thigh", "thigh_corrector", "calf", "foot", "ball",
