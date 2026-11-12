@@ -155,6 +155,8 @@ const DUCK: readonly [string, number][] = [
   ['spine_03', 0.2],
   ['neck_01', 0.1],
 ];
+/** A leg's reach in the plumb's solve, of its length: past the soft limit's ease, so a pose the leg had is solved exactly. */
+const PLUMB_REACH = 1.09;
 /** How far a full duck lowers someone walking, m: the knees bent more. */
 export const DUCK_DROP = 0.08;
 /** How much of a step's lift a full duck takes away from someone walking under a boom. */
@@ -343,8 +345,11 @@ export class CrewBody {
    */
   #plumb(up: Vector3): void {
     const rig = this.rig;
-    this.#legs.forEach(([, , foot], k) => {
+    // Each foot where it is, and how far its hip is from it.
+    const reach = this.#reach;
+    this.#legs.forEach(([thigh, , foot], k) => {
       rig.position(foot, this.#feetA[k] as Vector3).applyMatrix4(this.root);
+      reach[k] = rig.position(thigh, v).applyMatrix4(this.root).distanceTo(this.#feetA[k] as Vector3);
     });
     const [f0, f1] = this.#feetA as [Vector3, Vector3];
     v.set((f0.x + f1.x) / 2, Math.min(f0.y, f1.y), (f0.z + f1.z) / 2);
@@ -353,11 +358,25 @@ export class CrewBody {
       .multiply(m2.makeRotationFromQuaternion(q))
       .multiply(m3.makeTranslation(-v.x, -v.y, -v.z));
     this.root.premultiply(m);
+    // Lowered as far as a hip has come further from its foot than it was:
+    // the knees a little more bent, both feet where they were.
+    let drop = 0;
+    this.#legs.forEach(([thigh], k) => {
+      rig.position(thigh, v).applyMatrix4(this.root);
+      drop = Math.max(drop, v.distanceTo(this.#feetA[k] as Vector3) - (reach[k] as number));
+    });
+    if (drop > 0) {
+      m.makeTranslation(-up.x * drop, -up.y * drop, -up.z * drop);
+      this.root.premultiply(m);
+    }
     inv.copy(this.root).invert();
+    // Solved exactly, never eased short: each leg reaches no further than it did.
     this.#legs.forEach(([thigh, calf, foot], k) => {
-      twoBone(rig, thigh, calf, foot, w.copy(this.#feetA[k] as Vector3).applyMatrix4(inv));
+      twoBone(rig, thigh, calf, foot, w.copy(this.#feetA[k] as Vector3).applyMatrix4(inv), 1, PLUMB_REACH);
     });
   }
+
+  readonly #reach = [0, 0];
 
   /** Not drawn: every bone folded to a point (gone on a ladder or aloft). */
   hide(): void {

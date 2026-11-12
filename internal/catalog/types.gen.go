@@ -5458,4 +5458,4 @@ type WorldZones struct {
 }
 
 // Version is the catalog version (tools/catalog).
-const Version = "54611047e221c686"
+const Version = "b237fa9645f07772"

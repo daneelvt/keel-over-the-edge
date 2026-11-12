@@ -48,6 +48,7 @@ const m = new Matrix4();
 const m2 = new Matrix4();
 const v = new Vector3();
 const q = new Quaternion();
+const q2 = new Quaternion();
 const theBlend = blend();
 const idle = { now: 0, was: 0, f: 1 };
 const where = new Vector3();
@@ -60,9 +61,8 @@ export function plumbOf(model: Matrix4, out: Vector3): Vector3 {
   out.copy(Y).applyMatrix4(m).normalize();
   const angle = Math.acos(Math.max(-1, Math.min(1, out.y)));
   if (angle > SEA_LEGS) {
-    q.setFromUnitVectors(Y, out);
-    const k = SEA_LEGS / angle;
-    q.slerpQuaternions(new Quaternion(), q, k);
+    q2.setFromUnitVectors(Y, out);
+    q.identity().slerp(q2, SEA_LEGS / angle);
     out.copy(Y).applyQuaternion(q);
   }
   return out;
@@ -102,15 +102,23 @@ function idleOf(
   input: ShipPoseInput,
   member: ShipMember,
   held: 'standing' | 'leaning' | 'seated' | 'aloft',
+  spot: ShipSpot,
 ): { now: string; was: string; f: number } {
   const set = IDLES[held] as readonly string[];
-  const company = member.ship.company;
+  // Talking with someone near; not standing at her rail looking out (the hands would go over it).
+  const company = member.ship.company && !(held === 'standing' && facesOut(spot));
   idleAt(member.seat, input.world, set.length, idle);
   const pick = (i: number): string => {
     const c = set[i] as string;
     return canPlay(input, c, company) ? c : (set[0] as string);
   };
   return { now: pick(idle.now), was: pick(idle.was), f: idle.f };
+}
+
+/** Whether a station drawn at spot faces out over her side: within 45° of abeam, toward its own side. */
+function facesOut(spot: ShipSpot): boolean {
+  const f = (spot.facing * Math.PI) / 180;
+  return Math.abs(Math.sin(f)) > Math.SQRT1_2 && Math.sign(Math.sin(f)) === Math.sign(spot.at.x);
 }
 
 /**
@@ -237,7 +245,7 @@ function placeStanceOf(
     return false;
   }
   const held = heldAs(input, st, member.ship.sat >= 0.5);
-  const id = idleOf(input, member, held);
+  const id = idleOf(input, member, held, spot);
   return heldStance(input, st, spot, held, id.now, input.time, into);
 }
 
@@ -274,7 +282,7 @@ export function poseShip(body: CrewBody, member: ShipMember, input: ShipPoseInpu
       upright = 0.5;
     } else {
       const held = heldAs(input, st, sat >= 0.5);
-      const id = idleOf(input, member, held);
+      const id = idleOf(input, member, held, spotNow);
       if (!heldStance(input, st, spotNow, held, id.f < 1 ? id.was : id.now, input.time, a)) {
         return false;
       }

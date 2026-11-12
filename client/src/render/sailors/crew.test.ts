@@ -36,6 +36,7 @@ import { deckFigure, farFigure } from './crewfigures';
 import { STRIDE } from './crewlevel';
 import { type PoseInput, poseMember } from './crewpose';
 import { type CrewMember, RISE, SIT } from './crewrules';
+import type { ShipMember } from './shiprules';
 import { deckLook, FleetLook } from './fleetlooks';
 import { placesOf } from './model';
 import { boneNames } from './onboat';
@@ -105,8 +106,11 @@ describe('who is drawn where', () => {
 });
 
 describe('a crew to windward', () => {
-  /** The kinds with stations to windward: a dinghy's crew on its rack, a keelboat's along her rail. */
-  const crewed = catalog.boats.filter((b) => b.stations.some((s) => s.windward === true));
+  /** The kinds with stations to windward of the boom: a dinghy's crew on its rack, a keelboat's along her rail (not a ship's, whose weather side is her yards'). */
+  const crewed = catalog.boats.filter(
+    (b) =>
+      b.stations.some((s) => s.windward === true) && !b.stations.some((s) => s.pose === 'aloft'),
+  );
   const place = () => ({ at: [0, 0, 0] as [number, number, number], facing: 0 });
 
   test('some kinds have them, by data: the helm’s station never; a kind with one has all its crew’s stations to windward', () => {
@@ -169,8 +173,8 @@ describe('a crew to windward', () => {
     }
   });
 
-  test('the Jolly boat’s and the tall ship’s stations are as they were: none to windward, none on a rail', () => {
-    for (const b of catalog.boats.filter((x) => x.capacity === 1 || x.capacity >= 40)) {
+  test('the Jolly boat’s station is as it was: not to windward, not on a rail', () => {
+    for (const b of catalog.boats.filter((x) => x.capacity === 1)) {
       expect(
         b.stations.some((s) => s.windward === true || s.pose === 'rail'),
         b.id,
@@ -225,6 +229,10 @@ describe.each(catalog.boats.map((b) => [b.name, b] as const))('%s’s stations',
     };
     boat.stations.forEach((s, i) => {
       const [x, y, z] = s.at;
+      if (boat.stations.some((t) => t.pose === 'aloft') && s.pose !== 'standing') {
+        // A ship's people leaning on her rail, sat on her hatch or in her top: held to her model aboard her (below).
+        return;
+      }
       // On the rail: the deck just inboard of its edge, the point at the edge.
       const rail = s.pose === 'rail';
       const inboard = rail ? x - Math.sign(x) * 0.04 : x;
@@ -1354,3 +1362,406 @@ describe('on the keelboat, nobody through anybody', () => {
     },
   );
 }, 60_000);
+
+// --- Aboard the tall ship ----------------------------------------------------
+
+/** The nearest point of a triangle to p (Ericson's), its distance. */
+function triangleDistance(p: Vector3, a: Vector3, b: Vector3, c: Vector3): number {
+  const ab = new Vector3().subVectors(b, a);
+  const ac = new Vector3().subVectors(c, a);
+  const ap = new Vector3().subVectors(p, a);
+  const d1 = ab.dot(ap);
+  const d2 = ac.dot(ap);
+  if (d1 <= 0 && d2 <= 0) {
+    return p.distanceTo(a);
+  }
+  const bp = new Vector3().subVectors(p, b);
+  const d3 = ab.dot(bp);
+  const d4 = ac.dot(bp);
+  if (d3 >= 0 && d4 <= d3) {
+    return p.distanceTo(b);
+  }
+  const vc = d1 * d4 - d3 * d2;
+  if (vc <= 0 && d1 >= 0 && d3 <= 0) {
+    return p.distanceTo(a.clone().addScaledVector(ab, d1 / (d1 - d3)));
+  }
+  const cp = new Vector3().subVectors(p, c);
+  const d5 = ab.dot(cp);
+  const d6 = ac.dot(cp);
+  if (d6 >= 0 && d5 <= d6) {
+    return p.distanceTo(c);
+  }
+  const vb = d5 * d2 - d1 * d6;
+  if (vb <= 0 && d2 >= 0 && d6 <= 0) {
+    return p.distanceTo(a.clone().addScaledVector(ac, d2 / (d2 - d6)));
+  }
+  const va = d3 * d6 - d5 * d4;
+  if (va <= 0 && d4 - d3 >= 0 && d5 - d6 >= 0) {
+    return p.distanceTo(b.clone().addScaledVector(new Vector3().subVectors(c, b), (d4 - d3) / (d4 - d3 + (d5 - d6))));
+  }
+  const denom = 1 / (va + vb + vc);
+  return p.distanceTo(a.clone().addScaledVector(ab, vb * denom).addScaledVector(ac, vc * denom));
+}
+
+/** The tall ship as her company's checks need her: her plan, rules, and what of her a body may not pass through. */
+const ship = await (async () => {
+  const kind = tallShip as NonNullable<typeof tallShip>;
+  const model = await load(kind.art.model);
+  model.scene.updateMatrixWorld(true);
+  const parts = new Map<string, Object3D>();
+  model.scene.traverse((o) => {
+    if (o.name !== '' && !parts.has(o.name)) {
+      parts.set(o.name, o);
+    }
+  });
+  const { company } = await import('./ship');
+  const { ShipRules, shipPlan } = await import('./shiprules');
+  const c = company(parts);
+  const plan = shipPlan(kind.stations, c);
+  if (c === null || plan === null) {
+    throw new Error('the tall ship has no company');
+  }
+  // What of her a body may not pass through: her bulwarks, rails, the
+  // breaks, hatches, capstan, fife rails, bitts, the longboat and its
+  // skids, the masts, the wheel and the binnacle; not her decks (walked
+  // on), her ropes, sails or what is outboard of her.
+  const solid = ['paint', 'rail', 'spar', 'blackwood', 'iron', 'varnish', 'brass'];
+  const CELL = 0.25;
+  const cells = new Map<string, Vector3[][]>();
+  const names = new Map<Vector3[], string>();
+  model.scene.traverse((o) => {
+    if (!(o instanceof Mesh)) {
+      return;
+    }
+    const mat = (o.material as MeshStandardMaterial).name;
+    // Not the yards (aloft) nor the mizzen's boom and gaff, 2 m over her quarterdeck (heads pass under it).
+    const node = o.parent?.name ?? '';
+    if (
+      !solid.includes(mat) ||
+      node.includes('yard') ||
+      node === 'boom' ||
+      node === 'gaff' ||
+      o.name === 'boom' ||
+      o.name === 'gaff'
+    ) {
+      return;
+    }
+    const g = o.geometry;
+    const pos = g.getAttribute('position');
+    const index = g.index;
+    const count = index === null ? pos.count : index.count;
+    for (let k = 0; k < count; k += 3) {
+      const tri = [0, 1, 2].map((j) =>
+        new Vector3()
+          .fromBufferAttribute(pos, index === null ? k + j : index.getX(k + j))
+          .applyMatrix4(o.matrixWorld),
+      ) as [Vector3, Vector3, Vector3];
+      // Only what stands over her decks, inboard of her sides.
+      if (Math.max(...tri.map((p) => p.y)) < 2.5) {
+        continue;
+      }
+      names.set(tri, `${o.parent?.name ?? ''}/${o.name}:${mat}`);
+      const lo = new Vector3(...[0, 1, 2].map((a) => Math.min(...tri.map((p) => p.getComponent(a)))));
+      const hi = new Vector3(...[0, 1, 2].map((a) => Math.max(...tri.map((p) => p.getComponent(a)))));
+      for (let x = Math.floor(lo.x / CELL); x <= Math.floor(hi.x / CELL); x++) {
+        for (let z = Math.floor(lo.z / CELL); z <= Math.floor(hi.z / CELL); z++) {
+          const key = `${x},${z}`;
+          const list = cells.get(key) ?? [];
+          list.push(tri);
+          cells.set(key, list);
+        }
+      }
+    }
+  });
+  /** How near a point comes to her, and to what. */
+  const near = (p: Vector3, reach: number): { d: number; what: string } => {
+    let best = { d: Number.POSITIVE_INFINITY, what: '' };
+    const k = Math.ceil(reach / CELL);
+    const cx = Math.floor(p.x / CELL);
+    const cz = Math.floor(p.z / CELL);
+    const seen = new Set<Vector3[]>();
+    for (let x = cx - k; x <= cx + k; x++) {
+      for (let z = cz - k; z <= cz + k; z++) {
+        for (const t of cells.get(`${x},${z}`) ?? []) {
+          if (seen.has(t)) {
+            continue;
+          }
+          seen.add(t);
+          const d = triangleDistance(p, t[0] as Vector3, t[1] as Vector3, t[2] as Vector3);
+          if (d < best.d) {
+            best = { d, what: names.get(t) ?? '' };
+          }
+        }
+      }
+    }
+    return best;
+  };
+  const rules = (still = false) => new ShipRules({ stations: kind.stations, ship: plan }, still);
+  return { kind, company: c, plan, near, rules };
+})();
+
+/** A look as the fleet holds it with a ship's clips too: about her decks, and her work and aloft. */
+async function shipLook(art: Parameters<typeof fleetLook>[0], machine: boolean) {
+  const { look } = await fleetLook(art, machine);
+  const { shipClips, aloftClips } = await import('./ship');
+  const [deck, aloft, model] = await Promise.all([
+    load(shipClips(art.clips)),
+    load(aloftClips(art.clips)),
+    load(art.model),
+  ]);
+  const rig = Rig.from(model.scene, boneNames(model.scene));
+  const clips = look.clips as Map<string, Clip>;
+  for (const file of [deck, aloft]) {
+    const places = placesOf(file.scene);
+    for (const a of file.animations) {
+      const place = places.get(`place-${a.name}`) ?? null;
+      clips.set(a.name, Clip.from(a, rig, place !== null && !place.equals(new Matrix4()) ? place : null));
+    }
+  }
+  return look;
+}
+
+/** The looks posed aboard her: a woman's and a man's of the Rover, and the male machine. */
+const shipLooks = await Promise.all(
+  [
+    ['rover', 'female'],
+    ['rover', 'male'],
+    ['machine', 'male'],
+  ].map(async ([name, version]) => {
+    const machine = name === 'machine';
+    const art = machine
+      ? catalog.machine.versions.find((v) => v.id === version)?.art
+      : catalog.sailors.find((s) => s.id === name)?.versions.find((v) => v.id === version)?.art;
+    return { name: `${name} ${version}`, machine, look: await shipLook(art as NonNullable<typeof art>, machine) };
+  }),
+);
+
+describe('aboard the tall ship', () => {
+  const { kind, near, rules: makeRules, company: c } = ship;
+
+  /** A ship's pose input for a look, at a moment. */
+  const shipInput = async (
+    rules: Awaited<ReturnType<typeof makeRules>>,
+    look: FleetLook,
+    world: number,
+    up = new Vector3(0, 1, 0),
+  ) => {
+    const { stance } = await import('./crewbody');
+    return {
+      rules,
+      clips: look.clips as Map<string, Clip>,
+      machine: look.machine,
+      time: world,
+      world,
+      life: { dt: 1 / 30, heel: 0, upright: 0, still: false, plumb: null },
+      up,
+      a: stance(),
+      b: stance(),
+    };
+  };
+
+  test('every station’s person stands on her deck, within a centimetre (in the top, on its floor; sat, on the hatch’s grating)', () => {
+    const { shipStation, standPoint } = shipRules;
+    const deck = modelDeckOf(ship);
+    const off: string[] = [];
+    kind.stations.forEach((s, i) => {
+      for (const weather of [1, -1]) {
+        const sp = shipStation(s, weather, { at: new Vector3(), facing: 0, side: 1 });
+        const p = standPoint(s, sp, new Vector3());
+        const y = s.pose === 'aloft' ? c.top.y : deck(p.x, p.z);
+        if (y === null || Math.abs(y - p.y) > 0.01) {
+          off.push(`${i} (${s.pose}): stands at ${p.y.toFixed(3)}, the deck at ${y?.toFixed(3)}`);
+        }
+        if (s.pose === 'seated' && Math.abs(s.at[1] - c.hatch.y) > 0.001) {
+          off.push(`${i}: sat ${s.at[1]}, the grating at ${c.hatch.y}`);
+        }
+      }
+    });
+    expect(off).toEqual([]);
+  });
+
+  test('every way clear of her by a body’s breadth (the masts, rails, fife rails, capstan, hatches, the skids, the wheel and the binnacle), and of everyone at their stations', () => {
+    const ways = c.ways as NonNullable<typeof c.ways>;
+    const { PASS_SIDE, shipStation, standPoint } = shipRules;
+    const stands: Vector3[] = [];
+    kind.stations.forEach((s, i) => {
+      if (i === 0) {
+        return;
+      }
+      for (const weather of [1, -1]) {
+        const sp = shipStation(s, weather, { at: new Vector3(), facing: 0, side: 1 });
+        stands.push(standPoint(s, sp, new Vector3()));
+      }
+    });
+    const bad: string[] = [];
+    let least = Number.POSITIVE_INFINITY;
+    // The ladders' ends, where a walker stands at its foot or head and is gone up or down it.
+    const ladders = ways.edges
+      .filter((e) => e[2] === 1)
+      .flatMap(([a, b]) => [ways.nodes[a] as Vector3, ways.nodes[b] as Vector3]);
+    for (const [a, b, kindOf] of ways.edges) {
+      if (kindOf !== 0) {
+        continue;
+      }
+      const pa = ways.nodes[a] as Vector3;
+      const pb = ways.nodes[b] as Vector3;
+      const l = Math.hypot(pa.x - pb.x, pa.z - pb.z);
+      const side = Math.abs(pb.z - pa.z) > 2 * Math.abs(pb.x - pa.x) && Math.abs(pa.x) > 1 && Math.abs(pb.x) > 1;
+      for (const off of side ? [-PASS_SIDE, 0, PASS_SIDE] : [0]) {
+        for (let k = 0; k <= Math.ceil(l / 0.1); k++) {
+          const p = pa.clone().lerp(pb, k / Math.ceil(l / 0.1));
+          p.x += off;
+          if (ladders.some((q) => Math.hypot(q.x - p.x, q.z - p.z) < 0.35 && Math.abs(q.y - p.y) < 0.2)) {
+            continue;
+          }
+          // A body: a column from the shins to the head, a person's breadth.
+          for (const h of [0.3, 0.9, 1.5, 1.75]) {
+            const q = p.clone();
+            q.y += h;
+            const n = near(q, 0.5);
+            least = Math.min(least, n.d);
+            if (n.d < 0.22) {
+              bad.push(`${a}–${b} at ${p.x.toFixed(2)}, ${p.z.toFixed(2)}, ${h} up: ${n.what} ${n.d.toFixed(2)} m`);
+            }
+          }
+          for (const s of stands) {
+            if (Math.abs(s.y - p.y) < 1 && Math.hypot(s.x - p.x, s.z - p.z) < 0.45) {
+              bad.push(`${a}–${b} at ${p.x.toFixed(2)}, ${p.z.toFixed(2)}: a station's person at ${s.x.toFixed(2)}, ${s.z.toFixed(2)}`);
+            }
+          }
+        }
+      }
+    }
+    expect([...new Set(bad)].slice(0, 20)).toEqual([]);
+    process.stdout.write(`the ways: nearest her ${least.toFixed(3)} m\n`);
+  });
+
+  test.each(shipLooks.map((l) => [l.name, l] as const))(
+    '%s: every station’s idles, on either side, nothing through her',
+    async (_, { look, machine }) => {
+      const { CrewBody } = await import('./crewbody');
+      const { poseShip } = await import('./shippose');
+      const { IDLES } = shipRules;
+      const bad: string[] = [];
+      let least = Number.POSITIVE_INFINITY;
+      for (const yards of [0.4, -0.4]) {
+        const rules = makeRules();
+        rules.set({ people: Array.from({ length: 40 }, (_, seat) => ({ seat, look: 0 })), holder: 0 }, false);
+        rules.step({ dt: 1 / 30, boom: 0, windOffBow: 0, depth: 0, ship: { yards, heel: 0, wind: 5, time: 0 } });
+        for (const m of rules.members) {
+          const s = kind.stations[m.station] as (typeof kind.stations)[number];
+          const set = s.pose === 'standing' ? IDLES.standing : (IDLES[s.pose as keyof typeof IDLES] ?? IDLES.standing);
+          const body = new CrewBody(look.deck as NonNullable<typeof look.deck>, 7, machine);
+          for (let k = 0; k < set.length; k++) {
+            // Each idle in turn, by the time it comes up for this seat; a few moments into it.
+            let world = 0;
+            const { idleAt } = shipRules;
+            const id = { now: 0, was: 0, f: 0 };
+            for (let t = 0; t < 4000 && !(idleAt(m.seat, t, set.length, id).now === k && id.f >= 1); t += 1) {
+              world = t + 1;
+            }
+            for (const dt of [0, 1.3, 2.9]) {
+              const input = await shipInput(rules, look, world + dt);
+              m.ship.company = true;
+              if (!poseShip(body, m, input)) {
+                continue;
+              }
+              const clip = input.a.clip?.name ?? '';
+              for (const [p0, p1, r, part] of capsulesNamed(body)) {
+                // Hands and forearms rest on the rail leaning; in the top a hand holds a shroud.
+                if ((clip === 'leaning' || clip.startsWith('aloft')) && /hand|lowerarm/.test(part)) {
+                  continue;
+                }
+                for (let j = 0; j <= 4; j++) {
+                  const q = p0.clone().lerp(p1, j / 4);
+                  const n = near(q, 0.5);
+                  least = Math.min(least, n.d - r);
+                  if (n.d < r * 0.7) {
+                    bad.push(`${m.station} ${clip}: ${part} through ${n.what} (${(n.d - r).toFixed(3)})`);
+                    break;
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+      process.stdout.write(`${_}: nearest her ${least.toFixed(3)} m beyond the radii\n`);
+      expect([...new Set(bad)].slice(0, 20)).toEqual([]);
+    },
+    120_000,
+  );
+
+  test('standing, kept plumb as she heels: upright at 0° and 10°, leaning with her past 12°, the feet where they were', async () => {
+    const { CrewBody } = await import('./crewbody');
+    const { poseShip, plumbOf } = await import('./shippose');
+    const { look, machine } = shipLooks[0] as (typeof shipLooks)[number];
+    const rules = makeRules();
+    rules.set({ people: Array.from({ length: 12 }, (_, seat) => ({ seat, look: 0 })), holder: 0 }, false);
+    rules.step({ dt: 1 / 30, boom: 0, windOffBow: 0, depth: 0, ship: { yards: 0.4, heel: 0, wind: 5, time: 0 } });
+    const m = rules.members.find((x) => x.station === 8) as ShipMember;
+    const lean = (heel: number) => {
+      const model = new Matrix4().makeRotationZ(-heel * DEG);
+      const up = plumbOf(model, new Vector3());
+      const body = new CrewBody(look.deck as NonNullable<typeof look.deck>, 7, machine);
+      return shipInput(rules, look, 3, up).then((input) => {
+        input.life.plumb = null;
+        poseShip(body, m, input);
+        // The figure's own up, in the world, and its feet in the model.
+        const figureUp = new Vector3(0, 1, 0).transformDirection(body.root).transformDirection(model);
+        const foot = body.rig.position(body.rig.bone('foot_l'), new Vector3()).applyMatrix4(body.root);
+        const hips = body.rig.position(body.rig.bone('pelvis'), new Vector3()).applyMatrix4(body.root);
+        return { tilt: Math.acos(Math.min(1, figureUp.y)) / DEG, foot, hips };
+      });
+    };
+    const flat = await lean(0);
+    const ten = await lean(10);
+    const twenty = await lean(20);
+    expect(flat.tilt).toBeLessThan(0.5);
+    expect(ten.tilt).toBeLessThan(0.5);
+    expect(twenty.tilt).toBeCloseTo(8, 0);
+    expect(ten.foot.distanceTo(flat.foot)).toBeLessThan(0.01);
+    expect(twenty.foot.distanceTo(flat.foot)).toBeLessThan(0.01);
+    // No jump as she comes through upright.
+    const little = await lean(0.2);
+    expect(little.tilt).toBeLessThan(0.5);
+    expect(little.hips.distanceTo(flat.hips)).toBeLessThan(0.01);
+  });
+
+  test('two clients at the same moment pose everyone alike', async () => {
+    const { CrewBody } = await import('./crewbody');
+    const { poseShip } = await import('./shippose');
+    const { look, machine } = shipLooks[1] as (typeof shipLooks)[number];
+    const pose = async () => {
+      const rules = makeRules();
+      rules.set({ people: Array.from({ length: 40 }, (_, seat) => ({ seat, look: 0 })), holder: 0 }, false);
+      rules.step({ dt: 1 / 30, boom: 0, windOffBow: 0, depth: 0, ship: { yards: 0.4, heel: 0, wind: 5, time: 523.4 } });
+      const out: number[][] = [];
+      for (const m of rules.members) {
+        const body = new CrewBody(look.deck as NonNullable<typeof look.deck>, 1 + m.seat * 977, machine);
+        poseShip(body, m, await shipInput(rules, look, 523.4));
+        out.push(Array.from(body.bones));
+      }
+      return out;
+    };
+    expect(await pose()).toEqual(await pose());
+  });
+});
+
+/** The capsules of a posed body, by the bone each starts at. */
+function capsulesNamed(body: CrewBody): [Vector3, Vector3, number, string][] {
+  const caps = capsulesOf(body);
+  return caps.map((c, i) => [c[0], c[1], c[2], CAPSULES[i]?.[0] ?? 'head']);
+}
+
+/** Her decks' height under (x, z), as her model has them. */
+function modelDeckOf(s: { kind: { art: { model: string } } }): (x: number, z: number) => number | null {
+  return deckBy.get(s.kind.art.model) as (x: number, z: number) => number | null;
+}
+const deckBy = new Map<string, (x: number, z: number) => number | null>();
+{
+  const m = await load((tallShip as NonNullable<typeof tallShip>).art.model);
+  const { modelDeck } = await import('./crew');
+  deckBy.set((tallShip as NonNullable<typeof tallShip>).art.model, modelDeck(m.scene));
+}
+const shipRules = await import('./shiprules');

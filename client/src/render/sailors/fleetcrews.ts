@@ -109,6 +109,8 @@ interface Crewed {
   kind: number;
   told: BoatCrew | null;
   rules: CrewRules | ShipRules;
+  /** A ship's rules' members' version its people were last made from. */
+  version: number;
   /** The vertical in its model's frame, kept within the sea legs' reach. */
   readonly up: Vector3;
   people: Person[];
@@ -387,6 +389,7 @@ export class FleetCrews {
             ? new CrewRules(kc.plan)
             : new ShipRules({ stations: kc.plan.stations, ship: kc.plan.ship }, this.#still),
         up: new Vector3(0, 1, 0),
+        version: -1,
         people: [],
         boom: b.boom,
         boomRate: 0,
@@ -407,6 +410,9 @@ export class FleetCrews {
       c.told = b.crew;
       c.rules.set(b.crew, !first);
       this.#people(c);
+    } else if (c.rules instanceof ShipRules && c.rules.version !== c.version) {
+      // A relief has taken the spokes: who walks has changed.
+      this.#people(c);
     }
     return c;
   }
@@ -421,8 +427,18 @@ export class FleetCrews {
     }
     const stations = c.rules.plan.stations;
     const ship = c.rules instanceof ShipRules;
+    if (c.rules instanceof ShipRules) {
+      c.version = c.rules.version;
+    }
     const railed = !ship && stations.some((s) => s.windward === true || s.pose === 'rail');
     const aloft = ship && stations.some((s) => s.pose === 'aloft');
+    if (ship) {
+      // Whoever is at the wheel too: relieved, they walk with the crew.
+      for (const p of c.told?.people ?? []) {
+        const l = this.sailorLookOf(p.look);
+        looks.want(looks.add(l.art, l.machine), true, false, false, true, aloft);
+      }
+    }
     for (const member of c.rules.members) {
       const l = this.sailorLookOf(member.look);
       const look = looks.add(l.art, l.machine);

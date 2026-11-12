@@ -339,11 +339,35 @@ export class CrewDeck {
       return;
     }
     rules.set(this.#crew, this.#people.length > 0);
+    this.#sync();
+  }
+
+  /** The members' version of a ship's rules last drawn: a relief changes who is at the wheel and who walks. */
+  #version = -1;
+
+  /** Those drawn, as the rules have them aboard: those already met kept. */
+  #sync(): void {
+    const looks = this.#looks;
+    const rules = this.#rules;
+    if (rules === null) {
+      this.#people = [];
+      return;
+    }
+    if (rules instanceof ShipRules) {
+      this.#version = rules.version;
+    }
     const before = new Map(this.#people.map((p) => [p.member, p]));
     this.#people = [];
     if (looks !== null) {
       const ship = rules instanceof ShipRules;
       const aloft = this.#stations.some((s) => s.pose === 'aloft');
+      if (ship) {
+        // Whoever is at the wheel too: relieved, they walk with the crew.
+        for (const p of this.#crew?.people ?? []) {
+          const l = this.sailorLookOf(p.look);
+          looks.want(looks.add(l.art, l.machine), true, false, false, true, aloft);
+        }
+      }
       for (const member of rules.members) {
         const l = this.sailorLookOf(member.look);
         const look = looks.add(l.art, l.machine);
@@ -413,6 +437,10 @@ export class CrewDeck {
       return;
     }
     this.#frames++;
+    const rules = this.#rules;
+    if (rules instanceof ShipRules && rules.version !== this.#version) {
+      this.#sync();
+    }
     const people = this.#people;
     // Who is drawn: anyone not at the helm, or walking to or from it, once their look can be posed.
     for (const p of people) {

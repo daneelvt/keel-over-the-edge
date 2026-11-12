@@ -38,8 +38,9 @@ const clampAcos = (x: number): number => Math.acos(Math.max(-1, Math.min(1, x)))
 
 /**
  * Turns root and mid so the end bone's head reaches target (the figure's
- * space), as near as the limb's stretch allows; fk() is run before and
- * after. weight blends from the pose as it was (0) to the solve (1).
+ * space), as near as the limb's stretch allows (reach of its length);
+ * fk() is run before and after. weight blends from the pose as it was (0)
+ * to the solve (1).
  */
 export function twoBone(
   rig: Rig,
@@ -48,6 +49,7 @@ export function twoBone(
   end: number,
   target: Vector3,
   weight = 1,
+  reach = REACH,
 ): void {
   if (weight <= 0) {
     return;
@@ -58,7 +60,7 @@ export function twoBone(
   rig.position(end, c);
   const lab = b.distanceTo(a);
   const lcb = c.distanceTo(b);
-  const most = REACH * (lab + lcb);
+  const most = reach * (lab + lcb);
   t.copy(target);
   at.subVectors(t, a);
   let d = at.length();

@@ -94,7 +94,7 @@ export const SEA_LEGS = (12 * Math.PI) / 180;
 export const LEAN_BACK = 0.42;
 export const RAIL_OVER = 0.908;
 export const SIT_FEET = 0.45;
-export const HATCH_OVER = 0.37;
+export const HATCH_OVER = 0.297;
 export const TOP_OUT = 1.4;
 
 /** The idles of each pose, by clip name: the first is the pose's own. */
@@ -246,6 +246,9 @@ export class ShipRoute {
   /** Seconds from its start to the first leg (stepping off), and from the last to its end (stepping in). */
   readonly off: number;
   readonly in: number;
+
+  /** The ways' stretches walked, by edge, and which way: +1 from its first point, −1 toward it. */
+  ways = new Map<number, number>();
 
   constructor(legs: ShipLeg[], off: number, inTime: number) {
     this.legs = legs;
@@ -666,6 +669,8 @@ export class ShipRules {
   members: ShipMember[] = [];
   /** Whose look is drawn at the wheel: whoever held the controls until relieved. −1 for nobody. */
   wheelSeat = -1;
+  /** Counts the changes of members: whoever draws them takes the new ones. */
+  version = 0;
   readonly graph: ShipWayGraph;
   #crew: CrewAboard | null = null;
   /** The world's time, seconds; her heel smoothed; whether those on a hatch stand now, and seconds since that changed. */
@@ -793,6 +798,7 @@ export class ShipRules {
       members.push(m);
     }
     this.members = members;
+    this.version++;
     this.#talk();
   }
 
@@ -848,11 +854,21 @@ export class ShipRules {
    * (from); along the ways, kept off the stretches those in others (already
    * planned this moment) walk the other way.
    */
-  #walk(m: ShipMember, from: number | null, to: number, others: readonly ShipMember[]): void {
+  #walk(
+    m: ShipMember,
+    from: number | null,
+    to: number,
+    others: readonly ShipMember[],
+    begin: { at: Vector3; spot: ShipSpot } | null = null,
+  ): void {
     const d = m.ship;
     const start = new Vector3();
-    const fromSpot = spot();
-    if (from !== null) {
+    let fromSpot = spot();
+    if (begin !== null) {
+      start.copy(begin.at);
+      fromSpot = begin.spot;
+      d.from = m.station;
+    } else if (from !== null) {
       this.#placeAt(from, start, fromSpot);
       d.from = from;
     } else if (d.route !== null) {
@@ -869,27 +885,8 @@ export class ShipRules {
     // Stretches others set off along at this moment, and which way.
     const met = new Map<number, number>();
     for (const o of others) {
-      const r = o.ship.route;
-      if (r === null) {
-        continue;
-      }
-      for (const leg of r.legs) {
-        if (leg.path === null) {
-          continue;
-        }
-        // Each stretch near its points, by way of the graph's nearest.
-        for (let k = 0; k + 1 < leg.path.x.length; k += 10) {
-          here.set(leg.path.x[k] as number, leg.path.y[k] as number, leg.path.z[k] as number);
-          const q = this.graph.nearest(here);
-          if (q.edge >= 0 && q.d < 0.4) {
-            const [a, b] = this.graph.edges[q.edge] as [number, number, number];
-            const pa = this.graph.nodes[a] as Vector3;
-            const pb = this.graph.nodes[b] as Vector3;
-            const nx = (leg.path.x[Math.min(k + 10, leg.path.x.length - 1)] as number) - here.x;
-            const nz = (leg.path.z[Math.min(k + 10, leg.path.z.length - 1)] as number) - here.z;
-            met.set(q.edge, nx * (pb.x - pa.x) + nz * (pb.z - pa.z) >= 0 ? 1 : -1);
-          }
-        }
+      for (const [edge, way] of o.ship.route?.ways ?? []) {
+        met.set(edge, way);
       }
     }
     const weather = this.side.side || 1;
@@ -924,6 +921,19 @@ export class ShipRules {
         l.t0 -= off;
         l.t1 -= off;
       }
+    }
+    // The stretches walked, and which way.
+    for (let i = 1; i < points.length; i++) {
+      const p = points[i] as { at: Vector3; kind: number; edge: number };
+      const e = this.graph.edges[p.edge];
+      if (p.kind !== 0 || e === undefined) {
+        continue;
+      }
+      const prev = (points[i - 1] as { at: Vector3 }).at;
+      const na = this.graph.nodes[e[0]] as Vector3;
+      const nb = this.graph.nodes[e[1]] as Vector3;
+      const dot = (p.at.x - prev.x) * (nb.x - na.x) + (p.at.z - prev.z) * (nb.z - na.z);
+      route.ways.set(p.edge, dot >= 0 ? 1 : -1);
     }
     d.route = route;
     d.t = 0;
@@ -998,7 +1008,7 @@ export class ShipRules {
         this.side.side = side;
         if (was !== 0) {
           this.side.changes++;
-          this.#cross();
+          this.#cross(was);
         } else {
           for (const p of this.members) {
             if (p.ship.route === null) {
@@ -1041,8 +1051,8 @@ export class ShipRules {
     }
   }
 
-  /** The weather side changed: those to windward and to leeward walk across. */
-  #cross(): void {
+  /** The weather side changed from was: those to windward and to leeward walk across, from where they were. */
+  #cross(was: number): void {
     const planned: ShipMember[] = [];
     for (const p of this.members) {
       const s = this.stations[p.station];
@@ -1053,7 +1063,12 @@ export class ShipRules {
         this.#put(p, p.station);
         continue;
       }
-      this.#walk(p, null, p.station, planned);
+      let start: { at: Vector3; spot: ShipSpot } | null = null;
+      if (p.ship.route === null) {
+        const sp = shipStation(s, was, spot());
+        start = { at: standPoint(s, sp, new Vector3()), spot: sp };
+      }
+      this.#walk(p, null, p.station, planned, start);
       planned.push(p);
     }
   }
@@ -1145,6 +1160,7 @@ export class ShipRules {
     const old = this.wheelSeat;
     this.wheelSeat = p.seat;
     this.members = this.members.filter((x) => x !== p);
+    this.version++;
     if (crew === null) {
       return;
     }
