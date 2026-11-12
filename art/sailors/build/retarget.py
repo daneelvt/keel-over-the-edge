@@ -207,7 +207,7 @@ def retarget(fig, name, spec, fps):
         elif clip.seated:
             _sit(fig, clip)
         before = [{"rot": dict(fr["rot"]), "pelvis": fr["pelvis"].copy()} for fr in clip.frames]
-        _plant(fig, clip, spec.get("speed", 0.0), way, crawl)
+        _plant(fig, clip, spec.get("speed", 0.0), way, crawl, spec.get("pull", 0.0))
         lowered = 0.0
         for _ in range(12):
             if not 0.0005 < clip.notes["short of the deck"] < 0.05:
@@ -218,7 +218,7 @@ def retarget(fig, name, spec, fps):
             # (An arm's eased stretch reaches only some of the way down.)
             lowered += 2 * clip.notes["short of the deck"] + 0.001
             _lower(fig, clip, lowered)
-            _plant(fig, clip, spec.get("speed", 0.0), way, crawl)
+            _plant(fig, clip, spec.get("speed", 0.0), way, crawl, spec.get("pull", 0.0))
         if not crawl:
             # A deep stride's knee brought down onto the deck by its foot's
             # place: the body lifted over those frames, eased, and planted
@@ -229,7 +229,7 @@ def retarget(fig, name, spec, fps):
                 for _ in range(3):
                     clip.frames = [{"rot": dict(fr["rot"]), "pelvis": fr["pelvis"].copy()} for fr in base]
                     _raise(fig, clip, lift)
-                    _plant(fig, clip, spec.get("speed", 0.0), way, crawl)
+                    _plant(fig, clip, spec.get("speed", 0.0), way, crawl, spec.get("pull", 0.0))
                     more = _knees_down(fig, clip)
                     if max(more) <= 0:
                         break
@@ -727,7 +727,7 @@ def _contacts(crawl):
     return ("foot_l", "foot_r") + (("knee_l", "knee_r", "hand_l", "hand_r") if crawl else ())
 
 
-def _plant(fig, clip, speed, way=WAYS["forward"], crawl=False):
+def _plant(fig, clip, speed, way=WAYS["forward"], crawl=False, pull=0.0):
     """Each foot (crawling, each hand and knee too), while it bears on the
     deck, held to it by IK: its lowest point on the deck and moving back
     (the way, at speed: forward, the figure's +y, as it faces -y) at speed;
@@ -833,6 +833,9 @@ def _plant(fig, clip, speed, way=WAYS["forward"], crawl=False):
             low = soles[s][f][0]
             lift = -low * w[f] if low > 0 else -low
             targets[s] = soles[s][f][3] + c[f] + Vector((0.0, 0.0, lift))
+            if pull and s.startswith("hand"):
+                # The hands set nearer the body (it faces -y).
+                targets[s].y += pull
         for s in order:
             w = moves[s][0]
             target = targets[s]

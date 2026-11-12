@@ -424,3 +424,18 @@ retarget:
     strain: [thigh, calf, foot, ball, neck_01, head, upperarm, hand]
     stage: cat-net
     group: cat
+  # The Chartmaker's: the hands nearer the body, clear of the man's hat's
+  # brim.
+  chartmaker-net-crawl-left:
+    file: vendor/quaternius/Crawl_Left_Loop.glb
+    loop: true
+    deck: true
+    crawl: true
+    way: left
+    seconds: 2.6
+    speed: 0.14
+    smooth: 5.0
+    pull: 0.06
+    strain: [thigh, calf, foot, ball, neck_01, head, upperarm, hand]
+    stage: cat-net
+    group: cat

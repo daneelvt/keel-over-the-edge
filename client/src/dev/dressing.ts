@@ -1516,10 +1516,11 @@ export class DressingRoom {
             // from ahead.
             const net = catAnchor(r.clip) === 'net';
             const lying = catAnchor(r.clip) === 'stand';
-            // Righting her, from abeam of the figure: her bottom before it.
-            o.azimuth = back + (lying ? 0.9 : 0);
-            o.elevation = net ? 0.3 : lying ? 0.12 : 0.5;
-            o.distance = 3.0 + 1.4 * n;
+            // Righting her, from behind the figure and to one side: her
+            // bottom beyond it.
+            o.azimuth = back + (lying ? 2.4 : 0);
+            o.elevation = net ? 0.3 : lying ? 0.25 : 0.42;
+            o.distance = (lying ? 4.0 : 3.0) + 1.4 * n;
             return;
           }
           o.azimuth =
