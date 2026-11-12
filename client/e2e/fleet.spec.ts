@@ -21,6 +21,8 @@ import { openScene, picture, pictureDifference } from './helpers';
 const DEG = Math.PI / 180;
 /** The catalog's skiff's place among its boats: the kind with a gennaker. */
 const SKIFF = 3;
+/** The beach cat's kind: the catalog's fifth boat. */
+const CAT = 4;
 /** How far apart the own boat's picture and a fleet boat's at one pose may be, 0 to 255 a channel. */
 const LIKE = 0.25;
 
@@ -203,7 +205,7 @@ test('64 boats keep to 22 draw calls and 200,000 triangles', async ({ page }) =>
   test.info().annotations.push({ type: 'measured', description: JSON.stringify(budget) });
 });
 
-test('a mixed 64, Jolly boats, keelboats, tall ships and skiffs, keep to 37 draw calls and 320,000 triangles', async ({
+test('a mixed 64, Jolly boats, keelboats, tall ships, skiffs and beach cats, keep to 43 draw calls and 320,000 triangles', async ({
   page,
 }) => {
   await openScene(page);
@@ -213,14 +215,16 @@ test('a mixed 64, Jolly boats, keelboats, tall ships and skiffs, keep to 37 draw
     const boats = [];
     for (let i = 0; i < 64; i++) {
       // The start line again: of every sixteen, three keelboats, a tall
-      // ship and four skiffs, the keelboats' jibs drawing and every other
-      // one reefed, the ships braced up, one with her topgallants in, every
-      // other skiff with her gennaker set and one with it half way up, every
-      // skiff's sailor out on the wire, the first of each near.
+      // ship, four skiffs and two beach cats, the keelboats' jibs drawing
+      // and every other one reefed, the ships braced up, one with her
+      // topgallants in, every other skiff with her gennaker set and one with
+      // it half way up, every skiff's and beach cat's sailor out on the
+      // wire, the cats heeled with a hull flying, the first of each near.
       const ship = i % 16 === 3;
       const keel = !ship && i % 4 === 3;
       const skiff = i % 4 === 1;
-      const kind = ship ? 2 : keel ? 1 : skiff ? 3 : 0;
+      const cat = i % 8 === 6;
+      const kind = ship ? 2 : keel ? 1 : skiff ? 3 : cat ? 4 : 0;
       boats.push({
         kind,
         east: b.x - 70 + (i % 8) * 20,
@@ -233,13 +237,14 @@ test('a mixed 64, Jolly boats, keelboats, tall ships and skiffs, keep to 37 draw
         reef: (keel && i % 8 === 3) || (ship && i === 19) ? 1 : 0,
         yardsTurn: ship ? -0.9 : 0,
         foreYardsTurn: ship ? -0.9 : 0,
-        sailor: skiff ? -1.8 : 0,
+        sailor: skiff ? -1.8 : cat ? -2.16 : 0,
+        heel: cat ? 0.15 : 0,
         sail: 15 | (1 << 4) | (1 << 6),
       });
     }
     k.setFleet(boats);
     k.render();
-    // The keelboats', the ships' and the skiffs' kinds load as their first boats come into view.
+    // The keelboats', the ships', the skiffs' and the cats' kinds load as their first boats come into view.
     await k.fleetLoaded();
     k.render();
     const set = k.fleetBudget();
@@ -252,13 +257,13 @@ test('a mixed 64, Jolly boats, keelboats, tall ships and skiffs, keep to 37 draw
   expect(budget.near + budget.far).toBe(64);
   expect(budget.near).toBeLessThanOrEqual(12);
   // Each kind's draws a level, a skiff's gennaker one more where one is
-  // set, and the skiffs' trapeze wires one.
-  expect(budget.drawCalls).toBeLessThanOrEqual(37);
+  // set, and the trapeze wires one.
+  expect(budget.drawCalls).toBeLessThanOrEqual(43);
   expect(budget.triangles).toBeLessThanOrEqual(320_000);
   expect(budget.bagged).toBe(budget.drawCalls - 2);
 });
 
-test('a keelboat, a tall ship and a skiff of the fleet look as the own ones do, the jib, the yards, the reefs and the gennaker', async ({
+test('a keelboat, a tall ship, a skiff and a beach cat of the fleet look as the own ones do, the jib, the yards, the reefs, the gennaker and the rudders', async ({
   page,
 }) => {
   await openScene(page, 'boat=keelboat');
@@ -336,6 +341,26 @@ test('a keelboat, a tall ship and a skiff of the fleet look as the own ones do, 
     },
   ]) {
     const { own, fleet } = await both(page, pose, SKIFF);
+    diffs[pose.name] = pictureDifference(own, fleet);
+  }
+  // A beach cat: close-hauled with her windward hull flying and her sailor
+  // on the wire; reaching with her rudders put over, each on its own stock.
+  await page.evaluate(async (kind) => {
+    await globalThis.keel.useBoat(kind);
+  }, CAT);
+  for (const pose of [
+    {
+      name: 'a beach cat flying a hull',
+      state: { ...rest, heading: 0.8, heel: 9 * DEG, boom: 0.1, jib: 0.15, sailor: -2.1 },
+      view: { azimuth: 0.6, elevation: 0.2, distance: 9 },
+    },
+    {
+      name: 'a beach cat reaching, her rudders over',
+      state: { ...rest, heading: 1.8, heel: 3 * DEG, boom: 0.6, jib: 0.3, rudder: 0.3, sailor: -1.0 },
+      view: { azimuth: 2.6, elevation: 0.25, distance: 8 },
+    },
+  ]) {
+    const { own, fleet } = await both(page, pose, CAT);
     diffs[pose.name] = pictureDifference(own, fleet);
   }
   test.info().annotations.push({ type: 'measured', description: JSON.stringify(diffs) });
