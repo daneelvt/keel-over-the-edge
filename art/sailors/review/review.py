@@ -95,6 +95,7 @@ class Renderer:
         else:
             cam.angle, dist = scale
         cam.clip_start, cam.clip_end = 0.01, 100.0
+        self.distance = dist
         u = Vector(up).normalized()
         if abs(d.dot(u)) > 0.99:
             u = Vector((0, 1, 0))
@@ -486,7 +487,7 @@ def clip_sheet(r, fig, look, clip, act, slot, track, path, chains, frames=8, siz
     picks = [round(i * (n - 1) / (frames - 1)) for i in range(frames)]
     in_boat = clip.place != Matrix()
     fig.stage.show(in_boat, wheel=getattr(clip, "standing", False), trapeze=getattr(clip, "trapeze", False),
-                   rail=getattr(clip, "rail", False))
+                   rail=getattr(clip, "rail", False), ship=bool(getattr(clip, "ship", None)))
     look.use(look.look)
     pts = []
     for f in picks:
@@ -494,12 +495,17 @@ def clip_sheet(r, fig, look, clip, act, slot, track, path, chains, frames=8, siz
         pts.append(np.array([np.array(p) for p in track_points(fig)]))
     centre, extent = bounds(np.concatenate(pts))
     sheet = Sheet(f"{clip.name}: {n} frames at {clip.fps} a second, frames {', '.join(str(f) for f in picks)}")
+    on_ship = bool(getattr(clip, "ship", None))
     for name in ("front", "side", "profile", "top"):
         row = []
         for f in picks:
             scene.frame_set(f)
             d, up = view(fig, name)
             r.look_at(centre, d, extent * 1.2, size, up=up)
+            if on_ship:
+                # Cut away what of the ship is between the camera and the
+                # figure.
+                r.cam.data.clip_start = r.distance - extent * 0.75
             row.append((f"{name} {f}" if f == picks[0] else str(f), r.render("TEXTURE")))
         sheet.row(row)
     fig.stage.show(False)

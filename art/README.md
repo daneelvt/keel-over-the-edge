@@ -237,6 +237,46 @@ the coat's chains hanging from the body as it bends. They are not placed.
 All seven are written to `<version>.rail.glb`, which only a boat with
 someone at a station on her rail loads.
 
+The tall ship's company stand, sit, walk, haul and lie out aboard her.
+Her model's `company` node gives, on her starboard side, in her frame (the
+yard's in its node's), the places their clips are made against: her
+quarterdeck's rail (the cap's inner edge, on its top), the fore hatch's
+forward edge on its grating, the quarterdeck's ladder, the main shrouds,
+their ratlines, futtock and topmast shrouds, the main top, the main topsail
+yard's node with its footrope, and the main brace's lead and a point along
+its fall. The sailors' stage imports her far forward of the rest
+(`tables.yaml`'s `stage.ship`, `build/stage.py`'s `Ship`); her hull, her
+mainmast's spars and top and her main yards are solid to the gates, her
+ropes too but to what holds them (the hands, the feet; on the yard, the
+hands hold it). Their clips are in two files. `<version>.ship.glb`, about her
+decks: Quaternius' `Idle_LookAround_Loop` (`look-about`, the hand the source
+raises to the brow kept down: a hat's brim is in its way),
+`Idle_FoldArms_Loop` (`fold-arms`), `Idle_Talking_Loop` (`talking`) and
+`Walk_Loop` (`walk`, a foot bearing on the deck moving back at 0.9 m/s), set
+on a flat deck and not placed; `Idle_Rail_Loop` (`leaning`), leaning on her
+rail facing outboard with the forearms laid on the cap rail's top at her
+rail's height over her deck (the back bent as far as brings the shoulders
+within reach of it, and the body kept off the bulwark under it), placed
+from the rail's point; and `Sitting_Idle_Loop`,
+`Sitting_Idle02_Loop`, `Sitting_Nodding_Loop` and `Sitting_Talking_Loop`
+(`hatch-sit`, `hatch-shift`, `hatch-nod`, `hatch-talk`), sat on the hatch's
+forward edge facing forward, the buttocks on its grating and the cloth laid
+on it, placed from the edge. `<version>.aloft.glb`, her work and aloft, each
+with its `-port`: `haul`, hauling the main brace's fall hand over hand facing
+its lead, the hands brought along the fall toward it to 76% and 73% of the arm
+from the shoulder, the forward hand the further (placed from the
+fall's point 1.6 m from its lead, 0.1 m over it); `aloft`, standing in the
+main top as far out as leaves a hand 77% of the arm from a topmast shroud
+(placed from the top's floor at her centreline); and `yard`, lying over the
+main topsail yard, the hips over it as high as the legs reach down to the
+footrope a fifth of the way out along its run, the belly on it and the
+hands on its fore side (placed from the yard's axis over that point, in its
+node's frame). A clip with no `-port` is put on her port side by its place
+seen in the mirror. The machines have neither `fold-arms`, `hatch-talk`,
+`leaning` nor `haul`: their hands would meet their plates, their long coats
+the deck and the rail. The Bosun leans with her forearms a little further
+over the rail, for her loose sleeves (`bosun-leaning`, named `leaning`).
+
 Every build is judged before anyone looks at it: the gates
 (`review/metrics.py`: budgets, clean meshes and weights, nothing through
 the clothes in any judged pose, nothing through the boat seated, the

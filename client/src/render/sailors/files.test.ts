@@ -5,12 +5,14 @@
 // one skeleton, the far level one rigid figure with the place it sits in,
 // one material whose base colour is the atlas and whose occlusion texture
 // is the mask, both KTX2; and the clips with a place each, those at a
-// wheel, those on a trapeze's wire and those on a rail (with the crouch) in
-// files of their own; and the trapeze harness, skinned to the same
-// skeleton, with its hook.
+// wheel, those on a trapeze's wire, those on a rail (with the crouch) and
+// the ship's company's (about her decks, and her work and aloft) in files
+// of their own; and the trapeze harness, skinned to the same skeleton, with
+// its hook.
 
 import { readdirSync, readFileSync } from 'node:fs';
 import { describe, expect, test } from 'vitest';
+import { ALOFT_CLIPS, DECK_CLIPS, NOT_FOR_MACHINES, shipAnchor } from './ship';
 
 interface Gltf {
   extensionsUsed?: string[];
@@ -157,6 +159,54 @@ describe.each(looks)('%s', (look) => {
         expect(m[5] ?? 0, name).toBeGreaterThan(0.99);
         const side = name.endsWith('-port') ? -1 : 1;
         expect(side * (m[8] ?? 0), name).toBeGreaterThan(0.99);
+      }
+    });
+
+    test('its clips about the ship’s decks and of her work and aloft, two files of their own on its skeleton: those set on her placed upright from their place, the rest not placed', () => {
+      if (look === 'test') {
+        return;
+      }
+      const deck = readGltf(`${look}/${version}.ship.glb`);
+      const aloft = readGltf(`${look}/${version}.aloft.glb`);
+      const names = (g: Gltf) => (g.animations ?? []).map((a) => a.name).sort();
+      expect(names(deck)).toEqual(
+        [...DECK_CLIPS.idles, ...DECK_CLIPS.leaning, ...DECK_CLIPS.seated, DECK_CLIPS.walk]
+          .filter((c) => look !== 'machine' || !NOT_FOR_MACHINES.includes(c))
+          .sort(),
+      );
+      expect(names(aloft)).toEqual(
+        Object.values(ALOFT_CLIPS)
+          .flatMap((c) => [c, `${c}-port`])
+          .filter((c) => look !== 'machine' || !NOT_FOR_MACHINES.includes(c))
+          .sort(),
+      );
+      for (const g of [deck, aloft]) {
+        expect(joints(g)).toEqual(joints(clips));
+        for (const name of names(g)) {
+          const m = g.nodes.find((n) => n.name === `place-${name}`)?.matrix ?? [];
+          if (shipAnchor(name) === null) {
+            expect(m, name).toEqual([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]);
+            continue;
+          }
+          // Upright, near its place on the ship (in the top, out from her
+          // middle toward the shrouds).
+          expect(m[5] ?? 0, name).toBeGreaterThan(0.99);
+          expect(Math.hypot(m[12] ?? 9, m[13] ?? 9, m[14] ?? 9), name).toBeLessThan(2);
+        }
+      }
+      // Leaning on the starboard rail facing outboard (+x); sat on the hatch
+      // and in the top and on the yard facing forward (−z); hauling facing
+      // aft along the fall (+z).
+      const facing = (g: Gltf, n: string) =>
+        g.nodes.find((x) => x.name === `place-${n}`)?.matrix ?? [];
+      if (look !== 'machine') {
+        expect(facing(deck, 'leaning')[8]).toBeGreaterThan(0.99);
+      }
+      expect(facing(deck, 'hatch-sit')[10]).toBeLessThan(-0.99);
+      expect(facing(aloft, 'aloft')[10]).toBeLessThan(-0.99);
+      expect(facing(aloft, 'yard-port')[10]).toBeLessThan(-0.99);
+      if (look !== 'machine') {
+        expect(facing(aloft, 'haul')[10]).toBeGreaterThan(0.95);
       }
     });
 

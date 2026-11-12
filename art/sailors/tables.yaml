@@ -135,6 +135,14 @@ stage:
     at: [0.0, 36.0, 0.0]
     knee: 0.12
     span: 1.2
+  # The tall ship, whose company stands, sits, walks, climbs, hauls and
+  # lies out about her decks and aloft (build/stage.py's Ship): her model,
+  # set this far forward of the dinghy in the stage's scene, clear of every
+  # other stage; her `company` node gives the places the clips made there
+  # are placed from, on the starboard side (the port's the mirror).
+  ship:
+    boat: boats/tall-ship.glb
+    at: [0.0, 80.0, 0.0]
 
 # The portraits (build/portraits.py), every look's taken alike: head and
 # shoulders, three-quarter, the camera on the figure's left at the height

@@ -310,7 +310,12 @@ class Figure:
             if self.stage.rail is not None:
                 lifts += [(SEAT_GROUP + "-rail", self.stage.rail.plane, "ABOVE_SURFACE"),
                           (SEAT_GROUP + "-rail-deck", self.stage.rail.solid[0], "OUTSIDE_SURFACE")]
-            planes = (self.stage.plane,) + ((self.stage.rail.plane,) if self.stage.rail is not None else ())
+            # The ship's hatch, its cloth laid on its grating.
+            if self.stage.ship is not None:
+                lifts += [(SEAT_GROUP + "-hatch", self.stage.ship.hatch_plane, "ABOVE_SURFACE"),
+                          (SEAT_GROUP + "-ship-deck", self.stage.ship.deck, "OUTSIDE_SURFACE")]
+            planes = (self.stage.plane,) + ((self.stage.rail.plane,) if self.stage.rail is not None else ()) + \
+                ((self.stage.ship.hatch_plane,) if self.stage.ship is not None else ())
             for name, target, mode in lifts:
                 m = o.modifiers.get(name) or o.modifiers.new(name, "SHRINKWRAP")
                 m.target = target
@@ -322,7 +327,8 @@ class Figure:
                 # From under the deck its underside faces the ray: only its
                 # top is found.
                 m.cull_face = "FRONT" if target not in planes else "OFF"
-                m.offset = SEAT_CLEAR + (above or {}).get(o.name, 0.0)
+                m.offset = SEAT_CLEAR + (above or {}).get(o.name, 0.0) + \
+                    (SHIP_DECK_CLEAR if name == SEAT_GROUP + "-ship-deck" else 0.0)
                 m.project_limit = 2.0 if target in planes else 0.3
                 m.vertex_group = SEAT_GROUP
                 m.show_viewport = m.show_render = False
@@ -343,6 +349,12 @@ class Figure:
                 o.hide_viewport = on
 
     def update(self):
+        # Only the pelvis moves: what setting a bone's matrix leaves in
+        # another's place (its rounding) is not the clip's, which keeps
+        # turns alone.
+        for pb in self.bones:
+            if pb.name != "pelvis" and pb.location.length_squared > 0.0:
+                pb.location = (0.0, 0.0, 0.0)
         bpy.context.view_layer.update()
 
     def turn(self, turns):
@@ -453,6 +465,8 @@ class Figure:
                     if top is not None and top - 0.15 < z < top + SEAT_CLEAR:
                         lift = max(lift, top + SEAT_CLEAR - z)
             return Matrix.Translation((0, 0, lift)) @ m
+        if place in SHIP_STANDS:
+            return self._on_ship(place, side)
         if place == "outside":
             # In the water at the side, facing in, the chest at the gunwale:
             # where a sailor climbing back in starts.
@@ -500,6 +514,83 @@ class Figure:
                     lift = max(lift, top + SEAT_CLEAR - z)
         return Matrix.Translation((0, 0, lift)) @ m
 
+    def _on_ship(self, place, side):
+        """Standing on the ship (stage.Ship): the soles on what is under
+        them, the hips over the place: hauling, beside the brace's fall
+        (inboard of it) facing its lead; in the main top, out toward its
+        shrouds, facing forward; on the main topsail yard's footrope, aft
+        of the yard, facing forward."""
+        ship = self.stage.ship
+        pelvis = self.bones["pelvis"].head
+        low = min(min(self.bones[f"{b}_{s}"].head.z, self.bones[f"{b}_{s}"].tail.z)
+                  for b in ("foot", "ball") for s in ("l", "r")) - SOLE
+        contact = Vector((pelvis.x, pelvis.y, low))
+        if place == BRACE:
+            along = ship.brace_along(side)
+            heading = math.atan2(along.x, -along.y)
+            at = ship.point("haul-deck", side)
+        elif place == TOP:
+            # Out toward the shrouds as far as leaves the hand that holds
+            # one its easy reach from the shoulder.
+            at = ship.point("aloft", side)
+            heading = math.pi
+            s = "r" if side > 0 else "l"
+            # The shoulder as it is at rest over the hips, the same for every
+            # key: the figure stays where it stands.
+            bones = self.arm.data.bones
+            sh = self.bones["pelvis"].head + (bones[f"upperarm_{s}"].head_local - bones["pelvis"].head_local)
+            arm = self.arm.data.bones[f"upperarm_{s}"].length + self.arm.data.bones[f"lowerarm_{s}"].length
+            grip = ship.point("topmast-shroud", side)
+            rel = Vector((-(sh.x - contact.x), -(sh.y - contact.y), sh.z - contact.z))
+            dy, dz = grip.y - (at.y + rel.y), grip.z - (at.z + rel.z)
+            span = (TOP_REACH * arm) ** 2 - dy * dy - dz * dz
+            if span > 0:
+                at.x = grip.x - rel.x - side * math.sqrt(span)
+            self.top_out = abs(at.x - ship.at.x)
+            # Where the feet stand there, for their targets.
+            self.top_at = at.copy()
+        else:
+            # Lying over the yard: the hips as high as it, and as far aft of
+            # it as keeps the body (not its arms, which reach over it) its
+            # radius and a little from its axis: the belly on it. The feet
+            # reach down to the footrope.
+            co = self.dressed()[self.carried(YARD_BODY)]
+            r = ship.yard_radius + YARD_CLEAR
+            # The hips as high over the yard as the legs, nearly straight,
+            # reach down to the footrope's from, and no lower than YARD_HIPS.
+            bones = self.arm.data.bones
+            legs = bones["thigh_l"].length + bones["calf_l"].length
+            rope = ship.footrope_at(ship.YARD_AT, side).z
+            hips = max(YARD_HIPS, rope + HEEL_CLEAR + YARD_LEGS * legs - ship.point("yard", side).z)
+            self.yard_hips = hips
+            dz = co[:, 2] - (pelvis.z - hips)
+            lo, hi = 0.0, 1.0
+            for _ in range(30):
+                aft = (lo + hi) / 2
+                dy = co[:, 1] - (pelvis.y - aft)
+                if float(np.hypot(dy, dz).min()) < r:
+                    lo = aft
+                else:
+                    hi = aft
+            # And no nearer than the legs standing down to the footrope
+            # keep their thighs clear of it.
+            self.yard_aft = max(hi, YARD_AFT)
+            at = ship.point("yard", side) + Vector((0.0, -self.yard_aft, hips))
+            contact = pelvis.copy()
+            heading = math.pi
+        return Matrix.Translation(at) @ Matrix.Rotation(heading, 4, "Z") @ Matrix.Translation(-contact)
+
+    def carried(self, kinds, meshes=None):
+        """Which vertices of the figure (or of meshes), in dressed()'s
+        order, a bone of these kinds (or starting so) weighs most on."""
+        out = []
+        for o in meshes or self.meshes:
+            names = {g.index: g.name for g in o.vertex_groups}
+            out.append(np.array([bool(v.groups) and any(
+                kind(b) == k or b.startswith(k) for k in kinds
+                for b in (max((g.weight, names.get(g.group, "")) for g in v.groups)[1],)) for v in o.data.vertices]))
+        return np.concatenate(out)
+
     def armed(self, meshes=None):
         """Which vertices of the figure (or of meshes), in dressed()'s
         order, the arms carry: those an arm's bone (the collarbone to the
@@ -541,9 +632,25 @@ class Figure:
         if spec["at"] == "bone":
             return self.anchored(spec["bone"], spec.get("offset", (0, 0, 0)))
         p = self.stage.point(spec["at"], side)
+        if spec["at"] == "aloft" and getattr(self, "top_at", None) is not None:
+            # In the top where the figure was placed, out toward the shrouds.
+            p = self.top_at.copy()
         frame = self.stage.frame(side).to_3x3()
         off = spec.get("offset")
-        if off:
+        if off and spec["at"] in (BRACE, "haul-deck"):
+            # Along the brace's fall toward its lead, across it inboard, and up.
+            along = self.stage.ship.brace_along(side)
+            inboard = Vector((-side, 0.0, 0.0))
+            inboard = (inboard - along * inboard.dot(along)).normalized()
+            p = p + along * off[0] + inboard * off[1] + Vector((0.0, 0.0, off[2]))
+            if spec.get("reach") and effector:
+                p = self._along(p, along, spec["reach"], effector, exact=True)
+            return p
+        if off and spec["at"] == YARD and spec.get("reach") and effector:
+            # Brought straight toward the shoulder until the arm is no more
+            # than that share of its length from it.
+            return self._along(p + frame @ Vector(off), None, spec["reach"], effector)
+        elif off:
             p = p + frame @ Vector(off)
         if spec.get("reach") and effector:
             upper, lower, _ = EFFECTORS[effector]
@@ -560,6 +667,33 @@ class Figure:
             if side * p.x < -far:
                 p.x = -side * far
         return p
+
+    def _along(self, p, way, reach, effector, least=None, exact=False):
+        """A target moved along a line (a rope) until the arm is no more
+        than reach and no less than least (shares of its length) from its
+        shoulder, the same stretch on any body: by the least move when too
+        far, out along the line's way when too near; or (exact) to the
+        furthest point along the way at reach. Where the line never comes so
+        near, its nearest point; or straight toward the shoulder (way
+        None)."""
+        upper, lower, _ = EFFECTORS[effector]
+        root = self.world(upper)
+        arm = self.arm.data.bones[upper].length + self.arm.data.bones[lower].length
+        d = p - root
+        want = reach * arm if exact or d.length > reach * arm else \
+            (least * arm if least and d.length < least * arm else None)
+        if want is None:
+            return p
+        if way is None:
+            return root + d.normalized() * want
+        b = d.dot(way)
+        disc = b * b - (d.length_squared - want * want)
+        if disc <= 0:
+            return p - way * b
+        roots = (-b + math.sqrt(disc), -b - math.sqrt(disc))
+        # Too near: out along the line's way; too far: the least move.
+        t = roots[0] if exact or want > d.length else min(roots, key=abs)
+        return p + way * t
 
     def solve(self, effector, target, pole=None, grip=None, side=1):
         """Two-bone IK: the chain's end to target, the middle joint toward
@@ -768,8 +902,8 @@ class Figure:
             # Moved forward, inboard and up in the seat's frame.
             place = Matrix.Translation(self.stage.frame(side).to_3x3() @ Vector(pose["shift"])) @ place
         self.arm.matrix_world = place
-        # Standing at a wheel or on the trapeze, nothing lies on a seat.
-        self.on_seat(pose["place"] not in (None, STANDS, TRAPEZE))
+        # Standing at a wheel, on the trapeze or on the ship, nothing lies on a seat.
+        self.on_seat(pose["place"] not in (None, STANDS, TRAPEZE) + SHIP_STANDS)
         self.update()
         at = {}
         for eff in EFFECTORS:
@@ -781,13 +915,17 @@ class Figure:
             if spec and spec.get("planted") and eff.startswith("foot") and spec["at"] != "free":
                 # A foot planted on what it stands on, its heel not under it.
                 at[eff].z = max(at[eff].z, self.stage.point(spec["at"], side).z + HEEL_CLEAR)
-        if pose["place"] == STANDS:
+        if pose["place"] in (STANDS, BRACE, TOP):
             # Standing, a foot's target as high as its toes need to be on
             # the deck with the foot set on it (a trailing foot's heel off
             # it), so the bake never lifts it off its target.
             for eff, spec in pose["ik"].items():
                 if eff.startswith("foot") and spec["at"] not in ("bone", "free") and not spec.get("planted"):
                     surface = self.stage.point(spec["at"], side).z
+                    if pose["place"] in SHIP_STANDS:
+                        # On the ship, held there whatever the clip does
+                        # after: a boot's sole kept clear.
+                        surface += SHIP_SOLE
                     for _ in range(3):
                         self.solve(eff, at[eff], spec.get("pole"))
                         self.level_foot(eff)
@@ -851,6 +989,12 @@ class Clip:
         # Placed on the rail, every key: sat on the deck's edge, the legs
         # over the side.
         self.rail = False
+        # Placed on the ship (stage.Ship), every key: at which of her
+        # places; and whether sat there (on her hatch), its cloth laid on it.
+        self.ship = None
+        self.seated = False
+        # The file it is written to beside the look's clips, if not theirs.
+        self.group = None
 
 
 def make(fig, lib, name):
@@ -909,11 +1053,23 @@ def make(fig, lib, name):
     clip.standing = all(lib.poses[k["pose"]]["place"] == STANDS for k in keys)
     clip.trapeze = all(lib.poses[k["pose"]]["place"] == TRAPEZE for k in keys)
     clip.rail = all(lib.poses[k["pose"]]["place"] == RAIL for k in keys)
+    # Placed on the ship, every key: from her place of its pose's (the
+    # brace's fall, the top, the yard).
+    ship = lib.poses[keys[0]["pose"]]["place"]
+    clip.ship = ship if ship in SHIP_STANDS and all(lib.poses[k["pose"]]["place"] == ship for k in keys) else None
+    clip.group = spec.get("group")
     # On the trapeze the skirts hang from the body as it lies (Figure.hang);
     # any clip may hang its chains so (on the rail, the coat's back).
     fig.hang = spec.get("hang") or (HANG if clip.trapeze else None)
     # Feet that stay where they are: in the boat, never stepping elsewhere.
     still = all(p["place"] == place for p in kp)
+    if still and clip_ship_place(lib, keys):
+        # On the ship a foot every key sets on the same place stands on one
+        # point: the first key's (each key's own differs by the toes' set).
+        for e in ("foot_l", "foot_r"):
+            if all(p["ik"].get(e) == kp[0]["ik"].get(e) for p in kp) and e in kp[0]["at"]:
+                for p in kp[1:]:
+                    p["at"][e] = kp[0]["at"][e].copy()
     clip.planted = ["foot_l", "foot_r"] if all(p["place"] for p in kp) and still else []
     # The hips carry the figure elsewhere: their turn is a journey, not a
     # joint's.
@@ -921,6 +1077,24 @@ def make(fig, lib, name):
     # The joints the clip strains toward the ends of their ranges, as the
     # hike does (climbing in, a knee to the chest).
     clip.notes["strain"] = list(spec.get("strain") or [])
+    if clip.ship == YARD:
+        clip.notes["hips aft of the yard"] = round(fig.yard_aft, 4)
+        clip.notes["hips over the yard"] = round(fig.yard_hips, 4)
+    if clip.ship == TOP:
+        clip.notes["out in the top"] = round(fig.top_out, 4)
+    # How far each key's hands' and feet's targets are from their
+    # shoulders and hips, as a share of the limb: past the reach the tables
+    # allow, the IK falls short.
+    reach = []
+    for p in kp:
+        fig.set_rotations(p["rot"], p["pelvis"])
+        fig.arm.matrix_world = p["place"]
+        for e in ("hand_l", "hand_r", "foot_l", "foot_r"):
+            if e in p["ik"]:
+                up, lo, _ = EFFECTORS[e]
+                arm = fig.arm.data.bones[up].length + fig.arm.data.bones[lo].length
+                reach.append(round((p["at"][e] - fig.world(up)).length / arm, 3))
+    clip.notes["reach"] = reach
 
     delays = m["delays"]
     filt = m["filter"]
@@ -1016,7 +1190,9 @@ def make(fig, lib, name):
                 fig.level_foot(e)
                 # The toes never under what the foot stands on: the foot
                 # lifted, if they would be.
-                for _ in range(2):
+                # (On the ship a foot is held where its key set it: its
+                # soles are judged against her deck, clip_ship.)
+                for _ in range(0 if clip.ship else 2):
                     low = min(fig.toes(e) - TOE_CLEAR, fig.world(EFFECTORS[e][2]).z - HEEL_CLEAR) - surface
                     if low >= 0:
                         break
@@ -1056,19 +1232,35 @@ def make(fig, lib, name):
         # A loop of one key returns to itself: no move.
         if a is not None and ramp > 0 and a != ki:
             clip.ramps.append((int(round(start * fps)), int(round((start + ramp) * fps)), k.get("lead", "hips")))
-    if loop and clip.trapeze:
+    if loop and (clip.trapeze or clip.ship):
         # The IK's turns follow the frame before: round a loop they come
         # back a few tenths of a degree from where they began. The gap is
         # shared out over the loop, so its seam is smooth; not the hips'
-        # nor the legs', whose feet stay where they press on the rack.
+        # nor the legs', whose feet stay where they press on the rack or the
+        # ship's deck, her top or her footrope (and are put back on it).
         last = clip.frames[-1]
         for b in names:
-            if kind(b) in ("Root", "pelvis", "thigh", "calf", "foot", "ball") or b.startswith("thigh_corrector"):
+            legs = kind(b) in ("thigh", "calf", "foot", "ball") or b.startswith("thigh_corrector")
+            if kind(b) in ("Root", "pelvis") or legs:
                 continue
             q0, q1 = clip.frames[0]["rot"][b], last["rot"][b]
             gap = q1.inverted() @ (q0 if q0.dot(q1) >= 0 else -q0)
             for i, fr in enumerate(clip.frames):
                 fr["rot"][b] = fr["rot"][b] @ Quaternion().slerp(gap, i / frames)
+        if clip.ship:
+            fig.quiet()
+            fig.arm.matrix_world = place
+            for fr, contacts in zip(clip.frames, clip.contacts):
+                feet = [e for e in contacts if e.startswith("foot")]
+                if not feet:
+                    continue
+                fig.set_rotations(fr["rot"], fr["pelvis"])
+                for e in feet:
+                    fig.solve(e, contacts[e], _pole(kp, segs, e, 0.0, length, loop))
+                fig.derive()
+                fr["rot"] = fig.rotations()
+
+            fig.quiet(False)
     if loop:
         # The end is the start.
         clip.frames[-1] = {"rot": {b: q.copy() for b, q in clip.frames[0]["rot"].items()},
@@ -1096,6 +1288,42 @@ ANKLE_UP = 0.08
 HANG = {"back": 1.0, "side": 0.85}
 
 
+def clip_ship_place(lib, keys):
+    """Whether every key of a clip is placed on the ship."""
+    return all(lib.poses[k["pose"]]["place"] in SHIP_STANDS for k in keys)
+
+
+# The places on the ship a pose stands at (stage.Ship's): hauling on the
+# main brace beside its fall; in the main top; on the main topsail yard's
+# footrope.
+BRACE = "brace"
+TOP = "top"
+YARD = "yard"
+SHIP_STANDS = (BRACE, TOP, YARD)
+# The targets that are ropes a foot stands on, not floors: the footrope's.
+ON_ROPE = ("yard-foot-in", "yard-foot-out")
+# On the yard, the hips this far over its axis and at least this far aft of
+# it, the body (not its arms) this far clear of it beyond its radius.
+# In the top, the hand on the shroud this share of the arm from the
+# shoulder.
+TOP_REACH = 0.77
+YARD_HIPS = 0.26
+# Cloth laid on the ship's deck this much further off it than on a seat:
+# her planks' seams are uneven.
+SHIP_DECK_CLEAR = 0.006
+# A foot standing on the ship's deck or top, this much higher than a foot
+# set on a floor: it is held where its key sets it, and a boot's sole is
+# thick.
+SHIP_SOLE = 0.012
+# The legs on the footrope straight to this share of their length.
+YARD_LEGS = 0.9
+YARD_AFT = 0.42
+YARD_CLEAR = 0.03
+# What of the body lies on the yard: what the hips, the back and the thighs
+# carry (and the cloth on them); not the arms or the head.
+YARD_BODY = ("pelvis", "spine_01", "spine_02", "spine_03", "thigh", "thigh_corrector", "skirt")
+
+
 # The channel of the hips' place, beside the bones' turns.
 PELVIS_AT = "pelvis.location"
 
@@ -1105,6 +1333,9 @@ PELVIS_AT = "pelvis.location"
 # How far out of what it hangs over a skirt is kept, in every frame: the
 # game's springs let it sag toward the legs by about half of this.
 SKIRT_CLEAR = 0.015
+# A figure this far or less aft of the ship's stage's place in the scene is
+# on her (her stern is 16 m aft of it, and every other stage far aft).
+SHIP_NEAR = 25.0
 # How far in from a vertex a ray looks for the cloth over it.
 SKIRT_DEPTH = 0.03
 # The most a skirt bone is turned off its clip's pose, and in one step.
@@ -1138,7 +1369,8 @@ def clear_skirts(fig, clip, under, skirts, rounds=16, passes=5, most=None):
     if not under or not skirts:
         return 0
     chains = {s.name: _chains_of(s) for s in skirts}
-    seated = clip.place != Matrix() and not getattr(clip, "standing", False)
+    seated = clip.place != Matrix() and not getattr(clip, "standing", False) and \
+        (not getattr(clip, "ship", None) or clip.seated)
     n = len(clip.frames)
     # A loop's last frame is its first again: the turns wrap round the
     # frames before it.
@@ -1183,6 +1415,12 @@ def laid(fig):
     """How high the cloth laid on the seat lies, while the figure sits on
     it (Figure.lay_on_seat): what of the legs is below it sits on the
     seat under the cloth. Off the seat, None."""
+    ship = fig.stage.ship
+    if ship is not None and fig.world("pelvis").y > ship.at.y - SHIP_NEAR:
+        # On the ship: her hatch's, the only seat she has.
+        on = [o.modifiers[n] for o, n in getattr(fig, "seat_mods", [])
+              if o.modifiers[n].show_viewport and o.modifiers[n].target is ship.hatch_plane]
+        return ship.hatch.z + max(m.offset for m in on) + SKIRT_LAID if on else None
     on = [o.modifiers[n] for o, n in getattr(fig, "seat_mods", [])
           if o.modifiers[n].show_viewport and o.modifiers[n].target is fig.stage.plane]
     return fig.stage.seat.z + max(m.offset for m in on) + SKIRT_LAID if on else None
@@ -1389,7 +1627,7 @@ def _surface(fig, kp, segs, e, s, length, loop):
         t = key["ik"].get(e)
         # A foot against the rack's edge on the trapeze presses on it with
         # its ball, its sole across the rail: it stands on no floor.
-        if t is not None and t["at"] not in ("bone", "free", "rack"):
+        if t is not None and t["at"] not in ("bone", "free", "rack") + ON_ROPE:
             heights.append(fig.stage.point(t["at"], key["side"]).z)
     return max(heights) if heights else None
 

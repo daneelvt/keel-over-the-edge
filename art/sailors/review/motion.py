@@ -62,6 +62,10 @@ FINGER_TIPS = ("thumb_03", "index_03", "middle_03", "ring_03", "pinky_03")
 HAT = "hat"
 
 
+# How far a forearm leaning on a rail may be off the rail's line, in metres.
+RAIL_LOCK = 0.005
+
+
 class Track:
     """A clip played back: per frame, the world positions and rotations of
     the bones the gate reads."""
@@ -182,6 +186,11 @@ def check(fig, clip, act, slot, gate, ranges, proxies):
         add("feet on the deck", off, gate["contact"], off <= gate["contact"])
         clear = clip.notes["clear of the deck"]
         add("clear of the deck", clear, 0.0, clear >= 0.0)
+    # Leaning on a rail: each forearm's bone on the rail's line where it
+    # crosses it, while its hand rests there.
+    if "forearms off the rail" in clip.notes:
+        off = clip.notes["forearms off the rail"]
+        add("on the rail", off, RAIL_LOCK, off <= RAIL_LOCK)
     drift = 0.0
     for e in clip.planted:
         p = tr.pos[motion.EFFECTORS[e][2]]

@@ -89,6 +89,9 @@ class Stage:
         self.trapeze = Trapeze(root, spec["trapeze"]) if spec.get("trapeze") else None
         # The rail's, likewise: the keelboat's hull is solid too.
         self.rail = Rail(root, spec["rail"]) if spec.get("rail") else None
+        # The ship's, judged apart (Ship.tree): she stands far higher than
+        # the rest, and her ropes are held.
+        self.ship = Ship(root, spec["ship"]) if spec.get("ship") else None
         self.tree = _tree(self.solid + ([self.wheel.deck] if self.wheel else []) +
                           (self.trapeze.solid if self.trapeze else []) + (self.rail.solid if self.rail else []))
 
@@ -175,6 +178,8 @@ class Stage:
             return self.trapeze.point(name, side)
         if self.rail is not None and name in Rail.POINTS:
             return self.rail.point(name, side)
+        if self.ship is not None and name in Ship.POINTS:
+            return self.ship.point(name, side)
         fwd, inb, up = self.spec["points"][name]
         p = self.frame(side) @ Vector((fwd, inb, up))
         if name.startswith("tiller"):
@@ -188,11 +193,14 @@ class Stage:
         own axes, x to its left."""
         return Matrix.Rotation(np.radians(-90.0 * side), 4, "Z")
 
-    def show(self, shown, wheel=False, trapeze=False, rail=False):
+    def show(self, shown, wheel=False, trapeze=False, rail=False, ship=False):
         """Shows the dinghy's hull (shown), or the wheel's stage, or the
-        trapeze's boat, or the rail's."""
+        trapeze's boat, or the rail's, or the ship."""
         for o in self.objects:
-            o.hide_render = not shown or wheel or trapeze or rail or o not in self.solid
+            o.hide_render = not shown or wheel or trapeze or rail or ship or o not in self.solid
+        if self.ship is not None:
+            for o in self.ship.objects:
+                o.hide_render = not (shown and ship) or o.type != "MESH" or o in self.ship.planes
         if self.wheel is not None:
             for o in self.wheel.objects:
                 o.hide_render = not (shown and wheel)
@@ -463,8 +471,211 @@ class Rail:
         return None if hit[0] is None else hit[0].z
 
 
-def _tree(objs):
-    """One BVH tree of the objects as they stand, in boat space."""
+class Ship:
+    """The ship's stage: the tall ship's model (spec `boat`), imported and
+    moved by `at` in the stage's scene (x to starboard, y forward, z up),
+    far forward of the rest. Its places, from her model's `company` node
+    (the starboard side's; the port's the mirror): her quarterdeck's rail,
+    the fore hatch's forward edge, the ladder at the quarterdeck's break, the
+    main shrouds and their ratlines, the futtock and topmast shrouds, the
+    main top, the main topsail yard's footrope and the main brace's lead and
+    fall. Her hull (decks, bulwarks, rails, ladders, hatches, channels), her
+    mainmast's spars and top and her main yards are solid (`tree`); the
+    ropes a sailor holds or stands on (the shrouds, ratlines, footropes) are
+    `ropes`, which only what holds them may meet; and the topsail yard a
+    sailor lying on it holds, which its hands may meet (`unheld` is the rest).
+    Where a seated sailor's cloth lies on the hatch is `hatch_plane`."""
+
+    POINTS = ("ship-rail", "ship-hatch", "ladder-foot", "ladder-head", "shroud", "top", "aloft", "topmast-shroud",
+              "yard-foot-in", "yard-foot-out", "yard", "brace-lead", "brace-fall", "brace", "haul-deck")
+    # The parts of her model a sailor is judged against.
+    SOLID = ("hull", "mainmast", "main-yards", "main-topsail-yard")
+    # The ropes among them, by their material.
+    ROPE = "rope"
+    # Where a figure stands on the footrope, out along it from the yard's
+    # middle (a share of its run), and how far apart its feet are.
+    YARD_AT = 0.2
+    YARD_FEET = 0.24
+    # The shrouds a figure climbs between, fore and aft (the main's second
+    # and third), and how high up the ratlines it is staged.
+    SHROUDS = (1, 2)
+    SHROUD_AT = 0.3
+    # The hauler's place along the brace's fall, from its lead; the feet's
+    # middle this far inboard of the fall.
+    BRACE_AT = 1.6
+    HAUL_BESIDE = 0.06
+    # The fall as it is hauled, this far over the lead on her rail.
+    BRACE_UP = 0.1
+    # Where a figure stands in the top: this far out from her middle toward
+    # her shrouds; and the topmast shroud it holds, this share of the way
+    # up from the top's rim.
+    TOP_OUT = 1.47
+    TOPMAST_AT = 0.14
+
+    def __init__(self, root, spec):
+        self.spec = spec
+        before = set(bpy.data.objects)
+        bpy.ops.import_scene.gltf(filepath=os.path.join(root, "art", spec["boat"]))
+        self.objects = [o for o in bpy.data.objects if o not in before]
+        self.at = Vector(spec["at"])
+        for o in self.objects:
+            o.name = "ship-" + o.name
+            o.hide_render = True
+            if o.parent is None:
+                o.location = o.location + self.at
+        bpy.context.view_layer.update()
+        c = bpy.data.objects["ship-company"]
+
+        def blender(p):
+            # The model's frame (x to starboard, y up, z aft) as the scene's.
+            return Vector((p[0], -p[2], p[1])) + self.at
+
+        def rows(v):
+            return [list(x) for x in v]
+
+        self.rail = blender(list(c["rail"]))
+        self.hatch = blender(list(c["hatch"]["edge"]))
+        self.hatch_half = float(c["hatch"]["half"])
+        lad = c["ladder"]
+        self.ladder = (blender(list(lad["foot"])), blender(list(lad["head"])), int(lad["steps"]))
+        self.shrouds = [(blender(a), blender(b)) for a, b in rows(c["shrouds"])]
+        r = c["ratlines"]
+        self.ratlines = (float(r["from"]) + self.at.z, float(r["to"]) + self.at.z, float(r["every"]))
+        self.futtocks = [(blender(a), blender(b)) for a, b in rows(c["futtocks"])]
+        self.topmast = [(blender(a), blender(b)) for a, b in rows(c["topmast"])]
+        t = c["top"]
+        self.top = blender(list(t["floor"]))
+        self.top_size = (float(t["half"]), float(t["fore"]), float(t["aft"]))
+        y = c["yard"]
+        node = bpy.data.objects["ship-" + y["node"]]
+        self.yard_node = node
+        self.yard_radius = float(y["radius"])
+        # The footrope, in the yard's node's frame (as the model's), into the scene.
+        self.footrope = [node.matrix_world @ Vector((p[0], -p[2], p[1])) for p in rows(y["footrope"])]
+        self.yard_at = node.matrix_world.translation.copy()
+        b = c["brace"]
+        up = Vector((0.0, 0.0, self.BRACE_UP))
+        self.brace = (blender(list(b["lead"])) + up, blender(list(b["fall"])) + up)
+        objs = [bpy.data.objects["ship-" + n] for n in self.SOLID]
+        # Her hull, decks and all: what cloth hanging to her deck is laid on.
+        self.deck = objs[0]
+
+        def rope(o, p):
+            slots = o.material_slots
+            return p.material_index < len(slots) and slots[p.material_index].name.split(".")[0] == self.ROPE
+
+        self.tree = _tree(objs, lambda o, p: not rope(o, p))
+        self.ropes = _tree(objs, rope)
+        # Her hull and mast without the yard a figure on it holds: what its
+        # hands may not meet there.
+        self.unheld = _tree([o for o in objs if o is not node], lambda o, p: not rope(o, p))
+        # The hatch's top, from its forward edge aft, as the cloth of a
+        # figure sat on its edge is laid on it.
+        me = bpy.data.meshes.new("ship-hatch-plane")
+        h = self.hatch
+        w = self.hatch_half
+        me.from_pydata([(h.x - w, h.y - 2 * w, h.z), (h.x + w, h.y - 2 * w, h.z), (h.x + w, h.y, h.z),
+                        (h.x - w, h.y, h.z)], [], [(0, 1, 2, 3)])
+        self.hatch_plane = bpy.data.objects.new("ship-hatch-plane", me)
+        bpy.context.scene.collection.objects.link(self.hatch_plane)
+        self.hatch_plane.hide_render = True
+        self.objects.append(self.hatch_plane)
+        self.planes = [self.hatch_plane]
+        # The brace's fall, drawn for the sheets (the model has no braces):
+        # from its lead along the deck, past the hauler.
+        lead, fall = self.brace
+        end = lead + (fall - lead).normalized() * (self.BRACE_AT + 1.2)
+        import bmesh
+
+        bm = bmesh.new()
+        bmesh.ops.create_cone(bm, cap_ends=True, segments=8, radius1=0.014, radius2=0.014,
+                              depth=(end - lead).length,
+                              matrix=Matrix.Translation((lead + end) / 2) @
+                              (end - lead).to_track_quat("Z", "Y").to_matrix().to_4x4())
+        for side in (1, -1):
+            me = bpy.data.meshes.new("ship-fall")
+            bm.to_mesh(me)
+            o = bpy.data.objects.new("ship-fall", me)
+            bpy.context.scene.collection.objects.link(o)
+            if side < 0:
+                o.matrix_world = Matrix.Translation((self.at.x, 0, 0)) @ Matrix.Scale(-1, 4, (1, 0, 0)) @ \
+                    Matrix.Translation((-self.at.x, 0, 0))
+            o.hide_render = True
+            self.objects.append(o)
+        bm.free()
+
+    def footrope_at(self, f, side=1):
+        """The footrope's point a share f along its run from the yard's
+        middle to its arm, on a side."""
+        n = len(self.footrope) - 1
+        x = min(max(f, 0.0), 1.0) * n
+        i = min(int(x), n - 1)
+        p = self.footrope[i].lerp(self.footrope[i + 1], x - i)
+        return self._side(p, side)
+
+    def _side(self, p, side):
+        """A place on the starboard side, on a side: mirrored across her
+        centreline for port."""
+        return Vector((self.at.x + side * (p.x - self.at.x), p.y, p.z))
+
+    def brace_along(self, side=1):
+        """Along the brace's fall toward its lead, level: the way a hauler
+        faces."""
+        d = self.point("brace-lead", side) - self.point("brace-fall", side)
+        d.z = 0.0
+        return d.normalized()
+
+    def shroud_line(self, side=1):
+        """The line up the shrouds a figure climbs between: from their
+        middle at the deadeyes to their middle under the top."""
+        a, b = self.SHROUDS
+        top = (self.shrouds[a][0] + self.shrouds[b][0]) / 2
+        foot = (self.shrouds[a][1] + self.shrouds[b][1]) / 2
+        return self._side(foot, side), self._side(top, side)
+
+    def point(self, name, side=1):
+        if name == "yard-foot-in" or name == "yard-foot-out":
+            run = (self.footrope[-1] - self.footrope[0]).length
+            d = self.YARD_FEET / 2 / run * (1 if name == "yard-foot-out" else -1)
+            return self.footrope_at(self.YARD_AT + d, side)
+        if name == "yard":
+            # The yard over the footrope's point where the figure stands.
+            p = self.footrope_at(self.YARD_AT, 1)
+            return self._side(Vector((p.x, self.yard_at.y, self.yard_at.z)), side)
+        if name == "shroud":
+            foot, top = self.shroud_line(1)
+            return self._side(foot.lerp(top, self.SHROUD_AT), side)
+        if name == "topmast-shroud":
+            a, b = self.topmast[1]
+            return self._side(b.lerp(a, self.TOPMAST_AT), side)
+        if name == "brace":
+            lead, fall = self.brace
+            return self._side(lead + (fall - lead).normalized() * self.BRACE_AT, side)
+        if name == "haul-deck":
+            # Under the hauler: beside the fall, inboard of it, on the deck.
+            along = self.brace_along(side)
+            across = Vector((-along.y, along.x, 0.0))
+            if across.x * side > 0:
+                across = -across
+            p = self.point("brace", side) + across * self.HAUL_BESIDE
+            return Vector((p.x, p.y, self.down(p.x, p.y, p.z)))
+        if name == "aloft":
+            return self.point("top", side) + Vector((side * self.TOP_OUT, 0.0, 0.0))
+        p = {"ship-rail": self.rail, "ship-hatch": self.hatch, "ladder-foot": self.ladder[0],
+             "ladder-head": self.ladder[1], "top": self.top, "brace-lead": self.brace[0],
+             "brace-fall": self.brace[1]}[name]
+        return self._side(p, side)
+
+    def down(self, x, y, z):
+        """The height of the first surface of the ship a ray straight down
+        from (x, y, z) meets, or None."""
+        hit = self.tree.ray_cast(Vector((x, y, z)), Vector((0, 0, -1)), 10.0)
+        return None if hit[0] is None else hit[0].z
+
+
+def _tree(objs, keep=None):
+    """One BVH tree of the objects as they stand, in boat space: of those
+    faces keep (an object and a face) keeps, if given."""
     dg = bpy.context.evaluated_depsgraph_get()
     verts, polys = [], []
     for o in objs:
@@ -472,6 +683,6 @@ def _tree(objs):
         me = e.to_mesh()
         base = len(verts)
         verts.extend(o.matrix_world @ v.co for v in me.vertices)
-        polys.extend([base + i for i in p.vertices] for p in me.polygons)
+        polys.extend([base + i for i in p.vertices] for p in me.polygons if keep is None or keep(o, p))
         e.to_mesh_clear()
     return BVHTree.FromPolygons(verts, polys)

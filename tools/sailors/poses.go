@@ -84,7 +84,10 @@ type clip struct {
 	// the trapeze, sat on a rail); on the trapeze, the build's own shares
 	// if not said.
 	Hang map[string]float64 `yaml:"hang" json:"hang,omitempty"`
-	Keys []key              `yaml:"keys" json:"keys"`
+	// Group is the file it is written to beside the look's clips (ship:
+	// <version>.ship.glb), if not the clips' own.
+	Group string `yaml:"group" json:"group,omitempty"`
+	Keys  []key  `yaml:"keys" json:"keys"`
 }
 
 // portSuffix names a clip's port side, made with Sides.
@@ -130,13 +133,27 @@ type retarget struct {
 	// Group is the file it is written to beside the look's clips (rail:
 	// <version>.rail.glb), if not the clips' own.
 	Group string `yaml:"group" json:"group,omitempty"`
+	// Stage is the ship's place it is set at (on a deck): leaning on her
+	// rail (ship-rail), sat on her hatch (ship-hatch).
+	Stage string `yaml:"stage" json:"stage,omitempty"`
+	// Still keeps the arm of each hand named as the clip's first frame has
+	// it: a gesture of the source's left out.
+	Still []string `yaml:"still" json:"still,omitempty"`
+	// Clear sets, leaning on the ship's rail, how far the forearms' sleeves
+	// are kept over its top, if not the build's own.
+	Clear float64 `yaml:"clear" json:"clear,omitempty"`
 }
 
 var (
-	places = []string{"", "seat", "gunwale", "cockpit", "outside", "wheel", "trapeze", "rail"}
+	places = []string{"", "seat", "gunwale", "cockpit", "outside", "wheel", "trapeze", "rail", "brace", "top", "yard"}
 	// groups are the files a clip may be written to apart from the
 	// look's clips.
-	groups    = []string{"", "rail"}
+	groups = []string{"", "rail", "ship", "aloft"}
+	// shipStages are the ship's places a retargeted clip may be set at.
+	shipStages = []string{"", "ship-rail", "ship-hatch"}
+	// shipPoints are the ship's places a target may be at.
+	shipPoints = []string{"ship-rail", "ship-hatch", "ladder-foot", "ladder-head", "shroud", "top", "aloft",
+		"topmast-shroud", "yard-foot-in", "yard-foot-out", "yard", "brace-lead", "brace-fall", "brace", "haul-deck"}
 	effectors = []string{"hand_l", "hand_r", "foot_l", "foot_r"}
 	stageAt   = []string{"seat", "gunwale", "floor", "strap", "free"}
 	keySides  = []string{"", "port", "starboard"}
@@ -209,6 +226,12 @@ func (lib poseLibrary) check(t tables, sources map[string]source) error {
 		if _, ok := st["rail"].(map[string]any); ok {
 			points["rail"] = true
 		}
+		// On the ship: her company's places.
+		if _, ok := st["ship"].(map[string]any); ok {
+			for _, p := range shipPoints {
+				points[p] = true
+			}
+		}
 		// At the wheel: the deck the helmsman stands on, and the grips.
 		if w, ok := st["wheel"].(map[string]any); ok {
 			points["deck"] = true
@@ -236,6 +259,9 @@ func (lib poseLibrary) check(t tables, sources map[string]source) error {
 		}
 		if _, ok := lib.Clips[name+portSuffix]; ok && c.Sides {
 			return fmt.Errorf("the clip %s is made on both sides, but %s is a clip of its own", name, name+portSuffix)
+		}
+		if !slices.Contains(groups, c.Group) {
+			return fmt.Errorf("the clip %s: no file %q beside the clips", name, c.Group)
 		}
 		for i, k := range c.Keys {
 			if _, ok := lib.Poses[k.Pose]; !ok {
@@ -266,9 +292,20 @@ func (lib poseLibrary) check(t tables, sources map[string]source) error {
 				return fmt.Errorf("the retarget %s: only feet are locked, not %q", name, e)
 			}
 		}
+		for _, e := range r.Still {
+			if !strings.HasPrefix(e, "hand_") || !slices.Contains(effectors, e) {
+				return fmt.Errorf("the retarget %s: only arms are kept still, by their hands, not %q", name, e)
+			}
+		}
 		switch {
 		case !slices.Contains(groups, r.Group):
 			return fmt.Errorf("the retarget %s: no file %q beside the clips", name, r.Group)
+		case !slices.Contains(shipStages, r.Stage):
+			return fmt.Errorf("the retarget %s: no place %q on the ship", name, r.Stage)
+		case r.Clear < 0 || r.Clear > 0.1 || r.Clear > 0 && r.Stage != "ship-rail":
+			return fmt.Errorf("the retarget %s: a clearance over the rail is 0 to 0.1 m, and only on it", name)
+		case r.Stage != "" && !r.Deck:
+			return fmt.Errorf("the retarget %s: set on the ship's %s, it is on a deck", name, r.Stage)
 		case (r.Speed != 0 || r.Head != 0) && !r.Deck:
 			return fmt.Errorf("the retarget %s: a speed or a head's height is over a deck, and it has none", name)
 		case r.Deck && len(r.Lock) > 0:

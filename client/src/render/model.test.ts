@@ -541,6 +541,47 @@ describe.each(catalog.boats.map((b) => [b.name, b] as const))('%s', (_, boat) =>
     },
   );
 
+  test.runIf(has('company'))(
+    'her company’s places: on her rail, her hatch, her ladder, her shrouds, her top, her yard and her brace, each where her model has it',
+    () => {
+      const c = (node('company').extras ?? {}) as unknown as Record<string, unknown>;
+      const rail = c.rail as number[];
+      const hatch = (c.hatch as { edge: number[] }).edge;
+      const ladder = c.ladder as { foot: number[]; head: number[]; steps: number };
+      const top = (c.top as { floor: number[] }).floor;
+      const yard = c.yard as unknown as { node: string; footrope: number[][] };
+      const brace = c.brace as { lead: number[]; fall: number[] };
+      const shrouds = c.shrouds as number[][][];
+      const far = readGltf(boat.art.far).nodes.find((n) => n.name === 'company');
+      expect(far?.extras).toEqual(c);
+      // The rail on her starboard side, aft of the quarterdeck's break,
+      // over the wheel's deck; the brace's lead on it too, its fall forward.
+      expect(rail[0]).toBeGreaterThan(2);
+      expect(rail[2]).toBeGreaterThan(ladder.head[2] ?? 0);
+      expect((rail[1] ?? 0) - (place('sailor')[1] ?? 0)).toBeGreaterThan(0.5);
+      expect(brace.fall[2]).toBeLessThan(brace.lead[2] ?? 0);
+      // The hatch on her centreline in the waist, below the rail; the
+      // ladder rising aft from the waist to the quarterdeck, near her helm's height.
+      expect(hatch[0]).toBe(0);
+      expect(hatch[1]).toBeLessThan((ladder.foot[1] ?? 0) + 1);
+      expect(ladder.head[2]).toBeGreaterThan(ladder.foot[2] ?? 0);
+      expect(Math.abs((ladder.head[1] ?? 0) - (place('sailor')[1] ?? 0))).toBeLessThan(0.3);
+      expect(ladder.steps).toBeGreaterThan(3);
+      // The main top at the lookout's eye less a man's height; the shrouds
+      // from under it down to the channel.
+      expect((top[1] ?? 0) + 1.6).toBeCloseTo(boat.lookout, 3);
+      for (const [a, b] of shrouds) {
+        expect(a?.[1]).toBeLessThan(top[1] ?? 0);
+        expect(b?.[0]).toBeGreaterThan(a?.[0] ?? 0);
+      }
+      // The yard's node is hers, its footrope below it.
+      expect(has(yard.node)).toBe(true);
+      for (const p of yard.footrope) {
+        expect(p[1]).toBeLessThan(0);
+      }
+    },
+  );
+
   test('the sail carries its fraction of chord and luff, for its vertex node', () => {
     const sail = g.meshes[node('sail').mesh ?? -1]?.primitives[0];
     expect(sail?.attributes.TEXCOORD_1).toBeDefined();
