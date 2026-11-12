@@ -209,14 +209,14 @@ def retarget(fig, name, spec, fps):
         before = [{"rot": dict(fr["rot"]), "pelvis": fr["pelvis"].copy()} for fr in clip.frames]
         _plant(fig, clip, spec.get("speed", 0.0), way, crawl)
         lowered = 0.0
-        for _ in range(8):
-            if not 0.0005 < clip.notes["off the deck"] < 0.05:
+        for _ in range(12):
+            if not 0.0005 < clip.notes["short of the deck"] < 0.05:
                 break
             # A straight leg (or arm) short of the deck it pushes off: the
             # body lowered by as much, and planted again.
             clip.frames = [{"rot": dict(fr["rot"]), "pelvis": fr["pelvis"].copy()} for fr in before]
             # (An arm's eased stretch reaches only some of the way down.)
-            lowered += 2 * clip.notes["off the deck"] + 0.001
+            lowered += 2 * clip.notes["short of the deck"] + 0.001
             _lower(fig, clip, lowered)
             _plant(fig, clip, spec.get("speed", 0.0), way, crawl)
         if not crawl:
@@ -878,8 +878,10 @@ def _plant(fig, clip, speed, way=WAYS["forward"], crawl=False):
     # The result, read back: each time a foot bears fully, how far its
     # bearing points have slid over the deck (as it moves back at speed)
     # since it came down, and how far off the deck it is.
-    slide = off = 0.0
-    for s in sides:
+    slide = off = short = 0.0
+    # Crawling, what bears is judged by the hands and knees: the toes behind
+    # rest on the deck as they come, and are kept off it (_toes_up).
+    for s in [e for e in sides if not (crawl and e.startswith("foot"))]:
         w = moves[s][0]
         after = []
         for fr in frames:
@@ -893,6 +895,7 @@ def _plant(fig, clip, speed, way=WAYS["forward"], crawl=False):
                 acc = None
                 continue
             off = max(off, abs(after[f][0]))
+            short = max(short, after[f][0])
             if acc is None:
                 acc = Vector()
             else:
@@ -906,6 +909,7 @@ def _plant(fig, clip, speed, way=WAYS["forward"], crawl=False):
     clip.notes["speed walked"] = round(float(np.mean(walked)), 4) if walked else 0.0
     clip.notes["slide"] = round(slide, 4)
     clip.notes["off the deck"] = round(off, 4)
+    clip.notes["short of the deck"] = round(short, 4)
 
 
 def _joint(e):
@@ -1085,8 +1089,15 @@ def _arm(fig, s, target, bears=1.0):
 
 def _knee(fig, s, target):
     """A knee to target: the thigh turned the least way that points it
-    there, the shin and foot carried as they were on it."""
-    fig._aim(f"thigh_{s}", target)
+    there, the shin and foot carried as they were on it; and again, as far
+    as takes its height there (the thigh's length is its own)."""
+    aim = Vector(target)
+    for _ in range(5):
+        fig._aim(f"thigh_{s}", aim)
+        k = fig.world(f"calf_{s}")
+        if abs(k.z - target.z) < 2e-4:
+            break
+        aim = aim + Vector((0.0, 0.0, target.z - k.z))
 
 
 def _shin(fig, s, target):
