@@ -321,7 +321,13 @@ Crawling (`crawl`), the hands and knees are held on the net while they
 bear as the feet are, the back's arch shared along it, the forearms' turn
 kept within their range and the palms flat where the wrists allow; the
 crawl plays slower than the library's (its `seconds`) and smoothed more
-(its `smooth`), easing its hitches.
+(its `smooth`), easing its hitches. On the net a knee is as thick as the
+figure's dressed one, a deep stride's knee lifts the body rather than
+meet the net, a bearing foot bent past its range raises its heel, and the
+whole stands as high as keeps its lowest vertex (but the cloth laid on the
+net) on it. There is no clip going down onto the hands and knees or up
+off them: the library's `Crawl_Enter` and `Crawl_Exit` did not pass the
+gates.
 
 Every build is judged before anyone looks at it: the gates
 (`review/metrics.py`: budgets, clean meshes and weights, nothing through
