@@ -209,7 +209,22 @@ checks that there is one for each person, within the hull's beam and
 length, above the waterline and below the boom, and none within 0.45 m of
 another; `render/sailors/crew.test.ts` holds each to its model's deck
 within 1 cm, the first to the helm, with nothing of the hull where a
-person stands.
+person stands. On a boat of two hulls (`hulls.hullSpacing`) every station
+is on a hull's top, and only such a boat has one `on a hull` (`hull`: sat
+by the hull's inner edge with the legs across the net, out on the trapeze's
+wire beside the helm once the helm is on theirs). Her people are drawn with
+her own clips (her art's `sailorClips`, placed from her model's `aboard`
+node): they cross her net facing forward along its middle in turn, the crew
+forward of its middle and the helm aft of it, at a crouch and on hands and
+knees under the boom; in a tack the crew first as the wind comes ahead, in
+a gybe the helm first; at a handover they pass along her windward hull,
+one on its top and one on the net beside it. Her helm's clips are blended
+by how far out the physics puts the sailor, sat on her hull, sitting out
+and then on the wire, as the skiff's are. On every boat, a capsize puts
+everyone aboard in the water (on a beach cat, up on her lower hull beside
+the sailor righting her, and thrown off over her bows as she pitchpoles),
+and back aboard as she comes up. `render/sailors/catcrew.test.ts` holds a
+boat of two hulls' people clear of her and of each other through all of it.
 
 ## The physics package
 
@@ -862,7 +877,9 @@ A kind of boat is data: nothing reads its name or id. Adding one touches:
    (`go test ./internal/sim -run Fixture -update`) and the sandbox's
    recording (`UPDATE_RECORDING=1 npx vitest run src/sandbox/sandbox.test.ts`).
 8. The browser's specs: the mixed fleet's budgets (`fleet.spec.ts`), the
-   looks (`boatlook.spec.ts`), the layout's heel hold (`layout.spec.ts`).
+   looks (`boatlook.spec.ts`), the layout's heel hold (`layout.spec.ts`);
+   and, if it carries more than one, its people (`crew.spec.ts`, and
+   `catcrew.test.ts` for a boat of two hulls).
 9. The machine sailors' aboard page, and the report's words if the boat
    does something new.
 10. The chooser's picture (`client/src/account/boats.tsx`) if its form is
