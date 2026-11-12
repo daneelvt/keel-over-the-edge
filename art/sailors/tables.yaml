@@ -184,7 +184,7 @@ stage:
     helm-seat: { aft: 0.3, out: 0.17, brace: 0.58 }
     bench: { in: 0.24, knee: 0.18 }
     rail: { knee: 0.1 }
-    cockpit: { table: 0.15 }
+    cockpit: { table: 0.1 }
     roof: { fore: 0.5 }
 
 # The portraits (build/portraits.py), every look's taken alike: head and

@@ -27,8 +27,8 @@ poses:
       - [thigh_r, x, -84]
       - [thigh_l, z, 2]
       - [thigh_r, z, -3]
-      - [calf_l, x, 24]
-      - [calf_r, x, 12]
+      - [calf_l, x, 6]
+      - [calf_r, x, 2]
       - [spine_01, x, 6]
       - [spine_02, x, 4]
       - [spine_03, x, 2]
@@ -73,6 +73,7 @@ poses:
   # back laid on the bench behind.
   bench-brace:
     place: yacht-bench
+    shift: [0.0, 0.03, 0.006]
     turn:
       - [thigh_l, x, -78]
       - [thigh_r, x, -78]
@@ -163,6 +164,7 @@ poses:
   # past it, the forearms over it; the head kept up looking forward.
   yacht-rail-lean:
     from: yacht-rail-sit
+    shift: [0.0, 0.05, 0.0]
     turn:
       - [spine_01, x, 6]
       - [spine_02, x, 5]
@@ -170,8 +172,8 @@ poses:
       - [neck_01, x, -8]
       - [head, x, -10]
     ik:
-      hand_l: { at: yacht-lifeline-up, offset: [0.18, -0.14, -0.12], pole: [0.5, -0.2, 0.8] }
-      hand_r: { at: yacht-lifeline-up, offset: [-0.18, -0.14, -0.12], pole: [-0.5, -0.2, 0.8] }
+      hand_l: { at: yacht-lifeline-up, offset: [0.18, -0.12, -0.05], pole: [0.4, -0.1, 1.0] }
+      hand_r: { at: yacht-lifeline-up, offset: [-0.18, -0.12, -0.05], pole: [-0.4, -0.1, 1.0] }
 
   yacht-rail-lean-luff:
     from: yacht-rail-lean

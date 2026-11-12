@@ -1037,7 +1037,9 @@ def clip_yacht(gates, fig, measures):
                 co, _ = motion.coords_posed(o)
                 anchors = None
                 if laid and motion.SEAT_GROUP in o.vertex_groups:
-                    idx = [i for i, p in enumerate(co) if _under(yacht.tree, p)]
+                    # (Under her decks, cockpit, benches, coachroof or table:
+                    # her boom and rig over them are no top cloth lies on.)
+                    idx = [i for i, p in enumerate(co) if _under(yacht.decks, p)]
                 else:
                     anchors = metrics._nearest_on_segments(co, a, b)
                     body = ~armed[o.name]

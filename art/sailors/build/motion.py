@@ -711,12 +711,16 @@ class Figure:
             m = Matrix.Translation(at) @ Matrix.Rotation(math.pi, 4, "Z") @ \
                 Matrix.Translation(-Vector((pelvis.x, pelvis.y, low)))
             lo, hi = edge.x - y.at.x - 0.02, y.rail.x - y.at.x
+            # Only what is under the hips: the legs along the deck are set
+            # on it by their feet's targets.
+            near = SEAT_REACH
         elif place == YACHT_BENCH:
             edge = st.point("yacht-bench", side)
             x = edge.x + side * spec["bench"]["in"]
             at = Vector((x, edge.y, y.down(x, edge.y)))
             m = Matrix.Translation(at) @ st.facing(side) @ Matrix.Translation(-Vector((pelvis.x, pelvis.y, low)))
             lo, hi = edge.x - y.at.x - 0.02, edge.x - y.at.x + 0.6
+            near = None
         else:
             # On the rail: the backs of the knees just past the deck's edge.
             knees = (self.bones["calf_l"].head + self.bones["calf_r"].head) / 2
@@ -724,11 +728,15 @@ class Figure:
             m = Matrix.Translation(at) @ st.facing(-side) @ Matrix.Translation(-Vector((pelvis.x, knees.y, low)))
             # (Its edge rounded down, under the thighs going over it.)
             lo, hi = y.rail.x - y.at.x - 0.8, y.rail.x - y.at.x + 0.06
+            near = None
         # The arms hang as they rest till the IK takes the hands where they
         # go: they lie on nothing.
         placed = (co @ np.array(m)[:3, :3].T + np.array(m)[:3, 3])[~self.armed(self.sitting)]
+        hips = m @ pelvis
         lift = 0.0
         for px, py, pz in placed:
+            if near is not None and math.hypot(px - hips.x, py - hips.y) > near:
+                continue
             if lo <= side * (px - y.at.x) <= hi:
                 top = y.down(px, py, pz + 0.15)
                 if top is not None and top - 0.15 < pz < top + SEAT_CLEAR:
