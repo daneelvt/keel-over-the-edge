@@ -80,6 +80,7 @@ import type { FleetLook } from './fleetlooks';
 import { type Hike, STRAPPED } from './restage';
 import { Rig } from './rig';
 import {
+  type CatBoat,
   OFF_SEAT,
   type SailorBoat,
   type SailorMoment,
@@ -124,6 +125,8 @@ export interface NearBoat {
   rudderMax?: number;
   /** The trapeze, on a boat with one (trapeze.ts's trapezeOf): its sailors go out on the wire. */
   trapeze?: Trapeze | null;
+  /** A beach cat's (onboat.ts's catOf): her sailors sit on her hull and cross her net on her own clips. */
+  cat?: CatBoat | null;
 }
 
 /** A near boat's sailor: its runtime, and its bones' matrices as last run. */
@@ -169,6 +172,7 @@ class Sailor {
       // Each its own, turned by its own boat's rudder.
       wheel: near.wheel ? { ...near.wheel, turn: 0 } : null,
       trapeze: near.trapeze ?? null,
+      cat: near.cat ?? null,
     };
     this.runtime = new SailorRuntime(rig, clips, this.boat, seed, look.machine, false);
     if (near.trapeze) {
@@ -259,6 +263,10 @@ export class NearSailors extends SailorRows {
       // On a trapeze: rigid until its clips on the wire have loaded (or failed to: then on the rail).
       return false;
     }
+    if (this.boat.cat && look.catState !== 'ready' && look.catState !== 'failed') {
+      // Aboard a beach cat: rigid until her people's clips have loaded (or failed to).
+      return false;
+    }
     let s = this.#slots[b.slot] ?? null;
     if (s === null || s.look !== look) {
       s = new Sailor(look, this.boat, b.slot * 131 + look.index * 17 + 1, this.#still);
@@ -295,6 +303,9 @@ export class NearSailors extends SailorRows {
     mo.heel = b.heel;
     mo.pitch = b.pitch;
     mo.heave = b.heave;
+    mo.boom = b.boom;
+    mo.trim = b.trim;
+    mo.wayHeld = b.helmHeld;
     mo.rollRate = dt > 0 ? (b.heel - s.heel) / dt : 0;
     s.heel = b.heel;
     // The extension's hinge, where the rudder swings it about the stock.
@@ -346,6 +357,12 @@ export class NearSailors extends SailorRows {
       return 0;
     }
     return s.runtime.side;
+  }
+
+  /** On a beach cat, where a slot's sailor crossing her net is across it (as last run); null if not crossing it. */
+  netAt(slot: number): number | null {
+    const s = slot >= 0 && slot < SLOTS ? this.#slots[slot] : null;
+    return s?.runtime.netAt ?? null;
   }
 
   /**

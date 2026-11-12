@@ -189,6 +189,9 @@ export class CrewBody {
   readonly head = new Vector3();
   readonly headUp = new Vector3();
   readonly neck = new Vector3();
+  /** The hips' joint, in the boat's model, as last posed: where a crew's trapeze wire hooks on. */
+  readonly hips = new Vector3();
+  readonly #hipsBone: number;
   /** The place last posed at: from the figure's space to the model's. */
   readonly root = new Matrix4();
   readonly #inverse: Float32Array;
@@ -232,6 +235,7 @@ export class CrewBody {
       }
     }
     this.#neckBone = this.rig.bone('neck_01');
+    this.#hipsBone = this.rig.bone('pelvis');
   }
 
   /**
@@ -465,6 +469,9 @@ export class CrewBody {
     }
     if (this.#neckBone >= 0) {
       rig.position(this.#neckBone, this.neck).applyMatrix4(this.root);
+    }
+    if (this.#hipsBone >= 0) {
+      rig.position(this.#hipsBone, this.hips).applyMatrix4(this.root);
     }
   }
 }

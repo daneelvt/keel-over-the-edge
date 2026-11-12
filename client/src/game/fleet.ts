@@ -188,6 +188,10 @@ export interface DrawnBoat {
   entered: number;
   /** Whether its helm is drawn elsewhere this frame, walking with the crew as the controls change hands: set by the crew's drawing. */
   helmAway: boolean;
+  /** On a beach cat, whether her crew crossing her net is in her helm's way this frame: set by the crew's drawing. */
+  helmHeld: boolean;
+  /** On a beach cat, where her helm crossing her net is across it (x, m, + starboard), as last drawn near; null if not crossing it or not drawn near. */
+  helmNet: number | null;
 }
 
 /** Who is aboard a boat in view: each person's seat and look, the skipper (seat 0) first, and the seat of whoever holds the controls. */
@@ -234,6 +238,8 @@ export function newDrawnBoat(): DrawnBoat {
     crew: null,
     entered: 0,
     helmAway: false,
+    helmHeld: false,
+    helmNet: null,
   };
 }
 
@@ -779,4 +785,6 @@ function copyDrawn(a: DrawnBoat, b: DrawnBoat): void {
   b.crew = a.crew;
   b.entered = a.entered;
   b.helmAway = a.helmAway;
+  b.helmHeld = a.helmHeld;
+  b.helmNet = a.helmNet;
 }

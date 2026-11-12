@@ -22,6 +22,15 @@
 // seated. The clips on the wire are placed from the rack's edge, never
 // moved to another seat; the hook of the harness rides on the hips.
 //
+// A beach cat (a kind whose art names her people's clips, cat.ts) has her
+// sailor sit on her windward hull by its inner edge, sit out from its outer
+// edge, and go out on the wire from it, as the physics puts the sailor
+// further out; cross her net facing forward at a crouch, on hands and knees
+// under the boom, when the side changes (after the crew, if the crew is in
+// the way: wayHeld); stand on her lower hull to right her; and, thrown off
+// over her bows as she pitchpoles, land in the water ahead of her front
+// beam before swimming to her side.
+//
 // A boat steered by a wheel (its model's `wheel` node) has its sailor
 // standing at it instead, at the model's `sailor` node, facing forward,
 // playing the wheel's clip: looking ahead, aloft at the sails and to
@@ -36,7 +45,24 @@
 // Allocation-free once made.
 
 import { Euler, Matrix4, Quaternion, Vector3 } from 'three';
+
+export type { CatBoat } from './cat';
+
 import { CLIMBING, IN_WATER, ON_BOARD } from '../sailor';
+import {
+  type Aboard,
+  CAT_CLIPS,
+  type CatBoat,
+  catAnchor,
+  catPlace,
+  catPoint,
+  catSide,
+  crawlFor,
+  inCatFile,
+  NetCross,
+  netWay,
+  standPlace,
+} from './cat';
 import { Clip, Pose } from './clips';
 import { REACH, twoBone } from './ik';
 import { Layers, random, type SailorLayers } from './layers';
@@ -127,6 +153,30 @@ const WIRED: readonly string[] = [
 ];
 /** The first of WIRED on the wire. */
 const FIRST_ON_WIRE = 2;
+/** On a beach cat: sat on her hull, sitting out from it; then part out and out fully on the wire. */
+const CAT_SEATED: readonly string[] = [CAT_CLIPS.helm, CAT_CLIPS.hike];
+const CAT_WIRED: readonly string[] = [
+  CAT_CLIPS.helm,
+  CAT_CLIPS.hike,
+  CAT_CLIPS.wireLow,
+  CAT_CLIPS.wire,
+];
+/** Of a change of mode's blend, how much passes before a crossing of the net moves on. */
+const NET_RISE = 0.6;
+/** How far a change of mode's path bows up for a crossing of the net, m: the hips brought in over the hull's edge. */
+const NET_ARC_UP = 0.15;
+/**
+ * Thrown off over her bows: the boat pitched this far bow down off the
+ * waves (radians), or heeled no further than this (no capsize throws a
+ * sailor so near upright), as the sailor fell in.
+ */
+export const THROWN_TRIM = 0.2;
+export const THROWN_HEEL = 0.9;
+/** Thrown off: landed this far ahead of the front beam, and this far out from the centreline, m; there this long, then swimming to her side over SWIM_ROUND, seconds. */
+export const THROWN_AHEAD = 0.9;
+export const THROWN_OUT = 0.35;
+export const THROWN_FOR = 3;
+export const SWIM_ROUND = 2.5;
 /** Further out on the wire than this, the cloth hangs free of the seat. */
 export const OFF_SEAT = 0.5;
 /** How far out and up of both ends a change of mode's path bows. */
@@ -174,6 +224,8 @@ export interface SailorBoat {
   wheel?: WheelHelm | null;
   /** The trapeze, on a boat with one: the sailor goes out on its wire beyond the rail, if it has the clips on the wire. */
   trapeze?: Trapeze | null;
+  /** A beach cat's, whose people's clips are placed from her model: her sailor sits on her hull and crosses her net, if it has the clips. */
+  cat?: CatBoat | null;
 }
 
 /** The physics' moment for the sailor. */
@@ -196,6 +248,12 @@ export interface SailorMoment {
   rollRate: number;
   /** Under reduced motion: breathing only, no habit. */
   still: boolean;
+  /** The boom's angle, radians, + starboard: on a beach cat, under it her net is crossed on hands and knees. 0 if not said. */
+  boom?: number;
+  /** A boat whose rig pitches her: her trim, radians, bow up; far bow down as the sailor falls in, thrown off over the bows. 0 if not said. */
+  trim?: number;
+  /** On a beach cat, whether someone crossing her net is in the sailor's way: the sailor waits to cross till they are clear. */
+  wayHeld?: boolean;
 }
 
 /** Which hand holds what, and where (the model's frame). */
@@ -328,6 +386,18 @@ export class SailorRuntime {
   #hookRest: Vector3 | null = null;
   /** How far the sailor hiked at the last moment (depth). */
   #depth = 0;
+  /** On a beach cat: whether the sailor sits on her hull (her clips are here), crosses her net (those too), and the crossing now. */
+  readonly #catted: boolean;
+  readonly #netted: boolean;
+  #net: NetCross | null = null;
+  /** How long a crossing of the net waits for the blend off the hull, seconds; whether a change's path bows up only (onto and off the net). */
+  #netWait = 0;
+  #flat = false;
+  /** Seconds since thrown off over her bows into the water; −1 if not. */
+  #thrown = -1;
+  readonly #righting = new Matrix4();
+  readonly #ahead = new Place();
+  readonly #beside = new Place();
 
   constructor(
     readonly rig: Rig,
@@ -340,31 +410,44 @@ export class SailorRuntime {
   ) {
     const by = boat.restage;
     const trapeze = boat.trapeze;
+    const cat = boat.cat ?? null;
     this.#clips =
-      (by === undefined || by === null) && !trapeze
+      (by === undefined || by === null) && !trapeze && cat === null
         ? clips
         : new Map(
             [...clips].map(([name, c]) => [
               name,
-              // On the wire, placed from the rack's edge on its side.
-              onWire(name)
-                ? trapeze && c.place !== null
-                  ? new Clip(
-                      c.name,
-                      c.duration,
-                      c.tracks,
-                      wirePlace(c.place, trapeze.rackEdge, wireSide(name)),
-                    )
-                  : c
-                : AT_WHEEL.includes(name) || by === undefined || by === null
-                  ? c
-                  : restageClip(c, rig, by),
+              // Aboard a beach cat, placed from her model's places on the
+              // clip's side (righting her, from where she lies).
+              cat !== null && inCatFile(name)
+                ? catClip(c, cat.aboard)
+                : // On the wire, placed from the rack's edge on its side.
+                  onWire(name)
+                  ? trapeze && c.place !== null
+                    ? new Clip(
+                        c.name,
+                        c.duration,
+                        c.tracks,
+                        wirePlace(c.place, trapeze.rackEdge, wireSide(name)),
+                      )
+                    : c
+                  : AT_WHEEL.includes(name) || by === undefined || by === null
+                    ? c
+                    : restageClip(c, rig, by),
             ]),
           );
+    const sided = (n: string): boolean =>
+      !!this.#clips.get(n)?.place && !!this.#clips.get(n + PORT)?.place;
+    this.#catted = cat !== null && CAT_SEATED.every(sided);
     this.#wired =
       !!trapeze &&
-      [TRAPEZE_CLIPS.low, TRAPEZE_CLIPS.out].every(
-        (n) => this.#clips.get(n)?.place && this.#clips.get(n + PORT)?.place,
+      (this.#catted
+        ? [CAT_CLIPS.wireLow, CAT_CLIPS.wire].every(sided)
+        : [TRAPEZE_CLIPS.low, TRAPEZE_CLIPS.out].every(sided));
+    this.#netted =
+      this.#catted &&
+      [...CAT_CLIPS.crouch.slice(1, 3), ...CAT_CLIPS.crawl].every(
+        (n) => !!this.#clips.get(n)?.place,
       );
     const n = rig.names.length;
     this.#pose = new Pose(n).rest(rig);
@@ -467,18 +550,40 @@ export class SailorRuntime {
 
   /** Whether the sailor is crossing the boat. */
   get crossing(): boolean {
-    return this.#cross !== null;
+    return this.#cross !== null || this.#net !== null;
   }
 
   /** The side deck the sailor is crossing from, or sits on: + starboard, − port. */
   get crossFrom(): number {
-    return this.#cross === null ? this.#side : this.#crossFrom;
+    return this.#net !== null
+      ? this.#net.from
+      : this.#cross === null
+        ? this.#side
+        : this.#crossFrom;
   }
 
   /** How far through crossing the boat the sailor is, 0 to 1; 1 when not crossing. */
   get crossed(): number {
+    if (this.#net !== null) {
+      return this.#net.done;
+    }
     const c = this.#cross;
     return c === null ? 1 : Math.min(1, this.#crossT / Math.max(c.duration, 1e-3));
+  }
+
+  /** On a beach cat, where the sailor crossing her net is across it (x, + starboard); null if not crossing it. */
+  get netAt(): number | null {
+    return this.#net?.x ?? null;
+  }
+
+  /** Whether the sailor is on a beach cat's own clips: sat on her hull, crossing her net. */
+  get catted(): boolean {
+    return this.#catted;
+  }
+
+  /** Whether, in the water, the sailor was thrown off over her bows. */
+  get thrown(): boolean {
+    return this.#thrown >= 0;
   }
 
   /**
@@ -488,6 +593,8 @@ export class SailorRuntime {
   reset(): void {
     this.#mode = -1;
     this.#cross = null;
+    this.#net = null;
+    this.#thrown = -1;
     this.#habit = null;
     this.#change = 1;
     this.#springs.reset();
@@ -503,7 +610,7 @@ export class SailorRuntime {
       this.#side = Math.sign(s.offset);
     }
     if (mode !== this.#mode) {
-      this.#begin(mode);
+      this.#begin(mode, s);
     }
     this.#effort = Math.max(
       0,
@@ -526,9 +633,20 @@ export class SailorRuntime {
     } else if (mode === IN_WATER) {
       this.#sample(CLIPS.water, 1, s.time + this.#helmOffset, true, pose);
       this.#waterPlace(s, place);
+      if (this.#thrown >= 0) {
+        this.#thrownPlace(s, dt, place);
+      }
     } else if (mode === ON_BOARD) {
-      this.#sample(CLIPS.board, 1, s.time + this.#helmOffset, true, pose);
-      this.#boardPlace(s, place);
+      const stand = this.boat.cat?.stand ?? null;
+      const c = this.#catted && stand !== null ? this.#clip(CAT_CLIPS.righting, 1) : null;
+      if (c !== null && c.place !== null && stand !== null) {
+        // On her lower hull, upright in the world as she lies on her side.
+        this.#sample(CAT_CLIPS.righting, 1, s.time + this.#helmOffset, true, pose);
+        place.set(standPlace(c.place, stand, s.heel >= 0 ? 1 : -1, this.#righting));
+      } else {
+        this.#sample(CLIPS.board, 1, s.time + this.#helmOffset, true, pose);
+        this.#boardPlace(s, place);
+      }
     } else if (mode === CLIMBING) {
       const c = this.#clip(CLIPS.climb, this.#side);
       if (c !== null) {
@@ -539,7 +657,7 @@ export class SailorRuntime {
       }
     } else {
       seated = this.#sailing(s, dt, pose, place);
-      if (seated && s.aft !== undefined && s.aft !== 0) {
+      if (seated && this.#net === null && s.aft !== undefined && s.aft !== 0) {
         // Stepped aft along the hull to hold the bows up.
         place.at.z += s.aft;
       }
@@ -556,6 +674,9 @@ export class SailorRuntime {
     }
     if (this.#change < 1) {
       this.#change = Math.min(1, this.#change + dt / CHANGE);
+      if (this.#change >= 1) {
+        this.#flat = false;
+      }
       const f = smooth(this.#change);
       // The body takes its new shape early in the move, the limbs gathered
       // before the hips go over the side.
@@ -577,7 +698,7 @@ export class SailorRuntime {
       effort: this.#effort,
       heelAxis: this.#heelAxis,
       heel: s.heel,
-      upright: (seated && this.#cross === null) || wheel ? 0.5 : 0,
+      upright: (seated && !this.crossing) || wheel ? 0.5 : 0,
       still: s.still,
     });
 
@@ -609,13 +730,23 @@ export class SailorRuntime {
   }
 
   /** Starts a new mode: the old pose and place kept to blend from. */
-  #begin(mode: number): void {
+  #begin(mode: number, s: SailorMoment): void {
     const first = this.#mode < 0;
     this.#from.copy(this.#pose);
     this.#fromPlace.copy(this.#placeNow);
+    // Thrown off over a beach cat's bows: through the air, ahead of her.
+    this.#thrown =
+      mode === IN_WATER &&
+      !first &&
+      this.#catted &&
+      ((s.trim ?? 0) < -THROWN_TRIM || Math.abs(s.heel) < THROWN_HEEL)
+        ? 0
+        : -1;
     // Falling in is sudden: no frame between the seat and the water, where
     // the legs would come up through the deck.
-    this.#change = first || mode === IN_WATER ? 1 : 0;
+    this.#change = first || (mode === IN_WATER && this.#thrown < 0) ? 1 : 0;
+    this.#flat = false;
+    this.#net = null;
     if (mode === CLIMBING || (mode === 0 && this.#mode === IN_WATER)) {
       // Climbing in on the side the board was on, the high one.
       this.#side = this.#high;
@@ -657,7 +788,14 @@ export class SailorRuntime {
   /** At the helm or hiking, crossing, or the habit: true when seated on a side deck. */
   #sailing(s: SailorMoment, dt: number, pose: Pose, place: Place): boolean {
     const want = Math.abs(s.offset) > 0.05 ? Math.sign(s.offset) : this.#side;
-    if (this.#cross === null && want !== this.#side && this.#change >= 1) {
+    if (this.#netted) {
+      if (this.#net === null && want !== this.#side && this.#change >= 1 && s.wayHeld !== true) {
+        this.#beginNet(s);
+      }
+      if (this.#net !== null) {
+        return this.#acrossNet(s, dt, pose, place);
+      }
+    } else if (this.#cross === null && want !== this.#side && this.#change >= 1) {
       this.#cross = this.#clip(CLIPS.cross, this.#side);
       this.#crossT = 0;
       this.#crossFrom = this.#side;
@@ -698,7 +836,7 @@ export class SailorRuntime {
     pose.clear();
     let total = 0;
     let hanging = 0;
-    const names = wired ? WIRED : SEATED;
+    const names = this.#catted ? (wired ? CAT_WIRED : CAT_SEATED) : wired ? WIRED : SEATED;
     p.set(0, 0, 0);
     q.set(0, 0, 0, 0);
     for (let k = 0; k < names.length; k++) {
@@ -709,7 +847,7 @@ export class SailorRuntime {
       }
       scratch.rest(this.rig);
       c.sample(t % c.duration, scratch);
-      if (k === 0 && this.#habit === null) {
+      if (k === 0 && this.#habit === null && !this.#catted) {
         this.#maybeHabit(s, dt, h);
       }
       if (k === 0 && this.#habit !== null) {
@@ -737,6 +875,92 @@ export class SailorRuntime {
     place.at.copy(p).divideScalar(total);
     place.turn.copy(q).normalize();
     return true;
+  }
+
+  /** Begins crossing a beach cat's net, from the side sat on: blended off the hull first. */
+  #beginNet(s: SailorMoment): void {
+    const cat = this.boat.cat as CatBoat;
+    const way = netWay(cat.aboard);
+    this.#net = new NetCross(
+      this.#side,
+      way.x,
+      crawlFor(cat.boom, s.boom ?? 0, this.#side * way.x, way.z),
+    );
+    this.#habit = null;
+    this.#from.copy(this.#pose);
+    this.#fromPlace.copy(this.#placeNow);
+    this.#change = 0;
+    this.#flat = true;
+    this.#netWait = NET_RISE * CHANGE;
+  }
+
+  /**
+   * Across a beach cat's net, facing forward: at a crouch, on hands and
+   * knees under the boom, the two blended as far as the boom asks; at the
+   * other side, sat down on the hull there (blended on as a change).
+   */
+  #acrossNet(s: SailorMoment, dt: number, pose: Pose, place: Place): boolean {
+    const n = this.#net as NetCross;
+    const cat = this.boat.cat as CatBoat;
+    const way = netWay(cat.aboard);
+    let there = false;
+    if (this.#netWait > 0) {
+      this.#netWait -= dt;
+    } else {
+      there = n.step(dt, crawlFor(cat.boom, s.boom ?? 0, n.x, way.z));
+    }
+    const crouch = this.#clip(n.crouch);
+    const crawl = this.#clip(n.crawlClip);
+    const f = smooth(n.crawl);
+    pose.rest(this.rig);
+    crouch?.sample(n.crouchT % crouch.duration, pose);
+    const scratch = this.#scratch;
+    scratch.rest(this.rig);
+    crawl?.sample(n.crawlT % crawl.duration, scratch);
+    pose.mix(scratch, f);
+    // Each clip's place on the net's middle, moved across to where they are.
+    (crouch?.place ?? m.identity()).decompose(v, q, w);
+    (crawl?.place ?? m2.identity()).decompose(u, q2, w);
+    place.at.lerpVectors(v, u, f);
+    place.at.x += n.x;
+    place.at.z += way.z - (cat.aboard.net.fore + cat.aboard.net.aft) / 2;
+    place.turn.copy(q).slerp(q2, f);
+    if (there) {
+      // Across: sat down on the hull on the other side, blended from here.
+      this.#side = -n.from;
+      this.#net = null;
+      this.#from.copy(pose);
+      this.#fromPlace.copy(place);
+      this.#change = 0;
+      this.#flat = true;
+      this.#springs.reset();
+    }
+    return true;
+  }
+
+  /**
+   * Thrown off over her bows: landed in the water ahead of her front beam,
+   * facing her; after THROWN_FOR, swimming round to her side, to where the
+   * water's place is (place, as #waterPlace gave it).
+   */
+  #thrownPlace(s: SailorMoment, dt: number, place: Place): void {
+    const cat = this.boat.cat;
+    if (cat === undefined || cat === null) {
+      return;
+    }
+    this.#thrown += dt;
+    this.#beside.copy(place);
+    this.#level(
+      this.#side * THROWN_OUT,
+      -s.heave,
+      cat.aboard.net.fore - THROWN_AHEAD,
+      0,
+      s,
+      this.#ahead,
+    );
+    const f = smooth((this.#thrown - THROWN_FOR) / SWIM_ROUND);
+    place.at.lerpVectors(this.#ahead.at, this.#beside.at, f);
+    place.turn.copy(this.#ahead.turn).slerp(this.#beside.turn, f);
   }
 
   /**
@@ -942,9 +1166,11 @@ export class SailorRuntime {
     // both; as much as the ends are apart (a place to itself is no move).
     const side = Math.sign(v.x + w.x) || 1;
     const bow = Math.min(1, v.distanceTo(w) / ARC_SPAN);
+    // Onto a beach cat's net or off it: up over the hull's edge, not out.
+    const flat = this.#flat;
     u.set(
-      side * Math.max(side * v.x, side * w.x) + side * ARC_OUT * bow,
-      Math.max(v.y, w.y) + ARC_UP * bow,
+      flat ? (v.x + w.x) / 2 : side * Math.max(side * v.x, side * w.x) + side * ARC_OUT * bow,
+      Math.max(v.y, w.y) + (flat ? NET_ARC_UP : ARC_UP) * bow,
       (v.z + w.z) / 2,
     );
     const g = 1 - f;
@@ -967,12 +1193,8 @@ export class SailorRuntime {
    */
   #tillerHand(seated: boolean): void {
     const hands = this.hands;
-    const crossing = this.#cross !== null;
-    const side = crossing
-      ? this.#crossT / (this.#cross as Clip).duration < 0.75
-        ? this.#crossFrom
-        : -this.#crossFrom
-      : this.#side;
+    const crossing = this.#cross !== null || this.#net !== null;
+    const side = crossing ? (this.crossed < 0.75 ? this.crossFrom : -this.crossFrom) : this.#side;
     hands.tiller = seated && this.#mode === 0;
     if (!hands.tiller) {
       return;
@@ -1032,7 +1254,7 @@ export class SailorRuntime {
   /** The forward hand, where the mainsheet comes to it. */
   #forwardHand(seated: boolean): void {
     const hands = this.hands;
-    const side = this.#cross !== null ? this.#crossFrom : this.#side;
+    const side = this.crossing ? this.crossFrom : this.#side;
     hands.sheet = seated && this.#mode === 0 && this.#habit === null;
     const hand = side > 0 ? this.#bones.hand_r : this.#bones.hand_l;
     if (hand === undefined || hand < 0) {
@@ -1053,7 +1275,7 @@ export class SailorRuntime {
     wd.accel.set(0, 0, 0);
     wd.seatY = this.boat.seatY;
     // Out on the wire the cloth hangs free of the seat.
-    wd.seated = seated && this.#mode === 0 && this.#cross === null && this.hands.wire < OFF_SEAT;
+    wd.seated = seated && this.#mode === 0 && !this.crossing && this.hands.wire < OFF_SEAT;
     wd.side = this.#side;
     wd.seatIn = this.boat.seatIn;
     wd.seatOut = this.boat.seatOut;
@@ -1076,4 +1298,18 @@ function wrap(a: number): number {
 function smooth(x: number): number {
   const t = Math.max(0, Math.min(1, x));
   return t * t * t * (t * (6 * t - 15) + 10);
+}
+
+/**
+ * A clip of a beach cat's people's file placed in her model: from its place
+ * on her starboard side (its mirror, a -port clip's), or, righting her, as
+ * it is (placed from where she lies, as she lies).
+ */
+function catClip(c: Clip, aboard: Aboard): Clip {
+  const anchor = catAnchor(c.name);
+  const at = anchor === null ? null : catPoint(aboard, anchor);
+  if (c.place === null || at === null) {
+    return c;
+  }
+  return new Clip(c.name, c.duration, c.tracks, catPlace(c.place, at, catSide(c.name)));
 }

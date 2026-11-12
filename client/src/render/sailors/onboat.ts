@@ -42,7 +42,7 @@ import type { Boat as BoatKind } from '../../catalog';
 import type { BoatPose } from '../../predict/blend';
 import { RECORDS } from '../../predict/layout.gen';
 import { fallToEdge, glowMaterial, litMaterial } from '../materials';
-import { namesCatClips } from './cat';
+import { aboard, CREW_BESIDE, namesCatClips, standOf } from './cat';
 import { Clip } from './clips';
 import { type SailorColours, sailorColours, sailorLight } from './material';
 import {
@@ -55,7 +55,7 @@ import {
 } from './model';
 import { seating } from './restage';
 import { bonesFor, Rig } from './rig';
-import { type SailorBoat, type SailorMoment, SailorRuntime } from './runtime';
+import { type CatBoat, type SailorBoat, type SailorMoment, SailorRuntime } from './runtime';
 import { type HullSolid, hullSolid } from './solid';
 import { trapezeOf, wireNode } from './trapeze';
 import { turnIn, wheelOf, wheelTurnOf } from './wheel';
@@ -266,6 +266,7 @@ export class BoatSailor {
       chord: foils.boardChord,
     });
     const seat = at('sailor');
+    const catBoat = cat === null ? null : catOf(model, parts, kind.physics.rig.foot);
     if (wheel !== null && seat !== null) {
       // At the wheel: what the seat and the tiller would be is the
       // helmsman's place; the hull's solid only if the model has it.
@@ -303,6 +304,7 @@ export class BoatSailor {
       climbTime: sailor.climbTime,
       ...seating(parts, sailor.hikeReach),
       trapeze: wire !== null ? trapeze : null,
+      cat: catBoat,
     };
     return new BoatSailor(
       model,
@@ -369,6 +371,9 @@ export class BoatSailor {
     }
     this.#levels();
   }
+
+  /** On a beach cat, whether someone of her crew crossing her net is in the sailor's way: told by the crew each frame. */
+  wayHeld = false;
 
   /** Whether the sailor is away from the helm, drawn by the crew as they change places: not drawn here meanwhile. */
   get away(): boolean {
@@ -437,6 +442,9 @@ export class BoatSailor {
     mo.rollRate = pose.rollRate;
     mo.windSpeed = out[RECORDS.out.apparentWindSpeed] ?? 0;
     mo.windAngle = out[RECORDS.out.apparentWindAngle] ?? 0;
+    mo.boom = pose.boom;
+    mo.trim = out[RECORDS.out.trim] ?? 0;
+    mo.wayHeld = this.wayHeld;
     const rt = this.runtime;
     rt.update(mo);
     if (this.#machine) {
@@ -527,6 +535,45 @@ export class BoatSailor {
     }
     tube(this.#rope.geometry, this.#ropePoints, ROPE_RADIUS);
   }
+}
+
+/**
+ * What a beach cat's sailor needs of her, from her model: its `aboard`
+ * node's places, her boom's gooseneck and length, and where her sailor
+ * stands to right her; null for a model without the places.
+ */
+export function catOf(
+  model: Object3D,
+  parts: Map<string, Object3D>,
+  boomLength: number,
+): CatBoat | null {
+  const a = aboard(parts);
+  const boom = parts.get('boom');
+  const keel = parts.get('board-root');
+  if (a === null || boom === undefined) {
+    return null;
+  }
+  const g = modelPosition(boom, model, new Vector3());
+  const k = keel === undefined ? 1 : Math.abs(modelPosition(keel, model, new Vector3()).x);
+  const t = parts.get('trapeze')?.userData as { crewRings?: unknown; hounds?: unknown } | undefined;
+  const rings = Array.isArray(t?.crewRings) ? (t.crewRings as unknown[]).map(pointOf) : [];
+  const [starboard, port] = rings;
+  const hounds = pointOf(t?.hounds);
+  return {
+    aboard: a,
+    boom: { y: g.y, z: g.z, length: boomLength },
+    stand: standOf(model, k, a.crew.inner.z),
+    crewStand: standOf(model, k, a.crew.inner.z + CREW_BESIDE),
+    crewRings: starboard != null && port != null ? [starboard, port] : null,
+    hounds,
+  };
+}
+
+/** A point from a node's data, or null. */
+function pointOf(a: unknown): Vector3 | null {
+  return Array.isArray(a) && a.length === 3 && a.every((x) => typeof x === 'number')
+    ? new Vector3(a[0] as number, a[1] as number, a[2] as number)
+    : null;
 }
 
 /** A look's clips aboard a beach cat, from their URL; null (warned) if they did not load. */

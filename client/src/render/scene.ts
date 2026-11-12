@@ -80,9 +80,11 @@ import {
 } from './quality';
 import { type Gfx, type Wanted, wantsCompat } from './renderer';
 import { RightOfWay, type Seen } from './rightofway';
+import { namesCatClips } from './sailors/cat';
 import { CrewDeck, type CrewShown, helmLook, modelDeck, tillerOf } from './sailors/crew';
-import { type CrewPlan, crewPlan } from './sailors/crewrules';
+import { type CrewPlan, crewPlan, type SailorNow } from './sailors/crewrules';
 import { FleetCrews, kindCrew } from './sailors/fleetcrews';
+import { catOf } from './sailors/onboat';
 import { company } from './sailors/ship';
 import { shipPlan } from './sailors/shiprules';
 import { hullSolid } from './sailors/solid';
@@ -336,6 +338,8 @@ export class SeaScene {
     this.#query = options.query;
     this.#store = options.store;
     this.detail = options.detail;
+    // A beach cat's crew on her wire: the fleet draws it to them.
+    this.fleet.crewHook = (slot, out) => this.crews.hook(slot, out);
     this.stage = new Stage(container, backend, {
       frame: (gfx, info) => {
         const cover = this.cover;
@@ -580,6 +584,9 @@ export class SeaScene {
   #lookShown: number | null = null;
   /** Who is aboard the boat in view, as last told; null for nobody but its sailor. */
   #crewShown: CrewShown | null = null;
+  /** The boat's sailor as her crew follow them, and how she lies, each frame. */
+  readonly #sailorNow: SailorNow = { mode: 0, heel: 0, trim: 0, offset: 0, net: null };
+  readonly #lie = { pitch: 0, heave: 0, aft: 0 };
 
   /**
    * The sailors seated, the own boat's and the fleet's first look, once the
@@ -755,8 +762,13 @@ export class SeaScene {
       model === undefined ? null : modelDeck(model),
       model === undefined ? null : tillerOf(model),
     );
-    // A ship: her company's places and ways, which her model marks.
+    // A ship: her company's places and ways, which her model marks; a
+    // beach cat, her people's places.
     plan.ship = shipPlan(kind.stations, company(boat.parts));
+    plan.cat = namesCatClips(kind.art)
+      ? catOf(boat.model, boat.parts, kind.physics.rig.foot)
+      : null;
+    plan.cog = kind.physics.hull.centreOfGravity;
     return plan;
   }
 
@@ -1850,6 +1862,16 @@ export class SeaScene {
     sm.heel = this.pose.heel;
     sm.wind = this.wind.meanSpeed;
     sm.time = this.ticks / STEPS_PER_SECOND;
+    const sn = this.#sailorNow;
+    sn.mode = this.pose.sailorMode;
+    sn.heel = this.pose.heel;
+    sn.trim = this.out[RECORDS.out.trim] ?? 0;
+    sn.offset = this.pose.sailor;
+    sn.net = helm?.runtime.netAt ?? null;
+    const lie = this.#lie;
+    lie.pitch = this.pose.pitch;
+    lie.heave = this.pose.heave;
+    lie.aft = this.pose.sailorAft;
     this.crew.sail(
       {
         dt: this.timeStep,
@@ -1857,11 +1879,14 @@ export class SeaScene {
         windOffBow: this.wind.meanFrom - this.pose.heading,
         depth: helm?.runtime.depth ?? 0,
         ship: this.#shipMoment,
+        sailor: sn,
       },
       this.pose.heel,
+      lie,
     );
     if (helm !== null) {
       helm.away = this.crew.helmAway;
+      helm.wayHeld = this.crew.helmHeld;
     }
     if (this.crew.wheelSeat !== this.#wheelDrawn) {
       // A relief has taken the spokes: the wheel drawn in their look.
