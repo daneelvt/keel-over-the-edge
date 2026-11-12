@@ -160,9 +160,9 @@ export interface ShipYard {
 
 /**
  * A brace of hers, the starboard side's (the port's the mirror): from its
- * yard's arm through a block (her frame) to its lead (a pin on her rail or
- * a lead in her deck); and where those hauling on its fall have their
- * hands, from its lead out, this high over her deck.
+ * yard's arm through a block (her frame) to its lead (a pin on her rail);
+ * and where those hauling on its fall have their hands, from its lead out
+ * (none for a brace belayed), this high over her deck.
  */
 export interface ShipBrace {
   yard: number;
