@@ -102,6 +102,7 @@ import {
 } from '../render/materials';
 import { rungName, TIERS } from '../render/quality';
 import { CREW_MOST } from '../render/sailors/fleetcrews';
+import { type ShipMember, ShipRules } from '../render/sailors/shiprules';
 import { CAMERA_PRESETS, type CameraView, type SeaScene } from '../render/scene';
 import { look } from '../render/sky';
 import { sandboxCrew } from '../sandbox/crewscene';
@@ -2524,6 +2525,13 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
      * own looks, the helm's look, and where each one's head is on screen
      * (CSS pixels, with the dome's drop).
      */
+    /** Aboard a ship: everyone walks at once to the next one's place (showCrew sends them back). */
+    shipShuffle(): void {
+      const rules = world.crew.rules;
+      if (rules instanceof ShipRules) {
+        rules.shuffle();
+      }
+    },
     crew(): {
       aboard: number;
       ready: boolean;
@@ -2550,7 +2558,14 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
         moving: string | null;
         from: number;
         t: number;
+        /** Aboard a ship: whether gone (on a ladder or aloft), seconds waited on a walk, and whether sat (1) or stood (0) at a hatch. */
+        gone?: boolean;
+        waited?: number;
+        sat?: number;
       }[];
+      /** Aboard a ship: whose seat is drawn at the wheel, and whether those on a hatch stand for the weather. */
+      wheel: number | null;
+      standing: boolean;
       heads: {
         x: number;
         y: number;
@@ -2558,6 +2573,11 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
         station: number;
         across: number;
         moving: boolean;
+        /** The seat, and the clip last posed in (the first of two blended). */
+        seat: number;
+        clip: string | null;
+        /** Where the head is in the boat's model. */
+        model: [number, number, number];
       }[];
     } {
       const c = world.crew;
@@ -2576,15 +2596,21 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
         changes: rules?.side.changes ?? 0,
         helmAway: c.helmAway,
         helmShown: sailor?.shown === true && !sailor.away,
-        members: (rules?.members ?? []).map((m) => ({
-          seat: m.seat,
-          station: m.station,
-          side: m.side,
-          lean: m.lean,
-          moving: m.moving?.kind ?? null,
-          from: m.moving?.from.station ?? m.station,
-          t: m.moving?.t ?? 0,
-        })),
+        members: (rules?.members ?? []).map((m) => {
+          const ship = 'ship' in m ? (m as ShipMember).ship : null;
+          return {
+            seat: m.seat,
+            station: m.station,
+            side: m.side,
+            lean: m.lean,
+            moving: m.moving?.kind ?? null,
+            from: m.moving?.from.station ?? m.station,
+            t: m.moving?.t ?? 0,
+            ...(ship === null ? {} : { gone: ship.gone, waited: ship.waited, sat: ship.sat }),
+          };
+        }),
+        wheel: c.wheelSeat,
+        standing: rules instanceof ShipRules ? rules.standing : false,
         heads: c.heads().map((h) => {
           const p = h.at;
           p.y -= domeDrop(Math.hypot(p.x - bs.x, p.z - bs.z));
@@ -2596,6 +2622,9 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
             station: h.station,
             across: h.across,
             moving: h.moving,
+            seat: h.seat,
+            clip: h.clip,
+            model: h.model,
           };
         }),
       };
@@ -2670,7 +2699,7 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
           from: number;
           t: number;
         }[];
-        heads: { x: number; y: number }[];
+        heads: { x: number; y: number; up: number }[];
       }[];
       drawn: { near: number; far: number };
       stats: { frames: number; posed: number; ms: number };
@@ -2684,11 +2713,14 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
         boats: c.boats().map((b) => ({
           ...b,
           heads: b.heads.map((p) => {
+            const up = p.y;
             p.y -= domeDrop(Math.hypot(p.x - bs.x, p.z - bs.z));
             p.project(stage.camera);
             return {
               x: ((p.x + 1) / 2) * (canvas?.clientWidth ?? 0),
               y: ((1 - p.y) / 2) * (canvas?.clientHeight ?? 0),
+              /** How high over the sea, m. */
+              up,
             };
           }),
         })),

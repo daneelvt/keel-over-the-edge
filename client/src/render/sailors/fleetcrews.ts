@@ -41,6 +41,9 @@ import {
 } from './crewrules';
 import type { FleetLook, FleetLooks } from './fleetlooks';
 import { type Hike, STRAPPED, seating } from './restage';
+import { company } from './ship';
+import { plumbOf, poseShip, type ShipPoseInput } from './shippose';
+import { type ShipMember, ShipRules, shipPlan } from './shiprules';
 import { hullSolid } from './solid';
 
 /** The most people drawn on other boats: the frame's budget on a phone, with a port of crewed boats in view. */
@@ -82,15 +85,18 @@ export function kindCrew(
     span: kind.physics.foils.boardSpan,
     chord: kind.physics.foils.boardChord,
   });
+  const plan = crewPlan(
+    kind.stations,
+    solid,
+    parts.gooseneck,
+    kind.physics.rig.foot,
+    root === null ? null : modelDeck(root),
+    root === null ? null : tillerOf(root),
+  );
+  // A ship: her company's places and ways, which her model marks.
+  plan.ship = shipPlan(kind.stations, company(parts.objects));
   return {
-    plan: crewPlan(
-      kind.stations,
-      solid,
-      parts.gooseneck,
-      kind.physics.rig.foot,
-      root === null ? null : modelDeck(root),
-      root === null ? null : tillerOf(root),
-    ),
+    plan,
     hike: seating(parts.objects, kind.physics.sailor.hikeReach).hike,
     cog: kind.physics.hull.centreOfGravity,
   };
@@ -102,7 +108,11 @@ interface Crewed {
   entered: number;
   kind: number;
   told: BoatCrew | null;
-  rules: CrewRules;
+  rules: CrewRules | ShipRules;
+  /** A ship's rules' members' version its people were last made from. */
+  version: number;
+  /** The vertical in its model's frame, kept within the sea legs' reach. */
+  readonly up: Vector3;
   people: Person[];
   /** The boom last frame, its swing, the heel; the model's place in the scene; how far from the camera, squared. */
   boom: number;
@@ -162,6 +172,9 @@ export class FleetCrews {
   windFrom = 0;
   /** The most people drawn: CREW_MOST, or as a test asks. */
   most = CREW_MOST;
+  /** The wind's speed, m/s, and the world's time, s: a ship's company's by them. */
+  windSpeed = 0;
+  time = 0;
 
   constructor(
     readonly kinds: readonly BoatKind[],
@@ -228,7 +241,26 @@ export class FleetCrews {
       c.boomRate = dt > 0 ? (boom - c.boom) / dt : 0;
       c.boom = boom;
       c.heel = b.heel;
-      c.rules.step({ dt, boom, windOffBow: this.windFrom - b.heading, depth: depthOf(b, kc.hike) });
+      const sm = this.#shipMoment;
+      sm.yards = b.yardsTurn;
+      sm.heel = b.heel;
+      sm.wind = this.windSpeed;
+      sm.time = this.time;
+      c.rules.step({
+        dt,
+        boom,
+        windOffBow: this.windFrom - b.heading,
+        depth: depthOf(b, kc.hike),
+        ship: sm,
+      });
+      // A ship's wheel drawn in the look of whoever is at it till relieved.
+      if (c.rules instanceof ShipRules && b.crew !== null && c.rules.wheelSeat !== b.crew.holder) {
+        const wheel = c.rules.wheelSeat;
+        const look = b.crew.people.find((p) => p.seat === wheel)?.look;
+        if (look !== undefined) {
+          b.look = look;
+        }
+      }
     }
     // Boats gone from view, or with nobody aboard now, forgotten.
     for (let k = this.#order.length - 1; k >= 0; k--) {
@@ -277,13 +309,16 @@ export class FleetCrews {
     for (const c of this.#order) {
       for (const p of c.people) {
         const l = p.look;
-        looks.want(l, true, false, l.railed);
+        looks.want(l, true, false, l.railed, l.shipped, l.aloft);
+        const done = (s: string): boolean => s === 'ready' || s === 'failed';
         const can =
           c.drawn &&
           l.deck !== null &&
           l.clips !== null &&
           l.clipsState === 'ready' &&
-          (!l.railed || l.railState === 'ready' || l.railState === 'failed');
+          (!l.railed || done(l.railState)) &&
+          (!l.shipped || done(l.shipState)) &&
+          (!l.aloft || done(l.aloftState));
         const shown = can && (p.member.station > 0 || p.member.moving !== null);
         if (shown && p.body === null && l.deck !== null) {
           p.body = new CrewBody(
@@ -307,13 +342,16 @@ export class FleetCrews {
     const t0 = performance.now();
     for (const c of this.#order) {
       const kc = this.#kinds[c.kind] as KindCrew;
+      if (c.rules instanceof ShipRules) {
+        plumbOf(c.matrix, c.up);
+      }
       for (const p of c.people) {
         if (!p.shown || p.body === null) {
           continue;
         }
         p.wait += dt;
         p.time += dt;
-        if (p.posed) {
+        if (p.posed && c.rules instanceof CrewRules) {
           p.duck = duckStep(p.duck, duckFor(kc.plan, c.boom, c.boomRate, p.body.headUp), dt);
         }
         if (p.near || !p.posed || (this.#frames + p.turn) % FAR_EVERY === 0) {
@@ -346,7 +384,12 @@ export class FleetCrews {
         entered: b.entered,
         kind: b.kind,
         told: null,
-        rules: new CrewRules(kc.plan),
+        rules:
+          kc.plan.ship == null
+            ? new CrewRules(kc.plan)
+            : new ShipRules({ stations: kc.plan.stations, ship: kc.plan.ship }, this.#still),
+        up: new Vector3(0, 1, 0),
+        version: -1,
         people: [],
         boom: b.boom,
         boomRate: 0,
@@ -367,6 +410,9 @@ export class FleetCrews {
       c.told = b.crew;
       c.rules.set(b.crew, !first);
       this.#people(c);
+    } else if (c.rules instanceof ShipRules && c.rules.version !== c.version) {
+      // A relief has taken the spokes: who walks has changed.
+      this.#people(c);
     }
     return c;
   }
@@ -380,11 +426,23 @@ export class FleetCrews {
       return;
     }
     const stations = c.rules.plan.stations;
-    const railed = stations.some((s) => s.windward === true || s.pose === 'rail');
+    const ship = c.rules instanceof ShipRules;
+    if (c.rules instanceof ShipRules) {
+      c.version = c.rules.version;
+    }
+    const railed = !ship && stations.some((s) => s.windward === true || s.pose === 'rail');
+    const aloft = ship && stations.some((s) => s.pose === 'aloft');
+    if (ship) {
+      // Whoever is at the wheel too: relieved, they walk with the crew.
+      for (const p of c.told?.people ?? []) {
+        const l = this.sailorLookOf(p.look);
+        looks.want(looks.add(l.art, l.machine), true, false, false, true, aloft);
+      }
+    }
     for (const member of c.rules.members) {
       const l = this.sailorLookOf(member.look);
       const look = looks.add(l.art, l.machine);
-      looks.want(look, true, false, railed);
+      looks.want(look, true, false, railed, ship, aloft);
       const was = before.get(member);
       if (was !== undefined && was.look === look) {
         c.people.push(was);
@@ -438,6 +496,25 @@ export class FleetCrews {
     if (seat === undefined || clips === null || p.body === null) {
       return;
     }
+    if (c.rules instanceof ShipRules) {
+      const s = this.#shipInput;
+      s.rules = c.rules;
+      s.clips = clips;
+      s.machine = p.look.machine;
+      s.time = this.#still ? p.hold : p.time;
+      s.world = c.rules.time;
+      s.life.dt = dt;
+      s.life.heel = c.heel;
+      s.life.upright = 0;
+      s.life.still = this.#still;
+      s.up = c.up;
+      s.a = p.a;
+      s.b = p.b;
+      if (!poseShip(p.body, p.member as ShipMember, s)) {
+        p.body.hide();
+      }
+      return;
+    }
     const input = this.#input;
     input.stations = kc.plan.stations;
     input.seat = seat;
@@ -452,6 +529,19 @@ export class FleetCrews {
     input.b = p.b;
     poseMember(p.body, p.member, input);
   }
+
+  readonly #shipMoment = { yards: 0, heel: 0, wind: 0, time: 0 };
+  readonly #shipInput: ShipPoseInput = {
+    rules: null as unknown as ShipRules,
+    clips: new Map(),
+    machine: false,
+    time: 0,
+    world: 0,
+    life: { dt: 0, heel: 0, upright: 0, still: false, plumb: null },
+    up: new Vector3(0, 1, 0),
+    a: stance(),
+    b: stance(),
+  };
 
   readonly #input: PoseInput = {
     stations: [],
@@ -612,6 +702,8 @@ export class FleetCrews {
               (settled(p.look.state) &&
                 settled(p.look.clipsState) &&
                 (!p.look.railed || settled(p.look.railState)) &&
+                (!p.look.shipped || settled(p.look.shipState)) &&
+                (!p.look.aloft || settled(p.look.aloftState)) &&
                 (p.look.clipsState === 'failed' || (p.shown && p.posed))),
           ),
       )

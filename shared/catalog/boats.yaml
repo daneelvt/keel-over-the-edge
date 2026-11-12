@@ -579,50 +579,55 @@ boats:
     name: Tall ship
     description: Traditional sailing ship
     capacity: 40
-    # Where the people aboard are: her helmsman at the wheel, then the
-    # quarterdeck, the waist at the rails and by the masts, and the
-    # forecastle, all standing.
+    # Where the people aboard are, in the order they come aboard: her
+    # helmsman at the wheel; beside it the weather and the lee side of the
+    # quarterdeck, as a master and his mate keep them; the weather gangway;
+    # the taffrail; two lookouts on the forecastle and one in the main top.
+    # Then pairs, in turn forward and aft of the mainmast: at the waist's
+    # rails, leaning on the quarterdeck's, by the fife rails and the mizzen,
+    # sat on the fore hatch, on the forecastle. Her weather side is the one
+    # her after yards are braced for.
     stations:
       - { at: [0, 5, 12.6], pose: standing, facing: 0 } # at the wheel
-      - { at: [1.4, 4.97, 12.4], pose: standing, facing: 0 } # the quarterdeck, beside the wheel
-      - { at: [-1.4, 4.97, 12.4], pose: standing, facing: 0 }
-      - { at: [3.1, 4.78, 9], pose: standing, facing: 90 } # at the quarterdeck's rails
-      - { at: [-3.1, 4.78, 9], pose: standing, facing: 270 }
-      - { at: [1, 4.84, 8.6], pose: standing, facing: 0 } # by the mizzen
-      - { at: [-1, 4.84, 8.6], pose: standing, facing: 0 }
-      - { at: [2.2, 4.75, 6.2], pose: standing, facing: 0 } # at the break of the quarterdeck
-      - { at: [-2.2, 4.75, 6.2], pose: standing, facing: 0 }
-      - { at: [1.3, 5.1, 15.1], pose: standing, facing: 180 } # at the taffrail
-      - { at: [-1.3, 5.1, 15.1], pose: standing, facing: 180 }
-      - { at: [3.3, 3.2, -10], pose: standing, facing: 90 } # the waist, at the rails
-      - { at: [-3.3, 3.2, -10], pose: standing, facing: 270 }
-      - { at: [3.35, 3.09, -8], pose: standing, facing: 90 }
-      - { at: [-3.35, 3.09, -8], pose: standing, facing: 270 }
-      - { at: [3.4, 3, -6], pose: standing, facing: 90 }
-      - { at: [-3.4, 3, -6], pose: standing, facing: 270 }
-      - { at: [3.75, 2.92, -4], pose: standing, facing: 90 }
-      - { at: [-3.75, 2.92, -4], pose: standing, facing: 270 }
-      - { at: [3.8, 2.86, -1.5], pose: standing, facing: 90 }
-      - { at: [-3.8, 2.86, -1.5], pose: standing, facing: 270 }
-      - { at: [3.8, 2.84, 1], pose: standing, facing: 90 }
-      - { at: [-3.8, 2.84, 1], pose: standing, facing: 270 }
-      - { at: [3.8, 2.84, 3], pose: standing, facing: 90 }
-      - { at: [-3.8, 2.84, 3], pose: standing, facing: 270 }
-      - { at: [1.4, 2.95, -1.1], pose: standing, facing: 270 } # by the mainmast's fife rail
-      - { at: [-1.4, 2.95, -1.1], pose: standing, facing: 90 }
-      - { at: [1.4, 2.94, 0.3], pose: standing, facing: 270 }
-      - { at: [-1.4, 2.94, 0.3], pose: standing, facing: 90 }
-      - { at: [1.5, 3.31, -10.6], pose: standing, facing: 270 } # by the foremast
-      - { at: [-1.5, 3.31, -10.6], pose: standing, facing: 90 }
-      - { at: [0.9, 4.41, -15.3], pose: standing, facing: 0 } # the forecastle
-      - { at: [-0.9, 4.41, -15.3], pose: standing, facing: 0 }
-      - { at: [2.5, 4.25, -13.4], pose: standing, facing: 90 }
-      - { at: [-2.5, 4.25, -13.4], pose: standing, facing: 270 }
-      - { at: [2.6, 4.96, 13.2], pose: standing, facing: 90 } # the quarterdeck's after corners
-      - { at: [-2.6, 4.96, 13.2], pose: standing, facing: 270 }
-      - { at: [3.6, 2.87, 4.6], pose: standing, facing: 90 } # the waist, abreast of the ladders
-      - { at: [-3.6, 2.87, 4.6], pose: standing, facing: 270 }
-      - { at: [0, 4.36, -14], pose: standing, facing: 0 } # the forecastle, the lookout
+      - { at: [1.4, 4.9718, 12.4], pose: standing, facing: 0, windward: true } # the quarterdeck, beside the wheel, to windward
+      - { at: [-1.4, 4.9718, 12.4], pose: standing, facing: 0, lee: true } # and to leeward
+      - { at: [3.3, 4.6976, 6], pose: standing, facing: 0, windward: true } # the weather gangway, at the break of the quarterdeck
+      - { at: [1, 5.1295, 15.5], pose: standing, facing: 180 } # at the taffrail
+      - { at: [0.75, 4.3921, -14.8], pose: standing, facing: 0 } # the lookouts on the forecastle
+      - { at: [-0.75, 4.3921, -14.8], pose: standing, facing: 0 }
+      - { at: [0, 13.4, -0.57841], pose: aloft, facing: 0, windward: true } # the lookout in the main top
+      - { at: [3.75, 2.8388, 1], pose: standing, facing: 90 } # the waist's rails, abreast of the mainmast
+      - { at: [-3.75, 2.8388, 1], pose: standing, facing: 270 }
+      - { at: [2.36, 4.2672, -13.6], pose: standing, facing: 90 } # the forecastle's rails
+      - { at: [-2.36, 4.2672, -13.6], pose: standing, facing: 270 }
+      - { at: [4.011, 5.6047, 6.7], pose: leaning, facing: 90 } # leaning on the quarterdeck's rails
+      - { at: [-4.011, 5.6047, 6.7], pose: leaning, facing: 270 }
+      - { at: [0.3, 3.5758, -9.3], pose: seated, facing: 0 } # sat on the fore hatch
+      - { at: [-0.3, 3.5758, -9.3], pose: seated, facing: 0 }
+      - { at: [1.4, 2.9374, 0.3], pose: standing, facing: 270 } # by the main fife rail
+      - { at: [-1.4, 2.9374, 0.3], pose: standing, facing: 90 }
+      - { at: [3.73, 2.8696, -2], pose: standing, facing: 90 } # the waist's rails
+      - { at: [-3.73, 2.8696, -2], pose: standing, facing: 270 }
+      - { at: [1, 4.8428, 8.6], pose: standing, facing: 0 } # by the mizzen
+      - { at: [-1, 4.8428, 8.6], pose: standing, facing: 0 }
+      - { at: [1.5, 3.3098, -10.6], pose: standing, facing: 270 } # by the fore fife rail
+      - { at: [-1.5, 3.3098, -10.6], pose: standing, facing: 90 }
+      - { at: [3.75, 2.8449, 3], pose: standing, facing: 90 } # the waist's rails
+      - { at: [-3.75, 2.8449, 3], pose: standing, facing: 270 }
+      - { at: [3.69, 2.9187, -4], pose: standing, facing: 90 }
+      - { at: [-3.69, 2.9187, -4], pose: standing, facing: 270 }
+      - { at: [3.9272, 5.6367, 7.9], pose: leaning, facing: 90 } # leaning on the quarterdeck's rails
+      - { at: [-3.9272, 5.6367, 7.9], pose: leaning, facing: 270 }
+      - { at: [3.6, 2.9902, -6], pose: standing, facing: 90 } # the waist's rails
+      - { at: [-3.6, 2.9902, -6], pose: standing, facing: 270 }
+      - { at: [3.3504, 5.839, 12.9], pose: leaning, facing: 90 } # leaning on the quarterdeck's rails, aft
+      - { at: [-3.3504, 5.839, 12.9], pose: leaning, facing: 270 }
+      - { at: [1.4, 2.9507, -1.1], pose: standing, facing: 270 } # by the main fife rail
+      - { at: [-1.4, 2.9507, -1.1], pose: standing, facing: 90 }
+      - { at: [2, 5.0875, 15.4], pose: standing, facing: 180 } # the taffrail's corners
+      - { at: [-2, 5.0875, 15.4], pose: standing, facing: 180 }
+      - { at: [3.38, 3.1115, -8.5], pose: standing, facing: 90 } # the waist's rails, by the fore hatch
+      - { at: [-3.38, 3.1115, -8.5], pose: standing, facing: 270 }
     # Her hull on deck, which meets other boats and the land; 43.6 m over
     # her jibboom.
     lengthOverall: 33.3

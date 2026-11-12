@@ -497,7 +497,25 @@ func TestRejects(t *testing.T) {
 			name: "a station to windward on another when the wind is on the other side",
 			files: map[string]string{"shared/catalog/boats.yaml": strings.Replace(validBoats,
 				"{ at: [-0.3, 0.3, -0.5], pose: standing, facing: 0 }", "{ at: [-0.55, 0.3, 0.1], pose: seated, facing: 90, windward: true }", 1)},
-			want: "boats[0].stations[1]: to windward on the other side, within 0.45 m of stations[0]",
+			want: "boats[0].stations[1]: within 0.45 m of stations[0] with the weather to starboard",
+		},
+		{
+			name: "a station to leeward on another when the wind is on the other side",
+			files: map[string]string{"shared/catalog/boats.yaml": strings.Replace(validBoats,
+				"{ at: [-0.3, 0.3, -0.5], pose: standing, facing: 0 }", "{ at: [-0.55, 0.3, 0.1], pose: seated, facing: 90, lee: true }", 1)},
+			want: "boats[0].stations[1]: within 0.45 m of stations[0] with the weather to port",
+		},
+		{
+			name: "a station both to windward and to leeward",
+			files: map[string]string{"shared/catalog/boats.yaml": strings.Replace(validBoats,
+				"{ at: [-0.3, 0.3, -0.5], pose: standing, facing: 0 }", "{ at: [-0.3, 0.3, -0.5], pose: standing, facing: 0, windward: true, lee: true }", 1)},
+			want: "boats[0].stations[1]: both to windward and to leeward",
+		},
+		{
+			name: "a station aloft above the lookout's eye",
+			files: map[string]string{"shared/catalog/boats.yaml": strings.Replace(validBoats,
+				"{ at: [-0.3, 0.3, -0.5], pose: standing, facing: 0 }", "{ at: [0, 2.5, -0.5], pose: aloft, facing: 0 }", 1)},
+			want: "boats[0].stations[1]: aloft 2.5 m up is not above the boom",
 		},
 		{
 			name:  "a station's pose unknown",

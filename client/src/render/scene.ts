@@ -82,6 +82,8 @@ import { RightOfWay, type Seen } from './rightofway';
 import { CrewDeck, type CrewShown, helmLook, modelDeck, tillerOf } from './sailors/crew';
 import { type CrewPlan, crewPlan } from './sailors/crewrules';
 import { FleetCrews, kindCrew } from './sailors/fleetcrews';
+import { company } from './sailors/ship';
+import { shipPlan } from './sailors/shiprules';
 import { hullSolid } from './sailors/solid';
 import { Shadows } from './shadows';
 import { StormCones } from './signals';
@@ -535,10 +537,26 @@ export class SeaScene {
   /** The look the sailor at the helm is drawn in: whoever holds the controls', else the look last asked for. */
   #helmCode(): number {
     const crew = this.#crewShown;
+    // Aboard a ship, whoever is at the wheel until relieved.
+    const wheel = this.crew.wheelSeat;
+    const atWheel =
+      crew === null || wheel === null
+        ? null
+        : (crew.people.find((p) => p.seat === wheel)?.look ?? null);
     return (
-      (crew === null ? null : helmLook(crew)) ?? this.#lookShown ?? this.#ownLook ?? PERSON_DEFAULT
+      atWheel ??
+      (crew === null ? null : helmLook(crew)) ??
+      this.#lookShown ??
+      this.#ownLook ??
+      PERSON_DEFAULT
     );
   }
+
+  /** The ship's moment, as her company's rules need it: filled each frame. */
+  readonly #shipMoment = { yards: 0, heel: 0, wind: 0, time: 0 };
+
+  /** The seat drawn at the wheel when the helm was last drawn: a relief taking the spokes draws it again. */
+  #wheelDrawn: number | null = null;
 
   /** Whether the sailor at the helm is drawn in the look it is to be: whoever holds the controls'. */
   get helmDrawn(): boolean {
@@ -728,7 +746,7 @@ export class SeaScene {
       chord: kind.physics.foils.boardChord,
     });
     const model = boat.model.children[0];
-    return crewPlan(
+    const plan = crewPlan(
       kind.stations,
       solid,
       boat.nodeAt('boom'),
@@ -736,6 +754,9 @@ export class SeaScene {
       model === undefined ? null : modelDeck(model),
       model === undefined ? null : tillerOf(model),
     );
+    // A ship: her company's places and ways, which her model marks.
+    plan.ship = shipPlan(kind.stations, company(boat.parts));
+    return plan;
   }
 
   /**
@@ -1800,22 +1821,35 @@ export class SeaScene {
     // leaning out as the helm hikes; the helm not drawn while it walks
     // to or from the tiller in a change of hands.
     const helm = this.boat?.sailor ?? null;
+    const sm = this.#shipMoment;
+    sm.yards = this.pose.yardsTurn;
+    sm.heel = this.pose.heel;
+    sm.wind = this.wind.meanSpeed;
+    sm.time = this.ticks / STEPS_PER_SECOND;
     this.crew.sail(
       {
         dt: this.timeStep,
         boom: this.pose.boom,
         windOffBow: this.wind.meanFrom - this.pose.heading,
         depth: helm?.runtime.depth ?? 0,
+        ship: this.#shipMoment,
       },
       this.pose.heel,
     );
     if (helm !== null) {
       helm.away = this.crew.helmAway;
     }
+    if (this.crew.wheelSeat !== this.#wheelDrawn) {
+      // A relief has taken the spokes: the wheel drawn in their look.
+      this.#wheelDrawn = this.crew.wheelSeat;
+      void this.#drawHelm();
+    }
     this.crew.frame(camera.position, this.timeStep);
     const fs = this.fleetSource;
     // The other boats' crews, before the fleet: whose helm walks with them.
     this.crews.windFrom = this.wind.meanFrom;
+    this.crews.windSpeed = this.wind.meanSpeed;
+    this.crews.time = this.ticks / STEPS_PER_SECOND;
     this.crews.frame(fs?.drawn ?? [], fs?.count ?? 0, this.origin, camera.position, this.timeStep);
     if (this.fleet.loaded) {
       this.fleet.windFrom = this.wind.meanFrom;

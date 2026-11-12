@@ -1032,7 +1032,7 @@ const LADDER_STEP = 0.3;
 const LADDER_HALF = 0.3;
 const LADDER_TREAD = 0.025;
 const LADDER_DEPTH = 0.09;
-const LADDER_GAP = 0.4;
+const LADDER_GAP = 0.45;
 
 /**
  * A break's ladder on a side (s): its foot on the waist's deck, its head at
@@ -2687,6 +2687,9 @@ function sternlight(): { brass: MeshBuilder; glass: MeshBuilder; iron: MeshBuild
 // --- Fittings on deck ------------------------------------------------------------------
 
 /** The longboat on the skids in the waist, between the fore and main masts. */
+/** How far out from the centreline the longboat's skids reach, each side. */
+const SKID_HALF = 2.0;
+
 function longboat(): { paint: MeshBuilder; wood: MeshBuilder } {
   const paint = new MeshBuilder('paint');
   const wood = new MeshBuilder('varnish');
@@ -2741,7 +2744,8 @@ function longboat(): { paint: MeshBuilder; wood: MeshBuilder } {
     const z = zc + dz;
     const uu = uAt(z);
     const w = deckHalf(uu, WAIST);
-    wood.box([-w + 0.3, y0 - 0.12, z - 0.1], [w - 0.3, y0 + 0.05, z + 0.1], shade(WOOD, 0.7));
+    // Clear of the ways along the waist's sides.
+    wood.box([-SKID_HALF, y0 - 0.12, z - 0.1], [SKID_HALF, y0 + 0.05, z + 0.1], shade(WOOD, 0.7));
     for (const s of [1, -1]) {
       const yd = deckSurface(s * 1.4, uu, WAIST, w);
       wood.box(
@@ -3423,8 +3427,98 @@ function company(): NodeDef {
         footrope: footrope(0, 0, topsail.half, 1).map(round3v),
       },
       brace: { lead, fall: round3v([lead[0] - BRACE_FALL[1], lead[1], lead[2] - BRACE_FALL[0]]) },
+      ways: ways(),
     },
   };
+}
+
+/** A way's stretch: walked along a deck, climbed up a ladder, or climbed aloft by the shrouds. */
+const WALKED = 0;
+const LADDER = 1;
+const ALOFT = 2;
+/** How far out from the centreline the ways along the quarterdeck's and the waist's sides go. */
+const WAY_QD = 2.3;
+/** Abaft the wheel, where she narrows, nearer the centreline. */
+const WAY_QD_AFT = 2.1;
+const WAY_WAIST = 2.9;
+/** Where the ways cross the quarterdeck, before and abaft the wheel, and the waist, abaft the main fife rail. */
+const WAY_BEFORE_WHEEL = 10.85;
+const WAY_ABAFT_WHEEL = 13.3;
+const WAY_WAIST_CROSS = 1.35;
+
+/**
+ * The ways her company walks, as points on her decks and the stretches
+ * between them: along each side of the quarterdeck from the head of its
+ * ladder aft, across it at the break and before and abaft the wheel; up and down the
+ * ladders at the breaks; along each side of the waist from the
+ * quarterdeck's ladder to the forecastle's, and across it abaft the main
+ * fife rail; forward on the forecastle each side of the bowsprit; and from
+ * the waist abreast of the main shrouds up to the main top. Each stretch
+ * keeps a body's breadth clear of the masts, rails, fife rails, capstan,
+ * hatches, the longboat's skids, the wheel and the binnacle, and of the
+ * stations' people. Every point is on the deck it is on (the top's floor
+ * for the top); a stretch is walked (0), a ladder (1) or the climb aloft (2).
+ */
+function ways(): { nodes: Vec3[]; edges: [number, number, number][] } {
+  const nodes: Vec3[] = [];
+  const edges: [number, number, number][] = [];
+  const node = (p: Vec3): number => {
+    const q = round3v(p);
+    const i = nodes.findIndex((n) => Math.hypot(n[0] - q[0], n[1] - q[1], n[2] - q[2]) < 1e-3);
+    if (i >= 0) {
+      return i;
+    }
+    nodes.push(q);
+    return nodes.length - 1;
+  };
+  const on = (x: number, z: number, level: Level): Vec3 => {
+    const u = uAt(z);
+    return [x, deckSurface(x, u, level, deckHalf(u, level)), z];
+  };
+  const line = (points: Vec3[], kind = WALKED): void => {
+    for (let i = 0; i + 1 < points.length; i++) {
+      edges.push([node(points[i] as Vec3), node(points[i + 1] as Vec3), kind]);
+    }
+  };
+  const Q = QUARTERDECK;
+  const W = WAIST;
+  const F = FORECASTLE;
+  for (const s of [1, -1]) {
+    const qd = ladderAt(U_QD, QUARTERDECK, -1, s);
+    const fc = ladderAt(U_FC, FORECASTLE, 1, s);
+    // The quarterdeck: from its ladder's head aft along her side; across her before and abaft the wheel.
+    line([
+      qd.head,
+      on(s * LADDER_X, QD_FORE_Z + 0.45, Q),
+      on(s * WAY_QD, QD_FORE_Z + 1.0, Q),
+      on(s * WAY_QD, 7.6, Q),
+      on(s * WAY_QD, 9.0, Q),
+      on(s * WAY_QD, WAY_BEFORE_WHEEL, Q),
+      on(s * WAY_QD_AFT, 12.4, Q),
+      on(s * WAY_QD_AFT, WAY_ABAFT_WHEEL, Q),
+    ]);
+    line([on(s * LADDER_X, QD_FORE_Z + 0.45, Q), on(0, QD_FORE_Z + 0.45, Q)]);
+    line([on(s * WAY_QD, WAY_BEFORE_WHEEL, Q), on(0, WAY_BEFORE_WHEEL, Q)]);
+    line([on(s * WAY_QD_AFT, WAY_ABAFT_WHEEL, Q), on(0, WAY_ABAFT_WHEEL, Q)]);
+    // The ladders.
+    line([qd.foot, qd.head], LADDER);
+    line([fc.foot, fc.head], LADDER);
+    // The waist: from the foot of the quarterdeck's ladder forward along her
+    // side, in from the bulwarks as she narrows, to the forecastle's.
+    const side = (z: number): number => Math.min(WAY_WAIST, deckHalf(uAt(z), W) - 1.35);
+    const waist: Vec3[] = [qd.foot, on(s * LADDER_X, qd.foot[2] - 0.45, W)];
+    for (const z of [3.0, WAY_WAIST_CROSS, 0.7, -1.0, -3.0, -5.2, -7.4, -8.6, -9.75, -10.6]) {
+      waist.push(on(s * side(z), z, W));
+    }
+    waist.push(on(s * 1.9, -11.9, W), fc.foot);
+    line(waist);
+    line([on(s * side(WAY_WAIST_CROSS), WAY_WAIST_CROSS, W), on(0, WAY_WAIST_CROSS, W)]);
+    // The forecastle, each side of the bowsprit.
+    line([fc.head, on(s * LADDER_X, FC_AFT_Z - 0.45, F), on(s * 1.2, -14.2, F)]);
+    // Aloft: from the waist abreast of the main shrouds to the main top, where its lookout stands.
+    line([on(s * side(0.7), 0.7, W), [s * 1.4, MAIN.top, MAIN.z]], ALOFT);
+  }
+  return { nodes, edges };
 }
 
 for (const name of boat.lights) {

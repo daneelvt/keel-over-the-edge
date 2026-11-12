@@ -157,6 +157,115 @@ test('forty aboard the tall ship, at their stations, within a frame’s budget',
   }
 });
 
+test('forty aboard the tall ship: alive at their stations, crossing to the weather side, and a handover that relieves the wheel, within a frame’s budget', async ({
+  page,
+}, info) => {
+  test.setTimeout(240_000);
+  await openScene(page, 'boat=tall-ship&crew=40');
+  await page.evaluate(async () => {
+    const k = globalThis.keel;
+    k.setSky(12);
+    await k.crewReady();
+    k.freezeTick(k.world.ticks);
+  });
+  /** Sails frames, each so many world ticks on, the after yards braced so (the physics' angle: + for the wind over port). */
+  const sail = (frames: number, steps: number, yards: number) =>
+    page.evaluate(
+      ({ frames, steps, yards }) => {
+        const k = globalThis.keel;
+        for (let i = 0; i < frames; i++) {
+          k.setState({ yards, foreYards: yards });
+          k.sailFrames(1, steps);
+        }
+        return k.crew();
+      },
+      { frames, steps, yards },
+    );
+  const picture = async (name: string) => {
+    await page.evaluate(async () => {
+      const k = globalThis.keel;
+      k.camera({ azimuth: 0.5, elevation: 0.5, distance: 1.2 });
+      await k.show();
+    });
+    await info.attach(name, { body: await page.screenshot(), contentType: 'image/png' });
+  };
+  const at = (c: Awaited<ReturnType<typeof sail>>, seat: number) =>
+    c.heads.find((h) => h.seat === seat);
+  // The wind over port: her weather side to port.
+  const port = await sail(20, 3, 1.1);
+  expect(port.aboard).toBe(39);
+  expect(port.side).toBe(-1);
+  // Seat 1 holds the controls; the skipper beside the wheel to windward, seat 2 to leeward.
+  expect(port.wheel).toBe(1);
+  expect(Math.sign(at(port, 0)?.model[0] ?? 0)).toBe(-1);
+  expect(Math.sign(at(port, 2)?.model[0] ?? 0)).toBe(1);
+  // Alive: idles of every kind about her; one in the top; none still for long.
+  const clips = new Set(port.heads.map((h) => h.clip));
+  expect(clips.size).toBeGreaterThanOrEqual(4);
+  expect(port.heads.some((h) => h.station === 7 && h.model[1] > 13)).toBe(true);
+  await picture('forty aboard, the weather to port');
+  const later = await sail(60, 30, 1.1);
+  const changed = later.heads.filter(
+    (h) => port.heads.find((p) => p.seat === h.seat)?.clip !== h.clip,
+  ).length;
+  expect(changed).toBeGreaterThan(5);
+  // About: the after yards swing to the other side; the two beside the
+  // wheel walk across to the new weather and lee sides.
+  const swinging = await sail(4, 3, -1.1);
+  expect(swinging.side).toBe(1);
+  expect(
+    swinging.members
+      .filter((m) => m.moving !== null)
+      .map((m) => m.seat)
+      .sort((a, b) => a - b),
+  ).toEqual(expect.arrayContaining([0, 2]));
+  const tacked = await sail(90, 6, -1.1);
+  expect(tacked.members.find((m) => m.seat === 0)?.moving).toBeNull();
+  expect(Math.sign(at(tacked, 0)?.model[0] ?? 0)).toBe(1);
+  expect(Math.sign(at(tacked, 2)?.model[0] ?? 0)).toBe(-1);
+  await picture('after a tack, the weather to starboard');
+  // A handover to seat 2, to leeward of the wheel: seat 1 keeps the wheel
+  // till seat 2 has come behind them; then seat 1 walks to their own place,
+  // and the skipper, who stood there, to seat 2's.
+  const helmBefore = tacked.helm;
+  await page.evaluate(async () => {
+    const k = globalThis.keel;
+    await k.showCrew(40, 2);
+    await k.crewReady();
+  });
+  const walking = await sail(6, 3, -1.1);
+  expect(walking.wheel).toBe(1);
+  expect(walking.helm).toBe(helmBefore);
+  expect(walking.members.find((m) => m.seat === 2)?.moving).not.toBeNull();
+  await picture('the relief walking aft to the wheel');
+  const relieved = await sail(60, 6, -1.1);
+  expect(relieved.wheel).toBe(2);
+  expect(relieved.members.some((m) => m.seat === 2)).toBe(false);
+  expect(relieved.members.find((m) => m.seat === 1)?.station).toBe(1);
+  expect(relieved.members.find((m) => m.seat === 0)?.station).toBe(2);
+  await page.evaluate(() => globalThis.keel.crewReady());
+  await expect.poll(() => page.evaluate(() => globalThis.keel.crew().helm)).not.toBe(helmBefore);
+  const done = await sail(30, 6, -1.1);
+  expect(done.members.every((m) => m.moving === null)).toBe(true);
+  expect(at(done, 1)?.station).toBe(1);
+  expect(at(done, 0)?.station).toBe(2);
+  await picture('relieved, the old helmsman back at their place');
+  // Within a frame's budget: forty idling cost little more than her helmsman alone.
+  const cost = (): Promise<number> => frameMs(page, softwareGPU ? 6 : 30);
+  const forty = await cost();
+  await page.evaluate(async () => {
+    const k = globalThis.keel;
+    await k.showCrew(1);
+    await k.crewReady();
+  });
+  const one = await cost();
+  test.info().annotations.push({ type: 'measured', description: JSON.stringify({ one, forty }) });
+  expect(forty).toBeLessThan(one * (softwareGPU ? 1.6 : 1.3) + 1.5);
+  if (!softwareGPU) {
+    expect(forty).toBeLessThan(BUDGET);
+  }
+});
+
 test('five aboard the keelboat: to windward on both tacks, through a tack and a gybe, and after a handover', async ({
   page,
 }, info) => {
@@ -431,6 +540,8 @@ test('a friend’s boat near a crewed keelboat, skiff and tall ship sees their c
   toWindward(met, 1, 1, -1, 'the skiff');
   expect(boatOf(met, 2).members.filter((m) => m.station > 0)).toHaveLength(39);
   expect(boatOf(met, 2).heads).toHaveLength(39);
+  // Her company by a ship's rules: her lookout in the main top, 13 m and more over the sea.
+  expect(boatOf(met, 2).heads.some((h) => h.up > 13)).toBe(true);
   expect(met.drawn.near + met.drawn.far).toBe(44);
   await picture('a friend near a keelboat of five, a skiff of two and a tall ship of forty', {
     azimuth: 2.6,
