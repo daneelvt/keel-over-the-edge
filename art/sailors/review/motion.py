@@ -226,13 +226,13 @@ def check(fig, clip, act, slot, gate, ranges, proxies):
         add("hand on hat", hat, gate["hat-clearance"], hat >= gate["hat-clearance"], at=at_hat)
 
     # Ranges: the hips' turn is not a joint's when they carry the figure
-    # elsewhere.
+    # elsewhere, or lie it down on a deck, crawling.
     worst, where = 0.0, None
     strained, strain_at = 0.0, None
     strain = set(clip.notes.get("strain") or [])
     for b, qs in tr.basis.items():
         r = motion.table(ranges, b)
-        if r is None or b == "pelvis" and clip.notes.get("travels"):
+        if r is None or b == "pelvis" and (clip.notes.get("travels") or clip.notes.get("crawl")):
             continue
         for f, q in enumerate(qs):
             share = math.degrees(motion.angle(Quaternion(), q)) / r

@@ -624,15 +624,26 @@ function net(): MeshBuilder {
   return m;
 }
 
-/** The hiking straps: leather across the net, from the rear beam forward, one each side of the middle. */
+/**
+ * The hiking straps: leather along the net, one each side of the middle,
+ * from the rear beam forward past the crew's station, so the helm's feet
+ * and the crew's both go under one; each stands off the net a little more
+ * between its ends.
+ */
+const STRAP_X = 0.45;
+const STRAP_AFT = NET_AFT - 0.02;
+const STRAP_FORE = -0.5;
+const STRAP_R = 0.012;
+const strapY = (z: number): number =>
+  NET_Y + 0.02 + 0.03 * Math.sin((Math.PI * (STRAP_AFT - z)) / (STRAP_AFT - STRAP_FORE));
 function straps(m: MeshBuilder): void {
-  for (const x of [-0.45, 0.45]) {
+  for (const x of [-STRAP_X, STRAP_X]) {
     const path: Vec3[] = [];
-    for (let i = 0; i <= 6; i++) {
-      const z = NET_AFT - 0.02 - (1.3 * i) / 6;
-      path.push([x, NET_Y + 0.02 + 0.03 * Math.sin((Math.PI * i) / 6), z]);
+    for (let i = 0; i <= 10; i++) {
+      const z = STRAP_AFT - ((STRAP_AFT - STRAP_FORE) * i) / 10;
+      path.push([x, strapY(z), z]);
     }
-    m.tube(path, [0.012], 4);
+    m.tube(path, [STRAP_R], 4);
   }
 }
 
@@ -844,6 +855,9 @@ function trapezeSide(name: string, s: number): NodeDef {
 }
 
 /** The boom: spruce, a bronze gooseneck at the mast and a band at its end. */
+/** The boom's radius: its underside is this far below its axis. */
+const BOOM_R = 0.034;
+
 function boom(): { spar: MeshBuilder; iron: MeshBuilder } {
   const spar = new MeshBuilder('spar');
   spar.tube(
@@ -851,7 +865,7 @@ function boom(): { spar: MeshBuilder; iron: MeshBuilder } {
       [0, 0, 0.04],
       [0, 0, rig.foot + 0.08],
     ],
-    [0.034],
+    [BOOM_R],
     D.small ? 10 : 4,
   );
   const iron = new MeshBuilder('iron');
@@ -1362,6 +1376,35 @@ const TRAPEZE = {
 /** The stations of the people aboard, as the catalog should have them: on the starboard hull's deck. */
 const STATIONS = { helm: r5v(GUNWALE), crew: r5v(CREW) };
 
+/** The side bar's top, the hull's deck at its inner and outer edges, and the hiking strap's underside, at a station z. */
+function aboardAt(z: number): Record<string, Vec3> {
+  const u = uAt(z);
+  return {
+    inner: r5v([C - innerAt(u), sheer(u), z]),
+    outer: r5v([outline(u), deckY(outline(u) - 0.004, u), z]),
+    bar: r5v([netEdge(z) - 0.005, NET_Y + 0.01 + 0.022, z]),
+    strap: r5v([STRAP_X, strapY(z) - STRAP_R, z]),
+  };
+}
+
+/**
+ * The places the people aboard are posed against, on the starboard side
+ * (the port side's their mirror), in the boat's frame: at the helm's and
+ * the crew's stations, the hull's deck at its inner edge (by the net's
+ * side bar) and at its outer edge, the side bar's top, and the hiking
+ * strap's underside, under which the feet go; the net, laced at its height
+ * between its fore and aft edges, its middle sagging; the boom's underside
+ * at its lowest; and the righting line as it lies on the net, from its end
+ * at the starboard pylon to its middle.
+ */
+const ABOARD = {
+  helm: aboardAt(SEAT_Z),
+  crew: aboardAt(CREW_Z),
+  net: { y: r5(NET_Y), fore: r5(NET_FORE), aft: r5(NET_AFT), sag: 0.015 },
+  boom: r5(rig.boomHeight - BOOM_R),
+  line: [r5v([C - 0.05, NET_Y + 0.012, NET_FORE + 0.25]), r5v([0, NET_Y + 0.012, NET_FORE + 0.45])],
+};
+
 // --- The model ---------------------------------------------------------------
 
 /** The boat's nodes at the detail in force. */
@@ -1486,6 +1529,8 @@ function model(): NodeDef[] {
   // The trapeze: its points for the sailor on the wire, and each side's
   // helm's wire, lanyard and ring a node of its own, which the game hides
   // for the side its sailor is hooked on.
+  // The places the people aboard are posed against.
+  nodes.push({ name: 'aboard', extras: ABOARD });
   nodes.push({
     name: 'trapeze',
     extras: TRAPEZE,
