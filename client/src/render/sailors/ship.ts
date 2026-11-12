@@ -127,6 +127,19 @@ export interface Company {
   top: Vector3;
   /** The main topsail yard: its node, its radius, and its footrope's points from the yard's middle out (in the node's frame). */
   yard: { node: string; radius: number; footrope: Vector3[] };
+  /** The ways her company walks: points on her decks (and the main top) and the stretches between them; null if her model has none. */
+  ways: ShipWays | null;
+}
+
+/** What a stretch of a way is: walked along a deck, a ladder, or the climb aloft. */
+export const WAY_WALKED = 0;
+export const WAY_LADDER = 1;
+export const WAY_ALOFT = 2;
+
+/** The ways along the ship: points (each on its deck) and the stretches between two of them, each walked, a ladder or the climb aloft. */
+export interface ShipWays {
+  nodes: Vector3[];
+  edges: [number, number, number][];
 }
 
 /** The places of the ship's company her model's `company` node gives; null if it has none. */
@@ -140,12 +153,22 @@ export function company(parts: Map<string, Object3D>): Company | null {
   const brace = e.brace as { lead: number[]; fall: number[] };
   const top = e.top as { floor: number[] };
   const yard = e.yard as { node: string; radius: number; footrope: number[][] };
+  const ways = e.ways as { nodes: number[][]; edges: number[][] } | undefined;
   return {
     rail: v(e.rail),
     hatch: v(hatch.edge),
     brace: { lead: v(brace.lead), fall: v(brace.fall) },
     top: v(top.floor),
     yard: { node: yard.node, radius: yard.radius, footrope: yard.footrope.map(v) },
+    ways:
+      ways === undefined
+        ? null
+        : {
+            nodes: ways.nodes.map(v),
+            edges: ways.edges.map(
+              (e) => [e[0] ?? 0, e[1] ?? 0, e[2] ?? 0] as [number, number, number],
+            ),
+          },
   };
 }
 

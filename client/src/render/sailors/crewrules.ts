@@ -26,6 +26,7 @@
 // Everything is in the boat model's frame (x to starboard, y up, z aft).
 
 import type { BoatStation } from '../../catalog';
+import type { ShipMoment, ShipPlan } from './shiprules';
 import type { HullSolid } from './solid';
 
 /** How far past the centreline the boom must go before the crew's side changes, radians. */
@@ -94,6 +95,8 @@ export interface CrewPlan {
    * top; null for a boat with none (a wheel, or no cockpit).
    */
   tiller: { head: number; hinge: number; top: number } | null;
+  /** A ship's company's places and ways, for a ship (her model marks them); her crew then keeps a ship's rules (shiprules.ts). */
+  ship?: ShipPlan | null;
 }
 
 /** A boat's plan from its kind's stations, its model's hull solid, its boom's gooseneck and, if it can be read, its deck. */
@@ -881,6 +884,8 @@ export interface CrewMoment {
   windOffBow: number;
   /** How far the helm hikes: 0 sat in, past 1 out on the first hiking depth. */
   depth: number;
+  /** A ship's: her after yards, heel, wind and the world's time. */
+  ship?: ShipMoment;
 }
 
 /** Who is aboard, the skipper (seat 0) first, and the seat of whoever holds the controls. */

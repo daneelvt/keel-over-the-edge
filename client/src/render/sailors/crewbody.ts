@@ -170,6 +170,13 @@ export interface Life {
   upright: number;
   /** Under reduced motion: breathing only. */
   still: boolean;
+  /**
+   * Up, in the boat model's frame, for a figure kept plumb as she heels and
+   * pitches: the figure turned about the point between its feet to stand
+   * along it, the feet kept where they were; null or not given, it goes
+   * with the boat.
+   */
+  plumb?: Vector3 | null;
 }
 
 export class CrewBody {
@@ -300,6 +307,10 @@ export class CrewBody {
         twoBone(rig, thigh, calf, foot, w);
       });
     }
+    const up = life.plumb ?? null;
+    if (up !== null && !carry && this.#legs.length === 2 && up.y < 1 - 1e-9) {
+      this.#plumb(up);
+    }
     if (this.#headBone >= 0) {
       rig.position(this.#headBone, this.headUp).applyMatrix4(this.root);
     }
@@ -324,6 +335,33 @@ export class CrewBody {
       still: life.still,
     });
     this.#write();
+  }
+
+  /**
+   * The figure turned about the point between its feet to stand along up
+   * (in the boat's model), the feet put back where they were by the legs.
+   */
+  #plumb(up: Vector3): void {
+    const rig = this.rig;
+    this.#legs.forEach(([, , foot], k) => {
+      rig.position(foot, this.#feetA[k] as Vector3).applyMatrix4(this.root);
+    });
+    const [f0, f1] = this.#feetA as [Vector3, Vector3];
+    v.set((f0.x + f1.x) / 2, Math.min(f0.y, f1.y), (f0.z + f1.z) / 2);
+    q.setFromUnitVectors(Y, up);
+    m.makeTranslation(v.x, v.y, v.z)
+      .multiply(m2.makeRotationFromQuaternion(q))
+      .multiply(m3.makeTranslation(-v.x, -v.y, -v.z));
+    this.root.premultiply(m);
+    inv.copy(this.root).invert();
+    this.#legs.forEach(([thigh, calf, foot], k) => {
+      twoBone(rig, thigh, calf, foot, w.copy(this.#feetA[k] as Vector3).applyMatrix4(inv));
+    });
+  }
+
+  /** Not drawn: every bone folded to a point (gone on a ladder or aloft). */
+  hide(): void {
+    this.bones.fill(0);
   }
 
   /** Where a pose, at a stance, brought in by narrow, has its feet: into out, in the boat's model. */
