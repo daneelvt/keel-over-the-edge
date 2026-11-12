@@ -549,7 +549,7 @@ export const NO_SOLID: HullSolid = {
   stations: [],
   exponent: 2,
   cockpit: { fore: 0, aft: 0, halfWidth: 0, floor: 0 },
-  board: { y: 0, z: 0, span: 0, chord: 0, thickness: 0 },
+  board: { x: 0, y: 0, z: 0, span: 0, chord: 0, thickness: 0 },
 };
 
 /**

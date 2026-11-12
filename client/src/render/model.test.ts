@@ -36,6 +36,7 @@ interface Gltf {
       hounds?: number[];
       rings?: number[][];
       rackEdge?: number[];
+      length?: number;
     };
   }[];
   meshes: {
@@ -270,6 +271,18 @@ describe.each(catalog.boats.map((b) => [b.name, b] as const))('%s', (_, boat) =>
       expect(at('pennant')[1] ?? 0).toBeLessThan(masthead + 0.5);
     }
     expect(at('rudder')[2]).toBeCloseTo(foils.rudderPosition, 2);
+    // A boat of two hulls has a rudder on each, turning on its own stock
+    // under the rudder's node, half the spacing out; the crossbar joining
+    // them, the tiller, on the centreline.
+    const twin = boat.physics.hulls.rudderCount > 1;
+    expect(has('rudder-starboard')).toBe(twin);
+    expect(has('rudder-port')).toBe(twin);
+    if (twin) {
+      const half = boat.physics.hulls.hullSpacing / 2;
+      expect(at('rudder-starboard')).toEqual([half, 0, 0]);
+      expect(at('rudder-port')).toEqual([-half, 0, 0]);
+      expect(Math.abs(at('tiller')[0] ?? 1)).toBeLessThan(CM);
+    }
     expect(at('daggerboard')[2]).toBeCloseTo(-foils.boardPosition, 2);
     expect(at('sailor')[1]).toBeCloseTo(hull.centreOfGravity + sailor.sailorSeatHeight, 2);
     for (const name of ['mast', 'boom', 'rudder', 'daggerboard', 'sailor']) {
@@ -311,10 +324,19 @@ describe.each(catalog.boats.map((b) => [b.name, b] as const))('%s', (_, boat) =>
     const deepest = bounds('daggerboard', undefined, true);
     expect(Math.abs((deepest.min[1] ?? 0) + hull.hullDraught + foils.boardSpan)).toBeLessThan(CM);
     expect(Math.abs((board.max[2] ?? 0) - (board.min[2] ?? 0) - foils.boardChord)).toBeLessThan(CM);
-    // A rudder hung on the sternpost, behind the deadwood, reaches the keel's depth.
-    const rudder = bounds('rudder');
+    // A rudder hung on the sternpost, behind the deadwood, reaches the keel's
+    // depth; a boat of two hulls' each reaches the rudders' span.
     const span = has('deadwood') ? foils.boardSpan : foils.rudderSpan;
-    expect(Math.abs((rudder.min[1] ?? 0) + hull.hullDraught + span)).toBeLessThan(CM);
+    for (const name of has('rudder-starboard') ? ['rudder-starboard', 'rudder-port'] : ['rudder']) {
+      const rudder = bounds(name);
+      expect(Math.abs((rudder.min[1] ?? 0) + hull.hullDraught + span), name).toBeLessThan(CM);
+    }
+    // A boat of two hulls' keels, its lateral planes, one under each hull.
+    if (boat.physics.hulls.boardCount > 1) {
+      const half = boat.physics.hulls.hullSpacing / 2;
+      expect(board.min[0] ?? 0).toBeLessThan(-half + 0.1);
+      expect(board.max[0] ?? 0).toBeGreaterThan(half - 0.1);
+    }
   });
 
   test('its telltales sit at the height of each sail strip’s centre of effort', () => {
@@ -516,10 +538,11 @@ describe.each(catalog.boats.map((b) => [b.name, b] as const))('%s', (_, boat) =>
       expect(bounds('trapeze-starboard').min[0]).toBeGreaterThan(0);
       expect(bounds('trapeze-port').max[0]).toBeLessThan(0);
       expect(far.nodes.find((n) => n.name === 'trapeze')?.extras?.rackEdge).toEqual(rackEdge);
-      // The extension reaches a sailor's aft hand out fully on the wire, 1.8 m from its hinge.
+      // The extension reaches a sailor's aft hand out fully on the wire, 1.8 m
+      // from its hinge: as long as its node says (the skiff's 1.9 m if not said).
       const length = Math.hypot(...at('grip'));
       expect(length).toBeGreaterThanOrEqual(1.8);
-      expect(length).toBeCloseTo(1.9, 3);
+      expect(length).toBeCloseTo(node('extension').extras?.length ?? 1.9, 3);
     },
   );
 

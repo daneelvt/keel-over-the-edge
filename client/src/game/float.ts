@@ -25,6 +25,7 @@ import { RECORDS } from '../predict/layout.gen';
 import type { Physics } from '../predict/physics';
 import type { Seas } from '../predict/seas';
 import type { DrawnBoat } from './fleet';
+import { hullLift } from './hullpose';
 
 /** Sea water's density, kg/m³, and gravity, m/s², as the physics has them. */
 const WATER = 1025;
@@ -132,9 +133,11 @@ export class Floater {
         slope = w[RECORDS.wave.ahead] ?? 0;
       }
       const s = b.slot;
+      // Heeled about her lee hull, if she has two.
+      const lift = hullLift(this.#kinds[b.kind]?.physics.hulls.hullSpacing ?? 0, b.heel);
       if (s < 0 || s >= VIEW_SLOTS) {
         // Fading out of the view: on the water as it is.
-        b.heave = height;
+        b.heave = height + lift;
         b.pitch = slope + b.trim;
         continue;
       }
@@ -153,7 +156,7 @@ export class Floater {
       }
       this.#height[s] = height;
       this.#slope[s] = slope;
-      b.heave = this.#heave[s] ?? 0;
+      b.heave = (this.#heave[s] ?? 0) + lift;
       b.pitch = (this.#pitch[s] ?? 0) + b.trim;
     }
     this.#afloat.set(this.#seen);

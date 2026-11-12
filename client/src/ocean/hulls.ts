@@ -11,7 +11,9 @@
 // either, which a lid at the gunwale would let through. The fragment is
 // taken into the hull's own frame first, its heave, pitch and heel
 // included, so the volume holds however the boat lies. Each kind of boat
-// has its own hull: each hull drawn names its kind's shape.
+// has its own hull: each hull drawn names its kind's shape. A boat of two
+// hulls has the volume of one about each hull's centreline, its offset
+// either side of hers, and the sea between them.
 //
 // This is clipping the water's surface by a primitive (Crest, "Water
 // Exclusion": clip surface, signed distance primitives): it needs no
@@ -57,19 +59,22 @@ export const HULL_FILL = 0.94;
 /** A fragment's own place is taken a little off the fragment's, so a tile this much further off than a hull reaches may still need the walk, metres. */
 export const HULL_MARGIN = 0.5;
 
-/** A hull's volume: its stations from the transom forward, each [z, half-beam at the waterline, depth of the bottom], and the exponent of its sections' narrowing. */
+/** A hull's volume: its stations from the transom forward, each [z, half-beam at the waterline, depth of the bottom], and the exponent of its sections' narrowing; and, for a boat of two hulls, each hull's centreline's offset either side of hers (0 for one hull), about which the half-beams are. */
 export interface HullShape {
   stations: number[][];
   bilge: number;
+  offset: number;
 }
 
 /** Reads a hull's volume from its model's node data; null if it has none. */
 export function hullShape(data: unknown): HullShape | null {
-  const w = (data as { waterline?: { stations?: unknown; bilge?: unknown } } | undefined)
-    ?.waterline;
+  const w = (
+    data as { waterline?: { stations?: unknown; bilge?: unknown; offset?: unknown } } | undefined
+  )?.waterline;
   if (w === undefined || !Array.isArray(w.stations) || typeof w.bilge !== 'number') {
     return null;
   }
+  const offset = typeof w.offset === 'number' && w.offset >= 0 ? w.offset : 0;
   const stations = w.stations as number[][];
   if (
     stations.length !== STATIONS ||
@@ -77,7 +82,7 @@ export function hullShape(data: unknown): HullShape | null {
   ) {
     return null;
   }
-  return { stations, bilge: w.bilge };
+  return { stations, bilge: w.bilge, offset };
 }
 
 /**
@@ -110,7 +115,7 @@ export function insideHull(
   }
   const below = Math.min(Math.max(-y / Math.max(depth, 1e-4), 0), 1);
   const side = (1 - below ** shape.bilge) ** (1 / shape.bilge);
-  return Math.abs(x) < fill * beam * side;
+  return Math.abs(Math.abs(x) - shape.offset) < fill * beam * side;
 }
 
 /**
@@ -150,7 +155,7 @@ export class HullVolumes {
     { length: STATIONS * HULL_SHAPES },
     () => new Vector4(),
   );
-  /** Each kind's bilge exponent and centre of gravity's height above the waterline; and every hull's reach from it, the most of any kind's. */
+  /** Each kind's bilge exponent, centre of gravity's height above the waterline and its hulls' offset; and every hull's reach from it, the most of any kind's. */
   readonly #shapes: Vector4[] = Array.from({ length: HULL_SHAPES }, () => new Vector4(2, 0, 0, 0));
   readonly #shape = uniform(new Vector4(2, 0, 0, 0));
   readonly #placesNode = uniformArray(this.#places, 'vec4');
@@ -168,9 +173,9 @@ export class HullVolumes {
     let reach = 0;
     shape.stations.forEach((s, i) => {
       (this.#stations[kind * STATIONS + i] as Vector4).set(s[0] ?? 0, s[1] ?? 0, s[2] ?? 0, 0);
-      reach = Math.max(reach, Math.hypot(s[0] ?? 0, s[1] ?? 0));
+      reach = Math.max(reach, Math.hypot(s[0] ?? 0, (s[1] ?? 0) + shape.offset));
     });
-    (this.#shapes[kind] as Vector4).set(shape.bilge, centreOfGravity, 0, 0);
+    (this.#shapes[kind] as Vector4).set(shape.bilge, centreOfGravity, shape.offset, 0);
     // A heeled or pitched hull reaches no further from its centre of
     // gravity than this; the walk's test is by the furthest any kind's does.
     const v = this.#shape.value;
@@ -286,7 +291,9 @@ export class HullVolumes {
           const below = min(max(y.negate().div(max(depth, 1e-4)), 0), 1);
           const side = pow(float(1).sub(pow(below, own.x)), float(1).div(own.x));
           If(
-            y.greaterThan(depth.negate()).and(abs(m.x).lessThan(beam.mul(side).mul(HULL_FILL))),
+            y
+              .greaterThan(depth.negate())
+              .and(abs(abs(m.x).sub(own.z)).lessThan(beam.mul(side).mul(HULL_FILL))),
             () => {
               inside.assign(1);
             },

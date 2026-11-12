@@ -74,6 +74,7 @@ import { bumpLine } from '../ui/verdict';
 import { bumpedLine } from '../ui/watchwords';
 import { STEPS_PER_SECOND, WorldClock } from './clock';
 import type { BoatDriver, Pacer } from './driver';
+import { hullLift } from './hullpose';
 import { StepLoop } from './loop';
 
 const DEG = Math.PI / 180;
@@ -572,6 +573,8 @@ export class Game implements PilotActions {
     w.overlays.setPilot(this.pilot.on);
     if (d !== null) {
       d.states.blend(this.clock.alpha, w.pose);
+      // Heeled about her lee hull, if she has two.
+      w.pose.heave += hullLift(w.kind.physics.hulls.hullSpacing, w.pose.heel);
       d.decorate?.(w.pose, dt);
       if (this.pilot.on) {
         // Held on the boat's new tack after it gybed by itself: what the

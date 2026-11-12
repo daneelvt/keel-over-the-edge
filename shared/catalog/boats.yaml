@@ -1286,8 +1286,8 @@ boats:
     # the same hull by the shrouds, hiking, on whichever hull the helm
     # sits: to windward, crossing with the helm.
     stations:
-      - { at: [1.12, 0.45, 1.25], pose: seated, facing: 270 }
-      - { at: [1.12, 0.45, -0.2], pose: hiking, facing: 270, windward: true }
+      - { at: [1.201, 0.4256, 1.25], pose: seated, facing: 270 }
+      - { at: [1.1064, 0.4622, -0.2], pose: hiking, facing: 270, windward: true }
     lengthOverall: 5.04 # Hobie
     beam: 2.41 # Hobie
     # A sailing vessel of less than 7 m shows her sidelights and sternlight

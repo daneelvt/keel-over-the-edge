@@ -884,7 +884,8 @@ export class SailorRuntime {
   /**
    * Standing on the daggerboard as on a floor, facing up it to the hull:
    * upright in the world when she lies on her side, leaning back away
-   * from her as she comes up.
+   * from her as she comes up. A boat of two hulls' is the lower hull's
+   * keel.
    */
   #boardPlace(s: SailorMoment, place: Place): void {
     const board = this.boat.solid.board;
@@ -892,7 +893,8 @@ export class SailorRuntime {
     this.#levelTurn(s, q);
     u.set(0, 1, 0).applyQuaternion(q.invert());
     const face = u.x >= 0 ? 1 : -1;
-    place.at.set(face * (board.thickness / 2), board.y - BOARD_ALONG, board.z);
+    const low = s.heel >= 0 ? 1 : -1;
+    place.at.set(low * board.x + face * (board.thickness / 2), board.y - BOARD_ALONG, board.z);
     // The figure's left, up and forward: up off the face, forward up the board.
     v.set(face, 0, 0);
     w.set(0, 1, 0);
