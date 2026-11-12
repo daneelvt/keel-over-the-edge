@@ -196,7 +196,8 @@ def retarget(fig, name, spec, fps):
         _untwist(fig, clip)
     # How far a sole stands below where the build takes it (a machine's
     # iron feet): what is set on a net stands that much higher.
-    sole = _sole_below(fig) if spec.get("stage") == CAT_NET else 0.0
+    # Set on a net, a knee is as thick as the figure's dressed one.
+    fig.knee = _own_knee(fig) if spec.get("stage") == CAT_NET else None
     if spec.get("deck"):
         _ground(fig, clip, crawl)
         if spec.get("head") is not None:
@@ -237,6 +238,7 @@ def retarget(fig, name, spec, fps):
         if clip.ship == SHIP_RAIL:
             _on_rail(fig, clip, rail)
         if crawl:
+            _knees_on(fig, clip)
             _toes_up(fig, clip)
             _wrists(fig, clip)
         else:
@@ -255,9 +257,13 @@ def retarget(fig, name, spec, fps):
             # On the beach cat's net, crossing it facing forward: placed
             # from its middle, judged against her (clip.cat).
             clip.cat, clip.ship = CAT_NET, None
-            clip.place = Matrix.Translation(fig.stage.point(CAT_NET) + Vector((0.0, 0.0, NET_STRANDS + sole))) @ \
+            # As high as keeps the lowest of the figure (but its cloth, which
+            # is laid on the net) on it in every frame: thick soles, a
+            # machine's iron feet.
+            under = _under_deck(fig, clip)
+            clip.place = Matrix.Translation(fig.stage.point(CAT_NET) + Vector((0.0, 0.0, NET_STRANDS + under))) @ \
                 Matrix.Rotation(math.pi, 4, "Z")
-            clip.notes["soles under the bones"] = round(sole, 4)
+            clip.notes["raised for the soles"] = round(under, 4)
     elif lock:
         _lock(fig, clip, lock)
         clip.planted = list(lock)
@@ -267,6 +273,7 @@ def retarget(fig, name, spec, fps):
     # The joints it takes toward the ends of their ranges, as the hike
     # does (a deep crouch's knees and ankles).
     clip.notes["strain"] = list(spec.get("strain") or [])
+    fig.knee = None
     fig.hang = None
     fig.quiet(False)
     return clip
@@ -408,7 +415,9 @@ KNEE_SWING = (0.02, 0.04, 0.07, 0.1, 0.15, 0.2)
 # it is laced what crosses it stands, on its strands (a foot passing low
 # over it scrapes it no lower).
 CAT_NET = "cat-net"
-NET_STRANDS = 0.01
+NET_STRANDS = 0.015
+# A knee's dressed thickness is looked for this near its joint.
+KNEE_NEAR = 0.1
 
 
 def _sole(fig, s):
@@ -547,16 +556,53 @@ def _heel_up(fig, s, most):
         fig.update()
 
 
-def _sole_below(fig):
-    """How far the figure's lowest vertex standing at rest is below the
-    lowest point of its feet the build takes (the heel under the ankle,
-    the sole under the ball and toes): nothing, but for thicker soles."""
+def _knee_of(fig):
+    """A knee's thickness under its joint: the figure's own, set on a net
+    (a machine's knee plate stands further out), else the build's."""
+    return getattr(fig, "knee", None) or KNEE
+
+
+def _own_knee(fig):
+    """How far the figure's dressed knee reaches from its joint, standing at
+    rest: of what the thigh and shin carry within a hand of it, the
+    furthest; no less than the build's."""
     fig.reset()
     fig.quiet(False)
-    low = float(fig.dressed()[:, 2].min())
+    co = fig.dressed()
     fig.quiet()
-    bone = min(_lowest(fig, s)[0] for s in ("l", "r"))
-    return max(0.0, bone - low)
+    most = KNEE
+    for s in ("l", "r"):
+        at = np.array(fig.world(f"calf_{s}"))
+        mine = _carried_by(fig, f"calf_{s}") | _carried_by(fig, f"thigh_{s}")
+        d = np.linalg.norm(co[mine] - at, axis=1)
+        near = d[d < KNEE_NEAR]
+        if len(near):
+            most = max(most, float(near.max()))
+    return most
+
+
+def _under_deck(fig, clip):
+    """How far the lowest vertex of the figure, but of the cloth that hangs
+    from its skirts' chains, is under its deck in any frame."""
+    meshes = [o for o in fig.meshes if not any(g.name.startswith("skirt_") for g in o.vertex_groups)]
+    fig.quiet(False)
+    low = 0.0
+    for fr in _ring(clip):
+        fig.set_rotations(fr["rot"], fr["pelvis"])
+        low = min(low, float(fig.dressed(meshes)[:, 2].min()))
+    fig.quiet()
+    return -low
+
+
+def _carried_by(fig, bone):
+    """Which vertices of the figure, in dressed()'s order, a bone weighs
+    most on."""
+    out = []
+    for o in fig.meshes:
+        names = {g.index: g.name for g in o.vertex_groups}
+        out.append(np.array([bool(v.groups) and max((g.weight, names.get(g.group, "")) for g in v.groups)[1] == bone
+                             for v in o.data.vertices]))
+    return np.concatenate(out)
 
 
 def _knees_down(fig, clip):
@@ -566,7 +612,7 @@ def _knees_down(fig, clip):
     low = []
     for fr in _ring(clip):
         fig.set_rotations(fr["rot"], fr["pelvis"])
-        low.append(max(0.0, max(KNEE - fig.world(f"calf_{s}").z for s in ("l", "r"))))
+        low.append(max(0.0, max(_knee_of(fig) - fig.world(f"calf_{s}").z for s in ("l", "r"))))
     held = [max(low[max(0, f - 4):f + 5]) if not clip.loop else
             max(low[(f + k) % len(low)] for k in range(-4, 5)) for f in range(len(low))]
     return [x * 1.2 + (0.002 if x > 0 else 0.0) for x in _gauss(held, 2.0, clip.loop)]
@@ -802,7 +848,7 @@ def _plant(fig, clip, speed, way=WAYS["forward"], crawl=False):
                     # A knee brought down onto the deck by the foot's place:
                     # swung up about the line from the hip to the foot.
                     for up in KNEE_SWING:
-                        if fig.world(f"calf_{s[-1]}").z - KNEE >= 0:
+                        if fig.world(f"calf_{s[-1]}").z - _knee_of(fig) >= 0:
                             break
                         for b, q in rest.items():
                             fig.bones[b].rotation_quaternion = q
@@ -814,8 +860,8 @@ def _plant(fig, clip, speed, way=WAYS["forward"], crawl=False):
                         # The knee kept on or over the deck, the foot then
                         # taken back to its place by the shin.
                         k = fig.world(f"calf_{s[-1]}")
-                        if k.z - KNEE < 0:
-                            _knee(fig, s[-1], k + Vector((0.0, 0.0, KNEE - k.z)))
+                        if k.z - _knee_of(fig) < 0:
+                            _knee(fig, s[-1], k + Vector((0.0, 0.0, _knee_of(fig) - k.z)))
                             _shin(fig, s[-1], target)
             elif s.startswith("knee"):
                 _knee(fig, s[-1], target)
@@ -876,7 +922,7 @@ def _points(fig, e):
         return _sole(fig, s)
     m = fig.arm.matrix_world
     if kind == "knee":
-        return [(m @ fig.bones[f"calf_{s}"].head, KNEE)]
+        return [(m @ fig.bones[f"calf_{s}"].head, _knee_of(fig))]
     return [(m @ fig.bones[f"hand_{s}"].head, PALM[0]), (m @ fig.bones[f"middle_01_{s}"].head, PALM[1])] + \
         [(m @ fig.bones[f"{d}_03_{s}"].tail, PALM[2]) for d in motion.FINGERS]
 
@@ -922,7 +968,7 @@ def _clearance(fig, clip, crawl=False):
     for f, fr in enumerate(_ring(clip)):
         fig.set_rotations(fr["rot"], fr["pelvis"])
         for name, z in [(b, fig.world(b, "tail").z - finger) for b in tips] + \
-                [(f"calf_{s}", fig.world(f"calf_{s}").z - KNEE) for s in sides]:
+                [(f"calf_{s}", fig.world(f"calf_{s}").z - _knee_of(fig)) for s in sides]:
             if z < clear:
                 clear, nearest = z, f"{name} at frame {f}"
     clip.notes["clear of the deck"] = round(clear, 4)
@@ -1122,6 +1168,27 @@ def _wrists(fig, clip):
                 fig.update()
         fig.derive()
         fr["rot"] = fig.rotations()
+    _close(clip)
+
+
+def _knees_on(fig, clip):
+    """Crawling, each knee kept on the deck, never in it: its thigh turned
+    up the least way, frame by frame, until its knee's thickness is over
+    it."""
+    knee = _knee_of(fig)
+    for fr in _ring(clip):
+        fig.set_rotations(fr["rot"], fr["pelvis"])
+        moved = False
+        for s in ("l", "r"):
+            for _ in range(4):
+                k = fig.world(f"calf_{s}")
+                if k.z - knee >= 0:
+                    break
+                _knee(fig, s, k + Vector((0.0, 0.0, knee - k.z + 0.0005)))
+                moved = True
+        if moved:
+            fig.derive()
+            fr["rot"] = fig.rotations()
     _close(clip)
 
 

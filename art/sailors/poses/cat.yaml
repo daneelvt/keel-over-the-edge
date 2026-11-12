@@ -112,7 +112,7 @@ poses:
     from: cat-seated
     place: crew-seat
     ik:
-      hand_l: { at: bone, bone: thigh_l, offset: [0.09, -0.1, -0.32], pole: [0.6, 0.3, -0.2] }
+      hand_l: { at: bone, bone: thigh_l, offset: [0.12, -0.06, -0.36], pole: [0.7, 0.2, -0.2] }
       hand_r: { at: bone, bone: spine_03, offset: [-0.16, -0.32, -0.06], pole: [-0.5, 0.3, -0.4] }
       foot_l: { at: crew-strap, offset: [-0.1, 0.03, 0.11], pole: [0.1, -0.5, 0.6] }
       foot_r: { at: crew-strap, offset: [0.1, 0.03, 0.11], pole: [-0.1, -0.5, 0.6] }
@@ -369,7 +369,7 @@ retarget:
     seconds: 1.0
     deck: true
     head: 0.7
-    strain: [thigh, calf, foot]
+    strain: [thigh, calf, foot, ball]
     stage: cat-net
     group: cat
   net-crouch-left:
@@ -379,7 +379,7 @@ retarget:
     way: left
     speed: 0.5
     head: 0.7
-    strain: [thigh, calf, foot]
+    strain: [thigh, calf, foot, ball]
     stage: cat-net
     group: cat
   net-crouch-right:
@@ -389,7 +389,7 @@ retarget:
     way: right
     speed: 0.5
     head: 0.7
-    strain: [thigh, calf, foot]
+    strain: [thigh, calf, foot, ball]
     stage: cat-net
     group: cat
   net-crouch-exit:
@@ -397,7 +397,7 @@ retarget:
     seconds: 1.0
     deck: true
     head: 0.7
-    strain: [thigh, calf, foot]
+    strain: [thigh, calf, foot, ball]
     stage: cat-net
     group: cat
   net-crawl-left:
