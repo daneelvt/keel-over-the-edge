@@ -7,6 +7,9 @@
 // ship, chosen the same way, sails with her yards braced. The skiff, chosen
 // the same way, has her crew set the gennaker as she bears away on the
 // autopilot and take it in as she comes up, and keep it in once reefed.
+// The beach cat, chosen the same way, flies a hull on a reach, capsizes
+// luffed in a gust with her sheet held and is righted, pitchpoles borne
+// away in a breeze with it held, and reefs.
 
 import { expect, type Page, test } from '@playwright/test';
 import data from '../src/catalog/catalog.gen.json' with { type: 'json' };
@@ -35,6 +38,9 @@ const keelboat = data.boats.find((b) => b.fleet === 'account');
 const ship = data.boats.find((b) => b.fleet === 'account' && b.physics.square.squareAfterArea > 0);
 /** The account's boat with a downwind sail its crew sets. */
 const skiff = data.boats.find((b) => b.fleet === 'account' && b.physics.downwind.downwindArea > 0);
+
+/** The account's boat of two hulls. */
+const cat = data.boats.find((b) => b.fleet === 'account' && b.physics.hulls.hullSpacing > 0);
 
 /** keel's internal listener, as tools/e2e serves it: its developer commands. */
 const internal = 'http://127.0.0.1:19090';
@@ -217,6 +223,91 @@ test('the skiff chosen from the fleet: her crew sets the gennaker bearing away, 
     const s = await page.evaluate(() => globalThis.keel.boat().state);
     expect([s.hoist, s.hoistTarget, s.sailorMode]).toEqual([0, 0, 0]);
     expect(await angleOff(page)).toBeGreaterThanOrEqual(set);
+  } finally {
+    // Back to the breeze tools/e2e holds.
+    await request.post(`${internal}/debug/weather?regime=${heldRegime()}`);
+  }
+});
+
+test('the beach cat chosen from the fleet: she flies a hull on a reach, capsizes luffed in a gust and is righted, pitchpoles borne away in a breeze, and reefs', {
+  tag: '@world',
+}, async ({ context, page, request }) => {
+  test.skip(cat === undefined, 'the catalog has no boat of two hulls');
+  test.setTimeout(240_000);
+  await sailor(context, 'Cat');
+  await page.goto(GAME);
+  const readout = page.locator('.your-sailor [data-readout=boat]');
+  await expect(readout).toBeVisible({ timeout: 90_000 });
+  await page.getByRole('button', { name: 'Change boat', exact: true }).click();
+  const choice = page.locator('.change-boat-choice', { hasText: cat?.name ?? '' }).first();
+  await expect(choice).toContainText('available');
+  await choice.click();
+  await expect(readout).toContainText(cat?.name ?? '');
+  expect((await fleet(page)).boats.find((b) => b.yours)?.kind).toBe(cat?.id);
+
+  await setSail(page);
+  await page.waitForFunction(() => globalThis.keel?.net().status === 'sailing', null, {
+    timeout: 60_000,
+  });
+  /** The sheet held down (W hauls in, S eases) for so long, s: its whole range in 2. */
+  const sheet = async (key: 'KeyW' | 'KeyS', seconds: number) => {
+    await page.keyboard.down(key);
+    await page.waitForTimeout(seconds * 1000);
+    await page.keyboard.up(key);
+  };
+  const state = () => page.evaluate(() => globalThis.keel.boat().state);
+  const wind = async (knots: number) =>
+    expect((await request.post(`${internal}/debug/wind?knots=${knots}&from=0`)).status()).toBe(204);
+  try {
+    await wind(16);
+    await page.waitForFunction(() => Math.cos(globalThis.keel.boat().wind.meanFrom) > 0.99, null, {
+      timeout: 10_000,
+    });
+    // At rest on a beam reach in clean air, the autopilot on there and the
+    // sheet half out: way gathered, her windward hull clear of the water.
+    await alone(page, 90);
+    await page.keyboard.press('p');
+    await expect.poll(() => page.evaluate(() => globalThis.keel.boat().pilot.mode)).toBe(1);
+    await sheet('KeyW', 2.2);
+    await sheet('KeyS', 0.7);
+    await page.waitForFunction(() => globalThis.keel.boat().out.hullFlying > 0, null, {
+      timeout: 40_000,
+    });
+    // Luffed hard in a gust, the sheet hauled in and held: over onto her side.
+    await wind(30);
+    await sheet('KeyW', 2.2);
+    await pilotTo(page, 60);
+    await expect.poll(async () => (await state()).sailorMode, { timeout: 40_000 }).not.toBe(0);
+    expect(Math.abs((await state()).heel)).toBeGreaterThan(1);
+    // Let fly in a lighter wind: her sailor rights her from her lower hull and climbs back.
+    await wind(12);
+    await sheet('KeyS', 2.2);
+    await expect.poll(async () => (await state()).sailorMode, { timeout: 90_000 }).toBe(0);
+    expect(Math.abs((await state()).heel)).toBeLessThan(0.5);
+    // A broad reach in a breeze, the sheet at its best; a gust and borne
+    // away, the sheet held: her bows bury and her sailor goes over them.
+    await wind(20);
+    await pilotTo(page, 135);
+    await sheet('KeyW', 0.6);
+    await page.waitForFunction(() => globalThis.keel.boat().out.speedOverGround > 4, null, {
+      timeout: 40_000,
+    });
+    await wind(30);
+    await pilotTo(page, 155);
+    await page.waitForFunction(
+      () => {
+        const b = globalThis.keel.boat();
+        return b.state.sailorMode !== 0 && Math.abs(b.state.heel) < 0.9;
+      },
+      null,
+      { timeout: 40_000, polling: 50 },
+    );
+    // One reef, as the Reef key says it, while her sailor swims back to her.
+    await wind(12);
+    await page.getByRole('button', { name: /^Reef: / }).click();
+    await expect(page.locator('[data-control=reef] .reef-level').first()).toHaveText(
+      cat?.controls.reef[1] ?? '',
+    );
   } finally {
     // Back to the breeze tools/e2e holds.
     await request.post(`${internal}/debug/weather?regime=${heldRegime()}`);
