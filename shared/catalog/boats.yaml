@@ -76,6 +76,7 @@ boats:
         # centre of gravity from Day's measurement. Every 10° from 0° to 180°.
         rightingLever: [0, 0.074, 0.117, 0.115, 0.062, -0.014, -0.10, -0.19, -0.27,
           -0.346, -0.41, -0.465, -0.505, -0.47, -0.40, -0.30, -0.20, -0.10, 0]
+        rightingLeverStep: 10
         # In waves. The hull heaves and pitches on its waterplane, as a mass on
         # a spring: ρ g × the area in heave, ρ g × the second moment in pitch.
         waterlineBeam: 1.103 # Day and Nixon, Table 1, at 160 kg
@@ -296,6 +297,21 @@ boats:
         steerage: 0.26 # m/s, half a knot
         stallTime: 8
         stallGain: 5
+      # One hull: a monohull's rudder and board, its drag as it heels.
+      hulls: &oneHull
+        hullSpacing: 0
+        liftHeel: 0
+        flyingDrag: 1
+        rudderCount: 1
+        boardCount: 1
+      # Her pitch is the waves' alone: her rig never pitches her.
+      pitch: &noPitch
+        rigPitch: 0
+        bowBuryPitch: 0
+        bowBuryRestoring: 1
+        bowBuryDrag: 0
+        pitchpoleAngle: 0
+        aftReach: 0
 
   # The J/22, a fractionally rigged day-sailing keelboat of 1983, sailed by
   # one 80 kg sailor under main and jib, with no spinnaker. Its values are
@@ -391,6 +407,7 @@ boats:
         # 0° to 180°.
         rightingLever: [0, 0.17, 0.30, 0.37, 0.41, 0.41, 0.41, 0.38, 0.27,
           0.14, 0, -0.12, -0.22, -0.30, -0.36, -0.37, -0.29, -0.12, 0]
+        rightingLeverStep: 10
         waterlineBeam: 1.95 # estimate
         waterplaneArea: 7.9 # estimate: a waterplane coefficient of 0.70
         waterplanePitch: 18 # estimate: an ellipse's π L³ B / 64
@@ -558,6 +575,8 @@ boats:
         steerage: 0.26
         stallTime: 8
         stallGain: 5
+      hulls: *oneHull
+      pitch: *noPitch
 
   # The HM Bark Endeavour replica (1994), after the collier-built bark of
   # 1768: a ship of three masts under her plain sail, courses, topsails and
@@ -696,6 +715,7 @@ boats:
         # from 0° to 180°.
         rightingLever: [0, 0.21, 0.40, 0.56, 0.66, 0.68, 0.62, 0.50, 0.35,
           0.20, 0.08, 0, -0.12, -0.25, -0.35, -0.38, -0.30, -0.17, 0]
+        rightingLeverStep: 10
         waterlineBeam: 8.6 # estimate
         waterplaneArea: 192 # estimate: a waterplane coefficient of 0.75
         waterplanePitch: 13000 # estimate: a full waterplane's
@@ -926,6 +946,8 @@ boats:
         steerage: 1.5
         stallTime: 20
         stallGain: 5
+      hulls: *oneHull
+      pitch: *noPitch
 
   # The 29er, the two-person trapeze skiff of 1998 (Julian Bethwaite), with
   # its racks, a fully battened main, a self-tacking jib and a gennaker on a
@@ -1024,6 +1046,7 @@ boats:
         # near the Jolly boat's. Every 10° from 0° to 180°.
         rightingLever: [0, 0.07, 0.11, 0.10, 0.05, -0.02, -0.10, -0.19, -0.27,
           -0.35, -0.41, -0.46, -0.50, -0.47, -0.40, -0.30, -0.20, -0.10, 0]
+        rightingLeverStep: 10
         waterlineBeam: 0.9 # estimate: the Musto Skiff's 0.89 to 0.94 m
         waterplaneArea: 2.71 # estimate: a waterplane coefficient of 0.70 on 4.3 m × 0.9 m
         waterplanePitch: 3.5 # estimate: an ellipse's π L³ B / 64
@@ -1227,3 +1250,303 @@ boats:
         steerage: 0.26
         stallTime: 8
         stallGain: 5
+      hulls: *oneHull
+      pitch: *noPitch
+
+  # The Hobie 16, the beach catamaran of 1969 (Hobie Alter): two
+  # asymmetric hulls with no boards, two beams and a trampoline, a fully
+  # battened main on a rotating mast, a jib on a bridled forestay, two
+  # kick-up rudders on a tiller crossbar and two trapezes a side, sailed by
+  # one 80 kg sailor who helms from the windward hull and from the wire.
+  # One body with two hulls' values: it heels about its lee hull, flies its
+  # windward one, and its rig pitches it bow down. Its values are the Hobie
+  # 16's where they are published; the rest are estimates as the other
+  # boats' were, tuned only by tools/polar. No VPP or tank test of a beach
+  # catamaran is published: tools/polar checks it as raced against its
+  # yardstick, and its one published polar as a ceiling. Sources:
+  #   Hobie Cat Company, Hobie 16 (2026): length, beam, weight, mast, the
+  #     main's and jib's areas.
+  #   Hobie Cat Europe, Hobie 16 rigging manual: the hulls 2 m apart, seven
+  #     battens, the trapezes, the Easy rig's areas, the righting line.
+  #   SCHRS (2026), its ratings and their measured inputs: the waterline,
+  #     the sailing weight, the main's luff; the Hobie 16 two-up 1.227.
+  #   RYA Portsmouth Number List (2026): a catamaran it does not list is
+  #     rated as its SCHRS number times 678; the ILCA 7 1103.
+  #   ITTC (1957): the hulls' friction.
+  #   Offshore Racing Congress (2023), ORC VPP Documentation: the sails.
+  #   Day (2017), Performance prediction for sailing dinghies, Ocean
+  #     Engineering: the sailor's reach.
+  #   Colby, Hobie 16 tuning guide: the crew moving aft as the breeze builds.
+  - id: beach-cat
+    name: Beach cat
+    description: Small fast catamaran
+    capacity: 2
+    # Where the people aboard are: the helmsman on the starboard hull aft,
+    # forward of the rear beam, facing in, and a second forward of them on
+    # the same hull by the shrouds, hiking, on whichever hull the helm
+    # sits: to windward, crossing with the helm.
+    stations:
+      - { at: [1.12, 0.45, 1.25], pose: seated, facing: 270 }
+      - { at: [1.12, 0.45, -0.2], pose: hiking, facing: 270, windward: true }
+    lengthOverall: 5.04 # Hobie
+    beam: 2.41 # Hobie
+    # A sailing vessel of less than 7 m shows her sidelights and sternlight
+    # in one lantern at the masthead "if practicable" (Collision
+    # Regulations, Rule 25(b) and (d)(i)): she does, as the other dinghies.
+    lights: [tricolour]
+    # Her lookout is the sailor on her hull or the wire, the eye 2 m above
+    # the sea.
+    lookout: 2
+    # A seabird aboard perches on her starboard bow; a flying fish lands on
+    # her trampoline.
+    perch: [1.0, 0.5, -1.9]
+    deck: [0.3, 0.5, 0.6]
+    # Her sheet for a start from rest, by the angle off the wind: from
+    # tools/polar's sweep from rest (-start), each within 85% of the best
+    # sheet's speed after 20 s in 3, 5 and 8 knots.
+    startSheet: [[90, 0.2], [110, 0.25], [130, 0.3]]
+    controls:
+      sheet: { name: Sheet, trim: Trim, ease: Ease }
+      reef: [Full sail, One reef, Two reefs]
+    fleet: account
+    art:
+      model: boats/beach-cat.glb
+      far: boats/beach-cat.far.glb
+      budget: { near: 15000, far: 1000 }
+    physics:
+      hull:
+        # The boat sailing, 145 kg (Hobie; SCHRS weighs 145.15 kg), and the
+        # sailor's 80 kg.
+        displacement: 225
+        waterlineLength: 4.72 # SCHRS
+        # Estimate: each hull's canoe body at 112.5 kg; its keel below it
+        # is the lateral plane (foils).
+        hullDraught: 0.12
+        centreOfGravity: 0.55 # estimate: the sailor seated on the centreline
+        # A knot, in m/s.
+        dragAreaStep: 0.5144444444444445
+        # Estimate, both hulls at 225 kg, every knot from 0 to 24: their
+        # friction by ITTC 1957 (form factor 1.1) on 3.0 m² wetted, and a
+        # slender hull's wave-making, a small hump near a Froude number of
+        # 0.45 to 0.5 (6 to 6.5 knots), falling beyond it.
+        dragArea: [0.0149, 0.0145, 0.0140, 0.0133, 0.0136, 0.0150, 0.0160,
+          0.0158, 0.0147, 0.0138, 0.0131, 0.0124, 0.0120, 0.0116, 0.0112,
+          0.0109, 0.0107, 0.0105, 0.0103, 0.0101, 0.0100, 0.0099, 0.0098,
+          0.0097, 0.0096]
+        crossFlowDrag: 1.0 # estimate: two slender hulls moving sideways
+        addedMassSurge: 11 # estimate: about 5% of the mass
+        addedMassSway: 300 # estimate: two hulls' sections moving sideways
+        munk: 280 # estimate: the hulls' own added masses, less in surge
+        yawInertia: 650 # estimate: the skiff's by mass and the length's square, and the hulls 1 m out
+        # Estimate: the hulls 1 m either side, the mast, and the sailor on
+        # the wire, with the water each hull moves.
+        rollInertia: 900
+        rollDamping: 300 # estimate: each hull heaving as she rolls
+        yawDamping: 0 # a short hull: its lateral planes and rudders damp its turning
+        # Estimate, from two hulls 2 m apart at 225 kg, the sailor on the
+        # centreline: rising steeply as the weight shifts to the lee hull,
+        # to its greatest as the windward hull lifts near 5°, then half the
+        # spacing's cosine less the centre of gravity's height above the
+        # lee hull's buoyancy, 0.63 m, times the sine: nothing near 58°,
+        # and held beyond 90°, where the mast and sails float. Every 5°.
+        rightingLever: [0, 0.85, 0.876, 0.80, 0.72, 0.64, 0.55, 0.46, 0.36,
+          0.26, 0.16, 0.06, -0.05, -0.15, -0.25, -0.35, -0.45, -0.54, -0.63]
+        rightingLeverStep: 5
+        waterlineBeam: 2.3 # outside the hulls at the waterline
+        waterplaneArea: 2.18 # estimate: two hulls, a waterplane coefficient of 0.70 on 4.72 m × 0.33 m
+        waterplanePitch: 2.6 # estimate: two fine hulls, 0.04 L³ B each
+        addedMassHeave: 420 # estimate
+        pitchInertia: 700 # estimate: the hulls, the mast and the sailor
+        heaveDamping: 0.4 # estimate
+        pitchDamping: 0.4 # estimate
+        waveForce: 1.0
+        waveYaw: 0
+        # The platform's plan at the sheer, every tenth of the length from
+        # the transom to the bows: the hulls' outer sides, near straight,
+        # coming in to the bows, whose points are 1 m either side (a flat
+        # bow). art/boats/beach-cat/build.ts builds from it.
+        outline: [1.19, 1.20, 1.205, 1.205, 1.20, 1.19, 1.175, 1.15, 1.115, 1.07, 1.0]
+        transom: 2.44
+        stem: 2.60 # the length overall forward of the transom
+      rig:
+        # The main: 13.77 m² (Hobie), its luff 7.375 m (SCHRS), fully
+        # battened with a square head, on a rotating mast stepped on the
+        # front beam.
+        sailArea: 13.77
+        luff: 7.375
+        foot: 2.6 # estimate: the boom
+        # Estimate: the boom 0.68 m above the trampoline.
+        boomHeight: 1.2
+        mastPosition: 0.70 # estimate: the front beam, 1.9 m aft of the bows
+        footStrip: 0.17
+        headStrip: 0.60
+        pressureAttached: 0.33 # ORC
+        pressureSeparated: 0.50
+        effectiveHeight: 8.0 # estimate: the head's height above the water (ORC 2023, 5.34)
+        quadraticDrag: 0.01379 # ORC 2023, Table 5.1
+        # Fitted by tools/polar -sail to ORC's low-lift mainsail, as the
+        # skiff's.
+        maxLift: 1.48
+        stallAngle: 28
+        stallWidth: 20
+        sailDrag: 0.026
+        luffAngle: 3
+        flogDrag: 0.05
+        normalForce: [0, 0.5, 0.9, 1.07, 1.21, 1.31, 1.37, 1.39, 1.38, 1.35,
+          1.28, 1.19, 1.07, 0.93, 0.77, 0.59, 0.40, 0.20, 0]
+        twistPowered: 5 # estimate
+        twistDepowered: 15 # estimate
+        twistEased: 18 # estimate: the mainsheet's tackle holds the boom down
+        twistTurn: 3 # estimate
+        headBacked: 90 # estimate
+        headBackedWidth: 20 # estimate
+        boomIn: 4 # estimate
+        boomOut: 80 # estimate: the shrouds at the beams' ends
+        boomInertia: 14 # estimate: boom and sail about 8 kg, and the air the sail carries
+        boomMoment: 8 # estimate
+        boomDamping: 5 # estimate
+        # Estimates by Day's method: the sailor, the hulls, the beams and
+        # the mast.
+        windageFront: 1.5
+        windageSide: 1.8
+        windageHeight: 0.9
+        sailFloat: 2500 # estimate: the sails and the spruce mast float
+        sailWaterDamping: 300 # estimate
+        closeHauled: 45 # Hobie: close to 45° from the true wind
+        # Two reefs take the main to the Easy rig's 10.50 m² (Hobie), one
+        # halfway: the shares of the luff whose squares are what is left of
+        # the area. A licence: a Hobie 16 has no reef points.
+        reefs: [1, 0.933, 0.873]
+        reefTime: 30 # estimate
+      headsails:
+        headsailArea: 5.12 # Hobie
+        headsailLuff: 5.6 # estimate: from the bridle's apex to the hounds
+        headsailFoot: 1.85 # estimate
+        headsailTackHeight: 0.65 # estimate: the bridle's apex
+        headsailTack: 2.3 # estimate: between the bows
+        headsailFootStrip: 0.137
+        headsailHeadStrip: 0.53
+        headsailPressureAttached: 0.33
+        headsailPressureSeparated: 0.50
+        # ORC's low-lift jib, as the keelboat's.
+        headsailMaxLift: 2.1
+        headsailStallAngle: 17
+        headsailStallWidth: 19
+        headsailDrag: 0.034
+        headsailNormalForce: [0, 0.5, 0.83, 1.01, 1.10, 1.14, 1.14, 1.11, 1.08,
+          1.05, 1.04, 1.01, 0.97, 0.90, 0.77, 0.59, 0.40, 0.20, 0]
+        headsailTwist: 8
+        headsailTwistEased: 10
+        # The jib's leads on the trampoline, as the keelboat's (tools/polar
+        # -sail holds the jib to ORC's within them).
+        headsailIn: 10
+        headsailOut: 20
+        headsailInertia: 5 # estimate
+        headsailMoment: 2 # estimate
+        headsailDamping: 3 # estimate
+        # Two reefs take the jib to the Easy rig's 3.70 m², one halfway.
+        headsailReefs: [1, 0.928, 0.850]
+      square: *noSquare
+      downwind: *noDownwind
+      foils:
+        # Each asymmetric hull is its own lateral plane, as the tall ship's
+        # keel: a fixed keel below its canoe body, short and long (the
+        # hull's depth below its waterline, 0.27 m, and most of its
+        # length), its lift carried over from the body above it. Two of
+        # them (hulls); the windward one leaves the water as she flies.
+        boardSpan: 0.15 # estimate
+        boardChord: 2.6 # estimate
+        boardPosition: 0.6 # estimate
+        # Two kick-up rudders on the transoms (hulls), joined by the
+        # crossbar.
+        rudderSpan: 0.6 # estimate
+        rudderChord: 0.2 # estimate
+        rudderPosition: 2.5 # estimate: hung on the transoms
+        rudderAngle: 35 # estimate
+        foilStall: 13 # estimate for thin sections at these Reynolds numbers
+        foilStallWidth: 6 # estimate
+        foilDrag: 0.010 # ITTC 1957 at Re ≈ 10⁶, both faces
+        plateNormal: 1.2 # a flat plate
+        pressureDepth: 0.43 # Keuning and Vermeulen (2003), via Day
+        carryOver: 4.0 # estimate: tuned by tools/polar for her leeway
+        heelLoss: 0.2 # estimate: a hull's lateral plane, not a board
+        rudderInflow: 0.9 # Day
+        downwash: 0.7 # estimate
+        foilWetHeel: 60 # estimate
+        foilDryHeel: 90 # estimate
+        fixed: 1 # the hulls' keels: the ground never pushes them up
+      sailor:
+        sailorMass: 80 # the game's sailor, Day's baseline
+        sailorSeatHeight: 0.15 # estimate: seated on the hull's deck
+        # On the wire, feet on the hull's outer edge 1.2 m out: Day's
+        # bound, 0.95 × 0.55 × 1.83 m, beyond it.
+        hikeReach: 2.16
+        # In light air on the lee hull, to lift the windward one.
+        leeReach: 1.0
+        hikeSpeed: 1.0 # estimate
+        hikeLag: 0.5 # estimate
+        heelGain: 1.0
+        rollRateGain: 0.6
+        # Estimates, as the skiff's, tuned by tools/polar.
+        flattenFrom: 7
+        flattenTo: 12
+        flattenMin: 0.62
+        # Past 40° "no amount of easing" brings her back (Colby): the
+        # sailor holds on as she goes past her vanishing angle, near 58°,
+        # and drops into the water as she lies down on her side.
+        fallOutHeel: 75
+        climbInHeel: 25 # estimate
+        # Standing on the lower hull and leaning back on the righting line
+        # (Hobie Cat Europe), about a metre beyond it: 1.6 m from where the
+        # sailor sits on the centreline, which on her side is over the
+        # lower hull's mast side. A licence: one 80 kg sailor rights her,
+        # where in life it is marginal under about 90 kg.
+        boardReach: 1.6
+        sailorDrag: 600 # estimate
+        swimTime: 20 # estimate: round to the lower hull and onto it
+        climbTime: 5 # estimate
+      rates:
+        rudderTime: 0.3 # estimate
+        sheetHaulTime: 2.5 # estimate
+        sheetEaseTime: 1.0 # estimate
+      # The autopilot: the skiff's until tools/polar and the step in the
+      # catalog's spells tune it.
+      autopilot:
+        gain: 2
+        damping: 0.8
+        trimTime: 10
+        trimLimit: 0.3
+        trimBand: 10
+        tackHelm: 1.0
+        gybeHelm: 0.5
+        byTheLee: 15
+        onCourse: 10
+        astern: 0.05
+        steerage: 0.26
+        stallTime: 8
+        stallGain: 5
+      hulls:
+        hullSpacing: 2.0 # Hobie Cat Europe: the hulls 2 m apart
+        # Estimate: the windward hull unloads as she heels, leaves the
+        # water at 3° and is clear by 8°, as the righting lever reaches
+        # its peak.
+        liftHeel: 3
+        # Estimate: one hull at twice the load has about 2^(2/3) / 2 of two
+        # hulls' wetted area, and makes a little more wave.
+        flyingDrag: 0.85
+        rudderCount: 2
+        boardCount: 2
+      pitch:
+        rigPitch: 1
+        # Estimates, tuned against her behaviour tests: borne away in a
+        # 30-knot gust from 20 on a broad reach with the sheet held she
+        # pitchpoles; let fly, at two reefs or borne away to a run she does
+        # not, nor ever in 12 knots or upwind. Her bows' decks are about
+        # 0.23 m above the water 2.6 m ahead: they meet it at 5°.
+        bowBuryPitch: 5
+        bowBuryRestoring: 0.15 # the bows have little more volume to give
+        bowBuryDrag: 0.3 # buried 10° past, four times the drag
+        pitchpoleAngle: 25
+        # Colby: the helm back to the corner as the wind rises, from their
+        # place forward of the rear beam.
+        aftReach: 0.8

@@ -351,6 +351,8 @@ export interface BoatPhysics {
   sailor: PhysicsSailor;
   rates: PhysicsRates;
   autopilot: PhysicsAutopilot;
+  hulls: PhysicsHulls;
+  pitch: PhysicsPitch;
 }
 /**
  * The hull: its mass, resistance, inertia and stability.
@@ -445,7 +447,7 @@ export interface PhysicsHull {
    */
   yawDamping: number;
   /**
-   * Righting lever (GZ) with the sailor on the centreline, every 10° of heel from 0° to 180°, in m.
+   * Righting lever (GZ) with the sailor on the centreline, every rightingLeverStep of heel from 0°, in m. Beyond the last, the last.
    *
    * @minItems 19
    * @maxItems 19
@@ -471,6 +473,10 @@ export interface PhysicsHull {
     number,
     number
   ];
+  /**
+   * Heel between entries of rightingLever, in degrees: 10 reaches 180°, 5 reaches 90° (a catamaran's lever, which peaks within a few degrees of upright, held beyond). 180° over it is a whole number.
+   */
+  rightingLeverStep: number;
   /**
    * Beam on the waterline, in m.
    */
@@ -508,7 +514,7 @@ export interface PhysicsHull {
    */
   waveYaw: number;
   /**
-   * The hull's half-beam at the sheer at 11 stations equally spaced from the transom to the stem, in m: its plan, where hulls touch. Convex, with the stem a point.
+   * The hull's half-beam at the sheer at 11 stations equally spaced from the transom to the stem, in m: its plan, where hulls touch. Convex, with the stem a point; a boat of two hulls (hulls.hullSpacing) has a flat bow, the last the bows' half-spread.
    *
    * @minItems 11
    * @maxItems 11
@@ -1356,6 +1362,66 @@ export interface PhysicsAutopilot {
    * Too little gain for a stalling turn, in degrees.
    */
   stallGain: number;
+}
+/**
+ * A boat of two hulls, a catamaran: one body whose stability, foils and drag take its hulls' values. A monohull has a spacing of 0, one rudder and one board, and a flying drag of 1.
+ *
+ * This interface was referenced by `Catalog`'s JSON-Schema
+ * via the `definition` "PhysicsHulls".
+ */
+export interface PhysicsHulls {
+  /**
+   * Between the hulls' centrelines, in m: 0 for one hull. The drawing, the sea, the wake and the contacts read it: the boat heels about its lee hull.
+   */
+  hullSpacing: number;
+  /**
+   * The heel at which the windward hull leaves the water, in degrees: it is clear 5° later, its rudder and lateral plane with it.
+   */
+  liftHeel: number;
+  /**
+   * The drag area's share with the windward hull clear: one hull at twice the load has less wetted area than two.
+   */
+  flyingDrag: number;
+  /**
+   * Rudders, one on each hull, each the one rudder's lift and drag: 1, or 2 on a boat of two hulls.
+   */
+  rudderCount: number;
+  /**
+   * Boards, or hulls' lateral planes, each the one board's lift and drag: 1, or 2 on a boat of two hulls.
+   */
+  boardCount: number;
+}
+/**
+ * Pitch from the rig: the sails' drive, high above the centre of gravity, and the hull's resistance below it pitch the bow down, and the sailor steps aft to hold it up. Past bowBuryPitch the bows bury: their spring weakens and their drag grows; past pitchpoleAngle the sailor is thrown off over the bow. None where rigPitch is 0, the rest unread: the pitch is the waves' alone.
+ *
+ * This interface was referenced by `Catalog`'s JSON-Schema
+ * via the `definition` "PhysicsPitch".
+ */
+export interface PhysicsPitch {
+  /**
+   * 1 where the rig pitches the hull, else 0.
+   */
+  rigPitch: number;
+  /**
+   * The trim, bow down off the water's surface, at which the lee bow's deck meets the water, in degrees.
+   */
+  bowBuryPitch: number;
+  /**
+   * The share of the pitch spring's slope left past bowBuryPitch.
+   */
+  bowBuryRestoring: number;
+  /**
+   * The hull's drag area grows by this share of itself for each degree past bowBuryPitch.
+   */
+  bowBuryDrag: number;
+  /**
+   * Past this trim, bow down, the sailor is thrown off over the bow, in degrees.
+   */
+  pitchpoleAngle: number;
+  /**
+   * How far aft of the helm's place the sailor steps to hold the bow up, in m.
+   */
+  aftReach: number;
 }
 /**
  * A boat's art. Every art object's values are paths under art/, checked to exist.
@@ -8830,4 +8896,4 @@ export interface LifeGlow {
 }
 
 /** The catalog version (tools/catalog). */
-export const CATALOG_VERSION = 'b237fa9645f07772';
+export const CATALOG_VERSION = '80416b731a21be4e';

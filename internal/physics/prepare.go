@@ -24,6 +24,7 @@ type Prepared struct {
 	dragAreaInvStep float64
 	weight          float64 // N
 	rightingLever   [19]float64
+	leverInvStep    float64 // 1 / the righting lever's step, 1/rad
 	rollDamping     float64
 	yawDamping      float64 // N·m per (rad/s)²
 	invLogReference float64 // 1 / ln(10 m / z₀)
@@ -191,6 +192,25 @@ type Prepared struct {
 	swimTime     float64
 	climbTime    float64
 
+	// Two hulls, if the boat has them: the windward hull leaves the
+	// water from liftHeel to liftHeel + liftRange, taking its rudder and
+	// lateral plane with it and lightening the drag.
+	twin         bool
+	liftHeel     float64 // rad
+	invLiftRange float64 // 1/rad
+	flyingDrag   float64
+	rudderCount  float64
+	boardCount   float64
+
+	// Pitch from the rig, if the boat's pitches her.
+	rigPitch       bool
+	bowBury        float64 // rad
+	flyingSink     float64 // how much sooner the lee bow buries with the windward hull clear, rad
+	buryRestoring  float64
+	buryDrag       float64 // per rad past bowBury
+	pitchpoleAngle float64 // rad
+	aftReach       float64 // m
+
 	// Encounters.
 	outline      outline
 	length       float64 // overall, transom to stem, m
@@ -243,6 +263,9 @@ func Prepare(p *Params, w *Waves, b *Prepared) {
 	b.dragAreaInvStep = 1 / p.DragAreaStep
 	b.weight = float64(m * gravity)
 	b.rightingLever = p.RightingLever
+	// 180 / the step is a whole number for every step the catalog allows,
+	// so a step of 10° gives 18/π exactly.
+	b.leverInvStep = (180 / p.RightingLeverStep) / math.Pi
 	b.rollDamping = p.RollDamping
 	b.yawDamping = p.YawDamping
 	b.invLogReference = 1 / Log(10/seaRoughness)
@@ -371,6 +394,7 @@ func Prepare(p *Params, w *Waves, b *Prepared) {
 	b.swimTime = p.SwimTime
 	b.climbTime = p.ClimbTime
 
+	b.prepareHulls(p)
 	b.prepareOutline(p)
 	// A hexagon the hull's bounding circle reaches has its centre within
 	// the circle's radius and a hexagon's of the centre of gravity.
@@ -551,4 +575,34 @@ func (b *Prepared) prepareDownwind(p *Params) {
 	// -sail).
 	b.kiteTrimBelow = float64(0.5 * b.kiteSail.stallAngle)
 	b.kiteEaseAbove = float64(3 * b.kiteSail.stallAngle)
+}
+
+// liftRange is the heel over which a catamaran's windward hull leaves the
+// water, from touching to clear, rad.
+const liftRange = 5 * degree
+
+// prepareHulls derives the constants of a boat of two hulls and of a rig
+// that pitches her, if the boat has them.
+func (b *Prepared) prepareHulls(p *Params) {
+	b.twin = p.HullSpacing > 0
+	b.liftHeel = float64(p.LiftHeel * degree)
+	b.invLiftRange = 1 / liftRange
+	b.flyingDrag = p.FlyingDrag
+	b.rudderCount = p.RudderCount
+	b.boardCount = p.BoardCount
+	b.rigPitch = p.RigPitch != 0
+	if !b.rigPitch {
+		return
+	}
+	b.bowBury = float64(p.BowBuryPitch * degree)
+	// With the windward hull clear the lee hull carries her whole weight,
+	// and settles by about √2 − 1 of its draught: its bow meets the water
+	// that much sooner.
+	if b.twin {
+		b.flyingSink = float64(0.41421356*p.HullDraught) / p.Stem
+	}
+	b.buryRestoring = p.BowBuryRestoring
+	b.buryDrag = p.BowBuryDrag / degree
+	b.pitchpoleAngle = float64(p.PitchpoleAngle * degree)
+	b.aftReach = p.AftReach
 }

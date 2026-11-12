@@ -170,6 +170,34 @@
         "Held at most, not within: sailed at its best in flat water, on the Musto Skiff's measured resistance and ORC's sails, the 29er raced goes round the course in 0.73 of the Jolly boat's time in 8 knots, 0.66 in 12 and 0.61 in 16, where the yardstick has 0.816 in every wind. 15% more drag at every speed and no planing, the most the hull's data allow, still left it at 0.67 in 16 knots: the gap is the yardstick's, a club fleet's average over its races, in which a skiff loses most at the marks and in a breeze. The check holds that the boat as raced is never slower than its yardstick.",
         "Weather helm is light, as the Jolly boat's: neutral to 1° close-hauled with the board just aft of the mast and the rudder working in its downwash (0.8, as the keelboat's)."
       ]
+    },
+    {
+      "boat": "beach-cat",
+      "original": "Hobie 16, raced by its crew of two, flat water",
+      "height": 10,
+      "crew": {"mass": 130, "reach": 2.16, "source": "The class's least crew weight, 129 kg (285 lb), both on the wire, their centre of mass about 2.16 m to windward (Day 2017's bound beyond the hull's outer edge)."},
+      "points": [
+        {"measure": "course", "against": "jolly-boat", "atMost": true, "wind": 8, "value": 0.754, "tolerance": 0.08, "source": "SCHRS 2026: the Hobie 16, two-up, 1.227; the RYA's Portsmouth Number List 2026 rates a catamaran it does not list as its SCHRS number times 678, PN 832, against the ILCA 7's 1103: 0.754. A beat, a beam reach, a broad reach at 135° and a run, equal legs, each at its best. At most, as the skiff's: the yardstick is of club racing."},
+        {"measure": "course", "against": "jolly-boat", "atMost": true, "wind": 12, "value": 0.754, "tolerance": 0.08, "source": "SCHRS 2026 × 678 (RYA 2026)"},
+        {"measure": "course", "against": "jolly-boat", "atMost": true, "wind": 16, "value": 0.754, "tolerance": 0.08, "source": "SCHRS 2026 × 678 (RYA 2026)"},
+        {"measure": "speed", "atMost": true, "twa": 60, "wind": 10, "value": 9.2, "tolerance": 0.05, "source": "The Hobie Hotline's Hobie 16 polar (Bowers and Mattson, about 1978), at 10 knots of true wind, read off its chart; its author: \"most of the time none should be able to get numbers this good\". At most."},
+        {"measure": "speed", "atMost": true, "twa": 90, "wind": 10, "value": 12.1, "tolerance": 0.05, "source": "The Hobie Hotline's polar"},
+        {"measure": "speed", "atMost": true, "twa": 120, "wind": 10, "value": 10.3, "tolerance": 0.05, "source": "The Hobie Hotline's polar"},
+        {"measure": "speed", "atMost": true, "twa": 135, "wind": 10, "value": 8.3, "tolerance": 0.05, "source": "The Hobie Hotline's polar"},
+        {"measure": "upwindAngle", "wind": 10, "value": 45, "tolerance": 0.112, "source": "Hobie: the best upwind angle \"close to 45° from the true wind\"; a tack through about 90°. ±5°."},
+        {"measure": "upwindAngle", "wind": 15, "value": 45, "tolerance": 0.112, "source": "Hobie: the best upwind angle \"close to 45° from the true wind\"; a tack through about 90°. ±5°."},
+        {"measure": "speed", "atLeast": true, "alone": true, "twa": 90, "winds": [10, 11, 12, 13, 14, 15, 16], "value": 12, "tolerance": 0, "source": "The concept's 12 knots, the fastest boat: sailed alone, as players sail her, at least 12 knots on a beam reach at her best in some wind from 10 to 16 knots, at any reef."},
+        {"measure": "course", "against": "jolly-boat", "alone": true, "report": true, "wind": 8, "value": 0.729, "tolerance": 0, "source": "Not published: SCHRS's formula worked for one 80 kg sailor with the jib, 1.186, PN 804, 0.729."},
+        {"measure": "course", "against": "jolly-boat", "alone": true, "report": true, "wind": 12, "value": 0.729, "tolerance": 0, "source": "As sailed alone"},
+        {"measure": "course", "against": "jolly-boat", "alone": true, "report": true, "wind": 16, "value": 0.729, "tolerance": 0, "source": "As sailed alone"},
+        {"measure": "course", "against": "jolly-boat", "alone": true, "reef": 1, "report": true, "wind": 12, "value": 0.82, "tolerance": 0, "source": "SCHRS 2026: the Hobie 16 Easy rig, 10.50 and 3.70 m², 1.334, PN 904, 0.820."},
+        {"measure": "course", "against": "jolly-boat", "alone": true, "reef": 2, "report": true, "wind": 12, "value": 0.82, "tolerance": 0, "source": "The Easy rig"},
+        {"measure": "course", "against": "jolly-boat", "alone": true, "reef": 1, "report": true, "wind": 16, "value": 0.82, "tolerance": 0, "source": "The Easy rig"},
+        {"measure": "course", "against": "jolly-boat", "alone": true, "reef": 2, "report": true, "wind": 16, "value": 0.82, "tolerance": 0, "source": "The Easy rig"}
+      ],
+      "notes": [
+        "No VPP or tank test of a beach catamaran is published. Its yardstick, the Hobie 16's SCHRS rating times the RYA's 678, is held as the skiff's is, at most; its one published polar, the Hotline's at 10 knots, as the ceiling its author called it; its upwind angle from Hobie's own words. The game's beach cat, sailed by one 80 kg sailor, is held to at least 12 knots on a beam reach, the concept's speed. SCHRS's formula is the property of SCHRS: only its published ratings are used."
+      ]
     }
 ]
 }

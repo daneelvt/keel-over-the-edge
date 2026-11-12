@@ -49,6 +49,7 @@ func checkBoats(doc map[string]any) error {
 			}
 		}
 		problems = append(problems, checkDownwind(i, ph)...)
+		problems = append(problems, checkHulls(i, ph)...)
 		problems = append(problems, checkStations(i, m)...)
 		pairs, _ := m["startSheet"].([]any)
 		last := -1.0
@@ -99,6 +100,43 @@ func checkDownwind(i int, ph map[string]any) []string {
 	}
 	if !(num(g["hoistTime"]) > 0 && num(g["dropTime"]) > 0 && num(g["downwindInertia"]) > 0 && num(g["downwindOut"]) > 0) {
 		problems = append(problems, fmt.Sprintf("  boats[%d].physics.downwind: a downwind sail needs its hoist and drop times, its clew's inertia and its travel", i))
+	}
+	return problems
+}
+
+// checkHulls checks boat i's hulls: a boat of two hulls has a rudder and
+// a lateral plane on each, which the ground never pushes up, and a
+// monohull one of each and no flying drag; and a rig pitches the hull or
+// does not, its bows burying before it pitchpoles.
+func checkHulls(i int, ph map[string]any) []string {
+	var problems []string
+	num := func(g map[string]any, k string) float64 {
+		f, _ := g[k].(json.Number).Float64()
+		return f
+	}
+	hull, _ := ph["hull"].(map[string]any)
+	if step := num(hull, "rightingLeverStep"); 180/step != math.Trunc(180/step) {
+		problems = append(problems, fmt.Sprintf("  boats[%d].physics.hull.rightingLeverStep: 180° over %v° is not a whole number", i, step))
+	}
+	h, _ := ph["hulls"].(map[string]any)
+	foils, _ := ph["foils"].(map[string]any)
+	rudders, boards := num(h, "rudderCount"), num(h, "boardCount")
+	if num(h, "hullSpacing") > 0 {
+		if rudders != 2 || boards != 2 {
+			problems = append(problems, fmt.Sprintf("  boats[%d].physics.hulls: two hulls need two rudders and two lateral planes, not %v and %v", i, rudders, boards))
+		}
+		if num(foils, "fixed") != 1 {
+			problems = append(problems, fmt.Sprintf("  boats[%d].physics.foils.fixed: two hulls' lateral planes are fixed, 1", i))
+		}
+	} else if rudders != 1 || boards != 1 || num(h, "flyingDrag") != 1 {
+		problems = append(problems, fmt.Sprintf("  boats[%d].physics.hulls: one hull has one rudder, one board and a flying drag of 1", i))
+	}
+	p, _ := ph["pitch"].(map[string]any)
+	switch rig := num(p, "rigPitch"); {
+	case rig != 0 && rig != 1:
+		problems = append(problems, fmt.Sprintf("  boats[%d].physics.pitch.rigPitch: %v is neither 0 nor 1", i, rig))
+	case rig == 1 && !(num(p, "bowBuryPitch") > 0 && num(p, "bowBuryPitch") < num(p, "pitchpoleAngle")):
+		problems = append(problems, fmt.Sprintf("  boats[%d].physics.pitch: the bows bury at %v°, which must be above 0 and before the pitchpole at %v°", i, num(p, "bowBuryPitch"), num(p, "pitchpoleAngle")))
 	}
 	return problems
 }

@@ -780,6 +780,11 @@ func TestEncounters(t *testing.T) {
 		{name: "close-hauled at 81°", boats: strings.Replace(boats, "closeHauled: 40", "closeHauled: 81", 1), want: "/boats/0/physics/rig/closeHauled"},
 		{name: "a restitution above 1", enc: strings.Replace(realEncounters(), "restitution: 0.3", "restitution: 1.2", 1), want: "/encounters/contact/restitution"},
 		{name: "a restitution below 0", enc: strings.Replace(realEncounters(), "restitution: 0.3", "restitution: -0.1", 1), want: "/encounters/contact/restitution"},
+		{name: "two hulls with a pointed bow", boats: strings.Replace(boats, "1.115, 1.07, 1.0]", "1.115, 1.07, 0]", 1), want: "not convex with a flat bow"},
+		{name: "two hulls and one rudder", boats: strings.Replace(boats, "rudderCount: 2", "rudderCount: 1", 1), want: "two hulls need two rudders"},
+		{name: "one hull and two rudders", boats: strings.Replace(boats, "        rudderCount: 1\n", "        rudderCount: 2\n", 1), want: "one hull has one rudder"},
+		{name: "a righting lever's step of 7°", boats: strings.Replace(boats, "rightingLeverStep: 5", "rightingLeverStep: 7", 1), want: "not a whole number"},
+		{name: "the bows buried past the pitchpole", boats: strings.Replace(boats, "pitchpoleAngle: 25", "pitchpoleAngle: 4", 1), want: "before the pitchpole"},
 		{name: "a taper past the reach", enc: strings.Replace(realEncounters(), "taper: 8", "taper: 12", 1), want: "taper"},
 	}
 	for _, c := range cases {
@@ -800,6 +805,8 @@ func TestEncounters(t *testing.T) {
 			files["art/boats/tall-ship.far.glb"] = "glTF"
 			files["art/boats/skiff.glb"] = glb("hull", "tricolour")
 			files["art/boats/skiff.far.glb"] = "glTF"
+			files["art/boats/beach-cat.glb"] = glb("hull", "tricolour")
+			files["art/boats/beach-cat.far.glb"] = "glTF"
 			root := fixture(t, files)
 			err := checkAll(root)
 			if err == nil {

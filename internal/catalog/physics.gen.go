@@ -28,6 +28,7 @@ func PhysicsParams(b *Boat) physics.Params {
 	p.RollDamping = b.Physics.Hull.RollDamping
 	p.YawDamping = b.Physics.Hull.YawDamping
 	copy(p.RightingLever[:], b.Physics.Hull.RightingLever)
+	p.RightingLeverStep = b.Physics.Hull.RightingLeverStep
 	p.WaterlineBeam = b.Physics.Hull.WaterlineBeam
 	p.WaterplaneArea = b.Physics.Hull.WaterplaneArea
 	p.WaterplanePitch = b.Physics.Hull.WaterplanePitch
@@ -195,6 +196,17 @@ func PhysicsParams(b *Boat) physics.Params {
 	p.Steerage = b.Physics.Autopilot.Steerage
 	p.StallTime = b.Physics.Autopilot.StallTime
 	p.StallGain = b.Physics.Autopilot.StallGain
+	p.HullSpacing = b.Physics.Hulls.HullSpacing
+	p.LiftHeel = b.Physics.Hulls.LiftHeel
+	p.FlyingDrag = b.Physics.Hulls.FlyingDrag
+	p.RudderCount = b.Physics.Hulls.RudderCount
+	p.BoardCount = b.Physics.Hulls.BoardCount
+	p.RigPitch = b.Physics.Pitch.RigPitch
+	p.BowBuryPitch = b.Physics.Pitch.BowBuryPitch
+	p.BowBuryRestoring = b.Physics.Pitch.BowBuryRestoring
+	p.BowBuryDrag = b.Physics.Pitch.BowBuryDrag
+	p.PitchpoleAngle = b.Physics.Pitch.PitchpoleAngle
+	p.AftReach = b.Physics.Pitch.AftReach
 	return p
 }
 

@@ -33,6 +33,7 @@ export function writeParams(params: Float64Array, p: BoatPhysics): void {
   params[f.rollDamping] = p.hull.rollDamping;
   params[f.yawDamping] = p.hull.yawDamping;
   params.set(p.hull.rightingLever, f.rightingLever);
+  params[f.rightingLeverStep] = p.hull.rightingLeverStep;
   params[f.waterlineBeam] = p.hull.waterlineBeam;
   params[f.waterplaneArea] = p.hull.waterplaneArea;
   params[f.waterplanePitch] = p.hull.waterplanePitch;
@@ -200,6 +201,17 @@ export function writeParams(params: Float64Array, p: BoatPhysics): void {
   params[f.steerage] = p.autopilot.steerage;
   params[f.stallTime] = p.autopilot.stallTime;
   params[f.stallGain] = p.autopilot.stallGain;
+  params[f.hullSpacing] = p.hulls.hullSpacing;
+  params[f.liftHeel] = p.hulls.liftHeel;
+  params[f.flyingDrag] = p.hulls.flyingDrag;
+  params[f.rudderCount] = p.hulls.rudderCount;
+  params[f.boardCount] = p.hulls.boardCount;
+  params[f.rigPitch] = p.pitch.rigPitch;
+  params[f.bowBuryPitch] = p.pitch.bowBuryPitch;
+  params[f.bowBuryRestoring] = p.pitch.bowBuryRestoring;
+  params[f.bowBuryDrag] = p.pitch.bowBuryDrag;
+  params[f.pitchpoleAngle] = p.pitch.pitchpoleAngle;
+  params[f.aftReach] = p.pitch.aftReach;
 }
 
 /**
