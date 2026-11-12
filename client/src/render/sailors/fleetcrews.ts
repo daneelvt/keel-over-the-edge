@@ -243,6 +243,8 @@ export class FleetCrews {
       c.heel = b.heel;
       const sm = this.#shipMoment;
       sm.yards = b.yardsTurn;
+      sm.foreYards = b.foreYardsTurn;
+      sm.reef = b.reef;
       sm.heel = b.heel;
       sm.wind = this.windSpeed;
       sm.time = this.time;
@@ -530,7 +532,7 @@ export class FleetCrews {
     poseMember(p.body, p.member, input);
   }
 
-  readonly #shipMoment = { yards: 0, heel: 0, wind: 0, time: 0 };
+  readonly #shipMoment = { yards: 0, foreYards: 0, reef: 0, heel: 0, wind: 0, time: 0 };
   readonly #shipInput: ShipPoseInput = {
     rules: null as unknown as ShipRules,
     clips: new Map(),

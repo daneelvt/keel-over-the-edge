@@ -33,7 +33,7 @@
 //
 // Everything is in the ship model's frame (x to starboard, y up, z aft).
 
-import { Vector3 } from 'three';
+import { Matrix4, Vector3 } from 'three';
 import type { BoatStation } from '../../catalog';
 import {
   type CrewAboard,
@@ -44,6 +44,24 @@ import {
   placeOf,
 } from './crewrules';
 import { type Company, type ShipWays, WALK_SPEED, WAY_ALOFT, WAY_LADDER } from './ship';
+import {
+  CLIMB_PER_METRE,
+  COIL_TIME,
+  type HaulPlace,
+  hauledSide,
+  haulPlaces,
+  keepers,
+  REEF_STILL,
+  reefedYards,
+  SWING,
+  SWING_MOVE,
+  SWING_START,
+  SWING_STOP,
+  turnOf,
+  type YardPlace,
+  yardFrame,
+  yardPlaces,
+} from './shipwork';
 
 /** Seconds a walker is gone on a ladder, and on the climb to the main top (a cut). */
 export const LADDER_TIME = 1.5;
@@ -54,6 +72,43 @@ export const STEP_IN = 0.7;
 /** How far behind someone walking ahead the one following keeps, m; and the longest a walker waits for anyone, s. */
 export const KEEP_BEHIND = 0.6;
 export const WAIT_MOST = 6;
+/** Someone this near the line a walker heads along is in their way, m; anyone ahead nearer than TOO_CLOSE is. */
+export const IN_WAY = 0.32;
+export const TOO_CLOSE = 0.42;
+/** How far a walker steps aside to let someone coming the other way by, m, and how fast, m/s. */
+export const ASIDE = 0.32;
+export const ASIDE_SPEED = 0.6;
+
+/**
+ * Whether b is in the way of a, walking along heading yaw: ahead within
+ * KEEP_BEHIND and IN_WAY of their line, or nearer than TOO_CLOSE ahead; and
+ * how far to a's right b is.
+ */
+function inWay(a: { v: Vector3; yaw: number }, b: { v: Vector3 }): { right: number } | null {
+  const hx = Math.sin(a.yaw);
+  const hz = Math.cos(a.yaw);
+  const dx = b.v.x - a.v.x;
+  const dz = b.v.z - a.v.z;
+  const along = dx * hx + dz * hz;
+  const right = -dx * hz + dz * hx;
+  const cone = along > 0.05 && along <= KEEP_BEHIND && Math.abs(right) <= IN_WAY;
+  const close = along > 0 && Math.hypot(dx, dz) < TOO_CLOSE;
+  return cone || close ? { right } : null;
+}
+
+/** A walker's place along their walk at t, stepped aside as they are, into out. */
+export function walkerAt(
+  d: ShipDoing,
+  out: Vector3,
+): { yaw: number; gone: boolean; leg: ShipLeg | null } {
+  const r = d.route as ShipRoute;
+  const w = r.at(Math.max(r.legs[0]?.t0 ?? 0, d.t), out);
+  if (!w.gone) {
+    out.x += d.aside.x;
+    out.z += d.aside.z;
+  }
+  return w;
+}
 /** How far to the right of a way along her side a walker keeps, m: two meeting pass each other this far either side. */
 export const PASS_SIDE = 0.2;
 /** How much dearer a way along her weather side is to one going aft whose place is not to windward. */
@@ -534,8 +589,9 @@ export class ShipWayGraph {
   }
 }
 
-/** A way's stretch is along her side if it runs fore and aft this far out from her centreline, m. */
+/** A way's stretch is along her side if it runs fore and aft this far out from her centreline, m; across her if it runs athwartships this far. */
 const SIDE_OUT = 1.0;
+const CROSS_LONG = 0.8;
 
 /**
  * The legs of a walk through points (as ShipWayGraph.route gives them):
@@ -598,7 +654,7 @@ export function legsOf(
   return legs;
 }
 
-/** Each point along her side moved PASS_SIDE to the right of the way walked there. */
+/** Each point along her side or across her moved PASS_SIDE to the right of the way walked there. */
 function keptRight(points: readonly Vector3[]): Vector3[] {
   return points.map((p, i) => {
     if (i === 0 || i === points.length - 1) {
@@ -618,9 +674,30 @@ function keptRight(points: readonly Vector3[]): Vector3[] {
         q.x = p.x + (dz < 0 ? PASS_SIDE : -PASS_SIDE);
         return q;
       }
+      if (Math.abs(dx) > 2 * Math.abs(dz) && Math.abs(dx) > CROSS_LONG) {
+        // Across her, going to starboard (+x), the right is aft.
+        q.z = p.z + (dx > 0 ? PASS_SIDE : -PASS_SIDE);
+        return q;
+      }
     }
     return q;
   });
+}
+
+/**
+ * A ship's member's work: hauling on a brace (its place on the fall; how
+ * hard they haul now, 0 … 1, eased in and out as the yards swing and stop),
+ * or aloft on a yard (its place on it, the foot of the shrouds they climb
+ * and how long the climb takes); going to it, at it, or going back from it.
+ */
+export interface ShipWork {
+  kind: 'haul' | 'aloft';
+  haul: HaulPlace | null;
+  pull: number;
+  yard: YardPlace | null;
+  foot: Vector3;
+  climb: number;
+  phase: 'going' | 'at' | 'back';
 }
 
 /** What a ship's member is doing beyond the rules every crew keeps. */
@@ -644,11 +721,43 @@ export interface ShipDoing {
   gone: boolean;
   /** At the end of a walk to relieve the helmsman, seconds waited there. */
   relieving: number;
+  /** Their work, while at the braces or aloft or going to or from them; null otherwise. */
+  work: ShipWork | null;
+  /** How far they have stepped aside off their walk (x and z, m), to let someone by. */
+  aside: { x: number; z: number };
 }
 
-/** A walk's ends that are not stations: behind the helmsman, and the wheel. */
+/** A walk's ends that are not stations: behind the helmsman, the wheel, and a member's work. */
 export const RELIEF = -2;
 export const WHEEL = -1;
+export const WORK = -3;
+
+/** How fast a hauler takes to hauling and leaves off, s. */
+export const PULL_EASE = 0.5;
+/** A station's person is in a fall's way within this of its places, m: they go to the braces first. */
+export const FALL_CLEAR = 0.6;
+
+/** A group of yards' swing, as followed from its turn: its last turn, how long it has gone fast and slow, whether it swings and which way. */
+interface Swing {
+  last: number;
+  fast: number;
+  slow: number;
+  on: boolean;
+  dir: number;
+  /** Where its turn was when it began to go fast this way. */
+  from: number;
+}
+
+function swing(): Swing {
+  return {
+    last: Number.NaN,
+    fast: 0,
+    slow: Number.POSITIVE_INFINITY,
+    on: false,
+    dir: 0,
+    from: 0,
+  };
+}
 
 function spot(): ShipSpot {
   return { at: new Vector3(), facing: 0, side: 1 };
@@ -661,6 +770,7 @@ export interface ShipMember extends CrewMember {
 
 const here = new Vector3();
 const there = new Vector3();
+const frameNow = new Matrix4();
 
 /** A ship's company under the rules. */
 export class ShipRules {
@@ -679,6 +789,18 @@ export class ShipRules {
   #stand = false;
   #since = Number.POSITIVE_INFINITY;
   #talkCheck = 0;
+  /** Her yards' turns, the fore yards' and the after ones' (as yardsTurn has them), and her reef (0 … 2), as last told. */
+  readonly turns = { fore: 0, after: 0 };
+  reef = 0;
+  readonly #swings = { after: swing(), fore: swing() };
+  /** The hands at the braces: which group's and which side's; seconds since its swing stopped (coiling down), or −1 while it swings. */
+  gang: { group: 'fore' | 'after'; side: number; coil: number } | null = null;
+  /** The reef as followed: its last level, seconds since it changed, and the band it changes in (1 the topgallants, 2 the topsails). */
+  readonly #reefing = { last: Number.NaN, still: Number.POSITIVE_INFINITY, band: 0 };
+  /** The band of yards the topmen are aloft for, 0 for none. */
+  aloftBand = 0;
+  /** The stations whose people stay when the hands go to the braces or aloft. */
+  readonly #keep: Set<number>;
 
   constructor(
     readonly plan: { stations: readonly BoatStation[]; ship: ShipPlan },
@@ -686,6 +808,11 @@ export class ShipRules {
     readonly still = false,
   ) {
     this.graph = new ShipWayGraph(plan.ship.ways);
+    this.#keep = keepers(plan.stations);
+  }
+
+  get company(): Company {
+    return this.plan.ship.company;
   }
 
   get stations(): readonly BoatStation[] {
@@ -711,8 +838,22 @@ export class ShipRules {
     return shipStation(s, this.side.side || 1, out);
   }
 
-  /** Where a place's person stands now: a station's stand point, behind the helmsman, or to leeward of the wheel. */
-  #placeAt(place: number, out: Vector3, sp: ShipSpot): ShipSpot {
+  /** Where a place's person stands now: a station's stand point, behind the helmsman, to leeward of the wheel, or at their work (m's). */
+  #placeAt(place: number, out: Vector3, sp: ShipSpot, m: ShipMember | null = null): ShipSpot {
+    const work = m?.ship.work ?? null;
+    if (place === WORK && work !== null) {
+      if (work.haul !== null) {
+        out.copy(work.haul.feet);
+        sp.facing = (((((Math.PI - work.haul.yaw) * 180) / Math.PI) % 360) + 360) % 360;
+        sp.side = work.haul.side;
+      } else {
+        out.copy(work.foot);
+        sp.facing = 0;
+        sp.side = Math.sign(work.foot.x) || 1;
+      }
+      sp.at.copy(out);
+      return sp;
+    }
     const helm = this.stations[0];
     if (place === RELIEF || place === WHEEL || helm === undefined) {
       const [x, y, z] = (helm?.at ?? [0, 0, 0]) as [number, number, number];
@@ -743,8 +884,33 @@ export class ShipRules {
       d.route.at(Math.max(d.route.legs[0]?.t0 ?? 0, d.t), out);
       return out;
     }
-    this.#placeAt(m.station, out, spot());
+    this.#placeAt(d.to === WORK ? WORK : m.station, out, spot(), m);
     return out;
+  }
+
+  /**
+   * Where a member is now, into out: along their walk, at their place, or
+   * at their work (on a yard, where the yard is now); whether gone (on a
+   * ladder or the shrouds), and whether out on a yard.
+   */
+  whereIs(m: ShipMember, out: Vector3): { gone: boolean; aloft: boolean } {
+    const d = m.ship;
+    const w = d.work;
+    if (d.route === null && d.to === WORK && w?.yard != null) {
+      const y = this.company.yards[w.yard.yard];
+      if (y !== undefined) {
+        out
+          .set(w.yard.x, 0, 0)
+          .applyMatrix4(yardFrame(y, turnOf(y, this.turns), this.reef, frameNow));
+        return { gone: false, aloft: true };
+      }
+    }
+    if (d.route !== null) {
+      const at = walkerAt(d, out);
+      return { gone: at.gone, aloft: false };
+    }
+    this.#where(m, out);
+    return { gone: false, aloft: false };
   }
 
   /**
@@ -786,7 +952,10 @@ export class ShipRules {
         m = this.#member(p.seat, p.look, place);
       } else {
         m.look = p.look;
-        if (m.ship.to !== place) {
+        // At work for a place still theirs: kept at it.
+        const working = m.ship.work !== null && m.station === place;
+        if (m.ship.to !== place && !working) {
+          m.ship.work = null;
           if (walks && !this.still) {
             this.#walk(m, null, place, planned);
             planned.push(m);
@@ -825,6 +994,8 @@ export class ShipRules {
         company: false,
         gone: false,
         relieving: 0,
+        work: null,
+        aside: { x: 0, z: 0 },
       },
     };
     this.#put(m, place);
@@ -860,11 +1031,17 @@ export class ShipRules {
     to: number,
     others: readonly ShipMember[],
     begin: { at: Vector3; spot: ShipSpot } | null = null,
+    aloft: { up?: { at: Vector3; time: number }; down?: { at: Vector3; time: number } } = {},
   ): void {
     const d = m.ship;
     const start = new Vector3();
     let fromSpot = spot();
-    if (begin !== null) {
+    if (aloft.down !== undefined && begin !== null) {
+      // Coming down from aloft: from the foot of the shrouds, after the climb down.
+      start.copy(begin.at);
+      fromSpot = begin.spot;
+      d.from = WORK;
+    } else if (begin !== null) {
       start.copy(begin.at);
       fromSpot = begin.spot;
       d.from = m.station;
@@ -875,13 +1052,16 @@ export class ShipRules {
       d.route.at(Math.max(d.route.legs[0]?.t0 ?? 0, d.t), start);
       fromSpot.at.copy(start);
       d.from = d.to;
+    } else if (d.to === WORK) {
+      this.#placeAt(WORK, start, fromSpot, m);
+      d.from = WORK;
     } else {
       this.#placeAt(m.station, start, fromSpot);
       d.from = m.station;
     }
     const toSpot = spot();
     const end = new Vector3();
-    this.#placeAt(to, end, toSpot);
+    this.#placeAt(to, end, toSpot, m);
     // Stretches others set off along at this moment, and which way.
     const met = new Map<number, number>();
     for (const o of others) {
@@ -906,8 +1086,34 @@ export class ShipRules {
       return c;
     };
     const points = this.graph.route(start, end, cost);
-    const off = d.route === null || from !== null ? STEP_OFF : 0;
-    const legs = legsOf(points, off);
+    const down = aloft.down;
+    const off = down === undefined && (d.route === null || from !== null) ? STEP_OFF : 0;
+    const legs = legsOf(points, down === undefined ? off : down.time);
+    // The climb (a cut, each topman's own): down from aloft before the walk, up aloft after it.
+    const climb = -1000 - m.seat;
+    if (down !== undefined) {
+      legs.unshift({
+        kind: 'cut',
+        t0: 0,
+        t1: down.time,
+        path: null,
+        edge: climb,
+        from: down.at.clone(),
+        to: start.clone(),
+      });
+    }
+    if (aloft.up !== undefined) {
+      const t = legs.at(-1)?.t1 ?? off;
+      legs.push({
+        kind: 'cut',
+        t0: t,
+        t1: t + aloft.up.time,
+        path: null,
+        edge: climb,
+        from: end.clone(),
+        to: aloft.up.at.clone(),
+      });
+    }
     const first = legs[0];
     const last = legs.at(-1);
     const route = new ShipRoute(
@@ -915,7 +1121,7 @@ export class ShipRules {
       first?.kind === 'walk' ? off : 0,
       last?.kind === 'walk' ? STEP_IN : 0,
     );
-    if (first?.kind !== 'walk') {
+    if (first?.kind !== 'walk' && down === undefined) {
       // Begins with a cut (from the top): gone at once.
       for (const l of legs) {
         l.t0 -= off;
@@ -942,7 +1148,9 @@ export class ShipRules {
     d.relieving = 0;
     d.fromSpot = fromSpot;
     d.toSpot = toSpot;
-    m.station = to;
+    if (to !== WORK) {
+      m.station = to;
+    }
     m.side = toSpot.side;
     m.moving = {
       path: first?.path ?? deckPath([start, end]),
@@ -992,6 +1200,11 @@ export class ShipRules {
     const ship = m.ship;
     if (ship !== undefined) {
       this.time = ship.time;
+      this.turns.after = ship.yards;
+      this.turns.fore = ship.foreYards ?? ship.yards;
+      this.reef = ship.reef ?? 0;
+      this.#swing(this.#swings.after, this.turns.after, dt);
+      this.#swing(this.#swings.fore, this.turns.fore, dt);
       // The weather side: the side the after yards are braced for.
       const y = ship.yards;
       const was = this.side.side;
@@ -1043,6 +1256,8 @@ export class ShipRules {
       const step = dt / SIT_TIME;
       d.sat = d.satTo > d.sat ? Math.min(d.satTo, d.sat + step) : Math.max(d.satTo, d.sat - step);
     }
+    this.#hands(dt);
+    this.#topmen(dt);
     this.#walks(dt);
     this.#talkCheck -= dt;
     if (this.#talkCheck <= 0) {
@@ -1051,12 +1266,326 @@ export class ShipRules {
     }
   }
 
+  /** Follows a group of yards' swing by its turn: swinging once faster than SWING for SWING_START, stopped once slower for SWING_STOP. */
+  #swing(sw: Swing, turn: number, dt: number): void {
+    if (Number.isNaN(sw.last) || dt <= 0) {
+      sw.last = turn;
+      return;
+    }
+    const rate = (turn - sw.last) / dt;
+    const was = sw.last;
+    sw.last = turn;
+    if (Math.abs(rate) > SWING) {
+      if (sw.fast === 0 || Math.sign(rate) !== Math.sign(turn - sw.from)) {
+        // Going fast from here, or the other way now.
+        sw.from = was;
+        sw.fast = 0;
+      }
+      sw.fast += dt;
+      sw.slow = 0;
+      if (sw.fast >= SWING_START && Math.abs(turn - sw.from) >= SWING_MOVE) {
+        sw.on = true;
+        sw.dir = Math.sign(rate);
+      }
+    } else {
+      sw.slow += dt;
+      sw.fast = 0;
+      if (sw.slow >= SWING_STOP) {
+        sw.on = false;
+      }
+    }
+  }
+
+  /** Whether a member may be sent to work: not one who stays (the helm, the master, the lookouts), nor aloft, nor relieving the wheel. */
+  #free(m: ShipMember, haul: boolean): boolean {
+    const d = m.ship;
+    if (this.#keep.has(m.station) || d.to === RELIEF || this.still) {
+      return false;
+    }
+    const w = d.work;
+    return w === null || (haul ? w.kind === 'haul' : w.phase === 'back' && w.kind === 'haul');
+  }
+
+  /**
+   * The hands at the braces: when a group of yards swings, all but those who
+   * stay go to its hauled braces; when it stops, to the other group's if it
+   * swings, else they coil down and, after COIL_TIME, walk back.
+   */
+  #hands(dt: number): void {
+    const sw = this.#swings;
+    const gang = this.gang;
+    if (gang === null) {
+      const group = sw.after.on ? 'after' : sw.fore.on ? 'fore' : null;
+      if (group !== null) {
+        this.#haulOn(group, hauledSide(sw[group].dir));
+      }
+    } else {
+      const now = sw[gang.group];
+      const other = gang.group === 'after' ? 'fore' : 'after';
+      if (now.on) {
+        gang.coil = -1;
+        const side = hauledSide(now.dir);
+        if (side !== gang.side) {
+          this.#haulOn(gang.group, side);
+        }
+      } else if (sw[other].on) {
+        this.#haulOn(other, hauledSide(sw[other].dir));
+      } else {
+        gang.coil = Math.max(0, gang.coil) + dt;
+        if (gang.coil >= COIL_TIME) {
+          this.gang = null;
+          const planned: ShipMember[] = [];
+          for (const m of this.members) {
+            if (m.ship.work?.kind === 'haul' && m.ship.work.phase !== 'back') {
+              this.#home(m, planned);
+            }
+          }
+        }
+      }
+    }
+    // How hard each at the braces hauls: while their group swings.
+    const hauling = this.gang !== null && this.gang.coil < 0;
+    const k = Math.min(1, dt / PULL_EASE);
+    for (const m of this.members) {
+      const w = m.ship.work;
+      if (w?.kind === 'haul') {
+        const want = hauling && w.phase === 'at' ? 1 : 0;
+        w.pull += (want - w.pull) * k;
+      }
+    }
+  }
+
+  /** A member's walk back from their work to their station. */
+  #home(m: ShipMember, planned: ShipMember[]): void {
+    const w = m.ship.work;
+    if (w === null) {
+      return;
+    }
+    w.phase = 'back';
+    this.#walk(m, null, m.station, planned);
+    planned.push(m);
+  }
+
+  /**
+   * Sends the hands to a group's braces on a side: the places in the order
+   * they fill (the main or fore brace first), as many as there are hands;
+   * anyone standing in a fall's way first, then the nearest. Each place
+   * goes to the nearest of them; those not needed stay or walk back.
+   */
+  #haulOn(group: 'fore' | 'after', side: number): void {
+    const c = this.company;
+    const places = haulPlaces(c, group, side);
+    this.gang = { group, side, coil: -1 };
+    const free = this.members.filter((m) => this.#free(m, true));
+    const at = new Map(free.map((m) => [m, this.#where(m, new Vector3())]));
+    const home = new Map(
+      free.map((m) => {
+        const p = new Vector3();
+        this.#placeAt(m.station, p, spot());
+        return [m, p];
+      }),
+    );
+    const near = (a: Vector3, b: Vector3): number =>
+      Math.hypot(a.x - b.x, a.z - b.z) + (Math.abs(a.y - b.y) > 1 ? 3 : 0);
+    const inWay = (m: ShipMember): boolean => {
+      const p = home.get(m) as Vector3;
+      return places.some(
+        (q) =>
+          Math.abs(q.feet.y - p.y) < 1 &&
+          (Math.hypot(q.feet.x - p.x, q.feet.z - p.z) < FALL_CLEAR ||
+            Math.hypot(q.hands.x - p.x, q.hands.z - p.z) < FALL_CLEAR),
+      );
+    };
+    const nearest = (m: ShipMember): number =>
+      Math.min(...places.map((q) => near(at.get(m) as Vector3, q.feet)));
+    const chosen = [...free]
+      .sort((a, b) => {
+        const wa = inWay(a) ? 0 : 1;
+        const wb = inWay(b) ? 0 : 1;
+        return wa - wb || nearest(a) - nearest(b) || a.seat - b.seat;
+      })
+      .slice(0, places.length);
+    const left = new Set(chosen);
+    const planned: ShipMember[] = [];
+    for (const q of places) {
+      let best: ShipMember | null = null;
+      let bestD = Number.POSITIVE_INFINITY;
+      for (const m of left) {
+        const dd = near(at.get(m) as Vector3, q.feet);
+        if (dd < bestD) {
+          best = m;
+          bestD = dd;
+        }
+      }
+      if (best === null) {
+        break;
+      }
+      left.delete(best);
+      const w = best.ship.work;
+      if (
+        w?.haul !== null &&
+        w?.haul !== undefined &&
+        w.phase !== 'back' &&
+        w.haul.brace === q.brace &&
+        w.haul.k === q.k &&
+        w.haul.side === q.side
+      ) {
+        continue;
+      }
+      best.ship.work = {
+        kind: 'haul',
+        haul: q,
+        pull: w?.kind === 'haul' ? w.pull : 0,
+        yard: null,
+        foot: q.feet,
+        climb: 0,
+        phase: 'going',
+      };
+      this.#walk(best, null, WORK, planned);
+      planned.push(best);
+    }
+    // Those hauling before and not now: back to their stations.
+    for (const m of free) {
+      if (!chosen.includes(m) && m.ship.work?.kind === 'haul' && m.ship.work.phase !== 'back') {
+        this.#home(m, planned);
+      }
+    }
+  }
+
+  /**
+   * The topmen: when the reef changes, up to four a yard (two on the
+   * mizzen topsail's) go aloft by the weather shrouds of its mast, those
+   * of the waist's and the forecastle's stations nearest it; once the reef
+   * is in, they come down and walk back.
+   */
+  #topmen(dt: number): void {
+    const r = this.#reefing;
+    const reef = this.reef;
+    if (Number.isNaN(r.last)) {
+      r.last = reef;
+    } else if (Math.abs(reef - r.last) > 1e-5) {
+      const up = reef > r.last;
+      r.band = Math.min(
+        2,
+        Math.max(1, up ? Math.floor(r.last + 1e-6) + 1 : Math.ceil(r.last - 1e-6)),
+      );
+      r.still = 0;
+      r.last = reef;
+    } else {
+      r.still += dt;
+    }
+    const reefing = r.still < REEF_STILL;
+    if (reefing && r.band !== this.aloftBand) {
+      this.#comeDown();
+      this.aloftBand = r.band;
+      this.#goAloft(r.band);
+    } else if (!reefing && this.aloftBand !== 0) {
+      this.aloftBand = 0;
+      this.#comeDown();
+    }
+  }
+
+  /** Sends topmen aloft to the yards reefed in a band, by the weather shrouds. */
+  #goAloft(band: number): void {
+    const c = this.company;
+    const weather = this.side.side || 1;
+    const taken = new Set<ShipMember>();
+    const planned: ShipMember[] = [];
+    const yard = new Vector3();
+    const frame = new Matrix4();
+    for (const yi of reefedYards(c, band)) {
+      const y = c.yards[yi];
+      const foot = c.aloft.find((a) => a.mast === y?.mast)?.foot;
+      if (y === undefined || foot === undefined) {
+        continue;
+      }
+      const at = new Vector3(weather * foot.x, foot.y, foot.z);
+      for (const place of yardPlaces(c, yi)) {
+        // The nearest the mast of those free in the waist and on the forecastle.
+        let best: ShipMember | null = null;
+        let bestD = Number.POSITIVE_INFINITY;
+        for (const m of this.members) {
+          if (taken.has(m) || !this.#free(m, false)) {
+            continue;
+          }
+          const p = new Vector3();
+          this.#placeAt(m.station, p, spot());
+          if (p.z > 0 && p.y > 4.5) {
+            // On the quarterdeck.
+            continue;
+          }
+          const dd = Math.abs(p.z - y.origin.z) + Math.abs(p.x) * 0.1;
+          if (dd < bestD) {
+            best = m;
+            bestD = dd;
+          }
+        }
+        if (best === null) {
+          break;
+        }
+        taken.add(best);
+        yardFrame(y, turnOf(y, this.turns), this.reef, frame);
+        yard.set(place.x, 0, 0).applyMatrix4(frame);
+        const climb = CLIMB_PER_METRE * Math.max(0, yard.y - at.y);
+        best.ship.work = {
+          kind: 'aloft',
+          haul: null,
+          pull: 0,
+          yard: place,
+          foot: at.clone(),
+          climb,
+          phase: 'going',
+        };
+        this.#walk(best, null, WORK, planned, null, { up: { at: yard.clone(), time: climb } });
+        planned.push(best);
+      }
+    }
+  }
+
+  /** The topmen come down: from the yard by the shrouds they went up, or back from wherever they are, and walk back. */
+  #comeDown(): void {
+    const planned: ShipMember[] = [];
+    const frame = new Matrix4();
+    for (const m of this.members) {
+      const w = m.ship.work;
+      if (w?.kind !== 'aloft' || w.phase === 'back' || w.yard === null) {
+        continue;
+      }
+      const d = m.ship;
+      const r = d.route;
+      const now = r?.legAt(Math.max(r.legs[0]?.t0 ?? 0, d.t)) ?? null;
+      let down: { at: Vector3; time: number } | null = null;
+      if (r === null) {
+        // On the yard.
+        const y = this.company.yards[w.yard.yard];
+        if (y !== undefined) {
+          yardFrame(y, turnOf(y, this.turns), this.reef, frame);
+          down = { at: new Vector3(w.yard.x, 0, 0).applyMatrix4(frame), time: w.climb };
+        }
+      } else if (now !== null && now.kind === 'cut' && now.edge === -1000 - m.seat) {
+        // On the shrouds going up: down again as far as they climbed.
+        down = { at: now.to.clone(), time: Math.max(0.5, d.t - now.t0) };
+      }
+      w.phase = 'back';
+      if (down !== null) {
+        const sp = spot();
+        sp.at.copy(w.foot);
+        sp.side = Math.sign(w.foot.x) || 1;
+        this.#walk(m, null, m.station, planned, { at: w.foot.clone(), spot: sp }, { down });
+      } else {
+        this.#walk(m, null, m.station, planned);
+      }
+      planned.push(m);
+    }
+  }
+
   /** The weather side changed from was: those to windward and to leeward walk across, from where they were. */
   #cross(was: number): void {
     const planned: ShipMember[] = [];
     for (const p of this.members) {
       const s = this.stations[p.station];
-      if (s === undefined || (s.windward !== true && s.lee !== true)) {
+      if (s === undefined || (s.windward !== true && s.lee !== true) || p.ship.work !== null) {
+        // At work: to the new side once back.
         continue;
       }
       if (this.still) {
@@ -1073,17 +1602,40 @@ export class ShipRules {
     }
   }
 
-  /** The walks on: each waits for a ladder another is on, and behind anyone walking ahead of them. */
+  /**
+   * The walks on: each waits for a ladder another is on, and behind anyone
+   * ahead of them in their way (walking or standing), for at most
+   * WAIT_MOST each time; two meeting head-on pass, each keeping to their
+   * right.
+   */
   #walks(dt: number): void {
     const walkers = this.members.filter((p) => p.ship.route !== null);
-    // Where each walker is, and which way they head.
-    const at = walkers.map((p) => {
-      const r = p.ship.route as ShipRoute;
+    if (walkers.length === 0) {
+      return;
+    }
+    // Where everyone is, and which way each walker heads.
+    const all = this.members.map((p) => {
       const v = new Vector3();
-      const w = r.at(Math.max(r.legs[0]?.t0 ?? 0, p.ship.t), v);
-      return { v, yaw: w.yaw, gone: w.gone, leg: w.leg };
+      const r = p.ship.route;
+      if (r === null) {
+        const w = this.whereIs(p, v);
+        return {
+          p,
+          v,
+          yaw: 0,
+          gone: w.gone || w.aloft,
+          leg: null as ShipLeg | null,
+          walking: false,
+        };
+      }
+      const w = walkerAt(p.ship, v);
+      return { p, v, yaw: w.yaw, gone: w.gone, leg: w.leg, walking: true };
     });
-    walkers.forEach((p, i) => {
+    for (const me of all) {
+      if (!me.walking) {
+        continue;
+      }
+      const p = me.p;
       const d = p.ship;
       const r = d.route as ShipRoute;
       let next = d.t + dt;
@@ -1094,42 +1646,68 @@ export class ShipRules {
         if (d.relieving >= RELIEF_PAUSE) {
           this.#relieve(p);
         }
-        return;
+        continue;
       }
-      const me = at[i] as { v: Vector3; yaw: number; gone: boolean; leg: ShipLeg | null };
       let wait = false;
       // A ladder or the climb ahead, with someone on it: wait at its foot.
       const ahead = r.legAt(next);
       if (ahead !== null && ahead.kind === 'cut' && (me.leg === null || me.leg !== ahead)) {
-        wait = walkers.some(
-          (_, j) =>
-            j !== i &&
-            (at[j] as { leg: ShipLeg | null }).leg?.edge === ahead.edge &&
-            (at[j] as { gone: boolean }).gone,
-        );
+        wait = all.some((o) => o !== me && o.leg?.edge === ahead.edge && o.gone);
       }
-      // Someone walking ahead of them, the same way, within KEEP_BEHIND: keeps behind.
-      if (!wait && !me.gone && me.leg !== null) {
-        const hx = Math.sin(me.yaw);
-        const hz = Math.cos(me.yaw);
-        wait = walkers.some((o, j) => {
-          const them = at[j] as { v: Vector3; yaw: number; gone: boolean };
-          if (j === i || them.gone || o.ship.route === null) {
-            return false;
+      // Someone ahead in their way, within KEEP_BEHIND: keeps behind; one
+      // coming the other way, the lesser steps aside, away from them, and
+      // waits for them to pass, and the other waits till they have; two in
+      // each other's way otherwise, the lesser waits.
+      let ax = 0;
+      let az = 0;
+      let back = false;
+      if (!wait && !me.gone && me.leg !== null && d.t >= me.leg.t0) {
+        for (const o of all) {
+          if (o === me || o.gone || Math.abs(o.v.y - me.v.y) > 1 || inWay(me, o) === null) {
+            continue;
           }
-          const dx = them.v.x - me.v.x;
-          const dz = them.v.z - me.v.z;
-          const dist = Math.hypot(dx, dz);
-          const ahead = dx * hx + dz * hz;
-          const same = Math.sin(them.yaw) * hx + Math.cos(them.yaw) * hz > 0.3;
-          return (
-            dist < KEEP_BEHIND && ahead > 0.5 * dist && same && Math.abs(them.v.y - me.v.y) < 1
-          );
-        });
+          if (!o.walking || o.leg === null) {
+            wait = true;
+            continue;
+          }
+          const lesser = p.seat > o.p.seat;
+          const facing = Math.sin(o.yaw) * Math.sin(me.yaw) + Math.cos(o.yaw) * Math.cos(me.yaw);
+          if (facing < -0.7) {
+            // Coming the other way: the lesser steps aside off their line; the other waits till they have.
+            if (lesser) {
+              const rx = -Math.cos(o.yaw);
+              const rz = Math.sin(o.yaw);
+              const side = (me.v.x - o.v.x) * rx + (me.v.z - o.v.z) * rz >= 0 ? 1 : -1;
+              ax = side * rx * ASIDE;
+              az = side * rz * ASIDE;
+              wait = true;
+            } else if (Math.hypot(o.p.ship.aside.x, o.p.ship.aside.z) < ASIDE * 0.9) {
+              wait = true;
+            }
+          } else if (inWay(o, me) === null) {
+            // Behind them: keeps behind.
+            wait = true;
+          } else if (lesser) {
+            // Across each other's way: the lesser steps back out of it.
+            wait = true;
+            back = true;
+          }
+        }
+      }
+      const step = ASIDE_SPEED * dt;
+      const ex = ax - d.aside.x;
+      const ez = az - d.aside.z;
+      const el = Math.hypot(ex, ez);
+      if (el > 0) {
+        const k = Math.min(1, step / el);
+        d.aside.x += ex * k;
+        d.aside.z += ez * k;
       }
       if (wait && d.waited < WAIT_MOST) {
         d.waited += dt;
-        next = d.t;
+        next = back && me.leg !== null ? Math.max(me.leg.t0, d.t - dt) : d.t;
+      } else if (!wait) {
+        d.waited = 0;
       }
       d.t = next;
       if (p.moving !== null) {
@@ -1140,18 +1718,27 @@ export class ShipRules {
       if (d.t >= r.duration) {
         this.#arrive(p);
       }
-    });
+    }
   }
 
-  /** A walk ended: at their place. */
+  /** A walk ended: at their place, or at their work. */
   #arrive(p: ShipMember): void {
     const d = p.ship;
+    d.aside.x = 0;
+    d.aside.z = 0;
     d.route = null;
     d.t = 0;
     d.gone = false;
     p.moving = null;
     d.from = d.to;
     p.side = d.toSpot.side;
+    if (d.work !== null) {
+      if (d.to === WORK) {
+        d.work.phase = 'at';
+      } else {
+        d.work = null;
+      }
+    }
   }
 
   /** The relief takes the spokes: the one at the wheel steps to leeward and walks to their place. */
@@ -1174,9 +1761,15 @@ export class ShipRules {
   }
 }
 
-/** The ship's moment, beside the crew's: her after yards' turn, her heel, the wind's speed (m/s) and the world's time (s). */
+/**
+ * The ship's moment, beside the crew's: her after yards' turn and her fore
+ * yards' (as yardsTurn has them; the after ones' if not told), her reef
+ * (0 … 2), her heel, the wind's speed (m/s) and the world's time (s).
+ */
 export interface ShipMoment {
   yards: number;
+  foreYards?: number;
+  reef?: number;
   heel: number;
   wind: number;
   time: number;
