@@ -268,12 +268,36 @@ test('a mixed 64, Jolly boats, keelboats, tall ships, skiffs, beach cats and yac
   expect(budget.bagged).toBe(budget.drawCalls - 2);
 });
 
-test('a keelboat and a tall ship of the fleet look as the own ones do, the jib, the yards and the reefs', async ({
+/**
+ * Each kind on a page of its own, its poses taken own and fleet alike: one
+ * page for all four ran to the edge of a test's time on a slow runner.
+ */
+async function kindAlike(page: Page, kind: number, poses: Pose[]): Promise<void> {
+  await openScene(page, 'boat=keelboat');
+  if (kind !== 1) {
+    await page.evaluate(async (k) => {
+      await globalThis.keel.useBoat(k);
+      // A tall ship's foam and wake are the sea's, drawn by each boat's speed
+      // and its history, the own boat's and the fleet's apart: the hull's the
+      // same. Her braces are drawn only on the ship in view.
+      if (k === 2) globalThis.keel.setParts({ foam: false, wakes: false, braces: false });
+    }, kind);
+  }
+  const diffs: Record<string, number> = {};
+  for (const pose of poses) {
+    const { own, fleet } = await both(page, pose, kind);
+    diffs[pose.name] = pictureDifference(own, fleet);
+  }
+  test.info().annotations.push({ type: 'measured', description: JSON.stringify(diffs) });
+  for (const [name, d] of Object.entries(diffs)) {
+    expect(d, name).toBeLessThan(LIKE);
+  }
+}
+
+test('a keelboat of the fleet looks as the own one does, the jib and the reefs', async ({
   page,
 }) => {
-  await openScene(page, 'boat=keelboat');
-  const diffs: Record<string, number> = {};
-  for (const pose of [
+  await kindAlike(page, 1, [
     {
       name: 'a keelboat close-hauled',
       state: { ...rest, heading: 1.5708, heel: 15 * DEG, boom: 0.15, jib: 0.2, sailor: -0.9 },
@@ -282,24 +306,18 @@ test('a keelboat and a tall ship of the fleet look as the own ones do, the jib, 
       name: 'a keelboat reefed, reaching',
       state: { ...rest, heading: 1.5708, heel: 10 * DEG, boom: 0.7, jib: 0.35, reef: 1 },
     },
-  ]) {
-    const { own, fleet } = await both(page, pose, 1);
-    diffs[pose.name] = pictureDifference(own, fleet);
-  }
-  // The same page, its own boat a tall ship: the wind on her port beam, her
-  // yards braced up and drawing; then running square before it, her
-  // topgallants furled. Seen from her quarter, near enough that the fleet
-  // draws her full model, as the chase camera's distance would not.
-  await page.evaluate(async () => {
-    const k = globalThis.keel;
-    await k.useBoat(2);
-    // Her foam and wake are the sea's, drawn by each boat's speed and its
-    // history, the own boat's and the fleet's apart: the hull's the same.
-    // Her braces are drawn only on the ship in view.
-    k.setParts({ foam: false, wakes: false, braces: false });
-  });
+  ]);
+});
+
+test('a tall ship of the fleet looks as the own one does, the yards and the reefs', async ({
+  page,
+}) => {
+  // The wind on her port beam, her yards braced up and drawing; then running
+  // square before it, her topgallants furled. Seen from her quarter, near
+  // enough that the fleet draws her full model, as the chase camera's
+  // distance would not.
   const near = { azimuth: 0.5, elevation: 0.25, distance: 6 };
-  for (const pose of [
+  await kindAlike(page, 2, [
     {
       name: 'a tall ship braced up',
       state: { ...rest, heading: 1.5708, heel: 4 * DEG, boom: 0.4, yards: 0.6, foreYards: 0.6 },
@@ -310,34 +328,19 @@ test('a keelboat and a tall ship of the fleet look as the own ones do, the jib, 
       state: { ...rest, heading: Math.PI, boom: 1.0, yards: 1.5, foreYards: 1.5, reef: 1 },
       view: near,
     },
-  ]) {
-    const { own, fleet } = await both(page, pose, 2);
-    diffs[pose.name] = pictureDifference(own, fleet);
-  }
-  test.info().annotations.push({ type: 'measured', description: JSON.stringify(diffs) });
-  for (const [name, d] of Object.entries(diffs)) {
-    expect(d, name).toBeLessThan(LIKE);
-  }
+  ]);
 });
 
-// A page each, so that each test's time is two kinds'.
-test('a skiff and a beach cat of the fleet look as the own ones do, the gennaker and the rudders', async ({
+test('a skiff of the fleet looks as the own one does, the gennaker and the trapeze', async ({
   page,
 }) => {
-  await openScene(page, 'boat=skiff');
-  // The sea's foam and wakes, and a ship's braces, left out, as they are
-  // for the ship.
-  await page.evaluate(() => {
-    globalThis.keel.setParts({ foam: false, wakes: false, braces: false });
-  });
-  const diffs: Record<string, number> = {};
-  // A skiff, the wind from the north: on a broad reach with her gennaker
-  // set, half way up and in its bag; close-hauled, her sailor out on the
-  // trapeze past her rack, drawn hiked at its edge. Seen from her lee bow,
-  // near enough that the fleet draws her full model.
+  // The wind from the north: on a broad reach with her gennaker set, half way
+  // up and in its bag; close-hauled, her sailor out on the trapeze past her
+  // rack, drawn hiked at its edge. Seen from her lee bow, near enough that
+  // the fleet draws her full model.
   const reach = { ...rest, heading: 2.2, heel: 5 * DEG, boom: 0.9, jib: 0.3, sailor: -0.6 };
   const lee = { azimuth: -2.2, elevation: 0.2, distance: 9 };
-  for (const pose of [
+  await kindAlike(page, SKIFF, [
     {
       name: 'a skiff with her gennaker set',
       state: { ...reach, kite: 0.9, hoist: 1, hoistTarget: 1 },
@@ -358,16 +361,15 @@ test('a skiff and a beach cat of the fleet look as the own ones do, the gennaker
       state: { ...rest, heading: 0.8, heel: 8 * DEG, boom: 0.12, jib: 0.15, sailor: -1.7 },
       view: { azimuth: 0.6, elevation: 0.2, distance: 8 },
     },
-  ]) {
-    const { own, fleet } = await both(page, pose, SKIFF);
-    diffs[pose.name] = pictureDifference(own, fleet);
-  }
-  // A beach cat: close-hauled with her windward hull flying and her sailor
-  // on the wire; reaching with her rudders put over, each on its own stock.
-  await page.evaluate(async (kind) => {
-    await globalThis.keel.useBoat(kind);
-  }, CAT);
-  for (const pose of [
+  ]);
+});
+
+test('a beach cat of the fleet looks as the own one does, a hull flying and the rudders', async ({
+  page,
+}) => {
+  // Close-hauled with her windward hull flying and her sailor on the wire;
+  // reaching with her rudders put over, each on its own stock.
+  await kindAlike(page, CAT, [
     {
       name: 'a beach cat flying a hull',
       state: { ...rest, heading: 0.8, heel: 9 * DEG, boom: 0.1, jib: 0.15, sailor: -2.1 },
@@ -386,25 +388,16 @@ test('a skiff and a beach cat of the fleet look as the own ones do, the gennaker
       },
       view: { azimuth: 2.6, elevation: 0.25, distance: 8 },
     },
-  ]) {
-    const { own, fleet } = await both(page, pose, CAT);
-    diffs[pose.name] = pictureDifference(own, fleet);
-  }
-  test.info().annotations.push({ type: 'measured', description: JSON.stringify(diffs) });
-  for (const [name, d] of Object.entries(diffs)) {
-    expect(d, name).toBeLessThan(LIKE);
-  }
+  ]);
 });
 
 test('a yacht of the fleet looks as the own one does, her two wheels and two rudders turned', async ({
   page,
 }) => {
-  await openScene(page, 'boat=yacht');
-  const diffs: Record<string, number> = {};
-  // Close-hauled, heeled, her helm at the windward wheel; reaching with
-  // her rudders and both her wheels put over, each on its own stock and
-  // hub. Seen from her quarter, near enough for the full model.
-  for (const pose of [
+  // Close-hauled, heeled, her helm at the windward wheel; reaching with her
+  // rudders and both her wheels put over, each on its own stock and hub.
+  // Seen from her quarter, near enough for the full model.
+  await kindAlike(page, YACHT, [
     {
       name: 'a yacht close-hauled',
       state: { ...rest, heading: 0.8, heel: 12 * DEG, boom: 0.06, jib: 0.18, sailor: -1 },
@@ -415,14 +408,7 @@ test('a yacht of the fleet looks as the own one does, her two wheels and two rud
       state: { ...rest, heading: 1.8, heel: 6 * DEG, boom: 0.6, jib: 0.3, rudder: 0.3, sailor: -1 },
       view: { azimuth: 0.4, elevation: 0.35, distance: 9 },
     },
-  ]) {
-    const { own, fleet } = await both(page, pose, YACHT);
-    diffs[pose.name] = pictureDifference(own, fleet);
-  }
-  test.info().annotations.push({ type: 'measured', description: JSON.stringify(diffs) });
-  for (const [name, d] of Object.entries(diffs)) {
-    expect(d, name).toBeLessThan(LIKE);
-  }
+  ]);
 });
 
 test('every sailor, near and far, person or machine, in at most 6 draws', async ({ page }) => {
