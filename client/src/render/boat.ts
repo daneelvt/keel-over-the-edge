@@ -91,6 +91,7 @@ import { chordAt, chordAtHalf, markPlace } from './machinemark';
 import { litMaterial, sailGlow } from './materials';
 import { Pennant } from './pennant';
 import type { Gfx } from './renderer';
+import { catClips } from './sailors/cat';
 import { BoatSailor } from './sailors/onboat';
 import { harnessFile, trapezeClips } from './sailors/trapeze';
 import { wheelClips } from './sailors/wheel';
@@ -623,6 +624,7 @@ export class Boat {
         wheel: () => lazyArtUrl(wheelClips(a.clips)),
         trapeze: () => lazyArtUrl(trapezeClips(a.clips)),
         harness: () => lazyArtUrl(harnessFile(a.clips)),
+        cat: () => lazyArtUrl(catClips(a.clips)),
         colours: look.colours,
       },
       renderer,

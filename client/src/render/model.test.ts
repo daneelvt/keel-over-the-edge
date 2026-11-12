@@ -12,6 +12,7 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, test } from 'vitest';
 import { catalog } from '../catalog';
+import { aboardData } from './sailors/cat';
 
 /** Most triangles in a sailor's deck and far levels (the build's tables.yaml). */
 const DECK_BUDGET = 3300;
@@ -601,6 +602,46 @@ describe.each(catalog.boats.map((b) => [b.name, b] as const))('%s', (_, boat) =>
       expect(has(yard.node)).toBe(true);
       for (const p of yard.footrope) {
         expect(p[1]).toBeLessThan(0);
+      }
+    },
+  );
+
+  test.runIf(has('aboard'))(
+    'her people’s places: each station’s hull deck edges, side bar and strap, the net between the beams, the boom over it',
+    () => {
+      const a = aboardData(node('aboard').extras);
+      expect(a).not.toBeNull();
+      if (a === null) {
+        return;
+      }
+      expect(far.nodes.find((n) => n.name === 'aboard')?.extras).toEqual(node('aboard').extras);
+      // The helm's station where the catalog seats its sailor, its outer
+      // edge the trapeze's rack's edge; the crew's forward of it.
+      const seat = boat.stations[0]?.at ?? [];
+      expect(a.helm.outer.z).toBeCloseTo(seat[2] ?? 0, 2);
+      expect(a.helm.outer.toArray()).toEqual(node('trapeze').extras?.rackEdge);
+      expect(a.crew.inner.z).toBeCloseTo(boat.stations[1]?.at[2] ?? 0, 2);
+      for (const s of [a.helm, a.crew]) {
+        // Across the starboard hull: the strap on the net inboard of the
+        // side bar, the bar inboard of the deck's inner edge, outboard of
+        // it the outer edge; the deck under the bar's top.
+        expect(s.strap.x).toBeGreaterThan(0);
+        expect(s.strap.x).toBeLessThan(s.bar.x);
+        expect(s.bar.x).toBeLessThan(s.inner.x);
+        expect(s.inner.x).toBeLessThan(s.outer.x);
+        expect(s.bar.y).toBeGreaterThan(s.inner.y);
+        expect(s.strap.y).toBeGreaterThan(a.net.y);
+        expect(s.inner.z).toBeGreaterThan(a.net.fore);
+        expect(s.inner.z).toBeLessThan(a.net.aft);
+      }
+      // The net between the beams, the boom over it with room for a sailor
+      // on hands and knees under it, its righting line on it.
+      expect(a.net.fore).toBeGreaterThan(at('mast')[2] ?? 0);
+      expect(a.boom - a.net.y).toBeGreaterThan(0.6);
+      expect(a.boom).toBeCloseTo(rig.boomHeight - 0.034, 3);
+      for (const p of a.line) {
+        expect(p.y).toBeGreaterThan(a.net.y);
+        expect(p.z).toBeGreaterThan(a.net.fore);
       }
     },
   );

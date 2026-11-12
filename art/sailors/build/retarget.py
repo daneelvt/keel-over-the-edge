@@ -206,7 +206,7 @@ def retarget(fig, name, spec, fps):
         _plant(fig, clip, spec.get("speed", 0.0), way, crawl)
         lowered = 0.0
         for _ in range(8):
-            if clip.notes["off the deck"] <= 0.0005:
+            if not 0.0005 < clip.notes["off the deck"] < 0.05:
                 break
             # A straight leg (or arm) short of the deck it pushes off: the
             # body lowered by as much, and planted again.
@@ -379,10 +379,15 @@ WAYS = {"forward": Vector((0.0, 1.0, 0.0)), "left": Vector((-1.0, 0.0, 0.0)), "r
 # far over it, the knuckles' and the fingers' tips (their bones' ends)
 # this far.
 PALM = (0.055, 0.026, 0.012)
+# A leg's joints, by side; and how far up its knee's pole is moved, try by
+# try, to swing the knee off the deck.
+_LEG_BONES = {s: (f"thigh_{s}", f"calf_{s}", f"foot_{s}", f"ball_{s}") for s in ("l", "r")}
+KNEE_SWING = (0.02, 0.04, 0.07, 0.1, 0.15, 0.2)
 # Where the beach cat's net is crossed (stage.Cat); and how far over where
-# it is laced what crosses it stands, on its strands.
+# it is laced what crosses it stands, on its strands (a foot passing low
+# over it scrapes it no lower).
 CAT_NET = "cat-net"
-NET_STRANDS = 0.006
+NET_STRANDS = 0.01
 
 
 def _sole(fig, s):
@@ -667,20 +672,42 @@ def _plant(fig, clip, speed, way=WAYS["forward"], crawl=False):
     for f, fr in enumerate(frames):
         fig.set_rotations(fr["rot"], fr["pelvis"])
         contacts = {}
-        for s in order:
+        targets = {}
+        for s in sides:
             w, c = moves[s]
             low = soles[s][f][0]
             lift = -low * w[f] if low > 0 else -low
-            target = soles[s][f][3] + c[f] + Vector((0.0, 0.0, lift))
+            targets[s] = soles[s][f][3] + c[f] + Vector((0.0, 0.0, lift))
+        for s in order:
+            w = moves[s][0]
+            target = targets[s]
             if s.startswith("foot"):
                 if crawl and moves[f"knee_{s[-1]}"][0][f] > 0.5:
                     # The toes behind, on the deck: the shin turned at the
                     # knee, which bears.
                     _shin(fig, s[-1], target)
                 else:
-                    _leg(fig, s[-1], target, fig.world(f"calf_{s[-1]}"), w[f])
+                    knee = fig.world(f"calf_{s[-1]}")
+                    rest = {b: fig.bones[b].rotation_quaternion.copy() for b in _LEG_BONES[s[-1]]}
+                    _leg(fig, s[-1], target, knee, w[f])
+                    # A knee brought down onto the deck by the foot's place:
+                    # swung up about the line from the hip to the foot.
+                    for up in KNEE_SWING:
+                        if fig.world(f"calf_{s[-1]}").z - KNEE >= 0:
+                            break
+                        for b, q in rest.items():
+                            fig.bones[b].rotation_quaternion = q
+                        fig.update()
+                        _leg(fig, s[-1], target, knee + Vector((0.0, 0.0, up)), w[f])
                     if w[f] >= 0.999:
                         contacts[s] = target.copy()
+                    if crawl:
+                        # The knee kept on or over the deck, the foot then
+                        # taken back to its place by the shin.
+                        k = fig.world(f"calf_{s[-1]}")
+                        if k.z - KNEE < 0:
+                            _knee(fig, s[-1], k + Vector((0.0, 0.0, KNEE - k.z)))
+                            _shin(fig, s[-1], target)
             elif s.startswith("knee"):
                 _knee(fig, s[-1], target)
             else:
@@ -958,7 +985,7 @@ def _wrists(fig, clip):
     wrist past its range on the eased elbows: the hand turned back on its
     forearm within it, and then about the wrist as far as lifts its fingers
     out of the deck."""
-    most = math.radians(fig.motion["ranges"]["hand"] * fig.motion["gate"]["range-strain"] * 0.97)
+    most = math.radians(fig.motion["ranges"]["hand"] * fig.motion["gate"]["range-strain"] * 0.9)
     for fr in _ring(clip):
         fig.set_rotations(fr["rot"], fr["pelvis"])
         for s in ("l", "r"):

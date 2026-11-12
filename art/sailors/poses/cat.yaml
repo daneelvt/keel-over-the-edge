@@ -226,6 +226,41 @@ poses:
       foot_l: { at: cat-stand, offset: [-0.12, 0.0, 0.1] }
       foot_r: { at: cat-stand, offset: [0.12, 0.0, 0.1] }
 
+  # The helm on the wire from the hull's outer edge, the skiff's two (out
+  # fully, lying back nearly flat; part out, crouched on the edge) set on
+  # her hull: the man's heel crouched on the skiff's rack's edge comes
+  # through her hull's rounder edge, so the crouch stands 15 mm higher.
+  cat-wire-out:
+    from: trapeze-out
+    place: cat-wire
+    ik:
+      foot_l: { at: cat-outer, offset: [-0.15, -0.05, 0.07] }
+      foot_r: { at: cat-outer, offset: [0.17, -0.05, 0.07] }
+  cat-wire-luff:
+    from: trapeze-luff
+    place: cat-wire
+    ik:
+      foot_l: { at: cat-outer, offset: [-0.15, -0.05, 0.07] }
+      foot_r: { at: cat-outer, offset: [0.17, -0.05, 0.07] }
+  cat-wire-ahead:
+    from: trapeze-ahead
+    place: cat-wire
+    ik:
+      foot_l: { at: cat-outer, offset: [-0.15, -0.05, 0.07] }
+      foot_r: { at: cat-outer, offset: [0.17, -0.05, 0.07] }
+  cat-wire-crouch:
+    from: trapeze-crouch
+    place: cat-wire
+    shift: [0.0, 0.0, 0.015]
+  cat-wire-crouch-luff:
+    from: trapeze-crouch-luff
+    place: cat-wire
+    shift: [0.0, 0.0, 0.015]
+  cat-wire-crouch-ahead:
+    from: trapeze-crouch-ahead
+    place: cat-wire
+    shift: [0.0, 0.0, 0.015]
+
 clips:
   # The helm on the hull: looking forward, at the luff, forward and to
   # windward. Its -port is on the port hull.
@@ -261,7 +296,8 @@ clips:
     loop: true
     idle: true
     sides: true
-    strain: [thigh]
+    # The arm resting on the raised knee folds near the end of its range.
+    strain: [thigh, lowerarm]
     group: cat
     keys:
       - { pose: hull-seated, hold: 1.6, ramp: 1.5, lead: head }
@@ -291,14 +327,40 @@ clips:
       - { pose: righting-right-over, hold: 0.25, ramp: 0.8, arc: [0.06, 0.08] }
       - { pose: righting-right-heave, hold: 0.3, ramp: 0.8 }
 
+  # The helm on the wire, fully out and part out. Their -port are for the
+  # port hull's wire.
+  cat-trapeze:
+    loop: true
+    idle: true
+    sides: true
+    group: cat
+    keys:
+      - { pose: cat-wire-out, hold: 1.6, ramp: 1.5, lead: head }
+      - { pose: cat-wire-luff, hold: 1.4, ramp: 1.3, lead: head, anticipate: 0.05 }
+      - { pose: cat-wire-out, hold: 1.2, ramp: 1.5, lead: head }
+      - { pose: cat-wire-ahead, hold: 1.2, ramp: 1.4, lead: head, anticipate: 0.05 }
+  cat-trapeze-low:
+    loop: true
+    idle: true
+    sides: true
+    hang: { back: 1.0 }
+    group: cat
+    keys:
+      - { pose: cat-wire-crouch, hold: 1.6, ramp: 1.5, lead: head }
+      - { pose: cat-wire-crouch-luff, hold: 1.4, ramp: 1.3, lead: head, anticipate: 0.05 }
+      - { pose: cat-wire-crouch, hold: 1.2, ramp: 1.5, lead: head }
+      - { pose: cat-wire-crouch-ahead, hold: 1.2, ramp: 1.4, lead: head, anticipate: 0.05 }
+
 # Crossing her net facing forward, from Quaternius' library (CC0),
 # retargeted, each set on the net where it is laced (the soles on it, and
 # each foot held there by IK while it bears) and placed from its middle: at a crouch, going down into it, stepping sideways
 # to the left and to the right (a foot that bears moving the other way at
 # the walk's speed), and up out of it, the back bent as far as keeps the
 # head's joint under 0.7 m over the net; or on hands and knees under the
-# boom, going down onto them, crawling sideways to either side (the hands
-# and knees held on the net while they bear, as the feet) and up again.
+# boom, crawling sideways to either side (the hands and knees held on the
+# net while they bear, as the feet; the back's arch shared along it, the
+# forearms' turn within their range, the palms flat where the wrists
+# allow), played slower than the library's to ease its hitches.
 # The knees and ankles are taken near the ends of their ranges, as in any
 # deep crouch.
 retarget:
@@ -338,13 +400,6 @@ retarget:
     strain: [thigh, calf, foot]
     stage: cat-net
     group: cat
-  net-crawl-enter:
-    file: vendor/quaternius/Crawl_Enter.glb
-    deck: true
-    crawl: true
-    strain: [thigh, calf, foot, neck_01, head, upperarm, hand]
-    stage: cat-net
-    group: cat
   net-crawl-left:
     file: vendor/quaternius/Crawl_Left_Loop.glb
     loop: true
@@ -354,7 +409,7 @@ retarget:
     seconds: 2.6
     speed: 0.14
     smooth: 5.0
-    strain: [thigh, calf, foot, neck_01, head, upperarm, hand]
+    strain: [thigh, calf, foot, ball, neck_01, head, upperarm, hand]
     stage: cat-net
     group: cat
   net-crawl-right:
@@ -366,13 +421,6 @@ retarget:
     seconds: 2.6
     speed: 0.14
     smooth: 5.0
-    strain: [thigh, calf, foot, neck_01, head, upperarm, hand]
-    stage: cat-net
-    group: cat
-  net-crawl-exit:
-    file: vendor/quaternius/Crawl_Exit.glb
-    deck: true
-    crawl: true
-    strain: [thigh, calf, foot, neck_01, head, upperarm, hand]
+    strain: [thigh, calf, foot, ball, neck_01, head, upperarm, hand]
     stage: cat-net
     group: cat

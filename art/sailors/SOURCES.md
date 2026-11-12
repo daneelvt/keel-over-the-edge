@@ -43,8 +43,6 @@ them.
 | File                                         | Pack                                                                      | Licence | SHA-256                                                          |
 | -------------------------------------------- | ------------------------------------------------------------------------- | ------- | ---------------------------------------------------------------- |
 | `vendor/quaternius/License.txt`              | Quaternius, Universal Animation Library (Source)                          | CC0-1.0 | 6d01f55c6e4c49a2c9963e147e561945ae2c83958c8ca667d90a6bffdbfac061 |
-| `vendor/quaternius/Crawl_Enter.glb`          | Quaternius, Universal Animation Library (Source), Unreal-Godot/UAL1.glb   | CC0-1.0 | 72ed6feaa5d28f3f33a9822ebccd9dd4f49c379cd4de2b72ebce5232727a0c83 |
-| `vendor/quaternius/Crawl_Exit.glb`           | Quaternius, Universal Animation Library (Source), Unreal-Godot/UAL1.glb   | CC0-1.0 | 5751065756596c1977e70f1d37580ea232eb80bee3baaaa5c1da0a11e1c1884a |
 | `vendor/quaternius/Crawl_Left_Loop.glb`      | Quaternius, Universal Animation Library (Source), Unreal-Godot/UAL1.glb   | CC0-1.0 | 9cbee4edae4f83ca18414a5c149475aa45e293f5f178e604815a78c76aabcbc0 |
 | `vendor/quaternius/Crawl_Right_Loop.glb`     | Quaternius, Universal Animation Library (Source), Unreal-Godot/UAL1.glb   | CC0-1.0 | 89944aedb40c6b1c3bfbbbbe3b05c9a87f2d6f289bc164318b604cadc6e182c5 |
 | `vendor/quaternius/Crouch_Enter.glb`         | Quaternius, Universal Animation Library (Source), Unreal-Godot/UAL1.glb   | CC0-1.0 | f27635721bd09875aa97199231330329f8e3a8c88cd4420bdbcc62eed7270324 |

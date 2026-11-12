@@ -54,6 +54,7 @@ import {
   Mesh,
   type Object3D,
   PlaneGeometry,
+  Quaternion,
   Raycaster,
   TorusGeometry,
   Vector2,
@@ -71,6 +72,17 @@ import { Boat } from '../render/boat';
 import { basicMaterial, checkScene, domeCentre, domeDrop, litMaterial } from '../render/materials';
 import { TIERS } from '../render/quality';
 import { chooseBackend, wantsCompat } from '../render/renderer';
+import {
+  aboard,
+  CAT_CLIPS,
+  CROSS_SPEED,
+  catAnchor,
+  catPlace,
+  catPoint,
+  catSide,
+  inCatFile,
+  namesCatClips,
+} from '../render/sailors/cat';
 import { readSailorLight, type SailorColours, sailorColours } from '../render/sailors/material';
 import { loadClips, loadSailor, type SailorClips, type SailorModel } from '../render/sailors/model';
 import {
@@ -149,6 +161,7 @@ export interface LookFiles {
       rail?: string;
       ship?: string;
       aloft?: string;
+      cat?: string;
     }
   >;
 }
@@ -158,7 +171,7 @@ export function builtLooks(files: Record<string, string>): LookFiles[] {
   const looks = new Map<string, LookFiles>();
   for (const [path, url] of Object.entries(files)) {
     const m =
-      /\/art\/sailors\/([^/]+)\/([a-z]+)(?:\.(deck|far|clips|wheel|trapeze|harness|rail|ship|aloft))?\.glb$/.exec(
+      /\/art\/sailors\/([^/]+)\/([a-z]+)(?:\.(deck|far|clips|wheel|trapeze|harness|rail|ship|aloft|cat))?\.glb$/.exec(
         path,
       );
     if (m === null) {
@@ -183,6 +196,8 @@ export function builtLooks(files: Record<string, string>): LookFiles[] {
       v.ship = url;
     } else if (kind === 'aloft') {
       v.aloft = url;
+    } else if (kind === 'cat') {
+      v.cat = url;
     } else {
       v.levels[(kind ?? 'close') as Level] = url;
     }
@@ -367,7 +382,7 @@ interface Figure {
   harness: { root: Object3D; mixer: AnimationMixer; meshes: Mesh[]; hook: Vector3 | null } | null;
   wire: { mesh: Mesh; side: number; hounds: Vector3; hook: Vector3 } | null;
   /** Walking at a crouch along a side deck: where it starts, and how far it goes before it starts again. */
-  walk: { from: Vector3; length: number; speed: number } | null;
+  walk: { from: Vector3; length: number; speed: number; way?: Vector3 } | null;
 }
 
 /** The wheel stood at on the quay: its hub ahead of and above the helmsman's place, its rim, spokes and their handles beyond it, as the ships' models are built. */
@@ -393,6 +408,17 @@ const WALK = 0.9;
 /** Aboard the ship, standing about this far inboard of her rail, and walking this far forward. */
 const SHIP_STAND_IN = 1.1;
 const SHIP_WALK = 2.4;
+
+/** Crossing a beach cat's net, the loops go this far across it, and back. */
+const CROSS = 1.0;
+/** Righting her: stood on her lower hull's top this far toward her deck from the hull's middle, as the build stands it. */
+const CAT_STAND_OUT = 0.05;
+
+/** Whether a clip on a beach cat hangs from the trapeze's wire. */
+function catWired(clip: string): boolean {
+  const base = clip.replace(/-port$/, '');
+  return base === CAT_CLIPS.wire || base === CAT_CLIPS.wireLow || base === CAT_CLIPS.crewWire;
+}
 
 /** Whether a clip is the ship's company's: about her decks, or her work and aloft. */
 function onShip(clip: string): boolean {
@@ -513,6 +539,8 @@ export class DressingRoom {
   #wireBoat: number | null = null;
   /** The catalog's boat whose model has a rail, once found; −1 if none has. */
   #railBoat: number | null = null;
+  /** The catalog's beach cat, once looked for: its index, or −1 if none. */
+  #cat: number | null = null;
   /** The catalog's boat whose model marks her company's places (the tall ship), once found; −1 if none does. */
   #ship: number | null = null;
   /** The boats made, by the catalog's boat and the place in the room, and their models' loads. */
@@ -758,6 +786,9 @@ export class DressingRoom {
     if (onShip(r.clip)) {
       await this.#findShip();
     }
+    if (inCatFile(r.clip)) {
+      await this.#findCat();
+    }
     const made = await Promise.all(
       wanted.map((w) => this.#figure(w.look, w.version, w.level, w.colours, w.at)),
     );
@@ -802,17 +833,19 @@ export class DressingRoom {
     let clips: Promise<SailorClips> | null = null;
     // The clips at a wheel, those on a trapeze's wire and those on a rail
     // (and the crouch) are files of their own.
-    const clipsUrl = onWire(this.room.clip)
-      ? files?.trapeze
-      : inRailFile(this.room.clip)
-        ? files?.rail
-        : inShipFile(this.room.clip)
-          ? files?.ship
-          : inAloftFile(this.room.clip)
-            ? files?.aloft
-            : atWheel(this.room.clip)
-              ? files?.wheel
-              : files?.clips;
+    const clipsUrl = inCatFile(this.room.clip)
+      ? files?.cat
+      : onWire(this.room.clip)
+        ? files?.trapeze
+        : inRailFile(this.room.clip)
+          ? files?.rail
+          : inShipFile(this.room.clip)
+            ? files?.ship
+            : inAloftFile(this.room.clip)
+              ? files?.aloft
+              : atWheel(this.room.clip)
+                ? files?.wheel
+                : files?.clips;
     if (clipsUrl !== undefined) {
       clips = this.#clips.get(clipsUrl) ?? loadClips(clipsUrl, renderer);
       this.#clips.set(clipsUrl, clips);
@@ -855,7 +888,7 @@ export class DressingRoom {
       f.mixer = new AnimationMixer(root);
       f.action = f.mixer.clipAction(clip);
       f.action.play();
-      if (onWire(clip.name) && files?.harness !== undefined) {
+      if ((onWire(clip.name) || catWired(clip.name)) && files?.harness !== undefined) {
         f.harness = await this.#harness(files.harness, root, clip);
       }
     }
@@ -1023,6 +1056,103 @@ export class DressingRoom {
     return true;
   }
 
+  /** Finds the catalog's boat whose kind's people are drawn with the beach cat's clips. */
+  async #findCat(): Promise<void> {
+    if (this.#cat === null) {
+      this.#cat = catalog.boats.findIndex((b) => namesCatClips(b.art));
+    }
+  }
+
+  /**
+   * A figure aboard a beach cat, each on her own, moored before the quay:
+   * on her starboard hull (or port, for a -port clip) from her station's
+   * deck edge, turned so the figure faces the front; crossing her net from
+   * its middle, facing forward, the loops going to their side at their
+   * speed; or, righting her, standing on her lower hull as she lies on her
+   * side, facing her. Her sails are left out, so the people are seen.
+   * False if the room has no beach cat or the figure no clip.
+   */
+  async #onCat(f: Figure, i: number): Promise<boolean> {
+    const r = this.room;
+    if (!inCatFile(r.clip) || f.action === null || this.#cat === null || this.#cat < 0) {
+      return false;
+    }
+    const { boat, loaded } = this.#boat(i);
+    await loaded;
+    const a = aboard(boat.parts);
+    const place = f.clips?.places.get(`place-${r.clip}`);
+    const anchor = catAnchor(r.clip);
+    if (a === null || place === undefined || anchor === null) {
+      return false;
+    }
+    boat.model.traverse((o) => {
+      if (o instanceof Mesh && (o.material as Material).name === 'flax') {
+        o.visible = false;
+      }
+    });
+    const n = this.#figuresWanted();
+    const x = (i - (n - 1) / 2) * this.#boatSpacing();
+    this.stage.scene.add(boat.root);
+    boat.root.position.set(x, 0, MOORED_Z);
+    f.boat = boat;
+    f.walk = null;
+    f.root.matrixAutoUpdate = true;
+    const side = catSide(r.clip);
+    if (anchor === 'stand') {
+      // Lying on her side, her mast to port, turned so the figure faces
+      // the front; it stands upright on her lower hull, where a ray down
+      // over its middle meets it, as the build stood it.
+      boat.root.quaternion
+        .setFromAxisAngle(new Vector3(0, 1, 0), Math.PI / 2)
+        .multiply(new Quaternion().setFromAxisAngle(new Vector3(0, 0, 1), Math.PI / 2));
+      boat.root.updateMatrixWorld(true);
+      const keel = boat.parts.get('board-root')?.position.x ?? 1;
+      const from = new Vector3(-keel, CAT_STAND_OUT, a.crew.inner.z).applyMatrix4(
+        boat.model.matrixWorld,
+      );
+      const hull = boat.parts.get('hull');
+      const hit =
+        hull === undefined
+          ? undefined
+          : new Raycaster(from.clone().setY(from.y + 0.6), new Vector3(0, -1, 0)).intersectObject(
+              hull,
+              true,
+            )[0];
+      const stand = hit?.point ?? from;
+      this.stage.scene.add(f.root);
+      new Matrix4()
+        .makeTranslation(stand.x, stand.y, stand.z)
+        .multiply(new Matrix4().makeRotationY(Math.PI / 2))
+        .multiply(place)
+        .decompose(f.root.position, f.root.quaternion, f.root.scale);
+      return true;
+    }
+    boat.root.rotation.set(0, anchor === 'net' ? Math.PI : (side * Math.PI) / 2, 0);
+    const at = catPoint(a, anchor) ?? new Vector3();
+    const seat = catPlace(place, at, side);
+    boat.model.add(f.root);
+    seat.decompose(f.root.position, f.root.quaternion, f.root.scale);
+    const speed = CROSS_SPEED[r.clip];
+    if (speed !== undefined) {
+      // To the clip's side, from half the way to the other.
+      const way = new Vector3(r.clip.endsWith('left') ? -1 : 1, 0, 0);
+      const from = f.root.position.clone().addScaledVector(way, -CROSS / 2);
+      f.walk = { from, length: CROSS, speed, way };
+    }
+    if (f.harness !== null) {
+      boat.model.add(f.harness.root);
+      seat.decompose(f.harness.root.position, f.harness.root.quaternion, f.harness.root.scale);
+      const trapeze = trapezeData(boat.parts.get('trapeze')?.userData);
+      if (trapeze !== null) {
+        const mesh = wireMesh(wireColour(wireNode(boat.parts, side)));
+        mesh.castShadow = true;
+        boat.model.add(mesh);
+        f.wire = { mesh, side, hounds: trapeze.hounds, hook: new Vector3() };
+      }
+    }
+    return true;
+  }
+
   /** Finds the catalog's boat whose model has a rail, loading the boats' models in turn. */
   async #findRailBoat(): Promise<void> {
     if (this.#railBoat !== null) {
@@ -1114,7 +1244,7 @@ export class DressingRoom {
   /** Where a figure stands, or sits: on the quay or the disc, or in its boat. */
   async #place(f: Figure, i: number): Promise<void> {
     const r = this.room;
-    if ((await this.#onRailBoat(f, i)) || (await this.#onShip(f, i))) {
+    if ((await this.#onRailBoat(f, i)) || (await this.#onShip(f, i)) || (await this.#onCat(f, i))) {
       return;
     }
     let seat = this.#seat(f);
@@ -1282,6 +1412,9 @@ export class DressingRoom {
     if (onShip(this.room.clip) && this.#ship !== null && this.#ship >= 0) {
       return this.#ship;
     }
+    if (inCatFile(this.room.clip) && this.#cat !== null && this.#cat >= 0) {
+      return this.#cat;
+    }
     return onWire(this.room.clip) && wire !== null && wire >= 0 ? wire : this.room.boat;
   }
 
@@ -1359,7 +1492,7 @@ export class DressingRoom {
         ) ?? new Vector3();
       // On a rail boat, the crew are on her side nearest the quay.
       const railed = seated && inRailFile(r.clip);
-      const aboard = seated && onShip(r.clip);
+      const aboard = seated && (onShip(r.clip) || inCatFile(r.clip));
       if (aboard) {
         // Aboard the ship: among the figures, wherever on her they are.
         o.target.set(0, 0, 0);
@@ -1376,6 +1509,15 @@ export class DressingRoom {
           // her shrouds, clear of the foremast and with neither figure
           // behind the other; else from the front, a little above.
           const anchor = shipAnchor(r.clip);
+          if (inCatFile(r.clip)) {
+            // Aboard a beach cat, a little above: crossing her net, from
+            // ahead and above, under her boom.
+            const net = catAnchor(r.clip) === 'net';
+            o.azimuth = back;
+            o.elevation = net ? 0.35 : 0.22;
+            o.distance = 3.0 + 1.4 * n;
+            return;
+          }
           o.azimuth =
             back + (anchor === 'brace' ? Math.PI / 2 : anchor === 'hatch' ? Math.PI / 2 + 0.6 : 0);
           o.elevation = anchor === 'hatch' ? 0.5 : 0.2;
@@ -1433,7 +1575,12 @@ export class DressingRoom {
             r.t !== null
               ? r.t * f.walk.speed
               : ((this.#time + f.offset) * f.walk.speed) % f.walk.length;
-          f.root.position.copy(f.walk.from).setZ(f.walk.from.z - (along % f.walk.length));
+          const d = along % f.walk.length;
+          if (f.walk.way === undefined) {
+            f.root.position.copy(f.walk.from).setZ(f.walk.from.z - d);
+          } else {
+            f.root.position.copy(f.walk.from).addScaledVector(f.walk.way, d);
+          }
         }
       }
     }

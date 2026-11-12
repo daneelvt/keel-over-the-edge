@@ -1439,6 +1439,10 @@ export interface BoatArt {
    */
   far: string;
   /**
+   * The files of clips beside each sailor look's clips (<version>.<name>.glb) its people aboard are drawn with, loaded only when someone is drawn aboard one of its kind: cat, a beach cat's (sat on her hull, sitting out, on the wire, crossing her net, righting her).
+   */
+  sailorClips?: "cat"[];
+  /**
    * The most triangles each of the boat's models may have.
    */
   budget: {
@@ -8896,4 +8900,4 @@ export interface LifeGlow {
 }
 
 /** The catalog version (tools/catalog). */
-export const CATALOG_VERSION = '88f9ccff6e432058';
+export const CATALOG_VERSION = '018a30e98d087965';

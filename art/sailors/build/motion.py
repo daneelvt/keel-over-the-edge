@@ -334,8 +334,8 @@ class Figure:
                 m.cull_face = "FRONT" if target not in planes else "OFF"
                 m.offset = SEAT_CLEAR + (above or {}).get(o.name, 0.0) + \
                     (SHIP_DECK_CLEAR if name == SEAT_GROUP + "-ship-deck" else 0.0)
-                m.project_limit = 0.3 if target not in planes or self.stage.cat is not None and \
-                    target is self.stage.cat.net else 2.0
+                m.project_limit = 0.3 if target not in planes else \
+                    CAT_NET_LIFT if self.stage.cat is not None and target is self.stage.cat.net else 2.0
                 m.vertex_group = SEAT_GROUP
                 m.show_viewport = m.show_render = False
                 self.seat_mods.append((o, m.name))
@@ -1375,6 +1375,9 @@ CAT_SEATS = (CAT_SEAT, CREW_SEAT, CAT_OUT)
 CAT_WIRES = ("cat-wire", "crew-wire")
 CAT_STAND = "cat-stand"
 CAT_NET = "cat-net"
+# Cloth this far or less under the beach cat's net is laid on it: a long
+# coat's skirts hanging from a deep crouch; none of her hull below it.
+CAT_NET_LIFT = 0.6
 CAT_PLACES = CAT_SEATS + CAT_WIRES + (CAT_STAND,)
 # The place on the cat each is placed from, as the game places it from her
 # model's `aboard` node: the deck's inner edge, its outer edge, the net's
