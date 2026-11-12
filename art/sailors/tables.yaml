@@ -173,18 +173,19 @@ stage:
   # far in from its front edge (the idles': its edge this far from the
   # knees).
   # On the rail, the knees' joints this far out from the deck's edge. Her
-  # cockpit is crossed this far forward of her table, aft of the mainsheet's
-  # bridle; her coachroof this far aft of its fore end, forward of the
+  # cockpit is crossed this far aft of her table, forward of the wheels
+  # (forward of the table there is no room fore and aft for a crouch); her
+  # coachroof this far aft of its fore end, forward of the
   # mast, over its scuttle (aft of the mast her boom is 0.72 m over the
   # roof, lower than a crouching figure's hat).
   cruiser:
     boat: boats/yacht.glb
     at: [40.0, 0.0, 0.0]
-    grips: { yacht-wheel-left: -45, yacht-wheel-right: 45, yacht-seat: 75 }
-    helm-seat: { aft: 0.3, out: 0.17, brace: 0.58 }
+    grips: { yacht-wheel-left: -45, yacht-wheel-right: 45, yacht-seat: 95 }
+    helm-seat: { aft: 0.38, out: 0.17, brace: 0.66 }
     bench: { in: 0.24, knee: 0.18 }
     rail: { knee: 0.1 }
-    cockpit: { table: 0.1 }
+    cockpit: { table: 0.45 }
     roof: { fore: 0.5 }
 
 # The portraits (build/portraits.py), every look's taken alike: head and

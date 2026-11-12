@@ -1179,9 +1179,8 @@ export class DressingRoom {
    * quay, her sails left out so her people are seen, turned so the figure
    * faces the front: at her starboard wheel (or port, for a -port clip),
    * standing aft of it or sat outboard of it; on her bench facing inboard;
-   * on her rail facing outboard; crossing her cockpit facing forward, the
-   * loops going to their side at their speed; or crossing her coachroof
-   * facing across her, going to port. False if the room has no yacht or
+   * on her rail facing outboard; or crossing her cockpit or her coachroof
+   * facing across her, going to port at the walk's speed. False if the room has no yacht or
    * the figure no clip.
    */
   async #onYacht(f: Figure, i: number): Promise<boolean> {
@@ -1211,11 +1210,11 @@ export class DressingRoom {
     f.root.matrixAutoUpdate = true;
     const side = yachtSide(r.clip);
     boat.heel.rotation.set(0, 0, 0);
-    // Facing the front: forward at the wheel and crossing the cockpit;
-    // inboard on the bench; outboard on the rail; to port on the roof.
+    // Facing the front: forward at the wheel; inboard on the bench;
+    // outboard on the rail; to port crossing the cockpit and the roof.
     boat.root.rotation.set(
       0,
-      anchor === 'stance' || anchor === 'sole'
+      anchor === 'stance'
         ? Math.PI
         : anchor === 'bench'
           ? (side * Math.PI) / 2
@@ -1235,9 +1234,8 @@ export class DressingRoom {
     seat.decompose(f.root.position, f.root.quaternion, f.root.scale);
     const speed = YACHT_CROSS_SPEED[r.clip];
     if (speed !== undefined) {
-      // To the clip's side (the coachroof's to port), from half the way to
-      // the other.
-      const way = new Vector3(r.clip.endsWith('right') ? 1 : -1, 0, 0);
+      // To port, as it faces, from half the way to the other side.
+      const way = new Vector3(-1, 0, 0);
       const from = f.root.position.clone().addScaledVector(way, -CROSS / 2);
       f.walk = { from, length: CROSS, speed, way };
     }
@@ -1611,10 +1609,11 @@ export class DressingRoom {
           if (inYachtFile(r.clip)) {
             // Aboard a cruising yacht, from the front and above: at her
             // wheel, from higher, over the binnacle and the wheel's rim.
+            // Each figure on a yacht of its own, a yacht's length apart.
             const a = yachtAnchor(r.clip);
             o.azimuth = back;
             o.elevation = a === 'stance' ? 0.42 : a === 'rail' ? 0.18 : 0.3;
-            o.distance = 3.0 + 1.4 * n;
+            o.distance = 4.4 + 0.9 * (n - 1) * this.#boatSpacing();
             return;
           }
           if (inCatFile(r.clip)) {

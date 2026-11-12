@@ -258,15 +258,14 @@ def retarget(fig, name, spec, fps):
         elif clip.seated:
             clip.place = _hatch_place(fig, clip)
         elif clip.ship in YACHT_DECKS:
-            # Crossing the yacht's cockpit facing forward, or her coachroof
-            # facing across her (to port): placed from where it is crossed,
+            # Crossing the yacht's cockpit or her coachroof facing across
+            # her (to port): placed from where it is crossed,
             # on her centreline, as high as keeps the lowest of the figure
             # (but its cloth, laid on her deck) on her deck in every frame;
             # judged against her (clip.yacht).
             under = _under_deck(fig, clip)
-            turn = math.pi if clip.ship == YACHT_SOLE else -math.pi / 2
             clip.place = Matrix.Translation(fig.stage.point(clip.ship) + Vector((0.0, 0.0, YACHT_SOLES + under))) @ \
-                Matrix.Rotation(turn, 4, "Z")
+                Matrix.Rotation(-math.pi / 2, 4, "Z")
             clip.notes["raised for the soles"] = round(under, 4)
             clip.yacht, clip.ship = clip.ship, None
         elif clip.ship == CAT_NET:

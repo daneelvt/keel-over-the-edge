@@ -22,13 +22,14 @@
 //    lifeline, the forearms over the upper, upright and leaning out
 //    (`yacht-rail`, `yacht-rail-out`): placed from the deck's edge at the
 //    station;
-//  - crossing her cockpit facing forward, stepping sideways at a crouch
-//    (`cockpit-crouch-left`, `cockpit-crouch-right`): placed from the
-//    sole on her centreline; and her coachroof at a crouch, facing across
-//    her (`roof-crouch-walk`, made facing port): placed from its top on her
-//    centreline. A loop steps in place: what bears on the deck moves the
-//    other way at its speed (YACHT_CROSS_SPEED), so a figure moved that way
-//    at that speed, times the rate the clip plays at, keeps its feet still.
+//  - crossing her cockpit and her coachroof at a crouch, facing across her
+//    (`cockpit-crouch-walk`, `roof-crouch-walk`, made facing port: between
+//    the coachroof's after face and the table there is no room fore and aft
+//    for a crouch facing forward): placed from the sole, aft of the table,
+//    or the coachroof's top, on her centreline. A loop walks in place: what bears
+//    on the deck moves back at its speed (YACHT_CROSS_SPEED), so a figure
+//    moved forward at that speed, times the rate the clip plays at, keeps
+//    its feet still.
 
 import { Matrix4, type Object3D, Vector3 } from 'three';
 
@@ -41,17 +42,16 @@ export const YACHT_CLIPS = {
   braced: 'bench-braced',
   rail: 'yacht-rail',
   railOut: 'yacht-rail-out',
-  cockpit: ['cockpit-crouch-left', 'cockpit-crouch-right'],
+  cockpit: 'cockpit-crouch-walk',
   roof: 'roof-crouch-walk',
 } as const;
 
 /** The clips a machine has not: its hands would meet its plates. */
 export const YACHT_NOT_FOR_MACHINES: readonly string[] = ['bench-talk'];
 
-/** How fast the crossings go over the deck at their own rate, m/s: sideways to their side, or (the coachroof's) forward. */
+/** How fast the crossings go over the deck at their own rate, m/s, forward as they face. */
 export const YACHT_CROSS_SPEED: Readonly<Record<string, number>> = {
-  'cockpit-crouch-left': 0.5,
-  'cockpit-crouch-right': 0.5,
+  'cockpit-crouch-walk': 0.7,
   'roof-crouch-walk': 0.7,
 };
 
@@ -67,8 +67,8 @@ const ANCHORS: Readonly<Record<string, YachtPlace>> = {
   [YACHT_CLIPS.rail]: 'rail',
   [YACHT_CLIPS.railOut]: 'rail',
   [YACHT_CLIPS.roof]: 'roof',
+  [YACHT_CLIPS.cockpit]: 'sole',
   ...Object.fromEntries(YACHT_CLIPS.bench.map((c) => [c, 'bench' as const])),
-  ...Object.fromEntries(YACHT_CLIPS.cockpit.map((c) => [c, 'sole' as const])),
 };
 const SIDED: readonly string[] = [
   YACHT_CLIPS.wheel,
@@ -81,7 +81,7 @@ const IN_FILE: readonly string[] = [
   ...SIDED.flatMap((c) => [c, `${c}${PORT}`]),
   YACHT_CLIPS.habit,
   ...YACHT_CLIPS.bench,
-  ...YACHT_CLIPS.cockpit,
+  YACHT_CLIPS.cockpit,
   YACHT_CLIPS.roof,
 ];
 
@@ -115,12 +115,13 @@ export function yachtAnchor(clip: string): YachtPlace | null {
 }
 
 /**
- * Where her cockpit is crossed, m forward of her table's fore end (between
- * it and the mainsheet's bridle); and her coachroof, m aft of its fore end
+ * Where her cockpit is crossed, m aft of her table's after end (forward of
+ * the wheels: forward of the table, by the coachroof's after face, there is
+ * no room fore and aft for a crouch); and her coachroof, m aft of its fore end
  * (forward of the mast, over its scuttle: aft of the mast her boom is lower
  * over it than a crouching figure's hat).
  */
-export const COCKPIT_CROSS = 0.2;
+export const COCKPIT_CROSS = 0.45;
 export const ROOF_CROSS = 0.5;
 
 /** A yacht's places her people's clips are placed from, on her starboard side or her centreline, in her model's frame. */
@@ -144,7 +145,7 @@ function num(a: unknown): number | null {
 /**
  * Her places from her model's nodes' places and data (by name): the
  * `sailor` node and the `wheel` node's spread; the `bench` node's front
- * edge, top and sole; the `rail` node; the `table` node's fore end; the
+ * edge, top and sole; the `rail` node; the `table` node's after end; the
  * `coachroof` node's fore end and top. Null if she lacks any of them.
  */
 export function yachtPlaces(
@@ -161,7 +162,7 @@ export function yachtPlaces(
   const inner = num(b?.inner);
   const top = num(b?.top);
   const sole = num(b?.sole);
-  const fore = num((table?.data as { table?: { fore?: unknown } } | undefined)?.table?.fore);
+  const aft = num((table?.data as { table?: { aft?: unknown } } | undefined)?.table?.aft);
   const roofFore = num(
     (roof?.data as { coachroof?: { fore?: unknown } } | undefined)?.coachroof?.fore,
   );
@@ -175,7 +176,7 @@ export function yachtPlaces(
     inner === null ||
     top === null ||
     sole === null ||
-    fore === null ||
+    aft === null ||
     roofFore === null
   ) {
     return null;
@@ -184,7 +185,7 @@ export function yachtPlaces(
     stance: sailor.at.clone().setX(sailor.at.x + spread),
     bench: new Vector3(inner, top, bench.at.z),
     rail: rail.at.clone(),
-    sole: new Vector3(0, sole, fore - COCKPIT_CROSS),
+    sole: new Vector3(0, sole, aft + COCKPIT_CROSS),
     roof: new Vector3(0, roof.at.y, roofFore + ROOF_CROSS),
   };
 }

@@ -65,7 +65,7 @@ describe('the cruising yacht’s clips', () => {
     for (const c of [
       YACHT_CLIPS.habit,
       ...YACHT_CLIPS.bench,
-      ...YACHT_CLIPS.cockpit,
+      YACHT_CLIPS.cockpit,
       YACHT_CLIPS.roof,
     ]) {
       expect(inYachtFile(c)).toBe(true);
@@ -75,7 +75,7 @@ describe('the cruising yacht’s clips', () => {
     for (const c of ['helm-wheel', 'habit-wheel', 'hatch-sit', 'rail', 'crouch-walk']) {
       expect(inYachtFile(c)).toBe(false);
     }
-    expect(YACHT_FILE).toHaveLength(18);
+    expect(YACHT_FILE).toHaveLength(17);
   });
 
   test('each from its place: the wheel’s at the stance, the bench’s at its edge, the rail’s at the deck’s edge, the crossings on her centreline', () => {
@@ -87,9 +87,7 @@ describe('the cruising yacht’s clips', () => {
     }
     expect(yachtAnchor(YACHT_CLIPS.rail)).toBe('rail');
     expect(yachtAnchor(YACHT_CLIPS.railOut)).toBe('rail');
-    for (const c of YACHT_CLIPS.cockpit) {
-      expect(yachtAnchor(c)).toBe('sole');
-    }
+    expect(yachtAnchor(YACHT_CLIPS.cockpit)).toBe('sole');
     expect(yachtAnchor(YACHT_CLIPS.roof)).toBe('roof');
     expect(yachtAnchor('cat-helm')).toBeNull();
   });

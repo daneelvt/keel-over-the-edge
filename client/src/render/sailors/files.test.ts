@@ -259,7 +259,7 @@ describe.each(looks)('%s', (look) => {
       }
     });
 
-    test('its clips aboard a cruising yacht, a file of its own on its skeleton: each placed upright from its place, at the wheel facing forward, on the bench inboard, on the rail outboard, crossing her cockpit forward and her coachroof across her', () => {
+    test('its clips aboard a cruising yacht, a file of its own on its skeleton: each placed upright from its place, at the wheel facing forward, on the bench inboard, on the rail outboard, crossing her cockpit and her coachroof across her', () => {
       if (look === 'test') {
         return;
       }
@@ -291,8 +291,6 @@ describe.each(looks)('%s', (look) => {
             expect(side * (m[8] ?? 0), name).toBeGreaterThan(0.99);
             break;
           case 'sole':
-            expect(m[10] ?? 0, name).toBeLessThan(-0.99);
-            break;
           case 'roof':
             // Facing across her, to port.
             expect(m[8] ?? 0, name).toBeLessThan(-0.99);

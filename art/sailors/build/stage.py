@@ -881,9 +881,9 @@ class Yacht:
       lifelines there, as they run between their stanchions
       (`yacht-lifeline-low`, `yacht-lifeline-up`, from the `lifelines`
       node), and the stanchion nearest (`yacht-stanchion`, its foot);
-    - the sole on her centreline `cockpit.table` forward of her table
-      (`yacht-sole`), where the cockpit is crossed between the bridle and
-      the table, and the top of her coachroof on her centreline `roof.fore`
+    - the sole on her centreline `cockpit.table` aft of her table
+      (`yacht-sole`), where the cockpit is crossed between the table and
+      the wheels, and the top of her coachroof on her centreline `roof.fore`
       aft of its fore end (`yacht-roof`), where it is crossed forward of the
       mast, and the side deck's top outboard of the coachroof's side there
       (`yacht-roof-step`);
@@ -967,7 +967,7 @@ class Yacht:
         # Forward of it along the side deck, where the helm's feet are
         # braced: the deck's top there, as far out.
         y += spec["helm-seat"]["brace"]
-        self.helm_brace = Vector((self.helm_seat.x, y, self.down(self.helm_seat.x, y)))
+        self.helm_brace = self._edge_out(self.hub.x, y)
         # The deck's edge at the rail's station (her `rail` node).
         self.rail = node("rail").matrix_world.translation.copy()
         y = self.rail.y
@@ -991,9 +991,9 @@ class Yacht:
         t = 0.0 if aft == fore else (z - fore) / (aft - fore)
         self.lifelines = [a.lerp(c, t) + Vector((0.0, 0.0, float(h))) for h in ll["heights"]]
         self.stanchion = min((a, c), key=lambda p: abs(p.y - y))
-        # The cockpit's crossing: the sole on her centreline, forward of the
-        # table's fore end (the `table` node's).
-        z = float(node("table")["table"]["fore"]) - spec["cockpit"]["table"]
+        # The cockpit's crossing: the sole on her centreline, aft of the
+        # table's after end (the `table` node's).
+        z = float(node("table")["table"]["aft"]) + spec["cockpit"]["table"]
         self.cross = Vector((self.at.x, self.at.y - z, self.sole))
         # The coachroof's crossing: its top on her centreline (on the
         # scuttle there, if any), and the side deck's top outboard of the
