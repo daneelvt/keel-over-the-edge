@@ -2460,9 +2460,23 @@ type PhysicsHulls struct {
 	// 5° later, its rudder and lateral plane with it.
 	LiftHeel float64 `json:"liftHeel"`
 
-	// Rudders, one on each hull, each the one rudder's lift and drag: 1, or 2 on a
-	// boat of two hulls.
+	// On one hull with two rudders, the heel at which the windward blade's tip leaves
+	// the water, in degrees: from it only the lee blade steers. 0 for any other boat.
+	RudderClearHeel float64 `json:"rudderClearHeel"`
+
+	// Rudders, each the one rudder's lift and drag: 1, or 2, one on each hull of a
+	// boat of two hulls, or a pair either side of one hull's centreline
+	// (rudderSpread).
 	RudderCount float64 `json:"rudderCount"`
+
+	// On one hull with two rudders, the heel at which the windward blade's root
+	// leaves the water in still water, in degrees: from it the blade's share of the
+	// steering falls. 0 for any other boat.
+	RudderLiftHeel float64 `json:"rudderLiftHeel"`
+
+	// Each of one hull's two rudders' stock off the centreline, in m: 0 for a rudder
+	// on the centreline, and on a boat of two hulls, whose rudders are on its hulls.
+	RudderSpread float64 `json:"rudderSpread"`
 }
 
 // Pitch from the rig: the sails' drive, high above the centre of gravity, and the
@@ -5535,4 +5549,4 @@ type WorldZones struct {
 }
 
 // Version is the catalog version (tools/catalog).
-const Version = "539218b4519e881b"
+const Version = "e73019c2f1aafd1e"

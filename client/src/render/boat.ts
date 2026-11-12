@@ -94,7 +94,7 @@ import type { Gfx } from './renderer';
 import { catClips } from './sailors/cat';
 import { BoatSailor } from './sailors/onboat';
 import { harnessFile, trapezeClips } from './sailors/trapeze';
-import { wheelClips } from './sailors/wheel';
+import { wheelClips, wheelNodes } from './sailors/wheel';
 import {
   headsailFrame,
   jibPoint,
@@ -272,6 +272,8 @@ export class Boat {
   /** The model, lowered so that the heel's pivot is at its centre of gravity. */
   readonly model = new Group();
   readonly parts = new Map<string, Object3D>();
+  /** The wheels that turn with the rudder: none, one or two. */
+  #wheels: Object3D[] = [];
   readonly sail = sailUniforms();
   /** The headsail's shape, and how far aft of its tack its head is (its node's rake). */
   readonly jib = sailUniforms();
@@ -409,6 +411,7 @@ export class Boat {
         this.parts.set(o.name, o);
       }
     });
+    this.#wheels = wheelNodes(this.parts);
     let sail: Mesh | undefined;
     this.parts.get('sail')?.traverse((o) => {
       if (sail === undefined && o instanceof Mesh) {
@@ -789,9 +792,10 @@ export class Boat {
         node.rotation.y = YARDS_NODES[name] === 'fore' ? pose.foreYardsTurn : pose.yardsTurn;
       }
     }
-    const wheel = this.parts.get('wheel');
-    if (wheel !== undefined) {
-      wheel.rotation.z = wheelTurn(pose.rudder, this.#kind.physics.foils.rudderAngle);
+    // The wheel, or each of two, turned with the rudder.
+    const turn = wheelTurn(pose.rudder, this.#kind.physics.foils.rudderAngle);
+    for (const wheel of this.#wheels) {
+      wheel.rotation.z = turn;
     }
     if (this.#squareSails.length === 0) {
       return;

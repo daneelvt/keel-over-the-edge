@@ -25,9 +25,19 @@ type reference struct {
 	Height float64 `json:"height"`
 	// Crew, if set, sails the reference's points in place of the
 	// catalog's sailor (course.go).
-	Crew   *crew      `json:"crew,omitempty"`
+	Crew *crew `json:"crew,omitempty"`
+	// Rig, if set, says what ORC rates the original's sails by (sail.go).
+	Rig    *rigData   `json:"rig,omitempty"`
 	Points []refPoint `json:"points"`
 	Notes  []string   `json:"notes"`
+}
+
+// rigData is what ORC's choice of sail coefficients reads of a rig: a
+// backstay (without runners), and its fractionality, IG over ISP.
+type rigData struct {
+	Backstay      bool    `json:"backstay"`
+	Fractionality float64 `json:"fractionality"`
+	Source        string  `json:"source"`
 }
 
 type refPoint struct {
@@ -271,7 +281,7 @@ func runCheck(k *kind, ref *reference) error {
 		p, _ := polarAt(polars, w)
 		chart = append(chart, p)
 	}
-	if err := checkWords(chart); err != nil {
+	if err := checkWords(chart, k.p.CloseHauled); err != nil {
 		return err
 	}
 	return checkHandbook(k, polars)

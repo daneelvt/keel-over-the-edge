@@ -49,6 +49,23 @@ built files are committed; the catalog's `art.model` names them, and
   wires a side, a fully battened square-headed main and a jib, the hulls'
   keels, and two kick-up rudders whose arms the crossbar joins. Its hull's
   volume is one hull's, measured about its own centreline, and its offset.
+- `boats/yacht/build.ts`: the yacht, carvel planked on a cruising sloop's
+  lines with a plumb bow and a broad stern, a copper bottom and round bronze
+  portlights; a laid deck and a varnished coachroof with windows of small
+  panes in lead cames, wooden dead-lights and glazed scuttles; an
+  oiled-canvas tilt on ash laths; a cockpit open to a hinged stern door,
+  with teak benches, a table and two spoked wheels before wooden binnacles;
+  small timber capstans; iron stanchions, pulpit and pushpit and two hemp
+  lifelines; a fractional rig with two pairs of spreaders on oak
+  cross-trees, shrouds on deadeyes, a main in its lazy bag and a genoa on a
+  roller of pine; a fin keel with a lead bulb, two rudders either side of
+  her centreline, an ash bumkin with an iron anchor; brass sidelights on
+  her pulpit and a sternlight at her transom. Its hull's `lever` data are
+  her sections and appendages, which `tools/lever` heels for her righting
+  lever. Its `wheel` node says how far out its two wheels are (`spread`),
+  each a child of its own, `wheel-port` and `wheel-starboard`; and it
+  names the places its people's ways read: `coachroof`, `table`, `bridle`,
+  `bench` and `lifelines`.
 - `town/lib/kit.ts` and `town/<biome>/build.ts`: each biome's kit of town
   buildings and props, `town/<biome>.glb`.
 - `icon/icon.ts` and `icon/build.ts`: the game's icon, the boat on sky and
@@ -201,7 +218,12 @@ deck, 0.75 m to the rim, 8 spokes), placed from the helmsman's place
 (`place-helm-wheel` is from the figure's space to the `sailor` node's),
 and written to a file of their own, `<version>.wheel.glb`, which only a
 boat steered by a wheel loads. The game keeps the hands on the spokes as
-the wheel turns with the rudder. `-add` makes only the clips named (as the
+the wheel turns with the rudder. A boat of two wheels says how far out
+each is (`extras.wheel.spread`), its hubs `ahead` of and `up` from the
+`sailor` node, which stands between them; each wheel is a child of the
+`wheel` node, `wheel-port` and `wheel-starboard`, turned alike, and the
+helmsman stands aft of the windward one, the clips' hands brought in to
+its smaller rim. `-add` makes only the clips named (as the
 game asks for them) on each committed look and writes their file, adding
 them to it if it has others, those kept byte for byte; nothing else is
 written, and garments it must make again go into `.dev`.

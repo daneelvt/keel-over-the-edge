@@ -201,6 +201,11 @@ type Prepared struct {
 	flyingDrag   float64
 	rudderCount  float64
 	boardCount   float64
+	// Two rudders on one hull: the windward blade's share falls from 1 to
+	// 0 as the heel goes from rudderLift to rudderLift + 1/invRudderRange.
+	twinRudders    bool
+	rudderLift     float64 // rad
+	invRudderRange float64 // 1/rad
 
 	// Pitch from the rig, if the boat's pitches her.
 	rigPitch       bool
@@ -590,6 +595,11 @@ func (b *Prepared) prepareHulls(p *Params) {
 	b.flyingDrag = p.FlyingDrag
 	b.rudderCount = p.RudderCount
 	b.boardCount = p.BoardCount
+	b.twinRudders = !b.twin && p.RudderCount > 1 && p.RudderSpread > 0
+	if b.twinRudders {
+		b.rudderLift = float64(p.RudderLiftHeel * degree)
+		b.invRudderRange = 1 / float64((p.RudderClearHeel-p.RudderLiftHeel)*degree)
+	}
 	b.rigPitch = p.RigPitch != 0
 	if !b.rigPitch {
 		return

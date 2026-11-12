@@ -88,7 +88,7 @@ func main() {
 		case *check:
 			err = runCheck(k, refs.boat(k.id))
 		case *sailFlag:
-			err = runSail(k)
+			err = runSail(k, refs.boat(k.id))
 		case *manoeuvres:
 			err = runManoeuvres(k)
 		default:

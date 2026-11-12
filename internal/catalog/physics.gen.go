@@ -201,6 +201,9 @@ func PhysicsParams(b *Boat) physics.Params {
 	p.FlyingDrag = b.Physics.Hulls.FlyingDrag
 	p.RudderCount = b.Physics.Hulls.RudderCount
 	p.BoardCount = b.Physics.Hulls.BoardCount
+	p.RudderSpread = b.Physics.Hulls.RudderSpread
+	p.RudderLiftHeel = b.Physics.Hulls.RudderLiftHeel
+	p.RudderClearHeel = b.Physics.Hulls.RudderClearHeel
 	p.RigPitch = b.Physics.Pitch.RigPitch
 	p.BowBuryPitch = b.Physics.Pitch.BowBuryPitch
 	p.BowBuryRestoring = b.Physics.Pitch.BowBuryRestoring

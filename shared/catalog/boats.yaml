@@ -304,6 +304,9 @@ boats:
         flyingDrag: 1
         rudderCount: 1
         boardCount: 1
+        rudderSpread: 0
+        rudderLiftHeel: 0
+        rudderClearHeel: 0
       # Her pitch is the waves' alone: her rig never pitches her.
       pitch: &noPitch
         rigPitch: 0
@@ -1542,6 +1545,10 @@ boats:
         flyingDrag: 0.85
         rudderCount: 2
         boardCount: 2
+        # Her rudders are on her hulls: they go with them.
+        rudderSpread: 0
+        rudderLiftHeel: 0
+        rudderClearHeel: 0
       pitch:
         rigPitch: 1
         # Estimates, tuned against her behaviour tests: borne away in a
@@ -1556,3 +1563,267 @@ boats:
         # Colby: the helm back to the corner as the wind rises, from their
         # place forward of the rear beam.
         aftReach: 0.8
+
+  # The Jeanneau Sun Odyssey 410 (Marc Lombard, 2018), a cruising sloop of
+  # 12 m: a fin keel with a bulb, twin spade rudders and twin wheels, a
+  # coachroof and a walk-around cockpit, a fractional rig with two pairs of
+  # spreaders and a backstay, a slab-reefed main and a roller-furling
+  # genoa, sailed by one 80 kg sailor at the windward wheel, with no
+  # engine and no propeller. Her values are the 410's where her builder or
+  # her ORC certificates publish them; the rest are estimates, tuned only
+  # by tools/polar, or read from her model (tools/lever). Sources:
+  #   Jeanneau (2019), Sun Odyssey 410 specification sheet and owner's
+  #     manual: length, beam, draught, displacement, the rig's I, J, P and
+  #     E, sail areas, reefs, the angle of vanishing stability (122°).
+  #   Offshore Racing Congress (2026), ORC Club certificate of SKY LINA
+  #     (045900051RS), the standard boat: displacement, wetted surface,
+  #     sail areas, and the polar tools/polar checks; a 2024 certificate of
+  #     her sister KANALOA: the righting moment at 1°, IG, ISP, BAS, the
+  #     genoa's LP.
+  #   Offshore Racing Congress (2023), ORC VPP Documentation: the sails'
+  #     medium coefficient sets for a backstay without runners (eqs. 5.5,
+  #     5.6 and 5.9), induced and quadratic drag, flattening and reefing.
+  #   ITTC (1957) and the Delft Systematic Yacht Hull Series: the hull's
+  #     resistance.
+  - id: yacht
+    name: Yacht
+    description: Cruising yacht
+    capacity: 8
+    stations:
+      - { at: [0, 0.33, 4.3], pose: standing, facing: 0 }
+      - { at: [1.349, 0.75, 2.35], pose: seated, facing: 270, windward: true }
+      - { at: [1.3632, 0.75, 0.85], pose: seated, facing: 270, windward: true }
+      - { at: [1.3599, 0.75, 1.6], pose: seated, facing: 270, windward: true }
+      - { at: [1.8405, 1.1917, -2.2], pose: rail, facing: 90, windward: true }
+      - { at: [1.9006, 1.1701, -1.6], pose: rail, facing: 90, windward: true }
+      - { at: [1.9453, 1.1474, -0.9], pose: rail, facing: 90, windward: true }
+      - { at: [1.9754, 1.13, -0.3], pose: rail, facing: 90, windward: true }
+    lengthOverall: 11.985 # ORC certificate
+    beam: 3.99 # Jeanneau
+    # A sailing vessel of less than 20 m may show red and green sidelights
+    # and a white sternlight (Collision Regulations, Rule 25(a)): hers at
+    # deck level, the sidelights on her pulpit, the sternlight on her
+    # pushpit.
+    lights: [port, starboard, stern]
+    # Her lookout is the sailor standing at the wheel, on her cockpit's
+    # sole 0.33 m above the water: the eye 2 m above the sea.
+    lookout: 2
+    # A seabird aboard perches on her pulpit; a flying fish lands on her
+    # side deck, abreast of the coachroof.
+    perch: [0, 2.0, -5.6]
+    deck: [1.6, 1.2, -0.6]
+    # Her sheet for a start from rest, by the angle off the wind: from
+    # tools/polar's sweep from rest (-start), each within 85% of the best
+    # sheet's speed after 20 s in 3, 5 and 8 knots.
+    startSheet: [[90, 0.65], [110, 0.85], [130, 1]]
+    controls:
+      sheet: { name: Sheet, trim: Trim, ease: Ease }
+      reef: [Full sail, One reef, Two reefs]
+    fleet: account
+    art:
+      model: boats/yacht.glb
+      far: boats/yacht.far.glb
+      budget: { near: 25000, far: 1200 }
+    physics:
+      hull:
+        # 7,784 kg (Jeanneau; SKY LINA's certificate) and the sailor's 80 kg.
+        displacement: 7864
+        waterlineLength: 11.47 # Jeanneau
+        hullDraught: 0.45 # the canoe body, from her model
+        centreOfGravity: -0.16 # tools/lever: the boat alone at -0.17 m, and her sailor standing at the wheel
+        dragAreaStep: 0.2572222222222222 # half a knot, in m/s
+        # Estimate: the canoe body's friction by ITTC 1957 on 28.5 m² (SKY
+        # LINA's wetted 35.8 m² less her keel's and rudders'), and the
+        # keelboat's residuary resistance at the same Froude number (their
+        # displacement-length ratios are near, 144 and 137), every half knot
+        # from 0 to 12 knots: her hull speed about 8.2 knots. Tuned by
+        # tools/polar: from 4.5 knots up to 15% steeper, against the
+        # certificate's reaching speeds in 10 and 14 knots. The keel's and
+        # rudders' own friction is the foils'.
+        dragArea: [0.135, 0.135, 0.13, 0.126, 0.125, 0.123, 0.121, 0.119,
+          0.117, 0.116, 0.1188, 0.1274, 0.1361, 0.1475, 0.1587, 0.2093,
+          0.2611, 0.3105, 0.3645, 0.4128, 0.4554, 0.491, 0.5129, 0.5221, 0.521]
+        crossFlowDrag: 1.0 # estimate
+        addedMassSurge: 390 # estimate: about 5% of the mass
+        addedMassSway: 7500 # estimate: the keelboat's by mass
+        munk: 4200 # estimate: the keelboat's by mass
+        yawInertia: 80000 # estimate: a radius of gyration of a quarter of her length, and the water she moves; tuned by her tacks
+        rollInertia: 32000 # estimate: the keel's ballast, the mast, the hull
+        rollDamping: 6000 # estimate: as the keelboat's share of critical damping
+        yawDamping: 0 # her keel and rudders damp her turning
+        # tools/lever, from her model (its hull, coachroof, fin, bulb and
+        # rudders) heeled in still water, every 10°: the boat alone's centre
+        # of gravity set for the 348.5 kg·m at 1° her sister's certificate
+        # rates (entered, not measured), which gives her vanishing stability
+        # at 126°, against her builder's 122°; then her sailor aboard,
+        # standing on the centreline.
+        rightingLever: [0, 0.43, 0.75, 0.95, 1.08, 1.12, 1.07, 1.01, 0.86,
+          0.70, 0.51, 0.31, 0.11, -0.08, -0.24, -0.35, -0.37, -0.30, 0]
+        rightingLeverStep: 10
+        waterlineBeam: 3.33 # from her model
+        waterplaneArea: 28.9 # from her model
+        waterplanePitch: 226 # from her model: its second moment along her length
+        addedMassHeave: 12000 # estimate: the keelboat's share of a strip's
+        pitchInertia: 110000 # estimate
+        heaveDamping: 0.3 # estimate
+        pitchDamping: 0.3 # estimate
+        waveForce: 1.0
+        waveYaw: 0
+        # The plan at the sheer, every tenth of the length from the transom
+        # to the stem: a broad transom, her greatest beam just aft of
+        # amidships, a plumb bow (art/boats/yacht/build.ts builds from it).
+        outline: [1.72, 1.85, 1.94, 1.985, 1.995, 1.98, 1.92, 1.80, 1.58, 1.05, 0]
+        transom: 5.785
+        stem: 6.2
+      rig:
+        # The classic main, 42.8 m² (Jeanneau), on P 14.83 m and E 5.00 m.
+        sailArea: 42.8
+        luff: 14.83
+        foot: 5.0
+        boomHeight: 2.49 # BAS 1.33 m above the sheer (ORC certificate)
+        mastPosition: 1.37 # J 4.65 m aft of the forestay
+        footStrip: 0.14
+        headStrip: 0.55
+        pressureAttached: 0.33 # ORC
+        pressureSeparated: 0.50
+        effectiveHeight: 17.0 # estimate: about the masthead's height
+        quadraticDrag: 0.01379 # ORC 2023, Table 5.1
+        # Fitted by tools/polar -sail to ORC's medium mainsail (eq. 5.6:
+        # 7.5% of the high set): the keelboat's coefficients.
+        maxLift: 1.48
+        stallAngle: 28
+        stallWidth: 20
+        sailDrag: 0.026
+        luffAngle: 3
+        flogDrag: 0.05
+        normalForce: [0, 0.5, 0.9, 1.07, 1.21, 1.31, 1.37, 1.39, 1.38, 1.35,
+          1.28, 1.19, 1.07, 0.93, 0.77, 0.59, 0.40, 0.20, 0]
+        twistPowered: 5 # estimate
+        twistDepowered: 15 # estimate
+        twistEased: 18
+        twistTurn: 3 # estimate
+        headBacked: 90 # estimate
+        headBackedWidth: 20 # estimate
+        boomIn: 3 # estimate: the mainsheet's bridle
+        boomOut: 75 # estimate: the shrouds stop the boom
+        boomInertia: 900 # estimate: boom and main about 120 kg, and the air the sail carries
+        boomMoment: 300 # estimate
+        boomDamping: 200 # estimate
+        windageFront: 8 # estimate: the topsides, the coachroof, the sailor and the rig
+        windageSide: 22 # estimate
+        windageHeight: 1.5 # estimate
+        sailFloat: 12000 # estimate
+        sailWaterDamping: 5000 # estimate
+        closeHauled: 42 # the certificate's beat angles, 40° to 46°
+        reefs: [1, 0.88, 0.76] # estimate: two reefs at about 12% of the luff each
+        reefTime: 30 # estimate: single-line reefs
+      headsails:
+        headsailArea: 34.3 # Jeanneau: the furling genoa
+        headsailLuff: 14.0 # estimate: the head's height above the tack
+        headsailFoot: 5.5 # estimate
+        headsailTackHeight: 1.65 # estimate: the furler's reel on the stem
+        headsailTack: 6.05
+        headsailFootStrip: 0.137
+        headsailHeadStrip: 0.53
+        headsailPressureAttached: 0.33
+        headsailPressureSeparated: 0.50
+        # Fitted by tools/polar -sail to ORC's medium jib, of a rig with a
+        # backstay and no runners (ORC 2023, eqs. 5.5 and 5.9: fcoef 0.151
+        # by IG/ISP 15.55/16.00, 85% of the high set): the keelboat's
+        # coefficients, sheeted between the genoa's leads. ORC models a
+        # genoa as a jib, with no penalty for furling at an LP of 109%.
+        headsailMaxLift: 2.1
+        headsailStallAngle: 17
+        headsailStallWidth: 19
+        headsailDrag: 0.034
+        headsailNormalForce: [0, 0.5, 0.83, 1.01, 1.10, 1.14, 1.14, 1.11, 1.08,
+          1.05, 1.04, 1.01, 0.97, 0.90, 0.77, 0.59, 0.40, 0.20, 0]
+        headsailTwist: 8
+        headsailTwistEased: 10
+        headsailIn: 10 # estimate: the genoa's leads on the side decks; fitted with the sail
+        headsailOut: 20 # estimate: fitted with the sail
+        headsailInertia: 60 # estimate
+        headsailMoment: 25 # estimate
+        headsailDamping: 30 # estimate
+        headsailReefs: [1, 0.85, 0.70] # estimate: the genoa rolled
+      square: *noSquare
+      downwind: *noDownwind
+      foils:
+        boardSpan: 1.69 # the draught, 2.14 m (Jeanneau), less the canoe body
+        boardChord: 1.15 # estimate: her model's fin, 1.15 m at the root, 0.77 m at the bulb
+        boardPosition: 0.9 # estimate: the fin under the mast's step; tuned for weather helm (tools/polar)
+        rudderSpan: 1.0 # estimate: each blade, its tip 1.45 m down
+        rudderChord: 0.40 # estimate: each blade
+        rudderPosition: 4.6 # estimate: the stocks 1.2 m forward of the transom
+        rudderAngle: 35 # estimate
+        foilStall: 13 # estimate
+        foilStallWidth: 6 # estimate
+        foilDrag: 0.007 # ITTC 1957 at Re ≈ 5 × 10⁶, both faces
+        plateNormal: 1.2 # a flat plate
+        pressureDepth: 0.43 # Keuning and Vermeulen (2003)
+        carryOver: 1.80 # Keuning and Verwerft (2009)
+        heelLoss: 0.382 # Keuning and Verwerft (2009)
+        rudderInflow: 0.9
+        downwash: 0.8 # estimate: the keelboat's; tuned for weather helm
+        foilWetHeel: 70 # estimate: a deep keel stays in the water
+        foilDryHeel: 120 # estimate
+        fixed: 1
+      sailor:
+        sailorMass: 80
+        sailorSeatHeight: 0.49 # standing at the wheel: the cockpit's sole, 0.33 m above the water
+        hikeReach: 1.0 # the windward wheel's stance
+        leeReach: 1.0 # the lee wheel's
+        hikeSpeed: 1.0 # estimate: a walk across the cockpit
+        hikeLag: 0.5 # estimate
+        # The keelboat's: her sailor's 80 kg is too small a share of her
+        # weight to balance her, and the helm is drawn at the windward
+        # wheel by the apparent wind.
+        heelGain: 1.0
+        rollRateGain: 0.6
+        # Estimates, tuned against the certificate's beat VMG: flattened
+        # from 8 m/s of apparent wind, fully by 11, to 0.5, below ORC's
+        # floor of 0.6: her one sailor depowers where her rated crew would
+        # sit out and reef.
+        flattenFrom: 8
+        flattenTo: 11
+        flattenMin: 0.5
+        # Knocked down, not capsized, as the keelboat: her sailor stays at
+        # the wheel and her keel brings her back.
+        fallOutHeel: 180
+        climbInHeel: 30
+        boardReach: 0
+        sailorDrag: 0
+        swimTime: 0
+        climbTime: 0
+      rates:
+        rudderTime: 1.5 # estimate: a wheel's turn and a half, lock to lock
+        sheetHaulTime: 8 # estimate: the main and the genoa, on the capstans
+        sheetEaseTime: 3 # estimate
+      # The autopilot, tuned by its behaviour tests: damping strong for her
+      # weight and her wheel, and half the helm in a tack, so that she tacks
+      # in a trade spell in under 9 s keeping 55% of her speed, never
+      # turning on past 60° off the wind, and gybes in under 10 s.
+      autopilot:
+        gain: 3
+        damping: 8
+        trimTime: 10
+        trimLimit: 0.3
+        trimBand: 10
+        tackHelm: 0.5
+        gybeHelm: 0.5
+        byTheLee: 15
+        onCourse: 10
+        astern: 0.05
+        steerage: 0.26
+        stallTime: 8
+        stallGain: 5
+      hulls:
+        hullSpacing: 0
+        liftHeel: 0
+        flyingDrag: 1
+        rudderCount: 2
+        boardCount: 1
+        rudderSpread: 0.72 # from her model
+        rudderLiftHeel: 11 # from her model: the blade's root 0.14 m deep, 0.72 m out
+        rudderClearHeel: 64 # from her model: its tip 1.45 m deep
+      pitch: *noPitch

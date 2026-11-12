@@ -287,6 +287,19 @@ func TestPilotTacksAndGybes(t *testing.T) {
 			// she heels further in a tack: she keeps 59% of her speed.
 			cases[0].least, cases[1].least = 0.55, 0.55
 		}
+		if boat.b.weight > 2000*gravity && !boat.b.square {
+			// A cruising yacht of near 8 t turns slowly at a wheel and
+			// carries her way: she tacks from close-hauled in under 9 s
+			// keeping 55% of her speed, and gybes in under 10 s. From a
+			// run she loses her way before she is round through the wind,
+			// as a ship does: her autopilot says the tack stalled, and she
+			// pays off on her old tack.
+			cases[0].within, cases[1].within = 9, 9
+			cases[0].least, cases[1].least = 0.55, 0.55
+			cases[2].within, cases[3].within = 10, 10
+			cases[4].within, cases[5].within = 10, 10
+			cases = cases[:6]
+		}
 		if boat.b.twin {
 			// A catamaran's two long hulls turn slowly through the wind,
 			// her sailor crossing the net from wire to wire: she keeps 56%

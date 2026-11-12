@@ -199,6 +199,12 @@ func (b *Prepared) substep(s *State, wind, sinW, cosW, dt float64, g *rig, v *wa
 		rudderWet = float64(rudderWet * (b.rudderCount - float64(flying*(b.rudderCount-1))))
 		drag = 1 + float64(flying*(b.flyingDrag-1))
 	}
+	// One hull's two rudders: the lee blade always in the water, the
+	// windward one leaving it as she heels.
+	if b.twinRudders {
+		dry := smooth(float64((math.Abs(wetHeel) - b.rudderLift) * b.invRudderRange))
+		rudderWet = float64(rudderWet * (2 - dry))
+	}
 	// Bows pressed past where their deck meets the water drag her.
 	var past float64
 	if b.rigPitch {

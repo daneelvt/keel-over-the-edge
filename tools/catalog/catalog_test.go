@@ -798,7 +798,9 @@ func TestEncounters(t *testing.T) {
 		{name: "a restitution below 0", enc: strings.Replace(realEncounters(), "restitution: 0.3", "restitution: -0.1", 1), want: "/encounters/contact/restitution"},
 		{name: "two hulls with a pointed bow", boats: strings.Replace(boats, "1.115, 1.07, 1.0]", "1.115, 1.07, 0]", 1), want: "not convex with a flat bow"},
 		{name: "two hulls and one rudder", boats: strings.Replace(boats, "rudderCount: 2", "rudderCount: 1", 1), want: "two hulls need two rudders"},
-		{name: "one hull and two rudders", boats: strings.Replace(boats, "        rudderCount: 1\n", "        rudderCount: 2\n", 1), want: "one hull has one rudder"},
+		{name: "one hull and two rudders with no spread", boats: strings.Replace(boats, "        rudderCount: 1\n", "        rudderCount: 2\n", 1), want: "one hull's two rudders need a spread above 0"},
+		{name: "one hull's two rudders, the tip clear before the root", boats: strings.Replace(boats, "rudderClearHeel: 64", "rudderClearHeel: 5", 1), want: "before its tip (5°)"},
+		{name: "one rudder off the centreline", boats: strings.Replace(boats, "        rudderSpread: 0\n", "        rudderSpread: 0.5\n", 1), want: "one rudder is on the centreline"},
 		{name: "a righting lever's step of 7°", boats: strings.Replace(boats, "rightingLeverStep: 5", "rightingLeverStep: 7", 1), want: "not a whole number"},
 		{name: "the bows buried past the pitchpole", boats: strings.Replace(boats, "pitchpoleAngle: 25", "pitchpoleAngle: 4", 1), want: "before the pitchpole"},
 		{name: "a taper past the reach", enc: strings.Replace(realEncounters(), "taper: 8", "taper: 12", 1), want: "taper"},
@@ -823,6 +825,8 @@ func TestEncounters(t *testing.T) {
 			files["art/boats/skiff.far.glb"] = "glTF"
 			files["art/boats/beach-cat.glb"] = glb("hull", "tricolour")
 			files["art/boats/beach-cat.far.glb"] = "glTF"
+			files["art/boats/yacht.glb"] = glb("hull", "port", "starboard", "stern")
+			files["art/boats/yacht.far.glb"] = "glTF"
 			root := fixture(t, files)
 			err := checkAll(root)
 			if err == nil {

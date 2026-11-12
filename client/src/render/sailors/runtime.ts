@@ -32,7 +32,9 @@
 // beam before swimming to her side.
 //
 // A boat steered by a wheel (its model's `wheel` node) has its sailor
-// standing at it instead, at the model's `sailor` node, facing forward,
+// standing at it instead, at the model's `sailor` node, facing forward (of
+// two wheels, aft of the windward one, walking across to the other as the
+// wind changes side, hands off the spokes on the way),
 // playing the wheel's clip: looking ahead, aloft at the sails and to
 // windward, its windward side by the apparent wind; now and then its look's
 // habit at the wheel. The hands are kept on the spokes as the wheel turns
@@ -128,6 +130,12 @@ export interface WheelHelm {
   /** The rim's radius, metres, and how many spokes. */
   radius: number;
   spokes: number;
+  /**
+   * Two wheels, either side: how far out each is, metres (0 for one on the
+   * centreline). The hub and the stand are then between them, and the
+   * helmsman stands aft of whichever the sailor's offset is at.
+   */
+  spread?: number;
   /** Its turn now, radians: positive, the top to starboard (wheelTurn's). Set before each moment. */
   turn: number;
 }
@@ -142,6 +150,13 @@ const REGRIP_LIFT = 0.06;
 /** A hand of the clip this near its grip (m) holds the spoke; let go fully this far beyond. */
 const HOLD_NEAR = 0.04;
 const HOLD_FAR = 0.12;
+/** The radius of the wheel the wheel's clips were made at: a smaller wheel's hands are brought in to its rim. */
+const CLIP_WHEEL_RADIUS = 0.75;
+/** At two wheels, the helmsman stands aft of the windward one, walking across to the other at this speed, m/s, as the wind changes side. */
+const WHEEL_WALK = 1;
+/** At two wheels, the hands hold the nearer one's spokes when the helmsman is this near its stance (m), and let go this far from it. */
+const AT_WHEEL_NEAR = 0.08;
+const AT_WHEEL_FAR = 0.3;
 /** Seconds the wheel's windward side takes to change. */
 const WINDWARD_CHANGE = 1.5;
 const PORT = '-port';
@@ -1088,7 +1103,27 @@ export class SailorRuntime {
       this.#habitStep(dt, pose);
     }
     const c = this.#clip(CLIPS.wheel, 1);
-    place.set(m.multiplyMatrices(wheel.stand, c?.place ?? m2.identity()));
+    place.set(m.multiplyMatrices(this.#standAt(wheel, dt), c?.place ?? m2.identity()));
+  }
+
+  /** Where the helmsman stands: the stand; of two wheels, aft of the windward one, walked across to the other. */
+  readonly #stand = new Matrix4();
+  readonly #hubAt = new Vector3();
+  #across = Number.NaN;
+  #standAt(wheel: WheelHelm, dt: number): Matrix4 {
+    const spread = wheel.spread ?? 0;
+    const want = spread * this.#windward;
+    if (Number.isNaN(this.#across)) {
+      this.#across = want;
+    }
+    const step = WHEEL_WALK * dt;
+    this.#across += Math.max(-step, Math.min(step, want - this.#across));
+    this.#stand.copy(wheel.stand);
+    this.#stand.elements[12] = (this.#stand.elements[12] ?? 0) + this.#across;
+    // The wheel the hands are on: the one the helmsman is nearer.
+    this.#hubAt.copy(wheel.hub);
+    this.#hubAt.x += this.#across >= 0 ? spread : -spread;
+    return this.#stand;
   }
 
   /**
@@ -1113,20 +1148,25 @@ export class SailorRuntime {
       }
       // The clip's hand, in the model's frame, against the wheel's hub.
       rig.position(hand, v).applyMatrix4(this.root);
-      w.copy(h.home).applyMatrix4(wheel.stand);
-      const hold = 1 - smooth((v.distanceTo(w) - HOLD_NEAR) / (HOLD_FAR - HOLD_NEAR));
-      u.subVectors(v, wheel.hub);
-      // Its place against its grip at rest: across the spoke and off the wheel.
-      const r = Math.hypot(u.x, u.y);
+      w.copy(h.home).applyMatrix4(this.#stand);
+      const spread = wheel.spread ?? 0;
+      // At two wheels, off the one it is at the helmsman lets go.
+      const off = spread > 0 ? Math.abs(Math.abs(this.#across) - spread) : 0;
+      const near = 1 - smooth((off - AT_WHEEL_NEAR) / (AT_WHEEL_FAR - AT_WHEEL_NEAR));
+      const hold = near * (1 - smooth((v.distanceTo(w) - HOLD_NEAR) / (HOLD_FAR - HOLD_NEAR)));
+      u.subVectors(v, this.#hubAt);
+      // Its place against its grip at rest: across the spoke and off the
+      // wheel, brought in to a smaller wheel's rim.
+      const r = Math.hypot(u.x, u.y) * (wheel.radius / CLIP_WHEEL_RADIUS);
       const drift = Math.atan2(u.x, u.y) - h.angle;
       // The spoke it holds: changed for the next when the wheel has carried
       // it too far, the other hand holding meanwhile.
       const other = this.#wheelHands[1 - k];
-      const at = wheel.turn + h.spoke * step;
-      const off = wrap(at - h.angle);
+      const now = wheel.turn + h.spoke * step;
+      const away = wrap(now - h.angle);
       if (
         h.next < 0 &&
-        (Math.abs(off) > SPOKE_MOST || (Math.abs(off) > SPOKE_LEAD && (other?.next ?? -1) < 0))
+        (Math.abs(away) > SPOKE_MOST || (Math.abs(away) > SPOKE_LEAD && (other?.next ?? -1) < 0))
       ) {
         const n = wheel.spokes;
         h.next = (((Math.round((h.angle - wheel.turn) / step) % n) + n) % n) as number;
@@ -1135,12 +1175,12 @@ export class SailorRuntime {
           h.next = -1;
         }
       }
-      let angle = at;
+      let angle = now;
       let lift = 0;
       if (h.next >= 0) {
         h.change = Math.min(1, h.change + dt / REGRIP);
         const to = wheel.turn + h.next * step;
-        angle = at + wrap(to - at) * smooth(h.change);
+        angle = now + wrap(to - now) * smooth(h.change);
         lift = REGRIP_LIFT * Math.sin(Math.PI * h.change);
         if (h.change >= 1) {
           h.spoke = h.next;
@@ -1151,7 +1191,8 @@ export class SailorRuntime {
         continue;
       }
       const a = angle + drift;
-      p.set(wheel.hub.x + r * Math.sin(a), wheel.hub.y + r * Math.cos(a), wheel.hub.z + u.z + lift);
+      const hub = this.#hubAt;
+      p.set(hub.x + r * Math.sin(a), hub.y + r * Math.cos(a), hub.z + u.z + lift);
       twoBone(rig, upper, lower, hand, p.applyMatrix4(inv), hold);
       rig.position(hand, hands.wheelAt[k] as Vector3).applyMatrix4(this.root);
       if (hold >= 1 && h.next < 0) {
