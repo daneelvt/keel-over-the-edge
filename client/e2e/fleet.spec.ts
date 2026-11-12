@@ -356,7 +356,15 @@ test('a keelboat, a tall ship, a skiff and a beach cat of the fleet look as the 
     },
     {
       name: 'a beach cat reaching, her rudders over',
-      state: { ...rest, heading: 1.8, heel: 3 * DEG, boom: 0.6, jib: 0.3, rudder: 0.3, sailor: -1.0 },
+      state: {
+        ...rest,
+        heading: 1.8,
+        heel: 3 * DEG,
+        boom: 0.6,
+        jib: 0.3,
+        rudder: 0.3,
+        sailor: -1.0,
+      },
       view: { azimuth: 2.6, elevation: 0.25, distance: 8 },
     },
   ]) {
