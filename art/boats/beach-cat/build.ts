@@ -848,11 +848,7 @@ function crewWire(s: number): { rope: MeshBuilder; bronze: MeshBuilder } {
   const rope = new MeshBuilder('rope');
   const bronze = new MeshBuilder('bronze');
   const crew = crewRing(s);
-  rope.tube(
-    [[s * mastR(HOUNDS), HOUNDS - 0.05, MAST_Z], add(crew, [0, RING_R, 0])],
-    [0.0035],
-    4,
-  );
+  rope.tube([[s * mastR(HOUNDS), HOUNDS - 0.05, MAST_Z], add(crew, [0, RING_R, 0])], [0.0035], 4);
   ringLoop(bronze, crew, s);
   return { rope, bronze };
 }
