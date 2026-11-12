@@ -27,6 +27,7 @@
 //    figure facing her, upright in the world; it has no -port.
 
 import { Matrix4, Mesh, type Object3D, Raycaster, Vector3 } from 'three';
+import type { Rig } from './rig';
 
 /** The clips, by what they are; those on the hull and the wire each have their -port mirror (the crossings go either way, and righting her is the same on either hull). */
 export const CAT_CLIPS = {
@@ -226,13 +227,26 @@ export const CROSS_IN = 0.25;
 export const CROUCH_ACROSS = 0.8;
 export const CRAWL_ACROSS = 0.3;
 export const CRAWL_CHANGE = 0.4;
-export const CRAWL_NEAR = 0.45;
-export const CRAWL_FAR = 0.7;
+export const CRAWL_NEAR = 0.3;
+export const CRAWL_FAR = 0.45;
 
 /** The way across her net: its z, and how far out each end is from the centreline. */
-export function netWay(a: Aboard): { z: number; x: number } {
-  return { z: (a.net.fore + a.net.aft) / 2, x: a.helm.bar.x - CROSS_IN };
+export function netWay(a: Aboard, crew = false): { z: number; x: number } {
+  return {
+    z: (a.net.fore + a.net.aft) / 2 - (crew ? CREW_FORWARD : HELM_FORWARD),
+    x: a.helm.bar.x - CROSS_IN,
+  };
 }
+
+/**
+ * How far forward of the net's middle the helm's way across it goes, and
+ * the crew's, m: each clear of where the other sits, the legs across the
+ * net (the crew forward, the helm aft), at a crouch by the hulls; on hands
+ * and knees, the helm's feet clear of the mainsheet's tackle on the rear
+ * beam and the crew's hands of the front beam.
+ */
+export const HELM_FORWARD = 0.03;
+export const CREW_FORWARD = 0.58;
 
 /** Her boom as the crossing needs it: its gooseneck's height and z, and its length. */
 export interface CatBoom {
@@ -247,7 +261,7 @@ export interface CatBoat {
   aboard: Aboard;
   /** Her boom: under it the net is crossed on hands and knees. */
   boom: CatBoom;
-  /** Where her sailor stands on her lower hull to right her, lying to port (standOf's); and her crew, beside them (CREW_BESIDE aft); null if not found. */
+  /** Where her sailor stands on her lower hull to right her, lying to port (standOf's); and her crew, beside them (CREW_BESIDE); null if not found. */
   stand: Vector3 | null;
   crewStand: Vector3 | null;
   /** Each side's crew's trapeze ring (starboard, port) and the hounds, where the crew's wire hangs from; null if she has none. */
@@ -255,8 +269,8 @@ export interface CatBoat {
   hounds: Vector3 | null;
 }
 
-/** How far aft of her sailor her crew stands to right her beside them, on her lower hull, m. */
-export const CREW_BESIDE = 1.15;
+/** Where her crew stands to right her beside her sailor, on her lower hull, m aft of the sailor: forward of them, by the bows, clear of the front beam. */
+export const CREW_BESIDE = -1.25;
 
 /**
  * How far on hands and knees (0 to 1) someone crossing at x on the way at
@@ -382,3 +396,133 @@ export function standPlace(
   }
   return out.multiply(place);
 }
+
+/** How far over what they stand on (her net's laced plane, her decks) the joints keep, m. */
+export const FLOOR_CLEAR = 0.005;
+
+/**
+ * What her people's joints keep over, under (x, z) in her model's frame:
+ * her net between her hulls (from side bar to side bar, beam to beam), and
+ * each hull's deck, as high as its inner edge is at the station nearest;
+ * null where there is neither (over the water).
+ */
+export function catFloor(cat: CatBoat): (x: number, z: number) => number | null {
+  const a = cat.aboard;
+  const net = a.net;
+  const bar = a.helm.bar.x;
+  const inner = Math.min(a.helm.inner.x, a.crew.inner.x);
+  const outer = Math.max(a.helm.outer.x, a.crew.outer.x);
+  return (x, z) => {
+    const ax = Math.abs(x);
+    if (ax < bar && z > net.fore && z < net.aft) {
+      return net.y + FLOOR_CLEAR;
+    }
+    if (ax >= inner && ax <= outer && z > net.fore - 0.6 && z < net.aft + 0.4) {
+      // The deck: from the crew's station's height forward to the helm's aft.
+      const f = Math.max(0, Math.min(1, (z - a.crew.inner.z) / (a.helm.inner.z - a.crew.inner.z)));
+      return a.crew.inner.y + (a.helm.inner.y - a.crew.inner.y) * f - FLOOR_CLEAR;
+    }
+    return null;
+  };
+}
+
+const joint = new Vector3();
+
+/** The body's joints a floor keeps over: not the skeleton's root or its helpers. */
+const BODY_JOINTS = [
+  'pelvis',
+  'spine_01',
+  'spine_02',
+  'spine_03',
+  'neck_01',
+  'head',
+  'upperarm_l',
+  'lowerarm_l',
+  'hand_l',
+  'upperarm_r',
+  'lowerarm_r',
+  'hand_r',
+  'thigh_l',
+  'calf_l',
+  'foot_l',
+  'ball_l',
+  'thigh_r',
+  'calf_r',
+  'foot_r',
+  'ball_r',
+];
+const BODY = new WeakMap<Rig, number[]>();
+
+/**
+ * A posed figure (its rig, placed by root into her model's frame) lifted as
+ * far as keeps every joint over the floor under it: going down onto her net
+ * or up off it, nothing is drawn through it or her decks. Returns the lift,
+ * m; root is changed by it.
+ */
+export function liftOver(
+  rig: Rig,
+  root: Matrix4,
+  floor: (x: number, z: number) => number | null,
+): number {
+  let lift = 0;
+  let joints = BODY.get(rig);
+  if (joints === undefined) {
+    joints = BODY_JOINTS.map((n) => rig.bone(n)).filter((j) => j >= 0);
+    BODY.set(rig, joints);
+    MIDDLES.set(
+      rig,
+      LIMBS.map(([a, b]): [number, number] => [rig.bone(a), rig.bone(b)]).filter(
+        ([a, b]) => a >= 0 && b >= 0,
+      ),
+    );
+    HEAD.set(rig, [rig.bone('neck_01'), rig.bone('head')]);
+  }
+  for (const j of joints) {
+    rig.position(j, joint).applyMatrix4(root);
+    const f = floor(joint.x, joint.z);
+    if (f !== null && f - joint.y > lift) {
+      lift = f - joint.y;
+    }
+  }
+  // Between the joints down each limb and up the back, and the head's ball.
+  for (const [a, b] of MIDDLES.get(rig) ?? []) {
+    rig.position(a, joint).applyMatrix4(root);
+    rig.position(b, mid).applyMatrix4(root);
+    joint.add(mid).multiplyScalar(0.5);
+    const f = floor(joint.x, joint.z);
+    if (f !== null && f - joint.y > lift) {
+      lift = f - joint.y;
+    }
+  }
+  const head = HEAD.get(rig);
+  if (head !== undefined && head[0] >= 0 && head[1] >= 0) {
+    rig.position(head[0], mid).applyMatrix4(root);
+    rig.position(head[1], joint).applyMatrix4(root);
+    joint.addScaledVector(mid.sub(joint).normalize(), -HEAD_BALL);
+    const f = floor(joint.x, joint.z);
+    if (f !== null && f + HEAD_BALL - joint.y > lift) {
+      lift = f + HEAD_BALL - joint.y;
+    }
+  }
+  if (lift > 0) {
+    root.elements[13] = (root.elements[13] as number) + lift;
+  }
+  return lift;
+}
+
+const mid = new Vector3();
+/** The head's ball: this far over its joint up the neck, and as large. */
+const HEAD_BALL = 0.1;
+const LIMBS: [string, string][] = [
+  ['thigh_l', 'calf_l'],
+  ['calf_l', 'foot_l'],
+  ['thigh_r', 'calf_r'],
+  ['calf_r', 'foot_r'],
+  ['upperarm_l', 'lowerarm_l'],
+  ['lowerarm_l', 'hand_l'],
+  ['upperarm_r', 'lowerarm_r'],
+  ['lowerarm_r', 'hand_r'],
+  ['pelvis', 'spine_02'],
+];
+const MIDDLES = new WeakMap<Rig, [number, number][]>();
+const HEAD = new WeakMap<Rig, [number, number]>();

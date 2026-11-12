@@ -54,16 +54,19 @@ import {
   CAT_CLIPS,
   type CatBoat,
   catAnchor,
+  catFloor,
   catPlace,
   catPoint,
   catSide,
   crawlFor,
   inCatFile,
+  liftOver,
   NetCross,
   netWay,
   standPlace,
 } from './cat';
 import { Clip, Pose } from './clips';
+import { carried } from './crewbody';
 import { REACH, twoBone } from './ik';
 import { Layers, random, type SailorLayers } from './layers';
 import { MachineLayers } from './machinelayers';
@@ -161,10 +164,14 @@ const CAT_WIRED: readonly string[] = [
   CAT_CLIPS.wireLow,
   CAT_CLIPS.wire,
 ];
+/** On a beach cat, how far past the centreline the boom comes over the hull sat on before the sailor crosses, radians. */
+export const BOOM_OVER = (5 * Math.PI) / 180;
 /** Of a change of mode's blend, how much passes before a crossing of the net moves on. */
 const NET_RISE = 0.6;
+/** How high over the net the feet are carried, onto it or off it, m. */
+const NET_STEP = 0.12;
 /** How far a change of mode's path bows up for a crossing of the net, m: the hips brought in over the hull's edge. */
-const NET_ARC_UP = 0.15;
+const NET_ARC_UP = 0.03;
 /**
  * Thrown off over her bows: the boat pitched this far bow down off the
  * waves (radians), or heeled no further than this (no capsize throws a
@@ -396,6 +403,15 @@ export class SailorRuntime {
   /** Seconds since thrown off over her bows into the water; −1 if not. */
   #thrown = -1;
   readonly #righting = new Matrix4();
+  /** The legs' thigh, calf and foot bones; and each foot's place at either end of a carry. */
+  readonly #legs: [number, number, number][];
+  readonly #feetA: [Vector3, Vector3] = [new Vector3(), new Vector3()];
+  readonly #feetB: [Vector3, Vector3] = [new Vector3(), new Vector3()];
+  /** Between the crouch and the crawl, how far (0 to 1), the feet to be carried so; −1 if not. */
+  #crawlCarry = -1;
+  readonly #ends = new Place();
+  /** On a beach cat, what the joints keep over: her net and decks. */
+  readonly #floor: ((x: number, z: number) => number | null) | null;
   readonly #ahead = new Place();
   readonly #beside = new Place();
 
@@ -444,6 +460,10 @@ export class SailorRuntime {
       (this.#catted
         ? [CAT_CLIPS.wireLow, CAT_CLIPS.wire].every(sided)
         : [TRAPEZE_CLIPS.low, TRAPEZE_CLIPS.out].every(sided));
+    this.#floor = cat === null ? null : catFloor(cat);
+    this.#legs = ['l', 'r']
+      .map((sd) => [`thigh_${sd}`, `calf_${sd}`, `foot_${sd}`].map((b) => rig.bone(b)))
+      .filter((l) => l.every((b) => b >= 0)) as [number, number, number][];
     this.#netted =
       this.#catted &&
       [...CAT_CLIPS.crouch.slice(1, 3), ...CAT_CLIPS.crawl].every(
@@ -609,6 +629,10 @@ export class SailorRuntime {
       // The first moment: the sailor is already on its side deck.
       this.#side = Math.sign(s.offset);
     }
+    if (this.#mode < 0 && this.#netted && s.boom !== undefined && Math.abs(s.boom) > BOOM_OVER) {
+      // On a beach cat's hull, to windward of the boom.
+      this.#side = -Math.sign(s.boom);
+    }
     if (mode !== this.#mode) {
       this.#begin(mode, s);
     }
@@ -672,8 +696,19 @@ export class SailorRuntime {
       this.#rebasePose(this.#from, this.#fromPlace, place);
       this.#fromPlace.copy(place);
     }
+    // Going down onto hands and knees on the net or up off them: carried.
+    let carry = this.#crawlCarry;
+    this.#crawlCarry = -1;
     if (this.#change < 1) {
       this.#change = Math.min(1, this.#change + dt / CHANGE);
+      if (this.#flat) {
+        // Onto a beach cat's net or off it: each foot carried from where
+        // the old pose had it to where the new one has it, over her hull's
+        // edge, as the crew's are.
+        this.#feetOf(this.#from, this.#fromPlace, this.#feetA);
+        this.#feetOf(pose, place, this.#feetB);
+        carry = this.#change;
+      }
       if (this.#change >= 1) {
         this.#flat = false;
       }
@@ -689,6 +724,9 @@ export class SailorRuntime {
     this.#placeNow.matrix(this.root);
     pose.to(this.rig);
     this.rig.fk();
+    if (carry >= 0 && carry < 1) {
+      this.#carryFeet(carry);
+    }
 
     // The layers.
     this.#heelAxis.set(0, 0, 1).applyQuaternion(q.copy(this.#placeNow.turn).invert());
@@ -701,6 +739,10 @@ export class SailorRuntime {
       upright: (seated && !this.crossing) || wheel ? 0.5 : 0,
       still: s.still,
     });
+    // Aboard a beach cat, sailing: over her net and decks, never through them.
+    if (this.#floor !== null && this.#catted && mode === 0) {
+      liftOver(this.rig, this.root, this.#floor);
+    }
 
     // The hands.
     if (wheel) {
@@ -787,7 +829,17 @@ export class SailorRuntime {
 
   /** At the helm or hiking, crossing, or the habit: true when seated on a side deck. */
   #sailing(s: SailorMoment, dt: number, pose: Pose, place: Place): boolean {
-    const want = Math.abs(s.offset) > 0.05 ? Math.sign(s.offset) : this.#side;
+    // To the side the physics puts the sailor; on a beach cat, to windward
+    // of the boom, once it has come over past BOOM_OVER: across as it
+    // comes, before it lies over the hull sat on.
+    const want =
+      this.#netted && s.boom !== undefined
+        ? this.#side * s.boom > BOOM_OVER
+          ? -this.#side
+          : this.#side
+        : Math.abs(s.offset) > 0.05
+          ? Math.sign(s.offset)
+          : this.#side;
     if (this.#netted) {
       if (this.#net === null && want !== this.#side && this.#change >= 1 && s.wayHeld !== true) {
         this.#beginNet(s);
@@ -877,6 +929,37 @@ export class SailorRuntime {
     return true;
   }
 
+  /** Where a pose at a place has its feet, in the model's frame, into out. The rig is left posed so. */
+  #feetOf(pose: Pose, place: Place, out: [Vector3, Vector3]): void {
+    pose.to(this.rig);
+    this.rig.fk();
+    place.matrix(m4);
+    for (let k = 0; k < 2; k++) {
+      const foot = this.#legs[k]?.[2] ?? -1;
+      if (foot >= 0) {
+        this.rig.position(foot, out[k] as Vector3).applyMatrix4(m4);
+      }
+    }
+  }
+
+  /** The feet carried f of the way from #feetA to #feetB, up over the net's height and down, the legs bent to them. */
+  #carryFeet(f: number): void {
+    const cat = this.boat.cat;
+    if (cat == null) {
+      return;
+    }
+    const top = cat.aboard.net.y + NET_STEP;
+    inv.copy(this.root).invert();
+    for (let k = 0; k < 2; k++) {
+      const leg = this.#legs[k];
+      if (leg === undefined) {
+        continue;
+      }
+      carried(this.#feetA[k] as Vector3, this.#feetB[k] as Vector3, f, p, top).applyMatrix4(inv);
+      twoBone(this.rig, leg[0], leg[1], leg[2], p);
+    }
+  }
+
   /** Begins crossing a beach cat's net, from the side sat on: blended off the hull first. */
   #beginNet(s: SailorMoment): void {
     const cat = this.boat.cat as CatBoat;
@@ -912,18 +995,31 @@ export class SailorRuntime {
     const crouch = this.#clip(n.crouch);
     const crawl = this.#clip(n.crawlClip);
     const f = smooth(n.crawl);
-    pose.rest(this.rig);
-    crouch?.sample(n.crouchT % crouch.duration, pose);
     const scratch = this.#scratch;
-    scratch.rest(this.rig);
-    crawl?.sample(n.crawlT % crawl.duration, scratch);
-    pose.mix(scratch, f);
+    const dz = way.z - (cat.aboard.net.fore + cat.aboard.net.aft) / 2;
     // Each clip's place on the net's middle, moved across to where they are.
     (crouch?.place ?? m.identity()).decompose(v, q, w);
     (crawl?.place ?? m2.identity()).decompose(u, q2, w);
+    v.x += n.x;
+    v.z += dz;
+    u.x += n.x;
+    u.z += dz;
+    scratch.rest(this.rig);
+    crawl?.sample(n.crawlT % crawl.duration, scratch);
+    pose.rest(this.rig);
+    crouch?.sample(n.crouchT % crouch.duration, pose);
+    if (f > 0 && f < 1) {
+      // Each foot where either has it, to be carried between.
+      this.#ends.at.copy(v);
+      this.#ends.turn.copy(q);
+      this.#feetOf(pose, this.#ends, this.#feetA);
+      this.#ends.at.copy(u);
+      this.#ends.turn.copy(q2);
+      this.#feetOf(scratch, this.#ends, this.#feetB);
+      this.#crawlCarry = f;
+    }
+    pose.mix(scratch, f);
     place.at.lerpVectors(v, u, f);
-    place.at.x += n.x;
-    place.at.z += way.z - (cat.aboard.net.fore + cat.aboard.net.aft) / 2;
     place.turn.copy(q).slerp(q2, f);
     if (there) {
       // Across: sat down on the hull on the other side, blended from here.

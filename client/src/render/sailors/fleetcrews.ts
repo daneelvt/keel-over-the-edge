@@ -26,7 +26,7 @@ import type { Boat as BoatKind } from '../../catalog';
 import type { BoatCrew, DrawnBoat } from '../../game/fleet';
 import type { SailorLook } from '../boat';
 import type { FloatingOrigin } from '../coords';
-import { namesCatClips } from './cat';
+import { catFloor, namesCatClips } from './cat';
 import { FAR_EVERY, modelDeck, tillerOf } from './crew';
 import { CrewBody, type Stance, stance } from './crewbody';
 import { deckFigure, farFigure } from './crewfigures';
@@ -68,6 +68,8 @@ export interface KindCrew {
   cog: number;
   /** On a kind with a trapeze, its sailor's furthest reach out on the wire (m); 0 for none. */
   reach: number;
+  /** A beach cat's: what her people's joints keep over, her net and decks; null for any other kind. */
+  floor: ((x: number, z: number) => number | null) | null;
 }
 
 /**
@@ -115,6 +117,7 @@ export function kindCrew(
       trapezeOf(parts.objects, kind.physics.sailor.hikeReach) === null
         ? 0
         : kind.physics.sailor.hikeReach,
+    floor: plan.cat == null ? null : catFloor(plan.cat),
   };
 }
 
@@ -569,6 +572,7 @@ export class FleetCrews {
     input.cat = kc.plan.cat ?? null;
     input.aft = c.aft;
     input.level = c.level;
+    input.life.floor = kc.floor;
     poseMember(p.body, p.member, input);
   }
 

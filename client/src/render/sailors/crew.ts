@@ -28,6 +28,7 @@
 import { Color, Group, Mesh, type Object3D, Raycaster, Vector3 } from 'three';
 import type { BoatStation } from '../../catalog';
 import type { SailorLook } from '../boat';
+import { catFloor } from './cat';
 import { CrewBody, type Stance, stance } from './crewbody';
 import { deckFigure, farFigure } from './crewfigures';
 import { CrewLevel } from './crewlevel';
@@ -209,6 +210,8 @@ export class CrewDeck {
   readonly #level: Level = { heel: 0, pitch: 0, heave: 0, cog: 0, solid: null };
   #aft = 0;
   #plan: CrewPlan | null = null;
+  /** Aboard a beach cat, what her people's joints keep over: her net and decks. */
+  #floor: ((x: number, z: number) => number | null) | null = null;
   /** Aboard a beach cat: each side's crew's wire drawn to whoever hangs on it, and the model's own (starboard, port). */
   #wires: { mesh: Mesh; node: Object3D | null }[] = [];
   readonly #still: boolean;
@@ -241,6 +244,7 @@ export class CrewDeck {
     model.add(this.group);
     this.#stations = plan.stations;
     this.#plan = plan;
+    this.#floor = plan.cat == null ? null : catFloor(plan.cat);
     this.#level.cog = plan.cog ?? 0;
     this.#level.solid = plan.solid ?? null;
     for (const w of this.#wires) {
@@ -676,6 +680,7 @@ export class CrewDeck {
     input.cat = this.#plan?.cat ?? null;
     input.aft = this.#aft;
     input.level = this.#level;
+    input.life.floor = this.#floor;
     poseMember(p.body as CrewBody, p.member, input);
   }
 

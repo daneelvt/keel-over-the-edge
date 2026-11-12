@@ -389,7 +389,7 @@ function netStance(
   into.clip = c;
   into.t = time;
   at.x += x;
-  at.z = netWay(cat.aboard).z;
+  at.z = netWay(cat.aboard, true).z;
   placeStance(into, catPlace(c.place, at, 1, m));
   return true;
 }
@@ -427,27 +427,39 @@ function poseAcross(body: CrewBody, member: CrewMember, input: PoseInput, cat: C
     }
     how.f = smooth(rise);
     how.arc = ACROSS_ARC;
+    how.carry = true;
+    how.top = cat.aboard.net.y + ACROSS_STEP;
   } else if (sit <= 0) {
     netStance(input, cat, net.crouch, net.crouchT, net.x, a);
     if (!netStance(input, cat, net.crawlClip, net.crawlT, net.x, b)) {
       b = null;
     }
+    // Down onto hands and knees, or up off them: lifted over, the feet
+    // carried, never through the net.
     how.f = smooth(net.crawl);
+    how.arc = ACROSS_ARC;
+    how.carry = true;
+    how.top = cat.aboard.net.y + ACROSS_STEP;
   } else {
     netStance(input, cat, loop, time, net.x, a);
     spotStance(input, mv.to, pose, t, b);
     how.f = smooth(sit);
     how.arc = ACROSS_ARC;
+    how.carry = true;
+    how.top = cat.aboard.net.y + ACROSS_STEP;
   }
   const life = input.life;
   const was = life.upright;
   life.upright = 0;
-  body.pose(a, b, how, 0, life);
+  // Ducked under the boom at a crouch; on hands and knees, low enough.
+  body.pose(a, b, how, input.duck * Math.max(0, 1 - 2 * net.crawl), life);
   life.upright = was;
 }
 
 /** How high the body is lifted at the middle of coming off a beach cat's hull onto her net, or back, m. */
-const ACROSS_ARC = 0.1;
+const ACROSS_ARC = 0.08;
+/** How high over a beach cat's net the feet are carried coming off her hull or onto it, m. */
+const ACROSS_STEP = 0.12;
 /** In the water, how far clear of the hull (as the sailor's own, runtime.ts); climbing back aboard, how high over the line between the body is carried, m. */
 const WATER_CLEAR = 0.32;
 const CLIMB_ARC = 0.4;
@@ -520,6 +532,9 @@ function waterStance(
 }
 
 const ahead = new Vector3();
+/** Thrown off a beach cat's bows: how long through the air, s, and how high over the line between, m. */
+const THROWN_FLY = 0.7;
+const THROWN_ARC = 0.6;
 
 /**
  * After a capsize: in the water; up on a beach cat's lower hull righting
@@ -550,6 +565,19 @@ function poseWet(
     a.clip = righting;
     a.t = input.time;
     placeStance(a, standPlace(righting.place, stand, lv.heel >= 0 ? 1 : -1, m));
+  } else if (wet.thrown && wet.phase === 'water' && wet.t < THROWN_FLY) {
+    // Thrown off the hull or the wire, over the bows, through the air.
+    spotStance(
+      input,
+      { station: member.station, side: member.side },
+      wet.lean >= 0.5 ? 1 : 0,
+      input.time,
+      a,
+    );
+    b = input.b;
+    waterStance(input, member, wet, lv, b);
+    how.f = smooth(wet.t / THROWN_FLY);
+    how.arc = THROWN_ARC;
   } else {
     waterStance(input, member, wet, lv, a);
     if (wet.phase === 'climb') {
@@ -559,9 +587,13 @@ function poseWet(
       how.arc = CLIMB_ARC;
     }
   }
+  // In the water or on her hull as she lies, over nothing of hers.
   const life = input.life;
   const was = life.upright;
+  const floor = life.floor ?? null;
   life.upright = 0;
+  life.floor = wet.phase === 'climb' ? floor : null;
   body.pose(a, b, how, 0, life);
   life.upright = was;
+  life.floor = floor;
 }
