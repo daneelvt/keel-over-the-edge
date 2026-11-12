@@ -59,6 +59,7 @@ import { type CatBoat, type SailorBoat, type SailorMoment, SailorRuntime } from 
 import { type HullSolid, hullSolid } from './solid';
 import { trapezeOf, wireNode } from './trapeze';
 import { turnIn, wheelNodes, wheelOf, wheelTurnOf } from './wheel';
+import { namesYachtClips } from './yacht';
 
 /** Nearer than this to the camera the close level is drawn, metres; back to the deck level beyond the second. */
 export const CLOSE_IN = 6;
@@ -82,6 +83,8 @@ export interface SailorUrls {
   harness?: () => Promise<string>;
   /** The clips aboard a beach cat's URL, fetched for a kind whose art names them. */
   cat?: () => Promise<string>;
+  /** The clips aboard a cruising yacht's URL, fetched for a kind whose art names them. */
+  cruiser?: () => Promise<string>;
   colours: { main: string; skin: string; hair: string };
 }
 
@@ -249,6 +252,11 @@ export class BoatSailor {
     const cat = namesCatClips(kind.art) ? await aboardCat(urls, renderer) : null;
     if (cat !== null) {
       files.push(cat);
+    }
+    // Aboard a cruising yacht, her people's clips too.
+    const cruiser = namesYachtClips(kind.art) ? await aboardYacht(urls, renderer) : null;
+    if (cruiser !== null) {
+      files.push(cruiser);
     }
     for (const file of files) {
       for (const a of file.clips) {
@@ -587,6 +595,22 @@ async function aboardCat(urls: SailorUrls, renderer: WebGPURenderer): Promise<Sa
     return await loadClips(await urls.cat(), renderer);
   } catch (e) {
     console.warn('the sailor’s clips aboard the beach cat did not load', e);
+    return null;
+  }
+}
+
+/** A look's clips aboard a cruising yacht, from their URL; null (warned) if they did not load. */
+async function aboardYacht(
+  urls: SailorUrls,
+  renderer: WebGPURenderer,
+): Promise<SailorClips | null> {
+  if (urls.cruiser === undefined) {
+    return null;
+  }
+  try {
+    return await loadClips(await urls.cruiser(), renderer);
+  } catch (e) {
+    console.warn('the sailor’s clips aboard the yacht did not load', e);
     return null;
   }
 }

@@ -85,6 +85,11 @@ poses:
       - [head, z, -14]
 
 clips:
+  # The habit at a cruising yacht's wheel: the same, made at hers.
+  lookout-yacht-habit-wheel:
+    of: lookout-habit-wheel
+    restage: cruiser
+    group: cruiser
   lookout-habit:
     sides: true
     keys:

@@ -95,6 +95,7 @@ import { catClips } from './sailors/cat';
 import { BoatSailor } from './sailors/onboat';
 import { harnessFile, trapezeClips } from './sailors/trapeze';
 import { wheelClips, wheelNodes } from './sailors/wheel';
+import { yachtClips } from './sailors/yacht';
 import {
   headsailFrame,
   jibPoint,
@@ -628,6 +629,7 @@ export class Boat {
         trapeze: () => lazyArtUrl(trapezeClips(a.clips)),
         harness: () => lazyArtUrl(harnessFile(a.clips)),
         cat: () => lazyArtUrl(catClips(a.clips)),
+        cruiser: () => lazyArtUrl(yachtClips(a.clips)),
         colours: look.colours,
       },
       renderer,

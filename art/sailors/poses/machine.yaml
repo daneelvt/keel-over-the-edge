@@ -78,6 +78,11 @@ poses:
       - [head, z, -22]
 
 clips:
+  # The habit at a cruising yacht's wheel: the same, made at hers.
+  machine-yacht-habit-wheel:
+    of: machine-habit-wheel
+    restage: cruiser
+    group: cruiser
   machine-habit:
     sides: true
     keys:

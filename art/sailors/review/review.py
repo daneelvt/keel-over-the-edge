@@ -489,7 +489,8 @@ def clip_sheet(r, fig, look, clip, act, slot, track, path, chains, frames=8, siz
     cat = getattr(clip, "cat", None)
     fig.stage.show(in_boat, wheel=getattr(clip, "standing", False), trapeze=getattr(clip, "trapeze", False),
                    rail=getattr(clip, "rail", False), ship=bool(getattr(clip, "ship", None)),
-                   cat=("capsized" if cat == motion.CAT_STAND else "upright") if cat else None)
+                   cat=("capsized" if cat == motion.CAT_STAND else "upright") if cat else None,
+                   yacht=bool(getattr(clip, "yacht", None)))
     look.use(look.look)
     pts = []
     for f in picks:

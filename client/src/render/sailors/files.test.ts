@@ -6,14 +6,15 @@
 // one material whose base colour is the atlas and whose occlusion texture
 // is the mask, both KTX2; and the clips with a place each, those at a
 // wheel, those on a trapeze's wire, those on a rail (with the crouch) and
-// the ship's company's (about her decks, and her work and aloft) and a beach
-// cat's people's in files of their own; and the trapeze harness, skinned to the same skeleton, with
-// its hook.
+// the ship's company's (about her decks, and her work and aloft), a beach
+// cat's people's and a cruising yacht's in files of their own; and the
+// trapeze harness, skinned to the same skeleton, with its hook.
 
 import { readdirSync, readFileSync } from 'node:fs';
 import { describe, expect, test } from 'vitest';
 import { CAT_CLIPS, catAnchor, catSide, inCatFile } from './cat';
 import { ALOFT_CLIPS, DECK_CLIPS, NOT_FOR_MACHINES, shipAnchor } from './ship';
+import { inYachtFile, YACHT_FILE, YACHT_NOT_FOR_MACHINES, yachtAnchor, yachtSide } from './yacht';
 
 /** Every clip of the beach cat's file, and those a machine has not. */
 const CAT_FILE = [
@@ -254,6 +255,50 @@ describe.each(looks)('%s', (look) => {
         } else if (catAnchor(name) !== 'stand') {
           // On the starboard hull facing inboard (−x), on the port one +x.
           expect(-side * (m[8] ?? 0), name).toBeGreaterThan(0.99);
+        }
+      }
+    });
+
+    test('its clips aboard a cruising yacht, a file of its own on its skeleton: each placed upright from its place, at the wheel facing forward, on the bench inboard, on the rail outboard, crossing her cockpit forward and her coachroof across her', () => {
+      if (look === 'test') {
+        return;
+      }
+      const cruiser = readGltf(`${look}/${version}.cruiser.glb`);
+      const names = (cruiser.animations ?? []).map((a) => a.name).sort();
+      expect(names).toEqual(
+        YACHT_FILE.filter((c) => look !== 'machine' || !YACHT_NOT_FOR_MACHINES.includes(c)).sort(),
+      );
+      expect(joints(cruiser)).toEqual(joints(clips));
+      for (const name of names) {
+        expect(inYachtFile(name), name).toBe(true);
+        const m = cruiser.nodes.find((n) => n.name === `place-${name}`)?.matrix ?? [];
+        // Near its place on her, upright.
+        expect(Math.hypot(m[12] ?? 9, m[13] ?? 9, m[14] ?? 9), name).toBeLessThan(1.2);
+        expect(m[5] ?? 0, name).toBeGreaterThan(0.99);
+        const side = yachtSide(name);
+        switch (yachtAnchor(name)) {
+          case 'stance':
+            // Facing forward (−z); sat by the wheel, turned toward it.
+            expect(m[10] ?? 0, name).toBeLessThan(-0.8);
+            expect(-side * (m[8] ?? 0), name).toBeGreaterThan(-0.01);
+            break;
+          case 'bench':
+            // On the starboard bench facing inboard (−x), on the port one +x.
+            expect(-side * (m[8] ?? 0), name).toBeGreaterThan(0.99);
+            break;
+          case 'rail':
+            // On the starboard rail facing outboard (+x), on the port one −x.
+            expect(side * (m[8] ?? 0), name).toBeGreaterThan(0.99);
+            break;
+          case 'sole':
+            expect(m[10] ?? 0, name).toBeLessThan(-0.99);
+            break;
+          case 'roof':
+            // Facing across her, to port.
+            expect(m[8] ?? 0, name).toBeLessThan(-0.99);
+            break;
+          default:
+            throw new Error(`${name} has no place`);
         }
       }
     });

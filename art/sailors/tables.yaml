@@ -158,6 +158,34 @@ stage:
     capsized: [13.0, 0.0, 0.0]
     seat: { in: 0.22 }
     hike: { in: 0.05 }
+  # The cruising yacht, whose helm stands or sits at her windward wheel,
+  # whose crew sit on her cockpit's benches and on her rail under her
+  # lifelines, and cross her cockpit and her coachroof at a crouch
+  # (build/stage.py's Yacht): her model, set this far to starboard of the
+  # dinghy in the stage's scene, clear of every other stage; her nodes give
+  # the places the clips made there are placed from, on the starboard side
+  # (the port's the mirror). At her wheel the hands hold its rim, each this
+  # many degrees from its top (to starboard as the helm sees it), standing;
+  # sat by it, the inboard hand. Sat on the side deck outboard of the
+  # wheel facing forward, the helm's hips are this far aft of the wheel
+  # and this far outboard of the deck's inner edge, the feet braced this
+  # far forward of them, by her capstan. Sat on the bench, the hips this
+  # far in from its front edge (the idles': its edge this far from the
+  # knees).
+  # On the rail, the knees' joints this far out from the deck's edge. Her
+  # cockpit is crossed this far forward of her table, aft of the mainsheet's
+  # bridle; her coachroof this far aft of its fore end, forward of the
+  # mast, over its scuttle (aft of the mast her boom is 0.72 m over the
+  # roof, lower than a crouching figure's hat).
+  cruiser:
+    boat: boats/yacht.glb
+    at: [40.0, 0.0, 0.0]
+    grips: { yacht-wheel-left: -45, yacht-wheel-right: 45, yacht-seat: 75 }
+    helm-seat: { aft: 0.3, out: 0.17, brace: 0.58 }
+    bench: { in: 0.24, knee: 0.18 }
+    rail: { knee: 0.1 }
+    cockpit: { table: 0.15 }
+    roof: { fore: 0.5 }
 
 # The portraits (build/portraits.py), every look's taken alike: head and
 # shoulders, three-quarter, the camera on the figure's left at the height

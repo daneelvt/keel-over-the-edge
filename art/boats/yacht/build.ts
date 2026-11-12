@@ -595,8 +595,11 @@ function deck(): MeshBuilder {
       const z = zAt(u);
       const inside = Math.min(x1, b) - Math.max(x0, -b) > 1e-4;
       const edge = x0 >= 0 ? b : -b;
-      const lo = inside ? Math.max(x0, -b) : edge;
-      const hi = inside ? Math.min(x1, b) : edge;
+      // A plank across the cockpit's side stops at it: the side deck ends
+      // there, over the bench, not overhanging it.
+      const c = z >= COCKPIT_FORE - 1e-6 ? cockpitHalf(z) : Number.POSITIVE_INFINITY;
+      const lo = inside ? Math.max(x0, -b, x0 < c && x1 > c ? c : -b) : edge;
+      const hi = inside ? Math.min(x1, b, x0 < -c && x1 > -c ? -c : b) : edge;
       const w = Math.min(0.006, (hi - lo) / 4);
       const xs = [lo, lo + w, hi - w, hi];
       const cs = [seam, c, c, seam];
@@ -2313,8 +2316,13 @@ const rudderHeels = (): { lift: number; clear: number } => ({
 /** The sailor's stance between the wheels, on the sole; the gunwale at its station. */
 const STANCE: Vec3 = [0, SOLE, STAND_Z];
 const GUNWALE: Vec3 = [halfBeam(uAt(STAND_Z)), sheer(uAt(STAND_Z)), STAND_Z];
-/** Where the crew sit on the rail, legs over the side: the starboard deck's edge abreast the coachroof. */
-const RAIL_Z = -0.9;
+/**
+ * Where the crew sit on the rail, legs over the side under the lifelines:
+ * the starboard deck's edge abreast the coachroof, aft of the shrouds'
+ * chainplates (over them a figure sat on the edge has a shroud through its
+ * hips) and clear of the stanchions either side.
+ */
+const RAIL_Z = -0.45;
 const RAIL: Vec3 = [halfBeam(uAt(RAIL_Z)), sheer(uAt(RAIL_Z)), RAIL_Z];
 /** The provisional stations: on the windward bench, and on the rail. */
 const BENCH_ZS = [2.35, 0.85, 1.6];

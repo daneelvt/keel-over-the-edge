@@ -1623,6 +1623,9 @@ boats:
     art:
       model: boats/yacht.glb
       far: boats/yacht.far.glb
+      # Her people's clips: at her wheel, on her bench and her rail, and
+      # crossing her cockpit and her coachroof.
+      sailorClips: [cruiser]
       budget: { near: 25000, far: 1200 }
     physics:
       hull:

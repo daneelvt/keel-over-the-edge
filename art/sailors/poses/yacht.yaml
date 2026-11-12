@@ -1,0 +1,333 @@
+# SPDX-License-Identifier: LicenseRef-All-Rights-Reserved
+#
+# The yacht's people: the clips her helm stands and sits at her windward
+# wheel in, her crew sit on her cockpit's windward bench and on her
+# windward rail in, under her lifelines, and they cross her cockpit and her
+# coachroof in, at a crouch (written to <version>.cruiser.glb, which only a
+# boat whose kind names it loads).
+#
+# Each is placed from her place it is made at (stage.Yacht, from her
+# model's nodes), on the starboard side; its -port the mirror on the port
+# side. At her wheel and sat by it the helm is placed from the stance aft of
+# the wheel; on the bench from its front edge; on the rail from the deck's
+# edge; crossing, from where the cockpit's sole or the coachroof's top is
+# crossed on her centreline.
+poses:
+  # The helm sat on the windward side deck outboard of the wheel, aft of
+  # it, facing forward, the legs along the deck, the outboard foot braced
+  # against the capstan forward and the other beside it; leaning a little
+  # forward, the inboard hand on the wheel's rim, on its upper outboard
+  # quarter, the outboard one on its thigh; looking forward along the boat.
+  # The coat's skirts as seated: the front over the thighs, the sides and
+  # back laid on the deck.
+  yacht-seated:
+    place: yacht-helm-seat
+    turn:
+      - [thigh_l, x, -86]
+      - [thigh_r, x, -84]
+      - [thigh_l, z, 2]
+      - [thigh_r, z, -3]
+      - [calf_l, x, 24]
+      - [calf_r, x, 12]
+      - [spine_01, x, 6]
+      - [spine_02, x, 4]
+      - [spine_03, x, 2]
+      - [neck_01, x, -4]
+      - [head, x, -6]
+      - [skirt_front_l_01, x, -82]
+      - [skirt_front_r_01, x, -82]
+      - [skirt_side_l_01, y, 80]
+      - [skirt_side_r_01, y, -80]
+      - [skirt_back_l_01, x, 82]
+      - [skirt_back_r_01, x, 82]
+    ik:
+      hand_l: { at: yacht-seat, offset: [-0.07, -0.02, 0.0], pole: [0.6, 0.2, -0.3] }
+      hand_r: { at: bone, bone: thigh_r, offset: [-0.03, -0.13, -0.3], pole: [-0.5, 0.3, -0.3] }
+      foot_l: { at: yacht-helm-brace, offset: [-0.1, -0.17, 0.1], pole: [0.1, -0.5, 0.6] }
+      foot_r: { at: yacht-helm-brace, offset: [0.0, -0.3, 0.1], pole: [-0.1, -0.5, 0.6] }
+
+  # Looking up at the main's luff, and over the shoulder to windward.
+  yacht-seated-aloft:
+    from: yacht-seated
+    turn:
+      - [spine_03, x, -3]
+      - [neck_01, x, -10]
+      - [head, x, -20]
+      - [neck_01, z, -4]
+      - [head, z, -8]
+
+  yacht-seated-windward:
+    from: yacht-seated
+    turn:
+      - [spine_03, z, -5]
+      - [neck_01, z, -14]
+      - [head, z, -28]
+
+  # Sat on the cockpit's windward bench facing inboard, braced as she
+  # heels: the back leaning against the bench's back, the body kept nearer
+  # plumb than the boat; the aft foot on the sole before the bench, the
+  # forward one braced on it further out, the leg near straight; the
+  # hands on the thighs, the forward one on its knee; looking forward
+  # along the boat. The coat's skirts
+  # as seated: the front over the thighs and over the bench's edge, the
+  # back laid on the bench behind.
+  bench-brace:
+    place: yacht-bench
+    turn:
+      - [thigh_l, x, -78]
+      - [thigh_r, x, -78]
+      - [thigh_l, z, 4]
+      - [thigh_r, z, -6]
+      - [calf_l, x, 76]
+      - [calf_r, x, 54]
+      - [spine_01, x, -6]
+      - [spine_02, x, -3]
+      - [neck_01, x, 6]
+      - [head, x, 4]
+      - [neck_01, z, -12]
+      - [head, z, -22]
+      - [skirt_front_l_01, x, -78]
+      - [skirt_front_r_01, x, -72]
+      - [skirt_side_l_01, y, 80]
+      - [skirt_side_r_01, y, -80]
+      - [skirt_back_l_01, x, 82]
+      - [skirt_back_r_01, x, 82]
+    ik:
+      hand_l: { at: bone, bone: thigh_l, offset: [0.03, -0.13, -0.3], pole: [0.5, 0.3, -0.3] }
+      hand_r: { at: bone, bone: thigh_r, offset: [-0.03, -0.13, -0.34], pole: [-0.5, 0.3, -0.3] }
+      foot_l: { at: yacht-bench-sole, offset: [-0.12, 0.26, 0.1], pole: [0.1, -0.5, 0.6] }
+      foot_r: { at: yacht-bench-sole, offset: [0.16, 0.34, 0.1], pole: [-0.1, -0.5, 0.6] }
+
+  bench-brace-luff:
+    from: bench-brace
+    turn:
+      - [neck_01, x, -8]
+      - [head, x, -14]
+      - [neck_01, z, -4]
+      - [head, z, -8]
+
+  bench-brace-sea:
+    from: bench-brace
+    turn:
+      - [neck_01, z, 18]
+      - [head, z, 30]
+
+  # On the rail: sat on the windward deck's edge facing outboard, the legs
+  # over the side under the lower lifeline, the backs of the knees just
+  # past the edge; the body up, the chest at the upper lifeline, the
+  # forearms laid over it, the hands hanging outboard of it; looking
+  # forward along the boat. The coat's skirts: the back laid on the deck
+  # behind, the front over the knees and down the topsides.
+  yacht-rail-sit:
+    place: yacht-rail
+    turn:
+      - [thigh_l, x, -86]
+      - [thigh_r, x, -86]
+      - [thigh_l, z, 5]
+      - [thigh_r, z, -5]
+      - [calf_l, x, 76]
+      - [calf_r, x, 76]
+      - [foot_l, x, 22]
+      - [foot_r, x, 22]
+      - [spine_01, x, 4]
+      - [spine_02, x, 4]
+      - [neck_01, z, 10]
+      - [head, z, 22]
+      - [skirt_front_l_01, x, -78]
+      - [skirt_front_r_01, x, -78]
+      - [skirt_side_l_01, y, 80]
+      - [skirt_side_r_01, y, -80]
+      - [skirt_back_l_01, x, 82]
+      - [skirt_back_r_01, x, 82]
+    ik:
+      hand_l: { at: yacht-lifeline-up, offset: [0.18, -0.08, -0.06], pole: [0.5, -0.2, 0.8] }
+      hand_r: { at: yacht-lifeline-up, offset: [-0.18, -0.08, -0.06], pole: [-0.5, -0.2, 0.8] }
+
+  yacht-rail-sit-luff:
+    from: yacht-rail-sit
+    turn:
+      - [spine_03, z, 4]
+      - [neck_01, z, 14]
+      - [head, z, 20]
+      - [head, x, -18]
+
+  yacht-rail-sit-sea:
+    from: yacht-rail-sit
+    turn:
+      - [neck_01, z, -8]
+      - [head, z, -20]
+      - [head, x, 6]
+
+  # Leaning out on the rail: the same, the body bent out from the hips
+  # over the water, the chest on the upper lifeline and the shoulders out
+  # past it, the forearms over it; the head kept up looking forward.
+  yacht-rail-lean:
+    from: yacht-rail-sit
+    turn:
+      - [spine_01, x, 6]
+      - [spine_02, x, 5]
+      - [spine_03, x, 4]
+      - [neck_01, x, -8]
+      - [head, x, -10]
+    ik:
+      hand_l: { at: yacht-lifeline-up, offset: [0.18, -0.14, -0.12], pole: [0.5, -0.2, 0.8] }
+      hand_r: { at: yacht-lifeline-up, offset: [-0.18, -0.14, -0.12], pole: [-0.5, -0.2, 0.8] }
+
+  yacht-rail-lean-luff:
+    from: yacht-rail-lean
+    turn:
+      - [spine_03, z, 4]
+      - [neck_01, z, 14]
+      - [head, z, 20]
+      - [head, x, -14]
+
+  yacht-rail-lean-sea:
+    from: yacht-rail-lean
+    turn:
+      - [neck_01, z, -8]
+      - [head, z, -20]
+      - [head, x, 6]
+
+clips:
+  # The helm standing at her windward wheel, the hands on its rim: the
+  # wheel's clip made at her wheel. Its -port is at her port wheel.
+  yacht-wheel:
+    of: helm-wheel
+    restage: cruiser
+    group: cruiser
+
+  # The look's habit at her wheel (each look's own, named so by it).
+  yacht-habit-wheel:
+    of: habit-wheel
+    restage: cruiser
+    group: cruiser
+
+  # The helm sat outboard of her windward wheel: looking forward, at the
+  # luff, forward and to windward.
+  yacht-wheel-seated:
+    loop: true
+    idle: true
+    sides: true
+    group: cruiser
+    keys:
+      - { pose: yacht-seated, hold: 1.4, ramp: 1.5, lead: head }
+      - { pose: yacht-seated-aloft, hold: 1.4, ramp: 1.4, lead: head, anticipate: 0.05 }
+      - { pose: yacht-seated, hold: 1.0, ramp: 1.4, lead: head }
+      - { pose: yacht-seated-windward, hold: 1.2, ramp: 1.3, lead: head, anticipate: 0.05 }
+
+  # Braced on the bench; its -port on the port bench. The game blends the
+  # bench's idles into it by the heel.
+  bench-braced:
+    loop: true
+    idle: true
+    sides: true
+    group: cruiser
+    keys:
+      - { pose: bench-brace, hold: 1.6, ramp: 1.5, lead: head }
+      - { pose: bench-brace-luff, hold: 1.4, ramp: 1.3, lead: head, anticipate: 0.05 }
+      - { pose: bench-brace, hold: 1.2, ramp: 1.5, lead: head }
+      - { pose: bench-brace-sea, hold: 1.2, ramp: 1.4, lead: head, anticipate: 0.05 }
+
+  # On the rail, upright and leaning out; their -port on the port rail. The
+  # game blends the one into the other by the wind.
+  yacht-rail:
+    loop: true
+    idle: true
+    sides: true
+    hang: { back: 1.0, front_02: 1.0 }
+    group: cruiser
+    keys:
+      - { pose: yacht-rail-sit, hold: 1.6, ramp: 1.5, lead: head }
+      - { pose: yacht-rail-sit-luff, hold: 1.4, ramp: 1.3, lead: head, anticipate: 0.05 }
+      - { pose: yacht-rail-sit, hold: 1.2, ramp: 1.5, lead: head }
+      - { pose: yacht-rail-sit-sea, hold: 1.2, ramp: 1.4, lead: head, anticipate: 0.05 }
+
+  yacht-rail-out:
+    loop: true
+    idle: true
+    sides: true
+    hang: { back: 1.0, front_02: 1.0 }
+    group: cruiser
+    keys:
+      - { pose: yacht-rail-lean, hold: 1.6, ramp: 1.5, lead: head }
+      - { pose: yacht-rail-lean-luff, hold: 1.4, ramp: 1.3, lead: head, anticipate: 0.05 }
+      - { pose: yacht-rail-lean, hold: 1.2, ramp: 1.5, lead: head }
+      - { pose: yacht-rail-lean-sea, hold: 1.2, ramp: 1.4, lead: head, anticipate: 0.05 }
+
+# From Quaternius' library (CC0), retargeted onto the yacht:
+#  - sat on her starboard bench facing inboard, the feet on the sole before
+#    it, the buttocks on its top: still, shifting, nodding off, talking (the
+#    ship's company's idles, sat on her bench). Placed from the bench's
+#    front edge; on the port bench the same turned about her middle;
+#  - crossing her cockpit facing forward, stepping sideways at a crouch to
+#    the left and to the right (a foot that bears moving the other way at
+#    the walk's speed), set on her sole and placed from her centreline
+#    between the mainsheet's bridle and the table;
+#  - crossing her coachroof at a crouch, facing across her, set on its top
+#    and placed from her centreline (facing port; the game turns it to the
+#    way it goes).
+# The back is bent as far as keeps the head's joint under 0.7 m over the
+# deck; the knees and ankles taken near the ends of their ranges, as in any
+# deep crouch.
+retarget:
+  bench:
+    file: vendor/quaternius/Sitting_Idle_Loop.glb
+    loop: true
+    idle: true
+    deck: true
+    stage: yacht-bench
+    strain: [hand]
+    group: cruiser
+  bench-shift:
+    file: vendor/quaternius/Sitting_Idle02_Loop.glb
+    loop: true
+    idle: true
+    deck: true
+    stage: yacht-bench
+    strain: [hand]
+    group: cruiser
+  bench-nod:
+    file: vendor/quaternius/Sitting_Nodding_Loop.glb
+    loop: true
+    idle: true
+    deck: true
+    stage: yacht-bench
+    strain: [hand]
+    group: cruiser
+  bench-talk:
+    file: vendor/quaternius/Sitting_Talking_Loop.glb
+    loop: true
+    idle: true
+    deck: true
+    stage: yacht-bench
+    strain: [hand]
+    group: cruiser
+  cockpit-crouch-left:
+    file: vendor/quaternius/Crouch_Left_Loop.glb
+    loop: true
+    deck: true
+    way: left
+    speed: 0.5
+    head: 0.7
+    strain: [thigh, calf, foot, ball]
+    stage: yacht-sole
+    group: cruiser
+  cockpit-crouch-right:
+    file: vendor/quaternius/Crouch_Right_Loop.glb
+    loop: true
+    deck: true
+    way: right
+    speed: 0.5
+    head: 0.7
+    strain: [thigh, calf, foot, ball]
+    stage: yacht-sole
+    group: cruiser
+  roof-crouch-walk:
+    file: vendor/quaternius/Crouch_Fwd_Loop.glb
+    loop: true
+    deck: true
+    speed: 0.7
+    head: 0.7
+    strain: [thigh, calf, foot, ball]
+    stage: yacht-roof
+    group: cruiser

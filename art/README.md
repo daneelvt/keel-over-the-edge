@@ -128,6 +128,7 @@ go run ./tools/sailors -add helm-wheel,habit-wheel   # only these clips, on ever
 go run ./tools/sailors -add trapeze,trapeze-low      # and the harness with them
 go run ./tools/sailors -add rail,rail-out,crouch-enter,crouch-walk,crouch-exit
 go run ./tools/sailors -add cat-helm,cat-hike,hull,hull-wire,cat-trapeze,cat-trapeze-low,cat-righting,net-crouch-enter,net-crouch-left,net-crouch-right,net-crouch-exit,net-crawl-left,net-crawl-right
+go run ./tools/sailors -add yacht-wheel,yacht-wheel-seated,yacht-habit-wheel,bench,bench-shift,bench-nod,bench-talk,bench-braced,yacht-rail,yacht-rail-out,cockpit-crouch-left,cockpit-crouch-right,roof-crouch-walk
 ```
 
 It needs Blender 5.2 LTS installed; the first run installs the pinned MPFB
@@ -352,6 +353,49 @@ the hands nearer the body (a retarget's `pull`, `chartmaker-net-crawl-left`
 named `net-crawl-left`), clear of the man's hat's brim. There is no clip
 going down onto the hands and knees or up off them: the library's
 `Crawl_Enter` and `Crawl_Exit` did not pass the gates.
+
+A cruising yacht's people stand and sit at her windward wheel, sit on her
+cockpit's windward bench and on her windward rail under her lifelines, and
+cross her cockpit and her coachroof at a crouch. The sailors' stage imports
+her to starboard of the rest (`tables.yaml`'s `stage.cruiser`,
+`build/stage.py`'s `Yacht`) and reads her places from her model's nodes, on
+her starboard side: the stance aft of her starboard wheel (the `sailor` node
+moved out by the `wheel` node's `spread`), its hub and rim; the side deck's
+inner edge outboard of the wheel; the `bench` node's front edge, top and
+sole; the deck's edge at the `rail` node, and her two lifelines there
+between their stanchions (the `lifelines` node); the sole on her
+centreline forward of her table (the `table` node) and her coachroof's top
+on her centreline aft of its fore end (the `coachroof` node). Her hull,
+decks, benches, coachroof, sprayhood, table, binnacles, capstans,
+stanchions, pulpit, pushpit, mast and boom are solid to the gates, her
+ropes (the lifelines above all, her rigging, her sheets) too but to what
+holds them (the hands; on her rail, the forearms laid over the upper
+lifeline), and her wheels' wood but to the hands that hold it (a gate,
+"clear of the yacht"); sat on her, the cloth is laid on her decks and bench.
+Her clips are `<version>.cruiser.glb`, which only a kind whose catalog art
+names `cruiser` in `sailorClips` loads: `yacht-wheel` (the wheel's
+`helm-wheel` made at her wheel, a clip's `restage`, its hands on her rim at
+45° either side of its top) and `yacht-habit-wheel` (each look's habit at
+the wheel so made, a clip made `of` another), and `yacht-wheel-seated`
+(perched on the side deck's inner edge outboard of the wheel, facing in
+toward it, the legs down into the cockpit aft of it, the forward hand on the
+rim's upper outboard quarter, the other on its thigh, the forward foot
+braced on the sole), placed from the stance; `bench`, `bench-shift`,
+`bench-nod` and `bench-talk` (Quaternius' `Sitting_*`, sat on the bench
+facing inboard, a retarget's `stage: yacht-bench`) and `bench-braced`
+(leaning back against the bench's back, the forward foot braced further
+out), placed from the bench's front edge; `yacht-rail` and `yacht-rail-out`
+(sat on the deck's edge facing outboard, the legs over the side under the
+lower lifeline, the forearms laid over the upper, sitting up and leaning
+out), placed from the deck's edge; `cockpit-crouch-left` and
+`cockpit-crouch-right` (`Crouch_Left_Loop`, `Crouch_Right_Loop`, facing
+forward, stepping sideways), set on the sole and placed from where it is
+crossed; and `roof-crouch-walk` (`Crouch_Fwd_Loop` facing across her, to
+port), set on the coachroof's top and placed from where it is crossed,
+forward of the mast (aft of it her boom is lower over the roof than a
+crouching figure's hat). Those at the wheel, braced on the bench and on the
+rail have their `-port`; the bench's idles and the crossings are turned
+onto the port side. The machines have no `bench-talk`.
 
 Every build is judged before anyone looks at it: the gates
 (`review/metrics.py`: budgets, clean meshes and weights, nothing through

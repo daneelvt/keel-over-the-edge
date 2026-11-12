@@ -737,9 +737,9 @@
         "model": { "description": "The boat's model: a glTF binary with the nodes hull, mast, boom, sail, telltales, pennant, rudder, tiller, daggerboard and sailor, a jib on a boat with headsails, and a node for each of the boat's lights, named as the light, where its lantern is.", "$ref": "#/$defs/ArtPath" },
         "far": { "description": "The boat's far model, drawn for boats seen from afar among many: the model's nodes but telltales, pennant and lights, with few segments.", "$ref": "#/$defs/ArtPath" },
         "sailorClips": {
-          "description": "The files of clips beside each sailor look's clips (<version>.<name>.glb) its people aboard are drawn with, loaded only when someone is drawn aboard one of its kind: cat, a beach cat's (sat on her hull, sitting out, on the wire, crossing her net, righting her).",
+          "description": "The files of clips beside each sailor look's clips (<version>.<name>.glb) its people aboard are drawn with, loaded only when someone is drawn aboard one of its kind: cat, a beach cat's (sat on her hull, sitting out, on the wire, crossing her net, righting her); cruiser, a cruising yacht's (at her wheel, standing and sat by it, on her cockpit's bench, on her rail under her lifelines, crossing her cockpit and her coachroof).",
           "type": "array",
-          "items": { "type": "string", "enum": ["cat"] },
+          "items": { "type": "string", "enum": ["cat", "cruiser"] },
           "uniqueItems": true
         },
         "budget": {

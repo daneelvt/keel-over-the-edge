@@ -71,6 +71,11 @@ poses:
       - [head, x, 6]
 
 clips:
+  # The habit at a cruising yacht's wheel: the same, made at hers.
+  oldsalt-yacht-habit-wheel:
+    of: oldsalt-habit-wheel
+    restage: cruiser
+    group: cruiser
   oldsalt-habit:
     sides: true
     keys:

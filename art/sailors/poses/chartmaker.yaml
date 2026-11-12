@@ -80,6 +80,11 @@ poses:
       - [head, z, -10]
 
 clips:
+  # The habit at a cruising yacht's wheel: the same, made at hers.
+  chartmaker-yacht-habit-wheel:
+    of: chartmaker-habit-wheel
+    restage: cruiser
+    group: cruiser
   chartmaker-habit:
     sides: true
     keys:

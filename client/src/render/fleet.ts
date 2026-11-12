@@ -158,6 +158,7 @@ import { seating } from './sailors/restage';
 import { hullSolid } from './sailors/solid';
 import { type Trapeze, trapezeOf, wireNode } from './sailors/trapeze';
 import { wheelOf } from './sailors/wheel';
+import { namesYachtClips } from './sailors/yacht';
 import { kiteRig, kiteRipple, kiteShown } from './sailshape';
 import { Shadows } from './shadows';
 import { packYards, squareVertex } from './squarerig';
@@ -615,6 +616,8 @@ export class FleetView {
   #trapeze: Trapeze | null = null;
   /** Whether the kind's people are drawn with a beach cat's clips: their looks' are loaded, near. */
   readonly #catted: boolean;
+  /** Whether the kind's people are drawn with a cruising yacht's clips: their looks' are loaded, near. */
+  readonly #yachted: boolean;
   wires: WireLines | null = null;
   /** The boat being written's sailor's hook (the model's frame) and the side it hangs on, 0 if not. */
   readonly #hook = new Vector3();
@@ -625,6 +628,7 @@ export class FleetView {
     this.index = index;
     this.#shared = shared;
     this.#catted = namesCatClips(kind.art);
+    this.#yachted = namesYachtClips(kind.art);
     const { hull, foils } = kind.physics;
     this.root.name = `fleet ${kind.name}`;
     this.root.add(this.near.group, this.far.group);
@@ -1071,7 +1075,16 @@ export class FleetView {
       return;
     }
     const look = d.look;
-    shared.looks?.want(look, near, this.#trapeze !== null, false, false, false, this.#catted);
+    shared.looks?.want(
+      look,
+      near,
+      this.#trapeze !== null,
+      false,
+      false,
+      false,
+      this.#catted,
+      this.#yachted,
+    );
     const drawn = look.layer >= 0 ? look : shared.first;
     const ns = near ? this.nearSailors : null;
     const skinned = ns?.write(n, b, look, dt) === true;

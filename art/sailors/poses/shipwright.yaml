@@ -78,6 +78,11 @@ poses:
       - [head, z, -8]
 
 clips:
+  # The habit at a cruising yacht's wheel: the same, made at hers.
+  shipwright-yacht-habit-wheel:
+    of: shipwright-habit-wheel
+    restage: cruiser
+    group: cruiser
   shipwright-habit:
     sides: true
     keys:

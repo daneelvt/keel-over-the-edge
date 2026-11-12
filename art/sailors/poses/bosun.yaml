@@ -61,6 +61,11 @@ poses:
       - [head, z, -18]
 
 clips:
+  # The habit at a cruising yacht's wheel: the same, made at hers.
+  bosun-yacht-habit-wheel:
+    of: bosun-habit-wheel
+    restage: cruiser
+    group: cruiser
   bosun-habit:
     sides: true
     keys:
