@@ -287,6 +287,16 @@ test('the beach cat chosen from the fleet: she flies a hull on a reach, capsizes
     // A broad reach in a breeze, the sheet at its best; a gust and borne
     // away, the sheet held: her bows bury and her sailor goes over them.
     await wind(20);
+    // At rest on it in clean air, with the wind over starboard again
+    // (righted, she may have come up on the other tack), the autopilot on
+    // afresh there.
+    if ((await page.evaluate(() => globalThis.keel.boat().pilot.mode)) === 1) {
+      await page.keyboard.press('p');
+      await expect.poll(() => page.evaluate(() => globalThis.keel.boat().pilot.mode)).toBe(0);
+    }
+    await alone(page, 135);
+    await page.keyboard.press('p');
+    await expect.poll(() => page.evaluate(() => globalThis.keel.boat().pilot.mode)).toBe(1);
     await pilotTo(page, 135);
     await sheet('KeyW', 0.6);
     await page.waitForFunction(() => globalThis.keel.boat().out.speedOverGround > 4, null, {
