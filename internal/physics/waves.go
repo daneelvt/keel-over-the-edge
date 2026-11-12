@@ -160,11 +160,21 @@ func (b *Prepared) waveLoads(v *wave, l *loads) {
 
 // float integrates the heave and the pitch over dt: the hull on its
 // waterplane, sprung toward the effective surface and damped by how fast it
-// moves against it.
-func (b *Prepared) float(s *State, v *wave, dt float64) {
+// moves against it. On a boat whose rig pitches her (pitch.go), pitching
+// is the rig's moment bow down, against which her sailor's weight aft of
+// their place holds her bow up, and her spring weakens as her bows bury,
+// the sooner as flying, of the way, her windward hull is clear.
+func (b *Prepared) float(s *State, v *wave, dt, pitching, flying float64) {
 	lift := float64(b.heaveStiffness*(s.Heave-v.height)) + float64(b.heaveDamping*(s.HeaveRate-v.heightRate))
 	s.HeaveRate -= float64(float64(lift*b.invHeaveMass) * dt)
 	s.Heave += float64(s.HeaveRate * dt)
+	if b.rigPitch {
+		trim := b.pitchSpring(s.Pitch-v.ahead, flying) + float64(b.pitchDamping*(s.PitchRate-v.aheadRate))
+		trim += pitching - float64(b.sailorWeight*s.SailorAft)
+		s.PitchRate -= float64(float64(trim*b.invPitchInertia) * dt)
+		s.Pitch += float64(s.PitchRate * dt)
+		return
+	}
 	trim := float64(b.pitchStiffness*(s.Pitch-v.ahead)) + float64(b.pitchDamping*(s.PitchRate-v.aheadRate))
 	s.PitchRate -= float64(float64(trim*b.invPitchInertia) * dt)
 	s.Pitch += float64(s.PitchRate * dt)

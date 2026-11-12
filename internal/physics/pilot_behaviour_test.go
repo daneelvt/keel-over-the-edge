@@ -140,7 +140,9 @@ func TestPilotHoldsAnAngleThroughTheShifts(t *testing.T) {
 // spells at its last reef, its main reefed and its gennaker kept in, as a
 // sailor would; reefed, the skiff still capsizes once in ten minutes on a
 // beam reach in a stormy spell's gusts of 36 knots with its sheet fixed,
-// and is held there only in the unsettled spells, the next calmer.
+// and is held there only in the unsettled spells, the next calmer. A boat
+// of two hulls sails the stormy spells at her last reef too, and her beam
+// reach in the trade spells only.
 func holdsAnAngle(t *testing.T, p *WeatherPrepared, b, first *Prepared, short bool) {
 	type point struct{ angle, sheet float64 }
 	light := []point{{45, 0.02}, {90, 0.23}, {150, 0.75}}
@@ -164,6 +166,12 @@ func holdsAnAngle(t *testing.T, p *WeatherPrepared, b, first *Prepared, short bo
 			if b.square && pt.angle == 45 {
 				// A ship sails no closer than close-hauled, braced up sharp.
 				pt = point{b.closeHauled / deg, 0}
+			} else if b.twin && pt.angle == 90 && (c.regime == "stormy" || c.regime == "unsettled") {
+				// A catamaran on a beam reach with her sheet fixed flies
+				// her hull in every gust of an unsettled spell, and the
+				// strongest take her over, at her last reef too: she is
+				// held there in the trade spells, the next calmer.
+				continue
 			} else if b.kite {
 				if c.regime == "stormy" && pt.angle == 90 {
 					continue
@@ -172,7 +180,7 @@ func holdsAnAngle(t *testing.T, p *WeatherPrepared, b, first *Prepared, short bo
 				pt.sheet = clamp((boom-b.boomIn)/(b.boomOut-b.boomIn), 0, 1)
 			}
 			m := onPilot(t, b, weatherOf(p, s), pt.angle, pt.sheet, PilotWind)
-			if b.kite && c.regime == "stormy" {
+			if reefsInAStorm(b) && c.regime == "stormy" {
 				m.c.Reef, m.s.Reef = 2, 2
 			}
 			r := holdAngle(m, 600, pt.angle)
@@ -191,6 +199,12 @@ func holdsAnAngle(t *testing.T, p *WeatherPrepared, b, first *Prepared, short bo
 		}
 	}
 }
+
+// reefsInAStorm reports whether the fixed-sheet tests sail b in a stormy
+// spell at its last reef, as a sailor would: a boat with a downwind sail,
+// kept in there, or one of two hulls, which carries her whole rig to the
+// gusts with nothing to spill them but the sheet.
+func reefsInAStorm(b *Prepared) bool { return b.kite || b.twin }
 
 // turn orders m's autopilot, holding angle degrees, to tack or gybe onto
 // the mirrored angle, and sails 30 s. It returns how long the boat took to
@@ -273,6 +287,12 @@ func TestPilotTacksAndGybes(t *testing.T) {
 			// she heels further in a tack: she keeps 59% of her speed.
 			cases[0].least, cases[1].least = 0.55, 0.55
 		}
+		if boat.b.twin {
+			// A catamaran's two long hulls turn slowly through the wind,
+			// her sailor crossing the net from wire to wire: she keeps 56%
+			// of her speed.
+			cases[0].least, cases[1].least = 0.5, 0.5
+		}
 		if boat.b.square {
 			close := boat.b.closeHauled / deg
 			cases = []turnCase{
@@ -296,7 +316,7 @@ func TestPilotTacksAndGybes(t *testing.T) {
 				sheet = clamp((boom-boat.b.boomIn)/(boat.b.boomOut-boat.b.boomIn), 0, 1)
 			}
 			m := onPilot(t, boat.b, weatherOf(p, s), c.angle, sheet, PilotWind)
-			if boat.b.kite && c.regime == "stormy" {
+			if reefsInAStorm(boat.b) && c.regime == "stormy" {
 				m.c.Reef, m.s.Reef = 2, 2
 			}
 			m.run(settle, nil)

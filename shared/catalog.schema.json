@@ -952,7 +952,7 @@
       "description": "The boat's physics, in SI units with angles in degrees. Every value is required.",
       "type": "object",
       "additionalProperties": false,
-      "required": ["hull", "rig", "headsails", "square", "downwind", "foils", "sailor", "rates", "autopilot"],
+      "required": ["hull", "rig", "headsails", "square", "downwind", "foils", "sailor", "rates", "autopilot", "hulls", "pitch"],
       "properties": {
         "hull": { "$ref": "#/$defs/PhysicsHull" },
         "rig": { "$ref": "#/$defs/PhysicsRig" },
@@ -962,7 +962,9 @@
         "foils": { "$ref": "#/$defs/PhysicsFoils" },
         "sailor": { "$ref": "#/$defs/PhysicsSailor" },
         "rates": { "$ref": "#/$defs/PhysicsRates" },
-        "autopilot": { "$ref": "#/$defs/PhysicsAutopilot" }
+        "autopilot": { "$ref": "#/$defs/PhysicsAutopilot" },
+        "hulls": { "$ref": "#/$defs/PhysicsHulls" },
+        "pitch": { "$ref": "#/$defs/PhysicsPitch" }
       }
     },
     "PhysicsHull": {
@@ -970,7 +972,7 @@
       "description": "The hull: its mass, resistance, inertia and stability.",
       "type": "object",
       "additionalProperties": false,
-      "required": ["displacement", "waterlineLength", "hullDraught", "centreOfGravity", "dragAreaStep", "dragArea", "crossFlowDrag", "addedMassSurge", "addedMassSway", "munk", "yawInertia", "rollInertia", "rollDamping", "yawDamping", "rightingLever", "waterlineBeam", "waterplaneArea", "waterplanePitch", "addedMassHeave", "pitchInertia", "heaveDamping", "pitchDamping", "waveForce", "waveYaw", "outline", "transom", "stem"],
+      "required": ["displacement", "waterlineLength", "hullDraught", "centreOfGravity", "dragAreaStep", "dragArea", "crossFlowDrag", "addedMassSurge", "addedMassSway", "munk", "yawInertia", "rollInertia", "rollDamping", "yawDamping", "rightingLever", "rightingLeverStep", "waterlineBeam", "waterplaneArea", "waterplanePitch", "addedMassHeave", "pitchInertia", "heaveDamping", "pitchDamping", "waveForce", "waveYaw", "outline", "transom", "stem"],
       "properties": {
         "displacement": { "description": "Boat, rig and sailor, in kg.", "type": "number", "exclusiveMinimum": 0, "maximum": 1000000 },
         "waterlineLength": { "description": "Length on the waterline, in m.", "type": "number", "exclusiveMinimum": 0, "maximum": 100 },
@@ -986,7 +988,8 @@
         "rollInertia": { "description": "Moment of inertia in roll, added inertia included, in kg·m².", "type": "number", "exclusiveMinimum": 0, "maximum": 100000000 },
         "rollDamping": { "description": "The hull's own roll damping, in N·m·s/rad. The foils and sails damp through their flow.", "type": "number", "minimum": 0, "maximum": 10000000 },
         "yawDamping": { "description": "The hull's resistance to turning, from the water flowing across it as it turns, in N·m per (rad/s)²: its moment against the rate of turn times the rate's size. 0 where the foils alone damp the turning.", "type": "number", "minimum": 0, "maximum": 1000000000 },
-        "rightingLever": { "description": "Righting lever (GZ) with the sailor on the centreline, every 10° of heel from 0° to 180°, in m.", "type": "array", "items": { "type": "number", "minimum": -10, "maximum": 10 }, "minItems": 19, "maxItems": 19 },
+        "rightingLever": { "description": "Righting lever (GZ) with the sailor on the centreline, every rightingLeverStep of heel from 0°, in m. Beyond the last, the last.", "type": "array", "items": { "type": "number", "minimum": -10, "maximum": 10 }, "minItems": 19, "maxItems": 19 },
+        "rightingLeverStep": { "description": "Heel between entries of rightingLever, in degrees: 10 reaches 180°, 5 reaches 90° (a catamaran's lever, which peaks within a few degrees of upright, held beyond). 180° over it is a whole number.", "type": "number", "minimum": 1, "maximum": 10 },
         "waterlineBeam": { "description": "Beam on the waterline, in m.", "type": "number", "exclusiveMinimum": 0, "maximum": 50 },
         "waterplaneArea": { "description": "Area of the waterplane, in m²: the heave stiffness is the water's weight per metre of it.", "type": "number", "exclusiveMinimum": 0, "maximum": 5000 },
         "waterplanePitch": { "description": "The waterplane's second moment of area about its transverse axis, in m⁴: the pitch stiffness.", "type": "number", "exclusiveMinimum": 0, "maximum": 10000000 },
@@ -996,7 +999,7 @@
         "pitchDamping": { "description": "Damping of the pitch, as a fraction of critical.", "type": "number", "minimum": 0, "maximum": 2 },
         "waveForce": { "description": "The share of the Froude–Krylov force of a wave's slope that pushes the hull along and across.", "type": "number", "minimum": 0, "maximum": 1.5 },
         "waveYaw": { "description": "The share of that force's moment along the hull, which yaws the boat with the water of an oblique wave.", "type": "number", "minimum": 0, "maximum": 1.5 },
-        "outline": { "description": "The hull's half-beam at the sheer at 11 stations equally spaced from the transom to the stem, in m: its plan, where hulls touch. Convex, with the stem a point.", "type": "array", "items": { "type": "number", "minimum": 0, "maximum": 15 }, "minItems": 11, "maxItems": 11 },
+        "outline": { "description": "The hull's half-beam at the sheer at 11 stations equally spaced from the transom to the stem, in m: its plan, where hulls touch. Convex, with the stem a point; a boat of two hulls (hulls.hullSpacing) has a flat bow, the last the bows' half-spread.", "type": "array", "items": { "type": "number", "minimum": 0, "maximum": 15 }, "minItems": 11, "maxItems": 11 },
         "transom": { "description": "The transom's distance aft of the centre of gravity, in m.", "type": "number", "exclusiveMinimum": 0, "maximum": 100 },
         "stem": { "description": "The stem's distance forward of the centre of gravity, in m.", "type": "number", "exclusiveMinimum": 0, "maximum": 100 }
       }
@@ -1226,6 +1229,35 @@
         "steerage": { "description": "Slower than this through the water, either way, in m/s, the rudder has no steerage: the report says so, and a turn may stall.", "type": "number", "exclusiveMinimum": 0, "maximum": 2 },
         "stallTime": { "description": "A tack or gybe with no steerage that gains less than stallGain on its course in this long, in s, has stalled: the autopilot gives it up and holds the angle it turned from.", "type": "number", "exclusiveMinimum": 0, "maximum": 60 },
         "stallGain": { "description": "Too little gain for a stalling turn, in degrees.", "type": "number", "exclusiveMinimum": 0, "maximum": 45 }
+      }
+    },
+    "PhysicsHulls": {
+      "title": "PhysicsHulls",
+      "description": "A boat of two hulls, a catamaran: one body whose stability, foils and drag take its hulls' values. A monohull has a spacing of 0, one rudder and one board, and a flying drag of 1.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["hullSpacing", "liftHeel", "flyingDrag", "rudderCount", "boardCount"],
+      "properties": {
+        "hullSpacing": { "description": "Between the hulls' centrelines, in m: 0 for one hull. The drawing, the sea, the wake and the contacts read it: the boat heels about its lee hull.", "type": "number", "minimum": 0, "maximum": 30 },
+        "liftHeel": { "description": "The heel at which the windward hull leaves the water, in degrees: it is clear 5° later, its rudder and lateral plane with it.", "type": "number", "minimum": 0, "maximum": 45 },
+        "flyingDrag": { "description": "The drag area's share with the windward hull clear: one hull at twice the load has less wetted area than two.", "type": "number", "exclusiveMinimum": 0, "maximum": 1 },
+        "rudderCount": { "description": "Rudders, one on each hull, each the one rudder's lift and drag: 1, or 2 on a boat of two hulls.", "type": "number", "minimum": 1, "maximum": 2 },
+        "boardCount": { "description": "Boards, or hulls' lateral planes, each the one board's lift and drag: 1, or 2 on a boat of two hulls.", "type": "number", "minimum": 1, "maximum": 2 }
+      }
+    },
+    "PhysicsPitch": {
+      "title": "PhysicsPitch",
+      "description": "Pitch from the rig: the sails' drive, high above the centre of gravity, and the hull's resistance below it pitch the bow down, and the sailor steps aft to hold it up. Past bowBuryPitch the bows bury: their spring weakens and their drag grows; past pitchpoleAngle the sailor is thrown off over the bow. None where rigPitch is 0, the rest unread: the pitch is the waves' alone.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["rigPitch", "bowBuryPitch", "bowBuryRestoring", "bowBuryDrag", "pitchpoleAngle", "aftReach"],
+      "properties": {
+        "rigPitch": { "description": "1 where the rig pitches the hull, else 0.", "type": "number", "minimum": 0, "maximum": 1 },
+        "bowBuryPitch": { "description": "The trim, bow down off the water's surface, at which the lee bow's deck meets the water, in degrees.", "type": "number", "minimum": 0, "maximum": 45 },
+        "bowBuryRestoring": { "description": "The share of the pitch spring's slope left past bowBuryPitch.", "type": "number", "minimum": 0, "maximum": 1 },
+        "bowBuryDrag": { "description": "The hull's drag area grows by this share of itself for each degree past bowBuryPitch.", "type": "number", "minimum": 0, "maximum": 10 },
+        "pitchpoleAngle": { "description": "Past this trim, bow down, the sailor is thrown off over the bow, in degrees.", "type": "number", "minimum": 0, "maximum": 90 },
+        "aftReach": { "description": "How far aft of the helm's place the sailor steps to hold the bow up, in m.", "type": "number", "minimum": 0, "maximum": 10 }
       }
     },
     "World": {

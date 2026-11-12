@@ -200,6 +200,7 @@ func (w *World) stepSlots(slots []int32, o *physics.Out, src *physics.Sources) {
 			// state and its sail as it went over; nor is a boat that
 			// stays while its owner's free camera roams.
 			f.Sail[s] = w.cur.Sail[s]
+			f.Trim[s] = w.cur.Trim[s]
 			f.Instruments[s] = w.cur.Instruments[s]
 			w.settle(f, s)
 			continue
@@ -215,6 +216,7 @@ func (w *World) stepSlots(slots []int32, o *physics.Out, src *physics.Sources) {
 		}
 		physics.Step(st, &c, &e, w.sea.at, w.ground, kind, o)
 		f.Sail[s] = physics.SailByte(o)
+		f.Trim[s] = o.Trim
 		if f.Machine[s] {
 			// What a phone reads from its own prediction, a machine
 			// boat's agent is told: the step worked it out.

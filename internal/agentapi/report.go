@@ -91,10 +91,15 @@ type boatFacts struct {
 	// Gennaker is a boat's downwind sail while it is not in its bag, as its
 	// crew works it: "gennaker going up", "gennaker set" or "gennaker
 	// coming in"; "" in its bag, or on a boat without one.
-	Gennaker string  `json:"gennaker,omitempty"`
-	State    string  `json:"state"`
-	Heading  int     `json:"heading"`
-	Speed    float64 `json:"speedKnots"`
+	Gennaker string `json:"gennaker,omitempty"`
+	// Hull is what a boat of two hulls, or one whose rig pitches her, is
+	// doing while her sailor sails: "hull flying" with her windward hull
+	// clear of the water, "bows burying" with her bows pressed under; ""
+	// otherwise.
+	Hull    string  `json:"hull,omitempty"`
+	State   string  `json:"state"`
+	Heading int     `json:"heading"`
+	Speed   float64 `json:"speedKnots"`
 	// Astern says the boat makes sternway, NoSteerage that the water
 	// passes its rudder too slowly to steer by; Depth is the water under
 	// it while that is shoal, m.
@@ -186,6 +191,9 @@ func (h *helm) reportFor(s *Sea, f *bus.Frame, sl int32, detail string, since in
 	}
 	if kind.Physics.Downwind.DownwindArea > 0 {
 		b.Gennaker = gennakerWords(st)
+	}
+	if st.SailorMode == physics.Sailing {
+		b.Hull = hullWords(kind, st, f.Trim[sl])
 	}
 	if d := float64(in.Depth); d < shoalUnder {
 		d = math.Floor(max(d, 0)*10+0.5) / 10
@@ -902,6 +910,9 @@ func (r *report) text() string {
 			if bt.Gennaker != "" {
 				reef += bt.Gennaker + " · "
 			}
+			if bt.Hull != "" {
+				reef += bt.Hull + " · "
+			}
 			fmt.Fprintf(&b, "Boat: %s%s · heading %s · %s · %s · %s", reef, bt.State, three(bt.Heading), speed, heel, bt.Tack)
 		} else {
 			kind := bt.Kind + ", " + bt.Reef
@@ -910,6 +921,9 @@ func (r *report) text() string {
 			}
 			if bt.Gennaker != "" {
 				kind += ", " + bt.Gennaker
+			}
+			if bt.Hull != "" {
+				kind += ", " + bt.Hull
 			}
 			fmt.Fprintf(&b, "Boat: %s · %s · heading %s · %s · %s · %s\n", kind, bt.State, three(bt.Heading), speed, heel, bt.Tack)
 		}
@@ -1069,4 +1083,29 @@ const woodedFrom = 8.0
 // 311".
 func boatSeen(s *Sea, f *bus.Frame, slot int32) string {
 	return sailorlooks.Named(s.boat(f.Kind[slot]).Name, f.BoatName[slot], sailorlooks.BoatOf(f.BoatLook[slot]).Number)
+}
+
+// hullWords is what a boat of two hulls, or one whose rig pitches her, is
+// doing, from her state and her trim (physics.Out's Trim): "bows burying"
+// with her bows pressed past where their deck meets the water, "hull
+// flying" with her windward hull more than half clear of it, as the
+// physics has them; "" for any other boat, or neither.
+func hullWords(kind *catalog.Boat, st *physics.State, trim float64) string {
+	p := &kind.Physics
+	if p.Pitch.RigPitch != 0 && -trim > float64(p.Pitch.BowBuryPitch)*math.Pi/180 {
+		return "bows burying"
+	}
+	if p.Hulls.HullSpacing > 0 && math.Abs(st.Heel) > (float64(p.Hulls.LiftHeel)+2.5)*math.Pi/180 {
+		return "hull flying"
+	}
+	return ""
+}
+
+// pitchpoled says whether a boat whose sailor has just gone into the water
+// was pitchpoled, not capsized: her rig pitches her, and her sailor went
+// over the bows with her heeled less than she throws them off at.
+func pitchpoled(kind *catalog.Boat, st *physics.State) bool {
+	p := &kind.Physics
+	return p.Pitch.RigPitch != 0 && st.SailorMode == physics.InWater &&
+		math.Abs(st.Heel) < float64(p.Sailor.FallOutHeel)*math.Pi/180
 }

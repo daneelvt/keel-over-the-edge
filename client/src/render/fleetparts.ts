@@ -182,6 +182,8 @@ export interface BoatParts {
   /** The gooseneck, the rudder's stock and the sail's node, in the model's frame. */
   gooseneck: Vector3;
   stock: Vector3;
+  /** A boat of two hulls' rudders' stocks, out from the centreline either side; 0 for one rudder. */
+  rudderSpread: number;
   sailAt: Vector3;
   /** The seat's station along the boat, metres aft. */
   seatZ: number;
@@ -299,6 +301,7 @@ export function boatParts(scene: Object3D, path: string): BoatParts {
     objects: new Map(),
     gooseneck: new Vector3(),
     stock: new Vector3(),
+    rudderSpread: 0,
     sailAt: new Vector3(),
     seatZ: 0,
     gunwale: new Vector3(0.7, 0.3, 0),
@@ -331,6 +334,9 @@ export function boatParts(scene: Object3D, path: string): BoatParts {
         break;
       case 'rudder':
         o.getWorldPosition(parts.stock);
+        break;
+      case 'rudder-starboard':
+        parts.rudderSpread = o.getWorldPosition(new Vector3()).x;
         break;
       case 'sailor':
         parts.seatZ = o.position.z;
@@ -405,7 +411,12 @@ export function boatParts(scene: Object3D, path: string): BoatParts {
       sail = { geometry: keep(o.geometry.clone(), ['position', 'normal', 'uv', 'uv1']), material };
       return;
     }
-    const joint = within(o, JOINTS);
+    let joint = within(o, JOINTS);
+    if (joint === 'tiller' && scene.getObjectByName('rudder-starboard') !== undefined) {
+      // A boat of two hulls' crossbar and extension: carried across by the
+      // rudders' arms, drawn still far off.
+      joint = 'hull';
+    }
     if ((joint === null && !everything) || within(o, UNDRAWN_NODES) !== null) {
       return;
     }
@@ -658,7 +669,9 @@ export function solidNode(
     const p = positionGeometry;
     const n = normalGeometry;
     const pivotBoom = vec3(g.x, g.y, g.z);
-    const pivotRudder = vec3(k.x, k.y, k.z);
+    // A boat of two hulls' rudders each turn on their own hull's stock.
+    const spread = parts.rudderSpread;
+    const pivotRudder = spread > 0 ? vec3(p.x.sign().mul(spread), k.y, k.z) : vec3(k.x, k.y, k.z);
     const boomed = rotY(p.sub(pivotBoom), i.rig.x).add(pivotBoom);
     const ruddered = rotY(p.sub(pivotRudder), i.rig.y).add(pivotRudder);
     const isBoom = joint.greaterThan(JOINT.boom - 0.5).and(joint.lessThan(JOINT.boom + 0.5));

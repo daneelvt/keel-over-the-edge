@@ -42,6 +42,13 @@ built files are committed; the catalog's `art.model` names them, and
   a fractional rig with swept spreaders, deadeyes and trapeze wires, a
   square-headed, fully battened main, a self-tacking jib on its horse, a
   gennaker on a bowsprit, a centreboard and a kick-up rudder.
+- `boats/beach-cat/build.ts`: the beach cat, two narrow rockered hulls in
+  carvel planking with laid decks, ash beams lashed to oak pylons and a net
+  of tarred hemp between them, a spruce mast of teardrop section on a
+  bronze ball, shrouds on deadeyes and a bridled forestay, two trapeze
+  wires a side, a fully battened square-headed main and a jib, the hulls'
+  keels, and two kick-up rudders whose arms the crossbar joins. Its hull's
+  volume is one hull's, measured about its own centreline, and its offset.
 - `town/lib/kit.ts` and `town/<biome>/build.ts`: each biome's kit of town
   buildings and props, `town/<biome>.glb`.
 - `icon/icon.ts` and `icon/build.ts`: the game's icon, the boat on sky and

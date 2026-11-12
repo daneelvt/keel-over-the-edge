@@ -190,8 +190,10 @@ names are not in the catalog: they are the generator's
 does the top-level kinds.
 
 A boat's `physics` object holds every number its physics needs, in groups
-(`hull`, `rig`, `foils`, `sailor`, `rates`), in SI units with angles in
-degrees. Every value is required, with its unit and range in the schema. The
+(`hull`, `rig`, `headsails`, `square`, `downwind`, `foils`, `sailor`,
+`rates`, `autopilot`, `hulls`, `pitch`), in SI units with angles in
+degrees; a group a boat has none of (a monohull's `hulls`, a rig that does
+not pitch her) holds the values that make it nothing, by a YAML anchor. Every value is required, with its unit and range in the schema. The
 schema's fields must match the physics package's `Params` field for field;
 the tool checks that and generates `catalog.PhysicsParams` for the server and
 `writeParams` (`client/src/predict/params.gen.ts`) for the client, so the
@@ -440,6 +442,40 @@ damp their turning. The tall ship's keel is one foil at one place, which
 gives her almost none, and without it a tack's turn carried her on round
 with no way to stop it.
 
+**Two hulls.** A catamaran is one rigid body with one heel, whose values
+are her two hulls' (the catalog's `hulls` group; a monohull's spacing is 0,
+her counts 1 and her flying drag 1, and she steps exactly as she did before
+the group was added). `hullSpacing` is between the hulls' centrelines.
+`rudderCount` and `boardCount` are 2: a rudder and a lateral plane on each
+hull, each the one foil's lift and drag. Her windward hull leaves the water
+from `liftHeel` and is clear 5° later: its rudder and lateral plane go with
+it, the count falling from 2 to 1, and the drag area falls to `flyingDrag`
+of itself. `Out.HullFlying` is 1 while it is more than half clear. Her
+righting lever, which peaks within a few degrees of upright as the weight
+goes onto the lee hull, is read at a finer step, `rightingLeverStep` (10°
+for every monohull, from 0° to 180°; 5° for the beach cat, from 0° to 90°,
+held beyond, where her mast and sails float). Her hulls' lateral planes
+are a fixed keel's (`fixed` 1), the asymmetric hulls' deep run below the
+canoe body. The outline the contacts use ends in a flat bow, its last
+value the bows' half-spread, a corner each side (`outline.go`). Nothing in
+the physics reads a kind's name: the cruising catamaran takes the same
+values.
+
+**Pitch from the rig.** On a boat whose rig pitches her (the catalog's
+`pitch` group, `rigPitch` 1; every other boat's 0, its pitch the waves'
+alone) the sails' drive, from their centre of effort above the centre of
+gravity, and the hull's resistance, below it, pitch her bow down against
+her waterplane's spring to the water's surface (`pitch.go`). Her sailor
+steps aft as the hike moves them across, toward the place whose weight
+balances that moment, up to `aftReach` (`State.SailorAft`). Past
+`bowBuryPitch` off the surface (sooner with the windward hull clear, as the
+lee hull settles) her bows bury: the spring's slope falls to
+`bowBuryRestoring` of itself and the drag area grows by `bowBuryDrag` of
+itself a degree past it (`Out.BowsBurying`). Past `pitchpoleAngle` the
+sailor is thrown off over the bows, into the water as in a capsize, and
+swims back. `Out.Trim` is the pitch off the effective wave; it goes on the
+wire for others to add to the pitch they float her at.
+
 ### The Jolly boat's numbers
 
 The Jolly boat is an ILCA 7 (formerly the Laser, full rig) with an 80 kg,
@@ -576,6 +612,67 @@ not checked: the course sailed by her one sailor; her speeds in 8 m/s of
 wind beside the 470's measured ones; where her gennaker pays in each wind;
 her best downwind angle. Weather helm is light, as the Jolly boat's.
 
+### The beach cat's numbers
+
+The beach cat is a Hobie 16, the beach catamaran of 1969: two asymmetric
+hulls 2 m apart with no boards, two beams and a trampoline, a fully
+battened main on a rotating mast, a jib on a bridled forestay, two kick-up
+rudders on a crossbar and two trapezes a side, sailed by one 80 kg sailor
+who helms from the windward hull and from the wire. No VPP or tank test of
+a beach catamaran is published. Each value in `shared/catalog/boats.yaml`
+says where it comes from:
+
+- **Published:** her length, 5.04 m, and beam, 2.41 m; her sailing
+  weight, 145 kg (Hobie; SCHRS weighs 145.15 kg), to which the game adds
+  its sailor's 80 kg; her main's and jib's areas, 13.77 and 5.12 m²; her
+  waterline, 4.72 m, and her main's luff, 7.375 m (SCHRS); her hulls 2 m
+  apart (Hobie Cat Europe).
+- **Fitted:** the main and jib as the keelboat's, held to ORC's by
+  `tools/polar -sail`.
+- **Estimates:** the hulls' resistance (ITTC 1957's friction on both
+  hulls' wetted area and a slender hull's small wave-making hump near a
+  Froude number of 0.45), her righting lever (from two hulls 2 m apart,
+  rising to its greatest as the windward hull lifts and falling to nothing
+  near 58°), the hulls' lateral planes and their carry-over, the rudders,
+  the flying drag (0.85), the sailor's reach on the wire, 2.16 m, and to
+  leeward, 1.0 m, her fall-out heel (75°: she is past her vanishing angle
+  as the sailor comes off the wire), the righting reach on the line, her
+  reefs (a licence: two take her to the Easy rig's 10.50 and 3.70 m²), and
+  her pitch from the rig (the bows bury at 5° off the surface, the
+  pitchpole at 25°, her sailor stepping 0.8 m aft).
+
+She is checked as raced, as the skiff is (`reference.json`): her crew of
+two, 130 kg on the wire 2.16 m out, round the course against the Jolly
+boat's time, held at most to the yardstick, the Hobie 16's SCHRS rating,
+1.227, times the RYA's 678 (the RYA's 2026 list rates a catamaran it does
+not list so: PN 832, against the ILCA 7's 1103, 0.754), and 8%; at most
+the Hobie Hotline's polar at 10 knots (60°, 90°, 120° and 135°), which its
+author called optimistic; her best upwind angle 45° ±5° at 10 and 15
+knots, Hobie's own words. SCHRS's formula is the property of SCHRS: only
+its published ratings are used. Sailed alone, as players sail her, she
+makes at least 12 knots on a beam reach at her best in some wind from 10
+to 16 knots, at any reef (`atLeast`). Printed beside them, not checked:
+the course sailed alone, against SCHRS's rating worked for one sailor
+(PN 804, unpublished) and against the Easy rig's (PN 904) at each reef;
+the wind in which her windward hull clears, close-hauled and on a beam
+reach; her best downwind angle in each wind; and the wind and angle in
+which she first pitchpoles with the sheet held where it sails her fastest
+in 16 knots.
+
+Her behaviour tests (`beachcat_test.go`): close-hauled with the sheet
+hauled in, the windward hull stays down in 6 knots and is clear in 20; on
+a beam reach in 14 knots she is fastest with it just clear, over 12 knots;
+luffed in a 24-knot gust hauled in she capsizes onto her side, and let fly
+she comes down; on her side she stays there, her mast floating, until her
+sailor rights her from the lower hull; she tacks from full speed in 12
+knots; borne away in a 30-knot gust from 20 knots on a broad reach with
+the sheet held she pitchpoles, and let fly, at two reefs or borne away to
+a run she does not, nor in a 12-knot breeze's gusts nor close-hauled; her
+sailor stands further aft as the wind rises. The pilot's fixed-sheet tests
+sail her stormy spells at her last reef, and her beam reach in the trade
+spells only: with her sheet fixed, the gusts of an unsettled spell take
+her over there.
+
 ### `tools/polar`
 
 ```sh
@@ -632,7 +729,14 @@ sloop's, the trim that drives her best near the wind is not ORC's.
 
 A reference may name a `crew` to sail its points with in place of the
 catalog's sailor, and a `course` point the time round a course of a beat,
-a beam reach, a broad reach and a run over another boat's (`against`).
+a beam reach, a broad reach and a run over another boat's (`against`). A
+point is held `atMost` or `atLeast` its value and tolerance, or within
+them; `alone` sails it with the catalog's sailor in place of the crew;
+`winds` makes it the boat's best in any of them at any reef; `reef` sails
+a course reefed; `report` prints it beside its value and never fails. For
+a boat of two hulls or a rig that pitches her `-check` also prints the
+wind in which her windward hull clears, her best downwind angle and where
+she first pitchpoles.
 For a boat with a downwind sail `-check` also prints, without failing, the
 course sailed by its own sailor, where its downwind sail pays in each wind
 and its best downwind angle.
@@ -716,6 +820,56 @@ golden file, and copy the catalog's new values into that boat's
 `scenarios.json` `params` (a test fails until they match). Rewrite the
 handbook's tables (`-handbook`), and set the start sheet from `-start`. Note each change and its reason in
 `reference.json`'s notes.
+
+### Adding a boat
+
+A kind of boat is data: nothing reads its name or id. Adding one touches:
+
+1. `shared/catalog/boats.yaml`: its entry, appended (the kinds before it
+   keep their numbers), every value with its source; its stations, its
+   `fleet`, its `art`. A monohull takes the `hulls` and `pitch` groups'
+   anchors (`*oneHull`, `*noPitch`). Then `go run ./tools/catalog`, and
+   `go run ./tools/catalog -check` by hand (the lint skips it), and
+   `go run ./tools/physics` if a record changed.
+2. `internal/physics/testdata/scenarios.json`: every boat's `params`, by
+   id in the catalog's order, as the catalog has them, and the boat's own
+   scenarios. Before the golden file is rewritten, compare every other
+   boat's steps with the old code's, field by field: they must not change.
+   Then `go test ./internal/physics -run 'Golden|EncounterFile' -update`,
+   and check it with `GOARCH=amd64`.
+3. `internal/physics/testdata/reference.json`: its references; then
+   `tools/polar` `-check`, `-sail`, `-manoeuvres` and `-start` (its start
+   sheet), and `-handbook` (`internal/agentapi/handbook/trim.md`; the trim
+   page's token limit in `internal/agentapi/tools_test.go`).
+4. Its behaviour tests, and the pilot's (`pilot_behaviour_test.go`, which
+   says by data what each boat is held to).
+5. Its model, `art/boats/<id>/build.ts`, in `client/package.json`'s `art`
+   and `art/README.md`, and `tools/catalog/catalog_test.go`'s art fixture;
+   held by `model.test.ts`, `crew.test.ts` (its stations on its deck),
+   `hulls.test.ts` (its volume in the sea) and `runtime.test.ts` (its
+   sailor clear of its solid).
+6. The fleet: a migration giving every human account one
+   (`internal/store/migrations/`, `SUMS` by
+   `go test ./internal/store -run AppendOnly -args -update`), and
+   `internal/store/fleet_test.go`'s counts.
+7. A catalog change changes the catalog's version, which the edge's
+   recorded traces carry: `go test -short -run
+   'TestTraces|TestFleetTraces|TestOverTheLipOnline' ./internal/edge/edgetest/
+   -update`. A new state field also changes `sim.RigSize`,
+   `shared/protocol/snapshot.txt`, the snapshot's layout,
+   `sim.SnapshotVersion`, the replay's format and the client's
+   `snapshot.ts`; then `go run ./tools/protocol`, the replay fixture
+   (`go test ./internal/sim -run Fixture -update`) and the sandbox's
+   recording (`UPDATE_RECORDING=1 npx vitest run src/sandbox/sandbox.test.ts`).
+8. The browser's specs: the mixed fleet's budgets (`fleet.spec.ts`), the
+   looks (`boatlook.spec.ts`), the layout's heel hold (`layout.spec.ts`).
+9. The machine sailors' aboard page, and the report's words if the boat
+   does something new.
+10. The chooser's picture (`client/src/account/boats.tsx`) if its form is
+    new.
+11. Its numbers here.
+
+The sandbox sails it: `?sandbox&boat=<id>`.
 
 ### Where the model and the data differ
 
@@ -8178,6 +8332,7 @@ shadow's), some 11,500 triangles.
 # https://localhost:5173/?sandbox&boat=keelboat&dev    with the panel, to change the boat
 # https://localhost:5173/?sandbox&boat=keelboat&sky=midnight   her tricolour lit at the masthead
 # https://localhost:5173/?sandbox&boat=skiff           the skiff: bear away past 105° and her crew sets the gennaker
+# https://localhost:5173/?sandbox&boat=beach-cat       the beach cat: her windward hull flies in a breeze; bear away in a gust and her bows bury
 ```
 
 ### The developer panel
@@ -8269,7 +8424,15 @@ The script also measures the hull's volume from its mesh, eight stations
 from the transom to where the stem leaves the water, each the half-beam at
 the waterline and the depth of the bottom, and writes it into the model as
 the `hull` node's `extras`: the sea is not drawn inside it
-([Waves](#waves)).
+([Waves](#waves)). A boat of two hulls' volume is one hull's, measured about
+its own centreline, with its `offset`, half the hulls' spacing: the sea is
+kept out of each hull and drawn between them. Her pose is drawn heeled
+about her lee hull (`client/src/game/hullpose.ts`: her heave lifted by half
+the spacing times the sine of her heel, for the own boat and every boat of
+the fleet), and each hull makes its own wake, foam track and bow spray,
+none while it is lifted clear. Each rudder (`rudder-starboard`,
+`rudder-port`) turns on its own stock, the crossbar (`tiller`) carried
+across by their arms.
 
 Commit the rebuilt `.glb`. `npm test` checks each boat's model against the
 catalog: its hull's volume against its waterline's length, beam and draught; its named parts sit where the physics puts them, within 1 cm, its

@@ -27,6 +27,8 @@ export interface BoatPose {
   rudder: number;
   /** The sailor's offset from the centreline, metres, positive to starboard. */
   sailor: number;
+  /** How far aft of their place the sailor stands, metres: 0 but on a boat whose rig pitches her. */
+  sailorAft: number;
   /** The furthest the sheet lets the boom out, radians. */
   sheetLimit: number;
   /** The sailor's mode, from the newer step. */
@@ -63,6 +65,7 @@ export function newPose(): BoatPose {
     boom: 0,
     rudder: 0,
     sailor: 0,
+    sailorAft: 0,
     sheetLimit: 0,
     sailorMode: 0,
     sailorTimer: 0,
@@ -136,6 +139,7 @@ export class StatePair {
     out.boom = this.#at(S.boom, alpha);
     out.rudder = this.#at(S.rudder, alpha);
     out.sailor = this.#at(S.sailor, alpha);
+    out.sailorAft = this.#at(S.sailorAft, alpha);
     out.sheetLimit = this.#at(S.sheetLimit, alpha);
     out.sailorMode = this.current[S.sailorMode] ?? 0;
     out.sailorTimer = this.current[S.sailorTimer] ?? 0;

@@ -44,7 +44,19 @@ The fastest boom by angle off the true wind, in 6, 12 and 20 knots (Skiff, flat 
 
 The Skiff's crew sets its gennaker bearing away past 105° off the true wind and takes it in coming up forward of 90°. Set, the sheet trims it with the main and the sail word is its own. Reef 1 (Gennaker in) keeps it in. It pays at 105° in every wind to 30 knots.
 
-Reef (trim or steer with reef 1 or 2; 0 shakes the reefs out) when close-hauled the sheet hauled in hard heels the boat past its trim: from there only easing holds her up, and reefed she heels less and stands up. Reef the Jolly boat from 19 knots, the Keelboat from 13 knots, the Tall ship from 27 knots and the Skiff from 13 knots (reef 2: its reef 1 shortens nothing).
+The fastest boom by angle off the true wind, in 6, 12 and 20 knots (Beach cat, flat water):
+
+- 40°: 4, 4, 4
+- 60°: 4, 5, 15
+- 90°: 10, 10, 25
+- 120°: 35, 35, 35
+- 150°: 70, 70, 70
+- 170°: 75, 75, 75
+- 180°: 80, 80, 80
+
+The Beach cat lifts her windward hull when pressed ("hull flying" on the Boat line), fastest just clear; ease before it rises further. In a gust on a broad reach her bows bury ("bows burying") and she can pitchpole, throwing her sailor off over them; her sailor steps aft by herself. Ease, reef, or bear off to a run.
+
+Reef (trim or steer with reef 1 or 2; 0 shakes the reefs out) when close-hauled the sheet hauled in hard heels the boat past its trim: from there only easing holds her up, and reefed she heels less and stands up. Reef the Jolly boat from 19 knots, the Keelboat from 13 knots, the Tall ship from 27 knots, the Skiff from 13 knots (reef 2: its reef 1 shortens nothing) and the Beach cat from 22 knots.
 
 Close-hauled, haul in hard. Half the apparent wind's angle is a rough guide on a reach only.
 

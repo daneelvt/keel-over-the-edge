@@ -58,9 +58,9 @@ func (k *kind) at10() *kind {
 // courseTime is the time the kind takes round the course in a wind of
 // knots 10 m up, in hours a nautical mile of each leg, and its legs' speeds
 // made good: the beat's VMG, the reaches' speeds and the run's VMG.
-func courseTime(k *kind, wind float64) (float64, []float64, error) {
+func courseTime(k *kind, wind, reef float64) (float64, []float64, error) {
 	k = k.at10()
-	p := sailPolars(k, []float64{wind}, chartAngles)[0]
+	p := reefedPolars(k, []float64{wind}, chartAngles, reef)[0]
 	up, _, down, _ := vmg(p)
 	speeds := []float64{up}
 	for _, a := range courseLegs {
@@ -83,12 +83,12 @@ func courseTime(k *kind, wind float64) (float64, []float64, error) {
 
 // courseRatio is the kind's time round the course over the other's, in a
 // wind of knots 10 m up, and both boats' legs in words.
-func courseRatio(k, other *kind, wind float64) (float64, string, error) {
-	t, mine, err := courseTime(k, wind)
+func courseRatio(k, other *kind, wind, reef float64) (float64, string, error) {
+	t, mine, err := courseTime(k, wind, reef)
 	if err != nil {
 		return 0, "", err
 	}
-	o, theirs, err := courseTime(other, wind)
+	o, theirs, err := courseTime(other, wind, 0)
 	if err != nil {
 		return 0, "", err
 	}
@@ -106,7 +106,7 @@ func courseRatio(k, other *kind, wind float64) (float64, string, error) {
 func reportDownwind(k, other *kind, winds []float64) {
 	fmt.Printf("  reported, not checked (winds 10 m up):\n")
 	for _, w := range winds {
-		r, legs, err := courseRatio(k, other, w)
+		r, legs, err := courseRatio(k, other, w, 0)
 		if err != nil {
 			fmt.Printf("    %4g knots  the course as sailed: %v\n", w, err)
 			continue

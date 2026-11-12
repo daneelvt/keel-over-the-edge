@@ -89,6 +89,9 @@ type State struct {
 	Kite        float64 // rad
 	KiteRate    float64 // rad/s
 	KiteLimit   float64 // rad
+	// SailorAft is how far aft of their place the sailor stands, m: 0 but
+	// on a boat whose rig pitches her.
+	SailorAft float64
 }
 
 // Control holds what the player sets. Helm and Sheet are targets: the rudder
@@ -124,33 +127,37 @@ type Env struct {
 // them; Prepare turns them into radians and every other derived constant.
 type Params struct {
 	// Hull.
-	Displacement    float64                  // boat, rig and sailor, kg
-	WaterlineLength float64                  // m
-	HullDraught     float64                  // the hull's own draught, foils aside, m
-	CentreOfGravity float64                  // height of the centre of gravity above the waterline, m
-	DragAreaStep    float64                  // speed between entries of DragArea, m/s
-	DragArea        [25]float64              // upright resistance as a drag area at 0, 1, 2 … steps of speed, m²
-	CrossFlowDrag   float64                  // drag coefficient of the hull moving sideways, on length × draught
-	AddedMassSurge  float64                  // kg
-	AddedMassSway   float64                  // kg, hull and foils
-	Munk            float64                  // the hull's added mass in sway less in surge, for the Munk moment, kg
-	YawInertia      float64                  // added inertia included, kg·m²
-	RollInertia     float64                  // added inertia included, kg·m²
-	RollDamping     float64                  // the hull's own roll damping, N·m·s/rad
-	YawDamping      float64                  // the hull's resistance to turning, from the cross flow along it, N·m per (rad/s)²
-	RightingLever   [19]float64              // with the sailor on the centreline, every 10° of heel from 0° to 180°, m
-	WaterlineBeam   float64                  // m
-	WaterplaneArea  float64                  // m²
-	WaterplanePitch float64                  // the waterplane's second moment of area about its transverse axis, m⁴
-	AddedMassHeave  float64                  // kg
-	PitchInertia    float64                  // added inertia included, kg·m²
-	HeaveDamping    float64                  // fraction of critical
-	PitchDamping    float64                  // fraction of critical
-	WaveForce       float64                  // share of the Froude–Krylov force of a wave's slope
-	WaveYaw         float64                  // share of that force's moment along the hull
-	Outline         [OutlineStations]float64 // half-beam at the sheer at stations equally spaced from transom to stem, m
-	Transom         float64                  // the transom's distance aft of the centre of gravity, m
-	Stem            float64                  // the stem's distance forward of the centre of gravity, m
+	Displacement    float64     // boat, rig and sailor, kg
+	WaterlineLength float64     // m
+	HullDraught     float64     // the hull's own draught, foils aside, m
+	CentreOfGravity float64     // height of the centre of gravity above the waterline, m
+	DragAreaStep    float64     // speed between entries of DragArea, m/s
+	DragArea        [25]float64 // upright resistance as a drag area at 0, 1, 2 … steps of speed, m²
+	CrossFlowDrag   float64     // drag coefficient of the hull moving sideways, on length × draught
+	AddedMassSurge  float64     // kg
+	AddedMassSway   float64     // kg, hull and foils
+	Munk            float64     // the hull's added mass in sway less in surge, for the Munk moment, kg
+	YawInertia      float64     // added inertia included, kg·m²
+	RollInertia     float64     // added inertia included, kg·m²
+	RollDamping     float64     // the hull's own roll damping, N·m·s/rad
+	YawDamping      float64     // the hull's resistance to turning, from the cross flow along it, N·m per (rad/s)²
+	RightingLever   [19]float64 // with the sailor on the centreline, every RightingLeverStep of heel from 0°, m
+	// RightingLeverStep is the heel between entries of RightingLever,
+	// degrees: 10 reaches from 0° to 180°; a finer step holds its last
+	// value beyond its last entry, as the drag area does.
+	RightingLeverStep float64
+	WaterlineBeam     float64                  // m
+	WaterplaneArea    float64                  // m²
+	WaterplanePitch   float64                  // the waterplane's second moment of area about its transverse axis, m⁴
+	AddedMassHeave    float64                  // kg
+	PitchInertia      float64                  // added inertia included, kg·m²
+	HeaveDamping      float64                  // fraction of critical
+	PitchDamping      float64                  // fraction of critical
+	WaveForce         float64                  // share of the Froude–Krylov force of a wave's slope
+	WaveYaw           float64                  // share of that force's moment along the hull
+	Outline           [OutlineStations]float64 // half-beam at the sheer at stations equally spaced from transom to stem, m
+	Transom           float64                  // the transom's distance aft of the centre of gravity, m
+	Stem              float64                  // the stem's distance forward of the centre of gravity, m
 
 	// Rig.
 	SailArea          float64     // m²
@@ -334,6 +341,28 @@ type Params struct {
 	Steerage  float64 // slower through the water than this, either way, the rudder has no steerage, m/s
 	StallTime float64 // a turn with no steerage that gains too little on its course in this long stalls, s
 	StallGain float64 // too little, degrees
+
+	// Hulls: a boat of two hulls, a catamaran, is one body whose
+	// stability, foils and drag take its hulls' values. A monohull has a
+	// spacing of 0, one rudder and one board, and a flying drag of 1.
+	HullSpacing float64 // between the hulls' centrelines, m; 0 for one hull
+	LiftHeel    float64 // the heel at which the windward hull leaves the water, degrees: it is clear 5° later
+	FlyingDrag  float64 // the drag area's share with the windward hull clear
+	RudderCount float64 // rudders, one on each hull: each the one rudder's lift and drag
+	BoardCount  float64 // boards or hulls' lateral planes: each the one board's lift and drag
+
+	// Pitch from the rig: the sails' drive, high above the centre of
+	// gravity, and the hull's resistance below it pitch the bow down; the
+	// sailor steps aft to hold it up. Past BowBuryPitch the bows bury,
+	// their spring weakens and their drag grows; past PitchpoleAngle the
+	// sailor is thrown off over the bow. None where RigPitch is 0: the
+	// pitch is then the waves' alone.
+	RigPitch         float64 // 1 where the rig pitches the hull, else 0
+	BowBuryPitch     float64 // the trim, bow down off the water's surface, at which the lee bow's deck meets the water, degrees
+	BowBuryRestoring float64 // the share of the pitch spring's slope left past it
+	BowBuryDrag      float64 // the hull's drag area grows by this share of itself for each degree past it
+	PitchpoleAngle   float64 // past this trim, bow down, the sailor is thrown off over the bow, degrees
+	AftReach         float64 // how far aft of the helm's place the sailor steps to hold the bow up, m
 }
 
 // SeaParams describe the waves long enough to move a boat: the catalog's sea
@@ -424,6 +453,15 @@ type Out struct {
 	KiteFootFlow   float64
 	KiteHeadFlow   float64
 	KiteTwist      float64 // the upper strip's twist beyond the clew's line, rad
+	// HullFlying is 1 while a catamaran's windward hull is clear of the
+	// water, else 0; BowsBurying is 1 while her bows are pressed past
+	// where their deck meets the water, else 0.
+	HullFlying  float64
+	BowsBurying float64
+	// Trim is the hull's pitch off the water's surface, rad, positive with
+	// the bow up, on a boat whose rig pitches her: what the waves do not
+	// give her pitch. 0 on every other boat.
+	Trim float64
 }
 
 // GroundParams describe how a boat meets the ground: the catalog's world

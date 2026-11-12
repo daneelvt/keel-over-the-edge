@@ -10,7 +10,7 @@
 // remembers from the autopilot's block that follows it while there is any,
 // and how long it has been aground and where it left deep water from the
 // ground block after that while it has either, or nothing; its headsails,
-// yards, reef and downwind sail, and the reef in force, from the rig's
+// yards, reef, downwind sail and sailor's place aft, and the reef in force, from the rig's
 // block after that while any is not zero; and, while it is falling over the lip, the
 // tick it went over from the over block after those; while it stays where
 // it is as its owner's free camera roams, a flag says so. The other boats'
@@ -27,13 +27,13 @@ export const PILOT_SIZE = 56;
 /** The ground block's length. */
 export const GROUND_SIZE = 24;
 /** The rig's block's length. */
-export const RIG_SIZE = 96;
+export const RIG_SIZE = 104;
 /** The over block's length. */
 export const OVER_SIZE = 8;
 /** The header's length with every block. */
 export const MAX_HEADER_SIZE = HEADER_SIZE + PILOT_SIZE + GROUND_SIZE + RIG_SIZE + OVER_SIZE;
 /** The layout this client reads: the own boat's state as float64, its autopilot's, ground, rig's and over blocks, then the view's entries; flag bit 4 while the boat stays, bit 6 while the connection does not hold its controls. */
-export const SNAPSHOT_LAYOUT = 15;
+export const SNAPSHOT_LAYOUT = 16;
 /** The most entries a snapshot may hold. */
 export const MAX_ENTRIES = 128;
 /** A header's flag: the far band's boats are sampled by this snapshot. */
@@ -55,13 +55,13 @@ const HEADER_FLAGS =
 /** A snapshot's margin when no input arrived since the one before. */
 export const NO_MARGIN = -32768;
 /** The boat's state's fields, as the physics module lays them out: the boat's own, then its autopilot's, then how long it has been aground and where it left deep water, then its rig's. */
-export const STATE_FIELDS = 39;
+export const STATE_FIELDS = 40;
 /** Those of them the header holds; the autopilot's block holds those up to PILOT_FIELDS, the ground block those up to RIG_FIELD, and the rig's block the last. */
 export const BOAT_FIELDS = 19;
 export const PILOT_FIELDS = 25;
 /** The first of the fields the ground block holds: how long the boat has been aground and all but still, then where it left deep water, east and north. */
 export const GROUND_TIMER = 25;
-/** The first of the fields the rig's block holds: the headsails' angle, rate and limit, the yards, the fore yards, the reef, and the downwind sail's hoist, the crew's aim for it, and its clew's angle, rate and limit. */
+/** The first of the fields the rig's block holds: the headsails' angle, rate and limit, the yards, the fore yards, the reef, the downwind sail's hoist, the crew's aim for it, and its clew's angle, rate and limit, and the sailor's place aft. */
 export const RIG_FIELD = 28;
 /** The deepest reef. */
 export const MAX_REEF = 2;

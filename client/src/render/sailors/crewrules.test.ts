@@ -77,7 +77,7 @@ function keelPlan(): CrewPlan {
       stations,
       exponent: 2.2,
       cockpit: { fore: 0.25, aft: 2.55, halfWidth: 0.7324, floor: 0.5036 },
-      board: { y: -0.3, z: -0.9, span: 1, chord: 0.5, thickness: 0.03 },
+      board: { x: 0, y: -0.3, z: -0.9, span: 1, chord: 0.5, thickness: 0.03 },
     },
     { y: 1.45, z: -kind.physics.rig.mastPosition },
     kind.physics.rig.foot,

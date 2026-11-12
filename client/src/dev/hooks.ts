@@ -57,6 +57,7 @@ import { STEPS_PER_SECOND } from '../game/clock';
 import type { BoatDriver } from '../game/driver';
 import { type DrawnBoat, newDrawnBoat } from '../game/fleet';
 import type { Game } from '../game/game';
+import { hullLift } from '../game/hullpose';
 import { PILOT_WIND } from '../input/pilot';
 import type { LifeBird } from '../life/draw';
 import type { GullTown } from '../life/gulls';
@@ -2485,6 +2486,13 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
           d.heave = boats[i]?.heave ?? w[RECORDS.wave.height] ?? 0;
           d.pitch = boats[i]?.pitch ?? w[RECORDS.wave.ahead] ?? 0;
         });
+      }
+      // A boat of two hulls heeled about her lee hull, as float.ts has it.
+      for (const d of drawn) {
+        d.heave += hullLift(
+          (catalog.boats[d.kind] ?? world.kind).physics.hulls.hullSpacing,
+          d.heel,
+        );
       }
       world.fleetSource = { drawn, count: drawn.length };
       // Boats put somewhere at once: their sailors met afresh.

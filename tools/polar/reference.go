@@ -35,11 +35,24 @@ type refPoint struct {
 	// upwindAngle, the true wind angle of the best upwind VMG, degrees;
 	// upwindLeeway, the leeway there, degrees; or course, the time round
 	// the course over the boat Against's, its wind 10 m up (course.go).
-	Measure   string  `json:"measure"`
-	Against   string  `json:"against,omitempty"`
-	AtMost    bool    `json:"atMost,omitempty"`
-	TWA       float64 `json:"twa,omitempty"`
-	Wind      float64 `json:"wind"`
+	Measure string `json:"measure"`
+	Against string `json:"against,omitempty"`
+	// AtMost holds the model to at most the value, and its tolerance;
+	// AtLeast to at least it, less its tolerance.
+	AtMost  bool    `json:"atMost,omitempty"`
+	AtLeast bool    `json:"atLeast,omitempty"`
+	TWA     float64 `json:"twa,omitempty"`
+	Wind    float64 `json:"wind"`
+	// Winds, if set, in place of Wind: the point is the boat's best in
+	// any of them, at any reef.
+	Winds []float64 `json:"winds,omitempty"`
+	// Alone sails the point with the catalog's one sailor, not the
+	// reference's crew: the boat as players sail it.
+	Alone bool `json:"alone,omitempty"`
+	// Reef sails a course reefed, 0 to 2.
+	Reef float64 `json:"reef,omitempty"`
+	// Report prints the point beside its value and never fails.
+	Report    bool    `json:"report,omitempty"`
 	Value     float64 `json:"value"`
 	Tolerance float64 `json:"tolerance"`
 	Source    string  `json:"source"`
@@ -97,26 +110,60 @@ func (p refPoint) model(polars []polar) (float64, error) {
 // verdict compares the model with a reference point.
 func (p refPoint) verdict(got float64) (ok bool, text string) {
 	off := got/p.Value - 1
-	if p.AtMost {
+	switch {
+	case p.Report:
+		return true, fmt.Sprintf("%5.2f beside %5.2f (%+.1f%%), reported", got, p.Value, 100*off)
+	case p.AtMost:
 		ok = got <= p.Value*(1+p.Tolerance)
 		return ok, fmt.Sprintf("%5.2f, at most %5.2f", got, p.Value)
+	case p.AtLeast:
+		ok = got >= p.Value*(1-p.Tolerance)
+		return ok, fmt.Sprintf("%5.2f, at least %5.2f", got, p.Value)
 	}
 	ok = off >= -p.Tolerance && off <= p.Tolerance
 	return ok, fmt.Sprintf("%5.2f against %5.2f (%+.1f%%, within ±%.0f%%)", got, p.Value, 100*off, 100*p.Tolerance)
 }
 
 func (p refPoint) label() string {
+	l := p.Measure
 	switch p.Measure {
 	case "speed":
-		return fmt.Sprintf("speed at %g°", p.TWA)
+		l = fmt.Sprintf("speed at %g°", p.TWA)
 	case "upwindAngle":
-		return "upwind angle"
+		l = "upwind angle"
 	case "upwindLeeway":
-		return "upwind leeway"
+		l = "upwind leeway"
 	case "course":
-		return "course / " + p.Against
+		l = "course / " + p.Against
 	}
-	return p.Measure
+	if p.Reef > 0 {
+		l += fmt.Sprintf(", reef %g", p.Reef)
+	}
+	if p.Alone {
+		l += ", alone"
+	}
+	return l
+}
+
+// windWords is the point's wind, or its winds.
+func (p refPoint) windWords() string {
+	if len(p.Winds) == 0 {
+		return fmt.Sprintf("%4g knots", p.Wind)
+	}
+	return fmt.Sprintf("%g–%g knots", p.Winds[0], p.Winds[len(p.Winds)-1])
+}
+
+// bestIn is the kind's fastest point at a true wind angle in any of the
+// winds, at any reef: its speed, and the wind and reef it is sailed in.
+func bestIn(k *kind, twa float64, winds []float64) (speed, wind, reef float64) {
+	for r := 0.0; r <= 2; r++ {
+		for _, pl := range reefedPolars(k, winds, []float64{twa}, r) {
+			if pt := pl.Points[0]; pt.OK && pt.Speed > speed {
+				speed, wind, reef = pt.Speed, pl.Wind, r
+			}
+		}
+	}
+	return speed, wind, reef
 }
 
 // runCheck sails the polar at the reference's winds and angles and fails
@@ -134,7 +181,7 @@ func runCheck(k *kind, ref *reference) error {
 	}
 	var refWinds []float64
 	for _, p := range ref.Points {
-		if p.Measure == "course" {
+		if p.Measure == "course" || p.Alone || len(p.Winds) > 0 {
 			continue
 		}
 		refWinds = append(refWinds, p.Wind)
@@ -162,17 +209,31 @@ func runCheck(k *kind, ref *reference) error {
 	for _, p := range ref.Points {
 		var got float64
 		var err error
-		if p.Measure == "course" {
+		pk := rk
+		if p.Alone {
+			pk = k
+		}
+		switch {
+		case p.Measure == "course":
 			other := kindsByID[p.Against]
 			if other == nil {
 				return fmt.Errorf("a course against %q, which is not a boat of the catalog", p.Against)
 			}
 			var legs string
-			got, legs, err = courseRatio(rk, other, p.Wind)
+			got, legs, err = courseRatio(pk, other, p.Wind, p.Reef)
 			if err == nil {
 				fmt.Printf("       %4g knots  %s\n", p.Wind, legs)
 			}
-		} else {
+		case len(p.Winds) > 0:
+			if p.Measure != "speed" {
+				return fmt.Errorf("a point over winds measures speed, not %s", p.Measure)
+			}
+			var wind, reef float64
+			got, wind, reef = bestIn(pk.at10(), p.TWA, p.Winds)
+			fmt.Printf("       %s  at its fastest in %g knots, %s\n", p.windWords(), wind, k.reefWord(reef))
+		case p.Alone:
+			got, err = p.model(sailPolars(k, []float64{p.Wind}, []float64{p.TWA}))
+		default:
 			got, err = p.model(refPolars)
 		}
 		if err != nil {
@@ -183,9 +244,12 @@ func runCheck(k *kind, ref *reference) error {
 		mark := "ok  "
 		if !ok {
 			mark = "FAIL"
-			failed = append(failed, fmt.Sprintf("%g knots, %s: %s", p.Wind, p.label(), text))
+			failed = append(failed, fmt.Sprintf("%s, %s: %s", p.windWords(), p.label(), text))
 		}
-		fmt.Printf("  %s %4g knots  %-16s %s\n", mark, p.Wind, p.label(), text)
+		fmt.Printf("  %s %s  %-16s %s\n", mark, p.windWords(), p.label(), text)
+	}
+	if k.p.HullSpacing > 0 || k.p.RigPitch != 0 {
+		reportHulls(k)
 	}
 	if k.p.DownwindArea > 0 {
 		var courseWinds []float64

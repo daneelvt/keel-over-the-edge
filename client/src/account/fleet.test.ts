@@ -241,6 +241,31 @@ describe('the ship of square sails', () => {
     expect(Number(number[0]?.props.x)).toBeCloseTo(sq?.squareAfterMast ?? Number.NaN, 1);
     expect(text(number[0]?.props.children)).toBe('7');
   });
+
+  test('a boat of two hulls is drawn with both, her main and her jib; one of one hull with one', () => {
+    for (const b of catalog.boats.filter((x) => x.physics.square.squareForeArea === 0)) {
+      const pic = expand(
+        BoatPicture({
+          cat: catalog,
+          kind: b.id,
+          paint: P[0]?.id ?? '',
+          cloth: C[0]?.id ?? '',
+          number: 3,
+          width: 120,
+        }),
+      );
+      const hulls = findAll(
+        pic,
+        (n) => n.type === 'path' && String(n.props.class).startsWith('boat-picture-hull'),
+      );
+      expect(hulls.length, b.id).toBe(b.physics.hulls.hullSpacing > 0 ? 2 : 1);
+      const sails = findAll(
+        pic,
+        (n) => n.type === 'polygon' && n.props.class === 'boat-picture-sail',
+      );
+      expect(sails.length, b.id).toBe(b.physics.headsails.headsailArea > 0 ? 2 : 1);
+    }
+  });
 });
 
 describe('refusals in words', () => {

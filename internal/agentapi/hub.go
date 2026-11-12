@@ -368,6 +368,8 @@ func (h *hub) boatEvents(f *bus.Frame, sl int32, mode uint8, aground bool) {
 // boatEventsOf tells a helm of the boat's capsizes and groundings.
 func (h *hub) boatEventsOf(hm *helm, f *bus.Frame, sl int32, mode uint8, aground bool) {
 	switch {
+	case mode != physics.Sailing && h.modes[sl] == physics.Sailing && pitchpoled(h.sea.boat(f.Kind[sl]), &f.State[sl]):
+		hm.event(event{Tick: f.Tick, Kind: evCapsized, Words: "pitchpoled: the bows buried and your sailor went over them; swimming back to her"})
 	case mode != physics.Sailing && h.modes[sl] == physics.Sailing:
 		hm.event(event{Tick: f.Tick, Kind: evCapsized, Words: "capsized: your sailor is in the water, righting the boat"})
 	case mode == physics.Sailing && h.modes[sl] != physics.Sailing:

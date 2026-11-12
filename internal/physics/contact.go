@@ -22,7 +22,7 @@ import "math"
 
 // clipCapacity holds the overlap of two outlines: each clip by a half-plane
 // adds at most one corner.
-const clipCapacity = 2*outlinePoints + 2
+const clipCapacity = 2*outlineCorners + 2
 
 // Hulls is the room contacts are found in: two hulls placed in the world
 // and their overlap clipped. A goroutine keeps one and uses it for every
@@ -51,7 +51,7 @@ func (h *Hulls) Touch(a, b *State, pa, pb *Prepared, c *Contact) bool {
 
 	best := math.Inf(-1)
 	var nx, ny float64
-	for i := range outlinePoints {
+	for i := range int(ha.o.n) {
 		sep := hb.lowest(ha.nx[i], ha.ny[i]) - ha.edgeOffset(i)
 		if sep > 0 {
 			return false
@@ -60,7 +60,7 @@ func (h *Hulls) Touch(a, b *State, pa, pb *Prepared, c *Contact) bool {
 			best, nx, ny = sep, ha.nx[i], ha.ny[i]
 		}
 	}
-	for i := range outlinePoints {
+	for i := range int(hb.o.n) {
 		sep := ha.lowest(hb.nx[i], hb.ny[i]) - hb.edgeOffset(i)
 		if sep > 0 {
 			return false
@@ -83,11 +83,11 @@ func (h *Hulls) Touch(a, b *State, pa, pb *Prepared, c *Contact) bool {
 func (h *Hulls) overlapCentre() (x, y float64) {
 	a, b := &h.a, &h.b
 	bufX, bufY := &h.clipX, &h.clipY
-	n := int32(outlinePoints)
+	n := a.o.n
 	copy(bufX[0][:], a.x[:])
 	copy(bufY[0][:], a.y[:])
 	cur := 0
-	for e := range outlinePoints {
+	for e := range int(b.o.n) {
 		nx, ny, off := b.nx[e], b.ny[e], b.edgeOffset(e)
 		inX, inY := &bufX[cur], &bufY[cur]
 		outX, outY := &bufX[1-cur], &bufY[1-cur]

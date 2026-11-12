@@ -41,9 +41,11 @@ describe.each(catalog.boats.map((b) => [b.name, b] as const))('%s’s hull', (_,
     const length = (shape.stations[0]?.[0] ?? 0) - (shape.stations[STATIONS - 1]?.[0] ?? 0);
     expect(length).toBeGreaterThan(0.8 * hull.waterlineLength);
     expect(length).toBeLessThan(boat.lengthOverall);
-    const widest = Math.max(...shape.stations.map((s) => s[1] ?? 0));
+    // Across the waterline, outside a boat of two hulls' both hulls.
+    const widest = Math.max(...shape.stations.map((s) => s[1] ?? 0)) + shape.offset;
     expect(2 * widest).toBeGreaterThan(0.85 * hull.waterlineBeam);
     expect(2 * widest).toBeLessThan(boat.beam);
+    expect(shape.offset).toBeCloseTo(boat.physics.hulls.hullSpacing / 2, 6);
     const deepest = Math.max(...shape.stations.map((s) => s[2] ?? 0));
     expect(Math.abs(deepest - hull.hullDraught)).toBeLessThan(0.02);
     // The waterline ends in a point at the stem.
@@ -56,27 +58,38 @@ describe.each(catalog.boats.map((b) => [b.name, b] as const))('%s’s hull', (_,
     const z = shape.stations[3]?.[0] ?? 0;
     const beam = shape.stations[3]?.[1] ?? 0;
     const depth = shape.stations[3]?.[2] ?? 0;
-    // On the centreline, at the waterline, above it without limit, and down to the bottom.
-    expect(insideHull(shape, 0, 0, z)).toBe(true);
-    expect(insideHull(shape, 0, 3, z)).toBe(true);
-    expect(insideHull(shape, 0, -depth + 0.005, z)).toBe(true);
-    expect(insideHull(shape, 0, -depth - 0.005, z)).toBe(false);
-    // Out to the planking at the waterline, less the margin; never beyond it.
-    expect(insideHull(shape, HULL_FILL * beam - 0.005, 0, z)).toBe(true);
-    expect(insideHull(shape, -(HULL_FILL * beam - 0.005), 0, z)).toBe(true);
-    expect(insideHull(shape, beam, 0, z)).toBe(false);
-    expect(insideHull(shape, beam + 0.05, 0.2, z)).toBe(false);
-    // Narrower toward the bottom.
-    expect(insideHull(shape, 0.8 * beam, -0.8 * depth, z)).toBe(false);
-    expect(insideHull(shape, 0.8 * beam, -0.1 * depth, z)).toBe(true);
-    // Not astern of the transom, nor ahead of the waterline's end.
-    expect(insideHull(shape, 0, 0, (shape.stations[0]?.[0] ?? 0) + 0.01)).toBe(false);
-    expect(insideHull(shape, 0, 0, (shape.stations[STATIONS - 1]?.[0] ?? 0) - 0.01)).toBe(false);
-    // Between stations it is their blend.
-    const mid = (z + (shape.stations[4]?.[0] ?? 0)) / 2;
-    const between = (beam + (shape.stations[4]?.[1] ?? 0)) / 2;
-    expect(insideHull(shape, HULL_FILL * between - 0.003, 0, mid)).toBe(true);
-    expect(insideHull(shape, HULL_FILL * between + 0.003, 0, mid)).toBe(false);
+    // Each hull's centreline: hers, or a boat of two hulls' starboard one,
+    // and the port one its mirror.
+    const c = shape.offset;
+    for (const side of c > 0 ? [1, -1] : [1]) {
+      const x = side * c;
+      // On the centreline, at the waterline, above it without limit, and down to the bottom.
+      expect(insideHull(shape, x, 0, z)).toBe(true);
+      expect(insideHull(shape, x, 3, z)).toBe(true);
+      expect(insideHull(shape, x, -depth + 0.005, z)).toBe(true);
+      expect(insideHull(shape, x, -depth - 0.005, z)).toBe(false);
+      // Out to the planking at the waterline, less the margin; never beyond it.
+      expect(insideHull(shape, x + HULL_FILL * beam - 0.005, 0, z)).toBe(true);
+      expect(insideHull(shape, x - (HULL_FILL * beam - 0.005), 0, z)).toBe(true);
+      expect(insideHull(shape, x + beam, 0, z)).toBe(false);
+      expect(insideHull(shape, x + beam + 0.05, 0.2, z)).toBe(false);
+      // Narrower toward the bottom.
+      expect(insideHull(shape, x + 0.8 * beam, -0.8 * depth, z)).toBe(false);
+      expect(insideHull(shape, x + 0.8 * beam, -0.1 * depth, z)).toBe(true);
+      // Not astern of the transom, nor ahead of the waterline's end.
+      expect(insideHull(shape, x, 0, (shape.stations[0]?.[0] ?? 0) + 0.01)).toBe(false);
+      expect(insideHull(shape, x, 0, (shape.stations[STATIONS - 1]?.[0] ?? 0) - 0.01)).toBe(false);
+      // Between stations it is their blend.
+      const mid = (z + (shape.stations[4]?.[0] ?? 0)) / 2;
+      const between = (beam + (shape.stations[4]?.[1] ?? 0)) / 2;
+      expect(insideHull(shape, x + HULL_FILL * between - 0.003, 0, mid)).toBe(true);
+      expect(insideHull(shape, x + HULL_FILL * between + 0.003, 0, mid)).toBe(false);
+    }
+    if (c > 0) {
+      // The sea between two hulls, and none inside either.
+      expect(insideHull(shape, 0, 0, z)).toBe(false);
+      expect(insideHull(shape, 0, 2, z)).toBe(false);
+    }
   });
 
   test('the far model carries a volume too', () => {
@@ -94,7 +107,12 @@ describe('a hull’s volume', () => {
     expect(
       hullShape({ waterline: { stations: stations.map((s) => s.slice(1)), bilge: 2 } }),
     ).toBeNull();
-    expect(hullShape({ waterline: { stations, bilge: 1.7 } })).toEqual({ stations, bilge: 1.7 });
+    expect(hullShape({ waterline: { stations, bilge: 1.7 } })).toEqual({
+      stations,
+      bilge: 1.7,
+      offset: 0,
+    });
+    expect(hullShape({ waterline: { stations, bilge: 1.7, offset: 1 } })?.offset).toBe(1);
   });
 
   test('a point is taken into the hull’s frame by undoing the boat’s own turns', () => {

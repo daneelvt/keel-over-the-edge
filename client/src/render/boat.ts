@@ -671,7 +671,23 @@ export class Boat {
     // A positive rudder turns the bow to starboard: its blade swings to
     // starboard behind the stock, and the tiller ahead of it to port.
     const rudder = this.parts.get('rudder');
-    if (rudder !== undefined) {
+    const starboard = this.parts.get('rudder-starboard');
+    const port = this.parts.get('rudder-port');
+    if (starboard !== undefined && port !== undefined) {
+      // A boat of two hulls: each rudder on its own stock, and the
+      // crossbar carried across by their arms, square to the boat.
+      starboard.rotation.y = pose.rudder;
+      port.rotation.y = pose.rudder;
+      const bar = this.parts.get('tiller');
+      if (bar !== undefined) {
+        if (bar.userData.rest === undefined) {
+          bar.userData.rest = bar.position.clone();
+        }
+        const rest = bar.userData.rest as Vector3;
+        const arm = -rest.z;
+        bar.position.set(-arm * Math.sin(pose.rudder), rest.y, -arm * Math.cos(pose.rudder));
+      }
+    } else if (rudder !== undefined) {
       rudder.rotation.y = pose.rudder;
     }
 

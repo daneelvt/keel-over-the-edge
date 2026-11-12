@@ -30,6 +30,7 @@ import { edgeLook, KOSCHMIEDER } from '../edge/mist';
 import { closedIn, EndSlabs, type EndStage, endStage, risen } from '../edge/taken';
 import { STEPS_PER_SECOND } from '../game/clock';
 import type { DrawnBoat } from '../game/fleet';
+import { eachHull, type HullAt, hullRoom } from '../game/hullpose';
 import type { Land } from '../land/land';
 import type { BoatAt } from '../life/birds';
 import { type GullSource, LifeDraw, type LifeFrame, type SurfaceAt } from '../life/draw';
@@ -1174,11 +1175,23 @@ export class SeaScene {
     const waves = ocean.wakeWaves;
     wakes.begin();
     waves.begin();
-    wakes.add(p.east, p.north, p.heading, speed, own);
     // The hull deeper than at rest where the sea under it stands above it:
-    // a boat that bobs makes rings.
+    // a boat that bobs makes rings. Each of a boat's hulls makes its own
+    // wake, and one lifted clear of the water none.
     const sink = Math.min(Math.max(this.#seaUnderBoat() - p.heave, -SINK_MOST), SINK_MOST);
-    waves.add(p.east, p.north, p.heading, sink, own);
+    const room = this.#hullRoom;
+    const kinds = catalog.boats;
+    const ownHull = this.kind.physics;
+    for (
+      let h = eachHull(ownHull.hulls.hullSpacing, p.east, p.north, p.heading, p.heel, room);
+      h-- > 0;
+    ) {
+      const at = room[h] as HullAt;
+      if (at.lift < ownHull.hull.hullDraught) {
+        wakes.add(at.east, at.north, p.heading, speed, own);
+        waves.add(at.east, at.north, p.heading, sink - at.lift, own);
+      }
+    }
     const fs = this.fleetSource;
     if (fs === null) {
       this.#stampLife();
@@ -1192,8 +1205,17 @@ export class SeaScene {
       if (b.opacity >= 0.5) {
         const ve = b.speed * Math.sin(b.heading) - current.east;
         const vn = b.speed * Math.cos(b.heading) - current.north;
-        wakes.add(b.east, b.north, b.heading, Math.hypot(ve, vn), b.kind);
-        waves.add(b.east, b.north, b.heading, 0, b.kind);
+        const k = (kinds[b.kind] ?? this.kind).physics;
+        for (
+          let h = eachHull(k.hulls.hullSpacing, b.east, b.north, b.heading, b.heel, room);
+          h-- > 0;
+        ) {
+          const at = room[h] as HullAt;
+          if (at.lift < k.hull.hullDraught) {
+            wakes.add(at.east, at.north, b.heading, Math.hypot(ve, vn), b.kind);
+            waves.add(at.east, at.north, b.heading, -at.lift, b.kind);
+          }
+        }
       }
     }
     // The sea's life's after the boats', in what room is left.
@@ -1958,6 +1980,8 @@ export class SeaScene {
   /** The boat as the gust rings want it: where, how it moves, and where the mean wind comes from. */
   readonly #ringBoat = { east: 0, north: 0, velEast: 0, velNorth: 0, windFrom: 0 };
 
+  /** Room for a boat's hulls, for its wakes and its bows. */
+  readonly #hullRoom = hullRoom();
   /** The spray's sources this frame: the player's bow, and the nearest others' on the tiers that have them. */
   readonly #sources: SpraySource[] = Array.from({ length: 4 }, () => ({
     east: 0,
@@ -2005,19 +2029,29 @@ export class SeaScene {
       heading: number,
       heave: number,
       pitch: number,
+      heel: number,
       speed: number,
       kind: number,
     ) => {
-      const half = (catalog.boats[kind] ?? this.kind).physics.hull.waterlineLength / 2;
-      const s = sources[n] as SpraySource;
-      s.east = east + Math.sin(heading) * half;
-      s.north = north + Math.cos(heading) * half;
-      s.height = heave + Math.sin(pitch) * half;
-      s.heading = heading;
-      s.speed = speed;
-      pts[n * 2] = s.east;
-      pts[n * 2 + 1] = s.north;
-      n++;
+      const k = (catalog.boats[kind] ?? this.kind).physics;
+      const half = k.hull.waterlineLength / 2;
+      // Each hull's bow, but one lifted clear of the water.
+      const room = this.#hullRoom;
+      for (let h = eachHull(k.hulls.hullSpacing, east, north, heading, heel, room); h-- > 0; ) {
+        const at = room[h] as HullAt;
+        if (at.lift >= k.hull.hullDraught || n >= sources.length) {
+          continue;
+        }
+        const s = sources[n] as SpraySource;
+        s.east = at.east + Math.sin(heading) * half;
+        s.north = at.north + Math.cos(heading) * half;
+        s.height = heave + Math.sin(pitch) * half;
+        s.heading = heading;
+        s.speed = speed;
+        pts[n * 2] = s.east;
+        pts[n * 2 + 1] = s.north;
+        n++;
+      }
     };
     bow(
       p.east,
@@ -2025,6 +2059,7 @@ export class SeaScene {
       p.heading,
       p.heave,
       p.pitch,
+      p.heel,
       this.out[RECORDS.out.speedThroughWater] ?? 0,
       this.kindIndex,
     );
@@ -2036,7 +2071,7 @@ export class SeaScene {
         if (b === undefined || (this.#nearDist[k] ?? Infinity) > HULL_REACH) {
           break;
         }
-        bow(b.east, b.north, b.heading, b.heave, b.pitch, b.speed, b.kind);
+        bow(b.east, b.north, b.heading, b.heave, b.pitch, b.heel, b.speed, b.kind);
       }
     }
     const wind = this.wind;

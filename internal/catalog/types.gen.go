@@ -300,6 +300,12 @@ type BoatPhysics struct {
 	// Hull corresponds to the JSON schema field "hull".
 	Hull PhysicsHull `json:"hull"`
 
+	// Hulls corresponds to the JSON schema field "hulls".
+	Hulls PhysicsHulls `json:"hulls"`
+
+	// Pitch corresponds to the JSON schema field "pitch".
+	Pitch PhysicsPitch `json:"pitch"`
+
 	// Rates corresponds to the JSON schema field "rates".
 	Rates PhysicsRates `json:"rates"`
 
@@ -2363,7 +2369,8 @@ type PhysicsHull struct {
 
 	// The hull's half-beam at the sheer at 11 stations equally spaced from the
 	// transom to the stem, in m: its plan, where hulls touch. Convex, with the stem a
-	// point.
+	// point; a boat of two hulls (hulls.hullSpacing) has a flat bow, the last the
+	// bows' half-spread.
 	Outline []float64 `json:"outline"`
 
 	// Damping of the pitch, as a fraction of critical.
@@ -2372,9 +2379,14 @@ type PhysicsHull struct {
 	// Moment of inertia in pitch, added inertia included, in kg·m².
 	PitchInertia float64 `json:"pitchInertia"`
 
-	// Righting lever (GZ) with the sailor on the centreline, every 10° of heel from
-	// 0° to 180°, in m.
+	// Righting lever (GZ) with the sailor on the centreline, every rightingLeverStep
+	// of heel from 0°, in m. Beyond the last, the last.
 	RightingLever []float64 `json:"rightingLever"`
+
+	// Heel between entries of rightingLever, in degrees: 10 reaches 180°, 5 reaches
+	// 90° (a catamaran's lever, which peaks within a few degrees of upright, held
+	// beyond). 180° over it is a whole number.
+	RightingLeverStep float64 `json:"rightingLeverStep"`
 
 	// The hull's own roll damping, in N·m·s/rad. The foils and sails damp through
 	// their flow.
@@ -2418,6 +2430,58 @@ type PhysicsHull struct {
 
 	// Moment of inertia in yaw, added inertia included, in kg·m².
 	YawInertia float64 `json:"yawInertia"`
+}
+
+// A boat of two hulls, a catamaran: one body whose stability, foils and drag take
+// its hulls' values. A monohull has a spacing of 0, one rudder and one board, and
+// a flying drag of 1.
+type PhysicsHulls struct {
+	// Boards, or hulls' lateral planes, each the one board's lift and drag: 1, or 2
+	// on a boat of two hulls.
+	BoardCount float64 `json:"boardCount"`
+
+	// The drag area's share with the windward hull clear: one hull at twice the load
+	// has less wetted area than two.
+	FlyingDrag float64 `json:"flyingDrag"`
+
+	// Between the hulls' centrelines, in m: 0 for one hull. The drawing, the sea, the
+	// wake and the contacts read it: the boat heels about its lee hull.
+	HullSpacing float64 `json:"hullSpacing"`
+
+	// The heel at which the windward hull leaves the water, in degrees: it is clear
+	// 5° later, its rudder and lateral plane with it.
+	LiftHeel float64 `json:"liftHeel"`
+
+	// Rudders, one on each hull, each the one rudder's lift and drag: 1, or 2 on a
+	// boat of two hulls.
+	RudderCount float64 `json:"rudderCount"`
+}
+
+// Pitch from the rig: the sails' drive, high above the centre of gravity, and the
+// hull's resistance below it pitch the bow down, and the sailor steps aft to hold
+// it up. Past bowBuryPitch the bows bury: their spring weakens and their drag
+// grows; past pitchpoleAngle the sailor is thrown off over the bow. None where
+// rigPitch is 0, the rest unread: the pitch is the waves' alone.
+type PhysicsPitch struct {
+	// How far aft of the helm's place the sailor steps to hold the bow up, in m.
+	AftReach float64 `json:"aftReach"`
+
+	// The hull's drag area grows by this share of itself for each degree past
+	// bowBuryPitch.
+	BowBuryDrag float64 `json:"bowBuryDrag"`
+
+	// The trim, bow down off the water's surface, at which the lee bow's deck meets
+	// the water, in degrees.
+	BowBuryPitch float64 `json:"bowBuryPitch"`
+
+	// The share of the pitch spring's slope left past bowBuryPitch.
+	BowBuryRestoring float64 `json:"bowBuryRestoring"`
+
+	// Past this trim, bow down, the sailor is thrown off over the bow, in degrees.
+	PitchpoleAngle float64 `json:"pitchpoleAngle"`
+
+	// 1 where the rig pitches the hull, else 0.
+	RigPitch float64 `json:"rigPitch"`
 }
 
 // How fast the sailor's hands move the rudder and the sheet.
@@ -5458,4 +5522,4 @@ type WorldZones struct {
 }
 
 // Version is the catalog version (tools/catalog).
-const Version = "b237fa9645f07772"
+const Version = "88f9ccff6e432058"

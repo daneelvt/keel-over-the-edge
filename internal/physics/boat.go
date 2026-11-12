@@ -190,12 +190,27 @@ func (b *Prepared) substep(s *State, wind, sinW, cosW, dt float64, g *rig, v *wa
 		// The bottom has pushed the foils up: what is left of them works.
 		boardWet, rudderWet = float64(wet*bd.boardCut), float64(wet*bd.rudderCut)
 	}
+	// A catamaran has a rudder and a lateral plane on each hull, and
+	// lifts her windward hull, and its foils, clear as she heels.
+	drag, flying := 1.0, 0.0
+	if b.twin {
+		flying = smooth(float64((math.Abs(wetHeel) - b.liftHeel) * b.invLiftRange))
+		boardWet = float64(boardWet * (b.boardCount - float64(flying*(b.boardCount-1))))
+		rudderWet = float64(rudderWet * (b.rudderCount - float64(flying*(b.rudderCount-1))))
+		drag = 1 + float64(flying*(b.flyingDrag-1))
+	}
+	// Bows pressed past where their deck meets the water drag her.
+	var past float64
+	if b.rigPitch {
+		past = b.buried(s, v, flying)
+		drag = float64(drag * (1 + float64(b.buryDrag*past)))
+	}
 	boardLift := float64(b.board.carry * max2(1-float64(b.heelLoss*math.Abs(s.Heel)), 0))
 	board := b.foilLoads(&b.board, &m, 0, 1, 1, 0, boardLift, boardWet, &l)
 	sinR, cosR := SinCos(s.Rudder)
 	rudder := b.foilLoads(&b.rudder, &m, sinR, cosR, b.rudderInflow, b.downwash, 1, rudderWet, &l)
 
-	b.hullLoads(&m, &l)
+	resistance := b.hullLoads(&m, &l, drag)
 	if bd.active {
 		bd.loads(&m, b, &l)
 	}
@@ -285,7 +300,16 @@ func (b *Prepared) substep(s *State, wind, sinW, cosW, dt float64, g *rig, v *wa
 	sinH, cosH = SinCos(s.Heading)
 	s.X += float64((float64(s.Surge*sinH) + float64(s.Sway*cosH)) * dt)
 	s.Y += float64((float64(s.Surge*cosH) - float64(s.Sway*sinH)) * dt)
-	b.float(s, v, dt)
+	var pitching float64
+	if b.rigPitch {
+		pitching = b.rigMoment(&sail, &kite, g, resistance)
+		b.stepAft(s, pitching, dt)
+	}
+	b.float(s, v, dt, pitching, flying)
+	if b.pitchpoled(s, v) && (s.SailorMode == Sailing || s.SailorMode == Climbing) {
+		// Thrown off over the bow: the sailor swims back to her.
+		s.SailorMode, s.SailorTimer, s.Sailor, s.SailorAft = InWater, b.swimTime, 0, 0
+	}
 	b.sailorModes(s, dt)
 
 	if last {
@@ -317,6 +341,17 @@ func (b *Prepared) substep(s *State, wind, sinW, cosW, dt float64, g *rig, v *wa
 		o.AfterFootFlow, o.AfterHeadFlow = sail.afterFlow[0], sail.afterFlow[1]
 		if b.square {
 			o.Sail = b.squareState(s, o)
+		}
+		o.HullFlying, o.BowsBurying = 0, 0
+		if flying > 0.5 {
+			o.HullFlying = 1
+		}
+		if past > 0 {
+			o.BowsBurying = 1
+		}
+		o.Trim = 0
+		if b.rigPitch {
+			o.Trim = s.Pitch - v.ahead
 		}
 		if b.kite {
 			o.Drive, o.SideForce = o.Drive+kite.drive, o.SideForce+kite.side

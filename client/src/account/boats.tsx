@@ -155,10 +155,16 @@ export function BoatPicture({
   const { width: w, top } = room(cat);
   const below = w * 0.06;
   const L = b.lengthOverall;
-  const f = 0.09 * L + 0.18;
+  // A boat of two hulls: each slender, the far one a little behind and
+  // above the near one, and a beam between them.
+  const twin = b.physics.hulls.hullSpacing > 0;
+  const f = twin ? 0.06 * L + 0.12 : 0.09 * L + 0.18;
   const stern = -0.48 * L;
   const bow = 0.5 * L;
-  const hull = `M ${stern} ${-f} L ${bow} ${-1.15 * f} Q ${0.42 * L} ${0.2 * f} ${0.28 * L} ${0.32 * f} L ${-0.4 * L} ${0.32 * f} Q ${stern} ${0.2 * f} ${stern} ${-f} Z`;
+  const hullAt = (dx: number, dy: number) =>
+    `M ${stern + dx} ${-f + dy} L ${bow + dx} ${-1.15 * f + dy} Q ${0.42 * L + dx} ${0.2 * f + dy} ${0.28 * L + dx} ${0.32 * f + dy} L ${-0.4 * L + dx} ${0.32 * f + dy} Q ${stern + dx} ${0.2 * f + dy} ${stern + dx} ${-f + dy} Z`;
+  const hull = hullAt(0, 0);
+  const farHull = twin ? hullAt(0.04 * L, -0.45 * f) : null;
   const { sails, masts } = sailsOf(b);
   const at = numberAt(b);
   const id = `boat-clip-${++pictures}`;
@@ -180,6 +186,14 @@ export function BoatPicture({
           ))}
         </clipPath>
       </defs>
+      {farHull === null ? null : (
+        <path
+          d={farHull}
+          fill={p?.colour}
+          class="boat-picture-hull boat-picture-far"
+          stroke-width={w * 0.006}
+        />
+      )}
       <line
         class="boat-picture-water"
         x1={-w / 2}

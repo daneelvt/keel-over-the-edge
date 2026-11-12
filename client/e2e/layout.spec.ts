@@ -90,6 +90,8 @@ interface Box {
 async function parts(page: Page): Promise<{
   parts: Box[];
   boat: Box | null;
+  /** Each of the boat's drawn parts' boxes, with the room kept about the boat. */
+  drawn: Box[];
   out: string[];
   spilt: string[];
   words: string[];
@@ -156,6 +158,13 @@ async function parts(page: Page): Promise<{
             right: Math.max(...b.map((r) => r.right)) + about,
             bottom: Math.max(...b.map((r) => r.bottom)) + about,
           };
+    const drawn = b.map((r) => ({
+      name: 'the boat',
+      left: r.left - about,
+      top: r.top - about,
+      right: r.right + about,
+      bottom: r.bottom + about,
+    }));
     // A part's own keys stay within it; a pusher's stem stands out of the
     // edge it is set in, and no other.
     const spilt = [...hud.querySelectorAll('.pilot-head button, .case button, .pocket button')]
@@ -224,7 +233,7 @@ async function parts(page: Page): Promise<{
     }
     const helm = one('the helm', '[data-control=helm]');
     const head = one('the control head', '.pilot-head');
-    return { parts: all, boat, out, spilt, words, helm, head };
+    return { parts: all, boat, drawn, out, spilt, words, helm, head };
   }, ABOUT_BOAT);
 }
 
@@ -1231,10 +1240,13 @@ for (const { kind, braces, aback, kite } of data.boats.slice(1).map((kind) => {
         n === 'the barometer pusher' ||
         n === 'the clock pusher' ||
         n === 'the board pusher';
+      // Against each part drawn, not the box about them all: a wide boat's
+      // box takes in empty corners beside a tall mast.
       for (const p of seen.parts) {
-        if (!(s.upright && inCase(p.name)) && overlap(p, boat)) {
+        const under = seen.drawn.find((d) => overlap(p, d));
+        if (!(s.upright && inCase(p.name)) && under !== undefined) {
           found.push(
-            `${id}, ${s.name}: ${p.name} covers the boat (${edges(p)} and ${edges(boat)})`,
+            `${id}, ${s.name}: ${p.name} covers the boat (${edges(p)} and ${edges(under)})`,
           );
         }
       }
