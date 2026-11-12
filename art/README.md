@@ -325,9 +325,11 @@ crawl plays slower than the library's (its `seconds`) and smoothed more
 figure's dressed one, a deep stride's knee lifts the body rather than
 meet the net, a bearing foot bent past its range raises its heel, and the
 whole stands as high as keeps its lowest vertex (but the cloth laid on the
-net) on it. There is no clip going down onto the hands and knees or up
-off them: the library's `Crawl_Enter` and `Crawl_Exit` did not pass the
-gates.
+net) on it. The Chartmaker crawls to the left with
+the hands nearer the body (a retarget's `pull`, `chartmaker-net-crawl-left`
+named `net-crawl-left`), clear of the man's hat's brim. There is no clip
+going down onto the hands and knees or up off them: the library's
+`Crawl_Enter` and `Crawl_Exit` did not pass the gates.
 
 Every build is judged before anyone looks at it: the gates
 (`review/metrics.py`: budgets, clean meshes and weights, nothing through
