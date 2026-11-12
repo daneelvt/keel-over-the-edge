@@ -332,7 +332,6 @@ export class CrewDeck {
   }
 
   #show(): void {
-    const looks = this.#looks;
     const rules = this.#rules;
     if (rules === null) {
       this.#people = [];

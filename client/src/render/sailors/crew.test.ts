@@ -36,12 +36,12 @@ import { deckFigure, farFigure } from './crewfigures';
 import { STRIDE } from './crewlevel';
 import { type PoseInput, poseMember } from './crewpose';
 import { type CrewMember, RISE, SIT } from './crewrules';
-import type { ShipMember } from './shiprules';
 import { deckLook, FleetLook } from './fleetlooks';
 import { placesOf } from './model';
 import { boneNames } from './onboat';
 import { railClips } from './rail';
 import { Rig } from './rig';
+import type { ShipMember } from './shiprules';
 
 const ART = new URL('../../../../art/', import.meta.url);
 
@@ -1397,10 +1397,17 @@ function triangleDistance(p: Vector3, a: Vector3, b: Vector3, c: Vector3): numbe
   }
   const va = d3 * d6 - d5 * d4;
   if (va <= 0 && d4 - d3 >= 0 && d5 - d6 >= 0) {
-    return p.distanceTo(b.clone().addScaledVector(new Vector3().subVectors(c, b), (d4 - d3) / (d4 - d3 + (d5 - d6))));
+    return p.distanceTo(
+      b.clone().addScaledVector(new Vector3().subVectors(c, b), (d4 - d3) / (d4 - d3 + (d5 - d6))),
+    );
   }
   const denom = 1 / (va + vb + vc);
-  return p.distanceTo(a.clone().addScaledVector(ab, vb * denom).addScaledVector(ac, vc * denom));
+  return p.distanceTo(
+    a
+      .clone()
+      .addScaledVector(ab, vb * denom)
+      .addScaledVector(ac, vc * denom),
+  );
 }
 
 /** The tall ship as her company's checks need her: her plan, rules, and what of her a body may not pass through. */
@@ -1461,8 +1468,12 @@ const ship = await (async () => {
         continue;
       }
       names.set(tri, `${o.parent?.name ?? ''}/${o.name}:${mat}`);
-      const lo = new Vector3(...[0, 1, 2].map((a) => Math.min(...tri.map((p) => p.getComponent(a)))));
-      const hi = new Vector3(...[0, 1, 2].map((a) => Math.max(...tri.map((p) => p.getComponent(a)))));
+      const lo = new Vector3(
+        ...[0, 1, 2].map((a) => Math.min(...tri.map((p) => p.getComponent(a)))),
+      );
+      const hi = new Vector3(
+        ...[0, 1, 2].map((a) => Math.max(...tri.map((p) => p.getComponent(a)))),
+      );
       for (let x = Math.floor(lo.x / CELL); x <= Math.floor(hi.x / CELL); x++) {
         for (let z = Math.floor(lo.z / CELL); z <= Math.floor(hi.z / CELL); z++) {
           const key = `${x},${z}`;
@@ -1515,7 +1526,10 @@ async function shipLook(art: Parameters<typeof fleetLook>[0], machine: boolean) 
     const places = placesOf(file.scene);
     for (const a of file.animations) {
       const place = places.get(`place-${a.name}`) ?? null;
-      clips.set(a.name, Clip.from(a, rig, place !== null && !place.equals(new Matrix4()) ? place : null));
+      clips.set(
+        a.name,
+        Clip.from(a, rig, place !== null && !place.equals(new Matrix4()) ? place : null),
+      );
     }
   }
   return look;
@@ -1532,7 +1546,11 @@ const shipLooks = await Promise.all(
     const art = machine
       ? catalog.machine.versions.find((v) => v.id === version)?.art
       : catalog.sailors.find((s) => s.id === name)?.versions.find((v) => v.id === version)?.art;
-    return { name: `${name} ${version}`, machine, look: await shipLook(art as NonNullable<typeof art>, machine) };
+    return {
+      name: `${name} ${version}`,
+      machine,
+      look: await shipLook(art as NonNullable<typeof art>, machine),
+    };
   }),
 );
 
@@ -1606,12 +1624,19 @@ describe('aboard the tall ship', () => {
       const pa = ways.nodes[a] as Vector3;
       const pb = ways.nodes[b] as Vector3;
       const l = Math.hypot(pa.x - pb.x, pa.z - pb.z);
-      const side = Math.abs(pb.z - pa.z) > 2 * Math.abs(pb.x - pa.x) && Math.abs(pa.x) > 1 && Math.abs(pb.x) > 1;
+      const side =
+        Math.abs(pb.z - pa.z) > 2 * Math.abs(pb.x - pa.x) &&
+        Math.abs(pa.x) > 1 &&
+        Math.abs(pb.x) > 1;
       for (const off of side ? [-PASS_SIDE, 0, PASS_SIDE] : [0]) {
         for (let k = 0; k <= Math.ceil(l / 0.1); k++) {
           const p = pa.clone().lerp(pb, k / Math.ceil(l / 0.1));
           p.x += off;
-          if (ladders.some((q) => Math.hypot(q.x - p.x, q.z - p.z) < 0.35 && Math.abs(q.y - p.y) < 0.2)) {
+          if (
+            ladders.some(
+              (q) => Math.hypot(q.x - p.x, q.z - p.z) < 0.35 && Math.abs(q.y - p.y) < 0.2,
+            )
+          ) {
             continue;
           }
           // A body: a column from the shins to the head, a person's breadth.
@@ -1621,12 +1646,16 @@ describe('aboard the tall ship', () => {
             const n = near(q, 0.5);
             least = Math.min(least, n.d);
             if (n.d < 0.22) {
-              bad.push(`${a}–${b} at ${p.x.toFixed(2)}, ${p.z.toFixed(2)}, ${h} up: ${n.what} ${n.d.toFixed(2)} m`);
+              bad.push(
+                `${a}–${b} at ${p.x.toFixed(2)}, ${p.z.toFixed(2)}, ${h} up: ${n.what} ${n.d.toFixed(2)} m`,
+              );
             }
           }
           for (const s of stands) {
             if (Math.abs(s.y - p.y) < 1 && Math.hypot(s.x - p.x, s.z - p.z) < 0.45) {
-              bad.push(`${a}–${b} at ${p.x.toFixed(2)}, ${p.z.toFixed(2)}: a station's person at ${s.x.toFixed(2)}, ${s.z.toFixed(2)}`);
+              bad.push(
+                `${a}–${b} at ${p.x.toFixed(2)}, ${p.z.toFixed(2)}: a station's person at ${s.x.toFixed(2)}, ${s.z.toFixed(2)}`,
+              );
             }
           }
         }
@@ -1646,18 +1675,34 @@ describe('aboard the tall ship', () => {
       let least = Number.POSITIVE_INFINITY;
       for (const yards of [0.4, -0.4]) {
         const rules = makeRules();
-        rules.set({ people: Array.from({ length: 40 }, (_, seat) => ({ seat, look: 0 })), holder: 0 }, false);
-        rules.step({ dt: 1 / 30, boom: 0, windOffBow: 0, depth: 0, ship: { yards, heel: 0, wind: 5, time: 0 } });
+        rules.set(
+          { people: Array.from({ length: 40 }, (_, seat) => ({ seat, look: 0 })), holder: 0 },
+          false,
+        );
+        rules.step({
+          dt: 1 / 30,
+          boom: 0,
+          windOffBow: 0,
+          depth: 0,
+          ship: { yards, heel: 0, wind: 5, time: 0 },
+        });
         for (const m of rules.members) {
           const s = kind.stations[m.station] as (typeof kind.stations)[number];
-          const set = s.pose === 'standing' ? IDLES.standing : (IDLES[s.pose as keyof typeof IDLES] ?? IDLES.standing);
+          const set =
+            s.pose === 'standing'
+              ? IDLES.standing
+              : (IDLES[s.pose as keyof typeof IDLES] ?? IDLES.standing);
           const body = new CrewBody(look.deck as NonNullable<typeof look.deck>, 7, machine);
           for (let k = 0; k < set.length; k++) {
             // Each idle in turn, by the time it comes up for this seat; a few moments into it.
             let world = 0;
             const { idleAt } = shipRules;
             const id = { now: 0, was: 0, f: 0 };
-            for (let t = 0; t < 4000 && !(idleAt(m.seat, t, set.length, id).now === k && id.f >= 1); t += 1) {
+            for (
+              let t = 0;
+              t < 4000 && !(idleAt(m.seat, t, set.length, id).now === k && id.f >= 1);
+              t += 1
+            ) {
               world = t + 1;
             }
             for (const dt of [0, 1.3, 2.9]) {
@@ -1669,7 +1714,10 @@ describe('aboard the tall ship', () => {
               const clip = input.a.clip?.name ?? '';
               for (const [p0, p1, r, part] of capsulesNamed(body)) {
                 // Hands and forearms rest on the rail leaning; in the top a hand holds a shroud.
-                if ((clip === 'leaning' || clip.startsWith('aloft')) && /hand|lowerarm/.test(part)) {
+                if (
+                  (clip === 'leaning' || clip.startsWith('aloft')) &&
+                  /hand|lowerarm/.test(part)
+                ) {
                   continue;
                 }
                 for (let j = 0; j <= 4; j++) {
@@ -1677,7 +1725,9 @@ describe('aboard the tall ship', () => {
                   const n = near(q, 0.5);
                   least = Math.min(least, n.d - r);
                   if (n.d < r * 0.7) {
-                    bad.push(`${m.station} ${clip}: ${part} through ${n.what} (${(n.d - r).toFixed(3)})`);
+                    bad.push(
+                      `${m.station} ${clip}: ${part} through ${n.what} (${(n.d - r).toFixed(3)})`,
+                    );
                     break;
                   }
                 }
@@ -1697,8 +1747,17 @@ describe('aboard the tall ship', () => {
     const { poseShip, plumbOf } = await import('./shippose');
     const { look, machine } = shipLooks[0] as (typeof shipLooks)[number];
     const rules = makeRules();
-    rules.set({ people: Array.from({ length: 12 }, (_, seat) => ({ seat, look: 0 })), holder: 0 }, false);
-    rules.step({ dt: 1 / 30, boom: 0, windOffBow: 0, depth: 0, ship: { yards: 0.4, heel: 0, wind: 5, time: 0 } });
+    rules.set(
+      { people: Array.from({ length: 12 }, (_, seat) => ({ seat, look: 0 })), holder: 0 },
+      false,
+    );
+    rules.step({
+      dt: 1 / 30,
+      boom: 0,
+      windOffBow: 0,
+      depth: 0,
+      ship: { yards: 0.4, heel: 0, wind: 5, time: 0 },
+    });
     const m = rules.members.find((x) => x.station === 8) as ShipMember;
     const lean = (heel: number) => {
       const model = new Matrix4().makeRotationZ(-heel * DEG);
@@ -1708,9 +1767,15 @@ describe('aboard the tall ship', () => {
         input.life.plumb = null;
         poseShip(body, m, input);
         // The figure's own up, in the world, and its feet in the model.
-        const figureUp = new Vector3(0, 1, 0).transformDirection(body.root).transformDirection(model);
-        const foot = body.rig.position(body.rig.bone('foot_l'), new Vector3()).applyMatrix4(body.root);
-        const hips = body.rig.position(body.rig.bone('pelvis'), new Vector3()).applyMatrix4(body.root);
+        const figureUp = new Vector3(0, 1, 0)
+          .transformDirection(body.root)
+          .transformDirection(model);
+        const foot = body.rig
+          .position(body.rig.bone('foot_l'), new Vector3())
+          .applyMatrix4(body.root);
+        const hips = body.rig
+          .position(body.rig.bone('pelvis'), new Vector3())
+          .applyMatrix4(body.root);
         return { tilt: Math.acos(Math.min(1, figureUp.y)) / DEG, foot, hips };
       });
     };
@@ -1734,11 +1799,24 @@ describe('aboard the tall ship', () => {
     const { look, machine } = shipLooks[1] as (typeof shipLooks)[number];
     const pose = async () => {
       const rules = makeRules();
-      rules.set({ people: Array.from({ length: 40 }, (_, seat) => ({ seat, look: 0 })), holder: 0 }, false);
-      rules.step({ dt: 1 / 30, boom: 0, windOffBow: 0, depth: 0, ship: { yards: 0.4, heel: 0, wind: 5, time: 523.4 } });
+      rules.set(
+        { people: Array.from({ length: 40 }, (_, seat) => ({ seat, look: 0 })), holder: 0 },
+        false,
+      );
+      rules.step({
+        dt: 1 / 30,
+        boom: 0,
+        windOffBow: 0,
+        depth: 0,
+        ship: { yards: 0.4, heel: 0, wind: 5, time: 523.4 },
+      });
       const out: number[][] = [];
       for (const m of rules.members) {
-        const body = new CrewBody(look.deck as NonNullable<typeof look.deck>, 1 + m.seat * 977, machine);
+        const body = new CrewBody(
+          look.deck as NonNullable<typeof look.deck>,
+          1 + m.seat * 977,
+          machine,
+        );
         poseShip(body, m, await shipInput(rules, look, 523.4));
         out.push(Array.from(body.bones));
       }
@@ -1755,7 +1833,9 @@ function capsulesNamed(body: CrewBody): [Vector3, Vector3, number, string][] {
 }
 
 /** Her decks' height under (x, z), as her model has them. */
-function modelDeckOf(s: { kind: { art: { model: string } } }): (x: number, z: number) => number | null {
+function modelDeckOf(s: {
+  kind: { art: { model: string } };
+}): (x: number, z: number) => number | null {
   return deckBy.get(s.kind.art.model) as (x: number, z: number) => number | null;
 }
 const deckBy = new Map<string, (x: number, z: number) => number | null>();

@@ -349,7 +349,10 @@ export class CrewBody {
     const reach = this.#reach;
     this.#legs.forEach(([thigh, , foot], k) => {
       rig.position(foot, this.#feetA[k] as Vector3).applyMatrix4(this.root);
-      reach[k] = rig.position(thigh, v).applyMatrix4(this.root).distanceTo(this.#feetA[k] as Vector3);
+      reach[k] = rig
+        .position(thigh, v)
+        .applyMatrix4(this.root)
+        .distanceTo(this.#feetA[k] as Vector3);
     });
     const [f0, f1] = this.#feetA as [Vector3, Vector3];
     v.set((f0.x + f1.x) / 2, Math.min(f0.y, f1.y), (f0.z + f1.z) / 2);
@@ -372,7 +375,15 @@ export class CrewBody {
     inv.copy(this.root).invert();
     // Solved exactly, never eased short: each leg reaches no further than it did.
     this.#legs.forEach(([thigh, calf, foot], k) => {
-      twoBone(rig, thigh, calf, foot, w.copy(this.#feetA[k] as Vector3).applyMatrix4(inv), 1, PLUMB_REACH);
+      twoBone(
+        rig,
+        thigh,
+        calf,
+        foot,
+        w.copy(this.#feetA[k] as Vector3).applyMatrix4(inv),
+        1,
+        PLUMB_REACH,
+      );
     });
   }
 

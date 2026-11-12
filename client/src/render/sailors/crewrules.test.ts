@@ -452,7 +452,9 @@ function shipCompany(): Company {
     nodes: { name?: string; extras?: unknown }[];
   };
   const node = json.nodes.find((n) => n.name === 'company');
-  return company(new Map([['company', { userData: node?.extras } as unknown as Object3D]])) as Company;
+  return company(
+    new Map([['company', { userData: node?.extras } as unknown as Object3D]]),
+  ) as Company;
 }
 
 /** A ship's rules for her stations, with n aboard (seat k in look k) and holder holding. */
@@ -550,7 +552,9 @@ describe('the tall ship’s company, as seats fill', () => {
 
   test('forty aboard: everyone at their own station, peopled fore and aft', () => {
     const rules = shipRules(40);
-    expect(rules.members.map((m) => m.station)).toEqual(Array.from({ length: 39 }, (_, i) => i + 1));
+    expect(rules.members.map((m) => m.station)).toEqual(
+      Array.from({ length: 39 }, (_, i) => i + 1),
+    );
     const zs = rules.members.map((m) => kindStations()[m.station]?.at[2] as number);
     expect(zs.filter((z) => z < MAIN_Z).length).toBeGreaterThan(14);
     expect(zs.filter((z) => z > MAIN_Z).length).toBeGreaterThan(14);
@@ -582,17 +586,20 @@ describe('the tall ship’s weather side: the side her after yards are braced fo
   test.each([
     [0.4, 1],
     [-0.4, -1],
-  ])('the yards turned %f: the weather side %i; the master to windward, the mate to leeward, the gangway and the top to windward', (yards, weather) => {
-    const rules = shipRules(8);
-    sailShip(rules, 1 / 30, yards, { time: 0 });
-    expect(rules.side.side).toBe(weather);
-    expect(sideOf(rules, 1)).toBe(weather);
-    expect(sideOf(rules, 2)).toBe(-weather);
-    expect(sideOf(rules, 3)).toBe(weather);
-    expect(sideOf(rules, 7)).toBe(weather);
-    // Nobody walks to begin with.
-    expect(rules.members.every((m) => m.ship.route === null)).toBe(true);
-  });
+  ])(
+    'the yards turned %f: the weather side %i; the master to windward, the mate to leeward, the gangway and the top to windward',
+    (yards, weather) => {
+      const rules = shipRules(8);
+      sailShip(rules, 1 / 30, yards, { time: 0 });
+      expect(rules.side.side).toBe(weather);
+      expect(sideOf(rules, 1)).toBe(weather);
+      expect(sideOf(rules, 2)).toBe(-weather);
+      expect(sideOf(rules, 3)).toBe(weather);
+      expect(sideOf(rules, 7)).toBe(weather);
+      // Nobody walks to begin with.
+      expect(rules.members.every((m) => m.ship.route === null)).toBe(true);
+    },
+  );
 
   test('yards slatting about square move nobody', () => {
     const rules = shipRules(8);
@@ -684,7 +691,9 @@ describe('sat on the hatch in light weather', () => {
     const rules = shipRules(16);
     const t = { time: 0 };
     const sat = () =>
-      rules.members.filter((m) => kindStations()[m.station]?.pose === 'seated').map((m) => m.ship.sat);
+      rules.members
+        .filter((m) => kindStations()[m.station]?.pose === 'seated')
+        .map((m) => m.ship.sat);
     for (let i = 0; i < 300; i++) {
       sailShip(rules, 1 / 30, 0.4, t, 5 * DEG);
     }
@@ -770,7 +779,7 @@ describe('walking her ways', () => {
     handOver(8, 0, 5, 0.4, (r) => {
       const w = standing(r).get(5);
       // Abaft the waist's crossing, up to the wheel.
-      if (w !== undefined && w.walking && !w.gone && w.at.z > 2 && w.at.z < 12.4) {
+      if (w?.walking && !w.gone && w.at.z > 2 && w.at.z < 12.4) {
         aft.push(w.at.x);
       }
       if (w?.gone === true) {
@@ -779,7 +788,10 @@ describe('walking her ways', () => {
     });
     // The weather to starboard: walked to port.
     expect(aft.length).toBeGreaterThan(30);
-    expect(aft.every((x) => x < -1), JSON.stringify(aft.map((x) => x.toFixed(2)))).toBe(true);
+    expect(
+      aft.every((x) => x < -1),
+      JSON.stringify(aft.map((x) => x.toFixed(2))),
+    ).toBe(true);
     // Two ladders, each a cut of LADDER_TIME.
     expect(gone).toBeCloseTo(2 * LADDER_TIME, 0);
   });
@@ -791,37 +803,40 @@ describe('walking her ways', () => {
     [21, 0.4],
     [30, -0.4],
     [39, 0.4],
-  ])('handing to seat %i with forty aboard (yards %f): every walk ends at its place, and nobody walks through anybody', (to, yards) => {
-    let nearest = Number.POSITIVE_INFINITY;
-    let who = '';
-    const { rules, relievedAt } = handOver(40, 0, to, yards, (r) => {
-      const at = standing(r);
-      for (const [a, pa] of at) {
-        if (!pa.walking || pa.gone) {
-          continue;
-        }
-        for (const [b, pb] of at) {
-          if (a === b || pb.gone || Math.abs(pa.at.y - pb.at.y) > 1) {
+  ])(
+    'handing to seat %i with forty aboard (yards %f): every walk ends at its place, and nobody walks through anybody',
+    (to, yards) => {
+      let nearest = Number.POSITIVE_INFINITY;
+      let who = '';
+      const { rules, relievedAt } = handOver(40, 0, to, yards, (r) => {
+        const at = standing(r);
+        for (const [a, pa] of at) {
+          if (!pa.walking || pa.gone) {
             continue;
           }
-          const d = Math.hypot(pa.at.x - pb.at.x, pa.at.z - pb.at.z);
-          if (d < nearest) {
-            nearest = d;
-            who = `${a} and ${b} at ${pa.at.x.toFixed(2)}, ${pa.at.z.toFixed(2)}`;
+          for (const [b, pb] of at) {
+            if (a === b || pb.gone || Math.abs(pa.at.y - pb.at.y) > 1) {
+              continue;
+            }
+            const d = Math.hypot(pa.at.x - pb.at.x, pa.at.z - pb.at.z);
+            if (d < nearest) {
+              nearest = d;
+              who = `${a} and ${b} at ${pa.at.x.toFixed(2)}, ${pa.at.z.toFixed(2)}`;
+            }
           }
         }
+      });
+      expect(relievedAt).toBeGreaterThan(0);
+      expect(rules.wheelSeat).toBe(to);
+      const skipper = rules.members.find((m) => m.seat === 0) as ShipMember;
+      expect(skipper.station).toBe(to);
+      // Everyone at their own place after.
+      for (const m of rules.members) {
+        expect(m.station, `seat ${m.seat}`).toBe(m.seat === 0 ? to : m.seat);
       }
-    });
-    expect(relievedAt).toBeGreaterThan(0);
-    expect(rules.wheelSeat).toBe(to);
-    const skipper = rules.members.find((m) => m.seat === 0) as ShipMember;
-    expect(skipper.station).toBe(to);
-    // Everyone at their own place after.
-    for (const m of rules.members) {
-      expect(m.station, `seat ${m.seat}`).toBe(m.seat === 0 ? to : m.seat);
-    }
-    expect(nearest, who).toBeGreaterThan(0.4);
-  });
+      expect(nearest, who).toBeGreaterThan(0.4);
+    },
+  );
 
   test('a second handover during the walk: the first relief walks back to their place, the wheel kept by its holder', () => {
     const rules = shipRules(8, 0);
@@ -857,7 +872,11 @@ describe('walking her ways', () => {
     const relief = new Vector3(0, 5, 12.6 + RELIEF_AFT);
     for (let k = 1; k < 40; k++) {
       rules.spotOf(k, sp);
-      const from = standPoint(kindStations()[k] as (typeof kindStations extends () => infer R ? R : never)[number], sp, new Vector3());
+      const from = standPoint(
+        kindStations()[k] as (typeof kindStations extends () => infer R ? R : never)[number],
+        sp,
+        new Vector3(),
+      );
       const route = graph.route(from, relief, () => 1);
       expect(route.length, `${k}`).toBeGreaterThan(2);
       // No stretch between two points of a walk jumps a deck.
