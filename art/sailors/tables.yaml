@@ -143,6 +143,21 @@ stage:
   ship:
     boat: boats/tall-ship.glb
     at: [0.0, 80.0, 0.0]
+  # The beach cat, whose sailors sit on her windward hull, sit out from it,
+  # lie out on the wire, cross her net and right her standing on her lower
+  # hull (build/stage.py's Cat): her model, set this far forward of the
+  # dinghy in the stage's scene, clear of every other stage, and a copy of
+  # her lying on her side this far to starboard of her (her mast reaches
+  # 9 m to port of it); her `aboard` node gives the places the clips made
+  # there are placed from, on the starboard side (the port's the mirror).
+  # Sat on her hull facing inboard, the hips this far outboard of the
+  # deck's inner edge; sitting out, this far inboard of its outer edge.
+  cat:
+    boat: boats/beach-cat.glb
+    at: [0.0, 50.0, 0.0]
+    capsized: [13.0, 0.0, 0.0]
+    seat: { in: 0.22 }
+    hike: { in: 0.05 }
 
 # The portraits (build/portraits.py), every look's taken alike: head and
 # shoulders, three-quarter, the camera on the figure's left at the height

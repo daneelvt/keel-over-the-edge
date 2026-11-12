@@ -110,6 +110,7 @@ go run ./tools/sailors -setup       # check Blender, install MPFB and gltfpack
 go run ./tools/sailors -add helm-wheel,habit-wheel   # only these clips, on every look
 go run ./tools/sailors -add trapeze,trapeze-low      # and the harness with them
 go run ./tools/sailors -add rail,rail-out,crouch-enter,crouch-walk,crouch-exit
+go run ./tools/sailors -add cat-helm,cat-hike,hull,hull-wire,cat-trapeze,cat-trapeze-low,cat-righting,net-crouch-enter,net-crouch-left,net-crouch-right,net-crouch-exit,net-crawl-left,net-crawl-right
 ```
 
 It needs Blender 5.2 LTS installed; the first run installs the pinned MPFB
@@ -283,6 +284,52 @@ seen in the mirror. The machines have neither `fold-arms`, `hatch-talk`,
 `leaning` nor `haul`: their hands would meet their plates, their long coats
 the deck and the rail. The Bosun leans with her forearms a little further
 over the rail, for her loose sleeves (`bosun-leaning`, named `leaning`).
+
+A beach cat's people sit on her windward hull, sit out from it, lie out
+on the wire from it, cross her net and right her. Her model's `aboard`
+node gives, on her starboard side, in her frame: at the helm's and the
+crew's stations the hull's deck at its inner and outer edges, the side
+bar's top and the hiking strap's underside; the net (its height where it
+is laced, its fore and aft edges, its sag); the boom's underside at its
+lowest; and the righting line lying on the net. The sailors' stage imports
+her forward of the rest (`tables.yaml`'s `stage.cat`, `build/stage.py`'s
+`Cat`), and a copy of her lying on her side beside her; her hulls, decks,
+beams, side bars and fittings are solid to the gates, her net as the plane
+it is laced at, and her straps and ropes too but to the hands and feet
+(a new gate, "clear of the cat"); sat on her, the cloth is laid on her
+decks and net. Her clips are `<version>.cat.glb`, which only a kind whose
+catalog art names `cat` in `sailorClips` loads: `cat-helm` (sat on the
+hull's deck by its inner edge, the legs across the net and the feet under
+the strap, the aft hand on the extension and the other on the mainsheet)
+and `hull` (the crew so at the crew's station, a hand on the jib sheet,
+the other on the knee), placed from the deck's inner edge at their
+station; `cat-hike` (sitting out on the outer edge), `cat-trapeze` and
+`cat-trapeze-low` (the skiff's two on the wire, the crouch standing 15 mm
+higher, the man's heel being through her rounder edge) and `hull-wire`
+(the crew on the wire, a hand on the jib sheet, the other on the trapeze's
+handle), placed from the deck's outer edge; each with its `-port`.
+`cat-righting` is the tall ship's `haul` set on her lower hull as she lies
+on her side, leaning further back, each hand brought from its shoulder
+toward where the righting line leaves her upper hull, placed from where
+the feet stand. The crossings of her net facing forward are Quaternius'
+(`Crouch_Enter`, `Crouch_Left_Loop`, `Crouch_Right_Loop`, `Crouch_Exit`:
+`net-crouch-enter`, `-left`, `-right`, `-exit`; `Crawl_Left_Loop`,
+`Crawl_Right_Loop`: `net-crawl-left`, `-right`), set on the net (a
+retarget's `stage: cat-net`) and placed from its middle on her centreline,
+the loops stepping to their side (a retarget's `way`, at its `speed`).
+Crawling (`crawl`), the hands and knees are held on the net while they
+bear as the feet are, the back's arch shared along it, the forearms' turn
+kept within their range and the palms flat where the wrists allow; the
+crawl plays slower than the library's (its `seconds`) and smoothed more
+(its `smooth`), easing its hitches. On the net a knee is as thick as the
+figure's dressed one, a deep stride's knee lifts the body rather than
+meet the net, a bearing foot bent past its range raises its heel, and the
+whole stands as high as keeps its lowest vertex (but the cloth laid on the
+net) on it. The Chartmaker crawls to the left with
+the hands nearer the body (a retarget's `pull`, `chartmaker-net-crawl-left`
+named `net-crawl-left`), clear of the man's hat's brim. There is no clip
+going down onto the hands and knees or up off them: the library's
+`Crawl_Enter` and `Crawl_Exit` did not pass the gates.
 
 Every build is judged before anyone looks at it: the gates
 (`review/metrics.py`: budgets, clean meshes and weights, nothing through

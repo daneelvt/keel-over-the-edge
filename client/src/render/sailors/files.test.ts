@@ -6,13 +6,31 @@
 // one material whose base colour is the atlas and whose occlusion texture
 // is the mask, both KTX2; and the clips with a place each, those at a
 // wheel, those on a trapeze's wire, those on a rail (with the crouch) and
-// the ship's company's (about her decks, and her work and aloft) in files
-// of their own; and the trapeze harness, skinned to the same skeleton, with
+// the ship's company's (about her decks, and her work and aloft) and a beach
+// cat's people's in files of their own; and the trapeze harness, skinned to the same skeleton, with
 // its hook.
 
 import { readdirSync, readFileSync } from 'node:fs';
 import { describe, expect, test } from 'vitest';
+import { CAT_CLIPS, catAnchor, catSide, inCatFile } from './cat';
 import { ALOFT_CLIPS, DECK_CLIPS, NOT_FOR_MACHINES, shipAnchor } from './ship';
+
+/** Every clip of the beach cat's file, and those a machine has not. */
+const CAT_FILE = [
+  ...[
+    CAT_CLIPS.helm,
+    CAT_CLIPS.hike,
+    CAT_CLIPS.wire,
+    CAT_CLIPS.wireLow,
+    CAT_CLIPS.crew,
+    CAT_CLIPS.crewWire,
+  ].flatMap((c) => [c, `${c}-port`]),
+  CAT_CLIPS.righting,
+  ...CAT_CLIPS.crouch,
+  ...CAT_CLIPS.crawl,
+];
+const CAT_NOT_FOR_MACHINES: readonly string[] = [];
+const WIRES: readonly string[] = [CAT_CLIPS.wire, CAT_CLIPS.wireLow, CAT_CLIPS.crewWire];
 
 interface Gltf {
   extensionsUsed?: string[];
@@ -207,6 +225,36 @@ describe.each(looks)('%s', (look) => {
       expect(facing(aloft, 'yard-port')[10]).toBeLessThan(-0.99);
       if (look !== 'machine') {
         expect(facing(aloft, 'haul')[10]).toBeGreaterThan(0.95);
+      }
+    });
+
+    test('its clips aboard a beach cat, a file of its own on its skeleton: each placed upright from its place, those on the hull facing inboard, those crossing the net forward', () => {
+      if (look === 'test') {
+        return;
+      }
+      const cat = readGltf(`${look}/${version}.cat.glb`);
+      const names = (cat.animations ?? []).map((a) => a.name).sort();
+      expect(names).toEqual(
+        CAT_FILE.filter((c) => look !== 'machine' || !CAT_NOT_FOR_MACHINES.includes(c)).sort(),
+      );
+      expect(joints(cat)).toEqual(joints(clips));
+      for (const name of names) {
+        expect(inCatFile(name), name).toBe(true);
+        const m = cat.nodes.find((n) => n.name === `place-${name}`)?.matrix ?? [];
+        // Near its place on her; upright, but lying out on the wire.
+        expect(Math.hypot(m[12] ?? 9, m[13] ?? 9, m[14] ?? 9), name).toBeLessThan(1.6);
+        if (WIRES.includes(name.replace(/-port$/, ''))) {
+          continue;
+        }
+        expect(m[5] ?? 0, name).toBeGreaterThan(0.99);
+        const side = catSide(name);
+        if (catAnchor(name) === 'net') {
+          // Facing forward (−z).
+          expect(m[10] ?? 0, name).toBeLessThan(-0.99);
+        } else if (catAnchor(name) !== 'stand') {
+          // On the starboard hull facing inboard (−x), on the port one +x.
+          expect(-side * (m[8] ?? 0), name).toBeGreaterThan(0.99);
+        }
       }
     });
 

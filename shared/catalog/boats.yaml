@@ -1312,6 +1312,9 @@ boats:
     art:
       model: boats/beach-cat.glb
       far: boats/beach-cat.far.glb
+      # Her people's clips: on her hull, out on the wire, across her net,
+      # and righting her.
+      sailorClips: [cat]
       budget: { near: 15000, far: 1000 }
     physics:
       hull:

@@ -50,6 +50,7 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import type { WebGPURenderer } from 'three/webgpu';
 import type { SailorArt } from '../../catalog';
 import { seatFigure } from '../fleetparts';
+import { catClips } from './cat';
 import { Clip, Pose } from './clips';
 import { LayeredTexture } from './layers2d';
 import { gltfLoader, placesOf } from './model';
@@ -101,6 +102,9 @@ export class FleetLook {
   aloftState: LookState = 'none';
   shipped = false;
   aloft = false;
+  /** Its clips aboard a beach cat (cat.ts), added to its clips when someone wearing it is aboard one; whether wanted. */
+  catState: LookState = 'none';
+  catted = false;
   /** Whether a boat with it has come near: its clips are wanted. */
   near = false;
   deck: DeckLook | null = null;
@@ -176,8 +180,10 @@ export class FleetLooks {
     railed = false,
     shipped = false,
     aloft = false,
+    catted = false,
   ): void {
     look.near ||= near;
+    look.catted ||= catted;
     look.wired ||= wired;
     look.railed ||= railed;
     look.shipped ||= shipped || aloft;
@@ -284,6 +290,7 @@ export class FleetLooks {
     for (const [wanted, state, file] of [
       [look.shipped, 'shipState', shipClips],
       [look.aloft, 'aloftState', aloftClips],
+      [look.catted && look.near, 'catState', catClips],
     ] as const) {
       if (wanted && look.clipsState === 'ready' && look[state] === 'none' && look.deck !== null) {
         look[state] = 'loading';
@@ -316,7 +323,8 @@ export class FleetLooks {
         look.trapezeState === 'loading' ||
         look.railState === 'loading' ||
         look.shipState === 'loading' ||
-        look.aloftState === 'loading'
+        look.aloftState === 'loading' ||
+        look.catState === 'loading'
       ) {
         await new Promise((r) => setTimeout(r, 10));
         this.want(look, true);

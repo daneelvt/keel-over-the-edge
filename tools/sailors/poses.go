@@ -142,15 +142,34 @@ type retarget struct {
 	// Clear sets, leaning on the ship's rail, how far the forearms' sleeves
 	// are kept over its top, if not the build's own.
 	Clear float64 `yaml:"clear" json:"clear,omitempty"`
+	// Way is which way it walks over the deck at its speed: forward, or to
+	// its left or right, facing forward (crossing a beach cat's net).
+	Way string `yaml:"way" json:"way,omitempty"`
+	// Crawl holds its hands and knees on the deck while they bear, as its
+	// feet.
+	Crawl bool `yaml:"crawl" json:"crawl,omitempty"`
+	// Smooth is over how many frames (a Gaussian's sigma) its keys are
+	// smoothed, if not the build's own: a source's hitches eased.
+	Smooth float64 `yaml:"smooth" json:"smooth,omitempty"`
+	// Pull sets the hands this much nearer the body, crawling: clear of a
+	// hat's brim.
+	Pull float64 `yaml:"pull" json:"pull,omitempty"`
 }
 
 var (
-	places = []string{"", "seat", "gunwale", "cockpit", "outside", "wheel", "trapeze", "rail", "brace", "top", "yard"}
+	places = []string{"", "seat", "gunwale", "cockpit", "outside", "wheel", "trapeze", "rail", "brace", "top", "yard",
+		"cat-seat", "crew-seat", "cat-out", "cat-wire", "crew-wire", "cat-stand"}
 	// groups are the files a clip may be written to apart from the
 	// look's clips.
-	groups = []string{"", "rail", "ship", "aloft"}
-	// shipStages are the ship's places a retargeted clip may be set at.
-	shipStages = []string{"", "ship-rail", "ship-hatch"}
+	groups = []string{"", "rail", "ship", "aloft", "cat"}
+	// shipStages are the ship's places a retargeted clip may be set at,
+	// and the beach cat's: her net, crossing it.
+	shipStages = []string{"", "ship-rail", "ship-hatch", "cat-net"}
+	// ways are the ways a retargeted clip may walk over its deck.
+	ways = []string{"", "forward", "left", "right"}
+	// catPoints are the beach cat's places a target may be at.
+	catPoints = []string{"cat-inner", "cat-outer", "cat-strap", "crew-inner", "crew-outer", "crew-strap", "cat-net",
+		"cat-stand", "cat-line"}
 	// shipPoints are the ship's places a target may be at.
 	shipPoints = []string{"ship-rail", "ship-hatch", "ladder-foot", "ladder-head", "shroud", "top", "aloft",
 		"topmast-shroud", "yard-foot-in", "yard-foot-out", "yard", "brace-lead", "brace-fall", "brace", "haul-deck"}
@@ -229,6 +248,13 @@ func (lib poseLibrary) check(t tables, sources map[string]source) error {
 		// On the ship: her company's places.
 		if _, ok := st["ship"].(map[string]any); ok {
 			for _, p := range shipPoints {
+				points[p] = true
+			}
+		}
+		// On the beach cat: her hull's edges, the strap, the net, and
+		// where she is righted from.
+		if _, ok := st["cat"].(map[string]any); ok {
+			for _, p := range catPoints {
 				points[p] = true
 			}
 		}
@@ -314,6 +340,14 @@ func (lib poseLibrary) check(t tables, sources map[string]source) error {
 			return fmt.Errorf("the retarget %s: a speed of %v m/s is not 0 to 2", name, r.Speed)
 		case r.Seconds < 0 || r.Seconds > 60:
 			return fmt.Errorf("the retarget %s: %v seconds is not 0 to 60", name, r.Seconds)
+		case !slices.Contains(ways, r.Way) || r.Way != "" && r.Speed == 0:
+			return fmt.Errorf("the retarget %s: it walks forward, left or right, not %q, and at a speed", name, r.Way)
+		case r.Pull < 0 || r.Pull > 0.2 || r.Pull > 0 && !r.Crawl:
+			return fmt.Errorf("the retarget %s: its hands are pulled in 0 to 0.2 m, and only crawling", name)
+		case r.Smooth < 0 || r.Smooth > 10:
+			return fmt.Errorf("the retarget %s: smoothed over %v frames, not 0 to 10", name, r.Smooth)
+		case r.Crawl && !r.Deck:
+			return fmt.Errorf("the retarget %s: crawling, it is on a deck", name)
 		case r.Head < 0 || r.Head > 2:
 			return fmt.Errorf("the retarget %s: a head %v m over the deck is not 0 to 2", name, r.Head)
 		}

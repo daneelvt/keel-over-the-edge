@@ -47,6 +47,16 @@ places it from a station on the rail; her hull (with her deck and cuddy)
 is solid, and the cloth a figure sits on is laid on her deck inboard of
 the edge (Rail.plane), hanging free outboard of it.
 
+A beach cat has a stage of its own (tables.yaml's `cat`): her model,
+imported and set forward of the others, and a second of her lying on her
+side (capsized to port), beside the first. Her `aboard` node gives, on her
+starboard side, the hull's deck at its inner and outer edges at the helm's
+and the crew's stations and the hiking strap there, the net, and the boom's
+underside; her sailors sit on the hull facing inboard (the legs across the
+net, the feet under the strap), sit out on its outer edge, lie out on the
+wire from it, cross the net on it, and stand on her lower hull lying on her
+side, hauling her up on the righting line over the upper one (Cat).
+
 The cockpit runs between the side decks' inner edges (`edge` out from the
 centreline). A figure is seated with its face inboard; a vertex is through the boat
 when the line from its bone to it crosses the hull, and a bone is when the
@@ -92,6 +102,9 @@ class Stage:
         # The ship's, judged apart (Ship.tree): she stands far higher than
         # the rest, and her ropes are held.
         self.ship = Ship(root, spec["ship"]) if spec.get("ship") else None
+        # The beach cat's, judged apart too (Cat.tree): her net gives, and
+        # her straps and ropes are held.
+        self.cat = Cat(root, spec["cat"]) if spec.get("cat") else None
         self.tree = _tree(self.solid + ([self.wheel.deck] if self.wheel else []) +
                           (self.trapeze.solid if self.trapeze else []) + (self.rail.solid if self.rail else []))
 
@@ -180,6 +193,8 @@ class Stage:
             return self.rail.point(name, side)
         if self.ship is not None and name in Ship.POINTS:
             return self.ship.point(name, side)
+        if self.cat is not None and name in Cat.POINTS:
+            return self.cat.point(name, side)
         fwd, inb, up = self.spec["points"][name]
         p = self.frame(side) @ Vector((fwd, inb, up))
         if name.startswith("tiller"):
@@ -193,11 +208,17 @@ class Stage:
         own axes, x to its left."""
         return Matrix.Rotation(np.radians(-90.0 * side), 4, "Z")
 
-    def show(self, shown, wheel=False, trapeze=False, rail=False, ship=False):
+    def show(self, shown, wheel=False, trapeze=False, rail=False, ship=False, cat=None):
         """Shows the dinghy's hull (shown), or the wheel's stage, or the
-        trapeze's boat, or the rail's, or the ship."""
+        trapeze's boat, or the rail's, or the ship, or the beach cat
+        (cat: upright, or lying on her side, capsized)."""
         for o in self.objects:
-            o.hide_render = not shown or wheel or trapeze or rail or ship or o not in self.solid
+            o.hide_render = not shown or wheel or trapeze or rail or ship or bool(cat) or o not in self.solid
+        if self.cat is not None:
+            for o in self.cat.objects:
+                o.hide_render = not (shown and cat) or o.type != "MESH" or o in self.cat.planes or \
+                    o in self.cat.hidden or \
+                    (o in self.cat.lying) != (cat == "capsized")
         if self.ship is not None:
             for o in self.ship.objects:
                 o.hide_render = not (shown and ship) or o.type != "MESH" or o in self.ship.planes
@@ -670,6 +691,160 @@ class Ship:
         """The height of the first surface of the ship a ray straight down
         from (x, y, z) meets, or None."""
         hit = self.tree.ray_cast(Vector((x, y, z)), Vector((0, 0, -1)), 10.0)
+        return None if hit[0] is None else hit[0].z
+
+
+class Cat:
+    """The beach cat's stage: her model (spec `boat`), imported and moved by
+    `at` in the stage's scene (x to starboard, y forward, z up), clear of
+    the rest; and a copy of her hull, mast and boom lying on her side,
+    capsized to port (her port hull down), `capsized` from her. Her places,
+    from her model's `aboard` node, on her starboard side (the port's the
+    mirror): at the helm's station (`cat-`) and the crew's (`crew-`), the
+    hull's deck at its inner edge (`-inner`), where a sailor sits facing
+    inboard, and at its outer edge (`-outer`), where one sits out or stands
+    on the wire, and the net under the hiking strap (`-strap`), where the
+    feet go; the net's middle (`cat-net`), where a
+    sailor crosses it; and, lying on her side, the top of her lower hull
+    where a sailor stands to right her (`cat-stand`), and where the righting
+    line leaves the upper hull's bottom for the hands (`cat-line`).
+
+    Her hulls, decks, beams, pylons, side bars and fittings are solid
+    (`tree`), and her net as a plane where it is laced (`net`, the middle's
+    sag aside); her leather straps and her ropes (the righting line lying
+    on the net, the lashings) are `ropes`, which only what holds them or
+    stands on them may meet. Lying on her side, her hull, net and all, is
+    `capsized_tree`. Where a seated sailor's cloth lies are the decks and
+    the net (`planes`)."""
+
+    POINTS = ("cat-inner", "cat-outer", "cat-strap", "crew-inner", "crew-outer", "crew-strap", "cat-net",
+              "cat-stand", "cat-line")
+    # The parts of her hull's mesh that give or are held, by material.
+    NET = "net"
+    HELD = ("leather", "rope")
+    # Where a sailor stands to right her: on her lower hull's top (its
+    # inner side, lying uppermost) at the crew's station, this far toward
+    # its keel from the hull's middle; and where the line leaves her upper
+    # hull, this far beyond its keel, toward the sailor.
+    STAND_OUT = -0.05
+    LINE_OUT = 0.06
+
+    def __init__(self, root, spec):
+        import math
+
+        self.spec = spec
+        before = set(bpy.data.objects)
+        bpy.ops.import_scene.gltf(filepath=os.path.join(root, "art", spec["boat"]))
+        self.objects = [o for o in bpy.data.objects if o not in before]
+        self.at = Vector(spec["at"])
+        for o in self.objects:
+            o.name = "cat-" + o.name
+            o.hide_render = True
+            if o.parent is None:
+                o.location = o.location + self.at
+        bpy.context.view_layer.update()
+        # Her sails and what flies from her rig, left out of the sheets: they
+        # stand between the camera and her people.
+        self.hidden = [o for o in self.objects if o.name in ("cat-sail", "cat-jib", "cat-telltales", "cat-pennant",
+                                                             "cat-tricolour")]
+        a = bpy.data.objects["cat-aboard"]
+
+        def blender(p):
+            # The model's frame (x to starboard, y up, z aft) as the scene's.
+            return Vector((p[0], -p[2], p[1])) + self.at
+
+        self.stations = {k: {n: blender(list(a[src][n])) for n in ("inner", "outer", "bar", "strap")}
+                         for k, src in (("cat", "helm"), ("crew", "crew"))}
+        n = a["net"]
+        self.net_y = float(n["y"]) + self.at.z
+        self.net_fore = -float(n["fore"]) + self.at.y
+        self.net_aft = -float(n["aft"]) + self.at.y
+        self.net_sag = float(n["sag"])
+        self.boom = float(a["boom"]) + self.at.z
+        hull = bpy.data.objects["cat-hull"]
+        self.hull = hull
+
+        def material(o, p):
+            slots = o.material_slots
+            return slots[p.material_index].name.split(".")[0] if p.material_index < len(slots) else ""
+
+        self.tree = None
+        # The net, as a plane where it is laced: from side bar to side bar,
+        # beam to beam.
+        half = min(st["bar"].x - self.at.x for st in self.stations.values())
+        me = bpy.data.meshes.new("cat-net-plane")
+        x0, x1 = self.at.x - half, self.at.x + half
+        me.from_pydata([(x0, self.net_aft, self.net_y), (x1, self.net_aft, self.net_y), (x1, self.net_fore, self.net_y),
+                        (x0, self.net_fore, self.net_y)], [], [(0, 1, 2, 3)])
+        self.net = bpy.data.objects.new("cat-net-plane", me)
+        bpy.context.scene.collection.objects.link(self.net)
+        self.net.hide_render = True
+        self.objects.append(self.net)
+        self.planes = [self.net]
+        self.tree = _tree([hull, self.net], lambda o, p: o is self.net or
+                          material(o, p) not in (self.NET,) + self.HELD)
+        self.ropes = _tree([hull], lambda o, p: material(o, p) in self.HELD)
+        # Lying on her side: her hull, mast and boom turned about her
+        # fore-and-aft axis till her mast lies to port, set beside her.
+        self.lying_at = self.at + Vector(spec["capsized"])
+        turn = Matrix.Translation(self.lying_at) @ Matrix.Rotation(math.radians(-90.0), 4, "Y") @ \
+            Matrix.Translation(-self.at)
+        self.turn = turn
+        self.lying = []
+        for name in ("cat-hull", "cat-mast", "cat-boom"):
+            o = bpy.data.objects[name]
+            c = o.copy()
+            c.name = name + "-lying"
+            bpy.context.scene.collection.objects.link(c)
+            c.parent = None
+            c.matrix_world = turn @ o.matrix_world
+            c.hide_render = True
+            self.lying.append(c)
+            self.objects.append(c)
+        bpy.context.view_layer.update()
+        self.capsized_tree = _tree([self.lying[0]])
+        # Where the sailor stands: on the lower hull's top over its middle
+        # at the crew's station (a little toward its keel), as a ray down
+        # finds it.
+        # The starboard hull's keel, where it leaves the bottom (the model's
+        # `board-root`): its centreline out from hers, and its depth.
+        keel = bpy.data.objects["cat-board-root"].matrix_world.translation - self.at
+        crew = self.stations["crew"]["inner"]
+        mid = turn @ Vector((self.at.x - keel.x, crew.y, self.at.z))
+        x = mid.x + self.STAND_OUT
+        hit = self.capsized_tree.ray_cast(Vector((x, mid.y, mid.z + 0.6)), Vector((0, 0, -1)), 1.2)
+        if hit[0] is None:
+            raise AssertionError(f"{spec['boat']}: no lower hull under {x:.3f}, {mid.y:.3f} lying on her side")
+        self.stand = hit[0].copy()
+        # Where the line leaves the upper hull: past its keel at the
+        # crew's station, toward the sailor.
+        self.line = turn @ Vector((self.at.x + keel.x, crew.y, self.at.z + keel.z)) + \
+            Vector((self.LINE_OUT, 0.0, 0.0))
+
+    def _side(self, p, side):
+        return Vector((self.at.x + side * (p.x - self.at.x), p.y, p.z))
+
+    def point(self, name, side=1):
+        if name == "cat-stand":
+            return self.stand.copy()
+        if name == "cat-line":
+            return self.line.copy()
+        if name == "cat-net":
+            # The net's middle, on her centreline: a sailor on hands and
+            # knees there is clear of both beams.
+            return Vector((self.at.x, (self.net_fore + self.net_aft) / 2, self.net_y))
+        station, _, which = name.partition("-")
+        p = self.stations[station][which]
+        if which == "strap":
+            # On the net under the strap: where the feet go.
+            p = Vector((p.x, p.y, self.net_y))
+        return self._side(p, side)
+
+    def down(self, x, y, z=None):
+        """The height of the first surface of the cat (her decks, the net's
+        plane) a ray straight down at (x, y) meets, or None."""
+        top = (self.at.z + 3.0) if z is None else z
+        hit = self.tree.ray_cast(Vector((x, y, top)), Vector((0, 0, -1)), 6.0)
         return None if hit[0] is None else hit[0].z
 
 

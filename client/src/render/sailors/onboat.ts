@@ -42,6 +42,7 @@ import type { Boat as BoatKind } from '../../catalog';
 import type { BoatPose } from '../../predict/blend';
 import { RECORDS } from '../../predict/layout.gen';
 import { fallToEdge, glowMaterial, litMaterial } from '../materials';
+import { namesCatClips } from './cat';
 import { Clip } from './clips';
 import { type SailorColours, sailorColours, sailorLight } from './material';
 import {
@@ -79,6 +80,8 @@ export interface SailorUrls {
   /** The clips on a trapeze's wire and the harness's URLs, fetched for a boat with a trapeze. */
   trapeze?: () => Promise<string>;
   harness?: () => Promise<string>;
+  /** The clips aboard a beach cat's URL, fetched for a kind whose art names them. */
+  cat?: () => Promise<string>;
   colours: { main: string; skin: string; hair: string };
 }
 
@@ -239,6 +242,11 @@ export class BoatSailor {
     const wire = trapeze !== null ? await onTheWire(urls, renderer) : null;
     if (wire !== null) {
       files.push(wire.clips);
+    }
+    // Aboard a beach cat, her people's clips too.
+    const cat = namesCatClips(kind.art) ? await aboardCat(urls, renderer) : null;
+    if (cat !== null) {
+      files.push(cat);
     }
     for (const file of files) {
       for (const a of file.clips) {
@@ -518,6 +526,19 @@ export class BoatSailor {
       c.copy(b).add(w.set(0, -0.04, 0.35));
     }
     tube(this.#rope.geometry, this.#ropePoints, ROPE_RADIUS);
+  }
+}
+
+/** A look's clips aboard a beach cat, from their URL; null (warned) if they did not load. */
+async function aboardCat(urls: SailorUrls, renderer: WebGPURenderer): Promise<SailorClips | null> {
+  if (urls.cat === undefined) {
+    return null;
+  }
+  try {
+    return await loadClips(await urls.cat(), renderer);
+  } catch (e) {
+    console.warn('the sailor’s clips aboard the beach cat did not load', e);
+    return null;
   }
 }
 

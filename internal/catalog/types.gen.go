@@ -219,6 +219,12 @@ type BoatArt struct {
 	// with headsails, and a node for each of the boat's lights, named as the light,
 	// where its lantern is.
 	Model ArtPath `json:"model"`
+
+	// The files of clips beside each sailor look's clips (<version>.<name>.glb) its
+	// people aboard are drawn with, loaded only when someone is drawn aboard one of
+	// its kind: cat, a beach cat's (sat on her hull, sitting out, on the wire,
+	// crossing her net, righting her).
+	SailorClips []SailorClip `json:"sailorClips,omitempty,omitzero"`
 }
 
 type BoatCloth struct {
@@ -3202,6 +3208,10 @@ type SailorArt struct {
 	PortraitMask ArtPath `json:"portraitMask"`
 }
 
+type SailorClip string
+
+const SailorClipCat SailorClip = "cat"
+
 type SailorOption struct {
 	// Its colour, sRGB, #rrggbb.
 	Colour string `json:"colour"`
@@ -5522,4 +5532,4 @@ type WorldZones struct {
 }
 
 // Version is the catalog version (tools/catalog).
-const Version = "88f9ccff6e432058"
+const Version = "018a30e98d087965"

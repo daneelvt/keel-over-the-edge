@@ -43,9 +43,13 @@ them.
 | File                                         | Pack                                                                      | Licence | SHA-256                                                          |
 | -------------------------------------------- | ------------------------------------------------------------------------- | ------- | ---------------------------------------------------------------- |
 | `vendor/quaternius/License.txt`              | Quaternius, Universal Animation Library (Source)                          | CC0-1.0 | 6d01f55c6e4c49a2c9963e147e561945ae2c83958c8ca667d90a6bffdbfac061 |
+| `vendor/quaternius/Crawl_Left_Loop.glb`      | Quaternius, Universal Animation Library (Source), Unreal-Godot/UAL1.glb   | CC0-1.0 | 9cbee4edae4f83ca18414a5c149475aa45e293f5f178e604815a78c76aabcbc0 |
+| `vendor/quaternius/Crawl_Right_Loop.glb`     | Quaternius, Universal Animation Library (Source), Unreal-Godot/UAL1.glb   | CC0-1.0 | 89944aedb40c6b1c3bfbbbbe3b05c9a87f2d6f289bc164318b604cadc6e182c5 |
 | `vendor/quaternius/Crouch_Enter.glb`         | Quaternius, Universal Animation Library (Source), Unreal-Godot/UAL1.glb   | CC0-1.0 | f27635721bd09875aa97199231330329f8e3a8c88cd4420bdbcc62eed7270324 |
 | `vendor/quaternius/Crouch_Exit.glb`          | Quaternius, Universal Animation Library (Source), Unreal-Godot/UAL1.glb   | CC0-1.0 | d716d7c8e117e2dba1531b0bb687e9a0a24e6c32240a5cb14de09b0ab36a871d |
 | `vendor/quaternius/Crouch_Fwd_Loop.glb`      | Quaternius, Universal Animation Library (Source), Unreal-Godot/UAL1.glb   | CC0-1.0 | 23af7046ec0705111a1d6f78048abf11d373c62bcd27a15af713be39e2b70448 |
+| `vendor/quaternius/Crouch_Left_Loop.glb`     | Quaternius, Universal Animation Library (Source), Unreal-Godot/UAL1.glb   | CC0-1.0 | 54ac118d8dd28b04b706aebb5dd168a6f2cfc0336e9a869db1b49f584ef20da5 |
+| `vendor/quaternius/Crouch_Right_Loop.glb`    | Quaternius, Universal Animation Library (Source), Unreal-Godot/UAL1.glb   | CC0-1.0 | 27e018d6de7defeecb10fdae2520a1859fd0cee000cb79d5d908ef55b10909cc |
 | `vendor/quaternius/Idle_FoldArms_Loop.glb`   | Quaternius, Universal Animation Library 2 (Source), Unreal-Godot/UAL2.glb | CC0-1.0 | ebd75d5e581a8e4f3b7ac2b92f6ebfa4c4af0228d8e1c70c54c5e8a12f59c1dd |
 | `vendor/quaternius/Idle_LookAround_Loop.glb` | Quaternius, Universal Animation Library (Source), Unreal-Godot/UAL1.glb   | CC0-1.0 | 4e965ff4a0f490f5ba939023a3e0564a5e40c024a7044be0301d34104fe2968d |
 | `vendor/quaternius/Idle_Loop.glb`            | Quaternius, Universal Animation Library (Source), Unreal-Godot/UAL1.glb   | CC0-1.0 | 7384c02bb4349e77206523e0d1b58a17b0f230f8596a6c270270eb5a889558d3 |
