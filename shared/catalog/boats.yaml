@@ -1281,13 +1281,16 @@ boats:
     name: Beach cat
     description: Small fast catamaran
     capacity: 2
-    # Where the people aboard are: the helmsman on the starboard hull aft,
-    # forward of the rear beam, facing in, and a second forward of them on
-    # the same hull by the shrouds, hiking, on whichever hull the helm
-    # sits: to windward, crossing with the helm.
+    # Where the people aboard are, read from her model (its `aboard` node):
+    # the helmsman on the starboard hull aft, forward of the rear beam,
+    # facing in, and a second forward of them on the same hull by the
+    # shrouds (Colby: "close together"), sat on its deck by its inner edge
+    # with the legs across the net, and out on the wire beside the helm
+    # once the helm is on theirs; on whichever hull is to windward,
+    # crossing the net in a tack or a gybe.
     stations:
       - { at: [1.201, 0.4256, 1.25], pose: seated, facing: 270 }
-      - { at: [1.1064, 0.4622, -0.2], pose: hiking, facing: 270, windward: true }
+      - { at: [0.8397, 0.442, -0.2], pose: hull, facing: 270, windward: true }
     lengthOverall: 5.04 # Hobie
     beam: 2.41 # Hobie
     # A sailing vessel of less than 7 m shows her sidelights and sternlight

@@ -150,6 +150,10 @@ const stationsApart = 0.45
 // quote.
 const lookoutField = "look" + "out"
 
+// hullTop is how far beyond a hull's top a station of a boat of two hulls
+// may be, in m: its point at an edge of the deck.
+const hullTop = 0.01
+
 // railFromEdge is how far a station on the rail may be from the deck's edge,
 // in m: its point is the edge under the person.
 const railFromEdge = 0.1
@@ -181,7 +185,8 @@ func deckEdge(m map[string]any, z float64) float64 {
 // the waterline and below the boom; a station aloft, above the boom, no
 // higher than its lookout's eye), none on another wherever the wind is
 // (a station to windward or to leeward drawn on its side or its mirror,
-// as the weather side has it); and one on the rail at the deck's edge. The
+// as the weather side has it); one on the rail at the deck's edge; and, on
+// a boat of two hulls, each on a hull's top (and only there one on a hull). The
 // client's tests hold each to the model's deck itself.
 func checkStations(i int, m map[string]any) []string {
 	var problems []string
@@ -199,6 +204,12 @@ func checkStations(i int, m map[string]any) []string {
 	ph, _ := m["physics"].(map[string]any)
 	rig, _ := ph["rig"].(map[string]any)
 	boom := num(rig["boomHeight"])
+	hulls, _ := ph["hulls"].(map[string]any)
+	spacing := num(hulls["hullSpacing"])
+	// A boat of two hulls: each hull's top reaches from the beam's half
+	// out, to as far inboard of its centreline as that is outboard.
+	hullOut := beam / 2
+	hullIn := spacing - hullOut
 	at := make([][3]float64, 0, len(stations))
 	// Each station's side: +1 drawn on the weather side, −1 on the lee, 0 where it is.
 	sides := make([]int, 0, len(stations))
@@ -213,6 +224,12 @@ func checkStations(i int, m map[string]any) []string {
 			if edge := deckEdge(m, z); math.Abs(math.Abs(x)-edge) > railFromEdge {
 				problems = append(problems, fmt.Sprintf("  boats[%d].stations[%d]: on the rail %v m out, but the deck's edge is %v m out there", i, j, math.Abs(x), math.Round(edge*1000)/1000))
 			}
+		}
+		if spacing > 0 && (math.Abs(x) < hullIn-hullTop || math.Abs(x) > hullOut+hullTop) {
+			problems = append(problems, fmt.Sprintf("  boats[%d].stations[%d]: %v m out is not on a hull's top, from %v to %v m out", i, j, math.Abs(x), math.Round(hullIn*1000)/1000, hullOut))
+		}
+		if st["pose"] == "hull" && !(spacing > 0) {
+			problems = append(problems, fmt.Sprintf("  boats[%d].stations[%d]: on a hull, but the boat has one hull", i, j))
 		}
 		if 2*x > beam || 2*x < -beam || 2*z > length || 2*z < -length {
 			problems = append(problems, fmt.Sprintf("  boats[%d].stations[%d]: (%v, %v) is outside the hull's %v by %v m", i, j, x, z, beam, length))

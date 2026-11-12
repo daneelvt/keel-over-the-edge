@@ -518,6 +518,22 @@ func TestRejects(t *testing.T) {
 			want: "boats[0].stations[1]: aloft 2.5 m up is not above the boom",
 		},
 		{
+			name: "a station on a hull of a boat of one hull",
+			files: map[string]string{"shared/catalog/boats.yaml": strings.Replace(validBoats,
+				"pose: standing", "pose: hull", 1)},
+			want: "boats[0].stations[1]: on a hull, but the boat has one hull",
+		},
+		{
+			name: "a station of a boat of two hulls off its hulls",
+			files: map[string]string{"shared/catalog/boats.yaml": strings.NewReplacer(
+				"hullSpacing: 0", "hullSpacing: 1",
+				"rudderCount: 1", "rudderCount: 2",
+				"boardCount: 1", "boardCount: 2",
+				"fixed: 0 #", "fixed: 1 #",
+			).Replace(validBoats)},
+			want: "boats[0].stations[1]: 0.3 m out is not on a hull's top, from 0.4 to 0.6 m out",
+		},
+		{
 			name:  "a station's pose unknown",
 			files: map[string]string{"shared/catalog/boats.yaml": strings.Replace(validBoats, "pose: standing", "pose: kneeling", 1)},
 			want:  "/boats/0/stations/1/pose",
