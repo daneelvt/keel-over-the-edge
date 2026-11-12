@@ -281,7 +281,7 @@ func runCheck(k *kind, ref *reference) error {
 		p, _ := polarAt(polars, w)
 		chart = append(chart, p)
 	}
-	if err := checkWords(chart); err != nil {
+	if err := checkWords(chart, k.p.CloseHauled); err != nil {
 		return err
 	}
 	return checkHandbook(k, polars)

@@ -476,6 +476,17 @@ value the bows' half-spread, a corner each side (`outline.go`). Nothing in
 the physics reads a kind's name: the cruising catamaran takes the same
 values.
 
+**Two rudders on one hull.** A monohull may carry two rudders either side
+of her centreline (`rudderCount` 2, `rudderSpread` each stock's distance
+out; every other monohull's spread is 0 and her count 1). Each is the one
+rudder foil's lift and drag, acting at the centreline's rudder position
+(their small roll moment is left out). Heeled, the windward blade comes out
+of the water: its root at `rudderLiftHeel` and its tip at
+`rudderClearHeel` (both from the model, in still water), its share of the
+steering falling smoothly from 1 to 0 between them; the lee blade stays in
+to the boat's `foilDryHeel`. A boat of two hulls keeps her own rule: her
+rudders go with her hulls, and her spread and heels are 0.
+
 **Pitch from the rig.** On a boat whose rig pitches her (the catalog's
 `pitch` group, `rigPitch` 1; every other boat's 0, its pitch the waves'
 alone) the sails' drive, from their centre of effort above the centre of
@@ -688,6 +699,84 @@ sail her stormy spells at her last reef, and her beam reach in the trade
 spells only: with her sheet fixed, the gusts of an unsettled spell take
 her over there.
 
+### The yacht's numbers
+
+The yacht is a Jeanneau Sun Odyssey 410 of 2018, a cruising sloop of 12 m
+with a deep fin keel and bulb, two spade rudders and two wheels, a
+fractional rig with two pairs of spreaders and a backstay, the classic main
+and a furling genoa, sailed by one 80 kg sailor at the windward wheel, with
+no engine and no propeller. Each value in `shared/catalog/boats.yaml` says
+where it comes from:
+
+- **Published:** her length, 11.985 m (ORC), beam, 3.99 m, waterline,
+  11.47 m, draught, 2.14 m, and displacement, 7,784 kg (Jeanneau), to which
+  the game adds its sailor's 80 kg; her main's and genoa's areas, 42.8 and
+  34.3 m², and P, E and J (Jeanneau); the boom's height above the sheer
+  (BAS), I, IG and ISP (ORC); her rated righting moment at 1°, 348.5 kg·m
+  (KANALOA's certificate: entered, not measured), and her angle of
+  vanishing stability, 122° (ISO 12217, her builder's).
+- **Fitted:** the main and genoa to ORC's medium sets for a rig with a
+  backstay and no runners (`tools/polar -sail`); the keelboat's
+  coefficients hold within 5%.
+- **From her model:** the canoe body's draught, waterline beam, waterplane
+  and its second moment; the rudders' spread and the heels at which the
+  windward one's root and tip leave the water; and her righting lever
+  (`tools/lever`): her sections and appendages heeled in still water, her
+  centre of gravity set for the rated moment at 1°, which gives her
+  vanishing stability at 126°.
+- **Estimates:** the hull's resistance (ITTC 1957's friction on her canoe
+  body and the keelboat's residuary resistance at the same Froude number,
+  their displacement-length ratios near; tuned against her certificate's
+  reaching speeds), the keel's place and downwash (weather helm), the
+  flattening (her beat in a breeze), her inertias and damping, the reefs
+  (two of about 12% of the luff each, the genoa rolled), the wheel's rate
+  (1.5 s hard over to hard over), and her autopilot (her tacks).
+
+She is checked against SKY LINA's 2026 ORC Club certificate, the standard
+boat at her builder's numbers: upwind and at 52°, 60° and 75° within ±10%
+from 6 to 12 knots; above 12 knots at most the certificate, whose crew of
+780 kg sits out; from 90° aft at most the certificate, rated under an
+asymmetric spinnaker she has not; and sailed as players sail her, at least
+7.6 knots on a beam reach at her best in some wind from 12 to 16 knots.
+Printed beside them, not checked: her sister the Oceanis 40.1 under main
+and jib alone from 90° aft, three other 410s' certificates at 52° in 12
+knots, and her certificate's beat angles. The certificates rate a folding
+propeller, about 1% of her resistance: she has none.
+
+Her behaviour tests (`yacht_test.go`): close-hauled at her fastest sheet in
+12 knots she heels 8° to 20°; held at a fixed helm in a 35-knot gust with
+her sheet held she heels past 30° and rounds up, and let fly comes back;
+her autopilot tacks her from full speed in 6, 12 and 18 knots; heeled, her
+windward rudder's root and then its tip leave the water, and past that her
+lee rudder alone still turns her. Knocked down, she comes back
+(`TestKnockdownRecovers`). Her reef wind in the handbook is high: heel
+costs this model's hull little, and she stands up to her full sail in a
+breeze her crew would reef in.
+
+### `tools/lever`
+
+```sh
+go run ./tools/lever -boat yacht          # her lever from her model, and the values for the catalog
+go run ./tools/lever -boat yacht -check   # fail unless the catalog's centre of gravity and lever are the model's
+```
+
+A boat's model may carry its sections and appendages in its hull node's
+`lever` data (its build script writes them): every few tenths of a metre,
+the starboard half of the watertight body, from the keel round the
+planking to the sheer, across the deck, over the coachroof or down into
+the open cockpit to its sole, and its appendages (keel, bulb, rudders) as
+small volumes. The tool floats the boat alone (the catalog's displacement
+less its sailor) at each heel, sinking until it displaces its weight, and
+gives the lever of its centre of buoyancy about its centre of gravity. The
+centre of gravity is set for the righting moment at 1° its reference data
+give (`reference.json`'s `stability`), and its angle of vanishing stability
+held to theirs within their tolerance; the boat alone must float within
+1 cm of her drawn waterline. Then the sailor is put aboard on the
+centreline (standing at the `sailor` node if she is steered by a wheel,
+else seated there), and the whole boat's lever, every `rightingLeverStep`,
+and centre of gravity are what the catalog holds; a test holds them to the
+model. Its test holds a wall-sided box's lever to the formula's.
+
 ### `tools/polar`
 
 ```sh
@@ -731,7 +820,10 @@ measurements and hollow ones upper bounds.
 compares it with its source: the main with ORC's low-lift mainsail (Table
 5.1), held from 28° to 180° of apparent wind and its side force at 28° and
 60°; the headsails with ORC's low-lift jib (Table 5.4), held from 27° to
-100° and their side force at 27°, 50° and 60°; a downwind sail with ORC's
+100° and their side force at 27°, 50° and 60°. A reference whose `rig` has
+a backstay (and no runners) is held to ORC's medium sets instead, blended
+from the low and high by the rig's fractionality, IG over ISP (ORC VPP
+2023, eqs. 5.5, 5.6 and 5.9); a downwind sail with ORC's
 asymmetric spinnaker tacked on the centreline (Table 5.7), set, its area
 in the rig's induced drag, held from 41° to 180° on its drive alone. From 150° aft ORC's jib
 stands across the wind as if poled out; a jib sheeted to the rail stands
@@ -860,9 +952,14 @@ A kind of boat is data: nothing reads its name or id. Adding one touches:
    says by data what each boat is held to).
 5. Its model, `art/boats/<id>/build.ts`, in `client/package.json`'s `art`
    and `art/README.md`, and `tools/catalog/catalog_test.go`'s art fixture;
-   held by `model.test.ts`, `crew.test.ts` (its stations on its deck),
-   `hulls.test.ts` (its volume in the sea) and `runtime.test.ts` (its
-   sailor clear of its solid).
+   held by `model.test.ts` (its rudders by their count and spread, its
+   wheels by their data, its lights by their kind), `crew.test.ts` (its
+   stations on its deck), `hulls.test.ts` (its volume in the sea) and
+   `runtime.test.ts` (its sailor clear of its solid). If no righting lever
+   is published, its build writes its sections (`lever`) and
+   `tools/lever` gives the lever and centre of gravity the catalog holds,
+   from the stability `reference.json` gives; the canoe body is drawn so
+   that the boat floats on her waterline.
 6. The fleet: a migration giving every human account one
    (`internal/store/migrations/`, `SUMS` by
    `go test ./internal/store -run AppendOnly -args -update`), and

@@ -1623,7 +1623,7 @@ boats:
     art:
       model: boats/yacht.glb
       far: boats/yacht.far.glb
-      budget: { near: 25000, far: 2500 }
+      budget: { near: 25000, far: 1200 }
     physics:
       hull:
         # 7,784 kg (Jeanneau; SKY LINA's certificate) and the sailor's 80 kg.
@@ -1775,6 +1775,9 @@ boats:
         leeReach: 1.0 # the lee wheel's
         hikeSpeed: 1.0 # estimate: a walk across the cockpit
         hikeLag: 0.5 # estimate
+        # The keelboat's: her sailor's 80 kg is too small a share of her
+        # weight to balance her, and the helm is drawn at the windward
+        # wheel by the apparent wind.
         heelGain: 1.0
         rollRateGain: 0.6
         # Estimates, tuned against the certificate's beat VMG: flattened

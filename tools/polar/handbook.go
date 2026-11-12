@@ -330,11 +330,16 @@ func checkHandbook(k *kind, polars []polar) error {
 }
 
 // checkWords fails unless the sail says drawing at the fastest sheet at
-// every angle and strength the boat sails without capsizing.
-func checkWords(polars []polar) error {
+// every angle and strength the boat sails without capsizing, from 10°
+// inside her close-hauled angle: pinched closer, a big boat's main lifts,
+// the genoa backing it, and the word is not held there.
+func checkWords(polars []polar, closeHauled float64) error {
 	var bad []string
 	for _, p := range polars {
 		for _, pt := range p.Points {
+			if pt.TWA < closeHauled-10 {
+				continue
+			}
 			if pt.OK && pt.Word != physics.SailDrawing {
 				bad = append(bad, fmt.Sprintf("%g knots at %g°, boom %.0f°, apparent %.0f°: %s", p.Wind, pt.TWA, pt.Boom, pt.Apparent, sailWords[pt.Word]))
 			}

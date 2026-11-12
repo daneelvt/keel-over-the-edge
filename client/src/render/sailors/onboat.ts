@@ -58,7 +58,7 @@ import { bonesFor, Rig } from './rig';
 import { type CatBoat, type SailorBoat, type SailorMoment, SailorRuntime } from './runtime';
 import { type HullSolid, hullSolid } from './solid';
 import { trapezeOf, wireNode } from './trapeze';
-import { turnIn, wheelOf, wheelTurnOf } from './wheel';
+import { turnIn, wheelNodes, wheelOf, wheelTurnOf } from './wheel';
 
 /** Nearer than this to the camera the close level is drawn, metres; back to the deck level beyond the second. */
 export const CLOSE_IN = 6;
@@ -155,7 +155,9 @@ export class BoatSailor {
     this.#urls = urls;
     this.#renderer = renderer;
     this.runtime = new SailorRuntime(rig, clips, boat, seed, machine);
-    this.#wheelNode = boat.wheel ? (parts.get('wheel') ?? null) : null;
+    // The wheel whose turn the hands follow: of two, the starboard one, as
+    // both turn alike.
+    this.#wheelNode = boat.wheel ? (wheelNodes(parts).at(-1) ?? null) : null;
     if (this.#wheelNode !== null) {
       turnIn(this.#wheelNode, model, this.#wheelRest);
     }

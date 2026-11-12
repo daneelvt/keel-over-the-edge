@@ -210,6 +210,8 @@ export interface BoatParts {
   /** How far each yards' node's lowered yard comes down at its reef (fore, main, mizzen), and at which level, metres. */
   yardDrops: { drop: number; level: number }[];
   wheelAt: Vector3 | null;
+  /** Two wheels': how far out each is; 0 for one on the centreline. */
+  wheelSpread: number;
   gallery: boolean;
 }
 
@@ -314,6 +316,7 @@ export function boatParts(scene: Object3D, path: string): BoatParts {
     yardsAt: [...YARDS_ORDER, SPRITSAIL].map(() => new Vector3()),
     yardDrops: YARDS_ORDER.map(() => ({ drop: 0, level: 0 })),
     wheelAt: null,
+    wheelSpread: 0,
     gallery: false,
   };
   scene.traverse((o) => {
@@ -323,6 +326,9 @@ export function boatParts(scene: Object3D, path: string): BoatParts {
     }
     if (o.name === 'wheel') {
       parts.wheelAt = o.getWorldPosition(new Vector3());
+    }
+    if (o.name === 'wheel-starboard') {
+      parts.wheelSpread = o.getWorldPosition(new Vector3()).x - (parts.wheelAt?.x ?? 0);
     }
     if (o.name !== '' && !parts.nodes.has(o.name)) {
       parts.nodes.set(o.name, o.getWorldPosition(new Vector3()));
@@ -637,11 +643,17 @@ export function placeNormal(n: Node<'vec3'>, i: Instances): Node<'vec3'> {
   return rotY(rotX(rotZ(n, i.pose.w.negate()), i.lean.z), i.pose.z.negate());
 }
 
-/** A square rig's joints, for a kind's solids: its yards' and wheel's places, and its rudder's stop, degrees. */
+/**
+ * A kind's joints beyond its boom and rudder, for its solids: a square
+ * rig's yards' places, its wheel's or wheels' (each turning on its own
+ * hub, the spread out either side of the node's), and its rudder's stop,
+ * degrees.
+ */
 export interface RigJoints {
   yardsAt: readonly Vector3[];
   yardDrops: readonly { drop: number; level: number }[];
   wheelAt: Vector3 | null;
+  wheelSpread?: number;
   rudderAngle: number;
 }
 
@@ -687,7 +699,8 @@ export function solidNode(
         .clamp(-1, 1)
         .mul(-WHEEL_TURNS * 2 * Math.PI);
       const w = rig.wheelAt ?? new Vector3();
-      const pivotWheel = vec3(w.x, w.y, w.z);
+      const ws = rig.wheelSpread ?? 0;
+      const pivotWheel = ws > 0 ? vec3(p.x.sign().mul(ws), w.y, w.z) : vec3(w.x, w.y, w.z);
       const is = (j: number) => joint.greaterThan(j - 0.5).and(joint.lessThan(j + 0.5));
       local = select(is(JOINT.wheel), rotZ(p.sub(pivotWheel), wheel).add(pivotWheel), local);
       turned = select(is(JOINT.wheel), rotZ(n, wheel), turned);

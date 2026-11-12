@@ -247,14 +247,17 @@ class Level {
     const cog = hull.centreOfGravity;
     const i = this.nodes;
     const squareRig = parts.square !== null;
-    const joints = squareRig
-      ? {
-          yardsAt: parts.yardsAt,
-          yardDrops: parts.yardDrops,
-          wheelAt: parts.wheelAt,
-          rudderAngle: foils.rudderAngle,
-        }
-      : null;
+    // A square rig's yards and any kind's wheels turn as joints of its solids.
+    const joints =
+      squareRig || parts.wheelAt !== null
+        ? {
+            yardsAt: parts.yardsAt,
+            yardDrops: parts.yardDrops,
+            wheelAt: parts.wheelAt,
+            wheelSpread: parts.wheelSpread,
+            rudderAngle: foils.rudderAngle,
+          }
+        : null;
     const l = varying(i.look ?? vec4(0, 0, 0, -1)) as unknown as Node<'vec4'>;
     const look: LookNodes = {
       paint: l.x,
@@ -716,10 +719,8 @@ export class FleetView {
     }
     // A boat steered by a wheel has its sailor standing at it.
     const stand = nearParts.nodes.get('sailor');
-    this.#frame.wheel =
-      wheelOf(nearParts.objects, null) !== null && stand !== undefined
-        ? { y: stand.y, z: stand.z }
-        : null;
+    const atWheel = wheelOf(nearParts.objects, null);
+    this.#frame.wheel = atWheel !== null && stand !== undefined ? { y: stand.y, z: stand.z } : null;
     const shared = this.#shared;
     const time = shared.time;
     const names = shared.nameAtlas();
