@@ -268,7 +268,7 @@ test('a mixed 64, Jolly boats, keelboats, tall ships, skiffs, beach cats and yac
   expect(budget.bagged).toBe(budget.drawCalls - 2);
 });
 
-test('a keelboat, a tall ship, a skiff, a beach cat and a yacht of the fleet look as the own ones do, the jib, the yards, the reefs, the gennaker, the rudders and the wheels', async ({
+test('a keelboat, a tall ship, a skiff and a beach cat of the fleet look as the own ones do, the jib, the yards, the reefs, the gennaker and the rudders', async ({
   page,
 }) => {
   await openScene(page, 'boat=keelboat');
@@ -376,12 +376,20 @@ test('a keelboat, a tall ship, a skiff, a beach cat and a yacht of the fleet loo
     const { own, fleet } = await both(page, pose, CAT);
     diffs[pose.name] = pictureDifference(own, fleet);
   }
-  // A yacht: close-hauled, heeled, her helm at the windward wheel; reaching
-  // with her rudders and both her wheels put over, each on its own stock and
+  test.info().annotations.push({ type: 'measured', description: JSON.stringify(diffs) });
+  for (const [name, d] of Object.entries(diffs)) {
+    expect(d, name).toBeLessThan(LIKE);
+  }
+});
+
+test('a yacht of the fleet looks as the own one does, her two wheels and two rudders turned', async ({
+  page,
+}) => {
+  await openScene(page, 'boat=yacht');
+  const diffs: Record<string, number> = {};
+  // Close-hauled, heeled, her helm at the windward wheel; reaching with
+  // her rudders and both her wheels put over, each on its own stock and
   // hub. Seen from her quarter, near enough for the full model.
-  await page.evaluate(async (kind) => {
-    await globalThis.keel.useBoat(kind);
-  }, YACHT);
   for (const pose of [
     {
       name: 'a yacht close-hauled',
