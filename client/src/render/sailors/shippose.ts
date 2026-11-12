@@ -23,10 +23,13 @@ import {
   type ShipMember,
   type ShipRules,
   type ShipSpot,
+  type ShipWork,
   standPoint,
   TALKING,
   WHEEL,
+  WORK,
 } from './shiprules';
+import { turnOf, yardFrame } from './shipwork';
 
 /** What posing a ship's member needs: the look's clips, whether a machine's, the moment, the vertical. */
 export interface ShipPoseInput {
@@ -173,6 +176,88 @@ function heldStance(
   return true;
 }
 
+/** A yaw (atan2 of a way's x and z) as a facing, degrees clockwise from the bow. */
+function facingOf(yaw: number): number {
+  return ((Math.PI - yaw) * 180) / Math.PI;
+}
+
+/**
+ * Hauling on a brace at a place, into into: the hauling clip (or its
+ * mirror, whichever has the rail on the same hand) turned from the way it
+ * was staged facing the main brace's lead to the way this place faces, its
+ * hands on the fall here. Null if this person cannot haul (a machine).
+ */
+function haulStance(input: ShipPoseInput, work: ShipWork, into: Stance): boolean {
+  const place = work.haul;
+  if (place === null || input.machine) {
+    return false;
+  }
+  // The staged hauler had her rail on the left hand, facing aft.
+  const railLeft = place.side * Math.cos(place.yaw) > 0;
+  const c = input.clips.get(railLeft ? 'haul' : 'haul-port') ?? null;
+  const brace = input.rules.company.brace;
+  if (c?.place == null) {
+    return false;
+  }
+  const staged = Math.atan2(brace.lead.x - brace.fall.x, brace.lead.z - brace.fall.z);
+  into.clip = c;
+  into.t = input.time;
+  m.makeTranslation(place.hands.x, place.hands.y, place.hands.z)
+    .multiply(m2.makeRotationY(place.yaw - (railLeft ? staged : -staged)))
+    .multiply(c.place);
+  placeStance(into, m);
+  return true;
+}
+
+/** Lying over a yard on its footrope, into into: the yard's clip on its side, placed in the yard's frame as the braces turn it and the reef lowers it. */
+function yardStance(input: ShipPoseInput, work: ShipWork, into: Stance): boolean {
+  const place = work.yard;
+  const rules = input.rules;
+  const y = place === null ? undefined : rules.company.yards[place.yard];
+  if (place === null || y === undefined) {
+    return false;
+  }
+  const c = input.clips.get(place.x < 0 ? 'yard-port' : 'yard') ?? null;
+  if (c?.place == null) {
+    return false;
+  }
+  into.clip = c;
+  into.t = input.time;
+  yardFrame(y, turnOf(y, rules.turns), rules.reef, m);
+  m.multiply(m2.makeTranslation(place.x, 0, 0)).multiply(c.place);
+  placeStance(into, m);
+  return true;
+}
+
+/**
+ * At work, into a (and b, blended by how): on the yard; at the brace,
+ * standing at its fall facing its lead, blended into hauling as they haul.
+ * Whether to keep plumb; false if not to be drawn.
+ */
+function workStance(
+  input: ShipPoseInput,
+  work: ShipWork,
+  how: { f: number },
+  a: Stance,
+  b: Stance,
+): { ok: boolean; two: boolean; plumb: boolean } {
+  if (work.kind === 'aloft') {
+    return { ok: yardStance(input, work, a), two: false, plumb: false };
+  }
+  const place = work.haul;
+  if (place === null) {
+    return { ok: false, two: false, plumb: true };
+  }
+  // Hauling (first, as the clip they are in), blended into standing as they leave off.
+  if (work.pull > 0.01 && haulStance(input, work, a)) {
+    const stood = standAt(input, place.feet, facingOf(place.yaw), IDLES.standing[0], input.time, b);
+    how.f = smooth(1 - work.pull);
+    return { ok: true, two: stood && work.pull < 0.99, plumb: work.pull < 0.5 };
+  }
+  const stood = standAt(input, place.feet, facingOf(place.yaw), IDLES.standing[0], input.time, a);
+  return { ok: stood, two: false, plumb: true };
+}
+
 /** Standing at a point (not a station's) facing a way: behind the helmsman, or to leeward of the wheel. */
 function standAt(
   input: ShipPoseInput,
@@ -202,6 +287,7 @@ function walkAt(
   path: NonNullable<import('./shiprules').ShipLeg['path']>,
   s: number,
   into: Stance,
+  aside: { x: number; z: number } | null = null,
 ): boolean {
   const c = input.clips.get('walk') ?? null;
   if (c === null) {
@@ -211,7 +297,8 @@ function walkAt(
   const yaw = path.at(s, p);
   into.clip = c;
   into.t = feetTogether(c, rig) + s / WALK_SPEED;
-  into.at.set(p.x, p.y, p.z);
+  // Stepped aside, to let someone by.
+  into.at.set(p.x + (aside?.x ?? 0), p.y, p.z + (aside?.z ?? 0));
   into.yaw = yaw;
   into.tilt.identity();
   return true;
@@ -229,6 +316,13 @@ function placeStanceOf(
   spot: ShipSpot,
   into: Stance,
 ): boolean {
+  if (place === WORK && member.ship.work !== null) {
+    // Leaving or reaching the braces: standing at the fall.
+    const w = member.ship.work;
+    return w.haul !== null
+      ? standAt(input, w.haul.feet, facingOf(w.haul.yaw), IDLES.standing[0], input.time, into)
+      : false;
+  }
   if (place === RELIEF || place === WHEEL) {
     const talk = canPlay(input, 'talking', true) ? 'talking' : IDLES.standing[0];
     return standAt(
@@ -265,7 +359,17 @@ export function poseShip(body: CrewBody, member: ShipMember, input: ShipPoseInpu
   let plumb = true;
   let upright = 0;
   const route = d.route;
-  if (route === null) {
+  if (route === null && d.to === WORK && d.work !== null) {
+    // At their work.
+    const w = workStance(input, d.work, how, a, input.b);
+    if (!w.ok) {
+      return false;
+    }
+    if (!w.two) {
+      b = null;
+    }
+    plumb = w.plumb;
+  } else if (route === null) {
     // At their place.
     const st = input.rules.stations[member.station];
     if (st === undefined) {
@@ -339,7 +443,7 @@ export function poseShip(body: CrewBody, member: ShipMember, input: ShipPoseInpu
       const st = input.rules.stations[d.to];
       plumb = st === undefined || st.pose === 'standing' || how.f < 0.5;
     } else if (now.leg !== null && now.leg.path !== null) {
-      walkAt(input, body.rig, now.leg.path, now.s, a);
+      walkAt(input, body.rig, now.leg.path, now.s, a, d.aside);
       b = null;
     } else {
       return false;

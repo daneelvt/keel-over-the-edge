@@ -1535,6 +1535,26 @@ function topsailYard(name: string, y: SquareYard, z: number): NodeDef {
   };
 }
 
+/** A mast's three yards, the lower, the topsail and the topgallant: each rides on its sail's head. */
+function squareYardsOf(m: Mast, area: number): SquareYard[] {
+  const w = sailWidth(area);
+  return [
+    { y: LOWER_YARD_Y + 0.2, r: 0.2, half: w / 2 + 0.9, lift: m.cap - 0.2 },
+    {
+      y: TOPSAIL_YARD_Y + 0.15,
+      r: 0.15,
+      half: (TOPSAIL_HEAD_W * w) / 2 + 0.7,
+      lift: m.topmastHead - 0.2,
+    },
+    {
+      y: TOPGALLANT_YARD_Y + 0.1,
+      r: 0.1,
+      half: (TOPGALLANT_HEAD_W * w) / 2 + 0.5,
+      lift: m.truck - 0.4,
+    },
+  ];
+}
+
 /**
  * The fore or main yards: the lower yard, the topsail yard and the
  * topgallant yard, with their sails, the course, topsail and topgallant.
@@ -1552,22 +1572,7 @@ function squareYards(
   const black = new MeshBuilder('blackwood');
   const ropes = new MeshBuilder('rope');
   const w = sailWidth(area);
-  // Each yard rides on its sail's head.
-  const yards = [
-    { y: LOWER_YARD_Y + 0.2, r: 0.2, half: w / 2 + 0.9, lift: m.cap - 0.2 },
-    {
-      y: TOPSAIL_YARD_Y + 0.15,
-      r: 0.15,
-      half: (TOPSAIL_HEAD_W * w) / 2 + 0.7,
-      lift: m.topmastHead - 0.2,
-    },
-    {
-      y: TOPGALLANT_YARD_Y + 0.1,
-      r: 0.1,
-      half: (TOPGALLANT_HEAD_W * w) / 2 + 0.5,
-      lift: m.truck - 0.4,
-    },
-  ];
+  const yards = squareYardsOf(m, area);
   const zs = yards.map((y) => yardZ(m, y.y, y.r));
   yards.forEach((y, i) => {
     const own = i === 1;
@@ -1689,6 +1694,17 @@ function rigYard(
   }
 }
 
+/** The mizzen's two yards: the crossjack and the mizzen topsail's. */
+function mizzenYardsOf(): SquareYard[] {
+  const m = MIZZEN;
+  const footW = MIZZEN_TOPSAIL_FOOT;
+  const headW = MIZZEN_TOPSAIL_HEAD_W * footW;
+  return [
+    { y: CROSSJACK_Y + 0.14, r: 0.14, half: footW / 2 + 0.6, lift: m.cap - 0.2 },
+    { y: MIZZEN_TOPSAIL_YARD_Y + 0.1, r: 0.1, half: headW / 2 + 0.5, lift: m.topmastHead - 0.2 },
+  ];
+}
+
 /** The mizzen's yards: the bare crossjack yard, and the mizzen topsail on its yard. */
 function mizzenYards(): YardsOut {
   const m = MIZZEN;
@@ -1697,10 +1713,7 @@ function mizzenYards(): YardsOut {
   const ropes = new MeshBuilder('rope');
   const footW = MIZZEN_TOPSAIL_FOOT;
   const headW = MIZZEN_TOPSAIL_HEAD_W * footW;
-  const yards = [
-    { y: CROSSJACK_Y + 0.14, r: 0.14, half: footW / 2 + 0.6, lift: m.cap - 0.2 },
-    { y: MIZZEN_TOPSAIL_YARD_Y + 0.1, r: 0.1, half: headW / 2 + 0.5, lift: m.topmastHead - 0.2 },
-  ];
+  const yards = mizzenYardsOf();
   const zs = yards.map((y) => yardZ(m, y.y, y.r));
   yards.forEach((y, i) => {
     const own = i === 1;
@@ -3428,6 +3441,9 @@ function company(): NodeDef {
       },
       brace: { lead, fall: round3v([lead[0] - BRACE_FALL[1], lead[1], lead[2] - BRACE_FALL[0]]) },
       ways: ways(),
+      yards: yardPlaces(),
+      braces: braces(),
+      aloft: aloftPlaces(),
     },
   };
 }
@@ -3519,6 +3535,244 @@ function ways(): { nodes: Vec3[]; edges: [number, number, number][] } {
     line([on(s * side(0.7), 0.7, W), [s * 1.4, MAIN.top, MAIN.z]], ALOFT);
   }
   return { nodes, edges };
+}
+
+// --- Her braces and her yards, for her company's work -------------------------------
+
+/** A yard her company braces or lies out on: which mast's, its node and its own node (a topsail's), and where it is. */
+interface YardPlace {
+  name: string;
+  mast: 'fore' | 'main' | 'mizzen';
+  group: 'fore' | 'after';
+  /** The node of its mast's yards, and that node's place in the ship. */
+  node: string;
+  origin: Vec3;
+  /** Its own node, a topsail's, which the game lowers as the sail is reefed; null for one fixed in its mast's yards. */
+  own: string | null;
+  /** Its middle in its mast's yards' node's frame, at rest; half its length and its radius. */
+  at: Vec3;
+  half: number;
+  radius: number;
+  /** How far it comes down with its sail reefed, and at which reef its sail is taken in (1 the topgallants, 2 the topsails; 0 never). */
+  drop: number;
+  reef: number;
+}
+
+/**
+ * Her yards that are braced and reefed: the courses, topsails and
+ * topgallants of the fore and main, the crossjack and the mizzen topsail.
+ * Each with where its middle is in its mast's yards' node's frame (the
+ * node at the mast's axis at the courses' foot, turned by the braces), and
+ * how far it comes down reefed: a topsail's yard to its lower reef band.
+ */
+function yardPlaces(): YardPlace[] {
+  const out: YardPlace[] = [];
+  const names = ['course', 'topsail', 'topgallant'];
+  for (const [m, mast, area] of [
+    [FORE, 'fore', square.squareForeArea],
+    [MAIN, 'main', MAIN_AREA],
+  ] as [Mast, 'fore' | 'main', number][]) {
+    const w = sailWidth(area);
+    const reefs = reefBands(TOPSAIL_HEAD_W * w, w, TOPSAIL_DEPTH);
+    squareYardsOf(m, area).forEach((y, i) => {
+      out.push({
+        name: `${mast}-${names[i]}`,
+        mast,
+        group: mast === 'fore' ? 'fore' : 'after',
+        node: `${mast}-yards`,
+        origin: round3v([0, FOOT_Y, m.z]),
+        own: i === 1 ? `${mast}-topsail-yard` : null,
+        at: round3v([0, y.y - FOOT_Y, yardZ(m, y.y, y.r)]),
+        half: round5(y.half),
+        radius: y.r,
+        drop: i === 1 ? round5((reefs.at(-1) ?? 0) * TOPSAIL_DEPTH) : 0,
+        reef: i === 1 ? 2 : i === 2 ? 1 : 0,
+      });
+    });
+  }
+  const footW = MIZZEN_TOPSAIL_FOOT;
+  const reefs = reefBands(MIZZEN_TOPSAIL_HEAD_W * footW, footW, MIZZEN_TOPSAIL_DEPTH);
+  mizzenYardsOf().forEach((y, i) => {
+    out.push({
+      name: i === 0 ? 'crossjack' : 'mizzen-topsail',
+      mast: 'mizzen',
+      group: 'after',
+      node: 'mizzen-yards',
+      origin: round3v([0, FOOT_Y, MIZZEN.z]),
+      own: i === 1 ? 'mizzen-topsail-yard' : null,
+      at: round3v([0, y.y - FOOT_Y, yardZ(MIZZEN, y.y, y.r)]),
+      half: round5(y.half),
+      radius: y.r,
+      drop: i === 1 ? round5((reefs.at(-1) ?? 0) * MIZZEN_TOPSAIL_DEPTH) : 0,
+      reef: i === 1 ? 2 : 0,
+    });
+  });
+  return out;
+}
+
+/** How far inboard of the cap rail's inner edge a fall along her side is hauled, m; how far apart its haulers stand. */
+const FALL_IN = 0.45;
+const TALLY = 0.7;
+/** The first hauler's hands along a fall from its pin, m, as the hauling clip was staged (the main brace's, 1.6 m from its lead). */
+const FIRST_HAND = 1.6;
+
+/** The deck a point is over. */
+const levelOf = (z: number): Level =>
+  z > QD_FORE_Z ? QUARTERDECK : z < FC_AFT_Z ? FORECASTLE : WAIST;
+/** A deck's surface under (x, z). */
+const deckUnder = (x: number, z: number): number => {
+  const u = uAt(z);
+  const level = levelOf(z);
+  return deckSurface(x, u, level, deckHalf(u, level));
+};
+
+/**
+ * How high over her deck a hauler's hands hold a fall: as the hauling clip
+ * was staged, over the main brace's fall 1.6 m from its lead on the
+ * quarterdeck's rail, and 0.1 m over it.
+ */
+const HANDS_OVER = (() => {
+  const lead = railTop(BRACE_Z);
+  const along = normalize([-BRACE_FALL[1], 0, -BRACE_FALL[0]]);
+  const p = add(add(lead, scale(along, FIRST_HAND)), [0, 0.1, 0]);
+  return round5(p[1] - deckUnder(p[0], p[2]));
+})();
+
+/** A brace: its yard, its block, its lead (its pin on her rail), and where its haulers' hands are along its fall. */
+interface Brace {
+  yard: string;
+  group: 'fore' | 'after';
+  block: Vec3;
+  lead: Vec3;
+  hands: Vec3[];
+  /** How high over her deck the hands are. */
+  over: number;
+}
+
+/**
+ * The hands along a fall on the starboard side: from z0, every TALLY m
+ * forward (way −1) or aft (+1) while short of z1, FALL_IN inboard of her
+ * cap rail.
+ */
+function fallHands(z0: number, way: number, z1: number): Vec3[] {
+  const out: Vec3[] = [];
+  for (let z = z0; way < 0 ? z >= z1 : z <= z1; z += way * TALLY) {
+    const across = (railTop(z)[0] as number) - FALL_IN;
+    out.push(round3v([across, deckUnder(across, z) + HANDS_OVER, z]));
+  }
+  return out;
+}
+
+/**
+ * Her braces, the starboard side's (the port's the mirror): from each
+ * yardarm of the courses, topsails, topgallants and the crossjack (and the
+ * mizzen topsail), through a block on a stay, a mast or her quarter, to a
+ * pin on her rail, with where those hauling on its
+ * fall stand, their hands on it, facing its lead. The after braces lead
+ * aft: the main brace to a block on her quarter and a pin on the
+ * quarterdeck's rail, its fall forward along her rail; the main topsail's
+ * and topgallant's to the mizzen's top and topmast head and down to the
+ * quarterdeck's rail, belayed (all the rest tally on to the main brace);
+ * the crossjack's forward to the
+ * main's aftmost shroud and down to the waist's rail abaft the main
+ * shrouds, its fall forward along it; the mizzen topsail's to the main
+ * topmast's head and down to the quarterdeck's rail, belayed. The head
+ * braces lead aft to the main stay and the main top and down to the waist's
+ * rail by the main mast: the fore brace's fall forward along her rail, the
+ * fore topsail's aft; the fore topgallant's belayed. The falls keep clear
+ * of her ways along her sides by a body's breadth.
+ */
+function braces(): Brace[] {
+  const shroud = (lowerShrouds(MAIN, 5, channelOf(MAIN, -1.0, 3.6), 1).at(-1) ?? [
+    [0, 0, 0],
+    [0, 0, 0],
+  ]) as [Vec3, Vec3];
+  const stayTop: Vec3 = [0, MAIN.top - 0.4, MAIN.z - mastR(MAIN, MAIN.top - 0.4)];
+  const stayFoot: Vec3 = [0, mastFoot(FORE) + 0.6, FORE.z + mastR(FORE, mastFoot(FORE) + 0.6)];
+  const onStay = add(lerp3(stayTop, stayFoot, 0.3), [0.3, 0, 0]);
+  const quarter = railTop(14.6);
+  return [
+    {
+      yard: 'main-course',
+      group: 'after',
+      block: round3v([quarter[0] + 0.5, quarter[1] + 0.35, 14.6]),
+      lead: railTop(14.0),
+      hands: fallHands(14.0 - FIRST_HAND, -1, QD_FORE_Z + 1.0),
+      over: HANDS_OVER,
+    },
+    {
+      yard: 'main-topsail',
+      group: 'after',
+      block: round3v([MIZZEN.topHalf * 0.6, MIZZEN.top + 0.2, MIZZEN.z - MIZZEN.topFore + 0.15]),
+      lead: railTop(9.3),
+      hands: [],
+      over: HANDS_OVER,
+    },
+    {
+      yard: 'main-topgallant',
+      group: 'after',
+      block: round3v([0.25, MIZZEN.topmastHead - 0.3, MIZZEN.z]),
+      lead: railTop(8.4),
+      hands: [],
+      over: HANDS_OVER,
+    },
+    {
+      yard: 'crossjack',
+      group: 'after',
+      block: round3v(lerp3(shroud[1], shroud[0], 0.4)),
+      lead: railTop(4.4),
+      hands: fallHands(4.4 - FIRST_HAND, -1, -1.5),
+      over: HANDS_OVER,
+    },
+    {
+      yard: 'mizzen-topsail',
+      group: 'after',
+      block: round3v([0.3, MAIN.topmastHead - 0.5, MAIN.z + 0.3]),
+      lead: railTop(6.4),
+      hands: [],
+      over: HANDS_OVER,
+    },
+    {
+      yard: 'fore-course',
+      group: 'fore',
+      block: round3v(onStay),
+      lead: railTop(-1.9),
+      hands: fallHands(-1.9 - FIRST_HAND, -1, -8.7),
+      over: HANDS_OVER,
+    },
+    {
+      yard: 'fore-topsail',
+      group: 'fore',
+      block: round3v([MAIN.topHalf - 0.3, MAIN.top + 0.1, MAIN.z - MAIN.topFore + 0.1]),
+      lead: railTop(-1.2),
+      hands: fallHands(-1.2 + FIRST_HAND, 1, 3.3),
+      over: HANDS_OVER,
+    },
+    {
+      yard: 'fore-topgallant',
+      group: 'fore',
+      block: round3v([0.3, MAIN.topmastHead - 0.3, MAIN.z - 0.3]),
+      lead: railTop(-0.5),
+      hands: [],
+      over: HANDS_OVER,
+    },
+  ];
+}
+
+/**
+ * Where her topmen go aloft by each mast, the starboard side's: the foot of
+ * its shrouds on the deck (on her way along her side, abreast the shrouds'
+ * middle), and from there the climb. The yards' footropes are at the same
+ * heights under every yard, from FOOTROPE.
+ */
+function aloftPlaces(): { mast: string; foot: Vec3 }[] {
+  const side = (z: number): number => Math.min(WAY_WAIST, deckHalf(uAt(z), WAIST) - 1.35);
+  const at = (x: number, z: number): Vec3 => round3v([x, deckUnder(x, z), z]);
+  return [
+    { mast: 'fore', foot: at(side(-9.75), -9.75) },
+    { mast: 'main', foot: at(side(0.7), 0.7) },
+    { mast: 'mizzen', foot: at(WAY_QD, 10.4) },
+  ];
 }
 
 for (const name of boat.lights) {

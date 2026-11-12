@@ -243,6 +243,8 @@ export class FleetCrews {
       c.heel = b.heel;
       const sm = this.#shipMoment;
       sm.yards = b.yardsTurn;
+      sm.foreYards = b.foreYardsTurn;
+      sm.reef = b.reef;
       sm.heel = b.heel;
       sm.wind = this.windSpeed;
       sm.time = this.time;
@@ -530,7 +532,7 @@ export class FleetCrews {
     poseMember(p.body, p.member, input);
   }
 
-  readonly #shipMoment = { yards: 0, heel: 0, wind: 0, time: 0 };
+  readonly #shipMoment = { yards: 0, foreYards: 0, reef: 0, heel: 0, wind: 0, time: 0 };
   readonly #shipInput: ShipPoseInput = {
     rules: null as unknown as ShipRules,
     clips: new Map(),
@@ -664,6 +666,8 @@ export class FleetCrews {
       moving: string | null;
       from: number;
       t: number;
+      /** Aboard a ship, their work ('haul' or 'aloft') and how far on with it; null for none. */
+      work: { kind: string; phase: string } | null;
     }[];
     heads: Vector3[];
   }[] {
@@ -681,6 +685,13 @@ export class FleetCrews {
         moving: m.moving?.kind ?? null,
         from: m.moving?.from.station ?? m.station,
         t: m.moving?.t ?? 0,
+        work:
+          'ship' in m && (m as ShipMember).ship.work !== null
+            ? {
+                kind: (m as ShipMember).ship.work?.kind ?? '',
+                phase: (m as ShipMember).ship.work?.phase ?? '',
+              }
+            : null,
       })),
       heads: c.people
         .filter((p) => p.shown && p.body !== null)

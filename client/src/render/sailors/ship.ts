@@ -129,6 +129,54 @@ export interface Company {
   yard: { node: string; radius: number; footrope: Vector3[] };
   /** The ways her company walks: points on her decks (and the main top) and the stretches between them; null if her model has none. */
   ways: ShipWays | null;
+  /** Her yards that are braced and reefed, her braces, and where her topmen go aloft by each mast (empty if her model has none). */
+  yards: ShipYard[];
+  braces: ShipBrace[];
+  aloft: ShipAloft[];
+}
+
+/**
+ * A yard of hers that is braced and reefed: its mast and the group of
+ * yards it swings with, the node of its mast's yards (turned about the
+ * mast by the braces) and that node's place in her frame, its own node if
+ * it has one (a topsail's, lowered as it is reefed), its middle in its
+ * mast's yards' node's frame at rest, half its length, its radius, how far
+ * it comes down reefed and at which reef its sail is taken in (1 the
+ * topgallants, 2 the topsails, 0 never).
+ */
+export interface ShipYard {
+  name: string;
+  mast: 'fore' | 'main' | 'mizzen';
+  group: 'fore' | 'after';
+  node: string;
+  origin: Vector3;
+  own: string | null;
+  at: Vector3;
+  half: number;
+  radius: number;
+  drop: number;
+  reef: number;
+}
+
+/**
+ * A brace of hers, the starboard side's (the port's the mirror): from its
+ * yard's arm through a block (her frame) to its lead (a pin on her rail);
+ * and where those hauling on its fall have their hands, from its lead out
+ * (none for a brace belayed), this high over her deck.
+ */
+export interface ShipBrace {
+  yard: number;
+  group: 'fore' | 'after';
+  block: Vector3;
+  lead: Vector3;
+  hands: Vector3[];
+  over: number;
+}
+
+/** Where her topmen go aloft by a mast: the foot of its shrouds on her deck, the starboard side's. */
+export interface ShipAloft {
+  mast: 'fore' | 'main' | 'mizzen';
+  foot: Vector3;
 }
 
 /** What a stretch of a way is: walked along a deck, a ladder, or the climb aloft. */
@@ -154,6 +202,34 @@ export function company(parts: Map<string, Object3D>): Company | null {
   const top = e.top as { floor: number[] };
   const yard = e.yard as { node: string; radius: number; footrope: number[][] };
   const ways = e.ways as { nodes: number[][]; edges: number[][] } | undefined;
+  const yards = ((e.yards ?? []) as Record<string, unknown>[]).map(
+    (y): ShipYard => ({
+      name: y.name as string,
+      mast: y.mast as ShipYard['mast'],
+      group: y.group as ShipYard['group'],
+      node: y.node as string,
+      origin: v(y.origin),
+      own: (y.own as string | null) ?? null,
+      at: v(y.at),
+      half: y.half as number,
+      radius: y.radius as number,
+      drop: y.drop as number,
+      reef: y.reef as number,
+    }),
+  );
+  const braces = ((e.braces ?? []) as Record<string, unknown>[]).map(
+    (b): ShipBrace => ({
+      yard: yards.findIndex((y) => y.name === b.yard),
+      group: b.group as ShipBrace['group'],
+      block: v(b.block),
+      lead: v(b.lead),
+      hands: (b.hands as number[][]).map(v),
+      over: b.over as number,
+    }),
+  );
+  const aloft = ((e.aloft ?? []) as Record<string, unknown>[]).map(
+    (a): ShipAloft => ({ mast: a.mast as ShipAloft['mast'], foot: v(a.foot) }),
+  );
   return {
     rail: v(e.rail),
     hatch: v(hatch.edge),
@@ -169,6 +245,9 @@ export function company(parts: Map<string, Object3D>): Company | null {
               (e) => [e[0] ?? 0, e[1] ?? 0, e[2] ?? 0] as [number, number, number],
             ),
           },
+    yards,
+    braces: braces.filter((b) => b.yard >= 0),
+    aloft,
   };
 }
 

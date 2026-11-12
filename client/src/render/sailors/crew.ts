@@ -38,6 +38,7 @@ import {
   duckStep,
 } from './crewrules';
 import type { FleetLook, FleetLooks, FleetSeat } from './fleetlooks';
+import { ShipBraces } from './shipbraces';
 import { plumbOf, poseShip, type ShipPoseInput } from './shippose';
 import { type ShipMember, ShipRules } from './shiprules';
 
@@ -179,6 +180,8 @@ export class CrewDeck {
   #far: CrewLevel | null = null;
   #stations: readonly BoatStation[] = [];
   #rules: CrewRules | ShipRules | null = null;
+  /** A ship's braces, drawn under her model; null aboard any other boat. */
+  braces: ShipBraces | null = null;
   #crew: CrewShown | null = null;
   #people: Drawn[] = [];
   /** Those drawn at each level, in order of their rows. */
@@ -227,6 +230,14 @@ export class CrewDeck {
       ship === null
         ? new CrewRules(plan)
         : new ShipRules({ stations: plan.stations, ship }, this.#still);
+    if (this.braces !== null) {
+      this.group.remove(this.braces.mesh);
+      this.braces = null;
+    }
+    if (ship !== null && ship.company.braces.length > 0) {
+      this.braces = new ShipBraces(ship.company);
+      this.group.add(this.braces.mesh);
+    }
     this.#show();
   }
 
@@ -259,6 +270,11 @@ export class CrewDeck {
     this.#boom = moment.boom;
     this.#heel = heel;
     this.#rules?.step(moment);
+    // Her braces as her yards are now, and the falls those at them haul.
+    const rules = this.#rules;
+    if (this.braces !== null && rules instanceof ShipRules) {
+      this.braces.update(rules.turns, rules.reef, this.#crew === null ? null : rules);
+    }
   }
 
   /** Whether everyone aboard is drawn, in their own look, at the level their distance asks. */

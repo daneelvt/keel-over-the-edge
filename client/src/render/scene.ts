@@ -553,7 +553,7 @@ export class SeaScene {
   }
 
   /** The ship's moment, as her company's rules need it: filled each frame. */
-  readonly #shipMoment = { yards: 0, heel: 0, wind: 0, time: 0 };
+  readonly #shipMoment = { yards: 0, foreYards: 0, reef: 0, heel: 0, wind: 0, time: 0 };
 
   /** The seat drawn at the wheel when the helm was last drawn: a relief taking the spokes draws it again. */
   #wheelDrawn: number | null = null;
@@ -1823,6 +1823,8 @@ export class SeaScene {
     const helm = this.boat?.sailor ?? null;
     const sm = this.#shipMoment;
     sm.yards = this.pose.yardsTurn;
+    sm.foreYards = this.pose.foreYardsTurn;
+    sm.reef = this.pose.reef;
     sm.heel = this.pose.heel;
     sm.wind = this.wind.meanSpeed;
     sm.time = this.ticks / STEPS_PER_SECOND;
