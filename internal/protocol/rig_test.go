@@ -19,8 +19,8 @@ func TestTheYardsOnTheWire(t *testing.T) {
 	plain := st
 	plain.Jib, plain.Yards, plain.ForeYards = 0, 0, 0
 	var ship, dinghy Boat
-	Quantise(&st, 2, 0x15, false, &ship)
-	Quantise(&plain, 0, 0x15, false, &dinghy)
+	Quantise(&st, 2, 0x15, 0, false, &ship)
+	Quantise(&plain, 2, 0x15, 0, false, &dinghy)
 	ship.BoatLook, dinghy.BoatLook = 0x3300, 0x3300
 	enter := func(q *Boat) []byte { return AppendEntry(nil, &Entry{Slot: 5, Op: OpEnter, Boat: *q}) }
 	if a, b := len(enter(&ship)), len(enter(&dinghy)); a != b+4 {
@@ -43,8 +43,8 @@ func TestTheYardsOnTheWire(t *testing.T) {
 	turned, dturned := st, plain
 	turned.Heading, dturned.Heading = 1.25, 1.25
 	var q, dq Boat
-	Quantise(&turned, 2, 0x15, false, &q)
-	Quantise(&dturned, 0, 0x15, false, &dq)
+	Quantise(&turned, 2, 0x15, 0, false, &q)
+	Quantise(&dturned, 2, 0x15, 0, false, &dq)
 	q.BoatLook, dq.BoatLook = ship.BoatLook, dinghy.BoatLook
 	heading := update(&ship, &q)
 	if len(heading) != len(update(&dinghy, &dq)) || heading[0]>>6 != OpUpdate {
@@ -54,7 +54,7 @@ func TestTheYardsOnTheWire(t *testing.T) {
 	// yards and the fore yards' difference.
 	hauled := st
 	hauled.Yards = -0.7
-	Quantise(&hauled, 2, 0x15, false, &q)
+	Quantise(&hauled, 2, 0x15, 0, false, &q)
 	q.BoatLook = ship.BoatLook
 	haul := update(&ship, &q)
 	if haul[0]>>6 != OpUpdateRig || haul[2] != (ChangeYards|ChangeFore)>>8 {
@@ -63,7 +63,7 @@ func TestTheYardsOnTheWire(t *testing.T) {
 	// The fore yards let go and hauled after them: the fore yards' alone.
 	hauled.ForeYards = -0.7
 	var after Boat
-	Quantise(&hauled, 2, 0x15, false, &after)
+	Quantise(&hauled, 2, 0x15, 0, false, &after)
 	after.BoatLook = ship.BoatLook
 	letGo := update(&q, &after)
 	if letGo[0]>>6 != OpUpdateRig || letGo[2] != ChangeFore>>8 || after.Fore != 0 {
@@ -83,8 +83,8 @@ func TestTheGennakerOnTheWire(t *testing.T) {
 	bagged := st
 	bagged.Hoist, bagged.HoistTarget = 0, 0
 	var set, bag Boat
-	Quantise(&st, 3, 0x15, false, &set)
-	Quantise(&bagged, 3, 0x15, false, &bag)
+	Quantise(&st, 3, 0x15, 0, false, &set)
+	Quantise(&bagged, 3, 0x15, 0, false, &bag)
 	if bag.Kite != 0 || bag.Hoist != 0 {
 		t.Errorf("in its bag the gennaker is sent: clew %d, hoist %d", bag.Kite, bag.Hoist)
 	}
@@ -97,7 +97,7 @@ func TestTheGennakerOnTheWire(t *testing.T) {
 	up := st
 	up.Hoist = 0.75
 	var q Boat
-	Quantise(&up, 3, 0x15, false, &q)
+	Quantise(&up, 3, 0x15, 0, false, &q)
 	v1.Put(7, &q)
 	b, n := AppendEntries(nil, &v0, &v1, 0, 1<<7)
 	if n != 1 || b[0]>>6 != OpUpdateRig || b[1] != 0 || b[2] != ChangeHoist>>8 || len(b) != 4 {
@@ -105,6 +105,39 @@ func TestTheGennakerOnTheWire(t *testing.T) {
 	}
 	var e Entry
 	if _, err := ReadEntry(enter(&set), &e); err != nil || e.Boat.Kite != set.Kite || e.Boat.Hoist != set.Hoist || e.Boat.Kind != 3 {
+		t.Errorf("her enter read back as %+v, %v", e.Boat, err)
+	}
+}
+
+// A boat whose rig pitches her, the beach cat, carries her trim and her
+// sailor's place aft in her enter and her updates, two bytes more than
+// the same boat with neither, which sails at a dinghy's sizes; the trim
+// changing alone is the rig's second mask byte with one byte after it.
+func TestThePitchOnTheWire(t *testing.T) {
+	st := physics.State{X: 400, Y: 300, Heading: 2.4, Boom: -1.0, Jib: -0.3, Sailor: -2.16, SailorAft: 0.6}
+	level := st
+	level.SailorAft = 0
+	var pitched, flat Boat
+	Quantise(&st, 4, 0x15, -0.1, false, &pitched)
+	Quantise(&level, 4, 0x15, 0, false, &flat)
+	if pitched.Trim != -11 || pitched.Aft != 60 || pitched.Sailor != -216 || flat.Trim != 0 || flat.Aft != 0 {
+		t.Errorf("quantised trim %d aft %d sailor %d; level trim %d aft %d", pitched.Trim, pitched.Aft, pitched.Sailor, flat.Trim, flat.Aft)
+	}
+	enter := func(q *Boat) []byte { return AppendEntry(nil, &Entry{Slot: 7, Op: OpEnter, Boat: *q}) }
+	if a, b := len(enter(&pitched)), len(enter(&flat)); a != b+2 {
+		t.Errorf("her enter trimmed %d bytes, level %d", a, b)
+	}
+	var v0, v1 View
+	v0.Put(7, &pitched)
+	down := pitched
+	down.Trim = -30
+	v1.Put(7, &down)
+	b, n := AppendEntries(nil, &v0, &v1, 0, 1<<7)
+	if n != 1 || b[0]>>6 != OpUpdateRig || b[1] != 0 || b[2] != ChangeTrim>>8 || len(b) != 4 || int8(b[3]) != -30 {
+		t.Errorf("the trim's update %x", b)
+	}
+	var e Entry
+	if _, err := ReadEntry(enter(&pitched), &e); err != nil || e.Boat != pitched {
 		t.Errorf("her enter read back as %+v, %v", e.Boat, err)
 	}
 }

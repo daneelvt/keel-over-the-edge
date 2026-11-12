@@ -77,13 +77,15 @@ type goldenBoat struct {
 	Heel    int16  `json:"heel"`
 	Boom    int16  `json:"boom"`
 	Rudder  int16  `json:"rudder"`
-	Sailor  int8   `json:"sailor"`
+	Sailor  int16  `json:"sailor"`
 	Sail    uint8  `json:"sail"`
 	Jib     int16  `json:"jib"`
 	Yards   int16  `json:"yards"`
 	Fore    int16  `json:"fore"`
 	Kite    int16  `json:"kite"`
 	Hoist   uint8  `json:"hoist"`
+	Trim    int8   `json:"trim"`
+	Aft     int8   `json:"aft"`
 }
 
 func f64bits(v float64) string { return fmt.Sprintf("%#016x", math.Float64bits(v)) }
@@ -117,7 +119,7 @@ type golden struct {
 	sample uint64
 }
 
-func boat(kind uint16, far bool, mode uint8, x, y int32, heading uint16, heel, boom, rudder int16, sailor int8, sail uint8) Boat {
+func boat(kind uint16, far bool, mode uint8, x, y int32, heading uint16, heel, boom, rudder int16, sailor int16, sail uint8) Boat {
 	q := Boat{Kind: kind, Flags: mode << modeShift, X: x, Y: y, Heading: heading, Heel: heel, Boom: boom, Rudder: rudder, Sailor: sailor, Sail: sail}
 	if far {
 		q.Flags |= FarBand
@@ -183,6 +185,10 @@ func goldens() []golden {
 	v1.Boats[6].Jib, v1.Boats[6].Kite, v1.Boats[6].Hoist = -2500, -11000, 128
 	v1.Put(4, ptr(boat(1, false, physics.Sailing, 300, 400, 100, 0, 0, 0, 0, 0x11)))
 	v1.Boats[4].Jib = 2000
+	// A beach cat, her sailor on the wire past a byte's reach, trimmed
+	// bow down and stepped aft.
+	v1.Put(7, ptr(boat(4, false, physics.Sailing, 700, -800, 300, 1500, 9000, -200, -216, 0x15)))
+	v1.Boats[7].Jib, v1.Boats[7].Trim, v1.Boats[7].Aft = 3000, -9, 64
 
 	v2 := v1
 	v2.Boats[0] = boat(0, false, 0, 13, -7, 0, 0, 0, 0, 0, 0)                                                     // position only
@@ -197,6 +203,8 @@ func goldens() []golden {
 	v2.Boats[4].Jib = 2100    // the rig's alone: the second byte alone
 	v2.Boats[6].Hoist = 255   // the hoist alone
 	v2.Boats[6].Kite = -11500 // and the clew
+	v2.Boats[7].Trim = -40    // her bows buried
+	v2.Boats[7].Sailor = 216  // and her sailor on the other wire
 	// Slot 5 is far, and not sampled: unchanged.
 
 	v3 := v1
@@ -283,7 +291,7 @@ func viewOf(v *View) []goldenBoat {
 		q := v.Boats[slot]
 		out = append(out, goldenBoat{Slot: slot, Kind: q.Kind, Flags: q.Flags, X: q.X, Y: q.Y, Heading: q.Heading,
 			Heel: q.Heel, Boom: q.Boom, Rudder: q.Rudder, Sailor: q.Sailor, Sail: q.Sail, Jib: q.Jib, Yards: q.Yards, Fore: q.Fore,
-			Kite: q.Kite, Hoist: q.Hoist})
+			Kite: q.Kite, Hoist: q.Hoist, Trim: q.Trim, Aft: q.Aft})
 	}
 	return out
 }
@@ -454,12 +462,17 @@ func TestDeltaAgainstEveryBase(t *testing.T) {
 func randomBoat(rng *rand.Rand) Boat {
 	q := Boat{Kind: uint16(rng.IntN(3)), Flags: uint8(rng.IntN(8)) | uint8(rng.IntN(3))<<reefShift, X: int32(rng.IntN(1<<24) - 1<<23), Y: int32(rng.IntN(1<<24) - 1<<23),
 		Heading: uint16(rng.Uint32()), Heel: int16(rng.Uint32()), Boom: int16(rng.Uint32()), Rudder: int16(rng.Uint32()),
-		Sailor: int8(rng.Uint32()), Sail: uint8(rng.Uint32())}
+		Sailor: int16(rng.Uint32()), Sail: uint8(rng.Uint32())}
 	// A rig on some boats, each field now and then zero.
 	if q.Kind > 0 {
 		for _, v := range []*int16{&q.Jib, &q.Yards, &q.Fore} {
 			if rng.IntN(3) > 0 {
 				*v = int16(rng.Uint32())
+			}
+		}
+		for _, v := range []*int8{&q.Trim, &q.Aft} {
+			if rng.IntN(3) > 0 {
+				*v = int8(rng.Uint32())
 			}
 		}
 	}
@@ -470,7 +483,7 @@ func randomBoat(rng *rand.Rand) Boat {
 func TestQuantise(t *testing.T) {
 	var q Boat
 	st := physics.State{X: 12.345, Y: -0.004, Heading: math.Pi, Heel: -math.Pi / 2, Boom: 1.3, Rudder: -0.6, Sailor: 0.955, SailorMode: physics.OnBoard}
-	Quantise(&st, 3, 0x5a, true, &q)
+	Quantise(&st, 3, 0x5a, 0, true, &q)
 	want := Boat{Kind: 3, Flags: FarBand | physics.OnBoard<<modeShift, X: 1235, Y: 0, Heading: 32768, Heel: -16384,
 		Boom: int16(math.Round(1.3 / AngleStep)), Rudder: int16(math.Round(-0.6 / AngleStep)), Sailor: 96, Sail: 0x5a}
 	if q != want {
@@ -481,8 +494,13 @@ func TestQuantise(t *testing.T) {
 		want Boat
 	}{
 		{physics.State{X: 1e9, Y: -1e9}, Boat{X: PositionLimit, Y: -PositionLimit - 1}},
-		{physics.State{X: math.NaN(), Heading: math.NaN(), Sailor: 9}, Boat{Sailor: math.MaxInt8}},
-		{physics.State{Heading: -math.Pi, Heel: math.Pi, Boom: 3 * math.Pi, Sailor: -9}, Boat{Heading: 32768, Heel: math.MinInt16, Boom: math.MinInt16, Sailor: math.MinInt8}},
+		{physics.State{X: math.NaN(), Heading: math.NaN(), Sailor: 900}, Boat{Sailor: math.MaxInt16}},
+		{physics.State{Heading: -math.Pi, Heel: math.Pi, Boom: 3 * math.Pi, Sailor: -900}, Boat{Heading: 32768, Heel: math.MinInt16, Boom: math.MinInt16, Sailor: math.MinInt16}},
+		// A sailor on the wire past 1.27 m, the reach of a byte.
+		{physics.State{Sailor: -2.16}, Boat{Sailor: -216}},
+		// A sailor stepped aft, and the trim, on a boat whose rig pitches her.
+		{physics.State{SailorAft: 0.734}, Boat{Aft: 73}},
+		{physics.State{SailorAft: 9}, Boat{Aft: math.MaxInt8}},
 		{physics.State{Heading: 2*math.Pi - 1e-9, Heel: math.Pi - AngleStep/4, Rudder: -math.Pi + AngleStep/4}, Boat{Heading: 0, Heel: math.MinInt16, Rudder: math.MinInt16}},
 		{physics.State{Heading: -AngleStep * 0.6, SailorMode: 7}, Boat{Heading: 65535, Flags: 3 << modeShift}},
 		// The rig: the reef rounded to a level, and kept to its range.
@@ -494,9 +512,17 @@ func TestQuantise(t *testing.T) {
 		{physics.State{Reef: math.NaN()}, Boat{}},
 	} {
 		var q Boat
-		Quantise(&tc.st, 0, 0, false, &q)
+		Quantise(&tc.st, 0, 0, 0, false, &q)
 		if q != tc.want {
 			t.Errorf("%+v quantised to %+v, want %+v", tc.st, q, tc.want)
+		}
+	}
+	// The trim in half degrees, kept to its range.
+	for trim, want := range map[float64]int8{-0.2: -23, 0.0044: 1, 2: math.MaxInt8, -9: -math.MaxInt8, math.NaN(): 0} {
+		var q Boat
+		Quantise(&physics.State{}, 4, 0, trim, false, &q)
+		if q.Trim != want {
+			t.Errorf("a trim of %v rad quantised to %d, want %d", trim, q.Trim, want)
 		}
 	}
 }
@@ -513,7 +539,7 @@ func TestAnglesMoveEverySnapshot(t *testing.T) {
 		a := -1.5 + rate*interval*float64(i)
 		st := physics.State{Heel: a, Boom: -a, Rudder: a / 3}
 		var q Boat
-		Quantise(&st, 0, 0, false, &q)
+		Quantise(&st, 0, 0, 0, false, &q)
 		if i > 0 && (q.Heel == prev.Heel || q.Boom == prev.Boom || q.Rudder == prev.Rudder) {
 			t.Fatalf("snapshot %d: heel %d, boom %d, rudder %d; before it %d, %d, %d",
 				i, q.Heel, q.Boom, q.Rudder, prev.Heel, prev.Boom, prev.Rudder)

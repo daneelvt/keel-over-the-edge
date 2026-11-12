@@ -349,6 +349,10 @@ func (b *Prepared) substep(s *State, wind, sinW, cosW, dt float64, g *rig, v *wa
 		if past > 0 {
 			o.BowsBurying = 1
 		}
+		o.Trim = 0
+		if b.rigPitch {
+			o.Trim = s.Pitch - v.ahead
+		}
 		if b.kite {
 			o.Drive, o.SideForce = o.Drive+kite.drive, o.SideForce+kite.side
 			o.KiteFootAttack, o.KiteHeadAttack = kite.attack[0], kite.attack[1]

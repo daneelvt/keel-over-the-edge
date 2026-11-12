@@ -182,6 +182,8 @@ export interface SailorMoment {
   time: number;
   /** The physics' sailor offset (m, + starboard), mode and timer. */
   offset: number;
+  /** How far aft of their place the sailor stands (m), on a boat whose rig pitches her; 0 if not said. */
+  aft?: number;
   mode: number;
   timer: number;
   heel: number;
@@ -537,6 +539,10 @@ export class SailorRuntime {
       }
     } else {
       seated = this.#sailing(s, dt, pose, place);
+      if (seated && s.aft !== undefined && s.aft !== 0) {
+        // Stepped aft along the hull to hold the bows up.
+        place.at.z += s.aft;
+      }
     }
 
     // A change of mode, blended along a path clear of the hull.

@@ -45,9 +45,13 @@ const (
 	// and starting.)
 	AngleStep = 2 * math.Pi / 65536
 	// PositionStep and SailorStep are the position's and the sailor
-	// offset's, in metres.
+	// offset's, in metres, across and, on a boat whose rig pitches her,
+	// aft.
 	PositionStep = 0.01
 	SailorStep   = 0.01
+	// TrimStep is a hull's trim's, its pitch off the water's surface, on a
+	// boat whose rig pitches her, in radians: half a degree, ±63.5°.
+	TrimStep = math.Pi / 360
 	// PositionLimit is the furthest a position goes from the centre, in
 	// steps: a signed 24-bit integer, ±83.9 km.
 	PositionLimit = 1<<23 - 1
@@ -67,7 +71,7 @@ type Boat struct {
 	Heel     int16
 	Boom     int16
 	Rudder   int16
-	Sailor   int8 // cm
+	Sailor   int16 // cm
 	Sail     uint8
 	// Jib is the headsails' clew's angle off the centreline, Yards the
 	// after yards' and Fore the fore yards' less the after yards', each in
@@ -80,6 +84,11 @@ type Boat struct {
 	// hoisted, 0 in its bag … 255 set: 0 on a boat without one.
 	Kite  int16
 	Hoist uint8
+	// Trim is the hull's pitch off the water's surface, in TrimSteps,
+	// positive with the bow up, and Aft how far aft of their place its
+	// sailor stands, in cm: 0 on a boat whose rig does not pitch her.
+	Trim int8
+	Aft  int8
 }
 
 // Relooked says whether a view slot's boat, the same boat, is drawn
@@ -105,8 +114,9 @@ func (q *Boat) Mode() uint8 { return q.Flags >> modeShift & 3 }
 func (q *Boat) Reef() uint8 { return q.Flags >> reefShift }
 
 // Quantise sets q to a boat of kind in state st, whose last step's sail
-// byte was sail, in the far band or not.
-func Quantise(st *physics.State, kind uint16, sail uint8, far bool, q *Boat) {
+// byte was sail and trim its hull's trim (physics.Out's Trim), in the far
+// band or not.
+func Quantise(st *physics.State, kind uint16, sail uint8, trim float64, far bool, q *Boat) {
 	q.Kind = kind
 	q.Flags = uint8(clampInt(int64(st.SailorMode), 0, 3))<<modeShift | uint8(steps(st.Reef, 0, bus.MaxReef))<<reefShift
 	if far {
@@ -118,7 +128,7 @@ func Quantise(st *physics.State, kind uint16, sail uint8, far bool, q *Boat) {
 	q.Heel = int16(angleSteps(st.Heel))
 	q.Boom = int16(angleSteps(st.Boom))
 	q.Rudder = int16(angleSteps(st.Rudder))
-	q.Sailor = int8(steps(st.Sailor/SailorStep, math.MinInt8, math.MaxInt8))
+	q.Sailor = int16(steps(st.Sailor/SailorStep, math.MinInt16, math.MaxInt16))
 	q.Sail = sail
 	q.Jib = int16(angleSteps(st.Jib))
 	q.Yards = int16(angleSteps(st.Yards))
@@ -128,6 +138,8 @@ func Quantise(st *physics.State, kind uint16, sail uint8, far bool, q *Boat) {
 	if q.Hoist != 0 {
 		q.Kite = int16(angleSteps(st.Kite))
 	}
+	q.Trim = int8(steps(trim/TrimStep, -math.MaxInt8, math.MaxInt8))
+	q.Aft = int8(steps(st.SailorAft/SailorStep, -math.MaxInt8, math.MaxInt8))
 }
 
 // HoistSteps is how many steps a boat's downwind sail's hoist is sent in,
@@ -205,7 +217,9 @@ const (
 	ChangeFore
 	ChangeKite
 	ChangeHoist
-	changeUsed = ChangeHoist<<1 - 1
+	ChangeTrim
+	ChangeAft
+	changeUsed = ChangeAft<<1 - 1
 )
 
 // An enter's rig: which of the rig's fields follow it, those not zero, in
@@ -216,15 +230,18 @@ const (
 	enterFore  = 4
 	enterKite  = 8
 	enterHoist = 16
-	enterRig   = enterJib | enterYards | enterFore | enterKite | enterHoist
-	kindShift  = 5
+	// enterPitch: the trim and the sailor's place aft, both, on a boat
+	// whose rig pitches her.
+	enterPitch = 32
+	enterRig   = enterJib | enterYards | enterFore | enterKite | enterHoist | enterPitch
+	kindShift  = 6
 )
 
 // maxEntrySize is the longest entry this package writes: an enter of a
 // kind of 3 bytes, a look of 3 (a look code holds 20 bits), a boat look of
 // 4 (22 bits) and every rig field; an update of every field, its position
 // changes 4 bytes each, is shorter.
-const maxEntrySize = 37
+const maxEntrySize = 40
 
 // Entry is one entry of a snapshot.
 type Entry struct {
@@ -286,6 +303,12 @@ func Diff(base, q *Boat) uint16 {
 	if q.Hoist != base.Hoist {
 		m |= ChangeHoist
 	}
+	if q.Trim != base.Trim {
+		m |= ChangeTrim
+	}
+	if q.Aft != base.Aft {
+		m |= ChangeAft
+	}
 	return m
 }
 
@@ -343,6 +366,9 @@ func AppendEntry(b []byte, e *Entry) []byte {
 		if q.Hoist != 0 {
 			rig |= enterHoist
 		}
+		if q.Trim != 0 || q.Aft != 0 {
+			rig |= enterPitch
+		}
 		b = binary.AppendUvarint(b, uint64(q.Kind)<<kindShift|rig)
 		b = binary.AppendUvarint(b, uint64(q.Look))
 		b = binary.AppendUvarint(b, uint64(q.BoatLook))
@@ -352,7 +378,8 @@ func AppendEntry(b []byte, e *Entry) []byte {
 		for _, v := range [...]uint16{q.Heading, uint16(q.Heel), uint16(q.Boom), uint16(q.Rudder)} {
 			b = binary.LittleEndian.AppendUint16(b, v)
 		}
-		b = append(b, byte(q.Sailor), q.Sail)
+		b = binary.LittleEndian.AppendUint16(b, uint16(q.Sailor))
+		b = append(b, q.Sail)
 		for i, v := range [...]int16{q.Jib, q.Yards, q.Fore, q.Kite} {
 			if rig&(1<<i) != 0 {
 				b = binary.LittleEndian.AppendUint16(b, uint16(v))
@@ -360,6 +387,9 @@ func AppendEntry(b []byte, e *Entry) []byte {
 		}
 		if rig&enterHoist != 0 {
 			b = append(b, q.Hoist)
+		}
+		if rig&enterPitch != 0 {
+			b = append(b, byte(q.Trim), byte(q.Aft))
 		}
 	case OpUpdate, OpUpdateRig:
 		m := e.Mask
@@ -376,8 +406,11 @@ func AppendEntry(b []byte, e *Entry) []byte {
 				b = binary.LittleEndian.AppendUint16(b, v)
 			}
 		}
-		for i, v := range [...]uint8{uint8(q.Sailor), q.Sail, q.Flags} {
-			if m&(ChangeSailor<<i) != 0 {
+		if m&ChangeSailor != 0 {
+			b = binary.LittleEndian.AppendUint16(b, uint16(q.Sailor))
+		}
+		for i, v := range [...]uint8{q.Sail, q.Flags} {
+			if m&(ChangeSail<<i) != 0 {
 				b = append(b, v)
 			}
 		}
@@ -388,6 +421,11 @@ func AppendEntry(b []byte, e *Entry) []byte {
 		}
 		if m&ChangeHoist != 0 {
 			b = append(b, q.Hoist)
+		}
+		for i, v := range [...]int8{q.Trim, q.Aft} {
+			if m&(ChangeTrim<<i) != 0 {
+				b = append(b, byte(v))
+			}
 		}
 	}
 	return b
@@ -449,7 +487,7 @@ func ReadEntry(b []byte, e *Entry) ([]byte, error) {
 		q.Heel = int16(binary.LittleEndian.Uint16(b[9:]))
 		q.Boom = int16(binary.LittleEndian.Uint16(b[11:]))
 		q.Rudder = int16(binary.LittleEndian.Uint16(b[13:]))
-		q.Sailor, q.Sail = int8(b[15]), b[16]
+		q.Sailor, q.Sail = int16(binary.LittleEndian.Uint16(b[15:])), b[17]
 		b = b[enterFields:]
 		for i, v := range [...]*int16{&q.Jib, &q.Yards, &q.Fore, &q.Kite} {
 			if rig&(1<<i) == 0 {
@@ -471,6 +509,15 @@ func ReadEntry(b []byte, e *Entry) ([]byte, error) {
 				return b, errors.New("protocol: an enter's rig field of 0 sent")
 			}
 			b = b[1:]
+		}
+		if rig&enterPitch != 0 {
+			if len(b) < 2 {
+				return b, ErrEntryShort
+			}
+			if q.Trim, q.Aft = int8(b[0]), int8(b[1]); q.Trim == 0 && q.Aft == 0 {
+				return b, errors.New("protocol: an enter's rig field of 0 sent")
+			}
+			b = b[2:]
 		}
 	case OpUpdate, OpUpdateRig:
 		width := 1
@@ -521,8 +568,15 @@ func ReadEntry(b []byte, e *Entry) ([]byte, error) {
 			}
 			b = b[2:]
 		}
-		for i := range 3 {
-			if m&(ChangeSailor<<i) == 0 {
+		if m&ChangeSailor != 0 {
+			if len(b) < 2 {
+				return b, ErrEntryShort
+			}
+			q.Sailor = int16(binary.LittleEndian.Uint16(b))
+			b = b[2:]
+		}
+		for i := range 2 {
+			if m&(ChangeSail<<i) == 0 {
 				continue
 			}
 			if len(b) == 0 {
@@ -530,10 +584,8 @@ func ReadEntry(b []byte, e *Entry) ([]byte, error) {
 			}
 			switch v := b[0]; i {
 			case 0:
-				q.Sailor = int8(v)
-			case 1:
 				q.Sail = v
-			case 2:
+			case 1:
 				q.Flags = v
 			}
 			b = b[1:]
@@ -555,6 +607,16 @@ func ReadEntry(b []byte, e *Entry) ([]byte, error) {
 			q.Hoist = b[0]
 			b = b[1:]
 		}
+		for i, v := range [...]*int8{&q.Trim, &q.Aft} {
+			if m&(ChangeTrim<<i) == 0 {
+				continue
+			}
+			if len(b) < 1 {
+				return b, ErrEntryShort
+			}
+			*v = int8(b[0])
+			b = b[1:]
+		}
 	default:
 		return b, fmt.Errorf("protocol: an entry of op %d", e.Op)
 	}
@@ -565,7 +627,7 @@ func ReadEntry(b []byte, e *Entry) ([]byte, error) {
 }
 
 // enterFields is the length of an enter's fields after its kind and look.
-const enterFields = 17
+const enterFields = 18
 
 // uvarint reads a uvarint written in as few bytes as it needs, as
 // binary.AppendUvarint writes it, and returns it and its length.
@@ -651,6 +713,12 @@ func (v *View) Apply(e *Entry, ch *Changes) error {
 	}
 	if m&ChangeHoist != 0 {
 		q.Hoist = u.Hoist
+	}
+	if m&ChangeTrim != 0 {
+		q.Trim = u.Trim
+	}
+	if m&ChangeAft != 0 {
+		q.Aft = u.Aft
 	}
 	if ch.Entered&bit == 0 {
 		ch.Updated |= bit

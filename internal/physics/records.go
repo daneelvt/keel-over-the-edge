@@ -458,6 +458,10 @@ type Out struct {
 	// where their deck meets the water, else 0.
 	HullFlying  float64
 	BowsBurying float64
+	// Trim is the hull's pitch off the water's surface, rad, positive with
+	// the bow up, on a boat whose rig pitches her: what the waves do not
+	// give her pitch. 0 on every other boat.
+	Trim float64
 }
 
 // GroundParams describe how a boat meets the ground: the catalog's world

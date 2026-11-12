@@ -37,8 +37,11 @@ export const Q = {
   /** The downwind sail: its clew in angle steps while it is hoisted at all, and its hoist, 0 … 255; 0 without. */
   kite: 15,
   hoist: 16,
+  /** A boat whose rig pitches her: her trim in half degrees, bow up, and her sailor's place aft in cm; 0 without. */
+  trim: 17,
+  aft: 18,
 } as const;
-export const VIEW_STRIDE = 17;
+export const VIEW_STRIDE = 19;
 
 /**
  * A boat's flags: in the far band; the sailor's mode is bits 1–2; falling
@@ -57,6 +60,8 @@ const MAX_REEF = 2;
 
 /** The hoist's steps: 255 is set. */
 export const HOIST_STEPS = 255;
+/** The trim's step, radians: half a degree. */
+export const TRIM_STEP = Math.PI / 360;
 /** The steps of the fields: the heading's, heel's, boom's and rudder's, and the position's. */
 export const ANGLE_STEP = (2 * Math.PI) / 65536;
 export const POSITION_STEP = 0.01;
@@ -71,12 +76,15 @@ const OP_LEAVE = 2;
 /** An update whose change mask has a second byte, for the rig's fields. */
 const OP_UPDATE_RIG = 3;
 
-/** An enter's kind is its kind × RIG_KINDS plus which rig fields follow: 1 the jib, 2 the yards, 4 the fore yards, 8 the downwind sail's clew, 16 its hoist. */
-const RIG_KINDS = 32;
+/** An enter's kind is its kind × RIG_KINDS plus which rig fields follow: 1 the jib, 2 the yards, 4 the fore yards, 8 the downwind sail's clew, 16 its hoist, 32 the trim and the sailor's place aft. */
+const RIG_KINDS = 64;
 /** The rig's two-byte fields, in their order after an enter's and in an update's second mask byte; the hoist, one byte, after them. */
 const RIG_FIELDS = [Q.jib, Q.yards, Q.fore, Q.kite] as const;
 /** The hoist's bit among the rig's. */
 const RIG_HOIST = 1 << RIG_FIELDS.length;
+/** The trim's bit among the rig's, and in an update's second mask byte the trim's and the sailor's place aft's, one byte each. */
+const RIG_TRIM = RIG_HOIST << 1;
+const RIG_AFT = RIG_TRIM << 1;
 
 /** The boats a player sees after a snapshot, as the wire carries them. */
 export class View {
@@ -158,7 +166,7 @@ class Reader {
 class EntryError extends Error {}
 
 /** An enter's length after its kind and look, the rig's fields aside. */
-const ENTER_FIELDS = 17;
+const ENTER_FIELDS = 18;
 
 /** Whether a boat's flags are refused: a reef of 3. */
 function badFlags(flags: number): boolean {
@@ -233,8 +241,8 @@ export function applyEntries(
           q[o + Q.heel] = v.getInt16(b + 9, true);
           q[o + Q.boom] = v.getInt16(b + 11, true);
           q[o + Q.rudder] = v.getInt16(b + 13, true);
-          q[o + Q.sailor] = v.getInt8(b + 15);
-          q[o + Q.sail] = v.getUint8(b + 16);
+          q[o + Q.sailor] = v.getInt16(b + 15, true);
+          q[o + Q.sail] = v.getUint8(b + 17);
           r.at += ENTER_FIELDS;
           for (let i = 0; i < RIG_FIELDS.length; i++) {
             let value = 0;
@@ -254,6 +262,17 @@ export function applyEntries(
             }
           }
           q[o + Q.hoist] = hoist;
+          let trim = 0;
+          let aft = 0;
+          if ((rig & RIG_TRIM) !== 0) {
+            trim = (r.byte() << 24) >> 24;
+            aft = (r.byte() << 24) >> 24;
+            if (trim === 0 && aft === 0) {
+              return "an enter's rig field of 0 sent";
+            }
+          }
+          q[o + Q.trim] = trim;
+          q[o + Q.aft] = aft;
           view.used[slot] = 1;
           changes[slot] = CHANGE.entered;
           break;
@@ -263,7 +282,7 @@ export function applyEntries(
           let m = r.byte();
           if (op === OP_UPDATE_RIG) {
             const rigMask = r.byte();
-            if (rigMask === 0 || rigMask >= 2 * RIG_HOIST) {
+            if (rigMask === 0 || rigMask >= 2 * RIG_AFT) {
               return `a rig's update of mask ${rigMask}`;
             }
             m |= rigMask << 8;
@@ -301,7 +320,7 @@ export function applyEntries(
             q[o + Q.rudder] = ((r.byte() | (r.byte() << 8)) << 16) >> 16;
           }
           if ((m & 32) !== 0) {
-            q[o + Q.sailor] = (r.byte() << 24) >> 24;
+            q[o + Q.sailor] = ((r.byte() | (r.byte() << 8)) << 16) >> 16;
           }
           if ((m & 64) !== 0) {
             q[o + Q.sail] = r.byte();
@@ -320,6 +339,12 @@ export function applyEntries(
           }
           if ((m & (256 * RIG_HOIST)) !== 0) {
             q[o + Q.hoist] = r.byte();
+          }
+          if ((m & (256 * RIG_TRIM)) !== 0) {
+            q[o + Q.trim] = (r.byte() << 24) >> 24;
+          }
+          if ((m & (256 * RIG_AFT)) !== 0) {
+            q[o + Q.aft] = (r.byte() << 24) >> 24;
           }
           if (changes[slot] !== CHANGE.entered) {
             changes[slot] = CHANGE.updated;
@@ -475,8 +500,11 @@ export const SLOT = {
   /** Radians, positive to starboard: the downwind sail's clew's angle off the centreline, and how far it is hoisted, 0 … 1; 0 without one. */
   kite: 23,
   hoist: 24,
+  /** Radians, positive with the bow up: the hull's pitch off the water's surface, and metres aft of their place the sailor stands, on a boat whose rig pitches her; 0 on any other. */
+  trim: 25,
+  aft: 26,
 } as const;
-export const SLOT_FIELDS = 25;
+export const SLOT_FIELDS = 27;
 /** A record's length in bytes. */
 export const FLEET_RECORD_BYTES = MAX_HEADER_SIZE + 8 * (META_FIELDS + VIEW_SLOTS * SLOT_FIELDS);
 
@@ -550,6 +578,8 @@ export function writeRecord(
     f[o + SLOT.boatLook] = q[b + Q.boatLook] ?? 0;
     f[o + SLOT.kite] = (q[b + Q.kite] ?? 0) * ANGLE_STEP;
     f[o + SLOT.hoist] = (q[b + Q.hoist] ?? 0) / HOIST_STEPS;
+    f[o + SLOT.trim] = (q[b + Q.trim] ?? 0) * TRIM_STEP;
+    f[o + SLOT.aft] = (q[b + Q.aft] ?? 0) * POSITION_STEP;
   }
   f[FLEET_META.boats] = boats;
 }

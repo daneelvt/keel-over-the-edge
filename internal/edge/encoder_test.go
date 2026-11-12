@@ -203,7 +203,7 @@ func checkView(t *testing.T, f *bus.Frame, own int32, v *protocol.View, flags ui
 			within = append(within, d)
 		}
 		var q protocol.Boat
-		protocol.Quantise(&f.State[s], f.Kind[s], f.Sail[s], false, &q)
+		protocol.Quantise(&f.State[s], f.Kind[s], f.Sail[s], 0, false, &q)
 		byID[[2]int32{q.X, q.Y}] = s
 	}
 	for slot := range protocol.ViewSlots {
@@ -223,7 +223,7 @@ func checkView(t *testing.T, f *bus.Frame, own int32, v *protocol.View, flags ui
 			t.Fatalf("view slot %d: slot %d, %.0f m off", slot, s, d)
 		}
 		var want protocol.Boat
-		protocol.Quantise(&f.State[s], f.Kind[s], f.Sail[s], q.Far(), &want)
+		protocol.Quantise(&f.State[s], f.Kind[s], f.Sail[s], 0, q.Far(), &want)
 		if q != want {
 			t.Fatalf("view slot %d: %+v, the frame's %+v", slot, q, want)
 		}

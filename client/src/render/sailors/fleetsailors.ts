@@ -288,6 +288,7 @@ export class NearSailors extends SailorRows {
     mo.dt = dt;
     mo.time = this.#time;
     mo.offset = b.sailor;
+    mo.aft = b.aft;
     mo.mode = b.mode;
     // The fleet does not hear how far on a climb is: as if just begun.
     mo.timer = s.boat.climbTime;

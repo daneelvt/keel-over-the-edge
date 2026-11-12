@@ -1,10 +1,10 @@
 {
  "comment": "Written by go test ./internal/physics -run Golden -update. Floats are their IEEE 754 bits in hexadecimal.",
- "layout": "0xe072f3ed",
+ "layout": "0xffa32e62",
  "scenarios": [
   {
    "name": "beat",
-   "digest": "c893ae127bc761857e7c32edf34eaa72b3174294362b73f6e6580995abe9cf55",
+   "digest": "5262108c05569b2d1d31b6e5865b662bfa22f51fdce975a88e970f589b886c6a",
    "checkpoints": [
     {
      "step": 600,
@@ -280,7 +280,7 @@
   },
   {
    "name": "reach",
-   "digest": "b285e289c0700fddfa292aa0d3f4c278bd8ea99d68b6a063221ea5e2efbe6286",
+   "digest": "a681676c86c26120cbf74b514654906e732b274a41b1153fac2694fd2a628afd",
    "checkpoints": [
     {
      "step": 600,
@@ -556,7 +556,7 @@
   },
   {
    "name": "run",
-   "digest": "a23798f3df0dd34820815ada410824342efaf29f1dba1c57f361d3ac890b37d0",
+   "digest": "0f9dae96a74c4c6b4fcb90fc1e70a802827b8c2b733617851660c2303bf8e7d1",
    "checkpoints": [
     {
      "step": 600,
@@ -832,7 +832,7 @@
   },
   {
    "name": "tacks",
-   "digest": "2cd7615fb6ae3029a098c831f9ee6f162f7a63a72a6764260c732de265748085",
+   "digest": "fede8c629cc06f42546dd8e1a7f80023490387a568ed9cec4ce37bbcec060261",
    "checkpoints": [
     {
      "step": 600,
@@ -1288,7 +1288,7 @@
   },
   {
    "name": "gybes",
-   "digest": "dba39e4c317215c8724bb57ceab73c542844593f6eb0988d9d4cabdb005fa6ed",
+   "digest": "f01d69bc5145d4b2f831e7fc5455611386210cc2cd1d9f3bcfcfbe533cd3e035",
    "checkpoints": [
     {
      "step": 600,
@@ -1744,7 +1744,7 @@
   },
   {
    "name": "by-the-lee",
-   "digest": "4ebef76f5e5c24a49394bd5beaf8290c566e414a5fce1775e23018f26a413392",
+   "digest": "60afc2aa1cd60d6da5d64891d0edeab53f22d2d8395a784269c1c13d0bac1e4c",
    "checkpoints": [
     {
      "step": 600,
@@ -1885,7 +1885,7 @@
   },
   {
    "name": "capsize",
-   "digest": "f044876206c3c95e037fe4dfa1254ae97ece7500581d6933e62ac71658dc5299",
+   "digest": "aa097bb836bef3deaf8c01e49e2785e422e82a23dc2c8f3a14ef307d3ab59e70",
    "checkpoints": [
     {
      "step": 600,
@@ -2161,7 +2161,7 @@
   },
   {
    "name": "death-roll",
-   "digest": "ca055d7523e639dc61f7fd8cd652a9494ceb26c2033b59d1c21889a6f41a6535",
+   "digest": "1b9dae8dfccdad991edf861f26b683f808f864bfb9babba029cbb7744d5ffccf",
    "checkpoints": [
     {
      "step": 600,
@@ -2437,7 +2437,7 @@
   },
   {
    "name": "irons",
-   "digest": "fc5ccad5dd98fc701011dfdffcda3e88dd5586cc9b1bff25be0217fcd73d5fe6",
+   "digest": "12dabc65ace29416208b1c058c609d3dfadcbc48390c229962e74229dc95ffa0",
    "checkpoints": [
     {
      "step": 600,
@@ -2578,7 +2578,7 @@
   },
   {
    "name": "gusts",
-   "digest": "aa6b65115c8d547505b7bd5c3b4d3696133fc1889342fa0292e5f18e2e6750e4",
+   "digest": "743367f5cfdea30040fbff24f33d079aea86f39b7d1c21396bd89639cbac5d79",
    "checkpoints": [
     {
      "step": 600,
@@ -3034,7 +3034,7 @@
   },
   {
    "name": "calm",
-   "digest": "756250c451e25dc6d7aae6943675d2fcd0a097978adfc0883acd50cf3a444ae9",
+   "digest": "7295ffe24116b62406831058fef56dd220137abe36bc9d59df6e655dfa790135",
    "checkpoints": [
     {
      "step": 600,
@@ -3130,7 +3130,7 @@
   },
   {
    "name": "storm",
-   "digest": "85c2371a2d680ead5dc92575aa8413eeb4398ceee330f3bb142ae00cb38261d3",
+   "digest": "155d43df9950108400b691bdab9fb2722389ebcd46ddcbcc27c0512c91aadce1",
    "checkpoints": [
     {
      "step": 600,
@@ -3406,7 +3406,7 @@
   },
   {
    "name": "random",
-   "digest": "3bd8cbcc667596ff207932a56d5e532232950fb4c1221c79dd5b8347103e5690",
+   "digest": "b4a2268e3c8b7ff443be4aa9b4b8489f5ce2bd62d5e17a5a4c854d4a78307f71",
    "checkpoints": [
     {
      "step": 600,
@@ -4177,7 +4177,7 @@
   },
   {
    "name": "beat-breeze",
-   "digest": "90da035836b24b528883ab76e77150fe798f4b176a83587b369fead8bcfcb244",
+   "digest": "87ac05258a09740e6bb07122071e92450a09eda6d89c192239d6f6e611ca9ecf",
    "checkpoints": [
     {
      "step": 600,
@@ -4453,7 +4453,7 @@
   },
   {
    "name": "reach-fresh",
-   "digest": "16dcde0a0b0e440d081f75d2b4434c7b343b1bba9eabed171d203ae20f9bca08",
+   "digest": "0b907c7ee74fd2cf2eb3ff6f1daca041a7998b6a86e11b564a9ab99f0ab8019d",
    "checkpoints": [
     {
      "step": 600,
@@ -4729,7 +4729,7 @@
   },
   {
    "name": "swell-reach",
-   "digest": "c0e00570526bf7ace8aabd7417ed76baf7a4c85ab26bcb64202d9e868d412f38",
+   "digest": "4cfe116f42a061c66f18bc2208cceaf231e05cc3f10d01d8eda5253fc37643b5",
    "checkpoints": [
     {
      "step": 600,
@@ -5005,7 +5005,7 @@
   },
   {
    "name": "run-gale",
-   "digest": "64e905f4925aad92f0eeaab50193eb3231f6654c70e480af04b5e3f3472ee1e2",
+   "digest": "7dc29cc7a0103224f6138b1f63cd14b1a18cd0278770a765ff4bee51305cabec",
    "checkpoints": [
     {
      "step": 600,
@@ -5281,7 +5281,7 @@
   },
   {
    "name": "capsize-gale",
-   "digest": "cbb399f3cfe9bed9fb3d4b556282154018a87f32a8617512c6734f8dd026f68e",
+   "digest": "262796f60474fae69abd008c48e9b4f6dadd30601c2077286d5feadc1202be52",
    "checkpoints": [
     {
      "step": 600,
@@ -5557,7 +5557,7 @@
   },
   {
    "name": "border",
-   "digest": "3154c9a5be4678c7d3950c79219a19d91a76fc822618edeb7129828095ae1691",
+   "digest": "71d3c3ab8ef803cdc75847fd71db472bd60dc860e3f182ee7094d8df8bbe8d4f",
    "checkpoints": [
     {
      "step": 600,
@@ -5833,7 +5833,7 @@
   },
   {
    "name": "rim-late",
-   "digest": "d908d70b99f9fc78346f5649b34d1660ba13a583eb696ee286a438c05ab33bd0",
+   "digest": "ca50e176f18afa6f363ee7095a7e4eb2bcf50a57b7b8baded2f799e4310e24b7",
    "checkpoints": [
     {
      "step": 600,
@@ -5974,7 +5974,7 @@
   },
   {
    "name": "random-sea",
-   "digest": "30530ff3d145506c3d767da7bcc7edab77d03e96f139e8920a1ddad942a9e3fc",
+   "digest": "67f474f9e450b2a7f2ed2fc7052b06557d38e85b16ca42716873a85b4e54b649",
    "checkpoints": [
     {
      "step": 600,
@@ -6745,7 +6745,7 @@
   },
   {
    "name": "gusty-beat",
-   "digest": "f06654d09874ac51d7339398445e21599b6692b720290f0554e881ad94452ff7",
+   "digest": "6a6ef58e5dd0b74deec5dff4eacad027609f279b848581e43dabf88489eef89e",
    "checkpoints": [
     {
      "step": 600,
@@ -7021,7 +7021,7 @@
   },
   {
    "name": "shifty-reach",
-   "digest": "162a5b87f8a6c83e36c2f45d6645e7bac76d925ed8fa601ec91afa02f0d632b9",
+   "digest": "cdf1a3a7d2fff94502397c3d2c58932b796ea1c5938ea7654b2e0906dd60cffb",
    "checkpoints": [
     {
      "step": 600,
@@ -7297,7 +7297,7 @@
   },
   {
    "name": "change",
-   "digest": "68bd752b733be8951fdd35a4069f1e788fbe9ea587f3ff44d283f0ec219e0acf",
+   "digest": "27fb7e9af575db3396e37c5bdbbeb74323608203c404be175a218a87387e7be3",
    "checkpoints": [
     {
      "step": 600,
@@ -7573,7 +7573,7 @@
   },
   {
    "name": "refuge",
-   "digest": "2c19c5169dfa3c7de2130db1e0673c43c41ee55d6d1a740546da8933f1d753c7",
+   "digest": "1f31a9ce4bc8d7041dc860cc60ebaa07a4b3892f62dd5a6e8087be1268b6c88f",
    "checkpoints": [
     {
      "step": 600,
@@ -7849,7 +7849,7 @@
   },
   {
    "name": "rim-gusts",
-   "digest": "26b7cb8f200041b0e3ccab6df14a2d65a6c2ba113cb3cee19e2add1e823b3ce5",
+   "digest": "ee3e139f44b7fd60b05d7541350e53f27125a023796b885cba8426493de72d41",
    "checkpoints": [
     {
      "step": 600,
@@ -7990,7 +7990,7 @@
   },
   {
    "name": "random-weather",
-   "digest": "c0ce34b907c44ff2af7e57d016524353000d2474c01eab31b6a82f771ba78206",
+   "digest": "c23b9bf2eb3cfdfbfee258ea5209920df97c6f5d72431050b8efac9f8ce06432",
    "checkpoints": [
     {
      "step": 600,
@@ -8761,7 +8761,7 @@
   },
   {
    "name": "pilot-hold",
-   "digest": "104c06038d1364a819b35b3cd0fa633f71522d0cc07f8f79e22256dc33830ff4",
+   "digest": "035392d9971d46ebbc7a5d07a257987a461ffca415393f7767de13d089b6854d",
    "checkpoints": [
     {
      "step": 600,
@@ -9037,7 +9037,7 @@
   },
   {
    "name": "pilot-shifts",
-   "digest": "c3f5af1eec19ac3318174f2fa37dcace5a368895346ee65ee3c62287e6fd2c52",
+   "digest": "31716122cfb818d2ed8ced0227be3ec1b95a7d4aedcba16d389979d8ed8cfaf8",
    "checkpoints": [
     {
      "step": 600,
@@ -9448,7 +9448,7 @@
   },
   {
    "name": "pilot-tack",
-   "digest": "d2656e0bb4a589d6763f951d8ad9cac7942bf6b5b5e38b5bf3d7f5482dfc3ed1",
+   "digest": "a0e20b519c40ee87c54e3a63b12e8aa28659bb9ed381f55799a17cd09913e21c",
    "checkpoints": [
     {
      "step": 600,
@@ -9634,7 +9634,7 @@
   },
   {
    "name": "pilot-astern",
-   "digest": "f0b930bfa8875637e4fab9783327765b9d16fbad9208a1c429820b266b682b72",
+   "digest": "72d38de89e3911993f81c44c22a7181b4571be64fa049cd53d10bc2b384824ed",
    "checkpoints": [
     {
      "step": 600,
@@ -9730,7 +9730,7 @@
   },
   {
    "name": "pilot-stall",
-   "digest": "4d73e307506b23891c0ce7b3aa15fd754c7a9a189a09f83f3f4fc64c265c1587",
+   "digest": "be7e7a78035c84d29157adf4c07116b5d9719b0c0c91224617cc37cc2a0c2739",
    "checkpoints": [
     {
      "step": 600,
@@ -10096,7 +10096,7 @@
   },
   {
    "name": "pilot-stall-bear",
-   "digest": "dd666347a40b11c5e6cfb60650b4353319ff6f2c9de560b16f7be9ccfe63d5d9",
+   "digest": "b61a7eb267ba78328736b87139f75df5a9ce26275e5c2b12f4207adecf8aa430",
    "checkpoints": [
     {
      "step": 600,
@@ -10462,7 +10462,7 @@
   },
   {
    "name": "pilot-gybe",
-   "digest": "56765f2b7fbb09b06bbfa41f3815345338564478c142eaa1dd91c5d91d161fb9",
+   "digest": "4a30ebbd6f4eafd6f1bcd877a3af39fe9abc32b36c8e03211d98745dd61bdadd",
    "checkpoints": [
     {
      "step": 600,
@@ -10693,7 +10693,7 @@
   },
   {
    "name": "pilot-heading",
-   "digest": "5a034a1a934ca4ef9f09898591e5ecbec24829aa9bec3ec88c68c96e61fabc7c",
+   "digest": "13d643b38dc2662e9b743cfb21623a92d780b9f3062e4d1f4450dd3030dd345b",
    "checkpoints": [
     {
      "step": 600,
@@ -10969,7 +10969,7 @@
   },
   {
    "name": "ground-beach",
-   "digest": "bee1e8105d3531ff5661f2af45f340e188b359c6dbe57e2927ba3077316d7567",
+   "digest": "11809ec08a8159109ca4d7f658952be532bded8e483a10801782f4026a15318b",
    "checkpoints": [
     {
      "step": 600,
@@ -11200,7 +11200,7 @@
   },
   {
    "name": "ground-reef",
-   "digest": "9d5427cfc1da4d6a3b0587bc945c772b9d1f09975f60a66d5db5c58fb97120e9",
+   "digest": "894816a54403f6ca74f0963c5934036404b923b20681ca4ba25936d92a2f09f3",
    "checkpoints": [
     {
      "step": 600,
@@ -11431,7 +11431,7 @@
   },
   {
    "name": "ground-cliff",
-   "digest": "f8ec508608f9c0bb4689188889649d889fea8d14bdbf6eab65bdb11293bd801c",
+   "digest": "1555f7cc58d28643c36ac8c1a306a9c26d021b8f9ab322f530bae56d3c42cf21",
    "checkpoints": [
     {
      "step": 600,
@@ -11527,7 +11527,7 @@
   },
   {
    "name": "ground-pier",
-   "digest": "46615203dbc428dd30b44d5b2880ee43ba4149e4c00ebe05c38325373ef27acb",
+   "digest": "2be80f0183e399b8837e96545ebf6c2eaecc77e136fa6bb4d51d4df706f953c9",
    "checkpoints": [
     {
      "step": 600,
@@ -11623,7 +11623,7 @@
   },
   {
    "name": "ground-quay",
-   "digest": "c993198f4337a6ef9ec464530a7a36ce6e5efdb7ae874048f2d4ddfa7902269e",
+   "digest": "3daf4b60409583062ffd3b27f45cb7ea603ead970c9e9fe11a0e82a1cb883076",
    "checkpoints": [
     {
      "step": 600,
@@ -11719,7 +11719,7 @@
   },
   {
    "name": "ground-arch",
-   "digest": "7be7f979aef7c00aa1e37fe7c46059ad5c8835a2cb78cb2d637f54d92027355a",
+   "digest": "e9d3c879ae2f50e4bb017e1d630be32dd939b546841805af25f597ca4f30c5bf",
    "checkpoints": [
     {
      "step": 600,
@@ -11815,7 +11815,7 @@
   },
   {
    "name": "ground-pushoff",
-   "digest": "70b684c0a2f865e826caeab72726c2b1ffaf88c7a7d33da42ff66c54741b7548",
+   "digest": "fee0104080cd7a780b0ce10cd8fd65b7f638a859284f197845042f3edddbdb53",
    "checkpoints": [
     {
      "step": 600,
@@ -11956,7 +11956,7 @@
   },
   {
    "name": "lee",
-   "digest": "20340b3e35e92aac34b5fbf728ca74ac5cf910ff5e5b82ebe42fe525b088a700",
+   "digest": "95160301ae60cba588b89c4ca41f7121e76327c6ba1a65bd890f2ad515274c70",
    "checkpoints": [
     {
      "step": 600,
@@ -12097,7 +12097,7 @@
   },
   {
    "name": "lee-sea",
-   "digest": "83b24aa4c4900ebb4e5bcd5a1901f4c5af11214a5fcb04b7ef84bdcdf1ed1cd1",
+   "digest": "c804788489e51930faa7b10b4b3d4c209e99f1275e310162312564cef936dc4f",
    "checkpoints": [
     {
      "step": 600,
@@ -12238,7 +12238,7 @@
   },
   {
    "name": "shoal",
-   "digest": "e963110d7140e192dce47d097c98bc91a998c31cd996cc421c0f4971b8ad44a8",
+   "digest": "1dfa9e5e901a1c773e3bf510cc4345e761147646dd94bba04fba591e21ea6069",
    "checkpoints": [
     {
      "step": 600,
@@ -12424,7 +12424,7 @@
   },
   {
    "name": "drift",
-   "digest": "52c3742e7797b9431430a81d35bcbf40cb31214b3cbb358d84a52a6c669749ec",
+   "digest": "e44be14f37453ac3ee67b7b9df00a27765cdbd7279bd0e1ee1653c289075975e",
    "checkpoints": [
     {
      "step": 600,
@@ -12655,7 +12655,7 @@
   },
   {
    "name": "edge",
-   "digest": "c20318a1f15d27c4c5a026cd95259a3e87ede0f7d6dadc4e01241abfe7c41bbe",
+   "digest": "402b2df4607b0b1b6a8036a6f1714374b4f4538f25ac9ce4706af8981965fc72",
    "checkpoints": [
     {
      "step": 600,
@@ -13336,7 +13336,7 @@
   },
   {
    "name": "reef",
-   "digest": "400e67e3028a66ca8d62aec21f33d55bd40960cad57168c65ecc6a483300dedb",
+   "digest": "32eebaebae8ed2ae90542f862290394a08f5207efc64a0920a0dcd0e7e4a18ab",
    "checkpoints": [
     {
      "step": 600,
@@ -13702,7 +13702,7 @@
   },
   {
    "name": "keel-beat",
-   "digest": "340ebbfb26658837852a55287713bb74c4bd52773f831f125bffd5d949c1c779",
+   "digest": "d8583fdfff9de945fa0b53cad31826453493458f33284fa147f03fcdb2024118",
    "checkpoints": [
     {
      "step": 600,
@@ -13978,7 +13978,7 @@
   },
   {
    "name": "keel-tacks",
-   "digest": "6781f21177016b4ca1f97dcc390ad4767eaa7851b96e8f1aaa29d63b2c3b8e8f",
+   "digest": "87b709eb73e08fa070152c61cf5d773728a718d3fb3001149add43923e960718",
    "checkpoints": [
     {
      "step": 600,
@@ -14434,7 +14434,7 @@
   },
   {
    "name": "keel-gybe",
-   "digest": "a873540782116d4debb8e03c94c55d9cfd5b373b35807af8feff041c8df41f75",
+   "digest": "daf2a567e74b991531a223d1818d0e77c32b612516b858f4c8b7d41947568a4f",
    "checkpoints": [
     {
      "step": 600,
@@ -14800,7 +14800,7 @@
   },
   {
    "name": "keel-reef",
-   "digest": "6074bbd0db6b3acaf97fba6ed30846436f4f02f1c85985747b7d5f4bfac93182",
+   "digest": "7553a6378ee7ed809802fcc6e3aa23acf9e76540724cae220fc9675562f0cd61",
    "checkpoints": [
     {
      "step": 600,
@@ -15166,7 +15166,7 @@
   },
   {
    "name": "keel-knockdown",
-   "digest": "00f54b24b3e014b725b0c10e33ab1ff6577fb885b88eda0082018ea7af2e7bc6",
+   "digest": "a4dc12d6e70016dd54e0e4d8219f2532d640d7b5ec0c77900f3144bac1aab446",
    "checkpoints": [
     {
      "step": 600,
@@ -15442,7 +15442,7 @@
   },
   {
    "name": "keel-ground",
-   "digest": "2e8e7ffe452bc74d3dd4798241556e9ab10a4a41c07a089de82671898a4577b4",
+   "digest": "4a3661723b0437588c69b7b11815f8f23c063f9c5c53427e91be8220f5f81889",
    "checkpoints": [
     {
      "step": 600,
@@ -15718,7 +15718,7 @@
   },
   {
    "name": "keel-sea",
-   "digest": "d1a0dde609e421f76d0cb41ea7c905bd32f9616cbf6134cfb2cb7583f95448d8",
+   "digest": "819222aa281a750e125f827782f99478976da6d1a0523354df16596dbb65e2c0",
    "checkpoints": [
     {
      "step": 600,
@@ -15949,7 +15949,7 @@
   },
   {
    "name": "ship-beat",
-   "digest": "8e9f01a2c6d66921608150761d3e32dd964d53a2027a24ecdbecff7400b5317a",
+   "digest": "08e2ee17c206f30af3851e69b76ad9b216df5c964b1a00484b4aa7308c573107",
    "checkpoints": [
     {
      "step": 600,
@@ -16495,7 +16495,7 @@
   },
   {
    "name": "ship-tack",
-   "digest": "d01a020d0e5d101685b5d26766b14f2e99a8671b158ffdc85c3c679eb59481fe",
+   "digest": "cbc4a6ae1789dfb2290bb204d02b12381646a27c5930470022a841af9e1fb152",
    "checkpoints": [
     {
      "step": 600,
@@ -17716,7 +17716,7 @@
   },
   {
    "name": "ship-stall",
-   "digest": "0af179cf406cc21fa467ffc1acdbb1eb8cf4f9cab88f08e4299423293db652f5",
+   "digest": "d7f343fc4f22fa3dfd763c1f7e7716fcca0d772846d410ce56793c6dcc3371fb",
    "checkpoints": [
     {
      "step": 600,
@@ -18127,7 +18127,7 @@
   },
   {
    "name": "ship-wear",
-   "digest": "d27a656d177b164728055640a16e4ce197590847597054ef0126db85e6c226b1",
+   "digest": "3005a506ee184727db0add903787c8e861bf149078054dcecb0b5863cd650251",
    "checkpoints": [
     {
      "step": 600,
@@ -19078,7 +19078,7 @@
   },
   {
    "name": "ship-reef",
-   "digest": "1a1a131833e899bc56e45dc830f9e9877a463e7b8296b6f16f9f228f02c63afa",
+   "digest": "afa4b200d8a1e07c0a0cc081eb2568138f1c5cacdcc63deaa1dd5cacfde6f579",
    "checkpoints": [
     {
      "step": 600,
@@ -20119,7 +20119,7 @@
   },
   {
    "name": "ship-beam-ends",
-   "digest": "58657663d4ddbdeccab7167994f513c3f4b1be4e9b127ef3363e42ef6e9e5bd9",
+   "digest": "b98bb3c857ed75193bc3f889b4f753c67d3fde32605444d3494ef05747e10dec",
    "checkpoints": [
     {
      "step": 600,
@@ -20395,7 +20395,7 @@
   },
   {
    "name": "ship-ground",
-   "digest": "827a78617606837f513da643396135aa59352f16382391d6b981a3092439a5b6",
+   "digest": "ac8386bcdc3c762dbd6f448c9f8e022063933d2f76aa2af56172255673ba2316",
    "checkpoints": [
     {
      "step": 600,
@@ -20806,7 +20806,7 @@
   },
   {
    "name": "skiff-beat",
-   "digest": "78ae916a21fc52e16c7cf59a1345c727ef932e97c93ab4e53147e028ce5175d6",
+   "digest": "88477994196905a0a487fa98776b5fc38b3cd2dd6c04efda30adb9f075b60b2d",
    "checkpoints": [
     {
      "step": 600,
@@ -21082,7 +21082,7 @@
   },
   {
    "name": "skiff-tacks",
-   "digest": "29c4ac38d4be454780f6d54dd061a060244e38536d91c9b97ea695940352fb4e",
+   "digest": "3d9a4799c61842bc1218daf9d5335c698822b7a2af9dcbb31a0662ccb20370e5",
    "checkpoints": [
     {
      "step": 600,
@@ -21538,7 +21538,7 @@
   },
   {
    "name": "skiff-bear-away",
-   "digest": "88709a3eb707d28e2f68279d20e32de66c8dc0e264d59bef19c99d522874a2dc",
+   "digest": "95b0a3c065c6b41fdf8664d5e80d8478dcd0e2c421720f0d0b5589cf3f95bc1b",
    "checkpoints": [
     {
      "step": 600,
@@ -21949,7 +21949,7 @@
   },
   {
    "name": "skiff-gybes",
-   "digest": "81444c9327006d31ab01653afb18ea71ad720be2820b0851045b1206245207a1",
+   "digest": "e1f91ffc5a0d372e25cd19420170d713641f03a5bb7d1a8ba759a2e0a9d9abfc",
    "checkpoints": [
     {
      "step": 600,
@@ -22315,7 +22315,7 @@
   },
   {
    "name": "skiff-capsize",
-   "digest": "9bdc2c3a145bcab7aeb5aa4b4a07ee516562098127980fe797c60e3f1006ba96",
+   "digest": "568f9eb14c8a59394424784ffa701cdd3c1551b587672a3fb68beef73f8d7495",
    "checkpoints": [
     {
      "step": 600,
@@ -22681,7 +22681,7 @@
   },
   {
    "name": "skiff-lull",
-   "digest": "12be596578bcb1497e968b969d1f1ee3e890e5ae58e325f61c91303de802ad1d",
+   "digest": "cbce4bdf01dfb6c237f295e6a6f50c2c0b54b15545e49e344ea61111c7562a2c",
    "checkpoints": [
     {
      "step": 600,
@@ -22957,7 +22957,7 @@
   },
   {
    "name": "skiff-gennaker-in",
-   "digest": "3f99d7ef8f2e0116d5157902ebba1810dd1b5c85aa0a06d78e25cf456d9424d1",
+   "digest": "1c05003a12333740a9255fd4f187926398933010a7fd86a746a6129be14879e4",
    "checkpoints": [
     {
      "step": 600,
@@ -23323,7 +23323,7 @@
   },
   {
    "name": "skiff-reef",
-   "digest": "2e71ae50369c21a8b4648a08174ce19730b1892d26d2ba7a241c348c3b3985eb",
+   "digest": "18878d759d0fefaf78a0d8bc99ee995e5d237a502e8785862a02fc508daff22d",
    "checkpoints": [
     {
      "step": 600,
@@ -23689,7 +23689,7 @@
   },
   {
    "name": "beach-cat-beat",
-   "digest": "29480ef8b3e9a3fbbde82343c1ed3240bab5a88c8d0a07a0be4b89e5a0ddb812",
+   "digest": "26af4b5e004865e2e48d90b65bfd9cf4c82ff0a8a3e03977f2bbea48bd536695",
    "checkpoints": [
     {
      "step": 600,
@@ -23965,7 +23965,7 @@
   },
   {
    "name": "beach-cat-tacks",
-   "digest": "4c125d1e65881db6c3c92063e4f949788e46dad67fbbd88d617c937859fe146e",
+   "digest": "54904949185cbb441a926aa8663f672faab9d08a175c4eb74851db7a1e82e223",
    "checkpoints": [
     {
      "step": 600,
@@ -24421,7 +24421,7 @@
   },
   {
    "name": "beach-cat-flying",
-   "digest": "a43784615ae65a0a54f6af4088f8c33b6dfd188ab10bdb30a05067a6a026e83f",
+   "digest": "201ba1f6a9103e2b1dbda9bec8d26164d1510c3c1b448f775b195151d54da219",
    "checkpoints": [
     {
      "step": 600,
@@ -24787,7 +24787,7 @@
   },
   {
    "name": "beach-cat-gybes",
-   "digest": "d606e61393d67b3336b07feac8d70158765f79083b83d61806e92895ca1aff64",
+   "digest": "e88ac3cfd70dd5fe11a77320a1d63d1bf89cdc9522bf2b95424b75c9acfcbae6",
    "checkpoints": [
     {
      "step": 600,
@@ -25153,7 +25153,7 @@
   },
   {
    "name": "beach-cat-capsize",
-   "digest": "90a1332f77f6c3d025a1364397fffff3527f482b5e46fe748bf9f65792139de1",
+   "digest": "2f6d9d9845c470de11813fc8b9b1a9d1259a07d9f2f48c7466a1a98711cea6b0",
    "checkpoints": [
     {
      "step": 600,
@@ -25609,7 +25609,7 @@
   },
   {
    "name": "beach-cat-reef",
-   "digest": "baea280bf87354598ec89f6ba81da5a50f7227b2062c6f0c6036333bb9c6f56d",
+   "digest": "0d7211a14e6267b54c1f3fa5d6522de7f7d04125998eadb535c43dff3ff27b20",
    "checkpoints": [
     {
      "step": 600,
@@ -25975,7 +25975,7 @@
   },
   {
    "name": "beach-cat-pitchpole",
-   "digest": "f486cf7e811bc9076ea77c87520eae76c5b02eeb81aa4693defccad9fea541f4",
+   "digest": "ebeb0c2321de6e3c852cb7fc4ea3425013898f915bd138f0b361793ae4644530",
    "checkpoints": [
     {
      "step": 600,

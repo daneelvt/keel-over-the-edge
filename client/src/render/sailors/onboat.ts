@@ -420,6 +420,7 @@ export class BoatSailor {
     mo.dt = dt;
     mo.time = this.#time;
     mo.offset = pose.sailor;
+    mo.aft = pose.sailorAft;
     mo.mode = pose.sailorMode;
     mo.timer = pose.sailorTimer;
     mo.heel = pose.heel;

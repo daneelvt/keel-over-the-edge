@@ -69,6 +69,9 @@ type Frame struct {
 	Rig      []RigWord
 	State    []physics.State
 	Sail     []uint8 // per slot: physics.SailByte of the boat's last step, for drawing
+	// Trim is per slot the hull's trim after its last step (physics.Out's
+	// Trim), for drawing: 0 but on a boat whose rig pitches her.
+	Trim []float64
 	// Course is per slot what the Articles keep of a boat between ticks.
 	Course []physics.Course
 	// Voyage is per slot what the edge keeps of a boat's voyage: whether
@@ -494,6 +497,7 @@ func NewFrame(capacity int) *Frame {
 			Next: make([]physics.SeaInput, physics.SeaAreas*physics.SeaAreas),
 		},
 		Sail:        make([]uint8, capacity),
+		Trim:        make([]float64, capacity),
 		Course:      make([]physics.Course, capacity),
 		Voyage:      make([]Voyage, capacity),
 		Stay:        make([]bool, capacity),

@@ -83,6 +83,7 @@
    -0.1,
    0
   ],
+  "rightingLeverStep": 10,
   "waterlineBeam": 1.103,
   "waterplaneArea": 2.93,
   "waterplanePitch": 3,
@@ -397,7 +398,18 @@
   "astern": 0.05,
   "steerage": 0.26,
   "stallTime": 8,
-  "stallGain": 5
+  "stallGain": 5,
+  "hullSpacing": 0,
+  "liftHeel": 0,
+  "flyingDrag": 1,
+  "rudderCount": 1,
+  "boardCount": 1,
+  "rigPitch": 0,
+  "bowBuryPitch": 0,
+  "bowBuryRestoring": 1,
+  "bowBuryDrag": 0,
+  "pitchpoleAngle": 0,
+  "aftReach": 0
  },
  "wind": {
   "speedCentre": 0.65,
@@ -514,7 +526,8 @@
     "hoistTarget": 0,
     "kite": 0,
     "kiteRate": 0,
-    "kiteLimit": 0
+    "kiteLimit": 0,
+    "sailorAft": 0
    },
    "control": {
     "helm": 0,
@@ -15160,7 +15173,8 @@
     "hoistTarget": "0x0000000000000000",
     "kite": "0x0000000000000000",
     "kiteRate": "0x0000000000000000",
-    "kiteLimit": "0x0000000000000000"
+    "kiteLimit": "0x0000000000000000",
+    "sailorAft": "0x0000000000000000"
    }
   }
  ]

@@ -3,7 +3,10 @@
 // How the other boats float. The server sends where each is, which way it
 // heads and how it heels, but not its heave or its pitch: every client
 // floats the other boats on the waves it draws under them, which are the
-// same waves for everyone. A boat's heave and pitch as the server had them
+// same waves for everyone. A boat whose rig pitches her, the beach cat, is
+// also sent her trim, her pitch off the water's surface: the bows pressed
+// down by her rig, or buried, which the waves do not give; it is added to
+// the pitch she floats at. A boat's heave and pitch as the server had them
 // would come a fraction of a second late, as its position does, while the
 // sea is drawn at the present: the boat would sit a quarter of a wave out of
 // step with the water under it.
@@ -132,7 +135,7 @@ export class Floater {
       if (s < 0 || s >= VIEW_SLOTS) {
         // Fading out of the view: on the water as it is.
         b.heave = height;
-        b.pitch = slope;
+        b.pitch = slope + b.trim;
         continue;
       }
       this.#seen[s] = 1;
@@ -151,7 +154,7 @@ export class Floater {
       this.#height[s] = height;
       this.#slope[s] = slope;
       b.heave = this.#heave[s] ?? 0;
-      b.pitch = this.#pitch[s] ?? 0;
+      b.pitch = (this.#pitch[s] ?? 0) + b.trim;
     }
     this.#afloat.set(this.#seen);
   }
