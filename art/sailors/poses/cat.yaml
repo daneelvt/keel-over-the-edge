@@ -40,8 +40,8 @@ poses:
     ik:
       hand_l: { at: bone, bone: pelvis, offset: [0.2, -0.18, 0.1], pole: [0.5, 0.4, -0.3] }
       hand_r: { at: bone, bone: spine_02, offset: [-0.12, -0.3, 0.08], pole: [-0.5, 0.4, -0.3] }
-      foot_l: { at: cat-strap, offset: [-0.1, 0.0, 0.11], pole: [0.1, -0.5, 0.6] }
-      foot_r: { at: cat-strap, offset: [0.1, 0.0, 0.11], pole: [-0.1, -0.5, 0.6] }
+      foot_l: { at: cat-strap, offset: [-0.1, 0.03, 0.11], pole: [0.1, -0.5, 0.6] }
+      foot_r: { at: cat-strap, offset: [0.1, 0.03, 0.11], pole: [-0.1, -0.5, 0.6] }
 
   # Looking up at the main's luff, and back over the shoulder to windward.
   cat-seated-luff:
@@ -112,10 +112,10 @@ poses:
     from: cat-seated
     place: crew-seat
     ik:
-      hand_l: { at: bone, bone: thigh_l, offset: [0.03, -0.12, -0.3], pole: [0.5, 0.3, -0.3] }
+      hand_l: { at: bone, bone: thigh_l, offset: [0.09, -0.1, -0.32], pole: [0.6, 0.3, -0.2] }
       hand_r: { at: bone, bone: spine_03, offset: [-0.16, -0.32, -0.06], pole: [-0.5, 0.3, -0.4] }
-      foot_l: { at: crew-strap, offset: [-0.1, 0.0, 0.11], pole: [0.1, -0.5, 0.6] }
-      foot_r: { at: crew-strap, offset: [0.1, 0.0, 0.11], pole: [-0.1, -0.5, 0.6] }
+      foot_l: { at: crew-strap, offset: [-0.1, 0.03, 0.11], pole: [0.1, -0.5, 0.6] }
+      foot_r: { at: crew-strap, offset: [0.1, 0.03, 0.11], pole: [-0.1, -0.5, 0.6] }
 
   # Looking up at the jib's luff, and out over the sea to windward.
   hull-luff:

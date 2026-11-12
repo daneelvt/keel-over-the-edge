@@ -194,6 +194,9 @@ def retarget(fig, name, spec, fps):
     if crawl:
         _even_back(fig, clip)
         _untwist(fig, clip)
+    # How far a sole stands below where the build takes it (a machine's
+    # iron feet): what is set on a net stands that much higher.
+    sole = _sole_below(fig) if spec.get("stage") == CAT_NET else 0.0
     if spec.get("deck"):
         _ground(fig, clip, crawl)
         if spec.get("head") is not None:
@@ -215,12 +218,29 @@ def retarget(fig, name, spec, fps):
             lowered += 2 * clip.notes["off the deck"] + 0.001
             _lower(fig, clip, lowered)
             _plant(fig, clip, spec.get("speed", 0.0), way, crawl)
+        if not crawl:
+            # A deep stride's knee brought down onto the deck by its foot's
+            # place: the body lifted over those frames, eased, and planted
+            # again.
+            lift = _knees_down(fig, clip)
+            if max(lift) > 0:
+                base = [{"rot": dict(fr["rot"]), "pelvis": fr["pelvis"].copy()} for fr in clip.frames]
+                for _ in range(3):
+                    clip.frames = [{"rot": dict(fr["rot"]), "pelvis": fr["pelvis"].copy()} for fr in base]
+                    _raise(fig, clip, lift)
+                    _plant(fig, clip, spec.get("speed", 0.0), way, crawl)
+                    more = _knees_down(fig, clip)
+                    if max(more) <= 0:
+                        break
+                    lift = [a + b for a, b in zip(lift, more)]
+                clip.notes["knees lifted"] = round(max(lift), 4)
         if clip.ship == SHIP_RAIL:
             _on_rail(fig, clip, rail)
         if crawl:
             _toes_up(fig, clip)
             _wrists(fig, clip)
         else:
+            _ankles_in_air(fig, clip)
             _hands_up(fig, clip)
         _clearance(fig, clip, crawl)
         if clip.loop:
@@ -235,8 +255,9 @@ def retarget(fig, name, spec, fps):
             # On the beach cat's net, crossing it facing forward: placed
             # from its middle, judged against her (clip.cat).
             clip.cat, clip.ship = CAT_NET, None
-            clip.place = Matrix.Translation(fig.stage.point(CAT_NET) + Vector((0.0, 0.0, NET_STRANDS))) @ \
+            clip.place = Matrix.Translation(fig.stage.point(CAT_NET) + Vector((0.0, 0.0, NET_STRANDS + sole))) @ \
                 Matrix.Rotation(math.pi, 4, "Z")
+            clip.notes["soles under the bones"] = round(sole, 4)
     elif lock:
         _lock(fig, clip, lock)
         clip.planted = list(lock)
@@ -472,6 +493,94 @@ def _lower(fig, clip, by):
         fr["pelvis"] = pb.location.copy()
     _close(clip)
     clip.notes["lowered"] = round(by, 4)
+
+
+def _ankles_in_air(fig, clip):
+    """A foot in the air, clear of the deck, bent at the ankle no further
+    than its range lets it (a stride's trailing foot); one that bears, as
+    it stands."""
+    most = math.radians(fig.motion["ranges"]["foot"] * fig.motion["gate"]["range-strain"] * 0.99)
+    for fr in _ring(clip):
+        fig.set_rotations(fr["rot"], fr["pelvis"])
+        for s in ("l", "r"):
+            pb = fig.bones[f"foot_{s}"]
+            turn = motion.angle(Quaternion(), pb.rotation_quaternion)
+            if turn <= most:
+                continue
+            if _lowest(fig, s)[0] > PLANTED:
+                pb.rotation_quaternion = Quaternion().slerp(pb.rotation_quaternion, most / turn)
+                fig.update()
+            else:
+                _heel_up(fig, s, most)
+            fig.derive()
+            fr["rot"] = fig.rotations()
+    _close(clip)
+
+
+def _heel_up(fig, s, most):
+    """A foot that bears, bent at the ankle past its range in a deep stride:
+    its heel raised, the foot turned about its ball (the toes kept flat on
+    the deck), the shin following by IK, until the ankle is within it."""
+    foot, ball = f"foot_{s}", f"ball_{s}"
+    for _ in range(4):
+        pb = fig.bones[foot]
+        q = pb.rotation_quaternion.copy()
+        turn = motion.angle(Quaternion(), q)
+        if turn <= most:
+            return
+        old = fig.world_matrix(foot)
+        toes = fig.world_matrix(ball).to_quaternion()
+        pivot = fig.world(ball)
+        pb.rotation_quaternion = Quaternion().slerp(q, most / turn)
+        fig.update()
+        new = fig.world_matrix(foot).to_quaternion()
+        delta = new @ old.to_quaternion().inverted()
+        ankle = pivot + delta @ (old.to_translation() - pivot)
+        pb.rotation_quaternion = q
+        fig.update()
+        _leg(fig, s, ankle, fig.world(f"calf_{s}"), 0.0)
+        m = fig.world_matrix(foot)
+        fig.bones[foot].matrix = fig.arm.matrix_world.inverted() @ Matrix.LocRotScale(m.to_translation(), new, None)
+        fig.update()
+        m = fig.world_matrix(ball)
+        fig.bones[ball].matrix = fig.arm.matrix_world.inverted() @ Matrix.LocRotScale(m.to_translation(), toes, None)
+        fig.update()
+
+
+def _sole_below(fig):
+    """How far the figure's lowest vertex standing at rest is below the
+    lowest point of its feet the build takes (the heel under the ankle,
+    the sole under the ball and toes): nothing, but for thicker soles."""
+    fig.reset()
+    fig.quiet(False)
+    low = float(fig.dressed()[:, 2].min())
+    fig.quiet()
+    bone = min(_lowest(fig, s)[0] for s in ("l", "r"))
+    return max(0.0, bone - low)
+
+
+def _knees_down(fig, clip):
+    """How far each frame's lower knee is under the deck (its joint less a
+    knee's thickness), eased and widened over the frames about it: what the
+    body must rise by."""
+    low = []
+    for fr in _ring(clip):
+        fig.set_rotations(fr["rot"], fr["pelvis"])
+        low.append(max(0.0, max(KNEE - fig.world(f"calf_{s}").z for s in ("l", "r"))))
+    held = [max(low[max(0, f - 4):f + 5]) if not clip.loop else
+            max(low[(f + k) % len(low)] for k in range(-4, 5)) for f in range(len(low))]
+    return [x * 1.2 + (0.002 if x > 0 else 0.0) for x in _gauss(held, 2.0, clip.loop)]
+
+
+def _raise(fig, clip, by):
+    """The body moved up by each frame's share."""
+    pb = fig.bones["pelvis"]
+    for fr, up in zip(_ring(clip), by):
+        fig.set_rotations(fr["rot"], fr["pelvis"])
+        pb.location = _local_move(pb, Vector((0.0, 0.0, up)))
+        fig.update()
+        fr["pelvis"] = pb.location.copy()
+    _close(clip)
 
 
 def _even_back(fig, clip):

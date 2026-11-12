@@ -54,7 +54,6 @@ import {
   Mesh,
   type Object3D,
   PlaneGeometry,
-  Quaternion,
   Raycaster,
   TorusGeometry,
   Vector2,
@@ -1102,9 +1101,11 @@ export class DressingRoom {
       // Lying on her side, her mast to port, turned so the figure faces
       // the front; it stands upright on her lower hull, where a ray down
       // over its middle meets it, as the build stood it.
-      boat.root.quaternion
-        .setFromAxisAngle(new Vector3(0, 1, 0), Math.PI / 2)
-        .multiply(new Quaternion().setFromAxisAngle(new Vector3(0, 0, 1), Math.PI / 2));
+      boat.root.rotation.set(0, Math.PI / 2, 0);
+      // Her lower hull afloat, as she lies.
+      boat.root.position.y = boat.parts.get('board-root')?.position.x ?? 1;
+      // As the room draws her (the pose's heel), now, to find her hull.
+      boat.heel.rotation.set(0, 0, Math.PI / 2);
       boat.root.updateMatrixWorld(true);
       const keel = boat.parts.get('board-root')?.position.x ?? 1;
       const from = new Vector3(-keel, CAT_STAND_OUT, a.crew.inner.z).applyMatrix4(
@@ -1127,6 +1128,7 @@ export class DressingRoom {
         .decompose(f.root.position, f.root.quaternion, f.root.scale);
       return true;
     }
+    boat.heel.rotation.set(0, 0, 0);
     boat.root.rotation.set(0, anchor === 'net' ? Math.PI : (side * Math.PI) / 2, 0);
     const at = catPoint(a, anchor) ?? new Vector3();
     const seat = catPlace(place, at, side);
@@ -1510,11 +1512,13 @@ export class DressingRoom {
           // behind the other; else from the front, a little above.
           const anchor = shipAnchor(r.clip);
           if (inCatFile(r.clip)) {
-            // Aboard a beach cat, a little above: crossing her net, from
-            // ahead and above, under her boom.
+            // Aboard a beach cat, from above her boom: crossing her net,
+            // from ahead.
             const net = catAnchor(r.clip) === 'net';
-            o.azimuth = back;
-            o.elevation = net ? 0.35 : 0.22;
+            const lying = catAnchor(r.clip) === 'stand';
+            // Righting her, from abeam of the figure: her bottom before it.
+            o.azimuth = back + (lying ? 0.9 : 0);
+            o.elevation = net ? 0.3 : lying ? 0.12 : 0.5;
             o.distance = 3.0 + 1.4 * n;
             return;
           }
@@ -1594,12 +1598,20 @@ export class DressingRoom {
     const lever =
       (this.#boats.get(`${this.#boatIndex()}:0`)?.boat.parts.get('sailor')?.position.z ?? 0) +
       kind.physics.rig.mastPosition;
-    pose.boom = inRailFile(r.clip)
-      ? // Off to leeward of the crew on the rail.
-        -railSide(r.clip) * 0.35
-      : r.view === 'deck'
-        ? -0.35
-        : Math.min(0.35, Math.atan2(0.5, Math.max(lever, 0.1)));
+    pose.boom = inCatFile(r.clip)
+      ? // Aboard a beach cat: amidships at its lowest over the net, or off
+        // to leeward of those on her hull and the wire.
+        catAnchor(r.clip) === 'net'
+        ? 0
+        : -catSide(r.clip) * 0.35
+      : inRailFile(r.clip)
+        ? // Off to leeward of the crew on the rail.
+          -railSide(r.clip) * 0.35
+        : r.view === 'deck'
+          ? -0.35
+          : Math.min(0.35, Math.atan2(0.5, Math.max(lever, 0.1)));
+    // Righting a beach cat: she lies on her side, her mast to port.
+    pose.heel = inCatFile(r.clip) && catAnchor(r.clip) === 'stand' ? -Math.PI / 2 : 0;
     for (const f of this.#figures) {
       const b = f.boat;
       if (b !== null) {
