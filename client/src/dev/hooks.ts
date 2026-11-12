@@ -3247,8 +3247,12 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
     tier() {
       return { ...TIERS[world.rung.tier], shadows: world.rung.shadows };
     },
-    /** Draws the detail band, the foam, or neither. */
-    setParts(parts: { detail?: boolean; foam?: boolean; wakes?: boolean }): void {
+    /** Draws the detail band, the foam, the wakes and a ship's braces, or not. */
+    setParts(parts: { detail?: boolean; foam?: boolean; wakes?: boolean; braces?: boolean }): void {
+      if (parts.braces !== undefined && world.crew.braces !== null) {
+        // A ship's braces, which the fleet does not draw.
+        world.crew.braces.mesh.visible = parts.braces;
+      }
       if (parts.detail !== undefined) {
         detailOn.value = parts.detail ? 1 : 0;
       }

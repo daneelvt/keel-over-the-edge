@@ -248,11 +248,13 @@ function workStance(
   if (place === null) {
     return { ok: false, two: false, plumb: true };
   }
-  const stood = standAt(input, place.feet, facingOf(place.yaw), IDLES.standing[0], input.time, a);
-  if (work.pull > 0.01 && haulStance(input, work, b)) {
-    how.f = smooth(work.pull);
-    return { ok: stood, two: true, plumb: work.pull < 0.5 };
+  // Hauling (first, as the clip they are in), blended into standing as they leave off.
+  if (work.pull > 0.01 && haulStance(input, work, a)) {
+    const stood = standAt(input, place.feet, facingOf(place.yaw), IDLES.standing[0], input.time, b);
+    how.f = smooth(1 - work.pull);
+    return { ok: true, two: stood && work.pull < 0.99, plumb: work.pull < 0.5 };
   }
+  const stood = standAt(input, place.feet, facingOf(place.yaw), IDLES.standing[0], input.time, a);
   return { ok: stood, two: false, plumb: true };
 }
 

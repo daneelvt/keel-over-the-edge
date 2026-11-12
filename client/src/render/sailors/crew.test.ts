@@ -1827,7 +1827,7 @@ describe('aboard the tall ship', () => {
 });
 
 describe('all hands aboard the tall ship', () => {
-  const { kind, near, rules: makeRules, company: c } = ship;
+  const { near, rules: makeRules, company: c } = ship;
 
   /** Her company at forty, the yards braced as given, a moment on. */
   const forty = (yards = 0.4) => {
@@ -1896,7 +1896,7 @@ describe('all hands aboard the tall ship', () => {
               });
               const inp = await input(rules, look, t);
               expect(poseShip(body, m, inp)).toBe(true);
-              const clip = (inp.b.clip ?? inp.a.clip)?.name ?? '';
+              const clip = inp.a.clip?.name ?? '';
               expect(clip, `${q.brace} ${q.k}`).toBe(
                 machine ? 'standing-idle' : side * Math.cos(q.yaw) > 0 ? 'haul' : 'haul-port',
               );

@@ -285,7 +285,8 @@ test('a keelboat, a tall ship and a skiff of the fleet look as the own ones do, 
     await k.useBoat(2);
     // Her foam and wake are the sea's, drawn by each boat's speed and its
     // history, the own boat's and the fleet's apart: the hull's the same.
-    k.setParts({ foam: false, wakes: false });
+    // Her braces are drawn only on the ship in view.
+    k.setParts({ foam: false, wakes: false, braces: false });
   });
   const near = { azimuth: 0.5, elevation: 0.25, distance: 6 };
   for (const pose of [
