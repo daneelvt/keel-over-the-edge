@@ -121,7 +121,7 @@ export function yachtAnchor(clip: string): YachtPlace | null {
  * (forward of the mast, over its scuttle: aft of the mast her boom is lower
  * over it than a crouching figure's hat).
  */
-export const COCKPIT_CROSS = 0.45;
+export const COCKPIT_CROSS = 0.5;
 export const ROOF_CROSS = 0.5;
 
 /** A yacht's places her people's clips are placed from, on her starboard side or her centreline, in her model's frame. */

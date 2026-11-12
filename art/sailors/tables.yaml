@@ -182,10 +182,10 @@ stage:
     boat: boats/yacht.glb
     at: [40.0, 0.0, 0.0]
     grips: { yacht-wheel-left: -45, yacht-wheel-right: 45, yacht-seat: 95 }
-    helm-seat: { aft: 0.38, out: 0.17, brace: 0.66 }
-    bench: { in: 0.24, knee: 0.18 }
+    helm-seat: { aft: 0.44, out: 0.13, brace: 0.72 }
+    bench: { in: 0.2, knee: 0.24 }
     rail: { knee: 0.1 }
-    cockpit: { table: 0.45 }
+    cockpit: { table: 0.5 }
     roof: { fore: 0.5 }
 
 # The portraits (build/portraits.py), every look's taken alike: head and

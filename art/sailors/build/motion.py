@@ -348,6 +348,7 @@ class Figure:
             # The yacht's decks, cockpit and bench, the cloth laid on them.
             if self.stage.yacht is not None:
                 lifts += [(SEAT_GROUP + "-yacht-bench", self.stage.yacht.planes[0], "ABOVE_SURFACE"),
+                          (SEAT_GROUP + "-yacht-roof", self.stage.yacht.planes[1], "ABOVE_SURFACE"),
                           (SEAT_GROUP + "-yacht-deck", self.stage.yacht.hull, "OUTSIDE_SURFACE")]
             planes = (self.stage.plane,) + ((self.stage.rail.plane,) if self.stage.rail is not None else ()) + \
                 ((self.stage.ship.hatch_plane,) if self.stage.ship is not None else ()) + \
@@ -366,7 +367,10 @@ class Figure:
                 m.cull_face = "FRONT" if target not in planes else "OFF"
                 m.offset = SEAT_CLEAR + (above or {}).get(o.name, 0.0) + \
                     (SHIP_DECK_CLEAR if name == SEAT_GROUP + "-ship-deck" else 0.0)
-                m.project_limit = 0.3 if target not in planes else \
+                # (A crouch's long skirts on the yacht's sole or roof hang
+                # further below them than cloth does below a seat.)
+                m.project_limit = (YACHT_DECK_LIFT if self.stage.yacht is not None and
+                                   target is self.stage.yacht.hull else 0.3) if target not in planes else \
                     CAT_NET_LIFT if self.stage.cat is not None and target is self.stage.cat.net else \
                     YACHT_BENCH_LIFT if self.stage.yacht is not None and target in self.stage.yacht.planes else 2.0
                 m.vertex_group = SEAT_GROUP
@@ -1515,8 +1519,10 @@ YACHT_DECKS = (YACHT_SOLE, YACHT_ROOF)
 # the coachroof's top on her centreline where they are crossed.
 YACHT_ANCHORS = {YACHT_WHEEL: "yacht-stance", YACHT_HELM: "yacht-stance", YACHT_BENCH: "yacht-bench",
                  YACHT_RAIL: "yacht-rail", YACHT_SOLE: "yacht-sole", YACHT_ROOF: "yacht-roof"}
-# Cloth this far or less under the yacht's bench's top is laid on it.
+# Cloth this far or less under the yacht's bench's top is laid on it; and
+# under her decks (a crouch's long skirts).
 YACHT_BENCH_LIFT = 0.5
+YACHT_DECK_LIFT = 0.6
 # A figure this far or less from the yacht's stage's place in the scene is
 # on her (she is 12 m long, every other stage far off).
 YACHT_NEAR = 10.0

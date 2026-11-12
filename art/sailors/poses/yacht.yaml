@@ -42,8 +42,8 @@ poses:
       - [skirt_back_r_01, x, 82]
     ik:
       hand_l: { at: yacht-seat, offset: [-0.07, -0.02, 0.0], pole: [0.6, 0.2, -0.3] }
-      hand_r: { at: bone, bone: thigh_r, offset: [-0.03, -0.13, -0.36], pole: [-0.5, 0.3, -0.3] }
-      foot_l: { at: yacht-helm-brace, offset: [-0.1, -0.09, 0.1], pole: [0.1, -0.5, 0.6] }
+      hand_r: { at: bone, bone: thigh_r, offset: [-0.03, -0.13, -0.42], pole: [-0.5, 0.3, -0.3] }
+      foot_l: { at: yacht-helm-brace, offset: [-0.1, -0.12, 0.1], pole: [0.1, -0.5, 0.6] }
       foot_r: { at: yacht-helm-brace, offset: [0.0, -0.17, 0.1], pole: [-0.1, -0.5, 0.6] }
 
   # Looking up at the main's luff, and over the shoulder to windward.
@@ -81,8 +81,8 @@ poses:
       - [thigh_r, z, -6]
       - [calf_l, x, 76]
       - [calf_r, x, 54]
-      - [spine_01, x, -6]
-      - [spine_02, x, -3]
+      - [spine_01, x, -4]
+      - [spine_02, x, -2]
       - [neck_01, x, 6]
       - [head, x, 4]
       - [neck_01, z, -12]
@@ -166,6 +166,8 @@ poses:
     from: yacht-rail-sit
     shift: [0.0, 0.012, 0.0]
     turn:
+      - [calf_l, x, -14]
+      - [calf_r, x, -14]
       - [spine_01, x, 2]
       - [spine_02, x, 2]
       - [spine_03, x, 2]

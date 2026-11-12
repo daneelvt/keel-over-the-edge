@@ -1017,6 +1017,10 @@ class Yacht:
         out = self._wall(self.bench.x, self.bench.y, self.bench.z + 0.05)
         self.planes = [self._plane("yacht-bench-plane", self.bench.x, out, self.at.y - float(bench["aft"]),
                                    self.at.y - float(bench["fore"]), self.bench.z)]
+        # And the coachroof's scuttle where it is crossed, its top: a long
+        # coat's skirts in a deep crouch are laid on it, not in it.
+        self.planes.append(self._plane("yacht-roof-plane", self.at.x, self.at.x + 0.5, self.roof.y - 0.4,
+                                       self.roof.y + 0.4, self.roof.z))
         self.objects += self.planes
 
     def _wall(self, x, y, z):
