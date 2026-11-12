@@ -741,8 +741,7 @@ function mast(): { spar: MeshBuilder; iron: MeshBuilder; bronze: MeshBuilder } {
  * a pair of deadeyes and a lanyard on a bronze chainplate on the hull's
  * outer side; the forestay from the hounds down to the bridle's apex, the
  * jib hanked to it, and the bridle's legs to each bow; the dolphin
- * striker's stays from under the front beam to the bows; the crew's
- * trapeze wires, hanging by the shrouds. Tarred hemp.
+ * striker's stays from under the front beam to the bows. Tarred hemp.
  */
 function rigging(): { rope: MeshBuilder; bronze: MeshBuilder; wood: MeshBuilder } {
   const rope = new MeshBuilder('rope');
@@ -779,14 +778,6 @@ function rigging(): { rope: MeshBuilder; bronze: MeshBuilder; wood: MeshBuilder 
     bronze.box(add(bowHead(s), [-0.02, -0.03, -0.02]), add(bowHead(s), [0.02, 0.01, 0.03]));
     // The dolphin striker's stay, from its foot to the bow.
     rope.tube([STRIKER_FOOT, add(bowHead(s), [0, -0.04, 0.02])], [0.004], sides);
-    // The crew's wire, forward of the helm's, hanging by the shroud.
-    const crew = crewRing(s);
-    rope.tube(
-      [[s * mastR(HOUNDS), HOUNDS - 0.05, MAST_Z], add(crew, [0, RING_R, 0])],
-      [0.0035],
-      sides,
-    );
-    ringLoop(bronze, crew, s);
   }
   rope.tube([TACK, STAY_TOP], [R], sides);
   bronze.box([-0.025, TACK[1] - 0.03, TACK[2] - 0.03], [0.025, TACK[1] + 0.01, TACK[2] + 0.03]);
@@ -807,11 +798,6 @@ const SEAT_U = uAt(SEAT_Z);
 const GUNWALE: Vec3 = [outline(SEAT_U) - 0.004, deckY(outline(SEAT_U) - 0.004, SEAT_U), SEAT_Z];
 /** The crew's station, forward of the helm on the same hull, by the shrouds. */
 const CREW_Z = -0.2;
-const CREW: Vec3 = [
-  outline(uAt(CREW_Z)) - 0.08,
-  deckY(outline(uAt(CREW_Z)) - 0.08, uAt(CREW_Z)),
-  CREW_Z,
-];
 
 /** The trapeze rings: the helm's at a sailor's hip height above the hull, by the shroud; the crew's forward of it. */
 const RING_Y = GUNWALE[1] + 0.95;
@@ -851,6 +837,25 @@ function trapeze(s: number): { rope: MeshBuilder; bronze: MeshBuilder } {
 /** A side's trapeze as a node of its own, named. */
 function trapezeSide(name: string, s: number): NodeDef {
   const t = trapeze(s);
+  return { name, primitives: [t.rope.primitive(), t.bronze.primitive()] };
+}
+
+/**
+ * The crew's trapeze wire on side s: from the hounds, forward of the
+ * helm's, down to its bronze ring hanging by the shroud. Tarred hemp.
+ */
+function crewWire(s: number): { rope: MeshBuilder; bronze: MeshBuilder } {
+  const rope = new MeshBuilder('rope');
+  const bronze = new MeshBuilder('bronze');
+  const crew = crewRing(s);
+  rope.tube([[s * mastR(HOUNDS), HOUNDS - 0.05, MAST_Z], add(crew, [0, RING_R, 0])], [0.0035], 4);
+  ringLoop(bronze, crew, s);
+  return { rope, bronze };
+}
+
+/** The crew's wire on a side as a node of its own, which the game hides while the crew hangs on it. */
+function crewWireSide(name: string, s: number): NodeDef {
+  const t = crewWire(s);
   return { name, primitives: [t.rope.primitive(), t.bronze.primitive()] };
 }
 
@@ -1373,8 +1378,15 @@ const TRAPEZE = {
   rackEdge: r5v([outline(SEAT_U), deckY(outline(SEAT_U) - 0.004, SEAT_U), SEAT_Z]),
 };
 
-/** The stations of the people aboard, as the catalog should have them: on the starboard hull's deck. */
-const STATIONS = { helm: r5v(GUNWALE), crew: r5v(CREW) };
+/**
+ * The stations of the people aboard, as the catalog should have them: the
+ * helm's on the starboard hull's deck at its outer edge (the gunwale), the
+ * crew's at its inner edge, where they sit.
+ */
+const STATIONS = {
+  helm: r5v(GUNWALE),
+  crew: r5v([C - innerAt(uAt(CREW_Z)), sheer(uAt(CREW_Z)), CREW_Z]),
+};
 
 /** The side bar's top, the hull's deck at its inner and outer edges, and the hiking strap's underside, at a station z. */
 function aboardAt(z: number): Record<string, Vec3> {
@@ -1528,13 +1540,20 @@ function model(): NodeDef[] {
   }
   // The trapeze: its points for the sailor on the wire, and each side's
   // helm's wire, lanyard and ring a node of its own, which the game hides
-  // for the side its sailor is hooked on.
+  // for the side its sailor is hooked on; the crew's likewise.
   // The places the people aboard are posed against.
   nodes.push({ name: 'aboard', extras: ABOARD });
   nodes.push({
     name: 'trapeze',
     extras: TRAPEZE,
-    children: D.small ? [trapezeSide('trapeze-starboard', 1), trapezeSide('trapeze-port', -1)] : [],
+    children: D.small
+      ? [
+          trapezeSide('trapeze-starboard', 1),
+          trapezeSide('trapeze-port', -1),
+          crewWireSide('trapeze-crew-starboard', 1),
+          crewWireSide('trapeze-crew-port', -1),
+        ]
+      : [],
   });
   // The rudders on the transoms, each turning on its own stock; the
   // crossbar between their arms, the extension from its middle.

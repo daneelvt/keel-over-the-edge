@@ -2519,7 +2519,8 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
             l.state === 'loading' ||
             l.clipsState === 'loading' ||
             l.wheelState === 'loading' ||
-            l.trapezeState === 'loading',
+            l.trapezeState === 'loading' ||
+            l.catState === 'loading',
         ) ??
           false);
       while (busy()) {
@@ -2570,6 +2571,11 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
       /** Whether the helm is away from the tiller, walking to or from it as the controls change hands, and drawn. */
       helmAway: boolean;
       helmShown: boolean;
+      /** Aboard a beach cat: where the helm crossing her net is across it (null if not), and whether the crew crossing holds them. */
+      helmNet: number | null;
+      helmHeld: boolean;
+      /** Aboard a beach cat: each side's crew's wire drawn to whoever hangs on it (starboard, port). */
+      crewWires: [boolean, boolean];
       /** Everyone under the crew's rules: seat, station (-1 the helm), side, how far they lean, and what they are doing (seconds into it, from which station). */
       members: {
         seat: number;
@@ -2579,6 +2585,12 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
         moving: string | null;
         from: number;
         t: number;
+        /** After a capsize: in the water, righting her or climbing back, and whether thrown off over her bows; null aboard. */
+        wet: string | null;
+        thrown: boolean;
+        /** Across a beach cat's net: where across it, and how far on hands and knees; null if not. */
+        net: number | null;
+        crawl: number;
         /** Aboard a ship: whether gone (on a ladder or aloft), seconds waited on a walk, and whether sat (1) or stood (0) at a hatch. */
         gone?: boolean;
         waited?: number;
@@ -2630,6 +2642,9 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
         changes: rules?.side.changes ?? 0,
         helmAway: c.helmAway,
         helmShown: sailor?.shown === true && !sailor.away,
+        helmNet: sailor?.runtime.netAt ?? null,
+        helmHeld: c.helmHeld,
+        crewWires: c.wiresDrawn,
         members: (rules?.members ?? []).map((m) => {
           const ship = 'ship' in m ? (m as ShipMember).ship : null;
           return {
@@ -2640,6 +2655,10 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
             moving: m.moving?.kind ?? null,
             from: m.moving?.from.station ?? m.station,
             t: m.moving?.t ?? 0,
+            wet: m.wet?.phase ?? null,
+            thrown: m.wet?.thrown ?? false,
+            net: m.moving?.net?.x ?? null,
+            crawl: m.moving?.net?.crawl ?? 0,
             ...(ship === null
               ? {}
               : {
@@ -2756,8 +2775,11 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
           from: number;
           t: number;
           work: { kind: string; phase: string } | null;
+          lean: number;
+          wet: string | null;
         }[];
         heads: { x: number; y: number; up: number }[];
+        hooked: number;
       }[];
       drawn: { near: number; far: number };
       stats: { frames: number; posed: number; ms: number };

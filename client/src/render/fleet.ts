@@ -66,6 +66,7 @@ import {
   LineSegments,
   type Material,
   type Mesh,
+  type Object3D,
   type Texture,
   Vector3,
 } from 'three';
@@ -152,7 +153,7 @@ import {
   swayOf,
 } from './sailors/fleetsailors';
 import { type SailorColours, sailorColours, sailorMaterial } from './sailors/material';
-import { NO_SOLID, wireColour } from './sailors/onboat';
+import { catOf, NO_SOLID, wireColour } from './sailors/onboat';
 import { seating } from './sailors/restage';
 import { hullSolid } from './sailors/solid';
 import { type Trapeze, trapezeOf, wireNode } from './sailors/trapeze';
@@ -428,10 +429,15 @@ class WireLines {
   readonly #opacity: BufferAttribute;
   count = 0;
 
-  constructor(colour: Color | null, name: string) {
+  constructor(
+    colour: Color | null,
+    name: string,
+    /** Wires a boat: a side's helm's, and a crew's if it has theirs. */
+    readonly each = 2,
+  ) {
     const g = new BufferGeometry();
-    this.#position = new BufferAttribute(new Float32Array(FLEET_CAPACITY * 2 * 2 * 3), 3);
-    this.#opacity = new BufferAttribute(new Float32Array(FLEET_CAPACITY * 2 * 2), 1);
+    this.#position = new BufferAttribute(new Float32Array(FLEET_CAPACITY * each * 2 * 3), 3);
+    this.#opacity = new BufferAttribute(new Float32Array(FLEET_CAPACITY * each * 2), 1);
     this.#position.setUsage(DynamicDrawUsage);
     this.#opacity.setUsage(DynamicDrawUsage);
     g.setAttribute('position', this.#position);
@@ -451,7 +457,7 @@ class WireLines {
 
   /** A wire from a to b (the scene's), as faded as its boat. */
   add(a: Vector3, b: Vector3, opacity: number): void {
-    if (this.count >= FLEET_CAPACITY * 2) {
+    if (this.count >= FLEET_CAPACITY * this.each) {
       return;
     }
     const k = 2 * this.count++;
@@ -540,6 +546,12 @@ class Shared {
   /** The wind the sailors' cloth streams in: from (radians) and speed (m/s). */
   windFrom = 0;
   windSpeed = 0;
+  /**
+   * Aboard a beach cat in a view slot, where her crew hanging on her
+   * trapeze's wire has it hooked (her model's frame), into out, and the
+   * side; 0 if none (the crews' drawing tells it).
+   */
+  crewHook: (slot: number, out: Vector3) => number = () => 0;
 
   /**
    * The look a boat's sailor is drawn in, and its colours: its look code's,
@@ -695,7 +707,11 @@ export class FleetView {
         rail: seating(nearParts.objects, hikeReach).hike.full,
         reach: t.reach,
       };
-      this.wires = new WireLines(wireColour(wireNode(nearParts.objects, 1)), kind.name);
+      this.wires = new WireLines(
+        wireColour(wireNode(nearParts.objects, 1)),
+        kind.name,
+        t.crewRings === null ? 2 : 3,
+      );
       this.root.add(this.wires.mesh);
     }
     // A boat steered by a wheel has its sailor standing at it.
@@ -794,6 +810,9 @@ export class FleetView {
               climbTime: kind.physics.sailor.climbTime,
               ...seating(nearParts.objects, kind.physics.sailor.hikeReach),
               trapeze: this.#trapeze,
+              cat: this.#catted
+                ? catOf(rootOf(nearParts.objects), nearParts.objects, kind.physics.rig.foot)
+                : null,
             }
           : null;
     if (looks.near !== null && boat !== null) {
@@ -884,7 +903,18 @@ export class FleetView {
       const end = side === this.#hookSide ? this.#hook : side > 0 ? t.rings[0] : t.rings[1];
       wires.add(wireA, at(end, wireB), b.opacity);
     }
+    // A crew's wire, to whoever of the crew hangs on it: hanging idle by
+    // the shroud, too fine to be seen from the fleet's distances.
+    if (
+      t.crewRings !== null &&
+      b.slot >= 0 &&
+      this.#shared.crewHook(b.slot, this.#crewHook) !== 0
+    ) {
+      wires.add(wireA, at(this.#crewHook, wireB), b.opacity);
+    }
   }
+
+  readonly #crewHook = new Vector3();
 
   /** Ends a frame: the counts and values to the GPU. */
   commit(): void {
@@ -1044,6 +1074,7 @@ export class FleetView {
     const drawn = look.layer >= 0 ? look : shared.first;
     const ns = near ? this.nearSailors : null;
     const skinned = ns?.write(n, b, look, dt) === true;
+    b.helmNet = skinned && ns !== null ? ns.netAt(b.slot) : null;
     // Out on a wire: the figure on the wire, if its look's is made; else on the rail.
     let wire = skinned ? 0 : (p.wire ?? 0);
     if (wire !== 0 && (drawn.wire === null || drawn.wireHooks === null)) {
@@ -1151,6 +1182,11 @@ export class FleetViews {
   readonly #shared: Shared;
   /** The looks are ready for each view as it loads. */
   #sailorsReady = false;
+
+  /** Where a beach cat's crew in a view slot hangs on her wire, as the crews' drawing tells it (Shared's crewHook). */
+  set crewHook(f: (slot: number, out: Vector3) => number) {
+    this.#shared.crewHook = f;
+  }
   /** The near level's shadows, for each view as it is made. */
   #shadows = { cast: false, receive: false };
   readonly #nearest = new Int32Array(NEAR_MODELS);
@@ -1531,4 +1567,13 @@ function trianglesOf(g: BufferGeometry | null): number {
   }
   const index = g.index;
   return (index !== null ? index.count : g.getAttribute('position').count) / 3;
+}
+
+/** The root of a model's nodes, by name: the parent of them all. */
+function rootOf(objects: Map<string, Object3D>): Object3D {
+  let root: Object3D | null = objects.get('hull') ?? objects.values().next().value ?? null;
+  while (root?.parent != null) {
+    root = root.parent;
+  }
+  return root as Object3D;
 }

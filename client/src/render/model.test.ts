@@ -36,6 +36,7 @@ interface Gltf {
       wheel?: { radius: number; spokes: number };
       hounds?: number[];
       rings?: number[][];
+      crewRings?: number[][];
       rackEdge?: number[];
       length?: number;
     };
@@ -533,11 +534,19 @@ describe.each(catalog.boats.map((b) => [b.name, b] as const))('%s', (_, boat) =>
       expect(Math.abs((rackEdge?.[1] ?? 0) - (gunwale[1] ?? 1))).toBeLessThan(CM);
       expect(Math.abs((rackEdge?.[2] ?? 0) - (place('sailor')[2] ?? 1))).toBeLessThan(CM);
       expect(rackEdge?.[0]).toBeGreaterThanOrEqual(gunwale[0] ?? 0);
-      // Each side's wire, lanyard and ring a node under it, on its side; the far model has none.
+      // Each side's wire, lanyard and ring a node under it, on its side, and
+      // a crew's, if it has crew's rings; the far model has none.
       const sides = (t.children ?? []).map((c) => g.nodes[c]?.name);
-      expect(sides.sort()).toEqual(['trapeze-port', 'trapeze-starboard']);
-      expect(bounds('trapeze-starboard').min[0]).toBeGreaterThan(0);
-      expect(bounds('trapeze-port').max[0]).toBeLessThan(0);
+      const crew = t.extras?.crewRings !== undefined;
+      expect(sides.sort()).toEqual(
+        crew
+          ? ['trapeze-crew-port', 'trapeze-crew-starboard', 'trapeze-port', 'trapeze-starboard']
+          : ['trapeze-port', 'trapeze-starboard'],
+      );
+      for (const k of crew ? ['', 'crew-'] : ['']) {
+        expect(bounds(`trapeze-${k}starboard`).min[0]).toBeGreaterThan(0);
+        expect(bounds(`trapeze-${k}port`).max[0]).toBeLessThan(0);
+      }
       expect(far.nodes.find((n) => n.name === 'trapeze')?.extras?.rackEdge).toEqual(rackEdge);
       // The extension reaches a sailor's aft hand out fully on the wire, 1.8 m
       // from its hinge: as long as its node says (the skiff's 1.9 m if not said).

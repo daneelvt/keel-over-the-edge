@@ -22,10 +22,26 @@
 // - When the controls are handed over, everyone whose place changes walks
 //   to their new place at a crouch along the windward side deck; the helm
 //   is drawn by the crew meanwhile, not at the tiller.
+// - When the boat's sailor falls in (a capsize), everyone aboard goes in
+//   too: in the water by the hull off its high side (thrown off a beach
+//   cat's bows as she pitchpoles, ahead of her front beam first, then
+//   round to her side); on a beach cat, up on her lower hull beside the
+//   sailor righting her; and back aboard to their station as she comes up.
+//
+// Aboard a beach cat (a plan with her places, `cat`), her crew sits on her
+// windward hull and goes out on the wire once the helm is on theirs; and
+// crosses her net facing forward, at a crouch, on hands and knees under
+// the boom, along its middle: in a tack the crew first, as the wind comes
+// ahead and the jib is about to back, the helm waiting for them to be
+// clear; in a gybe the helm first, the crew following once the helm is
+// across or clear. At a handover the two pass along the windward hull, the
+// one going aft on its top, the one going forward on the net beside it.
 //
 // Everything is in the boat model's frame (x to starboard, y up, z aft).
 
 import type { BoatStation } from '../../catalog';
+import { CLIMBING, IN_WATER, ON_BOARD, SAILING } from '../sailor';
+import { type CatBoat, crawlFor, NetCross, netWay } from './cat';
 import type { ShipMoment, ShipPlan } from './shiprules';
 import type { HullSolid } from './solid';
 
@@ -36,6 +52,26 @@ export const CROSS_GAP = 0.4;
 /** Seconds to come off a station into the crouch, and to sit down out of it. */
 export const RISE = 0.5;
 export const SIT = 0.5;
+/** Aboard a beach cat: the wind this near ahead (radians) in a tack, the crew crosses, before the boom. */
+export const TACK_AHEAD = (20 * Math.PI) / 180;
+/** Aboard a beach cat: how far along the net one crossing keeps behind another (m), and, in a gybe with the helm's crossing not seen, how long the crew waits after the helm's side changes (s). */
+export const NET_FOLLOW = 0.9;
+export const GYBE_LAG = 1.2;
+/** Aboard a beach cat: the helm's hiking depth past which the crew go out on the wire (the helm part out on theirs), and under which they come in; and how long that takes. */
+export const WIRE_OUT = 1.5;
+export const WIRE_IN = 1.2;
+export const WIRE_TIME = 1.2;
+/** How far over the plane a beach cat's net is laced at its strands stand, m: what is walked on. */
+export const NET_STRANDS = 0.015;
+/** Seconds to climb back aboard as she comes up after a capsize. */
+export const CLIMB = 1.6;
+/**
+ * Thrown off over a beach cat's bows: she pitched this far bow down off
+ * the waves (radians), or heeled no further than this, as the sailor fell
+ * in (as the sailor's own: runtime.ts).
+ */
+export const THROWN_TRIM = 0.2;
+export const THROWN_HEEL = 0.9;
 /** How far a step of the crouch's walk goes, m: half its cycle at its own speed (rail.ts). */
 export const STRIDE = 0.7;
 /** How fast a crossing person goes along the path, m/s. */
@@ -97,6 +133,11 @@ export interface CrewPlan {
   tiller: { head: number; hinge: number; top: number } | null;
   /** A ship's company's places and ways, for a ship (her model marks them); her crew then keeps a ship's rules (shiprules.ts). */
   ship?: ShipPlan | null;
+  /** A beach cat's places (her model marks them): her crew sits on her hull and crosses her net; null for any other boat. */
+  cat?: CatBoat | null;
+  /** The hull as a solid, and the centre of gravity's height (the heel's pivot): where those in the water keep off it. */
+  solid?: HullSolid | null;
+  cog?: number;
 }
 
 /** A boat's plan from its kind's stations, its model's hull solid, its boom's gooseneck and, if it can be read, its deck. */
@@ -138,12 +179,23 @@ export function crewPlan(
     boom: { y: gooseneck?.y ?? 0, z: gooseneck?.z ?? 0, length: boomLength },
     deck,
     tiller,
+    solid,
   };
   return plan;
 }
 
 /** The deck's height under (x, z): the model's, else the cockpit's floor within it and the sheer's without. */
 export function deckY(plan: CrewPlan, x: number, z: number): number {
+  // A beach cat's net, between her hulls: its strands, as it is laced.
+  const net = plan.cat?.aboard.net ?? null;
+  if (
+    net !== null &&
+    Math.abs(x) < (plan.cat?.aboard.helm.bar.x ?? 0) &&
+    z > net.fore &&
+    z < net.aft
+  ) {
+    return net.y + NET_STRANDS;
+  }
   const d = plan.deck?.(x, z) ?? null;
   if (d !== null) {
     return d;
@@ -156,7 +208,10 @@ export function deckY(plan: CrewPlan, x: number, z: number): number {
 }
 
 /** How a station's person crosses the boat: through the cockpit, or round the front of the mast. */
-export function crossingWay(plan: CrewPlan, station: BoatStation): 'cockpit' | 'mast' {
+export function crossingWay(plan: CrewPlan, station: BoatStation): 'cockpit' | 'mast' | 'net' {
+  if (plan.cat != null) {
+    return 'net';
+  }
   const c = plan.cockpit;
   const z = station.at[2] as number;
   return c !== null && z >= c.fore - 0.1 ? 'cockpit' : 'mast';
@@ -444,6 +499,9 @@ export function crossPath(
   boom = 0,
   to: BoatStation = station,
 ): CrewPath {
+  if (plan.cat != null) {
+    return netPath(plan, plan.cat, from);
+  }
   const z = station.at[2] as number;
   const z1 = to.at[2] as number;
   const c = plan.cockpit;
@@ -511,6 +569,41 @@ export function crossPath(
     [from * sideDeckX(plan, zf), zf],
     [-from * sideDeckX(plan, zf), zf],
     [-from * sideDeckX(plan, z1), z1],
+  ]);
+}
+
+/** Aboard a beach cat: the way across her net, along its middle, from the side from to the other. */
+export function netPath(plan: CrewPlan, cat: CatBoat, from: number): CrewPath {
+  const way = netWay(cat.aboard, true);
+  return pathThrough(plan, [
+    [from * way.x, way.z],
+    [-from * way.x, way.z],
+  ]);
+}
+
+/** Aboard a beach cat, how far out from the centreline a walk along her hull goes (on its top's middle), and one beside it on the net, m. */
+export function catLanes(cat: CatBoat): { hull: number; net: number } {
+  const h = cat.aboard.helm;
+  return { hull: (h.inner.x + h.outer.x) / 2, net: h.bar.x - 0.3 };
+}
+
+/**
+ * Aboard a beach cat, the path someone changing places takes on side, from
+ * a place at z0 to one at z1: going aft, along the windward hull's top;
+ * going forward, on the net beside it; so the two pass apart.
+ */
+export function catChangePath(
+  plan: CrewPlan,
+  cat: CatBoat,
+  side: number,
+  z0: number,
+  z1: number,
+): CrewPath {
+  const lanes = catLanes(cat);
+  const x = side * (z1 > z0 ? lanes.hull : lanes.net);
+  return pathThrough(plan, [
+    [x, z0],
+    [x, z1],
   ]);
 }
 
@@ -819,6 +912,8 @@ export interface CrewMember {
    * seconds in (negative while waiting their turn).
    */
   moving: CrewMove | null;
+  /** After a capsize, in the water or righting her; null aboard. */
+  wet?: CrewWet | null;
 }
 
 /** A place someone is at: a station, or the helm (-1); on a side. */
@@ -841,6 +936,18 @@ export interface CrewMove {
   waited: number;
   /** Who goes ahead of them along the same way, whom they keep FOLLOW behind; null for none. */
   after?: CrewMember | null;
+  /** Across a beach cat's net: where they are on it; and the time they came to its other side (undefined till then). */
+  net?: NetCross | null;
+  arrived?: number;
+}
+
+/** Someone in the water after a capsize: in it, up on the hull righting her, or climbing back aboard; seconds since; and whether thrown off over her bows. */
+export interface CrewWet {
+  phase: 'water' | 'board' | 'climb';
+  t: number;
+  thrown: boolean;
+  /** How far out they leaned as they went in (thrown off the wire, from it). */
+  lean: number;
 }
 
 /** Where along a move someone is, into out: rising (0 to 1), along the path (metres), sitting (0 to 1). */
@@ -849,6 +956,13 @@ export function moveAt(
   out: { rise: number; along: number; sit: number } = { rise: 0, along: 0, sit: 0 },
 ): { rise: number; along: number; sit: number } {
   const t = Math.max(0, m.t);
+  if (m.net != null) {
+    // Across a beach cat's net: as far as they have got.
+    out.rise = Math.min(1, t / RISE);
+    out.along = m.net.done * m.path.length;
+    out.sit = m.arrived === undefined ? 0 : Math.max(0, Math.min(1, (t - m.arrived) / SIT));
+    return out;
+  }
   const walk = m.path.length / CROSS_SPEED;
   out.rise = Math.min(1, t / RISE);
   out.along = Math.max(0, Math.min(m.path.length, (t - RISE) * CROSS_SPEED));
@@ -886,6 +1000,22 @@ export interface CrewMoment {
   depth: number;
   /** A ship's: her after yards, heel, wind and the world's time. */
   ship?: ShipMoment;
+  /** The boat's sailor, as the crew follow them; not said, sailing. */
+  sailor?: SailorNow;
+}
+
+/**
+ * The boat's sailor, as the crew follow them: the mode (sailing, in the
+ * water, on the hull righting her, climbing back), the heel and the trim
+ * (radians), the offset (m, + starboard), and, on a beach cat, where the
+ * helm crossing her net is across it (null if not, or not known).
+ */
+export interface SailorNow {
+  mode: number;
+  heel: number;
+  trim: number;
+  offset: number;
+  net: number | null;
 }
 
 /** Who is aboard, the skipper (seat 0) first, and the seat of whoever holds the controls. */
@@ -922,6 +1052,13 @@ export class CrewRules {
    * one forward to the place aft and so on; unlisted, their own.
    */
   readonly #moved = new Map<number, number>();
+  /** The sailor's mode last frame; the helm's side by their offset, and seconds since it changed; whether someone crossing a beach cat's net holds the helm. */
+  #mode = SAILING;
+  #helmSide = 0;
+  #helmSince = Number.POSITIVE_INFINITY;
+  #held = false;
+  /** Whether its crew sit on a hull and go out on the wire with the helm (a beach cat's). */
+  readonly #wire: boolean;
 
   constructor(readonly plan: CrewPlan) {
     const st = plan.stations;
@@ -943,6 +1080,7 @@ export class CrewRules {
     };
     this.#tackRank = rank([...[...cockpit].sort(byZ), ...[...mast].sort(byZ)]);
     this.#gybeRank = rank([...[...mast].sort(byZ), ...[...cockpit].sort(byZ).reverse()]);
+    this.#wire = st.some((s) => s.pose === 'hull');
     this.#leanRank = st.map(() => 0);
     st.map((s, i) => ({ z: s.at[2] as number, i }))
       .filter(({ i }) => i > 0)
@@ -950,6 +1088,11 @@ export class CrewRules {
       .forEach(({ i }, k) => {
         this.#leanRank[i] = k;
       });
+  }
+
+  /** Aboard a beach cat, whether someone crossing her net is in the helm's way: the helm waits to cross till they are clear. */
+  get helmHeld(): boolean {
+    return this.#held;
   }
 
   /** How many windward stations cross in turn. */
@@ -1057,12 +1200,16 @@ export class CrewRules {
         const zf = Math.min(z0, z1);
         const za = Math.max(z0, z1);
         const beside = c !== null && zf >= c.fore && !sat.some((z) => z > zf && z < za);
-        // Coming forward to the helm, they stop short of it and sit forward into it.
+        // Coming forward to the helm, they stop short of it and sit forward
+        // into it. Aboard a beach cat, along her hull or the net beside it.
+        const cat = this.plan.cat ?? null;
         const path =
-          beside && to.station < 0
-            ? walkPath(this.plan, to.side, z0, z1 < z0 ? z1 + APPROACH : z1, 0)
-            : changePath(this.plan, to.side, z0, z1, z1 < z0 ? -PASS : PASS);
-        floor ||= beside;
+          cat !== null
+            ? catChangePath(this.plan, cat, to.side, z0, z1)
+            : beside && to.station < 0
+              ? walkPath(this.plan, to.side, z0, z1 < z0 ? z1 + APPROACH : z1, 0)
+              : changePath(this.plan, to.side, z0, z1, z1 < z0 ? -PASS : PASS);
+        floor ||= beside && cat === null;
         const mv = moveOf(path, from, to, 0, 'change');
         m.moving = mv;
         return mv;
@@ -1072,6 +1219,122 @@ export class CrewRules {
       if (floor) {
         keepApart(this.plan, moves);
       }
+    }
+  }
+
+  /**
+   * Aboard a beach cat, her crew across her net: in a tack as the wind
+   * comes ahead (before the boom crosses), the helm waiting for them; in a
+   * gybe once the helm has gone (by their offset) and is NET_FOLLOW along
+   * the way, or GYBE_LAG after their side changed if their crossing is not
+   * seen; and back if she falls back onto her old tack.
+   */
+  #catCross(m: CrewMoment, dt: number, side: number): void {
+    const cat = this.plan.cat as CatBoat;
+    const way = netWay(cat.aboard, true);
+    const s = m.sailor;
+    // Since the side last changed: in a gybe, how long the helm has had to go.
+    if (this.#helmSide !== side) {
+      this.#helmSide = side;
+      this.#helmSince = 0;
+    } else {
+      this.#helmSince += dt;
+    }
+    const off = Math.abs(Math.atan2(Math.sin(m.windOffBow), Math.cos(m.windOffBow)));
+    const ahead = off < TACK_AHEAD && (s?.mode ?? SAILING) === SAILING;
+    this.#held = false;
+    for (const p of this.members) {
+      const mv = p.moving;
+      if (mv?.net != null) {
+        // Still near the side they left: in the way of the helm.
+        if (mv.arrived === undefined && Math.abs(mv.net.x - mv.net.from * way.x) < NET_FOLLOW) {
+          this.#held = true;
+        }
+        continue;
+      }
+      if (p.station <= 0 || mv !== null || (p.wet ?? null) !== null) {
+        continue;
+      }
+      if (this.plan.stations[p.station]?.windward !== true) {
+        continue;
+      }
+      // To windward; in a tack, to the new side as the wind comes ahead.
+      const to = ahead && p.side === side ? -side : side;
+      if (to === p.side) {
+        continue;
+      }
+      if (!ahead && !this.side.tack) {
+        // A gybe: the helm first, as far along as one follows another;
+        // their crossing not seen, after GYBE_LAG.
+        const net = s?.net ?? null;
+        const gone =
+          net === null ? this.#helmSince >= GYBE_LAG : Math.abs(net - p.side * way.x) >= NET_FOLLOW;
+        if (!gone) {
+          continue;
+        }
+      }
+      const mv2 = moveOf(
+        netPath(this.plan, cat, p.side),
+        { station: p.station, side: p.side },
+        { station: p.station, side: to },
+        0,
+        'cross',
+      );
+      mv2.net = new NetCross(p.side, way.x, crawlFor(cat.boom, m.boom, p.side * way.x, way.z));
+      mv2.duration = Number.POSITIVE_INFINITY;
+      p.moving = mv2;
+      this.#held = true;
+    }
+  }
+
+  /**
+   * After a capsize: everyone aboard in the water when the sailor falls in
+   * (thrown off a beach cat's bows if she is pitchpoling: far bow down, or
+   * nearly upright); on a beach cat up on her lower hull while the sailor
+   * rights her; climbing back aboard as she comes up, over CLIMB; then at
+   * their station on the windward side.
+   */
+  #wetStep(m: CrewMoment, dt: number): void {
+    const s = m.sailor;
+    const mode = s?.mode ?? SAILING;
+    const was = this.#mode;
+    this.#mode = mode;
+    const cat = this.plan.cat ?? null;
+    const board = cat !== null && cat.crewStand !== null;
+    for (const p of this.members) {
+      if (p.station <= 0) {
+        continue;
+      }
+      let w = p.wet ?? null;
+      if (mode === IN_WATER || mode === ON_BOARD) {
+        if (w === null) {
+          const fell = mode === IN_WATER && (was === SAILING || was === CLIMBING);
+          const thrown =
+            fell &&
+            cat !== null &&
+            s !== undefined &&
+            (s.trim < -THROWN_TRIM || Math.abs(s.heel) < THROWN_HEEL);
+          w = { phase: mode === ON_BOARD && board ? 'board' : 'water', t: 0, thrown, lean: p.lean };
+          p.moving = null;
+          p.lean = 0;
+          p.leanTo = 0;
+        } else if (mode === ON_BOARD && board && w.phase !== 'board') {
+          w = { phase: 'board', t: 0, thrown: false, lean: 0 };
+        }
+      } else if (w !== null) {
+        // Coming up (climbing, or sailing already): back aboard.
+        if (w.phase !== 'climb') {
+          w = { phase: 'climb', t: 0, thrown: false, lean: 0 };
+          p.side = this.sideFor(p.station);
+        } else if (mode === SAILING && w.t >= CLIMB) {
+          w = null;
+          p.side = this.sideFor(p.station);
+        }
+      }
+      if (w !== null) {
+        w.t += dt;
+      }
+      p.wet = w;
     }
   }
 
@@ -1096,8 +1359,16 @@ export class CrewRules {
         }
       }
     }
-    // Leaning out or sitting up with the helm, with a hysteresis.
-    const out = this.#out ? m.depth > LEAN_IN : m.depth > LEAN_OUT;
+    this.#wetStep(m, dt);
+    // Leaning out or sitting up with the helm, with a hysteresis; on a
+    // beach cat, out on the wire once the helm is on theirs.
+    const out = this.#wire
+      ? this.#out
+        ? m.depth > WIRE_IN
+        : m.depth > WIRE_OUT
+      : this.#out
+        ? m.depth > LEAN_IN
+        : m.depth > LEAN_OUT;
     if (out !== this.#out) {
       this.#out = out;
       this.#since = 0;
@@ -1121,7 +1392,24 @@ export class CrewRules {
       }
       const from = stations[mv.from.station];
       const to = stations[mv.to.station];
-      if (mv.kind === 'cross' && from !== undefined && to !== undefined && was < 0 && mv.t >= 0) {
+      const net = mv.net ?? null;
+      const cat = this.plan.cat ?? null;
+      if (net !== null && cat !== null) {
+        // Across a beach cat's net, once off the hull: on to the other side.
+        const way = netWay(cat.aboard, true);
+        if (mv.arrived === undefined && mv.t > RISE) {
+          if (net.step(dt, crawlFor(cat.boom, m.boom, net.x, way.z))) {
+            mv.arrived = mv.t;
+            mv.duration = mv.t + SIT;
+          }
+        }
+      } else if (
+        mv.kind === 'cross' &&
+        from !== undefined &&
+        to !== undefined &&
+        was < 0 &&
+        mv.t >= 0
+      ) {
         if (
           crossingWay(this.plan, from) === 'mast' &&
           mv.waited < WAIT_MOST &&
@@ -1145,16 +1433,24 @@ export class CrewRules {
         p.side = side;
       }
     }
+    // Aboard a beach cat, across her net in her own order.
+    if (this.plan.cat != null) {
+      this.#catCross(m, dt, side);
+    }
     // The side changed: those to windward cross, in turn; those round the
     // mast in file, the one forward leading, to the places in the same
     // order from aft, so that nobody passes anybody.
-    const crossing = this.members.filter(
-      (p) =>
-        stations[p.station]?.windward === true &&
-        p.station > 0 &&
-        p.moving === null &&
-        p.side !== side,
-    );
+    const crossing =
+      this.plan.cat != null
+        ? []
+        : this.members.filter(
+            (p) =>
+              stations[p.station]?.windward === true &&
+              p.station > 0 &&
+              p.moving === null &&
+              (p.wet ?? null) === null &&
+              p.side !== side,
+          );
     if (crossing.length > 0) {
       const z = (p: CrewMember): number => stations[p.station]?.at[2] as number;
       const file = crossing
@@ -1189,12 +1485,16 @@ export class CrewRules {
       }
     }
     for (const p of this.members) {
-      // Leaning: each in their turn after the helm, aft first.
+      // Leaning: each in their turn after the helm, aft first; in from the
+      // water, sat up.
       const turn = (this.#leanRank[p.station] ?? 0) * LEAN_STAGGER;
       if (this.#since >= turn) {
-        p.leanTo = out ? 1 : 0;
+        p.leanTo = out && (p.wet ?? null) === null ? 1 : 0;
       }
-      const step = dt / LEAN_TIME;
+      if ((p.wet ?? null) !== null) {
+        p.lean = 0;
+      }
+      const step = dt / (this.#wire ? WIRE_TIME : LEAN_TIME);
       p.lean =
         p.leanTo > p.lean ? Math.min(p.leanTo, p.lean + step) : Math.max(p.leanTo, p.lean - step);
     }

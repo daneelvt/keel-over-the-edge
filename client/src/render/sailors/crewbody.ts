@@ -12,6 +12,7 @@
 // made.
 
 import { Matrix4, Quaternion, Vector3 } from 'three';
+import { liftOver } from './cat';
 import { type Clip, Pose } from './clips';
 import type { DeckLook } from './fleetlooks';
 import { twoBone } from './ik';
@@ -127,7 +128,7 @@ const STEP_UP = 0.08;
  * higher end in the first third, across in the second, set down in the
  * last; so it goes round an edge between, not through it.
  */
-function carried(a: Vector3, b: Vector3, f: number, out: Vector3, over: number): Vector3 {
+export function carried(a: Vector3, b: Vector3, f: number, out: Vector3, over: number): Vector3 {
   const top = Math.max(a.y + STEP_UP, b.y + STEP_UP, over);
   const up = smooth3(3 * f);
   const across = smooth3(3 * f - 1);
@@ -179,6 +180,12 @@ export interface Life {
    * with the boat.
    */
   plumb?: Vector3 | null;
+  /**
+   * What the joints keep over under (x, z) in the boat's model (a beach
+   * cat's net and decks: cat.ts's catFloor), the figure lifted as far as
+   * that asks; null or not given, nothing.
+   */
+  floor?: ((x: number, z: number) => number | null) | null;
 }
 
 export class CrewBody {
@@ -189,6 +196,9 @@ export class CrewBody {
   readonly head = new Vector3();
   readonly headUp = new Vector3();
   readonly neck = new Vector3();
+  /** The hips' joint, in the boat's model, as last posed: where a crew's trapeze wire hooks on. */
+  readonly hips = new Vector3();
+  readonly #hipsBone: number;
   /** The place last posed at: from the figure's space to the model's. */
   readonly root = new Matrix4();
   readonly #inverse: Float32Array;
@@ -232,6 +242,7 @@ export class CrewBody {
       }
     }
     this.#neckBone = this.rig.bone('neck_01');
+    this.#hipsBone = this.rig.bone('pelvis');
   }
 
   /**
@@ -336,6 +347,10 @@ export class CrewBody {
       upright: life.upright,
       still: life.still,
     });
+    const floor = life.floor ?? null;
+    if (floor !== null) {
+      liftOver(rig, this.root, floor);
+    }
     this.#write();
   }
 
@@ -465,6 +480,9 @@ export class CrewBody {
     }
     if (this.#neckBone >= 0) {
       rig.position(this.#neckBone, this.neck).applyMatrix4(this.root);
+    }
+    if (this.#hipsBone >= 0) {
+      rig.position(this.#hipsBone, this.hips).applyMatrix4(this.root);
     }
   }
 }
