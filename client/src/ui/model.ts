@@ -21,6 +21,27 @@ export const SIGNAL_INTERVAL = 100;
 const SAILOR_LINES = ['', 'In the water', 'Righting the boat', 'Climbing back in'];
 /** The line while the hull is on the bottom or against land. */
 export const AGROUND = 'Aground';
+/**
+ * The lines of a boat of two hulls whose windward hull is clear of the
+ * water, and of one whose rig pitches her with her bows pressed under,
+ * while the sailor sails: what the boat does, which a sailor feels.
+ */
+export const HULL_FLYING = 'Hull flying';
+export const BOWS_BURYING = 'Bows burying';
+
+/** The sailor's line: aground, or what the sailor or the hull is doing; empty while sailing as usual. */
+export function sailorLine(mode: number, out: Float64Array): string {
+  if (mode !== 0) {
+    return SAILOR_LINES[mode] ?? '';
+  }
+  if ((out[RECORDS.out.aground] ?? 0) !== 0) {
+    return AGROUND;
+  }
+  if ((out[RECORDS.out.bowsBurying] ?? 0) !== 0) {
+    return BOWS_BURYING;
+  }
+  return (out[RECORDS.out.hullFlying] ?? 0) !== 0 ? HULL_FLYING : '';
+}
 /** The line a push off the ground shows, for BUMP_LINE. */
 export const PUSHED_OFF = 'Pushed off';
 
@@ -465,10 +486,9 @@ export class HudModel {
     // The force is the mean wind's, as the Beaufort scale is defined, so a
     // gust shows as the knots rising while the force holds.
     this.wind.value = windText(a.speed, a.from, wind.meanSpeed);
-    // On the bottom or against land, while the sailor sails.
-    const aground = out[RECORDS.out.aground] ?? 0;
-    this.sailor.value =
-      pose.sailorMode === 0 && aground !== 0 ? AGROUND : (SAILOR_LINES[pose.sailorMode] ?? '');
+    // On the bottom or against land, while the sailor sails; or the hull
+    // flying, or the bows burying.
+    this.sailor.value = sailorLine(pose.sailorMode, out);
     this.pilot.value = pilotText(pilot, way, watch, left);
     this.sail.value = this.sailHold.shown;
     const c = this.controls.peek();

@@ -206,6 +206,26 @@ func kiteAdvice(k *kind, wind float64) string {
 	return b.String()
 }
 
+// hullsAdvice is the page's paragraph on a boat of two hulls, or one whose
+// rig pitches her: her windward hull flying, and her bows burying.
+func hullsAdvice(k *kind) string {
+	var b strings.Builder
+	if k.p.HullSpacing > 0 {
+		fmt.Fprintf(&b, "The %s lifts her windward hull when pressed (\"hull flying\" on the Boat line), fastest just clear; ease before it rises further.", k.name)
+	}
+	if k.p.RigPitch != 0 {
+		if b.Len() > 0 {
+			b.WriteString(" ")
+		}
+		b.WriteString("In a gust on a broad reach her bows bury (\"bows burying\") and she can pitchpole, throwing her sailor off over them; her sailor steps aft by herself. Ease, reef, or bear off to a run.")
+	}
+	if b.Len() == 0 {
+		return ""
+	}
+	b.WriteString("\n")
+	return b.String()
+}
+
 // reefAdvice is the page's paragraph on reefing, every kind's wind in it.
 func reefAdvice(kinds []*kind, winds []float64) string {
 	var b strings.Builder
@@ -242,6 +262,10 @@ func handbookBlock(kinds []*kind) (string, error) {
 		b.WriteString("\n")
 		if k.p.DownwindArea > 0 {
 			b.WriteString(kiteAdvice(k, kiteWind(k)))
+			b.WriteString("\n")
+		}
+		if a := hullsAdvice(k); a != "" {
+			b.WriteString(a)
 			b.WriteString("\n")
 		}
 		if winds[i] = reefWind(k); winds[i] == 0 {
@@ -293,6 +317,9 @@ func checkHandbook(k *kind, polars []polar) error {
 		if a := kiteAdvice(k, kiteWind(k)); !strings.Contains(page, a) {
 			return fmt.Errorf("%s's advice on the %s's gennaker is not the polar's: rewrite it with go run ./tools/polar -handbook, which gives\n%s", handbookPath, k.name, a)
 		}
+	}
+	if a := hullsAdvice(k); !strings.Contains(page, a) {
+		return fmt.Errorf("%s's advice on the %s's hulls and bows is not the polar's: rewrite it with go run ./tools/polar -handbook, which gives\n%s", handbookPath, k.name, a)
 	}
 	w := reefWind(k)
 	if want := fmt.Sprintf("the %s from %g knots", k.name, w); w == 0 || !strings.Contains(page, want) {

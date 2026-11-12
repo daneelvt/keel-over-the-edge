@@ -260,3 +260,69 @@ func TestBeachCatSailorStepsAft(t *testing.T) {
 		})
 	}
 }
+
+// A boat of two hulls' outline has a flat bow: its two bows' points half
+// their spread either side, the edge between them square ahead. Touching
+// other boats, Touch finds the least overlap there as anywhere: two beach
+// cats bow to bow, a beach cat's bows on a monohull's side and its quarter,
+// and a skiff's bow on a beach cat's beam, each a few centimetres in and
+// deep, within 1 mm of the overlap found the slow way.
+func TestBeachCatFlatBow(t *testing.T) {
+	cat := beachCat(t)
+	o := &cat.outline
+	if o.n != outlineCorners {
+		t.Fatalf("the beach cat's outline has %d corners, not a flat bow's %d", o.n, outlineCorners)
+	}
+	front := OutlineStations - 1
+	if o.x[front] != o.x[front+1] || o.y[front] != -o.y[front+1] || !(o.y[front] > 0) {
+		t.Errorf("the bows' points (%v, %v) and (%v, %v)", o.x[front], o.y[front], o.x[front+1], o.y[front+1])
+	}
+	if math.Abs(o.nx[front]-1) > 1e-12 || math.Abs(o.ny[front]) > 1e-12 {
+		t.Errorf("the flat bow's edge faces (%v, %v), not ahead", o.nx[front], o.ny[front])
+	}
+	var skiffB *Prepared
+	for _, b := range testBoats(t) {
+		if b.b.kite {
+			skiffB = b.b
+		}
+	}
+	mono := jolly(t)
+	var h Hulls
+	for _, c := range []struct {
+		name         string
+		pa, pb       *Prepared
+		rel, bearing float64 // b's heading off a's, and where b lies from a, degrees
+	}{
+		{"bow to bow", cat, cat, 180, 0},
+		{"bows on a side", cat, mono, 90, 0},
+		{"bows on a quarter", cat, mono, 60, 10},
+		{"a skiff's bow on the beam", cat, skiffB, -90, 90},
+	} {
+		for _, want := range []float64{0.02, 0.1} {
+			a := State{Heading: 0.4}
+			b := State{Heading: 0.4 + c.rel*degree}
+			dir := 0.4 + c.bearing*degree
+			sd, cd := math.Sincos(dir)
+			lo, hi := 0.0, 8.0
+			for range 40 {
+				mid := (lo + hi) / 2
+				b.X, b.Y = mid*sd, mid*cd
+				if d, _ := bruteDepth(&a, &b, c.pa, c.pb, 720); d > want {
+					lo = mid
+				} else {
+					hi = mid
+				}
+			}
+			b.X, b.Y = hi*sd, hi*cd
+			depth, _ := bruteDepth(&a, &b, c.pa, c.pb, 18000)
+			var ct Contact
+			if !h.Touch(&a, &b, c.pa, c.pb, &ct) {
+				t.Errorf("%s, %g m in: no contact", c.name, want)
+				continue
+			}
+			if math.Abs(ct.Depth-depth) > 0.001 {
+				t.Errorf("%s, %g m in: depth %.4f m, want %.4f", c.name, want, ct.Depth, depth)
+			}
+		}
+	}
+}

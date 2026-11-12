@@ -221,3 +221,8 @@
     padding: 2px 10px;
   }
 }
+
+/* A boat of two hulls' far hull, behind the near one: a shade darker. */
+.boat-picture-far {
+  filter: brightness(0.82);
+}
