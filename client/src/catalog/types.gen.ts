@@ -8912,4 +8912,4 @@ export interface LifeGlow {
 }
 
 /** The catalog version (tools/catalog). */
-export const CATALOG_VERSION = '89c1e68172797b01';
+export const CATALOG_VERSION = 'e73019c2f1aafd1e';

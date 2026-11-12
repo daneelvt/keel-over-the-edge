@@ -1605,9 +1605,9 @@ boats:
     # deck level, the sidelights on her pulpit, the sternlight on her
     # pushpit.
     lights: [port, starboard, stern]
-    # Her lookout is the sailor standing at the wheel, the eye 3 m above
-    # the sea.
-    lookout: 3
+    # Her lookout is the sailor standing at the wheel, on her cockpit's
+    # sole 0.33 m above the water: the eye 2 m above the sea.
+    lookout: 2
     # A seabird aboard perches on her pulpit; a flying fish lands on her
     # side deck, abreast of the coachroof.
     perch: [0, 2.0, -5.6]

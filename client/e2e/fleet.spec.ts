@@ -268,7 +268,7 @@ test('a mixed 64, Jolly boats, keelboats, tall ships, skiffs, beach cats and yac
   expect(budget.bagged).toBe(budget.drawCalls - 2);
 });
 
-test('a keelboat, a tall ship, a skiff and a beach cat of the fleet look as the own ones do, the jib, the yards, the reefs, the gennaker and the rudders', async ({
+test('a keelboat and a tall ship of the fleet look as the own ones do, the jib, the yards and the reefs', async ({
   page,
 }) => {
   await openScene(page, 'boat=keelboat');
@@ -314,13 +314,27 @@ test('a keelboat, a tall ship, a skiff and a beach cat of the fleet look as the 
     const { own, fleet } = await both(page, pose, 2);
     diffs[pose.name] = pictureDifference(own, fleet);
   }
+  test.info().annotations.push({ type: 'measured', description: JSON.stringify(diffs) });
+  for (const [name, d] of Object.entries(diffs)) {
+    expect(d, name).toBeLessThan(LIKE);
+  }
+});
+
+// A page each, so that each test's time is two kinds'.
+test('a skiff and a beach cat of the fleet look as the own ones do, the gennaker and the rudders', async ({
+  page,
+}) => {
+  await openScene(page, 'boat=skiff');
+  // The sea's foam and wakes, and a ship's braces, left out, as they are
+  // for the ship.
+  await page.evaluate(() => {
+    globalThis.keel.setParts({ foam: false, wakes: false, braces: false });
+  });
+  const diffs: Record<string, number> = {};
   // A skiff, the wind from the north: on a broad reach with her gennaker
   // set, half way up and in its bag; close-hauled, her sailor out on the
   // trapeze past her rack, drawn hiked at its edge. Seen from her lee bow,
   // near enough that the fleet draws her full model.
-  await page.evaluate(async (kind) => {
-    await globalThis.keel.useBoat(kind);
-  }, SKIFF);
   const reach = { ...rest, heading: 2.2, heel: 5 * DEG, boom: 0.9, jib: 0.3, sailor: -0.6 };
   const lee = { azimuth: -2.2, elevation: 0.2, distance: 9 };
   for (const pose of [
