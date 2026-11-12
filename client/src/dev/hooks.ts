@@ -2699,7 +2699,7 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
           from: number;
           t: number;
         }[];
-        heads: { x: number; y: number }[];
+        heads: { x: number; y: number; up: number }[];
       }[];
       drawn: { near: number; far: number };
       stats: { frames: number; posed: number; ms: number };
@@ -2713,11 +2713,14 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
         boats: c.boats().map((b) => ({
           ...b,
           heads: b.heads.map((p) => {
+            const up = p.y;
             p.y -= domeDrop(Math.hypot(p.x - bs.x, p.z - bs.z));
             p.project(stage.camera);
             return {
               x: ((p.x + 1) / 2) * (canvas?.clientWidth ?? 0),
               y: ((1 - p.y) / 2) * (canvas?.clientHeight ?? 0),
+              /** How high over the sea, m. */
+              up,
             };
           }),
         })),
