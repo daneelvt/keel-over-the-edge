@@ -739,8 +739,13 @@ export class FleetCrews {
       t: number;
       /** Aboard a ship, their work ('haul' or 'aloft') and how far on with it; null for none. */
       work: { kind: string; phase: string } | null;
+      /** How far out they lean (on a beach cat, out on the wire); after a capsize, in the water, on her hull or climbing back; null aboard. */
+      lean: number;
+      wet: string | null;
     }[];
     heads: Vector3[];
+    /** Aboard a beach cat, the side her crew hangs on her wire from, its wire drawn to them; 0 if nobody does. */
+    hooked: number;
   }[] {
     return this.#order.map((c) => ({
       slot: c.slot,
@@ -763,7 +768,10 @@ export class FleetCrews {
                 phase: (m as ShipMember).ship.work?.phase ?? '',
               }
             : null,
+        lean: m.lean,
+        wet: m.wet?.phase ?? null,
       })),
+      hooked: this.hook(c.slot, new Vector3()),
       heads: c.people
         .filter((p) => p.shown && p.body !== null)
         .map((p) => (p.body as CrewBody).head.clone().applyMatrix4(c.matrix)),

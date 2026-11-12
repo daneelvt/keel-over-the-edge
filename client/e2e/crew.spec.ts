@@ -8,7 +8,11 @@
 // figures; close, the nearest twelve their deck level. The keelboat's
 // five to windward of the boom on both tacks, crossing in a tack and a
 // gybe in turn, and changing places at a handover; the skiff's two
-// likewise.
+// likewise. The beach cat's two on her windward hull and out on the wire
+// together, across her net in a tack (the crew first) and a gybe (the helm
+// first), changing places along her hull, and in the water, up on her
+// lower hull and back aboard after a capsize; and seen so from a friend's
+// boat near her.
 
 import { expect, type Page, test } from '@playwright/test';
 import data from '../src/catalog/catalog.gen.json' with { type: 'json' };
@@ -478,17 +482,18 @@ test('two aboard the skiff: the crew to windward of the boom, after a tack and a
     await k.crewReady();
     k.freezeTick(k.world.ticks);
     // Frames with the helm held this far out, close-hauled with the wind on
-    // that side, the boom on the other.
+    // that side, the boom on the other, held upright (a capsize would put
+    // everyone in the water).
     const sail = (sailor: number, frames: number) => {
       const heading = k.world.wind.meanFrom - Math.sign(sailor) * 0.8;
       for (let i = 0; i < frames; i++) {
-        k.setState({ sailor, boom: -0.3 * Math.sign(sailor), heading });
+        k.setState({ sailor, boom: -0.3 * Math.sign(sailor), heading, heel: 0, sailorMode: 0 });
         k.sailFrames(1, 1);
       }
       return k.crew();
     };
     // Met on the starboard rack.
-    k.setState({ sailor: 0.8, boom: -0.3, heading: k.world.wind.meanFrom - 0.8 });
+    k.setState({ sailor: 0.8, boom: -0.3, heading: k.world.wind.meanFrom - 0.8, heel: 0 });
     k.settleSailor();
     const starboard = sail(0.8, 150);
     // A tack: the helm crosses to the port rack, and the crew at a crouch.
@@ -516,7 +521,176 @@ test('two aboard the skiff: the crew to windward of the boom, after a tack and a
   expect(out.handed.helm).not.toBe(out.tacked.helm);
 });
 
-test('a friend’s boat near a crewed keelboat, skiff and tall ship sees their crews: to windward, through a tack and a handover', async ({
+test('two aboard the beach cat: on her windward hull and out on the wire, across her net in a tack and a gybe in their order, changing places along her hull, and in the water and righting her together after a capsize', async ({
+  page,
+}, info) => {
+  test.setTimeout(150_000);
+  const cat = data.boats.find((b) => b.physics.hulls.hullSpacing > 0);
+  test.skip(cat === undefined, 'no kind has two hulls');
+  await openScene(page, `boat=${cat?.id}&crew=2`);
+  await page.evaluate(async () => {
+    const k = globalThis.keel;
+    k.setSky(12);
+    await k.crewReady();
+    k.freezeTick(k.world.ticks);
+  });
+  /**
+   * Sails frames of 0.1 s, each with the state script gives at its time
+   * (s): the boom, the sailor's offset and mode, the heel, and the bow so
+   * far off the wind (radians, + with the wind over starboard); the crew as
+   * they then are, and when each first set off across her net.
+   */
+  const sail = (seconds: number, script: string) =>
+    page.evaluate(
+      ({ seconds, script }) => {
+        const k = globalThis.keel;
+        const at = new Function('t', `return (${script})(t);`) as (t: number) => {
+          boom: number;
+          sailor: number;
+          off: number;
+          heel?: number;
+          mode?: number;
+        };
+        let crewGoes = Number.POSITIVE_INFINITY;
+        let helmGoes = Number.POSITIVE_INFINITY;
+        const wet = new Set<string>();
+        const changed = new Set<number>();
+        let wires = 0;
+        for (let i = 0; i * 0.1 <= seconds; i++) {
+          const t = i * 0.1;
+          const s = at(t);
+          k.setState({
+            boom: s.boom,
+            sheetLimit: Math.abs(s.boom),
+            sailor: s.sailor,
+            heel: s.heel ?? 0,
+            sailorMode: s.mode ?? 0,
+            sailorTimer: 30,
+            heading: k.world.wind.meanFrom - s.off,
+          });
+          k.sailFrames(1, 3);
+          const c = k.crew();
+          for (const m of c.members) {
+            if (m.net !== null) {
+              crewGoes = Math.min(crewGoes, t);
+            }
+            if (m.wet !== null) {
+              wet.add(m.wet);
+            }
+            if (m.moving === 'change') {
+              changed.add(m.seat);
+            }
+          }
+          if (c.helmNet !== null) {
+            helmGoes = Math.min(helmGoes, t);
+          }
+          wires = Math.max(wires, c.crewWires.filter((w) => w).length);
+        }
+        return {
+          ...k.crew(),
+          crewGoes,
+          helmGoes,
+          wet: [...wet],
+          changed: [...changed],
+          wiresSeen: wires,
+        };
+      },
+      { seconds, script },
+    );
+  const picture = async (name: string, view = { azimuth: -0.6, elevation: 0.7, distance: 5 }) => {
+    await page.evaluate(async (v) => {
+      const k = globalThis.keel;
+      k.camera(v);
+      await k.show();
+    }, view);
+    await info.attach(name, { body: await page.screenshot(), contentType: 'image/png' });
+  };
+  const crewOf = (c: Awaited<ReturnType<typeof sail>>) => c.members.find((m) => m.station > 0);
+  // Close-hauled, the wind over starboard, the boom to port: both on the
+  // starboard hull, sat; then the helm out on the wire, and the crew with them.
+  const sat = await sail(4, '() => ({ boom: -0.25, sailor: 0.8, off: 0.8 })');
+  expect(sat.aboard).toBe(1);
+  expect(sat.side).toBe(1);
+  expect(crewOf(sat)?.lean).toBe(0);
+  expect(sat.heads[0]?.across).toBeGreaterThan(0.5);
+  await picture('two aboard, sat on her starboard hull');
+  const wire = await sail(4, '() => ({ boom: -0.25, sailor: 2.1, off: 0.8 })');
+  expect(crewOf(wire)?.lean).toBe(1);
+  expect(wire.crewWires).toEqual([true, false]);
+  expect(wire.heads[0]?.across).toBeGreaterThan(1.5);
+  await picture('both out on the wire to starboard');
+  // A tack: the bow through the wind over 4 s, the boom over as it passes,
+  // the helm's weight over a second later. The crew first, as the wind
+  // comes ahead; the helm once they are clear.
+  const tacked = await sail(
+    12,
+    `(t) => {
+      const turn = Math.max(0, Math.min(1, t / 4));
+      const off = 0.8 - turn * 1.6;
+      const boom = off > 0 ? -Math.min(0.25, off * 0.6) : Math.min(0.25, -off * 0.6);
+      const over = Math.max(0, Math.min(1, (t - 3) / 1.5));
+      return { boom, sailor: 0.8 - 1.6 * over, off };
+    }`,
+  );
+  expect(tacked.crewGoes).toBeLessThan(tacked.helmGoes);
+  expect(tacked.helmGoes).toBeLessThan(12);
+  expect(tacked.side).toBe(-1);
+  expect(crewOf(tacked)?.side).toBe(-1);
+  expect(crewOf(tacked)?.moving).toBeNull();
+  expect(tacked.helmSide).toBe(-1);
+  await picture('after a tack, both on her port hull', {
+    azimuth: 0.6,
+    elevation: 0.7,
+    distance: 5,
+  });
+  // A gybe: from a broad reach on port to one on starboard, the boom over
+  // fast. The helm first; the crew once the helm is along the way.
+  const gybed = await sail(
+    12,
+    `(t) => {
+      const turn = Math.max(0, Math.min(1, t / 3));
+      const off = -(2.4 + turn * 1.5);
+      const boom = t < 1.5 ? 1.1 : t < 2 ? 1.1 - (t - 1.5) * 4.4 : -1.1;
+      const over = Math.max(0, Math.min(1, (t - 2.5) / 1.5));
+      return { boom, sailor: -0.8 + 1.6 * over, off: Math.atan2(Math.sin(off), Math.cos(off)) };
+    }`,
+  );
+  expect(gybed.helmGoes).toBeLessThan(gybed.crewGoes);
+  expect(gybed.crewGoes).toBeLessThan(12);
+  expect(gybed.side).toBe(1);
+  expect(crewOf(gybed)?.side).toBe(1);
+  expect(gybed.helmSide).toBe(1);
+  await picture('after a gybe, both on her starboard hull');
+  // A handover: the crew to the helm along her hull, the helm forward on the net beside it.
+  const helmBefore = gybed.helm;
+  await page.evaluate(async () => {
+    const k = globalThis.keel;
+    await k.showCrew(2, 0);
+    await k.crewReady();
+  });
+  const handed = await sail(8, '() => ({ boom: -0.25, sailor: 0.8, off: 0.8 })');
+  expect(handed.changed.sort()).toEqual([0, 1]);
+  expect(handed.helm).not.toBe(helmBefore);
+  expect(handed.members.every((m) => m.moving === null)).toBe(true);
+  expect(crewOf(handed)?.side).toBe(1);
+  await picture('after a handover');
+  // A capsize: in the water as the sailor falls in, up on her lower hull
+  // as the sailor rights her, climbing back as she comes up.
+  const capsized = await sail(
+    16,
+    `(t) => {
+      const mode = t < 5 ? 1 : t < 10 ? 2 : t < 12 ? 3 : 0;
+      const heel = t < 8 ? 1.45 : t < 12 ? 1.45 - (t - 8) * 0.34 : 0.05;
+      return { boom: -0.25, sailor: mode === 0 ? 0.8 : 0, off: 0.8, heel, mode };
+    }`,
+  );
+  expect(capsized.wet.sort()).toEqual(['board', 'climb', 'water']);
+  expect(crewOf(capsized)?.wet).toBeNull();
+  expect(crewOf(capsized)?.side).toBe(1);
+  await picture('righted, both back aboard');
+});
+
+test('a friend’s boat near a crewed keelboat, skiff, tall ship and beach cat sees their crews: to windward, through a tack and a handover, and the beach cat’s on the wire', async ({
   page,
 }, info) => {
   test.setTimeout(180_000);
@@ -526,9 +700,10 @@ test('a friend’s boat near a crewed keelboat, skiff and tall ship sees their c
     (b) => b.capacity === 2 && b.stations.some((s) => 'windward' in s && s.windward),
   );
   const ship = kindOf((b) => b.capacity >= 40);
+  const cat = kindOf((b) => b.physics.hulls.hullSpacing > 0);
   await openScene(page, 'boat=jolly-boat');
   await page.evaluate(
-    async ({ keelboat, skiff, ship }) => {
+    async ({ keelboat, skiff, ship, cat }) => {
       const k = globalThis.keel;
       k.setSky(12);
       const from = k.world.wind.meanFrom;
@@ -554,12 +729,13 @@ test('a friend’s boat near a crewed keelboat, skiff and tall ship sees their c
         boat(keelboat, 5, 1, 12, 6),
         boat(skiff, 2, 2, 22, -6),
         boat(ship, 40, 3, 60, 25),
+        ...(cat < 0 ? [] : [boat(cat, 2, 4, 16, -14)]),
       ]);
       await k.fleetLoaded();
       await k.fleetCrewsReady();
       k.freezeTick(k.world.ticks);
     },
-    { keelboat, skiff, ship },
+    { keelboat, skiff, ship, cat },
   );
   /** Sails frames, the keelboat's boom and heading as given, and the crews as they then are. */
   const sail = (frames: number, boom: number, off: number) =>
@@ -622,7 +798,11 @@ test('a friend’s boat near a crewed keelboat, skiff and tall ship sees their c
   expect(boatOf(met, 2).heads).toHaveLength(39);
   // Her company by a ship's rules: her lookout in the main top, 13 m and more over the sea.
   expect(boatOf(met, 2).heads.some((h) => h.up > 13)).toBe(true);
-  expect(met.drawn.near + met.drawn.far).toBe(44);
+  if (cat >= 0) {
+    // The beach cat's crew on her port hull, beside her helm.
+    toWindward(met, 3, 1, -1, 'the beach cat');
+  }
+  expect(met.drawn.near + met.drawn.far).toBe(cat >= 0 ? 45 : 44);
   await picture('a friend near a keelboat of five, a skiff of two and a tall ship of forty', {
     azimuth: 2.6,
     elevation: 0.35,
@@ -670,6 +850,25 @@ test('a friend’s boat near a crewed keelboat, skiff and tall ship sees their c
   expect(boatOf(handed, 0).helmAway).toBe(false);
   expect(boatOf(handed, 0).members.find((m) => m.seat === 0)?.station).toBe(1);
   toWindward(handed, 0, 4, 1, 'the keelboat after the handover');
+  if (cat >= 0) {
+    // The beach cat's helm out on the wire to port: her crew out on theirs
+    // beside them, the crew's wire drawn to them.
+    const wire = await page.evaluate(() => {
+      const k = globalThis.keel;
+      for (let i = 0; i < 60; i++) {
+        k.moveFleet(3, { sailor: -2.1, boom: 0.25, heading: k.world.wind.meanFrom - 0.7 });
+        k.sailFrames(1, 1);
+      }
+      return k.fleetCrews().boats.find((b) => b.slot === 3);
+    });
+    expect(wire?.members.find((m) => m.station > 0)?.lean).toBe(1);
+    expect(wire?.hooked).toBe(-1);
+    await picture('the beach cat’s two out on the wire, from a friend’s boat', {
+      azimuth: 2.6,
+      elevation: 0.35,
+      distance: 14,
+    });
+  }
 });
 
 test('a friend’s boat near the tall ship sees her company at work: at the braces in her tack, and her topmen aloft as she reefs', async ({

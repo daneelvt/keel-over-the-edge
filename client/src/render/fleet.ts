@@ -710,7 +710,7 @@ export class FleetView {
       this.wires = new WireLines(
         wireColour(wireNode(nearParts.objects, 1)),
         kind.name,
-        t.crewRings === null ? 2 : 4,
+        t.crewRings === null ? 2 : 3,
       );
       this.root.add(this.wires.mesh);
     }
@@ -903,14 +903,14 @@ export class FleetView {
       const end = side === this.#hookSide ? this.#hook : side > 0 ? t.rings[0] : t.rings[1];
       wires.add(wireA, at(end, wireB), b.opacity);
     }
-    // A crew's wires: to whoever of the crew hangs on one, else to its ring.
-    const crew = t.crewRings;
-    if (crew !== null) {
-      const hung = b.slot >= 0 ? this.#shared.crewHook(b.slot, this.#crewHook) : 0;
-      for (const side of [1, -1]) {
-        const end = side === hung ? this.#crewHook : side > 0 ? crew[0] : crew[1];
-        wires.add(wireA, at(end, wireB), b.opacity);
-      }
+    // A crew's wire, to whoever of the crew hangs on it: hanging idle by
+    // the shroud, too fine to be seen from the fleet's distances.
+    if (
+      t.crewRings !== null &&
+      b.slot >= 0 &&
+      this.#shared.crewHook(b.slot, this.#crewHook) !== 0
+    ) {
+      wires.add(wireA, at(this.#crewHook, wireB), b.opacity);
     }
   }
 

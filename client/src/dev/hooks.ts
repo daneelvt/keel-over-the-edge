@@ -2519,7 +2519,8 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
             l.state === 'loading' ||
             l.clipsState === 'loading' ||
             l.wheelState === 'loading' ||
-            l.trapezeState === 'loading',
+            l.trapezeState === 'loading' ||
+            l.catState === 'loading',
         ) ??
           false);
       while (busy()) {
@@ -2774,8 +2775,11 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
           from: number;
           t: number;
           work: { kind: string; phase: string } | null;
+          lean: number;
+          wet: string | null;
         }[];
         heads: { x: number; y: number; up: number }[];
+        hooked: number;
       }[];
       drawn: { near: number; far: number };
       stats: { frames: number; posed: number; ms: number };
