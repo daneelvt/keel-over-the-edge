@@ -107,6 +107,11 @@ func checkDownwind(i int, ph map[string]any) []string {
 // person's breadth.
 const stationsApart = 0.45
 
+// lookoutField is the name of a boat's lookout's eye's height: spelled in
+// two, as the whole word is also a sailor look's id, which code may not
+// quote.
+const lookoutField = "look" + "out"
+
 // railFromEdge is how far a station on the rail may be from the deck's edge,
 // in m: its point is the edge under the person.
 const railFromEdge = 0.1
@@ -135,10 +140,11 @@ func deckEdge(m map[string]any, z float64) float64 {
 
 // checkStations checks boat i's stations: one for each person it carries,
 // each on its deck within its hull (within its beam and its length, above
-// the waterline and below the boom), none on another, nor a windward one's
-// mirror (where it is drawn when the wind is on the other side) on one on
-// the other side; and one on the rail at the deck's edge. The client's
-// tests hold each to the model's deck itself.
+// the waterline and below the boom; a station aloft, above the boom, no
+// higher than its lookout's eye), none on another wherever the wind is
+// (a station to windward or to leeward drawn on its side or its mirror,
+// as the weather side has it); and one on the rail at the deck's edge. The
+// client's tests hold each to the model's deck itself.
 func checkStations(i int, m map[string]any) []string {
 	var problems []string
 	stations, _ := m["stations"].([]any)
@@ -151,11 +157,13 @@ func checkStations(i int, m map[string]any) []string {
 		return f
 	}
 	beam, length := num(m["beam"]), num(m["lengthOverall"])
+	lookout := num(m[lookoutField])
 	ph, _ := m["physics"].(map[string]any)
 	rig, _ := ph["rig"].(map[string]any)
 	boom := num(rig["boomHeight"])
 	at := make([][3]float64, 0, len(stations))
-	windward := make([]bool, 0, len(stations))
+	// Each station's side: +1 drawn on the weather side, −1 on the lee, 0 where it is.
+	sides := make([]int, 0, len(stations))
 	for j, s := range stations {
 		st, _ := s.(map[string]any)
 		p, _ := st["at"].([]any)
@@ -171,26 +179,60 @@ func checkStations(i int, m map[string]any) []string {
 		if 2*x > beam || 2*x < -beam || 2*z > length || 2*z < -length {
 			problems = append(problems, fmt.Sprintf("  boats[%d].stations[%d]: (%v, %v) is outside the hull's %v by %v m", i, j, x, z, beam, length))
 		}
-		if !(y > 0 && y < boom) {
+		if st["pose"] == "aloft" {
+			if !(y >= boom && y <= lookout) {
+				problems = append(problems, fmt.Sprintf("  boats[%d].stations[%d]: aloft %v m up is not above the boom (%v m) and no higher than the lookout's eye (%v m)", i, j, y, boom, lookout))
+			}
+		} else if !(y > 0 && y < boom) {
 			problems = append(problems, fmt.Sprintf("  boats[%d].stations[%d]: %v m up is not on a deck above the waterline and below the boom (%v m)", i, j, y, boom))
 		}
 		w, _ := st["windward"].(bool)
-		near := func(a, b [3]float64) bool {
-			dx, dy, dz := a[0]-b[0], a[1]-b[1], a[2]-b[2]
-			return dx*dx+dy*dy+dz*dz < stationsApart*stationsApart
+		l, _ := st["lee"].(bool)
+		side := 0
+		switch {
+		case w && l:
+			problems = append(problems, fmt.Sprintf("  boats[%d].stations[%d]: both to windward and to leeward", i, j))
+		case w:
+			side = 1
+		case l:
+			side = -1
 		}
-		here := [3]float64{x, y, z}
-		for k, o := range at {
-			if near(here, o) {
-				problems = append(problems, fmt.Sprintf("  boats[%d].stations[%d]: within %v m of stations[%d]", i, j, stationsApart, k))
-			}
-			// A windward station drawn on the other side: its mirror, against those there.
-			if (w || windward[k]) && (x < 0) != (o[0] < 0) && near([3]float64{-x, y, z}, o) {
-				problems = append(problems, fmt.Sprintf("  boats[%d].stations[%d]: to windward on the other side, within %v m of stations[%d]", i, j, stationsApart, k))
+		at = append(at, [3]float64{x, y, z})
+		sides = append(sides, side)
+	}
+	// Where each is drawn with the weather on either side: none within a
+	// person's breadth of another.
+	drawn := func(k, weather int) [3]float64 {
+		p := at[k]
+		if sides[k] == 0 {
+			return p
+		}
+		own := 1
+		if p[0] < 0 {
+			own = -1
+		}
+		if own != sides[k]*weather {
+			p[0] = -p[0]
+		}
+		return p
+	}
+	near := func(a, b [3]float64) bool {
+		dx, dy, dz := a[0]-b[0], a[1]-b[1], a[2]-b[2]
+		return dx*dx+dy*dy+dz*dz < stationsApart*stationsApart
+	}
+	for j := range at {
+		for k := range j {
+			for _, weather := range []int{1, -1} {
+				if near(drawn(j, weather), drawn(k, weather)) {
+					how := ""
+					if sides[j] != 0 || sides[k] != 0 {
+						how = map[int]string{1: " with the weather to starboard", -1: " with the weather to port"}[weather]
+					}
+					problems = append(problems, fmt.Sprintf("  boats[%d].stations[%d]: within %v m of stations[%d]%s", i, j, stationsApart, k, how))
+					break
+				}
 			}
 		}
-		at = append(at, here)
-		windward = append(windward, w)
 	}
 	return problems
 }

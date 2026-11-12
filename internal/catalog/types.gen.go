@@ -317,27 +317,38 @@ type BoatPhysics struct {
 type BoatPoint []float64
 
 // A place aboard where a person is drawn: standing on the deck, seated as a
-// dinghy's helmsman sits on the side deck, hiking out on its rail, or sat on a
-// keelboat's rail with the legs over the side; to windward, if it says so.
+// dinghy's helmsman sits on the side deck (on a ship, sat on a hatch), hiking out
+// on its rail, sat on a keelboat's rail with the legs over the side, leaning on a
+// ship's rail, or in a ship's top; to windward or to leeward, if it says so.
 type BoatStation struct {
 	// In m in the model's frame. Standing, the deck between the feet; seated, the
 	// seat's back edge, as the gunwale is to a dinghy's helmsman: the hips just
 	// within it, the legs reaching 0.7 m the way the person faces, the feet 0.2 m
-	// below it; on the rail, the deck's edge at the sheer under the person, who sits
-	// facing outboard, the hips just within it and the legs over the side.
+	// below it (on a ship, a hatch's edge on its grating, the feet on the deck before
+	// it); on the rail, the deck's edge at the sheer under the person, who sits
+	// facing outboard, the hips just within it and the legs over the side; leaning,
+	// the cap rail's inner edge on its top, the forearms on it; aloft, the top's
+	// floor by the mast, the person out toward the shrouds on the weather side.
 	At BoatPoint `json:"at"`
 
 	// The way the person faces, in degrees clockwise from the bow seen from above: 0
 	// forward, 90 to starboard, 180 aft, 270 to port.
 	Facing float64 `json:"facing"`
 
+	// Whether the person is to leeward, as windward is to windward: the station's
+	// mirror across the centreline (and its facing's) when its own side is the
+	// weather side. Not with windward.
+	Lee *bool `json:"lee,omitempty,omitzero"`
+
 	// Pose corresponds to the JSON schema field "pose".
 	Pose StationPose `json:"pose"`
 
 	// Whether the person sits to windward, as a crew does: on the side away from the
 	// boom, the station's mirror across the centreline (and its facing's) when that
-	// is the other side, and crossing the boat at a crouch in a tack or a gybe. Not
-	// said, the station is where it is.
+	// is the other side, and crossing the boat at a crouch in a tack or a gybe. On a
+	// ship with yards, her weather side is the side her after yards are braced for,
+	// and the person walks across when it changes. Not said, the station is where it
+	// is.
 	Windward *bool `json:"windward,omitempty,omitzero"`
 }
 
@@ -3429,7 +3440,9 @@ type StartMoorings struct {
 
 type StationPose string
 
+const StationPoseAloft StationPose = "aloft"
 const StationPoseHiking StationPose = "hiking"
+const StationPoseLeaning StationPose = "leaning"
 const StationPoseRail StationPose = "rail"
 const StationPoseSeated StationPose = "seated"
 const StationPoseStanding StationPose = "standing"
@@ -5445,4 +5458,4 @@ type WorldZones struct {
 }
 
 // Version is the catalog version (tools/catalog).
-const Version = "0e5e1240a73a066f"
+const Version = "54611047e221c686"

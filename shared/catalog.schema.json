@@ -909,21 +909,22 @@
     },
     "BoatStation": {
       "title": "BoatStation",
-      "description": "A place aboard where a person is drawn: standing on the deck, seated as a dinghy's helmsman sits on the side deck, hiking out on its rail, or sat on a keelboat's rail with the legs over the side; to windward, if it says so.",
+      "description": "A place aboard where a person is drawn: standing on the deck, seated as a dinghy's helmsman sits on the side deck (on a ship, sat on a hatch), hiking out on its rail, sat on a keelboat's rail with the legs over the side, leaning on a ship's rail, or in a ship's top; to windward or to leeward, if it says so.",
       "type": "object",
       "additionalProperties": false,
       "required": ["at", "pose", "facing"],
       "properties": {
-        "at": { "description": "In m in the model's frame. Standing, the deck between the feet; seated, the seat's back edge, as the gunwale is to a dinghy's helmsman: the hips just within it, the legs reaching 0.7 m the way the person faces, the feet 0.2 m below it; on the rail, the deck's edge at the sheer under the person, who sits facing outboard, the hips just within it and the legs over the side.", "$ref": "#/$defs/BoatPoint" },
+        "at": { "description": "In m in the model's frame. Standing, the deck between the feet; seated, the seat's back edge, as the gunwale is to a dinghy's helmsman: the hips just within it, the legs reaching 0.7 m the way the person faces, the feet 0.2 m below it (on a ship, a hatch's edge on its grating, the feet on the deck before it); on the rail, the deck's edge at the sheer under the person, who sits facing outboard, the hips just within it and the legs over the side; leaning, the cap rail's inner edge on its top, the forearms on it; aloft, the top's floor by the mast, the person out toward the shrouds on the weather side.", "$ref": "#/$defs/BoatPoint" },
         "pose": { "$ref": "#/$defs/StationPose" },
         "facing": { "description": "The way the person faces, in degrees clockwise from the bow seen from above: 0 forward, 90 to starboard, 180 aft, 270 to port.", "type": "number", "minimum": 0, "exclusiveMaximum": 360 },
-        "windward": { "description": "Whether the person sits to windward, as a crew does: on the side away from the boom, the station's mirror across the centreline (and its facing's) when that is the other side, and crossing the boat at a crouch in a tack or a gybe. Not said, the station is where it is.", "type": "boolean" }
+        "windward": { "description": "Whether the person sits to windward, as a crew does: on the side away from the boom, the station's mirror across the centreline (and its facing's) when that is the other side, and crossing the boat at a crouch in a tack or a gybe. On a ship with yards, her weather side is the side her after yards are braced for, and the person walks across when it changes. Not said, the station is where it is.", "type": "boolean" },
+        "lee": { "description": "Whether the person is to leeward, as windward is to windward: the station's mirror across the centreline (and its facing's) when its own side is the weather side. Not with windward.", "type": "boolean" }
       }
     },
     "StationPose": {
       "title": "StationPose",
-      "description": "How a person is at a station: standing; seated (leaning out as hiking in a breeze); hiking (sitting out on the rail and leaning out, as a dinghy's crew); or on the rail (sat on a keelboat's deck edge facing outboard with the legs over the side, upright, leaning out in a breeze).",
-      "type": "string", "enum": ["standing", "seated", "hiking", "rail"]
+      "description": "How a person is at a station: standing; seated (leaning out as hiking in a breeze; on a ship, sat on a hatch, standing up as she heels or the wind rises); hiking (sitting out on the rail and leaning out, as a dinghy's crew); on the rail (sat on a keelboat's deck edge facing outboard with the legs over the side, upright, leaning out in a breeze); leaning (on a ship's rail, the forearms on its cap, facing outboard); or aloft (standing in a ship's top, a hand on a shroud: the only station above the boom).",
+      "type": "string", "enum": ["standing", "seated", "hiking", "rail", "leaning", "aloft"]
     },
     "BoatControls": {
       "title": "BoatControls",
