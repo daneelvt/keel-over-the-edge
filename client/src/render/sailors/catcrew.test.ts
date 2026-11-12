@@ -723,4 +723,97 @@ describe.each(kinds.map((k) => [k.name, k] as const))('aboard the %s', (_, kind)
     expect([...r.seen.wet].sort()).toEqual(['board', 'climb', 'water']);
     expect(r.least).toBeGreaterThan(0);
   });
+
+  /** Her crew under the rules alone: the helm (seat 1) holding, the crew (seat 0) at their station on side. */
+  async function crewOnly(side: number) {
+    const { plan } = await setUp();
+    const rules = new CrewRules(plan);
+    rules.set(
+      {
+        people: [
+          { seat: 0, look: 0 },
+          { seat: 1, look: 1 },
+        ],
+        holder: 1,
+      },
+      false,
+    );
+    const sn: SailorNow = { mode: SAILING, heel: 0, trim: 0, offset: side * 0.9, net: null };
+    const step = (depth: number, seconds: number, boom = -side * 0.3) => {
+      for (let t = 0; t < seconds; t += 1 / 30) {
+        rules.step({ dt: 1 / 30, boom, windOffBow: side * 0.8, depth, sailor: sn });
+      }
+      return rules.members.find((m) => m.station > 0) as CrewMember;
+    };
+    return { plan, rules, sn, step };
+  }
+
+  test('her crew goes out on the wire once her helm is out on theirs, and back in with a hysteresis; sitting out from the hull, they stay sat', async () => {
+    const { step } = await crewOnly(1);
+    expect(step(1, 3).lean).toBe(0);
+    // The helm out on the wire: the crew follows.
+    expect(step(1.8, 3).lean).toBe(1);
+    // Part way in, still on the wire; sat out on the hull, the crew comes in.
+    expect(step(1.3, 3).lean).toBe(1);
+    expect(step(1, 3).lean).toBe(0);
+  });
+
+  test('a capsize: in the water as the sailor falls in, on her hull as the sailor rights her, climbing back as she comes up, then at their station to windward', async () => {
+    const { step, sn } = await crewOnly(1);
+    step(0.5, 1);
+    sn.mode = IN_WATER;
+    sn.heel = 1.4;
+    sn.trim = 0;
+    expect(step(0, 1).wet).toMatchObject({ phase: 'water', thrown: false });
+    sn.mode = ON_BOARD;
+    expect(step(0, 1).wet?.phase).toBe('board');
+    sn.mode = CLIMBING;
+    sn.heel = 0.3;
+    expect(step(0, 0.5).wet?.phase).toBe('climb');
+    sn.mode = SAILING;
+    sn.heel = 0.05;
+    const back = step(0.5, 3);
+    expect(back.wet ?? null).toBeNull();
+    expect(back.side).toBe(1);
+  });
+
+  test('a pitchpole: thrown off over her bows, nearly upright and far bow down, then as after a capsize', async () => {
+    const { step, sn, plan } = await crewOnly(1);
+    step(1.8, 3);
+    sn.mode = IN_WATER;
+    sn.heel = 0.1;
+    sn.trim = -0.6;
+    const thrown = step(0, 0.3);
+    expect(thrown.wet).toMatchObject({ phase: 'water', thrown: true, lean: 1 });
+    // Posed ahead of her front beam, then round by her side.
+    const ls = await looks;
+    const c = crewOf(ls[0] as Awaited<typeof looks>[number], plan, 4);
+    const net = plan.cat?.aboard.net;
+    (thrown.wet as NonNullable<typeof thrown.wet>).t = 1;
+    poseMember(c.body, thrown, c.inp);
+    expect(c.body.head.z).toBeLessThan((net?.fore ?? 0) - 0.3);
+    (thrown.wet as NonNullable<typeof thrown.wet>).t = 8;
+    poseMember(c.body, thrown, c.inp);
+    expect(c.body.head.z).toBeGreaterThan((net?.fore ?? 0) - 0.3);
+  });
+
+  test('aft with her helm: as the breeze builds her crew stands as far aft of their place as her helm does', async () => {
+    const { plan } = await setUp();
+    const ls = await looks;
+    const c = crewOf(ls[0] as Awaited<typeof looks>[number], plan, 4);
+    const m: CrewMember = {
+      seat: 0,
+      look: 0,
+      station: 1,
+      side: 1,
+      lean: 0,
+      leanTo: 0,
+      moving: null,
+    };
+    poseMember(c.body, m, c.inp);
+    const z0 = c.body.head.z;
+    c.inp.aft = 0.6;
+    poseMember(c.body, m, c.inp);
+    expect(c.body.head.z - z0).toBeCloseTo(0.6, 2);
+  });
 });
