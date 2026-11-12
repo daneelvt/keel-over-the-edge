@@ -1383,13 +1383,25 @@ export interface PhysicsHulls {
    */
   flyingDrag: number;
   /**
-   * Rudders, one on each hull, each the one rudder's lift and drag: 1, or 2 on a boat of two hulls.
+   * Rudders, each the one rudder's lift and drag: 1, or 2, one on each hull of a boat of two hulls, or a pair either side of one hull's centreline (rudderSpread).
    */
   rudderCount: number;
   /**
    * Boards, or hulls' lateral planes, each the one board's lift and drag: 1, or 2 on a boat of two hulls.
    */
   boardCount: number;
+  /**
+   * Each of one hull's two rudders' stock off the centreline, in m: 0 for a rudder on the centreline, and on a boat of two hulls, whose rudders are on its hulls.
+   */
+  rudderSpread: number;
+  /**
+   * On one hull with two rudders, the heel at which the windward blade's root leaves the water in still water, in degrees: from it the blade's share of the steering falls. 0 for any other boat.
+   */
+  rudderLiftHeel: number;
+  /**
+   * On one hull with two rudders, the heel at which the windward blade's tip leaves the water, in degrees: from it only the lee blade steers. 0 for any other boat.
+   */
+  rudderClearHeel: number;
 }
 /**
  * Pitch from the rig: the sails' drive, high above the centre of gravity, and the hull's resistance below it pitch the bow down, and the sailor steps aft to hold it up. Past bowBuryPitch the bows bury: their spring weakens and their drag grows; past pitchpoleAngle the sailor is thrown off over the bow. None where rigPitch is 0, the rest unread: the pitch is the waves' alone.
@@ -8900,4 +8912,4 @@ export interface LifeGlow {
 }
 
 /** The catalog version (tools/catalog). */
-export const CATALOG_VERSION = '539218b4519e881b';
+export const CATALOG_VERSION = 'e727e20dadedfd21';

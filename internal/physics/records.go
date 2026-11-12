@@ -350,6 +350,14 @@ type Params struct {
 	FlyingDrag  float64 // the drag area's share with the windward hull clear
 	RudderCount float64 // rudders, one on each hull: each the one rudder's lift and drag
 	BoardCount  float64 // boards or hulls' lateral planes: each the one board's lift and drag
+	// One hull may carry two rudders either side of its centreline (a
+	// spread above 0): heeled, the windward blade comes out of the water,
+	// its root at RudderLiftHeel and its tip at RudderClearHeel, and only
+	// the lee one steers. Each is the one rudder's lift and drag, acting at
+	// the centreline's rudder position. 0 for every other boat.
+	RudderSpread    float64 // each blade's stock off the centreline, m
+	RudderLiftHeel  float64 // the windward blade's root leaves the water, degrees
+	RudderClearHeel float64 // the windward blade's tip leaves the water, degrees
 
 	// Pitch from the rig: the sails' drive, high above the centre of
 	// gravity, and the hull's resistance below it pitch the bow down; the

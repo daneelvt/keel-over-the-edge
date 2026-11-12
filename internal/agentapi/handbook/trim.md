@@ -56,7 +56,17 @@ The fastest boom by angle off the true wind, in 6, 12 and 20 knots (Beach cat, f
 
 The Beach cat lifts her windward hull when pressed ("hull flying" on the Boat line), fastest just clear; ease before it rises further. In a gust on a broad reach her bows bury ("bows burying") and she can pitchpole, throwing her sailor off over them; her sailor steps aft by herself. Ease, reef, or bear off to a run.
 
-Reef (trim or steer with reef 1 or 2; 0 shakes the reefs out) when close-hauled the sheet hauled in hard heels the boat past its trim: from there only easing holds her up, and reefed she heels less and stands up. Reef the Jolly boat from 19 knots, the Keelboat from 13 knots, the Tall ship from 27 knots, the Skiff from 13 knots (reef 2: its reef 1 shortens nothing) and the Beach cat from 22 knots.
+The fastest boom by angle off the true wind, in 6, 12 and 20 knots (Yacht, flat water):
+
+- 40°: 4, 4, 4
+- 60°: 4, 5, 10
+- 90°: 25, 25, 30
+- 120°: 45, 50, 50
+- 150°: 75, 75, 65
+- 170°: 75, 75, 75
+- 180°: 75, 75, 75
+
+Reef (trim or steer with reef 1 or 2; 0 shakes the reefs out) when close-hauled the sheet hauled in hard heels the boat past its trim: from there only easing holds her up, and reefed she heels less and stands up. Reef the Jolly boat from 19 knots, the Keelboat from 13 knots, the Tall ship from 27 knots, the Skiff from 13 knots (reef 2: its reef 1 shortens nothing), the Beach cat from 22 knots and the Yacht from 30 knots.
 
 Close-hauled, haul in hard. Half the apparent wind's angle is a rough guide on a reach only.
 

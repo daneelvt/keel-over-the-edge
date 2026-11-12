@@ -128,8 +128,22 @@ func checkHulls(i int, ph map[string]any) []string {
 		if num(foils, "fixed") != 1 {
 			problems = append(problems, fmt.Sprintf("  boats[%d].physics.foils.fixed: two hulls' lateral planes are fixed, 1", i))
 		}
-	} else if rudders != 1 || boards != 1 || num(h, "flyingDrag") != 1 {
-		problems = append(problems, fmt.Sprintf("  boats[%d].physics.hulls: one hull has one rudder, one board and a flying drag of 1", i))
+		if num(h, "rudderSpread") != 0 || num(h, "rudderLiftHeel") != 0 || num(h, "rudderClearHeel") != 0 {
+			problems = append(problems, fmt.Sprintf("  boats[%d].physics.hulls: two hulls' rudders are on their hulls, with no spread and no heels of their own", i))
+		}
+	} else {
+		if boards != 1 || num(h, "flyingDrag") != 1 {
+			problems = append(problems, fmt.Sprintf("  boats[%d].physics.hulls: one hull has one board and a flying drag of 1", i))
+		}
+		spread, lift, clear := num(h, "rudderSpread"), num(h, "rudderLiftHeel"), num(h, "rudderClearHeel")
+		switch {
+		case rudders == 1 && (spread != 0 || lift != 0 || clear != 0):
+			problems = append(problems, fmt.Sprintf("  boats[%d].physics.hulls: one rudder is on the centreline, with no spread and no heels of its own", i))
+		case rudders == 2 && !(spread > 0 && lift < clear):
+			problems = append(problems, fmt.Sprintf("  boats[%d].physics.hulls: one hull's two rudders need a spread above 0, and the windward blade's root to leave the water (%v°) before its tip (%v°)", i, lift, clear))
+		case rudders != 1 && rudders != 2:
+			problems = append(problems, fmt.Sprintf("  boats[%d].physics.hulls: one hull has one rudder or two, not %v", i, rudders))
+		}
 	}
 	p, _ := ph["pitch"].(map[string]any)
 	switch rig := num(p, "rigPitch"); {

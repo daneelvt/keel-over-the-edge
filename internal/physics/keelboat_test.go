@@ -164,12 +164,23 @@ func TestKeelAground(t *testing.T) {
 // the crew takes them in at her reef time, the sail's share of its luff
 // going down to the reef's. A ship sails close-hauled, braced up sharp,
 // in 30 knots, past where her crew reefs her: reefed she makes no less
-// to windward, though she is slower through the water.
+// to windward, though she is slower through the water. A heavy keelboat
+// stiff enough to stand up to 24 knots at full sail, heeling under 20°,
+// sails it in 32 knots, past where she heels 25°; heel costs her hull
+// little, so reefed she is slower, but by no more than a quarter.
 func TestReefingHeelsLess(t *testing.T) {
 	for _, boat := range testBoats(t) {
 		knots, angle, sheet := 24.0, 50.0, 0.1
 		if boat.b.square {
 			knots, angle, sheet = 30, boat.b.closeHauled/deg, 0
+		}
+		keep := 0.95
+		if !boat.b.square {
+			m := newSimOf(t, boat.b, knots*knot, angle, sheet)
+			m.run(90, nil)
+			if m.mean(30, func() float64 { return math.Abs(m.s.Heel) })/deg < 20 && boat.b.fallOutHeel >= math.Pi {
+				knots, keep = 32, 0.75
+			}
 		}
 		heel := func(reef float64) (float64, float64, *sim) {
 			m := newSimOf(t, boat.b, knots*knot, angle, sheet)
@@ -201,7 +212,7 @@ func TestReefingHeelsLess(t *testing.T) {
 			t.Errorf("%s: with two reefs, sailor mode %v", boat.id, m.maxMode)
 		case boat.b.square && made < 0.95*made0:
 			t.Errorf("%s: with two reefs, %.2f knots to windward against %.2f at full sail", boat.id, made/knot, made0/knot)
-		case !boat.b.square && m.speed() < 0.95*m0.speed():
+		case !boat.b.square && m.speed() < keep*m0.speed():
 			t.Errorf("%s: with two reefs, %.2f knots against %.2f at full sail", boat.id, m.speed()/knot, m0.speed()/knot)
 		}
 		if m.s.Reef != 2 || m.o.ReefShare != boat.b.reefs[2] {

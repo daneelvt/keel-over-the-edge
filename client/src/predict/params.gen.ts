@@ -206,6 +206,9 @@ export function writeParams(params: Float64Array, p: BoatPhysics): void {
   params[f.flyingDrag] = p.hulls.flyingDrag;
   params[f.rudderCount] = p.hulls.rudderCount;
   params[f.boardCount] = p.hulls.boardCount;
+  params[f.rudderSpread] = p.hulls.rudderSpread;
+  params[f.rudderLiftHeel] = p.hulls.rudderLiftHeel;
+  params[f.rudderClearHeel] = p.hulls.rudderClearHeel;
   params[f.rigPitch] = p.pitch.rigPitch;
   params[f.bowBuryPitch] = p.pitch.bowBuryPitch;
   params[f.bowBuryRestoring] = p.pitch.bowBuryRestoring;
