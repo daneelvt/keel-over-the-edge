@@ -57,6 +57,7 @@ import { STEPS_PER_SECOND } from '../game/clock';
 import type { BoatDriver } from '../game/driver';
 import { type DrawnBoat, newDrawnBoat } from '../game/fleet';
 import type { Game } from '../game/game';
+import { PILOT_WIND } from '../input/pilot';
 import type { LifeBird } from '../life/draw';
 import type { GullTown } from '../life/gulls';
 import { nowUs, worldUs } from '../net/clock';
@@ -1603,6 +1604,18 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
       );
       return { x: at.x, y: at.y, front: at.z < 1 };
     },
+    /** The autopilot as its keys work it: on at the boat's angle to the wind, about in a tack or a wear (gybe), or off. */
+    autopilot(order: 'wind' | 'tack' | 'gybe' | 'off'): void {
+      if (order === 'wind') {
+        game.engagePilot(PILOT_WIND);
+      } else if (order === 'tack') {
+        game.pilotTack();
+      } else if (order === 'gybe') {
+        game.pilotGybe();
+      } else {
+        game.takeHelm();
+      }
+    },
     /** Sets the helm's and the sheet's targets, as the player's thumbs would. */
     setControls(helm: number, sheet: number): void {
       game.helm.target = helm;
@@ -2562,10 +2575,23 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
         gone?: boolean;
         waited?: number;
         sat?: number;
+        /** Aboard a ship, their work: hauling ('haul') or aloft ('aloft'), going to it, at it or back; the brace's index and side, how hard they haul; the yard's index. */
+        work?: {
+          kind: string;
+          phase: string;
+          brace: number;
+          side: number;
+          pull: number;
+          yard: number;
+        } | null;
       }[];
       /** Aboard a ship: whose seat is drawn at the wheel, and whether those on a hatch stand for the weather. */
       wheel: number | null;
       standing: boolean;
+      /** Aboard a ship: the hands at the braces (which group's, which side's, coiling down), the band of yards her topmen are aloft for (0 none), and her braces' lines drawn. */
+      gang: { group: string; side: number; coil: number } | null;
+      aloftBand: number;
+      braces: number;
       heads: {
         x: number;
         y: number;
@@ -2606,11 +2632,34 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
             moving: m.moving?.kind ?? null,
             from: m.moving?.from.station ?? m.station,
             t: m.moving?.t ?? 0,
-            ...(ship === null ? {} : { gone: ship.gone, waited: ship.waited, sat: ship.sat }),
+            ...(ship === null
+              ? {}
+              : {
+                  gone: ship.gone,
+                  waited: ship.waited,
+                  sat: ship.sat,
+                  work:
+                    ship.work === null
+                      ? null
+                      : {
+                          kind: ship.work.kind,
+                          phase: ship.work.phase,
+                          brace: ship.work.haul?.brace ?? -1,
+                          side: ship.work.haul?.side ?? 0,
+                          pull: ship.work.pull,
+                          yard: ship.work.yard?.yard ?? -1,
+                        },
+                }),
           };
         }),
         wheel: c.wheelSeat,
         standing: rules instanceof ShipRules ? rules.standing : false,
+        gang: rules instanceof ShipRules && rules.gang !== null ? { ...rules.gang } : null,
+        aloftBand: rules instanceof ShipRules ? rules.aloftBand : 0,
+        braces:
+          c.braces?.mesh.geometry.drawRange.count === undefined
+            ? 0
+            : c.braces.mesh.geometry.drawRange.count / 2,
         heads: c.heads().map((h) => {
           const p = h.at;
           p.y -= domeDrop(Math.hypot(p.x - bs.x, p.z - bs.z));
@@ -2698,6 +2747,7 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
           moving: string | null;
           from: number;
           t: number;
+          work: { kind: string; phase: string } | null;
         }[];
         heads: { x: number; y: number; up: number }[];
       }[];

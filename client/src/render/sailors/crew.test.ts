@@ -1826,6 +1826,167 @@ describe('aboard the tall ship', () => {
   });
 });
 
+describe('all hands aboard the tall ship', () => {
+  const { kind, near, rules: makeRules, company: c } = ship;
+
+  /** Her company at forty, the yards braced as given, a moment on. */
+  const forty = (yards = 0.4) => {
+    const rules = makeRules();
+    rules.set(
+      { people: Array.from({ length: 40 }, (_, seat) => ({ seat, look: 0 })), holder: 0 },
+      false,
+    );
+    rules.step({
+      dt: 1 / 30,
+      boom: 0,
+      windOffBow: 0,
+      depth: 0,
+      ship: { yards, foreYards: yards, reef: 0, heel: 0, wind: 5, time: 0 },
+    });
+    return rules;
+  };
+  const input = async (rules: ReturnType<typeof forty>, look: FleetLook, world: number) => {
+    const { stance } = await import('./crewbody');
+    return {
+      rules,
+      clips: look.clips as Map<string, Clip>,
+      machine: look.machine,
+      time: world,
+      world,
+      life: { dt: 1 / 30, heel: 0, upright: 0, still: false, plumb: null },
+      up: new Vector3(0, 1, 0),
+      a: stance(),
+      b: stance(),
+    };
+  };
+  /** A member put to work at a place: at it, hauling (pull 1) or out on a yard. */
+  const atWork = (m: ShipMember, work: ShipMember['ship']['work']): void => {
+    m.ship.route = null;
+    m.ship.to = shipRules.WORK;
+    m.ship.work = work;
+  };
+
+  test.each(shipLooks.map((l) => [l.name, l] as const))(
+    '%s: hauling at every place on every brace, either side, through the haul: nothing through her, the hands on the fall, and nobody through the one before them',
+    async (_, { look, machine }) => {
+      const { CrewBody } = await import('./crewbody');
+      const { poseShip } = await import('./shippose');
+      const { haulPlaces } = await import('./shipwork');
+      const rules = forty();
+      const m = rules.members[10] as ShipMember;
+      const bad: string[] = [];
+      let least = Number.POSITIVE_INFINITY;
+      let off = 0;
+      let apartLeast = Number.POSITIVE_INFINITY;
+      for (const group of ['after', 'fore'] as const) {
+        for (const side of [1, -1]) {
+          const places = haulPlaces(c, group, side);
+          for (const t of [0.4, 1.5, 2.9, 3.8]) {
+            let before: { brace: number; caps: ReturnType<typeof capsulesOf> } | null = null;
+            for (const q of places) {
+              const body = new CrewBody(look.deck as NonNullable<typeof look.deck>, 7, machine);
+              atWork(m, {
+                kind: 'haul',
+                haul: q,
+                pull: 1,
+                yard: null,
+                foot: q.feet,
+                climb: 0,
+                phase: 'at',
+              });
+              const inp = await input(rules, look, t);
+              expect(poseShip(body, m, inp)).toBe(true);
+              const clip = (inp.b.clip ?? inp.a.clip)?.name ?? '';
+              expect(clip, `${q.brace} ${q.k}`).toBe(
+                machine ? 'standing-idle' : side * Math.cos(q.yaw) > 0 ? 'haul' : 'haul-port',
+              );
+              const caps = capsulesOf(body);
+              for (const [p0, p1, r] of caps) {
+                for (let j = 0; j <= 4; j++) {
+                  const at = p0.clone().lerp(p1, j / 4);
+                  const n = near(at, 0.5);
+                  least = Math.min(least, n.d - r);
+                  if (n.d < r * 0.7) {
+                    bad.push(`${group} ${side} ${q.brace}/${q.k}: through ${n.what}`);
+                  }
+                }
+              }
+              if (!machine) {
+                // The hands on the fall: each within reach of the line through the places.
+                const rig = body.rig;
+                for (const hand of ['hand_l', 'hand_r']) {
+                  const h = rig.position(rig.bone(hand), new Vector3()).applyMatrix4(body.root);
+                  const d = Math.hypot(h.x - q.hands.x, h.y - q.hands.y - 0.0, h.z - q.hands.z);
+                  off = Math.max(off, Math.abs(h.y - q.hands.y));
+                  expect(d, `${hand} ${q.brace}/${q.k}`).toBeLessThan(0.75);
+                }
+              }
+              if (before !== null && before.brace === q.brace) {
+                apartLeast = Math.min(apartLeast, apart(before.caps, caps));
+              }
+              before = { brace: q.brace, caps };
+            }
+          }
+        }
+      }
+      process.stdout.write(
+        `${_} hauling: nearest her ${least.toFixed(3)} m beyond the radii; hands ${off.toFixed(3)} m off the fall's height at most; neighbours ${apartLeast.toFixed(3)} m apart\n`,
+      );
+      expect([...new Set(bad)].slice(0, 20)).toEqual([]);
+      expect(apartLeast).toBeGreaterThan(0);
+    },
+    120_000,
+  );
+
+  test('on a yard: out along it, the belly over it, the feet on its footrope; turned with the braces and lowered with the reef, they go with it', async () => {
+    const { CrewBody } = await import('./crewbody');
+    const { poseShip } = await import('./shippose');
+    const { yardFrame, yardPlaces } = await import('./shipwork');
+    const { look, machine } = shipLooks[0] as (typeof shipLooks)[number];
+    const rules = forty();
+    const m = rules.members[10] as ShipMember;
+    const yi = c.yards.findIndex((y) => y.name === 'main-topsail');
+    const y = c.yards[yi] as (typeof c.yards)[number];
+    for (const place of yardPlaces(c, yi)) {
+      const local: Vector3[] = [];
+      for (const [turn, reef] of [
+        [0, 1],
+        [0.5, 1],
+        [-0.6, 1.5],
+        [0.3, 2],
+      ] as const) {
+        rules.turns.after = turn;
+        rules.reef = reef;
+        atWork(m, {
+          kind: 'aloft',
+          haul: null,
+          pull: 0,
+          yard: place,
+          foot: new Vector3(),
+          climb: 0,
+          phase: 'at',
+        });
+        const body = new CrewBody(look.deck as NonNullable<typeof look.deck>, 7, machine);
+        expect(poseShip(body, m, await input(rules, look, 2))).toBe(true);
+        expect(body.root).toBeDefined();
+        // The hips in the yard's own frame: the same however it is turned or lowered.
+        const hips = body.rig
+          .position(body.rig.bone('pelvis'), new Vector3())
+          .applyMatrix4(body.root)
+          .applyMatrix4(yardFrame(y, turn, reef, new Matrix4()).invert());
+        local.push(hips);
+        // Out at its place along the yard, aft of it and over it.
+        expect(hips.x).toBeCloseTo(place.x, 0);
+        expect(hips.z).toBeGreaterThan(0.2);
+        expect(hips.y).toBeGreaterThan(0);
+      }
+      for (const p of local) {
+        expect(p.distanceTo(local[0] as Vector3)).toBeLessThan(1e-4);
+      }
+    }
+  });
+});
+
 /** The capsules of a posed body, by the bone each starts at. */
 function capsulesNamed(body: CrewBody): [Vector3, Vector3, number, string][] {
   const caps = capsulesOf(body);

@@ -666,6 +666,8 @@ export class FleetCrews {
       moving: string | null;
       from: number;
       t: number;
+      /** Aboard a ship, their work ('haul' or 'aloft') and how far on with it; null for none. */
+      work: { kind: string; phase: string } | null;
     }[];
     heads: Vector3[];
   }[] {
@@ -683,6 +685,13 @@ export class FleetCrews {
         moving: m.moving?.kind ?? null,
         from: m.moving?.from.station ?? m.station,
         t: m.moving?.t ?? 0,
+        work:
+          'ship' in m && (m as ShipMember).ship.work !== null
+            ? {
+                kind: (m as ShipMember).ship.work?.kind ?? '',
+                phase: (m as ShipMember).ship.work?.phase ?? '',
+              }
+            : null,
       })),
       heads: c.people
         .filter((p) => p.shown && p.body !== null)
