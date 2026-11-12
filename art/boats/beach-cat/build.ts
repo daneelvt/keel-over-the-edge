@@ -50,7 +50,7 @@ import {
   telltales,
 } from '../../lib/fittings.ts';
 import { type MaterialDef, type NodeDef, readGlbJson, writeGlb } from '../../lib/gltf.ts';
-import { add, cross, MeshBuilder, normalize, scale, srgb, sub, type Vec3 } from '../../lib/mesh.ts';
+import { add, MeshBuilder, normalize, scale, srgb, sub, type Vec3 } from '../../lib/mesh.ts';
 
 /** The models this script writes, as the catalog's art.model and art.far name them. */
 const MODEL = 'boats/beach-cat.glb';
