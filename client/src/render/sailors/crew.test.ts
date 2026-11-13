@@ -351,8 +351,14 @@ function input(
   };
 }
 
-const keelboat = catalog.boats.find((b) => b.stations.some((s) => s.pose === 'rail'));
-const tallShip = catalog.boats.find((b) => b.capacity >= 40);
+/** The keelboat: her crew on her rail, her trimmer sat to windward in her cockpit (a yacht's sit on a bench). */
+const keelboat = catalog.boats.find(
+  (b) =>
+    b.stations.some((s) => s.pose === 'rail') &&
+    b.stations.some((s) => s.pose === 'seated' && s.windward === true),
+);
+/** The tall ship: a station aloft. */
+const tallShip = catalog.boats.find((b) => b.stations.some((s) => s.pose === 'aloft'));
 
 describe.each([
   ['rover', 'female'],

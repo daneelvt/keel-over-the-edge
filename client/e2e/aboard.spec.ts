@@ -56,8 +56,13 @@ test('a link opened by a friend who has never played: a sailor made, let aboard,
   const ann = await sailor(context, 'Skipper');
   await holdPasskeys(context, ann.passkey);
   expect((await context.request.post('/api/me/rules', { data: {} })).status()).toBe(204);
-  // The keelboat from the fleet: she carries five.
-  const keelboat = data.boats.find((b) => b.capacity === 5)?.id;
+  // The keelboat from the fleet: her crew on her rail, her trimmer sat to
+  // windward in her cockpit.
+  const keelboat = data.boats.find(
+    (b) =>
+      b.stations.some((s) => s.pose === 'rail') &&
+      b.stations.some((s) => s.pose === 'seated' && 'windward' in s && s.windward),
+  )?.id;
   const fleet = (await (await context.request.get('/api/fleet')).json()) as {
     boats: { id: string; kind: string }[];
   };

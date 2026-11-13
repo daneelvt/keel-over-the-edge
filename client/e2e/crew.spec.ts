@@ -915,11 +915,16 @@ test('a friend’s boat near a crewed keelboat, skiff, tall ship and beach cat s
 }, info) => {
   test.setTimeout(180_000);
   const kindOf = (pred: (b: (typeof data.boats)[number]) => boolean) => data.boats.findIndex(pred);
-  const keelboat = kindOf((b) => b.stations.some((s) => s.pose === 'rail'));
+  // The keelboat: her crew on her rail, her trimmer sat to windward in her cockpit.
+  const keelboat = kindOf(
+    (b) =>
+      b.stations.some((s) => s.pose === 'rail') &&
+      b.stations.some((s) => s.pose === 'seated' && 'windward' in s && s.windward),
+  );
   const skiff = kindOf(
     (b) => b.capacity === 2 && b.stations.some((s) => 'windward' in s && s.windward),
   );
-  const ship = kindOf((b) => b.capacity >= 40);
+  const ship = kindOf((b) => b.stations.some((s) => s.pose === 'aloft'));
   const cat = kindOf((b) => b.physics.hulls.hullSpacing > 0);
   await openScene(page, 'boat=jolly-boat');
   await page.evaluate(
