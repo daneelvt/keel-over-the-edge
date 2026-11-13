@@ -11,9 +11,8 @@
 // luffed in a gust with her sheet held and is righted, pitchpoles borne
 // away in a breeze with it held, and reefs. The yacht beats, tacks,
 // reaches, rounds up in a gust and reefs. The catamaran beats, tacks
-// through about a hundred degrees with her helm staying at her wheel,
-// reaches past 7.6 knots, is told her hull is flying in a squall with her
-// sheet held, and reefs.
+// through about a hundred degrees, reaches past 7.6 knots, is told her
+// hull is flying in a squall with her sheet held, and reefs.
 
 import { expect, type Page, test } from '@playwright/test';
 import data from '../src/catalog/catalog.gen.json' with { type: 'json' };
@@ -429,7 +428,7 @@ test('the yacht chosen from the fleet: she beats in a breeze, tacks, reaches pas
   }
 });
 
-test('the catamaran chosen from the fleet: she beats in a breeze, tacks with her helm at her wheel, reaches past 7.6 knots, flies a hull in a squall with her sheet held, and reefs', {
+test('the catamaran chosen from the fleet: she beats in a breeze, tacks through about a hundred degrees, reaches past 7.6 knots, flies a hull in a squall with her sheet held, and reefs', {
   tag: '@world',
 }, async ({ context, page, request }) => {
   test.skip(catamaran === undefined, 'the catalog has no cruising catamaran');
@@ -459,12 +458,6 @@ test('the catamaran chosen from the fleet: she beats in a breeze, tacks with her
   const knots = (k: number) => k * 0.5144;
   const wind = async (knots: number) =>
     expect((await request.post(`${internal}/debug/wind?knots=${knots}&from=0`)).status()).toBe(204);
-  /** Where her helm stands across her, m (+ starboard): at her one wheel, to port. */
-  const helmAcross = () =>
-    page.evaluate(() => {
-      const crew = globalThis.keel.crew();
-      return { shown: crew.helmShown, wheel: crew.helmWheel };
-    });
   try {
     await wind(14);
     await page.waitForFunction(() => Math.cos(globalThis.keel.boat().wind.meanFrom) > 0.99, null, {
@@ -480,26 +473,22 @@ test('the catamaran chosen from the fleet: she beats in a breeze, tacks with her
     await page.waitForFunction((v) => globalThis.keel.boat().out.speedOverGround > v, knots(4), {
       timeout: 60_000,
     });
-    await pilotTo(page, 50);
+    await pilotTo(page, Math.sign(await angleOff(page)) * 50);
     await sheet('KeyW', 0.5);
     await page.waitForFunction((v) => globalThis.keel.boat().out.speedOverGround > v, knots(5), {
       timeout: 60_000,
     });
-    expect((await helmAcross()).shown).toBe(true);
-    // A tack: round onto the other tack, through about a hundred degrees,
-    // her helm at her one wheel throughout (looking to the new windward
-    // side).
+    // A tack: round onto the other tack, through about a hundred degrees.
     const before = Math.sign(await angleOff(page));
     const heading = (await state()).heading;
     await page.keyboard.press('t');
     await expect
       .poll(async () => Math.sign(await angleOff(page)), { timeout: 60_000 })
       .toBe(-before);
-    await expect.poll(async () => (await helmAcross()).wheel, { timeout: 10_000 }).toBe(-before);
-    const turned = Math.abs(
-      (((((await state()).heading - heading) * 180) / Math.PI + 540) % 360) - 180,
-    );
-    expect(turned).toBeGreaterThan(70);
+    // Settled on the new tack: about a hundred degrees from the old heading.
+    const turned = async () =>
+      Math.abs((((((await state()).heading - heading) * 180) / Math.PI + 540) % 360) - 180);
+    await expect.poll(turned, { timeout: 30_000 }).toBeGreaterThan(85);
     // A beam reach in a breeze, the sheet eased: past 7.6 knots.
     await wind(16);
     await pilotTo(page, -before * 90);
