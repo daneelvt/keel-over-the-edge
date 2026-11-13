@@ -276,7 +276,9 @@ test('the Rover aboard the cruising yacht in both versions: sat by her wheel, br
 }) => {
   test.setTimeout(240_000);
   await openRoom(page, 'view=lineup&black=1&t=1&clip=yacht-wheel-seated&look=rover');
-  const parts = ['head', 'pelvis'];
+  // Seen from before her, the wheel, the table and the coaming hide the
+  // hips: the heads are seen.
+  const parts = ['head'];
   for (const clip of [
     'yacht-wheel-seated',
     'bench-braced-port',
