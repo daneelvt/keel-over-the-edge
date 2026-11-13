@@ -2324,9 +2324,18 @@ const GUNWALE: Vec3 = [halfBeam(uAt(STAND_Z)), sheer(uAt(STAND_Z)), STAND_Z];
  */
 const RAIL_Z = -0.45;
 const RAIL: Vec3 = [halfBeam(uAt(RAIL_Z)), sheer(uAt(RAIL_Z)), RAIL_Z];
-/** The provisional stations: on the windward bench, and on the rail. */
+/**
+ * The crew's stations: on the windward bench, the trimmer at its after end
+ * by the primary capstan, one at its forward end and one between; and on
+ * the rail forward of the shrouds' chainplates, from by the shrouds to the
+ * foredeck, each clear of them and of the stanchions by 0.3 m, and of where
+ * the coachroof is crossed (forward of the mast) by a turn at a crouch. Aft
+ * of the shrouds the side deck between them and the lifelines is narrower
+ * than a body crossing at a crouch, and aft of the mast the boom and the
+ * vang lie over the coachroof.
+ */
 const BENCH_ZS = [2.35, 0.85, 1.6];
-const RAIL_ZS = [-2.2, -1.6, -0.9, -0.3];
+const RAIL_ZS = [-1.6, -2.9, -3.5, -4.1];
 
 // --- The model ---------------------------------------------------------------
 
@@ -2444,7 +2453,16 @@ function model(): NodeDef[] {
         ...(D === NEAR ? { lever: leverData() } : {}),
       },
     },
-    { name: 'mast', translation: [0, 0, MAST_Z], primitives: mastParts },
+    {
+      name: 'mast',
+      translation: [0, 0, MAST_Z],
+      primitives: mastParts,
+      // Where her shrouds come down to the side decks: her crew's way along
+      // them passes outboard of these.
+      extras: {
+        chainplates: [CAP_Z, CAP_Z + 0.06, LOWER_Z].map((z) => [CHAIN_X, round4(z)]),
+      },
+    },
     {
       name: 'boom',
       translation: [0, rig.boomHeight, MAST_Z],
@@ -2663,7 +2681,7 @@ for (const [detail, path] of [
   );
 }
 
-// What the catalog takes from the model, and the provisional stations.
+// What the catalog takes from the model, and the crew's stations.
 D = NEAR;
 const wp = waterplane();
 const heels = rudderHeels();
@@ -2672,6 +2690,6 @@ process.stdout.write(
   `wrote art/${MODEL} and art/${FAR_MODEL}: bow ${BOW_Z.toFixed(2)} m, transom ${TRANSOM_Z.toFixed(2)} m\n` +
     `  waterline beam ${wp.beam.toFixed(3)} m, waterplane ${wp.area.toFixed(2)} m², its second moment ${wp.pitch.toFixed(1)} m⁴ about ${wp.centre.toFixed(2)} m\n` +
     `  the windward rudder's root leaves the water at ${heels.lift.toFixed(1)}°, its tip at ${heels.clear.toFixed(1)}° (root ${RUDDER_ROOT.toFixed(3)} m)\n` +
-    `  stations: helm ${station(STANCE)}; bench ${BENCH_ZS.map((z) => station([cockpitHalf(z) - BENCH_DEPTH / 2, BENCH_TOP, z])).join(' ')}; ` +
+    `  stations: helm ${station(STANCE)}; bench ${BENCH_ZS.map((z) => station([cockpitHalf(z) - BENCH_DEPTH, BENCH_TOP, z])).join(' ')}; ` +
     `rail ${RAIL_ZS.map((z) => station([halfBeam(uAt(z)), deckY(halfBeam(uAt(z)), uAt(z)), z])).join(' ')}\n`,
 );

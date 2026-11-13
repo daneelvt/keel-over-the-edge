@@ -62,6 +62,9 @@ func run(root string, check bool, out io.Writer) error {
 	if err := checkLights(root, doc); err != nil {
 		return err
 	}
+	if err := checkPlaces(root, doc); err != nil {
+		return err
+	}
 	if err := checkIDsNotInCode(root, ids(doc)); err != nil {
 		return err
 	}

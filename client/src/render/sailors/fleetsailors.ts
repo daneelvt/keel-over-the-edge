@@ -90,6 +90,7 @@ import {
 } from './runtime';
 import type { HullSolid } from './solid';
 import type { Trapeze } from './trapeze';
+import type { YachtPlaces } from './yacht';
 
 /** How often a near sailor's runtime runs, a second. */
 export const NEAR_RATE = 20;
@@ -127,6 +128,8 @@ export interface NearBoat {
   trapeze?: Trapeze | null;
   /** A beach cat's (onboat.ts's catOf): her sailors sit on her hull and cross her net on her own clips. */
   cat?: CatBoat | null;
+  /** A cruising yacht's places (yacht.ts's yachtOf): her helm at her wheel on her own clips. */
+  yacht?: YachtPlaces | null;
 }
 
 /** A near boat's sailor: its runtime, and its bones' matrices as last run. */
@@ -173,6 +176,7 @@ class Sailor {
       wheel: near.wheel ? { ...near.wheel, turn: 0 } : null,
       trapeze: near.trapeze ?? null,
       cat: near.cat ?? null,
+      yacht: near.yacht ?? null,
     };
     this.runtime = new SailorRuntime(rig, clips, this.boat, seed, look.machine, false);
     if (near.trapeze) {
@@ -241,6 +245,10 @@ export class NearSailors extends SailorRows {
       typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
   }
 
+  /** The wind's direction (radians from north) and speed (m/s): each boat's apparent wind from it and the boat's own way. */
+  windFrom = 0;
+  windSpeed = 0;
+
   /** A new frame at the world's time; dt the time since the last, seconds. */
   frame(time: number): void {
     this.#time = time;
@@ -265,6 +273,10 @@ export class NearSailors extends SailorRows {
     }
     if (this.boat.cat && look.catState !== 'ready' && look.catState !== 'failed') {
       // Aboard a beach cat: rigid until her people's clips have loaded (or failed to).
+      return false;
+    }
+    if (this.boat.yacht && look.cruiserState !== 'ready' && look.cruiserState !== 'failed') {
+      // Aboard a cruising yacht: rigid until her people's clips have loaded (or failed to).
       return false;
     }
     let s = this.#slots[b.slot] ?? null;
@@ -306,6 +318,9 @@ export class NearSailors extends SailorRows {
     mo.boom = b.boom;
     mo.trim = b.trim;
     mo.wayHeld = b.helmHeld;
+    // The apparent wind, from the wind and the boat's way: at a wheel, the
+    // side the helm stands to.
+    apparentOf(this.windFrom, this.windSpeed, b, mo);
     mo.rollRate = dt > 0 ? (b.heel - s.heel) / dt : 0;
     s.heel = b.heel;
     // The extension's hinge, where the rudder swings it about the stock.
@@ -531,6 +546,29 @@ export function rigidSailorNodes(rows: Texture, row: Node<'int'>, cog: number): 
     .and(i.hair.w.greaterThan(0.5))
     .and(abs(tag.y.sub(i.hair.w.sub(1))).lessThan(0.5));
   return { vertex: figureNode(i, cog).mul(float(here)) as unknown as Node<'vec3'>, ...colours(i) };
+}
+
+/**
+ * A boat's apparent wind from the wind (from, radians from north; speed,
+ * m/s) and its way, into out: its speed, and its angle from the bow
+ * (radians, + from starboard), as the physics gives the boat in view's.
+ */
+export function apparentOf(
+  windFrom: number,
+  windSpeed: number,
+  b: DrawnBoat,
+  out: { windSpeed: number; windAngle: number },
+): void {
+  // Where it blows to, east and north, less the boat's way; into the model's frame.
+  const we = -windSpeed * Math.sin(windFrom) - b.speed * Math.sin(b.heading);
+  const wn = -windSpeed * Math.cos(windFrom) - b.speed * Math.cos(b.heading);
+  const c = Math.cos(b.heading);
+  const s = Math.sin(b.heading);
+  const x = we * c - wn * s;
+  const z = -(we * s + wn * c);
+  out.windSpeed = Math.hypot(x, z);
+  // It comes from the other way: from ahead is −z.
+  out.windAngle = Math.atan2(-x, z);
 }
 
 /** The apparent wind's push on a sailor's cloth, in the boat model's frame, into out (x, z). */

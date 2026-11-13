@@ -105,6 +105,14 @@ export interface Blend {
   carry: boolean;
   /** At least how high carried feet go, stepping over something, m in the boat's model; −∞ for no more than a step. */
   top: number;
+  /**
+   * Of the blend, how much the carried feet take to come across: 1, all of
+   * it; less, the legs come in first (off a rail under its lifelines, the
+   * knees low while the feet are out). Not said, 1.
+   */
+  legs?: number;
+  /** The hands carried too, from one end's to the other's, up over this height (m in the boat's model: a lifeline the forearms lie over); −∞ or not said, not. */
+  hands?: number;
 }
 
 /** A blend with nothing set: the first pose alone. */
@@ -117,6 +125,8 @@ export function blend(): Blend {
     narrowB: 0,
     carry: false,
     top: Number.NEGATIVE_INFINITY,
+    legs: 1,
+    hands: Number.NEGATIVE_INFINITY,
   };
 }
 
@@ -239,6 +249,7 @@ export class CrewBody {
       const arm = [`upperarm_${sd}`, `lowerarm_${sd}`, `hand_${sd}`].map((b) => this.rig.bone(b));
       if (arm.every((b) => b >= 0)) {
         this.#limbs.push([arm[0] as number, arm[1] as number, arm[2] as number, false]);
+        this.#arms.push([arm[0] as number, arm[1] as number, arm[2] as number]);
       }
     }
     this.#neckBone = this.rig.bone('neck_01');
@@ -266,9 +277,9 @@ export class CrewBody {
         b.clip.sample(loopTime(b.t, b.clip.duration), pb);
       }
       if (carry) {
-        // Where each end has its feet, in the boat's model.
-        this.#feetOf(pa, a, blend.narrowA, this.#feetA);
-        this.#feetOf(pb, b, blend.narrowB, this.#feetB);
+        // Where each end has its feet, in the boat's model (and its hands, carried too).
+        this.#feetOf(pa, a, blend.narrowA, this.#feetA, this.#handsA);
+        this.#feetOf(pb, b, blend.narrowB, this.#feetB, this.#handsB);
       }
       pa.mix(pb, g);
     }
@@ -311,14 +322,30 @@ export class CrewBody {
       });
     }
     if (carry) {
-      // The feet carried from one end's to the other's: up, across, down.
+      // The feet carried from one end's to the other's: up, across, down;
+      // the legs first, if asked.
       inv.copy(this.root).invert();
+      const gl = Math.min(1, g / Math.max(1e-3, blend.legs ?? 1));
       this.#legs.forEach(([thigh, calf, foot], k) => {
-        carried(this.#feetA[k] as Vector3, this.#feetB[k] as Vector3, g, w, blend.top).applyMatrix4(
-          inv,
-        );
+        carried(
+          this.#feetA[k] as Vector3,
+          this.#feetB[k] as Vector3,
+          gl,
+          w,
+          blend.top,
+        ).applyMatrix4(inv);
         twoBone(rig, thigh, calf, foot, w);
       });
+      const hands = blend.hands ?? Number.NEGATIVE_INFINITY;
+      if (hands > Number.NEGATIVE_INFINITY) {
+        // The hands up over what the forearms lay on, and across.
+        this.#arms.forEach(([upper, lower, hand], k) => {
+          carried(this.#handsA[k] as Vector3, this.#handsB[k] as Vector3, g, w, hands).applyMatrix4(
+            inv,
+          );
+          twoBone(rig, upper, lower, hand, w);
+        });
+      }
     }
     const up = life.plumb ?? null;
     if (up !== null && !carry && this.#legs.length === 2 && up.y < 1 - 1e-9) {
@@ -409,8 +436,8 @@ export class CrewBody {
     this.bones.fill(0);
   }
 
-  /** Where a pose, at a stance, brought in by narrow, has its feet: into out, in the boat's model. */
-  #feetOf(pose: Pose, at: Stance, narrow: number, out: Vector3[]): void {
+  /** Where a pose, at a stance, brought in by narrow, has its feet (and its hands): into out, in the boat's model. */
+  #feetOf(pose: Pose, at: Stance, narrow: number, out: Vector3[], hands: Vector3[]): void {
     const rig = this.rig;
     pose.to(rig);
     rig.fk();
@@ -421,7 +448,15 @@ export class CrewBody {
     this.#legs.forEach(([, , foot], k) => {
       rig.position(foot, out[k] as Vector3).applyMatrix4(m3);
     });
+    this.#arms.forEach(([, , hand], k) => {
+      rig.position(hand, hands[k] as Vector3).applyMatrix4(m3);
+    });
   }
+
+  /** Each arm's upper, lower and hand bones; and where each end of a blend has the hands. */
+  readonly #arms: [number, number, number][] = [];
+  readonly #handsA = [new Vector3(), new Vector3()];
+  readonly #handsB = [new Vector3(), new Vector3()];
 
   /**
    * The knees and hands brought in toward the middle (each limb turned in

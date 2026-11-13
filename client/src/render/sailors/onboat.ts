@@ -59,7 +59,7 @@ import { type CatBoat, type SailorBoat, type SailorMoment, SailorRuntime } from 
 import { type HullSolid, hullSolid } from './solid';
 import { trapezeOf, wireNode } from './trapeze';
 import { turnIn, wheelNodes, wheelOf, wheelTurnOf } from './wheel';
-import { namesYachtClips } from './yacht';
+import { namesYachtClips, yachtOf } from './yacht';
 
 /** Nearer than this to the camera the close level is drawn, metres; back to the deck level beyond the second. */
 export const CLOSE_IN = 6;
@@ -292,6 +292,8 @@ export class BoatSailor {
         solid: solid ?? NO_SOLID,
         climbTime: sailor.climbTime,
         wheel,
+        // Aboard a cruising yacht, at her wheel on her own clips.
+        yacht: cruiser === null ? null : yachtOf(parts),
       };
       return new BoatSailor(model, parts, deck, rig, clips, boat, urls, renderer, seed, machine);
     }

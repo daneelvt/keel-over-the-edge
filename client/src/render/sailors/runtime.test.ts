@@ -31,6 +31,7 @@ import {
 import { ballInside, hullSolid } from './solid';
 import { trapezeData, trapezeOf } from './trapeze';
 import { wheelData, wheelOf } from './wheel';
+import { namesYachtClips, type YachtPlaces, yachtOf } from './yacht';
 
 const ART = new URL('../../../../art/', import.meta.url);
 
@@ -669,6 +670,81 @@ describe.each([
         expect(s.out).toBeGreaterThan(0.15);
         expect(s.out).toBeLessThan(wheel.radius + 0.1);
       }
+    }
+  });
+});
+
+/** The kind whose model's two wheels are a cruising yacht's, her people on her own clips; and her places. */
+async function yachtWheels(): Promise<{ wheel: WheelHelm; places: YachtPlaces } | null> {
+  for (const kind of catalog.boats.filter((b) => namesYachtClips(b.art))) {
+    const boat = await load(kind.art.model);
+    const parts = new Map<string, Object3D>();
+    boat.scene.traverse((o) => {
+      if (o.name !== '') {
+        parts.set(o.name, o);
+      }
+    });
+    const wheel = wheelOf(parts, boat.scene);
+    const places = yachtOf(parts);
+    if (wheel !== null && places !== null) {
+      return { wheel, places };
+    }
+  }
+  return null;
+}
+
+describe.each([
+  ['rover', 'female'],
+  ['bosun', 'male'],
+  ['machine', 'male'],
+] as const)('at a cruising yacht’s two wheels, on her own clips, the %s, %s', (look, version) => {
+  test('sat outboard of the windward wheel in a light wind, a hand on its rim; standing aft of it in a breeze, both hands on its spokes; across between them at a crouch as the boom comes over', async () => {
+    const { rig, clips, boat } = await sailor(version, look);
+    const yacht = await yachtWheels();
+    expect(yacht).not.toBeNull();
+    if (yacht === null) {
+      return;
+    }
+    // Her own clips, beside the look's.
+    const file = await load(`sailors/${look}/${version}.cruiser.glb`);
+    const places = placesOf(file.scene);
+    for (const a of file.animations) {
+      const place = places.get(`place-${a.name}`) ?? null;
+      clips.set(a.name, Clip.from(a, rig, place));
+    }
+    boat.wheel = yacht.wheel;
+    boat.yacht = yacht.places;
+    const spread = yacht.wheel.spread ?? 0;
+    const rt = new SailorRuntime(rig, clips, boat, 4, look === 'machine');
+    expect(rt.yachted).toBe(true);
+    let t = 0;
+    let walked = false;
+    const run = (seconds: number, side: number, windSpeed: number): void => {
+      for (let f = 0; f < seconds * 30; f++, t += 1 / 30) {
+        rt.update(
+          moment({ time: t, windAngle: side * 0.8, boom: -side * 0.3, windSpeed, offset: 0 }),
+        );
+        walked ||= rt.walking;
+      }
+    };
+    const hips = (): Vector3 =>
+      rig.position(rig.bone('pelvis'), new Vector3()).applyMatrix4(rt.root);
+    for (const side of [1, -1]) {
+      walked = false;
+      // A breeze: standing aft of the windward wheel, the hands on its spokes.
+      run(8, side, 8);
+      expect(rt.windward, `${side}`).toBe(side);
+      expect(walked, `${side}`).toBe(side < 0);
+      expect(rt.seat).toBe(0);
+      expect(Math.abs(hips().x - side * spread), `${side}`).toBeLessThan(0.15);
+      expect(hips().z).toBeGreaterThan(yacht.wheel.hub.z);
+      expect(rt.hands.wheel).toBe(2);
+      // A light wind: sat on the side deck outboard of it, off its spokes.
+      run(3, side, 3);
+      expect(rt.seat).toBe(1);
+      expect(side * hips().x).toBeGreaterThan(spread + 0.3);
+      expect(rt.hands.wheel).toBe(0);
+      run(3, side, 8);
     }
   });
 });

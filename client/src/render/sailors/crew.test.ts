@@ -233,9 +233,14 @@ describe.each(catalog.boats.map((b) => [b.name, b] as const))('%s’s stations',
         // A ship's people leaning on her rail, sat on her hatch or in her top: held to her model aboard her (below).
         return;
       }
-      // On the rail: the deck just inboard of its edge, the point at the edge.
+      // On the rail: the deck just inboard of its edge, the point at the
+      // edge; on a bench, its top just outboard of its front edge.
       const rail = s.pose === 'rail';
-      const inboard = rail ? x - Math.sign(x) * 0.04 : x;
+      const inboard = rail
+        ? x - Math.sign(x) * 0.04
+        : s.pose === 'bench'
+          ? x + Math.sign(x) * 0.04
+          : x;
       ray.set(new Vector3(inboard, y + 1, z), new Vector3(0, -1, 0));
       const hit = ray.intersectObjects(hull, false)[0];
       if (hit === undefined || Math.abs(hit.point.y - y) > 0.01) {
@@ -346,8 +351,14 @@ function input(
   };
 }
 
-const keelboat = catalog.boats.find((b) => b.stations.some((s) => s.pose === 'rail'));
-const tallShip = catalog.boats.find((b) => b.capacity >= 40);
+/** The keelboat: her crew on her rail, her trimmer sat to windward in her cockpit (a yacht's sit on a bench). */
+const keelboat = catalog.boats.find(
+  (b) =>
+    b.stations.some((s) => s.pose === 'rail') &&
+    b.stations.some((s) => s.pose === 'seated' && s.windward === true),
+);
+/** The tall ship: a station aloft. */
+const tallShip = catalog.boats.find((b) => b.stations.some((s) => s.pose === 'aloft'));
 
 describe.each([
   ['rover', 'female'],

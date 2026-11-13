@@ -226,6 +226,30 @@ the sailor righting her, and thrown off over her bows as she pitchpoles),
 and back aboard as she comes up. `render/sailors/catcrew.test.ts` holds a
 boat of two hulls' people clear of her and of each other through all of it.
 
+A station `on a bench` (`bench`) is a cockpit's bench's front edge on its
+top: only a boat whose model has a `bench` node has one, and the tool holds
+it there; a station on the rail of a boat with `lifelines` sits between its
+pulpit and pushpit, 0.25 m or more from every stanchion. A cruising yacht's
+people (her art's `sailorClips`, `cruiser`) are drawn with her own clips,
+placed from her model's places (`render/sailors/yacht.ts`): on her windward
+bench at ease, one of the ship's sitting idles at a time by the world's
+time, talking with a neighbour near, and braced as she heels; on her
+windward rail, the legs under the lower lifeline, leaning out on the upper
+as she heels, placed by where the lifeline runs; her helm sat outboard of
+the windward wheel in a light wind and standing aft of it in a breeze, the
+wheel away from the boom. They walk her ways at a crouch, read from her
+model (`yachtWay`: her bench, table, coachroof, wheels, lifelines and the
+shrouds' chainplates, the mast's data): the cockpit crossed aft of the
+table, the side decks inboard of the lifelines and outboard of the
+chainplates, the coachroof forward of the mast, the helm between the
+wheels; out of the cockpit and into it on the lee side only. In a tack the
+trimmer goes first, then the cockpit, then the rail once she has come
+upright; in a gybe the rail first; each way's file led by the one nearest
+it, to the place furthest from it along her side deck, so nobody passes
+anybody sat on the rail. `render/sailors/yachtcrew.test.ts` holds her eight
+clear of her (her lifelines as a solid) and of each other, and measures
+what getting up, sitting down and climbing brush for a moment.
+
 ## The physics package
 
 `internal/physics` steps boats. The server runs it natively, and the client
@@ -982,7 +1006,10 @@ A kind of boat is data: nothing reads its name or id. Adding one touches:
 9. The browser's specs: the mixed fleet's budgets (`fleet.spec.ts`), the
    looks (`boatlook.spec.ts`), the layout's heel hold (`layout.spec.ts`);
    and, if it carries more than one, its people (`crew.spec.ts`, and
-   `catcrew.test.ts` for a boat of two hulls).
+   `catcrew.test.ts` for a boat of two hulls, `yachtcrew.test.ts` for a
+   cruising yacht). Tests that find a kind by a trait name the trait they
+   mean (a keelboat: her crew on her rail and her trimmer sat to windward),
+   so a new kind never matches by accident.
 10. The machine sailors' aboard page, and the report's words if the boat
     does something new.
 11. The chooser's picture (`client/src/account/boats.tsx`) if its form is
@@ -8453,6 +8480,7 @@ shadow's), some 11,500 triangles.
 # https://localhost:5173/?sandbox&boat=keelboat&sky=midnight   her tricolour lit at the masthead
 # https://localhost:5173/?sandbox&boat=skiff           the skiff: bear away past 105° and her crew sets the gennaker
 # https://localhost:5173/?sandbox&boat=beach-cat       the beach cat: her windward hull flies in a breeze; bear away in a gust and her bows bury
+# https://localhost:5173/?sandbox&boat=yacht&crew=8     eight aboard the yacht: her helm at the windward wheel, three on her bench, four on her rail
 ```
 
 ### The developer panel

@@ -81,13 +81,14 @@ import {
 import { type Gfx, type Wanted, wantsCompat } from './renderer';
 import { RightOfWay, type Seen } from './rightofway';
 import { namesCatClips } from './sailors/cat';
-import { CrewDeck, type CrewShown, helmLook, modelDeck, tillerOf } from './sailors/crew';
+import { CrewDeck, type CrewShown, helmLook, modelDeck, STEPPED, tillerOf } from './sailors/crew';
 import { type CrewPlan, crewPlan, type SailorNow } from './sailors/crewrules';
 import { FleetCrews, kindCrew } from './sailors/fleetcrews';
 import { catOf } from './sailors/onboat';
 import { company } from './sailors/ship';
 import { shipPlan } from './sailors/shiprules';
 import { hullSolid } from './sailors/solid';
+import { namesYachtClips, yachtBoat } from './sailors/yacht';
 import { Shadows } from './shadows';
 import { StormCones } from './signals';
 import { look, Sky, toLinear } from './sky';
@@ -759,15 +760,16 @@ export class SeaScene {
       solid,
       boat.nodeAt('boom'),
       kind.physics.rig.foot,
-      model === undefined ? null : modelDeck(model),
+      model === undefined ? null : modelDeck(model, namesYachtClips(kind.art) ? STEPPED : []),
       model === undefined ? null : tillerOf(model),
     );
     // A ship: her company's places and ways, which her model marks; a
-    // beach cat, her people's places.
+    // beach cat, her people's places; a cruising yacht, her deck.
     plan.ship = shipPlan(kind.stations, company(boat.parts));
     plan.cat = namesCatClips(kind.art)
       ? catOf(boat.model, boat.parts, kind.physics.rig.foot)
       : null;
+    plan.yacht = namesYachtClips(kind.art) ? yachtBoat(boat.parts) : null;
     plan.cog = kind.physics.hull.centreOfGravity;
     return plan;
   }

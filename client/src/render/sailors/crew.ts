@@ -20,6 +20,8 @@
 //
 // Aboard a beach cat, her crew go out on her trapeze's wire: theirs drawn
 // from the hounds to their hips, the model's own on that side hidden.
+// Aboard a cruising yacht, her people are drawn with her own clips (her
+// bench, her rail, her ways at a crouch), loaded with their looks.
 //
 // The group is a child of the boat's model: the people heel, pitch and
 // heave with it. Allocation-free from frame to frame once each person is
@@ -40,6 +42,7 @@ import {
   CrewRules,
   duckFor,
   duckStep,
+  waysOf,
 } from './crewrules';
 import type { FleetLook, FleetLooks, FleetSeat } from './fleetlooks';
 import { setWire, wireColour, wireMesh } from './onboat';
@@ -109,18 +112,26 @@ const from = new Vector3();
 /** The materials of what is walked on: the deck and the cockpit's floor, a cuddy's canvas roof, and a beach cat's net. */
 const WALKED = ['deck', 'canvas', 'net'];
 
+/** What else is stepped on or over walking a cruising yacht's ways: her coachroof's scuttles and handrails, her hatches. */
+export const STEPPED = ['varnish', 'glass'];
+
 /**
  * The deck of a boat's model, as a height under (x, z) in the model's
  * frame: the highest of its hull's meshes walked on (the deck, the
- * cockpit's floor, a cuddy's roof) there, or null.
+ * cockpit's floor, a cuddy's roof) there, or null; and of those of the
+ * materials also given, stepped on or over.
  */
-export function modelDeck(model: Object3D): (x: number, z: number) => number | null {
+export function modelDeck(
+  model: Object3D,
+  also: readonly string[] = [],
+): (x: number, z: number) => number | null {
   model.updateMatrixWorld(true);
   const inverse = model.matrixWorld.clone().invert();
   const meshes: Mesh[] = [];
   const hull = model.getObjectByName('hull') ?? model;
+  const walked = [...WALKED, ...also];
   hull.traverse((o) => {
-    if (o instanceof Mesh && WALKED.includes((o.material as { name?: string }).name ?? '')) {
+    if (o instanceof Mesh && walked.includes((o.material as { name?: string }).name ?? '')) {
       meshes.push(o);
     }
   });
@@ -209,6 +220,8 @@ export class CrewDeck {
   #heel = 0;
   readonly #level: Level = { heel: 0, pitch: 0, heave: 0, cog: 0, solid: null };
   #aft = 0;
+  /** The world's time, s: what picks an idle on a cruising yacht's bench. */
+  #world = 0;
   #plan: CrewPlan | null = null;
   /** Aboard a beach cat, what her people's joints keep over: her net and decks. */
   #floor: ((x: number, z: number) => number | null) | null = null;
@@ -324,6 +337,7 @@ export class CrewDeck {
     this.#level.pitch = lie.pitch;
     this.#level.heave = lie.heave;
     this.#aft = lie.aft;
+    this.#world = moment.ship?.time ?? this.#world + dt;
     this.#rules?.step(moment);
     // Her braces as her yards are now, and the falls those at them haul.
     const rules = this.#rules;
@@ -347,6 +361,7 @@ export class CrewDeck {
             (!p.look.shipped || settled(p.look.shipState)) &&
             (!p.look.aloft || settled(p.look.aloftState)) &&
             (!this.#catted || settled(p.look.catState)) &&
+            (!this.#yachted || settled(p.look.cruiserState)) &&
             (p.look.clipsState === 'failed' || (p.shown && p.posed))),
       ) &&
       this.drawn.near + this.drawn.far === this.#people.filter((p) => p.shown).length
@@ -448,9 +463,10 @@ export class CrewDeck {
         const station = this.#stations[member.station];
         const railed =
           !ship &&
+          !this.#yachted &&
           (this.#stations.some((s) => s.windward === true || s.pose === 'rail') ||
             station?.pose === 'rail');
-        looks.want(look, true, false, railed, ship, ship && aloft, this.#catted);
+        looks.want(look, true, false, railed, ship, ship && aloft, this.#catted, this.#yachted);
         const was = before.get(member);
         if (was !== undefined && was.look === look) {
           this.#people.push(was);
@@ -524,7 +540,8 @@ export class CrewDeck {
         (!l.railed || done(l.railState)) &&
         (!l.shipped || done(l.shipState)) &&
         (!l.aloft || done(l.aloftState)) &&
-        (!this.#catted || done(l.catState));
+        (!this.#catted || done(l.catState)) &&
+        (!this.#yachted || done(l.cruiserState));
       const shown = can && (p.member.station > 0 || p.member.moving !== null);
       if (shown && p.body === null && l.deck !== null) {
         p.body = new CrewBody(l.deck, 1 + p.member.seat * 977 + l.index * 31, l.machine);
@@ -594,6 +611,11 @@ export class CrewDeck {
   /** Whether the boat is a beach cat, whose people are drawn with her own clips. */
   get #catted(): boolean {
     return this.#plan?.cat != null;
+  }
+
+  /** Whether the boat is a cruising yacht, whose people are drawn with her own clips. */
+  get #yachted(): boolean {
+    return this.#plan?.yacht != null;
   }
 
   /**
@@ -681,6 +703,10 @@ export class CrewDeck {
     input.aft = this.#aft;
     input.level = this.#level;
     input.life.floor = this.#floor;
+    input.cruiser = this.#plan?.yacht ?? null;
+    input.world = this.#world;
+    input.machine = p.look.machine;
+    input.ways = this.#plan === null ? null : waysOf(this.#plan);
     poseMember(p.body as CrewBody, p.member, input);
   }
 

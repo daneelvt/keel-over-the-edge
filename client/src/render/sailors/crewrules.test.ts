@@ -54,7 +54,12 @@ import {
 import { COIL_TIME, haulPlaces, keepers, REEF_STILL, SWING_STOP } from './shipwork';
 
 const DEG = Math.PI / 180;
-const keelboat = catalog.boats.find((b) => b.stations.filter((s) => s.windward).length > 1);
+/** The keelboat: her crew on her rail, her trimmer sat to windward in her cockpit (a yacht's sit on a bench). */
+const keelboat = catalog.boats.find(
+  (b) =>
+    b.stations.some((s) => s.pose === 'rail') &&
+    b.stations.some((s) => s.pose === 'seated' && s.windward === true),
+);
 
 /** The keelboat's plan, its deck as her model's hull solid has it (numbers from her model). */
 function keelPlan(): CrewPlan {

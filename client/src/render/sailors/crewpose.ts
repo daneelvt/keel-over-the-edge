@@ -10,6 +10,10 @@
 // her hull and out on the wire, across her net at a crouch or on hands and
 // knees, and righting her on her lower hull. After a capsize, in the water
 // (treading it, the helm's clip) off the high side, and climbing back.
+// Aboard a cruising yacht, her own (yacht.ts): at her wheel, sat on her
+// bench at ease (the ship's sitting idles, one at a time by the world's
+// time, talking only with someone near) and braced, on her rail sitting up
+// and leaning out, and walking her ways at a crouch.
 
 import { Euler, Matrix4, Quaternion, Vector3 } from 'three';
 import type { BoatStation, StationPose } from '../../catalog';
@@ -23,7 +27,7 @@ import {
   netWay,
   standPlace,
 } from './cat';
-import { type Clip, Pose } from './clips';
+import { type Clip, feetTogether } from './clips';
 import { blend, type CrewBody, type Life, placeStance, type Stance } from './crewbody';
 import {
   CLIMB,
@@ -38,7 +42,16 @@ import type { FleetSeat } from './fleetlooks';
 import { CROUCH_CLIPS, CROUCH_SPEED, RAIL_CLIPS, railPlace } from './rail';
 import type { Rig } from './rig';
 import { CLIPS, SWIM_ROUND, THROWN_AHEAD, THROWN_FOR, THROWN_OUT } from './runtime';
+import { idleAt } from './shiprules';
 import { type HullSolid, reach } from './solid';
+import {
+  YACHT_CLIPS,
+  YACHT_NOT_FOR_MACHINES,
+  YACHT_WALK_AHEAD,
+  type YachtBoat,
+  type YachtWays,
+  yachtPlace,
+} from './yacht';
 
 /**
  * Where a station's person is drawn, into out: the station's own point and
@@ -100,6 +113,7 @@ export function clipsOf(pose: StationPose): [string, string] {
     case 'rail':
       return [RAIL_CLIPS.up, RAIL_CLIPS.out];
     case 'seated':
+    case 'bench':
       return [CLIPS.helm, CLIPS.hiking[0] as string];
     case 'hiking':
       return [CLIPS.hiking[0] as string, CLIPS.hiking[0] as string];
@@ -124,6 +138,14 @@ export interface PoseInput {
   /** Aboard a beach cat, her places; and how far aft of their places her helm stands, which her crew stand beside (m). */
   cat?: CatBoat | null;
   aft?: number;
+  /** Aboard a cruising yacht, her deck; the world's time (s), which picks the idle on her bench; and whether the look is a machine's. */
+  cruiser?: YachtBoat | null;
+  world?: number;
+  machine?: boolean;
+  /** Aboard a cruising yacht, the idle on her bench to sit in, sitting up: set by the pose for the moment. */
+  idle?: string | undefined;
+  /** Aboard a cruising yacht, her ways (crewrules.ts's waysOf): where on her rail its clips are placed from. */
+  ways?: YachtWays | null;
   /** The boat as it lies, for those in the water: its heel and pitch (radians), heave (m), hull and pivot's height. */
   level?: Level | null;
 }
@@ -143,7 +165,10 @@ export interface Level {
  * into; false if its clip is not there.
  */
 export function spotStance(
-  input: Pick<PoseInput, 'stations' | 'seat' | 'clips' | 'cat' | 'aft'>,
+  input: Pick<
+    PoseInput,
+    'stations' | 'seat' | 'clips' | 'cat' | 'aft' | 'cruiser' | 'idle' | 'ways'
+  >,
   at: CrewSpot,
   out: 0 | 1,
   t: number,
@@ -153,6 +178,10 @@ export function spotStance(
   const clips = input.clips;
   if (st === undefined) {
     return false;
+  }
+  const yacht = input.cruiser ?? null;
+  if (yacht !== null && yachtStance(input, yacht, at, out, t, into)) {
+    return true;
   }
   if (at.station < 0 || st.windward === true) {
     // On the side asked: its point or its mirror.
@@ -210,48 +239,75 @@ export function spotStance(
   return true;
 }
 
-/** Each walk's time with both feet down and nearest side by side, its steps begun and ended there. */
-const together = new WeakMap<Clip, number>();
-
-/** How near its lowest the higher foot must be for both to be down, m. */
-const FEET_DOWN = 0.02;
-
-/** The time in a walk where both its feet are down, nearest side by side fore and aft: found once. */
-export function feetTogether(clip: Clip, rig: Rig): number {
-  let t0 = together.get(clip);
-  if (t0 === undefined) {
-    const pose = new Pose(rig.names.length);
-    const l = rig.bone('foot_l');
-    const r = rig.bone('foot_r');
-    // Each moment's feet: how far apart fore and aft, and how high the higher is.
-    const apart: number[] = [];
-    const high: number[] = [];
-    for (let k = 0; k < 120; k++) {
-      const t = (clip.duration * k) / 120;
-      pose.rest(rig);
-      clip.sample(t, pose);
-      pose.to(rig);
-      rig.fk();
-      rig.position(l, v);
-      rig.position(r, w);
-      apart.push(Math.abs(v.z - w.z));
-      high.push(Math.max(v.y, w.y));
+/**
+ * Aboard a cruising yacht, a place's stance on her own clips, into into:
+ * the helm's (-1) at the windward wheel standing; on her bench, the idle
+ * asked for sitting up (her own `bench` if none), braced leaning out; on
+ * her rail, sitting up or leaning out; each from its place on the side
+ * asked. False if the clip is not there.
+ */
+function yachtStance(
+  input: Pick<PoseInput, 'stations' | 'clips' | 'idle' | 'ways'>,
+  yacht: YachtBoat,
+  at: CrewSpot,
+  out: 0 | 1,
+  t: number,
+  into: Stance,
+): boolean {
+  const st = input.stations[Math.max(0, at.station)];
+  const port = at.side < 0 ? '-port' : '';
+  let name: string;
+  let point: Vector3;
+  let turn = false;
+  if (at.station < 0) {
+    name = `${YACHT_CLIPS.wheel}${port}`;
+    point = v.copy(yacht.places.stance);
+  } else if (st?.pose === 'bench') {
+    if (out === 1) {
+      name = `${YACHT_CLIPS.braced}${port}`;
+    } else {
+      // The idles have no -port: turned about her middle onto the port bench.
+      name = input.idle ?? (YACHT_CLIPS.bench[0] as string);
+      turn = true;
     }
-    // Both feet down (the higher within FEET_DOWN of its lowest), nearest side by side.
-    const low = Math.min(...high);
-    let best = Number.POSITIVE_INFINITY;
-    t0 = 0;
-    for (let k = 0; k < 120; k++) {
-      if ((high[k] as number) <= low + FEET_DOWN && (apart[k] as number) < best) {
-        best = apart[k] as number;
-        t0 = (clip.duration * k) / 120;
-      }
-    }
-    rig.reset();
-    together.set(clip, t0);
+    point = v.set(Math.abs(st.at[0] as number), st.at[1] as number, st.at[2] as number);
+  } else if (st?.pose === 'rail') {
+    name = `${out === 1 ? YACHT_CLIPS.railOut : YACHT_CLIPS.rail}${port}`;
+    const z = st.at[2] as number;
+    point = v.set(input.ways?.railX(z) ?? Math.abs(st.at[0] as number), st.at[1] as number, z);
+  } else {
+    return false;
   }
-  return t0;
+  const c = input.clips.get(name) ?? null;
+  if (c === null || c.place === null) {
+    return false;
+  }
+  into.clip = c;
+  into.t = t;
+  yachtPlace(c.place, point, at.side, turn, m);
+  if (st?.pose === 'rail' && at.station >= 0 && input.ways != null) {
+    // Square to her deck's edge where it turns (toward her bow).
+    const a = 0.5 * input.ways.railTurn(st.at[2] as number) * at.side;
+    m.premultiply(m2.makeTranslation(-at.side * point.x, -point.y, -point.z))
+      .premultiply(m2.makeRotationY(a))
+      .premultiply(m2.makeTranslation(at.side * point.x, point.y, point.z));
+  }
+  placeStance(into, m);
+  return true;
 }
+
+/** The idles on a cruising yacht's bench this look can play now: a machine has not some, and talking needs someone near. */
+function benchIdle(input: PoseInput, company: boolean, i: number): string {
+  const name = YACHT_CLIPS.bench[i] as string;
+  const talk = name === YACHT_CLIPS.bench[3];
+  return input.clips.has(name) &&
+    !(input.machine === true && YACHT_NOT_FOR_MACHINES.includes(name)) &&
+    (company || !talk)
+    ? name
+    : (YACHT_CLIPS.bench[0] as string);
+}
+
+const idle = { now: 0, was: 0, f: 1 };
 
 /** The crouch's walk s along a path, into into: begun with the feet side by side; they keep their place on the deck, a step's length the clip's speed. */
 export function walkStance(
@@ -260,8 +316,11 @@ export function walkStance(
   path: CrewPath,
   s: number,
   into: Stance,
+  name: string = CROUCH_CLIPS.walk,
+  /** How far ahead of the path's point the figure is set, m: its hips on it. */
+  ahead = 0,
 ): boolean {
-  const c = clips.get(CROUCH_CLIPS.walk) ?? null;
+  const c = clips.get(name) ?? null;
   const yaw = path.at(s, along);
   into.clip = c;
   // Whole steps along the path; from its start, or from the end of the last
@@ -279,7 +338,12 @@ export function walkStance(
     }
   }
   into.t = (c === null ? 0 : feetTogether(c, rig)) + ((s - from) * pace) / CROUCH_SPEED;
-  into.at.set(along.x, along.y, along.z);
+  // Placed on a deck of its own (a cruising yacht's), as high over it as there.
+  into.at.set(
+    along.x + ahead * Math.sin(yaw),
+    along.y + (c?.place?.elements[13] ?? 0),
+    along.z + ahead * Math.cos(yaw),
+  );
   into.yaw = yaw;
   into.tilt.identity();
   return c !== null;
@@ -310,8 +374,40 @@ export function poseMember(body: CrewBody, member: CrewMember, input: PoseInput)
   how.carry = false;
   how.top = Number.NEGATIVE_INFINITY;
   let upright = input.life.upright;
+  const walk = input.cruiser != null ? YACHT_CLIPS.cockpit : CROUCH_CLIPS.walk;
+  const ahead = input.cruiser != null ? YACHT_WALK_AHEAD : 0;
+  how.legs = 1;
+  how.hands = Number.NEGATIVE_INFINITY;
+  // Aboard a cruising yacht, on her bench: the idle now, by the world's time.
+  input.idle = undefined;
+  const at0: CrewSpot =
+    mv === null || mv.t < 0 ? (mv?.from ?? { station: member.station, side: member.side }) : mv.to;
+  if (input.cruiser != null && input.stations[at0.station]?.pose === 'bench') {
+    idleAt(member.seat, input.world ?? 0, YACHT_CLIPS.bench.length, idle);
+    input.idle = benchIdle(input, member.company === true, idle.now);
+    if ((mv === null || mv.t < 0) && member.lean <= 0 && idle.f < 1) {
+      // One idle going over into the next.
+      const now = input.idle;
+      input.idle = benchIdle(input, member.company === true, idle.was);
+      spotStance(input, at0, 0, t, a);
+      input.idle = now;
+      if (!spotStance(input, at0, 0, t, b)) {
+        b = null;
+      }
+      how.f = smooth(idle.f);
+      const life = input.life;
+      const was = life.upright;
+      body.pose(a, b, how, input.duck, life);
+      life.upright = was;
+      return;
+    }
+  }
   if (mv === null || mv.t < 0) {
     const at: CrewSpot = mv === null ? { station: member.station, side: member.side } : mv.from;
+    if (underLifelines(input, at)) {
+      // On a cruising yacht's rail, against her lifelines: with her as she heels.
+      upright = 0;
+    }
     spotStance(input, at, 0, t, a);
     if (!spotStance(input, at, 1, t, b)) {
       b = null;
@@ -324,22 +420,24 @@ export function poseMember(body: CrewBody, member: CrewMember, input: PoseInput)
     const pose = lean >= 0.5 ? 1 : 0;
     if (rise < 1) {
       spotStance(input, mv.from, pose, t, a);
-      walkStance(input.clips, body.rig, mv.path, 0, b);
+      walkStance(input.clips, body.rig, mv.path, 0, b, walk, ahead);
       how.f = smooth(rise);
       how.narrowB = 1;
-      // Not lifted under a boom: kept low.
-      how.arc = RISE_ARC * (1 - input.duck);
+      // Not lifted under a boom: kept low; off a cruising yacht's rail,
+      // the legs brought in under her lower lifeline.
+      how.arc = underLifelines(input, mv.from) ? 0 : RISE_ARC * (1 - input.duck);
+      railTransition(input, mv.from, how);
     } else if (sit <= 0) {
       const step = mv.path.stepAt(s);
       how.narrowA = 1;
       if (step === null) {
-        walkStance(input.clips, body.rig, mv.path, s, a);
+        walkStance(input.clips, body.rig, mv.path, s, a, walk, ahead);
         b = null;
       } else {
         // A step up or down: from the walk at its foot to the walk at its
         // head, the feet carried over its edge.
-        walkStance(input.clips, body.rig, mv.path, step[0], a);
-        walkStance(input.clips, body.rig, mv.path, step[1], b);
+        walkStance(input.clips, body.rig, mv.path, step[0], a, walk, ahead);
+        walkStance(input.clips, body.rig, mv.path, step[1], b, walk, ahead);
         how.f = smooth((s - step[0]) / (step[1] - step[0]));
         how.narrowB = 1;
         how.carry = true;
@@ -350,11 +448,16 @@ export function poseMember(body: CrewBody, member: CrewMember, input: PoseInput)
         }
       }
     } else {
-      walkStance(input.clips, body.rig, mv.path, mv.path.length, a);
+      walkStance(input.clips, body.rig, mv.path, mv.path.length, a, walk, ahead);
       spotStance(input, mv.to, pose, t, b);
       how.f = smooth(sit);
       how.narrowA = 1;
-      how.arc = RISE_ARC * (1 - input.duck);
+      how.arc = underLifelines(input, mv.to) ? 0 : RISE_ARC * (1 - input.duck);
+      railTransition(input, mv.to, how);
+      if (how.legs !== undefined && how.legs < 1) {
+        // Sitting down on it, the legs go out last.
+        how.legs = 1;
+      }
     }
   }
   if (a.clip === null && b !== null) {
@@ -365,6 +468,27 @@ export function poseMember(body: CrewBody, member: CrewMember, input: PoseInput)
   life.upright = upright;
   body.pose(a, b, how, input.duck, life);
   life.upright = was;
+}
+
+/** Of a rise off a cruising yacht's rail, how much the legs take to come in: first, under her lower lifeline. */
+const LEGS_IN = 0.5;
+/** How far over her upper lifeline the hands are carried, m. */
+const HANDS_OVER = 0.1;
+
+/** Off or onto a cruising yacht's rail: the legs in first under her lower lifeline, the hands carried over her upper. */
+function railTransition(input: PoseInput, at: CrewSpot, how: typeof theBlend): void {
+  const st = input.stations[Math.max(0, at.station)];
+  const l = input.cruiser?.lifelines ?? null;
+  if (!underLifelines(input, at) || st === undefined || l === null) {
+    return;
+  }
+  how.legs = LEGS_IN;
+  how.hands = (st.at[1] as number) + Math.max(...l.heights) + HANDS_OVER;
+}
+
+/** Whether a place is on a cruising yacht's rail, the legs over her side under her lifelines. */
+function underLifelines(input: PoseInput, at: CrewSpot): boolean {
+  return input.cruiser != null && input.stations[Math.max(0, at.station)]?.pose === 'rail';
 }
 
 function smooth(x: number): number {
@@ -416,6 +540,8 @@ function poseAcross(body: CrewBody, member: CrewMember, input: PoseInput, cat: C
   how.narrowB = 0;
   how.carry = false;
   how.top = Number.NEGATIVE_INFINITY;
+  how.legs = 1;
+  how.hands = Number.NEGATIVE_INFINITY;
   const a = input.a;
   let b: Stance | null = input.b;
   const pose = smooth(member.lean) >= 0.5 ? 1 : 0;
@@ -556,6 +682,8 @@ function poseWet(
   how.narrowB = 0;
   how.carry = false;
   how.top = Number.NEGATIVE_INFINITY;
+  how.legs = 1;
+  how.hands = Number.NEGATIVE_INFINITY;
   const a = input.a;
   let b: Stance | null = null;
   const cat = input.cat ?? null;

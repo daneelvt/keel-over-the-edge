@@ -158,7 +158,7 @@ import { seating } from './sailors/restage';
 import { hullSolid } from './sailors/solid';
 import { type Trapeze, trapezeOf, wireNode } from './sailors/trapeze';
 import { wheelOf } from './sailors/wheel';
-import { namesYachtClips } from './sailors/yacht';
+import { namesYachtClips, yachtOf } from './sailors/yacht';
 import { kiteRig, kiteRipple, kiteShown } from './sailshape';
 import { Shadows } from './shadows';
 import { packYards, squareVertex } from './squarerig';
@@ -800,6 +800,7 @@ export class FleetView {
             climbTime: kind.physics.sailor.climbTime,
             wheel,
             rudderMax: kind.physics.foils.rudderAngle * DEG,
+            yacht: this.#yachted ? yachtOf(nearParts.objects) : null,
           }
         : solid !== null && nearParts.hinge !== null && nearParts.grip !== null
           ? {
@@ -859,7 +860,12 @@ export class FleetView {
     if (this.wires !== null) {
       this.wires.count = 0;
     }
-    this.nearSailors?.frame(time);
+    const ns = this.nearSailors;
+    if (ns !== null) {
+      ns.frame(time);
+      ns.windFrom = this.#shared.windFrom;
+      ns.windSpeed = this.#shared.windSpeed;
+    }
   }
 
   /** Writes boat b, of this kind, into the level it is drawn at. */
