@@ -1126,7 +1126,8 @@ A kind of boat is data: nothing reads its name or id. Adding one touches:
    test of the kind's likeness of its own), the looks (`boatlook.spec.ts`),
    the layout's heel hold (`layout.spec.ts`; a boat wider than half her
    length is framed as twice her beam long);
-   and, if it carries more than one, its people (`crew.spec.ts`, and
+   and, if it carries more than one, its people (`crew.spec.ts`, or
+   `crew-cruisers.spec.ts` for the yacht and the catamaran, and
    `catcrew.test.ts` for a boat of two hulls, `yachtcrew.test.ts` for a
    cruising yacht). Tests that find a kind by a trait name the trait they
    mean (a keelboat: her crew on her rail and her trimmer sat to windward),
@@ -8934,7 +8935,8 @@ tall ship, each at their station on her deck and one at the wheel, in a
 draw or two more than her one sailor, her frames, each drawn and waited
 for, little dearer than with her one sailor and, on a real GPU, within a
 frame at 60 Hz, from the chase camera and close (`@long`); and the
-keelboat's five on her deck.
+keelboat's five on her deck. `crew-cruisers.spec.ts` holds the yacht's and
+the catamaran's people, apart so that the two files run on two runners.
 `fleet.spec.ts` draws other boats in the sandbox: a boat of the fleet as
 the own boat at seven poses, and a keelboat as the own keelboat with her
 jib and reefed, 64 boats within 22 draw calls and 200,000 triangles, a
