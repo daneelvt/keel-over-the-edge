@@ -232,6 +232,8 @@ type memDB struct {
 	runs         map[string]*memRun
 	news         []store.WorldNews
 	switches     int
+	// newsKept is the news's stories and editions.
+	newsKept memNews
 }
 
 // emptyWorld makes a world of open sea at once: the generator of the
@@ -452,6 +454,7 @@ func (d *memDB) Write(_ context.Context, b store.Batch) error {
 		}
 		d.chartings = append(d.chartings, *c)
 	}
+	d.writeNews(&b)
 	if b.Checkpoint != nil {
 		c := *b.Checkpoint
 		c.Data = slices.Clone(c.Data)
@@ -465,10 +468,6 @@ func (d *memDB) Chartings(context.Context, [16]byte) ([]store.Charting, error) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	return slices.Clone(d.chartings), nil
-}
-
-func (d *memDB) News(context.Context, [16]byte, *[16]byte, int) ([]store.News, error) {
-	return nil, nil
 }
 
 func (d *memDB) SetNoticesOff(context.Context, store.AccountID, []string) error { return nil }

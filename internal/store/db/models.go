@@ -247,6 +247,15 @@ type NewsItem struct {
 	Also         []byte
 	WrittenAt    time.Time
 	EndsAt       pgtype.Timestamptz
+	Story        pgtype.Text
+	Score        int16
+	Day          pgtype.Date
+	Rank         pgtype.Int2
+	Struck       bool
+	Named        []pgtype.UUID
+	Amount       pgtype.Float8
+	Facts        []byte
+	Source       pgtype.Text
 }
 
 type NoticeReport struct {

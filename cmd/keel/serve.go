@@ -189,7 +189,8 @@ type database interface {
 	JobRuns(ctx context.Context, limit int) ([]store.JobRun, error)
 	jobs.Store
 	Chartings(ctx context.Context, world [16]byte) ([]store.Charting, error)
-	News(ctx context.Context, world [16]byte, before *[16]byte, limit int) ([]store.News, error)
+	// The news: its candidates, editions and figures.
+	newsDB
 	api.Notices
 	owner.Accounts
 	watch.Store
@@ -550,7 +551,7 @@ func runServer(ctx context.Context, getenv func(string) string, stdout io.Writer
 	health.Beat()
 	play := newServer(p.playRoutes, log)
 	agents := newServer(p.agents.handler, log)
-	p.jobs = jobs.New(jobs.Config{Store: db, Lease: leaseEpoch, Jobs: append(p.lifecycleJobs(), p.oauthJob(), p.backfillJob()), Log: log, Metrics: metrics})
+	p.jobs = jobs.New(jobs.Config{Store: db, Lease: leaseEpoch, Jobs: append(append(p.lifecycleJobs(), p.oauthJob(), p.backfillJob()), p.newsJobs()...), Log: log, Metrics: metrics})
 
 	g, gctx := errgroup.WithContext(ctx)
 	flightCtx, stopFlight := context.WithCancel(context.Background())

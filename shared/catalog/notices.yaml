@@ -79,12 +79,38 @@ notices:
       text: "{who} has set sail"
       folded: "{count} sailors you follow have set sail"
 
-# The news, a sheet in the manner of Lloyd's List's: its columns, a page
-# of page items, and a sailor's places charted within fold minutes of an
-# island's item, about that island, folded into it.
+# The news, a daily edition in the manner of the old shipping lists. What
+# could be news is written as a candidate story with its kind's score; each
+# day's edition (the day of the world's schedule) shows the best few, a
+# story's score easing with its age through the day, never two about one
+# sailor nor more than ofKind of one kind, and a sailor named in the recent
+# editions giving way to one who was not, so everyone has a turn. Beneath
+# them, a box of the reader's own: the day's stories about their shipmates,
+# the sailors they follow and themselves that did not make the front page.
+# Falls are counted in the day's figures only, never a story with a name,
+# and the weather is never news. Starting values, tuned in play.
 news:
-  fold: 10
-  page: 40
   columns:
     - { id: discoveries, title: Discoveries, of: charting }
     - { id: mariners, title: Notices to Mariners, of: world }
+  edition:
+    stories: 6
+    shipmates: 3
+    ofKind: 2
+    recent: 3
+    giveWay: 0.5
+    ease: 24
+    falls: 100
+    aboard: 4
+    together: 30
+    run: 1
+    milestones: { distance: 1000, worlds: 10, places: 100 }
+  stories:
+    - { id: great-find, of: great, score: 10 }
+    - { id: falls-record, of: record, score: 8 }
+    - { id: rare-meeting, of: life, score: 6 }
+    - { id: crew-in-company, of: crew, score: 5 }
+    - { id: new-hands-find, of: first, score: 5 }
+    - { id: longest-run, of: run, score: 4 }
+    - { id: milestone, of: milestone, score: 4 }
+    - { id: lesser-find, of: charting, score: 1 }

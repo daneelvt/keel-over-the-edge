@@ -1575,14 +1575,14 @@
     },
     "News": {
       "title": "News",
-      "description": "The news sheet: its columns, and how its items are folded and paged.",
+      "description": "The news: a daily edition of chosen stories, its columns, and the kinds of story with their scores.",
       "type": "object",
       "additionalProperties": false,
-      "required": ["fold", "page", "columns"],
+      "required": ["columns", "edition", "stories"],
       "properties": {
-        "fold": { "description": "A sailor's places charted within this of an island's item are folded into it, in minutes.", "type": "number", "minimum": 0, "maximum": 1440 },
-        "page": { "description": "Items to a page.", "type": "integer", "minimum": 1, "maximum": 200 },
-        "columns": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/NewsColumn" } }
+        "columns": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/NewsColumn" } },
+        "edition": { "$ref": "#/$defs/NewsEdition" },
+        "stories": { "description": "The kinds of story, each written as a candidate with its score; the edition shows the best.", "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/NewsStory" } }
       }
     },
     "NewsColumn": {
@@ -1594,7 +1594,51 @@
       "properties": {
         "id": { "$ref": "#/$defs/Id" },
         "title": { "description": "Its heading.", "type": "string", "minLength": 1, "maxLength": 60 },
-        "of": { "description": "What its items tell of: what is charted, or the world itself, its end.", "type": "string", "enum": ["charting", "world"] }
+        "of": { "description": "What its items tell of: the stories, or the world itself, its end.", "type": "string", "enum": ["charting", "world"] }
+      }
+    },
+    "NewsEdition": {
+      "title": "NewsEdition",
+      "description": "How a day's edition is chosen from the day's candidates.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["stories", "shipmates", "ofKind", "recent", "giveWay", "ease", "falls", "aboard", "together", "run", "milestones"],
+      "properties": {
+        "stories": { "description": "The most stories on the front page.", "type": "integer", "minimum": 1, "maximum": 12 },
+        "shipmates": { "description": "The most stories in the reader's own box, about their shipmates, the sailors they follow and themselves.", "type": "integer", "minimum": 0, "maximum": 6 },
+        "ofKind": { "description": "The most stories of one kind on the front page.", "type": "integer", "minimum": 1, "maximum": 12 },
+        "recent": { "description": "How many editions back a sailor named in one gives way to one who was not.", "type": "integer", "minimum": 0, "maximum": 14 },
+        "giveWay": { "description": "A story about a sailor in the recent editions has its score times this.", "type": "number", "exclusiveMinimum": 0, "maximum": 1 },
+        "ease": { "description": "A story's score eases with its age through the day: halved after this many hours.", "type": "number", "exclusiveMinimum": 0, "maximum": 240 },
+        "falls": { "description": "A record at the falls: an approach survived within this of the lip, m, nearer than any boat's before it this world.", "type": "number", "exclusiveMinimum": 0, "maximum": 1000 },
+        "aboard": { "description": "A crew in company: this many aboard, the skipper with them.", "type": "integer", "minimum": 2, "maximum": 30 },
+        "together": { "description": "A crew in company: each of them aboard this long, in minutes.", "type": "number", "minimum": 0, "maximum": 600 },
+        "run": { "description": "A run is a candidate for the day's longest from this distance, in nautical miles.", "type": "number", "minimum": 0, "maximum": 100 },
+        "milestones": { "$ref": "#/$defs/NewsMilestones" }
+      }
+    },
+    "NewsMilestones": {
+      "title": "NewsMilestones",
+      "description": "A sailor's milestones: each time their log's distance, worlds or places charted pass a multiple of these.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["distance", "worlds", "places"],
+      "properties": {
+        "distance": { "description": "Nautical miles sailed.", "type": "number", "minimum": 1, "maximum": 100000 },
+        "worlds": { "description": "Worlds sailed.", "type": "integer", "minimum": 1, "maximum": 1000 },
+        "places": { "description": "Places charted.", "type": "integer", "minimum": 1, "maximum": 100000 }
+      }
+    },
+    "NewsStory": {
+      "title": "NewsStory",
+      "description": "A kind of story: what makes it, and its score.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "of", "score"],
+      "properties": {
+        "id": { "$ref": "#/$defs/Id" },
+        "of": { "description": "What makes it: a great discovery first sighted; a record at the falls; a rare creature met; a crew in company; a sailor's first charting ever; the day's longest run; a milestone; any other charting.", "type": "string", "enum": ["great", "record", "life", "crew", "first", "run", "milestone", "charting"] },
+        "score": { "description": "How interesting it is: the edition shows the highest first.", "type": "integer", "minimum": 0, "maximum": 100 }
       }
     },
     "WorldHazards": {
@@ -1795,7 +1839,7 @@
         "worth": { "description": "What charting one is worth.", "type": "number", "minimum": 0, "maximum": 100 },
         "awash": { "description": "It lies awash: seen by the water breaking on it, within the chart's awash reach, not over the horizon.", "type": "boolean" },
         "water": { "description": "It is water: seen by looking into it, within the chart's water reach.", "type": "boolean" },
-        "news": { "description": "Its charting is an item of the news of its own; otherwise it is folded into its island's.", "type": "boolean" }
+        "news": { "description": "Its charting is an item of its own in the sheet a chart makes of itself, offline; online every charting is a candidate story of the day's news.", "type": "boolean" }
       }
     },
     "PlaceRig": {
@@ -4506,6 +4550,7 @@
         "id": { "type": "string", "pattern": "^[a-z][a-z0-9-]*$" },
         "name": { "type": "string" },
         "plural": { "description": "Its name for more than one.", "type": "string" },
+        "news": { "description": "Meeting it is rare enough to be a story of the day's news.", "type": "boolean" },
         "form": { "$ref": "#/$defs/LifeForm" },
         "family": { "$ref": "#/$defs/LifeFamily" },
         "path": { "$ref": "#/$defs/LifePath" },

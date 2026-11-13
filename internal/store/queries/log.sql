@@ -54,12 +54,14 @@ WHERE (sqlc.narg('name_key')::text IS NOT NULL AND sl.name_key = sqlc.narg('name
 
 -- name: LogPeople :many
 -- The accounts of ids as the log names them: their kinds, their months of
--- birth (a machine sailor's owner's), who may read their logs, and their
--- owners.
+-- birth (a machine sailor's owner's), who may read their logs, their
+-- owners, and their sailors' names, "" for none.
 SELECT a.id, a.kind, coalesce(a.owner_id, '00000000-0000-0000-0000-000000000000')::uuid AS owner_id,
-  coalesce(coalesce(a.born, o.born), 0)::integer AS born, coalesce(a.log_shown, '')::text AS log_shown
+  coalesce(coalesce(a.born, o.born), 0)::integer AS born, coalesce(a.log_shown, '')::text AS log_shown,
+  coalesce(sl.name, '')::text AS name
 FROM account a
 LEFT JOIN account o ON o.id = a.owner_id
+LEFT JOIN sailor sl ON sl.account_id = a.id
 WHERE a.id = ANY(@ids::uuid[]);
 
 -- name: SetLogShown :execrows

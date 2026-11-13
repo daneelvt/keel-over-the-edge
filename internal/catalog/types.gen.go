@@ -1596,6 +1596,9 @@ type LifeKind struct {
 	// Its weight times this within the habitat's colony distance of a colony.
 	NearColony *float64 `json:"nearColony,omitempty,omitzero"`
 
+	// Meeting it is rare enough to be a story of the day's news.
+	News *bool `json:"news,omitempty,omitzero"`
+
 	// Over corresponds to the JSON schema field "over".
 	Over *LifeOver `json:"over,omitempty,omitzero"`
 
@@ -1965,17 +1968,18 @@ const NestCliff Nest = "cliff"
 const NestStack Nest = "stack"
 const NestTrees Nest = "trees"
 
-// The news sheet: its columns, and how its items are folded and paged.
+// The news: a daily edition of chosen stories, its columns, and the kinds of story
+// with their scores.
 type News struct {
 	// Columns corresponds to the JSON schema field "columns".
 	Columns []NewsColumn `json:"columns"`
 
-	// A sailor's places charted within this of an island's item are folded into it,
-	// in minutes.
-	Fold float64 `json:"fold"`
+	// Edition corresponds to the JSON schema field "edition".
+	Edition NewsEdition `json:"edition"`
 
-	// Items to a page.
-	Page int `json:"page"`
+	// The kinds of story, each written as a candidate with its score; the edition
+	// shows the best.
+	Stories []NewsStory `json:"stories"`
 }
 
 // A column of the news sheet.
@@ -1983,12 +1987,90 @@ type NewsColumn struct {
 	// ID corresponds to the JSON schema field "id".
 	ID ID `json:"id"`
 
-	// What its items tell of: what is charted, or the world itself, its end.
+	// What its items tell of: the stories, or the world itself, its end.
 	Of Of `json:"of"`
 
 	// Its heading.
 	Title string `json:"title"`
 }
+
+// How a day's edition is chosen from the day's candidates.
+type NewsEdition struct {
+	// A crew in company: this many aboard, the skipper with them.
+	Aboard int `json:"aboard"`
+
+	// A story's score eases with its age through the day: halved after this many
+	// hours.
+	Ease float64 `json:"ease"`
+
+	// A record at the falls: an approach survived within this of the lip, m, nearer
+	// than any boat's before it this world.
+	Falls float64 `json:"falls"`
+
+	// A story about a sailor in the recent editions has its score times this.
+	GiveWay float64 `json:"giveWay"`
+
+	// Milestones corresponds to the JSON schema field "milestones".
+	Milestones NewsMilestones `json:"milestones"`
+
+	// The most stories of one kind on the front page.
+	OfKind int `json:"ofKind"`
+
+	// How many editions back a sailor named in one gives way to one who was not.
+	Recent int `json:"recent"`
+
+	// A run is a candidate for the day's longest from this distance, in nautical
+	// miles.
+	Run float64 `json:"run"`
+
+	// The most stories in the reader's own box, about their shipmates, the sailors
+	// they follow and themselves.
+	Shipmates int `json:"shipmates"`
+
+	// The most stories on the front page.
+	Stories int `json:"stories"`
+
+	// A crew in company: each of them aboard this long, in minutes.
+	Together float64 `json:"together"`
+}
+
+// A sailor's milestones: each time their log's distance, worlds or places charted
+// pass a multiple of these.
+type NewsMilestones struct {
+	// Nautical miles sailed.
+	Distance float64 `json:"distance"`
+
+	// Places charted.
+	Places int `json:"places"`
+
+	// Worlds sailed.
+	Worlds int `json:"worlds"`
+}
+
+// A kind of story: what makes it, and its score.
+type NewsStory struct {
+	// ID corresponds to the JSON schema field "id".
+	ID ID `json:"id"`
+
+	// What makes it: a great discovery first sighted; a record at the falls; a rare
+	// creature met; a crew in company; a sailor's first charting ever; the day's
+	// longest run; a milestone; any other charting.
+	Of NewsStoryOf `json:"of"`
+
+	// How interesting it is: the edition shows the highest first.
+	Score int `json:"score"`
+}
+
+type NewsStoryOf string
+
+const NewsStoryOfCharting NewsStoryOf = "charting"
+const NewsStoryOfCrew NewsStoryOf = "crew"
+const NewsStoryOfFirst NewsStoryOf = "first"
+const NewsStoryOfGreat NewsStoryOf = "great"
+const NewsStoryOfLife NewsStoryOf = "life"
+const NewsStoryOfMilestone NewsStoryOf = "milestone"
+const NewsStoryOfRecord NewsStoryOf = "record"
+const NewsStoryOfRun NewsStoryOf = "run"
 
 // A kind of notice: what raises it, its words, how urgent it is, whether it can be
 // switched off and how long it stays.
@@ -2878,8 +2960,8 @@ type PlaceKind struct {
 	// Its name, as the world page lists it.
 	Name string `json:"name"`
 
-	// Its charting is an item of the news of its own; otherwise it is folded into its
-	// island's.
+	// Its charting is an item of its own in the sheet a chart makes of itself,
+	// offline; online every charting is a candidate story of the day's news.
 	News *bool `json:"news,omitempty,omitzero"`
 
 	// The rule its sites are found by.
@@ -5554,4 +5636,4 @@ type WorldZones struct {
 }
 
 // Version is the catalog version (tools/catalog).
-const Version = "5d88f8835e788a56"
+const Version = "381e69df8aca64ec"

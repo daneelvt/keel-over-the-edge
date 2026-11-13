@@ -231,3 +231,61 @@ func buildGrid(f *bus.Frame) {
 	}
 	f.Grid.Start[bus.Cells] = int32(len(f.Grid.Slots))
 }
+
+// The frames' candidate stories of the news: a rare creature met, the
+// skipper's, naming those aboard; an approach to the lip within the
+// record's reach, to be written if it is nearer than any; a voyage's run,
+// and a crew in company of four aboard together long enough; none of a
+// common creature, a far approach, or a crew too short aboard.
+func TestBookStories(t *testing.T) {
+	cat := testCatalog(t)
+	rare, common := -1, -1
+	for i, k := range cat.Life.Kinds {
+		switch {
+		case k.News != nil && *k.News && rare < 0:
+			rare = i
+		case (k.News == nil || !*k.News) && common < 0:
+			common = i
+		}
+	}
+	b := NewBook(Config{World: 3, Epoch: time.Unix(0, 0), Catalog: cat, Chart: testChart(t, cat), Boats: []string{"a", "b"}})
+	f := frameOf(90, [2]float64{1000, 1500})
+	f.BoatName[0] = "Gull"
+	f.Crew = append(f.Crew, bus.Aboard{Slot: 0, Boat: 10, Seat: 1, Account: acc(3), Since: 60})
+	buildGrid(f)
+	f.Life = append(f.Life, bus.LifeEncounter{ID: 1, Kind: uint16(rare), Start: 0, End: 10000, East: 1000, North: 1600, Slot: -1},
+		bus.LifeEncounter{ID: 2, Kind: uint16(common), Start: 0, End: 10000, East: 1000, North: 1600, Slot: -1})
+	f.Edges = append(f.Edges, bus.EdgeEvent{Tick: 90, Kind: bus.EdgeApproach, Slot: 0, Boat: 10, Owner: acc(1), X: 9000, Y: 0, Distance: 37.26},
+		bus.EdgeEvent{Tick: 90, Kind: bus.EdgeApproach, Slot: 0, Boat: 10, Owner: acc(1), X: 9000, Y: 0, Distance: 340})
+	rows := b.Rows(f, nil)
+	if rows == nil || len(rows.Stories) != 2 {
+		t.Fatalf("the stories: %+v", rows)
+	}
+	life, rec := rows.Stories[0], rows.Stories[1]
+	if life.Story != store.StoryLife || life.Account != id(1) || life.Facts.Life != cat.Life.Kinds[rare].ID || !slices.Equal(life.Named, []store.AccountID{id(3)}) ||
+		life.Facts.Boat != "Gull" || life.Title != "Keyhole Rock" || !life.Facts.Spot || life.Score != cat.StoryScore(catalog.NewsStoryOfLife) {
+		t.Errorf("the creature met: %+v", life)
+	}
+	if rec.Story != store.StoryRecord || !rec.Record || rec.Amount != 37.3 || rec.Account != id(1) || rec.Source == "" {
+		t.Errorf("the record: %+v", rec)
+	}
+	// Ann's voyage ends: 3 NM run, three aboard with her for an hour,
+	// one for a minute.
+	f = frameOf(200000, [2]float64{1000, 1500})
+	for i, since := range []int64{60, 60, 60, 199000} {
+		f.Crew = append(f.Crew, bus.Aboard{Slot: 0, Boat: 10, Seat: uint8(i + 1), Account: acc(byte(4 + i)), Since: since})
+	}
+	f.VoyageEnds = append(f.VoyageEnds, bus.VoyageEnded{Tick: 200000, Slot: 0, Boat: 10, Owner: acc(1), Kind: 1, BoatName: "Gull",
+		How: bus.EndReturned, X: 1000, Y: 1500, Log: bus.VoyageLog{Began: 30, Run: 3 * 1852}})
+	rows = b.Rows(f, nil)
+	if rows == nil || len(rows.Stories) != 2 {
+		t.Fatalf("the voyage's stories: %+v", rows)
+	}
+	run, crew := rows.Stories[0], rows.Stories[1]
+	if run.Story != store.StoryRun || run.Amount != 5556 || run.Facts.BoatKind != "b" {
+		t.Errorf("the run: %+v", run)
+	}
+	if crew.Story != store.StoryCrew || crew.Facts.Aboard != 4 || !slices.Equal(crew.Named, []store.AccountID{id(4), id(5), id(6)}) {
+		t.Errorf("the crew: %+v", crew)
+	}
+}

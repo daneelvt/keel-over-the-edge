@@ -5921,7 +5921,7 @@ export interface PlaceKind {
    */
   water?: boolean;
   /**
-   * Its charting is an item of the news of its own; otherwise it is folded into its island's.
+   * Its charting is an item of its own in the sheet a chart makes of itself, offline; online every charting is a candidate story of the day's news.
    */
   news?: boolean;
 }
@@ -8425,24 +8425,23 @@ export interface NoticeKind {
   folded: string;
 }
 /**
- * The news sheet: its columns, and how its items are folded and paged.
+ * The news: a daily edition of chosen stories, its columns, and the kinds of story with their scores.
  *
  * This interface was referenced by `Catalog`'s JSON-Schema
  * via the `definition` "News".
  */
 export interface News {
   /**
-   * A sailor's places charted within this of an island's item are folded into it, in minutes.
-   */
-  fold: number;
-  /**
-   * Items to a page.
-   */
-  page: number;
-  /**
    * @minItems 1
    */
   columns: [NewsColumn, ...NewsColumn[]];
+  edition: NewsEdition;
+  /**
+   * The kinds of story, each written as a candidate with its score; the edition shows the best.
+   *
+   * @minItems 1
+   */
+  stories: [NewsStory, ...NewsStory[]];
 }
 /**
  * A column of the news sheet.
@@ -8457,9 +8456,95 @@ export interface NewsColumn {
    */
   title: string;
   /**
-   * What its items tell of: what is charted, or the world itself, its end.
+   * What its items tell of: the stories, or the world itself, its end.
    */
   of: "charting" | "world";
+}
+/**
+ * How a day's edition is chosen from the day's candidates.
+ *
+ * This interface was referenced by `Catalog`'s JSON-Schema
+ * via the `definition` "NewsEdition".
+ */
+export interface NewsEdition {
+  /**
+   * The most stories on the front page.
+   */
+  stories: number;
+  /**
+   * The most stories in the reader's own box, about their shipmates, the sailors they follow and themselves.
+   */
+  shipmates: number;
+  /**
+   * The most stories of one kind on the front page.
+   */
+  ofKind: number;
+  /**
+   * How many editions back a sailor named in one gives way to one who was not.
+   */
+  recent: number;
+  /**
+   * A story about a sailor in the recent editions has its score times this.
+   */
+  giveWay: number;
+  /**
+   * A story's score eases with its age through the day: halved after this many hours.
+   */
+  ease: number;
+  /**
+   * A record at the falls: an approach survived within this of the lip, m, nearer than any boat's before it this world.
+   */
+  falls: number;
+  /**
+   * A crew in company: this many aboard, the skipper with them.
+   */
+  aboard: number;
+  /**
+   * A crew in company: each of them aboard this long, in minutes.
+   */
+  together: number;
+  /**
+   * A run is a candidate for the day's longest from this distance, in nautical miles.
+   */
+  run: number;
+  milestones: NewsMilestones;
+}
+/**
+ * A sailor's milestones: each time their log's distance, worlds or places charted pass a multiple of these.
+ *
+ * This interface was referenced by `Catalog`'s JSON-Schema
+ * via the `definition` "NewsMilestones".
+ */
+export interface NewsMilestones {
+  /**
+   * Nautical miles sailed.
+   */
+  distance: number;
+  /**
+   * Worlds sailed.
+   */
+  worlds: number;
+  /**
+   * Places charted.
+   */
+  places: number;
+}
+/**
+ * A kind of story: what makes it, and its score.
+ *
+ * This interface was referenced by `Catalog`'s JSON-Schema
+ * via the `definition` "NewsStory".
+ */
+export interface NewsStory {
+  id: Id;
+  /**
+   * What makes it: a great discovery first sighted; a record at the falls; a rare creature met; a crew in company; a sailor's first charting ever; the day's longest run; a milestone; any other charting.
+   */
+  of: "great" | "record" | "life" | "crew" | "first" | "run" | "milestone" | "charting";
+  /**
+   * How interesting it is: the edition shows the highest first.
+   */
+  score: number;
 }
 /**
  * The sea's life: the kinds of animal met at sea, and the schedule that says where and when each is met. The server draws it from the world's seed, the place, the time, the habitat there and the weather; every player near is told of each encounter.
@@ -8661,6 +8746,10 @@ export interface LifeKind {
    * Its name for more than one.
    */
   plural: string;
+  /**
+   * Meeting it is rare enough to be a story of the day's news.
+   */
+  news?: boolean;
   form: LifeForm;
   family: LifeFamily;
   path: LifePath;
@@ -8912,4 +9001,4 @@ export interface LifeGlow {
 }
 
 /** The catalog version (tools/catalog). */
-export const CATALOG_VERSION = '5d88f8835e788a56';
+export const CATALOG_VERSION = '381e69df8aca64ec';

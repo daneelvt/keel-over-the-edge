@@ -84,6 +84,22 @@ type Book struct {
 	met   map[metKey]struct{}
 	mates map[uint64][]mate
 	near  []int32
+
+	news newsRules
+}
+
+// newsRules are how the log's frames make candidate stories of the news,
+// from the catalog: each kind's score (0 for none), how near the lip a
+// record at the falls is, how many aboard and for how long make a crew in
+// company, s, the least run that may be the day's longest, m, and the
+// kinds of life whose meeting is a story.
+type newsRules struct {
+	record, life, crew, run int
+	falls                   float64
+	aboard                  int
+	together                int
+	least                   float64
+	rare                    []bool
 }
 
 // metKey is a kind of life met by an account in a voyage, or a time
@@ -126,6 +142,15 @@ func NewBook(cfg Config) *Book {
 		for _, s := range c.World.Sizes {
 			b.sizes = append(b.sizes, s.Class)
 		}
+		e := &c.News.Edition
+		b.news = newsRules{
+			record: c.StoryScore(catalog.NewsStoryOfRecord), life: c.StoryScore(catalog.NewsStoryOfLife),
+			crew: c.StoryScore(catalog.NewsStoryOfCrew), run: c.StoryScore(catalog.NewsStoryOfRun),
+			falls: e.Falls, aboard: e.Aboard, together: int(e.Together * 60), least: e.Run * 1852,
+		}
+		for _, k := range c.Life.Kinds {
+			b.news.rare = append(b.news.rare, k.News != nil && *k.News)
+		}
 	}
 	return b
 }
@@ -162,7 +187,70 @@ func (b *Book) Rows(f *bus.Frame, charts []store.Charting) *store.LogRows {
 	if f.Tick%bus.LogEvery == 0 && len(f.Life) > 0 {
 		b.lifeMet(f, rows)
 	}
+	for i := range f.Edges {
+		if e := &f.Edges[i]; e.Kind == bus.EdgeApproach && !e.Placed {
+			b.approached(f, e, rows)
+		}
+	}
 	return out
+}
+
+// story is a candidate story of the news about the sailor of the boat in
+// slot s, or of a voyage ended with it, at tick, where: their boat, its
+// name and kind, and the place named nearest.
+func (b *Book) story(kind string, score int, owner bus.Account, boat uint64, boatName string, boatKind uint16, tick int64, x, y float64, place string) store.Story {
+	return store.Story{
+		Story: kind, Score: score, At: b.At(tick), Account: store.AccountID(owner), Subject: store.SubjectSailor,
+		Title: place, Island: -1, X: x, Y: y,
+		Facts:  store.StoryFacts{Boat: boatName, BoatKind: b.kindID(boatKind), Place: place, Spot: true},
+		Source: fmt.Sprintf("%s:%d:%d:%d", kind, b.world, boat, tick),
+	}
+}
+
+// approached makes the candidate an approach to the lip survived makes: a
+// record at the falls, if it is nearer than any before it this world
+// (which its write decides).
+func (b *Book) approached(f *bus.Frame, e *bus.EdgeEvent, rows func() *store.LogRows) {
+	if b.news.record <= 0 || e.Distance > b.news.falls {
+		return
+	}
+	var name string
+	var kind uint16
+	if s := e.Slot; s >= 0 && int(s) < f.Capacity() && f.Occupied[s] && f.Boat[s] == e.Boat {
+		name, kind = f.BoatName[s], f.Kind[s]
+	}
+	st := b.story(store.StoryRecord, b.news.record, e.Owner, e.Boat, name, kind, e.Tick, e.X, e.Y, b.Place(e.X, e.Y))
+	st.Amount, st.Record = math.Round(e.Distance*10)/10, true
+	r := rows()
+	r.Stories = append(r.Stories, st)
+}
+
+// voyageStories are the candidates a voyage ended makes: its run, which
+// may be the day's longest, and a crew in company, if it had one.
+func (b *Book) voyageStories(e *bus.VoyageEnded, v *store.LogVoyage, rows func() *store.LogRows) {
+	n := &b.news
+	if n.run > 0 && v.Logged && v.Run >= max(n.least, 1) {
+		st := b.story(store.StoryRun, n.run, e.Owner, e.Boat, e.BoatName, e.Kind, e.Tick, e.X, e.Y, v.Place)
+		st.Amount = math.Round(v.Run)
+		r := rows()
+		r.Stories = append(r.Stories, st)
+	}
+	if n.crew <= 0 || n.aboard < 2 {
+		return
+	}
+	var named []store.AccountID
+	for _, m := range v.Crew {
+		if m.Seconds >= n.together && m.ID != v.Account {
+			named = append(named, m.ID)
+		}
+	}
+	if len(named)+1 < n.aboard {
+		return
+	}
+	st := b.story(store.StoryCrew, n.crew, e.Owner, e.Boat, e.BoatName, e.Kind, e.Tick, e.X, e.Y, v.Place)
+	st.Named, st.Facts.Aboard = named, len(named)+1
+	r := rows()
+	r.Stories = append(r.Stories, st)
 }
 
 // kindID is the ID of the world's boat kind k.
@@ -265,6 +353,7 @@ func (b *Book) voyageEnded(f *bus.Frame, e *bus.VoyageEnded, rows func() *store.
 	}
 	r := rows()
 	r.Voyages = append(r.Voyages, v)
+	b.voyageStories(e, &v, rows)
 }
 
 // crewOf are those who were aboard the boat in slot s, boat, between
@@ -515,6 +604,19 @@ func (b *Book) met1(f *bus.Frame, s int32, kind uint16, rows func() *store.LogRo
 			At: b.At(f.Tick), Kind: store.LogMet, Title: k.Name, Group: GroupLife, Find: k.ID, X: st.X, Y: st.Y, Place: place,
 			Finds: []store.LogFind{{Group: GroupLife, Kind: k.ID}},
 		})
+		if account != f.Owner[s] || b.news.life <= 0 || int(kind) >= len(b.news.rare) || !b.news.rare[kind] {
+			return
+		}
+		// A rare creature met is a story: the skipper's, naming those
+		// aboard, once a kind a voyage.
+		story := b.story(store.StoryLife, b.news.life, account, f.Boat[s], f.BoatName[s], f.Kind[s], f.Tick, st.X, st.Y, place)
+		story.Source = fmt.Sprintf("%s:%d:%d:%d:%s", store.StoryLife, b.world, f.Boat[s], began, k.ID)
+		story.Facts.Life = k.ID
+		lo, hi := f.CrewOf(s)
+		for _, a := range f.Crew[lo:hi] {
+			story.Named = append(story.Named, store.AccountID(a.Account))
+		}
+		r.Stories = append(r.Stories, story)
 	}
 	try(f.Owner[s], v.Log.Began)
 	lo, hi := f.CrewOf(s)

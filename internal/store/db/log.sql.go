@@ -487,9 +487,11 @@ func (q *Queries) LogFrom(ctx context.Context) (time.Time, error) {
 
 const logPeople = `-- name: LogPeople :many
 SELECT a.id, a.kind, coalesce(a.owner_id, '00000000-0000-0000-0000-000000000000')::uuid AS owner_id,
-  coalesce(coalesce(a.born, o.born), 0)::integer AS born, coalesce(a.log_shown, '')::text AS log_shown
+  coalesce(coalesce(a.born, o.born), 0)::integer AS born, coalesce(a.log_shown, '')::text AS log_shown,
+  coalesce(sl.name, '')::text AS name
 FROM account a
 LEFT JOIN account o ON o.id = a.owner_id
+LEFT JOIN sailor sl ON sl.account_id = a.id
 WHERE a.id = ANY($1::uuid[])
 `
 
@@ -499,11 +501,12 @@ type LogPeopleRow struct {
 	OwnerID  pgtype.UUID
 	Born     int32
 	LogShown string
+	Name     string
 }
 
 // The accounts of ids as the log names them: their kinds, their months of
-// birth (a machine sailor's owner's), who may read their logs, and their
-// owners.
+// birth (a machine sailor's owner's), who may read their logs, their
+// owners, and their sailors' names, "" for none.
 func (q *Queries) LogPeople(ctx context.Context, ids []pgtype.UUID) ([]LogPeopleRow, error) {
 	rows, err := q.db.Query(ctx, logPeople, ids)
 	if err != nil {
@@ -519,6 +522,7 @@ func (q *Queries) LogPeople(ctx context.Context, ids []pgtype.UUID) ([]LogPeople
 			&i.OwnerID,
 			&i.Born,
 			&i.LogShown,
+			&i.Name,
 		); err != nil {
 			return nil, err
 		}

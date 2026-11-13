@@ -493,11 +493,11 @@ func TestWorldNews(t *testing.T) {
 	if err := s.WriteWorldNews(ctx, lease, w.ID, n); err != nil {
 		t.Fatal(err)
 	}
-	items, err := s.News(ctx, w.ID, nil, 10)
+	items, err := s.WorldNotices(ctx, w.ID)
 	if err != nil || len(items) != 1 {
 		t.Fatal(items, err)
 	}
-	if it := items[0]; it.Subject != store.SubjectWorld || it.Column != "notices" || !it.EndsAt.Equal(end) || it.Title != "PORT ROYAL" {
+	if it := items[0]; it.Column != "notices" || !it.EndsAt.Equal(end) || it.Title != "PORT ROYAL" || it.X != -36 {
 		t.Fatalf("%+v", it)
 	}
 }
@@ -560,12 +560,11 @@ func TestNoStormNewsMigration(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer s.Close()
-	news, err := s.News(ctx, w, nil, 10)
-	if err != nil || len(news) != 2 {
-		t.Fatal(news, err)
+	notices, err := s.WorldNotices(ctx, w)
+	if err != nil || len(notices) != 1 {
+		t.Fatal(notices, err)
 	}
-	if news[0].ID != before[0].id || news[0].Subject != store.SubjectWorld || !news[0].EndsAt.Equal(end) ||
-		news[1].ID != before[1].id || news[1].Subject != "island" || news[1].Sailor != "Ann Bonny" || news[1].What != "an island of the rim" {
-		t.Fatalf("the news %+v", news)
+	if notices[0].ID != before[0].id || !notices[0].EndsAt.Equal(end) || notices[0].Title != "PORT ROYAL" {
+		t.Fatalf("the world's notice %+v", notices)
 	}
 }
