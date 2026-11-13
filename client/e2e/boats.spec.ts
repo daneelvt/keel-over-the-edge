@@ -364,12 +364,18 @@ test('the yacht chosen from the fleet: she beats in a breeze, tacks, reaches pas
     await page.waitForFunction(() => Math.cos(globalThis.keel.boat().wind.meanFrom) > 0.99, null, {
       timeout: 10_000,
     });
-    // Close-hauled in clean air, the autopilot on there and the sheet in:
-    // way gathered to windward.
-    await alone(page, 50);
+    // Way gathered on a close reach in clean air, the autopilot on there;
+    // then close-hauled, the sheet in, making her way to windward.
+    await alone(page, 70);
     await page.keyboard.press('p');
     await expect.poll(() => page.evaluate(() => globalThis.keel.boat().pilot.mode)).toBe(1);
     await sheet('KeyW', 2.2);
+    await sheet('KeyS', 0.4);
+    await page.waitForFunction((v) => globalThis.keel.boat().out.speedOverGround > v, knots(4), {
+      timeout: 60_000,
+    });
+    await pilotTo(page, 50);
+    await sheet('KeyW', 0.5);
     await page.waitForFunction((v) => globalThis.keel.boat().out.speedOverGround > v, knots(5), {
       timeout: 60_000,
     });
