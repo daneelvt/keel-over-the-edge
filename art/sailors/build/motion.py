@@ -406,7 +406,8 @@ class Figure:
                     if target not in planes else \
                     CAT_NET_LIFT if self.stage.cat is not None and target is self.stage.cat.net else \
                     YACHT_BENCH_LIFT if self.stage.yacht is not None and target in self.stage.yacht.planes else \
-                    BRIDGE_SEAT_LIFT if bridge is not None and target in bridge.planes else 2.0
+                    (BRIDGE_TREAD_LIFT if target in bridge.treads else BRIDGE_SEAT_LIFT) \
+                    if bridge is not None and target in bridge.planes else 2.0
                 m.vertex_group = SEAT_GROUP
                 m.show_viewport = m.show_render = False
                 self.seat_mods.append((o, m.name))
@@ -1348,7 +1349,9 @@ def make(fig, lib, name):
     bridge = lib.poses[keys[0]["pose"]]["place"]
     clip.bridge = bridge if bridge in BRIDGE_PLACES and \
         all(lib.poses[k["pose"]]["place"] == bridge for k in keys) else None
-    clip.seated = clip.seated or clip.bridge in BRIDGE_SEATS
+    # On her ladder, what of the cloth meets a tread lies on it, as a
+    # seated figure's lies on the seat.
+    clip.seated = clip.seated or clip.bridge in BRIDGE_SEATS + (BRIDGE_STAIRS, BRIDGE_LANDING)
     # On the trapeze the skirts hang from the body as it lies (Figure.hang);
     # any clip may hang its chains so (on the rail, the coat's back).
     fig.hang = spec.get("hang") or (HANG if clip.trapeze or clip.cat in CAT_WIRES else None)
@@ -1663,6 +1666,9 @@ BRIDGE_ANCHORS = {BRIDGE_WHEEL: "bridge-stance", BRIDGE_WHEEL_SEAT: "bridge-stan
 # her other tops (her sole, her platform).
 BRIDGE_SEAT_LIFT = 0.5
 BRIDGE_DECK_LIFT = 0.1
+# Cloth this far or less under a tread of her ladder's top (in it: the
+# tread's thickness) is laid on it.
+BRIDGE_TREAD_LIFT = 0.06
 # A figure this far or less from the catamaran's stage's place in the scene
 # is on her (she is 12.8 m long, every other stage far off).
 BRIDGE_NEAR = 12.0

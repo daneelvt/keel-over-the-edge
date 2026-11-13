@@ -68,7 +68,7 @@ poses:
   # across the table and out to sea. The coat's skirts as seated.
   table-brace:
     place: bridge-table
-    shift: [0.06, 0.0, 0.008]
+    shift: [0.1, 0.0, 0.008]
     turn:
       - [thigh_l, x, -80]
       - [thigh_r, x, -78]
@@ -253,7 +253,7 @@ poses:
   # the foot to step next down on its toes.
   down-landing:
     place: bridge-landing
-    shift: [0.0, 0.0, -0.02]
+    shift: [0.0, 0.0, -0.04]
     turn:
       - [spine_01, x, 3]
       - [neck_01, x, 10]
@@ -277,7 +277,7 @@ poses:
       foot_r: { at: bridge-tread-4, offset: [0.06, -0.1, 0.1] }
   down-2:
     place: bridge-landing
-    shift: [0.45, 0.03, -0.43]
+    shift: [0.45, 0.03, -0.395]
     turn:
       - [spine_01, x, 3]
       - [neck_01, x, 10]
@@ -414,12 +414,12 @@ clips:
     hang: { front_02: 1.0 }
     keys:
       - { pose: down-landing, hold: 0.25 }
-      - { pose: down-1, hold: 0.0, ramp: 0.6, step: 0.12 }
-      - { pose: down-2, hold: 0.0, ramp: 0.55, step: 0.12 }
-      - { pose: down-3, hold: 0.0, ramp: 0.55, step: 0.12 }
-      - { pose: down-4, hold: 0.0, ramp: 0.55, step: 0.12 }
-      - { pose: down-5, hold: 0.0, ramp: 0.55, step: 0.12 }
-      - { pose: down-foot, hold: 0.3, ramp: 0.6, step: 0.12 }
+      - { pose: down-1, hold: 0.0, ramp: 0.6, step: 0.16 }
+      - { pose: down-2, hold: 0.0, ramp: 0.55, step: 0.16 }
+      - { pose: down-3, hold: 0.0, ramp: 0.55, step: 0.16 }
+      - { pose: down-4, hold: 0.0, ramp: 0.55, step: 0.16 }
+      - { pose: down-5, hold: 0.0, ramp: 0.55, step: 0.16 }
+      - { pose: down-foot, hold: 0.3, ramp: 0.6, step: 0.16 }
 
 # From Quaternius' library (CC0), retargeted onto the catamaran:
 #  - sat on her seats, each facing as it faces, the feet on the floor

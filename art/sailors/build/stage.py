@@ -1307,6 +1307,21 @@ class Bridgedeck:
             bpy.context.scene.collection.objects.link(o)
             o.hide_render = True
             self.planes.append(o)
+        # And her ladder's treads, each its top: the cloth of one climbing it
+        # meets them, and lies on them as on a seat.
+        self.treads = []
+        for k in range(1, n + 1):
+            t = self.places[f"bridge-tread-{k}"]
+            half = self.stairs["run"] / 2 + 0.01
+            me = bpy.data.meshes.new(f"bridge-tread-plane-{k}")
+            me.from_pydata([(self.at.x + sides[0], t.y - half, t.z), (self.at.x + sides[1], t.y - half, t.z),
+                            (self.at.x + sides[1], t.y + half, t.z), (self.at.x + sides[0], t.y + half, t.z)], [],
+                           [(0, 1, 2, 3), (3, 2, 1, 0)])
+            o = bpy.data.objects.new(f"bridge-tread-plane-{k}", me)
+            bpy.context.scene.collection.objects.link(o)
+            o.hide_render = True
+            self.treads.append(o)
+        self.planes += self.treads
         self.objects += self.planes
 
     @staticmethod
@@ -1340,6 +1355,8 @@ class Bridgedeck:
             ends = [Vector((self.at.x + e, at.y, at.z)) for e in (lo, hi)]
         else:
             ends = [Vector((at.x, self.at.y - e, at.z)) for e in (lo, hi)]
+        # (A hair over the slats' top.)
+        ends = [e + Vector((0.0, 0.0, 0.002)) for e in ends]
         verts = [tuple(e) for e in ends] + [tuple(e - a * s["back"]) for e in ends]
         me = bpy.data.meshes.new(f"bridge-{key}-plane")
         me.from_pydata(verts, [], [(0, 1, 3, 2), (2, 3, 1, 0)])
