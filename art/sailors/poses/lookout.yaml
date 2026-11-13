@@ -98,26 +98,32 @@ poses:
       - [neck_01, z, -9]
       - [head, z, -15]
 
-  # On a cruising yacht's rail, sat a little further in: her loose hair,
+  # On a cruising yacht's rail, sat leaning a little back: her loose hair,
   # turning to look forward, kept inboard of the upper lifeline.
   lookout-yacht-rail-sit:
     from: yacht-rail-sit
-    shift: [0.0, 0.05, 0.0]
+    turn:
+      - [spine_01, x, -5]
   lookout-yacht-rail-sit-luff:
     from: yacht-rail-sit-luff
-    shift: [0.0, 0.05, 0.0]
+    turn:
+      - [spine_01, x, -5]
   lookout-yacht-rail-sit-sea:
     from: yacht-rail-sit-sea
-    shift: [0.0, 0.05, 0.0]
+    turn:
+      - [spine_01, x, -5]
   lookout-yacht-rail-lean:
     from: yacht-rail-lean
-    shift: [0.0, 0.062, 0.008]
+    turn:
+      - [spine_01, x, -5]
   lookout-yacht-rail-lean-luff:
     from: yacht-rail-lean-luff
-    shift: [0.0, 0.062, 0.008]
+    turn:
+      - [spine_01, x, -5]
   lookout-yacht-rail-lean-sea:
     from: yacht-rail-lean-sea
-    shift: [0.0, 0.062, 0.008]
+    turn:
+      - [spine_01, x, -5]
 
 clips:
   lookout-yacht-rail:
