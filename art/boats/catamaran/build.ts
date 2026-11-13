@@ -425,20 +425,23 @@ const LOUNGER_TOP = SOLE + 0.4;
 const DOOR_PORT = -0.75;
 const DOOR_STAR = 0.55;
 
+/** How far onto a seat from its front edge a seated station is, m: the seat's edge under the thighs. */
+const ON_SEAT = 0.04;
+
 /** The people's stations, in the order seats fill: the helm, beside the helm, the L-bench, the aft bench, the lounger. */
 const STATIONS: { at: Vec3; pose: string; facing: number }[] = [
   { at: STANCE, pose: 'standing', facing: 0 },
-  { at: [-1.95, SETTLE_TOP, SETTLE_FORE], pose: 'seated', facing: 0 },
-  { at: [0.85, SEAT_TOP, LBENCH_LEG], pose: 'seated', facing: 180 },
-  { at: [1.45, SEAT_TOP, LBENCH_LEG], pose: 'seated', facing: 180 },
-  { at: [LBENCH_FRONT, SEAT_TOP, 2.8], pose: 'seated', facing: 270 },
-  { at: [LBENCH_FRONT, SEAT_TOP, 3.35], pose: 'seated', facing: 270 },
-  { at: [LBENCH_FRONT, SEAT_TOP, 3.9], pose: 'seated', facing: 270 },
-  { at: [0.25, SEAT_TOP, AFT_FRONT], pose: 'seated', facing: 0 },
-  { at: [0.85, SEAT_TOP, AFT_FRONT], pose: 'seated', facing: 0 },
-  { at: [1.45, SEAT_TOP, AFT_FRONT], pose: 'seated', facing: 0 },
-  { at: [LOUNGER_FRONT, LOUNGER_TOP, 4.0], pose: 'seated', facing: 90 },
-  { at: [LOUNGER_FRONT, LOUNGER_TOP, 4.5], pose: 'seated', facing: 90 },
+  { at: [-1.95, SETTLE_TOP, SETTLE_FORE + ON_SEAT], pose: 'seated', facing: 0 },
+  { at: [0.85, SEAT_TOP, LBENCH_LEG - ON_SEAT], pose: 'seated', facing: 180 },
+  { at: [1.45, SEAT_TOP, LBENCH_LEG - ON_SEAT], pose: 'seated', facing: 180 },
+  { at: [LBENCH_FRONT + ON_SEAT, SEAT_TOP, 2.8], pose: 'seated', facing: 270 },
+  { at: [LBENCH_FRONT + ON_SEAT, SEAT_TOP, 3.35], pose: 'seated', facing: 270 },
+  { at: [LBENCH_FRONT + ON_SEAT, SEAT_TOP, 3.9], pose: 'seated', facing: 270 },
+  { at: [0.25, SEAT_TOP, AFT_FRONT + ON_SEAT], pose: 'seated', facing: 0 },
+  { at: [0.85, SEAT_TOP, AFT_FRONT + ON_SEAT], pose: 'seated', facing: 0 },
+  { at: [1.45, SEAT_TOP, AFT_FRONT + ON_SEAT], pose: 'seated', facing: 0 },
+  { at: [LOUNGER_FRONT - ON_SEAT, LOUNGER_TOP, 4.0], pose: 'seated', facing: 90 },
+  { at: [LOUNGER_FRONT - ON_SEAT, LOUNGER_TOP, 4.5], pose: 'seated', facing: 90 },
 ];
 
 // --- Materials ---------------------------------------------------------------
@@ -917,6 +920,9 @@ function roundHouse(): {
       roof.triFacing(k[0] as number, k[1] as number, k[2] as number, [0, 1, 0]);
       roof.triFacing(k[0] as number, k[2] as number, k[3] as number, [0, 1, 0]);
       // Its underside, varnished, seen from the cockpit.
+      if (!D.small) {
+        continue;
+      }
       const u = [
         wood.vertex([lo, roofY(lo, z0) - ROOF_THICK, z0], shade(VARNISH, 0.8)),
         wood.vertex([hi, roofY(hi, z0) - ROOF_THICK, z0], shade(VARNISH, 0.8)),
@@ -1078,7 +1084,7 @@ function helmStation(): { deck: MeshBuilder; wood: MeshBuilder; oak: MeshBuilder
     const z0 = LANDING_AFT + run * k;
     box(oak, [PLAT_IN + 0.05, y - 0.04, z0], [LADDER_IN - 0.05, y, z0 + run + 0.02], shade(OAK, 0.95 + 0.1 * jitter(k + 510)));
   }
-  for (const x of [PLAT_IN + 0.03, LADDER_IN - 0.03]) {
+  for (const x of D.small ? [PLAT_IN + 0.03, LADDER_IN - 0.03] : []) {
     oak.tube(
       [
         [x, PLAT_Y - 0.06, LANDING_AFT],
@@ -2304,9 +2310,10 @@ function solid(): Record<string, unknown> {
 
 /**
  * The bridgedeck's plan, for the sea under it and the stations on it: from
- * the nacelle's foot to the aft crossbeam, between the hulls' inner sides
- * (their least half-spacing there at the underside), and the underside's
- * height.
+ * the locker deck's fore edge to the aft crossbeam, between the hulls'
+ * inner sides (their least half-spacing there at the underside); the
+ * underside's height; and the top of what stands at its after end, the
+ * roof's after edge on the centreline, where her sternlight hangs.
  */
 function bridgedeckData(): Record<string, number> {
   let half = Number.POSITIVE_INFINITY;
@@ -2318,6 +2325,7 @@ function bridgedeckData(): Record<string, number> {
     aft: round4(BRIDGE_AFT),
     halfWidth: round4(half),
     underside: UNDERSIDE,
+    top: round4(roofY(0, ROOF_AFT)),
   };
 }
 
@@ -2521,15 +2529,15 @@ function model(): NodeDef[] {
     front.net.primitive({ colors: true }),
   ];
   const h = horses();
-  hullParts.push(h.iron.primitive());
   const fittings = { timber: new MeshBuilder('oak'), iron: new MeshBuilder('iron'), bronze: new MeshBuilder('bronze') };
-  for (const [x, z] of CAPSTANS) {
-    capstan(fittings, x, PLAT_Y, z, 0.8);
-  }
   if (D.small) {
+    hullParts.push(h.iron.primitive());
+    for (const [x, z] of CAPSTANS) {
+      capstan(fittings, x, PLAT_Y, z, 0.8);
+    }
     cleats(fittings.timber);
+    hullParts.push(fittings.timber.primitive({ colors: true }));
   }
-  hullParts.push(fittings.timber.primitive({ colors: true }));
   const masts = mast();
   const mastParts = [masts.spar.primitive()];
   const spars = boom();
@@ -2572,9 +2580,6 @@ function model(): NodeDef[] {
     const gooseneck = new MeshBuilder('iron');
     gooseneck.box([-0.055, -0.055, -0.13], [0.055, 0.055, 0.11]);
     boomParts.push(gooseneck.primitive());
-  } else {
-    const st = steps();
-    hullParts.push(st.oak.primitive({ colors: true }));
   }
   const vangParts = vang();
   const nodes: NodeDef[] = [

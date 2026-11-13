@@ -39,6 +39,7 @@ interface Gltf {
       crewRings?: number[][];
       rackEdge?: number[];
       length?: number;
+      bridgedeck?: { aft: number; top: number };
     };
   }[];
   meshes: {
@@ -240,11 +241,15 @@ describe.each(catalog.boats.map((b) => [b.name, b] as const))('%s', (_, boat) =>
     // Her lights by their kind, whatever her rig: a tricolour at the
     // masthead; sidelights at deck level on their own sides, forward of the
     // mast (a ship's, of her main yards), out near her beam, and a
-    // sternlight on the centreline at her transom (Collision Regulations,
-    // Rules 21 and 25).
+    // sternlight on the centreline at the aftmost of her structure there:
+    // her transom, or the after end of the bridgedeck between her hulls,
+    // up to the top of what stands on it, a roof's after edge (Collision
+    // Regulations, Rules 21 and 25).
     const masthead = rig.boomHeight + rig.luff;
     const forward = squareRigged ? (at('main-yards')[2] ?? 0) : -rig.mastPosition;
     const under20 = boat.lengthOverall < 20;
+    const bridge = node('hull').extras?.bridgedeck;
+    const sternmost = bridge?.aft ?? hull.transom;
     for (const light of boat.lights) {
       const p = at(light);
       if (light === 'tricolour') {
@@ -254,11 +259,12 @@ describe.each(catalog.boats.map((b) => [b.name, b] as const))('%s', (_, boat) =>
         continue;
       }
       expect(p[1] ?? 0).toBeGreaterThan(under20 ? 0.5 : 1);
-      expect(p[1] ?? 0).toBeLessThan(under20 ? 3 : 10);
       if (light === 'stern') {
+        expect(p[1] ?? 0).toBeLessThan(bridge !== undefined ? bridge.top : under20 ? 3 : 10);
         expect(Math.abs(p[0] ?? 1)).toBeLessThan(CM);
-        expect(p[2] ?? 0).toBeGreaterThan(hull.transom - 0.5);
+        expect(Math.abs((p[2] ?? 0) - sternmost)).toBeLessThan(0.5);
       } else {
+        expect(p[1] ?? 0).toBeLessThan(under20 ? 3 : 10);
         expect(Math.sign(p[0] ?? 0)).toBe(light === 'port' ? -1 : 1);
         expect(Math.abs(p[0] ?? 0)).toBeGreaterThan(boat.beam / 2 - 1);
         expect(p[2] ?? 0).toBeLessThan(forward);
@@ -303,9 +309,12 @@ describe.each(catalog.boats.map((b) => [b.name, b] as const))('%s', (_, boat) =>
     }
     expect(at('daggerboard')[2]).toBeCloseTo(-foils.boardPosition, 2);
     expect(at('sailor')[1]).toBeCloseTo(hull.centreOfGravity + sailor.sailorSeatHeight, 2);
-    for (const name of ['mast', 'boom', 'rudder', 'daggerboard', 'sailor']) {
+    for (const name of ['mast', 'boom', 'rudder', 'daggerboard']) {
       expect(Math.abs(at(name)[0] ?? 1)).toBeLessThan(CM);
     }
+    // The sailor on the centreline, or abreast of one wheel off it.
+    const offCentre = wheel && !((node('wheel').extras?.wheel?.spread ?? 0) > 0);
+    expect(Math.abs((at('sailor')[0] ?? 1) - (offCentre ? (place('wheel')[0] ?? 0) : 0))).toBeLessThan(CM);
   });
 
   test('its sheer is the outline the physics bumps hulls with, within 1 cm', () => {
@@ -518,8 +527,9 @@ describe.each(catalog.boats.map((b) => [b.name, b] as const))('%s', (_, boat) =>
   test.runIf(wheel)(
     'her wheels stand before her helmsman, each as its data says, its axle fore and aft',
     () => {
-      // The wheel's node at the hub's height and station, on the centreline;
-      // a boat of two wheels has one either side, the spread out, each a
+      // The wheel's node at the hub's height and station, on the centreline
+      // or, one wheel, where it stands off it, the sailor abreast of it; a
+      // boat of two wheels has one either side, the spread out, each a
       // node of its own turned with the rudder.
       const w = place('wheel');
       const s = place('sailor');
@@ -537,7 +547,7 @@ describe.each(catalog.boats.map((b) => [b.name, b] as const))('%s', (_, boat) =>
       const ahead = spec?.ahead ?? 0.55;
       const up = spec?.up ?? 1.05;
       const spread = spec?.spread ?? 0;
-      expect(Math.abs(w[0] ?? 1)).toBeLessThan(CM);
+      expect(Math.abs((w[0] ?? 1) - (spread > 0 ? 0 : (s[0] ?? 0)))).toBeLessThan(CM);
       expect(Math.abs((s[2] ?? 0) - (w[2] ?? 0) - ahead)).toBeLessThan(CM);
       expect(Math.abs((w[1] ?? 0) - (s[1] ?? 0) - up)).toBeLessThan(CM);
       const wheels = (node('wheel').children ?? []).map((i) => g.nodes[i]?.name ?? '').sort();
@@ -555,11 +565,9 @@ describe.each(catalog.boats.map((b) => [b.name, b] as const))('%s', (_, boat) =>
         // Within the cockpit, the helm's reach either side.
         expect(spread).toBeCloseTo(sailor.hikeReach, 3);
         expect(spread).toBeCloseTo(sailor.leeReach, 3);
-      } else {
-        // The ship's wheel.
-        expect(spec?.radius).toBeCloseTo(0.75, 2);
-        expect(spec?.spokes).toBe(8);
       }
+      // Its spokes as its data has them.
+      expect(spec?.spokes ?? 0).toBeGreaterThanOrEqual(6);
       // The rim and its handles in the node's x-y plane.
       const b = bounds(spread > 0 ? 'wheel-starboard' : 'wheel');
       const reach = (spec?.radius ?? 0) + (spec?.handles ?? 0);

@@ -184,7 +184,10 @@ func TestKeelAground(t *testing.T) {
 // to windward, though she is slower through the water. A heavy keelboat
 // stiff enough to stand up to 24 knots at full sail, heeling under 20°,
 // sails it in 32 knots, past where she heels 25°; heel costs her hull
-// little, so reefed she is slower, but by no more than a quarter.
+// little, so reefed she is slower, but by no more than a quarter. A
+// cruising catamaran, two hulls whose sailor never falls in, barely heels
+// there at full sail: she is reefed for the gusts, not for her speed, and
+// reefed twice is slower by no more than half.
 func TestReefingHeelsLess(t *testing.T) {
 	for _, boat := range testBoats(t) {
 		knots, angle, sheet := 24.0, 50.0, 0.1
@@ -197,6 +200,9 @@ func TestReefingHeelsLess(t *testing.T) {
 			m.run(90, nil)
 			if m.mean(30, func() float64 { return math.Abs(m.s.Heel) })/deg < 20 && boat.b.fallOutHeel >= math.Pi {
 				knots, keep = 32, 0.75
+				if boat.b.twin {
+					keep = 0.5
+				}
 			}
 		}
 		heel := func(reef float64) (float64, float64, *sim) {
