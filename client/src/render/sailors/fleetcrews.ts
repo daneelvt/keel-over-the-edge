@@ -581,7 +581,7 @@ export class FleetCrews {
     input.aft = c.aft;
     input.level = c.level;
     input.life.floor = kc.floor;
-    input.yacht = kc.plan.yacht ?? null;
+    input.cruiser = kc.plan.yacht ?? null;
     input.world = this.time;
     input.machine = p.look.machine;
     input.ways = waysOf(kc.plan);

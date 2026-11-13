@@ -703,7 +703,7 @@ export class CrewDeck {
     input.aft = this.#aft;
     input.level = this.#level;
     input.life.floor = this.#floor;
-    input.yacht = this.#plan?.yacht ?? null;
+    input.cruiser = this.#plan?.yacht ?? null;
     input.world = this.#world;
     input.machine = p.look.machine;
     input.ways = this.#plan === null ? null : waysOf(this.#plan);

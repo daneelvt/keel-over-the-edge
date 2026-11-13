@@ -524,7 +524,7 @@ describe.each(kinds.map((k) => [k.name, k] as const))('aboard the %s', (_, kind)
       a: stance(),
       b: stance(),
       level: { heel: 0, pitch: 0, heave: 0, cog: plan.cog ?? 0, solid: plan.solid ?? null },
-      yacht: plan.yacht ?? null,
+      cruiser: plan.yacht ?? null,
       world: 0,
       machine: l.machine,
       ways: waysOf(plan),

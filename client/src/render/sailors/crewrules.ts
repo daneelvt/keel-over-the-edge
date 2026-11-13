@@ -37,7 +37,7 @@
 // across or clear. At a handover the two pass along the windward hull, the
 // one going aft on its top, the one going forward on the net beside it.
 //
-// Aboard a cruising yacht (a plan with her deck, `yacht`), her crew sit
+// Aboard a cruising yacht (a plan with her deck), her crew sit
 // on her windward bench and her windward rail, and walk her ways (yacht.ts)
 // at a crouch: those on the bench cross the cockpit forward of the table
 // or aft of it, whichever is nearer, those on the rail the coachroof

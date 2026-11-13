@@ -139,7 +139,7 @@ export interface PoseInput {
   cat?: CatBoat | null;
   aft?: number;
   /** Aboard a cruising yacht, her deck; the world's time (s), which picks the idle on her bench; and whether the look is a machine's. */
-  yacht?: YachtBoat | null;
+  cruiser?: YachtBoat | null;
   world?: number;
   machine?: boolean;
   /** Aboard a cruising yacht, the idle on her bench to sit in, sitting up: set by the pose for the moment. */
@@ -165,7 +165,10 @@ export interface Level {
  * into; false if its clip is not there.
  */
 export function spotStance(
-  input: Pick<PoseInput, 'stations' | 'seat' | 'clips' | 'cat' | 'aft' | 'yacht' | 'idle' | 'ways'>,
+  input: Pick<
+    PoseInput,
+    'stations' | 'seat' | 'clips' | 'cat' | 'aft' | 'cruiser' | 'idle' | 'ways'
+  >,
   at: CrewSpot,
   out: 0 | 1,
   t: number,
@@ -176,7 +179,7 @@ export function spotStance(
   if (st === undefined) {
     return false;
   }
-  const yacht = input.yacht ?? null;
+  const yacht = input.cruiser ?? null;
   if (yacht !== null && yachtStance(input, yacht, at, out, t, into)) {
     return true;
   }
@@ -371,15 +374,15 @@ export function poseMember(body: CrewBody, member: CrewMember, input: PoseInput)
   how.carry = false;
   how.top = Number.NEGATIVE_INFINITY;
   let upright = input.life.upright;
-  const walk = input.yacht != null ? YACHT_CLIPS.cockpit : CROUCH_CLIPS.walk;
-  const ahead = input.yacht != null ? YACHT_WALK_AHEAD : 0;
+  const walk = input.cruiser != null ? YACHT_CLIPS.cockpit : CROUCH_CLIPS.walk;
+  const ahead = input.cruiser != null ? YACHT_WALK_AHEAD : 0;
   how.legs = 1;
   how.hands = Number.NEGATIVE_INFINITY;
   // Aboard a cruising yacht, on her bench: the idle now, by the world's time.
   input.idle = undefined;
   const at0: CrewSpot =
     mv === null || mv.t < 0 ? (mv?.from ?? { station: member.station, side: member.side }) : mv.to;
-  if (input.yacht != null && input.stations[at0.station]?.pose === 'bench') {
+  if (input.cruiser != null && input.stations[at0.station]?.pose === 'bench') {
     idleAt(member.seat, input.world ?? 0, YACHT_CLIPS.bench.length, idle);
     input.idle = benchIdle(input, member.company === true, idle.now);
     if ((mv === null || mv.t < 0) && member.lean <= 0 && idle.f < 1) {
@@ -475,7 +478,7 @@ const HANDS_OVER = 0.1;
 /** Off or onto a cruising yacht's rail: the legs in first under her lower lifeline, the hands carried over her upper. */
 function railTransition(input: PoseInput, at: CrewSpot, how: typeof theBlend): void {
   const st = input.stations[Math.max(0, at.station)];
-  const l = input.yacht?.lifelines ?? null;
+  const l = input.cruiser?.lifelines ?? null;
   if (!underLifelines(input, at) || st === undefined || l === null) {
     return;
   }
@@ -485,7 +488,7 @@ function railTransition(input: PoseInput, at: CrewSpot, how: typeof theBlend): v
 
 /** Whether a place is on a cruising yacht's rail, the legs over her side under her lifelines. */
 function underLifelines(input: PoseInput, at: CrewSpot): boolean {
-  return input.yacht != null && input.stations[Math.max(0, at.station)]?.pose === 'rail';
+  return input.cruiser != null && input.stations[Math.max(0, at.station)]?.pose === 'rail';
 }
 
 function smooth(x: number): number {
