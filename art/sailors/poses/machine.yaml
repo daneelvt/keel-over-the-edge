@@ -97,6 +97,11 @@ poses:
       hand_l: { at: yacht-seat, offset: [-0.1, -0.02, 0.0], pole: [0.6, 0.2, -0.3] }
 
 clips:
+  # The habit at a cruising catamaran's wheel: the same, made at hers.
+  machine-bridge-habit-wheel:
+    of: machine-habit-wheel
+    restage: bridgedeck
+    group: bridgedeck
   machine-yacht-wheel-seated:
     loop: true
     idle: true

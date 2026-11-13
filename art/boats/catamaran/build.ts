@@ -382,6 +382,8 @@ const LANDING_AFT = 2.65;
 const LADDER_IN = NOTCH_IN;
 const LADDER_FOOT = 3.65;
 const TREADS = 4;
+const LADDER_RAIL = LADDER_IN + 0.03;
+const LANDING_RAIL = LADDER_IN - 0.005;
 /** The wheel: its stance on the platform, its rim's size, its hub ahead of and above the stance. */
 const STANCE: Vec3 = [-2.6, PLAT_Y, 2.15];
 const WHEEL_RADIUS = 0.4;
@@ -392,34 +394,47 @@ const WHEEL_UP = 1.05;
 const HUB: Vec3 = [STANCE[0], STANCE[1] + WHEEL_UP, STANCE[2] - WHEEL_AHEAD];
 /** The console before the wheel. */
 const CONSOLE_AFT = NOTCH_FORE + 0.07;
-/** The settle: its front edge, its back, its top; from the platform's outer side to near its inner. */
+/**
+ * The settle: its front edge, its seat's after end where its back stands,
+ * its back's height, its top; from the platform's outer side to near its
+ * inner.
+ */
 const SETTLE_FORE = 2.5;
+const SETTLE_AFT = PLAT_AFT - 0.06;
+const SETTLE_BACK = 0.42;
 const SETTLE_TOP = PLAT_Y + 0.45;
 const SETTLE_OUT = -3.25;
-const SETTLE_IN = -1.65;
+const SETTLE_IN = -1.75;
 /** The cockpit's seats' tops, above the sole. */
 const SEAT_TOP = SOLE + 0.45;
-/** The L-shaped bench: its long leg along the starboard side, its forward leg along the bulkhead. */
-const LBENCH_FRONT = 1.95;
-const LBENCH_OUT = 2.45;
+/**
+ * The L-shaped bench: its long leg along the starboard side, its front
+ * edge over the hull's inner side (so the legs of those on it fall clear of
+ * the hull's deck to the sole), its forward leg along the bulkhead.
+ */
+const LBENCH_FRONT = 1.75;
+const LBENCH_OUT = 2.25;
 const LBENCH_LEG = 2.15;
 const LBENCH_INNER = 0.55;
 const LBENCH_AFT = 4.05;
-/** The table: 1.4 m by 0.82, its top at a table's height above the sole. */
+/** The table: 1.4 m by 0.72, its top at a table's height above the sole. */
 const TABLE: { x0: number; x1: number; z0: number; z1: number; y: number } = {
-  x0: 0.8,
-  x1: 1.62,
+  x0: 0.7,
+  x1: 1.42,
   z0: 2.45,
   z1: 3.85,
   y: SOLE + 0.72,
 };
-/** The bench along the aft crossbeam: its front edge, its back, its ends. */
+/**
+ * The bench along the aft crossbeam: its front edge, its back, its ends;
+ * short of the lounger, so the legs of those on it have the sole before it.
+ */
 const AFT_FRONT = 4.2;
 const AFT_BACK = 4.65;
-const AFT_PORT = -1.3;
+const AFT_PORT = -0.75;
 const AFT_STAR = LBENCH_OUT;
 /** The lounger: to port, aft of the ladder's foot, along the hull's side. */
-const LOUNGER_FRONT = -1.4;
+const LOUNGER_FRONT = -1.5;
 const LOUNGER_OUT = -2.65;
 const LOUNGER_FORE = 3.85;
 const LOUNGER_AFT = AFT_BACK;
@@ -443,7 +458,7 @@ const STATIONS: { at: Vec3; pose: string; facing: number }[] = [
   { at: [0.25, SEAT_TOP, AFT_FRONT + ON_SEAT], pose: 'seated', facing: 0 },
   { at: [0.85, SEAT_TOP, AFT_FRONT + ON_SEAT], pose: 'seated', facing: 0 },
   { at: [1.45, SEAT_TOP, AFT_FRONT + ON_SEAT], pose: 'seated', facing: 0 },
-  { at: [LOUNGER_FRONT - ON_SEAT, LOUNGER_TOP, 4.0], pose: 'seated', facing: 90 },
+  { at: [LOUNGER_FRONT - ON_SEAT, LOUNGER_TOP, 4.05], pose: 'seated', facing: 90 },
   { at: [LOUNGER_FRONT - ON_SEAT, LOUNGER_TOP, 4.5], pose: 'seated', facing: 90 },
 ];
 
@@ -900,18 +915,29 @@ function roundHouse(): {
   const notchSide = wall(nIn, nAft, [1, 0, 0], [0, 0, 0], 2);
   const notchFace = wall(nPort, nIn, [0, 0, 1], [0, 0, 0], 4);
   // The roof: laid planks fore and aft, from its front to its after edge,
-  // overhanging the sides; open over the helm.
+  // overhanging the sides; open over the helm, its landing and the head of
+  // its ladder, and on aft over the ladder as far as a sailor climbing it
+  // stands tall under the roof.
   const rx = HOUSE_SIDE + ROOF_OVER;
   const planks = D.small ? 22 : 2;
   const nz = D.small ? 24 : 4;
   const OPEN = {
     x0: PLAT_OUT - ROOF_OVER - 0.01,
-    x1: PLAT_IN + 0.05,
+    x1: LADDER_IN + 0.05,
     z0: NOTCH_FORE - 0.1,
     z1: PLAT_AFT + 0.05,
   };
+  /** The opening's after part, over the ladder: from its port side, aft to here. */
+  const LADDER_OPEN = { x0: PLAT_IN - 0.02, z1: LADDER_FOOT - 0.15 };
+  /** The roof's opening across at z: from x0 to x1, or none. */
+  const openAt = (z: number): [number, number] | null =>
+    z > OPEN.z0 && z < OPEN.z1
+      ? [-rx - 1, OPEN.x1]
+      : z >= OPEN.z1 && z < LADDER_OPEN.z1
+        ? [LADDER_OPEN.x0, OPEN.x1]
+        : null;
   const zs = Array.from({ length: nz + 1 }, (_, i) => lerp(ROOF_FRONT, ROOF_AFT, i / nz));
-  for (const z of [OPEN.z0, OPEN.z1]) {
+  for (const z of [OPEN.z0, OPEN.z1, LADDER_OPEN.z1]) {
     zs.push(z);
   }
   zs.sort((a, b) => a - b);
@@ -922,35 +948,42 @@ function roundHouse(): {
     for (let i = 0; i + 1 < zs.length; i++) {
       const z0 = zs[i] as number;
       const z1 = zs[i + 1] as number;
-      const zm = (z0 + z1) / 2;
-      const inOpen = zm > OPEN.z0 && zm < OPEN.z1;
-      // Over the helm the roof is open, from its port edge to the opening's inboard side.
-      const lo = inOpen ? Math.max(x0, OPEN.x1) : x0;
-      const hi = x1;
-      if (hi - lo < 1e-6) {
-        continue;
+      // The plank, but where the opening crosses it: none, one or two
+      // pieces of it.
+      const open = openAt((z0 + z1) / 2);
+      const pieces: [number, number][] =
+        open === null
+          ? [[x0, x1]]
+          : [
+              [x0, Math.min(x1, open[0])],
+              [Math.max(x0, open[1]), x1],
+            ];
+      for (const [lo, hi] of pieces) {
+        if (hi - lo < 1e-6) {
+          continue;
+        }
+        const seamC = D.seams ? shade(c, 0.6) : c;
+        const k = [
+          roof.vertex([lo, roofY(lo, z0), z0], seamC),
+          roof.vertex([hi, roofY(hi, z0), z0], c),
+          roof.vertex([hi, roofY(hi, z1), z1], c),
+          roof.vertex([lo, roofY(lo, z1), z1], seamC),
+        ];
+        roof.triFacing(k[0] as number, k[1] as number, k[2] as number, [0, 1, 0]);
+        roof.triFacing(k[0] as number, k[2] as number, k[3] as number, [0, 1, 0]);
+        // Its underside, varnished, seen from the cockpit.
+        if (!D.small) {
+          continue;
+        }
+        const u = [
+          wood.vertex([lo, roofY(lo, z0) - ROOF_THICK, z0], shade(VARNISH, 0.8)),
+          wood.vertex([hi, roofY(hi, z0) - ROOF_THICK, z0], shade(VARNISH, 0.8)),
+          wood.vertex([hi, roofY(hi, z1) - ROOF_THICK, z1], shade(VARNISH, 0.8)),
+          wood.vertex([lo, roofY(lo, z1) - ROOF_THICK, z1], shade(VARNISH, 0.8)),
+        ];
+        wood.triFacing(u[0] as number, u[1] as number, u[2] as number, [0, -1, 0]);
+        wood.triFacing(u[0] as number, u[2] as number, u[3] as number, [0, -1, 0]);
       }
-      const seamC = D.seams ? shade(c, 0.6) : c;
-      const k = [
-        roof.vertex([lo, roofY(lo, z0), z0], seamC),
-        roof.vertex([hi, roofY(hi, z0), z0], c),
-        roof.vertex([hi, roofY(hi, z1), z1], c),
-        roof.vertex([lo, roofY(lo, z1), z1], seamC),
-      ];
-      roof.triFacing(k[0] as number, k[1] as number, k[2] as number, [0, 1, 0]);
-      roof.triFacing(k[0] as number, k[2] as number, k[3] as number, [0, 1, 0]);
-      // Its underside, varnished, seen from the cockpit.
-      if (!D.small) {
-        continue;
-      }
-      const u = [
-        wood.vertex([lo, roofY(lo, z0) - ROOF_THICK, z0], shade(VARNISH, 0.8)),
-        wood.vertex([hi, roofY(hi, z0) - ROOF_THICK, z0], shade(VARNISH, 0.8)),
-        wood.vertex([hi, roofY(hi, z1) - ROOF_THICK, z1], shade(VARNISH, 0.8)),
-        wood.vertex([lo, roofY(lo, z1) - ROOF_THICK, z1], shade(VARNISH, 0.8)),
-      ];
-      wood.triFacing(u[0] as number, u[1] as number, u[2] as number, [0, -1, 0]);
-      wood.triFacing(u[0] as number, u[2] as number, u[3] as number, [0, -1, 0]);
     }
   }
   // The roof's edges: a varnished fascia round it, and round the opening.
@@ -980,21 +1013,16 @@ function roundHouse(): {
       fascia([x0, roofY(x0, z), z], [x1, roofY(x1, z), z], [0, 0, out]);
     }
   }
-  fascia(
-    [OPEN.x1, roofY(OPEN.x1, OPEN.z0), OPEN.z0],
-    [OPEN.x1, roofY(OPEN.x1, OPEN.z1), OPEN.z1],
-    [-1, 0, 0],
-  );
-  fascia(
-    [-rx, roofY(rx, OPEN.z0), OPEN.z0],
-    [OPEN.x1, roofY(OPEN.x1, OPEN.z0), OPEN.z0],
-    [0, 0, 1],
-  );
-  fascia(
-    [-rx, roofY(rx, OPEN.z1), OPEN.z1],
-    [OPEN.x1, roofY(OPEN.x1, OPEN.z1), OPEN.z1],
-    [0, 0, -1],
-  );
+  // Round the opening: its inboard side, its fore end, its after end over
+  // the platform, and the ladder's part's port side and after end.
+  const ox = OPEN.x1;
+  const lx = LADDER_OPEN.x0;
+  const lz = LADDER_OPEN.z1;
+  fascia([ox, roofY(ox, OPEN.z0), OPEN.z0], [ox, roofY(ox, lz), lz], [-1, 0, 0]);
+  fascia([-rx, roofY(rx, OPEN.z0), OPEN.z0], [ox, roofY(ox, OPEN.z0), OPEN.z0], [0, 0, 1]);
+  fascia([-rx, roofY(rx, OPEN.z1), OPEN.z1], [lx, roofY(lx, OPEN.z1), OPEN.z1], [0, 0, -1]);
+  fascia([lx, roofY(lx, OPEN.z1), OPEN.z1], [lx, roofY(lx, lz), lz], [1, 0, 0]);
+  fascia([lx, roofY(lx, lz), lz], [ox, roofY(ox, lz), lz], [0, 0, -1]);
   // The posts carrying the roof over the cockpit, on the hulls' decks and at the opening's after corner.
   const posts: [number, number, number][] = [
     [HOUSE_SIDE - 0.1, ROOF_AFT - 0.12, deckAt(HOUSE_SIDE - 0.1, ROOF_AFT - 0.12)],
@@ -1222,14 +1250,16 @@ function helmStation(): {
     );
   }
   if (D.small) {
-    // The rail, on the ladder's inboard side and round the landing's.
+    // The rail, on the ladder's inboard side, a little outboard of its
+    // treads (a coat's skirts clear of its posts), and round the landing's.
     const rail: Vec3[] = [
-      [LADDER_IN - 0.02, SOLE + 0.9, LADDER_FOOT],
-      [LADDER_IN - 0.02, PLAT_Y + 0.9, LANDING_AFT],
-      [LADDER_IN - 0.02, PLAT_Y + 0.9, PLAT_FORE + 0.25],
+      [LADDER_RAIL, SOLE + 0.9, LADDER_FOOT],
+      [LADDER_RAIL, PLAT_Y + 0.9, LANDING_AFT],
+      [LANDING_RAIL, PLAT_Y + 0.9, LANDING_AFT - 0.05],
+      [LANDING_RAIL, PLAT_Y + 0.9, PLAT_FORE + 0.25],
     ];
     bronze.tube(rail, [0.016], 6);
-    for (const p of rail) {
+    for (const p of [rail[0], rail[1], rail[3]] as Vec3[]) {
       bronze.tube(
         [[p[0], p[2] > LANDING_AFT ? SOLE + 0.02 + (p[1] - SOLE - 0.9) : PLAT_Y, p[2]], p],
         [0.014],
@@ -1287,13 +1317,13 @@ function helmStation(): {
   box(
     wood,
     [SETTLE_OUT, PLAT_Y, SETTLE_FORE],
-    [SETTLE_IN, SETTLE_TOP - 0.05, PLAT_AFT - 0.06],
+    [SETTLE_IN, SETTLE_TOP - 0.05, SETTLE_AFT],
     shade(VARNISH, 0.85),
   );
   const slats = D.small ? 5 : 1;
   for (let i = 0; i < slats; i++) {
-    const z0 = lerp(SETTLE_FORE, PLAT_AFT - 0.06, i / slats) + (D.small ? 0.004 : 0);
-    const z1 = lerp(SETTLE_FORE, PLAT_AFT - 0.06, (i + 1) / slats) - (D.small ? 0.004 : 0);
+    const z0 = lerp(SETTLE_FORE, SETTLE_AFT, i / slats) + (D.small ? 0.004 : 0);
+    const z1 = lerp(SETTLE_FORE, SETTLE_AFT, (i + 1) / slats) - (D.small ? 0.004 : 0);
     box(
       oak,
       [SETTLE_OUT, SETTLE_TOP - 0.05, z0],
@@ -1303,8 +1333,8 @@ function helmStation(): {
   }
   box(
     wood,
-    [SETTLE_OUT, SETTLE_TOP, PLAT_AFT - 0.06],
-    [SETTLE_IN, SETTLE_TOP + 0.42, PLAT_AFT],
+    [SETTLE_OUT, SETTLE_TOP, SETTLE_AFT],
+    [SETTLE_IN, SETTLE_TOP + SETTLE_BACK, SETTLE_AFT + 0.06],
     VARNISH,
   );
   return { deck: top, wood, oak, bronze, brass, glass };
@@ -1453,12 +1483,13 @@ function cockpitFurniture(): { wood: MeshBuilder; oak: MeshBuilder } {
     [LBENCH_OUT + 0.06, SEAT_TOP + 0.4, LBENCH_AFT],
     VARNISH,
   );
-  // The table, and its pedestal.
+  // The table, and its pedestal toward its inboard side, clear of the
+  // knees and coats of those on the bench.
   box(wood, [TABLE.x0, TABLE.y - 0.04, TABLE.z0], [TABLE.x1, TABLE.y, TABLE.z1], VARNISH);
   box(
     wood,
-    [(TABLE.x0 + TABLE.x1) / 2 - 0.08, SOLE, TABLE.z0 + 0.35],
-    [(TABLE.x0 + TABLE.x1) / 2 + 0.08, TABLE.y - 0.04, TABLE.z1 - 0.35],
+    [TABLE.x0 + 0.17, SOLE, TABLE.z0 + 0.35],
+    [TABLE.x0 + 0.23, TABLE.y - 0.04, TABLE.z1 - 0.35],
     shade(VARNISH, 0.8),
   );
   // The aft bench, its back the crossbeam's turned rail.
@@ -1473,7 +1504,8 @@ function cockpitFurniture(): { wood: MeshBuilder; oak: MeshBuilder } {
     D.small ? 8 : 4,
     OAK,
   );
-  for (const x of [LOUNGER_OUT + 0.1, -0.6, 0.6, 1.8, AFT_STAR]) {
+  // (The posts between the stations on it, clear of the backs of those sat there.)
+  for (const x of [LOUNGER_OUT + 0.1, -0.05, 0.55, 1.15, 1.75, AFT_STAR]) {
     oak.tube(
       [
         [x, SEAT_TOP - 0.02, AFT_BACK + 0.03],
@@ -2582,6 +2614,81 @@ function bridgedeckData(): Record<string, number> {
   };
 }
 
+/**
+ * Where her people sit, climb and walk, for the clips they are drawn with
+ * (art/sailors' stage of her, and the game placing them): each seat's
+ * front edge on its top where a clip of it is made (at a station), the way
+ * one sat there faces (degrees from ahead toward starboard, as a
+ * station's), the floor under the feet, the seat's back (how far behind
+ * the edge, and its top over the floor) and its ends along the edge (x
+ * or z as the edge runs); the table (its sides, ends and top); the
+ * ladder's foot and head on its middle where it is climbed from and to,
+ * its run (from its foot to the landing, z), its rise and run a tread,
+ * its treads' sides, its rail's line (inboard of the treads, its height
+ * over their nosings, and inboard of the landing); the sole where the
+ * cockpit is walked; the platform's height; the floors' plans.
+ */
+function seatsData(): Record<string, unknown> {
+  const v = (p: Vec3): number[] => p.map(round4);
+  const rise = (PLAT_Y - SOLE) / (TREADS + 1);
+  const run = (LADDER_FOOT - LANDING_AFT) / TREADS;
+  const mid = (PLAT_IN + LADDER_IN) / 2;
+  return {
+    helm: {
+      at: v([STATIONS[1]?.at[0] ?? 0, SETTLE_TOP, SETTLE_FORE]),
+      facing: 0,
+      floor: PLAT_Y,
+      back: round4(SETTLE_AFT - SETTLE_FORE),
+      backTop: round4(SETTLE_TOP + SETTLE_BACK - PLAT_Y),
+      along: v([SETTLE_OUT, SETTLE_IN, 0]).slice(0, 2),
+    },
+    table: {
+      at: v([LBENCH_FRONT, SEAT_TOP, 3.35]),
+      facing: 270,
+      floor: SOLE,
+      back: round4(LBENCH_OUT - LBENCH_FRONT),
+      backTop: round4(SEAT_TOP + 0.4 - SOLE),
+      along: v([LBENCH_LEG, LBENCH_AFT, 0]).slice(0, 2),
+      top: v([TABLE.x0, TABLE.x1, TABLE.z0]).concat(round4(TABLE.z1), round4(TABLE.y)),
+    },
+    beam: {
+      at: v([0.85, SEAT_TOP, AFT_FRONT]),
+      facing: 0,
+      floor: SOLE,
+      back: round4(AFT_BACK + 0.03 - AFT_FRONT),
+      backTop: round4(SEAT_TOP + 0.42 - SOLE),
+      along: v([AFT_PORT, AFT_STAR, 0]).slice(0, 2),
+    },
+    lounger: {
+      at: v([LOUNGER_FRONT, LOUNGER_TOP, 4.05]),
+      facing: 90,
+      floor: SOLE,
+      back: round4(LOUNGER_FRONT - LOUNGER_OUT),
+      backTop: round4(LOUNGER_TOP + 0.4 - SOLE),
+      along: v([LOUNGER_FORE, LOUNGER_AFT, 0]).slice(0, 2),
+    },
+    stairs: {
+      foot: v([mid, SOLE, LADDER_FOOT + 0.23]),
+      head: v([mid - 0.04, PLAT_Y, LANDING_AFT - 0.2]),
+      from: round4(LADDER_FOOT),
+      to: round4(LANDING_AFT),
+      rise: round4(rise),
+      run: round4(run),
+      treads: TREADS,
+      sides: v([PLAT_IN + 0.05, LADDER_IN - 0.05, 0]).slice(0, 2),
+      rail: v([LADDER_RAIL, 0.9, LANDING_RAIL]),
+    },
+    walk: v([-0.21, SOLE, 3.05]),
+    platform: PLAT_Y,
+    // The floors' plans, x from and to, z from and to: the cockpit's sole
+    // between the hulls' inner sides, the helm's platform and its landing.
+    floors: {
+      sole: [-1.6, LBENCH_FRONT, HOUSE_AFT, BRIDGE_AFT].map(round4),
+      platform: [PLAT_OUT, LADDER_IN, PLAT_FORE, PLAT_AFT].map(round4),
+    },
+  };
+}
+
 /** How far the model's plan, drawn straight between its stations, lies from the outline at most, in metres. */
 function planDeviation(): number {
   const s = stations();
@@ -3006,6 +3113,8 @@ function model(): NodeDef[] {
     },
     // The helm's stance at the wheel, on the platform.
     { name: 'sailor', translation: STANCE },
+    // Where her people sit, climb and walk.
+    { name: 'seats', extras: { seats: seatsData() } },
     { name: 'gunwale', translation: GUNWALE },
     {
       name: 'board-root',

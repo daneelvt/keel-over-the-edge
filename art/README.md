@@ -151,6 +151,7 @@ go run ./tools/sailors -add trapeze,trapeze-low      # and the harness with them
 go run ./tools/sailors -add rail,rail-out,crouch-enter,crouch-walk,crouch-exit
 go run ./tools/sailors -add cat-helm,cat-hike,hull,hull-wire,cat-trapeze,cat-trapeze-low,cat-righting,net-crouch-enter,net-crouch-left,net-crouch-right,net-crouch-exit,net-crawl-left,net-crawl-right
 go run ./tools/sailors -add yacht-wheel,yacht-wheel-seated,yacht-habit-wheel,bench,bench-shift,bench-nod,bench-talk,bench-braced,yacht-rail,yacht-rail-out,cockpit-crouch-walk,roof-crouch-walk
+go run ./tools/sailors -add bridge-wheel,bridge-habit-wheel,bridge-wheel-seated,helm-seat,helm-seat-shift,helm-seat-nod,helm-seat-talk,table-sit,table-shift,table-nod,table-talk,table-braced,beam-sit,beam-shift,beam-nod,beam-talk,beam-braced,lounger-sit,lounger-shift,lounger-nod,lounger-talk,cockpit-walk,cockpit-turn-left,cockpit-turn-right,stairs-up,stairs-down
 ```
 
 It needs Blender 5.2 LTS installed; the first run installs the pinned MPFB
@@ -426,6 +427,62 @@ kind):
 Those at the wheel, braced on the bench and on the rail have their
 `-port`; the bench's idles and the crossings are turned onto the port side,
 as a seat facing inboard is. The machines have no `bench-talk`.
+
+A cruising catamaran's people stand at her raised wheel and sit on the
+settle behind it, sit beside the helm, round her table, on her aft bench
+and on her lounger, walk her cockpit and go up and down her helm's ladder.
+The sailors' stage imports her to port of the rest (`tables.yaml`'s
+`stage.bridgedeck`, `build/stage.py`'s `Bridgedeck`) and reads her places
+from her model's nodes: the helm's stance (the `sailor` node), her wheel's
+hub and the grips on its rim (the `wheel` node); and her `seats` node's
+data: each seat's front edge where its clips are made (at a station of
+hers), the way one sat there faces, the floor before it and the top of its
+back; her table; her ladder's foot, landing, treads and rail; the sole
+where her cockpit is walked; her floors' plans. Every place belongs to a
+family whose own place it is placed from and whose way it faces: a clip's
+`-port` is at the same place, the figure its own mirror image (her places
+are hers alone, none mirrored across her), and a stage target's offset is
+in its family's frame (ahead as it faces, to the figure's left, up). Her
+hulls, bridgedeck, saloon, roof and its posts, platform, settle, console,
+capstans, ladder, seats, table, mast and boom are solid to the gates, her
+ropes and her bronze rails too but to the hands, and her wheel's wood but
+to the hands that hold it (a gate, "clear of the catamaran"); sat on her
+or on her ladder, the cloth is laid on her seats, floors and treads, and is
+through her if it is under a top of hers. Her clips are `<version>.bridgedeck.glb`, which only a
+kind whose catalog art names `bridgedeck` in `sailorClips` loads (the
+catalog's check refuses code quoting a kind's id):
+
+- `bridge-wheel`, the wheel's `helm-wheel` made at her wheel (a clip's
+  `restage: bridgedeck`), and `bridge-habit-wheel`, each look's habit at
+  the wheel made so; `bridge-wheel-seated`, sat on the settle behind the
+  stance, facing forward, the hands on the thighs (the settle is aft of
+  where the helm stands, the wheel beyond a hand's reach from it): placed
+  from the stance;
+- the ship's company's four sitting idles (Quaternius' `Sitting_*`) on each
+  of her seats (a retarget's `stage: bridge-helm`, `bridge-table`,
+  `bridge-beam`, `bridge-lounger`; the seat's edge `seat.knee` from the
+  knees): `helm-seat`, `-shift`, `-nod`, `-talk` beside the helm;
+  `table-sit`, `-shift`, `-nod`, `-talk` round her table; `beam-` on her
+  aft bench; `lounger-` on her lounger; placed from that seat's place;
+- `table-braced`, sat at the table's bench's front edge leaning in, the
+  right hand gripping the table's edge, the feet set wide; `beam-braced`,
+  sat on the aft bench leaning back against its rail, the left leg braced
+  out on the sole: placed from their seat's place;
+- `cockpit-walk` (`Walk_Loop`, its feet moving back at 0.9 m/s), and
+  `cockpit-turn-left` and `-right` (`Turn90_L`, `Turn90_R`, played over
+  1.8 s), on her sole: placed from where it is walked;
+- `stairs-up` and `stairs-down`, once through, the body carried up her
+  ladder from its foot to its landing facing up it, and down it facing aft:
+  key poses a step apart, the feet set on the treads (a pose's place
+  `bridge-stairs` or `bridge-landing`, its `shift` up and along the ladder),
+  the foot that steps next up on its toes, what is under a stepping foot
+  rising early in the step going up and falling late going down
+  (`motion.LADDER_UP`), the hands at the hips (clear of its rail and of the
+  settle beside it), a coat's front falling from the knee; what of the
+  cloth meets a tread is laid on it, as a seated figure's is on its seat;
+  placed from the ladder's foot and its landing.
+
+Those at the wheel and the braced have their `-port`.
 
 Every build is judged before anyone looks at it: the gates
 (`review/metrics.py`: budgets, clean meshes and weights, nothing through

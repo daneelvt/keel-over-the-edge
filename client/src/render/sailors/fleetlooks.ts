@@ -50,6 +50,7 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import type { WebGPURenderer } from 'three/webgpu';
 import type { SailorArt } from '../../catalog';
 import { seatFigure } from '../fleetparts';
+import { bridgeClips } from './bridgedeck';
 import { catClips } from './cat';
 import { Clip, Pose } from './clips';
 import { LayeredTexture } from './layers2d';
@@ -109,6 +110,9 @@ export class FleetLook {
   /** Its clips aboard a cruising yacht (yacht.ts), added to its clips when someone wearing it is aboard one; whether wanted. */
   cruiserState: LookState = 'none';
   yachted = false;
+  /** Its clips aboard a cruising catamaran (bridgedeck.ts), added to its clips when someone wearing it is aboard one; whether wanted. */
+  bridgeState: LookState = 'none';
+  bridged = false;
   /** Whether a boat with it has come near: its clips are wanted. */
   near = false;
   deck: DeckLook | null = null;
@@ -186,10 +190,12 @@ export class FleetLooks {
     aloft = false,
     catted = false,
     yachted = false,
+    bridged = false,
   ): void {
     look.near ||= near;
     look.catted ||= catted;
     look.yachted ||= yachted;
+    look.bridged ||= bridged;
     look.wired ||= wired;
     look.railed ||= railed;
     look.shipped ||= shipped || aloft;
@@ -298,6 +304,7 @@ export class FleetLooks {
       [look.aloft, 'aloftState', aloftClips],
       [look.catted && look.near, 'catState', catClips],
       [look.yachted && look.near, 'cruiserState', yachtClips],
+      [look.bridged && look.near, 'bridgeState', bridgeClips],
     ] as const) {
       if (wanted && look.clipsState === 'ready' && look[state] === 'none' && look.deck !== null) {
         look[state] = 'loading';
@@ -332,7 +339,8 @@ export class FleetLooks {
         look.shipState === 'loading' ||
         look.aloftState === 'loading' ||
         look.catState === 'loading' ||
-        look.cruiserState === 'loading'
+        look.cruiserState === 'loading' ||
+        look.bridgeState === 'loading'
       ) {
         await new Promise((r) => setTimeout(r, 10));
         this.want(look, true);
