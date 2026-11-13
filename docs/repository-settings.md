@@ -36,8 +36,10 @@ credential.
 - [ ] Push protection for yourself on
 - [ ] No classic personal access tokens; any token fine-grained, for this
       repository only, short-lived
-- [ ] Installed apps: Renovate only, on this repository only; no deploy keys,
-      no webhooks
+- [ ] Installed apps: Renovate, and the contributor agreement's own App
+      (**Keel Over the Edge contributor agreement**, infra/MANUAL-STEPS.md
+      section 15), each on this repository only; no deploy keys, no
+      webhooks but the App's own
 - [ ] Renovate's mode for this repository, in Mend's Developer Portal
       (developer.mend.io, signed in with GitHub): **Interactive**. Installed
       on all of an account's repositories, the hosted app starts in Silent
@@ -134,6 +136,39 @@ each push while it stays.
 - [ ] `render`: the browser tests that `pr.render` leaves to the night
       (`render-nightly.yaml`). Not a required check: of the browser tests
       the `main` ruleset requires `pr-render` alone.
+
+And the one label that runs no workflow:
+
+- [ ] `agreement-checked`: the owner has checked, after asking, the authors
+      of a pull request that the contributor agreement's check cannot match
+      to a GitHub account (an unlinked e-mail, a co-author by a private
+      address, a bot that cannot sign); `pr-agreement` then passes them.
+      People with a GitHub account still sign. Only collaborators can label.
+
+## Pull requests from outside
+
+Anyone may open a pull request (`pull_request_creation_policy` in
+`repository.json`). Before it is merged, everyone who wrote it has signed
+the contributor agreement: the `main` ruleset requires `pr-agreement`,
+posted by the agreement's App alone (its `integration_id`; a test holds it
+to the App ID the keeper runs with).
+
+- [ ] Settings → Actions → General → **Fork pull request workflows from
+      outside collaborators**: "Require approval for all external
+      contributors" (`actions.json` keeps it too): every workflow run on an
+      outsider's pull request waits for the owner, on every push.
+- [ ] Settings → Moderation options → **Reported content**: reports reach
+      the repository's admins (the code of conduct sends them there).
+- [ ] Settings → **Allow edits by maintainers** is the contributor's to
+      leave on; CONTRIBUTING.md asks them to.
+
+**Shutting the door again**, as in a flood of generated pull requests:
+Settings → Moderation options → **Interaction limits** → "Limit to prior
+contributors" or "Limit to repository collaborators", for 24 hours to six
+months, takes effect at once. For longer, set `pull_request_creation_policy`
+back to `collaborators_only` in `repository.json` and run `go run
+./tools/github -apply`. Either way, open pull requests stay open.
+CONTRIBUTING.md says which pull requests are closed without review.
 
 ## Not available to this repository
 

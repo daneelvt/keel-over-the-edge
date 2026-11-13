@@ -465,9 +465,74 @@ func (t *tool) rulesets() (map[string]int64, error) {
 	return out, nil
 }
 
-// apply writes every setting that differs, in order, then checks again.
+// lastKeys are the repository's settings applied after everything else:
+// pull requests from anyone are let in only once the rulesets, which
+// require the contributor agreement's check, are in place.
+var lastKeys = []string{"pull_request_creation_policy"}
+
+// splitLast splits the endpoints into those applied first, and the
+// settings of lastKeys, each an endpoint of its own, applied last.
+func splitLast(eps []endpoint) (first, last []endpoint) {
+	for _, ep := range eps {
+		var held map[string]any
+		for _, k := range lastKeys {
+			if v, ok := ep.Body[k]; ok && ep.Expect == nil {
+				if held == nil {
+					held = map[string]any{}
+				}
+				held[k] = v
+			}
+		}
+		if held == nil {
+			first = append(first, ep)
+			continue
+		}
+		rest := endpoint{Method: ep.Method, Path: ep.Path, ExpectStatus: ep.ExpectStatus, Body: map[string]any{}}
+		for k, v := range ep.Body {
+			if _, ok := held[k]; !ok {
+				rest.Body[k] = v
+			}
+		}
+		if len(rest.Body) > 0 {
+			first = append(first, rest)
+		}
+		last = append(last, endpoint{Method: ep.Method, Path: ep.Path, ExpectStatus: ep.ExpectStatus, Body: held})
+	}
+	return first, last
+}
+
+// apply writes every setting that differs, in order, then checks again:
+// the endpoints, the environments, the rulesets, and last lastKeys.
 func (t *tool) apply(s settings) error {
-	for _, ep := range s.endpoints {
+	first, last := splitLast(s.endpoints)
+	if err := t.applyEndpoints(first); err != nil {
+		return err
+	}
+	for _, env := range s.environments {
+		if err := t.applyEnvironment(env); err != nil {
+			return err
+		}
+	}
+	if err := t.applyRulesets(s.rulesets); err != nil {
+		return err
+	}
+	if err := t.applyEndpoints(last); err != nil {
+		return err
+	}
+	drift, err := t.check(s)
+	if err != nil {
+		return err
+	}
+	if len(drift) > 0 {
+		return fmt.Errorf("still different after applying:\n  %s", strings.Join(drift, "\n  "))
+	}
+	fmt.Fprintln(t.out, "github: the repository matches the settings")
+	return nil
+}
+
+// applyEndpoints writes each endpoint that differs, in order.
+func (t *tool) applyEndpoints(eps []endpoint) error {
+	for _, ep := range eps {
 		d, err := t.checkEndpoint(ep)
 		if err != nil {
 			return err
@@ -488,16 +553,16 @@ func (t *tool) apply(s settings) error {
 		}
 		fmt.Fprintf(t.out, "applied: %s %s\n", ep.Method, t.url(ep.Path))
 	}
-	for _, env := range s.environments {
-		if err := t.applyEnvironment(env); err != nil {
-			return err
-		}
-	}
+	return nil
+}
+
+// applyRulesets makes or replaces each ruleset that differs.
+func (t *tool) applyRulesets(rulesets []map[string]any) error {
 	existing, err := t.rulesets()
 	if err != nil {
 		return err
 	}
-	for _, want := range s.rulesets {
+	for _, want := range rulesets {
 		name := want["name"].(string)
 		method, path := "POST", "rulesets"
 		if id, ok := existing[name]; ok {
@@ -519,14 +584,6 @@ func (t *tool) apply(s settings) error {
 		}
 		fmt.Fprintf(t.out, "applied: ruleset %s\n", name)
 	}
-	drift, err := t.check(s)
-	if err != nil {
-		return err
-	}
-	if len(drift) > 0 {
-		return fmt.Errorf("still different after applying:\n  %s", strings.Join(drift, "\n  "))
-	}
-	fmt.Fprintln(t.out, "github: the repository matches the settings")
 	return nil
 }
 
