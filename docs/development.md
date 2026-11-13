@@ -230,8 +230,9 @@ and back aboard as she comes up. `render/sailors/catcrew.test.ts` holds a
 boat of two hulls' people clear of her and of each other through all of it.
 
 A station `on a bench` (`bench`) is a cockpit's bench's front edge on its
-top: only a boat whose model has a `bench` node has one, and the tool holds
-it there; a station on the rail of a boat with `lifelines` sits between its
+top: only a boat whose model has a `bench` node, or a `seats` node whose
+seats each give a front edge, a facing and its ends, has one, and the tool
+holds it there (on one of the seats, facing as it faces); a station on the rail of a boat with `lifelines` sits between its
 pulpit and pushpit, 0.25 m or more from every stanchion. A cruising yacht's
 people (her art's `sailorClips`, `cruiser`) are drawn with her own clips,
 placed from her model's places (`render/sailors/yacht.ts`): on her windward
@@ -252,6 +253,26 @@ it, to the place furthest from it along her side deck, so nobody passes
 anybody sat on the rail. `render/sailors/yachtcrew.test.ts` holds her eight
 clear of her (her lifelines as a solid) and of each other, and measures
 what getting up, sitting down and climbing brush for a moment.
+
+A cruising catamaran's people (her art's `sailorClips`, `bridgedeck`) are
+drawn with her own clips, placed from her model's `seats` node
+(`render/sailors/bridgedeck.ts`): each on her seat their station is on
+(the settle beside the helm, the L-bench round her table, her aft bench,
+her lounger), one of its sitting idles at a time, talking with someone
+near, and braced at the table and on the aft bench in an apparent wind
+past 7 m/s or as she pitches (`crewrules.ts`'s `BRACE_WIND`,
+`BRACE_PITCH`), not as she heels. Nobody crosses in a tack or a gybe. Her
+helm sits on the settle behind her wheel in a light wind and stands at it
+in a breeze, by the apparent wind alone, the hands on the rim standing.
+At a handover the two walk her ways (her model's `ways` node, walked by
+the ship's way graph, `bridgecrew.ts`): upright on her sole, two passing
+on the lane by her table each keeping right (`wide`); one at a time edging
+along the gaps between her seats and her table, standing, facing it
+(`narrow`); turning on the spot at her ladder's foot, and up or down it on
+its clips. `render/sailors/bridgecrew.test.ts` holds twelve clear of her
+and of each other, sat up and braced, through a tack and a gybe, and
+along every way of a handover from each of her seats; the sandbox's
+`?boat=<her id>&crew=12` shows them.
 
 ## The physics package
 

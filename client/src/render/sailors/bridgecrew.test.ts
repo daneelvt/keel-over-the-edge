@@ -555,6 +555,40 @@ describe.each(kinds.map((k) => [k.name, k] as const))('aboard the %s', (_, kind)
     ]);
   });
 
+  test('the order her seats fill: one at the helm; two, the companion beside the helm; six, four of them round the table; twelve, five round the table, three on the aft bench and two on the lounger', async () => {
+    const { plan, deck } = await setUp;
+    const families = (n: number): string[] => {
+      const rules = new CrewRules(plan);
+      rules.set(
+        { people: Array.from({ length: n }, (_, seat) => ({ seat, look: 0 })), holder: 0 },
+        false,
+      );
+      return rules.members
+        .filter((m) => m.station > 0)
+        .sort((a, b) => a.station - b.station)
+        .map(
+          (m) =>
+            seatOf(deck, kind.stations[m.station] as (typeof kind.stations)[number])?.family ?? '',
+        );
+    };
+    expect(families(1)).toEqual([]);
+    expect(families(2)).toEqual(['helm']);
+    expect(families(6)).toEqual(['helm', 'table', 'table', 'table', 'table']);
+    expect(families(12)).toEqual([
+      'helm',
+      'table',
+      'table',
+      'table',
+      'table',
+      'table',
+      'beam',
+      'beam',
+      'beam',
+      'lounger',
+      'lounger',
+    ]);
+  });
+
   test('twelve aboard sat up and braced, through their idles, the boom anywhere: nothing through anything, nobody through anybody', async () => {
     const { through } = await obstacles;
     const ls = await looks;
