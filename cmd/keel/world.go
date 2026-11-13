@@ -392,15 +392,17 @@ func (p *process) openWorld(ctx context.Context, rw *readyWorld) (*worldHalf, er
 		Build: p.build, Catalog: catalog.Version, Layout: physics.LayoutVersion,
 		Hold: b.Commands.Server(), Log: p.log, Metrics: p.metrics,
 		Chart: rw.charts.model, Written: rw.charts.model.Add, FoldWithin: rw.charts.model.FoldWithin(),
+		Logbook: bookOf(rw, cat),
 	})
 	h.sea = p.seaOf(h, rw, sighting)
 	world.Record(h.inputs, h.game, h.lasting, h.forecasts, p.agents.core.Open(h.sea))
+	logs := p.logsOf(row.Number)
 	h.tools = ownerTools(ownerConfig{
 		cat: cat, bus: b, bundle: rw.bundle, made: rw.held.made, sailed: row, wcfg: p.wcfg, timeline: timeline, terrain: rw.terrain,
 		db: p.db, sessions: p.sessions, game: h.game, charts: rw.charts, clock: h.loop, page: p.ownPage, log: p.log, metrics: p.metrics,
 		lifecycle: p, from: p.nextView.Load(), forecasts: h.forecasts, agents: p.agents, hand: p.hand,
 		aiCap: world.AICap(), aiReserve: world.AIReserve(), life: rw.life,
-		switches: p.switches, chat: p.chatDB(), reports: p.reports, hub: h.chat,
+		switches: p.switches, chat: p.chatDB(), reports: p.reports, hub: h.chat, logs: logs,
 	})
 	playCfg := api.Config{
 		Version:   api.Version{Build: p.build, Catalog: catalog.Version},
@@ -437,6 +439,7 @@ func (p *process) openWorld(ctx context.Context, rw *readyWorld) (*worldHalf, er
 	if p.shipmates != nil {
 		playCfg.Shipmates = p.shipmates
 	}
+	playCfg.Logs = logs
 	h.watch = watch.New(watch.Config{Store: p.db, Frames: b.Frames, Edge: h.game, Kinds: boatIDs(cat), Sea: h.sea, Agent: p.agentAttends,
 		Blocks: func(a, b bus.Account) bool { return p.ties.Blocks(a, b) }})
 	playCfg.Watch = h.watch

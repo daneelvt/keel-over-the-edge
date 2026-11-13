@@ -235,6 +235,9 @@ func (m *Model) Charting(c *bus.Charted) store.Charting {
 	return row
 }
 
+// What is what subject i of the world is, as the news says it.
+func (m *Model) What(i int32) string { return m.what(&m.world.Subjects[i]) }
+
 // what is what a subject is, as the news says it: "an island of the rim",
 // "a lighthouse on Gannet Holm", "a reef of the middle waters". An island
 // is named only once it is charted: before, "a lighthouse on uncharted

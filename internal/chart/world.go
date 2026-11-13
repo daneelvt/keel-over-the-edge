@@ -35,12 +35,13 @@ type Subject struct {
 	News  bool
 	// An island's: its land's bounds, m east and north (west, south, east,
 	// north), its highest, its zone and its class of scenery, and its
-	// model, by its index in World.Models, or -1.
+	// model, by its index in World.Models, or -1; and its biome.
 	Bounds  [4]float64
 	Highest float64
 	Zone    string
 	Class   string
 	Model   int
+	Biome   string
 	// Light is a lighthouse's light, by its index in the bundle's lights,
 	// or -1; Ship a wreck's ship's name; Sunk, that she lies sunk.
 	Light int
@@ -100,6 +101,24 @@ func KindOf(w string) uint8 {
 		return sight.Feature
 	}
 	return 0
+}
+
+// WorldOf is a world of the subjects given and nothing else: no sight
+// table, no models. For tests, and for what reads a world's subjects
+// alone.
+func WorldOf(subjects []Subject) *World {
+	w := &World{Subjects: subjects, byIsland: map[int32]int32{}, byPlace: map[int32]int32{}, byFeature: map[int32]int32{}}
+	for i, s := range subjects {
+		switch s.Kind {
+		case sight.Island:
+			w.byIsland[s.Number] = int32(i)
+		case sight.Place:
+			w.byPlace[s.Number] = int32(i)
+		case sight.Feature:
+			w.byFeature[s.Number] = int32(i)
+		}
+	}
+	return w
 }
 
 // Index is the subject of a kind and number, or −1.
@@ -180,7 +199,8 @@ func Build(b *worldgen.Bundle, cat *catalog.Catalog) *World {
 		s := Subject{
 			Subject: sight.Subject{Kind: sight.Island, Number: is.Number, Island: -1, X: is.X, Y: is.Y, Top: is.Highest, Seen: sight.ByLand},
 			Name:    is.Name, Title: is.Name, Sort: sizes[is.Size], Highest: is.Highest, Zone: is.Zone, Class: is.Class, Model: -1, Light: -1,
-			News: true,
+			Biome: is.Biome,
+			News:  true,
 		}
 		if is.Group >= 0 {
 			for _, g := range b.Groups {

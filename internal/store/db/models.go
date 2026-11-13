@@ -35,6 +35,7 @@ type Account struct {
 	AppearOffline  bool
 	WatchCode      string
 	FleetCode      pgtype.Text
+	LogShown       pgtype.Text
 }
 
 type AccountAction struct {
@@ -160,6 +161,66 @@ type Light struct {
 	Focal     float64
 	Tower     float64
 	Daymark   int16
+}
+
+type LogEntry struct {
+	ID           pgtype.UUID
+	AccountID    pgtype.UUID
+	Source       string
+	World        int32
+	At           time.Time
+	Kind         string
+	Title        string
+	What         string
+	Worth        float32
+	Grp          pgtype.Text
+	Find         pgtype.Text
+	X            pgtype.Float4
+	Y            pgtype.Float4
+	Place        pgtype.Text
+	OtherID      pgtype.UUID
+	OtherName    pgtype.Text
+	OtherMachine bool
+	OtherBoat    pgtype.Text
+	Article      pgtype.Text
+	Fault        pgtype.Text
+}
+
+type LogFind struct {
+	AccountID  pgtype.UUID
+	Grp        string
+	Find       string
+	Count      int32
+	FirstWorld int32
+	FirstAt    time.Time
+	FirstPlace pgtype.Text
+	LastWorld  int32
+}
+
+type LogVoyage struct {
+	ID             pgtype.UUID
+	AccountID      pgtype.UUID
+	Source         string
+	World          int32
+	Aboard         bool
+	Boat           int64
+	BoatKind       string
+	BoatName       pgtype.Text
+	BeganAt        time.Time
+	EndedAt        time.Time
+	How            string
+	Run            pgtype.Float4
+	Place          pgtype.Text
+	Least          pgtype.Float4
+	BumpsAt        int16
+	BumpsNot       int16
+	Met            int16
+	GalePlace      pgtype.Text
+	FogPlace       pgtype.Text
+	SkipperID      pgtype.UUID
+	SkipperName    pgtype.Text
+	SkipperMachine bool
+	Crew           []byte
 }
 
 type Mute struct {
@@ -368,6 +429,7 @@ type Setting struct {
 	ShipmateMessages bool
 	ChatCountries    []string
 	SpectatorChat    bool
+	LogFrom          time.Time
 }
 
 type Shipmate struct {
