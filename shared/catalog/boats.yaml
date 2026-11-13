@@ -1896,10 +1896,10 @@ boats:
       - { at: [1.45, 1.6, 2.11], pose: bench, facing: 180 }
       - { at: [1.79, 1.6, 2.8], pose: bench, facing: 270 }
       - { at: [1.79, 1.6, 3.35], pose: bench, facing: 270 }
-      - { at: [1.79, 1.6, 3.9], pose: bench, facing: 270 }
-      - { at: [0.25, 1.6, 4.24], pose: bench, facing: 0 }
-      - { at: [0.85, 1.6, 4.24], pose: bench, facing: 0 }
-      - { at: [1.45, 1.6, 4.24], pose: bench, facing: 0 }
+      - { at: [1.79, 1.6, 3.85], pose: bench, facing: 270 }
+      - { at: [0.1, 1.6, 4.24], pose: bench, facing: 0 }
+      - { at: [0.65, 1.6, 4.24], pose: bench, facing: 0 }
+      - { at: [1.2, 1.6, 4.24], pose: bench, facing: 0 }
       - { at: [-1.54, 1.55, 4.05], pose: bench, facing: 90 }
       - { at: [-1.54, 1.55, 4.5], pose: bench, facing: 90 }
     lengthOverall: 12.8 # Lagoon

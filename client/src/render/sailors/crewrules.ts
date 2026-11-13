@@ -63,7 +63,14 @@
 import { Vector3 } from 'three';
 import type { BoatStation } from '../../catalog';
 import { CLIMBING, IN_WATER, ON_BOARD, SAILING } from '../sailor';
-import { BRIDGE_WALK_SPEED, type BridgeCrew, type BridgeLadder, standPoint } from './bridgedeck';
+import {
+  BRIDGE_RISE,
+  BRIDGE_SIT,
+  BRIDGE_WALK_SPEED,
+  type BridgeCrew,
+  type BridgeStretch,
+  standPoint,
+} from './bridgedeck';
 import { type CatBoat, crawlFor, NetCross, netWay } from './cat';
 import type { ShipMoment, ShipPlan } from './shiprules';
 import type { HullSolid } from './solid';
@@ -849,6 +856,23 @@ export function changePath(
   );
 }
 
+/** Whether someone moving is on a cruising catamaran's ladder (or at its foot or head) t seconds into a move. */
+function onLadder(mv: CrewMove, t: number): boolean {
+  const ls = mv.stretches ?? [];
+  const rise = mv.rise ?? RISE;
+  if (t <= rise || !ls.some((l) => l.kind !== 'edge')) {
+    return false;
+  }
+  const s = alongAt(mv.path, mv.speed ?? CROSS_SPEED, ls, t - rise);
+  return ls.some((l) => l.kind !== 'edge' && s > l.s0 - LADDER_CLEAR && s < l.s1 + LADDER_CLEAR);
+}
+
+/** How far along a walk from her ladder's foot or head someone is still in the way of another on it, m. */
+const LADDER_CLEAR = 0.6;
+
+/** Aboard a cruising catamaran, how far apart two walking keep, m: upright, passing each other where her ways let two pass. */
+export const KEEP_PASSING = 0.42;
+
 /** How far apart, m, two people changing places keep while both move, and while one waits at their place or is at their new one; and the most a walk waits for another to pass, s. */
 export const KEEP = 0.8;
 export const KEEP_CROUCH = 1.3;
@@ -921,8 +945,13 @@ function nearestOf(plan: CrewPlan, mv: CrewMove, delay: number, other: CrewMove)
     }
     moveSpot(plan, mv, t - delay, a);
     moveSpot(plan, other, ot, b);
-    // Aboard a cruising yacht, at her crouch: its head well ahead of its hips.
-    const keep = plan.yacht != null ? KEEP_CROUCH : KEEP;
+    // Aboard a cruising yacht, at her crouch: its head well ahead of its
+    // hips; aboard a cruising catamaran, upright, passing where her ways
+    // let two pass, and one at a time on her ladder.
+    const keep = plan.yacht != null ? KEEP_CROUCH : plan.bridge != null ? KEEP_PASSING : KEEP;
+    if (plan.bridge != null && onLadder(mv, t - delay) && onLadder(other, ot)) {
+      least = Math.min(least, -1);
+    }
     least = Math.min(least, Math.hypot(a.x - b.x, a.z - b.z) - (sa || sb ? KEEP_STILL : keep));
   }
   return least;
@@ -1125,10 +1154,12 @@ export interface CrewMove {
   /** Across a beach cat's net: where they are on it; and the time they came to its other side (undefined till then). */
   net?: NetCross | null;
   arrived?: number;
-  /** How fast they walk along the path, m/s: CROSS_SPEED if not said. */
+  /** How fast they walk along the path, m/s: CROSS_SPEED if not said; and how long getting up and sitting down take, s (RISE and SIT if not said). */
   speed?: number;
-  /** Aboard a cruising catamaran, her ladder on the path, climbed over its own time; null for none. */
-  ladder?: BridgeLadder | null;
+  rise?: number;
+  sit?: number;
+  /** Aboard a cruising catamaran, the stretches of the path not walked (her ladder, a gap edged along), each over its own time, in order along it. */
+  stretches?: BridgeStretch[];
 }
 
 /** Someone in the water after a capsize: in it, up on the hull righting her, or climbing back aboard; seconds since; and whether thrown off over her bows. */
@@ -1155,39 +1186,49 @@ export function moveAt(
     out.sit = m.arrived === undefined ? 0 : Math.max(0, Math.min(1, (t - m.arrived) / SIT));
     return out;
   }
-  const walk = walkTime(m.path, m.speed ?? CROSS_SPEED, m.ladder ?? null);
-  out.rise = Math.min(1, t / RISE);
-  out.along = alongAt(m.path, m.speed ?? CROSS_SPEED, m.ladder ?? null, t - RISE);
-  out.sit = Math.max(0, Math.min(1, (t - RISE - walk) / SIT));
+  const walk = walkTime(m.path, m.speed ?? CROSS_SPEED, m.stretches ?? []);
+  const rise = m.rise ?? RISE;
+  out.rise = Math.min(1, t / rise);
+  out.along = alongAt(m.path, m.speed ?? CROSS_SPEED, m.stretches ?? [], t - rise);
+  out.sit = Math.max(0, Math.min(1, (t - rise - walk) / (m.sit ?? SIT)));
   return out;
 }
 
-/** Seconds along a path at a speed, its ladder (if any) over its own time. */
-export function walkTime(path: CrewPath, speed: number, ladder: BridgeLadder | null): number {
-  return ladder === null
-    ? path.length / speed
-    : (path.length - (ladder.s1 - ladder.s0)) / speed + ladder.time;
+/** Seconds along a path at a speed, its stretches not walked each over its own time. */
+export function walkTime(
+  path: CrewPath,
+  speed: number,
+  stretches: readonly BridgeStretch[],
+): number {
+  let t = path.length / speed;
+  for (const l of stretches) {
+    t += l.time - (l.s1 - l.s0) / speed;
+  }
+  return t;
 }
 
-/** How far along a path someone walking it at a speed has come t seconds in, its ladder (if any) climbed over its own time. */
+/** How far along a path someone walking it at a speed has come t seconds in, its stretches not walked (in order along it) each over its own time. */
 export function alongAt(
   path: CrewPath,
   speed: number,
-  ladder: BridgeLadder | null,
+  stretches: readonly BridgeStretch[],
   t: number,
 ): number {
-  const tt = Math.max(0, t);
-  if (ladder === null) {
-    return Math.min(path.length, tt * speed);
+  let left = Math.max(0, t);
+  let s = 0;
+  for (const l of stretches) {
+    const walked = (l.s0 - s) / speed;
+    if (left <= walked) {
+      return s + left * speed;
+    }
+    left -= walked;
+    if (left <= l.time) {
+      return l.s0 + ((l.s1 - l.s0) * left) / Math.max(1e-6, l.time);
+    }
+    left -= l.time;
+    s = l.s1;
   }
-  const t0 = ladder.s0 / speed;
-  if (tt <= t0) {
-    return tt * speed;
-  }
-  if (tt <= t0 + ladder.time) {
-    return ladder.s0 + ((ladder.s1 - ladder.s0) * (tt - t0)) / ladder.time;
-  }
-  return Math.min(path.length, ladder.s1 + (tt - t0 - ladder.time) * speed);
+  return Math.min(path.length, s + left * speed);
 }
 
 function moveOf(
@@ -1197,19 +1238,19 @@ function moveOf(
   delay: number,
   kind: CrewMove['kind'],
   speed = CROSS_SPEED,
-  ladder: BridgeLadder | null = null,
+  stretches: BridgeStretch[] = [],
 ): CrewMove {
   return {
     path,
     from,
     to,
     t: -delay,
-    duration: RISE + walkTime(path, speed, ladder) + SIT,
+    duration: RISE + walkTime(path, speed, stretches) + SIT,
     kind,
     waited: 0,
     after: null,
     speed,
-    ladder,
+    stretches,
   };
 }
 
@@ -1426,6 +1467,10 @@ export class CrewRules {
       const sat = members
         .filter((m) => m.moving === null && m.station > 0)
         .map((m) => this.#spotZ(m.station));
+      const walkers = new Set(walking.map((w) => w.m));
+      const staying = members
+        .filter((m) => !walkers.has(m) && m.moving === null && m.station > 0)
+        .map((m) => m.station);
       let floor = false;
       const moves = walking.map(({ m, from, to }) => {
         const z0 = this.#spotZ(from.station);
@@ -1440,13 +1485,19 @@ export class CrewRules {
         const bridge = this.plan.bridge ?? null;
         const st = this.plan.stations;
         if (bridge !== null) {
-          // Aboard a cruising catamaran, by her ways, upright, up or down her ladder.
+          // Aboard a cruising catamaran, by her ways, upright, up or down
+          // her ladder, keeping off those who stay sat where it can.
           const walk = bridge.walk(
             standPoint(bridge.boat, st[Math.max(0, from.station)], from.station < 0, new Vector3()),
             standPoint(bridge.boat, st[Math.max(0, to.station)], to.station < 0, new Vector3()),
+            staying.map((k) => standPoint(bridge.boat, st[k], false, new Vector3())),
           );
           floor = true;
-          const mv = moveOf(walk.path, from, to, 0, 'change', BRIDGE_WALK_SPEED, walk.ladder);
+          const mv = moveOf(walk.path, from, to, 0, 'change', BRIDGE_WALK_SPEED, walk.stretches);
+          mv.rise = BRIDGE_RISE;
+          mv.sit = BRIDGE_SIT;
+          mv.duration =
+            BRIDGE_RISE + walkTime(walk.path, BRIDGE_WALK_SPEED, walk.stretches) + BRIDGE_SIT;
           m.moving = mv;
           return mv;
         }

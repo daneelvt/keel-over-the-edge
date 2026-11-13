@@ -24,14 +24,16 @@ import type { BoatStation, StationPose } from '../../catalog';
 import {
   BRIDGE_CLIPS,
   BRIDGE_NOT_FOR_MACHINES,
+  BRIDGE_PIVOT_TIME,
   BRIDGE_SEATS,
   BRIDGE_WALK_SPEED,
   type BridgeBoat,
-  type BridgeLadder,
+  type BridgeStretch,
   bridgePlace,
   facingDir,
   seatAnchor,
   seatOf,
+  standPoint,
 } from './bridgedeck';
 import {
   CAT_CLIPS,
@@ -412,48 +414,124 @@ function seatIdle(input: PoseInput, idles: readonly string[], company: boolean, 
     : (idles[0] as string);
 }
 
-/** Of her ladder, how much at each end the climb is blended with the walk: in from it, and out to it. */
-const LADDER_BLEND = 0.08;
+/** How far along a walk, m, edging along a gap is blended with the walk at each end of it. */
+const EDGE_BLEND = 0.2;
 
 /**
- * Aboard a cruising catamaran, s along a walk with her ladder on it, into
- * into: the ladder's clip, up from its foot or down from its head, played
- * through as far as they have come up or down it; placed from where it was
- * made. False if the clip is not there.
+ * Aboard a cruising catamaran, standing on her floor at a point, the feet
+ * side by side, facing a yaw (the figure's +z turned to (sin yaw, cos
+ * yaw)), into into: the first moment of her ladder's climb, where it
+ * stands at its foot facing up it, moved there. False without the clip.
  */
-function ladderStance(
+function standingAt(
   input: PoseInput,
-  bridge: BridgeBoat,
-  ladder: BridgeLadder,
-  s: number,
+  x: number,
+  y: number,
+  z: number,
+  yaw: number,
   into: Stance,
 ): boolean {
-  const name = ladder.up ? BRIDGE_CLIPS.up : BRIDGE_CLIPS.down;
-  const c = input.clips.get(name) ?? null;
+  const c = input.clips.get(BRIDGE_CLIPS.up) ?? null;
   if (c === null || c.place === null) {
     return false;
   }
-  const f = Math.max(0, Math.min(1, (s - ladder.s0) / Math.max(1e-6, ladder.s1 - ladder.s0)));
   into.clip = c;
-  into.t = Math.min(f * c.duration, c.duration - 1e-3);
-  placeStance(
-    into,
-    bridgePlace(c.place, ladder.up ? bridge.places.foot : bridge.places.landing, m),
-  );
+  into.t = 0;
+  anchor.at.set(x, y, z);
+  anchor.facing = 180 - (yaw * 180) / Math.PI;
+  placeStance(into, bridgePlace(c.place, anchor, m));
   return true;
 }
 
 /**
+ * Aboard a cruising catamaran, s along a stretch of a walk not walked,
+ * into into (and b, blended by how.f, or not): up her ladder, turning on
+ * the spot at its foot to face up it (from the walk there), then its clip
+ * from its foot; down it, its clip from its head, then turning on the spot
+ * at its foot to the walk on; or standing, edging along a gap facing her
+ * table. False if b is not used.
+ */
+function stretchStance(
+  input: PoseInput,
+  bridge: BridgeBoat,
+  rig: Rig,
+  path: CrewPath,
+  l: BridgeStretch,
+  s: number,
+  into: Stance,
+  b: Stance | null = null,
+  how: typeof theBlend | null = null,
+  stretches: readonly BridgeStretch[] | null = null,
+): boolean {
+  if (l.kind === 'edge') {
+    path.at(Math.max(l.s0, Math.min(l.s1, s)), along);
+    standingAt(input, along.x, along.y, along.z, l.yaw, into);
+    return false;
+  }
+  const up = l.kind === 'up';
+  const c = input.clips.get(up ? BRIDGE_CLIPS.up : BRIDGE_CLIPS.down) ?? null;
+  if (c === null || c.place === null) {
+    return false;
+  }
+  const f = Math.max(0, Math.min(1, (s - l.s0) / Math.max(1e-6, l.s1 - l.s0)));
+  const time = f * l.time;
+  const climb = l.time - BRIDGE_PIVOT_TIME;
+  const ct = up ? time - BRIDGE_PIVOT_TIME : time;
+  into.clip = c;
+  into.t = Math.max(0, Math.min(ct * (c.duration / climb), c.duration - 1e-3));
+  placeStance(into, bridgePlace(c.place, up ? bridge.places.foot : bridge.places.landing, m));
+  if (b === null || how === null) {
+    return false;
+  }
+  // At its foot, how one comes to it or goes on from it: edging, or walking.
+  const at = up ? l.s0 : l.s1;
+  const by = (stretches ?? []).find(
+    (e) => e.kind === 'edge' && Math.abs((up ? e.s1 : e.s0) - at) < 0.02,
+  );
+  if (up && time < BRIDGE_PIVOT_TIME) {
+    // Turning to face up it.
+    if (by !== undefined) {
+      stretchStance(input, bridge, rig, path, by, at, b);
+    } else {
+      bridgeWalk(input.clips, rig, path, [l], at, b);
+    }
+    how.f = 1 - smooth(time / BRIDGE_PIVOT_TIME);
+    return true;
+  }
+  if (!up && time > climb) {
+    // Down: turning from facing aft to go on.
+    if (by !== undefined) {
+      stretchStance(input, bridge, rig, path, by, at, b);
+    } else {
+      bridgeWalk(input.clips, rig, path, [l], at, b);
+    }
+    how.f = smooth((time - climb) / BRIDGE_PIVOT_TIME);
+    return true;
+  }
+  return false;
+}
+
+/** The stretch not walked a walk is on at s; null if walked there. */
+function stretchAt(stretches: readonly BridgeStretch[], s: number): BridgeStretch | null {
+  for (const l of stretches) {
+    if (s > l.s0 && s < l.s1) {
+      return l;
+    }
+  }
+  return null;
+}
+
+/**
  * Aboard a cruising catamaran, her upright walk s along a path into into:
- * whole steps on each stretch walked (from its start, or from the ladder's
- * head or foot, to the next), the feet together at each end; they keep
- * their place on her floor, a step's length the walk's own.
+ * whole steps on each stretch walked (between those not walked), the feet
+ * together at each end; they keep their place on her floor, a step's
+ * length the walk's own.
  */
 function bridgeWalk(
   clips: Map<string, Clip>,
   rig: Rig,
   path: CrewPath,
-  ladder: BridgeLadder | null,
+  stretches: readonly BridgeStretch[],
   s: number,
   into: Stance,
 ): boolean {
@@ -463,11 +541,12 @@ function bridgeWalk(
   const stride = c === null ? 1 : (c.duration * BRIDGE_WALK_SPEED) / 2;
   let from = 0;
   let to = path.length;
-  if (ladder !== null) {
-    if (s <= ladder.s0) {
-      to = ladder.s0;
-    } else {
-      from = ladder.s1;
+  for (const l of stretches) {
+    if (l.s1 <= s + 1e-6) {
+      from = Math.max(from, l.s1);
+    }
+    if (l.s0 >= s - 1e-6) {
+      to = Math.min(to, l.s0);
     }
   }
   const length = Math.max(1e-6, to - from);
@@ -478,6 +557,103 @@ function bridgeWalk(
   into.yaw = yaw;
   into.tilt.identity();
   return c !== null;
+}
+
+/**
+ * Aboard a cruising catamaran, s along a walk into a (and b, how far by
+ * how.f, or null): walking; up or down her ladder, blended with the walk
+ * at its foot and its head; edging along a gap, blended with the walk at
+ * its ends.
+ */
+function onTheWay(
+  input: PoseInput,
+  bridge: BridgeBoat,
+  mv: NonNullable<CrewMember['moving']>,
+  rig: Rig,
+  s: number,
+  a: Stance,
+  b: Stance,
+  how: typeof theBlend,
+): boolean {
+  const ls = mv.stretches ?? [];
+  const path = mv.path;
+  const l = stretchAt(ls, s);
+  if (l !== null && l.kind !== 'edge') {
+    return stretchStance(input, bridge, rig, path, l, s, a, b, how, ls);
+  }
+  if (l !== null) {
+    stretchStance(input, bridge, rig, path, l, s, a);
+    // Into the next gap round a corner, turning to face the table there.
+    const next = ls.find((e) => e.kind === 'edge' && Math.abs(e.s0 - l.s1) < 1e-3);
+    if (next !== undefined && l.s1 - s < EDGE_BLEND) {
+      stretchStance(input, bridge, rig, path, next, next.s0, b);
+      how.f = smooth(1 - (l.s1 - s) / EDGE_BLEND) * 0.5;
+      return true;
+    }
+    const prev = ls.find((e) => e.kind === 'edge' && Math.abs(e.s1 - l.s0) < 1e-3);
+    if (prev !== undefined && s - l.s0 < EDGE_BLEND) {
+      stretchStance(input, bridge, rig, path, prev, prev.s1, b);
+      how.f = 0.5 * (1 - smooth((s - l.s0) / EDGE_BLEND));
+      return true;
+    }
+    return false;
+  }
+  // Walking: near a gap edged along, blended with edging there.
+  for (const e of ls) {
+    if (e.kind !== 'edge') {
+      continue;
+    }
+    const d = s <= e.s0 ? e.s0 - s : s >= e.s1 ? s - e.s1 : -1;
+    if (
+      d >= 0 &&
+      d < EDGE_BLEND &&
+      (e.s0 > 1e-3 || s >= e.s1) &&
+      (e.s1 < path.length - 1e-3 || s <= e.s0)
+    ) {
+      bridgeWalk(input.clips, rig, path, ls, s, a);
+      stretchStance(input, bridge, rig, path, e, s <= e.s0 ? e.s0 : e.s1, b);
+      how.f = 1 - smooth(d / EDGE_BLEND);
+      return true;
+    }
+  }
+  bridgeWalk(input.clips, rig, path, ls, s, a);
+  return false;
+}
+
+/** Standing before a station's seat on her floor, facing as it faces, where one sat there stands up and sits down, into into. */
+function standingBefore(
+  input: PoseInput,
+  bridge: BridgeBoat,
+  station: number,
+  into: Stance,
+): boolean {
+  const st = input.stations[Math.max(0, station)];
+  const seat = st === undefined ? null : seatOf(bridge, st);
+  if (seat === null) {
+    return false;
+  }
+  standPoint(bridge, st, false, v);
+  return standingAt(input, v.x, v.y, v.z, Math.PI - (seat.facing * Math.PI) / 180, into);
+}
+
+/** At a walk's start (s 0) or end: edging, if a gap edged along begins or ends it, else walking; into into. */
+function endStance(
+  input: PoseInput,
+  bridge: BridgeBoat,
+  mv: NonNullable<CrewMember['moving']>,
+  rig: Rig,
+  s: number,
+  into: Stance,
+): void {
+  const ls = mv.stretches ?? [];
+  const e = ls.find(
+    (l) => l.kind === 'edge' && (Math.abs(l.s0 - s) < 0.02 || Math.abs(l.s1 - s) < 0.02),
+  );
+  if (e !== undefined && e.kind === 'edge') {
+    stretchStance(input, bridge, rig, mv.path, e, s, into);
+    return;
+  }
+  bridgeWalk(input.clips, rig, mv.path, ls, s, into);
 }
 
 /** The idles on a cruising yacht's bench this look can play now: a machine has not some, and talking needs someone near. */
@@ -689,36 +865,44 @@ function poseBridgeMove(
   sit: number,
 ): void {
   let b: Stance | null = b0;
-  const ladder = mv.ladder ?? null;
   const rig = body.rig;
   if (rise < 1) {
-    spotStance(input, mv.from, pose, t, a);
-    bridgeWalk(input.clips, rig, mv.path, ladder, 0, b);
-    how.f = smooth(rise);
-    how.narrowB = 0;
-    how.arc = mv.from.station < 0 ? 0 : RISE_ARC * 0.5;
-  } else if (sit <= 0) {
-    if (ladder !== null && s > ladder.s0 && s < ladder.s1) {
-      const f = (s - ladder.s0) / (ladder.s1 - ladder.s0);
-      ladderStance(input, bridge, ladder, s, a);
-      if (f < LADDER_BLEND) {
-        bridgeWalk(input.clips, rig, mv.path, ladder, ladder.s0, b);
-        how.f = 1 - smooth(f / LADDER_BLEND);
-      } else if (f > 1 - LADDER_BLEND) {
-        bridgeWalk(input.clips, rig, mv.path, ladder, ladder.s1, b);
-        how.f = smooth((f - 1 + LADDER_BLEND) / LADDER_BLEND);
-      } else {
-        b = null;
-      }
+    // Up off the seat, standing before it facing as it faces; then turning
+    // to go. From her wheel, straight into going.
+    if (mv.from.station >= 0 && rise < 0.5) {
+      spotStance(input, mv.from, pose, t, a);
+      standingBefore(input, bridge, mv.from.station, b);
+      how.f = smooth(rise * 2);
+      how.arc = RISE_ARC * 0.5;
+    } else if (mv.from.station >= 0) {
+      standingBefore(input, bridge, mv.from.station, a);
+      endStance(input, bridge, mv, rig, 0, b);
+      how.f = smooth(rise * 2 - 1);
+      how.via = null;
     } else {
-      bridgeWalk(input.clips, rig, mv.path, ladder, s, a);
+      spotStance(input, mv.from, pose, t, a);
+      endStance(input, bridge, mv, rig, 0, b);
+      how.f = smooth(rise);
+    }
+  } else if (sit <= 0) {
+    if (!onTheWay(input, bridge, mv, rig, s, a, b, how)) {
       b = null;
     }
+  } else if (mv.to.station >= 0 && sit < 0.5) {
+    // Turning to stand before the seat, its back to it; then down onto it.
+    endStance(input, bridge, mv, rig, mv.path.length, a);
+    standingBefore(input, bridge, mv.to.station, b);
+    how.f = smooth(sit * 2);
+    how.via = null;
+  } else if (mv.to.station >= 0) {
+    standingBefore(input, bridge, mv.to.station, a);
+    spotStance(input, mv.to, pose, t, b);
+    how.f = smooth(sit * 2 - 1);
+    how.arc = RISE_ARC * 0.5;
   } else {
-    bridgeWalk(input.clips, rig, mv.path, ladder, mv.path.length, a);
+    endStance(input, bridge, mv, rig, mv.path.length, a);
     spotStance(input, mv.to, pose, t, b);
     how.f = smooth(sit);
-    how.arc = mv.to.station < 0 ? 0 : RISE_ARC * 0.5;
   }
   if (a.clip === null && b !== null) {
     [a, b] = [b, null];

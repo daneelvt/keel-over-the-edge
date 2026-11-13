@@ -250,8 +250,15 @@ export interface BridgeBoat {
   seats: BridgeSeat[];
   /** Her table: its sides, its ends, its top's height. */
   table: { x0: number; x1: number; z0: number; z1: number; y: number } | null;
-  /** Her ways (her model's `ways` node): points on her floors and the stretches between them, walked (0) or her ladder (1). */
-  ways: { nodes: Vector3[]; edges: [number, number, number][] } | null;
+  /** Her ways (her model's `ways` node): points on her floors and the stretches between them, walked (0) or her ladder (1); the points where two may pass; and the stretches edged along, too narrow to walk. */
+  ways: {
+    nodes: Vector3[];
+    edges: [number, number, number][];
+    wide: number[];
+    narrow: number[];
+    /** The way one edging along a stretch faces, by its edge: walked toward its second point, and toward its first (degrees from ahead toward starboard); else toward her table. */
+    facing: Map<number, [number, number]>;
+  } | null;
 }
 
 /** Which clips each seat of her `seats` node's is sat with, by its name: the forward leg of the L-bench is the table's. */
@@ -288,8 +295,25 @@ export function bridgeBoat(parts: Map<string, Object3D>): BridgeBoat | null {
   }
   const top = (seats?.table as { top?: unknown } | undefined)?.top;
   const t = Array.isArray(top) ? top.map(num) : [];
-  const ways = (parts.get('ways')?.userData as { ways?: { nodes?: unknown; edges?: unknown } })
-    ?.ways;
+  const ways = (
+    parts.get('ways')?.userData as {
+      ways?: {
+        nodes?: unknown;
+        edges?: unknown;
+        wide?: unknown;
+        narrow?: unknown;
+        facing?: unknown;
+      };
+    }
+  )?.ways;
+  const wide = Array.isArray(ways?.wide) ? ways.wide.map(Number) : [];
+  const narrow = Array.isArray(ways?.narrow) ? ways.narrow.map(Number) : [];
+  const facing = new Map<number, [number, number]>();
+  for (const f of Array.isArray(ways?.facing) ? ways.facing : []) {
+    if (Array.isArray(f) && f.length === 3) {
+      facing.set(Number(f[0]), [Number(f[1]), Number(f[2])]);
+    }
+  }
   const nodes = Array.isArray(ways?.nodes) ? ways.nodes.map(vec) : [];
   const edges = Array.isArray(ways?.edges) ? ways.edges : [];
   return {
@@ -317,6 +341,9 @@ export function bridgeBoat(parts: Map<string, Object3D>): BridgeBoat | null {
                   number,
                 ],
             ),
+            wide,
+            narrow,
+            facing,
           }
         : null,
   };
@@ -371,8 +398,17 @@ export function seatAnchor(
   return out;
 }
 
-/** How far before a seat's front edge one sat there stands up, and sits down from, m: the feet's place, the shins clear of the edge. */
-export const STAND_OFF = 0.21;
+/** How far before a seat's front edge one sat there stands up, and sits down from, m: clear of the edge walking along it; or half way to her table, where it is nearer. */
+export const STAND_OFF = 0.33;
+/** How far either side of the way a seat faces her table must lie to be before it, m: half a body's breadth. */
+const TABLE_SIDE = 0.2;
+/** How much nearer the seat than half way to her table one stands, m: the knees are forward of the hips (her model's gaps' lines). */
+const GAP_IN = 0.04;
+/** How far short of her helm's stance a walk to it ends, and one from it begins, m: the rest is stepped as the helm takes the wheel or leaves it. */
+export const STANCE_SHORT = 0.45;
+/** Seconds getting up from a seat into a walk, and sitting down out of one: up, turning to go; turning, then down. */
+export const BRIDGE_RISE = 1;
+export const BRIDGE_SIT = 1;
 
 /**
  * Where on her floors a station's walk begins or ends, at a handover: the
@@ -391,22 +427,54 @@ export function standPoint(
   }
   const a = seatAnchor(seat, st as { at: readonly number[] });
   const [dx, dz] = facingDir(seat.facing);
-  return out.set(a.at.x + dx * STAND_OFF, seat.floor, a.at.z + dz * STAND_OFF);
+  let off = STAND_OFF;
+  const t = boat.table;
+  if (t !== null) {
+    // Her table before the seat: half way to it.
+    const across = Math.abs(dx) > 0.5;
+    const side = across ? a.at.z : a.at.x;
+    const [lo, hi] = across ? [t.z0, t.z1] : [t.x0, t.x1];
+    if (side > lo - TABLE_SIDE && side < hi + TABLE_SIDE) {
+      const edge = across ? (dx > 0 ? t.x0 : t.x1) : dz > 0 ? t.z0 : t.z1;
+      const d = ((across ? edge - a.at.x : edge - a.at.z) * (across ? dx : dz)) as number;
+      if (d > 0 && d < 2 * STAND_OFF) {
+        off = d / 2 - GAP_IN;
+      }
+    }
+  }
+  return out.set(a.at.x + dx * off, seat.floor, a.at.z + dz * off);
 }
 
 /** Seconds up or down her ladder: its clips' length, played once through. */
 export const BRIDGE_LADDER_TIME = 4;
 
-/** Her ladder along a walk: from s0 to s1 m along its path, up it or down, over time seconds. */
-export interface BridgeLadder {
+/** Seconds turning on the spot at her ladder's foot: into facing up it, or out of facing aft down it. */
+export const BRIDGE_PIVOT_TIME = 0.6;
+
+/** How fast someone edges along a gap between her seats and her table, m/s. */
+export const BRIDGE_EDGE_SPEED = 0.45;
+
+/**
+ * A stretch of a walk not walked, from s0 to s1 m along its path, over
+ * time seconds: up her ladder or down it (its clips), or edged along a gap
+ * between a seat and her table, standing, facing (a yaw: the figure's +z
+ * turned to (sin yaw, cos yaw)) the table.
+ */
+export interface BridgeStretch {
   s0: number;
   s1: number;
-  up: boolean;
   time: number;
+  kind: 'up' | 'down' | 'edge';
+  yaw: number;
 }
 
 /** Her people's walks at a handover, along her ways: from a place on her floors to another, its path and her ladder on it, if it climbs it. */
 export interface BridgeCrew {
   boat: BridgeBoat;
-  walk(from: Vector3, to: Vector3): { path: CrewPath; ladder: BridgeLadder | null };
+  /** The walk from a place to another; past those sat at the places given (where they stand up) only where there is no other way. */
+  walk(
+    from: Vector3,
+    to: Vector3,
+    sat?: readonly Vector3[],
+  ): { path: CrewPath; stretches: BridgeStretch[] };
 }
