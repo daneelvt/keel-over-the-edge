@@ -66,7 +66,19 @@ The fastest boom by angle off the true wind, in 6, 12 and 20 knots (Yacht, flat 
 - 170°: 75, 75, 75
 - 180°: 75, 75, 75
 
-Reef (trim or steer with reef 1 or 2; 0 shakes the reefs out) when close-hauled the sheet hauled in hard heels the boat past its trim: from there only easing holds her up, and reefed she heels less and stands up. Reef the Jolly boat from 19 knots, the Keelboat from 13 knots, the Tall ship from 27 knots, the Skiff from 13 knots (reef 2: its reef 1 shortens nothing), the Beach cat from 22 knots and the Yacht from 30 knots.
+The fastest boom by angle off the true wind, in 6, 12 and 20 knots (Catamaran, flat water):
+
+- 40°: 20, 20, 20
+- 60°: 4, 10, 10
+- 90°: 25, 25, 25
+- 120°: 45, 50, 50
+- 150°: 75, 75, 80
+- 170°: 75, 75, 75
+- 180°: 80, 80, 80
+
+The Catamaran barely heels, so heel will not warn you: reef by the wind, before any hull lifts. A lifted hull ("hull flying") means she is far over-pressed: let fly.
+
+Reef (trim or steer with reef 1 or 2; 0 shakes the reefs out) when close-hauled the sheet hauled in hard heels the boat past its trim: from there only easing holds her up, and reefed she heels less and stands up. Reef the Jolly boat from 19 knots, the Keelboat from 13 knots, the Tall ship from 27 knots, the Skiff from 13 knots (reef 2: its reef 1 shortens nothing), the Beach cat from 22 knots, the Yacht from 30 knots and the Catamaran from 20 knots.
 
 Close-hauled, haul in hard. Half the apparent wind's angle is a rough guide on a reach only.
 

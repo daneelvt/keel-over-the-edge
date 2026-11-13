@@ -607,7 +607,7 @@ func TestRejects(t *testing.T) {
 				"boardCount: 1", "boardCount: 2",
 				"fixed: 0 #", "fixed: 1 #",
 			).Replace(validBoats)},
-			want: "boats[0].stations[1]: 0.3 m out is not on a hull's top, from 0.4 to 0.6 m out",
+			want: "stations[1]: 0.3 m out is not on a hull's top, from 0.4 to 0.6 m out, nor over a bridgedeck between them",
 		},
 		{
 			name:  "a station's pose unknown",
