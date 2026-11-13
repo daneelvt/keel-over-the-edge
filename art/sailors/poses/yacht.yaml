@@ -19,7 +19,8 @@ poses:
   # forward, the inboard hand on the wheel's rim, on its upper outboard
   # quarter, the outboard one on its thigh; looking forward along the boat.
   # The coat's skirts as seated: the front over the thighs, the sides and
-  # back laid on the deck.
+  # back laid on the deck, the inboard side kept in from the deck's edge,
+  # clear of the wheel's spokes.
   yacht-seated:
     place: yacht-helm-seat
     turn:
@@ -29,21 +30,21 @@ poses:
       - [thigh_r, z, -3]
       - [calf_l, x, 2]
       - [calf_r, x, 2]
-      - [spine_01, x, 6]
-      - [spine_02, x, 4]
-      - [spine_03, x, 2]
+      - [spine_01, x, 9]
+      - [spine_02, x, 7]
+      - [spine_03, x, 4]
       - [neck_01, x, -4]
       - [head, x, -6]
       - [skirt_front_l_01, x, -82]
       - [skirt_front_r_01, x, -82]
-      - [skirt_side_l_01, y, 80]
+      - [skirt_side_l_01, y, 40]
       - [skirt_side_r_01, y, -80]
       - [skirt_back_l_01, x, 82]
       - [skirt_back_r_01, x, 82]
     ik:
       hand_l: { at: yacht-seat, offset: [-0.07, -0.02, 0.0], pole: [0.6, 0.2, -0.3] }
-      hand_r: { at: bone, bone: thigh_r, offset: [-0.03, -0.13, -0.42], pole: [-0.5, 0.3, -0.3] }
-      foot_l: { at: yacht-helm-brace, offset: [-0.1, -0.12, 0.1], pole: [0.1, -0.5, 0.6] }
+      hand_r: { at: bone, bone: thigh_r, offset: [-0.03, -0.13, -0.42], pole: [-0.2, 0.6, -0.3] }
+      foot_l: { at: yacht-helm-brace, offset: [-0.1, -0.16, 0.1], pole: [0.1, -0.5, 0.6] }
       foot_r: { at: yacht-helm-brace, offset: [0.0, -0.17, 0.1], pole: [-0.1, -0.5, 0.6] }
 
   # Looking up at the main's luff, and over the shoulder to windward.
@@ -164,7 +165,7 @@ poses:
   # past it, the forearms over it; the head kept up looking forward.
   yacht-rail-lean:
     from: yacht-rail-sit
-    shift: [0.0, 0.012, 0.0]
+    shift: [0.0, 0.012, 0.008]
     turn:
       - [calf_l, x, -14]
       - [calf_r, x, -14]

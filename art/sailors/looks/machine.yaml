@@ -195,7 +195,7 @@ clips:
     net-crawl-left,
     net-crawl-right,
     yacht-wheel,
-    yacht-wheel-seated,
+    machine-yacht-wheel-seated,
     bench,
     bench-shift,
     bench-nod,
@@ -218,6 +218,6 @@ clips:
     climbing-in,
   ]
 names:
-  { machine-habit: habit, machine-habit-standing: habit-standing, machine-habit-wheel: habit-wheel, machine-yacht-habit-wheel: yacht-habit-wheel }
+  { machine-habit: habit, machine-habit-standing: habit-standing, machine-habit-wheel: habit-wheel, machine-yacht-habit-wheel: yacht-habit-wheel, machine-yacht-wheel-seated: yacht-wheel-seated }
 # The head takes less of the atlas: its face is planes of metal.
 atlas-head: 0.3
