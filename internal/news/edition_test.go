@@ -392,3 +392,42 @@ func TestAbout(t *testing.T) {
 		t.Errorf("about nobody: %+v", got)
 	}
 }
+
+// TestEditionOfTwoHundredBoats: a day of two hundred boats' candidates
+// makes an edition of six stories and its figures, the same size as a
+// day of two boats', small on a phone's data; and the set edition the job
+// writes is the one read.
+func TestEditionOfTwoHundredBoats(t *testing.T) {
+	for _, boats := range []int{200, 2} {
+		w := newWorld(t)
+		c := w.s.cfg.Catalog
+		start := time.Date(2026, 11, 12, 6, 0, 0, 0, ny)
+		cands := day(c, boats, 7)
+		for _, x := range cands {
+			who := x.About[0]
+			if _, ok := w.m.people[who]; !ok {
+				w.m.people[who] = store.LogPerson{ID: who, Kind: store.Human, Born: born(w.now, 30), Name: fmt.Sprintf("Sailor %x", who[:2])}
+			}
+			at := start.Add(time.Duration(x.At-time.Date(2026, 11, 12, 5, 0, 0, 0, time.UTC).UnixMilli()) * time.Millisecond / 4)
+			s := w.add(x.Kind, who, at, "A Rather Long Island Name", x.About[1:]...)
+			w.m.stories[len(w.m.stories)-1].Amount = x.Amount
+			_ = s
+		}
+		w.m.figures = store.Figures{Boats: boats, Machines: boats / 7, Run: float64(boats) * 9 * 1852, Charted: len(cands) / 2, Over: boats / 5}
+		began := time.Now()
+		e := w.read(w.ann, time.Time{})
+		took := time.Since(began)
+		body, _ := json.Marshal(e)
+		if boats == 200 && len(e.Stories) != 6 || boats == 2 && (len(e.Stories) == 0 || len(e.Stories) > 2) {
+			t.Errorf("%d boats: %d stories", boats, len(e.Stories))
+		}
+		if len(body) > 8000 {
+			t.Errorf("%d boats: the edition is %d bytes of JSON", boats, len(body))
+		}
+		t.Logf("%d boats, %d candidates: %d stories, %d in the box, %d bytes of JSON, read in %v; %s", boats, len(cands),
+			len(e.Stories), len(e.Shipmates), len(body), took, e.FiguresText)
+		for _, s := range e.Stories {
+			t.Logf("  %s. %s", s.Head, s.Text)
+		}
+	}
+}

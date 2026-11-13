@@ -16,6 +16,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/daneelvt/keel-over-the-edge/internal/logbook"
+	"github.com/daneelvt/keel-over-the-edge/internal/moderation"
 	"github.com/daneelvt/keel-over-the-edge/internal/news"
 	"github.com/daneelvt/keel-over-the-edge/internal/oauth"
 	"github.com/daneelvt/keel-over-the-edge/internal/store"
@@ -216,4 +218,26 @@ func TestOpenRoutes(t *testing.T) {
 	}
 	slices.Sort(found)
 	t.Logf("open routes: %s, and the sign-in service's %d", strings.Join(found, ", "), len(oauth.Routes))
+}
+
+// TestLogCarriesItsNews: a log's answer carries this world's stories
+// naming its sailor, as the reader may read them.
+func TestLogCarriesItsNews(t *testing.T) {
+	srv := newAboardServer(t, func(c *Config) {
+		c.Logs = logbook.NewService(logbook.ServiceConfig{Store: c.Sailing.(*sailing).Store, Key: moderation.Key})
+		c.News = &fakeNews{}
+	})
+	ann, _ := makeSailor(t, srv.testServer, "Ann Bonny")
+	bob, _ := makeSailor(t, srv.testServer, "Bob Read")
+	var l struct {
+		Name string       `json:"name"`
+		News []news.Story `json:"news"`
+	}
+	status, body := bob.do("GET", "/api/log?name=Ann+Bonny", "")
+	if status != 200 || json.Unmarshal([]byte(body), &l) != nil || l.Name != "Ann Bonny" || len(l.News) != 1 || l.News[0].Head != "KEYHOLE ROCK" {
+		t.Errorf("Ann's log to Bob: %d %s", status, body)
+	}
+	if status, body := ann.do("GET", "/api/me/log", ""); status != 200 || !strings.Contains(body, `"news":[]`) {
+		t.Errorf("Ann's own log: %d %s", status, body)
+	}
 }

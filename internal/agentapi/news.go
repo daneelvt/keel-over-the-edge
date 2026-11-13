@@ -184,10 +184,12 @@ func logWords(ctx context.Context, s *Sea, account store.AccountID) (string, *re
 	r := &l.Record
 	parts := []string{
 		fmt.Sprintf("sailed %s NM", news.Miles(r.DistanceM)),
-		fmt.Sprintf("%d voyages", r.Voyages+r.Aboard),
-		fmt.Sprintf("%d worlds", r.Worlds),
-		fmt.Sprintf("%d places charted", r.Charted),
-		fmt.Sprintf("%d over the falls", r.Falls),
+		counted(r.Voyages+r.Aboard, "voyage"),
+		counted(r.Worlds, "world"),
+		counted(r.Charted, "place") + " charted",
+	}
+	if r.Falls > 0 {
+		parts = append(parts, fmt.Sprintf("%d over the falls", r.Falls))
 	}
 	if r.ClosestM != nil {
 		parts = append(parts, fmt.Sprintf("closest to the falls %s m", strconv.FormatFloat(math.Round(*r.ClosestM*10)/10, 'f', -1, 64)))
@@ -195,12 +197,14 @@ func logWords(ctx context.Context, s *Sea, account store.AccountID) (string, *re
 	if r.Gales > 0 {
 		parts = append(parts, fmt.Sprintf("%d gales ridden out", r.Gales))
 	}
-	parts = append(parts, fmt.Sprintf("%d bumps (%d at fault)", r.Bumps, r.BumpsAt))
+	if r.Bumps > 0 {
+		parts = append(parts, fmt.Sprintf("%s (%d at fault)", counted(r.Bumps, "bump"), r.BumpsAt))
+	}
 	b.WriteString(capitalWords(strings.Join(parts, " · ")) + ".\n")
 	if w := l.World; w != nil && len(w.Days) > 0 {
 		fmt.Fprintf(&b, "World %d, its days:\n", w.Number)
 		for _, d := range w.Days {
-			line := fmt.Sprintf(" %s · %s NM · %d voyages", dateWords(d.Date), news.Miles(d.RunM), len(d.Voyages))
+			line := fmt.Sprintf(" %s · %s NM · %s", dateWords(d.Date), news.Miles(d.RunM), counted(len(d.Voyages), "voyage"))
 			var notes []string
 			for _, e := range d.Entries {
 				if n := entryWords(&e); n != "" && len(notes) < 6 {
@@ -240,4 +244,13 @@ func entryWords(e *logbook.Entry) string {
 		return "a bump"
 	}
 	return ""
+}
+
+// counted is a count of a thing, its plural with an s: "1 voyage", "31
+// voyages".
+func counted(n int, thing string) string {
+	if n == 1 {
+		return "1 " + thing
+	}
+	return strconv.Itoa(n) + " " + thing + "s"
 }
