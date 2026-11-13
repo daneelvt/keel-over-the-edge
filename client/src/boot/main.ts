@@ -139,6 +139,7 @@ import { ShipsClock } from '../ui/clock';
 import { Countdown, EndNotices, localShown } from '../ui/countdown';
 import { deckOf } from '../ui/decklazy';
 import { mountScreen, type ScreenProps } from '../ui/hud';
+import { setLogHost } from '../ui/loglazy';
 import { AGROUND } from '../ui/model';
 import { saveNoticesOff } from '../ui/notices';
 import { showQueue } from '../ui/queue';
@@ -801,6 +802,8 @@ async function start(): Promise<void> {
   // The world's chart, as the server tells of it; the notices it raises,
   // switched off as the account has them.
   const parts = makeChart(world, models, serverNews, forecasting);
+  // A name tapped anywhere opens its log on the chart screen's Log tab.
+  setLogHost((who) => parts.chart.showLog(who));
   const gales = steerByChart(game, world, parts, forecasting);
   online.onForecast = (f, past) => {
     forecasting.forecasts.receive(f, past);

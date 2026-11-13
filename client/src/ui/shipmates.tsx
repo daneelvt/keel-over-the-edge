@@ -27,6 +27,7 @@ import { type ChatLine, lineLength, lineOf } from './chatlog';
 import { BLOCK, blockWords, CANCEL, CLOSE, leftText, REPORT, SEND } from './chatwords';
 import type { DeckView } from './decklazy';
 import { actionName, DISMISS, MORE, moreFor, plain, type Words } from './deckwords';
+import { openLog, THEIR_LOG } from './loglazy';
 import { PlayerText } from './player';
 import type { ThreadNote } from './shipmatelog';
 import { nameOf, REFRESH_EVERY, type ShipmateAsk, type ShipmatesView } from './shipmatesview';
@@ -389,6 +390,13 @@ export function ShipmatesPanel({ deck, view }: { deck: DeckView; view: Shipmates
       });
     }
     more.push(
+      {
+        words: THEIR_LOG,
+        act: () => {
+          close();
+          openLog({ kind: 'sailor', name: s.name });
+        },
+      },
       { words: NO_LONGER, act: () => ask(s.id, 'end') },
       { words: BLOCK, act: () => ask(s.id, 'block') },
       { words: REPORT, act: () => report(s.id, s.name) },
@@ -439,6 +447,13 @@ export function ShipmatesPanel({ deck, view }: { deck: DeckView; view: Shipmates
             open={opened === `recent-${r.id}`}
             toggle={() => toggle(`recent-${r.id}`)}
             keys={[
+              {
+                words: THEIR_LOG,
+                act: () => {
+                  close();
+                  openLog({ kind: 'sailor', name: r.name });
+                },
+              },
               { words: BLOCK, act: () => ask(r.id, 'block') },
               { words: REPORT, act: () => report(r.id, r.name) },
             ]}

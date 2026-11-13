@@ -11,7 +11,7 @@
 import './chart.css';
 import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks';
 import { Raycaster, Vector2 } from 'three';
-import type { Chart, TappedWeather } from '../chart/chart';
+import type { Chart, ChartMode, TappedWeather } from '../chart/chart';
 import type { Forecasting } from '../chart/forecasting';
 import { drawPocketWeather, type PocketWeather, pocketWeather } from '../chart/pocketweather';
 import { formatPosition } from '../chart/position';
@@ -34,6 +34,7 @@ import { ClockFace } from './clockdial';
 import { type Countdown, endText } from './countdown';
 import { WeatherDecal } from './decals';
 import { threeDigits, wholeDegrees } from './format';
+import { useLog } from './loglazy';
 import type { Notices } from './notices';
 import { PlayerText } from './player';
 
@@ -452,15 +453,15 @@ function SystemBoxPanel({ sea, t, close }: { sea: ChartSea; t: TappedWeather; cl
   );
 }
 
-/** The tabs between the chart, its list and the news. */
+/** The tabs between the chart, its list, the news and the log; the Log tab opens the reader's own. */
 function Tabs({ sea }: { sea: ChartSea }) {
   const mode = sea.chart.mode.value;
-  const tab = (m: 'chart' | 'list' | 'news', label: string) => (
+  const tab = (m: ChartMode, label: string) => (
     <button
       type="button"
       class={mode === m ? 'chart-tab chosen' : 'chart-tab'}
       aria-pressed={mode === m}
-      onClick={() => sea.chart.show(m)}
+      onClick={() => (m === 'log' ? sea.chart.showLog({ kind: 'own' }) : sea.chart.show(m))}
     >
       {label}
     </button>
@@ -470,6 +471,7 @@ function Tabs({ sea }: { sea: ChartSea }) {
       {tab('chart', 'Chart')}
       {tab('list', 'List')}
       {tab('news', 'News')}
+      {tab('log', 'Log')}
     </nav>
   );
 }
@@ -695,8 +697,8 @@ function RimCountdown({ end }: { end: Countdown | null }) {
 }
 
 /**
- * The strip's ship's clock: the world's time of the moment the chart
- * shows, now or the slider's, its hands sweeping on as Play plays and back
+ * The chart's ship's clock, in the strip or held upright under it: the
+ * world's time of the moment the chart shows, now or the slider's, its hands sweeping on as Play plays and back
  * with Now; its rim gold while it reads ahead, as the slider's knob is.
  */
 function StripClock({ sea }: { sea: ChartSea }) {
@@ -728,18 +730,43 @@ function StripClock({ sea }: { sea: ChartSea }) {
   );
 }
 
+/** The Log tab: a sailor's log, loaded when first opened. */
+function LogTab({ sea, watch }: { sea: ChartSea; watch: ((name: string) => void) | null }) {
+  const m = useLog();
+  const who = sea.chart.logOf.value;
+  if (m === null) {
+    return (
+      <section class="chart-panel log-sheet" aria-label="The log">
+        <p>Opening the log…</p>
+      </section>
+    );
+  }
+  return (
+    <m.LogSheet
+      who={who}
+      setWho={(w) => {
+        sea.chart.logOf.value = w;
+      }}
+      watch={watch}
+    />
+  );
+}
+
 /**
- * The chart over the whole screen, its list, or the news; the notices
+ * The chart over the whole screen, its list, the news or the log; the notices
  * under its top, out of the way of its working foot.
  */
 export function ChartScreen({
   sea,
   end = null,
   notices = null,
+  watch = null,
 }: {
   sea: ChartSea;
   end?: Countdown | null;
   notices?: Notices | null;
+  /** Watches a sailor from their log, the chart closed; null where none may be watched from it. */
+  watch?: ((name: string) => void) | null;
 }) {
   const chart = sea.chart;
   const surface = useGestures(sea);
@@ -768,6 +795,7 @@ export function ChartScreen({
     return () => sized.disconnect();
   }, []);
   const mode = chart.mode.value;
+  const upright = useUpright();
   const picked = chart.picked.value;
   const tapped = chart.tapped.value;
   return (
@@ -778,7 +806,7 @@ export function ChartScreen({
         <div class="chart-case chart-strip">
           <Tabs sea={sea} />
           <Position sea={sea} />
-          <StripClock sea={sea} />
+          {mode === 'chart' && !upright ? <StripClock sea={sea} /> : null}
           <button
             type="button"
             class="chart-button chart-back"
@@ -789,6 +817,8 @@ export function ChartScreen({
             ✕
           </button>
         </div>
+        {/* Held upright the strip has no room for the clock: it stands under it. */}
+        {mode === 'chart' && upright ? <StripClock sea={sea} /> : null}
         <RimCountdown end={end} />
         {notices !== null ? (
           <div class="chart-notices">
@@ -807,6 +837,7 @@ export function ChartScreen({
       ) : null}
       {mode === 'list' ? <ChartList sea={sea} /> : null}
       {mode === 'news' ? <NewsSheet sea={sea} end={end} /> : null}
+      {mode === 'log' ? <LogTab sea={sea} watch={watch} /> : null}
     </div>
   );
 }

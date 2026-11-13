@@ -19,6 +19,7 @@ import { catalog } from '../catalog';
 import { lookOf } from '../catalog/looks';
 import { type PocketSky, SKY_WORDS } from '../chart/pocketsky';
 import { SkyDecal } from './decals';
+import { openLog, THEIR_LOG } from './loglazy';
 import { PlayerText } from './player';
 import {
   agentText,
@@ -49,6 +50,9 @@ import {
   watchersText,
   watchLink,
 } from './watchwords';
+
+/** The card's key to the sailor's log. */
+const LOG = 'Log';
 
 /** Why a sailor followed or shown cannot be watched now, by kind: a machine sailor out of the water, or anyone else. */
 export type Gone = 'not-at-sea' | 'cannot';
@@ -348,6 +352,14 @@ export function SailorCard({
       <div class="watch-card-top">
         <button type="button" class="watch-back" aria-label="Back" onClick={back}>
           {BACK}
+        </button>
+        <button
+          type="button"
+          class="watch-follow watch-log"
+          aria-label={`${c.name}: ${THEIR_LOG}`}
+          onClick={() => openLog({ kind: 'sailor', name: c.name })}
+        >
+          {LOG}
         </button>
         {gone === null || followed ? (
           <button

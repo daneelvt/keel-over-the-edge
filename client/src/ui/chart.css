@@ -17,7 +17,8 @@
 /* The chart over the whole screen: the picture is the renderer's; these are
    the pointers' surface, the names over it, and its panels. */
 .chart-screen {
-  --paper: #ece0c2;
+  /* One paper for the chart's sheets, the log's ink and its glyphs. */
+  --paper: #efe4c8;
   --chart-ink: #3b2e22;
   --magenta: #a8236e;
   position: fixed;
@@ -220,8 +221,9 @@
   font-size: 16px;
 }
 
-/* The ship's clock in the strip: the world's time of the moment shown,
-   its rim gold while that is ahead. Not a button. */
+/* The chart's ship's clock, in the strip or under it held upright: the
+   world's time of the moment shown, its rim gold while that is ahead. Not
+   a button. */
 .chart-clock {
   flex: none;
   display: block;
@@ -275,7 +277,7 @@
   /* The chart's paper, in the plate's brass frame. */
   border: 1px solid var(--brass-dark);
   border-radius: 12px;
-  background: rgb(236 224 194 / 96%);
+  background: rgb(239 228 200 / 96%);
   color: var(--chart-ink);
   box-shadow:
     inset 0 0 0 1px rgb(201 162 76 / 55%),
@@ -754,8 +756,18 @@
     flex: 1 1 100%;
   }
 
+  /* Four tabs, where the boat is and the way back fit a phone's width. */
+  .chart-tab {
+    padding: 0 7px;
+  }
+
+  .chart-top > .chart-clock {
+    margin-left: 2px;
+  }
+
   .chart-screen:has(.chart-falls) .chart-list,
-  .chart-screen:has(.chart-falls) .news-sheet {
+  .chart-screen:has(.chart-falls) .news-sheet,
+  .chart-screen:has(.chart-falls) .log-sheet {
     top: calc(var(--edge-top, 12px) + 90px);
   }
 }
