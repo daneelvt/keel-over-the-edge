@@ -327,7 +327,7 @@ clips:
     cockpit-turn-left,
     cockpit-turn-right,
     stairs-up,
-    stairs-down,
+    oldsalt-stairs-down,
     oldsalt-bridge-habit-wheel,
     oldsalt-habit-wheel,
     hiking-1,
@@ -348,4 +348,5 @@ names:
     oldsalt-habit-wheel: habit-wheel,
     oldsalt-yacht-habit-wheel: yacht-habit-wheel,
     oldsalt-bridge-habit-wheel: bridge-habit-wheel,
+    oldsalt-stairs-down: stairs-down,
   }

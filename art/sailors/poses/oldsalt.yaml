@@ -71,6 +71,20 @@ poses:
       - [head, x, 6]
 
 clips:
+  # Down a cruising catamaran's helm's ladder, the feet lifted higher over
+  # the treads' nosings: the Old Salt's broad shoes.
+  oldsalt-stairs-down:
+    group: bridgedeck
+    strain: [foot]
+    hang: { front_02: 1.0 }
+    keys:
+      - { pose: down-landing, hold: 0.25 }
+      - { pose: down-1, hold: 0.0, ramp: 0.6, step: 0.2 }
+      - { pose: down-2, hold: 0.0, ramp: 0.55, step: 0.2 }
+      - { pose: down-3, hold: 0.0, ramp: 0.55, step: 0.2 }
+      - { pose: down-4, hold: 0.0, ramp: 0.55, step: 0.2 }
+      - { pose: down-5, hold: 0.0, ramp: 0.55, step: 0.2 }
+      - { pose: down-foot, hold: 0.3, ramp: 0.6, step: 0.2 }
   # The habit at a cruising catamaran's wheel: the same, made at hers.
   oldsalt-bridge-habit-wheel:
     of: oldsalt-habit-wheel
