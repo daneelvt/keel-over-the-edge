@@ -97,6 +97,11 @@ poses:
       - [head, z, 6]
 
 clips:
+  # The habit at a cruising catamaran's wheel: the same, made at hers.
+  quartermaster-bridge-habit-wheel:
+    of: quartermaster-habit-wheel
+    restage: bridgedeck
+    group: bridgedeck
   # The habit at a cruising yacht's wheel: the same, made at hers.
   quartermaster-yacht-habit-wheel:
     of: quartermaster-habit-wheel

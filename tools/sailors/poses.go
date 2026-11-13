@@ -88,8 +88,10 @@ type clip struct {
 	// <version>.ship.glb), if not the clips' own.
 	Group string `yaml:"group" json:"group,omitempty"`
 	// Restage makes it, whose keys are at the wheel's stage, at the
-	// cruising yacht's wheel instead (cruiser): placed at her stance, the
-	// hands on her wheel's rim where they held the stage's spokes.
+	// cruising yacht's wheel instead (cruiser), or the catamaran's
+	// (bridgedeck, standing upright over the feet, nearer her wheel):
+	// placed at her stance, the hands on her wheel's rim where they held the
+	// stage's spokes.
 	Restage string `yaml:"restage" json:"restage,omitempty"`
 	// Of is the clip it is made as, its keys and all but what it says
 	// itself (restaged, written to another file).
@@ -141,11 +143,12 @@ type retarget struct {
 	// <version>.rail.glb), if not the clips' own.
 	Group string `yaml:"group" json:"group,omitempty"`
 	// Stage is the ship's place it is set at (on a deck): leaning on her
-	// rail (ship-rail), sat on her hatch (ship-hatch).
+	// rail (ship-rail), sat on her hatch (ship-hatch); or another boat's
+	// (shipStages).
 	Stage string `yaml:"stage" json:"stage,omitempty"`
-	// Knee sets, sat on a cruising yacht's bench, how far its front edge is
-	// from the knees, if not the tables' own: a long coat kept off the
-	// bench's back.
+	// Knee sets, sat on a cruising yacht's bench or a catamaran's seat, how
+	// far its front edge is from the knees, if not the tables' own: a long
+	// coat kept off the seat's back.
 	Knee float64 `yaml:"knee" json:"knee,omitempty"`
 	// Still keeps the arm of each hand named as the clip's first frame has
 	// it: a gesture of the source's left out.
@@ -165,22 +168,32 @@ type retarget struct {
 	// Pull sets the hands this much nearer the body, crawling: clear of a
 	// hat's brim.
 	Pull float64 `yaml:"pull" json:"pull,omitempty"`
+	// Hang turns the skirts' chains toward straight down, as a clip's
+	// does, in place of a deck's crouch's (all of them, all the way): {}
+	// for none.
+	Hang *map[string]float64 `yaml:"hang" json:"hang,omitempty"`
 }
 
 var (
 	places = []string{"", "seat", "gunwale", "cockpit", "outside", "wheel", "trapeze", "rail", "brace", "top", "yard",
 		"cat-seat", "crew-seat", "cat-out", "cat-wire", "crew-wire", "cat-stand",
-		"yacht-wheel", "yacht-helm-seat", "yacht-bench", "yacht-rail"}
+		"yacht-wheel", "yacht-helm-seat", "yacht-bench", "yacht-rail",
+		"bridge-wheel", "bridge-stairs", "bridge-landing", "bridge-wheel-seat", "bridge-helm", "bridge-table", "bridge-beam",
+		"bridge-lounger"}
 	// groups are the files a clip may be written to apart from the
 	// look's clips.
-	groups = []string{"", "rail", "ship", "aloft", "cat", "cruiser"}
+	groups = []string{"", "rail", "ship", "aloft", "cat", "cruiser", "bridgedeck"}
 	// shipStages are the ship's places a retargeted clip may be set at,
-	// the beach cat's (her net, crossing it) and the yacht's (her bench,
-	// sat on it; her sole and her coachroof, crossing them).
-	shipStages = []string{"", "ship-rail", "ship-hatch", "cat-net", "yacht-bench", "yacht-sole", "yacht-roof"}
+	// the beach cat's (her net, crossing it), the yacht's (her bench,
+	// sat on it; her sole and her coachroof, crossing them) and the
+	// catamaran's (her seats, sat on them; her sole, walked).
+	shipStages = []string{"", "ship-rail", "ship-hatch", "cat-net", "yacht-bench", "yacht-sole", "yacht-roof",
+		"bridge-helm", "bridge-table", "bridge-beam", "bridge-lounger", "bridge-sole"}
+	// bridgeSeats are the catamaran's seats a retargeted clip may sit on.
+	bridgeSeats = []string{"bridge-helm", "bridge-table", "bridge-beam", "bridge-lounger"}
 	// restages are the stages a clip made at the wheel's may be made at
 	// instead.
-	restages = []string{"", "cruiser"}
+	restages = []string{"", "cruiser", "bridgedeck"}
 	// ways are the ways a retargeted clip may walk over its deck.
 	ways = []string{"", "forward", "left", "right"}
 	// catPoints are the beach cat's places a target may be at.
@@ -191,6 +204,25 @@ var (
 		"yacht-bench-sole",
 		"yacht-rail", "yacht-lifeline-low", "yacht-lifeline-up", "yacht-stanchion", "yacht-sole", "yacht-roof",
 		"yacht-roof-step"}
+	// bridgePoints are the catamaran's places a target may be at: at her
+	// wheel, each seat's (its front edge, the floor before it, its back's
+	// top), her table's edge, her helm's ladder (its foot, its four treads
+	// from the lowest, its landing, its rail over each step from the sole
+	// to the landing), her sole where it is walked.
+	bridgePoints = func() []string {
+		out := []string{"bridge-stance", "bridge-hub", "bridge-wheel-seat", "bridge-wheel-floor", "bridge-table-top",
+			"bridge-stairs", "bridge-landing", "bridge-sole"}
+		for _, s := range []string{"bridge-helm", "bridge-table", "bridge-beam", "bridge-lounger"} {
+			out = append(out, s, s+"-floor", s+"-back")
+		}
+		for k := 0; k <= 5; k++ {
+			if k > 0 && k < 5 {
+				out = append(out, fmt.Sprintf("bridge-tread-%d", k))
+			}
+			out = append(out, fmt.Sprintf("bridge-rail-%d", k))
+		}
+		return out
+	}()
 	// shipPoints are the ship's places a target may be at.
 	shipPoints = []string{"ship-rail", "ship-hatch", "ladder-foot", "ladder-head", "shroud", "top", "aloft",
 		"topmast-shroud", "yard-foot-in", "yard-foot-out", "yard", "brace-lead", "brace-fall", "brace", "haul-deck"}
@@ -287,6 +319,18 @@ func (lib poseLibrary) check(t tables, sources map[string]source) error {
 				points[p] = true
 			}
 			if gs, ok := y["grips"].(map[string]any); ok {
+				for g := range gs {
+					points[g] = true
+				}
+			}
+		}
+		// On the catamaran: at her wheel, her seats, her table, her
+		// ladder and her sole; and the grips on her wheel's rim.
+		if b, ok := st["bridgedeck"].(map[string]any); ok {
+			for _, p := range bridgePoints {
+				points[p] = true
+			}
+			if gs, ok := b["grips"].(map[string]any); ok {
 				for g := range gs {
 					points[g] = true
 				}
@@ -401,8 +445,8 @@ func (lib poseLibrary) check(t tables, sources map[string]source) error {
 			return fmt.Errorf("the retarget %s: smoothed over %v frames, not 0 to 10", name, r.Smooth)
 		case r.Crawl && !r.Deck:
 			return fmt.Errorf("the retarget %s: crawling, it is on a deck", name)
-		case r.Knee < 0 || r.Knee > 0.5 || r.Knee > 0 && r.Stage != "yacht-bench":
-			return fmt.Errorf("the retarget %s: its bench's edge is 0 to 0.5 m from the knees, and only on a yacht's bench", name)
+		case r.Knee < 0 || r.Knee > 0.5 || r.Knee > 0 && r.Stage != "yacht-bench" && !slices.Contains(bridgeSeats, r.Stage):
+			return fmt.Errorf("the retarget %s: its seat's edge is 0 to 0.5 m from the knees, and only on a yacht's bench or a catamaran's seat", name)
 		case r.Head < 0 || r.Head > 2:
 			return fmt.Errorf("the retarget %s: a head %v m over the deck is not 0 to 2", name, r.Head)
 		}

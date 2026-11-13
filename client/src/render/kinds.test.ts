@@ -49,14 +49,16 @@ describe('a reefed main', () => {
 });
 
 describe('the camera’s size for a boat', () => {
-  test('is 1 for the boat its views are framed for, and grows with a taller or longer one', () => {
+  test('is 1 for the boat its views are framed for, and grows with a taller, longer or much wider one', () => {
     const first = catalog.boats[0];
     expect(sizeOf(first, first)).toBe(1);
     for (const boat of catalog.boats.slice(1)) {
       const s = sizeOf(boat, first);
+      // Framed by her length, or twice her beam if she is wider than half her length.
+      const length = Math.max(boat.lengthOverall, 2 * boat.beam);
       expect(s).toBeCloseTo(
         Math.min(
-          Math.max(boat.lengthOverall / first.lengthOverall, mastOf(boat) / mastOf(first)),
+          Math.max(length / first.lengthOverall, mastOf(boat) / mastOf(first)),
           MAX_CHASE / CHASE.distance,
         ),
         12,

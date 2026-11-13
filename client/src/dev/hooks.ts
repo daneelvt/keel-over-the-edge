@@ -103,6 +103,7 @@ import {
   seaMaterial,
 } from '../render/materials';
 import { rungName, TIERS } from '../render/quality';
+import { type CrewMove, moveAt } from '../render/sailors/crewrules';
 import { CREW_MOST } from '../render/sailors/fleetcrews';
 import { type ShipMember, ShipRules } from '../render/sailors/shiprules';
 import { CAMERA_PRESETS, type CameraView, type SeaScene } from '../render/scene';
@@ -2521,7 +2522,8 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
             l.wheelState === 'loading' ||
             l.trapezeState === 'loading' ||
             l.catState === 'loading' ||
-            l.cruiserState === 'loading',
+            l.cruiserState === 'loading' ||
+            l.bridgeState === 'loading',
         ) ??
           false);
       while (busy()) {
@@ -2596,6 +2598,8 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
         /** Across a beach cat's net: where across it, and how far on hands and knees; null if not. */
         net: number | null;
         crawl: number;
+        /** Aboard a cruising catamaran, a stretch of a walk not walked they are on: up or down her ladder ('up', 'down'), or edging along a gap ('edge'); null if walking or not moving. */
+        stretch: string | null;
         /** Aboard a ship: whether gone (on a ladder or aloft), seconds waited on a walk, and whether sat (1) or stood (0) at a hatch. */
         gone?: boolean;
         waited?: number;
@@ -2667,6 +2671,7 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
             thrown: m.wet?.thrown ?? false,
             net: m.moving?.net?.x ?? null,
             crawl: m.moving?.net?.crawl ?? 0,
+            stretch: stretchOf(m.moving),
             ...(ship === null
               ? {}
               : {
@@ -4525,4 +4530,16 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
   };
 
   return hooks;
+}
+
+/** Aboard a cruising catamaran, the stretch of a walk not walked someone moving is on now: up or down her ladder, or edging; null if not. */
+function stretchOf(mv: CrewMove | null): string | null {
+  if (mv === null || mv.t < 0 || (mv.stretches ?? []).length === 0) {
+    return null;
+  }
+  const at = moveAt(mv);
+  if (at.rise < 1 || at.sit > 0) {
+    return null;
+  }
+  return mv.stretches?.find((l) => at.along > l.s0 && at.along < l.s1)?.kind ?? null;
 }

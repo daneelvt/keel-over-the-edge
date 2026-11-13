@@ -17,6 +17,11 @@
   stroke: rgb(0 0 0 / 45%);
   stroke-linejoin: round;
 }
+.boat-picture-house {
+  fill: rgb(122 70 36);
+  stroke: rgb(0 0 0 / 45%);
+  stroke-linejoin: round;
+}
 .boat-picture-grain {
   stroke: rgb(60 32 12 / 50%);
 }

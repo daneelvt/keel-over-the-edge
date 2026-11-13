@@ -188,6 +188,23 @@ stage:
     rail: { knee: 0.1 }
     cockpit: { table: 0.5 }
     roof: { fore: 0.5 }
+  # The cruising catamaran, whose helm stands at her raised wheel or sits
+  # on the settle behind it, whose company sit beside the helm, round her
+  # table, on her aft bench and her lounger, walk her cockpit and climb her
+  # helm's ladder (build/stage.py's Bridgedeck): her model, set this far to
+  # port of the dinghy in the stage's scene, clear of every other stage;
+  # her nodes give the places the clips made there are placed from. At her
+  # wheel the hands hold its rim, each this many degrees from its top (to
+  # starboard as the helm sees it) and this far in from the rim's middle.
+  # Sat on the settle at the wheel, the hips this far behind its front
+  # edge; on any other seat, this far (the idles: its edge this far from
+  # the knees).
+  bridgedeck:
+    boat: boats/catamaran.glb
+    at: [-40.0, 0.0, 0.0]
+    grips: { bridge-wheel-left: [-45, 0.0], bridge-wheel-right: [45, 0.0] }
+    wheel-seat: { in: 0.06 }
+    seat: { in: 0.2, knee: 0.24 }
 
 # The portraits (build/portraits.py), every look's taken alike: head and
 # shoulders, three-quarter, the camera on the figure's left at the height

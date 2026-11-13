@@ -13,7 +13,12 @@ import (
 // rig that pitches her: the wind in which her windward hull lifts,
 // close-hauled and on a beam reach; her best downwind angle in each wind;
 // and the wind and angle in which she first pitchpoles with the sheet
-// held where it sails her fastest in 16 knots.
+// held where it sails her fastest in 16 knots. A boat of two hulls whose
+// sailor never falls in (a cruising catamaran) is also sailed close-hauled
+// at full sail with her sheet hauled in, in a rising wind, for the
+// apparent wind in which her windward hull lifts, which her reference may
+// hold to a least; her heel close-hauled is printed; and she is told to
+// reef by the wind, before any hull lifts (reefWind).
 
 // reefWord is the reef's level in the catalog's words.
 func (k *kind) reefWord(reef float64) string {
@@ -26,9 +31,64 @@ func (k *kind) reefWord(reef float64) string {
 // liftWinds are the winds, 10 m up, the hull's lifting is looked for in.
 var liftWinds = []float64{4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 18, 20}
 
+// cruising reports whether a kind is a boat of two hulls whose sailor never
+// falls in: she is knocked down, not capsized, and her heel tells her
+// sailor little.
+func (k *kind) cruising() bool {
+	return k.p.HullSpacing > 0 && k.p.FallOutHeel >= 180
+}
+
+// apparent is the apparent wind's speed, knots, over a boat sailing speed
+// knots at twa degrees off a true wind of wind knots.
+func apparent(wind, speed, twa float64) float64 {
+	return math.Sqrt(wind*wind + speed*speed + 2*wind*speed*math.Cos(twa*deg))
+}
+
+// The winds, knots at the kind's height, a hull's lifting close-hauled
+// hauled in is looked for in: every knot from liftFrom to liftTo.
+const (
+	liftFrom = 12
+	liftTo   = 70
+)
+
+// liftWind sails the kind close-hauled, at her catalog's angle, at full sail
+// with her sheet hauled in, in winds rising a knot at a time, and returns
+// the first in which her windward hull is half clear of the water (her
+// liftHeel and half the lift's range) or she is knocked further: the
+// apparent wind there and the true, knots at her height; 0, 0 if she never
+// lifts it up to liftTo.
+func liftWind(k *kind) (apparentWind, trueWind float64) {
+	half := k.p.LiftHeel + 2.5
+	twa := k.p.CloseHauled
+	for w := float64(liftFrom); w <= liftTo; w++ {
+		h := k.helmsmanOf(twa)
+		bt := newBoat(k, k.wind10(w), h.target, 0, 0)
+		settled := k.settleAt(k.wind10(w))
+		n := int((settled + k.measure) * physics.StepsPerSecond)
+		start := int(settled * physics.StepsPerSecond)
+		var heel, speed float64
+		for i := range n {
+			bt.c.Helm = h.helm(&bt.s)
+			bt.step()
+			if i >= start {
+				heel += math.Abs(bt.s.Heel)
+				speed += math.Hypot(bt.s.Surge, bt.s.Sway)
+			}
+		}
+		per := 1 / float64(n-start)
+		if bt.capsized || heel*per >= half*deg {
+			return apparent(w, speed*per/knot, twa), w
+		}
+	}
+	return 0, 0
+}
+
 func reportHulls(k *kind) {
 	k10 := k.at10()
 	fmt.Printf("  reported, not checked (winds 10 m up), as sailed alone:\n")
+	if k.cruising() {
+		fmt.Printf("    told to reef close-hauled from %g knots, where the apparent wind reaches %g knots, her builder's plate's\n", reefWind(k), k.plate)
+	}
 	if k.p.HullSpacing > 0 {
 		flying := k.p.LiftHeel + 2.5
 		for _, twa := range []float64{45, 90} {

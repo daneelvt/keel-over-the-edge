@@ -17,7 +17,7 @@ import (
 
 // The sailor's log lasts from world to world: its rows keep the world's
 // number, never its ID, and their own copies of the names and places they
-// show (migration 00033). Every count is a query on the rows.
+// show (migration 00034). Every count is a query on the rows.
 
 // The kinds of a log's entry.
 const (

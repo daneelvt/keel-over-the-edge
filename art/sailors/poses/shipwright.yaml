@@ -78,6 +78,19 @@ poses:
       - [head, z, -8]
 
 clips:
+  # The habit at a cruising catamaran's wheel: the same, made at hers, its
+  # look about turned slower.
+  shipwright-bridge-habit-wheel:
+    restage: bridgedeck
+    group: bridgedeck
+    keys:
+      - { pose: wheel-stand, hold: 0.3 }
+      - { pose: shipwright-wheel-hold, hold: 0.25, ramp: 1.3, lead: head }
+      - { pose: shipwright-wheel-tug, hold: 0.12, ramp: 0.5 }
+      - { pose: shipwright-wheel-hold, hold: 0.1, ramp: 0.45 }
+      - { pose: shipwright-wheel-tug, hold: 0.25, ramp: 0.5 }
+      - { pose: shipwright-wheel-look, hold: 0.4, ramp: 1.4, lead: head }
+      - { pose: wheel-stand, hold: 0.3, ramp: 1.7, lead: head }
   # The habit at a cruising yacht's wheel: the same, made at hers.
   shipwright-yacht-habit-wheel:
     of: shipwright-habit-wheel
@@ -113,3 +126,29 @@ clips:
       - { pose: shipwright-wheel-tug, hold: 0.25, ramp: 0.5 }
       - { pose: shipwright-wheel-look, hold: 0.4, ramp: 1.0, lead: head }
       - { pose: wheel-stand, hold: 0.3, ramp: 1.4, lead: head }
+
+# Walking and turning on a cruising catamaran's sole upright, the apron
+# hanging as it hangs: a crouch's hang lays its chains out sideways.
+retarget:
+  shipwright-cockpit-walk:
+    file: vendor/quaternius/Walk_Loop.glb
+    loop: true
+    deck: true
+    speed: 0.9
+    stage: bridge-sole
+    hang: {}
+    group: bridgedeck
+  shipwright-cockpit-turn-left:
+    file: vendor/quaternius/Turn90_L.glb
+    smooth: 4
+    deck: true
+    stage: bridge-sole
+    hang: {}
+    group: bridgedeck
+  shipwright-cockpit-turn-right:
+    file: vendor/quaternius/Turn90_R.glb
+    smooth: 4
+    deck: true
+    stage: bridge-sole
+    hang: {}
+    group: bridgedeck

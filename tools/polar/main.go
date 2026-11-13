@@ -66,6 +66,9 @@ func main() {
 		}
 		kinds[i] = newKind(string(boat.ID), boat.Name, &prepared[i], &params, ref.Height, boat.StartSheet)
 		kinds[i].reefWords = boat.Controls.Reef
+		if ref.Stability != nil {
+			kinds[i].plate = ref.Stability.ReefWind
+		}
 		kindsByID[kinds[i].id] = kinds[i]
 	}
 	if *handbook {

@@ -76,6 +76,11 @@ poses:
       - [head, z, 6]
 
 clips:
+  # The habit at a cruising catamaran's wheel: the same, made at hers.
+  buccaneer-bridge-habit-wheel:
+    of: buccaneer-habit-wheel
+    restage: bridgedeck
+    group: bridgedeck
   # The habit at a cruising yacht's wheel: the same, made at hers.
   buccaneer-yacht-habit-wheel:
     of: buccaneer-habit-wheel
