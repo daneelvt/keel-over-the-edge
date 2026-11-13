@@ -82,8 +82,11 @@ The tailnet policy is written from `infra/tailnet/policy.hujson` by the
       infra/MANUAL-STEPS.md section 11's check, and nothing else;
       `keel-cluster`: `/keel/DB_PASSWORD`, `/keel/DB_READER_PASSWORD`,
       `/keel/DB_GRAFANA_PASSWORD`, `/monitoring/DB_GRAFANA_PASSWORD`,
-      `/monitoring/GRAFANA_ADMIN_PASSWORD` and `/cloudflared/TUNNEL_TOKEN`,
-      all written by `accounts`, and nothing else
+      `/monitoring/GRAFANA_ADMIN_PASSWORD`, `/cloudflared/TUNNEL_TOKEN` and
+      `/keel/DB_AGREEMENT_PASSWORD`, all written by `accounts`; and in
+      `/keel-agreement/`, put there by hand, `GITHUB_APP_PRIVATE_KEY`,
+      `GITHUB_APP_WEBHOOK_SECRET`, `GITHUB_APP_CLIENT_SECRET` and
+      `CONTACT_EMAIL` (infra/MANUAL-STEPS.md section 15); nothing else
 - [ ] `eso-prod`'s client secrets: the one in use alone (an old one is
       revoked once `machine apply` has placed the new)
 

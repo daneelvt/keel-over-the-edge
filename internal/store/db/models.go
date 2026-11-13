@@ -50,6 +50,30 @@ type AccountAction struct {
 	ReportID  pgtype.UUID
 }
 
+type AgreementPull struct {
+	Repo     string
+	Number   int32
+	GithubID int64
+	HeadSha  string
+	Since    time.Time
+}
+
+type AgreementSignature struct {
+	ID            pgtype.UUID
+	GithubID      int64
+	Login         string
+	Name          string
+	Version       int32
+	TextSha256    string
+	SignedAt      time.Time
+	How           string
+	Guardian      string
+	GuardianEmail string
+	Note          string
+	VoidedAt      pgtype.Timestamptz
+	VoidReason    string
+}
+
 type AiGrant struct {
 	ID          pgtype.UUID
 	AccountID   pgtype.UUID

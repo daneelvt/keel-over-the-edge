@@ -7643,6 +7643,9 @@ go run ./tools/accounts -lock    # write .terraform.lock.hcl again, after changi
 | The password of `reader` | OpenTofu, ephemeral | `keel-cluster` `/keel/DB_READER_PASSWORD` | External Secrets → `keel/keel-db-reader`; the owner, for `psql` | No |
 | The password of `grafana`, the database's role | OpenTofu, ephemeral | `keel-cluster` `/keel/DB_GRAFANA_PASSWORD` and `/monitoring/DB_GRAFANA_PASSWORD`, the same value | External Secrets → `keel/keel-db-grafana` and `monitoring/grafana-db` | No |
 | Grafana's admin password | OpenTofu, ephemeral | `keel-cluster` `/monitoring/GRAFANA_ADMIN_PASSWORD` | External Secrets → `monitoring/grafana-admin`; the owner, to sign in | No |
+| The password of `agreement`, the contributor agreement keeper's role | OpenTofu, ephemeral | `keel-cluster` `/keel/DB_AGREEMENT_PASSWORD` | External Secrets → `keel/keel-db-agreement` | No |
+| The agreement App's private key, webhook secret and client secret | GitHub, when the owner registers the App (infra/MANUAL-STEPS.md, section 15) | `keel-cluster` `/keel-agreement/GITHUB_APP_PRIVATE_KEY`, `…/GITHUB_APP_WEBHOOK_SECRET`, `…/GITHUB_APP_CLIENT_SECRET` | External Secrets → `keel/keel-agreement` | No |
+| The address the signing page shows for a guardian and for privacy requests | The owner | `keel-cluster` `/keel-agreement/CONTACT_EMAIL` | External Secrets → `keel/keel-agreement` | No |
 | The B2 key that writes the backups | The owner | `keel-backups` `/keel/B2_BARMAN_KEY_ID`, `…_KEY` | External Secrets → `keel/keel-b2` | No |
 | The B2 key that writes the dumps | The owner | `keel-backups` `/keel/B2_DUMPS_KEY_ID`, `…_KEY` | External Secrets → `keel/keel-dumps` | No |
 | The B2 key that reads the backups | The owner | `keel-backups` `/keel-restore/B2_RESTORE_KEY_ID`, `…_KEY` | External Secrets → `keel-restore/keel-b2-read` | No |
@@ -7796,8 +7799,12 @@ host refused; a game connection open for ten minutes, past Cloudflare's
   `accounts` with `apply`. External Secrets brings the new value within
   the hour; CloudNativePG sets a managed role's password from its Secret
   by itself. Grafana reads its passwords when it starts: `kubectl -n
-  monitoring rollout restart deploy/grafana`.
+  monitoring rollout restart deploy/grafana`. The contributor agreement
+  keeper's role the same way, then `kubectl -n keel rollout restart
+  deploy/keel-agreement`.
 - **The backups' keys**: infra/MANUAL-STEPS.md, section 14.
+- **The contributor agreement App's key and secrets**:
+  infra/MANUAL-STEPS.md, section 15.
 - **The tunnel**: raise `tunnel_generation` in `infra/tofu/tunnel.tf` and
   run `accounts` with `apply`: the plan replaces the tunnel (a new ID, a new
   `play` record, a new token) and writes the new token into Infisical.
@@ -7983,13 +7990,15 @@ in-memory stand-in.
 
 ### Production's database: roles, access and what it records
 
-Three roles log in. **`keel`** owns the database; the game and its
+Four roles log in. **`keel`** owns the database; the game and its
 migrations use it, and its password never leaves the namespace `keel`.
 **`reader`** is for the owner and **`grafana`** for Grafana (at most five
 connections): each is a member of `pg_read_all_data` and `pg_monitor`,
 PostgreSQL's own roles that read every table and every statistic and
-write nothing. CloudNativePG makes and keeps both, with the passwords
-OpenTofu wrote into Infisical. The superuser, `postgres`, has no password
+write nothing. **`agreement`** is the contributor agreement keeper's (at
+most three connections), a member of no role, granted its own two tables
+alone by `keel migrate`. CloudNativePG makes and keeps the last three,
+with the passwords OpenTofu wrote into Infisical. The superuser, `postgres`, has no password
 and no way in over the network.
 
 **To look**, open the forwards ([Monitoring](#monitoring)); the database
@@ -8964,6 +8973,80 @@ when a file they read changed: a change to the server alone runs the
 page's, to the shaders alone the scene's (`tools/e2e/filters_test.go` holds
 the two filters to what each reads). A new folder under `client/src` is
 both kinds', unless it only draws or only keel's pages use it.
+
+## The contributor agreement
+
+Before an outside pull request is merged, everyone who wrote it signs the
+contributor agreement ([CONTRIBUTING.md](../CONTRIBUTING.md) says why and
+how). Its keeper is **`keel agreement`**: the same binary, run as a process
+of its own (the deployment `keel-agreement`), the server of a GitHub App
+the owner registered (infra/MANUAL-STEPS.md). It holds the App's private
+key, which may set commit statuses and comment on pull requests; keel's own
+pod never does. It reaches the database as the role `agreement`, which may
+touch the agreement's two tables and nothing else (`keel migrate` grants
+them, on every run, once the role exists).
+
+**The texts.** `legal/agreement-N.md`, one file a version, and
+`legal/privacy.md`, embedded by the `legal` package; the page serves those
+exact bytes, and a signature records the SHA-256 of the version signed.
+`legal/SUMS` holds each version's SHA-256, and a test fails when one
+changes: once anyone has signed a version, it is never edited. A new version
+is a new file, `agreement-2.md`, and a new line in SUMS; it is current at
+once, and everyone signs it before their next pull request passes. The
+plain-words summary at the top of the current version and the one in
+CONTRIBUTING.md must be the same (a test checks).
+
+**The check.** GitHub sends the App's webhook each pull request opened,
+pushed to, reopened, labelled or closed (`/agreement/webhook`, verified by
+HMAC-SHA256 before anything in it is read, at most 1 MB, a delivery's ID
+taken once). One worker checks one pull request at a time: who must sign
+(`internal/agreement/who.go`: whoever opened it, every commit's author and
+committer as GitHub links them, every `Co-authored-by` trailer; the
+repository's owner, Renovate, Dependabot, GitHub Actions and AI tools'
+addresses passed), whether each has signed the current version, then the
+status `pr-agreement` (`success`, `pending`, or `error` when GitHub or the
+database failed) and one comment, edited in place, never a second. An
+author it cannot match to an account that can sign (an unlinked e-mail, a
+co-author by a private address, an unknown bot) holds the merge until the
+owner puts the label `agreement-checked` on the pull request. Every open pull
+request is checked again at the start and every hour, so a lost webhook
+mends itself.
+
+**The page**, `/agreement` on the players' host: the text, *Sign in with
+GitHub* (the App's web flow: a `state` cookie, the token used once to ask
+who signed in and revoked at once), then a form (full name, the age, the
+employer, the agreement) whose token is the session's. Signing queues the
+signer's waiting pull requests at once. No script; its own style and the
+game's heading font.
+
+**The owner's tools**, on its internal listener, run in its pod:
+
+```sh
+kubectl -n keel exec deploy/keel-agreement -- /keel admin agreements list
+kubectl -n keel exec deploy/keel-agreement -- /keel admin agreements export > signatures.csv   # keep it off the repository
+kubectl -n keel exec deploy/keel-agreement -- /keel admin agreements add ann \
+  -name "Ann Smith" -guardian "Carol Smith" -guardian-email carol@example.com -note "by e-mail, 14 November 2026"
+kubectl -n keel exec deploy/keel-agreement -- /keel admin agreements void <ID> -reason "entered for the wrong account"
+```
+
+`add` and `void` say what they would do until given `-yes`. A voided
+signature is kept, marked void.
+
+**Locally**, it runs "not set up" without the App's settings: the page shows
+the agreement to read, and the webhook answers 503.
+
+```sh
+set -a; . .dev/db.env; set +a
+KEEL_PLAY_ORIGIN=http://localhost:8082 KEEL_INTERNAL_ADDR=127.0.0.1:9095 \
+  go run ./cmd/keel agreement        # http://localhost:8082/agreement, beside a keel on 9090
+```
+
+The App's whole flow is tested against a fake GitHub
+(`internal/agreement`'s tests); a real one is tried on a throwaway
+repository, as infra/MANUAL-STEPS.md says. Its metrics:
+`keel_agreement_webhooks_total{result}`, `keel_agreement_checks_total{result}`,
+`keel_agreement_signatures_total{how}` and
+`keel_agreement_github_errors_total`.
 
 ## Commits
 

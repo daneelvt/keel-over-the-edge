@@ -1,7 +1,8 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 # The players' routes: the page, the API and the game connection, all
-# served by keel's game listener; and AI apps', served by its agents'
-# listener. Never the internal listener. The game connection counts
+# served by keel's game listener, but the contributor agreement's page and
+# GitHub's webhook, served by the keeper's; and AI apps', served by keel's
+# agents' listener. Never an internal listener. The game connection counts
 # against the connections one address may hold open; everything else
 # against the requests it may make a second (the middlewares, through
 # Gateway API filters naming them).
@@ -40,6 +41,24 @@ spec:
       backendRefs:
         - name: keel
           port: 8080
+    # The contributor agreement keeper: /agreement and everything under
+    # it, its page, its sign-in's callback and GitHub's webhook. A longer
+    # prefix wins over /, in whatever order the rules are written; and
+    # Gateway API's PathPrefix matches whole path elements, so
+    # /agreements, or /agreementx, is not caught: it stays the game's.
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /agreement
+      filters:
+        - type: ExtensionRef
+          extensionRef:
+            group: traefik.io
+            kind: Middleware
+            name: per-address-rate
+      backendRefs:
+        - name: keel-agreement
+          port: 8082
 ---
 # AI apps' route: the MCP address, its server's card and its resource's
 # metadata, nothing else. Named with no host, it shares the players' host, as on the local

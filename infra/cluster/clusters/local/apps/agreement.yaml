@@ -1,0 +1,27 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# The contributor agreement keeper, at production's sizes, "not set up":
+# no GitHub App here, so its page says signing is not open and the webhook
+# is refused. Its role's password is made by go run ./tools/cluster
+# -deploy, as the other roles' are. The players' origin is keel's, from
+# its configuration, so a deploy's Mac name reaches both (a change to
+# keel's configuration restarts the keeper too). The pull policy as for
+# keel (keel.yaml): Kubernetes' own for an image named by digest, said
+# outright, so a release applied after a deploy from the working tree
+# takes the field back.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: keel-agreement
+  namespace: keel
+spec:
+  template:
+    spec:
+      containers:
+        - name: agreement
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: KEEL_PLAY_ORIGIN
+              valueFrom:
+                configMapKeyRef:
+                  name: keel
+                  key: KEEL_PLAY_ORIGIN

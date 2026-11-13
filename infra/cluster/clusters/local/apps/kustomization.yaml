@@ -30,6 +30,7 @@ configMapGenerator:
       - KEEL_WORLD_SEED=1
 patches:
   - path: keel.yaml
+  - path: agreement.yaml
   - path: database.yaml
   # The local cluster's bucket, never production's.
   - target:

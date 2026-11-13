@@ -7,6 +7,7 @@
 !go.sum
 !cmd/
 !internal/
+!legal/
 !shared/
 !tools/
 !art/
