@@ -37,6 +37,7 @@ func (w *World) rules() {
 	w.edgeRules()
 	w.sighting()
 	w.lifeRules()
+	w.logRules()
 	w.ends()
 }
 
@@ -55,7 +56,10 @@ func (w *World) ends() {
 		}
 		st := &f.State[s]
 		f.Edges = append(f.Edges, bus.EdgeEvent{Tick: f.Tick, Kind: bus.EdgeTaken, Slot: s, Boat: f.Boat[s], Owner: f.Owner[s], X: st.X, Y: st.Y, Placed: f.Voyage[s].Placed})
-		w.voyageEnds(f, s)
+		w.voyageEnds(f, s, bus.EndTaken)
+	}
+	for i := range f.Crew {
+		w.aboardEnded(f, &f.Crew[i], bus.EndTaken)
 	}
 	f.Ended = true
 }
@@ -79,7 +83,7 @@ func (w *World) edgeRules() {
 			f.Edges = append(f.Edges, bus.EdgeEvent{Tick: f.Tick, Kind: bus.EdgeOver, Slot: s, Boat: f.Boat[s], Owner: f.Owner[s], X: st.X, Y: st.Y, Placed: v.Placed})
 			// The approach under way ended over the lip: it is not survived.
 			v.Approaching = false
-			w.voyageEnds(f, s)
+			w.voyageEnds(f, s, bus.EndOver)
 			if w.enc != nil {
 				f.Wake[s] = physics.Wake{}
 			}
@@ -111,11 +115,13 @@ func survive(v *bus.Voyage) {
 }
 
 // voyageEnds records the closest approach slot s of f survived in its
-// voyage, if any, and clears the voyage's record: an approach under way is
-// survived, since the boat ends it afloat.
-func (w *World) voyageEnds(f *bus.Frame, s int32) {
+// voyage, if any, and the voyage ended, how; and clears the voyage's
+// record at the edge: an approach under way is survived, since the boat
+// ends it afloat.
+func (w *World) voyageEnds(f *bus.Frame, s int32, how uint8) {
 	v := &f.Voyage[s]
 	survive(v)
+	w.voyageEnded(f, s, how)
 	if v.Survived {
 		f.Edges = append(f.Edges, bus.EdgeEvent{
 			Tick: f.Tick, Kind: bus.EdgeApproach, Slot: s, Boat: f.Boat[s], Owner: f.Owner[s],
@@ -145,7 +151,7 @@ func (w *World) fallsEnd() {
 // ready to sail as a new boat is: what its autopilot remembered, its time
 // aground and its course are cleared, and its pairs begin afresh.
 func (w *World) startAgain(f *bus.Frame, s int32) {
-	f.Voyage[s] = bus.Voyage{}
+	f.Voyage[s] = newVoyage(f.Tick)
 	f.State[s] = w.spawn(f, s)
 	w.readyControls(f, s)
 	f.Course[s] = physics.Course{}
