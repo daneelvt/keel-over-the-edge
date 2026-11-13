@@ -112,7 +112,13 @@ clips:
       - { pose: chartmaker-bridge-seated, hold: 1.4, ramp: 1.5, lead: head }
       - { pose: chartmaker-bridge-seated-aloft, hold: 1.4, ramp: 1.4, lead: head, anticipate: 0.05 }
       - { pose: chartmaker-bridge-seated, hold: 1.0, ramp: 1.4, lead: head }
-      - { pose: chartmaker-bridge-seated-windward, hold: 1.2, ramp: 1.3, lead: head, anticipate: 0.05 }
+      - {
+          pose: chartmaker-bridge-seated-windward,
+          hold: 1.2,
+          ramp: 1.3,
+          lead: head,
+          anticipate: 0.05,
+        }
   # The habit at a cruising catamaran's wheel: as at a cruising yacht's,
   # made at hers.
   chartmaker-bridge-habit-wheel:
