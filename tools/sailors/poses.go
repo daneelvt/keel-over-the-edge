@@ -143,6 +143,10 @@ type retarget struct {
 	// Stage is the ship's place it is set at (on a deck): leaning on her
 	// rail (ship-rail), sat on her hatch (ship-hatch).
 	Stage string `yaml:"stage" json:"stage,omitempty"`
+	// Knee sets, sat on a cruising yacht's bench, how far its front edge is
+	// from the knees, if not the tables' own: a long coat kept off the
+	// bench's back.
+	Knee float64 `yaml:"knee" json:"knee,omitempty"`
 	// Still keeps the arm of each hand named as the clip's first frame has
 	// it: a gesture of the source's left out.
 	Still []string `yaml:"still" json:"still,omitempty"`
@@ -397,6 +401,8 @@ func (lib poseLibrary) check(t tables, sources map[string]source) error {
 			return fmt.Errorf("the retarget %s: smoothed over %v frames, not 0 to 10", name, r.Smooth)
 		case r.Crawl && !r.Deck:
 			return fmt.Errorf("the retarget %s: crawling, it is on a deck", name)
+		case r.Knee < 0 || r.Knee > 0.5 || r.Knee > 0 && r.Stage != "yacht-bench":
+			return fmt.Errorf("the retarget %s: its bench's edge is 0 to 0.5 m from the knees, and only on a yacht's bench", name)
 		case r.Head < 0 || r.Head > 2:
 			return fmt.Errorf("the retarget %s: a head %v m over the deck is not 0 to 2", name, r.Head)
 		}

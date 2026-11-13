@@ -1182,7 +1182,7 @@ export class DressingRoom {
 
   /**
    * A figure aboard a cruising yacht, each on her own, moored before the
-   * quay, her sails left out so her people are seen, turned so the figure
+   * quay, her sails and boom left out so her people are seen, turned so the figure
    * faces the front: at her starboard wheel (or port, for a -port clip),
    * standing aft of it or sat outboard of it; on her bench facing inboard;
    * on her rail facing outboard; or crossing her cockpit or her coachroof
@@ -1207,6 +1207,12 @@ export class DressingRoom {
         o.visible = false;
       }
     });
+    // Her boom too: swung over her cockpit, it stands between the camera
+    // and her people.
+    const boom = boat.parts.get('boom');
+    if (boom !== undefined) {
+      boom.visible = false;
+    }
     const n = this.#figuresWanted();
     const x = (i - (n - 1) / 2) * this.#boatSpacing();
     this.stage.scene.add(boat.root);

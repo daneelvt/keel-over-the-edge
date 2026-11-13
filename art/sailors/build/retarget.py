@@ -185,6 +185,7 @@ def retarget(fig, name, spec, fps):
     # her hatch.
     clip.ship = spec.get("stage")
     clip.seated = clip.ship in (SHIP_HATCH, YACHT_BENCH)
+    clip.notes["knee"] = spec.get("knee")
     # Crawling, the hands and knees bear on the deck with the feet; the
     # way it goes over the deck (back, for a foot bearing on it: its
     # opposite) forward or to a side.
@@ -1585,7 +1586,8 @@ def _bench_place(fig, clip):
     for fr in _ring(clip):
         fig.set_rotations(fr["rot"], fr["pelvis"])
         ys.append(((fig.world("calf_l") + fig.world("calf_r")) / 2).y)
-    edge = Vector((0.0, float(np.median(ys)) + fig.stage.yacht.spec["bench"]["knee"], clip.notes["seat"]))
+    edge = Vector((0.0, float(np.median(ys)) + (clip.notes.get("knee") or fig.stage.yacht.spec["bench"]["knee"]),
+                   clip.notes["seat"]))
     return Matrix.Translation(fig.stage.point(YACHT_BENCH)) @ fig.stage.facing(1) @ Matrix.Translation(-edge)
 
 
