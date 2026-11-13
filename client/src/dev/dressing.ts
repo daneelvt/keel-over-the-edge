@@ -1704,11 +1704,11 @@ export class DressingRoom {
           const anchor = shipAnchor(r.clip);
           if (inBridgeFile(r.clip)) {
             // Aboard a cruising catamaran, from the front and above, her
-            // roof left out: sat, from higher and a little to one side,
-            // over her table.
+            // roof left out: sat or on her sole, from higher and a little to
+            // one side, over her table.
             const a = bridgeAnchor(r.clip);
             const sat =
-              (a !== 'stance' && a !== 'foot' && a !== 'landing' && a !== 'sole') ||
+              (a !== 'stance' && a !== 'foot' && a !== 'landing') ||
               r.clip.startsWith(BRIDGE_CLIPS.seated);
             o.azimuth = back + (sat ? 0.5 : 0);
             o.elevation = a === 'stance' ? 0.4 : sat ? 0.85 : 0.35;

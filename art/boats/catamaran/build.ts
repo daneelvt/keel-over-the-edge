@@ -417,9 +417,9 @@ const LBENCH_OUT = 2.25;
 const LBENCH_LEG = 2.15;
 const LBENCH_INNER = 0.55;
 const LBENCH_AFT = 4.05;
-/** The table: 1.4 m by 0.82, its top at a table's height above the sole. */
+/** The table: 1.4 m by 0.72, its top at a table's height above the sole. */
 const TABLE: { x0: number; x1: number; z0: number; z1: number; y: number } = {
-  x0: 0.6,
+  x0: 0.7,
   x1: 1.42,
   z0: 2.45,
   z1: 3.85,
@@ -2678,7 +2678,7 @@ function seatsData(): Record<string, unknown> {
       sides: v([PLAT_IN + 0.05, LADDER_IN - 0.05, 0]).slice(0, 2),
       rail: v([LADDER_RAIL, 0.9, LANDING_RAIL]),
     },
-    walk: v([-0.25, SOLE, 3.15]),
+    walk: v([-0.21, SOLE, 3.05]),
     platform: PLAT_Y,
     // The floors' plans, x from and to, z from and to: the cockpit's sole
     // between the hulls' inner sides, the helm's platform and its landing.
