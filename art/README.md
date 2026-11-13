@@ -66,6 +66,28 @@ built files are committed; the catalog's `art.model` names them, and
   each a child of its own, `wheel-port` and `wheel-starboard`; and it
   names the places its people's ways read: `coachroof`, `table`, `bridle`,
   `bench` and `lifelines`.
+- `boats/catamaran/build.ts`: the catamaran, two carvel hulls with plumb
+  bows, a knuckle and flared topsides, coppered below, joined by a
+  bridgedeck under a varnished round-house of small-paned windows all round
+  with dead-lights and two glazed doors shut, its planked roof carried aft
+  over the cockpit on varnished posts as a poop, open over the helm; a
+  raised helm platform to port up an oak companion ladder with a bronze
+  rail, a spoked wheel aft of a wooden console with a brass hood, a settle
+  for two and two small capstans; the cockpit's L-shaped teak bench and
+  table, the aft crossbeam's bench with its turned oak rail, the lounger;
+  oak beams forward with hemp nets between, an iron anchor at a timber
+  roller and a windlass; iron horses for the main sheet and the
+  self-tacking jib; iron stanchions, pulpits and pushpits with hemp
+  lifelines; a spruce rig on oak cross-trees with shrouds on deadeyes and
+  no backstay, a fully battened main in its lazy bag and a jib on a roller
+  of pine; two copper-sheathed keels and two oak rudders whose arms a tie
+  rod joins; oak steps on the transoms; brass sidelights on the forward
+  decks and a poop-lantern hung at the roof's after edge. Its hull's
+  `lever` data are both hulls' sections with the bridgedeck and the
+  round-house, and its `bridgedeck` the plan between the hulls, its
+  underside and the roof's top at its after end. Its `wheel` node stands
+  off the centreline, with no spread; the `sailor` node is the helm's
+  stance aft of it.
 - `town/lib/kit.ts` and `town/<biome>/build.ts`: each biome's kit of town
   buildings and props, `town/<biome>.glb`.
 - `icon/icon.ts` and `icon/build.ts`: the game's icon, the boat on sky and
