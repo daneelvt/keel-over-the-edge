@@ -226,4 +226,11 @@ clips:
     climbing-in,
   ]
 names:
-  { lookout-habit: habit, lookout-habit-standing: habit-standing, lookout-habit-wheel: habit-wheel, lookout-yacht-habit-wheel: yacht-habit-wheel, lookout-yacht-rail: yacht-rail, lookout-yacht-rail-out: yacht-rail-out }
+  {
+    lookout-habit: habit,
+    lookout-habit-standing: habit-standing,
+    lookout-habit-wheel: habit-wheel,
+    lookout-yacht-habit-wheel: yacht-habit-wheel,
+    lookout-yacht-rail: yacht-rail,
+    lookout-yacht-rail-out: yacht-rail-out,
+  }

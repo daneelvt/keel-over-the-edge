@@ -316,4 +316,9 @@ clips:
     climbing-in,
   ]
 names:
-  { oldsalt-habit: habit, oldsalt-habit-standing: habit-standing, oldsalt-habit-wheel: habit-wheel, oldsalt-yacht-habit-wheel: yacht-habit-wheel }
+  {
+    oldsalt-habit: habit,
+    oldsalt-habit-standing: habit-standing,
+    oldsalt-habit-wheel: habit-wheel,
+    oldsalt-yacht-habit-wheel: yacht-habit-wheel,
+  }
