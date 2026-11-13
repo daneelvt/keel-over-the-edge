@@ -143,6 +143,11 @@ export default defineConfig({
       extra: [
         { name: 'IM Fell English SC (font)', licence: 'OFL-1.1', file: 'src/fonts/OFL.txt' },
         {
+          name: 'Libre Caslon Text (font)',
+          licence: 'OFL-1.1',
+          file: 'src/fonts/LibreCaslonText-OFL.txt',
+        },
+        {
           name: 'Alegreya Sans (font)',
           licence: 'OFL-1.1',
           file: 'src/fonts/AlegreyaSans-OFL.txt',
