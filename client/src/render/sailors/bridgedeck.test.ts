@@ -1,19 +1,21 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import { readFileSync } from 'node:fs';
-import { Matrix4, Vector3 } from 'three';
+import { Matrix4, Object3D, Vector3 } from 'three';
 import { describe, expect, test } from 'vitest';
 import { catalog } from '../../catalog';
 import {
   BRIDGE_CLIPS,
   BRIDGE_FILE,
   bridgeAnchor,
+  bridgeBoat,
   bridgeClips,
   bridgePlace,
   bridgePlaces,
   bridgeSide,
   inBridgeFile,
   namesBridgeClips,
+  seatOf,
 } from './bridgedeck';
 
 /** A model's nodes, by name: each one's place (its translation, the model's nodes being children of its root) and its data. */
@@ -30,6 +32,23 @@ function nodesOf(path: string): (name: string) => { at: Vector3; data: unknown }
       ? null
       : { at: new Vector3(t[0] ?? 0, t[1] ?? 0, t[2] ?? 0), data: n.extras };
   };
+}
+
+/** A model's nodes as parts by name, each at its place with its data, as the game reads them. */
+function partsOf(
+  nodes: (name: string) => { at: Vector3; data: unknown } | null,
+): Map<string, Object3D> {
+  const parts = new Map<string, Object3D>();
+  for (const name of ['sailor', 'seats', 'ways']) {
+    const n = nodes(name);
+    if (n !== null) {
+      const o = new Object3D();
+      o.position.copy(n.at);
+      o.userData = (n.data ?? {}) as Record<string, unknown>;
+      parts.set(name, o);
+    }
+  }
+  return parts;
 }
 
 /** The kind whose art names the catamaran's clips. */
@@ -126,20 +145,20 @@ describe('the cruising catamaran’s clips', () => {
     }
     expect(places.stance.at.distanceTo(nodes('sailor')?.at ?? new Vector3())).toBeLessThan(1e-6);
     expect(places.stance.facing).toBe(0);
-    // Each seat's place is at the front edge of a station of hers on it
-    // (the station a little in from the edge, on its top), facing as she
-    // has it face.
+    // Each seat's place is on the front edge of a seat of hers (facing as
+    // she has it face), where stations of hers sit.
+    const deck = bridgeBoat(partsOf(nodes));
+    if (deck === null) {
+      throw new Error('no deck');
+    }
     for (const key of ['helm', 'table', 'beam', 'lounger'] as const) {
       const p = places[key];
-      const near = kind.stations.filter((s) => {
-        const [x, y, z] = s.at;
-        return (
-          s.facing === p.facing &&
-          Math.abs((y ?? 0) - p.at.y) < 0.01 &&
-          Math.hypot((x ?? 0) - p.at.x, (z ?? 0) - p.at.z) < 0.06
-        );
-      });
-      expect(near.length, key).toBe(1);
+      const seat = seatOf(deck, { at: [p.at.x, p.at.y, p.at.z], facing: p.facing });
+      expect(seat?.family, key).toBe(key);
+      expect(
+        kind.stations.filter((s) => seatOf(deck, s)?.name === seat?.name).length,
+        key,
+      ).toBeGreaterThan(0);
     }
     // The ladder rises forward from its foot, on the sole, to its landing.
     expect(places.landing.at.z).toBeLessThan(places.foot.at.z - 1);

@@ -21,7 +21,8 @@
 // Aboard a beach cat, her crew go out on her trapeze's wire: theirs drawn
 // from the hounds to their hips, the model's own on that side hidden.
 // Aboard a cruising yacht, her people are drawn with her own clips (her
-// bench, her rail, her ways at a crouch), loaded with their looks.
+// bench, her rail, her ways at a crouch), loaded with their looks; aboard a
+// cruising catamaran, with hers (her seats, her ways upright, her ladder).
 //
 // The group is a child of the boat's model: the people heel, pitch and
 // heave with it. Allocation-free from frame to frame once each person is
@@ -362,6 +363,7 @@ export class CrewDeck {
             (!p.look.aloft || settled(p.look.aloftState)) &&
             (!this.#catted || settled(p.look.catState)) &&
             (!this.#yachted || settled(p.look.cruiserState)) &&
+            (!this.#bridged || settled(p.look.bridgeState)) &&
             (p.look.clipsState === 'failed' || (p.shown && p.posed))),
       ) &&
       this.drawn.near + this.drawn.far === this.#people.filter((p) => p.shown).length
@@ -466,7 +468,17 @@ export class CrewDeck {
           !this.#yachted &&
           (this.#stations.some((s) => s.windward === true || s.pose === 'rail') ||
             station?.pose === 'rail');
-        looks.want(look, true, false, railed, ship, ship && aloft, this.#catted, this.#yachted);
+        looks.want(
+          look,
+          true,
+          false,
+          railed,
+          ship,
+          ship && aloft,
+          this.#catted,
+          this.#yachted,
+          this.#bridged,
+        );
         const was = before.get(member);
         if (was !== undefined && was.look === look) {
           this.#people.push(was);
@@ -541,7 +553,8 @@ export class CrewDeck {
         (!l.shipped || done(l.shipState)) &&
         (!l.aloft || done(l.aloftState)) &&
         (!this.#catted || done(l.catState)) &&
-        (!this.#yachted || done(l.cruiserState));
+        (!this.#yachted || done(l.cruiserState)) &&
+        (!this.#bridged || done(l.bridgeState));
       const shown = can && (p.member.station > 0 || p.member.moving !== null);
       if (shown && p.body === null && l.deck !== null) {
         p.body = new CrewBody(l.deck, 1 + p.member.seat * 977 + l.index * 31, l.machine);
@@ -616,6 +629,11 @@ export class CrewDeck {
   /** Whether the boat is a cruising yacht, whose people are drawn with her own clips. */
   get #yachted(): boolean {
     return this.#plan?.yacht != null;
+  }
+
+  /** Whether the boat is a cruising catamaran, whose people are drawn with her own clips. */
+  get #bridged(): boolean {
+    return this.#plan?.bridge != null;
   }
 
   /**
@@ -707,6 +725,7 @@ export class CrewDeck {
     input.world = this.#world;
     input.machine = p.look.machine;
     input.ways = this.#plan === null ? null : waysOf(this.#plan);
+    input.bridge = this.#plan?.bridge?.boat ?? null;
     poseMember(p.body as CrewBody, p.member, input);
   }
 

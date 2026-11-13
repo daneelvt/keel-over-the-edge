@@ -80,6 +80,8 @@ import {
 } from './quality';
 import { type Gfx, type Wanted, wantsCompat } from './renderer';
 import { RightOfWay, type Seen } from './rightofway';
+import { bridgeCrew } from './sailors/bridgecrew';
+import { bridgeBoat, namesBridgeClips } from './sailors/bridgedeck';
 import { namesCatClips } from './sailors/cat';
 import { CrewDeck, type CrewShown, helmLook, modelDeck, STEPPED, tillerOf } from './sailors/crew';
 import { type CrewPlan, crewPlan, type SailorNow } from './sailors/crewrules';
@@ -770,6 +772,7 @@ export class SeaScene {
       ? catOf(boat.model, boat.parts, kind.physics.rig.foot)
       : null;
     plan.yacht = namesYachtClips(kind.art) ? yachtBoat(boat.parts) : null;
+    plan.bridge = namesBridgeClips(kind.art) ? bridgeCrew(bridgeBoat(boat.parts)) : null;
     plan.cog = kind.physics.hull.centreOfGravity;
     return plan;
   }
@@ -1881,6 +1884,7 @@ export class SeaScene {
         windOffBow: this.wind.meanFrom - this.pose.heading,
         depth: helm?.runtime.depth ?? 0,
         ship: this.#shipMoment,
+        apparent: this.out[RECORDS.out.apparentWindSpeed] ?? 0,
         sailor: sn,
       },
       this.pose.heel,

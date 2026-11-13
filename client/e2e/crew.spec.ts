@@ -15,7 +15,11 @@
 // boat near her. The yacht's eight: her helm at the windward wheel, three
 // on her windward bench and four on her windward rail, crossing in a tack
 // and a gybe in their order, changing places at a handover; and all eight
-// seen from a friend's boat near her.
+// seen from a friend's boat near her. The catamaran's twelve: two at her
+// helm, five at her table, three on her aft bench and two on her lounger,
+// sat up in a light wind and braced in a breeze, nobody moving in a tack
+// or a gybe, a handover a walk along her cockpit and up her helm's ladder;
+// and all twelve seen from a friend's boat near her.
 
 import { expect, type Page, test } from '@playwright/test';
 import data from '../src/catalog/catalog.gen.json' with { type: 'json' };
@@ -697,9 +701,11 @@ test('eight aboard the yacht: three on her windward bench and four on her windwa
   page,
 }, info) => {
   test.setTimeout(180_000);
-  // The kind whose crew sit on a cockpit's bench.
-  const yacht = data.boats.find((b) => b.stations.some((s) => s.pose === 'bench'));
-  test.skip(yacht === undefined, 'no kind has a bench');
+  // The kind whose people are drawn with a cruising yacht's clips.
+  const yacht = data.boats.find((b) =>
+    (b.art.sailorClips as string[] | undefined)?.includes('cruiser'),
+  );
+  test.skip(yacht === undefined, 'no kind names a cruising yacht’s clips');
   const kind = yacht as NonNullable<typeof yacht>;
   await openScene(page, `boat=${kind.id}&crew=${kind.capacity}`);
   await page.evaluate(async (n) => {
@@ -843,8 +849,10 @@ test('a friend’s boat near a crewed yacht sees all eight: the helm at the wind
   page,
 }, info) => {
   test.setTimeout(150_000);
-  const yacht = data.boats.findIndex((b) => b.stations.some((s) => s.pose === 'bench'));
-  test.skip(yacht < 0, 'no kind has a bench');
+  const yacht = data.boats.findIndex((b) =>
+    (b.art.sailorClips as string[] | undefined)?.includes('cruiser'),
+  );
+  test.skip(yacht < 0, 'no kind names a cruising yacht’s clips');
   const capacity = data.boats[yacht]?.capacity ?? 0;
   await openScene(page, 'boat=jolly-boat');
   await page.evaluate(
@@ -908,6 +916,240 @@ test('a friend’s boat near a crewed yacht sees all eight: the helm at the wind
     tacked?.members.filter((m) => m.station > 0 && m.moving === null && m.side === 1),
   ).toHaveLength(capacity - 1);
   await picture('a friend near the yacht after her tack');
+});
+
+/** The kind whose people are drawn with a cruising catamaran's clips. */
+const catamaran = data.boats.findIndex((b) =>
+  (b.art.sailorClips as string[] | undefined)?.includes('bridgedeck'),
+);
+
+test('twelve aboard the catamaran: two at her helm, five at her table, three on her aft bench and two on her lounger, sat up in a light wind and braced in a breeze, nobody moving in a tack or a gybe, and a handover up her ladder', async ({
+  page,
+}, info) => {
+  test.setTimeout(240_000);
+  test.skip(catamaran < 0, 'no kind names a cruising catamaran’s clips');
+  const kind = data.boats[catamaran] as (typeof data.boats)[number];
+  await openScene(page, `boat=${kind.id}&crew=${kind.capacity}`);
+  /** Shows n aboard, the seat given holding the controls, and holds the world's time. */
+  const aboard = (n: number, holder = 0) =>
+    page.evaluate(
+      async ({ n, holder }) => {
+        const k = globalThis.keel;
+        k.setSky(12);
+        await k.showCrew(n, holder);
+        await k.crewReady();
+        k.freezeTick(k.world.ticks);
+      },
+      { n, holder },
+    );
+  /** Sails frames in a wind (knots), the boom held, the bow so far off the wind, and the crew as they then are. */
+  const sail = (knots: number, boom: number, off: number, frames: number) =>
+    page.evaluate(
+      ({ knots, boom, off, frames }) => {
+        const k = globalThis.keel;
+        const from = k.world.wind.meanFrom;
+        k.setWind(knots, from);
+        const moved = new Set<number>();
+        for (let i = 0; i < frames; i++) {
+          k.setState({ boom, sailor: 0, heading: from + off, heel: 0.02 });
+          k.sailFrames(1, 3);
+          for (const m of k.crew().members) {
+            if (m.moving !== null && m.t > 0) {
+              moved.add(m.seat);
+            }
+          }
+        }
+        return { ...k.crew(), moved: [...moved] };
+      },
+      { knots, boom, off, frames },
+    );
+  const picture = async (name: string, azimuth = -2.4) => {
+    await page.evaluate(async (azimuth) => {
+      const k = globalThis.keel;
+      k.camera({ azimuth, elevation: 0.6, distance: 13 });
+      await k.show();
+    }, azimuth);
+    await info.attach(name, { body: await page.screenshot(), contentType: 'image/png' });
+  };
+  const pose = (station: number): string | undefined => kind.stations[station]?.pose;
+  /** Everyone at their station, nobody moving: where their heads are, by the seat's place. */
+  const seated = (c: Awaited<ReturnType<typeof sail>>, n: number, name: string) => {
+    expect(c.aboard, name).toBe(n - 1);
+    expect(c.helmShown, name).toBe(true);
+    for (const h of c.heads) {
+      expect(h.moving, name).toBe(false);
+      expect(pose(h.station), `${name}: station ${h.station}`).toBe('bench');
+      // Each head over their own station's seat.
+      const st = kind.stations[h.station]?.at as number[];
+      expect(Math.hypot(h.model[0] - (st[0] ?? 0), h.model[2] - (st[2] ?? 0)), name).toBeLessThan(
+        0.45,
+      );
+    }
+  };
+  const tack = 0.85;
+  for (const n of [2, 6, kind.capacity]) {
+    await aboard(n);
+    // A light wind: sat up, the helm on the settle behind the wheel.
+    const light = await sail(2, -0.06, tack, 150);
+    seated(light, n, `${n} in a light wind`);
+    expect(light.members.filter((m) => m.station > 0).every((m) => m.lean === 0)).toBe(true);
+    expect(light.helmSeat).toBe(1);
+    await picture(`${n} aboard, sat up in a light wind`);
+    // A breeze: braced, the helm standing at the wheel.
+    const breeze = await sail(18, -0.06, tack, 150);
+    seated(breeze, n, `${n} in a breeze`);
+    expect(breeze.members.filter((m) => m.station > 0).every((m) => m.lean === 1)).toBe(true);
+    expect(breeze.helmSeat).toBe(0);
+    await picture(`${n} aboard, braced in a breeze`);
+  }
+  // The heads of all twelve: two at the helm (the helm drawn by her
+  // sailor), five at the table, three on the aft bench, two on the lounger.
+  const all = await sail(18, -0.06, tack, 1);
+  expect(all.heads).toHaveLength(kind.capacity - 1);
+  // A tack in four frames: through the wind, the boom over; nobody moves.
+  const before = all.changes;
+  const frames = [
+    [0.4, -0.03],
+    [0, 0],
+    [-0.4, 0.03],
+    [-tack, 0.06],
+  ] as const;
+  let k = 0;
+  for (const [off, boom] of frames) {
+    const c = await sail(18, boom, off, 45);
+    expect(c.moved, `a tack, frame ${k}`).toEqual([]);
+    seated(c, kind.capacity, `a tack, frame ${k}`);
+    await picture(`a tack, ${['bearing up', 'head to wind', 'falling off', 'on the new tack'][k]}`);
+    k++;
+  }
+  const tacked = await sail(18, 0.06, -tack, 30);
+  expect(tacked.changes).toBeGreaterThan(before);
+  expect(tacked.tack).toBe(true);
+  // A gybe: the wind over the quarter, the boom across; nobody moves.
+  const gybe = Math.PI - 0.6;
+  await sail(10, 1.1, -gybe, 120);
+  const gybed = await sail(10, -1.1, gybe, 240);
+  expect(gybed.tack).toBe(false);
+  expect(gybed.moved).toEqual([]);
+  seated(gybed, kind.capacity, 'after a gybe');
+  // A handover: the skipper hands the wheel to the one at the aft bench's
+  // port end, who walks her cockpit and climbs her ladder; the skipper
+  // comes down it and walks to their seat.
+  const holder = kind.stations.findIndex(
+    (s, i) => i > 1 && s.facing === 0 && (s.at[0] as number) >= 0 && (s.at[0] as number) < 0.3,
+  );
+  expect(holder).toBeGreaterThan(1);
+  await aboard(kind.capacity, holder);
+  const seen = new Map<string, number>();
+  const shots: string[] = [];
+  for (let i = 0; i < 80; i++) {
+    const c = await sail(18, 0.06, -tack, 10);
+    const walkers = c.members.filter((m) => m.moving === 'change');
+    for (const m of walkers) {
+      const what = m.stretch ?? (m.t > 0 ? 'walking' : 'waiting');
+      seen.set(`${m.seat} ${what}`, (seen.get(`${m.seat} ${what}`) ?? 0) + 1);
+    }
+    const climber = walkers.find((m) => m.seat === holder);
+    const phase =
+      climber === undefined
+        ? 'at the wheel'
+        : climber.stretch === 'up'
+          ? 'up the ladder'
+          : climber.t > 0
+            ? 'along the cockpit'
+            : null;
+    if (
+      phase !== null &&
+      !shots.includes(phase) &&
+      (phase !== 'at the wheel' || shots.length > 0)
+    ) {
+      shots.push(phase);
+      await picture(`a handover: ${phase}`, -1.9);
+    }
+    if (walkers.length === 0 && shots.includes('at the wheel')) {
+      break;
+    }
+  }
+  expect(seen.get(`${holder} up`)).toBeGreaterThan(0);
+  expect(seen.get('0 down')).toBeGreaterThan(0);
+  const handed = await sail(18, 0.06, -tack, 1);
+  expect(handed.members.find((m) => m.seat === 0)?.station).toBe(holder);
+  expect(handed.members.find((m) => m.seat === holder)?.station).toBe(-1);
+  seated(handed, kind.capacity, 'after a handover');
+  await picture('after a handover');
+});
+
+test('a friend’s boat near a crewed catamaran sees all twelve: two at her helm, five at her table, three on her aft bench and two on her lounger, through a tack', async ({
+  page,
+}, info) => {
+  test.setTimeout(150_000);
+  test.skip(catamaran < 0, 'no kind names a cruising catamaran’s clips');
+  const capacity = data.boats[catamaran]?.capacity ?? 0;
+  await openScene(page, 'boat=jolly-boat');
+  await page.evaluate(
+    async ({ catamaran, capacity }) => {
+      const k = globalThis.keel;
+      k.setSky(12);
+      const from = k.world.wind.meanFrom;
+      const me = k.boat().state;
+      const { crew, look } = k.fleetCrew(capacity, 0, 7);
+      k.setFleet([
+        {
+          kind: catamaran,
+          crew,
+          look,
+          east: me.x + Math.sin(me.heading) * 18 + Math.cos(me.heading) * 10,
+          north: me.y + Math.cos(me.heading) * 18 - Math.sin(me.heading) * 10,
+          heading: from - 0.85,
+          boom: 0.06,
+          heel: 0.02,
+          sailor: 0,
+        },
+      ]);
+      await k.fleetLoaded();
+      await k.fleetCrewsReady();
+      k.freezeTick(k.world.ticks);
+    },
+    { catamaran, capacity },
+  );
+  const sail = (frames: number, boom: number, off: number) =>
+    page.evaluate(
+      ({ frames, boom, off }) => {
+        const k = globalThis.keel;
+        const moved = new Set<number>();
+        for (let i = 0; i < frames; i++) {
+          k.moveFleet(0, { boom, heel: 0.02, heading: k.world.wind.meanFrom + off });
+          k.sailFrames(1, 3);
+          const b = k.fleetCrews().boats.find((x) => x.slot === 0);
+          for (const m of b?.members ?? []) {
+            if (m.moving !== null) {
+              moved.add(m.seat);
+            }
+          }
+        }
+        return { boat: k.fleetCrews().boats.find((b) => b.slot === 0), moved: [...moved] };
+      },
+      { frames, boom, off },
+    );
+  const picture = async (name: string) => {
+    await page.evaluate(async () => {
+      const k = globalThis.keel;
+      k.camera({ azimuth: 2.5, elevation: 0.35, distance: 24 });
+      await k.show();
+    });
+    await info.attach(name, { body: await page.screenshot(), contentType: 'image/png' });
+  };
+  const met = await sail(60, 0.06, -0.85);
+  expect(met.boat?.drawn).toBe(true);
+  // Everyone but her helm (the fleet's sailor, at her wheel) drawn.
+  expect(met.boat?.members.filter((m) => m.station > 0)).toHaveLength(capacity - 1);
+  expect(met.boat?.heads).toHaveLength(capacity - 1);
+  await picture('a friend near the catamaran and her twelve');
+  // She tacks: nobody moves.
+  const tacked = await sail(300, -0.06, 0.85);
+  expect(tacked.moved).toEqual([]);
+  expect(tacked.boat?.heads).toHaveLength(capacity - 1);
+  await picture('a friend near the catamaran after her tack');
 });
 
 test('a friend’s boat near a crewed keelboat, skiff, tall ship and beach cat sees their crews: to windward, through a tack and a handover, and the beach cat’s on the wire', async ({
