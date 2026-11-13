@@ -29,10 +29,6 @@ export const NOT_HAD = 'The log cannot be had just now.';
 /** The player's own log without a sailor. */
 export const NO_SAILOR = 'A log is kept by a sailor: make yours and set sail.';
 export const YOUR_LOG = 'Your log';
-/** The key that opens another sailor's log from their name. */
-export const THEIR_LOG = 'Their log';
-/** The key that opens a machine sailor's log from its row. */
-export const ITS_LOG = 'Its log';
 export const DAYS = 'Days';
 export const COLLECTION = 'Collection';
 export const WHOLE_RECORD = 'The whole record';

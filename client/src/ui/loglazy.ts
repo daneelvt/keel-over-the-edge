@@ -9,6 +9,11 @@
 import { useEffect, useState } from 'preact/hooks';
 import type { LogWho } from '../chart/chart';
 
+/** The key that opens another sailor's log from their name. */
+export const THEIR_LOG = 'Their log';
+/** The key that opens a machine sailor's log from its row. */
+export const ITS_LOG = 'Its log';
+
 type LogModule = typeof import('./log');
 
 let loading: Promise<LogModule> | null = null;

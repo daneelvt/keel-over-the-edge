@@ -26,8 +26,7 @@ import type { ComponentChildren, JSX } from 'preact';
 import { useEffect, useState } from 'preact/hooks';
 import { catalog } from '../catalog';
 import { MACHINE } from '../catalog/looks';
-import { openLog } from '../ui/loglazy';
-import { ITS_LOG } from '../ui/logwords';
+import { ITS_LOG, openLog } from '../ui/loglazy';
 import { linkState, NewLink, ShareLink } from '../ui/sharelink';
 import { useWatch } from '../ui/watchlazy';
 import {

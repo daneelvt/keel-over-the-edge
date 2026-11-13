@@ -131,7 +131,7 @@ function days(now: number) {
           other: { name: LONG_NAME },
         },
         { at: t - 2 * 3_600_000, kind: 'met', find: life, place: 'Gull Reach', times: 3 },
-        ...[1, 2, 3, 4, 5].map((k) => ({
+        ...[1, 2, 3, 4].map((k) => ({
           at: t - k * 60_000,
           kind: 'bump',
           other: { name: LONG_NAME, logged: true },

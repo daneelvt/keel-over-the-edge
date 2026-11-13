@@ -19,8 +19,7 @@ import { catalog } from '../catalog';
 import { lookOf } from '../catalog/looks';
 import { type PocketSky, SKY_WORDS } from '../chart/pocketsky';
 import { SkyDecal } from './decals';
-import { openLog } from './loglazy';
-import { THEIR_LOG } from './logwords';
+import { openLog, THEIR_LOG } from './loglazy';
 import { PlayerText } from './player';
 import {
   agentText,
