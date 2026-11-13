@@ -89,6 +89,8 @@ export const THROWN_HEEL = 0.9;
 /** Aboard a cruising yacht: how far she may heel toward the side her rail sat on before her crew leave it in a tack, radians; and the longest they wait for her to come upright, s. */
 export const FLAT_HEEL = (4 * Math.PI) / 180;
 export const FLAT_MOST = 4;
+/** Aboard a cruising yacht, in a tack, how long after the cockpit's last sets off the rail's first may, s: the cockpit crosses as she comes through the wind, the rail after. */
+export const RAIL_AFTER = 1;
 /** Aboard a cruising yacht: the heel past which her crew lean out on the rail and brace on the bench, and under which they sit up again, radians. */
 export const LEAN_HEEL_OUT = (7 * Math.PI) / 180;
 export const LEAN_HEEL_IN = (4 * Math.PI) / 180;
@@ -1801,7 +1803,7 @@ export class CrewRules {
           ),
           from,
           to,
-          changed ? rank * CROSS_GAP : 0,
+          changed ? rank * CROSS_GAP + (tack && rail ? RAIL_AFTER : 0) : 0,
           'cross',
         );
         mv.after = k > 0 ? (file[k - 1] as CrewMember) : null;

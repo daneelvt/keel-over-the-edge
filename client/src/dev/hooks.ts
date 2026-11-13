@@ -2520,7 +2520,8 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
             l.clipsState === 'loading' ||
             l.wheelState === 'loading' ||
             l.trapezeState === 'loading' ||
-            l.catState === 'loading',
+            l.catState === 'loading' ||
+            l.cruiserState === 'loading',
         ) ??
           false);
       while (busy()) {
@@ -2576,6 +2577,10 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
       helmHeld: boolean;
       /** Aboard a beach cat: each side's crew's wire drawn to whoever hangs on it (starboard, port). */
       crewWires: [boolean, boolean];
+      /** At a cruising yacht's wheels: the wheel the helm stands at (+ starboard), how far sat by it (0 to 1), and whether walking between them. */
+      helmWheel: number;
+      helmSeat: number;
+      helmWalking: boolean;
       /** Everyone under the crew's rules: seat, station (-1 the helm), side, how far they lean, and what they are doing (seconds into it, from which station). */
       members: {
         seat: number;
@@ -2645,6 +2650,9 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
         helmNet: sailor?.runtime.netAt ?? null,
         helmHeld: c.helmHeld,
         crewWires: c.wiresDrawn,
+        helmWheel: sailor?.runtime.windward ?? 0,
+        helmSeat: sailor?.runtime.seat ?? 0,
+        helmWalking: sailor?.runtime.walking ?? false,
         members: (rules?.members ?? []).map((m) => {
           const ship = 'ship' in m ? (m as ShipMember).ship : null;
           return {

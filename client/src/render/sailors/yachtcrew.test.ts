@@ -924,7 +924,7 @@ describe.each(kinds.map((k) => [k.name, k] as const))('aboard the %s', (_, kind)
   const pose = (s: string | undefined): string | undefined => s;
 
   test('through a tack: the trimmer first as she comes through the wind, the rest of the cockpit, then the rail once she has come upright; each in file; nothing through anything, nobody through anybody', async () => {
-    const r = await sail(16, tack);
+    const r = await sail(22, tack);
     const crossed = r.moves.filter((m) => m.kind === 'cross');
     expect(crossed).toHaveLength(7);
     const at = (pose: string) =>
@@ -940,9 +940,10 @@ describe.each(kinds.map((k) => [k.name, k] as const))('aboard the %s', (_, kind)
     // The rail once she is upright: her heel toward their old side no more than FLAT_HEEL (a frame since).
     const first = rail[0]?.set ?? 0;
     expect(-tack(first - 1 / 30).heel).toBeLessThanOrEqual(FLAT_HEEL + 1e-6);
-    // All across, each in a few seconds.
+    // All across, each in a few seconds (the furthest forward on the rail
+    // has 7 m to go, over the coachroof and back).
     for (const m of crossed) {
-      expect(m.done - m.set, `seat ${m.seat}`).toBeLessThan(8);
+      expect(m.done - m.set, `seat ${m.seat}`).toBeLessThan(10);
     }
     expect(r.helmWalked).toBe(true);
     measured.push(

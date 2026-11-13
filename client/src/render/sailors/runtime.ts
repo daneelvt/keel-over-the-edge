@@ -46,9 +46,10 @@
 // deck outboard of it in a light wind, a hand on the rim, and standing
 // aft of it in a breeze. Going from one to the other the legs come in
 // along the deck aft of the wheel and the body goes down into the cockpit
-// (or up out of it), the feet carried. When the wind changes side the
-// helm stands, lets go and walks across between the wheels at a crouch,
-// facing the way, to stand at the other.
+// (or up out of it), the feet carried. Its windward side is away from the
+// boom, as her crew's (by the wind while the boom lies amidships); when it
+// changes the helm stands, lets go and walks across between the wheels at
+// a crouch, facing the way, to stand at the other.
 //
 // Everything here is in the boat model's frame (x to starboard, y up, z
 // aft), unheeled; the boat's heel turns the model. A boat other than the
@@ -187,6 +188,8 @@ export const STAND_WIND = 6;
 export const SIT_HEEL = (8 * Math.PI) / 180;
 export const STAND_HEEL = (12 * Math.PI) / 180;
 export const SEAT_TIME = 1.6;
+/** Aboard a cruising yacht, how far past the centreline the boom lies before the helm's wheel is the one away from it, radians: nearer, by the wind. */
+const BOOM_SIDE = (5 * Math.PI) / 180;
 /** Aboard a cruising yacht, how far forward of the stance the feet are drawn in along the side deck, aft of the wheel, m. */
 const LEGS_IN = 0.25;
 /** Aboard a cruising yacht, seconds to get up from the wheel into the crouch's walk between the wheels, and to stand at the other. */
@@ -1162,7 +1165,11 @@ export class SailorRuntime {
       Math.abs(Math.sin(s.windAngle)) > 0.1 ? Math.sign(Math.sin(s.windAngle)) : this.#windward;
     this.#feetTo = null;
     if (this.#yachted) {
-      this.#atYachtWheel(s, dt, wheel, want, pose, place);
+      // Aboard a cruising yacht, to windward of the boom, as her crew: by
+      // the wind only while it lies near the centreline.
+      const boom = s.boom ?? 0;
+      const side = Math.abs(boom) > BOOM_SIDE ? -Math.sign(boom) : want;
+      this.#atYachtWheel(s, dt, wheel, side, pose, place);
       return;
     }
     if (want !== this.#windward && this.#windwardChange >= 1) {
