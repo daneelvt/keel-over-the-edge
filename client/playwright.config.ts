@@ -249,6 +249,8 @@ export default defineConfig({
         KEEL_AGENTS_ADDR: keelAgents,
         KEEL_DEV_CERT: `${tls}/cert.pem`,
         KEEL_DEV_KEY: `${tls}/key.pem`,
+        // WebKit on Linux stalls on a page of this many modules over HTTP/2.
+        KEEL_DEV_HTTP1: '1',
       },
       reuseExistingServer: !process.env.CI,
       timeout: 120_000,
