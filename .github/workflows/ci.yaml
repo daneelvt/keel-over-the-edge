@@ -46,6 +46,8 @@ jobs:
               - 'go.sum'
               - 'cmd/**'
               - 'internal/**'
+              - 'legal/**'
+              - 'CONTRIBUTING.md'
               - 'tools/**'
               - 'shared/**'
             client:
@@ -73,6 +75,7 @@ jobs:
               - 'go.sum'
               - 'cmd/**'
               - 'internal/**'
+              - 'legal/**'
               - 'shared/**'
               - 'client/**'
               - 'art/**'
