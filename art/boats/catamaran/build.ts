@@ -185,7 +185,6 @@ if (sailor.hikeReach !== 0 || sailor.leeReach !== 0) {
 // starboard one, and the port one its mirror.
 
 const L = boat.lengthOverall;
-const HALF_BEAM = boat.beam / 2;
 const TRANSOM_Z = hull.transom;
 const BOW_Z = -hull.stem;
 /** Each hull's centreline, out from the boat's. */
@@ -259,7 +258,11 @@ function section(u: number, g: number, s: number): Vec3 {
   if (g <= KNUCKLE_G) {
     const a = ((g / KNUCKLE_G) * Math.PI) / 2;
     const e = 2 / bottomN(u);
-    return [C + s * knuckleHalf(u) * Math.sin(a) ** e, bottom + (yk - bottom) * (1 - Math.cos(a) ** e), z];
+    return [
+      C + s * knuckleHalf(u) * Math.sin(a) ** e,
+      bottom + (yk - bottom) * (1 - Math.cos(a) ** e),
+      z,
+    ];
   }
   const t = (g - KNUCKLE_G) / (1 - KNUCKLE_G);
   return [C + s * lerp(knuckleHalf(u), deckHalf(u), t), lerp(yk, sheer(u), t), z];
@@ -553,7 +556,11 @@ function band(
     const hi = grid[r + 1] as number[];
     for (let i = 0; i + 1 < lo.length; i++) {
       const out = surfaceNormal(stations()[i] as number, (from(0.5) + to(0.5)) / 2, s);
-      m.triFacing(lo[i] as number, lo[i + 1] as number, hi[i + 1] as number, [out[0], out[1], 0.0001]);
+      m.triFacing(lo[i] as number, lo[i + 1] as number, hi[i + 1] as number, [
+        out[0],
+        out[1],
+        0.0001,
+      ]);
       m.triFacing(lo[i] as number, hi[i + 1] as number, hi[i] as number, [out[0], out[1], 0.0001]);
     }
   }
@@ -569,11 +576,18 @@ function planking(): { copper: MeshBuilder; paint: MeshBuilder; topsides: MeshBu
   const rows = Array.from({ length: D.copperRows + 1 }, (_, i) => i / D.copperRows);
   const SHEER_FROM = 0.9;
   for (const s of [1, -1]) {
-    band(copper, s, () => 0, bootFrom, rows, (r, i) => {
-      const sheet = Math.floor((i * L) / D.stations / 1.2) * 7 + r + (s > 0 ? 0 : 50);
-      const tone = 0.88 + 0.2 * jitter(sheet + 300);
-      return shade(mix(COPPER, VERDIGRIS, jitter(sheet + 700) > 0.85 ? 0.35 : 0), tone);
-    });
+    band(
+      copper,
+      s,
+      () => 0,
+      bootFrom,
+      rows,
+      (r, i) => {
+        const sheet = Math.floor((i * L) / D.stations / 1.2) * 7 + r + (s > 0 ? 0 : 50);
+        const tone = 0.88 + 0.2 * jitter(sheet + 300);
+        return shade(mix(COPPER, VERDIGRIS, jitter(sheet + 700) > 0.85 ? 0.35 : 0), tone);
+      },
+    );
     band(paint, s, bootFrom, bootTo, [0, 1], () => BOOT);
     const seam = D.seams ? [0, 0.08, 1] : [0, 1];
     const edge = (k: number): number => (k >= D.strakes ? 1 : (SHEER_FROM * k) / (D.strakes - 1));
@@ -657,7 +671,9 @@ function deck(): MeshBuilder {
       const x = C - deckHalf(u) + f * 2 * deckHalf(u);
       const tone = 0.92 + 0.12 * jitter(Math.floor(j / 2) * 17);
       const seam = D.plankedDeck && j % 2 === 0 && j > 0 && j < n ? 0.55 : 1;
-      (cols[j] as number[]).push(m.vertex([x, deckY(x, u), zAt(u)], shade(DECK, tone * seam), [x, u]));
+      (cols[j] as number[]).push(
+        m.vertex([x, deckY(x, u), zAt(u)], shade(DECK, tone * seam), [x, u]),
+      );
     }
   }
   for (let j = 0; j < n; j++) {
@@ -688,7 +704,9 @@ function bridgedeck(): { paint: MeshBuilder; deck: MeshBuilder; oak: MeshBuilder
   const n = D.small ? 30 : 6;
   const zs = bridgeZs(NACELLE_FOOT, BRIDGE_AFT, n);
   // The underside.
-  const rows = [-1, 1].map((s) => zs.map((z) => paint.vertex([s * innerAt(z, UNDERSIDE), UNDERSIDE, z], WHITE_LEAD)));
+  const rows = [-1, 1].map((s) =>
+    zs.map((z) => paint.vertex([s * innerAt(z, UNDERSIDE), UNDERSIDE, z], WHITE_LEAD)),
+  );
   for (let i = 0; i < n; i++) {
     const [a, b] = rows as [number[], number[]];
     paint.triFacing(a[i] as number, a[i + 1] as number, b[i + 1] as number, [0, -1, 0]);
@@ -867,7 +885,12 @@ function roundHouse(): {
     const xt = s * (HOUSE_SIDE - TUMBLE);
     quad(
       wood,
-      [foot, [xt, top(xt, ROOF_FRONT), ROOF_FRONT], [xt, top(xt, HOUSE_FORE + rake), HOUSE_FORE + rake], foot],
+      [
+        foot,
+        [xt, top(xt, ROOF_FRONT), ROOF_FRONT],
+        [xt, top(xt, HOUSE_FORE + rake), HOUSE_FORE + rake],
+        foot,
+      ],
       [s, 0, 0],
       VARNISH,
     );
@@ -881,7 +904,12 @@ function roundHouse(): {
   const rx = HOUSE_SIDE + ROOF_OVER;
   const planks = D.small ? 22 : 2;
   const nz = D.small ? 24 : 4;
-  const OPEN = { x0: PLAT_OUT - ROOF_OVER - 0.01, x1: PLAT_IN + 0.05, z0: NOTCH_FORE - 0.1, z1: PLAT_AFT + 0.05 };
+  const OPEN = {
+    x0: PLAT_OUT - ROOF_OVER - 0.01,
+    x1: PLAT_IN + 0.05,
+    z0: NOTCH_FORE - 0.1,
+    z1: PLAT_AFT + 0.05,
+  };
   const zs = Array.from({ length: nz + 1 }, (_, i) => lerp(ROOF_FRONT, ROOF_AFT, i / nz));
   for (const z of [OPEN.z0, OPEN.z1]) {
     zs.push(z);
@@ -896,19 +924,11 @@ function roundHouse(): {
       const z1 = zs[i + 1] as number;
       const zm = (z0 + z1) / 2;
       const inOpen = zm > OPEN.z0 && zm < OPEN.z1;
-      // Over the helm only the planks outboard of the opening run on (none) or inboard of it.
-      let lo = x0;
-      let hi = x1;
-      if (inOpen) {
-        if (hi <= OPEN.x1 && lo >= OPEN.x0 - 0.2) {
-          continue;
-        }
-        if (lo < OPEN.x1 && hi > OPEN.x1) {
-          lo = OPEN.x1;
-        }
-        if (hi <= OPEN.x1) {
-          continue;
-        }
+      // Over the helm the roof is open, from its port edge to the opening's inboard side.
+      const lo = inOpen ? Math.max(x0, OPEN.x1) : x0;
+      const hi = x1;
+      if (hi - lo < 1e-6) {
+        continue;
       }
       const seamC = D.seams ? shade(c, 0.6) : c;
       const k = [
@@ -935,7 +955,12 @@ function roundHouse(): {
   }
   // The roof's edges: a varnished fascia round it, and round the opening.
   const fascia = (a: Vec3, b: Vec3, out: Vec3): void => {
-    quad(wood, [a, b, add(b, [0, -ROOF_THICK - 0.04, 0]), add(a, [0, -ROOF_THICK - 0.04, 0])], out, shade(VARNISH, 0.9));
+    quad(
+      wood,
+      [a, b, add(b, [0, -ROOF_THICK - 0.04, 0]), add(a, [0, -ROOF_THICK - 0.04, 0])],
+      out,
+      shade(VARNISH, 0.9),
+    );
   };
   const edgeN = D.small ? 8 : 2;
   for (const s of [1, -1]) {
@@ -955,9 +980,21 @@ function roundHouse(): {
       fascia([x0, roofY(x0, z), z], [x1, roofY(x1, z), z], [0, 0, out]);
     }
   }
-  fascia([OPEN.x1, roofY(OPEN.x1, OPEN.z0), OPEN.z0], [OPEN.x1, roofY(OPEN.x1, OPEN.z1), OPEN.z1], [-1, 0, 0]);
-  fascia([-rx, roofY(rx, OPEN.z0), OPEN.z0], [OPEN.x1, roofY(OPEN.x1, OPEN.z0), OPEN.z0], [0, 0, 1]);
-  fascia([-rx, roofY(rx, OPEN.z1), OPEN.z1], [OPEN.x1, roofY(OPEN.x1, OPEN.z1), OPEN.z1], [0, 0, -1]);
+  fascia(
+    [OPEN.x1, roofY(OPEN.x1, OPEN.z0), OPEN.z0],
+    [OPEN.x1, roofY(OPEN.x1, OPEN.z1), OPEN.z1],
+    [-1, 0, 0],
+  );
+  fascia(
+    [-rx, roofY(rx, OPEN.z0), OPEN.z0],
+    [OPEN.x1, roofY(OPEN.x1, OPEN.z0), OPEN.z0],
+    [0, 0, 1],
+  );
+  fascia(
+    [-rx, roofY(rx, OPEN.z1), OPEN.z1],
+    [OPEN.x1, roofY(OPEN.x1, OPEN.z1), OPEN.z1],
+    [0, 0, -1],
+  );
   // The posts carrying the roof over the cockpit, on the hulls' decks and at the opening's after corner.
   const posts: [number, number, number][] = [
     [HOUSE_SIDE - 0.1, ROOF_AFT - 0.12, deckAt(HOUSE_SIDE - 0.1, ROOF_AFT - 0.12)],
@@ -993,19 +1030,49 @@ function roundHouse(): {
     rowsN: number,
     deadlight: boolean,
   ): void => {
-    quad(frames, [at(t0, h0, 0.006), at(t1, h0, 0.006), at(t1, h1, 0.006), at(t0, h1, 0.006)], out, shade(VARNISH, 0.7));
-    quad(glass, [at(t0, h0, 0.01), at(t1, h0, 0.01), at(t1, h1, 0.01), at(t0, h1, 0.01)], out, GLASS);
+    quad(
+      frames,
+      [at(t0, h0, 0.006), at(t1, h0, 0.006), at(t1, h1, 0.006), at(t0, h1, 0.006)],
+      out,
+      shade(VARNISH, 0.7),
+    );
+    quad(
+      glass,
+      [at(t0, h0, 0.01), at(t1, h0, 0.01), at(t1, h1, 0.01), at(t0, h1, 0.01)],
+      out,
+      GLASS,
+    );
     for (let c = 0; c <= cols; c++) {
       const t = lerp(t0, t1, c / cols);
-      frames.tube([at(t, h0, 0.014), at(t, h1, 0.014)], [c === 0 || c === cols ? 0.02 : 0.009], 3, shade(VARNISH, 0.85));
+      frames.tube(
+        [at(t, h0, 0.014), at(t, h1, 0.014)],
+        [c === 0 || c === cols ? 0.02 : 0.009],
+        3,
+        shade(VARNISH, 0.85),
+      );
     }
     for (let r = 0; r <= rowsN; r++) {
       const h = lerp(h0, h1, r / rowsN);
-      frames.tube([at(t0, h, 0.014), at(t1, h, 0.014)], [r === 0 || r === rowsN ? 0.02 : 0.009], 3, shade(VARNISH, 0.85));
+      frames.tube(
+        [at(t0, h, 0.014), at(t1, h, 0.014)],
+        [r === 0 || r === rowsN ? 0.02 : 0.009],
+        3,
+        shade(VARNISH, 0.85),
+      );
     }
     if (deadlight) {
       const d0 = t0 - (t1 - t0) * 0.55;
-      quad(wood, [at(d0, h0 + 0.03, 0.03), at(t0 - 0.005, h0 + 0.03, 0.03), at(t0 - 0.005, h1 - 0.03, 0.03), at(d0, h1 - 0.03, 0.03)], out, shade(WOOD, 0.9));
+      quad(
+        wood,
+        [
+          at(d0, h0 + 0.03, 0.03),
+          at(t0 - 0.005, h0 + 0.03, 0.03),
+          at(t0 - 0.005, h1 - 0.03, 0.03),
+          at(d0, h1 - 0.03, 0.03),
+        ],
+        out,
+        shade(WOOD, 0.9),
+      );
       brass.tube([at(t0 - 0.008, h0 + 0.08, 0.02), at(t0 - 0.008, h1 - 0.08, 0.02)], [0.007], 4);
     }
   };
@@ -1017,7 +1084,17 @@ function roundHouse(): {
     const spans = side > 0 ? [0.14, 0.4, 0.66] : [0.16, 0.48];
     for (const t0 of spans) {
       const t1 = t0 + (side > 0 ? 1.0 : 1.2) / len;
-      window(at, t0, Math.min(0.97, t1), 0.38, 0.8, [side, 0.1, 0], Math.round(((t1 - t0) * len) / 0.22), 3, true);
+      window(
+        at,
+        t0,
+        Math.min(0.97, t1),
+        0.38,
+        0.8,
+        [side, 0.1, 0],
+        Math.round(((t1 - t0) * len) / 0.22),
+        3,
+        true,
+      );
     }
   }
   window(front, 0.1, 0.9, 0.18, 0.85, [0, 0.5, -1], 18, 4, false);
@@ -1030,9 +1107,21 @@ function roundHouse(): {
   ] as [number, number][]) {
     const t0 = doorT(x0);
     const t1 = doorT(x1);
-    quad(wood, [aft(t0, 0, 0.012), aft(t1, 0, 0.012), aft(t1, 0.88, 0.012), aft(t0, 0.88, 0.012)], [0, 0, 1], shade(VARNISH, 0.75));
+    quad(
+      wood,
+      [aft(t0, 0, 0.012), aft(t1, 0, 0.012), aft(t1, 0.88, 0.012), aft(t0, 0.88, 0.012)],
+      [0, 0, 1],
+      shade(VARNISH, 0.75),
+    );
     window(aft, t0 + 0.004, t1 - 0.004, 0.36, 0.84, [0, 0, 1], 3, 4, false);
-    brass.tube([aft(x0 < 0 ? t1 - 0.01 : t0 + 0.01, 0.45, 0.04), aft(x0 < 0 ? t1 - 0.01 : t0 + 0.01, 0.52, 0.04)], [0.012], 6);
+    brass.tube(
+      [
+        aft(x0 < 0 ? t1 - 0.01 : t0 + 0.01, 0.45, 0.04),
+        aft(x0 < 0 ? t1 - 0.01 : t0 + 0.01, 0.52, 0.04),
+      ],
+      [0.012],
+      6,
+    );
   }
   // A small window in the notch's face, beside the console.
   window(notchFace, 0.05, 0.25, 0.42, 0.85, [0, 0, 1], 2, 2, false);
@@ -1049,7 +1138,14 @@ function roundHouse(): {
  * before the wheel with its brass hood; the settle behind; a bronze rail
  * round the platform's open edges.
  */
-function helmStation(): { deck: MeshBuilder; wood: MeshBuilder; oak: MeshBuilder; bronze: MeshBuilder; brass: MeshBuilder; glass: MeshBuilder } {
+function helmStation(): {
+  deck: MeshBuilder;
+  wood: MeshBuilder;
+  oak: MeshBuilder;
+  bronze: MeshBuilder;
+  brass: MeshBuilder;
+  glass: MeshBuilder;
+} {
   const top = new MeshBuilder('deck');
   const wood = new MeshBuilder('varnish');
   const oak = new MeshBuilder('oak');
@@ -1063,10 +1159,30 @@ function helmStation(): { deck: MeshBuilder; wood: MeshBuilder; oak: MeshBuilder
     for (let i = 0; i < planks; i++) {
       const za = lerp(z0, z1, i / planks) + (D.plankedDeck ? 0.004 : 0);
       const zb = lerp(z0, z1, (i + 1) / planks) - (D.plankedDeck ? 0.004 : 0);
-      quad(top, [[x0, PLAT_Y, za], [x1, PLAT_Y, za], [x1, PLAT_Y, zb], [x0, PLAT_Y, zb]], [0, 1, 0], shade(TEAK, 0.85 + 0.15 * jitter(i + 400 + Math.round(x0 * 10))));
+      quad(
+        top,
+        [
+          [x0, PLAT_Y, za],
+          [x1, PLAT_Y, za],
+          [x1, PLAT_Y, zb],
+          [x0, PLAT_Y, zb],
+        ],
+        [0, 1, 0],
+        shade(TEAK, 0.85 + 0.15 * jitter(i + 400 + Math.round(x0 * 10))),
+      );
     }
     if (D.plankedDeck) {
-      quad(top, [[x0, PLAT_Y - 0.003, z0], [x1, PLAT_Y - 0.003, z0], [x1, PLAT_Y - 0.003, z1], [x0, PLAT_Y - 0.003, z1]], [0, 1, 0], shade(TEAK, 0.3));
+      quad(
+        top,
+        [
+          [x0, PLAT_Y - 0.003, z0],
+          [x1, PLAT_Y - 0.003, z0],
+          [x1, PLAT_Y - 0.003, z1],
+          [x0, PLAT_Y - 0.003, z1],
+        ],
+        [0, 1, 0],
+        shade(TEAK, 0.3),
+      );
     }
   };
   laid(PLAT_OUT, PLAT_IN, PLAT_FORE, PLAT_AFT);
@@ -1075,14 +1191,24 @@ function helmStation(): { deck: MeshBuilder; wood: MeshBuilder; oak: MeshBuilder
   box(wood, [PLAT_OUT, foot, PLAT_AFT - 0.03], [PLAT_IN, PLAT_Y - 0.004, PLAT_AFT], VARNISH);
   box(wood, [PLAT_IN, foot, LANDING_AFT - 0.03], [LADDER_IN, PLAT_Y - 0.004, LANDING_AFT], VARNISH);
   box(wood, [PLAT_IN - 0.03, foot, LANDING_AFT], [PLAT_IN, PLAT_Y - 0.004, PLAT_AFT], VARNISH);
-  box(wood, [PLAT_OUT, deckAt(PLAT_OUT, 2) - 0.02, PLAT_FORE], [PLAT_OUT + 0.03, PLAT_Y - 0.004, PLAT_AFT], VARNISH);
+  box(
+    wood,
+    [PLAT_OUT, deckAt(PLAT_OUT, 2) - 0.02, PLAT_FORE],
+    [PLAT_OUT + 0.03, PLAT_Y - 0.004, PLAT_AFT],
+    VARNISH,
+  );
   // The ladder: oak treads stepping down aft from the landing to the sole, its stringers and the bronze rail.
   const rise = (PLAT_Y - SOLE) / (TREADS + 1);
   const run = (LADDER_FOOT - LANDING_AFT) / TREADS;
   for (let k = 0; k < TREADS; k++) {
     const y = PLAT_Y - rise * (k + 1);
     const z0 = LANDING_AFT + run * k;
-    box(oak, [PLAT_IN + 0.05, y - 0.04, z0], [LADDER_IN - 0.05, y, z0 + run + 0.02], shade(OAK, 0.95 + 0.1 * jitter(k + 510)));
+    box(
+      oak,
+      [PLAT_IN + 0.05, y - 0.04, z0],
+      [LADDER_IN - 0.05, y, z0 + run + 0.02],
+      shade(OAK, 0.95 + 0.1 * jitter(k + 510)),
+    );
   }
   for (const x of D.small ? [PLAT_IN + 0.03, LADDER_IN - 0.03] : []) {
     oak.tube(
@@ -1104,7 +1230,11 @@ function helmStation(): { deck: MeshBuilder; wood: MeshBuilder; oak: MeshBuilder
     ];
     bronze.tube(rail, [0.016], 6);
     for (const p of rail) {
-      bronze.tube([[p[0], p[2] > LANDING_AFT ? SOLE + 0.02 + (p[1] - SOLE - 0.9) : PLAT_Y, p[2]], p], [0.014], 5);
+      bronze.tube(
+        [[p[0], p[2] > LANDING_AFT ? SOLE + 0.02 + (p[1] - SOLE - 0.9) : PLAT_Y, p[2]], p],
+        [0.014],
+        5,
+      );
     }
     // And round the platform's after side outboard of the settle.
     bronze.tube(
@@ -1154,14 +1284,29 @@ function helmStation(): { deck: MeshBuilder; wood: MeshBuilder; oak: MeshBuilder
     );
   }
   // The settle for two: its seat, its back, its ends.
-  box(wood, [SETTLE_OUT, PLAT_Y, SETTLE_FORE], [SETTLE_IN, SETTLE_TOP - 0.05, PLAT_AFT - 0.06], shade(VARNISH, 0.85));
+  box(
+    wood,
+    [SETTLE_OUT, PLAT_Y, SETTLE_FORE],
+    [SETTLE_IN, SETTLE_TOP - 0.05, PLAT_AFT - 0.06],
+    shade(VARNISH, 0.85),
+  );
   const slats = D.small ? 5 : 1;
   for (let i = 0; i < slats; i++) {
     const z0 = lerp(SETTLE_FORE, PLAT_AFT - 0.06, i / slats) + (D.small ? 0.004 : 0);
     const z1 = lerp(SETTLE_FORE, PLAT_AFT - 0.06, (i + 1) / slats) - (D.small ? 0.004 : 0);
-    box(oak, [SETTLE_OUT, SETTLE_TOP - 0.05, z0], [SETTLE_IN, SETTLE_TOP, z1], shade(TEAK, 0.9 + 0.1 * jitter(i + 600)));
+    box(
+      oak,
+      [SETTLE_OUT, SETTLE_TOP - 0.05, z0],
+      [SETTLE_IN, SETTLE_TOP, z1],
+      shade(TEAK, 0.9 + 0.1 * jitter(i + 600)),
+    );
   }
-  box(wood, [SETTLE_OUT, SETTLE_TOP, PLAT_AFT - 0.06], [SETTLE_IN, SETTLE_TOP + 0.42, PLAT_AFT], VARNISH);
+  box(
+    wood,
+    [SETTLE_OUT, SETTLE_TOP, PLAT_AFT - 0.06],
+    [SETTLE_IN, SETTLE_TOP + 0.42, PLAT_AFT],
+    VARNISH,
+  );
   return { deck: top, wood, oak, bronze, brass, glass };
 }
 
@@ -1179,10 +1324,20 @@ function wheel(): { wood: MeshBuilder; brass: MeshBuilder; rope: MeshBuilder } {
   for (let k = 0; k < WHEEL_SPOKES; k++) {
     const a = Math.PI / 2 + (k * 2 * Math.PI) / WHEEL_SPOKES;
     const d: Vec3 = [Math.cos(a), Math.sin(a), 0];
-    wood.tube([scale(d, 0.07), scale(d, WHEEL_RADIUS), scale(d, WHEEL_RADIUS + 0.02)], [0.016, 0.013, 0.017], D.small ? 5 : 3, WOOD);
+    wood.tube(
+      [scale(d, 0.07), scale(d, WHEEL_RADIUS), scale(d, WHEEL_RADIUS + 0.02)],
+      [0.016, 0.013, 0.017],
+      D.small ? 5 : 3,
+      WOOD,
+    );
     if (D.small) {
       wood.tube(
-        [scale(d, WHEEL_RADIUS + 0.02), scale(d, WHEEL_RADIUS + 0.045), scale(d, WHEEL_RADIUS + 0.065), scale(d, WHEEL_RADIUS + WHEEL_HANDLE)],
+        [
+          scale(d, WHEEL_RADIUS + 0.02),
+          scale(d, WHEEL_RADIUS + 0.045),
+          scale(d, WHEEL_RADIUS + 0.065),
+          scale(d, WHEEL_RADIUS + WHEEL_HANDLE),
+        ],
         [0.016, 0.021, 0.016, 0.009],
         6,
         shade(WOOD, 0.8),
@@ -1292,10 +1447,20 @@ function cockpitFurniture(): { wood: MeshBuilder; oak: MeshBuilder } {
   // The L-bench's long leg and its forward leg.
   seat(wood, oak, LBENCH_FRONT, LBENCH_OUT, LBENCH_LEG, LBENCH_AFT, SEAT_TOP, false);
   seat(wood, oak, LBENCH_INNER, LBENCH_OUT, HOUSE_AFT + 0.02, LBENCH_LEG, SEAT_TOP, true);
-  box(wood, [LBENCH_OUT, SEAT_TOP, HOUSE_AFT + 0.02], [LBENCH_OUT + 0.06, SEAT_TOP + 0.4, LBENCH_AFT], VARNISH);
+  box(
+    wood,
+    [LBENCH_OUT, SEAT_TOP, HOUSE_AFT + 0.02],
+    [LBENCH_OUT + 0.06, SEAT_TOP + 0.4, LBENCH_AFT],
+    VARNISH,
+  );
   // The table, and its pedestal.
   box(wood, [TABLE.x0, TABLE.y - 0.04, TABLE.z0], [TABLE.x1, TABLE.y, TABLE.z1], VARNISH);
-  box(wood, [(TABLE.x0 + TABLE.x1) / 2 - 0.08, SOLE, TABLE.z0 + 0.35], [(TABLE.x0 + TABLE.x1) / 2 + 0.08, TABLE.y - 0.04, TABLE.z1 - 0.35], shade(VARNISH, 0.8));
+  box(
+    wood,
+    [(TABLE.x0 + TABLE.x1) / 2 - 0.08, SOLE, TABLE.z0 + 0.35],
+    [(TABLE.x0 + TABLE.x1) / 2 + 0.08, TABLE.y - 0.04, TABLE.z1 - 0.35],
+    shade(VARNISH, 0.8),
+  );
   // The aft bench, its back the crossbeam's turned rail.
   seat(wood, oak, AFT_PORT, AFT_STAR, AFT_FRONT, AFT_BACK, SEAT_TOP, true);
   const railY = SEAT_TOP + 0.42;
@@ -1321,7 +1486,12 @@ function cockpitFurniture(): { wood: MeshBuilder; oak: MeshBuilder } {
   }
   // The lounger, and its back along the hull's side.
   seat(wood, oak, LOUNGER_OUT, LOUNGER_FRONT, LOUNGER_FORE, LOUNGER_AFT, LOUNGER_TOP, false);
-  box(wood, [LOUNGER_OUT - 0.06, LOUNGER_TOP, LOUNGER_FORE], [LOUNGER_OUT, LOUNGER_TOP + 0.4, LOUNGER_AFT], VARNISH);
+  box(
+    wood,
+    [LOUNGER_OUT - 0.06, LOUNGER_TOP, LOUNGER_FORE],
+    [LOUNGER_OUT, LOUNGER_TOP + 0.4, LOUNGER_AFT],
+    VARNISH,
+  );
   return { wood, oak };
 }
 
@@ -1348,12 +1518,27 @@ function beams(): { oak: MeshBuilder; net: MeshBuilder; iron: MeshBuilder } {
   const net = new MeshBuilder('net');
   const iron = new MeshBuilder('iron');
   const reach = C + 0.1;
-  box(oak, [-reach, BEAM_Y - BEAM_D, BEAM_FORE_Z - BEAM_W / 2], [reach, BEAM_Y, BEAM_FORE_Z + BEAM_W / 2], OAK);
-  box(oak, [-0.08, NET_Y - 0.1, BEAM_FORE_Z], [0.08, NET_Y + 0.04, NET_AFT + 0.03], shade(OAK, 0.92));
+  box(
+    oak,
+    [-reach, BEAM_Y - BEAM_D, BEAM_FORE_Z - BEAM_W / 2],
+    [reach, BEAM_Y, BEAM_FORE_Z + BEAM_W / 2],
+    OAK,
+  );
+  box(
+    oak,
+    [-0.08, NET_Y - 0.1, BEAM_FORE_Z],
+    [0.08, NET_Y + 0.04, NET_AFT + 0.03],
+    shade(OAK, 0.92),
+  );
   if (D.small) {
     // Iron straps where the crossbeam meets each hull.
     for (const s of [1, -1]) {
-      box(iron, [s * (C - 0.25) - 0.03, BEAM_Y - BEAM_D - 0.01, BEAM_FORE_Z - BEAM_W / 2 - 0.01], [s * (C - 0.25) + 0.03, BEAM_Y + 0.01, BEAM_FORE_Z + BEAM_W / 2 + 0.01], [1, 1, 1]);
+      box(
+        iron,
+        [s * (C - 0.25) - 0.03, BEAM_Y - BEAM_D - 0.01, BEAM_FORE_Z - BEAM_W / 2 - 0.01],
+        [s * (C - 0.25) + 0.03, BEAM_Y + 0.01, BEAM_FORE_Z + BEAM_W / 2 + 0.01],
+        [1, 1, 1],
+      );
     }
   }
   const dark: Vec3 = [0.8, 0.8, 0.8];
@@ -1417,7 +1602,12 @@ function groundTackle(): { iron: MeshBuilder; oak: MeshBuilder } {
   const z = BEAM_FORE_Z;
   // The roller in its iron cheeks, forward of the crossbeam.
   for (const s of [1, -1]) {
-    box(iron, [s * 0.075 - 0.008, y - 0.12, z - 0.35], [s * 0.075 + 0.008, y + 0.06, z - 0.05], [1, 1, 1]);
+    box(
+      iron,
+      [s * 0.075 - 0.008, y - 0.12, z - 0.35],
+      [s * 0.075 + 0.008, y + 0.06, z - 0.05],
+      [1, 1, 1],
+    );
   }
   oak.tube(
     [
@@ -1467,7 +1657,12 @@ function groundTackle(): { iron: MeshBuilder; oak: MeshBuilder } {
     for (const dx of [-0.11, 0.11]) {
       box(oak, [s * C + dx - 0.04, by, bz - 0.04], [s * C + dx + 0.04, by + 0.24, bz + 0.04], OAK);
     }
-    box(oak, [s * C - 0.15, by + 0.15, bz - 0.025], [s * C + 0.15, by + 0.19, bz + 0.025], shade(OAK, 0.9));
+    box(
+      oak,
+      [s * C - 0.15, by + 0.15, bz - 0.025],
+      [s * C + 0.15, by + 0.19, bz + 0.025],
+      shade(OAK, 0.9),
+    );
   }
   return { iron, oak };
 }
@@ -1513,7 +1708,9 @@ function guardrails(): { iron: MeshBuilder; rope: MeshBuilder } {
       );
     }
     for (const h of LIFELINES) {
-      const pts: Vec3[] = [PULPIT_AFT, ...STANCHIONS, PUSHPIT_FORE].map((z): Vec3 => [s * edgeAt(z), deckAt(edgeAt(z), z) + h, z]);
+      const pts: Vec3[] = [PULPIT_AFT, ...STANCHIONS, PUSHPIT_FORE].map(
+        (z): Vec3 => [s * edgeAt(z), deckAt(edgeAt(z), z) + h, z],
+      );
       rope.tube(pts, [0.006], 4);
     }
     // The pulpit round this bow: from its leg on the outer edge, round the
@@ -1557,10 +1754,20 @@ function steps(): { oak: MeshBuilder; rope: MeshBuilder } {
     for (let k = 0; k < 3; k++) {
       const y = lerp(sheer(0) - 0.32, 0.38, k / 2);
       const w = breadthAt(0, y) * 0.75;
-      box(oak, [s * C - w, y - 0.04, TRANSOM_Z], [s * C + w, y, TRANSOM_Z + 0.2], shade(OAK, 0.95 + 0.1 * jitter(k + 700)));
+      box(
+        oak,
+        [s * C - w, y - 0.04, TRANSOM_Z],
+        [s * C + w, y, TRANSOM_Z + 0.2],
+        shade(OAK, 0.95 + 0.1 * jitter(k + 700)),
+      );
       if (D.small) {
         for (const dx of [-w + 0.08, w - 0.08]) {
-          box(oak, [s * C + dx - 0.02, y - 0.16, TRANSOM_Z], [s * C + dx + 0.02, y - 0.04, TRANSOM_Z + 0.14], OAK);
+          box(
+            oak,
+            [s * C + dx - 0.02, y - 0.16, TRANSOM_Z],
+            [s * C + dx + 0.02, y - 0.04, TRANSOM_Z + 0.14],
+            OAK,
+          );
         }
       }
     }
@@ -1650,7 +1857,11 @@ function mast(): { spar: MeshBuilder; iron: MeshBuilder; timber: MeshBuilder } {
       12,
     );
   }
-  timber.box([-mastR(SPREADER_Y) - 0.05, SPREADER_Y - 0.045, -0.09], [mastR(SPREADER_Y) + 0.05, SPREADER_Y + 0.045, 0.09], OAK);
+  timber.box(
+    [-mastR(SPREADER_Y) - 0.05, SPREADER_Y - 0.045, -0.09],
+    [mastR(SPREADER_Y) + 0.05, SPREADER_Y + 0.045, 0.09],
+    OAK,
+  );
   for (const s of [1, -1]) {
     spar.tube([[s * mastR(SPREADER_Y), SPREADER_Y, 0.02], spreaderTip(s)], [0.04, 0.025], 6);
   }
@@ -1666,7 +1877,11 @@ function mast(): { spar: MeshBuilder; iron: MeshBuilder; timber: MeshBuilder } {
   return { spar, iron, timber };
 }
 
-const deadeye = (s: number, z: number, up: number): Vec3 => [s * CHAIN_X, deckAt(CHAIN_X, z) + up, z];
+const deadeye = (s: number, z: number, up: number): Vec3 => [
+  s * CHAIN_X,
+  deckAt(CHAIN_X, z) + up,
+  z,
+];
 
 /**
  * The standing rigging, in the boat's frame: the caps over the spreaders to
@@ -1675,7 +1890,13 @@ const deadeye = (s: number, z: number, up: number): Vec3 => [s * CHAIN_X, deckAt
  * forestay from the forward crossbeam's middle to the hounds, the jib's
  * roller of pine on it with the brass reel at its foot. No backstay.
  */
-function rigging(): { rope: MeshBuilder; iron: MeshBuilder; wood: MeshBuilder; brass: MeshBuilder; spar: MeshBuilder } {
+function rigging(): {
+  rope: MeshBuilder;
+  iron: MeshBuilder;
+  wood: MeshBuilder;
+  brass: MeshBuilder;
+  spar: MeshBuilder;
+} {
   const rope = new MeshBuilder('rope');
   const iron = new MeshBuilder('iron');
   const wood = new MeshBuilder('varnish');
@@ -1705,7 +1926,10 @@ function rigging(): { rope: MeshBuilder; iron: MeshBuilder; wood: MeshBuilder; b
         );
       }
       const footY = deckAt(CHAIN_X, z);
-      iron.box([s * CHAIN_X - 0.014, footY - 0.01, z - 0.025], [s * CHAIN_X + 0.014, lower[1] - DEADEYE_R, z + 0.025]);
+      iron.box(
+        [s * CHAIN_X - 0.014, footY - 0.01, z - 0.025],
+        [s * CHAIN_X + 0.014, lower[1] - DEADEYE_R, z + 0.025],
+      );
     }
   }
   // The forestay, and the jib's roller round it: glued yellow pine, turned,
@@ -1808,9 +2032,10 @@ const BATTENS = [0.14, 0.3, 0.46, 0.62, 0.78, 0.93];
 /** The mainsail, flat in the centreline plane at rest: the luff up the mast's after face, the foot along the boom. */
 function sail(): MeshBuilder {
   const m = new MeshBuilder('flax');
-  const vs = [...Array.from({ length: D.sailRows + 1 }, (_, i) => i / D.sailRows), ...(D.small ? REEF_ROWS : [])].sort(
-    (a, b) => a - b,
-  );
+  const vs = [
+    ...Array.from({ length: D.sailRows + 1 }, (_, i) => i / D.sailRows),
+    ...(D.small ? REEF_ROWS : []),
+  ].sort((a, b) => a - b);
   const rows: number[][] = [];
   for (const v of vs.filter((v, i) => i === 0 || v - (vs[i - 1] as number) > 1e-6)) {
     const chord = chordAt(v);
@@ -1818,7 +2043,12 @@ function sail(): MeshBuilder {
     for (let j = 0; j <= D.sailCols; j++) {
       const u = j / D.sailCols;
       const along = u * Math.max(chord, 0.01);
-      const k = m.vertex([0, 0.03 + v * rig.luff, 0.08 + along], [1, 1, 1], [along / rig.foot, v], [u, v]);
+      const k = m.vertex(
+        [0, 0.03 + v * rig.luff, 0.08 + along],
+        [1, 1, 1],
+        [along / rig.foot, v],
+        [u, v],
+      );
       m.normal(k, [1, 0, 0]);
       row.push(k);
     }
@@ -1895,7 +2125,11 @@ function horses(): { iron: MeshBuilder; oak: MeshBuilder; rope: MeshBuilder } {
       );
     }
     if (D.small) {
-      oak.box([-0.05, roofY(0, z) + HORSE_UP - 0.04, z - 0.05], [0.05, roofY(0, z) + HORSE_UP + 0.07, z + 0.05], OAK);
+      oak.box(
+        [-0.05, roofY(0, z) + HORSE_UP - 0.04, z - 0.05],
+        [0.05, roofY(0, z) + HORSE_UP + 0.07, z + 0.05],
+        OAK,
+      );
     }
   }
   if (D.small) {
@@ -1924,7 +2158,13 @@ function sheetBlock(): MeshBuilder {
 // --- Fittings --------------------------------------------------------------------
 
 /** A small capstan at (x, z) on a surface at y: a lignum vitae drum on an oak barrel, an iron pawl ring, a bronze cap. */
-function capstan(m: { timber: MeshBuilder; iron: MeshBuilder; bronze: MeshBuilder }, x: number, y: number, z: number, k: number): void {
+function capstan(
+  m: { timber: MeshBuilder; iron: MeshBuilder; bronze: MeshBuilder },
+  x: number,
+  y: number,
+  z: number,
+  k: number,
+): void {
   const h = 0.24 * k;
   const r = 0.085 * k;
   m.timber.tube(
@@ -1994,7 +2234,11 @@ const LENS_CLEAR = srgb(0.78, 0.77, 0.7);
 
 /** The sidelights on the forward decks, each on its own hull's outer side, aft of its pulpit; the sternlight hung from its crank at the roof's after edge. */
 const SIDELIGHT_Z = PULPIT_AFT + 0.3;
-const sidelightAt = (s: number): Vec3 => [s * (edgeAt(SIDELIGHT_Z) - 0.12), deckAt(edgeAt(SIDELIGHT_Z), SIDELIGHT_Z) + 0.3, SIDELIGHT_Z];
+const sidelightAt = (s: number): Vec3 => [
+  s * (edgeAt(SIDELIGHT_Z) - 0.12),
+  deckAt(edgeAt(SIDELIGHT_Z), SIDELIGHT_Z) + 0.3,
+  SIDELIGHT_Z,
+];
 const STERNLIGHT: Vec3 = [0, roofY(0, ROOF_AFT) - ROOF_THICK - 0.28, ROOF_AFT + 0.12];
 
 /** A sidelight in its node's frame: a brass lamp with its coloured glass, on its post, the screen inboard that keeps it from showing across the bow. */
@@ -2080,7 +2324,11 @@ function sternlight(): { brass: MeshBuilder; glass: MeshBuilder; iron: MeshBuild
 // --- Keels and rudders --------------------------------------------------------
 
 /** A tapering foil: sections from the root down, each its height, its leading and trailing edges and its thickness. */
-function foil(m: MeshBuilder, sections: { y: number; z0: number; z1: number; t: number }[], x: number): void {
+function foil(
+  m: MeshBuilder,
+  sections: { y: number; z0: number; z1: number; t: number }[],
+  x: number,
+): void {
   const n = D.small ? 10 : 3;
   const rings = sections.map(({ y, z0, z1, t }) => {
     const out: number[] = [];
@@ -2296,7 +2544,12 @@ function solid(): Record<string, unknown> {
   return {
     stations: Array.from({ length: 21 }, (_, i) => {
       const u = i / 20;
-      return [round4(zAt(u)), round4(outline(u)), round4(sheer(u)), round4(Math.max(0, keelDepth(u)))];
+      return [
+        round4(zAt(u)),
+        round4(outline(u)),
+        round4(sheer(u)),
+        round4(Math.max(0, keelDepth(u))),
+      ];
     }),
     exponent: 2.2,
     cockpit: {
@@ -2310,7 +2563,7 @@ function solid(): Record<string, unknown> {
 
 /**
  * The bridgedeck's plan, for the sea under it and the stations on it: from
- * the locker deck's fore edge to the aft crossbeam, between the hulls'
+ * the nacelle's foot under its fore end to the aft crossbeam, between the hulls'
  * inner sides (their least half-spacing there at the underside); the
  * underside's height; and the top of what stands at its after end, the
  * roof's after edge on the centreline, where her sternlight hangs.
@@ -2321,7 +2574,7 @@ function bridgedeckData(): Record<string, number> {
     half = Math.min(half, innerAt(lerp(NACELLE_FOOT, BRIDGE_AFT, i / 40), UNDERSIDE));
   }
   return {
-    fore: round4(LOCKERS_FORE),
+    fore: round4(NACELLE_FOOT),
     aft: round4(BRIDGE_AFT),
     halfWidth: round4(half),
     underside: UNDERSIDE,
@@ -2390,7 +2643,14 @@ function leverData(): Record<string, unknown> {
       hullRound(girthAt(u, UNDERSIDE));
       if (z > HOUSE_FORE && z < HOUSE_AFT) {
         push(HOUSE_SIDE, deckAt(HOUSE_SIDE, z));
-        const ry = z > ROOF_FRONT ? roofY(HOUSE_SIDE, z) : lerp(deckAt(HOUSE_SIDE, z), roofY(HOUSE_SIDE, ROOF_FRONT), (z - HOUSE_FORE) / (ROOF_FRONT - HOUSE_FORE));
+        const ry =
+          z > ROOF_FRONT
+            ? roofY(HOUSE_SIDE, z)
+            : lerp(
+                deckAt(HOUSE_SIDE, z),
+                roofY(HOUSE_SIDE, ROOF_FRONT),
+                (z - HOUSE_FORE) / (ROOF_FRONT - HOUSE_FORE),
+              );
         push(HOUSE_SIDE, ry);
         push(0, ry + (z > ROOF_FRONT ? ROOF_CROWN : 0));
       } else if (z <= HOUSE_FORE) {
@@ -2419,7 +2679,7 @@ function leverData(): Record<string, unknown> {
       const a = ks[i] as { y: number; z0: number; z1: number; t: number };
       const b = ks[i + 1] as { y: number; z0: number; z1: number; t: number };
       const y0 = Math.min(a.y, -keelDepth(uAt(keelZ)));
-      const chord = ((a.z1 - a.z0) + (b.z1 - b.z0)) / 2;
+      const chord = (a.z1 - a.z0 + (b.z1 - b.z0)) / 2;
       const t = (a.t + b.t) / 2;
       const area = 0.68 * chord * t;
       const along = 8;
@@ -2439,14 +2699,25 @@ function leverData(): Record<string, unknown> {
       const y0 = lerp(RUDDER_ROOT, RUDDER_TIP, i / 4);
       const y1 = lerp(RUDDER_ROOT, RUDDER_TIP, (i + 1) / 4);
       const area = 0.68 * rc * 0.11 * rc;
-      elements.push([r(sgn * C), r((y0 + y1) / 2), r(foils.rudderPosition + rc * 0.35), r(area * Math.abs(y1 - y0))]);
+      elements.push([
+        r(sgn * C),
+        r((y0 + y1) / 2),
+        r(foils.rudderPosition + rc * 0.35),
+        r(area * Math.abs(y1 - y0)),
+      ]);
     }
   }
   return { step: LEVER_STEP, sections: out, elements };
 }
 
 /** Both hulls' waterplane at rest: the beam outside them, their area, its second moment about its centre along the length; and their wetted area. */
-function waterplane(): { beam: number; area: number; pitch: number; centre: number; wetted: number } {
+function waterplane(): {
+  beam: number;
+  area: number;
+  pitch: number;
+  centre: number;
+  wetted: number;
+} {
   let area = 0;
   let moment = 0;
   let beam = 0;
@@ -2529,7 +2800,11 @@ function model(): NodeDef[] {
     front.net.primitive({ colors: true }),
   ];
   const h = horses();
-  const fittings = { timber: new MeshBuilder('oak'), iron: new MeshBuilder('iron'), bronze: new MeshBuilder('bronze') };
+  const fittings = {
+    timber: new MeshBuilder('oak'),
+    iron: new MeshBuilder('iron'),
+    bronze: new MeshBuilder('bronze'),
+  };
   if (D.small) {
     hullParts.push(h.iron.primitive());
     for (const [x, z] of CAPSTANS) {
@@ -2575,8 +2850,18 @@ function model(): NodeDef[] {
         b.positions[i * 3 + 2] = (b.positions[i * 3 + 2] ?? 0) - MAST_Z;
       }
     }
-    mastParts.push(r.rope.primitive(), r.iron.primitive(), r.wood.primitive({ colors: true }), r.brass.primitive(), r.spar.primitive());
-    boomParts.push(spars.iron.primitive(), spars.bag.primitive({ colors: true }), spars.rope.primitive());
+    mastParts.push(
+      r.rope.primitive(),
+      r.iron.primitive(),
+      r.wood.primitive({ colors: true }),
+      r.brass.primitive(),
+      r.spar.primitive(),
+    );
+    boomParts.push(
+      spars.iron.primitive(),
+      spars.bag.primitive({ colors: true }),
+      spars.rope.primitive(),
+    );
     const gooseneck = new MeshBuilder('iron');
     gooseneck.box([-0.055, -0.055, -0.13], [0.055, 0.055, 0.11]);
     boomParts.push(gooseneck.primitive());
@@ -2607,7 +2892,9 @@ function model(): NodeDef[] {
       children: [
         {
           name: 'vang',
-          primitives: D.small ? [vangParts.rope.primitive(), vangParts.timber.primitive({ colors: true })] : [vangParts.rope.primitive()],
+          primitives: D.small
+            ? [vangParts.rope.primitive(), vangParts.timber.primitive({ colors: true })]
+            : [vangParts.rope.primitive()],
         },
         ...(D.small
           ? [
@@ -2662,7 +2949,11 @@ function model(): NodeDef[] {
       nodes.push({
         name: s < 0 ? 'port' : 'starboard',
         translation: sidelightAt(s),
-        primitives: [l.brass.primitive(), l.glass.primitive({ colors: true }), l.board.primitive({ colors: true })],
+        primitives: [
+          l.brass.primitive(),
+          l.glass.primitive({ colors: true }),
+          l.board.primitive({ colors: true }),
+        ],
       });
     }
     const st = sternlight();
@@ -2678,12 +2969,26 @@ function model(): NodeDef[] {
     name: 'wheel',
     translation: HUB,
     extras: {
-      wheel: { radius: WHEEL_RADIUS, spokes: WHEEL_SPOKES, handles: WHEEL_HANDLE, ahead: WHEEL_AHEAD, up: WHEEL_UP },
+      wheel: {
+        radius: WHEEL_RADIUS,
+        spokes: WHEEL_SPOKES,
+        handles: WHEEL_HANDLE,
+        ahead: WHEEL_AHEAD,
+        up: WHEEL_UP,
+      },
     },
-    primitives: D.small ? [w.wood.primitive({ colors: true }), w.brass.primitive(), w.rope.primitive({ colors: true })] : [wheelDisc().primitive({ colors: true })],
+    primitives: D.small
+      ? [
+          w.wood.primitive({ colors: true }),
+          w.brass.primitive(),
+          w.rope.primitive({ colors: true }),
+        ]
+      : [wheelDisc().primitive({ colors: true })],
   });
   const blade = rudder();
-  const rudderPrims = D.small ? [blade.blade.primitive(), blade.bronze.primitive()] : [blade.blade.primitive()];
+  const rudderPrims = D.small
+    ? [blade.blade.primitive(), blade.bronze.primitive()]
+    : [blade.blade.primitive()];
   nodes.push(
     {
       name: 'rudder',
@@ -2735,9 +3040,24 @@ for (const [detail, path] of [
   const raw = writeGlb([{ name: 'boat', children: model() }], materials);
   const name = path.replace(/^boats\//, '').replace(/\.glb$/, '');
   writeFileSync(`.dev/art/${name}.raw.glb`, raw);
-  execFileSync('client/node_modules/.bin/gltfpack', ['-i', `.dev/art/${name}.raw.glb`, '-o', `art/${path}`, '-c', '-kn', '-km', '-kv', '-ke', '-noq'], {
-    stdio: 'inherit',
-  });
+  execFileSync(
+    'client/node_modules/.bin/gltfpack',
+    [
+      '-i',
+      `.dev/art/${name}.raw.glb`,
+      '-o',
+      `art/${path}`,
+      '-c',
+      '-kn',
+      '-km',
+      '-kv',
+      '-ke',
+      '-noq',
+    ],
+    {
+      stdio: 'inherit',
+    },
+  );
 }
 
 // What the catalog takes from the model, and the people's stations.

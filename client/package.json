@@ -15,7 +15,7 @@
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
     "lint": "biome ci . ../art",
-    "art": "cd .. && node art/boats/jolly-boat/build.ts && node art/boats/keelboat/build.ts && node art/boats/tall-ship/build.ts && node art/boats/skiff/build.ts && node art/boats/beach-cat/build.ts && node art/boats/yacht/build.ts && for k in wooded tropical rocky sandy volcanic; do node art/town/$k/build.ts; done && node art/flora/build.ts && node art/life/build.ts && node art/icon/build.ts",
+    "art": "cd .. && node art/boats/jolly-boat/build.ts && node art/boats/keelboat/build.ts && node art/boats/tall-ship/build.ts && node art/boats/skiff/build.ts && node art/boats/beach-cat/build.ts && node art/boats/yacht/build.ts && node art/boats/catamaran/build.ts && for k in wooded tropical rocky sandy volcanic; do node art/town/$k/build.ts; done && node art/flora/build.ts && node art/life/build.ts && node art/icon/build.ts",
     "art:sailors": "cd .. && go run ./tools/sailors"
   },
   "allowScripts": {

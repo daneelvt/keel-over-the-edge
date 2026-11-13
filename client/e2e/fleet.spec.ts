@@ -8,8 +8,8 @@
 // topgallants furled, and a skiff as the own skiff, her gennaker set, part
 // way up and in, her sailor out past her rack; the fleet's 64 boats keep to
 // their draw calls and triangles, and a mixed 64 of Jolly boats, keelboats,
-// tall ships and skiffs, some with their gennakers set and their sailors
-// out on the wire, to theirs, their sailors, near and far, of every look,
+// tall ships, skiffs, beach cats, yachts and catamarans, some with their
+// gennakers set and their sailors out on the wire, to theirs, their sailors, near and far, of every look,
 // on the wire or not, to at most 6; every fleet
 // material is the factory's, with the bend; faded boats dither and none
 // sorts; and a picture of a fleet at fixed poses, near and far models,
@@ -25,6 +25,8 @@ const SKIFF = 3;
 const CAT = 4;
 /** The yacht's kind: the catalog's sixth boat, of two wheels and two rudders. */
 const YACHT = 5;
+/** The catamaran's kind: the catalog's seventh boat, of two hulls joined by a bridgedeck, her one wheel off the centreline. */
+const CATAMARAN = 6;
 /** How far apart the own boat's picture and a fleet boat's at one pose may be, 0 to 255 a channel. */
 const LIKE = 0.25;
 
@@ -207,7 +209,7 @@ test('64 boats keep to 22 draw calls and 200,000 triangles', async ({ page }) =>
   test.info().annotations.push({ type: 'measured', description: JSON.stringify(budget) });
 });
 
-test('a mixed 64, Jolly boats, keelboats, tall ships, skiffs, beach cats and yachts, keep to 47 draw calls and 320,000 triangles', async ({
+test('a mixed 64, Jolly boats, keelboats, tall ships, skiffs, beach cats, yachts and catamarans, keep to 57 draw calls and 320,000 triangles', async ({
   page,
 }) => {
   await openScene(page);
@@ -217,18 +219,20 @@ test('a mixed 64, Jolly boats, keelboats, tall ships, skiffs, beach cats and yac
     const boats = [];
     for (let i = 0; i < 64; i++) {
       // The start line again: of every sixteen, three keelboats, a tall
-      // ship, four skiffs, two beach cats and a yacht, the keelboats' jibs
-      // drawing and every other one reefed, the ships braced up, one with
-      // her topgallants in, every other skiff with her gennaker set and one
-      // with it half way up, every skiff's and beach cat's sailor out on the
-      // wire, the cats heeled with a hull flying, the yachts heeled with
-      // their wheels and rudders over, the first of each near.
+      // ship, four skiffs, two beach cats, a yacht and a catamaran, the
+      // keelboats' jibs drawing and every other one reefed, the ships
+      // braced up, one with her topgallants in, every other skiff with her
+      // gennaker set and one with it half way up, every skiff's and beach
+      // cat's sailor out on the wire, the cats heeled with a hull flying,
+      // the yachts heeled with their wheels and rudders over, the
+      // catamarans barely heeled with theirs over, the first of each near.
       const ship = i % 16 === 3;
       const keel = !ship && i % 4 === 3;
       const skiff = i % 4 === 1;
       const cat = i % 8 === 6;
       const yacht = i % 16 === 8;
-      const kind = ship ? 2 : keel ? 1 : skiff ? 3 : cat ? 4 : yacht ? 5 : 0;
+      const catamaran = i % 16 === 0;
+      const kind = ship ? 2 : keel ? 1 : skiff ? 3 : cat ? 4 : yacht ? 5 : catamaran ? 6 : 0;
       boats.push({
         kind,
         east: b.x - 70 + (i % 8) * 20,
@@ -242,14 +246,14 @@ test('a mixed 64, Jolly boats, keelboats, tall ships, skiffs, beach cats and yac
         yardsTurn: ship ? -0.9 : 0,
         foreYardsTurn: ship ? -0.9 : 0,
         sailor: skiff ? -1.8 : cat ? -2.16 : yacht ? -1 : 0,
-        heel: cat ? 0.15 : yacht ? 0.25 : 0,
-        rudder: yacht ? 0.2 : 0,
+        heel: cat ? 0.15 : yacht ? 0.25 : catamaran ? 0.04 : 0,
+        rudder: yacht || catamaran ? 0.2 : 0,
         sail: 15 | (1 << 4) | (1 << 6),
       });
     }
     k.setFleet(boats);
     k.render();
-    // The keelboats', the ships', the skiffs', the cats' and the yachts' kinds load as their first boats come into view.
+    // The keelboats', the ships', the skiffs', the cats', the yachts' and the catamarans' kinds load as their first boats come into view.
     await k.fleetLoaded();
     k.render();
     const set = k.fleetBudget();
@@ -263,7 +267,7 @@ test('a mixed 64, Jolly boats, keelboats, tall ships, skiffs, beach cats and yac
   expect(budget.near).toBeLessThanOrEqual(12);
   // Each kind's draws a level, a skiff's gennaker one more where one is
   // set, and the trapeze wires one.
-  expect(budget.drawCalls).toBeLessThanOrEqual(47);
+  expect(budget.drawCalls).toBeLessThanOrEqual(57);
   expect(budget.triangles).toBeLessThanOrEqual(320_000);
   expect(budget.bagged).toBe(budget.drawCalls - 2);
 });
@@ -407,6 +411,26 @@ test('a yacht of the fleet looks as the own one does, her two wheels and two rud
       name: 'a yacht reaching, her wheels and rudders over',
       state: { ...rest, heading: 1.8, heel: 6 * DEG, boom: 0.6, jib: 0.3, rudder: 0.3, sailor: -1 },
       view: { azimuth: 0.4, elevation: 0.35, distance: 9 },
+    },
+  ]);
+});
+
+test('a catamaran of the fleet looks as the own one does, her wheel and rudders turned', async ({
+  page,
+}) => {
+  // Close-hauled, barely heeled, her helm at her wheel to port; reaching
+  // with her rudders and her wheel put over. Seen from her port quarter,
+  // near enough for the full model.
+  await kindAlike(page, CATAMARAN, [
+    {
+      name: 'a catamaran close-hauled',
+      state: { ...rest, heading: 0.9, heel: 2 * DEG, boom: 0.08, jib: 0.18 },
+      view: { azimuth: 0.6, elevation: 0.3, distance: 8 },
+    },
+    {
+      name: 'a catamaran reaching, her wheel and rudders over',
+      state: { ...rest, heading: 1.8, heel: 1 * DEG, boom: 0.6, jib: 0.3, rudder: 0.3 },
+      view: { azimuth: 0.5, elevation: 0.35, distance: 8 },
     },
   ]);
 });

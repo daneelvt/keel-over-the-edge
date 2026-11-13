@@ -314,7 +314,9 @@ describe.each(catalog.boats.map((b) => [b.name, b] as const))('%s', (_, boat) =>
     }
     // The sailor on the centreline, or abreast of one wheel off it.
     const offCentre = wheel && !((node('wheel').extras?.wheel?.spread ?? 0) > 0);
-    expect(Math.abs((at('sailor')[0] ?? 1) - (offCentre ? (place('wheel')[0] ?? 0) : 0))).toBeLessThan(CM);
+    expect(
+      Math.abs((at('sailor')[0] ?? 1) - (offCentre ? (place('wheel')[0] ?? 0) : 0)),
+    ).toBeLessThan(CM);
   });
 
   test('its sheer is the outline the physics bumps hulls with, within 1 cm', () => {

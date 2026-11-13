@@ -132,6 +132,7 @@ const RISE_STEPS = 6;
 /** A boat's size, as the camera frames it: its length over all, and its sails' heights, metres. */
 export interface FramedBoat {
   lengthOverall: number;
+  beam: number;
   physics: {
     rig: { boomHeight: number; luff: number };
     headsails?: { headsailArea: number; headsailTackHeight: number; headsailLuff: number };
@@ -161,15 +162,24 @@ export function mastOf(b: FramedBoat): number {
 }
 
 /**
+ * How long a boat is framed as: her length, or twice her beam for one
+ * wider than half her length (a cruising catamaran), whose breadth seen
+ * from astern the chase view must take in as a monohull's sail.
+ */
+export function framedLength(b: FramedBoat): number {
+  return Math.max(b.lengthOverall, 2 * b.beam);
+}
+
+/**
  * How much farther the camera stands from a boat than from the one its
- * views are framed for: by the boat's length or its masthead's height,
- * whichever is the more, the chase view never past MAX_CHASE.
+ * views are framed for: by the boat's framed length or its masthead's
+ * height, whichever is the more, the chase view never past MAX_CHASE.
  */
 export function sizeOf(boat: FramedBoat, framed: FramedBoat): number {
   if (boat === framed) {
     return 1;
   }
-  const size = Math.max(boat.lengthOverall / framed.lengthOverall, mastOf(boat) / mastOf(framed));
+  const size = Math.max(framedLength(boat) / framedLength(framed), mastOf(boat) / mastOf(framed));
   return Math.min(size, MAX_CHASE / CHASE.distance);
 }
 
