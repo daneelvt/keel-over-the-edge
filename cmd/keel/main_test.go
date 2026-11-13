@@ -219,7 +219,8 @@ type memDB struct {
 	checkpoint *store.Checkpoint
 	events     []store.Event
 	chartings  []store.Charting
-	down       bool // the world's writes fail
+	log        store.LogRows // the log's rows written
+	down       bool          // the world's writes fail
 	bundle     *store.Bundle
 	weathers   map[[16]byte]*store.Weather
 	number     int // worlds ended before the active one
@@ -438,6 +439,8 @@ func (d *memDB) Write(_ context.Context, b store.Batch) error {
 		return errors.New("the database is down")
 	}
 	d.events = append(d.events, b.Events...)
+	d.log.Voyages = append(d.log.Voyages, b.Log.Voyages...)
+	d.log.Entries = append(d.log.Entries, b.Log.Entries...)
 	for i := range b.Charting {
 		c := &b.Charting[i]
 		if slices.ContainsFunc(d.chartings, func(o store.Charting) bool { return o.Subject == c.Subject && o.Number == c.Number }) {
@@ -890,7 +893,7 @@ func TestServe(t *testing.T) {
 		}
 		// The world it sailed: its empty terrain, its water's way round.
 		sailed := worldgen.Empty(f.Header.Seed)
-		res, err := replay.Run(f, replay.Options{Kinds: kinds(t), Waves: waves(t), Weather: logTimeline(t, f.Header, sailed), Encounters: encounters(t), Workers: 3,
+		res, err := replay.Run(f, replay.Options{Kinds: kinds(t), Waves: waves(t), Weather: logTimeline(t, f.Header, sailed), Encounters: encounters(t), Workers: 3, Sky: catalogOf(t).PrepareSky(),
 			Terrain: sailed.Terrain(groundOf(t)), Edge: edgeOf(catalogOf(t))})
 		if err != nil {
 			t.Fatal(err)
@@ -1254,7 +1257,7 @@ func TestReplayDump(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := replay.Run(f, replay.Options{Kinds: kinds(t), Waves: waves(t), Weather: logTimeline(t, f.Header, sailed), Encounters: encounters(t), Workers: 1,
+	if _, err := replay.Run(f, replay.Options{Kinds: kinds(t), Waves: waves(t), Weather: logTimeline(t, f.Header, sailed), Encounters: encounters(t), Workers: 1, Sky: catalogOf(t).PrepareSky(),
 		Terrain: sailed.Terrain(groundOf(t)), Edge: edgeOf(catalogOf(t)), At: func(fr *bus.Frame) {
 			if fr.Tick == at {
 				if err := sim.ReadSnapshot(sim.AppendSnapshot(nil, fr), want); err != nil {

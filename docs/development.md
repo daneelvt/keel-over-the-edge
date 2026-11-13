@@ -1126,7 +1126,8 @@ A kind of boat is data: nothing reads its name or id. Adding one touches:
    test of the kind's likeness of its own), the looks (`boatlook.spec.ts`),
    the layout's heel hold (`layout.spec.ts`; a boat wider than half her
    length is framed as twice her beam long);
-   and, if it carries more than one, its people (`crew.spec.ts`, and
+   and, if it carries more than one, its people (`crew.spec.ts`, or
+   `crew-cruisers.spec.ts` for the yacht and the catamaran, and
    `catcrew.test.ts` for a boat of two hulls, `yachtcrew.test.ts` for a
    cruising yacht). Tests that find a kind by a trait name the trait they
    mean (a keelboat: her crew on her rail and her trimmer sat to windward),
@@ -3791,6 +3792,117 @@ sight table; `?chart=sight` looks by it (`chart/sight.ts`), and
 `chart/sight.test.ts` holds its looks to the server's along seed 1's runs.
 The world page washes the islands not yet charted paler, rings the places
 charted, and lists what is charted by whom.
+
+## The sailors' log
+
+Every sailor has a log that lasts from world to world: what they did at
+sea, read in the game by sailors signed in, as its setting allows.
+
+### What a voyage keeps
+
+Each voyage keeps its own log in the simulation (`bus.VoyageLog`, in the
+snapshot and the digest; `internal/sim/voyagelog.go`), read once a second
+in the rules phase:
+
+- **The odometer**: the straight line from the boat's place a second ago,
+  with the square root every machine works out alike. A move farther than
+  25 m in a second (the owner's tools moving it, a restart's start) adds
+  nothing. On a course of reaches and turns it reads within 0.4% of the
+  distance summed tick by tick (`go test ./internal/sim -run Odometer -v`).
+- **Gales and storms**: the true wind at the boat (`Frame.Wind`) summed
+  into minute means; the mean of the last ten is the wind as Beaufort's
+  forces are reckoned. Force 8 (17.2 m/s) meets a gale, Force 10 (24.5 m/s)
+  a storm; either is ridden out once the mean falls below Force 7
+  (13.9 m/s), or when the voyage ends in port.
+- **A landfall in fog**: a port's harbour entered from the sea with the
+  visibility at the boat under a nautical mile.
+- **A night at sea**: half an hour in the water with the sun below the
+  horizon at the boat (the game's night is 59 minutes).
+- **Bumps**, at fault and not.
+
+Those aboard another's boat run what it runs and meet what it meets while
+aboard (`bus.Aboard`'s `Run` and `Met`). A voyage's end is a record of the
+frame (`bus.VoyageEnded`: returned, expired, over, taken, or gone aboard
+another's boat), and so is the end of a time aboard (`bus.AboardEnded`:
+ashore, landed with the boat, taken). A voyage the owner's tools placed is
+marked, and the log leaves it out. `keel replay` reckons the nights by the
+catalog's sky at the log's epoch.
+
+### The rows
+
+`internal/logbook`'s `Book` turns each frame into rows of the log, on the
+tick, and persist writes them in the same fenced transaction as the
+events and chartings they come from (`store.Batch.Log`). The tables
+(`00034_log.sql`) are never partitioned and have no `world_id`: they keep
+the world's **number** and their own copies of names and places, so they
+read after the world is dropped.
+
+| Table | A row |
+|---|---|
+| `log_voyage` | a voyage, or a time aboard another's boat: the boat's kind and name, when, how it ended and the place named nearest, the distance run (NULL where not logged), the closest approach to the lip survived, bumps, the weather met (flags) and where, a time aboard's skipper, and the others aboard (`crew`, a JSON list of `{id, name, machine, s}`) |
+| `log_entry` | a place charted (the skipper's), sighted aboard another's boat (each aboard), a kind of the sea's life met within 300 m (everyone aboard, once a kind a voyage), a bump (both sailors, whose fault from each side, the Article), and the first of a kind found |
+| `log_find` | the collection: each kind of each group a sailor has found, how many times, where and when first, the latest world |
+
+Each row is written once by its `source` (the world, the boat, the tick it
+began…), and only while its account is: a row of an account deleted
+meanwhile is dropped without failing the batch. Every count is a query on
+the rows (`store.LogTotals`), never a counter. The collection's groups are
+the catalog's lists (the islands' biomes and size classes, the features,
+the kinds of place, the sea's life, the boats) and the log's own: the
+weather met (`gale-ridden-out`, `storm-ridden-out`, `landfall-in-fog`,
+`night-at-sea`) and the edge's ladder (`within-500m` … `within-10m`).
+
+### Who reads a log
+
+Only a sailor signed in reads a log: its sailor always, a player their own
+machine sailors' always, anyone else as `account.log_shown` says:
+`sailors` (every sailor in the game) or `me`. Unset, it is the age band's
+default: an adult's `sailors`, a teen's (or one whose age is not known)
+`me`; a machine sailor's is always `sailors` (a check). A block either
+way refuses it, and a stopped sailor's is refused to others. A refused
+log and one that is not there are the same 404.
+
+The sailors named in a log follow one rule (`logbook.NameOf`, which the
+news follows too): by name when they are the reader, a machine sailor
+(⚙), or a human whose own log the reader may read and who is in the
+reader's age band; anyone else counted ("with two aboard"); "a sailor"
+for a block between them and the reader or the log's sailor; "a former
+sailor" once their account is deleted, as `ForgetCredits` forgets their
+name and account in others' rows.
+
+| Route | What |
+|---|---|
+| `GET /api/me/log?world=` | the player's own log, the days of a world (the newest by default) |
+| `GET /api/log?name=&world=` | a sailor's log by name, as the player may read it |
+| `PUT /api/me/log {"shown": "sailors" \| "me"}` | who may read the player's log |
+| `GET /api/machines/log?id=&world=` | one of the player's machine sailors' logs |
+| `GET /owner/api/log.json?id=&world=` | any log, every name shown; an account's card carries its record, and the search's rows a few figures |
+
+Every route needs a session, and answers `Cache-Control: private,
+no-store`. A log is its header (name, look, since), an abstract of four
+figures, the whole record, the worlds, one world's days in the world's
+zone (each day's voyages and entries; a kind of life met again the same
+day counted on the day's first) and the collection (`logbook.Log`). A
+week's page of a sailor sailing fifteen voyages a day, each meeting five
+kinds of life, is 29 KB of JSON, read in 4 ms.
+
+### The backfill
+
+Once (the job `log-backfill`), keel copies into the log what the worlds
+still kept recorded before `setting.log_from`, the moment the migration
+ran: credited chartings, voyages from the events of boats entering and
+leaving the water or going over, their closest approaches, and bumps.
+Distance and weather were not recorded then and are not made up: those
+voyages have none, and a log says from when distance is logged for a week
+after. Each row has the source the live log gives it, so the job run
+twice writes once.
+
+### Trying it
+
+```sh
+go test ./internal/sim -run 'Odometer|VoyageEnds|AboardEnds|Gale|Landfall|Night|VoyageLog' -v
+go test ./internal/logbook ./internal/store -run 'Log|Backfill|Book|Name|Read|Collection' -v
+```
 
 ## The weekly world
 
@@ -8823,7 +8935,8 @@ tall ship, each at their station on her deck and one at the wheel, in a
 draw or two more than her one sailor, her frames, each drawn and waited
 for, little dearer than with her one sailor and, on a real GPU, within a
 frame at 60 Hz, from the chase camera and close (`@long`); and the
-keelboat's five on her deck.
+keelboat's five on her deck. `crew-cruisers.spec.ts` holds the yacht's and
+the catamaran's people, apart so that the two files run on two runners.
 `fleet.spec.ts` draws other boats in the sandbox: a boat of the fleet as
 the own boat at seven poses, and a keelboat as the own keelboat with her
 jib and reefed, 64 boats within 22 draw calls and 200,000 triangles, a

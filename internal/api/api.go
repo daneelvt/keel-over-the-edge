@@ -125,6 +125,8 @@ type Config struct {
 	Chat Chatting
 	// Shipmates, if not nil, is shipmates: the list, offers and the rest.
 	Shipmates Shipmating
+	// Logs, if not nil, are the sailors' logs.
+	Logs Logs
 	// ReadTimeout and WriteTimeout, if not zero, replace the constants, for
 	// tests.
 	ReadTimeout, WriteTimeout time.Duration
@@ -227,6 +229,7 @@ func Handler(cfg Config) http.Handler {
 	}
 	a.registerChat(mux, required)
 	a.registerShipmates(mux, required)
+	a.registerLogs(mux, required)
 	if cfg.Watch != nil {
 		mux.Handle("GET /api/watch", required(a.watchList))
 		mux.Handle("GET /api/watch/sailor", required(a.watchSailor))

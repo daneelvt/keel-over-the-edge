@@ -440,11 +440,21 @@ func (q *Queries) DeleteAccount(ctx context.Context, id pgtype.UUID) (int64, err
 }
 
 const forgetCredits = `-- name: ForgetCredits :exec
-WITH c AS (UPDATE charting SET sailor = NULL WHERE charting.account_id = $1)
+WITH c AS (UPDATE charting SET sailor = NULL WHERE charting.account_id = $1),
+v AS (
+  UPDATE log_voyage SET
+    skipper_id = CASE WHEN log_voyage.skipper_id = $1 THEN NULL ELSE log_voyage.skipper_id END,
+    skipper_name = CASE WHEN log_voyage.skipper_id = $1 THEN NULL ELSE log_voyage.skipper_name END,
+    crew = (SELECT coalesce(jsonb_agg(CASE WHEN m->>'id' = $1::text THEN m - 'id' - 'name' ELSE m END ORDER BY o), '[]'::jsonb)
+            FROM jsonb_array_elements(log_voyage.crew) WITH ORDINALITY AS t(m, o))
+  WHERE log_voyage.skipper_id = $1 OR log_voyage.crew @> jsonb_build_array(jsonb_build_object('id', $1::text))
+),
+e AS (UPDATE log_entry SET other_id = NULL, other_name = NULL WHERE log_entry.other_id = $1)
 UPDATE news_item SET sailor = NULL WHERE news_item.account_id = $1
 `
 
-// A deleted account's credits keep their places, under no name.
+// A deleted account's credits keep their places, under no name; and in
+// others' logs it is a former sailor, its name and its account forgotten.
 func (q *Queries) ForgetCredits(ctx context.Context, id pgtype.UUID) error {
 	_, err := q.db.Exec(ctx, forgetCredits, id)
 	return err

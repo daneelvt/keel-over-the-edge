@@ -205,7 +205,7 @@ func (w *World) newBoat(q *bus.Waiting) int32 {
 	f.Pilot[s] = bus.PilotOffWord(gen)
 	f.Rig[s] = bus.FullSail(gen)
 	f.Course[s] = physics.Course{}
-	f.Voyage[s] = bus.Voyage{}
+	f.Voyage[s] = newVoyage(f.Tick)
 	f.Stay[s], f.Unseen[s] = false, false
 	f.Holder[s] = bus.Account{}
 	i, _ := slices.BinarySearch(f.Live, s)
