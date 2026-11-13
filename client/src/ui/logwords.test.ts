@@ -57,7 +57,15 @@ function voyage(v: Partial<LogVoyage>): LogVoyage {
 }
 
 function bump(v: Partial<LogEntry>): LogEntry {
-  return { at: 0, kind: 'bump', otherBoat: 'Gull', fault: 'theirs', article: '10', place: 'Keyhole Rock', ...v };
+  return {
+    at: 0,
+    kind: 'bump',
+    otherBoat: 'Gull',
+    fault: 'theirs',
+    article: '10',
+    place: 'Keyhole Rock',
+    ...v,
+  };
 }
 
 describe('a day', () => {
@@ -66,7 +74,12 @@ describe('a day', () => {
       date: '2026-11-12',
       runM: 18.4 * 1852,
       voyages: [
-        voyage({ how: 'over', place: 'the Skerries', met: ['gale', 'gale-ridden-out'], galePlace: 'Gull Reach' }),
+        voyage({
+          how: 'over',
+          place: 'the Skerries',
+          met: ['gale', 'gale-ridden-out'],
+          galePlace: 'Gull Reach',
+        }),
       ],
       entries: [{ at: 0, kind: 'charted', title: 'Keyhole Rock' }],
     };
@@ -93,7 +106,10 @@ describe('a day', () => {
   test('the day’s column and the world’s heading', () => {
     expect(dayCell('2026-11-12')).toBe('Thu 12');
     expect(
-      worldHeading({ number: 14, first: Date.UTC(2026, 10, 9, 12), last: Date.UTC(2026, 10, 15, 12) }, 'UTC'),
+      worldHeading(
+        { number: 14, first: Date.UTC(2026, 10, 9, 12), last: Date.UTC(2026, 10, 15, 12) },
+        'UTC',
+      ),
     ).toBe('World 14 · 9–15 November');
   });
 });
@@ -106,7 +122,7 @@ describe('a bump', () => {
     expect(bumpWords(bump({ fault: 'mine', other: { hidden: true } }))).toBe(
       'A brush with the Gull, off Keyhole Rock; port tack keeps clear of starboard, the way ours to give',
     );
-    expect(bumpWords(bump({ fault: 'none', article: undefined, place: undefined }))).toBe(
+    expect(bumpWords({ at: 0, kind: 'bump', otherBoat: 'Gull', fault: 'none' })).toBe(
       'A brush with the Gull, in open water; no one at fault',
     );
   });
@@ -114,25 +130,34 @@ describe('a bump', () => {
 
 describe('company', () => {
   test('aboard another’s boat, with whom, how long and how far', () => {
-    const v = voyage({ aboard: true, boatName: 'Iron Mary', skipper: { name: 'Mira' }, runM: 8.4 * 1852 });
+    const v = voyage({
+      aboard: true,
+      boatName: 'Iron Mary',
+      skipper: { name: 'Mira' },
+      runM: 8.4 * 1852,
+    });
     expect(companyWords(v)).toBe('Sailed aboard Iron Mary with Mira, 2 h, 8.4 NM');
   });
 
   test('skippered with those named, and those counted', () => {
-    expect(companyWords(voyage({ boatName: 'Gull', crew: [{ name: 'Tom' }, { name: 'Bolt', machine: true }] }))).toBe(
-      'Skippered Gull with Tom and Bolt ⚙',
+    expect(
+      companyWords(
+        voyage({ boatName: 'Gull', crew: [{ name: 'Tom' }, { name: 'Bolt', machine: true }] }),
+      ),
+    ).toBe('Skippered Gull with Tom and Bolt ⚙');
+    expect(companyWords(voyage({ boatName: 'Gull', counted: 3 }))).toBe(
+      'Skippered Gull with three aboard',
     );
-    expect(companyWords(voyage({ boatName: 'Gull', counted: 3 }))).toBe('Skippered Gull with three aboard');
     expect(companyWords(voyage({}))).toBe('');
   });
 
   test('a sighting aboard names the skipper or not', () => {
-    expect(entryWords({ at: 0, kind: 'sighted', title: 'Gull Reach', other: { name: 'Mira' } })).toBe(
-      'Sighted Gull Reach aboard Mira’s boat',
-    );
-    expect(entryWords({ at: 0, kind: 'sighted', title: 'Gull Reach', other: { former: true } })).toBe(
-      'Sighted Gull Reach aboard a former sailor’s boat',
-    );
+    expect(
+      entryWords({ at: 0, kind: 'sighted', title: 'Gull Reach', other: { name: 'Mira' } }),
+    ).toBe('Sighted Gull Reach aboard Mira’s boat');
+    expect(
+      entryWords({ at: 0, kind: 'sighted', title: 'Gull Reach', other: { former: true } }),
+    ).toBe('Sighted Gull Reach aboard a former sailor’s boat');
   });
 });
 

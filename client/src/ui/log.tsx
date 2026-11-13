@@ -50,6 +50,7 @@ import {
   READING,
   recordLines,
   remarks,
+  remarksLine,
   runCell,
   SAILORS,
   shownLine,
@@ -94,8 +95,11 @@ function WhoReads({
   close: () => void;
 }) {
   const shown = log.shown ?? 'sailors';
+  const at = useRef<HTMLElement | null>(null);
+  // Opened under the head, which held sideways may be out of view.
+  useEffect(() => at.current?.scrollIntoView?.({ block: 'nearest' }), []);
   return (
-    <section class="log-who" aria-label={WHO_READS}>
+    <section class="log-who" aria-label={WHO_READS} ref={at}>
       <h3>{WHO_READS}</h3>
       <div class="log-keys">
         {(['sailors', 'me'] as const).map((s) => (
@@ -162,11 +166,14 @@ function Head({
             <PlayerText text={log.name} />
           </h2>
           {log.machine ? <p class="log-sub">{MACHINE_SAILOR}</p> : null}
-          {since !== '' ? <p class="log-sub">{since}</p> : null}
-          {worlds > 0 ? (
-            <p class="log-sub">{worlds === 1 ? '1 world' : `${worlds} worlds`}</p>
+          {since !== '' || worlds > 0 ? (
+            <p class="log-sub">
+              {[since, worlds === 0 ? '' : worlds === 1 ? '1 world' : `${worlds} worlds`]
+                .filter((x) => x !== '')
+                .join(' · ')}
+            </p>
           ) : null}
-          {log.loggedFrom !== undefined && log.loggedFrom > 0 ? (
+          {log.own && log.loggedFrom !== undefined && log.loggedFrom > 0 ? (
             <p class="log-sub log-faint">{loggedFromLine(log.loggedFrom, log.zone)}</p>
           ) : null}
         </div>
@@ -232,11 +239,11 @@ function Day({
         type="button"
         class="log-day"
         aria-expanded={open}
-        aria-label={`${dayLong(d.date)}: ${lines.join('; ')}`}
+        aria-label={`${dayLong(d.date)}: ${remarksLine(lines)}`}
         onClick={toggle}
       >
         <span class="log-day-date">{dayCell(d.date)}</span>
-        <span class="log-day-remarks">{lines.join('; ')}.</span>
+        <span class="log-day-remarks">{remarksLine(lines)}</span>
         <span class="log-day-run">{runCell(d.runM)}</span>
       </button>
       {open ? (
@@ -266,7 +273,11 @@ function Days({ log, read }: { log: Log; read: (world: number) => void }) {
   return (
     <div class="log-days-part">
       {w === null ? (
-        <p class="log-empty">{empty(log.record) ? NOT_YET : 'No days logged in this world yet.'}</p>
+        <p class="log-faint">
+          {empty(log.record)
+            ? 'Each day at sea is written here, a line a day; the collection waits to be found.'
+            : 'No days logged in this world yet.'}
+        </p>
       ) : (
         <>
           <h3 class="log-world">{worldHeading(w, log.zone)}</h3>

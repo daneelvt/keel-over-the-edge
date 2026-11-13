@@ -261,7 +261,7 @@
   cursor: pointer;
 }
 
-.log-day-heads {
+.log-sheet .log-day-heads {
   min-height: 0;
   padding: 2px 0;
   font:
@@ -279,7 +279,7 @@
 }
 
 .log-day-run {
-  font-variant-numeric: tabular-nums lining-nums;
+  font-variant-numeric: lining-nums;
   text-align: right;
 }
 

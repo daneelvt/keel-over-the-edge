@@ -221,8 +221,9 @@
   font-size: 16px;
 }
 
-/* The ship's clock in the strip: the world's time of the moment shown,
-   its rim gold while that is ahead. Not a button. */
+/* The chart's ship's clock, in the strip or under it held upright: the
+   world's time of the moment shown, its rim gold while that is ahead. Not
+   a button. */
 .chart-clock {
   flex: none;
   display: block;
@@ -753,6 +754,15 @@
 @media (orientation: portrait) {
   .chart-strip {
     flex: 1 1 100%;
+  }
+
+  /* Four tabs, where the boat is and the way back fit a phone's width. */
+  .chart-tab {
+    padding: 0 7px;
+  }
+
+  .chart-top > .chart-clock {
+    margin-left: 2px;
   }
 
   .chart-screen:has(.chart-falls) .chart-list,

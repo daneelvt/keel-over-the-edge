@@ -397,18 +397,15 @@ export function companyWords(v: LogVoyage): string {
   const named = v.crew.map(personWords);
   const more = v.counted ?? 0;
   if (v.aboard === true) {
-    const others = named.filter((n) => n !== personWords(v.skipper));
+    const skipper = personWords(v.skipper);
+    const others = named.filter((n) => n !== skipper);
     const boat =
       v.boatName !== undefined && v.boatName !== ''
         ? v.boatName
-        : `${personWords(v.skipper)}’s ${boatKind(v.boat)}`;
+        : `${skipper}’s ${boatKind(v.boat)}`;
     const lasted = span(Math.max(0, (v.ended - v.began) / 1000));
-    const with_ = [personWords(v.skipper), ...others];
-    if (more > 0) {
-      with_.push(counted(more, 'other'));
-    }
     const run = v.runM !== null && v.runM >= 50 ? `, ${nm(v.runM)} NM` : '';
-    return `Sailed aboard ${boat} with ${joined(with_)}, ${lasted}${run}`;
+    return `Sailed aboard ${boat} with ${withWords([skipper, ...others], more)}, ${lasted}${run}`;
   }
   if (named.length === 0 && more === 0) {
     return '';
@@ -417,8 +414,16 @@ export function companyWords(v: LogVoyage): string {
   if (named.length === 0) {
     return `Skippered ${boat} with ${inWords(more)} aboard`;
   }
-  const with_ = more > 0 ? [...named, counted(more, 'other')] : named;
-  return `Skippered ${boat} with ${joined(with_)}`;
+  return `Skippered ${boat} with ${withWords(named, more)}`;
+}
+
+/** Companions in a line: two named at most, the rest counted. */
+function withWords(named: string[], more: number): string {
+  const shown = named.slice(0, 2);
+  const rest = named.length - shown.length + more;
+  return rest === 0
+    ? joined(shown)
+    : `${shown.join(', ')} and ${inWords(rest)} ${rest === 1 ? 'other' : 'others'}`;
 }
 
 /** How a voyage ended, where the log tells it: going over the falls, or taken at the world's end; nothing for an ordinary landfall. */
@@ -455,6 +460,11 @@ export function howWords(v: LogVoyage): string {
 
 /** How many of a day's bumps are told before the rest fold. */
 const BUMPS_TOLD = 3;
+
+/** A day's remarks as one entry of the log: each after the first begun in small letters, a full stop at the end. */
+export function remarksLine(lines: string[]): string {
+  return `${lines.map((l, i) => (i === 0 ? l : l.charAt(0).toLowerCase() + l.slice(1))).join('; ')}.`;
+}
 
 /**
  * A day's remarks: the weather met, then what was found and met, then

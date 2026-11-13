@@ -9,18 +9,7 @@
 
 import { catalog } from '../catalog';
 import { FEATURE_MARKS, PLACE_MARKS } from '../chart/marks';
-
-/** Every inked glyph, by its path under art/: one for each kind of the sea's life and each boat. */
-const INKED = import.meta.glob<string>('../../../art/glyphs/*.webp', {
-  query: '?url&no-inline',
-  import: 'default',
-  eager: true,
-});
-
-/** An inked glyph's URL by its kind's id, or undefined. */
-export function inkedGlyph(id: string): string | undefined {
-  return INKED[`../../../art/glyphs/${id}.webp`];
-}
+import { inkedGlyph } from './logglyphfiles';
 
 /** The marks of the kinds of place the chart letters by their light or their water alone, by site. */
 const MORE_PLACE_MARKS: Record<string, string> = {

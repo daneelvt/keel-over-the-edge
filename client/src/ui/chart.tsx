@@ -697,8 +697,8 @@ function RimCountdown({ end }: { end: Countdown | null }) {
 }
 
 /**
- * The strip's ship's clock: the world's time of the moment the chart
- * shows, now or the slider's, its hands sweeping on as Play plays and back
+ * The chart's ship's clock, in the strip or held upright under it: the
+ * world's time of the moment the chart shows, now or the slider's, its hands sweeping on as Play plays and back
  * with Now; its rim gold while it reads ahead, as the slider's knob is.
  */
 function StripClock({ sea }: { sea: ChartSea }) {
@@ -795,6 +795,7 @@ export function ChartScreen({
     return () => sized.disconnect();
   }, []);
   const mode = chart.mode.value;
+  const upright = useUpright();
   const picked = chart.picked.value;
   const tapped = chart.tapped.value;
   return (
@@ -805,7 +806,7 @@ export function ChartScreen({
         <div class="chart-case chart-strip">
           <Tabs sea={sea} />
           <Position sea={sea} />
-          <StripClock sea={sea} />
+          {mode === 'chart' && !upright ? <StripClock sea={sea} /> : null}
           <button
             type="button"
             class="chart-button chart-back"
@@ -816,6 +817,8 @@ export function ChartScreen({
             ✕
           </button>
         </div>
+        {/* Held upright the strip has no room for the clock: it stands under it. */}
+        {mode === 'chart' && upright ? <StripClock sea={sea} /> : null}
         <RimCountdown end={end} />
         {notices !== null ? (
           <div class="chart-notices">

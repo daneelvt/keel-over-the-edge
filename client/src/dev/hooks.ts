@@ -48,7 +48,7 @@ import type { FullScreen } from '../boot/fullscreen';
 import type { Revealed } from '../boot/gate';
 import { harbourWater } from '../boot/harbour';
 import { catalog } from '../catalog';
-import type { ChartMode } from '../chart/chart';
+import type { ChartMode, LogWho } from '../chart/chart';
 import type { ChartParts } from '../chart/make';
 import { placeWords, pointsOf, warningInForce } from '../chart/placeweather';
 import { formatPosition } from '../chart/position';
@@ -4110,9 +4110,14 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
       c.setEnd({ world: 'sandbox', zone: '', ...end });
     },
 
-    /** Opens the chart, its list or the news; null closes it. */
+    /** Opens the chart, its list, the news or the log; null closes it. */
     openChart(mode: ChartMode | null): void {
       chartParts().chart.show(mode);
+    },
+
+    /** Opens the chart screen's Log tab on a log: the player's own, a sailor's or a machine sailor's. */
+    openLog(who: LogWho): void {
+      chartParts().chart.showLog(who);
     },
 
     /** Where a charted subject lies on the chart's screen, CSS pixels. */
