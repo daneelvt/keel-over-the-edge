@@ -32,6 +32,7 @@
 // across her).
 
 import { Matrix4, type Object3D, Vector3 } from 'three';
+import type { CrewPath } from './crewrules';
 
 /** The clips, by what they are; those at the wheel and the braced each have their -port mirror. */
 export const BRIDGE_CLIPS = {
@@ -215,4 +216,197 @@ export function bridgePlace(place: Matrix4, anchor: BridgeAnchor, out = new Matr
   out.makeRotationY((-anchor.facing * Math.PI) / 180);
   out.setPosition(anchor.at);
   return out.multiply(place);
+}
+
+// --- Her people aboard ----------------------------------------------------------
+
+/** What her seats' clips are, by the seat: the settle beside the helm, the L-bench at her table, her aft bench, her lounger. */
+export type BridgeFamily = 'helm' | 'table' | 'beam' | 'lounger';
+
+/** Each seat's idles (still, shifting, nodding off, talking) and its braced clip, if it has one. */
+export const BRIDGE_SEATS: Readonly<
+  Record<BridgeFamily, { idles: readonly string[]; braced: string | null }>
+> = {
+  helm: { idles: BRIDGE_CLIPS.helmSeat, braced: null },
+  table: { idles: BRIDGE_CLIPS.table, braced: BRIDGE_CLIPS.tableBraced },
+  beam: { idles: BRIDGE_CLIPS.beam, braced: BRIDGE_CLIPS.beamBraced },
+  lounger: { idles: BRIDGE_CLIPS.lounger, braced: null },
+};
+
+/** A seat of hers: its clips, its front edge's point on its top where its clips are made, the way one sat on it faces, the floor before it, and its ends along the edge (x for one facing ahead or astern, z for one facing across). */
+export interface BridgeSeat {
+  name: string;
+  family: BridgeFamily;
+  at: Vector3;
+  facing: number;
+  floor: number;
+  along: [number, number];
+}
+
+/** Her deck as her people need it, from her model's nodes, in her model's frame. */
+export interface BridgeBoat {
+  places: BridgePlaces;
+  /** Her seats, each a bench. */
+  seats: BridgeSeat[];
+  /** Her table: its sides, its ends, its top's height. */
+  table: { x0: number; x1: number; z0: number; z1: number; y: number } | null;
+  /** Her ways (her model's `ways` node): points on her floors and the stretches between them, walked (0) or her ladder (1). */
+  ways: { nodes: Vector3[]; edges: [number, number, number][] } | null;
+}
+
+/** Which clips each seat of her `seats` node's is sat with, by its name: the forward leg of the L-bench is the table's. */
+const FAMILY: Readonly<Record<string, BridgeFamily>> = {
+  helm: 'helm',
+  table: 'table',
+  tableFore: 'table',
+  beam: 'beam',
+  lounger: 'lounger',
+};
+
+/** A boat's model's cruising catamaran's deck (its nodes by name), or null if it has none. */
+export function bridgeBoat(parts: Map<string, Object3D>): BridgeBoat | null {
+  const places = bridgeOf(parts);
+  if (places === null) {
+    return null;
+  }
+  const seats = (parts.get('seats')?.userData as { seats?: Record<string, unknown> } | undefined)
+    ?.seats;
+  const out: BridgeSeat[] = [];
+  for (const [name, family] of Object.entries(FAMILY)) {
+    const s = seats?.[name] as
+      | { at?: unknown; facing?: unknown; floor?: unknown; along?: unknown }
+      | undefined;
+    const at = vec(s?.at);
+    const facing = num(s?.facing);
+    const floor = num(s?.floor);
+    const along = Array.isArray(s?.along) ? s.along.map(num) : [];
+    const [a0, a1] = along;
+    if (at === null || facing === null || floor === null || a0 == null || a1 == null) {
+      continue;
+    }
+    out.push({ name, family, at, facing, floor, along: [Math.min(a0, a1), Math.max(a0, a1)] });
+  }
+  const top = (seats?.table as { top?: unknown } | undefined)?.top;
+  const t = Array.isArray(top) ? top.map(num) : [];
+  const ways = (parts.get('ways')?.userData as { ways?: { nodes?: unknown; edges?: unknown } })
+    ?.ways;
+  const nodes = Array.isArray(ways?.nodes) ? ways.nodes.map(vec) : [];
+  const edges = Array.isArray(ways?.edges) ? ways.edges : [];
+  return {
+    places,
+    seats: out,
+    table:
+      t.length === 5 && t.every((x) => x !== null)
+        ? {
+            x0: t[0] as number,
+            x1: t[1] as number,
+            z0: t[2] as number,
+            z1: t[3] as number,
+            y: t[4] as number,
+          }
+        : null,
+    ways:
+      nodes.length > 0 && nodes.every((n) => n !== null)
+        ? {
+            nodes: nodes as Vector3[],
+            edges: edges.map(
+              (e) =>
+                [Number(e[0] ?? 0), Number(e[1] ?? 0), Number(e[2] ?? 0)] as [
+                  number,
+                  number,
+                  number,
+                ],
+            ),
+          }
+        : null,
+  };
+}
+
+/** The way one facing f (degrees from ahead toward starboard) faces, in her model's frame (x, z). */
+export function facingDir(f: number): [number, number] {
+  const r = (f * Math.PI) / 180;
+  return [Math.sin(r), -Math.cos(r)];
+}
+
+/** How far onto a seat from its front edge, or before it, a station on it may be, m; and how near its top. */
+const ON_EDGE = 0.1;
+const ON_TOP = 0.01;
+
+/**
+ * The seat of hers a station is on: one facing as it faces, the station
+ * within ON_TOP of its top and ON_EDGE of its front edge, between its
+ * ends; null if none.
+ */
+export function seatOf(
+  boat: BridgeBoat,
+  st: { at: readonly number[]; facing: number },
+): BridgeSeat | null {
+  const [x, y, z] = st.at as [number, number, number];
+  for (const s of boat.seats) {
+    const turn = Math.abs(((((st.facing - s.facing) % 360) + 540) % 360) - 180);
+    if (turn > 1 || Math.abs(y - s.at.y) > ON_TOP) {
+      continue;
+    }
+    const [dx, dz] = facingDir(s.facing);
+    const off = (x - s.at.x) * dx + (z - s.at.z) * dz;
+    const along = Math.abs(dx) < 0.5 ? x : z;
+    if (Math.abs(off) <= ON_EDGE && along >= s.along[0] && along <= s.along[1]) {
+      return s;
+    }
+  }
+  return null;
+}
+
+/** Where a station's clips are placed from: its seat's front edge, on its top, abreast of the station, facing as it faces. */
+export function seatAnchor(
+  seat: BridgeSeat,
+  st: { at: readonly number[] },
+  out: BridgeAnchor = { at: new Vector3(), facing: 0 },
+): BridgeAnchor {
+  const [x, , z] = st.at as [number, number, number];
+  const [dx, dz] = facingDir(seat.facing);
+  const off = (seat.at.x - x) * dx + (seat.at.z - z) * dz;
+  out.at.set(x + dx * off, seat.at.y, z + dz * off);
+  out.facing = seat.facing;
+  return out;
+}
+
+/** How far before a seat's front edge one sat there stands up, and sits down from, m: the feet's place, the shins clear of the edge. */
+export const STAND_OFF = 0.21;
+
+/**
+ * Where on her floors a station's walk begins or ends, at a handover: the
+ * helm's stance (station 0, or the helm, −1); before a seat's front edge,
+ * abreast of the station, on the floor before it.
+ */
+export function standPoint(
+  boat: BridgeBoat,
+  st: { at: readonly number[]; facing: number } | undefined,
+  helm: boolean,
+  out = new Vector3(),
+): Vector3 {
+  const seat = st === undefined || helm ? null : seatOf(boat, st);
+  if (seat === null) {
+    return out.copy(boat.places.stance.at);
+  }
+  const a = seatAnchor(seat, st as { at: readonly number[] });
+  const [dx, dz] = facingDir(seat.facing);
+  return out.set(a.at.x + dx * STAND_OFF, seat.floor, a.at.z + dz * STAND_OFF);
+}
+
+/** Seconds up or down her ladder: its clips' length, played once through. */
+export const BRIDGE_LADDER_TIME = 4;
+
+/** Her ladder along a walk: from s0 to s1 m along its path, up it or down, over time seconds. */
+export interface BridgeLadder {
+  s0: number;
+  s1: number;
+  up: boolean;
+  time: number;
+}
+
+/** Her people's walks at a handover, along her ways: from a place on her floors to another, its path and her ladder on it, if it climbs it. */
+export interface BridgeCrew {
+  boat: BridgeBoat;
+  walk(from: Vector3, to: Vector3): { path: CrewPath; ladder: BridgeLadder | null };
 }

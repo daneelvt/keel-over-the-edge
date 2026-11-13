@@ -13,10 +13,26 @@
 // Aboard a cruising yacht, her own (yacht.ts): at her wheel, sat on her
 // bench at ease (the ship's sitting idles, one at a time by the world's
 // time, talking only with someone near) and braced, on her rail sitting up
-// and leaning out, and walking her ways at a crouch.
+// and leaning out, and walking her ways at a crouch. Aboard a cruising
+// catamaran, her own (bridgedeck.ts): on each of her seats its idles (at
+// ease, talking only with someone near) and, at her table and on her aft
+// bench, braced; at her wheel standing, for the helm walking to or from it;
+// walking her ways upright, and up and down her helm's ladder.
 
 import { Euler, Matrix4, Quaternion, Vector3 } from 'three';
 import type { BoatStation, StationPose } from '../../catalog';
+import {
+  BRIDGE_CLIPS,
+  BRIDGE_NOT_FOR_MACHINES,
+  BRIDGE_SEATS,
+  BRIDGE_WALK_SPEED,
+  type BridgeBoat,
+  type BridgeLadder,
+  bridgePlace,
+  facingDir,
+  seatAnchor,
+  seatOf,
+} from './bridgedeck';
 import {
   CAT_CLIPS,
   type CatBoat,
@@ -146,6 +162,8 @@ export interface PoseInput {
   idle?: string | undefined;
   /** Aboard a cruising yacht, her ways (crewrules.ts's waysOf): where on her rail its clips are placed from. */
   ways?: YachtWays | null;
+  /** Aboard a cruising catamaran, her deck: her people on her own clips. */
+  bridge?: BridgeBoat | null;
   /** The boat as it lies, for those in the water: its heel and pitch (radians), heave (m), hull and pivot's height. */
   level?: Level | null;
 }
@@ -167,7 +185,7 @@ export interface Level {
 export function spotStance(
   input: Pick<
     PoseInput,
-    'stations' | 'seat' | 'clips' | 'cat' | 'aft' | 'cruiser' | 'idle' | 'ways'
+    'stations' | 'seat' | 'clips' | 'cat' | 'aft' | 'cruiser' | 'idle' | 'ways' | 'bridge'
   >,
   at: CrewSpot,
   out: 0 | 1,
@@ -181,6 +199,10 @@ export function spotStance(
   }
   const yacht = input.cruiser ?? null;
   if (yacht !== null && yachtStance(input, yacht, at, out, t, into)) {
+    return true;
+  }
+  const bridge = input.bridge ?? null;
+  if (bridge !== null && bridgeStance(input, bridge, at, out, t, into)) {
     return true;
   }
   if (at.station < 0 || st.windward === true) {
@@ -296,6 +318,168 @@ function yachtStance(
   return true;
 }
 
+/**
+ * Aboard a cruising catamaran, a place's stance on her own clips, into
+ * into: the helm's (-1) standing at her wheel; on a seat of hers, the idle
+ * asked for sitting up (its first if none), braced in a breeze where it
+ * has a braced clip (at her table and on her aft bench), the hand or the
+ * leg toward the table's middle or her aft bench's ends; each placed from
+ * its seat's front edge abreast of the station. False if the clip is not
+ * there.
+ */
+function bridgeStance(
+  input: Pick<PoseInput, 'stations' | 'clips' | 'idle'>,
+  bridge: BridgeBoat,
+  at: CrewSpot,
+  out: 0 | 1,
+  t: number,
+  into: Stance,
+): boolean {
+  const st = input.stations[Math.max(0, at.station)];
+  if (st === undefined) {
+    return false;
+  }
+  let name: string;
+  if (at.station < 0) {
+    name = BRIDGE_CLIPS.wheel;
+    anchor.at.copy(bridge.places.stance.at);
+    anchor.facing = 0;
+  } else {
+    const seat = seatOf(bridge, st);
+    if (seat === null) {
+      return false;
+    }
+    const family = BRIDGE_SEATS[seat.family];
+    seatAnchor(seat, st, anchor);
+    const idle = input.idle !== undefined && family.idles.includes(input.idle) ? input.idle : null;
+    name =
+      out === 1 && family.braced !== null
+        ? `${family.braced}${bracedSide(bridge, seat.family, anchor) < 0 ? '-port' : ''}`
+        : (idle ?? (family.idles[0] as string));
+  }
+  const c = input.clips.get(name) ?? null;
+  if (c === null || c.place === null) {
+    return false;
+  }
+  into.clip = c;
+  into.t = t;
+  placeStance(into, bridgePlace(c.place, anchor, m));
+  return true;
+}
+
+const anchor = { at: new Vector3(), facing: 0 };
+
+/**
+ * Aboard a cruising catamaran, the side a braced clip is on at a seat's
+ * place: at her table, its right hand on the table's edge (+1), or its
+ * mirror's left (−1), whichever is toward the table's middle; on her aft
+ * bench, its left leg braced out (+1), or its mirror's right, whichever
+ * is toward the nearer end of the bench.
+ */
+export function bracedSide(
+  bridge: BridgeBoat,
+  family: string,
+  at: { at: Vector3; facing: number },
+): number {
+  const [dx, dz] = facingDir(at.facing);
+  // The figure's right, facing that way: ahead turned a quarter to starboard.
+  const rx = -dz;
+  const rz = dx;
+  if (family === 'table' && bridge.table !== null) {
+    const t = bridge.table;
+    const toward = ((t.x0 + t.x1) / 2 - at.at.x) * rx + ((t.z0 + t.z1) / 2 - at.at.z) * rz;
+    return toward >= 0 ? 1 : -1;
+  }
+  const seat = bridge.seats.find((s) => s.family === family);
+  if (seat === undefined) {
+    return 1;
+  }
+  const along = Math.abs(dx) < 0.5 ? at.at.x : at.at.z;
+  const middle = (seat.along[0] + seat.along[1]) / 2;
+  // Along the edge, the figure's left is the way of −right.
+  const left = Math.abs(dx) < 0.5 ? -rx : -rz;
+  return (along - middle) * left >= 0 ? 1 : -1;
+}
+
+/** The idles on a cruising catamaran's seat this look can play now: a machine has not some, and talking needs someone near. */
+function seatIdle(input: PoseInput, idles: readonly string[], company: boolean, i: number): string {
+  const name = idles[i] as string;
+  const talk = i === 3;
+  return input.clips.has(name) &&
+    !(input.machine === true && BRIDGE_NOT_FOR_MACHINES.includes(name)) &&
+    (company || !talk)
+    ? name
+    : (idles[0] as string);
+}
+
+/** Of her ladder, how much at each end the climb is blended with the walk: in from it, and out to it. */
+const LADDER_BLEND = 0.08;
+
+/**
+ * Aboard a cruising catamaran, s along a walk with her ladder on it, into
+ * into: the ladder's clip, up from its foot or down from its head, played
+ * through as far as they have come up or down it; placed from where it was
+ * made. False if the clip is not there.
+ */
+function ladderStance(
+  input: PoseInput,
+  bridge: BridgeBoat,
+  ladder: BridgeLadder,
+  s: number,
+  into: Stance,
+): boolean {
+  const name = ladder.up ? BRIDGE_CLIPS.up : BRIDGE_CLIPS.down;
+  const c = input.clips.get(name) ?? null;
+  if (c === null || c.place === null) {
+    return false;
+  }
+  const f = Math.max(0, Math.min(1, (s - ladder.s0) / Math.max(1e-6, ladder.s1 - ladder.s0)));
+  into.clip = c;
+  into.t = Math.min(f * c.duration, c.duration - 1e-3);
+  placeStance(
+    into,
+    bridgePlace(c.place, ladder.up ? bridge.places.foot : bridge.places.landing, m),
+  );
+  return true;
+}
+
+/**
+ * Aboard a cruising catamaran, her upright walk s along a path into into:
+ * whole steps on each stretch walked (from its start, or from the ladder's
+ * head or foot, to the next), the feet together at each end; they keep
+ * their place on her floor, a step's length the walk's own.
+ */
+function bridgeWalk(
+  clips: Map<string, Clip>,
+  rig: Rig,
+  path: CrewPath,
+  ladder: BridgeLadder | null,
+  s: number,
+  into: Stance,
+): boolean {
+  const c = clips.get(BRIDGE_CLIPS.walk) ?? null;
+  const yaw = path.at(s, along);
+  into.clip = c;
+  const stride = c === null ? 1 : (c.duration * BRIDGE_WALK_SPEED) / 2;
+  let from = 0;
+  let to = path.length;
+  if (ladder !== null) {
+    if (s <= ladder.s0) {
+      to = ladder.s0;
+    } else {
+      from = ladder.s1;
+    }
+  }
+  const length = Math.max(1e-6, to - from);
+  const paces = Math.max(1, Math.round(length / stride));
+  const pace = (paces * stride) / length;
+  into.t = (c === null ? 0 : feetTogether(c, rig)) + ((s - from) * pace) / BRIDGE_WALK_SPEED;
+  into.at.set(along.x, along.y + (c?.place?.elements[13] ?? 0), along.z);
+  into.yaw = yaw;
+  into.tilt.identity();
+  return c !== null;
+}
+
 /** The idles on a cruising yacht's bench this look can play now: a machine has not some, and talking needs someone near. */
 function benchIdle(input: PoseInput, company: boolean, i: number): string {
   const name = YACHT_CLIPS.bench[i] as string;
@@ -375,6 +559,7 @@ export function poseMember(body: CrewBody, member: CrewMember, input: PoseInput)
   how.top = Number.NEGATIVE_INFINITY;
   let upright = input.life.upright;
   const walk = input.cruiser != null ? YACHT_CLIPS.cockpit : CROUCH_CLIPS.walk;
+  const bridge = input.bridge ?? null;
   const ahead = input.cruiser != null ? YACHT_WALK_AHEAD : 0;
   how.legs = 1;
   how.hands = Number.NEGATIVE_INFINITY;
@@ -382,13 +567,21 @@ export function poseMember(body: CrewBody, member: CrewMember, input: PoseInput)
   input.idle = undefined;
   const at0: CrewSpot =
     mv === null || mv.t < 0 ? (mv?.from ?? { station: member.station, side: member.side }) : mv.to;
-  if (input.cruiser != null && input.stations[at0.station]?.pose === 'bench') {
-    idleAt(member.seat, input.world ?? 0, YACHT_CLIPS.bench.length, idle);
-    input.idle = benchIdle(input, member.company === true, idle.now);
+  const st0 = input.stations[at0.station];
+  const seat0 =
+    bridge !== null && st0 !== undefined && at0.station >= 0 ? seatOf(bridge, st0) : null;
+  const idles = seat0 === null ? null : BRIDGE_SEATS[seat0.family].idles;
+  const pick =
+    idles !== null
+      ? (i: number): string => seatIdle(input, idles, member.company === true, i)
+      : (i: number): string => benchIdle(input, member.company === true, i);
+  if ((input.cruiser != null && st0?.pose === 'bench') || idles !== null) {
+    idleAt(member.seat, input.world ?? 0, idles?.length ?? YACHT_CLIPS.bench.length, idle);
+    input.idle = pick(idle.now);
     if ((mv === null || mv.t < 0) && member.lean <= 0 && idle.f < 1) {
       // One idle going over into the next.
       const now = input.idle;
-      input.idle = benchIdle(input, member.company === true, idle.was);
+      input.idle = pick(idle.was);
       spotStance(input, at0, 0, t, a);
       input.idle = now;
       if (!spotStance(input, at0, 0, t, b)) {
@@ -418,6 +611,10 @@ export function poseMember(body: CrewBody, member: CrewMember, input: PoseInput)
     how.via = BY_THE_BOW;
     how.carry = true;
     const pose = lean >= 0.5 ? 1 : 0;
+    if (bridge !== null) {
+      poseBridgeMove(body, input, bridge, mv, pose, t, a, b, how, rise, s, sit);
+      return;
+    }
     if (rise < 1) {
       spotStance(input, mv.from, pose, t, a);
       walkStance(input.clips, body.rig, mv.path, 0, b, walk, ahead);
@@ -467,6 +664,69 @@ export function poseMember(body: CrewBody, member: CrewMember, input: PoseInput)
   const was = life.upright;
   life.upright = upright;
   body.pose(a, b, how, input.duck, life);
+  life.upright = was;
+}
+
+/**
+ * Aboard a cruising catamaran, someone walking her ways at a handover:
+ * getting up from their seat (or from her wheel) into the walk, along her
+ * floors upright, up or down her ladder on its clip (blended with the walk
+ * at its foot and its head), and sitting down at the end (or standing at
+ * her wheel).
+ */
+function poseBridgeMove(
+  body: CrewBody,
+  input: PoseInput,
+  bridge: BridgeBoat,
+  mv: NonNullable<CrewMember['moving']>,
+  pose: 0 | 1,
+  t: number,
+  a: Stance,
+  b0: Stance,
+  how: typeof theBlend,
+  rise: number,
+  s: number,
+  sit: number,
+): void {
+  let b: Stance | null = b0;
+  const ladder = mv.ladder ?? null;
+  const rig = body.rig;
+  if (rise < 1) {
+    spotStance(input, mv.from, pose, t, a);
+    bridgeWalk(input.clips, rig, mv.path, ladder, 0, b);
+    how.f = smooth(rise);
+    how.narrowB = 0;
+    how.arc = mv.from.station < 0 ? 0 : RISE_ARC * 0.5;
+  } else if (sit <= 0) {
+    if (ladder !== null && s > ladder.s0 && s < ladder.s1) {
+      const f = (s - ladder.s0) / (ladder.s1 - ladder.s0);
+      ladderStance(input, bridge, ladder, s, a);
+      if (f < LADDER_BLEND) {
+        bridgeWalk(input.clips, rig, mv.path, ladder, ladder.s0, b);
+        how.f = 1 - smooth(f / LADDER_BLEND);
+      } else if (f > 1 - LADDER_BLEND) {
+        bridgeWalk(input.clips, rig, mv.path, ladder, ladder.s1, b);
+        how.f = smooth((f - 1 + LADDER_BLEND) / LADDER_BLEND);
+      } else {
+        b = null;
+      }
+    } else {
+      bridgeWalk(input.clips, rig, mv.path, ladder, s, a);
+      b = null;
+    }
+  } else {
+    bridgeWalk(input.clips, rig, mv.path, ladder, mv.path.length, a);
+    spotStance(input, mv.to, pose, t, b);
+    how.f = smooth(sit);
+    how.arc = mv.to.station < 0 ? 0 : RISE_ARC * 0.5;
+  }
+  if (a.clip === null && b !== null) {
+    [a, b] = [b, null];
+  }
+  const life = input.life;
+  const was = life.upright;
+  life.upright = 0;
+  body.pose(a, b, how, 0, life);
   life.upright = was;
 }
 

@@ -141,7 +141,7 @@ import {
 import { chordAt, chordAtHalf, markPlace } from './machinemark';
 import { lineMaterial, litMaterial, sailGlow } from './materials';
 import { placeSailor, SAILING, type SailorFrame, type SailorPlace } from './sailor';
-import { namesBridgeClips } from './sailors/bridgedeck';
+import { bridgeOf, namesBridgeClips } from './sailors/bridgedeck';
 import { namesCatClips } from './sailors/cat';
 import { type ArtFiles, type FleetLook, FleetLooks } from './sailors/fleetlooks';
 import {
@@ -805,6 +805,7 @@ export class FleetView {
             wheel,
             rudderMax: kind.physics.foils.rudderAngle * DEG,
             yacht: this.#yachted ? yachtOf(nearParts.objects) : null,
+            bridge: this.#bridged ? bridgeOf(nearParts.objects) : null,
           }
         : solid !== null && nearParts.hinge !== null && nearParts.grip !== null
           ? {

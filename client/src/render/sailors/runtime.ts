@@ -51,6 +51,14 @@
 // changes the helm stands, lets go and walks across between the wheels at
 // a crouch, facing the way, to stand at the other.
 //
+// A cruising catamaran (a kind whose art names her people's clips,
+// bridgedeck.ts) has her helm on her own clips at her one wheel, off her
+// centreline: sat on the settle behind it in a light wind, the hands on
+// the thighs, and standing at it in a breeze, the hands on the rim, by her
+// apparent wind alone (she barely heels); stepping back and sitting down,
+// or getting up and stepping forward, the feet carried. The helm never
+// crosses; the look to windward is the wind's side, as at any wheel.
+//
 // Everything here is in the boat model's frame (x to starboard, y up, z
 // aft), unheeled; the boat's heel turns the model. A boat other than the
 // one the clips were placed in moves them to its own seat (restage.ts).
@@ -61,6 +69,7 @@ import { Euler, Matrix4, Quaternion, Vector3 } from 'three';
 export type { CatBoat } from './cat';
 
 import { CLIMBING, IN_WATER, ON_BOARD } from '../sailor';
+import { BRIDGE_CLIPS, type BridgePlaces, bridgePlace } from './bridgedeck';
 import {
   type Aboard,
   CAT_CLIPS,
@@ -288,6 +297,8 @@ export interface SailorBoat {
   cat?: CatBoat | null;
   /** A cruising yacht's places, whose people's clips are placed from her model: her helm at her wheel on her own clips, if it has them. */
   yacht?: YachtPlaces | null;
+  /** A cruising catamaran's places, whose people's clips are placed from her model: her helm at her wheel on her own clips, if it has them. */
+  bridge?: BridgePlaces | null;
 }
 
 /** The physics' moment for the sailor. */
@@ -404,6 +415,8 @@ export class SailorRuntime {
   readonly #pose: Pose;
   readonly #scratch: Pose;
   readonly #from: Pose;
+  /** Aboard a cruising catamaran, her helm sat, blended with standing. */
+  readonly #satPose: Pose;
   readonly #habitPose: Pose;
   readonly #layers: SailorLayers;
   readonly #springs: Springs;
@@ -471,6 +484,8 @@ export class SailorRuntime {
   readonly #beside = new Place();
   /** Aboard a cruising yacht: whether her helm is on her own clips; the radius of the wheel the wheel's clip was made at. */
   readonly #yachted: boolean;
+  /** Aboard a cruising catamaran: whether her helm is on her own clips. */
+  readonly #bridged: boolean;
   readonly #clipRadius: number;
   /** Aboard a cruising yacht: how far sat by the wheel (0 standing, 1 sat), and whether the wind has the helm sit. */
   #seat = 0;
@@ -541,6 +556,7 @@ export class SailorRuntime {
     this.#pose = new Pose(n).rest(rig);
     this.#scratch = new Pose(n).rest(rig);
     this.#from = new Pose(n).rest(rig);
+    this.#satPose = new Pose(n).rest(rig);
     this.#habitPose = new Pose(n).rest(rig);
     // A machine has its own life: no breath, snapped glances, its lamps.
     this.#layers = machine ? new MachineLayers(rig, seed) : new Layers(rig, seed);
@@ -558,7 +574,10 @@ export class SailorRuntime {
       boat.yacht != null &&
       [YACHT_CLIPS.wheel, YACHT_CLIPS.seated].every(sided) &&
       !!this.#clips.get(YACHT_CLIPS.cockpit)?.place;
-    this.#clipRadius = this.#yachted && boat.wheel ? boat.wheel.radius : CLIP_WHEEL_RADIUS;
+    this.#bridged =
+      !!boat.wheel && boat.bridge != null && [BRIDGE_CLIPS.wheel, BRIDGE_CLIPS.seated].every(sided);
+    this.#clipRadius =
+      (this.#yachted || this.#bridged) && boat.wheel ? boat.wheel.radius : CLIP_WHEEL_RADIUS;
     if (boat.wheel) {
       this.#gripsAtRest(boat.wheel);
     }
@@ -569,7 +588,12 @@ export class SailorRuntime {
     return this.#yachted;
   }
 
-  /** Aboard a cruising yacht, how far her helm is sat by the wheel: 0 standing, 1 sat. */
+  /** Aboard a cruising catamaran, whether her helm is on her own clips. */
+  get bridged(): boolean {
+    return this.#bridged;
+  }
+
+  /** Aboard a cruising yacht or catamaran, how far her helm is sat by the wheel: 0 standing, 1 sat. */
   get seat(): number {
     return this.#seat;
   }
@@ -586,7 +610,10 @@ export class SailorRuntime {
    */
   #gripsAtRest(wheel: WheelHelm): void {
     const n = wheel.spokes;
-    const c = this.#clip(this.#yachted ? YACHT_CLIPS.wheel : CLIPS.wheel, 1);
+    const c = this.#clip(
+      this.#yachted ? YACHT_CLIPS.wheel : this.#bridged ? BRIDGE_CLIPS.wheel : CLIPS.wheel,
+      1,
+    );
     const rig = this.rig;
     const pose = this.#scratch;
     pose.rest(rig);
@@ -1172,6 +1199,10 @@ export class SailorRuntime {
       this.#atYachtWheel(s, dt, wheel, side, pose, place);
       return;
     }
+    if (this.#bridged) {
+      this.#atBridgeWheel(s, dt, wheel, want, pose, place);
+      return;
+    }
     if (want !== this.#windward && this.#windwardChange >= 1) {
       this.#windward = want;
       this.#windwardChange = 0;
@@ -1350,6 +1381,99 @@ export class SailorRuntime {
     pose.copy(scratch);
     place.at.copy(at);
     place.turn.copy(turn);
+  }
+
+  /**
+   * Aboard a cruising catamaran, at her wheel on her own clips: looking to
+   * windward (the two sides blended while the wind changes side), sat on
+   * the settle behind the stance or standing at the wheel as the apparent
+   * wind has her, blended as the helm steps back and sits down (or gets up
+   * and steps forward), the feet carried; and now and then the habit,
+   * standing.
+   */
+  #atBridgeWheel(
+    s: SailorMoment,
+    dt: number,
+    wheel: WheelHelm,
+    want: number,
+    pose: Pose,
+    place: Place,
+  ): void {
+    const bridge = this.boat.bridge as BridgePlaces;
+    this.#sits = this.#sits ? s.windSpeed < STAND_WIND : s.windSpeed < SIT_WIND;
+    if (Number.isNaN(this.#across)) {
+      // Met first: as the wind has the helm.
+      this.#windward = want;
+      this.#windwardChange = 1;
+      this.#seat = this.#sits ? 1 : 0;
+    }
+    this.#across = 0;
+    if (want !== this.#windward && this.#windwardChange >= 1) {
+      this.#windward = want;
+      this.#windwardChange = 0;
+    }
+    this.#windwardChange = Math.min(1, this.#windwardChange + dt / WINDWARD_CHANGE);
+    const step = dt / SEAT_TIME;
+    this.#seat += Math.max(-step, Math.min(step, (this.#sits ? 1 : 0) - this.#seat));
+    this.#standFor(wheel);
+    const t = s.time + this.#helmOffset;
+    const side = this.#windward;
+    // Standing at the wheel, looking to windward.
+    this.#sideways(BRIDGE_CLIPS.wheel, side, t, pose);
+    const stand = this.#clip(BRIDGE_CLIPS.wheel, side);
+    place.set(bridgePlace(stand?.place ?? m2.identity(), bridge.stance, m));
+    if (this.#seat <= 0) {
+      if (this.#habit === null) {
+        this.#maybeHabit(s, dt, 0, BRIDGE_CLIPS.habit, 1);
+      }
+      if (this.#habit !== null) {
+        this.#habitStep(dt, pose);
+      }
+      return;
+    }
+    this.#habit = null;
+    const sat = this.#clip(BRIDGE_CLIPS.seated, side);
+    const seatPlace = this.#seatPlace.set(
+      bridgePlace(sat?.place ?? m2.identity(), bridge.stance, m),
+    );
+    if (this.#seat >= 1) {
+      this.#sideways(BRIDGE_CLIPS.seated, side, t, pose);
+      place.copy(seatPlace);
+      return;
+    }
+    // Between: stepping back to the settle and sitting down on it (or up
+    // and forward), the feet carried from where standing has them to where
+    // sat has them.
+    const scratch = this.#satPose;
+    this.#sideways(BRIDGE_CLIPS.seated, side, t, scratch);
+    const f = smooth(this.#seat);
+    this.#feetOf(pose, place, this.#feetA);
+    this.#feetOf(scratch, seatPlace, this.#feetB);
+    pose.mix(scratch, f);
+    place.at.lerp(seatPlace.at, f);
+    place.turn.slerp(seatPlace.turn, f);
+    const feet = this.#feetC;
+    for (let k = 0; k < 2; k++) {
+      carried(
+        this.#feetA[k] as Vector3,
+        this.#feetB[k] as Vector3,
+        f,
+        feet[k] as Vector3,
+        Number.NEGATIVE_INFINITY,
+      );
+    }
+    this.#feetTo = feet;
+  }
+
+  /** A clip at the wheel looking to windward on side, the other side's blended in while the wind changes side, into out. */
+  #sideways(name: string, side: number, t: number, out: Pose): void {
+    this.#sample(name, side, t, true, out);
+    if (this.#windwardChange < 1) {
+      const other = this.#scratch;
+      this.#sample(name, -side, t, true, other);
+      other.mix(out, smooth(this.#windwardChange));
+      out.copy(other);
+    }
   }
 
   readonly #placeTurn = new Quaternion();

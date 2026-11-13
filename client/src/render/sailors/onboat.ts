@@ -42,7 +42,7 @@ import type { Boat as BoatKind } from '../../catalog';
 import type { BoatPose } from '../../predict/blend';
 import { RECORDS } from '../../predict/layout.gen';
 import { fallToEdge, glowMaterial, litMaterial } from '../materials';
-import { namesBridgeClips } from './bridgedeck';
+import { bridgeOf, namesBridgeClips } from './bridgedeck';
 import { aboard, CREW_BESIDE, namesCatClips, standOf } from './cat';
 import { Clip } from './clips';
 import { type SailorColours, sailorColours, sailorLight } from './material';
@@ -302,6 +302,8 @@ export class BoatSailor {
         wheel,
         // Aboard a cruising yacht, at her wheel on her own clips.
         yacht: cruiser === null ? null : yachtOf(parts),
+        // Aboard a cruising catamaran, at her wheel on her own clips.
+        bridge: bridgedeck === null ? null : bridgeOf(parts),
       };
       return new BoatSailor(model, parts, deck, rig, clips, boat, urls, renderer, seed, machine);
     }
