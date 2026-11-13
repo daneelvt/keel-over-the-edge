@@ -483,12 +483,20 @@ export function remarks(d: LogDay): string[] {
   }
   const found: string[] = [];
   const bumps: string[] = [];
+  const firsts: string[] = [];
   for (const e of d.entries) {
     if (e.kind === 'bump') {
       bumps.push(bumpWords(e));
+    } else if (e.kind === 'found') {
+      const k = kindName(e.group ?? '', e.find ?? '');
+      firsts.push(k.charAt(0).toLowerCase() + k.slice(1));
     } else {
       found.push(entryWords(e));
     }
+  }
+  // The day's first finds of kinds, in one remark after its other finds.
+  if (firsts.length > 0) {
+    found.push(`New to the collection: ${joined([...new Set(firsts)])}`);
   }
   if (bumps.length > BUMPS_TOLD) {
     const more = bumps.length - BUMPS_TOLD;

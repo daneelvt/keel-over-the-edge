@@ -89,9 +89,9 @@
   inset: -3px -1px;
 }
 
-.log-key[aria-selected="true"],
-.log-key[aria-pressed="true"],
-.log-key[aria-expanded="true"] {
+.log-sheet button.log-key[aria-selected="true"],
+.log-sheet button.log-key[aria-pressed="true"],
+.log-sheet button.log-key[aria-expanded="true"] {
   background: var(--chart-ink);
   color: var(--paper);
 }

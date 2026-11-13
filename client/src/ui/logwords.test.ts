@@ -81,11 +81,16 @@ describe('a day', () => {
           galePlace: 'Gull Reach',
         }),
       ],
-      entries: [{ at: 0, kind: 'charted', title: 'Keyhole Rock' }],
+      entries: [
+        { at: 0, kind: 'found', group: 'edge', find: 'within-20m' },
+        { at: 0, kind: 'charted', title: 'Keyhole Rock' },
+        { at: 0, kind: 'found', group: 'weather', find: 'gale-ridden-out' },
+      ],
     };
     expect(remarks(d)).toEqual([
       'Rode out a gale off Gull Reach',
       'Charted Keyhole Rock, first',
+      'New to the collection: within 20 m and a gale ridden out',
       'Went over the falls off the Skerries, and home again',
     ]);
   });

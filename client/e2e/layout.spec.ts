@@ -2981,6 +2981,14 @@ async function logFaults(page: Page, collection: boolean): Promise<string[]> {
         out.push(`“${k.textContent?.slice(0, 20)}” is ${Math.round(r.height)} px tall`);
       }
     }
+    // The keys chosen, inked in.
+    for (const k of sheet.querySelectorAll(
+      'button.log-key[aria-selected=true], button.log-key[aria-pressed=true]',
+    )) {
+      if (getComputedStyle(k).backgroundColor !== 'rgb(59, 46, 34)') {
+        out.push(`the chosen key “${k.textContent}” is not inked in`);
+      }
+    }
     // No words under 13 px.
     const walker = document.createTreeWalker(sheet, NodeFilter.SHOW_TEXT);
     for (let n = walker.nextNode(); n !== null; n = walker.nextNode()) {
