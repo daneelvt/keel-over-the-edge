@@ -164,6 +164,17 @@ test('the news while waiting to watch: News beside Watch another opens the sheet
   await page.evaluate(() => globalThis.keel.watchWaiting('Iron Mary'));
   const plate = page.locator('.watch-waiting [data-readout="watching"]');
   await expect(plate).toContainText('Iron Mary has left the water.');
+  // The plate keeps within the screen, News a key the size of its others.
+  const keys = await plate.evaluate((p) => ({
+    plate: p.getBoundingClientRect().toJSON(),
+    keys: [...p.querySelectorAll('button')].map((k) => k.getBoundingClientRect().toJSON()),
+  }));
+  expect(keys.plate.left).toBeGreaterThanOrEqual(0);
+  expect(keys.plate.right).toBeLessThanOrEqual(360);
+  for (const k of keys.keys) {
+    expect(k.width).toBeLessThan(120);
+    expect(k.height).toBeGreaterThanOrEqual(43.5);
+  }
   await plate.getByRole('button', { name: 'News' }).click();
   // The sheet on its own, over the view: its stories, no tap to a chart.
   const sheet = page.locator('.news-alone-screen .news-sheet');

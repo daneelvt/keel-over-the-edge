@@ -353,8 +353,8 @@ function LastNews({ s }: { s: NewsStory }) {
   return (
     <section class="watch-card-part" aria-label={LAST_IN_THE_NEWS}>
       <h3>{LAST_IN_THE_NEWS}</h3>
-      <button type="button" class="watch-news" onClick={() => openNews(s.day ?? null)}>
-        <span class="watch-news-head">{headWords(s.head)}.</span> {storyText(s)}
+      <button type="button" class="watch-last-news" onClick={() => openNews(s.day ?? null)}>
+        <span class="watch-last-news-head">{headWords(s.head)}.</span> {storyText(s)}
       </button>
     </section>
   );

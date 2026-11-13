@@ -2163,7 +2163,7 @@ test('the list of sailors to watch and the card fit every screen, Watch in view'
     }
     // Its last story in the news, one line within the card.
     const line = await page
-      .locator('.watch-card .watch-news')
+      .locator('.watch-card .watch-last-news')
       .evaluate((e) => ({
         tall: e.getBoundingClientRect().height,
         over: e.scrollHeight - e.clientHeight,

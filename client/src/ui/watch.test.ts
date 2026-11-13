@@ -740,10 +740,10 @@ describe('the card about a sailor', () => {
       [CopyWatchLink],
     );
     expect(lines(t, LAST_IN_THE_NEWS)).toEqual([LAST_IN_THE_NEWS]);
-    expect(text(find(t, (v) => v.props.class === 'watch-news'))).toBe(
+    expect(text(find(t, (v) => v.props.class === 'watch-last-news'))).toBe(
       'Off the skerries. Iron Mary ⚙ passed 8 m from the lip, nearer than any boat this world.',
     );
-    expect(find(drawn(card), (v) => v.props.class === 'watch-news')).toHaveLength(0);
+    expect(find(drawn(card), (v) => v.props.class === 'watch-last-news')).toHaveLength(0);
   });
 
   test('the sailor’s portrait in the heading’s row, from the look code; none without one', () => {

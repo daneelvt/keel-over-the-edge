@@ -381,7 +381,7 @@
 }
 
 /* The sailor's last story, one line: a tap opens the news on its day. */
-.watch-news {
+.watch-last-news {
   display: block;
   box-sizing: border-box;
   width: 100%;
@@ -399,7 +399,7 @@
   cursor: pointer;
 }
 
-.watch-news-head {
+.watch-last-news-head {
   font-variant-caps: small-caps;
   letter-spacing: 0.04em;
 }
