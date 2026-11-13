@@ -449,17 +449,17 @@ const ON_SEAT = 0.04;
 /** The people's stations, in the order seats fill: the helm, beside the helm, the L-bench, the aft bench, the lounger. */
 const STATIONS: { at: Vec3; pose: string; facing: number }[] = [
   { at: STANCE, pose: 'standing', facing: 0 },
-  { at: [-1.95, SETTLE_TOP, SETTLE_FORE + ON_SEAT], pose: 'seated', facing: 0 },
-  { at: [0.85, SEAT_TOP, LBENCH_LEG - ON_SEAT], pose: 'seated', facing: 180 },
-  { at: [1.45, SEAT_TOP, LBENCH_LEG - ON_SEAT], pose: 'seated', facing: 180 },
-  { at: [LBENCH_FRONT + ON_SEAT, SEAT_TOP, 2.8], pose: 'seated', facing: 270 },
-  { at: [LBENCH_FRONT + ON_SEAT, SEAT_TOP, 3.35], pose: 'seated', facing: 270 },
-  { at: [LBENCH_FRONT + ON_SEAT, SEAT_TOP, 3.9], pose: 'seated', facing: 270 },
-  { at: [0.25, SEAT_TOP, AFT_FRONT + ON_SEAT], pose: 'seated', facing: 0 },
-  { at: [0.85, SEAT_TOP, AFT_FRONT + ON_SEAT], pose: 'seated', facing: 0 },
-  { at: [1.45, SEAT_TOP, AFT_FRONT + ON_SEAT], pose: 'seated', facing: 0 },
-  { at: [LOUNGER_FRONT - ON_SEAT, LOUNGER_TOP, 4.05], pose: 'seated', facing: 90 },
-  { at: [LOUNGER_FRONT - ON_SEAT, LOUNGER_TOP, 4.5], pose: 'seated', facing: 90 },
+  { at: [-1.95, SETTLE_TOP, SETTLE_FORE + ON_SEAT], pose: 'bench', facing: 0 },
+  { at: [0.85, SEAT_TOP, LBENCH_LEG - ON_SEAT], pose: 'bench', facing: 180 },
+  { at: [1.45, SEAT_TOP, LBENCH_LEG - ON_SEAT], pose: 'bench', facing: 180 },
+  { at: [LBENCH_FRONT + ON_SEAT, SEAT_TOP, 2.8], pose: 'bench', facing: 270 },
+  { at: [LBENCH_FRONT + ON_SEAT, SEAT_TOP, 3.35], pose: 'bench', facing: 270 },
+  { at: [LBENCH_FRONT + ON_SEAT, SEAT_TOP, 3.9], pose: 'bench', facing: 270 },
+  { at: [0.25, SEAT_TOP, AFT_FRONT + ON_SEAT], pose: 'bench', facing: 0 },
+  { at: [0.85, SEAT_TOP, AFT_FRONT + ON_SEAT], pose: 'bench', facing: 0 },
+  { at: [1.45, SEAT_TOP, AFT_FRONT + ON_SEAT], pose: 'bench', facing: 0 },
+  { at: [LOUNGER_FRONT - ON_SEAT, LOUNGER_TOP, 4.05], pose: 'bench', facing: 90 },
+  { at: [LOUNGER_FRONT - ON_SEAT, LOUNGER_TOP, 4.5], pose: 'bench', facing: 90 },
 ];
 
 // --- Materials ---------------------------------------------------------------
@@ -2651,6 +2651,16 @@ function seatsData(): Record<string, unknown> {
       along: v([LBENCH_LEG, LBENCH_AFT, 0]).slice(0, 2),
       top: v([TABLE.x0, TABLE.x1, TABLE.z0]).concat(round4(TABLE.z1), round4(TABLE.y)),
     },
+    // The L-bench's forward leg, along the bulkhead facing aft, its clips
+    // the table's turned: from its inboard end to the long leg's front.
+    tableFore: {
+      at: v([STATIONS[2]?.at[0] ?? 0, SEAT_TOP, LBENCH_LEG]),
+      facing: 180,
+      floor: SOLE,
+      back: round4(LBENCH_LEG - HOUSE_AFT - 0.02),
+      backTop: round4(SEAT_TOP + 0.4 - SOLE),
+      along: v([LBENCH_INNER, LBENCH_FRONT, 0]).slice(0, 2),
+    },
     beam: {
       at: v([0.85, SEAT_TOP, AFT_FRONT]),
       facing: 0,
@@ -2687,6 +2697,62 @@ function seatsData(): Record<string, unknown> {
       platform: [PLAT_OUT, LADDER_IN, PLAT_FORE, PLAT_AFT].map(round4),
     },
   };
+}
+
+/**
+ * Her people's ways, as points on her floors (x, y, z) and the stretches
+ * between two of them, each walked (0) or her helm's ladder (1), for a
+ * handover's walk: on the cockpit's sole, a lane along the port side of
+ * the table from aft of it to forward of it, inboard of the feet of those
+ * sat on the aft bench and at the forward leg's end; the gaps between the
+ * L-bench and the table, and between the table and the aft bench, where
+ * those sat there stand up; from the lane aft to the ladder's foot, clear
+ * of the knees of those on the lounger; up the ladder to its landing; and
+ * on the platform, from the landing forward of the settle's knees to aft
+ * of the wheel, and aft to the stance. Nobody walks her side decks, her
+ * roof or her nets.
+ */
+const LANE_X = 0.3;
+const GAP_FORE = (LBENCH_LEG + TABLE.z0) / 2;
+const GAP_STAR = (LBENCH_FRONT + TABLE.x1) / 2;
+const GAP_AFT = (AFT_FRONT + TABLE.z1) / 2;
+const LANE_AFT = 3.45;
+const HELM_LANE = 1.85;
+function waysData(): { nodes: number[][]; edges: number[][] } {
+  const v = (p: Vec3): number[] => p.map(round4);
+  const mid = (PLAT_IN + LADDER_IN) / 2;
+  const nodes: Vec3[] = [
+    // 0 the ladder's foot, 1 off it forward of the lounger, 2 the lane's
+    // after end, 3 its forward end, 4 the forward gap's starboard end, 5
+    // the long gap's after end, 6 the aft gap's port end.
+    [mid, SOLE, LADDER_FOOT + 0.23],
+    [mid + 0.35, SOLE, LANE_AFT],
+    [LANE_X, SOLE, LANE_AFT],
+    [LANE_X, SOLE, GAP_FORE],
+    [GAP_STAR, SOLE, GAP_FORE],
+    [GAP_STAR, SOLE, GAP_AFT],
+    [TABLE.x0 - 0.1, SOLE, GAP_AFT],
+    // 7 the ladder's head on its landing, 8 the landing's forward end, 9
+    // aft of the wheel, 10 the stance.
+    [mid - 0.04, PLAT_Y, LANDING_AFT - 0.2],
+    [mid, PLAT_Y, HELM_LANE],
+    [STANCE[0] + 0.4, PLAT_Y, HELM_LANE],
+    STANCE,
+  ];
+  const edges = [
+    [0, 1, 0],
+    [1, 2, 0],
+    [2, 3, 0],
+    [3, 4, 0],
+    [4, 5, 0],
+    [5, 6, 0],
+    [6, 2, 0],
+    [0, 7, 1],
+    [7, 8, 0],
+    [8, 9, 0],
+    [9, 10, 0],
+  ];
+  return { nodes: nodes.map(v), edges };
 }
 
 /** How far the model's plan, drawn straight between its stations, lies from the outline at most, in metres. */
@@ -3115,6 +3181,8 @@ function model(): NodeDef[] {
     { name: 'sailor', translation: STANCE },
     // Where her people sit, climb and walk.
     { name: 'seats', extras: { seats: seatsData() } },
+    // Where they walk at a handover.
+    { name: 'ways', extras: { ways: waysData() } },
     { name: 'gunwale', translation: GUNWALE },
     {
       name: 'board-root',

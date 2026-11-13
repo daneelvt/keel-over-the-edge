@@ -1891,17 +1891,17 @@ boats:
     # or seating areas provided", her manual); nobody crosses in a tack.
     stations:
       - { at: [-2.6, 2.15, 2.15], pose: standing, facing: 0 }
-      - { at: [-1.95, 2.6, 2.54], pose: seated, facing: 0 }
-      - { at: [0.85, 1.6, 2.11], pose: seated, facing: 180 }
-      - { at: [1.45, 1.6, 2.11], pose: seated, facing: 180 }
-      - { at: [1.79, 1.6, 2.8], pose: seated, facing: 270 }
-      - { at: [1.79, 1.6, 3.35], pose: seated, facing: 270 }
-      - { at: [1.79, 1.6, 3.9], pose: seated, facing: 270 }
-      - { at: [0.25, 1.6, 4.24], pose: seated, facing: 0 }
-      - { at: [0.85, 1.6, 4.24], pose: seated, facing: 0 }
-      - { at: [1.45, 1.6, 4.24], pose: seated, facing: 0 }
-      - { at: [-1.54, 1.55, 4.05], pose: seated, facing: 90 }
-      - { at: [-1.54, 1.55, 4.5], pose: seated, facing: 90 }
+      - { at: [-1.95, 2.6, 2.54], pose: bench, facing: 0 }
+      - { at: [0.85, 1.6, 2.11], pose: bench, facing: 180 }
+      - { at: [1.45, 1.6, 2.11], pose: bench, facing: 180 }
+      - { at: [1.79, 1.6, 2.8], pose: bench, facing: 270 }
+      - { at: [1.79, 1.6, 3.35], pose: bench, facing: 270 }
+      - { at: [1.79, 1.6, 3.9], pose: bench, facing: 270 }
+      - { at: [0.25, 1.6, 4.24], pose: bench, facing: 0 }
+      - { at: [0.85, 1.6, 4.24], pose: bench, facing: 0 }
+      - { at: [1.45, 1.6, 4.24], pose: bench, facing: 0 }
+      - { at: [-1.54, 1.55, 4.05], pose: bench, facing: 90 }
+      - { at: [-1.54, 1.55, 4.5], pose: bench, facing: 90 }
     lengthOverall: 12.8 # Lagoon
     beam: 7.7 # Lagoon
     # Red and green sidelights on her forward decks and a white sternlight
