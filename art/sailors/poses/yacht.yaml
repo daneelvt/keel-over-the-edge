@@ -149,8 +149,8 @@ poses:
     from: yacht-rail-sit
     turn:
       - [spine_03, z, 4]
-      - [neck_01, z, 14]
-      - [head, z, 20]
+      - [neck_01, z, 8]
+      - [head, z, 12]
       - [head, x, -18]
 
   yacht-rail-sit-sea:
@@ -182,8 +182,8 @@ poses:
     from: yacht-rail-lean
     turn:
       - [spine_03, z, 4]
-      - [neck_01, z, 14]
-      - [head, z, 20]
+      - [neck_01, z, 8]
+      - [head, z, 12]
       - [head, x, -14]
 
   yacht-rail-lean-sea:

@@ -21,7 +21,8 @@
 // and hair (#RRGGBB without the #), black (the silhouettes in black), mask
 // (the mask in place of the colours: red main, green skin, blue hair), phone
 // (the stage at a phone's 360 × 640), t (the clips held at that many
-// seconds, for pictures), who, look (only that look's versions), boat (the
+// seconds, for pictures), who, near (aboard a cruising yacht, the camera
+// close on the who'th figure), look (only that look's versions), boat (the
 // boat the sailors sit in, by its place in the catalog's boats: 0 the
 // first; the clips moved to its seat as the game moves them). A clip at a
 // wheel stands each sailor at the wheel of a boat that has one, as the game
@@ -236,6 +237,8 @@ export interface Room {
   /** The clips held at this time, in seconds; null to play. */
   t: number | null;
   who: number;
+  /** Aboard a cruising yacht, the camera close on one figure (who), not on them all. */
+  near: boolean;
   /** Only this look's versions, or every look's (''). */
   look: string;
   /** The boat they sit in: its place in the catalog's boats. */
@@ -258,6 +261,7 @@ const DEFAULTS: Room = {
   phone: false,
   t: null,
   who: 0,
+  near: false,
   look: '',
   boat: 0,
 };
@@ -312,6 +316,7 @@ export function readRoom(hash: string): Room {
     phone: q.get('phone') === '1',
     t: q.has('t') && Number.isFinite(t) ? t : null,
     who: Math.max(0, Math.floor(Number(q.get('who')) || 0)),
+    near: q.get('near') === '1',
     look: /^[a-z][a-z0-9-]*$/.test(q.get('look') ?? '') ? (q.get('look') as string) : '',
     boat: Math.min(catalog.boats.length - 1, Math.max(0, Math.floor(Number(q.get('boat')) || 0))),
   };
@@ -333,6 +338,7 @@ export function writeRoom(r: Room): string {
   if (r.phone) q.set('phone', '1');
   if (r.t !== null) q.set('t', String(r.t));
   if (r.who !== 0) q.set('who', String(r.who));
+  if (r.near) q.set('near', '1');
   if (r.look !== '') q.set('look', r.look);
   if (r.boat !== 0) q.set('boat', String(r.boat));
   return `#sailors&${q.toString()}`;
@@ -1599,6 +1605,11 @@ export class DressingRoom {
           o.target.add(f.root.getWorldPosition(p));
         }
         o.target.divideScalar(Math.max(1, this.#figures.length));
+        // Aboard a cruising yacht, close on one of them (near).
+        const one = this.#figures[Math.min(r.who, this.#figures.length - 1)];
+        if (r.near && inYachtFile(r.clip) && one !== undefined) {
+          one.root.getWorldPosition(o.target);
+        }
         o.target.y += 0.85;
         if (reset) {
           // Hauling, from the side, the hands along the fall seen; sat on
@@ -1608,12 +1619,14 @@ export class DressingRoom {
           const anchor = shipAnchor(r.clip);
           if (inYachtFile(r.clip)) {
             // Aboard a cruising yacht, from the front and above: at her
-            // wheel, from higher, over the binnacle and the wheel's rim.
-            // Each figure on a yacht of its own, a yacht's length apart.
+            // wheel, from higher, over the binnacle and the wheel's rim; on
+            // her bench, higher again, over her table.
+            // Each figure on a yacht of its own, a yacht's length apart; or
+            // close on one of them (near).
             const a = yachtAnchor(r.clip);
             o.azimuth = back;
-            o.elevation = a === 'stance' ? 0.42 : a === 'rail' ? 0.18 : 0.3;
-            o.distance = 4.4 + 0.9 * (n - 1) * this.#boatSpacing();
+            o.elevation = a === 'stance' ? 0.42 : a === 'rail' ? 0.18 : a === 'bench' ? 0.6 : 0.3;
+            o.distance = r.near ? 4.4 : 4.4 + 0.9 * (n - 1) * this.#boatSpacing();
             return;
           }
           if (inCatFile(r.clip)) {

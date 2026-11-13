@@ -869,7 +869,8 @@ class Yacht:
       her centreline): the stance aft of it on the cockpit's sole
       (`yacht-stance`, the `sailor` node moved out by the spread), its hub
       (`yacht-hub`) and the grips on its rim (`grips`: each an angle from
-      the top, degrees, to starboard as the helm sees it, on the rim);
+      the top, degrees, to starboard as the helm sees it, on the rim, so far
+      in from its middle as is still within its wood);
     - the side deck outboard of the wheel, where the helm sits: its inner
       edge's top `helm-seat.aft` aft of the wheel (`yacht-helm-seat`), and
       `helm-seat.brace` forward of that (`yacht-helm-brace`), where the
@@ -940,7 +941,10 @@ class Yacht:
         self.hub = Vector((hub.x + self.spread, hub.y, hub.z))
         st = node("sailor").matrix_world.translation
         self.stance = Vector((st.x + self.spread, st.y, st.z))
-        self.grips = {name: self.spoke(float(deg), self.radius) for name, deg in spec["grips"].items()}
+        # Each grip on the rim: its angle from the top, and how far in from
+        # the rim's middle the hand holds it (within the rim's own wood).
+        self.grips = {name: self.spoke(float(deg), self.radius - float(inside))
+                      for name, (deg, inside) in spec["grips"].items()}
 
         def material(o, p):
             slots = o.material_slots

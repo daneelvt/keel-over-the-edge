@@ -84,12 +84,34 @@ poses:
       - [neck_01, z, -7]
       - [head, z, -14]
 
+  lookout-yacht-wheel-left:
+    from: lookout-wheel-shade
+    turn:
+      - [spine_03, z, 2]
+      - [neck_01, z, 9]
+      - [head, z, 15]
+
+  lookout-yacht-wheel-right:
+    from: lookout-wheel-shade
+    turn:
+      - [spine_03, z, -2]
+      - [neck_01, z, -9]
+      - [head, z, -15]
+
 clips:
-  # The habit at a cruising yacht's wheel: the same, made at hers.
+  # The habit at a cruising yacht's wheel: the same, made at hers, turning
+  # less from the hips, so the hand on her rim (a hair further out than the
+  # ship's spoke) stays on it.
   lookout-yacht-habit-wheel:
-    of: lookout-habit-wheel
     restage: cruiser
     group: cruiser
+    keys:
+      - { pose: wheel-stand, hold: 0.4 }
+      - { pose: lookout-wheel-shade, hold: 0.4, ramp: 1.4, arc: [0.06, 0.05] }
+      - { pose: lookout-yacht-wheel-left, hold: 0.5, ramp: 1.9, lead: head }
+      - { pose: lookout-yacht-wheel-right, hold: 0.5, ramp: 2.0, lead: head }
+      - { pose: lookout-wheel-shade, hold: 0.2, ramp: 1.4, lead: head }
+      - { pose: wheel-stand, hold: 0.5, ramp: 1.5, arc: [0.08, 0.0] }
   lookout-habit:
     sides: true
     keys:
