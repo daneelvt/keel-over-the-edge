@@ -73,6 +73,15 @@ import { basicMaterial, checkScene, domeCentre, domeDrop, litMaterial } from '..
 import { TIERS } from '../render/quality';
 import { chooseBackend, wantsCompat } from '../render/renderer';
 import {
+  BRIDGE_CLIPS,
+  BRIDGE_WALK_SPEED,
+  bridgeAnchor,
+  bridgeOf,
+  bridgePlace,
+  inBridgeFile,
+  namesBridgeClips,
+} from '../render/sailors/bridgedeck';
+import {
   aboard,
   CAT_CLIPS,
   CROSS_SPEED,
@@ -172,6 +181,7 @@ export interface LookFiles {
       aloft?: string;
       cat?: string;
       cruiser?: string;
+      bridgedeck?: string;
     }
   >;
 }
@@ -181,7 +191,7 @@ export function builtLooks(files: Record<string, string>): LookFiles[] {
   const looks = new Map<string, LookFiles>();
   for (const [path, url] of Object.entries(files)) {
     const m =
-      /\/art\/sailors\/([^/]+)\/([a-z]+)(?:\.(deck|far|clips|wheel|trapeze|harness|rail|ship|aloft|cat|cruiser))?\.glb$/.exec(
+      /\/art\/sailors\/([^/]+)\/([a-z]+)(?:\.(deck|far|clips|wheel|trapeze|harness|rail|ship|aloft|cat|cruiser|bridgedeck))?\.glb$/.exec(
         path,
       );
     if (m === null) {
@@ -210,6 +220,8 @@ export function builtLooks(files: Record<string, string>): LookFiles[] {
       v.cat = url;
     } else if (kind === 'cruiser') {
       v.cruiser = url;
+    } else if (kind === 'bridgedeck') {
+      v.bridgedeck = url;
     } else {
       v.levels[(kind ?? 'close') as Level] = url;
     }
@@ -560,6 +572,8 @@ export class DressingRoom {
   #cat: number | null = null;
   /** The catalog's cruising yacht, once looked for: its index, or −1 if none. */
   #yacht: number | null = null;
+  /** The catalog's cruising catamaran, once looked for: its index, or −1 if none. */
+  #bridge: number | null = null;
   /** The catalog's boat whose model marks her company's places (the tall ship), once found; −1 if none does. */
   #ship: number | null = null;
   /** The boats made, by the catalog's boat and the place in the room, and their models' loads. */
@@ -811,6 +825,9 @@ export class DressingRoom {
     if (inYachtFile(r.clip) && this.#yacht === null) {
       this.#yacht = catalog.boats.findIndex((b) => namesYachtClips(b.art));
     }
+    if (inBridgeFile(r.clip) && this.#bridge === null) {
+      this.#bridge = catalog.boats.findIndex((b) => namesBridgeClips(b.art));
+    }
     const made = await Promise.all(
       wanted.map((w) => this.#figure(w.look, w.version, w.level, w.colours, w.at)),
     );
@@ -855,21 +872,23 @@ export class DressingRoom {
     let clips: Promise<SailorClips> | null = null;
     // The clips at a wheel, those on a trapeze's wire and those on a rail
     // (and the crouch) are files of their own.
-    const clipsUrl = inYachtFile(this.room.clip)
-      ? files?.cruiser
-      : inCatFile(this.room.clip)
-        ? files?.cat
-        : onWire(this.room.clip)
-          ? files?.trapeze
-          : inRailFile(this.room.clip)
-            ? files?.rail
-            : inShipFile(this.room.clip)
-              ? files?.ship
-              : inAloftFile(this.room.clip)
-                ? files?.aloft
-                : atWheel(this.room.clip)
-                  ? files?.wheel
-                  : files?.clips;
+    const clipsUrl = inBridgeFile(this.room.clip)
+      ? files?.bridgedeck
+      : inYachtFile(this.room.clip)
+        ? files?.cruiser
+        : inCatFile(this.room.clip)
+          ? files?.cat
+          : onWire(this.room.clip)
+            ? files?.trapeze
+            : inRailFile(this.room.clip)
+              ? files?.rail
+              : inShipFile(this.room.clip)
+                ? files?.ship
+                : inAloftFile(this.room.clip)
+                  ? files?.aloft
+                  : atWheel(this.room.clip)
+                    ? files?.wheel
+                    : files?.clips;
     if (clipsUrl !== undefined) {
       clips = this.#clips.get(clipsUrl) ?? loadClips(clipsUrl, renderer);
       this.#clips.set(clipsUrl, clips);
@@ -1254,6 +1273,60 @@ export class DressingRoom {
     return true;
   }
 
+  /**
+   * A figure aboard a cruising catamaran, each on her own, moored before
+   * the quay, her sails, boom and roof left out so her people are seen from
+   * above, turned so the figure faces the front: at her wheel, standing or
+   * sat on the settle behind it; on one of her seats, facing as it faces;
+   * walking or turning on her sole; on her ladder. False if the room has no
+   * catamaran or the figure no clip.
+   */
+  async #onBridge(f: Figure, i: number): Promise<boolean> {
+    const r = this.room;
+    if (!inBridgeFile(r.clip) || f.action === null || this.#bridge === null || this.#bridge < 0) {
+      return false;
+    }
+    const { boat, loaded } = this.#boat(i);
+    await loaded;
+    const places = bridgeOf(boat.parts);
+    const place = f.clips?.places.get(`place-${r.clip}`);
+    const anchor = bridgeAnchor(r.clip);
+    if (places === null || place === undefined || anchor === null) {
+      return false;
+    }
+    boat.model.traverse((o) => {
+      const name = o instanceof Mesh ? (o.material as Material).name : '';
+      if (name === 'flax' || name === 'roof') {
+        o.visible = false;
+      }
+    });
+    const boom = boat.parts.get('boom');
+    if (boom !== undefined) {
+      boom.visible = false;
+    }
+    const n = this.#figuresWanted();
+    const x = (i - (n - 1) / 2) * this.#boatSpacing();
+    this.stage.scene.add(boat.root);
+    boat.root.position.set(x, 0, MOORED_Z);
+    f.boat = boat;
+    f.walk = null;
+    f.root.matrixAutoUpdate = true;
+    boat.heel.rotation.set(0, 0, 0);
+    // Facing the front: turned as the place faces.
+    const a = places[anchor];
+    boat.root.rotation.set(0, Math.PI + (a.facing * Math.PI) / 180, 0);
+    const seat = bridgePlace(place, a);
+    boat.model.add(f.root);
+    seat.decompose(f.root.position, f.root.quaternion, f.root.scale);
+    if (anchor === 'sole' && r.clip === 'cockpit-walk') {
+      // Forward along her sole, from half the way back.
+      const way = new Vector3(0, 0, -1);
+      const from = f.root.position.clone().addScaledVector(way, -CROSS / 2);
+      f.walk = { from, length: CROSS, speed: BRIDGE_WALK_SPEED, way };
+    }
+    return true;
+  }
+
   /** Finds the catalog's boat whose model has a rail, loading the boats' models in turn. */
   async #findRailBoat(): Promise<void> {
     if (this.#railBoat !== null) {
@@ -1349,7 +1422,8 @@ export class DressingRoom {
       (await this.#onRailBoat(f, i)) ||
       (await this.#onShip(f, i)) ||
       (await this.#onCat(f, i)) ||
-      (await this.#onYacht(f, i))
+      (await this.#onYacht(f, i)) ||
+      (await this.#onBridge(f, i))
     ) {
       return;
     }
@@ -1524,6 +1598,9 @@ export class DressingRoom {
     if (inYachtFile(this.room.clip) && this.#yacht !== null && this.#yacht >= 0) {
       return this.#yacht;
     }
+    if (inBridgeFile(this.room.clip) && this.#bridge !== null && this.#bridge >= 0) {
+      return this.#bridge;
+    }
     return onWire(this.room.clip) && wire !== null && wire >= 0 ? wire : this.room.boat;
   }
 
@@ -1601,7 +1678,9 @@ export class DressingRoom {
         ) ?? new Vector3();
       // On a rail boat, the crew are on her side nearest the quay.
       const railed = seated && inRailFile(r.clip);
-      const aboard = seated && (onShip(r.clip) || inCatFile(r.clip) || inYachtFile(r.clip));
+      const aboard =
+        seated &&
+        (onShip(r.clip) || inCatFile(r.clip) || inYachtFile(r.clip) || inBridgeFile(r.clip));
       if (aboard) {
         // Aboard the ship: among the figures, wherever on her they are.
         o.target.set(0, 0, 0);
@@ -1613,7 +1692,7 @@ export class DressingRoom {
         o.target.divideScalar(Math.max(1, this.#figures.length));
         // Aboard a cruising yacht, close on one of them (near).
         const one = this.#figures[Math.min(r.who, this.#figures.length - 1)];
-        if (r.near && inYachtFile(r.clip) && one !== undefined) {
+        if (r.near && (inYachtFile(r.clip) || inBridgeFile(r.clip)) && one !== undefined) {
           one.root.getWorldPosition(o.target);
         }
         o.target.y += 0.85;
@@ -1623,6 +1702,19 @@ export class DressingRoom {
           // her shrouds, clear of the foremast and with neither figure
           // behind the other; else from the front, a little above.
           const anchor = shipAnchor(r.clip);
+          if (inBridgeFile(r.clip)) {
+            // Aboard a cruising catamaran, from the front and above, her
+            // roof left out: sat or on her sole, from higher and a little to
+            // one side, over her table.
+            const a = bridgeAnchor(r.clip);
+            const sat =
+              (a !== 'stance' && a !== 'foot' && a !== 'landing') ||
+              r.clip.startsWith(BRIDGE_CLIPS.seated);
+            o.azimuth = back + (sat ? 0.5 : 0);
+            o.elevation = a === 'stance' ? 0.4 : sat ? 0.85 : 0.35;
+            o.distance = r.near ? (sat ? 3.6 : 4.4) : 4.4 + 0.9 * (n - 1) * this.#boatSpacing();
+            return;
+          }
           if (inYachtFile(r.clip)) {
             // Aboard a cruising yacht, from the front and above: at her
             // wheel, from higher, over the binnacle and the wheel's rim; on

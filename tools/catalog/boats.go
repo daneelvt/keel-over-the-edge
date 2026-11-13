@@ -200,8 +200,9 @@ func deckEdge(m map[string]any, z float64) float64 {
 // higher than its lookout's eye), none on another wherever the wind is
 // (a station to windward or to leeward drawn on its side or its mirror,
 // as the weather side has it); one on the rail at the deck's edge; and, on
-// a boat of two hulls, each on a hull's top (and only there one on a hull). The
-// client's tests hold each to the model's deck itself.
+// a boat of two hulls, none outboard of her hulls' tops (and only there one
+// on a hull; one between them is on her bridgedeck, which checkPlaces holds
+// to her model). The client's tests hold each to the model's deck itself.
 func checkStations(i int, m map[string]any) []string {
 	var problems []string
 	stations, _ := m["stations"].([]any)
@@ -239,7 +240,9 @@ func checkStations(i int, m map[string]any) []string {
 				problems = append(problems, fmt.Sprintf("  boats[%d].stations[%d]: on the rail %v m out, but the deck's edge is %v m out there", i, j, math.Abs(x), math.Round(edge*1000)/1000))
 			}
 		}
-		if spacing > 0 && (math.Abs(x) < hullIn-hullTop || math.Abs(x) > hullOut+hullTop) {
+		// Between the hulls, off their tops, only over the model's
+		// bridgedeck (checkPlaces).
+		if spacing > 0 && math.Abs(x) > hullOut+hullTop {
 			problems = append(problems, fmt.Sprintf("  boats[%d].stations[%d]: %v m out is not on a hull's top, from %v to %v m out", i, j, math.Abs(x), math.Round(hullIn*1000)/1000, hullOut))
 		}
 		if st["pose"] == "hull" && !(spacing > 0) {

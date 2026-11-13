@@ -76,6 +76,7 @@ import type { Node } from 'three/webgpu';
 import type { DrawnBoat } from '../../game/fleet';
 import { figureNode, type Instances, placeNormal, placePoint } from '../fleetparts';
 import { SAILING } from '../sailor';
+import type { BridgePlaces } from './bridgedeck';
 import type { FleetLook } from './fleetlooks';
 import { type Hike, STRAPPED } from './restage';
 import { Rig } from './rig';
@@ -130,6 +131,8 @@ export interface NearBoat {
   cat?: CatBoat | null;
   /** A cruising yacht's places (yacht.ts's yachtOf): her helm at her wheel on her own clips. */
   yacht?: YachtPlaces | null;
+  /** A cruising catamaran's places (bridgedeck.ts's bridgeOf): her helm at her wheel on her own clips. */
+  bridge?: BridgePlaces | null;
 }
 
 /** A near boat's sailor: its runtime, and its bones' matrices as last run. */
@@ -177,6 +180,7 @@ class Sailor {
       trapeze: near.trapeze ?? null,
       cat: near.cat ?? null,
       yacht: near.yacht ?? null,
+      bridge: near.bridge ?? null,
     };
     this.runtime = new SailorRuntime(rig, clips, this.boat, seed, look.machine, false);
     if (near.trapeze) {
@@ -277,6 +281,10 @@ export class NearSailors extends SailorRows {
     }
     if (this.boat.yacht && look.cruiserState !== 'ready' && look.cruiserState !== 'failed') {
       // Aboard a cruising yacht: rigid until her people's clips have loaded (or failed to).
+      return false;
+    }
+    if (this.boat.bridge && look.bridgeState !== 'ready' && look.bridgeState !== 'failed') {
+      // Aboard a cruising catamaran: rigid until her people's clips have loaded (or failed to).
       return false;
     }
     let s = this.#slots[b.slot] ?? null;

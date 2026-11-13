@@ -86,9 +86,21 @@ describe.each(catalog.boats.map((b) => [b.name, b] as const))('%s’s hull', (_,
       expect(insideHull(shape, x + HULL_FILL * between + 0.003, 0, mid)).toBe(false);
     }
     if (c > 0) {
-      // The sea between two hulls, and none inside either.
+      // The sea between two hulls, and none inside either; with a
+      // bridgedeck between them, none above its underside, but the sea
+      // below it, and beyond its ends.
+      const deck = shape.deck;
       expect(insideHull(shape, 0, 0, z)).toBe(false);
-      expect(insideHull(shape, 0, 2, z)).toBe(false);
+      if (deck === undefined) {
+        expect(insideHull(shape, 0, 2, z)).toBe(false);
+      } else {
+        const mid = (deck.fore + deck.aft) / 2;
+        expect(insideHull(shape, 0, deck.underside - 0.01, mid)).toBe(false);
+        expect(insideHull(shape, 0, deck.underside + 0.01, mid)).toBe(true);
+        expect(insideHull(shape, 0.9 * deck.halfWidth, deck.underside + 0.01, mid)).toBe(true);
+        expect(insideHull(shape, 0, deck.underside + 0.01, deck.aft + 0.01)).toBe(false);
+        expect(insideHull(shape, 0, deck.underside + 0.01, deck.fore - 0.01)).toBe(false);
+      }
     }
   });
 

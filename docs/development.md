@@ -210,7 +210,10 @@ length, above the waterline and below the boom, and none within 0.45 m of
 another; `render/sailors/crew.test.ts` holds each to its model's deck
 within 1 cm, the first to the helm, with nothing of the hull where a
 person stands. On a boat of two hulls (`hulls.hullSpacing`) every station
-is on a hull's top, and only such a boat has one `on a hull` (`hull`: sat
+is on a hull's top or, between the hulls, over her bridgedeck (her model's
+hull's `bridgedeck`, from its fore to its after end: a cruising
+catamaran's cockpit's seats and her raised helm), and only such a boat
+has one `on a hull` (`hull`: sat
 by the hull's inner edge with the legs across the net, out on the trapeze's
 wire beside the helm once the helm is on theirs). Her people are drawn with
 her own clips (her art's `sailorClips`, `cat`, placed from her model's
@@ -227,8 +230,9 @@ and back aboard as she comes up. `render/sailors/catcrew.test.ts` holds a
 boat of two hulls' people clear of her and of each other through all of it.
 
 A station `on a bench` (`bench`) is a cockpit's bench's front edge on its
-top: only a boat whose model has a `bench` node has one, and the tool holds
-it there; a station on the rail of a boat with `lifelines` sits between its
+top: only a boat whose model has a `bench` node, or a `seats` node whose
+seats each give a front edge, a facing and its ends, has one, and the tool
+holds it there (on one of the seats, facing as it faces); a station on the rail of a boat with `lifelines` sits between its
 pulpit and pushpit, 0.25 m or more from every stanchion. A cruising yacht's
 people (her art's `sailorClips`, `cruiser`) are drawn with her own clips,
 placed from her model's places (`render/sailors/yacht.ts`): on her windward
@@ -249,6 +253,26 @@ it, to the place furthest from it along her side deck, so nobody passes
 anybody sat on the rail. `render/sailors/yachtcrew.test.ts` holds her eight
 clear of her (her lifelines as a solid) and of each other, and measures
 what getting up, sitting down and climbing brush for a moment.
+
+A cruising catamaran's people (her art's `sailorClips`, `bridgedeck`) are
+drawn with her own clips, placed from her model's `seats` node
+(`render/sailors/bridgedeck.ts`): each on her seat their station is on
+(the settle beside the helm, the L-bench round her table, her aft bench,
+her lounger), one of its sitting idles at a time, talking with someone
+near, and braced at the table and on the aft bench in an apparent wind
+past 7 m/s or as she pitches (`crewrules.ts`'s `BRACE_WIND`,
+`BRACE_PITCH`), not as she heels. Nobody crosses in a tack or a gybe. Her
+helm sits on the settle behind her wheel in a light wind and stands at it
+in a breeze, by the apparent wind alone, the hands on the rim standing.
+At a handover the two walk her ways (her model's `ways` node, walked by
+the ship's way graph, `bridgecrew.ts`): upright on her sole, two passing
+on the lane by her table each keeping right (`wide`); one at a time edging
+along the gaps between her seats and her table, standing, facing it
+(`narrow`); turning on the spot at her ladder's foot, and up or down it on
+its clips. `render/sailors/bridgecrew.test.ts` holds twelve clear of her
+and of each other, sat up and braced, through a tack and a gybe, and
+along every way of a handover from each of her seats; the sandbox's
+`?boat=<her id>&crew=12` shows them.
 
 ## The physics package
 
@@ -492,13 +516,16 @@ it, the count falling from 2 to 1, and the drag area falls to `flyingDrag`
 of itself. `Out.HullFlying` is 1 while it is more than half clear. Her
 righting lever, which peaks within a few degrees of upright as the weight
 goes onto the lee hull, is read at a finer step, `rightingLeverStep` (10°
-for every monohull, from 0° to 180°; 5° for the beach cat, from 0° to 90°,
-held beyond, where her mast and sails float). Her hulls' lateral planes
+for every monohull, from 0° to 180°; 5° for the beach cat and the
+catamaran, from 0° to 90°, held beyond: the beach cat's mast and sails
+float, and the catamaran's lever is held at a tenth of its greatest past
+its fall, so that she never turns over). Her hulls' lateral planes
 are a fixed keel's (`fixed` 1), the asymmetric hulls' deep run below the
 canoe body. The outline the contacts use ends in a flat bow, its last
 value the bows' half-spread, a corner each side (`outline.go`). Nothing in
 the physics reads a kind's name: the cruising catamaran takes the same
-values.
+values, her one sailor on her centreline (`hikeReach` and `leeReach` 0) at
+her helm's height, where the drawing stands the helm at her wheel off it.
 
 **Two rudders on one hull.** A monohull may carry two rudders either side
 of her centreline (`rudderCount` 2, `rudderSpread` each stock's distance
@@ -777,11 +804,74 @@ lee rudder alone still turns her. Knocked down, she comes back
 costs this model's hull little, and she stands up to her full sail in a
 breeze her crew would reef in.
 
+### The catamaran's numbers
+
+The catamaran is a Lagoon 42 of 2016, a cruising catamaran of 12.8 m: two
+hulls 5.6 m apart joined by a bridgedeck that carries a saloon and an aft
+cockpit under a hard roof, a fixed mini keel and a suspended rudder under
+each hull, one wheel at a raised helm station to port, a fractional sloop
+with one level of spreaders and no backstay, a fully battened main on a
+long boom and a self-tacking jib, sailed by one 80 kg sailor at her
+wheel, with no engine and no propeller. Each value in
+`shared/catalog/boats.yaml` says where it comes from:
+
+- **Published:** her length, 12.80 m, waterline, 12.50 m, beam, 7.70 m,
+  and light displacement, 12,242 kg (Lagoon), to which the game adds its
+  sailor's 80 kg; I, J, P and E; the keels' draught, 1.25 m; the jib,
+  35.2 m², and the main as her ORC multihull certificate MC133 rates it,
+  64.64 m² (her builder gives 55); twelve aboard in category A; the
+  manual's reef table (full main to 26 knots of apparent wind).
+- **Fitted:** the main and jib to ORC's low sets, her rig having no
+  backstay (`tools/polar -sail`), the self-tacker's horse as the jib's
+  travel.
+- **From her model:** her hulls' spacing, both hulls' waterline beam,
+  waterplane and its second moment, the canoe bodies' draught, the heel at
+  which her windward hull leaves the water, and her righting lever
+  (`tools/lever`): her two hulls' sections, the bridgedeck and the saloon
+  over it, and her keels and rudders, heeled in still water about a centre
+  of gravity estimated from her parts' masses. Its greatest is 2.44 m at
+  12.5°, some 30 t·m; ISO 12217-2's Annex G has her reef at 29 knots of
+  apparent wind, above her plate's 26. Past its fall her lever is held at
+  a tenth of its greatest: a licence, so that she never turns over, as a
+  real catamaran held too long in a squall would.
+- **Estimates:** the hulls' resistance (ITTC 1957's friction on both
+  hulls' 41 m² wetted, with a form factor of 1.3, and a slender hull's
+  wave-making by the Froude number, its hump near 0.45, steepened a fifth
+  from 0.4 to 0.5 against her certificate's reaching speeds), her windage
+  (the saloon's front), the keels' place and carry-over (her balance and
+  pointing), the rudders' span, the reefs (two of the main, the jib rolled
+  to 75% and 60% of its area), the flattening (her sailor barely flattens
+  her main: she is reefed instead), her inertias, damping and autopilot
+  (her tacks).
+
+She is checked against MC133, as players sail her, alone: the beat VMG,
+the speeds at 52° to 150° and the run VMG within ±10% from 6 to 16
+knots, and at least 7.6 knots on a beam reach at her best in some wind
+from 12 to 16. Printed beside them, not checked: 20 and 24 knots, two
+larger neighbours' certificates (a Leopard 45 and a Lagoon 46), a
+measured 6.1 knots at 50° in 11.6, her heel close-hauled, the wind she is
+told to reef in, and the apparent wind in which her windward hull lifts
+close-hauled at full sail hauled in, held to at least 37 knots (her
+plate's 26 over ISO's 70%). The certificate rates two propellers: with
+none she is a little faster than it.
+
+Her behaviour tests (`catamaran_test.go`): close-hauled she heels under 5°
+in 8 to 16 knots; held in a 40-knot squall at full sail she flies her
+windward hull past her lever's greatest and, let fly, comes back; held in
+55 knots she is laid past 75° and comes back too; her autopilot tacks her
+in 12 and 18 knots, and in 6 knots tacks slowly or stalls and pays off.
+Knocked down she comes back (`TestKnockdownRecovers`, laid past her
+lever's greatest). Reefed in a gale she heels less but is much slower: she
+is reefed for the gusts, not for her speed. The handbook tells her sailor
+to reef by the wind (her heel will not warn them), at her plate's 26 knots
+of apparent wind, from 20 knots close-hauled.
+
 ### `tools/lever`
 
 ```sh
 go run ./tools/lever -boat yacht          # her lever from her model, and the values for the catalog
 go run ./tools/lever -boat yacht -check   # fail unless the catalog's centre of gravity and lever are the model's
+go run ./tools/lever -boat catamaran      # two hulls: and her hull's lift, her greatest lever's heel, Annex G's reef wind
 ```
 
 A boat's model may carry its sections and appendages in its hull node's
@@ -799,7 +889,23 @@ held to theirs within their tolerance; the boat alone must float within
 centreline (standing at the `sailor` node if she is steered by a wheel,
 else seated there), and the whole boat's lever, every `rightingLeverStep`,
 and centre of gravity are what the catalog holds; a test holds them to the
-model. Its test holds a wall-sided box's lever to the formula's.
+model, its 19 values at the catalog's step. Its test holds a wall-sided
+box's lever to the formula's, and two boxes' to the formula of the lee
+one carrying the boat.
+
+A boat of two hulls' sections run from the centreline along her
+bridgedeck's underside to the inner side of her starboard hull, round it
+and back over her deck and saloon, or, where the hulls stand apart, out
+along the deck's height to the hull and back (no area). Where no righting
+moment is published, the reference gives the boat alone's centre of
+gravity itself (`centreOfGravity`, an estimate). The reference may also
+hold the heel of her greatest lever within a range (`peak`), ISO 12217-2
+Annex G's wind at which she must reef to at least her builder's plate's
+(`reefWind`: G.2 to G.4, from her model's spacing, waterline beams and
+profiles and the catalog's sails), and her lever past its fall at a share
+of its greatest (`hold`). The tool gives the heel at which her windward
+hull is clear of the water, whole boat aboard; the catalog's `liftHeel` is
+5° before it.
 
 ### `tools/polar`
 
@@ -870,7 +976,11 @@ wind in which her windward hull clears, her best downwind angle and where
 she first pitchpoles.
 For a boat with a downwind sail `-check` also prints, without failing, the
 course sailed by its own sailor, where its downwind sail pays in each wind
-and its best downwind angle.
+and its best downwind angle. For a boat of two hulls whose sailor never
+falls in (a cruising catamaran) it prints her heel close-hauled, and sails
+her close-hauled at full sail with the sheet hauled in, in a wind rising a
+knot at a time, for the apparent wind in which her windward hull lifts,
+which the reference's `stability.liftWind` holds to a least.
 
 `-handbook` writes each boat's table of the fastest boom, at 6, 12 and 20
 knots 10 m up, under a line naming the boat, and when to reef: the least
@@ -885,7 +995,12 @@ she reefs from the wind in which, close-hauled at full sail, she heels past
 table of a boat with a downwind sail it writes where her crew sets it and
 takes it in, and the wind from which it no longer pays where they set it.
 It prints how each boat sails close-hauled with no reef, one and two in
-that wind and above.
+that wind and above. A boat of two hulls whose sailor never falls in
+barely heels, and her fastest sheet eases long before she is pressed: she
+reefs from the least wind in which, close-hauled at full sail at her
+fastest sheet, the apparent wind reaches her builder's plate's
+(`stability.reefWind`), and her paragraph tells her sailor to reef by the
+wind, not by her heel.
 
 `-manoeuvres` tacks from close-hauled, 45° or the boat's own angle if she
 cannot sail so close, and gybes from 150°; for a ship it then sails her own
@@ -977,13 +1092,17 @@ A kind of boat is data: nothing reads its name or id. Adding one touches:
 5. Its model, `art/boats/<id>/build.ts`, in `client/package.json`'s `art`
    and `art/README.md`, and `tools/catalog/catalog_test.go`'s art fixture;
    held by `model.test.ts` (its rudders by their count and spread, its
-   wheels by their data, its lights by their kind), `crew.test.ts` (its
+   wheels by their data, on the centreline or one off it, its lights by
+   their kind, its sternlight at its aftmost structure), `crew.test.ts` (its
    stations on its deck), `hulls.test.ts` (its volume in the sea) and
    `runtime.test.ts` (its sailor clear of its solid). If no righting lever
    is published, its build writes its sections (`lever`) and
    `tools/lever` gives the lever and centre of gravity the catalog holds,
    from the stability `reference.json` gives; the canoe body is drawn so
-   that the boat floats on her waterline.
+   that the boat floats on her waterline. A boat of two hulls with a
+   bridgedeck says so in her hull's `bridgedeck` (its plan, underside and
+   the top of what stands at its after end), which the sea, the stations
+   and the sternlight's place read.
 6. The fleet: a migration giving every human account one
    (`internal/store/migrations/`, `SUMS` by
    `go test ./internal/store -run AppendOnly -args -update`), and
@@ -1003,8 +1122,10 @@ A kind of boat is data: nothing reads its name or id. Adding one touches:
    (never her id: the catalog's check refuses code quoting one), built on
    every look with `go run ./tools/sailors -add`, and held by
    `files.test.ts`.
-9. The browser's specs: the mixed fleet's budgets (`fleet.spec.ts`), the
-   looks (`boatlook.spec.ts`), the layout's heel hold (`layout.spec.ts`);
+9. The browser's specs: the mixed fleet's budgets (`fleet.spec.ts`, and a
+   test of the kind's likeness of its own), the looks (`boatlook.spec.ts`),
+   the layout's heel hold (`layout.spec.ts`; a boat wider than half her
+   length is framed as twice her beam long);
    and, if it carries more than one, its people (`crew.spec.ts`, and
    `catcrew.test.ts` for a boat of two hulls, `yachtcrew.test.ts` for a
    cruising yacht). Tests that find a kind by a trait name the trait they
@@ -3711,7 +3832,7 @@ catalog's sky at the log's epoch.
 `internal/logbook`'s `Book` turns each frame into rows of the log, on the
 tick, and persist writes them in the same fenced transaction as the
 events and chartings they come from (`store.Batch.Log`). The tables
-(`00033_log.sql`) are never partitioned and have no `world_id`: they keep
+(`00034_log.sql`) are never partitioned and have no `world_id`: they keep
 the world's **number** and their own copies of names and places, so they
 read after the world is dropped.
 

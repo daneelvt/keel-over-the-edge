@@ -81,7 +81,10 @@ def retarget(fig, name, spec, fps):
     # On a deck, crouched, the coat hangs from the body as it bends
     # (motion.Figure.hang).
     # Crawling, the coat lies along the body and the legs, on the deck.
-    fig.hang = CROUCH_HANG if spec.get("deck") and not spec.get("crawl") else None
+    # A retarget may say its own (none, upright: an apron's chains are not
+    # a coat's).
+    fig.hang = spec["hang"] or None if "hang" in spec else \
+        CROUCH_HANG if spec.get("deck") and not spec.get("crawl") else None
     before = set(bpy.data.objects)
     actions = set(bpy.data.actions)
     bpy.ops.import_scene.gltf(filepath=inputs.path(spec["file"]), bone_heuristic="TEMPERANCE")
@@ -184,7 +187,7 @@ def retarget(fig, name, spec, fps):
     # Where on the ship it is set, if anywhere: leaning on her rail, sat on
     # her hatch.
     clip.ship = spec.get("stage")
-    clip.seated = clip.ship in (SHIP_HATCH, YACHT_BENCH)
+    clip.seated = clip.ship in (SHIP_HATCH, YACHT_BENCH) + BRIDGE_SEATS
     clip.notes["knee"] = spec.get("knee")
     # Crawling, the hands and knees bear on the deck with the feet; the
     # way it goes over the deck (back, for a foot bearing on it: its
@@ -198,7 +201,7 @@ def retarget(fig, name, spec, fps):
     # How far a sole stands below where the build takes it (a machine's
     # iron feet): what is set on a net stands that much higher.
     # Set on a net, a knee is as thick as the figure's dressed one.
-    fig.knee = _own_knee(fig) if spec.get("stage") in (CAT_NET,) + YACHT_DECKS else None
+    fig.knee = _own_knee(fig) if spec.get("stage") in (CAT_NET, BRIDGE_SOLE) + YACHT_DECKS else None
     if spec.get("deck"):
         _ground(fig, clip, crawl)
         if spec.get("head") is not None:
@@ -256,6 +259,21 @@ def retarget(fig, name, spec, fps):
             # On the yacht's bench, facing inboard: judged against her.
             clip.place = _bench_place(fig, clip)
             clip.yacht, clip.ship = YACHT_BENCH, None
+        elif clip.ship in BRIDGE_SEATS:
+            # On one of the catamaran's seats, facing as it faces: judged
+            # against her.
+            clip.place = _bridge_seat_place(fig, clip)
+            clip.bridge, clip.ship = clip.ship, None
+        elif clip.ship == BRIDGE_SOLE:
+            # Walking the catamaran's cockpit, facing forward: placed from
+            # where her sole is walked, as high as keeps the lowest of the
+            # figure on it in every frame; judged against her.
+            under = _under_deck(fig, clip)
+            b = fig.stage.bridge
+            clip.place = Matrix.Translation(b.point(BRIDGE_SOLE) + Vector((0.0, 0.0, YACHT_SOLES + under))) @ \
+                b.facing(BRIDGE_SOLE)
+            clip.notes["raised for the soles"] = round(under, 4)
+            clip.bridge, clip.ship = BRIDGE_SOLE, None
         elif clip.seated:
             clip.place = _hatch_place(fig, clip)
         elif clip.ship in YACHT_DECKS:
@@ -283,7 +301,7 @@ def retarget(fig, name, spec, fps):
     elif lock:
         _lock(fig, clip, lock)
         clip.planted = list(lock)
-    if clip.ship or clip.cat or getattr(clip, "yacht", None):
+    if clip.ship or clip.cat or getattr(clip, "yacht", None) or getattr(clip, "bridge", None):
         # Its contacts, made in the figure's space, where it is placed.
         clip.contacts = [{e: clip.place @ p for e, p in cs.items()} for cs in clip.contacts]
     # The joints it takes toward the ends of their ranges, as the hike
@@ -1279,6 +1297,10 @@ YACHT_ROOF = "yacht-roof"
 YACHT_DECKS = (YACHT_SOLE, YACHT_ROOF)
 # What crosses her decks stands this far over them (its soles' wear).
 YACHT_SOLES = 0.003
+# The catamaran's seats (sat on them, facing as each faces), and her sole
+# (walked): where on her a clip is set.
+BRIDGE_SEATS = (motion.BRIDGE_HELM, motion.BRIDGE_TABLE, motion.BRIDGE_BEAM, motion.BRIDGE_LOUNGER)
+BRIDGE_SOLE = motion.BRIDGE_SOLE
 # Leaning on the rail: the forearms' bones this far over the cap rail's top
 # beyond the sleeve's own depth under them (the rail rises with her sheer
 # along the forearms); each shoulder no higher over the
@@ -1534,6 +1556,10 @@ def _sit(fig, clip):
     if clip.ship == YACHT_BENCH:
         yacht = fig.stage.yacht
         seat = yacht.bench.z - yacht.sole + SIT_CLEAR
+    elif clip.ship in BRIDGE_SEATS:
+        # On the catamaran: her seat's top over the floor before it.
+        b = fig.stage.bridge
+        seat = b.point(clip.ship).z - b.point(clip.ship + "-floor").z + SIT_CLEAR
     else:
         ship = fig.stage.ship
         seat = ship.hatch.z - ship.down(ship.hatch.x + 0.15, ship.hatch.y + 0.3, ship.hatch.z) + SIT_CLEAR
@@ -1574,6 +1600,20 @@ def _hatch_place(fig, clip):
         ys.append(((fig.world("calf_l") + fig.world("calf_r")) / 2).y)
     edge = Vector((0.0, float(np.median(ys)) + SIT_KNEE, clip.notes["seat"]))
     return Matrix.Translation(ship.point(SHIP_HATCH)) @ Matrix.Rotation(math.pi, 4, "Z") @ Matrix.Translation(-edge)
+
+
+def _bridge_seat_place(fig, clip):
+    """From the figure's space to the catamaran's, sat on one of her seats
+    facing as it faces: its front edge under the thighs the tables'
+    `seat.knee` (or the retarget's own `knee`) from the knees' joints
+    (their median), at its top's height, from its place."""
+    b = fig.stage.bridge
+    ys = []
+    for fr in _ring(clip):
+        fig.set_rotations(fr["rot"], fr["pelvis"])
+        ys.append(((fig.world("calf_l") + fig.world("calf_r")) / 2).y)
+    edge = Vector((0.0, float(np.median(ys)) + (clip.notes.get("knee") or b.spec["seat"]["knee"]), clip.notes["seat"]))
+    return Matrix.Translation(b.point(clip.ship)) @ b.facing(clip.ship) @ Matrix.Translation(-edge)
 
 
 def _bench_place(fig, clip):

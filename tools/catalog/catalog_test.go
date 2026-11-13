@@ -118,6 +118,17 @@ var yachtPlaces = map[string]string{
 	"lifelines": `{"lifelines":{"heights":[0.32,0.62],"stanchions":[-4.4,-2.65,-1.25,0.2,1.75,3.25],"inboard":0.04,"fore":-4.75,"aft":4.6}}`,
 }
 
+// catamaranPlaces is the catamaran's hull's bridgedeck, which her people's
+// stations between her hulls stand on, and her seats, which they sit on.
+var catamaranPlaces = map[string]string{
+	"hull": `{"bridgedeck":{"fore":-4.45,"aft":4.75,"halfWidth":1.82,"underside":0.8,"top":3.46}}`,
+	"seats": `{"seats":{"helm":{"at":[-1.95,2.6,2.5],"facing":0,"along":[-3.25,-1.75]},` +
+		`"table":{"at":[1.75,1.6,3.35],"facing":270,"along":[2.15,4.05]},` +
+		`"tableFore":{"at":[0.85,1.6,2.15],"facing":180,"along":[0.55,1.75]},` +
+		`"beam":{"at":[0.85,1.6,4.2],"facing":0,"along":[-0.75,2.25]},` +
+		`"lounger":{"at":[-1.5,1.55,4.05],"facing":90,"along":[3.85,4.65]},"walk":[-0.21,1.15,3.05]}}`,
+}
+
 // realSky returns the real catalog's sky, which every fixture has unless
 // it gives its own.
 func realSky() string {
@@ -578,6 +589,19 @@ func TestRejects(t *testing.T) {
 			want: "is not on the bench's top at its front edge",
 		},
 		{
+			name: "a station on none of its model's seats",
+			files: map[string]string{
+				"shared/catalog/boats.yaml": strings.Replace(validBoats, "pose: standing", "pose: bench", 1),
+				testArt: glbWith([]string{"hull", "tricolour"}, map[string]string{"seats": `{"seats":{
+					"aft":{"at":[-0.3,0.3,-0.46],"facing":180,"along":[-0.5,0]},
+					"side":{"at":[-0.34,0.3,-0.5],"facing":90,"along":[-1,0]},
+					"low":{"at":[-0.3,0.25,-0.46],"facing":0,"along":[-0.5,0]},
+					"short":{"at":[-0.3,0.3,-0.46],"facing":0,"along":[-0.2,0]},
+					"walk":[0,0.1,0]}}`}),
+			},
+			want: "boats[test-boat].stations[1]: (-0.3, 0.3, -0.5) facing 0 is not on any of the model's seats' tops at its front edge, within its ends, facing as it faces",
+		},
+		{
 			name: "a station on the rail by a stanchion",
 			files: map[string]string{
 				"shared/catalog/boats.yaml": strings.Replace(validBoats, "pose: standing", "pose: rail", 1),
@@ -607,7 +631,7 @@ func TestRejects(t *testing.T) {
 				"boardCount: 1", "boardCount: 2",
 				"fixed: 0 #", "fixed: 1 #",
 			).Replace(validBoats)},
-			want: "boats[0].stations[1]: 0.3 m out is not on a hull's top, from 0.4 to 0.6 m out",
+			want: "stations[1]: 0.3 m out is not on a hull's top, from 0.4 to 0.6 m out, nor over a bridgedeck between them",
 		},
 		{
 			name:  "a station's pose unknown",
@@ -903,6 +927,8 @@ func TestEncounters(t *testing.T) {
 			files["art/boats/beach-cat.far.glb"] = "glTF"
 			files["art/boats/yacht.glb"] = glbWith([]string{"hull", "port", "starboard", "stern"}, yachtPlaces)
 			files["art/boats/yacht.far.glb"] = "glTF"
+			files["art/boats/catamaran.glb"] = glbWith([]string{"port", "starboard", "stern"}, catamaranPlaces)
+			files["art/boats/catamaran.far.glb"] = "glTF"
 			root := fixture(t, files)
 			err := checkAll(root)
 			if err == nil {
@@ -919,5 +945,36 @@ func TestEncounters(t *testing.T) {
 				t.Fatalf("got %v, want an error with %q", err, c.want)
 			}
 		})
+	}
+}
+
+// A station on a seat of a model's seats: facing as it faces, at its front
+// edge on its top, between its ends; the edge running across for a seat
+// facing ahead or astern, fore and aft for one facing across.
+func TestOnSeat(t *testing.T) {
+	f := func(v float64) *float64 { return &v }
+	seats := map[string]modelSeat{
+		"settle": {At: []float64{-1.95, 2.6, 2.5}, Facing: f(0), Along: []float64{-3.25, -1.75}},
+		"long":   {At: []float64{1.75, 1.6, 3.35}, Facing: f(270), Along: []float64{2.15, 4.05}},
+		"fore":   {At: []float64{0.85, 1.6, 2.15}, Facing: f(180), Along: []float64{0.55, 1.75}},
+	}
+	for _, c := range []struct {
+		x, y, z, facing float64
+		want            string
+	}{
+		{-1.95, 2.6, 2.54, 0, "settle"},
+		{-3, 2.6, 2.54, 0, "settle"},
+		{-1.5, 2.6, 2.54, 0, ""},
+		{-1.95, 2.6, 2.54, 180, ""},
+		{-1.95, 2.62, 2.54, 0, ""},
+		{-1.95, 2.6, 2.7, 0, ""},
+		{1.79, 1.6, 2.8, 270, "long"},
+		{1.79, 1.6, 4.2, 270, ""},
+		{1.45, 1.6, 2.11, 180, "fore"},
+		{1.45, 1.6, 2.11, -180, "fore"},
+	} {
+		if got := onSeat(seats, c.x, c.y, c.z, c.facing); got != c.want {
+			t.Errorf("onSeat(%v, %v, %v facing %v) = %q, want %q", c.x, c.y, c.z, c.facing, got, c.want)
+		}
 	}
 }

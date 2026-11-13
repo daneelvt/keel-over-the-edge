@@ -189,11 +189,15 @@ describe('the mark’s place', () => {
       expect(p.u + p.ru).toBeLessThan(leech.x);
       // The near model's chord at half height: the foot's half and the
       // roach; a gaff sail's, its head along the gaff, half its foot and
-      // its head together.
+      // its head together; a full, square-headed main's, near its mean
+      // chord, its area over its luff.
       if (path === boat.art.model) {
         const head = chordAt(sail, 1);
+        const mean = boat.physics.rig.sailArea / (luff * foot);
         expect(chordAtHalf(sail)).toBeGreaterThan(0.5);
-        expect(chordAtHalf(sail)).toBeLessThan(head > 0.2 ? 0.6 + head / 2 : 0.6);
+        expect(chordAtHalf(sail)).toBeLessThan(
+          Math.max(head > 0.2 ? 0.6 + head / 2 : 0.6, 1.15 * mean),
+        );
       }
     });
   });

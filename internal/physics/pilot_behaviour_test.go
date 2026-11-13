@@ -141,8 +141,8 @@ func TestPilotHoldsAnAngleThroughTheShifts(t *testing.T) {
 // sailor would; reefed, the skiff still capsizes once in ten minutes on a
 // beam reach in a stormy spell's gusts of 36 knots with its sheet fixed,
 // and is held there only in the unsettled spells, the next calmer. A boat
-// of two hulls sails the stormy spells at her last reef too, and her beam
-// reach in the trade spells only.
+// of two hulls sails the stormy spells at her last reef too, and a beach
+// cat, whose sailor falls in, her beam reach in the trade spells only.
 func holdsAnAngle(t *testing.T, p *WeatherPrepared, b, first *Prepared, short bool) {
 	type point struct{ angle, sheet float64 }
 	light := []point{{45, 0.02}, {90, 0.23}, {150, 0.75}}
@@ -166,11 +166,12 @@ func holdsAnAngle(t *testing.T, p *WeatherPrepared, b, first *Prepared, short bo
 			if b.square && pt.angle == 45 {
 				// A ship sails no closer than close-hauled, braced up sharp.
 				pt = point{b.closeHauled / deg, 0}
-			} else if b.twin && pt.angle == 90 && (c.regime == "stormy" || c.regime == "unsettled") {
-				// A catamaran on a beam reach with her sheet fixed flies
+			} else if b.twin && b.fallOutHeel < math.Pi && pt.angle == 90 && (c.regime == "stormy" || c.regime == "unsettled") {
+				// A beach cat on a beam reach with her sheet fixed flies
 				// her hull in every gust of an unsettled spell, and the
 				// strongest take her over, at her last reef too: she is
-				// held there in the trade spells, the next calmer.
+				// held there in the trade spells, the next calmer. A
+				// cruising catamaran, far stiffer, is held there too.
 				continue
 			} else if b.kite {
 				if c.regime == "stormy" && pt.angle == 90 {
@@ -305,6 +306,16 @@ func TestPilotTacksAndGybes(t *testing.T) {
 			// her sailor crossing the net from wire to wire: she keeps 56%
 			// of her speed.
 			cases[0].least, cases[1].least = 0.5, 0.5
+		}
+		if boat.b.twin && boat.b.fallOutHeel >= math.Pi {
+			// A cruising catamaran of 12 t turns more slowly still, her
+			// two long hulls at a wheel, and carries less of her way
+			// through the wind: from close-hauled she tacks in under 11 s
+			// keeping 45% of her speed, and gybes in under 11 s.
+			cases[0].within, cases[1].within = 11, 11
+			cases[0].least, cases[1].least = 0.45, 0.45
+			cases[2].within, cases[3].within = 11, 11
+			cases[4].within, cases[5].within = 11, 11
 		}
 		if boat.b.square {
 			close := boat.b.closeHauled / deg

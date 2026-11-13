@@ -27,7 +27,16 @@ type reference struct {
 	// catalog's sailor (course.go).
 	Crew *crew `json:"crew,omitempty"`
 	// Rig, if set, says what ORC rates the original's sails by (sail.go).
-	Rig    *rigData   `json:"rig,omitempty"`
+	Rig *rigData `json:"rig,omitempty"`
+	// Stability, if set, may hold the apparent wind in which a boat of two
+	// hulls, close-hauled at full sail hauled in, lifts her windward hull
+	// to at least LiftWind knots (hulls.go), and give the apparent wind her
+	// builder has her reef at, ReefWind (reefWind); tools/lever reads the
+	// rest.
+	Stability *struct {
+		LiftWind float64 `json:"liftWind"`
+		ReefWind float64 `json:"reefWind"`
+	} `json:"stability,omitempty"`
 	Points []refPoint `json:"points"`
 	Notes  []string   `json:"notes"`
 }
@@ -260,6 +269,21 @@ func runCheck(k *kind, ref *reference) error {
 	}
 	if k.p.HullSpacing > 0 || k.p.RigPitch != 0 {
 		reportHulls(k)
+	}
+	if k.cruising() {
+		for _, w := range []float64{8, 12, 16} {
+			if pl, ok := polarAt(refPolars, w); ok {
+				_, upAngle, _, _ := vmg(pl)
+				fmt.Printf("    close-hauled at her best VMG, %g° in %g knots, she heels %.1f°\n", upAngle, w, at(pl, upAngle).Heel)
+			}
+		}
+		aw, tw := liftWind(k)
+		mark := "ok  "
+		if ref.Stability != nil && ref.Stability.LiftWind > 0 && aw < ref.Stability.LiftWind {
+			mark = "FAIL"
+			failed = append(failed, fmt.Sprintf("her windward hull lifts in %.1f knots of apparent wind, under %g", aw, ref.Stability.LiftWind))
+		}
+		fmt.Printf("  %s close-hauled at %g° at full sail hauled in, her windward hull lifts in %.1f knots of apparent wind (%g true)\n", mark, k.p.CloseHauled, aw, tw)
 	}
 	if k.p.DownwindArea > 0 {
 		var courseWinds []float64

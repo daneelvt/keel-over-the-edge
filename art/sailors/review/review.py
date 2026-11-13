@@ -490,7 +490,7 @@ def clip_sheet(r, fig, look, clip, act, slot, track, path, chains, frames=8, siz
     fig.stage.show(in_boat, wheel=getattr(clip, "standing", False), trapeze=getattr(clip, "trapeze", False),
                    rail=getattr(clip, "rail", False), ship=bool(getattr(clip, "ship", None)),
                    cat=("capsized" if cat == motion.CAT_STAND else "upright") if cat else None,
-                   yacht=bool(getattr(clip, "yacht", None)))
+                   yacht=bool(getattr(clip, "yacht", None)), bridge=bool(getattr(clip, "bridge", None)))
     look.use(look.look)
     pts = []
     for f in picks:
@@ -498,7 +498,8 @@ def clip_sheet(r, fig, look, clip, act, slot, track, path, chains, frames=8, siz
         pts.append(np.array([np.array(p) for p in track_points(fig)]))
     centre, extent = bounds(np.concatenate(pts))
     sheet = Sheet(f"{clip.name}: {n} frames at {clip.fps} a second, frames {', '.join(str(f) for f in picks)}")
-    on_ship = bool(getattr(clip, "ship", None))
+    # (Aboard the ship, or under the catamaran's roof.)
+    on_ship = bool(getattr(clip, "ship", None)) or bool(getattr(clip, "bridge", None))
     for name in ("front", "side", "profile", "top"):
         row = []
         for f in picks:
