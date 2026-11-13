@@ -73,6 +73,7 @@ import { basicMaterial, checkScene, domeCentre, domeDrop, litMaterial } from '..
 import { TIERS } from '../render/quality';
 import { chooseBackend, wantsCompat } from '../render/renderer';
 import {
+  BRIDGE_CLIPS,
   BRIDGE_WALK_SPEED,
   bridgeAnchor,
   bridgeOf,
@@ -1706,7 +1707,9 @@ export class DressingRoom {
             // roof left out: sat, from higher and a little to one side,
             // over her table.
             const a = bridgeAnchor(r.clip);
-            const sat = a !== 'stance' && a !== 'foot' && a !== 'landing' && a !== 'sole';
+            const sat =
+              (a !== 'stance' && a !== 'foot' && a !== 'landing' && a !== 'sole') ||
+              r.clip.startsWith(BRIDGE_CLIPS.seated);
             o.azimuth = back + (sat ? 0.5 : 0);
             o.elevation = a === 'stance' ? 0.4 : sat ? 0.85 : 0.35;
             o.distance = r.near ? (sat ? 3.6 : 4.4) : 4.4 + 0.9 * (n - 1) * this.#boatSpacing();
