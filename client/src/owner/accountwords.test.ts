@@ -227,7 +227,7 @@ describe('the boats', () => {
     expect(boatWords(keel)).toBe('Keelboat «Saltpeter» 311 · red ochre, tanbark sails');
     expect(boatWords({ kind: 'Jolly boat', number: 2 })).toBe('Jolly boat 2');
     expect(cardBoatWords({ ...keel, sailor: 'Iron Mary', machine: true, atSea: true })).toBe(
-      'Keelboat «Saltpeter» 311 · red ochre, tanbark sails · at sea, sailed by Iron Mary (AI)',
+      'Keelboat «Saltpeter» 311 · red ochre, tanbark sails · at sea, sailed by Iron Mary ⚙',
     );
     expect(cardBoatWords({ ...keel, sailor: 'Ann Bonny' })).toContain("· Ann Bonny's, ashore");
     expect(cardBoatWords(keel)).toContain('· available');

@@ -380,6 +380,30 @@
   text-transform: uppercase;
 }
 
+/* The sailor's last story, one line: a tap opens the news on its day. */
+.watch-news {
+  display: block;
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 40px;
+  padding: 0 2px;
+  border: 0;
+  border-bottom: 1px dotted rgb(242 239 231 / 35%);
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: pointer;
+}
+
+.watch-news-head {
+  font-variant-caps: small-caps;
+  letter-spacing: 0.04em;
+}
+
 .watch-card-sky {
   display: flex;
   align-items: center;

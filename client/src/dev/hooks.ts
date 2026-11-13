@@ -119,6 +119,7 @@ import type { ShipsClock } from '../ui/clock';
 import type { Countdown } from '../ui/countdown';
 import type { DeckView } from '../ui/decklazy';
 import { downwindLine, type SailState } from '../ui/model';
+import { serverNews } from '../ui/newsread';
 import type { Settings } from '../ui/settings';
 import type { StatementsView } from '../ui/statementlazy';
 import type { WatchView } from '../ui/watchlazy';
@@ -4118,6 +4119,21 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
     /** Opens the chart, its list, the news or the log; null closes it. */
     openChart(mode: ChartMode | null): void {
       chartParts().chart.show(mode);
+    },
+
+    /** Opens the chart screen's News tab on a day's edition (2006-01-02), today's for null. */
+    openNews(day: string | null = null): void {
+      chartParts().chart.showNews(day);
+    },
+
+    /** Reads the news from the server's route (GET /api/news, which a test may stand in for), not from the sandbox's own chart. */
+    newsFromServer(): void {
+      chartParts().sea.news = serverNews;
+    },
+
+    /** How many listen for what the chart charts: the chart's own, and the news sheet's while it is open. */
+    chartListeners(): number {
+      return chartParts().chart.store.listening;
     },
 
     /** Opens the chart screen's Log tab on a log: the player's own, a sailor's or a machine sailor's. */

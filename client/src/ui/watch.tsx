@@ -82,6 +82,7 @@ import {
   LEAVE_DETAIL,
   LEAVE_QUESTION,
   MORE,
+  NEWS,
   READING,
   SAIL,
   SEARCH,
@@ -759,7 +760,14 @@ export function WatchList({
  * Nothing while the own boat sails. A long name ends in an ellipsis, and
  * the plate's label says it whole.
  */
-export function WatchBar({ view }: { view: WatchView }) {
+export function WatchBar({
+  view,
+  news = null,
+}: {
+  view: WatchView;
+  /** Opens the news, where the chart screen is not yet to be had (before the sea); null at sea. */
+  news?: (() => void) | null;
+}) {
   const w = view.watching.value;
   const place = view.place.value;
   const ended = view.ended.value;
@@ -839,6 +847,11 @@ export function WatchBar({ view }: { view: WatchView }) {
         ) : null}
       </div>
       {another}
+      {news !== null ? (
+        <button type="button" class="head-key watch-news" onClick={news}>
+          {NEWS}
+        </button>
+      ) : null}
       {share}
       {come}
       {sail}
@@ -967,11 +980,11 @@ export function WatchShare({
   );
 }
 
-/** What the screen shows of watching before the sea: the plate, and the list while it is open. */
-export function WatchParts({ view }: { view: WatchView }) {
+/** What the screen shows of watching before the sea: the plate, with the news, and the list while it is open. */
+export function WatchParts({ view, news = null }: { view: WatchView; news?: (() => void) | null }) {
   return (
     <>
-      <WatchBar view={view} />
+      <WatchBar view={view} news={news} />
       <SeaWatchList view={view} />
     </>
   );
@@ -979,14 +992,18 @@ export function WatchParts({ view }: { view: WatchView }) {
 
 /**
  * Before the sea is shown: why a watch the page opened with was refused,
- * or the place in the spectators' queue, and the list; until the result
- * takes it away.
+ * or the place in the spectators' queue, the list, and the day's news;
+ * until the result takes it away.
  */
-export function showWatchWaiting(parent: HTMLElement, view: WatchView): () => void {
+export function showWatchWaiting(
+  parent: HTMLElement,
+  view: WatchView,
+  news: (() => void) | null = null,
+): () => void {
   const host = document.createElement('div');
   host.className = 'hud watch-waiting';
   parent.append(host);
-  render(<WatchParts view={view} />, host);
+  render(<WatchParts view={view} news={news} />, host);
   return () => {
     render(null, host);
     host.remove();

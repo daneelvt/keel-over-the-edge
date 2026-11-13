@@ -69,6 +69,19 @@ describe('the chart’s store', () => {
     expect(s.size).toBe(1);
   });
 
+  it('stops telling a listener that has let go, keeping no hold on it', () => {
+    const s = new ChartStore(words);
+    const told: string[] = [];
+    const before = s.listening;
+    const stop = s.onCharted((es) => told.push(...es.map((e) => s.title(e))));
+    s.receive([entry({ number: 7, name: 'Keyhole Rock', by: 'Mira' })], false);
+    stop();
+    stop();
+    s.receive([entry({ number: 8, name: 'Gull Reach', by: 'Mira' })], false);
+    expect(told).toEqual(['Keyhole Rock']);
+    expect(s.listening).toBe(before);
+  });
+
   it('says how far the edge is: miles to a tenth, metres under a tenth of a mile', () => {
     expect(edgeCaption(0, 0, 8334)).toBe('edge 4.5 NM');
     expect(edgeCaption(8200, 0, 8334)).toBe('edge 134 m');

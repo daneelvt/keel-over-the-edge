@@ -108,27 +108,51 @@ export function storyParts(text: string, names: readonly NewsName[]): StoryPart[
   return out;
 }
 
-/** A name's words around the player's text: "the ", "a Jolly boat", "a sailor"; the player's own words are the name itself. */
+/**
+ * A name's words around the player's text: "the ", "a Jolly boat", "a
+ * sailor"; the player's own words are the name itself. A named sailor's
+ * boat, when the story has it, stands before them: "the Iron Mary, Mira,"
+ * (boat), its comma left to the words after it when they open with one
+ * (stops: the next character of the story's words).
+ */
 export function nameWords(
   n: NewsName,
   opens: boolean,
-): { before: string; text: string; after: string } {
+  stops = '',
+): { before: string; boat: string; text: string; after: string } {
   const cap = (s: string) => (opens ? s.charAt(0).toUpperCase() + s.slice(1) : s);
+  const own = (after: string) => {
+    if (n.boat === undefined || n.boat === '') {
+      return { before: '', boat: '', text: n.name ?? '', after };
+    }
+    return {
+      before: cap('the '),
+      boat: n.boat,
+      text: n.name ?? '',
+      after: /^[,.;:!?]/.test(stops) ? after : `${after},`,
+    };
+  };
   switch (n.kind) {
     case 'human':
-      return { before: '', text: n.name ?? '', after: '' };
+      return own('');
     case 'machine':
-      return { before: '', text: n.name ?? '', after: ' ⚙' };
+      return own(' ⚙');
     case 'boat':
       if (n.name !== undefined && n.name !== '') {
-        return { before: cap('the '), text: n.name, after: '' };
+        return { before: cap('the '), boat: n.name, text: '', after: '' };
       }
-      return { before: cap(article(n.type ?? 'boat')), text: '', after: '' };
+      return { before: cap(article(n.type ?? 'boat')), boat: '', text: '', after: '' };
     case 'sailor':
-      return { before: cap('a sailor'), text: '', after: '' };
+      return { before: cap('a sailor'), boat: '', text: '', after: '' };
     default:
-      return { before: cap('a former sailor'), text: '', after: '' };
+      return { before: cap('a former sailor'), boat: '', text: '', after: '' };
   }
+}
+
+/** The words after a part of a story: what a name's comma looks to. */
+export function nextWords(parts: readonly StoryPart[], i: number): string {
+  const p = parts[i + 1];
+  return p !== undefined && 'words' in p ? p.words : '';
 }
 
 /** A kind's name with "a" or "an". */
@@ -138,13 +162,82 @@ function article(kind: string): string {
 
 /** A story's words as plain text, its names set in: for an accessible name and the tests. */
 export function storyText(s: NewsStory): string {
-  return storyParts(s.text, s.names)
-    .map((p) => {
+  const parts = storyParts(s.text, s.names);
+  return parts
+    .map((p, i) => {
       if ('words' in p) {
         return p.words;
       }
-      const w = nameWords(p.name, p.opens);
-      return w.before + w.text + w.after;
+      const w = nameWords(p.name, p.opens, nextWords(parts, i));
+      return w.before + w.boat + (w.boat !== '' && w.text !== '' ? ', ' : '') + w.text + w.after;
     })
     .join('');
+}
+
+/** Every story of an edition: above the front page, on it, and the reader's own box. */
+export function storiesOf(e: Edition): NewsStory[] {
+  return [...e.lead, ...e.stories, ...e.shipmates];
+}
+
+/** The day of a date, 2006-01-02, as an instant: its midday in UTC, so its calendar date reads the same in UTC. */
+function middayOf(day: string): Date | null {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(day);
+  return m === null ? null : new Date(Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]), 12));
+}
+
+/** The place a zone is named for: "America/New_York" is "New York". */
+export function zonePlace(zone: string): string {
+  return (zone.split('/').pop() ?? zone).replace(/_/g, ' ');
+}
+
+/** Whether two zones keep one calendar day: the same name, or the same wall clock at the day's midday. */
+function sameDay(a: string, b: string, at: Date): boolean {
+  if (a === b) {
+    return true;
+  }
+  const f = (z: string) =>
+    new Intl.DateTimeFormat('en-US', { timeZone: z, dateStyle: 'short', timeStyle: 'long' }).format(
+      at,
+    );
+  try {
+    return f(a) === f(b);
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * An edition's date as its masthead reads it, a calendar date: "Thursday
+ * 12 November"; with the place whose clock keeps the world's days when the
+ * reader's own differs, "Thursday 12 November (New York)". own is the
+ * reader's zone, the device's by default.
+ */
+export function editionDate(day: string, zone: string, own?: string): string {
+  const at = middayOf(day);
+  if (at === null) {
+    return day;
+  }
+  const date = new Intl.DateTimeFormat('en-GB', {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+    timeZone: 'UTC',
+  }).format(at);
+  const mine = own ?? new Intl.DateTimeFormat().resolvedOptions().timeZone;
+  return zone === '' || sameDay(mine, zone, at) ? date : `${date} (${zonePlace(zone)})`;
+}
+
+/** An edition's day, short, for its key: "Wednesday 11". */
+export function editionDay(day: string): string {
+  const at = middayOf(day);
+  return at === null
+    ? day
+    : new Intl.DateTimeFormat('en-GB', { weekday: 'long', day: 'numeric', timeZone: 'UTC' }).format(
+        at,
+      );
+}
+
+/** A headword as it is set in small capitals: its first letter a capital, the rest small. */
+export function headWords(head: string): string {
+  return head.charAt(0) + head.slice(1).toLowerCase();
 }
