@@ -109,6 +109,9 @@ class Stage:
         # The yacht's, judged apart too (Yacht.tree): her ropes are held,
         # her wheels measured apart.
         self.yacht = Yacht(root, spec["cruiser"]) if spec.get("cruiser") else None
+        # The catamaran's, judged apart too (Bridgedeck.tree): her ropes and
+        # rails are held, her wheel measured apart.
+        self.bridge = Bridgedeck(root, spec["bridgedeck"]) if spec.get("bridgedeck") else None
         self.tree = _tree(self.solid + ([self.wheel.deck] if self.wheel else []) +
                           (self.trapeze.solid if self.trapeze else []) + (self.rail.solid if self.rail else []))
 
@@ -201,6 +204,8 @@ class Stage:
             return self.cat.point(name, side)
         if self.yacht is not None and (name in Yacht.POINTS or name in self.yacht.grips):
             return self.yacht.point(name, side)
+        if self.bridge is not None and name in self.bridge.places:
+            return self.bridge.point(name, side)
         fwd, inb, up = self.spec["points"][name]
         p = self.frame(side) @ Vector((fwd, inb, up))
         if name.startswith("tiller"):
@@ -214,13 +219,18 @@ class Stage:
         own axes, x to its left."""
         return Matrix.Rotation(np.radians(-90.0 * side), 4, "Z")
 
-    def show(self, shown, wheel=False, trapeze=False, rail=False, ship=False, cat=None, yacht=False):
+    def show(self, shown, wheel=False, trapeze=False, rail=False, ship=False, cat=None, yacht=False, bridge=False):
         """Shows the dinghy's hull (shown), or the wheel's stage, or the
         trapeze's boat, or the rail's, or the ship, or the beach cat
-        (cat: upright, or lying on her side, capsized), or the yacht."""
+        (cat: upright, or lying on her side, capsized), or the yacht, or the
+        catamaran (bridge)."""
         for o in self.objects:
-            o.hide_render = not shown or wheel or trapeze or rail or ship or bool(cat) or yacht or \
+            o.hide_render = not shown or wheel or trapeze or rail or ship or bool(cat) or yacht or bridge or \
                 o not in self.solid
+        if self.bridge is not None:
+            for o in self.bridge.objects:
+                o.hide_render = not (shown and bridge) or o.type != "MESH" or o in self.bridge.planes or \
+                    o in self.bridge.hidden
         if self.yacht is not None:
             for o in self.yacht.objects:
                 o.hide_render = not (shown and yacht) or o.type != "MESH" or o in self.yacht.planes or \
@@ -1091,6 +1101,285 @@ class Yacht:
         skipped left out."""
         hub = self._side(self.hub, side)
         p = np.asarray(points, float) - np.array(hub)
+        r = np.hypot(p[:, 0], p[:, 2])
+        hit = np.hypot(r - self.radius, p[:, 1]) < self.RIM
+        a = np.arctan2(p[:, 0], p[:, 2])
+        step = 2 * np.pi / self.spokes
+        off = (a + step / 2) % step - step / 2
+        across = np.abs(np.sin(off) * r)
+        hit |= (across < self.SPOKE) & (np.abs(p[:, 1]) < self.SPOKE) & (r < self.radius + self.handles) & \
+            (np.cos(off) > 0)
+        if skip is not None:
+            hit &= ~np.asarray(skip, bool)
+        return np.flatnonzero(hit)
+
+
+class Bridgedeck:
+    """The cruising catamaran's stage: her model (spec `boat`), imported and
+    moved by `at` in the stage's scene (x to starboard, y forward, z up),
+    clear of the rest. Her places, from her model's nodes:
+
+    - at her wheel (the `wheel` node, off her centreline): the helm's
+      stance aft of it (`bridge-stance`, the `sailor` node), its hub
+      (`bridge-hub`) and the grips on its rim (`grips`: each an angle from
+      the top, degrees, to starboard as the helm sees it, so far in from the
+      rim's middle as is still within its wood); the settle's front edge
+      behind the stance, at the wheel (`bridge-wheel-seat`), and the
+      platform under it (`bridge-wheel-floor`);
+    - her seats (the `seats` node), each a family of places: the front
+      edge's top where its clips are made (`bridge-helm`, the settle beside
+      the helm; `bridge-table`, the L-shaped bench round the table;
+      `bridge-beam`, the aft crossbeam's bench; `bridge-lounger`), the
+      floor before it (`-floor`) and the top of its back (`-back`); and the
+      table's edge nearest the table's seat (`bridge-table-top`);
+    - her helm's ladder: its foot on the sole (`bridge-stairs`, facing up
+      it), its landing (`bridge-landing`, facing down it, aft), each
+      tread's middle from the lowest
+      (`bridge-tread-1`...), and its rail over each (`bridge-rail-1`...,
+      `bridge-rail-0` over the sole at its foot, the last over the landing);
+    - the sole where her cockpit is walked (`bridge-sole`);
+    - the boom's underside at its lowest, amidships (`boom`).
+
+    Each place belongs to a family whose own place it is placed from, and
+    the way a figure there faces (`facing`): its port side's mirror (a clip
+    made with its -port) is the same place seen in a mirror stood along that
+    way through it, the figure its own mirror image (`point`, side -1). Her
+    seats, her helm's station and her ladder are hers alone: a mirror of
+    one across her is no place of hers.
+
+    Her hulls, bridgedeck, saloon, roof and its posts, helm's platform,
+    settle, console and capstans, ladder, cockpit's seats and table, beams,
+    mast and boom are solid (`tree`), but for her ropes and her bronze
+    rails (`ropes`), which only what holds them may meet, and her wheel,
+    whose wood is measured apart (`near`). Her sails are neither."""
+
+    # What of her model only a hand may hold.
+    HELD = ("rope", "bronze")
+    # What of her model is neither solid nor held: her sails and what flies
+    # from her rig; her wheel (measured apart).
+    LEFT_OUT = ("sail", "jib", "telltales", "pennant")
+    WHEEL = "wheel"
+    # A wheel's rim and spokes as thick as her model's (their radii).
+    RIM = 0.024
+    SPOKE = 0.017
+    SEATS = ("helm", "table", "beam", "lounger")
+
+    def __init__(self, root, spec):
+        self.spec = spec
+        before = set(bpy.data.objects)
+        bpy.ops.import_scene.gltf(filepath=os.path.join(root, "art", spec["boat"]))
+        self.objects = [o for o in bpy.data.objects if o not in before]
+        self.at = Vector(spec["at"])
+        for o in self.objects:
+            o.name = "bridge-" + re.sub(r"\.\d{3}$", "", o.name)
+            o.hide_render = True
+            if o.parent is None:
+                o.location = o.location + self.at
+        bpy.context.view_layer.update()
+        self.hidden = [o for o in self.objects if o.name in ["bridge-" + n for n in self.LEFT_OUT]]
+
+        def node(name):
+            return bpy.data.objects["bridge-" + name]
+
+        def blender(p):
+            # The model's frame (x to starboard, y up, z aft) as the scene's.
+            return Vector((float(p[0]), -float(p[2]), float(p[1]))) + self.at
+
+        seats = node("seats")["seats"]
+        w = node("wheel")["wheel"]
+        self.radius = float(w["radius"])
+        self.spokes = int(w["spokes"])
+        self.handles = float(w["handles"])
+        self.hub = node("wheel").matrix_world.translation.copy()
+        self.stance = node("sailor").matrix_world.translation.copy()
+        self.grips = {name: self.spoke(float(deg), self.radius - float(inside))
+                      for name, (deg, inside) in spec["grips"].items()}
+        # The places, each with its family's place and facing (degrees from
+        # ahead toward starboard).
+        self.places = {}
+        self.family = {}
+
+        def put(name, p, family):
+            self.places[name] = p
+            self.family[name] = family
+
+        self.facings = {"bridge-stance": 0.0}
+        put("bridge-stance", self.stance.copy(), "bridge-stance")
+        put("bridge-hub", self.hub.copy(), "bridge-stance")
+        for name, p in self.grips.items():
+            put(name, p, "bridge-stance")
+        helm = seats["helm"]
+        edge = blender(list(helm["at"]))
+        put("bridge-wheel-seat", Vector((self.stance.x, edge.y, edge.z)), "bridge-stance")
+        put("bridge-wheel-floor", Vector((self.stance.x, edge.y, self.at.z + float(helm["floor"]))), "bridge-stance")
+        self.seats = {}
+        for key in self.SEATS:
+            s = seats[key]
+            name = "bridge-" + key
+            at = blender(list(s["at"]))
+            f = float(s["facing"])
+            ahead = self.ahead(f)
+            floor = self.at.z + float(s["floor"])
+            self.facings[name] = f
+            put(name, at, name)
+            put(name + "-floor", Vector((at.x, at.y, floor)), name)
+            put(name + "-back", at - ahead * float(s["back"]) + Vector((0.0, 0.0, floor + float(s["backTop"]) - at.z)),
+                name)
+            self.seats[key] = {"at": at, "facing": f, "floor": floor, "back": float(s["back"]),
+                               "along": [float(x) for x in s["along"]]}
+        top = [float(x) for x in seats["table"]["top"]]
+        # The table's edge nearest its seat, across from the seat's place.
+        t = self.places["bridge-table"]
+        put("bridge-table-top", Vector((self.at.x + top[1], t.y, self.at.z + top[4])), "bridge-table")
+        st = seats["stairs"]
+        foot = blender(list(st["foot"]))
+        head = blender(list(st["head"]))
+        self.stairs = {"foot": foot, "head": head, "rise": float(st["rise"]), "run": float(st["run"]),
+                       "treads": int(st["treads"]), "from": float(st["from"]), "to": float(st["to"])}
+        # Climbed facing forward from its foot, and come down facing aft
+        # from its head.
+        self.facings["bridge-stairs"] = 0.0
+        self.facings["bridge-landing"] = 180.0
+        put("bridge-stairs", foot, "bridge-stairs")
+        put("bridge-landing", head, "bridge-landing")
+        sides = [float(x) for x in st["sides"]]
+        mid = self.at.x + (sides[0] + sides[1]) / 2
+        rail = [float(x) for x in st["rail"]]
+        n = self.stairs["treads"]
+        sole = self.at.z + float(st["foot"][1])
+        for k in range(n + 2):
+            # The k-th step from the sole (0, the sole at the foot; n + 1, the
+            # landing): its middle (the model's z along her), and the rail
+            # over it, rising from the ladder's foot to its head and level
+            # beyond.
+            if k == 0:
+                mz, z = self.stairs["from"] + 0.1, sole
+            elif k <= n:
+                # Tread k from the foot is the model's (n - k)th from the top.
+                mz = self.stairs["to"] + self.stairs["run"] * (n - k + 0.5)
+                z = head.z - self.stairs["rise"] * (n + 1 - k)
+            else:
+                mz, z = self.stairs["to"] - 0.15, head.z
+            y = self.at.y - mz
+            if 0 < k <= n:
+                put(f"bridge-tread-{k}", Vector((mid, y, z)), "bridge-stairs")
+            t = min(max((self.stairs["from"] - mz) / (self.stairs["from"] - self.stairs["to"]), 0.0), 1.0)
+            # (Over the landing, its own rail, inboard of its edge.)
+            x = rail[2] if mz < self.stairs["to"] else rail[0]
+            put(f"bridge-rail-{k}", Vector((self.at.x + x, y, sole + rail[1] + t * (head.z - sole))), "bridge-stairs")
+        self.facings["bridge-sole"] = 0.0
+        put("bridge-sole", blender(list(seats["walk"])), "bridge-sole")
+        # The ladder's mirror is about its middle.
+        self.mirror_x = {"bridge-stairs": mid, "bridge-landing": mid}
+
+        def material(o, p):
+            slots = o.material_slots
+            return slots[p.material_index].name.split(".")[0] if p.material_index < len(slots) else ""
+
+        meshes = [o for o in self.objects if o.type == "MESH" and o not in self.hidden]
+        self.wheels = [o for o in meshes if o.name == "bridge-" + self.WHEEL]
+        solid = [o for o in meshes if o not in self.wheels]
+        self.hull = node("hull")
+        self.tree = _tree(solid, lambda o, p: material(o, p) not in self.HELD)
+        # Her decks, platform, seats and table: what a ray down finds them by.
+        self.decks = _tree([self.hull], lambda o, p: material(o, p) not in self.HELD)
+        self.ropes = _tree(solid, lambda o, p: material(o, p) in self.HELD)
+        # The boom's underside, amidships: what a ray up from the roof meets
+        # first.
+        boom = node("boom")
+        self.boom_tree = _tree([boom])
+        y = boom.matrix_world.translation.y - 1.5
+        hit = self.boom_tree.ray_cast(Vector((self.at.x, y, self.at.z + 3.6)), Vector((0, 0, 1)), 5.0)
+        self.boom = hit[0].z if hit[0] is not None else None
+        # Each seat's top, from its front edge back to its back, from end to
+        # end: what a seated figure's cloth is laid on there (`planes`).
+        self.planes = [self._plane(key) for key in self.SEATS]
+        # And her floors: the cloth hanging from a seated figure to the sole
+        # is laid on it.
+        for key, height in (("sole", float(st["foot"][1])), ("platform", float(seats["platform"]))):
+            x0, x1, z0, z1 = (float(v) for v in seats["floors"][key])
+            me = bpy.data.meshes.new(f"bridge-{key}-plane")
+            z = self.at.z + height
+            me.from_pydata([(self.at.x + x0, self.at.y - z0, z), (self.at.x + x1, self.at.y - z0, z),
+                            (self.at.x + x1, self.at.y - z1, z), (self.at.x + x0, self.at.y - z1, z)], [],
+                           [(0, 1, 2, 3), (3, 2, 1, 0)])
+            o = bpy.data.objects.new(f"bridge-{key}-plane", me)
+            bpy.context.scene.collection.objects.link(o)
+            o.hide_render = True
+            self.planes.append(o)
+        self.objects += self.planes
+
+    @staticmethod
+    def ahead(facing):
+        """The way a figure faces at this facing (degrees from ahead toward
+        starboard), in the scene."""
+        a = np.radians(facing)
+        return Vector((float(np.sin(a)), float(np.cos(a)), 0.0))
+
+    def frame(self, family, side=1):
+        """A place's frame in the scene (the figure's ahead, its left, up),
+        for a family's places; on side -1, its mirror (left the other way)."""
+        f = self.facings[family]
+        a = self.ahead(f)
+        left = Vector((-a.y, a.x, 0.0)) * side
+        return Matrix((a, left, (0.0, 0.0, 1.0))).transposed()
+
+    def facing(self, family):
+        """The figure's turn to face as a family's places face: it faces -y
+        in its own axes."""
+        return Matrix.Rotation(np.pi - np.radians(self.facings[family]), 4, "Z")
+
+    def _plane(self, key):
+        s = self.seats[key]
+        a = self.ahead(s["facing"])
+        at = s["at"]
+        lo, hi = sorted(s["along"])
+        # Its ends along its front edge: the model's x for a seat facing fore
+        # or aft, its z (aft, the scene's -y) for one facing athwartships.
+        if abs(a.y) > 0.5:
+            ends = [Vector((self.at.x + e, at.y, at.z)) for e in (lo, hi)]
+        else:
+            ends = [Vector((at.x, self.at.y - e, at.z)) for e in (lo, hi)]
+        verts = [tuple(e) for e in ends] + [tuple(e - a * s["back"]) for e in ends]
+        me = bpy.data.meshes.new(f"bridge-{key}-plane")
+        me.from_pydata(verts, [], [(0, 1, 3, 2), (2, 3, 1, 0)])
+        o = bpy.data.objects.new(f"bridge-{key}-plane", me)
+        bpy.context.scene.collection.objects.link(o)
+        o.hide_render = True
+        return o
+
+    def spoke(self, degrees, along):
+        """The point along the wheel's spoke at this angle from the top, this
+        far from the hub."""
+        a = np.radians(degrees)
+        return self.hub + Vector((np.sin(a) * along, 0.0, np.cos(a) * along))
+
+    def point(self, name, side=1):
+        """A place, on a side: as it is (1), or (-1) its mirror in its
+        family's mirror, stood along the way the family's place faces."""
+        p = self.places[name].copy()
+        if side > 0:
+            return p
+        fam = self.family[name]
+        if fam in self.mirror_x:
+            return Vector((2 * self.mirror_x[fam] - p.x, p.y, p.z))
+        a = self.ahead(self.facings[fam])
+        left = Vector((-a.y, a.x, 0.0))
+        d = (p - self.places[fam]).dot(left)
+        return p - left * (2 * d)
+
+    def down(self, x, y, z=None):
+        """The height of the first surface of her hull (her decks, platform,
+        seats and table, not her rig) a ray straight down at (x, y) meets,
+        from z (or from under her roof), or None."""
+        top = (self.at.z + 3.25) if z is None else z
+        hit = self.decks.ray_cast(Vector((x, y, top)), Vector((0, 0, -1)), 8.0)
+        return None if hit[0] is None else hit[0].z
+
+    def near(self, points, skip=None):
+        """Which points are within the wheel's rim or a spoke's thickness of
+        it (inside its wood): the indices, those skipped left out."""
+        p = np.asarray(points, float) - np.array(self.hub)
         r = np.hypot(p[:, 0], p[:, 2])
         hit = np.hypot(r - self.radius, p[:, 1]) < self.RIM
         a = np.arctan2(p[:, 0], p[:, 2])

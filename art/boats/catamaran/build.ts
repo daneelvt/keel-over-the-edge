@@ -382,52 +382,55 @@ const LANDING_AFT = 2.65;
 const LADDER_IN = NOTCH_IN;
 const LADDER_FOOT = 3.65;
 const TREADS = 4;
-/**
- * The wheel: its stance on the platform, its rim's size, its hub ahead of
- * and above the stance. The helm stands close to her small wheel, the
- * settle just behind the heels, so that sat on the settle's edge a hand
- * still reaches the rim.
- */
+const LADDER_RAIL = LADDER_IN + 0.03;
+/** The wheel: its stance on the platform, its rim's size, its hub ahead of and above the stance. */
 const STANCE: Vec3 = [-2.6, PLAT_Y, 2.15];
 const WHEEL_RADIUS = 0.4;
 const WHEEL_HANDLE = 0.08;
 const WHEEL_SPOKES = 8;
-const WHEEL_AHEAD = 0.4;
+const WHEEL_AHEAD = 0.55;
 const WHEEL_UP = 1.05;
 const HUB: Vec3 = [STANCE[0], STANCE[1] + WHEEL_UP, STANCE[2] - WHEEL_AHEAD];
 /** The console before the wheel. */
 const CONSOLE_AFT = NOTCH_FORE + 0.07;
 /**
- * The settle: its front edge (this far aft of the wheel's hub, behind the
- * standing helm's heels), its seat's after end where its back stands, its
- * top; from the platform's outer side to near its inner.
+ * The settle: its front edge, its seat's after end where its back stands,
+ * its back's height, its top; from the platform's outer side to near its
+ * inner.
  */
-const SETTLE_FORE = STANCE[2] - WHEEL_AHEAD + 0.52;
-const SETTLE_AFT = SETTLE_FORE + 0.39;
+const SETTLE_FORE = 2.5;
+const SETTLE_AFT = PLAT_AFT - 0.06;
 const SETTLE_BACK = 0.42;
 const SETTLE_TOP = PLAT_Y + 0.45;
 const SETTLE_OUT = -3.25;
 const SETTLE_IN = -1.65;
 /** The cockpit's seats' tops, above the sole. */
 const SEAT_TOP = SOLE + 0.45;
-/** The L-shaped bench: its long leg along the starboard side, its forward leg along the bulkhead. */
-const LBENCH_FRONT = 1.95;
-const LBENCH_OUT = 2.45;
+/**
+ * The L-shaped bench: its long leg along the starboard side, its front
+ * edge over the hull's inner side (so the legs of those on it fall clear of
+ * the hull's deck to the sole), its forward leg along the bulkhead.
+ */
+const LBENCH_FRONT = 1.75;
+const LBENCH_OUT = 2.25;
 const LBENCH_LEG = 2.15;
 const LBENCH_INNER = 0.55;
 const LBENCH_AFT = 4.05;
 /** The table: 1.4 m by 0.82, its top at a table's height above the sole. */
 const TABLE: { x0: number; x1: number; z0: number; z1: number; y: number } = {
-  x0: 0.8,
-  x1: 1.62,
+  x0: 0.6,
+  x1: 1.42,
   z0: 2.45,
   z1: 3.85,
   y: SOLE + 0.72,
 };
-/** The bench along the aft crossbeam: its front edge, its back, its ends. */
+/**
+ * The bench along the aft crossbeam: its front edge, its back, its ends;
+ * short of the lounger, so the legs of those on it have the sole before it.
+ */
 const AFT_FRONT = 4.2;
 const AFT_BACK = 4.65;
-const AFT_PORT = -1.3;
+const AFT_PORT = -0.75;
 const AFT_STAR = LBENCH_OUT;
 /** The lounger: to port, aft of the ladder's foot, along the hull's side. */
 const LOUNGER_FRONT = -1.4;
@@ -454,7 +457,7 @@ const STATIONS: { at: Vec3; pose: string; facing: number }[] = [
   { at: [0.25, SEAT_TOP, AFT_FRONT + ON_SEAT], pose: 'seated', facing: 0 },
   { at: [0.85, SEAT_TOP, AFT_FRONT + ON_SEAT], pose: 'seated', facing: 0 },
   { at: [1.45, SEAT_TOP, AFT_FRONT + ON_SEAT], pose: 'seated', facing: 0 },
-  { at: [LOUNGER_FRONT - ON_SEAT, LOUNGER_TOP, 4.0], pose: 'seated', facing: 90 },
+  { at: [LOUNGER_FRONT - ON_SEAT, LOUNGER_TOP, 4.05], pose: 'seated', facing: 90 },
   { at: [LOUNGER_FRONT - ON_SEAT, LOUNGER_TOP, 4.5], pose: 'seated', facing: 90 },
 ];
 
@@ -1246,14 +1249,16 @@ function helmStation(): {
     );
   }
   if (D.small) {
-    // The rail, on the ladder's inboard side and round the landing's.
+    // The rail, on the ladder's inboard side, a little outboard of its
+    // treads (a coat's skirts clear of its posts), and round the landing's.
     const rail: Vec3[] = [
-      [LADDER_IN - 0.02, SOLE + 0.9, LADDER_FOOT],
-      [LADDER_IN - 0.02, PLAT_Y + 0.9, LANDING_AFT],
+      [LADDER_RAIL, SOLE + 0.9, LADDER_FOOT],
+      [LADDER_RAIL, PLAT_Y + 0.9, LANDING_AFT],
+      [LADDER_IN - 0.02, PLAT_Y + 0.9, LANDING_AFT - 0.05],
       [LADDER_IN - 0.02, PLAT_Y + 0.9, PLAT_FORE + 0.25],
     ];
     bronze.tube(rail, [0.016], 6);
-    for (const p of rail) {
+    for (const p of [rail[0], rail[1], rail[3]] as Vec3[]) {
       bronze.tube(
         [[p[0], p[2] > LANDING_AFT ? SOLE + 0.02 + (p[1] - SOLE - 0.9) : PLAT_Y, p[2]], p],
         [0.014],
@@ -2612,10 +2617,13 @@ function bridgedeckData(): Record<string, number> {
  * front edge on its top where a clip of it is made (at a station), the way
  * one sat there faces (degrees from ahead toward starboard, as a
  * station's), the floor under the feet, the seat's back (how far behind
- * the edge, and its top over the floor); the table; the ladder's foot and
- * head on its middle, its rise and run, its treads' sides, its rail's line
- * (inboard of the treads, its height over their nosings); the sole where
- * the cockpit is walked; the platform's height.
+ * the edge, and its top over the floor) and its ends along the edge (x
+ * or z as the edge runs); the table (its sides, ends and top); the
+ * ladder's foot and head on its middle where it is climbed from and to,
+ * its run (from its foot to the landing, z), its rise and run a tread,
+ * its treads' sides, its rail's line (inboard of the treads, its height
+ * over their nosings, and inboard of the landing); the sole where the
+ * cockpit is walked; the platform's height; the floors' plans.
  */
 function seatsData(): Record<string, unknown> {
   const v = (p: Vec3): number[] => p.map(round4);
@@ -2629,7 +2637,7 @@ function seatsData(): Record<string, unknown> {
       floor: PLAT_Y,
       back: round4(SETTLE_AFT - SETTLE_FORE),
       backTop: round4(SETTLE_TOP + SETTLE_BACK - PLAT_Y),
-      ends: v([SETTLE_OUT, SETTLE_IN, 0]).slice(0, 2),
+      along: v([SETTLE_OUT, SETTLE_IN, 0]).slice(0, 2),
     },
     table: {
       at: v([LBENCH_FRONT, SEAT_TOP, 3.35]),
@@ -2637,6 +2645,7 @@ function seatsData(): Record<string, unknown> {
       floor: SOLE,
       back: round4(LBENCH_OUT - LBENCH_FRONT),
       backTop: round4(SEAT_TOP + 0.4 - SOLE),
+      along: v([LBENCH_LEG, LBENCH_AFT, 0]).slice(0, 2),
       top: v([TABLE.x0, TABLE.x1, TABLE.z0]).concat(round4(TABLE.z1), round4(TABLE.y)),
     },
     beam: {
@@ -2645,25 +2654,35 @@ function seatsData(): Record<string, unknown> {
       floor: SOLE,
       back: round4(AFT_BACK + 0.03 - AFT_FRONT),
       backTop: round4(SEAT_TOP + 0.42 - SOLE),
+      along: v([AFT_PORT, AFT_STAR, 0]).slice(0, 2),
     },
     lounger: {
-      at: v([LOUNGER_FRONT, LOUNGER_TOP, 4.0]),
+      at: v([LOUNGER_FRONT, LOUNGER_TOP, 4.05]),
       facing: 90,
       floor: SOLE,
       back: round4(LOUNGER_FRONT - LOUNGER_OUT),
       backTop: round4(LOUNGER_TOP + 0.4 - SOLE),
+      along: v([LOUNGER_FORE, LOUNGER_AFT, 0]).slice(0, 2),
     },
     stairs: {
-      foot: v([mid + 0.08, SOLE, LADDER_FOOT + 0.12]),
-      head: v([mid, PLAT_Y, LANDING_AFT - 0.2]),
+      foot: v([mid + 0.03, SOLE, LADDER_FOOT + 0.23]),
+      head: v([mid - 0.04, PLAT_Y, LANDING_AFT - 0.2]),
+      from: round4(LADDER_FOOT),
+      to: round4(LANDING_AFT),
       rise: round4(rise),
       run: round4(run),
       treads: TREADS,
       sides: v([PLAT_IN + 0.05, LADDER_IN - 0.05, 0]).slice(0, 2),
-      rail: v([LADDER_IN - 0.02, 0.9, 0]).slice(0, 2),
+      rail: v([LADDER_RAIL, 0.9, LADDER_IN - 0.02]),
     },
     walk: v([-0.2, SOLE, 3.0]),
     platform: PLAT_Y,
+    // The floors' plans, x from and to, z from and to: the cockpit's sole
+    // between the hulls' inner sides, the helm's platform and its landing.
+    floors: {
+      sole: [-1.6, LBENCH_FRONT, HOUSE_AFT, BRIDGE_AFT].map(round4),
+      platform: [PLAT_OUT, LADDER_IN, PLAT_FORE, PLAT_AFT].map(round4),
+    },
   };
 }
 

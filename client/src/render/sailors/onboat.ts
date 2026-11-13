@@ -42,6 +42,7 @@ import type { Boat as BoatKind } from '../../catalog';
 import type { BoatPose } from '../../predict/blend';
 import { RECORDS } from '../../predict/layout.gen';
 import { fallToEdge, glowMaterial, litMaterial } from '../materials';
+import { namesBridgeClips } from './bridgedeck';
 import { aboard, CREW_BESIDE, namesCatClips, standOf } from './cat';
 import { Clip } from './clips';
 import { type SailorColours, sailorColours, sailorLight } from './material';
@@ -85,6 +86,8 @@ export interface SailorUrls {
   cat?: () => Promise<string>;
   /** The clips aboard a cruising yacht's URL, fetched for a kind whose art names them. */
   cruiser?: () => Promise<string>;
+  /** The clips aboard a cruising catamaran's URL, fetched for a kind whose art names them. */
+  bridgedeck?: () => Promise<string>;
   colours: { main: string; skin: string; hair: string };
 }
 
@@ -257,6 +260,11 @@ export class BoatSailor {
     const cruiser = namesYachtClips(kind.art) ? await aboardYacht(urls, renderer) : null;
     if (cruiser !== null) {
       files.push(cruiser);
+    }
+    // Aboard a cruising catamaran, her people's clips too.
+    const bridgedeck = namesBridgeClips(kind.art) ? await aboardBridge(urls, renderer) : null;
+    if (bridgedeck !== null) {
+      files.push(bridgedeck);
     }
     for (const file of files) {
       for (const a of file.clips) {
@@ -613,6 +621,22 @@ async function aboardYacht(
     return await loadClips(await urls.cruiser(), renderer);
   } catch (e) {
     console.warn('the sailor’s clips aboard the yacht did not load', e);
+    return null;
+  }
+}
+
+/** A look's clips aboard a cruising catamaran, from their URL; null (warned) if they did not load. */
+async function aboardBridge(
+  urls: SailorUrls,
+  renderer: WebGPURenderer,
+): Promise<SailorClips | null> {
+  if (urls.bridgedeck === undefined) {
+    return null;
+  }
+  try {
+    return await loadClips(await urls.bridgedeck(), renderer);
+  } catch (e) {
+    console.warn('the sailor’s clips aboard the catamaran did not load', e);
     return null;
   }
 }

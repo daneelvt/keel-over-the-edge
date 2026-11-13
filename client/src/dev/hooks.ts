@@ -2521,7 +2521,8 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
             l.wheelState === 'loading' ||
             l.trapezeState === 'loading' ||
             l.catState === 'loading' ||
-            l.cruiserState === 'loading',
+            l.cruiserState === 'loading' ||
+            l.bridgeState === 'loading',
         ) ??
           false);
       while (busy()) {

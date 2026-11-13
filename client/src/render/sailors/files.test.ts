@@ -7,11 +7,13 @@
 // is the mask, both KTX2; and the clips with a place each, those at a
 // wheel, those on a trapeze's wire, those on a rail (with the crouch) and
 // the ship's company's (about her decks, and her work and aloft), a beach
-// cat's people's and a cruising yacht's in files of their own; and the
-// trapeze harness, skinned to the same skeleton, with its hook.
+// cat's people's, a cruising yacht's and a cruising catamaran's in files of
+// their own; and the trapeze harness, skinned to the same skeleton, with
+// its hook.
 
 import { readdirSync, readFileSync } from 'node:fs';
 import { describe, expect, test } from 'vitest';
+import { BRIDGE_FILE, BRIDGE_NOT_FOR_MACHINES, bridgeAnchor, inBridgeFile } from './bridgedeck';
 import { CAT_CLIPS, catAnchor, catSide, inCatFile } from './cat';
 import { ALOFT_CLIPS, DECK_CLIPS, NOT_FOR_MACHINES, shipAnchor } from './ship';
 import { inYachtFile, YACHT_FILE, YACHT_NOT_FOR_MACHINES, yachtAnchor, yachtSide } from './yacht';
@@ -298,6 +300,30 @@ describe.each(looks)('%s', (look) => {
           default:
             throw new Error(`${name} has no place`);
         }
+      }
+    });
+
+    test('its clips aboard a cruising catamaran, a file of its own on its skeleton: each placed upright from its place, facing the way it faces', () => {
+      if (look === 'test') {
+        return;
+      }
+      const bridge = readGltf(`${look}/${version}.bridgedeck.glb`);
+      const names = (bridge.animations ?? []).map((a) => a.name).sort();
+      expect(names).toEqual(
+        BRIDGE_FILE.filter(
+          (c) => look !== 'machine' || !BRIDGE_NOT_FOR_MACHINES.includes(c),
+        ).sort(),
+      );
+      expect(joints(bridge)).toEqual(joints(clips));
+      for (const name of names) {
+        expect(inBridgeFile(name), name).toBe(true);
+        expect(bridgeAnchor(name), name).not.toBeNull();
+        const m = bridge.nodes.find((n) => n.name === `place-${name}`)?.matrix ?? [];
+        // Near its place on her, upright, facing as the place faces (ahead,
+        // −z, in the place's own frame).
+        expect(Math.hypot(m[12] ?? 9, m[13] ?? 9, m[14] ?? 9), name).toBeLessThan(1.2);
+        expect(m[5] ?? 0, name).toBeGreaterThan(0.99);
+        expect(m[10] ?? 0, name).toBeLessThan(-0.99);
       }
     });
 

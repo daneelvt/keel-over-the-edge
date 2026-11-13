@@ -141,6 +141,7 @@ import {
 import { chordAt, chordAtHalf, markPlace } from './machinemark';
 import { lineMaterial, litMaterial, sailGlow } from './materials';
 import { placeSailor, SAILING, type SailorFrame, type SailorPlace } from './sailor';
+import { namesBridgeClips } from './sailors/bridgedeck';
 import { namesCatClips } from './sailors/cat';
 import { type ArtFiles, type FleetLook, FleetLooks } from './sailors/fleetlooks';
 import {
@@ -618,6 +619,8 @@ export class FleetView {
   readonly #catted: boolean;
   /** Whether the kind's people are drawn with a cruising yacht's clips: their looks' are loaded, near. */
   readonly #yachted: boolean;
+  /** Whether the kind's people are drawn with a cruising catamaran's clips: their looks' are loaded, near. */
+  readonly #bridged: boolean;
   wires: WireLines | null = null;
   /** The boat being written's sailor's hook (the model's frame) and the side it hangs on, 0 if not. */
   readonly #hook = new Vector3();
@@ -629,6 +632,7 @@ export class FleetView {
     this.#shared = shared;
     this.#catted = namesCatClips(kind.art);
     this.#yachted = namesYachtClips(kind.art);
+    this.#bridged = namesBridgeClips(kind.art);
     const { hull, foils } = kind.physics;
     this.root.name = `fleet ${kind.name}`;
     this.root.add(this.near.group, this.far.group);
@@ -1090,6 +1094,7 @@ export class FleetView {
       false,
       this.#catted,
       this.#yachted,
+      this.#bridged,
     );
     const drawn = look.layer >= 0 ? look : shared.first;
     const ns = near ? this.nearSailors : null;

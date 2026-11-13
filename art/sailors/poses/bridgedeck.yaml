@@ -1,0 +1,577 @@
+# SPDX-License-Identifier: LicenseRef-All-Rights-Reserved
+#
+# The cruising catamaran's people: the clips her helm stands at her raised
+# wheel in and sits behind it in, on the settle; her company sits in beside
+# the helm, round her table, on her aft bench and on her lounger, walks her
+# cockpit and climbs her helm's ladder in (written to
+# <version>.bridgedeck.glb, which only a boat whose kind names it loads).
+#
+# Each is placed from her place it is made at (stage.Bridgedeck, from her
+# model's nodes): at the wheel and sat at it, from the helm's stance; on a
+# seat, from its front edge where the clip is made; on the ladder, from its
+# foot; walking, from where her sole is walked. Her places are hers alone:
+# a clip's -port is at the same place, the figure its own mirror image (the
+# wind over her port side).
+poses:
+  # The helm sat on the settle behind her wheel, facing forward, the feet
+  # on the platform before it; sitting up, the hands on the thighs; looking
+  # forward over the roof. (The settle is aft of where the helm stands, the
+  # wheel beyond a hand's reach from it.) The coat's skirts as seated: the
+  # front over the thighs, the sides laid on the settle, the back down
+  # behind.
+  bridge-seated:
+    place: bridge-wheel-seat
+    shift: [0.0, 0.0, 0.015]
+    turn:
+      - [thigh_l, x, -82]
+      - [thigh_r, x, -80]
+      - [thigh_l, z, 6]
+      - [thigh_r, z, -8]
+      - [calf_l, x, 74]
+      - [calf_r, x, 70]
+      - [spine_01, x, 2]
+      - [spine_02, x, 1]
+      - [neck_01, x, -2]
+      - [head, x, -2]
+      - [skirt_front_l_01, x, -80]
+      - [skirt_front_r_01, x, -80]
+      - [skirt_side_l_01, y, 80]
+      - [skirt_side_r_01, y, -80]
+      - [skirt_back_l_01, x, 75]
+      - [skirt_back_r_01, x, 75]
+    ik:
+      hand_r: { at: bone, bone: thigh_r, offset: [-0.03, -0.12, -0.2], pole: [-0.5, 0.3, -0.3] }
+      hand_l: { at: bone, bone: thigh_l, offset: [0.03, -0.12, -0.2], pole: [0.5, 0.3, -0.3] }
+      foot_l: { at: bridge-wheel-floor, offset: [0.36, 0.14, 0.1], pole: [0.1, -0.5, 0.6] }
+      foot_r: { at: bridge-wheel-floor, offset: [0.4, -0.16, 0.1], pole: [-0.1, -0.5, 0.6] }
+
+  # Looking up at the main's luff, and over the shoulder to windward.
+  bridge-seated-aloft:
+    from: bridge-seated
+    turn:
+      - [spine_03, x, -3]
+      - [neck_01, x, -10]
+      - [head, x, -18]
+      - [neck_01, z, -4]
+      - [head, z, -8]
+
+  bridge-seated-windward:
+    from: bridge-seated
+    turn:
+      - [spine_03, z, -5]
+      - [neck_01, z, -14]
+      - [head, z, -28]
+
+  # Sat on the bench round her table facing it, braced as she pitches: on
+  # the seat's front, leaning forward, the right hand gripping the table's
+  # edge, the left on its thigh, the feet set wide on the sole; looking
+  # across the table and out to sea. The coat's skirts as seated.
+  table-brace:
+    place: bridge-table
+    shift: [0.1, 0.0, 0.008]
+    turn:
+      - [thigh_l, x, -80]
+      - [thigh_r, x, -78]
+      - [thigh_l, z, 10]
+      - [thigh_r, z, -12]
+      - [calf_l, x, 72]
+      - [calf_r, x, 68]
+      - [spine_01, x, 16]
+      - [spine_02, x, 14]
+      - [spine_03, x, 10]
+      - [neck_01, x, -14]
+      - [head, x, -14]
+      - [skirt_front_l_01, x, -78]
+      - [skirt_front_r_01, x, -78]
+      - [skirt_side_l_01, y, 80]
+      - [skirt_side_r_01, y, -80]
+      - [skirt_back_l_01, x, 82]
+      - [skirt_back_r_01, x, 82]
+    ik:
+      hand_r: { at: bridge-table-top, offset: [-0.04, -0.16, 0.04], pole: [-0.6, 0.3, -0.4] }
+      hand_l: { at: bone, bone: thigh_l, offset: [0.03, -0.12, -0.22], pole: [0.5, 0.3, -0.3] }
+      foot_l: { at: bridge-table-floor, offset: [0.36, 0.2, 0.1], pole: [0.1, -0.5, 0.6] }
+      foot_r: { at: bridge-table-floor, offset: [0.3, -0.22, 0.1], pole: [-0.1, -0.5, 0.6] }
+
+  table-brace-across:
+    from: table-brace
+    turn:
+      - [neck_01, z, 8]
+      - [head, z, 16]
+      - [head, x, -4]
+
+  table-brace-sea:
+    from: table-brace
+    turn:
+      - [neck_01, z, -16]
+      - [head, z, -30]
+      - [head, x, -6]
+
+  # Sat on the aft bench facing forward, braced: leaning back against its
+  # rail, the left leg straightened, its foot braced further out on the
+  # sole, the right foot drawn in; the hands on the thighs; looking forward
+  # over the table. The coat's skirts as seated.
+  beam-brace:
+    place: bridge-beam
+    shift: [-0.04, 0.0, 0.012]
+    turn:
+      - [thigh_l, x, -80]
+      - [thigh_r, x, -80]
+      - [thigh_l, z, 6]
+      - [thigh_r, z, -8]
+      - [calf_l, x, 56]
+      - [calf_r, x, 78]
+      - [spine_01, x, -5]
+      - [spine_02, x, -3]
+      - [neck_01, x, 4]
+      - [head, x, 3]
+      - [skirt_front_l_01, x, -72]
+      - [skirt_front_r_01, x, -78]
+      - [skirt_side_l_01, y, 80]
+      - [skirt_side_r_01, y, -80]
+      - [skirt_back_l_01, x, 70]
+      - [skirt_back_r_01, x, 70]
+    ik:
+      hand_l: { at: bone, bone: thigh_l, offset: [0.03, -0.12, -0.14], pole: [0.5, 0.3, -0.3] }
+      hand_r: { at: bone, bone: thigh_r, offset: [-0.03, -0.12, -0.12], pole: [-0.5, 0.3, -0.3] }
+      foot_l: { at: bridge-beam-floor, offset: [0.33, 0.16, 0.12], pole: [0.1, -0.5, 0.6] }
+      foot_r: { at: bridge-beam-floor, offset: [0.2, -0.16, 0.1], pole: [-0.1, -0.5, 0.6] }
+
+  beam-brace-aloft:
+    from: beam-brace
+    turn:
+      - [neck_01, x, -10]
+      - [head, x, -16]
+      - [neck_01, z, 4]
+      - [head, z, 8]
+
+  beam-brace-sea:
+    from: beam-brace
+    turn:
+      - [neck_01, z, -14]
+      - [head, z, -28]
+
+  # Up her helm's ladder facing up it, from its foot on the sole to its
+  # landing, a tread a step, the left foot first (the body moved up and
+  # along by each key's shift, as high over the lower foot's tread as the
+  # leg on it reaches), the foot to step next up on its toes; the hands at
+  # the hips, clear of its rail and the settle beside it. The ankles a
+  # little aft of each tread's middle, the toes short of its nosing.
+  stairs-foot:
+    place: bridge-stairs
+    shift: [0.0, 0.0, -0.02]
+    turn:
+      - [spine_01, x, 6]
+      - [spine_02, x, 3]
+      - [neck_01, x, 6]
+      - [head, x, 10]
+    ik:
+      hand_l: { at: bone, bone: pelvis, offset: [0.2, -0.04, 0.08] }
+      hand_r: { at: bone, bone: pelvis, offset: [-0.2, -0.04, 0.08] }
+      foot_l: { at: bridge-stairs, offset: [0.0, 0.07, 0.1] }
+      foot_r: { at: bridge-stairs, offset: [0.0, -0.1, 0.1] }
+  stairs-1:
+    place: bridge-stairs
+    shift: [0.18, 0.02, -0.08]
+    turn:
+      - [spine_01, x, 6]
+      - [spine_02, x, 3]
+      - [neck_01, x, 6]
+      - [head, x, 10]
+    ik:
+      hand_l: { at: bone, bone: pelvis, offset: [0.2, -0.04, 0.08] }
+      hand_r: { at: bone, bone: pelvis, offset: [-0.2, -0.04, 0.08] }
+      foot_l: { at: bridge-tread-1, offset: [-0.08, 0.1, 0.1] }
+      foot_r: { at: bridge-stairs, offset: [0.0, -0.1, 0.13] }
+  stairs-2:
+    place: bridge-stairs
+    shift: [0.5, 0.03, 0.17]
+    turn:
+      - [spine_01, x, 6]
+      - [spine_02, x, 3]
+      - [neck_01, x, 6]
+      - [head, x, 10]
+    ik:
+      hand_l: { at: bone, bone: pelvis, offset: [0.2, -0.04, 0.08] }
+      hand_r: { at: bone, bone: pelvis, offset: [-0.2, -0.04, 0.08] }
+      foot_l: { at: bridge-tread-1, offset: [-0.08, 0.1, 0.15] }
+      foot_r: { at: bridge-tread-2, offset: [-0.08, -0.1, 0.1] }
+  stairs-3:
+    place: bridge-stairs
+    shift: [0.75, 0.03, 0.37]
+    turn:
+      - [spine_01, x, 6]
+      - [spine_02, x, 3]
+      - [neck_01, x, 6]
+      - [head, x, 10]
+    ik:
+      hand_l: { at: bone, bone: pelvis, offset: [0.2, -0.04, 0.08] }
+      hand_r: { at: bone, bone: pelvis, offset: [-0.2, -0.04, 0.08] }
+      foot_l: { at: bridge-tread-3, offset: [-0.08, 0.1, 0.1] }
+      foot_r: { at: bridge-tread-2, offset: [-0.08, -0.1, 0.15] }
+  stairs-4:
+    place: bridge-stairs
+    shift: [1.0, 0.03, 0.57]
+    turn:
+      - [spine_01, x, 6]
+      - [spine_02, x, 3]
+      - [neck_01, x, 6]
+      - [head, x, 10]
+    ik:
+      hand_l: { at: bone, bone: pelvis, offset: [0.2, -0.04, 0.08] }
+      hand_r: { at: bone, bone: pelvis, offset: [-0.2, -0.04, 0.08] }
+      foot_l: { at: bridge-tread-3, offset: [-0.08, 0.1, 0.15] }
+      foot_r: { at: bridge-tread-4, offset: [-0.08, -0.1, 0.1] }
+  stairs-5:
+    place: bridge-stairs
+    shift: [1.23, 0.06, 0.77]
+    turn:
+      - [spine_01, x, 6]
+      - [spine_02, x, 3]
+      - [neck_01, x, 6]
+      - [head, x, 10]
+    ik:
+      hand_l: { at: bone, bone: pelvis, offset: [0.2, -0.04, 0.08] }
+      hand_r: { at: bone, bone: pelvis, offset: [-0.2, -0.04, 0.08] }
+      foot_l: { at: bridge-landing, offset: [-0.1, 0.1, 0.1] }
+      foot_r: { at: bridge-tread-4, offset: [-0.08, -0.1, 0.15] }
+  stairs-top:
+    place: bridge-stairs
+    shift: [1.43, 0.07, 0.97]
+    turn:
+      - [spine_01, x, 6]
+      - [spine_02, x, 3]
+      - [neck_01, x, 6]
+      - [head, x, 10]
+    ik:
+      hand_r: { at: bone, bone: pelvis, offset: [-0.2, -0.04, 0.08] }
+      hand_l: { at: bone, bone: pelvis, offset: [0.2, -0.04, 0.08] }
+      foot_l: { at: bridge-landing, offset: [0.0, 0.1, 0.1] }
+      foot_r: { at: bridge-landing, offset: [0.0, -0.1, 0.1] }
+
+  # Down it facing aft, from its landing to its foot, the right foot first,
+  # the foot to step next down on its toes.
+  down-landing:
+    place: bridge-landing
+    shift: [0.0, 0.0, -0.02]
+    turn:
+      - [spine_01, x, 3]
+      - [neck_01, x, 10]
+      - [head, x, 14]
+    ik:
+      hand_r: { at: bone, bone: pelvis, offset: [-0.16, 0.03, 0.1] }
+      hand_l: { at: bone, bone: pelvis, offset: [0.16, 0.03, 0.1] }
+      foot_l: { at: bridge-landing, offset: [0.0, 0.1, 0.1] }
+      foot_r: { at: bridge-landing, offset: [0.0, -0.1, 0.1] }
+  down-1:
+    place: bridge-landing
+    shift: [0.2, 0.0, -0.23]
+    turn:
+      - [spine_01, x, 3]
+      - [neck_01, x, 10]
+      - [head, x, 14]
+    ik:
+      hand_r: { at: bone, bone: pelvis, offset: [-0.16, 0.03, 0.1] }
+      hand_l: { at: bone, bone: pelvis, offset: [0.16, 0.03, 0.1] }
+      foot_l: { at: bridge-landing, offset: [0.0, 0.1, 0.15] }
+      foot_r: { at: bridge-tread-4, offset: [0.06, -0.1, 0.1] }
+  down-2:
+    place: bridge-landing
+    shift: [0.45, 0.03, -0.43]
+    turn:
+      - [spine_01, x, 3]
+      - [neck_01, x, 10]
+      - [head, x, 14]
+    ik:
+      hand_r: { at: bone, bone: pelvis, offset: [-0.16, 0.03, 0.1] }
+      hand_l: { at: bone, bone: pelvis, offset: [0.16, 0.03, 0.1] }
+      foot_l: { at: bridge-tread-3, offset: [0.06, 0.1, 0.1] }
+      foot_r: { at: bridge-tread-4, offset: [0.06, -0.1, 0.15] }
+  down-3:
+    place: bridge-landing
+    shift: [0.7, 0.03, -0.63]
+    turn:
+      - [spine_01, x, 3]
+      - [neck_01, x, 10]
+      - [head, x, 14]
+    ik:
+      hand_r: { at: bone, bone: pelvis, offset: [-0.16, 0.03, 0.1] }
+      hand_l: { at: bone, bone: pelvis, offset: [0.16, 0.03, 0.1] }
+      foot_l: { at: bridge-tread-3, offset: [0.06, 0.1, 0.15] }
+      foot_r: { at: bridge-tread-2, offset: [0.06, -0.1, 0.1] }
+  down-4:
+    place: bridge-landing
+    shift: [0.95, 0.03, -0.83]
+    turn:
+      - [spine_01, x, 3]
+      - [neck_01, x, 10]
+      - [head, x, 14]
+    ik:
+      hand_r: { at: bone, bone: pelvis, offset: [-0.16, 0.03, 0.1] }
+      hand_l: { at: bone, bone: pelvis, offset: [0.16, 0.03, 0.1] }
+      foot_l: { at: bridge-tread-1, offset: [0.06, 0.1, 0.1] }
+      foot_r: { at: bridge-tread-2, offset: [0.06, -0.1, 0.15] }
+  down-5:
+    place: bridge-landing
+    shift: [1.28, 0.08, -1.06]
+    turn:
+      - [spine_01, x, 3]
+      - [neck_01, x, 10]
+      - [head, x, 14]
+    ik:
+      hand_l: { at: bone, bone: pelvis, offset: [0.16, 0.03, 0.1] }
+      hand_r: { at: bone, bone: pelvis, offset: [-0.16, 0.03, 0.1] }
+      foot_l: { at: bridge-tread-1, offset: [0.06, 0.1, 0.15] }
+      foot_r: { at: bridge-stairs, offset: [-0.13, -0.01, 0.1] }
+  down-foot:
+    place: bridge-landing
+    shift: [1.3, 0.12, -1.04]
+    turn:
+      - [spine_01, x, 3]
+      - [neck_01, x, 10]
+      - [head, x, 14]
+    ik:
+      hand_l: { at: bone, bone: pelvis, offset: [0.16, 0.03, 0.1] }
+      hand_r: { at: bone, bone: pelvis, offset: [-0.16, 0.03, 0.1] }
+      foot_l: { at: bridge-stairs, offset: [-0.1, 0.15, 0.1] }
+      foot_r: { at: bridge-stairs, offset: [-0.1, -0.01, 0.1] }
+
+clips:
+  # The helm standing at her wheel, the hands on its rim: the wheel's clip
+  # made at her wheel. Its -port for the wind over her port side.
+  bridge-wheel:
+    of: helm-wheel
+    restage: bridgedeck
+    group: bridgedeck
+
+  # The look's habit at her wheel (each look's own, named so by it).
+  bridge-habit-wheel:
+    of: habit-wheel
+    restage: bridgedeck
+    group: bridgedeck
+
+  # The helm sat on the settle behind her wheel: looking forward, at the
+  # luff, forward and to windward. Placed from the stance,
+  # as bridge-wheel is.
+  bridge-wheel-seated:
+    loop: true
+    idle: true
+    sides: true
+    group: bridgedeck
+    keys:
+      - { pose: bridge-seated, hold: 1.4, ramp: 1.5, lead: head }
+      - { pose: bridge-seated-aloft, hold: 1.4, ramp: 1.4, lead: head, anticipate: 0.05 }
+      - { pose: bridge-seated, hold: 1.0, ramp: 1.4, lead: head }
+      - { pose: bridge-seated-windward, hold: 1.2, ramp: 1.3, lead: head, anticipate: 0.05 }
+
+  # Braced round her table and on her aft bench, as she pitches in a
+  # breeze; their -port the same seat, braced the other way. The game
+  # blends each seat's idles into them by the wind and her motion.
+  table-braced:
+    loop: true
+    idle: true
+    sides: true
+    group: bridgedeck
+    keys:
+      - { pose: table-brace, hold: 1.6, ramp: 1.5, lead: head }
+      - { pose: table-brace-across, hold: 1.4, ramp: 1.3, lead: head, anticipate: 0.05 }
+      - { pose: table-brace, hold: 1.2, ramp: 1.5, lead: head }
+      - { pose: table-brace-sea, hold: 1.2, ramp: 1.4, lead: head, anticipate: 0.05 }
+
+  beam-braced:
+    loop: true
+    idle: true
+    sides: true
+    group: bridgedeck
+    keys:
+      - { pose: beam-brace, hold: 1.6, ramp: 1.5, lead: head }
+      - { pose: beam-brace-aloft, hold: 1.4, ramp: 1.3, lead: head, anticipate: 0.05 }
+      - { pose: beam-brace, hold: 1.2, ramp: 1.5, lead: head }
+      - { pose: beam-brace-sea, hold: 1.2, ramp: 1.4, lead: head, anticipate: 0.05 }
+
+  # Up her helm's ladder from its foot to its landing, and down it from its
+  # landing to its foot: placed from its foot (up) and its landing (down),
+  # once through, the body carried up or down it.
+  stairs-up:
+    group: bridgedeck
+    # The ankles near the ends of their ranges, as on any steep stair.
+    strain: [foot]
+    keys:
+      - { pose: stairs-foot, hold: 0.25 }
+      - { pose: stairs-1, hold: 0.0, ramp: 0.6, step: 0.16 }
+      - { pose: stairs-2, hold: 0.0, ramp: 0.55, step: 0.16 }
+      - { pose: stairs-3, hold: 0.0, ramp: 0.55, step: 0.16 }
+      - { pose: stairs-4, hold: 0.0, ramp: 0.55, step: 0.16 }
+      - { pose: stairs-5, hold: 0.0, ramp: 0.55, step: 0.16 }
+      - { pose: stairs-top, hold: 0.3, ramp: 0.6, step: 0.1 }
+
+  stairs-down:
+    group: bridgedeck
+    strain: [foot]
+    keys:
+      - { pose: down-landing, hold: 0.25 }
+      - { pose: down-1, hold: 0.0, ramp: 0.6, step: 0.08 }
+      - { pose: down-2, hold: 0.0, ramp: 0.55, step: 0.08 }
+      - { pose: down-3, hold: 0.0, ramp: 0.55, step: 0.08 }
+      - { pose: down-4, hold: 0.0, ramp: 0.55, step: 0.08 }
+      - { pose: down-5, hold: 0.0, ramp: 0.55, step: 0.08 }
+      - { pose: down-foot, hold: 0.3, ramp: 0.6, step: 0.08 }
+
+# From Quaternius' library (CC0), retargeted onto the catamaran:
+#  - sat on her seats, each facing as it faces, the feet on the floor
+#    before it, the buttocks on its top: still, shifting, nodding off,
+#    talking (the ship's company's idles), on the settle beside the helm
+#    (helm-seat), on the bench round her table (table-), on her aft bench
+#    (beam-) and on her lounger (lounger-). Each placed from its seat's
+#    front edge where it is made;
+#  - walking her cockpit facing forward, set on her sole, a foot that bears
+#    moving back at the walk's speed; and turning on the spot to the left
+#    and to the right.
+retarget:
+  helm-seat:
+    file: vendor/quaternius/Sitting_Idle_Loop.glb
+    loop: true
+    idle: true
+    deck: true
+    stage: bridge-helm
+    strain: [hand]
+    group: bridgedeck
+  helm-seat-shift:
+    file: vendor/quaternius/Sitting_Idle02_Loop.glb
+    loop: true
+    idle: true
+    deck: true
+    stage: bridge-helm
+    strain: [hand]
+    group: bridgedeck
+  helm-seat-nod:
+    file: vendor/quaternius/Sitting_Nodding_Loop.glb
+    loop: true
+    idle: true
+    deck: true
+    stage: bridge-helm
+    strain: [hand]
+    group: bridgedeck
+  helm-seat-talk:
+    file: vendor/quaternius/Sitting_Talking_Loop.glb
+    loop: true
+    idle: true
+    deck: true
+    stage: bridge-helm
+    strain: [hand]
+    group: bridgedeck
+  table-sit:
+    file: vendor/quaternius/Sitting_Idle_Loop.glb
+    loop: true
+    idle: true
+    deck: true
+    stage: bridge-table
+    strain: [hand]
+    group: bridgedeck
+  table-shift:
+    file: vendor/quaternius/Sitting_Idle02_Loop.glb
+    loop: true
+    idle: true
+    deck: true
+    stage: bridge-table
+    strain: [hand]
+    group: bridgedeck
+  table-nod:
+    file: vendor/quaternius/Sitting_Nodding_Loop.glb
+    loop: true
+    idle: true
+    deck: true
+    stage: bridge-table
+    strain: [hand]
+    group: bridgedeck
+  table-talk:
+    file: vendor/quaternius/Sitting_Talking_Loop.glb
+    loop: true
+    idle: true
+    deck: true
+    stage: bridge-table
+    strain: [hand]
+    group: bridgedeck
+  beam-sit:
+    file: vendor/quaternius/Sitting_Idle_Loop.glb
+    loop: true
+    idle: true
+    deck: true
+    stage: bridge-beam
+    strain: [hand]
+    group: bridgedeck
+  beam-shift:
+    file: vendor/quaternius/Sitting_Idle02_Loop.glb
+    loop: true
+    idle: true
+    deck: true
+    stage: bridge-beam
+    strain: [hand]
+    group: bridgedeck
+  beam-nod:
+    file: vendor/quaternius/Sitting_Nodding_Loop.glb
+    loop: true
+    idle: true
+    deck: true
+    stage: bridge-beam
+    strain: [hand]
+    group: bridgedeck
+  beam-talk:
+    file: vendor/quaternius/Sitting_Talking_Loop.glb
+    loop: true
+    idle: true
+    deck: true
+    stage: bridge-beam
+    strain: [hand]
+    group: bridgedeck
+  lounger-sit:
+    file: vendor/quaternius/Sitting_Idle_Loop.glb
+    loop: true
+    idle: true
+    deck: true
+    stage: bridge-lounger
+    strain: [hand]
+    group: bridgedeck
+  lounger-shift:
+    file: vendor/quaternius/Sitting_Idle02_Loop.glb
+    loop: true
+    idle: true
+    deck: true
+    stage: bridge-lounger
+    strain: [hand]
+    group: bridgedeck
+  lounger-nod:
+    file: vendor/quaternius/Sitting_Nodding_Loop.glb
+    loop: true
+    idle: true
+    deck: true
+    stage: bridge-lounger
+    strain: [hand]
+    group: bridgedeck
+  lounger-talk:
+    file: vendor/quaternius/Sitting_Talking_Loop.glb
+    loop: true
+    idle: true
+    deck: true
+    stage: bridge-lounger
+    strain: [hand]
+    group: bridgedeck
+  cockpit-walk:
+    file: vendor/quaternius/Walk_Loop.glb
+    loop: true
+    deck: true
+    speed: 0.9
+    stage: bridge-sole
+    group: bridgedeck
+  cockpit-turn-left:
+    file: vendor/quaternius/Turn90_L.glb
+    seconds: 1.8
+    deck: true
+    stage: bridge-sole
+    group: bridgedeck
+  cockpit-turn-right:
+    file: vendor/quaternius/Turn90_R.glb
+    seconds: 1.8
+    deck: true
+    stage: bridge-sole
+    group: bridgedeck
