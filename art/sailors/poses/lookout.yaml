@@ -103,27 +103,29 @@ poses:
   lookout-yacht-rail-sit:
     from: yacht-rail-sit
     turn:
-      - [spine_01, x, -5]
+      - [spine_01, x, -8]
   lookout-yacht-rail-sit-luff:
     from: yacht-rail-sit-luff
     turn:
-      - [spine_01, x, -5]
+      - [spine_01, x, -8]
+      - [head, z, -4]
   lookout-yacht-rail-sit-sea:
     from: yacht-rail-sit-sea
     turn:
-      - [spine_01, x, -5]
+      - [spine_01, x, -8]
   lookout-yacht-rail-lean:
     from: yacht-rail-lean
     turn:
-      - [spine_01, x, -5]
+      - [spine_01, x, -8]
   lookout-yacht-rail-lean-luff:
     from: yacht-rail-lean-luff
     turn:
-      - [spine_01, x, -5]
+      - [spine_01, x, -8]
+      - [head, z, -4]
   lookout-yacht-rail-lean-sea:
     from: yacht-rail-lean-sea
     turn:
-      - [spine_01, x, -5]
+      - [spine_01, x, -8]
 
 clips:
   lookout-yacht-rail:
