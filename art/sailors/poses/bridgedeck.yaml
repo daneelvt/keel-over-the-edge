@@ -68,7 +68,7 @@ poses:
   # across the table and out to sea. The coat's skirts as seated.
   table-brace:
     place: bridge-table
-    shift: [0.1, 0.0, 0.008]
+    shift: [0.06, 0.0, 0.008]
     turn:
       - [thigh_l, x, -80]
       - [thigh_r, x, -78]
@@ -107,13 +107,13 @@ poses:
       - [head, z, -30]
       - [head, x, -6]
 
-  # Sat on the aft bench facing forward, braced: leaning back against its
+  # Sat on the aft bench facing forward, braced: sitting back toward its
   # rail, the left leg straightened, its foot braced further out on the
   # sole, the right foot drawn in; the hands on the thighs; looking forward
   # over the table. The coat's skirts as seated.
   beam-brace:
     place: bridge-beam
-    shift: [-0.04, 0.0, 0.012]
+    shift: [0.02, 0.0, 0.012]
     turn:
       - [thigh_l, x, -80]
       - [thigh_r, x, -80]
@@ -121,8 +121,8 @@ poses:
       - [thigh_r, z, -8]
       - [calf_l, x, 56]
       - [calf_r, x, 78]
-      - [spine_01, x, -5]
-      - [spine_02, x, -3]
+      - [spine_01, x, -2]
+      - [spine_02, x, -1]
       - [neck_01, x, 4]
       - [head, x, 3]
       - [skirt_front_l_01, x, -72]
@@ -159,93 +159,93 @@ poses:
   # little aft of each tread's middle, the toes short of its nosing.
   stairs-foot:
     place: bridge-stairs
-    shift: [0.0, 0.0, -0.02]
+    shift: [0.0, 0.0, -0.04]
     turn:
       - [spine_01, x, 6]
       - [spine_02, x, 3]
       - [neck_01, x, 6]
       - [head, x, 10]
     ik:
-      hand_l: { at: bone, bone: pelvis, offset: [0.2, -0.04, 0.08] }
-      hand_r: { at: bone, bone: pelvis, offset: [-0.2, -0.04, 0.08] }
-      foot_l: { at: bridge-stairs, offset: [0.0, 0.07, 0.1] }
+      hand_l: { at: bone, bone: pelvis, offset: [0.23, -0.02, 0.04] }
+      hand_r: { at: bone, bone: pelvis, offset: [-0.23, -0.02, 0.04] }
+      foot_l: { at: bridge-stairs, offset: [0.0, 0.1, 0.1] }
       foot_r: { at: bridge-stairs, offset: [0.0, -0.1, 0.1] }
   stairs-1:
     place: bridge-stairs
-    shift: [0.18, 0.02, -0.08]
+    shift: [0.18, 0.0, -0.08]
     turn:
       - [spine_01, x, 6]
       - [spine_02, x, 3]
       - [neck_01, x, 6]
       - [head, x, 10]
     ik:
-      hand_l: { at: bone, bone: pelvis, offset: [0.2, -0.04, 0.08] }
-      hand_r: { at: bone, bone: pelvis, offset: [-0.2, -0.04, 0.08] }
+      hand_l: { at: bone, bone: pelvis, offset: [0.23, -0.02, 0.04] }
+      hand_r: { at: bone, bone: pelvis, offset: [-0.23, -0.02, 0.04] }
       foot_l: { at: bridge-tread-1, offset: [-0.08, 0.1, 0.1] }
       foot_r: { at: bridge-stairs, offset: [0.0, -0.1, 0.13] }
   stairs-2:
     place: bridge-stairs
-    shift: [0.5, 0.03, 0.17]
+    shift: [0.5, 0.0, 0.17]
     turn:
       - [spine_01, x, 6]
       - [spine_02, x, 3]
       - [neck_01, x, 6]
       - [head, x, 10]
     ik:
-      hand_l: { at: bone, bone: pelvis, offset: [0.2, -0.04, 0.08] }
-      hand_r: { at: bone, bone: pelvis, offset: [-0.2, -0.04, 0.08] }
+      hand_l: { at: bone, bone: pelvis, offset: [0.23, -0.02, 0.04] }
+      hand_r: { at: bone, bone: pelvis, offset: [-0.23, -0.02, 0.04] }
       foot_l: { at: bridge-tread-1, offset: [-0.08, 0.1, 0.15] }
       foot_r: { at: bridge-tread-2, offset: [-0.08, -0.1, 0.1] }
   stairs-3:
     place: bridge-stairs
-    shift: [0.75, 0.03, 0.37]
+    shift: [0.75, 0.0, 0.37]
     turn:
       - [spine_01, x, 6]
       - [spine_02, x, 3]
       - [neck_01, x, 6]
       - [head, x, 10]
     ik:
-      hand_l: { at: bone, bone: pelvis, offset: [0.2, -0.04, 0.08] }
-      hand_r: { at: bone, bone: pelvis, offset: [-0.2, -0.04, 0.08] }
+      hand_l: { at: bone, bone: pelvis, offset: [0.23, -0.02, 0.04] }
+      hand_r: { at: bone, bone: pelvis, offset: [-0.23, -0.02, 0.04] }
       foot_l: { at: bridge-tread-3, offset: [-0.08, 0.1, 0.1] }
       foot_r: { at: bridge-tread-2, offset: [-0.08, -0.1, 0.15] }
   stairs-4:
     place: bridge-stairs
-    shift: [1.0, 0.03, 0.57]
+    shift: [1.0, 0.0, 0.57]
     turn:
       - [spine_01, x, 6]
       - [spine_02, x, 3]
       - [neck_01, x, 6]
       - [head, x, 10]
     ik:
-      hand_l: { at: bone, bone: pelvis, offset: [0.2, -0.04, 0.08] }
-      hand_r: { at: bone, bone: pelvis, offset: [-0.2, -0.04, 0.08] }
+      hand_l: { at: bone, bone: pelvis, offset: [0.23, -0.02, 0.04] }
+      hand_r: { at: bone, bone: pelvis, offset: [-0.23, -0.02, 0.04] }
       foot_l: { at: bridge-tread-3, offset: [-0.08, 0.1, 0.15] }
       foot_r: { at: bridge-tread-4, offset: [-0.08, -0.1, 0.1] }
   stairs-5:
     place: bridge-stairs
-    shift: [1.23, 0.06, 0.77]
+    shift: [1.23, 0.03, 0.77]
     turn:
       - [spine_01, x, 6]
       - [spine_02, x, 3]
       - [neck_01, x, 6]
       - [head, x, 10]
     ik:
-      hand_l: { at: bone, bone: pelvis, offset: [0.2, -0.04, 0.08] }
-      hand_r: { at: bone, bone: pelvis, offset: [-0.2, -0.04, 0.08] }
+      hand_l: { at: bone, bone: pelvis, offset: [0.23, -0.02, 0.04] }
+      hand_r: { at: bone, bone: pelvis, offset: [-0.23, -0.02, 0.04] }
       foot_l: { at: bridge-landing, offset: [-0.1, 0.1, 0.1] }
       foot_r: { at: bridge-tread-4, offset: [-0.08, -0.1, 0.15] }
   stairs-top:
     place: bridge-stairs
-    shift: [1.43, 0.07, 0.97]
+    shift: [1.43, 0.04, 0.97]
     turn:
       - [spine_01, x, 6]
       - [spine_02, x, 3]
       - [neck_01, x, 6]
       - [head, x, 10]
     ik:
-      hand_r: { at: bone, bone: pelvis, offset: [-0.2, -0.04, 0.08] }
-      hand_l: { at: bone, bone: pelvis, offset: [0.2, -0.04, 0.08] }
+      hand_r: { at: bone, bone: pelvis, offset: [-0.23, -0.02, 0.04] }
+      hand_l: { at: bone, bone: pelvis, offset: [0.23, -0.02, 0.04] }
       foot_l: { at: bridge-landing, offset: [0.0, 0.1, 0.1] }
       foot_r: { at: bridge-landing, offset: [0.0, -0.1, 0.1] }
 
@@ -259,8 +259,8 @@ poses:
       - [neck_01, x, 10]
       - [head, x, 14]
     ik:
-      hand_r: { at: bone, bone: pelvis, offset: [-0.16, 0.03, 0.1] }
-      hand_l: { at: bone, bone: pelvis, offset: [0.16, 0.03, 0.1] }
+      hand_r: { at: bone, bone: pelvis, offset: [-0.2, 0.02, 0.04] }
+      hand_l: { at: bone, bone: pelvis, offset: [0.2, 0.02, 0.04] }
       foot_l: { at: bridge-landing, offset: [0.0, 0.1, 0.1] }
       foot_r: { at: bridge-landing, offset: [0.0, -0.1, 0.1] }
   down-1:
@@ -271,8 +271,8 @@ poses:
       - [neck_01, x, 10]
       - [head, x, 14]
     ik:
-      hand_r: { at: bone, bone: pelvis, offset: [-0.16, 0.03, 0.1] }
-      hand_l: { at: bone, bone: pelvis, offset: [0.16, 0.03, 0.1] }
+      hand_r: { at: bone, bone: pelvis, offset: [-0.2, 0.02, 0.04] }
+      hand_l: { at: bone, bone: pelvis, offset: [0.2, 0.02, 0.04] }
       foot_l: { at: bridge-landing, offset: [0.0, 0.1, 0.15] }
       foot_r: { at: bridge-tread-4, offset: [0.06, -0.1, 0.1] }
   down-2:
@@ -283,8 +283,8 @@ poses:
       - [neck_01, x, 10]
       - [head, x, 14]
     ik:
-      hand_r: { at: bone, bone: pelvis, offset: [-0.16, 0.03, 0.1] }
-      hand_l: { at: bone, bone: pelvis, offset: [0.16, 0.03, 0.1] }
+      hand_r: { at: bone, bone: pelvis, offset: [-0.2, 0.02, 0.04] }
+      hand_l: { at: bone, bone: pelvis, offset: [0.2, 0.02, 0.04] }
       foot_l: { at: bridge-tread-3, offset: [0.06, 0.1, 0.1] }
       foot_r: { at: bridge-tread-4, offset: [0.06, -0.1, 0.15] }
   down-3:
@@ -295,8 +295,8 @@ poses:
       - [neck_01, x, 10]
       - [head, x, 14]
     ik:
-      hand_r: { at: bone, bone: pelvis, offset: [-0.16, 0.03, 0.1] }
-      hand_l: { at: bone, bone: pelvis, offset: [0.16, 0.03, 0.1] }
+      hand_r: { at: bone, bone: pelvis, offset: [-0.2, 0.02, 0.04] }
+      hand_l: { at: bone, bone: pelvis, offset: [0.2, 0.02, 0.04] }
       foot_l: { at: bridge-tread-3, offset: [0.06, 0.1, 0.15] }
       foot_r: { at: bridge-tread-2, offset: [0.06, -0.1, 0.1] }
   down-4:
@@ -307,34 +307,34 @@ poses:
       - [neck_01, x, 10]
       - [head, x, 14]
     ik:
-      hand_r: { at: bone, bone: pelvis, offset: [-0.16, 0.03, 0.1] }
-      hand_l: { at: bone, bone: pelvis, offset: [0.16, 0.03, 0.1] }
+      hand_r: { at: bone, bone: pelvis, offset: [-0.2, 0.02, 0.04] }
+      hand_l: { at: bone, bone: pelvis, offset: [0.2, 0.02, 0.04] }
       foot_l: { at: bridge-tread-1, offset: [0.06, 0.1, 0.1] }
       foot_r: { at: bridge-tread-2, offset: [0.06, -0.1, 0.15] }
   down-5:
     place: bridge-landing
-    shift: [1.28, 0.08, -1.06]
+    shift: [1.28, 0.03, -1.06]
     turn:
       - [spine_01, x, 3]
       - [neck_01, x, 10]
       - [head, x, 14]
     ik:
-      hand_l: { at: bone, bone: pelvis, offset: [0.16, 0.03, 0.1] }
-      hand_r: { at: bone, bone: pelvis, offset: [-0.16, 0.03, 0.1] }
+      hand_l: { at: bone, bone: pelvis, offset: [0.2, 0.02, 0.04] }
+      hand_r: { at: bone, bone: pelvis, offset: [-0.2, 0.02, 0.04] }
       foot_l: { at: bridge-tread-1, offset: [0.06, 0.1, 0.15] }
-      foot_r: { at: bridge-stairs, offset: [-0.13, -0.01, 0.1] }
+      foot_r: { at: bridge-stairs, offset: [-0.13, -0.1, 0.1] }
   down-foot:
     place: bridge-landing
-    shift: [1.3, 0.12, -1.04]
+    shift: [1.3, 0.04, -1.04]
     turn:
       - [spine_01, x, 3]
       - [neck_01, x, 10]
       - [head, x, 14]
     ik:
-      hand_l: { at: bone, bone: pelvis, offset: [0.16, 0.03, 0.1] }
-      hand_r: { at: bone, bone: pelvis, offset: [-0.16, 0.03, 0.1] }
-      foot_l: { at: bridge-stairs, offset: [-0.1, 0.15, 0.1] }
-      foot_r: { at: bridge-stairs, offset: [-0.1, -0.01, 0.1] }
+      hand_l: { at: bone, bone: pelvis, offset: [0.2, 0.02, 0.04] }
+      hand_r: { at: bone, bone: pelvis, offset: [-0.2, 0.02, 0.04] }
+      foot_l: { at: bridge-stairs, offset: [-0.1, 0.1, 0.1] }
+      foot_r: { at: bridge-stairs, offset: [-0.1, -0.1, 0.1] }
 
 clips:
   # The helm standing at her wheel, the hands on its rim: the wheel's clip
@@ -394,8 +394,11 @@ clips:
   # once through, the body carried up or down it.
   stairs-up:
     group: bridgedeck
-    # The ankles near the ends of their ranges, as on any steep stair.
+    # The ankles near the ends of their ranges, as on any steep stair; a
+    # coat's front falling from the knee as it rises, not held out over the
+    # treads above.
     strain: [foot]
+    hang: { front_02: 1.0 }
     keys:
       - { pose: stairs-foot, hold: 0.25 }
       - { pose: stairs-1, hold: 0.0, ramp: 0.6, step: 0.16 }
@@ -408,14 +411,15 @@ clips:
   stairs-down:
     group: bridgedeck
     strain: [foot]
+    hang: { front_02: 1.0 }
     keys:
       - { pose: down-landing, hold: 0.25 }
-      - { pose: down-1, hold: 0.0, ramp: 0.6, step: 0.08 }
-      - { pose: down-2, hold: 0.0, ramp: 0.55, step: 0.08 }
-      - { pose: down-3, hold: 0.0, ramp: 0.55, step: 0.08 }
-      - { pose: down-4, hold: 0.0, ramp: 0.55, step: 0.08 }
-      - { pose: down-5, hold: 0.0, ramp: 0.55, step: 0.08 }
-      - { pose: down-foot, hold: 0.3, ramp: 0.6, step: 0.08 }
+      - { pose: down-1, hold: 0.0, ramp: 0.6, step: 0.12 }
+      - { pose: down-2, hold: 0.0, ramp: 0.55, step: 0.12 }
+      - { pose: down-3, hold: 0.0, ramp: 0.55, step: 0.12 }
+      - { pose: down-4, hold: 0.0, ramp: 0.55, step: 0.12 }
+      - { pose: down-5, hold: 0.0, ramp: 0.55, step: 0.12 }
+      - { pose: down-foot, hold: 0.3, ramp: 0.6, step: 0.12 }
 
 # From Quaternius' library (CC0), retargeted onto the catamaran:
 #  - sat on her seats, each facing as it faces, the feet on the floor
@@ -565,13 +569,13 @@ retarget:
     group: bridgedeck
   cockpit-turn-left:
     file: vendor/quaternius/Turn90_L.glb
-    seconds: 1.8
+    smooth: 4
     deck: true
     stage: bridge-sole
     group: bridgedeck
   cockpit-turn-right:
     file: vendor/quaternius/Turn90_R.glb
-    seconds: 1.8
+    smooth: 4
     deck: true
     stage: bridge-sole
     group: bridgedeck

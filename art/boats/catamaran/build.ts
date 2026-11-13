@@ -403,7 +403,7 @@ const SETTLE_AFT = PLAT_AFT - 0.06;
 const SETTLE_BACK = 0.42;
 const SETTLE_TOP = PLAT_Y + 0.45;
 const SETTLE_OUT = -3.25;
-const SETTLE_IN = -1.65;
+const SETTLE_IN = -1.75;
 /** The cockpit's seats' tops, above the sole. */
 const SEAT_TOP = SOLE + 0.45;
 /**
@@ -433,7 +433,7 @@ const AFT_BACK = 4.65;
 const AFT_PORT = -0.75;
 const AFT_STAR = LBENCH_OUT;
 /** The lounger: to port, aft of the ladder's foot, along the hull's side. */
-const LOUNGER_FRONT = -1.4;
+const LOUNGER_FRONT = -1.5;
 const LOUNGER_OUT = -2.65;
 const LOUNGER_FORE = 3.85;
 const LOUNGER_AFT = AFT_BACK;
@@ -1486,8 +1486,8 @@ function cockpitFurniture(): { wood: MeshBuilder; oak: MeshBuilder } {
   box(wood, [TABLE.x0, TABLE.y - 0.04, TABLE.z0], [TABLE.x1, TABLE.y, TABLE.z1], VARNISH);
   box(
     wood,
-    [(TABLE.x0 + TABLE.x1) / 2 - 0.08, SOLE, TABLE.z0 + 0.35],
-    [(TABLE.x0 + TABLE.x1) / 2 + 0.08, TABLE.y - 0.04, TABLE.z1 - 0.35],
+    [(TABLE.x0 + TABLE.x1) / 2 - 0.05, SOLE, TABLE.z0 + 0.35],
+    [(TABLE.x0 + TABLE.x1) / 2 + 0.05, TABLE.y - 0.04, TABLE.z1 - 0.35],
     shade(VARNISH, 0.8),
   );
   // The aft bench, its back the crossbeam's turned rail.
@@ -1502,7 +1502,8 @@ function cockpitFurniture(): { wood: MeshBuilder; oak: MeshBuilder } {
     D.small ? 8 : 4,
     OAK,
   );
-  for (const x of [LOUNGER_OUT + 0.1, -0.6, 0.6, 1.8, AFT_STAR]) {
+  // (The posts between the stations on it, clear of the backs of those sat there.)
+  for (const x of [LOUNGER_OUT + 0.1, -0.05, 0.55, 1.15, 1.75, AFT_STAR]) {
     oak.tube(
       [
         [x, SEAT_TOP - 0.02, AFT_BACK + 0.03],
@@ -2665,7 +2666,7 @@ function seatsData(): Record<string, unknown> {
       along: v([LOUNGER_FORE, LOUNGER_AFT, 0]).slice(0, 2),
     },
     stairs: {
-      foot: v([mid + 0.03, SOLE, LADDER_FOOT + 0.23]),
+      foot: v([mid, SOLE, LADDER_FOOT + 0.23]),
       head: v([mid - 0.04, PLAT_Y, LANDING_AFT - 0.2]),
       from: round4(LADDER_FOOT),
       to: round4(LANDING_AFT),

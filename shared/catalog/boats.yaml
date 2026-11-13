@@ -1900,8 +1900,8 @@ boats:
       - { at: [0.25, 1.6, 4.24], pose: seated, facing: 0 }
       - { at: [0.85, 1.6, 4.24], pose: seated, facing: 0 }
       - { at: [1.45, 1.6, 4.24], pose: seated, facing: 0 }
-      - { at: [-1.44, 1.55, 4.05], pose: seated, facing: 90 }
-      - { at: [-1.44, 1.55, 4.5], pose: seated, facing: 90 }
+      - { at: [-1.54, 1.55, 4.05], pose: seated, facing: 90 }
+      - { at: [-1.54, 1.55, 4.5], pose: seated, facing: 90 }
     lengthOverall: 12.8 # Lagoon
     beam: 7.7 # Lagoon
     # Red and green sidelights on her forward decks and a white sternlight
