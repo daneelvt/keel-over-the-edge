@@ -979,6 +979,103 @@ export interface SearchAnswer {
   pages: number;
   sort: Sort;
   accounts: AccountRow[];
+  /** Each account's log in a few figures, by its id: none for an account with nothing logged. */
+  logs?: Record<string, LogFigures>;
+}
+
+/** An account's log in a few figures: the distance logged, m, and the voyages skippered. */
+export interface LogFigures {
+  runM: number;
+  voyages: number;
+}
+
+/** A sailor named in a log: by name, "a sailor" for a block (hidden), or a former sailor. */
+export interface LogPerson {
+  name?: string;
+  machine?: boolean;
+  logged?: boolean;
+  hidden?: boolean;
+  former?: boolean;
+  s?: number;
+}
+
+/** A voyage of a log's day, or a time aboard another's boat. Times are ms. */
+export interface LogVoyage {
+  boat: string;
+  boatName?: string;
+  began: number;
+  ended: number;
+  how: 'returned' | 'expired' | 'over' | 'taken' | 'aboard' | 'ashore' | 'landed';
+  place?: string;
+  runM: number | null;
+  closestM?: number;
+  bumpsAtFault?: number;
+  bumpsNotAtFault?: number;
+  met?: string[];
+  galePlace?: string;
+  fogPlace?: string;
+  aboard?: boolean;
+  skipper?: LogPerson;
+  crew: LogPerson[];
+  counted?: number;
+}
+
+/** A notable thing of a log's day. */
+export interface LogEntry {
+  at: number;
+  kind: 'charted' | 'sighted' | 'found' | 'met' | 'bump';
+  title?: string;
+  what?: string;
+  group?: string;
+  find?: string;
+  place?: string;
+  other?: LogPerson;
+  otherBoat?: string;
+  article?: string;
+  fault?: 'mine' | 'theirs' | 'none';
+}
+
+/** A day of a log, in the world's zone. */
+export interface LogDay {
+  date: string;
+  runM: number;
+  voyages: LogVoyage[];
+  entries: LogEntry[];
+}
+
+/** A sailor's log, as log.json and an account's card give it: every count, and a world's days. */
+export interface OwnerLog {
+  name: string;
+  machine: boolean;
+  shown?: 'sailors' | 'me';
+  chosen?: boolean;
+  loggedFrom?: number;
+  abstract: { kind: string; value: number }[];
+  record: {
+    distanceM: number;
+    voyages: number;
+    aboard: number;
+    worlds: number;
+    falls: number;
+    closestM: number | null;
+    bumps: number;
+    bumpsAtFault: number;
+    gales: number;
+    storms: number;
+    charted: number;
+    kinds: number;
+    of: number;
+  };
+  worlds: { number: number; first: number; last: number; current?: boolean }[];
+  world: { number: number; days: LogDay[] } | null;
+  zone: string;
+}
+
+/** An account's log, whole, with the days of a world (the newest for 0). */
+export function getLog(id: string, world = 0): Promise<OwnerLog> {
+  return getJSON<OwnerLog>(
+    `log.json?id=${encodeURIComponent(id)}${world > 0 ? `&world=${world}` : ''}`,
+  );
 }
 
 /** A passkey of a human's account. */
@@ -1062,6 +1159,8 @@ export interface AccountCard {
   /** One of the owner's own: flagged, or a flagged human's machine sailor. */
   own: boolean;
   actions?: AccountAction[];
+  /** Its log's abstract and record, and who may read it. */
+  log?: OwnerLog;
 }
 
 /** What an action on an account would do, with check, or did: the words the confirmation shows. */
