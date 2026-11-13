@@ -79,17 +79,28 @@ poses:
       - [neck_01, z, -5]
       - [head, z, -10]
 
-  # Sat on a cruising catamaran's settle a little further forward: the long
-  # coat's back off the settle's back.
+  # Sat on a cruising catamaran's settle a little further forward, the feet
+  # further out: the long coat's back off the settle's back.
   chartmaker-bridge-seated:
     from: bridge-seated
     shift: [0.08, 0.0, 0.015]
+    ik:
+      foot_l: { at: bridge-wheel-floor, offset: [0.42, 0.14, 0.1], pole: [0.1, -0.5, 0.6] }
+      foot_r: { at: bridge-wheel-floor, offset: [0.46, -0.16, 0.1], pole: [-0.1, -0.5, 0.6] }
   chartmaker-bridge-seated-aloft:
-    from: bridge-seated-aloft
-    shift: [0.08, 0.0, 0.015]
+    from: chartmaker-bridge-seated
+    turn:
+      - [spine_03, x, -3]
+      - [neck_01, x, -10]
+      - [head, x, -18]
+      - [neck_01, z, -4]
+      - [head, z, -8]
   chartmaker-bridge-seated-windward:
-    from: bridge-seated-windward
-    shift: [0.08, 0.0, 0.015]
+    from: chartmaker-bridge-seated
+    turn:
+      - [spine_03, z, -5]
+      - [neck_01, z, -14]
+      - [head, z, -28]
 
 clips:
   chartmaker-bridge-wheel-seated:

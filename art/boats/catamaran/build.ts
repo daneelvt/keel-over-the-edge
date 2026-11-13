@@ -383,6 +383,7 @@ const LADDER_IN = NOTCH_IN;
 const LADDER_FOOT = 3.65;
 const TREADS = 4;
 const LADDER_RAIL = LADDER_IN + 0.03;
+const LANDING_RAIL = LADDER_IN - 0.005;
 /** The wheel: its stance on the platform, its rim's size, its hub ahead of and above the stance. */
 const STANCE: Vec3 = [-2.6, PLAT_Y, 2.15];
 const WHEEL_RADIUS = 0.4;
@@ -1254,8 +1255,8 @@ function helmStation(): {
     const rail: Vec3[] = [
       [LADDER_RAIL, SOLE + 0.9, LADDER_FOOT],
       [LADDER_RAIL, PLAT_Y + 0.9, LANDING_AFT],
-      [LADDER_IN - 0.02, PLAT_Y + 0.9, LANDING_AFT - 0.05],
-      [LADDER_IN - 0.02, PLAT_Y + 0.9, PLAT_FORE + 0.25],
+      [LANDING_RAIL, PLAT_Y + 0.9, LANDING_AFT - 0.05],
+      [LANDING_RAIL, PLAT_Y + 0.9, PLAT_FORE + 0.25],
     ];
     bronze.tube(rail, [0.016], 6);
     for (const p of [rail[0], rail[1], rail[3]] as Vec3[]) {
@@ -1486,8 +1487,8 @@ function cockpitFurniture(): { wood: MeshBuilder; oak: MeshBuilder } {
   box(wood, [TABLE.x0, TABLE.y - 0.04, TABLE.z0], [TABLE.x1, TABLE.y, TABLE.z1], VARNISH);
   box(
     wood,
-    [(TABLE.x0 + TABLE.x1) / 2 - 0.05, SOLE, TABLE.z0 + 0.35],
-    [(TABLE.x0 + TABLE.x1) / 2 + 0.05, TABLE.y - 0.04, TABLE.z1 - 0.35],
+    [(TABLE.x0 + TABLE.x1) / 2 - 0.03, SOLE, TABLE.z0 + 0.35],
+    [(TABLE.x0 + TABLE.x1) / 2 + 0.03, TABLE.y - 0.04, TABLE.z1 - 0.35],
     shade(VARNISH, 0.8),
   );
   // The aft bench, its back the crossbeam's turned rail.
@@ -2674,7 +2675,7 @@ function seatsData(): Record<string, unknown> {
       run: round4(run),
       treads: TREADS,
       sides: v([PLAT_IN + 0.05, LADDER_IN - 0.05, 0]).slice(0, 2),
-      rail: v([LADDER_RAIL, 0.9, LADDER_IN - 0.02]),
+      rail: v([LADDER_RAIL, 0.9, LANDING_RAIL]),
     },
     walk: v([-0.2, SOLE, 3.0]),
     platform: PLAT_Y,
