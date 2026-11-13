@@ -30,9 +30,14 @@ const stanchionClear = 0.25
 
 // modelPlaces holds what a boat's model says of the places its people sit:
 // its `bench` node's data (the bench's ends, its top's height and its front
-// edge out from the centreline) and its `lifelines` node's (the stanchions'
-// stations and the lifelines' ends); nil where the model has none.
+// edge out from the centreline), its `lifelines` node's (the stanchions'
+// stations and the lifelines' ends) and its hull's bridgedeck, between two
+// hulls (its fore and after ends); nil where the model has none.
 type modelPlaces struct {
+	Bridgedeck *struct {
+		Fore float64 `json:"fore"`
+		Aft  float64 `json:"aft"`
+	}
 	Bench *struct {
 		Fore  float64 `json:"fore"`
 		Aft   float64 `json:"aft"`
@@ -46,7 +51,8 @@ type modelPlaces struct {
 	}
 }
 
-// readPlaces reads a glTF binary's `bench` and `lifelines` nodes' data.
+// readPlaces reads a glTF binary's `bench` and `lifelines` nodes' data and
+// its `hull` node's bridgedeck.
 func readPlaces(path string) (modelPlaces, error) {
 	var out modelPlaces
 	data, err := os.ReadFile(path)
@@ -64,8 +70,9 @@ func readPlaces(path string) (modelPlaces, error) {
 		Nodes []struct {
 			Name   string `json:"name"`
 			Extras struct {
-				Bench     json.RawMessage `json:"bench"`
-				Lifelines json.RawMessage `json:"lifelines"`
+				Bench      json.RawMessage `json:"bench"`
+				Lifelines  json.RawMessage `json:"lifelines"`
+				Bridgedeck json.RawMessage `json:"bridgedeck"`
 			} `json:"extras"`
 		} `json:"nodes"`
 	}
@@ -82,6 +89,10 @@ func readPlaces(path string) (modelPlaces, error) {
 			if err := json.Unmarshal(node.Extras.Lifelines, &out.Lifelines); err != nil {
 				return out, fmt.Errorf("its lifelines: %w", err)
 			}
+		case node.Name == "hull" && len(node.Extras.Bridgedeck) > 0:
+			if err := json.Unmarshal(node.Extras.Bridgedeck, &out.Bridgedeck); err != nil {
+				return out, fmt.Errorf("its bridgedeck: %w", err)
+			}
 		}
 	}
 	return out, nil
@@ -89,11 +100,16 @@ func readPlaces(path string) (modelPlaces, error) {
 
 // checkPlaces fails on a station its boat's model has no place for: one on
 // a bench where the model has none, or off the bench's top at its front
-// edge, or beyond its ends; and one on the rail of a boat with lifelines
+// edge, or beyond its ends; one on the rail of a boat with lifelines
 // outside their run, between the pulpit and the pushpit, or within
-// stanchionClear of a stanchion.
+// stanchionClear of a stanchion; and one between a boat's two hulls, off
+// their tops, where her model has no bridgedeck between them.
 func checkPlaces(root string, doc map[string]any) error {
 	var problems []string
+	num := func(v any) float64 {
+		f, _ := v.(json.Number).Float64()
+		return f
+	}
 	for _, b := range kinds(doc)["boats"] {
 		id, _ := b["id"].(string)
 		stations, _ := b["stations"].([]any)
@@ -102,11 +118,17 @@ func checkPlaces(root string, doc map[string]any) error {
 		if model == "" {
 			continue
 		}
+		ph, _ := b["physics"].(map[string]any)
+		hulls, _ := ph["hulls"].(map[string]any)
+		spacing := num(hulls["hullSpacing"])
+		hullIn := spacing - num(b["beam"])/2
 		var places *modelPlaces
 		for j, s := range stations {
 			st, _ := s.(map[string]any)
 			pose, _ := st["pose"].(string)
-			if pose != "bench" && pose != "rail" {
+			at, _ := st["at"].([]any)
+			between := spacing > 0 && len(at) == 3 && math.Abs(num(at[0])) < hullIn-hullTop
+			if pose != "bench" && pose != "rail" && !between {
 				continue
 			}
 			if places == nil {
@@ -117,15 +139,13 @@ func checkPlaces(root string, doc map[string]any) error {
 				}
 				places = &p
 			}
-			at, _ := st["at"].([]any)
 			if len(at) != 3 {
 				continue
 			}
-			num := func(v any) float64 {
-				f, _ := v.(json.Number).Float64()
-				return f
-			}
 			x, y, z := math.Abs(num(at[0])), num(at[1]), num(at[2])
+			if between && (places.Bridgedeck == nil || z < places.Bridgedeck.Fore || z > places.Bridgedeck.Aft) {
+				problems = append(problems, fmt.Sprintf("  boats[%s].stations[%d]: %v m out is not on a hull's top, from %v to %v m out, nor over a bridgedeck between them", id, j, x, math.Round(hullIn*1000)/1000, num(b["beam"])/2))
+			}
 			switch {
 			case pose == "bench" && places.Bench == nil:
 				problems = append(problems, fmt.Sprintf("  boats[%s].stations[%d]: on a bench, but the model %s/%s has no bench", id, j, artDir, model))

@@ -1848,3 +1848,328 @@ boats:
         rudderLiftHeel: 11 # from her model: the blade's root 0.14 m deep, 0.72 m out
         rudderClearHeel: 64 # from her model: its tip 1.45 m deep
       pitch: *noPitch
+
+  # The Lagoon 42 (VPLP Design, 2016), a cruising catamaran of 12.8 m: two
+  # hulls joined by a bridgedeck that carries a saloon and an aft cockpit
+  # under a hard roof, a fixed mini keel and a suspended rudder on each
+  # hull, one wheel at a raised helm station to port, a fractional sloop
+  # with one level of spreaders and no backstay, a fully battened main on a
+  # long boom and a self-tacking jib on a furler, sailed by one 80 kg sailor
+  # at the wheel, with no engine and no propeller. Her values are the 42's
+  # where her builder or her ORC certificate publish them; the rest are
+  # estimates, tuned only by tools/polar, or read from her model
+  # (tools/lever). Sources:
+  #   Lagoon (about 2015-16), Lagoon 42 user's guide; owner's manual
+  #     (RCD-2 Index G); inventory (May 2021): length, waterline, beam,
+  #     displacement, the keels' draught, the rig's I, J, P and E, the sail
+  #     areas, the reefs, the sail reduction table, the helm station, the
+  #     cockpit's seats, the lights, and twelve persons in category A.
+  #   Offshore Racing Congress (2026), ORC multihull certificate MC133 of
+  #     Desert Rose, a Lagoon 42 of 2016: displacement sailing, rated sail
+  #     areas, and the polar tools/polar checks.
+  #   Offshore Racing Congress (2023), ORC VPP Documentation: the sails' low
+  #     coefficient sets (no backstay), induced and quadratic drag.
+  #   ISO 12217-2:2013, Small craft: stability and buoyancy assessment,
+  #     clause 7 and Annex G: the wind at which a catamaran must reef.
+  #   ITTC (1957); Molland, Wellicome and Couser (1994), the resistance of
+  #     slender catamaran hulls: the hulls' resistance.
+  - id: catamaran
+    name: Catamaran
+    description: Cruising catamaran
+    # Twelve aboard: her builder's limit in category A (Lagoon, owner's
+    # manual: "Recommended maximum number of people on board when the boat
+    # is underway").
+    capacity: 12
+    # Where her people are, read from her model (art/boats/catamaran/
+    # build.ts prints them), in the order seats fill: the helm standing at
+    # her wheel on the raised station to port; beside the helm on its
+    # double seat; round the cockpit table to starboard on the L-shaped
+    # bench, its forward leg along the after bulkhead and its long leg
+    # along her side; on the aft crossbeam's bench facing forward over the
+    # table; and on the lounger to port. Each sat on a seat's edge; nobody
+    # forward, on the roof or on the nets under way ("Always use the seats
+    # or seating areas provided", her manual); nobody crosses in a tack.
+    stations:
+      - { at: [-2.6, 2.15, 2.15], pose: standing, facing: 0 }
+      - { at: [-1.95, 2.6, 2.54], pose: seated, facing: 0 }
+      - { at: [0.85, 1.6, 2.11], pose: seated, facing: 180 }
+      - { at: [1.45, 1.6, 2.11], pose: seated, facing: 180 }
+      - { at: [1.99, 1.6, 2.8], pose: seated, facing: 270 }
+      - { at: [1.99, 1.6, 3.35], pose: seated, facing: 270 }
+      - { at: [1.99, 1.6, 3.9], pose: seated, facing: 270 }
+      - { at: [0.25, 1.6, 4.24], pose: seated, facing: 0 }
+      - { at: [0.85, 1.6, 4.24], pose: seated, facing: 0 }
+      - { at: [1.45, 1.6, 4.24], pose: seated, facing: 0 }
+      - { at: [-1.44, 1.55, 4], pose: seated, facing: 90 }
+      - { at: [-1.44, 1.55, 4.5], pose: seated, facing: 90 }
+    lengthOverall: 12.8 # Lagoon
+    beam: 7.7 # Lagoon
+    # Red and green sidelights on her forward decks and a white sternlight
+    # at the back of her roof, where the 42 has them ("Navigation lights on
+    # the forward decks and at the back of the coachroof", her inventory),
+    # as a sailing vessel under 20 m may (Collision Regulations, Rule
+    # 25(a)).
+    lights: [port, starboard, stern]
+    # Her lookout's eye 2 m above the sea, as the yacht's: the helm's on her
+    # raised station is nearer 4 m, but a new height of eye slows the
+    # chart's sight tables.
+    lookout: 2
+    # A seabird aboard perches on her starboard bow's pulpit; a flying fish
+    # lands on her starboard side deck, abreast of the saloon.
+    perch: [2.8, 2.35, -6.75]
+    deck: [3.5, 1.43, -1.0]
+    # Her sheet for a start from rest, by the angle off the wind: from
+    # tools/polar's sweep from rest (-start), each within 85% of the best
+    # sheet's speed after 20 s in 3, 5 and 8 knots.
+    startSheet: [[90, 0.65], [110, 0.85], [130, 1]]
+    controls:
+      sheet: { name: Sheet, trim: Trim, ease: Ease }
+      reef: [Full sail, One reef, Two reefs]
+    fleet: account
+    art:
+      model: boats/catamaran.glb
+      far: boats/catamaran.far.glb
+      budget: { near: 30000, far: 1500 }
+    physics:
+      hull:
+        # 12,242 kg light (Lagoon; MC133 sails 12,530) and the sailor's 80.
+        displacement: 12322
+        waterlineLength: 12.5 # Lagoon
+        hullDraught: 0.75 # each canoe body, from her model: her keels reach 1.25 m (Lagoon)
+        centreOfGravity: 1.21 # tools/lever: the boat alone at 1.2 m, an estimate from her parts' masses, and her sailor standing at the wheel
+        dragAreaStep: 0.30866666666666664 # 0.6 knot, in m/s
+        # Estimate, every 0.6 knot from 0 to 14.4 knots, held beyond: both
+        # hulls' friction by ITTC 1957 (form factor 1.3, for two slender
+        # hulls and the water between them) on 41 m² wetted (her model;
+        # MC133 gives 20.89 m², about one hull's), and a slender hull's
+        # wave-making by the Froude number, its hump near 0.45 (about 9.5
+        # knots), for hulls of her slenderness 4.5 hull spacings apart, as
+        # Molland, Wellicome and Couser's (1994) series shows its shape.
+        # Tuned by tools/polar: the hump a fifth higher from a Froude number
+        # of 0.4 to 0.5, against her certificate's reaching speeds in 16
+        # knots. Her keels' and rudders' own friction is the foils'.
+        dragArea: [0.2005, 0.1995, 0.1787, 0.1698, 0.1651, 0.1625, 0.1678,
+          0.1780, 0.1906, 0.2043, 0.2249, 0.2463, 0.2716, 0.3054, 0.3385,
+          0.3517, 0.3532, 0.3384, 0.3203, 0.2944, 0.2707, 0.2503, 0.2353,
+          0.2254, 0.2171]
+        crossFlowDrag: 1.0 # estimate: two long hulls moving sideways
+        addedMassSurge: 620 # estimate: about 5% of the mass
+        addedMassSway: 12000 # estimate: two hulls' sections, about her mass
+        munk: 6600 # estimate: the yacht's share of the added mass in sway
+        # Estimate: her hulls' weight 2.8 m either side and a radius of
+        # gyration about a quarter of her length, and the water she moves;
+        # tuned by her tacks.
+        yawInertia: 160000
+        rollInertia: 200000 # estimate: her hulls 2.8 m out, her rig, and the water each hull moves as she rolls
+        rollDamping: 200000 # estimate: each hull heaving as she rolls, some tenth of critical
+        # Estimate: her two long hulls' resistance to turning, ½ρ C_D T L⁴/32
+        # each, about 290,000; a quarter of it, tuned by her tacks.
+        yawDamping: 80000
+        # tools/lever, from her model (both hulls, the bridgedeck and the
+        # saloon over it, the keels and rudders) heeled in still water,
+        # every 5° to 90°: the boat alone's centre of gravity an estimate
+        # from her parts' masses (no moment is published), her greatest
+        # lever 2.44 m at 12.5°, as her windward hull leaves the water;
+        # then her sailor aboard, standing at the wheel's height on her
+        # centreline. Past its fall the lever is held at a tenth of its
+        # greatest, positive to 90° and beyond: a licence, so that she
+        # never turns over, but comes back from a squall held too long as
+        # every heavy boat here does.
+        rightingLever: [0, 1.32, 2.31, 2.41, 2.27, 2.10, 1.91, 1.72, 1.52, 1.32,
+          1.12, 0.92, 0.70, 0.48, 0.26, 0.24, 0.24, 0.24, 0.24]
+        rightingLeverStep: 5
+        waterlineBeam: 6.95 # from her model: outside both hulls
+        waterplaneArea: 26.17 # from her model: both hulls
+        waterplanePitch: 241.8 # from her model: its second moment along her length
+        addedMassHeave: 18000 # estimate: the yacht's share of a strip's, two hulls
+        pitchInertia: 160000 # estimate
+        heaveDamping: 0.3 # estimate
+        pitchDamping: 0.3 # estimate
+        waveForce: 1.0
+        waveYaw: 0
+        # The platform's plan at the sheer, every tenth of the length from
+        # the transoms to the bows: the hulls' outer sides, their greatest
+        # breadth from amidships aft, coming in to plumb bows 2.8 m either
+        # side (a flat bow). art/boats/catamaran/build.ts builds from it.
+        outline: [3.7, 3.79, 3.84, 3.85, 3.85, 3.84, 3.8, 3.7, 3.5, 3.2, 2.8]
+        transom: 5.85
+        stem: 6.95 # the length overall forward of the transoms
+      rig:
+        # The main as MC133 rates it, 64.64 m² (her builder gives 55 m²,
+        # 59 square-topped, perhaps by another measure), fully battened and
+        # square-headed, on P 15.945 m and E 4.86 m (Lagoon).
+        sailArea: 64.64
+        luff: 15.945
+        foot: 4.86
+        # Air draught 20.65 m less P and the headboard and truck: the boom
+        # 1 m over her roof, clear of her helm's head.
+        boomHeight: 4.45
+        # Estimate: J 5.95 m aft of the forestay on the forward crossbeam,
+        # over her centre of gravity.
+        mastPosition: 0
+        footStrip: 0.17 # as the beach cat's square-headed main
+        headStrip: 0.6
+        pressureAttached: 0.33 # ORC
+        pressureSeparated: 0.50
+        effectiveHeight: 20.0 # estimate: about the masthead's height
+        quadraticDrag: 0.01379 # ORC 2023, Table 5.1
+        # Fitted by tools/polar -sail to ORC's low-lift mainsail, her rig
+        # having no backstay: the keelboat's coefficients.
+        maxLift: 1.48
+        stallAngle: 28
+        stallWidth: 20
+        sailDrag: 0.026
+        luffAngle: 3
+        flogDrag: 0.05
+        normalForce: [0, 0.5, 0.9, 1.07, 1.21, 1.31, 1.37, 1.39, 1.38, 1.35,
+          1.28, 1.19, 1.07, 0.93, 0.77, 0.59, 0.40, 0.20, 0]
+        twistPowered: 5 # estimate
+        twistDepowered: 15 # estimate
+        twistEased: 18
+        twistTurn: 3 # estimate
+        headBacked: 90 # estimate
+        headBackedWidth: 20 # estimate
+        boomIn: 3 # estimate: the traveller's car at the middle of its horse
+        boomOut: 78 # estimate: the boom meets the shrouds near 80°
+        boomInertia: 1600 # estimate: a long boom and a big main, and the air the sail carries
+        boomMoment: 500 # estimate
+        boomDamping: 300 # estimate
+        # Estimates: her saloon's front and her hulls' bows, the rig and
+        # the sailor; her side; the centre of her windage. Tuned with the
+        # drag against her certificate's beat in 6 to 16 knots.
+        windageFront: 25
+        windageSide: 35
+        windageHeight: 2.2
+        sailFloat: 15000 # estimate
+        sailWaterDamping: 6000 # estimate
+        closeHauled: 51 # MC133's beat angles, 48° to 52°
+        # Two reefs by her model's reef rows, about a fifth of the luff
+        # each (estimates; her third, for a storm, is drawn, not used).
+        reefs: [1, 0.80, 0.63]
+        reefTime: 30 # estimate: single-line reefs led to the helm
+      headsails:
+        headsailArea: 35.2 # Lagoon; MC133: the self-tacking jib
+        headsailLuff: 14.3 # estimate: the head's height above the tack, under the hounds at I 15.377 m
+        headsailFoot: 5.0 # estimate: from the tack to the clew on its horse before the mast
+        headsailTackHeight: 2.05 # estimate: the furler's reel on the forward crossbeam
+        headsailTack: 5.95 # J aft of it to the mast
+        headsailFootStrip: 0.137
+        headsailHeadStrip: 0.53
+        headsailPressureAttached: 0.33
+        headsailPressureSeparated: 0.50
+        # ORC's low-lift jib, as the keelboat's.
+        headsailMaxLift: 2.1
+        headsailStallAngle: 17
+        headsailStallWidth: 19
+        headsailDrag: 0.034
+        headsailNormalForce: [0, 0.5, 0.83, 1.01, 1.10, 1.14, 1.14, 1.11, 1.08,
+          1.05, 1.04, 1.01, 0.97, 0.90, 0.77, 0.59, 0.40, 0.20, 0]
+        headsailTwist: 8
+        headsailTwistEased: 10
+        # The self-tacker's horse before the mast: its sheet's travel, held
+        # to ORC's jib by tools/polar -sail.
+        headsailIn: 10
+        headsailOut: 20
+        headsailInertia: 60 # estimate
+        headsailMoment: 25 # estimate
+        headsailDamping: 30 # estimate
+        # The jib rolled with the reefs, to 75% and 60% of its area (her
+        # user's guide: one reef with 75% of the jib, two with 60%): the
+        # luff's share the square root.
+        headsailReefs: [1, 0.866, 0.775]
+      square: *noSquare
+      downwind: *noDownwind
+      foils:
+        # Two fixed mini keels (hulls), each a long low fin under its canoe
+        # body: their draught, 1.25 m (Lagoon), less the canoe body's.
+        boardSpan: 0.5
+        boardChord: 3.2 # estimate: her model's keels
+        # Estimate: the keels' middle under her centre of gravity; tuned for
+        # her balance and her tacks (forward of it she carried a weather
+        # helm the autopilot could not hold close-hauled).
+        boardPosition: 0.0
+        # Two suspended rudders (hulls), on bronze stocks: each blade about
+        # a metre deep from the hull's bottom near the transom; the span
+        # the physics turns on below the canoe body's draught, its tip
+        # 1.35 m down.
+        rudderSpan: 0.6
+        rudderChord: 0.6 # estimate
+        rudderPosition: 5.0 # estimate: the stocks 0.85 m forward of the transoms
+        rudderAngle: 35 # estimate
+        foilStall: 13 # estimate
+        foilStallWidth: 6 # estimate
+        foilDrag: 0.007 # ITTC 1957 at Re ≈ 5 × 10⁶, both faces
+        plateNormal: 1.2 # a flat plate
+        pressureDepth: 0.43 # Keuning and Vermeulen (2003)
+        carryOver: 3.2 # estimate: the deep canoe bodies over shallow keels; tuned for her pointing
+        heelLoss: 0.2 # estimate: she barely heels
+        rudderInflow: 0.9
+        downwash: 0.7 # estimate
+        foilWetHeel: 60 # estimate
+        foilDryHeel: 90 # estimate
+        fixed: 1 # fixed keels: the ground never pushes them up
+      sailor:
+        sailorMass: 80
+        # On her centreline at her helm platform's height (her model's
+        # sailor node is her helm's stance at the wheel, off it to port):
+        # her one sailor's weight off the centreline is under 1% of her
+        # righting moment as her hull lifts, and is left out.
+        sailorSeatHeight: 0.94
+        hikeReach: 0
+        leeReach: 0
+        hikeSpeed: 1.0
+        hikeLag: 0.5
+        heelGain: 1.0
+        rollRateGain: 0.6
+        # Estimates: her one sailor at the wheel barely flattens her main,
+        # from 12 m/s of apparent wind, fully by 16, to 0.9: she is reefed
+        # instead (her manual's table). So held in a 40-knot squall she
+        # flies her hull.
+        flattenFrom: 12
+        flattenTo: 16
+        flattenMin: 0.9
+        # Knocked down, not capsized, as the yacht: her sailor stays at the
+        # wheel, and her held lever brings her back.
+        fallOutHeel: 180
+        climbInHeel: 30
+        boardReach: 0
+        sailorDrag: 0
+        swimTime: 0
+        climbTime: 0
+      rates:
+        rudderTime: 1.5 # the yacht's: a wheel working two quadrants by cables
+        sheetHaulTime: 10 # estimate: the main and the self-tacker on the capstans at the helm
+        sheetEaseTime: 3 # estimate
+      # The autopilot, tuned by its behaviour tests: the whole helm in a
+      # tack, so that she tacks in a trade spell in under 11 s keeping 45%
+      # of her speed, and gybes in under 11 s without rounding up.
+      autopilot:
+        gain: 3
+        damping: 8
+        trimTime: 10
+        trimLimit: 0.3
+        trimBand: 10
+        tackHelm: 1.0
+        gybeHelm: 0.6
+        byTheLee: 15
+        onCourse: 10
+        astern: 0.05
+        steerage: 0.26
+        stallTime: 8
+        stallGain: 5
+      hulls:
+        # Estimate: her hulls' centrelines 5.6 m apart (her beam 7.70 m and
+        # her model's hulls; none is published).
+        hullSpacing: 5.6
+        # From her model: her windward hull leaves the water from 11.2° and
+        # is clear 5° later, as her lever peaks.
+        liftHeel: 11.2
+        # Estimate, as the beach cat's: one hull at twice the load has
+        # about 2^(2/3) / 2 of two hulls' wetted area.
+        flyingDrag: 0.85
+        rudderCount: 2
+        boardCount: 2
+        rudderSpread: 0
+        rudderLiftHeel: 0
+        rudderClearHeel: 0
+      pitch: *noPitch

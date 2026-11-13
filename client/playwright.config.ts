@@ -91,8 +91,10 @@ export const shardFiles: Record<string, string[][]> = {
   ],
   // About 7 minutes each on SwiftShader, 34.5 in all.
   webgpu: [
-    ['freecam', 'lights', 'machine-mark', 'sea'],
-    ['forecast', 'wind'],
+    // The fleet's file grows with every kind: out of the last shard,
+    // which ran past its 20 minutes with the catamaran.
+    ['freecam', 'lights', 'machine-mark', 'sea', 'fleet'],
+    ['forecast', 'wind', 'land', 'seabirds'],
     ['edge', 'features', 'sail', 'sky'],
     ['fog', 'look', 'pilot', 'weather'],
     // The sailors' files grow with every look, and the layout's measures

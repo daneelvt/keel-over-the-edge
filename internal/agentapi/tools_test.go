@@ -126,12 +126,16 @@ func TestHandbookPages(t *testing.T) {
 		if r != nil {
 			t.Fatalf("%s: %v", topic, r)
 		}
-		// The longest, aboard, is about 690 o200k tokens; trim, a table
-		// for each of six boats and the beach cat's hulls and bows, about
-		// 1,110.
+		// The longest, aboard, is about 705 o200k tokens, with the
+		// catamaran's twelve named; trim, a table for each of seven boats,
+		// the beach cat's hulls and bows and the catamaran's reefing by the
+		// wind, about 1,255.
 		most := 700
-		if topic == "trim" {
-			most = 1150
+		switch topic {
+		case "aboard":
+			most = 720
+		case "trim":
+			most = 1300
 		}
 		if n := estimateTokens(page); n < 100 || n > most {
 			t.Errorf("%s is about %d tokens", topic, n)

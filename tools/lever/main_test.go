@@ -44,6 +44,71 @@ func TestABoxsLeverIsTheWallSidedFormulas(t *testing.T) {
 	}
 }
 
+// twinBox is two wall-sided box hulls of beam b, their centrelines s
+// apart, from depth below the waterline to height above it, length l in
+// sections a tenth of a metre apart, joined by nothing: each section's
+// starboard half runs out along the deck's height to the hull and round it.
+func twinBox(s, b, depth, height, l float64) *model {
+	m := &model{step: 0.1}
+	in, out := s/2-b/2, s/2+b/2
+	half := []float64{0, height, in, height, in, -depth, out, -depth, out, height, in, height, 0, height}
+	for z := 0.05; z < l; z += 0.1 {
+		m.sections = append(m.sections, section{z: z, poly: whole(half)})
+	}
+	return m
+}
+
+// Two boxes' lever, once the windward one is clear of the water, is the
+// lee one's alone, carrying the whole weight half the spacing out: GZ =
+// s/2 cos φ + sin φ (BM (1 + ½ tan² φ) − KG), the wall-sided formula about
+// the lee box's centreline at twice the draught (KG above the boxes' upright
+// waterline, which is the lee box's own centreline at half its new draught).
+func TestTwoBoxesLeverIsTheFormulas(t *testing.T) {
+	const s, b, draught, zg = 4.0, 1.0, 0.5, 0.6
+	m := twinBox(s, b, draught, 1.5, 4)
+	volume := 2 * b * draught * 4
+	if h := m.waterline(0, volume); math.Abs(h) > 1e-6 {
+		t.Fatalf("upright she floats at %g m, not on her waterline", h)
+	}
+	lift := clearHeel(m, volume)
+	bm := b * b / (12 * 2 * draught)
+	for _, deg := range []float64{25, 30, 35, 40} {
+		phi := deg * math.Pi / 180
+		if deg < lift {
+			t.Fatalf("at %g° her windward box is not yet clear (clear at %.1f°)", deg, lift)
+		}
+		want := s/2*math.Cos(phi) + math.Sin(phi)*(bm*(1+0.5*math.Tan(phi)*math.Tan(phi))-zg)
+		got := m.buoyancy(phi, volume) - zg*math.Sin(phi)
+		if math.Abs(got-want) > 1e-6 {
+			t.Errorf("at %g°: GZ %.6f m, the formula's %.6f", deg, got, want)
+		}
+	}
+	// Upright the lever is nothing, and the windward box's volume all
+	// of half.
+	if got := m.buoyancy(0, volume); math.Abs(got) > 1e-9 {
+		t.Errorf("upright: GZ %.6f m", got)
+	}
+	if v := m.immersedPort(0, 0); math.Abs(v-volume/2) > 1e-9 {
+		t.Errorf("upright her port box has %g m³ under the water, not %g", v, volume/2)
+	}
+}
+
+// Past its greatest, a lever held at a share falls only to that share of
+// its greatest, and stays there from where it first falls so far.
+func TestAHeldLeverNeverFallsPastItsShare(t *testing.T) {
+	lever := []float64{0, 1, 2, 1.5, 0.8, 0.1, -0.3, -0.2, 0.05}
+	got := hold(lever, 0.1)
+	want := []float64{0, 1, 2, 1.5, 0.8, 0.2, 0.2, 0.2, 0.2}
+	for i := range want {
+		if math.Abs(got[i]-want[i]) > 1e-12 {
+			t.Fatalf("held: %v, not %v", got, want)
+		}
+	}
+	if got := hold(lever, 0); math.Abs(got[6]-lever[6]) > 0 {
+		t.Errorf("unheld, the lever changed: %v", got)
+	}
+}
+
 // A small volume counts while it is under the water, and not once it is
 // out of it.
 func TestAppendagesCountWhileUnderTheWater(t *testing.T) {
@@ -65,7 +130,9 @@ func TestTheCatalogsLeverIsTheModels(t *testing.T) {
 	if err := os.Chdir("../.."); err != nil {
 		t.Fatal(err)
 	}
-	if err := run("yacht", true); err != nil {
-		t.Error(err)
+	for _, id := range []string{"yacht", "catamaran"} {
+		if err := run(id, true); err != nil {
+			t.Errorf("%s: %v", id, err)
+		}
 	}
 }

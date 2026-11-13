@@ -13,7 +13,9 @@
 // included, so the volume holds however the boat lies. Each kind of boat
 // has its own hull: each hull drawn names its kind's shape. A boat of two
 // hulls has the volume of one about each hull's centreline, its offset
-// either side of hers, and the sea between them.
+// either side of hers, and the sea between them; where a bridgedeck joins
+// them, the sea between them is drawn no higher than its underside, so no
+// crest shows through her saloon's floor: above it is the boat.
 //
 // This is clipping the water's surface by a primitive (Crest, "Water
 // Exclusion": clip surface, signed distance primitives): it needs no
@@ -59,11 +61,20 @@ export const HULL_FILL = 0.94;
 /** A fragment's own place is taken a little off the fragment's, so a tile this much further off than a hull reaches may still need the walk, metres. */
 export const HULL_MARGIN = 0.5;
 
-/** A hull's volume: its stations from the transom forward, each [z, half-beam at the waterline, depth of the bottom], and the exponent of its sections' narrowing; and, for a boat of two hulls, each hull's centreline's offset either side of hers (0 for one hull), about which the half-beams are. */
+/** A hull's volume: its stations from the transom forward, each [z, half-beam at the waterline, depth of the bottom], and the exponent of its sections' narrowing; and, for a boat of two hulls, each hull's centreline's offset either side of hers (0 for one hull), about which the half-beams are, and the bridgedeck between them if she has one. */
 export interface HullShape {
   stations: number[][];
   bilge: number;
   offset: number;
+  deck?: BridgeDeck;
+}
+
+/** A bridgedeck between two hulls: its fore and after ends (z), its half-width between the hulls, its underside's height above the waterline. */
+export interface BridgeDeck {
+  fore: number;
+  aft: number;
+  halfWidth: number;
+  underside: number;
 }
 
 /** Reads a hull's volume from its model's node data; null if it has none. */
@@ -82,7 +93,38 @@ export function hullShape(data: unknown): HullShape | null {
   ) {
     return null;
   }
+  const d = (data as { bridgedeck?: Partial<BridgeDeck> }).bridgedeck;
+  if (
+    d !== undefined &&
+    [d.fore, d.aft, d.halfWidth, d.underside].every(
+      (v) => typeof v === 'number' && Number.isFinite(v),
+    )
+  ) {
+    const deck = d as BridgeDeck;
+    return {
+      stations,
+      bilge: w.bilge,
+      offset,
+      deck: {
+        fore: deck.fore,
+        aft: deck.aft,
+        halfWidth: deck.halfWidth,
+        underside: deck.underside,
+      },
+    };
+  }
   return { stations, bilge: w.bilge, offset };
+}
+
+/** Whether the point (in the hull's own frame) lies over a boat's bridgedeck's plan and above its underside: the boat's, not the sea's. */
+export function overDeck(deck: BridgeDeck | undefined, x: number, y: number, z: number): boolean {
+  return (
+    deck !== undefined &&
+    Math.abs(x) < deck.halfWidth &&
+    z > deck.fore &&
+    z < deck.aft &&
+    y > deck.underside
+  );
 }
 
 /**
@@ -97,6 +139,9 @@ export function insideHull(
   z: number,
   fill = HULL_FILL,
 ): boolean {
+  if (overDeck(shape.deck, x, y, z)) {
+    return true;
+  }
   const s = shape.stations;
   const aft = s[0]?.[0] ?? 0;
   const fore = s[STATIONS - 1]?.[0] ?? 0;
@@ -157,11 +202,14 @@ export class HullVolumes {
   );
   /** Each kind's bilge exponent, centre of gravity's height above the waterline and its hulls' offset; and every hull's reach from it, the most of any kind's. */
   readonly #shapes: Vector4[] = Array.from({ length: HULL_SHAPES }, () => new Vector4(2, 0, 0, 0));
+  /** Each kind's bridgedeck: its fore and after ends, half-width and underside; a half-width of 0 for none. */
+  readonly #decks: Vector4[] = Array.from({ length: HULL_SHAPES }, () => new Vector4());
   readonly #shape = uniform(new Vector4(2, 0, 0, 0));
   readonly #placesNode = uniformArray(this.#places, 'vec4');
   readonly #tiltsNode = uniformArray(this.#tilts, 'vec4');
   readonly #stationsNode = uniformArray(this.#stations, 'vec4');
   readonly #shapesNode = uniformArray(this.#shapes, 'vec4');
+  readonly #decksNode = uniformArray(this.#decks, 'vec4');
   #n = 0;
   readonly #ready: boolean[] = new Array<boolean>(HULL_SHAPES).fill(false);
 
@@ -176,6 +224,13 @@ export class HullVolumes {
       reach = Math.max(reach, Math.hypot(s[0] ?? 0, (s[1] ?? 0) + shape.offset));
     });
     (this.#shapes[kind] as Vector4).set(shape.bilge, centreOfGravity, shape.offset, 0);
+    const deck = shape.deck;
+    (this.#decks[kind] as Vector4).set(
+      deck?.fore ?? 0,
+      deck?.aft ?? 0,
+      deck?.halfWidth ?? 0,
+      deck?.underside ?? 0,
+    );
     // A heeled or pitched hull reaches no further from its centre of
     // gravity than this; the walk's test is by the furthest any kind's does.
     const v = this.#shape.value;
@@ -277,6 +332,18 @@ export class HullVolumes {
           this.#stationsNode.element(first.add(STATIONS - 1)) as unknown as Node<'vec4'>
         ).x;
         const y = m.y.add(own.y);
+        // Over her bridgedeck, above its underside: the boat's, not the sea's.
+        const deck = this.#decksNode.element(kind) as unknown as Node<'vec4'>;
+        If(
+          abs(m.x)
+            .lessThan(deck.z)
+            .and(m.z.greaterThan(deck.x))
+            .and(m.z.lessThan(deck.y))
+            .and(y.greaterThan(deck.w)),
+          () => {
+            inside.assign(1);
+          },
+        );
         If(m.z.lessThan(aft).and(m.z.greaterThan(fore)), () => {
           const t = aft
             .sub(m.z)
