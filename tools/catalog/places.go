@@ -26,7 +26,7 @@ const benchEdge = 0.1
 // stanchionClear is how near a station on the rail may be to a stanchion,
 // fore and aft, in m: the person sits between two, the arms over the upper
 // lifeline.
-const stanchionClear = 0.3
+const stanchionClear = 0.25
 
 // modelPlaces holds what a boat's model says of the places its people sit:
 // its `bench` node's data (the bench's ends, its top's height and its front

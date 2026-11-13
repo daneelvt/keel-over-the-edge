@@ -8,7 +8,7 @@
 //
 // Allocation-free once made: the frame loop samples and blends every frame.
 
-import type { AnimationClip, Matrix4 } from 'three';
+import { type AnimationClip, type Matrix4, Vector3 } from 'three';
 import type { Rig } from './rig';
 
 /** One bone's keys: its turns (x, y, z, w) or its places (x, y, z). */
@@ -252,4 +252,49 @@ function nlerp(
   dst[o + 1] = y / l;
   dst[o + 2] = z / l;
   dst[o + 3] = w / l;
+}
+
+/** Each walk's time with both feet down and nearest side by side, its steps begun and ended there. */
+const together = new WeakMap<Clip, number>();
+
+/** How near its lowest the higher foot must be for both to be down, m. */
+const FEET_DOWN = 0.02;
+
+/** The time in a walk where both its feet are down, nearest side by side fore and aft: found once. */
+export function feetTogether(clip: Clip, rig: Rig): number {
+  let t0 = together.get(clip);
+  if (t0 === undefined) {
+    const pose = new Pose(rig.names.length);
+    const v = new Vector3();
+    const w = new Vector3();
+    const l = rig.bone('foot_l');
+    const r = rig.bone('foot_r');
+    // Each moment's feet: how far apart fore and aft, and how high the higher is.
+    const apart: number[] = [];
+    const high: number[] = [];
+    for (let k = 0; k < 120; k++) {
+      const t = (clip.duration * k) / 120;
+      pose.rest(rig);
+      clip.sample(t, pose);
+      pose.to(rig);
+      rig.fk();
+      rig.position(l, v);
+      rig.position(r, w);
+      apart.push(Math.abs(v.z - w.z));
+      high.push(Math.max(v.y, w.y));
+    }
+    // Both feet down (the higher within FEET_DOWN of its lowest), nearest side by side.
+    const low = Math.min(...high);
+    let best = Number.POSITIVE_INFINITY;
+    t0 = 0;
+    for (let k = 0; k < 120; k++) {
+      if ((high[k] as number) <= low + FEET_DOWN && (apart[k] as number) < best) {
+        best = apart[k] as number;
+        t0 = (clip.duration * k) / 120;
+      }
+    }
+    rig.reset();
+    together.set(clip, t0);
+  }
+  return t0;
 }

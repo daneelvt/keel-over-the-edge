@@ -583,7 +583,7 @@ func TestRejects(t *testing.T) {
 				"shared/catalog/boats.yaml": strings.Replace(validBoats, "pose: standing", "pose: rail", 1),
 				testArt:                     glbWith([]string{"hull", "tricolour"}, map[string]string{"lifelines": `{"lifelines":{"heights":[0.2,0.4],"stanchions":[-1,-0.3,0.5],"inboard":0.03,"fore":-1.5,"aft":1.5}}`}),
 			},
-			want: "boats[test-boat].stations[1]: on the rail at -0.5, within 0.3 m of the stanchion at -0.3",
+			want: "boats[test-boat].stations[1]: on the rail at -0.5, within 0.25 m of the stanchion at -0.3",
 		},
 		{
 			name: "a station on the rail beyond the lifelines",

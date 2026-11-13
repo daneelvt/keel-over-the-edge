@@ -5,7 +5,8 @@
 // sailor of that boat, at its helm), drawn at their stations by the same
 // rules as the crew of the boat in view (crewrules.ts): to windward of each
 // boat's boom, crossing in its tacks and gybes, sitting up or leaning out as
-// its helm hikes, changing places when its controls change hands. While its
+// its helm hikes (aboard a cruising yacht, as she heels), changing places
+// when its controls change hands. While its
 // helm walks to or from the tiller, the fleet does not draw it there
 // (DrawnBoat's helmAway) and its crew draws it walking.
 //
@@ -27,7 +28,7 @@ import type { BoatCrew, DrawnBoat } from '../../game/fleet';
 import type { SailorLook } from '../boat';
 import type { FloatingOrigin } from '../coords';
 import { catFloor, namesCatClips } from './cat';
-import { FAR_EVERY, modelDeck, tillerOf } from './crew';
+import { FAR_EVERY, modelDeck, STEPPED, tillerOf } from './crew';
 import { CrewBody, type Stance, stance } from './crewbody';
 import { deckFigure, farFigure } from './crewfigures';
 import { CrewLevel, LEVEL_MOST } from './crewlevel';
@@ -40,6 +41,7 @@ import {
   duckFor,
   duckStep,
   type SailorNow,
+  waysOf,
 } from './crewrules';
 import type { FleetLook, FleetLooks } from './fleetlooks';
 import { catOf } from './onboat';
@@ -49,6 +51,7 @@ import { plumbOf, poseShip, type ShipPoseInput } from './shippose';
 import { type ShipMember, ShipRules, shipPlan } from './shiprules';
 import { hullSolid } from './solid';
 import { trapezeOf, wireDepth } from './trapeze';
+import { namesYachtClips, yachtBoat } from './yacht';
 
 /** The most people drawn on other boats: the frame's budget on a phone, with a port of crewed boats in view. */
 export const CREW_MOST = 160;
@@ -98,7 +101,7 @@ export function kindCrew(
     solid,
     parts.gooseneck,
     kind.physics.rig.foot,
-    root === null ? null : modelDeck(root),
+    root === null ? null : modelDeck(root, namesYachtClips(kind.art) ? STEPPED : []),
     root === null ? null : tillerOf(root),
   );
   // A ship: her company's places and ways, which her model marks; a beach
@@ -108,6 +111,7 @@ export function kindCrew(
     root !== null && namesCatClips(kind.art)
       ? catOf(root, parts.objects, kind.physics.rig.foot)
       : null;
+  plan.yacht = namesYachtClips(kind.art) ? yachtBoat(parts.objects) : null;
   plan.cog = kind.physics.hull.centreOfGravity;
   return {
     plan,
@@ -347,7 +351,8 @@ export class FleetCrews {
       for (const p of c.people) {
         const l = p.look;
         const catted = catOfRules(c.rules);
-        looks.want(l, true, false, l.railed, l.shipped, l.aloft, catted);
+        const yachted = yachtOfRules(c.rules);
+        looks.want(l, true, false, l.railed, l.shipped, l.aloft, catted, yachted);
         const done = (s: string): boolean => s === 'ready' || s === 'failed';
         const can =
           c.drawn &&
@@ -357,7 +362,8 @@ export class FleetCrews {
           (!l.railed || done(l.railState)) &&
           (!l.shipped || done(l.shipState)) &&
           (!l.aloft || done(l.aloftState)) &&
-          (!catted || done(l.catState));
+          (!catted || done(l.catState)) &&
+          (!yachted || done(l.cruiserState));
         const shown = can && (p.member.station > 0 || p.member.moving !== null);
         if (shown && p.body === null && l.deck !== null) {
           p.body = new CrewBody(
@@ -472,7 +478,9 @@ export class FleetCrews {
     if (c.rules instanceof ShipRules) {
       c.version = c.rules.version;
     }
-    const railed = !ship && stations.some((s) => s.windward === true || s.pose === 'rail');
+    const yachted = yachtOfRules(c.rules);
+    const railed =
+      !ship && !yachted && stations.some((s) => s.windward === true || s.pose === 'rail');
     const aloft = ship && stations.some((s) => s.pose === 'aloft');
     if (ship) {
       // Whoever is at the wheel too: relieved, they walk with the crew.
@@ -484,7 +492,7 @@ export class FleetCrews {
     for (const member of c.rules.members) {
       const l = this.sailorLookOf(member.look);
       const look = looks.add(l.art, l.machine);
-      looks.want(look, true, false, railed, ship, aloft, catOfRules(c.rules));
+      looks.want(look, true, false, railed, ship, aloft, catOfRules(c.rules), yachted);
       const was = before.get(member);
       if (was !== undefined && was.look === look) {
         c.people.push(was);
@@ -573,6 +581,10 @@ export class FleetCrews {
     input.aft = c.aft;
     input.level = c.level;
     input.life.floor = kc.floor;
+    input.yacht = kc.plan.yacht ?? null;
+    input.world = this.time;
+    input.machine = p.look.machine;
+    input.ways = waysOf(kc.plan);
     poseMember(p.body, p.member, input);
   }
 
@@ -795,6 +807,7 @@ export class FleetCrews {
                 (!p.look.shipped || settled(p.look.shipState)) &&
                 (!p.look.aloft || settled(p.look.aloftState)) &&
                 (!catOfRules(c.rules) || settled(p.look.catState)) &&
+                (!yachtOfRules(c.rules) || settled(p.look.cruiserState)) &&
                 (p.look.clipsState === 'failed' || (p.shown && p.posed))),
           ),
       )
@@ -819,6 +832,11 @@ export function depthOf(b: DrawnBoat, hike: Hike = STRAPPED, reach = 0): number 
   const h = Math.max(0, Math.min(1, (out - hike.from) / (hike.full - hike.from))) * hike.depth;
   // On a trapeze, beyond the rail onto the wire, as the helm's own is.
   return reach > 0 ? Math.min(h, 1) + wireDepth(out, hike.full, reach) : h;
+}
+
+/** Whether a boat's crew are a cruising yacht's: a crew's rules with her deck. */
+function yachtOfRules(rules: CrewRules | ShipRules): boolean {
+  return rules instanceof CrewRules && rules.plan.yacht != null;
 }
 
 /** Whether a boat's crew are a beach cat's: a crew's rules with her places. */

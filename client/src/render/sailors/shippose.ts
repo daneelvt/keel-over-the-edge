@@ -11,9 +11,8 @@
 
 import { Matrix4, Quaternion, Vector3 } from 'three';
 import type { BoatStation } from '../../catalog';
-import type { Clip } from './clips';
+import { type Clip, feetTogether } from './clips';
 import { blend, type CrewBody, type Life, placeStance, type Stance } from './crewbody';
-import { feetTogether } from './crewpose';
 import { NOT_FOR_MACHINES, WALK_SPEED } from './ship';
 import {
   IDLES,

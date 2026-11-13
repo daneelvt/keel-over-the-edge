@@ -2327,11 +2327,15 @@ const RAIL: Vec3 = [halfBeam(uAt(RAIL_Z)), sheer(uAt(RAIL_Z)), RAIL_Z];
 /**
  * The crew's stations: on the windward bench, the trimmer at its after end
  * by the primary capstan, one at its forward end and one between; and on
- * the rail abreast the coachroof, forward of the shrouds' chainplates and
- * aft of them, each clear of them and of the stanchions by 0.3 m.
+ * the rail forward of the shrouds' chainplates, from by the shrouds to the
+ * foredeck, each clear of them and of the stanchions by 0.3 m, and of where
+ * the coachroof is crossed (forward of the mast) by a turn at a crouch. Aft
+ * of the shrouds the side deck between them and the lifelines is narrower
+ * than a body crossing at a crouch, and aft of the mast the boom and the
+ * vang lie over the coachroof.
  */
 const BENCH_ZS = [2.35, 0.85, 1.6];
-const RAIL_ZS = [-2.3, -1.6, -0.5, 0.55];
+const RAIL_ZS = [-1.6, -2.9, -3.5, -4.1];
 
 // --- The model ---------------------------------------------------------------
 
@@ -2449,7 +2453,16 @@ function model(): NodeDef[] {
         ...(D === NEAR ? { lever: leverData() } : {}),
       },
     },
-    { name: 'mast', translation: [0, 0, MAST_Z], primitives: mastParts },
+    {
+      name: 'mast',
+      translation: [0, 0, MAST_Z],
+      primitives: mastParts,
+      // Where her shrouds come down to the side decks: her crew's way along
+      // them passes outboard of these.
+      extras: {
+        chainplates: [CAP_Z, CAP_Z + 0.06, LOWER_Z].map((z) => [CHAIN_X, round4(z)]),
+      },
+    },
     {
       name: 'boom',
       translation: [0, rig.boomHeight, MAST_Z],
