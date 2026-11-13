@@ -5,8 +5,8 @@
 // material in the room is the factory's, with the bend; and the figures are
 // drawn posed by the GPU where the skeleton on the CPU says, standing on the
 // quay, seated in a dinghy and on a keelboat's rail, crouched on her
-// deck, aboard the tall ship and aboard the beach cat. The silhouettes are
-// drawn black, so a pixel says whether a sailor is there: a figure drawn unposed would leave the
+// deck, aboard the tall ship, the beach cat and the cruising yacht. The
+// silhouettes are drawn black, so a pixel says whether a sailor is there: a figure drawn unposed would leave the
 // places its pose takes it to empty, and cover the places it left.
 //
 // The clips are held at a time (t), so every picture is the same.
@@ -259,6 +259,32 @@ test('the Rover aboard the beach cat in both versions: at her helm, on her wire,
   await openRoom(page, 'view=lineup&black=1&t=1&clip=cat-helm&look=rover');
   const parts = ['head', 'pelvis'];
   for (const clip of ['cat-helm', 'hull-wire-port', 'net-crawl-left', 'cat-righting']) {
+    const aboard = await show(page, { clip, t: 1 });
+    expect(
+      (await page.evaluate(() => globalThis.dressing.figures())).every((f) => f.inBoat),
+      clip,
+    ).toBe(true);
+    expect(await page.evaluate(() => globalThis.dressing.problems()), clip).toEqual([]);
+    for (const [name, at] of Object.entries(await bones(page, parts))) {
+      expect(darkest(aboard, at), `${name}, ${clip}`).toBeLessThanOrEqual(DARK);
+    }
+  }
+});
+
+test('the Rover aboard the cruising yacht in both versions: sat by her wheel, braced on her bench, out on her rail and crossing her coachroof', async ({
+  page,
+}) => {
+  test.setTimeout(240_000);
+  await openRoom(page, 'view=lineup&black=1&t=1&clip=yacht-wheel-seated&look=rover');
+  // Seen from before her, the wheel, the table and the coaming hide the
+  // hips: the heads are seen.
+  const parts = ['head'];
+  for (const clip of [
+    'yacht-wheel-seated',
+    'bench-braced-port',
+    'yacht-rail-out',
+    'roof-crouch-walk',
+  ]) {
     const aboard = await show(page, { clip, t: 1 });
     expect(
       (await page.evaluate(() => globalThis.dressing.figures())).every((f) => f.inBoat),

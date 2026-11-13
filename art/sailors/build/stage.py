@@ -65,6 +65,7 @@ inside to test, so what is crossed is counted instead).
 """
 
 import os
+import re
 
 import bpy
 import numpy as np
@@ -105,6 +106,9 @@ class Stage:
         # The beach cat's, judged apart too (Cat.tree): her net gives, and
         # her straps and ropes are held.
         self.cat = Cat(root, spec["cat"]) if spec.get("cat") else None
+        # The yacht's, judged apart too (Yacht.tree): her ropes are held,
+        # her wheels measured apart.
+        self.yacht = Yacht(root, spec["cruiser"]) if spec.get("cruiser") else None
         self.tree = _tree(self.solid + ([self.wheel.deck] if self.wheel else []) +
                           (self.trapeze.solid if self.trapeze else []) + (self.rail.solid if self.rail else []))
 
@@ -195,6 +199,8 @@ class Stage:
             return self.ship.point(name, side)
         if self.cat is not None and name in Cat.POINTS:
             return self.cat.point(name, side)
+        if self.yacht is not None and (name in Yacht.POINTS or name in self.yacht.grips):
+            return self.yacht.point(name, side)
         fwd, inb, up = self.spec["points"][name]
         p = self.frame(side) @ Vector((fwd, inb, up))
         if name.startswith("tiller"):
@@ -208,12 +214,17 @@ class Stage:
         own axes, x to its left."""
         return Matrix.Rotation(np.radians(-90.0 * side), 4, "Z")
 
-    def show(self, shown, wheel=False, trapeze=False, rail=False, ship=False, cat=None):
+    def show(self, shown, wheel=False, trapeze=False, rail=False, ship=False, cat=None, yacht=False):
         """Shows the dinghy's hull (shown), or the wheel's stage, or the
         trapeze's boat, or the rail's, or the ship, or the beach cat
-        (cat: upright, or lying on her side, capsized)."""
+        (cat: upright, or lying on her side, capsized), or the yacht."""
         for o in self.objects:
-            o.hide_render = not shown or wheel or trapeze or rail or ship or bool(cat) or o not in self.solid
+            o.hide_render = not shown or wheel or trapeze or rail or ship or bool(cat) or yacht or \
+                o not in self.solid
+        if self.yacht is not None:
+            for o in self.yacht.objects:
+                o.hide_render = not (shown and yacht) or o.type != "MESH" or o in self.yacht.planes or \
+                    o in self.yacht.hidden
         if self.cat is not None:
             for o in self.cat.objects:
                 o.hide_render = not (shown and cat) or o.type != "MESH" or o in self.cat.planes or \
@@ -846,6 +857,251 @@ class Cat:
         top = (self.at.z + 3.0) if z is None else z
         hit = self.tree.ray_cast(Vector((x, y, top)), Vector((0, 0, -1)), 6.0)
         return None if hit[0] is None else hit[0].z
+
+
+class Yacht:
+    """The yacht's stage: her model (spec `boat`), imported and moved by
+    `at` in the stage's scene (x to starboard, y forward, z up), clear of
+    the rest. Her places, from her model's nodes, on her starboard side (the
+    port's the mirror):
+
+    - at her starboard wheel (the `wheel` node's child, `spread` out from
+      her centreline): the stance aft of it on the cockpit's sole
+      (`yacht-stance`, the `sailor` node moved out by the spread), its hub
+      (`yacht-hub`) and the grips on its rim (`grips`: each an angle from
+      the top, degrees, to starboard as the helm sees it, on the rim, so far
+      in from its middle as is still within its wood);
+    - the side deck outboard of the wheel, where the helm sits: its inner
+      edge's top `helm-seat.aft` aft of the wheel (`yacht-helm-seat`), and
+      `helm-seat.brace` forward of that (`yacht-helm-brace`), where the
+      feet are braced, by her capstan;
+    - the bench (the `bench` node): its front edge's top at the node's
+      station (`yacht-bench`) and the sole before it (`yacht-bench-sole`);
+    - the side deck's edge at her rail's station (`yacht-rail`, her `rail`
+      node), and her two
+      lifelines there, as they run between their stanchions
+      (`yacht-lifeline-low`, `yacht-lifeline-up`, from the `lifelines`
+      node), and the stanchion nearest (`yacht-stanchion`, its foot);
+    - the sole on her centreline `cockpit.table` aft of her table
+      (`yacht-sole`), where the cockpit is crossed between the table and
+      the wheels, and the top of her coachroof on her centreline `roof.fore`
+      aft of its fore end (`yacht-roof`), where it is crossed forward of the
+      mast, and the side deck's top outboard of the coachroof's side there
+      (`yacht-roof-step`);
+    - the boom's underside at its lowest, amidships (`boom`).
+
+    Her hull (with her decks, cockpit, benches, coachroof, sprayhood, table,
+    binnacles, capstans, stanchions, pulpit and pushpit), mast and boom are
+    solid (`tree`), but for her ropes (the lifelines, her rigging, the
+    sheets and lazy jacks: `ropes`), which only what holds them may meet,
+    and her wheels, whose wood is measured apart (`near`). Her sails are
+    neither."""
+
+    POINTS = ("yacht-stance", "yacht-hub", "yacht-helm-seat", "yacht-helm-brace", "yacht-bench", "yacht-bench-sole", "yacht-rail",
+              "yacht-lifeline-low", "yacht-lifeline-up", "yacht-stanchion", "yacht-sole", "yacht-roof",
+              "yacht-roof-step")
+    ROPE = "rope"
+    # What of her model is neither solid nor held: her sails and what flies
+    # from her rig, and the wheels (measured apart).
+    LEFT_OUT = ("sail", "jib", "telltales", "pennant")
+    WHEELS = ("wheel-port", "wheel-starboard")
+    # A wheel's rim and spokes as thick as her model's (their radii), and
+    # its handles' reach beyond the rim.
+    RIM = 0.024
+    SPOKE = 0.017
+
+    def __init__(self, root, spec):
+        self.spec = spec
+        before = set(bpy.data.objects)
+        bpy.ops.import_scene.gltf(filepath=os.path.join(root, "art", spec["boat"]))
+        self.objects = [o for o in bpy.data.objects if o not in before]
+        self.at = Vector(spec["at"])
+        for o in self.objects:
+            # Her nodes by their own names, whatever of the scene's they
+            # met on import (the wheel's stage has a `wheel`).
+            o.name = "yacht-" + re.sub(r"\.\d{3}$", "", o.name)
+            o.hide_render = True
+            if o.parent is None:
+                o.location = o.location + self.at
+        bpy.context.view_layer.update()
+        self.hidden = [o for o in self.objects if o.name in ["yacht-" + n for n in self.LEFT_OUT]]
+
+        def node(name):
+            return bpy.data.objects["yacht-" + name]
+
+        def extras(name, key):
+            return node(name)[key]
+
+        w = extras("wheel", "wheel")
+        self.spread = float(w["spread"])
+        self.radius = float(w["radius"])
+        self.spokes = int(w["spokes"])
+        self.handles = float(w["handles"])
+        hub = node("wheel").matrix_world.translation
+        self.hub = Vector((hub.x + self.spread, hub.y, hub.z))
+        st = node("sailor").matrix_world.translation
+        self.stance = Vector((st.x + self.spread, st.y, st.z))
+        # Each grip on the rim: its angle from the top, and how far in from
+        # the rim's middle the hand holds it (within the rim's own wood).
+        self.grips = {name: self.spoke(float(deg), self.radius - float(inside))
+                      for name, (deg, inside) in spec["grips"].items()}
+
+        def material(o, p):
+            slots = o.material_slots
+            return slots[p.material_index].name.split(".")[0] if p.material_index < len(slots) else ""
+
+        meshes = [o for o in self.objects if o.type == "MESH" and o not in self.hidden]
+        self.wheels = [o for o in meshes if o.name in ["yacht-" + n for n in self.WHEELS]]
+        solid = [o for o in meshes if o not in self.wheels]
+        self.hull = node("hull")
+        self.tree = _tree(solid, lambda o, p: material(o, p) != self.ROPE)
+        # Her decks, cockpit and coachroof, what a ray down finds them by.
+        self.decks = _tree([self.hull], lambda o, p: material(o, p) != self.ROPE)
+        self.ropes = _tree(solid, lambda o, p: material(o, p) == self.ROPE)
+        # The bench, from its node: its front edge's top at its station.
+        b = node("bench")
+        bench = b["bench"]
+        self.bench_z = b.matrix_world.translation.y
+        self.bench = Vector((self.at.x + float(bench["inner"]), self.bench_z, self.at.z + float(bench["top"])))
+        self.sole = self.at.z + float(bench["sole"])
+        # The side deck outboard of the wheel: its inner edge's top, where a
+        # ray down first meets the deck, not the sole, going out.
+        y = self.hub.y - spec["helm-seat"]["aft"]
+        self.helm_seat = self._edge_out(self.hub.x, y)
+        # Forward of it along the side deck, where the helm's feet are
+        # braced: the deck's top there, as far out.
+        y += spec["helm-seat"]["brace"]
+        self.helm_brace = self._edge_out(self.hub.x, y)
+        # The deck's edge at the rail's station (her `rail` node).
+        self.rail = node("rail").matrix_world.translation.copy()
+        y = self.rail.y
+        # The lifelines there, between the stanchions either side; and the
+        # nearest stanchion's foot.
+        ll = node("lifelines")["lifelines"]
+        stations = [float(z) for z in ll["stanchions"]]
+        inboard = float(ll["inboard"])
+        z = self.at.y - y
+        fore = max(s for s in stations if s <= z)
+        aft = min(s for s in stations if s >= z)
+
+        def foot(sz):
+            yy = self.at.y - sz
+            xx = self.at.x + 2.5
+            while xx > self.at.x and self.down(xx, yy) is None:
+                xx -= 0.002
+            return Vector((xx - inboard, yy, self.down(xx - inboard, yy)))
+
+        a, c = foot(fore), foot(aft)
+        t = 0.0 if aft == fore else (z - fore) / (aft - fore)
+        self.lifelines = [a.lerp(c, t) + Vector((0.0, 0.0, float(h))) for h in ll["heights"]]
+        self.stanchion = min((a, c), key=lambda p: abs(p.y - y))
+        # The cockpit's crossing: the sole on her centreline, aft of the
+        # table's after end (the `table` node's).
+        z = float(node("table")["table"]["aft"]) + spec["cockpit"]["table"]
+        self.cross = Vector((self.at.x, self.at.y - z, self.sole))
+        # The coachroof's crossing: its top on her centreline (on the
+        # scuttle there, if any), and the side deck's top outboard of the
+        # coachroof's side.
+        z = float(node("coachroof")["coachroof"]["fore"]) + spec["roof"]["fore"]
+        y = self.at.y - z
+        self.roof = Vector((self.at.x, y, self.down(self.at.x, y)))
+        x = self.at.x
+        while self.down(x, y) > self.roof.z - 0.2:
+            x += 0.002
+        self.roof_step = Vector((x + 0.05, y, self.down(x + 0.05, y)))
+        # The boom's underside, amidships: what a ray up from the coachroof
+        # meets first.
+        boom = node("boom")
+        self.boom_tree = _tree([boom])
+        hit = self.boom_tree.ray_cast(Vector((self.at.x, y, self.roof.z + 0.05)), Vector((0, 0, 1)), 5.0)
+        self.boom = hit[0].z if hit[0] is not None else None
+        # The bench's top, from its front edge to the cockpit's side, fore
+        # and aft along it: what a seated figure's cloth is laid on there
+        # (the rest of her decks by her hull itself).
+        out = self._wall(self.bench.x, self.bench.y, self.bench.z + 0.05)
+        self.planes = [self._plane("yacht-bench-plane", self.bench.x, out, self.at.y - float(bench["aft"]),
+                                   self.at.y - float(bench["fore"]), self.bench.z)]
+        # And the coachroof's scuttle where it is crossed, its top: a long
+        # coat's skirts in a deep crouch are laid on it, not in it.
+        self.planes.append(self._plane("yacht-roof-plane", self.at.x, self.at.x + 0.5, self.roof.y - 0.4,
+                                       self.roof.y + 0.4, self.roof.z))
+        self.objects += self.planes
+
+    def _wall(self, x, y, z):
+        """Going out from (x, y) at height z, where her side first stands."""
+        hit = self.tree.ray_cast(Vector((x, y, z)), Vector((1, 0, 0)), 3.0)
+        if hit[0] is None:
+            raise AssertionError(f"{self.spec['boat']}: no side outboard of {x:.3f}, {y:.3f}")
+        return hit[0].x
+
+    def _edge_out(self, x, y, above=None):
+        """Going out from (x, y), where a ray down first meets the deck: the
+        side deck's inner edge, its top (above: higher than this)."""
+        floor = self.sole + 0.1 if above is None else above
+        while x < self.at.x + 2.5:
+            h = self.down(x, y)
+            if h is not None and h > floor and (above is None or h < above + 0.05):
+                return Vector((x, y, h))
+            x += 0.002
+        raise AssertionError(f"{self.spec['boat']}: no side deck outboard of {x:.3f}, {y:.3f}")
+
+    def _plane(self, name, x0, x1, y0, y1, z):
+        me = bpy.data.meshes.new(name)
+        verts = []
+        for s in (1, -1):
+            a, b = self.at.x + s * (x0 - self.at.x), self.at.x + s * (x1 - self.at.x)
+            verts += [(a, y0, z), (b, y0, z), (b, y1, z), (a, y1, z)]
+        me.from_pydata(verts, [], [(0, 1, 2, 3), (7, 6, 5, 4)])
+        o = bpy.data.objects.new(name, me)
+        bpy.context.scene.collection.objects.link(o)
+        o.hide_render = True
+        return o
+
+    def spoke(self, degrees, along, hub=None):
+        """The point along the starboard wheel's spoke at this angle from
+        the top, this far from the hub."""
+        a = np.radians(degrees)
+        return (hub or self.hub) + Vector((np.sin(a) * along, 0.0, np.cos(a) * along))
+
+    def _side(self, p, side):
+        return Vector((self.at.x + side * (p.x - self.at.x), p.y, p.z))
+
+    def point(self, name, side=1):
+        if name in self.grips:
+            return self._side(self.grips[name], side)
+        p = {"yacht-stance": self.stance, "yacht-hub": self.hub, "yacht-helm-seat": self.helm_seat,
+             "yacht-helm-brace": self.helm_brace,
+             "yacht-bench": self.bench, "yacht-bench-sole": Vector((self.bench.x, self.bench.y, self.sole)),
+             "yacht-rail": self.rail, "yacht-lifeline-low": self.lifelines[0], "yacht-lifeline-up": self.lifelines[1],
+             "yacht-stanchion": self.stanchion, "yacht-sole": self.cross, "yacht-roof": self.roof,
+             "yacht-roof-step": self.roof_step}[name]
+        return self._side(p, side)
+
+    def down(self, x, y, z=None):
+        """The height of the first surface of the yacht's hull (her decks,
+        cockpit, coachroof and what stands on them, not her rig) a ray
+        straight down at (x, y) meets (from z, or from above her), or None."""
+        top = (self.at.z + 4.0) if z is None else z
+        hit = self.decks.ray_cast(Vector((x, y, top)), Vector((0, 0, -1)), 8.0)
+        return None if hit[0] is None else hit[0].z
+
+    def near(self, points, side, skip=None):
+        """Which points are within a wheel's rim or a spoke's thickness of
+        it (inside its wood), at the wheel on a side: the indices, those
+        skipped left out."""
+        hub = self._side(self.hub, side)
+        p = np.asarray(points, float) - np.array(hub)
+        r = np.hypot(p[:, 0], p[:, 2])
+        hit = np.hypot(r - self.radius, p[:, 1]) < self.RIM
+        a = np.arctan2(p[:, 0], p[:, 2])
+        step = 2 * np.pi / self.spokes
+        off = (a + step / 2) % step - step / 2
+        across = np.abs(np.sin(off) * r)
+        hit |= (across < self.SPOKE) & (np.abs(p[:, 1]) < self.SPOKE) & (r < self.radius + self.handles) & \
+            (np.cos(off) > 0)
+        if skip is not None:
+            hit &= ~np.asarray(skip, bool)
+        return np.flatnonzero(hit)
 
 
 def _tree(objs, keep=None):

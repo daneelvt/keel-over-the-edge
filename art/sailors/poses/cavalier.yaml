@@ -76,6 +76,11 @@ poses:
       hand_r: { at: bone, bone: spine_03, offset: [-0.5, -0.3, -0.12], pole: [-0.4, 0.7, -0.2] }
 
 clips:
+  # The habit at a cruising yacht's wheel: the same, made at hers.
+  cavalier-yacht-habit-wheel:
+    of: cavalier-habit-wheel
+    restage: cruiser
+    group: cruiser
   cavalier-habit:
     sides: true
     keys:

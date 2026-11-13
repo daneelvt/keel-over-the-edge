@@ -61,6 +61,7 @@ import { aloftClips, shipClips } from './ship';
 import { CHAINS } from './springs';
 import { harnessFile, TRAPEZE_CLIPS, trapezeClips } from './trapeze';
 import { wheelClips } from './wheel';
+import { yachtClips } from './yacht';
 
 /** Where the fleet's figures are seated: the boat model's seat (fleetparts.ts's seatFigure). */
 export interface FleetSeat {
@@ -105,6 +106,9 @@ export class FleetLook {
   /** Its clips aboard a beach cat (cat.ts), added to its clips when someone wearing it is aboard one; whether wanted. */
   catState: LookState = 'none';
   catted = false;
+  /** Its clips aboard a cruising yacht (yacht.ts), added to its clips when someone wearing it is aboard one; whether wanted. */
+  cruiserState: LookState = 'none';
+  yachted = false;
   /** Whether a boat with it has come near: its clips are wanted. */
   near = false;
   deck: DeckLook | null = null;
@@ -181,9 +185,11 @@ export class FleetLooks {
     shipped = false,
     aloft = false,
     catted = false,
+    yachted = false,
   ): void {
     look.near ||= near;
     look.catted ||= catted;
+    look.yachted ||= yachted;
     look.wired ||= wired;
     look.railed ||= railed;
     look.shipped ||= shipped || aloft;
@@ -291,6 +297,7 @@ export class FleetLooks {
       [look.shipped, 'shipState', shipClips],
       [look.aloft, 'aloftState', aloftClips],
       [look.catted && look.near, 'catState', catClips],
+      [look.yachted && look.near, 'cruiserState', yachtClips],
     ] as const) {
       if (wanted && look.clipsState === 'ready' && look[state] === 'none' && look.deck !== null) {
         look[state] = 'loading';
@@ -324,7 +331,8 @@ export class FleetLooks {
         look.railState === 'loading' ||
         look.shipState === 'loading' ||
         look.aloftState === 'loading' ||
-        look.catState === 'loading'
+        look.catState === 'loading' ||
+        look.cruiserState === 'loading'
       ) {
         await new Promise((r) => setTimeout(r, 10));
         this.want(look, true);

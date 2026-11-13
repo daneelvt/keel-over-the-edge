@@ -223,7 +223,9 @@ type BoatArt struct {
 	// The files of clips beside each sailor look's clips (<version>.<name>.glb) its
 	// people aboard are drawn with, loaded only when someone is drawn aboard one of
 	// its kind: cat, a beach cat's (sat on her hull, sitting out, on the wire,
-	// crossing her net, righting her).
+	// crossing her net, righting her); cruiser, a cruising yacht's (at her wheel,
+	// standing and sat by it, on her cockpit's bench, on her rail under her
+	// lifelines, crossing her cockpit and her coachroof).
 	SailorClips []SailorClip `json:"sailorClips,omitempty,omitzero"`
 }
 
@@ -3227,6 +3229,7 @@ type SailorArt struct {
 type SailorClip string
 
 const SailorClipCat SailorClip = "cat"
+const SailorClipCruiser SailorClip = "cruiser"
 
 type SailorOption struct {
 	// Its colour, sRGB, #rrggbb.
@@ -5549,4 +5552,4 @@ type WorldZones struct {
 }
 
 // Version is the catalog version (tools/catalog).
-const Version = "e73019c2f1aafd1e"
+const Version = "8f0a3373c69a1ccd"

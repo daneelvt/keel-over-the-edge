@@ -213,8 +213,8 @@ person stands. On a boat of two hulls (`hulls.hullSpacing`) every station
 is on a hull's top, and only such a boat has one `on a hull` (`hull`: sat
 by the hull's inner edge with the legs across the net, out on the trapeze's
 wire beside the helm once the helm is on theirs). Her people are drawn with
-her own clips (her art's `sailorClips`, placed from her model's `aboard`
-node): they cross her net facing forward along its middle in turn, the crew
+her own clips (her art's `sailorClips`, `cat`, placed from her model's
+`aboard` node): they cross her net facing forward along its middle in turn, the crew
 forward of its middle and the helm aft of it, at a crouch and on hands and
 knees under the boom; in a tack the crew first as the wind comes ahead, in
 a gybe the helm first; at a handover they pass along her windward hull,
@@ -973,15 +973,21 @@ A kind of boat is data: nothing reads its name or id. Adding one touches:
    `snapshot.ts`; then `go run ./tools/protocol`, the replay fixture
    (`go test ./internal/sim -run Fixture -update`) and the sandbox's
    recording (`UPDATE_RECORDING=1 npx vitest run src/sandbox/sandbox.test.ts`).
-8. The browser's specs: the mixed fleet's budgets (`fleet.spec.ts`), the
+8. If its people need clips of their own (seats, a rail, crossings no
+   other boat has), a stage of hers in the sailors' build (`art/README.md`,
+   Sailors in Blender), a file of clips her art names in `sailorClips`
+   (never her id: the catalog's check refuses code quoting one), built on
+   every look with `go run ./tools/sailors -add`, and held by
+   `files.test.ts`.
+9. The browser's specs: the mixed fleet's budgets (`fleet.spec.ts`), the
    looks (`boatlook.spec.ts`), the layout's heel hold (`layout.spec.ts`);
    and, if it carries more than one, its people (`crew.spec.ts`, and
    `catcrew.test.ts` for a boat of two hulls).
-9. The machine sailors' aboard page, and the report's words if the boat
-   does something new.
-10. The chooser's picture (`client/src/account/boats.tsx`) if its form is
+10. The machine sailors' aboard page, and the report's words if the boat
+    does something new.
+11. The chooser's picture (`client/src/account/boats.tsx`) if its form is
     new.
-11. Its numbers here.
+12. Its numbers here.
 
 The sandbox sails it: `?sandbox&boat=<id>`.
 
