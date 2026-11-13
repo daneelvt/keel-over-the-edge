@@ -970,8 +970,10 @@ def clip_cat(gates, fig, measures):
             measures[name]["cat"] = {"value": total, "limit": 0, "ok": total == 0}
 
 
-# On the yacht's rail the forearms lie over her upper lifeline too.
+# On the yacht's rail the forearms lie over her upper lifeline too; and the
+# cloth of the arms at the elbow, the sleeves draped over it.
 ON_LIFELINE = ON_ROPES + ("lowerarm",)
+DRAPED = ON_LIFELINE + ("upperarm",)
 
 
 def clip_yacht(gates, fig, measures):
@@ -981,7 +983,8 @@ def clip_yacht(gates, fig, measures):
     benches, coachroof, sprayhood, table, binnacles, capstans, stanchions,
     pulpit, pushpit, mast or boom; nor her ropes (her lifelines above all,
     her rigging, her sheets), but for what holds them (the hands, and on
-    her rail the forearms laid over the upper lifeline) or stands on them;
+    her rail the forearms laid over the upper lifeline, the sleeves draped
+    over it with them) or stands on them;
     nor, at her wheel, its wood (its rim, its spokes) but for the hands
     that hold it. Sat on her, the cloth laid on her is through her if it is
     under a top of hers, as on any seat."""
@@ -1001,7 +1004,7 @@ def clip_yacht(gates, fig, measures):
         return out
 
     held = holds(ON_ROPES)
-    held_rail = holds(ON_LIFELINE)
+    held_rail = holds(DRAPED)
     on_wheel = holds(ON_WHEEL)
     bones = [b.name for b in fig.arm.data.bones if motion.kind(b.name) in metrics.BODY_BONES]
     trunk = np.array([motion.kind(b) not in ARM_KINDS for b in bones])

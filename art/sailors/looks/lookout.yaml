@@ -208,8 +208,8 @@ clips:
     bench-nod,
     bench-talk,
     bench-braced,
-    yacht-rail,
-    yacht-rail-out,
+    lookout-yacht-rail,
+    lookout-yacht-rail-out,
     cockpit-crouch-walk,
     roof-crouch-walk,
     lookout-yacht-habit-wheel,
@@ -226,4 +226,4 @@ clips:
     climbing-in,
   ]
 names:
-  { lookout-habit: habit, lookout-habit-standing: habit-standing, lookout-habit-wheel: habit-wheel, lookout-yacht-habit-wheel: yacht-habit-wheel }
+  { lookout-habit: habit, lookout-habit-standing: habit-standing, lookout-habit-wheel: habit-wheel, lookout-yacht-habit-wheel: yacht-habit-wheel, lookout-yacht-rail: yacht-rail, lookout-yacht-rail-out: yacht-rail-out }
