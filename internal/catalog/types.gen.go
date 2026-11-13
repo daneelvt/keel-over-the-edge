@@ -342,9 +342,10 @@ type BoatStation struct {
 	// it); on the rail, the deck's edge at the sheer under the person, who sits
 	// facing outboard, the hips just within it and the legs over the side; on a hull,
 	// the hull's deck at its inner edge, on its top, the person facing across the
-	// net; leaning, the cap rail's inner edge on its top, the forearms on it; aloft,
-	// the top's floor by the mast, the person out toward the shrouds on the weather
-	// side.
+	// net; on a bench, its front edge on its top, the person sat on it facing the way
+	// the station faces, the feet on the floor before it; leaning, the cap rail's
+	// inner edge on its top, the forearms on it; aloft, the top's floor by the mast,
+	// the person out toward the shrouds on the weather side.
 	At BoatPoint `json:"at"`
 
 	// The way the person faces, in degrees clockwise from the bow seen from above: 0
@@ -3534,6 +3535,7 @@ type StartMoorings struct {
 type StationPose string
 
 const StationPoseAloft StationPose = "aloft"
+const StationPoseBench StationPose = "bench"
 const StationPoseHiking StationPose = "hiking"
 const StationPoseHull StationPose = "hull"
 const StationPoseLeaning StationPose = "leaning"
@@ -5552,4 +5554,4 @@ type WorldZones struct {
 }
 
 // Version is the catalog version (tools/catalog).
-const Version = "8f0a3373c69a1ccd"
+const Version = "033ce6847f02d8ea"

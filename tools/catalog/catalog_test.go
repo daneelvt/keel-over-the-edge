@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"testing"
 )
@@ -81,6 +82,40 @@ func glb(nodes ...string) string {
 	out = binary.LittleEndian.AppendUint32(out, uint32(len(body)))
 	out = binary.LittleEndian.AppendUint32(out, glbJSON)
 	return string(append(out, body...))
+}
+
+// glbWith is a glTF binary holding only its JSON: nodes of the given names,
+// and nodes of the given names with the given data.
+func glbWith(names []string, extras map[string]string) string {
+	nodes := make([]string, 0, len(names)+len(extras))
+	for _, n := range names {
+		nodes = append(nodes, `{"name":"`+n+`"}`)
+	}
+	keys := make([]string, 0, len(extras))
+	for k := range extras {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	for _, k := range keys {
+		nodes = append(nodes, `{"name":"`+k+`","extras":`+extras[k]+`}`)
+	}
+	body := []byte(`{"nodes":[` + strings.Join(nodes, ",") + `]}`)
+	for len(body)%4 != 0 {
+		body = append(body, ' ')
+	}
+	out := binary.LittleEndian.AppendUint32(nil, glbMagic)
+	out = binary.LittleEndian.AppendUint32(out, 2)
+	out = binary.LittleEndian.AppendUint32(out, uint32(20+len(body)))
+	out = binary.LittleEndian.AppendUint32(out, uint32(len(body)))
+	out = binary.LittleEndian.AppendUint32(out, glbJSON)
+	return string(append(out, body...))
+}
+
+// yachtPlaces are the yacht's model's bench and lifelines, as its build
+// writes them: what her people's stations are checked against.
+var yachtPlaces = map[string]string{
+	"bench":     `{"bench":{"fore":0.35,"aft":2.75,"top":0.75,"inner":1.1303,"sole":0.33}}`,
+	"lifelines": `{"lifelines":{"heights":[0.32,0.62],"stanchions":[-4.4,-2.65,-1.25,0.2,1.75,3.25],"inboard":0.04,"fore":-4.75,"aft":4.6}}`,
 }
 
 // realSky returns the real catalog's sky, which every fixture has unless
@@ -234,6 +269,9 @@ func checkAll(root string) error {
 		return err
 	}
 	if err := checkLights(root, doc); err != nil {
+		return err
+	}
+	if err := checkPlaces(root, doc); err != nil {
 		return err
 	}
 	if err := checkWorld(doc); err != nil {
@@ -516,6 +554,44 @@ func TestRejects(t *testing.T) {
 			files: map[string]string{"shared/catalog/boats.yaml": strings.Replace(validBoats,
 				"{ at: [-0.3, 0.3, -0.5], pose: standing, facing: 0 }", "{ at: [0, 2.5, -0.5], pose: aloft, facing: 0 }", 1)},
 			want: "boats[0].stations[1]: aloft 2.5 m up is not above the boom",
+		},
+		{
+			name: "a station on a bench of a boat whose model has none",
+			files: map[string]string{"shared/catalog/boats.yaml": strings.Replace(validBoats,
+				"pose: standing", "pose: bench", 1)},
+			want: "boats[test-boat].stations[1]: on a bench, but the model art/boats/test-boat/model.glb has no bench",
+		},
+		{
+			name: "a station on a bench off its top",
+			files: map[string]string{
+				"shared/catalog/boats.yaml": strings.Replace(validBoats, "pose: standing", "pose: bench", 1),
+				testArt:                     glbWith([]string{"hull", "tricolour"}, map[string]string{"bench": `{"bench":{"fore":-1,"aft":0,"top":0.25,"inner":0.3,"sole":0.1}}`}),
+			},
+			want: "boats[test-boat].stations[1]: (0.3, 0.3, -0.5) is not on the bench's top at its front edge (0.25 up, 0.3 out, from -1 to 0)",
+		},
+		{
+			name: "a station on a bench beyond its end",
+			files: map[string]string{
+				"shared/catalog/boats.yaml": strings.Replace(validBoats, "pose: standing", "pose: bench", 1),
+				testArt:                     glbWith([]string{"hull", "tricolour"}, map[string]string{"bench": `{"bench":{"fore":-0.4,"aft":0,"top":0.3,"inner":0.3,"sole":0.1}}`}),
+			},
+			want: "is not on the bench's top at its front edge",
+		},
+		{
+			name: "a station on the rail by a stanchion",
+			files: map[string]string{
+				"shared/catalog/boats.yaml": strings.Replace(validBoats, "pose: standing", "pose: rail", 1),
+				testArt:                     glbWith([]string{"hull", "tricolour"}, map[string]string{"lifelines": `{"lifelines":{"heights":[0.2,0.4],"stanchions":[-1,-0.3,0.5],"inboard":0.03,"fore":-1.5,"aft":1.5}}`}),
+			},
+			want: "boats[test-boat].stations[1]: on the rail at -0.5, within 0.3 m of the stanchion at -0.3",
+		},
+		{
+			name: "a station on the rail beyond the lifelines",
+			files: map[string]string{
+				"shared/catalog/boats.yaml": strings.Replace(validBoats, "pose: standing", "pose: rail", 1),
+				testArt:                     glbWith([]string{"hull", "tricolour"}, map[string]string{"lifelines": `{"lifelines":{"heights":[0.2,0.4],"stanchions":[-1,0.5],"inboard":0.03,"fore":-0.4,"aft":1.5}}`}),
+			},
+			want: "boats[test-boat].stations[1]: on the rail at -0.5, outside the lifelines from -0.4 to 1.5",
 		},
 		{
 			name: "a station on a hull of a boat of one hull",
@@ -825,7 +901,7 @@ func TestEncounters(t *testing.T) {
 			files["art/boats/skiff.far.glb"] = "glTF"
 			files["art/boats/beach-cat.glb"] = glb("hull", "tricolour")
 			files["art/boats/beach-cat.far.glb"] = "glTF"
-			files["art/boats/yacht.glb"] = glb("hull", "port", "starboard", "stern")
+			files["art/boats/yacht.glb"] = glbWith([]string{"hull", "port", "starboard", "stern"}, yachtPlaces)
 			files["art/boats/yacht.far.glb"] = "glTF"
 			root := fixture(t, files)
 			err := checkAll(root)

@@ -1589,15 +1589,30 @@ boats:
     name: Yacht
     description: Cruising yacht
     capacity: 8
+    # Where her people are, read from her model (art/boats/yacht/build.ts
+    # prints them): the helm between her wheels, standing aft of the
+    # windward one; the cockpit fills before the rail, in the order a
+    # 40-footer's crew is named from aft (US Sailing's Match 40 notes:
+    # "Driver, Main Trimmer, Jib Trimmer, Pit, Bow"). On the windward bench,
+    # sat on it facing inboard: the trimmer at its after end by the primary
+    # capstan (Yachting World: the trimmer "just forward of the helming
+    # position"), one at its forward end under the sprayhood, one between;
+    # their stations its front edge on its top. On the windward rail, sat
+    # on the deck's edge facing outboard with the legs over the side under
+    # the lower lifeline (Racing Rules of Sailing 49.2), the bow forward of
+    # the shrouds and the rest aft toward the cockpit, each clear of the
+    # shrouds' chainplates and the stanchions. All cross in a tack or a
+    # gybe: the cockpit's through the cockpit, the rail's over the
+    # coachroof forward of the mast.
     stations:
       - { at: [0, 0.33, 4.3], pose: standing, facing: 0 }
-      - { at: [1.349, 0.75, 2.35], pose: seated, facing: 270, windward: true }
-      - { at: [1.3632, 0.75, 0.85], pose: seated, facing: 270, windward: true }
-      - { at: [1.3599, 0.75, 1.6], pose: seated, facing: 270, windward: true }
-      - { at: [1.8405, 1.1917, -2.2], pose: rail, facing: 90, windward: true }
+      - { at: [1.119, 0.75, 2.35], pose: bench, facing: 270, windward: true }
+      - { at: [1.1332, 0.75, 0.85], pose: bench, facing: 270, windward: true }
+      - { at: [1.1299, 0.75, 1.6], pose: bench, facing: 270, windward: true }
+      - { at: [1.8305, 1.1955, -2.3], pose: rail, facing: 90, windward: true }
       - { at: [1.9006, 1.1701, -1.6], pose: rail, facing: 90, windward: true }
-      - { at: [1.9453, 1.1474, -0.9], pose: rail, facing: 90, windward: true }
-      - { at: [1.9754, 1.13, -0.3], pose: rail, facing: 90, windward: true }
+      - { at: [1.9654, 1.1356, -0.5], pose: rail, facing: 90, windward: true }
+      - { at: [1.9895, 1.1082, 0.55], pose: rail, facing: 90, windward: true }
     lengthOverall: 11.985 # ORC certificate
     beam: 3.99 # Jeanneau
     # A sailing vessel of less than 20 m may show red and green sidelights

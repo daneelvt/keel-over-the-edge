@@ -100,6 +100,7 @@ export function clipsOf(pose: StationPose): [string, string] {
     case 'rail':
       return [RAIL_CLIPS.up, RAIL_CLIPS.out];
     case 'seated':
+    case 'bench':
       return [CLIPS.helm, CLIPS.hiking[0] as string];
     case 'hiking':
       return [CLIPS.hiking[0] as string, CLIPS.hiking[0] as string];
