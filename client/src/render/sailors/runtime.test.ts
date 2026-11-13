@@ -721,7 +721,9 @@ describe.each([
     let walked = false;
     const run = (seconds: number, side: number, windSpeed: number): void => {
       for (let f = 0; f < seconds * 30; f++, t += 1 / 30) {
-        rt.update(moment({ time: t, windAngle: side * 0.8, boom: -side * 0.3, windSpeed, offset: 0 }));
+        rt.update(
+          moment({ time: t, windAngle: side * 0.8, boom: -side * 0.3, windSpeed, offset: 0 }),
+        );
         walked ||= rt.walking;
       }
     };
