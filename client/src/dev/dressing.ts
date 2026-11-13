@@ -1703,12 +1703,13 @@ export class DressingRoom {
           const anchor = shipAnchor(r.clip);
           if (inBridgeFile(r.clip)) {
             // Aboard a cruising catamaran, from the front and above, her
-            // roof left out: higher over her seats and table.
+            // roof left out: sat, from higher and a little to one side,
+            // over her table.
             const a = bridgeAnchor(r.clip);
-            o.azimuth = back;
-            o.elevation =
-              a === 'stance' ? 0.4 : a === 'foot' || a === 'landing' || a === 'sole' ? 0.35 : 0.55;
-            o.distance = r.near ? 4.4 : 4.4 + 0.9 * (n - 1) * this.#boatSpacing();
+            const sat = a !== 'stance' && a !== 'foot' && a !== 'landing' && a !== 'sole';
+            o.azimuth = back + (sat ? 0.5 : 0);
+            o.elevation = a === 'stance' ? 0.4 : sat ? 0.85 : 0.35;
+            o.distance = r.near ? (sat ? 3.6 : 4.4) : 4.4 + 0.9 * (n - 1) * this.#boatSpacing();
             return;
           }
           if (inYachtFile(r.clip)) {
