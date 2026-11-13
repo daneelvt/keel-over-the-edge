@@ -98,6 +98,16 @@ func (m *memStore) LogPeople(_ context.Context, ids []store.AccountID) (map[stor
 	return out, nil
 }
 
+func (m *memStore) StrikeStory(_ context.Context, _, id [16]byte, struck bool) (store.Struck, error) {
+	for i := range m.stories {
+		if m.stories[i].ID == id {
+			m.stories[i].Struck = struck
+			return store.Struck{Account: m.stories[i].Account, Title: m.stories[i].Title}, nil
+		}
+	}
+	return store.Struck{}, store.ErrNotFound
+}
+
 func (m *memStore) LogSailorByID(_ context.Context, id store.AccountID) (store.LogSailor, error) {
 	p, ok := m.people[id]
 	if !ok {
@@ -300,16 +310,21 @@ func TestEditionSet(t *testing.T) {
 	if len(after.Shipmates) != 1 || after.Shipmates[0].Kind != store.StoryRecord {
 		t.Errorf("Bob's own box, after: %+v", after.Shipmates)
 	}
-	// Struck: gone for everyone, the rest in their places.
-	for i := range w.m.stories {
-		if w.m.stories[i].ID == great.ID {
-			w.m.stories[i].Struck = true
-		}
+	// Struck: gone for everyone, the rest in their places; the owner
+	// reads it, marked, to put it back.
+	if _, err := w.s.Strike(ctx, great.ID, true); err != nil {
+		t.Fatal(err)
 	}
 	for _, who := range []store.AccountID{w.ann, w.bob} {
 		if e := w.read(who, day); len(e.Stories) != 2 || e.Stories[0].Head == "KEYHOLE ROCK" {
 			t.Errorf("struck, to %x: %+v", who[:1], e.Stories)
 		}
+	}
+	if e, err := w.s.ForOwner(ctx, day); err != nil || len(e.Stories) != 3 || !e.Stories[2].Struck || e.Stories[2].Names[0].Name != "Ann Bonny" {
+		t.Errorf("the owner's: %+v, %v", e.Stories, err)
+	}
+	if _, err := w.s.Strike(ctx, [16]byte{99}, true); err != store.ErrNotFound {
+		t.Errorf("no such story: %v", err)
 	}
 	// Today: Ann, in Wednesday's edition (struck, not read), and Bob,
 	// who was not, with equal stories: Bob's first.

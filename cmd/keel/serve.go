@@ -702,8 +702,10 @@ type ownerConfig struct {
 	agents *agents
 	// hand is the owner's hand on accounts.
 	hand *accounts.Accounts
-	// logs are the sailors' logs; nil for the next world.
+	// logs are the sailors' logs, and news the world's news; nil for the
+	// next world.
 	logs owner.Logs
+	news owner.News
 	// aiCap and aiReserve are the world's most boats for machine sailors
 	// and the places kept for them; 0 for the next world.
 	aiCap, aiReserve int
@@ -733,6 +735,9 @@ func ownerTools(c ownerConfig) *owner.Owner {
 		Calm:     c.cat.World.MainPort.Calm * 1852,
 		Accounts: c.db, Page: c.page, Log: c.log, Metrics: c.metrics,
 		Life: c.lifecycle, From: c.from, Hand: c.hand,
+	}
+	if c.news != nil {
+		cfg.News = c.news
 	}
 	if c.logs != nil {
 		cfg.Logs = c.logs

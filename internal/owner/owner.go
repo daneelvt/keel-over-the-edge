@@ -200,6 +200,9 @@ type Config struct {
 	// Logs, if not nil, are the sailors' logs, every one of which the
 	// owner reads: on an account's card, in the search's rows and whole.
 	Logs Logs
+	// News, if not nil, is the world's news, which the owner reads with
+	// every name shown and strikes stories from.
+	News News
 	// Door, if not nil, is the machine sailors' door, whose cache of
 	// tokens' accounts forgets an account whose priority changes.
 	Door Door
@@ -411,6 +414,8 @@ func (o *Owner) Handler() http.Handler {
 	mux.HandleFunc("GET /owner/api/account.json", o.accountCard)
 	mux.HandleFunc("GET /owner/api/log.json", o.log)
 	mux.HandleFunc("GET /owner/api/actions.json", o.actions)
+	mux.HandleFunc("GET /owner/api/news.json", o.newsDay)
+	mux.HandleFunc("POST /owner/api/news/strike", o.strike)
 	mux.HandleFunc("POST /owner/api/accounts/stop", o.act(store.ActionStop, (*accounts.Accounts).Stop))
 	mux.HandleFunc("POST /owner/api/accounts/start", o.act(store.ActionStart, (*accounts.Accounts).Start))
 	mux.HandleFunc("POST /owner/api/accounts/revoke", o.act(store.ActionRevoke, (*accounts.Accounts).Revoke))

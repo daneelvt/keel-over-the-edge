@@ -37,6 +37,12 @@ const (
 	storyEdition   = "edition"   // a day's edition set
 )
 
+// The owner's actions on the news: a story struck from it, and put back.
+const (
+	ActionStrike   = "strike"
+	ActionUnstrike = "unstrike"
+)
+
 // SubjectSailor is a story's subject when it is about a sailor, not a
 // place.
 const SubjectSailor = "sailor"

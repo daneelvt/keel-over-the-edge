@@ -55,6 +55,7 @@ type Store interface {
 	LogPeople(ctx context.Context, ids []store.AccountID) (map[store.AccountID]store.LogPerson, error)
 	LogSailorByID(ctx context.Context, id store.AccountID) (store.LogSailor, error)
 	LogSailorByKey(ctx context.Context, key string) (store.LogSailor, error)
+	StrikeStory(ctx context.Context, world, id [16]byte, struck bool) (store.Struck, error)
 }
 
 var _ Store = (*store.Store)(nil)
@@ -164,6 +165,8 @@ type Story struct {
 	Y       *float64 `json:"y,omitempty"`
 	// Day is the date of the edition it is in, for a sailor's own.
 	Day string `json:"day,omitempty"`
+	// Struck is the owner's hand: shown to the owner alone.
+	Struck bool `json:"struck,omitempty"`
 }
 
 // The kinds of a name in a story.
@@ -451,13 +454,20 @@ func (s *Service) Edition(ctx context.Context, reader store.AccountID, day time.
 	if day.IsZero() {
 		day = s.dayOf(s.cfg.Now())
 	}
-	p, err := s.page(ctx, day)
-	if err != nil {
-		return Edition{}, err
-	}
 	r, err := s.reader(ctx, reader)
 	if err != nil {
 		return Edition{}, err
+	}
+	e, _, err := s.edition(ctx, r, day)
+	return e, err
+}
+
+// edition is a day's edition as r reads it, with the day's page.
+func (s *Service) edition(ctx context.Context, r logbook.Reader, day time.Time) (Edition, *page, error) {
+	reader := r.ID
+	p, err := s.page(ctx, day)
+	if err != nil {
+		return Edition{}, nil, err
 	}
 	box := Box(p.order, p.chosen, s.circle(ctx, reader), p.recent, p.at, &s.rules, s.rules.Shipmates)
 	var all []*store.Story
@@ -472,7 +482,7 @@ func (s *Service) Edition(ctx context.Context, reader store.AccountID, day time.
 	}
 	people, err := s.people(ctx, all)
 	if err != nil {
-		return Edition{}, err
+		return Edition{}, nil, err
 	}
 	out := Edition{
 		World: s.cfg.World.Number, Day: dayText(day), Number: s.number(day), Zone: s.cfg.Zone.String(), Set: p.set,
@@ -494,7 +504,7 @@ func (s *Service) Edition(ctx context.Context, reader store.AccountID, day time.
 			out.Notices = append(out.Notices, Notice{ID: hex.EncodeToString(n.ID[:]), Head: n.Title, EndsAt: n.EndsAt.UnixMilli(), X: n.X, Y: n.Y})
 		}
 	}
-	return out, nil
+	return out, p, nil
 }
 
 // circle are the sailors whose stories go in reader's own box: the
@@ -741,4 +751,51 @@ func (s *Service) Set(ctx context.Context, lease int64) (int, error) {
 	clear(s.kept)
 	s.mu.Unlock()
 	return n, nil
+}
+
+// ForOwner is a day's edition as the game's owner reads it, every name
+// shown, with the day's stories struck, which no one else reads, to put
+// back.
+func (s *Service) ForOwner(ctx context.Context, day time.Time) (Edition, error) {
+	if day.IsZero() {
+		day = s.dayOf(s.cfg.Now())
+	}
+	r := logbook.Reader{All: true}
+	e, _, err := s.edition(ctx, r, day)
+	if err != nil {
+		return Edition{}, err
+	}
+	all, err := s.cfg.Store.DayStories(ctx, s.cfg.World.ID, day)
+	if err != nil {
+		return Edition{}, err
+	}
+	var struck []*store.Story
+	for i := range all {
+		if all[i].Struck {
+			struck = append(struck, &all[i])
+		}
+	}
+	people, err := s.people(ctx, struck)
+	if err != nil {
+		return Edition{}, err
+	}
+	for _, st := range struck {
+		x := s.story(r, st, people)
+		x.Struck = true
+		e.Stories = append(e.Stories, x)
+	}
+	return e, nil
+}
+
+// Strike strikes a story of the world from the news, for everyone, or
+// puts it back; store.ErrNotFound for no such story.
+func (s *Service) Strike(ctx context.Context, id [16]byte, struck bool) (store.Struck, error) {
+	out, err := s.cfg.Store.StrikeStory(ctx, s.cfg.World.ID, id, struck)
+	if err != nil {
+		return out, err
+	}
+	s.mu.Lock()
+	clear(s.kept)
+	s.mu.Unlock()
+	return out, nil
 }

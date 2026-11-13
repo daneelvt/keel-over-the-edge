@@ -406,7 +406,7 @@ func (p *process) openWorld(ctx context.Context, rw *readyWorld) (*worldHalf, er
 		db: p.db, sessions: p.sessions, game: h.game, charts: rw.charts, clock: h.loop, page: p.ownPage, log: p.log, metrics: p.metrics,
 		lifecycle: p, from: p.nextView.Load(), forecasts: h.forecasts, agents: p.agents, hand: p.hand,
 		aiCap: world.AICap(), aiReserve: world.AIReserve(), life: rw.life,
-		switches: p.switches, chat: p.chatDB(), reports: p.reports, hub: h.chat, logs: logs,
+		switches: p.switches, chat: p.chatDB(), reports: p.reports, hub: h.chat, logs: logs, news: h.news,
 	})
 	playCfg := api.Config{
 		Version:   api.Version{Build: p.build, Catalog: catalog.Version},
