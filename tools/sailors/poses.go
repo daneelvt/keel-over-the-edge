@@ -168,6 +168,10 @@ type retarget struct {
 	// Pull sets the hands this much nearer the body, crawling: clear of a
 	// hat's brim.
 	Pull float64 `yaml:"pull" json:"pull,omitempty"`
+	// Hang turns the skirts' chains toward straight down, as a clip's
+	// does, in place of a deck's crouch's (all of them, all the way): {}
+	// for none.
+	Hang *map[string]float64 `yaml:"hang" json:"hang,omitempty"`
 }
 
 var (

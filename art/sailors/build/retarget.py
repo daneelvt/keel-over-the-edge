@@ -81,7 +81,10 @@ def retarget(fig, name, spec, fps):
     # On a deck, crouched, the coat hangs from the body as it bends
     # (motion.Figure.hang).
     # Crawling, the coat lies along the body and the legs, on the deck.
-    fig.hang = CROUCH_HANG if spec.get("deck") and not spec.get("crawl") else None
+    # A retarget may say its own (none, upright: an apron's chains are not
+    # a coat's).
+    fig.hang = spec["hang"] or None if "hang" in spec else \
+        CROUCH_HANG if spec.get("deck") and not spec.get("crawl") else None
     before = set(bpy.data.objects)
     actions = set(bpy.data.actions)
     bpy.ops.import_scene.gltf(filepath=inputs.path(spec["file"]), bone_heuristic="TEMPERANCE")

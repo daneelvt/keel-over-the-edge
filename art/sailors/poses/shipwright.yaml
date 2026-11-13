@@ -126,3 +126,29 @@ clips:
       - { pose: shipwright-wheel-tug, hold: 0.25, ramp: 0.5 }
       - { pose: shipwright-wheel-look, hold: 0.4, ramp: 1.0, lead: head }
       - { pose: wheel-stand, hold: 0.3, ramp: 1.4, lead: head }
+
+# Walking and turning on a cruising catamaran's sole upright, the apron
+# hanging as it hangs: a crouch's hang lays its chains out sideways.
+retarget:
+  shipwright-cockpit-walk:
+    file: vendor/quaternius/Walk_Loop.glb
+    loop: true
+    deck: true
+    speed: 0.9
+    stage: bridge-sole
+    hang: {}
+    group: bridgedeck
+  shipwright-cockpit-turn-left:
+    file: vendor/quaternius/Turn90_L.glb
+    smooth: 4
+    deck: true
+    stage: bridge-sole
+    hang: {}
+    group: bridgedeck
+  shipwright-cockpit-turn-right:
+    file: vendor/quaternius/Turn90_R.glb
+    smooth: 4
+    deck: true
+    stage: bridge-sole
+    hang: {}
+    group: bridgedeck
