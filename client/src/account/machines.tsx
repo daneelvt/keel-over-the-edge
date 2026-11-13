@@ -26,6 +26,8 @@ import type { ComponentChildren, JSX } from 'preact';
 import { useEffect, useState } from 'preact/hooks';
 import { catalog } from '../catalog';
 import { MACHINE } from '../catalog/looks';
+import { openLog } from '../ui/loglazy';
+import { ITS_LOG } from '../ui/logwords';
 import { linkState, NewLink, ShareLink } from '../ui/sharelink';
 import { useWatch } from '../ui/watchlazy';
 import {
@@ -388,6 +390,13 @@ export function MachineList({
                   </button>
                 </>
               )}
+              <button
+                type="button"
+                class="start-sign-in"
+                onClick={() => openLog({ kind: 'machine', id: m.id, name: m.name })}
+              >
+                {ITS_LOG}
+              </button>
               {open === m.id ? <Connect mcp={page.mcp} name={m.name} /> : null}
             </li>
           ))}

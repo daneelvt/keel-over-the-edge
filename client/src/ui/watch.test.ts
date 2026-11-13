@@ -652,9 +652,9 @@ describe('the card about a sailor', () => {
       (v) => ['p', 'li', 'h3'].includes(String(v.type)),
     ).map(text);
 
-  test('the weather, where, and this voyage; Follow, Copy a link and Watch at the bottom', () => {
+  test('the weather, where, and this voyage; the sailor’s log, Follow, Copy a link and Watch at the bottom', () => {
     const t = drawn({ ...card, code: 'k3x7q2mbwa' });
-    expect(buttons(t)).toEqual(['‹ Back', '☆ Follow', 'Watch']);
+    expect(buttons(t)).toEqual(['‹ Back', 'Log', '☆ Follow', 'Watch']);
     const copy = find(t, (v) => v.type === CopyWatchLink);
     expect(copy).toHaveLength(1);
     expect(copy[0]?.props.code).toBe('k3x7q2mbwa');
@@ -737,13 +737,14 @@ describe('the card about a sailor', () => {
     );
   });
 
-  test('gone: greyed with a refused watch’s words, no Watch, and Follow only to undo one', () => {
+  test('gone: greyed with a refused watch’s words, no Watch, Follow only to undo one, and the sailor’s log still', () => {
     const t = drawn({ ...card, code: 'k3x7q2mbwa' }, { gone: 'not-at-sea' });
     expect(text(t)).toContain('Iron Mary is not at sea.');
-    expect(buttons(t)).toEqual(['‹ Back']);
+    expect(buttons(t)).toEqual(['‹ Back', 'Log']);
     expect(find(t, (v) => v.type === CopyWatchLink)).toHaveLength(0);
     expect(buttons(drawn({ ...card, followed: true }, { gone: 'cannot' }))).toEqual([
       '‹ Back',
+      'Log',
       '★ Following',
     ]);
   });

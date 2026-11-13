@@ -14,7 +14,16 @@ import { zoneWhere } from './store';
 import type { ChartView } from './view';
 import { LAYERS_AT_FIRST, type Layer, type Layers } from './weather';
 
-export type ChartMode = 'chart' | 'list' | 'news';
+export type ChartMode = 'chart' | 'list' | 'news' | 'log';
+
+/**
+ * Whose log the Log tab shows: the reader's own, a sailor's by name, or
+ * one of the player's machine sailors' by its account's id.
+ */
+export type LogWho =
+  | { kind: 'own' }
+  | { kind: 'sailor'; name: string }
+  | { kind: 'machine'; id: string; name: string };
 
 /** A weather system or a front tapped on the chart: which, as the scene had it then. */
 export type TappedWeather =
@@ -47,6 +56,8 @@ export class Chart {
   /** The slider: the forecast ahead, its minutes from now; 0 is now. Play runs it on. */
   readonly minutes = signal(0);
   readonly playing = signal(false);
+  /** Whose log the Log tab shows. */
+  readonly logOf = signal<LogWho>({ kind: 'own' });
   /** The weather's layers, each switched on or off. */
   readonly layers = signal<Layers>({ ...LAYERS_AT_FIRST });
   /** The clock notices are raised by, ms. */
@@ -63,7 +74,7 @@ export class Chart {
     store.onCharted((es) => this.#told(es));
   }
 
-  /** Opens it as the chart, the list or the news; or closes it. */
+  /** Opens it as the chart, the list, the news or the log; or closes it. */
   show(mode: ChartMode | null): void {
     if (mode === null) {
       this.open.value = false;
@@ -87,6 +98,12 @@ export class Chart {
     // feature from where it is lettered too.
     this.view.lookAt(e.east, e.north, e.subject === 'island' ? 4500 : 2000);
     this.picked.value = e;
+  }
+
+  /** Opens the Log tab on a log: the reader's own, or a sailor's by name. */
+  showLog(who: LogWho): void {
+    this.logOf.value = who;
+    this.show('log');
   }
 
   /** Opens the chart at a point. */

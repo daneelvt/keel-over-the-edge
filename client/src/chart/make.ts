@@ -15,34 +15,12 @@ import { type ChartSea, chartNews, type NewsSource } from '../ui/chart';
 import { type NoticeKind, Notices } from '../ui/notices';
 import { Chart } from './chart';
 import type { Forecasting } from './forecasting';
+import { FEATURE_MARKS, PLACE_MARKS } from './marks';
 import { Models } from './model';
 import { type Air, chartedWith, look, type SightExport } from './sight';
 import { ChartStore } from './store';
 import { type ChartLook, ChartView, type WindSampler } from './view';
 import { ChartWeather } from './weatherlayer';
-
-/** The marks of the kinds of place on the chart, by their sites. */
-const PLACE_MARKS: Record<string, string> = {
-  harbour: '■',
-  village: '•',
-  anchorage: '⚓',
-  reef: '✳',
-  bar: '∴',
-  wreck: '⋕',
-};
-
-/** The marks of the kinds of feature, by the chart's symbol for each. */
-const FEATURE_MARKS: Record<string, string> = {
-  cave: '◖',
-  arch: '⌒',
-  blowhole: '⊙',
-  fall: '≋',
-  spring: '◦',
-  crater: '◎',
-  smoke: '♨',
-  ruin: '⌂',
-  birds: '⋎',
-};
 
 /** The chart's look, from the catalog. */
 export function chartLook(): ChartLook {
