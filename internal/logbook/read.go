@@ -271,11 +271,13 @@ type Person struct {
 
 // Entry is a notable thing of a day: Kind is charted, sighted (from
 // Other's boat, OtherBoat), found (the first of Group's Find), met (a
-// kind of the sea's life, Find) or bump (with Other's boat OtherBoat, by
-// Article, Fault mine, theirs or none). Other is nil where not named.
+// kind of the sea's life, Find, the day's first meeting of it, Times the
+// day's meetings) or bump (with Other's boat OtherBoat, by Article, Fault
+// mine, theirs or none). Other is nil where not named.
 type Entry struct {
 	At        int64   `json:"at"`
 	Kind      string  `json:"kind"`
+	Times     int     `json:"times,omitempty"`
 	Title     string  `json:"title,omitempty"`
 	What      string  `json:"what,omitempty"`
 	Worth     float64 `json:"worth,omitempty"`
@@ -635,15 +637,29 @@ func (s *Service) days(ctx context.Context, r Reader, l *store.LogSailor, world 
 		}
 		d.Voyages = append(d.Voyages, out)
 	}
+	// A kind of life met again the same day is counted on the day's first.
+	met := map[[2]string]int{}
 	for i := range entries {
 		e := &entries[i]
 		d := day(e.At)
+		if e.Kind == store.LogMet {
+			k := [2]string{d.Date, e.Find}
+			if j, ok := met[k]; ok {
+				d.Entries[j].Times++
+				continue
+			}
+			met[k] = len(d.Entries)
+		}
 		out := Entry{
 			At: ms(e.At), Kind: e.Kind, Title: e.Title, What: e.What, Worth: e.Worth, Group: e.Group, Find: e.Find,
 			Place: e.Place, X: math.Round(e.X), Y: math.Round(e.Y), OtherBoat: e.OtherBoat, Article: e.Article, Fault: e.Fault,
 		}
 		if e.Kind == store.LogSighted || e.Kind == store.LogBump {
 			out.Other = names(e.Other, e.OtherName, e.OtherMachine, 0)
+		}
+		if e.Kind == store.LogMet {
+			out.Times = 1
+			out.X, out.Y = 0, 0
 		}
 		d.Entries = append(d.Entries, out)
 	}

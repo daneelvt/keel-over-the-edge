@@ -228,7 +228,9 @@ func TestLogDays(t *testing.T) {
 		{Account: ann, World: 13, Boat: 3, Began: t0.Add(-200 * time.Hour), Ended: t0.Add(-199 * time.Hour), How: store.LogTaken},
 	}
 	f.entries = []store.LogEntry{{Account: ann, World: 14, At: t0.Add(time.Minute), Kind: store.LogBump, Other: kit, OtherName: "Kit",
-		OtherBoat: "Kittiwake", Article: "10", Fault: store.FaultMine}}
+		OtherBoat: "Kittiwake", Article: "10", Fault: store.FaultMine},
+		{Account: ann, World: 14, At: t0.Add(2 * time.Minute), Kind: store.LogMet, Group: GroupLife, Find: "gull", Title: "Gull"},
+		{Account: ann, World: 14, At: t0.Add(3 * time.Minute), Kind: store.LogMet, Group: GroupLife, Find: "gull", Title: "Gull"}}
 	f.totals = map[store.AccountID]store.LogTotals{ann: {Voyages: 3, Run: 8400.4, Worlds: 2, Survived: true, Least: 12.25, Charted: 4}}
 	l, err := svc.ByName(ctx, kit, "Ann", 0)
 	if err != nil {
@@ -261,6 +263,10 @@ func TestLogDays(t *testing.T) {
 	}
 	if e := l.World.Days[0].Entries[0]; e.Other == nil || e.Other.Name != "Kit" || e.Fault != store.FaultMine {
 		t.Errorf("the bump: %+v", e)
+	}
+	// Life met twice in a day is one entry, counted.
+	if es := l.World.Days[0].Entries; len(es) != 2 || es[1].Kind != store.LogMet || es[1].Times != 2 {
+		t.Errorf("the day's entries: %+v", es)
 	}
 	if o := l.World.Days[1].Voyages[0]; o.ClosestM == nil || *o.ClosestM != 12.3 && *o.ClosestM != 12.2 || o.RunM != nil {
 		t.Errorf("the fall: %+v", o)
