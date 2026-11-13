@@ -40,9 +40,9 @@ func TestFleetMigration(t *testing.T) {
 	defer s.Close()
 	for i, id := range ids {
 		boats, err := s.Boats(ctx, id)
-		// Its Jolly boat, and the keelboat, tall ship, skiff, beach cat and
-		// yacht the later migrations give.
-		if err != nil || len(boats) != 6 {
+		// Its Jolly boat, and the keelboat, tall ship, skiff, beach cat,
+		// yacht and catamaran the later migrations give.
+		if err != nil || len(boats) != 7 {
 			t.Fatalf("account %d's boats: %+v %v", i, boats, err)
 		}
 		for _, b := range boats {
@@ -94,9 +94,9 @@ func TestTallShipMigration(t *testing.T) {
 				ships = append(ships, b.Number)
 			}
 		}
-		// Its Jolly boat, keelboat and tall ship, and the skiff, beach cat
-		// and yacht later migrations give.
-		if want := []int{1, 2, 3}[i]; len(boats) != 6 || len(ships) != 1 || ships[0] != want {
+		// Its Jolly boat, keelboat and tall ship, and the skiff, beach cat,
+		// yacht and catamaran later migrations give.
+		if want := []int{1, 2, 3}[i]; len(boats) != 7 || len(ships) != 1 || ships[0] != want {
 			t.Errorf("account %d's tall ships: %v (want one, numbered %d), of %d boats", i, ships, want, len(boats))
 		}
 	}
@@ -147,8 +147,8 @@ func TestSkiffMigration(t *testing.T) {
 				skiffs = append(skiffs, b.Number)
 			}
 		}
-		// And the beach cat and yacht later migrations give.
-		if want := []int{2, 3, 1}[i]; len(boats) != 6 || len(skiffs) != 1 || skiffs[0] != want {
+		// And the beach cat, yacht and catamaran later migrations give.
+		if want := []int{2, 3, 1}[i]; len(boats) != 7 || len(skiffs) != 1 || skiffs[0] != want {
 			t.Errorf("account %d's skiffs: %v (want one, numbered %d), of %d boats", i, skiffs, want, len(boats))
 		}
 	}
@@ -199,8 +199,8 @@ func TestBeachCatMigration(t *testing.T) {
 				cats = append(cats, b.Number)
 			}
 		}
-		// And the yacht a later migration gives.
-		if want := []int{2, 1, 3}[i]; len(boats) != 6 || len(cats) != 1 || cats[0] != want {
+		// And the yacht and catamaran later migrations give.
+		if want := []int{2, 1, 3}[i]; len(boats) != 7 || len(cats) != 1 || cats[0] != want {
 			t.Errorf("account %d's beach cats: %v (want one, numbered %d), of %d boats", i, cats, want, len(boats))
 		}
 	}
@@ -251,8 +251,59 @@ func TestYachtMigration(t *testing.T) {
 				yachts = append(yachts, b.Number)
 			}
 		}
-		if want := []int{2, 3, 1}[i]; len(boats) != 6 || len(yachts) != 1 || yachts[0] != want {
+		if want := []int{2, 3, 1}[i]; len(boats) != 7 || len(yachts) != 1 || yachts[0] != want {
 			t.Errorf("account %d's yachts: %v (want one, numbered %d), of %d boats", i, yachts, want, len(boats))
+		}
+	}
+	var n int
+	if err := pool.QueryRow(ctx, "SELECT count(*) FROM boat WHERE account_id = $1", machine).Scan(&n); err != nil || n != 0 {
+		t.Errorf("the machine sailor's account has %d boats: %v", n, err)
+	}
+}
+
+// TestCatamaranMigration: migrated from the schema with yachts, every
+// human account has one catamaran, numbered the lowest free of its kind in the
+// order the accounts were made; one that had one already keeps it, and a
+// machine sailor's account has none.
+func TestCatamaranMigration(t *testing.T) {
+	ctx := context.Background()
+	u := storetest.Empty(t)
+	if _, err := store.Migrate(ctx, u, 32); err != nil {
+		t.Fatal(err)
+	}
+	pool := storetest.PoolOn(t, u)
+	var ids [][16]byte
+	for i, name := range []string{"Ann Bonny", "Mary Read", "Grace O'Malley"} {
+		id := uuidOf(t, pool, "INSERT INTO account (kind, saved_at, created_at) VALUES ('human', now(), now() + $1 * interval '1 second') RETURNING id", i)
+		must(t, pool, "INSERT INTO sailor (account_id, name, name_key, look) VALUES ($1, $2, $3, 'figure')", id, name,
+			[]string{"annbonny", "maryread", "graceomalley"}[i])
+		must(t, pool, "INSERT INTO boat (account_id, kind, number) VALUES ($1, 'jolly-boat', $2), ($1, 'keelboat', $2), ($1, 'tall-ship', $2), ($1, 'skiff', $2), ($1, 'beach-cat', $2), ($1, 'yacht', $2)", id, i+1)
+		ids = append(ids, id)
+	}
+	// The third already has one, numbered 1.
+	must(t, pool, "INSERT INTO boat (account_id, kind, number) VALUES ($1, 'catamaran', 1)", ids[2])
+	machine := uuidOf(t, pool, "INSERT INTO account (kind, owner_id, saved_at) VALUES ('ai', $1, now()) RETURNING id", ids[0])
+	if _, err := store.Migrate(ctx, u, 0); err != nil {
+		t.Fatal(err)
+	}
+	s, err := store.Open(ctx, u, store.Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	for i, id := range ids {
+		boats, err := s.Boats(ctx, id)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var cats []int
+		for _, b := range boats {
+			if b.Kind == "catamaran" {
+				cats = append(cats, b.Number)
+			}
+		}
+		if want := []int{2, 3, 1}[i]; len(boats) != 7 || len(cats) != 1 || cats[0] != want {
+			t.Errorf("account %d's catamarans: %v (want one, numbered %d), of %d boats", i, cats, want, len(boats))
 		}
 	}
 	var n int

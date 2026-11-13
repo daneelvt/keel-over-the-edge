@@ -4,6 +4,7 @@ package main
 
 import (
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -29,21 +30,17 @@ func TestAMachineSailorSailsTheYacht(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// The account's boat whose crew sit on a cockpit's bench.
+	// The account's cruising yacht: the boat whose people are drawn with
+	// a cruising yacht's clips, her crew on her cockpit's bench.
 	var yacht *catalog.Boat
 	for i := range cat.Boats {
 		b := &cat.Boats[i]
-		if b.Fleet != catalog.FleetAccount {
-			continue
-		}
-		for _, s := range b.Stations {
-			if s.Pose == catalog.StationPoseBench {
-				yacht = b
-			}
+		if b.Fleet == catalog.FleetAccount && slices.Contains(b.Art.SailorClips, catalog.SailorClipCruiser) && yacht == nil {
+			yacht = b
 		}
 	}
 	if yacht == nil {
-		t.Skip("the catalog has no boat with a bench")
+		t.Skip("the catalog has no cruising yacht")
 	}
 	synctest.Test(t, func(t *testing.T) {
 		db := fleetDB{memDB: &memDB{epoch: bubbleEpoch, sessions: edgetest.NewSessions()}, boats: &fleettest.Store{}}

@@ -17,7 +17,7 @@ import type { KTX2Loader } from 'three/addons/loaders/KTX2Loader.js';
 import { describe, expect, test } from 'vitest';
 import { catalog } from '../../catalog';
 import { CLIMBING, IN_WATER, ON_BOARD, SAILING } from '../sailor';
-import { catClips, catFloor } from './cat';
+import { catClips, catFloor, namesCatClips } from './cat';
 import { Clip } from './clips';
 import { modelDeck, tillerOf } from './crew';
 import { CrewBody, stance } from './crewbody';
@@ -142,7 +142,8 @@ function apart(a: Caps, b: Caps): number {
 /** The parts the last apart() found nearest. */
 let apartParts = '';
 
-const kinds = catalog.boats.filter((b) => b.physics.hulls.hullSpacing > 0);
+/** The kinds whose people are drawn with a beach cat's clips: on her hulls, on the wire and across her net. */
+const kinds = catalog.boats.filter((b) => namesCatClips(b.art));
 
 /**
  * How long after the boom comes over the centreline its mainsheet sweeps

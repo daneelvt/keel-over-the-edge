@@ -56,12 +56,14 @@ func TestKeelboatUpwind(t *testing.T) {
 
 // A boat whose sailor never falls out is knocked down, not capsized: hit
 // on a reach in 12 knots by a 40-knot gust of 20 s with her sheet hauled
-// in, she goes far over; her sheet let fly 4 s in, her keel and her sails
-// bring her back under 30° within 60 s of the gust's coming, and she stays
-// there; her sailor never leaves her, and the helm and sheet work
+// in, she goes far over, past 45°; her sheet let fly 4 s in, her keel and
+// her sails bring her back under 30° within 60 s of the gust's coming, and
+// she stays there; her sailor never leaves her, and the helm and sheet work
 // throughout. A ship, stiffer and slower to roll, is laid over with her
 // yards braced up sharp for a roll and a half, 12 s, her lee rail under,
-// past 25°, before her braces are let go and her yards squared.
+// past 25°, before her braces are let go and her yards squared. A boat of
+// two hulls, whose lever peaks within a few degrees of upright as her
+// windward hull lifts, is laid past that peak, her hull flying.
 func TestKnockdownRecovers(t *testing.T) {
 	ran := 0
 	for _, boat := range testBoats(t) {
@@ -72,6 +74,9 @@ func TestKnockdownRecovers(t *testing.T) {
 		hauled, laid := 4.0, 45.0
 		if boat.b.square {
 			hauled, laid = 12, 25
+		}
+		if boat.b.twin {
+			laid = leverPeak(boat.b) / deg
 		}
 		m := newSimOf(t, boat.b, 12*knot, 80, 0.3)
 		m.run(60, nil)
@@ -90,7 +95,7 @@ func TestKnockdownRecovers(t *testing.T) {
 		m.run(10, func() { most = max(most, math.Abs(m.s.Heel)) })
 		t.Logf("%s: knocked down to %.0f°, at most %.1f° over the last 10 s of the minute", boat.id, deepest, most/deg)
 		if deepest < laid {
-			t.Errorf("%s: a 40-knot gust sheeted in heeled her only to %.0f°", boat.id, deepest)
+			t.Errorf("%s: a 40-knot gust sheeted in heeled her only to %.0f°, not past %.0f°", boat.id, deepest, laid)
 		}
 		if most > 30*deg {
 			t.Errorf("%s: a minute after the gust came she heels %.1f°, not under 30°", boat.id, most/deg)
@@ -111,6 +116,18 @@ func TestKnockdownRecovers(t *testing.T) {
 	if ran == 0 {
 		t.Fatal("no boat whose sailor never falls out")
 	}
+}
+
+// leverPeak is the heel of a boat's greatest righting lever, rad, as its
+// table gives it.
+func leverPeak(b *Prepared) float64 {
+	top := 0
+	for i, v := range b.rightingLever {
+		if v > b.rightingLever[top] {
+			top = i
+		}
+	}
+	return float64(top) / b.leverInvStep
 }
 
 // A fixed keel meets the bottom: the keelboat run onto a sloping beach
@@ -167,7 +184,10 @@ func TestKeelAground(t *testing.T) {
 // to windward, though she is slower through the water. A heavy keelboat
 // stiff enough to stand up to 24 knots at full sail, heeling under 20°,
 // sails it in 32 knots, past where she heels 25°; heel costs her hull
-// little, so reefed she is slower, but by no more than a quarter.
+// little, so reefed she is slower, but by no more than a quarter. A
+// cruising catamaran, two hulls whose sailor never falls in, barely heels
+// there at full sail: she is reefed for the gusts, not for her speed, and
+// reefed twice is slower by no more than half.
 func TestReefingHeelsLess(t *testing.T) {
 	for _, boat := range testBoats(t) {
 		knots, angle, sheet := 24.0, 50.0, 0.1
@@ -180,6 +200,9 @@ func TestReefingHeelsLess(t *testing.T) {
 			m.run(90, nil)
 			if m.mean(30, func() float64 { return math.Abs(m.s.Heel) })/deg < 20 && boat.b.fallOutHeel >= math.Pi {
 				knots, keep = 32, 0.75
+				if boat.b.twin {
+					keep = 0.5
+				}
 			}
 		}
 		heel := func(reef float64) (float64, float64, *sim) {

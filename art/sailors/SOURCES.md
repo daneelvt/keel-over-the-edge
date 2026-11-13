@@ -60,4 +60,6 @@ them.
 | `vendor/quaternius/Sitting_Nodding_Loop.glb` | Quaternius, Universal Animation Library (Source), Unreal-Godot/UAL1.glb   | CC0-1.0 | af182b1457022c5508b1545e4b4b40f5997d62c344100a1329f63f611653d9ef |
 | `vendor/quaternius/Sitting_Talking_Loop.glb` | Quaternius, Universal Animation Library (Source), Unreal-Godot/UAL1.glb   | CC0-1.0 | b3a17e9399418a1b19feb9dd32ce5a33ca6b3d19fdb457b0c1d68242261f515e |
 | `vendor/quaternius/Swim_Idle_Loop.glb`       | Quaternius, Universal Animation Library (Source), Unreal-Godot/UAL1.glb   | CC0-1.0 | 9d1a8d48327c8bb05a9fb56323bf0836ac18e07665bbbf90c4379fb3897ca41e |
+| `vendor/quaternius/Turn90_L.glb`             | Quaternius, Universal Animation Library (Source), Unreal-Godot/UAL1.glb   | CC0-1.0 | f18f7017d7db3a1c246e78e7155e26b53f2a517b0b33d4798dc9e306409a2e91 |
+| `vendor/quaternius/Turn90_R.glb`             | Quaternius, Universal Animation Library (Source), Unreal-Godot/UAL1.glb   | CC0-1.0 | 3689d159d992ab646dbeed53f05ccf7f5889084bb4762e7d9261e6125bd52ee0 |
 | `vendor/quaternius/Walk_Loop.glb`            | Quaternius, Universal Animation Library (Source), Unreal-Godot/UAL1.glb   | CC0-1.0 | 5cdbd47056ec8e382b65759f63e80fce95972e5ff5cf55019c938a502bacca7a |

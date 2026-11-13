@@ -128,6 +128,18 @@ poses:
       - [spine_01, x, -8]
 
 clips:
+  # The habit at a cruising catamaran's wheel: as at a cruising yacht's,
+  # made at hers.
+  lookout-bridge-habit-wheel:
+    restage: bridgedeck
+    group: bridgedeck
+    keys:
+      - { pose: wheel-stand, hold: 0.4 }
+      - { pose: lookout-wheel-shade, hold: 0.4, ramp: 1.4, arc: [0.06, 0.05] }
+      - { pose: lookout-yacht-wheel-left, hold: 0.5, ramp: 1.9, lead: head }
+      - { pose: lookout-yacht-wheel-right, hold: 0.5, ramp: 2.0, lead: head }
+      - { pose: lookout-wheel-shade, hold: 0.2, ramp: 1.4, lead: head }
+      - { pose: wheel-stand, hold: 0.5, ramp: 1.5, arc: [0.08, 0.0] }
   lookout-yacht-rail:
     loop: true
     idle: true

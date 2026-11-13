@@ -94,6 +94,25 @@ function sailsOf(b: Boat): { sails: Point[][]; masts: [number, number][]; top: n
   return { sails, masts, top };
 }
 
+/** Whether a boat of two hulls carries people between them, over a bridgedeck: a station inboard of her hulls' tops. */
+function bridged(b: Boat): boolean {
+  const inner = b.physics.hulls.hullSpacing - b.beam / 2;
+  return b.stations.some((s) => Math.abs(s.at[0] ?? 0) < inner);
+}
+
+/**
+ * Her round-house side on, m ahead of her middle and up from the water,
+ * over her hulls' freeboard f: from the stations' aftmost, aft, to a raked
+ * front well forward of her mast, its roof 1 m under her boom.
+ */
+function houseAt(b: Boat, f: number): string {
+  const L = b.lengthOverall;
+  const roof = b.physics.rig.boomHeight - 1;
+  const aft = -Math.max(...b.stations.map((s) => s.at[2] ?? 0)) - 0.6;
+  const fore = 0.26 * L;
+  return `M ${aft} ${-f} L ${aft} ${-roof} L ${fore - 0.07 * L} ${-roof} L ${fore} ${-f} Z`;
+}
+
 /**
  * Where a kind's sail number is drawn, side on: on the main topsail of a
  * ship of square sails, else on the mainsail; null for neither.
@@ -165,6 +184,10 @@ export function BoatPicture({
     `M ${stern + dx} ${-f + dy} L ${bow + dx} ${-1.15 * f + dy} Q ${0.42 * L + dx} ${0.2 * f + dy} ${0.28 * L + dx} ${0.32 * f + dy} L ${-0.4 * L + dx} ${0.32 * f + dy} Q ${stern + dx} ${0.2 * f + dy} ${stern + dx} ${-f + dy} Z`;
   const hull = hullAt(0, 0);
   const farHull = twin ? hullAt(0.04 * L, -0.45 * f) : null;
+  // A boat of two hulls whose people sit between them, on a bridgedeck:
+  // her round-house on it, its roof carried aft over her cockpit, a little
+  // under her boom.
+  const house = twin && bridged(b) ? houseAt(b, f) : null;
   const { sails, masts } = sailsOf(b);
   const at = numberAt(b);
   const id = `boat-clip-${++pictures}`;
@@ -244,6 +267,9 @@ export function BoatPicture({
           {number}
         </text>
       ) : null}
+      {house === null ? null : (
+        <path d={house} class="boat-picture-house" stroke-width={w * 0.006} />
+      )}
       <path d={hull} fill={p?.colour} class="boat-picture-hull" stroke-width={w * 0.006} />
       {p?.grain === true ? (
         <g class="boat-picture-grain" stroke-width={w * 0.004}>
