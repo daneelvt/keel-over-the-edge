@@ -446,9 +446,9 @@ in its family's frame (ahead as it faces, to the figure's left, up). Her
 hulls, bridgedeck, saloon, roof and its posts, platform, settle, console,
 capstans, ladder, seats, table, mast and boom are solid to the gates, her
 ropes and her bronze rails too but to the hands, and her wheel's wood but
-to the hands that hold it (a gate, "clear of the catamaran"); sat on her,
-the cloth is laid on her seats and floors, and is through her if it is
-under a top of hers. Her clips are `<version>.bridgedeck.glb`, which only a
+to the hands that hold it (a gate, "clear of the catamaran"); sat on her
+or on her ladder, the cloth is laid on her seats, floors and treads, and is
+through her if it is under a top of hers. Her clips are `<version>.bridgedeck.glb`, which only a
 kind whose catalog art names `bridgedeck` in `sailorClips` loads (the
 catalog's check refuses code quoting a kind's id):
 
@@ -477,7 +477,10 @@ catalog's check refuses code quoting a kind's id):
   `bridge-stairs` or `bridge-landing`, its `shift` up and along the ladder),
   the foot that steps next up on its toes, what is under a stepping foot
   rising early in the step going up and falling late going down
-  (`motion.LADDER_UP`); placed from the ladder's foot and its landing.
+  (`motion.LADDER_UP`), the hands at the hips (clear of its rail and of the
+  settle beside it), a coat's front falling from the knee; what of the
+  cloth meets a tread is laid on it, as a seated figure's is on its seat;
+  placed from the ladder's foot and its landing.
 
 Those at the wheel and the braced have their `-port`.
 
