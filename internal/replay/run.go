@@ -10,6 +10,7 @@ import (
 	"github.com/daneelvt/keel-over-the-edge/internal/bus"
 	"github.com/daneelvt/keel-over-the-edge/internal/physics"
 	"github.com/daneelvt/keel-over-the-edge/internal/sim"
+	"github.com/daneelvt/keel-over-the-edge/internal/sky"
 	"github.com/daneelvt/keel-over-the-edge/internal/weather"
 )
 
@@ -33,6 +34,9 @@ type Options struct {
 	// Edge is how the world's boats met its edge; nil replays a world
 	// whose boats sailed on past it.
 	Edge *sim.Edge
+	// Sky is the sky the voyages' nights at sea were reckoned by, at the
+	// log's epoch; nil replays a world with none.
+	Sky *sky.Prepared
 	// At, if not nil, is called with the world's frame after each tick
 	// replayed, and after each snapshot loaded.
 	At func(*bus.Frame)
@@ -67,7 +71,11 @@ func Run(f *File, opt Options) (Result, error) {
 	if len(f.Segments) == 0 {
 		return res, errors.New("replay: the log has no segment")
 	}
-	w, err := sim.New(sim.Config{Capacity: f.Header.Capacity, Kinds: opt.Kinds, StartSheets: opt.StartSheets, Waves: opt.Waves, Weather: opt.Weather, Workers: opt.Workers, Encounters: opt.Encounters, Grace: f.Header.Grace, Limit: f.Header.Limit, Terrain: opt.Terrain, Edge: opt.Edge, Capacities: opt.Capacities})
+	cfg := sim.Config{Capacity: f.Header.Capacity, Kinds: opt.Kinds, StartSheets: opt.StartSheets, Waves: opt.Waves, Weather: opt.Weather, Workers: opt.Workers, Encounters: opt.Encounters, Grace: f.Header.Grace, Limit: f.Header.Limit, Terrain: opt.Terrain, Edge: opt.Edge, Capacities: opt.Capacities}
+	if opt.Sky != nil {
+		cfg.Sight = &sim.Sight{Sky: opt.Sky, Epoch: f.Header.Epoch.UnixMicro()}
+	}
+	w, err := sim.New(cfg)
 	if err != nil {
 		return res, err
 	}
