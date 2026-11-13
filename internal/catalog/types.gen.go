@@ -225,7 +225,10 @@ type BoatArt struct {
 	// its kind: cat, a beach cat's (sat on her hull, sitting out, on the wire,
 	// crossing her net, righting her); cruiser, a cruising yacht's (at her wheel,
 	// standing and sat by it, on her cockpit's bench, on her rail under her
-	// lifelines, crossing her cockpit and her coachroof).
+	// lifelines, crossing her cockpit and her coachroof); bridgedeck, a cruising
+	// catamaran's (at her raised wheel, standing and sat on the helm seat, beside the
+	// helm, on her cockpit's seats round her table, on her aft bench and her lounger,
+	// walking her cockpit, up and down her helm's ladder).
 	SailorClips []SailorClip `json:"sailorClips,omitempty,omitzero"`
 }
 
@@ -3229,6 +3232,7 @@ type SailorArt struct {
 
 type SailorClip string
 
+const SailorClipBridgedeck SailorClip = "bridgedeck"
 const SailorClipCat SailorClip = "cat"
 const SailorClipCruiser SailorClip = "cruiser"
 
@@ -5554,4 +5558,4 @@ type WorldZones struct {
 }
 
 // Version is the catalog version (tools/catalog).
-const Version = "fe7044688ef66549"
+const Version = "4da453b00fc9a7c1"

@@ -1891,7 +1891,7 @@ boats:
     # or seating areas provided", her manual); nobody crosses in a tack.
     stations:
       - { at: [-2.6, 2.15, 2.15], pose: standing, facing: 0 }
-      - { at: [-1.95, 2.6, 2.54], pose: seated, facing: 0 }
+      - { at: [-1.95, 2.6, 2.31], pose: seated, facing: 0 }
       - { at: [0.85, 1.6, 2.11], pose: seated, facing: 180 }
       - { at: [1.45, 1.6, 2.11], pose: seated, facing: 180 }
       - { at: [1.99, 1.6, 2.8], pose: seated, facing: 270 }
@@ -1929,6 +1929,9 @@ boats:
     art:
       model: boats/catamaran.glb
       far: boats/catamaran.far.glb
+      # Her people's clips: at her wheel and beside it, on her cockpit's
+      # seats, walking her cockpit and on her helm's ladder.
+      sailorClips: [bridgedeck]
       budget: { near: 30000, far: 1500 }
     physics:
       hull:

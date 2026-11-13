@@ -1451,9 +1451,9 @@ export interface BoatArt {
    */
   far: string;
   /**
-   * The files of clips beside each sailor look's clips (<version>.<name>.glb) its people aboard are drawn with, loaded only when someone is drawn aboard one of its kind: cat, a beach cat's (sat on her hull, sitting out, on the wire, crossing her net, righting her); cruiser, a cruising yacht's (at her wheel, standing and sat by it, on her cockpit's bench, on her rail under her lifelines, crossing her cockpit and her coachroof).
+   * The files of clips beside each sailor look's clips (<version>.<name>.glb) its people aboard are drawn with, loaded only when someone is drawn aboard one of its kind: cat, a beach cat's (sat on her hull, sitting out, on the wire, crossing her net, righting her); cruiser, a cruising yacht's (at her wheel, standing and sat by it, on her cockpit's bench, on her rail under her lifelines, crossing her cockpit and her coachroof); bridgedeck, a cruising catamaran's (at her raised wheel, standing and sat on the helm seat, beside the helm, on her cockpit's seats round her table, on her aft bench and her lounger, walking her cockpit, up and down her helm's ladder).
    */
-  sailorClips?: ("cat" | "cruiser")[];
+  sailorClips?: ("cat" | "cruiser" | "bridgedeck")[];
   /**
    * The most triangles each of the boat's models may have.
    */
@@ -8912,4 +8912,4 @@ export interface LifeGlow {
 }
 
 /** The catalog version (tools/catalog). */
-export const CATALOG_VERSION = 'fe7044688ef66549';
+export const CATALOG_VERSION = '4da453b00fc9a7c1';
