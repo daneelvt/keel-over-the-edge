@@ -302,18 +302,24 @@ test('the Rover aboard the cruising catamaran in both versions: sat behind her w
   page,
 }) => {
   test.setTimeout(240_000);
-  await openRoom(page, 'view=lineup&black=1&t=1&clip=bridge-wheel-seated&look=rover');
-  // Seen from before her and above, her roof left out: the heads are seen.
+  await openRoom(page, 'view=lineup&black=1&t=1&clip=bridge-wheel-seated&look=rover&near=1');
+  // Each on a catamaran of her own, a catamaran's length apart: the camera
+  // close on one at a time, from above with her roof left out; the heads
+  // are seen.
   const parts = ['head'];
-  for (const clip of ['bridge-wheel-seated', 'table-braced-port', 'beam-sit', 'stairs-up']) {
-    const aboard = await show(page, { clip, t: 1 });
-    expect(
-      (await page.evaluate(() => globalThis.dressing.figures())).every((f) => f.inBoat),
-      clip,
-    ).toBe(true);
-    expect(await page.evaluate(() => globalThis.dressing.problems()), clip).toEqual([]);
-    for (const [name, at] of Object.entries(await bones(page, parts))) {
-      expect(darkest(aboard, at), `${name}, ${clip}`).toBeLessThanOrEqual(DARK);
+  for (const who of [0, 1]) {
+    for (const clip of ['bridge-wheel-seated', 'table-braced-port', 'beam-sit', 'stairs-up']) {
+      const aboard = await show(page, { clip, t: 1, who });
+      expect(
+        (await page.evaluate(() => globalThis.dressing.figures())).every((f) => f.inBoat),
+        clip,
+      ).toBe(true);
+      expect(await page.evaluate(() => globalThis.dressing.problems()), clip).toEqual([]);
+      for (const [name, at] of Object.entries(await bones(page, parts))) {
+        if (name.startsWith(`${who}:`)) {
+          expect(darkest(aboard, at), `${name}, ${clip}`).toBeLessThanOrEqual(DARK);
+        }
+      }
     }
   }
 });
