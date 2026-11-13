@@ -29,7 +29,9 @@ describe('a story', () => {
           { kind: 'former' },
         ]),
       ),
-    ).toBe('The Gull passed 8 m from the lip. A Jolly boat met Gus ⚙, with a sailor and a former sailor.');
+    ).toBe(
+      'The Gull passed 8 m from the lip. A Jolly boat met Gus ⚙, with a sailor and a former sailor.',
+    );
     expect(storyText(story('First sighted by {0}.', [{ kind: 'human', name: 'Mira' }]))).toBe(
       'First sighted by Mira.',
     );
