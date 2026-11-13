@@ -102,35 +102,7 @@ poses:
       - [neck_01, z, -14]
       - [head, z, -28]
 
-  # Braced at a cruising catamaran's table sat further back on the bench:
-  # the long coat's front clear of the table's pedestal.
-  chartmaker-table-brace:
-    from: table-brace
-    shift: [0.0, 0.0, 0.008]
-  chartmaker-table-brace-across:
-    from: chartmaker-table-brace
-    turn:
-      - [neck_01, z, 8]
-      - [head, z, 16]
-      - [head, x, -4]
-  chartmaker-table-brace-sea:
-    from: chartmaker-table-brace
-    turn:
-      - [neck_01, z, -16]
-      - [head, z, -30]
-      - [head, x, -6]
-
 clips:
-  chartmaker-table-braced:
-    loop: true
-    idle: true
-    sides: true
-    group: bridgedeck
-    keys:
-      - { pose: chartmaker-table-brace, hold: 1.6, ramp: 1.5, lead: head }
-      - { pose: chartmaker-table-brace-across, hold: 1.4, ramp: 1.3, lead: head, anticipate: 0.05 }
-      - { pose: chartmaker-table-brace, hold: 1.2, ramp: 1.5, lead: head }
-      - { pose: chartmaker-table-brace-sea, hold: 1.2, ramp: 1.4, lead: head, anticipate: 0.05 }
   chartmaker-bridge-wheel-seated:
     loop: true
     idle: true

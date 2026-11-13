@@ -1483,12 +1483,13 @@ function cockpitFurniture(): { wood: MeshBuilder; oak: MeshBuilder } {
     [LBENCH_OUT + 0.06, SEAT_TOP + 0.4, LBENCH_AFT],
     VARNISH,
   );
-  // The table, and its pedestal.
+  // The table, and its pedestal toward its inboard side, clear of the
+  // knees and coats of those on the bench.
   box(wood, [TABLE.x0, TABLE.y - 0.04, TABLE.z0], [TABLE.x1, TABLE.y, TABLE.z1], VARNISH);
   box(
     wood,
-    [(TABLE.x0 + TABLE.x1) / 2 - 0.03, SOLE, TABLE.z0 + 0.35],
-    [(TABLE.x0 + TABLE.x1) / 2 + 0.03, TABLE.y - 0.04, TABLE.z1 - 0.35],
+    [TABLE.x0 + 0.17, SOLE, TABLE.z0 + 0.35],
+    [TABLE.x0 + 0.23, TABLE.y - 0.04, TABLE.z1 - 0.35],
     shade(VARNISH, 0.8),
   );
   // The aft bench, its back the crossbeam's turned rail.
@@ -2677,7 +2678,7 @@ function seatsData(): Record<string, unknown> {
       sides: v([PLAT_IN + 0.05, LADDER_IN - 0.05, 0]).slice(0, 2),
       rail: v([LADDER_RAIL, 0.9, LANDING_RAIL]),
     },
-    walk: v([-0.2, SOLE, 3.0]),
+    walk: v([-0.45, SOLE, 3.0]),
     platform: PLAT_Y,
     // The floors' plans, x from and to, z from and to: the cockpit's sole
     // between the hulls' inner sides, the helm's platform and its landing.
