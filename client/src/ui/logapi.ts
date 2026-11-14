@@ -119,6 +119,49 @@ export interface LogRecord {
   of: number;
 }
 
+/** A sailor's races counted over every world. */
+export interface RaceCounts {
+  sailed: number;
+  top3: number;
+  wins: number;
+  /** Each award given, by its name: best-start, comeback, photo-finish, crowd, spoon. */
+  awards: Record<string, number>;
+  /** Each time trial's medal: harbourmaster, gold, silver, bronze. */
+  medals: Record<string, number>;
+  ran: number;
+}
+
+/** A race in a log: the sailor's ribbon of it. Times ms. */
+export interface LogRibbon {
+  world: number;
+  at: number;
+  code: string;
+  name: string;
+  kind: 'race' | 'trial';
+  course: string;
+  /** The boats' kind, by its catalog id. */
+  boat: string;
+  boatName?: string;
+  fleet: number;
+  harbour?: boolean;
+  newcomers?: boolean;
+  role: 'skipper' | 'crew';
+  place?: number;
+  how?: 'finished' | 'placed' | 'ret' | 'dns' | 'removed';
+  medal?: string;
+  awards: string[];
+  /** A crew's skipper, where named. */
+  skipper?: LogPerson;
+  /** In the reader's own log: whether its wooden spoon hangs from their sterns. */
+  hung?: boolean;
+}
+
+/** A log's races: the counts kept for good and the newest races. */
+export interface LogRibbons {
+  counts: RaceCounts;
+  races: LogRibbon[];
+}
+
 /** A sailor's log, a world's days at a time. */
 export interface Log {
   name: string;
@@ -138,6 +181,8 @@ export interface Log {
   collection: LogGroup[];
   zone: string;
   worldNow?: number;
+  /** The races sailed; none from an older server. */
+  ribbons?: LogRibbons | null;
 }
 
 /** What asking for a log came to: the log; not there to be read (unknown and refused alike); or not had. */

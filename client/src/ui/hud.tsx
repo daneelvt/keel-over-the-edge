@@ -45,6 +45,7 @@ import { Menu } from './menu';
 import type { HudModel } from './model';
 import type { Notices } from './notices';
 import { Pilot } from './pilot';
+import { type RaceSource, raceShown, useRaceLine } from './racelinelazy';
 import { type RacesView, racesShown, useRaces } from './raceslazy';
 import { type CameraKeys, SeaKeys } from './seakeys';
 import type { SettingsSignal } from './settings';
@@ -142,6 +143,16 @@ function LazyRaces({ races }: { races: RacesView }) {
   const shown = racesShown(races);
   const m = useRaces(shown);
   return m === null || !shown ? null : <m.RacesWindows view={races} />;
+}
+
+/** The race the boat sails in: its line over the case, or its windows over the rest; loaded when the boat first races. */
+function LazyRaceLine({ src, part }: { src: RaceSource; part: 'line' | 'windows' }) {
+  const shown = raceShown(src);
+  const m = useRaceLine(shown);
+  if (m === null || !shown) {
+    return null;
+  }
+  return part === 'line' ? <m.RaceLine src={src} /> : <m.RaceWindows src={src} />;
 }
 
 /** The controls that act on the boat: the helm, the autopilot and the sheet; none on a boat watched. */
@@ -245,6 +256,8 @@ export interface ScreenProps {
   clear?: ClearView | null;
   /** Races ashore: Make a race in the menu, the cards; null in the offline sandbox. */
   races?: RacesView | null;
+  /** The race the boat sails in: its line, its windows; null without. */
+  racing?: RaceSource | null;
 }
 
 /** Whether a key press is the player's, not typing in a field. */
@@ -338,10 +351,15 @@ function Screen(props: ScreenProps) {
   }
   // Cleared, every part stays laid out but unseen, so the two keys left
   // stand where they stood; the overlays' labels go with the overlays.
+  // In a race its line heads the top: held upright the pocket chart's
+  // column stands under it too.
+  const racing = props.racing ?? null;
+  const raced = racing !== null && racing.racing.told.value !== null;
   return (
-    <div class={`hud-screen${cleared ? ' clear' : ''}`}>
+    <div class={`hud-screen${cleared ? ' clear' : ''}${raced ? ' racing' : ''}`}>
       {cleared ? null : <div class="overlay-labels" ref={props.labels} aria-hidden="true" />}
       <div class="hud-top">
+        {racing !== null ? <LazyRaceLine src={racing} part="line" /> : null}
         <Case
           model={model}
           settings={settings}
@@ -462,6 +480,7 @@ function Screen(props: ScreenProps) {
         <LazyStatements view={props.statements} part="window" />
       ) : null}
       {props.races != null ? <LazyRaces races={props.races} /> : null}
+      {racing !== null ? <LazyRaceLine src={racing} part="windows" /> : null}
     </div>
   );
 }

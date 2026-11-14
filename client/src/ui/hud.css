@@ -826,6 +826,14 @@
   right: auto;
 }
 
+/* In a race, held upright, the race line heads the screen's whole width:
+   the pocket chart's column stands under it, as the case does. */
+@media (orientation: portrait) {
+  .hud-screen.racing .hud-right {
+    top: calc(var(--edge-top) + 40px);
+  }
+}
+
 /* The keys: the menu's button heads a column of them, 8 pixels apart:
    Back to the boat, the clear view's, and the full screen's while it is
    wanted. On a short screen they run left from it in a row. */
@@ -1498,6 +1506,29 @@
   position: absolute;
   inset: 0;
   overflow: hidden;
+}
+
+/* A race's next mark's number, over its spar while in sight. */
+.mark-tag {
+  position: absolute;
+  left: 0;
+  top: 0;
+  translate: -50% -100%;
+  min-width: 14px;
+  padding: 1px 5px;
+  border: 1px solid var(--gold);
+  border-radius: 9px;
+  background: rgb(26 36 44 / 80%);
+  color: var(--gold);
+  font:
+    500 13px / 1.1 "Alegreya Sans",
+    system-ui,
+    sans-serif;
+  text-align: center;
+}
+
+.mark-tag[hidden] {
+  display: none;
 }
 
 .overlay-label {

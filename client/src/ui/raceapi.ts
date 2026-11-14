@@ -227,6 +227,19 @@ export function raceAct(
   );
 }
 
+/** POST /api/race/{code}/spoon: the wooden spoon given there hung from the sailor's sterns for the world, or taken down. */
+export function hangSpoon(
+  code: string,
+  hang: boolean,
+  f: Fetch = own,
+): Promise<Told<{ hang: boolean }>> {
+  return ask<{ hang: boolean }>(f, `/api/race/${encodeURIComponent(code)}/spoon`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ hang }),
+  });
+}
+
 /** POST /api/race: the race made, its card. */
 export function makeRace(body: MakeBody, f: Fetch = own): Promise<Told<RaceCard>> {
   return ask<RaceCard>(

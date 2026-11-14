@@ -38,7 +38,10 @@ import type { ChartEntry } from '../net/messages';
 import { chartMaterial } from '../render/materials';
 import { ARROW_HEIGHT, ARROW_NOSE, ARROW_TAIL, arrowSize, placeChartCamera } from './arrow';
 import type { IslandModel, Models } from './model';
+import type { Racing } from '../ui/racestate';
+import { raceDrawingOf } from '../ui/racestate';
 import { PAPER_MARGIN, type PaperLook, paintCourses, paintPaper } from './paper';
+import { type RaceDrawing, RaceLayer } from './racelayer';
 import { type ChartStore, keyOf } from './store';
 import type { ChartWeather } from './weatherlayer';
 
@@ -140,6 +143,10 @@ export class ChartView {
   streaksOn: () => boolean = () => true;
   /** How many times it was drawn (the tests). */
   draws = 0;
+  /** The race drawn on it, from the boat's race unless set: a replay sets its own. */
+  raceDrawing: () => RaceDrawing | null = () => null;
+  /** The race's course, tracks and boats over the paper. */
+  readonly race = new RaceLayer();
 
   readonly #store: ChartStore;
   readonly #models: Models;
@@ -193,8 +200,12 @@ export class ChartView {
     look: ChartLook,
     boatAt: () => BoatAt,
     wind: WindSampler | null,
+    racing: Racing | null = null,
   ) {
     this.#store = store;
+    if (racing !== null) {
+      this.raceDrawing = () => raceDrawingOf(racing);
+    }
     this.#models = models;
     this.#look = look;
     this.#boatAt = boatAt;
@@ -216,7 +227,15 @@ export class ChartView {
     this.#streakXY = new Float32Array(look.streaks.count * 4);
     this.#streaks = this.#makeStreaks();
     const falls = this.#makeFalls();
-    this.scene.add(paper, this.#land, this.#towers, this.#boat, this.#streaks, falls);
+    this.scene.add(
+      paper,
+      this.#land,
+      this.#towers,
+      this.#boat,
+      this.#streaks,
+      falls,
+      this.race.group,
+    );
     // The table the chart lies on.
     this.scene.background = new Color(TABLE);
     const n = look.wind;
@@ -282,12 +301,13 @@ export class ChartView {
       l.el.remove();
     }
     this.#labels.clear();
+    this.race.attach(layer);
     this.#dirty = true;
   }
 
-  /** Opens or closes it; opened, it looks at the boat. */
+  /** Opens or closes it; opened, it looks at the boat, or in a race at its course. */
   show(open: boolean): void {
-    if (open && !this.open) {
+    if (open && !this.open && !this.frameRace()) {
       const b = this.#boatAt();
       this.lookAt(b.east, b.north, 9000);
     }
@@ -300,6 +320,22 @@ export class ChartView {
     this.#target.set(east, north);
     this.#distance = Math.min(Math.max(distance, NEAREST), FURTHEST);
     this.#dirty = true;
+  }
+
+  /** Looks at the race drawn, its whole course in view: false with none. */
+  frameRace(): boolean {
+    const d = this.raceDrawing();
+    if (d === null) {
+      return false;
+    }
+    const t = d.told;
+    let reach = Math.max(t.reach, 200);
+    for (const p of [...t.marks, ...t.way]) {
+      reach = Math.max(reach, Math.hypot(p.east - t.east, p.north - t.north) * 1.15);
+    }
+    const fit = this.#width / Math.max(this.#height, 1) < 1 ? 5.2 : 3.4;
+    this.lookAt(t.east, t.north, reach * fit);
+    return true;
   }
 
   /** The whole disk in view. */
@@ -490,6 +526,14 @@ export class ChartView {
     if (this.#streaks.visible !== streaks) {
       this.#streaks.visible = streaks;
       this.#dirty = true;
+    }
+    if (this.open) {
+      const metres =
+        (2 * this.#distance * Math.tan((this.camera.fov * Math.PI) / 360)) /
+        Math.max(this.#height, 1);
+      if (this.race.update(this.raceDrawing(), metres, this.#look.ink)) {
+        this.#dirty = true;
+      }
     }
   }
 
@@ -750,6 +794,7 @@ export class ChartView {
         l.width = l.el.offsetWidth;
       }
     }
+    this.race.place(this.camera, this.#width, this.#height);
   }
 
   #makeLabel(e: ChartEntry, layer: HTMLElement): Label {

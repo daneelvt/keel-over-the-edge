@@ -31,7 +31,8 @@ type DeckAsk = Extract<
       | 'say'
       | 'mute'
       | 'block'
-      | 'report';
+      | 'report'
+      | 'raceRetire';
   }
 >;
 
@@ -61,6 +62,8 @@ function deckCommand(s: Session, now: number, m: DeckAsk): Uint8Array<ArrayBuffe
       return s.blockCommand(now, m.who, m.on);
     case 'report':
       return s.reportCommand(now, m.who, m.reason, m.note);
+    case 'raceRetire':
+      return s.raceRetireCommand(now);
   }
 }
 
@@ -200,6 +203,7 @@ export class NetWorker {
       case 'mute':
       case 'block':
       case 'report':
+      case 'raceRetire':
         if (this.#session !== null) {
           this.#send(deckCommand(this.#session, this.#d.now(), m));
           this.#arm();
@@ -481,6 +485,18 @@ export class NetWorker {
           break;
         case 'raceSignal':
           this.#d.post({ type: 'raceSignal', signal: r.signal });
+          break;
+        case 'racePicture':
+          this.#d.post({ type: 'racePicture', picture: r.picture });
+          break;
+        case 'raceCall':
+          this.#d.post({ type: 'raceCall', call: r.call });
+          break;
+        case 'raceFinish':
+          this.#d.post({ type: 'raceFinish', finish: r.finish });
+          break;
+        case 'raceResults':
+          this.#d.post({ type: 'raceResults', results: r.results });
           break;
         case 'chunks':
           this.#d.post({ type: 'chunks', chunks: r.chunks });

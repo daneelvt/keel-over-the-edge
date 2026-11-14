@@ -15,6 +15,7 @@ import type { Chart, ChartMode, TappedWeather } from '../chart/chart';
 import type { Forecasting } from '../chart/forecasting';
 import { drawPocketWeather, type PocketWeather, pocketWeather } from '../chart/pocketweather';
 import { formatPosition } from '../chart/position';
+import { type RaceDrawing, trackColour } from '../chart/racelayer';
 import {
   type ChartStore,
   chartList,
@@ -41,6 +42,7 @@ import { checkUnread, type NewsSource, unread } from './newsread';
 import type { NewsStory } from './newswords';
 import type { Notices } from './notices';
 import { MachineMark, PlayerText } from './player';
+import { type Racing, raceDrawingOf } from './racestate';
 
 /** What the chart's screens need of the world beyond the chart. */
 export interface ChartSea {
@@ -64,6 +66,8 @@ export interface ChartSea {
   speed: () => number;
   /** Sets the autopilot to hold a heading, rad, as its panel does; null with no boat to steer. */
   steer: ((heading: number) => void) | null;
+  /** The race the boat sails in: the pocket chart frames its course, the chart opens on it. */
+  racing?: Racing | null;
 }
 
 /** "Charted by <name>, Tuesday", the name as the player wrote it. */
@@ -860,9 +864,22 @@ export function PocketChart({
   );
 }
 
+/** The pocket chart's frame on a race's course: its middle and how far it reaches, m. */
+export function raceFrame(d: RaceDrawing): { east: number; north: number; radius: number } {
+  const t = d.told;
+  let radius = Math.max(t.reach, 150);
+  for (const p of [...t.marks, ...t.way]) {
+    radius = Math.max(radius, Math.hypot(p.east - t.east, p.north - t.north) * 1.12);
+  }
+  return { east: t.east, north: t.north, radius };
+}
+
 /**
  * Draws the pocket chart: a disk seen tilted, its weather now if given,
- * its charted islands and lights, the mist band, the boat.
+ * its charted islands and lights, the mist band, the boat. In a race it
+ * is framed on the course: its way faint, its line, its marks numbered
+ * (the next ringed in gold), the boat's own track, the fleet as dots in
+ * their colours.
  */
 export function drawPocket(
   c: HTMLCanvasElement,
@@ -878,36 +895,40 @@ export function drawPocket(
   }
   const w = c.width;
   const h = c.height;
+  const race = sea.racing != null ? raceDrawingOf(sea.racing) : null;
+  const frame = race === null ? { east: 0, north: 0, radius: sea.lip } : raceFrame(race);
   // The disk nearly the canvas's width, room left at the rim for the
   // boat's mark; its weather cut to the disk's shape.
-  const k = (w * 0.48) / sea.lip;
+  const k = (w * 0.48) / frame.radius;
   const tilt = 0.62;
-  const x = (east: number) => w / 2 + east * k;
-  const y = (north: number) => h / 2 - north * k * tilt;
+  const x = (east: number) => w / 2 + (east - frame.east) * k;
+  const y = (north: number) => h / 2 - (north - frame.north) * k * tilt;
+  const rim = frame.radius * k;
   ctx.clearRect(0, 0, w, h);
   ctx.save();
   ctx.beginPath();
-  ctx.ellipse(w / 2, h / 2, sea.lip * k, sea.lip * k * tilt, 0, 0, 2 * Math.PI);
+  ctx.ellipse(w / 2, h / 2, rim, rim * tilt, 0, 0, 2 * Math.PI);
   ctx.fillStyle = 'rgba(236, 224, 194, 0.92)';
   ctx.fill();
   ctx.strokeStyle = 'rgba(59, 46, 34, 0.9)';
   ctx.lineWidth = 2;
   ctx.stroke();
-  // The mist band.
-  ctx.beginPath();
-  ctx.ellipse(w / 2, h / 2, sea.lip * k * 0.93, sea.lip * k * tilt * 0.93, 0, 0, 2 * Math.PI);
-  ctx.setLineDash([3, 3]);
-  ctx.lineWidth = 1;
-  ctx.stroke();
-  ctx.setLineDash([]);
-  if (weather !== null) {
-    // The weather within the rim: a storm on it is cut by the world's edge.
-    ctx.save();
+  if (race === null) {
+    // The mist band.
     ctx.beginPath();
-    ctx.ellipse(w / 2, h / 2, sea.lip * k - 1, sea.lip * k * tilt - 1, 0, 0, 2 * Math.PI);
-    ctx.clip();
+    ctx.ellipse(w / 2, h / 2, rim * 0.93, rim * tilt * 0.93, 0, 0, 2 * Math.PI);
+    ctx.setLineDash([3, 3]);
+    ctx.lineWidth = 1;
+    ctx.stroke();
+    ctx.setLineDash([]);
+  }
+  // Everything within the rim.
+  ctx.beginPath();
+  ctx.ellipse(w / 2, h / 2, rim - 1, rim * tilt - 1, 0, 0, 2 * Math.PI);
+  ctx.clip();
+  if (weather !== null) {
+    // A storm on the rim is cut by the world's edge.
     drawPocketWeather(ctx, weather, x, y, k, tilt);
-    ctx.restore();
   }
   for (const e of sea.chart.store.entries) {
     if (e.subject === 'island' && e.bounds !== null) {
@@ -918,6 +939,9 @@ export function drawPocket(
       ctx.fillStyle = '#a8236e';
       ctx.fillRect(x(e.east) - 1.5, y(e.north) - 1.5, 3, 3);
     }
+  }
+  if (race !== null) {
+    drawPocketRace(ctx, race, x, y);
   }
   // The boat, and its heading.
   const bx = x(b.east);
@@ -933,6 +957,100 @@ export function drawPocket(
   ctx.arc(bx, by, 4, 0, 2 * Math.PI);
   ctx.fill();
   ctx.restore();
+}
+
+/** A race on the pocket chart: its way, its lines, its marks numbered, the boat's track and the fleet. */
+function drawPocketRace(
+  ctx: CanvasRenderingContext2D,
+  d: RaceDrawing,
+  x: (east: number) => number,
+  y: (north: number) => number,
+): void {
+  const t = d.told;
+  const ink = 'rgba(59, 46, 34, 0.9)';
+  if (t.way.length > 1) {
+    ctx.beginPath();
+    for (const [i, p] of t.way.entries()) {
+      if (i === 0) {
+        ctx.moveTo(x(p.east), y(p.north));
+      } else {
+        ctx.lineTo(x(p.east), y(p.north));
+      }
+    }
+    ctx.setLineDash([4, 4]);
+    ctx.lineWidth = 1.2;
+    ctx.strokeStyle = 'rgba(59, 46, 34, 0.4)';
+    ctx.stroke();
+    ctx.setLineDash([]);
+  }
+  for (const line of [
+    t.pin !== null && t.committee !== null ? [t.pin, t.committee] : null,
+    t.finish,
+  ]) {
+    if (line == null) {
+      continue;
+    }
+    const [a, b] = line as [{ east: number; north: number }, { east: number; north: number }];
+    ctx.beginPath();
+    ctx.moveTo(x(a.east), y(a.north));
+    ctx.lineTo(x(b.east), y(b.north));
+    ctx.lineWidth = 2.5;
+    ctx.strokeStyle = ink;
+    ctx.stroke();
+  }
+  // The boat's own track.
+  const own = d.tracks.get(d.watched) ?? [];
+  if (own.length >= 4) {
+    ctx.beginPath();
+    for (let i = 0; i + 1 < own.length; i += 2) {
+      const px = x(own[i] ?? 0);
+      const py = y(own[i + 1] ?? 0);
+      if (i === 0) {
+        ctx.moveTo(px, py);
+      } else {
+        ctx.lineTo(px, py);
+      }
+    }
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = 'rgba(176, 65, 45, 0.85)';
+    ctx.stroke();
+  }
+  const next = t.legs[d.next]?.mark ?? 0;
+  ctx.font = '600 15px "Alegreya Sans", system-ui, sans-serif';
+  ctx.textBaseline = 'middle';
+  for (const m of t.marks) {
+    const mx = x(m.east);
+    const my = y(m.north);
+    if (m.number === next && next > 0) {
+      ctx.beginPath();
+      ctx.arc(mx, my, 9, 0, 2 * Math.PI);
+      ctx.lineWidth = 2.5;
+      ctx.strokeStyle = '#c8952c';
+      ctx.stroke();
+    }
+    ctx.beginPath();
+    ctx.arc(mx, my, 4.5, 0, 2 * Math.PI);
+    ctx.fillStyle = '#e0782c';
+    ctx.fill();
+    ctx.lineWidth = 1;
+    ctx.strokeStyle = ink;
+    ctx.stroke();
+    ctx.fillStyle = '#3b2e22';
+    ctx.fillText(String(m.number), mx + 8, my - 7);
+  }
+  // The fleet, each a dot in its colour; the boat's own is its arrow.
+  for (const b of d.boats) {
+    if (b.number === d.watched) {
+      continue;
+    }
+    ctx.beginPath();
+    ctx.arc(x(b.east), y(b.north), 3.5, 0, 2 * Math.PI);
+    ctx.fillStyle = trackColour(b.number);
+    ctx.fill();
+    ctx.lineWidth = 1;
+    ctx.strokeStyle = ink;
+    ctx.stroke();
+  }
 }
 
 /** The notice shown, with its way to dismiss it; the line is in the page from the start, empty. */

@@ -71,6 +71,7 @@ import { CATALOG_VERSION, catalog } from '../catalog';
 import { codeOf, lookFrom } from '../catalog/looks';
 import { Forecasting } from '../chart/forecasting';
 import { GaleNotices } from '../chart/gales';
+import { raceSea } from './racesea';
 import {
   type ChartParts,
   chartSandbox,
@@ -99,7 +100,6 @@ import { loadPhysics, type Physics } from '../predict/physics';
 import wasmUrl from '../predict/physics.wasm?url';
 import { Predictor, prepareEncounters } from '../predict/predictor';
 import { regimeIndex } from '../predict/weather';
-import { signalFlag } from '../render/committee';
 import { PERSON_DEFAULT } from '../render/fleet';
 import { ROAM_HIGH } from '../render/freecam';
 import { flashNear } from '../render/lightning';
@@ -151,6 +151,7 @@ import { saveNoticesOff } from '../ui/notices';
 import { showQueue } from '../ui/queue';
 import { RACE_PARAM, raceFromQuery } from '../ui/raceapi';
 import { loadRaces, pollRaces, type RacesView, racesOf } from '../ui/raceslazy';
+import { Racing } from '../ui/racestate';
 import { settingsSignal } from '../ui/settings';
 import { shipmatesOf } from '../ui/shipmatesview';
 import { checkStatements, statementsOf } from '../ui/statementlazy';
@@ -560,12 +561,29 @@ async function start(): Promise<void> {
       },
       camera,
       clear,
+      // The race the boat sails in, as the tests tell it; Retire answered
+      // as the race committee would.
+      racing: {
+        racing: parts.racing,
+        tick: () => world.ticks,
+        boat: () => ({
+          east: world.pose.east,
+          north: world.pose.north,
+          heading: world.pose.heading,
+        }),
+        retire: () => retireInSandbox(parts.racing),
+        races: null,
+        origin: location.origin,
+      },
     };
     // ?races: races ashore on the sandbox, its routes answered by the tests.
     if (query.has('races')) {
       const races = racesOf();
       pollRaces(races, parts.notices, catalog.notices.kinds);
       screen.races = races;
+      if (screen.racing != null) {
+        screen.racing.races = races;
+      }
       if (screen.harbour != null) {
         screen.harbour.races = races;
       }
@@ -821,6 +839,16 @@ async function start(): Promise<void> {
   game.canFly = () => online.tools.value && !online.spectating.value;
   game.canSteer = () => !online.spectating.value;
   game.onRoam = (on, east, north, height) => online.roam(on, east, north, height);
+  // A race under way: its course laid in the sea, its committee boat's
+  // flags, and its gun; the race the boat sails in on the race line.
+  const racing = new Racing();
+  const raceInSea = raceSea({
+    lay: (id, c) => world.race.lay(id, c),
+    drop: (id) => world.race.drop(id),
+    signals: (id, f) => world.race.signals(id, f),
+    fire: (id, loud) => game.fireGun(id, loud, true),
+    tick: () => world.ticks,
+  });
   let worldId = '';
   const models = new Models();
   online.onWorld = (id, sailed) => {
@@ -830,6 +858,8 @@ async function start(): Promise<void> {
       world.lighthouses.clear();
       world.wrecks.clear();
       world.race.clear();
+      raceInSea.clear();
+      racing.clear();
       models.clear();
       forecasting.forecasts.reset();
       gales.reset();
@@ -843,39 +873,15 @@ async function start(): Promise<void> {
     world.wrecks.setPlaces(p);
     world.race.setPlaces(p);
   };
-  // A race under way: its course laid in the sea, its committee boat's
-  // flags, and its gun.
-  const racing = new Map<number, { boat: string | undefined; flags: number[] }>();
   online.onRaceTold = (t) => {
-    if (t.gone) {
-      racing.delete(t.race);
-      world.race.drop(t.race);
-      return;
-    }
-    const boat = catalog.boats[t.boat]?.id;
-    const known = racing.get(t.race) ?? { boat, flags: raceFlags('warning', boat) };
-    racing.set(t.race, known);
-    world.race.lay(t.race, {
-      committee: t.committee,
-      pin: t.pin,
-      marks: t.marks,
-      flags: known.flags,
-    });
+    raceInSea.told(t);
+    racing.tell(t);
   };
-  online.onRaceSignal = (s) => {
-    const r = racing.get(s.race);
-    if (r !== undefined && s.signal !== 'finish' && s.signal !== 'other') {
-      r.flags = raceFlags(s.signal, r.boat);
-      world.race.signals(s.race, r.flags);
-    }
-    if (s.gun) {
-      game.fireGun(
-        s.race,
-        s.signal === 'start' || (s.signal === 'finish' && s.place === 1) ? 1.6 : 1,
-        true,
-      );
-    }
-  };
+  online.onRaceSignal = (s) => raceInSea.signal(s);
+  online.onRacePicture = (p) => racing.take(p);
+  online.onRaceCall = (c) => racing.called(c);
+  online.onRaceFinish = (f) => racing.finished(f);
+  online.onRaceResults = (r) => racing.results(r);
   online.onLights = (l, drop) => world.lighthouses.setLights(l, drop);
   online.onLife = (l, drop) => world.life.set(l, drop);
   online.onCaps = (c, drop) => world.weather.setCaps(c, drop);
@@ -894,7 +900,7 @@ async function start(): Promise<void> {
   online.onWeather = (spells, keyframes) => forecasting.forecasts.keep(spells, keyframes);
   // The world's chart, as the server tells of it; the notices it raises,
   // switched off as the account has them.
-  const parts = makeChart(world, models, serverNews, forecasting);
+  const parts = makeChart(world, models, serverNews, forecasting, racing);
   const gales = steerByChart(game, world, parts, forecasting);
   online.onForecast = (f, past) => {
     forecasting.forecasts.receive(f, past);
@@ -1182,6 +1188,14 @@ async function start(): Promise<void> {
     camera,
     clear,
     races,
+    racing: {
+      racing,
+      tick: () => world.ticks,
+      boat: () => ({ east: world.pose.east, north: world.pose.north, heading: world.pose.heading }),
+      retire: () => online.raceRetire(),
+      races,
+      origin: location.origin,
+    },
   });
   // A name tapped anywhere opens its log on the chart screen's Log tab, and
   // a sailor's last story the News tab, now the chart screen can be shown;
@@ -1418,19 +1432,28 @@ start().catch((err: unknown) => {
   console.error(err);
 });
 
-/** The flags a race's committee boat flies after a signal: the class's pennant from the warning, P too from the preparatory, none from the start, X for a recall. */
-function raceFlags(
-  signal: 'warning' | 'preparatory' | 'start' | 'recall',
-  boat: string | undefined,
-): number[] {
-  const flags = catalog.world.committee.flags;
-  const shown =
-    signal === 'warning'
-      ? [signalFlag(flags, 'class', boat)]
-      : signal === 'preparatory'
-        ? [signalFlag(flags, 'class', boat), signalFlag(flags, 'preparatory')]
-        : signal === 'recall'
-          ? [signalFlag(flags, 'recall')]
-          : [];
-  return shown.filter((f) => f >= 0);
+/** Retires the boat from the sandbox's race as the race committee would: its call, and its place gone from the picture. */
+function retireInSandbox(r: Racing): void {
+  const t = r.told.peek();
+  const n = r.number();
+  const p = r.picture.peek();
+  if (t === null || n === 0) {
+    return;
+  }
+  if (p !== null) {
+    r.take({
+      ...p,
+      racers: p.racers.map((x) => (x.number === n ? { ...x, state: 'retired', place: 0 } : x)),
+    });
+  }
+  r.called({
+    race: t.race,
+    kind: 'retired',
+    number: n,
+    other: 0,
+    article: '',
+    mark: 0,
+    added: 0,
+    place: 0,
+  });
 }

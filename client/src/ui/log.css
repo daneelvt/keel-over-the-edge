@@ -535,3 +535,52 @@
     grid-template-columns: repeat(auto-fill, minmax(104px, 1fr));
   }
 }
+
+/* The ribbons: the counts kept for good, then each race's ribbon, drawn
+   in the log's ink with a wash of its colour, its line and details. */
+.log-ribbon-counts {
+  margin: 10px 0 4px;
+  padding: 6px 0;
+  border-top: 1px solid var(--chart-ink);
+  border-bottom: 1px solid var(--chart-ink);
+  font:
+    17px / 1.35 "IM Fell English",
+    Georgia,
+    serif;
+}
+
+.log-ribbon-counts p {
+  margin: 0;
+}
+
+.log-ribbons {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.log-ribbon {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  min-height: 44px;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--log-rule);
+}
+
+.log-ribbon-prize {
+  flex: none;
+  width: 40px;
+  height: 40px;
+}
+
+.log-ribbon-words {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.log-ribbon .log-keys {
+  margin-top: 4px;
+}

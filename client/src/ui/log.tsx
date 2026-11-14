@@ -24,6 +24,7 @@ import {
   type LogDay,
   type LogGroup,
   type LogKind,
+  type LogRibbon,
   type LogShown,
   type LogSource,
   serverLogs,
@@ -42,15 +43,19 @@ import {
   kindName,
   loggedFromLine,
   MACHINE_SAILOR,
+  NO_RACES,
   NO_SAILOR,
   NO_SUCH_LOG,
   NOT_HAD,
   NOT_YET,
   ONLY_YOU,
   READING,
+  RIBBONS,
   recordLines,
   remarks,
   remarksLine,
+  ribbonCounts,
+  ribbonLines,
   runCell,
   SAILORS,
   shownLine,
@@ -65,6 +70,8 @@ import {
   YOUR_LOG,
 } from './logwords';
 import { PlayerText } from './player';
+import { Prize, raceColour } from './prize';
+import { hangSpoon } from './raceapi';
 
 /** The log's inked portrait, the look's drawing on the log's paper; nothing for a look the build has not. */
 function Ink({ look }: { look: Look }) {
@@ -434,6 +441,110 @@ function Collection({ log }: { log: Log }) {
   );
 }
 
+/** A race's ribbon: its prize drawn, its line, its details; in the reader's own log this world, the spoon's key. */
+function RibbonRow({ r, maiden, spoonKey }: { r: LogRibbon; maiden: boolean; spoonKey: boolean }) {
+  const [hung, setHung] = useState(r.hung === true);
+  const [busy, setBusy] = useState(false);
+  const boat = catalog.boats.find((b) => b.id === r.boat)?.name ?? '';
+  const [line, more] = ribbonLines(r, boat);
+  const placed = r.kind === 'race' && r.how !== 'ret' ? (r.place ?? 0) : 0;
+  return (
+    <li class="log-ribbon" data-ribbon={r.code}>
+      <span class={`log-ribbon-prize${r.newcomers === true ? ' newcomers' : ''}`}>
+        <Prize
+          place={placed}
+          of={r.fleet}
+          colour={r.newcomers === true ? '#3d7a46' : raceColour(r.code)}
+          medal={r.kind === 'trial' ? (r.medal ?? '') : ''}
+          size={40}
+        />
+      </span>
+      <span class="log-ribbon-words">
+        <span class="log-ribbon-line">
+          <PlayerText text={line} />
+        </span>
+        {more !== '' || maiden ? (
+          <span class="log-faint">
+            {[maiden ? 'Maiden race' : '', more].filter((x) => x !== '').join(' · ')}
+          </span>
+        ) : null}
+        {spoonKey ? (
+          <span class="log-keys">
+            <button
+              type="button"
+              class="log-key"
+              aria-pressed={hung}
+              disabled={busy}
+              onClick={() => {
+                setBusy(true);
+                void hangSpoon(r.code, !hung).then((a) => {
+                  setBusy(false);
+                  if (a.ok) {
+                    setHung(a.value.hang);
+                  }
+                });
+              }}
+            >
+              {hung ? 'The spoon hangs at the stern' : 'Hang the spoon at the stern'}
+            </button>
+          </span>
+        ) : null}
+      </span>
+    </li>
+  );
+}
+
+/** The log's ribbons: the counts kept for good, then each race's ribbon by world, the newest first. */
+function Ribbons({ log }: { log: Log }) {
+  const rb = log.ribbons ?? null;
+  if (rb === null || rb.counts.sailed === 0) {
+    return (
+      <div class="log-ribbons-part">
+        <p class="log-faint">{NO_RACES}</p>
+        {rb !== null && rb.counts.ran > 0 ? <p>{ribbonCounts(rb.counts).at(-1)}</p> : null}
+      </div>
+    );
+  }
+  const worlds: { world: number; races: LogRibbon[] }[] = [];
+  for (const r of rb.races) {
+    const last = worlds.at(-1);
+    if (last !== undefined && last.world === r.world) {
+      last.races.push(r);
+    } else {
+      worlds.push({ world: r.world, races: [r] });
+    }
+  }
+  // The whole record is here: its oldest race is the sailor's first.
+  const all = rb.races.length === rb.counts.sailed;
+  const oldest = rb.races.at(-1);
+  return (
+    <div class="log-ribbons-part" data-readout="log-ribbons">
+      <div class="log-ribbon-counts">
+        {ribbonCounts(rb.counts).map((l) => (
+          <p key={l}>{l}</p>
+        ))}
+      </div>
+      {worlds.map((w) => (
+        <section key={w.world} class="log-ribbon-world">
+          <h3 class="log-world">World {w.world.toLocaleString('en')}</h3>
+          <ol class="log-ribbons">
+            {w.races.map((r) => (
+              <RibbonRow
+                key={`${r.code}-${r.at}`}
+                r={r}
+                maiden={all && r === oldest}
+                spoonKey={
+                  log.own && !log.machine && r.world === log.worldNow && r.awards.includes('spoon')
+                }
+              />
+            ))}
+          </ol>
+        </section>
+      ))}
+    </div>
+  );
+}
+
 /** What reading a log has come to, while it is read. */
 type Reading = { kind: 'reading' } | { kind: 'read'; answer: LogAnswer };
 
@@ -457,7 +568,7 @@ export function LogSheet({
 }) {
   const [world, setWorld] = useState(0);
   const [reading, setReading] = useState<Reading>({ kind: 'reading' });
-  const [tab, setTab] = useState<'days' | 'collection'>('days');
+  const [tab, setTab] = useState<'days' | 'collection' | 'ribbons'>('days');
   const [more, setMore] = useState(false);
   const [watchable, setWatchable] = useState(false);
   const [again, setAgain] = useState(0);
@@ -581,7 +692,7 @@ export function LogSheet({
           </div>
           <div class="log-main">
             <div class="log-keys log-switch" role="tablist" aria-label="The log">
-              {(['days', 'collection'] as const).map((t) => (
+              {(['days', 'collection', 'ribbons'] as const).map((t) => (
                 <button
                   key={t}
                   type="button"
@@ -590,11 +701,17 @@ export function LogSheet({
                   aria-selected={tab === t}
                   onClick={() => setTab(t)}
                 >
-                  {t === 'days' ? DAYS : COLLECTION}
+                  {t === 'days' ? DAYS : t === 'collection' ? COLLECTION : RIBBONS}
                 </button>
               ))}
             </div>
-            {tab === 'days' ? <Days log={log} read={setWorld} /> : <Collection log={log} />}
+            {tab === 'days' ? (
+              <Days log={log} read={setWorld} />
+            ) : tab === 'collection' ? (
+              <Collection log={log} />
+            ) : (
+              <Ribbons log={log} />
+            )}
           </div>
         </>
       )}

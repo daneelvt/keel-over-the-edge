@@ -7,6 +7,7 @@
 // on the wing, mark 3 to leeward just above the line; the committee boat
 // flying a class's pennant.
 
+import type { RaceToldIn } from '../net/messages';
 import type { CourseLaid } from '../render/committee';
 
 /** How far ahead of the boat the line's middle lies, and its length, m. */
@@ -46,5 +47,65 @@ export function courseNear(
       { ...at(55, 15), number: 3, side: -1 },
     ],
     flags: [...flags],
+  };
+}
+
+/** The sandbox's race told: the course laid near, a triangle once round, the boats entered, the player's first. */
+export function raceNear(
+  course: CourseLaid,
+  race: number,
+  boat: number,
+  tick: number,
+  entrants: readonly { name: string; boat: string; machine?: boolean }[],
+): RaceToldIn {
+  const pin = course.pin ?? { east: 0, north: 0 };
+  const committee = course.committee ?? pin;
+  const mid = { east: (pin.east + committee.east) / 2, north: (pin.north + committee.north) / 2 };
+  const marks = course.marks.map((m) => ({
+    east: m.east,
+    north: m.north,
+    number: m.number,
+    side: m.side,
+  }));
+  const way = [mid, ...marks.map((m) => ({ east: m.east, north: m.north })), mid];
+  const all = [pin, committee, ...marks];
+  const east = all.reduce((s, p) => s + p.east, 0) / all.length;
+  const north = all.reduce((s, p) => s + p.north, 0) / all.length;
+  const reach = Math.max(...all.map((p) => Math.hypot(p.east - east, p.north - north))) * 1.1;
+  return {
+    race,
+    code: 'abcdefghij',
+    name: 'The Noon Gun',
+    boat,
+    trial: false,
+    run: 0,
+    warning: tick,
+    start: tick + 120 * 30,
+    pin: { east: pin.east, north: pin.north },
+    committee: { east: committee.east, north: committee.north },
+    finish: [
+      { east: pin.east, north: pin.north },
+      { east: committee.east, north: committee.north },
+    ],
+    marks,
+    way,
+    legs: [
+      { mark: 0, east: mid.east, north: mid.north },
+      ...marks.map((m) => ({ mark: m.number, east: m.east, north: m.north })),
+      { mark: 0, east: mid.east, north: mid.north },
+    ],
+    east,
+    north,
+    reach,
+    laps: 1,
+    expected: 600,
+    entrants: entrants.map((e, i) => ({
+      number: i + 1,
+      name: e.name,
+      boat: e.boat,
+      machine: e.machine === true,
+      me: i === 0,
+    })),
+    gone: false,
   };
 }

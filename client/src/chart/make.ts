@@ -14,6 +14,7 @@ import { hourAt, skyPeriods } from '../sky/skytime';
 import { type ChartSea, chartNews } from '../ui/chart';
 import type { NewsSource } from '../ui/newsread';
 import { type NoticeKind, Notices } from '../ui/notices';
+import { nextMarkOf, Racing } from '../ui/racestate';
 import { Chart } from './chart';
 import type { Forecasting } from './forecasting';
 import { FEATURE_MARKS, PLACE_MARKS } from './marks';
@@ -102,6 +103,8 @@ export interface ChartParts {
   notices: Notices;
   /** The chart's weather, null without a forecast. */
   weather: ChartWeather | null;
+  /** The race the boat sails in, as the chart and the race line show it. */
+  racing: Racing;
 }
 
 /**
@@ -113,6 +116,7 @@ export function makeChart(
   models: Models,
   news: NewsSource | null,
   forecasting: Forecasting | null = null,
+  racing: Racing = new Racing(),
 ): ChartParts {
   const w = catalog.world;
   const store = new ChartStore({
@@ -139,7 +143,7 @@ export function makeChart(
   if (forecasting !== null) {
     weather = new ChartWeather(forecasting, choice, w.chart.look.weather.canvas);
   }
-  const view = new ChartView(store, models, chartLook(), boat, windOf(world, weather));
+  const view = new ChartView(store, models, chartLook(), boat, windOf(world, weather), racing);
   const notices = new Notices(
     catalog.notices.kinds as unknown as NoticeKind[],
     catalog.notices.queue,
@@ -153,6 +157,8 @@ export function makeChart(
     }
   }
   world.cover = view;
+  // In a race, the next mark's number over its spar in the sea.
+  world.markTagOf = () => nextMarkOf(racing);
   const motion = globalThis.matchMedia?.('(prefers-reduced-motion: reduce)');
   if (motion !== undefined) {
     view.reducedMotion = motion.matches;
@@ -182,8 +188,9 @@ export function makeChart(
     forecasting,
     speed: () => 0,
     steer: null,
+    racing,
   };
-  return { chart, sea, notices, weather };
+  return { chart, sea, notices, weather, racing };
 }
 
 /** The sandbox's chart file. */

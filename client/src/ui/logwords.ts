@@ -14,8 +14,10 @@ import type {
   LogGroup,
   LogPerson,
   LogRecord,
+  LogRibbon,
   LogVoyage,
   LogWorld,
+  RaceCounts,
 } from './logapi';
 import { ARTICLES } from './verdict';
 
@@ -575,4 +577,114 @@ export function firstWords(
   }
   out.push(k.count === 1 ? 'Found once' : `Found ${inWords(k.count)} times`);
   return out;
+}
+
+export const RIBBONS = 'Ribbons';
+/** A log with no races yet. */
+export const NO_RACES =
+  'No races sailed yet. Every race sailed leaves its ribbon here, kept for good.';
+
+/** The awards and medals counted, in their order, each a word and its plural. */
+const AWARD_COUNTS: [string, string, string][] = [
+  ['best-start', 'best start', 'best starts'],
+  ['comeback', 'biggest comeback', 'biggest comebacks'],
+  ['photo-finish', 'photo finish', 'photo finishes'],
+  ['crowd', 'crowd’s favourite', 'crowd’s favourites'],
+  ['spoon', 'wooden spoon', 'wooden spoons'],
+];
+const MEDAL_COUNTS: [string, string, string][] = [
+  ['harbourmaster', 'harbourmaster’s time', 'harbourmaster’s times'],
+  ['gold', 'gold medal', 'gold medals'],
+  ['silver', 'silver medal', 'silver medals'],
+  ['bronze', 'bronze medal', 'bronze medals'],
+];
+
+/**
+ * A log's races counted, kept for good, a line each: those sailed, the
+ * top three and the wins; the awards; the time trials' medals; the races
+ * run. Lines with nothing to say are left out.
+ */
+export function ribbonCounts(c: RaceCounts): string[] {
+  const out = [
+    [
+      counted(c.sailed, 'race sailed', 'races sailed'),
+      c.top3 > 0 ? `${c.top3.toLocaleString('en')} in the top three` : '',
+      c.wins > 0 ? counted(c.wins, 'win', 'wins') : '',
+    ]
+      .filter((x) => x !== '')
+      .join(' · '),
+  ];
+  for (const list of [AWARD_COUNTS, MEDAL_COUNTS]) {
+    const line = list
+      .filter(([k]) => (list === AWARD_COUNTS ? c.awards[k] : c.medals[k]) !== undefined)
+      .map(([k, one, many]) =>
+        counted((list === AWARD_COUNTS ? c.awards[k] : c.medals[k]) ?? 0, one, many),
+      )
+      .join(' · ');
+    if (line !== '') {
+      out.push(line.charAt(0).toUpperCase() + line.slice(1));
+    }
+  }
+  if (c.ran > 0) {
+    out.push(`Ran ${counted(c.ran, 'race', 'races')}`);
+  }
+  return out;
+}
+
+/** A kind of boat, many: "Jolly boats". */
+function boatsOf(name: string): string {
+  return name === '' ? '' : /s$/.test(name) ? name : `${name}s`;
+}
+
+/** A place of how many: "2nd of 7". */
+function placeOf(place: number, fleet: number): string {
+  const tens = place % 100;
+  const suffix =
+    tens >= 11 && tens <= 13
+      ? 'th'
+      : place % 10 === 1
+        ? 'st'
+        : place % 10 === 2
+          ? 'nd'
+          : place % 10 === 3
+            ? 'rd'
+            : 'th';
+  return `${place}${suffix}${fleet > 1 ? ` of ${fleet}` : ''}`;
+}
+
+/** An award in the log: a word or two. */
+export function awardWord(a: string): string {
+  return AWARD_COUNTS.find(([k]) => k === a)?.[1] ?? '';
+}
+
+/**
+ * A race's ribbon in a line and its details: "Tuesday Triangle · Jolly
+ * boats · 2nd of 7"; then the course, a harbour or newcomers' race, a
+ * crew's skipper, how it ended and the awards: "Short triangle · a harbour
+ * race · aboard Tom's boat · the wooden spoon".
+ */
+export function ribbonLines(r: LogRibbon, boatName: string): [string, string] {
+  const result =
+    r.kind === 'trial'
+      ? r.medal !== undefined && r.medal !== ''
+        ? `a ${r.medal === 'harbourmaster' ? 'harbourmaster’s time' : `${r.medal} medal`}`
+        : 'a time trial'
+      : r.how === 'ret'
+        ? 'retired'
+        : r.place !== undefined && r.place > 0
+          ? placeOf(r.place, r.fleet)
+          : 'sailed';
+  const first = [r.name, boatsOf(boatName), result].filter((x) => x !== '').join(' · ');
+  const awards = r.awards.map(awardWord).filter((x) => x !== '');
+  const more = [
+    r.course,
+    r.harbour === true ? 'a harbour race' : '',
+    r.newcomers === true ? 'a newcomers’ race' : '',
+    r.role === 'crew'
+      ? `aboard ${r.skipper !== undefined ? `${personWords(r.skipper)}’s boat` : 'another’s boat'}`
+      : '',
+    r.how === 'placed' ? 'placed as the race ended' : '',
+    ...awards.map((a) => (a === 'wooden spoon' ? 'the wooden spoon: never gave up' : a)),
+  ].filter((x) => x !== '');
+  return [first.charAt(0).toUpperCase() + first.slice(1), more.join(' · ')];
 }

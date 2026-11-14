@@ -34,7 +34,9 @@ import {
   type LifeEncounter,
   type Light,
   type Place,
+  RaceCallKind,
   RaceSignalKind,
+  RacerState,
   ReportReason,
   WatchEnd,
   type Welcome,
@@ -60,7 +62,12 @@ import type {
   LightSeen,
   PastTold,
   PlaceSeen,
+  RaceCallIn,
+  RaceFinishIn,
+  RacePictureIn,
+  RaceResultsIn,
   RaceSignalIn,
+  RacerStateIn,
   RaceToldIn,
   ReportReasonTold,
   SeaAreas,
@@ -111,6 +118,26 @@ const SIGNALS: Record<number, RaceSignalIn['signal']> = {
   [RaceSignalKind.START]: 'start',
   [RaceSignalKind.RECALL]: 'recall',
   [RaceSignalKind.FINISH]: 'finish',
+};
+
+/** How a boat stands in its race, as the page names it. */
+const RACER_STATES: Record<number, RacerStateIn> = {
+  [RacerState.DNS]: 'dns',
+  [RacerState.PLACED]: 'placed',
+  [RacerState.RACING]: 'racing',
+  [RacerState.FINISHED]: 'finished',
+  [RacerState.RETIRED]: 'retired',
+  [RacerState.PLACED_AT_END]: 'placedAtEnd',
+};
+
+/** What a race's call tells, as the page names it. */
+const CALLS: Record<number, RaceCallIn['kind']> = {
+  [RaceCallKind.BUMP]: 'bump',
+  [RaceCallKind.OVER_EARLY]: 'overEarly',
+  [RaceCallKind.MISSED_MARK]: 'missedMark',
+  [RaceCallKind.DRIFTING]: 'drifting',
+  [RaceCallKind.RETIRED]: 'retired',
+  [RaceCallKind.ROUNDED]: 'rounded',
 };
 
 /** Why a watch ended, as the page names it. */
@@ -241,6 +268,11 @@ export type Received =
   /** A race under way told, or taken up; a signal from its committee boat. */
   | { kind: 'raceTold'; told: RaceToldIn }
   | { kind: 'raceSignal'; signal: RaceSignalIn }
+  /** A race's picture, a call, a boat home, its results. */
+  | { kind: 'racePicture'; picture: RacePictureIn }
+  | { kind: 'raceCall'; call: RaceCallIn }
+  | { kind: 'raceFinish'; finish: RaceFinishIn }
+  | { kind: 'raceResults'; results: RaceResultsIn }
   /** The addresses of chunks of the land, by number. */
   | { kind: 'chunks'; chunks: ChunksHanded }
   /** The places in chunks just handed. */
@@ -614,28 +646,9 @@ export class Session {
           forecast: forecastTold(m.body.value),
           past: pastTold(m.body.value.past),
         };
-      case 'raceTold': {
+      case 'raceTold':
         this.#lastHeard = now;
-        const v = m.body.value;
-        const point = (at: number) =>
-          v.line.length >= at + 2 ? { east: v.line[at] ?? 0, north: v.line[at + 1] ?? 0 } : null;
-        return {
-          kind: 'raceTold',
-          told: {
-            race: v.race,
-            boat: v.boat,
-            pin: point(0),
-            committee: point(2),
-            marks: v.marks.map((k) => ({
-              east: k.east,
-              north: k.north,
-              number: k.number,
-              side: k.side,
-            })),
-            gone: v.gone,
-          },
-        };
-      }
+        return { kind: 'raceTold', told: raceToldIn(m.body.value) };
       case 'raceSignal': {
         this.#lastHeard = now;
         const v = m.body.value;
@@ -645,17 +658,89 @@ export class Session {
             race: v.race,
             signal: SIGNALS[v.signal] ?? 'other',
             gun: v.gun,
+            number: v.number,
             place: v.place,
           },
         };
       }
-      case 'racePicture':
-      case 'raceCall':
-      case 'raceFinish':
-      case 'raceResults':
-        // The race's screens read these.
+      case 'racePicture': {
         this.#lastHeard = now;
-        return { kind: 'other' };
+        const v = m.body.value;
+        return {
+          kind: 'racePicture',
+          picture: {
+            race: v.race,
+            tick: Number(v.tick),
+            racers: v.racers.map((r) => ({
+              number: r.number,
+              east: r.east,
+              north: r.north,
+              heading: r.heading,
+              place: r.place,
+              gap: r.gap / 10,
+              added: r.added,
+              state: RACER_STATES[r.state] ?? 'other',
+              leg: r.leg,
+              toGo: r.toGo,
+              cheers: r.cheers,
+            })),
+          },
+        };
+      }
+      case 'raceCall': {
+        this.#lastHeard = now;
+        const v = m.body.value;
+        return {
+          kind: 'raceCall',
+          call: {
+            race: v.race,
+            kind: CALLS[v.kind] ?? 'other',
+            number: v.number,
+            other: v.other,
+            article: v.article,
+            mark: v.mark,
+            added: v.added,
+            place: v.place,
+          },
+        };
+      }
+      case 'raceFinish': {
+        this.#lastHeard = now;
+        const v = m.body.value;
+        return {
+          kind: 'raceFinish',
+          finish: {
+            race: v.race,
+            number: v.number,
+            place: v.place,
+            elapsedMs: v.elapsedMs,
+            added: v.added,
+          },
+        };
+      }
+      case 'raceResults': {
+        this.#lastHeard = now;
+        const v = m.body.value;
+        return {
+          kind: 'raceResults',
+          results: {
+            race: v.race,
+            code: v.code,
+            prizes: v.prizes,
+            results: v.results.map((r) => ({
+              number: r.number,
+              place: r.place,
+              how: r.how,
+              elapsedMs: r.elapsedMs,
+              added: r.added,
+              marks: r.marks,
+              toGo: r.toGo,
+              medal: r.medal,
+              awards: [...r.awards],
+            })),
+          },
+        };
+      }
       case 'bump': {
         this.#lastHeard = now;
         const v = m.body.value;
@@ -790,6 +875,13 @@ export class Session {
   giveBackCommand(now: number): Uint8Array<ArrayBuffer> {
     return this.#encode(now, {
       body: { case: 'command', value: { body: { case: 'giveBack', value: {} } } },
+    });
+  }
+
+  /** Retires the boat from the race it sails in. */
+  raceRetireCommand(now: number): Uint8Array<ArrayBuffer> {
+    return this.#encode(now, {
+      body: { case: 'command', value: { body: { case: 'raceRetire', value: {} } } },
     });
   }
 
@@ -1081,5 +1173,67 @@ export function courseOpen(c: CourseWire): CourseOpen {
       starboard: r.starboard,
     })),
     boats: c.boats.map((b) => ({ kind: b.kind, seconds: b.seconds })),
+  };
+}
+
+/** A race told, as the page has it. */
+export function raceToldIn(v: {
+  race: number;
+  code: string;
+  name: string;
+  boat: number;
+  trial: boolean;
+  run: number;
+  warning: bigint;
+  start: bigint;
+  line: number[];
+  finish: number[];
+  marks: { east: number; north: number; number: number; side: number }[];
+  way: number[];
+  legs: { mark: number; east: number; north: number }[];
+  east: number;
+  north: number;
+  reach: number;
+  laps: number;
+  expected: number;
+  entrants: { number: number; name: string; boat: string; machine: boolean; me: boolean }[];
+  gone: boolean;
+}): RaceToldIn {
+  const point = (xs: number[], at: number) =>
+    xs.length >= at + 2 ? { east: xs[at] ?? 0, north: xs[at + 1] ?? 0 } : null;
+  const fa = point(v.finish, 0);
+  const fb = point(v.finish, 2);
+  const way = [];
+  for (let i = 0; i + 1 < v.way.length; i += 2) {
+    way.push({ east: v.way[i] ?? 0, north: v.way[i + 1] ?? 0 });
+  }
+  return {
+    race: v.race,
+    code: v.code,
+    name: v.name,
+    boat: v.boat,
+    trial: v.trial,
+    run: v.run,
+    warning: Number(v.warning),
+    start: Number(v.start),
+    pin: point(v.line, 0),
+    committee: point(v.line, 2),
+    finish: fa !== null && fb !== null ? [fa, fb] : null,
+    marks: v.marks.map((k) => ({ east: k.east, north: k.north, number: k.number, side: k.side })),
+    way,
+    legs: v.legs.map((l) => ({ mark: l.mark, east: l.east, north: l.north })),
+    east: v.east,
+    north: v.north,
+    reach: v.reach,
+    laps: v.laps,
+    expected: v.expected,
+    entrants: v.entrants.map((e) => ({
+      number: e.number,
+      name: e.name,
+      boat: e.boat,
+      machine: e.machine,
+      me: e.me,
+    })),
+    gone: v.gone,
   };
 }

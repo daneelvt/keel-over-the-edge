@@ -893,3 +893,71 @@
     bottom: -6px;
   }
 }
+
+/* A race on the chart: its marks' numbers, its line, every boat's place,
+   and the tags of the boat watched and the leader: a bar of the boat's
+   colour, the name, the place. */
+.race-chart-mark,
+.race-chart-line,
+.race-chart-place,
+.race-chart-tag {
+  position: absolute;
+  top: 0;
+  left: 0;
+  color: var(--chart-ink);
+  font:
+    600 13px / 1.1 "Alegreya Sans",
+    system-ui,
+    sans-serif;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.race-chart-mark[hidden],
+.race-chart-line[hidden],
+.race-chart-place[hidden],
+.race-chart-tag[hidden] {
+  display: none;
+}
+
+.race-chart-mark {
+  translate: 7px -115%;
+  font-size: 15px;
+}
+
+.race-chart-line {
+  translate: -50% 35%;
+  font:
+    italic 12px / 1.1 "IM Fell English",
+    Georgia,
+    serif;
+}
+
+.race-chart-place {
+  translate: 7px -50%;
+  font-size: 12px;
+  text-shadow:
+    0 0 2px rgb(236 224 194),
+    0 0 2px rgb(236 224 194);
+}
+
+.race-chart-tag {
+  display: flex;
+  align-items: stretch;
+  gap: 5px;
+  translate: 9px -125%;
+  padding: 0 6px 0 0;
+  border: 1px solid var(--chart-ink);
+  border-radius: 3px;
+  background: rgb(236 224 194 / 94%);
+  line-height: 18px;
+}
+
+.race-chart-bar {
+  width: 5px;
+  background: var(--race-colour);
+}
+
+.race-chart-tag-place {
+  color: #7a5a1c;
+}

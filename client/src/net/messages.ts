@@ -121,28 +121,138 @@ export interface BumpTold {
   article: string;
 }
 
+/** A point of a race's course, m east and north of the world's centre. */
+export interface RacePoint {
+  east: number;
+  north: number;
+}
+
+/** A boat in a race as told: its race number, its skipper's name as the reader may see it ("" for one not named: their boat's name and number), its boat's name, whether a machine sailor's, whether the reader's own. */
+export interface RaceEntrantIn {
+  number: number;
+  name: string;
+  boat: string;
+  machine: boolean;
+  me: boolean;
+}
+
 /**
- * A race under way as the server tells it (its course laid, for the marks
- * in the sea): its number in the world; its boats' kind, an index into the
- * catalog's boats; the start line's ends, the pin's then the committee
- * boat's, m east and north; the marks laid, each left to a side (1
- * starboard, −1 port, 0 a gate's); or, gone, its course taken up.
+ * A race under way as the server tells it: its number in the world, its
+ * link's code and its name ("" until read); its boats' kind, an index into
+ * the catalog's boats; whether a time trial's run; its warning and start,
+ * world ticks (a trial's start 0 until its boat crosses); the start line's
+ * ends, the pin's then the committee boat's, and the finish line's; the
+ * marks laid, each left to a side (1 starboard, −1 port, 0 a gate's); the
+ * way sailed, start to finish; its legs, the points of the way a boat
+ * makes for in turn, each a mark's number (0 a line); where it lies and
+ * how far it reaches, m; its laps and its expected time, s; its boats; or,
+ * gone, its course taken up.
  */
 export interface RaceToldIn {
   race: number;
+  code: string;
+  name: string;
   boat: number;
-  pin: { east: number; north: number } | null;
-  committee: { east: number; north: number } | null;
+  trial: boolean;
+  run: number;
+  warning: number;
+  start: number;
+  pin: RacePoint | null;
+  committee: RacePoint | null;
+  finish: [RacePoint, RacePoint] | null;
   marks: { east: number; north: number; number: number; side: number }[];
+  way: RacePoint[];
+  legs: { mark: number; east: number; north: number }[];
+  east: number;
+  north: number;
+  reach: number;
+  laps: number;
+  expected: number;
+  entrants: RaceEntrantIn[];
   gone: boolean;
 }
 
-/** A signal from a race's committee boat: what it signals, and whether its gun fires. */
+/** A signal from a race's committee boat: what it signals, whether its gun fires, and a finish's boat and place. */
 export interface RaceSignalIn {
   race: number;
   signal: 'warning' | 'preparatory' | 'start' | 'recall' | 'finish' | 'other';
   gun: boolean;
+  number: number;
   place: number;
+}
+
+/** How a boat stands in its race. */
+export type RacerStateIn =
+  | 'dns'
+  | 'placed'
+  | 'racing'
+  | 'finished'
+  | 'retired'
+  | 'placedAtEnd'
+  | 'other';
+
+/** A boat in a race's picture: its number; where, m, and its heading, degrees; its place (0 none); its gap to the first, s; seconds added; its state; the leg it makes for; its way to go, m; its cheers. */
+export interface RacerAtIn {
+  number: number;
+  east: number;
+  north: number;
+  heading: number;
+  place: number;
+  gap: number;
+  added: number;
+  state: RacerStateIn;
+  leg: number;
+  toGo: number;
+  cheers: number;
+}
+
+/** A race as it stands, every two seconds: the world's tick it was taken at, and every boat. */
+export interface RacePictureIn {
+  race: number;
+  tick: number;
+  racers: RacerAtIn[];
+}
+
+/** What a race's committee saw: a bump (number at fault, other bumped, by article, added seconds), a boat over early, a mark missed, a boat asked if it races still, a boat retired, a mark rounded (in place). */
+export interface RaceCallIn {
+  race: number;
+  kind: 'bump' | 'overEarly' | 'missedMark' | 'drifting' | 'retired' | 'rounded' | 'other';
+  number: number;
+  other: number;
+  article: string;
+  mark: number;
+  added: number;
+  place: number;
+}
+
+/** A boat home: its place as it stands, its time from the start, ms, and the seconds added. */
+export interface RaceFinishIn {
+  race: number;
+  number: number;
+  place: number;
+  elapsedMs: number;
+  added: number;
+}
+
+/** What a boat came to: its place (0 none), how it ended (finished, placed, dns, ret), its time, ms (0 not home), seconds added, marks rounded, way still to go, m, a trial's medal and its awards. */
+export interface RaceResultIn {
+  number: number;
+  place: number;
+  how: string;
+  elapsedMs: number;
+  added: number;
+  marks: number;
+  toGo: number;
+  medal: string;
+  awards: string[];
+}
+
+/** A race's results as it ends, and whether its prizes were given. */
+export interface RaceResultsIn {
+  race: number;
+  code: string;
+  prizes: boolean;
+  results: RaceResultIn[];
 }
 
 /**
@@ -520,6 +630,8 @@ export type ToWorker =
   | { type: 'giveBack' }
   /** Go ashore (who 0), or, the skipper's, put the person in seat who ashore. */
   | { type: 'ashore'; who: number }
+  /** Retires the boat from the race it sails in. */
+  | { type: 'raceRetire' }
   /** Close the boat to knocks for this voyage, or open it again. */
   | { type: 'closeKnocks'; closed: boolean }
   /** Come aboard the own machine sailor watched, without knocking: knocking tells how it stands. */
@@ -669,6 +781,11 @@ export type FromWorker =
   /** A race told, or taken up; a signal from its committee boat. */
   | { type: 'raceTold'; told: RaceToldIn }
   | { type: 'raceSignal'; signal: RaceSignalIn }
+  /** A race's picture, a call, a boat home, its results. */
+  | { type: 'racePicture'; picture: RacePictureIn }
+  | { type: 'raceCall'; call: RaceCallIn }
+  | { type: 'raceFinish'; finish: RaceFinishIn }
+  | { type: 'raceResults'; results: RaceResultsIn }
   /** Chunks of the land the boat could see: their addresses to fetch. */
   | { type: 'chunks'; chunks: ChunksHanded }
   /** The places in chunks just handed. */

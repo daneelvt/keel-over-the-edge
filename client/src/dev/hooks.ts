@@ -62,7 +62,19 @@ import { PILOT_WIND } from '../input/pilot';
 import type { LifeBird } from '../life/draw';
 import type { GullTown } from '../life/gulls';
 import { nowUs, worldUs } from '../net/clock';
-import type { BumpTold, ChartEntry, ChartSubject, KnockStateTold, LifeSeen } from '../net/messages';
+import type {
+  BumpTold,
+  ChartEntry,
+  ChartSubject,
+  KnockStateTold,
+  LifeSeen,
+  RaceCallIn,
+  RaceFinishIn,
+  RacerAtIn,
+  RaceResultsIn,
+  RaceSignalIn,
+  RaceToldIn,
+} from '../net/messages';
 import type { Online } from '../net/online';
 import type { Cascade } from '../ocean/detail';
 import { FieldMaker, newFields } from '../ocean/field';
@@ -109,7 +121,8 @@ import { CREW_MOST } from '../render/sailors/fleetcrews';
 import { type ShipMember, ShipRules } from '../render/sailors/shiprules';
 import { CAMERA_PRESETS, type CameraView, type SeaScene } from '../render/scene';
 import { look } from '../render/sky';
-import { courseNear } from '../sandbox/coursescene';
+import { courseNear, raceNear } from '../sandbox/coursescene';
+import { raceSea } from '../boot/racesea';
 import { sandboxCrew } from '../sandbox/crewscene';
 import type { SandboxForecast } from '../sandbox/forecast';
 import { aboardScene, lifeScene, raiseScene } from '../sandbox/lifescene';
@@ -319,6 +332,15 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
     if (s !== null && noticesShown.at(-1) !== s.text) {
       noticesShown.push(s.text);
     }
+  });
+  // A race told as the server would tell it, laid in the sea and on the
+  // race line: the tests' stand-in for the race committee.
+  const seaRace = raceSea({
+    lay: (id, c) => world.race.lay(id, c),
+    drop: (id) => world.race.drop(id),
+    signals: (id, f) => world.race.signals(id, f),
+    fire: (id, loud) => game.fireGun(id, loud, true),
+    tick: () => world.ticks,
   });
   const chartParts = (): ChartParts => {
     if (sailing.chart === undefined) {
@@ -2073,6 +2095,118 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
     fireGun(id: number, loud = 1, inRace = true) {
       const fired = game.fireGun(id, loud, inRace);
       return { fired, report: game.lastGun, played: game.sound.guns };
+    },
+    /**
+     * Tells a race as the server would: the one given, or the sandbox's
+     * (the course laid near, its start two minutes on, the boats entered
+     * by name, the player's first), laid in the sea and on the race line.
+     */
+    raceTell(
+      t?: Partial<RaceToldIn>,
+      entrants?: { name: string; boat: string; machine?: boolean }[],
+    ): RaceToldIn {
+      const course = courseNear(
+        world.pose.east,
+        world.pose.north,
+        world.pose.heading,
+        world.wind.meanFrom,
+        [],
+      );
+      const told = {
+        ...raceNear(
+          course,
+          1,
+          catalog.boats.findIndex((b) => b.id === world.kind.id),
+          world.ticks,
+          entrants ?? [
+            { name: 'Mira', boat: 'Gull' },
+            { name: '', boat: 'Petrel' },
+            { name: 'Iron Mary', boat: 'Iron Mary', machine: true },
+          ],
+        ),
+        ...t,
+      };
+      seaRace.told(told);
+      chartParts().racing.tell(told);
+      return told;
+    },
+    /** A race's picture: its boats as given, each filled out. */
+    racePicture(racers: Partial<RacerAtIn>[], race = 1): void {
+      chartParts().racing.take({
+        race,
+        tick: world.ticks,
+        racers: racers.map((r, i) => ({
+          number: i + 1,
+          east: world.pose.east,
+          north: world.pose.north,
+          heading: 0,
+          place: 0,
+          gap: 0,
+          added: 0,
+          state: 'racing',
+          leg: 1,
+          toGo: 500,
+          cheers: 0,
+          ...r,
+        })),
+      });
+    },
+    /** A signal from the committee boat: its flags hoisted, its gun fired. */
+    raceSignal(s: Partial<RaceSignalIn>): void {
+      seaRace.signal({ race: 1, signal: 'start', gun: true, number: 0, place: 0, ...s });
+    },
+    /** A call of the committee's. */
+    raceCall(c: Partial<RaceCallIn>): void {
+      chartParts().racing.called({
+        race: 1,
+        kind: 'bump',
+        number: 1,
+        other: 2,
+        article: '10',
+        mark: 0,
+        added: 10,
+        place: 0,
+        ...c,
+      });
+    },
+    /** A boat home. */
+    raceFinish(f: Partial<RaceFinishIn>): void {
+      chartParts().racing.finished({
+        race: 1,
+        number: 1,
+        place: 1,
+        elapsedMs: 600_000,
+        added: 0,
+        ...f,
+      });
+    },
+    /** The race's results. */
+    raceResults(r: Partial<RaceResultsIn>): void {
+      chartParts().racing.results({ race: 1, code: 'abcdefghij', prizes: true, results: [], ...r });
+    },
+    /** The race over and its course taken up; with all, every race forgotten. */
+    raceGone(race = 1, all = false): void {
+      const t = chartParts().racing.known.get(race);
+      if (t !== undefined) {
+        seaRace.told({ ...t, gone: true });
+        chartParts().racing.tell({ ...t, gone: true });
+      }
+      if (all) {
+        seaRace.clear();
+        chartParts().racing.clear();
+      }
+    },
+    /** The race as the screen and the chart have it. */
+    racing() {
+      const r = chartParts().racing;
+      const view = chartParts().chart.view;
+      return {
+        told: r.told.value,
+        number: r.number(),
+        call: r.call.value,
+        tracks: [...r.tracks().entries()].map(([n, t]) => ({ number: n, points: t.length / 2 })),
+        chart: { ...view.race.drawn, shown: view.race.group.visible },
+      };
     },
     /** The race committee's things as drawn this frame, the beacons known, and the courses laid. */
     raceMarks() {

@@ -79,6 +79,10 @@ import type {
   LightSeen,
   PastTold,
   PlaceSeen,
+  RaceCallIn,
+  RaceFinishIn,
+  RacePictureIn,
+  RaceResultsIn,
   RaceSignalIn,
   RaceToldIn,
   ReportReasonTold,
@@ -232,6 +236,11 @@ export class Online {
   /** A race under way told or taken up, and its committee boat's signals. */
   onRaceTold: ((t: RaceToldIn) => void) | null = null;
   onRaceSignal: ((s: RaceSignalIn) => void) | null = null;
+  /** A race's picture, its calls, its boats home and its results. */
+  onRacePicture: ((p: RacePictureIn) => void) | null = null;
+  onRaceCall: ((c: RaceCallIn) => void) | null = null;
+  onRaceFinish: ((f: RaceFinishIn) => void) | null = null;
+  onRaceResults: ((r: RaceResultsIn) => void) | null = null;
   /** Told of a new boat lying within OPENING_RANGE of the harbour's mouth: where it lies and where the mouth is, m. */
   onOpening: ((east: number, north: number, mouthEast: number, mouthNorth: number) => void) | null =
     null;
@@ -393,6 +402,11 @@ export class Online {
   /** The skipper's: puts the person in seat ashore. */
   putAshore(seat: number): void {
     this.#port.postMessage({ type: 'ashore', who: seat });
+  }
+
+  /** Retires the boat from the race it sails in. */
+  raceRetire(): void {
+    this.#port.postMessage({ type: 'raceRetire' });
   }
 
   /** The skipper's: closes the boat to knocks for this voyage, or opens it. */
@@ -618,6 +632,18 @@ export class Online {
         break;
       case 'raceSignal':
         this.onRaceSignal?.(m.signal);
+        break;
+      case 'racePicture':
+        this.onRacePicture?.(m.picture);
+        break;
+      case 'raceCall':
+        this.onRaceCall?.(m.call);
+        break;
+      case 'raceFinish':
+        this.onRaceFinish?.(m.finish);
+        break;
+      case 'raceResults':
+        this.onRaceResults?.(m.results);
         break;
       case 'chunks':
         this.onChunks?.(m.chunks);

@@ -19,7 +19,7 @@
 // frames update the scene alone until the page lets them draw.
 
 import { signal } from '@preact/signals';
-import { type Color, type Vector2, Vector3, type Vector4 } from 'three';
+import { type Camera, type Color, type Vector2, Vector3, type Vector4 } from 'three';
 import { exp, float, fog, length, max, mix, positionView, positionWorld } from 'three/tsl';
 import type { WebGPURenderer } from 'three/webgpu';
 import { type Boat as BoatKind, catalog } from '../catalog';
@@ -63,7 +63,7 @@ import { GustRings } from './gustring';
 import { type BoatLantern, Lanterns, lanternLit, TOWN_LANTERNS } from './lanterns';
 import { Lightning } from './lightning';
 import { Lighthouses } from './lights';
-import { domeCentre } from './materials';
+import { domeCentre, domeDrop } from './materials';
 import { Overlays } from './overlays';
 import {
   Adaptive,
@@ -115,6 +115,8 @@ const END_LOOK = catalog.world.edge.end;
 const MIST_VEIL = 0.6;
 /** A tick of world time, µs. */
 const TICK_US = 1e6 / STEPS_PER_SECOND;
+/** How high over the sea a mark's tag stands, m: over its spar's flag. */
+const MARK_TAG_HEIGHT = 8;
 
 /** For this long after the scene starts, the windows adaptive quality judges are short: the first seconds are the benchmark. */
 const BENCHMARK = 6000;
@@ -297,6 +299,10 @@ export class SeaScene {
   cover: Cover | null = null;
   /** Called after each frame is placed (the panel's statistics, the tests). */
   onFrame: (() => void) | null = null;
+  /** A tag over a point of the sea, a race's next mark's number, while there is one; placed each frame where the camera sees it. */
+  markTagOf: (() => { east: number; north: number; text: string } | null) | null = null;
+  #markTag: HTMLElement | null = null;
+  readonly #tagAt = new Vector3();
   /** Called after each frame is drawn, with the main thread's work on it, ms. */
   onDrawn: ((work: number) => void) | null = null;
   /** Whether the camera rests behind the boat, at its resting view and distance. */
@@ -2030,8 +2036,34 @@ export class SeaScene {
       o.world.updateMatrixWorld();
       o.placeLabels(camera, view.width, view.height);
     }
+    this.#placeMarkTag(camera, view.width, view.height);
     this.#spray();
     this.onFrame?.();
+  }
+
+  /** The next mark's tag, over its spar, when the camera sees it; nothing when not. */
+  #placeMarkTag(camera: Camera, width: number, height: number): void {
+    const el = this.#markTag;
+    if (el === null) {
+      return;
+    }
+    const t = this.markTagOf?.() ?? null;
+    if (t === null) {
+      el.hidden = true;
+      return;
+    }
+    const ow = this.origin.world;
+    const d = Math.hypot(t.east - this.pose.east, t.north - this.pose.north);
+    // Over the spar's top, dropped by the dome as the sea is.
+    const v = this.#tagAt
+      .set(t.east - ow.x, MARK_TAG_HEIGHT - domeDrop(d), -(t.north - ow.y))
+      .project(camera);
+    const on = v.z < 1 && v.z > -1 && Math.abs(v.x) < 1 && Math.abs(v.y) < 1;
+    el.hidden = !on;
+    if (on) {
+      el.textContent = t.text;
+      el.style.transform = `translate(${(((v.x + 1) / 2) * width).toFixed(1)}px, ${(((1 - v.y) / 2) * height).toFixed(1)}px)`;
+    }
   }
 
   /** The player's boat as the dirty air and the right-of-way overlay want it. */
@@ -2050,6 +2082,16 @@ export class SeaScene {
   attachLabels(layer: HTMLElement | null): void {
     this.overlays.attachLabels(layer);
     this.rightOfWay.attachLabels(layer);
+    this.#markTag?.remove();
+    this.#markTag = null;
+    if (layer !== null) {
+      const el = document.createElement('span');
+      el.className = 'mark-tag';
+      el.dataset.readout = 'mark-tag';
+      el.hidden = true;
+      layer.append(el);
+      this.#markTag = el;
+    }
   }
 
   /** The boat as the gust rings want it: where, how it moves, and where the mean wind comes from. */
