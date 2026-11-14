@@ -47,7 +47,7 @@ func TestOdometer(t *testing.T) {
 	s := r.Slot
 	run := 0.0
 	// A course: a reach east, a turn to the south-east, a reach back west,
-	// each three minutes.
+	// each a minute.
 	for i, heading := range []float64{math.Pi / 2, 3 * math.Pi / 4, 3 * math.Pi / 2, math.Pi / 2} {
 		st := w.Latest().State[s]
 		st.Heading, st.SheetLimit = heading, 0.7
@@ -55,10 +55,10 @@ func TestOdometer(t *testing.T) {
 			st.Surge = 2
 		}
 		do(t, w, bus.Command{Op: bus.Place, Boat: r.Boat, State: st})
-		run += sailFor(w, s, 3*60*physics.StepsPerSecond)
+		run += sailFor(w, s, 60*physics.StepsPerSecond)
 	}
 	lg := w.Latest().Voyage[s].Log
-	if run < 500 {
+	if run < 150 {
 		t.Fatalf("the boat sailed only %.0f m", run)
 	}
 	if d := math.Abs(lg.Run-run) / run; d > 0.01 {
@@ -307,18 +307,22 @@ func TestNightAtSea(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(w.Close)
+	// Two minutes stand for the half hour, so the test sails minutes, not
+	// a night: the rule is the same.
+	defer func(n int32) { nightSeconds = n }(nightSeconds)
+	nightSeconds = 2 * 60
 	r := do(t, w, bus.Command{Op: bus.Join, Account: acct(1)})
-	for range 15 * 60 * physics.StepsPerSecond {
+	for range 60 * physics.StepsPerSecond {
 		w.Tick()
 	}
-	if lg := w.Latest().Voyage[r.Slot].Log; lg.Met&bus.MetNight != 0 || lg.Dark < 14*60 {
-		t.Fatalf("a quarter of an hour in the dark: %+v", lg)
+	if lg := w.Latest().Voyage[r.Slot].Log; lg.Met&bus.MetNight != 0 || lg.Dark < 55 {
+		t.Fatalf("half the time in the dark: %+v", lg)
 	}
-	for range 16 * 60 * physics.StepsPerSecond {
+	for range 65 * physics.StepsPerSecond {
 		w.Tick()
 	}
 	if lg := w.Latest().Voyage[r.Slot].Log; lg.Met&bus.MetNight == 0 {
-		t.Errorf("half an hour in the dark: %d seconds dark of %d", lg.Dark, lg.Seconds)
+		t.Errorf("the whole time in the dark: %d seconds dark of %d", lg.Dark, lg.Seconds)
 	}
 }
 
