@@ -32,7 +32,7 @@ import (
 
 // Version is the generator's version. Raise it whenever a change to the
 // generator or to the catalog's world values changes any seed's world.
-const Version = 7
+const Version = 8
 
 // Island is an island of a made world.
 type Island struct {
@@ -102,6 +102,10 @@ type Records struct {
 	// Features are its features, island by island. Their roofs and parts
 	// are in the chunks.
 	Features []Feature `json:"features,omitempty"`
+	// Areas are its racing areas off Port Royal, and Courses its island
+	// courses (courses.go): none in a world made before they were.
+	Areas   []Area   `json:"areas,omitempty"`
+	Courses []Course `json:"courses,omitempty"`
 	// Circulation is the way the world's water circulates round the disk:
 	// 1 clockwise seen from above, −1 the other way. It is drawn from the
 	// seed of the attempt made, and left out of the digest, so that a
@@ -264,6 +268,10 @@ func (c *config) generate(seed uint64) *Bundle {
 	lap("ruins")
 	b.Start = c.startPlaces(b.Ground, islands[0], b.Start, b.Towns)
 	lap("start")
+	var beacons []Place
+	b.Areas, b.Courses, beacons = c.coursesOf(b.Ground, islands, islandNames, b)
+	b.Places = append(b.Places, beacons...)
+	lap("courses")
 	b.Features, b.Parts = c.featureRecords(pw)
 	lap("sighting")
 
@@ -300,7 +308,7 @@ func (c *config) generate(seed uint64) *Bundle {
 	allNames := append(append([]string{}, islandNames...), groupNames...)
 	b.made = &world{islands: islands, names: allNames, groups: groups, ground: b.Ground, coarse: k, start: b.Start,
 		reach: pw.reach, hazards: hazards, places: b.Places, lights: b.Lights, pw: pw, lightWork: lights, towns: b.Towns,
-		buildings: b.Buildings, records: b}
+		buildings: b.Buildings, records: b, areas: b.Areas}
 	b.Report.Rules = c.validate(b.made)
 	lap("validate")
 	return b
@@ -405,7 +413,7 @@ func (b *Bundle) MainPort() *Island { return &b.Islands[0] }
 
 // stages are the generator's stages, as the report times them.
 var stages = []string{"layout", "islands", "raster", "hazards", "fetch", "start", "features", "places", "shelter", "names", "lights",
-	"placeNames", "towns", "ruins", "moorings", "sighting", "score", "validate"}
+	"placeNames", "towns", "ruins", "moorings", "courses", "sighting", "score", "validate"}
 
 // Generated reports how long making the world's last attempt took.
 func (b *Bundle) Generated() time.Duration {

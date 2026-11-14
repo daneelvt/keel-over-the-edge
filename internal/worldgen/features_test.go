@@ -592,6 +592,8 @@ func TestEachFeatureRuleFails(t *testing.T) {
 	}
 }
 
+// Seeds 1 to 8 pass on their first attempt, each with a racing area and
+// three island courses at least.
 func TestSeedsPassFirstTime(t *testing.T) {
 	if testing.Short() {
 		t.Skip("makes eight worlds")
@@ -603,6 +605,10 @@ func TestSeedsPassFirstTime(t *testing.T) {
 			b, err := Generate(seed, cat)
 			if err != nil || b.Attempts != 1 {
 				t.Errorf("seed %d: %d attempts, %v: %v", seed, b.Attempts, err, b.Report.Attempts)
+			}
+			// Each has a racing area at least, and island courses to race.
+			if len(b.Areas) < 1 || len(b.Courses) < 3 {
+				t.Errorf("seed %d: %d racing areas and %d island courses", seed, len(b.Areas), len(b.Courses))
 			}
 		})
 	}

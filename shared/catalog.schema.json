@@ -28,6 +28,7 @@
     "encounters": { "$ref": "#/$defs/Encounters" },
     "world": { "$ref": "#/$defs/World" },
     "notices": { "$ref": "#/$defs/Notices" },
+    "polars": { "$ref": "#/$defs/Polars" },
     "news": { "$ref": "#/$defs/News" },
     "life": { "$ref": "#/$defs/Life" }
   },
@@ -1304,7 +1305,8 @@
         "flora",
         "score",
         "chart",
-        "instruments"
+        "instruments",
+        "courses"
       ],
       "properties": {
         "disk": { "$ref": "#/$defs/WorldDisk" },
@@ -1359,7 +1361,8 @@
         "flora": { "$ref": "#/$defs/WorldFlora" },
         "score": { "$ref": "#/$defs/WorldScore" },
         "chart": { "$ref": "#/$defs/WorldChart" },
-        "instruments": { "$ref": "#/$defs/Instruments" }
+        "instruments": { "$ref": "#/$defs/Instruments" },
+        "courses": { "$ref": "#/$defs/WorldCourses" }
       }
     },
     "WorldChart": {
@@ -1637,7 +1640,7 @@
       "required": ["id", "of", "score"],
       "properties": {
         "id": { "$ref": "#/$defs/Id" },
-        "of": { "description": "What makes it: a great discovery first sighted; a record at the falls; a rare creature met; a crew in company; a sailor's first charting ever; the day's longest run; a milestone; any other charting.", "type": "string", "enum": ["great", "record", "life", "crew", "first", "run", "milestone", "charting"] },
+        "of": { "description": "What makes it: a great discovery first sighted; a record at the falls; a rare creature met; a crew in company; a sailor's first charting ever; the day's longest run; a milestone; any other charting; a course opened by charting.", "type": "string", "enum": ["great", "record", "life", "crew", "first", "run", "milestone", "charting", "course"] },
         "score": { "description": "How interesting it is: the edition shows the highest first.", "type": "integer", "minimum": 0, "maximum": 100 }
       }
     },
@@ -1817,7 +1820,8 @@
             "lagoon",
             "reef",
             "bar",
-            "wreck"
+            "wreck",
+            "beacon"
           ]
         },
         "count": {
@@ -1910,6 +1914,91 @@
           "minimum": 0,
           "maximum": 1
         }
+      }
+    },
+    "WorldCourses": {
+      "title": "WorldCourses",
+      "description": "Courses for races, made with the world: racing areas off Port Royal and island courses, and the checks a course passes.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["areas", "margin", "depth", "mist", "site", "reach", "near", "tour", "ports", "beacon", "beacons", "minutes", "narrows", "step", "beat", "beatLeg", "set", "lengths"],
+      "properties": {
+        "areas": { "$ref": "#/$defs/CourseAreas" },
+        "margin": { "description": "How far a course's way keeps from land and shoal water, m.", "type": "number", "minimum": 0, "maximum": 500 },
+        "depth": { "description": "Water under the deepest boat's keel along a way, m.", "type": "number", "minimum": 0, "maximum": 10 },
+        "mist": { "description": "No way runs further from the centre, nautical miles.", "type": "number", "minimum": 1, "maximum": 4.5 },
+        "site": { "$ref": "#/$defs/CourseSite" },
+        "reach": { "description": "The islands a course rounds lie within this of its site, nautical miles.", "type": "number", "minimum": 0.5, "maximum": 9 },
+        "near": { "description": "How many of the nearest islands a site rounds one at a time.", "type": "integer", "minimum": 1, "maximum": 100 },
+        "tour": { "description": "A tour's islands lie within this of each other, nautical miles.", "type": "number", "minimum": 0, "maximum": 9 },
+        "ports": { "description": "How many of the nearest other ports a site runs to.", "type": "integer", "minimum": 0, "maximum": 20 },
+        "beacon": { "description": "A reef or bar within this of a way gets a beacon, m.", "type": "number", "minimum": 0, "maximum": 2000 },
+        "beacons": { "description": "The most beacons a course may need.", "type": "integer", "minimum": 0, "maximum": 20 },
+        "minutes": { "description": "A boat is offered a course whose expected time in the typical wind is within these, minutes.", "type": "array", "minItems": 2, "maxItems": 2, "items": { "type": "number", "minimum": 1, "maximum": 600 } },
+        "narrows": { "description": "Every narrows on a way is at least this many of a boat's lengths wide for it to be offered the course.", "type": "number", "minimum": 0, "maximum": 100 },
+        "step": { "description": "How often the narrows are sampled along a way, m.", "type": "number", "minimum": 4, "maximum": 500 },
+        "beat": { "description": "Of the sixteen winds, how many give the way a leg to beat up.", "type": "integer", "minimum": 0, "maximum": 16 },
+        "beatLeg": { "description": "The least leg that counts as a beat, m.", "type": "number", "minimum": 0, "maximum": 5000 },
+        "set": { "description": "How many island courses a world has, the least it aims for and the most.", "type": "array", "minItems": 2, "maxItems": 2, "items": { "type": "integer", "minimum": 0, "maximum": 100 } },
+        "lengths": { "description": "A course from Port Royal is short below the first and long from the second, by the Jolly boat's expected minutes.", "type": "array", "minItems": 2, "maxItems": 2, "items": { "type": "number", "minimum": 1, "maximum": 600 } }
+      }
+    },
+    "CourseAreas": {
+      "title": "CourseAreas",
+      "description": "Racing areas: circles of open water off Port Royal where a buoy course is laid to the wind.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["within", "radius", "most", "apart", "margin", "mouth", "fan", "longest", "step", "turn"],
+      "properties": {
+        "within": { "description": "Every part of an area lies within this of Port Royal's centre, nautical miles.", "type": "number", "minimum": 0.1, "maximum": 4 },
+        "radius": { "description": "An area's radius, m.", "type": "number", "minimum": 50, "maximum": 2000 },
+        "most": { "description": "The most areas a world has.", "type": "integer", "minimum": 1, "maximum": 16 },
+        "apart": { "description": "Areas' centres lie at least this far apart, m.", "type": "number", "minimum": 0, "maximum": 5000 },
+        "margin": { "description": "An area keeps this far from land and shoal water, m.", "type": "number", "minimum": 0, "maximum": 500 },
+        "mouth": { "description": "An area keeps this far from Port Royal's harbour mouth, m.", "type": "number", "minimum": 0, "maximum": 2000 },
+        "fan": { "description": "An area keeps this far from the start's fan, m.", "type": "number", "minimum": 0, "maximum": 2000 },
+        "longest": { "description": "Boats no longer than this race in the areas; their water is deep enough for each, m.", "type": "number", "minimum": 1, "maximum": 100 },
+        "step": { "description": "Candidates every this far out, m.", "type": "number", "minimum": 5, "maximum": 500 },
+        "turn": { "description": "Candidates every this many degrees round.", "type": "number", "minimum": 1, "maximum": 90 }
+      }
+    },
+    "CourseSite": {
+      "title": "CourseSite",
+      "description": "Where an island course's start and finish lie off a port.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["from", "to", "turn", "room", "fan"],
+      "properties": {
+        "from": { "description": "The nearest a site is to its port's waterfront, m.", "type": "number", "minimum": 0, "maximum": 5000 },
+        "to": { "description": "The furthest, m.", "type": "number", "minimum": 0, "maximum": 5000 },
+        "turn": { "description": "How far off its port's way out a site may lie, degrees.", "type": "number", "minimum": 0, "maximum": 180 },
+        "room": { "description": "Clear water round a site, m: room for the line and the start behind it.", "type": "number", "minimum": 0, "maximum": 2000 },
+        "fan": { "description": "A site keeps this far from the start's fan, m.", "type": "number", "minimum": 0, "maximum": 2000 }
+      }
+    },
+    "Polars": {
+      "title": "Polars",
+      "description": "The boats' polars: each boat's steady speed in flat water by the true wind's speed and angle, written by tools/polar.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["winds", "angles", "boats"],
+      "properties": {
+        "winds": { "description": "The true winds, knots 10 m up, evenly spaced, ascending.", "type": "array", "minItems": 2, "items": { "type": "number", "minimum": 0, "maximum": 100 } },
+        "angles": { "description": "The angles off the true wind, degrees, evenly spaced, ascending.", "type": "array", "minItems": 2, "items": { "type": "number", "minimum": 0, "maximum": 180 } },
+        "boats": { "type": "array", "items": { "$ref": "#/$defs/BoatPolar" } }
+      }
+    },
+    "BoatPolar": {
+      "title": "BoatPolar",
+      "description": "One boat's polar.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["boat", "speed", "up", "down"],
+      "properties": {
+        "boat": { "description": "The boat's id.", "type": "string", "minLength": 1 },
+        "speed": { "description": "Her speed through the water, knots: a row for each wind, a column for each angle, 0 where she cannot sail.", "type": "array", "items": { "type": "array", "items": { "type": "number", "minimum": 0, "maximum": 100 } } },
+        "up": { "description": "For each wind, her best angle up the wind, degrees, and the speed she makes good toward it there, knots.", "type": "array", "items": { "type": "array", "minItems": 2, "maxItems": 2, "items": { "type": "number", "minimum": 0, "maximum": 180 } } },
+        "down": { "description": "For each wind, her best angle down the wind, degrees, and the speed she makes good away from it, knots.", "type": "array", "items": { "type": "array", "minItems": 2, "maxItems": 2, "items": { "type": "number", "minimum": 0, "maximum": 180 } } }
       }
     },
     "WorldPlaces": {

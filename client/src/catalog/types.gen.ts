@@ -220,6 +220,7 @@ export interface Catalog {
   encounters: Encounters;
   world: World;
   notices: Notices;
+  polars?: Polars;
   news: News;
   life: Life;
 }
@@ -4509,6 +4510,7 @@ export interface World {
   score: WorldScore;
   chart: WorldChart;
   instruments: Instruments;
+  courses: WorldCourses;
 }
 /**
  * The disk.
@@ -5896,7 +5898,7 @@ export interface PlaceKind {
   /**
    * The rule its sites are found by.
    */
-  site: "harbour" | "village" | "light" | "anchorage" | "cove" | "lagoon" | "reef" | "bar" | "wreck";
+  site: "harbour" | "village" | "light" | "anchorage" | "cove" | "lagoon" | "reef" | "bar" | "wreck" | "beacon";
   /**
    * How many a world has, the least and the most.
    *
@@ -8365,6 +8367,165 @@ export interface Barometer {
       ];
 }
 /**
+ * Courses for races, made with the world: racing areas off Port Royal and island courses, and the checks a course passes.
+ *
+ * This interface was referenced by `Catalog`'s JSON-Schema
+ * via the `definition` "WorldCourses".
+ */
+export interface WorldCourses {
+  areas: CourseAreas;
+  /**
+   * How far a course's way keeps from land and shoal water, m.
+   */
+  margin: number;
+  /**
+   * Water under the deepest boat's keel along a way, m.
+   */
+  depth: number;
+  /**
+   * No way runs further from the centre, nautical miles.
+   */
+  mist: number;
+  site: CourseSite;
+  /**
+   * The islands a course rounds lie within this of its site, nautical miles.
+   */
+  reach: number;
+  /**
+   * How many of the nearest islands a site rounds one at a time.
+   */
+  near: number;
+  /**
+   * A tour's islands lie within this of each other, nautical miles.
+   */
+  tour: number;
+  /**
+   * How many of the nearest other ports a site runs to.
+   */
+  ports: number;
+  /**
+   * A reef or bar within this of a way gets a beacon, m.
+   */
+  beacon: number;
+  /**
+   * The most beacons a course may need.
+   */
+  beacons: number;
+  /**
+   * A boat is offered a course whose expected time in the typical wind is within these, minutes.
+   *
+   * @minItems 2
+   * @maxItems 2
+   */
+  minutes: [number, number];
+  /**
+   * Every narrows on a way is at least this many of a boat's lengths wide for it to be offered the course.
+   */
+  narrows: number;
+  /**
+   * How often the narrows are sampled along a way, m.
+   */
+  step: number;
+  /**
+   * Of the sixteen winds, how many give the way a leg to beat up.
+   */
+  beat: number;
+  /**
+   * The least leg that counts as a beat, m.
+   */
+  beatLeg: number;
+  /**
+   * How many island courses a world has, the least it aims for and the most.
+   *
+   * @minItems 2
+   * @maxItems 2
+   */
+  set: [number, number];
+  /**
+   * A course from Port Royal is short below the first and long from the second, by the Jolly boat's expected minutes.
+   *
+   * @minItems 2
+   * @maxItems 2
+   */
+  lengths: [number, number];
+}
+/**
+ * Racing areas: circles of open water off Port Royal where a buoy course is laid to the wind.
+ *
+ * This interface was referenced by `Catalog`'s JSON-Schema
+ * via the `definition` "CourseAreas".
+ */
+export interface CourseAreas {
+  /**
+   * Every part of an area lies within this of Port Royal's centre, nautical miles.
+   */
+  within: number;
+  /**
+   * An area's radius, m.
+   */
+  radius: number;
+  /**
+   * The most areas a world has.
+   */
+  most: number;
+  /**
+   * Areas' centres lie at least this far apart, m.
+   */
+  apart: number;
+  /**
+   * An area keeps this far from land and shoal water, m.
+   */
+  margin: number;
+  /**
+   * An area keeps this far from Port Royal's harbour mouth, m.
+   */
+  mouth: number;
+  /**
+   * An area keeps this far from the start's fan, m.
+   */
+  fan: number;
+  /**
+   * Boats no longer than this race in the areas; their water is deep enough for each, m.
+   */
+  longest: number;
+  /**
+   * Candidates every this far out, m.
+   */
+  step: number;
+  /**
+   * Candidates every this many degrees round.
+   */
+  turn: number;
+}
+/**
+ * Where an island course's start and finish lie off a port.
+ *
+ * This interface was referenced by `Catalog`'s JSON-Schema
+ * via the `definition` "CourseSite".
+ */
+export interface CourseSite {
+  /**
+   * The nearest a site is to its port's waterfront, m.
+   */
+  from: number;
+  /**
+   * The furthest, m.
+   */
+  to: number;
+  /**
+   * How far off its port's way out a site may lie, degrees.
+   */
+  turn: number;
+  /**
+   * Clear water round a site, m: room for the line and the start behind it.
+   */
+  room: number;
+  /**
+   * A site keeps this far from the start's fan, m.
+   */
+  fan: number;
+}
+/**
  * The notices that pop up: one at a time, the rest queued, the same kind folded.
  *
  * This interface was referenced by `Catalog`'s JSON-Schema
@@ -8423,6 +8584,51 @@ export interface NoticeKind {
    * Its words for several at once: {count} is filled in.
    */
   folded: string;
+}
+/**
+ * The boats' polars: each boat's steady speed in flat water by the true wind's speed and angle, written by tools/polar.
+ *
+ * This interface was referenced by `Catalog`'s JSON-Schema
+ * via the `definition` "Polars".
+ */
+export interface Polars {
+  /**
+   * The true winds, knots 10 m up, evenly spaced, ascending.
+   *
+   * @minItems 2
+   */
+  winds: [number, number, ...number[]];
+  /**
+   * The angles off the true wind, degrees, evenly spaced, ascending.
+   *
+   * @minItems 2
+   */
+  angles: [number, number, ...number[]];
+  boats: BoatPolar[];
+}
+/**
+ * One boat's polar.
+ *
+ * This interface was referenced by `Catalog`'s JSON-Schema
+ * via the `definition` "BoatPolar".
+ */
+export interface BoatPolar {
+  /**
+   * The boat's id.
+   */
+  boat: string;
+  /**
+   * Her speed through the water, knots: a row for each wind, a column for each angle, 0 where she cannot sail.
+   */
+  speed: number[][];
+  /**
+   * For each wind, her best angle up the wind, degrees, and the speed she makes good toward it there, knots.
+   */
+  up: [number, number][];
+  /**
+   * For each wind, her best angle down the wind, degrees, and the speed she makes good away from it, knots.
+   */
+  down: [number, number][];
 }
 /**
  * The news: a daily edition of chosen stories, its columns, and the kinds of story with their scores.
@@ -8538,9 +8744,9 @@ export interface NewsMilestones {
 export interface NewsStory {
   id: Id;
   /**
-   * What makes it: a great discovery first sighted; a record at the falls; a rare creature met; a crew in company; a sailor's first charting ever; the day's longest run; a milestone; any other charting.
+   * What makes it: a great discovery first sighted; a record at the falls; a rare creature met; a crew in company; a sailor's first charting ever; the day's longest run; a milestone; any other charting; a course opened by charting.
    */
-  of: "great" | "record" | "life" | "crew" | "first" | "run" | "milestone" | "charting";
+  of: "great" | "record" | "life" | "crew" | "first" | "run" | "milestone" | "charting" | "course";
   /**
    * How interesting it is: the edition shows the highest first.
    */
@@ -9001,4 +9207,4 @@ export interface LifeGlow {
 }
 
 /** The catalog version (tools/catalog). */
-export const CATALOG_VERSION = '175e021136f1ccf9';
+export const CATALOG_VERSION = '8ea076afc994dc37';

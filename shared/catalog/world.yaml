@@ -555,7 +555,10 @@ world:
   # the world page marks it with; worth what charting one is worth; water
   # for a place seen by looking into it, awash for one seen by the water
   # breaking on it (world.chart.sight); news for one whose charting is an
-  # item of the news of its own, not folded into its island's.
+  # item of the news of its own, not folded into its island's. A beacon, a
+  # spar with a topmark at the seaward end of a reef or bar an island
+  # course passes, is set by the courses (world.courses) and charted with
+  # what it marks.
   places:
     kinds:
       - { id: port, name: Port, site: harbour, count: [5, 5], mark: "#b3261e", worth: 5, news: true }
@@ -567,6 +570,7 @@ world:
       - { id: reef, name: Reef, site: reef, count: [4, 80], mark: "#c2563a", worth: 1, awash: true }
       - { id: sandbar, name: Sandbar, site: bar, count: [3, 80], mark: "#c9a227", worth: 1, awash: true }
       - { id: wreck, name: Wreck, site: wreck, count: [8, 8], mark: "#5a4632", worth: 3, news: true }
+      - { id: beacon, name: Beacon, site: beacon, count: [0, 60], mark: "#e4e4dc", worth: 0 }
     # A port: on a landmark island, at the stretch of its coast with the
     # least fetch over the 16 directions where water depth m deep lies
     # within within m of the shore; reachable from the start; not in the
@@ -917,6 +921,56 @@ world:
     # Lanterns ashore are lit as boats' are, by the sun at the town: on the
     # posts, by the doors, and in the windows, a share of each house's.
     lit: { windows: 0.6, near: 300, props: 120 }
+
+  # Courses for races, made with the world. Racing areas: circles of open
+  # water off Port Royal where a buoy course is laid to the wind as each
+  # race begins, every part of each within within nautical miles of Port
+  # Royal's centre, radius m across the middle (the Jolly boat's long
+  # windward leg, about 300 m, and 150 m), at most most of them, their
+  # centres apart m from each other, clear of land and shoal water by
+  # margin, of the harbour's mouth by mouth m and of the start's fan by fan
+  # m; their water deep enough for every boat no longer than longest m (a
+  # tall ship races island courses only); candidates every step m out and
+  # every turn degrees round.
+  #
+  # Island courses: from a site off a port, round islands to a side, or to
+  # another port, by the shortest way a boat can sail on the coarse grid,
+  # margin m clear of land and of water shallower than the deepest boat's
+  # draught and depth m, never beyond mist nautical miles from the centre.
+  # A site lies seaward of its port along the way out, from site.from to
+  # site.to m off its waterfront, within site.turn degrees of it, with
+  # site.room m of clear water round it and the start's fan site.fan m off.
+  # A course rounds islands within reach nautical miles of its site, at most
+  # near of the nearest for a course round one, tours two or three islands
+  # within tour nautical miles of each other, and runs to the nearest ports
+  # other ports; a reef or bar within beacon m of its way that is no part of
+  # what it rounds gets a beacon at its seaward end, and a course needing
+  # more than beacons is dropped. A boat is offered a course if its expected
+  # time in the typical wind is within minutes, if every narrows on the way
+  # is narrows of its lengths wide (sampled every step m), and if in at
+  # least beat of the sixteen winds the way has a leg of beatLeg m or more
+  # to beat up. The set: set courses, the least and the most, at least one
+  # of each length from Port Royal (short, middle and long by the Jolly
+  # boat's minutes, split at lengths).
+  courses:
+    areas: { within: 1, radius: 450, most: 4, apart: 800, margin: 60, mouth: 250, fan: 60, longest: 15, step: 50, turn: 10 }
+    margin: 60 # m
+    depth: 1 # m
+    mist: 4 # nautical miles
+    site: { from: 150, to: 1800, turn: 60, room: 160, fan: 60 }
+    reach: 3 # nautical miles
+    near: 8
+    tour: 1.2 # nautical miles
+    ports: 2
+    beacon: 300 # m
+    beacons: 3
+    minutes: [20, 60]
+    narrows: 10
+    step: 32 # m
+    beat: 10
+    beatLeg: 200 # m
+    set: [8, 12]
+    lengths: [30, 45] # minutes
 
   # The rules a world must pass; one that fails is made again from the next
   # seed, at most attempts times.

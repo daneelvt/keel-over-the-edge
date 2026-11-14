@@ -71,7 +71,8 @@ const (
 	ByWater
 	// Awash: within Reach, by the water breaking on it.
 	Awash
-	// Hidden: seen from no water; charted with its island.
+	// Hidden: seen from no water; charted with its island, or with the
+	// subject its With names.
 	Hidden
 	// ByLight: a lighthouse whose light alone is looked for, its tower too
 	// low or hidden to be seen by day from any water.
@@ -93,6 +94,10 @@ type Subject struct {
 	// more than the horizon).
 	Seen  uint8
 	Reach float64
+	// With is, for a hidden subject charted with another than its island
+	// (a beacon with the reef it marks), that subject's index and one; 0
+	// for its island.
+	With int32
 }
 
 // Cell is a cell of an island's land: where it is, how high its highest
@@ -488,8 +493,12 @@ func Build(in *Input) *Table {
 			t.awash = append(t.awash, awash{x: s.X, y: s.Y, reach: s.Reach, subject: int32(i)})
 			t.reachMost = max(t.reachMost, s.Reach)
 		case Hidden:
-			if s.Island >= 0 {
-				t.with[s.Island] = append(t.with[s.Island], int32(i))
+			to := s.Island
+			if s.With > 0 {
+				to = s.With - 1
+			}
+			if to >= 0 {
+				t.with[to] = append(t.with[to], int32(i))
 			}
 		}
 	}

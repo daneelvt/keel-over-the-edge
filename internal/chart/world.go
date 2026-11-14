@@ -272,6 +272,12 @@ func Build(b *worldgen.Bundle, cat *catalog.Catalog) *World {
 		if s.Seen == sight.ByView && s.Top <= 0 {
 			s.Seen, s.Reach = sight.Awash, cs.Sight.Awash
 		}
+		// A beacon is charted with the reef or bar it marks.
+		if kind.Site == catalog.SiteBeacon {
+			if marks, ok := w.byPlace[p.Details.Marks]; ok {
+				s.Seen, s.Reach, s.With = sight.Hidden, 0, marks+1
+			}
+		}
 		w.byPlace[p.Number] = int32(len(w.Subjects))
 		w.Subjects = append(w.Subjects, s)
 	}

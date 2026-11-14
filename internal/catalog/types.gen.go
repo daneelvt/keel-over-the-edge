@@ -333,6 +333,24 @@ type BoatPhysics struct {
 // A point on a boat, in m in its model's frame: x to starboard, y up, z aft.
 type BoatPoint []float64
 
+// One boat's polar.
+type BoatPolar struct {
+	// The boat's id.
+	Boat string `json:"boat"`
+
+	// For each wind, her best angle down the wind, degrees, and the speed she makes
+	// good away from it, knots.
+	Down [][]float64 `json:"down"`
+
+	// Her speed through the water, knots: a row for each wind, a column for each
+	// angle, 0 where she cannot sail.
+	Speed [][]float64 `json:"speed"`
+
+	// For each wind, her best angle up the wind, degrees, and the speed she makes
+	// good toward it there, knots.
+	Up [][]float64 `json:"up"`
+}
+
 // A place aboard where a person is drawn: standing on the deck, seated as a
 // dinghy's helmsman sits on the side deck (on a ship, sat on a hatch), hiking out
 // on its rail, sat on a keelboat's rail with the legs over the side, leaning on a
@@ -464,6 +482,9 @@ type Catalog struct {
 
 	// Notices corresponds to the JSON schema field "notices".
 	Notices Notices `json:"notices"`
+
+	// Polars corresponds to the JSON schema field "polars".
+	Polars *Polars `json:"polars,omitempty,omitzero"`
 
 	// SailorOptions corresponds to the JSON schema field "sailorOptions".
 	SailorOptions SailorOptions `json:"sailorOptions"`
@@ -734,6 +755,59 @@ type ConeShape struct {
 
 	// Its height.
 	Height float64 `json:"height"`
+}
+
+// Racing areas: circles of open water off Port Royal where a buoy course is laid
+// to the wind.
+type CourseAreas struct {
+	// Areas' centres lie at least this far apart, m.
+	Apart float64 `json:"apart"`
+
+	// An area keeps this far from the start's fan, m.
+	Fan float64 `json:"fan"`
+
+	// Boats no longer than this race in the areas; their water is deep enough for
+	// each, m.
+	Longest float64 `json:"longest"`
+
+	// An area keeps this far from land and shoal water, m.
+	Margin float64 `json:"margin"`
+
+	// The most areas a world has.
+	Most int `json:"most"`
+
+	// An area keeps this far from Port Royal's harbour mouth, m.
+	Mouth float64 `json:"mouth"`
+
+	// An area's radius, m.
+	Radius float64 `json:"radius"`
+
+	// Candidates every this far out, m.
+	Step float64 `json:"step"`
+
+	// Candidates every this many degrees round.
+	Turn float64 `json:"turn"`
+
+	// Every part of an area lies within this of Port Royal's centre, nautical miles.
+	Within float64 `json:"within"`
+}
+
+// Where an island course's start and finish lie off a port.
+type CourseSite struct {
+	// A site keeps this far from the start's fan, m.
+	Fan float64 `json:"fan"`
+
+	// The nearest a site is to its port's waterfront, m.
+	From float64 `json:"from"`
+
+	// Clear water round a site, m: room for the line and the start behind it.
+	Room float64 `json:"room"`
+
+	// The furthest, m.
+	To float64 `json:"to"`
+
+	// How far off its port's way out a site may lie, degrees.
+	Turn float64 `json:"turn"`
 }
 
 // The water pouring over the lip.
@@ -2057,7 +2131,7 @@ type NewsStory struct {
 
 	// What makes it: a great discovery first sighted; a record at the falls; a rare
 	// creature met; a crew in company; a sailor's first charting ever; the day's
-	// longest run; a milestone; any other charting.
+	// longest run; a milestone; any other charting; a course opened by charting.
 	Of NewsStoryOf `json:"of"`
 
 	// How interesting it is: the edition shows the highest first.
@@ -2067,6 +2141,7 @@ type NewsStory struct {
 type NewsStoryOf string
 
 const NewsStoryOfCharting NewsStoryOf = "charting"
+const NewsStoryOfCourse NewsStoryOf = "course"
 const NewsStoryOfCrew NewsStoryOf = "crew"
 const NewsStoryOfFirst NewsStoryOf = "first"
 const NewsStoryOfGreat NewsStoryOf = "great"
@@ -3114,6 +3189,19 @@ type PlantKind struct {
 	Trunk Colour `json:"trunk"`
 }
 
+// The boats' polars: each boat's steady speed in flat water by the true wind's
+// speed and angle, written by tools/polar.
+type Polars struct {
+	// The angles off the true wind, degrees, evenly spaced, ascending.
+	Angles []float64 `json:"angles"`
+
+	// Boats corresponds to the JSON schema field "boats".
+	Boats []BoatPolar `json:"boats"`
+
+	// The true winds, knots 10 m up, evenly spaced, ascending.
+	Winds []float64 `json:"winds"`
+}
+
 // Its harbour: a basin entered through a narrows, carved into the island.
 type PortHarbour struct {
 	// The basin's width, the least and the most, in m.
@@ -3496,6 +3584,7 @@ type Site string
 
 const SiteAnchorage Site = "anchorage"
 const SiteBar Site = "bar"
+const SiteBeacon Site = "beacon"
 const SiteCove Site = "cove"
 const SiteHarbour Site = "harbour"
 const SiteLagoon Site = "lagoon"
@@ -4872,6 +4961,9 @@ type World struct {
 	// Chart corresponds to the JSON schema field "chart".
 	Chart WorldChart `json:"chart"`
 
+	// Courses corresponds to the JSON schema field "courses".
+	Courses WorldCourses `json:"courses"`
+
 	// Disk corresponds to the JSON schema field "disk".
 	Disk WorldDisk `json:"disk"`
 
@@ -4971,6 +5063,67 @@ type WorldChart struct {
 
 	// Worth corresponds to the JSON schema field "worth".
 	Worth ChartWorth `json:"worth"`
+}
+
+// Courses for races, made with the world: racing areas off Port Royal and island
+// courses, and the checks a course passes.
+type WorldCourses struct {
+	// Areas corresponds to the JSON schema field "areas".
+	Areas CourseAreas `json:"areas"`
+
+	// A reef or bar within this of a way gets a beacon, m.
+	Beacon float64 `json:"beacon"`
+
+	// The most beacons a course may need.
+	Beacons int `json:"beacons"`
+
+	// Of the sixteen winds, how many give the way a leg to beat up.
+	Beat int `json:"beat"`
+
+	// The least leg that counts as a beat, m.
+	BeatLeg float64 `json:"beatLeg"`
+
+	// Water under the deepest boat's keel along a way, m.
+	Depth float64 `json:"depth"`
+
+	// A course from Port Royal is short below the first and long from the second, by
+	// the Jolly boat's expected minutes.
+	Lengths []float64 `json:"lengths"`
+
+	// How far a course's way keeps from land and shoal water, m.
+	Margin float64 `json:"margin"`
+
+	// A boat is offered a course whose expected time in the typical wind is within
+	// these, minutes.
+	Minutes []float64 `json:"minutes"`
+
+	// No way runs further from the centre, nautical miles.
+	Mist float64 `json:"mist"`
+
+	// Every narrows on a way is at least this many of a boat's lengths wide for it to
+	// be offered the course.
+	Narrows float64 `json:"narrows"`
+
+	// How many of the nearest islands a site rounds one at a time.
+	Near int `json:"near"`
+
+	// How many of the nearest other ports a site runs to.
+	Ports int `json:"ports"`
+
+	// The islands a course rounds lie within this of its site, nautical miles.
+	Reach float64 `json:"reach"`
+
+	// How many island courses a world has, the least it aims for and the most.
+	Set []int `json:"set"`
+
+	// Site corresponds to the JSON schema field "site".
+	Site CourseSite `json:"site"`
+
+	// How often the narrows are sampled along a way, m.
+	Step float64 `json:"step"`
+
+	// A tour's islands lie within this of each other, nautical miles.
+	Tour float64 `json:"tour"`
 }
 
 // The disk.
@@ -5640,4 +5793,4 @@ type WorldZones struct {
 }
 
 // Version is the catalog version (tools/catalog).
-const Version = "175e021136f1ccf9"
+const Version = "8ea076afc994dc37"

@@ -114,3 +114,4 @@ news:
     - { id: longest-run, of: run, score: 4 }
     - { id: milestone, of: milestone, score: 4 }
     - { id: lesser-find, of: charting, score: 1 }
+    - { id: new-course, of: course, score: 5 }
