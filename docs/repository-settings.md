@@ -37,9 +37,10 @@ credential.
 - [ ] No classic personal access tokens; any token fine-grained, for this
       repository only, short-lived
 - [ ] Installed apps: Renovate, and the contributor agreement's own App
-      (**Keel Over the Edge contributor agreement**, infra/MANUAL-STEPS.md
+      (**Keel Over the Edge CLA**, App ID 5756060, infra/MANUAL-STEPS.md
       section 15), each on this repository only; no deploy keys, no
-      webhooks but the App's own
+      webhooks but the App's own. The App is public, so that anyone may
+      sign in through it; others' installations of it are passed over
 - [ ] Renovate's mode for this repository, in Mend's Developer Portal
       (developer.mend.io, signed in with GitHub): **Interactive**. Installed
       on all of an account's repositories, the hosted app starts in Silent
