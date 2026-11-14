@@ -58,17 +58,24 @@ export type WatchEndWhy =
   | 'quick'
   | 'busy'
   | 'aboard'
+  | 'no-race'
   | 'other';
 
 /** The words of a watch ended or refused, the sailor named as the server names them. */
 export function endedText(why: WatchEndWhy, sailor: string): string {
+  // A race's boat whose sailor is not named to the reader.
+  const who = sailor === '' ? 'That boat' : sailor;
   switch (why) {
-    case 'left':
-      return `${sailor} has left the water.`;
+    case 'no-race':
+      return 'That race is not on the water now.';
     case 'off':
-      return `${sailor} no longer allows spectators.`;
+      return sailor === ''
+        ? 'That boat is out of the race.'
+        : `${sailor} no longer allows spectators.`;
+    case 'left':
+      return `${who} has left the water.`;
     case 'not-at-sea':
-      return `${sailor} is not at sea.`;
+      return `${who} is not at sea.`;
     case 'no-sailor':
       return `There is no sailor called ${sailor}.`;
     case 'own':
@@ -80,7 +87,7 @@ export function endedText(why: WatchEndWhy, sailor: string): string {
     case 'aboard':
       return 'Go ashore first to watch another boat.';
     default:
-      return `${sailor} cannot be watched now.`;
+      return `${who} cannot be watched now.`;
   }
 }
 

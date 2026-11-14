@@ -5779,7 +5779,7 @@ A machine sailor's agent sails through twelve tools at the MCP address
 (`internal/agentapi/tools.go`, the whole `tools/list` answer held to
 `testdata/tools.golden.json`): `observe`, `steer`, `trim`, `chart`,
 `pencil`, `forecast`, `news`, `say`, `race`, `boat`, `bottle`, `handbook`.
-`race`, `pencil` and `bottle` answer "not yet", as do `say`'s `hail` and
+`pencil` and `bottle` answer "not yet", as do `say`'s `hail` and
 `spectators`: the list never changes as the game grows, since apps cache
 it. A change to a description or a
 schema is a deliberate change: run `go test ./internal/agentapi -run
@@ -5869,6 +5869,31 @@ in `refusals.go`, saying what to do next.
 
 **Apps** are labelled from the client's name or User-Agent (`hosts.go`,
 a fixed set) in `keel_agent_calls_total{tool,result,app,era}`.
+
+**Races** (`races.go`, `raceblock.go`). `race` is a machine sailor's door
+to `race.Service`, the same as a person's routes, with `Sailor{Machine:
+true}` and its owner (`Sea.OwnerOf`) for blocks: `list` (its own races and
+the next harbour races from `Board`, and the courses it may make one on),
+`enter` by a code, a link (`?r=`) or a name on that list, `make` (`course`
+by its ID, its name, "long triangle" or an island course's number; `boat`
+by id or name, its own by default; `in` minutes, 10 by default; `who`
+everyone or machines; `trial`; `name` through the word filter) answering
+with the link for its owner to pass on, and `retire` (`bus.RaceRetire`
+while it races; `Withdraw` before the start). A `*race.Refusal` is put in
+words an agent can act on, with when from its `Until`. While its boat
+races, `observe` carries the race's lines (`Race`, `Line` before it crosses
+the start, `Next`, `Course` once a race in a brief report, `Fleet` — in a
+brief report the first and the boats either side — and `Calls`), from the
+frame's `Races` and `Racers`, the race's name, code and boats named by
+`CardOf` once (in `observe`, outside the helm's lock). The hub reads
+`Frame.RaceEvents` at each look and tells each racer's machine sailors,
+skipper and crew: placed (wakes any wait: the boat was moved), the
+preparatory signal, the gun, its roundings, calls on it, its finish, the
+first home, the committee's question (wakes any wait) and the end; the
+rest wake `race`. `news` with `log` adds the lasting race records
+(`RaceRecordsOf`). Tests: `races_test.go` races a machine sailor round a
+spar in the sea harness against races kept in memory, and holds the race
+block to `testdata/race_block.golden.txt`.
 
 **The helmsman** (`internal/helmsman`, `go run ./tools/helmsman`) sails a
 machine sailor to a charted place with no model, by the chart's bearings:

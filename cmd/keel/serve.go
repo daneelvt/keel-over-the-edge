@@ -47,6 +47,7 @@ import (
 	"github.com/daneelvt/keel-over-the-edge/internal/owner"
 	"github.com/daneelvt/keel-over-the-edge/internal/persist"
 	"github.com/daneelvt/keel-over-the-edge/internal/physics"
+	"github.com/daneelvt/keel-over-the-edge/internal/race"
 	"github.com/daneelvt/keel-over-the-edge/internal/review"
 	"github.com/daneelvt/keel-over-the-edge/internal/scripted"
 	"github.com/daneelvt/keel-over-the-edge/internal/sim"
@@ -132,7 +133,8 @@ Configured from the environment:
                        or &at=boat (a group of the sea's life of that kind
                        there) and POST /debug/sailed (everyone aboard
                        together now counted as having sailed together five
-                       minutes) (default 0)
+                       minutes) and GET /debug/races (the races under way:
+                       their courses and boats, as JSON) (default 0)
 `
 
 func serve(ctx context.Context, args []string, getenv func(string) string, stdout, stderr io.Writer) error {
@@ -196,6 +198,7 @@ type database interface {
 	watch.Store
 	fleet.Store
 	WatchTarget(ctx context.Context, key string) (store.WatchTarget, error)
+	WatchTargetByID(ctx context.Context, id store.AccountID) (store.WatchTarget, error)
 	// Sailing together: a month of birth and the Rules of the sea,
 	// skippers' links, a knock's look at its knocker, and the owner's
 	// switches.
@@ -209,6 +212,10 @@ type database interface {
 	chatStore
 	// The sailors' log.
 	logs
+	// Races ashore, and their limits and timetable on the owner's page.
+	race.Store
+	RaceRecordsOf(ctx context.Context, id store.AccountID, most int) ([]store.RaceRecord, error)
+	owner.RacingSettings
 	Stats() store.PoolStats
 	Close()
 }
@@ -546,12 +553,12 @@ func runServer(ctx context.Context, getenv func(string) string, stdout io.Writer
 	}
 	p.current.Store(first)
 	if weatherHandler != nil {
-		log.Warn("developer commands are on: POST /debug/wind, /debug/weather, /debug/encounter, /debug/place, /debug/chart, /debug/life and /debug/sailed on the internal listener")
+		log.Warn("developer commands are on: POST /debug/wind, /debug/weather, /debug/encounter, /debug/place, /debug/chart, /debug/life and /debug/sailed, and GET /debug/races, on the internal listener")
 	}
 	health.Beat()
 	play := newServer(p.playRoutes, log)
 	agents := newServer(p.agents.handler, log)
-	p.jobs = jobs.New(jobs.Config{Store: db, Lease: leaseEpoch, Jobs: append(append(p.lifecycleJobs(), p.oauthJob(), p.backfillJob()), p.newsJobs()...), Log: log, Metrics: metrics})
+	p.jobs = jobs.New(jobs.Config{Store: db, Lease: leaseEpoch, Jobs: append(append(p.lifecycleJobs(), p.oauthJob(), p.backfillJob(), p.harbourJob()), p.newsJobs()...), Log: log, Metrics: metrics})
 
 	g, gctx := errgroup.WithContext(ctx)
 	flightCtx, stopFlight := context.WithCancel(context.Background())
@@ -735,6 +742,7 @@ func ownerTools(c ownerConfig) *owner.Owner {
 		Calm:     c.cat.World.MainPort.Calm * 1852,
 		Accounts: c.db, Page: c.page, Log: c.log, Metrics: c.metrics,
 		Life: c.lifecycle, From: c.from, Hand: c.hand,
+		Racing: c.db, RaceBoats: raceBoats(c.cat),
 	}
 	if c.news != nil {
 		cfg.News = c.news

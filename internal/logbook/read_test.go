@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -20,6 +21,7 @@ type fakeLogs struct {
 	entries []store.LogEntry
 	finds   map[store.AccountID][]store.LogKept
 	totals  map[store.AccountID]store.LogTotals
+	races   map[store.AccountID][]store.RaceRecord
 	from    time.Time
 }
 
@@ -104,6 +106,54 @@ func (f *fakeLogs) LogFrom(context.Context) (time.Time, error) { return f.from, 
 
 func (f *fakeLogs) LogFigures(context.Context, []store.AccountID) (map[store.AccountID]store.LogFigures, error) {
 	return nil, nil
+}
+
+func (f *fakeLogs) RaceRibbonsOf(_ context.Context, id store.AccountID, skip, most int) ([]store.RaceRecord, error) {
+	var rs []store.RaceRecord
+	for _, r := range f.races[id] {
+		if r.Role != store.RoleOwner {
+			rs = append(rs, r)
+		}
+	}
+	rs = rs[min(skip, len(rs)):]
+	return rs[:min(most, len(rs))], nil
+}
+
+func (f *fakeLogs) PrizesOf(_ context.Context, world int, ids []store.AccountID, _ int) (map[store.AccountID]store.RacePrizes, error) {
+	out := map[store.AccountID]store.RacePrizes{}
+	for _, id := range ids {
+		for _, r := range f.races[id] {
+			if r.World == world && r.Role != store.RoleOwner && r.Kind == "race" && r.Fleet >= 3 && r.Place == 1 {
+				p := out[id]
+				p.Wins = append(p.Wins, r.Code)
+				out[id] = p
+			}
+		}
+	}
+	return out, nil
+}
+
+func (f *fakeLogs) RaceCountsOf(_ context.Context, id store.AccountID) (store.RaceCounts, error) {
+	var c store.RaceCounts
+	for _, r := range f.races[id] {
+		if r.Role == store.RoleOwner {
+			c.Ran++
+			continue
+		}
+		c.Sailed++
+		if r.Kind == "race" && r.Place >= 1 && r.Place <= 3 {
+			c.Top3++
+		}
+		if r.Kind == "race" && r.Place == 1 {
+			c.Wins++
+		}
+		for _, a := range r.Awards {
+			if a == "spoon" {
+				c.Spoons++
+			}
+		}
+	}
+	return c, nil
 }
 
 // The sailors of the tests: Ann an adult, Tom an adult who keeps his log,
@@ -341,5 +391,118 @@ func TestCollection(t *testing.T) {
 	}
 	if l.Record.Kinds != 2 || l.Record.Of < 50 {
 		t.Errorf("the record's kinds: %d of %d", l.Record.Kinds, l.Record.Of)
+	}
+}
+
+// A log's ribbons: its races newest first, the counts over every world,
+// the races its sailor ran counted and not listed, and a crew's skipper
+// named as the log names anyone.
+func TestRibbons(t *testing.T) {
+	svc, f, _ := testLogs(t)
+	ctx := context.Background()
+	at := time.Date(2026, 11, 12, 18, 0, 0, 0, time.UTC)
+	f.races = map[store.AccountID][]store.RaceRecord{
+		jo: {
+			{Account: jo, World: 14, At: at, RaceName: "The Noon Gun", Kind: "race", CourseName: "Short triangle", Boat: "b", Fleet: 7,
+				Harbour: true, Role: store.RoleCrew, Place: 2, How: store.HowFinished, Awards: []string{}, Skipper: tom, SkipperName: "Tom"},
+			{Account: jo, World: 14, At: at.Add(-time.Hour), RaceName: "Jo's Dash", Kind: "race", Role: store.RoleOwner},
+			{Account: jo, World: 13, At: at.Add(-48 * time.Hour), RaceName: "The Lantern Race", Kind: "race", Fleet: 5,
+				Role: store.RoleSkipper, Place: 5, How: store.HowPlaced, Awards: []string{"spoon"}},
+		},
+	}
+	l, err := svc.ByName(ctx, ann, "Jo", 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// The log carries the counts alone; its races come by the page.
+	if l.Ribbons == nil || l.Ribbons.Counts.Sailed != 2 || l.Ribbons.Races != nil || l.Ribbons.More {
+		t.Fatalf("the log's ribbons: %+v", l.Ribbons)
+	}
+	// No win in the world sailed now: no cockade in the portrait. A win
+	// in a world gone keeps its ribbon but not the cockade; a win in this
+	// one gives it.
+	if l.Cockade {
+		t.Error("a cockade without a win")
+	}
+	f.races[jo][2].Place = 1
+	if l, err := svc.ByName(ctx, ann, "Jo", 0); err != nil || l.Cockade {
+		t.Errorf("a cockade for a win in a world gone: %v", err)
+	}
+	f.races[jo][0].Place = 1
+	if l, err := svc.ByName(ctx, ann, "Jo", 0); err != nil || !l.Cockade {
+		t.Errorf("no cockade for a win in this world: %v", err)
+	}
+	f.races[jo][0].Place, f.races[jo][2].Place = 2, 5
+	ribbons := func(reader store.AccountID, who Who) Ribbons {
+		t.Helper()
+		r, err := svc.Ribbons(ctx, reader, who, 0)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return r
+	}
+	r := ribbons(ann, Who{Name: "Jo"})
+	if r.Counts.Sailed != 2 || r.Counts.Top3 != 1 || r.Counts.Wins != 0 || r.Counts.Ran != 1 || r.Counts.Awards["spoon"] != 1 {
+		t.Fatalf("the counts: %+v", r)
+	}
+	if len(r.Races) != 2 || r.Races[0].Name != "The Noon Gun" || r.Races[1].Name != "The Lantern Race" || r.Races[1].Awards[0] != "spoon" {
+		t.Fatalf("the races: %+v", r.Races)
+	}
+	// Tom, an adult, crewed for by a teen: his name is not the reader's
+	// to see unless his log is (he keeps it), and a teen's reader sees
+	// him by the same rule.
+	if k := r.Races[0].Skipper; k != nil && k.Name != "" {
+		t.Errorf("Tom named to Ann: %+v", k)
+	}
+	f.races[jo][0].Skipper, f.races[jo][0].SkipperName = bea, "Bea"
+	if k := ribbons(kit, Who{Name: "Jo"}).Races[0].Skipper; k != nil && k.Name != "" {
+		t.Errorf("an adult named to a teen: %+v", k)
+	}
+	if k := ribbons(tom, Who{Name: "Jo"}).Races[0].Skipper; k == nil || k.Name != "Bea" {
+		t.Errorf("Bea named to Tom: %+v", k)
+	}
+	if r := ribbons(ann, Who{}); r.Counts.Sailed != 0 || len(r.Races) != 0 || r.More {
+		t.Errorf("a log with no races: %+v", r)
+	}
+	// The ribbons are read by the log's own rule.
+	if _, err := svc.Ribbons(ctx, ann, Who{Name: "Nobody"}, 0); !errors.Is(err, ErrNotFound) {
+		t.Errorf("an unknown sailor's ribbons: %v", err)
+	}
+	if _, err := svc.Ribbons(ctx, ann, Who{Machine: jo}, 0); !errors.Is(err, ErrNotFound) {
+		t.Errorf("another's sailor as a machine: %v", err)
+	}
+}
+
+// A log's ribbons come a page at a time, the newest first, with more
+// said while older ones follow; the owner's records never among them.
+func TestRibbonsByThePage(t *testing.T) {
+	svc, f, _ := testLogs(t)
+	ctx := context.Background()
+	at := time.Date(2026, 11, 12, 18, 0, 0, 0, time.UTC)
+	var rs []store.RaceRecord
+	for i := range RibbonsPage + 5 {
+		rs = append(rs, store.RaceRecord{Account: jo, World: 14, At: at.Add(-time.Duration(i) * time.Hour), RaceName: fmt.Sprint("Race ", i),
+			Kind: "race", Fleet: 4, Role: store.RoleSkipper, Place: 2, How: store.HowFinished})
+		if i%7 == 0 {
+			rs = append(rs, store.RaceRecord{Account: jo, World: 14, At: at, RaceName: "Run by Jo", Kind: "race", Role: store.RoleOwner})
+		}
+	}
+	f.races = map[store.AccountID][]store.RaceRecord{jo: rs}
+	first, err := svc.Ribbons(ctx, ann, Who{Name: "Jo"}, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(first.Races) != RibbonsPage || !first.More || first.Races[0].Name != "Race 0" || first.Counts.Sailed != RibbonsPage+5 {
+		t.Fatalf("the first page: %d races, more %v, counts %+v", len(first.Races), first.More, first.Counts)
+	}
+	next, err := svc.Ribbons(ctx, ann, Who{Name: "Jo"}, RibbonsPage)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(next.Races) != 5 || next.More || next.Races[4].Name != fmt.Sprint("Race ", RibbonsPage+4) {
+		t.Fatalf("the last page: %+v", next.Races)
+	}
+	if past, err := svc.Ribbons(ctx, ann, Who{Name: "Jo"}, 1000); err != nil || len(past.Races) != 0 || past.More {
+		t.Errorf("past the last: %+v, %v", past, err)
 	}
 }

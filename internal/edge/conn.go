@@ -48,13 +48,14 @@ type conn struct {
 	// that boat's; boarded, it has been let aboard one, so its end is told
 	// to the simulation by its account. The encoder alone reads the rest:
 	// holding, whether its inputs steer the boat as of its last frame;
-	// seat, its seat aboard; toldDeck, the boat and its deck's count as the
-	// client was last told its crew, and toldCrew whether it was told any.
+	// seat, its seat aboard; toldDeck, the boat, its deck's count and who
+	// aboard wore the cockade as the client was last told its crew, and
+	// toldCrew whether it was told any.
 	crew     atomic.Bool
 	boarded  atomic.Bool
 	holding  bool
 	seat     uint8
-	toldDeck [2]uint64
+	toldDeck [3]uint64
 	toldCrew bool
 	// recrew: a mute or a block changed what the connection is to be told
 	// of those aboard.
@@ -70,6 +71,8 @@ type conn struct {
 	// or the tick it was welcomed at: it is sent only those after.
 	bumped int64
 	seen   int64 // the tick the encoder last found it in the queue
+	// racesTold is what it has been told of the world's races.
+	racesTold connRaces
 	// enc is the connection's encoder, from the Hello on; active, the
 	// encoder's, whether it is among those whose snapshots it writes.
 	enc    *encoder
@@ -87,6 +90,15 @@ type conn struct {
 	watched    atomic.Pointer[string]
 	lastWatch  time.Time
 	helloWatch string
+	// helloRace is the race's boat its Hello asked to watch, if any;
+	// byRace whether the watch last asked for was asked as a race's boat.
+	// band is the account's age band, as it connected (aboard.Band).
+	// cheering: the client cheered the boat it watches, for the encoder
+	// to count.
+	helloRace *raceAsk
+	byRace    atomic.Bool
+	band      atomic.Uint32
+	cheering  atomic.Bool
 	// Under the spectators' lock: seated holds a spectator's place; wants
 	// is whom it waits in their queue to watch; toldSpect and toldSpectOf
 	// the place in it and the queue's length it was last told.
@@ -117,6 +129,11 @@ type conn struct {
 	toldCrews    [protocol.ViewSlots]toldCrew
 	crewed       uint64
 	crewKnown    uint64
+	// toldPrizes are the prizes of the boats in its view, by view slot,
+	// and toldOwnPrize those of the boat its snapshots are about, as the
+	// client was last told them: the encoder's.
+	toldPrizes   [protocol.ViewSlots]toldPrize
+	toldOwnPrize toldPrize
 
 	// The control slot's writer, stopped once another connection has
 	// taken the boat over: a word is stored only under wmu while not
@@ -164,6 +181,8 @@ type conn struct {
 	// charted is how many of the chart's entries the client has been
 	// sent: the encoder's.
 	charted int
+	// courses is how many of the courses open the client has been sent.
+	courses int
 	margin  margin
 	ack     atomic.Int64 // the newest snapshot's tick the client has decoded
 	// resync: the client lacks a base and asked for a full snapshot.
@@ -256,6 +275,8 @@ func (c *conn) run() {
 	c.enc = e.encoderFor()
 	if c.helloWatch != "" {
 		c.watchCommand(c.helloWatch, time.Now())
+	} else if c.helloRace != nil {
+		c.raceWatchCommand(*c.helloRace, time.Now())
 	} else if !c.join() {
 		return
 	}
@@ -361,6 +382,9 @@ func (c *conn) hello(data []byte) bool {
 		e.m.hello[helloOK].Inc()
 		e.cfg.Log.Debug("game connection", "request_id", c.reqID, "conn", c.id, "client_build", h.GetBuild(), "watch", h.GetWatch() != "")
 		c.helloWatch = h.GetWatch()
+		if a, ok := raceAskOf(h.GetRaceWatch()); ok {
+			c.helloRace = &a
+		}
 		return true
 	}
 	e.m.hello[differs].Inc()
@@ -500,7 +524,11 @@ func (c *conn) handle(data []byte) bool {
 			c.roamTo(r)
 		}
 		if w := b.Command.GetWatch(); w != nil {
-			c.watchCommand(w.GetSailor(), time.Now())
+			if a, ok := raceAskOf(w); ok {
+				c.raceWatchCommand(a, time.Now())
+			} else {
+				c.watchCommand(w.GetSailor(), time.Now())
+			}
 		}
 		if b.Command.GetSail() != nil && !c.sailCommand() {
 			return false
@@ -510,6 +538,7 @@ func (c *conn) handle(data []byte) bool {
 		}
 		c.deckCommand(b.Command)
 		c.chatCommand(b.Command)
+		c.raceCommand(b.Command)
 	}
 	return true
 }

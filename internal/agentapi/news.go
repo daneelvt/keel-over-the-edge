@@ -14,6 +14,7 @@ import (
 	"github.com/daneelvt/keel-over-the-edge/internal/chart"
 	"github.com/daneelvt/keel-over-the-edge/internal/logbook"
 	"github.com/daneelvt/keel-over-the-edge/internal/news"
+	"github.com/daneelvt/keel-over-the-edge/internal/race"
 	"github.com/daneelvt/keel-over-the-edge/internal/store"
 )
 
@@ -219,6 +220,11 @@ func logWords(ctx context.Context, s *Sea, account store.AccountID) (string, *re
 	} else {
 		b.WriteString("Nothing yet this world.\n")
 	}
+	if s.RaceRecords != nil {
+		if recs, err := s.RaceRecords(ctx, account); err == nil && len(recs) > 0 {
+			b.WriteString(raceRecordWords(recs, s.boatNamed) + "\n")
+		}
+	}
 	var groups []string
 	for _, g := range l.Groups {
 		groups = append(groups, fmt.Sprintf("%s %d of %d", g.ID, g.Found, len(g.Kinds)))
@@ -253,4 +259,109 @@ func counted(n int, thing string) string {
 		return "1 " + thing
 	}
 	return strconv.Itoa(n) + " " + thing + "s"
+}
+
+// MostRaceRecords is how many of its race records a machine sailor's log
+// counts and reads from.
+const MostRaceRecords = 200
+
+// latestRaces is how many race records the log tells one by one.
+const latestRaces = 5
+
+// raceRecordWords are a sailor's race records in its log: the races
+// sailed, won and in the top three, the medals and awards, and the
+// latest races, each with its place among how many.
+func raceRecordWords(recs []store.RaceRecord, boatName func(id string) string) string {
+	var sailed, won, top int
+	awards := map[string]int{}
+	medals := map[string]int{}
+	for _, r := range recs {
+		if r.Role == store.RoleOwner {
+			continue
+		}
+		sailed++
+		if r.How != store.HowDNS && r.How != store.HowRetired && r.How != store.HowRemoved {
+			if r.Place == 1 && r.Kind != race.KindTrial {
+				won++
+			}
+			if r.Place >= 1 && r.Place <= 3 {
+				top++
+			}
+		}
+		for _, a := range r.Awards {
+			awards[strings.ReplaceAll(a, "-", " ")]++
+		}
+		if r.Medal != "" {
+			medals[r.Medal]++
+		}
+	}
+	var b strings.Builder
+	more := ""
+	if len(recs) >= MostRaceRecords {
+		more = " (the latest)"
+	}
+	fmt.Fprintf(&b, "Races%s: %s · %d won · %d in the top three", more, counted(sailed, "race")+" sailed", won, top)
+	for _, m := range []string{"harbourmaster", "gold", "silver", "bronze"} {
+		if n := medals[m]; n > 0 {
+			fmt.Fprintf(&b, " · %d %s", n, m)
+		}
+	}
+	for _, a := range []string{"best start", "comeback", "photo finish", "crowd", "spoon"} {
+		if n := awards[a]; n > 0 {
+			fmt.Fprintf(&b, " · %d %s", n, a)
+		}
+	}
+	b.WriteString(".")
+	n := 0
+	for _, r := range recs {
+		if n == latestRaces {
+			break
+		}
+		n++
+		name := playerText(r.RaceName)
+		if r.Harbour {
+			name = r.RaceName
+		}
+		line := fmt.Sprintf("\n %s · %s", dateWords(r.At.UTC().Format(time.DateOnly)), name)
+		switch {
+		case r.Role == store.RoleOwner:
+			line += " · made by you"
+		case r.How == store.HowDNS:
+			line += " · did not start"
+		case r.How == store.HowRetired:
+			line += " · retired"
+		case r.How == store.HowRemoved:
+			line += " · removed"
+		case r.Kind == race.KindTrial:
+			line += " · a time trial run"
+		default:
+			line += fmt.Sprintf(" · %s of %d", ordinal(int32(r.Place)), r.Fleet)
+		}
+		if r.Medal != "" {
+			line += " · " + r.Medal
+		}
+		if len(r.Awards) > 0 {
+			line += " · " + strings.ReplaceAll(strings.Join(r.Awards, ", "), "-", " ")
+		}
+		if r.Role == store.RoleCrew && r.SkipperName != "" {
+			who := "human"
+			if r.SkipperMachine {
+				who = "machine"
+			}
+			line += fmt.Sprintf(" · crewing for %s (%s)", playerText(r.SkipperName), who)
+		}
+		line += fmt.Sprintf(" · %s, %s, world %d", r.CourseName, boatName(r.Boat), r.World)
+		b.WriteString(line)
+	}
+	return b.String()
+}
+
+// boatNamed is a kind of boat's name by the catalog's id, or the id.
+func (s *Sea) boatNamed(id string) string {
+	for i := range s.Boats {
+		if string(s.Boats[i].ID) == id {
+			return s.Boats[i].Name
+		}
+	}
+	return id
 }

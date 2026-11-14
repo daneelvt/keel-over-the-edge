@@ -245,6 +245,35 @@ func (f *Fleet) ForJoin(ctx context.Context, sailor store.AccountID) Join {
 	return Join{Kind: uint16(b.Kind), Look: b.Code(), Name: b.Name}
 }
 
+// Racing is the sailor's boat of a kind (its place in the catalog) as
+// they race it, its boat look code and name: the one of that kind they
+// have, or else the first of their fleet's of that kind; the first look,
+// unnamed, with none. Nothing is written: a race lends the boat.
+func (f *Fleet) Racing(ctx context.Context, sailor store.AccountID, kind int) (uint32, string) {
+	v, _, err := f.read(ctx, sailor)
+	if err != nil {
+		return 0, ""
+	}
+	found := -1
+	for i := range v.Boats {
+		b := &v.Boats[i]
+		if b.Kind != kind || b.Taken() {
+			continue
+		}
+		if b.Yours || b.Held && b.Sailor == sailor {
+			found = i
+			break
+		}
+		if found < 0 {
+			found = i
+		}
+	}
+	if found < 0 {
+		return 0, ""
+	}
+	return v.Boats[found].Code(), v.Boats[found].Name
+}
+
 // find is the boat of v with an id, or nil.
 func find(v *View, id store.BoatID) *Boat {
 	for i := range v.Boats {

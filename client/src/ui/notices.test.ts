@@ -121,3 +121,17 @@ describe('the notices', () => {
     expect(calls[0]?.[1]?.body).toBe('{"off":["great"]}');
   });
 });
+
+describe('a notice’s key', () => {
+  it('carried by the notice raised with it; the latest raised’s once folded', () => {
+    const n = new Notices(kinds, 3);
+    const first = { label: 'Enter', act: () => {} };
+    n.raise('charted-own', { name: 'Gull Rock' }, 0, first);
+    expect(n.shown.value?.action).toBe(first);
+    const second = { label: 'Enter', act: () => {} };
+    n.raise('charted-own', { name: 'Seal Rock' }, 10, second);
+    expect(n.shown.value?.action).toBe(second);
+    n.raise('charted-own', { name: 'Tern Rock' }, 20);
+    expect(n.shown.value?.action).toBeUndefined();
+  });
+});

@@ -29,6 +29,7 @@ import (
 	"github.com/daneelvt/keel-over-the-edge/internal/bus"
 	"github.com/daneelvt/keel-over-the-edge/internal/life"
 	"github.com/daneelvt/keel-over-the-edge/internal/physics"
+	"github.com/daneelvt/keel-over-the-edge/internal/race/committee"
 	"github.com/daneelvt/keel-over-the-edge/internal/sky"
 	"github.com/daneelvt/keel-over-the-edge/internal/weather"
 )
@@ -93,6 +94,10 @@ type Config struct {
 	// skipper included, by its index; a kind with none carries its skipper
 	// alone.
 	Capacities []int
+	// Races are what the world's races are run on: its racing areas, its
+	// island courses and its kinds of boat as races know them; nil is a
+	// world with no races.
+	Races *committee.Stage
 }
 
 // Terrain is a world's land: the ground boats run aground on, the land's
@@ -133,7 +138,7 @@ const (
 	PhasePhysics               // step every boat, in the shadow of the boats near it
 	PhaseGrid                  // sort the boats into the grid's cells
 	PhaseContacts              // pairs, contacts and bumps, under the Articles
-	PhaseRules                 // the edge: boats over the lip, and their approaches to it; what the lookouts sight; and the sea's life
+	PhaseRules                 // the edge: boats over the lip, and their approaches to it; the races; what the lookouts sight; and the sea's life
 	PhasePublish               // publish the frame, hand it to the recorder
 	Phases                     // the number of phases
 )
@@ -244,6 +249,11 @@ type World struct {
 	life        *life.World
 	lifeWeather lifeWeather
 
+	// stage is what races are run on, nil for none; racePlaced the boats
+	// the committee placed this tick, whose pairs begin afresh.
+	stage      *committee.Stage
+	racePlaced []int32
+
 	// endAt is the world's last tick, once an End has set it; 0 until then.
 	// It is in no snapshot: a process that restores the world is told its
 	// end again.
@@ -291,6 +301,7 @@ func New(cfg Config) (*World, error) {
 		timeline:   cfg.Weather,
 		ctx:        context.Background(),
 		enc:        cfg.Encounters,
+		stage:      cfg.Races,
 	}
 	if w.enc != nil {
 		for i := range w.kinds {

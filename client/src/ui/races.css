@@ -1,0 +1,441 @@
+/* SPDX-License-Identifier: AGPL-3.0-only */
+
+/* Races ashore's windows: over the sea, centred, within the screen held
+   either way, scrolling inside; in the plate's brass and lacquer, every
+   key the instruments' head keys' size (40 px, 14 px words, a touch 3 px
+   beyond the face), the main one gold. Before the sea they stand over the
+   start screen, in a layer of their own. */
+
+.race-host {
+  z-index: 30;
+}
+
+.race-scrim {
+  position: absolute;
+  inset: 0;
+  z-index: 12;
+  background: rgb(4 8 12 / 30%);
+  pointer-events: auto;
+}
+
+.hud .race-window {
+  position: absolute;
+  z-index: 13;
+  top: 50%;
+  left: 50%;
+  translate: -50% -50%;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: min(420px, calc(100vw - var(--edge-left) - var(--edge-right)));
+  max-height: calc(100dvh - var(--edge-top) - var(--edge-bottom));
+  padding: 10px 14px 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  outline: none;
+  pointer-events: auto;
+  font-size: 15px;
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+/* Held sideways: wider, so that less of it scrolls; the share's picture
+   no taller than leaves its keys in sight. */
+@media (max-height: 499px) {
+  .hud .race-window {
+    width: min(560px, calc(100vw - var(--edge-left) - var(--edge-right)));
+  }
+
+  .hud .race-share-picture {
+    width: auto;
+    max-width: 100%;
+    height: 38dvh;
+    align-self: center;
+  }
+}
+
+.hud .race-window h2 {
+  margin: 0;
+  font-size: 20px;
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+}
+
+.race-faint {
+  color: var(--faint);
+  font-size: 14px;
+}
+
+.race-label {
+  margin: 4px 0 0;
+  color: var(--faint);
+  font:
+    13px / 1.2 "IM Fell English SC",
+    Georgia,
+    serif;
+  letter-spacing: 0.04em;
+}
+
+/* Every key: the head keys' height and words. */
+.hud .race-window button:not(.race-course),
+.hud .race-window input,
+.hud .race-window select {
+  position: relative;
+  box-sizing: border-box;
+  min-height: 0;
+  height: var(--key);
+  font:
+    500 14px / 1 "Alegreya Sans",
+    system-ui,
+    sans-serif;
+}
+
+.hud .race-window button:not(.race-course) {
+  min-width: 44px;
+  padding: 0 14px;
+}
+
+.hud .race-window button:not(.race-course, .key-main) {
+  border: 0;
+  border-radius: 7px;
+  background: linear-gradient(#34434e, #1c262d);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 14%),
+    0 1px 2px rgb(0 0 0 / 55%);
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.hud .race-window button.key-main {
+  border: 0;
+  border-radius: 7px;
+  cursor: pointer;
+}
+
+.hud .race-window button:not(.race-course)::after {
+  content: "";
+  position: absolute;
+  inset: -3px 0;
+}
+
+.hud .race-window :is(input[type="datetime-local"], select, input[type="text"]) {
+  width: 100%;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 5px;
+  background: #091014;
+  box-shadow:
+    inset 0 2px 5px rgb(0 0 0 / 85%),
+    0 0 0 1px var(--brass-dark);
+  color: var(--ink);
+  color-scheme: dark;
+}
+
+.race-form {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+/* A row of keys, wrapping when narrow. */
+.race-keys {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.race-keys > button {
+  flex: 1 1 auto;
+}
+
+/* The foot: kept in sight at the window's bottom while the rest scrolls. */
+.race-foot {
+  position: sticky;
+  bottom: 0;
+  justify-content: flex-end;
+  margin: 4px -14px 0;
+  padding: 8px 14px 10px;
+  border-top: 1px solid var(--plate-line);
+  background: var(--panel);
+}
+
+.race-foot > button {
+  flex: 0 1 auto;
+}
+
+/* Why a race could not be made: in the foot, over its keys, in sight. */
+.race-foot-said {
+  flex: 1 1 100%;
+}
+
+/* The groups of keys: no frame of their own. */
+fieldset.race-choice,
+fieldset.race-courses,
+fieldset.race-owner-row {
+  min-width: 0;
+  margin: 0;
+  border: 0;
+}
+
+/* One of a few: the chosen key lit gold-edged. */
+.race-choice {
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.hud .race-window .race-choice > button {
+  flex: 1 1 auto;
+  padding: 0 8px;
+}
+
+.hud .race-window .race-choice > button.chosen {
+  box-shadow:
+    inset 0 0 0 2px var(--gold),
+    0 1px 2px rgb(0 0 0 / 55%);
+  color: var(--gold);
+}
+
+/* The courses: a row of small charts, scrolled sideways. */
+.race-courses {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding: 2px 2px 6px;
+  scroll-snap-type: x proximity;
+}
+
+.hud .race-course {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  width: 92px;
+  padding: 6px 4px;
+  border: 0;
+  border-radius: 8px;
+  background: rgb(255 255 255 / 5%);
+  box-shadow: inset 0 0 0 1px var(--plate-line);
+  color: var(--ink);
+  font:
+    13px / 1.15 "Alegreya Sans",
+    system-ui,
+    sans-serif;
+  text-align: center;
+  scroll-snap-align: start;
+  cursor: pointer;
+}
+
+.hud .race-course.chosen {
+  box-shadow: inset 0 0 0 2px var(--gold);
+  color: var(--gold);
+}
+
+.race-course-name {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* A course drawn small: on paper, its legs dashed, its marks orange. */
+.race-course-picture {
+  flex: none;
+  display: block;
+}
+
+.race-paper {
+  fill: #e6dcc3;
+}
+
+.race-legs {
+  fill: none;
+  stroke: #2a2620;
+  stroke-width: 1.5;
+  stroke-dasharray: 3 2;
+  stroke-linejoin: round;
+}
+
+.race-line {
+  stroke: #2a2620;
+  stroke-width: 2.5;
+}
+
+.race-mark {
+  fill: #e0742c;
+  stroke: #2a2620;
+  stroke-width: 1;
+}
+
+.race-wind {
+  stroke: #3b6d8f;
+  stroke-width: 2;
+}
+
+.race-wind-head {
+  fill: #3b6d8f;
+}
+
+.race-refused {
+  color: var(--brass-light);
+  font-size: 14px;
+  font-weight: 500;
+}
+
+/* The share: the picture at the window's width, the link under it. */
+.race-share-picture {
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 16 / 9;
+  border-radius: 6px;
+}
+
+.race-link {
+  color: var(--faint);
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+
+/* The card: its name and ⋯, the course small beside its words. */
+.race-card-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.hud .race-card-head h2 {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.hud .race-card-head h2 .player-text {
+  color: var(--gold);
+}
+
+.hud .race-window .race-more {
+  flex: none;
+  font-size: 18px;
+}
+
+.race-card-top {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.race-card-words {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.race-card-words p {
+  overflow-wrap: anywhere;
+}
+
+.race-start strong {
+  color: var(--gold);
+  font-weight: 500;
+}
+
+.race-who,
+.race-phase,
+.race-entered {
+  font-size: 14px;
+}
+
+.race-phase {
+  color: var(--gold);
+}
+
+.hud .race-window h3.race-entrants-head {
+  margin: 4px 0 0;
+  color: var(--faint);
+  font:
+    15px / 1.2 "IM Fell English SC",
+    Georgia,
+    serif;
+  letter-spacing: 0.04em;
+}
+
+.race-entrants {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+}
+
+.race-entrant {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 28px;
+  border-bottom: 1px solid rgb(255 255 255 / 10%);
+  font-size: 14px;
+}
+
+.hud .race-entrant.me .player-text {
+  color: var(--gold);
+}
+
+.race-entrant-number {
+  flex: none;
+  width: 22px;
+  color: var(--faint);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.race-entrant-name {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+/* The green ribbon of a newcomer. */
+.race-ribbon {
+  display: inline-flex;
+  flex: none;
+}
+
+.race-ribbon svg {
+  fill: #5fbf72;
+}
+
+.race-key-note {
+  align-self: center;
+}
+
+/* The owner's choices, behind ⋯. */
+.race-owner {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px;
+  border-radius: 8px;
+  background: rgb(0 0 0 / 22%);
+}
+
+.race-owner-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.hud .race-owner-row :is(input, select) {
+  flex: 1 1 140px;
+  width: auto;
+}
+
+.hud .race-window button.race-danger {
+  color: #f3b3a6;
+}

@@ -51,10 +51,11 @@ import { ShipBraces } from './shipbraces';
 import { plumbOf, poseShip, type ShipPoseInput } from './shippose';
 import { type ShipMember, ShipRules } from './shiprules';
 
-/** Someone aboard, as the crew drawn needs them: their seat and look code. */
+/** Someone aboard, as the crew drawn needs them: their seat and look code, and whether they wear the winner's cockade. */
 export interface CrewPerson {
   seat: number;
   look: number;
+  cockade?: boolean;
 }
 
 /** Who is aboard, the skipper (seat 0) first, and the seat of whoever holds the controls. */
@@ -792,7 +793,8 @@ export class CrewDeck {
       rows.forEach((p, r) => {
         const placed = level.pool.placed.get(keys[r] as string);
         if (placed !== undefined) {
-          level.head(r, placed, p.colours, p.look.layer, p.look.machine);
+          const worn = this.#crew?.people.find((q) => q.seat === p.member.seat)?.cockade === true;
+          level.head(r, placed, p.colours, p.look.layer, p.look.machine, worn);
           level.frame(r, null);
         }
       });

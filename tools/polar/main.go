@@ -5,16 +5,18 @@
 //
 //	go run ./tools/polar               the polar: .dev/polar/<boat>.json, .svg, and a table
 //	go run ./tools/polar -check        fail unless the polar is within the reference data's tolerances,
-//	                                   the sail says drawing at its fastest sheet, and the handbook's
-//	                                   trim tables and reefing advice are the polar's
+//	                                   the sail says drawing at its fastest sheet, the handbook's
+//	                                   trim tables and reefing advice are the polar's, and a sample
+//	                                   of the catalog's polar table sails as the table says
 //	go run ./tools/polar -handbook     write the handbook's trim tables and reefing advice
 //	go run ./tools/polar -sail         the trimmed sails against ORC's mainsail and jib coefficients
 //	go run ./tools/polar -manoeuvres   tacks and gybes, and where an accidental gybe comes
 //	go run ./tools/polar -start        starts from rest by the sheet, beside the catalog's start sheet
 //	go run ./tools/polar -sea 12       the polar in 12 knots and the sea it raises, beside flat water
+//	go run ./tools/polar -table        write the catalog's polar tables, shared/catalog/polars.yaml
 //
 // -boat sails one boat of the catalog, by its id, in any mode but
-// -handbook, which writes every boat's.
+// -handbook and -table, which write every boat's.
 //
 // Each boat's winds are given at its reference data's height
 // (internal/physics/testdata/reference.json). It steers with a
@@ -39,6 +41,7 @@ func main() {
 	sea := flag.Float64("sea", 0, "the polar in this wind, in knots at the boat's reference height, in the sea it raises, beside flat water")
 	edge := flag.Bool("edge", false, "the line of no return at the lip, in each regime's spells and in flat water")
 	start := flag.Bool("start", false, "starts from rest, untouched, by the sheet: what a boat's start sheet is chosen by")
+	tableFlag := flag.Bool("table", false, "write every boat's polar table into "+tablePath)
 	handbook := flag.Bool("handbook", false, "write the machine sailors' handbook's trim tables and reefing advice into "+handbookPath)
 	out := flag.String("out", ".dev/polar", "folder for the polar's JSON and SVG")
 	only := flag.String("boat", "", "sail only the boat of this id, not every boat of the catalog")
@@ -77,6 +80,18 @@ func main() {
 		}
 		return
 	}
+	if *tableFlag {
+		if err := runTable(kinds); err != nil {
+			fail(err)
+		}
+		return
+	}
+	var table *tableFile
+	if *check {
+		if table, err = readTable(tablePath); err != nil {
+			fail(err)
+		}
+	}
 	for i, k := range kinds {
 		if *only != "" && k.id != *only {
 			continue
@@ -90,6 +105,9 @@ func main() {
 			err = runSea(k, waves, *sea)
 		case *check:
 			err = runCheck(k, refs.boat(k.id))
+			if err == nil {
+				err = checkTable(k, table, checkWinds, checkAngles)
+			}
 		case *sailFlag:
 			err = runSail(k, refs.boat(k.id))
 		case *manoeuvres:

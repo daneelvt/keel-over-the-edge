@@ -78,6 +78,27 @@ func (q *Queries) DayCharted(ctx context.Context, arg DayChartedParams) (int32, 
 	return column_1, err
 }
 
+const dayRaces = `-- name: DayRaces :one
+SELECT count(*)::integer FROM race r
+WHERE r.world_id = $1 AND r.kind = 'race' AND r.state = 'finished' AND r.ended_at >= $2 AND r.ended_at < $3
+  AND EXISTS (SELECT 1 FROM race_entry e WHERE e.world_id = r.world_id AND e.race_id = r.id AND e.started_at IS NOT NULL)
+`
+
+type DayRacesParams struct {
+	WorldID pgtype.UUID
+	Since   pgtype.Timestamptz
+	Until   pgtype.Timestamptz
+}
+
+// The races run in a world in a time: finished, with a boat that
+// started.
+func (q *Queries) DayRaces(ctx context.Context, arg DayRacesParams) (int32, error) {
+	row := q.db.QueryRow(ctx, dayRaces, arg.WorldID, arg.Since, arg.Until)
+	var column_1 int32
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
 const dayStories = `-- name: DayStories :many
 SELECT id, story::text AS story, score, account_id, sailor, account_kind, named, subject, number, title, what, worth, x, y,
   amount, facts, rank, struck, written_at

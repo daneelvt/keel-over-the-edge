@@ -35,6 +35,7 @@ type Edge struct {
 // boat's approach to it; then the lookouts look.
 func (w *World) rules() {
 	w.edgeRules()
+	w.raceRules()
 	w.sighting()
 	w.lifeRules()
 	w.logRules()

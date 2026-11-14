@@ -171,6 +171,55 @@ export function paintPaper(
   }
 }
 
+/**
+ * Paints the island courses open on the paper, after its islands: each
+ * way as a faint dotted line in the ink, its start a small ring, as an
+ * old chart pricks a passage sailed.
+ */
+export function paintCourses(
+  canvas: HTMLCanvasElement | OffscreenCanvas,
+  look: PaperLook,
+  courses: readonly { way: readonly (readonly [number, number])[] }[],
+): void {
+  const ctx = canvas.getContext('2d') as CanvasRenderingContext2D | null;
+  if (ctx === null || courses.length === 0) {
+    return;
+  }
+  const side = canvas.width;
+  const k = side / (2 * look.lip * PAPER_MARGIN);
+  const px = (east: number) => side / 2 + east * k;
+  const py = (north: number) => side / 2 - north * k;
+  const dot = Math.max(2, side / 600);
+  ctx.save();
+  ctx.strokeStyle = look.ink;
+  ctx.globalAlpha = 0.65;
+  ctx.lineWidth = dot;
+  ctx.lineCap = 'round';
+  ctx.setLineDash([0.01, dot * 3]);
+  for (const c of courses) {
+    const first = c.way[0];
+    if (first === undefined) {
+      continue;
+    }
+    ctx.beginPath();
+    ctx.moveTo(px(first[0]), py(first[1]));
+    for (const p of c.way.slice(1)) {
+      ctx.lineTo(px(p[0]), py(p[1]));
+    }
+    ctx.stroke();
+  }
+  ctx.setLineDash([]);
+  for (const c of courses) {
+    const first = c.way[0];
+    if (first !== undefined) {
+      ctx.beginPath();
+      ctx.arc(px(first[0]), py(first[1]), dot * 2.5, 0, 2 * Math.PI);
+      ctx.stroke();
+    }
+  }
+  ctx.restore();
+}
+
 /** Calls f with each land cell of m: its centre, m, and its surface. */
 function forCells(m: IslandModel, f: (x: number, y: number, surface: number) => void): void {
   for (let r = 0; r < m.rows; r++) {

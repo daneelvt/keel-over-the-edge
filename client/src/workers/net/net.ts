@@ -10,7 +10,14 @@
 // watches. The controls go to the server only while it sails: watching or
 // idle, only the acknowledgements and the Pings do.
 
-import type { FromWorker, HelloVersions, Status, ToWorker, Traffic } from '../../net/messages';
+import type {
+  FromWorker,
+  HelloVersions,
+  RaceWatchAsk,
+  Status,
+  ToWorker,
+  Traffic,
+} from '../../net/messages';
 import { FLEET_RECORD_BYTES, writeRecord } from '../../net/view';
 import { afterClose } from './policy';
 import { harbourOf, lightSeen, Session } from './session';
@@ -31,7 +38,8 @@ type DeckAsk = Extract<
       | 'say'
       | 'mute'
       | 'block'
-      | 'report';
+      | 'report'
+      | 'raceRetire';
   }
 >;
 
@@ -61,6 +69,8 @@ function deckCommand(s: Session, now: number, m: DeckAsk): Uint8Array<ArrayBuffe
       return s.blockCommand(now, m.who, m.on);
     case 'report':
       return s.reportCommand(now, m.who, m.reason, m.note);
+    case 'raceRetire':
+      return s.raceRetireCommand(now);
   }
 }
 
@@ -112,6 +122,8 @@ export class NetWorker {
   };
   /** The sailor the page last asked to watch, which every Hello asks for; "" to sail. */
   #watch = '';
+  /** Or the race's boat it last asked to watch; null for none. */
+  #raceWatch: RaceWatchAsk | null = null;
   /** The connection sails its own boat; watches another's; waits in the queue for a boat. */
   #sailing = false;
   #watching = false;
@@ -136,6 +148,7 @@ export class NetWorker {
         this.#url = m.url;
         this.#session = new Session(m.versions as HelloVersions);
         this.#session.watch = this.#watch;
+        this.#session.raceWatch = this.#raceWatch;
         this.#session.tier = this.#tier;
         this.#session.renderScale = this.#scale;
         this.#connect();
@@ -166,6 +179,19 @@ export class NetWorker {
         this.#ask(m.sailor);
         if (!this.#takeBack() && this.#session !== null) {
           this.#send(this.#session.watchCommand(this.#d.now(), m.sailor));
+          this.#arm();
+        }
+        break;
+      case 'watchRace':
+        this.#ask('', m.ask);
+        if (!this.#takeBack() && this.#session !== null) {
+          this.#send(this.#session.watchRaceCommand(this.#d.now(), m.ask));
+          this.#arm();
+        }
+        break;
+      case 'cheer':
+        if (this.#session !== null) {
+          this.#send(this.#session.cheerCommand(this.#d.now()));
           this.#arm();
         }
         break;
@@ -200,6 +226,7 @@ export class NetWorker {
       case 'mute':
       case 'block':
       case 'report':
+      case 'raceRetire':
         if (this.#session !== null) {
           this.#send(deckCommand(this.#session, this.#d.now(), m));
           this.#arm();
@@ -256,11 +283,13 @@ export class NetWorker {
     return true;
   }
 
-  /** What every Hello from now on asks for: a sailor's boat to watch, or "" to sail. */
-  #ask(sailor: string): void {
+  /** What every Hello from now on asks for: a sailor's boat to watch, or a race's, or "" and none to sail. */
+  #ask(sailor: string, race: RaceWatchAsk | null = null): void {
     this.#watch = sailor;
+    this.#raceWatch = race;
     if (this.#session !== null) {
       this.#session.watch = sailor;
+      this.#session.raceWatch = race;
     }
   }
 
@@ -446,6 +475,9 @@ export class NetWorker {
         case 'boatNames':
           this.#d.post({ type: 'boatNames', names: r.names });
           break;
+        case 'boatPrizes':
+          this.#d.post({ type: 'boatPrizes', prizes: r.prizes });
+          break;
         case 'crews':
           this.#d.post({ type: 'crews', crews: r.crews });
           break;
@@ -476,6 +508,27 @@ export class NetWorker {
         case 'bump':
           this.#d.post({ type: 'bump', bump: r.bump });
           break;
+        case 'raceTold':
+          this.#d.post({ type: 'raceTold', told: r.told });
+          break;
+        case 'raceSignal':
+          this.#d.post({ type: 'raceSignal', signal: r.signal });
+          break;
+        case 'racePicture':
+          this.#d.post({ type: 'racePicture', picture: r.picture });
+          break;
+        case 'raceCall':
+          this.#d.post({ type: 'raceCall', call: r.call });
+          break;
+        case 'raceFinish':
+          this.#d.post({ type: 'raceFinish', finish: r.finish });
+          break;
+        case 'raceResults':
+          this.#d.post({ type: 'raceResults', results: r.results });
+          break;
+        case 'raceCheered':
+          this.#d.post({ type: 'raceCheered', cheered: r.cheered });
+          break;
         case 'chunks':
           this.#d.post({ type: 'chunks', chunks: r.chunks });
           break;
@@ -492,7 +545,7 @@ export class NetWorker {
           this.#d.post({ type: 'life', life: r.life, drop: r.drop });
           break;
         case 'chart':
-          this.#d.post({ type: 'chart', entries: r.entries, whole: r.whole });
+          this.#d.post({ type: 'chart', entries: r.entries, courses: r.courses, whole: r.whole });
           break;
         case 'forecast':
           this.#d.post({ type: 'forecast', forecast: r.forecast, past: r.past });

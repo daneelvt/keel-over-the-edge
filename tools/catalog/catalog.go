@@ -65,6 +65,9 @@ func run(root string, check bool, out io.Writer) error {
 	if err := checkPlaces(root, doc); err != nil {
 		return err
 	}
+	if err := checkCommittee(doc); err != nil {
+		return err
+	}
 	if err := checkIDsNotInCode(root, ids(doc)); err != nil {
 		return err
 	}
@@ -313,6 +316,10 @@ func ids(doc map[string]any) []string {
 		}
 		if towns, ok := world["towns"].(map[string]any); ok {
 			add(towns["buildings"])
+		}
+		// The committee's signal flags.
+		if c, ok := world["committee"].(map[string]any); ok {
+			add(c["flags"])
 		}
 	}
 	// The sea's life keeps its kinds in its group, as the world does.

@@ -417,6 +417,11 @@
   font-variant-numeric: tabular-nums;
 }
 
+/* A course's boats, under its name and where it starts, across the line. */
+.chart-list-course .chart-credit {
+  grid-column: 1 / -1;
+}
+
 /* The lights' characters, printed only close in. */
 .chart-close .chart-character {
   display: block;
@@ -541,6 +546,60 @@
   background: none;
   color: var(--ink);
   font-size: 20px;
+}
+
+/* A notice's key, as Enter on a harbour race's: the head keys' size. */
+.hud .notice-act {
+  flex: none;
+  position: relative;
+  height: var(--key, 40px);
+  min-width: 44px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 7px;
+  background: linear-gradient(var(--brass-light), var(--brass) 55%, var(--brass-dark));
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 40%),
+    0 1px 2px rgb(0 0 0 / 55%);
+  color: #1a242c;
+  font:
+    500 14px / 1 "Alegreya Sans",
+    system-ui,
+    sans-serif;
+  cursor: pointer;
+}
+
+.hud .notice-act::after {
+  content: "";
+  position: absolute;
+  inset: -3px 0;
+}
+
+/* A notice with a key: no wider than the column under the case, clear
+   of the pocket chart; its words beside the ×, the key under them. */
+.hud .notice.with-act {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 0 4px;
+  box-sizing: border-box;
+  max-width: var(--deck-width, 250px);
+  padding-bottom: 8px;
+}
+
+.notice.with-act > span {
+  padding-top: 8px;
+}
+
+.notice.with-act > .notice-act {
+  grid-row: 2;
+  justify-self: start;
+  margin-top: 4px;
+}
+
+.notice.with-act > .notice-dismiss {
+  grid-column: 2;
+  grid-row: 1;
 }
 
 .menu-chart {
@@ -833,4 +892,72 @@
     left: 2px;
     bottom: -6px;
   }
+}
+
+/* A race on the chart: its marks' numbers, its line, every boat's place,
+   and the tags of the boat watched and the leader: a bar of the boat's
+   colour, the name, the place. */
+.race-chart-mark,
+.race-chart-line,
+.race-chart-place,
+.race-chart-tag {
+  position: absolute;
+  top: 0;
+  left: 0;
+  color: var(--chart-ink);
+  font:
+    600 13px / 1.1 "Alegreya Sans",
+    system-ui,
+    sans-serif;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.race-chart-mark[hidden],
+.race-chart-line[hidden],
+.race-chart-place[hidden],
+.race-chart-tag[hidden] {
+  display: none;
+}
+
+.race-chart-mark {
+  translate: 7px -115%;
+  font-size: 15px;
+}
+
+.race-chart-line {
+  translate: -50% 35%;
+  font:
+    italic 12px / 1.1 "IM Fell English",
+    Georgia,
+    serif;
+}
+
+.race-chart-place {
+  translate: 7px -50%;
+  font-size: 12px;
+  text-shadow:
+    0 0 2px rgb(236 224 194),
+    0 0 2px rgb(236 224 194);
+}
+
+.race-chart-tag {
+  display: flex;
+  align-items: stretch;
+  gap: 5px;
+  translate: 9px -125%;
+  padding: 0 6px 0 0;
+  border: 1px solid var(--chart-ink);
+  border-radius: 3px;
+  background: rgb(236 224 194 / 94%);
+  line-height: 18px;
+}
+
+.race-chart-bar {
+  width: 5px;
+  background: var(--race-colour);
+}
+
+.race-chart-tag-place {
+  color: #7a5a1c;
 }

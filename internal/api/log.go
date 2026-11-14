@@ -22,6 +22,7 @@ type Logs interface {
 	Own(ctx context.Context, reader store.AccountID, world int) (logbook.Log, error)
 	ByName(ctx context.Context, reader store.AccountID, name string, world int) (logbook.Log, error)
 	Machine(ctx context.Context, owner, machine store.AccountID, world int) (logbook.Log, error)
+	Ribbons(ctx context.Context, reader store.AccountID, who logbook.Who, from int) (logbook.Ribbons, error)
 	SetShown(ctx context.Context, id store.AccountID, shown string) error
 }
 
@@ -43,6 +44,51 @@ func (a *api) registerLogs(mux *http.ServeMux, required func(http.HandlerFunc) h
 type logAnswer struct {
 	logbook.Log
 	News []news.Story `json:"news"`
+}
+
+// writeRibbons answers with a page of a log's races, kept by no cache.
+func writeRibbons(w http.ResponseWriter, rb logbook.Ribbons) {
+	body, err := json.Marshal(rb)
+	if err != nil {
+		panic(err) // ribbons always marshal
+	}
+	h := w.Header()
+	h.Set("Content-Type", "application/json")
+	h.Set("Cache-Control", "private, no-store")
+	h.Set("X-Content-Type-Options", "nosniff")
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write(append(body, '\n'))
+}
+
+// ribbonsAsked is whether a log's route was asked for its races
+// (?part=ribbons), and from which: the races after the first from=.
+func ribbonsAsked(r *http.Request) (asked bool, from int, ok bool) {
+	q := r.URL.Query()
+	if q.Get("part") != "ribbons" {
+		return false, 0, true
+	}
+	if s := q.Get("from"); s != "" {
+		n, err := strconv.Atoi(s)
+		if err != nil || n < 0 || n >= 1<<20 {
+			return true, 0, false
+		}
+		from = n
+	}
+	return true, from, true
+}
+
+// answerRibbons answers ?part=ribbons on a log's route: the counts and a
+// page of the races of who's log, by the log's own rule.
+func (a *api) answerRibbons(w http.ResponseWriter, r *http.Request, reader store.AccountID, who logbook.Who, from int) {
+	rb, err := a.cfg.Logs.Ribbons(r.Context(), reader, who, from)
+	switch {
+	case errors.Is(err, logbook.ErrNotFound):
+		refuseLog(w)
+	case err != nil:
+		a.unavailable(w, r, "reading a log's ribbons", err)
+	default:
+		writeRibbons(w, rb)
+	}
 }
 
 // writeLog answers with a log, kept by no cache but the reader's own
@@ -121,10 +167,11 @@ func (a *api) answerLog(w http.ResponseWriter, r *http.Request, l logbook.Log, e
 
 // ownLog answers GET /api/me/log?world=, behind auth.Required: the
 // player's own sailor's log, with its days of the world asked for, the
-// newest by default.
+// newest by default. With ?part=ribbons&from=, a page of its races
+// instead; so for every log's route.
 //
-//	200 the log (logbook.Log, its news with it)
-//	400 {"error":"world"}
+//	200 the log (logbook.Log, its news with it); logbook.Ribbons
+//	400 {"error":"world"} {"error":"from"}
 //	404 {"error":"not-found"}   no sailor
 //	403 {"error":"ai-account"}
 func (a *api) ownLog(w http.ResponseWriter, r *http.Request) {
@@ -137,6 +184,13 @@ func (a *api) ownLog(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "world")
 		return
 	}
+	if asked, from, ok := ribbonsAsked(r); !ok {
+		writeError(w, http.StatusBadRequest, "from")
+		return
+	} else if asked {
+		a.answerRibbons(w, r, acc.ID, logbook.Who{}, from)
+		return
+	}
 	l, err := a.cfg.Logs.Own(r.Context(), acc.ID, world)
 	a.answerLog(w, r, l, err, acc.ID, acc.ID)
 }
@@ -145,8 +199,8 @@ func (a *api) ownLog(w http.ResponseWriter, r *http.Request) {
 // log of the sailor of the name, as the player may read it. No such
 // sailor, and one whose log the player may not read, are refused alike.
 //
-//	200 the log (logbook.Log, its news with it)
-//	400 {"error":"world"}
+//	200 the log (logbook.Log, its news with it); logbook.Ribbons
+//	400 {"error":"world"} {"error":"from"}
 //	404 {"error":"not-found"}
 //	403 {"error":"ai-account"}
 func (a *api) sailorLog(w http.ResponseWriter, r *http.Request) {
@@ -164,6 +218,13 @@ func (a *api) sailorLog(w http.ResponseWriter, r *http.Request) {
 		refuseLog(w)
 		return
 	}
+	if asked, from, ok := ribbonsAsked(r); !ok {
+		writeError(w, http.StatusBadRequest, "from")
+		return
+	} else if asked {
+		a.answerRibbons(w, r, acc.ID, logbook.Who{Name: name}, from)
+		return
+	}
 	l, err := a.cfg.Logs.ByName(r.Context(), acc.ID, name, world)
 	a.answerLog(w, r, l, err, acc.ID, store.AccountID{})
 }
@@ -172,8 +233,8 @@ func (a *api) sailorLog(w http.ResponseWriter, r *http.Request) {
 // auth.Required: the log of one of the player's machine sailors, by its
 // ID, as the machine sailors' panel lists them.
 //
-//	200 the log (logbook.Log, its news with it)
-//	400 {"error":"world"}
+//	200 the log (logbook.Log, its news with it); logbook.Ribbons
+//	400 {"error":"world"} {"error":"from"}
 //	404 {"error":"not-found"}   not the player's machine sailor
 //	403 {"error":"ai-account"}
 func (a *api) machineLog(w http.ResponseWriter, r *http.Request) {
@@ -189,6 +250,13 @@ func (a *api) machineLog(w http.ResponseWriter, r *http.Request) {
 	id, ok := store.ParseID(r.URL.Query().Get("id"))
 	if !ok {
 		refuseLog(w)
+		return
+	}
+	if asked, from, ok := ribbonsAsked(r); !ok {
+		writeError(w, http.StatusBadRequest, "from")
+		return
+	} else if asked {
+		a.answerRibbons(w, r, acc.ID, logbook.Who{Machine: id}, from)
 		return
 	}
 	l, err := a.cfg.Logs.Machine(r.Context(), acc.ID, id, world)

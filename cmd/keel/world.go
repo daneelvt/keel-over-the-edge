@@ -34,6 +34,7 @@ import (
 	"github.com/daneelvt/keel-over-the-edge/internal/physics"
 	"github.com/daneelvt/keel-over-the-edge/internal/protocol"
 	"github.com/daneelvt/keel-over-the-edge/internal/protocol/pb"
+	"github.com/daneelvt/keel-over-the-edge/internal/race"
 	"github.com/daneelvt/keel-over-the-edge/internal/replay"
 	"github.com/daneelvt/keel-over-the-edge/internal/review"
 	"github.com/daneelvt/keel-over-the-edge/internal/scripted"
@@ -282,6 +283,10 @@ type worldHalf struct {
 	news *news.Service
 	// watch is the world's watching: the list, the card and follows.
 	watch *watch.Service
+	// races are the world's races ashore, and clerk the races' clerk,
+	// between them and the committee in the world.
+	races *race.Service
+	clerk *race.Clerk
 	// chat is the world's chat aboard: every line is said through it.
 	chat *chat.Hub
 	// tally finds who sails together aboard the world's boats.
@@ -296,6 +301,7 @@ type worldHalf struct {
 
 	stopLoop, stopSailors, stopEncoder, stopWatch  context.CancelFunc
 	loopDone, inputsDone, sailorsDone, encoderDone chan struct{}
+	clerkDone                                      chan struct{}
 	lastingDone, watchDone                         chan struct{}
 	closed                                         bool
 }
@@ -334,7 +340,7 @@ func (p *process) openWorld(ctx context.Context, rw *readyWorld) (*worldHalf, er
 	world, err := sim.New(sim.Config{
 		Kinds: p.kinds, StartSheets: cat.StartSheets(), Capacities: cat.Capacities(), Waves: p.waves, Weather: timeline, Encounters: cat.PrepareEncounters(), Workers: p.opt.workers,
 		Tick: loop.TickAt(time.Now(), epoch), Limit: cfg.BoatLimit, Terrain: rw.terrain, Edge: edgeOf(cat), Sight: sighting,
-		Life: rw.life,
+		Life: rw.life, Races: raceStage(cat, rw.bundle),
 	})
 	if err != nil {
 		return nil, err
@@ -371,6 +377,8 @@ func (p *process) openWorld(ctx context.Context, rw *readyWorld) (*worldHalf, er
 	h.chat = chat.NewHub(b.Frames, aboard.Rules{Switches: p.switches, Ties: p.ties}, time.Now)
 	h.chat.Metrics = p.metrics
 	h.tally = shipmates.NewTally(b.Frames, p.chatDB(), time.Now, p.log, p.metrics)
+	// The races first: the game's connections ask them every boat's prizes.
+	h.races = p.racesOf(h)
 	h.game = edge.New(edge.Config{
 		LookCode: p.lookCode,
 		BoatOf:   p.boatOf,
@@ -388,7 +396,11 @@ func (p *process) openWorld(ctx context.Context, rw *readyWorld) (*worldHalf, er
 		Link:  p.sailLink, Knocker: p.knocker, Switches: p.switches, Capacities: cat.Capacities(), CrewLimit: cfg.CrewLimit,
 		Refuser: p.ties,
 		Chat:    h.chat, Talker: p.talker, Tie: p.tie, Report: p.report, CountryHeader: countryHeader,
-		Machines: p.agents.core,
+		Machines:  p.agents.core,
+		RaceNames: p.raceNames(h),
+		WatchByID: p.watchTargetByID,
+		RaceOf:    p.raceOf(h),
+		Prizes:    func(a bus.Account) uint32 { return uint32(h.races.PrizesOf(a)) },
 	})
 	h.lasting = persist.New(persist.Config{
 		Frames: b.Frames, Store: p.writer, World: row.ID, Epoch: p.lease,
@@ -398,6 +410,7 @@ func (p *process) openWorld(ctx context.Context, rw *readyWorld) (*worldHalf, er
 		Logbook: bookOf(rw, cat),
 	})
 	h.news = p.newsOf(row)
+	h.clerk = p.clerkOf(h)
 	h.sea = p.seaOf(h, rw, sighting)
 	world.Record(h.inputs, h.game, h.lasting, h.forecasts, p.agents.core.Open(h.sea))
 	logs := p.logsOf(row.Number)
@@ -443,6 +456,7 @@ func (p *process) openWorld(ctx context.Context, rw *readyWorld) (*worldHalf, er
 		playCfg.Shipmates = p.shipmates
 	}
 	playCfg.Logs = logs
+	playCfg.Races = h.races
 	h.watch = watch.New(watch.Config{Store: p.db, Frames: b.Frames, Edge: h.game, Kinds: boatIDs(cat), Sea: h.sea, Agent: p.agentAttends,
 		Blocks: func(a, b bus.Account) bool { return p.ties.Blocks(a, b) }})
 	playCfg.Watch = h.watch
@@ -564,6 +578,11 @@ func (h *worldHalf) start() {
 		h.game.Run(encoderCtx)
 		wg.Wait()
 	}()
+	h.clerkDone = make(chan struct{})
+	go func() {
+		defer close(h.clerkDone)
+		h.clerk.Run(sailorsCtx)
+	}()
 	go func() {
 		defer close(h.sailorsDone)
 		if p.cfg.DevSailors == 0 {
@@ -579,10 +598,14 @@ func (h *worldHalf) start() {
 		dev := devRoutes(sailorsCtx, h.bus, p.cat, h.ready.charts, p.log)
 		end := endRoute(p, h)
 		sailed := sailedRoute(h)
+		races := racesRoute(h)
 		p.devRoutes.set(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			switch r.URL.Path {
 			case "/debug/end":
 				end.ServeHTTP(w, r)
+				return
+			case "/debug/races":
+				races.ServeHTTP(w, r)
 				return
 			case "/debug/sailed":
 				sailed.ServeHTTP(w, r)
@@ -626,6 +649,9 @@ func (h *worldHalf) close(how closeHow) int64 {
 	h.closed = true
 	h.stopSailors()
 	<-h.sailorsDone
+	if h.clerkDone != nil {
+		<-h.clerkDone
+	}
 	h.stopLoop()
 	<-h.loopDone
 	last := h.world.Now()
@@ -795,6 +821,12 @@ func (p *process) knocker(ctx context.Context, a bus.Account) (edge.Knocker, err
 
 func (p *process) watchTarget(ctx context.Context, key string) (watch.Target, error) {
 	t, err := p.db.WatchTarget(ctx, key)
+	return watch.Target(t), err
+}
+
+// watchTargetByID finds a sailor to watch by their account: a race's boat.
+func (p *process) watchTargetByID(ctx context.Context, a bus.Account) (watch.Target, error) {
+	t, err := p.db.WatchTargetByID(ctx, store.AccountID(a))
 	return watch.Target(t), err
 }
 

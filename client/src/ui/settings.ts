@@ -50,6 +50,8 @@ export interface Settings {
   watchWho: WatchWho;
   /** The whole screen, without the browser's bars or the phone's: entered by the menu, and by Set sail. */
   fullScreen: boolean;
+  /** The crowd's cheers in a race: its bunting in the sea and its sound; off for quiet. */
+  showCheers: boolean;
 }
 
 export const DEFAULTS: Settings = {
@@ -70,6 +72,7 @@ export const DEFAULTS: Settings = {
   watchSort: 'liveliest',
   watchWho: 'all',
   fullScreen: false,
+  showCheers: true,
 };
 
 const KEY = 'keel.settings';
@@ -130,6 +133,7 @@ export function loadSettings(store: Store | null = defaultStore()): Settings {
     'pilotHead',
     'pocketWeather',
     'fullScreen',
+    'showCheers',
   ] as const) {
     if (typeof r[k] === 'boolean') {
       out[k] = r[k];

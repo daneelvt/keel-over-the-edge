@@ -68,6 +68,16 @@ type World struct {
 	FogSignals []int
 	// Weather is the catalog's weather, prepared: what Calm sees by.
 	Weather *physics.WeatherPrepared
+	// Courses are the world's island courses, as its bundle holds them;
+	// CourseSubjects each one's subjects, every one of which must be
+	// charted for it to open; Boats the boats' kinds' ids, by the catalog's
+	// index, which a course's boats name.
+	Courses        []worldgen.Course
+	CourseSubjects [][]int32
+	Boats          []string
+	// Areas are the world's racing areas off Port Royal, open from the
+	// world's start.
+	Areas []worldgen.Area
 
 	byIsland, byPlace, byFeature map[int32]int32
 }
@@ -272,6 +282,12 @@ func Build(b *worldgen.Bundle, cat *catalog.Catalog) *World {
 		if s.Seen == sight.ByView && s.Top <= 0 {
 			s.Seen, s.Reach = sight.Awash, cs.Sight.Awash
 		}
+		// A beacon is charted with the reef or bar it marks.
+		if kind.Site == catalog.SiteBeacon {
+			if marks, ok := w.byPlace[p.Details.Marks]; ok {
+				s.Seen, s.Reach, s.With = sight.Hidden, 0, marks+1
+			}
+		}
 		w.byPlace[p.Number] = int32(len(w.Subjects))
 		w.Subjects = append(w.Subjects, s)
 	}
@@ -342,6 +358,26 @@ func Build(b *worldgen.Bundle, cat *catalog.Catalog) *World {
 		Clear: cat.World.Lights.ClearAir * light.NauticalMile, Contrast: cat.Weather.Visibility.Contrast,
 		Threshold: cat.World.Lights.Threshold,
 	})
+
+	// The island courses, and what each needs charted to open.
+	for _, k := range cat.Boats {
+		w.Boats = append(w.Boats, string(k.ID))
+	}
+	w.Courses, w.Areas = b.Courses, b.Areas
+	for _, c := range b.Courses {
+		var need []int32
+		for _, n := range c.Islands {
+			if i, ok := w.byIsland[n]; ok {
+				need = append(need, i)
+			}
+		}
+		for _, n := range c.Places {
+			if i, ok := w.byPlace[n]; ok {
+				need = append(need, i)
+			}
+		}
+		w.CourseSubjects = append(w.CourseSubjects, need)
+	}
 
 	// The main port's island and everything on it are known from the start.
 	if main >= 0 {

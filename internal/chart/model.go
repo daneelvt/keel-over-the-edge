@@ -33,6 +33,11 @@ type Chart struct {
 	// Subjects are the entries' subjects, by their index in the world's
 	// sight table.
 	Subjects []int32
+	// Courses are the island courses open, every subject each names
+	// charted, in the order they opened, as the wire carries them; Open
+	// the same by their index in the world's.
+	Courses []*pb.Course
+	Open    []int32
 }
 
 // Len is how many subjects are charted.
@@ -52,6 +57,16 @@ type Model struct {
 	great       float64
 	greatScore  int
 	lesserScore int
+	// The courses: seen is each subject charted by the simulation, as its
+	// chartings are made, written or not; left how many of each course's
+	// subjects are not seen; courseOf each subject's courses; opened the
+	// courses on the published chart; courseScore a course's opening's
+	// story's.
+	seen        []bool
+	left        []int
+	courseOf    map[int32][]int32
+	opened      []bool
+	courseScore int
 }
 
 // NewModel is world w's chart, empty, its islands' models at the addresses
@@ -59,7 +74,15 @@ type Model struct {
 func NewModel(w *World, cat *catalog.Catalog, paths []string) *Model {
 	m := &Model{world: w, paths: paths, cat: cat, charted: make([]bool, len(w.Subjects)),
 		great: cat.World.Chart.Worth.Great, greatScore: cat.StoryScore(catalog.NewsStoryOfGreat),
-		lesserScore: cat.StoryScore(catalog.NewsStoryOfCharting)}
+		lesserScore: cat.StoryScore(catalog.NewsStoryOfCharting), courseScore: cat.StoryScore(catalog.NewsStoryOfCourse),
+		seen: make([]bool, len(w.Subjects)), courseOf: map[int32][]int32{}}
+	for k, need := range w.CourseSubjects {
+		m.left = append(m.left, len(need))
+		for _, i := range need {
+			m.courseOf[i] = append(m.courseOf[i], int32(k))
+		}
+	}
+	m.opened = make([]bool, len(m.left))
 	m.cur.Store(&Chart{})
 	return m
 }
@@ -70,6 +93,9 @@ func (m *Model) World() *World { return m.world }
 // Entries are the chart's entries as it stands: an edge.ChartSource.
 func (m *Model) Entries() []*pb.ChartEntry { return m.cur.Load().Entries }
 
+// Courses are the courses open as the chart stands: an edge.ChartSource.
+func (m *Model) Courses() []*pb.Course { return m.cur.Load().Courses }
+
 // Load is the chart as it stands.
 func (m *Model) Load() *Chart { return m.cur.Load() }
 
@@ -79,7 +105,7 @@ func (m *Model) Add(rows []store.Charting) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	old := m.cur.Load()
-	next := &Chart{Entries: old.Entries, Rows: old.Rows, Subjects: old.Subjects}
+	next := &Chart{Entries: old.Entries, Rows: old.Rows, Subjects: old.Subjects, Courses: old.Courses, Open: old.Open}
 	added := false
 	for _, r := range rows {
 		i := m.world.Index(KindOf(r.Subject), r.Number)
@@ -87,10 +113,12 @@ func (m *Model) Add(rows []store.Charting) {
 			continue
 		}
 		m.charted[i] = true
+		m.see(i)
 		next.Entries = append(next.Entries, m.entry(i, &r))
 		next.Rows = append(next.Rows, r)
 		next.Subjects = append(next.Subjects, i)
 		added = true
+		m.openCourses(i, next)
 	}
 	if added {
 		m.cur.Store(next)
@@ -231,6 +259,10 @@ func (m *Model) Charting(c *bus.Charted) store.Charting {
 			story, score = store.StoryGreat, m.greatScore
 		}
 		row.News = &store.NewsItem{Story: story, Score: score, Title: s.Title, What: m.what(s), Island: island, X: s.X, Y: s.Y}
+	}
+	opens := m.opens(c.Subject)
+	if row.Credited {
+		row.Opens = opens
 	}
 	return row
 }

@@ -184,6 +184,10 @@ export interface DrawnBoat {
   name: string;
   /** Who is aboard it, as the server told it while it is near: null for nobody but its skipper. Never a name. */
   crew: BoatCrew | null;
+  /** What it flies for its skipper's races in the world: a prize code (render/prizes.ts); 0 for none. */
+  prizes: number;
+  /** Its race number while it races, 0 for none. */
+  raceNumber: number;
   /** Counts the boats its slot has held: another boat in the slot, another count. */
   entered: number;
   /** Whether its helm is drawn elsewhere this frame, walking with the crew as the controls change hands: set by the crew's drawing. */
@@ -194,9 +198,9 @@ export interface DrawnBoat {
   helmNet: number | null;
 }
 
-/** Who is aboard a boat in view: each person's seat and look, the skipper (seat 0) first, and the seat of whoever holds the controls. */
+/** Who is aboard a boat in view: each person's seat and look and whether they wear the winner's cockade, the skipper (seat 0) first, and the seat of whoever holds the controls. */
 export interface BoatCrew {
-  people: readonly { seat: number; look: number }[];
+  people: readonly { seat: number; look: number; cockade?: boolean }[];
   holder: number;
 }
 
@@ -236,6 +240,8 @@ export function newDrawnBoat(): DrawnBoat {
     boatLook: -1,
     name: '',
     crew: null,
+    prizes: 0,
+    raceNumber: 0,
     entered: 0,
     helmAway: false,
     helmHeld: false,
@@ -255,6 +261,9 @@ class Boat {
   boatLook = 0;
   name = '';
   crew: BoatCrew | null = null;
+  /** Its prize code and race number, as told for its slot. */
+  prizes = 0;
+  raceNumber = 0;
   /** Counts the boats this slot has held. */
   entered = 0;
   readonly ring = new Float64Array(SAMPLES * FIELDS);
@@ -350,6 +359,8 @@ class Boat {
     out.boatLook = this.boatLook;
     out.name = this.name;
     out.crew = this.crew;
+    out.prizes = this.prizes;
+    out.raceNumber = this.raceNumber;
     out.entered = this.entered;
     out.tick = rt;
     out.fall = rt >= this.fallTick ? (rt - this.fallTick) / TICKS_PER_SECOND : -1;
@@ -505,6 +516,8 @@ export class Fleet {
   readonly #names: string[] = Array.from({ length: VIEW_SLOTS }, () => '');
   /** The crews by view slot, as the server told them: of the boat the slot holds as of the next snapshot. */
   readonly #crews: (BoatCrew | null)[] = Array.from({ length: VIEW_SLOTS }, () => null);
+  /** Each view slot's prize code and race number, as last told, two to a slot. */
+  readonly #prizes = new Uint32Array(2 * VIEW_SLOTS);
 
   /** The boats drawn this frame: drawn[0 … count). */
   readonly drawn: DrawnBoat[] = Array.from({ length: 2 * VIEW_SLOTS }, newDrawnBoat);
@@ -553,6 +566,8 @@ export class Fleet {
         b.kind = f[o + SLOT.kind] ?? 0;
         b.name = this.#names[i] ?? '';
         b.crew = this.#crews[i] ?? null;
+        b.prizes = this.#prizes[2 * i] ?? 0;
+        b.raceNumber = this.#prizes[2 * i + 1] ?? 0;
       }
       if (f[o + SLOT.present] === 1 && f[o + SLOT.sampled] === 1 && b.present) {
         b.add(f, o, tick);
@@ -584,7 +599,7 @@ export class Fleet {
   crews(
     list: readonly {
       slot: number;
-      people: readonly { seat: number; look: number; machine?: boolean }[];
+      people: readonly { seat: number; look: number; machine?: boolean; cockade?: boolean }[];
       holder: number;
     }[],
   ): void {
@@ -592,8 +607,34 @@ export class Fleet {
       if (c.slot >= 0 && c.slot < VIEW_SLOTS) {
         this.#crews[c.slot] =
           c.people.length > 1
-            ? { people: c.people.map((p) => ({ seat: p.seat, look: p.look })), holder: c.holder }
+            ? {
+                people: c.people.map((p) =>
+                  p.cockade === true
+                    ? { seat: p.seat, look: p.look, cockade: true }
+                    : { seat: p.seat, look: p.look },
+                ),
+                holder: c.holder,
+              }
             : null;
+      }
+    }
+  }
+
+  /**
+   * Takes boats' prizes by view slot: each the prize code and race number
+   * of the boat its slot holds as of the next snapshot, kept for the next
+   * boat it holds until told again. The own boat's are not the fleet's.
+   */
+  prizes(list: readonly { slot: number; own: boolean; prizes: number; number: number }[]): void {
+    for (const p of list) {
+      if (!p.own && p.slot >= 0 && p.slot < VIEW_SLOTS) {
+        this.#prizes[2 * p.slot] = p.prizes;
+        this.#prizes[2 * p.slot + 1] = p.number;
+        const b = this.#boats[p.slot] as Boat;
+        if (b.present) {
+          b.prizes = p.prizes;
+          b.raceNumber = p.number;
+        }
       }
     }
   }
@@ -602,6 +643,7 @@ export class Fleet {
   clear(): void {
     this.#names.fill('');
     this.#crews.fill(null);
+    this.#prizes.fill(0);
     for (const b of this.#boats) {
       if (b.present) {
         this.#fadeOut(b);
@@ -783,6 +825,8 @@ function copyDrawn(a: DrawnBoat, b: DrawnBoat): void {
   b.boatLook = a.boatLook;
   b.name = a.name;
   b.crew = a.crew;
+  b.prizes = a.prizes;
+  b.raceNumber = a.raceNumber;
   b.entered = a.entered;
   b.helmAway = a.helmAway;
   b.helmHeld = a.helmHeld;

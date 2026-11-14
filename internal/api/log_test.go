@@ -76,6 +76,12 @@ func TestLogRoutes(t *testing.T) {
 		{"GET", "/api/log?name=", "", 404, `{"error":"not-found"}`},
 		{"GET", "/api/machines/log?id=nobody", "", 404, `{"error":"not-found"}`},
 		{"GET", "/api/machines/log?id=" + store.AccountID{9}.String(), "", 404, `{"error":"not-found"}`},
+		// A log's races, a page at a time, by the log's own rule.
+		{"GET", "/api/me/log?part=ribbons", "", 200, `{"counts":{"sailed":0,"top3":0,"wins":0,"awards":{},"medals":{},"ran":0}}`},
+		{"GET", "/api/log?name=ann+bonny&part=ribbons&from=30", "", 200, `{"counts":{"sailed":0,"top3":0,"wins":0,"awards":{},"medals":{},"ran":0}}`},
+		{"GET", "/api/log?name=Nobody+At+All&part=ribbons", "", 404, `{"error":"not-found"}`},
+		{"GET", "/api/me/log?part=ribbons&from=-1", "", 400, `{"error":"from"}`},
+		{"GET", "/api/machines/log?id=" + store.AccountID{9}.String() + "&part=ribbons", "", 404, `{"error":"not-found"}`},
 	} {
 		if status, body := bob.do(c.method, c.path, c.body); status != c.status || body != c.want {
 			t.Errorf("%s %s %s: %d %s", c.method, c.path, c.body, status, body)

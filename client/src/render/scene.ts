@@ -19,7 +19,7 @@
 // frames update the scene alone until the page lets them draw.
 
 import { signal } from '@preact/signals';
-import { type Color, type Vector2, Vector3, type Vector4 } from 'three';
+import { type Camera, type Color, type Vector2, Vector3, type Vector4 } from 'three';
 import { exp, float, fog, length, max, mix, positionView, positionWorld } from 'three/tsl';
 import type { WebGPURenderer } from 'three/webgpu';
 import { type Boat as BoatKind, catalog } from '../catalog';
@@ -51,6 +51,7 @@ import { SkyWeather } from '../sky/weather';
 import { Birds } from './birds';
 import { Boat, lampsLit, lazyArtUrl, type SailorLook } from './boat';
 import { CAMERA_PRESETS, type CameraView, ChaseCamera, lookSizeOf, sizeOf } from './camera';
+import { type RaceFrame, RaceMarks } from './committee';
 import { FloatingOrigin, type ScenePoint } from './coords';
 import { glowDark } from './daylight';
 import { DirtyAir } from './dirtyair';
@@ -62,8 +63,9 @@ import { GustRings } from './gustring';
 import { type BoatLantern, Lanterns, lanternLit, TOWN_LANTERNS } from './lanterns';
 import { Lightning } from './lightning';
 import { Lighthouses } from './lights';
-import { domeCentre } from './materials';
+import { domeCentre, domeDrop } from './materials';
 import { Overlays } from './overlays';
+import { cockadeOf, PrizesAfloat } from './prizes';
 import {
   Adaptive,
   type FrameWindow,
@@ -114,6 +116,8 @@ const END_LOOK = catalog.world.edge.end;
 const MIST_VEIL = 0.6;
 /** A tick of world time, µs. */
 const TICK_US = 1e6 / STEPS_PER_SECOND;
+/** How high over the sea a mark's tag stands, m: over its spar's flag. */
+const MARK_TAG_HEIGHT = 8;
 
 /** For this long after the scene starts, the windows adaptive quality judges are short: the first seconds are the benchmark. */
 const BENCHMARK = 6000;
@@ -148,6 +152,11 @@ export function sailorLookOf(cat: Looks, code: number): SailorLook {
   const l = lookOf(cat, code) ?? (lookOf(cat, PERSON_DEFAULT) as Look);
   return { art: artOf(cat, l), colours: coloursOf(cat, l), machine: isMachine(l) };
 }
+
+/** How near a tap must be to a boat's hull or sail to pick it, CSS pixels: a finger's width. */
+export const BOAT_TAP = 44;
+/** The height of a boat's sail's middle a tap is measured to, m. */
+const SAIL_TAP_HEIGHT = 3;
 
 /** No boats: the fleet before the game is online. */
 const NO_BOATS: readonly DrawnBoat[] = [];
@@ -248,6 +257,15 @@ export class SeaScene {
     catalog.world.places.kinds.findIndex((k) => k.site === 'wreck'),
     catalog.world.look.attenuation,
   );
+  /** The race committee's things in the sea: the courses laid, the world's beacons, the guns' smoke. */
+  readonly race = new RaceMarks(
+    catalog.world.committee,
+    catalog.world.towns.flags,
+    catalog.world.towns.smoke,
+    catalog.world.places.kinds.findIndex((k) => k.site === 'beacon'),
+  );
+  /** What every boat flies for its skipper's races, the own boat's too: one draw for their flags, one for their spoons. */
+  readonly prizes = new PrizesAfloat(catalog.world.committee, catalog.world.towns.flags);
   /** Sky time, once the scene knows the world's epoch; and the module that says where everything stands. */
   skyTime: SkyTime | null = null;
   skyPhysics: Physics | null = null;
@@ -289,6 +307,10 @@ export class SeaScene {
   cover: Cover | null = null;
   /** Called after each frame is placed (the panel's statistics, the tests). */
   onFrame: (() => void) | null = null;
+  /** A tag over a point of the sea, a race's next mark's number, while there is one; placed each frame where the camera sees it. */
+  markTagOf: (() => { east: number; north: number; text: string } | null) | null = null;
+  #markTag: HTMLElement | null = null;
+  readonly #tagAt = new Vector3();
   /** Called after each frame is drawn, with the main thread's work on it, ms. */
   onDrawn: ((work: number) => void) | null = null;
   /** Whether the camera rests behind the boat, at its resting view and distance. */
@@ -427,6 +449,9 @@ export class SeaScene {
     scene.add(this.flags.mesh, this.smoke.mesh, this.cones.mesh);
     scene.add(this.lighthouses.towers, this.lighthouses.glows);
     scene.add(this.wrecks.root);
+    scene.add(this.race.root);
+    scene.add(this.prizes.root);
+    this.fleet.prizes = this.prizes;
     scene.add(this.birds.mesh, this.swimmers.mesh);
     this.wrecks.depthAt = (east, north) => {
       const h = this.land?.heightAt(east, north) ?? null;
@@ -494,8 +519,53 @@ export class SeaScene {
     return this.skyPhysics?.skyAt(this.skyAt, east, north) ?? null;
   }
 
-  /** A tap on the open sea at (x, y) CSS pixels: a named star there shows its name. */
+  /**
+   * A tap on a boat in view: the boat drawn nearest (x, y) CSS pixels by
+   * its sail, within reach pixels of it, as onBoatTap takes it. True if it
+   * took the tap.
+   */
+  onBoatTap: ((east: number, north: number) => boolean) | null = null;
+
+  /** The other boat drawn whose sail is nearest (x, y) CSS pixels, within reach of it: where it is; null for none. */
+  boatAt(x: number, y: number, reach = BOAT_TAP): { east: number; north: number } | null {
+    const fs = this.fleetSource;
+    const canvas = this.stage.gfx?.canvas;
+    if (fs === null || canvas === undefined) {
+      return null;
+    }
+    const w = canvas.clientWidth;
+    const h = canvas.clientHeight;
+    const o = this.origin.world;
+    const v = this.#tagAt;
+    let best: DrawnBoat | null = null;
+    let d = reach;
+    for (let i = 0; i < fs.count; i++) {
+      const b = fs.drawn[i] as DrawnBoat;
+      if (b.opacity < 0.5) {
+        continue;
+      }
+      // Its hull and its sail's middle: a tap on either is on the boat.
+      for (const up of [0.5, SAIL_TAP_HEIGHT]) {
+        v.set(b.east - o.x, up + b.heave, -(b.north - o.y)).project(this.stage.camera);
+        if (v.z < -1 || v.z > 1) {
+          continue;
+        }
+        const dist = Math.hypot(((v.x + 1) / 2) * w - x, ((1 - v.y) / 2) * h - y);
+        if (dist < d) {
+          d = dist;
+          best = b;
+        }
+      }
+    }
+    return best === null ? null : { east: best.east, north: best.north };
+  }
+
+  /** A tap on the open sea at (x, y) CSS pixels: a boat there taken by onBoatTap, or a named star there shows its name. */
   tap(x: number, y: number, now: number): string | null {
+    const boat = this.onBoatTap === null ? null : this.boatAt(x, y);
+    if (boat !== null && this.onBoatTap?.(boat.east, boat.north) === true) {
+      return null;
+    }
     const canvas = this.stage.gfx?.canvas;
     if (canvas === undefined || !this.drawSky) {
       return null;
@@ -572,6 +642,7 @@ export class SeaScene {
   }
 
   #drawHelm(): Promise<void> {
+    this.#wearHelm();
     if (this.#crewShown === null && this.#lookShown === null && this.#ownLook === null) {
       return Promise.resolve();
     }
@@ -659,6 +730,41 @@ export class SeaScene {
   #boatLook = { look: -1, name: '' };
 
   /**
+   * What the boat in view, the own or the one watched, flies for its
+   * skipper's races: a prize code (render/prizes.ts), its race number
+   * while it races (on its sail), on every kind the own boat has been.
+   */
+  setPrizes(code: number, number: number): void {
+    this.#prizes = { code: code >>> 0, number };
+    for (const b of this.#boats.values()) {
+      b.setRaceNumber(number);
+    }
+    this.#wearHelm();
+  }
+
+  /**
+   * The winner's cockade on the sailor drawn at the helm, if they wear it:
+   * the skipper's by the boat's prizes; whoever of the crew holds the
+   * controls (or the wheel), by their own.
+   */
+  #wearHelm(): void {
+    const crew = this.#crewShown;
+    const seat = crew === null ? 0 : (this.crew.wheelSeat ?? crew.holder);
+    const at = crew?.people.find((p) => p.seat === seat);
+    const on = at?.cockade ?? (seat === 0 && cockadeOf(this.#prizes.code));
+    for (const b of this.#boats.values()) {
+      b.wearCockade(on);
+    }
+  }
+
+  #prizes = { code: 0, number: 0 };
+
+  /** The own boat's prizes, as setPrizes was last told. */
+  get ownPrizes(): { code: number; number: number } {
+    return this.#prizes;
+  }
+
+  /**
    * Loads the boat, and its sailor once the player's look is known
    * (sailAs). Its sails carry its kind's insignia.
    */
@@ -680,7 +786,9 @@ export class SeaScene {
     const boat = new Boat(k, catalog);
     await boat.load(k.name.slice(0, 1));
     boat.setBoatLook(this.#boatLook.look, this.#boatLook.name);
+    boat.setRaceNumber(this.#prizes.number);
     this.#boats.set(kind, boat);
+    this.#wearHelm();
     return boat;
   }
 
@@ -1434,6 +1542,12 @@ export class SeaScene {
         l.addAshore(t.east - o.x, t.top, -(t.north - o.y), lit);
       }
     }
+    // The race committee's lanterns: the marks' and the committee boats' riding lights.
+    const race = this.race;
+    for (let i = 0; this.drawSky && i < race.lanternCount; i++) {
+      const r = race.lanterns;
+      l.addAshore(r[3 * i] ?? 0, r[3 * i + 1] ?? 0, r[3 * i + 2] ?? 0, lanternLit(own));
+    }
     l.commit(this.stage.camera.fov, height);
   }
 
@@ -1503,6 +1617,34 @@ export class SeaScene {
       this.galeUp,
     );
     this.smoke.frame(chimneys, o, time, 0.25 + 0.75 * (1 - night));
+  }
+
+  /** The race committee's frame, reused, and the time its winds are asked at. */
+  #raceNow = 0;
+  readonly #raceFrame: RaceFrame = {
+    origin: { x: 0, y: 0 },
+    cameraEast: 0,
+    cameraNorth: 0,
+    time: 0,
+    lit: 0,
+    light: 1,
+    windAt: (east, north) => this.#windAt(east, north, this.#raceNow),
+    surface: null,
+  };
+
+  /** The race committee's things near the camera: boats, buoys, marks, beacons, flags and smoke. */
+  #drawRace(camera: Vector3, now: number, night: number): void {
+    const o = this.origin.world;
+    const f = this.#raceFrame;
+    this.#raceNow = now;
+    f.origin = o;
+    f.cameraEast = camera.x + o.x;
+    f.cameraNorth = -camera.z + o.y;
+    f.time = this.ticks / STEPS_PER_SECOND;
+    f.lit = night;
+    f.light = 0.25 + 0.75 * (1 - night);
+    f.surface = this.ocean.source === null ? null : this.#surface;
+    this.race.frame(f);
   }
 
   /** The lands used, so the towns' gulls are found again in a new one. */
@@ -1906,6 +2048,7 @@ export class SeaScene {
     this.crews.windSpeed = this.wind.meanSpeed;
     this.crews.time = this.ticks / STEPS_PER_SECOND;
     this.crews.frame(fs?.drawn ?? [], fs?.count ?? 0, this.origin, camera.position, this.timeStep);
+    this.prizes.begin();
     if (this.fleet.loaded) {
       this.fleet.windFrom = this.wind.meanFrom;
       this.fleet.windSpeed = this.wind.meanSpeed;
@@ -1918,11 +2061,14 @@ export class SeaScene {
         this.timeStep,
       );
     }
+    this.#ownPrizesDrawn();
+    this.prizes.end(this.origin.world, this.ticks / STEPS_PER_SECOND);
     const night = this.drawSky ? lanternLit(this.sky.now.sunHeight) : 0;
     this.birds.begin(this.origin.world, this.ticks / STEPS_PER_SECOND, 0.25 + 0.75 * (1 - night));
     this.#drawTowns(camera.position, now);
     this.#drawLife(camera.position, night > 0.5);
     this.birds.end();
+    this.#drawRace(camera.position, now, night);
     this.#drawLanterns(view.height, camera.position);
     this.#drawLights(view.height, camera.position, now);
     this.wrecks.frame(this.origin);
@@ -1986,8 +2132,61 @@ export class SeaScene {
       o.world.updateMatrixWorld();
       o.placeLabels(camera, view.width, view.height);
     }
+    this.#placeMarkTag(camera, view.width, view.height);
     this.#spray();
     this.onFrame?.();
+  }
+
+  /** The own boat's prizes, placed as its model is drawn, in the wind it feels. */
+  #ownPrizesDrawn(): void {
+    const b = this.boat;
+    const rig = b?.prizeRig ?? null;
+    if (b === null || rig === null || this.#prizes.code === 0 || !b.root.visible) {
+      return;
+    }
+    b.model.updateWorldMatrix(true, false);
+    const angle = this.out[RECORDS.out.apparentWindAngle] ?? 0;
+    const w = this.#ownWind;
+    w.speed = this.out[RECORDS.out.apparentWindSpeed] ?? 0;
+    w.from = this.pose.heading + angle;
+    this.prizes.add(
+      this.#prizes.code,
+      rig,
+      this.#placeOwn,
+      w,
+      0.37,
+      this.ticks / STEPS_PER_SECOND,
+      this.origin.world,
+    );
+  }
+
+  readonly #ownWind = { from: 0, speed: 0 };
+  readonly #placeOwn = (p: Vector3, out: Vector3): Vector3 =>
+    this.boat === null ? out.copy(p) : this.boat.model.localToWorld(out.copy(p));
+
+  /** The next mark's tag, over its spar, when the camera sees it; nothing when not. */
+  #placeMarkTag(camera: Camera, width: number, height: number): void {
+    const el = this.#markTag;
+    if (el === null) {
+      return;
+    }
+    const t = this.markTagOf?.() ?? null;
+    if (t === null) {
+      el.hidden = true;
+      return;
+    }
+    const ow = this.origin.world;
+    const d = Math.hypot(t.east - this.pose.east, t.north - this.pose.north);
+    // Over the spar's top, dropped by the dome as the sea is.
+    const v = this.#tagAt
+      .set(t.east - ow.x, MARK_TAG_HEIGHT - domeDrop(d), -(t.north - ow.y))
+      .project(camera);
+    const on = v.z < 1 && v.z > -1 && Math.abs(v.x) < 1 && Math.abs(v.y) < 1;
+    el.hidden = !on;
+    if (on) {
+      el.textContent = t.text;
+      el.style.transform = `translate(${(((v.x + 1) / 2) * width).toFixed(1)}px, ${(((1 - v.y) / 2) * height).toFixed(1)}px)`;
+    }
   }
 
   /** The player's boat as the dirty air and the right-of-way overlay want it. */
@@ -2006,6 +2205,16 @@ export class SeaScene {
   attachLabels(layer: HTMLElement | null): void {
     this.overlays.attachLabels(layer);
     this.rightOfWay.attachLabels(layer);
+    this.#markTag?.remove();
+    this.#markTag = null;
+    if (layer !== null) {
+      const el = document.createElement('span');
+      el.className = 'mark-tag';
+      el.dataset.readout = 'mark-tag';
+      el.hidden = true;
+      layer.append(el);
+      this.#markTag = el;
+    }
   }
 
   /** The boat as the gust rings want it: where, how it moves, and where the mean wind comes from. */

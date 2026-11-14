@@ -57,6 +57,7 @@ import type { Act } from './lifecycle';
 import { LogPart } from './log';
 import { figuresWords } from './logwords';
 import { AISignIn, MAX_CAP, plural } from './machines';
+import { RacingSettings } from './racing';
 import { reportsOn } from './reportwords';
 import { SailWithSettings } from './settings';
 
@@ -903,6 +904,7 @@ export function AccountsTab({
         </section>
         {accounts !== null ? <AISignIn accounts={accounts} act={act} /> : null}
         {accounts !== null ? <SailWithSettings act={act} /> : null}
+        {accounts !== null ? <RacingSettings act={act} /> : null}
         <Search open={open} chosen={chosen} again={again} />
       </div>
       <aside>

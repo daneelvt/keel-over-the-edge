@@ -7,6 +7,7 @@ import (
 
 	"github.com/daneelvt/keel-over-the-edge/internal/bus"
 	"github.com/daneelvt/keel-over-the-edge/internal/physics"
+	"github.com/daneelvt/keel-over-the-edge/internal/race/committee"
 )
 
 // Digest is a 64-bit FNV-1a hash of a frame's state: the tick, the
@@ -22,7 +23,8 @@ import (
 // connection's account, connection, tick of joining the queue, grace,
 // kind unless a human's alone, look unless the first and kind of boat unless the first,
 // and each pair's slots, boats, keep-clear boat, Article, whose action and
-// ticks, as little-endian bits. Two worlds with the
+// ticks, as little-endian bits; and, once the world has had a race, its
+// races as its snapshot holds them. Two worlds with the
 // same digest at a tick are, all but certainly, the same world; a replay
 // compares them to find the first tick at which it went wrong.
 func Digest(f *bus.Frame) uint64 {
@@ -146,6 +148,13 @@ func Digest(f *bus.Frame) uint64 {
 		h.byte(p.By)
 		h.u64(uint64(p.Since))
 		h.u64(uint64(p.Touched))
+	}
+	// The races count once there has been one, so a world without races
+	// hashes as before.
+	if f.NextRace != 0 {
+		for _, b := range committee.AppendSnapshot(nil, f) {
+			h.byte(b)
+		}
 	}
 	return uint64(h)
 }

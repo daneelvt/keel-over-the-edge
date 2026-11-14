@@ -99,6 +99,7 @@ describe('watching’s words', () => {
       quick: 'One at a time: try again in a moment.',
       busy: 'The harbour is busy: try again in a moment.',
       aboard: 'Go ashore first to watch another boat.',
+      'no-race': 'That race is not on the water now.',
       other: 'Iron Mary cannot be watched now.',
     };
     for (const [why, text] of Object.entries(words)) {

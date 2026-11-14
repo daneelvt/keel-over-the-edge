@@ -20,7 +20,7 @@
 //   3 hair colour
 //   4–6 the frame: the rows of the matrix from the person's boat's model
 //     to the level's parent (the identity for the boat the level is under)
-//   7 unused
+//   7 1 if they wear the winner's cockade, then unused
 //   8 on: three texels a bone, the rows of its matrix from the figure's
 //     bind pose to the boat's model.
 //
@@ -57,9 +57,14 @@ import {
   vertexIndex,
 } from 'three/tsl';
 import type { Node } from 'three/webgpu';
+import { catalog } from '../../catalog';
+import { cockadeColours } from './cockade';
 import type { FleetLooks } from './fleetlooks';
 import { ROW_HEAD, SailorRows, skinRow } from './fleetsailors';
 import { sailorMaterial } from './material';
+
+/** The winner's cockade's colours, linear. */
+const COCKADE_COLOURS = cockadeColours(catalog.world.committee.prizes.cockade);
 
 /** The pool's width, texels. */
 const POOL_WIDTH = 2048;
@@ -177,13 +182,14 @@ export class CrewLevel {
   ) {
     this.pool = new Pool(`crew ${name} figures`, vertices * figures);
     this.rows = new SailorRows(ROW_HEAD + 3 * bones, 8, `crew ${name} rows`);
-    const nodes = crewNodes(this.pool, this.rows.texture, this.#rowsUsers);
+    const nodes = crewNodes(this.pool, this.rows.texture, this.#rowsUsers, looks);
     const material = sailorMaterial(looks.atlas.texture as Texture, looks.mask.texture as Texture, {
       vertex: nodes.vertex,
       uv: nodes.uv,
       normal: nodes.normal,
       glow: float(LAMPS) as unknown as Node<'float'>,
       instance: { ...nodes, users: { atlas: looks.atlas.users, mask: looks.mask.users } },
+      cockade: { coords: nodes.cockade, wears: float(1), colours: COCKADE_COLOURS },
     });
     material.name = `crew ${name}`;
     // Only as many vertices as the largest figure; each instance draws its own.
@@ -217,16 +223,18 @@ export class CrewLevel {
     old.texture.dispose();
   }
 
-  /** Row r's head: the figure, its look's layer, whether a machine, and the colours. */
+  /** Row r's head: the figure, its look's layer, whether a machine, the colours, and whether they wear the winner's cockade. */
   head(
     r: number,
     figure: Placed,
     colours: { main: Color; skin: Color; hair: Color },
     layer: number,
     machine: boolean,
+    cockade = false,
   ): void {
     const d = this.rows.data;
     const o = 4 * this.rows.width * r;
+    d[o + 28] = cockade ? 1 : 0;
     d[o] = figure.offset;
     d[o + 1] = figure.count;
     d[o + 2] = layer;
@@ -283,7 +291,9 @@ function crewNodes(
   pool: Pool,
   rowsTexture: Texture,
   rowsUsers: { value: Texture }[],
+  looks: FleetLooks,
 ): {
+  cockade: Node<'vec3'>;
   vertex: Node<'vec3'>;
   uv: Node<'vec2'>;
   normal: Node<'vec3'>;
@@ -329,6 +339,12 @@ function crewNodes(
   })() as unknown as Node<'vec3'>;
   return {
     vertex,
+    // The winner's cockade, on the figure as bound, where the row wears it.
+    cockade: looks.cockadeCoords(
+      a.xyz as unknown as Node<'vec3'>,
+      figure.z as unknown as Node<'float'>,
+      at(7).x.greaterThan(0.5) as unknown as Node<'bool'>,
+    ),
     uv: varying(vec2(a.w, b.w)) as unknown as Node<'vec2'>,
     normal: varying(modelWorldMatrix.mul(vec4(n, 0)).xyz) as unknown as Node<'vec3'>,
     main: varying(main.xyz) as unknown as Node<'vec3'>,

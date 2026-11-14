@@ -38,8 +38,8 @@
 //
 // The chart screen's Log tab, the strip still one row with its four tabs,
 // where the boat is and the way back to sea, holds a sailor's log on its
-// paper within the screen under the strip: a long log's days and
-// collection (three kinds a row upright, five sideways), who may read it,
+// paper within the screen under the strip: a long log's days, its
+// collection (three kinds a row upright, five sideways) and its ribbons, who may read it,
 // another sailor's, a machine sailor's, an empty one and one not there;
 // its keys the head keys' size, its day rows and kinds a 44 px touch, no
 // words under 13 px, nothing wider than the sheet.
@@ -74,12 +74,43 @@
 // name, keeps Set sail in view on every screen, and the boat's look and
 // the fleet's boats keep Save, Cancel, every swatch and the first boat in
 // view, the server's answers stood in for.
+//
+// In a race, the race line heads the top, 32 pixels, over the case: held
+// upright the screen's width, the pocket chart's column under it; held
+// sideways between the case and the pocket chart. Before the start (over
+// the line), racing and with a call at its longest, on every screen, it
+// covers no part and no part covers it, it stands clear of the boat, and
+// its words are whole within it, none cut short. Its ⋯'s window, the
+// finish's card and the results fit every screen, their keys the head
+// keys' size.
+//
+// Watching a race, the race bar takes the watch plate's place: one row at
+// the foot of the screen, within it, clear of every part and the boat,
+// before the start and racing, with the crier's line and a cheer's under
+// the case; the standings and the bar's ⋯ fit every screen, the
+// standings' rows a 40 px touch.
+//
+// A race replayed on the chart: its head (the race's name, the standings
+// at the slider's moment) under the chart's strip and its time (Play, the
+// slider, the speeds, Results, Share) at the foot, in two rows held
+// upright and one sideways, within the screen and clear of each other, on
+// every screen; its keys a 40 px touch; the standings, the results and a
+// gone world's results alone fit, Close within reach.
+//
+// Races ashore's windows over the sea, Make a race (filled, a later start
+// and an island course, refused), the share of a race made, a race's card
+// (its owner's ⋯ open, another's, one refused) and the harbour race's
+// notice with Enter, on every screen, the server's answers stood in for:
+// each within the screen, its foot's keys in view, every key 40 pixels
+// tall with 14-pixel words.
 
 import { expect, type Page, test } from '@playwright/test';
 import data from '../src/catalog/catalog.gen.json' with { type: 'json' };
 import { GAME, openScene, sailor } from './helpers';
 import { emptyLog, LONG_NAME, longLog, standInLogs } from './logs';
 import { firstEdition, fullDay, quietDay, standInNews } from './news';
+import { OTHERS, REFUSED, standInRaces } from './races';
+import { GONE, RACED, standInReplays } from './replays';
 
 /** The screens: phones in CSS pixels, upright and sideways, and the tests' own. */
 const SCREENS = [
@@ -162,6 +193,8 @@ async function parts(page: Page): Promise<{
       one('the shake out key', '.reef-key.shake'),
       one('the autopilot', '.pilot-head'),
       one('the autopilot button', '.pilot-button'),
+      one('the race bar', '.race-bar'),
+      one('the crier’s lines', '.rb-lines'),
       ...[...hud.querySelectorAll('.hud-top > .panel:not(.case)')].map((e) =>
         box(`the line “${(e as HTMLElement).innerText}”`, [e]),
       ),
@@ -210,7 +243,8 @@ async function parts(page: Page): Promise<{
     );
     // No words show outside their part: each run of text as it is drawn,
     // clipped by whatever clips it, within the part it is in.
-    const PARTS = '.case-top, .complications, .pocket-frame, .pilot-head, .pilot-button, .control';
+    const PARTS =
+      '.case-top, .complications, .pocket-frame, .pilot-head, .pilot-button, .control, .racer-line';
     const words: string[] = [];
     const walker = document.createTreeWalker(hud, NodeFilter.SHOW_TEXT);
     for (let t = walker.nextNode(); t !== null; t = walker.nextNode()) {
@@ -3093,6 +3127,12 @@ test('the chart screen’s Log tab holds a long log, its collection, who may rea
     await page.getByRole('tab', { name: 'Collection' }).click();
     await page.locator('.log-cell').nth(2).click();
     await check(`${s.name}, the collection`, true);
+    await page.getByRole('tab', { name: 'Ribbons' }).click();
+    await expect(page.locator('.log-ribbon').first()).toBeVisible();
+    await check(`${s.name}, the ribbons`);
+    await page.locator('[data-key=older-ribbons]').click();
+    await expect(page.locator('.log-ribbon')).toHaveCount(45);
+    await check(`${s.name}, the older ribbons`);
     await page.evaluate((name) => globalThis.keel.openLog({ kind: 'sailor', name }), LONG_NAME);
     await expect(page.locator('.log-back')).toBeVisible();
     await check(`${s.name}, another’s log`);
@@ -3304,5 +3344,692 @@ test('the chart screen’s News tab holds a full day’s edition, a new world’
     .info()
     .annotations.push({ type: 'the front page, in screens', description: fronts.join('; ') });
   await page.evaluate(() => globalThis.keel.openChart(null));
+  expect(found).toEqual([]);
+});
+
+/**
+ * What is wrong with a window of races ashore, open: any of it off the
+ * screen or spilling sideways; a key of its foot out of view or under
+ * another part; a key not the head keys' height (40 px, 38 on a small
+ * phone) with 14 px words.
+ */
+async function raceFaults(page: Page, sel: string): Promise<string[]> {
+  return page.evaluate((sel) => {
+    const el = document.querySelector(sel);
+    if (el === null) {
+      return [`no ${sel}`];
+    }
+    const out: string[] = [];
+    const r = el.getBoundingClientRect();
+    if (
+      r.left < -0.5 ||
+      r.top < -0.5 ||
+      r.right > innerWidth + 0.5 ||
+      r.bottom > innerHeight + 0.5
+    ) {
+      out.push(`${sel} is off the screen (${[r.left, r.top, r.right, r.bottom].map(Math.round)})`);
+    }
+    if (el.scrollWidth > el.clientWidth + 1) {
+      out.push(`${sel} spills sideways (${el.scrollWidth} > ${el.clientWidth})`);
+    }
+    // The head keys' height: 40 px, 38 on a small phone.
+    const hud = document.querySelector('.hud');
+    const key =
+      hud === null ? 40 : Number.parseFloat(getComputedStyle(hud).getPropertyValue('--key'));
+    for (const b of el.querySelectorAll<HTMLElement>('button:not(.race-course, .notice-dismiss)')) {
+      const k = b.getBoundingClientRect();
+      const size = getComputedStyle(b).fontSize;
+      if (Math.abs(k.height - key) > 0.5 || size !== '14px') {
+        out.push(`“${b.textContent}” is ${k.height.toFixed(1)} px tall, its words ${size}`);
+      }
+    }
+    for (const b of el.querySelectorAll<HTMLElement>('.race-foot button, .notice-act')) {
+      const k = b.getBoundingClientRect();
+      const at = document.elementFromPoint(k.left + k.width / 2, k.top + k.height / 2);
+      if (at === null || !b.contains(at)) {
+        out.push(`“${b.textContent}” is under ${at?.className ?? 'nothing'}`);
+      }
+    }
+    return out;
+  }, sel);
+}
+
+test('races ashore’s windows fit every screen, their foot’s keys in view, every key the head keys’ size', async ({
+  page,
+}) => {
+  test.skip(test.info().project.name === 'webgpu', 'the windows are the same on either back end');
+  test.setTimeout(180_000);
+  const state = await standInRaces(page, Date.now());
+  await page.setViewportSize({ width: SCREENS[1].width, height: SCREENS[1].height });
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await openScene(page, 'races', true);
+  const found: string[] = [];
+  const check = async (where: string, sel: string) => {
+    for (const f of await raceFaults(page, sel)) {
+      found.push(`${where}: ${f}`);
+    }
+  };
+  // The harbour race's notice, with Enter, ten minutes before.
+  await expect(page.locator('.notice.with-act')).toBeVisible({ timeout: 15_000 });
+  const screens = [
+    SCREENS[1],
+    SCREENS[5],
+    ...SCREENS.filter((s) => s !== SCREENS[1] && s !== SCREENS[5]),
+  ];
+  for (const s of screens) {
+    await page.setViewportSize({ width: s.width, height: s.height });
+    await page.waitForFunction(
+      ({ width, height }) => innerWidth === width && innerHeight === height,
+      s,
+    );
+    if (s === SCREENS[1] || s === SCREENS[5]) {
+      await check(`${s.name}, the notice`, '.notice.with-act');
+    }
+    await page.getByRole('button', { name: 'Menu' }).click();
+    await page.locator('.menu').getByRole('button', { name: 'Make a race' }).click();
+    const make = page.locator('[data-panel=make-race]');
+    await expect(make.locator('#race-name')).toHaveValue('Saturday Triangle');
+    await check(`${s.name}, Make a race`, '[data-panel=make-race]');
+    await make.getByRole('button', { name: 'Later' }).click();
+    await make.locator('[data-course="island:3"]').click();
+    await check(`${s.name}, a later start on an island course`, '[data-panel=make-race]');
+    state.make = 'made';
+    await make.getByRole('button', { name: 'Make it' }).click();
+    await expect(make.locator('[data-readout=race-refused]')).toBeVisible();
+    await check(`${s.name}, refused`, '[data-panel=make-race]');
+    state.make = 'ok';
+    await make.getByRole('button', { name: 'Make it' }).click();
+    const share = page.locator('[data-panel=race-share]');
+    await expect(share).toBeVisible();
+    await check(`${s.name}, the share`, '[data-panel=race-share]');
+    await share.getByRole('button', { name: 'See the race' }).click();
+    const card = page.locator('[data-panel=race-card]');
+    await expect(card.locator('[data-readout=race-entrants]')).toBeVisible();
+    await card.getByRole('button', { name: 'The race’s owner’s choices' }).click();
+    await check(`${s.name}, the owner’s card`, '[data-panel=race-card]');
+    await card.getByRole('button', { name: 'Close', exact: true }).click();
+    for (const code of [OTHERS, REFUSED]) {
+      await page.getByRole('button', { name: 'Menu' }).click();
+      await page.locator(`.menu-race[data-race=${code}]`).click();
+      await expect(card.locator('[data-readout=race-entrants]')).toBeVisible();
+      await check(`${s.name}, the card of ${code}`, '[data-panel=race-card]');
+      await card.getByRole('button', { name: 'Close', exact: true }).click();
+      await expect(card).toHaveCount(0);
+    }
+  }
+  expect(found).toEqual([]);
+});
+
+/** What is wrong with the race line: not 32 pixels tall, or a word cut short or run out of it. */
+async function raceLineFaults(page: Page): Promise<string[]> {
+  return page.evaluate(() => {
+    const line = document.querySelector<HTMLElement>('.racer-line');
+    if (line === null) {
+      return ['no race line'];
+    }
+    const out: string[] = [];
+    const r = line.getBoundingClientRect();
+    if (Math.abs(r.height - 32) > 0.5) {
+      out.push(`the race line is ${r.height} px tall`);
+    }
+    for (const e of line.querySelectorAll<HTMLElement>('.rl-words > *, .rl-next > *, .rl-call')) {
+      if (e.offsetWidth === 0) {
+        continue;
+      }
+      if (e.scrollWidth > e.clientWidth + 1 || e.scrollHeight > e.clientHeight + 1) {
+        out.push(`“${e.textContent}” is cut short in the race line`);
+      }
+      const b = e.getBoundingClientRect();
+      if (
+        b.left < r.left - 0.5 ||
+        b.right > r.right + 0.5 ||
+        b.top < r.top - 0.5 ||
+        b.bottom > r.bottom + 0.5
+      ) {
+        out.push(`“${e.textContent}” runs out of the race line`);
+      }
+    }
+    return out;
+  });
+}
+
+/** What is wrong with one of the race's windows: off the screen, spilling, a key not the head keys' size or under another part. */
+async function raceWindowFaults(page: Page, sel: string): Promise<string[]> {
+  return page.evaluate((sel) => {
+    const el = document.querySelector(sel);
+    if (el === null) {
+      return [`no ${sel}`];
+    }
+    const out: string[] = [];
+    const r = el.getBoundingClientRect();
+    if (
+      r.left < -0.5 ||
+      r.top < -0.5 ||
+      r.right > innerWidth + 0.5 ||
+      r.bottom > innerHeight + 0.5
+    ) {
+      out.push(`${sel} is off the screen`);
+    }
+    if (el.scrollWidth > el.clientWidth + 1) {
+      out.push(`${sel} spills sideways`);
+    }
+    const hud = document.querySelector('.hud');
+    const key =
+      hud === null ? 40 : Number.parseFloat(getComputedStyle(hud).getPropertyValue('--key'));
+    for (const b of el.querySelectorAll<HTMLElement>('.rl-keys button')) {
+      const k = b.getBoundingClientRect();
+      if (Math.abs(k.height - key) > 0.5 || getComputedStyle(b).fontSize !== '14px') {
+        out.push(`“${b.textContent}” is ${k.height.toFixed(1)} px tall`);
+      }
+      el.scrollTop = el.scrollHeight;
+      const k2 = b.getBoundingClientRect();
+      const at = document.elementFromPoint(k2.left + k2.width / 2, k2.top + k2.height / 2);
+      if (at === null || !b.contains(at)) {
+        out.push(`“${b.textContent}” is under ${at?.className ?? 'nothing'}`);
+      }
+    }
+    return out;
+  }, sel);
+}
+
+test('the race line stands clear of every part and the boat on every screen, its words whole; the race’s windows fit', async ({
+  page,
+}) => {
+  test.skip(test.info().project.name === 'webgpu', 'the screen is the same on either back end');
+  test.setTimeout(180_000);
+  const first = SCREENS[1];
+  await page.setViewportSize({ width: first.width, height: first.height });
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await openScene(page, 'world=1', true);
+  await expect
+    .poll(() => page.evaluate(() => globalThis.keel.toHarbour()), { timeout: 30_000 })
+    .toBe(true);
+  await page.evaluate((long) => {
+    const k = globalThis.keel;
+    k.setState({ sheetLimit: 0.05, boom: 0, surge: 0 });
+    k.setControls(0, 0);
+    k.advance(30);
+    k.render();
+    k.camera('chase');
+    k.render();
+    // Everything out: the case's longest shape.
+    k.settings({ barometer: true, clock: true, pilotHead: true, rightOfWay: true });
+    k.raceGone(1, true);
+    k.raceTell(undefined, [
+      { name: long, boat: 'Gull' },
+      { name: '', boat: 'Petrel Of The Morning' },
+      { name: long, boat: 'Swift', machine: true },
+    ]);
+  }, LONG);
+  await expect(page.locator('.racer-line')).toBeVisible({ timeout: 15_000 });
+  const found: string[] = [];
+  /** The race told in a state: before the start over the line, racing, a call at its longest. */
+  const states = {
+    before: () => {
+      const k = globalThis.keel;
+      const t = k.racing().told;
+      if (t === null) {
+        return;
+      }
+      k.raceTell({ start: t.warning + 120 * 30 });
+      const m = t.marks[0];
+      k.racePicture([{ state: 'placed', east: m?.east ?? 0, north: m?.north ?? 0 }, {}, {}]);
+      k.raceCall({ kind: 'other' });
+    },
+    racing: () => {
+      const k = globalThis.keel;
+      const m = k.racing().told?.marks[1];
+      k.raceTell({ start: 1 });
+      // The twelfth of twelve, far behind, far from its mark.
+      k.racePicture([
+        { place: 12, gap: 754.5, leg: 2, east: (m?.east ?? 0) + 1400, north: m?.north ?? 0 },
+        ...Array.from({ length: 11 }, (_, i) => ({ place: i + 1, gap: i * 0.5 })),
+      ]);
+    },
+    call: () => {
+      const k = globalThis.keel;
+      k.raceCall({ article: '16.1', number: 2, other: 1, added: 10 });
+    },
+  };
+  for (const s of SCREENS) {
+    await page.setViewportSize({ width: s.width, height: s.height });
+    await page.waitForFunction(
+      ({ width, height }) =>
+        innerWidth === width &&
+        innerHeight === height &&
+        Math.abs(globalThis.keel.world.stage.camera.aspect - width / height) < 1e-6,
+      { width: s.width, height: s.height },
+    );
+    for (const [state, tell] of Object.entries(states)) {
+      await page.evaluate(tell);
+      await page.evaluate(() => globalThis.keel.render());
+      await expect(page.locator('.racer-line')).toHaveAttribute(
+        'data-state',
+        state === 'call' ? 'call' : state,
+      );
+      await page.waitForTimeout(100);
+      const where = `${s.name}, ${state}`;
+      for (const f of await raceLineFaults(page)) {
+        found.push(`${where}: ${f}`);
+      }
+      const seen = await parts(page);
+      for (const w of seen.words) {
+        found.push(`${where}: ${w}`);
+      }
+      const line = seen.parts.find(
+        (p) => p.name.startsWith('the line') && p.top < 60 + 0.5 && p.bottom - p.top < 33,
+      );
+      if (line === undefined) {
+        found.push(`${where}: no race line among the parts`);
+        continue;
+      }
+      if (
+        line.left < -0.5 ||
+        line.top < -0.5 ||
+        line.right > s.width + 0.5 ||
+        line.bottom > s.height + 0.5
+      ) {
+        found.push(`${where}: the race line is off the screen`);
+      }
+      const all = seen.boat === null ? seen.parts : [...seen.parts, seen.boat];
+      for (let i = 0; i < all.length; i++) {
+        for (let j = i + 1; j < all.length; j++) {
+          const a = all[i] as Box;
+          const b = all[j] as Box;
+          const names = [a.name, b.name];
+          const inCase = (n?: string) =>
+            n === 'the case' ||
+            n === 'the barometer pusher' ||
+            n === 'the clock pusher' ||
+            n === 'the board pusher';
+          const masthead = s.upright && names.some(inCase) && names.includes('the boat');
+          const own =
+            (names.includes('the case') && names.filter(inCase).length === 2) ||
+            (names.includes('the pocket chart') && names.includes('the weather pusher'));
+          if (!masthead && !own && overlap(a, b)) {
+            found.push(`${where}: ${a.name} covers ${b.name} (${edges(a)} and ${edges(b)})`);
+          }
+        }
+      }
+    }
+    // The race's windows: its ⋯, the finish's card, the results.
+    await page.locator('.racer-line .rl-more').click();
+    for (const f of await raceWindowFaults(page, '[data-panel=race-more]')) {
+      found.push(`${s.name}, the race’s window: ${f}`);
+    }
+    await page.keyboard.press('Escape');
+    await page.evaluate(() => {
+      const k = globalThis.keel;
+      k.raceFinish({ number: 2, place: 1, elapsedMs: 570_000 });
+      k.raceFinish({ number: 1, place: 10, elapsedMs: 3_604_200, added: 30 });
+    });
+    for (const f of await raceWindowFaults(page, '[data-panel=race-finish]')) {
+      found.push(`${s.name}, the finish’s card: ${f}`);
+    }
+    await page.evaluate(() => {
+      const k = globalThis.keel;
+      const row = (number: number, place: number, how: string, awards: string[] = []) => ({
+        number,
+        place,
+        how,
+        elapsedMs: how === 'finished' ? 570_000 + place * 9_000 : 0,
+        added: place === 10 ? 30 : 0,
+        marks: 3,
+        toGo: how === 'placed' ? 1_234 : 0,
+        medal: '',
+        awards,
+      });
+      k.raceResults({
+        results: [
+          row(2, 1, 'finished', ['photo-finish', 'best-start']),
+          row(3, 2, 'finished', ['photo-finish', 'crowd']),
+          row(1, 10, 'placed', ['spoon']),
+          row(4, 0, 'ret'),
+        ],
+      });
+    });
+    await expect(page.locator('[data-panel=race-results]')).toBeVisible();
+    for (const f of await raceWindowFaults(page, '[data-panel=race-results]')) {
+      found.push(`${s.name}, the results: ${f}`);
+    }
+    await page.keyboard.press('Escape');
+    await page.evaluate(() => {
+      const k = globalThis.keel;
+      const entrants = k.racing().told?.entrants;
+      k.raceGone(1, true);
+      k.raceTell(entrants === undefined ? {} : { entrants });
+    });
+  }
+  expect(found).toEqual([]);
+});
+
+test('the race bar stands at the foot, one row, clear of every part and the boat on every screen; the standings and its ⋯ fit', async ({
+  page,
+}) => {
+  test.skip(test.info().project.name === 'webgpu', 'the screen is the same on either back end');
+  test.setTimeout(150_000);
+  const first = SCREENS[1];
+  await page.setViewportSize({ width: first.width, height: first.height });
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await openScene(page, 'world=1', true);
+  await page.evaluate((long) => {
+    const k = globalThis.keel;
+    k.setState({ sheetLimit: 0.05, boom: 0, surge: 0 });
+    k.setControls(0, 0);
+    k.advance(30);
+    k.render();
+    k.camera('chase');
+    k.render();
+    k.settings({ barometer: true, clock: true });
+    k.raceGone(1, true);
+    k.raceTell({
+      entrants: Array.from({ length: 12 }, (_, i) => ({
+        number: i + 1,
+        name: i % 3 === 1 ? '' : long,
+        boat: 'Petrel Of The Morning',
+        machine: i % 3 === 2,
+        me: false,
+      })),
+    });
+    k.racePicture(
+      Array.from({ length: 12 }, (_, i) => ({ place: i + 1, gap: i * 61.5, leg: 2 })),
+      1,
+      12,
+    );
+    k.raceWatching(12);
+  }, LONG);
+  const bar = page.locator('.race-bar');
+  await expect(bar).toBeVisible({ timeout: 15_000 });
+  const found: string[] = [];
+  const states = {
+    before: () => {
+      const k = globalThis.keel;
+      const t = k.racing().told;
+      k.raceTell({ start: (t?.warning ?? 0) + 120 * 30, entrants: t?.entrants ?? [] });
+    },
+    racing: () => {
+      const k = globalThis.keel;
+      k.raceTell({ start: 1, entrants: k.racing().told?.entrants ?? [] });
+      k.raceCall({ kind: 'rounded', number: 1, mark: 2, place: 1 });
+      k.raceCheered({ number: 12, count: 30, crowd: 30, mine: true });
+    },
+  };
+  for (const s of SCREENS) {
+    await page.setViewportSize({ width: s.width, height: s.height });
+    await page.waitForFunction(
+      ({ width, height }) =>
+        innerWidth === width &&
+        innerHeight === height &&
+        Math.abs(globalThis.keel.world.stage.camera.aspect - width / height) < 1e-6,
+      { width: s.width, height: s.height },
+    );
+    for (const [state, tell] of Object.entries(states)) {
+      await page.evaluate(tell);
+      await page.evaluate(() => globalThis.keel.render());
+      await page.waitForTimeout(100);
+      const where = `${s.name}, ${state}`;
+      const seen = await parts(page);
+      for (const w of seen.words) {
+        found.push(`${where}: ${w}`);
+      }
+      const b = seen.parts.find((p) => p.name === 'the race bar');
+      if (b === undefined) {
+        found.push(`${where}: no race bar`);
+        continue;
+      }
+      if (b.bottom - b.top > 52) {
+        found.push(`${where}: the race bar is ${b.bottom - b.top} px tall: more than a row`);
+      }
+      if (b.left < -0.5 || b.right > s.width + 0.5 || b.bottom > s.height + 0.5) {
+        found.push(`${where}: the race bar is off the screen`);
+      }
+      if (s.height - b.bottom > 40) {
+        found.push(`${where}: the race bar is not at the foot (${Math.round(b.bottom)})`);
+      }
+      if (seen.parts.some((p) => p.name === 'the helm' || p.name === 'the sheet')) {
+        found.push(`${where}: a control that steers shows while watching`);
+      }
+      const all = seen.boat === null ? seen.parts : [...seen.parts, seen.boat];
+      for (const a of all) {
+        if (a !== b && overlap(a, b)) {
+          found.push(`${where}: the race bar and ${a.name} overlap (${edges(b)} and ${edges(a)})`);
+        }
+      }
+      if (state === 'racing' && !seen.parts.some((p) => p.name === 'the crier’s lines')) {
+        found.push(`${where}: no crier’s lines`);
+      }
+      for (const l of seen.parts.filter(
+        (p) => p.name.startsWith('the line') || p.name === 'the crier’s lines',
+      )) {
+        for (const a of all) {
+          if (a !== l && a.name !== 'the case' && !a.name.startsWith('the line') && overlap(a, l)) {
+            found.push(`${where}: ${l.name} covers ${a.name}`);
+          }
+        }
+      }
+      // Every key of the bar a 44 px touch, the name's slot ending in an ellipsis.
+      const keys = await page.evaluate(() =>
+        [...document.querySelectorAll<HTMLElement>('.race-bar button')].map((k) => {
+          const r = k.getBoundingClientRect();
+          return { name: k.getAttribute('aria-label') ?? k.innerText, w: r.width, h: r.height };
+        }),
+      );
+      for (const k of keys) {
+        if (k.h < 44 - 0.5 || k.w < 40 - 0.5) {
+          found.push(`${where}: “${k.name}” is ${k.w.toFixed(0)} × ${k.h.toFixed(0)} px`);
+        }
+      }
+    }
+    // The standings, over the room where the helm would be.
+    await bar.locator('.rb-words').click();
+    const sheet = await page.evaluate(() => {
+      const el = document.querySelector('[data-panel=race-standings]');
+      const bar = document.querySelector('.race-bar')?.getBoundingClientRect();
+      if (el === null || bar === undefined) {
+        return ['no standings'];
+      }
+      const out: string[] = [];
+      const r = el.getBoundingClientRect();
+      if (
+        r.left < -0.5 ||
+        r.top < -0.5 ||
+        r.right > innerWidth + 0.5 ||
+        r.bottom > innerHeight + 0.5
+      ) {
+        out.push('the standings are off the screen');
+      }
+      if (r.bottom > bar.top + 0.5) {
+        out.push('the standings cover the race bar');
+      }
+      if (el.scrollWidth > el.clientWidth + 1) {
+        out.push('the standings spill sideways');
+      }
+      for (const row of el.querySelectorAll<HTMLElement>('.rb-row')) {
+        if (row.getBoundingClientRect().height < 40 - 0.5) {
+          out.push(`a row of the standings is ${row.getBoundingClientRect().height} px tall`);
+        }
+      }
+      return out;
+    });
+    for (const f of sheet) {
+      found.push(`${s.name}, the standings: ${f}`);
+    }
+    await page.locator('.rb-scrim').click({ position: { x: 4, y: 4 } });
+    await bar.locator('.rb-more').click();
+    for (const f of await raceWindowFaults(page, '[data-panel=race-bar-more]')) {
+      found.push(`${s.name}, the bar’s ⋯: ${f}`);
+    }
+    await page.locator('[data-panel=race-bar-more]').getByRole('button', { name: 'Close' }).click();
+  }
+  expect(found).toEqual([]);
+});
+
+test('a race’s replay on the chart: its head under the strip and its time at the foot, clear of each other on every screen, its keys a 40 px touch; its windows and a gone world’s results fit', async ({
+  page,
+}) => {
+  test.skip(test.info().project.name === 'webgpu', 'the screen is the same on either back end');
+  test.setTimeout(120_000);
+  const first = SCREENS[1];
+  await page.setViewportSize({ width: first.width, height: first.height });
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await openScene(page, 'world=1', true);
+  const at = await page.evaluate(() => ({
+    east: globalThis.keel.world.pose.east,
+    north: globalThis.keel.world.pose.north + 600,
+  }));
+  await standInReplays(page, at.east, at.north, 12);
+  const box = (sel: string) =>
+    page.evaluate((s) => {
+      const r = document.querySelector(s)?.getBoundingClientRect();
+      return r === undefined
+        ? null
+        : { left: r.left, top: r.top, right: r.right, bottom: r.bottom };
+    }, sel);
+  const found: string[] = [];
+  const within = (
+    where: string,
+    name: string,
+    b: Omit<Box, 'name'> | null,
+    w: number,
+    h: number,
+  ) => {
+    if (b === null) {
+      found.push(`${where}: no ${name}`);
+      return false;
+    }
+    if (b.left < -0.5 || b.top < -0.5 || b.right > w + 0.5 || b.bottom > h + 0.5) {
+      found.push(`${where}: ${name} is off the screen (${edges({ name, ...b })})`);
+    }
+    return true;
+  };
+  // Every key of the parts as tall as the chart's keys (40 px), or a
+  // window's the head keys' (38 px on the shortest screens), whole within
+  // its part.
+  const keys = (sel: string) =>
+    page.evaluate((s) => {
+      const out: string[] = [];
+      const hud = document.querySelector('.hud');
+      const head =
+        hud === null ? 40 : Number.parseFloat(getComputedStyle(hud).getPropertyValue('--key'));
+      for (const part of document.querySelectorAll(s)) {
+        const p = part.getBoundingClientRect();
+        const least = part.closest('.rl-window') !== null ? head : 40;
+        for (const k of part.querySelectorAll('button')) {
+          const r = k.getBoundingClientRect();
+          if (r.height < least - 0.5 || r.width < 39.5) {
+            out.push(
+              `the key “${k.textContent}” is ${Math.round(r.width)} × ${Math.round(r.height)} px`,
+            );
+          }
+          if (
+            r.left < p.left - 0.5 ||
+            r.right > p.right + 0.5 ||
+            r.top < p.top - 0.5 ||
+            r.bottom > p.bottom + 0.5
+          ) {
+            out.push(`the key “${k.textContent}” spills out of its part`);
+          }
+        }
+      }
+      return out;
+    }, sel);
+  for (const s of SCREENS) {
+    await page.setViewportSize({ width: s.width, height: s.height });
+    await page.waitForFunction(
+      ({ width, height }) => innerWidth === width && innerHeight === height,
+      s,
+    );
+    await page.evaluate((c) => globalThis.keel.replay(c), RACED);
+    await page.evaluate(() => {
+      globalThis.keel.replayed(90);
+      globalThis.keel.render();
+    });
+    await expect(page.locator('.rp-bar')).toBeVisible();
+    const where = s.name;
+    const strip = await box('.chart-strip');
+    const head = await box('.rp-head');
+    const bar = await box('.rp-bar');
+    within(where, 'the strip', strip, s.width, s.height);
+    if (within(where, 'the replay’s head', head, s.width, s.height) && head !== null) {
+      if (head.bottom - head.top > 56) {
+        found.push(`${where}: the replay’s head is ${Math.round(head.bottom - head.top)} px tall`);
+      }
+      if (
+        strip !== null &&
+        head.top < strip.bottom - 0.5 &&
+        overlap({ name: 's', ...strip }, { name: 'h', ...head })
+      ) {
+        found.push(`${where}: the replay’s head and the strip overlap`);
+      }
+    }
+    if (within(where, 'the replay’s time', bar, s.width, s.height) && bar !== null) {
+      const most = s.width >= 540 ? 52 : 100;
+      if (bar.bottom - bar.top > most) {
+        found.push(`${where}: the replay’s time is ${Math.round(bar.bottom - bar.top)} px tall`);
+      }
+      if (s.height - bar.bottom > 40) {
+        found.push(`${where}: the replay’s time is not at the foot`);
+      }
+      for (const o of [strip, head]) {
+        if (o !== null && overlap({ name: 'o', ...o }, { name: 'b', ...bar })) {
+          found.push(`${where}: the replay’s time overlaps the chart’s top`);
+        }
+      }
+    }
+    for (const k of await keys('.rp-bar')) {
+      found.push(`${where}: ${k}`);
+    }
+    // The standings and the results, each within the screen, Close in reach.
+    for (const [open, panel] of [
+      ['[data-readout=replay-standing]', 'replay-standings'],
+      ['.rp-bar >> text=Results', 'replay-results'],
+    ] as const) {
+      await page.locator(open).click();
+      const win = page.locator(`[data-panel=${panel}]`);
+      await expect(win).toBeVisible();
+      within(
+        `${where}, ${panel}`,
+        'the window',
+        await box(`[data-panel=${panel}]`),
+        s.width,
+        s.height,
+      );
+      for (const k of await keys(`[data-panel=${panel}] .rl-keys`)) {
+        found.push(`${where}, ${panel}: ${k}`);
+      }
+      const close = win.getByRole('button', { name: 'Close' });
+      await close.scrollIntoViewIfNeeded();
+      within(
+        `${where}, ${panel}`,
+        'Close',
+        await close
+          .boundingBox()
+          .then((b) =>
+            b === null
+              ? null
+              : { left: b.x, top: b.y, right: b.x + b.width, bottom: b.y + b.height },
+          ),
+        s.width,
+        s.height,
+      );
+      await close.click();
+    }
+    await page.getByRole('button', { name: 'Back to sea' }).click();
+    // A race whose world has gone: its results alone.
+    await page.evaluate((c) => globalThis.keel.replay(c), GONE);
+    const alone = page.locator('[data-panel=replay-alone]');
+    await expect(alone).toBeVisible();
+    within(
+      `${where}, the results alone`,
+      'the window',
+      await box('[data-panel=replay-alone]'),
+      s.width,
+      s.height,
+    );
+    for (const k of await keys('[data-panel=replay-alone] .rl-keys')) {
+      found.push(`${where}, the results alone: ${k}`);
+    }
+    await alone.getByRole('button', { name: 'Close' }).click();
+  }
   expect(found).toEqual([]);
 });

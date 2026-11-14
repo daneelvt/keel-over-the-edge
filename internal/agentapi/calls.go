@@ -250,6 +250,12 @@ func (c *Core) call(ctx context.Context, d toolDef, h *helm, a *oauth.Accepted, 
 			return "", nil, r
 		}
 		return c.say(ctx, h, &o)
+	case toolRace:
+		var o raceArgs
+		if r := args(req, &o); r != nil {
+			return "", nil, r
+		}
+		return c.race(ctx, h, &o)
 	case toolHandbook:
 		var o handbookArgs
 		if r := args(req, &o); r != nil {
@@ -496,6 +502,7 @@ func (c *Core) observe(ctx context.Context, h *helm, req *mcp.CallToolRequest, o
 		}
 	}
 	defer f.Release()
+	c.knowRace(ctx, s, h, f)
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	if s != c.sea.Load() {

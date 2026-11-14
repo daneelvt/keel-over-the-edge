@@ -15,9 +15,11 @@ import type { Chart, ChartMode, TappedWeather } from '../chart/chart';
 import type { Forecasting } from '../chart/forecasting';
 import { drawPocketWeather, type PocketWeather, pocketWeather } from '../chart/pocketweather';
 import { formatPosition } from '../chart/position';
+import { type RaceDrawing, trackColour } from '../chart/racelayer';
 import {
   type ChartStore,
   chartList,
+  courseLines,
   dayText,
   edgeCaption,
   pocketCaption,
@@ -40,6 +42,8 @@ import { checkUnread, type NewsSource, unread } from './newsread';
 import type { NewsStory } from './newswords';
 import type { Notices } from './notices';
 import { MachineMark, PlayerText } from './player';
+import { type Racing, raceDrawingOf } from './racestate';
+import { type ReplayHost, useReplayParts } from './replayhost';
 
 /** What the chart's screens need of the world beyond the chart. */
 export interface ChartSea {
@@ -63,6 +67,12 @@ export interface ChartSea {
   speed: () => number;
   /** Sets the autopilot to hold a heading, rad, as its panel does; null with no boat to steer. */
   steer: ((heading: number) => void) | null;
+  /** The race the boat sails in: the pocket chart frames its course, the chart opens on it. */
+  racing?: Racing | null;
+  /** Watches a race's boat tapped on the charts, by its number: false where none may be (the page races, or watches no race). */
+  watchRacer?: ((n: number) => boolean) | null;
+  /** A race replayed on the chart. */
+  replay?: ReplayHost | null;
 }
 
 /** "Charted by <name>, Tuesday", the name as the player wrote it. */
@@ -256,6 +266,17 @@ function useGestures(sea: ChartSea) {
           lastTap = e.timeStamp;
           const x = e.clientX - r.left;
           const y = e.clientY - r.top;
+          // A race's boat tapped is watched, the chart open on it.
+          const racer = chartRacer(sea, view, x, y);
+          if (
+            racer > 0 &&
+            (sea.replay?.model.peek()?.follow(racer) === true || sea.watchRacer?.(racer) === true)
+          ) {
+            pts.delete(e.pointerId);
+            down = null;
+            before = pair();
+            return;
+          }
           let picked = view.pick(x, y);
           const weather = weatherTapped(sea, x, y, r);
           // Within a system, a place wins only under the finger.
@@ -498,15 +519,37 @@ function Tabs({ sea }: { sea: ChartSea }) {
   );
 }
 
-/** Everything charted, by kind, nearest first: a tap opens the chart there. */
+/** The island courses open, then everything charted, by kind, nearest first: a tap opens the chart there. */
 export function ChartList({ sea }: { sea: ChartSea }) {
   const store = sea.chart.store;
   void store.version.value;
   const b = sea.boat();
   const now = Date.now();
+  const courses = courseLines(store.courses, b.east, b.north, store.words.boats);
   return (
     <section class="chart-panel chart-list" aria-label="Everything charted">
       <h2>Charted: {store.size}</h2>
+      {courses.length === 0 ? null : (
+        <div>
+          <h3>Courses</h3>
+          <ul>
+            {courses.map((l) => (
+              <li key={`course:${l.course.number}`}>
+                <button
+                  type="button"
+                  class="chart-list-course"
+                  onClick={() => sea.chart.showCourse(l.course)}
+                >
+                  <span class="chart-list-name">{l.course.name}</span>
+                  <span class="chart-list-kind">{l.kind}</span>
+                  <span class="chart-list-where">{l.where}</span>
+                  <span class="chart-credit">{l.boats}</span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
       {chartList(store.entries, b.east, b.north).map(({ title, lines }) =>
         lines.length === 0 ? null : (
           <div key={title}>
@@ -698,6 +741,11 @@ export function ChartScreen({
   const upright = useUpright();
   const picked = chart.picked.value;
   const tapped = chart.tapped.value;
+  // A race replayed: its head under the strip, its time at the foot.
+  const host = sea.replay ?? null;
+  const replaying = mode === 'chart' && host !== null && host.model.value !== null;
+  const rp = useReplayParts(replaying);
+  const replay = replaying && rp !== null && host !== null ? { rp, host } : null;
   return (
     <div class="chart-screen" data-mode={mode} ref={screen}>
       <div class="chart-surface" ref={surface} hidden={mode !== 'chart'} />
@@ -718,7 +766,8 @@ export function ChartScreen({
           </button>
         </div>
         {/* Held upright the strip has no room for the clock: it stands under it. */}
-        {mode === 'chart' && upright ? <StripClock sea={sea} /> : null}
+        {mode === 'chart' && upright && replay === null ? <StripClock sea={sea} /> : null}
+        {replay !== null ? <replay.rp.ReplayHead host={replay.host} /> : null}
         <RimCountdown end={end} />
         {notices !== null ? (
           <div class="chart-notices">
@@ -732,8 +781,14 @@ export function ChartScreen({
       {mode === 'chart' && picked === null && tapped !== null ? (
         <SystemBoxPanel sea={sea} t={tapped} close={() => (chart.tapped.value = null)} />
       ) : null}
-      {mode === 'chart' && sea.forecasting !== null ? (
+      {mode === 'chart' && sea.forecasting !== null && !replaying ? (
         <TimeBar chart={chart} src={sea.forecasting} />
+      ) : null}
+      {replay !== null ? (
+        <>
+          <replay.rp.ReplayBar host={replay.host} />
+          <replay.rp.ReplayWindows host={replay.host} chart={chart} />
+        </>
       ) : null}
       {mode === 'list' ? <ChartList sea={sea} /> : null}
       {mode === 'news' ? <NewsTab sea={sea} /> : null}
@@ -791,7 +846,24 @@ export function PocketChart({
         <button
           type="button"
           class="pocket-chart"
-          onClick={() => sea.chart.show('chart')}
+          onClick={(e) => {
+            // A race's boat tapped is watched; anywhere else opens the chart.
+            const c = canvas.current;
+            if (c !== null && e.detail > 0) {
+              const r = c.getBoundingClientRect();
+              const n = pocketRacer(
+                sea,
+                ((e.clientX - r.left) * c.width) / r.width,
+                ((e.clientY - r.top) * c.height) / r.height,
+                c.width,
+                c.height,
+              );
+              if (n > 0 && sea.watchRacer?.(n) === true) {
+                return;
+              }
+            }
+            sea.chart.show('chart');
+          }}
           aria-label={caption.name}
         >
           <canvas ref={canvas} width={240} height={156} />
@@ -837,10 +909,72 @@ export function PocketChart({
   );
 }
 
+/** The pocket chart's frame on a race's course: its middle and how far it reaches, m. */
+export function raceFrame(d: RaceDrawing): { east: number; north: number; radius: number } {
+  const t = d.told;
+  let radius = Math.max(t.reach, 150);
+  for (const p of [...t.marks, ...t.way]) {
+    radius = Math.max(radius, Math.hypot(p.east - t.east, p.north - t.north) * 1.12);
+  }
+  return { east: t.east, north: t.north, radius };
+}
+
 /**
  * Draws the pocket chart: a disk seen tilted, its weather now if given,
- * its charted islands and lights, the mist band, the boat.
+ * its charted islands and lights, the mist band, the boat. In a race it
+ * is framed on the course: its way faint, its line, its marks numbered
+ * (the next ringed in gold), the boat's own track, the fleet as dots in
+ * their colours.
  */
+/** The race's boat whose dot on the full chart is nearest (x, y) CSS pixels, within a finger; 0 for none. */
+function chartRacer(sea: ChartSea, view: ChartView, x: number, y: number): number {
+  const race = view.raceDrawing();
+  if (race === null || (sea.watchRacer == null && sea.replay?.model.peek() == null)) {
+    return 0;
+  }
+  let best = 0;
+  // A finger's width either side: the dots are small and close.
+  let d = 2 * FINGER;
+  for (const b of race.boats) {
+    const p = view.screenOf(b.east, b.north);
+    if (p !== null) {
+      const dd = Math.hypot(p.x - x, p.y - y);
+      if (dd < d) {
+        d = dd;
+        best = b.number;
+      }
+    }
+  }
+  return best;
+}
+
+/** How near a tap on the pocket chart must be to a race's boat's dot to pick it, canvas pixels. */
+const POCKET_TAP = 14;
+
+/** The race's boat whose dot on the pocket chart, w by h canvas pixels, is nearest (px, py), within a tap; 0 for none. */
+export function pocketRacer(sea: ChartSea, px: number, py: number, w: number, h: number): number {
+  const race = sea.racing != null ? raceDrawingOf(sea.racing) : null;
+  if (race === null) {
+    return 0;
+  }
+  const frame = raceFrame(race);
+  const k = (w * 0.48) / frame.radius;
+  const tilt = 0.62;
+  let best = 0;
+  let d = POCKET_TAP;
+  for (const b of race.boats) {
+    const dd = Math.hypot(
+      w / 2 + (b.east - frame.east) * k - px,
+      h / 2 - (b.north - frame.north) * k * tilt - py,
+    );
+    if (dd < d) {
+      d = dd;
+      best = b.number;
+    }
+  }
+  return best;
+}
+
 export function drawPocket(
   c: HTMLCanvasElement,
   sea: ChartSea,
@@ -855,36 +989,40 @@ export function drawPocket(
   }
   const w = c.width;
   const h = c.height;
+  const race = sea.racing != null ? raceDrawingOf(sea.racing) : null;
+  const frame = race === null ? { east: 0, north: 0, radius: sea.lip } : raceFrame(race);
   // The disk nearly the canvas's width, room left at the rim for the
   // boat's mark; its weather cut to the disk's shape.
-  const k = (w * 0.48) / sea.lip;
+  const k = (w * 0.48) / frame.radius;
   const tilt = 0.62;
-  const x = (east: number) => w / 2 + east * k;
-  const y = (north: number) => h / 2 - north * k * tilt;
+  const x = (east: number) => w / 2 + (east - frame.east) * k;
+  const y = (north: number) => h / 2 - (north - frame.north) * k * tilt;
+  const rim = frame.radius * k;
   ctx.clearRect(0, 0, w, h);
   ctx.save();
   ctx.beginPath();
-  ctx.ellipse(w / 2, h / 2, sea.lip * k, sea.lip * k * tilt, 0, 0, 2 * Math.PI);
+  ctx.ellipse(w / 2, h / 2, rim, rim * tilt, 0, 0, 2 * Math.PI);
   ctx.fillStyle = 'rgba(236, 224, 194, 0.92)';
   ctx.fill();
   ctx.strokeStyle = 'rgba(59, 46, 34, 0.9)';
   ctx.lineWidth = 2;
   ctx.stroke();
-  // The mist band.
-  ctx.beginPath();
-  ctx.ellipse(w / 2, h / 2, sea.lip * k * 0.93, sea.lip * k * tilt * 0.93, 0, 0, 2 * Math.PI);
-  ctx.setLineDash([3, 3]);
-  ctx.lineWidth = 1;
-  ctx.stroke();
-  ctx.setLineDash([]);
-  if (weather !== null) {
-    // The weather within the rim: a storm on it is cut by the world's edge.
-    ctx.save();
+  if (race === null) {
+    // The mist band.
     ctx.beginPath();
-    ctx.ellipse(w / 2, h / 2, sea.lip * k - 1, sea.lip * k * tilt - 1, 0, 0, 2 * Math.PI);
-    ctx.clip();
+    ctx.ellipse(w / 2, h / 2, rim * 0.93, rim * tilt * 0.93, 0, 0, 2 * Math.PI);
+    ctx.setLineDash([3, 3]);
+    ctx.lineWidth = 1;
+    ctx.stroke();
+    ctx.setLineDash([]);
+  }
+  // Everything within the rim.
+  ctx.beginPath();
+  ctx.ellipse(w / 2, h / 2, rim - 1, rim * tilt - 1, 0, 0, 2 * Math.PI);
+  ctx.clip();
+  if (weather !== null) {
+    // A storm on the rim is cut by the world's edge.
     drawPocketWeather(ctx, weather, x, y, k, tilt);
-    ctx.restore();
   }
   for (const e of sea.chart.store.entries) {
     if (e.subject === 'island' && e.bounds !== null) {
@@ -895,6 +1033,9 @@ export function drawPocket(
       ctx.fillStyle = '#a8236e';
       ctx.fillRect(x(e.east) - 1.5, y(e.north) - 1.5, 3, 3);
     }
+  }
+  if (race !== null) {
+    drawPocketRace(ctx, race, x, y);
   }
   // The boat, and its heading.
   const bx = x(b.east);
@@ -912,6 +1053,100 @@ export function drawPocket(
   ctx.restore();
 }
 
+/** A race on the pocket chart: its way, its lines, its marks numbered, the boat's track and the fleet. */
+function drawPocketRace(
+  ctx: CanvasRenderingContext2D,
+  d: RaceDrawing,
+  x: (east: number) => number,
+  y: (north: number) => number,
+): void {
+  const t = d.told;
+  const ink = 'rgba(59, 46, 34, 0.9)';
+  if (t.way.length > 1) {
+    ctx.beginPath();
+    for (const [i, p] of t.way.entries()) {
+      if (i === 0) {
+        ctx.moveTo(x(p.east), y(p.north));
+      } else {
+        ctx.lineTo(x(p.east), y(p.north));
+      }
+    }
+    ctx.setLineDash([4, 4]);
+    ctx.lineWidth = 1.2;
+    ctx.strokeStyle = 'rgba(59, 46, 34, 0.4)';
+    ctx.stroke();
+    ctx.setLineDash([]);
+  }
+  for (const line of [
+    t.pin !== null && t.committee !== null ? [t.pin, t.committee] : null,
+    t.finish,
+  ]) {
+    if (line == null) {
+      continue;
+    }
+    const [a, b] = line as [{ east: number; north: number }, { east: number; north: number }];
+    ctx.beginPath();
+    ctx.moveTo(x(a.east), y(a.north));
+    ctx.lineTo(x(b.east), y(b.north));
+    ctx.lineWidth = 2.5;
+    ctx.strokeStyle = ink;
+    ctx.stroke();
+  }
+  // The boat's own track.
+  const own = d.tracks.get(d.watched) ?? [];
+  if (own.length >= 4) {
+    ctx.beginPath();
+    for (let i = 0; i + 1 < own.length; i += 2) {
+      const px = x(own[i] ?? 0);
+      const py = y(own[i + 1] ?? 0);
+      if (i === 0) {
+        ctx.moveTo(px, py);
+      } else {
+        ctx.lineTo(px, py);
+      }
+    }
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = 'rgba(176, 65, 45, 0.85)';
+    ctx.stroke();
+  }
+  const next = t.legs[d.next]?.mark ?? 0;
+  ctx.font = '600 15px "Alegreya Sans", system-ui, sans-serif';
+  ctx.textBaseline = 'middle';
+  for (const m of t.marks) {
+    const mx = x(m.east);
+    const my = y(m.north);
+    if (m.number === next && next > 0) {
+      ctx.beginPath();
+      ctx.arc(mx, my, 9, 0, 2 * Math.PI);
+      ctx.lineWidth = 2.5;
+      ctx.strokeStyle = '#c8952c';
+      ctx.stroke();
+    }
+    ctx.beginPath();
+    ctx.arc(mx, my, 4.5, 0, 2 * Math.PI);
+    ctx.fillStyle = '#e0782c';
+    ctx.fill();
+    ctx.lineWidth = 1;
+    ctx.strokeStyle = ink;
+    ctx.stroke();
+    ctx.fillStyle = '#3b2e22';
+    ctx.fillText(String(m.number), mx + 8, my - 7);
+  }
+  // The fleet, each a dot in its colour; the boat's own is its arrow.
+  for (const b of d.boats) {
+    if (b.number === d.watched) {
+      continue;
+    }
+    ctx.beginPath();
+    ctx.arc(x(b.east), y(b.north), 3.5, 0, 2 * Math.PI);
+    ctx.fillStyle = trackColour(b.number);
+    ctx.fill();
+    ctx.lineWidth = 1;
+    ctx.strokeStyle = ink;
+    ctx.stroke();
+  }
+}
+
 /** The notice shown, with its way to dismiss it; the line is in the page from the start, empty. */
 export function NoticeLine({ notices }: { notices: Notices }) {
   const n = notices.shown.value;
@@ -922,8 +1157,23 @@ export function NoticeLine({ notices }: { notices: Notices }) {
   return (
     <div class="notice-line" role="status" data-readout="notice">
       {n === null ? null : (
-        <p class={`panel notice notice-${n.kind.level}`}>
+        <p
+          class={`panel notice notice-${n.kind.level}${n.action === undefined ? '' : ' with-act'}`}
+        >
           <span>{n.text}</span>
+          {n.action !== undefined ? (
+            <button
+              type="button"
+              class="notice-act"
+              onClick={() => {
+                const a = n.action;
+                notices.dismiss(performance.now());
+                a?.act();
+              }}
+            >
+              {n.action.label}
+            </button>
+          ) : null}
           <button
             type="button"
             class="notice-dismiss"

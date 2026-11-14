@@ -7,7 +7,8 @@
 
 import { describe, expect, test } from 'vitest';
 import { catalog } from '../catalog';
-import type { LogDay, LogEntry, LogRecord, LogVoyage } from './logapi';
+import type { LogDay, LogEntry, LogRecord, LogRibbon, LogVoyage } from './logapi';
+
 import {
   bumpWords,
   companyWords,
@@ -19,6 +20,8 @@ import {
   nm,
   recordLines,
   remarks,
+  ribbonCounts,
+  ribbonLines,
   span,
   worldHeading,
 } from './logwords';
@@ -203,5 +206,60 @@ describe('the collection', () => {
     }
     expect(kindName('edge', 'within-10m')).toBe('Within 10 m');
     expect(kindName('weather', 'night-at-sea')).toBe('A night at sea');
+  });
+});
+
+describe('the ribbons', () => {
+  test('the counts kept for good, a line each, those with nothing left out', () => {
+    expect(
+      ribbonCounts({
+        sailed: 12,
+        top3: 5,
+        wins: 1,
+        awards: { spoon: 3, 'best-start': 1 },
+        medals: { gold: 2 },
+        ran: 4,
+      }),
+    ).toEqual([
+      '12 races sailed · 5 in the top three · 1 win',
+      '1 best start · 3 wooden spoons',
+      '2 gold medals',
+      'Ran 4 races',
+    ]);
+    expect(ribbonCounts({ sailed: 1, top3: 0, wins: 0, awards: {}, medals: {}, ran: 0 })).toEqual([
+      '1 race sailed',
+    ]);
+  });
+
+  test('a race’s ribbon: its name, the boats and the place of how many; the course and the rest', () => {
+    const r: LogRibbon = {
+      world: 14,
+      at: 0,
+      code: 'abcdefghij',
+      name: 'Tuesday Triangle',
+      kind: 'race',
+      course: 'Short triangle',
+      boat: 'b',
+      fleet: 7,
+      harbour: true,
+      role: 'crew',
+      place: 2,
+      how: 'finished',
+      awards: ['spoon'],
+      skipper: { name: 'Tom' },
+    };
+    expect(ribbonLines(r, 'Jolly boat')).toEqual([
+      'Tuesday Triangle · Jolly boats · 2nd of 7',
+      'Short triangle · a harbour race · aboard Tom’s boat · the wooden spoon: never gave up',
+    ]);
+    expect(
+      ribbonLines(
+        { ...r, kind: 'trial', medal: 'gold', role: 'skipper', awards: [], harbour: false },
+        'Skiff',
+      )[0],
+    ).toBe('Tuesday Triangle · Skiffs · a gold medal');
+    expect(ribbonLines({ ...r, how: 'ret', role: 'skipper', awards: [] }, 'Jolly boat')[0]).toBe(
+      'Tuesday Triangle · Jolly boats · retired',
+    );
   });
 });

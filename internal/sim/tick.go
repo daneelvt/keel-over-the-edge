@@ -101,6 +101,8 @@ func (w *World) inputs() {
 			next.Bumps = append(next.Bumps, b)
 		}
 	}
+	raceCopy(next, cur)
+	w.racePlaced = w.racePlaced[:0]
 	next.Queue = append(next.Queue[:0], cur.Queue...)
 	next.Changed = next.Changed[:0]
 	clear(next.Events) // drop the old events' references

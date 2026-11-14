@@ -64,6 +64,7 @@ type report struct {
 	Aboard  string        `json:"aboard,omitempty"`
 	Boat    *boatFacts    `json:"boat,omitempty"`
 	Wind    *windFacts    `json:"wind,omitempty"`
+	Race    *raceFacts    `json:"race,omitempty"`
 	Shoal   *shoalFacts   `json:"shoal,omitempty"`
 	Sky     *skyFacts     `json:"sky,omitempty"`
 	Pilot   *pilotFacts   `json:"pilot,omitempty"`
@@ -220,6 +221,9 @@ func (h *helm) reportFor(s *Sea, f *bus.Frame, sl int32, detail string, since in
 	r.Wind = &windFacts{From: shown.Degrees, Point: shown.Point, Knots: shown.Knots, Force: shown.Force,
 		OffBow: degrees(math.Abs(off)), Side: side(off), Apparent: knots0(float64(in.ApparentSpeed)),
 		AppAngle: degrees(math.Abs(float64(in.ApparentAngle))), Lee: leeOf(s, st.X, st.Y, wp.MeanFrom)}
+
+	// Its race, while it sails one.
+	r.Race = h.raceFactsFor(s, f, sl, r.brief)
 
 	// The shoal water about the boat: in the brief report while it is
 	// near, or the boat is on it or aground.
@@ -950,6 +954,9 @@ func (r *report) text() string {
 			b.WriteString(" · in the lee of land to the " + w.Lee)
 		}
 		b.WriteByte('\n')
+	}
+	if rc := r.Race; rc != nil {
+		rc.text(&b)
 	}
 	if s := r.Shoal; s != nil {
 		b.WriteString("Shoal: " + s.text() + "\n")

@@ -18,6 +18,7 @@ import (
 	"github.com/daneelvt/keel-over-the-edge/internal/life"
 	"github.com/daneelvt/keel-over-the-edge/internal/oauth"
 	"github.com/daneelvt/keel-over-the-edge/internal/physics"
+	"github.com/daneelvt/keel-over-the-edge/internal/race/committee"
 	"github.com/daneelvt/keel-over-the-edge/internal/sim"
 	"github.com/daneelvt/keel-over-the-edge/internal/weather"
 )
@@ -43,23 +44,43 @@ func newHarness(t *testing.T, limit int, knots, from float64) *harness {
 // sea makes from the catalog, nil for none.
 func newHarnessOf(t *testing.T, limit int, knots, from float64, sea func(*catalog.Catalog) *life.Schedule) *harness {
 	t.Helper()
+	return newHarnessWith(t, harnessWith{limit: limit, knots: knots, from: from, life: sea})
+}
+
+// harnessWith is what a harness's world is made with: its limit of boats,
+// its steady wind of knots from from degrees, the sea's life of the
+// schedule life makes from the catalog (nil for none), and the races run
+// on stage, kept ashore by races (nil for none).
+type harnessWith struct {
+	limit       int
+	knots, from float64
+	life        func(*catalog.Catalog) *life.Schedule
+	stage       *committee.Stage
+	races       Races
+}
+
+// newHarnessWith is a harness's world made with w.
+func newHarnessWith(t *testing.T, hw harnessWith) *harness {
+	t.Helper()
 	cat, err := catalog.Load()
 	if err != nil {
 		t.Fatal(err)
 	}
+	limit := hw.limit
 	waves, kinds := cat.Prepare()
-	tl := weather.FixedIn(cat.PrepareWeather(), physics.SteadySpell(knots*nm/3600, from*3.141592653589793/180, 0))
+	tl := weather.FixedIn(cat.PrepareWeather(), physics.SteadySpell(hw.knots*nm/3600, hw.from*3.141592653589793/180, 0))
 	enc := cat.PrepareEncounters()
 	var ls *life.Schedule
-	if sea != nil {
-		ls = sea(cat)
+	if hw.life != nil {
+		ls = hw.life(cat)
 	}
-	w, err := sim.New(sim.Config{Capacity: 64, Kinds: kinds, Waves: waves, Weather: tl, Encounters: enc, Limit: limit, Tick: 1000, Life: ls, Capacities: crewed(cat)})
+	w, err := sim.New(sim.Config{Capacity: 64, Kinds: kinds, Waves: waves, Weather: tl, Encounters: enc, Limit: limit, Tick: 1000, Life: ls,
+		Capacities: crewed(cat), Races: hw.stage})
 	if err != nil {
 		t.Fatal(err)
 	}
 	s := &Sea{Number: 1, Epoch: time.Now(), Bus: w.Bus(), Boats: cat.Boats, Limit: limit, AICap: w.AICap(), AIReserve: w.AIReserve(),
-		Timeline: tl, Waves: waves, Words: weather.WordsOf(cat), Catalog: cat, Kinds: kinds, Encounters: enc, Life: ls}
+		Timeline: tl, Waves: waves, Words: weather.WordsOf(cat), Catalog: cat, Kinds: kinds, Encounters: enc, Life: ls, Races: hw.races}
 	h := &harness{core: NewCore(CoreConfig{Silence: time.Minute, Log: slog.New(slog.DiscardHandler)}), sea: s, w: w, done: make(chan struct{})}
 	w.Record(h.core.Open(s))
 	ctx, cancel := context.WithCancel(context.Background())

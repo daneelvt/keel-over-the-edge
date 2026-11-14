@@ -94,6 +94,9 @@ type config struct {
 	// is: a stream's bed, a mangrove shore, sulphur, guano.
 	featureSurface struct{ stream, mangrove, sulphur, guano uint8 }
 	score          catalog.WorldScore
+	// courses are the courses' values, with the boats and the wind they
+	// are sized for.
+	courses courseConfig
 }
 
 // formCover is a form of plant on a surface, and the share of it their
@@ -232,6 +235,7 @@ func newConfig(cat *catalog.Catalog) (*config, error) {
 		}
 	}
 	c.towns, c.moorings = w.Towns, w.Start.Moorings
+	c.courses = newCourseConfig(cat)
 	c.buildings = kindsOf(w.Towns.Buildings)
 	c.terraceDm = int16(max(round(float64(w.Look.Terrace*10)), 1))
 	parts := map[catalog.Town]*uint8{catalog.TownStreet: &c.townSurface.street, catalog.TownQuay: &c.townSurface.quay,

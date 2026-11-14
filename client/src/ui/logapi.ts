@@ -119,6 +119,57 @@ export interface LogRecord {
   of: number;
 }
 
+/** A sailor's races counted over every world. */
+export interface RaceCounts {
+  sailed: number;
+  top3: number;
+  wins: number;
+  /** Each award given, by its name: best-start, comeback, photo-finish, crowd, spoon. */
+  awards: Record<string, number>;
+  /** Each time trial's medal: harbourmaster, gold, silver, bronze. */
+  medals: Record<string, number>;
+  ran: number;
+}
+
+/** A race in a log: the sailor's ribbon of it. Times ms. */
+export interface LogRibbon {
+  world: number;
+  at: number;
+  code: string;
+  name: string;
+  kind: 'race' | 'trial';
+  course: string;
+  /** The boats' kind, by its catalog id. */
+  boat: string;
+  boatName?: string;
+  fleet: number;
+  harbour?: boolean;
+  newcomers?: boolean;
+  role: 'skipper' | 'crew';
+  place?: number;
+  how?: 'finished' | 'placed' | 'ret' | 'dns' | 'removed';
+  medal?: string;
+  awards: string[];
+  /** A crew's skipper, where named. */
+  skipper?: LogPerson;
+  /** In the reader's own log: whether its wooden spoon hangs from their sterns. */
+  hung?: boolean;
+}
+
+/**
+ * A log's races: the counts kept for good; and, read by the page, races
+ * from the newest, with more while older ones follow. The log itself
+ * carries the counts alone.
+ */
+export interface LogRibbons {
+  counts: RaceCounts;
+  races?: LogRibbon[];
+  more?: boolean;
+}
+
+/** How many races a page of a log's ribbons lists, as the server pages them. */
+export const RIBBONS_PAGE = 30;
+
 /** A sailor's log, a world's days at a time. */
 export interface Log {
   name: string;
@@ -138,6 +189,10 @@ export interface Log {
   collection: LogGroup[];
   zone: string;
   worldNow?: number;
+  /** The races sailed; none from an older server. */
+  ribbons?: LogRibbons | null;
+  /** The sailor wears the winner's cockade, for a race won in the world sailed now. */
+  cockade?: boolean;
 }
 
 /** What asking for a log came to: the log; not there to be read (unknown and refused alike); or not had. */
@@ -149,13 +204,15 @@ export type LogShown = 'sailors' | 'me';
 /** Where the log is read from: the server's routes, or a test's stand-in. */
 export interface LogSource {
   read(who: LogWho, world: number): Promise<LogAnswer>;
+  /** A page of a log's races, the newest first, after the first from; null if not had. */
+  ribbons(who: LogWho, from: number): Promise<LogRibbons | null>;
   setShown(shown: LogShown): Promise<boolean>;
   /** Whether a sailor's boat can be watched now. */
   watchable(name: string): Promise<boolean>;
 }
 
-/** The route a log is read by. */
-export function logPath(who: LogWho, world: number): string {
+/** The route a log is read by; with from, a page of its races. */
+export function logPath(who: LogWho, world: number, from: number | null = null): string {
   const q = new URLSearchParams();
   if (who.kind === 'sailor') {
     q.set('name', who.name);
@@ -164,6 +221,12 @@ export function logPath(who: LogWho, world: number): string {
   }
   if (world > 0) {
     q.set('world', String(world));
+  }
+  if (from !== null) {
+    q.set('part', 'ribbons');
+    if (from > 0) {
+      q.set('from', String(from));
+    }
   }
   const base =
     who.kind === 'own' ? '/api/me/log' : who.kind === 'sailor' ? '/api/log' : '/api/machines/log';
@@ -187,6 +250,21 @@ export const serverLogs: LogSource = {
       }
       const log = (await res.json()) as Log;
       return typeof log?.name === 'string' ? { log } : null;
+    } catch {
+      return null;
+    }
+  },
+  async ribbons(who, from) {
+    try {
+      const res = await fetch(logPath(who, 0, from), {
+        cache: 'no-store',
+        credentials: 'same-origin',
+      });
+      if (!res.ok) {
+        return null;
+      }
+      const rb = (await res.json()) as LogRibbons;
+      return typeof rb?.counts === 'object' && rb.counts !== null ? rb : null;
     } catch {
       return null;
     }

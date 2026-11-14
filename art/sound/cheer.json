@@ -1,0 +1,37 @@
+{
+  "licence": "SPDX-License-Identifier: LicenseRef-All-Rights-Reserved. Art: all rights reserved, not covered by the AGPL. See art/README.md.",
+  "description": "A crowd on the quay cheering a boat in a race: a \"huzzah\" from a few voices for one cheer, swelling to a roar for many. Each voice is a breath and a vowel, after the source-filter model of the voice (Fant, Acoustic Theory of Speech Production, 1960; Farnell, Designing Sound, 2010, practical on voices): the \"h\" a short burst of noise through a band about breath's centre, then \"ah\", a sawtooth at the voice's pitch through formant bands of the open vowel, its pitch rising by rise times on the stressed second syllable over its first share of the vowel and falling by fall times to its end, with a slow vibrato, its loudness swelling in over attack seconds and dying over the rest. The voices, between least and most, number least and perDouble more each time the cheers double, men's and women's pitches drawn between low and high, each starting within spread seconds of the first, placed across the stereo field by width. Under them, from roarFrom cheers, a roar: noise between the roar's low and high frequencies, louder by perDouble each time the cheers double up to most; and claps, short bursts of high noise, rate a second a cheer up to most, over the roar's length. A cheer of the player's own is near and bright, at own's level; the crowd cheering the player's boat is heard from the quay, distant: low-passed at distant's cutoff, at its level, louder with more. Frequencies in Hz, times in seconds, levels as gains.",
+  "breath": { "centre": 1800, "q": 0.8, "length": 0.07, "level": 0.25 },
+  "vowel": {
+    "length": [0.55, 0.85],
+    "attack": 0.05,
+    "rise": 1.35,
+    "riseShare": 0.3,
+    "fall": 0.8,
+    "vibrato": { "rate": 5.5, "depth": 0.012 },
+    "level": 0.5
+  },
+  "formants": [
+    { "frequency": 730, "q": 6, "level": 1 },
+    { "frequency": 1090, "q": 7, "level": 0.55 },
+    { "frequency": 2440, "q": 9, "level": 0.2 }
+  ],
+  "pitch": { "low": 105, "high": 270 },
+  "voices": { "least": 3, "perDouble": 2, "most": 14 },
+  "spread": 0.35,
+  "width": 0.8,
+  "roar": {
+    "from": 3,
+    "low": 350,
+    "high": 2400,
+    "attack": 0.25,
+    "length": 1.6,
+    "level": 0.12,
+    "perDouble": 0.05,
+    "most": 0.35
+  },
+  "claps": { "from": 4, "rate": 1.2, "most": 14, "length": 0.012, "centre": 2600, "level": 0.18 },
+  "own": { "level": 0.55 },
+  "distant": { "cutoff": 2200, "level": 0.35, "perDouble": 0.08, "most": 0.7 },
+  "level": 0.8
+}

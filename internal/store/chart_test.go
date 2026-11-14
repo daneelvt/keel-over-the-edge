@@ -122,6 +122,60 @@ func TestChartingsWritten(t *testing.T) {
 	}
 }
 
+// TestCourseStory: a charting that opens an island course writes the
+// course's story with it, about the course, naming the charter, once
+// however often it is written; a course a beacon is charted with opens
+// the same.
+func TestCourseStory(t *testing.T) {
+	ctx := context.Background()
+	s, u := storetest.Store(t, store.Options{})
+	world, err := s.ActiveOrFirstWorld(ctx, time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	ann, err := s.CreateAccount(ctx, storetest.NewAccount("Ann Bonny", "annbonny", [32]byte{1}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	epoch := take(t, newLease(t, u, "keel-a dev", store.LeaseOptions{}))
+	p, err := store.OpenPersister(ctx, u, store.Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer p.Close()
+	rules := &store.NewsRules{Zone: "America/New_York", Column: "discoveries"}
+	open := store.CourseOpen{Number: 3, Title: "Round Gannet Holm", What: "a new course of 2.4 NM", X: 100, Y: -200, Score: 5}
+	b := store.Batch{World: world.ID, Epoch: epoch, News: rules, Charting: []store.Charting{
+		{Subject: "island", Number: 7, Credited: true, Account: ann, Boat: 4, Tick: 90, X: 1, Y: 2, Worth: 1,
+			News:  &store.NewsItem{Story: store.StoryCharting, Score: 1, Title: "Gannet Holm", What: "an island", Island: 7, Boat: "Gull", BoatKind: "skiff"},
+			Opens: []store.CourseOpen{open}},
+		// A beacon charted with a reef, and the same course again.
+		{Subject: "place", Number: 300, Credited: true, Account: ann, Boat: 4, Tick: 90, X: 1, Y: 2, WithSubject: "island", WithNumber: 7,
+			Opens: []store.CourseOpen{open}},
+	}}
+	if err := p.Write(ctx, b); err != nil {
+		t.Fatal(err)
+	}
+	ny, _ := time.LoadLocation("America/New_York")
+	stories, err := s.DayStories(ctx, world.ID, b.Charting[0].At.In(ny))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var courses []store.Story
+	for _, st := range stories {
+		if st.Story == store.StoryCourse {
+			courses = append(courses, st)
+		}
+	}
+	if len(courses) != 1 {
+		t.Fatalf("%d course stories: %+v", len(courses), stories)
+	}
+	if c := courses[0]; c.Subject != store.SubjectCourse || c.Number != 3 || c.Title != "Round Gannet Holm" || c.Account != ann ||
+		c.Score != 5 || c.Facts.Boat != "Gull" || c.X != 100 || c.Y != -200 {
+		t.Errorf("the course's story: %+v", c)
+	}
+}
+
 // TestNoticesOff: the kinds switched off are kept on the account and read
 // with its session.
 func TestNoticesOff(t *testing.T) {

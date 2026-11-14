@@ -130,3 +130,10 @@ SELECT facts FROM news_item WHERE world_id = @world_id AND story = 'arrival';
 UPDATE news_item SET struck = @struck
 WHERE world_id = @world_id AND id = @id AND story IS NOT NULL AND story <> 'edition'
 RETURNING account_id, sailor, title, story::text AS story;
+
+-- name: DayRaces :one
+-- The races run in a world in a time: finished, with a boat that
+-- started.
+SELECT count(*)::integer FROM race r
+WHERE r.world_id = @world_id AND r.kind = 'race' AND r.state = 'finished' AND r.ended_at >= @since AND r.ended_at < @until
+  AND EXISTS (SELECT 1 FROM race_entry e WHERE e.world_id = r.world_id AND e.race_id = r.id AND e.started_at IS NOT NULL);

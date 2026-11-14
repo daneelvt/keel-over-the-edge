@@ -36,9 +36,12 @@ import {
 import type { WebGPURenderer } from 'three/webgpu';
 import type { ChartEntry } from '../net/messages';
 import { chartMaterial } from '../render/materials';
+import type { Racing } from '../ui/racestate';
+import { raceDrawingOf } from '../ui/racestate';
 import { ARROW_HEIGHT, ARROW_NOSE, ARROW_TAIL, arrowSize, placeChartCamera } from './arrow';
 import type { IslandModel, Models } from './model';
-import { PAPER_MARGIN, type PaperLook, paintPaper } from './paper';
+import { PAPER_MARGIN, type PaperLook, paintCourses, paintPaper } from './paper';
+import { type RaceDrawing, RaceLayer } from './racelayer';
 import { type ChartStore, keyOf } from './store';
 import type { ChartWeather } from './weatherlayer';
 
@@ -140,6 +143,10 @@ export class ChartView {
   streaksOn: () => boolean = () => true;
   /** How many times it was drawn (the tests). */
   draws = 0;
+  /** The race drawn on it, from the boat's race unless set: a replay sets its own. */
+  raceDrawing: () => RaceDrawing | null = () => null;
+  /** The race's course, tracks and boats over the paper. */
+  readonly race = new RaceLayer();
 
   readonly #store: ChartStore;
   readonly #models: Models;
@@ -171,6 +178,8 @@ export class ChartView {
   /** The models asked for and not yet had. */
   readonly #asked = new Set<string>();
   #built = -1;
+  /** The courses open when the paper was last painted. */
+  #courses = -1;
   #buildWanted = true;
   #dirty = true;
   #last = Number.NEGATIVE_INFINITY;
@@ -182,6 +191,9 @@ export class ChartView {
   #bearing = 0;
   #width = 1;
   #height = 1;
+  /** Whether the screen's size is known, from the first draw since the chart opened; a race framed before it is framed again then, as it was asked. */
+  #sized = false;
+  #framing: { room: number; tight: boolean; lower: number } | null = null;
   readonly #v = new Vector3();
   readonly #ray = new Raycaster();
 
@@ -191,8 +203,12 @@ export class ChartView {
     look: ChartLook,
     boatAt: () => BoatAt,
     wind: WindSampler | null,
+    racing: Racing | null = null,
   ) {
     this.#store = store;
+    if (racing !== null) {
+      this.raceDrawing = () => raceDrawingOf(racing);
+    }
     this.#models = models;
     this.#look = look;
     this.#boatAt = boatAt;
@@ -214,7 +230,15 @@ export class ChartView {
     this.#streakXY = new Float32Array(look.streaks.count * 4);
     this.#streaks = this.#makeStreaks();
     const falls = this.#makeFalls();
-    this.scene.add(paper, this.#land, this.#towers, this.#boat, this.#streaks, falls);
+    this.scene.add(
+      paper,
+      this.#land,
+      this.#towers,
+      this.#boat,
+      this.#streaks,
+      falls,
+      this.race.group,
+    );
     // The table the chart lies on.
     this.scene.background = new Color(TABLE);
     const n = look.wind;
@@ -280,12 +304,18 @@ export class ChartView {
       l.el.remove();
     }
     this.#labels.clear();
+    this.race.attach(layer);
     this.#dirty = true;
   }
 
-  /** Opens or closes it; opened, it looks at the boat. */
+  /** Opens or closes it; opened, it looks at the boat, or in a race at its course. */
   show(open: boolean): void {
     if (open && !this.open) {
+      // The screen may have turned while the chart was closed: its size
+      // is known again at its first draw.
+      this.#sized = false;
+    }
+    if (open && !this.open && !this.frameRace()) {
       const b = this.#boatAt();
       this.lookAt(b.east, b.north, 9000);
     }
@@ -298,6 +328,53 @@ export class ChartView {
     this.#target.set(east, north);
     this.#distance = Math.min(Math.max(distance, NEAREST), FURTHEST);
     this.#dirty = true;
+  }
+
+  /**
+   * Looks at the race drawn, its whole racing area in view, room times as
+   * far off; tight, its course alone (its marks, its lines and its way);
+   * the course lower on the screen by a share of its reach, to clear
+   * what stands at the screen's top: false with none.
+   */
+  frameRace(room = 1, tight = false, lower = 0): boolean {
+    const d = this.raceDrawing();
+    if (d === null) {
+      return false;
+    }
+    if (!this.#sized) {
+      this.#framing = { room, tight, lower };
+    }
+    const t = d.told;
+    let east = t.east;
+    let north = t.north;
+    let reach = Math.max(t.reach, 200);
+    const points = [...t.marks, ...t.way];
+    for (const p of [t.pin, t.committee, ...(t.finish ?? [])]) {
+      if (p !== null) {
+        points.push(p);
+      }
+    }
+    if (tight && points.length > 0) {
+      const es = points.map((p) => p.east);
+      const ns = points.map((p) => p.north);
+      east = (Math.min(...es) + Math.max(...es)) / 2;
+      north = (Math.min(...ns) + Math.max(...ns)) / 2;
+      reach = 150;
+    }
+    for (const p of points) {
+      reach = Math.max(reach, Math.hypot(p.east - east, p.north - north) * 1.15);
+    }
+    // The course's reach about its middle across the narrower of the
+    // screen's two ways, with room about it.
+    const half = Math.tan((this.camera.fov * Math.PI) / 360);
+    const narrow = Math.min(1, this.#width / Math.max(this.#height, 1));
+    // Held sideways the paper, seen tilted, is shortened up the screen.
+    this.lookAt(
+      east,
+      north + lower * reach,
+      (room * (narrow < 1 ? 1.15 : 0.75) * reach) / (half * narrow),
+    );
+    return true;
   }
 
   /** The whole disk in view. */
@@ -405,6 +482,14 @@ export class ChartView {
       this.camera.updateProjectionMatrix();
       this.#dirty = true;
     }
+    if (canvas !== undefined && !this.#sized) {
+      this.#sized = true;
+      const f = this.#framing;
+      this.#framing = null;
+      if (f !== null) {
+        this.frameRace(f.room, f.tight, f.lower);
+      }
+    }
     if (now - this.#last < 1000 / this.#look.fps - 2) {
       return;
     }
@@ -436,6 +521,7 @@ export class ChartView {
       this.#loaded.clear();
       this.#asked.clear();
       this.#built = -1;
+      this.#courses = -1;
       this.#buildWanted = true;
     }
     if (store.version.value !== this.#version) {
@@ -488,6 +574,14 @@ export class ChartView {
       this.#streaks.visible = streaks;
       this.#dirty = true;
     }
+    if (this.open) {
+      const metres =
+        (2 * this.#distance * Math.tan((this.camera.fov * Math.PI) / 360)) /
+        Math.max(this.#height, 1);
+      if (this.race.update(this.raceDrawing(), metres, this.#look.ink)) {
+        this.#dirty = true;
+      }
+    }
   }
 
   #placeCamera(): void {
@@ -527,11 +621,16 @@ export class ChartView {
   /** Builds the islands' columns, the towers and the paper's coasts from what is had. */
   #build(): void {
     const models = [...this.#loaded.values()];
-    if (models.length !== this.#built) {
+    const courses = this.#store.courses;
+    if (models.length !== this.#built || courses.length !== this.#courses) {
+      if (models.length !== this.#built) {
+        this.#land.geometry.dispose();
+        this.#land.geometry = columns(models, this.#look);
+      }
       this.#built = models.length;
-      this.#land.geometry.dispose();
-      this.#land.geometry = columns(models, this.#look);
+      this.#courses = courses.length;
       paintPaper(this.#paperCanvas, this.#look, models, this.#look.tops);
+      paintCourses(this.#paperCanvas, this.#look, courses);
       this.#paper.needsUpdate = true;
     }
     this.#towers.geometry.dispose();
@@ -742,6 +841,7 @@ export class ChartView {
         l.width = l.el.offsetWidth;
       }
     }
+    this.race.place(this.camera, this.#width, this.#height);
   }
 
   #makeLabel(e: ChartEntry, layer: HTMLElement): Label {

@@ -77,10 +77,13 @@ func chartList(s *Sea, a *chartArgs, x, y float64, atSea bool) (string, *refusal
 	if a.Limit > 0 {
 		limit = min(a.Limit, 30)
 	}
+	if a.Group == groupCourses {
+		return s.courseList(x, y, atSea, limit), nil
+	}
 	want := map[string]uint8{"islands": sight.Island, "places": sight.Place, "features": sight.Feature}
 	kind, filtered := want[a.Group]
 	if a.Group != "" && a.Group != "all" && !filtered {
-		return "", refuse(refusedArgs, "group is all, islands, places or features.")
+		return "", refuse(refusedArgs, "group is all, islands, places, features or courses.")
 	}
 	list := make([]chart.ListEntry, len(entries))
 	for i, e := range entries {
@@ -125,7 +128,10 @@ func chartList(s *Sea, a *chartArgs, x, y float64, atSea bool) (string, *refusal
 	if shown == 0 {
 		b.WriteString(" nothing charted yet: what your lookout sights is charted, and named, for everyone.\n")
 	}
-	b.WriteString("Race locations: none: races come with a later update. Pencil notes: not yet.")
+	if !filtered {
+		b.WriteString(s.courseList(x, y, atSea, limit))
+	}
+	b.WriteString("Pencil notes: not yet.")
 	return b.String(), nil
 }
 
@@ -675,7 +681,6 @@ func (s *Sea) placeOf(p forecast.Place) (string, float64, float64, bool) {
 
 // The tools still to come, each saying what it will do.
 var notYet = map[string]string{
-	toolRace:   "Not yet: races come with a later update. Then race lists the races, enters one, votes to start it, or retires.",
 	toolPencil: "Not yet: pencil notes come with a later update. Then pencil writes a private note on your chart, or rubs one out.",
 	toolBottle: "Not yet: messages in bottles come with a later update. Then bottle drops a message over the side for someone to find.",
 }

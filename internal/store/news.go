@@ -34,6 +34,7 @@ const (
 	StoryCharting  = "charting"  // any other charting
 	StoryArrival   = "arrival"   // a new world: its first edition opens with it
 	StoryReview    = "review"    // the last world in review, in a new world's first edition
+	StoryCourse    = "course"    // an island course opened by charting
 	storyEdition   = "edition"   // a day's edition set
 )
 
@@ -46,6 +47,10 @@ const (
 // SubjectSailor is a story's subject when it is about a sailor, not a
 // place.
 const SubjectSailor = "sailor"
+
+// SubjectCourse is a story's subject when it is about an island course,
+// by its number in the world.
+const SubjectCourse = "course"
 
 // The kinds of a sailor's milestone.
 const (
@@ -61,7 +66,7 @@ const (
 // its kind and value; for the world's arrival, its islands to find; for
 // the last world's review, its number, sailors, distance, islands charted
 // of how many, its greatest finds and who came nearest the falls; and for
-// an edition, its figures.
+// an edition, its figures; for a time trial's run, its medal.
 type StoryFacts struct {
 	Boat      string       `json:"boat,omitempty"`
 	BoatKind  string       `json:"boatKind,omitempty"`
@@ -80,6 +85,7 @@ type StoryFacts struct {
 	Finds     []ReviewFind `json:"finds,omitempty"`
 	Nearest   *Nearest     `json:"nearest,omitempty"`
 	Figures   *Figures     `json:"figures,omitempty"`
+	Medal     string       `json:"medal,omitempty"`
 }
 
 // ReviewFind is one of a world's greatest finds as its review copies it:
@@ -101,8 +107,8 @@ type Nearest struct {
 
 // Figures are a day of the world in counts, never names: the boats
 // sailed (each sailor once) and the machine sailors among them, the
-// distance run, m, the places charted, the crews in company and the
-// falls.
+// distance run, m, the places charted, the crews in company, the falls
+// and the races run.
 type Figures struct {
 	Boats    int     `json:"boats"`
 	Machines int     `json:"machines"`
@@ -110,6 +116,7 @@ type Figures struct {
 	Charted  int     `json:"charted"`
 	Crews    int     `json:"crews"`
 	Over     int     `json:"over"`
+	Races    int     `json:"races,omitempty"`
 }
 
 // Story is a story of the news: a candidate, or one chosen. Account is the
@@ -221,6 +228,21 @@ func chartingStory(ctx context.Context, q *db.Queries, nw *newsWrite, c *Chartin
 		}
 	}
 	first[c.Account] = true
+	_, err := insertStory(ctx, q, nw, &s)
+	return err
+}
+
+// courseStory writes the candidate a course opened by a charting makes,
+// about the course, naming the sailor whose charting opened it.
+func courseStory(ctx context.Context, q *db.Queries, nw *newsWrite, c *Charting, o *CourseOpen) error {
+	s := Story{
+		Story: StoryCourse, Score: o.Score, At: c.At, Account: c.Account, Subject: SubjectCourse, Number: o.Number,
+		Title: o.Title, What: o.What, Island: -1, X: o.X, Y: o.Y,
+		Source: fmt.Sprintf("course:%d", o.Number),
+	}
+	if n := c.News; n != nil {
+		s.Facts = StoryFacts{Boat: n.Boat, BoatKind: n.BoatKind}
+	}
 	_, err := insertStory(ctx, q, nw, &s)
 	return err
 }
@@ -509,7 +531,11 @@ func (s *Store) DayFigures(ctx context.Context, world [16]byte, number int, sinc
 	if err != nil {
 		return Figures{}, err
 	}
-	return Figures{Boats: int(v.Boats), Machines: int(v.Machines), Run: v.Run, Over: int(v.Over), Charted: int(c)}, nil
+	races, err := s.q.DayRaces(ctx, db.DayRacesParams{WorldID: pgtype.UUID{Bytes: world, Valid: true}, Since: stamp(since), Until: stamp(until)})
+	if err != nil {
+		return Figures{}, err
+	}
+	return Figures{Boats: int(v.Boats), Machines: int(v.Machines), Run: v.Run, Over: int(v.Over), Charted: int(c), Races: int(races)}, nil
 }
 
 // Review is a whole world in review: its sailors, the distance its boats

@@ -20,10 +20,12 @@
 // keys move no control, and the free camera is not offered.
 
 import { effect, signal } from '@preact/signals';
+import { CHEER, type CheerSound, cheerOf } from '../audio/cheer';
 import { SoundEngine } from '../audio/engine';
 import { type FeaturesInput, isColonyCall } from '../audio/features';
 import { FOG_SIGNAL_RULES, type FogSignalsInput, poorBy } from '../audio/fogsignals';
 import { groundSound, SCRAPE, scrapeOf } from '../audio/ground';
+import { GUN, type GunReport, gunReport } from '../audio/gun';
 import { KNOCK, knockOf } from '../audio/knock';
 import {
   isLifeCall,
@@ -836,6 +838,55 @@ export class Game implements PilotActions {
     look: 0,
     flashes: [],
   };
+
+  /** The last report of a signal gun the player was given to hear, null for none (the tests). */
+  lastGun: GunReport | null = null;
+
+  /**
+   * Fires the signal gun of a course laid in the sea: a burst of smoke from
+   * its committee boat's muzzle, and its report, as loud as loud (1 for a
+   * signal, more for the start's and the winner's), heard at full level by
+   * a racer or a spectator of the race (inRace), and by anyone else as a
+   * sound of the world. False for a course with no committee boat.
+   */
+  fireGun(course: number, loud = 1, inRace = true): boolean {
+    const w = this.world;
+    const at = w.race.fire(course, loud, w.ticks / STEPS_PER_SECOND);
+    if (at === null) {
+      return false;
+    }
+    const listener = { east: w.pose.east, north: w.pose.north };
+    this.lastGun = gunReport(GUN, at, listener, w.lookBearing(), loud, inRace);
+    if (this.lastGun !== null) {
+      this.sound.gun(this.lastGun);
+    }
+    return true;
+  }
+
+  /** The last crowd's cheer the player was given to hear, null for none (the tests). */
+  lastCheer: CheerSound | null = null;
+
+  /**
+   * A crowd's cheer heard: count cheers' worth; own, the player's own
+   * "Huzzah!"; racer, the crowd on the quay cheering the player's boat.
+   */
+  cheer(count: number, own: boolean, racer: boolean): void {
+    this.lastCheer = cheerOf(CHEER, count, own, racer);
+    this.sound.cheer(this.lastCheer);
+  }
+
+  /** A cheer's bunting bursts from the masthead of the boat in view: count cheers' worth. */
+  bunting(count: number): void {
+    const w = this.world;
+    const rig = w.kind.physics.rig;
+    w.race.cheer(
+      w.pose.east,
+      w.pose.north,
+      rig.boomHeight + rig.luff,
+      count,
+      w.ticks / STEPS_PER_SECOND,
+    );
+  }
 
   #thunder(now: number, look: number): void {
     const w = this.world;

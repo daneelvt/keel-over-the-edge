@@ -7,8 +7,8 @@
 // sloping, a tap opening the box of what is tapped; the boat sails on and
 // the sea is not drawn while it is open; two fingers twisted turn it the
 // way they twist; the pocket chart says how far the edge is and opens it;
-// its list puts the nearest first; a notice is a status, dismissed by its
-// button; and charted by sight, an island the boat sails up to is charted,
+// its list puts the nearest first, and lists its island courses; a notice
+// is a status, dismissed by its button; and charted by sight, an island the boat sails up to is charted,
 // the sailor's, with a notice.
 
 import { existsSync, readFileSync } from 'node:fs';
@@ -184,21 +184,45 @@ test.describe('the chart', () => {
   test('its list puts the nearest first, and a tap shows it on the chart', async ({ page }) => {
     await openScene(page, 'world=1', true);
     await page.evaluate(() => globalThis.keel.openChart('list'));
-    const where = await page
-      .locator('.chart-list ul')
-      .first()
-      .locator('.chart-list-where')
-      .allTextContents();
+    const islands = page.locator('.chart-list div', {
+      has: page.locator('h3', { hasText: 'Islands' }),
+    });
+    const where = await islands.locator('.chart-list-where').allTextContents();
     const metres = where.map((w) => {
       const [, n, unit] = /(\d+(?:\.\d+)?) (NM|m)$/.exec(w) ?? [];
       return Number(n) * (unit === 'NM' ? 1852 : 1);
     });
     expect(metres.length).toBeGreaterThan(10);
     expect(metres).toEqual([...metres].sort((a, b) => a - b));
-    await page.locator('.chart-list li button').first().click();
+    await islands.locator('li button').first().click();
     const info = await page.evaluate(() => globalThis.keel.chartInfo());
     expect(info.mode).toBe('chart');
     expect(info.picked).not.toBeNull();
+  });
+
+  test('charted whole, its island courses are listed, and a tap shows one on the chart', async ({
+    page,
+  }) => {
+    const file = JSON.parse(readFileSync(chartFile, 'utf8')) as { courses?: { name: string }[] };
+    const names = (file.courses ?? []).map((c) => c.name);
+    expect(names.length).toBeGreaterThanOrEqual(3);
+    await openScene(page, 'world=1', true);
+    await page.evaluate(() => globalThis.keel.openChart('list'));
+    const courses = page.locator('.chart-list div', {
+      has: page.locator('h3', { hasText: 'Courses' }),
+    });
+    await expect(courses.locator('li')).toHaveCount(names.length);
+    const listed = await courses.locator('.chart-list-name').allTextContents();
+    expect([...listed].sort()).toEqual([...names].sort());
+    for (const w of await courses.locator('.chart-list-where').allTextContents()) {
+      expect(w).toMatch(/^\d{3}° \d+(\.\d)? (NM|m) · \d+\.\d NM long$/);
+    }
+    expect(await courses.locator('.chart-credit').first().textContent()).toMatch(/ \d+ min/);
+    await courses.locator('li button').first().click();
+    const info = await page.evaluate(() => globalThis.keel.chartInfo());
+    expect(info.mode).toBe('chart');
+    expect(info.courses).toHaveLength(names.length);
+    expect(info.problems).toEqual([]);
   });
 
   test('a notice is a status: dismissed by its button, the focus left where it was', async ({

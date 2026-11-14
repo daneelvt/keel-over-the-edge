@@ -66,6 +66,7 @@ import type {
   ChartEntry,
   ChatStateTold,
   ChunksHanded,
+  CourseOpen,
   CrewTold,
   ForecastTold,
   FromWorker,
@@ -78,6 +79,14 @@ import type {
   LightSeen,
   PastTold,
   PlaceSeen,
+  RaceCallIn,
+  RaceCheeredIn,
+  RaceFinishIn,
+  RacePictureIn,
+  RaceResultsIn,
+  RaceSignalIn,
+  RaceToldIn,
+  RaceWatchAsk,
   ReportReasonTold,
   Status,
   ToWorker,
@@ -162,6 +171,12 @@ export class Online {
    * before a Welcome.
    */
   readonly boatLook = signal<{ look: number; name: string } | null>(null);
+  /**
+   * What the boat in view, the own or the one watched, flies for its
+   * skipper's races in the world: its prize code (render/prizes.ts), and
+   * its race number while it races, 0 for none; none before a Welcome.
+   */
+  readonly prizes = signal<{ prizes: number; number: number }>({ prizes: 0, number: 0 });
   /** The kind of the boat in view, the own or the one watched, as the last Welcome told it: an index into the catalog's boats. */
   readonly kind = signal(0);
   /** The world's harbour, Port Royal's, as the last Welcome named it; null for none. */
@@ -226,6 +241,15 @@ export class Online {
   onEpoch: ((epochUs: number) => void) | null = null;
   /** Told of each bump the server tells of: the game knocks, shakes and says the verdict. */
   onBump: ((b: BumpTold) => void) | null = null;
+  /** A race under way told or taken up, and its committee boat's signals. */
+  onRaceTold: ((t: RaceToldIn) => void) | null = null;
+  onRaceSignal: ((s: RaceSignalIn) => void) | null = null;
+  /** A race's picture, its calls, its boats home and its results. */
+  onRacePicture: ((p: RacePictureIn) => void) | null = null;
+  onRaceCall: ((c: RaceCallIn) => void) | null = null;
+  onRaceFinish: ((f: RaceFinishIn) => void) | null = null;
+  onRaceResults: ((r: RaceResultsIn) => void) | null = null;
+  onRaceCheered: ((c: RaceCheeredIn) => void) | null = null;
   /** Told of a new boat lying within OPENING_RANGE of the harbour's mouth: where it lies and where the mouth is, m. */
   onOpening: ((east: number, north: number, mouthEast: number, mouthNorth: number) => void) | null =
     null;
@@ -241,7 +265,7 @@ export class Online {
   /** Told of the places in chunks just handed. */
   onPlaces: ((p: PlaceSeen[]) => void) | null = null;
   /** Told of the world's chart: whole after each Welcome, then what is charted. */
-  onChart: ((entries: ChartEntry[], whole: boolean) => void) | null = null;
+  onChart: ((entries: ChartEntry[], whole: boolean, courses: CourseOpen[]) => void) | null = null;
   /** Told of each forecast as it is issued, with what has been after a Welcome. */
   onForecast: ((f: ForecastTold, past: PastTold | null) => void) | null = null;
   /** Told of the weather as it is sent: the spells in play, or null to keep them, and keyframes. */
@@ -347,6 +371,16 @@ export class Online {
     this.#port.postMessage({ type: 'watch', sailor });
   }
 
+  /** Watches a race's boat, by its race and number (0: the boat the game chooses): a boat sailed leaves the water at once. */
+  watchRace(ask: RaceWatchAsk): void {
+    this.#port.postMessage({ type: 'watchRace', ask });
+  }
+
+  /** Cheers the boat watched in a race. */
+  cheer(): void {
+    this.#port.postMessage({ type: 'cheer' });
+  }
+
   /** Asks to come aboard by a link's token, or sends the player's machine sailor named machine: knocking tells how it stands. */
   knock(token: string, machine = ''): void {
     this.#port.postMessage({ type: 'knock', token, machine });
@@ -387,6 +421,11 @@ export class Online {
   /** The skipper's: puts the person in seat ashore. */
   putAshore(seat: number): void {
     this.#port.postMessage({ type: 'ashore', who: seat });
+  }
+
+  /** Retires the boat from the race it sails in. */
+  raceRetire(): void {
+    this.#port.postMessage({ type: 'raceRetire' });
   }
 
   /** The skipper's: closes the boat to knocks for this voyage, or opens it. */
@@ -580,6 +619,14 @@ export class Online {
       case 'boatNames':
         this.fleet.names(m.names);
         break;
+      case 'boatPrizes':
+        for (const p of m.prizes) {
+          if (p.own) {
+            this.prizes.value = { prizes: p.prizes, number: p.number };
+          }
+        }
+        this.fleet.prizes(m.prizes);
+        break;
       case 'crews':
         this.fleet.crews(m.crews);
         break;
@@ -607,6 +654,27 @@ export class Online {
       case 'bump':
         this.onBump?.(m.bump);
         break;
+      case 'raceTold':
+        this.onRaceTold?.(m.told);
+        break;
+      case 'raceSignal':
+        this.onRaceSignal?.(m.signal);
+        break;
+      case 'racePicture':
+        this.onRacePicture?.(m.picture);
+        break;
+      case 'raceCall':
+        this.onRaceCall?.(m.call);
+        break;
+      case 'raceFinish':
+        this.onRaceFinish?.(m.finish);
+        break;
+      case 'raceResults':
+        this.onRaceResults?.(m.results);
+        break;
+      case 'raceCheered':
+        this.onRaceCheered?.(m.cheered);
+        break;
       case 'chunks':
         this.onChunks?.(m.chunks);
         break;
@@ -623,7 +691,7 @@ export class Online {
         this.onCaps?.(m.caps, m.drop);
         break;
       case 'chart':
-        this.onChart?.(m.entries, m.whole);
+        this.onChart?.(m.entries, m.whole, m.courses);
         break;
       case 'tools':
         this.tools.value = m.on;
@@ -724,8 +792,10 @@ export class Online {
         // its controls are not this boat's.
         this.#queued.length = 0;
         // A new connection's views start afresh: the boats fade out, and
-        // in again with its first snapshot.
+        // in again with its first snapshot; the boat in view's prizes are
+        // told again.
         this.fleet.clear();
+        this.prizes.value = { prizes: 0, number: 0 };
         this.#predictor.wakes.reset();
         break;
       case 'snapshot':

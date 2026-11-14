@@ -23,6 +23,8 @@ import './start.css';
 import { type JSX, render } from 'preact';
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { drawLook, type Looks } from '../catalog/looks';
+import { loadRaces, type RacesView } from '../ui/raceslazy';
+import { MAKE_TO_RACE } from '../ui/racewords';
 import { useWatch } from '../ui/watchlazy';
 import { MAKE_TO_WATCH } from '../ui/watchwords';
 import { BoatChooser } from './boatchooser';
@@ -67,6 +69,10 @@ export interface StartProps {
   straight?: boolean;
   /** Whether the page was opened at a link to watch: the visitor is told they will be watching once they make a sailor. */
   watching?: boolean;
+  /** Whether the page was opened at a race's link: the visitor is told they can enter it once they make a sailor. */
+  racing?: boolean;
+  /** Races ashore: Make a race beside Set sail on the player's own panel; none for no key. */
+  races?: RacesView;
   random?: () => number;
   /** The server and the browser's prompt; the browser's own unless a test stands in. */
   reach?: Reach;
@@ -102,6 +108,8 @@ export function StartScreen({
   panel = true,
   straight = false,
   watching = false,
+  racing = false,
+  races,
 }: StartProps) {
   const [view, setView] = useState<View>({ kind: 'form' });
   const [support, setSupport] = useState<Support | null>(null);
@@ -336,6 +344,7 @@ export function StartScreen({
           stage={stage}
           boats={boats}
           fetcher={reach?.fetch}
+          races={races}
         />
       );
     case 'recovered':
@@ -466,6 +475,11 @@ export function StartScreen({
             {MAKE_TO_WATCH}
           </p>
         ) : null}
+        {racing ? (
+          <p class="start-text start-watching" data-readout="make-to-race">
+            {MAKE_TO_RACE}
+          </p>
+        ) : null}
         {support?.kind === 'maybe' ? (
           <p class="start-warning" role="note">
             This browser may not be able to make a passkey. If Set sail fails, try your phone’s own
@@ -576,6 +590,7 @@ function Sailor({
   stage,
   boats: cat,
   fetcher,
+  races,
 }: {
   first: boolean;
   me: Me;
@@ -585,6 +600,8 @@ function Sailor({
   stage?: LookStage | undefined;
   boats?: BoatCatalog | undefined;
   fetcher?: Fetch | undefined;
+  /** Races ashore, Make a race offered beside Set sail; none for no key. */
+  races?: RacesView | undefined;
 }) {
   const [asking, setAsking] = useState(() => given.born === false && !askedAge);
   askedAge ||= asking;
@@ -611,6 +628,7 @@ function Sailor({
       watchName={(name) => go(name)}
       {...(chooser === undefined ? {} : { chooser })}
       boats={boats}
+      {...(races === undefined ? {} : { race: () => void openMakeRace(races) })}
     />
   );
   const picking = chooser !== undefined && chooser.mode.value !== 'shown' && stage !== undefined;
@@ -660,6 +678,13 @@ function Sailor({
       )}
     </div>
   );
+}
+
+/** Make a race, over the player's own panel before the sea. */
+async function openMakeRace(races: RacesView): Promise<void> {
+  const m = await loadRaces();
+  races.make.value = true;
+  await m.showRaces(document.body, races);
 }
 
 /** A browser that cannot make the player's passkey: the game's address, to open elsewhere. */
@@ -726,7 +751,8 @@ export function showStartScreen(parent: HTMLElement, props: Omit<StartProps, 'do
  * Shows the player's own sailor in parent until Set sail, or a sailor
  * chosen to watch, then removes it; with the catalog's looks, the player
  * may change theirs there, on the picker's stage if there is one; with its
- * boats, choose their boat from the fleet and set its look.
+ * boats, choose their boat from the fleet and set its look; with races,
+ * make a race before setting sail.
  */
 export function showSailor(
   parent: HTMLElement,
@@ -734,6 +760,7 @@ export function showSailor(
   looks?: Looks,
   stage?: LookStage,
   boats?: BoatCatalog,
+  races?: RacesView,
 ): Promise<Me> {
   return mount(parent, (done) => (
     <Sailor
@@ -744,6 +771,7 @@ export function showSailor(
       {...(looks === undefined ? {} : { looks })}
       stage={stage}
       boats={boats}
+      races={races}
     />
   ));
 }

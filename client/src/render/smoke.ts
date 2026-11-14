@@ -184,6 +184,44 @@ export class Smoke {
   }
 }
 
+/**
+ * Smoke given puff by puff, as the signal gun's is: begin a frame with the
+ * daylight on it, put each puff at its place in the scene, then end it.
+ */
+export class Puffs extends Smoke {
+  begin(light: number): void {
+    this.light.value = light;
+    this.count = 0;
+  }
+
+  /** A puff at x, y, z in the scene, width m across, thick 0 to 1, shade the light on it; false once the draw is full. */
+  put(x: number, y: number, z: number, width: number, thick: number, shade: number): boolean {
+    if (this.count >= PUFF_CAPACITY) {
+      return false;
+    }
+    const place = this.place.array as Float32Array;
+    const shading = this.shade.array as Float32Array;
+    const i = this.count * 4;
+    place[i] = x;
+    place[i + 1] = y;
+    place[i + 2] = z;
+    place[i + 3] = width;
+    shading[i] = thick;
+    shading[i + 1] = shade;
+    this.count++;
+    return true;
+  }
+
+  end(): void {
+    this.mesh.count = this.count;
+    this.mesh.visible = this.count > 0;
+    if (this.count > 0) {
+      this.place.needsUpdate = true;
+      this.shade.needsUpdate = true;
+    }
+  }
+}
+
 function attr(): InstancedInterleavedBuffer {
   const b = new InstancedInterleavedBuffer(new Float32Array(PUFF_CAPACITY * 4), 4, 1);
   b.setUsage(DynamicDrawUsage);

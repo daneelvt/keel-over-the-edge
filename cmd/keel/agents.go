@@ -127,6 +127,12 @@ func (p *process) seaOf(h *worldHalf, rw *readyWorld, sighting *sim.Sight) *agen
 	if h.news != nil {
 		s.News = h.news
 	}
+	if h.races != nil {
+		s.Races, s.OwnerOf = h.races, p.db.FleetOwner
+	}
+	s.RaceRecords = func(ctx context.Context, id store.AccountID) ([]store.RaceRecord, error) {
+		return p.db.RaceRecordsOf(ctx, id, agentapi.MostRaceRecords)
+	}
 	logs := p.logsOf(h.row.Number)
 	s.Log = func(ctx context.Context, account store.AccountID) (logbook.Log, error) {
 		return logs.Own(ctx, account, 0)

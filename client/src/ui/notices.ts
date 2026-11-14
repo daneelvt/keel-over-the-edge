@@ -26,6 +26,12 @@ export interface NoticeKind {
   folded: string;
 }
 
+/** A key a notice may carry: its label and what it does, as Enter on a harbour race's. */
+export interface NoticeAction {
+  label: string;
+  act: () => void;
+}
+
 /** A notice shown: its kind, its words, and when it goes, ms. */
 export interface Shown {
   kind: NoticeKind;
@@ -35,6 +41,8 @@ export interface Shown {
   until: number;
   /** Raised again since shown: its count changed. */
   serial: number;
+  /** Its key, if it carries one: the latest raised's. */
+  action?: NoticeAction;
 }
 
 /** Fills a notice's words: {name} and the rest from fill. */
@@ -64,8 +72,11 @@ export class Notices {
     return this.kinds.find((k) => k.on === on);
   }
 
-  /** Raises a notice of the kind for on, at now (ms), its words filled in; nothing if that kind is off. */
-  raise(on: string, fill: Record<string, string>, now: number): void {
+  /**
+   * Raises a notice of the kind for on, at now (ms), its words filled in,
+   * with a key if action is given; nothing if that kind is off.
+   */
+  raise(on: string, fill: Record<string, string>, now: number, action?: NoticeAction): void {
     const kind = this.kindFor(on);
     if (kind === undefined || this.off.value.has(kind.id)) {
       return;
@@ -78,6 +89,11 @@ export class Notices {
       same.text = fillText(kind.folded, { ...fill, count: String(same.count) });
       same.until = now + kind.stays * 1000;
       same.serial = ++this.#serial;
+      if (action === undefined) {
+        delete same.action;
+      } else {
+        same.action = action;
+      }
       if (same === cur) {
         this.shown.value = { ...same };
       }
@@ -90,6 +106,7 @@ export class Notices {
       fill,
       until: now + kind.stays * 1000,
       serial: ++this.#serial,
+      ...(action === undefined ? {} : { action }),
     };
     if (cur === null) {
       this.shown.value = n;
