@@ -6,6 +6,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"os"
+	"regexp"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -318,5 +321,88 @@ func TestLoadRepositorySettings(t *testing.T) {
 	}
 	if perm >= selected {
 		t.Fatal("actions/permissions must be applied before selected-actions")
+	}
+}
+
+// TestAgreementCheckRequired: main requires pr-agreement from the
+// contributor agreement's GitHub App alone, by its ID, the same ID its
+// keeper is configured with in production, so no other App or workflow
+// can post a status of that name that counts. And pull requests from
+// anyone are let in only while the check is required.
+func TestAgreementCheckRequired(t *testing.T) {
+	s, err := loadSettings("../../.github/settings")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var appID float64 = -1
+	for _, rs := range s.rulesets {
+		if rs["name"] != "main" {
+			continue
+		}
+		for _, r := range rs["rules"].([]any) {
+			rule := r.(map[string]any)
+			if rule["type"] != "required_status_checks" {
+				continue
+			}
+			for _, c := range rule["parameters"].(map[string]any)["required_status_checks"].([]any) {
+				check := c.(map[string]any)
+				if check["context"] == "pr-agreement" {
+					appID, _ = check["integration_id"].(float64)
+				}
+			}
+		}
+	}
+	open := false
+	for _, ep := range s.endpoints {
+		if ep.Path == "" && ep.Body["pull_request_creation_policy"] == "all" {
+			open = true
+		}
+	}
+	if appID < 0 {
+		if open {
+			t.Fatal("pull requests are open to anyone, and main does not require pr-agreement")
+		}
+		return
+	}
+	raw, err := os.ReadFile("../../infra/cluster/clusters/prod/apps/kustomization.yaml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	m := regexp.MustCompile(`(?m)^\s*- KEEL_AGREEMENT_APP_ID=(\S*)\s*$`).FindSubmatch(raw)
+	if m == nil {
+		t.Fatal("production's keel-agreement ConfigMap has no KEEL_AGREEMENT_APP_ID")
+	}
+	deployed, err := strconv.ParseInt(string(m[1]), 10, 64)
+	if err != nil || deployed <= 0 {
+		t.Fatalf("production's KEEL_AGREEMENT_APP_ID is %q: the App's ID goes there and in the main ruleset (infra/MANUAL-STEPS.md, section 15)", m[1])
+	}
+	if int64(appID) != deployed || appID == 15368 {
+		t.Fatalf("main requires pr-agreement from integration %v; the keeper's App is %d", appID, deployed)
+	}
+}
+
+// TestApplyOpensTheDoorLast: pull requests from anyone are let in after the
+// rulesets are written, which require the contributor agreement's check,
+// never before.
+func TestApplyOpensTheDoorLast(t *testing.T) {
+	answers := matching()
+	answers["GET repos/o/r"] = answer{200, `{"has_wiki":true,"pull_request_creation_policy":"collaborators_only","security_and_analysis":{"secret_scanning":{"status":"enabled"}}}`}
+	answers["GET repos/o/r/rulesets?includes_parents=false"] = answer{200, `[]`}
+	f := &fakeAPI{answers: answers}
+	tl := &tool{api: f, repo: repo, out: io.Discard}
+	s := testSettings()
+	s.endpoints[0].Body["pull_request_creation_policy"] = "all"
+	_ = tl.apply(s)
+	if len(f.writes) != 3 {
+		t.Fatalf("writes = %q, want three", f.writes)
+	}
+	if !strings.HasPrefix(f.writes[0], "PATCH repos/o/r ") || strings.Contains(f.writes[0], "pull_request_creation_policy") {
+		t.Errorf("first write %q", f.writes[0])
+	}
+	if !strings.HasPrefix(f.writes[1], "POST repos/o/r/rulesets ") {
+		t.Errorf("second write %q", f.writes[1])
+	}
+	if f.writes[2] != `PATCH repos/o/r {"pull_request_creation_policy":"all"}` {
+		t.Errorf("last write %q", f.writes[2])
 	}
 }
