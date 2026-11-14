@@ -47,6 +47,8 @@ export interface RacesView {
   fetch: Fetch;
   /** Reads the board again now. */
   refresh: () => Promise<void>;
+  /** Opens a race's replay by its code, its card closed; null where none may be. */
+  replay: ((code: string) => void) | null;
 }
 
 /** Makes the view: nothing open, the board unread. */
@@ -67,6 +69,7 @@ export function racesOf({
     now,
     crew,
     fetch: f,
+    replay: null,
     refresh: async () => {
       const a = await readBoard(f);
       if (a.ok) {

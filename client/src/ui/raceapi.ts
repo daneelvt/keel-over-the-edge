@@ -240,6 +240,93 @@ export function hangSpoon(
   });
 }
 
+/**
+ * A course as its committee laid it, whole metres east and north of the
+ * world's centre: the start line's ends (the pin's, then the committee
+ * boat's) and the finish line's; each mark (east, north, number, side: 1
+ * starboard, −1 port, 0 a gate's); the way, in pairs; each leg (the mark's
+ * number, 0 a line, east, north); where it lies and how far it reaches;
+ * its laps; the time its boat was expected to take, s.
+ */
+export interface LaidCourse {
+  line: [number, number, number, number];
+  finish: [number, number, number, number];
+  marks: [number, number, number, number][];
+  way: number[];
+  legs: [number, number, number][];
+  east: number;
+  north: number;
+  reach: number;
+  laps: number;
+  expected: number;
+}
+
+/** A boat's track: its first sample's tick, the ticks between samples; the first's east and north, whole metres, then each sample's change. */
+export interface ReplayTrack {
+  first: number;
+  every: number;
+  p: number[];
+}
+
+/** A boat of a race replayed: its skipper's name or its boat's (null where not told), its result, those aboard, its track. Times s, −1 none. */
+export interface ReplayBoat {
+  number: number;
+  name: string | null;
+  boat: string | null;
+  machine: boolean;
+  me?: boolean;
+  place: number;
+  how: string;
+  elapsed: number;
+  added: number;
+  marks: number;
+  toGo: number;
+  medal?: string;
+  awards: string[];
+  crew?: { name: string | null; machine: boolean }[];
+  track?: ReplayTrack;
+}
+
+/** A race's run (a race's only one is 0): its warning, gun and end, world ticks, and its course, while kept; its prizes given; its boats. */
+export interface ReplayRun {
+  run: number;
+  warning?: number;
+  start?: number;
+  ended?: number;
+  course?: LaidCourse;
+  prizes: boolean;
+  boats: ReplayBoat[];
+}
+
+/** A race's replay: GET /api/race/{code}/replay. kept: its world sails on and its tracks come; else its results alone. second: a second's ticks. at: when it ended, ms. */
+export interface ReplayTold {
+  code: string;
+  link: string;
+  name: string;
+  kind: 'race' | 'trial';
+  boat: { id: string; name: string };
+  course: string;
+  world: number;
+  harbour: boolean;
+  newcomers: boolean;
+  at: number;
+  kept: boolean;
+  second: number;
+  runs: ReplayRun[];
+}
+
+/** GET /api/race/{code}/replay: a race's replay, a trial's runs asked for drawn; kept by the browser a while. */
+export function readReplay(
+  code: string,
+  runs: number[] = [],
+  f: Fetch = own,
+): Promise<Told<ReplayTold>> {
+  const q = runs.length > 0 ? `?runs=${runs.join(',')}` : '';
+  return ask<ReplayTold>(f, `/api/race/${encodeURIComponent(code)}/replay${q}`, {
+    cache: 'default',
+  });
+}
+
 /** POST /api/race: the race made, its card. */
 export function makeRace(body: MakeBody, f: Fetch = own): Promise<Told<RaceCard>> {
   return ask<RaceCard>(

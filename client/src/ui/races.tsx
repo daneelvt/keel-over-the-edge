@@ -60,6 +60,8 @@ import {
   NEWCOMERS_DETAIL,
   ownerText,
   phaseText,
+  REPLAY,
+  REPLAY_RUNS,
   STARTS,
   startChoiceText,
   startOf,
@@ -917,6 +919,21 @@ export function RaceCardPanel({
             ) : null}
           </div>
         </>
+      ) : null}
+      {view.replay !== null && (card.phase === 'finished' || card.kind === 'trial') ? (
+        <div class="race-keys">
+          <button
+            type="button"
+            class={card.phase === 'finished' ? 'key-main' : undefined}
+            onClick={() => {
+              const replay = view.replay;
+              close();
+              replay?.(card.code);
+            }}
+          >
+            {card.kind === 'trial' ? REPLAY_RUNS : REPLAY}
+          </button>
+        </div>
       ) : null}
       <h3 class="race-entrants-head">{enteredText(card.entrants.length, card.most)}</h3>
       {card.entrants.length === 0 ? (

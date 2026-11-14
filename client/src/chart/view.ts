@@ -322,8 +322,8 @@ export class ChartView {
     this.#dirty = true;
   }
 
-  /** Looks at the race drawn, its whole course in view: false with none. */
-  frameRace(): boolean {
+  /** Looks at the race drawn, its whole course in view, room times as far off: false with none. */
+  frameRace(room = 1): boolean {
     const d = this.raceDrawing();
     if (d === null) {
       return false;
@@ -338,7 +338,7 @@ export class ChartView {
     const half = Math.tan((this.camera.fov * Math.PI) / 360);
     const narrow = Math.min(1, this.#width / Math.max(this.#height, 1));
     // Held sideways the paper, seen tilted, is shortened up the screen.
-    this.lookAt(t.east, t.north, ((narrow < 1 ? 1.15 : 0.75) * reach) / (half * narrow));
+    this.lookAt(t.east, t.north, (room * (narrow < 1 ? 1.15 : 0.75) * reach) / (half * narrow));
     return true;
   }
 

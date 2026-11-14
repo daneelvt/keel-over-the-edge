@@ -2282,6 +2282,37 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
         chart: { ...view.race.drawn, shown: view.race.group.visible },
       };
     },
+    /** Opens a race's replay by its code, as its link does after the race; resolves once it is shown. */
+    async replay(code: string, runs: number[] = []): Promise<boolean> {
+      const { loadReplay } = await import('../ui/replayhost');
+      const m = await loadReplay();
+      return m.openReplay(chartParts().replay, chartParts().chart, code, runs);
+    },
+    /** The replay open: the slider's moment and reach, the boat followed, the standings and what the chart draws; null for none. With at, the slider moved there first. */
+    replayed(at?: number) {
+      const m = chartParts().replay.model.peek();
+      if (m === null) {
+        return null;
+      }
+      if (at !== undefined) {
+        m.playing.value = false;
+        m.setTime(at);
+      }
+      const view = chartParts().chart.view;
+      return {
+        t: m.t.peek(),
+        lo: m.lo,
+        hi: m.hi,
+        playing: m.playing.peek(),
+        speed: m.speed.peek(),
+        followed: m.followed.peek(),
+        standings: m
+          .standings()
+          .map((x) => ({ key: x.key, place: x.place, state: x.state, toGo: x.toGo })),
+        drawing: m.drawing()?.boats ?? [],
+        chart: { ...view.race.drawn, shown: view.race.group.visible },
+      };
+    },
     /** The race committee's things as drawn this frame, the beacons known, and the courses laid. */
     raceMarks() {
       const r = world.race;

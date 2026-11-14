@@ -43,6 +43,7 @@ import type { NewsStory } from './newswords';
 import type { Notices } from './notices';
 import { MachineMark, PlayerText } from './player';
 import { type Racing, raceDrawingOf } from './racestate';
+import { type ReplayHost, useReplayParts } from './replayhost';
 
 /** What the chart's screens need of the world beyond the chart. */
 export interface ChartSea {
@@ -70,6 +71,8 @@ export interface ChartSea {
   racing?: Racing | null;
   /** Watches a race's boat tapped on the charts, by its number: false where none may be (the page races, or watches no race). */
   watchRacer?: ((n: number) => boolean) | null;
+  /** A race replayed on the chart. */
+  replay?: ReplayHost | null;
 }
 
 /** "Charted by <name>, Tuesday", the name as the player wrote it. */
@@ -265,7 +268,10 @@ function useGestures(sea: ChartSea) {
           const y = e.clientY - r.top;
           // A race's boat tapped is watched, the chart open on it.
           const racer = chartRacer(sea, view, x, y);
-          if (racer > 0 && sea.watchRacer?.(racer) === true) {
+          if (
+            racer > 0 &&
+            (sea.replay?.model.peek()?.follow(racer) === true || sea.watchRacer?.(racer) === true)
+          ) {
             pts.delete(e.pointerId);
             down = null;
             before = pair();
@@ -735,6 +741,11 @@ export function ChartScreen({
   const upright = useUpright();
   const picked = chart.picked.value;
   const tapped = chart.tapped.value;
+  // A race replayed: its head under the strip, its time at the foot.
+  const host = sea.replay ?? null;
+  const replaying = mode === 'chart' && host !== null && host.model.value !== null;
+  const rp = useReplayParts(replaying);
+  const replay = replaying && rp !== null && host !== null ? { rp, host } : null;
   return (
     <div class="chart-screen" data-mode={mode} ref={screen}>
       <div class="chart-surface" ref={surface} hidden={mode !== 'chart'} />
@@ -755,7 +766,8 @@ export function ChartScreen({
           </button>
         </div>
         {/* Held upright the strip has no room for the clock: it stands under it. */}
-        {mode === 'chart' && upright ? <StripClock sea={sea} /> : null}
+        {mode === 'chart' && upright && replay === null ? <StripClock sea={sea} /> : null}
+        {replay !== null ? <replay.rp.ReplayHead host={replay.host} /> : null}
         <RimCountdown end={end} />
         {notices !== null ? (
           <div class="chart-notices">
@@ -769,8 +781,14 @@ export function ChartScreen({
       {mode === 'chart' && picked === null && tapped !== null ? (
         <SystemBoxPanel sea={sea} t={tapped} close={() => (chart.tapped.value = null)} />
       ) : null}
-      {mode === 'chart' && sea.forecasting !== null ? (
+      {mode === 'chart' && sea.forecasting !== null && !replaying ? (
         <TimeBar chart={chart} src={sea.forecasting} />
+      ) : null}
+      {replay !== null ? (
+        <>
+          <replay.rp.ReplayBar host={replay.host} />
+          <replay.rp.ReplayWindows host={replay.host} chart={chart} />
+        </>
       ) : null}
       {mode === 'list' ? <ChartList sea={sea} /> : null}
       {mode === 'news' ? <NewsTab sea={sea} /> : null}
@@ -910,8 +928,8 @@ export function raceFrame(d: RaceDrawing): { east: number; north: number; radius
  */
 /** The race's boat whose dot on the full chart is nearest (x, y) CSS pixels, within a finger; 0 for none. */
 function chartRacer(sea: ChartSea, view: ChartView, x: number, y: number): number {
-  const race = sea.racing != null ? raceDrawingOf(sea.racing) : null;
-  if (race === null || sea.watchRacer == null) {
+  const race = view.raceDrawing();
+  if (race === null || (sea.watchRacer == null && sea.replay?.model.peek() == null)) {
     return 0;
   }
   let best = 0;

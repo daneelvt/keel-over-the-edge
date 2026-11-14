@@ -148,10 +148,11 @@ import { openNews, setNewsHost } from '../ui/newslazy';
 import { serverNews } from '../ui/newsread';
 import { saveNoticesOff } from '../ui/notices';
 import { showQueue } from '../ui/queue';
-import { RACE_PARAM, raceFromQuery, readCard } from '../ui/raceapi';
+import { RACE_PARAM, raceFromQuery, readCard, readReplay } from '../ui/raceapi';
 import { loadRaces, pollRaces, type RacesView, racesOf } from '../ui/raceslazy';
 import { Racing } from '../ui/racestate';
 import { RaceWatch } from '../ui/racewatch';
+import { loadReplay } from '../ui/replayhost';
 import { settingsSignal } from '../ui/settings';
 import { shipmatesOf } from '../ui/shipmatesview';
 import { checkStatements, statementsOf } from '../ui/statementlazy';
@@ -478,6 +479,7 @@ async function start(): Promise<void> {
     // it does without one.
     const chartFile = seed === null ? null : await fetchSandboxChart(seed);
     const parts = makeChart(world, sandboxModels(chartFile), null, forecasting);
+    hostReplay(parts);
     sandboxForecast = new SandboxForecast(
       {
         physics: sandbox.physics,
@@ -636,11 +638,13 @@ async function start(): Promise<void> {
         retire: () => retireInSandbox(parts.racing),
         races: null,
         origin: location.origin,
+        replay: (code) => parts.replay.open(code),
       },
     };
     // ?races: races ashore on the sandbox, its routes answered by the tests.
     if (query.has('races')) {
       const races = racesOf();
+      races.replay = (code) => parts.replay.open(code);
       pollRaces(races, parts.notices, catalog.notices.kinds);
       screen.races = races;
       if (screen.racing != null) {
@@ -766,17 +770,39 @@ async function start(): Promise<void> {
         forgetParams(RACE_PARAM);
         return { ...me, watchRace: raceCode };
       }
+      // After the race: its replay on the chart, once at sea.
+      if (card.ok && card.value.phase === 'finished') {
+        return { ...me, replayRace: raceCode };
+      }
+      // A race whose world has gone: its results alone, before the sea.
+      if (!card.ok ? card.refusal.status === 404 : card.value.phase === 'ended') {
+        const told = await readReplay(raceCode);
+        if (told.ok && !told.value.kept) {
+          const m = await loadReplay();
+          await m.showReplayAlone(document.body, told.value, location.origin);
+          forgetParams(RACE_PARAM);
+          return me;
+        }
+      }
+      let replay = '';
+      startRaces.replay = (code) => {
+        replay = code;
+      };
       const m = await loadRaces();
       startRaces.card.value = raceCode;
       await m.showRaces(document.body, startRaces);
+      startRaces.replay = null;
       // Seen: a reload just sails.
       forgetParams(RACE_PARAM);
+      if (replay !== '') {
+        return { ...me, replayRace: replay };
+      }
     }
     return me;
   };
   const yours = (me: Me): Promise<Me> =>
     raceLinked(me).then((m) =>
-      m.watchRace !== undefined
+      m.watchRace !== undefined || m.replayRace !== undefined
         ? own(m)
         : showSailor(document.body, own(m), catalog, stage, catalog, startRaces),
     );
@@ -1029,6 +1055,7 @@ async function start(): Promise<void> {
   // The world's chart, as the server tells of it; the notices it raises,
   // switched off as the account has them.
   const parts = makeChart(world, models, serverNews, forecasting, racing);
+  hostReplay(parts);
   const gales = steerByChart(game, world, parts, forecasting);
   // A race's boat tapped on the charts or in the sea, by a page watching
   // the race, is watched.
@@ -1083,6 +1110,7 @@ async function start(): Promise<void> {
     crew: () => online.aboard.value === null && online.crew.value !== null,
   });
   races.board.value = startRaces.board.value;
+  races.replay = (code) => parts.replay.open(code);
   // A race asked to be watched as it starts: Watch on its notice watches
   // the closest battle at the front, following the action.
   pollRaces(races, parts.notices, catalog.notices.kinds, (code) => {
@@ -1361,6 +1389,7 @@ async function start(): Promise<void> {
         watchView.list.value = true;
       },
       sail: () => watchView.sail(),
+      replay: (code) => parts.replay.open(code),
     },
   });
   // A name tapped anywhere opens its log on the chart screen's Log tab, and
@@ -1399,8 +1428,21 @@ async function start(): Promise<void> {
   };
   atSea = true;
   reveal(world, cover, view === undefined ? DESCENT : 0);
+  // A race's link opened after the race: its replay on the chart.
+  if (me.replayRace !== undefined) {
+    parts.replay.open(me.replayRace);
+  }
   // A word from the game's owner about chat, if one waits unread.
   void checkStatements(statements);
+}
+
+/** A race's replay, opened on the chart by its link's code, or its results alone. */
+function hostReplay(parts: ChartParts): void {
+  const host = parts.replay;
+  host.origin = location.origin;
+  host.open = (code) => {
+    void loadReplay().then((m) => m.openReplay(host, parts.chart, code));
+  };
 }
 
 /** Whether the sailor is out of the boat, or the boat over: the sailor's line says so, but for aground. */

@@ -55,6 +55,8 @@ export interface RaceSource {
   another?: () => void;
   /** Takes the player's own boat to sea; absent where not offered. */
   sail?: () => void;
+  /** Opens a race's replay on the chart by its code; absent where not offered. */
+  replay?: (code: string) => void;
 }
 
 export { BarMore, CrierLine, RaceBar, Standings } from './racebar';
@@ -637,6 +639,17 @@ function ResultsWindow({ src }: { src: RaceSource }) {
         {owner ? (
           <button type="button" disabled={busy} onClick={again}>
             Race again
+          </button>
+        ) : null}
+        {src.replay !== undefined && code !== '' ? (
+          <button
+            type="button"
+            onClick={() => {
+              close();
+              src.replay?.(code);
+            }}
+          >
+            {told.trial ? 'Replay the runs' : 'Replay'}
           </button>
         ) : null}
         <button type="button" class="key-main" onClick={close}>

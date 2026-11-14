@@ -419,7 +419,7 @@ func laidOf(r *bus.Race) *store.RaceLaid {
 		Line:   [4]int32{m(c.Pin[0]), m(c.Pin[1]), m(c.Committee[0]), m(c.Committee[1])},
 		Finish: [4]int32{m(c.FinishA[0]), m(c.FinishA[1]), m(c.FinishB[0]), m(c.FinishB[1])},
 		Marks:  [][4]int32{}, Way: []int32{}, Legs: [][3]int32{},
-		East:   m(c.X), North: m(c.Y), Reach: max(m(c.Reach), 0), Laps: max(c.Laps, 1), Expected: c.Expected}}
+		East: m(c.X), North: m(c.Y), Reach: max(m(c.Reach), 0), Laps: max(c.Laps, 1), Expected: c.Expected}}
 	for _, mk := range c.Marks {
 		l.Course.Marks = append(l.Course.Marks, [4]int32{m(mk.X), m(mk.Y), int32(max(mk.Number, 0)), int32(mk.Side)})
 	}

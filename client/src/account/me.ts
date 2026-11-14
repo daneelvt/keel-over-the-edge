@@ -63,6 +63,11 @@ export interface Me extends Look {
    */
   watchRace?: string;
   /**
+   * Not the server's: the code of a race's link opened after the race, its
+   * replay opened on the chart once at sea; none for none.
+   */
+  replayRace?: string;
+  /**
    * Not the server's: the token of a link to come aboard, the knock to make
    * once the player's own boat is in the water; none for no knock.
    */

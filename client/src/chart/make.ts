@@ -14,7 +14,8 @@ import { hourAt, skyPeriods } from '../sky/skytime';
 import { type ChartSea, chartNews } from '../ui/chart';
 import type { NewsSource } from '../ui/newsread';
 import { type NoticeKind, Notices } from '../ui/notices';
-import { nextMarkOf, Racing } from '../ui/racestate';
+import { nextMarkOf, Racing, raceDrawingOf } from '../ui/racestate';
+import { ReplayHost } from '../ui/replayhost';
 import { Chart } from './chart';
 import type { Forecasting } from './forecasting';
 import { FEATURE_MARKS, PLACE_MARKS } from './marks';
@@ -105,6 +106,8 @@ export interface ChartParts {
   weather: ChartWeather | null;
   /** The race the boat sails in, as the chart and the race line show it. */
   racing: Racing;
+  /** A race replayed on the chart. */
+  replay: ReplayHost;
 }
 
 /**
@@ -117,6 +120,7 @@ export function makeChart(
   news: NewsSource | null,
   forecasting: Forecasting | null = null,
   racing: Racing = new Racing(),
+  replay: ReplayHost = new ReplayHost(),
 ): ChartParts {
   const w = catalog.world;
   const store = new ChartStore({
@@ -149,6 +153,14 @@ export function makeChart(
     catalog.notices.queue,
   );
   const chart = new Chart(store, view, notices);
+  // A replay open draws its race at its slider's moment in the race's
+  // place; closing the chart closes it.
+  view.raceDrawing = () => replay.model.peek()?.drawing() ?? raceDrawingOf(racing);
+  chart.open.subscribe((open) => {
+    if (!open) {
+      replay.close();
+    }
+  });
   if (weather !== null) {
     view.attachWeather(weather);
     view.streaksOn = () => chart.layers.value.streaks;
@@ -189,8 +201,9 @@ export function makeChart(
     speed: () => 0,
     steer: null,
     racing,
+    replay,
   };
-  return { chart, sea, notices, weather, racing };
+  return { chart, sea, notices, weather, racing, replay };
 }
 
 /** The sandbox's chart file. */

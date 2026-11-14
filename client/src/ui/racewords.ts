@@ -140,6 +140,10 @@ export function enteredText(n: number, most: number): string {
   return most > 0 ? `${n} entered of ${most}` : `${n} entered`;
 }
 
+/** The keys that replay a race on the chart, and a time trial's runs together. */
+export const REPLAY = 'Replay';
+export const REPLAY_RUNS = 'Replay the runs';
+
 /** Where a race stands, where it is past entering: "" while it may be entered. */
 export function phaseText(phase: Phase): string {
   switch (phase) {
