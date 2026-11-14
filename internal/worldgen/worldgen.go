@@ -269,7 +269,7 @@ func (c *config) generate(seed uint64) *Bundle {
 	b.Start = c.startPlaces(b.Ground, islands[0], b.Start, b.Towns)
 	lap("start")
 	var beacons []Place
-	b.Areas, b.Courses, beacons = c.coursesOf(b.Ground, islands, islandNames, b)
+	b.Areas, b.Courses, beacons = c.coursesOf(b.Ground, islands, len(groups), islandNames, b)
 	b.Places = append(b.Places, beacons...)
 	lap("courses")
 	b.Features, b.Parts = c.featureRecords(pw)

@@ -213,7 +213,13 @@ func TestCoursesOfSeedOne(t *testing.T) {
 	beacon := c.kinds[catalog.SiteBeacon]
 	places := map[int32]*Place{}
 	for i := range b.Places {
-		places[b.Places[i].Number] = &b.Places[i]
+		// Every place has a number of its own, after the islands' and the
+		// groups': the beacons too.
+		p := &b.Places[i]
+		if n := p.Number; places[n] != nil || int(n) < len(b.Islands)+len(b.Groups) {
+			t.Errorf("place %d (%s) shares its number", n, p.Name)
+		}
+		places[p.Number] = p
 	}
 	names := map[string]bool{}
 	for _, co := range b.Courses {

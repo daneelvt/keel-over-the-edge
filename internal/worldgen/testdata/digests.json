@@ -2,12 +2,12 @@
   "comment": "Written by go test ./internal/worldgen -run Digests -update: each seed's world's digest under the generator's version.",
   "version": 8,
   "digests": {
-    "1": "f6abef981aaa06067963be152ec859fa07b85a5e88c9cffabde31ba7cb5fe344",
+    "1": "23f1a37dd486756411c230a1c3700ef194619ddb4bff93c233e0a162c6c3d81e",
     "2": "a3bbde0abe964f2be7ce8204a0553c26587911af7eef7c573571322821f52767",
     "3": "cd0ab27818c382babb0a5da67e487a540c504b939780ebd6fc9948bebacd4b5f",
-    "4": "32dd9ed51cbbaba59255e39759f47374455d3c768bef96cb1a706fd343d97dd8",
-    "5": "bf2767de52cf5d4de0a3173d628dc8f6ce7ca7899c6bed95e6ba057e4df93718",
-    "6": "714008fa2016a7572691d856a76f892dc712574260439799b06f847b501bf3c3",
+    "4": "36b5be7790459551f66a9fe319d6f8b6cc2e8c84042314eb281030eb14008004",
+    "5": "4688e0797d6bbad4cc2e6a22abf9ca45c454abd6bf6b1636c35bdd2e786d0e8e",
+    "6": "e5ad47caa8e178a5d9dcfa59dd3c75da8773d430819bd65ef3563dc1face2246",
     "7": "8b8ada21ea493958867a13b74196d888fed7457359956b3008b6ed2b519dd6b7",
     "8": "814f06be1cac0a0e236437af28b4ba31186d9eb788e8bf8099d643f79901dedb"
   }

@@ -218,7 +218,7 @@ type lightRun struct {
 // coursesOf makes a world's racing areas and island courses, and the
 // beacons they need, numbered after its places; after the start, whose
 // fan the areas and the sites keep clear of.
-func (c *config) coursesOf(g *physics.Ground, islands []*made, names []string, b *Bundle) ([]Area, []Course, []Place) {
+func (c *config) coursesOf(g *physics.Ground, islands []*made, groups int, names []string, b *Bundle) ([]Area, []Course, []Place) {
 	cw := &coursesWork{c: c, cc: &c.courses, ground: g, islands: islands, names: names, b: b, beacons: map[int32]*beaconWork{}}
 	cw.grid = newWayGrid(g, c, b.Towns, decimetres(-(c.courses.deepest + c.courses.Depth)), decimetres(-(c.courses.deepestInAreas + c.courses.Depth)))
 	areas := cw.areas()
@@ -226,7 +226,10 @@ func (c *config) coursesOf(g *physics.Ground, islands []*made, names []string, b
 	cw.findSites()
 	courses := cw.chosen(cw.candidates())
 	var beacons []Place
-	next := int32(len(b.Islands) + len(b.Groups) + len(b.Places))
+	// The beacons are numbered after the world's other places, which come
+	// after its islands and its groups of rocks (the bundle's are not yet
+	// recorded here).
+	next := int32(len(islands) + groups + len(b.Places))
 	for i := range courses {
 		for j, h := range courses[i].Beacons {
 			bw := cw.beacons[h]
