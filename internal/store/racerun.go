@@ -216,6 +216,9 @@ type RaceRecord struct {
 	Skipper        AccountID
 	SkipperName    string
 	SkipperMachine bool
+	// Hung: the wooden spoon of the race hung from the sailor's sterns
+	// for the rest of its world, by their choice.
+	Hung bool
 }
 
 // EndRace writes a race, or a trial's run, ended, fenced: each boat's
@@ -341,7 +344,50 @@ func (s *Store) RaceRecordsOf(ctx context.Context, id AccountID, most int) ([]Ra
 		out[i] = RaceRecord{Account: id, Source: r.Source, World: int(r.World), At: r.At.UTC(), Code: r.Code, RaceName: r.RaceName,
 			Kind: r.Kind, CourseName: r.CourseName, Boat: r.Boat, BoatName: r.BoatName, Fleet: int(r.Fleet), Harbour: r.Harbour,
 			Newcomers: r.Newcomers, Role: r.Role, Place: int(r.Place), How: r.How, Medal: r.Medal, Awards: r.Awards,
-			Skipper: r.SkipperID.Bytes, SkipperName: r.SkipperName, SkipperMachine: r.SkipperMachine}
+			Skipper: r.SkipperID.Bytes, SkipperName: r.SkipperName, SkipperMachine: r.SkipperMachine, Hung: r.Hung}
 	}
 	return out, nil
+}
+
+// RaceCounts are a sailor's races counted over every world: sailed,
+// skipper or crew; top three places and wins in races; each award and
+// medal given; races run as their owner.
+type RaceCounts struct {
+	Sailed, Top3, Wins                                   int
+	BestStarts, Comebacks, PhotoFinishes, Crowds, Spoons int
+	Harbourmasters, Golds, Silvers, Bronzes              int
+	Ran                                                  int
+}
+
+// RaceCountsOf are id's races counted over every world.
+func (s *Store) RaceCountsOf(ctx context.Context, id AccountID) (RaceCounts, error) {
+	r, err := s.q.RaceCountsOf(ctx, uuidOf(id))
+	if err != nil {
+		return RaceCounts{}, err
+	}
+	return RaceCounts{Sailed: int(r.Sailed), Top3: int(r.Top3), Wins: int(r.Wins), BestStarts: int(r.BestStarts),
+		Comebacks: int(r.Comebacks), PhotoFinishes: int(r.PhotoFinishes), Crowds: int(r.Crowds), Spoons: int(r.Spoons),
+		Harbourmasters: int(r.Harbourmasters), Golds: int(r.Golds), Silvers: int(r.Silvers), Bronzes: int(r.Bronzes),
+		Ran: int(r.Ran)}, nil
+}
+
+// HangSpoon hangs the wooden spoon id was given in world's race of code
+// from their boats' sterns, or takes it down; ErrNotFound if they were
+// given none there.
+func (s *Store) HangSpoon(ctx context.Context, id AccountID, world int, code string, hung bool) error {
+	n, err := s.q.HangSpoon(ctx, db.HangSpoonParams{Hung: hung, AccountID: uuidOf(id), World: int32(world), Code: code})
+	if err != nil {
+		return err
+	}
+	if n == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+// SpoonsHung is how many wooden spoons id hangs from their sterns in
+// world.
+func (s *Store) SpoonsHung(ctx context.Context, id AccountID, world int) (int, error) {
+	n, err := s.q.SpoonsHung(ctx, db.SpoonsHungParams{AccountID: uuidOf(id), World: int32(world)})
+	return int(n), err
 }

@@ -3,6 +3,7 @@
 package race
 
 import (
+	"errors"
 	"math"
 	"testing"
 	"time"
@@ -276,6 +277,24 @@ func raceOfThree(t *testing.T, restart int) {
 	}
 	if records != 4 || won != 1 {
 		t.Errorf("%d records of the three skippers and the owner, %d stories of the win", records, won)
+	}
+	if c, err := s.db.RaceCountsOf(s.ctx, sailors[2].ID); err != nil || c.Sailed != 1 || c.Top3 != 1 || c.Spoons != 1 || c.Ran != 0 {
+		t.Errorf("the last boat's counts: %+v, %v", c, err)
+	}
+	if c, err := s.db.RaceCountsOf(s.ctx, owner.ID); err != nil || c.Sailed != 0 || c.Ran != 1 {
+		t.Errorf("the owner's counts: %+v, %v", c, err)
+	}
+	// The spoon hung by the last boat's skipper alone, and taken down.
+	if err := s.svc.Spoon(s.ctx, sailors[0], card.Code, true); !errors.Is(err, ErrNotFound) {
+		t.Errorf("the winner hangs a spoon: %v", err)
+	}
+	for _, hang := range []bool{true, false} {
+		if err := s.svc.Spoon(s.ctx, sailors[2], card.Code, hang); err != nil {
+			t.Fatal(err)
+		}
+		if n, err := s.db.SpoonsHung(s.ctx, sailors[2].ID, s.world.Number); err != nil || n != map[bool]int{true: 1}[hang] {
+			t.Errorf("hung %v: %d spoons, %v", hang, n, err)
+		}
 	}
 	// Written again, nothing changes.
 	if err := s.db.EndRace(s.ctx, s.lease, rulesOf(s), &store.RaceEnd{World: s.world.ID, Race: r.ID,

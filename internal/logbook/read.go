@@ -38,6 +38,8 @@ type Store interface {
 	LogFinds(ctx context.Context, id store.AccountID) ([]store.LogKept, error)
 	LogFrom(ctx context.Context) (time.Time, error)
 	LogFigures(ctx context.Context, ids []store.AccountID) (map[store.AccountID]store.LogFigures, error)
+	RaceRecordsOf(ctx context.Context, id store.AccountID, most int) ([]store.RaceRecord, error)
+	RaceCountsOf(ctx context.Context, id store.AccountID) (store.RaceCounts, error)
 }
 
 var _ Store = (*store.Store)(nil)
@@ -153,6 +155,8 @@ type Log struct {
 	Zone   string     `json:"zone"`
 	// Now is the number of the world sailed now, 0 for none.
 	Now int `json:"worldNow,omitempty"`
+	// Ribbons are the races sailed, over every world.
+	Ribbons *Ribbons `json:"ribbons"`
 }
 
 // A Figure of the abstract: Kind is distance (m), voyages, charted,
@@ -496,6 +500,9 @@ func (s *Service) read(ctx context.Context, r Reader, l *store.LogSailor, world 
 			return Log{}, err
 		}
 		out.World = &WorldDays{WorldRef: out.Worlds[at], Days: days}
+	}
+	if out.Ribbons, err = s.ribbons(ctx, r, l.ID); err != nil {
+		return Log{}, err
 	}
 	return out, nil
 }

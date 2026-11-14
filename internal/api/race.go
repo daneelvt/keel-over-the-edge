@@ -28,6 +28,7 @@ type Races interface {
 	Move(ctx context.Context, by race.Sailor, code string, at time.Time) (race.Card, error)
 	Again(ctx context.Context, by race.Sailor, code string) (race.Card, error)
 	Calendar(ctx context.Context, by race.Sailor, code string) ([]byte, string, error)
+	Spoon(ctx context.Context, by race.Sailor, code string, hang bool) error
 }
 
 var _ Races = (*race.Service)(nil)
@@ -57,6 +58,7 @@ func (a *api) registerRaces(mux *http.ServeMux, required func(http.HandlerFunc) 
 	mux.Handle("POST /api/race/{code}/remove", required(a.removeEntrant))
 	mux.Handle("POST /api/race/{code}/move", required(a.moveRace))
 	mux.Handle("POST /api/race/{code}/again", required(a.raceAgain))
+	mux.Handle("POST /api/race/{code}/spoon", required(a.raceSpoon))
 }
 
 // racer is the session's sailor as races see them: a human's, since a
@@ -312,6 +314,35 @@ func (a *api) raceAgain(w http.ResponseWriter, r *http.Request) {
 	}
 	c, err := a.cfg.Races.Again(r.Context(), by, raceCode(r))
 	a.answerRace(w, r, http.StatusCreated, c, err)
+}
+
+// spoonBody is POST /api/race/{code}/spoon's body and answer: whether the
+// wooden spoon hangs from the sailor's sterns.
+type spoonBody struct {
+	Hang bool `json:"hang"`
+}
+
+// raceSpoon answers POST /api/race/{code}/spoon, behind auth.Required:
+// the wooden spoon the player was given in the race hung from their
+// boats' sterns for the rest of the world, or taken down.
+//
+//	200 {"hang"}
+//	404 {"error":"not-found"}   no such race this world, or no spoon of theirs in it
+//	403 {"error":"ai-account"}
+func (a *api) raceSpoon(w http.ResponseWriter, r *http.Request) {
+	by, ok := racer(w, r)
+	if !ok {
+		return
+	}
+	var body spoonBody
+	if !readJSON(w, r, &body) {
+		return
+	}
+	if err := a.cfg.Races.Spoon(r.Context(), by, raceCode(r), body.Hang); err != nil {
+		a.refusedRace(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, body)
 }
 
 // raceCalendar answers GET /api/race/{code}/calendar.ics, behind

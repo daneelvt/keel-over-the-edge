@@ -412,6 +412,7 @@ type RaceRecord struct {
 	SkipperID      pgtype.UUID
 	SkipperName    pgtype.Text
 	SkipperMachine bool
+	Hung           bool
 }
 
 type RaceResult struct {

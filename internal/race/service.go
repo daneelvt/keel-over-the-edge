@@ -45,6 +45,8 @@ type Store interface {
 	PendingRuns(ctx context.Context, world [16]byte) ([]store.PendingRun, error)
 	StartRace(ctx context.Context, lease int64, r *store.RaceStart) error
 	EndRace(ctx context.Context, lease int64, rules store.NewsRules, e *store.RaceEnd) error
+	// The wooden spoon hung by a sailor's choice.
+	HangSpoon(ctx context.Context, id store.AccountID, world int, code string, hung bool) error
 }
 
 var _ Store = (*store.Store)(nil)
@@ -640,6 +642,25 @@ func (s *Service) Again(ctx context.Context, by Sailor, code string) (Card, erro
 		return Card{}, err
 	}
 	return s.Card(ctx, by, code)
+}
+
+// Spoon hangs the wooden spoon by was given in the race of code from
+// their boats' sterns for the rest of the world, or takes it down: a
+// race of the world sailed now only. ErrNotFound for no such race, or no
+// spoon of theirs in it.
+func (s *Service) Spoon(ctx context.Context, by Sailor, code string, hang bool) error {
+	r, err := s.find(ctx, code)
+	if err != nil {
+		return err
+	}
+	if r.WorldNumber != s.cfg.World.Number {
+		return ErrNotFound
+	}
+	err = s.cfg.Store.HangSpoon(ctx, by.ID, r.WorldNumber, r.Code, hang)
+	if errors.Is(err, store.ErrNotFound) {
+		return ErrNotFound
+	}
+	return err
 }
 
 // Calendar is a race's calendar file and its file's name.

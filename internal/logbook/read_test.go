@@ -20,6 +20,7 @@ type fakeLogs struct {
 	entries []store.LogEntry
 	finds   map[store.AccountID][]store.LogKept
 	totals  map[store.AccountID]store.LogTotals
+	races   map[store.AccountID][]store.RaceRecord
 	from    time.Time
 }
 
@@ -104,6 +105,34 @@ func (f *fakeLogs) LogFrom(context.Context) (time.Time, error) { return f.from, 
 
 func (f *fakeLogs) LogFigures(context.Context, []store.AccountID) (map[store.AccountID]store.LogFigures, error) {
 	return nil, nil
+}
+
+func (f *fakeLogs) RaceRecordsOf(_ context.Context, id store.AccountID, most int) ([]store.RaceRecord, error) {
+	rs := f.races[id]
+	return rs[:min(most, len(rs))], nil
+}
+
+func (f *fakeLogs) RaceCountsOf(_ context.Context, id store.AccountID) (store.RaceCounts, error) {
+	var c store.RaceCounts
+	for _, r := range f.races[id] {
+		if r.Role == store.RoleOwner {
+			c.Ran++
+			continue
+		}
+		c.Sailed++
+		if r.Kind == "race" && r.Place >= 1 && r.Place <= 3 {
+			c.Top3++
+		}
+		if r.Kind == "race" && r.Place == 1 {
+			c.Wins++
+		}
+		for _, a := range r.Awards {
+			if a == "spoon" {
+				c.Spoons++
+			}
+		}
+	}
+	return c, nil
 }
 
 // The sailors of the tests: Ann an adult, Tom an adult who keeps his log,
@@ -341,5 +370,58 @@ func TestCollection(t *testing.T) {
 	}
 	if l.Record.Kinds != 2 || l.Record.Of < 50 {
 		t.Errorf("the record's kinds: %d of %d", l.Record.Kinds, l.Record.Of)
+	}
+}
+
+// A log's ribbons: its races newest first, the counts over every world,
+// the races its sailor ran counted and not listed, and a crew's skipper
+// named as the log names anyone.
+func TestRibbons(t *testing.T) {
+	svc, f, _ := testLogs(t)
+	ctx := context.Background()
+	at := time.Date(2026, 11, 12, 18, 0, 0, 0, time.UTC)
+	f.races = map[store.AccountID][]store.RaceRecord{
+		jo: {
+			{Account: jo, World: 14, At: at, RaceName: "The Noon Gun", Kind: "race", CourseName: "Short triangle", Boat: "b", Fleet: 7,
+				Harbour: true, Role: store.RoleCrew, Place: 2, How: store.HowFinished, Awards: []string{}, Skipper: tom, SkipperName: "Tom"},
+			{Account: jo, World: 14, At: at.Add(-time.Hour), RaceName: "Jo's Dash", Kind: "race", Role: store.RoleOwner},
+			{Account: jo, World: 13, At: at.Add(-48 * time.Hour), RaceName: "The Lantern Race", Kind: "race", Fleet: 5,
+				Role: store.RoleSkipper, Place: 5, How: store.HowPlaced, Awards: []string{"spoon"}},
+		},
+	}
+	l, err := svc.ByName(ctx, ann, "Jo", 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	r := l.Ribbons
+	if r == nil || r.Counts.Sailed != 2 || r.Counts.Top3 != 1 || r.Counts.Wins != 0 || r.Counts.Ran != 1 || r.Counts.Awards["spoon"] != 1 {
+		t.Fatalf("the counts: %+v", r)
+	}
+	if len(r.Races) != 2 || r.Races[0].Name != "The Noon Gun" || r.Races[1].Name != "The Lantern Race" || r.Races[1].Awards[0] != "spoon" {
+		t.Fatalf("the races: %+v", r.Races)
+	}
+	// Tom, an adult, crewed for by a teen: his name is not the reader's
+	// to see unless his log is (he keeps it), and a teen's reader sees
+	// him by the same rule.
+	if k := r.Races[0].Skipper; k != nil && k.Name != "" {
+		t.Errorf("Tom named to Ann: %+v", k)
+	}
+	f.races[jo][0].Skipper, f.races[jo][0].SkipperName = bea, "Bea"
+	l, err = svc.ByName(ctx, kit, "Jo", 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if k := l.Ribbons.Races[0].Skipper; k != nil && k.Name != "" {
+		t.Errorf("an adult named to a teen: %+v", k)
+	}
+	l, err = svc.ByName(ctx, tom, "Jo", 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if k := l.Ribbons.Races[0].Skipper; k == nil || k.Name != "Bea" {
+		t.Errorf("Bea named to Tom: %+v", k)
+	}
+	if l, err = svc.Own(ctx, ann, 0); err != nil || l.Ribbons == nil || l.Ribbons.Counts.Sailed != 0 || len(l.Ribbons.Races) != 0 {
+		t.Errorf("a log with no races: %+v, %v", l.Ribbons, err)
 	}
 }

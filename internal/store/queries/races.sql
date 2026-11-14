@@ -270,8 +270,40 @@ ORDER BY r.run, r.place NULLS LAST, r.account_id;
 SELECT source, world, at, code, race_name, kind, course_name, boat, coalesce(boat_name, '')::text AS boat_name, fleet, harbour,
   newcomers, role, coalesce(place, 0)::smallint AS place, coalesce(how, '')::text AS how, coalesce(medal, '')::text AS medal,
   awards, coalesce(skipper_id, '00000000-0000-0000-0000-000000000000')::uuid AS skipper_id,
-  coalesce(skipper_name, '')::text AS skipper_name, skipper_machine
+  coalesce(skipper_name, '')::text AS skipper_name, skipper_machine, hung
 FROM race_record
 WHERE account_id = @account_id
 ORDER BY at DESC, id DESC
 LIMIT @most;
+
+-- name: HangSpoon :execrows
+-- Hangs the wooden spoon a sailor was given in a world's race from their
+-- boats' sterns, or takes it down: only on a record of theirs that has it.
+UPDATE race_record SET hung = @hung
+WHERE account_id = @account_id AND world = @world AND code = @code AND role IN ('skipper', 'crew')
+  AND 'spoon' = ANY (awards);
+
+-- name: SpoonsHung :one
+-- How many wooden spoons a sailor hangs in a world.
+SELECT count(*)::integer FROM race_record WHERE account_id = @account_id AND world = @world AND hung;
+
+-- name: RaceCountsOf :one
+-- A sailor's races counted over every world: those sailed, skipper or
+-- crew; their top three places and wins in races; the awards and medals
+-- given; the races run as their owner.
+SELECT
+  count(*) FILTER (WHERE role IN ('skipper', 'crew'))::integer AS sailed,
+  count(*) FILTER (WHERE role IN ('skipper', 'crew') AND kind = 'race' AND place BETWEEN 1 AND 3)::integer AS top3,
+  count(*) FILTER (WHERE role IN ('skipper', 'crew') AND kind = 'race' AND place = 1)::integer AS wins,
+  count(*) FILTER (WHERE 'best-start' = ANY (awards))::integer AS best_starts,
+  count(*) FILTER (WHERE 'comeback' = ANY (awards))::integer AS comebacks,
+  count(*) FILTER (WHERE 'photo-finish' = ANY (awards))::integer AS photo_finishes,
+  count(*) FILTER (WHERE 'crowd' = ANY (awards))::integer AS crowds,
+  count(*) FILTER (WHERE 'spoon' = ANY (awards))::integer AS spoons,
+  count(*) FILTER (WHERE medal = 'harbourmaster')::integer AS harbourmasters,
+  count(*) FILTER (WHERE medal = 'gold')::integer AS golds,
+  count(*) FILTER (WHERE medal = 'silver')::integer AS silvers,
+  count(*) FILTER (WHERE medal = 'bronze')::integer AS bronzes,
+  count(*) FILTER (WHERE role = 'owner')::integer AS ran
+FROM race_record
+WHERE account_id = @account_id;

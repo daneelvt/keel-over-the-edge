@@ -185,6 +185,34 @@ func (q *Queries) FinishRace(ctx context.Context, arg FinishRaceParams) error {
 	return err
 }
 
+const hangSpoon = `-- name: HangSpoon :execrows
+UPDATE race_record SET hung = $1
+WHERE account_id = $2 AND world = $3 AND code = $4 AND role IN ('skipper', 'crew')
+  AND 'spoon' = ANY (awards)
+`
+
+type HangSpoonParams struct {
+	Hung      bool
+	AccountID pgtype.UUID
+	World     int32
+	Code      string
+}
+
+// Hangs the wooden spoon a sailor was given in a world's race from their
+// boats' sterns, or takes it down: only on a record of theirs that has it.
+func (q *Queries) HangSpoon(ctx context.Context, arg HangSpoonParams) (int64, error) {
+	result, err := q.db.Exec(ctx, hangSpoon,
+		arg.Hung,
+		arg.AccountID,
+		arg.World,
+		arg.Code,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const harbourDays = `-- name: HarbourDays :many
 SELECT day, hour FROM harbour_day WHERE world_id = $1 ORDER BY day
 `
@@ -681,6 +709,65 @@ func (q *Queries) RaceByCode(ctx context.Context, code string) (RaceByCodeRow, e
 	return i, err
 }
 
+const raceCountsOf = `-- name: RaceCountsOf :one
+SELECT
+  count(*) FILTER (WHERE role IN ('skipper', 'crew'))::integer AS sailed,
+  count(*) FILTER (WHERE role IN ('skipper', 'crew') AND kind = 'race' AND place BETWEEN 1 AND 3)::integer AS top3,
+  count(*) FILTER (WHERE role IN ('skipper', 'crew') AND kind = 'race' AND place = 1)::integer AS wins,
+  count(*) FILTER (WHERE 'best-start' = ANY (awards))::integer AS best_starts,
+  count(*) FILTER (WHERE 'comeback' = ANY (awards))::integer AS comebacks,
+  count(*) FILTER (WHERE 'photo-finish' = ANY (awards))::integer AS photo_finishes,
+  count(*) FILTER (WHERE 'crowd' = ANY (awards))::integer AS crowds,
+  count(*) FILTER (WHERE 'spoon' = ANY (awards))::integer AS spoons,
+  count(*) FILTER (WHERE medal = 'harbourmaster')::integer AS harbourmasters,
+  count(*) FILTER (WHERE medal = 'gold')::integer AS golds,
+  count(*) FILTER (WHERE medal = 'silver')::integer AS silvers,
+  count(*) FILTER (WHERE medal = 'bronze')::integer AS bronzes,
+  count(*) FILTER (WHERE role = 'owner')::integer AS ran
+FROM race_record
+WHERE account_id = $1
+`
+
+type RaceCountsOfRow struct {
+	Sailed         int32
+	Top3           int32
+	Wins           int32
+	BestStarts     int32
+	Comebacks      int32
+	PhotoFinishes  int32
+	Crowds         int32
+	Spoons         int32
+	Harbourmasters int32
+	Golds          int32
+	Silvers        int32
+	Bronzes        int32
+	Ran            int32
+}
+
+// A sailor's races counted over every world: those sailed, skipper or
+// crew; their top three places and wins in races; the awards and medals
+// given; the races run as their owner.
+func (q *Queries) RaceCountsOf(ctx context.Context, accountID pgtype.UUID) (RaceCountsOfRow, error) {
+	row := q.db.QueryRow(ctx, raceCountsOf, accountID)
+	var i RaceCountsOfRow
+	err := row.Scan(
+		&i.Sailed,
+		&i.Top3,
+		&i.Wins,
+		&i.BestStarts,
+		&i.Comebacks,
+		&i.PhotoFinishes,
+		&i.Crowds,
+		&i.Spoons,
+		&i.Harbourmasters,
+		&i.Golds,
+		&i.Silvers,
+		&i.Bronzes,
+		&i.Ran,
+	)
+	return i, err
+}
+
 const raceEntrants = `-- name: RaceEntrants :many
 SELECT e.account_id, e.number, e.machine, e.with_crew, e.entered_at,
   coalesce((SELECT b.name FROM boat b WHERE b.sailor = e.account_id AND b.kind = $1 AND b.name IS NOT NULL
@@ -969,7 +1056,7 @@ const raceRecordsOf = `-- name: RaceRecordsOf :many
 SELECT source, world, at, code, race_name, kind, course_name, boat, coalesce(boat_name, '')::text AS boat_name, fleet, harbour,
   newcomers, role, coalesce(place, 0)::smallint AS place, coalesce(how, '')::text AS how, coalesce(medal, '')::text AS medal,
   awards, coalesce(skipper_id, '00000000-0000-0000-0000-000000000000')::uuid AS skipper_id,
-  coalesce(skipper_name, '')::text AS skipper_name, skipper_machine
+  coalesce(skipper_name, '')::text AS skipper_name, skipper_machine, hung
 FROM race_record
 WHERE account_id = $1
 ORDER BY at DESC, id DESC
@@ -1002,6 +1089,7 @@ type RaceRecordsOfRow struct {
 	SkipperID      pgtype.UUID
 	SkipperName    string
 	SkipperMachine bool
+	Hung           bool
 }
 
 // A sailor's lasting race records, the newest first.
@@ -1035,6 +1123,7 @@ func (q *Queries) RaceRecordsOf(ctx context.Context, arg RaceRecordsOfParams) ([
 			&i.SkipperID,
 			&i.SkipperName,
 			&i.SkipperMachine,
+			&i.Hung,
 		); err != nil {
 			return nil, err
 		}
@@ -1292,6 +1381,23 @@ func (q *Queries) SetRaceState(ctx context.Context, arg SetRaceStateParams) (int
 		return 0, err
 	}
 	return result.RowsAffected(), nil
+}
+
+const spoonsHung = `-- name: SpoonsHung :one
+SELECT count(*)::integer FROM race_record WHERE account_id = $1 AND world = $2 AND hung
+`
+
+type SpoonsHungParams struct {
+	AccountID pgtype.UUID
+	World     int32
+}
+
+// How many wooden spoons a sailor hangs in a world.
+func (q *Queries) SpoonsHung(ctx context.Context, arg SpoonsHungParams) (int32, error) {
+	row := q.db.QueryRow(ctx, spoonsHung, arg.AccountID, arg.World)
+	var column_1 int32
+	err := row.Scan(&column_1)
+	return column_1, err
 }
 
 const startEntries = `-- name: StartEntries :exec

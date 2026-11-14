@@ -77,3 +77,9 @@ func (noRaces) RaceIn(context.Context, [16]byte, int, [16]byte) (store.Race, err
 func (noRaces) PendingRuns(context.Context, [16]byte) ([]store.PendingRun, error)     { return nil, nil }
 func (noRaces) StartRace(context.Context, int64, *store.RaceStart) error              { return nil }
 func (noRaces) EndRace(context.Context, int64, store.NewsRules, *store.RaceEnd) error { return nil }
+func (noRaces) HangSpoon(context.Context, store.AccountID, int, string, bool) error {
+	return store.ErrNotFound
+}
+func (noRaces) RaceCountsOf(context.Context, store.AccountID) (store.RaceCounts, error) {
+	return store.RaceCounts{}, nil
+}

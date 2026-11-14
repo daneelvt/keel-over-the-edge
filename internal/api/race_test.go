@@ -18,6 +18,7 @@ import (
 type fakeRaces struct {
 	asked []race.Sailor
 	made  []race.Making
+	hung  []bool
 }
 
 var raceUntil = time.Date(2026, 11, 17, 16, 10, 0, 0, time.UTC)
@@ -78,6 +79,14 @@ func (f *fakeRaces) Calendar(_ context.Context, by race.Sailor, code string) ([]
 	return []byte("BEGIN:VCALENDAR\r\n"), "Tuesday-Triangle.ics", nil
 }
 
+func (f *fakeRaces) Spoon(_ context.Context, by race.Sailor, code string, hang bool) error {
+	if _, err := f.card(by, code); err != nil {
+		return err
+	}
+	f.hung = append(f.hung, hang)
+	return nil
+}
+
 // TestRacesBehindSession: every race route answers only a signed-in
 // sailor, the card and the calendar file too; refusals carry their reason
 // and when they end; a code no race has is not found; another's race is
@@ -89,6 +98,7 @@ func TestRacesBehindSession(t *testing.T) {
 		{"GET", "/api/races"}, {"GET", "/api/race/abcdefghij"}, {"GET", "/api/race/abcdefghij/calendar.ics"},
 		{"GET", "/api/race/name?course=island:3"}, {"POST", "/api/race"}, {"POST", "/api/race/abcdefghij/enter"},
 		{"POST", "/api/race/abcdefghij/withdraw"}, {"POST", "/api/race/abcdefghij/cancel"},
+		{"POST", "/api/race/abcdefghij/spoon"},
 	} {
 		req, _ := http.NewRequest(r.method, srv.URL+r.path, nil)
 		req.Header.Set("Origin", srv.URL)
@@ -133,6 +143,15 @@ func TestRacesBehindSession(t *testing.T) {
 	}
 	if status, _ := ann.do("POST", "/api/race/abcdefghij/again", ""); status != 409 {
 		t.Errorf("again: %d", status)
+	}
+	if status, body := ann.do("POST", "/api/race/abcdefghij/spoon", `{"hang":true}`); status != 200 || strings.TrimSpace(body) != `{"hang":true}` {
+		t.Errorf("the spoon hung: %d %s", status, body)
+	}
+	if status, _ := ann.do("POST", "/api/race/nosuchrace/spoon", `{"hang":true}`); status != 404 {
+		t.Errorf("a spoon of no such race: %d", status)
+	}
+	if len(f.hung) != 1 || !f.hung[0] {
+		t.Errorf("hung %v", f.hung)
 	}
 	if status, body := ann.do("GET", "/api/race/name?kind=race&course=island:3", ""); status != 200 || strings.TrimSpace(body) != `{"name":"the Noon Gun"}` {
 		t.Errorf("a name: %d %s", status, body)
