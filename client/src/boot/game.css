@@ -11,12 +11,13 @@ body {
 
 /* The screen at sea stays out of sight while the cover is over the page,
    and comes in over the cover's last moments as it lifts; the watch's
-   waiting and a race's windows before the sea stand on the cover. */
+   waiting, a race's windows and a race's results alone before the sea
+   stand on the cover. */
 .hud {
   transition: opacity 0.4s ease-out 0.4s;
 }
 
-html.covered .hud:not(.watch-waiting, .race-host) {
+html.covered .hud:not(.watch-waiting, .race-host, .rp-host) {
   opacity: 0;
   transition: none;
 }
