@@ -13,16 +13,21 @@ import (
 // every world, each with its place of how many and its awards, newest
 // first; and the counts kept for good. Read with the log, by the log's
 // own rule: who may read the log may read its ribbons. A crew's record
-// names the boat's skipper as the log names anyone.
+// names the boat's skipper as the log names anyone. The log itself
+// carries the counts; its races are read a page at a time, so that
+// neither answer outgrows a phone's data.
 
-// MostRibbons is how many races a log's ribbons list, the newest; the
+// RibbonsPage is how many races a page of a log's ribbons lists; the
 // counts are over every race.
-const MostRibbons = 120
+const RibbonsPage = 30
 
-// Ribbons are a log's races.
+// Ribbons are a log's races: the counts, and a page of races from the
+// newest with More if older ones follow. The log's own answer has no
+// page.
 type Ribbons struct {
 	Counts RaceCounts `json:"counts"`
-	Races  []Ribbon   `json:"races"`
+	Races  []Ribbon   `json:"races,omitempty"`
+	More   bool       `json:"more,omitempty"`
 }
 
 // RaceCounts are a sailor's races counted over every world: sailed, the
@@ -72,14 +77,15 @@ var (
 	medalNames = [...]string{"harbourmaster", "gold", "silver", "bronze"}
 )
 
-// ribbons reads the races of id's log for r.
-func (s *Service) ribbons(ctx context.Context, r Reader, id store.AccountID) (*Ribbons, error) {
+// ribbons reads the races of id's log for r: the counts, and the page of
+// races after the first from; none for a from below 0.
+func (s *Service) ribbons(ctx context.Context, r Reader, id store.AccountID, from int) (Ribbons, error) {
 	c, err := s.cfg.Store.RaceCountsOf(ctx, id)
 	if err != nil {
-		return nil, err
+		return Ribbons{}, err
 	}
-	out := &Ribbons{Counts: RaceCounts{Sailed: c.Sailed, Top3: c.Top3, Wins: c.Wins, Ran: c.Ran,
-		Awards: map[string]int{}, Medals: map[string]int{}}, Races: []Ribbon{}}
+	out := Ribbons{Counts: RaceCounts{Sailed: c.Sailed, Top3: c.Top3, Wins: c.Wins, Ran: c.Ran,
+		Awards: map[string]int{}, Medals: map[string]int{}}}
 	for i, n := range [...]int{c.BestStarts, c.Comebacks, c.PhotoFinishes, c.Crowds, c.Spoons} {
 		if n > 0 {
 			out.Counts.Awards[awardNames[i]] = n
@@ -90,13 +96,20 @@ func (s *Service) ribbons(ctx context.Context, r Reader, id store.AccountID) (*R
 			out.Counts.Medals[medalNames[i]] = n
 		}
 	}
-	if c.Sailed == 0 {
+	if from < 0 {
 		return out, nil
 	}
-	// The newest records: the owner's of races run are counted, not shown.
-	recs, err := s.cfg.Store.RaceRecordsOf(ctx, id, MostRibbons+c.Ran)
+	out.Races = []Ribbon{}
+	if from >= c.Sailed {
+		return out, nil
+	}
+	// One more than the page, to know whether older ones follow.
+	recs, err := s.cfg.Store.RaceRibbonsOf(ctx, id, from, RibbonsPage+1)
 	if err != nil {
-		return nil, err
+		return Ribbons{}, err
+	}
+	if len(recs) > RibbonsPage {
+		recs, out.More = recs[:RibbonsPage], true
 	}
 	var skippers []store.AccountID
 	seen := map[store.AccountID]bool{}
@@ -108,14 +121,11 @@ func (s *Service) ribbons(ctx context.Context, r Reader, id store.AccountID) (*R
 	}
 	people, err := s.cfg.Store.LogPeople(ctx, skippers)
 	if err != nil {
-		return nil, err
+		return Ribbons{}, err
 	}
 	now := s.cfg.Now()
 	for i := range recs {
 		x := &recs[i]
-		if x.Role == store.RoleOwner || len(out.Races) == MostRibbons {
-			continue
-		}
 		rb := Ribbon{World: x.World, At: ms(x.At), Code: x.Code, Name: x.RaceName, Kind: x.Kind, Course: x.CourseName, Boat: x.Boat, BoatName: x.BoatName,
 			Fleet: x.Fleet, Harbour: x.Harbour, Newcomers: x.Newcomers, Role: x.Role, Place: x.Place, How: x.How, Medal: x.Medal,
 			Awards: x.Awards}

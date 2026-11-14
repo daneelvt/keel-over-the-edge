@@ -80,6 +80,10 @@ func (noRaces) EndRace(context.Context, int64, store.NewsRules, *store.RaceEnd) 
 func (noRaces) HangSpoon(context.Context, store.AccountID, int, string, bool) error {
 	return store.ErrNotFound
 }
+func (noRaces) RaceRibbonsOf(context.Context, store.AccountID, int, int) ([]store.RaceRecord, error) {
+	return nil, nil
+}
+
 func (noRaces) RaceCountsOf(context.Context, store.AccountID) (store.RaceCounts, error) {
 	return store.RaceCounts{}, nil
 }

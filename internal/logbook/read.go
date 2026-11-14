@@ -38,7 +38,7 @@ type Store interface {
 	LogFinds(ctx context.Context, id store.AccountID) ([]store.LogKept, error)
 	LogFrom(ctx context.Context) (time.Time, error)
 	LogFigures(ctx context.Context, ids []store.AccountID) (map[store.AccountID]store.LogFigures, error)
-	RaceRecordsOf(ctx context.Context, id store.AccountID, most int) ([]store.RaceRecord, error)
+	RaceRibbonsOf(ctx context.Context, id store.AccountID, skip, most int) ([]store.RaceRecord, error)
 	RaceCountsOf(ctx context.Context, id store.AccountID) (store.RaceCounts, error)
 }
 
@@ -155,7 +155,8 @@ type Log struct {
 	Zone   string     `json:"zone"`
 	// Now is the number of the world sailed now, 0 for none.
 	Now int `json:"worldNow,omitempty"`
-	// Ribbons are the races sailed, over every world.
+	// Ribbons are the races sailed, over every world: their counts; the
+	// races themselves are read by the page (Service.Ribbons).
 	Ribbons *Ribbons `json:"ribbons"`
 }
 
@@ -349,65 +350,98 @@ func (s *Service) sailorOf(l *store.LogSailor) Sailor {
 	return Sailor{ID: l.ID, Machine: l.Kind == store.AI, Owner: l.Owner, Band: BandOf(l.Born, s.cfg.Now()), Shown: l.Shown}
 }
 
+// Who is whose log is read: a sailor's by Name, one of the reader's
+// machine sailors by Machine, or else the reader's own.
+type Who struct {
+	Name    string
+	Machine store.AccountID
+}
+
 // Own is the log of a reader's own sailor, world 0 for the newest.
 func (s *Service) Own(ctx context.Context, reader store.AccountID, world int) (Log, error) {
-	r, err := s.reader(ctx, reader)
-	if err != nil {
-		return Log{}, err
-	}
-	l, err := s.cfg.Store.LogSailorByID(ctx, reader)
-	if err != nil {
-		return Log{}, err
-	}
-	return s.read(ctx, r, &l, world)
+	return s.readOf(ctx, reader, Who{}, world)
 }
 
 // ByName is the log of the sailor of a name, as reader may read it;
 // ErrNotFound for no such sailor, or one reader may not read.
 func (s *Service) ByName(ctx context.Context, reader store.AccountID, name string, world int) (Log, error) {
-	r, err := s.reader(ctx, reader)
-	if err != nil {
-		return Log{}, err
-	}
-	key := name
-	if s.cfg.Key != nil {
-		key = s.cfg.Key(name)
-	}
-	if key == "" {
+	if name == "" {
 		return Log{}, ErrNotFound
 	}
-	l, err := s.cfg.Store.LogSailorByKey(ctx, key)
-	if errors.Is(err, store.ErrNotFound) {
-		return Log{}, ErrNotFound
-	}
-	if err != nil {
-		return Log{}, err
-	}
-	sl := s.sailorOf(&l)
-	if l.Stopped && !Own(r, sl) || !MayRead(r, sl, s.blocks(r.ID, l.ID)) {
-		return Log{}, ErrNotFound
-	}
-	return s.read(ctx, r, &l, world)
+	return s.readOf(ctx, reader, Who{Name: name}, world)
 }
 
 // Machine is the log of one of a player's machine sailors; ErrNotFound if
 // it is not theirs.
 func (s *Service) Machine(ctx context.Context, owner, machine store.AccountID, world int) (Log, error) {
-	r, err := s.reader(ctx, owner)
+	return s.readOf(ctx, owner, Who{Machine: machine}, world)
+}
+
+// Ribbons are a page of the races of who's log, as reader may read it,
+// from the newest: the counts, and the races after the first from.
+func (s *Service) Ribbons(ctx context.Context, reader store.AccountID, who Who, from int) (Ribbons, error) {
+	r, l, err := s.open(ctx, reader, who)
+	if err != nil {
+		return Ribbons{}, err
+	}
+	return s.ribbons(ctx, r, l.ID, max(from, 0))
+}
+
+// readOf reads who's log for reader, world 0 for the newest.
+func (s *Service) readOf(ctx context.Context, reader store.AccountID, who Who, world int) (Log, error) {
+	r, l, err := s.open(ctx, reader, who)
 	if err != nil {
 		return Log{}, err
-	}
-	l, err := s.cfg.Store.LogSailorByID(ctx, machine)
-	if errors.Is(err, store.ErrNotFound) {
-		return Log{}, ErrNotFound
-	}
-	if err != nil {
-		return Log{}, err
-	}
-	if l.Kind != store.AI || l.Owner != owner {
-		return Log{}, ErrNotFound
 	}
 	return s.read(ctx, r, &l, world)
+}
+
+// open finds who's log for reader, as they may read it: ErrNotFound for
+// none, and for one not theirs to read.
+func (s *Service) open(ctx context.Context, reader store.AccountID, who Who) (Reader, store.LogSailor, error) {
+	r, err := s.reader(ctx, reader)
+	if err != nil {
+		return Reader{}, store.LogSailor{}, err
+	}
+	switch {
+	case who.Name != "":
+		key := who.Name
+		if s.cfg.Key != nil {
+			key = s.cfg.Key(who.Name)
+		}
+		if key == "" {
+			return Reader{}, store.LogSailor{}, ErrNotFound
+		}
+		l, err := s.cfg.Store.LogSailorByKey(ctx, key)
+		if errors.Is(err, store.ErrNotFound) {
+			return Reader{}, store.LogSailor{}, ErrNotFound
+		}
+		if err != nil {
+			return Reader{}, store.LogSailor{}, err
+		}
+		sl := s.sailorOf(&l)
+		if l.Stopped && !Own(r, sl) || !MayRead(r, sl, s.blocks(r.ID, l.ID)) {
+			return Reader{}, store.LogSailor{}, ErrNotFound
+		}
+		return r, l, nil
+	case who.Machine != (store.AccountID{}):
+		l, err := s.cfg.Store.LogSailorByID(ctx, who.Machine)
+		if errors.Is(err, store.ErrNotFound) {
+			return Reader{}, store.LogSailor{}, ErrNotFound
+		}
+		if err != nil {
+			return Reader{}, store.LogSailor{}, err
+		}
+		if l.Kind != store.AI || l.Owner != reader {
+			return Reader{}, store.LogSailor{}, ErrNotFound
+		}
+		return r, l, nil
+	}
+	l, err := s.cfg.Store.LogSailorByID(ctx, reader)
+	if err != nil {
+		return Reader{}, store.LogSailor{}, err
+	}
+	return r, l, nil
 }
 
 // ForOwner is any account's log as the game's owner reads it: every name
@@ -501,9 +535,12 @@ func (s *Service) read(ctx context.Context, r Reader, l *store.LogSailor, world 
 		}
 		out.World = &WorldDays{WorldRef: out.Worlds[at], Days: days}
 	}
-	if out.Ribbons, err = s.ribbons(ctx, r, l.ID); err != nil {
+	// The counts alone: the Ribbons tab reads its races by the page.
+	rb, err := s.ribbons(ctx, r, l.ID, -1)
+	if err != nil {
 		return Log{}, err
 	}
+	out.Ribbons = &rb
 	return out, nil
 }
 

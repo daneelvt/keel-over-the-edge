@@ -48,6 +48,7 @@ import {
   NO_SUCH_LOG,
   NOT_HAD,
   NOT_YET,
+  OLDER_RACES,
   ONLY_YOU,
   READING,
   RIBBONS,
@@ -494,10 +495,59 @@ function RibbonRow({ r, maiden, spoonKey }: { r: LogRibbon; maiden: boolean; spo
   );
 }
 
-/** The log's ribbons: the counts kept for good, then each race's ribbon by world, the newest first. */
-function Ribbons({ log }: { log: Log }) {
+/** The ribbons read so far: their pages, and whether one is being read, failed, or more follow. */
+interface RibbonsRead {
+  races: LogRibbon[];
+  more: boolean;
+  reading: boolean;
+  failed: boolean;
+}
+
+/**
+ * The log's ribbons: the counts kept for good, then each race's ribbon
+ * by world, the newest first, read a page at a time when the tab opens,
+ * older pages on asking.
+ */
+function Ribbons({ log, who, source }: { log: Log; who: LogWho; source: LogSource }) {
   const rb = log.ribbons ?? null;
-  if (rb === null || rb.counts.sailed === 0) {
+  const sailed = rb?.counts.sailed ?? 0;
+  const [read, setRead] = useState<RibbonsRead>({
+    races: [],
+    more: sailed > 0,
+    reading: false,
+    failed: false,
+  });
+  const live = useRef(true);
+  useEffect(() => {
+    live.current = true;
+    return () => {
+      live.current = false;
+    };
+  }, []);
+  const page = (from: number) => {
+    setRead((r) => ({ ...r, reading: true, failed: false }));
+    void source.ribbons(who, from).then((got) => {
+      if (!live.current) {
+        return;
+      }
+      setRead((r) =>
+        got === null
+          ? { ...r, reading: false, failed: true }
+          : {
+              races: [...r.races.slice(0, from), ...(got.races ?? [])],
+              more: got.more === true,
+              reading: false,
+              failed: false,
+            },
+      );
+    });
+  };
+  useEffect(() => {
+    if (sailed > 0) {
+      page(0);
+    }
+  }, []);
+  if (rb === null || sailed === 0) {
     return (
       <div class="log-ribbons-part">
         <p class="log-faint">{NO_RACES}</p>
@@ -506,7 +556,7 @@ function Ribbons({ log }: { log: Log }) {
     );
   }
   const worlds: { world: number; races: LogRibbon[] }[] = [];
-  for (const r of rb.races) {
+  for (const r of read.races) {
     const last = worlds.at(-1);
     if (last !== undefined && last.world === r.world) {
       last.races.push(r);
@@ -515,8 +565,8 @@ function Ribbons({ log }: { log: Log }) {
     }
   }
   // The whole record is here: its oldest race is the sailor's first.
-  const all = rb.races.length === rb.counts.sailed;
-  const oldest = rb.races.at(-1);
+  const all = !read.more && read.races.length === sailed;
+  const oldest = read.races.at(-1);
   return (
     <div class="log-ribbons-part" data-readout="log-ribbons">
       <div class="log-ribbon-counts">
@@ -541,6 +591,29 @@ function Ribbons({ log }: { log: Log }) {
           </ol>
         </section>
       ))}
+      {read.reading ? (
+        <p class="log-faint" aria-live="polite">
+          {READING}
+        </p>
+      ) : read.failed ? (
+        <div class="log-keys">
+          <p class="log-faint">{NOT_HAD}</p>
+          <button type="button" class="log-key" onClick={() => page(read.races.length)}>
+            {TRY_AGAIN}
+          </button>
+        </div>
+      ) : read.more ? (
+        <div class="log-keys">
+          <button
+            type="button"
+            class="log-key"
+            data-key="older-ribbons"
+            onClick={() => page(read.races.length)}
+          >
+            {OLDER_RACES}
+          </button>
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -710,7 +783,7 @@ export function LogSheet({
             ) : tab === 'collection' ? (
               <Collection log={log} />
             ) : (
-              <Ribbons log={log} />
+              <Ribbons key={`${key}-${again}`} log={log} who={who} source={source} />
             )}
           </div>
         </>

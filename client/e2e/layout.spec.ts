@@ -3122,6 +3122,9 @@ test('the chart screen’s Log tab holds a long log, its collection, who may rea
     await page.getByRole('tab', { name: 'Ribbons' }).click();
     await expect(page.locator('.log-ribbon').first()).toBeVisible();
     await check(`${s.name}, the ribbons`);
+    await page.locator('[data-key=older-ribbons]').click();
+    await expect(page.locator('.log-ribbon')).toHaveCount(45);
+    await check(`${s.name}, the older ribbons`);
     await page.evaluate((name) => globalThis.keel.openLog({ kind: 'sailor', name }), LONG_NAME);
     await expect(page.locator('.log-back')).toBeVisible();
     await check(`${s.name}, another’s log`);

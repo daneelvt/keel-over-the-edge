@@ -156,11 +156,19 @@ export interface LogRibbon {
   hung?: boolean;
 }
 
-/** A log's races: the counts kept for good and the newest races. */
+/**
+ * A log's races: the counts kept for good; and, read by the page, races
+ * from the newest, with more while older ones follow. The log itself
+ * carries the counts alone.
+ */
 export interface LogRibbons {
   counts: RaceCounts;
-  races: LogRibbon[];
+  races?: LogRibbon[];
+  more?: boolean;
 }
+
+/** How many races a page of a log's ribbons lists, as the server pages them. */
+export const RIBBONS_PAGE = 30;
 
 /** A sailor's log, a world's days at a time. */
 export interface Log {
@@ -194,13 +202,15 @@ export type LogShown = 'sailors' | 'me';
 /** Where the log is read from: the server's routes, or a test's stand-in. */
 export interface LogSource {
   read(who: LogWho, world: number): Promise<LogAnswer>;
+  /** A page of a log's races, the newest first, after the first from; null if not had. */
+  ribbons(who: LogWho, from: number): Promise<LogRibbons | null>;
   setShown(shown: LogShown): Promise<boolean>;
   /** Whether a sailor's boat can be watched now. */
   watchable(name: string): Promise<boolean>;
 }
 
-/** The route a log is read by. */
-export function logPath(who: LogWho, world: number): string {
+/** The route a log is read by; with from, a page of its races. */
+export function logPath(who: LogWho, world: number, from: number | null = null): string {
   const q = new URLSearchParams();
   if (who.kind === 'sailor') {
     q.set('name', who.name);
@@ -209,6 +219,12 @@ export function logPath(who: LogWho, world: number): string {
   }
   if (world > 0) {
     q.set('world', String(world));
+  }
+  if (from !== null) {
+    q.set('part', 'ribbons');
+    if (from > 0) {
+      q.set('from', String(from));
+    }
   }
   const base =
     who.kind === 'own' ? '/api/me/log' : who.kind === 'sailor' ? '/api/log' : '/api/machines/log';
@@ -232,6 +248,21 @@ export const serverLogs: LogSource = {
       }
       const log = (await res.json()) as Log;
       return typeof log?.name === 'string' ? { log } : null;
+    } catch {
+      return null;
+    }
+  },
+  async ribbons(who, from) {
+    try {
+      const res = await fetch(logPath(who, 0, from), {
+        cache: 'no-store',
+        credentials: 'same-origin',
+      });
+      if (!res.ok) {
+        return null;
+      }
+      const rb = (await res.json()) as LogRibbons;
+      return typeof rb?.counts === 'object' && rb.counts !== null ? rb : null;
     } catch {
       return null;
     }

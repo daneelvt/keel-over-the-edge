@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -107,8 +108,14 @@ func (f *fakeLogs) LogFigures(context.Context, []store.AccountID) (map[store.Acc
 	return nil, nil
 }
 
-func (f *fakeLogs) RaceRecordsOf(_ context.Context, id store.AccountID, most int) ([]store.RaceRecord, error) {
-	rs := f.races[id]
+func (f *fakeLogs) RaceRibbonsOf(_ context.Context, id store.AccountID, skip, most int) ([]store.RaceRecord, error) {
+	var rs []store.RaceRecord
+	for _, r := range f.races[id] {
+		if r.Role != store.RoleOwner {
+			rs = append(rs, r)
+		}
+	}
+	rs = rs[min(skip, len(rs)):]
 	return rs[:min(most, len(rs))], nil
 }
 
@@ -393,8 +400,20 @@ func TestRibbons(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	r := l.Ribbons
-	if r == nil || r.Counts.Sailed != 2 || r.Counts.Top3 != 1 || r.Counts.Wins != 0 || r.Counts.Ran != 1 || r.Counts.Awards["spoon"] != 1 {
+	// The log carries the counts alone; its races come by the page.
+	if l.Ribbons == nil || l.Ribbons.Counts.Sailed != 2 || l.Ribbons.Races != nil || l.Ribbons.More {
+		t.Fatalf("the log's ribbons: %+v", l.Ribbons)
+	}
+	ribbons := func(reader store.AccountID, who Who) Ribbons {
+		t.Helper()
+		r, err := svc.Ribbons(ctx, reader, who, 0)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return r
+	}
+	r := ribbons(ann, Who{Name: "Jo"})
+	if r.Counts.Sailed != 2 || r.Counts.Top3 != 1 || r.Counts.Wins != 0 || r.Counts.Ran != 1 || r.Counts.Awards["spoon"] != 1 {
 		t.Fatalf("the counts: %+v", r)
 	}
 	if len(r.Races) != 2 || r.Races[0].Name != "The Noon Gun" || r.Races[1].Name != "The Lantern Race" || r.Races[1].Awards[0] != "spoon" {
@@ -407,21 +426,54 @@ func TestRibbons(t *testing.T) {
 		t.Errorf("Tom named to Ann: %+v", k)
 	}
 	f.races[jo][0].Skipper, f.races[jo][0].SkipperName = bea, "Bea"
-	l, err = svc.ByName(ctx, kit, "Jo", 0)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if k := l.Ribbons.Races[0].Skipper; k != nil && k.Name != "" {
+	if k := ribbons(kit, Who{Name: "Jo"}).Races[0].Skipper; k != nil && k.Name != "" {
 		t.Errorf("an adult named to a teen: %+v", k)
 	}
-	l, err = svc.ByName(ctx, tom, "Jo", 0)
+	if k := ribbons(tom, Who{Name: "Jo"}).Races[0].Skipper; k == nil || k.Name != "Bea" {
+		t.Errorf("Bea named to Tom: %+v", k)
+	}
+	if r := ribbons(ann, Who{}); r.Counts.Sailed != 0 || len(r.Races) != 0 || r.More {
+		t.Errorf("a log with no races: %+v", r)
+	}
+	// The ribbons are read by the log's own rule.
+	if _, err := svc.Ribbons(ctx, ann, Who{Name: "Nobody"}, 0); !errors.Is(err, ErrNotFound) {
+		t.Errorf("an unknown sailor's ribbons: %v", err)
+	}
+	if _, err := svc.Ribbons(ctx, ann, Who{Machine: jo}, 0); !errors.Is(err, ErrNotFound) {
+		t.Errorf("another's sailor as a machine: %v", err)
+	}
+}
+
+// A log's ribbons come a page at a time, the newest first, with more
+// said while older ones follow; the owner's records never among them.
+func TestRibbonsByThePage(t *testing.T) {
+	svc, f, _ := testLogs(t)
+	ctx := context.Background()
+	at := time.Date(2026, 11, 12, 18, 0, 0, 0, time.UTC)
+	var rs []store.RaceRecord
+	for i := range RibbonsPage + 5 {
+		rs = append(rs, store.RaceRecord{Account: jo, World: 14, At: at.Add(-time.Duration(i) * time.Hour), RaceName: fmt.Sprint("Race ", i),
+			Kind: "race", Fleet: 4, Role: store.RoleSkipper, Place: 2, How: store.HowFinished})
+		if i%7 == 0 {
+			rs = append(rs, store.RaceRecord{Account: jo, World: 14, At: at, RaceName: "Run by Jo", Kind: "race", Role: store.RoleOwner})
+		}
+	}
+	f.races = map[store.AccountID][]store.RaceRecord{jo: rs}
+	first, err := svc.Ribbons(ctx, ann, Who{Name: "Jo"}, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if k := l.Ribbons.Races[0].Skipper; k == nil || k.Name != "Bea" {
-		t.Errorf("Bea named to Tom: %+v", k)
+	if len(first.Races) != RibbonsPage || !first.More || first.Races[0].Name != "Race 0" || first.Counts.Sailed != RibbonsPage+5 {
+		t.Fatalf("the first page: %d races, more %v, counts %+v", len(first.Races), first.More, first.Counts)
 	}
-	if l, err = svc.Own(ctx, ann, 0); err != nil || l.Ribbons == nil || l.Ribbons.Counts.Sailed != 0 || len(l.Ribbons.Races) != 0 {
-		t.Errorf("a log with no races: %+v, %v", l.Ribbons, err)
+	next, err := svc.Ribbons(ctx, ann, Who{Name: "Jo"}, RibbonsPage)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(next.Races) != 5 || next.More || next.Races[4].Name != fmt.Sprint("Race ", RibbonsPage+4) {
+		t.Fatalf("the last page: %+v", next.Races)
+	}
+	if past, err := svc.Ribbons(ctx, ann, Who{Name: "Jo"}, 1000); err != nil || len(past.Races) != 0 || past.More {
+		t.Errorf("past the last: %+v, %v", past, err)
 	}
 }

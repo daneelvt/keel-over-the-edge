@@ -583,6 +583,8 @@ export const RIBBONS = 'Ribbons';
 /** A log with no races yet. */
 export const NO_RACES =
   'No races sailed yet. Every race sailed leaves its ribbon here, kept for good.';
+/** The key that reads a log's older ribbons. */
+export const OLDER_RACES = 'Older races';
 
 /** The awards and medals counted, in their order, each a word and its plural. */
 const AWARD_COUNTS: [string, string, string][] = [

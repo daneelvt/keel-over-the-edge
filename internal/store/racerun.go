@@ -339,6 +339,25 @@ func (s *Store) RaceRecordsOf(ctx context.Context, id AccountID, most int) ([]Ra
 	if err != nil {
 		return nil, err
 	}
+	return raceRecordsOf(id, rows), nil
+}
+
+// RaceRibbonsOf are a sailor's lasting records of the races they sailed,
+// skipper or crew, the newest first: at most most after the first skip.
+func (s *Store) RaceRibbonsOf(ctx context.Context, id AccountID, skip, most int) ([]RaceRecord, error) {
+	rows, err := s.q.RaceRibbonsOf(ctx, db.RaceRibbonsOfParams{AccountID: uuidOf(id), Skip: int32(skip), Most: int32(most)})
+	if err != nil {
+		return nil, err
+	}
+	same := make([]db.RaceRecordsOfRow, len(rows))
+	for i, r := range rows {
+		same[i] = db.RaceRecordsOfRow(r)
+	}
+	return raceRecordsOf(id, same), nil
+}
+
+// raceRecordsOf are id's race records as read.
+func raceRecordsOf(id AccountID, rows []db.RaceRecordsOfRow) []RaceRecord {
 	out := make([]RaceRecord, len(rows))
 	for i, r := range rows {
 		out[i] = RaceRecord{Account: id, Source: r.Source, World: int(r.World), At: r.At.UTC(), Code: r.Code, RaceName: r.RaceName,
@@ -346,7 +365,7 @@ func (s *Store) RaceRecordsOf(ctx context.Context, id AccountID, most int) ([]Ra
 			Newcomers: r.Newcomers, Role: r.Role, Place: int(r.Place), How: r.How, Medal: r.Medal, Awards: r.Awards,
 			Skipper: r.SkipperID.Bytes, SkipperName: r.SkipperName, SkipperMachine: r.SkipperMachine, Hung: r.Hung}
 	}
-	return out, nil
+	return out
 }
 
 // RaceCounts are a sailor's races counted over every world: sailed,
