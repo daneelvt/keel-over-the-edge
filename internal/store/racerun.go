@@ -300,3 +300,48 @@ func putRecord(ctx context.Context, q *db.Queries, r *RaceRecord) error {
 	}
 	return q.PutRaceRecord(ctx, p)
 }
+
+// RaceRun is what a boat came to in a race, or in a trial's run, as kept:
+// its run, and its result with its track.
+type RaceRun struct {
+	Run int
+	RaceResult
+}
+
+// RaceResults are what a race's boats came to, or a trial's runs, with
+// their tracks: by run, then place, those unplaced last.
+func (s *Store) RaceResults(ctx context.Context, world, race [16]byte) ([]RaceRun, error) {
+	rows, err := s.q.RaceResults(ctx, db.RaceResultsParams{WorldID: pgtype.UUID{Bytes: world, Valid: true},
+		RaceID: pgtype.UUID{Bytes: race, Valid: true}})
+	if err != nil {
+		return nil, err
+	}
+	out := make([]RaceRun, len(rows))
+	for i, r := range rows {
+		x := RaceRun{Run: int(r.Run), RaceResult: RaceResult{Account: r.AccountID.Bytes, Place: int(r.Place), Elapsed: float64(r.Elapsed),
+			Added: float64(r.Added), Marks: int(r.Marks), ToGo: float64(r.ToGo), How: r.How, Medal: r.Medal, Awards: r.Awards,
+			Track: r.Samples}}
+		if err := json.Unmarshal(r.Crew, &x.Crew); err != nil {
+			return nil, fmt.Errorf("a race result's crew: %w", err)
+		}
+		out[i] = x
+	}
+	return out, nil
+}
+
+// RaceRecordsOf are a sailor's lasting race records, the newest first, at
+// most most.
+func (s *Store) RaceRecordsOf(ctx context.Context, id AccountID, most int) ([]RaceRecord, error) {
+	rows, err := s.q.RaceRecordsOf(ctx, db.RaceRecordsOfParams{AccountID: uuidOf(id), Most: int32(most)})
+	if err != nil {
+		return nil, err
+	}
+	out := make([]RaceRecord, len(rows))
+	for i, r := range rows {
+		out[i] = RaceRecord{Account: id, Source: r.Source, World: int(r.World), At: r.At.UTC(), Code: r.Code, RaceName: r.RaceName,
+			Kind: r.Kind, CourseName: r.CourseName, Boat: r.Boat, BoatName: r.BoatName, Fleet: int(r.Fleet), Harbour: r.Harbour,
+			Newcomers: r.Newcomers, Role: r.Role, Place: int(r.Place), How: r.How, Medal: r.Medal, Awards: r.Awards,
+			Skipper: r.SkipperID.Bytes, SkipperName: r.SkipperName, SkipperMachine: r.SkipperMachine}
+	}
+	return out, nil
+}

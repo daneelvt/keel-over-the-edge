@@ -7,8 +7,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jackc/pgx/v5"
-
 	"github.com/daneelvt/keel-over-the-edge/internal/bus"
 	"github.com/daneelvt/keel-over-the-edge/internal/catalog"
 	"github.com/daneelvt/keel-over-the-edge/internal/physics"
@@ -238,29 +236,7 @@ func raceOfThree(t *testing.T, restart int) {
 	if r.State != store.RaceFinished {
 		t.Errorf("the race is %q", r.State)
 	}
-	conn, err := pgx.Connect(s.ctx, s.url)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer conn.Close(s.ctx)
-	rows, err := conn.Query(s.ctx, `SELECT r.account_id, r.place, r.how, r.awards, length(t.samples), r.elapsed
-		FROM race_result r JOIN race_track t USING (world_id, race_id, account_id, run) WHERE r.race_id = $1 ORDER BY r.place`, r.ID)
-	if err != nil {
-		t.Fatal(err)
-	}
-	type result struct {
-		account [16]byte
-		place   int16
-		how     string
-		awards  []string
-		track   int
-		elapsed float32
-	}
-	results, err := pgx.CollectRows(rows, func(row pgx.CollectableRow) (result, error) {
-		var x result
-		err := row.Scan(&x.account, &x.place, &x.how, &x.awards, &x.track, &x.elapsed)
-		return x, err
-	})
+	results, err := s.db.RaceResults(s.ctx, s.world.ID, r.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -268,33 +244,43 @@ func raceOfThree(t *testing.T, restart int) {
 		t.Fatalf("%d results", len(results))
 	}
 	for i, x := range results {
-		if x.account != sailors[i].ID || x.place != int16(i+1) || x.how != store.HowFinished || x.track < 100 {
-			t.Errorf("result %d: %+v", i, x)
+		if x.Account != sailors[i].ID || x.Place != i+1 || x.How != store.HowFinished || len(x.Track) < 100 || !(x.Elapsed > 60) {
+			t.Errorf("result %d: place %d, %s, %.1f s, a track of %d bytes", i, x.Place, x.How, x.Elapsed, len(x.Track))
 		}
 	}
-	if aw := results[2].awards; len(aw) != 1 || aw[0] != "spoon" {
+	if aw := results[2].Awards; len(aw) != 1 || aw[0] != "spoon" {
 		t.Errorf("the last boat's awards: %v", aw)
 	}
-	var records, owners, stories int
-	if err := conn.QueryRow(s.ctx, `SELECT count(*) FILTER (WHERE role = 'skipper'), count(*) FILTER (WHERE role = 'owner')
-		FROM race_record WHERE code = $1`, card.Code).Scan(&records, &owners); err != nil {
+	records := 0
+	for _, sl := range append(sailors, owner) {
+		recs, err := s.db.RaceRecordsOf(s.ctx, sl.ID, 10)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, rec := range recs {
+			if rec.Code == card.Code && (rec.Role == store.RoleSkipper && sl != owner || rec.Role == store.RoleOwner && sl == owner) {
+				records++
+			}
+		}
+	}
+	day := s.now.UTC().Truncate(24 * time.Hour)
+	stories, err := s.db.DayStories(s.ctx, s.world.ID, day)
+	if err != nil {
 		t.Fatal(err)
 	}
-	if err := conn.QueryRow(s.ctx, `SELECT count(*) FROM news_item WHERE story = 'race' AND account_id = $1`, sailors[0].ID).Scan(&stories); err != nil {
-		t.Fatal(err)
+	won := 0
+	for _, st := range stories {
+		if st.Story == store.StoryRace && st.Account == sailors[0].ID {
+			won++
+		}
 	}
-	if records != 3 || owners != 1 || stories != 1 {
-		t.Errorf("%d skippers' records, %d owner's, %d stories of the win", records, owners, stories)
+	if records != 4 || won != 1 {
+		t.Errorf("%d records of the three skippers and the owner, %d stories of the win", records, won)
 	}
 	// Written again, nothing changes.
 	if err := s.db.EndRace(s.ctx, s.lease, rulesOf(s), &store.RaceEnd{World: s.world.ID, Race: r.ID,
 		At: s.now}); err != nil {
 		t.Fatal(err)
-	}
-	for _, x := range results {
-		if !(x.elapsed > 60) {
-			t.Errorf("a time of %v s", x.elapsed)
-		}
 	}
 }
 
@@ -368,21 +354,12 @@ func TestATrialsRun(t *testing.T) {
 			break
 		}
 	}
-	conn, err := pgx.Connect(s.ctx, s.url)
-	if err != nil {
-		t.Fatal(err)
+	res, err := s.db.RaceResults(s.ctx, s.world.ID, card2ID(t, s, card.Code))
+	if err != nil || len(res) != 1 {
+		t.Fatalf("the run's results %+v: %v", res, err)
 	}
-	defer conn.Close(s.ctx)
-	var run int16
-	var medal string
-	var started bool
-	if err := conn.QueryRow(s.ctx, `SELECT r.run, r.medal, e.started_at IS NOT NULL FROM race_result r
-		JOIN race_entry e USING (world_id, race_id, account_id, run) JOIN race x ON x.id = r.race_id WHERE x.code = $1`, card.Code).
-		Scan(&run, &medal, &started); err != nil {
-		t.Fatal(err)
-	}
-	if run != 1 || medal != "harbourmaster" || !started {
-		t.Errorf("run %d, medal %q, started %v", run, medal, started)
+	if res[0].Run != 1 || res[0].Medal != "harbourmaster" || res[0].Place != 1 {
+		t.Errorf("run %d, medal %q, place %d", res[0].Run, res[0].Medal, res[0].Place)
 	}
 	runs, err := s.db.PendingRuns(s.ctx, s.world.ID)
 	if err != nil || len(runs) != 0 {
@@ -394,4 +371,14 @@ func TestATrialsRun(t *testing.T) {
 	if runs, err = s.db.PendingRuns(s.ctx, s.world.ID); err != nil || len(runs) != 1 || runs[0].Run != 2 {
 		t.Errorf("runs asked for: %+v %v", runs, err)
 	}
+}
+
+// card2ID is the ID of the race of a code.
+func card2ID(t *testing.T, s *sea, code string) [16]byte {
+	t.Helper()
+	r, err := s.db.RaceByCode(s.ctx, code)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return r.ID
 }

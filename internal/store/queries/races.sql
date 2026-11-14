@@ -253,3 +253,25 @@ SELECT r.code, coalesce(r.owner_id, '00000000-0000-0000-0000-000000000000')::uui
      AND e.withdrawn_at IS NULL AND NOT e.removed)::integer AS entered
 FROM race r
 WHERE r.world_id = @world_id AND r.id = @id;
+
+-- name: RaceResults :many
+-- What a race's boats came to, or a trial's runs, with their tracks: by
+-- run, then place, those unplaced last.
+SELECT r.account_id, r.run, coalesce(r.place, 0)::smallint AS place, coalesce(r.elapsed, -1)::real AS elapsed, r.added, r.marks,
+  coalesce(r.to_go, -1)::real AS to_go, r.how, coalesce(r.medal, '')::text AS medal, r.awards, r.crew,
+  coalesce(t.samples, ''::bytea)::bytea AS samples
+FROM race_result r
+LEFT JOIN race_track t USING (world_id, race_id, account_id, run)
+WHERE r.world_id = @world_id AND r.race_id = @race_id
+ORDER BY r.run, r.place NULLS LAST, r.account_id;
+
+-- name: RaceRecordsOf :many
+-- A sailor's lasting race records, the newest first.
+SELECT source, world, at, code, race_name, kind, course_name, boat, coalesce(boat_name, '')::text AS boat_name, fleet, harbour,
+  newcomers, role, coalesce(place, 0)::smallint AS place, coalesce(how, '')::text AS how, coalesce(medal, '')::text AS medal,
+  awards, coalesce(skipper_id, '00000000-0000-0000-0000-000000000000')::uuid AS skipper_id,
+  coalesce(skipper_name, '')::text AS skipper_name, skipper_machine
+FROM race_record
+WHERE account_id = @account_id
+ORDER BY at DESC, id DESC
+LIMIT @most;

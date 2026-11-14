@@ -965,6 +965,152 @@ func (q *Queries) RaceList(ctx context.Context, arg RaceListParams) ([]RaceListR
 	return items, nil
 }
 
+const raceRecordsOf = `-- name: RaceRecordsOf :many
+SELECT source, world, at, code, race_name, kind, course_name, boat, coalesce(boat_name, '')::text AS boat_name, fleet, harbour,
+  newcomers, role, coalesce(place, 0)::smallint AS place, coalesce(how, '')::text AS how, coalesce(medal, '')::text AS medal,
+  awards, coalesce(skipper_id, '00000000-0000-0000-0000-000000000000')::uuid AS skipper_id,
+  coalesce(skipper_name, '')::text AS skipper_name, skipper_machine
+FROM race_record
+WHERE account_id = $1
+ORDER BY at DESC, id DESC
+LIMIT $2
+`
+
+type RaceRecordsOfParams struct {
+	AccountID pgtype.UUID
+	Most      int32
+}
+
+type RaceRecordsOfRow struct {
+	Source         string
+	World          int32
+	At             time.Time
+	Code           string
+	RaceName       string
+	Kind           string
+	CourseName     string
+	Boat           string
+	BoatName       string
+	Fleet          int16
+	Harbour        bool
+	Newcomers      bool
+	Role           string
+	Place          int16
+	How            string
+	Medal          string
+	Awards         []string
+	SkipperID      pgtype.UUID
+	SkipperName    string
+	SkipperMachine bool
+}
+
+// A sailor's lasting race records, the newest first.
+func (q *Queries) RaceRecordsOf(ctx context.Context, arg RaceRecordsOfParams) ([]RaceRecordsOfRow, error) {
+	rows, err := q.db.Query(ctx, raceRecordsOf, arg.AccountID, arg.Most)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []RaceRecordsOfRow
+	for rows.Next() {
+		var i RaceRecordsOfRow
+		if err := rows.Scan(
+			&i.Source,
+			&i.World,
+			&i.At,
+			&i.Code,
+			&i.RaceName,
+			&i.Kind,
+			&i.CourseName,
+			&i.Boat,
+			&i.BoatName,
+			&i.Fleet,
+			&i.Harbour,
+			&i.Newcomers,
+			&i.Role,
+			&i.Place,
+			&i.How,
+			&i.Medal,
+			&i.Awards,
+			&i.SkipperID,
+			&i.SkipperName,
+			&i.SkipperMachine,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const raceResults = `-- name: RaceResults :many
+SELECT r.account_id, r.run, coalesce(r.place, 0)::smallint AS place, coalesce(r.elapsed, -1)::real AS elapsed, r.added, r.marks,
+  coalesce(r.to_go, -1)::real AS to_go, r.how, coalesce(r.medal, '')::text AS medal, r.awards, r.crew,
+  coalesce(t.samples, ''::bytea)::bytea AS samples
+FROM race_result r
+LEFT JOIN race_track t USING (world_id, race_id, account_id, run)
+WHERE r.world_id = $1 AND r.race_id = $2
+ORDER BY r.run, r.place NULLS LAST, r.account_id
+`
+
+type RaceResultsParams struct {
+	WorldID pgtype.UUID
+	RaceID  pgtype.UUID
+}
+
+type RaceResultsRow struct {
+	AccountID pgtype.UUID
+	Run       int16
+	Place     int16
+	Elapsed   float32
+	Added     float32
+	Marks     int16
+	ToGo      float32
+	How       string
+	Medal     string
+	Awards    []string
+	Crew      []byte
+	Samples   []byte
+}
+
+// What a race's boats came to, or a trial's runs, with their tracks: by
+// run, then place, those unplaced last.
+func (q *Queries) RaceResults(ctx context.Context, arg RaceResultsParams) ([]RaceResultsRow, error) {
+	rows, err := q.db.Query(ctx, raceResults, arg.WorldID, arg.RaceID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []RaceResultsRow
+	for rows.Next() {
+		var i RaceResultsRow
+		if err := rows.Scan(
+			&i.AccountID,
+			&i.Run,
+			&i.Place,
+			&i.Elapsed,
+			&i.Added,
+			&i.Marks,
+			&i.ToGo,
+			&i.How,
+			&i.Medal,
+			&i.Awards,
+			&i.Crew,
+			&i.Samples,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const raceSettings = `-- name: RaceSettings :one
 SELECT race_ahead, race_daily, race_made, race_owned, extract(epoch FROM race_cutoff)::bigint AS cutoff_seconds,
   harbour_every, harbour_boats, greenhorn_us
