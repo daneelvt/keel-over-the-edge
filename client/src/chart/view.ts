@@ -191,6 +191,9 @@ export class ChartView {
   #bearing = 0;
   #width = 1;
   #height = 1;
+  /** Whether the screen's size is known, from the first draw since the chart opened; a race framed before it is framed again then, room times as far. */
+  #sized = false;
+  #framing: number | null = null;
   readonly #v = new Vector3();
   readonly #ray = new Raycaster();
 
@@ -307,6 +310,11 @@ export class ChartView {
 
   /** Opens or closes it; opened, it looks at the boat, or in a race at its course. */
   show(open: boolean): void {
+    if (open && !this.open) {
+      // The screen may have turned while the chart was closed: its size
+      // is known again at its first draw.
+      this.#sized = false;
+    }
     if (open && !this.open && !this.frameRace()) {
       const b = this.#boatAt();
       this.lookAt(b.east, b.north, 9000);
@@ -327,6 +335,9 @@ export class ChartView {
     const d = this.raceDrawing();
     if (d === null) {
       return false;
+    }
+    if (!this.#sized) {
+      this.#framing = room;
     }
     const t = d.told;
     let reach = Math.max(t.reach, 200);
@@ -446,6 +457,14 @@ export class ChartView {
       this.camera.aspect = w / h;
       this.camera.updateProjectionMatrix();
       this.#dirty = true;
+    }
+    if (canvas !== undefined && !this.#sized) {
+      this.#sized = true;
+      const room = this.#framing;
+      this.#framing = null;
+      if (room !== null) {
+        this.frameRace(room);
+      }
     }
     if (now - this.#last < 1000 / this.#look.fps - 2) {
       return;
