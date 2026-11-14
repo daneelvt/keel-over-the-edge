@@ -108,7 +108,15 @@ export function Prize({
         />
         <path d={`${pleats} Z`} fill={fill} stroke="#2b2622" stroke-width="0.9" />
         <circle cx="20" cy="16" r="8" fill="#f4ecd8" stroke="#2b2622" stroke-width="0.9" />
-        <text class="rl-prize-number" x="20" y="20.2" text-anchor="middle">
+        <text
+          x="20"
+          y="20.6"
+          text-anchor="middle"
+          font-family="'Libre Caslon Text', Georgia, serif"
+          font-size="13"
+          font-weight="700"
+          fill="#2b2622"
+        >
           {place}
         </text>
       </svg>
@@ -123,9 +131,17 @@ export function Prize({
       role="img"
       aria-label={label}
     >
-      <path d="M12 2 H28 V36 L20 30 L12 36 Z" fill={colour} stroke="#2b2622" stroke-width="0.9" />
-      <text class="rl-prize-place" x="20" y="18" text-anchor="middle">
-        {place > 0 ? ordinal(place) : '·'}
+      <path d="M9 2 H31 V37 L20 30 L9 37 Z" fill={colour} stroke="#2b2622" stroke-width="0.9" />
+      <text
+        x="20"
+        y="19.5"
+        text-anchor="middle"
+        font-family="'Libre Caslon Text', Georgia, serif"
+        font-size="13"
+        font-weight="700"
+        fill="#f4ecd8"
+      >
+        {place > 0 ? place : '·'}
       </text>
     </svg>
   );

@@ -38,8 +38,8 @@
 //
 // The chart screen's Log tab, the strip still one row with its four tabs,
 // where the boat is and the way back to sea, holds a sailor's log on its
-// paper within the screen under the strip: a long log's days and
-// collection (three kinds a row upright, five sideways), who may read it,
+// paper within the screen under the strip: a long log's days, its
+// collection (three kinds a row upright, five sideways) and its ribbons, who may read it,
 // another sailor's, a machine sailor's, an empty one and one not there;
 // its keys the head keys' size, its day rows and kinds a 44 px touch, no
 // words under 13 px, nothing wider than the sheet.
@@ -74,6 +74,15 @@
 // name, keeps Set sail in view on every screen, and the boat's look and
 // the fleet's boats keep Save, Cancel, every swatch and the first boat in
 // view, the server's answers stood in for.
+//
+// In a race, the race line heads the top, 32 pixels, over the case: held
+// upright the screen's width, the pocket chart's column under it; held
+// sideways between the case and the pocket chart. Before the start (over
+// the line), racing and with a call at its longest, on every screen, it
+// covers no part and no part covers it, it stands clear of the boat, and
+// its words are whole within it, none cut short. Its ⋯'s window, the
+// finish's card and the results fit every screen, their keys the head
+// keys' size.
 //
 // Races ashore's windows over the sea, Make a race (filled, a later start
 // and an island course, refused), the share of a race made, a race's card
@@ -218,7 +227,8 @@ async function parts(page: Page): Promise<{
     );
     // No words show outside their part: each run of text as it is drawn,
     // clipped by whatever clips it, within the part it is in.
-    const PARTS = '.case-top, .complications, .pocket-frame, .pilot-head, .pilot-button, .control';
+    const PARTS =
+      '.case-top, .complications, .pocket-frame, .pilot-head, .pilot-button, .control, .racer-line';
     const words: string[] = [];
     const walker = document.createTreeWalker(hud, NodeFilter.SHOW_TEXT);
     for (let t = walker.nextNode(); t !== null; t = walker.nextNode()) {
@@ -3101,6 +3111,9 @@ test('the chart screen’s Log tab holds a long log, its collection, who may rea
     await page.getByRole('tab', { name: 'Collection' }).click();
     await page.locator('.log-cell').nth(2).click();
     await check(`${s.name}, the collection`, true);
+    await page.getByRole('tab', { name: 'Ribbons' }).click();
+    await expect(page.locator('.log-ribbon').first()).toBeVisible();
+    await check(`${s.name}, the ribbons`);
     await page.evaluate((name) => globalThis.keel.openLog({ kind: 'sailor', name }), LONG_NAME);
     await expect(page.locator('.log-back')).toBeVisible();
     await check(`${s.name}, another’s log`);
@@ -3424,6 +3437,249 @@ test('races ashore’s windows fit every screen, their foot’s keys in view, ev
       await card.getByRole('button', { name: 'Close', exact: true }).click();
       await expect(card).toHaveCount(0);
     }
+  }
+  expect(found).toEqual([]);
+});
+
+/** What is wrong with the race line: not 32 pixels tall, or a word cut short or run out of it. */
+async function raceLineFaults(page: Page): Promise<string[]> {
+  return page.evaluate(() => {
+    const line = document.querySelector<HTMLElement>('.racer-line');
+    if (line === null) {
+      return ['no race line'];
+    }
+    const out: string[] = [];
+    const r = line.getBoundingClientRect();
+    if (Math.abs(r.height - 32) > 0.5) {
+      out.push(`the race line is ${r.height} px tall`);
+    }
+    for (const e of line.querySelectorAll<HTMLElement>('.rl-words > *, .rl-next > *, .rl-call')) {
+      if (e.offsetWidth === 0) {
+        continue;
+      }
+      if (e.scrollWidth > e.clientWidth + 1 || e.scrollHeight > e.clientHeight + 1) {
+        out.push(`“${e.textContent}” is cut short in the race line`);
+      }
+      const b = e.getBoundingClientRect();
+      if (
+        b.left < r.left - 0.5 ||
+        b.right > r.right + 0.5 ||
+        b.top < r.top - 0.5 ||
+        b.bottom > r.bottom + 0.5
+      ) {
+        out.push(`“${e.textContent}” runs out of the race line`);
+      }
+    }
+    return out;
+  });
+}
+
+/** What is wrong with one of the race's windows: off the screen, spilling, a key not the head keys' size or under another part. */
+async function raceWindowFaults(page: Page, sel: string): Promise<string[]> {
+  return page.evaluate((sel) => {
+    const el = document.querySelector(sel);
+    if (el === null) {
+      return [`no ${sel}`];
+    }
+    const out: string[] = [];
+    const r = el.getBoundingClientRect();
+    if (
+      r.left < -0.5 ||
+      r.top < -0.5 ||
+      r.right > innerWidth + 0.5 ||
+      r.bottom > innerHeight + 0.5
+    ) {
+      out.push(`${sel} is off the screen`);
+    }
+    if (el.scrollWidth > el.clientWidth + 1) {
+      out.push(`${sel} spills sideways`);
+    }
+    const hud = document.querySelector('.hud');
+    const key =
+      hud === null ? 40 : Number.parseFloat(getComputedStyle(hud).getPropertyValue('--key'));
+    for (const b of el.querySelectorAll<HTMLElement>('.rl-keys button')) {
+      const k = b.getBoundingClientRect();
+      if (Math.abs(k.height - key) > 0.5 || getComputedStyle(b).fontSize !== '14px') {
+        out.push(`“${b.textContent}” is ${k.height.toFixed(1)} px tall`);
+      }
+      el.scrollTop = el.scrollHeight;
+      const k2 = b.getBoundingClientRect();
+      const at = document.elementFromPoint(k2.left + k2.width / 2, k2.top + k2.height / 2);
+      if (at === null || !b.contains(at)) {
+        out.push(`“${b.textContent}” is under ${at?.className ?? 'nothing'}`);
+      }
+    }
+    return out;
+  }, sel);
+}
+
+test('the race line stands clear of every part and the boat on every screen, its words whole; the race’s windows fit', async ({
+  page,
+}) => {
+  test.skip(test.info().project.name === 'webgpu', 'the screen is the same on either back end');
+  test.setTimeout(180_000);
+  const first = SCREENS[1];
+  await page.setViewportSize({ width: first.width, height: first.height });
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await openScene(page, 'world=1', true);
+  await expect
+    .poll(() => page.evaluate(() => globalThis.keel.toHarbour()), { timeout: 30_000 })
+    .toBe(true);
+  await page.evaluate((long) => {
+    const k = globalThis.keel;
+    k.setState({ sheetLimit: 0.05, boom: 0, surge: 0 });
+    k.setControls(0, 0);
+    k.advance(30);
+    k.render();
+    k.camera('chase');
+    k.render();
+    // Everything out: the case's longest shape.
+    k.settings({ barometer: true, clock: true, pilotHead: true, rightOfWay: true });
+    k.raceGone(1, true);
+    k.raceTell(undefined, [
+      { name: long, boat: 'Gull' },
+      { name: '', boat: 'Petrel Of The Morning' },
+      { name: long, boat: 'Swift', machine: true },
+    ]);
+  }, LONG);
+  await expect(page.locator('.racer-line')).toBeVisible({ timeout: 15_000 });
+  const found: string[] = [];
+  /** The race told in a state: before the start over the line, racing, a call at its longest. */
+  const states = {
+    before: () => {
+      const k = globalThis.keel;
+      const t = k.racing().told;
+      if (t === null) {
+        return;
+      }
+      k.raceTell({ start: t.warning + 120 * 30 });
+      const m = t.marks[0];
+      k.racePicture([{ state: 'placed', east: m?.east ?? 0, north: m?.north ?? 0 }, {}, {}]);
+      k.raceCall({ kind: 'other' });
+    },
+    racing: () => {
+      const k = globalThis.keel;
+      const m = k.racing().told?.marks[1];
+      k.raceTell({ start: 1 });
+      // The twelfth of twelve, far behind, far from its mark.
+      k.racePicture([
+        { place: 12, gap: 754.5, leg: 2, east: (m?.east ?? 0) + 1400, north: m?.north ?? 0 },
+        ...Array.from({ length: 11 }, (_, i) => ({ place: i + 1, gap: i * 0.5 })),
+      ]);
+    },
+    call: () => {
+      const k = globalThis.keel;
+      k.raceCall({ article: '16.1', number: 2, other: 1, added: 10 });
+    },
+  };
+  for (const s of SCREENS) {
+    await page.setViewportSize({ width: s.width, height: s.height });
+    await page.waitForFunction(
+      ({ width, height }) =>
+        innerWidth === width &&
+        innerHeight === height &&
+        Math.abs(globalThis.keel.world.stage.camera.aspect - width / height) < 1e-6,
+      { width: s.width, height: s.height },
+    );
+    for (const [state, tell] of Object.entries(states)) {
+      await page.evaluate(tell);
+      await page.evaluate(() => globalThis.keel.render());
+      await expect(page.locator('.racer-line')).toHaveAttribute(
+        'data-state',
+        state === 'call' ? 'call' : state,
+      );
+      await page.waitForTimeout(100);
+      const where = `${s.name}, ${state}`;
+      for (const f of await raceLineFaults(page)) {
+        found.push(`${where}: ${f}`);
+      }
+      const seen = await parts(page);
+      for (const w of seen.words) {
+        found.push(`${where}: ${w}`);
+      }
+      const line = seen.parts.find(
+        (p) => p.name.startsWith('the line') && p.top < 60 + 0.5 && p.bottom - p.top < 33,
+      );
+      if (line === undefined) {
+        found.push(`${where}: no race line among the parts`);
+        continue;
+      }
+      if (
+        line.left < -0.5 ||
+        line.top < -0.5 ||
+        line.right > s.width + 0.5 ||
+        line.bottom > s.height + 0.5
+      ) {
+        found.push(`${where}: the race line is off the screen`);
+      }
+      const all = seen.boat === null ? seen.parts : [...seen.parts, seen.boat];
+      for (let i = 0; i < all.length; i++) {
+        for (let j = i + 1; j < all.length; j++) {
+          const a = all[i] as Box;
+          const b = all[j] as Box;
+          const names = [a.name, b.name];
+          const inCase = (n?: string) =>
+            n === 'the case' ||
+            n === 'the barometer pusher' ||
+            n === 'the clock pusher' ||
+            n === 'the board pusher';
+          const masthead = s.upright && names.some(inCase) && names.includes('the boat');
+          const own =
+            (names.includes('the case') && names.filter(inCase).length === 2) ||
+            (names.includes('the pocket chart') && names.includes('the weather pusher'));
+          if (!masthead && !own && overlap(a, b)) {
+            found.push(`${where}: ${a.name} covers ${b.name} (${edges(a)} and ${edges(b)})`);
+          }
+        }
+      }
+    }
+    // The race's windows: its ⋯, the finish's card, the results.
+    await page.locator('.racer-line .rl-more').click();
+    for (const f of await raceWindowFaults(page, '[data-panel=race-more]')) {
+      found.push(`${s.name}, the race’s window: ${f}`);
+    }
+    await page.keyboard.press('Escape');
+    await page.evaluate(() => {
+      const k = globalThis.keel;
+      k.raceFinish({ number: 2, place: 1, elapsedMs: 570_000 });
+      k.raceFinish({ number: 1, place: 10, elapsedMs: 3_604_200, added: 30 });
+    });
+    for (const f of await raceWindowFaults(page, '[data-panel=race-finish]')) {
+      found.push(`${s.name}, the finish’s card: ${f}`);
+    }
+    await page.evaluate(() => {
+      const k = globalThis.keel;
+      const row = (number: number, place: number, how: string, awards: string[] = []) => ({
+        number,
+        place,
+        how,
+        elapsedMs: how === 'finished' ? 570_000 + place * 9_000 : 0,
+        added: place === 10 ? 30 : 0,
+        marks: 3,
+        toGo: how === 'placed' ? 1_234 : 0,
+        medal: '',
+        awards,
+      });
+      k.raceResults({
+        results: [
+          row(2, 1, 'finished', ['photo-finish', 'best-start']),
+          row(3, 2, 'finished', ['photo-finish', 'crowd']),
+          row(1, 10, 'placed', ['spoon']),
+          row(4, 0, 'ret'),
+        ],
+      });
+    });
+    await expect(page.locator('[data-panel=race-results]')).toBeVisible();
+    for (const f of await raceWindowFaults(page, '[data-panel=race-results]')) {
+      found.push(`${s.name}, the results: ${f}`);
+    }
+    await page.keyboard.press('Escape');
+    await page.evaluate(() => {
+      const k = globalThis.keel;
+      const entrants = k.racing().told?.entrants;
+      k.raceGone(1, true);
+      k.raceTell(entrants === undefined ? {} : { entrants });
+    });
   }
   expect(found).toEqual([]);
 });

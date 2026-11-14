@@ -118,13 +118,23 @@
   color: var(--gold);
 }
 
+/* The way to turn for the next mark: an arrow in a box of its own, which
+   it turns within. */
 .rl-turn {
-  display: inline-block;
-  width: 12px;
-  font-size: 11px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 14px;
+  height: 14px;
+  overflow: hidden;
+  font-size: 10px;
   line-height: 1;
-  text-align: center;
   color: var(--brass-light);
+}
+
+.rl-turn > span {
+  display: block;
 }
 
 .rl-distance {
@@ -164,9 +174,13 @@
   }
 
   .hud .rl-words {
-    gap: 6px;
-    padding-left: 8px;
-    font-size: 14px;
+    gap: 5px;
+    padding: 0 3px 0 8px;
+    font-size: 13px;
+  }
+
+  .hud .racer-line .rl-more {
+    width: 34px;
   }
 
   .hud .rl-bearing {
@@ -383,22 +397,6 @@
 
 .rl-prize {
   flex: none;
-}
-
-.rl-prize-number {
-  font:
-    700 10px "Libre Caslon Text",
-    Georgia,
-    serif;
-  fill: #2b2622;
-}
-
-.rl-prize-place {
-  font:
-    700 9px "Libre Caslon Text",
-    Georgia,
-    serif;
-  fill: #f4ecd8;
 }
 
 .rl-awards {

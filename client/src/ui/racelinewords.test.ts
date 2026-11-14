@@ -183,12 +183,12 @@ describe('calls', () => {
   test('a bump in the log’s words, to the boat at fault and the boat bumped', () => {
     expect(callLine(call({}), 1, name)).toEqual({
       text: 'Port tack keeps clear of starboard · 10 seconds added',
-      short: 'Port tack keeps clear of starboard · +10 s',
+      short: 'Port keeps clear of starboard · +10 s',
       warn: true,
     });
     expect(callLine(call({ number: 2, other: 1, article: '16.1' }), 1, name)).toEqual({
       text: 'A boat with right of way changing course gives room · 10 seconds to the Petrel, 2',
-      short: 'A boat with right of way changing course gives room · +10 s to the Petrel, 2',
+      short: 'Changing course, give room · +10 s to the Petrel, 2',
       warn: false,
     });
     expect(callLine(call({ number: 2, other: 3 }), 1, name)).toBeNull();

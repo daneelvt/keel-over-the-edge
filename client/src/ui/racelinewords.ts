@@ -242,6 +242,22 @@ export function lineView(i: LineInput): LineView {
   };
 }
 
+/** Each Article in a few words, for a narrow race line. */
+const SHORT_RULES: Record<string, string> = {
+  '10': 'Port keeps clear of starboard',
+  '11': 'Windward keeps clear of leeward',
+  '12': 'Astern keeps clear of ahead',
+  '13': 'A boat tacking keeps clear',
+  '15': 'Gaining right of way, give room',
+  '16.1': 'Changing course, give room',
+  '22': 'Keep clear of a capsized boat',
+};
+
+/** A rule of the Articles in a few words. */
+function shortRule(article: string): string {
+  return SHORT_RULES[article] ?? 'A bump';
+}
+
 /** A rule of the Articles as a line begins it: "Port tack keeps clear of starboard". */
 function ruleOf(article: string): string {
   const r = ARTICLES[article];
@@ -270,14 +286,14 @@ export function callLine(c: RaceCallIn, me: number, name: (n: number) => string)
         return words(
           `${ruleOf(c.article)} · ${c.added} seconds added`,
           true,
-          `${ruleOf(c.article)} · +${c.added} s`,
+          `${shortRule(c.article)} · +${c.added} s`,
         );
       }
       if (me > 0 && c.other === me) {
         return words(
           `${ruleOf(c.article)} · ${c.added} seconds to ${name(c.number)}`,
           false,
-          `${ruleOf(c.article)} · +${c.added} s to ${name(c.number)}`,
+          `${shortRule(c.article)} · +${c.added} s to ${name(c.number)}`,
         );
       }
       return null;

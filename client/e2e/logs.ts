@@ -155,6 +155,48 @@ function worlds(now: number) {
   }));
 }
 
+/** A log's races at their longest: every award, a crew's long-named skipper, a trial's medal, a retirement, a newcomers' race, the spoon of this world. */
+export function ribbons(now: number) {
+  const boat = (i: number) => data.boats[i % data.boats.length]?.id ?? '';
+  const races = Array.from({ length: 12 }, (_, i) => ({
+    world: i < 6 ? 14 : 13,
+    at: now - i * DAY,
+    code: `race${String(i).padStart(6, 'a')}`.slice(0, 10),
+    name: i % 3 === 0 ? 'The Graveyard Watch Gallop of the Far Reefs' : 'The Noon Gun',
+    kind: i === 4 ? 'trial' : 'race',
+    course: i % 2 === 0 ? 'Round Gannet Holm and the Three Sisters' : 'Short triangle',
+    boat: boat(i),
+    fleet: 12,
+    harbour: i % 2 === 1,
+    newcomers: i === 11,
+    role: i % 3 === 1 ? 'crew' : 'skipper',
+    place: i === 5 ? 0 : (i % 12) + 1,
+    how: i === 5 ? 'ret' : i === 3 ? 'placed' : 'finished',
+    medal: i === 4 ? 'harbourmaster' : '',
+    awards:
+      i === 0
+        ? ['spoon']
+        : i === 2
+          ? ['best-start', 'photo-finish', 'crowd']
+          : i === 7
+            ? ['comeback']
+            : [],
+    ...(i % 3 === 1 ? { skipper: { name: LONG_NAME, logged: true } } : {}),
+    ...(i === 0 ? { hung: true } : {}),
+  }));
+  return {
+    counts: {
+      sailed: 12,
+      top3: 3,
+      wins: 1,
+      awards: { 'best-start': 1, comeback: 1, 'photo-finish': 1, crowd: 1, spoon: 1 },
+      medals: { harbourmaster: 1 },
+      ran: 1234,
+    },
+    races,
+  };
+}
+
 /** The player's own log at its fullest. */
 export function longLog() {
   const now = Date.now();
@@ -179,6 +221,7 @@ export function longLog() {
     collection: collection(true),
     zone: 'America/New_York',
     worldNow: 14,
+    ribbons: ribbons(now),
   };
 }
 

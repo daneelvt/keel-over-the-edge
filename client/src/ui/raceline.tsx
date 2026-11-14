@@ -100,12 +100,8 @@ function Cells({ v }: { v: LineView }) {
           ) : null}
           <span class="rl-next" data-readout="race-next">
             <span class="rl-label">{v.next.label}</span>
-            <span
-              class="rl-turn"
-              aria-hidden="true"
-              style={{ rotate: `${Math.round(v.next.turn)}deg` }}
-            >
-              ▲
+            <span class="rl-turn" aria-hidden="true">
+              <span style={{ rotate: `${Math.round(v.next.turn)}deg` }}>▲</span>
             </span>
             <span class="rl-bearing">{v.next.bearing}</span>
             <span class="rl-distance">{v.next.distance}</span>
