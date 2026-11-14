@@ -90,10 +90,9 @@ type Config struct {
 	// addresses under /w/; Models its islands' models.
 	Chunks *Chunks
 	Models *Models
-	// News, if not nil, is the world's news, served a page of NewsPage
-	// items at a time.
-	News     NewsSource
-	NewsPage int
+	// News, if not nil, is the world's news: a day's edition, and the
+	// stories naming a sailor, which a log's answer carries too.
+	News NewsSource
 	// Notices, if not nil, keeps an account's notices switched off, of
 	// NoticeKinds, the kinds that may be.
 	Notices     Notices
@@ -125,6 +124,8 @@ type Config struct {
 	Chat Chatting
 	// Shipmates, if not nil, is shipmates: the list, offers and the rest.
 	Shipmates Shipmating
+	// Logs, if not nil, are the sailors' logs.
+	Logs Logs
 	// ReadTimeout and WriteTimeout, if not zero, replace the constants, for
 	// tests.
 	ReadTimeout, WriteTimeout time.Duration
@@ -227,6 +228,7 @@ func Handler(cfg Config) http.Handler {
 	}
 	a.registerChat(mux, required)
 	a.registerShipmates(mux, required)
+	a.registerLogs(mux, required)
 	if cfg.Watch != nil {
 		mux.Handle("GET /api/watch", required(a.watchList))
 		mux.Handle("GET /api/watch/sailor", required(a.watchSailor))
@@ -236,7 +238,7 @@ func Handler(cfg Config) http.Handler {
 		mux.Handle("POST /api/me/spectators", required(a.setSpectators))
 	}
 	if cfg.News != nil {
-		mux.Handle(newsRoute, newNews(cfg.News, cfg.NewsPage))
+		mux.Handle(newsRoute, required(a.newsEdition))
 	}
 	if cfg.Status != nil {
 		mux.Handle(statusRoute, statusHandler(cfg.Status, cfg.Website))
@@ -275,7 +277,7 @@ func Handler(cfg Config) http.Handler {
 	}))
 
 	open := map[string]bool{}
-	for p := range openRoutes {
+	for p := range sessionless {
 		open[p] = true
 	}
 	if cfg.OAuth != nil {
@@ -295,11 +297,39 @@ func Handler(cfg Config) http.Handler {
 // robotsRoute is robots.txt's route.
 const robotsRoute = "GET /robots.txt"
 
-// openRoutes are the routes besides the page's that need no session: what
-// they serve is the same for everyone who has the address. The
-// authorization server's routes need none either: an AI app's sign-in is
+// openRoutes are the routes that answer without a session, each with why.
+// Nothing of the game is served to anyone without an account unless there
+// is a reason it must be: TestOpenRoutes finds every route registered
+// without auth.Required or auth.Signed and fails on one not here, so
+// opening a route is always a decision made in review. The authorization
+// server's routes (oauth.Routes) are open too: an AI app's sign-in is
 // never the game's session.
-var openRoutes = map[string]bool{chunkRoute: true, chunksRoute: true, modelRoute: true, robotsRoute: true, newsRoute: true, statusRoute: true}
+var openRoutes = map[string]string{
+	"GET /{$}":             "the page: the game must load for anyone to sign in",
+	"GET /{file}":          "the page's own files at the top, its icons and manifest",
+	"GET /assets/{file}":   "the page's built assets",
+	"GET /api/version":     "the page's build and catalog, which a page asks before it signs in to know it is current",
+	noticePageRoute:        "the notice page: anyone, with an account or not, may tell of illegal content (the DSA's notice and action)",
+	"POST /api/notice":     "the notice page's form, sent by anyone, limited by address",
+	"POST /account/begin":  "making a sailor and their passkey: there is no session before it",
+	"POST /account/finish": "making a sailor and their passkey: there is no session before it",
+	"POST /signin/begin":   "signing in with a passkey",
+	"POST /signin/finish":  "signing in with a passkey",
+	"POST /recovery":       "signing in with the recovery code",
+	"GET /ws":              "the game connection: it reads the session itself, to count those it refuses",
+	statusRoute:            "the website's countdown and sailors at sea, read by keelovertheedge.com",
+	chunkRoute:             "the world's chunks: capability addresses handed only to a signed-in player over the game connection, cached once at the edge for everyone",
+	chunksRoute:            "every other address under /w/, answered not found",
+	modelRoute:             "the islands' models: capability addresses like the chunks', handed out over the game connection",
+	robotsRoute:            "robots.txt, which keeps crawlers off the game",
+}
+
+// sessionless are the open routes that read no session at all: what they
+// serve is the same for everyone who has the address, and the edge may
+// keep it for everyone, so their answers carry no cookie. The page's
+// routes (pageRoutes) read none either, so the page loads even when the
+// database cannot be asked.
+var sessionless = map[string]bool{chunkRoute: true, chunksRoute: true, modelRoute: true, robotsRoute: true, statusRoute: true}
 
 // session reads the session for every route but the page's and the open
 // ones: the page is the same for everyone, and loads even when the database

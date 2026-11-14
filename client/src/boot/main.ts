@@ -133,13 +133,15 @@ import { startWakeScene, wakeSceneFromQuery, wakeSceneHost } from '../sandbox/wa
 import { hourAt, sandboxEpochUs, skyFromQuery, skyPeriods, skyTimeFor } from '../sky/skytime';
 import { Barometer } from '../ui/barometer';
 import type { DialWord } from '../ui/barometerdial';
-import { serverNews } from '../ui/chart';
 import { ClearView, type Needed, needed } from '../ui/clearview';
 import { ShipsClock } from '../ui/clock';
 import { Countdown, EndNotices, localShown } from '../ui/countdown';
 import { deckOf } from '../ui/decklazy';
 import { mountScreen, type ScreenProps } from '../ui/hud';
+import { setLogHost } from '../ui/loglazy';
 import { AGROUND } from '../ui/model';
+import { openNews, setNewsHost } from '../ui/newslazy';
+import { serverNews } from '../ui/newsread';
 import { saveNoticesOff } from '../ui/notices';
 import { showQueue } from '../ui/queue';
 import { settingsSignal } from '../ui/settings';
@@ -552,6 +554,9 @@ async function start(): Promise<void> {
       clear,
     };
     let unmount = mountScreen(document.body, screen);
+    // A name tapped opens its log on the chart screen's Log tab, as online.
+    setLogHost((who) => parts.chart.showLog(who));
+    setNewsHost((day) => parts.chart.showNews(day));
     game.listen(document, container);
     // The boat set down, then the world shown.
     await frames(2);
@@ -993,7 +998,7 @@ async function start(): Promise<void> {
     if (online.status.value === 'idle' || online.watchPlace.value !== null) {
       void loadWatch().then((m) => {
         if (!watchWaiting.atSea && watchWaiting.hide === null) {
-          watchWaiting.hide = m.showWatchWaiting(document.body, watchView);
+          watchWaiting.hide = m.showWatchWaiting(document.body, watchView, () => openNews(null));
         }
       });
     }
@@ -1076,6 +1081,11 @@ async function start(): Promise<void> {
     camera,
     clear,
   });
+  // A name tapped anywhere opens its log on the chart screen's Log tab, and
+  // a sailor's last story the News tab, now the chart screen can be shown;
+  // before, they open on their own over the screen.
+  setLogHost((who) => parts.chart.showLog(who));
+  setNewsHost((day) => parts.chart.showNews(day));
   game.listen(document, container);
   if (view !== undefined) {
     world.placeCamera(view);

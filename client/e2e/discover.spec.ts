@@ -131,11 +131,18 @@ test('two players discover a world: the chart fills in for both, with the credit
     )
     .toBeGreaterThanOrEqual(3);
   // The news, and the world page.
+  // The day's edition: each island a story, its headword its name, Ann's
+  // naming her to herself.
   const news = (await (await ann.context.request.get('/api/news')).json()) as {
-    items: { title: string; by: string }[];
+    stories: { head: string; names: { kind: string; name?: string }[] }[];
   };
-  expect(news.items).toContainEqual(expect.objectContaining({ title: isleA.name, by: ann.name }));
-  expect(news.items).toContainEqual(expect.objectContaining({ title: isleB.name, by: bob.name }));
+  expect(news.stories).toContainEqual(
+    expect.objectContaining({
+      head: isleA.name.toUpperCase(),
+      names: [expect.objectContaining({ kind: 'human', name: ann.name })],
+    }),
+  );
+  expect(news.stories).toContainEqual(expect.objectContaining({ head: isleB.name.toUpperCase() }));
   const owner = (await (
     await ann.page.request.get(`${internal}/owner/api/charted.json`)
   ).json()) as {

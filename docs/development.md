@@ -1126,7 +1126,8 @@ A kind of boat is data: nothing reads its name or id. Adding one touches:
    test of the kind's likeness of its own), the looks (`boatlook.spec.ts`),
    the layout's heel hold (`layout.spec.ts`; a boat wider than half her
    length is framed as twice her beam long);
-   and, if it carries more than one, its people (`crew.spec.ts`, and
+   and, if it carries more than one, its people (`crew.spec.ts`, or
+   `crew-cruisers.spec.ts` for the yacht and the catamaran, and
    `catcrew.test.ts` for a boat of two hulls, `yachtcrew.test.ts` for a
    cruising yacht). Tests that find a kind by a trait name the trait they
    mean (a keelboat: her crew on her rail and her trimmer sat to windward),
@@ -3706,12 +3707,11 @@ Persist writes each charting in the fenced batch with the events
 (`charting`, migration `00010_chart.sql`): the subject's kind and number,
 the sailor's name and account kind **copied**, the boat, tick, place and
 worth; the key (world, subject, number) leaves a second write as it was.
-A charting credited to a sailor, not charted with another, makes a news
-item (`news_item`): an island, a port, a lighthouse or a wreck one of its
-own; a sailor's other places and features about one island within
-`news.fold` minutes are folded into its item. The news carries what is
-charted and by whom, and the world's own notices (its end, subject
-`world`, in the Notices to Mariners); never the weather.
+A charting credited to a sailor, not charted with another, is a candidate
+story of the day's news (`news_item`, see [The day's news](#the-days-news)):
+a great discovery's, the sailor's first charting ever, or a lesser one's.
+The chart's list keeps every place with its credit. The news never tells
+the weather.
 
 Only what is written is shown: persist hands each written batch's chartings
 to the chart's model (`chart.Model`), which publishes the chart whole by an
@@ -3727,7 +3727,6 @@ hexagons, each cell's highest ground and surface, gzipped
 
 | Route | What |
 |---|---|
-| `GET /api/news?before=<id>` | the news, newest first, 40 a page; no session; kept 5 s |
 | `POST /api/me/notices {"off": [ids]}` | the notices switched off, kept on the account; `GET /api/me` says them |
 | `GET /owner/api/charted.json` | the world page's chart: what is charted, by whom, when, its worth |
 | `GET /owner/api/accounts.json` | the players' accounts: how many, made in the last seven days, seen in the last day (the world card's "Accounts" line) |
@@ -3757,8 +3756,8 @@ and water's sloping, the great islands' lettered from afar and the rest as
 the camera comes nearer; the lights' characters close in.
 
 The **pocket chart** (top right at sea) says how far the edge is; the
-chart's **list** puts the nearest first; **the news** is a page of the
-period. **Notices** (`ui/notices.ts`) are the catalog's kinds
+chart's **list** puts the nearest first; **the news** is the day's
+edition, a page of the period. **Notices** (`ui/notices.ts`) are the catalog's kinds
 (`notices.kinds`): one shown at a time, three waiting at most, one kind
 folded; a status, never an alert, dismissed by a button or by time; each
 kind switched off in the menu, on the account.
@@ -3791,6 +3790,210 @@ sight table; `?chart=sight` looks by it (`chart/sight.ts`), and
 `chart/sight.test.ts` holds its looks to the server's along seed 1's runs.
 The world page washes the islands not yet charted paler, rings the places
 charted, and lists what is charted by whom.
+
+## The sailors' log
+
+Every sailor has a log that lasts from world to world: what they did at
+sea, read in the game by sailors signed in, as its setting allows.
+
+### What a voyage keeps
+
+Each voyage keeps its own log in the simulation (`bus.VoyageLog`, in the
+snapshot and the digest; `internal/sim/voyagelog.go`), read once a second
+in the rules phase:
+
+- **The odometer**: the straight line from the boat's place a second ago,
+  with the square root every machine works out alike. A move farther than
+  25 m in a second (the owner's tools moving it, a restart's start) adds
+  nothing. On a course of reaches and turns it reads within 0.4% of the
+  distance summed tick by tick (`go test ./internal/sim -run Odometer -v`).
+- **Gales and storms**: the true wind at the boat (`Frame.Wind`) summed
+  into minute means; the mean of the last ten is the wind as Beaufort's
+  forces are reckoned. Force 8 (17.2 m/s) meets a gale, Force 10 (24.5 m/s)
+  a storm; either is ridden out once the mean falls below Force 7
+  (13.9 m/s), or when the voyage ends in port.
+- **A landfall in fog**: a port's harbour entered from the sea with the
+  visibility at the boat under a nautical mile.
+- **A night at sea**: half an hour in the water with the sun below the
+  horizon at the boat (the game's night is 59 minutes).
+- **Bumps**, at fault and not.
+
+Those aboard another's boat run what it runs and meet what it meets while
+aboard (`bus.Aboard`'s `Run` and `Met`). A voyage's end is a record of the
+frame (`bus.VoyageEnded`: returned, expired, over, taken, or gone aboard
+another's boat), and so is the end of a time aboard (`bus.AboardEnded`:
+ashore, landed with the boat, taken). A voyage the owner's tools placed is
+marked, and the log leaves it out. `keel replay` reckons the nights by the
+catalog's sky at the log's epoch.
+
+### The rows
+
+`internal/logbook`'s `Book` turns each frame into rows of the log, on the
+tick, and persist writes them in the same fenced transaction as the
+events and chartings they come from (`store.Batch.Log`). The tables
+(`00034_log.sql`) are never partitioned and have no `world_id`: they keep
+the world's **number** and their own copies of names and places, so they
+read after the world is dropped.
+
+| Table | A row |
+|---|---|
+| `log_voyage` | a voyage, or a time aboard another's boat: the boat's kind and name, when, how it ended and the place named nearest, the distance run (NULL where not logged), the closest approach to the lip survived, bumps, the weather met (flags) and where, a time aboard's skipper, and the others aboard (`crew`, a JSON list of `{id, name, machine, s}`) |
+| `log_entry` | a place charted (the skipper's), sighted aboard another's boat (each aboard), a kind of the sea's life met within 300 m (everyone aboard, once a kind a voyage), a bump (both sailors, whose fault from each side, the Article), and the first of a kind found |
+| `log_find` | the collection: each kind of each group a sailor has found, how many times, where and when first, the latest world |
+
+Each row is written once by its `source` (the world, the boat, the tick it
+began…), and only while its account is: a row of an account deleted
+meanwhile is dropped without failing the batch. Every count is a query on
+the rows (`store.LogTotals`), never a counter. The collection's groups are
+the catalog's lists (the islands' biomes and size classes, the features,
+the kinds of place, the sea's life, the boats) and the log's own: the
+weather met (`gale-ridden-out`, `storm-ridden-out`, `landfall-in-fog`,
+`night-at-sea`) and the edge's ladder (`within-500m` … `within-10m`).
+
+### Who reads a log
+
+Only a sailor signed in reads a log: its sailor always, a player their own
+machine sailors' always, anyone else as `account.log_shown` says:
+`sailors` (every sailor in the game) or `me`. Unset, it is the age band's
+default: an adult's `sailors`, a teen's (or one whose age is not known)
+`me`; a machine sailor's is always `sailors` (a check). A block either
+way refuses it, and a stopped sailor's is refused to others. A refused
+log and one that is not there are the same 404.
+
+The sailors named in a log follow one rule (`logbook.NameOf`, which the
+news follows too): by name when they are the reader, a machine sailor
+(⚙), or a human whose own log the reader may read and who is in the
+reader's age band; anyone else counted ("with two aboard"); "a sailor"
+for a block between them and the reader or the log's sailor; "a former
+sailor" once their account is deleted, as `ForgetCredits` forgets their
+name and account in others' rows.
+
+| Route | What |
+|---|---|
+| `GET /api/me/log?world=` | the player's own log, the days of a world (the newest by default) |
+| `GET /api/log?name=&world=` | a sailor's log by name, as the player may read it |
+| `PUT /api/me/log {"shown": "sailors" \| "me"}` | who may read the player's log |
+| `GET /api/machines/log?id=&world=` | one of the player's machine sailors' logs |
+| `GET /owner/api/log.json?id=&world=` | any log, every name shown; an account's card carries its record, and the search's rows a few figures |
+
+Every route needs a session, and answers `Cache-Control: private,
+no-store`. A log is its header (name, look, since), an abstract of four
+figures, the whole record, the worlds, one world's days in the world's
+zone (each day's voyages and entries; a kind of life met again the same
+day counted on the day's first) and the collection (`logbook.Log`). A
+week's page of a sailor sailing fifteen voyages a day, each meeting five
+kinds of life, is 29 KB of JSON, read in 4 ms.
+
+### The backfill
+
+Once (the job `log-backfill`), keel copies into the log what the worlds
+still kept recorded before `setting.log_from`, the moment the migration
+ran: credited chartings, voyages from the events of boats entering and
+leaving the water or going over, their closest approaches, and bumps.
+Distance and weather were not recorded then and are not made up: those
+voyages have none, and a log says from when distance is logged for a week
+after. Each row has the source the live log gives it, so the job run
+twice writes once.
+
+### Trying it
+
+```sh
+go test ./internal/sim -run 'Odometer|VoyageEnds|AboardEnds|Gale|Landfall|Night|VoyageLog' -v
+go test ./internal/logbook ./internal/store -run 'Log|Backfill|Book|Name|Read|Collection' -v
+```
+
+## The day's news
+
+The news is a daily edition, not a feed: with two hundred boats a feed of
+every charting would bury itself. Each day of the world's schedule (its
+zone's, New York's) has one edition: **the day in figures**, one sentence
+of counts and never a name ("Sailed this day, 212 boats (31 machine ⚙) ·
+1,804 NM · 14 places charted · 5 crews in company · 37 over the falls, all
+hands home."; "A quiet day on the water." for none); **at most six
+stories**, chosen; **from your shipmates**, up to three stories of the
+day about the reader's shipmates, the sailors they follow or themselves
+that did not make the front page, worked out as they ask; and the
+**Notices to Mariners**, the world's own (its end). A world's first edition
+opens with **its arrival** ("The chart is blank: 64 islands wait to be
+found.") and **the last world in review** (its sailors, distance, islands
+charted of how many, the first finders of its three greatest finds, who
+came nearest the falls), above the six. The same size with two boats or
+two hundred.
+
+### Candidates
+
+Whatever could be news is written as a candidate story, a row of the
+world's `news_item` (migration `00035_news_edition.sql`) with its kind,
+its score from the catalog (`news.stories`), the day it falls on, the
+sailor it is about (`account_id`) and the others it names (`named`), what
+it turns on (`amount`) and the facts its words need, as copies (`facts`):
+
+| Kind | Written by | When | Score |
+|---|---|---|---|
+| `great` | the charting writer | a charting worth `worth.great` (20) or more | 10 |
+| `record` | the logbook's recorder | an approach to the lip survived within `news.edition.falls` (100 m), written only if nearer than any this world | 8 |
+| `life` | the recorder | a kind of life marked `news` in the catalog (the whales, the rays, a shark, the glowing water, a booby aboard) met, the skipper's, naming those aboard, once a kind a voyage | 6 |
+| `crew` | the recorder | a voyage ended with `aboard` (4) or more aboard, each for `together` (30) minutes | 5 |
+| `first` | the charting writer | a sailor's first charting ever, unless great | 5 |
+| `run` | the recorder | a voyage's run of `run` (1 NM) or more; only the day's longest is told | 4 |
+| `milestone` | the log's writer | a sailor's distance passing a multiple of 1,000 NM, their tenth (twentieth…) world, their hundredth place charted | 4 |
+| `charting` | the charting writer | any other charting | 1 |
+
+Each is written once, by its `source`, in the world's fenced batch with
+the rows that make it. **Falls are counted in the figures only**, never a
+story with a name, and the weather is never news (`TestNoStormNews`).
+
+### The choice
+
+`news.Choose` is a pure function of the day's candidates, the sailors of
+the last `recent` (3) editions and a time, in integers only, so every
+server chooses alike: each story's score eases with its age (halved after
+`ease`, 24 hours), times `giveWay` (½) if a sailor it names was in a recent
+edition; the heaviest first, then the earliest; **never two stories about
+one sailor**, never more than `ofKind` (2) of a kind. Today's front page
+is chosen at the time truncated to 10 minutes, so the page moves through
+the day; after midnight the `editions` job sets each day's at its end:
+the stories' places (`rank`) and its figures, in a row of its own
+(`story = 'edition'`), and **a set edition never changes**. A day of two
+hundred boats (about 750 candidates) is chosen in about 70 µs.
+
+### Names and words
+
+Every name follows the log's rule (`logbook.NameOf`): a sailor by name to
+a reader of their age band who may read their log, a machine sailor always
+(⚙), else their boat ("the *Gull*", or with no name its kind's, "a Jolly
+boat"); "a sailor" for a block either way; "a former sailor" once the
+account is deleted. Others aboard not named are counted ("and two more").
+A story's words hold no name: each is a slot, `{0}`, `{1}`, its index in
+the story's `names`, each with its kind and, for a sailor, whether the
+reader may open their log (`logged`); the phone sets them in, a slot
+opening a sentence with a capital. Each kind has several phrasings in the
+manner of the old shipping lists (`internal/news/words.go`), picked by the
+story's own id, each about two lines on a phone held upright.
+
+### Routes
+
+| Route | What |
+|---|---|
+| `GET /api/news?day=` | a day's edition (today's by default, `2006-01-02` by the schedule's zone): its number from the world's first, whether set, its figures and their sentence, the lead, the stories, the reader's box, the notices, the world's days; behind a session, `Cache-Control: private, max-age=5`; the day's stories kept 5 s in the process |
+| `GET /api/news?name=` | the stories this world naming a sailor, the newest first (five), if the reader may name them; none otherwise, as for no such sailor |
+| `GET /api/log…` | a log's answer carries the same, as `news` |
+| `GET /owner/api/news.json?day=` | the world page's News tab: the day's edition with every name shown, and its stories struck |
+| `POST /owner/api/news/strike {"id", "struck"}` | strikes a story from the news for everyone, or puts it back, in the record (`strike`, `unstrike`) |
+
+A story has `subject` and `number` when it is about a place, which open
+its box on the chart (`showAt`), and `x` and `y` when it happened at a
+point (`showPoint`). An edition of a day of two hundred boats is about
+2.5 KB of JSON. Machine sailors read it with the `news` tool, `day` for
+another, and their own log with `log: true`.
+
+### Trying it
+
+```sh
+go test ./internal/news ./internal/store -run 'Choose|Edition|Words|Figures|Shipmates|About|News' -v
+go test ./internal/api -run 'News|OpenRoutes|LogCarries' -v
+go test ./internal/agentapi -run NewsWords -v
+```
 
 ## The weekly world
 
@@ -3834,6 +4037,8 @@ last twenty.
 |---|---|---|
 | `next-world` | `ahead` before the end (Saturday 6 pm in New York) | the next world's row, a seed from `crypto/rand` (or `KEEL_WORLD_SEED`), its terrain made on one goroutine (about 4.5 s and 400 MB at most on the Mac) and stored, then its week of weather for when it is planned to begin (a few ms, [Wind and weather](#the-week-stored)); a world no attempt of which passes the rules is discarded and another seed drawn; tried every 5 minutes until stored |
 | `closing` | `notice` before the end (Thursday 6 pm) | the news's Notices to Mariners: the world's end, each reader seeing it in their own time |
+| `editions` | daily 00:05 in the schedule's zone | each day of the world sailed before today whose edition is not set (up to eight back) set: its stories in their places and its figures ([The day's news](#the-days-news)) |
+| `arrival` | as each world begins | the world's arrival (its islands to find) and the last world in review, written into its first edition, once |
 | `switch` | 5 minutes before the end | the next world loaded, the simulation told its last tick, then the switch |
 | `sessions` | daily 07:00 UTC | sessions not seen for 400 days, the cookie's life, deleted 1,000 at a time; and the record of the owner's actions older than two years |
 | `worlds` | daily 07:15 UTC | ended worlds older than `KEEL_WORLD_KEEP` (four weeks): each partition detached `CONCURRENTLY`, then dropped, with a 2 s lock timeout, an interrupted detach finished first; the row kept, `dropped`; job runs older than 90 days deleted |
@@ -5244,6 +5449,18 @@ go test -run '^$' -bench 'Tick|Workers' ./internal/sim
 | `POST /api/account/logout-others` | 200 `{"ended": n}` |
 | `POST /api/account/delete` | `{"name"}`, confirmed: 200 `{"unknown": [...]}`, every passkey for the browser to forget; 422 `name` |
 | `GET /`, `GET /{file}`, `GET /assets/{file}` | With `KEEL_CLIENT_DIR`, the built page, read into memory at start: `index.html` at `/`, the other files of the directory's top level (`dev.html`, the licences notice) by name, and the hashed files in `assets/`. Assets are cached for a year as `immutable`, the rest `no-cache`. No listings, no other folders, no hidden files; types from a table of the build's extensions (`.wasm` as `application/wasm`, `.glb` as `model/gltf-binary`); `HEAD` too. These routes need no session, so the page loads while the database cannot be asked |
+
+**Nothing is served without a session unless there is a reason it must
+be.** The routes that answer without one are listed in `openRoutes`
+(`internal/api/api.go`), each with its reason: the page and its files,
+`/api/version`, the notice page and its form (anyone may tell of illegal
+content), making a sailor and signing in, the game connection (it reads
+the session itself), `/api/status` (the website's), the world's chunks and
+islands' models (capability addresses handed out over the game
+connection), and `robots.txt`; and the sign-in service's own for AI apps
+(`oauth.Routes`). `TestOpenRoutes` finds every route registered without
+`auth.Required` or `auth.Signed` and fails on one not listed, so opening a
+route is always a decision made in review.
 
 Errors are `{"error": "<code>"}`; the client puts codes into words
 (`client/src/account/reasons.ts`). A session held to adding a passkey is
@@ -8832,7 +9049,8 @@ tall ship, each at their station on her deck and one at the wheel, in a
 draw or two more than her one sailor, her frames, each drawn and waited
 for, little dearer than with her one sailor and, on a real GPU, within a
 frame at 60 Hz, from the chase camera and close (`@long`); and the
-keelboat's five on her deck.
+keelboat's five on her deck. `crew-cruisers.spec.ts` holds the yacht's and
+the catamaran's people, apart so that the two files run on two runners.
 `fleet.spec.ts` draws other boats in the sandbox: a boat of the fleet as
 the own boat at seven poses, and a keelboat as the own keelboat with her
 jib and reefed, 64 boats within 22 draw calls and 200,000 triangles, a

@@ -12,6 +12,8 @@ import { ordinal } from './queue';
 export const WATCH = 'Watch';
 export const WATCHING = 'Watching';
 export const WATCH_ANOTHER = 'Watch another';
+/** The key to the day's news, before the sea. */
+export const NEWS = 'News';
 export const WATCH_ANOTHER_SAILOR = 'Watch another sailor';
 export const WATCH_A_SAILOR = 'Watch a sailor';
 export const STOP_WATCHING = 'Stop watching';

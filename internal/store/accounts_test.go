@@ -278,11 +278,10 @@ func TestDeleteAccount(t *testing.T) {
 	if rows[0].Account != ann || rows[0].Sailor != "" || rows[0].AccountKind != "human" || !rows[0].Credited || rows[1].Sailor != "Mary Read" {
 		t.Fatalf("the credits: %+v", rows)
 	}
-	items, _ := s.News(ctx, world.ID, nil, 10)
-	for _, it := range items {
-		if (it.Number == 0) != (it.Sailor == "") {
-			t.Errorf("an item: %+v", it)
-		}
+	var forgot, kept int
+	if err := pool.QueryRow(ctx, `SELECT count(*) FILTER (WHERE number = 0 AND sailor IS NULL), count(*) FILTER (WHERE number = 1 AND sailor = 'Mary Read')
+		FROM news_item WHERE world_id = $1`, world.ID).Scan(&forgot, &kept); err != nil || forgot != 1 || kept != 1 {
+		t.Errorf("the news's names: forgotten %d, kept %d (%v)", forgot, kept, err)
 	}
 	if _, err := s.CreateAccount(ctx, storetest.NewAccount("Ann Bonny", "annbonny", [32]byte{4})); err != nil {
 		t.Fatalf("the name once freed: %v", err)

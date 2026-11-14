@@ -64,9 +64,20 @@ export class ChartStore {
     return this.#byKey.get(keyOf(subject, number));
   }
 
-  /** Listens for what is charted: never the chart had whole. */
-  onCharted(l: ChartedListener): void {
+  /** Listens for what is charted: never the chart had whole. Returns what stops it listening. */
+  onCharted(l: ChartedListener): () => void {
     this.#listeners.push(l);
+    return () => {
+      const i = this.#listeners.indexOf(l);
+      if (i >= 0) {
+        this.#listeners.splice(i, 1);
+      }
+    };
+  }
+
+  /** How many listen for what is charted. */
+  get listening(): number {
+    return this.#listeners.length;
   }
 
   /**

@@ -22,6 +22,7 @@ import { ConnectionLine } from './connection';
 import { SeaControls } from './hud';
 import { Menu } from './menu';
 import { HudModel } from './model';
+import type { NewsStory } from './newswords';
 import { DEFAULTS, loadSettings, type Store, saveWatchChoice, settingsSignal } from './settings';
 import {
   Choices,
@@ -36,7 +37,13 @@ import {
   type WatchRow,
   watchServer,
 } from './watch';
-import { type CardFacts, CopyWatchLink, followProblem, SailorCard } from './watchcard';
+import {
+  type CardFacts,
+  CopyWatchLink,
+  followProblem,
+  LAST_IN_THE_NEWS,
+  SailorCard,
+} from './watchcard';
 import type { WatchView } from './watchlazy';
 import {
   aboutName,
@@ -60,6 +67,7 @@ import {
   type LinkRefusal,
   linkFromQuery,
   linkRefusedText,
+  NEWS,
   nowWatchableText,
   SAIL,
   STOP_WATCHING,
@@ -276,6 +284,24 @@ describe('the screen on a boat watched', () => {
     const bar = expand(WatchBar({ view: v }));
     expect(text(bar)).toContain('Iron Mary has left the water.');
     expect(buttons(bar)).toEqual([WATCH_ANOTHER, SAIL]);
+  });
+
+  test('before the sea, the day’s news beside Watch another; never at sea', () => {
+    const v = view(null, true, 'idle', { why: 'left', sailor: 'Iron Mary' });
+    let read = 0;
+    const bar = expand(WatchBar({ view: v, news: () => read++ }));
+    expect(buttons(bar)).toEqual([WATCH_ANOTHER, NEWS, SAIL]);
+    const key = find(bar, (n) => n.type === 'button' && text(n) === NEWS)[0];
+    if (key === undefined) {
+      throw new Error('no News key');
+    }
+    (key.props as unknown as { onClick: () => void }).onClick();
+    expect(read).toBe(1);
+    // At sea, watching: the plate keeps its keys.
+    expect(buttons(expand(WatchBar({ view: view(mary, true, 'sailing') })))).toEqual([
+      WATCH_ANOTHER,
+      SAIL,
+    ]);
   });
 
   test('the menu: no free camera; a sailor to watch, and a stop to watching', () => {
@@ -652,9 +678,9 @@ describe('the card about a sailor', () => {
       (v) => ['p', 'li', 'h3'].includes(String(v.type)),
     ).map(text);
 
-  test('the weather, where, and this voyage; Follow, Copy a link and Watch at the bottom', () => {
+  test('the weather, where, and this voyage; the sailor’s log, Follow, Copy a link and Watch at the bottom', () => {
     const t = drawn({ ...card, code: 'k3x7q2mbwa' });
-    expect(buttons(t)).toEqual(['‹ Back', '☆ Follow', 'Watch']);
+    expect(buttons(t)).toEqual(['‹ Back', 'Log', '☆ Follow', 'Watch']);
     const copy = find(t, (v) => v.type === CopyWatchLink);
     expect(copy).toHaveLength(1);
     expect(copy[0]?.props.code).toBe('k3x7q2mbwa');
@@ -689,6 +715,38 @@ describe('the card about a sailor', () => {
     // The Watch button is the foot's, after the sections.
     const foot = find(t, (v) => v.props.class === 'watch-card-foot');
     expect(buttons(foot)).toEqual(['Watch']);
+  });
+
+  test('the sailor’s last story this world, one line, under this voyage; none without one', () => {
+    const news: NewsStory = {
+      id: 'ab12',
+      kind: 'record',
+      at: 0,
+      head: 'OFF THE SKERRIES',
+      text: '{0} passed 8 m from the lip, nearer than any boat this world.',
+      names: [{ kind: 'machine', name: 'Iron Mary', logged: true }],
+      number: 0,
+      day: '2026-11-12',
+    };
+    const t = expand(
+      SailorCard({
+        c: card,
+        read: true,
+        gone: null,
+        withheld: false,
+        problem: '',
+        back: () => {},
+        follow: () => {},
+        watch: () => {},
+        news,
+      }),
+      [CopyWatchLink],
+    );
+    expect(lines(t, LAST_IN_THE_NEWS)).toEqual([LAST_IN_THE_NEWS]);
+    expect(text(find(t, (v) => v.props.class === 'watch-last-news'))).toBe(
+      'Off the skerries. Iron Mary ⚙ passed 8 m from the lip, nearer than any boat this world.',
+    );
+    expect(find(drawn(card), (v) => v.props.class === 'watch-last-news')).toHaveLength(0);
   });
 
   test('the sailor’s portrait in the heading’s row, from the look code; none without one', () => {
@@ -737,13 +795,14 @@ describe('the card about a sailor', () => {
     );
   });
 
-  test('gone: greyed with a refused watch’s words, no Watch, and Follow only to undo one', () => {
+  test('gone: greyed with a refused watch’s words, no Watch, Follow only to undo one, and the sailor’s log still', () => {
     const t = drawn({ ...card, code: 'k3x7q2mbwa' }, { gone: 'not-at-sea' });
     expect(text(t)).toContain('Iron Mary is not at sea.');
-    expect(buttons(t)).toEqual(['‹ Back']);
+    expect(buttons(t)).toEqual(['‹ Back', 'Log']);
     expect(find(t, (v) => v.type === CopyWatchLink)).toHaveLength(0);
     expect(buttons(drawn({ ...card, followed: true }, { gone: 'cannot' }))).toEqual([
       '‹ Back',
+      'Log',
       '★ Following',
     ]);
   });

@@ -29,6 +29,7 @@ import (
 	"github.com/daneelvt/keel-over-the-edge/internal/bus"
 	"github.com/daneelvt/keel-over-the-edge/internal/life"
 	"github.com/daneelvt/keel-over-the-edge/internal/physics"
+	"github.com/daneelvt/keel-over-the-edge/internal/sky"
 	"github.com/daneelvt/keel-over-the-edge/internal/weather"
 )
 
@@ -231,6 +232,13 @@ type World struct {
 	// The chart: what is charted, and what the lookouts see by.
 	chart chartState
 
+	// The voyages' log: the sky its nights are reckoned by, nil for none,
+	// and the world's epoch, µs of UTC; and, for tests, the visibility at
+	// a point, nil for the weather's.
+	logSky     *sky.Prepared
+	logEpoch   float64
+	visibility func(x, y float64) float64
+
 	// life is the sea's life, nil for none, and lifeWeather what it reads
 	// the weather by.
 	life        *life.World
@@ -316,6 +324,9 @@ func New(cfg Config) (*World, error) {
 		w.restarted = make([]int32, 0, cfg.Capacity)
 	}
 	w.initChart(cfg.Sight, len(cfg.Kinds))
+	if s := cfg.Sight; s != nil && s.Sky != nil {
+		w.logSky, w.logEpoch = s.Sky, float64(s.Epoch)
+	}
 	if cfg.Life != nil {
 		w.life = life.NewWorld(cfg.Life, cfg.Capacity)
 		bows := make([]float64, len(cfg.Kinds))

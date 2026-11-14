@@ -4,7 +4,14 @@ import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { gzipSync } from 'node:zlib';
 import { describe, expect, test } from 'vitest';
 import { catalog } from '../src/catalog';
-import { eagerAssets, eagerModels, SAILOR_BUDGETS, transcoderAsset } from './size';
+import {
+  eagerAssets,
+  eagerModels,
+  logAsset,
+  newsAsset,
+  SAILOR_BUDGETS,
+  transcoderAsset,
+} from './size';
 
 test('the first download is the page’s scripts, preloaded modules and styles', () => {
   const html = `<script type="module" crossorigin src="/assets/main-1.js"></script>
@@ -17,6 +24,28 @@ test('the first download is the page’s scripts, preloaded modules and styles',
 test('the models counted are those the first download names', () => {
   const scripts = ['const MODELS={"../../../art/boats/jolly.glb":"/assets/jolly-1a.glb"}'];
   expect(eagerModels(['jolly-1a.glb', 'female-2b.glb'], scripts)).toEqual(['jolly-1a.glb']);
+});
+
+test('the log’s chunk is told from the game’s other chunks', () => {
+  expect(logAsset('log-yMbyK3-x.js')).toBe(true);
+  expect(logAsset('log-DUBcYPk9.css')).toBe(true);
+  expect(logAsset('logwords-DhvZ2t9V.js.map')).toBe(false);
+  expect(logAsset('lookstage-1.js')).toBe(false);
+});
+
+test('the news sheet’s chunk is told from the game’s other chunks', () => {
+  expect(newsAsset('news-Cq3x_9aB.js')).toBe(true);
+  expect(newsAsset('news-DUBcYPk9.css')).toBe(true);
+  expect(newsAsset('newslazy-DhvZ2t9V.js')).toBe(false);
+  expect(newsAsset('newswords-DhvZ2t9V.js')).toBe(false);
+});
+
+test('the log’s fonts, Libre Caslon Text’s two styles, are under 60 KB together', () => {
+  const fonts = new URL('../src/fonts/', import.meta.url);
+  const size = ['LibreCaslonText-Regular.woff2', 'LibreCaslonText-Italic.woff2']
+    .map((f) => statSync(new URL(f, fonts)).size)
+    .reduce((a, b) => a + b, 0);
+  expect(size).toBeLessThan(60 * 1024);
 });
 
 const ART = new URL('../../art/', import.meta.url);

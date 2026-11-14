@@ -11,7 +11,7 @@
 import './chart.css';
 import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks';
 import { Raycaster, Vector2 } from 'three';
-import type { Chart, TappedWeather } from '../chart/chart';
+import type { Chart, ChartMode, TappedWeather } from '../chart/chart';
 import type { Forecasting } from '../chart/forecasting';
 import { drawPocketWeather, type PocketWeather, pocketWeather } from '../chart/pocketweather';
 import { formatPosition } from '../chart/position';
@@ -31,11 +31,15 @@ import { Pusher, useUpright } from './case';
 import { PlaceWeatherLines, TimeBar } from './chartweather';
 import { clockAngles, worldTimeText } from './clock';
 import { ClockFace } from './clockdial';
-import { type Countdown, endText } from './countdown';
+import type { Countdown } from './countdown';
 import { WeatherDecal } from './decals';
 import { threeDigits, wholeDegrees } from './format';
+import { useLog } from './loglazy';
+import { OPENING, useNews } from './newslazy';
+import { checkUnread, type NewsSource, unread } from './newsread';
+import type { NewsStory } from './newswords';
 import type { Notices } from './notices';
-import { PlayerText } from './player';
+import { MachineMark, PlayerText } from './player';
 
 /** What the chart's screens need of the world beyond the chart. */
 export interface ChartSea {
@@ -51,22 +55,14 @@ export interface ChartSea {
   lip: number;
   /** The lights' characters' notations, by index. */
   characters: readonly string[];
-  /** The news, a page at a time, and its columns. */
+  /** The news, a day's edition. */
   news: NewsSource;
-  columns: readonly NewsColumn[];
   /** The forecast and what has been, or null without. */
   forecasting: Forecasting | null;
   /** The boat's speed over the ground now, m/s. */
   speed: () => number;
   /** Sets the autopilot to hold a heading, rad, as its panel does; null with no boat to steer. */
   steer: ((heading: number) => void) | null;
-}
-
-/** A column of the news: what its items tell of, what is charted or the world itself. */
-export interface NewsColumn {
-  id: string;
-  title: string;
-  of: string;
 }
 
 /** "Charted by <name>, Tuesday", the name as the player wrote it. */
@@ -81,7 +77,7 @@ function Credit({ e, now }: { e: ChartEntry; now: number }) {
   return (
     <span class="chart-credit">
       Charted by <PlayerText text={e.by} />
-      {e.ai ? ' (AI)' : ''}, {dayText(e.at, now)}
+      {e.ai ? <MachineMark /> : null}, {dayText(e.at, now)}
     </span>
   );
 }
@@ -452,17 +448,44 @@ function SystemBoxPanel({ sea, t, close }: { sea: ChartSea; t: TappedWeather; cl
   );
 }
 
-/** The tabs between the chart, its list and the news. */
+/** How often the News tab's dot is looked to while the chart screen is open, ms. */
+const DOT_AGAIN = 120_000;
+
+/**
+ * The tabs between the chart, its list, the news and the log; the Log tab
+ * opens the reader's own, the News tab today's edition. The News tab has a
+ * dot while today's edition has a story not yet read: set over its corner,
+ * so the strip keeps its width.
+ */
 function Tabs({ sea }: { sea: ChartSea }) {
   const mode = sea.chart.mode.value;
-  const tab = (m: 'chart' | 'list' | 'news', label: string) => (
+  const dot = unread.value && mode !== 'news';
+  useEffect(() => {
+    const look = () => void checkUnread(() => sea.news(null));
+    look();
+    const t = setInterval(look, DOT_AGAIN);
+    return () => clearInterval(t);
+  }, [sea]);
+  const open = (m: ChartMode) => {
+    if (m === 'log') {
+      sea.chart.showLog({ kind: 'own' });
+    } else if (m === 'news') {
+      sea.chart.showNews(null);
+    } else {
+      sea.chart.show(m);
+    }
+  };
+  const tab = (m: ChartMode, label: string) => (
     <button
       type="button"
       class={mode === m ? 'chart-tab chosen' : 'chart-tab'}
       aria-pressed={mode === m}
-      onClick={() => sea.chart.show(m)}
+      onClick={() => open(m)}
     >
       {label}
+      {m === 'news' && dot ? (
+        <span class="chart-tab-dot" role="img" aria-label="new stories" title="new stories" />
+      ) : null}
     </button>
   );
   return (
@@ -470,6 +493,7 @@ function Tabs({ sea }: { sea: ChartSea }) {
       {tab('chart', 'Chart')}
       {tab('list', 'List')}
       {tab('news', 'News')}
+      {tab('log', 'Log')}
     </nav>
   );
 }
@@ -506,175 +530,40 @@ export function ChartList({ sea }: { sea: ChartSea }) {
   );
 }
 
-/** An item of the news: what is charted and by whom, or a notice of the world's own (its end). */
-export interface NewsItem {
-  id: string;
-  column: string;
-  at: number;
-  by: string;
-  ai: boolean;
-  subject: string;
-  number: number;
-  title: string;
-  what: string;
-  worth: number;
-  east: number;
-  north: number;
-  also: { subject: string; number: number; title: string }[];
-  /** An item about the world itself: the end it tells of, ms of UTC. */
-  endsAt?: number;
-}
-
-/** The news, a page at a time, older than before (an item's id), or the newest. */
-export type NewsSource = (
-  before: string | null,
-) => Promise<{ items: NewsItem[]; more: boolean } | null>;
-
-/** The news as the server serves it: GET /api/news. */
-export const serverNews: NewsSource = async (before) => {
-  try {
-    const res = await fetch(`/api/news${before === null ? '' : `?before=${before}`}`, {
-      credentials: 'same-origin',
-    });
-    if (!res.ok) {
-      return null;
-    }
-    return (await res.json()) as { items: NewsItem[]; more: boolean };
-  } catch {
-    return null;
-  }
-};
-
-/** The news made from the chart itself, offline: each island, port, light and wreck charted, newest first. */
+/** The news made from the chart itself, offline: each island, port, light and wreck charted, the newest first, as one day's stories. */
 export function chartNews(store: ChartStore, news: (e: ChartEntry) => boolean): NewsSource {
   return async () => {
-    const items: NewsItem[] = store.entries
+    const stories: NewsStory[] = store.entries
       .filter((e) => e.by !== '' && news(e))
       .map((e) => ({
         id: `${e.subject}:${e.number}`,
-        column: 'discoveries',
+        kind: 'charting',
         at: e.at,
-        by: e.by,
-        ai: e.ai,
+        head: store.title(e).toUpperCase(),
+        text: `${store.kindName(e)}, charted by {0}.`,
+        names: [{ kind: e.ai ? ('machine' as const) : ('human' as const), name: e.by }],
         subject: e.subject,
         number: e.number,
-        title: store.title(e),
-        what: store.kindName(e).toLowerCase(),
-        worth: e.worth,
-        east: e.east,
-        north: e.north,
-        also: [],
+        x: e.east,
+        y: e.north,
       }))
       .reverse();
-    return { items, more: false };
-  };
-}
-
-/** An item of the news about what is charted. */
-function ChartedItem({ sea, it, now }: { sea: ChartSea; it: NewsItem; now: number }) {
-  return (
-    <li>
-      <button type="button" onClick={() => sea.chart.showPoint(it.east, it.north)}>
-        <span class="news-title">{it.title.toUpperCase()}</span>
-        {it.what !== '' ? `, ${it.what}` : ''}
-        {it.also.length > 0 ? `, with ${it.also.map((a) => a.title).join(' and ')}` : ''}. Charted
-        by <PlayerText text={it.by} />
-        {it.ai ? ' (AI)' : ''}, {dayText(it.at, now)}.
-      </button>
-    </li>
-  );
-}
-
-/**
- * An item of the Notices to Mariners: a notice of the world's own, its end,
- * in the reader's own time. The weather is never in the news: the chart,
- * the forecast and the gale warning's notice tell of it.
- */
-function WorldItem({ it, zone }: { it: NewsItem; zone: string }) {
-  return (
-    <li class="news-world">
-      <span class="news-title">{it.title.toUpperCase()}.</span> The falls take this world on{' '}
-      {endText(it.endsAt ?? 0, zone)}.
-    </li>
-  );
-}
-
-/** The news: a sheet of the period, its columns of discoveries and of notices to mariners, a tap showing where on the chart. */
-export function NewsSheet({ sea, end = null }: { sea: ChartSea; end?: Countdown | null }) {
-  const [items, setItems] = useState<NewsItem[]>([]);
-  const [more, setMore] = useState(false);
-  const [fresh, setFresh] = useState(0);
-  const [failed, setFailed] = useState(false);
-  const load = async (before: string | null) => {
-    const page = await sea.news(before);
-    if (page === null) {
-      setFailed(true);
-      return;
-    }
-    setFailed(false);
-    setItems((had) => (before === null ? page.items : [...had, ...page.items]));
-    setMore(page.more);
-    setFresh(0);
-  };
-  useEffect(() => {
-    void load(null);
-    // What is charted while it is open is noted, to be read on asking.
-    let on = true;
-    sea.chart.store.onCharted((es) => {
-      if (on) {
-        setFresh((n) => n + es.filter((e) => e.by !== '').length);
-      }
-    });
-    return () => {
-      on = false;
+    const figures = { boats: 0, machines: 0, run: 0, charted: stories.length, crews: 0, over: 0 };
+    return {
+      world: 0,
+      day: '',
+      number: 1,
+      zone: '',
+      set: false,
+      figures,
+      figuresText: '',
+      lead: [],
+      stories,
+      shipmates: [],
+      notices: [],
+      days: [],
     };
-  }, [sea]);
-  const now = Date.now();
-  const worldOf = new Set(sea.columns.filter((c) => c.of === 'world').map((c) => c.id));
-  const notices = items.filter((it) => worldOf.has(it.column));
-  const charted = items.filter((it) => !worldOf.has(it.column));
-  const zone = end?.end.value?.zone ?? '';
-  return (
-    <section class="chart-panel news-sheet" aria-label="The news">
-      <header class="news-masthead">
-        <h2>The Shipping Intelligence</h2>
-        <p>{sea.columns.map((c) => c.title).join(' · ')}</p>
-      </header>
-      {notices.length > 0 ? (
-        <section class="news-column" aria-label="Notices to Mariners">
-          <h3>{sea.columns.find((c) => c.of === 'world')?.title}</h3>
-          <ol class="news-items">
-            {notices.map((it) => (
-              <WorldItem key={it.id} it={it} zone={zone} />
-            ))}
-          </ol>
-        </section>
-      ) : null}
-      {fresh > 0 ? (
-        <button type="button" class="news-fresh" onClick={() => void load(null)}>
-          {fresh} new {fresh === 1 ? 'discovery' : 'discoveries'}: read
-        </button>
-      ) : null}
-      {failed ? <p class="news-failed">The news cannot be had just now.</p> : null}
-      {charted.length === 0 && !failed ? (
-        <p class="news-none">Nothing charted yet: the chart is blank.</p>
-      ) : null}
-      <ol class="news-items">
-        {charted.map((it) => (
-          <ChartedItem key={it.id} sea={sea} it={it} now={now} />
-        ))}
-      </ol>
-      {more ? (
-        <button
-          type="button"
-          class="news-more"
-          onClick={() => void load(items[items.length - 1]?.id ?? null)}
-        >
-          Earlier
-        </button>
-      ) : null}
-    </section>
-  );
+  };
 }
 
 /** The countdown at the chart's rim, over its list and the news: the day and hour it ends are the news's, and its title's. */
@@ -695,8 +584,8 @@ function RimCountdown({ end }: { end: Countdown | null }) {
 }
 
 /**
- * The strip's ship's clock: the world's time of the moment the chart
- * shows, now or the slider's, its hands sweeping on as Play plays and back
+ * The chart's ship's clock, in the strip or held upright under it: the
+ * world's time of the moment the chart shows, now or the slider's, its hands sweeping on as Play plays and back
  * with Now; its rim gold while it reads ahead, as the slider's knob is.
  */
 function StripClock({ sea }: { sea: ChartSea }) {
@@ -728,18 +617,56 @@ function StripClock({ sea }: { sea: ChartSea }) {
   );
 }
 
+/** The News tab: the day's edition, its sheet loaded when first opened. */
+function NewsTab({ sea }: { sea: ChartSea }) {
+  const m = useNews();
+  if (m === null) {
+    return (
+      <section class="chart-panel news-sheet" aria-label="The news">
+        <p>{OPENING}</p>
+      </section>
+    );
+  }
+  return <m.NewsTab sea={sea} />;
+}
+
+/** The Log tab: a sailor's log, loaded when first opened. */
+function LogTab({ sea, watch }: { sea: ChartSea; watch: ((name: string) => void) | null }) {
+  const m = useLog();
+  const who = sea.chart.logOf.value;
+  if (m === null) {
+    return (
+      <section class="chart-panel log-sheet" aria-label="The log">
+        <p>Opening the log…</p>
+      </section>
+    );
+  }
+  return (
+    <m.LogSheet
+      who={who}
+      setWho={(w) => {
+        sea.chart.logOf.value = w;
+      }}
+      watch={watch}
+    />
+  );
+}
+
 /**
- * The chart over the whole screen, its list, or the news; the notices
+ * The chart over the whole screen, its list, the news or the log; the notices
  * under its top, out of the way of its working foot.
  */
 export function ChartScreen({
   sea,
   end = null,
   notices = null,
+  watch = null,
 }: {
   sea: ChartSea;
   end?: Countdown | null;
   notices?: Notices | null;
+  /** Watches a sailor from their log, the chart closed; null where none may be watched from it. */
+  watch?: ((name: string) => void) | null;
 }) {
   const chart = sea.chart;
   const surface = useGestures(sea);
@@ -768,6 +695,7 @@ export function ChartScreen({
     return () => sized.disconnect();
   }, []);
   const mode = chart.mode.value;
+  const upright = useUpright();
   const picked = chart.picked.value;
   const tapped = chart.tapped.value;
   return (
@@ -778,7 +706,7 @@ export function ChartScreen({
         <div class="chart-case chart-strip">
           <Tabs sea={sea} />
           <Position sea={sea} />
-          <StripClock sea={sea} />
+          {mode === 'chart' && !upright ? <StripClock sea={sea} /> : null}
           <button
             type="button"
             class="chart-button chart-back"
@@ -789,6 +717,8 @@ export function ChartScreen({
             ✕
           </button>
         </div>
+        {/* Held upright the strip has no room for the clock: it stands under it. */}
+        {mode === 'chart' && upright ? <StripClock sea={sea} /> : null}
         <RimCountdown end={end} />
         {notices !== null ? (
           <div class="chart-notices">
@@ -806,7 +736,8 @@ export function ChartScreen({
         <TimeBar chart={chart} src={sea.forecasting} />
       ) : null}
       {mode === 'list' ? <ChartList sea={sea} /> : null}
-      {mode === 'news' ? <NewsSheet sea={sea} end={end} /> : null}
+      {mode === 'news' ? <NewsTab sea={sea} /> : null}
+      {mode === 'log' ? <LogTab sea={sea} watch={watch} /> : null}
     </div>
   );
 }

@@ -27,6 +27,7 @@ import (
 	"github.com/daneelvt/keel-over-the-edge/internal/jobs"
 	"github.com/daneelvt/keel-over-the-edge/internal/life"
 	"github.com/daneelvt/keel-over-the-edge/internal/looks"
+	"github.com/daneelvt/keel-over-the-edge/internal/news"
 	"github.com/daneelvt/keel-over-the-edge/internal/obs"
 	"github.com/daneelvt/keel-over-the-edge/internal/owner"
 	"github.com/daneelvt/keel-over-the-edge/internal/persist"
@@ -277,6 +278,8 @@ type worldHalf struct {
 	forecasts *forecast.Issuer
 	// sea is the world as the machine sailors' tools reach it.
 	sea *agentapi.Sea
+	// news is the world's news, a day's edition at a time.
+	news *news.Service
 	// watch is the world's watching: the list, the card and follows.
 	watch *watch.Service
 	// chat is the world's chat aboard: every line is said through it.
@@ -391,16 +394,19 @@ func (p *process) openWorld(ctx context.Context, rw *readyWorld) (*worldHalf, er
 		Frames: b.Frames, Store: p.writer, World: row.ID, Epoch: p.lease,
 		Build: p.build, Catalog: catalog.Version, Layout: physics.LayoutVersion,
 		Hold: b.Commands.Server(), Log: p.log, Metrics: p.metrics,
-		Chart: rw.charts.model, Written: rw.charts.model.Add, FoldWithin: rw.charts.model.FoldWithin(),
+		Chart: rw.charts.model, Written: rw.charts.model.Add, News: newsRules(cat, cfg.Schedule.Zone), Boats: boatIDs(cat),
+		Logbook: bookOf(rw, cat),
 	})
+	h.news = p.newsOf(row)
 	h.sea = p.seaOf(h, rw, sighting)
 	world.Record(h.inputs, h.game, h.lasting, h.forecasts, p.agents.core.Open(h.sea))
+	logs := p.logsOf(row.Number)
 	h.tools = ownerTools(ownerConfig{
 		cat: cat, bus: b, bundle: rw.bundle, made: rw.held.made, sailed: row, wcfg: p.wcfg, timeline: timeline, terrain: rw.terrain,
 		db: p.db, sessions: p.sessions, game: h.game, charts: rw.charts, clock: h.loop, page: p.ownPage, log: p.log, metrics: p.metrics,
 		lifecycle: p, from: p.nextView.Load(), forecasts: h.forecasts, agents: p.agents, hand: p.hand,
 		aiCap: world.AICap(), aiReserve: world.AIReserve(), life: rw.life,
-		switches: p.switches, chat: p.chatDB(), reports: p.reports, hub: h.chat,
+		switches: p.switches, chat: p.chatDB(), reports: p.reports, hub: h.chat, logs: logs, news: h.news,
 	})
 	playCfg := api.Config{
 		Version:   api.Version{Build: p.build, Catalog: catalog.Version},
@@ -418,8 +424,7 @@ func (p *process) openWorld(ctx context.Context, rw *readyWorld) (*worldHalf, er
 		Chunks:    rw.chunks,
 		Models:    modelsOf(rw.charts),
 
-		News:        news{db: p.db, world: row.ID},
-		NewsPage:    cat.News.Page,
+		News:        h.news,
 		Notices:     p.db,
 		NoticeKinds: noticeKinds(cat),
 		Status:      p.statusNow,
@@ -437,6 +442,7 @@ func (p *process) openWorld(ctx context.Context, rw *readyWorld) (*worldHalf, er
 	if p.shipmates != nil {
 		playCfg.Shipmates = p.shipmates
 	}
+	playCfg.Logs = logs
 	h.watch = watch.New(watch.Config{Store: p.db, Frames: b.Frames, Edge: h.game, Kinds: boatIDs(cat), Sea: h.sea, Agent: p.agentAttends,
 		Blocks: func(a, b bus.Account) bool { return p.ties.Blocks(a, b) }})
 	playCfg.Watch = h.watch

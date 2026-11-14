@@ -36,6 +36,23 @@
 // and the key, open, stand on the case within the screen, covering
 // neither it nor the strip.
 //
+// The chart screen's Log tab, the strip still one row with its four tabs,
+// where the boat is and the way back to sea, holds a sailor's log on its
+// paper within the screen under the strip: a long log's days and
+// collection (three kinds a row upright, five sideways), who may read it,
+// another sailor's, a machine sailor's, an empty one and one not there;
+// its keys the head keys' size, its day rows and kinds a 44 px touch, no
+// words under 13 px, nothing wider than the sheet.
+//
+// The chart screen's News tab, its dot over the tab's corner with the
+// strip no wider, holds the day's edition on its paper under the strip: a
+// full day's (the figures, six stories at their longest, the reader's own
+// box and the world's notice), a new world's first (its arrival and the
+// last world in review), a quiet day's and an earlier one's; its masthead
+// on one line, every story a 44 px touch, its keys the head keys' size, no
+// words under 13 px, nothing wider than the sheet; and a full day's front
+// page, to the sixth story, within about one and a half screens upright.
+//
 // The menu's button heads a column of keys under the pocket chart, Back
 // to the boat, the clear view's and the full screen's, 8 pixels apart; on
 // a screen 420 pixels tall or less they run left from it in a row. The
@@ -61,6 +78,8 @@
 import { expect, type Page, test } from '@playwright/test';
 import data from '../src/catalog/catalog.gen.json' with { type: 'json' };
 import { GAME, openScene, sailor } from './helpers';
+import { emptyLog, LONG_NAME, longLog, standInLogs } from './logs';
+import { firstEdition, fullDay, quietDay, standInNews } from './news';
 
 /** The screens: phones in CSS pixels, upright and sideways, and the tests' own. */
 const SCREENS = [
@@ -1929,8 +1948,9 @@ test('on the chart the arrow shrinks as it zooms out, the notices stand clear of
       }
     }
     await page.locator('.notice-dismiss').click();
-    // The strip's clock: in the strip, and swept on by the slider.
-    const clock = page.locator('.chart-strip .chart-clock');
+    // The chart's clock: in the strip, or under it held upright, and swept
+    // on by the slider.
+    const clock = page.locator('.chart-top .chart-clock');
     await expect(clock).toBeVisible();
     const hands = () =>
       page.evaluate(() => ({
@@ -2087,6 +2107,8 @@ test('the list of sailors to watch and the card fit every screen, Watch in view'
   test.setTimeout(150_000);
   await sailor(context, 'Layout');
   await standIn(page);
+  // The sailor's last story, on the card.
+  await standInNews(page);
   await page.setViewportSize({ width: SCREENS[0].width, height: SCREENS[0].height });
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await page.goto(GAME);
@@ -2138,6 +2160,16 @@ test('the list of sailors to watch and the card fit every screen, Watch in view'
     }
     if (!(await inView(page, '.watch-card-foot .watch-go'))) {
       found.push(`${s.name}, the card: Watch is out of view`);
+    }
+    // Its last story in the news, one line within the card.
+    const line = await page.locator('.watch-card .watch-last-news').evaluate((e) => ({
+      tall: e.getBoundingClientRect().height,
+      over: e.scrollHeight - e.clientHeight,
+    }));
+    if (line.tall < 39.5 || line.over > 1) {
+      found.push(
+        `${s.name}, the card: its last story is ${Math.round(line.tall)} px tall, ${line.over} px over`,
+      );
     }
     await page.getByRole('button', { name: 'Back' }).click();
   }
@@ -2878,5 +2910,399 @@ test('shipmates’ panel, threads and notices stand clear of the instruments, ab
     }
   }
   await page.evaluate(() => globalThis.keel.deckScene(null));
+  expect(found).toEqual([]);
+});
+
+/** What is wrong with the chart screen's strip and the log on it, on paper: off the screen, overlapping, too small, a key not the head's size. */
+async function logFaults(page: Page, collection: boolean): Promise<string[]> {
+  return page.evaluate((collection) => {
+    const out: string[] = [];
+    const box = (sel: string) => document.querySelector(sel)?.getBoundingClientRect() ?? null;
+    const strip = box('.chart-strip');
+    const sheet = document.querySelector<HTMLElement>('.log-sheet');
+    if (strip === null || sheet === null) {
+      return ['no strip or no log'];
+    }
+    const s = sheet.getBoundingClientRect();
+    const w = innerWidth;
+    const h = innerHeight;
+    if (strip.height > 48 || strip.left < -0.5 || strip.right > w + 0.5) {
+      out.push(
+        `the strip is ${Math.round(strip.width)} × ${Math.round(strip.height)} at ${Math.round(strip.left)}`,
+      );
+    }
+    const tabs = [...document.querySelectorAll('.chart-tab')].map((t) => t.textContent);
+    if (tabs.join(' ') !== 'Chart List News Log') {
+      out.push(`the tabs are ${tabs.join(', ')}`);
+    }
+    const inStrip = ['.chart-tabs', '.chart-position', '.chart-back'].map((sel) => ({
+      sel,
+      r: box(sel),
+    }));
+    for (const [i, a] of inStrip.entries()) {
+      if (
+        a.r === null ||
+        a.r.width < 1 ||
+        a.r.left < strip.left - 0.5 ||
+        a.r.right > strip.right + 0.5
+      ) {
+        out.push(`${a.sel} is not within the strip`);
+        continue;
+      }
+      for (const b of inStrip.slice(i + 1)) {
+        if (b.r !== null && Math.min(a.r.right, b.r.right) - Math.max(a.r.left, b.r.left) > 0.5) {
+          out.push(`${a.sel} covers ${b.sel}`);
+        }
+      }
+    }
+    if (s.left < -0.5 || s.right > w + 0.5 || s.bottom > h + 0.5 || s.top < strip.bottom - 0.5) {
+      out.push(
+        `the sheet is off the screen or over the strip: ${Math.round(s.left)}, ${Math.round(s.top)}, ${Math.round(s.right)}, ${Math.round(s.bottom)}`,
+      );
+    }
+    const falls = box('.chart-falls');
+    if (
+      falls !== null &&
+      Math.min(falls.right, s.right) - Math.max(falls.left, s.left) > 0.5 &&
+      Math.min(falls.bottom, s.bottom) - Math.max(falls.top, s.top) > 0.5
+    ) {
+      out.push('the sheet covers the countdown');
+    }
+    // Paper: the chart's paper, opaque, in ink.
+    const st = getComputedStyle(sheet);
+    if (st.backgroundColor !== 'rgb(239, 228, 200)' || st.color !== 'rgb(59, 46, 34)') {
+      out.push(`the sheet is ${st.backgroundColor}, its ink ${st.color}`);
+    }
+    for (const el of [sheet, ...sheet.querySelectorAll<HTMLElement>('.log-side, .log-main')]) {
+      if (el.scrollWidth > el.clientWidth + 1) {
+        out.push(`${el.className} is ${el.scrollWidth - el.clientWidth} px wider than it shows`);
+      }
+    }
+    const shown = (e: Element) => {
+      const r = e.getBoundingClientRect();
+      return r.width > 0 && r.height > 0 && (e as HTMLElement).checkVisibility();
+    };
+    for (const k of sheet.querySelectorAll('button.log-key')) {
+      const r = k.getBoundingClientRect();
+      const short = innerHeight <= 420 || (innerHeight <= 700 && innerHeight > innerWidth);
+      const tall = short ? 38 : 40;
+      if (
+        shown(k) &&
+        (Math.abs(r.height - tall) > 0.5 ||
+          r.width < 43.5 ||
+          (k.textContent !== '⋯' && getComputedStyle(k).fontSize !== '14px'))
+      ) {
+        out.push(
+          `the key “${k.textContent}” is ${Math.round(r.width)} × ${Math.round(r.height)}, not the head’s ${tall}`,
+        );
+      }
+    }
+    for (const k of sheet.querySelectorAll('.log-day:not(.log-day-heads), .log-cell')) {
+      const r = k.getBoundingClientRect();
+      if (shown(k) && r.height < 43.5) {
+        out.push(`“${k.textContent?.slice(0, 20)}” is ${Math.round(r.height)} px tall`);
+      }
+    }
+    // The keys chosen, inked in.
+    for (const k of sheet.querySelectorAll(
+      'button.log-key[aria-selected=true], button.log-key[aria-pressed=true]',
+    )) {
+      if (getComputedStyle(k).backgroundColor !== 'rgb(59, 46, 34)') {
+        out.push(`the chosen key “${k.textContent}” is not inked in`);
+      }
+    }
+    // No words under 13 px.
+    const walker = document.createTreeWalker(sheet, NodeFilter.SHOW_TEXT);
+    for (let n = walker.nextNode(); n !== null; n = walker.nextNode()) {
+      const e = n.parentElement;
+      if (
+        e !== null &&
+        (n.textContent ?? '').trim() !== '' &&
+        shown(e) &&
+        Number.parseFloat(getComputedStyle(e).fontSize) < 13
+      ) {
+        out.push(`“${n.textContent?.trim().slice(0, 20)}” is ${getComputedStyle(e).fontSize}`);
+      }
+    }
+    if (collection) {
+      const cells =
+        [...sheet.querySelectorAll('.log-group')][0]?.querySelectorAll('.log-cell') ?? [];
+      const top = cells[0]?.getBoundingClientRect().top ?? 0;
+      const row = [...cells].filter(
+        (c) => Math.abs(c.getBoundingClientRect().top - top) < 1,
+      ).length;
+      const want = innerHeight > innerWidth ? 3 : innerWidth < 900 ? 5 : row;
+      if (row !== want && cells.length >= want) {
+        out.push(`${row} kinds a row, not ${want}`);
+      }
+    }
+    return out;
+  }, collection);
+}
+
+test('the chart screen’s Log tab holds a long log, its collection, who may read it, another’s, a machine’s, an empty one and one not there, on paper, on every screen', async ({
+  page,
+}) => {
+  test.skip(test.info().project.name === 'webgpu', 'the log is the same on either back end');
+  test.setTimeout(150_000);
+  let own: () => object = longLog;
+  await standInLogs(page, () => own());
+  await page.setViewportSize({ width: SCREENS[1].width, height: SCREENS[1].height });
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await openScene(page, 'world=1', true);
+  const now = Date.now();
+  await page.evaluate((now) => {
+    // In the world's last days, its countdown under the strip held upright.
+    globalThis.keel.setWorldEnd({
+      epoch: now - 5 * 86_400_000,
+      ends: now + 2 * 86_400_000,
+      closing: now - 86_400_000,
+    });
+  }, now);
+  const found: string[] = [];
+  const check = async (where: string, collection = false) => {
+    for (const f of await logFaults(page, collection)) {
+      found.push(`${where}: ${f}`);
+    }
+  };
+  // The upright and the sideways phone first.
+  const screens = [
+    SCREENS[1],
+    SCREENS[5],
+    ...SCREENS.filter((s) => s !== SCREENS[1] && s !== SCREENS[5]),
+  ];
+  for (const s of screens) {
+    await page.setViewportSize({ width: s.width, height: s.height });
+    await page.waitForFunction(
+      ({ width, height }) => innerWidth === width && innerHeight === height,
+      s,
+    );
+    own = longLog;
+    await page.evaluate(() => globalThis.keel.openLog({ kind: 'sailor', name: 'Nobody' }));
+    await expect(page.locator('.log-sheet .log-status')).toContainText('no such sailor');
+    await check(`${s.name}, a log not there`);
+    await page.evaluate(() => globalThis.keel.openLog({ kind: 'own' }));
+    await expect(page.locator('.log-day').nth(1)).toBeVisible();
+    await check(`${s.name}, a long log`);
+    await page.locator('.log-day:not(.log-day-heads)').first().click();
+    await check(`${s.name}, a day opened`);
+    await page.locator('.log-more').click();
+    await expect(page.locator('.log-who')).toBeVisible();
+    await check(`${s.name}, who may read it`);
+    await page.locator('.log-more').click();
+    await page.getByRole('tab', { name: 'Collection' }).click();
+    await page.locator('.log-cell').nth(2).click();
+    await check(`${s.name}, the collection`, true);
+    await page.evaluate((name) => globalThis.keel.openLog({ kind: 'sailor', name }), LONG_NAME);
+    await expect(page.locator('.log-back')).toBeVisible();
+    await check(`${s.name}, another’s log`);
+    await page.evaluate(() =>
+      globalThis.keel.openLog({ kind: 'machine', id: '0', name: 'Clockwork Kestrel' }),
+    );
+    await expect(page.locator('.log-name')).toContainText('Machine sailor');
+    await check(`${s.name}, a machine sailor’s log`);
+    own = emptyLog;
+    await page.evaluate(() => globalThis.keel.openLog({ kind: 'own' }));
+    await expect(page.locator('.log-sheet .log-empty')).toBeVisible();
+    await check(`${s.name}, an empty log`);
+  }
+  await page.evaluate(() => globalThis.keel.openChart(null));
+  expect(found).toEqual([]);
+});
+
+/** What is wrong with the chart screen's strip and the news on it, on paper: off the screen, overlapping, too small, a key not the head's size; and how far down its sixth story ends, px. */
+async function newsFaults(page: Page): Promise<{ out: string[]; front: number }> {
+  return page.evaluate(() => {
+    const out: string[] = [];
+    const box = (sel: string) => document.querySelector(sel)?.getBoundingClientRect() ?? null;
+    const strip = box('.chart-strip');
+    const sheet = document.querySelector<HTMLElement>('.news-sheet');
+    if (strip === null || sheet === null) {
+      return { out: ['no strip or no news'], front: 0 };
+    }
+    const s = sheet.getBoundingClientRect();
+    const w = innerWidth;
+    const h = innerHeight;
+    if (strip.height > 48 || strip.left < -0.5 || strip.right > w + 0.5) {
+      out.push(`the strip is ${Math.round(strip.width)} × ${Math.round(strip.height)}`);
+    }
+    const tab = [...document.querySelectorAll('.chart-tab')].find((t) => t.textContent === 'News');
+    const dot = box('.chart-tab-dot');
+    const t = tab?.getBoundingClientRect() ?? null;
+    if (
+      t === null ||
+      (dot !== null &&
+        (dot.left < t.left || dot.right > t.right || dot.top < t.top || dot.bottom > t.bottom))
+    ) {
+      out.push('the News tab’s dot is outside the tab');
+    }
+    if (s.left < -0.5 || s.right > w + 0.5 || s.bottom > h + 0.5 || s.top < strip.bottom - 0.5) {
+      out.push(
+        `the sheet is off the screen or over the strip: ${Math.round(s.left)}, ${Math.round(s.top)}, ${Math.round(s.right)}, ${Math.round(s.bottom)}`,
+      );
+    }
+    const falls = box('.chart-falls');
+    if (
+      falls !== null &&
+      Math.min(falls.right, s.right) - Math.max(falls.left, s.left) > 0.5 &&
+      Math.min(falls.bottom, s.bottom) - Math.max(falls.top, s.top) > 0.5
+    ) {
+      out.push('the sheet covers the countdown');
+    }
+    // Paper: the chart's paper, opaque, with its grain, in ink.
+    const st = getComputedStyle(sheet);
+    if (
+      st.backgroundColor !== 'rgb(239, 228, 200)' ||
+      st.color !== 'rgb(59, 46, 34)' ||
+      !st.backgroundImage.startsWith('url(')
+    ) {
+      out.push(`the sheet is ${st.backgroundColor}, its ink ${st.color}`);
+    }
+    for (const el of [
+      sheet,
+      ...sheet.querySelectorAll<HTMLElement>('.news-masthead h2, .news-box'),
+    ]) {
+      if (el.scrollWidth > el.clientWidth + 1) {
+        out.push(
+          `${el.className || el.tagName} is ${el.scrollWidth - el.clientWidth} px wider than it shows`,
+        );
+      }
+    }
+    const shown = (e: Element) => {
+      const r = e.getBoundingClientRect();
+      return r.width > 0 && r.height > 0 && (e as HTMLElement).checkVisibility();
+    };
+    const short = innerHeight <= 420 || (innerHeight <= 700 && innerHeight > innerWidth);
+    const tall = short ? 38 : 40;
+    for (const k of sheet.querySelectorAll('button.news-key')) {
+      const r = k.getBoundingClientRect();
+      if (
+        shown(k) &&
+        (Math.abs(r.height - tall) > 0.5 ||
+          r.width < 43.5 ||
+          getComputedStyle(k).fontSize !== '14px')
+      ) {
+        out.push(
+          `the key “${k.textContent}” is ${Math.round(r.width)} × ${Math.round(r.height)}, not the head’s ${tall}`,
+        );
+      }
+    }
+    for (const k of sheet.querySelectorAll('.news-story')) {
+      const r = k.getBoundingClientRect();
+      if (r.height < 43.5) {
+        out.push(`“${k.textContent?.slice(0, 20)}” is ${Math.round(r.height)} px tall`);
+      }
+      // A story with a place is a tap anywhere on it.
+      const go = k.querySelector('.news-go');
+      if (go !== null) {
+        const reach = getComputedStyle(go, '::after');
+        if (reach.position !== 'absolute' || reach.inset !== '0px') {
+          out.push(`“${k.textContent?.slice(0, 20)}” is not a tap all over`);
+        }
+      }
+    }
+    // The words: body 16 px, none under 13.
+    const words = sheet.querySelector('.news-words');
+    if (words !== null && getComputedStyle(words).fontSize !== '16px') {
+      out.push(`a story’s words are ${getComputedStyle(words).fontSize}`);
+    }
+    const walker = document.createTreeWalker(sheet, NodeFilter.SHOW_TEXT);
+    for (let n = walker.nextNode(); n !== null; n = walker.nextNode()) {
+      const e = n.parentElement;
+      if (
+        e !== null &&
+        (n.textContent ?? '').trim() !== '' &&
+        shown(e) &&
+        Number.parseFloat(getComputedStyle(e).fontSize) < 13
+      ) {
+        out.push(`“${n.textContent?.trim().slice(0, 20)}” is ${getComputedStyle(e).fontSize}`);
+      }
+    }
+    const front = [
+      ...sheet.querySelectorAll(':scope > .news-stories:not(.news-lead) > .news-story'),
+    ];
+    const last = front[front.length - 1];
+    return {
+      out,
+      front:
+        last === undefined
+          ? 0
+          : last.getBoundingClientRect().bottom - s.top + sheet.scrollTop + (s.top - strip.bottom),
+    };
+  });
+}
+
+test('the chart screen’s News tab holds a full day’s edition, a new world’s first, a quiet day’s and an earlier one, on paper, on every screen, its front page within about one and a half screens', async ({
+  page,
+}) => {
+  test.skip(test.info().project.name === 'webgpu', 'the news is the same on either back end');
+  test.setTimeout(150_000);
+  let today: () => object = fullDay;
+  await standInNews(page, () => today());
+  await page.setViewportSize({ width: SCREENS[1].width, height: SCREENS[1].height });
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await openScene(page, 'world=1', true);
+  const now = Date.now();
+  await page.evaluate((now) => {
+    globalThis.keel.newsFromServer();
+    // In the world's last days, its countdown under the strip held upright.
+    globalThis.keel.setWorldEnd({
+      epoch: now - 5 * 86_400_000,
+      ends: now + 2 * 86_400_000,
+      closing: now - 86_400_000,
+    });
+    globalThis.keel.openChart('chart');
+  }, now);
+  // Today's edition not yet read: the News tab's dot.
+  await expect(page.locator('.chart-tab-dot')).toBeVisible();
+  const found: string[] = [];
+  const fronts: string[] = [];
+  const check = async (where: string) => {
+    const { out, front } = await newsFaults(page);
+    for (const f of out) {
+      found.push(`${where}: ${f}`);
+    }
+    return front;
+  };
+  const open = async (edition: () => object) => {
+    today = edition;
+    await page.evaluate(() => {
+      globalThis.keel.openChart('chart');
+      globalThis.keel.openNews(null);
+    });
+    await expect(page.locator('.news-edition')).toBeVisible();
+  };
+  const screens = [
+    SCREENS[1],
+    SCREENS[5],
+    ...SCREENS.filter((s) => s !== SCREENS[1] && s !== SCREENS[5]),
+  ];
+  for (const s of screens) {
+    await page.setViewportSize({ width: s.width, height: s.height });
+    await page.waitForFunction(
+      ({ width, height }) => innerWidth === width && innerHeight === height,
+      s,
+    );
+    await open(fullDay);
+    await expect(page.locator('.news-story')).toHaveCount(9);
+    const front = await check(`${s.name}, a full day`);
+    fronts.push(`${s.name}: ${(front / s.height).toFixed(2)}`);
+    if (s === SCREENS[1] && front > 1.5 * s.height) {
+      found.push(`${s.name}: the front page is ${(front / s.height).toFixed(2)} screens`);
+    }
+    await page.locator('.news-older').click();
+    await expect(page.locator('.news-edition')).toContainText('No. 3');
+    await check(`${s.name}, an earlier edition`);
+    await open(firstEdition);
+    await expect(page.locator('.news-lead .news-story')).toHaveCount(2);
+    await check(`${s.name}, a new world’s first edition`);
+    await open(quietDay);
+    await expect(page.locator('.news-figures')).toHaveText('A quiet day on the water.');
+    await check(`${s.name}, a quiet day`);
+  }
+  test
+    .info()
+    .annotations.push({ type: 'the front page, in screens', description: fronts.join('; ') });
+  await page.evaluate(() => globalThis.keel.openChart(null));
   expect(found).toEqual([]);
 });
