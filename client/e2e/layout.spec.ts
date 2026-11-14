@@ -2162,12 +2162,10 @@ test('the list of sailors to watch and the card fit every screen, Watch in view'
       found.push(`${s.name}, the card: Watch is out of view`);
     }
     // Its last story in the news, one line within the card.
-    const line = await page
-      .locator('.watch-card .watch-last-news')
-      .evaluate((e) => ({
-        tall: e.getBoundingClientRect().height,
-        over: e.scrollHeight - e.clientHeight,
-      }));
+    const line = await page.locator('.watch-card .watch-last-news').evaluate((e) => ({
+      tall: e.getBoundingClientRect().height,
+      over: e.scrollHeight - e.clientHeight,
+    }));
     if (line.tall < 39.5 || line.over > 1) {
       found.push(
         `${s.name}, the card: its last story is ${Math.round(line.tall)} px tall, ${line.over} px over`,

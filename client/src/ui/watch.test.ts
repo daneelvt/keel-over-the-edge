@@ -292,7 +292,10 @@ describe('the screen on a boat watched', () => {
     const bar = expand(WatchBar({ view: v, news: () => read++ }));
     expect(buttons(bar)).toEqual([WATCH_ANOTHER, NEWS, SAIL]);
     const key = find(bar, (n) => n.type === 'button' && text(n) === NEWS)[0];
-    (key?.props as unknown as { onClick: () => void }).onClick();
+    if (key === undefined) {
+      throw new Error('no News key');
+    }
+    (key.props as unknown as { onClick: () => void }).onClick();
     expect(read).toBe(1);
     // At sea, watching: the plate keeps its keys.
     expect(buttons(expand(WatchBar({ view: view(mary, true, 'sailing') })))).toEqual([
