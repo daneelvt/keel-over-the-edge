@@ -1200,6 +1200,92 @@ func (q *Queries) RaceResults(ctx context.Context, arg RaceResultsParams) ([]Rac
 	return items, nil
 }
 
+const raceRibbonsOf = `-- name: RaceRibbonsOf :many
+SELECT source, world, at, code, race_name, kind, course_name, boat, coalesce(boat_name, '')::text AS boat_name, fleet, harbour,
+  newcomers, role, coalesce(place, 0)::smallint AS place, coalesce(how, '')::text AS how, coalesce(medal, '')::text AS medal,
+  awards, coalesce(skipper_id, '00000000-0000-0000-0000-000000000000')::uuid AS skipper_id,
+  coalesce(skipper_name, '')::text AS skipper_name, skipper_machine, hung
+FROM race_record
+WHERE account_id = $1 AND role IN ('skipper', 'crew')
+ORDER BY at DESC, id DESC
+OFFSET $2
+LIMIT $3
+`
+
+type RaceRibbonsOfParams struct {
+	AccountID pgtype.UUID
+	Skip      int32
+	Most      int32
+}
+
+type RaceRibbonsOfRow struct {
+	Source         string
+	World          int32
+	At             time.Time
+	Code           string
+	RaceName       string
+	Kind           string
+	CourseName     string
+	Boat           string
+	BoatName       string
+	Fleet          int16
+	Harbour        bool
+	Newcomers      bool
+	Role           string
+	Place          int16
+	How            string
+	Medal          string
+	Awards         []string
+	SkipperID      pgtype.UUID
+	SkipperName    string
+	SkipperMachine bool
+	Hung           bool
+}
+
+// A sailor's lasting records of races sailed, skipper or crew, the newest
+// first: a page of most after the first skip.
+func (q *Queries) RaceRibbonsOf(ctx context.Context, arg RaceRibbonsOfParams) ([]RaceRibbonsOfRow, error) {
+	rows, err := q.db.Query(ctx, raceRibbonsOf, arg.AccountID, arg.Skip, arg.Most)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []RaceRibbonsOfRow
+	for rows.Next() {
+		var i RaceRibbonsOfRow
+		if err := rows.Scan(
+			&i.Source,
+			&i.World,
+			&i.At,
+			&i.Code,
+			&i.RaceName,
+			&i.Kind,
+			&i.CourseName,
+			&i.Boat,
+			&i.BoatName,
+			&i.Fleet,
+			&i.Harbour,
+			&i.Newcomers,
+			&i.Role,
+			&i.Place,
+			&i.How,
+			&i.Medal,
+			&i.Awards,
+			&i.SkipperID,
+			&i.SkipperName,
+			&i.SkipperMachine,
+			&i.Hung,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const raceSettings = `-- name: RaceSettings :one
 SELECT race_ahead, race_daily, race_made, race_owned, extract(epoch FROM race_cutoff)::bigint AS cutoff_seconds,
   harbour_every, harbour_boats, greenhorn_us

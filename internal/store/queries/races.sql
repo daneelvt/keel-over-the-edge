@@ -276,6 +276,19 @@ WHERE account_id = @account_id
 ORDER BY at DESC, id DESC
 LIMIT @most;
 
+-- name: RaceRibbonsOf :many
+-- A sailor's lasting records of races sailed, skipper or crew, the newest
+-- first: a page of most after the first skip.
+SELECT source, world, at, code, race_name, kind, course_name, boat, coalesce(boat_name, '')::text AS boat_name, fleet, harbour,
+  newcomers, role, coalesce(place, 0)::smallint AS place, coalesce(how, '')::text AS how, coalesce(medal, '')::text AS medal,
+  awards, coalesce(skipper_id, '00000000-0000-0000-0000-000000000000')::uuid AS skipper_id,
+  coalesce(skipper_name, '')::text AS skipper_name, skipper_machine, hung
+FROM race_record
+WHERE account_id = @account_id AND role IN ('skipper', 'crew')
+ORDER BY at DESC, id DESC
+OFFSET @skip
+LIMIT @most;
+
 -- name: HangSpoon :execrows
 -- Hangs the wooden spoon a sailor was given in a world's race from their
 -- boats' sterns, or takes it down: only on a record of theirs that has it.

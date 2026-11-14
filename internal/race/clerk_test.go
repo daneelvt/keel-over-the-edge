@@ -284,6 +284,16 @@ func raceOfThree(t *testing.T, restart int) {
 	if c, err := s.db.RaceCountsOf(s.ctx, owner.ID); err != nil || c.Sailed != 0 || c.Ran != 1 {
 		t.Errorf("the owner's counts: %+v, %v", c, err)
 	}
+	// The ribbons: the races sailed, by the page; the owner's run not one.
+	if rbs, err := s.db.RaceRibbonsOf(s.ctx, sailors[2].ID, 0, 5); err != nil || len(rbs) != 1 || rbs[0].Code != card.Code {
+		t.Errorf("the last boat's ribbons: %+v, %v", rbs, err)
+	}
+	if rbs, err := s.db.RaceRibbonsOf(s.ctx, sailors[2].ID, 1, 5); err != nil || len(rbs) != 0 {
+		t.Errorf("the last boat's ribbons past the first: %+v, %v", rbs, err)
+	}
+	if rbs, err := s.db.RaceRibbonsOf(s.ctx, owner.ID, 0, 5); err != nil || len(rbs) != 0 {
+		t.Errorf("the owner's ribbons: %+v, %v", rbs, err)
+	}
 	// The spoon hung by the last boat's skipper alone, and taken down.
 	if err := s.svc.Spoon(s.ctx, sailors[0], card.Code, true); !errors.Is(err, ErrNotFound) {
 		t.Errorf("the winner hangs a spoon: %v", err)
