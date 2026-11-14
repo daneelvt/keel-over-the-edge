@@ -5,9 +5,10 @@
 // the water; the boat and how many watch it; the weather at the boat;
 // where it is (how far inside the lip, the nearest charted island, the
 // land in sight), unless the viewer's own boat is in the water; this
-// voyage's closest pass to the falls and its latest charting; Follow;
+// voyage's closest pass to the falls and its latest charting; the last
+// story this world naming them, a tap opening the news on its day; Follow;
 // a link to watch; and Watch, always in view at the bottom. Read again
-// every 5 seconds while open. And what the list and the card share: a
+// every 5 seconds while open, the news once. And what the list and the card share: a
 // row's facts as the server sends them, the cog and the boat's kind.
 
 import { useEffect, useState } from 'preact/hooks';
@@ -20,6 +21,8 @@ import { lookOf } from '../catalog/looks';
 import { type PocketSky, SKY_WORDS } from '../chart/pocketsky';
 import { SkyDecal } from './decals';
 import { openLog, THEIR_LOG } from './loglazy';
+import { openNews } from './newslazy';
+import { headWords, type NewsStory, storyText } from './newswords';
 import { PlayerText } from './player';
 import {
   agentText,
@@ -53,6 +56,9 @@ import {
 
 /** The card's key to the sailor's log. */
 const LOG = 'Log';
+
+/** The card's line of the news. */
+export const LAST_IN_THE_NEWS = 'Last in the news';
 
 /** Why a sailor followed or shown cannot be watched now, by kind: a machine sailor out of the water, or anyone else. */
 export type Gone = 'not-at-sea' | 'cannot';
@@ -139,6 +145,28 @@ export async function readCard(name: string, f: Fetch = browserFetch): Promise<C
     }
     const card = (await res.json()) as CardFacts;
     return typeof card?.name === 'string' ? { card } : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * The latest story this world naming a sailor, if the reader may name them
+ * (GET /api/news?name=); null for none, or when it cannot be read.
+ */
+export async function readNewsAbout(
+  name: string,
+  f: Fetch = browserFetch,
+): Promise<NewsStory | null> {
+  try {
+    const res = await f(`/api/news?${new URLSearchParams({ name })}`, {
+      credentials: 'same-origin',
+    });
+    if (res.status !== 200) {
+      return null;
+    }
+    const page = (await res.json()) as { stories?: NewsStory[] };
+    return page.stories?.[0] ?? null;
   } catch {
     return null;
   }
@@ -320,10 +348,23 @@ function Voyage({ c }: { c: CardFacts }) {
   );
 }
 
+/** The sailor's last story this world, in one line: a tap opens the news on its day. */
+function LastNews({ s }: { s: NewsStory }) {
+  return (
+    <section class="watch-card-part" aria-label={LAST_IN_THE_NEWS}>
+      <h3>{LAST_IN_THE_NEWS}</h3>
+      <button type="button" class="watch-last-news" onClick={() => openNews(s.day ?? null)}>
+        <span class="watch-last-news-head">{headWords(s.head)}.</span> {storyText(s)}
+      </button>
+    </section>
+  );
+}
+
 /**
  * The card as drawn: c is the last read, or the row until the card is
  * read (read false); gone greys it and takes Watch away; withheld says
- * where is kept from a player whose own boat is in the water.
+ * where is kept from a player whose own boat is in the water; news is the
+ * sailor's last story, or null.
  */
 export function SailorCard({
   c,
@@ -334,6 +375,7 @@ export function SailorCard({
   back,
   follow,
   watch,
+  news = null,
 }: {
   c: CardFacts;
   read: boolean;
@@ -343,6 +385,7 @@ export function SailorCard({
   back: () => void;
   follow: (on: boolean) => void;
   watch: () => void;
+  news?: NewsStory | null;
 }) {
   const followed = c.followed === true;
   const lively = gone === null ? livelyLine(c.lively) : '';
@@ -403,6 +446,7 @@ export function SailorCard({
             <Weather c={c} />
             <Where c={c} withheld={withheld} />
             <Voyage c={c} />
+            {news !== null ? <LastNews s={news} /> : null}
           </>
         ) : (
           <p class="watch-faint" aria-live="polite">
@@ -438,6 +482,7 @@ export function WatchCard({
   followed,
   read = readCard,
   follow = postFollow,
+  readNews = readNewsAbout,
 }: {
   first: WatchRow;
   withheld: boolean;
@@ -446,8 +491,22 @@ export function WatchCard({
   followed: (name: string, on: boolean) => void;
   read?: (name: string) => Promise<CardAnswer>;
   follow?: (name: string, on: boolean) => Promise<FollowAnswer>;
+  readNews?: (name: string) => Promise<NewsStory | null>;
 }) {
   const name = first.name;
+  const [news, setNews] = useState<NewsStory | null>(null);
+  useEffect(() => {
+    let live = true;
+    setNews(null);
+    void readNews(name).then((s) => {
+      if (live) {
+        setNews(s);
+      }
+    });
+    return () => {
+      live = false;
+    };
+  }, [name]);
   const [c, setC] = useState<CardFacts>(first);
   const [isRead, setRead] = useState(false);
   const [gone, setGone] = useState<Gone | null>(first.gone ?? null);
@@ -498,6 +557,7 @@ export function WatchCard({
       back={back}
       follow={(on) => void toggle(on)}
       watch={watch}
+      news={news}
     />
   );
 }

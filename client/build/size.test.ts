@@ -4,7 +4,14 @@ import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { gzipSync } from 'node:zlib';
 import { describe, expect, test } from 'vitest';
 import { catalog } from '../src/catalog';
-import { eagerAssets, eagerModels, logAsset, SAILOR_BUDGETS, transcoderAsset } from './size';
+import {
+  eagerAssets,
+  eagerModels,
+  logAsset,
+  newsAsset,
+  SAILOR_BUDGETS,
+  transcoderAsset,
+} from './size';
 
 test('the first download is the page’s scripts, preloaded modules and styles', () => {
   const html = `<script type="module" crossorigin src="/assets/main-1.js"></script>
@@ -24,6 +31,13 @@ test('the log’s chunk is told from the game’s other chunks', () => {
   expect(logAsset('log-DUBcYPk9.css')).toBe(true);
   expect(logAsset('logwords-DhvZ2t9V.js.map')).toBe(false);
   expect(logAsset('lookstage-1.js')).toBe(false);
+});
+
+test('the news sheet’s chunk is told from the game’s other chunks', () => {
+  expect(newsAsset('news-Cq3x_9aB.js')).toBe(true);
+  expect(newsAsset('news-DUBcYPk9.css')).toBe(true);
+  expect(newsAsset('newslazy-DhvZ2t9V.js')).toBe(false);
+  expect(newsAsset('newswords-DhvZ2t9V.js')).toBe(false);
 });
 
 test('the log’s fonts, Libre Caslon Text’s two styles, are under 60 KB together', () => {

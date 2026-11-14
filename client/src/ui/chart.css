@@ -14,6 +14,22 @@
   src: url("../fonts/IMFellEnglish-Italic.woff2") format("woff2");
 }
 
+/* Libre Caslon Text, drawn for text at 16 px: the log's words and the
+   news's. Each file loads only when words are first set in it. */
+@font-face {
+  font-family: "Libre Caslon Text";
+  font-style: normal;
+  font-display: swap;
+  src: url("../fonts/LibreCaslonText-Regular.woff2") format("woff2");
+}
+
+@font-face {
+  font-family: "Libre Caslon Text";
+  font-style: italic;
+  font-display: swap;
+  src: url("../fonts/LibreCaslonText-Italic.woff2") format("woff2");
+}
+
 /* The chart over the whole screen: the picture is the renderer's; these are
    the pointers' surface, the names over it, and its panels. */
 .chart-screen {
@@ -199,6 +215,24 @@
   color: var(--gold);
 }
 
+/* A story not yet read in today's edition: a gold dot over the News tab's
+   corner, the tab no wider. */
+.chart-tab {
+  position: relative;
+}
+
+.chart-tab-dot {
+  position: absolute;
+  top: 6px;
+  right: 2px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--gold);
+  box-shadow: 0 0 4px rgb(232 180 80 / 70%);
+  pointer-events: none;
+}
+
 .chart-position {
   flex: 1 1 auto;
   display: flex;
@@ -259,16 +293,6 @@
 .chart-falls.closing {
   color: var(--gold);
   font-weight: 500;
-}
-
-.news-column h3 {
-  margin: 8px 0 4px;
-  font-family: "IM Fell English SC", serif;
-  font-weight: 400;
-}
-
-.news-world {
-  padding: 4px 0;
 }
 
 .chart-panel {
@@ -365,15 +389,13 @@
   border-bottom: 1px solid rgb(59 46 34 / 30%);
 }
 
-.chart-list ul,
-.news-items {
+.chart-list ul {
   margin: 0;
   padding: 0;
   list-style: none;
 }
 
-.chart-list li button,
-.news-items li button {
+.chart-list li button {
   display: grid;
   grid-template-columns: 1fr auto;
   gap: 0 12px;
@@ -385,10 +407,6 @@
   text-align: left;
 }
 
-.news-items li button {
-  display: block;
-}
-
 .chart-list-kind,
 .chart-credit {
   font-style: italic;
@@ -397,54 +415,6 @@
 
 .chart-list-where {
   font-variant-numeric: tabular-nums;
-}
-
-.news-masthead {
-  text-align: center;
-  border-bottom: 3px double var(--chart-ink);
-  margin-bottom: 8px;
-}
-
-.news-masthead h2 {
-  font-family: "IM Fell English SC", Georgia, serif;
-  font-size: 26px;
-}
-
-.news-masthead p {
-  font-style: italic;
-  letter-spacing: 0.1em;
-}
-
-.news-title {
-  letter-spacing: 0.04em;
-}
-
-/* The day in figures, under the masthead. */
-.news-figures {
-  font-style: italic;
-  margin: 0 0 8px;
-}
-
-.news-fresh,
-.news-more {
-  width: 100%;
-  border: 1px solid rgb(59 46 34 / 40%);
-  border-radius: 8px;
-  background: rgb(255 255 255 / 30%);
-}
-
-/* The world's other editions, a row of keys. */
-.news-days {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin-top: 8px;
-}
-
-.news-days .news-more {
-  width: auto;
-  flex: 1 0 auto;
-  min-height: 40px;
 }
 
 /* The lights' characters, printed only close in. */

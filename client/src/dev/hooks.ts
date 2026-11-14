@@ -118,7 +118,10 @@ import type { Barometer } from '../ui/barometer';
 import type { ShipsClock } from '../ui/clock';
 import type { Countdown } from '../ui/countdown';
 import type { DeckView } from '../ui/decklazy';
+import { setLogHost } from '../ui/loglazy';
 import { downwindLine, type SailState } from '../ui/model';
+import { openNews, setNewsHost } from '../ui/newslazy';
+import { serverNews } from '../ui/newsread';
 import type { Settings } from '../ui/settings';
 import type { StatementsView } from '../ui/statementlazy';
 import type { WatchView } from '../ui/watchlazy';
@@ -306,6 +309,8 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
   let lifeRaised = 0;
   // What the screen of the latest scene of sailing together asked of it.
   let deckCalls: string[] = [];
+  // The view before the sea, shown by watchWaiting: what takes it away.
+  let waiting: (() => void) | null = null;
   // Every notice shown, in order, for tests that look after it has gone.
   const noticesShown: string[] = [];
   sailing.chart?.notices.shown.subscribe((s) => {
@@ -1766,6 +1771,43 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
       document.body.append(host);
       const gone = () => host.remove();
       render(h(LeaveWindow, { className: 'panel watch-list', leave: gone, stay: gone }), host);
+    },
+    /**
+     * The view before the sea while a watch waits, as after a refused one:
+     * the plate at the foot of the cover with its keys and the day's news,
+     * which (as before the sea) opens on its own, as do the logs from it;
+     * false takes it away, the chart screen's News and Log tabs again where
+     * they open. Resolves once it is drawn.
+     */
+    async watchWaiting(sailor: string | null): Promise<void> {
+      waiting?.();
+      waiting = null;
+      const c = chartParts().chart;
+      if (sailor === null) {
+        setLogHost((who) => c.showLog(who));
+        setNewsHost((day) => c.showNews(day));
+        return;
+      }
+      setLogHost(null);
+      setNewsHost(null);
+      const { showWatchWaiting } = await import('../ui/watch');
+      waiting = showWatchWaiting(
+        document.body,
+        {
+          watching: signal(null),
+          spectating: signal(false),
+          status: signal('idle'),
+          ended: signal({ why: 'left', sailor }),
+          place: signal(null),
+          boatPlace: signal(null),
+          watchers: signal(0),
+          list: signal(false),
+          watch: () => {},
+          sail: () => {},
+          unwatch: () => {},
+        },
+        () => openNews(null),
+      );
     },
     /** What the page did from the tap to the world's reveal; null before it, or in the sandbox. */
     revealed(): Revealed | null {
@@ -4118,6 +4160,21 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
     /** Opens the chart, its list, the news or the log; null closes it. */
     openChart(mode: ChartMode | null): void {
       chartParts().chart.show(mode);
+    },
+
+    /** Opens the chart screen's News tab on a day's edition (2006-01-02), today's for null. */
+    openNews(day: string | null = null): void {
+      chartParts().chart.showNews(day);
+    },
+
+    /** Reads the news from the server's route (GET /api/news, which a test may stand in for), not from the sandbox's own chart. */
+    newsFromServer(): void {
+      chartParts().sea.news = serverNews;
+    },
+
+    /** How many listen for what the chart charts: the chart's own, and the news sheet's while it is open. */
+    chartListeners(): number {
+      return chartParts().chart.store.listening;
     },
 
     /** Opens the chart screen's Log tab on a log: the player's own, a sailor's or a machine sailor's. */

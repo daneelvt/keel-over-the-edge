@@ -1,22 +1,9 @@
 /* SPDX-License-Identifier: AGPL-3.0-only */
 
 /* The log: the chart's paper, the logbook's hand. Libre Caslon Text for
-   its words at 16 px (drawn for text that size); IM Fell English for the
-   name and the figures, at 20 px and up, where its rough letters read. */
-
-@font-face {
-  font-family: "Libre Caslon Text";
-  font-style: normal;
-  font-display: swap;
-  src: url("../fonts/LibreCaslonText-Regular.woff2") format("woff2");
-}
-
-@font-face {
-  font-family: "Libre Caslon Text";
-  font-style: italic;
-  font-display: swap;
-  src: url("../fonts/LibreCaslonText-Italic.woff2") format("woff2");
-}
+   its words at 16 px (drawn for text that size; its faces are the chart's
+   styles'); IM Fell English for the name and the figures, at 20 px and up,
+   where its rough letters read. */
 
 .log-sheet {
   --log-key: 40px;

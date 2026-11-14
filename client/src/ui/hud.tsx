@@ -414,7 +414,11 @@ function Screen(props: ScreenProps) {
               ? null
               : (mode) => {
                   setMenu(false);
-                  sea.chart.show(mode);
+                  if (mode === 'news') {
+                    sea.chart.showNews(null);
+                  } else {
+                    sea.chart.show(mode);
+                  }
                 }
           }
           fly={

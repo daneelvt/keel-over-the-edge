@@ -10,7 +10,8 @@
 // largest look's deck and far levels and clips. And the approval page's,
 // which AI apps open, often on a phone's data: its page, script and
 // styles, held under 30 KB. And the log's chunk, loaded when the log is
-// first opened, held under 60 KB.
+// first opened, held under 60 KB; and the news sheet's, loaded when the
+// news is first opened, held under 20 KB.
 //
 //   node build/size.ts   (after vite build, in client/)
 
@@ -58,6 +59,14 @@ export const LOG_BUDGET = 60 * 1024;
 /** Whether a built asset is the log's own chunk, its script or its styles. */
 export function logAsset(name: string): boolean {
   return /^log-[\w-]+\.(js|css)$/.test(name);
+}
+
+/** The news sheet's budget, in bytes gzipped: its script and styles, loaded when the news is first opened. */
+export const NEWS_BUDGET = 20 * 1024;
+
+/** Whether a built asset is the news sheet's own chunk, its script or its styles. */
+export function newsAsset(name: string): boolean {
+  return /^news-[\w-]+\.(js|css)$/.test(name);
 }
 
 /** The approval page's budget, in bytes: the page with what it loads before it runs. */
@@ -143,6 +152,11 @@ function main(): void {
     `The log, when first opened, gzipped: **${(log / 1024).toFixed(1)} KB** of ${LOG_BUDGET / 1024} KB.`,
     '',
   );
+  const news = assets.filter(newsAsset).reduce((n, f) => n + gzipped(join(dist, 'assets', f)), 0);
+  lines.push(
+    `The news sheet, when first opened, gzipped: **${(news / 1024).toFixed(1)} KB** of ${NEWS_BUDGET / 1024} KB.`,
+    '',
+  );
   process.stdout.write(`${lines.join('\n')}\n`);
   const summary = process.env.GITHUB_STEP_SUMMARY;
   if (summary !== undefined && summary !== '') {
@@ -150,6 +164,10 @@ function main(): void {
   }
   if (log === 0 || log > LOG_BUDGET) {
     process.stderr.write('size: the log is not its own chunk, or is over its budget\n');
+    process.exitCode = 1;
+  }
+  if (news === 0 || news > NEWS_BUDGET) {
+    process.stderr.write('size: the news sheet is not its own chunk, or is over its budget\n');
     process.exitCode = 1;
   }
   if (approve > APPROVE_BUDGET) {

@@ -11,7 +11,8 @@ import type { ChartEntry } from '../net/messages';
 import { type Physics, VISIBILITY, WIND_VALUE, WIND_VALUES } from '../predict/physics';
 import type { SeaScene } from '../render/scene';
 import { hourAt, skyPeriods } from '../sky/skytime';
-import { type ChartSea, chartNews, type NewsSource } from '../ui/chart';
+import { type ChartSea, chartNews } from '../ui/chart';
+import type { NewsSource } from '../ui/newsread';
 import { type NoticeKind, Notices } from '../ui/notices';
 import { Chart } from './chart';
 import type { Forecasting } from './forecasting';
@@ -171,7 +172,6 @@ export function makeChart(
     scale: catalog.sky.scale,
     lip: w.disk.radius,
     characters: w.lights.characters.map((c) => c.notation),
-    columns: catalog.news.columns.map((c) => ({ id: c.id, title: c.title, of: c.of })),
     news:
       news ??
       chartNews(

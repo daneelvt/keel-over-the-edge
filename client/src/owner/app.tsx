@@ -529,7 +529,7 @@ function BoatRow({
         <td>{b.boat}</td>
         <td>
           {b.sailor || '—'}
-          {b.machine ? ' (AI)' : ''}
+          {b.machine ? ' ⚙' : ''}
           {b.machine ? (
             <div class="small agent" data-field="agent">
               {agentWords(b.agent)}
@@ -1961,7 +1961,7 @@ function App() {
                   </button>{' '}
                   <span class="small">
                     {c.by === '' ? 'known' : <bdi>{c.by}</bdi>}
-                    {c.ai ? ' (AI)' : ''}, {new Date(c.at).toLocaleString()}, worth{' '}
+                    {c.ai ? ' ⚙' : ''}, {new Date(c.at).toLocaleString()}, worth{' '}
                     {c.worth.toFixed(1)}
                   </span>
                 </li>

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 // The chart as the screen uses it: whether it is open, and as the chart,
-// its list or the news; what is picked on it, a charted thing or a weather
+// its list, the news or a log; what is picked on it, a charted thing or a weather
 // system; the course steered for a system from its box; and the notices
 // its chartings raise: one for each place the player charts, and one for
 // each great discovery anyone does.
@@ -58,6 +58,8 @@ export class Chart {
   readonly playing = signal(false);
   /** Whose log the Log tab shows. */
   readonly logOf = signal<LogWho>({ kind: 'own' });
+  /** The edition the News tab was last asked for: a day's (2006-01-02), or today's for null; each asking a new one. */
+  readonly newsDay = signal<{ day: string | null }>({ day: null });
   /** The weather's layers, each switched on or off. */
   readonly layers = signal<Layers>({ ...LAYERS_AT_FIRST });
   /** The clock notices are raised by, ms. */
@@ -106,9 +108,17 @@ export class Chart {
     this.show('log');
   }
 
-  /** Opens the chart at a point. */
+  /** Opens the News tab on a day's edition, or today's for null. */
+  showNews(day: string | null): void {
+    this.newsDay.value = { day };
+    this.show('news');
+  }
+
+  /** Opens the chart at a point, no box open. */
   showPoint(east: number, north: number): void {
     this.show('chart');
+    this.picked.value = null;
+    this.tapped.value = null;
     this.view.lookAt(east, north, 4000);
   }
 
