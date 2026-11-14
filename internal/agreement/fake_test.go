@@ -53,7 +53,9 @@ type fakeGitHub struct {
 	nextID   int64
 	revoked  []string
 	failing  bool // every repository call answers 502
-	users    map[string]User
+	// strangers counts tokens made for another account's installation.
+	strangers int
+	users     map[string]User
 }
 
 type fakePull struct {
@@ -135,22 +137,34 @@ func (f *fakeGitHub) serve(w http.ResponseWriter, r *http.Request) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	path := r.URL.Path
-	appCall := strings.HasPrefix(path, "/app/") || strings.HasSuffix(path, "/installation")
+	appCall := path == "/app" || strings.HasPrefix(path, "/app/") || strings.HasSuffix(path, "/installation")
 	switch {
 	case appCall && !f.checkJWT(r):
 		writeJSONT(w, 401, map[string]string{"message": "A JSON web token could not be decoded"})
 		return
+	case path == "/app":
+		writeJSONT(w, 200, map[string]any{"id": testAppID, "owner": userJSON(&theOwner)})
+		return
 	case path == "/repos/o/r/installation":
-		writeJSONT(w, 200, map[string]any{"id": 1})
+		writeJSONT(w, 200, map[string]any{"id": 1, "account": userJSON(&theOwner)})
+		return
+	case path == "/repos/x/y/installation":
+		// The public App, installed by someone else.
+		writeJSONT(w, 200, map[string]any{"id": 2, "account": map[string]any{"id": 99, "login": "stranger", "type": "User"}})
 		return
 	case strings.HasSuffix(path, "/installation"):
 		writeJSONT(w, 404, map[string]string{"message": "Not Found"})
 		return
 	case path == "/app/installations":
-		writeJSONT(w, 200, []map[string]any{{"id": 1}})
+		writeJSONT(w, 200, []map[string]any{{"id": 1, "account": userJSON(&theOwner)},
+			{"id": 2, "account": map[string]any{"id": 99, "login": "stranger", "type": "User"}}})
 		return
 	case path == "/app/installations/1/access_tokens" && r.Method == http.MethodPost:
 		writeJSONT(w, 201, map[string]any{"token": "inst-token", "expires_at": time.Now().Add(time.Hour)})
+		return
+	case strings.HasPrefix(path, "/app/installations/") && strings.HasSuffix(path, "/access_tokens"):
+		f.strangers++
+		writeJSONT(w, 201, map[string]any{"token": "stranger-token", "expires_at": time.Now().Add(time.Hour)})
 		return
 	case path == "/login/oauth/access_token":
 		r.ParseForm()

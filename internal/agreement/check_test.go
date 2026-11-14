@@ -6,6 +6,7 @@ import (
 	"context"
 	"crypto/x509"
 	"encoding/pem"
+	"slices"
 	"strings"
 	"testing"
 
@@ -187,8 +188,8 @@ func TestCheckClosed(t *testing.T) {
 		t.Errorf("waiting after close: %v", got)
 	}
 	// Another repository the App is not on: nothing waits there either.
-	m.SetWaiting(ctx, store.PullRef{Repo: "x/y", Number: 1}, "s", []int64{7})
-	if err := c.Check(ctx, store.PullRef{Repo: "x/y", Number: 1}); err != nil {
+	m.SetWaiting(ctx, store.PullRef{Repo: "a/b", Number: 1}, "s", []int64{7})
+	if err := c.Check(ctx, store.PullRef{Repo: "a/b", Number: 1}); err != nil {
 		t.Fatal(err)
 	}
 	if got, _ := m.Waiting(ctx); len(got) != 0 {
@@ -219,6 +220,31 @@ func TestSweep(t *testing.T) {
 	}
 }
 
+// TestStrangersInstallation: the App is public, so that anyone may sign in
+// through it, and so anyone may install it. On another account's
+// repository it does nothing: no token, no status, no comment, and the
+// sweep passes it over.
+func TestStrangersInstallation(t *testing.T) {
+	ctx := context.Background()
+	f, m, c, _ := setup(t)
+	f.pulls[5] = annsPull()
+	if err := c.Check(ctx, store.PullRef{Repo: "x/y", Number: 5}); err != nil {
+		t.Fatal(err)
+	}
+	if err := c.Sweep(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Equal(c.pending, []store.PullRef{{Repo: "o/r", Number: 5}}) {
+		t.Errorf("the sweep queued %v", c.pending)
+	}
+	if f.strangers != 0 || len(f.statuses) != 0 || len(f.comments) != 0 {
+		t.Errorf("on a stranger's repository: %d tokens, %d statuses, %d comments", f.strangers, len(f.statuses), len(f.comments))
+	}
+	if got, _ := m.Waiting(ctx); len(got) != 0 {
+		t.Errorf("waiting on a stranger's repository: %v", got)
+	}
+}
+
 func TestEnqueueOnce(t *testing.T) {
 	c := &Checker{}
 	pr := store.PullRef{Repo: "o/r", Number: 1}
@@ -237,7 +263,7 @@ func TestJWT(t *testing.T) {
 	if _, err := g.token(context.Background(), "o/r"); err != nil {
 		t.Fatalf("the installation's token, with the App's JWT: %v", err)
 	}
-	if _, err := g.token(context.Background(), "x/y"); err == nil || !strings.Contains(err.Error(), "not installed") {
+	if _, err := g.token(context.Background(), "a/b"); err == nil || !strings.Contains(err.Error(), "not installed") {
 		t.Errorf("a repository the App is not on: %v", err)
 	}
 	other := f.client()

@@ -676,13 +676,22 @@ Check:
 - [ ] `kubectl -n keel get externalsecret keel-db-agreement keel-agreement`:
       both `SecretSynced` (`keel-agreement` holds nothing yet: a value
       Infisical lacks is left out, not an error).
+- [ ] `kubectl -n keel get cluster keel-db -o
+      jsonpath='{.status.managedRolesStatus.byStatus}'` lists `agreement`
+      as `reconciled`. If CloudNativePG looked for the role's Secret before
+      it synced, it lists it `pending-reconciliation` ("secret not found")
+      and does not look again by itself: `kubectl -n keel annotate cluster
+      keel-db keel/roles-retry=$(date +%s) --overwrite` makes it (the
+      database does not restart).
 - [ ] `kubectl -n keel get deploy keel-agreement` is ready, and
-      `https://play.keelovertheedge.com/agreement` says signing is not
-      open yet. If it is not ready and its log says it may not read its
-      tables, the role was made after keel's migration ran, which grants
-      them: the next promote grants them, or at a quiet hour `kubectl -n
-      keel rollout restart deploy/keel` (the world pauses for keel's
-      restart).
+      `https://play.keelovertheedge.com/agreement` answers. If it is not
+      ready and its log says it may not read its tables, the role was made
+      after keel's migration ran, which grants them: the next promote
+      grants them, or at once, with no restart: `kubectl -n keel exec
+      keel-db-1 -c postgres -- psql -d keel -c "GRANT SELECT, INSERT,
+      UPDATE ON agreement_signature TO agreement; GRANT SELECT, INSERT,
+      UPDATE, DELETE ON agreement_pull TO agreement;"` (on the primary,
+      if it is not `keel-db-1`).
 
 ### 15.2 The App
 
@@ -696,7 +705,7 @@ openssl rand -hex 32
 
 | Field | Value |
 |---|---|
-| GitHub App name | `Keel Over the Edge contributor agreement` |
+| GitHub App name | `Keel Over the Edge CLA` (GitHub allows 34 characters) |
 | Homepage URL | `https://play.keelovertheedge.com/agreement` |
 | Callback URL | `https://play.keelovertheedge.com/agreement/callback` (one, no other) |
 | Expire user authorization tokens | on |
@@ -711,7 +720,7 @@ openssl rand -hex 32
 | Organization permissions | none |
 | Account permissions | none: signing in tells the keeper who someone is without any |
 | Subscribe to events | **Pull request** alone |
-| Where can this GitHub App be installed? | **Only on this account** |
+| Where can this GitHub App be installed? | **Any account**: GitHub lets only a private App's owner sign in through it. Others may install it too, and the keeper passes their installations over |
 
 **Create GitHub App**. On its **General** page:
 
@@ -797,6 +806,30 @@ Check:
 - [ ] The App's permissions are exactly those of 15.2, and it is
       subscribed to **Pull request** alone.
 - [ ] The next pull request to the game's repository has `pr-agreement`.
+
+### 15.5 The door opened
+
+Only after 15.4, with the App on this repository:
+
+1. In the pull request that opens the door, write the App's ID as
+   `pr-agreement`'s `integration_id` in `.github/settings/rulesets/main.json`.
+   It must be the ID of 15.3's ConfigMap: `go test ./tools/github` fails
+   until the two agree, and while either is missing.
+2. Make the label: `gh label create agreement-checked --repo
+   daneelvt/keel-over-the-edge --color c5def5 --description "The owner
+   checked authors the contributor agreement's check cannot match"`.
+3. Merge it, then `go run ./tools/github -apply`. It writes the rulesets
+   first, so `main` requires `pr-agreement` from the App alone, and only
+   then lets anyone open a pull request.
+
+Check:
+
+- [ ] `go run ./tools/github -check` reports no difference.
+- [ ] A pull request of yours has `pr-agreement` passed, with no comment.
+- [ ] As the second account, a new pull request to the game's repository
+      waits for its workflows' approval, gets the App's comment, and passes
+      `pr-agreement` once that account has signed (it signed in the trial).
+- [ ] docs/repository-settings.md's "Pull requests from outside", checked.
 
 ### Rotating the App's private key and webhook secret
 
