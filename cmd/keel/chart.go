@@ -80,16 +80,6 @@ func (c *worldChart) restore(ctx context.Context, db database, world [16]byte, w
 	return nil
 }
 
-// news is the news of the world sailed: an api.NewsSource.
-type news struct {
-	db    database
-	world [16]byte
-}
-
-func (n news) News(ctx context.Context, before *[16]byte, limit int) ([]store.News, error) {
-	return n.db.News(ctx, n.world, before, limit)
-}
-
 // noticeKinds are the kinds of notice a sailor may switch off, by id.
 func noticeKinds(cat *catalog.Catalog) []string {
 	var out []string

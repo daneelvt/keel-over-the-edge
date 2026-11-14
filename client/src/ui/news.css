@@ -1,0 +1,295 @@
+/* SPDX-License-Identifier: AGPL-3.0-only */
+
+/* The news sheet: a period front page on the chart's paper, its grain laid
+   over it. The masthead in IM Fell English's capitals, the edition's line
+   in italic between rules; the words in Libre Caslon Text at 16 px (drawn
+   for text that size), each story's headword in IM Fell's small capitals;
+   hairline rules between the stories; the reader's own box ruled round.
+   One column on every phone; held sideways it keeps its measure, centred,
+   its masthead shorter. */
+
+.news-sheet {
+  --news-rule: rgb(59 46 34 / 26%);
+  --news-key: 40px;
+  box-sizing: border-box;
+  overscroll-behavior: contain;
+  padding: 10px 14px 16px;
+  /* Opaque paper, with a laid paper's grain: fibres along the sheet. */
+  background-color: var(--paper);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.04 0.7' numOctaves='2' seed='7' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0.35 0 0 0 0 0.27 0 0 0 0 0.16 1.5 0 0 0 -0.62'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23g)' opacity='0.3'/%3E%3C/svg%3E");
+  font:
+    16px / 1.36 "Libre Caslon Text",
+    Georgia,
+    serif;
+}
+
+.news-sheet p {
+  margin: 0;
+}
+
+/* The masthead: its name in IM Fell's capitals on one line, as large as
+   the sheet's measure allows; the edition's number and date in italic
+   between a rule and a double. */
+.news-masthead {
+  text-align: center;
+  border-bottom: 3px double var(--chart-ink);
+}
+
+.news-masthead h2 {
+  margin: 0;
+  font:
+    400 clamp(20px, calc((100vw - 52px) / 12), 28px) / 1.1 "IM Fell English SC",
+    Georgia,
+    serif;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+}
+
+.news-masthead .news-edition {
+  margin-top: 5px;
+  padding: 3px 0 4px;
+  border-top: 1px solid var(--chart-ink);
+  font-style: italic;
+  font-size: 15px;
+}
+
+/* The day in figures: one sentence of counts, in italic. */
+.news-figures {
+  padding: 7px 0 8px;
+  border-bottom: 1px solid var(--chart-ink);
+  font-style: italic;
+}
+
+.news-status {
+  padding: 10px 0;
+  font-style: italic;
+}
+
+.news-stories {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* A story: a touch of 44 px at least, ruled from the next. One with a
+   place is a tap anywhere on it: its › key, at the end of its words,
+   reaches over the whole story, its names standing above it. */
+.news-story {
+  position: relative;
+  box-sizing: border-box;
+  min-height: 44px;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--news-rule);
+}
+
+.news-words {
+  overflow-wrap: anywhere;
+}
+
+.news-head {
+  font:
+    17px / 1 "IM Fell English SC",
+    Georgia,
+    serif;
+  letter-spacing: 0.03em;
+}
+
+/* A story not read before. */
+.news-new {
+  margin-left: 5px;
+  color: var(--magenta);
+  font:
+    italic 13px / 1 "Libre Caslon Text",
+    Georgia,
+    serif;
+  letter-spacing: 0.02em;
+}
+
+.news-sheet button.news-go {
+  min-height: 0;
+  margin: 0 0 0 4px;
+  padding: 0 2px;
+  border: 0;
+  background: none;
+  color: rgb(59 46 34 / 62%);
+  font:
+    20px / 1 "IM Fell English",
+    Georgia,
+    serif;
+  vertical-align: -1px;
+  cursor: pointer;
+}
+
+.news-go::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+}
+
+.news-tap:active {
+  background: rgb(59 46 34 / 8%);
+}
+
+.news-go:focus-visible,
+.news-name:focus-visible,
+.news-key:focus-visible {
+  outline: 2px solid var(--magenta);
+  outline-offset: 1px;
+}
+
+/* A name whose log the reader may read: a link to it, over the story's tap. */
+.news-sheet button.news-name {
+  position: relative;
+  z-index: 1;
+  display: inline;
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  text-decoration: underline dotted rgb(59 46 34 / 70%) 1px;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
+/* Its touch reaches above and below the line. */
+.news-name::after {
+  content: "";
+  position: absolute;
+  inset: -9px -3px;
+}
+
+.news-sheet .machine-mark {
+  margin-left: 0.2em;
+}
+
+/* A story come in while the sheet is open, lit a moment. */
+.news-arrived {
+  animation: news-in 6s ease-out;
+}
+
+@keyframes news-in {
+  from {
+    background-color: rgb(201 162 76 / 42%);
+  }
+
+  to {
+    background-color: transparent;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .news-arrived {
+    animation: none;
+    background-color: rgb(201 162 76 / 16%);
+  }
+}
+
+/* A new world's first edition: its arrival and the last world in review,
+   above the front page, a double rule under them. */
+.news-lead {
+  border-bottom: 3px double var(--chart-ink);
+}
+
+.news-lead .news-story:last-child {
+  border-bottom: 0;
+}
+
+/* The reader's own box, ruled round. */
+.news-box {
+  margin: 12px 0 2px;
+  padding: 0 10px 2px;
+  border: 1px solid var(--chart-ink);
+  box-shadow:
+    inset 0 0 0 2px var(--paper),
+    inset 0 0 0 3px rgb(59 46 34 / 45%);
+}
+
+.news-box h3,
+.news-notices h3 {
+  margin: 6px 0 0;
+  text-align: center;
+  font:
+    400 17px / 1.3 "IM Fell English SC",
+    Georgia,
+    serif;
+  letter-spacing: 0.05em;
+}
+
+.news-box .news-story:last-child {
+  border-bottom: 0;
+}
+
+.news-notices {
+  margin-top: 12px;
+  border-top: 1px solid var(--chart-ink);
+}
+
+.news-notices .news-words {
+  padding: 4px 0;
+}
+
+/* Its keys: the instruments' head keys' size on the paper, ruled in ink. */
+.news-keys {
+  display: flex;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.news-sheet button.news-key {
+  position: relative;
+  box-sizing: border-box;
+  min-width: 44px;
+  height: var(--news-key);
+  min-height: 0;
+  padding: 0 14px;
+  border: 1px solid rgb(59 46 34 / 45%);
+  border-radius: 7px;
+  background: rgb(255 255 255 / 32%);
+  color: var(--chart-ink);
+  font:
+    500 14px / 1 "Alegreya Sans",
+    sans-serif;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+/* A touch reaches a little beyond the face. */
+.news-key::after {
+  content: "";
+  position: absolute;
+  inset: -3px -1px;
+}
+
+.news-newer {
+  margin-left: auto;
+}
+
+.news-top-keys {
+  justify-content: flex-end;
+  margin: 0 0 6px;
+}
+
+/* The news opened on its own, before the sea: the sheet over the screen. */
+.news-alone-screen {
+  z-index: 49;
+}
+
+.news-alone-screen .news-sheet {
+  top: var(--edge-top, 12px);
+}
+
+/* Short screens and small phones upright: the keys 38 px, as the head's. */
+@media (max-height: 420px), (orientation: portrait) and (max-height: 700px) {
+  .news-sheet {
+    --news-key: 38px;
+  }
+}
+
+/* Held sideways: the masthead shorter. */
+@media (orientation: landscape) {
+  .news-masthead h2 {
+    font-size: 26px;
+  }
+}

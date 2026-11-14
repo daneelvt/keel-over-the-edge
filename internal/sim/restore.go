@@ -47,6 +47,10 @@ func (w *World) Restore(snapshot []byte, now int64) (Restored, error) {
 			// staying sails again, an unseen one is seen, and a placed
 			// voyage is forgotten.
 			f.Stay[s], f.Unseen[s], f.Voyage[s].Placed = false, false, false
+			// The odometer reads afresh: the boat may be put elsewhere
+			// below, and the world's time has jumped.
+			lg := &f.Voyage[s].Log
+			lg.Read, lg.At, lg.X, lg.Y, lg.Port = false, 0, 0, 0, false
 			f.Conn[s] = 0
 			if f.Grace[s] == 0 {
 				f.Grace[s] = now + w.grace
@@ -56,7 +60,7 @@ func (w *World) Restore(snapshot []byte, now int64) (Restored, error) {
 		// fallen: it starts again at the start, its voyage ended.
 		for _, s := range f.Live {
 			if f.Voyage[s].Falling() {
-				f.Voyage[s] = bus.Voyage{}
+				f.Voyage[s] = newVoyage(now)
 				f.State[s] = w.spawn(f, s)
 				w.readyControls(f, s)
 				f.Course[s] = physics.Course{}

@@ -5,6 +5,7 @@ package store_test
 import (
 	"context"
 	"errors"
+	"math"
 	"slices"
 	"strings"
 	"testing"
@@ -167,5 +168,22 @@ func TestGrantRoles(t *testing.T) {
 	}
 	if del {
 		t.Error("agreement may delete a signature")
+	}
+}
+
+// TestAgreementOutOfRange refuses a version or a pull request's number
+// that does not fit its column, rather than wrapping it.
+func TestAgreementOutOfRange(t *testing.T) {
+	a, _ := agreements(t)
+	ctx := context.Background()
+	big := math.MaxInt32 + 1
+	if _, err := a.Sign(ctx, store.Signature{GitHubID: 1, Login: "a", Name: "A", Version: big, TextSHA256: strings.Repeat("0", 64), How: store.SignedOnPage}); err == nil {
+		t.Error("Sign took a version out of range")
+	}
+	if _, err := a.Signed(ctx, []int64{1}, -1); err == nil {
+		t.Error("Signed took a negative version")
+	}
+	if err := a.SetWaiting(ctx, store.PullRef{Repo: "o/r", Number: big}, "abc", nil); err == nil {
+		t.Error("SetWaiting took a number out of range")
 	}
 }

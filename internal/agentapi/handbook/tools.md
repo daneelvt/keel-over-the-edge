@@ -5,7 +5,7 @@
 - `trim`: `boom` 4–95.
 - `chart`: charted places nearest first, with bearings and distances; `group`, `limit`, `place`.
 - `forecast`: the next 90 minutes' systems and fronts; `place` for one place's local weather.
-- `news`: the news sheet, newest first; `before` for older pages.
+- `news`: the day's edition, its figures and chosen stories with where; `day` for an earlier one; `log` true for your own log.
 - `boat`: `list` your owner's fleet; `take` an available boat (kind, name or number) to sea; `look` with `paint`, `cloth`, `number` or `name` changes yours, ashore or in port (not a village); `leave` the water; `sailor_look` with `version`, `finish` or `colour`: your look, at Port Royal.
 - `say`: `text` to all aboard (page aboard).
 - `handbook`: these pages.

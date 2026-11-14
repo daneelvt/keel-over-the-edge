@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -17,6 +18,15 @@ import (
 // AgreementConns is the agreement's pool: it answers a few webhooks and
 // page views a day.
 const AgreementConns = 2
+
+// column32 fits a version or a pull request's number to its integer
+// column, refusing one out of range.
+func column32(n int) (int32, error) {
+	if n < 0 || n > math.MaxInt32 {
+		return 0, fmt.Errorf("store: %d does not fit the column", n)
+	}
+	return int32(n), nil
+}
 
 // Agreements is the contributor agreement's two tables, reached by the
 // keeper of the agreement, a process of its own, as the role agreement,
@@ -93,7 +103,11 @@ const (
 // Signed reports which of these accounts have a standing signature of
 // version.
 func (a *Agreements) Signed(ctx context.Context, ids []int64, version int) (map[int64]bool, error) {
-	got, err := a.q.AgreementSigned(ctx, db.AgreementSignedParams{GithubIds: ids, Version: int32(version)})
+	v, err := column32(version)
+	if err != nil {
+		return nil, err
+	}
+	got, err := a.q.AgreementSigned(ctx, db.AgreementSignedParams{GithubIds: ids, Version: v})
 	if err != nil {
 		return nil, err
 	}
@@ -107,8 +121,12 @@ func (a *Agreements) Signed(ctx context.Context, ids []int64, version int) (map[
 // Sign records a signature. It reports false, and changes nothing, when
 // the account already has a standing signature of that version.
 func (a *Agreements) Sign(ctx context.Context, s Signature) (bool, error) {
-	_, err := a.q.AgreementSign(ctx, db.AgreementSignParams{
-		GithubID: s.GitHubID, Login: s.Login, Name: s.Name, Version: int32(s.Version),
+	v, err := column32(s.Version)
+	if err != nil {
+		return false, err
+	}
+	_, err = a.q.AgreementSign(ctx, db.AgreementSignParams{
+		GithubID: s.GitHubID, Login: s.Login, Name: s.Name, Version: v,
 		TextSha256: s.TextSHA256, How: s.How, Guardian: s.Guardian, GuardianEmail: s.GuardianEmail, Note: s.Note,
 	})
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -195,17 +213,21 @@ func (a *Agreements) Waiting(ctx context.Context) ([]PullRef, error) {
 // SetWaiting replaces whom a pull request waits for, at its head commit:
 // nobody, when ids is empty.
 func (a *Agreements) SetWaiting(ctx context.Context, pr PullRef, headSHA string, ids []int64) error {
+	number, err := column32(pr.Number)
+	if err != nil {
+		return err
+	}
 	tx, err := a.pool.Begin(ctx)
 	if err != nil {
 		return err
 	}
 	defer tx.Rollback(ctx)
 	q := a.q.WithTx(tx)
-	if err := q.AgreementPullClear(ctx, db.AgreementPullClearParams{Repo: pr.Repo, Number: int32(pr.Number)}); err != nil {
+	if err := q.AgreementPullClear(ctx, db.AgreementPullClearParams{Repo: pr.Repo, Number: number}); err != nil {
 		return err
 	}
 	for _, id := range ids {
-		if err := q.AgreementPullWait(ctx, db.AgreementPullWaitParams{Repo: pr.Repo, Number: int32(pr.Number), GithubID: id, HeadSha: headSHA}); err != nil {
+		if err := q.AgreementPullWait(ctx, db.AgreementPullWaitParams{Repo: pr.Repo, Number: number, GithubID: id, HeadSha: headSHA}); err != nil {
 			return err
 		}
 	}

@@ -15,6 +15,7 @@ import (
 	"github.com/daneelvt/keel-over-the-edge/internal/fleet"
 	"github.com/daneelvt/keel-over-the-edge/internal/forecast"
 	"github.com/daneelvt/keel-over-the-edge/internal/life"
+	"github.com/daneelvt/keel-over-the-edge/internal/logbook"
 	sailorlooks "github.com/daneelvt/keel-over-the-edge/internal/looks"
 	"github.com/daneelvt/keel-over-the-edge/internal/physics"
 	"github.com/daneelvt/keel-over-the-edge/internal/sim"
@@ -69,11 +70,10 @@ type Sea struct {
 	Biomes       map[string]string
 	PlaceKinds   []string
 	FeatureKinds []string
-	// News is the world's news sheet, newest first: up to n items before
-	// the item before, nil for the newest; Columns name its columns by
-	// their ids.
-	News    func(ctx context.Context, before *[16]byte, n int) ([]store.News, error)
-	Columns map[string]string
+	// News is the world's news, a day's edition as a machine sailor reads
+	// it; Log a machine sailor's own log. Nil for none.
+	News News
+	Log  func(ctx context.Context, account store.AccountID) (logbook.Log, error)
 	// SystemKinds are each kind of weather system's name, by the catalog's
 	// index, as a chart's key gives it: "Squall line", "Low".
 	SystemKinds []string

@@ -150,12 +150,12 @@ func tools() []toolDef {
 		}},
 		{budget: looks, tool: &mcp.Tool{
 			Name: toolNews, Title: "News",
-			Description: "The world's news sheet, newest first: what was charted and by whom, and the world's notices. " +
+			Description: "The day's news edition: its figures, chosen stories and where, your shipmates', notices. " +
 				"Names in «» are written by players.",
 			Annotations: hints("News", true, true, false),
 			InputSchema: schema(`{"type":"object","properties":{` +
-				`"before":{"type":"string","description":"An id from the last page."},` +
-				`"limit":{"type":"integer","minimum":1,"maximum":20,"description":"Default 10."}` +
+				`"day":{"type":"string","description":"An earlier edition, 2006-01-02."},` +
+				`"log":{"type":"boolean","description":"Your own log instead."}` +
 				`}}`),
 		}},
 		{budget: looks, tool: &mcp.Tool{

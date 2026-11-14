@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 // The chart as the screen uses it: whether it is open, and as the chart,
-// its list or the news; what is picked on it, a charted thing or a weather
+// its list, the news or a log; what is picked on it, a charted thing or a weather
 // system; the course steered for a system from its box; and the notices
 // its chartings raise: one for each place the player charts, and one for
 // each great discovery anyone does.
@@ -14,7 +14,16 @@ import { zoneWhere } from './store';
 import type { ChartView } from './view';
 import { LAYERS_AT_FIRST, type Layer, type Layers } from './weather';
 
-export type ChartMode = 'chart' | 'list' | 'news';
+export type ChartMode = 'chart' | 'list' | 'news' | 'log';
+
+/**
+ * Whose log the Log tab shows: the reader's own, a sailor's by name, or
+ * one of the player's machine sailors' by its account's id.
+ */
+export type LogWho =
+  | { kind: 'own' }
+  | { kind: 'sailor'; name: string }
+  | { kind: 'machine'; id: string; name: string };
 
 /** A weather system or a front tapped on the chart: which, as the scene had it then. */
 export type TappedWeather =
@@ -47,6 +56,10 @@ export class Chart {
   /** The slider: the forecast ahead, its minutes from now; 0 is now. Play runs it on. */
   readonly minutes = signal(0);
   readonly playing = signal(false);
+  /** Whose log the Log tab shows. */
+  readonly logOf = signal<LogWho>({ kind: 'own' });
+  /** The edition the News tab was last asked for: a day's (2006-01-02), or today's for null; each asking a new one. */
+  readonly newsDay = signal<{ day: string | null }>({ day: null });
   /** The weather's layers, each switched on or off. */
   readonly layers = signal<Layers>({ ...LAYERS_AT_FIRST });
   /** The clock notices are raised by, ms. */
@@ -63,7 +76,7 @@ export class Chart {
     store.onCharted((es) => this.#told(es));
   }
 
-  /** Opens it as the chart, the list or the news; or closes it. */
+  /** Opens it as the chart, the list, the news or the log; or closes it. */
   show(mode: ChartMode | null): void {
     if (mode === null) {
       this.open.value = false;
@@ -89,9 +102,23 @@ export class Chart {
     this.picked.value = e;
   }
 
-  /** Opens the chart at a point. */
+  /** Opens the Log tab on a log: the reader's own, or a sailor's by name. */
+  showLog(who: LogWho): void {
+    this.logOf.value = who;
+    this.show('log');
+  }
+
+  /** Opens the News tab on a day's edition, or today's for null. */
+  showNews(day: string | null): void {
+    this.newsDay.value = { day };
+    this.show('news');
+  }
+
+  /** Opens the chart at a point, no box open. */
   showPoint(east: number, north: number): void {
     this.show('chart');
+    this.picked.value = null;
+    this.tapped.value = null;
     this.view.lookAt(east, north, 4000);
   }
 

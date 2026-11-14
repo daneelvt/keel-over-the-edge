@@ -54,6 +54,8 @@ import {
 } from './api';
 import { hidden } from './life';
 import type { Act } from './lifecycle';
+import { LogPart } from './log';
+import { figuresWords } from './logwords';
 import { AISignIn, MAX_CAP, plural } from './machines';
 import { reportsOn } from './reportwords';
 import { SailWithSettings } from './settings';
@@ -264,6 +266,7 @@ function Search({
                 <th>Last active</th>
                 <th>Its machine sailors last active</th>
                 <th>At sea</th>
+                <th>Log</th>
                 <th>Flags</th>
                 <th>Stopped</th>
               </tr>
@@ -293,6 +296,9 @@ function Search({
                     ))}
                   </td>
                   <td>{r.atSea ? 'at sea' : r.queued ? 'waiting' : ''}</td>
+                  <td class="small" data-field="row-log">
+                    {figuresWords(answer.logs?.[r.id])}
+                  </td>
                   <td>
                     {[r.tools ? 'owner’s' : '', r.priority ? 'priority' : '']
                       .filter((w) => w !== '')
@@ -318,6 +324,7 @@ function Search({
                       <td title={momentWords(m.lastActiveAt)}>{m.lastActive}</td>
                       <td />
                       <td>{m.atSea ? 'at sea' : m.queued ? 'waiting' : ''}</td>
+                      <td class="small">{figuresWords(answer.logs?.[m.id])}</td>
                       <td>{m.priority ? 'priority' : ''}</td>
                       <td>{m.stopped ? 'stopped' : ''}</td>
                     </tr>
@@ -695,6 +702,14 @@ function Card({
             <dt>Watching</dt>
             <dd data-field="card-watching">
               <bdi>{card.watching}</bdi>’s boat
+            </dd>
+          </>
+        ) : null}
+        {card.log !== undefined ? (
+          <>
+            <dt>Log</dt>
+            <dd data-field="card-log">
+              <LogPart key={card.id} id={card.id} log={card.log} />
             </dd>
           </>
         ) : null}

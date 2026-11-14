@@ -4,7 +4,6 @@ package store
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"time"
 
@@ -18,7 +17,7 @@ import (
 // ("island", "place" or "feature") and its number; by whom, unless it was
 // known from the world's start or charted with another, which With names;
 // the boat, the tick and where the boat was; what it was worth; and the
-// news it makes, if any. Once written, Written says it was (not charted
+// story it makes, if any. Once written, Written says it was (not charted
 // already), with the sailor's name and account's kind as they were and when.
 type Charting struct {
 	Subject  string
@@ -41,41 +40,19 @@ type Charting struct {
 	At          time.Time
 }
 
-// NewsItem is what a charting tells the news: its column, its title and
-// what it is, and where; Island the island it is on or by, −1 for none;
-// with Fold, it is folded into the sailor's item about the island within
-// the batch's fold, if there is one.
+// NewsItem is the story a charting makes: its kind and score, its title
+// and what it is, and where; Island the island it is on or by, −1 for
+// none; and the boat that charted it, its name and kind's id. Unless it
+// is a great discovery, a sailor's first charting ever is a story of its
+// own (NewsRules).
 type NewsItem struct {
-	Column      string
+	Story       string
+	Score       int
 	Title, What string
 	Island      int32
-	Fold        bool
 	X, Y        float64
-}
-
-// Folded is a subject folded into a news item.
-type Folded struct {
-	Subject string `json:"subject"`
-	Number  int32  `json:"number"`
-	Title   string `json:"title"`
-}
-
-// News is an item of the news as it is read.
-type News struct {
-	ID          [16]byte
-	Column      string
-	Sailor      string
-	AccountKind string
-	Subject     string
-	Number      int32
-	Title, What string
-	Worth       float64
-	X, Y        float64
-	Also        []Folded
-	At          time.Time
-	// EndsAt is, for an item about the world itself, the world's end it
-	// tells of; zero for any other.
-	EndsAt time.Time
+	Boat        string
+	BoatKind    string
 }
 
 // SubjectWorld is a news item's subject when it is the world itself.
@@ -102,8 +79,9 @@ func (s *Store) WriteWorldNews(ctx context.Context, lease int64, world [16]byte,
 }
 
 // writeChartings writes a batch's chartings, in order, in its transaction,
-// and the news they make; one already written is left as it was.
+// and the stories they make; one already written is left as it was.
 func writeChartings(ctx context.Context, q *db.Queries, world pgtype.UUID, b *Batch) error {
+	var first map[AccountID]bool
 	for i := range b.Charting {
 		c := &b.Charting[i]
 		p := db.InsertChartingParams{WorldID: world, Subject: c.Subject, Number: c.Number, Tick: c.Tick, Worth: c.Worth}
@@ -124,31 +102,13 @@ func writeChartings(ctx context.Context, q *db.Queries, world pgtype.UUID, b *Ba
 			return err
 		}
 		c.Written, c.Sailor, c.AccountKind, c.At = true, row.Sailor.String, row.AccountKind.String, row.ChartedAt
-		n := c.News
-		if n == nil || !c.Credited {
+		if c.News == nil || !c.Credited || b.News == nil {
 			continue
 		}
-		island := pgtype.Int4{Int32: n.Island, Valid: n.Island >= 0}
-		if n.Fold && island.Valid {
-			item, err := json.Marshal([]Folded{{Subject: c.Subject, Number: c.Number, Title: n.Title}})
-			if err != nil {
-				return err
-			}
-			folded, err := q.FoldNews(ctx, db.FoldNewsParams{Item: item, WorldID: world, AccountID: p.AccountID,
-				IslandNumber: island, Within: b.FoldWithin.Seconds()})
-			if err != nil {
-				return err
-			}
-			if folded > 0 {
-				continue
-			}
+		if first == nil {
+			first = map[AccountID]bool{}
 		}
-		err = q.InsertNews(ctx, db.InsertNewsParams{
-			WorldID: world, NewsColumn: n.Column, AccountID: p.AccountID, Sailor: row.Sailor, AccountKind: row.AccountKind,
-			Subject: c.Subject, Number: c.Number, Title: n.Title, What: n.What, IslandNumber: island,
-			Worth: c.Worth, X: n.X, Y: n.Y,
-		})
-		if err != nil {
+		if err := chartingStory(ctx, q, &newsWrite{world: world, rules: b.News}, c, first); err != nil {
 			return err
 		}
 	}
@@ -169,33 +129,6 @@ func (s *Store) Chartings(ctx context.Context, world [16]byte) ([]Charting, erro
 			WithSubject: r.WithSubject.String, WithNumber: r.WithNumber.Int32,
 			Written: true, Sailor: r.Sailor.String, AccountKind: r.AccountKind.String, At: r.ChartedAt,
 		}
-	}
-	return out, nil
-}
-
-// News is up to limit of a world's news items written before the item
-// before, or the newest with before nil, the newest first. An item's id is
-// a UUIDv7, in the order the items were written.
-func (s *Store) News(ctx context.Context, world [16]byte, before *[16]byte, limit int) ([]News, error) {
-	p := db.NewsParams{WorldID: pgtype.UUID{Bytes: world, Valid: true}, Lim: int32(limit)}
-	if before != nil {
-		p.Before = pgtype.UUID{Bytes: *before, Valid: true}
-	}
-	rows, err := s.q.News(ctx, p)
-	if err != nil {
-		return nil, err
-	}
-	out := make([]News, len(rows))
-	for i, r := range rows {
-		n := News{
-			ID: r.ID.Bytes, Column: r.NewsColumn, Sailor: r.Sailor.String, AccountKind: r.AccountKind.String,
-			Subject: r.Subject, Number: r.Number, Title: r.Title, What: r.What, Worth: r.Worth, X: r.X, Y: r.Y, At: r.WrittenAt,
-			EndsAt: timeOf(r.EndsAt),
-		}
-		if err := json.Unmarshal(r.Also, &n.Also); err != nil {
-			return nil, err
-		}
-		out[i] = n
 	}
 	return out, nil
 }

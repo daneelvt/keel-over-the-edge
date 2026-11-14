@@ -48,7 +48,7 @@ import { Pilot } from './pilot';
 import { type CameraKeys, SeaKeys } from './seakeys';
 import type { SettingsSignal } from './settings';
 import { type StatementsView, statementsShown, useStatements } from './statementlazy';
-import { useWatch, type WatchView } from './watchlazy';
+import { sailsOwn, useWatch, type WatchView } from './watchlazy';
 import { watchersText } from './watchwords';
 
 function BumpLine({ model }: { model: HudModel }) {
@@ -303,7 +303,15 @@ function Screen(props: ScreenProps) {
   const steer = watch === null || !watch.spectating.value;
   if (charted && sea !== null) {
     // The chart covers the screen; the boat sails on under it.
-    return <ChartScreen sea={sea} end={end} notices={notices} />;
+    // A sailor's log offers Watch where watching takes no boat out of the water.
+    const fromLog =
+      watch === null || sailsOwn(watch)
+        ? null
+        : (name: string) => {
+            sea.chart.show(null);
+            watch.watch(name);
+          };
+    return <ChartScreen sea={sea} end={end} notices={notices} watch={fromLog} />;
   }
   if (flying && fly !== null) {
     // The free camera's picture is clean; a tap shows the way back a moment.
@@ -406,7 +414,11 @@ function Screen(props: ScreenProps) {
               ? null
               : (mode) => {
                   setMenu(false);
-                  sea.chart.show(mode);
+                  if (mode === 'news') {
+                    sea.chart.showNews(null);
+                  } else {
+                    sea.chart.show(mode);
+                  }
                 }
           }
           fly={

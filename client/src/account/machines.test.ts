@@ -361,6 +361,7 @@ describe('the start screen with machine sailors', () => {
     expect(buttons(ai)).toEqual([
       { text: WATCH, gold: false },
       { text: 'How to connect', gold: false },
+      { text: 'Its log', gold: false },
       { text: 'Make another machine sailor', gold: false },
     ]);
   });

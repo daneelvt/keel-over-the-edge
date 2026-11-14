@@ -44,8 +44,8 @@ import (
 // fields in 8 bytes each, then its course's, the same, then its voyage at
 // the edge: the tick it went over the lip as a varint (0 afloat), a uvarint
 // of flags (1: an approach under way, 2: one survived), and for each flag
-// set the least distance and where, three floats in 8 bytes each; each
-// connection waiting is its account's 16
+// set the least distance and where, three floats in 8 bytes each, then
+// its log (below); each connection waiting is its account's 16
 // bytes, the connection as a uvarint, the tick it was queued at and the tick
 // its place is given up at (0 while connected) as varints, and its account's
 // kind, the boat's flags, its look code, and the kind of boat it is to
@@ -59,7 +59,18 @@ import (
 // their grace ends as varints, a uvarint of flags (1: a machine sailor's, 2:
 // a priority account's, 4: they hold the boat's controls), their look code
 // as a uvarint, their name as a uvarint length and its bytes, and their own
-// boat's kind as a uvarint with its look and name as a boat's.
+// boat's kind as a uvarint with its look and name as a boat's, then the
+// distance the boat has run while they were aboard, a float in 8 bytes,
+// and the weather met meanwhile as a uvarint of the log's flags.
+//
+// A voyage's log is the tick it began as a varint, the distance run as a
+// float in 8 bytes, a uvarint of flags (1: a place read, 2: in port
+// there), and if a place was read the tick read as a varint and the place
+// as two floats; the seconds read and those dark, the bumps at fault and
+// not, the weather met (its flags) and the minute means kept as uvarints,
+// then each of those means as a byte, the oldest first; the minute's sum
+// as a float, the wind's state as a uvarint, and, met, where the gale was
+// met and where the landfall in fog was, two floats each.
 //
 // Then, only if a boat has any, the owner's tools' marks: a uvarint n, then
 // n × the slot and a uvarint of flags (1: it stays, 2: it is unseen, 4: its
@@ -69,7 +80,7 @@ import (
 // A checkpoint stores this snapshot without the owner's tools' marks
 // (AppendCheckpoint), so a world is restored only by a build that reads its
 // version, and a restart clears them.
-const SnapshotVersion = 19
+const SnapshotVersion = 20
 
 // The owner's tools' marks of a boat, in a snapshot.
 const (
@@ -232,6 +243,8 @@ func AppendCheckpoint(dst []byte, f *bus.Frame) []byte {
 		dst = appendString(dst, a.Name)
 		dst = binary.AppendUvarint(dst, uint64(a.BoatKind))
 		dst = appendBoatLook(dst, a.BoatLook, a.BoatName)
+		dst = appendF64(dst, a.Run)
+		dst = binary.AppendUvarint(dst, uint64(a.Met))
 	}
 	dst = binary.AppendUvarint(dst, uint64(len(f.Pairs)))
 	for _, p := range f.Pairs {
@@ -275,7 +288,79 @@ func appendVoyage(dst []byte, v *bus.Voyage) []byte {
 	if flags&voyageSurvived != 0 {
 		dst = appendF64(appendF64(appendF64(dst, v.Best), v.BestX), v.BestY)
 	}
+	return appendVoyageLog(dst, &v.Log)
+}
+
+// The flags of a voyage's log in a snapshot.
+const (
+	logRead = 1
+	logPort = 2
+)
+
+func appendVoyageLog(dst []byte, lg *bus.VoyageLog) []byte {
+	dst = binary.AppendVarint(dst, lg.Began)
+	dst = appendF64(dst, lg.Run)
+	var flags uint64
+	if lg.Read {
+		flags |= logRead
+	}
+	if lg.Port {
+		flags |= logPort
+	}
+	dst = binary.AppendUvarint(dst, flags)
+	if lg.Read {
+		dst = binary.AppendVarint(dst, lg.At)
+		dst = appendF64(appendF64(dst, lg.X), lg.Y)
+	}
+	for _, n := range [...]uint64{uint64(lg.Seconds), uint64(lg.Dark), uint64(lg.BumpsAt), uint64(lg.BumpsNot), uint64(lg.Met), uint64(lg.Minutes)} {
+		dst = binary.AppendUvarint(dst, n)
+	}
+	dst = append(dst, lg.Wind[bus.WindMinutes-int(lg.Minutes):]...)
+	dst = appendF64(dst, lg.Sum)
+	dst = binary.AppendUvarint(dst, uint64(lg.Blow))
+	if lg.Met&(bus.MetGale|bus.MetStorm) != 0 {
+		dst = appendF64(appendF64(dst, lg.GaleX), lg.GaleY)
+	}
+	if lg.Met&bus.MetFog != 0 {
+		dst = appendF64(appendF64(dst, lg.FogX), lg.FogY)
+	}
 	return dst
+}
+
+// voyageLog reads a voyage's log.
+func (r *reader) voyageLog(lg *bus.VoyageLog) error {
+	*lg = bus.VoyageLog{Began: r.varint(), Run: r.f64()}
+	flags := r.uvarint()
+	if r.err == nil && flags&^(logRead|logPort) != 0 {
+		return fmt.Errorf("sim: snapshot: a voyage's log with flags %d", flags)
+	}
+	lg.Read, lg.Port = flags&logRead != 0, flags&logPort != 0
+	if lg.Read {
+		lg.At, lg.X, lg.Y = r.varint(), r.f64(), r.f64()
+	}
+	seconds, dark, at, not, met, minutes := r.uvarint(), r.uvarint(), r.uvarint(), r.uvarint(), r.uvarint(), r.uvarint()
+	if r.err != nil {
+		return r.err
+	}
+	if seconds > math.MaxInt32 || dark > seconds || at > math.MaxUint16 || not > math.MaxUint16 || met&^bus.MetAll != 0 ||
+		minutes > bus.WindMinutes || !(lg.Run >= 0) {
+		return fmt.Errorf("sim: snapshot: a voyage's log of %d seconds, %d minutes and flags %d", seconds, minutes, met)
+	}
+	lg.Seconds, lg.Dark, lg.BumpsAt, lg.BumpsNot, lg.Met, lg.Minutes = int32(seconds), int32(dark), uint16(at), uint16(not), uint8(met), uint8(minutes)
+	r.bytes(lg.Wind[bus.WindMinutes-int(minutes):])
+	lg.Sum = r.f64()
+	blow := r.uvarint()
+	if r.err == nil && blow > bus.BlowStorm {
+		return fmt.Errorf("sim: snapshot: a voyage's log in wind %d", blow)
+	}
+	lg.Blow = uint8(blow)
+	if lg.Met&(bus.MetGale|bus.MetStorm) != 0 {
+		lg.GaleX, lg.GaleY = r.f64(), r.f64()
+	}
+	if lg.Met&bus.MetFog != 0 {
+		lg.FogX, lg.FogY = r.f64(), r.f64()
+	}
+	return r.err
 }
 
 // voyage reads a voyage at the edge.
@@ -294,7 +379,10 @@ func (r *reader) voyage(v *bus.Voyage) error {
 	if flags&voyageSurvived != 0 {
 		v.Survived, v.Best, v.BestX, v.BestY = true, r.f64(), r.f64(), r.f64()
 	}
-	return r.err
+	if r.err != nil {
+		return r.err
+	}
+	return r.voyageLog(&v.Log)
 }
 
 func appendF64(dst []byte, v float64) []byte {
@@ -442,9 +530,15 @@ func ReadSnapshot(data []byte, f *bus.Frame) error {
 		a.Name = r.str()
 		boatKind := r.uvarint()
 		a.BoatLook, a.BoatName = r.boatLook()
+		a.Run = r.f64()
+		met := r.uvarint()
 		if r.err != nil {
 			return r.err
 		}
+		if met&^bus.MetAll != 0 || !(a.Run >= 0) {
+			return fmt.Errorf("sim: snapshot: someone aboard the boat in slot %d with weather %d", slot, met)
+		}
+		a.Met = uint8(met)
 		ok := slot < capacity && f.Occupied[slot] && f.Boat[slot] == boat && seat >= 1 && seat <= bus.MaxCrew && a.Grace >= 0 &&
 			flags&^(kindAll|crewHolds) == 0 && look <= math.MaxUint32 && boatKind <= math.MaxUint16 && f.Owner[slot] != a.Account &&
 			len(a.Name) <= MaxBoatName
