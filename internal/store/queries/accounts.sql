@@ -77,8 +77,18 @@ WHERE a.id = old.id
 RETURNING old.recovered_at;
 
 -- name: ForgetCredits :exec
--- A deleted account's credits keep their places, under no name.
-WITH c AS (UPDATE charting SET sailor = NULL WHERE charting.account_id = @id)
+-- A deleted account's credits keep their places, under no name; and in
+-- others' logs it is a former sailor, its name and its account forgotten.
+WITH c AS (UPDATE charting SET sailor = NULL WHERE charting.account_id = @id),
+v AS (
+  UPDATE log_voyage SET
+    skipper_id = CASE WHEN log_voyage.skipper_id = @id THEN NULL ELSE log_voyage.skipper_id END,
+    skipper_name = CASE WHEN log_voyage.skipper_id = @id THEN NULL ELSE log_voyage.skipper_name END,
+    crew = (SELECT coalesce(jsonb_agg(CASE WHEN m->>'id' = @id::text THEN m - 'id' - 'name' ELSE m END ORDER BY o), '[]'::jsonb)
+            FROM jsonb_array_elements(log_voyage.crew) WITH ORDINALITY AS t(m, o))
+  WHERE log_voyage.skipper_id = @id OR log_voyage.crew @> jsonb_build_array(jsonb_build_object('id', @id::text))
+),
+e AS (UPDATE log_entry SET other_id = NULL, other_name = NULL WHERE log_entry.other_id = @id)
 UPDATE news_item SET sailor = NULL WHERE news_item.account_id = @id;
 
 -- name: DeleteAccount :execrows

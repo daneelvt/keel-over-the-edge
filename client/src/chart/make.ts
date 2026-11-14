@@ -11,38 +11,17 @@ import type { ChartEntry } from '../net/messages';
 import { type Physics, VISIBILITY, WIND_VALUE, WIND_VALUES } from '../predict/physics';
 import type { SeaScene } from '../render/scene';
 import { hourAt, skyPeriods } from '../sky/skytime';
-import { type ChartSea, chartNews, type NewsSource } from '../ui/chart';
+import { type ChartSea, chartNews } from '../ui/chart';
+import type { NewsSource } from '../ui/newsread';
 import { type NoticeKind, Notices } from '../ui/notices';
 import { Chart } from './chart';
 import type { Forecasting } from './forecasting';
+import { FEATURE_MARKS, PLACE_MARKS } from './marks';
 import { Models } from './model';
 import { type Air, chartedWith, look, type SightExport } from './sight';
 import { ChartStore } from './store';
 import { type ChartLook, ChartView, type WindSampler } from './view';
 import { ChartWeather } from './weatherlayer';
-
-/** The marks of the kinds of place on the chart, by their sites. */
-const PLACE_MARKS: Record<string, string> = {
-  harbour: '■',
-  village: '•',
-  anchorage: '⚓',
-  reef: '✳',
-  bar: '∴',
-  wreck: '⋕',
-};
-
-/** The marks of the kinds of feature, by the chart's symbol for each. */
-const FEATURE_MARKS: Record<string, string> = {
-  cave: '◖',
-  arch: '⌒',
-  blowhole: '⊙',
-  fall: '≋',
-  spring: '◦',
-  crater: '◎',
-  smoke: '♨',
-  ruin: '⌂',
-  birds: '⋎',
-};
 
 /** The chart's look, from the catalog. */
 export function chartLook(): ChartLook {
@@ -193,7 +172,6 @@ export function makeChart(
     scale: catalog.sky.scale,
     lip: w.disk.radius,
     characters: w.lights.characters.map((c) => c.notation),
-    columns: catalog.news.columns.map((c) => ({ id: c.id, title: c.title, of: c.of })),
     news:
       news ??
       chartNews(

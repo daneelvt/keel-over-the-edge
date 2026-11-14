@@ -8,7 +8,6 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
-	"time"
 
 	"github.com/daneelvt/keel-over-the-edge/internal/bus"
 	"github.com/daneelvt/keel-over-the-edge/internal/catalog"
@@ -48,30 +47,25 @@ type Model struct {
 	mu      sync.Mutex
 	charted []bool
 	cur     atomic.Pointer[Chart]
-	column  string
-	fold    time.Duration
+	// great is the worth a great discovery's, and its story's score;
+	// lesser a lesser charting's.
+	great       float64
+	greatScore  int
+	lesserScore int
 }
 
 // NewModel is world w's chart, empty, its islands' models at the addresses
 // paths gives by their index in w.Models.
 func NewModel(w *World, cat *catalog.Catalog, paths []string) *Model {
-	m := &Model{world: w, paths: paths, cat: cat, charted: make([]bool, len(w.Subjects))}
-	for _, c := range cat.News.Columns {
-		if c.Of == catalog.OfCharting && m.column == "" {
-			m.column = string(c.ID)
-		}
-	}
-	m.fold = time.Duration(cat.News.Fold * float64(time.Minute))
+	m := &Model{world: w, paths: paths, cat: cat, charted: make([]bool, len(w.Subjects)),
+		great: cat.World.Chart.Worth.Great, greatScore: cat.StoryScore(catalog.NewsStoryOfGreat),
+		lesserScore: cat.StoryScore(catalog.NewsStoryOfCharting)}
 	m.cur.Store(&Chart{})
 	return m
 }
 
 // World is what can be charted.
 func (m *Model) World() *World { return m.world }
-
-// FoldWithin is how long a sailor's news item about an island takes in what
-// they chart about it.
-func (m *Model) FoldWithin() time.Duration { return m.fold }
 
 // Entries are the chart's entries as it stands: an edge.ChartSource.
 func (m *Model) Entries() []*pb.ChartEntry { return m.cur.Load().Entries }
@@ -207,7 +201,9 @@ func (m *Model) entry(i int32, r *store.Charting) *pb.ChartEntry {
 	return e
 }
 
-// Charting is a sighting's row, with the news it makes: a persist.Chart.
+// Charting is a sighting's row, with the story it makes: a persist.Chart.
+// Every charting credited to a sailor, not charted with another, is a
+// candidate story of the news: a great discovery's, or a lesser one's.
 func (m *Model) Charting(c *bus.Charted) store.Charting {
 	w := m.world
 	s := &w.Subjects[c.Subject]
@@ -222,7 +218,7 @@ func (m *Model) Charting(c *bus.Charted) store.Charting {
 		ws := &w.Subjects[c.With]
 		row.WithSubject, row.WithNumber = KindWord(ws.Kind), ws.Number
 	}
-	if row.Credited && c.With < 0 && m.column != "" {
+	if row.Credited && c.With < 0 {
 		island := int32(-1)
 		switch {
 		case s.Kind == sight.Island:
@@ -230,10 +226,17 @@ func (m *Model) Charting(c *bus.Charted) store.Charting {
 		case s.Island >= 0:
 			island = w.Subjects[s.Island].Number
 		}
-		row.News = &store.NewsItem{Column: m.column, Title: s.Title, What: m.what(s), Island: island, Fold: !s.News, X: s.X, Y: s.Y}
+		story, score := store.StoryCharting, m.lesserScore
+		if m.great > 0 && s.Worth >= m.great {
+			story, score = store.StoryGreat, m.greatScore
+		}
+		row.News = &store.NewsItem{Story: story, Score: score, Title: s.Title, What: m.what(s), Island: island, X: s.X, Y: s.Y}
 	}
 	return row
 }
+
+// What is what subject i of the world is, as the news says it.
+func (m *Model) What(i int32) string { return m.what(&m.world.Subjects[i]) }
 
 // what is what a subject is, as the news says it: "an island of the rim",
 // "a lighthouse on Gannet Holm", "a reef of the middle waters". An island

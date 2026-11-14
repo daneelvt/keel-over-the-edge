@@ -5,9 +5,12 @@ package owner
 import (
 	"context"
 	"errors"
+	"math"
 	"net/http"
+	"strconv"
 
 	"github.com/daneelvt/keel-over-the-edge/internal/accounts"
+	"github.com/daneelvt/keel-over-the-edge/internal/logbook"
 	"github.com/daneelvt/keel-over-the-edge/internal/store"
 )
 
@@ -71,7 +74,45 @@ func (o *Owner) searchAccounts(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	o.count("search")
-	writeJSON(w, res)
+	if o.cfg.Logs == nil {
+		writeJSON(w, res)
+		return
+	}
+	var ids []store.AccountID
+	for _, a := range res.Accounts {
+		if id, ok := parseAccount(a.ID); ok {
+			ids = append(ids, id)
+		}
+		for _, m := range a.Machines {
+			if id, ok := parseAccount(m.ID); ok {
+				ids = append(ids, id)
+			}
+		}
+	}
+	figs, err := o.cfg.Logs.Figures(ctx, ids)
+	if err != nil {
+		http.Error(w, "the database: "+err.Error(), http.StatusServiceUnavailable)
+		return
+	}
+	logs := make(map[string]LogFigures, len(figs))
+	for id, f := range figs {
+		logs[id.String()] = LogFigures{RunM: math.Round(f.Run), Voyages: f.Voyages}
+	}
+	writeJSON(w, searchWithLogs{Result: res, Logs: logs})
+}
+
+// LogFigures are an account's log in the search's rows: the distance
+// logged, m, and the voyages skippered.
+type LogFigures struct {
+	RunM    float64 `json:"runM"`
+	Voyages int     `json:"voyages"`
+}
+
+// searchWithLogs is a search's answer with each account's log in a few
+// figures, by its ID; an account with nothing logged has none.
+type searchWithLogs struct {
+	accounts.Result
+	Logs map[string]LogFigures `json:"logs"`
 }
 
 // accountCard serves an account's card.
@@ -99,7 +140,74 @@ func (o *Owner) accountCard(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	o.count("card")
-	writeJSON(w, c)
+	if o.cfg.Logs == nil {
+		writeJSON(w, c)
+		return
+	}
+	l, err := o.cfg.Logs.Abstract(ctx, id)
+	if err != nil && !errors.Is(err, logbook.ErrNotFound) {
+		http.Error(w, "the database: "+err.Error(), http.StatusServiceUnavailable)
+		return
+	}
+	out := cardWithLog{Card: c}
+	if err == nil {
+		out.Log = &l
+	}
+	writeJSON(w, out)
+}
+
+// cardWithLog is an account's card with its log's abstract, its record and
+// who may read it.
+type cardWithLog struct {
+	accounts.Card
+	Log *logbook.Log `json:"log,omitempty"`
+}
+
+// Logs are the sailors' logs as the owner reads them: internal/logbook's
+// Service, and the store's figures.
+type Logs interface {
+	Abstract(ctx context.Context, id store.AccountID) (logbook.Log, error)
+	ForOwner(ctx context.Context, id store.AccountID, world int) (logbook.Log, error)
+	Figures(ctx context.Context, ids []store.AccountID) (map[store.AccountID]store.LogFigures, error)
+}
+
+// log serves an account's log, whole, as the owner reads every log: every
+// name in it shown, of the world asked for, the newest by default.
+//
+//	GET /owner/api/log.json?id=…[&world=12]
+func (o *Owner) log(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	id, ok := parseAccount(q.Get("id"))
+	if !ok {
+		o.refuse(w, "log", http.StatusBadRequest, "id is not an account's id")
+		return
+	}
+	world := 0
+	if s := q.Get("world"); s != "" {
+		n, err := strconv.Atoi(s)
+		if err != nil || n <= 0 {
+			o.refuse(w, "log", http.StatusBadRequest, "world is a world's number")
+			return
+		}
+		world = n
+	}
+	if o.cfg.Logs == nil {
+		o.refuse(w, "log", http.StatusServiceUnavailable, "the logs are not reached from here")
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), dbTimeout)
+	defer cancel()
+	l, err := o.cfg.Logs.ForOwner(ctx, id, world)
+	if errors.Is(err, logbook.ErrNotFound) {
+		o.refuse(w, "log", http.StatusNotFound, "no such sailor")
+		return
+	}
+	if err != nil {
+		http.Error(w, "the database: "+err.Error(), http.StatusServiceUnavailable)
+		return
+	}
+	o.count("log")
+	writeJSON(w, l)
 }
 
 // actions serves the record: the latest actions, or an account's.

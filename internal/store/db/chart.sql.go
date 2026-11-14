@@ -68,38 +68,6 @@ func (q *Queries) ChartRows(ctx context.Context, worldID pgtype.UUID) ([]ChartRo
 	return items, nil
 }
 
-const foldNews = `-- name: FoldNews :execrows
-UPDATE news_item SET also = news_item.also || $1::jsonb
-WHERE news_item.world_id = $2 AND news_item.id = (
-  SELECT n.id FROM news_item n
-  WHERE n.world_id = $2 AND n.account_id = $3 AND n.island_number = $4
-    AND n.written_at > now() - make_interval(secs => $5::float8)
-  ORDER BY n.written_at DESC LIMIT 1
-)
-`
-
-type FoldNewsParams struct {
-	Item         []byte
-	WorldID      pgtype.UUID
-	AccountID    pgtype.UUID
-	IslandNumber pgtype.Int4
-	Within       float64
-}
-
-func (q *Queries) FoldNews(ctx context.Context, arg FoldNewsParams) (int64, error) {
-	result, err := q.db.Exec(ctx, foldNews,
-		arg.Item,
-		arg.WorldID,
-		arg.AccountID,
-		arg.IslandNumber,
-		arg.Within,
-	)
-	if err != nil {
-		return 0, err
-	}
-	return result.RowsAffected(), nil
-}
-
 const insertCharting = `-- name: InsertCharting :one
 INSERT INTO charting (world_id, subject, number, account_id, sailor, account_kind, boat, tick, x, y, worth, with_subject, with_number)
 VALUES ($1, $2, $3, $4,
@@ -149,46 +117,6 @@ func (q *Queries) InsertCharting(ctx context.Context, arg InsertChartingParams) 
 	return i, err
 }
 
-const insertNews = `-- name: InsertNews :exec
-INSERT INTO news_item (world_id, news_column, account_id, sailor, account_kind, subject, number, title, what, island_number, worth, x, y)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
-`
-
-type InsertNewsParams struct {
-	WorldID      pgtype.UUID
-	NewsColumn   string
-	AccountID    pgtype.UUID
-	Sailor       pgtype.Text
-	AccountKind  pgtype.Text
-	Subject      string
-	Number       int32
-	Title        string
-	What         string
-	IslandNumber pgtype.Int4
-	Worth        float64
-	X            float64
-	Y            float64
-}
-
-func (q *Queries) InsertNews(ctx context.Context, arg InsertNewsParams) error {
-	_, err := q.db.Exec(ctx, insertNews,
-		arg.WorldID,
-		arg.NewsColumn,
-		arg.AccountID,
-		arg.Sailor,
-		arg.AccountKind,
-		arg.Subject,
-		arg.Number,
-		arg.Title,
-		arg.What,
-		arg.IslandNumber,
-		arg.Worth,
-		arg.X,
-		arg.Y,
-	)
-	return err
-}
-
 const insertWorldNews = `-- name: InsertWorldNews :exec
 INSERT INTO news_item (world_id, news_column, subject, number, title, what, worth, x, y, ends_at)
 VALUES ($1, $2, 'world', $3, $4, $5, 0, $6, $7, $8)
@@ -217,72 +145,6 @@ func (q *Queries) InsertWorldNews(ctx context.Context, arg InsertWorldNewsParams
 		arg.EndsAt,
 	)
 	return err
-}
-
-const news = `-- name: News :many
-SELECT id, news_column, sailor, account_kind, subject, number, title, what, worth, x, y, also, written_at, ends_at
-FROM news_item
-WHERE world_id = $1 AND ($2::uuid IS NULL OR id < $2::uuid)
-ORDER BY id DESC
-LIMIT $3
-`
-
-type NewsParams struct {
-	WorldID pgtype.UUID
-	Before  pgtype.UUID
-	Lim     int32
-}
-
-type NewsRow struct {
-	ID          pgtype.UUID
-	NewsColumn  string
-	Sailor      pgtype.Text
-	AccountKind pgtype.Text
-	Subject     string
-	Number      int32
-	Title       string
-	What        string
-	Worth       float64
-	X           float64
-	Y           float64
-	Also        []byte
-	WrittenAt   time.Time
-	EndsAt      pgtype.Timestamptz
-}
-
-func (q *Queries) News(ctx context.Context, arg NewsParams) ([]NewsRow, error) {
-	rows, err := q.db.Query(ctx, news, arg.WorldID, arg.Before, arg.Lim)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []NewsRow
-	for rows.Next() {
-		var i NewsRow
-		if err := rows.Scan(
-			&i.ID,
-			&i.NewsColumn,
-			&i.Sailor,
-			&i.AccountKind,
-			&i.Subject,
-			&i.Number,
-			&i.Title,
-			&i.What,
-			&i.Worth,
-			&i.X,
-			&i.Y,
-			&i.Also,
-			&i.WrittenAt,
-			&i.EndsAt,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
 }
 
 const setNoticesOff = `-- name: SetNoticesOff :execrows

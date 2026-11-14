@@ -530,6 +530,19 @@ and a paddle's share out from its root to its tip (v). The script fails if
 a body is not as long as it was built or is over its triangles' budget;
 `client/build/swimmers.test.ts` checks the committed file.
 
+## The log's glyphs
+
+`glyphs/build.py`, run by Blender from the repository's root
+(`/Applications/Blender.app/Contents/MacOS/Blender -b --factory-startup
+--python art/glyphs/build.py`), draws a small inked glyph of every kind of
+the sea's life and every boat, from the game's own models (the swimmers,
+the birds as `client/src/render/birds.ts` flies them, the boats), in the
+manner of the sailors' inked portraits: `glyphs/<kind id>.webp`, 96 × 96,
+lossless, transparent round the figure, the paper inside it and the ink.
+The log's collection shows each found kind so, and a kind not yet found as
+its silhouette; `client/src/ui/logglyphs.test.ts` checks that every kind
+has its glyph.
+
 ## Sound
 
 `sound/*.json` are the recipes the client's sound engine plays: filter

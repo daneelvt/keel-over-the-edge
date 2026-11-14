@@ -90,7 +90,7 @@ func TestOverTheLip(t *testing.T) {
 	f = w.Latest()
 	start := spawnAt(int64(s))
 	want := stepped(t, start, f.Control[s], windAt(w, f, start.X, start.Y))
-	if f.Tick != over+testEdge.Fall || f.Voyage[s] != (bus.Voyage{}) || f.State[s] != want || f.Boat[s] != boat || !f.Occupied[s] {
+	if f.Tick != over+testEdge.Fall || f.Voyage[s] != newVoyage(f.Tick) || f.State[s] != want || f.Boat[s] != boat || !f.Occupied[s] {
 		t.Fatalf("at tick %d after going over: boat %d, %+v, %+v; one step from the start is %+v", f.Tick-over, f.Boat[s], f.State[s], f.Voyage[s], want)
 	}
 }
@@ -220,9 +220,10 @@ func TestRestoreAtTheEdge(t *testing.T) {
 		t.Fatal(err)
 	}
 	f := w2.Latest()
-	if r.Fallen != 1 || f.Voyage[a.Slot] != (bus.Voyage{}) || f.State[a.Slot] != spawnAt(int64(a.Slot)) {
+	if r.Fallen != 1 || f.Voyage[a.Slot] != newVoyage(f.Tick) || f.State[a.Slot] != spawnAt(int64(a.Slot)) {
 		t.Fatalf("restored mid-fall: %+v, %+v, %+v", r, f.Voyage[a.Slot], f.State[a.Slot])
 	}
+	approach.Log.Read, approach.Log.At, approach.Log.X, approach.Log.Y, approach.Log.Port = false, 0, 0, 0, false
 	if f.Voyage[b.Slot] != approach || !approach.Approaching {
 		t.Fatalf("restored mid-approach: %+v, was %+v", f.Voyage[b.Slot], approach)
 	}
@@ -235,7 +236,7 @@ func TestVoyageInTheSnapshot(t *testing.T) {
 	r := do(t, w, bus.Command{Op: bus.Join, Account: acct(1)})
 	plain := Digest(w.Latest())
 	f := w.Latest()
-	f.Voyage[r.Slot] = bus.Voyage{}
+	f.Voyage[r.Slot] = bus.Voyage{Log: f.Voyage[r.Slot].Log}
 	if Digest(f) != plain {
 		t.Fatal("an empty voyage changes the digest")
 	}
@@ -244,6 +245,9 @@ func TestVoyageInTheSnapshot(t *testing.T) {
 		{Approaching: true, Least: 33.25, X: 1, Y: 8300},
 		{Survived: true, Best: 0.5, BestX: -3, BestY: 8333},
 		{Approaching: true, Least: 200, X: 2, Y: 8134, Survived: true, Best: 12, BestX: 4, BestY: 8322},
+		{Log: bus.VoyageLog{Began: 3, Run: 812.5, Read: true, At: 900, X: 1, Y: -2, Port: true, Seconds: 70, Dark: 12, BumpsAt: 1, BumpsNot: 2,
+			Met: bus.MetGale | bus.MetFog | bus.RodeGale, Wind: [bus.WindMinutes]uint8{8: 70, 9: 71}, Minutes: 2, Sum: 160.25, Blow: bus.BlowGale,
+			GaleX: 5, GaleY: 6, FogX: -7, FogY: 8}},
 	} {
 		f.Voyage[r.Slot] = v
 		if Digest(f) == plain {

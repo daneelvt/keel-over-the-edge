@@ -189,7 +189,8 @@ type database interface {
 	JobRuns(ctx context.Context, limit int) ([]store.JobRun, error)
 	jobs.Store
 	Chartings(ctx context.Context, world [16]byte) ([]store.Charting, error)
-	News(ctx context.Context, world [16]byte, before *[16]byte, limit int) ([]store.News, error)
+	// The news: its candidates, editions and figures.
+	newsDB
 	api.Notices
 	owner.Accounts
 	watch.Store
@@ -206,6 +207,8 @@ type database interface {
 	// Chat aboard: the owner's switches, mutes and blocks, players'
 	// switches, reports and statements of reasons.
 	chatStore
+	// The sailors' log.
+	logs
 	Stats() store.PoolStats
 	Close()
 }
@@ -548,7 +551,7 @@ func runServer(ctx context.Context, getenv func(string) string, stdout io.Writer
 	health.Beat()
 	play := newServer(p.playRoutes, log)
 	agents := newServer(p.agents.handler, log)
-	p.jobs = jobs.New(jobs.Config{Store: db, Lease: leaseEpoch, Jobs: append(p.lifecycleJobs(), p.oauthJob()), Log: log, Metrics: metrics})
+	p.jobs = jobs.New(jobs.Config{Store: db, Lease: leaseEpoch, Jobs: append(append(p.lifecycleJobs(), p.oauthJob(), p.backfillJob()), p.newsJobs()...), Log: log, Metrics: metrics})
 
 	g, gctx := errgroup.WithContext(ctx)
 	flightCtx, stopFlight := context.WithCancel(context.Background())
@@ -699,6 +702,10 @@ type ownerConfig struct {
 	agents *agents
 	// hand is the owner's hand on accounts.
 	hand *accounts.Accounts
+	// logs are the sailors' logs, and news the world's news; nil for the
+	// next world.
+	logs owner.Logs
+	news owner.News
 	// aiCap and aiReserve are the world's most boats for machine sailors
 	// and the places kept for them; 0 for the next world.
 	aiCap, aiReserve int
@@ -728,6 +735,12 @@ func ownerTools(c ownerConfig) *owner.Owner {
 		Calm:     c.cat.World.MainPort.Calm * 1852,
 		Accounts: c.db, Page: c.page, Log: c.log, Metrics: c.metrics,
 		Life: c.lifecycle, From: c.from, Hand: c.hand,
+	}
+	if c.news != nil {
+		cfg.News = c.news
+	}
+	if c.logs != nil {
+		cfg.Logs = c.logs
 	}
 	if a := c.agents; a != nil {
 		cfg.Machines, cfg.Lifetime, cfg.LifetimeChanged = c.db, a.lifetime, a.grants.ForgetAll

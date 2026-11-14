@@ -60,6 +60,27 @@ if (cert && key) {
   server.https = { cert: readFileSync(cert), key: readFileSync(key) };
 }
 
+// HTTP/1.1 only, when KEEL_DEV_HTTP1 asks: over https Vite serves HTTP/2,
+// and WebKit on Linux (libsoup) leaves a module request pending for good
+// once a page asks for some four hundred of them over HTTP/2; the tests'
+// WebKit page asks for more. Node's HTTP/2 server sets its own protocols
+// from its options, but offers each connection the server's list, so the
+// list is replaced once the server is made: http/1.1 alone, as TLS's ALPN
+// writes it (its length, then its name). A built page is a few files and
+// is never served so.
+const http1: Plugin = {
+  name: 'http1',
+  apply: 'serve',
+  configureServer(s) {
+    if (process.env.KEEL_DEV_HTTP1 && s.httpServer !== null) {
+      (s.httpServer as { ALPNProtocols?: Buffer }).ALPNProtocols = Buffer.from(
+        '\x08http/1.1',
+        'latin1',
+      );
+    }
+  },
+};
+
 // The sandbox's worlds: .dev/worlds/<seed>.world and its chart,
 // <seed>.chart, which go run ./tools/dev -world <seed> writes, served at
 // /dev-worlds/<seed>.world and .chart by the development server alone; a
@@ -134,6 +155,7 @@ export default defineConfig({
     plugins: () => [licences({ allowedFile, shared: workerPackages, emit: false })],
   },
   plugins: [
+    http1,
     devWorlds,
     approvePage,
     dressingRoom,
@@ -142,6 +164,11 @@ export default defineConfig({
       shared: workerPackages,
       extra: [
         { name: 'IM Fell English SC (font)', licence: 'OFL-1.1', file: 'src/fonts/OFL.txt' },
+        {
+          name: 'Libre Caslon Text (font)',
+          licence: 'OFL-1.1',
+          file: 'src/fonts/LibreCaslonText-OFL.txt',
+        },
         {
           name: 'Alegreya Sans (font)',
           licence: 'OFL-1.1',

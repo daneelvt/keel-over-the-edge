@@ -271,3 +271,30 @@ func TestDaily(t *testing.T) {
 		t.Errorf("next %s", got)
 	}
 }
+
+// TestDailyIn: a time of day by a zone's clock, through the change of
+// its offset: five past midnight in New York is 04:05 UTC in summer and
+// 05:05 in winter, whichever side of the change the day falls on.
+func TestDailyIn(t *testing.T) {
+	ny, err := time.LoadLocation("America/New_York")
+	if err != nil {
+		t.Fatal(err)
+	}
+	due := DailyIn(ny, 0, 5)
+	for at, want := range map[string]string{
+		"2026-10-31T12:00:00Z": "2026-10-31T04:05:00Z",
+		"2026-11-01T04:04:59Z": "2026-10-31T04:05:00Z",
+		"2026-11-01T04:05:00Z": "2026-11-01T04:05:00Z",
+		"2026-11-02T05:04:59Z": "2026-11-01T04:05:00Z",
+		"2026-11-02T05:05:00Z": "2026-11-02T05:05:00Z",
+	} {
+		now, _ := time.Parse(time.RFC3339, at)
+		if got, ok := due(now); !ok || got.Format(time.RFC3339) != want {
+			t.Errorf("at %s: %s, want %s", at, got.Format(time.RFC3339), want)
+		}
+	}
+	now, _ := time.Parse(time.RFC3339, "2026-11-01T12:00:00Z")
+	if got := DailyNextIn(ny, 0, 5)(now); got.Format(time.RFC3339) != "2026-11-02T05:05:00Z" {
+		t.Errorf("next %s", got)
+	}
+}

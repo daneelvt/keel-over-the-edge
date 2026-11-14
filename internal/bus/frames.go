@@ -106,6 +106,12 @@ type Frame struct {
 	// are events, in no snapshot or digest.
 	Edges []EdgeEvent
 
+	// VoyageEnds are the voyages this tick ended, and AboardEnds the
+	// times aboard another's boat it ended. They are events, in no
+	// snapshot or digest.
+	VoyageEnds []VoyageEnded
+	AboardEnds []AboardEnded
+
 	// Charted are the subjects this tick charted, sighted or charted with
 	// another, in the order they were. They are events, in no snapshot or
 	// digest.
@@ -224,6 +230,126 @@ type Voyage struct {
 	// voyage: it earns nothing, and its going over and its approaches are
 	// written as no event.
 	Placed bool
+	// Log is what the voyage keeps for the sailor's log.
+	Log VoyageLog
+}
+
+// VoyageLog is what a voyage keeps for the sailor's log, read once a
+// second (LogEvery): when it began, the distance run over the ground, the
+// bumps it had, and the weather it met.
+type VoyageLog struct {
+	// Began is the tick the voyage began.
+	Began int64
+	// Run is the distance sailed over the ground, m: the straight line
+	// from each second's place to the next. Read is true once the voyage
+	// has a place read, X and Y, at tick At; Port is true if that place
+	// was in port.
+	Run  float64
+	Read bool
+	At   int64
+	X, Y float64
+	Port bool
+	// Seconds counts the seconds under way that the log has read; Dark
+	// those with the sun below the horizon at the boat.
+	Seconds, Dark int32
+	// BumpsAt and BumpsNot count the bumps it had, at fault and not.
+	BumpsAt, BumpsNot uint16
+	// Met is the weather it met, Met… flags.
+	Met uint8
+	// Wind is the true wind's minute means at the boat, the newest last
+	// of the Minutes kept so far (at most WindMinutes), in quarter metres
+	// a second; Sum the wind of the minute under way, summed each second.
+	Wind    [WindMinutes]uint8
+	Minutes uint8
+	Sum     float64
+	// Blow is the wind's ten-minute mean as it stands: BlowNone, BlowGale
+	// or BlowStorm, held until the mean falls below Force 7.
+	Blow uint8
+	// GaleX and GaleY are where it first met a gale (or a storm), FogX and
+	// FogY where it made a landfall in fog.
+	GaleX, GaleY float64
+	FogX, FogY   float64
+}
+
+// The weather a voyage met, VoyageLog.Met's flags: a gale or a storm met,
+// and ridden out; a landfall in fog; a night at sea.
+const (
+	MetGale  = 1 << iota // a gale, Force 8, held as a ten-minute mean
+	MetStorm             // a storm, Force 10
+	RodeGale             // a gale ridden out: the mean fell below Force 7, or the voyage ended in port
+	RodeStorm
+	MetFog   // a port made with the visibility under a nautical mile
+	MetNight // half an hour under way with the sun down
+	MetAll   = MetGale | MetStorm | RodeGale | RodeStorm | MetFog | MetNight
+)
+
+// The wind's ten-minute mean, VoyageLog.Blow.
+const (
+	BlowNone  = 0
+	BlowGale  = 1
+	BlowStorm = 2
+)
+
+// WindMinutes is how many minute means of the wind a voyage keeps: ten.
+const WindMinutes = 10
+
+// LogEvery is how often a voyage's log is read, ticks: a second.
+const LogEvery = physics.StepsPerSecond
+
+// How a voyage ended, VoyageEnded.How; and how a time aboard another's
+// boat ended, AboardEnded.How.
+const (
+	EndReturned = 1 + iota // the sailor brought the boat out of the water
+	EndExpired             // its connection's grace ran out
+	EndOver                // it went over the lip
+	EndTaken               // the falls took the world
+	EndAboard              // its sailor went aboard another's boat
+	EndAshore              // one aboard went ashore, or was put ashore
+	EndLanded              // the boat they were aboard left the water
+)
+
+// VoyageEnded is a voyage ended: the boat, its sailor and its kind, how
+// it ended and where, its closest approach to the lip survived, and the
+// voyage's log. Placed is a voyage the owner's tools moved: the log
+// leaves it out. It is an event, in no snapshot or digest.
+type VoyageEnded struct {
+	Tick     int64
+	Slot     int32
+	Boat     uint64
+	Owner    Account
+	Machine  bool
+	Kind     uint16
+	BoatName string
+	How      uint8
+	Placed   bool
+	X, Y     float64
+	// Survived is true if an approach to the lip was survived, Least the
+	// closest, m inside the lip.
+	Survived bool
+	Least    float64
+	Log      VoyageLog
+}
+
+// AboardEnded is someone's time aboard another's boat ended: who, the boat
+// and its skipper, when they came aboard, the distance the boat ran while
+// they were, the weather met, and how it ended. Placed is a time aboard a
+// boat the owner's tools moved. It is an event, in no snapshot or digest.
+type AboardEnded struct {
+	Tick           int64
+	Account        Account
+	Machine        bool
+	Slot           int32
+	Boat           uint64
+	Skipper        Account
+	SkipperMachine bool
+	Kind           uint16
+	BoatName       string
+	Since          int64
+	Run            float64
+	Met            uint8
+	How            uint8
+	Placed         bool
+	X, Y           float64
 }
 
 // Falling reports whether the boat is over the lip, falling.
@@ -338,6 +464,10 @@ type Aboard struct {
 	// they come back first; 0 while connected.
 	Grace int64
 	Since int64 // the tick they came aboard
+	// Run is the distance the boat has run since they came aboard, m, and
+	// Met the weather met meanwhile, as the voyage's log reads them.
+	Run float64
+	Met uint8
 	// Machine and Priority are their account's kind; Look their sailor's
 	// look and Name their name, as players see it.
 	Machine  bool
@@ -504,6 +634,8 @@ func NewFrame(capacity int) *Frame {
 		Unseen:      make([]bool, capacity),
 		Edges:       make([]EdgeEvent, 0, 64),
 		Charted:     make([]Charted, 0, 64),
+		VoyageEnds:  make([]VoyageEnded, 0, 64),
+		AboardEnds:  make([]AboardEnded, 0, 16),
 		Wind:        make([]physics.Env, capacity),
 		Wake:        make([]physics.Wake, capacity),
 		Instruments: make([]Instruments, capacity),

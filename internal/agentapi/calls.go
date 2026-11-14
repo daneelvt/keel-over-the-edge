@@ -211,7 +211,7 @@ func (c *Core) call(ctx context.Context, d toolDef, h *helm, a *oauth.Accepted, 
 		if s == nil {
 			return "", nil, refuse(refusedNoWorld, wordsNoWorld)
 		}
-		text, r := newsWords(ctx, s, &o)
+		text, r := newsWords(ctx, s, h.account, &o)
 		return text, nil, r
 	case toolBoat:
 		var o struct {

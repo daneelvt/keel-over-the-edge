@@ -642,11 +642,11 @@ func NewMetrics(build, catalog string) *Metrics {
 	reg.MustRegister(m.MachinesCreated, m.MachinesDeleted, m.OAuthAuthorize, m.OAuthTokens, m.OAuthReuse, m.OAuthRegistered,
 		m.ClientFetches, m.ClientFetchTime, m.DoorRequests, m.DoorDuration, m.GrantsLive)
 	for _, a := range []string{"flag", "unflag", "place", "unseen", "seen", "world", "remake", "lifetime", "cap", "priority", "unpriority",
-		"stop", "start", "revoke", "delete", "search", "card", "link-lifetime", "links", "boarding"} {
+		"stop", "start", "revoke", "delete", "search", "card", "log", "link-lifetime", "links", "boarding", "news", "strike", "unstrike"} {
 		m.OwnerActions.WithLabelValues(a)
 	}
 	for _, w := range []string{"roam", "place", "flag", "unseen", "request", "world", "remake", "lifetime", "cap", "priority",
-		"stop", "start", "revoke", "delete", "search", "card", "settings"} {
+		"stop", "start", "revoke", "delete", "search", "card", "log", "settings", "news", "strike"} {
 		m.OwnerRefused.WithLabelValues(w)
 	}
 	reg.MustRegister(m.OwnerActions, m.OwnerRefused, m.OwnerView)

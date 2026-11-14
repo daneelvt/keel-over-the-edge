@@ -17,7 +17,8 @@ import (
 // owner, connection, grace, control word, pilot word, rig word, state, course, its account's
 // kind unless a human's alone, and, if it has
 // anything, its voyage at the edge (the tick it went over, its flags and its six
-// distances and places), and, if it has any, the owner's tools' marks, each waiting
+// distances and places), its voyage's log (each field, the wind's minute
+// means as bytes), and, if it has any, the owner's tools' marks, each waiting
 // connection's account, connection, tick of joining the queue, grace,
 // kind unless a human's alone, look unless the first and kind of boat unless the first,
 // and each pair's slots, boats, keep-clear boat, Article, whose action and
@@ -71,13 +72,14 @@ func Digest(f *bus.Frame) uint64 {
 		}
 		// A voyage at the edge counts once it has something, so a world
 		// whose boats never near it hashes as before.
-		if v := &f.Voyage[s]; *v != (bus.Voyage{}) {
+		if v := f.Voyage[s]; v.Over != 0 || voyageFlags(&v) != 0 || v.Least != 0 || v.X != 0 || v.Y != 0 || v.Best != 0 || v.BestX != 0 || v.BestY != 0 {
 			h.u64(uint64(v.Over))
-			h.byte(byte(voyageFlags(v)))
+			h.byte(byte(voyageFlags(&v)))
 			for _, x := range [...]float64{v.Least, v.X, v.Y, v.Best, v.BestX, v.BestY} {
 				h.f64(x)
 			}
 		}
+		h.voyageLog(&f.Voyage[s].Log)
 		// The owner's tools' marks count once one is set, so a world they
 		// never touched hashes as before; and an account's kind once it is
 		// not a human's alone, so a world of humans does.
@@ -131,6 +133,8 @@ func Digest(f *bus.Frame) uint64 {
 		h.u64(uint64(a.BoatKind))
 		h.boatLook(a.BoatLook, a.BoatName)
 		h.boatLook(0, a.Name)
+		h.f64(a.Run)
+		h.byte(a.Met)
 	}
 	for _, p := range f.Pairs {
 		h.u64(uint64(p.A))
@@ -237,3 +241,34 @@ func CourseFields(c *physics.Course) [CourseSize]*float64 {
 
 // CourseSize is the number of a course's fields.
 const CourseSize = 4
+
+// voyageLog hashes a voyage's log.
+func (h *fnv) voyageLog(lg *bus.VoyageLog) {
+	h.u64(uint64(lg.Began))
+	h.f64(lg.Run)
+	var flags byte
+	if lg.Read {
+		flags |= logRead
+	}
+	if lg.Port {
+		flags |= logPort
+	}
+	h.byte(flags)
+	h.u64(uint64(lg.At))
+	h.f64(lg.X)
+	h.f64(lg.Y)
+	h.u64(uint64(lg.Seconds))
+	h.u64(uint64(lg.Dark))
+	h.u64(uint64(lg.BumpsAt))
+	h.u64(uint64(lg.BumpsNot))
+	h.byte(lg.Met)
+	for _, m := range lg.Wind {
+		h.byte(m)
+	}
+	h.byte(lg.Minutes)
+	h.f64(lg.Sum)
+	h.byte(lg.Blow)
+	for _, x := range [...]float64{lg.GaleX, lg.GaleY, lg.FogX, lg.FogY} {
+		h.f64(x)
+	}
+}

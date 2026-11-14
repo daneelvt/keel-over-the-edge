@@ -23,7 +23,7 @@ func (w *World) apply(c *bus.Command) {
 		if s := slotOf(f, c.Boat); s >= 0 {
 			r = bus.Reply{Result: bus.Left, Slot: s, Boat: c.Boat, Gen: f.Gen[s]}
 			sailor = f.Owner[s]
-			w.free(s)
+			w.free(s, bus.EndReturned)
 		}
 	case bus.SetWeather:
 		wx := c.Weather
@@ -181,20 +181,21 @@ func (w *World) expire() {
 		boat := f.Boat[s]
 		r := bus.Reply{Result: bus.Expired, Slot: s, Boat: boat, Gen: f.Gen[s], Tick: f.Tick}
 		sailor := f.Owner[s]
-		w.free(s)
+		w.free(s, bus.EndExpired)
 		f.Events = append(f.Events, bus.Event{Command: bus.Command{Op: bus.Leave, Boat: boat, Account: sailor}, Reply: r})
 	}
 	w.launch()
 }
 
-// free ends the voyage of the boat in slot s of the next frame, unless it
-// ended going over the lip, and empties the slot.
-func (w *World) free(s int32) {
+// free puts ashore those aboard the boat in slot s of the next frame, ends
+// its voyage, how, unless it ended going over the lip, and empties the
+// slot.
+func (w *World) free(s int32, how uint8) {
 	f := w.next
-	if w.edge != nil && !f.Voyage[s].Falling() {
-		w.voyageEnds(f, s)
-	}
 	w.landCrew(f, s, bus.AshoreLeft)
+	if !f.Voyage[s].Falling() {
+		w.voyageEnds(f, s, how)
+	}
 	f.Holder[s] = bus.Account{}
 	f.Occupied[s] = false
 	f.Stay[s], f.Unseen[s] = false, false

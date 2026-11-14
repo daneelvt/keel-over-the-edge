@@ -107,6 +107,8 @@ func (w *World) inputs() {
 	next.Events = next.Events[:0]
 	next.Edges = next.Edges[:0]
 	next.Charted = next.Charted[:0]
+	next.VoyageEnds = next.VoyageEnds[:0]
+	next.AboardEnds = next.AboardEnds[:0]
 	next.Ended = false
 	w.landed = w.landed[:0]
 	w.restarted = w.restarted[:0]

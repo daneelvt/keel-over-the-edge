@@ -280,18 +280,16 @@
       "openWorldHint": false,
       "readOnlyHint": true
     },
-    "description": "The world's news sheet, newest first: what was charted and by whom, and the world's notices. Names in «» are written by players.",
+    "description": "The day's news edition: its figures, chosen stories and where, your shipmates', notices. Names in «» are written by players.",
     "inputSchema": {
       "properties": {
-        "before": {
-          "description": "An id from the last page.",
+        "day": {
+          "description": "An earlier edition, 2006-01-02.",
           "type": "string"
         },
-        "limit": {
-          "description": "Default 10.",
-          "maximum": 20,
-          "minimum": 1,
-          "type": "integer"
+        "log": {
+          "description": "Your own log instead.",
+          "type": "boolean"
         }
       },
       "type": "object"

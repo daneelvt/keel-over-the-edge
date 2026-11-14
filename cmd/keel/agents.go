@@ -16,6 +16,7 @@ import (
 	"github.com/daneelvt/keel-over-the-edge/internal/catalog"
 	"github.com/daneelvt/keel-over-the-edge/internal/forecast"
 	"github.com/daneelvt/keel-over-the-edge/internal/jobs"
+	"github.com/daneelvt/keel-over-the-edge/internal/logbook"
 	"github.com/daneelvt/keel-over-the-edge/internal/oauth"
 	"github.com/daneelvt/keel-over-the-edge/internal/owner"
 	"github.com/daneelvt/keel-over-the-edge/internal/sim"
@@ -121,7 +122,14 @@ func (p *process) seaOf(h *worldHalf, rw *readyWorld, sighting *sim.Sight) *agen
 		Limit: h.world.Limit(), AICap: h.world.AICap(), AIReserve: h.world.AIReserve(),
 		Timeline: rw.timeline, Waves: p.waves, Sky: cat.PrepareSky(), Bundle: rw.bundle, Life: rw.life,
 		Forecast: h.forecasts, Words: weather.WordsOf(cat), Catalog: cat, Looks: p.looks, Kinds: p.kinds, Encounters: cat.PrepareEncounters(), Fleet: p.fleet,
-		News: news{db: p.db, world: h.row.ID}.News, Columns: map[string]string{}, Biomes: map[string]string{},
+		Biomes: map[string]string{},
+	}
+	if h.news != nil {
+		s.News = h.news
+	}
+	logs := p.logsOf(h.row.Number)
+	s.Log = func(ctx context.Context, account store.AccountID) (logbook.Log, error) {
+		return logs.Own(ctx, account, 0)
 	}
 	if h.game != nil {
 		s.Watchers = h.game.Watchers
@@ -140,9 +148,6 @@ func (p *process) seaOf(h *worldHalf, rw *readyWorld, sighting *sim.Sight) *agen
 	}
 	s.Place = &forecast.PlaceWords{Timeline: rw.timeline, Words: s.Words, Outlook: cat.Weather.Forecast.Outlook.Samples}
 	copy(s.RainWords[:], cat.Weather.Clouds.RainWords)
-	for _, c := range cat.News.Columns {
-		s.Columns[string(c.ID)] = c.Title
-	}
 	for _, b := range cat.World.Biomes {
 		s.Biomes[string(b.ID)] = strings.ReplaceAll(string(b.ID), "-", " ")
 	}
