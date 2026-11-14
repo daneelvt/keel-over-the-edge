@@ -138,6 +138,12 @@ type Follow struct {
 	At         time.Time
 }
 
+type HarbourDay struct {
+	WorldID pgtype.UUID
+	Day     pgtype.Date
+	Hour    int16
+}
+
 type JobRun struct {
 	ID         pgtype.UUID
 	Job        string
@@ -347,6 +353,91 @@ type Place struct {
 	Details []byte
 }
 
+type Race struct {
+	WorldID    pgtype.UUID
+	ID         pgtype.UUID
+	Code       string
+	OwnerID    pgtype.UUID
+	Kind       string
+	CourseKind string
+	Course     int32
+	Shape      pgtype.Text
+	Long       bool
+	Boat       string
+	Who        string
+	Name       string
+	StartsAt   time.Time
+	Moved      bool
+	State      string
+	Harbour    pgtype.Int2
+	AgainOf    pgtype.UUID
+	MadeAt     time.Time
+	EndedAt    pgtype.Timestamptz
+}
+
+type RaceEntry struct {
+	WorldID     pgtype.UUID
+	RaceID      pgtype.UUID
+	AccountID   pgtype.UUID
+	Run         int16
+	Number      int16
+	Machine     bool
+	WithCrew    bool
+	EnteredAt   time.Time
+	WithdrawnAt pgtype.Timestamptz
+	Removed     bool
+	StartedAt   pgtype.Timestamptz
+}
+
+type RaceRecord struct {
+	ID             pgtype.UUID
+	AccountID      pgtype.UUID
+	Source         string
+	World          int32
+	At             time.Time
+	Code           string
+	RaceName       string
+	Kind           string
+	CourseName     string
+	Boat           string
+	BoatName       pgtype.Text
+	Fleet          int16
+	Harbour        bool
+	Newcomers      bool
+	Role           string
+	Place          pgtype.Int2
+	How            pgtype.Text
+	Medal          pgtype.Text
+	Awards         []string
+	SkipperID      pgtype.UUID
+	SkipperName    pgtype.Text
+	SkipperMachine bool
+}
+
+type RaceResult struct {
+	WorldID   pgtype.UUID
+	RaceID    pgtype.UUID
+	AccountID pgtype.UUID
+	Run       int16
+	Place     pgtype.Int2
+	Elapsed   pgtype.Float4
+	Added     float32
+	Marks     int16
+	ToGo      pgtype.Float4
+	How       string
+	Medal     pgtype.Text
+	Awards    []string
+	Crew      []byte
+}
+
+type RaceTrack struct {
+	WorldID   pgtype.UUID
+	RaceID    pgtype.UUID
+	AccountID pgtype.UUID
+	Run       int16
+	Samples   []byte
+}
+
 type Report struct {
 	ID            pgtype.UUID
 	MadeAt        time.Time
@@ -439,6 +530,14 @@ type Setting struct {
 	ChatCountries    []string
 	SpectatorChat    bool
 	LogFrom          time.Time
+	RaceAhead        int16
+	RaceDaily        int16
+	RaceMade         int16
+	RaceOwned        int16
+	RaceCutoff       pgtype.Interval
+	HarbourEvery     int16
+	HarbourBoats     []string
+	GreenhornUs      int16
 }
 
 type Shipmate struct {

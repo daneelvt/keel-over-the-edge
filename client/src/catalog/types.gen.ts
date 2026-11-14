@@ -243,6 +243,10 @@ export interface Boat {
    */
   capacity: number;
   /**
+   * The most boats of this kind in one race.
+   */
+  racers: number;
+  /**
    * Where the people aboard are drawn, one a person it can carry (capacity), in seat order: the first the helm, where whoever holds the controls is, then each seat's.
    *
    * @minItems 1
@@ -8858,11 +8862,20 @@ export interface NoticeKind {
    */
   name: string;
   /**
-   * What raises it: a place the player charts, a great discovery by anyone, the world closing, its end near, a new world begun, a new gale warning, or a sailor the player follows setting sail.
+   * What raises it: a place the player charts, a great discovery by anyone, the world closing, its end near, a new world begun, a new gale warning, a sailor the player follows setting sail, a harbour race about to start, or a race the player entered about to start.
    */
-  on: "charted-own" | "charted-great" | "falls-coming" | "falls-soon" | "new-world" | "gale-warned" | "followed-sailed";
+  on:
+    | "charted-own"
+    | "charted-great"
+    | "falls-coming"
+    | "falls-soon"
+    | "new-world"
+    | "gale-warned"
+    | "followed-sailed"
+    | "harbour-race"
+    | "race-soon";
   /**
-   * For a notice of the world's end near: the times before the end it is raised at, in minutes.
+   * For a notice of the world's end near, or of a race about to start: the times before it it is raised at, in minutes.
    *
    * @minItems 1
    * @maxItems 4
@@ -9048,9 +9061,9 @@ export interface NewsMilestones {
 export interface NewsStory {
   id: Id;
   /**
-   * What makes it: a great discovery first sighted; a record at the falls; a rare creature met; a crew in company; a sailor's first charting ever; the day's longest run; a milestone; any other charting; a course opened by charting.
+   * What makes it: a great discovery first sighted; a record at the falls; a rare creature met; a crew in company; a sailor's first charting ever; the day's longest run; a milestone; any other charting; a course opened by charting; a race won; a time trial sailed to gold or better.
    */
-  of: "great" | "record" | "life" | "crew" | "first" | "run" | "milestone" | "charting" | "course";
+  of: "great" | "record" | "life" | "crew" | "first" | "run" | "milestone" | "charting" | "course" | "race" | "trial";
   /**
    * How interesting it is: the edition shows the highest first.
    */
@@ -9511,4 +9524,4 @@ export interface LifeGlow {
 }
 
 /** The catalog version (tools/catalog). */
-export const CATALOG_VERSION = '2c1bf744a3f72688';
+export const CATALOG_VERSION = 'da5c831b248f14ed';

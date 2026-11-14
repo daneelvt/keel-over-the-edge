@@ -235,6 +235,11 @@ type Config struct {
 	ChatSettings ChatSettings
 	ChatChanged  func()
 	Reports      Reports
+	// Racing, if not nil, keeps the racing limits and the harbour
+	// timetable; RaceBoats are the catalog's boats' ids, the harbour
+	// rotation's choices.
+	Racing    RacingSettings
+	RaceBoats []string
 
 	// PlaceKinds and Characters are the catalog's kinds of place and
 	// lights' characters, by their indices, as the page shows them.
@@ -407,6 +412,8 @@ func (o *Owner) Handler() http.Handler {
 	mux.HandleFunc("POST /owner/api/machines", o.machineCap)
 	mux.HandleFunc("GET /owner/api/settings.json", o.settings)
 	mux.HandleFunc("POST /owner/api/settings", o.setSettings)
+	mux.HandleFunc("GET /owner/api/races", o.races)
+	mux.HandleFunc("POST /owner/api/races", o.setRaces)
 	mux.HandleFunc("GET /owner/api/reports.json", o.reports)
 	mux.HandleFunc("GET /owner/api/report.json", o.report)
 	mux.HandleFunc("POST /owner/api/reports/act", o.actOnReport)

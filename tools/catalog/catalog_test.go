@@ -19,6 +19,7 @@ var validBoats = `boats:
     name: Test boat
     description: A boat for tests
     capacity: 2
+    racers: 12
     stations:
       - { at: [0.55, 0.3, 0.4], pose: seated, facing: 270 }
       - { at: [-0.3, 0.3, -0.5], pose: standing, facing: 0 }
@@ -722,6 +723,7 @@ func TestCanonicalJSONIgnoresFileOrderAndLayout(t *testing.T) {
     controls: {reef: [Full sail, One reef, Two reefs], sheet: {trim: Trim, name: Sheet, ease: Ease}}
     beam: 1.20
     capacity: 2
+    racers: 12
     stations: [{facing: 270, pose: seated, at: [0.55, 0.30, 0.4]}, {pose: standing, at: [-0.3, 0.3, -0.5], facing: 0}]
     description: A boat for tests
     name: Test boat

@@ -194,6 +194,9 @@ type Boat struct {
 	// Physics corresponds to the JSON schema field "physics".
 	Physics BoatPhysics `json:"physics"`
 
+	// The most boats of this kind in one race.
+	Racers int `json:"racers"`
+
 	// Its sheet for a start from rest: pairs of an angle off the wind, in degrees,
 	// and the sheet there, from 0 hauled in to 1 let fly, by rising angle, read
 	// linearly between them.
@@ -2213,7 +2216,8 @@ type NewsStory struct {
 
 	// What makes it: a great discovery first sighted; a record at the falls; a rare
 	// creature met; a crew in company; a sailor's first charting ever; the day's
-	// longest run; a milestone; any other charting; a course opened by charting.
+	// longest run; a milestone; any other charting; a course opened by charting; a
+	// race won; a time trial sailed to gold or better.
 	Of NewsStoryOf `json:"of"`
 
 	// How interesting it is: the edition shows the highest first.
@@ -2229,14 +2233,16 @@ const NewsStoryOfFirst NewsStoryOf = "first"
 const NewsStoryOfGreat NewsStoryOf = "great"
 const NewsStoryOfLife NewsStoryOf = "life"
 const NewsStoryOfMilestone NewsStoryOf = "milestone"
+const NewsStoryOfRace NewsStoryOf = "race"
 const NewsStoryOfRecord NewsStoryOf = "record"
 const NewsStoryOfRun NewsStoryOf = "run"
+const NewsStoryOfTrial NewsStoryOf = "trial"
 
 // A kind of notice: what raises it, its words, how urgent it is, whether it can be
 // switched off and how long it stays.
 type NoticeKind struct {
-	// For a notice of the world's end near: the times before the end it is raised at,
-	// in minutes.
+	// For a notice of the world's end near, or of a race about to start: the times
+	// before it it is raised at, in minutes.
 	Before []float64 `json:"before,omitempty,omitzero"`
 
 	// Its words for several at once: {count} is filled in.
@@ -2252,8 +2258,9 @@ type NoticeKind struct {
 	Name string `json:"name"`
 
 	// What raises it: a place the player charts, a great discovery by anyone, the
-	// world closing, its end near, a new world begun, a new gale warning, or a sailor
-	// the player follows setting sail.
+	// world closing, its end near, a new world begun, a new gale warning, a sailor
+	// the player follows setting sail, a harbour race about to start, or a race the
+	// player entered about to start.
 	On On `json:"on"`
 
 	// How long it stays unless dismissed, in s.
@@ -2290,7 +2297,9 @@ const OnFallsComing On = "falls-coming"
 const OnFallsSoon On = "falls-soon"
 const OnFollowedSailed On = "followed-sailed"
 const OnGaleWarned On = "gale-warned"
+const OnHarbourRace On = "harbour-race"
 const OnNewWorld On = "new-world"
+const OnRaceSoon On = "race-soon"
 
 // How the boat's autopilot steers it: a proportional–integral–derivative law on
 // the angle off its course, and how hard it turns in a tack or a gybe. It sets the
@@ -5929,4 +5938,4 @@ type WorldZones struct {
 }
 
 // Version is the catalog version (tools/catalog).
-const Version = "2c1bf744a3f72688"
+const Version = "da5c831b248f14ed"

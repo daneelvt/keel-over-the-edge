@@ -34,6 +34,7 @@ import (
 	"github.com/daneelvt/keel-over-the-edge/internal/physics"
 	"github.com/daneelvt/keel-over-the-edge/internal/protocol"
 	"github.com/daneelvt/keel-over-the-edge/internal/protocol/pb"
+	"github.com/daneelvt/keel-over-the-edge/internal/race"
 	"github.com/daneelvt/keel-over-the-edge/internal/replay"
 	"github.com/daneelvt/keel-over-the-edge/internal/review"
 	"github.com/daneelvt/keel-over-the-edge/internal/scripted"
@@ -282,6 +283,8 @@ type worldHalf struct {
 	news *news.Service
 	// watch is the world's watching: the list, the card and follows.
 	watch *watch.Service
+	// races are the world's races ashore.
+	races *race.Service
 	// chat is the world's chat aboard: every line is said through it.
 	chat *chat.Hub
 	// tally finds who sails together aboard the world's boats.
@@ -398,6 +401,7 @@ func (p *process) openWorld(ctx context.Context, rw *readyWorld) (*worldHalf, er
 		Logbook: bookOf(rw, cat),
 	})
 	h.news = p.newsOf(row)
+	h.races = p.racesOf(h)
 	h.sea = p.seaOf(h, rw, sighting)
 	world.Record(h.inputs, h.game, h.lasting, h.forecasts, p.agents.core.Open(h.sea))
 	logs := p.logsOf(row.Number)
@@ -443,6 +447,7 @@ func (p *process) openWorld(ctx context.Context, rw *readyWorld) (*worldHalf, er
 		playCfg.Shipmates = p.shipmates
 	}
 	playCfg.Logs = logs
+	playCfg.Races = h.races
 	h.watch = watch.New(watch.Config{Store: p.db, Frames: b.Frames, Edge: h.game, Kinds: boatIDs(cat), Sea: h.sea, Agent: p.agentAttends,
 		Blocks: func(a, b bus.Account) bool { return p.ties.Blocks(a, b) }})
 	playCfg.Watch = h.watch

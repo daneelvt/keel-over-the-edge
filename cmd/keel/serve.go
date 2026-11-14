@@ -47,6 +47,7 @@ import (
 	"github.com/daneelvt/keel-over-the-edge/internal/owner"
 	"github.com/daneelvt/keel-over-the-edge/internal/persist"
 	"github.com/daneelvt/keel-over-the-edge/internal/physics"
+	"github.com/daneelvt/keel-over-the-edge/internal/race"
 	"github.com/daneelvt/keel-over-the-edge/internal/review"
 	"github.com/daneelvt/keel-over-the-edge/internal/scripted"
 	"github.com/daneelvt/keel-over-the-edge/internal/sim"
@@ -209,6 +210,9 @@ type database interface {
 	chatStore
 	// The sailors' log.
 	logs
+	// Races ashore, and their limits and timetable on the owner's page.
+	race.Store
+	owner.RacingSettings
 	Stats() store.PoolStats
 	Close()
 }
@@ -551,7 +555,7 @@ func runServer(ctx context.Context, getenv func(string) string, stdout io.Writer
 	health.Beat()
 	play := newServer(p.playRoutes, log)
 	agents := newServer(p.agents.handler, log)
-	p.jobs = jobs.New(jobs.Config{Store: db, Lease: leaseEpoch, Jobs: append(append(p.lifecycleJobs(), p.oauthJob(), p.backfillJob()), p.newsJobs()...), Log: log, Metrics: metrics})
+	p.jobs = jobs.New(jobs.Config{Store: db, Lease: leaseEpoch, Jobs: append(append(p.lifecycleJobs(), p.oauthJob(), p.backfillJob(), p.harbourJob()), p.newsJobs()...), Log: log, Metrics: metrics})
 
 	g, gctx := errgroup.WithContext(ctx)
 	flightCtx, stopFlight := context.WithCancel(context.Background())
@@ -735,6 +739,7 @@ func ownerTools(c ownerConfig) *owner.Owner {
 		Calm:     c.cat.World.MainPort.Calm * 1852,
 		Accounts: c.db, Page: c.page, Log: c.log, Metrics: c.metrics,
 		Life: c.lifecycle, From: c.from, Hand: c.hand,
+		Racing: c.db, RaceBoats: raceBoats(c.cat),
 	}
 	if c.news != nil {
 		cfg.News = c.news

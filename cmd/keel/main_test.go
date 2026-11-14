@@ -202,6 +202,7 @@ var bubbleEpoch = time.Date(2000, time.January, 1, 0, 0, 0, 0, time.UTC)
 // as two processes share a database.
 type memDB struct {
 	noAccounts
+	noRaces
 	epoch    time.Time
 	onClose  func()
 	sessions *edgetest.Sessions // nil for none

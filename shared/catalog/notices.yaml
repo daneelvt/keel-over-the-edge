@@ -14,6 +14,10 @@
 # charted place ("south-west of Gannet Holm"): the Met Office's grammar.
 # A sailor followed setting sail fills in {who}, and is told only once they
 # may be watched: a human who sails without allowing it raises nothing.
+# A harbour race about to start fills in {name}, the race's, and {boat},
+# its boats ("Jolly boats"); a race the player entered, {name}; both
+# {left}, the time to its start, at each time before it given. The
+# harbour board and the race's card say the same, so neither is lost.
 # Whatever a notice tells is in the news, on the chart, in the countdown or
 # on the list of sailors to watch too, so one missed is never lost (WCAG 2.2, 2.2.1). The world's end is worked out on the phone from the end the
 # Welcome gives and the world clock: each of its notices is shown once a
@@ -78,6 +82,24 @@ notices:
       stays: 8
       text: "{who} has set sail"
       folded: "{count} sailors you follow have set sail"
+    - id: harbour-races
+      name: Harbour races
+      on: harbour-race
+      before: [10]
+      level: passive
+      switchable: true
+      stays: 10
+      text: "{name} off Port Royal in {left} · {boat}"
+      folded: "{name} off Port Royal in {left} · {boat}"
+    - id: races-entered
+      name: Your races
+      on: race-soon
+      before: [5, 1]
+      level: active
+      switchable: false
+      stays: 8
+      text: "{name} starts in {left}"
+      folded: "{name} starts in {left}"
 
 # The news, a daily edition in the manner of the old shipping lists. What
 # could be news is written as a candidate story with its kind's score; each
@@ -115,3 +137,5 @@ news:
     - { id: milestone, of: milestone, score: 4 }
     - { id: lesser-find, of: charting, score: 1 }
     - { id: new-course, of: course, score: 5 }
+    - { id: race-won, of: race, score: 6 }
+    - { id: trial-gold, of: trial, score: 3 }

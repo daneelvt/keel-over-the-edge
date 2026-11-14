@@ -876,12 +876,13 @@
     "Boat": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["id", "name", "description", "capacity", "stations", "lengthOverall", "beam", "lights", "lookout", "perch", "deck", "startSheet", "controls", "fleet", "physics", "art"],
+      "required": ["id", "name", "description", "capacity", "racers", "stations", "lengthOverall", "beam", "lights", "lookout", "perch", "deck", "startSheet", "controls", "fleet", "physics", "art"],
       "properties": {
         "id": { "$ref": "#/$defs/Id" },
         "name": { "description": "Display name.", "type": "string", "minLength": 1 },
         "description": { "description": "What the boat is, in a few words.", "type": "string", "minLength": 1 },
         "capacity": { "description": "Most people aboard, the skipper included.", "type": "integer", "minimum": 1 },
+        "racers": { "description": "The most boats of this kind in one race.", "type": "integer", "minimum": 2, "maximum": 24 },
         "stations": {
           "description": "Where the people aboard are drawn, one a person it can carry (capacity), in seat order: the first the helm, where whoever holds the controls is, then each seat's.",
           "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/BoatStation" }
@@ -1569,8 +1570,8 @@
       "properties": {
         "id": { "$ref": "#/$defs/Id" },
         "name": { "description": "Its name in the menu's switches.", "type": "string", "minLength": 1, "maxLength": 60 },
-        "on": { "description": "What raises it: a place the player charts, a great discovery by anyone, the world closing, its end near, a new world begun, a new gale warning, or a sailor the player follows setting sail.", "type": "string", "enum": ["charted-own", "charted-great", "falls-coming", "falls-soon", "new-world", "gale-warned", "followed-sailed"] },
-        "before": { "description": "For a notice of the world's end near: the times before the end it is raised at, in minutes.", "type": "array", "minItems": 1, "maxItems": 4, "items": { "type": "number", "exclusiveMinimum": 0, "maximum": 1440 } },
+        "on": { "description": "What raises it: a place the player charts, a great discovery by anyone, the world closing, its end near, a new world begun, a new gale warning, a sailor the player follows setting sail, a harbour race about to start, or a race the player entered about to start.", "type": "string", "enum": ["charted-own", "charted-great", "falls-coming", "falls-soon", "new-world", "gale-warned", "followed-sailed", "harbour-race", "race-soon"] },
+        "before": { "description": "For a notice of the world's end near, or of a race about to start: the times before it it is raised at, in minutes.", "type": "array", "minItems": 1, "maxItems": 4, "items": { "type": "number", "exclusiveMinimum": 0, "maximum": 1440 } },
         "level": { "description": "Passive notices are for the player's leisure; active ones for now.", "type": "string", "enum": ["passive", "active"] },
         "switchable": { "description": "The player may switch it off.", "type": "boolean" },
         "stays": { "description": "How long it stays unless dismissed, in s.", "type": "number", "minimum": 1, "maximum": 60 },
@@ -1642,7 +1643,7 @@
       "required": ["id", "of", "score"],
       "properties": {
         "id": { "$ref": "#/$defs/Id" },
-        "of": { "description": "What makes it: a great discovery first sighted; a record at the falls; a rare creature met; a crew in company; a sailor's first charting ever; the day's longest run; a milestone; any other charting; a course opened by charting.", "type": "string", "enum": ["great", "record", "life", "crew", "first", "run", "milestone", "charting", "course"] },
+        "of": { "description": "What makes it: a great discovery first sighted; a record at the falls; a rare creature met; a crew in company; a sailor's first charting ever; the day's longest run; a milestone; any other charting; a course opened by charting; a race won; a time trial sailed to gold or better.", "type": "string", "enum": ["great", "record", "life", "crew", "first", "run", "milestone", "charting", "course", "race", "trial"] },
         "score": { "description": "How interesting it is: the edition shows the highest first.", "type": "integer", "minimum": 0, "maximum": 100 }
       }
     },

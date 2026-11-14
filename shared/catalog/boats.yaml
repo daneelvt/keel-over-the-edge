@@ -19,6 +19,7 @@ boats:
     name: Jolly boat
     description: Single-handed dinghy
     capacity: 1
+    racers: 12
     # Where the people aboard are: the helmsman on the starboard side deck,
     # where the helm's seat is, facing in.
     stations:
@@ -330,6 +331,7 @@ boats:
     name: Keelboat
     description: Day-sailing keelboat
     capacity: 5
+    racers: 8
     # Where the people aboard are, as a J/22 is crewed: the helmsman on the
     # starboard gunwale; then the crew along the rail, all to windward
     # (laid out here on the starboard side), in the order seats fill: the
@@ -601,6 +603,7 @@ boats:
     name: Tall ship
     description: Traditional sailing ship
     capacity: 40
+    racers: 6
     # Where the people aboard are, in the order they come aboard: her
     # helmsman at the wheel; beside it the weather and the lee side of the
     # quarterdeck, as a master and his mate keep them; the weather gangway;
@@ -980,6 +983,7 @@ boats:
     name: Skiff
     description: Two-person dinghy
     capacity: 2
+    racers: 12
     # Where the people aboard are: the helmsman on the starboard rack's
     # rail aft, facing in, and a second on the port rack's rail forward of
     # them, by the shrouds.
@@ -1284,6 +1288,7 @@ boats:
     name: Beach cat
     description: Small fast catamaran
     capacity: 2
+    racers: 12
     # Where the people aboard are, read from her model (its `aboard` node):
     # the helmsman on the starboard hull aft, forward of the rear beam,
     # facing in, and a second forward of them on the same hull by the
@@ -1589,6 +1594,7 @@ boats:
     name: Yacht
     description: Cruising yacht
     capacity: 8
+    racers: 8
     # Where her people are, read from her model (art/boats/yacht/build.ts
     # prints them): the helm between her wheels, standing aft of the
     # windward one; the cockpit fills before the rail, in the order a
@@ -1880,6 +1886,7 @@ boats:
     # manual: "Recommended maximum number of people on board when the boat
     # is underway").
     capacity: 12
+    racers: 8
     # Where her people are, read from her model (art/boats/catamaran/
     # build.ts prints them), in the order seats fill: the helm standing at
     # her wheel on the raised station to port; beside the helm on its
