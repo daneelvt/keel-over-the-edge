@@ -273,7 +273,11 @@ func (h *hub) dispatch(r recordFor) {
 		}
 		e = event{Tick: r.tick, Kind: evAboard, Words: ashoreEventWords(r.why, r.result)}
 	case evRace, evRacePlaced, evRaceAsked:
-		e = event{Tick: r.tick, Kind: r.kind, Words: r.words}
+		// A race tells several events in one tick (a lone boat finishes
+		// and ends its race at once), each its own record: one handed on
+		// after a report told its tick goes after that report, as a
+		// line does, or it would never be told.
+		e = event{Tick: max(r.tick, hm.seq+1, hm.ring.last()), Kind: r.kind, Words: r.words}
 		if r.call {
 			if hm.raceCalls == nil {
 				hm.raceCalls = map[uint32][]string{}

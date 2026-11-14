@@ -671,3 +671,20 @@ func TestRaceRecordsInTheLog(t *testing.T) {
 		}
 	}
 }
+
+// TestTwoRaceEventsOfOneTick: a race's second event of a tick, handed on
+// after a report told the first, is told by the next report.
+func TestTwoRaceEventsOfOneTick(t *testing.T) {
+	c := &Core{helms: map[store.AccountID]*helm{}}
+	h, s := newHub(c), &Sea{}
+	a := bus.Account{7}
+	hm := &helm{core: c, sea: s}
+	c.helms[store.AccountID(a)] = hm
+	h.dispatch(recordFor{sea: s, record: record{tick: 900, kind: evRace, account: a, words: "your boat finished, 1st home"}})
+	hm.seq = hm.ring.last()
+	h.dispatch(recordFor{sea: s, record: record{tick: 900, kind: evRace, account: a, words: "the race is over: 1st of 1"}})
+	evs, _ := hm.ring.after(hm.seq)
+	if len(evs) != 1 || evs[0].Words != "the race is over: 1st of 1" {
+		t.Fatalf("after the first was told: %+v", evs)
+	}
+}
