@@ -594,10 +594,14 @@ func (h *worldHalf) start() {
 		dev := devRoutes(sailorsCtx, h.bus, p.cat, h.ready.charts, p.log)
 		end := endRoute(p, h)
 		sailed := sailedRoute(h)
+		races := racesRoute(h)
 		p.devRoutes.set(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			switch r.URL.Path {
 			case "/debug/end":
 				end.ServeHTTP(w, r)
+				return
+			case "/debug/races":
+				races.ServeHTTP(w, r)
 				return
 			case "/debug/sailed":
 				sailed.ServeHTTP(w, r)

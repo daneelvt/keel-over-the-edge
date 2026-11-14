@@ -4,6 +4,8 @@ package main
 
 import (
 	"context"
+	"encoding/json"
+	"net/http"
 	"time"
 
 	"github.com/daneelvt/keel-over-the-edge/internal/bus"
@@ -163,4 +165,86 @@ func (p *process) raceNames(h *worldHalf) edge.RaceNamer {
 		}
 		return h.races.Names(ctx, store.AccountID(reader), ids)
 	}
+}
+
+// racesRoute answers the races under way in the world, on the internal
+// listener only, with KEEL_DEV_COMMANDS=1: each race's course as the
+// committee laid it and its boats as they stand, as JSON, for scripted
+// boats and the developer's eye.
+//
+//	GET /debug/races
+func racesRoute(h *worldHalf) http.Handler {
+	type point struct {
+		East  float64 `json:"east"`
+		North float64 `json:"north"`
+	}
+	type leg struct {
+		Mark  int16 `json:"mark"`
+		Line  bool  `json:"line"`
+		Want  int8  `json:"want"`
+		point       // the way's point it is made for
+		From  point `json:"from"` // a ray's start, a line's first end
+		To    point `json:"to"`   // a line's second end, or a point along a ray
+	}
+	type racer struct {
+		Number  int16    `json:"number"`
+		Account string   `json:"account"`
+		Boat    uint64   `json:"boat"`
+		State   uint8    `json:"state"`
+		Next    int16    `json:"next"`
+		Place   int16    `json:"place"`
+		ToGo    float64  `json:"toGo"`
+		Added   float64  `json:"added"`
+		Awards  []string `json:"awards"`
+		Medal   string   `json:"medal,omitempty"`
+		At      point    `json:"at"`
+	}
+	type raced struct {
+		Key      uint32  `json:"key"`
+		Run      int32   `json:"run"`
+		Trial    bool    `json:"trial"`
+		Phase    uint8   `json:"phase"`
+		Warning  int64   `json:"warning"`
+		Start    int64   `json:"start"`
+		Tick     int64   `json:"tick"`
+		From     float64 `json:"windFrom"`
+		Expected float64 `json:"expected"`
+		Legs     []leg   `json:"legs"`
+		Racers   []racer `json:"racers"`
+	}
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		f := h.bus.Frames.Acquire()
+		out := []raced{}
+		for i := range f.Races {
+			rc := &f.Races[i]
+			c := rc.Course
+			x := raced{Key: rc.Key, Run: rc.Run, Trial: rc.Trial, Phase: rc.Phase, Warning: rc.Warning, Start: rc.Start, Tick: f.Tick,
+				From: c.From, Expected: c.Expected}
+			for _, ch := range c.Checks {
+				l := leg{Mark: ch.Mark, Line: ch.Line, Want: ch.Want, point: point{ch.AtX, ch.AtY}, From: point{ch.X, ch.Y}}
+				if ch.Line {
+					l.To = point{ch.X2, ch.Y2}
+				} else {
+					l.To = point{ch.X + 100*ch.S, ch.Y + 100*ch.C}
+				}
+				x.Legs = append(x.Legs, l)
+			}
+			for j := range f.Racers {
+				b := &f.Racers[j]
+				if b.Race != rc.Key {
+					continue
+				}
+				x.Racers = append(x.Racers, racer{Number: b.Number, Account: b.Account.String(), Boat: b.Boat, State: b.State, Next: b.Next,
+					Place: b.Place, ToGo: b.ToGo, Added: float64(b.Added) / committee.Second, Awards: committee.Awards(b.Awards),
+					Medal: committee.MedalName(b.Medal)})
+				if s := b.Slot; s >= 0 && f.Occupied[s] && f.Boat[s] == b.Boat {
+					x.Racers[len(x.Racers)-1].At = point{f.State[s].X, f.State[s].Y}
+				}
+			}
+			out = append(out, x)
+		}
+		f.Release()
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(out)
+	})
 }

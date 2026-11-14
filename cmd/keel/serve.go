@@ -133,7 +133,8 @@ Configured from the environment:
                        or &at=boat (a group of the sea's life of that kind
                        there) and POST /debug/sailed (everyone aboard
                        together now counted as having sailed together five
-                       minutes) (default 0)
+                       minutes) and GET /debug/races (the races under way:
+                       their courses and boats, as JSON) (default 0)
 `
 
 func serve(ctx context.Context, args []string, getenv func(string) string, stdout, stderr io.Writer) error {
@@ -550,7 +551,7 @@ func runServer(ctx context.Context, getenv func(string) string, stdout io.Writer
 	}
 	p.current.Store(first)
 	if weatherHandler != nil {
-		log.Warn("developer commands are on: POST /debug/wind, /debug/weather, /debug/encounter, /debug/place, /debug/chart, /debug/life and /debug/sailed on the internal listener")
+		log.Warn("developer commands are on: POST /debug/wind, /debug/weather, /debug/encounter, /debug/place, /debug/chart, /debug/life and /debug/sailed, and GET /debug/races, on the internal listener")
 	}
 	health.Beat()
 	play := newServer(p.playRoutes, log)
