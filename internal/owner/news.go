@@ -100,6 +100,8 @@ func (o *Owner) strike(w http.ResponseWriter, r *http.Request) {
 		about = &st.Account
 	}
 	o.record(r, action, about, st.Story+": "+st.Title)
-	o.cfg.Log.Info("owner: a story of the news "+action, "action", action, "story", req.ID, "from", r.RemoteAddr)
+	// What is logged is what the database answered of the story, never the
+	// request's own words.
+	o.cfg.Log.Info("owner: a story of the news "+action, "action", action, "story", st.Story, "account", st.Account.String(), "from", r.RemoteAddr)
 	writeJSON(w, map[string]any{"id": req.ID, "struck": req.Struck})
 }
