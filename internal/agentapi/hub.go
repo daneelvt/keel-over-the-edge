@@ -51,6 +51,11 @@ type record struct {
 	result  bus.Result
 	// why is an Ashore's reason.
 	why uint8
+	// words are a race event's words for the account, race its race's
+	// key, and call whether it is a call on its boat.
+	words string
+	race  uint32
+	call  bool
 }
 
 // Recorder is handed a world's frames as they are published: a
@@ -58,6 +63,9 @@ type record struct {
 type Recorder struct {
 	hub *hub
 	sea *Sea
+	// raced is the tick of the newest race event recorded: the ticking
+	// goroutine's alone.
+	raced int64
 }
 
 // Record copies what f tells of machine sailors for the hub, and pokes it.
@@ -103,6 +111,7 @@ func (r *Recorder) Record(f *bus.Frame) {
 		}
 		put(record{tick: f.Tick, kind: evCharted, subject: c.Subject, owner: c.Owner, boat: c.Boat, x: c.X, y: c.Y})
 	}
+	r.raceEvents(f, put)
 	if f.Ended {
 		put(record{tick: f.Tick, kind: evWorldEnded})
 	}
@@ -263,6 +272,15 @@ func (h *hub) dispatch(r recordFor) {
 			hm.slot, hm.boat, hm.queued, hm.ordered = r.slot, r.boat, false, false
 		}
 		e = event{Tick: r.tick, Kind: evAboard, Words: ashoreEventWords(r.why, r.result)}
+	case evRace, evRacePlaced, evRaceAsked:
+		e = event{Tick: r.tick, Kind: r.kind, Words: r.words}
+		if r.call {
+			if hm.raceCalls == nil {
+				hm.raceCalls = map[uint32][]string{}
+			}
+			calls := append(hm.raceCalls[r.race], r.words)
+			hm.raceCalls[r.race] = calls[max(len(calls)-mostCalls, 0):]
+		}
 	case evOver:
 		e = event{Tick: r.tick, Kind: evOver, Words: "over the falls: your boat starts again at the start"}
 	case evTaken:

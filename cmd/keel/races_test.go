@@ -13,6 +13,9 @@ import (
 // timetable their defaults, the harbour races' job finding nothing to do.
 type noRaces struct{}
 
+func (noRaces) RaceRecordsOf(context.Context, store.AccountID, int) ([]store.RaceRecord, error) {
+	return nil, nil
+}
 func (noRaces) RaceSettings(context.Context) (store.RaceSettings, error) {
 	return store.RaceSettings{Ahead: 2, Daily: 8, Made: 8, Owned: 3, Cutoff: 3 * time.Hour, Every: 3, GreenhornUS: 50}, nil
 }

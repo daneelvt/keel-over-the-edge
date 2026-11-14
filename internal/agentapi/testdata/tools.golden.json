@@ -334,7 +334,7 @@
       "openWorldHint": false,
       "readOnlyHint": false
     },
-    "description": "Races: list, enter, start, retire. Not yet.",
+    "description": "Races: list yours and the next harbour races; enter one; make one, for its link; retire. handbook races.",
     "inputSchema": {
       "properties": {
         "action": {
@@ -342,13 +342,39 @@
           "enum": [
             "list",
             "enter",
-            "start",
+            "make",
             "retire"
           ],
           "type": "string"
         },
+        "boat": {
+          "type": "string"
+        },
+        "course": {
+          "description": "For make, as list gives.",
+          "type": "string"
+        },
+        "in": {
+          "description": "Minutes to the gun.",
+          "minimum": 5,
+          "type": "integer"
+        },
+        "name": {
+          "maxLength": 40,
+          "type": "string"
+        },
         "race": {
-          "description": "By its name.",
+          "description": "Code, link or name.",
+          "type": "string"
+        },
+        "trial": {
+          "type": "boolean"
+        },
+        "who": {
+          "enum": [
+            "everyone",
+            "machines"
+          ],
           "type": "string"
         }
       },
@@ -464,6 +490,7 @@
             "edge",
             "weather",
             "aboard",
+            "races",
             "tools",
             "limits"
           ],

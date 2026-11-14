@@ -539,6 +539,27 @@ func Standings(f *bus.Frame, key uint32) []int {
 	return out
 }
 
+// Gap is racer rc's gap to the first, lead, in race r, s: their times'
+// with the seconds added for two boats home; else the way between them at
+// the course's own speed, its length over its expected time.
+func Gap(r *bus.Race, lead, rc *bus.Racer) float64 {
+	if rc == lead {
+		return 0
+	}
+	if rc.State == bus.RacerFinished && lead.State == bus.RacerFinished {
+		return max(float64(rc.Home-lead.Home+rc.Added-lead.Added)/Second, 0)
+	}
+	speed := 1.0
+	if c := r.Course; c != nil && c.Expected > 0 {
+		speed = max(float64(c.Length/c.Expected), 0.1)
+	}
+	ahead := lead.ToGo
+	if lead.State == bus.RacerFinished {
+		ahead = 0
+	}
+	return max(float64((rc.ToGo-ahead)/speed), 0)
+}
+
 // Medal is a trial's run's medal for a time of secs against a par of par,
 // s: 0 for none.
 func Medal(secs, par float64) uint8 {

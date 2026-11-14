@@ -459,6 +459,12 @@ type helm struct {
 	// slot.
 	cands []view.Candidate
 	kept  []uint8
+	// raceKnown are the races its boat sails in as their cards told them,
+	// by their keys; raceCalls the calls on its boat in each; courseTold
+	// the race whose course card the last report told.
+	raceKnown  map[uint32]*knownRace
+	raceCalls  map[uint32][]string
+	courseTold uint32
 }
 
 // take waits for the helm's turn, or for ctx.

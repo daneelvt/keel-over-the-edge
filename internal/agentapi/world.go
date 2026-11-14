@@ -681,7 +681,6 @@ func (s *Sea) placeOf(p forecast.Place) (string, float64, float64, bool) {
 
 // The tools still to come, each saying what it will do.
 var notYet = map[string]string{
-	toolRace:   "Not yet: races come with a later update. Then race lists the races, enters one, votes to start it, or retires.",
 	toolPencil: "Not yet: pencil notes come with a later update. Then pencil writes a private note on your chart, or rubs one out.",
 	toolBottle: "Not yet: messages in bottles come with a later update. Then bottle drops a message over the side for someone to find.",
 }

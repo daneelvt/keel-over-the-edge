@@ -21,7 +21,7 @@ import (
 var pages embed.FS
 
 // topics are the handbook's pages, in their order.
-var topics = []string{"start", "sailing", "trim", "autopilot", "articles", "charting", "edge", "weather", "aboard", "tools", "limits"}
+var topics = []string{"start", "sailing", "trim", "autopilot", "articles", "charting", "edge", "weather", "aboard", "races", "tools", "limits"}
 
 // instructions are the server's instructions to the agent: under 512
 // characters.

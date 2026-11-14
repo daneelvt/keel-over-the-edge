@@ -213,6 +213,7 @@ type database interface {
 	logs
 	// Races ashore, and their limits and timetable on the owner's page.
 	race.Store
+	RaceRecordsOf(ctx context.Context, id store.AccountID, most int) ([]store.RaceRecord, error)
 	owner.RacingSettings
 	Stats() store.PoolStats
 	Close()

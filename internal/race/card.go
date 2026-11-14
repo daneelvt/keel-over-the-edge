@@ -4,6 +4,7 @@ package race
 
 import (
 	"context"
+	"errors"
 	"math"
 	"slices"
 	"time"
@@ -265,6 +266,20 @@ func (s *Service) Card(ctx context.Context, by Sailor, code string) (Card, error
 		return Card{}, err
 	}
 	return c, nil
+}
+
+// CardOf is the card of the race of an ID in the world sailed, as the
+// sailor by is shown it: a race under way in the world, by its row's ID.
+func (s *Service) CardOf(ctx context.Context, by Sailor, id [16]byte) (Card, error) {
+	w := &s.cfg.World
+	r, err := s.cfg.Store.RaceIn(ctx, w.ID, w.Number, id)
+	if errors.Is(err, store.ErrNotFound) {
+		return Card{}, ErrNotFound
+	}
+	if err != nil {
+		return Card{}, err
+	}
+	return s.Card(ctx, by, r.Code)
 }
 
 // person is a sailor of id as reader is shown them: by name by the log's

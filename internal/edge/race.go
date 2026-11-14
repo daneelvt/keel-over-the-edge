@@ -252,15 +252,8 @@ func racerState(s uint8) pb.RacerState {
 // racePicture is f.Races[i] as it stands.
 func racePicture(f *bus.Frame, i int) *pb.ServerMessage {
 	r := &f.Races[i]
-	c := r.Course
 	order := committee.Standings(f, r.Key)
 	m := &pb.RacePicture{Race: r.Key, Tick: f.Tick}
-	// The gap: to the first's time for those home; for the rest, the way
-	// between them at the course's own speed.
-	speed := 1.0
-	if c.Expected > 0 {
-		speed = max(c.Length/c.Expected, 0.1)
-	}
 	var lead *bus.Racer
 	for place, j := range order {
 		rc := &f.Racers[j]
@@ -271,7 +264,7 @@ func racePicture(f *bus.Frame, i int) *pb.ServerMessage {
 			if lead == nil {
 				lead = rc
 			}
-			at.Gap = gapOf(r, lead, rc, speed)
+			at.Gap = uint32(max(math.Round(committee.Gap(r, lead, rc)*10), 0))
 		}
 		if s := rc.Slot; s >= 0 && f.Occupied[s] && f.Boat[s] == rc.Boat {
 			st := &f.State[s]
@@ -281,24 +274,6 @@ func racePicture(f *bus.Frame, i int) *pb.ServerMessage {
 		m.Racers = append(m.Racers, at)
 	}
 	return &pb.ServerMessage{Body: &pb.ServerMessage_RacePicture{RacePicture: m}}
-}
-
-// gapOf is racer rc's gap to the first, lead, in race r, tenths of a
-// second: their times' for two boats home, else the way between them at
-// speed m/s.
-func gapOf(r *bus.Race, lead, rc *bus.Racer, speed float64) uint32 {
-	if rc == lead {
-		return 0
-	}
-	if rc.State == bus.RacerFinished && lead.State == bus.RacerFinished {
-		d := float64(rc.Home-lead.Home+rc.Added-lead.Added) / committee.Second
-		return uint32(max(math.Round(d*10), 0))
-	}
-	ahead := lead.ToGo
-	if lead.State == bus.RacerFinished {
-		ahead = 0
-	}
-	return uint32(max(math.Round((rc.ToGo-ahead)/speed*10), 0))
 }
 
 // raceSignals are the signals on the wire, by theirs.

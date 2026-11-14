@@ -102,6 +102,14 @@ type Sea struct {
 	// Deck, if not nil, is the game's own side of sailing together, which
 	// a skipper's agent puts someone ashore through.
 	Deck Deck
+	// Races are the world's races ashore, which a machine sailor lists,
+	// enters and makes; OwnerOf is a machine sailor's owner's account, for
+	// the blocks a race is entered by. Nil for none.
+	Races   Races
+	OwnerOf func(ctx context.Context, id store.AccountID) (store.AccountID, error)
+	// RaceRecords are a machine sailor's lasting race records, the newest
+	// first, at most MostRaceRecords, for its log; nil for none.
+	RaceRecords func(ctx context.Context, id store.AccountID) ([]store.RaceRecord, error)
 
 	overlays overlays
 

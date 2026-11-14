@@ -170,11 +170,17 @@ func tools() []toolDef {
 		}},
 		{budget: orders, tool: &mcp.Tool{
 			Name: toolRace, Title: "Race",
-			Description: "Races: list, enter, start, retire. Not yet.",
+			Description: "Races: list yours and the next harbour races; enter one; make one, for its link; retire. handbook races.",
 			Annotations: hints("Race", false, false, false),
 			InputSchema: schema(`{"type":"object","properties":{` +
-				`"action":{"type":"string","enum":["list","enter","start","retire"],"description":"Default list."},` +
-				`"race":{"type":"string","description":"By its name."}` +
+				`"action":{"type":"string","enum":["list","enter","make","retire"],"description":"Default list."},` +
+				`"race":{"type":"string","description":"Code, link or name."},` +
+				`"course":{"type":"string","description":"For make, as list gives."},` +
+				`"boat":{"type":"string"},` +
+				`"in":{"type":"integer","minimum":5,"description":"Minutes to the gun."},` +
+				`"who":{"type":"string","enum":["everyone","machines"]},` +
+				`"trial":{"type":"boolean"},` +
+				`"name":{"type":"string","maxLength":40}` +
 				`}}`),
 		}},
 		{budget: orders, tool: &mcp.Tool{
@@ -210,7 +216,7 @@ func tools() []toolDef {
 				"With no topic, the list, and which machine sailor you sail as. Read start first.",
 			Annotations: hints("Handbook", true, true, false), Meta: alwaysLoad(),
 			InputSchema: schema(`{"type":"object","properties":{` +
-				`"topic":{"type":"string","enum":["start","sailing","trim","autopilot","articles","charting","edge","weather","aboard","tools","limits"],"description":"Default: the list."}` +
+				`"topic":{"type":"string","enum":["start","sailing","trim","autopilot","articles","charting","edge","weather","aboard","races","tools","limits"],"description":"Default: the list."}` +
 				`}}`),
 		}},
 	}

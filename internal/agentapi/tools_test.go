@@ -25,8 +25,9 @@ var update = flag.Bool("update", false, "rewrite testdata from this build's answ
 const toolsGolden = "testdata/tools.golden.json"
 
 // mostToolBytes bounds the tool list's size, compact: 7,969 bytes, 1,953
-// o200k tokens, when it was written.
-const mostToolBytes = 8500
+// o200k tokens, when it was written; 8,859 bytes, 2,192 tokens, once race
+// was built.
+const mostToolBytes = 9000
 
 // listTools is the server's tools/list answer, as a client receives it.
 func listTools(t *testing.T) *mcp.ListToolsResult {
