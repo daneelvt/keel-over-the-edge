@@ -213,6 +213,20 @@ func TestWatchingARace(t *testing.T) {
 				t.Errorf("number %d: the picture's eye is %d", n, e)
 			}
 		}
+		// Every boat on the line wears her race number: the one watched,
+		// and those in view, told afresh after each Welcome.
+		numbered := func() bool {
+			n := 0
+			for _, p := range v.prizes {
+				if p.GetNumber() > 1 {
+					n++
+				}
+			}
+			return v.own.GetNumber() == 1 && n == 4
+		}
+		if !v.read(2*time.Second, numbered) {
+			t.Errorf("race numbers: own %v, in view %v", v.own, v.prizes)
+		}
 		// A switch within the second of the last is refused.
 		time.Sleep(time.Second)
 		v.send(raceWatch(key, "", 2))

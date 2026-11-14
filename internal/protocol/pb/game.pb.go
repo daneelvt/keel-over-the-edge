@@ -2820,6 +2820,7 @@ type ServerMessage struct {
 	//	*ServerMessage_RaceFinish
 	//	*ServerMessage_RaceResults
 	//	*ServerMessage_RaceCheered
+	//	*ServerMessage_BoatPrizes
 	Body          isServerMessage_Body `protobuf_oneof:"body"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -3222,6 +3223,15 @@ func (x *ServerMessage) GetRaceCheered() *RaceCheered {
 	return nil
 }
 
+func (x *ServerMessage) GetBoatPrizes() *BoatPrizes {
+	if x != nil {
+		if x, ok := x.Body.(*ServerMessage_BoatPrizes); ok {
+			return x.BoatPrizes
+		}
+	}
+	return nil
+}
+
 type isServerMessage_Body interface {
 	isServerMessage_Body()
 }
@@ -3386,6 +3396,10 @@ type ServerMessage_RaceCheered struct {
 	RaceCheered *RaceCheered `protobuf:"bytes,40,opt,name=race_cheered,json=raceCheered,proto3,oneof"`
 }
 
+type ServerMessage_BoatPrizes struct {
+	BoatPrizes *BoatPrizes `protobuf:"bytes,41,opt,name=boat_prizes,json=boatPrizes,proto3,oneof"`
+}
+
 func (*ServerMessage_Welcome) isServerMessage_Body() {}
 
 func (*ServerMessage_Pong) isServerMessage_Body() {}
@@ -3465,6 +3479,8 @@ func (*ServerMessage_RaceFinish) isServerMessage_Body() {}
 func (*ServerMessage_RaceResults) isServerMessage_Body() {}
 
 func (*ServerMessage_RaceCheered) isServerMessage_Body() {}
+
+func (*ServerMessage_BoatPrizes) isServerMessage_Body() {}
 
 // RaceTold tells a race under way: to its boats and those watching them,
 // and to every connection near enough to see its course, once as it is
@@ -4978,7 +4994,9 @@ type Person struct {
 	Muted   bool `protobuf:"varint,6,opt,name=muted,proto3" json:"muted,omitempty"`
 	Blocked bool `protobuf:"varint,7,opt,name=blocked,proto3" json:"blocked,omitempty"`
 	// A shipmate of the connection's account.
-	Shipmate      bool `protobuf:"varint,8,opt,name=shipmate,proto3" json:"shipmate,omitempty"`
+	Shipmate bool `protobuf:"varint,8,opt,name=shipmate,proto3" json:"shipmate,omitempty"`
+	// They wear the winner's cockade, for a race won in the world.
+	Cockade       bool `protobuf:"varint,9,opt,name=cockade,proto3" json:"cockade,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -5065,6 +5083,13 @@ func (x *Person) GetBlocked() bool {
 func (x *Person) GetShipmate() bool {
 	if x != nil {
 		return x.Shipmate
+	}
+	return false
+}
+
+func (x *Person) GetCockade() bool {
+	if x != nil {
+		return x.Cockade
 	}
 	return false
 }
@@ -5798,6 +5823,132 @@ func (x *BoatName) GetName() string {
 	return ""
 }
 
+// BoatPrizes are what boats fly for their skippers' races in the world:
+// of the boats in the connection's view, each as it comes into the view
+// and again when it changes, and of the boat the connection sails or
+// watches (own) as a Welcome begins it and when it changes. A Welcome
+// clears what the view's slots were told.
+type BoatPrizes struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Prizes        []*BoatPrize           `protobuf:"bytes,1,rep,name=prizes,proto3" json:"prizes,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *BoatPrizes) Reset() {
+	*x = BoatPrizes{}
+	mi := &file_keel_v1_game_proto_msgTypes[56]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *BoatPrizes) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*BoatPrizes) ProtoMessage() {}
+
+func (x *BoatPrizes) ProtoReflect() protoreflect.Message {
+	mi := &file_keel_v1_game_proto_msgTypes[56]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use BoatPrizes.ProtoReflect.Descriptor instead.
+func (*BoatPrizes) Descriptor() ([]byte, []int) {
+	return file_keel_v1_game_proto_rawDescGZIP(), []int{56}
+}
+
+func (x *BoatPrizes) GetPrizes() []*BoatPrize {
+	if x != nil {
+		return x.Prizes
+	}
+	return nil
+}
+
+// BoatPrize is a boat's prizes: by its view slot as of the next snapshot,
+// or the connection's own boat. prizes is a prize code, from the low bits:
+// how many winner's pennants it flies (3 bits, 0 … 5), each one's colour,
+// a place in the races' colours, the newest win's first (five fields of 3
+// bits), its burgee (2 bits: 0 none, 1 the racing burgee, 2 the gilded
+// one), how many wooden spoons hang from its stern (2 bits, 0 … 3) and the
+// committee's flag (1 bit); its skipper wears the winner's cockade while
+// it flies a pennant. number is its race number while it races, from its
+// placing on the line until its race is over; 0 for none.
+type BoatPrize struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Slot          uint32                 `protobuf:"varint,1,opt,name=slot,proto3" json:"slot,omitempty"`
+	Own           bool                   `protobuf:"varint,2,opt,name=own,proto3" json:"own,omitempty"`
+	Prizes        uint32                 `protobuf:"varint,3,opt,name=prizes,proto3" json:"prizes,omitempty"`
+	Number        uint32                 `protobuf:"varint,4,opt,name=number,proto3" json:"number,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *BoatPrize) Reset() {
+	*x = BoatPrize{}
+	mi := &file_keel_v1_game_proto_msgTypes[57]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *BoatPrize) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*BoatPrize) ProtoMessage() {}
+
+func (x *BoatPrize) ProtoReflect() protoreflect.Message {
+	mi := &file_keel_v1_game_proto_msgTypes[57]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use BoatPrize.ProtoReflect.Descriptor instead.
+func (*BoatPrize) Descriptor() ([]byte, []int) {
+	return file_keel_v1_game_proto_rawDescGZIP(), []int{57}
+}
+
+func (x *BoatPrize) GetSlot() uint32 {
+	if x != nil {
+		return x.Slot
+	}
+	return 0
+}
+
+func (x *BoatPrize) GetOwn() bool {
+	if x != nil {
+		return x.Own
+	}
+	return false
+}
+
+func (x *BoatPrize) GetPrizes() uint32 {
+	if x != nil {
+		return x.Prizes
+	}
+	return 0
+}
+
+func (x *BoatPrize) GetNumber() uint32 {
+	if x != nil {
+		return x.Number
+	}
+	return 0
+}
+
 // AgentLamp says whether the AI agent of the machine sailor a connection
 // watches is attending to it, as that changes: sent only to a connection
 // watching a machine sailor of its own account, never to the sailor, to
@@ -5813,7 +5964,7 @@ type AgentLamp struct {
 
 func (x *AgentLamp) Reset() {
 	*x = AgentLamp{}
-	mi := &file_keel_v1_game_proto_msgTypes[56]
+	mi := &file_keel_v1_game_proto_msgTypes[58]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5825,7 +5976,7 @@ func (x *AgentLamp) String() string {
 func (*AgentLamp) ProtoMessage() {}
 
 func (x *AgentLamp) ProtoReflect() protoreflect.Message {
-	mi := &file_keel_v1_game_proto_msgTypes[56]
+	mi := &file_keel_v1_game_proto_msgTypes[58]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5838,7 +5989,7 @@ func (x *AgentLamp) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AgentLamp.ProtoReflect.Descriptor instead.
 func (*AgentLamp) Descriptor() ([]byte, []int) {
-	return file_keel_v1_game_proto_rawDescGZIP(), []int{56}
+	return file_keel_v1_game_proto_rawDescGZIP(), []int{58}
 }
 
 func (x *AgentLamp) GetState() Lamp {
@@ -5885,7 +6036,7 @@ type Forecast struct {
 
 func (x *Forecast) Reset() {
 	*x = Forecast{}
-	mi := &file_keel_v1_game_proto_msgTypes[57]
+	mi := &file_keel_v1_game_proto_msgTypes[59]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5897,7 +6048,7 @@ func (x *Forecast) String() string {
 func (*Forecast) ProtoMessage() {}
 
 func (x *Forecast) ProtoReflect() protoreflect.Message {
-	mi := &file_keel_v1_game_proto_msgTypes[57]
+	mi := &file_keel_v1_game_proto_msgTypes[59]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5910,7 +6061,7 @@ func (x *Forecast) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Forecast.ProtoReflect.Descriptor instead.
 func (*Forecast) Descriptor() ([]byte, []int) {
-	return file_keel_v1_game_proto_rawDescGZIP(), []int{57}
+	return file_keel_v1_game_proto_rawDescGZIP(), []int{59}
 }
 
 func (x *Forecast) GetIssue() int64 {
@@ -6043,7 +6194,7 @@ type ForecastSystem struct {
 
 func (x *ForecastSystem) Reset() {
 	*x = ForecastSystem{}
-	mi := &file_keel_v1_game_proto_msgTypes[58]
+	mi := &file_keel_v1_game_proto_msgTypes[60]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6055,7 +6206,7 @@ func (x *ForecastSystem) String() string {
 func (*ForecastSystem) ProtoMessage() {}
 
 func (x *ForecastSystem) ProtoReflect() protoreflect.Message {
-	mi := &file_keel_v1_game_proto_msgTypes[58]
+	mi := &file_keel_v1_game_proto_msgTypes[60]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6068,7 +6219,7 @@ func (x *ForecastSystem) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ForecastSystem.ProtoReflect.Descriptor instead.
 func (*ForecastSystem) Descriptor() ([]byte, []int) {
-	return file_keel_v1_game_proto_rawDescGZIP(), []int{58}
+	return file_keel_v1_game_proto_rawDescGZIP(), []int{60}
 }
 
 func (x *ForecastSystem) GetSlot() uint32 {
@@ -6281,7 +6432,7 @@ type GaleWarning struct {
 
 func (x *GaleWarning) Reset() {
 	*x = GaleWarning{}
-	mi := &file_keel_v1_game_proto_msgTypes[59]
+	mi := &file_keel_v1_game_proto_msgTypes[61]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6293,7 +6444,7 @@ func (x *GaleWarning) String() string {
 func (*GaleWarning) ProtoMessage() {}
 
 func (x *GaleWarning) ProtoReflect() protoreflect.Message {
-	mi := &file_keel_v1_game_proto_msgTypes[59]
+	mi := &file_keel_v1_game_proto_msgTypes[61]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6306,7 +6457,7 @@ func (x *GaleWarning) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GaleWarning.ProtoReflect.Descriptor instead.
 func (*GaleWarning) Descriptor() ([]byte, []int) {
-	return file_keel_v1_game_proto_rawDescGZIP(), []int{59}
+	return file_keel_v1_game_proto_rawDescGZIP(), []int{61}
 }
 
 func (x *GaleWarning) GetKey() int64 {
@@ -6386,7 +6537,7 @@ type ForecastPast struct {
 
 func (x *ForecastPast) Reset() {
 	*x = ForecastPast{}
-	mi := &file_keel_v1_game_proto_msgTypes[60]
+	mi := &file_keel_v1_game_proto_msgTypes[62]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6398,7 +6549,7 @@ func (x *ForecastPast) String() string {
 func (*ForecastPast) ProtoMessage() {}
 
 func (x *ForecastPast) ProtoReflect() protoreflect.Message {
-	mi := &file_keel_v1_game_proto_msgTypes[60]
+	mi := &file_keel_v1_game_proto_msgTypes[62]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6411,7 +6562,7 @@ func (x *ForecastPast) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ForecastPast.ProtoReflect.Descriptor instead.
 func (*ForecastPast) Descriptor() ([]byte, []int) {
-	return file_keel_v1_game_proto_rawDescGZIP(), []int{60}
+	return file_keel_v1_game_proto_rawDescGZIP(), []int{62}
 }
 
 func (x *ForecastPast) GetIssue() *Forecast {
@@ -6449,7 +6600,7 @@ type Chart struct {
 
 func (x *Chart) Reset() {
 	*x = Chart{}
-	mi := &file_keel_v1_game_proto_msgTypes[61]
+	mi := &file_keel_v1_game_proto_msgTypes[63]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6461,7 +6612,7 @@ func (x *Chart) String() string {
 func (*Chart) ProtoMessage() {}
 
 func (x *Chart) ProtoReflect() protoreflect.Message {
-	mi := &file_keel_v1_game_proto_msgTypes[61]
+	mi := &file_keel_v1_game_proto_msgTypes[63]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6474,7 +6625,7 @@ func (x *Chart) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Chart.ProtoReflect.Descriptor instead.
 func (*Chart) Descriptor() ([]byte, []int) {
-	return file_keel_v1_game_proto_rawDescGZIP(), []int{61}
+	return file_keel_v1_game_proto_rawDescGZIP(), []int{63}
 }
 
 func (x *Chart) GetEntries() []*ChartEntry {
@@ -6503,7 +6654,7 @@ type Charted struct {
 
 func (x *Charted) Reset() {
 	*x = Charted{}
-	mi := &file_keel_v1_game_proto_msgTypes[62]
+	mi := &file_keel_v1_game_proto_msgTypes[64]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6515,7 +6666,7 @@ func (x *Charted) String() string {
 func (*Charted) ProtoMessage() {}
 
 func (x *Charted) ProtoReflect() protoreflect.Message {
-	mi := &file_keel_v1_game_proto_msgTypes[62]
+	mi := &file_keel_v1_game_proto_msgTypes[64]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6528,7 +6679,7 @@ func (x *Charted) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Charted.ProtoReflect.Descriptor instead.
 func (*Charted) Descriptor() ([]byte, []int) {
-	return file_keel_v1_game_proto_rawDescGZIP(), []int{62}
+	return file_keel_v1_game_proto_rawDescGZIP(), []int{64}
 }
 
 func (x *Charted) GetEntries() []*ChartEntry {
@@ -6567,7 +6718,7 @@ type Course struct {
 
 func (x *Course) Reset() {
 	*x = Course{}
-	mi := &file_keel_v1_game_proto_msgTypes[63]
+	mi := &file_keel_v1_game_proto_msgTypes[65]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6579,7 +6730,7 @@ func (x *Course) String() string {
 func (*Course) ProtoMessage() {}
 
 func (x *Course) ProtoReflect() protoreflect.Message {
-	mi := &file_keel_v1_game_proto_msgTypes[63]
+	mi := &file_keel_v1_game_proto_msgTypes[65]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6592,7 +6743,7 @@ func (x *Course) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Course.ProtoReflect.Descriptor instead.
 func (*Course) Descriptor() ([]byte, []int) {
-	return file_keel_v1_game_proto_rawDescGZIP(), []int{63}
+	return file_keel_v1_game_proto_rawDescGZIP(), []int{65}
 }
 
 func (x *Course) GetNumber() uint32 {
@@ -6658,7 +6809,7 @@ type CourseRound struct {
 
 func (x *CourseRound) Reset() {
 	*x = CourseRound{}
-	mi := &file_keel_v1_game_proto_msgTypes[64]
+	mi := &file_keel_v1_game_proto_msgTypes[66]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6670,7 +6821,7 @@ func (x *CourseRound) String() string {
 func (*CourseRound) ProtoMessage() {}
 
 func (x *CourseRound) ProtoReflect() protoreflect.Message {
-	mi := &file_keel_v1_game_proto_msgTypes[64]
+	mi := &file_keel_v1_game_proto_msgTypes[66]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6683,7 +6834,7 @@ func (x *CourseRound) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CourseRound.ProtoReflect.Descriptor instead.
 func (*CourseRound) Descriptor() ([]byte, []int) {
-	return file_keel_v1_game_proto_rawDescGZIP(), []int{64}
+	return file_keel_v1_game_proto_rawDescGZIP(), []int{66}
 }
 
 func (x *CourseRound) GetSubject() ChartSubject {
@@ -6719,7 +6870,7 @@ type CourseBoat struct {
 
 func (x *CourseBoat) Reset() {
 	*x = CourseBoat{}
-	mi := &file_keel_v1_game_proto_msgTypes[65]
+	mi := &file_keel_v1_game_proto_msgTypes[67]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6731,7 +6882,7 @@ func (x *CourseBoat) String() string {
 func (*CourseBoat) ProtoMessage() {}
 
 func (x *CourseBoat) ProtoReflect() protoreflect.Message {
-	mi := &file_keel_v1_game_proto_msgTypes[65]
+	mi := &file_keel_v1_game_proto_msgTypes[67]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6744,7 +6895,7 @@ func (x *CourseBoat) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CourseBoat.ProtoReflect.Descriptor instead.
 func (*CourseBoat) Descriptor() ([]byte, []int) {
-	return file_keel_v1_game_proto_rawDescGZIP(), []int{65}
+	return file_keel_v1_game_proto_rawDescGZIP(), []int{67}
 }
 
 func (x *CourseBoat) GetKind() uint32 {
@@ -6819,7 +6970,7 @@ type ChartEntry struct {
 
 func (x *ChartEntry) Reset() {
 	*x = ChartEntry{}
-	mi := &file_keel_v1_game_proto_msgTypes[66]
+	mi := &file_keel_v1_game_proto_msgTypes[68]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6831,7 +6982,7 @@ func (x *ChartEntry) String() string {
 func (*ChartEntry) ProtoMessage() {}
 
 func (x *ChartEntry) ProtoReflect() protoreflect.Message {
-	mi := &file_keel_v1_game_proto_msgTypes[66]
+	mi := &file_keel_v1_game_proto_msgTypes[68]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6844,7 +6995,7 @@ func (x *ChartEntry) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ChartEntry.ProtoReflect.Descriptor instead.
 func (*ChartEntry) Descriptor() ([]byte, []int) {
-	return file_keel_v1_game_proto_rawDescGZIP(), []int{66}
+	return file_keel_v1_game_proto_rawDescGZIP(), []int{68}
 }
 
 func (x *ChartEntry) GetSubject() ChartSubject {
@@ -7036,7 +7187,7 @@ type Places struct {
 
 func (x *Places) Reset() {
 	*x = Places{}
-	mi := &file_keel_v1_game_proto_msgTypes[67]
+	mi := &file_keel_v1_game_proto_msgTypes[69]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7048,7 +7199,7 @@ func (x *Places) String() string {
 func (*Places) ProtoMessage() {}
 
 func (x *Places) ProtoReflect() protoreflect.Message {
-	mi := &file_keel_v1_game_proto_msgTypes[67]
+	mi := &file_keel_v1_game_proto_msgTypes[69]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7061,7 +7212,7 @@ func (x *Places) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Places.ProtoReflect.Descriptor instead.
 func (*Places) Descriptor() ([]byte, []int) {
-	return file_keel_v1_game_proto_rawDescGZIP(), []int{67}
+	return file_keel_v1_game_proto_rawDescGZIP(), []int{69}
 }
 
 func (x *Places) GetPlaces() []*Place {
@@ -7101,7 +7252,7 @@ type Place struct {
 
 func (x *Place) Reset() {
 	*x = Place{}
-	mi := &file_keel_v1_game_proto_msgTypes[68]
+	mi := &file_keel_v1_game_proto_msgTypes[70]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7113,7 +7264,7 @@ func (x *Place) String() string {
 func (*Place) ProtoMessage() {}
 
 func (x *Place) ProtoReflect() protoreflect.Message {
-	mi := &file_keel_v1_game_proto_msgTypes[68]
+	mi := &file_keel_v1_game_proto_msgTypes[70]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7126,7 +7277,7 @@ func (x *Place) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Place.ProtoReflect.Descriptor instead.
 func (*Place) Descriptor() ([]byte, []int) {
-	return file_keel_v1_game_proto_rawDescGZIP(), []int{68}
+	return file_keel_v1_game_proto_rawDescGZIP(), []int{70}
 }
 
 func (x *Place) GetNumber() uint32 {
@@ -7228,7 +7379,7 @@ type Lights struct {
 
 func (x *Lights) Reset() {
 	*x = Lights{}
-	mi := &file_keel_v1_game_proto_msgTypes[69]
+	mi := &file_keel_v1_game_proto_msgTypes[71]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7240,7 +7391,7 @@ func (x *Lights) String() string {
 func (*Lights) ProtoMessage() {}
 
 func (x *Lights) ProtoReflect() protoreflect.Message {
-	mi := &file_keel_v1_game_proto_msgTypes[69]
+	mi := &file_keel_v1_game_proto_msgTypes[71]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7253,7 +7404,7 @@ func (x *Lights) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Lights.ProtoReflect.Descriptor instead.
 func (*Lights) Descriptor() ([]byte, []int) {
-	return file_keel_v1_game_proto_rawDescGZIP(), []int{69}
+	return file_keel_v1_game_proto_rawDescGZIP(), []int{71}
 }
 
 func (x *Lights) GetLights() []*Light {
@@ -7286,7 +7437,7 @@ type Life struct {
 
 func (x *Life) Reset() {
 	*x = Life{}
-	mi := &file_keel_v1_game_proto_msgTypes[70]
+	mi := &file_keel_v1_game_proto_msgTypes[72]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7298,7 +7449,7 @@ func (x *Life) String() string {
 func (*Life) ProtoMessage() {}
 
 func (x *Life) ProtoReflect() protoreflect.Message {
-	mi := &file_keel_v1_game_proto_msgTypes[70]
+	mi := &file_keel_v1_game_proto_msgTypes[72]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7311,7 +7462,7 @@ func (x *Life) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Life.ProtoReflect.Descriptor instead.
 func (*Life) Descriptor() ([]byte, []int) {
-	return file_keel_v1_game_proto_rawDescGZIP(), []int{70}
+	return file_keel_v1_game_proto_rawDescGZIP(), []int{72}
 }
 
 func (x *Life) GetEncounters() []*LifeEncounter {
@@ -7370,7 +7521,7 @@ type LifeEncounter struct {
 
 func (x *LifeEncounter) Reset() {
 	*x = LifeEncounter{}
-	mi := &file_keel_v1_game_proto_msgTypes[71]
+	mi := &file_keel_v1_game_proto_msgTypes[73]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7382,7 +7533,7 @@ func (x *LifeEncounter) String() string {
 func (*LifeEncounter) ProtoMessage() {}
 
 func (x *LifeEncounter) ProtoReflect() protoreflect.Message {
-	mi := &file_keel_v1_game_proto_msgTypes[71]
+	mi := &file_keel_v1_game_proto_msgTypes[73]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7395,7 +7546,7 @@ func (x *LifeEncounter) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use LifeEncounter.ProtoReflect.Descriptor instead.
 func (*LifeEncounter) Descriptor() ([]byte, []int) {
-	return file_keel_v1_game_proto_rawDescGZIP(), []int{71}
+	return file_keel_v1_game_proto_rawDescGZIP(), []int{73}
 }
 
 func (x *LifeEncounter) GetId() uint64 {
@@ -7517,7 +7668,7 @@ type Light struct {
 
 func (x *Light) Reset() {
 	*x = Light{}
-	mi := &file_keel_v1_game_proto_msgTypes[72]
+	mi := &file_keel_v1_game_proto_msgTypes[74]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7529,7 +7680,7 @@ func (x *Light) String() string {
 func (*Light) ProtoMessage() {}
 
 func (x *Light) ProtoReflect() protoreflect.Message {
-	mi := &file_keel_v1_game_proto_msgTypes[72]
+	mi := &file_keel_v1_game_proto_msgTypes[74]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7542,7 +7693,7 @@ func (x *Light) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Light.ProtoReflect.Descriptor instead.
 func (*Light) Descriptor() ([]byte, []int) {
-	return file_keel_v1_game_proto_rawDescGZIP(), []int{72}
+	return file_keel_v1_game_proto_rawDescGZIP(), []int{74}
 }
 
 func (x *Light) GetNumber() uint32 {
@@ -7614,7 +7765,7 @@ type Tools struct {
 
 func (x *Tools) Reset() {
 	*x = Tools{}
-	mi := &file_keel_v1_game_proto_msgTypes[73]
+	mi := &file_keel_v1_game_proto_msgTypes[75]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7626,7 +7777,7 @@ func (x *Tools) String() string {
 func (*Tools) ProtoMessage() {}
 
 func (x *Tools) ProtoReflect() protoreflect.Message {
-	mi := &file_keel_v1_game_proto_msgTypes[73]
+	mi := &file_keel_v1_game_proto_msgTypes[75]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7639,7 +7790,7 @@ func (x *Tools) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Tools.ProtoReflect.Descriptor instead.
 func (*Tools) Descriptor() ([]byte, []int) {
-	return file_keel_v1_game_proto_rawDescGZIP(), []int{73}
+	return file_keel_v1_game_proto_rawDescGZIP(), []int{75}
 }
 
 func (x *Tools) GetOn() bool {
@@ -7668,7 +7819,7 @@ type Chunks struct {
 
 func (x *Chunks) Reset() {
 	*x = Chunks{}
-	mi := &file_keel_v1_game_proto_msgTypes[74]
+	mi := &file_keel_v1_game_proto_msgTypes[76]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7680,7 +7831,7 @@ func (x *Chunks) String() string {
 func (*Chunks) ProtoMessage() {}
 
 func (x *Chunks) ProtoReflect() protoreflect.Message {
-	mi := &file_keel_v1_game_proto_msgTypes[74]
+	mi := &file_keel_v1_game_proto_msgTypes[76]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7693,7 +7844,7 @@ func (x *Chunks) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Chunks.ProtoReflect.Descriptor instead.
 func (*Chunks) Descriptor() ([]byte, []int) {
-	return file_keel_v1_game_proto_rawDescGZIP(), []int{74}
+	return file_keel_v1_game_proto_rawDescGZIP(), []int{76}
 }
 
 func (x *Chunks) GetNumber() []uint32 {
@@ -7735,7 +7886,7 @@ type Bump struct {
 
 func (x *Bump) Reset() {
 	*x = Bump{}
-	mi := &file_keel_v1_game_proto_msgTypes[75]
+	mi := &file_keel_v1_game_proto_msgTypes[77]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7747,7 +7898,7 @@ func (x *Bump) String() string {
 func (*Bump) ProtoMessage() {}
 
 func (x *Bump) ProtoReflect() protoreflect.Message {
-	mi := &file_keel_v1_game_proto_msgTypes[75]
+	mi := &file_keel_v1_game_proto_msgTypes[77]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7760,7 +7911,7 @@ func (x *Bump) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Bump.ProtoReflect.Descriptor instead.
 func (*Bump) Descriptor() ([]byte, []int) {
-	return file_keel_v1_game_proto_rawDescGZIP(), []int{75}
+	return file_keel_v1_game_proto_rawDescGZIP(), []int{77}
 }
 
 func (x *Bump) GetTick() int64 {
@@ -7835,7 +7986,7 @@ type WeatherSystems struct {
 
 func (x *WeatherSystems) Reset() {
 	*x = WeatherSystems{}
-	mi := &file_keel_v1_game_proto_msgTypes[76]
+	mi := &file_keel_v1_game_proto_msgTypes[78]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7847,7 +7998,7 @@ func (x *WeatherSystems) String() string {
 func (*WeatherSystems) ProtoMessage() {}
 
 func (x *WeatherSystems) ProtoReflect() protoreflect.Message {
-	mi := &file_keel_v1_game_proto_msgTypes[76]
+	mi := &file_keel_v1_game_proto_msgTypes[78]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7860,7 +8011,7 @@ func (x *WeatherSystems) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use WeatherSystems.ProtoReflect.Descriptor instead.
 func (*WeatherSystems) Descriptor() ([]byte, []int) {
-	return file_keel_v1_game_proto_rawDescGZIP(), []int{76}
+	return file_keel_v1_game_proto_rawDescGZIP(), []int{78}
 }
 
 func (x *WeatherSystems) GetSpells() []*Spell {
@@ -7908,7 +8059,7 @@ type ComingFront struct {
 
 func (x *ComingFront) Reset() {
 	*x = ComingFront{}
-	mi := &file_keel_v1_game_proto_msgTypes[77]
+	mi := &file_keel_v1_game_proto_msgTypes[79]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7920,7 +8071,7 @@ func (x *ComingFront) String() string {
 func (*ComingFront) ProtoMessage() {}
 
 func (x *ComingFront) ProtoReflect() protoreflect.Message {
-	mi := &file_keel_v1_game_proto_msgTypes[77]
+	mi := &file_keel_v1_game_proto_msgTypes[79]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7933,7 +8084,7 @@ func (x *ComingFront) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ComingFront.ProtoReflect.Descriptor instead.
 func (*ComingFront) Descriptor() ([]byte, []int) {
-	return file_keel_v1_game_proto_rawDescGZIP(), []int{77}
+	return file_keel_v1_game_proto_rawDescGZIP(), []int{79}
 }
 
 func (x *ComingFront) GetBegin() int64 {
@@ -7973,7 +8124,7 @@ type IslandCaps struct {
 
 func (x *IslandCaps) Reset() {
 	*x = IslandCaps{}
-	mi := &file_keel_v1_game_proto_msgTypes[78]
+	mi := &file_keel_v1_game_proto_msgTypes[80]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7985,7 +8136,7 @@ func (x *IslandCaps) String() string {
 func (*IslandCaps) ProtoMessage() {}
 
 func (x *IslandCaps) ProtoReflect() protoreflect.Message {
-	mi := &file_keel_v1_game_proto_msgTypes[78]
+	mi := &file_keel_v1_game_proto_msgTypes[80]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7998,7 +8149,7 @@ func (x *IslandCaps) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use IslandCaps.ProtoReflect.Descriptor instead.
 func (*IslandCaps) Descriptor() ([]byte, []int) {
-	return file_keel_v1_game_proto_rawDescGZIP(), []int{78}
+	return file_keel_v1_game_proto_rawDescGZIP(), []int{80}
 }
 
 func (x *IslandCaps) GetCaps() []*IslandCap {
@@ -8031,7 +8182,7 @@ type IslandCap struct {
 
 func (x *IslandCap) Reset() {
 	*x = IslandCap{}
-	mi := &file_keel_v1_game_proto_msgTypes[79]
+	mi := &file_keel_v1_game_proto_msgTypes[81]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8043,7 +8194,7 @@ func (x *IslandCap) String() string {
 func (*IslandCap) ProtoMessage() {}
 
 func (x *IslandCap) ProtoReflect() protoreflect.Message {
-	mi := &file_keel_v1_game_proto_msgTypes[79]
+	mi := &file_keel_v1_game_proto_msgTypes[81]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8056,7 +8207,7 @@ func (x *IslandCap) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use IslandCap.ProtoReflect.Descriptor instead.
 func (*IslandCap) Descriptor() ([]byte, []int) {
-	return file_keel_v1_game_proto_rawDescGZIP(), []int{79}
+	return file_keel_v1_game_proto_rawDescGZIP(), []int{81}
 }
 
 func (x *IslandCap) GetNumber() uint32 {
@@ -8102,7 +8253,7 @@ type Keyframe struct {
 
 func (x *Keyframe) Reset() {
 	*x = Keyframe{}
-	mi := &file_keel_v1_game_proto_msgTypes[80]
+	mi := &file_keel_v1_game_proto_msgTypes[82]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8114,7 +8265,7 @@ func (x *Keyframe) String() string {
 func (*Keyframe) ProtoMessage() {}
 
 func (x *Keyframe) ProtoReflect() protoreflect.Message {
-	mi := &file_keel_v1_game_proto_msgTypes[80]
+	mi := &file_keel_v1_game_proto_msgTypes[82]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8127,7 +8278,7 @@ func (x *Keyframe) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Keyframe.ProtoReflect.Descriptor instead.
 func (*Keyframe) Descriptor() ([]byte, []int) {
-	return file_keel_v1_game_proto_rawDescGZIP(), []int{80}
+	return file_keel_v1_game_proto_rawDescGZIP(), []int{82}
 }
 
 func (x *Keyframe) GetTick() int64 {
@@ -8179,7 +8330,7 @@ type SystemKey struct {
 
 func (x *SystemKey) Reset() {
 	*x = SystemKey{}
-	mi := &file_keel_v1_game_proto_msgTypes[81]
+	mi := &file_keel_v1_game_proto_msgTypes[83]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8191,7 +8342,7 @@ func (x *SystemKey) String() string {
 func (*SystemKey) ProtoMessage() {}
 
 func (x *SystemKey) ProtoReflect() protoreflect.Message {
-	mi := &file_keel_v1_game_proto_msgTypes[81]
+	mi := &file_keel_v1_game_proto_msgTypes[83]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8204,7 +8355,7 @@ func (x *SystemKey) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SystemKey.ProtoReflect.Descriptor instead.
 func (*SystemKey) Descriptor() ([]byte, []int) {
-	return file_keel_v1_game_proto_rawDescGZIP(), []int{81}
+	return file_keel_v1_game_proto_rawDescGZIP(), []int{83}
 }
 
 func (x *SystemKey) GetSlot() uint32 {
@@ -8357,7 +8508,7 @@ type Spell struct {
 
 func (x *Spell) Reset() {
 	*x = Spell{}
-	mi := &file_keel_v1_game_proto_msgTypes[82]
+	mi := &file_keel_v1_game_proto_msgTypes[84]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8369,7 +8520,7 @@ func (x *Spell) String() string {
 func (*Spell) ProtoMessage() {}
 
 func (x *Spell) ProtoReflect() protoreflect.Message {
-	mi := &file_keel_v1_game_proto_msgTypes[82]
+	mi := &file_keel_v1_game_proto_msgTypes[84]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8382,7 +8533,7 @@ func (x *Spell) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Spell.ProtoReflect.Descriptor instead.
 func (*Spell) Descriptor() ([]byte, []int) {
-	return file_keel_v1_game_proto_rawDescGZIP(), []int{82}
+	return file_keel_v1_game_proto_rawDescGZIP(), []int{84}
 }
 
 func (x *Spell) GetBegin() int64 {
@@ -8588,7 +8739,7 @@ type SeaAreas struct {
 
 func (x *SeaAreas) Reset() {
 	*x = SeaAreas{}
-	mi := &file_keel_v1_game_proto_msgTypes[83]
+	mi := &file_keel_v1_game_proto_msgTypes[85]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8600,7 +8751,7 @@ func (x *SeaAreas) String() string {
 func (*SeaAreas) ProtoMessage() {}
 
 func (x *SeaAreas) ProtoReflect() protoreflect.Message {
-	mi := &file_keel_v1_game_proto_msgTypes[83]
+	mi := &file_keel_v1_game_proto_msgTypes[85]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8613,7 +8764,7 @@ func (x *SeaAreas) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SeaAreas.ProtoReflect.Descriptor instead.
 func (*SeaAreas) Descriptor() ([]byte, []int) {
-	return file_keel_v1_game_proto_rawDescGZIP(), []int{83}
+	return file_keel_v1_game_proto_rawDescGZIP(), []int{85}
 }
 
 func (x *SeaAreas) GetTick() int64 {
@@ -8700,7 +8851,7 @@ type Restart struct {
 
 func (x *Restart) Reset() {
 	*x = Restart{}
-	mi := &file_keel_v1_game_proto_msgTypes[84]
+	mi := &file_keel_v1_game_proto_msgTypes[86]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8712,7 +8863,7 @@ func (x *Restart) String() string {
 func (*Restart) ProtoMessage() {}
 
 func (x *Restart) ProtoReflect() protoreflect.Message {
-	mi := &file_keel_v1_game_proto_msgTypes[84]
+	mi := &file_keel_v1_game_proto_msgTypes[86]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8725,7 +8876,7 @@ func (x *Restart) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Restart.ProtoReflect.Descriptor instead.
 func (*Restart) Descriptor() ([]byte, []int) {
-	return file_keel_v1_game_proto_rawDescGZIP(), []int{84}
+	return file_keel_v1_game_proto_rawDescGZIP(), []int{86}
 }
 
 func (x *Restart) GetInMs() uint32 {
@@ -8752,7 +8903,7 @@ type Queued struct {
 
 func (x *Queued) Reset() {
 	*x = Queued{}
-	mi := &file_keel_v1_game_proto_msgTypes[85]
+	mi := &file_keel_v1_game_proto_msgTypes[87]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8764,7 +8915,7 @@ func (x *Queued) String() string {
 func (*Queued) ProtoMessage() {}
 
 func (x *Queued) ProtoReflect() protoreflect.Message {
-	mi := &file_keel_v1_game_proto_msgTypes[85]
+	mi := &file_keel_v1_game_proto_msgTypes[87]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8777,7 +8928,7 @@ func (x *Queued) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Queued.ProtoReflect.Descriptor instead.
 func (*Queued) Descriptor() ([]byte, []int) {
-	return file_keel_v1_game_proto_rawDescGZIP(), []int{85}
+	return file_keel_v1_game_proto_rawDescGZIP(), []int{87}
 }
 
 func (x *Queued) GetPosition() uint32 {
@@ -8874,7 +9025,7 @@ type Welcome struct {
 
 func (x *Welcome) Reset() {
 	*x = Welcome{}
-	mi := &file_keel_v1_game_proto_msgTypes[86]
+	mi := &file_keel_v1_game_proto_msgTypes[88]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8886,7 +9037,7 @@ func (x *Welcome) String() string {
 func (*Welcome) ProtoMessage() {}
 
 func (x *Welcome) ProtoReflect() protoreflect.Message {
-	mi := &file_keel_v1_game_proto_msgTypes[86]
+	mi := &file_keel_v1_game_proto_msgTypes[88]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8899,7 +9050,7 @@ func (x *Welcome) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Welcome.ProtoReflect.Descriptor instead.
 func (*Welcome) Descriptor() ([]byte, []int) {
-	return file_keel_v1_game_proto_rawDescGZIP(), []int{86}
+	return file_keel_v1_game_proto_rawDescGZIP(), []int{88}
 }
 
 func (x *Welcome) GetWorld() string {
@@ -9055,7 +9206,7 @@ type Aboard struct {
 
 func (x *Aboard) Reset() {
 	*x = Aboard{}
-	mi := &file_keel_v1_game_proto_msgTypes[87]
+	mi := &file_keel_v1_game_proto_msgTypes[89]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9067,7 +9218,7 @@ func (x *Aboard) String() string {
 func (*Aboard) ProtoMessage() {}
 
 func (x *Aboard) ProtoReflect() protoreflect.Message {
-	mi := &file_keel_v1_game_proto_msgTypes[87]
+	mi := &file_keel_v1_game_proto_msgTypes[89]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9080,7 +9231,7 @@ func (x *Aboard) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Aboard.ProtoReflect.Descriptor instead.
 func (*Aboard) Descriptor() ([]byte, []int) {
-	return file_keel_v1_game_proto_rawDescGZIP(), []int{87}
+	return file_keel_v1_game_proto_rawDescGZIP(), []int{89}
 }
 
 func (x *Aboard) GetSkipper() string {
@@ -9122,7 +9273,7 @@ type Harbour struct {
 
 func (x *Harbour) Reset() {
 	*x = Harbour{}
-	mi := &file_keel_v1_game_proto_msgTypes[88]
+	mi := &file_keel_v1_game_proto_msgTypes[90]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9134,7 +9285,7 @@ func (x *Harbour) String() string {
 func (*Harbour) ProtoMessage() {}
 
 func (x *Harbour) ProtoReflect() protoreflect.Message {
-	mi := &file_keel_v1_game_proto_msgTypes[88]
+	mi := &file_keel_v1_game_proto_msgTypes[90]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9147,7 +9298,7 @@ func (x *Harbour) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Harbour.ProtoReflect.Descriptor instead.
 func (*Harbour) Descriptor() ([]byte, []int) {
-	return file_keel_v1_game_proto_rawDescGZIP(), []int{88}
+	return file_keel_v1_game_proto_rawDescGZIP(), []int{90}
 }
 
 func (x *Harbour) GetEast() int32 {
@@ -9208,7 +9359,7 @@ type Watching struct {
 
 func (x *Watching) Reset() {
 	*x = Watching{}
-	mi := &file_keel_v1_game_proto_msgTypes[89]
+	mi := &file_keel_v1_game_proto_msgTypes[91]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9220,7 +9371,7 @@ func (x *Watching) String() string {
 func (*Watching) ProtoMessage() {}
 
 func (x *Watching) ProtoReflect() protoreflect.Message {
-	mi := &file_keel_v1_game_proto_msgTypes[89]
+	mi := &file_keel_v1_game_proto_msgTypes[91]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9233,7 +9384,7 @@ func (x *Watching) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Watching.ProtoReflect.Descriptor instead.
 func (*Watching) Descriptor() ([]byte, []int) {
-	return file_keel_v1_game_proto_rawDescGZIP(), []int{89}
+	return file_keel_v1_game_proto_rawDescGZIP(), []int{91}
 }
 
 func (x *Watching) GetSailor() string {
@@ -9277,7 +9428,7 @@ type Pong struct {
 
 func (x *Pong) Reset() {
 	*x = Pong{}
-	mi := &file_keel_v1_game_proto_msgTypes[90]
+	mi := &file_keel_v1_game_proto_msgTypes[92]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9289,7 +9440,7 @@ func (x *Pong) String() string {
 func (*Pong) ProtoMessage() {}
 
 func (x *Pong) ProtoReflect() protoreflect.Message {
-	mi := &file_keel_v1_game_proto_msgTypes[90]
+	mi := &file_keel_v1_game_proto_msgTypes[92]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9302,7 +9453,7 @@ func (x *Pong) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Pong.ProtoReflect.Descriptor instead.
 func (*Pong) Descriptor() ([]byte, []int) {
-	return file_keel_v1_game_proto_rawDescGZIP(), []int{90}
+	return file_keel_v1_game_proto_rawDescGZIP(), []int{92}
 }
 
 func (x *Pong) GetClientTimeUs() int64 {
@@ -9432,7 +9583,7 @@ const file_keel_v1_game_proto_rawDesc = "" +
 	"\x02on\x18\x01 \x01(\bR\x02on\x12\x12\n" +
 	"\x04east\x18\x02 \x01(\x11R\x04east\x12\x14\n" +
 	"\x05north\x18\x03 \x01(\x11R\x05north\x12\x16\n" +
-	"\x06height\x18\x04 \x01(\rR\x06height\"\xaa\x0f\n" +
+	"\x06height\x18\x04 \x01(\rR\x06height\"\xe2\x0f\n" +
 	"\rServerMessage\x12,\n" +
 	"\awelcome\x18\x01 \x01(\v2\x10.keel.v1.WelcomeH\x00R\awelcome\x12#\n" +
 	"\x04pong\x18\x02 \x01(\v2\r.keel.v1.PongH\x00R\x04pong\x12)\n" +
@@ -9481,7 +9632,9 @@ const file_keel_v1_game_proto_rawDesc = "" +
 	"\vrace_finish\x18& \x01(\v2\x13.keel.v1.RaceFinishH\x00R\n" +
 	"raceFinish\x129\n" +
 	"\frace_results\x18' \x01(\v2\x14.keel.v1.RaceResultsH\x00R\vraceResults\x129\n" +
-	"\frace_cheered\x18( \x01(\v2\x14.keel.v1.RaceCheeredH\x00R\vraceCheeredB\x06\n" +
+	"\frace_cheered\x18( \x01(\v2\x14.keel.v1.RaceCheeredH\x00R\vraceCheered\x126\n" +
+	"\vboat_prizes\x18) \x01(\v2\x13.keel.v1.BoatPrizesH\x00R\n" +
+	"boatPrizesB\x06\n" +
 	"\x04body\"\xf5\x03\n" +
 	"\bRaceTold\x12\x12\n" +
 	"\x04race\x18\x01 \x01(\rR\x04race\x12\x12\n" +
@@ -9606,7 +9759,7 @@ const file_keel_v1_game_proto_rawDesc = "" +
 	"\x06holder\x18\x02 \x01(\rR\x06holder\x12\x12\n" +
 	"\x04slot\x18\x03 \x01(\rR\x04slot\",\n" +
 	"\x05Crews\x12#\n" +
-	"\x05crews\x18\x01 \x03(\v2\r.keel.v1.CrewR\x05crews\"\xbc\x01\n" +
+	"\x05crews\x18\x01 \x03(\v2\r.keel.v1.CrewR\x05crews\"\xd6\x01\n" +
 	"\x06Person\x12\x12\n" +
 	"\x04seat\x18\x01 \x01(\rR\x04seat\x12\x12\n" +
 	"\x04look\x18\x02 \x01(\rR\x04look\x12\x12\n" +
@@ -9615,7 +9768,8 @@ const file_keel_v1_game_proto_rawDesc = "" +
 	"\x03you\x18\x05 \x01(\bR\x03you\x12\x14\n" +
 	"\x05muted\x18\x06 \x01(\bR\x05muted\x12\x18\n" +
 	"\ablocked\x18\a \x01(\bR\ablocked\x12\x1a\n" +
-	"\bshipmate\x18\b \x01(\bR\bshipmate\"\xef\x01\n" +
+	"\bshipmate\x18\b \x01(\bR\bshipmate\x12\x18\n" +
+	"\acockade\x18\t \x01(\bR\acockade\"\xef\x01\n" +
 	"\x04Chat\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x04R\x02id\x12\x12\n" +
 	"\x04seat\x18\x02 \x01(\rR\x04seat\x12\x12\n" +
@@ -9660,7 +9814,15 @@ const file_keel_v1_game_proto_rawDesc = "" +
 	"\x05names\x18\x01 \x03(\v2\x11.keel.v1.BoatNameR\x05names\"2\n" +
 	"\bBoatName\x12\x12\n" +
 	"\x04slot\x18\x01 \x01(\rR\x04slot\x12\x12\n" +
-	"\x04name\x18\x02 \x01(\tR\x04name\"0\n" +
+	"\x04name\x18\x02 \x01(\tR\x04name\"8\n" +
+	"\n" +
+	"BoatPrizes\x12*\n" +
+	"\x06prizes\x18\x01 \x03(\v2\x12.keel.v1.BoatPrizeR\x06prizes\"a\n" +
+	"\tBoatPrize\x12\x12\n" +
+	"\x04slot\x18\x01 \x01(\rR\x04slot\x12\x10\n" +
+	"\x03own\x18\x02 \x01(\bR\x03own\x12\x16\n" +
+	"\x06prizes\x18\x03 \x01(\rR\x06prizes\x12\x16\n" +
+	"\x06number\x18\x04 \x01(\rR\x06number\"0\n" +
 	"\tAgentLamp\x12#\n" +
 	"\x05state\x18\x01 \x01(\x0e2\r.keel.v1.LampR\x05state\"\xd6\x02\n" +
 	"\bForecast\x12\x14\n" +
@@ -10083,7 +10245,7 @@ func file_keel_v1_game_proto_rawDescGZIP() []byte {
 }
 
 var file_keel_v1_game_proto_enumTypes = make([]protoimpl.EnumInfo, 13)
-var file_keel_v1_game_proto_msgTypes = make([]protoimpl.MessageInfo, 91)
+var file_keel_v1_game_proto_msgTypes = make([]protoimpl.MessageInfo, 93)
 var file_keel_v1_game_proto_goTypes = []any{
 	(ReportReason)(0),       // 0: keel.v1.ReportReason
 	(RacerState)(0),         // 1: keel.v1.RacerState
@@ -10154,41 +10316,43 @@ var file_keel_v1_game_proto_goTypes = []any{
 	(*BoatLookChanged)(nil), // 66: keel.v1.BoatLookChanged
 	(*BoatNames)(nil),       // 67: keel.v1.BoatNames
 	(*BoatName)(nil),        // 68: keel.v1.BoatName
-	(*AgentLamp)(nil),       // 69: keel.v1.AgentLamp
-	(*Forecast)(nil),        // 70: keel.v1.Forecast
-	(*ForecastSystem)(nil),  // 71: keel.v1.ForecastSystem
-	(*GaleWarning)(nil),     // 72: keel.v1.GaleWarning
-	(*ForecastPast)(nil),    // 73: keel.v1.ForecastPast
-	(*Chart)(nil),           // 74: keel.v1.Chart
-	(*Charted)(nil),         // 75: keel.v1.Charted
-	(*Course)(nil),          // 76: keel.v1.Course
-	(*CourseRound)(nil),     // 77: keel.v1.CourseRound
-	(*CourseBoat)(nil),      // 78: keel.v1.CourseBoat
-	(*ChartEntry)(nil),      // 79: keel.v1.ChartEntry
-	(*Places)(nil),          // 80: keel.v1.Places
-	(*Place)(nil),           // 81: keel.v1.Place
-	(*Lights)(nil),          // 82: keel.v1.Lights
-	(*Life)(nil),            // 83: keel.v1.Life
-	(*LifeEncounter)(nil),   // 84: keel.v1.LifeEncounter
-	(*Light)(nil),           // 85: keel.v1.Light
-	(*Tools)(nil),           // 86: keel.v1.Tools
-	(*Chunks)(nil),          // 87: keel.v1.Chunks
-	(*Bump)(nil),            // 88: keel.v1.Bump
-	(*WeatherSystems)(nil),  // 89: keel.v1.WeatherSystems
-	(*ComingFront)(nil),     // 90: keel.v1.ComingFront
-	(*IslandCaps)(nil),      // 91: keel.v1.IslandCaps
-	(*IslandCap)(nil),       // 92: keel.v1.IslandCap
-	(*Keyframe)(nil),        // 93: keel.v1.Keyframe
-	(*SystemKey)(nil),       // 94: keel.v1.SystemKey
-	(*Spell)(nil),           // 95: keel.v1.Spell
-	(*SeaAreas)(nil),        // 96: keel.v1.SeaAreas
-	(*Restart)(nil),         // 97: keel.v1.Restart
-	(*Queued)(nil),          // 98: keel.v1.Queued
-	(*Welcome)(nil),         // 99: keel.v1.Welcome
-	(*Aboard)(nil),          // 100: keel.v1.Aboard
-	(*Harbour)(nil),         // 101: keel.v1.Harbour
-	(*Watching)(nil),        // 102: keel.v1.Watching
-	(*Pong)(nil),            // 103: keel.v1.Pong
+	(*BoatPrizes)(nil),      // 69: keel.v1.BoatPrizes
+	(*BoatPrize)(nil),       // 70: keel.v1.BoatPrize
+	(*AgentLamp)(nil),       // 71: keel.v1.AgentLamp
+	(*Forecast)(nil),        // 72: keel.v1.Forecast
+	(*ForecastSystem)(nil),  // 73: keel.v1.ForecastSystem
+	(*GaleWarning)(nil),     // 74: keel.v1.GaleWarning
+	(*ForecastPast)(nil),    // 75: keel.v1.ForecastPast
+	(*Chart)(nil),           // 76: keel.v1.Chart
+	(*Charted)(nil),         // 77: keel.v1.Charted
+	(*Course)(nil),          // 78: keel.v1.Course
+	(*CourseRound)(nil),     // 79: keel.v1.CourseRound
+	(*CourseBoat)(nil),      // 80: keel.v1.CourseBoat
+	(*ChartEntry)(nil),      // 81: keel.v1.ChartEntry
+	(*Places)(nil),          // 82: keel.v1.Places
+	(*Place)(nil),           // 83: keel.v1.Place
+	(*Lights)(nil),          // 84: keel.v1.Lights
+	(*Life)(nil),            // 85: keel.v1.Life
+	(*LifeEncounter)(nil),   // 86: keel.v1.LifeEncounter
+	(*Light)(nil),           // 87: keel.v1.Light
+	(*Tools)(nil),           // 88: keel.v1.Tools
+	(*Chunks)(nil),          // 89: keel.v1.Chunks
+	(*Bump)(nil),            // 90: keel.v1.Bump
+	(*WeatherSystems)(nil),  // 91: keel.v1.WeatherSystems
+	(*ComingFront)(nil),     // 92: keel.v1.ComingFront
+	(*IslandCaps)(nil),      // 93: keel.v1.IslandCaps
+	(*IslandCap)(nil),       // 94: keel.v1.IslandCap
+	(*Keyframe)(nil),        // 95: keel.v1.Keyframe
+	(*SystemKey)(nil),       // 96: keel.v1.SystemKey
+	(*Spell)(nil),           // 97: keel.v1.Spell
+	(*SeaAreas)(nil),        // 98: keel.v1.SeaAreas
+	(*Restart)(nil),         // 99: keel.v1.Restart
+	(*Queued)(nil),          // 100: keel.v1.Queued
+	(*Welcome)(nil),         // 101: keel.v1.Welcome
+	(*Aboard)(nil),          // 102: keel.v1.Aboard
+	(*Harbour)(nil),         // 103: keel.v1.Harbour
+	(*Watching)(nil),        // 104: keel.v1.Watching
+	(*Pong)(nil),            // 105: keel.v1.Pong
 }
 var file_keel_v1_game_proto_depIdxs = []int32{
 	14,  // 0: keel.v1.ClientMessage.hello:type_name -> keel.v1.Hello
@@ -10219,28 +10383,28 @@ var file_keel_v1_game_proto_depIdxs = []int32{
 	22,  // 25: keel.v1.Block.who:type_name -> keel.v1.Who
 	22,  // 26: keel.v1.Report.who:type_name -> keel.v1.Who
 	0,   // 27: keel.v1.Report.reason:type_name -> keel.v1.ReportReason
-	99,  // 28: keel.v1.ServerMessage.welcome:type_name -> keel.v1.Welcome
-	103, // 29: keel.v1.ServerMessage.pong:type_name -> keel.v1.Pong
-	98,  // 30: keel.v1.ServerMessage.queued:type_name -> keel.v1.Queued
-	97,  // 31: keel.v1.ServerMessage.restart:type_name -> keel.v1.Restart
-	96,  // 32: keel.v1.ServerMessage.sea_areas:type_name -> keel.v1.SeaAreas
-	89,  // 33: keel.v1.ServerMessage.weather_systems:type_name -> keel.v1.WeatherSystems
-	88,  // 34: keel.v1.ServerMessage.bump:type_name -> keel.v1.Bump
-	87,  // 35: keel.v1.ServerMessage.chunks:type_name -> keel.v1.Chunks
-	86,  // 36: keel.v1.ServerMessage.tools:type_name -> keel.v1.Tools
-	80,  // 37: keel.v1.ServerMessage.places:type_name -> keel.v1.Places
-	82,  // 38: keel.v1.ServerMessage.lights:type_name -> keel.v1.Lights
-	74,  // 39: keel.v1.ServerMessage.chart:type_name -> keel.v1.Chart
-	75,  // 40: keel.v1.ServerMessage.charted:type_name -> keel.v1.Charted
-	91,  // 41: keel.v1.ServerMessage.island_caps:type_name -> keel.v1.IslandCaps
-	70,  // 42: keel.v1.ServerMessage.forecast:type_name -> keel.v1.Forecast
+	101, // 28: keel.v1.ServerMessage.welcome:type_name -> keel.v1.Welcome
+	105, // 29: keel.v1.ServerMessage.pong:type_name -> keel.v1.Pong
+	100, // 30: keel.v1.ServerMessage.queued:type_name -> keel.v1.Queued
+	99,  // 31: keel.v1.ServerMessage.restart:type_name -> keel.v1.Restart
+	98,  // 32: keel.v1.ServerMessage.sea_areas:type_name -> keel.v1.SeaAreas
+	91,  // 33: keel.v1.ServerMessage.weather_systems:type_name -> keel.v1.WeatherSystems
+	90,  // 34: keel.v1.ServerMessage.bump:type_name -> keel.v1.Bump
+	89,  // 35: keel.v1.ServerMessage.chunks:type_name -> keel.v1.Chunks
+	88,  // 36: keel.v1.ServerMessage.tools:type_name -> keel.v1.Tools
+	82,  // 37: keel.v1.ServerMessage.places:type_name -> keel.v1.Places
+	84,  // 38: keel.v1.ServerMessage.lights:type_name -> keel.v1.Lights
+	76,  // 39: keel.v1.ServerMessage.chart:type_name -> keel.v1.Chart
+	77,  // 40: keel.v1.ServerMessage.charted:type_name -> keel.v1.Charted
+	93,  // 41: keel.v1.ServerMessage.island_caps:type_name -> keel.v1.IslandCaps
+	72,  // 42: keel.v1.ServerMessage.forecast:type_name -> keel.v1.Forecast
 	63,  // 43: keel.v1.ServerMessage.watch_ended:type_name -> keel.v1.WatchEnded
 	64,  // 44: keel.v1.ServerMessage.watchers:type_name -> keel.v1.Watchers
-	69,  // 45: keel.v1.ServerMessage.agent_lamp:type_name -> keel.v1.AgentLamp
+	71,  // 45: keel.v1.ServerMessage.agent_lamp:type_name -> keel.v1.AgentLamp
 	65,  // 46: keel.v1.ServerMessage.look_changed:type_name -> keel.v1.LookChanged
 	66,  // 47: keel.v1.ServerMessage.boat_look_changed:type_name -> keel.v1.BoatLookChanged
 	67,  // 48: keel.v1.ServerMessage.boat_names:type_name -> keel.v1.BoatNames
-	83,  // 49: keel.v1.ServerMessage.life:type_name -> keel.v1.Life
+	85,  // 49: keel.v1.ServerMessage.life:type_name -> keel.v1.Life
 	52,  // 50: keel.v1.ServerMessage.knock:type_name -> keel.v1.KnockCard
 	53,  // 51: keel.v1.ServerMessage.knocking:type_name -> keel.v1.Knocking
 	54,  // 52: keel.v1.ServerMessage.crew:type_name -> keel.v1.Crew
@@ -10259,59 +10423,61 @@ var file_keel_v1_game_proto_depIdxs = []int32{
 	48,  // 65: keel.v1.ServerMessage.race_finish:type_name -> keel.v1.RaceFinish
 	49,  // 66: keel.v1.ServerMessage.race_results:type_name -> keel.v1.RaceResults
 	44,  // 67: keel.v1.ServerMessage.race_cheered:type_name -> keel.v1.RaceCheered
-	40,  // 68: keel.v1.RaceTold.marks:type_name -> keel.v1.RaceMark
-	41,  // 69: keel.v1.RaceTold.legs:type_name -> keel.v1.RaceLeg
-	42,  // 70: keel.v1.RaceTold.entrants:type_name -> keel.v1.RaceEntrant
-	45,  // 71: keel.v1.RacePicture.racers:type_name -> keel.v1.RacerAt
-	1,   // 72: keel.v1.RacerAt.state:type_name -> keel.v1.RacerState
-	2,   // 73: keel.v1.RaceSignal.signal:type_name -> keel.v1.RaceSignalKind
-	3,   // 74: keel.v1.RaceCall.kind:type_name -> keel.v1.RaceCallKind
-	50,  // 75: keel.v1.RaceResults.results:type_name -> keel.v1.RaceResult
-	4,   // 76: keel.v1.Knocking.state:type_name -> keel.v1.KnockState
-	56,  // 77: keel.v1.Crew.people:type_name -> keel.v1.Person
-	54,  // 78: keel.v1.Crews.crews:type_name -> keel.v1.Crew
-	5,   // 79: keel.v1.Chat.refused:type_name -> keel.v1.ChatRefusal
-	6,   // 80: keel.v1.ChatState.status:type_name -> keel.v1.ChatStatus
-	7,   // 81: keel.v1.Ashore.why:type_name -> keel.v1.AshoreWhy
-	8,   // 82: keel.v1.WatchEnded.why:type_name -> keel.v1.WatchEnd
-	68,  // 83: keel.v1.BoatNames.names:type_name -> keel.v1.BoatName
-	9,   // 84: keel.v1.AgentLamp.state:type_name -> keel.v1.Lamp
-	95,  // 85: keel.v1.Forecast.spells:type_name -> keel.v1.Spell
-	71,  // 86: keel.v1.Forecast.systems:type_name -> keel.v1.ForecastSystem
-	72,  // 87: keel.v1.Forecast.gale:type_name -> keel.v1.GaleWarning
-	73,  // 88: keel.v1.Forecast.past:type_name -> keel.v1.ForecastPast
-	11,  // 89: keel.v1.GaleWarning.subject:type_name -> keel.v1.ChartSubject
-	70,  // 90: keel.v1.ForecastPast.issue:type_name -> keel.v1.Forecast
-	93,  // 91: keel.v1.ForecastPast.truth:type_name -> keel.v1.Keyframe
-	95,  // 92: keel.v1.ForecastPast.spells:type_name -> keel.v1.Spell
-	79,  // 93: keel.v1.Chart.entries:type_name -> keel.v1.ChartEntry
-	76,  // 94: keel.v1.Chart.courses:type_name -> keel.v1.Course
-	79,  // 95: keel.v1.Charted.entries:type_name -> keel.v1.ChartEntry
-	76,  // 96: keel.v1.Charted.courses:type_name -> keel.v1.Course
-	10,  // 97: keel.v1.Course.kind:type_name -> keel.v1.CourseKind
-	77,  // 98: keel.v1.Course.rounds:type_name -> keel.v1.CourseRound
-	78,  // 99: keel.v1.Course.boats:type_name -> keel.v1.CourseBoat
-	11,  // 100: keel.v1.CourseRound.subject:type_name -> keel.v1.ChartSubject
-	11,  // 101: keel.v1.ChartEntry.subject:type_name -> keel.v1.ChartSubject
-	11,  // 102: keel.v1.ChartEntry.with_subject:type_name -> keel.v1.ChartSubject
-	81,  // 103: keel.v1.Places.places:type_name -> keel.v1.Place
-	85,  // 104: keel.v1.Lights.lights:type_name -> keel.v1.Light
-	84,  // 105: keel.v1.Life.encounters:type_name -> keel.v1.LifeEncounter
-	12,  // 106: keel.v1.Bump.part:type_name -> keel.v1.BumpPart
-	95,  // 107: keel.v1.WeatherSystems.spells:type_name -> keel.v1.Spell
-	93,  // 108: keel.v1.WeatherSystems.keyframes:type_name -> keel.v1.Keyframe
-	90,  // 109: keel.v1.WeatherSystems.coming:type_name -> keel.v1.ComingFront
-	92,  // 110: keel.v1.IslandCaps.caps:type_name -> keel.v1.IslandCap
-	94,  // 111: keel.v1.Keyframe.systems:type_name -> keel.v1.SystemKey
-	85,  // 112: keel.v1.Welcome.light:type_name -> keel.v1.Light
-	102, // 113: keel.v1.Welcome.watching:type_name -> keel.v1.Watching
-	101, // 114: keel.v1.Welcome.harbour:type_name -> keel.v1.Harbour
-	100, // 115: keel.v1.Welcome.aboard:type_name -> keel.v1.Aboard
-	116, // [116:116] is the sub-list for method output_type
-	116, // [116:116] is the sub-list for method input_type
-	116, // [116:116] is the sub-list for extension type_name
-	116, // [116:116] is the sub-list for extension extendee
-	0,   // [0:116] is the sub-list for field type_name
+	69,  // 68: keel.v1.ServerMessage.boat_prizes:type_name -> keel.v1.BoatPrizes
+	40,  // 69: keel.v1.RaceTold.marks:type_name -> keel.v1.RaceMark
+	41,  // 70: keel.v1.RaceTold.legs:type_name -> keel.v1.RaceLeg
+	42,  // 71: keel.v1.RaceTold.entrants:type_name -> keel.v1.RaceEntrant
+	45,  // 72: keel.v1.RacePicture.racers:type_name -> keel.v1.RacerAt
+	1,   // 73: keel.v1.RacerAt.state:type_name -> keel.v1.RacerState
+	2,   // 74: keel.v1.RaceSignal.signal:type_name -> keel.v1.RaceSignalKind
+	3,   // 75: keel.v1.RaceCall.kind:type_name -> keel.v1.RaceCallKind
+	50,  // 76: keel.v1.RaceResults.results:type_name -> keel.v1.RaceResult
+	4,   // 77: keel.v1.Knocking.state:type_name -> keel.v1.KnockState
+	56,  // 78: keel.v1.Crew.people:type_name -> keel.v1.Person
+	54,  // 79: keel.v1.Crews.crews:type_name -> keel.v1.Crew
+	5,   // 80: keel.v1.Chat.refused:type_name -> keel.v1.ChatRefusal
+	6,   // 81: keel.v1.ChatState.status:type_name -> keel.v1.ChatStatus
+	7,   // 82: keel.v1.Ashore.why:type_name -> keel.v1.AshoreWhy
+	8,   // 83: keel.v1.WatchEnded.why:type_name -> keel.v1.WatchEnd
+	68,  // 84: keel.v1.BoatNames.names:type_name -> keel.v1.BoatName
+	70,  // 85: keel.v1.BoatPrizes.prizes:type_name -> keel.v1.BoatPrize
+	9,   // 86: keel.v1.AgentLamp.state:type_name -> keel.v1.Lamp
+	97,  // 87: keel.v1.Forecast.spells:type_name -> keel.v1.Spell
+	73,  // 88: keel.v1.Forecast.systems:type_name -> keel.v1.ForecastSystem
+	74,  // 89: keel.v1.Forecast.gale:type_name -> keel.v1.GaleWarning
+	75,  // 90: keel.v1.Forecast.past:type_name -> keel.v1.ForecastPast
+	11,  // 91: keel.v1.GaleWarning.subject:type_name -> keel.v1.ChartSubject
+	72,  // 92: keel.v1.ForecastPast.issue:type_name -> keel.v1.Forecast
+	95,  // 93: keel.v1.ForecastPast.truth:type_name -> keel.v1.Keyframe
+	97,  // 94: keel.v1.ForecastPast.spells:type_name -> keel.v1.Spell
+	81,  // 95: keel.v1.Chart.entries:type_name -> keel.v1.ChartEntry
+	78,  // 96: keel.v1.Chart.courses:type_name -> keel.v1.Course
+	81,  // 97: keel.v1.Charted.entries:type_name -> keel.v1.ChartEntry
+	78,  // 98: keel.v1.Charted.courses:type_name -> keel.v1.Course
+	10,  // 99: keel.v1.Course.kind:type_name -> keel.v1.CourseKind
+	79,  // 100: keel.v1.Course.rounds:type_name -> keel.v1.CourseRound
+	80,  // 101: keel.v1.Course.boats:type_name -> keel.v1.CourseBoat
+	11,  // 102: keel.v1.CourseRound.subject:type_name -> keel.v1.ChartSubject
+	11,  // 103: keel.v1.ChartEntry.subject:type_name -> keel.v1.ChartSubject
+	11,  // 104: keel.v1.ChartEntry.with_subject:type_name -> keel.v1.ChartSubject
+	83,  // 105: keel.v1.Places.places:type_name -> keel.v1.Place
+	87,  // 106: keel.v1.Lights.lights:type_name -> keel.v1.Light
+	86,  // 107: keel.v1.Life.encounters:type_name -> keel.v1.LifeEncounter
+	12,  // 108: keel.v1.Bump.part:type_name -> keel.v1.BumpPart
+	97,  // 109: keel.v1.WeatherSystems.spells:type_name -> keel.v1.Spell
+	95,  // 110: keel.v1.WeatherSystems.keyframes:type_name -> keel.v1.Keyframe
+	92,  // 111: keel.v1.WeatherSystems.coming:type_name -> keel.v1.ComingFront
+	94,  // 112: keel.v1.IslandCaps.caps:type_name -> keel.v1.IslandCap
+	96,  // 113: keel.v1.Keyframe.systems:type_name -> keel.v1.SystemKey
+	87,  // 114: keel.v1.Welcome.light:type_name -> keel.v1.Light
+	104, // 115: keel.v1.Welcome.watching:type_name -> keel.v1.Watching
+	103, // 116: keel.v1.Welcome.harbour:type_name -> keel.v1.Harbour
+	102, // 117: keel.v1.Welcome.aboard:type_name -> keel.v1.Aboard
+	118, // [118:118] is the sub-list for method output_type
+	118, // [118:118] is the sub-list for method input_type
+	118, // [118:118] is the sub-list for extension type_name
+	118, // [118:118] is the sub-list for extension extendee
+	0,   // [0:118] is the sub-list for field type_name
 }
 
 func init() { file_keel_v1_game_proto_init() }
@@ -10391,6 +10557,7 @@ func file_keel_v1_game_proto_init() {
 		(*ServerMessage_RaceFinish)(nil),
 		(*ServerMessage_RaceResults)(nil),
 		(*ServerMessage_RaceCheered)(nil),
+		(*ServerMessage_BoatPrizes)(nil),
 	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
@@ -10398,7 +10565,7 @@ func file_keel_v1_game_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_keel_v1_game_proto_rawDesc), len(file_keel_v1_game_proto_rawDesc)),
 			NumEnums:      13,
-			NumMessages:   91,
+			NumMessages:   93,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

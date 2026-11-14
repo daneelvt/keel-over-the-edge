@@ -101,6 +101,18 @@ export type FeatureSite1 =
  */
 export type Colour4 = string;
 /**
+ * A colour, as #rrggbb in sRGB.
+ */
+export type Colour5 = string;
+/**
+ * A colour, as #rrggbb in sRGB.
+ */
+export type Colour6 = string;
+/**
+ * A colour, as #rrggbb in sRGB.
+ */
+export type Colour7 = string;
+/**
  * What it is, as the phone draws it.
  *
  * This interface was referenced by `Catalog`'s JSON-Schema
@@ -1965,6 +1977,33 @@ export interface SailorArt {
    * The inked portrait, for the log: one-bit WebP on the logbook's paper.
    */
   ink: string;
+  cockade: Cockade;
+}
+/**
+ * Where a race's winner wears the cockade: on the hat's left side, or on the coat's left breast for a look with no hat.
+ */
+export interface Cockade {
+  /**
+   * Its middle on the figure as it is bound, m: across to its left, up and forward.
+   *
+   * @minItems 3
+   * @maxItems 3
+   */
+  at: [number, number, number];
+  /**
+   * The way it faces out from the cloth, the same axes.
+   *
+   * @minItems 3
+   * @maxItems 3
+   */
+  facing: [number, number, number];
+  /**
+   * Its middle on the inked portrait, as shares of its width from the left and of its height from the top.
+   *
+   * @minItems 2
+   * @maxItems 2
+   */
+  inked: [number, number];
 }
 /**
  * The options a sailor's look takes: skins, hair colours, greys for the looks of greying sailors, and main colours, which the machines' coats take too. At most 16 of each: a look code holds each choice in 4 bits.
@@ -8665,6 +8704,7 @@ export interface Committee {
    * @maxItems 32
    */
   flags: [SignalFlag, ...SignalFlag[]];
+  prizes: Prizes;
 }
 /**
  * The committee's models: a glTF binary with the nodes committee-boat (with gun, muzzle, halyard, hawse and riding-light), cask-mark (with flag-staff, lantern and number), pin-buoy (with flag-staff and lantern) and beacon-spar.
@@ -8757,17 +8797,27 @@ export interface SignalFlag {
   id: Id;
   name: string;
   /**
-   * What it signals: a race's boats' class, the preparatory signal, an individual recall, a postponement, a mark or the pin.
+   * What it signals: a race's boats' class, the preparatory signal, an individual recall, a postponement, a mark or the pin; or, flown by a sailor's boat for the world, a race won (in that race's colour), races sailed (the racing burgee, then the gilded) or races run (the committee's flag).
    */
-  signal: "class" | "preparatory" | "recall" | "postponement" | "mark" | "pin";
+  signal:
+    | "class"
+    | "preparatory"
+    | "recall"
+    | "postponement"
+    | "mark"
+    | "pin"
+    | "victory"
+    | "burgee"
+    | "gilded"
+    | "committee";
   /**
    * Stable identifier of a kind, stored in the database: never renamed or reused.
    */
   boat?: string;
   /**
-   * Its cut: a flag, oblong; or a pennant, tapering to a point.
+   * Its cut: a flag, oblong; a pennant, tapering to a point; or a swallowtail, tapering a little and forked at the fly.
    */
-  cut: "flag" | "pennant";
+  cut: "flag" | "pennant" | "swallowtail";
   /**
    * From the hoist to the fly, in m.
    */
@@ -8832,6 +8882,62 @@ export interface SignalFlag {
         string,
         string
       ];
+}
+/**
+ * What a sailor's races in a world show on the water while it lasts.
+ */
+export interface Prizes {
+  /**
+   * A winner's pennants flown, the latest wins'.
+   */
+  pennants: number;
+  /**
+   * Wooden spoons hung from the stern, the latest.
+   */
+  spoons: number;
+  /**
+   * Races sailed in the world for the racing burgee.
+   */
+  burgee: number;
+  /**
+   * Races sailed in the world for the gilded burgee.
+   */
+  gilded: number;
+  /**
+   * Races run in the world for the committee's flag.
+   */
+  ran: number;
+  /**
+   * They are drawn within this of the camera, in m.
+   */
+  reach: number;
+  spoon: PrizeSpoon;
+  cockade: PrizeCockade;
+}
+/**
+ * A carved wooden spoon on its lanyard.
+ */
+export interface PrizeSpoon {
+  /**
+   * Its length, m.
+   */
+  length: number;
+  /**
+   * Its lanyard from the rail, m.
+   */
+  lanyard: number;
+  colour: Colour5;
+}
+/**
+ * The winner's cockade: a pleated rosette of ribbon.
+ */
+export interface PrizeCockade {
+  /**
+   * Its width, m.
+   */
+  across: number;
+  ribbon: Colour6;
+  button: Colour7;
 }
 /**
  * The notices that pop up: one at a time, the rest queued, the same kind folded.
@@ -9524,4 +9630,4 @@ export interface LifeGlow {
 }
 
 /** The catalog version (tools/catalog). */
-export const CATALOG_VERSION = 'da5c831b248f14ed';
+export const CATALOG_VERSION = 'e7ebca52cde2e92c';

@@ -348,3 +348,18 @@ SELECT
   count(*) FILTER (WHERE role = 'owner')::integer AS ran
 FROM race_record
 WHERE account_id = @account_id;
+
+-- name: PrizesOf :many
+-- What some sailors' races in a world show on the water: races sailed,
+-- skipper or crew, and the codes of those won, the newest first, at most
+-- most; the wooden spoons they hang; the races they ran. Only races of
+-- three boats or more count (a race's boats are of as many accounts).
+SELECT account_id,
+  count(*) FILTER (WHERE role IN ('skipper', 'crew') AND kind = 'race' AND fleet >= 3)::integer AS sailed,
+  coalesce((array_agg(code ORDER BY at DESC, id DESC)
+    FILTER (WHERE role IN ('skipper', 'crew') AND kind = 'race' AND fleet >= 3 AND place = 1))[1:@most::integer], '{}')::text[] AS wins,
+  count(*) FILTER (WHERE role IN ('skipper', 'crew') AND hung)::integer AS hung,
+  count(*) FILTER (WHERE role = 'owner' AND kind = 'race' AND fleet >= 3)::integer AS ran
+FROM race_record
+WHERE account_id = ANY (@ids::uuid[]) AND world = @world
+GROUP BY account_id;

@@ -48,13 +48,14 @@ type conn struct {
 	// that boat's; boarded, it has been let aboard one, so its end is told
 	// to the simulation by its account. The encoder alone reads the rest:
 	// holding, whether its inputs steer the boat as of its last frame;
-	// seat, its seat aboard; toldDeck, the boat and its deck's count as the
-	// client was last told its crew, and toldCrew whether it was told any.
+	// seat, its seat aboard; toldDeck, the boat, its deck's count and who
+	// aboard wore the cockade as the client was last told its crew, and
+	// toldCrew whether it was told any.
 	crew     atomic.Bool
 	boarded  atomic.Bool
 	holding  bool
 	seat     uint8
-	toldDeck [2]uint64
+	toldDeck [3]uint64
 	toldCrew bool
 	// recrew: a mute or a block changed what the connection is to be told
 	// of those aboard.
@@ -128,6 +129,11 @@ type conn struct {
 	toldCrews    [protocol.ViewSlots]toldCrew
 	crewed       uint64
 	crewKnown    uint64
+	// toldPrizes are the prizes of the boats in its view, by view slot,
+	// and toldOwnPrize those of the boat its snapshots are about, as the
+	// client was last told them: the encoder's.
+	toldPrizes   [protocol.ViewSlots]toldPrize
+	toldOwnPrize toldPrize
 
 	// The control slot's writer, stopped once another connection has
 	// taken the boat over: a word is stored only under wmu while not

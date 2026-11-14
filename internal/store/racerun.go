@@ -519,3 +519,35 @@ func (s *Store) SpoonsHung(ctx context.Context, id AccountID, world int) (int, e
 	n, err := s.q.SpoonsHung(ctx, db.SpoonsHungParams{AccountID: uuidOf(id), World: int32(world)})
 	return int(n), err
 }
+
+// RacePrizes are what a sailor's races in a world show on the water while
+// it lasts: the races they sailed, skipper or crew, the links' codes of
+// those they won, the newest first, the wooden spoons they hang, and the
+// races they ran. Only races of three boats or more count.
+type RacePrizes struct {
+	Sailed int
+	Wins   []string
+	Spoons int
+	Ran    int
+}
+
+// PrizesOf are the prizes of the sailors of ids in world, each with at
+// most wins of their wins; a sailor with none is left out.
+func (s *Store) PrizesOf(ctx context.Context, world int, ids []AccountID, wins int) (map[AccountID]RacePrizes, error) {
+	out := make(map[AccountID]RacePrizes, len(ids))
+	if len(ids) == 0 {
+		return out, nil
+	}
+	us := make([]pgtype.UUID, len(ids))
+	for i, id := range ids {
+		us[i] = uuidOf(id)
+	}
+	rows, err := s.q.PrizesOf(ctx, db.PrizesOfParams{Most: int32(max(wins, 0)), Ids: us, World: int32(world)})
+	if err != nil {
+		return nil, err
+	}
+	for _, r := range rows {
+		out[AccountID(r.AccountID.Bytes)] = RacePrizes{Sailed: int(r.Sailed), Wins: r.Wins, Spoons: int(r.Hung), Ran: int(r.Ran)}
+	}
+	return out, nil
+}

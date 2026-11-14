@@ -760,7 +760,7 @@
       "description": "A sailor's art.",
       "type": "object",
       "additionalProperties": false,
-      "required": ["model", "far", "close", "clips", "portrait", "portraitFallback", "portraitMask", "ink"],
+      "required": ["model", "far", "close", "clips", "portrait", "portraitFallback", "portraitMask", "ink", "cockade"],
       "properties": {
         "model": { "description": "The sailor's deck level: a glTF binary of skinned meshes on the shared skeleton, with its atlas and mask, drawn on the boat in view and on the boats near the camera.", "$ref": "#/$defs/ArtPath" },
         "far": { "description": "The sailor's far level: one rigid figure posed seated at the helm, with the place node that seats it in the boat model; drawn in the fleet.", "$ref": "#/$defs/ArtPath" },
@@ -769,7 +769,19 @@
         "portrait": { "description": "The colour portrait's base, AVIF: head and shoulders, shaded, its option regions in neutral grey.", "$ref": "#/$defs/ArtPath" },
         "portraitFallback": { "description": "The colour portrait's base as WebP, for a browser without AVIF.", "$ref": "#/$defs/ArtPath" },
         "portraitMask": { "description": "The colour portrait's mask, lossless WebP: each pixel's share of the main colour (red), the skin or metal (green) and the hair (blue).", "$ref": "#/$defs/ArtPath" },
-        "ink": { "description": "The inked portrait, for the log: one-bit WebP on the logbook's paper.", "$ref": "#/$defs/ArtPath" }
+        "ink": { "description": "The inked portrait, for the log: one-bit WebP on the logbook's paper.", "$ref": "#/$defs/ArtPath" },
+        "cockade": {
+          "title": "Cockade",
+          "description": "Where a race's winner wears the cockade: on the hat's left side, or on the coat's left breast for a look with no hat.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["at", "facing", "inked"],
+          "properties": {
+            "at": { "description": "Its middle on the figure as it is bound, m: across to its left, up and forward.", "type": "array", "minItems": 3, "maxItems": 3, "items": { "type": "number", "minimum": -2, "maximum": 2 } },
+            "facing": { "description": "The way it faces out from the cloth, the same axes.", "type": "array", "minItems": 3, "maxItems": 3, "items": { "type": "number", "minimum": -1, "maximum": 1 } },
+            "inked": { "description": "Its middle on the inked portrait, as shares of its width from the left and of its height from the top.", "type": "array", "minItems": 2, "maxItems": 2, "items": { "type": "number", "minimum": 0, "maximum": 1 } }
+          }
+        }
       }
     },
     "SailorVersion": {
@@ -1951,7 +1963,7 @@
       "description": "The race committee's things in the sea: the committee boat, the pin buoy, the marks, the beacons, the signal flags and the signal gun's smoke.",
       "type": "object",
       "additionalProperties": false,
-      "required": ["art", "reach", "mark", "boat", "gun", "dyes", "flags"],
+      "required": ["art", "reach", "mark", "boat", "gun", "dyes", "flags", "prizes"],
       "properties": {
         "art": {
           "title": "CommitteeArt",
@@ -2006,6 +2018,45 @@
           "minItems": 1,
           "maxItems": 32,
           "items": { "$ref": "#/$defs/SignalFlag" }
+        },
+        "prizes": {
+          "title": "Prizes",
+          "description": "What a sailor's races in a world show on the water while it lasts.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["pennants", "spoons", "burgee", "gilded", "ran", "reach", "spoon", "cockade"],
+          "properties": {
+            "pennants": { "description": "A winner's pennants flown, the latest wins'.", "type": "integer", "minimum": 1, "maximum": 5 },
+            "spoons": { "description": "Wooden spoons hung from the stern, the latest.", "type": "integer", "minimum": 1, "maximum": 3 },
+            "burgee": { "description": "Races sailed in the world for the racing burgee.", "type": "integer", "minimum": 1, "maximum": 100 },
+            "gilded": { "description": "Races sailed in the world for the gilded burgee.", "type": "integer", "minimum": 1, "maximum": 100 },
+            "ran": { "description": "Races run in the world for the committee's flag.", "type": "integer", "minimum": 1, "maximum": 100 },
+            "reach": { "description": "They are drawn within this of the camera, in m.", "type": "number", "minimum": 50, "maximum": 2000 },
+            "spoon": {
+              "title": "PrizeSpoon",
+              "description": "A carved wooden spoon on its lanyard.",
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["length", "lanyard", "colour"],
+              "properties": {
+                "length": { "description": "Its length, m.", "type": "number", "minimum": 0.05, "maximum": 1 },
+                "lanyard": { "description": "Its lanyard from the rail, m.", "type": "number", "minimum": 0.05, "maximum": 1 },
+                "colour": { "description": "Its wood.", "$ref": "#/$defs/Colour" }
+              }
+            },
+            "cockade": {
+              "title": "PrizeCockade",
+              "description": "The winner's cockade: a pleated rosette of ribbon.",
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["across", "ribbon", "button"],
+              "properties": {
+                "across": { "description": "Its width, m.", "type": "number", "minimum": 0.02, "maximum": 0.2 },
+                "ribbon": { "description": "Its ribbon.", "$ref": "#/$defs/Colour" },
+                "button": { "description": "Its middle's button.", "$ref": "#/$defs/Colour" }
+              }
+            }
+          }
         }
       }
     },
@@ -2030,9 +2081,9 @@
       "properties": {
         "id": { "$ref": "#/$defs/Id" },
         "name": { "type": "string", "minLength": 1 },
-        "signal": { "description": "What it signals: a race's boats' class, the preparatory signal, an individual recall, a postponement, a mark or the pin.", "enum": ["class", "preparatory", "recall", "postponement", "mark", "pin"] },
+        "signal": { "description": "What it signals: a race's boats' class, the preparatory signal, an individual recall, a postponement, a mark or the pin; or, flown by a sailor's boat for the world, a race won (in that race's colour), races sailed (the racing burgee, then the gilded) or races run (the committee's flag).", "enum": ["class", "preparatory", "recall", "postponement", "mark", "pin", "victory", "burgee", "gilded", "committee"] },
         "boat": { "description": "The boat whose class it is, by the boat's id: a class pennant's.", "$ref": "#/$defs/Id" },
-        "cut": { "description": "Its cut: a flag, oblong; or a pennant, tapering to a point.", "enum": ["flag", "pennant"] },
+        "cut": { "description": "Its cut: a flag, oblong; a pennant, tapering to a point; or a swallowtail, tapering a little and forked at the fly.", "enum": ["flag", "pennant", "swallowtail"] },
         "length": { "description": "From the hoist to the fly, in m.", "type": "number", "minimum": 0.2, "maximum": 5 },
         "hoist": { "description": "Its depth at the hoist, in m.", "type": "number", "minimum": 0.1, "maximum": 3 },
         "rows": {

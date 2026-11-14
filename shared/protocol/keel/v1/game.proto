@@ -364,6 +364,7 @@ message ServerMessage {
     RaceFinish race_finish = 38;
     RaceResults race_results = 39;
     RaceCheered race_cheered = 40;
+    BoatPrizes boat_prizes = 41;
   }
 }
 
@@ -696,6 +697,8 @@ message Person {
   bool blocked = 7;
   // A shipmate of the connection's account.
   bool shipmate = 8;
+  // They wear the winner's cockade, for a race won in the world.
+  bool cockade = 9;
 }
 
 // Chat is a line said aboard the boat the connection sails, is aboard,
@@ -886,6 +889,31 @@ message BoatNames {
 message BoatName {
   uint32 slot = 1;
   string name = 2;
+}
+
+// BoatPrizes are what boats fly for their skippers' races in the world:
+// of the boats in the connection's view, each as it comes into the view
+// and again when it changes, and of the boat the connection sails or
+// watches (own) as a Welcome begins it and when it changes. A Welcome
+// clears what the view's slots were told.
+message BoatPrizes {
+  repeated BoatPrize prizes = 1;
+}
+
+// BoatPrize is a boat's prizes: by its view slot as of the next snapshot,
+// or the connection's own boat. prizes is a prize code, from the low bits:
+// how many winner's pennants it flies (3 bits, 0 … 5), each one's colour,
+// a place in the races' colours, the newest win's first (five fields of 3
+// bits), its burgee (2 bits: 0 none, 1 the racing burgee, 2 the gilded
+// one), how many wooden spoons hang from its stern (2 bits, 0 … 3) and the
+// committee's flag (1 bit); its skipper wears the winner's cockade while
+// it flies a pennant. number is its race number while it races, from its
+// placing on the line until its race is over; 0 for none.
+message BoatPrize {
+  uint32 slot = 1;
+  bool own = 2;
+  uint32 prizes = 3;
+  uint32 number = 4;
 }
 
 // AgentLamp says whether the AI agent of the machine sailor a connection

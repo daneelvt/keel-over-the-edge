@@ -1025,6 +1025,13 @@ world:
       - { letter: "b", name: indigo blue, colour: "#233b69" }
       - { letter: "y", name: weld yellow, colour: "#d6a332" }
       - { letter: "k", name: logwood black, colour: "#211d1b" }
+      - { letter: "e", name: deep madder, colour: "#8e2f2a" }
+      - { letter: "n", name: woad blue, colour: "#1f4a7a" }
+      - { letter: "g", name: verdigris, colour: "#2f6a43" }
+      - { letter: "p", name: orchil purple, colour: "#6b3a6e" }
+      - { letter: "u", name: raw umber, colour: "#8a5a1c" }
+      - { letter: "t", name: sea green, colour: "#2a6670" }
+      - { letter: "d", name: gold leaf, colour: "#d8ad3c" }
     flags:
       - id: numeral-one
         name: Numeral pennant one
@@ -1133,6 +1140,97 @@ world:
         length: 0.75
         hoist: 0.5
         rows: [wwwwww, wbbbbw, wbbbbw, wwwwww]
+      # A winner's pennants, flown from the forestay of whatever boat the
+      # winner sails for the rest of the world, the latest few: a small
+      # swallowtail in the race's colour, one for each colour the races
+      # take in turn, with a gold ball at the hoist. Every boat aboard the
+      # race's winner earns one.
+      - id: victory-madder
+        name: Winner's pennant, deep madder
+        signal: victory
+        cut: swallowtail
+        length: 0.7
+        hoist: 0.28
+        rows: [eeeeeeeeeeee, eddeeeeeeeee, eddeeeeeeeee, eeeeeeeeeeee]
+      - id: victory-woad
+        name: Winner's pennant, woad blue
+        signal: victory
+        cut: swallowtail
+        length: 0.7
+        hoist: 0.28
+        rows: [nnnnnnnnnnnn, nddnnnnnnnnn, nddnnnnnnnnn, nnnnnnnnnnnn]
+      - id: victory-verdigris
+        name: Winner's pennant, verdigris
+        signal: victory
+        cut: swallowtail
+        length: 0.7
+        hoist: 0.28
+        rows: [gggggggggggg, gddggggggggg, gddggggggggg, gggggggggggg]
+      - id: victory-orchil
+        name: Winner's pennant, orchil purple
+        signal: victory
+        cut: swallowtail
+        length: 0.7
+        hoist: 0.28
+        rows: [pppppppppppp, pddppppppppp, pddppppppppp, pppppppppppp]
+      - id: victory-umber
+        name: Winner's pennant, raw umber
+        signal: victory
+        cut: swallowtail
+        length: 0.7
+        hoist: 0.28
+        rows: [uuuuuuuuuuuu, udduuuuuuuuu, udduuuuuuuuu, uuuuuuuuuuuu]
+      - id: victory-sea-green
+        name: Winner's pennant, sea green
+        signal: victory
+        cut: swallowtail
+        length: 0.7
+        hoist: 0.28
+        rows: [tttttttttttt, tddttttttttt, tddttttttttt, tttttttttttt]
+      # The racing burgee at the masthead for a sailor who has raced often
+      # in the world, and the gilded burgee for one who has raced more; and
+      # the committee's flag at the stern for one who has run races.
+      - id: racing-burgee
+        name: Racing burgee
+        signal: burgee
+        cut: pennant
+        length: 0.55
+        hoist: 0.32
+        rows: [bbbbbbbbbb, bwwbbbbbbb, bwwbbbbbbb, bbbbbbbbbb]
+      - id: gilded-burgee
+        name: Gilded burgee
+        signal: gilded
+        cut: pennant
+        length: 0.6
+        hoist: 0.35
+        rows: [dddddddddd, deeddddddd, deeddddddd, dddddddddd]
+      - id: committee-flag
+        name: The committee's flag
+        signal: committee
+        cut: flag
+        length: 0.6
+        hoist: 0.4
+        rows: [bbbbbbbbb, bwwwwwwwb, bwwdddwwb, bwwdddwwb, bwwwwwwwb, bbbbbbbbb]
+
+    # What a sailor's races show on the water for the rest of the world,
+    # every boat they sail flying them, drawn within reach m of the
+    # camera: the winner's pennants of their latest wins, at most
+    # pennants; the wooden spoons they chose to hang from the stern, at
+    # most spoons, each length m long on a lanyard m long; the racing
+    # burgee once they have sailed burgee races in the world, the gilded
+    # burgee from gilded; the committee's flag once they have run ran
+    # races. Only races of three boats from three accounts count. A
+    # winner also wears the cockade, a gold rosette across m wide, pinned
+    # to the hat (sailors.yaml says where on each look).
+    prizes:
+      pennants: 5
+      spoons: 3
+      burgee: 3
+      gilded: 12
+      ran: 5
+      reach: 400 # m
+      spoon: { length: 0.3, lanyard: 0.25, colour: "#a87443" }
+      cockade: { across: 0.075, ribbon: "#d9ad3a", button: "#7a2a22" }
 
   # The rules a world must pass; one that fails is made again from the next
   # seed, at most attempts times.

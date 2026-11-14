@@ -415,7 +415,7 @@ func (c *conn) welcomeWatch(f *bus.Frame) bool {
 	wt, _ := e.cfg.Clock.WorldTime()
 	c.toldLook = f.Look[s]
 	c.toldBoat(f, s)
-	c.toldDeck, c.toldCrew = [2]uint64{}, false
+	c.toldDeck, c.toldCrew = [3]uint64{}, false
 	c.rmu.Lock()
 	ok := c.send(&pb.ServerMessage{Body: &pb.ServerMessage_Welcome{Welcome: &pb.Welcome{
 		World: e.cfg.World, Tick: f.Tick, WorldTimeUs: wt.Microseconds(),

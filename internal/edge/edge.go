@@ -273,6 +273,11 @@ type Config struct {
 	// for none.
 	WatchByID func(ctx context.Context, a bus.Account) (watch.Target, error)
 	RaceOf    func(ctx context.Context, code string) ([16]byte, error)
+	// Prizes, if not nil, is a sailor's prizes in the world, a prize code
+	// (BoatPrize's): every boat they sail flies them, and they wear the
+	// cockade while it has a pennant. It never waits: a sailor not known
+	// yet has none until they are. Without it no boat flies any.
+	Prizes func(bus.Account) uint32
 }
 
 // Edge serves the game connection.
@@ -480,12 +485,73 @@ type toldName struct {
 }
 
 // toldCrew is what a client was last told of the crew of a view slot's
-// boat: the boat, its deck's count of changes aboard, and its skipper's
-// look.
+// boat: the boat, its deck's count of changes aboard, its skipper's look,
+// and who aboard wears the cockade (cockadesOf).
 type toldCrew struct {
-	boat uint64
-	deck uint32
-	look uint32
+	boat     uint64
+	deck     uint32
+	look     uint32
+	cockades uint64
+}
+
+// toldPrize is a boat's prizes as a client was last told them: its prize
+// code and its race number.
+type toldPrize struct {
+	prizes uint32
+	number uint32
+}
+
+// pennantsMask is a prize code's count of winner's pennants (BoatPrize):
+// a sailor whose boat flies any wears the cockade.
+const pennantsMask = 7
+
+// prizesOf is a sailor's prize code: none without Prizes.
+func (e *Edge) prizesOf(a bus.Account) uint32 {
+	if e.cfg.Prizes == nil {
+		return 0
+	}
+	return e.cfg.Prizes(a)
+}
+
+// cockade says whether a sailor wears the winner's cockade.
+func (e *Edge) cockade(a bus.Account) bool { return e.prizesOf(a)&pennantsMask != 0 }
+
+// cockadesOf is who aboard the boat in slot s of f wears the cockade, f's
+// crew of it f.Crew[lo:hi]: bit 0 its skipper, bit i+1 f.Crew[lo+i].
+func (e *Edge) cockadesOf(f *bus.Frame, s int32, lo, hi int) uint64 {
+	if e.cfg.Prizes == nil {
+		return 0
+	}
+	var m uint64
+	if e.cockade(f.Owner[s]) {
+		m = 1
+	}
+	for i, a := range f.Crew[lo:hi] {
+		if i < 63 && e.cockade(a.Account) {
+			m |= 1 << (i + 1)
+		}
+	}
+	return m
+}
+
+// raceNumber is the race number of the boat in slot s of f while it
+// races, from its placing on the line until its race is over; 0 for none.
+func raceNumber(f *bus.Frame, s int32) uint32 {
+	for i := range f.Racers {
+		r := &f.Racers[i]
+		if r.Slot != s || r.Boat != f.Boat[s] {
+			continue
+		}
+		if r.State != bus.RacerPlaced && r.State != bus.RacerRacing && r.State != bus.RacerFinished {
+			continue
+		}
+		for k := range f.Races {
+			if f.Races[k].Key == r.Race && f.Races[k].Phase < bus.RaceEnded {
+				return uint32(max(r.Number, 0))
+			}
+		}
+	}
+	return 0
 }
 
 // stopped reports whether an account is stopped by the game's operator.

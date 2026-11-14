@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/daneelvt/keel-over-the-edge/internal/bus"
 	"github.com/daneelvt/keel-over-the-edge/internal/catalog"
 	"github.com/daneelvt/keel-over-the-edge/internal/logbook"
 	"github.com/daneelvt/keel-over-the-edge/internal/moderation"
@@ -47,6 +48,8 @@ type Store interface {
 	EndRace(ctx context.Context, lease int64, rules store.NewsRules, e *store.RaceEnd) error
 	// The wooden spoon hung by a sailor's choice.
 	HangSpoon(ctx context.Context, id store.AccountID, world int, code string, hung bool) error
+	// What sailors' races show on the water.
+	PrizesOf(ctx context.Context, world int, ids []store.AccountID, wins int) (map[store.AccountID]store.RacePrizes, error)
 	// What a race's replay reads.
 	RaceResults(ctx context.Context, world, race [16]byte) ([]store.RaceRun, error)
 	RaceRuns(ctx context.Context, world, race [16]byte) ([]store.RaceLaid, error)
@@ -116,6 +119,9 @@ type Service struct {
 	cfg   Config
 	boats map[string]int // the catalog's boats' places, by id
 	port  string         // Port Royal's name
+	// prizes are the prizes afloat of the sailors asked for, by rules.
+	prizes *prizeBoard
+	rules  PrizeRules
 }
 
 // New makes a Service.
@@ -132,7 +138,8 @@ func New(cfg Config) *Service {
 	if cfg.Courses == nil {
 		cfg.Courses = func() Courses { return Courses{} }
 	}
-	s := &Service{cfg: cfg, boats: map[string]int{}, port: cfg.Catalog.World.MainPort.Name}
+	s := &Service{cfg: cfg, boats: map[string]int{}, port: cfg.Catalog.World.MainPort.Name, prizes: newPrizeBoard(),
+		rules: PrizeRulesOf(cfg.Catalog)}
 	for i := range cfg.Catalog.Boats {
 		s.boats[string(cfg.Catalog.Boats[i].ID)] = i
 	}
@@ -663,6 +670,10 @@ func (s *Service) Spoon(ctx context.Context, by Sailor, code string, hang bool) 
 	err = s.cfg.Store.HangSpoon(ctx, by.ID, r.WorldNumber, r.Code, hang)
 	if errors.Is(err, store.ErrNotFound) {
 		return ErrNotFound
+	}
+	if err == nil {
+		// Their boats show the spoons they hang from the clerk's next turn.
+		s.prizes.want(bus.Account(by.ID))
 	}
 	return err
 }

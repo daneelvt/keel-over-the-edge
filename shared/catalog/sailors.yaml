@@ -6,7 +6,8 @@
 # drawn on the boat in view and near the camera, the far level, the close
 # level for the camera nearest and the picker, the clips, the colour
 # portrait (its base in AVIF, with WebP for browsers without, and its
-# mask) and the inked portrait.
+# mask) and the inked portrait; and where a race's winner wears the
+# cockade, on the figure and on the inked portrait.
 sailors:
   - id: rover
     name: Rover
@@ -24,6 +25,7 @@ sailors:
           portraitFallback: sailors/rover/female.portrait.webp
           portraitMask: sailors/rover/female.portrait-mask.webp
           ink: sailors/rover/female.ink.webp
+          cockade: { at: [0.102, 1.572, 0.132], facing: [0.8, -0.32, 0.51], inked: [0.684, 0.312] }
       - id: male
         name: male
         art:
@@ -35,6 +37,7 @@ sailors:
           portraitFallback: sailors/rover/male.portrait.webp
           portraitMask: sailors/rover/male.portrait-mask.webp
           ink: sailors/rover/male.ink.webp
+          cockade: { at: [0.112, 1.712, 0.142], facing: [0.8, -0.32, 0.5], inked: [0.684, 0.319] }
   - id: bosun
     name: Bosun
     habit: stretches the back
@@ -51,6 +54,7 @@ sailors:
           portraitFallback: sailors/bosun/female.portrait.webp
           portraitMask: sailors/bosun/female.portrait-mask.webp
           ink: sailors/bosun/female.ink.webp
+          cockade: { at: [0.068, 1.574, 0.068], facing: [0.92, 0.4, 0.03], inked: [0.688, 0.338] }
       - id: male
         name: male
         art:
@@ -62,6 +66,7 @@ sailors:
           portraitFallback: sailors/bosun/male.portrait.webp
           portraitMask: sailors/bosun/male.portrait-mask.webp
           ink: sailors/bosun/male.ink.webp
+          cockade: { at: [0.067, 1.714, 0.067], facing: [0.92, 0.38, 0.02], inked: [0.695, 0.344] }
   - id: chartmaker
     name: Chartmaker
     habit: checks a pocket compass
@@ -78,6 +83,7 @@ sailors:
           portraitFallback: sailors/chartmaker/female.portrait.webp
           portraitMask: sailors/chartmaker/female.portrait-mask.webp
           ink: sailors/chartmaker/female.ink.webp
+          cockade: { at: [0.098, 1.58, 0.104], facing: [0.97, 0.12, 0.23], inked: [0.711, 0.338] }
       - id: male
         name: male
         art:
@@ -89,6 +95,7 @@ sailors:
           portraitFallback: sailors/chartmaker/male.portrait.webp
           portraitMask: sailors/chartmaker/male.portrait-mask.webp
           ink: sailors/chartmaker/male.ink.webp
+          cockade: { at: [0.104, 1.711, 0.108], facing: [0.87, 0.13, 0.48], inked: [0.711, 0.338] }
   - id: lookout
     name: Lookout
     habit: shades the eyes and scans the sea
@@ -105,6 +112,7 @@ sailors:
           portraitFallback: sailors/lookout/female.portrait.webp
           portraitMask: sailors/lookout/female.portrait-mask.webp
           ink: sailors/lookout/female.ink.webp
+          cockade: { at: [0.095, 1.27, 0.096], facing: [0.23, 0.69, 0.69], inked: [0.742, 0.844] }
       - id: male
         name: male
         art:
@@ -116,6 +124,7 @@ sailors:
           portraitFallback: sailors/lookout/male.portrait.webp
           portraitMask: sailors/lookout/male.portrait-mask.webp
           ink: sailors/lookout/male.ink.webp
+          cockade: { at: [0.108, 1.37, 0.116], facing: [0.15, 0.55, 0.82], inked: [0.762, 0.838] }
   - id: cavalier
     name: Cavalier
     habit: sweeps the hat
@@ -132,6 +141,7 @@ sailors:
           portraitFallback: sailors/cavalier/female.portrait.webp
           portraitMask: sailors/cavalier/female.portrait-mask.webp
           ink: sailors/cavalier/female.ink.webp
+          cockade: { at: [0.151, 1.593, 0.144], facing: [0.87, -0.49, 0.09], inked: [0.664, 0.338] }
       - id: male
         name: male
         art:
@@ -143,6 +153,7 @@ sailors:
           portraitFallback: sailors/cavalier/male.portrait.webp
           portraitMask: sailors/cavalier/male.portrait-mask.webp
           ink: sailors/cavalier/male.ink.webp
+          cockade: { at: [0.163, 1.733, 0.152], facing: [0.86, -0.5, 0.11], inked: [0.684, 0.35] }
   - id: quartermaster
     name: Quartermaster
     habit: tallies in a small book
@@ -159,6 +170,7 @@ sailors:
           portraitFallback: sailors/quartermaster/female.portrait.webp
           portraitMask: sailors/quartermaster/female.portrait-mask.webp
           ink: sailors/quartermaster/female.ink.webp
+          cockade: { at: [0.074, 1.556, 0.086], facing: [0.9, -0.04, 0.44], inked: [0.703, 0.338] }
       - id: male
         name: male
         art:
@@ -170,6 +182,7 @@ sailors:
           portraitFallback: sailors/quartermaster/male.portrait.webp
           portraitMask: sailors/quartermaster/male.portrait-mask.webp
           ink: sailors/quartermaster/male.ink.webp
+          cockade: { at: [0.074, 1.706, 0.086], facing: [0.97, -0.08, 0.25], inked: [0.719, 0.338] }
   - id: oldsalt
     name: Old Salt
     habit: squints at the sky
@@ -186,6 +199,7 @@ sailors:
           portraitFallback: sailors/oldsalt/female.portrait.webp
           portraitMask: sailors/oldsalt/female.portrait-mask.webp
           ink: sailors/oldsalt/female.ink.webp
+          cockade: { at: [0.08, 1.557, 0.09], facing: [0.81, 0.58, 0.11], inked: [0.688, 0.344] }
       - id: male
         name: male
         art:
@@ -197,6 +211,7 @@ sailors:
           portraitFallback: sailors/oldsalt/male.portrait.webp
           portraitMask: sailors/oldsalt/male.portrait-mask.webp
           ink: sailors/oldsalt/male.ink.webp
+          cockade: { at: [0.08, 1.694, 0.09], facing: [0.88, 0.47, 0.03], inked: [0.703, 0.35] }
   - id: shipwright
     name: Shipwright
     habit: tugs a knotted line taut
@@ -213,6 +228,7 @@ sailors:
           portraitFallback: sailors/shipwright/female.portrait.webp
           portraitMask: sailors/shipwright/female.portrait-mask.webp
           ink: sailors/shipwright/female.ink.webp
+          cockade: { at: [0.081, 1.613, 0.09], facing: [0.87, 0.29, 0.41], inked: [0.703, 0.275] }
       - id: male
         name: male
         art:
@@ -224,6 +240,7 @@ sailors:
           portraitFallback: sailors/shipwright/male.portrait.webp
           portraitMask: sailors/shipwright/male.portrait-mask.webp
           ink: sailors/shipwright/male.ink.webp
+          cockade: { at: [0.089, 1.756, 0.097], facing: [0.74, 0.37, 0.56], inked: [0.723, 0.275] }
   - id: buccaneer
     name: Buccaneer
     habit: hooks the thumbs in the belt
@@ -240,6 +257,7 @@ sailors:
           portraitFallback: sailors/buccaneer/female.portrait.webp
           portraitMask: sailors/buccaneer/female.portrait-mask.webp
           ink: sailors/buccaneer/female.ink.webp
+          cockade: { at: [0.097, 1.6, 0.102], facing: [0.95, -0.03, 0.3], inked: [0.723, 0.287] }
       - id: male
         name: male
         art:
@@ -251,6 +269,7 @@ sailors:
           portraitFallback: sailors/buccaneer/male.portrait.webp
           portraitMask: sailors/buccaneer/male.portrait-mask.webp
           ink: sailors/buccaneer/male.ink.webp
+          cockade: { at: [0.103, 1.741, 0.107], facing: [0.96, -0.06, 0.28], inked: [0.73, 0.287] }
 
 # The options a sailor's look takes. Six skins, evenly spaced in lightness
 # and warmer as they deepen, lightest first; six hair colours, and four
@@ -304,6 +323,7 @@ machine:
         portraitFallback: sailors/machine/female.portrait.webp
         portraitMask: sailors/machine/female.portrait-mask.webp
         ink: sailors/machine/female.ink.webp
+        cockade: { at: [0.113, 1.27, 0.096], facing: [0.39, 0.8, 0.45], inked: [0.723, 0.781] }
     - id: male
       name: male
       art:
@@ -315,6 +335,7 @@ machine:
         portraitFallback: sailors/machine/male.portrait.webp
         portraitMask: sailors/machine/male.portrait-mask.webp
         ink: sailors/machine/male.ink.webp
+        cockade: { at: [0.128, 1.37, 0.122], facing: [0.14, 0.69, 0.71], inked: [0.742, 0.781] }
   finishes:
     - { id: brass, name: brass, colour: "#d9a957" }
     - { id: copper, name: copper, colour: "#b8673f" }

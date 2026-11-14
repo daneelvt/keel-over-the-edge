@@ -377,6 +377,8 @@ func (p *process) openWorld(ctx context.Context, rw *readyWorld) (*worldHalf, er
 	h.chat = chat.NewHub(b.Frames, aboard.Rules{Switches: p.switches, Ties: p.ties}, time.Now)
 	h.chat.Metrics = p.metrics
 	h.tally = shipmates.NewTally(b.Frames, p.chatDB(), time.Now, p.log, p.metrics)
+	// The races first: the game's connections ask them every boat's prizes.
+	h.races = p.racesOf(h)
 	h.game = edge.New(edge.Config{
 		LookCode: p.lookCode,
 		BoatOf:   p.boatOf,
@@ -398,6 +400,7 @@ func (p *process) openWorld(ctx context.Context, rw *readyWorld) (*worldHalf, er
 		RaceNames: p.raceNames(h),
 		WatchByID: p.watchTargetByID,
 		RaceOf:    p.raceOf(h),
+		Prizes:    func(a bus.Account) uint32 { return uint32(h.races.PrizesOf(a)) },
 	})
 	h.lasting = persist.New(persist.Config{
 		Frames: b.Frames, Store: p.writer, World: row.ID, Epoch: p.lease,
@@ -407,7 +410,6 @@ func (p *process) openWorld(ctx context.Context, rw *readyWorld) (*worldHalf, er
 		Logbook: bookOf(rw, cat),
 	})
 	h.news = p.newsOf(row)
-	h.races = p.racesOf(h)
 	h.clerk = p.clerkOf(h)
 	h.sea = p.seaOf(h, rw, sighting)
 	world.Record(h.inputs, h.game, h.lasting, h.forecasts, p.agents.core.Open(h.sea))

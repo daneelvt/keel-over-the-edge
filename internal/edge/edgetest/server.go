@@ -128,6 +128,8 @@ type Config struct {
 	Races     *committee.Stage
 	RaceNames edge.RaceNamer
 	RaceOf    func(ctx context.Context, code string) ([16]byte, error)
+	// Prizes is the edge's: each sailor's prize code.
+	Prizes func(bus.Account) uint32
 }
 
 // Server is the game's server in a test.
@@ -322,7 +324,7 @@ func (s *Server) start(t testing.TB, w *sim.World) {
 		Agent: cfg.Agent, BoatOf: cfg.BoatOf,
 		Link: s.link, Knocker: s.knocker, Switches: cfg.Switches, Refuser: cfg.Refuser, Capacities: s.Capacities, CrewLimit: cfg.CrewLimit,
 		Chat: s.Chat, Talker: cfg.Talker, Machines: cfg.Machines, Tie: cfg.Tie, Report: cfg.Report,
-		WatchByID: s.Sessions.watchByID, RaceNames: cfg.RaceNames, RaceOf: cfg.RaceOf,
+		WatchByID: s.Sessions.watchByID, RaceNames: cfg.RaceNames, RaceOf: cfg.RaceOf, Prizes: cfg.Prizes,
 	})
 	var recorders []sim.Recorder
 	if cfg.Record != nil {

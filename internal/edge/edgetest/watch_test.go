@@ -50,6 +50,10 @@ type viewer struct {
 	welcomes  int
 	boatLooks []*pb.BoatLookChanged
 	names     map[uint32]string
+	// prizes are the boats' prizes by view slot as last told, and own the
+	// own boat's.
+	prizes map[uint32]*pb.BoatPrize
+	own    *pb.BoatPrize
 	// crews are the other boats' crews by view slot, as last told (an empty
 	// one deleted), and allCrews every one told, in order.
 	crews    map[uint32]*pb.Crew
@@ -128,7 +132,7 @@ func (v *viewer) take(r client.Received) {
 	case *pb.ServerMessage_Welcome:
 		v.welcome, v.snaps, v.queued = m.Welcome, 0, nil
 		v.welcomes++
-		v.names, v.crews = nil, nil
+		v.names, v.crews, v.prizes, v.own = nil, nil, nil, nil
 	case *pb.ServerMessage_WatchEnded:
 		v.ended = m.WatchEnded
 	case *pb.ServerMessage_Queued:
@@ -178,6 +182,17 @@ func (v *viewer) take(r client.Received) {
 				delete(v.crews, c.GetSlot())
 			} else {
 				v.crews[c.GetSlot()] = c
+			}
+		}
+	case *pb.ServerMessage_BoatPrizes:
+		if v.prizes == nil {
+			v.prizes = map[uint32]*pb.BoatPrize{}
+		}
+		for _, p := range m.BoatPrizes.GetPrizes() {
+			if p.GetOwn() {
+				v.own = p
+			} else {
+				v.prizes[p.GetSlot()] = p
 			}
 		}
 	case *pb.ServerMessage_BoatNames:

@@ -369,7 +369,7 @@ func (c *conn) welcome(f *bus.Frame) bool {
 	c.steering = f.Holder[s] == (bus.Account{})
 	c.holding = c.steering
 	c.wmu.Unlock()
-	c.toldDeck, c.toldCrew = [2]uint64{}, false
+	c.toldDeck, c.toldCrew = [3]uint64{}, false
 	c.toldWatchers = 0
 	c.toldLook = f.Look[s]
 	c.toldBoat(f, s)
@@ -467,7 +467,7 @@ func (enc *encoder) encode(c *conn, f *bus.Frame) {
 	// The weather, the sea, the land's chunks and the bumps first: they are
 	// queued, and what is queued goes out before the snapshot.
 	if !c.weather(f) || !c.seaAreas(f, x, y) || !c.chunks(chunks, x, y) || !c.bumps(f, next, s, boat) || !c.lookOf(f, s) ||
-		!c.boatLookOf(f, s) || !c.boatNames(f, next) || !c.crews(f, next) || !c.life(f, next, s, x, y) || !c.crewOf(f, s) ||
+		!c.boatLookOf(f, s) || !c.boatNames(f, next) || !c.prizes(f, next, s) || !c.crews(f, next) || !c.life(f, next, s, x, y) || !c.crewOf(f, s) ||
 		!c.races(f, s, boat, x, y) {
 		return
 	}
@@ -527,6 +527,7 @@ func (c *conn) toldBoat(f *bus.Frame, s int32) {
 	c.toldKind, c.toldBoatLook, c.toldBoatName = f.Kind[s], f.BoatLook[s], f.BoatName[s]
 	c.toldNames = [protocol.ViewSlots]toldName{}
 	c.toldCrews, c.crewed, c.crewKnown = [protocol.ViewSlots]toldCrew{}, 0, 0
+	c.toldPrizes, c.toldOwnPrize = [protocol.ViewSlots]toldPrize{}, toldPrize{}
 }
 
 // boatLookOf tells c that the boat in slot s of f, its own or the one it
@@ -568,6 +569,43 @@ func (c *conn) boatNames(f *bus.Frame, v *connView) bool {
 	return c.send(&pb.ServerMessage{Body: &pb.ServerMessage_BoatNames{BoatNames: &pb.BoatNames{Names: names}}}, outBoatNames)
 }
 
+// prizes tells c the prizes of the boats in its view v of f, and of the
+// boat in slot s, its own or the one it watches, that it has not been
+// told: each as it comes into the view, and again when they change. A
+// view slot keeps what it was told for the next boat it holds, which is
+// told only what differs.
+func (c *conn) prizes(f *bus.Frame, v *connView, s int32) bool {
+	e := c.e
+	racing := len(f.Racers) > 0
+	var list []*pb.BoatPrize
+	own := toldPrize{prizes: e.prizesOf(f.Owner[s])}
+	if racing {
+		own.number = raceNumber(f, s)
+	}
+	if own != c.toldOwnPrize {
+		list = append(list, &pb.BoatPrize{Own: true, Prizes: own.prizes, Number: own.number})
+	}
+	c.toldOwnPrize = own
+	for m := v.view.Used; m != 0; m &= m - 1 {
+		vs := bits.TrailingZeros64(m)
+		told := &c.toldPrizes[vs]
+		fs := v.slot[vs]
+		now := toldPrize{prizes: e.prizesOf(f.Owner[fs])}
+		if racing {
+			now.number = raceNumber(f, fs)
+		}
+		// The client keeps a slot's prizes for whichever boat it holds next.
+		if now != *told {
+			list = append(list, &pb.BoatPrize{Slot: uint32(vs), Prizes: now.prizes, Number: now.number})
+		}
+		*told = now
+	}
+	if len(list) == 0 {
+		return true
+	}
+	return c.send(&pb.ServerMessage{Body: &pb.ServerMessage_BoatPrizes{BoatPrizes: &pb.BoatPrizes{Prizes: list}}}, outBoatPrizes)
+}
+
 // crews tells c who is aboard the boats in its view v of f with anyone
 // aboard besides their skipper, while they are in its near band: each
 // boat's crew as it comes near or into the view near, and again when who
@@ -595,13 +633,13 @@ func (c *conn) crews(f *bus.Frame, v *connView) bool {
 		}
 		// Unchanged since told: nothing to look up.
 		s := v.slot[vs]
-		now := toldCrew{boat: v.boat[vs], deck: f.Deck[s], look: f.Look[s]}
+		lo, hi := f.CrewOf(s)
+		now := toldCrew{boat: v.boat[vs], deck: f.Deck[s], look: f.Look[s], cockades: c.e.cockadesOf(f, s, lo, hi)}
 		if c.crewKnown&bit != 0 && c.toldCrews[vs] == now {
 			continue
 		}
 		c.toldCrews[vs] = now
 		c.crewKnown |= bit
-		lo, hi := f.CrewOf(s)
 		if lo == hi {
 			if c.crewed&bit != 0 {
 				crews = append(crews, &pb.Crew{Slot: uint32(vs)})
@@ -610,7 +648,7 @@ func (c *conn) crews(f *bus.Frame, v *connView) bool {
 			continue
 		}
 		c.crewed |= bit
-		crews = append(crews, crewIn(f, s, lo, hi, vs))
+		crews = append(crews, crewIn(f, s, lo, hi, vs, now.cockades))
 	}
 	if len(crews) == 0 {
 		return true
@@ -621,15 +659,16 @@ func (c *conn) crews(f *bus.Frame, v *connView) bool {
 // crewIn is the crew of the boat in slot s of f, f.Crew[lo:hi] its crew
 // but its skipper, as those aboard no boat are told it, for view slot vs:
 // the skipper at seat 0, then the rest in seat order, and the seat of
-// whoever holds the controls, 0 for the skipper.
-func crewIn(f *bus.Frame, s int32, lo, hi, vs int) *pb.Crew {
+// whoever holds the controls, 0 for the skipper; cockades says who wears
+// the cockade (cockadesOf).
+func crewIn(f *bus.Frame, s int32, lo, hi, vs int, cockades uint64) *pb.Crew {
 	people := make([]pb.Person, hi-lo+1)
 	list := make([]*pb.Person, hi-lo+1)
-	people[0] = pb.Person{Look: f.Look[s], Machine: f.Machine[s]}
+	people[0] = pb.Person{Look: f.Look[s], Machine: f.Machine[s], Cockade: cockades&1 != 0}
 	list[0] = &people[0]
 	holder := uint32(0)
 	for i, a := range f.Crew[lo:hi] {
-		people[i+1] = pb.Person{Seat: uint32(a.Seat), Look: a.Look, Machine: a.Machine}
+		people[i+1] = pb.Person{Seat: uint32(a.Seat), Look: a.Look, Machine: a.Machine, Cockade: cockades>>(i+1)&1 != 0}
 		list[i+1] = &people[i+1]
 		if f.Holder[s] == a.Account {
 			holder = uint32(a.Seat)

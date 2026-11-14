@@ -511,6 +511,62 @@ func (q *Queries) PendingRuns(ctx context.Context, worldID pgtype.UUID) ([]Pendi
 	return items, nil
 }
 
+const prizesOf = `-- name: PrizesOf :many
+SELECT account_id,
+  count(*) FILTER (WHERE role IN ('skipper', 'crew') AND kind = 'race' AND fleet >= 3)::integer AS sailed,
+  coalesce((array_agg(code ORDER BY at DESC, id DESC)
+    FILTER (WHERE role IN ('skipper', 'crew') AND kind = 'race' AND fleet >= 3 AND place = 1))[1:$1::integer], '{}')::text[] AS wins,
+  count(*) FILTER (WHERE role IN ('skipper', 'crew') AND hung)::integer AS hung,
+  count(*) FILTER (WHERE role = 'owner' AND kind = 'race' AND fleet >= 3)::integer AS ran
+FROM race_record
+WHERE account_id = ANY ($2::uuid[]) AND world = $3
+GROUP BY account_id
+`
+
+type PrizesOfParams struct {
+	Most  int32
+	Ids   []pgtype.UUID
+	World int32
+}
+
+type PrizesOfRow struct {
+	AccountID pgtype.UUID
+	Sailed    int32
+	Wins      []string
+	Hung      int32
+	Ran       int32
+}
+
+// What some sailors' races in a world show on the water: races sailed,
+// skipper or crew, and the codes of those won, the newest first, at most
+// most; the wooden spoons they hang; the races they ran. Only races of
+// three boats or more count (a race's boats are of as many accounts).
+func (q *Queries) PrizesOf(ctx context.Context, arg PrizesOfParams) ([]PrizesOfRow, error) {
+	rows, err := q.db.Query(ctx, prizesOf, arg.Most, arg.Ids, arg.World)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []PrizesOfRow
+	for rows.Next() {
+		var i PrizesOfRow
+		if err := rows.Scan(
+			&i.AccountID,
+			&i.Sailed,
+			&i.Wins,
+			&i.Hung,
+			&i.Ran,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const putRaceRecord = `-- name: PutRaceRecord :exec
 INSERT INTO race_record (account_id, source, world, at, code, race_name, kind, course_name, boat, boat_name, fleet, harbour,
   newcomers, role, place, how, medal, awards, skipper_id, skipper_name, skipper_machine, number, elapsed, added)

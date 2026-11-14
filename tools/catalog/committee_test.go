@@ -38,6 +38,11 @@ const committeeSignals = `
       - { id: f-ap, signal: postponement, rows: [rw] }
       - { id: f-m, signal: mark, rows: [rw] }
       - { id: f-pin, signal: pin, rows: [rw] }
+      - { id: f-won-r, signal: victory, rows: [rw] }
+      - { id: f-won-w, signal: victory, rows: [wr] }
+      - { id: f-b, signal: burgee, rows: [rw] }
+      - { id: f-g, signal: gilded, rows: [rw] }
+      - { id: f-c, signal: committee, rows: [rw] }
 `
 
 func TestCommitteeFlags(t *testing.T) {
@@ -55,6 +60,7 @@ func TestCommitteeFlags(t *testing.T) {
 		"a signal twice":      {good + "      - { id: f-x2, signal: recall, rows: [rw] }\n", "signal recall is flown by 2 flags"},
 		"a signal by none":    {strings.Replace(good, "      - { id: f-pin, signal: pin, rows: [rw] }\n", "", 1), "signal pin is flown by 0 flags"},
 		"a boat on a signal":  {strings.Replace(good, "signal: mark,", "signal: mark, boat: one,", 1), "only a class pennant names a boat"},
+		"no winner's pennant": {strings.ReplaceAll(good, "signal: victory", "signal: burgee"), "no flag is a winner's pennant"},
 	} {
 		err := checkCommittee(committeeDoc(t, c.flags))
 		if err == nil || !strings.Contains(err.Error(), c.want) {

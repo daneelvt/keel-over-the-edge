@@ -724,6 +724,20 @@ const CloudFormFog CloudForm = "fog"
 const CloudFormNone CloudForm = "none"
 const CloudFormStorm CloudForm = "storm"
 
+// Where a race's winner wears the cockade: on the hat's left side, or on the
+// coat's left breast for a look with no hat.
+type Cockade struct {
+	// Its middle on the figure as it is bound, m: across to its left, up and forward.
+	At []float64 `json:"at"`
+
+	// The way it faces out from the cloth, the same axes.
+	Facing []float64 `json:"facing"`
+
+	// Its middle on the inked portrait, as shares of its width from the left and of
+	// its height from the top.
+	Inked []float64 `json:"inked"`
+}
+
 // A colony's birds: where they nest, and how they look, fly and call.
 type ColonyBirds struct {
 	// Look corresponds to the JSON schema field "look".
@@ -758,6 +772,9 @@ type Committee struct {
 
 	// A mark's spar above the water, in m.
 	Mark float64 `json:"mark"`
+
+	// What a sailor's races in a world show on the water while it lasts.
+	Prizes Prizes `json:"prizes"`
 
 	// They are drawn within this of the camera, in m.
 	Reach float64 `json:"reach"`
@@ -924,6 +941,7 @@ type Cut string
 
 const CutFlag Cut = "flag"
 const CutPennant Cut = "pennant"
+const CutSwallowtail Cut = "swallowtail"
 
 // The world's end, staged on every phone by the world clock: the falls heard and
 // the mist closing in, then the near sea's tiles breaking off and falling toward
@@ -3342,6 +3360,57 @@ type PortPiers struct {
 	Width float64 `json:"width"`
 }
 
+// The winner's cockade: a pleated rosette of ribbon.
+type PrizeCockade struct {
+	// Its width, m.
+	Across float64 `json:"across"`
+
+	// Its middle's button.
+	Button Colour `json:"button"`
+
+	// Its ribbon.
+	Ribbon Colour `json:"ribbon"`
+}
+
+// A carved wooden spoon on its lanyard.
+type PrizeSpoon struct {
+	// Its wood.
+	Colour Colour `json:"colour"`
+
+	// Its lanyard from the rail, m.
+	Lanyard float64 `json:"lanyard"`
+
+	// Its length, m.
+	Length float64 `json:"length"`
+}
+
+// What a sailor's races in a world show on the water while it lasts.
+type Prizes struct {
+	// Races sailed in the world for the racing burgee.
+	Burgee int `json:"burgee"`
+
+	// The winner's cockade: a pleated rosette of ribbon.
+	Cockade PrizeCockade `json:"cockade"`
+
+	// Races sailed in the world for the gilded burgee.
+	Gilded int `json:"gilded"`
+
+	// A winner's pennants flown, the latest wins'.
+	Pennants int `json:"pennants"`
+
+	// Races run in the world for the committee's flag.
+	Ran int `json:"ran"`
+
+	// They are drawn within this of the camera, in m.
+	Reach float64 `json:"reach"`
+
+	// A carved wooden spoon on its lanyard.
+	Spoon PrizeSpoon `json:"spoon"`
+
+	// Wooden spoons hung from the stern, the latest.
+	Spoons int `json:"spoons"`
+}
+
 // The water at a quay's foot, in m.
 type QuayFoot struct {
 	// Port Royal's.
@@ -3466,6 +3535,10 @@ type SailorArt struct {
 	// The sailor's close level, drawn on the boat in view when the camera is near,
 	// and on the picker's stage.
 	Close ArtPath `json:"close"`
+
+	// Where a race's winner wears the cockade: on the hat's left side, or on the
+	// coat's left breast for a look with no hat.
+	Cockade Cockade `json:"cockade"`
 
 	// The sailor's far level: one rigid figure posed seated at the helm, with the
 	// place node that seats it in the boat model; drawn in the fleet.
@@ -3673,7 +3746,9 @@ type Sheet struct {
 
 type Signal string
 
+const SignalBurgee Signal = "burgee"
 const SignalClass Signal = "class"
+const SignalCommittee Signal = "committee"
 
 // A dye of the bunting.
 type SignalDye struct {
@@ -3692,7 +3767,8 @@ type SignalFlag struct {
 	// The boat whose class it is, by the boat's id: a class pennant's.
 	Boat *ID `json:"boat,omitempty,omitzero"`
 
-	// Its cut: a flag, oblong; or a pennant, tapering to a point.
+	// Its cut: a flag, oblong; a pennant, tapering to a point; or a swallowtail,
+	// tapering a little and forked at the fly.
 	Cut Cut `json:"cut"`
 
 	// Its depth at the hoist, in m.
@@ -3712,15 +3788,19 @@ type SignalFlag struct {
 	Rows []string `json:"rows"`
 
 	// What it signals: a race's boats' class, the preparatory signal, an individual
-	// recall, a postponement, a mark or the pin.
+	// recall, a postponement, a mark or the pin; or, flown by a sailor's boat for the
+	// world, a race won (in that race's colour), races sailed (the racing burgee,
+	// then the gilded) or races run (the committee's flag).
 	Signal Signal `json:"signal"`
 }
 
+const SignalGilded Signal = "gilded"
 const SignalMark Signal = "mark"
 const SignalPin Signal = "pin"
 const SignalPostponement Signal = "postponement"
 const SignalPreparatory Signal = "preparatory"
 const SignalRecall Signal = "recall"
+const SignalVictory Signal = "victory"
 
 type Site string
 
@@ -5938,4 +6018,4 @@ type WorldZones struct {
 }
 
 // Version is the catalog version (tools/catalog).
-const Version = "da5c831b248f14ed"
+const Version = "e7ebca52cde2e92c"

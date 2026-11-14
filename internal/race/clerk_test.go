@@ -297,6 +297,15 @@ func raceOfThree(t *testing.T, restart int) {
 	if rbs, err := s.db.RaceRibbonsOf(s.ctx, owner.ID, 0, 5); err != nil || len(rbs) != 0 {
 		t.Errorf("the owner's ribbons: %+v, %v", rbs, err)
 	}
+	// The winner flies a pennant in the race's colour and wears the
+	// cockade, from the clerk's turn after the race was written.
+	c.once()
+	if p := s.svc.PrizesOf(bus.Account(sailors[0].ID)); p.Pennants() != 1 || p.Pennant(0) != RaceColour(card.Code, 6) || !p.Cockade() {
+		t.Errorf("the winner's prizes: %d pennants, colour %d", p.Pennants(), p.Pennant(0))
+	}
+	if p := s.svc.PrizesOf(bus.Account(sailors[1].ID)); p.Pennants() != 0 || p.Cockade() {
+		t.Errorf("the second's prizes: %d pennants", p.Pennants())
+	}
 	// The spoon hung by the last boat's skipper alone, and taken down.
 	if err := s.svc.Spoon(s.ctx, sailors[0], card.Code, true); !errors.Is(err, ErrNotFound) {
 		t.Errorf("the winner hangs a spoon: %v", err)
@@ -307,6 +316,10 @@ func raceOfThree(t *testing.T, restart int) {
 		}
 		if n, err := s.db.SpoonsHung(s.ctx, sailors[2].ID, s.world.Number); err != nil || n != map[bool]int{true: 1}[hang] {
 			t.Errorf("hung %v: %d spoons, %v", hang, n, err)
+		}
+		c.once()
+		if p := s.svc.PrizesOf(bus.Account(sailors[2].ID)); p.Spoons() != map[bool]int{true: 1}[hang] {
+			t.Errorf("hung %v: the stern shows %d spoons", hang, p.Spoons())
 		}
 	}
 	// Written again, nothing changes.

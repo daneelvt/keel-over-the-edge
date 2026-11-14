@@ -99,3 +99,7 @@ func (noRaces) RaceRibbonsOf(context.Context, store.AccountID, int, int) ([]stor
 func (noRaces) RaceCountsOf(context.Context, store.AccountID) (store.RaceCounts, error) {
 	return store.RaceCounts{}, nil
 }
+
+func (noRaces) PrizesOf(context.Context, int, []store.AccountID, int) (map[store.AccountID]store.RacePrizes, error) {
+	return nil, nil
+}

@@ -11,8 +11,8 @@ import (
 // checkCommittee fails when the committee's signal flags do not hold
 // together: a flag's rows of unequal length or naming a dye not listed, a
 // class pennant for a boat that is not in the catalog or for a boat that
-// has another, a boat with none, or one of the other signals flown by no
-// flag or by two.
+// has another, a boat with none, one of the other signals flown by no
+// flag or by two, or no winner's pennant.
 func checkCommittee(doc map[string]any) error {
 	world, _ := doc["world"].(map[string]any)
 	c, _ := world["committee"].(map[string]any)
@@ -76,10 +76,13 @@ func checkCommittee(doc map[string]any) error {
 			problems = append(problems, fmt.Sprintf("  boat %s has no class pennant", id))
 		}
 	}
-	for _, s := range []string{"preparatory", "recall", "postponement", "mark", "pin"} {
+	for _, s := range []string{"preparatory", "recall", "postponement", "mark", "pin", "burgee", "gilded", "committee"} {
 		if n := len(signals[s]); n != 1 {
 			problems = append(problems, fmt.Sprintf("  signal %s is flown by %d flags, not one", s, n))
 		}
+	}
+	if len(signals["victory"]) == 0 {
+		problems = append(problems, "  no flag is a winner's pennant (signal victory)")
 	}
 	if len(problems) > 0 {
 		sort.Strings(problems)

@@ -100,7 +100,10 @@ func (c *Clerk) Once(ctx context.Context) error {
 	if err := c.write(ctx); err != nil {
 		return err
 	}
-	return c.hand(ctx)
+	if err := c.hand(ctx); err != nil {
+		return err
+	}
+	return c.s.LoadPrizes(ctx)
 }
 
 // held are the races and runs the world holds, and the accounts racing.
@@ -329,7 +332,14 @@ func (c *Clerk) end(ctx context.Context, r *run) error {
 	if err != nil {
 		return err
 	}
-	return c.s.cfg.Store.EndRace(ctx, c.cfg.Lease, c.cfg.Rules, e)
+	if err := c.s.cfg.Store.EndRace(ctx, c.cfg.Lease, c.cfg.Rules, e); err != nil {
+		return err
+	}
+	// Everyone the race wrote a record for shows its prizes afresh.
+	for i := range e.Records {
+		c.s.prizes.want(bus.Account(e.Records[i].Account))
+	}
+	return nil
 }
 
 // endOf is what run r of race row came to, as the store keeps it.
