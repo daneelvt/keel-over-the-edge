@@ -206,11 +206,28 @@ export interface RacerAtIn {
   cheers: number;
 }
 
-/** A race as it stands, every two seconds: the world's tick it was taken at, and every boat. */
+/** A race as it stands, every two seconds: the world's tick it was taken at, and every boat; eye, the number of the boat the page sails or watches (0 none). */
 export interface RacePictureIn {
   race: number;
   tick: number;
   racers: RacerAtIn[];
+  eye: number;
+}
+
+/** The crowd's cheers for a boat in a race, gathered every two seconds: how many since the last, how many cheered it within ten seconds, and whether the page's own cheer is among them. */
+export interface RaceCheeredIn {
+  race: number;
+  number: number;
+  count: number;
+  crowd: number;
+  mine: boolean;
+}
+
+/** A race's boat to watch: its race by number (0 for none) or its link's code, and its race number (0: the boat the game chooses). */
+export interface RaceWatchAsk {
+  race: number;
+  code: string;
+  number: number;
 }
 
 /** What a race's committee saw: a bump (number at fault, other bumped, by article, added seconds), a boat over early, a mark missed, a boat asked if it races still, a boat retired, a mark rounded (in place). */
@@ -614,6 +631,10 @@ export type ToWorker =
    * connection, and by every Hello from then on.
    */
   | { type: 'watch'; sailor: string }
+  /** Watch a race's boat, as watch does a sailor's. */
+  | { type: 'watchRace'; ask: RaceWatchAsk }
+  /** Cheer the boat watched in a race. */
+  | { type: 'cheer' }
   /** A boat again, as a new connection gets one: the Hellos from then on ask for it too. */
   | { type: 'sail' }
   /** Stop watching, without sailing: the connection is idle. */
@@ -786,6 +807,8 @@ export type FromWorker =
   | { type: 'raceCall'; call: RaceCallIn }
   | { type: 'raceFinish'; finish: RaceFinishIn }
   | { type: 'raceResults'; results: RaceResultsIn }
+  /** The crowd's cheers for a boat of the race. */
+  | { type: 'raceCheered'; cheered: RaceCheeredIn }
   /** Chunks of the land the boat could see: their addresses to fetch. */
   | { type: 'chunks'; chunks: ChunksHanded }
   /** The places in chunks just handed. */

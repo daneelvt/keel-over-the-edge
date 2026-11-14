@@ -325,7 +325,7 @@ export function flagAtlas(
   return { data, width, height, designs };
 }
 
-/** A signal flag flown: the head of its hoist, m east, north and up; the wind there, m/s and from; its design, the catalog's index; its own number. */
+/** A signal flag flown: the head of its hoist, m east, north and up; the wind there, m/s and from; its design, the catalog's index; its own number; and its size against the design's, 1 if not given (bunting's are smaller). */
 export interface SignalSeen {
   east: number;
   north: number;
@@ -334,6 +334,7 @@ export interface SignalSeen {
   from: number;
   flag: number;
   seed: number;
+  scale?: number;
 }
 
 /** A flag's cloth: each vertex's place along the fly (0 at the hoist, 1 at its end) and across the hoist (−0.5 at its foot to 0.5 at its head). */
@@ -459,12 +460,13 @@ export class SignalFlags {
       a[o + 3] = flagExtension(f.speed / KNOT, c.limp, c.extended);
       a[o + 4] = downwind(f.from);
       a[o + 5] = f.seed * 0.7;
-      a[o + 6] = flapFrequency(f.speed, d.length, c.strouhal);
+      const k = f.scale ?? 1;
+      a[o + 6] = flapFrequency(f.speed, d.length * k, c.strouhal);
       a[o + 7] = 0;
       a[o + 8] = d.row;
       a[o + 9] = d.taper;
-      a[o + 10] = d.length;
-      a[o + 11] = d.hoist;
+      a[o + 10] = d.length * k;
+      a[o + 11] = d.hoist * k;
       n++;
     }
     this.count = n;

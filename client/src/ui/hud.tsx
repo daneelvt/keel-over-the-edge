@@ -47,6 +47,7 @@ import type { Notices } from './notices';
 import { Pilot } from './pilot';
 import { type RaceSource, raceShown, useRaceLine } from './racelinelazy';
 import { type RacesView, racesShown, useRaces } from './raceslazy';
+import { cheeringText } from './racewatchwords';
 import { type CameraKeys, SeaKeys } from './seakeys';
 import type { SettingsSignal } from './settings';
 import { type StatementsView, statementsShown, useStatements } from './statementlazy';
@@ -71,9 +72,11 @@ function SailorLine({ model }: { model: HudModel }) {
   );
 }
 
-/** How many watch the own boat, under the sailor's line, while any do. */
-function WatchersLine({ watch }: { watch: WatchView }) {
-  const text = watchersText(watch.watchers.value);
+/** How many watch the own boat, under the sailor's line, while any do; in a race, how many cheer it for a few seconds. */
+function WatchersLine({ watch, racing }: { watch: WatchView; racing: RaceSource | null }) {
+  const cheering = racing?.watch?.cheering.value ?? null;
+  const watching = watchersText(watch.watchers.value);
+  const text = cheering === null ? watching : cheeringText(watching, cheering.crowd);
   return text === '' ? null : (
     <p class="panel watchers-line" data-readout="watchers">
       {text}
@@ -145,14 +148,39 @@ function LazyRaces({ races }: { races: RacesView }) {
   return m === null || !shown ? null : <m.RacesWindows view={races} />;
 }
 
-/** The race the boat sails in: its line over the case, or its windows over the rest; loaded when the boat first races. */
-function LazyRaceLine({ src, part }: { src: RaceSource; part: 'line' | 'windows' }) {
+/**
+ * The race the boat sails in or the boat watched races in: the racer's
+ * line over the case, the race bar at the foot, the crier's line under the
+ * case, or the windows over the rest; loaded when first needed.
+ */
+function LazyRaceLine({
+  src,
+  part,
+}: {
+  src: RaceSource;
+  part: 'line' | 'windows' | 'bar' | 'crier';
+}) {
   const shown = raceShown(src);
   const m = useRaceLine(shown);
   if (m === null || !shown) {
     return null;
   }
-  return part === 'line' ? <m.RaceLine src={src} /> : <m.RaceWindows src={src} />;
+  switch (part) {
+    case 'line':
+      return <m.RaceLine src={src} />;
+    case 'bar':
+      return <m.RaceBar src={src} />;
+    case 'crier':
+      return <m.CrierLine src={src} />;
+    default:
+      return (
+        <>
+          <m.RaceWindows src={src} />
+          <m.Standings src={src} />
+          <m.BarMore src={src} />
+        </>
+      );
+  }
 }
 
 /** The controls that act on the boat: the helm, the autopilot and the sheet; none on a boat watched. */
@@ -354,7 +382,15 @@ function Screen(props: ScreenProps) {
   // In a race its line heads the top: held upright the pocket chart's
   // column stands under it too.
   const racing = props.racing ?? null;
-  const raced = racing !== null && racing.racing.told.value !== null;
+  // A boat of a race watched: the race bar in the watch plate's place.
+  const barred =
+    racing !== null &&
+    watch !== null &&
+    watch.spectating.value &&
+    racing.racing.told.value !== null &&
+    racing.racing.eye.value > 0 &&
+    racing.racing.number() === 0;
+  const raced = racing !== null && racing.racing.told.value !== null && !barred;
   return (
     <div class={`hud-screen${cleared ? ' clear' : ''}${raced ? ' racing' : ''}`}>
       {cleared ? null : <div class="overlay-labels" ref={props.labels} aria-hidden="true" />}
@@ -371,7 +407,7 @@ function Screen(props: ScreenProps) {
           clear={cleared}
         />
         <SailorLine model={model} />
-        {watch !== null && steer ? <WatchersLine watch={watch} /> : null}
+        {watch !== null && steer ? <WatchersLine watch={watch} racing={racing} /> : null}
         <BumpLine model={model} />
         {notices !== null && !cleared ? <NoticeLine notices={notices} /> : null}
         {deck !== null ? <LazyDeck deck={deck} part="top" sailor={props.sailor} /> : null}
@@ -463,7 +499,9 @@ function Screen(props: ScreenProps) {
           races={props.races ?? null}
         />
       ) : null}
-      {watch !== null && !decked ? <LazyWatch watch={watch} part="plate" /> : null}
+      {barred && racing !== null ? <LazyRaceLine src={racing} part="bar" /> : null}
+      {barred && racing !== null && !cleared ? <LazyRaceLine src={racing} part="crier" /> : null}
+      {watch !== null && !decked && !barred ? <LazyWatch watch={watch} part="plate" /> : null}
       {watch !== null ? <LazyWatch watch={watch} part="list" /> : null}
       {deck !== null ? <LazyDeck deck={deck} part="foot" sailor={props.sailor} /> : null}
       <SeaControls

@@ -59,6 +59,7 @@ import type { Committee, SignalFlag, TownFlags, TownSmoke } from '../catalog/typ
 import type { PlaceSeen } from '../net/messages';
 import { artUrl } from './boat';
 import { digits } from './boatlook';
+import { BUNTING_LIFE, type BuntingBurst, buntingFlags, strandsOf } from './bunting';
 import { HOIST_GAP, SignalFlags, type SignalSeen } from './flags';
 import { type Burst, burstPuff, puffsOf } from './gunsmoke';
 import { litMaterial } from './materials';
@@ -125,6 +126,8 @@ export interface RaceMarksStats {
   puffs: number;
   bursts: number;
   fired: number;
+  /** Bursts of the crowd's bunting thrown. */
+  bunting: number;
   draws: number;
   triangles: number;
 }
@@ -378,6 +381,7 @@ export class RaceMarks {
     puffs: 0,
     bursts: 0,
     fired: 0,
+    bunting: 0,
     draws: 0,
     triangles: 0,
   };
@@ -392,6 +396,10 @@ export class RaceMarks {
   readonly #courses = new Map<number, CourseLaid>();
   readonly #beacons = new Map<number, PlaceSeen>();
   readonly #bursts: Burst[] = [];
+  /** The crowd's bunting flying, and the flags it is made of: every one but the marks' and the pin's. */
+  readonly #bunting: BuntingBurst[] = [];
+  #buntingFlags: number[] = [];
+  #buntingHoists: number[] = [];
   #loading: 'no' | 'loading' | 'done' | 'failed' = 'no';
   readonly #drawn = new Map<Kind, Drawn>();
   #boards: { mesh: InstancedMesh; numbers: InstancedBufferAttribute } | null = null;
@@ -435,10 +443,36 @@ export class RaceMarks {
     this.flags = new SignalFlags(flags, cat.flags, cat.dyes);
     this.#markFlag = signalFlag(cat.flags, 'mark');
     this.#pinFlag = signalFlag(cat.flags, 'pin');
+    cat.flags.forEach((fl, i) => {
+      if (i !== this.#markFlag && i !== this.#pinFlag) {
+        this.#buntingFlags.push(i);
+        this.#buntingHoists.push(fl.hoist);
+      }
+    });
     this.smoke = new Puffs(smoke, { colour: [0.86, 0.86, 0.84], strength: 1 });
     this.smoke.mesh.name = 'gun smoke';
     this.root.name = 'committee';
     this.root.add(this.flags.mesh, this.smoke.mesh);
+  }
+
+  /**
+   * The crowd's cheers seen: a burst of bunting from a masthead at (east,
+   * north) and top m up, at world time s, a strand a cheer up to a few,
+   * more for a bigger crowd.
+   */
+  cheer(east: number, north: number, top: number, count: number, time: number): void {
+    this.#bunting.push({
+      east,
+      north,
+      top,
+      at: time,
+      strands: strandsOf(count),
+      seed: this.#bunting.length + time,
+    });
+    if (this.#bunting.length > 8) {
+      this.#bunting.shift();
+    }
+    this.stats.bunting++;
   }
 
   /** Whether the models are loaded and can be drawn. */
@@ -630,6 +664,7 @@ export class RaceMarks {
         triangles += 8 * numbers;
       }
     }
+    this.#drawBunting(f);
     this.flags.frame(this.#seen, f.origin, f.time);
     if (this.flags.count > 0) {
       draws++;
@@ -818,6 +853,30 @@ export class RaceMarks {
   }
 
   /** The bursts' puffs near the camera; each burst forgotten once its smoke has faded. */
+  /** The crowd's bunting flying near the camera, among the flags; bursts flown let go. */
+  #drawBunting(f: RaceFrame): void {
+    const b = this.#bunting;
+    for (let i = b.length - 1; i >= 0; i--) {
+      if (f.time - (b[i] as BuntingBurst).at > BUNTING_LIFE) {
+        b.splice(i, 1);
+      }
+    }
+    // The newest first: past the draw's room the oldest go.
+    for (let i = b.length - 1; i >= 0; i--) {
+      const x = b[i] as BuntingBurst;
+      const wind = f.windAt(x.east, x.north);
+      buntingFlags(
+        x,
+        f.time,
+        wind.speed,
+        wind.from,
+        this.#buntingFlags,
+        this.#buntingHoists,
+        this.#seen,
+      );
+    }
+  }
+
   #drawSmoke(f: RaceFrame): void {
     const g = this.#cat.gun;
     const puffs = this.smoke;

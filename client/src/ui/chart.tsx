@@ -68,6 +68,8 @@ export interface ChartSea {
   steer: ((heading: number) => void) | null;
   /** The race the boat sails in: the pocket chart frames its course, the chart opens on it. */
   racing?: Racing | null;
+  /** Watches a race's boat tapped on the charts, by its number: false where none may be (the page races, or watches no race). */
+  watchRacer?: ((n: number) => boolean) | null;
 }
 
 /** "Charted by <name>, Tuesday", the name as the player wrote it. */
@@ -261,6 +263,14 @@ function useGestures(sea: ChartSea) {
           lastTap = e.timeStamp;
           const x = e.clientX - r.left;
           const y = e.clientY - r.top;
+          // A race's boat tapped is watched, the chart open on it.
+          const racer = chartRacer(sea, view, x, y);
+          if (racer > 0 && sea.watchRacer?.(racer) === true) {
+            pts.delete(e.pointerId);
+            down = null;
+            before = pair();
+            return;
+          }
           let picked = view.pick(x, y);
           const weather = weatherTapped(sea, x, y, r);
           // Within a system, a place wins only under the finger.
@@ -818,7 +828,24 @@ export function PocketChart({
         <button
           type="button"
           class="pocket-chart"
-          onClick={() => sea.chart.show('chart')}
+          onClick={(e) => {
+            // A race's boat tapped is watched; anywhere else opens the chart.
+            const c = canvas.current;
+            if (c !== null && e.detail > 0) {
+              const r = c.getBoundingClientRect();
+              const n = pocketRacer(
+                sea,
+                ((e.clientX - r.left) * c.width) / r.width,
+                ((e.clientY - r.top) * c.height) / r.height,
+                c.width,
+                c.height,
+              );
+              if (n > 0 && sea.watchRacer?.(n) === true) {
+                return;
+              }
+            }
+            sea.chart.show('chart');
+          }}
           aria-label={caption.name}
         >
           <canvas ref={canvas} width={240} height={156} />
@@ -881,6 +908,55 @@ export function raceFrame(d: RaceDrawing): { east: number; north: number; radius
  * (the next ringed in gold), the boat's own track, the fleet as dots in
  * their colours.
  */
+/** The race's boat whose dot on the full chart is nearest (x, y) CSS pixels, within a finger; 0 for none. */
+function chartRacer(sea: ChartSea, view: ChartView, x: number, y: number): number {
+  const race = sea.racing != null ? raceDrawingOf(sea.racing) : null;
+  if (race === null || sea.watchRacer == null) {
+    return 0;
+  }
+  let best = 0;
+  // A finger's width either side: the dots are small and close.
+  let d = 2 * FINGER;
+  for (const b of race.boats) {
+    const p = view.screenOf(b.east, b.north);
+    if (p !== null) {
+      const dd = Math.hypot(p.x - x, p.y - y);
+      if (dd < d) {
+        d = dd;
+        best = b.number;
+      }
+    }
+  }
+  return best;
+}
+
+/** How near a tap on the pocket chart must be to a race's boat's dot to pick it, canvas pixels. */
+const POCKET_TAP = 14;
+
+/** The race's boat whose dot on the pocket chart, w by h canvas pixels, is nearest (px, py), within a tap; 0 for none. */
+export function pocketRacer(sea: ChartSea, px: number, py: number, w: number, h: number): number {
+  const race = sea.racing != null ? raceDrawingOf(sea.racing) : null;
+  if (race === null) {
+    return 0;
+  }
+  const frame = raceFrame(race);
+  const k = (w * 0.48) / frame.radius;
+  const tilt = 0.62;
+  let best = 0;
+  let d = POCKET_TAP;
+  for (const b of race.boats) {
+    const dd = Math.hypot(
+      w / 2 + (b.east - frame.east) * k - px,
+      h / 2 - (b.north - frame.north) * k * tilt - py,
+    );
+    if (dd < d) {
+      d = dd;
+      best = b.number;
+    }
+  }
+  return best;
+}
+
 export function drawPocket(
   c: HTMLCanvasElement,
   sea: ChartSea,

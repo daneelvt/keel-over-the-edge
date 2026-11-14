@@ -20,6 +20,7 @@
 // keys move no control, and the free camera is not offered.
 
 import { effect, signal } from '@preact/signals';
+import { CHEER, type CheerSound, cheerOf } from '../audio/cheer';
 import { SoundEngine } from '../audio/engine';
 import { type FeaturesInput, isColonyCall } from '../audio/features';
 import { FOG_SIGNAL_RULES, type FogSignalsInput, poorBy } from '../audio/fogsignals';
@@ -860,6 +861,31 @@ export class Game implements PilotActions {
       this.sound.gun(this.lastGun);
     }
     return true;
+  }
+
+  /** The last crowd's cheer the player was given to hear, null for none (the tests). */
+  lastCheer: CheerSound | null = null;
+
+  /**
+   * A crowd's cheer heard: count cheers' worth; own, the player's own
+   * "Huzzah!"; racer, the crowd on the quay cheering the player's boat.
+   */
+  cheer(count: number, own: boolean, racer: boolean): void {
+    this.lastCheer = cheerOf(CHEER, count, own, racer);
+    this.sound.cheer(this.lastCheer);
+  }
+
+  /** A cheer's bunting bursts from the masthead of the boat in view: count cheers' worth. */
+  bunting(count: number): void {
+    const w = this.world;
+    const rig = w.kind.physics.rig;
+    w.race.cheer(
+      w.pose.east,
+      w.pose.north,
+      rig.boomHeight + rig.luff,
+      count,
+      w.ticks / STEPS_PER_SECOND,
+    );
   }
 
   #thunder(now: number, look: number): void {

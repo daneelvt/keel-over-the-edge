@@ -148,9 +148,10 @@ import { openNews, setNewsHost } from '../ui/newslazy';
 import { serverNews } from '../ui/newsread';
 import { saveNoticesOff } from '../ui/notices';
 import { showQueue } from '../ui/queue';
-import { RACE_PARAM, raceFromQuery } from '../ui/raceapi';
+import { RACE_PARAM, raceFromQuery, readCard } from '../ui/raceapi';
 import { loadRaces, pollRaces, type RacesView, racesOf } from '../ui/raceslazy';
 import { Racing } from '../ui/racestate';
+import { RaceWatch } from '../ui/racewatch';
 import { settingsSignal } from '../ui/settings';
 import { shipmatesOf } from '../ui/shipmatesview';
 import { checkStatements, statementsOf } from '../ui/statementlazy';
@@ -164,6 +165,9 @@ import { harbourBoats, sandboxBoats } from './harbourboats';
 import { harbourLook, sandboxHarbourLook } from './harbourlook';
 import { lookStage } from './lookstage';
 import { raceSea } from './racesea';
+
+/** How far a boat tapped in the sea may be from a race's boat's place in its picture, m: two seconds' sailing. */
+const RACER_TAP = 30;
 
 /** How long the camera comes down into the first view, s: at the start, and after a change of boat. */
 const DESCENT = 2.5;
@@ -497,6 +501,34 @@ async function start(): Promise<void> {
       baro.barometer.hold(held, world.ticks);
     }
     const gales = steerByChart(game, world, parts, forecasting);
+    // A race's boat tapped on the charts or in the sea, by a page watching
+    // the race, is watched.
+    const watchRacer = (n: number): boolean => {
+      if (!racing.spectator() || !online.spectating.value || n <= 0) {
+        return false;
+      }
+      raceWatch.switchTo(n);
+      return true;
+    };
+    parts.sea.watchRacer = watchRacer;
+    world.onBoatTap = (east, north) => {
+      const p = racing.picture.peek();
+      if (p === null) {
+        return false;
+      }
+      // The race's boat nearest where the boat tapped is drawn: the picture
+      // is two seconds old at most.
+      let best = 0;
+      let d = RACER_TAP;
+      for (const r of p.racers) {
+        const dd = Math.hypot(r.east - east, r.north - north);
+        if (dd < d && r.number !== p.eye) {
+          d = dd;
+          best = r.number;
+        }
+      }
+      return watchRacer(best);
+    };
     issuer.onIssue = (f) => {
       gales.issued(f);
       world.galeUp = f.gale === null ? null : pointUp(f.gale.from);
@@ -529,6 +561,34 @@ async function start(): Promise<void> {
       }
       was = now;
     });
+    // Watching a race in the sandbox: a switch answered at once, the race's
+    // last picture told again with the boat asked for as its eye.
+    const sandboxWatch = new RaceWatch({
+      racing: parts.racing,
+      ask: (a) => {
+        const p = parts.racing.picture.peek();
+        if (p !== null) {
+          const q = { ...p, eye: a.number };
+          parts.racing.take(q);
+          sandboxWatch.picture(q);
+        }
+      },
+      cheer: () => {},
+      now: () => performance.now(),
+      length: (t) => catalog.boats[t.boat]?.lengthOverall ?? 4,
+      spectating: () => true,
+      bunting: (count) => {
+        if (game.settings.value.value.showCheers) {
+          game.bunting(count);
+        }
+      },
+      crowd: (count, own, racer) => {
+        if (own || game.settings.value.value.showCheers) {
+          game.cheer(count, own, racer);
+        }
+      },
+    });
+    setInterval(() => sandboxWatch.tick(), 250);
     const screen: ScreenProps = {
       model: game.hud,
       settings: game.settings,
@@ -562,9 +622,11 @@ async function start(): Promise<void> {
       camera,
       clear,
       // The race the boat sails in, as the tests tell it; Retire answered
-      // as the race committee would.
+      // as the race committee would; a race watched, its switches answered
+      // as the server would.
       racing: {
         racing: parts.racing,
+        watch: sandboxWatch,
         tick: () => world.ticks,
         boat: () => ({
           east: world.pose.east,
@@ -635,6 +697,7 @@ async function start(): Promise<void> {
         sandbox,
         fullScreen: full,
         chart: parts,
+        raceWatch: sandboxWatch,
         forecast: issuer,
         barometer: baro.barometer,
         readBarometer: baro.read,
@@ -692,6 +755,17 @@ async function start(): Promise<void> {
   const startRaces = racesOf();
   const raceLinked = async (me: Me): Promise<Me> => {
     if (raceCode !== null) {
+      // A race on the water, not the player's: watched, from the closest
+      // battle at the front.
+      const card = await readCard(raceCode);
+      if (
+        card.ok &&
+        (card.value.phase === 'starting' || card.value.phase === 'racing') &&
+        !card.value.mine.entered
+      ) {
+        forgetParams(RACE_PARAM);
+        return { ...me, watchRace: raceCode };
+      }
       const m = await loadRaces();
       startRaces.card.value = raceCode;
       await m.showRaces(document.body, startRaces);
@@ -702,7 +776,9 @@ async function start(): Promise<void> {
   };
   const yours = (me: Me): Promise<Me> =>
     raceLinked(me).then((m) =>
-      showSailor(document.body, own(m), catalog, stage, catalog, startRaces),
+      m.watchRace !== undefined
+        ? own(m)
+        : showSailor(document.body, own(m), catalog, stage, catalog, startRaces),
     );
   const aboard = (me: Me): Promise<Me> =>
     import('../account/comeaboard').then((m) =>
@@ -790,6 +866,9 @@ async function start(): Promise<void> {
   if (watchFirst !== '') {
     // The connection's first Hello asks to watch.
     online.watch(watchFirst);
+  } else if (me.watchRace !== undefined) {
+    // Or to watch a race's boat, the one the server chooses.
+    online.watchRace({ race: 0, code: me.watchRace, number: 0 });
   }
   const knock = me.knock;
   const sending = me.knockMachine;
@@ -860,6 +939,7 @@ async function start(): Promise<void> {
       world.race.clear();
       raceInSea.clear();
       racing.clear();
+      raceWatch.clear();
       models.clear();
       forecasting.forecasts.reset();
       gales.reset();
@@ -873,15 +953,63 @@ async function start(): Promise<void> {
     world.wrecks.setPlaces(p);
     world.race.setPlaces(p);
   };
+  // Watching a race: the bar's switches, follow the action, the crier and
+  // the cheers, for spectators and racers alike.
+  const raceWatch = new RaceWatch({
+    racing,
+    ask: (a) => {
+      // Another boat watched: a reload no longer opens a link to a sailor.
+      forgetParams(SAILOR_PARAM, FLEET_PARAM);
+      online.watchRace(a);
+    },
+    cheer: () => online.cheer(),
+    now: () => performance.now(),
+    length: (t) => catalog.boats[t.boat]?.lengthOverall ?? 4,
+    spectating: () => online.spectating.value,
+    bunting: (count) => {
+      if (game.settings.value.value.showCheers) {
+        game.bunting(count);
+      }
+    },
+    crowd: (count, own, racer) => {
+      if (own || game.settings.value.value.showCheers) {
+        game.cheer(count, own, racer);
+      }
+    },
+  });
+  setInterval(() => raceWatch.tick(), 250);
+  // A race's link opened under way follows the action from the first.
+  if (me.watchRace !== undefined) {
+    raceWatch.setFollow(true);
+  }
+  effect(() => {
+    const e = online.ended.value;
+    if (e !== null) {
+      raceWatch.ended(e.why);
+    }
+  });
   online.onRaceTold = (t) => {
     raceInSea.told(t);
     racing.tell(t);
   };
-  online.onRaceSignal = (s) => raceInSea.signal(s);
-  online.onRacePicture = (p) => racing.take(p);
-  online.onRaceCall = (c) => racing.called(c);
-  online.onRaceFinish = (f) => racing.finished(f);
+  online.onRaceSignal = (s) => {
+    raceInSea.signal(s);
+    raceWatch.signal(s);
+  };
+  online.onRacePicture = (p) => {
+    racing.take(p);
+    raceWatch.picture(p);
+  };
+  online.onRaceCall = (c) => {
+    racing.called(c);
+    raceWatch.call(c);
+  };
+  online.onRaceFinish = (f) => {
+    racing.finished(f);
+    raceWatch.finish(f);
+  };
   online.onRaceResults = (r) => racing.results(r);
+  online.onRaceCheered = (c) => raceWatch.cheered(c);
   online.onLights = (l, drop) => world.lighthouses.setLights(l, drop);
   online.onLife = (l, drop) => world.life.set(l, drop);
   online.onCaps = (c, drop) => world.weather.setCaps(c, drop);
@@ -902,6 +1030,34 @@ async function start(): Promise<void> {
   // switched off as the account has them.
   const parts = makeChart(world, models, serverNews, forecasting, racing);
   const gales = steerByChart(game, world, parts, forecasting);
+  // A race's boat tapped on the charts or in the sea, by a page watching
+  // the race, is watched.
+  const watchRacer = (n: number): boolean => {
+    if (!racing.spectator() || !online.spectating.value || n <= 0) {
+      return false;
+    }
+    raceWatch.switchTo(n);
+    return true;
+  };
+  parts.sea.watchRacer = watchRacer;
+  world.onBoatTap = (east, north) => {
+    const p = racing.picture.peek();
+    if (p === null) {
+      return false;
+    }
+    // The race's boat nearest where the boat tapped is drawn: the picture
+    // is two seconds old at most.
+    let best = 0;
+    let d = RACER_TAP;
+    for (const r of p.racers) {
+      const dd = Math.hypot(r.east - east, r.north - north);
+      if (dd < d && r.number !== p.eye) {
+        d = dd;
+        best = r.number;
+      }
+    }
+    return watchRacer(best);
+  };
   online.onForecast = (f, past) => {
     forecasting.forecasts.receive(f, past);
     gales.issued(f);
@@ -927,7 +1083,12 @@ async function start(): Promise<void> {
     crew: () => online.aboard.value === null && online.crew.value !== null,
   });
   races.board.value = startRaces.board.value;
-  pollRaces(races, parts.notices, catalog.notices.kinds);
+  // A race asked to be watched as it starts: Watch on its notice watches
+  // the closest battle at the front, following the action.
+  pollRaces(races, parts.notices, catalog.notices.kinds, (code) => {
+    raceWatch.setFollow(true);
+    void changeBoat(() => online.watchRace({ race: 0, code, number: 0 }));
+  });
   // The countdown to the world's end, by the world clock, and the notices
   // of the world's life, worked out here from the end each Welcome tells.
   const countdown = new Countdown(() => online.utcMs());
@@ -1195,6 +1356,11 @@ async function start(): Promise<void> {
       retire: () => online.raceRetire(),
       races,
       origin: location.origin,
+      watch: raceWatch,
+      another: () => {
+        watchView.list.value = true;
+      },
+      sail: () => watchView.sail(),
     },
   });
   // A name tapped anywhere opens its log on the chart screen's Log tab, and

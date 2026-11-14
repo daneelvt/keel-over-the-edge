@@ -11,9 +11,23 @@ import { type Signal, signal } from '@preact/signals';
 import { useEffect, useState } from 'preact/hooks';
 import type { Fetch } from '../account/me';
 import type { Notices } from './notices';
-import { type RaceCard, type RacesBoard, raceAct, readBoard } from './raceapi';
-import { dueNotices, type RaceNoticeKind } from './racenotices';
-import { ENTER } from './racewords';
+import {
+  forgetWatchedRace,
+  type RaceCard,
+  type RacesBoard,
+  raceAct,
+  readBoard,
+  readCard,
+  watchedRaces,
+} from './raceapi';
+import {
+  dueNotices,
+  dueWatches,
+  RACE_SOON,
+  type RaceNoticeKind,
+  type WatchedRace,
+} from './racenotices';
+import { ENTER, WATCH } from './racewords';
 
 /** Races ashore as the screens see them, and what they ask of them. */
 export interface RacesView {
@@ -84,15 +98,61 @@ export function pollRaces(
   view: RacesView,
   notices: Notices,
   kinds: readonly RaceNoticeKind[],
+  watch: ((code: string) => void) | null = null,
 ): () => void {
   const shown = new Set<string>();
+  // The races asked to be watched when they start, as their cards say.
+  let watched: WatchedRace[] = [];
+  const readWatched = async () => {
+    if (watch === null) {
+      return;
+    }
+    const out: WatchedRace[] = [];
+    for (const code of watchedRaces()) {
+      const a = await readCard(code, view.fetch);
+      if (!a.ok) {
+        if (a.refusal.status === 404) {
+          forgetWatchedRace(code);
+        }
+        continue;
+      }
+      const c = a.value;
+      if (
+        c.phase === 'finished' ||
+        c.phase === 'cancelled' ||
+        c.phase === 'ended' ||
+        c.mine.entered
+      ) {
+        forgetWatchedRace(code);
+        continue;
+      }
+      out.push({ code, name: c.name, startsAt: c.startsAt });
+    }
+    watched = out;
+  };
   void view.refresh();
-  const read = setInterval(() => void view.refresh(), BOARD_EVERY);
+  void readWatched();
+  const read = setInterval(() => {
+    void view.refresh();
+    void readWatched();
+  }, BOARD_EVERY);
   const look = setInterval(() => {
     const board = view.board.value;
     const now = view.now();
     if (board === null || !Number.isFinite(now)) {
       return;
+    }
+    if (watch !== null) {
+      for (const d of dueWatches(watched, now, shown)) {
+        const code = d.race.code;
+        notices.raise(RACE_SOON, d.fill, performance.now(), {
+          label: WATCH,
+          act: () => {
+            forgetWatchedRace(code);
+            watch(code);
+          },
+        });
+      }
     }
     for (const d of dueNotices(board, kinds, now, shown)) {
       const code = d.race.code;

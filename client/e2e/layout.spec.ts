@@ -84,6 +84,12 @@
 // finish's card and the results fit every screen, their keys the head
 // keys' size.
 //
+// Watching a race, the race bar takes the watch plate's place: one row at
+// the foot of the screen, within it, clear of every part and the boat,
+// before the start and racing, with the crier's line and a cheer's under
+// the case; the standings and the bar's ⋯ fit every screen, the
+// standings' rows a 40 px touch.
+//
 // Races ashore's windows over the sea, Make a race (filled, a later start
 // and an island course, refused), the share of a race made, a race's card
 // (its owner's ⋯ open, another's, one refused) and the harbour race's
@@ -179,6 +185,8 @@ async function parts(page: Page): Promise<{
       one('the shake out key', '.reef-key.shake'),
       one('the autopilot', '.pilot-head'),
       one('the autopilot button', '.pilot-button'),
+      one('the race bar', '.race-bar'),
+      one('the crier’s lines', '.rb-lines'),
       ...[...hud.querySelectorAll('.hud-top > .panel:not(.case)')].map((e) =>
         box(`the line “${(e as HTMLElement).innerText}”`, [e]),
       ),
@@ -3680,6 +3688,167 @@ test('the race line stands clear of every part and the boat on every screen, its
       k.raceGone(1, true);
       k.raceTell(entrants === undefined ? {} : { entrants });
     });
+  }
+  expect(found).toEqual([]);
+});
+
+test('the race bar stands at the foot, one row, clear of every part and the boat on every screen; the standings and its ⋯ fit', async ({
+  page,
+}) => {
+  test.skip(test.info().project.name === 'webgpu', 'the screen is the same on either back end');
+  test.setTimeout(150_000);
+  const first = SCREENS[1];
+  await page.setViewportSize({ width: first.width, height: first.height });
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await openScene(page, 'world=1', true);
+  await page.evaluate((long) => {
+    const k = globalThis.keel;
+    k.setState({ sheetLimit: 0.05, boom: 0, surge: 0 });
+    k.setControls(0, 0);
+    k.advance(30);
+    k.render();
+    k.camera('chase');
+    k.render();
+    k.settings({ barometer: true, clock: true });
+    k.raceGone(1, true);
+    k.raceTell({
+      entrants: Array.from({ length: 12 }, (_, i) => ({
+        number: i + 1,
+        name: i % 3 === 1 ? '' : long,
+        boat: 'Petrel Of The Morning',
+        machine: i % 3 === 2,
+        me: false,
+      })),
+    });
+    k.racePicture(
+      Array.from({ length: 12 }, (_, i) => ({ place: i + 1, gap: i * 61.5, leg: 2 })),
+      1,
+      12,
+    );
+    k.raceWatching(12);
+  }, LONG);
+  const bar = page.locator('.race-bar');
+  await expect(bar).toBeVisible({ timeout: 15_000 });
+  const found: string[] = [];
+  const states = {
+    before: () => {
+      const k = globalThis.keel;
+      const t = k.racing().told;
+      k.raceTell({ start: (t?.warning ?? 0) + 120 * 30, entrants: t?.entrants ?? [] });
+    },
+    racing: () => {
+      const k = globalThis.keel;
+      k.raceTell({ start: 1, entrants: k.racing().told?.entrants ?? [] });
+      k.raceCall({ kind: 'rounded', number: 1, mark: 2, place: 1 });
+      k.raceCheered({ number: 12, count: 30, crowd: 30, mine: true });
+    },
+  };
+  for (const s of SCREENS) {
+    await page.setViewportSize({ width: s.width, height: s.height });
+    await page.waitForFunction(
+      ({ width, height }) =>
+        innerWidth === width &&
+        innerHeight === height &&
+        Math.abs(globalThis.keel.world.stage.camera.aspect - width / height) < 1e-6,
+      { width: s.width, height: s.height },
+    );
+    for (const [state, tell] of Object.entries(states)) {
+      await page.evaluate(tell);
+      await page.evaluate(() => globalThis.keel.render());
+      await page.waitForTimeout(100);
+      const where = `${s.name}, ${state}`;
+      const seen = await parts(page);
+      for (const w of seen.words) {
+        found.push(`${where}: ${w}`);
+      }
+      const b = seen.parts.find((p) => p.name === 'the race bar');
+      if (b === undefined) {
+        found.push(`${where}: no race bar`);
+        continue;
+      }
+      if (b.bottom - b.top > 52) {
+        found.push(`${where}: the race bar is ${b.bottom - b.top} px tall: more than a row`);
+      }
+      if (b.left < -0.5 || b.right > s.width + 0.5 || b.bottom > s.height + 0.5) {
+        found.push(`${where}: the race bar is off the screen`);
+      }
+      if (s.height - b.bottom > 40) {
+        found.push(`${where}: the race bar is not at the foot (${Math.round(b.bottom)})`);
+      }
+      if (seen.parts.some((p) => p.name === 'the helm' || p.name === 'the sheet')) {
+        found.push(`${where}: a control that steers shows while watching`);
+      }
+      const all = seen.boat === null ? seen.parts : [...seen.parts, seen.boat];
+      for (const a of all) {
+        if (a !== b && overlap(a, b)) {
+          found.push(`${where}: the race bar and ${a.name} overlap (${edges(b)} and ${edges(a)})`);
+        }
+      }
+      if (state === 'racing' && !seen.parts.some((p) => p.name === 'the crier’s lines')) {
+        found.push(`${where}: no crier’s lines`);
+      }
+      for (const l of seen.parts.filter(
+        (p) => p.name.startsWith('the line') || p.name === 'the crier’s lines',
+      )) {
+        for (const a of all) {
+          if (a !== l && a.name !== 'the case' && !a.name.startsWith('the line') && overlap(a, l)) {
+            found.push(`${where}: ${l.name} covers ${a.name}`);
+          }
+        }
+      }
+      // Every key of the bar a 44 px touch, the name's slot ending in an ellipsis.
+      const keys = await page.evaluate(() =>
+        [...document.querySelectorAll<HTMLElement>('.race-bar button')].map((k) => {
+          const r = k.getBoundingClientRect();
+          return { name: k.getAttribute('aria-label') ?? k.innerText, w: r.width, h: r.height };
+        }),
+      );
+      for (const k of keys) {
+        if (k.h < 44 - 0.5 || k.w < 40 - 0.5) {
+          found.push(`${where}: “${k.name}” is ${k.w.toFixed(0)} × ${k.h.toFixed(0)} px`);
+        }
+      }
+    }
+    // The standings, over the room where the helm would be.
+    await bar.locator('.rb-words').click();
+    const sheet = await page.evaluate(() => {
+      const el = document.querySelector('[data-panel=race-standings]');
+      const bar = document.querySelector('.race-bar')?.getBoundingClientRect();
+      if (el === null || bar === undefined) {
+        return ['no standings'];
+      }
+      const out: string[] = [];
+      const r = el.getBoundingClientRect();
+      if (
+        r.left < -0.5 ||
+        r.top < -0.5 ||
+        r.right > innerWidth + 0.5 ||
+        r.bottom > innerHeight + 0.5
+      ) {
+        out.push('the standings are off the screen');
+      }
+      if (r.bottom > bar.top + 0.5) {
+        out.push('the standings cover the race bar');
+      }
+      if (el.scrollWidth > el.clientWidth + 1) {
+        out.push('the standings spill sideways');
+      }
+      for (const row of el.querySelectorAll<HTMLElement>('.rb-row')) {
+        if (row.getBoundingClientRect().height < 40 - 0.5) {
+          out.push(`a row of the standings is ${row.getBoundingClientRect().height} px tall`);
+        }
+      }
+      return out;
+    });
+    for (const f of sheet) {
+      found.push(`${s.name}, the standings: ${f}`);
+    }
+    await page.locator('.rb-scrim').click({ position: { x: 4, y: 4 } });
+    await bar.locator('.rb-more').click();
+    for (const f of await raceWindowFaults(page, '[data-panel=race-bar-more]')) {
+      found.push(`${s.name}, the bar’s ⋯: ${f}`);
+    }
+    await page.locator('[data-panel=race-bar-more]').getByRole('button', { name: 'Close' }).click();
   }
   expect(found).toEqual([]);
 });

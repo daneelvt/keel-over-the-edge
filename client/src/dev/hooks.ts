@@ -70,7 +70,9 @@ import type {
   KnockStateTold,
   LifeSeen,
   RaceCallIn,
+  RaceCheeredIn,
   RaceFinishIn,
+  RacePictureIn,
   RaceResultsIn,
   RacerAtIn,
   RaceSignalIn,
@@ -137,6 +139,7 @@ import { setLogHost } from '../ui/loglazy';
 import { downwindLine, type SailState } from '../ui/model';
 import { openNews, setNewsHost } from '../ui/newslazy';
 import { serverNews } from '../ui/newsread';
+import type { RaceWatch } from '../ui/racewatch';
 import type { Settings } from '../ui/settings';
 import type { StatementsView } from '../ui/statementlazy';
 import type { WatchView } from '../ui/watchlazy';
@@ -296,6 +299,8 @@ export type Sailing = (
   ) => void;
   /** What the page did from the tap to the world's reveal; null before it. */
   revealed?: () => Revealed | null;
+  /** Watching a race: the bar's switches, follow the action, the crier, the cheers. */
+  raceWatch?: RaceWatch;
 };
 
 /** Puts the hooks on globalThis.keel. */
@@ -2130,11 +2135,12 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
       chartParts().racing.tell(told);
       return told;
     },
-    /** A race's picture: its boats as given, each filled out. */
-    racePicture(racers: Partial<RacerAtIn>[], race = 1): void {
-      chartParts().racing.take({
+    /** A race's picture: its boats as given, each filled out; eye, the boat watched or sailed, by number. */
+    racePicture(racers: Partial<RacerAtIn>[], race = 1, eye?: number): void {
+      const p: RacePictureIn = {
         race,
         tick: world.ticks,
+        eye: eye ?? chartParts().racing.eye.peek(),
         racers: racers.map((r, i) => ({
           number: i + 1,
           east: world.pose.east,
@@ -2149,15 +2155,19 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
           cheers: 0,
           ...r,
         })),
-      });
+      };
+      chartParts().racing.take(p);
+      sailing.raceWatch?.picture(p);
     },
     /** A signal from the committee boat: its flags hoisted, its gun fired. */
     raceSignal(s: Partial<RaceSignalIn>): void {
-      seaRace.signal({ race: 1, signal: 'start', gun: true, number: 0, place: 0, ...s });
+      const sig: RaceSignalIn = { race: 1, signal: 'start', gun: true, number: 0, place: 0, ...s };
+      seaRace.signal(sig);
+      sailing.raceWatch?.signal(sig);
     },
     /** A call of the committee's. */
     raceCall(c: Partial<RaceCallIn>): void {
-      chartParts().racing.called({
+      const call: RaceCallIn = {
         race: 1,
         kind: 'bump',
         number: 1,
@@ -2167,18 +2177,82 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
         added: 10,
         place: 0,
         ...c,
-      });
+      };
+      chartParts().racing.called(call);
+      sailing.raceWatch?.call(call);
     },
     /** A boat home. */
     raceFinish(f: Partial<RaceFinishIn>): void {
-      chartParts().racing.finished({
+      const fin: RaceFinishIn = {
         race: 1,
         number: 1,
         place: 1,
         elapsedMs: 600_000,
         added: 0,
         ...f,
+      };
+      chartParts().racing.finished(fin);
+      sailing.raceWatch?.finish(fin);
+    },
+    /**
+     * The sandbox's screen as it is while a boat of the race told is watched
+     * (the race bar at its foot, nothing that steers), the boat of number
+     * eye; null as it is while sailing.
+     */
+    raceWatching(eye: number | null): void {
+      if (eye === null) {
+        sailing.remount?.(null);
+        return;
+      }
+      const r = chartParts().racing;
+      const p = r.picture.peek();
+      if (p !== null) {
+        const q = { ...p, eye };
+        r.take(q);
+        sailing.raceWatch?.picture(q);
+      } else {
+        r.eye.value = eye;
+      }
+      sailing.remount?.({
+        watching: signal({ sailor: '', machine: false, mine: false, look: -1 }),
+        spectating: signal(true),
+        status: signal('sailing'),
+        ended: signal(null),
+        place: signal(null),
+        boatPlace: signal(null),
+        watchers: signal(0),
+        list: signal(false),
+        watch: () => {},
+        sail: () => {},
+        unwatch: () => {},
       });
+    },
+    /** The crowd's cheers gathered for a boat, as the server tells them. */
+    raceCheered(c: Partial<RaceCheeredIn>): void {
+      sailing.raceWatch?.cheered({ race: 1, number: 1, count: 1, crowd: 1, mine: false, ...c });
+    },
+    /** Watching a race as the bar has it: follow the action, the boat asked for, the crier's line, the lines after cheers, what is open. */
+    raceWatch() {
+      const w = sailing.raceWatch;
+      return {
+        follow: w?.follow.value ?? false,
+        asking: w?.asking.value ?? null,
+        crier: w?.crier.value?.text ?? null,
+        cheered: w?.cheeredText.value?.text ?? null,
+        cheering: w?.cheering.value?.crowd ?? null,
+        standings: w?.standings.value ?? false,
+        more: w?.more.value ?? false,
+        eye: chartParts().racing.eye.value,
+        bunting: world.race.stats.bunting,
+        cheers:
+          game.lastCheer === null
+            ? null
+            : { voices: game.lastCheer.voices.length, roar: game.lastCheer.roar },
+      };
+    },
+    /** Sets follow the action on or off. */
+    raceFollow(on: boolean): void {
+      sailing.raceWatch?.setFollow(on);
     },
     /** The race's results. */
     raceResults(r: Partial<RaceResultsIn>): void {

@@ -81,3 +81,30 @@ func TestRaceEvents(t *testing.T) {
 		t.Errorf("results %+v", r)
 	}
 }
+
+// TestClosestBattle: before the start the edge chooses the first entered;
+// under way the boat ahead of the two racing nearest one another, the
+// front's pairs counting more; with one racing, that one; a boat retired
+// is no one's to watch.
+func TestClosestBattle(t *testing.T) {
+	f := raceFrame(t)
+	f.Racers[0].Number, f.Racers[1].Number = 2, 1
+	if j := closestBattle(f, 0); f.Racers[j].Number != 1 {
+		t.Errorf("before the start: number %d", f.Racers[j].Number)
+	}
+	f.Races[0].Phase = bus.RaceStarted
+	for i := range f.Racers {
+		f.Racers[i].State = bus.RacerRacing
+	}
+	f.Racers[0].ToGo, f.Racers[1].ToGo = 400, 410
+	if j := closestBattle(f, 0); j != 0 {
+		t.Errorf("two racing: %d, want the one ahead", j)
+	}
+	f.Racers[0].State = bus.RacerRetired
+	if j := closestBattle(f, 0); j != 1 {
+		t.Errorf("one racing: %d", j)
+	}
+	if watchable(f, &f.Racers[0]) || !racing(f, 1) || racing(f, 0) {
+		t.Error("a boat retired watchable as a racer, or one racing not")
+	}
+}

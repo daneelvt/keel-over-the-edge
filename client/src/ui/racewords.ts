@@ -345,6 +345,9 @@ export const MAKE_IT = 'Make it';
 export const ENTER = 'Enter';
 export const ENTER_WITH_CREW = 'Enter with my crew';
 export const WATCH_WHEN_STARTS = 'Watch when it starts';
+
+/** The notice's key as a race asked to be watched starts. */
+export const WATCH = 'Watch';
 export const ADD_TO_CALENDAR = 'Add to calendar';
 export const WITHDRAW = 'Withdraw';
 export const CLOSE = 'Close';

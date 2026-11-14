@@ -345,6 +345,15 @@ export function watchRace(code: string, storage: Storage | null = safeStorage())
   }
 }
 
+/** Forgets a race asked to be watched: begun and watched, or over. */
+export function forgetWatchedRace(code: string, storage: Storage | null = safeStorage()): void {
+  try {
+    storage?.setItem(WATCH_KEY, JSON.stringify(watchedRaces(storage).filter((c) => c !== code)));
+  } catch {
+    // Not kept.
+  }
+}
+
 function safeStorage(): Storage | null {
   try {
     return globalThis.localStorage ?? null;

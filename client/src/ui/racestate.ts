@@ -59,6 +59,8 @@ export class Racing {
   readonly more = signal(false);
   /** Counts up with each picture and each race told: the charts draw again. */
   readonly version = signal(0);
+  /** The boat the page sails or watches in the race, by number, as the latest picture says; 0 none. */
+  readonly eye = signal(0);
   /** The boats home in the race, by their numbers. */
   readonly homes = new Map<number, RaceFinishIn>();
   /** Every race told and not gone, by its number: their courses in sight. */
@@ -78,6 +80,7 @@ export class Racing {
       if (cur !== null && cur.race === t.race) {
         this.told.value = null;
         this.picture.value = null;
+        this.eye.value = 0;
         this.call.value = null;
         this.more.value = false;
         this.#tracks.clear();
@@ -109,6 +112,7 @@ export class Racing {
     this.#tracks.clear();
     this.#homed.clear();
     this.picture.value = null;
+    this.eye.value = 0;
     this.call.value = null;
     this.finish.value = null;
     this.finishOpen.value = false;
@@ -150,6 +154,7 @@ export class Racing {
       }
     }
     this.picture.value = p;
+    this.eye.value = p.eye;
     this.pictured = this.now();
     this.version.value++;
   }
@@ -201,6 +206,16 @@ export class Racing {
   /** The boat's own race number, 0 for none. */
   number(): number {
     return this.told.peek()?.entrants.find((e) => e.me)?.number ?? 0;
+  }
+
+  /** The boat watched, by number: the page's own boat in the race, or the one it watches; 0 for none. */
+  watched(): number {
+    return this.number() || this.eye.peek();
+  }
+
+  /** Whether the page watches a boat of the race, rather than racing in it. */
+  spectator(): boolean {
+    return this.told.peek() !== null && this.number() === 0 && this.eye.peek() > 0;
   }
 
   /** The boat's own place in the latest picture; null without. */
@@ -255,13 +270,14 @@ export function raceDrawingOf(r: Racing): RaceDrawing | null {
   const boats = racers
     .filter((x) => x.state !== 'dns' && (x.east !== 0 || x.north !== 0))
     .map((x) => ({ number: x.number, east: x.east, north: x.north, place: x.place }));
+  const watched = r.watched();
   return {
     told,
     tracks: r.tracks(),
     boats,
-    watched: r.number(),
+    watched,
     leader: racers.find((x) => x.place === 1)?.number ?? 0,
-    next: r.mine()?.leg ?? -1,
+    next: racers.find((x) => x.number === watched)?.leg ?? -1,
     name: (n) => entrantName(told, n),
     version: r.version.peek(),
   };

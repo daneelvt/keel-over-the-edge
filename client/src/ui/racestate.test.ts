@@ -39,6 +39,7 @@ describe('the race the boat sails in', () => {
     const pic = (n: number, state: 'placed' | 'racing' | 'finished') => ({
       race: 3,
       tick: n,
+      eye: 1,
       racers: [
         racer({ number: 1, north: n, state }),
         racer({ number: 2, north: -n, state: 'racing' }),
@@ -103,8 +104,10 @@ describe('the race the boat sails in', () => {
   test('a boat watched: the race whose pictures come', () => {
     const r = new Racing();
     r.tell(course({ entrants: [] }));
-    r.take({ race: 3, tick: 1, racers: [racer({ state: 'racing' })] });
+    r.take({ race: 3, tick: 1, eye: 2, racers: [racer({ state: 'racing' })] });
     expect(r.told.value?.race).toBe(3);
     expect(r.number()).toBe(0);
+    expect(r.watched()).toBe(2);
+    expect(r.spectator()).toBe(true);
   });
 });

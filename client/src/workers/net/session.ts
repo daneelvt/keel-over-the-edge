@@ -63,12 +63,14 @@ import type {
   PastTold,
   PlaceSeen,
   RaceCallIn,
+  RaceCheeredIn,
   RaceFinishIn,
   RacePictureIn,
   RaceResultsIn,
   RacerStateIn,
   RaceSignalIn,
   RaceToldIn,
+  RaceWatchAsk,
   ReportReasonTold,
   SeaAreas,
   TiedTold,
@@ -151,6 +153,7 @@ const ENDS: Record<number, WatchEndWhy> = {
   [WatchEnd.QUICK]: 'quick',
   [WatchEnd.BUSY]: 'busy',
   [WatchEnd.ABOARD]: 'aboard',
+  [WatchEnd.NO_RACE]: 'no-race',
 };
 
 /** How a knock stands, as the page names it. */
@@ -270,6 +273,7 @@ export type Received =
   | { kind: 'raceSignal'; signal: RaceSignalIn }
   /** A race's picture, a call, a boat home, its results. */
   | { kind: 'racePicture'; picture: RacePictureIn }
+  | { kind: 'raceCheered'; cheered: RaceCheeredIn }
   | { kind: 'raceCall'; call: RaceCallIn }
   | { kind: 'raceFinish'; finish: RaceFinishIn }
   | { kind: 'raceResults'; results: RaceResultsIn }
@@ -300,6 +304,8 @@ export class Session {
   renderScale = 0;
   /** The sailor every Hello asks to watch; "" to sail. */
   watch = '';
+  /** The race's boat every Hello asks to watch when watch is "": null for none. */
+  raceWatch: RaceWatchAsk | null = null;
 
   #versions: Versions;
   readonly #header = newSnapshot();
@@ -346,6 +352,9 @@ export class Session {
             physicsLayout: v.physicsLayout,
             build: v.build,
             watch: this.watch,
+            ...(this.watch === '' && this.raceWatch !== null
+              ? { raceWatch: { ...this.raceWatch, sailor: '' } }
+              : {}),
           },
         },
       }),
@@ -684,7 +693,16 @@ export class Session {
               toGo: r.toGo,
               cheers: r.cheers,
             })),
+            eye: v.eye,
           },
+        };
+      }
+      case 'raceCheered': {
+        this.#lastHeard = now;
+        const v = m.body.value;
+        return {
+          kind: 'raceCheered',
+          cheered: { race: v.race, number: v.number, count: v.count, crowd: v.crowd, mine: v.mine },
         };
       }
       case 'raceCall': {
@@ -875,6 +893,23 @@ export class Session {
   giveBackCommand(now: number): Uint8Array<ArrayBuffer> {
     return this.#encode(now, {
       body: { case: 'command', value: { body: { case: 'giveBack', value: {} } } },
+    });
+  }
+
+  /** Asks to watch a race's boat. */
+  watchRaceCommand(now: number, ask: RaceWatchAsk): Uint8Array<ArrayBuffer> {
+    return this.#encode(now, {
+      body: {
+        case: 'command',
+        value: { body: { case: 'watch', value: { sailor: '', ...ask } } },
+      },
+    });
+  }
+
+  /** Cheers the boat watched in a race. */
+  cheerCommand(now: number): Uint8Array<ArrayBuffer> {
+    return this.#encode(now, {
+      body: { case: 'command', value: { body: { case: 'cheer', value: {} } } },
     });
   }
 

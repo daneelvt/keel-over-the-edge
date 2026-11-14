@@ -80,11 +80,13 @@ import type {
   PastTold,
   PlaceSeen,
   RaceCallIn,
+  RaceCheeredIn,
   RaceFinishIn,
   RacePictureIn,
   RaceResultsIn,
   RaceSignalIn,
   RaceToldIn,
+  RaceWatchAsk,
   ReportReasonTold,
   Status,
   ToWorker,
@@ -241,6 +243,7 @@ export class Online {
   onRaceCall: ((c: RaceCallIn) => void) | null = null;
   onRaceFinish: ((f: RaceFinishIn) => void) | null = null;
   onRaceResults: ((r: RaceResultsIn) => void) | null = null;
+  onRaceCheered: ((c: RaceCheeredIn) => void) | null = null;
   /** Told of a new boat lying within OPENING_RANGE of the harbour's mouth: where it lies and where the mouth is, m. */
   onOpening: ((east: number, north: number, mouthEast: number, mouthNorth: number) => void) | null =
     null;
@@ -360,6 +363,16 @@ export class Online {
   /** Watches a sailor's boat: a boat sailed leaves the water at once. */
   watch(sailor: string): void {
     this.#port.postMessage({ type: 'watch', sailor });
+  }
+
+  /** Watches a race's boat, by its race and number (0: the boat the game chooses): a boat sailed leaves the water at once. */
+  watchRace(ask: RaceWatchAsk): void {
+    this.#port.postMessage({ type: 'watchRace', ask });
+  }
+
+  /** Cheers the boat watched in a race. */
+  cheer(): void {
+    this.#port.postMessage({ type: 'cheer' });
   }
 
   /** Asks to come aboard by a link's token, or sends the player's machine sailor named machine: knocking tells how it stands. */
@@ -644,6 +657,9 @@ export class Online {
         break;
       case 'raceResults':
         this.onRaceResults?.(m.results);
+        break;
+      case 'raceCheered':
+        this.onRaceCheered?.(m.cheered);
         break;
       case 'chunks':
         this.onChunks?.(m.chunks);

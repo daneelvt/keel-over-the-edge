@@ -21,6 +21,7 @@
 // context is made and resumed on the first such event, and tried again on
 // every one until it runs. It is suspended while the page is hidden.
 
+import { CHEER, type CheerSound } from './cheer';
 import {
   FEATURE_RECIPES,
   type FeatureEvent,
@@ -1202,6 +1203,153 @@ export class SoundEngine {
     burst.start(at, 0.5);
     burst.stop(end);
     tone.onended = () => {
+      for (const n of nodes) {
+        n.disconnect();
+      }
+    };
+  }
+
+  /** How many cheers were played (tests). */
+  cheers = 0;
+
+  /**
+   * Plays a crowd's cheer once, as cheerOf works it out: each voice a
+   * breath and an "ah" through the open vowel's formants, its pitch rising
+   * on the stress and falling away; a roar and claps under a big crowd's;
+   * all through the low-pass of its distance. The one place the crowd is
+   * heard: a recorded cheer would be played here instead.
+   */
+  cheer(c: CheerSound): void {
+    const g = this.#graph;
+    if (g === null || g.ctx.state !== 'running' || !(c.level > 0)) {
+      return;
+    }
+    this.cheers++;
+    const r = CHEER;
+    const ctx = g.ctx;
+    const t0 = ctx.currentTime + 0.02;
+    const out = ctx.createGain();
+    out.gain.value = c.level;
+    out.connect(g.master);
+    const air = ctx.createBiquadFilter();
+    air.type = 'lowpass';
+    air.frequency.value = c.cutoff;
+    air.Q.value = 0.7;
+    air.connect(out);
+    const nodes: AudioNode[] = [out, air];
+    let end = t0;
+    for (const v of c.voices) {
+      const at = t0 + v.at;
+      const pan = ctx.createStereoPanner();
+      pan.pan.value = v.pan;
+      pan.connect(air);
+      // The breath, "h".
+      const breath = ctx.createBufferSource();
+      breath.buffer = g.noise;
+      const band = ctx.createBiquadFilter();
+      band.type = 'bandpass';
+      band.frequency.value = r.breath.centre;
+      band.Q.value = r.breath.q;
+      const bg = ctx.createGain();
+      bg.gain.setValueAtTime(0, ctx.currentTime);
+      bg.gain.linearRampToValueAtTime(v.level * r.breath.level, at + 0.02);
+      bg.gain.linearRampToValueAtTime(0, at + r.breath.length);
+      breath.connect(band);
+      band.connect(bg);
+      bg.connect(pan);
+      breath.start(at, Math.random());
+      breath.stop(at + r.breath.length + 0.05);
+      // The vowel, "ah": a sawtooth through the formants.
+      const start = at + r.breath.length * 0.7;
+      const stop = start + v.length;
+      const saw = ctx.createOscillator();
+      saw.type = 'sawtooth';
+      saw.frequency.setValueAtTime(v.pitch, start);
+      saw.frequency.linearRampToValueAtTime(
+        v.pitch * r.vowel.rise,
+        start + v.length * r.vowel.riseShare,
+      );
+      saw.frequency.linearRampToValueAtTime(v.pitch * r.vowel.rise * r.vowel.fall, stop);
+      const vib = ctx.createOscillator();
+      vib.frequency.value = r.vowel.vibrato.rate;
+      const vibDepth = ctx.createGain();
+      vibDepth.gain.value = v.pitch * r.vowel.vibrato.depth;
+      vib.connect(vibDepth);
+      vibDepth.connect(saw.frequency);
+      const vg = ctx.createGain();
+      vg.gain.setValueAtTime(0, ctx.currentTime);
+      vg.gain.setValueAtTime(0, start);
+      vg.gain.linearRampToValueAtTime(v.level * r.vowel.level, start + r.vowel.attack);
+      vg.gain.setTargetAtTime(0, start + v.length * 0.55, v.length * 0.18);
+      vg.connect(pan);
+      nodes.push(pan, breath, band, bg, saw, vib, vibDepth, vg);
+      for (const f of r.formants) {
+        const fb = ctx.createBiquadFilter();
+        fb.type = 'bandpass';
+        fb.frequency.value = f.frequency;
+        fb.Q.value = f.q;
+        const fg = ctx.createGain();
+        fg.gain.value = f.level;
+        saw.connect(fb);
+        fb.connect(fg);
+        fg.connect(vg);
+        nodes.push(fb, fg);
+      }
+      saw.start(start);
+      vib.start(start);
+      saw.stop(stop + 0.3);
+      vib.stop(stop + 0.3);
+      end = Math.max(end, stop + 0.3);
+    }
+    if (c.roar > 0) {
+      const roar = ctx.createBufferSource();
+      roar.buffer = g.noise;
+      roar.loop = true;
+      const lo = ctx.createBiquadFilter();
+      lo.type = 'highpass';
+      lo.frequency.value = r.roar.low;
+      const hi = ctx.createBiquadFilter();
+      hi.type = 'lowpass';
+      hi.frequency.value = r.roar.high;
+      const rg = ctx.createGain();
+      rg.gain.setValueAtTime(0, ctx.currentTime);
+      rg.gain.linearRampToValueAtTime(c.roar, t0 + r.roar.attack);
+      rg.gain.setTargetAtTime(0, t0 + r.roar.length * 0.5, r.roar.length * 0.25);
+      roar.connect(lo);
+      lo.connect(hi);
+      hi.connect(rg);
+      rg.connect(air);
+      roar.start(t0, Math.random());
+      roar.stop(t0 + r.roar.length * 1.6);
+      nodes.push(roar, lo, hi, rg);
+      end = Math.max(end, t0 + r.roar.length * 1.6);
+    }
+    for (const k of c.claps) {
+      const at = t0 + k.at;
+      const clap = ctx.createBufferSource();
+      clap.buffer = g.noise;
+      const band = ctx.createBiquadFilter();
+      band.type = 'bandpass';
+      band.frequency.value = r.claps.centre;
+      band.Q.value = 1.2;
+      const cg = ctx.createGain();
+      cg.gain.setValueAtTime(0, ctx.currentTime);
+      cg.gain.setValueAtTime(r.claps.level, at);
+      cg.gain.setTargetAtTime(0, at + 0.001, r.claps.length / 3);
+      const pan = ctx.createStereoPanner();
+      pan.pan.value = k.pan;
+      clap.connect(band);
+      band.connect(cg);
+      cg.connect(pan);
+      pan.connect(air);
+      clap.start(at, Math.random());
+      clap.stop(at + r.claps.length * 4);
+      nodes.push(clap, band, cg, pan);
+    }
+    const done = ctx.createConstantSource();
+    done.start(t0);
+    done.stop(end + 0.1);
+    done.onended = () => {
       for (const n of nodes) {
         n.disconnect();
       }

@@ -44,22 +44,9 @@ export interface RaceDrawing {
   version: number;
 }
 
-/** Eight colours told apart by every reader (Okabe and Ito), the paper's black last. */
-export const TRACK_COLOURS = [
-  '#e69f00',
-  '#56b4e9',
-  '#009e73',
-  '#d55e00',
-  '#0072b2',
-  '#cc79a7',
-  '#b8a400',
-  '#1d1d1d',
-] as const;
+export { TRACK_COLOURS, trackColour } from '../ui/racecolours';
 
-/** A boat's colour by its race number: past eight they repeat, the place tells them apart. */
-export function trackColour(number: number): string {
-  return TRACK_COLOURS[(Math.max(1, number) - 1) % TRACK_COLOURS.length] ?? TRACK_COLOURS[0];
-}
+import { trackColour } from '../ui/racecolours';
 
 /** Widths on the screen, CSS pixels: the watched boat's track, the others', the lines', a dash's. */
 const WIDE = 4;

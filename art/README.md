@@ -586,6 +586,14 @@ The race committee's signal gun is played from `gun.json`: the crack of
 its blast, a thump falling in pitch, the boom of low-passed noise, and the
 boom's echoes off the water, each later, fainter and duller.
 
+The crowd cheering a boat in a race is played from `cheer.json`: a few
+voices' "huzzah", each a breath and an open vowel through its formants,
+its pitch rising on the stress and falling away; more voices, a roar and
+claps for a bigger crowd; near and bright for a spectator's own cheer,
+distant from the quay for the racer cheered. It is synthesised: the
+sound engine's `cheer` is the one place a recorded crowd would take its
+place.
+
 The lighthouses' fog signals are played from the recipe named for their
 device (`twotone`, `diaphone`, `siren`, `reedhorn`), and thunder from
 `thunder.json`; `go run ./tools/catalog -check` fails on a fog signal's

@@ -152,6 +152,11 @@ export function sailorLookOf(cat: Looks, code: number): SailorLook {
   return { art: artOf(cat, l), colours: coloursOf(cat, l), machine: isMachine(l) };
 }
 
+/** How near a tap must be to a boat's hull or sail to pick it, CSS pixels: a finger's width. */
+export const BOAT_TAP = 44;
+/** The height of a boat's sail's middle a tap is measured to, m. */
+const SAIL_TAP_HEIGHT = 3;
+
 /** No boats: the fleet before the game is online. */
 const NO_BOATS: readonly DrawnBoat[] = [];
 /** A hull sits at most this much deeper or higher than at rest for its wake's waves, metres. */
@@ -509,8 +514,53 @@ export class SeaScene {
     return this.skyPhysics?.skyAt(this.skyAt, east, north) ?? null;
   }
 
-  /** A tap on the open sea at (x, y) CSS pixels: a named star there shows its name. */
+  /**
+   * A tap on a boat in view: the boat drawn nearest (x, y) CSS pixels by
+   * its sail, within reach pixels of it, as onBoatTap takes it. True if it
+   * took the tap.
+   */
+  onBoatTap: ((east: number, north: number) => boolean) | null = null;
+
+  /** The other boat drawn whose sail is nearest (x, y) CSS pixels, within reach of it: where it is; null for none. */
+  boatAt(x: number, y: number, reach = BOAT_TAP): { east: number; north: number } | null {
+    const fs = this.fleetSource;
+    const canvas = this.stage.gfx?.canvas;
+    if (fs === null || canvas === undefined) {
+      return null;
+    }
+    const w = canvas.clientWidth;
+    const h = canvas.clientHeight;
+    const o = this.origin.world;
+    const v = this.#tagAt;
+    let best: DrawnBoat | null = null;
+    let d = reach;
+    for (let i = 0; i < fs.count; i++) {
+      const b = fs.drawn[i] as DrawnBoat;
+      if (b.opacity < 0.5) {
+        continue;
+      }
+      // Its hull and its sail's middle: a tap on either is on the boat.
+      for (const up of [0.5, SAIL_TAP_HEIGHT]) {
+        v.set(b.east - o.x, up + b.heave, -(b.north - o.y)).project(this.stage.camera);
+        if (v.z < -1 || v.z > 1) {
+          continue;
+        }
+        const dist = Math.hypot(((v.x + 1) / 2) * w - x, ((1 - v.y) / 2) * h - y);
+        if (dist < d) {
+          d = dist;
+          best = b;
+        }
+      }
+    }
+    return best === null ? null : { east: best.east, north: best.north };
+  }
+
+  /** A tap on the open sea at (x, y) CSS pixels: a boat there taken by onBoatTap, or a named star there shows its name. */
   tap(x: number, y: number, now: number): string | null {
+    const boat = this.onBoatTap === null ? null : this.boatAt(x, y);
+    if (boat !== null && this.onBoatTap?.(boat.east, boat.north) === true) {
+      return null;
+    }
     const canvas = this.stage.gfx?.canvas;
     if (canvas === undefined || !this.drawSky) {
       return null;

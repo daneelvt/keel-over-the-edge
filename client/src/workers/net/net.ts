@@ -10,7 +10,14 @@
 // watches. The controls go to the server only while it sails: watching or
 // idle, only the acknowledgements and the Pings do.
 
-import type { FromWorker, HelloVersions, Status, ToWorker, Traffic } from '../../net/messages';
+import type {
+  FromWorker,
+  HelloVersions,
+  RaceWatchAsk,
+  Status,
+  ToWorker,
+  Traffic,
+} from '../../net/messages';
 import { FLEET_RECORD_BYTES, writeRecord } from '../../net/view';
 import { afterClose } from './policy';
 import { harbourOf, lightSeen, Session } from './session';
@@ -115,6 +122,8 @@ export class NetWorker {
   };
   /** The sailor the page last asked to watch, which every Hello asks for; "" to sail. */
   #watch = '';
+  /** Or the race's boat it last asked to watch; null for none. */
+  #raceWatch: RaceWatchAsk | null = null;
   /** The connection sails its own boat; watches another's; waits in the queue for a boat. */
   #sailing = false;
   #watching = false;
@@ -139,6 +148,7 @@ export class NetWorker {
         this.#url = m.url;
         this.#session = new Session(m.versions as HelloVersions);
         this.#session.watch = this.#watch;
+        this.#session.raceWatch = this.#raceWatch;
         this.#session.tier = this.#tier;
         this.#session.renderScale = this.#scale;
         this.#connect();
@@ -169,6 +179,19 @@ export class NetWorker {
         this.#ask(m.sailor);
         if (!this.#takeBack() && this.#session !== null) {
           this.#send(this.#session.watchCommand(this.#d.now(), m.sailor));
+          this.#arm();
+        }
+        break;
+      case 'watchRace':
+        this.#ask('', m.ask);
+        if (!this.#takeBack() && this.#session !== null) {
+          this.#send(this.#session.watchRaceCommand(this.#d.now(), m.ask));
+          this.#arm();
+        }
+        break;
+      case 'cheer':
+        if (this.#session !== null) {
+          this.#send(this.#session.cheerCommand(this.#d.now()));
           this.#arm();
         }
         break;
@@ -260,11 +283,13 @@ export class NetWorker {
     return true;
   }
 
-  /** What every Hello from now on asks for: a sailor's boat to watch, or "" to sail. */
-  #ask(sailor: string): void {
+  /** What every Hello from now on asks for: a sailor's boat to watch, or a race's, or "" and none to sail. */
+  #ask(sailor: string, race: RaceWatchAsk | null = null): void {
     this.#watch = sailor;
+    this.#raceWatch = race;
     if (this.#session !== null) {
       this.#session.watch = sailor;
+      this.#session.raceWatch = race;
     }
   }
 
@@ -497,6 +522,9 @@ export class NetWorker {
           break;
         case 'raceResults':
           this.#d.post({ type: 'raceResults', results: r.results });
+          break;
+        case 'raceCheered':
+          this.#d.post({ type: 'raceCheered', cheered: r.cheered });
           break;
         case 'chunks':
           this.#d.post({ type: 'chunks', chunks: r.chunks });

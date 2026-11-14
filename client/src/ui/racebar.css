@@ -1,0 +1,362 @@
+/* SPDX-License-Identifier: AGPL-3.0-only */
+
+/* The race bar: the watch plate's brass and lacquer and its place at the
+   foot, one row, its keys the head keys' size, the race engraved small
+   over the place and the name; the name a slot ending in an ellipsis. */
+
+.hud .race-bar {
+  position: absolute;
+  bottom: var(--edge-bottom);
+  left: 50%;
+  translate: -50% 0;
+  width: max-content;
+  max-width: calc(100vw - var(--edge-left) - var(--edge-right));
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  padding: 2px;
+  border: 1px solid var(--brass-dark);
+  border-radius: 12px;
+  background: var(--lacquer);
+  box-shadow: var(--plate-shadow);
+  pointer-events: auto;
+}
+
+.hud .race-bar .head-key {
+  position: relative;
+  min-height: 44px;
+  height: auto;
+  align-self: stretch;
+  padding: 0 10px;
+}
+
+.hud .race-bar .head-key::after {
+  content: "";
+  position: absolute;
+  inset: -3px 0;
+}
+
+.hud .race-bar .rb-step {
+  min-width: 40px;
+  padding: 0;
+  font-size: 22px;
+  line-height: 1;
+}
+
+.hud .race-bar .rb-words {
+  flex: 0 1 auto;
+  align-self: stretch;
+  justify-content: center;
+  min-width: 0;
+  max-width: 24ch;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1px;
+  padding: 2px 6px;
+  border: 0;
+  background: none;
+  color: var(--ink);
+  text-align: left;
+  cursor: pointer;
+}
+
+.rb-over {
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+  color: var(--faint);
+  font:
+    12px / 1.15 "IM Fell English SC",
+    Georgia,
+    serif;
+  letter-spacing: 0.03em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rb-whose {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+  max-width: 100%;
+  min-width: 0;
+  font:
+    500 16px / 1.2 "Alegreya Sans",
+    system-ui,
+    sans-serif;
+}
+
+.rb-dot {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--race-colour, var(--gold));
+  align-self: center;
+}
+
+.rb-place {
+  flex: none;
+  font-variant-numeric: tabular-nums;
+}
+
+.rb-sep {
+  flex: none;
+  color: var(--faint);
+}
+
+.rb-name {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--gold);
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rb-cog {
+  flex: none;
+  color: var(--gold);
+}
+
+.race-bar.rb-pending .rb-words {
+  opacity: 0.7;
+}
+
+/* The cheer key: brass, its decal a waved tricorn; tapped, the hat flips
+   up and the key glows gold; waiting, dim, a thin ring filling back. */
+.hud .race-bar .rb-cheer {
+  min-width: 44px;
+  padding: 0 8px;
+}
+
+.rb-hat {
+  width: 26px;
+  height: 19px;
+  transform-origin: 50% 80%;
+  transition: rotate 0.25s ease-out;
+}
+
+.rb-hat-up {
+  rotate: -24deg;
+  translate: 0 -2px;
+}
+
+.rb-hat-brim {
+  fill: #1b1610;
+  stroke: #d8b25a;
+  stroke-width: 1.2;
+}
+
+.rb-hat-crown {
+  fill: #2a2117;
+  stroke: #d8b25a;
+  stroke-width: 1.2;
+}
+
+.rb-hat-cockade {
+  fill: #e8c25c;
+}
+
+.hud .race-bar .rb-cheer.rb-cheered {
+  box-shadow:
+    0 0 0 1px #e8c25c,
+    0 0 12px rgb(232 194 92 / 75%);
+}
+
+.hud .race-bar .rb-cheer.rb-waiting .rb-hat {
+  opacity: 0.45;
+}
+
+.hud .race-bar .rb-cheer.rb-waiting::before {
+  content: "";
+  position: absolute;
+  inset: 4px;
+  border-radius: 50%;
+  background: conic-gradient(
+    rgb(232 194 92 / 55%) calc((1 - var(--cheer-left, 0)) * 360deg),
+    transparent 0
+  );
+  mask: radial-gradient(farthest-side, transparent calc(100% - 2px), #000 calc(100% - 2px));
+  pointer-events: none;
+}
+
+.hud .race-bar .rb-more {
+  min-width: 40px;
+  padding: 0;
+  font-size: 18px;
+}
+
+/* The standings: a sheet up from the foot, over the room where the helm
+   would be, above the bar; a row a boat, the watched one gold. */
+.rb-scrim {
+  position: absolute;
+  inset: 0;
+  z-index: 10;
+  pointer-events: auto;
+}
+
+.hud .rb-standings {
+  position: absolute;
+  z-index: 11;
+  bottom: calc(var(--edge-bottom) + 56px);
+  left: 50%;
+  translate: -50% 0;
+  box-sizing: border-box;
+  width: min(380px, calc(100vw - var(--edge-left) - var(--edge-right)));
+  max-height: calc(100dvh - var(--edge-top) - var(--edge-bottom) - 64px);
+  display: flex;
+  flex-direction: column;
+  padding: 8px 8px 6px;
+  overflow: hidden;
+}
+
+.hud .rb-standings h2 {
+  margin: 0 4px 4px;
+  overflow: hidden;
+  font-size: 16px;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rb-faint {
+  color: var(--faint);
+  font-size: 14px;
+  font-weight: 400;
+}
+
+.rb-rows {
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  list-style: none;
+}
+
+.hud .rb-row {
+  box-sizing: border-box;
+  display: grid;
+  grid-template-columns: 2ch 10px minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 40px;
+  padding: 0 6px;
+  border: 0;
+  border-radius: 7px;
+  background: none;
+  color: var(--ink);
+  font:
+    500 15px / 1.2 "Alegreya Sans",
+    system-ui,
+    sans-serif;
+  font-variant-numeric: tabular-nums;
+  text-align: left;
+  cursor: pointer;
+}
+
+.hud .rb-row:hover:not(:disabled) {
+  background: rgb(255 255 255 / 6%);
+}
+
+.hud .rb-row.rb-watched {
+  background: rgb(232 194 92 / 14%);
+  color: var(--gold);
+}
+
+.hud .rb-row.rb-out {
+  color: var(--faint);
+  cursor: default;
+}
+
+.rb-row-place {
+  text-align: right;
+}
+
+.rb-row-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+}
+
+.rb-row-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rb-row-mark,
+.rb-row-gap {
+  color: var(--faint);
+  font-size: 14px;
+}
+
+.rb-watched .rb-row-mark,
+.rb-watched .rb-row-gap {
+  color: inherit;
+}
+
+/* The bar's ⋯: the switch for follow the action. */
+.rb-switch {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  min-height: 40px;
+  font-size: 15px;
+  cursor: pointer;
+}
+
+.rb-switch input {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  margin: 2px 0 0;
+  accent-color: #d8b25a;
+}
+
+/* The crier's line and the line after a cheer, over the race bar, in the
+   room where the helm would be. */
+.hud .rb-lines {
+  position: absolute;
+  bottom: calc(var(--edge-bottom) + 56px);
+  left: 50%;
+  translate: -50% 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  width: max-content;
+  max-width: calc(100vw - var(--edge-left) - var(--edge-right));
+  pointer-events: none;
+}
+
+.hud .crier-line {
+  max-width: 100%;
+  box-sizing: border-box;
+  margin: 0;
+  padding: 5px 12px;
+  text-align: center;
+  font:
+    italic 500 15px / 1.25 "Alegreya Sans",
+    system-ui,
+    sans-serif;
+}
+
+/* Held sideways the boat stands in the middle down to the bar: the lines
+   go to the left column, which is free top to bottom. */
+@media (orientation: landscape) {
+  .hud .rb-lines {
+    left: var(--edge-left);
+    translate: 0 0;
+    align-items: flex-start;
+    max-width: min(240px, 34vw);
+  }
+}
+
+.hud .rb-cheered-line {
+  color: var(--gold);
+  font-style: normal;
+}

@@ -30,6 +30,8 @@ import {
 } from './racelinewords';
 import type { RacesView } from './raceslazy';
 import { entrantName, type Racing } from './racestate';
+import type { RaceWatch } from './racewatch';
+import { Window } from './racewindow';
 import { browserSharer, shareLink } from './sharelink';
 
 /** What the race's parts need of the game. */
@@ -47,7 +49,15 @@ export interface RaceSource {
   fetch?: Fetch;
   /** The game's address, for the race's link. */
   origin: string;
+  /** Watching a race: the spectator's side of it, and the crier and cheers for racers too; null without. */
+  watch?: RaceWatch | null;
+  /** Opens the list of sailors to watch; absent where not offered. */
+  another?: () => void;
+  /** Takes the player's own boat to sea; absent where not offered. */
+  sail?: () => void;
 }
+
+export { BarMore, CrierLine, RaceBar, Standings } from './racebar';
 
 /** The flag up: the class's pennant, or P, the blue flag with its white square. */
 function Flag({ kind }: { kind: 'class' | 'P' }) {
@@ -202,7 +212,9 @@ export function RaceLine({ src }: { src: RaceSource }) {
   const el = useRef<HTMLDivElement | null>(null);
   useSideways(el);
   const call = src.racing.call.value;
-  if (v === null) {
+  // A boat watched has the race bar at the foot instead.
+  const watching = src.racing.eye.value > 0 && src.racing.number() === 0;
+  if (v === null || watching) {
     return null;
   }
   return (
@@ -327,45 +339,6 @@ export function CourseCard({
       })}
       {me !== undefined ? <circle class="rl-me" cx={me.x} cy={me.y} r={3.5} /> : null}
     </svg>
-  );
-}
-
-/** A window over the sea, a tap beside it closing it. */
-function Window({
-  name,
-  title,
-  close,
-  children,
-}: {
-  name: string;
-  title: preact.ComponentChildren;
-  close: () => void;
-  children: preact.ComponentChildren;
-}) {
-  const ref = useRef<HTMLElement | null>(null);
-  useEffect(() => {
-    ref.current?.focus({ preventScroll: true });
-  }, []);
-  return (
-    <>
-      <div class="rl-scrim" aria-hidden="true" onClick={close} />
-      <section
-        class="panel rl-window"
-        role="dialog"
-        aria-label={typeof title === 'string' ? title : undefined}
-        tabIndex={-1}
-        ref={ref}
-        data-panel={name}
-        onKeyDown={(e) => {
-          if (e.key === 'Escape') {
-            close();
-          }
-        }}
-      >
-        <h2>{title}</h2>
-        {children}
-      </section>
-    </>
   );
 }
 

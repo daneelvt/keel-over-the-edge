@@ -405,6 +405,12 @@ export function Menu({
             set={(sound) => settings.set({ sound })}
           />
           <Toggle
+            name="show-cheers"
+            label="Show cheers in a race"
+            on={s.showCheers}
+            set={(showCheers) => settings.set({ showCheers })}
+          />
+          <Toggle
             name="wind-overlay"
             label="Show the wind"
             on={s.windOverlay}

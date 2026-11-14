@@ -77,3 +77,36 @@ export function dueNotices(
   }
   return out;
 }
+
+/** A race the player asked to watch when it starts, as its card said: its code, name and start, ms of UTC. */
+export interface WatchedRace {
+  code: string;
+  name: string;
+  startsAt: number;
+}
+
+/** How long before its start a race asked to be watched is offered, ms: the boats are on the line. */
+export const WATCH_OFFERED = MINUTE;
+
+/**
+ * The races asked to be watched whose start is within WATCH_OFFERED of now
+ * (ms of UTC), each once (keys in shown, which this adds to): offered with
+ * Watch on the entered races' notice, its minute before the start.
+ */
+export function dueWatches(
+  races: readonly WatchedRace[],
+  now: number,
+  shown: Set<string>,
+  locale?: string,
+): { race: WatchedRace; fill: Record<string, string> }[] {
+  const out: { race: WatchedRace; fill: Record<string, string> }[] = [];
+  for (const r of races) {
+    const left = r.startsAt - now;
+    const key = `watch:${r.code}`;
+    if (left > 0 && left <= WATCH_OFFERED && !shown.has(key)) {
+      shown.add(key);
+      out.push({ race: r, fill: { name: r.name, left: leftText(Math.max(left, 1000), locale) } });
+    }
+  }
+  return out;
+}
