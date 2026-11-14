@@ -122,7 +122,7 @@ jobs:
       # Docker's own builder cannot push an image for two platforms; a
       # BuildKit container can. Its image is pinned as every image is.
       - name: A builder for both architectures
-        run: docker buildx create --name release --driver docker-container --driver-opt image=moby/buildkit:v0.34.1@sha256:99368f3e46177c6405b9740e4461d91cee004128daeecca78d4ceac50ec1da5c --use
+        run: docker buildx create --name release --driver docker-container --driver-opt image=moby/buildkit:v0.34.2@sha256:c5f8862f52499773af85bc07695b2379ef08e8002352b0df2c4864c91d78dabe --use
       - id: build
         name: Build for amd64 and arm64, and push
         env:
