@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: AGPL-3.0-only
-# The game: keel, its database and its backups, the Gateway and routes
-# that reach it, and what watches them.
+# The game: keel, its database and its backups, the contributor agreement
+# keeper beside it, the Gateway and routes that reach them, and what
+# watches them.
 # Sizes are production's (a machine of 4 cores and 16 GB); each cluster's
 # entry point under clusters/ patches what differs, and names the players'
 # host.
@@ -20,6 +21,7 @@ resources:
   - dump.yaml
   - deployment.yaml
   - service.yaml
+  - agreement.yaml
   - forward.yaml
   - gateway.yaml
   - routes.yaml
@@ -49,3 +51,19 @@ configMapGenerator:
       # The password comes from PGPASSWORD, which pgx reads under any URL;
       # the server's certificate is checked against the operator's CA.
       - KEEL_DATABASE_URL=postgres://keel@keel-db-rw.keel.svc:5432/keel?sslmode=verify-full&sslrootcert=/etc/keel/db-ca/ca.crt
+  # The contributor agreement keeper's (keel agreement's usage lists every
+  # variable); its database role is its own. Its players' origin is
+  # keel's, which each cluster's entry point hands it.
+  - name: keel-agreement
+    literals:
+      # Its page and GitHub's webhook, reached from Traefik alone.
+      - KEEL_AGREEMENT_ADDR=0.0.0.0:8082
+      # The probes, and the owner's keel admin agreements, run in its pod.
+      - KEEL_INTERNAL_ADDR=0.0.0.0:9090
+      - KEEL_METRICS_ADDR=0.0.0.0:9091
+      - KEEL_LOG_LEVEL=info
+      - KEEL_DATABASE_URL=postgres://agreement@keel-db-rw.keel.svc:5432/keel?sslmode=verify-full&sslrootcert=/etc/keel/db-ca/ca.crt
+      # The GitHub App's ID and client ID, neither secret: empty until the
+      # owner registers it, and set by production's entry point alone.
+      - KEEL_AGREEMENT_APP_ID=
+      - KEEL_AGREEMENT_CLIENT_ID=

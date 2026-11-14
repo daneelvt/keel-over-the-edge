@@ -1,0 +1,90 @@
+{{/* SPDX-License-Identifier: AGPL-3.0-only */ -}}
+{{/* The signing page: the agreement, the sign-in, the form, the signer's
+     signatures; the privacy notice; and the way for a signer under 18. */ -}}
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<title>{{.Title}} · Keel Over the Edge</title>
+<link rel="stylesheet" href="/agreement/style.css">
+</head>
+<body>
+<main>
+{{- if eq .Kind "privacy"}}
+<p><a href="/agreement">← The contributor agreement</a></p>
+<div class="text">{{.Body}}</div>
+
+{{- else if eq .Kind "minor"}}
+<h1>Signing under 18</h1>
+<p class="lead">Thank you. A contributor under 18 signs together with a parent or guardian, by e-mail. Nothing has been recorded yet.</p>
+<ol>
+<li>Your parent or guardian reads the agreement with you: the whole of it, and the plain-words summary at its top.</li>
+<li>They write to <strong>{{.Contact}}</strong>, saying that they are your parent or guardian, giving their full name and yours, and your GitHub account, <strong>@{{.User.Login}}</strong>, and that they have read the {{.Version.Name}} with you and consent to you agreeing to it.</li>
+<li>The owner replies with the agreement's text, and you both answer "I agree".</li>
+<li>The owner records your signature, with your parent's or guardian's name, and your pull requests are checked again at once.</li>
+</ol>
+<p>Only your parent's or guardian's name and e-mail are kept with your signature, as the <a href="/agreement/privacy">privacy notice</a> says.</p>
+<p><a href="/agreement">← The contributor agreement</a></p>
+
+{{- else}}
+<h1>Contributor agreement</h1>
+{{- if not .SetUp}}
+<div class="note">Signing is not open yet. The agreement is below to read.</div>
+{{- else if .JustSigned}}
+<div class="note ok"><strong>Signed.</strong> Your open pull requests have been checked again.</div>
+{{- end}}
+{{- if .Error}}
+<div class="note bad">{{.Error}}</div>
+{{- end}}
+
+{{- if and .SetUp (not .User)}}
+<p class="lead">Before a pull request to Keel Over the Edge is merged, everyone who wrote it signs this agreement, once. Read it below, then sign in with GitHub to sign: under a minute.</p>
+<p><a class="button" href="/agreement/signin">Sign in with GitHub</a></p>
+<p class="who">Signing in tells the game's site your GitHub account's name and number, and nothing else: it gets no access to your account.</p>
+{{- else if .User}}
+<form class="who signout" method="post" action="/agreement/signout"><span>Signed in as <strong>@{{.User.Login}}</strong>.</span> <input type="hidden" name="csrf" value="{{.CSRF}}"><button class="quiet" type="submit">Sign out</button></form>
+{{- if .SignedCurrent}}
+<p class="lead">You have signed the {{.Version.Name}}. Thank you.</p>
+{{- else}}
+<p class="lead">Read the agreement, then <a href="#sign">sign it below</a>.</p>
+{{- end}}
+{{- if .Signed}}
+<h2>Your signatures</h2>
+<ul class="signed">
+{{- range .Signed}}
+<li>Version {{.Version}}, as {{.Name}}, {{.SignedAt.UTC.Format "2 January 2006, 15:04 UTC"}} · <a href="/agreement/download?id={{.ID}}">download it with the text</a></li>
+{{- end}}
+</ul>
+{{- end}}
+{{- end}}
+
+<article class="text">{{.Body}}</article>
+
+{{- if and .User (not .SignedCurrent)}}
+<form id="sign" method="post" action="/agreement/sign">
+<h2>Sign</h2>
+<input type="hidden" name="csrf" value="{{.CSRF}}">
+<fieldset>
+<label><input type="radio" name="age" value="adult" id="age-adult"{{if eq .Age "adult"}} checked{{end}}> <span>I am 18 or older, or of full age where I live.</span></label>
+<label><input type="radio" name="age" value="minor" id="age-minor"{{if eq .Age "minor"}} checked{{end}}> <span>I am under 18.</span></label>
+</fieldset>
+<div class="adult-only">
+<label class="name">Your full name
+<input type="text" name="name" value="{{.Name}}" maxlength="200" autocomplete="name"></label>
+<label><input type="checkbox" name="employer" value="yes"{{if .Employer}} checked{{end}}> <span>My employer, if I have one, has no claim on what I contribute, or has agreed.</span></label>
+<label><input type="checkbox" name="agree" value="yes"{{if .Agree}} checked{{end}}> <span>I agree to the {{.Version.Name}}.</span></label>
+</div>
+<p><button class="adult-only" type="submit">Sign</button><button class="minor-only" type="submit">Continue</button></p>
+<p class="who">Your GitHub account, the name you give, the date, the version and its text's SHA-256 are kept, by the owner alone, as the <a href="/agreement/privacy">privacy notice</a> says.</p>
+</form>
+{{- end}}
+{{- end}}
+
+<footer>
+<p><a href="/agreement/privacy">Privacy</a> · <a href="/agreement/v/{{.Version.Number}}.md">The text as signed</a> (SHA-256 <code>{{.Version.SHA256}}</code>){{if .Contact}} · Questions: {{.Contact}}{{end}}</p>
+</footer>
+</main>
+</body>
+</html>

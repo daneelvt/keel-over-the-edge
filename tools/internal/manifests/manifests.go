@@ -255,7 +255,19 @@ func (t *Tree) RenderDeploy(d Deploy) (resmap.ResMap, error) {
 		}
 		components = append(components, RebuildComponent)
 	}
-	patches := []map[string]any{{"patch": string(patch)}}
+	// The contributor agreement keeper runs the same image, imported too.
+	keeper, err := yaml.Marshal(map[string]any{
+		"apiVersion": "apps/v1",
+		"kind":       "Deployment",
+		"metadata":   map[string]any{"name": "keel-agreement", "namespace": Namespace},
+		"spec": map[string]any{"template": map[string]any{"spec": map[string]any{
+			"containers": []map[string]any{{"name": "agreement", "imagePullPolicy": "Never"}},
+		}}},
+	})
+	if err != nil {
+		return nil, err
+	}
+	patches := []map[string]any{{"patch": string(patch)}, {"patch": string(keeper)}}
 	if d.NoBackups {
 		for _, gone := range [][4]string{
 			{"barmancloud.cnpg.io/v1", "ObjectStore", ObjectStore, Namespace},

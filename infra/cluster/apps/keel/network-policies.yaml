@@ -80,10 +80,79 @@ spec:
         - port: 443
           protocol: TCP
 ---
-# The database: from the game and the weekly dump, from Grafana (its SQL,
-# as grafana), from CloudNativePG's operator (PostgreSQL, and its instance
-# manager on 8000), from its own instances (CloudNativePG's documentation,
-# "Networking"), and from the scraper, on the exporter. Its pods call the
+# The contributor agreement keeper: the page and GitHub's webhook from
+# Traefik, on its page's listener alone, and the scraper, on the metrics
+# listener alone. Out, it reaches DNS, its database, and the internet on
+# 443, where GitHub's API and its sign-in are (api.github.com,
+# github.com), and nothing else: it never calls the Kubernetes API (it
+# mounts no token).
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: keel-agreement
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: keel-agreement
+  policyTypes: [Ingress, Egress]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: traefik
+      ports:
+        - port: 8082
+          protocol: TCP
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: monitoring
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: vmagent
+      ports:
+        - port: 9091
+          protocol: TCP
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - port: 53
+          protocol: UDP
+        - port: 53
+          protocol: TCP
+    - to:
+        - podSelector:
+            matchLabels:
+              cnpg.io/cluster: keel-db
+      ports:
+        - port: 5432
+          protocol: TCP
+    # Anywhere on the internet, but not the cluster's pods or Services
+    # (k3s's default ranges): GitHub's addresses are many, and change.
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except:
+              - 10.42.0.0/16
+              - 10.43.0.0/16
+      ports:
+        - port: 443
+          protocol: TCP
+---
+# The database: from the game, the contributor agreement keeper and the
+# weekly dump, from Grafana (its SQL, as grafana), from CloudNativePG's
+# operator (PostgreSQL, and its instance manager on 8000), from its own
+# instances (CloudNativePG's documentation, "Networking"), and from the
+# scraper, on the exporter. Its pods call the
 # Kubernetes API and the object store, so their way out is not fenced.
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
@@ -99,6 +168,9 @@ spec:
         - podSelector:
             matchLabels:
               app.kubernetes.io/name: keel
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: keel-agreement
         - podSelector:
             matchLabels:
               app.kubernetes.io/name: keel-db-dump
