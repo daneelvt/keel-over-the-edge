@@ -513,10 +513,10 @@ func (q *Queries) PendingRuns(ctx context.Context, worldID pgtype.UUID) ([]Pendi
 
 const putRaceRecord = `-- name: PutRaceRecord :exec
 INSERT INTO race_record (account_id, source, world, at, code, race_name, kind, course_name, boat, boat_name, fleet, harbour,
-  newcomers, role, place, how, medal, awards, skipper_id, skipper_name, skipper_machine, number, elapsed)
+  newcomers, role, place, how, medal, awards, skipper_id, skipper_name, skipper_machine, number, elapsed, added)
 SELECT $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12,
   $13, $14, $15, $16, $17, $18, $19, $20,
-  $21, $22, $23
+  $21, $22, $23, $24
 WHERE EXISTS (SELECT 1 FROM account WHERE id = $1)
 ON CONFLICT (account_id, source) DO NOTHING
 `
@@ -545,6 +545,7 @@ type PutRaceRecordParams struct {
 	SkipperMachine bool
 	Number         pgtype.Int2
 	Elapsed        pgtype.Float4
+	Added          float32
 }
 
 // A race in a sailor's lasting record, once for its source, while the
@@ -574,6 +575,7 @@ func (q *Queries) PutRaceRecord(ctx context.Context, arg PutRaceRecordParams) er
 		arg.SkipperMachine,
 		arg.Number,
 		arg.Elapsed,
+		arg.Added,
 	)
 	return err
 }
@@ -1092,7 +1094,7 @@ SELECT r.account_id, r.source, r.world, r.at, r.code, r.race_name, r.kind, r.cou
   coalesce(r.how, '')::text AS how, coalesce(r.medal, '')::text AS medal, r.awards,
   coalesce(r.skipper_id, '00000000-0000-0000-0000-000000000000')::uuid AS skipper_id,
   coalesce(r.skipper_name, '')::text AS skipper_name, r.skipper_machine, coalesce(r.number, 0)::smallint AS number,
-  coalesce(r.elapsed, -1)::real AS elapsed
+  coalesce(r.elapsed, -1)::real AS elapsed, r.added
 FROM race_record r
 WHERE r.code = $1 AND r.role IN ('skipper', 'crew') AND r.source LIKE 'race:%'
   AND r.world = (SELECT max(n.world) FROM race_record n WHERE n.code = $1 AND n.role IN ('skipper', 'crew'))
@@ -1123,6 +1125,7 @@ type RaceRecordsByCodeRow struct {
 	SkipperMachine bool
 	Number         int16
 	Elapsed        float32
+	Added          float32
 }
 
 // The lasting records of a race's boats and their crews by its link's
@@ -1160,6 +1163,7 @@ func (q *Queries) RaceRecordsByCode(ctx context.Context, code string) ([]RaceRec
 			&i.SkipperMachine,
 			&i.Number,
 			&i.Elapsed,
+			&i.Added,
 		); err != nil {
 			return nil, err
 		}

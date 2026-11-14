@@ -191,9 +191,9 @@ export class ChartView {
   #bearing = 0;
   #width = 1;
   #height = 1;
-  /** Whether the screen's size is known, from the first draw since the chart opened; a race framed before it is framed again then, room times as far. */
+  /** Whether the screen's size is known, from the first draw since the chart opened; a race framed before it is framed again then, as it was asked. */
   #sized = false;
-  #framing: number | null = null;
+  #framing: { room: number; tight: boolean; lower: number } | null = null;
   readonly #v = new Vector3();
   readonly #ray = new Raycaster();
 
@@ -330,26 +330,50 @@ export class ChartView {
     this.#dirty = true;
   }
 
-  /** Looks at the race drawn, its whole course in view, room times as far off: false with none. */
-  frameRace(room = 1): boolean {
+  /**
+   * Looks at the race drawn, its whole racing area in view, room times as
+   * far off; tight, its course alone (its marks, its lines and its way);
+   * the course lower on the screen by a share of its reach, to clear
+   * what stands at the screen's top: false with none.
+   */
+  frameRace(room = 1, tight = false, lower = 0): boolean {
     const d = this.raceDrawing();
     if (d === null) {
       return false;
     }
     if (!this.#sized) {
-      this.#framing = room;
+      this.#framing = { room, tight, lower };
     }
     const t = d.told;
+    let east = t.east;
+    let north = t.north;
     let reach = Math.max(t.reach, 200);
-    for (const p of [...t.marks, ...t.way]) {
-      reach = Math.max(reach, Math.hypot(p.east - t.east, p.north - t.north) * 1.15);
+    const points = [...t.marks, ...t.way];
+    for (const p of [t.pin, t.committee, ...(t.finish ?? [])]) {
+      if (p !== null) {
+        points.push(p);
+      }
+    }
+    if (tight && points.length > 0) {
+      const es = points.map((p) => p.east);
+      const ns = points.map((p) => p.north);
+      east = (Math.min(...es) + Math.max(...es)) / 2;
+      north = (Math.min(...ns) + Math.max(...ns)) / 2;
+      reach = 150;
+    }
+    for (const p of points) {
+      reach = Math.max(reach, Math.hypot(p.east - east, p.north - north) * 1.15);
     }
     // The course's reach about its middle across the narrower of the
     // screen's two ways, with room about it.
     const half = Math.tan((this.camera.fov * Math.PI) / 360);
     const narrow = Math.min(1, this.#width / Math.max(this.#height, 1));
     // Held sideways the paper, seen tilted, is shortened up the screen.
-    this.lookAt(t.east, t.north, (room * (narrow < 1 ? 1.15 : 0.75) * reach) / (half * narrow));
+    this.lookAt(
+      east,
+      north + lower * reach,
+      (room * (narrow < 1 ? 1.15 : 0.75) * reach) / (half * narrow),
+    );
     return true;
   }
 
@@ -460,10 +484,10 @@ export class ChartView {
     }
     if (canvas !== undefined && !this.#sized) {
       this.#sized = true;
-      const room = this.#framing;
+      const f = this.#framing;
       this.#framing = null;
-      if (room !== null) {
-        this.frameRace(room);
+      if (f !== null) {
+        this.frameRace(f.room, f.tight, f.lower);
       }
     }
     if (now - this.#last < 1000 / this.#look.fps - 2) {

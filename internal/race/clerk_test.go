@@ -460,7 +460,8 @@ func checkReplay(t *testing.T, s *sea, code string, sailors []Sailor) {
 	}
 	for i, b := range later.Runs[0].Boats {
 		was := run.Boats[i]
-		if b.Place != was.Place || b.Number != was.Number || math.Abs(b.Elapsed-was.Elapsed) > 0.01 || b.Track != nil || b.Me != (i == 1) {
+		if b.Place != was.Place || b.Number != was.Number || math.Abs(b.Elapsed-was.Elapsed) > 0.01 || b.Added != was.Added || b.Track != nil ||
+			b.Me != (i == 1) {
 			t.Errorf("boat %d after the world: %+v, was %+v", i, b, was)
 		}
 	}

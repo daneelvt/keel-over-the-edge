@@ -3,8 +3,9 @@
 -- warning signal, its gun and its end, world ticks, and its course as the
 -- chart draws it (the lines, the marks, the way and the legs), kept with
 -- the world beside its boats' tracks. And in the lasting record, each
--- boat's race number and its time from the start (s, none if not home),
--- so a race's link shows its results after its world has gone.
+-- boat's race number, its time from the start (s, none if not home) and
+-- the seconds added to it, so a race's link shows its results after its
+-- world has gone.
 
 -- +goose Up
 
@@ -24,4 +25,5 @@ SELECT create_world_partitions(id) FROM world;
 
 ALTER TABLE race_record ADD COLUMN number smallint CHECK (number > 0);
 ALTER TABLE race_record ADD COLUMN elapsed real CHECK (elapsed >= 0);
+ALTER TABLE race_record ADD COLUMN added real NOT NULL DEFAULT 0 CHECK (added >= 0);
 CREATE INDEX race_record_code ON race_record (code);

@@ -245,10 +245,10 @@ ON CONFLICT DO NOTHING;
 -- A race in a sailor's lasting record, once for its source, while the
 -- account is kept.
 INSERT INTO race_record (account_id, source, world, at, code, race_name, kind, course_name, boat, boat_name, fleet, harbour,
-  newcomers, role, place, how, medal, awards, skipper_id, skipper_name, skipper_machine, number, elapsed)
+  newcomers, role, place, how, medal, awards, skipper_id, skipper_name, skipper_machine, number, elapsed, added)
 SELECT @account_id, @source, @world, @at, @code, @race_name, @kind, @course_name, @boat, sqlc.narg(boat_name), @fleet, @harbour,
   @newcomers, @role, sqlc.narg(place), sqlc.narg(how), sqlc.narg(medal), @awards, sqlc.narg(skipper_id), sqlc.narg(skipper_name),
-  @skipper_machine, sqlc.narg(number), sqlc.narg(elapsed)
+  @skipper_machine, sqlc.narg(number), sqlc.narg(elapsed), @added
 WHERE EXISTS (SELECT 1 FROM account WHERE id = @account_id)
 ON CONFLICT (account_id, source) DO NOTHING;
 
@@ -311,7 +311,7 @@ SELECT r.account_id, r.source, r.world, r.at, r.code, r.race_name, r.kind, r.cou
   coalesce(r.how, '')::text AS how, coalesce(r.medal, '')::text AS medal, r.awards,
   coalesce(r.skipper_id, '00000000-0000-0000-0000-000000000000')::uuid AS skipper_id,
   coalesce(r.skipper_name, '')::text AS skipper_name, r.skipper_machine, coalesce(r.number, 0)::smallint AS number,
-  coalesce(r.elapsed, -1)::real AS elapsed
+  coalesce(r.elapsed, -1)::real AS elapsed, r.added
 FROM race_record r
 WHERE r.code = @code AND r.role IN ('skipper', 'crew') AND r.source LIKE 'race:%'
   AND r.world = (SELECT max(n.world) FROM race_record n WHERE n.code = @code AND n.role IN ('skipper', 'crew'))

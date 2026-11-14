@@ -42,11 +42,15 @@ import type { ReplayHost } from './replayhost';
 import { browserSharer, shareLink } from './sharelink';
 
 /**
- * How much farther off than a race's chart a replay looks at its course:
- * its head and its foot take more of the screen, most of it held sideways.
+ * How far off a replay looks at its course, its course alone in view, as
+ * many times as a race's chart frames its area: its head and its foot
+ * take more of the screen, most of it held sideways.
  */
-const REPLAY_ROOM = 1.35;
-const REPLAY_ROOM_SIDEWAYS = 1.9;
+const REPLAY_ROOM = 1.3;
+const REPLAY_ROOM_SIDEWAYS = 2.7;
+/** How far lower on the screen a replay sets its course, as a share of its reach: clear of its head. */
+const REPLAY_LOWER = 0.15;
+const REPLAY_LOWER_SIDEWAYS = 0.2;
 
 /** Why a replay cannot be had, in words. */
 export function replayRefusal(reason: string): string {
@@ -103,7 +107,12 @@ export function showReplay(host: ReplayHost, chart: Chart, told: ReplayTold): bo
     chart.show('chart');
   }
   // Room for the replay's head and its time at the foot.
-  chart.view.frameRace(innerWidth > innerHeight ? REPLAY_ROOM_SIDEWAYS : REPLAY_ROOM);
+  const sideways = innerWidth > innerHeight;
+  chart.view.frameRace(
+    sideways ? REPLAY_ROOM_SIDEWAYS : REPLAY_ROOM,
+    true,
+    sideways ? REPLAY_LOWER_SIDEWAYS : REPLAY_LOWER,
+  );
   return true;
 }
 

@@ -377,7 +377,7 @@ func (c *Clerk) endOf(ctx context.Context, row *store.Race, r *run) (*store.Race
 		}
 		rec := record(res.Account, store.RoleSkipper)
 		rec.BoatName, rec.Place, rec.How, rec.Medal, rec.Awards = r.names[i], res.Place, res.How, res.Medal, res.Awards
-		rec.Number, rec.Elapsed = int(rc.Number), max(res.Elapsed, 0)
+		rec.Number, rec.Elapsed, rec.Added = int(rc.Number), max(res.Elapsed, 0), res.Added
 		e.Records = append(e.Records, rec)
 		skipper := people[res.Account]
 		for _, a := range r.crews[i] {

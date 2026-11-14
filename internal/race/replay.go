@@ -365,7 +365,7 @@ func (s *Service) recorded(ctx context.Context, by Sailor, code string) (Replay,
 			out.Runs = append(out.Runs, ReplayRun{Run: x.Run, Boats: []ReplayBoat{}})
 		}
 		run := &out.Runs[len(out.Runs)-1]
-		b := ReplayBoat{Number: x.Number, Place: x.Place, How: x.How, Elapsed: -1, ToGo: -1, Medal: x.Medal, Awards: x.Awards}
+		b := ReplayBoat{Number: x.Number, Place: x.Place, How: x.How, Elapsed: -1, Added: x.Added, ToGo: -1, Medal: x.Medal, Awards: x.Awards}
 		if x.Elapsed > 0 {
 			b.Elapsed = x.Elapsed
 		}

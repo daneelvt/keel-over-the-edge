@@ -251,11 +251,13 @@ type RaceRecord struct {
 	// Hung: the wooden spoon of the race hung from the sailor's sterns
 	// for the rest of its world, by their choice.
 	Hung bool
-	// Number is the boat's race number and Elapsed its time from the
-	// start, s, 0 for none; Run the run of the race (a trial's from 1),
-	// from Source. Read by RaceRecordsByCode alone.
+	// Number is the boat's race number, Elapsed its time from the start,
+	// s, 0 for none, and Added the seconds added to it; Run the run of the
+	// race (a trial's from 1), from Source. Read by RaceRecordsByCode
+	// alone.
 	Number  int
 	Elapsed float64
+	Added   float64
 	Run     int
 }
 
@@ -355,6 +357,7 @@ func putRecord(ctx context.Context, q *db.Queries, r *RaceRecord) error {
 	if r.Elapsed > 0 {
 		p.Elapsed = pgtype.Float4{Float32: float32(r.Elapsed), Valid: true}
 	}
+	p.Added = float32(max(r.Added, 0))
 	return q.PutRaceRecord(ctx, p)
 }
 
@@ -420,7 +423,7 @@ func (s *Store) RaceRecordsByCode(ctx context.Context, code string) ([]RaceRecor
 			RaceName: r.RaceName, Kind: r.Kind, CourseName: r.CourseName, Boat: r.Boat, BoatName: r.BoatName, Fleet: int(r.Fleet),
 			Harbour: r.Harbour, Newcomers: r.Newcomers, Role: r.Role, Place: int(r.Place), How: r.How, Medal: r.Medal, Awards: r.Awards,
 			Skipper: r.SkipperID.Bytes, SkipperName: r.SkipperName, SkipperMachine: r.SkipperMachine, Number: int(r.Number),
-			Elapsed: max(float64(r.Elapsed), 0), Run: runOfSource(r.Source)}
+			Elapsed: max(float64(r.Elapsed), 0), Added: float64(r.Added), Run: runOfSource(r.Source)}
 	}
 	return out, nil
 }

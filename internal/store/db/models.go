@@ -415,6 +415,7 @@ type RaceRecord struct {
 	Hung           bool
 	Number         pgtype.Int2
 	Elapsed        pgtype.Float4
+	Added          float32
 }
 
 type RaceResult struct {
