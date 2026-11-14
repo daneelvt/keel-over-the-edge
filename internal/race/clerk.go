@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"math"
 	"slices"
 	"time"
 
@@ -335,8 +336,9 @@ func (c *Clerk) end(ctx context.Context, r *run) error {
 func (c *Clerk) endOf(ctx context.Context, row *store.Race, r *run) (*store.RaceEnd, error) {
 	w := c.s.cfg.World
 	at := c.cfg.TimeOf(r.race.Ended)
-	e := &store.RaceEnd{World: w.ID, Race: row.ID, Run: int(r.race.Run), Trial: r.race.Trial, At: at}
-	course := c.courseName(row)
+	e := &store.RaceEnd{World: w.ID, Race: row.ID, Run: int(r.race.Run), Trial: r.race.Trial, At: at, Laid: laidOf(&r.race)}
+	courses := c.s.cfg.Courses()
+	course := c.s.courseName(row, &courses)
 	fleet := 0
 	for _, rc := range r.racers {
 		if rc.State != bus.RacerDNS {
@@ -375,6 +377,7 @@ func (c *Clerk) endOf(ctx context.Context, row *store.Race, r *run) (*store.Race
 		}
 		rec := record(res.Account, store.RoleSkipper)
 		rec.BoatName, rec.Place, rec.How, rec.Medal, rec.Awards = r.names[i], res.Place, res.How, res.Medal, res.Awards
+		rec.Number, rec.Elapsed = int(rc.Number), max(res.Elapsed, 0)
 		e.Records = append(e.Records, rec)
 		skipper := people[res.Account]
 		for _, a := range r.crews[i] {
@@ -404,6 +407,31 @@ func (c *Clerk) endOf(ctx context.Context, row *store.Race, r *run) (*store.Race
 	return e, nil
 }
 
+// laidOf is race r as its committee laid it, for its replay: nil before
+// its course was laid.
+func laidOf(r *bus.Race) *store.RaceLaid {
+	c := r.Course
+	if c == nil {
+		return nil
+	}
+	m := func(v float64) int32 { return int32(min(max(math.Round(v), math.MinInt32), math.MaxInt32)) }
+	l := &store.RaceLaid{Run: int(max(r.Run, 0)), Warning: r.Warning, Start: r.Start, Ended: r.Ended, Course: store.LaidCourse{
+		Line:   [4]int32{m(c.Pin[0]), m(c.Pin[1]), m(c.Committee[0]), m(c.Committee[1])},
+		Finish: [4]int32{m(c.FinishA[0]), m(c.FinishA[1]), m(c.FinishB[0]), m(c.FinishB[1])},
+		Marks:  [][4]int32{}, Way: []int32{}, Legs: [][3]int32{},
+		East:   m(c.X), North: m(c.Y), Reach: max(m(c.Reach), 0), Laps: max(c.Laps, 1), Expected: c.Expected}}
+	for _, mk := range c.Marks {
+		l.Course.Marks = append(l.Course.Marks, [4]int32{m(mk.X), m(mk.Y), int32(max(mk.Number, 0)), int32(mk.Side)})
+	}
+	for _, p := range c.Way {
+		l.Course.Way = append(l.Course.Way, m(p[0]), m(p[1]))
+	}
+	for _, ch := range c.Checks {
+		l.Course.Legs = append(l.Course.Legs, [3]int32{int32(max(ch.Mark, 0)), m(ch.AtX), m(ch.AtY)})
+	}
+	return l
+}
+
 // marksRounded is how many of course c's marks a boat whose next check is
 // next has rounded.
 func marksRounded(c *bus.RaceCourse, next int16) int {
@@ -427,18 +455,6 @@ func howOf(state uint8) string {
 		return store.HowRetired
 	}
 	return store.HowPlaced
-}
-
-// courseName is race row's course's name.
-func (c *Clerk) courseName(row *store.Race) string {
-	if row.CourseKind == CourseIsland {
-		courses := c.s.cfg.Courses()
-		if ic := courses.island(row.Course); ic != nil {
-			return ic.Name
-		}
-		return "an island course"
-	}
-	return BuoyName(row.Shape, row.Long, c.s.port)
 }
 
 // raceStory is the news's story of a race won: by its winner, its crew

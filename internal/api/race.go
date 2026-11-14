@@ -3,10 +3,13 @@
 package api
 
 import (
+	"compress/gzip"
 	"context"
+	"encoding/json"
 	"errors"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/daneelvt/keel-over-the-edge/internal/race"
@@ -29,6 +32,7 @@ type Races interface {
 	Again(ctx context.Context, by race.Sailor, code string) (race.Card, error)
 	Calendar(ctx context.Context, by race.Sailor, code string) ([]byte, string, error)
 	Spoon(ctx context.Context, by race.Sailor, code string, hang bool) error
+	Replay(ctx context.Context, by race.Sailor, code string, runs []int) (race.Replay, error)
 }
 
 var _ Races = (*race.Service)(nil)
@@ -59,6 +63,7 @@ func (a *api) registerRaces(mux *http.ServeMux, required func(http.HandlerFunc) 
 	mux.Handle("POST /api/race/{code}/move", required(a.moveRace))
 	mux.Handle("POST /api/race/{code}/again", required(a.raceAgain))
 	mux.Handle("POST /api/race/{code}/spoon", required(a.raceSpoon))
+	mux.Handle("GET /api/race/{code}/replay", required(a.raceReplay))
 }
 
 // racer is the session's sailor as races see them: a human's, since a
@@ -369,4 +374,72 @@ func (a *api) raceCalendar(w http.ResponseWriter, r *http.Request) {
 	h.Set("X-Content-Type-Options", "nosniff")
 	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write(file)
+}
+
+// raceReplay answers GET /api/race/{code}/replay?runs=, behind
+// auth.Required: the race's replay after it, its courses and tracks while
+// its world sails on, its results alone after; a time trial's runs asked
+// for (runs=3,7) drawn, or else the best of each sailor's. A replay's
+// tracks are most of it: it is gzipped for a browser that takes it, and
+// kept by the reader's browser a while (a trial's briefly, as runs come).
+//
+//	200 race.Replay
+//	409 {"error":"not-finished"} {"error":"cancelled"}
+//	404 {"error":"not-found"}
+//	403 {"error":"ai-account"}
+func (a *api) raceReplay(w http.ResponseWriter, r *http.Request) {
+	by, ok := racer(w, r)
+	if !ok {
+		return
+	}
+	var runs []int
+	for f := range strings.SplitSeq(r.URL.Query().Get("runs"), ",") {
+		if n, err := strconv.Atoi(f); err == nil && n > 0 && len(runs) < race.MostReplayRuns {
+			runs = append(runs, n)
+		}
+	}
+	rp, err := a.cfg.Races.Replay(r.Context(), by, raceCode(r), runs)
+	if errors.Is(err, race.ErrNotFinished) {
+		writeError(w, http.StatusConflict, "not-finished")
+		return
+	}
+	if err != nil {
+		a.refusedRace(w, r, err)
+		return
+	}
+	body, err := json.Marshal(rp)
+	if err != nil {
+		panic(err) // a replay always marshals
+	}
+	h := w.Header()
+	h.Set("Content-Type", "application/json")
+	h.Set("X-Content-Type-Options", "nosniff")
+	h.Set("Vary", "Accept-Encoding")
+	if rp.Kind == race.KindTrial && rp.Kept {
+		h.Set("Cache-Control", "private, max-age=60")
+	} else {
+		h.Set("Cache-Control", "private, max-age=3600")
+	}
+	body = append(body, '\n')
+	if !acceptsGzip(r) || len(body) < 1024 {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write(body)
+		return
+	}
+	h.Set("Content-Encoding", "gzip")
+	w.WriteHeader(http.StatusOK)
+	z, _ := gzip.NewWriterLevel(w, gzip.BestCompression)
+	_, _ = z.Write(body)
+	_ = z.Close()
+}
+
+// acceptsGzip reports whether a request takes a gzipped answer.
+func acceptsGzip(r *http.Request) bool {
+	for f := range strings.SplitSeq(r.Header.Get("Accept-Encoding"), ",") {
+		name, q, _ := strings.Cut(strings.TrimSpace(f), ";")
+		if strings.EqualFold(strings.TrimSpace(name), "gzip") && strings.ReplaceAll(q, " ", "") != "q=0" {
+			return true
+		}
+	}
+	return false
 }

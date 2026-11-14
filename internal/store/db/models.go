@@ -413,6 +413,8 @@ type RaceRecord struct {
 	SkipperName    pgtype.Text
 	SkipperMachine bool
 	Hung           bool
+	Number         pgtype.Int2
+	Elapsed        pgtype.Float4
 }
 
 type RaceResult struct {
@@ -429,6 +431,16 @@ type RaceResult struct {
 	Medal     pgtype.Text
 	Awards    []string
 	Crew      []byte
+}
+
+type RaceRun struct {
+	WorldID pgtype.UUID
+	RaceID  pgtype.UUID
+	Run     int16
+	Warning int64
+	Start   int64
+	Ended   int64
+	Course  []byte
 }
 
 type RaceTrack struct {

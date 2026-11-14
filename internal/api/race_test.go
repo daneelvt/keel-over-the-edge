@@ -4,6 +4,7 @@ package api
 
 import (
 	"context"
+	"io"
 	"net/http"
 	"strconv"
 	"strings"
@@ -19,6 +20,7 @@ type fakeRaces struct {
 	asked []race.Sailor
 	made  []race.Making
 	hung  []bool
+	runs  []int
 }
 
 var raceUntil = time.Date(2026, 11, 17, 16, 10, 0, 0, time.UTC)
@@ -87,6 +89,19 @@ func (f *fakeRaces) Spoon(_ context.Context, by race.Sailor, code string, hang b
 	return nil
 }
 
+func (f *fakeRaces) Replay(_ context.Context, by race.Sailor, code string, runs []int) (race.Replay, error) {
+	if code == "racingnow2" {
+		return race.Replay{}, race.ErrNotFinished
+	}
+	if _, err := f.card(by, code); err != nil {
+		return race.Replay{}, err
+	}
+	f.runs = runs
+	tr := &race.ReplayTrack{First: 100, Every: 60, P: make([]int32, 4000)}
+	return race.Replay{Code: code, Name: "Tuesday Triangle", Kind: race.KindTrial, Kept: true,
+		Runs: []race.ReplayRun{{Run: 1, Boats: []race.ReplayBoat{{Number: 1, Track: tr}}}}}, nil
+}
+
 // TestRacesBehindSession: every race route answers only a signed-in
 // sailor, the card and the calendar file too; refusals carry their reason
 // and when they end; a code no race has is not found; another's race is
@@ -98,7 +113,7 @@ func TestRacesBehindSession(t *testing.T) {
 		{"GET", "/api/races"}, {"GET", "/api/race/abcdefghij"}, {"GET", "/api/race/abcdefghij/calendar.ics"},
 		{"GET", "/api/race/name?course=island:3"}, {"POST", "/api/race"}, {"POST", "/api/race/abcdefghij/enter"},
 		{"POST", "/api/race/abcdefghij/withdraw"}, {"POST", "/api/race/abcdefghij/cancel"},
-		{"POST", "/api/race/abcdefghij/spoon"},
+		{"POST", "/api/race/abcdefghij/spoon"}, {"GET", "/api/race/abcdefghij/replay"},
 	} {
 		req, _ := http.NewRequest(r.method, srv.URL+r.path, nil)
 		req.Header.Set("Origin", srv.URL)
@@ -156,9 +171,34 @@ func TestRacesBehindSession(t *testing.T) {
 	if status, body := ann.do("GET", "/api/race/name?kind=race&course=island:3", ""); status != 200 || strings.TrimSpace(body) != `{"name":"the Noon Gun"}` {
 		t.Errorf("a name: %d %s", status, body)
 	}
-	req, _ := http.NewRequest("GET", srv.URL+"/api/race/abcdefghij/calendar.ics", nil)
+	// The replay: gzipped, kept a while by the reader's browser, a
+	// trial's runs asked for passed on.
+	if status, body := ann.do("GET", "/api/race/abcdefghij/replay?runs=3,x,7,-1", ""); status != 200 || !strings.Contains(body, `"p":[0,0,`) ||
+		len(f.runs) != 2 || f.runs[0] != 3 || f.runs[1] != 7 {
+		t.Errorf("the replay: %d %.80s, runs %v", status, body, f.runs)
+	}
+	if status, body := ann.do("GET", "/api/race/racingnow2/replay", ""); status != 409 || strings.TrimSpace(body) != `{"error":"not-finished"}` {
+		t.Errorf("a replay before the race is over: %d %s", status, body)
+	}
+	if status, _ := ann.do("GET", "/api/race/nosuchrace/replay", ""); status != 404 {
+		t.Errorf("the replay of no such race: %d", status)
+	}
+	req, _ := http.NewRequest("GET", srv.URL+"/api/race/abcdefghij/replay", nil)
 	req.AddCookie(cookie)
+	req.Header.Set("Accept-Encoding", "gzip")
 	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	zipped, _ := io.ReadAll(res.Body)
+	res.Body.Close()
+	if res.StatusCode != 200 || res.Header.Get("Content-Encoding") != "gzip" || res.Header.Get("Cache-Control") != "private, max-age=60" ||
+		len(zipped) > 1000 {
+		t.Errorf("the replay's answer: %d %v, %d bytes", res.StatusCode, res.Header, len(zipped))
+	}
+	req, _ = http.NewRequest("GET", srv.URL+"/api/race/abcdefghij/calendar.ics", nil)
+	req.AddCookie(cookie)
+	res, err = http.DefaultClient.Do(req)
 	if err != nil {
 		t.Fatal(err)
 	}

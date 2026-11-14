@@ -222,6 +222,19 @@ ON CONFLICT (world_id, race_id, account_id, run) DO UPDATE
   SET place = excluded.place, elapsed = excluded.elapsed, added = excluded.added, marks = excluded.marks,
       to_go = excluded.to_go, how = excluded.how, medal = excluded.medal, awards = excluded.awards, crew = excluded.crew;
 
+-- name: PutRaceRun :exec
+-- A race's run as its committee laid it, once.
+INSERT INTO race_run (world_id, race_id, run, warning, start, ended, course)
+VALUES (@world_id, @race_id, @run, @warning, @start, @ended, @course)
+ON CONFLICT DO NOTHING;
+
+-- name: RaceRuns :many
+-- A race's runs as their committee laid them, by run.
+SELECT run, warning, start, ended, course
+FROM race_run
+WHERE world_id = @world_id AND race_id = @race_id
+ORDER BY run;
+
 -- name: PutRaceTrack :exec
 -- A boat's track in a race, once.
 INSERT INTO race_track (world_id, race_id, account_id, run, samples)
@@ -232,10 +245,10 @@ ON CONFLICT DO NOTHING;
 -- A race in a sailor's lasting record, once for its source, while the
 -- account is kept.
 INSERT INTO race_record (account_id, source, world, at, code, race_name, kind, course_name, boat, boat_name, fleet, harbour,
-  newcomers, role, place, how, medal, awards, skipper_id, skipper_name, skipper_machine)
+  newcomers, role, place, how, medal, awards, skipper_id, skipper_name, skipper_machine, number, elapsed)
 SELECT @account_id, @source, @world, @at, @code, @race_name, @kind, @course_name, @boat, sqlc.narg(boat_name), @fleet, @harbour,
   @newcomers, @role, sqlc.narg(place), sqlc.narg(how), sqlc.narg(medal), @awards, sqlc.narg(skipper_id), sqlc.narg(skipper_name),
-  @skipper_machine
+  @skipper_machine, sqlc.narg(number), sqlc.narg(elapsed)
 WHERE EXISTS (SELECT 1 FROM account WHERE id = @account_id)
 ON CONFLICT (account_id, source) DO NOTHING;
 
@@ -259,9 +272,10 @@ WHERE r.world_id = @world_id AND r.id = @id;
 -- run, then place, those unplaced last.
 SELECT r.account_id, r.run, coalesce(r.place, 0)::smallint AS place, coalesce(r.elapsed, -1)::real AS elapsed, r.added, r.marks,
   coalesce(r.to_go, -1)::real AS to_go, r.how, coalesce(r.medal, '')::text AS medal, r.awards, r.crew,
-  coalesce(t.samples, ''::bytea)::bytea AS samples
+  coalesce(t.samples, ''::bytea)::bytea AS samples, coalesce(e.number, 0)::smallint AS number, coalesce(e.machine, false)::boolean AS machine
 FROM race_result r
 LEFT JOIN race_track t USING (world_id, race_id, account_id, run)
+LEFT JOIN race_entry e USING (world_id, race_id, account_id, run)
 WHERE r.world_id = @world_id AND r.race_id = @race_id
 ORDER BY r.run, r.place NULLS LAST, r.account_id;
 
@@ -288,6 +302,20 @@ WHERE account_id = @account_id AND role IN ('skipper', 'crew')
 ORDER BY at DESC, id DESC
 OFFSET @skip
 LIMIT @most;
+
+-- name: RaceRecordsByCode :many
+-- The lasting records of a race's boats and their crews by its link's
+-- code, of the newest world that raced one, by run then place.
+SELECT r.account_id, r.source, r.world, r.at, r.code, r.race_name, r.kind, r.course_name, r.boat,
+  coalesce(r.boat_name, '')::text AS boat_name, r.fleet, r.harbour, r.newcomers, r.role, coalesce(r.place, 0)::smallint AS place,
+  coalesce(r.how, '')::text AS how, coalesce(r.medal, '')::text AS medal, r.awards,
+  coalesce(r.skipper_id, '00000000-0000-0000-0000-000000000000')::uuid AS skipper_id,
+  coalesce(r.skipper_name, '')::text AS skipper_name, r.skipper_machine, coalesce(r.number, 0)::smallint AS number,
+  coalesce(r.elapsed, -1)::real AS elapsed
+FROM race_record r
+WHERE r.code = @code AND r.role IN ('skipper', 'crew') AND r.source LIKE 'race:%'
+  AND r.world = (SELECT max(n.world) FROM race_record n WHERE n.code = @code AND n.role IN ('skipper', 'crew'))
+ORDER BY r.source, r.place NULLS LAST, r.number, r.account_id;
 
 -- name: HangSpoon :execrows
 -- Hangs the wooden spoon a sailor was given in a world's race from their

@@ -47,6 +47,10 @@ type Store interface {
 	EndRace(ctx context.Context, lease int64, rules store.NewsRules, e *store.RaceEnd) error
 	// The wooden spoon hung by a sailor's choice.
 	HangSpoon(ctx context.Context, id store.AccountID, world int, code string, hung bool) error
+	// What a race's replay reads.
+	RaceResults(ctx context.Context, world, race [16]byte) ([]store.RaceRun, error)
+	RaceRuns(ctx context.Context, world, race [16]byte) ([]store.RaceLaid, error)
+	RaceRecordsByCode(ctx context.Context, code string) ([]store.RaceRecord, error)
 }
 
 var _ Store = (*store.Store)(nil)

@@ -281,6 +281,9 @@ func raceOfThree(t *testing.T, restart int) {
 	if c, err := s.db.RaceCountsOf(s.ctx, sailors[2].ID); err != nil || c.Sailed != 1 || c.Top3 != 1 || c.Spoons != 1 || c.Ran != 0 {
 		t.Errorf("the last boat's counts: %+v, %v", c, err)
 	}
+	if restart == 0 {
+		checkReplay(t, s, card.Code, sailors)
+	}
 	if c, err := s.db.RaceCountsOf(s.ctx, owner.ID); err != nil || c.Sailed != 0 || c.Ran != 1 {
 		t.Errorf("the owner's counts: %+v, %v", c, err)
 	}
@@ -390,6 +393,12 @@ func TestATrialsRun(t *testing.T) {
 	if res[0].Run != 1 || res[0].Medal != "harbourmaster" || res[0].Place != 1 {
 		t.Errorf("run %d, medal %q, place %d", res[0].Run, res[0].Medal, res[0].Place)
 	}
+	// Its replay: the run, its course and track, the trial open still.
+	if rp, err := s.svc.Replay(s.ctx, s.human(), card.Code, nil); err != nil || rp.Kind != KindTrial || len(rp.Runs) != 1 ||
+		rp.Runs[0].Run != 1 || rp.Runs[0].Course == nil || rp.Runs[0].Prizes || len(rp.Runs[0].Boats) != 1 ||
+		rp.Runs[0].Boats[0].Track == nil || rp.Runs[0].Boats[0].Medal != "harbourmaster" {
+		t.Errorf("the trial's replay: %+v, %v", rp, err)
+	}
 	runs, err := s.db.PendingRuns(s.ctx, s.world.ID)
 	if err != nil || len(runs) != 0 {
 		t.Fatalf("runs asked for after the run: %+v %v", runs, err)
@@ -399,6 +408,61 @@ func TestATrialsRun(t *testing.T) {
 	}
 	if runs, err = s.db.PendingRuns(s.ctx, s.world.ID); err != nil || len(runs) != 1 || runs[0].Run != 2 {
 		t.Errorf("runs asked for: %+v %v", runs, err)
+	}
+}
+
+// checkReplay checks the replay of a race of three sailed by sailors, the
+// first home first: its course and every boat's track while its world
+// sails on; its results alone from the lasting records after.
+func checkReplay(t *testing.T, s *sea, code string, sailors []Sailor) {
+	t.Helper()
+	rp, err := s.svc.Replay(s.ctx, sailors[0], code, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !rp.Kept || rp.Kind != KindRace || len(rp.Runs) != 1 || rp.At == 0 || rp.Second != committee.Second {
+		t.Fatalf("the replay: %+v", rp)
+	}
+	run := rp.Runs[0]
+	if run.Course == nil || len(run.Course.Marks) == 0 || len(run.Course.Legs) < 3 || !(run.Warning < run.Start && run.Start < run.Ended) ||
+		!run.Prizes || len(run.Boats) != 3 {
+		t.Fatalf("the run: %+v", run)
+	}
+	for i, b := range run.Boats {
+		if b.Place != i+1 || b.How != store.HowFinished || b.Number < 1 || b.Me != (i == 0) || b.Track == nil || len(b.Track.P) < 200 ||
+			b.Track.Every != committee.TrackEvery || b.Elapsed < 60 {
+			t.Errorf("boat %d: %+v", i, b)
+			continue
+		}
+		// Every sample within the course's reach of its middle.
+		x, y := int32(0), int32(0)
+		for k := 0; k+1 < len(b.Track.P); k += 2 {
+			x, y = x+b.Track.P[k], y+b.Track.P[k+1]
+			if math.Hypot(float64(x-run.Course.East), float64(y-run.Course.North)) > float64(run.Course.Reach)+300 {
+				t.Errorf("boat %d's sample %d at (%d, %d), off the course", i, k/2, x, y)
+				break
+			}
+		}
+	}
+	if _, err := s.svc.Replay(s.ctx, sailors[0], "nosuchrace", nil); !errors.Is(err, ErrNotFound) {
+		t.Errorf("no such race: %v", err)
+	}
+	// The world gone: the results alone, from the records.
+	cfg := s.svc.cfg
+	cfg.World.Number++
+	later, err := New(cfg).Replay(s.ctx, sailors[1], code, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if later.Kept || len(later.Runs) != 1 || later.Name != rp.Name || later.World != rp.World || len(later.Runs[0].Boats) != 3 ||
+		!later.Runs[0].Prizes || later.Runs[0].Course != nil {
+		t.Fatalf("after the world: %+v", later)
+	}
+	for i, b := range later.Runs[0].Boats {
+		was := run.Boats[i]
+		if b.Place != was.Place || b.Number != was.Number || math.Abs(b.Elapsed-was.Elapsed) > 0.01 || b.Track != nil || b.Me != (i == 1) {
+			t.Errorf("boat %d after the world: %+v, was %+v", i, b, was)
+		}
 	}
 }
 

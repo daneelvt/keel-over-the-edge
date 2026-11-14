@@ -7,6 +7,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -153,7 +155,8 @@ func (s *Store) StartRace(ctx context.Context, lease int64, r *RaceStart) error 
 }
 
 // RaceEnd is a race, or a trial's run, ended: what its boats came to, the
-// lasting records, and the news's stories.
+// lasting records, the news's stories, and the run as laid for its
+// replay (nil for none).
 type RaceEnd struct {
 	World   [16]byte
 	Race    [16]byte
@@ -163,6 +166,35 @@ type RaceEnd struct {
 	Results []RaceResult
 	Records []RaceRecord
 	Stories []Story
+	Laid    *RaceLaid
+}
+
+// RaceLaid is a race's run as its committee laid it, for its replay: its
+// warning signal, its gun and its end, world ticks, and its course.
+type RaceLaid struct {
+	Run                   int
+	Warning, Start, Ended int64
+	Course                LaidCourse
+}
+
+// LaidCourse is a course as the chart draws it, whole metres east and
+// north of the world's centre: the start line's ends (the pin's, then the
+// committee boat's) and the finish line's; each mark laid (east, north,
+// its number, the side it is left to: 1 starboard, −1 port, 0 a gate's);
+// the way sailed, in pairs; each leg a boat makes for (the mark's number,
+// 0 a line, and the point); where the course lies and how far it reaches;
+// its laps; and how long its boat was expected to take, s.
+type LaidCourse struct {
+	Line     [4]int32   `json:"line"`
+	Finish   [4]int32   `json:"finish"`
+	Marks    [][4]int32 `json:"marks"`
+	Way      []int32    `json:"way"`
+	Legs     [][3]int32 `json:"legs"`
+	East     int32      `json:"east"`
+	North    int32      `json:"north"`
+	Reach    int32      `json:"reach"`
+	Laps     int32      `json:"laps"`
+	Expected float64    `json:"expected"`
 }
 
 // RaceResult is what a boat came to: its place (0 none), its time from
@@ -219,6 +251,12 @@ type RaceRecord struct {
 	// Hung: the wooden spoon of the race hung from the sailor's sterns
 	// for the rest of its world, by their choice.
 	Hung bool
+	// Number is the boat's race number and Elapsed its time from the
+	// start, s, 0 for none; Run the run of the race (a trial's from 1),
+	// from Source. Read by RaceRecordsByCode alone.
+	Number  int
+	Elapsed float64
+	Run     int
 }
 
 // EndRace writes a race, or a trial's run, ended, fenced: each boat's
@@ -272,6 +310,16 @@ func (s *Store) EndRace(ctx context.Context, lease int64, rules NewsRules, e *Ra
 				return fmt.Errorf("a race's record: %w", err)
 			}
 		}
+		if l := e.Laid; l != nil {
+			course, err := json.Marshal(l.Course)
+			if err != nil {
+				return err
+			}
+			if err := q.PutRaceRun(ctx, db.PutRaceRunParams{WorldID: world, RaceID: race, Run: int16(e.Run), Warning: l.Warning,
+				Start: l.Start, Ended: l.Ended, Course: course}); err != nil {
+				return fmt.Errorf("a race's run: %w", err)
+			}
+		}
 		nw := &newsWrite{world: world, rules: &rules}
 		for i := range e.Stories {
 			if _, err := insertStory(ctx, q, nw, &e.Stories[i]); err != nil {
@@ -301,13 +349,22 @@ func putRecord(ctx context.Context, q *db.Queries, r *RaceRecord) error {
 	if r.Skipper != (AccountID{}) {
 		p.SkipperID = uuidOf(r.Skipper)
 	}
+	if r.Number > 0 {
+		p.Number = pgtype.Int2{Int16: int16(r.Number), Valid: true}
+	}
+	if r.Elapsed > 0 {
+		p.Elapsed = pgtype.Float4{Float32: float32(r.Elapsed), Valid: true}
+	}
 	return q.PutRaceRecord(ctx, p)
 }
 
 // RaceRun is what a boat came to in a race, or in a trial's run, as kept:
-// its run, and its result with its track.
+// its run, its race number and whether a machine sailor's (0 and false for
+// an entry not kept), and its result with its track.
 type RaceRun struct {
-	Run int
+	Run     int
+	Number  int
+	Machine bool
 	RaceResult
 }
 
@@ -321,7 +378,7 @@ func (s *Store) RaceResults(ctx context.Context, world, race [16]byte) ([]RaceRu
 	}
 	out := make([]RaceRun, len(rows))
 	for i, r := range rows {
-		x := RaceRun{Run: int(r.Run), RaceResult: RaceResult{Account: r.AccountID.Bytes, Place: int(r.Place), Elapsed: float64(r.Elapsed),
+		x := RaceRun{Run: int(r.Run), Number: int(r.Number), Machine: r.Machine, RaceResult: RaceResult{Account: r.AccountID.Bytes, Place: int(r.Place), Elapsed: float64(r.Elapsed),
 			Added: float64(r.Added), Marks: int(r.Marks), ToGo: float64(r.ToGo), How: r.How, Medal: r.Medal, Awards: r.Awards,
 			Track: r.Samples}}
 		if err := json.Unmarshal(r.Crew, &x.Crew); err != nil {
@@ -330,6 +387,55 @@ func (s *Store) RaceResults(ctx context.Context, world, race [16]byte) ([]RaceRu
 		out[i] = x
 	}
 	return out, nil
+}
+
+// RaceRuns are a race's runs as their committee laid them, by run.
+func (s *Store) RaceRuns(ctx context.Context, world, race [16]byte) ([]RaceLaid, error) {
+	rows, err := s.q.RaceRuns(ctx, db.RaceRunsParams{WorldID: pgtype.UUID{Bytes: world, Valid: true},
+		RaceID: pgtype.UUID{Bytes: race, Valid: true}})
+	if err != nil {
+		return nil, err
+	}
+	out := make([]RaceLaid, len(rows))
+	for i, r := range rows {
+		out[i] = RaceLaid{Run: int(r.Run), Warning: r.Warning, Start: r.Start, Ended: r.Ended}
+		if err := json.Unmarshal(r.Course, &out[i].Course); err != nil {
+			return nil, fmt.Errorf("a race's run's course: %w", err)
+		}
+	}
+	return out, nil
+}
+
+// RaceRecordsByCode are the lasting records of the boats of a race and
+// their crews, by its link's code, of the newest world that raced one: by
+// run, then place. None for no such race.
+func (s *Store) RaceRecordsByCode(ctx context.Context, code string) ([]RaceRecord, error) {
+	rows, err := s.q.RaceRecordsByCode(ctx, code)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]RaceRecord, len(rows))
+	for i, r := range rows {
+		out[i] = RaceRecord{Account: r.AccountID.Bytes, Source: r.Source, World: int(r.World), At: r.At.UTC(), Code: r.Code,
+			RaceName: r.RaceName, Kind: r.Kind, CourseName: r.CourseName, Boat: r.Boat, BoatName: r.BoatName, Fleet: int(r.Fleet),
+			Harbour: r.Harbour, Newcomers: r.Newcomers, Role: r.Role, Place: int(r.Place), How: r.How, Medal: r.Medal, Awards: r.Awards,
+			Skipper: r.SkipperID.Bytes, SkipperName: r.SkipperName, SkipperMachine: r.SkipperMachine, Number: int(r.Number),
+			Elapsed: max(float64(r.Elapsed), 0), Run: runOfSource(r.Source)}
+	}
+	return out, nil
+}
+
+// runOfSource is the run of a race record's source, "race:<code>:<run>".
+func runOfSource(source string) int {
+	i := strings.LastIndexByte(source, ':')
+	if i < 0 {
+		return 0
+	}
+	n, err := strconv.Atoi(source[i+1:])
+	if err != nil || n < 0 {
+		return 0
+	}
+	return n
 }
 
 // RaceRecordsOf are a sailor's lasting race records, the newest first, at
