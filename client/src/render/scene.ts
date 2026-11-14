@@ -642,6 +642,7 @@ export class SeaScene {
   }
 
   #drawHelm(): Promise<void> {
+    this.#wearHelm();
     if (this.#crewShown === null && this.#lookShown === null && this.#ownLook === null) {
       return Promise.resolve();
     }
@@ -737,7 +738,22 @@ export class SeaScene {
     this.#prizes = { code: code >>> 0, number };
     for (const b of this.#boats.values()) {
       b.setRaceNumber(number);
-      b.wearCockade(cockadeOf(code));
+    }
+    this.#wearHelm();
+  }
+
+  /**
+   * The winner's cockade on the sailor drawn at the helm, if they wear it:
+   * the skipper's by the boat's prizes; whoever of the crew holds the
+   * controls (or the wheel), by their own.
+   */
+  #wearHelm(): void {
+    const crew = this.#crewShown;
+    const seat = crew === null ? 0 : (this.crew.wheelSeat ?? crew.holder);
+    const at = crew?.people.find((p) => p.seat === seat);
+    const on = at?.cockade ?? (seat === 0 && cockadeOf(this.#prizes.code));
+    for (const b of this.#boats.values()) {
+      b.wearCockade(on);
     }
   }
 
@@ -771,8 +787,8 @@ export class SeaScene {
     await boat.load(k.name.slice(0, 1));
     boat.setBoatLook(this.#boatLook.look, this.#boatLook.name);
     boat.setRaceNumber(this.#prizes.number);
-    boat.wearCockade(cockadeOf(this.#prizes.code));
     this.#boats.set(kind, boat);
+    this.#wearHelm();
     return boat;
   }
 

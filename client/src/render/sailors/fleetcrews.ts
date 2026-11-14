@@ -718,15 +718,17 @@ export class FleetCrews {
     const figure = (k: string): Float32Array => this.#figures.get(k) as Float32Array;
     near.pool.add(nearKeys, figure);
     far.pool.add(farKeys, figure);
-    for (const [level, rows, keys] of [
-      [near, this.#nearRows, nearKeys],
-      [far, this.#farRows, farKeys],
+    for (const [level, rows, keys, boats] of [
+      [near, this.#nearRows, nearKeys, this.#rowBoats],
+      [far, this.#farRows, farKeys, this.#farBoats],
     ] as const) {
       level.room(rows.length);
       rows.forEach((p, r) => {
         const placed = level.pool.placed.get(keys[r] as string);
         if (placed !== undefined) {
-          level.head(r, placed, p.colours, p.look.layer, p.look.machine);
+          const worn =
+            boats[r]?.told?.people.find((q) => q.seat === p.member.seat)?.cockade === true;
+          level.head(r, placed, p.colours, p.look.layer, p.look.machine, worn);
         }
       });
       level.commit(rows.length, keys);
