@@ -34,6 +34,7 @@ jobs:
               - 'go.sum'
               - 'cmd/**'
               - 'internal/**'
+              - 'legal/**'
               - 'tools/**'
               - 'client/**'
               - 'art/**'
