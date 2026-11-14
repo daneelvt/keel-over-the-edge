@@ -40,6 +40,7 @@ type Store interface {
 	LogFigures(ctx context.Context, ids []store.AccountID) (map[store.AccountID]store.LogFigures, error)
 	RaceRibbonsOf(ctx context.Context, id store.AccountID, skip, most int) ([]store.RaceRecord, error)
 	RaceCountsOf(ctx context.Context, id store.AccountID) (store.RaceCounts, error)
+	PrizesOf(ctx context.Context, world int, ids []store.AccountID, wins int) (map[store.AccountID]store.RacePrizes, error)
 }
 
 var _ Store = (*store.Store)(nil)
@@ -158,6 +159,9 @@ type Log struct {
 	// Ribbons are the races sailed, over every world: their counts; the
 	// races themselves are read by the page (Service.Ribbons).
 	Ribbons *Ribbons `json:"ribbons"`
+	// Cockade: the sailor wears the winner's cockade, for a race won in
+	// the world sailed now (of three boats or more), while it lasts.
+	Cockade bool `json:"cockade,omitempty"`
 }
 
 // A Figure of the abstract: Kind is distance (m), voyages, charted,
@@ -541,6 +545,13 @@ func (s *Service) read(ctx context.Context, r Reader, l *store.LogSailor, world 
 		return Log{}, err
 	}
 	out.Ribbons = &rb
+	if out.Now > 0 && rb.Counts.Wins > 0 {
+		won, err := s.cfg.Store.PrizesOf(ctx, out.Now, []store.AccountID{l.ID}, 1)
+		if err != nil {
+			return Log{}, err
+		}
+		out.Cockade = len(won[l.ID].Wins) > 0
+	}
 	return out, nil
 }
 

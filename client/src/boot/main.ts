@@ -339,6 +339,11 @@ async function start(): Promise<void> {
     // developer's own.
     const boatLook = boatLookFromQuery(query, catalog);
     world.setBoatLook(boatLook.look, boatLook.name);
+    // ?prizes=code&racenumber=n: the boat flying prizes of the developer's own.
+    world.setPrizes(
+      Number(query.get('prizes') ?? 0) || 0,
+      Number(query.get('racenumber') ?? 0) || 0,
+    );
     // ?boat=id: any of the catalog's boats; every kind is prepared, so the
     // developer panel can change it.
     const kind = boatFromQuery(
@@ -1253,6 +1258,11 @@ async function start(): Promise<void> {
     if (b !== null) {
       world.setBoatLook(b.look, b.name);
     }
+  });
+  // And flying its skipper's prizes, with its race number while it races.
+  effect(() => {
+    const p = online.prizes.value;
+    world.setPrizes(p.prizes, p.number);
   });
   // The screen comes back by itself when the player is needed.
   const neededNow = (): Needed => ({

@@ -45,6 +45,7 @@ import { fallToEdge, glowMaterial, litMaterial } from '../materials';
 import { bridgeOf, namesBridgeClips } from './bridgedeck';
 import { aboard, CREW_BESIDE, namesCatClips, standOf } from './cat';
 import { Clip } from './clips';
+import type { CockadePlace } from './cockade';
 import { type SailorColours, sailorColours, sailorLight } from './material';
 import {
   gltfLoader,
@@ -53,6 +54,7 @@ import {
   placesOf,
   type SailorClips,
   type SailorModel,
+  wearCockade,
 } from './model';
 import { seating } from './restage';
 import { bonesFor, Rig } from './rig';
@@ -89,6 +91,8 @@ export interface SailorUrls {
   /** The clips aboard a cruising catamaran's URL, fetched for a kind whose art names them. */
   bridgedeck?: () => Promise<string>;
   colours: { main: string; skin: string; hair: string };
+  /** Where the look wears the winner's cockade; none drawn without. */
+  cockade?: CockadePlace;
 }
 
 const v = new Vector3();
@@ -233,7 +237,7 @@ export class BoatSailor {
     const c = urls.colours;
     const colours = sailorColours(c.main, c.skin, c.hair);
     const [deck, clipFile] = await Promise.all([
-      loadSailor(urls.model, renderer, colours, machine),
+      loadSailor(urls.model, renderer, colours, machine, urls.cockade ?? null),
       loadClips(urls.clips, renderer),
     ]);
     const rig = Rig.from(deck.root, boneNames(deck.root));
@@ -344,6 +348,22 @@ export class BoatSailor {
   }
 
   /** Takes new colours, #RRGGBB: its main colour, skin or metal, and hair or lamps' light. */
+  /** Whether the sailor wears the winner's cockade. */
+  #cockade = false;
+
+  /** Puts the winner's cockade on, or takes it off: on every level. */
+  wearCockade(on: boolean): void {
+    this.#cockade = on;
+    wearCockade(this.#deck, on);
+    if (this.#close !== null) {
+      wearCockade(this.#close, on);
+    }
+  }
+
+  get cockade(): boolean {
+    return this.#cockade;
+  }
+
   colour(c: { main: string; skin: string; hair: string }): void {
     const shared = (this.#deck.meshes[0]?.userData ?? {}) as Partial<SailorColours>;
     shared.main?.set(c.main);
@@ -423,7 +443,14 @@ export class BoatSailor {
   async #loadClose(): Promise<void> {
     const deckMesh = this.#deck.meshes[0];
     const shared = (deckMesh?.userData ?? {}) as { main: Color; skin: Color; hair: Color };
-    const close = await loadSailor(await this.#urls.close(), this.#renderer, shared, this.#machine);
+    const close = await loadSailor(
+      await this.#urls.close(),
+      this.#renderer,
+      shared,
+      this.#machine,
+      this.#urls.cockade ?? null,
+    );
+    wearCockade(close, this.#cockade);
     close.root.matrixAutoUpdate = false;
     for (const mesh of close.meshes) {
       mesh.castShadow = deckMesh?.castShadow ?? false;

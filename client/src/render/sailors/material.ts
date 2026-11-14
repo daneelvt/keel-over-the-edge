@@ -62,6 +62,7 @@ import {
 } from 'three/tsl';
 import type { MeshStandardNodeMaterial, Node } from 'three/webgpu';
 import { litMaterial } from '../materials';
+import { rosette } from './cockade';
 
 /**
  * The light a sailor is lit by besides the scene's lights, in linear values
@@ -159,6 +160,16 @@ export interface SailorMaterialOptions {
     /** Told of the nodes that sample the atlas and the mask, to give them a new texture when it grows. */
     users: { atlas: { value: Texture }[]; mask: { value: Texture }[] };
   };
+  /**
+   * The winner's cockade (cockade.ts): each fragment's place on its disc
+   * (a varying of cockadeCoords), whether it is worn (1) or not (0), and
+   * its colours.
+   */
+  cockade?: {
+    coords: Node<'vec3'>;
+    wears: Node<'float'>;
+    colours: { ribbon: Color; button: Color };
+  };
 }
 
 /**
@@ -197,8 +208,14 @@ export function sailorMaterial(
     .add(regions.r.mul(main.mul(2).sub(1)))
     .add(regions.g.mul(skin.mul(2).sub(1)))
     .add(regions.b.mul(hair.mul(2).sub(1)).mul(person));
-  const albedo = base.rgb.mul(tint);
-  const metal = regions.a;
+  let albedo = base.rgb.mul(tint);
+  let metal = regions.a;
+  if (options.cockade !== undefined) {
+    const c = options.cockade;
+    const r = rosette(c.coords, c.wears, c.colours);
+    albedo = mix(albedo, r.colour, r.on);
+    metal = metal.mul(float(1).sub(r.on));
+  }
   // A machine's "skin" is metal, and takes nothing of skin's light.
   const isSkin = regions.g.mul(person);
   m.colorNode = vec4(albedo, 1);

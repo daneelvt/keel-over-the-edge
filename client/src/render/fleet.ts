@@ -72,6 +72,7 @@ import {
 } from 'three';
 import {
   attribute,
+  bool,
   float,
   instancedDynamicBufferAttribute,
   instanceIndex,
@@ -87,7 +88,7 @@ import {
   vec4,
 } from 'three/tsl';
 import type { Node, WebGPURenderer } from 'three/webgpu';
-import type { Boat as BoatKind } from '../catalog';
+import { type Boat as BoatKind, catalog } from '../catalog';
 import type { BoatLooks } from '../catalog/boatlooks';
 import {
   artOf,
@@ -140,9 +141,11 @@ import {
 } from './fleetparts';
 import { chordAt, chordAtHalf, markPlace } from './machinemark';
 import { lineMaterial, litMaterial, sailGlow } from './materials';
+import { apparentWind, cockadeOf, type PrizeRig, type PrizesAfloat, prizeRig } from './prizes';
 import { placeSailor, SAILING, type SailorFrame, type SailorPlace } from './sailor';
 import { bridgeOf, namesBridgeClips } from './sailors/bridgedeck';
 import { namesCatClips } from './sailors/cat';
+import { cockadeColours } from './sailors/cockade';
 import { type ArtFiles, type FleetLook, FleetLooks } from './sailors/fleetlooks';
 import {
   type NearBoat,
@@ -164,6 +167,9 @@ import { kiteRig, kiteRipple, kiteShown } from './sailshape';
 import { Shadows } from './shadows';
 import { packYards, squareVertex } from './squarerig';
 import { FLOW_LUFFING } from './telltales';
+
+/** The winner's cockade's colours, linear. */
+const COCKADE_COLOURS = cockadeColours(catalog.world.committee.prizes.cockade);
 
 /** The most boats drawn at once: a full view and as many fading out. */
 export const FLEET_CAPACITY = 128;
@@ -551,6 +557,10 @@ class Shared {
   /** The wind the sailors' cloth streams in: from (radians) and speed (m/s). */
   windFrom = 0;
   windSpeed = 0;
+  /** The boats' prizes, drawn with them; null for none drawn. The camera (scene) and world time, s, of the frame. */
+  prizes: PrizesAfloat | null = null;
+  readonly camera = new Vector3();
+  seconds = 0;
   /**
    * Aboard a beach cat in a view slot, where her crew hanging on her
    * trapeze's wire has it hooked (her model's frame), into out, and the
@@ -615,6 +625,8 @@ export class FleetView {
   readonly #kite: ReturnType<typeof kiteRig>;
   /** Its kind's trapeze, null for a kind without one; and its wires, drawn. */
   #trapeze: Trapeze | null = null;
+  /** Where its prizes fly on its model, once loaded. */
+  #prizeRig: PrizeRig | null = null;
   /** Whether the kind's people are drawn with a beach cat's clips: their looks' are loaded, near. */
   readonly #catted: boolean;
   /** Whether the kind's people are drawn with a cruising yacht's clips: their looks' are loaded, near. */
@@ -761,6 +773,7 @@ export class FleetView {
       kiteCloth,
     );
     this.#squareRig = nearParts.square !== null;
+    this.#prizeRig = prizeRig(nearParts.nodes, nearParts.hullData);
     this.parts = nearParts;
     this.loaded = true;
   }
@@ -831,10 +844,16 @@ export class FleetView {
       this.nearSailors = near;
       const seat = { y: g.y, in: nearParts.seatIn, out: g.x };
       const n = nearSailorNodes(near.texture, int(instanceIndex), this.#cog, seat, time);
+      const tag = attribute('tag', 'vec2') as unknown as Node<'vec2'>;
       const m = sailorMaterial(looks.atlas.texture as Texture, looks.mask.texture as Texture, {
         vertex: n.vertex,
         glow: lampPulse(time),
         instance: { ...n, users: { atlas: looks.atlas.users, mask: looks.mask.users } },
+        cockade: {
+          coords: looks.cockadeCoords(positionGeometry, tag.x, n.cockade ?? bool(false)),
+          wears: float(1),
+          colours: COCKADE_COLOURS,
+        },
       });
       this.skinned = this.near.add(looks.near, m, 'skinned', n.opacity);
     }
@@ -884,8 +903,49 @@ export class FleetView {
         level.machines++;
       }
       this.#wires(level, n, b);
+      this.#prizes(level, n, b, origin);
     }
   }
+
+  /** A boat's prizes, if it flies any within their reach of the camera: placed as the boat is. */
+  #prizes(level: Level, n: number, b: DrawnBoat, origin: FloatingOrigin): void {
+    const shared = this.#shared;
+    const prizes = shared.prizes;
+    const rig = this.#prizeRig;
+    if (prizes === null || rig === null || b.prizes === 0 || b.opacity < 0.5) {
+      return;
+    }
+    const o = n * 4;
+    const ol = n * LEAN_STRIDE;
+    const pose = level.pose.array as Float32Array;
+    const lean = level.lean.array as Float32Array;
+    const x = pose[o] as number;
+    const z = pose[o + 1] as number;
+    const c = shared.camera;
+    if ((x - c.x) ** 2 + (z - c.z) ** 2 > prizes.reach * prizes.reach) {
+      return;
+    }
+    const cog = this.#cog;
+    const heading = pose[o + 2] as number;
+    const heel = pose[o + 3] as number;
+    const heave = lean[ol + 1] as number;
+    const pitch = lean[ol + 2] as number;
+    const place = this.#placeAt;
+    place.set(x, z, heading, heel, heave, pitch, cog);
+    apparentWind(shared.windFrom, shared.windSpeed, b.heading, b.speed, prizeWind);
+    prizes.add(
+      b.prizes,
+      rig,
+      place.fn,
+      prizeWind,
+      (b.slot + 1) * 7.3,
+      shared.seconds,
+      origin.world,
+    );
+  }
+
+  /** Places a point of the model as the boat being written is placed. */
+  readonly #placeAt = new BoatPlace();
 
   /**
    * A boat's trapeze wires: from the hounds to its sailor's hook on the
@@ -1061,9 +1121,13 @@ export class FleetView {
     lean[ol + 2] = b.pitch;
     // A machine's mark, and the main's reef level above it.
     lean[ol + 3] = (b.machine === 1 ? 1 : 0) + 2 * Math.min(Math.max(Math.round(b.reef), 0), 2);
-    // Its own look: paint, cloth, sail number, and its name's row (near only).
+    // Its own look: paint, cloth, sail number (its race number while it
+    // races), and its name's row (near only).
     const shared = this.#shared;
     writeLook(shared.boatLooks, b.boatLook, lean, ol + 4);
+    if (b.raceNumber > 0) {
+      lean[ol + 6] = b.raceNumber;
+    }
     lean[ol + 7] =
       near && b.name !== '' && shared.names !== null
         ? shared.names.rowOf(b.name, shared.frame)
@@ -1176,7 +1240,8 @@ export class FleetView {
       d[r + 25] = this.#sway.z;
       d[r + 26] = this.nearSailors.seated(b.slot);
     }
-    d[r + 27] = skinned ? 1 : 0;
+    // Skinned, with the winner's cockade on its skipper if it flies a pennant.
+    d[r + 27] = skinned ? (cockadeOf(b.prizes) ? 2 : 1) : 0;
   }
 
   /** The fleet's sailors' meshes in this view: the rigid figures of each level and the skinned ones. */
@@ -1247,6 +1312,11 @@ export class FleetViews {
 
   set windSpeed(v: number) {
     this.#shared.windSpeed = v;
+  }
+
+  /** The boats' prizes are drawn into this, begun and ended by its owner each frame; null draws none. */
+  set prizes(p: PrizesAfloat | null) {
+    this.#shared.prizes = p;
   }
 
   /** The fleet's looks, once its sailors are loaded. */
@@ -1373,6 +1443,8 @@ export class FleetViews {
     const start = performance.now();
     this.#shared.time.value = time % (2 * Math.PI);
     this.#shared.frame++;
+    this.#shared.camera.copy(camera);
+    this.#shared.seconds = time;
     this.#pools();
     // The nearest few within range get the full model, whatever their kind.
     let nearN = 0;
@@ -1553,6 +1625,48 @@ export class FleetViews {
 
 const wireA = new Vector3();
 const wireB = new Vector3();
+const prizeWind = { from: 0, speed: 0 };
+
+/** A boat's pose, placing points of its model as placeOnCpu does: set for each boat, its fn made once. */
+class BoatPlace {
+  #x = 0;
+  #z = 0;
+  #heading = 0;
+  #heel = 0;
+  #heave = 0;
+  #pitch = 0;
+  #cog = 0;
+  readonly fn = (p: Vector3, out: Vector3): Vector3 =>
+    placeOnCpu(
+      p,
+      this.#cog,
+      this.#x,
+      this.#z,
+      this.#heading,
+      this.#heel,
+      this.#heave,
+      this.#pitch,
+      out,
+    );
+
+  set(
+    x: number,
+    z: number,
+    heading: number,
+    heel: number,
+    heave: number,
+    pitch: number,
+    cog: number,
+  ): void {
+    this.#x = x;
+    this.#z = z;
+    this.#heading = heading;
+    this.#heel = heel;
+    this.#heave = heave;
+    this.#pitch = pitch;
+    this.#cog = cog;
+  }
+}
 
 /**
  * A point of a boat's model placed as the parts' placePoint places it:

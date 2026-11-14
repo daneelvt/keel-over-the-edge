@@ -115,6 +115,22 @@
   border-radius: 4px;
 }
 
+/* The winner's cockade pinned to the portrait, where the look wears it. */
+.log-ink-frame {
+  position: relative;
+  flex: none;
+  display: block;
+}
+
+.log-cockade {
+  position: absolute;
+  width: 16%;
+  height: auto;
+  aspect-ratio: 1;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+
 .log-name {
   flex: 1 1 auto;
   min-width: 0;

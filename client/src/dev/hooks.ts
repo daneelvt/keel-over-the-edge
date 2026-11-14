@@ -118,6 +118,7 @@ import {
   domeDrop,
   seaMaterial,
 } from '../render/materials';
+import { prizeCode } from '../render/prizes';
 import { rungName, TIERS } from '../render/quality';
 import { type CrewMove, moveAt } from '../render/sailors/crewrules';
 import { CREW_MOST } from '../render/sailors/fleetcrews';
@@ -2311,6 +2312,39 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
           .map((x) => ({ key: x.key, place: x.place, state: x.state, toGo: x.toGo })),
         drawing: m.drawing()?.boats ?? [],
         chart: { ...view.race.drawn, shown: view.race.group.visible },
+      };
+    },
+    /**
+     * The own boat flies prizes, as if the server told them: a prize code
+     * (keel.prizeCode) and its race number while it races (0 none).
+     */
+    setPrizes(code: number, number = 0): void {
+      world.setPrizes(code, number);
+    },
+    /** A prize code: the pennants' colours (newest first), the burgee (0 none, 1 racing, 2 gilded), the spoons, the committee's flag. */
+    prizeCode(p: {
+      pennants?: number[];
+      burgee?: number;
+      spoons?: number;
+      committee?: boolean;
+    }): number {
+      return prizeCode(p);
+    },
+    /**
+     * The prizes drawn this frame: how many boats, flags, pennants,
+     * burgees, committee's flags and spoons; each flag's head (m east,
+     * north and up) and design (the catalog's flag index); the own boat's
+     * code, race number and whether its sailor wears the cockade.
+     */
+    prizesDrawn() {
+      const p = world.prizes;
+      return {
+        ...p.stats,
+        heads: p.shown
+          .slice(0, p.stats.flags)
+          .map((f) => ({ east: f.east, north: f.north, up: f.top, flag: f.flag })),
+        own: { ...world.ownPrizes, cockade: world.boat?.sailor?.cockade ?? false },
+        number: world.boat?.drawnBoatLook().number ?? 0,
       };
     },
     /** The race committee's things as drawn this frame, the beacons known, and the courses laid. */

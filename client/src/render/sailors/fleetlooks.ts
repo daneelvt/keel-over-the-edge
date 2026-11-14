@@ -45,16 +45,27 @@ import {
   type Texture,
   Uint32BufferAttribute,
   Vector3,
+  Vector4,
 } from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import type { WebGPURenderer } from 'three/webgpu';
+import { int, select, uniformArray, varying, vec3 } from 'three/tsl';
+import type { Node, WebGPURenderer } from 'three/webgpu';
 import type { SailorArt } from '../../catalog';
+import { catalog } from '../../catalog';
 import { seatFigure } from '../fleetparts';
 import { bridgeClips } from './bridgedeck';
 import { catClips } from './cat';
 import { Clip, Pose } from './clips';
+import { cockadeCoords } from './cockade';
 import { LayeredTexture } from './layers2d';
-import { gltfLoader, placesOf } from './model';
+import { cockadeOf, gltfLoader, placesOf } from './model';
+
+/** The looks whose cockades the fleet keeps places for, by layer; and the cockade's radius, m. */
+const COCKADE_LOOKS = 32;
+const COCKADE_RADIUS = catalog.world.committee.prizes.cockade.across / 2;
+/** A place far off any cockade's disc, in its radii. */
+const OFF_DISC = 99;
+
 import { boneNames } from './onboat';
 import { RAIL_CLIPS, railClips } from './rail';
 import { Rig } from './rig';
@@ -157,6 +168,28 @@ export class FleetLooks {
   onLoad: (look: FleetLook) => void = () => {};
   /** Whether a boat in the fleet is steered by a wheel: its looks' clips at a wheel are loaded too. */
   wheel = false;
+  /** Where each look wears the winner's cockade on its figure as bound, by its layer: its middle and the way it faces. */
+  readonly cockades = {
+    at: uniformArray(Array.from({ length: COCKADE_LOOKS }, () => new Vector4())),
+    facing: uniformArray(Array.from({ length: COCKADE_LOOKS }, () => new Vector4(0, 0, 1, 0))),
+  };
+
+  /**
+   * A vertex's place on its look's cockade's disc (cockade.ts), a varying,
+   * from its place as bound and its look's layer; far off the disc where
+   * its figure wears none (worn, in the vertex stage), so that the cockade
+   * costs the fragments one varying.
+   */
+  cockadeCoords(bound: Node<'vec3'>, layer: Node<'float'>, worn: Node<'bool'>): Node<'vec3'> {
+    const i = int(layer.add(0.5));
+    const c = cockadeCoords(
+      bound,
+      (this.cockades.at.element(i) as unknown as Node<'vec4'>).xyz as unknown as Node<'vec3'>,
+      (this.cockades.facing.element(i) as unknown as Node<'vec4'>).xyz as unknown as Node<'vec3'>,
+      COCKADE_RADIUS,
+    );
+    return varying(select(worn, c, vec3(0, 0, OFF_DISC))) as unknown as Node<'vec3'>;
+  }
 
   constructor(
     readonly renderer: WebGPURenderer,
@@ -391,6 +424,15 @@ export class FleetLooks {
       (m.material as MeshStandardMaterial).aoMap?.dispose();
       (m.material as MeshStandardMaterial).dispose();
     }
+    // Where it wears the winner's cockade, by its layer.
+    const c = cockadeOf(look.art);
+    (this.cockades.at.array[layer] as Vector4 | undefined)?.set(c.at.x, c.at.y, c.at.z, 0);
+    (this.cockades.facing.array[layer] as Vector4 | undefined)?.set(
+      c.facing.x,
+      c.facing.y,
+      c.facing.z,
+      0,
+    );
     look.layer = layer;
     this.#pools();
   }

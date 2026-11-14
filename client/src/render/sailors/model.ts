@@ -32,9 +32,28 @@ import transcoderWasm from 'three/addons/libs/basis/basis_transcoder.wasm?url';
 import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { KTX2Loader } from 'three/addons/loaders/KTX2Loader.js';
-import type { WebGPURenderer } from 'three/webgpu';
+import { positionGeometry, userData, varying, vec3 } from 'three/tsl';
+import type { Node, WebGPURenderer } from 'three/webgpu';
+import { catalog } from '../../catalog';
+import type { Cockade } from '../../catalog/types.gen';
+import { type CockadePlace, cockadeColours, cockadeCoords, cockadePlace } from './cockade';
 import type { SailorColours } from './material';
 import { sailorMaterial } from './material';
+
+/** The winner's cockade's colours, linear. */
+const COCKADE_COLOURS = cockadeColours(catalog.world.committee.prizes.cockade);
+
+/** Where a look's version wears the winner's cockade, at the catalog's width. */
+export function cockadeOf(art: { cockade: Cockade }): CockadePlace {
+  return cockadePlace(art.cockade, catalog.world.committee.prizes.cockade.across);
+}
+
+/** Puts the winner's cockade on a level's meshes, or takes it off. */
+export function wearCockade(model: SailorModel, on: boolean): void {
+  for (const m of model.meshes) {
+    m.userData.cockade = on ? 1 : 0;
+  }
+}
 
 /** A level of a sailor's look, as loaded. */
 export interface SailorModel {
@@ -110,13 +129,15 @@ export function placesOf(root: Object3D): Map<string, Matrix4> {
  * sailorMaterial and their colours the given ones (shared, so a change to
  * them shows on every mesh). The renderer's GPU decides how the textures
  * are transcoded. A machine's lamps glow as each mesh's userData glow says
- * (1 at first).
+ * (1 at first). Given its cockade's place, the winner's cockade is drawn
+ * there while each mesh's userData cockade is 1 (0 at first).
  */
 export async function loadSailor(
   url: string,
   renderer: WebGPURenderer,
   colours: SailorColours,
   machine = false,
+  cockade: CockadePlace | null = null,
 ): Promise<SailorModel> {
   const gltf = await gltfLoader(renderer).loadAsync(url);
   const root = gltf.scene;
@@ -139,13 +160,34 @@ export async function loadSailor(
   if (atlas === null || mask === null) {
     throw new Error(`${url}: no atlas and mask`);
   }
-  const material = sailorMaterial(atlas, mask, { machine });
+  const material = sailorMaterial(
+    atlas,
+    mask,
+    cockade === null
+      ? { machine }
+      : {
+          machine,
+          cockade: {
+            coords: varying(
+              cockadeCoords(
+                positionGeometry,
+                vec3(cockade.at.x, cockade.at.y, cockade.at.z),
+                vec3(cockade.facing.x, cockade.facing.y, cockade.facing.z),
+                cockade.radius,
+              ),
+            ) as unknown as Node<'vec3'>,
+            wears: userData('cockade', 'float') as unknown as Node<'float'>,
+            colours: COCKADE_COLOURS,
+          },
+        },
+  );
   for (const o of meshes) {
     (o.material as MeshStandardMaterial).dispose();
     o.material = material;
     o.userData.main = colours.main;
     o.userData.skin = colours.skin;
     o.userData.hair = colours.hair;
+    o.userData.cockade = 0;
     if (machine) {
       o.userData.glow = 1;
     }

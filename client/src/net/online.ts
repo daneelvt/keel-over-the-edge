@@ -171,6 +171,12 @@ export class Online {
    * before a Welcome.
    */
   readonly boatLook = signal<{ look: number; name: string } | null>(null);
+  /**
+   * What the boat in view, the own or the one watched, flies for its
+   * skipper's races in the world: its prize code (render/prizes.ts), and
+   * its race number while it races, 0 for none; none before a Welcome.
+   */
+  readonly prizes = signal<{ prizes: number; number: number }>({ prizes: 0, number: 0 });
   /** The kind of the boat in view, the own or the one watched, as the last Welcome told it: an index into the catalog's boats. */
   readonly kind = signal(0);
   /** The world's harbour, Port Royal's, as the last Welcome named it; null for none. */
@@ -613,6 +619,14 @@ export class Online {
       case 'boatNames':
         this.fleet.names(m.names);
         break;
+      case 'boatPrizes':
+        for (const p of m.prizes) {
+          if (p.own) {
+            this.prizes.value = { prizes: p.prizes, number: p.number };
+          }
+        }
+        this.fleet.prizes(m.prizes);
+        break;
       case 'crews':
         this.fleet.crews(m.crews);
         break;
@@ -778,8 +792,10 @@ export class Online {
         // its controls are not this boat's.
         this.#queued.length = 0;
         // A new connection's views start afresh: the boats fade out, and
-        // in again with its first snapshot.
+        // in again with its first snapshot; the boat in view's prizes are
+        // told again.
         this.fleet.clear();
+        this.prizes.value = { prizes: 0, number: 0 };
         this.#predictor.wakes.reset();
         break;
       case 'snapshot':

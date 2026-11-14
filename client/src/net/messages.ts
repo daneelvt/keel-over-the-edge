@@ -451,6 +451,8 @@ export interface PersonTold {
   muted: boolean;
   blocked: boolean;
   shipmate: boolean;
+  /** They wear the winner's cockade, for a race won in the world. */
+  cockade?: boolean;
 }
 
 /**
@@ -467,8 +469,20 @@ export interface CrewTold {
 /** Who is aboard a boat in view, by its view slot: each person's seat, look and machine mark, and the holder's seat; never a name. */
 export interface ViewCrewTold {
   slot: number;
-  people: { seat: number; look: number; machine: boolean }[];
+  people: { seat: number; look: number; machine: boolean; cockade?: boolean }[];
   holder: number;
+}
+
+/**
+ * A boat's prizes, by its view slot as of the next snapshot, or the own
+ * boat's (the boat sailed or watched): its prize code (render/prizes.ts)
+ * and its race number while it races, 0 for none.
+ */
+export interface BoatPrizeTold {
+  slot: number;
+  own: boolean;
+  prizes: number;
+  number: number;
 }
 
 /** A knock waiting for the skipper's answer, or, gone, no longer waiting. */
@@ -777,6 +791,8 @@ export type FromWorker =
   | { type: 'boatLook'; look: number; name: string }
   /** The names of boats in view, by view slot, as of the next snapshot: player text, "" for none. */
   | { type: 'boatNames'; names: { slot: number; name: string }[] }
+  /** What boats in view, and the own boat, fly for their skippers' races in the world. */
+  | { type: 'boatPrizes'; prizes: BoatPrizeTold[] }
   /** Who is aboard boats in view, by view slot, as of the next snapshot: no people for nobody but the skipper. */
   | { type: 'crews'; crews: ViewCrewTold[] }
   /** The server is about to restart, in about inMs: the bell. */

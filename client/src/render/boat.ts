@@ -90,9 +90,11 @@ import { headingToRotationY, type ScenePoint } from './coords';
 import { chordAt, chordAtHalf, markPlace } from './machinemark';
 import { litMaterial, sailGlow } from './materials';
 import { Pennant } from './pennant';
+import { type PrizeRig, prizeRig } from './prizes';
 import type { Gfx } from './renderer';
 import { bridgeClips } from './sailors/bridgedeck';
 import { catClips } from './sailors/cat';
+import { cockadeOf } from './sailors/model';
 import { BoatSailor } from './sailors/onboat';
 import { harnessFile, trapezeClips } from './sailors/trapeze';
 import { wheelClips, wheelNodes } from './sailors/wheel';
@@ -413,6 +415,13 @@ export class Boat {
         this.parts.set(o.name, o);
       }
     });
+    // Where its prizes fly, from its nodes' places in the model's frame.
+    model.updateMatrixWorld(true);
+    const nodes = new Map<string, Vector3>();
+    for (const [name, o] of this.parts) {
+      nodes.set(name, o.getWorldPosition(new Vector3()));
+    }
+    this.prizeRig = prizeRig(nodes, this.parts.get('hull')?.userData);
     this.#wheels = wheelNodes(this.parts);
     let sail: Mesh | undefined;
     this.parts.get('sail')?.traverse((o) => {
@@ -549,9 +558,30 @@ export class Boat {
     writeLook(this.#looks, code, this.#lookValues, 0);
     this.#look.paint.value = this.#lookValues[0] ?? 0;
     this.#look.cloth.value = this.#lookValues[1] ?? 0;
-    this.#look.number.value = this.#lookValues[2] ?? 0;
+    this.#look.number.value = this.#raceNumber > 0 ? this.#raceNumber : (this.#lookValues[2] ?? 0);
     this.#name = name;
     this.#letter();
+  }
+
+  /** Where its prizes fly on its model (render/prizes.ts); null until loaded. */
+  prizeRig: PrizeRig | null = null;
+
+  /** Its race number while it races, on its sail in place of its own number; 0 for none. */
+  #raceNumber = 0;
+
+  /** Whether its sailor wears the winner's cockade, whatever look it is drawn in. */
+  #cockade = false;
+
+  wearCockade(on: boolean): void {
+    this.#cockade = on;
+    for (const s of this.#sailors.values()) {
+      s.wearCockade(on);
+    }
+  }
+
+  setRaceNumber(n: number): void {
+    this.#raceNumber = Math.max(Math.floor(n), 0);
+    this.#look.number.value = this.#raceNumber > 0 ? this.#raceNumber : (this.#lookValues[2] ?? 0);
   }
 
   /** The look drawn: the paint's and cloth's places, the sail number, the name lettered and its row (−1 for none). */
@@ -612,6 +642,7 @@ export class Boat {
       return;
     }
     sailor.colour(wanted.colours);
+    sailor.wearCockade(this.#cockade);
     this.#shown = sailor;
     this.#shownMachine = wanted.machine;
     for (const s of this.#sailors.values()) {
@@ -633,6 +664,7 @@ export class Boat {
         cruiser: () => lazyArtUrl(yachtClips(a.clips)),
         bridgedeck: () => lazyArtUrl(bridgeClips(a.clips)),
         colours: look.colours,
+        cockade: cockadeOf(a),
       },
       renderer,
       this.model,

@@ -25,7 +25,7 @@
 //     trapeze's wire to starboard, 3 to port)
 //   6 the sway: the apparent wind's push in the model's frame (x, z,
 //     metres at full sway), the seat's side (±1 seated, 0 not), 1 if the
-//     row is drawn skinned
+//     row is drawn skinned (2 wearing the winner's cockade)
 //   7 seat: the rigid figure's place in the model (x, y, z) and facing
 //   8 on: three texels a bone, the rows of its matrix.
 //
@@ -417,6 +417,8 @@ export interface FleetSailorNodes {
   machine: Node<'float'>;
   layer: Node<'float'>;
   opacity: Node<'float'>;
+  /** The near figures': whether the row's sailor wears the winner's cockade, in the vertex stage. */
+  cockade?: Node<'bool'>;
 }
 
 /**
@@ -469,7 +471,8 @@ export function nearSailorNodes(
     });
     return out;
   })() as unknown as Node<'vec3'>;
-  return { vertex, ...colours(i) };
+  const cockade = sway.w.greaterThan(1.5) as unknown as Node<'bool'>;
+  return { vertex, ...colours(i), cockade };
 }
 
 /**

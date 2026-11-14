@@ -32,6 +32,7 @@ import {
 import { Glyph } from './logglyphs';
 import {
   CLOSE,
+  COCKADE,
   COLLECTION,
   DAYS,
   dayCell,
@@ -74,13 +75,14 @@ import { PlayerText } from './player';
 import { Prize, raceColour } from './prize';
 import { hangSpoon } from './raceapi';
 
-/** The log's inked portrait, the look's drawing on the log's paper; nothing for a look the build has not. */
-function Ink({ look }: { look: Look }) {
+/** The log's inked portrait, the look's drawing on the log's paper; nothing for a look the build has not. With the winner's cockade pinned where the look wears it, for a race won in the world sailed now. */
+function Ink({ look, cockade }: { look: Look; cockade: boolean }) {
   const version = partsOf(catalog, look).version;
   const src = version === undefined ? null : inkFile(version.art);
-  return src === null ? (
-    <span class="log-ink" />
-  ) : (
+  if (src === null) {
+    return <span class="log-ink" />;
+  }
+  const img = (
     <img
       class="log-ink"
       src={src}
@@ -89,6 +91,41 @@ function Ink({ look }: { look: Look }) {
       height={110}
       decoding="async"
     />
+  );
+  if (!cockade || version === undefined) {
+    return img;
+  }
+  const [u, v] = version.art.cockade.inked;
+  return (
+    <span class="log-ink-frame">
+      {img}
+      <Cockade at={[u ?? 0.7, v ?? 0.3]} />
+    </span>
+  );
+}
+
+/** The winner's cockade on the inked portrait: a pleated gold rosette about a button, in the log's ink. */
+function Cockade({ at }: { at: [number, number] }) {
+  const { ribbon, button } = catalog.world.committee.prizes.cockade;
+  // Scalloped: the ribbon's pleats round the edge.
+  const pleats = 14;
+  const edge = Array.from({ length: pleats * 2 }, (_, i) => {
+    const a = (Math.PI * i) / pleats;
+    const r = i % 2 === 0 ? 10 : 8.4;
+    return `${(12 + r * Math.cos(a)).toFixed(2)},${(12 + r * Math.sin(a)).toFixed(2)}`;
+  }).join(' ');
+  return (
+    <svg
+      class="log-cockade"
+      viewBox="0 0 24 24"
+      role="img"
+      aria-label={COCKADE}
+      style={{ left: `${(at[0] * 100).toFixed(1)}%`, top: `${(at[1] * 100).toFixed(1)}%` }}
+    >
+      <polygon points={edge} fill={ribbon} stroke="#2b2622" stroke-width="1" />
+      <circle cx="12" cy="12" r="6" fill="none" stroke="#2b2622" stroke-width="0.8" />
+      <circle cx="12" cy="12" r="3.4" fill={button} stroke="#2b2622" stroke-width="0.8" />
+    </svg>
   );
 }
 
@@ -168,7 +205,7 @@ function Head({
         </div>
       ) : null}
       <div class="log-id">
-        <Ink look={log.look} />
+        <Ink look={log.look} cockade={log.cockade === true} />
         <div class="log-name">
           <h2>
             <PlayerText text={log.name} />

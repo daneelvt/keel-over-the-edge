@@ -266,13 +266,17 @@ export const DESIGN_TEXELS = { along: 32, down: 16 } as const;
 const SIGNAL_STRIDE = 12;
 /** A pennant's taper: its point's depth is this much less than its hoist's. */
 const PENNANT_TAPER = 0.9;
+/** A swallowtail's taper, and how far its fork is cut back into its length. */
+const SWALLOWTAIL_TAPER = 0.35;
+const SWALLOWTAIL_FORK = 0.3;
 /** The gap between flags hoisted one under another, m. */
 export const HOIST_GAP = 0.15;
 
-/** A flag's design as the draw holds it: its row in the atlas, how much it tapers, its length and hoist, m. */
+/** A flag's design as the draw holds it: its row in the atlas, how much it tapers, how far its fork is cut back (a share of its length; 0 for none), its length and hoist, m. */
 export interface FlagDesign {
   row: number;
   taper: number;
+  fork: number;
   length: number;
   hoist: number;
 }
@@ -317,7 +321,8 @@ export function flagAtlas(
     }
     designs.push({
       row: k,
-      taper: f.cut === 'pennant' ? PENNANT_TAPER : 0,
+      taper: f.cut === 'pennant' ? PENNANT_TAPER : f.cut === 'swallowtail' ? SWALLOWTAIL_TAPER : 0,
+      fork: f.cut === 'swallowtail' ? SWALLOWTAIL_FORK : 0,
       length: f.length,
       hoist: f.hoist,
     });
@@ -369,9 +374,16 @@ export class SignalFlags {
   count = 0;
   readonly #buffer: InstancedInterleavedBuffer;
   readonly #cat: TownFlags;
+  readonly #capacity: number;
 
-  /** The flags ashore's rule for how a flag flies in a wind, and the committee's flags and dyes. */
-  constructor(cat: TownFlags, flags: readonly SignalFlag[], dyes: readonly SignalDye[]) {
+  /** The flags ashore's rule for how a flag flies in a wind, the committee's flags and dyes, and the most flown at once. */
+  constructor(
+    cat: TownFlags,
+    flags: readonly SignalFlag[],
+    dyes: readonly SignalDye[],
+    capacity = SIGNAL_CAPACITY,
+  ) {
+    this.#capacity = capacity;
     this.#cat = cat;
     const atlas = flagAtlas(flags, dyes);
     this.designs = atlas.designs;
@@ -389,7 +401,7 @@ export class SignalFlags {
     tex.needsUpdate = true;
     const g = signalGeometry();
     this.#buffer = new InstancedInterleavedBuffer(
-      new Float32Array(SIGNAL_CAPACITY * SIGNAL_STRIDE),
+      new Float32Array(capacity * SIGNAL_STRIDE),
       SIGNAL_STRIDE,
       1,
     );
@@ -435,22 +447,34 @@ export class SignalFlags {
     const rows = Math.max(this.designs.length, 1);
     m.colorNode = texture(tex, vec2(vAt.x, vRow.add(float(0.5).sub(vAt.y)).div(rows)))
       .rgb as unknown as Node<'vec3'>;
-    this.mesh = new InstancedMesh(g, m, SIGNAL_CAPACITY);
+    // A swallowtail's fork: cut back from the fly's end at the middle of
+    // the hoist, to nothing at its edges.
+    const vFork = varying(wind.w);
+    m.maskNode = vAt.x.lessThan(
+      float(1).sub(vFork.mul(float(1).sub(vAt.y.abs().mul(2)))),
+    ) as unknown as Node<'bool'>;
+    this.mesh = new InstancedMesh(g, m, capacity);
     this.mesh.name = 'signal flags';
     this.mesh.count = 0;
     this.mesh.frustumCulled = false;
     this.mesh.visible = false;
   }
 
-  /** The flags flying this frame, placed from the floating origin; time is world time, s. */
-  frame(flags: readonly SignalSeen[], origin: { x: number; y: number }, time: number): void {
+  /** The flags flying this frame, the first count of flags, placed from the floating origin; time is world time, s. */
+  frame(
+    flags: readonly SignalSeen[],
+    origin: { x: number; y: number },
+    time: number,
+    count = flags.length,
+  ): void {
     this.time.value = time;
     const c = this.#cat;
     const a = this.#buffer.array as Float32Array;
     let n = 0;
-    for (const f of flags) {
+    for (let i = 0; i < count; i++) {
+      const f = flags[i] as SignalSeen;
       const d = this.designs[f.flag];
-      if (n >= SIGNAL_CAPACITY || d === undefined) {
+      if (n >= this.#capacity || d === undefined) {
         continue;
       }
       const o = n * SIGNAL_STRIDE;
@@ -462,7 +486,7 @@ export class SignalFlags {
       a[o + 5] = f.seed * 0.7;
       const k = f.scale ?? 1;
       a[o + 6] = flapFrequency(f.speed, d.length * k, c.strouhal);
-      a[o + 7] = 0;
+      a[o + 7] = d.fork;
       a[o + 8] = d.row;
       a[o + 9] = d.taper;
       a[o + 10] = d.length * k;

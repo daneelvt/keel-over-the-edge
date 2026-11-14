@@ -43,6 +43,7 @@ import {
 } from '../../net/gen/keel/v1/game_pb';
 import type {
   AshoreWhyTold,
+  BoatPrizeTold,
   BumpTold,
   CapSeen,
   ChartEntry,
@@ -253,6 +254,8 @@ export type Received =
   | { kind: 'boatLook'; look: number; name: string }
   /** The names of boats in view, by view slot, as of the next snapshot. */
   | { kind: 'boatNames'; names: { slot: number; name: string }[] }
+  /** What boats in view, and the own boat, fly for their skippers' races in the world. */
+  | { kind: 'boatPrizes'; prizes: BoatPrizeTold[] }
   /** Who is aboard boats in view, by view slot, as of the next snapshot. */
   | { kind: 'crews'; crews: ViewCrewTold[] }
   /** The server is about to restart, in about inMs. */
@@ -455,6 +458,7 @@ export class Session {
               muted: p.muted,
               blocked: p.blocked,
               shipmate: p.shipmate,
+              cockade: p.cockade,
             })),
             holder: m.body.value.holder,
           },
@@ -524,8 +528,24 @@ export class Session {
           kind: 'crews',
           crews: m.body.value.crews.map((c) => ({
             slot: c.slot,
-            people: c.people.map((p) => ({ seat: p.seat, look: p.look, machine: p.machine })),
+            people: c.people.map((p) => ({
+              seat: p.seat,
+              look: p.look,
+              machine: p.machine,
+              cockade: p.cockade,
+            })),
             holder: c.holder,
+          })),
+        };
+      case 'boatPrizes':
+        this.#lastHeard = now;
+        return {
+          kind: 'boatPrizes',
+          prizes: m.body.value.prizes.map((p) => ({
+            slot: p.slot,
+            own: p.own,
+            prizes: p.prizes,
+            number: p.number,
           })),
         };
       case 'boatNames':

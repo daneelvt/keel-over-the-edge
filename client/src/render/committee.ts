@@ -172,6 +172,14 @@ interface Drawn {
 /** The committee boat's muzzle before the model is loaded: forward on her starboard bow, m. */
 const MUZZLE_GUESS = new Vector3(0.56, 1.6, -3.5);
 
+/** The flags a sailor's boat flies for their races, not the committee's signals (render/prizes.ts). */
+export const PRIZE_SIGNALS: ReadonlySet<SignalFlag['signal']> = new Set([
+  'victory',
+  'burgee',
+  'gilded',
+  'committee',
+]);
+
 /** The index of the catalog's flag that signals this, or −1; for a class, the pennant of the boat of that id. */
 export function signalFlag(
   flags: readonly SignalFlag[],
@@ -396,7 +404,7 @@ export class RaceMarks {
   readonly #courses = new Map<number, CourseLaid>();
   readonly #beacons = new Map<number, PlaceSeen>();
   readonly #bursts: Burst[] = [];
-  /** The crowd's bunting flying, and the flags it is made of: every one but the marks' and the pin's. */
+  /** The crowd's bunting flying, and the flags it is made of: every signal flag but the marks' and the pin's. */
   readonly #bunting: BuntingBurst[] = [];
   #buntingFlags: number[] = [];
   #buntingHoists: number[] = [];
@@ -444,7 +452,7 @@ export class RaceMarks {
     this.#markFlag = signalFlag(cat.flags, 'mark');
     this.#pinFlag = signalFlag(cat.flags, 'pin');
     cat.flags.forEach((fl, i) => {
-      if (i !== this.#markFlag && i !== this.#pinFlag) {
+      if (i !== this.#markFlag && i !== this.#pinFlag && !PRIZE_SIGNALS.has(fl.signal)) {
         this.#buntingFlags.push(i);
         this.#buntingHoists.push(fl.hoist);
       }

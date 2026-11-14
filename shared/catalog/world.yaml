@@ -1149,43 +1149,43 @@ world:
         name: Winner's pennant, deep madder
         signal: victory
         cut: swallowtail
-        length: 0.7
-        hoist: 0.28
+        length: 0.9
+        hoist: 0.36
         rows: [eeeeeeeeeeee, eddeeeeeeeee, eddeeeeeeeee, eeeeeeeeeeee]
       - id: victory-woad
         name: Winner's pennant, woad blue
         signal: victory
         cut: swallowtail
-        length: 0.7
-        hoist: 0.28
+        length: 0.9
+        hoist: 0.36
         rows: [nnnnnnnnnnnn, nddnnnnnnnnn, nddnnnnnnnnn, nnnnnnnnnnnn]
       - id: victory-verdigris
         name: Winner's pennant, verdigris
         signal: victory
         cut: swallowtail
-        length: 0.7
-        hoist: 0.28
+        length: 0.9
+        hoist: 0.36
         rows: [gggggggggggg, gddggggggggg, gddggggggggg, gggggggggggg]
       - id: victory-orchil
         name: Winner's pennant, orchil purple
         signal: victory
         cut: swallowtail
-        length: 0.7
-        hoist: 0.28
+        length: 0.9
+        hoist: 0.36
         rows: [pppppppppppp, pddppppppppp, pddppppppppp, pppppppppppp]
       - id: victory-umber
         name: Winner's pennant, raw umber
         signal: victory
         cut: swallowtail
-        length: 0.7
-        hoist: 0.28
+        length: 0.9
+        hoist: 0.36
         rows: [uuuuuuuuuuuu, udduuuuuuuuu, udduuuuuuuuu, uuuuuuuuuuuu]
       - id: victory-sea-green
         name: Winner's pennant, sea green
         signal: victory
         cut: swallowtail
-        length: 0.7
-        hoist: 0.28
+        length: 0.9
+        hoist: 0.36
         rows: [tttttttttttt, tddttttttttt, tddttttttttt, tttttttttttt]
       # The racing burgee at the masthead for a sailor who has raced often
       # in the world, and the gilded burgee for one who has raced more; and
@@ -1194,22 +1194,22 @@ world:
         name: Racing burgee
         signal: burgee
         cut: pennant
-        length: 0.55
-        hoist: 0.32
+        length: 0.75
+        hoist: 0.45
         rows: [bbbbbbbbbb, bwwbbbbbbb, bwwbbbbbbb, bbbbbbbbbb]
       - id: gilded-burgee
         name: Gilded burgee
         signal: gilded
         cut: pennant
-        length: 0.6
-        hoist: 0.35
+        length: 0.8
+        hoist: 0.48
         rows: [dddddddddd, deeddddddd, deeddddddd, dddddddddd]
       - id: committee-flag
         name: The committee's flag
         signal: committee
         cut: flag
-        length: 0.6
-        hoist: 0.4
+        length: 0.8
+        hoist: 0.55
         rows: [bbbbbbbbb, bwwwwwwwb, bwwdddwwb, bwwdddwwb, bwwwwwwwb, bbbbbbbbb]
 
     # What a sailor's races show on the water for the rest of the world,
@@ -1229,7 +1229,7 @@ world:
       gilded: 12
       ran: 5
       reach: 400 # m
-      spoon: { length: 0.3, lanyard: 0.25, colour: "#a87443" }
+      spoon: { length: 0.36, lanyard: 0.25, colour: "#c99a5c" }
       cockade: { across: 0.075, ribbon: "#d9ad3a", button: "#7a2a22" }
 
   # The rules a world must pass; one that fails is made again from the next

@@ -191,6 +191,8 @@ export interface Log {
   worldNow?: number;
   /** The races sailed; none from an older server. */
   ribbons?: LogRibbons | null;
+  /** The sailor wears the winner's cockade, for a race won in the world sailed now. */
+  cockade?: boolean;
 }
 
 /** What asking for a log came to: the log; not there to be read (unknown and refused alike); or not had. */

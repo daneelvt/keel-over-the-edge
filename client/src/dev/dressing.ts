@@ -93,7 +93,13 @@ import {
   namesCatClips,
 } from '../render/sailors/cat';
 import { readSailorLight, type SailorColours, sailorColours } from '../render/sailors/material';
-import { loadClips, loadSailor, type SailorClips, type SailorModel } from '../render/sailors/model';
+import {
+  cockadeOf,
+  loadClips,
+  loadSailor,
+  type SailorClips,
+  type SailorModel,
+} from '../render/sailors/model';
 import {
   boneNames,
   type Harness,
@@ -246,6 +252,8 @@ export interface Room {
   /** The mask drawn in place of the sailors' colours: red main, green skin, blue hair. */
   mask: boolean;
   phone: boolean;
+  /** The winner's cockade worn, where each look's art pins it. */
+  cockade: boolean;
   /** The clips held at this time, in seconds; null to play. */
   t: number | null;
   who: number;
@@ -271,6 +279,7 @@ const DEFAULTS: Room = {
   black: false,
   mask: false,
   phone: false,
+  cockade: false,
   t: null,
   who: 0,
   near: false,
@@ -326,6 +335,7 @@ export function readRoom(hash: string): Room {
     black: q.get('black') === '1',
     mask: q.get('mask') === '1',
     phone: q.get('phone') === '1',
+    cockade: q.get('cockade') === '1',
     t: q.has('t') && Number.isFinite(t) ? t : null,
     who: Math.max(0, Math.floor(Number(q.get('who')) || 0)),
     near: q.get('near') === '1',
@@ -348,6 +358,7 @@ export function writeRoom(r: Room): string {
   if (r.black) q.set('black', '1');
   if (r.mask) q.set('mask', '1');
   if (r.phone) q.set('phone', '1');
+  if (r.cockade) q.set('cockade', '1');
   if (r.t !== null) q.set('t', String(r.t));
   if (r.who !== 0) q.set('who', String(r.who));
   if (r.near) q.set('near', '1');
@@ -866,7 +877,16 @@ export class DressingRoom {
     }
     let proto = this.#protos.get(url);
     if (proto === undefined) {
-      proto = loadSailor(url, renderer, colours, machine);
+      const art = (
+        machine ? catalog.machine.versions : catalog.sailors.find((l) => l.id === look)?.versions
+      )?.find((v) => v.id === version)?.art;
+      proto = loadSailor(
+        url,
+        renderer,
+        colours,
+        machine,
+        art === undefined ? null : cockadeOf(art),
+      );
       this.#protos.set(url, proto);
     }
     let clips: Promise<SailorClips> | null = null;
@@ -903,6 +923,7 @@ export class DressingRoom {
         o.userData.skin = colours.skin;
         o.userData.hair = colours.hair;
         o.userData.glow = 1;
+        o.userData.cockade = this.room.cockade ? 1 : 0;
         o.castShadow = true;
         o.receiveShadow = true;
         meshes.push(o);
@@ -2084,6 +2105,7 @@ export class DressingRoom {
       ['black', r.black, () => this.#toggle('black')],
       ['mask', r.mask, () => this.#toggle('mask')],
       ['phone', r.phone, () => this.#toggle('phone')],
+      ['cockade', r.cockade, () => this.#toggle('cockade')],
       ['held', r.t !== null, () => void this.set({ t: r.t === null ? 1 : null })],
     ]);
     swatches('Skin', 'skin');
@@ -2098,10 +2120,16 @@ export class DressingRoom {
     this.#panelFor();
   }
 
-  #toggle(what: 'black' | 'mask' | 'phone'): void {
+  #toggle(what: 'black' | 'mask' | 'phone' | 'cockade'): void {
     this.room = { ...this.room, [what]: !this.room[what] };
     history.replaceState(null, '', writeRoom(this.room));
-    if (what !== 'phone') {
+    if (what === 'cockade') {
+      for (const f of this.#figures) {
+        for (const m of f.meshes) {
+          m.userData.cockade = this.room.cockade ? 1 : 0;
+        }
+      }
+    } else if (what !== 'phone') {
       this.#materials();
     } else {
       this.#container.classList.toggle('phone', this.room.phone);

@@ -65,6 +65,7 @@ import { Lightning } from './lightning';
 import { Lighthouses } from './lights';
 import { domeCentre, domeDrop } from './materials';
 import { Overlays } from './overlays';
+import { cockadeOf, PrizesAfloat } from './prizes';
 import {
   Adaptive,
   type FrameWindow,
@@ -263,6 +264,8 @@ export class SeaScene {
     catalog.world.towns.smoke,
     catalog.world.places.kinds.findIndex((k) => k.site === 'beacon'),
   );
+  /** What every boat flies for its skipper's races, the own boat's too: one draw for their flags, one for their spoons. */
+  readonly prizes = new PrizesAfloat(catalog.world.committee, catalog.world.towns.flags);
   /** Sky time, once the scene knows the world's epoch; and the module that says where everything stands. */
   skyTime: SkyTime | null = null;
   skyPhysics: Physics | null = null;
@@ -447,6 +450,8 @@ export class SeaScene {
     scene.add(this.lighthouses.towers, this.lighthouses.glows);
     scene.add(this.wrecks.root);
     scene.add(this.race.root);
+    scene.add(this.prizes.root);
+    this.fleet.prizes = this.prizes;
     scene.add(this.birds.mesh, this.swimmers.mesh);
     this.wrecks.depthAt = (east, north) => {
       const h = this.land?.heightAt(east, north) ?? null;
@@ -724,6 +729,26 @@ export class SeaScene {
   #boatLook = { look: -1, name: '' };
 
   /**
+   * What the boat in view, the own or the one watched, flies for its
+   * skipper's races: a prize code (render/prizes.ts), its race number
+   * while it races (on its sail), on every kind the own boat has been.
+   */
+  setPrizes(code: number, number: number): void {
+    this.#prizes = { code: code >>> 0, number };
+    for (const b of this.#boats.values()) {
+      b.setRaceNumber(number);
+      b.wearCockade(cockadeOf(code));
+    }
+  }
+
+  #prizes = { code: 0, number: 0 };
+
+  /** The own boat's prizes, as setPrizes was last told. */
+  get ownPrizes(): { code: number; number: number } {
+    return this.#prizes;
+  }
+
+  /**
    * Loads the boat, and its sailor once the player's look is known
    * (sailAs). Its sails carry its kind's insignia.
    */
@@ -745,6 +770,8 @@ export class SeaScene {
     const boat = new Boat(k, catalog);
     await boat.load(k.name.slice(0, 1));
     boat.setBoatLook(this.#boatLook.look, this.#boatLook.name);
+    boat.setRaceNumber(this.#prizes.number);
+    boat.wearCockade(cockadeOf(this.#prizes.code));
     this.#boats.set(kind, boat);
     return boat;
   }
@@ -2005,6 +2032,7 @@ export class SeaScene {
     this.crews.windSpeed = this.wind.meanSpeed;
     this.crews.time = this.ticks / STEPS_PER_SECOND;
     this.crews.frame(fs?.drawn ?? [], fs?.count ?? 0, this.origin, camera.position, this.timeStep);
+    this.prizes.begin();
     if (this.fleet.loaded) {
       this.fleet.windFrom = this.wind.meanFrom;
       this.fleet.windSpeed = this.wind.meanSpeed;
@@ -2017,6 +2045,8 @@ export class SeaScene {
         this.timeStep,
       );
     }
+    this.#ownPrizesDrawn();
+    this.prizes.end(this.origin.world, this.ticks / STEPS_PER_SECOND);
     const night = this.drawSky ? lanternLit(this.sky.now.sunHeight) : 0;
     this.birds.begin(this.origin.world, this.ticks / STEPS_PER_SECOND, 0.25 + 0.75 * (1 - night));
     this.#drawTowns(camera.position, now);
@@ -2090,6 +2120,33 @@ export class SeaScene {
     this.#spray();
     this.onFrame?.();
   }
+
+  /** The own boat's prizes, placed as its model is drawn, in the wind it feels. */
+  #ownPrizesDrawn(): void {
+    const b = this.boat;
+    const rig = b?.prizeRig ?? null;
+    if (b === null || rig === null || this.#prizes.code === 0 || !b.root.visible) {
+      return;
+    }
+    b.model.updateWorldMatrix(true, false);
+    const angle = this.out[RECORDS.out.apparentWindAngle] ?? 0;
+    const w = this.#ownWind;
+    w.speed = this.out[RECORDS.out.apparentWindSpeed] ?? 0;
+    w.from = this.pose.heading + angle;
+    this.prizes.add(
+      this.#prizes.code,
+      rig,
+      this.#placeOwn,
+      w,
+      0.37,
+      this.ticks / STEPS_PER_SECOND,
+      this.origin.world,
+    );
+  }
+
+  readonly #ownWind = { from: 0, speed: 0 };
+  readonly #placeOwn = (p: Vector3, out: Vector3): Vector3 =>
+    this.boat === null ? out.copy(p) : this.boat.model.localToWorld(out.copy(p));
 
   /** The next mark's tag, over its spar, when the camera sees it; nothing when not. */
   #placeMarkTag(camera: Camera, width: number, height: number): void {

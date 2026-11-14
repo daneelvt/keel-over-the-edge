@@ -237,6 +237,8 @@ export function longLog() {
     zone: 'America/New_York',
     worldNow: 14,
     ribbons: { counts: raceCounts() },
+    // A race won this world: the cockade on the portrait.
+    cockade: true,
   };
 }
 

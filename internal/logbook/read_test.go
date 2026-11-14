@@ -119,6 +119,20 @@ func (f *fakeLogs) RaceRibbonsOf(_ context.Context, id store.AccountID, skip, mo
 	return rs[:min(most, len(rs))], nil
 }
 
+func (f *fakeLogs) PrizesOf(_ context.Context, world int, ids []store.AccountID, _ int) (map[store.AccountID]store.RacePrizes, error) {
+	out := map[store.AccountID]store.RacePrizes{}
+	for _, id := range ids {
+		for _, r := range f.races[id] {
+			if r.World == world && r.Role != store.RoleOwner && r.Kind == "race" && r.Fleet >= 3 && r.Place == 1 {
+				p := out[id]
+				p.Wins = append(p.Wins, r.Code)
+				out[id] = p
+			}
+		}
+	}
+	return out, nil
+}
+
 func (f *fakeLogs) RaceCountsOf(_ context.Context, id store.AccountID) (store.RaceCounts, error) {
 	var c store.RaceCounts
 	for _, r := range f.races[id] {
@@ -404,6 +418,21 @@ func TestRibbons(t *testing.T) {
 	if l.Ribbons == nil || l.Ribbons.Counts.Sailed != 2 || l.Ribbons.Races != nil || l.Ribbons.More {
 		t.Fatalf("the log's ribbons: %+v", l.Ribbons)
 	}
+	// No win in the world sailed now: no cockade in the portrait. A win
+	// in a world gone keeps its ribbon but not the cockade; a win in this
+	// one gives it.
+	if l.Cockade {
+		t.Error("a cockade without a win")
+	}
+	f.races[jo][2].Place = 1
+	if l, err := svc.ByName(ctx, ann, "Jo", 0); err != nil || l.Cockade {
+		t.Errorf("a cockade for a win in a world gone: %v", err)
+	}
+	f.races[jo][0].Place = 1
+	if l, err := svc.ByName(ctx, ann, "Jo", 0); err != nil || !l.Cockade {
+		t.Errorf("no cockade for a win in this world: %v", err)
+	}
+	f.races[jo][0].Place, f.races[jo][2].Place = 2, 5
 	ribbons := func(reader store.AccountID, who Who) Ribbons {
 		t.Helper()
 		r, err := svc.Ribbons(ctx, reader, who, 0)
