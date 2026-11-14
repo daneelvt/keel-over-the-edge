@@ -28,15 +28,15 @@ configMapGenerator:
       # The MCP address has a host of its own.
       - KEEL_AGENTS_URL=https://agents.keelovertheedge.com/mcp
   # The contributor agreement keeper's GitHub App, by its ID and client
-  # ID, neither secret. Empty until the owner registers the App, then
-  # filled in here by a pull request (infra/MANUAL-STEPS.md, section 15);
-  # empty, the keeper runs "not set up".
+  # ID, neither secret (infra/MANUAL-STEPS.md, section 15). With them the
+  # keeper needs the App's four values in its Secret too, or it does not
+  # start; both empty, it runs "not set up".
   - name: keel-agreement
     namespace: keel
     behavior: merge
     literals:
-      - KEEL_AGREEMENT_APP_ID=
-      - KEEL_AGREEMENT_CLIENT_ID=
+      - KEEL_AGREEMENT_APP_ID=5756060
+      - KEEL_AGREEMENT_CLIENT_ID=Iv23liqyvdzExgY5eth5
 # The Gateway and the players' route answer the players' host alone; a
 # second listener and AI apps' route answer the MCP address's host alone.
 patches:
