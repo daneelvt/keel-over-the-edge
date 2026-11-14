@@ -47,6 +47,7 @@ type GitHub struct {
 
 	mu     sync.Mutex
 	tokens map[string]installToken // by repository
+	owner  int64                   // the App's owner's account, once asked
 }
 
 type installToken struct {
@@ -54,8 +55,48 @@ type installToken struct {
 	expires time.Time
 }
 
-// ErrNotInstalled is a repository the App is not installed on.
+// ErrNotInstalled is a repository the App is not installed on, or is
+// installed on by an account other than its owner's: the App is public, so
+// that anyone may sign in through it, and anyone may install it, but it
+// works for its owner's repositories alone.
 var ErrNotInstalled = errors.New("the App is not installed on the repository")
+
+// Owner is the account that owns the App, asked of GitHub once.
+func (g *GitHub) Owner(ctx context.Context) (int64, error) {
+	g.mu.Lock()
+	id := g.owner
+	g.mu.Unlock()
+	if id != 0 {
+		return id, nil
+	}
+	jwt, err := g.JWT()
+	if err != nil {
+		return 0, err
+	}
+	var app struct {
+		Owner struct {
+			ID int64 `json:"id"`
+		} `json:"owner"`
+	}
+	if _, err := g.call(ctx, http.MethodGet, g.API+"/app", "Bearer "+jwt, nil, &app); err != nil {
+		return 0, err
+	}
+	if app.Owner.ID == 0 {
+		return 0, errors.New("GitHub named no owner of the App")
+	}
+	g.mu.Lock()
+	g.owner = app.Owner.ID
+	g.mu.Unlock()
+	return app.Owner.ID, nil
+}
+
+// installation is an installation of the App, and the account it is on.
+type installation struct {
+	ID      int64 `json:"id"`
+	Account struct {
+		ID int64 `json:"id"`
+	} `json:"account"`
+}
 
 // ParseKey reads a GitHub App's private key, PEM: PKCS #1, as GitHub
 // gives it, or PKCS #8.
@@ -209,12 +250,19 @@ func (g *GitHub) token(ctx context.Context, repo string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	var inst struct{ ID int64 }
+	owner, err := g.Owner(ctx)
+	if err != nil {
+		return "", err
+	}
+	var inst installation
 	if _, err := g.call(ctx, http.MethodGet, g.API+"/repos/"+repo+"/installation", "Bearer "+jwt, nil, &inst); err != nil {
 		if e := (*apiError)(nil); errors.As(err, &e) && e.Status == http.StatusNotFound {
 			return "", fmt.Errorf("%s: %w", repo, ErrNotInstalled)
 		}
 		return "", err
+	}
+	if inst.Account.ID != owner {
+		return "", fmt.Errorf("%s: %w: it is another account's", repo, ErrNotInstalled)
 	}
 	var got struct {
 		Token     string
@@ -359,20 +407,26 @@ func (g *GitHub) OpenPulls(ctx context.Context, repo string) ([]int, error) {
 	return out, nil
 }
 
-// Repos lists the repositories the App is installed on, owner/name.
+// Repos lists the repositories the App is installed on by its owner,
+// owner/name. Other accounts' installations are passed over.
 func (g *GitHub) Repos(ctx context.Context) ([]string, error) {
 	jwt, err := g.JWT()
 	if err != nil {
 		return nil, err
 	}
-	var insts []struct {
-		ID int64 `json:"id"`
+	owner, err := g.Owner(ctx)
+	if err != nil {
+		return nil, err
 	}
+	var insts []installation
 	if _, err := g.call(ctx, http.MethodGet, g.API+"/app/installations?per_page=100", "Bearer "+jwt, nil, &insts); err != nil {
 		return nil, err
 	}
 	var repos []string
 	for _, inst := range insts {
+		if inst.Account.ID != owner {
+			continue
+		}
 		var tok struct{ Token string }
 		path := g.API + "/app/installations/" + strconv.FormatInt(inst.ID, 10) + "/access_tokens"
 		if _, err := g.call(ctx, http.MethodPost, path, "Bearer "+jwt, nil, &tok); err != nil {
