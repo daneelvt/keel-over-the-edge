@@ -42,10 +42,13 @@ type RaceCounts struct {
 // catalog's id), the sailor's boat's name and the fleet's size; a harbour
 // race's, a newcomers' race's; the sailor's part (skipper or crew); their
 // place, how their race ended (finished, placed, ret), a trial's medal and
-// the awards; and a crew's skipper, nil where not named.
+// the awards; and a crew's skipper, nil where not named. Code is the
+// race's link's; Hung, in the reader's own log, whether its wooden spoon
+// hangs from their sterns.
 type Ribbon struct {
 	World     int      `json:"world"`
 	At        int64    `json:"at"`
+	Code      string   `json:"code"`
 	Name      string   `json:"name"`
 	Kind      string   `json:"kind"`
 	Course    string   `json:"course"`
@@ -60,6 +63,7 @@ type Ribbon struct {
 	Medal     string   `json:"medal,omitempty"`
 	Awards    []string `json:"awards"`
 	Skipper   *Person  `json:"skipper,omitempty"`
+	Hung      bool     `json:"hung,omitempty"`
 }
 
 // The awards and medals counted, by their names in the record.
@@ -112,7 +116,7 @@ func (s *Service) ribbons(ctx context.Context, r Reader, id store.AccountID) (*R
 		if x.Role == store.RoleOwner || len(out.Races) == MostRibbons {
 			continue
 		}
-		rb := Ribbon{World: x.World, At: ms(x.At), Name: x.RaceName, Kind: x.Kind, Course: x.CourseName, Boat: x.Boat, BoatName: x.BoatName,
+		rb := Ribbon{World: x.World, At: ms(x.At), Code: x.Code, Name: x.RaceName, Kind: x.Kind, Course: x.CourseName, Boat: x.Boat, BoatName: x.BoatName,
 			Fleet: x.Fleet, Harbour: x.Harbour, Newcomers: x.Newcomers, Role: x.Role, Place: x.Place, How: x.How, Medal: x.Medal,
 			Awards: x.Awards}
 		if rb.Awards == nil {
@@ -120,6 +124,9 @@ func (s *Service) ribbons(ctx context.Context, r Reader, id store.AccountID) (*R
 		}
 		if x.Role == store.RoleCrew {
 			rb.Skipper = s.skipperOf(r, id, x, people, now)
+		}
+		if r.ID == id {
+			rb.Hung = x.Hung
 		}
 		out.Races = append(out.Races, rb)
 	}
