@@ -246,6 +246,11 @@ var (
 		"{0} has charted {n} places.",
 		"{n} places on the chart from {0}: a milestone.",
 	}
+	courseWords = []string{
+		"{What}, open for racing: {0} charted the last of it.",
+		"{What}: {0} charted its last place, and it is open for racing.",
+		"{What}, open for racing now that {0} has charted it all.",
+	}
 	arrivalWords = []string{
 		"The chart is blank: {n} islands wait to be found.",
 		"The falls have turned the world over: {n} islands wait to be found.",
@@ -293,6 +298,8 @@ func (w *words) written(s *store.Story, named, counted int) (string, string) {
 		default:
 			text = one(s.ID, distanceWords, fill)
 		}
+	case store.StoryCourse:
+		text = one(s.ID, courseWords, fill)
 	case store.StoryArrival:
 		fill["n"] = Count(s.Facts.Islands)
 		text = one(s.ID, arrivalWords, fill)

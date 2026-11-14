@@ -696,7 +696,7 @@ func (c *conn) firstChart() bool {
 	if c.welcomes > 1 || c.e.cfg.Chart == nil {
 		return true
 	}
-	entries := c.e.cfg.Chart.Entries()
-	c.charted = len(entries)
-	return c.send(&pb.ServerMessage{Body: &pb.ServerMessage_Chart{Chart: &pb.Chart{Entries: entries}}}, outChart)
+	entries, courses := c.e.cfg.Chart.Entries(), c.e.cfg.Chart.Courses()
+	c.charted, c.courses = len(entries), len(courses)
+	return c.send(&pb.ServerMessage{Body: &pb.ServerMessage_Chart{Chart: &pb.Chart{Entries: entries, Courses: courses}}}, outChart)
 }

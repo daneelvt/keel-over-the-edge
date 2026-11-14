@@ -164,6 +164,8 @@ type conn struct {
 	// charted is how many of the chart's entries the client has been
 	// sent: the encoder's.
 	charted int
+	// courses is how many of the courses open the client has been sent.
+	courses int
 	margin  margin
 	ack     atomic.Int64 // the newest snapshot's tick the client has decoded
 	// resync: the client lacks a base and asked for a full snapshot.

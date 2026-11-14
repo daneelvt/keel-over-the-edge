@@ -58,6 +58,13 @@ func (d *memDB) addStory(rules *store.NewsRules, s store.Story) {
 func (d *memDB) writeNews(b *store.Batch) {
 	for i := range b.Charting {
 		c := &b.Charting[i]
+		if c.Written && c.Credited {
+			for _, o := range c.Opens {
+				d.addStory(b.News, store.Story{Story: store.StoryCourse, Score: o.Score, At: c.At, Account: c.Account,
+					Subject: store.SubjectCourse, Number: o.Number, Title: o.Title, What: o.What, Island: -1, X: o.X, Y: o.Y,
+					Source: fmt.Sprintf("course:%d", o.Number)})
+			}
+		}
 		if !c.Written || !c.Credited || c.News == nil {
 			continue
 		}

@@ -40,6 +40,7 @@ func TestWords(t *testing.T) {
 		{Story: store.StoryMilestone, Subject: store.SubjectSailor, Facts: store.StoryFacts{Milestone: store.MilestoneWorlds, Value: 10}},
 		{Story: store.StoryMilestone, Subject: store.SubjectSailor, Facts: store.StoryFacts{Milestone: store.MilestonePlaces, Value: 100}},
 		{Story: store.StoryArrival, Subject: store.SubjectWorld, Facts: store.StoryFacts{Islands: 64}},
+		{Story: store.StoryCourse, Subject: store.SubjectCourse, Title: "Round Gannet Holm from Port Fortune", What: "a new course of 12.4 NM"},
 	}
 	for _, c := range cases {
 		for seed := range 12 {

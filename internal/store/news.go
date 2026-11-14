@@ -34,6 +34,7 @@ const (
 	StoryCharting  = "charting"  // any other charting
 	StoryArrival   = "arrival"   // a new world: its first edition opens with it
 	StoryReview    = "review"    // the last world in review, in a new world's first edition
+	StoryCourse    = "course"    // an island course opened by charting
 	storyEdition   = "edition"   // a day's edition set
 )
 
@@ -46,6 +47,10 @@ const (
 // SubjectSailor is a story's subject when it is about a sailor, not a
 // place.
 const SubjectSailor = "sailor"
+
+// SubjectCourse is a story's subject when it is about an island course,
+// by its number in the world.
+const SubjectCourse = "course"
 
 // The kinds of a sailor's milestone.
 const (
@@ -221,6 +226,21 @@ func chartingStory(ctx context.Context, q *db.Queries, nw *newsWrite, c *Chartin
 		}
 	}
 	first[c.Account] = true
+	_, err := insertStory(ctx, q, nw, &s)
+	return err
+}
+
+// courseStory writes the candidate a course opened by a charting makes,
+// about the course, naming the sailor whose charting opened it.
+func courseStory(ctx context.Context, q *db.Queries, nw *newsWrite, c *Charting, o *CourseOpen) error {
+	s := Story{
+		Story: StoryCourse, Score: o.Score, At: c.At, Account: c.Account, Subject: SubjectCourse, Number: o.Number,
+		Title: o.Title, What: o.What, Island: -1, X: o.X, Y: o.Y,
+		Source: fmt.Sprintf("course:%d", o.Number),
+	}
+	if n := c.News; n != nil {
+		s.Facts = StoryFacts{Boat: n.Boat, BoatKind: n.BoatKind}
+	}
 	_, err := insertStory(ctx, q, nw, &s)
 	return err
 }

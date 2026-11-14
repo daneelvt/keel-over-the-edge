@@ -1,0 +1,10 @@
+# about 216 tokens
+Racing areas off Port Royal, where a buoy course is laid to the wind as each race begins (4):
+ Area 1 · 288° 1.0 NM · 0.5 NM across
+ Area 2 · 014° 0.7 NM · 0.5 NM across
+ Area 3 · 214° 0.8 NM · 0.5 NM across
+ Area 4 · 328° 0.8 NM · 0.5 NM across
+Island courses open for racing (2 of the world's 12):
+ Round Port Royal · start 117° 0.6 NM · 2.5 NM, leaving Port Royal to starboard · Jolly boat about 37 min, Keelboat about 34 min, Skiff about 26 min, Beach cat about 27 min, Yacht about 31 min, Catamaran about 35 min
+ Round Shipstern Cay · start 117° 0.6 NM · 2.4 NM, leaving Shipstern Cay to starboard · Tall ship about 57 min
+

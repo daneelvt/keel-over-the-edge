@@ -783,12 +783,61 @@ message ForecastPast {
 // learns a place's name only once it is charted, by anyone.
 message Chart {
   repeated ChartEntry entries = 1;
+  // The island courses open for racing, in the order they opened.
+  repeated Course courses = 2;
 }
 
 // Charted is what has been charted since, sent to every connection as each
-// is written, each once a connection.
+// is written, each once a connection; and the courses opened since.
 message Charted {
   repeated ChartEntry entries = 1;
+  repeated Course courses = 2;
+}
+
+// Course is an island course of the world, open for racing once every
+// island and place it names is charted, and sent only then: its number
+// among the world's courses, its kind and its name; its way, the shortest
+// a boat sails, from the start to the finish, as metres east and north,
+// one after the other; its length, m; what it rounds or passes, in order,
+// each to its side; and the boats it is offered to, each with how long
+// she is expected to take in its typical wind.
+message Course {
+  uint32 number = 1;
+  CourseKind kind = 2;
+  string name = 3;
+  repeated sint32 way = 4;
+  uint32 length = 5;
+  repeated CourseRound rounds = 6;
+  repeated CourseBoat boats = 7;
+}
+
+// CourseKind is a kind of island course.
+enum CourseKind {
+  COURSE_KIND_UNSPECIFIED = 0;
+  // Round one island, from a line off a port and back.
+  COURSE_KIND_ROUND = 1;
+  // Round two or three islands.
+  COURSE_KIND_TOUR = 2;
+  // From a line off one port to a line off another.
+  COURSE_KIND_PASSAGE = 3;
+  // Round a lighthouse's island or rock, and home.
+  COURSE_KIND_LIGHT = 4;
+}
+
+// CourseRound is what a course rounds or passes: a subject of the chart (an
+// island, or a place: a lighthouse's rock, a beacon), and whether it is
+// left to starboard.
+message CourseRound {
+  ChartSubject subject = 1;
+  uint32 number = 2;
+  bool starboard = 3;
+}
+
+// CourseBoat is a boat a course is offered to: her kind, an index into the
+// catalog's boats, and her expected time, s.
+message CourseBoat {
+  uint32 kind = 1;
+  uint32 seconds = 2;
 }
 
 // ChartEntry is a subject of the world's chart: an island, a place or a

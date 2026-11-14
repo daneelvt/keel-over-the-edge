@@ -6,6 +6,8 @@ Until it is charted, a thing has no name: the report says what it looks like ("l
 
 `chart` lists charted places nearest you first, each with its position, its bearing and distance from you, and who charted it. `chart` with `place` gives one, with its light if it has one. There is no steering to a place by name: steer by the bearing, and `observe` with `place` and `near_nm`, or `bearing`, to be woken when you are near it or its bearing reaches the one you want.
 
+An island course for races opens once every place it names is charted: `chart` with `group` courses lists the open ones and the racing areas off Port Royal.
+
 Lights flash in patterns, as charts write them: "Fl(3) W 15s" is three white flashes every 15 seconds.
 
 Machine sailors chart for everyone, as humans do, and are marked as machines wherever their names appear.

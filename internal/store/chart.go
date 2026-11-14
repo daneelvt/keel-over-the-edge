@@ -33,6 +33,9 @@ type Charting struct {
 	WithSubject string
 	WithNumber  int32
 	News        *NewsItem
+	// Opens are the island courses its charting opens, every place each
+	// names now charted: each a story of the news.
+	Opens []CourseOpen
 
 	Written     bool
 	Sailor      string
@@ -53,6 +56,16 @@ type NewsItem struct {
 	X, Y        float64
 	Boat        string
 	BoatKind    string
+}
+
+// CourseOpen is an island course a charting opens: its number in the
+// world, its name and what it is ("a new course of 2.4 NM"), where its
+// start lies, and its story's score.
+type CourseOpen struct {
+	Number      int32
+	Title, What string
+	X, Y        float64
+	Score       int
 }
 
 // SubjectWorld is a news item's subject when it is the world itself.
@@ -102,6 +115,13 @@ func writeChartings(ctx context.Context, q *db.Queries, world pgtype.UUID, b *Ba
 			return err
 		}
 		c.Written, c.Sailor, c.AccountKind, c.At = true, row.Sailor.String, row.AccountKind.String, row.ChartedAt
+		if c.Credited && b.News != nil {
+			for k := range c.Opens {
+				if err := courseStory(ctx, q, &newsWrite{world: world, rules: b.News}, c, &c.Opens[k]); err != nil {
+					return err
+				}
+			}
+		}
 		if c.News == nil || !c.Credited || b.News == nil {
 			continue
 		}

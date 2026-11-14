@@ -201,7 +201,7 @@
       "openWorldHint": false,
       "readOnlyHint": true
     },
-    "description": "The world's shared chart: charted places nearest first, with position, bearing and distance from you, and who charted them. Uncharted places have no names until someone sights them. Steer by the bearings: there is no steering to a place by name.",
+    "description": "The world's shared chart: charted places nearest first, with position, bearing and distance from you, and who charted them. Uncharted places have no names until someone sights them. Steer by the bearings, not by name. Also racing areas and open courses.",
     "inputSchema": {
       "properties": {
         "group": {
@@ -210,7 +210,8 @@
             "all",
             "islands",
             "places",
-            "features"
+            "features",
+            "courses"
           ],
           "type": "string"
         },

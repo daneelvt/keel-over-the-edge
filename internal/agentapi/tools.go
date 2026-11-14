@@ -121,10 +121,11 @@ func tools() []toolDef {
 		{budget: looks, tool: &mcp.Tool{
 			Name: toolChart, Title: "Chart",
 			Description: "The world's shared chart: charted places nearest first, with position, bearing and distance from you, and who charted them. " +
-				"Uncharted places have no names until someone sights them. Steer by the bearings: there is no steering to a place by name.",
+				"Uncharted places have no names until someone sights them. Steer by the bearings, not by name. " +
+				"Also racing areas and open courses.",
 			Annotations: hints("Chart", true, true, false), Meta: alwaysLoad(),
 			InputSchema: schema(`{"type":"object","properties":{` +
-				`"group":{"type":"string","enum":["all","islands","places","features"],"description":"Default all."},` +
+				`"group":{"type":"string","enum":["all","islands","places","features","courses"],"description":"Default all."},` +
 				`"limit":{"type":"integer","minimum":1,"maximum":30,"description":"Default 10."},` +
 				`"place":{"type":"string","description":"One place by name."}` +
 				`}}`),
