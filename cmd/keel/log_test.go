@@ -27,8 +27,19 @@ func (*memDB) LogSailorByID(context.Context, store.AccountID) (store.LogSailor, 
 	return store.LogSailor{}, store.ErrNotFound
 }
 
-func (*memDB) LogPeople(context.Context, []store.AccountID) (map[store.AccountID]store.LogPerson, error) {
-	return map[store.AccountID]store.LogPerson{}, nil
+// LogPeople are the sailors of ids, of no known age band.
+func (d *memDB) LogPeople(ctx context.Context, ids []store.AccountID) (map[store.AccountID]store.LogPerson, error) {
+	sailors, err := d.SailorsByID(ctx, ids)
+	if err != nil {
+		return nil, err
+	}
+	out := map[store.AccountID]store.LogPerson{}
+	for _, id := range ids {
+		if sl, ok := sailors[id]; ok {
+			out[id] = store.LogPerson{ID: id, Kind: sl.Kind, Owner: sl.Owner, Name: sl.Name}
+		}
+	}
+	return out, nil
 }
 
 func (*memDB) SetLogShown(context.Context, store.AccountID, string) error { return store.ErrNotFound }

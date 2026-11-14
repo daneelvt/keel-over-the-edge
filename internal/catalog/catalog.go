@@ -193,3 +193,14 @@ func (c *Catalog) PrepareEncounters() *physics.EncounterPrepared {
 	physics.PrepareEncounters(&p, e)
 	return e
 }
+
+// StoryScore is the score of the news's kind of story that of makes, 0
+// for a kind the catalog has none of.
+func (c *Catalog) StoryScore(of NewsStoryOf) int {
+	for _, s := range c.News.Stories {
+		if s.Of == of {
+			return s.Score
+		}
+	}
+	return 0
+}

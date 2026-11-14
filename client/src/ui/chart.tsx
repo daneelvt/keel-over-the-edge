@@ -26,7 +26,7 @@ import {
 import { hitTest, type SystemBox, tappedBox, type WeatherHit } from '../chart/systembox';
 import type { BoatAt, ChartView } from '../chart/view';
 import { momentOf } from '../chart/weather';
-import type { ChartEntry } from '../net/messages';
+import type { ChartEntry, ChartSubject } from '../net/messages';
 import { Pusher, useUpright } from './case';
 import { PlaceWeatherLines, TimeBar } from './chartweather';
 import { clockAngles, worldTimeText } from './clock';
@@ -35,6 +35,7 @@ import { type Countdown, endText } from './countdown';
 import { WeatherDecal } from './decals';
 import { threeDigits, wholeDegrees } from './format';
 import { useLog } from './loglazy';
+import { type Edition, type NewsStory, nameWords, storyParts } from './newswords';
 import type { Notices } from './notices';
 import { PlayerText } from './player';
 
@@ -508,114 +509,128 @@ export function ChartList({ sea }: { sea: ChartSea }) {
   );
 }
 
-/** An item of the news: what is charted and by whom, or a notice of the world's own (its end). */
-export interface NewsItem {
-  id: string;
-  column: string;
-  at: number;
-  by: string;
-  ai: boolean;
-  subject: string;
-  number: number;
-  title: string;
-  what: string;
-  worth: number;
-  east: number;
-  north: number;
-  also: { subject: string; number: number; title: string }[];
-  /** An item about the world itself: the end it tells of, ms of UTC. */
-  endsAt?: number;
-}
+/** The news, a day's edition: today's for null, or a day's (2006-01-02); null when it cannot be had. */
+export type NewsSource = (day: string | null) => Promise<Edition | null>;
 
-/** The news, a page at a time, older than before (an item's id), or the newest. */
-export type NewsSource = (
-  before: string | null,
-) => Promise<{ items: NewsItem[]; more: boolean } | null>;
-
-/** The news as the server serves it: GET /api/news. */
-export const serverNews: NewsSource = async (before) => {
+/** The news as the server serves it, to a signed-in sailor: GET /api/news. */
+export const serverNews: NewsSource = async (day) => {
   try {
-    const res = await fetch(`/api/news${before === null ? '' : `?before=${before}`}`, {
+    const res = await fetch(`/api/news${day === null ? '' : `?day=${encodeURIComponent(day)}`}`, {
       credentials: 'same-origin',
     });
     if (!res.ok) {
       return null;
     }
-    return (await res.json()) as { items: NewsItem[]; more: boolean };
+    return (await res.json()) as Edition;
   } catch {
     return null;
   }
 };
 
-/** The news made from the chart itself, offline: each island, port, light and wreck charted, newest first. */
+/** The news made from the chart itself, offline: each island, port, light and wreck charted, the newest first, as one day's stories. */
 export function chartNews(store: ChartStore, news: (e: ChartEntry) => boolean): NewsSource {
   return async () => {
-    const items: NewsItem[] = store.entries
+    const stories: NewsStory[] = store.entries
       .filter((e) => e.by !== '' && news(e))
       .map((e) => ({
         id: `${e.subject}:${e.number}`,
-        column: 'discoveries',
+        kind: 'charting',
         at: e.at,
-        by: e.by,
-        ai: e.ai,
+        head: store.title(e).toUpperCase(),
+        text: `${store.kindName(e)}, charted by {0}.`,
+        names: [{ kind: e.ai ? ('machine' as const) : ('human' as const), name: e.by }],
         subject: e.subject,
         number: e.number,
-        title: store.title(e),
-        what: store.kindName(e).toLowerCase(),
-        worth: e.worth,
-        east: e.east,
-        north: e.north,
-        also: [],
+        x: e.east,
+        y: e.north,
       }))
       .reverse();
-    return { items, more: false };
+    const figures = { boats: 0, machines: 0, run: 0, charted: stories.length, crews: 0, over: 0 };
+    return {
+      world: 0,
+      day: '',
+      number: 1,
+      zone: '',
+      set: false,
+      figures,
+      figuresText: '',
+      lead: [],
+      stories,
+      shipmates: [],
+      notices: [],
+      days: [],
+    };
   };
 }
 
-/** An item of the news about what is charted. */
-function ChartedItem({ sea, it, now }: { sea: ChartSea; it: NewsItem; now: number }) {
+/** A story's words, its names set in, a player's own words shown as theirs. */
+function StoryWords({ s }: { s: NewsStory }) {
+  return (
+    <>
+      {storyParts(s.text, s.names).map((p, i) => {
+        if ('words' in p) {
+          return p.words;
+        }
+        const w = nameWords(p.name, p.opens);
+        return (
+          <span key={i}>
+            {w.before}
+            {w.text !== '' ? <PlayerText text={w.text} /> : null}
+            {w.after}
+          </span>
+        );
+      })}
+    </>
+  );
+}
+
+/** A story of the news: a tap opens the chart on its place's box, or on its point. */
+function StoryItem({ sea, s }: { sea: ChartSea; s: NewsStory }) {
+  const show = () => {
+    const e =
+      s.subject === undefined
+        ? undefined
+        : sea.chart.store.get(s.subject as ChartSubject, s.number);
+    if (e !== undefined) {
+      sea.chart.showAt(e);
+    } else if (s.x !== undefined && s.y !== undefined) {
+      sea.chart.showPoint(s.x, s.y);
+    }
+  };
+  const where = s.subject !== undefined || s.x !== undefined;
   return (
     <li>
-      <button type="button" onClick={() => sea.chart.showPoint(it.east, it.north)}>
-        <span class="news-title">{it.title.toUpperCase()}</span>
-        {it.what !== '' ? `, ${it.what}` : ''}
-        {it.also.length > 0 ? `, with ${it.also.map((a) => a.title).join(' and ')}` : ''}. Charted
-        by <PlayerText text={it.by} />
-        {it.ai ? ' (AI)' : ''}, {dayText(it.at, now)}.
-      </button>
+      {where ? (
+        <button type="button" onClick={show}>
+          <span class="news-title">{s.head}.</span> <StoryWords s={s} />
+        </button>
+      ) : (
+        <p>
+          <span class="news-title">{s.head}.</span> <StoryWords s={s} />
+        </p>
+      )}
     </li>
   );
 }
 
 /**
- * An item of the Notices to Mariners: a notice of the world's own, its end,
- * in the reader's own time. The weather is never in the news: the chart,
- * the forecast and the gale warning's notice tell of it.
+ * The news: the day's edition, its figures, the stories chosen and the
+ * reader's own, and the Notices to Mariners, a tap showing where on the
+ * chart. The weather is never in the news: the chart, the forecast and the
+ * gale warning's notice tell of it.
  */
-function WorldItem({ it, zone }: { it: NewsItem; zone: string }) {
-  return (
-    <li class="news-world">
-      <span class="news-title">{it.title.toUpperCase()}.</span> The falls take this world on{' '}
-      {endText(it.endsAt ?? 0, zone)}.
-    </li>
-  );
-}
-
-/** The news: a sheet of the period, its columns of discoveries and of notices to mariners, a tap showing where on the chart. */
 export function NewsSheet({ sea, end = null }: { sea: ChartSea; end?: Countdown | null }) {
-  const [items, setItems] = useState<NewsItem[]>([]);
-  const [more, setMore] = useState(false);
+  const [edition, setEdition] = useState<Edition | null>(null);
   const [fresh, setFresh] = useState(0);
   const [failed, setFailed] = useState(false);
-  const load = async (before: string | null) => {
-    const page = await sea.news(before);
-    if (page === null) {
+  const load = async (day: string | null) => {
+    const e = await sea.news(day);
+    if (e === null) {
       setFailed(true);
       return;
     }
     setFailed(false);
-    setItems((had) => (before === null ? page.items : [...had, ...page.items]));
-    setMore(page.more);
+    setEdition(e);
     setFresh(0);
   };
   useEffect(() => {
@@ -631,49 +646,72 @@ export function NewsSheet({ sea, end = null }: { sea: ChartSea; end?: Countdown 
       on = false;
     };
   }, [sea]);
-  const now = Date.now();
-  const worldOf = new Set(sea.columns.filter((c) => c.of === 'world').map((c) => c.id));
-  const notices = items.filter((it) => worldOf.has(it.column));
-  const charted = items.filter((it) => !worldOf.has(it.column));
   const zone = end?.end.value?.zone ?? '';
+  const mariners = sea.columns.find((c) => c.of === 'world')?.title ?? 'Notices to Mariners';
+  const e = edition;
+  const earlier = e === null ? [] : e.days.filter((d) => d.day !== e.day);
   return (
     <section class="chart-panel news-sheet" aria-label="The news">
       <header class="news-masthead">
         <h2>The Shipping Intelligence</h2>
-        <p>{sea.columns.map((c) => c.title).join(' · ')}</p>
+        {e !== null && e.day !== '' ? (
+          <p>
+            No. {e.number} · {e.day}
+          </p>
+        ) : null}
       </header>
-      {notices.length > 0 ? (
-        <section class="news-column" aria-label="Notices to Mariners">
-          <h3>{sea.columns.find((c) => c.of === 'world')?.title}</h3>
-          <ol class="news-items">
-            {notices.map((it) => (
-              <WorldItem key={it.id} it={it} zone={zone} />
-            ))}
-          </ol>
-        </section>
-      ) : null}
+      {e !== null && e.figuresText !== '' ? <p class="news-figures">{e.figuresText}</p> : null}
       {fresh > 0 ? (
-        <button type="button" class="news-fresh" onClick={() => void load(null)}>
+        <button
+          type="button"
+          class="news-fresh"
+          onClick={() => void load(e?.set === false ? null : (e?.day ?? null))}
+        >
           {fresh} new {fresh === 1 ? 'discovery' : 'discoveries'}: read
         </button>
       ) : null}
       {failed ? <p class="news-failed">The news cannot be had just now.</p> : null}
-      {charted.length === 0 && !failed ? (
-        <p class="news-none">Nothing charted yet: the chart is blank.</p>
+      {e !== null && e.lead.length + e.stories.length === 0 && !failed ? (
+        <p class="news-none">No news yet: the day is young.</p>
       ) : null}
-      <ol class="news-items">
-        {charted.map((it) => (
-          <ChartedItem key={it.id} sea={sea} it={it} now={now} />
-        ))}
-      </ol>
-      {more ? (
-        <button
-          type="button"
-          class="news-more"
-          onClick={() => void load(items[items.length - 1]?.id ?? null)}
-        >
-          Earlier
-        </button>
+      {e === null ? null : (
+        <ol class="news-items">
+          {[...e.lead, ...e.stories].map((s) => (
+            <StoryItem key={s.id} sea={sea} s={s} />
+          ))}
+        </ol>
+      )}
+      {e !== null && e.shipmates.length > 0 ? (
+        <section class="news-column" aria-label="From your shipmates">
+          <h3>From your shipmates</h3>
+          <ol class="news-items">
+            {e.shipmates.map((s) => (
+              <StoryItem key={s.id} sea={sea} s={s} />
+            ))}
+          </ol>
+        </section>
+      ) : null}
+      {e !== null && e.notices.length > 0 ? (
+        <section class="news-column" aria-label={mariners}>
+          <h3>{mariners}</h3>
+          <ol class="news-items">
+            {e.notices.map((n) => (
+              <li key={n.id} class="news-world">
+                <span class="news-title">{n.head}.</span> The falls take this world on{' '}
+                {endText(n.endsAt, zone)}.
+              </li>
+            ))}
+          </ol>
+        </section>
+      ) : null}
+      {earlier.length > 0 ? (
+        <nav class="news-days" aria-label="Other editions">
+          {earlier.map((d) => (
+            <button key={d.day} type="button" class="news-more" onClick={() => void load(d.day)}>
+              No. {d.number}
+            </button>
+          ))}
+        </nav>
       ) : null}
     </section>
   );

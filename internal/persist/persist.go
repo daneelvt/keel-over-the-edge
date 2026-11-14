@@ -89,14 +89,17 @@ type Config struct {
 	Hold    bus.Sender
 	Log     *slog.Logger
 	Metrics *obs.Metrics // may be nil
-	// Chart makes a charting's row, with the news it makes; nil writes
+	// Chart makes a charting's row, with the story it makes; nil writes
 	// none. Written is told of each batch's chartings once written, those
 	// charted already left out, on the writer's goroutine; it must not
-	// block. FoldWithin is how long a sailor's news item about an island
-	// takes in what they chart about it.
-	Chart      Chart
-	Written    func([]store.Charting)
-	FoldWithin time.Duration
+	// block.
+	Chart   Chart
+	Written func([]store.Charting)
+	// News, if not nil, are the rules the news's candidate stories are
+	// written by; without them none are. Boats are the boats' kinds' IDs,
+	// by the world's index of kinds, which a charting's story names.
+	News  *store.NewsRules
+	Boats []string
 	// Logbook makes the rows of the sailors' log a frame tells of,
 	// written with the frame's events; nil writes none.
 	Logbook Logbook
@@ -106,7 +109,7 @@ type Config struct {
 }
 
 // Chart makes a charting's row from the simulation's: the world's chart's
-// subjects, what each is worth and the news it makes.
+// subjects, what each is worth and the story it makes.
 type Chart interface {
 	Charting(c *bus.Charted) store.Charting
 }
@@ -304,7 +307,15 @@ func (p *Persist) chartings(f *bus.Frame) []store.Charting {
 	}
 	out := make([]store.Charting, len(f.Charted))
 	for i := range f.Charted {
-		out[i] = p.cfg.Chart.Charting(&f.Charted[i])
+		c := &f.Charted[i]
+		out[i] = p.cfg.Chart.Charting(c)
+		// The boat that charted it, as its story names her.
+		if n, s := out[i].News, c.Slot; n != nil && s >= 0 && int(s) < f.Capacity() && f.Occupied[s] && f.Boat[s] == c.Boat {
+			n.Boat = f.BoatName[s]
+			if k := int(f.Kind[s]); k < len(p.cfg.Boats) {
+				n.BoatKind = p.cfg.Boats[k]
+			}
+		}
 	}
 	return out
 }
@@ -501,7 +512,7 @@ func (p *Persist) write(ctx context.Context) error {
 	for i := range p.charts {
 		p.charts[i].Written = false
 	}
-	b := store.Batch{World: p.cfg.World, Epoch: p.cfg.Epoch, Events: p.batch, Charting: p.charts, FoldWithin: p.cfg.FoldWithin, Log: p.log}
+	b := store.Batch{World: p.cfg.World, Epoch: p.cfg.Epoch, Events: p.batch, Charting: p.charts, News: p.cfg.News, Log: p.log}
 	if p.haveCP {
 		p.cp.Format = sim.SnapshotVersion
 		p.cp.Build, p.cp.Catalog, p.cp.Layout, p.cp.Epoch = p.cfg.Build, p.cfg.Catalog, p.cfg.Layout, p.cfg.Epoch

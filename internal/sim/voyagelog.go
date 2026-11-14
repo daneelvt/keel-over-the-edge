@@ -41,9 +41,6 @@ const (
 	// fogLandfall is the visibility a port made in is fog under, m: a
 	// nautical mile.
 	fogLandfall = 1852.0
-	// nightSeconds is how long in the water with the sun down makes a
-	// night at sea.
-	nightSeconds = 30 * 60
 	// windQuarters is the minute means' unit: a quarter of a metre a
 	// second.
 	windQuarters = 4.0
@@ -51,6 +48,10 @@ const (
 
 // newVoyage is the voyage of a boat entering the water at tick.
 func newVoyage(tick int64) bus.Voyage { return bus.Voyage{Log: bus.VoyageLog{Began: tick}} }
+
+// nightSeconds is how long in the water with the sun down makes a night
+// at sea. A variable only so that a test may wait less than half an hour.
+var nightSeconds int32 = 30 * 60
 
 // logRules reads every sailing boat's voyage log, once a second.
 func (w *World) logRules() {

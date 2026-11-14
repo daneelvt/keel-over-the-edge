@@ -11,6 +11,7 @@ import (
 
 	"github.com/daneelvt/keel-over-the-edge/internal/auth"
 	"github.com/daneelvt/keel-over-the-edge/internal/logbook"
+	"github.com/daneelvt/keel-over-the-edge/internal/news"
 	"github.com/daneelvt/keel-over-the-edge/internal/store"
 )
 
@@ -37,9 +38,19 @@ func (a *api) registerLogs(mux *http.ServeMux, required func(http.HandlerFunc) h
 	mux.Handle("GET /api/machines/log", required(a.machineLog))
 }
 
+// logAnswer is a log as the game reads it: with the stories this world
+// naming its sailor, the newest first, if the reader may name them.
+type logAnswer struct {
+	logbook.Log
+	News []news.Story `json:"news"`
+}
+
 // writeLog answers with a log, kept by no cache but the reader's own
 // browser's, and not even there.
-func writeLog(w http.ResponseWriter, l logbook.Log) {
+func writeLog(w http.ResponseWriter, l logAnswer) {
+	if l.News == nil {
+		l.News = []news.Story{}
+	}
 	body, err := json.Marshal(l)
 	if err != nil {
 		panic(err) // a log always marshals
@@ -80,23 +91,39 @@ func human(w http.ResponseWriter, r *http.Request) (store.Account, bool) {
 	return acc, true
 }
 
-// answerLog answers what reading a log came to.
-func (a *api) answerLog(w http.ResponseWriter, r *http.Request, l logbook.Log, err error) {
+// answerLog answers what reading a log came to, with the stories this
+// world naming its sailor: by name, or of the account given.
+func (a *api) answerLog(w http.ResponseWriter, r *http.Request, l logbook.Log, err error, reader, account store.AccountID) {
 	switch {
 	case errors.Is(err, logbook.ErrNotFound):
 		refuseLog(w)
+		return
 	case err != nil:
 		a.unavailable(w, r, "reading a log", err)
-	default:
-		writeLog(w, l)
+		return
 	}
+	out := logAnswer{Log: l}
+	if a.cfg.News != nil {
+		var stories []news.Story
+		if account != (store.AccountID{}) {
+			stories, err = a.cfg.News.AboutAccount(r.Context(), reader, account, newsAbout)
+		} else {
+			stories, err = a.cfg.News.About(r.Context(), reader, l.Name, newsAbout)
+		}
+		if err != nil {
+			a.unavailable(w, r, "reading the news of a log", err)
+			return
+		}
+		out.News = stories
+	}
+	writeLog(w, out)
 }
 
 // ownLog answers GET /api/me/log?world=, behind auth.Required: the
 // player's own sailor's log, with its days of the world asked for, the
 // newest by default.
 //
-//	200 the log (logbook.Log)
+//	200 the log (logbook.Log, its news with it)
 //	400 {"error":"world"}
 //	404 {"error":"not-found"}   no sailor
 //	403 {"error":"ai-account"}
@@ -111,14 +138,14 @@ func (a *api) ownLog(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	l, err := a.cfg.Logs.Own(r.Context(), acc.ID, world)
-	a.answerLog(w, r, l, err)
+	a.answerLog(w, r, l, err, acc.ID, acc.ID)
 }
 
 // sailorLog answers GET /api/log?name=&world=, behind auth.Required: the
 // log of the sailor of the name, as the player may read it. No such
 // sailor, and one whose log the player may not read, are refused alike.
 //
-//	200 the log (logbook.Log)
+//	200 the log (logbook.Log, its news with it)
 //	400 {"error":"world"}
 //	404 {"error":"not-found"}
 //	403 {"error":"ai-account"}
@@ -138,14 +165,14 @@ func (a *api) sailorLog(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	l, err := a.cfg.Logs.ByName(r.Context(), acc.ID, name, world)
-	a.answerLog(w, r, l, err)
+	a.answerLog(w, r, l, err, acc.ID, store.AccountID{})
 }
 
 // machineLog answers GET /api/machines/log?id=&world=, behind
 // auth.Required: the log of one of the player's machine sailors, by its
 // ID, as the machine sailors' panel lists them.
 //
-//	200 the log (logbook.Log)
+//	200 the log (logbook.Log, its news with it)
 //	400 {"error":"world"}
 //	404 {"error":"not-found"}   not the player's machine sailor
 //	403 {"error":"ai-account"}
@@ -165,7 +192,7 @@ func (a *api) machineLog(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	l, err := a.cfg.Logs.Machine(r.Context(), acc.ID, id, world)
-	a.answerLog(w, r, l, err)
+	a.answerLog(w, r, l, err, acc.ID, id)
 }
 
 // logShown is PUT /api/me/log's body and answer: who may read the log,

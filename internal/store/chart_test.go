@@ -12,10 +12,10 @@ import (
 	"github.com/daneelvt/keel-over-the-edge/internal/store/storetest"
 )
 
-// TestChartingsWritten: chartings and the news they make are written in
-// the fenced batch; a subject charted twice keeps its first credit; a
-// sailor's places about an island within the fold are folded into its
-// item; the names are copies, kept when the sailor's changes; and a writer
+// TestChartingsWritten: chartings and the stories they make are written
+// in the fenced batch: a great discovery's, a sailor's first charting
+// ever, and any other; a subject charted twice keeps its first credit;
+// the names are copies, kept when the sailor's changes; and a writer
 // fenced out writes none of it.
 func TestChartingsWritten(t *testing.T) {
 	ctx := context.Background()
@@ -34,21 +34,22 @@ func TestChartingsWritten(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer p.Close()
-	news := func(title, what string, island int32, fold bool) *store.NewsItem {
-		return &store.NewsItem{Column: "discoveries", Title: title, What: what, Island: island, Fold: fold, X: 10, Y: 20}
+	news := func(story string, score int, title, what string, island int32) *store.NewsItem {
+		return &store.NewsItem{Story: story, Score: score, Title: title, What: what, Island: island, X: 10, Y: 20, Boat: "Gull", BoatKind: "skiff"}
 	}
-	b := store.Batch{World: world.ID, Epoch: epoch, FoldWithin: 10 * time.Minute, Charting: []store.Charting{
+	rules := &store.NewsRules{Zone: "America/New_York", Column: "discoveries", FirstScore: 5}
+	b := store.Batch{World: world.ID, Epoch: epoch, News: rules, Charting: []store.Charting{
 		// Known from the start, and charted with it.
 		{Subject: "island", Number: 0, Tick: 1, Worth: 5},
 		{Subject: "feature", Number: 3, Tick: 1, Worth: 2, WithSubject: "island", WithNumber: 0},
-		// Ann's island, its cove folded into its item, and a lighthouse of
-		// its own.
+		// Ann's cove, her first charting ever; her island, a great
+		// discovery; and a lighthouse.
+		{Subject: "place", Number: 200, Credited: true, Account: ann, Boat: 4, Tick: 89, X: 1, Y: 2, Worth: 1,
+			News: news(store.StoryCharting, 1, "Pelican Cove", "a cove on Keyhole Rock", 7)},
 		{Subject: "island", Number: 7, Credited: true, Account: ann, Boat: 4, Tick: 90, X: 1, Y: 2, Worth: 24,
-			News: news("Keyhole Rock", "an island of the rim", 7, false)},
-		{Subject: "place", Number: 200, Credited: true, Account: ann, Boat: 4, Tick: 91, X: 1, Y: 2, Worth: 1,
-			News: news("Pelican Cove", "a cove on Keyhole Rock", 7, true)},
+			News: news(store.StoryGreat, 10, "Keyhole Rock", "an island of the rim", 7)},
 		{Subject: "place", Number: 201, Credited: true, Account: ann, Boat: 4, Tick: 92, X: 1, Y: 2, Worth: 3,
-			News: news("Keyhole Light", "a lighthouse on Keyhole Rock", 7, false)},
+			News: news(store.StoryCharting, 1, "Keyhole Light", "a lighthouse on Keyhole Rock", 7)},
 	}}
 	if err := p.Write(ctx, b); err != nil {
 		t.Fatal(err)
@@ -58,11 +59,12 @@ func TestChartingsWritten(t *testing.T) {
 			t.Errorf("charting %d not written", i)
 		}
 	}
-	if c := b.Charting[2]; c.Sailor != "Ann Bonny" || c.AccountKind != "human" || time.Since(c.At) > time.Minute {
+	if c := b.Charting[3]; c.Sailor != "Ann Bonny" || c.AccountKind != "human" || time.Since(c.At) > time.Minute {
 		t.Errorf("the island's credit: %+v", c)
 	}
 	// Charted again: kept as it was.
-	again := store.Batch{World: world.ID, Epoch: epoch, Charting: []store.Charting{{Subject: "island", Number: 7, Tick: 500, Worth: 24}}}
+	again := store.Batch{World: world.ID, Epoch: epoch, News: rules, Charting: []store.Charting{{Subject: "island", Number: 7, Tick: 500, Worth: 24,
+		Credited: true, Account: ann, News: news(store.StoryGreat, 10, "Keyhole Rock", "an island of the rim", 7)}}}
 	if err := p.Write(ctx, again); err != nil {
 		t.Fatal(err)
 	}
@@ -77,34 +79,45 @@ func TestChartingsWritten(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(rows) != 5 || rows[2].Sailor != "Ann Bonny" || rows[2].Tick != 90 || rows[0].Credited || rows[0].WithSubject != "island" {
+	if len(rows) != 5 || rows[3].Sailor != "Ann Bonny" || rows[3].Tick != 90 || rows[0].Credited || rows[0].WithSubject != "island" {
 		t.Fatalf("rows %+v", rows)
 	}
-	items, err := s.News(ctx, world.ID, nil, 40)
+	ny, _ := time.LoadLocation("America/New_York")
+	stories, err := s.DayStories(ctx, world.ID, b.Charting[2].At.In(ny))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(items) != 2 {
-		t.Fatalf("%d items: %+v", len(items), items)
+	if len(stories) != 3 {
+		t.Fatalf("%d stories: %+v", len(stories), stories)
 	}
-	island := items[1]
-	if items[0].Title != "Keyhole Light" || island.Title != "Keyhole Rock" || island.Sailor != "Ann Bonny" ||
-		len(island.Also) != 1 || island.Also[0].Title != "Pelican Cove" {
-		t.Errorf("items %+v", items)
+	for i, want := range []struct {
+		story string
+		score int
+		title string
+	}{{store.StoryFirst, 5, "Pelican Cove"}, {store.StoryGreat, 10, "Keyhole Rock"}, {store.StoryCharting, 1, "Keyhole Light"}} {
+		st := stories[i]
+		if st.Story != want.story || st.Score != want.score || st.Title != want.title || st.Account != ann || st.Sailor != "Ann Bonny" ||
+			st.Facts.Boat != "Gull" || st.Facts.BoatKind != "skiff" || st.Rank != 0 || st.Struck {
+			t.Errorf("story %d: %+v", i, st)
+		}
 	}
-	// Paged: before the newest, the other.
-	older, err := s.News(ctx, world.ID, &items[0].ID, 40)
-	if err != nil || len(older) != 1 || older[0].Title != "Keyhole Rock" {
-		t.Errorf("before the newest: %+v, %v", older, err)
+	// Without the news's rules, a charting makes no story.
+	quiet := store.Batch{World: world.ID, Epoch: epoch, Charting: []store.Charting{{Subject: "island", Number: 8, Credited: true, Account: ann, Boat: 4,
+		Tick: 600, Worth: 1, News: news(store.StoryCharting, 1, "Gannet Holm", "an island", 8)}}}
+	if err := p.Write(ctx, quiet); err != nil {
+		t.Fatal(err)
+	}
+	if again, _ := s.DayStories(ctx, world.ID, b.Charting[2].At.In(ny)); len(again) != 3 {
+		t.Errorf("%d stories after a write without the rules", len(again))
 	}
 	// Fenced out, the lease's epoch another's: nothing.
 	err = p.Write(ctx, store.Batch{World: world.ID, Epoch: epoch + 1, Charting: []store.Charting{
-		{Subject: "island", Number: 9, Credited: true, Account: ann, Boat: 4, Tick: 900, Worth: 1, News: news("Gull Rock", "an island", 9, false)},
+		{Subject: "island", Number: 9, Credited: true, Account: ann, Boat: 4, Tick: 900, Worth: 1, News: news(store.StoryCharting, 1, "Gull Rock", "an island", 9)},
 	}})
 	if !errors.Is(err, store.ErrFenced) {
 		t.Fatalf("a fenced write: %v", err)
 	}
-	if rows, _ := s.Chartings(ctx, world.ID); len(rows) != 5 {
+	if rows, _ := s.Chartings(ctx, world.ID); len(rows) != 6 {
 		t.Errorf("%d rows after a fenced write", len(rows))
 	}
 }

@@ -153,26 +153,31 @@ type ChartKey struct {
 	Number  int32
 }
 
-// LogRows are rows of the log to write.
+// LogRows are rows of the log to write, and the candidate stories of the
+// news the same frames make.
 type LogRows struct {
 	Voyages []LogVoyage
 	Entries []LogEntry
+	Stories []Story
 }
 
 // Empty reports whether there is nothing to write.
-func (r *LogRows) Empty() bool { return len(r.Voyages) == 0 && len(r.Entries) == 0 }
+func (r *LogRows) Empty() bool {
+	return len(r.Voyages) == 0 && len(r.Entries) == 0 && len(r.Stories) == 0
+}
 
 // Reset empties r, keeping its room.
 func (r *LogRows) Reset() {
 	clear(r.Voyages)
 	clear(r.Entries)
-	r.Voyages, r.Entries = r.Voyages[:0], r.Entries[:0]
+	clear(r.Stories)
+	r.Voyages, r.Entries, r.Stories = r.Voyages[:0], r.Entries[:0], r.Stories[:0]
 }
 
 // WriteLog writes rows of the log, fenced by the lease's epoch: what the
 // backfill writes.
 func (s *Store) WriteLog(ctx context.Context, lease int64, rows LogRows) error {
-	return s.fenced(ctx, lease, func(q *db.Queries) error { return writeLog(ctx, q, &rows, nil) })
+	return s.fenced(ctx, lease, func(q *db.Queries) error { return writeLog(ctx, q, &rows, nil, nil) })
 }
 
 // writeLog writes rows of the log in a transaction: each row once by its
@@ -180,8 +185,9 @@ func (s *Store) WriteLog(ctx context.Context, lease int64, rows LogRows) error {
 // the charting is in written; the names of the sailors it copies as they
 // are now, where not given; and each row written the first time adds its
 // finds to its sailor's collection, a find made for the first time an
-// entry of its own.
-func writeLog(ctx context.Context, q *db.Queries, rows *LogRows, written map[ChartKey]bool) error {
+// entry of its own. With nw, the world's news, its stories are written
+// too, and the milestones its rows reach; without, none.
+func writeLog(ctx context.Context, q *db.Queries, rows *LogRows, written map[ChartKey]bool, nw *newsWrite) error {
 	if rows.Empty() {
 		return nil
 	}
@@ -231,6 +237,11 @@ func writeLog(ctx context.Context, q *db.Queries, rows *LogRows, written map[Cha
 				return err
 			}
 		}
+		if nw != nil {
+			if err := voyageMilestones(ctx, q, nw, v); err != nil {
+				return err
+			}
+		}
 	}
 	for i := range rows.Entries {
 		e := &rows.Entries[i]
@@ -246,6 +257,18 @@ func writeLog(ctx context.Context, q *db.Queries, rows *LogRows, written map[Cha
 		}
 		for _, fd := range e.Finds {
 			if err := writeFind(ctx, q, e.Account, e.World, e.At, e.Place, fd); err != nil {
+				return err
+			}
+		}
+		if nw != nil && e.Kind == LogCharted {
+			if err := chartedMilestone(ctx, q, nw, e); err != nil {
+				return err
+			}
+		}
+	}
+	if nw != nil {
+		for i := range rows.Stories {
+			if _, err := insertStory(ctx, q, nw, &rows.Stories[i]); err != nil {
 				return err
 			}
 		}
@@ -377,13 +400,14 @@ func (s *Store) logSailor(ctx context.Context, p db.LogSailorParams) (LogSailor,
 
 // LogPerson is an account as the log names it: its kind, its owner (a
 // machine sailor's), its month of birth (its owner's for a machine
-// sailor) and who may read its log.
+// sailor), who may read its log, and its sailor's name.
 type LogPerson struct {
 	ID    AccountID
 	Kind  Kind
 	Owner AccountID
 	Born  int32
 	Shown string
+	Name  string
 }
 
 // LogPeople are the accounts of ids still kept, by ID.
@@ -401,7 +425,7 @@ func (s *Store) LogPeople(ctx context.Context, ids []AccountID) (map[AccountID]L
 	}
 	out := make(map[AccountID]LogPerson, len(rows))
 	for _, r := range rows {
-		out[r.ID.Bytes] = LogPerson{ID: r.ID.Bytes, Kind: Kind(r.Kind), Owner: r.OwnerID.Bytes, Born: r.Born, Shown: r.LogShown}
+		out[r.ID.Bytes] = LogPerson{ID: r.ID.Bytes, Kind: Kind(r.Kind), Owner: r.OwnerID.Bytes, Born: r.Born, Shown: r.LogShown, Name: r.Name}
 	}
 	return out, nil
 }

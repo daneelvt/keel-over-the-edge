@@ -4,7 +4,9 @@ package main
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
+	"net/http"
 	"slices"
 	"strings"
 	"sync"
@@ -12,10 +14,12 @@ import (
 	"testing/synctest"
 	"time"
 
+	"github.com/daneelvt/keel-over-the-edge/internal/auth"
 	"github.com/daneelvt/keel-over-the-edge/internal/catalog"
 	"github.com/daneelvt/keel-over-the-edge/internal/chart"
 	"github.com/daneelvt/keel-over-the-edge/internal/client"
 	"github.com/daneelvt/keel-over-the-edge/internal/edge/edgetest"
+	"github.com/daneelvt/keel-over-the-edge/internal/news"
 	"github.com/daneelvt/keel-over-the-edge/internal/protocol"
 	"github.com/daneelvt/keel-over-the-edge/internal/protocol/pb"
 	"github.com/daneelvt/keel-over-the-edge/internal/sight"
@@ -156,6 +160,33 @@ func TestChartOnline(t *testing.T) {
 		c := heard(cin)
 		time.Sleep(2 * time.Second)
 		synctest.Wait()
+		// The island is a story of the day's news, read behind a
+		// session, its place given to open its box.
+		if code, _, _ := get(t, s.client, playURL+"/api/news"); code != http.StatusUnauthorized {
+			t.Errorf("the news without a session: %d", code)
+		}
+		req, _ := http.NewRequest(http.MethodGet, playURL+"/api/news", nil)
+		req.Header.Set("Cookie", auth.CookieName+"="+ann)
+		res, err = s.client.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var e news.Edition
+		err = json.NewDecoder(res.Body).Decode(&e)
+		res.Body.Close()
+		if err != nil || res.StatusCode != 200 || res.Header.Get("Cache-Control") != "private, max-age=5" {
+			t.Fatalf("the news: %d %v", res.StatusCode, err)
+		}
+		if !slices.ContainsFunc(e.Stories, func(st news.Story) bool {
+			return st.Head == strings.ToUpper(is.Name) && st.Subject == "island" && st.Number == is.Number && len(st.Names) == 1 && st.X != nil
+		}) || e.Number != 1 || e.Set || len(e.Lead) == 0 || e.Lead[0].Kind != store.StoryArrival {
+			t.Errorf("the island not in the day's news: %+v", e)
+		}
+		if !slices.ContainsFunc(d.stories(), func(st store.Story) bool {
+			return st.Story == store.StoryArrival && st.Facts.Islands > 0 && st.Facts.Islands < st.Facts.Of
+		}) {
+			t.Errorf("no arrival of the world: %+v", d.stories())
+		}
 		s.stop(t)
 		for who, g := range map[string]*charts{"Ann": a, "Bob": b, "Carol": c} {
 			e := g.entry(is.Name)
