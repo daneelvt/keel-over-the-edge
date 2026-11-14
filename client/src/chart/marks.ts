@@ -12,6 +12,7 @@ export const PLACE_MARKS: Record<string, string> = {
   reef: '✳',
   bar: '∴',
   wreck: '⋕',
+  beacon: '‡',
 };
 
 /** The marks of the kinds of feature, by the chart's symbol for each. */

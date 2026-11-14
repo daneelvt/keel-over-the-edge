@@ -4237,6 +4237,7 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
         size: c.store.size,
         titles: c.store.entries.map((e) => c.store.title(e)),
         mine: c.store.entries.filter((e) => c.store.mine(e)).map((e) => c.store.title(e)),
+        courses: c.store.courses.map((k) => k.name),
         credits: c.store.entries.map((e) => [c.store.title(e), e.by] as [string, string]),
         models: v.modelsHad,
         draws: v.draws,

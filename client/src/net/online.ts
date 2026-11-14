@@ -66,6 +66,7 @@ import type {
   ChartEntry,
   ChatStateTold,
   ChunksHanded,
+  CourseOpen,
   CrewTold,
   ForecastTold,
   FromWorker,
@@ -241,7 +242,7 @@ export class Online {
   /** Told of the places in chunks just handed. */
   onPlaces: ((p: PlaceSeen[]) => void) | null = null;
   /** Told of the world's chart: whole after each Welcome, then what is charted. */
-  onChart: ((entries: ChartEntry[], whole: boolean) => void) | null = null;
+  onChart: ((entries: ChartEntry[], whole: boolean, courses: CourseOpen[]) => void) | null = null;
   /** Told of each forecast as it is issued, with what has been after a Welcome. */
   onForecast: ((f: ForecastTold, past: PastTold | null) => void) | null = null;
   /** Told of the weather as it is sent: the spells in play, or null to keep them, and keyframes. */
@@ -623,7 +624,7 @@ export class Online {
         this.onCaps?.(m.caps, m.drop);
         break;
       case 'chart':
-        this.onChart?.(m.entries, m.whole);
+        this.onChart?.(m.entries, m.whole, m.courses);
         break;
       case 'tools':
         this.tools.value = m.on;

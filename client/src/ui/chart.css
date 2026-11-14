@@ -417,6 +417,11 @@
   font-variant-numeric: tabular-nums;
 }
 
+/* A course's boats, under its name and where it starts, across the line. */
+.chart-list-course .chart-credit {
+  grid-column: 1 / -1;
+}
+
 /* The lights' characters, printed only close in. */
 .chart-close .chart-character {
   display: block;

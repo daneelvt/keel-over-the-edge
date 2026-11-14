@@ -26,6 +26,8 @@ import {
   ChartSubject,
   ChatRefusal,
   ChatStatus,
+  CourseKind,
+  type Course as CourseWire,
   type Harbour as HarbourTold,
   KnockState,
   Lamp,
@@ -45,6 +47,7 @@ import type {
   ChatStateTold,
   ChatTold,
   ChunksHanded,
+  CourseOpen,
   CrewTold,
   ForecastTold,
   HandedTold,
@@ -233,7 +236,7 @@ export type Received =
   /** The account's owner's flag was set or cleared. */
   | { kind: 'tools'; on: boolean }
   /** The world's chart: whole, or what was charted since. */
-  | { kind: 'chart'; entries: ChartEntry[]; whole: boolean }
+  | { kind: 'chart'; entries: ChartEntry[]; courses: CourseOpen[]; whole: boolean }
   /** The forecast as it is issued, with what has been after a Welcome. */
   | { kind: 'forecast'; forecast: ForecastTold; past: PastTold | null }
   | { kind: 'pong' }
@@ -575,10 +578,20 @@ export class Session {
         };
       case 'chart':
         this.#lastHeard = now;
-        return { kind: 'chart', entries: m.body.value.entries.map(chartEntry), whole: true };
+        return {
+          kind: 'chart',
+          entries: m.body.value.entries.map(chartEntry),
+          courses: m.body.value.courses.map(courseOpen),
+          whole: true,
+        };
       case 'charted':
         this.#lastHeard = now;
-        return { kind: 'chart', entries: m.body.value.entries.map(chartEntry), whole: false };
+        return {
+          kind: 'chart',
+          entries: m.body.value.entries.map(chartEntry),
+          courses: m.body.value.courses.map(courseOpen),
+          whole: false,
+        };
       case 'forecast':
         this.#lastHeard = now;
         return {
@@ -982,5 +995,34 @@ export function chartEntry(e: ChartEntryWire): ChartEntry {
     sunk: e.sunk,
     withSubject: subjectOf(e.withSubject),
     withNumber: e.withNumber,
+  };
+}
+
+/** A course's kind as the page names it. */
+const courseKinds: Record<number, CourseOpen['kind']> = {
+  [CourseKind.ROUND]: 'round',
+  [CourseKind.TOUR]: 'tour',
+  [CourseKind.PASSAGE]: 'passage',
+  [CourseKind.LIGHT]: 'light',
+};
+
+/** A course open, as the page reads it, from the server's. */
+export function courseOpen(c: CourseWire): CourseOpen {
+  const way: [number, number][] = [];
+  for (let i = 0; i + 1 < c.way.length; i += 2) {
+    way.push([c.way[i] ?? 0, c.way[i + 1] ?? 0]);
+  }
+  return {
+    number: c.number,
+    kind: courseKinds[c.kind] ?? 'round',
+    name: c.name,
+    way,
+    length: c.length,
+    rounds: c.rounds.map((r) => ({
+      subject: subjectOf(r.subject) ?? 'island',
+      number: r.number,
+      starboard: r.starboard,
+    })),
+    boats: c.boats.map((b) => ({ kind: b.kind, seconds: b.seconds })),
   };
 }

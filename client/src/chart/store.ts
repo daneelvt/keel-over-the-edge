@@ -7,7 +7,7 @@
 // its latitude and longitude (position.ts).
 
 import { signal } from '@preact/signals';
-import type { ChartEntry, ChartSubject } from '../net/messages';
+import type { ChartEntry, ChartSubject, CourseOpen } from '../net/messages';
 import { formatPosition } from './position';
 
 /** A nautical mile, m. */
@@ -29,6 +29,8 @@ export interface ChartWords {
   lip: number;
   /** A discovery worth this or more is a great one. */
   great: number;
+  /** The boats' names, by their kinds' indices: what a course suits. */
+  boats?: readonly string[];
 }
 
 /** Told of entries charted since the chart was had whole. */
@@ -44,6 +46,7 @@ export class ChartStore {
   readonly words: ChartWords;
   readonly #entries: ChartEntry[] = [];
   readonly #byKey = new Map<string, ChartEntry>();
+  readonly #courses: CourseOpen[] = [];
   readonly #listeners: ChartedListener[] = [];
 
   constructor(words: ChartWords) {
@@ -57,6 +60,11 @@ export class ChartStore {
 
   get size(): number {
     return this.#entries.length;
+  }
+
+  /** The island courses open for racing, in the order they opened. */
+  get courses(): readonly CourseOpen[] {
+    return this.#courses;
   }
 
   /** The entry of a subject, if it is charted. */
@@ -81,14 +89,25 @@ export class ChartStore {
   }
 
   /**
-   * Takes entries from the server: with whole, the chart in full, replacing
-   * what was held (a new connection's, perhaps another world's).
+   * Takes entries from the server, and the courses opened: with whole, the
+   * chart in full, replacing what was held (a new connection's, perhaps
+   * another world's).
    */
-  receive(entries: readonly ChartEntry[], whole: boolean): void {
+  receive(
+    entries: readonly ChartEntry[],
+    whole: boolean,
+    courses: readonly CourseOpen[] = [],
+  ): void {
     if (whole) {
       this.#entries.length = 0;
       this.#byKey.clear();
+      this.#courses.length = 0;
       this.generation++;
+    }
+    for (const c of courses) {
+      if (!this.#courses.some((h) => h.number === c.number)) {
+        this.#courses.push(c);
+      }
     }
     const added: ChartEntry[] = [];
     for (const e of entries) {
@@ -230,6 +249,67 @@ export function chartList(
     g.lines.sort((x, y) => x.distance - y.distance);
   }
   return groups;
+}
+
+/** The kinds of course as the list names them. */
+const COURSE_KINDS: Record<CourseOpen['kind'], string> = {
+  round: 'Round an island',
+  tour: 'Round islands',
+  passage: 'Port to port',
+  light: 'Round a light',
+};
+
+/** A line of the list's courses: a course open, how far its start is from the boat, m, and its words. */
+export interface CourseLine {
+  course: CourseOpen;
+  distance: number;
+  kind: string;
+  /** Where its start is from the boat, and its length: "045° 1.2 NM · 2.4 NM long". */
+  where: string;
+  /** The boats it suits, each with her expected time: "Jolly boat 37 min · Skiff 26 min". */
+  boats: string;
+}
+
+/** The courses open for a boat at (east, north), nearest start first, the boats named from boats. */
+export function courseLines(
+  courses: readonly CourseOpen[],
+  east: number,
+  north: number,
+  boats: readonly string[] = [],
+): CourseLine[] {
+  const out: CourseLine[] = [];
+  for (const c of courses) {
+    const start = c.way[0] ?? [0, 0];
+    const d = Math.hypot(start[0] - east, start[1] - north);
+    out.push({
+      course: c,
+      distance: d,
+      kind: COURSE_KINDS[c.kind],
+      where: `${bearingText(Math.atan2(start[0] - east, start[1] - north))} ${distanceText(d)} · ${distanceText(c.length)} long`,
+      boats: c.boats
+        .map((b) => `${boats[b.kind] ?? 'Boat'} ${Math.max(Math.round(b.seconds / 60), 1)} min`)
+        .join(' · '),
+    });
+  }
+  return out.sort((x, y) => x.distance - y.distance);
+}
+
+/** The middle of a course's way and how far a camera stands back to see it whole, m. */
+export function courseFrame(c: CourseOpen): { east: number; north: number; distance: number } {
+  let w = Number.POSITIVE_INFINITY;
+  let s = Number.POSITIVE_INFINITY;
+  let e = Number.NEGATIVE_INFINITY;
+  let n = Number.NEGATIVE_INFINITY;
+  for (const [x, y] of c.way) {
+    w = Math.min(w, x);
+    s = Math.min(s, y);
+    e = Math.max(e, x);
+    n = Math.max(n, y);
+  }
+  if (!Number.isFinite(w)) {
+    return { east: 0, north: 0, distance: 4000 };
+  }
+  return { east: (w + e) / 2, north: (s + n) / 2, distance: Math.max(e - w, n - s) * 2.4 + 1500 };
 }
 
 /** How far the edge is, as the pocket chart's caption says it: "edge 4.3 NM". */

@@ -7,7 +7,7 @@
 // lookout as the boat sails.
 
 import { catalog } from '../catalog';
-import type { ChartEntry } from '../net/messages';
+import type { ChartEntry, CourseOpen } from '../net/messages';
 import { type Physics, VISIBILITY, WIND_VALUE, WIND_VALUES } from '../predict/physics';
 import type { SeaScene } from '../render/scene';
 import { hourAt, skyPeriods } from '../sky/skytime';
@@ -124,6 +124,7 @@ export function makeChart(
     scale: catalog.sky.scale,
     lip: w.disk.radius,
     great: w.chart.worth.great,
+    boats: catalog.boats.map((b) => b.name),
   });
   const boat = () => ({
     east: world.pose.east,
@@ -191,6 +192,13 @@ interface SandboxFile {
   models: string[];
   known: number[];
   sight: SightExport;
+  /** The world's island courses, each with the entries, by index, that open it once charted. */
+  courses?: (CourseOpen & { needs: number[] })[];
+}
+
+/** The sandbox's courses that every entry each needs, charted, opens. */
+function openCourses(file: SandboxFile, charted: (i: number) => boolean): CourseOpen[] {
+  return (file.courses ?? []).filter((c) => c.needs.every(charted)).map(({ needs: _, ...c }) => c);
 }
 
 /** Fetches the sandbox's chart for a seed: null without one. */
@@ -241,6 +249,7 @@ export function chartSandbox(
     store.receive(
       file.entries.map((e) => at(e, '')),
       true,
+      openCourses(file, () => true),
     );
     return () => {};
   }
@@ -252,6 +261,7 @@ export function chartSandbox(
       .filter((e) => e !== undefined)
       .map((e) => at(e, '')),
     true,
+    openCourses(file, (i) => charted.has(i)),
   );
   const lights = catalog.world.lights;
   const night = Math.log(lights.threshold);
@@ -292,7 +302,11 @@ export function chartSandbox(
       }
     }
     if (out.length > 0) {
-      store.receive(out, false);
+      store.receive(
+        out,
+        false,
+        openCourses(file, (i) => charted.has(i)),
+      );
     }
   }, 500);
   return () => clearInterval(t);

@@ -8,6 +8,7 @@ import (
 	"slices"
 
 	"github.com/daneelvt/keel-over-the-edge/internal/protocol/pb"
+	"github.com/daneelvt/keel-over-the-edge/internal/sight"
 	"github.com/daneelvt/keel-over-the-edge/internal/store"
 	"github.com/daneelvt/keel-over-the-edge/internal/worldgen"
 )
@@ -118,4 +119,15 @@ func (m *Model) course(k int32) *pb.Course {
 		}
 	}
 	return out
+}
+
+// subjectKind is a subject kind of the wire's, as the sight table's.
+func subjectKind(s pb.ChartSubject) uint8 {
+	switch s {
+	case pb.ChartSubject_CHART_SUBJECT_PLACE:
+		return sight.Place
+	case pb.ChartSubject_CHART_SUBJECT_FEATURE:
+		return sight.Feature
+	}
+	return sight.Island
 }

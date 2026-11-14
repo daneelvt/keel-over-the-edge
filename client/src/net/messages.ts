@@ -243,6 +243,27 @@ export interface ChartEntry {
   withNumber: number;
 }
 
+/** A kind of island course: round an island, a tour of islands, port to port, round a lighthouse. */
+export type CourseKind = 'round' | 'tour' | 'passage' | 'light';
+
+/**
+ * An island course open for racing, as the server tells of it once every
+ * place it names is charted: its number among the world's, its kind and
+ * name; its way, the shortest a boat sails, from the start to the finish,
+ * points in metres east and north; its length, m; what it rounds or
+ * passes, in order, each to its side; and the boats it suits, each by its
+ * kind (the catalog's index) with its expected time in the typical wind, s.
+ */
+export interface CourseOpen {
+  number: number;
+  kind: CourseKind;
+  name: string;
+  way: [number, number][];
+  length: number;
+  rounds: { subject: ChartSubject; number: number; starboard: boolean }[];
+  boats: { kind: number; seconds: number }[];
+}
+
 /** Whose boat a connection watches, as its Welcome says. */
 /** The AI of an own machine sailor watched: at the helm, or gone quiet. */
 export type LampState = 'helm' | 'quiet';
@@ -629,8 +650,8 @@ export type FromWorker =
   | { type: 'lights'; lights: LightSeen[]; drop: number[] }
   /** The sea's life come within reach or changed, and encounters to drop, by id. */
   | { type: 'life'; life: LifeSeen[]; drop: string[] }
-  /** The world's chart: whole after a Welcome, or what was charted since. */
-  | { type: 'chart'; entries: ChartEntry[]; whole: boolean }
+  /** The world's chart: whole after a Welcome, or what was charted since; and the courses open. */
+  | { type: 'chart'; entries: ChartEntry[]; courses: CourseOpen[]; whole: boolean }
   /** The forecast as it is issued, with what has been after a Welcome. */
   | { type: 'forecast'; forecast: ForecastTold; past: PastTold | null }
   | { type: 'clock'; clock: ClockState }

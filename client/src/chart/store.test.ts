@@ -1,9 +1,11 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import { describe, expect, it } from 'vitest';
-import type { ChartEntry } from '../net/messages';
+import type { ChartEntry, CourseOpen } from '../net/messages';
 import {
   ChartStore,
+  courseFrame,
+  courseLines,
   creditText,
   dayText,
   distanceText,
@@ -116,5 +118,59 @@ describe('the chart’s store', () => {
       'Charted by Mira, today',
     );
     expect(creditText(entry({}), at)).toBe('Known');
+  });
+});
+
+function course(c: Partial<CourseOpen>): CourseOpen {
+  return {
+    number: 0,
+    kind: 'round',
+    name: 'Round Gannet Holm',
+    way: [
+      [1000, 0],
+      [2000, 1000],
+      [1000, 2000],
+      [1000, 0],
+    ],
+    length: 4500,
+    rounds: [{ subject: 'island', number: 7, starboard: true }],
+    boats: [
+      { kind: 0, seconds: 37 * 60 },
+      { kind: 1, seconds: 26 * 60 + 20 },
+    ],
+    ...c,
+  };
+}
+
+describe('the island courses', () => {
+  it('are held as they open, each once, and dropped with the chart had whole', () => {
+    const s = new ChartStore(words);
+    s.receive([entry({ name: 'Port Royal' })], true, [course({})]);
+    s.receive([], false, [
+      course({}),
+      course({ number: 2, name: 'Port Royal to Saltcliff', kind: 'passage' }),
+    ]);
+    expect(s.courses.map((c) => c.name)).toEqual(['Round Gannet Holm', 'Port Royal to Saltcliff']);
+    const v = s.version.value;
+    s.receive([], true);
+    expect(s.courses).toHaveLength(0);
+    expect(s.version.value).toBeGreaterThan(v);
+  });
+
+  it('are listed nearest start first, with where each starts, its length and the boats it suits', () => {
+    const far = course({ number: 1, name: 'Round Saltcliff', way: [[-5000, 0]], kind: 'light' });
+    const lines = courseLines([far, course({})], 0, 0, ['Jolly boat', 'Skiff']);
+    expect(lines.map((l) => l.course.name)).toEqual(['Round Gannet Holm', 'Round Saltcliff']);
+    expect(lines[0]?.where).toBe('090° 0.5 NM · 2.4 NM long');
+    expect(lines[0]?.boats).toBe('Jolly boat 37 min · Skiff 26 min');
+    expect(lines[0]?.kind).toBe('Round an island');
+    expect(lines[1]?.kind).toBe('Round a light');
+  });
+
+  it('are framed whole on the chart', () => {
+    const f = courseFrame(course({}));
+    expect(f.east).toBe(1500);
+    expect(f.north).toBe(1000);
+    expect(f.distance).toBeGreaterThan(2000);
   });
 });

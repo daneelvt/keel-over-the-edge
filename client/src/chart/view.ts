@@ -38,7 +38,7 @@ import type { ChartEntry } from '../net/messages';
 import { chartMaterial } from '../render/materials';
 import { ARROW_HEIGHT, ARROW_NOSE, ARROW_TAIL, arrowSize, placeChartCamera } from './arrow';
 import type { IslandModel, Models } from './model';
-import { PAPER_MARGIN, type PaperLook, paintPaper } from './paper';
+import { PAPER_MARGIN, type PaperLook, paintCourses, paintPaper } from './paper';
 import { type ChartStore, keyOf } from './store';
 import type { ChartWeather } from './weatherlayer';
 
@@ -171,6 +171,8 @@ export class ChartView {
   /** The models asked for and not yet had. */
   readonly #asked = new Set<string>();
   #built = -1;
+  /** The courses open when the paper was last painted. */
+  #courses = -1;
   #buildWanted = true;
   #dirty = true;
   #last = Number.NEGATIVE_INFINITY;
@@ -436,6 +438,7 @@ export class ChartView {
       this.#loaded.clear();
       this.#asked.clear();
       this.#built = -1;
+      this.#courses = -1;
       this.#buildWanted = true;
     }
     if (store.version.value !== this.#version) {
@@ -527,11 +530,16 @@ export class ChartView {
   /** Builds the islands' columns, the towers and the paper's coasts from what is had. */
   #build(): void {
     const models = [...this.#loaded.values()];
-    if (models.length !== this.#built) {
+    const courses = this.#store.courses;
+    if (models.length !== this.#built || courses.length !== this.#courses) {
+      if (models.length !== this.#built) {
+        this.#land.geometry.dispose();
+        this.#land.geometry = columns(models, this.#look);
+      }
       this.#built = models.length;
-      this.#land.geometry.dispose();
-      this.#land.geometry = columns(models, this.#look);
+      this.#courses = courses.length;
       paintPaper(this.#paperCanvas, this.#look, models, this.#look.tops);
+      paintCourses(this.#paperCanvas, this.#look, courses);
       this.#paper.needsUpdate = true;
     }
     this.#towers.geometry.dispose();

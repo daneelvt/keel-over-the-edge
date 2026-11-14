@@ -7,10 +7,10 @@
 // each great discovery anyone does.
 
 import { signal } from '@preact/signals';
-import type { ChartEntry } from '../net/messages';
+import type { ChartEntry, CourseOpen } from '../net/messages';
 import type { Notices } from '../ui/notices';
 import type { ChartStore } from './store';
-import { zoneWhere } from './store';
+import { courseFrame, zoneWhere } from './store';
 import type { ChartView } from './view';
 import { LAYERS_AT_FIRST, type Layer, type Layers } from './weather';
 
@@ -112,6 +112,15 @@ export class Chart {
   showNews(day: string | null): void {
     this.newsDay.value = { day };
     this.show('news');
+  }
+
+  /** Opens the chart on an island course, the whole of its way in sight. */
+  showCourse(c: CourseOpen): void {
+    const f = courseFrame(c);
+    this.show('chart');
+    this.picked.value = null;
+    this.tapped.value = null;
+    this.view.lookAt(f.east, f.north, f.distance);
   }
 
   /** Opens the chart at a point, no box open. */

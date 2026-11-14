@@ -18,6 +18,7 @@ import { formatPosition } from '../chart/position';
 import {
   type ChartStore,
   chartList,
+  courseLines,
   dayText,
   edgeCaption,
   pocketCaption,
@@ -498,15 +499,37 @@ function Tabs({ sea }: { sea: ChartSea }) {
   );
 }
 
-/** Everything charted, by kind, nearest first: a tap opens the chart there. */
+/** The island courses open, then everything charted, by kind, nearest first: a tap opens the chart there. */
 export function ChartList({ sea }: { sea: ChartSea }) {
   const store = sea.chart.store;
   void store.version.value;
   const b = sea.boat();
   const now = Date.now();
+  const courses = courseLines(store.courses, b.east, b.north, store.words.boats);
   return (
     <section class="chart-panel chart-list" aria-label="Everything charted">
       <h2>Charted: {store.size}</h2>
+      {courses.length === 0 ? null : (
+        <div>
+          <h3>Courses</h3>
+          <ul>
+            {courses.map((l) => (
+              <li key={`course:${l.course.number}`}>
+                <button
+                  type="button"
+                  class="chart-list-course"
+                  onClick={() => sea.chart.showCourse(l.course)}
+                >
+                  <span class="chart-list-name">{l.course.name}</span>
+                  <span class="chart-list-kind">{l.kind}</span>
+                  <span class="chart-list-where">{l.where}</span>
+                  <span class="chart-credit">{l.boats}</span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
       {chartList(store.entries, b.east, b.north).map(({ title, lines }) =>
         lines.length === 0 ? null : (
           <div key={title}>

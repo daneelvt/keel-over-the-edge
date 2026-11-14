@@ -821,7 +821,7 @@ async function start(): Promise<void> {
   void import('../ui/following').then(({ followSailing }) =>
     followSailing((who) => parts.notices.raise('followed-sailed', { who }, performance.now())),
   );
-  online.onChart = (entries, whole) => parts.chart.store.receive(entries, whole);
+  online.onChart = (entries, whole, courses) => parts.chart.store.receive(entries, whole, courses);
   // The countdown to the world's end, by the world clock, and the notices
   // of the world's life, worked out here from the end each Welcome tells.
   const countdown = new Countdown(() => online.utcMs());
