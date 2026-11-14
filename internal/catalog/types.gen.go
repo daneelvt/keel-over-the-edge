@@ -733,6 +733,83 @@ type ColonyBirds struct {
 // A colour, as #rrggbb in sRGB.
 type Colour string
 
+// The race committee's things in the sea: the committee boat, the pin buoy, the
+// marks, the beacons, the signal flags and the signal gun's smoke.
+type Committee struct {
+	// The committee's models: a glTF binary with the nodes committee-boat (with gun,
+	// muzzle, halyard, hawse and riding-light), cask-mark (with flag-staff, lantern
+	// and number), pin-buoy (with flag-staff and lantern) and beacon-spar.
+	Art CommitteeArt `json:"art"`
+
+	// How the committee boat lies at her anchor.
+	Boat CommitteeBoat `json:"boat"`
+
+	// The bunting's dyes, each by the letter a flag's rows name it with.
+	Dyes []SignalDye `json:"dyes"`
+
+	// The signal flags.
+	Flags []SignalFlag `json:"flags"`
+
+	// The signal gun's smoke.
+	Gun CommitteeGun `json:"gun"`
+
+	// A mark's spar above the water, in m.
+	Mark float64 `json:"mark"`
+
+	// They are drawn within this of the camera, in m.
+	Reach float64 `json:"reach"`
+}
+
+// The committee's models: a glTF binary with the nodes committee-boat (with gun,
+// muzzle, halyard, hawse and riding-light), cask-mark (with flag-staff, lantern
+// and number), pin-buoy (with flag-staff and lantern) and beacon-spar.
+type CommitteeArt struct {
+	// Model corresponds to the JSON schema field "model".
+	Model ArtPath `json:"model"`
+}
+
+// How the committee boat lies at her anchor.
+type CommitteeBoat struct {
+	// Over this, there and back, in s.
+	Period float64 `json:"period"`
+
+	// Her anchor's cable, in m.
+	Scope float64 `json:"scope"`
+
+	// Her stern swings this far each way, in degrees.
+	Sheer float64 `json:"sheer"`
+}
+
+// The signal gun's smoke.
+type CommitteeGun struct {
+	// The air stops them over this, in s.
+	Drag float64 `json:"drag"`
+
+	// A puff gathers its rise over this, in s.
+	Gathers float64 `json:"gathers"`
+
+	// A puff fades over this, in s.
+	Life float64 `json:"life"`
+
+	// Puffs a report throws.
+	Puffs int `json:"puffs"`
+
+	// The smoke is drawn within this of the camera, in m.
+	Reach float64 `json:"reach"`
+
+	// A puff rises at this at most, in m/s.
+	Rise float64 `json:"rise"`
+
+	// A puff's width at the muzzle and at its end, in m.
+	Size []float64 `json:"size"`
+
+	// Its rise is halved after this, in s.
+	Slows float64 `json:"slows"`
+
+	// They leave the muzzle at this, in m/s.
+	Throw float64 `json:"throw"`
+}
+
 // Each age's weight.
 type ConeAges struct {
 	// Its weight.
@@ -839,6 +916,11 @@ type Curtain struct {
 	// Its last row, in s after the brink.
 	To float64 `json:"to"`
 }
+
+type Cut string
+
+const CutFlag Cut = "flag"
+const CutPennant Cut = "pennant"
 
 // The world's end, staged on every phone by the world clock: the falls heard and
 // the mist closing in, then the near sea's tiles breaking off and falling toward
@@ -3580,6 +3662,57 @@ type Sheet struct {
 	Trim string `json:"trim"`
 }
 
+type Signal string
+
+const SignalClass Signal = "class"
+
+// A dye of the bunting.
+type SignalDye struct {
+	// Colour corresponds to the JSON schema field "colour".
+	Colour Colour `json:"colour"`
+
+	// The letter a flag's rows name it by.
+	Letter string `json:"letter"`
+
+	// Name corresponds to the JSON schema field "name".
+	Name string `json:"name"`
+}
+
+// A signal flag: what it signals, its cut and size, and its design.
+type SignalFlag struct {
+	// The boat whose class it is, by the boat's id: a class pennant's.
+	Boat *ID `json:"boat,omitempty,omitzero"`
+
+	// Its cut: a flag, oblong; or a pennant, tapering to a point.
+	Cut Cut `json:"cut"`
+
+	// Its depth at the hoist, in m.
+	Hoist float64 `json:"hoist"`
+
+	// ID corresponds to the JSON schema field "id".
+	ID ID `json:"id"`
+
+	// From the hoist to the fly, in m.
+	Length float64 `json:"length"`
+
+	// Name corresponds to the JSON schema field "name".
+	Name string `json:"name"`
+
+	// Its design: rows of dyes' letters from the head down, each from the hoist to
+	// the fly, all of one length.
+	Rows []string `json:"rows"`
+
+	// What it signals: a race's boats' class, the preparatory signal, an individual
+	// recall, a postponement, a mark or the pin.
+	Signal Signal `json:"signal"`
+}
+
+const SignalMark Signal = "mark"
+const SignalPin Signal = "pin"
+const SignalPostponement Signal = "postponement"
+const SignalPreparatory Signal = "preparatory"
+const SignalRecall Signal = "recall"
+
 type Site string
 
 const SiteAnchorage Site = "anchorage"
@@ -4961,6 +5094,9 @@ type World struct {
 	// Chart corresponds to the JSON schema field "chart".
 	Chart WorldChart `json:"chart"`
 
+	// Committee corresponds to the JSON schema field "committee".
+	Committee Committee `json:"committee"`
+
 	// Courses corresponds to the JSON schema field "courses".
 	Courses WorldCourses `json:"courses"`
 
@@ -5793,4 +5929,4 @@ type WorldZones struct {
 }
 
 // Version is the catalog version (tools/catalog).
-const Version = "8ea076afc994dc37"
+const Version = "2c1bf744a3f72688"

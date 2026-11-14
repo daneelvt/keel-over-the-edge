@@ -4511,6 +4511,7 @@ export interface World {
   chart: WorldChart;
   instruments: Instruments;
   courses: WorldCourses;
+  committee: Committee;
 }
 /**
  * The disk.
@@ -8526,6 +8527,309 @@ export interface CourseSite {
   fan: number;
 }
 /**
+ * The race committee's things in the sea: the committee boat, the pin buoy, the marks, the beacons, the signal flags and the signal gun's smoke.
+ *
+ * This interface was referenced by `Catalog`'s JSON-Schema
+ * via the `definition` "Committee".
+ */
+export interface Committee {
+  art: CommitteeArt;
+  /**
+   * They are drawn within this of the camera, in m.
+   */
+  reach: number;
+  /**
+   * A mark's spar above the water, in m.
+   */
+  mark: number;
+  boat: CommitteeBoat;
+  gun: CommitteeGun;
+  /**
+   * The bunting's dyes, each by the letter a flag's rows name it with.
+   *
+   * @minItems 1
+   * @maxItems 16
+   */
+  dyes:
+    | [SignalDye]
+    | [SignalDye, SignalDye]
+    | [SignalDye, SignalDye, SignalDye]
+    | [SignalDye, SignalDye, SignalDye, SignalDye]
+    | [SignalDye, SignalDye, SignalDye, SignalDye, SignalDye]
+    | [SignalDye, SignalDye, SignalDye, SignalDye, SignalDye, SignalDye]
+    | [SignalDye, SignalDye, SignalDye, SignalDye, SignalDye, SignalDye, SignalDye]
+    | [SignalDye, SignalDye, SignalDye, SignalDye, SignalDye, SignalDye, SignalDye, SignalDye]
+    | [SignalDye, SignalDye, SignalDye, SignalDye, SignalDye, SignalDye, SignalDye, SignalDye, SignalDye]
+    | [SignalDye, SignalDye, SignalDye, SignalDye, SignalDye, SignalDye, SignalDye, SignalDye, SignalDye, SignalDye]
+    | [
+        SignalDye,
+        SignalDye,
+        SignalDye,
+        SignalDye,
+        SignalDye,
+        SignalDye,
+        SignalDye,
+        SignalDye,
+        SignalDye,
+        SignalDye,
+        SignalDye
+      ]
+    | [
+        SignalDye,
+        SignalDye,
+        SignalDye,
+        SignalDye,
+        SignalDye,
+        SignalDye,
+        SignalDye,
+        SignalDye,
+        SignalDye,
+        SignalDye,
+        SignalDye,
+        SignalDye
+      ]
+    | [
+        SignalDye,
+        SignalDye,
+        SignalDye,
+        SignalDye,
+        SignalDye,
+        SignalDye,
+        SignalDye,
+        SignalDye,
+        SignalDye,
+        SignalDye,
+        SignalDye,
+        SignalDye,
+        SignalDye
+      ]
+    | [
+        SignalDye,
+        SignalDye,
+        SignalDye,
+        SignalDye,
+        SignalDye,
+        SignalDye,
+        SignalDye,
+        SignalDye,
+        SignalDye,
+        SignalDye,
+        SignalDye,
+        SignalDye,
+        SignalDye,
+        SignalDye
+      ]
+    | [
+        SignalDye,
+        SignalDye,
+        SignalDye,
+        SignalDye,
+        SignalDye,
+        SignalDye,
+        SignalDye,
+        SignalDye,
+        SignalDye,
+        SignalDye,
+        SignalDye,
+        SignalDye,
+        SignalDye,
+        SignalDye,
+        SignalDye
+      ]
+    | [
+        SignalDye,
+        SignalDye,
+        SignalDye,
+        SignalDye,
+        SignalDye,
+        SignalDye,
+        SignalDye,
+        SignalDye,
+        SignalDye,
+        SignalDye,
+        SignalDye,
+        SignalDye,
+        SignalDye,
+        SignalDye,
+        SignalDye,
+        SignalDye
+      ];
+  /**
+   * The signal flags.
+   *
+   * @minItems 1
+   * @maxItems 32
+   */
+  flags: [SignalFlag, ...SignalFlag[]];
+}
+/**
+ * The committee's models: a glTF binary with the nodes committee-boat (with gun, muzzle, halyard, hawse and riding-light), cask-mark (with flag-staff, lantern and number), pin-buoy (with flag-staff and lantern) and beacon-spar.
+ */
+export interface CommitteeArt {
+  model: ArtPath;
+}
+/**
+ * How the committee boat lies at her anchor.
+ */
+export interface CommitteeBoat {
+  /**
+   * Her stern swings this far each way, in degrees.
+   */
+  sheer: number;
+  /**
+   * Over this, there and back, in s.
+   */
+  period: number;
+  /**
+   * Her anchor's cable, in m.
+   */
+  scope: number;
+}
+/**
+ * The signal gun's smoke.
+ */
+export interface CommitteeGun {
+  /**
+   * Puffs a report throws.
+   */
+  puffs: number;
+  /**
+   * They leave the muzzle at this, in m/s.
+   */
+  throw: number;
+  /**
+   * The air stops them over this, in s.
+   */
+  drag: number;
+  /**
+   * A puff gathers its rise over this, in s.
+   */
+  gathers: number;
+  /**
+   * A puff rises at this at most, in m/s.
+   */
+  rise: number;
+  /**
+   * Its rise is halved after this, in s.
+   */
+  slows: number;
+  /**
+   * A puff's width at the muzzle and at its end, in m.
+   *
+   * @minItems 2
+   * @maxItems 2
+   */
+  size: [number, number];
+  /**
+   * A puff fades over this, in s.
+   */
+  life: number;
+  /**
+   * The smoke is drawn within this of the camera, in m.
+   */
+  reach: number;
+}
+/**
+ * A dye of the bunting.
+ *
+ * This interface was referenced by `Catalog`'s JSON-Schema
+ * via the `definition` "SignalDye".
+ */
+export interface SignalDye {
+  /**
+   * The letter a flag's rows name it by.
+   */
+  letter: string;
+  name: string;
+  colour: Colour3;
+}
+/**
+ * A signal flag: what it signals, its cut and size, and its design.
+ *
+ * This interface was referenced by `Catalog`'s JSON-Schema
+ * via the `definition` "SignalFlag".
+ */
+export interface SignalFlag {
+  id: Id;
+  name: string;
+  /**
+   * What it signals: a race's boats' class, the preparatory signal, an individual recall, a postponement, a mark or the pin.
+   */
+  signal: "class" | "preparatory" | "recall" | "postponement" | "mark" | "pin";
+  /**
+   * Stable identifier of a kind, stored in the database: never renamed or reused.
+   */
+  boat?: string;
+  /**
+   * Its cut: a flag, oblong; or a pennant, tapering to a point.
+   */
+  cut: "flag" | "pennant";
+  /**
+   * From the hoist to the fly, in m.
+   */
+  length: number;
+  /**
+   * Its depth at the hoist, in m.
+   */
+  hoist: number;
+  /**
+   * Its design: rows of dyes' letters from the head down, each from the hoist to the fly, all of one length.
+   *
+   * @minItems 1
+   * @maxItems 16
+   */
+  rows:
+    | [string]
+    | [string, string]
+    | [string, string, string]
+    | [string, string, string, string]
+    | [string, string, string, string, string]
+    | [string, string, string, string, string, string]
+    | [string, string, string, string, string, string, string]
+    | [string, string, string, string, string, string, string, string]
+    | [string, string, string, string, string, string, string, string, string]
+    | [string, string, string, string, string, string, string, string, string, string]
+    | [string, string, string, string, string, string, string, string, string, string, string]
+    | [string, string, string, string, string, string, string, string, string, string, string, string]
+    | [string, string, string, string, string, string, string, string, string, string, string, string, string]
+    | [string, string, string, string, string, string, string, string, string, string, string, string, string, string]
+    | [
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string
+      ]
+    | [
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string
+      ];
+}
+/**
  * The notices that pop up: one at a time, the rest queued, the same kind folded.
  *
  * This interface was referenced by `Catalog`'s JSON-Schema
@@ -9207,4 +9511,4 @@ export interface LifeGlow {
 }
 
 /** The catalog version (tools/catalog). */
-export const CATALOG_VERSION = '8ea076afc994dc37';
+export const CATALOG_VERSION = '2c1bf744a3f72688';

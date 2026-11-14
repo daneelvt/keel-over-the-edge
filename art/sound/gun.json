@@ -1,0 +1,24 @@
+{
+  "licence": "SPDX-License-Identifier: LicenseRef-All-Rights-Reserved. Art: all rights reserved, not covered by the AGPL. See art/README.md.",
+  "description": "The race committee's signal gun, a small brass gun firing a blank: a report played once. Its layers are those of a gunshot as Farnell builds one (Designing Sound, 2010, practical on explosions): the crack, the muzzle's blast as a short burst of noise in a broad band, dying over its decay; the thump, a low tone falling in pitch as the blast's pressure swells the air (a sine from frequency to its share fall over its decay); and the boom, low-passed noise under it that dies over longer. Fired over the water it comes back: each echo a copy of the boom, later by delay, fainter by its level and duller through its cutoff, as the report runs out across the sea and returns off the hulls and the shore about. A louder report (the start, the winner's gun) is louder by loud times the share of its loudness over a signal's, and its echoes last longer by tail. Heard by a racer or a spectator at full level wherever they are, after the sound's flight over at most near metres; heard by anyone else falling 6 dB each time the distance doubles beyond near metres and duller as the air absorbs its highs (ISO 9613-1, at 10 °C and 70% humidity, in dB per km at the frequencies given), not at all past reach metres. Speeds in m/s, frequencies in Hz, times in seconds, levels as gains.",
+  "crack": { "centre": 1900, "q": 0.6, "decay": 0.045, "level": 0.9 },
+  "thump": { "frequency": 68, "fall": 0.45, "decay": 0.2, "level": 0.85 },
+  "boom": { "cutoff": 420, "decay": 0.55, "level": 0.5 },
+  "echoes": [
+    { "delay": 0.14, "level": 0.32, "cutoff": 1500 },
+    { "delay": 0.37, "level": 0.22, "cutoff": 900 },
+    { "delay": 0.71, "level": 0.14, "cutoff": 600 },
+    { "delay": 1.15, "level": 0.08, "cutoff": 380 }
+  ],
+  "loud": 0.6,
+  "tail": 0.5,
+  "absorption": {
+    "at": [125, 250, 500, 1000, 2000, 4000],
+    "dbPerKm": [0.4, 1, 1.9, 3.7, 9.7, 32.8]
+  },
+  "cutoff": { "least": 200, "most": 9000 },
+  "speed": 343,
+  "near": 60,
+  "reach": 4000,
+  "level": 0.8
+}

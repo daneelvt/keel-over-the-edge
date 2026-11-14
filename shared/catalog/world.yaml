@@ -972,6 +972,168 @@ world:
     set: [8, 12]
     lengths: [30, 45] # minutes
 
+  # The race committee's things in the sea, built by art/committee/build.ts
+  # in the period's materials: the committee boat, a gaff cutter at anchor
+  # at the starboard end of a race's line, dressed overall in signal flags,
+  # her small brass signal gun on the foredeck firing blanks; the pin buoy
+  # at the line's port end; the marks, painted casks with a spar of mark m,
+  # a flag and their number painted large on a board, a lantern on the spar
+  # lit by night as boats' lanterns are; and the beacons the courses set, a
+  # spar with a topmark standing on the bottom. All drawn within reach m of
+  # the camera.
+  committee:
+    art: { model: committee/committee.glb }
+    reach: 1500 # m
+    mark: 6 # m
+    # The committee boat lies head to wind at a single anchor, sheering
+    # about it as such a vessel does, her bow held and her stern swinging
+    # through sheer degrees each way and back over period s, her cable
+    # scope m long.
+    boat: { sheer: 12, period: 48, scope: 24 }
+    # The gun's report shows as a burst of white smoke from the muzzle:
+    # puffs thrown out at throw m/s and stopped by the air over drag s;
+    # each then a thermal, gathering its rise over gathers s, rising at up
+    # to rise m/s and slowing as it takes in air, its rise halved after
+    # slows s (Scorer, 1957: a thermal's rise falls as it grows), carried at
+    # the wind's speed; growing from size m across to its last and fading
+    # over life s, so that its cloud stands over the horizon from far off. A
+    # louder report (the start's, the winner's) throws more and bigger
+    # puffs. Drawn within reach m of the camera.
+    gun:
+      puffs: 16
+      throw: 16 # m/s
+      drag: 0.35 # s
+      gathers: 2.5 # s
+      rise: 6 # m/s
+      slows: 8 # s
+      size: [1.2, 14] # m
+      life: 36 # s
+      reach: 900 # m
+    # The signal flags, flown from the committee boat's signal halyard and
+    # on the marks' spars, and strung in her dressing line: wool bunting
+    # dyed with the period's dyes. Each flag is a grid of its dyes' letters,
+    # its rows from the head down, from the hoist to the fly, length m long
+    # and hoist m deep; a pennant's cut tapers to a point. Each race flies its
+    # boats' class pennant, the numeral pennant of the boat named; the
+    # preparatory flag (P) goes up a minute before the start, the
+    # individual recall (X) when a boat is over early, the answering
+    # pennant while a race is postponed; the marks and the pin fly their
+    # own.
+    dyes:
+      - { letter: "r", name: madder red, colour: "#a5312a" }
+      - { letter: "w", name: bleached white, colour: "#ebe4d2" }
+      - { letter: "b", name: indigo blue, colour: "#233b69" }
+      - { letter: "y", name: weld yellow, colour: "#d6a332" }
+      - { letter: "k", name: logwood black, colour: "#211d1b" }
+    flags:
+      - id: numeral-one
+        name: Numeral pennant one
+        signal: class
+        boat: jolly-boat
+        cut: pennant
+        length: 1.6
+        hoist: 0.6
+        rows:
+          - wwwwwwwwwwwwwwww
+          - wwwrrrwwwwwwwwww
+          - wwrrrrrwwwwwwwww
+          - wwrrrrrwwwwwwwww
+          - wwrrrrrwwwwwwwww
+          - wwrrrrrwwwwwwwww
+          - wwwrrrwwwwwwwwww
+          - wwwwwwwwwwwwwwww
+      - id: numeral-two
+        name: Numeral pennant two
+        signal: class
+        boat: keelboat
+        cut: pennant
+        length: 1.6
+        hoist: 0.6
+        rows:
+          - bbbbbbbbbbbbbbbb
+          - bbbwwwbbbbbbbbbb
+          - bbwwwwwbbbbbbbbb
+          - bbwwwwwbbbbbbbbb
+          - bbwwwwwbbbbbbbbb
+          - bbwwwwwbbbbbbbbb
+          - bbbwwwbbbbbbbbbb
+          - bbbbbbbbbbbbbbbb
+      - id: numeral-three
+        name: Numeral pennant three
+        signal: class
+        boat: tall-ship
+        cut: pennant
+        length: 1.6
+        hoist: 0.6
+        rows: [rrrrwwwwbbbb]
+      - id: numeral-four
+        name: Numeral pennant four
+        signal: class
+        boat: skiff
+        cut: pennant
+        length: 1.6
+        hoist: 0.6
+        rows: [rrrwrrrrrrrr, rrrwrrrrrrrr, wwwwwwwwwwww, rrrwrrrrrrrr, rrrwrrrrrrrr]
+      - id: numeral-five
+        name: Numeral pennant five
+        signal: class
+        boat: beach-cat
+        cut: pennant
+        length: 1.6
+        hoist: 0.6
+        rows: [yyyyyybbbbbb]
+      - id: numeral-six
+        name: Numeral pennant six
+        signal: class
+        boat: yacht
+        cut: pennant
+        length: 1.6
+        hoist: 0.6
+        rows: [kkkkkkkkkkkk, wwwwwwwwwwww]
+      - id: numeral-seven
+        name: Numeral pennant seven
+        signal: class
+        boat: catamaran
+        cut: pennant
+        length: 1.6
+        hoist: 0.6
+        rows: [yyyyyyyyyyyy, rrrrrrrrrrrr]
+      - id: code-flag-p
+        name: P, the Blue Peter
+        signal: preparatory
+        cut: flag
+        length: 0.9
+        hoist: 0.6
+        rows: [bbbbbbbbb, bbbbbbbbb, bbbwwwbbb, bbbwwwbbb, bbbbbbbbb, bbbbbbbbb]
+      - id: code-flag-x
+        name: X
+        signal: recall
+        cut: flag
+        length: 0.9
+        hoist: 0.6
+        rows: [wwwwbbwwwww, wwwwbbwwwww, bbbbbbbbbbb, bbbbbbbbbbb, wwwwbbwwwww, wwwwbbwwwww]
+      - id: answering-pennant
+        name: Answering pennant
+        signal: postponement
+        cut: pennant
+        length: 1.6
+        hoist: 0.6
+        rows: [rrwwrrwwrrww]
+      - id: mark-flag
+        name: Mark flag
+        signal: mark
+        cut: flag
+        length: 0.75
+        hoist: 0.5
+        rows: [rrrr, yyyy]
+      - id: pin-flag
+        name: Pin flag
+        signal: pin
+        cut: flag
+        length: 0.75
+        hoist: 0.5
+        rows: [wwwwww, wbbbbw, wbbbbw, wwwwww]
+
   # The rules a world must pass; one that fails is made again from the next
   # seed, at most attempts times.
   validator:

@@ -1306,7 +1306,8 @@
         "score",
         "chart",
         "instruments",
-        "courses"
+        "courses",
+        "committee"
       ],
       "properties": {
         "disk": { "$ref": "#/$defs/WorldDisk" },
@@ -1362,7 +1363,8 @@
         "score": { "$ref": "#/$defs/WorldScore" },
         "chart": { "$ref": "#/$defs/WorldChart" },
         "instruments": { "$ref": "#/$defs/Instruments" },
-        "courses": { "$ref": "#/$defs/WorldCourses" }
+        "courses": { "$ref": "#/$defs/WorldCourses" },
+        "committee": { "$ref": "#/$defs/Committee" }
       }
     },
     "WorldChart": {
@@ -1941,6 +1943,104 @@
         "beatLeg": { "description": "The least leg that counts as a beat, m.", "type": "number", "minimum": 0, "maximum": 5000 },
         "set": { "description": "How many island courses a world has, the least it aims for and the most.", "type": "array", "minItems": 2, "maxItems": 2, "items": { "type": "integer", "minimum": 0, "maximum": 100 } },
         "lengths": { "description": "A course from Port Royal is short below the first and long from the second, by the Jolly boat's expected minutes.", "type": "array", "minItems": 2, "maxItems": 2, "items": { "type": "number", "minimum": 1, "maximum": 600 } }
+      }
+    },
+    "Committee": {
+      "title": "Committee",
+      "description": "The race committee's things in the sea: the committee boat, the pin buoy, the marks, the beacons, the signal flags and the signal gun's smoke.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["art", "reach", "mark", "boat", "gun", "dyes", "flags"],
+      "properties": {
+        "art": {
+          "title": "CommitteeArt",
+          "description": "The committee's models: a glTF binary with the nodes committee-boat (with gun, muzzle, halyard, hawse and riding-light), cask-mark (with flag-staff, lantern and number), pin-buoy (with flag-staff and lantern) and beacon-spar.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["model"],
+          "properties": { "model": { "$ref": "#/$defs/ArtPath" } }
+        },
+        "reach": { "description": "They are drawn within this of the camera, in m.", "type": "number", "minimum": 100, "maximum": 5000 },
+        "mark": { "description": "A mark's spar above the water, in m.", "type": "number", "minimum": 1, "maximum": 20 },
+        "boat": {
+          "title": "CommitteeBoat",
+          "description": "How the committee boat lies at her anchor.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["sheer", "period", "scope"],
+          "properties": {
+            "sheer": { "description": "Her stern swings this far each way, in degrees.", "type": "number", "minimum": 0, "maximum": 45 },
+            "period": { "description": "Over this, there and back, in s.", "type": "number", "minimum": 5, "maximum": 600 },
+            "scope": { "description": "Her anchor's cable, in m.", "type": "number", "minimum": 1, "maximum": 200 }
+          }
+        },
+        "gun": {
+          "title": "CommitteeGun",
+          "description": "The signal gun's smoke.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["puffs", "throw", "drag", "gathers", "rise", "slows", "size", "life", "reach"],
+          "properties": {
+            "puffs": { "description": "Puffs a report throws.", "type": "integer", "minimum": 1, "maximum": 64 },
+            "throw": { "description": "They leave the muzzle at this, in m/s.", "type": "number", "minimum": 0, "maximum": 100 },
+            "drag": { "description": "The air stops them over this, in s.", "type": "number", "minimum": 0.01, "maximum": 10 },
+            "gathers": { "description": "A puff gathers its rise over this, in s.", "type": "number", "minimum": 0.01, "maximum": 60 },
+            "rise": { "description": "A puff rises at this at most, in m/s.", "type": "number", "minimum": 0, "maximum": 20 },
+            "slows": { "description": "Its rise is halved after this, in s.", "type": "number", "minimum": 0.1, "maximum": 120 },
+            "size": { "description": "A puff's width at the muzzle and at its end, in m.", "type": "array", "minItems": 2, "maxItems": 2, "items": { "type": "number", "minimum": 0.1, "maximum": 100 } },
+            "life": { "description": "A puff fades over this, in s.", "type": "number", "minimum": 1, "maximum": 300 },
+            "reach": { "description": "The smoke is drawn within this of the camera, in m.", "type": "number", "minimum": 100, "maximum": 5000 }
+          }
+        },
+        "dyes": {
+          "description": "The bunting's dyes, each by the letter a flag's rows name it with.",
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 16,
+          "items": { "$ref": "#/$defs/SignalDye" }
+        },
+        "flags": {
+          "description": "The signal flags.",
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 32,
+          "items": { "$ref": "#/$defs/SignalFlag" }
+        }
+      }
+    },
+    "SignalDye": {
+      "title": "SignalDye",
+      "description": "A dye of the bunting.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["letter", "name", "colour"],
+      "properties": {
+        "letter": { "description": "The letter a flag's rows name it by.", "type": "string", "pattern": "^[a-z]$" },
+        "name": { "type": "string", "minLength": 1 },
+        "colour": { "$ref": "#/$defs/Colour" }
+      }
+    },
+    "SignalFlag": {
+      "title": "SignalFlag",
+      "description": "A signal flag: what it signals, its cut and size, and its design.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "name", "signal", "cut", "length", "hoist", "rows"],
+      "properties": {
+        "id": { "$ref": "#/$defs/Id" },
+        "name": { "type": "string", "minLength": 1 },
+        "signal": { "description": "What it signals: a race's boats' class, the preparatory signal, an individual recall, a postponement, a mark or the pin.", "enum": ["class", "preparatory", "recall", "postponement", "mark", "pin"] },
+        "boat": { "description": "The boat whose class it is, by the boat's id: a class pennant's.", "$ref": "#/$defs/Id" },
+        "cut": { "description": "Its cut: a flag, oblong; or a pennant, tapering to a point.", "enum": ["flag", "pennant"] },
+        "length": { "description": "From the hoist to the fly, in m.", "type": "number", "minimum": 0.2, "maximum": 5 },
+        "hoist": { "description": "Its depth at the hoist, in m.", "type": "number", "minimum": 0.1, "maximum": 3 },
+        "rows": {
+          "description": "Its design: rows of dyes' letters from the head down, each from the hoist to the fly, all of one length.",
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 16,
+          "items": { "type": "string", "pattern": "^[a-z]{1,32}$" }
+        }
       }
     },
     "CourseAreas": {

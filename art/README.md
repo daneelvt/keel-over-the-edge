@@ -530,6 +530,38 @@ and a paddle's share out from its root to its tip (v). The script fails if
 a body is not as long as it was built or is over its triangles' budget;
 `client/build/swimmers.test.ts` checks the committed file.
 
+## The race committee
+
+`committee/build.ts` builds the race committee's things in the sea into
+`committee/committee.glb`, the catalog's `world.committee.art.model`, four
+root nodes laid out as the boats are, each origin on the waterline:
+
+- `committee-boat`: a gaff cutter of about eleven metres at a single
+  anchor, carvel planked, her topsides blacked with a gilt cove line, a
+  white boot top and a copper bottom; a laid deck, a varnished skylight and
+  companion, a long tiller; a spruce mast with crosstrees and a topmast, a
+  bowsprit, tarred shrouds and stays, the mainsail furled on its boom with
+  the gaff lowered onto it; her cable out over the stem. She is dressed
+  overall: a line from the bowsprit's end over the topmast's head to the
+  boom's end, the catalog's signal flags bent on it in turn, their designs
+  read from `world.committee.flags`. On her foredeck a small brass signal
+  gun on an oak carriage, its muzzle to starboard. Her empty nodes: `gun`;
+  `muzzle`, where its smoke leaves it; `halyard`, the starboard crosstree's
+  end, where the race's signals are hoisted; `hawse`; `riding-light`.
+- `cask-mark`: a cask painted madder red with blacked iron hoops, a white
+  spar through it banded black each metre, the catalog's `mark` metres
+  high, a white board box about the spar for the mark's number and a
+  lantern on an arm under the top. Its empty nodes: `flag-staff`, `lantern`
+  and `number`, whose `extras.face` says how far out the board's faces are.
+- `pin-buoy`: a smaller cask in weld yellow with a shorter spar, its
+  `flag-staff` and `lantern`.
+- `beacon-spar`: a tarred pole standing from twelve metres under the water,
+  a white band at the water, and an iron cage for a topmark.
+
+Every part's colour is in its vertices and every material is plain, so the
+page merges each node into one instanced draw, its parts' roughness and
+metalness carried in its vertices.
+
 ## The log's glyphs
 
 `glyphs/build.py`, run by Blender from the repository's root
@@ -549,6 +581,10 @@ has its glyph.
 bands, levels and curves for the wind, the rigging, the flogging sail, the
 water on the hull and the sea about the boat. They are art like the models. Each names the art licence
 in its first field, `licence`.
+
+The race committee's signal gun is played from `gun.json`: the crack of
+its blast, a thump falling in pitch, the boom of low-passed noise, and the
+boom's echoes off the water, each later, fainter and duller.
 
 The lighthouses' fog signals are played from the recipe named for their
 device (`twotone`, `diaphone`, `siren`, `reedhorn`), and thunder from

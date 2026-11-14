@@ -246,8 +246,8 @@ func fixture(t *testing.T, files map[string]string) string {
 			files[p] = "glTF"
 		}
 	}
-	// The real plants and the life's bodies.
-	for _, p := range []string{"art/flora/plants.glb", "art/life/swimmers.glb"} {
+	// The real plants, the life's bodies and the race committee's models.
+	for _, p := range []string{"art/flora/plants.glb", "art/life/swimmers.glb", "art/committee/committee.glb"} {
 		if files[p] == "" {
 			files[p] = "glTF"
 		}
