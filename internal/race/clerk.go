@@ -475,6 +475,20 @@ func (c *Clerk) trialStory(row *store.Race, course string, res *store.RaceResult
 		Source: fmt.Sprintf("trial:%s:%s:%s", row.Code, res.Account.String(), res.Medal)}
 }
 
+// Title is what the world's race of id is called: its link's code and its
+// name. ErrNotFound for no such race.
+func (s *Service) Title(ctx context.Context, id [16]byte) (code, name string, err error) {
+	w := &s.cfg.World
+	r, err := s.cfg.Store.RaceIn(ctx, w.ID, w.Number, id)
+	if errors.Is(err, store.ErrNotFound) {
+		return "", "", ErrNotFound
+	}
+	if err != nil {
+		return "", "", err
+	}
+	return r.Code, r.Name, nil
+}
+
 // Names are racers as reader is shown them, in order: by name by the log's
 // rule, "" for one not named to them (shown by their boat and number).
 func (s *Service) Names(ctx context.Context, reader store.AccountID, racers []store.AccountID) ([]string, error) {

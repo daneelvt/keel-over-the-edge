@@ -34,9 +34,12 @@ func raceFrame(t *testing.T) *bus.Frame {
 
 func TestRaceTold(t *testing.T) {
 	f := raceFrame(t)
-	m := raceTold(f, 0, bus.Account{2}, []string{"Ann", ""}).GetRaceTold()
+	if first := raceTold(f, 0, bus.Account{2}, nil).GetRaceTold(); first.Code != "" || first.Name != "" || first.Entrants[0].Name != "" {
+		t.Errorf("told before its names are read: %+v", first)
+	}
+	m := raceTold(f, 0, bus.Account{2}, &RaceNames{Code: "abcdefghij", Name: "The Noon Gun", Names: []string{"Ann", ""}}).GetRaceTold()
 	if m.Race != 1 || len(m.Line) != 4 || len(m.Finish) != 4 || len(m.Marks) != 1 || len(m.Legs) != 3 || len(m.Way) != 6 ||
-		m.Start != f.Races[0].Start || m.Expected <= 0 {
+		m.Start != f.Races[0].Start || m.Expected <= 0 || m.Code != "abcdefghij" || m.Name != "The Noon Gun" {
 		t.Fatalf("told %+v", m)
 	}
 	e := m.Entrants

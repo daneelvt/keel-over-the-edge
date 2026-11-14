@@ -5,6 +5,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"time"
 
@@ -152,18 +153,26 @@ func (p *process) clerkOf(h *worldHalf) *race.Clerk {
 	})
 }
 
-// raceNames names a race's boats as a reader may be told them, for the
-// game connection.
+// raceNames reads what a race is called and names its boats as a reader
+// may be told them, for the game connection.
 func (p *process) raceNames(h *worldHalf) edge.RaceNamer {
-	return func(ctx context.Context, reader bus.Account, racers []bus.Account) ([]string, error) {
+	return func(ctx context.Context, reader bus.Account, id [16]byte, racers []bus.Account) (edge.RaceNames, error) {
 		if h.races == nil {
-			return nil, nil
+			return edge.RaceNames{}, nil
 		}
 		ids := make([]store.AccountID, len(racers))
 		for i, a := range racers {
 			ids[i] = store.AccountID(a)
 		}
-		return h.races.Names(ctx, store.AccountID(reader), ids)
+		code, name, err := h.races.Title(ctx, id)
+		if err != nil && !errors.Is(err, race.ErrNotFound) {
+			return edge.RaceNames{}, err
+		}
+		names, err := h.races.Names(ctx, store.AccountID(reader), ids)
+		if err != nil {
+			return edge.RaceNames{}, err
+		}
+		return edge.RaceNames{Code: code, Name: name, Names: names}, nil
 	}
 }
 

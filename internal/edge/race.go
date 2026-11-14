@@ -34,9 +34,16 @@ const raceSight = 1500
 // watching them, ticks.
 const pictureEvery = 2 * committee.Second
 
-// RaceNamer names a race's skippers, in order, as reader may be told them:
-// "" for one not named. It may read the database.
-type RaceNamer func(ctx context.Context, reader bus.Account, racers []bus.Account) ([]string, error)
+// RaceNamer reads what a race is called, its link's code and its name,
+// and names its skippers, in order, as reader may be told them: "" for
+// one not named. It may read the database.
+type RaceNamer func(ctx context.Context, reader bus.Account, race [16]byte, racers []bus.Account) (RaceNames, error)
+
+// RaceNames are a race's code and name, and its skippers' names in order.
+type RaceNames struct {
+	Code, Name string
+	Names      []string
+}
 
 // connRaces is what a connection has been told of the world's races: the
 // encoder's, but for named, which the reader of names fills.
@@ -57,8 +64,8 @@ type toldRace struct {
 
 // namedRace is a race's names read for a connection, to be told.
 type namedRace struct {
-	key   uint32
-	names []string
+	key uint32
+	RaceNames
 }
 
 // races tells c of the races of f about its eye, the boat in slot s,
@@ -84,7 +91,7 @@ func (c *conn) races(f *bus.Frame, s int32, boat uint64, x, y float64) bool {
 	cr.mu.Unlock()
 	for _, n := range named {
 		if i := raceIndex(f, n.key); i >= 0 && cr.told[n.key] != nil {
-			if !c.send(raceTold(f, i, c.account, n.names), outRaceTold) {
+			if !c.send(raceTold(f, i, c.account, &n.RaceNames), outRaceTold) {
 				return false
 			}
 		}
@@ -166,18 +173,18 @@ func (c *conn) askNames(f *bus.Frame, i int) {
 			racers = append(racers, f.Racers[j].Account)
 		}
 	}
-	reader := c.account
+	reader, id := c.account, f.Races[i].ID
 	go func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
-		names, err := namer(ctx, reader, racers)
+		names, err := namer(ctx, reader, id, racers)
 		if err != nil {
 			c.e.cfg.Log.Warn("naming a race's boats", "err", err)
 			return
 		}
 		cr := &c.racesTold
 		cr.mu.Lock()
-		cr.named = append(cr.named, namedRace{key: key, names: names})
+		cr.named = append(cr.named, namedRace{key: key, RaceNames: names})
 		cr.mu.Unlock()
 	}()
 }
@@ -197,16 +204,20 @@ func metres(v float64) int32 {
 	return int32(min(max(math.Round(v), math.MinInt32), math.MaxInt32))
 }
 
-// raceTold is f.Races[i] as reader is told it, its boats named by names
-// (nil for none yet).
-func raceTold(f *bus.Frame, i int, reader bus.Account, names []string) *pb.ServerMessage {
+// raceTold is f.Races[i] as reader is told it: its code, name and boats'
+// names by named (nil for none read yet).
+func raceTold(f *bus.Frame, i int, reader bus.Account, named *RaceNames) *pb.ServerMessage {
 	r := &f.Races[i]
 	c := r.Course
+	var names []string
 	m := &pb.RaceTold{Race: r.Key, Boat: uint32(r.Kind), Trial: r.Trial, Run: uint32(max(r.Run, 0)), Warning: r.Warning, Start: r.Start,
 		Line:   []int32{metres(c.Pin[0]), metres(c.Pin[1]), metres(c.Committee[0]), metres(c.Committee[1])},
 		Finish: []int32{metres(c.FinishA[0]), metres(c.FinishA[1]), metres(c.FinishB[0]), metres(c.FinishB[1])},
 		East:   metres(c.X), North: metres(c.Y), Reach: uint32(max(metres(c.Reach), 0)), Laps: uint32(max(c.Laps, 1)),
 		Expected: float32(c.Expected)}
+	if named != nil {
+		m.Code, m.Name, names = named.Code, named.Name, named.Names
+	}
 	for _, mk := range c.Marks {
 		m.Marks = append(m.Marks, &pb.RaceMark{East: metres(mk.X), North: metres(mk.Y), Number: uint32(max(mk.Number, 0)), Side: int32(mk.Side)})
 	}
