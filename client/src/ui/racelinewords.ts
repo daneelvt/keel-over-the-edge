@@ -235,7 +235,7 @@ export function lineView(i: LineInput): LineView {
     ? clockOf((tick - told.start) / STEPS_PER_SECOND)
     : me !== null && me.place > 0
       ? `${me.place}/${fleet}`
-      : `–/${fleet}`;
+      : `–/${fleet > 0 ? fleet : told.entrants.length}`;
   return {
     kind: 'racing',
     place,
