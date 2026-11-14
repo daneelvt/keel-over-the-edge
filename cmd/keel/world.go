@@ -396,6 +396,8 @@ func (p *process) openWorld(ctx context.Context, rw *readyWorld) (*worldHalf, er
 		Chat:    h.chat, Talker: p.talker, Tie: p.tie, Report: p.report, CountryHeader: countryHeader,
 		Machines:  p.agents.core,
 		RaceNames: p.raceNames(h),
+		WatchByID: p.watchTargetByID,
+		RaceOf:    p.raceOf(h),
 	})
 	h.lasting = persist.New(persist.Config{
 		Frames: b.Frames, Store: p.writer, World: row.ID, Epoch: p.lease,
@@ -817,6 +819,12 @@ func (p *process) knocker(ctx context.Context, a bus.Account) (edge.Knocker, err
 
 func (p *process) watchTarget(ctx context.Context, key string) (watch.Target, error) {
 	t, err := p.db.WatchTarget(ctx, key)
+	return watch.Target(t), err
+}
+
+// watchTargetByID finds a sailor to watch by their account: a race's boat.
+func (p *process) watchTargetByID(ctx context.Context, a bus.Account) (watch.Target, error) {
+	t, err := p.db.WatchTargetByID(ctx, store.AccountID(a))
 	return watch.Target(t), err
 }
 

@@ -51,9 +51,9 @@ func TestRaceTold(t *testing.T) {
 func TestRacePicture(t *testing.T) {
 	f := raceFrame(t)
 	f.Racers[1].ToGo, f.Racers[0].ToGo = 500, 600
-	m := racePicture(f, 0).GetRacePicture()
+	m := racePicture(f, 0, 2).GetRacePicture()
 	if len(m.Racers) != 2 || m.Racers[0].Number != 2 || m.Racers[0].Place != 1 || m.Racers[1].Place != 2 || m.Racers[1].Gap == 0 ||
-		m.Racers[0].State != pb.RacerState_RACER_STATE_PLACED || m.Racers[1].North != -300 {
+		m.Racers[0].State != pb.RacerState_RACER_STATE_PLACED || m.Racers[1].North != -300 || m.Eye != 2 {
 		t.Errorf("picture %+v", m.Racers)
 	}
 }

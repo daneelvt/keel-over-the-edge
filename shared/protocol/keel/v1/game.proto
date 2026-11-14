@@ -37,6 +37,9 @@ message Hello {
   // A sailor's name, to watch their boat rather than sail: empty to sail.
   // Watching is as Command.watch asks it, the connection's first.
   string watch = 5;
+  // A race's boat to watch rather than sail, as Command.watch asks it by
+  // its race: for the connection's first watch when watch is empty.
+  Watch race_watch = 6;
 }
 
 // Input is the controls the client steps its boat with, stamped with the
@@ -116,7 +119,8 @@ message Command {
 message RaceRetire {}
 
 // Cheer cheers the boat the connection watches in a race: one gesture, no
-// words. At most one every ten seconds counts.
+// words. At most one every ten seconds counts, from the warning signal
+// until the race ends; the cheers come back gathered (RaceCheered).
 message Cheer {}
 
 // ComeAboard brings an owner watching their own machine sailor aboard its
@@ -262,7 +266,11 @@ message CloseKnocks {
 }
 
 // Watch asks to watch another sailor's boat from that boat's own place: a
-// spectator, holding no boat. A boat the connection sails leaves the water
+// spectator, holding no boat. A race's boat is asked for by its race (the
+// race's number in the world, or its link's code) and its race number, 0
+// for the boat the game chooses: the one at the front of the closest
+// battle, or before the start the first entered; its Welcome names its
+// sailor as the reader may be told them ("" for one not named). A boat the connection sails leaves the water
 // at once, with no grace; a place in the queue for one is kept, and the
 // watch ends when the queue gives the boat. The watch begins with a
 // Welcome whose watching names the sailor, its snapshots the watched
@@ -273,6 +281,11 @@ message Watch {
   // The sailor's name, as players see it: case and look-alikes do not
   // matter.
   string sailor = 1;
+  // A race's boat instead: its race by number, or by its link's code, and
+  // its race number.
+  uint32 race = 2;
+  string code = 3;
+  uint32 number = 4;
 }
 
 // Sail asks for a boat, as a connection that opens to sail does: a new one
@@ -350,6 +363,7 @@ message ServerMessage {
     RaceCall race_call = 37;
     RaceFinish race_finish = 38;
     RaceResults race_results = 39;
+    RaceCheered race_cheered = 40;
   }
 }
 
@@ -426,6 +440,22 @@ message RacePicture {
   uint32 race = 1;
   int64 tick = 2;
   repeated RacerAt racers = 3;
+  // The race number of the boat the connection sails, is aboard or
+  // watches; 0 for none.
+  uint32 eye = 4;
+}
+
+// RaceCheered is the crowd's cheers for a boat in a race, gathered every
+// two seconds, to the boat's racers and those watching it: never who.
+// count is the cheers since the last, crowd how many have cheered it
+// within the last ten seconds, and mine whether the connection's own
+// cheer is among count.
+message RaceCheered {
+  uint32 race = 1;
+  uint32 number = 2;
+  uint32 count = 3;
+  uint32 crowd = 4;
+  bool mine = 5;
 }
 
 // RacerAt is a boat in a race: its number; where it is, m east and north,
@@ -812,6 +842,9 @@ enum WatchEnd {
   WATCH_END_BUSY = 8;
   // The connection is aboard a boat: it goes ashore first.
   WATCH_END_ABOARD = 9;
+  // No such race on the water: not yet at its warning signal, or over; or
+  // no such boat in it.
+  WATCH_END_NO_RACE = 10;
 }
 
 // Watchers says how many watch the connection's boat, as it changes, at

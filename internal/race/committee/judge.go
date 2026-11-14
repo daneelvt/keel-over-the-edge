@@ -361,6 +361,23 @@ func Retire(f *bus.Frame, account bus.Account) bool {
 	return true
 }
 
+// Cheer adds n cheers to the boat account skippers in a race not yet
+// ended: on the line, racing, or home. False if it races in none.
+func Cheer(f *bus.Frame, account bus.Account, n uint32) bool {
+	for j := range f.Racers {
+		rc := &f.Racers[j]
+		if rc.Account != account || rc.State != bus.RacerPlaced && rc.State != bus.RacerRacing && rc.State != bus.RacerFinished {
+			continue
+		}
+		if i := raceOf(f, rc.Race); i < 0 || f.Races[i].Phase == bus.RaceEnded {
+			continue
+		}
+		rc.Cheers = uint32(min(uint64(rc.Cheers)+uint64(n), math.MaxUint32))
+		return true
+	}
+	return false
+}
+
 // Drop lets the race of id and run go from f once it has ended: false if
 // f has no such race ended.
 func Drop(f *bus.Frame, id [16]byte, run int32) bool {

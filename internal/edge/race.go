@@ -50,16 +50,19 @@ type RaceNames struct {
 type connRaces struct {
 	told map[uint32]*toldRace
 	// event is the tick of the newest race event sent; pictured that of
-	// the last picture.
-	event, pictured int64
-	mu              sync.Mutex
-	named           []namedRace
+	// the last picture; cheered that of the crowds' last gathering told.
+	event, pictured, cheered int64
+	mu                       sync.Mutex
+	named                    []namedRace
 }
 
 // toldRace is a race told to a connection.
 type toldRace struct {
 	asked   bool // its names asked for
 	results bool // its results sent
+	// names are its boats' names as read for the connection, by number;
+	// nil until read.
+	names map[int16]string
 }
 
 // namedRace is a race's names read for a connection, to be told.
@@ -78,10 +81,10 @@ func (c *conn) races(f *bus.Frame, s int32, boat uint64, x, y float64) bool {
 	if cr.told == nil {
 		cr.told = map[uint32]*toldRace{}
 	}
-	mine := uint32(0)
+	mine, eye := uint32(0), int16(0)
 	for j := range f.Racers {
 		if rc := &f.Racers[j]; rc.Slot == s && rc.Boat == boat {
-			mine = rc.Race
+			mine, eye = rc.Race, rc.Number
 		}
 	}
 	// Names read since.
@@ -91,6 +94,17 @@ func (c *conn) races(f *bus.Frame, s int32, boat uint64, x, y float64) bool {
 	cr.mu.Unlock()
 	for _, n := range named {
 		if i := raceIndex(f, n.key); i >= 0 && cr.told[n.key] != nil {
+			t := cr.told[n.key]
+			t.names = map[int16]string{}
+			k := 0
+			for j := range f.Racers {
+				if rc := &f.Racers[j]; rc.Race == n.key {
+					if k < len(n.Names) {
+						t.names[rc.Number] = n.Names[k]
+					}
+					k++
+				}
+			}
 			if !c.send(raceTold(f, i, c.account, &n.RaceNames), outRaceTold) {
 				return false
 			}
@@ -138,10 +152,13 @@ func (c *conn) races(f *bus.Frame, s int32, boat uint64, x, y float64) bool {
 	if mine != 0 && f.Tick-cr.pictured >= pictureEvery {
 		if i := raceIndex(f, mine); i >= 0 && cr.told[mine] != nil {
 			cr.pictured = f.Tick
-			if !c.send(racePicture(f, i), outRacePicture) {
+			if !c.send(racePicture(f, i, eye), outRacePicture) {
 				return false
 			}
 		}
+	}
+	if mine != 0 && !c.cheers(boat) {
+		return false
 	}
 	// Races let go: their courses taken up.
 	for key := range cr.told {
@@ -260,11 +277,12 @@ func racerState(s uint8) pb.RacerState {
 	return pb.RacerState_RACER_STATE_UNSPECIFIED
 }
 
-// racePicture is f.Races[i] as it stands.
-func racePicture(f *bus.Frame, i int) *pb.ServerMessage {
+// racePicture is f.Races[i] as it stands, to a connection whose eye is
+// its boat of number eye (0 none).
+func racePicture(f *bus.Frame, i int, eye int16) *pb.ServerMessage {
 	r := &f.Races[i]
 	order := committee.Standings(f, r.Key)
-	m := &pb.RacePicture{Race: r.Key, Tick: f.Tick}
+	m := &pb.RacePicture{Race: r.Key, Tick: f.Tick, Eye: uint32(max(eye, 0))}
 	var lead *bus.Racer
 	for place, j := range order {
 		rc := &f.Racers[j]
@@ -372,9 +390,12 @@ func raceResults(f *bus.Frame, i int) *pb.ServerMessage {
 }
 
 // raceCommand does what a Command asks of a race, if it asks anything: a
-// retirement goes to the committee; a cheer waits for the crowd to be
-// counted.
+// retirement goes to the committee; a cheer waits for the encoder to count
+// it with the crowd's.
 func (c *conn) raceCommand(cmd *pb.Command) {
+	if cmd.GetCheer() != nil && c.spectating.Load() {
+		c.cheering.Store(true)
+	}
 	if cmd.GetRaceRetire() == nil {
 		return
 	}

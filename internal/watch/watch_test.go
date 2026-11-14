@@ -5,6 +5,7 @@ package watch
 import (
 	"testing"
 
+	"github.com/daneelvt/keel-over-the-edge/internal/aboard"
 	"github.com/daneelvt/keel-over-the-edge/internal/store"
 )
 
@@ -27,6 +28,15 @@ func TestAllowed(t *testing.T) {
 	voyageUnseen := Boat{InWater: true, Voyage: true, Unseen: true}
 	stoppedHuman := human
 	stoppedHuman.Stopped = true
+	racing := func(racer, viewer aboard.Band) Boat {
+		return Boat{InWater: true, Racing: true, Band: racer, Viewer: viewer}
+	}
+	racingBlocked := racing(aboard.Adult, aboard.Adult)
+	racingBlocked.Blocked = true
+	racingUnseen := racing(aboard.Adult, aboard.Adult)
+	racingUnseen.Unseen = true
+	teenAllowing := racing(aboard.Teen, aboard.Adult)
+	teenAllowing.Voyage = true
 	for _, tc := range []struct {
 		name string
 		t    Target
@@ -47,6 +57,16 @@ func TestAllowed(t *testing.T) {
 		{"the own machine sailor", mine, at, Yes},
 		{"the own machine sailor, unseen", mine, unseen, Yes},
 		{"the own machine sailor, not at sea", mine, Boat{}, NotAtSea},
+		{"an adult racing, to an adult", human, racing(aboard.Adult, aboard.Adult), Yes},
+		{"an adult racing, to a teen", human, racing(aboard.Adult, aboard.Teen), Yes},
+		{"a teen racing, to a teen", human, racing(aboard.Teen, aboard.Teen), Yes},
+		{"a teen racing, to an adult", human, racing(aboard.Teen, aboard.Adult), Cannot},
+		{"a teen racing, to one of no known age", human, racing(aboard.Teen, aboard.Unknown), Cannot},
+		{"a teen racing and allowing, to an adult", human, teenAllowing, Yes},
+		{"one of no known age racing", human, racing(aboard.Unknown, aboard.Unknown), Cannot},
+		{"a racer blocked", human, racingBlocked, Cannot},
+		{"a racer unseen", human, racingUnseen, Cannot},
+		{"a machine sailor racing", machine, racing(aboard.Unknown, aboard.Adult), Yes},
 	} {
 		if got := Allowed(tc.t, tc.b, viewer); got != tc.want {
 			t.Errorf("%s: %v, want %v", tc.name, got, tc.want)

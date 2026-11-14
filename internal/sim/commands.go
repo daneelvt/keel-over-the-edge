@@ -111,6 +111,11 @@ func (w *World) apply(c *bus.Command) {
 		if c.Race != nil && committee.Drop(f, c.Race.ID, c.Race.Run) {
 			r.Result = bus.Done
 		}
+	case bus.RaceCheer:
+		r = bus.Reply{Result: bus.NoBoat, Slot: -1}
+		if committee.Cheer(f, c.Account, c.Cheers) {
+			r.Result = bus.Done
+		}
 	default:
 		return
 	}

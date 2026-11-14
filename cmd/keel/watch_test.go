@@ -154,6 +154,25 @@ func (d *memDB) WatchTarget(ctx context.Context, key string) (store.WatchTarget,
 	return store.WatchTarget{ID: t.ID, Kind: t.Kind, Name: t.Name, Stopped: d.isStopped(t.ID)}, nil
 }
 
+func (d *memDB) WatchTargetByID(ctx context.Context, id store.AccountID) (store.WatchTarget, error) {
+	d.tokens.mu.Lock()
+	for _, g := range d.tokens.tokens {
+		if g.Account == id {
+			d.tokens.mu.Unlock()
+			return d.WatchTarget(ctx, moderation.Key(g.Name))
+		}
+	}
+	d.tokens.mu.Unlock()
+	if d.sessions == nil {
+		return store.WatchTarget{}, store.ErrNotFound
+	}
+	t, err := d.sessions.TargetByID(ctx, id)
+	if err != nil {
+		return store.WatchTarget{}, err
+	}
+	return store.WatchTarget{ID: t.ID, Kind: t.Kind, Name: t.Name, Stopped: d.isStopped(t.ID), Born: t.Born}, nil
+}
+
 func (d *memDB) Follows(ctx context.Context, follower store.AccountID) ([]store.Followed, error) {
 	d.watching.mu.Lock()
 	var ids []store.AccountID

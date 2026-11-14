@@ -89,6 +89,15 @@ type conn struct {
 	watched    atomic.Pointer[string]
 	lastWatch  time.Time
 	helloWatch string
+	// helloRace is the race's boat its Hello asked to watch, if any;
+	// byRace whether the watch last asked for was asked as a race's boat.
+	// band is the account's age band, as it connected (aboard.Band).
+	// cheering: the client cheered the boat it watches, for the encoder
+	// to count.
+	helloRace *raceAsk
+	byRace    atomic.Bool
+	band      atomic.Uint32
+	cheering  atomic.Bool
 	// Under the spectators' lock: seated holds a spectator's place; wants
 	// is whom it waits in their queue to watch; toldSpect and toldSpectOf
 	// the place in it and the queue's length it was last told.
@@ -260,6 +269,8 @@ func (c *conn) run() {
 	c.enc = e.encoderFor()
 	if c.helloWatch != "" {
 		c.watchCommand(c.helloWatch, time.Now())
+	} else if c.helloRace != nil {
+		c.raceWatchCommand(*c.helloRace, time.Now())
 	} else if !c.join() {
 		return
 	}
@@ -365,6 +376,9 @@ func (c *conn) hello(data []byte) bool {
 		e.m.hello[helloOK].Inc()
 		e.cfg.Log.Debug("game connection", "request_id", c.reqID, "conn", c.id, "client_build", h.GetBuild(), "watch", h.GetWatch() != "")
 		c.helloWatch = h.GetWatch()
+		if a, ok := raceAskOf(h.GetRaceWatch()); ok {
+			c.helloRace = &a
+		}
 		return true
 	}
 	e.m.hello[differs].Inc()
@@ -504,7 +518,11 @@ func (c *conn) handle(data []byte) bool {
 			c.roamTo(r)
 		}
 		if w := b.Command.GetWatch(); w != nil {
-			c.watchCommand(w.GetSailor(), time.Now())
+			if a, ok := raceAskOf(w); ok {
+				c.raceWatchCommand(a, time.Now())
+			} else {
+				c.watchCommand(w.GetSailor(), time.Now())
+			}
 		}
 		if b.Command.GetSail() != nil && !c.sailCommand() {
 			return false

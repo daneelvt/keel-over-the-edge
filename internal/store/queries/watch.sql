@@ -5,13 +5,23 @@
 
 -- name: WatchTarget :one
 -- The account whose sailor has a name, by its key: its kind, its owner
--- (a machine sailor's human), and whether it, or its owner, is stopped.
+-- (a machine sailor's human), whether it, or its owner, is stopped, and
+-- its month of birth (0 for not known).
 SELECT a.id, a.kind, coalesce(a.owner_id, '00000000-0000-0000-0000-000000000000')::uuid AS owner_id, sl.name,
-  (a.stopped_at IS NOT NULL OR o.stopped_at IS NOT NULL)::boolean AS stopped
+  (a.stopped_at IS NOT NULL OR o.stopped_at IS NOT NULL)::boolean AS stopped, coalesce(a.born, 0)::integer AS born
 FROM sailor sl
 JOIN account a ON a.id = sl.account_id
 LEFT JOIN account o ON o.id = a.owner_id
 WHERE sl.name_key = @name_key;
+
+-- name: WatchTargetByID :one
+-- The account of an id, as WatchTarget has it.
+SELECT a.id, a.kind, coalesce(a.owner_id, '00000000-0000-0000-0000-000000000000')::uuid AS owner_id, sl.name,
+  (a.stopped_at IS NOT NULL OR o.stopped_at IS NOT NULL)::boolean AS stopped, coalesce(a.born, 0)::integer AS born
+FROM account a
+JOIN sailor sl ON sl.account_id = a.id
+LEFT JOIN account o ON o.id = a.owner_id
+WHERE a.id = @id;
 
 -- name: SailorsByID :many
 -- The sailors of the accounts of ids: their names, kinds, owners and
@@ -47,7 +57,7 @@ SELECT watch_code, coalesce(fleet_code, '')::text AS fleet_code FROM account WHE
 -- name: LinkTarget :one
 -- The sailor whose link has a code, as WatchTarget has it.
 SELECT a.id, a.kind, coalesce(a.owner_id, '00000000-0000-0000-0000-000000000000')::uuid AS owner_id, sl.name,
-  (a.stopped_at IS NOT NULL OR o.stopped_at IS NOT NULL)::boolean AS stopped
+  (a.stopped_at IS NOT NULL OR o.stopped_at IS NOT NULL)::boolean AS stopped, coalesce(a.born, 0)::integer AS born
 FROM account a
 JOIN sailor sl ON sl.account_id = a.id
 LEFT JOIN account o ON o.id = a.owner_id

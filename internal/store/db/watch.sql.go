@@ -101,7 +101,7 @@ func (q *Queries) LinkCodes(ctx context.Context, id pgtype.UUID) (LinkCodesRow, 
 
 const linkTarget = `-- name: LinkTarget :one
 SELECT a.id, a.kind, coalesce(a.owner_id, '00000000-0000-0000-0000-000000000000')::uuid AS owner_id, sl.name,
-  (a.stopped_at IS NOT NULL OR o.stopped_at IS NOT NULL)::boolean AS stopped
+  (a.stopped_at IS NOT NULL OR o.stopped_at IS NOT NULL)::boolean AS stopped, coalesce(a.born, 0)::integer AS born
 FROM account a
 JOIN sailor sl ON sl.account_id = a.id
 LEFT JOIN account o ON o.id = a.owner_id
@@ -114,6 +114,7 @@ type LinkTargetRow struct {
 	OwnerID pgtype.UUID
 	Name    string
 	Stopped bool
+	Born    int32
 }
 
 // The sailor whose link has a code, as WatchTarget has it.
@@ -126,6 +127,7 @@ func (q *Queries) LinkTarget(ctx context.Context, code string) (LinkTargetRow, e
 		&i.OwnerID,
 		&i.Name,
 		&i.Stopped,
+		&i.Born,
 	)
 	return i, err
 }
@@ -223,7 +225,7 @@ func (q *Queries) Unfollow(ctx context.Context, arg UnfollowParams) error {
 
 const watchTarget = `-- name: WatchTarget :one
 SELECT a.id, a.kind, coalesce(a.owner_id, '00000000-0000-0000-0000-000000000000')::uuid AS owner_id, sl.name,
-  (a.stopped_at IS NOT NULL OR o.stopped_at IS NOT NULL)::boolean AS stopped
+  (a.stopped_at IS NOT NULL OR o.stopped_at IS NOT NULL)::boolean AS stopped, coalesce(a.born, 0)::integer AS born
 FROM sailor sl
 JOIN account a ON a.id = sl.account_id
 LEFT JOIN account o ON o.id = a.owner_id
@@ -236,10 +238,12 @@ type WatchTargetRow struct {
 	OwnerID pgtype.UUID
 	Name    string
 	Stopped bool
+	Born    int32
 }
 
 // The account whose sailor has a name, by its key: its kind, its owner
-// (a machine sailor's human), and whether it, or its owner, is stopped.
+// (a machine sailor's human), whether it, or its owner, is stopped, and
+// its month of birth (0 for not known).
 func (q *Queries) WatchTarget(ctx context.Context, nameKey string) (WatchTargetRow, error) {
 	row := q.db.QueryRow(ctx, watchTarget, nameKey)
 	var i WatchTargetRow
@@ -249,6 +253,40 @@ func (q *Queries) WatchTarget(ctx context.Context, nameKey string) (WatchTargetR
 		&i.OwnerID,
 		&i.Name,
 		&i.Stopped,
+		&i.Born,
+	)
+	return i, err
+}
+
+const watchTargetByID = `-- name: WatchTargetByID :one
+SELECT a.id, a.kind, coalesce(a.owner_id, '00000000-0000-0000-0000-000000000000')::uuid AS owner_id, sl.name,
+  (a.stopped_at IS NOT NULL OR o.stopped_at IS NOT NULL)::boolean AS stopped, coalesce(a.born, 0)::integer AS born
+FROM account a
+JOIN sailor sl ON sl.account_id = a.id
+LEFT JOIN account o ON o.id = a.owner_id
+WHERE a.id = $1
+`
+
+type WatchTargetByIDRow struct {
+	ID      pgtype.UUID
+	Kind    string
+	OwnerID pgtype.UUID
+	Name    string
+	Stopped bool
+	Born    int32
+}
+
+// The account of an id, as WatchTarget has it.
+func (q *Queries) WatchTargetByID(ctx context.Context, id pgtype.UUID) (WatchTargetByIDRow, error) {
+	row := q.db.QueryRow(ctx, watchTargetByID, id)
+	var i WatchTargetByIDRow
+	err := row.Scan(
+		&i.ID,
+		&i.Kind,
+		&i.OwnerID,
+		&i.Name,
+		&i.Stopped,
+		&i.Born,
 	)
 	return i, err
 }

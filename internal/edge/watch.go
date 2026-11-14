@@ -46,6 +46,9 @@ type watching struct {
 	mine   bool
 	slot   int32
 	boat   uint64
+	// shown is the sailor's name as the client is told it: "" for a race's
+	// boat whose sailor the race does not name to it.
+	shown string
 }
 
 // askKind is what a connection's reader asks of its encoder.
@@ -119,11 +122,24 @@ func (c *conn) watchCommand(name string, now time.Time) {
 		c.refuse(pb.WatchEnd_WATCH_END_BUSY, name)
 		return
 	}
+	c.watchTarget(t, nil)
+}
+
+// watchTarget asks the rule, then a place, for c to watch t, asked for by
+// its name or, with race, as a race's boat: refused, it is told, by the
+// sailor's name only if asked for by it.
+func (c *conn) watchTarget(t watch.Target, race *raceAsk) {
+	e := c.e
+	c.byRace.Store(race != nil)
 	f := e.cfg.Bus.Frames.Acquire()
-	v := e.verdict(f, t, c.account)
+	v := e.verdict(f, t, c)
 	f.Release()
 	if v != watch.Yes {
-		c.refused(v, t.Name)
+		name := t.Name
+		if race != nil {
+			name = ""
+		}
+		c.refused(v, name)
 		return
 	}
 	mine := t.Mine(store.AccountID(c.account))
@@ -142,11 +158,13 @@ func (c *conn) watchCommand(name string, now time.Time) {
 	}
 }
 
-// verdict is the rule for viewer watching t, as f has t's boat.
-func (e *Edge) verdict(f *bus.Frame, t watch.Target, viewer bus.Account) watch.Verdict {
+// verdict is the rule for c watching t, as f has t's boat.
+func (e *Edge) verdict(f *bus.Frame, t watch.Target, c *conn) watch.Verdict {
+	viewer := c.account
 	s := watchSlot(f, t, viewer)
 	b := e.boatOf(f, s)
 	b.Blocked = e.refuses(bus.Account(t.ID), viewer)
+	c.raceBoat(f, s, t.Born, &b)
 	return watch.Allowed(t, b, store.AccountID(viewer))
 }
 
@@ -242,12 +260,16 @@ func (c *conn) sailCommand() bool {
 func (enc *encoder) beginWatch(c *conn, f *bus.Frame, t watch.Target) {
 	e := enc.e
 	s := watchSlot(f, t, c.account)
-	if v := e.verdict(f, t, c.account); v != watch.Yes {
+	if v := e.verdict(f, t, c); v != watch.Yes {
 		// Refused since the reader asked: a watch under way ends too.
 		enc.stopWatching(c, pb.WatchEnd_WATCH_END_UNSPECIFIED)
 		e.spect.release(c)
 		e.m.watch[watchRefused].Inc()
-		c.watchEnded(refusal(v), t.Name)
+		name := t.Name
+		if c.byRace.Load() {
+			name = ""
+		}
+		c.watchEnded(refusal(v), name)
 		return
 	}
 	switched := c.w.on
@@ -258,7 +280,16 @@ func (enc *encoder) beginWatch(c *conn, f *bus.Frame, t watch.Target) {
 		e.m.watch[watchStarted].Inc()
 	}
 	enc.leaveWater(c, f)
-	c.w = watching{on: true, target: t, mine: t.Mine(store.AccountID(c.account)), slot: s, boat: f.Boat[s]}
+	c.w = watching{on: true, target: t, mine: t.Mine(store.AccountID(c.account)), slot: s, boat: f.Boat[s], shown: t.Name}
+	if c.byRace.Load() && !c.w.mine && !t.Machine() {
+		// Asked for as a race's boat: named as the race names them.
+		c.w.shown = ""
+		for j := range f.Racers {
+			if rc := &f.Racers[j]; rc.Slot == s && rc.Boat == c.w.boat {
+				c.w.shown = c.raceNameOf(rc.Race, rc.Number)
+			}
+		}
+	}
 	c.toldLamp = pb.Lamp_LAMP_UNSPECIFIED
 	c.spectating.Store(true)
 	c.watched.Store(&t.Name)
@@ -351,8 +382,9 @@ func (enc *encoder) endWatch(c *conn, why pb.WatchEnd, name string) {
 }
 
 // stillWatchable is why c's watch of the boat in slot s of f must end, or
-// unspecified while it may go on: its sailor no longer allows spectators,
-// or the owner's tools keep it unseen.
+// unspecified while it may go on: its sailor no longer allows spectators
+// and is out of the race it sailed in, or the owner's tools keep it
+// unseen.
 func (enc *encoder) stillWatchable(c *conn, f *bus.Frame, s int32) pb.WatchEnd {
 	t := &c.w.target
 	if c.w.mine || t.Machine() && !f.Unseen[s] {
@@ -361,7 +393,15 @@ func (enc *encoder) stillWatchable(c *conn, f *bus.Frame, s int32) pb.WatchEnd {
 	if f.Unseen[s] {
 		return pb.WatchEnd_WATCH_END_CANNOT
 	}
-	if !enc.e.voyages.allows(f.Owner[s], f.Boat[s]) || enc.e.refuses(f.Owner[s], c.account) {
+	if enc.e.refuses(f.Owner[s], c.account) {
+		return pb.WatchEnd_WATCH_END_OFF
+	}
+	if enc.e.voyages.allows(f.Owner[s], f.Boat[s]) {
+		return pb.WatchEnd_WATCH_END_UNSPECIFIED
+	}
+	var b watch.Boat
+	c.raceBoat(f, s, t.Born, &b)
+	if !b.Racing || !watch.RaceBands(b.Band, b.Viewer) {
 		return pb.WatchEnd_WATCH_END_OFF
 	}
 	return pb.WatchEnd_WATCH_END_UNSPECIFIED
@@ -382,7 +422,7 @@ func (c *conn) welcomeWatch(f *bus.Frame) bool {
 		Boat: c.w.boat, Kind: uint32(f.Kind[s]), Look: c.toldLook, BoatLook: c.toldBoatLook, BoatName: c.toldBoatName,
 		EpochUs: e.cfg.Epoch.UnixMicro(), Land: e.cfg.Land, Circulation: e.cfg.Circulation, Harbour: e.cfg.Harbour,
 		Tools: c.tools.Load(), Light: e.cfg.MainLight, EndsUs: e.endsUs.Load(), ClosingUs: e.closingUs.Load(), Zone: e.cfg.Zone,
-		Watching: &pb.Watching{Sailor: c.w.target.Name, Machine: c.w.target.Machine(), Mine: c.w.mine, Look: c.toldLook},
+		Watching: &pb.Watching{Sailor: c.w.shown, Machine: c.w.target.Machine(), Mine: c.w.mine, Look: c.toldLook},
 	}}}, outWelcome)
 	ok = ok && c.firstChart()
 	c.rmu.Unlock()

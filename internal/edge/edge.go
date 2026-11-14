@@ -267,6 +267,12 @@ type Config struct {
 	// RaceNames, if not nil, names a race's boats as each reader may be
 	// told them; without it their names are not told.
 	RaceNames RaceNamer
+	// WatchByID, if not nil, finds a sailor to watch by their account, as
+	// Watch does by name: a race's boat is watched by it. RaceOf, if not
+	// nil, finds the world's race of a link's code, its ID: store.ErrNotFound
+	// for none.
+	WatchByID func(ctx context.Context, a bus.Account) (watch.Target, error)
+	RaceOf    func(ctx context.Context, code string) ([16]byte, error)
 }
 
 // Edge serves the game connection.
@@ -293,6 +299,7 @@ type Edge struct {
 	voyages  voyages
 	decks    decks
 	watchers boatWatchers
+	crowd    crowds
 
 	mu      sync.Mutex
 	closing bool

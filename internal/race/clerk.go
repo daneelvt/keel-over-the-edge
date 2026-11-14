@@ -489,6 +489,19 @@ func (s *Service) Title(ctx context.Context, id [16]byte) (code, name string, er
 	return r.Code, r.Name, nil
 }
 
+// IDOf is the world's race of a link's code, its ID: ErrNotFound for no
+// such race in this world.
+func (s *Service) IDOf(ctx context.Context, code string) ([16]byte, error) {
+	r, err := s.find(ctx, code)
+	if err != nil {
+		return [16]byte{}, err
+	}
+	if r.World != s.cfg.World.ID {
+		return [16]byte{}, ErrNotFound
+	}
+	return r.ID, nil
+}
+
 // Names are racers as reader is shown them, in order: by name by the log's
 // rule, "" for one not named to them (shown by their boat and number).
 func (s *Service) Names(ctx context.Context, reader store.AccountID, racers []store.AccountID) ([]string, error) {

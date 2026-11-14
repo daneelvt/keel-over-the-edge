@@ -174,6 +174,13 @@ func TestARaceRestores(t *testing.T) {
 	if f := w.Latest(); f.Races[0].Phase != bus.RaceStarted || f.Racers[0].State != bus.RacerRacing {
 		t.Errorf("after the start: phase %d, boat 1 %d", f.Races[0].Phase, f.Racers[0].State)
 	}
+	// Cheered by its spectators, counted in the world.
+	if r := do(t, w, bus.Command{Op: bus.RaceCheer, Account: acct(2), Cheers: 4}); r.Result != bus.Done || w.Latest().Racers[1].Cheers != 4 {
+		t.Errorf("cheered: %+v, %d", r, w.Latest().Racers[1].Cheers)
+	}
+	if r := do(t, w, bus.Command{Op: bus.RaceCheer, Account: acct(9), Cheers: 1}); r.Result != bus.NoBoat {
+		t.Errorf("one racing in none cheered: %+v", r)
+	}
 	// Retired at the skipper's word; written, the race goes.
 	if r := do(t, w, bus.Command{Op: bus.RaceRetire, Account: acct(2)}); r.Result != bus.Done || w.Latest().Racers[1].State != bus.RacerRetired {
 		t.Errorf("retired: %+v", r)

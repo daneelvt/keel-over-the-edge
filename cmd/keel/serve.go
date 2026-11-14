@@ -198,6 +198,7 @@ type database interface {
 	watch.Store
 	fleet.Store
 	WatchTarget(ctx context.Context, key string) (store.WatchTarget, error)
+	WatchTargetByID(ctx context.Context, id store.AccountID) (store.WatchTarget, error)
 	// Sailing together: a month of birth and the Rules of the sea,
 	// skippers' links, a knock's look at its knocker, and the owner's
 	// switches.

@@ -176,6 +176,20 @@ func (p *process) raceNames(h *worldHalf) edge.RaceNamer {
 	}
 }
 
+// raceOf finds the world's race of a link's code, for a watch of it.
+func (p *process) raceOf(h *worldHalf) func(ctx context.Context, code string) ([16]byte, error) {
+	return func(ctx context.Context, code string) ([16]byte, error) {
+		if h.races == nil {
+			return [16]byte{}, store.ErrNotFound
+		}
+		id, err := h.races.IDOf(ctx, code)
+		if errors.Is(err, race.ErrNotFound) {
+			return id, store.ErrNotFound
+		}
+		return id, err
+	}
+}
+
 // racesRoute answers the races under way in the world, on the internal
 // listener only, with KEEL_DEV_COMMANDS=1: each race's course as the
 // committee laid it and its boats as they stand, as JSON, for scripted

@@ -119,7 +119,7 @@ func (m *boatWatchers) of(boat uint64, out []*conn) []*conn {
 // what the store has of the account.
 func (c *conn) joinChat() {
 	e := c.e
-	if e.cfg.Chat == nil || e.cfg.Talker == nil {
+	if e.cfg.Talker == nil {
 		return
 	}
 	ctx, cancel := context.WithTimeout(e.ctx, ChatLookup)
@@ -127,6 +127,11 @@ func (c *conn) joinChat() {
 	s, name, err := e.cfg.Talker(ctx, c.account)
 	if err != nil {
 		e.cfg.Log.Warn("looking up a sailor for chat", "request_id", c.reqID, "conn", c.id, "err", err)
+		return
+	}
+	// The age band, which says whose racing boats it may watch.
+	c.band.Store(uint32(s.Band))
+	if e.cfg.Chat == nil {
 		return
 	}
 	s.Country = c.chat.country

@@ -255,7 +255,7 @@ func sailLive(t *testing.T, sailors, capacity, limit int, d time.Duration, stall
 					held = false
 				}
 				// A race handed to the committee with the boats about;
-				// a racer retiring; a race written, ended or not.
+				// a racer cheered, and retiring; a race written, ended or not.
 				if len(boats) > 0 && n%11 == 5 {
 					call := &bus.RaceCall{ID: [16]byte{byte(n)}, Course: 1, Start: tick + 30*30, Kind: uint16(n % 2)}
 					for i, b := range boats[:min(len(boats), 3)] {
@@ -263,6 +263,10 @@ func sailLive(t *testing.T, sailors, capacity, limit int, d time.Duration, stall
 							BoatName: "Tern"})
 					}
 					w.Bus().Commands.Server().TrySend(bus.Command{Op: bus.RacePlace, Race: call})
+				}
+				if len(boats) > 1 && n%11 == 6 {
+					// A racer cheered by its spectators.
+					w.Bus().Commands.Server().TrySend(bus.Command{Op: bus.RaceCheer, Account: boats[1].account, Cheers: 3})
 				}
 				if len(boats) > 0 && n%11 == 7 {
 					players.TrySend(bus.Command{Op: bus.RaceRetire, Account: boats[0].account})

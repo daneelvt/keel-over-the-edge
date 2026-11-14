@@ -5,4 +5,4 @@ package protocol
 
 // Version is the protocol version: a hash of the schema and the snapshot's
 // layout. A client's Hello must carry the same.
-const Version = "943ce7f8deef1c68"
+const Version = "d1486d7b94fc0d34"

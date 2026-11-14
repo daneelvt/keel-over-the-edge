@@ -32,6 +32,7 @@ import (
 	"github.com/daneelvt/keel-over-the-edge/internal/physics"
 	"github.com/daneelvt/keel-over-the-edge/internal/protocol"
 	"github.com/daneelvt/keel-over-the-edge/internal/protocol/pb"
+	"github.com/daneelvt/keel-over-the-edge/internal/race/committee"
 	"github.com/daneelvt/keel-over-the-edge/internal/sim"
 	"github.com/daneelvt/keel-over-the-edge/internal/sim/loop"
 	"github.com/daneelvt/keel-over-the-edge/internal/store"
@@ -122,6 +123,11 @@ type Config struct {
 	Tie    func(ctx context.Context, account, other bus.Account, block, on bool) error
 	Report func(ctx context.Context, r edge.ReportIn) error
 	Log    *slog.Logger
+	// Races, if not nil, are what the world's races are run on; RaceNames
+	// and RaceOf are the edge's.
+	Races     *committee.Stage
+	RaceNames edge.RaceNamer
+	RaceOf    func(ctx context.Context, code string) ([16]byte, error)
 }
 
 // Server is the game's server in a test.
@@ -227,7 +233,8 @@ func (s *Server) newWorld(t testing.TB) *sim.World {
 	t.Helper()
 	cfg := s.cfg
 	w, err := sim.New(sim.Config{Capacity: cfg.Capacity, Kinds: cfg.Kinds, StartSheets: cfg.StartSheets, Waves: cfg.Waves, Encounters: cfg.Encounters, Workers: 1,
-		Tick: loop.TickAt(time.Now(), Epoch), Grace: cfg.Grace, Limit: cfg.Limit, Weather: cfg.Weather, Terrain: cfg.Terrain, Edge: cfg.Edge, Capacities: s.Capacities})
+		Tick: loop.TickAt(time.Now(), Epoch), Grace: cfg.Grace, Limit: cfg.Limit, Weather: cfg.Weather, Terrain: cfg.Terrain, Edge: cfg.Edge, Capacities: s.Capacities,
+		Races: cfg.Races})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -315,6 +322,7 @@ func (s *Server) start(t testing.TB, w *sim.World) {
 		Agent: cfg.Agent, BoatOf: cfg.BoatOf,
 		Link: s.link, Knocker: s.knocker, Switches: cfg.Switches, Refuser: cfg.Refuser, Capacities: s.Capacities, CrewLimit: cfg.CrewLimit,
 		Chat: s.Chat, Talker: cfg.Talker, Machines: cfg.Machines, Tie: cfg.Tie, Report: cfg.Report,
+		WatchByID: s.Sessions.watchByID, RaceNames: cfg.RaceNames, RaceOf: cfg.RaceOf,
 	})
 	var recorders []sim.Recorder
 	if cfg.Record != nil {
@@ -447,10 +455,41 @@ func (s *Sessions) Target(_ context.Context, key string) (watch.Target, error) {
 	}
 	for _, v := range s.by {
 		if moderation.Key(v.Name) == key {
-			return watch.Target{ID: v.ID, Kind: v.Kind, Name: v.Name}, nil
+			return watch.Target{ID: v.ID, Kind: v.Kind, Name: v.Name, Born: bornOf(v.Account)}, nil
 		}
 	}
 	return watch.Target{}, store.ErrNotFound
+}
+
+// TargetByID finds the sailor of an account to watch: the edge's
+// WatchByID. A human's month of birth is their account's, or an adult's.
+func (s *Sessions) TargetByID(_ context.Context, id store.AccountID) (watch.Target, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for _, m := range s.machines {
+		if m.ID == id {
+			return m, nil
+		}
+	}
+	for _, v := range s.by {
+		if v.ID == id {
+			return watch.Target{ID: v.ID, Kind: v.Kind, Name: v.Name, Born: bornOf(v.Account)}, nil
+		}
+	}
+	return watch.Target{}, store.ErrNotFound
+}
+
+// watchByID is TargetByID by the bus's account: the edge's WatchByID.
+func (s *Sessions) watchByID(ctx context.Context, a bus.Account) (watch.Target, error) {
+	return s.TargetByID(ctx, store.AccountID(a))
+}
+
+// bornOf is an account's month of birth: its own, or an adult's.
+func bornOf(a store.Account) int32 {
+	if a.Born > 0 {
+		return a.Born
+	}
+	return 197001
 }
 
 // Session finds a session by its token's hash.

@@ -68,13 +68,14 @@ import (
 //	            its boat's kind and its start's tick, then its entrants (count, then
 //	            each one's account, number, a byte of flags, 1 for a machine sailor's
 //	            and 2 with its crew, and its boat's look code and name); a RaceRetire
-//	            its account; a RaceWritten its race's ID and run
+//	            its account; a RaceWritten its race's ID and run; a RaceCheer
+//	            its account and its cheers
 //	D digest    tick, sim.Digest of the world after it, 8 bytes
 //	X broken    the first tick whose records were lost: the segment holds
 //	            nothing reliable from that tick on
 const (
 	magic         = "KEELLOG\n"
-	formatVersion = 19
+	formatVersion = 20
 
 	kindHeader   = 'H'
 	kindSnapshot = 'S'
@@ -300,6 +301,9 @@ func appendEvent(dst []byte, e *bus.Event) []byte {
 		}
 		dst = append(dst, id[:]...)
 		dst = binary.AppendVarint(dst, int64(run))
+	case bus.RaceCheer:
+		dst = append(dst, e.Account[:]...)
+		dst = binary.AppendUvarint(dst, uint64(e.Cheers))
 	}
 	dst = append(dst, byte(e.Reply.Result))
 	dst = binary.AppendVarint(dst, int64(e.Reply.Slot))
@@ -767,6 +771,9 @@ func (p *payload) event(e *bus.Event) {
 		p.bytes(c.ID[:])
 		c.Run = int32(p.varint())
 		e.Race = c
+	case bus.RaceCheer:
+		p.bytes(e.Account[:])
+		e.Cheers = uint32(p.count(math.MaxUint32))
 	default:
 		if p.err == nil {
 			p.err = fmt.Errorf("unknown command %d", e.Op)

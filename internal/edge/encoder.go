@@ -126,6 +126,13 @@ func (enc *encoder) frame() {
 	if len(enc.queued) > 0 {
 		enc.admit(f)
 	}
+	// The crowds' cheers: counted, and once every two seconds gathered.
+	for _, c := range enc.active {
+		if c.active && c.cheering.Swap(false) {
+			enc.cheer(c, f)
+		}
+	}
+	enc.e.gather(f)
 	if enc.told == math.MinInt64 || f.Tick-enc.told >= watchersEvery {
 		enc.told = f.Tick
 		for _, c := range enc.active {
@@ -680,7 +687,7 @@ func (enc *encoder) stopWatching(c *conn, why pb.WatchEnd) {
 	if !c.w.on {
 		return
 	}
-	name := c.w.target.Name
+	name := c.w.shown
 	enc.endWatch(c, why, name)
 	enc.e.spect.release(c)
 	if !c.joined.Load() {
