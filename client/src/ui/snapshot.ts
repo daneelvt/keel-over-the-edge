@@ -114,7 +114,8 @@ export const FILE_NAME = 'keel-over-the-edge.jpg';
 /**
  * Shares the picture with the link at the end of its text, where the
  * phone can share a file; otherwise saves it (a download) and copies the
- * link. A share the player closed is neither.
+ * link. A share the player closed is neither. The words are a watch's
+ * unless others are given, as a race's are.
  */
 export async function sharePicture(
   blob: Blob,
@@ -122,9 +123,10 @@ export async function sharePicture(
   url: string,
   sharer: Sharer,
   save: (blob: Blob) => void = download,
+  words: { text: string; file: string } = { text: shareText(name, url), file: FILE_NAME },
 ): Promise<PictureResult> {
-  const file = new File([blob], FILE_NAME, { type: 'image/jpeg' });
-  const data: ShareData = { files: [file], text: shareText(name, url) };
+  const file = new File([blob], words.file, { type: 'image/jpeg' });
+  const data: ShareData = { files: [file], text: words.text };
   if (sharer.share !== undefined && sharer.canShare?.(data) === true) {
     try {
       await sharer.share(data);
@@ -146,11 +148,11 @@ export async function sharePicture(
 }
 
 /** Saves a picture to the device, as a download. */
-export function download(blob: Blob): void {
+export function download(blob: Blob, file = FILE_NAME): void {
   const a = document.createElement('a');
   const href = URL.createObjectURL(blob);
   a.href = href;
-  a.download = FILE_NAME;
+  a.download = file;
   document.body.append(a);
   a.click();
   a.remove();

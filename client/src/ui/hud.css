@@ -1128,6 +1128,62 @@
   width: 100%;
 }
 
+/* Make a race, and the player's races ahead under it: the head keys'
+   size, 40 px and 14 px words, a touch 3 px beyond the face. */
+.menu-races {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 6px 0;
+}
+
+.hud .menu-race {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: var(--key);
+  min-width: 44px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 7px;
+  background: linear-gradient(#34434e, #1c262d);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 14%),
+    0 1px 2px rgb(0 0 0 / 55%);
+  color: var(--ink);
+  font:
+    500 14px / 1 "Alegreya Sans",
+    system-ui,
+    sans-serif;
+  cursor: pointer;
+}
+
+.hud .menu-race::after {
+  content: "";
+  position: absolute;
+  inset: -3px 0;
+}
+
+.hud .menu-race-mine {
+  justify-content: space-between;
+  background: none;
+  box-shadow: inset 0 0 0 1px var(--plate-line);
+}
+
+.menu-race-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.menu-race-when {
+  flex: none;
+  color: var(--faint);
+}
+
 /* The free camera's way back to the boat: hidden, and shown a moment after
    a tap, so the picture is clean. */
 .hud .fly-back {
@@ -2174,4 +2230,82 @@
     width: min(360px, 56vw);
     max-height: none;
   }
+}
+
+/* Port Royal's board: the harbour races ahead, a row each, its key the
+   head keys' size at the end; the newcomers' week folded under them. */
+.hud .board .race-row button {
+  position: relative;
+  min-height: 0;
+  height: var(--key);
+  min-width: 44px;
+  padding: 0 14px;
+  font:
+    500 14px / 1 "Alegreya Sans",
+    system-ui,
+    sans-serif;
+}
+
+.hud .board .race-row button::after {
+  content: "";
+  position: absolute;
+  inset: -3px 0;
+}
+
+.hud .board .race-row .race-row-words {
+  flex: 1 1 160px;
+  min-width: 0;
+  height: auto;
+  min-height: var(--key);
+  padding: 2px 0;
+  border: 0;
+  background: none;
+  box-shadow: none;
+  color: inherit;
+  font:
+    15px / 1.3 "Alegreya Sans",
+    system-ui,
+    sans-serif;
+  text-align: left;
+}
+
+.board .race-rows {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.board .race-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  padding: 2px 0;
+}
+
+.race-row-name {
+  display: block;
+  font-weight: 500;
+}
+
+.race-row-when {
+  display: block;
+  color: var(--faint);
+  font-size: 14px;
+}
+
+.race-row-ribbon {
+  color: #5fbf72;
+  font-size: 13px;
+}
+
+.board .race-greenhorn {
+  margin-top: 4px;
+  font-size: 14px;
+}
+
+.board .race-greenhorn summary {
+  min-height: 32px;
+  color: var(--faint);
+  cursor: pointer;
 }

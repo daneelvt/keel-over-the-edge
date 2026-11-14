@@ -74,12 +74,20 @@
 // name, keeps Set sail in view on every screen, and the boat's look and
 // the fleet's boats keep Save, Cancel, every swatch and the first boat in
 // view, the server's answers stood in for.
+//
+// Races ashore's windows over the sea, Make a race (filled, a later start
+// and an island course, refused), the share of a race made, a race's card
+// (its owner's ⋯ open, another's, one refused) and the harbour race's
+// notice with Enter, on every screen, the server's answers stood in for:
+// each within the screen, its foot's keys in view, every key 40 pixels
+// tall with 14-pixel words.
 
 import { expect, type Page, test } from '@playwright/test';
 import data from '../src/catalog/catalog.gen.json' with { type: 'json' };
 import { GAME, openScene, sailor } from './helpers';
 import { emptyLog, LONG_NAME, longLog, standInLogs } from './logs';
 import { firstEdition, fullDay, quietDay, standInNews } from './news';
+import { OTHERS, REFUSED, standInRaces } from './races';
 
 /** The screens: phones in CSS pixels, upright and sideways, and the tests' own. */
 const SCREENS = [
@@ -3304,5 +3312,118 @@ test('the chart screen’s News tab holds a full day’s edition, a new world’
     .info()
     .annotations.push({ type: 'the front page, in screens', description: fronts.join('; ') });
   await page.evaluate(() => globalThis.keel.openChart(null));
+  expect(found).toEqual([]);
+});
+
+/**
+ * What is wrong with a window of races ashore, open: any of it off the
+ * screen or spilling sideways; a key of its foot out of view or under
+ * another part; a key not the head keys' height (40 px, 38 on a small
+ * phone) with 14 px words.
+ */
+async function raceFaults(page: Page, sel: string): Promise<string[]> {
+  return page.evaluate((sel) => {
+    const el = document.querySelector(sel);
+    if (el === null) {
+      return [`no ${sel}`];
+    }
+    const out: string[] = [];
+    const r = el.getBoundingClientRect();
+    if (
+      r.left < -0.5 ||
+      r.top < -0.5 ||
+      r.right > innerWidth + 0.5 ||
+      r.bottom > innerHeight + 0.5
+    ) {
+      out.push(`${sel} is off the screen (${[r.left, r.top, r.right, r.bottom].map(Math.round)})`);
+    }
+    if (el.scrollWidth > el.clientWidth + 1) {
+      out.push(`${sel} spills sideways (${el.scrollWidth} > ${el.clientWidth})`);
+    }
+    // The head keys' height: 40 px, 38 on a small phone.
+    const hud = document.querySelector('.hud');
+    const key =
+      hud === null ? 40 : Number.parseFloat(getComputedStyle(hud).getPropertyValue('--key'));
+    for (const b of el.querySelectorAll<HTMLElement>('button:not(.race-course, .notice-dismiss)')) {
+      const k = b.getBoundingClientRect();
+      const size = getComputedStyle(b).fontSize;
+      if (Math.abs(k.height - key) > 0.5 || size !== '14px') {
+        out.push(`“${b.textContent}” is ${k.height.toFixed(1)} px tall, its words ${size}`);
+      }
+    }
+    for (const b of el.querySelectorAll<HTMLElement>('.race-foot button, .notice-act')) {
+      const k = b.getBoundingClientRect();
+      const at = document.elementFromPoint(k.left + k.width / 2, k.top + k.height / 2);
+      if (at === null || !b.contains(at)) {
+        out.push(`“${b.textContent}” is under ${at?.className ?? 'nothing'}`);
+      }
+    }
+    return out;
+  }, sel);
+}
+
+test('races ashore’s windows fit every screen, their foot’s keys in view, every key the head keys’ size', async ({
+  page,
+}) => {
+  test.skip(test.info().project.name === 'webgpu', 'the windows are the same on either back end');
+  test.setTimeout(180_000);
+  const state = await standInRaces(page, Date.now());
+  await page.setViewportSize({ width: SCREENS[1].width, height: SCREENS[1].height });
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await openScene(page, 'races', true);
+  const found: string[] = [];
+  const check = async (where: string, sel: string) => {
+    for (const f of await raceFaults(page, sel)) {
+      found.push(`${where}: ${f}`);
+    }
+  };
+  // The harbour race's notice, with Enter, ten minutes before.
+  await expect(page.locator('.notice.with-act')).toBeVisible({ timeout: 15_000 });
+  const screens = [
+    SCREENS[1],
+    SCREENS[5],
+    ...SCREENS.filter((s) => s !== SCREENS[1] && s !== SCREENS[5]),
+  ];
+  for (const s of screens) {
+    await page.setViewportSize({ width: s.width, height: s.height });
+    await page.waitForFunction(
+      ({ width, height }) => innerWidth === width && innerHeight === height,
+      s,
+    );
+    if (s === SCREENS[1] || s === SCREENS[5]) {
+      await check(`${s.name}, the notice`, '.notice.with-act');
+    }
+    await page.getByRole('button', { name: 'Menu' }).click();
+    await page.locator('.menu').getByRole('button', { name: 'Make a race' }).click();
+    const make = page.locator('[data-panel=make-race]');
+    await expect(make.locator('#race-name')).toHaveValue('Saturday Triangle');
+    await check(`${s.name}, Make a race`, '[data-panel=make-race]');
+    await make.getByRole('button', { name: 'Later' }).click();
+    await make.locator('[data-course="island:3"]').click();
+    await check(`${s.name}, a later start on an island course`, '[data-panel=make-race]');
+    state.make = 'made';
+    await make.getByRole('button', { name: 'Make it' }).click();
+    await expect(make.locator('[data-readout=race-refused]')).toBeVisible();
+    await check(`${s.name}, refused`, '[data-panel=make-race]');
+    state.make = 'ok';
+    await make.getByRole('button', { name: 'Make it' }).click();
+    const share = page.locator('[data-panel=race-share]');
+    await expect(share).toBeVisible();
+    await check(`${s.name}, the share`, '[data-panel=race-share]');
+    await share.getByRole('button', { name: 'See the race' }).click();
+    const card = page.locator('[data-panel=race-card]');
+    await expect(card.locator('[data-readout=race-entrants]')).toBeVisible();
+    await card.getByRole('button', { name: 'The race’s owner’s choices' }).click();
+    await check(`${s.name}, the owner’s card`, '[data-panel=race-card]');
+    await card.getByRole('button', { name: 'Close', exact: true }).click();
+    for (const code of [OTHERS, REFUSED]) {
+      await page.getByRole('button', { name: 'Menu' }).click();
+      await page.locator(`.menu-race[data-race=${code}]`).click();
+      await expect(card.locator('[data-readout=race-entrants]')).toBeVisible();
+      await check(`${s.name}, the card of ${code}`, '[data-panel=race-card]');
+      await card.getByRole('button', { name: 'Close', exact: true }).click();
+      await expect(card).toHaveCount(0);
+    }
+  }
   expect(found).toEqual([]);
 });

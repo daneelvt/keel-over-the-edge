@@ -945,8 +945,23 @@ export function NoticeLine({ notices }: { notices: Notices }) {
   return (
     <div class="notice-line" role="status" data-readout="notice">
       {n === null ? null : (
-        <p class={`panel notice notice-${n.kind.level}`}>
+        <p
+          class={`panel notice notice-${n.kind.level}${n.action === undefined ? '' : ' with-act'}`}
+        >
           <span>{n.text}</span>
+          {n.action !== undefined ? (
+            <button
+              type="button"
+              class="notice-act"
+              onClick={() => {
+                const a = n.action;
+                notices.dismiss(performance.now());
+                a?.act();
+              }}
+            >
+              {n.action.label}
+            </button>
+          ) : null}
           <button
             type="button"
             class="notice-dismiss"

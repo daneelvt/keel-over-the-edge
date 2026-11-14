@@ -11,7 +11,8 @@
 // the screen. Online, the player's shipmates, a sailor to watch, the link
 // that asks others to sail with the player (while their own boat is in
 // the water), who may watch the player's own boat and their link to watch
-// them, shared with a picture of the view. It stands over everything at
+// them, shared with a picture of the view; Make a race, and the player's
+// races ahead, each a tap from its card. It stands over everything at
 // sea, within the screen held either way, its head and its close at the
 // top while the rest scrolls; a tap beside it closes it.
 
@@ -26,6 +27,8 @@ import { SAIL_WITH_ME, WHO_IS_ABOARD } from './deckwords';
 import { sailWithMeFor } from './machinewords';
 import type { Notices } from './notices';
 import { PlayerText } from './player';
+import type { RacesView } from './raceslazy';
+import { MAKE_A_RACE, whenLine } from './racewords';
 import type { SettingsSignal } from './settings';
 import { SHIPMATES } from './shipmatewords';
 import { useWatch, type WatchView } from './watchlazy';
@@ -156,6 +159,41 @@ function FullScreenRows({ full }: { full: FullScreen }) {
   return null;
 }
 
+/** Make a race, and the player's own races ahead under it, each opening its card. */
+function MenuRaces({ races, close }: { races: RacesView; close: () => void }) {
+  const mine = races.board.value?.mine ?? [];
+  const now = races.now();
+  return (
+    <div class="menu-races">
+      <button
+        type="button"
+        class="menu-race"
+        onClick={() => {
+          races.make.value = true;
+          close();
+        }}
+      >
+        {MAKE_A_RACE}
+      </button>
+      {mine.slice(0, 3).map((r) => (
+        <button
+          type="button"
+          key={r.code}
+          class="menu-race menu-race-mine"
+          data-race={r.code}
+          onClick={() => {
+            races.card.value = r.code;
+            close();
+          }}
+        >
+          <span class="menu-race-name">{r.name}</span>
+          <span class="menu-race-when">{whenLine(r.startsAt, now)}</span>
+        </button>
+      ))}
+    </div>
+  );
+}
+
 /** "Sailing as" and the sailor's name; nothing in the offline sandbox. */
 export function SailingAs({ sailor }: { sailor: string | null }) {
   return sailor === null ? null : (
@@ -179,6 +217,7 @@ export function Menu({
   watch = null,
   deck = null,
   fullScreen = null,
+  races = null,
 }: {
   settings: SettingsSignal;
   sailor: string | null;
@@ -202,6 +241,8 @@ export function Menu({
   deck?: DeckView | null;
   /** The full screen's switch; null where it is not run. */
   fullScreen?: FullScreen | null;
+  /** Races ashore; null in the offline sandbox. */
+  races?: RacesView | null;
 }) {
   const s = settings.value.value;
   return (
@@ -318,6 +359,7 @@ export function Menu({
               ) : null}
             </div>
           ) : null}
+          {races !== null ? <MenuRaces races={races} close={close} /> : null}
           {connection !== null ? <RoundTrip view={connection} /> : null}
           {end !== null && end.when.value !== '' ? (
             <p class="menu-end" data-readout="ends">

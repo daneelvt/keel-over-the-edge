@@ -64,6 +64,7 @@ export const pageFiles = [
   'over',
   'owner',
   'passkeys',
+  'races',
   'roam',
   'shipmates',
   'start',

@@ -18,7 +18,9 @@
 // from there; a link that opens no watch lands on the player's own panel,
 // saying why. A page opened at a link to come aboard (?s=<token>) offers,
 // once signed in, to knock on the skipper's boat rather than plain Set
-// sail. Each change of boat goes through the
+// sail. A page opened at a race's link (?r=<code>) shows its card once
+// signed in, or once a new visitor has made their sailor, before their
+// own Set sail. Each change of boat goes through the
 // cover again: down over the screen, the world changed under it, and up
 // once the new boat's world is ready.
 //
@@ -50,6 +52,8 @@
 //   ?w=<code>         watches the sailor of that link rather than sail, once signed in
 //   ?f=<code>         watches the liveliest of that fleet's machine sailors at sea
 //   ?s=<token>        asks to come aboard the skipper's boat of that link
+//   ?r=<code>         opens that race's card, once signed in, before the sea
+//   ?races            the sandbox with races ashore, its routes the tests' own
 //
 // F flies the free camera off the boat and back, Escape brings it back: in
 // the sandbox for anyone, online for an account with the owner's flag.
@@ -144,6 +148,8 @@ import { openNews, setNewsHost } from '../ui/newslazy';
 import { serverNews } from '../ui/newsread';
 import { saveNoticesOff } from '../ui/notices';
 import { showQueue } from '../ui/queue';
+import { RACE_PARAM, raceFromQuery } from '../ui/raceapi';
+import { loadRaces, pollRaces, type RacesView, racesOf } from '../ui/raceslazy';
 import { settingsSignal } from '../ui/settings';
 import { shipmatesOf } from '../ui/shipmatesview';
 import { checkStatements, statementsOf } from '../ui/statementlazy';
@@ -554,6 +560,15 @@ async function start(): Promise<void> {
       camera,
       clear,
     };
+    // ?races: races ashore on the sandbox, its routes answered by the tests.
+    if (query.has('races')) {
+      const races = racesOf();
+      pollRaces(races, parts.notices, catalog.notices.kinds);
+      screen.races = races;
+      if (screen.harbour != null) {
+        screen.harbour.races = races;
+      }
+    }
     let unmount = mountScreen(document.body, screen);
     // A name tapped opens its log on the chart screen's Log tab, as online.
     setLogHost((who) => parts.chart.showLog(who));
@@ -652,6 +667,24 @@ async function start(): Promise<void> {
   // A link to come aboard (?s=<token>): once signed in, or the sailor
   // made, the skipper's boat and the knock in place of Set sail.
   const sailLink = linked === null ? sailFromQuery(query) : '';
+  // A race's link (?r=<code>): its card once signed in, or the sailor
+  // made, before the player's own Set sail; Make a race beside Set sail.
+  const raceCode = linked === null && sailLink === '' ? raceFromQuery(query) : null;
+  const startRaces = racesOf();
+  const raceLinked = async (me: Me): Promise<Me> => {
+    if (raceCode !== null) {
+      const m = await loadRaces();
+      startRaces.card.value = raceCode;
+      await m.showRaces(document.body, startRaces);
+      // Seen: a reload just sails.
+      forgetParams(RACE_PARAM);
+    }
+    return me;
+  };
+  const yours = (me: Me): Promise<Me> =>
+    raceLinked(me).then((m) =>
+      showSailor(document.body, own(m), catalog, stage, catalog, startRaces),
+    );
   const aboard = (me: Me): Promise<Me> =>
     import('../account/comeaboard').then((m) =>
       m.showComeAboard(document.body, own(me), sailLink, catalog, catalog),
@@ -667,7 +700,14 @@ async function start(): Promise<void> {
       return { ...me, watch: o.watch };
     }
     const linkNote = { refusal: o.refusal, code: linked.kind === 'sailor' ? linked.code : '' };
-    return showSailor(document.body, own({ ...me, linkNote }), catalog, stage, catalog).then(set);
+    return showSailor(
+      document.body,
+      own({ ...me, linkNote }),
+      catalog,
+      stage,
+      catalog,
+      startRaces,
+    ).then(set);
   };
   const [, physics, me] = await Promise.all([
     world.start(),
@@ -678,10 +718,22 @@ async function start(): Promise<void> {
           looks: catalog,
           boats: catalog,
           ...(stage === undefined ? {} : { stage }),
-          ...(linked === null && sailLink === '' ? {} : { panel: false, straight: true }),
+          ...(linked === null && sailLink === '' && raceCode === null
+            ? {}
+            : { panel: false, straight: true }),
           ...(linked === null ? {} : { watching: true }),
+          ...(raceCode === null ? {} : { racing: true }),
+          races: startRaces,
         })
-          .then((me) => (sailLink !== '' ? aboard(me) : linked !== null ? watchLinked(me) : me))
+          .then((me) =>
+            sailLink !== ''
+              ? aboard(me)
+              : linked !== null
+                ? watchLinked(me)
+                : raceCode !== null
+                  ? yours(me)
+                  : me,
+          )
           .then(set),
       addPasskey: (me) => showAddPasskey(document.body, me),
       sailor: (me: Me) =>
@@ -689,7 +741,7 @@ async function start(): Promise<void> {
           ? aboard(me).then(set)
           : linked !== null
             ? watchLinked(me)
-            : showSailor(document.body, own(me), catalog, stage, catalog).then(set),
+            : yours(me).then(set),
       backSoon: notice,
     }).then(own),
   ]);
@@ -825,6 +877,17 @@ async function start(): Promise<void> {
     followSailing((who) => parts.notices.raise('followed-sailed', { who }, performance.now())),
   );
   online.onChart = (entries, whole, courses) => parts.chart.store.receive(entries, whole, courses);
+  // Races ashore at sea: the board read once a minute, by the world clock;
+  // Enter with my crew for a skipper with others aboard.
+  const races: RacesView = racesOf({
+    now: () => {
+      const t = online.utcMs();
+      return Number.isFinite(t) ? t : Date.now();
+    },
+    crew: () => online.aboard.value === null && online.crew.value !== null,
+  });
+  races.board.value = startRaces.board.value;
+  pollRaces(races, parts.notices, catalog.notices.kinds);
   // The countdown to the world's end, by the world clock, and the notices
   // of the world's life, worked out here from the end each Welcome tells.
   const countdown = new Countdown(() => online.utcMs());
@@ -1069,6 +1132,7 @@ async function start(): Promise<void> {
       store: parts.chart.store,
       look: harbourLook(world, online),
       boats: harbourBoats(catalog, online),
+      races,
     },
     watch: watchView,
     deck: deckOf(
@@ -1083,6 +1147,7 @@ async function start(): Promise<void> {
     lamp: online.lamp,
     camera,
     clear,
+    races,
   });
   // A name tapped anywhere opens its log on the chart screen's Log tab, and
   // a sailor's last story the News tab, now the chart screen can be shown;

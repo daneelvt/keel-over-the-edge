@@ -45,6 +45,7 @@ import { Menu } from './menu';
 import type { HudModel } from './model';
 import type { Notices } from './notices';
 import { Pilot } from './pilot';
+import { type RacesView, racesShown, useRaces } from './raceslazy';
 import { type CameraKeys, SeaKeys } from './seakeys';
 import type { SettingsSignal } from './settings';
 import { type StatementsView, statementsShown, useStatements } from './statementlazy';
@@ -134,6 +135,13 @@ function LazyStatements({ view, part }: { view: StatementsView; part: 'line' | '
     return null;
   }
   return part === 'line' ? <m.StatementLine view={view} /> : <m.StatementWindow view={view} />;
+}
+
+/** Races ashore's windows: Make a race, a race's card, the share of one made; loaded when one opens. */
+function LazyRaces({ races }: { races: RacesView }) {
+  const shown = racesShown(races);
+  const m = useRaces(shown);
+  return m === null || !shown ? null : <m.RacesWindows view={races} />;
 }
 
 /** The controls that act on the boat: the helm, the autopilot and the sheet; none on a boat watched. */
@@ -235,6 +243,8 @@ export interface ScreenProps {
   camera?: CameraKeys | null;
   /** The clear view; null without the key. */
   clear?: ClearView | null;
+  /** Races ashore: Make a race in the menu, the cards; null in the offline sandbox. */
+  races?: RacesView | null;
 }
 
 /** Whether a key press is the player's, not typing in a field. */
@@ -432,6 +442,7 @@ function Screen(props: ScreenProps) {
           watch={watch}
           deck={deck}
           fullScreen={full}
+          races={props.races ?? null}
         />
       ) : null}
       {watch !== null && !decked ? <LazyWatch watch={watch} part="plate" /> : null}
@@ -450,6 +461,7 @@ function Screen(props: ScreenProps) {
       {props.statements?.open.value != null ? (
         <LazyStatements view={props.statements} part="window" />
       ) : null}
+      {props.races != null ? <LazyRaces races={props.races} /> : null}
     </div>
   );
 }

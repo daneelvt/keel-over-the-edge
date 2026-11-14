@@ -548,6 +548,60 @@
   font-size: 20px;
 }
 
+/* A notice's key, as Enter on a harbour race's: the head keys' size. */
+.hud .notice-act {
+  flex: none;
+  position: relative;
+  height: var(--key, 40px);
+  min-width: 44px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 7px;
+  background: linear-gradient(var(--brass-light), var(--brass) 55%, var(--brass-dark));
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 40%),
+    0 1px 2px rgb(0 0 0 / 55%);
+  color: #1a242c;
+  font:
+    500 14px / 1 "Alegreya Sans",
+    system-ui,
+    sans-serif;
+  cursor: pointer;
+}
+
+.hud .notice-act::after {
+  content: "";
+  position: absolute;
+  inset: -3px 0;
+}
+
+/* A notice with a key: no wider than the column under the case, clear
+   of the pocket chart; its words beside the ×, the key under them. */
+.hud .notice.with-act {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 0 4px;
+  box-sizing: border-box;
+  max-width: var(--deck-width, 250px);
+  padding-bottom: 8px;
+}
+
+.notice.with-act > span {
+  padding-top: 8px;
+}
+
+.notice.with-act > .notice-act {
+  grid-row: 2;
+  justify-self: start;
+  margin-top: 4px;
+}
+
+.notice.with-act > .notice-dismiss {
+  grid-column: 2;
+  grid-row: 1;
+}
+
 .menu-chart {
   display: flex;
   gap: 8px;

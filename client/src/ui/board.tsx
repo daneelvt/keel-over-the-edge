@@ -8,7 +8,10 @@
 // village, the player's own boat may be changed there: "Your boat" opens
 // its look's chooser over the sea, in the board's place, and "Change boat"
 // the fleet's available boats, one chosen taking the place of the one in the
-// water. The server checks the place again, and says why it refuses.
+// water. The server checks the place again, and says why it refuses. In
+// Port Royal the board also posts the next three harbour races, each
+// entered in one tap, the newcomers' Greenhorn Cup marked as theirs, and
+// the week's Greenhorn Cups folded beneath.
 
 import type { ReadonlySignal } from '@preact/signals';
 import { useEffect, useState } from 'preact/hooks';
@@ -18,6 +21,16 @@ import { type Board, boardOf } from '../chart/board';
 import type { Forecasting } from '../chart/forecasting';
 import type { ChartStore } from '../chart/store';
 import { type HarbourLook, HarbourPicker } from './harbourlook';
+import { raceAct } from './raceapi';
+import type { RacesView } from './raceslazy';
+import {
+  boatsText,
+  ENTER,
+  enterRefusalText,
+  forNewcomers,
+  greenhornText,
+  whenLine,
+} from './racewords';
 
 /**
  * The port the boat is in, by its name and where its harbour is, and
@@ -42,6 +55,104 @@ export interface HarbourView {
   look?: HarbourLook;
   /** The player's boat, changed in a port; none where it cannot be. */
   boats?: HarbourBoats;
+  /** The races ashore, whose harbour races Port Royal's board posts; none offline. */
+  races?: RacesView;
+}
+
+/** How near the world's centre Port Royal's harbour is, m: its board posts the harbour races. */
+const ROYAL_WITHIN = 1852;
+
+/** Whether the port is Port Royal, at the world's centre. */
+export function royalPort(port: NonNullable<InPort>): boolean {
+  return Math.hypot(port.east, port.north) < ROYAL_WITHIN;
+}
+
+/**
+ * Port Royal's harbour races: the next three, the first as "Next harbour
+ * race", each with Enter where the player may enter, and its card a tap
+ * on its words away; and the week's Greenhorn Cups, folded.
+ */
+export function HarbourRaces({ races }: { races: RacesView }) {
+  const [busy, setBusy] = useState('');
+  const [said, setSaid] = useState('');
+  useEffect(() => {
+    void races.refresh();
+  }, [races]);
+  const board = races.board.value;
+  if (board === null) {
+    return null;
+  }
+  const now = races.now();
+  const list = board.harbour.slice(0, 3);
+  const enter = (code: string, name: string) => {
+    setBusy(code);
+    setSaid('');
+    void raceAct(code, 'enter', { crew: false }, races.fetch).then((a) => {
+      setBusy('');
+      setSaid(
+        a.ok
+          ? `You’re entered in ${name}.`
+          : enterRefusalText(a.refusal.reason, { until: a.refusal.until, now: races.now() }),
+      );
+      void races.refresh();
+    });
+  };
+  const greenhorn = greenhornText(board.greenhorn, now);
+  return (
+    <section class="board-races" aria-label="Harbour races">
+      <h3>Harbour races</h3>
+      {list.length === 0 ? (
+        <p>No harbour race is set before the world’s end.</p>
+      ) : (
+        <ul class="race-rows" data-readout="harbour-races">
+          {list.map((s, i) => (
+            <li class="race-row" key={s.code} data-race={s.code}>
+              <button
+                type="button"
+                class="race-row-words"
+                onClick={() => {
+                  races.card.value = s.code;
+                }}
+              >
+                <span class="race-row-name">
+                  {i === 0 ? 'Next harbour race: ' : ''}
+                  {whenLine(s.startsAt, now)} · {boatsText(s.boat.name)} · {s.entered} entered
+                </span>
+                <span class="race-row-when">
+                  {s.name}
+                  {forNewcomers(s) ? <span class="race-row-ribbon"> · for newcomers</span> : null}
+                </span>
+              </button>
+              {s.mine.entered ? (
+                <span class="race-row-when">Entered</span>
+              ) : s.enter.ok ? (
+                <button
+                  type="button"
+                  class="key-main"
+                  disabled={busy !== ''}
+                  aria-label={`${ENTER} ${s.name}`}
+                  onClick={() => enter(s.code, s.name)}
+                >
+                  {ENTER}
+                </button>
+              ) : null}
+            </li>
+          ))}
+        </ul>
+      )}
+      {said !== '' ? (
+        <p class="board-office" role="status" data-readout="harbour-said">
+          {said}
+        </p>
+      ) : null}
+      {greenhorn !== '' ? (
+        <details class="race-greenhorn">
+          <summary>The Greenhorn Cup, for newcomers, this week</summary>
+          <p>{greenhorn}</p>
+        </details>
+      ) : null}
+    </section>
+  );
 }
 
 /** Whether the board offers the player's boat to change: in a port that allows it, their own boat. */
@@ -169,6 +280,9 @@ export function BoardPanel({
           </section>
         </>
       )}
+      {harbour.races !== undefined && royalPort(port) ? (
+        <HarbourRaces races={harbour.races} />
+      ) : null}
       {you?.royal.value === true ? (
         <button type="button" class="board-close board-you" onClick={() => setPicking(true)}>
           Your sailor

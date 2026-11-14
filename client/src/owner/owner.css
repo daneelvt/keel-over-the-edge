@@ -735,3 +735,29 @@ table.lines tr.reported {
 .switch-state.off {
   color: rgb(213 94 0);
 }
+
+/* Racing: the limits and the harbour races' turn, a field each in two
+   columns where there is room. */
+.racing-form {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(11em, 1fr));
+  gap: 6px 12px;
+  align-items: end;
+}
+
+.racing-field {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 13px;
+}
+
+.racing-form .racing-field input,
+.racing-form .racing-field select {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.racing-form .racing-boats {
+  grid-column: 1 / -1;
+}

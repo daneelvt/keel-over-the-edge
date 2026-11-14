@@ -2,8 +2,8 @@
 
 // The player's own sailor, shown before every voyage: its name, whether its
 // boat is in the water, the boat it sails (chosen from the fleet, its look
-// set, ashore), whether others may watch it sail, Set sail as it, and
-// Watch another sailor. It is the screen's only gold button, as setting
+// set, ashore), whether others may watch it sail, Set sail as it, Watch
+// another sailor, and Make a race. It is the screen's only gold button, as setting
 // sail is the only thing there the player does as themselves; their machine
 // sailors, when they have any, stand apart beside it. In the game's first
 // download, so the screen shows it at once, alone or while the machine
@@ -15,6 +15,7 @@
 // screen without one.
 
 import { sailFullScreen } from '../boot/fullscreen';
+import { MAKE_A_RACE } from '../ui/racewords';
 import { STILL_AT_SEA, WATCH_ANOTHER_SAILOR } from '../ui/watchwords';
 import type { BoatChooser } from './boatchooser';
 import { BoatLookChooser, ChangeBoat, YourBoat } from './boats';
@@ -79,6 +80,7 @@ export function YourSailor({
   watchName,
   chooser,
   boats,
+  race,
 }: {
   me: Me;
   voyage: Voyage;
@@ -87,6 +89,8 @@ export function YourSailor({
   watchName?: (name: string) => void;
   chooser?: LookChooser;
   boats?: BoatChooser | undefined;
+  /** Make a race, before setting sail; none for no key. */
+  race?: () => void;
 }) {
   const atSea = me.atSea === true;
   const mode = chooser?.mode.value ?? 'shown';
@@ -148,6 +152,11 @@ export function YourSailor({
       >
         {WATCH_ANOTHER_SAILOR}
       </button>
+      {race !== undefined ? (
+        <button type="button" class="start-sign-in" onClick={race}>
+          {MAKE_A_RACE}
+        </button>
+      ) : null}
     </section>
   );
 }

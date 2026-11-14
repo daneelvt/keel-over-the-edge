@@ -1301,7 +1301,8 @@ export type Control =
   | 'accounts/revoke'
   | 'accounts/delete'
   | 'reports/act'
-  | 'news/strike';
+  | 'news/strike'
+  | 'races';
 
 /** Works a control: a POST of JSON, done on any 2xx (202 for one under way). */
 export async function control(path: Control | 'accounts/search', body: unknown): Promise<Answer> {
