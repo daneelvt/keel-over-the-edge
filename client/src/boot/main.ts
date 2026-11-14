@@ -386,6 +386,7 @@ async function start(): Promise<void> {
           onPlaces: (p) => {
             world.lighthouses.setPlaces(p);
             world.wrecks.setPlaces(p);
+            world.race.setPlaces(p);
           },
           onLights: (l, drop) => world.lighthouses.setLights(l, drop),
         },
@@ -775,6 +776,7 @@ async function start(): Promise<void> {
       // and its weather.
       world.lighthouses.clear();
       world.wrecks.clear();
+      world.race.clear();
       models.clear();
       forecasting.forecasts.reset();
       gales.reset();
@@ -786,6 +788,7 @@ async function start(): Promise<void> {
   online.onPlaces = (p) => {
     world.lighthouses.setPlaces(p);
     world.wrecks.setPlaces(p);
+    world.race.setPlaces(p);
   };
   online.onLights = (l, drop) => world.lighthouses.setLights(l, drop);
   online.onLife = (l, drop) => world.life.set(l, drop);

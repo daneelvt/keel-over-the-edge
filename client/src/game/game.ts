@@ -24,6 +24,7 @@ import { SoundEngine } from '../audio/engine';
 import { type FeaturesInput, isColonyCall } from '../audio/features';
 import { FOG_SIGNAL_RULES, type FogSignalsInput, poorBy } from '../audio/fogsignals';
 import { groundSound, SCRAPE, scrapeOf } from '../audio/ground';
+import { GUN, type GunReport, gunReport } from '../audio/gun';
 import { KNOCK, knockOf } from '../audio/knock';
 import {
   isLifeCall,
@@ -836,6 +837,30 @@ export class Game implements PilotActions {
     look: 0,
     flashes: [],
   };
+
+  /** The last report of a signal gun the player was given to hear, null for none (the tests). */
+  lastGun: GunReport | null = null;
+
+  /**
+   * Fires the signal gun of a course laid in the sea: a burst of smoke from
+   * its committee boat's muzzle, and its report, as loud as loud (1 for a
+   * signal, more for the start's and the winner's), heard at full level by
+   * a racer or a spectator of the race (inRace), and by anyone else as a
+   * sound of the world. False for a course with no committee boat.
+   */
+  fireGun(course: number, loud = 1, inRace = true): boolean {
+    const w = this.world;
+    const at = w.race.fire(course, loud, w.ticks / STEPS_PER_SECOND);
+    if (at === null) {
+      return false;
+    }
+    const listener = { east: w.pose.east, north: w.pose.north };
+    this.lastGun = gunReport(GUN, at, listener, w.lookBearing(), loud, inRace);
+    if (this.lastGun !== null) {
+      this.sound.gun(this.lastGun);
+    }
+    return true;
+  }
 
   #thunder(now: number, look: number): void {
     const w = this.world;

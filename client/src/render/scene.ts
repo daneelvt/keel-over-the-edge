@@ -51,6 +51,7 @@ import { SkyWeather } from '../sky/weather';
 import { Birds } from './birds';
 import { Boat, lampsLit, lazyArtUrl, type SailorLook } from './boat';
 import { CAMERA_PRESETS, type CameraView, ChaseCamera, lookSizeOf, sizeOf } from './camera';
+import { type RaceFrame, RaceMarks } from './committee';
 import { FloatingOrigin, type ScenePoint } from './coords';
 import { glowDark } from './daylight';
 import { DirtyAir } from './dirtyair';
@@ -248,6 +249,13 @@ export class SeaScene {
     catalog.world.places.kinds.findIndex((k) => k.site === 'wreck'),
     catalog.world.look.attenuation,
   );
+  /** The race committee's things in the sea: the courses laid, the world's beacons, the guns' smoke. */
+  readonly race = new RaceMarks(
+    catalog.world.committee,
+    catalog.world.towns.flags,
+    catalog.world.towns.smoke,
+    catalog.world.places.kinds.findIndex((k) => k.site === 'beacon'),
+  );
   /** Sky time, once the scene knows the world's epoch; and the module that says where everything stands. */
   skyTime: SkyTime | null = null;
   skyPhysics: Physics | null = null;
@@ -427,6 +435,7 @@ export class SeaScene {
     scene.add(this.flags.mesh, this.smoke.mesh, this.cones.mesh);
     scene.add(this.lighthouses.towers, this.lighthouses.glows);
     scene.add(this.wrecks.root);
+    scene.add(this.race.root);
     scene.add(this.birds.mesh, this.swimmers.mesh);
     this.wrecks.depthAt = (east, north) => {
       const h = this.land?.heightAt(east, north) ?? null;
@@ -1434,6 +1443,12 @@ export class SeaScene {
         l.addAshore(t.east - o.x, t.top, -(t.north - o.y), lit);
       }
     }
+    // The race committee's lanterns: the marks' and the committee boats' riding lights.
+    const race = this.race;
+    for (let i = 0; this.drawSky && i < race.lanternCount; i++) {
+      const r = race.lanterns;
+      l.addAshore(r[3 * i] ?? 0, r[3 * i + 1] ?? 0, r[3 * i + 2] ?? 0, lanternLit(own));
+    }
     l.commit(this.stage.camera.fov, height);
   }
 
@@ -1503,6 +1518,34 @@ export class SeaScene {
       this.galeUp,
     );
     this.smoke.frame(chimneys, o, time, 0.25 + 0.75 * (1 - night));
+  }
+
+  /** The race committee's frame, reused, and the time its winds are asked at. */
+  #raceNow = 0;
+  readonly #raceFrame: RaceFrame = {
+    origin: { x: 0, y: 0 },
+    cameraEast: 0,
+    cameraNorth: 0,
+    time: 0,
+    lit: 0,
+    light: 1,
+    windAt: (east, north) => this.#windAt(east, north, this.#raceNow),
+    surface: null,
+  };
+
+  /** The race committee's things near the camera: boats, buoys, marks, beacons, flags and smoke. */
+  #drawRace(camera: Vector3, now: number, night: number): void {
+    const o = this.origin.world;
+    const f = this.#raceFrame;
+    this.#raceNow = now;
+    f.origin = o;
+    f.cameraEast = camera.x + o.x;
+    f.cameraNorth = -camera.z + o.y;
+    f.time = this.ticks / STEPS_PER_SECOND;
+    f.lit = night;
+    f.light = 0.25 + 0.75 * (1 - night);
+    f.surface = this.ocean.source === null ? null : this.#surface;
+    this.race.frame(f);
   }
 
   /** The lands used, so the towns' gulls are found again in a new one. */
@@ -1923,6 +1966,7 @@ export class SeaScene {
     this.#drawTowns(camera.position, now);
     this.#drawLife(camera.position, night > 0.5);
     this.birds.end();
+    this.#drawRace(camera.position, now, night);
     this.#drawLanterns(view.height, camera.position);
     this.#drawLights(view.height, camera.position, now);
     this.wrecks.frame(this.origin);

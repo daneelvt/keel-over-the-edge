@@ -39,6 +39,7 @@ import {
   fogSignalEvents,
 } from './fogsignals';
 import type { Scrape } from './ground';
+import { GUN, type GunReport } from './gun';
 import {
   bellPartials,
   HARBOUR_RECIPES,
@@ -1113,6 +1114,95 @@ export class SoundEngine {
     burst.stop(end);
     tone.onended = () => {
       for (const n of [tone, thump, burst, band, crack, pan]) {
+        n.disconnect();
+      }
+    };
+  }
+
+  /** How many of the signal gun's reports were played (tests). */
+  guns = 0;
+
+  /**
+   * Plays the signal gun's report once: the crack of its blast, a thump
+   * falling in pitch and the boom of low-passed noise, each dying away, and
+   * the boom's echoes after them, duller and fainter; through the air's
+   * low-pass over its distance, placed left or right.
+   */
+  gun(g0: GunReport): void {
+    const g = this.#graph;
+    if (g === null || g.ctx.state !== 'running' || !(g0.level > 0)) {
+      return;
+    }
+    this.guns++;
+    const r = GUN;
+    const ctx = g.ctx;
+    const at = ctx.currentTime + g0.delay;
+    const pan = ctx.createStereoPanner();
+    pan.pan.value = g0.pan;
+    pan.connect(g.master);
+    const air = ctx.createBiquadFilter();
+    air.type = 'lowpass';
+    air.frequency.value = g0.cutoff;
+    air.Q.value = 0.7;
+    air.connect(pan);
+    const nodes: AudioNode[] = [pan, air];
+
+    const tone = ctx.createOscillator();
+    tone.type = 'sine';
+    tone.frequency.setValueAtTime(r.thump.frequency, at);
+    tone.frequency.exponentialRampToValueAtTime(
+      Math.max(20, r.thump.frequency * r.thump.fall),
+      at + 3 * r.thump.decay,
+    );
+    const thump = ctx.createGain();
+    thump.gain.setValueAtTime(0, ctx.currentTime);
+    thump.gain.setValueAtTime(g0.level * r.thump.level, at);
+    thump.gain.setTargetAtTime(0, at + 0.004, r.thump.decay / 3);
+    tone.connect(thump);
+    thump.connect(air);
+    nodes.push(tone, thump);
+
+    const burst = ctx.createBufferSource();
+    burst.buffer = g.noise;
+    burst.loop = true;
+    const band = ctx.createBiquadFilter();
+    band.type = 'bandpass';
+    band.frequency.value = r.crack.centre;
+    band.Q.value = r.crack.q;
+    const crack = ctx.createGain();
+    crack.gain.setValueAtTime(0, ctx.currentTime);
+    crack.gain.setValueAtTime(g0.level * r.crack.level, at);
+    crack.gain.setTargetAtTime(0, at + 0.002, r.crack.decay / 3);
+    burst.connect(band);
+    band.connect(crack);
+    crack.connect(air);
+    nodes.push(burst, band, crack);
+
+    // The boom, and each echo a later copy of it, duller and fainter.
+    let end = at + 3 * r.thump.decay;
+    for (const e of [{ delay: 0, level: 1, cutoff: r.boom.cutoff }, ...g0.echoes]) {
+      const t = at + e.delay;
+      const low = ctx.createBiquadFilter();
+      low.type = 'lowpass';
+      low.frequency.value = Math.min(r.boom.cutoff, e.cutoff);
+      low.Q.value = 0.7;
+      const boom = ctx.createGain();
+      boom.gain.setValueAtTime(0, ctx.currentTime);
+      boom.gain.setValueAtTime(0, t);
+      boom.gain.linearRampToValueAtTime(g0.level * r.boom.level * e.level, t + 0.012);
+      boom.gain.setTargetAtTime(0, t + 0.012, r.boom.decay / 3);
+      burst.connect(low);
+      low.connect(boom);
+      boom.connect(air);
+      nodes.push(low, boom);
+      end = Math.max(end, t + 2 * r.boom.decay);
+    }
+    tone.start(at);
+    tone.stop(end);
+    burst.start(at, 0.5);
+    burst.stop(end);
+    tone.onended = () => {
+      for (const n of nodes) {
         n.disconnect();
       }
     };

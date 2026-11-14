@@ -91,6 +91,7 @@ import { BODY, SKY, WIND_VALUE, WIND_VALUES } from '../predict/physics';
 import type { Predictor } from '../predict/predictor';
 import { heldSpell, placedRecord } from '../predict/weather';
 import { lookPalette } from '../render/boatlook';
+import { type CourseLaid, signalFlag } from '../render/committee';
 import { LEAN_STRIDE, MACHINE_DEFAULT, PERSON_DEFAULT } from '../render/fleet';
 import { airLook } from '../render/fog';
 import { flashNear } from '../render/lightning';
@@ -108,6 +109,7 @@ import { CREW_MOST } from '../render/sailors/fleetcrews';
 import { type ShipMember, ShipRules } from '../render/sailors/shiprules';
 import { CAMERA_PRESETS, type CameraView, type SeaScene } from '../render/scene';
 import { look } from '../render/sky';
+import { courseNear } from '../sandbox/coursescene';
 import { sandboxCrew } from '../sandbox/crewscene';
 import type { SandboxForecast } from '../sandbox/forecast';
 import { aboardScene, lifeScene, raiseScene } from '../sandbox/lifescene';
@@ -2034,6 +2036,76 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
         wreckVertices: world.wrecks.mesh.geometry.getAttribute('position')?.count ?? 0,
         shadowVertices: world.wrecks.shadows.geometry.getAttribute('position')?.count ?? 0,
         worldUs: Math.floor((world.ticks * 1e6) / STEPS_PER_SECOND),
+      };
+    },
+    /**
+     * Lays a race's course in the sea by its number: the one given, or the
+     * sandbox's (a line ahead of the boat square to the wind, the committee
+     * boat at its starboard end flying the class pennant of the boat's kind,
+     * the pin, and three marks); the course laid.
+     */
+    layCourse(id: number, course?: CourseLaid): CourseLaid {
+      const laid =
+        course ??
+        courseNear(world.pose.east, world.pose.north, world.pose.heading, world.wind.meanFrom, [
+          signalFlag(catalog.world.committee.flags, 'class', world.kind.id),
+        ]);
+      world.race.lay(id, laid);
+      return laid;
+    },
+    /** Takes a course up. */
+    dropCourse(id: number): void {
+      world.race.drop(id);
+    },
+    /** The flags a course's committee boat flies, by what each signals (a class by its boat's id), the top one first. */
+    raceSignals(id: number, signals: { signal: string; boat?: string }[]): number[] {
+      const flags = signals.map((s) =>
+        signalFlag(
+          catalog.world.committee.flags,
+          s.signal as (typeof catalog.world.committee.flags)[number]['signal'],
+          s.boat,
+        ),
+      );
+      world.race.signals(id, flags);
+      return flags;
+    },
+    /** Fires a course's gun, as loud as loud; its report as the player would hear it, or null for none. */
+    fireGun(id: number, loud = 1, inRace = true) {
+      const fired = game.fireGun(id, loud, inRace);
+      return { fired, report: game.lastGun, played: game.sound.guns };
+    },
+    /** The race committee's things as drawn this frame, the beacons known, and the courses laid. */
+    raceMarks() {
+      const r = world.race;
+      const lanterns = [];
+      for (let i = 0; i < r.lanternCount; i++) {
+        lanterns.push({
+          x: r.lanterns[3 * i] ?? 0,
+          y: r.lanterns[3 * i + 1] ?? 0,
+          z: r.lanterns[3 * i + 2] ?? 0,
+        });
+      }
+      const place = r.smoke.place.array as Float32Array;
+      const puffs = [];
+      for (let i = 0; i < r.smoke.count; i++) {
+        puffs.push({
+          east: (place[i * 4] ?? 0) + world.origin.world.x,
+          up: place[i * 4 + 1] ?? 0,
+          north: -(place[i * 4 + 2] ?? 0) + world.origin.world.y,
+          width: place[i * 4 + 3] ?? 0,
+        });
+      }
+      return {
+        ...r.stats,
+        laid: [...r.courses.entries()].map(([id, c]) => ({ id, ...c })),
+        known: [...r.beacons.values()].map(({ number, east, north, heading }) => ({
+          number,
+          east,
+          north,
+          heading,
+        })),
+        lanternsAt: lanterns,
+        puffsAt: puffs,
       };
     },
     land() {
