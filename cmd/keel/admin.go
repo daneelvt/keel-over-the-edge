@@ -85,8 +85,26 @@ const adminUsage = `usage: keel admin [-addr host:port] [-json] <command> [argum
                        shows them), purge, hold, release, under-13,
                        referred (-referred: to whom, and its reference)
 
-Without -yes, stop, revoke, delete, lifetime, links off, linklife, chat off
-and act say what they would do, and do nothing.
+  agreements list      every contributor agreement signature, voided ones
+                       too
+  agreements export    the same as CSV, for the owner's own copy: keep it
+                       off the repository
+  agreements add LOGIN -name NAME -note TEXT [-guardian NAME
+      -guardian-email EMAIL] [-version N] [-id NUMBER] [-yes]
+                       record a signature by hand: a contributor under 18,
+                       with their parent's or guardian's consent by e-mail,
+                       or one made on paper; their pull requests are
+                       checked again
+  agreements void ID -reason TEXT [-yes]
+                       void a mistaken signature; it is kept, marked void
+
+  The agreements commands reach keel agreement's internal listener, not
+  keel's: run them in its pod,
+    kubectl -n keel exec deploy/keel-agreement -- /keel admin agreements list
+
+Without -yes, stop, revoke, delete, lifetime, links off, linklife, chat off,
+act, agreements add and agreements void say what they would do, and do
+nothing.
 
   -addr  keel's internal listener (default KEEL_INTERNAL_ADDR, or
          127.0.0.1:9090)
@@ -248,6 +266,10 @@ func adminWith(ctx context.Context, args []string, getenv func(string) string, s
 	at := fs.String("at", "", "")
 	referred := fs.String("referred", "", "")
 	note := fs.String("note", "", "")
+	guardian := fs.String("guardian", "", "")
+	guardianEmail := fs.String("guardian-email", "", "")
+	version := fs.Int("version", 0, "")
+	githubID := fs.Int64("id", 0, "")
 	pos, err := parseMixed(fs, rest)
 	if err != nil {
 		return errUsage
@@ -510,6 +532,9 @@ func adminWith(ctx context.Context, args []string, getenv func(string) string, s
 				writeAction(stdout, &a)
 			}
 		})
+	case "agreements":
+		return c.agreements(ctx, pos, agreementFlags{name: *name, note: *note, reason: *reason, guardian: *guardian,
+			guardianEmail: *guardianEmail, version: *version, githubID: *githubID, yes: *yes}, stdout, stderr)
 	}
 	fmt.Fprintf(stderr, "keel admin: unknown command %q\n\n%s", verb, adminUsage)
 	return errUsage

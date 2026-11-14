@@ -1,0 +1,122 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# The contributor agreement keeper's alerts (apps/keel/rules.yaml, group
+# agreement), each made to fire and shown quiet first. go test runs them
+# with vmalert-tool unittest, against the rules as production renders
+# them.
+evaluation_interval: 1m
+tests:
+  - name: the keeper stops being ready
+    interval: 1m
+    input_series:
+      - series: kube_deployment_status_replicas_ready{namespace="keel", deployment="keel-agreement"}
+        values: 1x3 0+0x30
+      - series: kube_deployment_status_replicas_ready{namespace="keel", deployment="keel"}
+        values: 1x33
+    alert_rule_test:
+      - eval_time: 12m
+        groupname: agreement
+        alertname: AgreementKeeperDown
+        exp_alerts: []
+      - eval_time: 25m
+        groupname: agreement
+        alertname: AgreementKeeperDown
+        exp_alerts:
+          - exp_labels: &keeper-down
+              severity: warning
+              component: agreement
+              summary: "No agreement keeper is ready: pull requests wait for their check."
+            exp_annotations: &keeper-down-description
+              description: "Contributors cannot sign, and GitHub's deliveries are refused. Look at keel-agreement's pod and its logs, and at the database. GitHub sends no delivery again by itself: once the keeper is back, redeliver the failed ones from the App's Advanced page."
+
+  - name: the keeper's Deployment is gone, and its metric with it
+    interval: 1m
+    input_series:
+      - series: kube_deployment_status_replicas_ready{namespace="keel", deployment="keel"}
+        values: 1x30
+    alert_rule_test:
+      - eval_time: 20m
+        groupname: agreement
+        alertname: AgreementKeeperDown
+        exp_alerts:
+          - exp_labels: *keeper-down
+            exp_annotations: *keeper-down-description
+
+  - name: the keeper is ready
+    interval: 1m
+    input_series:
+      - series: kube_deployment_status_replicas_ready{namespace="keel", deployment="keel-agreement"}
+        values: 1x30
+    alert_rule_test:
+      - eval_time: 25m
+        groupname: agreement
+        alertname: AgreementKeeperDown
+        exp_alerts: []
+
+  - name: deliveries refused for their signature, three in an hour and then a fourth
+    interval: 5m
+    input_series:
+      - series: keel_agreement_webhooks_total{result="bad_signature"}
+        values: 0 0 0 1 2 3 4x10
+      - series: keel_agreement_webhooks_total{result="ok"}
+        values: 0+2x15
+      - series: keel_agreement_checks_total{result="success"}
+        values: 0+2x15
+    alert_rule_test:
+      - eval_time: 25m
+        groupname: agreement
+        alertname: AgreementChecksFailing
+        exp_alerts: []
+      - eval_time: 30m
+        groupname: agreement
+        alertname: AgreementChecksFailing
+        exp_alerts:
+          - exp_labels: &checks-failing
+              severity: warning
+              component: agreement
+              summary: "Pull requests' agreement checks are failing."
+            exp_annotations:
+              description: "4 deliveries refused for their signature, or checks ended in an error, in the last hour. The webhook secret in Infisical may differ from the App's, or GitHub's API refuses the App (its private key, or its installation). The keeper's logs say which; the App's Advanced page lists GitHub's deliveries, and refused ones that are not there were someone else's."
+
+  - name: checks end in an error, with no delivery refused, then an hour without
+    interval: 5m
+    input_series:
+      - series: keel_agreement_checks_total{result="error"}
+        values: 0 0 1 2 3 4x15
+      - series: keel_agreement_checks_total{result="success"}
+        values: 0+1x20
+    alert_rule_test:
+      - eval_time: 20m
+        groupname: agreement
+        alertname: AgreementChecksFailing
+        exp_alerts: []
+      - eval_time: 25m
+        groupname: agreement
+        alertname: AgreementChecksFailing
+        exp_alerts:
+          - exp_labels: *checks-failing
+            exp_annotations:
+              description: "4 deliveries refused for their signature, or checks ended in an error, in the last hour. The webhook secret in Infisical may differ from the App's, or GitHub's API refuses the App (its private key, or its installation). The keeper's logs say which; the App's Advanced page lists GitHub's deliveries, and refused ones that are not there were someone else's."
+      - eval_time: 90m
+        groupname: agreement
+        alertname: AgreementChecksFailing
+        exp_alerts: []
+
+  - name: a refused delivery and a failed check together pass three
+    interval: 5m
+    input_series:
+      - series: keel_agreement_webhooks_total{result="bad_signature"}
+        values: 0 0 1 2 2x10
+      - series: keel_agreement_checks_total{result="error"}
+        values: 0 0 0 1 2x10
+    alert_rule_test:
+      - eval_time: 10m
+        groupname: agreement
+        alertname: AgreementChecksFailing
+        exp_alerts: []
+      - eval_time: 20m
+        groupname: agreement
+        alertname: AgreementChecksFailing
+        exp_alerts:
+          - exp_labels: *checks-failing
+            exp_annotations:
+              description: "4 deliveries refused for their signature, or checks ended in an error, in the last hour. The webhook secret in Infisical may differ from the App's, or GitHub's API refuses the App (its private key, or its installation). The keeper's logs say which; the App's Advanced page lists GitHub's deliveries, and refused ones that are not there were someone else's."

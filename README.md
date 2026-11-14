@@ -49,7 +49,7 @@ The open licence covers the source code only. The following are not covered by i
 - The name "Keel Over the Edge" and any logo.
 - Art, sound, music and writing.
 
-A fork is welcome to use the code under the AGPL, but must use a different name and its own art.
+A fork is welcome to use the code under the AGPL, but must use a different name and its own art. The AGPL's section 7(e) allows exactly this reservation, and the contributor agreement does not cover art: the game's art, sound, music and writing are not taken from contributors.
 
 ## Sources
 
@@ -59,8 +59,6 @@ Astronomical Data Center, NSSDC/ADC, distributed as catalogue V/50 by the
 Centre de Données astronomiques de Strasbourg. It is kept as published in
 `tools/stars/bsc5/`; it is not covered by this repository's licence.
 
-## Contributions
+## Contributing
 
-Development is public, and bug reports, ideas and discussion are welcome through issues.
-
-Code contributions are not being accepted at this time, so pull requests will not be merged.
+Bug reports, ideas and discussion are welcome through issues, and pull requests are welcome too. Before a pull request is merged, everyone who wrote it signs the contributor agreement, once, in under a minute: you keep your copyright, the owner may license your contribution under any terms, and it stays available under the AGPL. [CONTRIBUTING.md](CONTRIBUTING.md) says what is welcome, how the agreement works, and how AI-assisted work is disclosed; everyone follows the [code of conduct](CODE_OF_CONDUCT.md).

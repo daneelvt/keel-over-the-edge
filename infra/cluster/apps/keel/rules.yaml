@@ -138,6 +138,35 @@ spec:
             summary: "A report has waited a day for the owner."
           annotations:
             description: "The oldest open report has waited {{ $value | humanizeDuration }}. The owner's page, Reports tab, lists them, a child's safety first."
+    # The contributor agreement keeper. While it is down or refused, pull
+    # requests to the game's repository wait for their check, and nothing
+    # else breaks: warnings, in a component of their own, which GameDown
+    # holds back nowhere.
+    - name: agreement
+      rules:
+        - alert: AgreementKeeperDown
+          expr: (sum(kube_deployment_status_replicas_ready{namespace="keel", deployment="keel-agreement"}) or vector(0)) < 1
+          for: 15m
+          labels:
+            severity: warning
+            component: agreement
+            summary: "No agreement keeper is ready: pull requests wait for their check."
+          annotations:
+            description: "Contributors cannot sign, and GitHub's deliveries are refused. Look at keel-agreement's pod and its logs, and at the database. GitHub sends no delivery again by itself: once the keeper is back, redeliver the failed ones from the App's Advanced page."
+        - alert: AgreementChecksFailing
+          # Deliveries refused for their signature, and checks that could
+          # not reach GitHub, over the last hour. A counter appears with its
+          # first count: one not yet counted is none.
+          expr: |
+            (sum(increase(keel_agreement_webhooks_total{result="bad_signature"}[1h])) or vector(0))
+              + (sum(increase(keel_agreement_checks_total{result="error"}[1h])) or vector(0))
+              > 3
+          labels:
+            severity: warning
+            component: agreement
+            summary: "Pull requests' agreement checks are failing."
+          annotations:
+            description: "{{ $value }} deliveries refused for their signature, or checks ended in an error, in the last hour. The webhook secret in Infisical may differ from the App's, or GitHub's API refuses the App (its private key, or its installation). The keeper's logs say which; the App's Advanced page lists GitHub's deliveries, and refused ones that are not there were someone else's."
     - name: database
       rules:
         - alert: DatabaseDown

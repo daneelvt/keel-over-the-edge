@@ -139,6 +139,10 @@ resource "cloudflare_ruleset" "rate" {
 # threats, and with no browser's headers, which Browser Integrity Check
 # refuses: neither is a challenge they can answer, so both are off there.
 # The game's own checks and limits hold the line, as for every player.
+# GitHub's deliveries to the contributor agreement keeper's webhook are
+# the same, from GitHub's servers with no browser's headers: both are off
+# at that one address, where the keeper checks each delivery's signature
+# and refuses the rest.
 resource "cloudflare_ruleset" "config" {
   zone_id = var.cloudflare_zone_id
   name    = "config"
@@ -159,6 +163,16 @@ resource "cloudflare_ruleset" "config" {
       ref         = "ai-apps"
       description = "No challenge for AI apps' servers at the MCP address and the token addresses"
       expression  = "(http.host eq \"${local.agents}\" or (http.host eq \"${local.play}\" and http.request.uri.path in ${local.oauth_path_set}))"
+      action      = "set_config"
+      action_parameters = {
+        security_level = "essentially_off"
+        bic            = false
+      }
+    },
+    {
+      ref         = "github-webhook"
+      description = "No challenge for GitHub's deliveries to the contributor agreement keeper"
+      expression  = "(http.host eq \"${local.play}\" and http.request.uri.path eq \"/agreement/webhook\")"
       action      = "set_config"
       action_parameters = {
         security_level = "essentially_off"

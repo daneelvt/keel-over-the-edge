@@ -649,6 +649,174 @@ database keeps the WAL it cannot archive and sends it once the new key
 arrives; within the lock's 14 days nothing in the bucket was lost, and
 `b2 ls --versions` shows what the thief hid or added.
 
+## 15. GitHub: the contributor agreement's App
+
+Pull requests from outside are taken under a contributor agreement. Its
+keeper, `keel agreement`, runs beside the game (`keel-agreement` in
+`keel`) and is the server of a GitHub App: GitHub tells it of each pull
+request, and it sets the commit status `pr-agreement` and leaves one
+comment. Contributors sign on its page, `/agreement` on the players'
+host, after signing in with GitHub. The App is registered by hand, on
+your own account; until it is, the keeper runs "not set up": its page
+says signing is not open yet, and it refuses GitHub's deliveries.
+
+### 15.1 Before the keeper is merged
+
+1. Run **`accounts`** with `plan`, then with `apply`, as in section 12. It
+   makes the password of the keeper's database role, `agreement`, in
+   `keel-cluster`, `/keel/DB_AGREEMENT_PASSWORD`, and the empty folder
+   `/keel-agreement/` the App's values go in.
+2. Only then merge and promote the pull request that brings the keeper:
+   CloudNativePG makes the role from that password, and the keeper
+   connects with it. Without it, the keeper waits for its Secret and the
+   role is not made.
+
+Check:
+
+- [ ] `kubectl -n keel get externalsecret keel-db-agreement keel-agreement`:
+      both `SecretSynced` (`keel-agreement` holds nothing yet: a value
+      Infisical lacks is left out, not an error).
+- [ ] `kubectl -n keel get deploy keel-agreement` is ready, and
+      `https://play.keelovertheedge.com/agreement` says signing is not
+      open yet. If it is not ready and its log says it may not read its
+      tables, the role was made after keel's migration ran, which grants
+      them: the next promote grants them, or at a quiet hour `kubectl -n
+      keel rollout restart deploy/keel` (the world pauses for keel's
+      restart).
+
+### 15.2 The App
+
+On github.com, signed in as yourself: **Settings → Developer settings →
+GitHub Apps → New GitHub App**. First make the webhook's secret, and keep
+it in the password manager until 15.3:
+
+```sh
+openssl rand -hex 32
+```
+
+| Field | Value |
+|---|---|
+| GitHub App name | `Keel Over the Edge contributor agreement` |
+| Homepage URL | `https://play.keelovertheedge.com/agreement` |
+| Callback URL | `https://play.keelovertheedge.com/agreement/callback` (one, no other) |
+| Expire user authorization tokens | on |
+| Request user authorization (OAuth) during installation | off |
+| Enable Device Flow | off |
+| Setup URL, Redirect on update | empty, off |
+| Webhook: Active | on |
+| Webhook URL | `https://play.keelovertheedge.com/agreement/webhook` |
+| Webhook secret | the value just made |
+| SSL verification | enabled |
+| Repository permissions | **Commit statuses**: Read and write; **Pull requests**: Read and write; **Metadata**: Read-only (GitHub's own, always); every other: No access |
+| Organization permissions | none |
+| Account permissions | none: signing in tells the keeper who someone is without any |
+| Subscribe to events | **Pull request** alone |
+| Where can this GitHub App be installed? | **Only on this account** |
+
+**Create GitHub App**. On its **General** page:
+
+1. Note the **App ID** and the **Client ID**. Neither is secret.
+2. **Client secrets → Generate a new client secret**. It is shown once.
+3. **Private keys → Generate a private key**. Your browser downloads a
+   `.pem` file.
+
+### 15.3 Its values
+
+In Infisical, `keel-cluster`, **Production**, the folder `keel-agreement`,
+add four secrets (the names are exact, the keys of the Secret the keeper
+reads):
+
+| Name | Value |
+|---|---|
+| `GITHUB_APP_PRIVATE_KEY` | the `.pem` file's whole text, its `BEGIN` and `END` lines included |
+| `GITHUB_APP_WEBHOOK_SECRET` | the webhook's secret, from 15.2 |
+| `GITHUB_APP_CLIENT_SECRET` | the client secret |
+| `CONTACT_EMAIL` | the address the signing page shows, for a parent or guardian and for privacy requests: one you read, never at the game's domain, which receives no mail |
+
+Then delete the `.pem` file and the webhook's secret from the password
+manager: Infisical holds them alone, and a new key or secret can always
+be made (below).
+
+By a pull request, write the App ID and the Client ID into the
+`keel-agreement` ConfigMap of `infra/cluster/clusters/prod/apps/kustomization.yaml`
+(`KEEL_AGREEMENT_APP_ID`, `KEEL_AGREEMENT_CLIENT_ID`). Before promoting
+it, bring the values to the cluster at once: `kubectl -n keel annotate
+externalsecret keel-agreement force-sync=$(date +%s) --overwrite`. The
+promote restarts the keeper, which reads them when it starts. (A value
+changed later needs the same, and `kubectl -n keel rollout restart
+deploy/keel-agreement`.)
+
+Check:
+
+- [ ] `kubectl -n keel get secret keel-agreement -o jsonpath='{.data}' | jq keys`
+      lists the four names.
+- [ ] The App's **Advanced** page: the ping GitHub sent when the App was
+      made may have failed (the keeper was not set up); **Redeliver** it:
+      it is answered.
+
+### 15.4 The trial, then the game's repository
+
+The App goes first on a throwaway repository, where nothing is at stake.
+
+1. Make a public repository `keel-agreement-trial` on your account, with a
+   README.
+2. On the App's page: **Install App** → your account → **Only select
+   repositories** → `keel-agreement-trial`.
+3. As a second GitHub account that has not signed, fork it and open a pull
+   request. Within a minute, `pr-agreement` waits on it, and the App's one
+   comment links to the signing page.
+4. As that account, sign on the page. The pull request's status turns
+   green with nothing run again and nothing pushed.
+5. Push a commit to it with a `Co-authored-by:` trailer naming a human's
+   GitHub account that has not signed. The status waits again, and the
+   comment names that author.
+6. Push one with an AI's trailer instead (`Co-authored-by: Claude
+   <noreply@anthropic.com>`): it does not hold the status back.
+7. As a third account, with a pull request open, answer **I am under 18**
+   on the page: it shows the guardian's way instead of signing. Record
+   that signature by hand, as a guardian's would be:
+
+   ```sh
+   kubectl -n keel exec deploy/keel-agreement -- /keel admin agreements add <login> \
+     -name "<their full name>" -guardian "<the guardian's name>" \
+     -guardian-email <the guardian's e-mail> -note "trial" -yes
+   ```
+
+   That account's pull request passes.
+8. `kubectl -n keel exec deploy/keel-agreement -- /keel admin agreements
+   export` lists the signatures, the trial's among them. Void those made
+   for the trial alone (`… agreements void`), unless they should stand.
+9. Delete `keel-agreement-trial` (its **Settings → Delete this
+   repository**); its installation goes with it.
+10. **Install App** again, now on `keel-over-the-edge` alone.
+
+Check:
+
+- [ ] The App's **Install App** page shows one installation, on your
+      account, for `keel-over-the-edge` alone.
+- [ ] The App's permissions are exactly those of 15.2, and it is
+      subscribed to **Pull request** alone.
+- [ ] The next pull request to the game's repository has `pr-agreement`.
+
+### Rotating the App's private key and webhook secret
+
+- **The private key**: GitHub keeps several at once. **Generate a private
+  key**; paste the new `.pem` over `GITHUB_APP_PRIVATE_KEY`; `kubectl -n
+  keel annotate externalsecret keel-agreement force-sync=$(date +%s)
+  --overwrite`, then `kubectl -n keel rollout restart
+  deploy/keel-agreement`. Once a pull request's check has worked (a
+  redelivery from the **Advanced** page will do), delete the old key on
+  the App's page. A key believed stolen: delete it first; checks fail
+  until the new one is in.
+- **The webhook's secret**: GitHub has one at a time, so deliveries are
+  refused for the minute between. Make a new one (`openssl rand -hex
+  32`); paste it over `GITHUB_APP_WEBHOOK_SECRET` and force the sync as
+  above; set it on the App's **General** page; restart the keeper at once.
+  Then, on the **Advanced** page, **Redeliver** what failed in between.
+- **The client secret**: GitHub keeps two at once. Generate a new one,
+  paste it over `GITHUB_APP_CLIENT_SECRET`, force the sync, restart the
+  keeper, sign in on the page once, then delete the old one.
+
 ## If something fails
 
 - **Tailscale is down, or the machine is off the tailnet**: InterServer's

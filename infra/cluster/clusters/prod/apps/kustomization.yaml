@@ -1,9 +1,10 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 # The game in production: the base's sizes, which are production's, the
 # players' address and their passkeys' domain, the MCP address, the
-# database's passwords and the backups' keys from Infisical, the weekly
-# restore test, and cloudflared, which carries players' and AI apps'
-# traffic in from Cloudflare.
+# database's passwords and the backups' keys from Infisical, the
+# contributor agreement keeper's GitHub App, the weekly restore test, and
+# cloudflared, which carries players' and AI apps' traffic in from
+# Cloudflare.
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
@@ -12,6 +13,7 @@ resources:
   - ../../../apps/cloudflared
   - keel-db-app.yaml
   - database-roles.yaml
+  - agreement-secrets.yaml
   - backup-keys.yaml
 components:
   - ../../../apps/archive
@@ -25,6 +27,16 @@ configMapGenerator:
       - KEEL_PASSKEY_RP_ID=keelovertheedge.com
       # The MCP address has a host of its own.
       - KEEL_AGENTS_URL=https://agents.keelovertheedge.com/mcp
+  # The contributor agreement keeper's GitHub App, by its ID and client
+  # ID, neither secret (infra/MANUAL-STEPS.md, section 15). With them the
+  # keeper needs the App's four values in its Secret too, or it does not
+  # start; both empty, it runs "not set up".
+  - name: keel-agreement
+    namespace: keel
+    behavior: merge
+    literals:
+      - KEEL_AGREEMENT_APP_ID=5756060
+      - KEEL_AGREEMENT_CLIENT_ID=Iv23liqyvdzExgY5eth5
 # The Gateway and the players' route answer the players' host alone; a
 # second listener and AI apps' route answer the MCP address's host alone.
 patches:
@@ -64,3 +76,18 @@ patches:
         path: /spec/hostnames
         value:
           - agents.keelovertheedge.com
+  # The contributor agreement keeper's players' origin is keel's, from its
+  # configuration: one place for it (a change to keel's configuration
+  # restarts the keeper too).
+  - target:
+      kind: Deployment
+      name: keel-agreement
+    patch: |-
+      - op: add
+        path: /spec/template/spec/containers/0/env/-
+        value:
+          name: KEEL_PLAY_ORIGIN
+          valueFrom:
+            configMapKeyRef:
+              name: keel
+              key: KEEL_PLAY_ORIGIN
