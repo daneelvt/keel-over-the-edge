@@ -66,7 +66,7 @@ const (
 // its kind and value; for the world's arrival, its islands to find; for
 // the last world's review, its number, sailors, distance, islands charted
 // of how many, its greatest finds and who came nearest the falls; and for
-// an edition, its figures.
+// an edition, its figures; for a time trial's run, its medal.
 type StoryFacts struct {
 	Boat      string       `json:"boat,omitempty"`
 	BoatKind  string       `json:"boatKind,omitempty"`
@@ -85,6 +85,7 @@ type StoryFacts struct {
 	Finds     []ReviewFind `json:"finds,omitempty"`
 	Nearest   *Nearest     `json:"nearest,omitempty"`
 	Figures   *Figures     `json:"figures,omitempty"`
+	Medal     string       `json:"medal,omitempty"`
 }
 
 // ReviewFind is one of a world's greatest finds as its review copies it:
@@ -106,8 +107,8 @@ type Nearest struct {
 
 // Figures are a day of the world in counts, never names: the boats
 // sailed (each sailor once) and the machine sailors among them, the
-// distance run, m, the places charted, the crews in company and the
-// falls.
+// distance run, m, the places charted, the crews in company, the falls
+// and the races run.
 type Figures struct {
 	Boats    int     `json:"boats"`
 	Machines int     `json:"machines"`
@@ -115,6 +116,7 @@ type Figures struct {
 	Charted  int     `json:"charted"`
 	Crews    int     `json:"crews"`
 	Over     int     `json:"over"`
+	Races    int     `json:"races,omitempty"`
 }
 
 // Story is a story of the news: a candidate, or one chosen. Account is the
@@ -529,7 +531,11 @@ func (s *Store) DayFigures(ctx context.Context, world [16]byte, number int, sinc
 	if err != nil {
 		return Figures{}, err
 	}
-	return Figures{Boats: int(v.Boats), Machines: int(v.Machines), Run: v.Run, Over: int(v.Over), Charted: int(c)}, nil
+	races, err := s.q.DayRaces(ctx, db.DayRacesParams{WorldID: pgtype.UUID{Bytes: world, Valid: true}, Since: stamp(since), Until: stamp(until)})
+	if err != nil {
+		return Figures{}, err
+	}
+	return Figures{Boats: int(v.Boats), Machines: int(v.Machines), Run: v.Run, Over: int(v.Over), Charted: int(c), Races: int(races)}, nil
 }
 
 // Review is a whole world in review: its sailors, the distance its boats

@@ -25,6 +25,7 @@ import (
 	"github.com/daneelvt/keel-over-the-edge/internal/bus"
 	"github.com/daneelvt/keel-over-the-edge/internal/catalog"
 	"github.com/daneelvt/keel-over-the-edge/internal/physics"
+	"github.com/daneelvt/keel-over-the-edge/internal/race/committee"
 	"github.com/daneelvt/keel-over-the-edge/internal/replay"
 	"github.com/daneelvt/keel-over-the-edge/internal/scripted"
 	"github.com/daneelvt/keel-over-the-edge/internal/sim"
@@ -123,6 +124,20 @@ var liveEdge = &sim.Edge{Fall: 150, Clear: 20}
 // open sea but for it.
 var livePort = &sim.Terrain{Ports: []sim.Disc{{X: 0, Y: 0, R: 300}}}
 
+// liveStage is the live sessions' worlds' racing area, about the centre,
+// for the catalog's boats.
+var liveStage = sync.OnceValue(func() *committee.Stage {
+	cat, err := catalog.Load()
+	if err != nil {
+		panic(err)
+	}
+	st := &committee.Stage{Areas: []committee.Area{{Number: 1, Radius: 450}}}
+	for i := range cat.Boats {
+		st.Kinds = append(st.Kinds, committee.Kind{Polar: cat.Polar(i), Length: cat.Boats[i].LengthOverall})
+	}
+	return st
+})
+
 // catalogCapacities are the catalog's kinds' people aboard.
 func catalogCapacities() []int {
 	cat, err := catalog.Load()
@@ -141,7 +156,7 @@ func sailLive(t *testing.T, sailors, capacity, limit int, d time.Duration, stall
 	dir := t.TempDir()
 	synctest.Test(t, func(t *testing.T) {
 		w, err := sim.New(sim.Config{Capacity: capacity, Kinds: catalogKinds(t), Waves: catalogWaves(t), Weather: catalogWeather(t), Encounters: catalogEncounters(t), Workers: 4, Tick: loop.TickAt(time.Now(), bubbleEpoch), Grace: liveGrace, Limit: limit, Edge: liveEdge,
-			Terrain: livePort, Capacities: catalogCapacities()})
+			Terrain: livePort, Capacities: catalogCapacities(), Races: liveStage()})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -207,6 +222,7 @@ func sailLive(t *testing.T, sailors, capacity, limit int, d time.Duration, stall
 				// A player's helm, stamped for a tick a little ahead; and
 				// those the queue has given boats to find them.
 				f := w.Bus().Frames.Acquire()
+				tick := f.Tick
 				if n == 3 {
 					// The world's end, a month beyond the recording: in
 					// the log, never reached.
@@ -237,6 +253,20 @@ func sailLive(t *testing.T, sailors, capacity, limit int, d time.Duration, stall
 					// Admission held a moment, as while the database is behind.
 					dev.TrySend(bus.Command{Op: bus.Hold})
 					held = false
+				}
+				// A race handed to the committee with the boats about;
+				// a racer retiring; a race written, ended or not.
+				if len(boats) > 0 && n%11 == 5 {
+					call := &bus.RaceCall{ID: [16]byte{byte(n)}, Course: 1, Start: tick + 30*30, Kind: uint16(n % 2)}
+					for i, b := range boats[:min(len(boats), 3)] {
+						call.Entrants = append(call.Entrants, bus.RaceEntrant{Account: b.account, Number: int16(i + 1), Crew: i == 0,
+							BoatName: "Tern"})
+					}
+					w.Bus().Commands.Server().TrySend(bus.Command{Op: bus.RacePlace, Race: call})
+				}
+				if len(boats) > 0 && n%11 == 7 {
+					players.TrySend(bus.Command{Op: bus.RaceRetire, Account: boats[0].account})
+					w.Bus().Commands.Server().TrySend(bus.Command{Op: bus.RaceWritten, Race: &bus.RaceCall{ID: [16]byte{byte(n - 1)}}})
 				}
 				switch r := rng.IntN(18); {
 				case r < 5:
@@ -376,7 +406,7 @@ func replayLog(t *testing.T, data []byte, workers int) (replay.Result, []byte) {
 		t.Fatal(err)
 	}
 	var end []byte
-	res, err := replay.Run(f, replay.Options{Kinds: catalogKinds(t), Capacities: catalogCapacities(), Waves: catalogWaves(t), Weather: catalogWeather(t), Encounters: catalogEncounters(t), Workers: workers, Edge: liveEdge, Terrain: livePort, At: func(fr *bus.Frame) {
+	res, err := replay.Run(f, replay.Options{Kinds: catalogKinds(t), Capacities: catalogCapacities(), Waves: catalogWaves(t), Weather: catalogWeather(t), Encounters: catalogEncounters(t), Workers: workers, Edge: liveEdge, Terrain: livePort, Races: liveStage(), At: func(fr *bus.Frame) {
 		end = sim.AppendSnapshot(end[:0], fr)
 	}})
 	if err != nil {

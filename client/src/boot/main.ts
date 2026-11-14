@@ -99,6 +99,7 @@ import { loadPhysics, type Physics } from '../predict/physics';
 import wasmUrl from '../predict/physics.wasm?url';
 import { Predictor, prepareEncounters } from '../predict/predictor';
 import { regimeIndex } from '../predict/weather';
+import { signalFlag } from '../render/committee';
 import { PERSON_DEFAULT } from '../render/fleet';
 import { ROAM_HIGH } from '../render/freecam';
 import { flashNear } from '../render/lightning';
@@ -842,6 +843,39 @@ async function start(): Promise<void> {
     world.wrecks.setPlaces(p);
     world.race.setPlaces(p);
   };
+  // A race under way: its course laid in the sea, its committee boat's
+  // flags, and its gun.
+  const racing = new Map<number, { boat: string | undefined; flags: number[] }>();
+  online.onRaceTold = (t) => {
+    if (t.gone) {
+      racing.delete(t.race);
+      world.race.drop(t.race);
+      return;
+    }
+    const boat = catalog.boats[t.boat]?.id;
+    const known = racing.get(t.race) ?? { boat, flags: raceFlags('warning', boat) };
+    racing.set(t.race, known);
+    world.race.lay(t.race, {
+      committee: t.committee,
+      pin: t.pin,
+      marks: t.marks,
+      flags: known.flags,
+    });
+  };
+  online.onRaceSignal = (s) => {
+    const r = racing.get(s.race);
+    if (r !== undefined && s.signal !== 'finish' && s.signal !== 'other') {
+      r.flags = raceFlags(s.signal, r.boat);
+      world.race.signals(s.race, r.flags);
+    }
+    if (s.gun) {
+      game.fireGun(
+        s.race,
+        s.signal === 'start' || (s.signal === 'finish' && s.place === 1) ? 1.6 : 1,
+        true,
+      );
+    }
+  };
   online.onLights = (l, drop) => world.lighthouses.setLights(l, drop);
   online.onLife = (l, drop) => world.life.set(l, drop);
   online.onCaps = (c, drop) => world.weather.setCaps(c, drop);
@@ -1383,3 +1417,20 @@ start().catch((err: unknown) => {
   document.body.replaceChildren(p);
   console.error(err);
 });
+
+/** The flags a race's committee boat flies after a signal: the class's pennant from the warning, P too from the preparatory, none from the start, X for a recall. */
+function raceFlags(
+  signal: 'warning' | 'preparatory' | 'start' | 'recall',
+  boat: string | undefined,
+): number[] {
+  const flags = catalog.world.committee.flags;
+  const shown =
+    signal === 'warning'
+      ? [signalFlag(flags, 'class', boat)]
+      : signal === 'preparatory'
+        ? [signalFlag(flags, 'class', boat), signalFlag(flags, 'preparatory')]
+        : signal === 'recall'
+          ? [signalFlag(flags, 'recall')]
+          : [];
+  return shown.filter((f) => f >= 0);
+}

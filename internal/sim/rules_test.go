@@ -34,8 +34,10 @@ var iterMaps = []string{"All", "Keys", "Values"}
 
 func TestRules(t *testing.T) {
 	// The simulation, the weather it asks which spells blow when, the
-	// sight its lookouts see by, and the sea's life it keeps.
-	for _, dir := range []string{".", filepath.Join("..", "weather"), filepath.Join("..", "sight"), filepath.Join("..", "life")} {
+	// sight its lookouts see by, the sea's life it keeps, and the race
+	// committee it runs races by.
+	for _, dir := range []string{".", filepath.Join("..", "weather"), filepath.Join("..", "sight"), filepath.Join("..", "life"),
+		filepath.Join("..", "race", "committee")} {
 		problems, err := checkDeterminism(dir)
 		if err != nil {
 			t.Fatal(err)

@@ -18,8 +18,9 @@
 //
 // A race goes up to its start here: open to entry, or closed by its owner,
 // and from its warning signal, two minutes before the start, starting.
-// What runs it from there, the committee in the world, puts it in racing
-// and then finished.
+// The races' clerk (Clerk) hands it then to the committee in the world
+// (package committee), which runs it, and writes it racing, and finished
+// with what everyone came to.
 package race
 
 import (
@@ -27,6 +28,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/daneelvt/keel-over-the-edge/internal/race/committee"
 	"github.com/daneelvt/keel-over-the-edge/internal/store"
 )
 
@@ -95,10 +97,10 @@ const (
 	HarbourAfter = 10 * time.Minute
 )
 
-// The minutes a buoy course is sized to, short and long.
+// The minutes a buoy course is sized to, short and long: the committee's.
 const (
-	ShortMinutes = 10
-	LongMinutes  = 20
+	ShortMinutes = committee.ShortSeconds / 60
+	LongMinutes  = committee.LongSeconds / 60
 )
 
 // Sailor is who asks: an account, a machine sailor's or a human's, and a

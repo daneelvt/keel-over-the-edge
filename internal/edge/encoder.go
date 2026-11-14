@@ -460,7 +460,8 @@ func (enc *encoder) encode(c *conn, f *bus.Frame) {
 	// The weather, the sea, the land's chunks and the bumps first: they are
 	// queued, and what is queued goes out before the snapshot.
 	if !c.weather(f) || !c.seaAreas(f, x, y) || !c.chunks(chunks, x, y) || !c.bumps(f, next, s, boat) || !c.lookOf(f, s) ||
-		!c.boatLookOf(f, s) || !c.boatNames(f, next) || !c.crews(f, next) || !c.life(f, next, s, x, y) || !c.crewOf(f, s) {
+		!c.boatLookOf(f, s) || !c.boatNames(f, next) || !c.crews(f, next) || !c.life(f, next, s, x, y) || !c.crewOf(f, s) ||
+		!c.races(f, s, boat, x, y) {
 		return
 	}
 	b = b[:protocol.MaxHeaderSize]

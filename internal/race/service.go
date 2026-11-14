@@ -39,6 +39,12 @@ type Store interface {
 	SetHarbourDays(ctx context.Context, lease int64, world [16]byte, days []store.HarbourDay) error
 	BusyAreas(ctx context.Context, world [16]byte, since, until time.Time) ([]store.BuoyStart, error)
 	LogPeople(ctx context.Context, ids []store.AccountID) (map[store.AccountID]store.LogPerson, error)
+	// What the races' clerk asks.
+	DueRaces(ctx context.Context, world [16]byte, number int, since, until time.Time) ([]store.Race, error)
+	RaceIn(ctx context.Context, world [16]byte, number int, id [16]byte) (store.Race, error)
+	PendingRuns(ctx context.Context, world [16]byte) ([]store.PendingRun, error)
+	StartRace(ctx context.Context, lease int64, r *store.RaceStart) error
+	EndRace(ctx context.Context, lease int64, rules store.NewsRules, e *store.RaceEnd) error
 }
 
 var _ Store = (*store.Store)(nil)

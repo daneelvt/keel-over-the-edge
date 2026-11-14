@@ -122,6 +122,16 @@ type Frame struct {
 	// schedule and the boats, so it is in no snapshot or digest.
 	Life []LifeEncounter
 
+	// Races are the races under way, by their keys, and Racers their
+	// boats, by their races' keys, then their numbers; NextRace the key
+	// the next race takes. RaceEvents are what happened in them in the
+	// last BumpTicks ticks, oldest first: events, in no snapshot or
+	// digest.
+	Races      []Race
+	Racers     []Racer
+	NextRace   uint32
+	RaceEvents []RaceEvent
+
 	// Ended says this tick was the world's last: the falls took every boat
 	// afloat (their EdgeTaken events are in Edges), and no tick follows.
 	Ended bool
@@ -642,6 +652,9 @@ func NewFrame(capacity int) *Frame {
 		Pairs:       make([]Pair, 0, capacity),
 		Bumps:       make([]Bump, 0, 64),
 		Life:        make([]LifeEncounter, 0, LifeRoom),
+		Races:       make([]Race, 0, 16),
+		Racers:      make([]Racer, 0, 64),
+		RaceEvents:  make([]RaceEvent, 0, 64),
 		Grid: Grid{
 			Start: make([]int32, Cells+1),
 			Slots: make([]int32, 0, capacity),

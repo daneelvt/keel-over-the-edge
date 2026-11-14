@@ -51,6 +51,40 @@ func (q *Queries) BuoyRacesNear(ctx context.Context, arg BuoyRacesNearParams) ([
 	return items, nil
 }
 
+const dueRaces = `-- name: DueRaces :many
+SELECT id FROM race
+WHERE world_id = $1 AND kind = 'race' AND state IN ('open', 'closed') AND starts_at > $2 AND starts_at <= $3
+ORDER BY starts_at, id
+`
+
+type DueRacesParams struct {
+	WorldID pgtype.UUID
+	Since   time.Time
+	Until   time.Time
+}
+
+// A world's races, not trials, open or closed, starting between two
+// times: those whose warning signal has come, for the committee.
+func (q *Queries) DueRaces(ctx context.Context, arg DueRacesParams) ([]pgtype.UUID, error) {
+	rows, err := q.db.Query(ctx, dueRaces, arg.WorldID, arg.Since, arg.Until)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []pgtype.UUID
+	for rows.Next() {
+		var id pgtype.UUID
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		items = append(items, id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const enterRace = `-- name: EnterRace :exec
 INSERT INTO race_entry (world_id, race_id, account_id, number, machine, with_crew, entered_at)
 VALUES ($1, $2, $3, $4, $5, $6, $7)
@@ -132,6 +166,23 @@ func (q *Queries) EntriesOf(ctx context.Context, arg EntriesOfParams) ([]Entries
 		return nil, err
 	}
 	return items, nil
+}
+
+const finishRace = `-- name: FinishRace :exec
+UPDATE race SET state = 'finished', ended_at = $1
+WHERE world_id = $2 AND id = $3 AND state IN ('open', 'closed', 'racing')
+`
+
+type FinishRaceParams struct {
+	At      pgtype.Timestamptz
+	WorldID pgtype.UUID
+	ID      pgtype.UUID
+}
+
+// A race over, its results kept.
+func (q *Queries) FinishRace(ctx context.Context, arg FinishRaceParams) error {
+	_, err := q.db.Exec(ctx, finishRace, arg.At, arg.WorldID, arg.ID)
+	return err
 }
 
 const harbourDays = `-- name: HarbourDays :many
@@ -298,6 +349,38 @@ func (q *Queries) InsertRace(ctx context.Context, arg InsertRaceParams) (string,
 	return code, err
 }
 
+const insertRun = `-- name: InsertRun :exec
+INSERT INTO race_entry (world_id, race_id, account_id, run, number, machine, with_crew, entered_at, started_at)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $8)
+ON CONFLICT DO NOTHING
+`
+
+type InsertRunParams struct {
+	WorldID   pgtype.UUID
+	RaceID    pgtype.UUID
+	AccountID pgtype.UUID
+	Run       int16
+	Number    int16
+	Machine   bool
+	WithCrew  bool
+	At        time.Time
+}
+
+// A trial's run begun, as an entry of its own, started.
+func (q *Queries) InsertRun(ctx context.Context, arg InsertRunParams) error {
+	_, err := q.db.Exec(ctx, insertRun,
+		arg.WorldID,
+		arg.RaceID,
+		arg.AccountID,
+		arg.Run,
+		arg.Number,
+		arg.Machine,
+		arg.WithCrew,
+		arg.At,
+	)
+	return err
+}
+
 const lockRacing = `-- name: LockRacing :exec
 SELECT pg_advisory_xact_lock(hashtextextended($1::text, 7))
 `
@@ -344,6 +427,194 @@ func (q *Queries) NextRaceNumber(ctx context.Context, arg NextRaceNumberParams) 
 	var column_1 int16
 	err := row.Scan(&column_1)
 	return column_1, err
+}
+
+const pendingRuns = `-- name: PendingRuns :many
+SELECT e.race_id, e.account_id, e.number, e.machine, e.with_crew,
+  (SELECT coalesce(max(x.run), 0) + 1 FROM race_entry x
+   WHERE x.world_id = e.world_id AND x.race_id = e.race_id AND x.account_id = e.account_id)::smallint AS next_run
+FROM race_entry e
+JOIN race r ON r.world_id = e.world_id AND r.id = e.race_id
+WHERE e.world_id = $1 AND r.kind = 'trial' AND r.state = 'open' AND e.run = 0 AND e.withdrawn_at IS NULL AND NOT e.removed
+  AND NOT EXISTS (
+    SELECT 1 FROM race_entry x
+    WHERE x.world_id = e.world_id AND x.race_id = e.race_id AND x.account_id = e.account_id AND x.run > 0
+      AND NOT EXISTS (SELECT 1 FROM race_result y
+                      WHERE y.world_id = x.world_id AND y.race_id = x.race_id AND y.account_id = x.account_id AND y.run = x.run))
+ORDER BY e.entered_at, e.account_id
+`
+
+type PendingRunsRow struct {
+	RaceID    pgtype.UUID
+	AccountID pgtype.UUID
+	Number    int16
+	Machine   bool
+	WithCrew  bool
+	NextRun   int16
+}
+
+// A world's open trials' sailors who asked for a run: an entry in force,
+// with no run under way (one without its result), and the run they sail
+// next.
+func (q *Queries) PendingRuns(ctx context.Context, worldID pgtype.UUID) ([]PendingRunsRow, error) {
+	rows, err := q.db.Query(ctx, pendingRuns, worldID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []PendingRunsRow
+	for rows.Next() {
+		var i PendingRunsRow
+		if err := rows.Scan(
+			&i.RaceID,
+			&i.AccountID,
+			&i.Number,
+			&i.Machine,
+			&i.WithCrew,
+			&i.NextRun,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const putRaceRecord = `-- name: PutRaceRecord :exec
+INSERT INTO race_record (account_id, source, world, at, code, race_name, kind, course_name, boat, boat_name, fleet, harbour,
+  newcomers, role, place, how, medal, awards, skipper_id, skipper_name, skipper_machine)
+SELECT $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12,
+  $13, $14, $15, $16, $17, $18, $19, $20,
+  $21
+WHERE EXISTS (SELECT 1 FROM account WHERE id = $1)
+ON CONFLICT (account_id, source) DO NOTHING
+`
+
+type PutRaceRecordParams struct {
+	AccountID      pgtype.UUID
+	Source         string
+	World          int32
+	At             time.Time
+	Code           string
+	RaceName       string
+	Kind           string
+	CourseName     string
+	Boat           string
+	BoatName       pgtype.Text
+	Fleet          int16
+	Harbour        bool
+	Newcomers      bool
+	Role           string
+	Place          pgtype.Int2
+	How            pgtype.Text
+	Medal          pgtype.Text
+	Awards         []string
+	SkipperID      pgtype.UUID
+	SkipperName    pgtype.Text
+	SkipperMachine bool
+}
+
+// A race in a sailor's lasting record, once for its source, while the
+// account is kept.
+func (q *Queries) PutRaceRecord(ctx context.Context, arg PutRaceRecordParams) error {
+	_, err := q.db.Exec(ctx, putRaceRecord,
+		arg.AccountID,
+		arg.Source,
+		arg.World,
+		arg.At,
+		arg.Code,
+		arg.RaceName,
+		arg.Kind,
+		arg.CourseName,
+		arg.Boat,
+		arg.BoatName,
+		arg.Fleet,
+		arg.Harbour,
+		arg.Newcomers,
+		arg.Role,
+		arg.Place,
+		arg.How,
+		arg.Medal,
+		arg.Awards,
+		arg.SkipperID,
+		arg.SkipperName,
+		arg.SkipperMachine,
+	)
+	return err
+}
+
+const putRaceResult = `-- name: PutRaceResult :exec
+INSERT INTO race_result (world_id, race_id, account_id, run, place, elapsed, added, marks, to_go, how, medal, awards, crew)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
+  $11, $12, $13)
+ON CONFLICT (world_id, race_id, account_id, run) DO UPDATE
+  SET place = excluded.place, elapsed = excluded.elapsed, added = excluded.added, marks = excluded.marks,
+      to_go = excluded.to_go, how = excluded.how, medal = excluded.medal, awards = excluded.awards, crew = excluded.crew
+`
+
+type PutRaceResultParams struct {
+	WorldID   pgtype.UUID
+	RaceID    pgtype.UUID
+	AccountID pgtype.UUID
+	Run       int16
+	Place     pgtype.Int2
+	Elapsed   pgtype.Float4
+	Added     float32
+	Marks     int16
+	ToGo      pgtype.Float4
+	How       string
+	Medal     pgtype.Text
+	Awards    []string
+	Crew      []byte
+}
+
+// What a boat came to in a race, or a trial's run.
+func (q *Queries) PutRaceResult(ctx context.Context, arg PutRaceResultParams) error {
+	_, err := q.db.Exec(ctx, putRaceResult,
+		arg.WorldID,
+		arg.RaceID,
+		arg.AccountID,
+		arg.Run,
+		arg.Place,
+		arg.Elapsed,
+		arg.Added,
+		arg.Marks,
+		arg.ToGo,
+		arg.How,
+		arg.Medal,
+		arg.Awards,
+		arg.Crew,
+	)
+	return err
+}
+
+const putRaceTrack = `-- name: PutRaceTrack :exec
+INSERT INTO race_track (world_id, race_id, account_id, run, samples)
+VALUES ($1, $2, $3, $4, $5)
+ON CONFLICT DO NOTHING
+`
+
+type PutRaceTrackParams struct {
+	WorldID   pgtype.UUID
+	RaceID    pgtype.UUID
+	AccountID pgtype.UUID
+	Run       int16
+	Samples   []byte
+}
+
+// A boat's track in a race, once.
+func (q *Queries) PutRaceTrack(ctx context.Context, arg PutRaceTrackParams) error {
+	_, err := q.db.Exec(ctx, putRaceTrack,
+		arg.WorldID,
+		arg.RaceID,
+		arg.AccountID,
+		arg.Run,
+		arg.Samples,
+	)
+	return err
 }
 
 const raceByCode = `-- name: RaceByCode :one
@@ -560,6 +831,65 @@ func (q *Queries) RaceIDsOf(ctx context.Context, arg RaceIDsOfParams) ([]pgtype.
 	return items, nil
 }
 
+const raceIn = `-- name: RaceIn :one
+SELECT r.code, coalesce(r.owner_id, '00000000-0000-0000-0000-000000000000')::uuid AS owner_id,
+  r.kind, r.course_kind, r.course, coalesce(r.shape, '')::text AS shape, r.long, r.boat, r.who, r.name, r.starts_at,
+  r.moved, r.state, coalesce(r.harbour, -1)::smallint AS harbour, r.made_at,
+  (SELECT count(*) FROM race_entry e WHERE e.world_id = r.world_id AND e.race_id = r.id
+     AND e.withdrawn_at IS NULL AND NOT e.removed)::integer AS entered
+FROM race r
+WHERE r.world_id = $1 AND r.id = $2
+`
+
+type RaceInParams struct {
+	WorldID pgtype.UUID
+	ID      pgtype.UUID
+}
+
+type RaceInRow struct {
+	Code       string
+	OwnerID    pgtype.UUID
+	Kind       string
+	CourseKind string
+	Course     int32
+	Shape      string
+	Long       bool
+	Boat       string
+	Who        string
+	Name       string
+	StartsAt   time.Time
+	Moved      bool
+	State      string
+	Harbour    int16
+	MadeAt     time.Time
+	Entered    int32
+}
+
+// A world's race of an ID, with how many are entered.
+func (q *Queries) RaceIn(ctx context.Context, arg RaceInParams) (RaceInRow, error) {
+	row := q.db.QueryRow(ctx, raceIn, arg.WorldID, arg.ID)
+	var i RaceInRow
+	err := row.Scan(
+		&i.Code,
+		&i.OwnerID,
+		&i.Kind,
+		&i.CourseKind,
+		&i.Course,
+		&i.Shape,
+		&i.Long,
+		&i.Boat,
+		&i.Who,
+		&i.Name,
+		&i.StartsAt,
+		&i.Moved,
+		&i.State,
+		&i.Harbour,
+		&i.MadeAt,
+		&i.Entered,
+	)
+	return i, err
+}
+
 const raceList = `-- name: RaceList :many
 SELECT r.id, r.code, coalesce(r.owner_id, '00000000-0000-0000-0000-000000000000')::uuid AS owner_id, r.kind,
   r.course_kind, r.course, coalesce(r.shape, '')::text AS shape, r.long, r.boat, r.who, r.name, r.starts_at,
@@ -722,6 +1052,21 @@ func (q *Queries) RacesSailed(ctx context.Context, accountID pgtype.UUID) (int32
 	return column_1, err
 }
 
+const racingState = `-- name: RacingState :exec
+UPDATE race SET state = 'racing' WHERE world_id = $1 AND id = $2 AND state IN ('open', 'closed')
+`
+
+type RacingStateParams struct {
+	WorldID pgtype.UUID
+	ID      pgtype.UUID
+}
+
+// A race under way: racing, from open or closed.
+func (q *Queries) RacingState(ctx context.Context, arg RacingStateParams) error {
+	_, err := q.db.Exec(ctx, racingState, arg.WorldID, arg.ID)
+	return err
+}
+
 const removeEntry = `-- name: RemoveEntry :one
 UPDATE race_entry SET removed = true
 WHERE world_id = $1 AND race_id = $2 AND number = $3 AND run = 0
@@ -803,6 +1148,29 @@ func (q *Queries) SetRaceState(ctx context.Context, arg SetRaceStateParams) (int
 	return result.RowsAffected(), nil
 }
 
+const startEntries = `-- name: StartEntries :exec
+UPDATE race_entry SET started_at = $1
+WHERE world_id = $2 AND race_id = $3 AND run = 0 AND account_id = ANY($4::uuid[]) AND started_at IS NULL
+`
+
+type StartEntriesParams struct {
+	At       pgtype.Timestamptz
+	WorldID  pgtype.UUID
+	RaceID   pgtype.UUID
+	Accounts []pgtype.UUID
+}
+
+// A race's boats placed on its line: started.
+func (q *Queries) StartEntries(ctx context.Context, arg StartEntriesParams) error {
+	_, err := q.db.Exec(ctx, startEntries,
+		arg.At,
+		arg.WorldID,
+		arg.RaceID,
+		arg.Accounts,
+	)
+	return err
+}
+
 const withdrawEntry = `-- name: WithdrawEntry :execrows
 UPDATE race_entry SET withdrawn_at = $1
 WHERE world_id = $2 AND race_id = $3 AND account_id = $4 AND run = 0
@@ -828,4 +1196,28 @@ func (q *Queries) WithdrawEntry(ctx context.Context, arg WithdrawEntryParams) (i
 		return 0, err
 	}
 	return result.RowsAffected(), nil
+}
+
+const withdrawRun = `-- name: WithdrawRun :exec
+UPDATE race_entry SET withdrawn_at = $1
+WHERE world_id = $2 AND race_id = $3 AND account_id = $4 AND run = 0 AND withdrawn_at IS NULL
+`
+
+type WithdrawRunParams struct {
+	At        pgtype.Timestamptz
+	WorldID   pgtype.UUID
+	RaceID    pgtype.UUID
+	AccountID pgtype.UUID
+}
+
+// A trial's sailor's run done or not begun: their entry no longer asks
+// for one until they enter again.
+func (q *Queries) WithdrawRun(ctx context.Context, arg WithdrawRunParams) error {
+	_, err := q.db.Exec(ctx, withdrawRun,
+		arg.At,
+		arg.WorldID,
+		arg.RaceID,
+		arg.AccountID,
+	)
+	return err
 }

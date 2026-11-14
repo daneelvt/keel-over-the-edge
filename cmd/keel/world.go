@@ -283,8 +283,10 @@ type worldHalf struct {
 	news *news.Service
 	// watch is the world's watching: the list, the card and follows.
 	watch *watch.Service
-	// races are the world's races ashore.
+	// races are the world's races ashore, and clerk the races' clerk,
+	// between them and the committee in the world.
 	races *race.Service
+	clerk *race.Clerk
 	// chat is the world's chat aboard: every line is said through it.
 	chat *chat.Hub
 	// tally finds who sails together aboard the world's boats.
@@ -299,6 +301,7 @@ type worldHalf struct {
 
 	stopLoop, stopSailors, stopEncoder, stopWatch  context.CancelFunc
 	loopDone, inputsDone, sailorsDone, encoderDone chan struct{}
+	clerkDone                                      chan struct{}
 	lastingDone, watchDone                         chan struct{}
 	closed                                         bool
 }
@@ -337,7 +340,7 @@ func (p *process) openWorld(ctx context.Context, rw *readyWorld) (*worldHalf, er
 	world, err := sim.New(sim.Config{
 		Kinds: p.kinds, StartSheets: cat.StartSheets(), Capacities: cat.Capacities(), Waves: p.waves, Weather: timeline, Encounters: cat.PrepareEncounters(), Workers: p.opt.workers,
 		Tick: loop.TickAt(time.Now(), epoch), Limit: cfg.BoatLimit, Terrain: rw.terrain, Edge: edgeOf(cat), Sight: sighting,
-		Life: rw.life,
+		Life: rw.life, Races: raceStage(cat, rw.bundle),
 	})
 	if err != nil {
 		return nil, err
@@ -391,7 +394,8 @@ func (p *process) openWorld(ctx context.Context, rw *readyWorld) (*worldHalf, er
 		Link:  p.sailLink, Knocker: p.knocker, Switches: p.switches, Capacities: cat.Capacities(), CrewLimit: cfg.CrewLimit,
 		Refuser: p.ties,
 		Chat:    h.chat, Talker: p.talker, Tie: p.tie, Report: p.report, CountryHeader: countryHeader,
-		Machines: p.agents.core,
+		Machines:  p.agents.core,
+		RaceNames: p.raceNames(h),
 	})
 	h.lasting = persist.New(persist.Config{
 		Frames: b.Frames, Store: p.writer, World: row.ID, Epoch: p.lease,
@@ -402,6 +406,7 @@ func (p *process) openWorld(ctx context.Context, rw *readyWorld) (*worldHalf, er
 	})
 	h.news = p.newsOf(row)
 	h.races = p.racesOf(h)
+	h.clerk = p.clerkOf(h)
 	h.sea = p.seaOf(h, rw, sighting)
 	world.Record(h.inputs, h.game, h.lasting, h.forecasts, p.agents.core.Open(h.sea))
 	logs := p.logsOf(row.Number)
@@ -569,6 +574,11 @@ func (h *worldHalf) start() {
 		h.game.Run(encoderCtx)
 		wg.Wait()
 	}()
+	h.clerkDone = make(chan struct{})
+	go func() {
+		defer close(h.clerkDone)
+		h.clerk.Run(sailorsCtx)
+	}()
 	go func() {
 		defer close(h.sailorsDone)
 		if p.cfg.DevSailors == 0 {
@@ -631,6 +641,9 @@ func (h *worldHalf) close(how closeHow) int64 {
 	h.closed = true
 	h.stopSailors()
 	<-h.sailorsDone
+	if h.clerkDone != nil {
+		<-h.clerkDone
+	}
 	h.stopLoop()
 	<-h.loopDone
 	last := h.world.Now()

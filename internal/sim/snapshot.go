@@ -9,6 +9,7 @@ import (
 	"math"
 
 	"github.com/daneelvt/keel-over-the-edge/internal/bus"
+	"github.com/daneelvt/keel-over-the-edge/internal/race/committee"
 )
 
 // A snapshot is a frame's whole state as bytes: what an input log starts
@@ -27,6 +28,7 @@ import (
 //	queue                   uvarint n, then n × the connection waiting below, the head first
 //	crew                    uvarint n, then n × the person aboard below, by their boat's slot, then seat
 //	pairs                   uvarint n, then n × the pair below, by their slots, ascending
+//	races                   the races under way, as package committee writes them
 //
 // A developer's weather is the tick it takes effect from as a varint, then
 // its mode, regime, wind speed and direction as uvarints; a developer's
@@ -80,7 +82,7 @@ import (
 // A checkpoint stores this snapshot without the owner's tools' marks
 // (AppendCheckpoint), so a world is restored only by a build that reads its
 // version, and a restart clears them.
-const SnapshotVersion = 20
+const SnapshotVersion = 21
 
 // The owner's tools' marks of a boat, in a snapshot.
 const (
@@ -258,7 +260,7 @@ func AppendCheckpoint(dst []byte, f *bus.Frame) []byte {
 		dst = binary.AppendVarint(dst, p.Since)
 		dst = binary.AppendVarint(dst, p.Touched)
 	}
-	return dst
+	return committee.AppendSnapshot(dst, f)
 }
 
 // The flags of a voyage in a snapshot.
@@ -588,18 +590,23 @@ func ReadSnapshot(data []byte, f *bus.Frame) error {
 	if r.err != nil {
 		return r.err
 	}
+	rest, err := committee.ReadSnapshot(r.b, f)
+	if err != nil {
+		return err
+	}
+	r.b = rest
 	if len(r.b) > 0 {
 		return r.marks(f)
 	}
 	return nil
 }
 
-// marks reads the owner's tools' marks, which follow the pairs only when a
+// marks reads the owner's tools' marks, which follow the races only when a
 // boat has one.
 func (r *reader) marks(f *bus.Frame) error {
 	n := r.count(uint64(len(f.Live)))
 	if r.err == nil && n == 0 {
-		return errors.New("sim: snapshot: data after the pairs")
+		return errors.New("sim: snapshot: data after the races")
 	}
 	last := int64(-1)
 	for range n {

@@ -79,6 +79,8 @@ import type {
   LightSeen,
   PastTold,
   PlaceSeen,
+  RaceSignalIn,
+  RaceToldIn,
   ReportReasonTold,
   Status,
   ToWorker,
@@ -227,6 +229,9 @@ export class Online {
   onEpoch: ((epochUs: number) => void) | null = null;
   /** Told of each bump the server tells of: the game knocks, shakes and says the verdict. */
   onBump: ((b: BumpTold) => void) | null = null;
+  /** A race under way told or taken up, and its committee boat's signals. */
+  onRaceTold: ((t: RaceToldIn) => void) | null = null;
+  onRaceSignal: ((s: RaceSignalIn) => void) | null = null;
   /** Told of a new boat lying within OPENING_RANGE of the harbour's mouth: where it lies and where the mouth is, m. */
   onOpening: ((east: number, north: number, mouthEast: number, mouthNorth: number) => void) | null =
     null;
@@ -607,6 +612,12 @@ export class Online {
         break;
       case 'bump':
         this.onBump?.(m.bump);
+        break;
+      case 'raceTold':
+        this.onRaceTold?.(m.told);
+        break;
+      case 'raceSignal':
+        this.onRaceSignal?.(m.signal);
         break;
       case 'chunks':
         this.onChunks?.(m.chunks);

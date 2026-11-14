@@ -120,12 +120,13 @@ func (w *World) contacts() {
 	buildGrid(f)
 }
 
-// placed reports whether a command put boat s where it is this tick, or it
-// started again after going over the lip: its pairs start afresh, as boats
+// placed reports whether a command put boat s where it is this tick, the
+// race committee placed it on a line, or it started again after going over
+// the lip: its pairs start afresh, as boats
 // that have just come near, since nothing they did brought them there.
 func (w *World) placed(s int32) bool {
 	f := w.next
-	if slices.Contains(w.restarted, s) {
+	if slices.Contains(w.restarted, s) || slices.Contains(w.racePlaced, s) {
 		return true
 	}
 	for i := range f.Events {

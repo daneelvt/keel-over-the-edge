@@ -7,6 +7,7 @@ import (
 
 	"github.com/daneelvt/keel-over-the-edge/internal/bus"
 	"github.com/daneelvt/keel-over-the-edge/internal/physics"
+	"github.com/daneelvt/keel-over-the-edge/internal/race/committee"
 )
 
 // apply applies one command to the next frame, records it as an event and
@@ -98,6 +99,18 @@ func (w *World) apply(c *bus.Command) {
 		r = w.ashore(c)
 	case bus.SetHolder:
 		r = w.setHolder(c)
+	case bus.RacePlace:
+		r = w.racePlace(c)
+	case bus.RaceRetire:
+		r = bus.Reply{Result: bus.NoBoat, Slot: -1}
+		if committee.Retire(f, c.Account) {
+			r.Result = bus.Done
+		}
+	case bus.RaceWritten:
+		r = bus.Reply{Result: bus.NoBoat, Slot: -1}
+		if c.Race != nil && committee.Drop(f, c.Race.ID, c.Race.Run) {
+			r.Result = bus.Done
+		}
 	default:
 		return
 	}

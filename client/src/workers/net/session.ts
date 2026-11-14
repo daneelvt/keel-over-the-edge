@@ -34,6 +34,7 @@ import {
   type LifeEncounter,
   type Light,
   type Place,
+  RaceSignalKind,
   ReportReason,
   WatchEnd,
   type Welcome,
@@ -59,6 +60,8 @@ import type {
   LightSeen,
   PastTold,
   PlaceSeen,
+  RaceSignalIn,
+  RaceToldIn,
   ReportReasonTold,
   SeaAreas,
   TiedTold,
@@ -99,6 +102,15 @@ const PARTS: Record<number, BumpTold['part']> = {
   [BumpPart.YOURS]: 'yours',
   [BumpPart.THEIRS]: 'theirs',
   [BumpPart.NONE]: 'none',
+};
+
+/** A race's signal, as the page names it. */
+const SIGNALS: Record<number, RaceSignalIn['signal']> = {
+  [RaceSignalKind.WARNING]: 'warning',
+  [RaceSignalKind.PREPARATORY]: 'preparatory',
+  [RaceSignalKind.START]: 'start',
+  [RaceSignalKind.RECALL]: 'recall',
+  [RaceSignalKind.FINISH]: 'finish',
 };
 
 /** Why a watch ended, as the page names it. */
@@ -226,6 +238,9 @@ export type Received =
   /** Islands' caps come into sight, and those to drop. */
   | { kind: 'caps'; caps: CapSeen[]; drop: number[] }
   | { kind: 'bump'; bump: BumpTold }
+  /** A race under way told, or taken up; a signal from its committee boat. */
+  | { kind: 'raceTold'; told: RaceToldIn }
+  | { kind: 'raceSignal'; signal: RaceSignalIn }
   /** The addresses of chunks of the land, by number. */
   | { kind: 'chunks'; chunks: ChunksHanded }
   /** The places in chunks just handed. */
@@ -599,6 +614,48 @@ export class Session {
           forecast: forecastTold(m.body.value),
           past: pastTold(m.body.value.past),
         };
+      case 'raceTold': {
+        this.#lastHeard = now;
+        const v = m.body.value;
+        const point = (at: number) =>
+          v.line.length >= at + 2 ? { east: v.line[at] ?? 0, north: v.line[at + 1] ?? 0 } : null;
+        return {
+          kind: 'raceTold',
+          told: {
+            race: v.race,
+            boat: v.boat,
+            pin: point(0),
+            committee: point(2),
+            marks: v.marks.map((k) => ({
+              east: k.east,
+              north: k.north,
+              number: k.number,
+              side: k.side,
+            })),
+            gone: v.gone,
+          },
+        };
+      }
+      case 'raceSignal': {
+        this.#lastHeard = now;
+        const v = m.body.value;
+        return {
+          kind: 'raceSignal',
+          signal: {
+            race: v.race,
+            signal: SIGNALS[v.signal] ?? 'other',
+            gun: v.gun,
+            place: v.place,
+          },
+        };
+      }
+      case 'racePicture':
+      case 'raceCall':
+      case 'raceFinish':
+      case 'raceResults':
+        // The race's screens read these.
+        this.#lastHeard = now;
+        return { kind: 'other' };
       case 'bump': {
         this.#lastHeard = now;
         const v = m.body.value;

@@ -476,6 +476,12 @@ export class NetWorker {
         case 'bump':
           this.#d.post({ type: 'bump', bump: r.bump });
           break;
+        case 'raceTold':
+          this.#d.post({ type: 'raceTold', told: r.told });
+          break;
+        case 'raceSignal':
+          this.#d.post({ type: 'raceSignal', signal: r.signal });
+          break;
         case 'chunks':
           this.#d.post({ type: 'chunks', chunks: r.chunks });
           break;

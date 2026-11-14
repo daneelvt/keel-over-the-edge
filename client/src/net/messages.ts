@@ -122,6 +122,30 @@ export interface BumpTold {
 }
 
 /**
+ * A race under way as the server tells it (its course laid, for the marks
+ * in the sea): its number in the world; its boats' kind, an index into the
+ * catalog's boats; the start line's ends, the pin's then the committee
+ * boat's, m east and north; the marks laid, each left to a side (1
+ * starboard, −1 port, 0 a gate's); or, gone, its course taken up.
+ */
+export interface RaceToldIn {
+  race: number;
+  boat: number;
+  pin: { east: number; north: number } | null;
+  committee: { east: number; north: number } | null;
+  marks: { east: number; north: number; number: number; side: number }[];
+  gone: boolean;
+}
+
+/** A signal from a race's committee boat: what it signals, and whether its gun fires. */
+export interface RaceSignalIn {
+  race: number;
+  signal: 'warning' | 'preparatory' | 'start' | 'recall' | 'finish' | 'other';
+  gun: boolean;
+  place: number;
+}
+
+/**
  * Chunks of the land the server handed: each one's number on the world's
  * grid and its address, a path on the play origin to fetch it from, nearest
  * first. The client never makes an address itself.
@@ -642,6 +666,9 @@ export type FromWorker =
   | { type: 'caps'; caps: CapSeen[]; drop: number[] }
   /** The boat, or one near it, touched another. */
   | { type: 'bump'; bump: BumpTold }
+  /** A race told, or taken up; a signal from its committee boat. */
+  | { type: 'raceTold'; told: RaceToldIn }
+  | { type: 'raceSignal'; signal: RaceSignalIn }
   /** Chunks of the land the boat could see: their addresses to fetch. */
   | { type: 'chunks'; chunks: ChunksHanded }
   /** The places in chunks just handed. */

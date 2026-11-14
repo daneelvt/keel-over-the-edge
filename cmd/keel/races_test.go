@@ -65,3 +65,12 @@ func (noRaces) SetHarbourDays(context.Context, int64, [16]byte, []store.HarbourD
 func (noRaces) BusyAreas(context.Context, [16]byte, time.Time, time.Time) ([]store.BuoyStart, error) {
 	return nil, nil
 }
+func (noRaces) DueRaces(context.Context, [16]byte, int, time.Time, time.Time) ([]store.Race, error) {
+	return nil, nil
+}
+func (noRaces) RaceIn(context.Context, [16]byte, int, [16]byte) (store.Race, error) {
+	return store.Race{}, store.ErrNotFound
+}
+func (noRaces) PendingRuns(context.Context, [16]byte) ([]store.PendingRun, error)     { return nil, nil }
+func (noRaces) StartRace(context.Context, int64, *store.RaceStart) error              { return nil }
+func (noRaces) EndRace(context.Context, int64, store.NewsRules, *store.RaceEnd) error { return nil }

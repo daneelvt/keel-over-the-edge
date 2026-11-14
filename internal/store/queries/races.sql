@@ -167,3 +167,89 @@ SELECT day, hour FROM harbour_day WHERE world_id = @world_id ORDER BY day;
 -- name: InsertHarbourDay :exec
 -- A day's newcomers' harbour race's hour, set once.
 INSERT INTO harbour_day (world_id, day, hour) VALUES (@world_id, @day, @hour) ON CONFLICT DO NOTHING;
+
+-- name: DueRaces :many
+-- A world's races, not trials, open or closed, starting between two
+-- times: those whose warning signal has come, for the committee.
+SELECT id FROM race
+WHERE world_id = @world_id AND kind = 'race' AND state IN ('open', 'closed') AND starts_at > @since AND starts_at <= @until
+ORDER BY starts_at, id;
+
+-- name: PendingRuns :many
+-- A world's open trials' sailors who asked for a run: an entry in force,
+-- with no run under way (one without its result), and the run they sail
+-- next.
+SELECT e.race_id, e.account_id, e.number, e.machine, e.with_crew,
+  (SELECT coalesce(max(x.run), 0) + 1 FROM race_entry x
+   WHERE x.world_id = e.world_id AND x.race_id = e.race_id AND x.account_id = e.account_id)::smallint AS next_run
+FROM race_entry e
+JOIN race r ON r.world_id = e.world_id AND r.id = e.race_id
+WHERE e.world_id = @world_id AND r.kind = 'trial' AND r.state = 'open' AND e.run = 0 AND e.withdrawn_at IS NULL AND NOT e.removed
+  AND NOT EXISTS (
+    SELECT 1 FROM race_entry x
+    WHERE x.world_id = e.world_id AND x.race_id = e.race_id AND x.account_id = e.account_id AND x.run > 0
+      AND NOT EXISTS (SELECT 1 FROM race_result y
+                      WHERE y.world_id = x.world_id AND y.race_id = x.race_id AND y.account_id = x.account_id AND y.run = x.run))
+ORDER BY e.entered_at, e.account_id;
+
+-- name: RacingState :exec
+-- A race under way: racing, from open or closed.
+UPDATE race SET state = 'racing' WHERE world_id = @world_id AND id = @id AND state IN ('open', 'closed');
+
+-- name: StartEntries :exec
+-- A race's boats placed on its line: started.
+UPDATE race_entry SET started_at = @at
+WHERE world_id = @world_id AND race_id = @race_id AND run = 0 AND account_id = ANY(@accounts::uuid[]) AND started_at IS NULL;
+
+-- name: InsertRun :exec
+-- A trial's run begun, as an entry of its own, started.
+INSERT INTO race_entry (world_id, race_id, account_id, run, number, machine, with_crew, entered_at, started_at)
+VALUES (@world_id, @race_id, @account_id, @run, @number, @machine, @with_crew, @at, @at)
+ON CONFLICT DO NOTHING;
+
+-- name: WithdrawRun :exec
+-- A trial's sailor's run done or not begun: their entry no longer asks
+-- for one until they enter again.
+UPDATE race_entry SET withdrawn_at = @at
+WHERE world_id = @world_id AND race_id = @race_id AND account_id = @account_id AND run = 0 AND withdrawn_at IS NULL;
+
+-- name: PutRaceResult :exec
+-- What a boat came to in a race, or a trial's run.
+INSERT INTO race_result (world_id, race_id, account_id, run, place, elapsed, added, marks, to_go, how, medal, awards, crew)
+VALUES (@world_id, @race_id, @account_id, @run, sqlc.narg(place), sqlc.narg(elapsed), @added, @marks, sqlc.narg(to_go), @how,
+  sqlc.narg(medal), @awards, @crew)
+ON CONFLICT (world_id, race_id, account_id, run) DO UPDATE
+  SET place = excluded.place, elapsed = excluded.elapsed, added = excluded.added, marks = excluded.marks,
+      to_go = excluded.to_go, how = excluded.how, medal = excluded.medal, awards = excluded.awards, crew = excluded.crew;
+
+-- name: PutRaceTrack :exec
+-- A boat's track in a race, once.
+INSERT INTO race_track (world_id, race_id, account_id, run, samples)
+VALUES (@world_id, @race_id, @account_id, @run, @samples)
+ON CONFLICT DO NOTHING;
+
+-- name: PutRaceRecord :exec
+-- A race in a sailor's lasting record, once for its source, while the
+-- account is kept.
+INSERT INTO race_record (account_id, source, world, at, code, race_name, kind, course_name, boat, boat_name, fleet, harbour,
+  newcomers, role, place, how, medal, awards, skipper_id, skipper_name, skipper_machine)
+SELECT @account_id, @source, @world, @at, @code, @race_name, @kind, @course_name, @boat, sqlc.narg(boat_name), @fleet, @harbour,
+  @newcomers, @role, sqlc.narg(place), sqlc.narg(how), sqlc.narg(medal), @awards, sqlc.narg(skipper_id), sqlc.narg(skipper_name),
+  @skipper_machine
+WHERE EXISTS (SELECT 1 FROM account WHERE id = @account_id)
+ON CONFLICT (account_id, source) DO NOTHING;
+
+-- name: FinishRace :exec
+-- A race over, its results kept.
+UPDATE race SET state = 'finished', ended_at = @at
+WHERE world_id = @world_id AND id = @id AND state IN ('open', 'closed', 'racing');
+
+-- name: RaceIn :one
+-- A world's race of an ID, with how many are entered.
+SELECT r.code, coalesce(r.owner_id, '00000000-0000-0000-0000-000000000000')::uuid AS owner_id,
+  r.kind, r.course_kind, r.course, coalesce(r.shape, '')::text AS shape, r.long, r.boat, r.who, r.name, r.starts_at,
+  r.moved, r.state, coalesce(r.harbour, -1)::smallint AS harbour, r.made_at,
+  (SELECT count(*) FROM race_entry e WHERE e.world_id = r.world_id AND e.race_id = r.id
+     AND e.withdrawn_at IS NULL AND NOT e.removed)::integer AS entered
+FROM race r
+WHERE r.world_id = @world_id AND r.id = @id;

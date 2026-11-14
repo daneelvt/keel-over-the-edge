@@ -264,6 +264,9 @@ type Config struct {
 	// the controls offered it; without them no machine sailor is sent
 	// aboard.
 	Machines Machines
+	// RaceNames, if not nil, names a race's boats as each reader may be
+	// told them; without it their names are not told.
+	RaceNames RaceNamer
 }
 
 // Edge serves the game connection.

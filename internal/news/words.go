@@ -251,6 +251,21 @@ var (
 		"{What}: {0} charted its last place, and it is open for racing.",
 		"{What}, open for racing now that {0} has charted it all.",
 	}
+	raceWords = []string{
+		"{0} takes it on {what}, first home of {n} boats.",
+		"First home of {n} on {what}: {0}.",
+		"{0} wins on {what}, {n} boats racing.",
+		"{n} boats raced {what}, and {0} crossed first.",
+	}
+	goldWords = []string{
+		"{0} sails {what} in gold time.",
+		"Gold on {what} for {0}.",
+		"{0} comes round {what} at par: gold.",
+	}
+	harbourmasterWords = []string{
+		"{0} beats the harbourmaster's time on {what}.",
+		"{What}, sailed by {0} inside the harbourmaster's time.",
+	}
 	arrivalWords = []string{
 		"The chart is blank: {n} islands wait to be found.",
 		"The falls have turned the world over: {n} islands wait to be found.",
@@ -300,6 +315,16 @@ func (w *words) written(s *store.Story, named, counted int) (string, string) {
 		}
 	case store.StoryCourse:
 		text = one(s.ID, courseWords, fill)
+	case store.StoryRace:
+		fill["what"], fill["What"] = s.What, capital(s.What)
+		fill["n"] = numberWord(s.Facts.Of)
+		text = one(s.ID, raceWords, fill)
+	case store.StoryTrial:
+		if s.Facts.Medal == "harbourmaster" {
+			text = one(s.ID, harbourmasterWords, fill)
+		} else {
+			text = one(s.ID, goldWords, fill)
+		}
 	case store.StoryArrival:
 		fill["n"] = Count(s.Facts.Islands)
 		text = one(s.ID, arrivalWords, fill)
@@ -413,8 +438,8 @@ func (w *words) review(s *store.Story, named int) string {
 
 // FiguresText is the day in figures in one sentence, never a name: "Sailed
 // this day, 212 boats (31 machine) · 1,804 NM · 14 places charted · 5
-// crews in company · 37 over the falls, all hands home." A day nobody
-// sailed is a quiet day.
+// crews in company · 37 over the falls, all hands home · 6 races run." A
+// day nobody sailed is a quiet day.
 func FiguresText(f *store.Figures) string {
 	if f.Boats == 0 && f.Charted == 0 {
 		return "A quiet day on the water."
@@ -447,6 +472,13 @@ func FiguresText(f *store.Figures) string {
 	}
 	if f.Over > 0 {
 		parts = append(parts, Count(f.Over)+" over the falls, all hands home")
+	}
+	if f.Races > 0 {
+		r := Count(f.Races) + " races run"
+		if f.Races == 1 {
+			r = "one race run"
+		}
+		parts = append(parts, r)
 	}
 	return strings.Join(parts, " · ") + "."
 }

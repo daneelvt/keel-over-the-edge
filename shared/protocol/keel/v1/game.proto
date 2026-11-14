@@ -106,8 +106,18 @@ message Command {
     Block block = 15;
     Report report = 16;
     ComeAboard come_aboard = 17;
+    RaceRetire race_retire = 18;
+    Cheer cheer = 19;
   }
 }
+
+// RaceRetire retires the connection's boat from the race it sails in, at
+// its skipper's word. The race's next messages say so (RaceCall retired).
+message RaceRetire {}
+
+// Cheer cheers the boat the connection watches in a race: one gesture, no
+// words. At most one every ten seconds counts.
+message Cheer {}
 
 // ComeAboard brings an owner watching their own machine sailor aboard its
 // boat, as crew, without knocking: the boat is theirs. It is told how it
@@ -334,7 +344,207 @@ message ServerMessage {
     Reported reported = 31;
     Shipmates shipmates = 32;
     Crews crews = 33;
+    RaceTold race_told = 34;
+    RacePicture race_picture = 35;
+    RaceSignal race_signal = 36;
+    RaceCall race_call = 37;
+    RaceFinish race_finish = 38;
+    RaceResults race_results = 39;
   }
+}
+
+// RaceTold tells a race under way: to its boats and those watching them,
+// and to every connection near enough to see its course, once as it is
+// first seen and again when its names are known (the latest replaces what
+// was told). race is the race's number in the world, by which every race
+// message names it; code its link's; name its name, as its owner gave it;
+// boat the boats' kind, an index into the catalog's; trial a time trial's
+// run, of number run. warning and start are its ticks (a trial's start 0
+// until its boat crosses the line). Its course: the start line, the pin's
+// end then the committee boat's, and the finish line, each two points of
+// metres east and north; its marks laid; the way sailed from the start
+// line's middle to the finish's, as metres east and north one after the
+// other; its legs, the points of the way a boat makes for in turn (a
+// boat's leg in RacePicture is one of them); where it lies and how far it
+// reaches, m; its laps and its expected time, s. Its entrants, by number:
+// each one's name as the reader may be told it ("" for one not named:
+// show their boat's name and number), their boat's name, and whether a
+// machine sailor's, or the reader's own. gone: the race is over and its
+// course taken up.
+message RaceTold {
+  uint32 race = 1;
+  string code = 2;
+  string name = 3;
+  uint32 boat = 4;
+  bool trial = 5;
+  uint32 run = 6;
+  int64 warning = 7;
+  int64 start = 8;
+  repeated sint32 line = 9;
+  repeated sint32 finish = 10;
+  repeated RaceMark marks = 11;
+  repeated sint32 way = 12;
+  repeated RaceLeg legs = 13;
+  sint32 east = 14;
+  sint32 north = 15;
+  uint32 reach = 16;
+  uint32 laps = 17;
+  float expected = 18;
+  repeated RaceEntrant entrants = 19;
+  bool gone = 20;
+}
+
+// RaceMark is a mark laid: where, its number, and the side it is left to:
+// 1 starboard, −1 port, 0 a gate's buoy.
+message RaceMark {
+  sint32 east = 1;
+  sint32 north = 2;
+  uint32 number = 3;
+  sint32 side = 4;
+}
+
+// RaceLeg is a point of a race's way a boat makes for: the mark it rounds
+// there (0 for the start or the finish line), and the point, m.
+message RaceLeg {
+  uint32 mark = 1;
+  sint32 east = 2;
+  sint32 north = 3;
+}
+
+// RaceEntrant is a boat in a race, by its race number.
+message RaceEntrant {
+  uint32 number = 1;
+  string name = 2;
+  string boat = 3;
+  bool machine = 4;
+  bool me = 5;
+}
+
+// RacePicture is a race as it stands, every two seconds, to its boats and
+// those watching them: every boat, wherever it is.
+message RacePicture {
+  uint32 race = 1;
+  int64 tick = 2;
+  repeated RacerAt racers = 3;
+}
+
+// RacerAt is a boat in a race: its number; where it is, m east and north,
+// and its heading, degrees; its place as it stands; its gap to the boat
+// first, tenths of a second (as near as the way to go says, for those
+// still racing); the seconds added; its state; its leg, the index of the
+// RaceTold's leg it makes for; its way to go, m; its cheers.
+message RacerAt {
+  uint32 number = 1;
+  sint32 east = 2;
+  sint32 north = 3;
+  uint32 heading = 4;
+  uint32 place = 5;
+  uint32 gap = 6;
+  uint32 added = 7;
+  RacerState state = 8;
+  uint32 leg = 9;
+  uint32 to_go = 10;
+  uint32 cheers = 11;
+}
+
+// RacerState is how a boat stands in its race.
+enum RacerState {
+  RACER_STATE_UNSPECIFIED = 0;
+  // Did not start: not at sea as the boats were placed.
+  RACER_STATE_DNS = 1;
+  // On the line, before the start or a trial's crossing.
+  RACER_STATE_PLACED = 2;
+  RACER_STATE_RACING = 3;
+  RACER_STATE_FINISHED = 4;
+  RACER_STATE_RETIRED = 5;
+  // Still racing as the race ended: placed by its progress.
+  RACER_STATE_PLACED_AT_END = 6;
+}
+
+// RaceSignal is a signal from the committee boat: the flags it hoists and
+// whether its gun fires. A finish is boat number's, in place.
+message RaceSignal {
+  uint32 race = 1;
+  RaceSignalKind signal = 2;
+  bool gun = 3;
+  uint32 number = 4;
+  uint32 place = 5;
+}
+
+// RaceSignalKind is a signal of the start's sequence, or a finish's gun.
+enum RaceSignalKind {
+  RACE_SIGNAL_KIND_UNSPECIFIED = 0;
+  // The class's pennant up, two minutes before the start.
+  RACE_SIGNAL_KIND_WARNING = 1;
+  // P up, a minute before the start: from here bumps are called.
+  RACE_SIGNAL_KIND_PREPARATORY = 2;
+  // Both down: the start.
+  RACE_SIGNAL_KIND_START = 3;
+  // X up: a boat over early.
+  RACE_SIGNAL_KIND_RECALL = 4;
+  // A boat finished: the winner's gun the loudest.
+  RACE_SIGNAL_KIND_FINISH = 5;
+}
+
+// RaceCall is something the committee saw: a bump with boat number at
+// fault, other the boat it bumped, by article, added seconds; a boat over
+// early; a mark missed, mark; a boat asked whether it still races; a boat
+// retired; a mark rounded, mark, in place.
+message RaceCall {
+  uint32 race = 1;
+  RaceCallKind kind = 2;
+  uint32 number = 3;
+  uint32 other = 4;
+  string article = 5;
+  uint32 mark = 6;
+  uint32 added = 7;
+  uint32 place = 8;
+}
+
+// RaceCallKind is what a RaceCall tells.
+enum RaceCallKind {
+  RACE_CALL_KIND_UNSPECIFIED = 0;
+  RACE_CALL_KIND_BUMP = 1;
+  RACE_CALL_KIND_OVER_EARLY = 2;
+  RACE_CALL_KIND_MISSED_MARK = 3;
+  RACE_CALL_KIND_DRIFTING = 4;
+  RACE_CALL_KIND_RETIRED = 5;
+  RACE_CALL_KIND_ROUNDED = 6;
+}
+
+// RaceFinish is a boat home: its place as it stands, its time from the
+// start, ms, and the seconds added.
+message RaceFinish {
+  uint32 race = 1;
+  uint32 number = 2;
+  uint32 place = 3;
+  uint32 elapsed_ms = 4;
+  uint32 added = 5;
+}
+
+// RaceResults are a race's results as it ends: every boat, and whether
+// its prizes are given (three boats of three accounts).
+message RaceResults {
+  uint32 race = 1;
+  string code = 2;
+  bool prizes = 3;
+  repeated RaceResult results = 4;
+}
+
+// RaceResult is what a boat came to: its place (0 none), how it ended
+// (finished, placed, dns, ret), its time, ms (0 not home), the seconds
+// added, the marks rounded, its way still to go, m, its medal (a trial's)
+// and its awards.
+message RaceResult {
+  uint32 number = 1;
+  uint32 place = 2;
+  string how = 3;
+  uint32 elapsed_ms = 4;
+  uint32 added = 5;
+  uint32 marks = 6;
+  uint32 to_go = 7;
+  string medal = 8;
+  repeated string awards = 9;
 }
 
 // Shipmates says the account's shipmates have changed: an offer made to

@@ -70,6 +70,8 @@ type conn struct {
 	// or the tick it was welcomed at: it is sent only those after.
 	bumped int64
 	seen   int64 // the tick the encoder last found it in the queue
+	// racesTold is what it has been told of the world's races.
+	racesTold connRaces
 	// enc is the connection's encoder, from the Hello on; active, the
 	// encoder's, whether it is among those whose snapshots it writes.
 	enc    *encoder
@@ -512,6 +514,7 @@ func (c *conn) handle(data []byte) bool {
 		}
 		c.deckCommand(b.Command)
 		c.chatCommand(b.Command)
+		c.raceCommand(b.Command)
 	}
 	return true
 }
