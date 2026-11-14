@@ -71,7 +71,6 @@ import { CATALOG_VERSION, catalog } from '../catalog';
 import { codeOf, lookFrom } from '../catalog/looks';
 import { Forecasting } from '../chart/forecasting';
 import { GaleNotices } from '../chart/gales';
-import { raceSea } from './racesea';
 import {
   type ChartParts,
   chartSandbox,
@@ -164,6 +163,7 @@ import { harbourWater, watchHarbour } from './harbour';
 import { harbourBoats, sandboxBoats } from './harbourboats';
 import { harbourLook, sandboxHarbourLook } from './harbourlook';
 import { lookStage } from './lookstage';
+import { raceSea } from './racesea';
 
 /** How long the camera comes down into the first view, s: at the start, and after a change of boat. */
 const DESCENT = 2.5;

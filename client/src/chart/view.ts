@@ -36,10 +36,10 @@ import {
 import type { WebGPURenderer } from 'three/webgpu';
 import type { ChartEntry } from '../net/messages';
 import { chartMaterial } from '../render/materials';
-import { ARROW_HEIGHT, ARROW_NOSE, ARROW_TAIL, arrowSize, placeChartCamera } from './arrow';
-import type { IslandModel, Models } from './model';
 import type { Racing } from '../ui/racestate';
 import { raceDrawingOf } from '../ui/racestate';
+import { ARROW_HEIGHT, ARROW_NOSE, ARROW_TAIL, arrowSize, placeChartCamera } from './arrow';
+import type { IslandModel, Models } from './model';
 import { PAPER_MARGIN, type PaperLook, paintCourses, paintPaper } from './paper';
 import { type RaceDrawing, RaceLayer } from './racelayer';
 import { type ChartStore, keyOf } from './store';
@@ -333,8 +333,12 @@ export class ChartView {
     for (const p of [...t.marks, ...t.way]) {
       reach = Math.max(reach, Math.hypot(p.east - t.east, p.north - t.north) * 1.15);
     }
-    const fit = this.#width / Math.max(this.#height, 1) < 1 ? 5.2 : 3.4;
-    this.lookAt(t.east, t.north, reach * fit);
+    // The course's reach about its middle across the narrower of the
+    // screen's two ways, with room about it.
+    const half = Math.tan((this.camera.fov * Math.PI) / 360);
+    const narrow = Math.min(1, this.#width / Math.max(this.#height, 1));
+    // Held sideways the paper, seen tilted, is shortened up the screen.
+    this.lookAt(t.east, t.north, ((narrow < 1 ? 1.15 : 0.75) * reach) / (half * narrow));
     return true;
   }
 

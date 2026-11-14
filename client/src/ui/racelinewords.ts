@@ -101,11 +101,15 @@ function middle(a: RacePoint, b: RacePoint): RacePoint {
   return { east: (a.east + b.east) / 2, north: (a.north + b.north) / 2 };
 }
 
+/** How far beyond the line's ends a boat on the course's side is still over, a share of its length: as the committee judges it. */
+const OVER_BEYOND = 0.2;
+
 /**
- * Where the boat is from the start line: how far, and whether on the
- * course's side of it (over). The course's side is the side its first
- * mark lies, or its way's next point; a boat beyond the line's ends is as
- * far as the nearer end.
+ * Where the boat is from the start line: how far, and whether over it, on
+ * the course's side and within a fifth of its length of its ends, as the
+ * committee judges a boat over early. The course's side is the side its
+ * first mark lies, or its way's next point; a boat beyond the line's ends
+ * is as far as the nearer end.
  */
 export function lineSide(
   told: RaceToldIn,
@@ -137,7 +141,10 @@ export function lineSide(
   const along = (dx * lx + dy * ly) / len;
   const across = dx * nx + dy * ny;
   const off = along < 0 ? -along : along > len ? along - len : 0;
-  return { metres: Math.hypot(across, off), over: across > 0 };
+  return {
+    metres: Math.hypot(across, off),
+    over: across > 0 && off <= OVER_BEYOND * len,
+  };
 }
 
 /** The line's distance and side in words: "40 m to the line"; "Over · 12 m". */

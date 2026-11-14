@@ -80,8 +80,11 @@ describe('before the start', () => {
     const flipped = course({ pin: { east: 30, north: 0 }, committee: { east: -30, north: 0 } });
     expect(lineSide(flipped, { east: 0, north: 12 })).toEqual({ metres: 12, over: true });
     expect(lineSide(flipped, { east: 0, north: -12 })).toEqual({ metres: 12, over: false });
-    // Beyond the line's end, as far as the nearer end.
+    // Beyond the line's end, as far as the nearer end; on the course's
+    // side well beyond it, not over, as the committee judges.
     expect(lineSide(course(), { east: 70, north: -30 })?.metres).toBeCloseTo(50);
+    expect(lineSide(course(), { east: 40, north: 5 })?.over).toBe(true);
+    expect(lineSide(course(), { east: 70, north: 5 })?.over).toBe(false);
   });
 
   test('a time trial waits for its boat to cross', () => {

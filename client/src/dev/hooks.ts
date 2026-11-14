@@ -47,6 +47,7 @@ import { MeshBasicNodeMaterial, QuadMesh, type WebGPURenderer } from 'three/webg
 import type { FullScreen } from '../boot/fullscreen';
 import type { Revealed } from '../boot/gate';
 import { harbourWater } from '../boot/harbour';
+import { raceSea } from '../boot/racesea';
 import { catalog } from '../catalog';
 import type { ChartMode, LogWho } from '../chart/chart';
 import type { ChartParts } from '../chart/make';
@@ -70,8 +71,8 @@ import type {
   LifeSeen,
   RaceCallIn,
   RaceFinishIn,
-  RacerAtIn,
   RaceResultsIn,
+  RacerAtIn,
   RaceSignalIn,
   RaceToldIn,
 } from '../net/messages';
@@ -122,7 +123,6 @@ import { type ShipMember, ShipRules } from '../render/sailors/shiprules';
 import { CAMERA_PRESETS, type CameraView, type SeaScene } from '../render/scene';
 import { look } from '../render/sky';
 import { courseNear, raceNear } from '../sandbox/coursescene';
-import { raceSea } from '../boot/racesea';
 import { sandboxCrew } from '../sandbox/crewscene';
 import type { SandboxForecast } from '../sandbox/forecast';
 import { aboardScene, lifeScene, raiseScene } from '../sandbox/lifescene';
