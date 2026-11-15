@@ -863,6 +863,15 @@ export class Game implements PilotActions {
     return true;
   }
 
+  /** How many times the bell was rung near, whether heard or not (the tests). */
+  bellsRung = 0;
+
+  /** Rings the harbour's bell near, strokes times: a certificate earned. */
+  bell(strokes: number): void {
+    this.bellsRung++;
+    this.sound.bell(strokes);
+  }
+
   /** The last crowd's cheer the player was given to hear, null for none (the tests). */
   lastCheer: CheerSound | null = null;
 

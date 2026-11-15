@@ -124,6 +124,10 @@ function days(now: number) {
         },
       ],
       entries: [
+        // A certificate earned, by hand, on the newest day.
+        ...(i === 0
+          ? [{ at: t - 3_600_000, kind: 'certificate', title: 'Captain', what: 'by hand' }]
+          : []),
         { at: t - 2 * 3_600_000, kind: 'charted', title: 'Isle of the Drowned Bells', worth: 12 },
         {
           at: t - 2 * 3_600_000,
@@ -212,6 +216,27 @@ export function ribbonsPage(now: number, from = 0) {
   return { counts: raceCounts(), races, ...(from + n < SAILED ? { more: true } : {}) };
 }
 
+/**
+ * Where the long log's sailor stands toward the last certificate, at its
+ * longest: every task, done ones each way, a venture under way, the
+ * Harbourmaster's courses' codes on the course tasks.
+ */
+function toward() {
+  const master = data.certificates?.at(-1);
+  const tasks = (master?.tasks ?? []).map((t, i) => {
+    const course = 'courses' in t;
+    return {
+      name: t.name,
+      ...(i === 1 ? { done: true, way: 'hand' } : i === 2 ? { done: true, way: 'log' } : {}),
+      ...(i === 3 ? { done: true, way: 'log' } : {}),
+      ...(course
+        ? { course: true, of: 3, ...(i === 0 ? { runs: 2 } : {}), code: `trial${i}abcde` }
+        : {}),
+    };
+  });
+  return { name: master?.name ?? 'Master', needs: master?.needs ?? 5, done: 3, tasks };
+}
+
 /** The player's own log at its fullest. */
 export function longLog() {
   const now = Date.now();
@@ -239,7 +264,16 @@ export function longLog() {
     ribbons: { counts: raceCounts() },
     // A race won this world: the cockade on the portrait.
     cockade: true,
+    // A Captain by hand, toward Master.
+    certificate: { name: data.certificates?.at(-2)?.name ?? 'Captain', byHand: true },
+    toward: toward(),
   };
+}
+
+/** The long log after the last certificate: its name alone in the Ribbons. */
+export function masterLog() {
+  const { toward: _, ...log } = longLog();
+  return { ...log, certificate: { name: data.certificates?.at(-1)?.name ?? 'Master', last: true } };
 }
 
 /** A log with nothing in it yet. */
@@ -276,9 +310,10 @@ export function machineLog() {
   };
 }
 
-/** Another sailor's log. */
+/** Another sailor's log: their certificate, never their way toward the next. */
 export function otherLog() {
-  return { ...longLog(), own: false, shown: undefined };
+  const { toward: _, ...log } = longLog();
+  return { ...log, own: false, shown: undefined };
 }
 
 /**

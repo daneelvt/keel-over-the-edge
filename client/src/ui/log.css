@@ -600,3 +600,74 @@
 .log-ribbon .log-keys {
   margin-top: 4px;
 }
+
+/* The certificate held, under the name: its by hand in small capitals. */
+.log-cert {
+  font-style: normal;
+}
+
+.log-by-hand {
+  font-variant: small-caps;
+  letter-spacing: 0.04em;
+}
+
+/* One's own Ribbons open with the next certificate: its count in the
+   figures' hand, its tasks ruled as the ribbons are, a course's opening
+   the Harbourmaster's course, a 44 px touch. */
+.log-sheet .log-toward-head {
+  margin: 4px 0 2px;
+  font:
+    20px / 1.3 "IM Fell English",
+    Georgia,
+    serif;
+}
+
+.log-toward-tasks {
+  margin: 0 0 8px;
+  padding: 0;
+  list-style: none;
+}
+
+.log-toward-task {
+  border-bottom: 1px solid var(--log-rule);
+}
+
+.log-toward-line,
+.log-toward-course {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-height: 44px;
+  box-sizing: border-box;
+  padding: 10px 0;
+  color: inherit;
+  text-decoration: none;
+  overflow-wrap: anywhere;
+}
+
+.log-toward-mark {
+  flex: none;
+  width: 16px;
+  text-align: center;
+}
+
+.log-toward-task.done .log-toward-mark {
+  font-weight: 700;
+}
+
+.log-toward-name {
+  flex: 1;
+  min-width: 0;
+}
+
+.log-toward-course .log-toward-name {
+  text-decoration: underline;
+  text-decoration-color: var(--log-rule);
+  text-underline-offset: 3px;
+}
+
+.log-toward-go {
+  flex: none;
+  font-size: 20px;
+  line-height: 1;
+}

@@ -435,7 +435,17 @@ function linkOf(src: RaceSource, code: string): string {
   return `${src.origin}/?r=${code}`;
 }
 
-/** The finish's card: the place, the time, the gap to the winner, the track drawn small, Share. */
+/** What the run counted toward its sailor's next certificate, once told: one line. */
+function CertifiedLine({ racing }: { racing: RaceSource['racing'] }) {
+  const line = racing.certified.value;
+  return line === null ? null : (
+    <p class="rl-certified" data-readout="race-certified">
+      {line}
+    </p>
+  );
+}
+
+/** The finish's card: the place, the time, the gap to the winner, the track drawn small, its certificate's line, Share. */
 function FinishCard({ src }: { src: RaceSource }) {
   const r = src.racing;
   const f = r.finish.value;
@@ -492,6 +502,7 @@ function FinishCard({ src }: { src: RaceSource }) {
         </div>
       </div>
       <CourseCard told={told} size={150} track={r.tracks().get(f.number) ?? []} />
+      <CertifiedLine racing={r} />
       <p class="rl-faint">The results come as the race ends.</p>
       {said !== '' ? (
         <p class="rl-faint" role="status">
@@ -604,6 +615,7 @@ function ResultsWindow({ src }: { src: RaceSource }) {
           </li>
         ))}
       </ol>
+      <CertifiedLine racing={r} />
       {awards.length > 0 ? (
         <ul class="rl-awards" data-readout="race-awards">
           {awards.map((a) => (

@@ -63,6 +63,7 @@ import type {
   AshoreWhyTold,
   BumpTold,
   CapSeen,
+  CertifiedIn,
   ChartEntry,
   ChatStateTold,
   ChunksHanded,
@@ -250,6 +251,8 @@ export class Online {
   onRaceFinish: ((f: RaceFinishIn) => void) | null = null;
   onRaceResults: ((r: RaceResultsIn) => void) | null = null;
   onRaceCheered: ((c: RaceCheeredIn) => void) | null = null;
+  /** What the sailor's certificates came to: a task done, a venture's run, a certificate earned. */
+  onCertified: ((c: CertifiedIn) => void) | null = null;
   /** Told of a new boat lying within OPENING_RANGE of the harbour's mouth: where it lies and where the mouth is, m. */
   onOpening: ((east: number, north: number, mouthEast: number, mouthNorth: number) => void) | null =
     null;
@@ -674,6 +677,9 @@ export class Online {
         break;
       case 'raceCheered':
         this.onRaceCheered?.(m.cheered);
+        break;
+      case 'certified':
+        this.onCertified?.(m.certified);
         break;
       case 'chunks':
         this.onChunks?.(m.chunks);

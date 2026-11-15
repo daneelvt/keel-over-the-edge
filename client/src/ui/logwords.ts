@@ -9,12 +9,15 @@
 
 import { catalog } from '../catalog';
 import type {
+  LogCertificate,
   LogDay,
   LogEntry,
   LogGroup,
   LogPerson,
   LogRecord,
   LogRibbon,
+  LogToward,
+  LogTowardTask,
   LogVoyage,
   LogWorld,
   RaceCounts,
@@ -388,8 +391,16 @@ export function entryWords(e: LogEntry): string {
       return metWords(e);
     case 'bump':
       return bumpWords(e);
+    case 'certificate':
+      return certificateEntry(e);
   }
   return '';
+}
+
+/** A certificate earned, as its day says it: "Earned the Helm certificate, by hand". */
+export function certificateEntry(e: LogEntry): string {
+  const by = e.what !== undefined && e.what !== '' ? `, ${e.what}` : '';
+  return `Earned the ${e.title ?? 'next'} certificate${by}`;
 }
 
 /** With whom a voyage sailed, or nothing alone. */
@@ -488,8 +499,11 @@ export function remarks(d: LogDay): string[] {
   const found: string[] = [];
   const bumps: string[] = [];
   const firsts: string[] = [];
+  const earned: string[] = [];
   for (const e of d.entries) {
-    if (e.kind === 'bump') {
+    if (e.kind === 'certificate') {
+      earned.push(certificateEntry(e));
+    } else if (e.kind === 'bump') {
       bumps.push(bumpWords(e));
     } else if (e.kind === 'found') {
       const k = kindName(e.group ?? '', e.find ?? '');
@@ -507,9 +521,13 @@ export function remarks(d: LogDay): string[] {
     bumps.splice(BUMPS_TOLD, more, `and ${inWords(more)} more ${more === 1 ? 'brush' : 'brushes'}`);
   }
   // Bumps alike are each told: they fold by count, not by likeness.
-  const out = [...new Set([...weather, ...found, ...company]), ...bumps, ...new Set(ends)].filter(
-    (x) => x !== '',
-  );
+  // A certificate earned heads its day.
+  const out = [
+    ...earned,
+    ...new Set([...weather, ...found, ...company]),
+    ...bumps,
+    ...new Set(ends),
+  ].filter((x) => x !== '');
   if (out.length === 0) {
     const n = d.voyages.length;
     out.push(
@@ -587,6 +605,37 @@ export const NO_RACES =
   'No races sailed yet. Every race sailed leaves its ribbon here, kept for good.';
 /** The key that reads a log's older ribbons. */
 export const OLDER_RACES = 'Older races';
+
+/** The certificate at the log's head, its by hand in small capitals apart: ["Helm", "by hand"]; null for none. */
+export function certificateHead(c: LogCertificate | undefined): [string, string] | null {
+  if (c === undefined) {
+    return null;
+  }
+  return [c.name, c.byHand === true ? 'by hand' : ''];
+}
+
+/** The head of the Ribbons' block: "Toward Skipper · 2 of 4". */
+export function towardHead(t: LogToward): string {
+  return `Toward ${t.name} · ${Math.min(t.done, t.needs)} of ${t.needs}`;
+}
+
+/** A task's line of the Ribbons' block: its tick, its name, and how it was done or how far it has come. */
+export function towardTaskLine(t: LogTowardTask): { mark: string; name: string; how: string } {
+  const how =
+    t.done === true
+      ? t.way === 'hand'
+        ? 'by hand'
+        : t.way === 'pilot'
+          ? 'the autopilot way'
+          : ''
+      : t.course === true && (t.runs ?? 0) > 0 && (t.of ?? 0) > 1
+        ? `the autopilot way, ${t.runs} of ${t.of}`
+        : '';
+  return { mark: t.done === true ? '✓' : '·', name: t.name, how };
+}
+
+/** Why a course's task's line opens a course: its words to a reader of the screen. */
+export const SAIL_IT = 'Sail it';
 
 /** The awards and medals counted, in their order, each a word and its plural. */
 const AWARD_COUNTS: [string, string, string][] = [

@@ -27,13 +27,16 @@ import {
   type LogRibbon,
   type LogShown,
   type LogSource,
+  type LogToward,
   serverLogs,
 } from './logapi';
 import { Glyph } from './logglyphs';
+import { openRaceCard, raceLink } from './loglazy';
 import {
   CLOSE,
   COCKADE,
   COLLECTION,
+  certificateHead,
   DAYS,
   dayCell,
   dayLong,
@@ -59,10 +62,13 @@ import {
   ribbonCounts,
   ribbonLines,
   runCell,
+  SAIL_IT,
   SAILORS,
   shownLine,
   sinceLine,
   TRY_AGAIN,
+  towardHead,
+  towardTaskLine,
   voyageLine,
   voyageMore,
   WATCH,
@@ -187,6 +193,7 @@ function Head({
 }) {
   const since = sinceLine(log.since, log.zone);
   const worlds = log.record.worlds;
+  const cert = certificateHead(log.certificate);
   const keyed = log.own && !log.machine && who.kind === 'own';
   return (
     <header class="log-head">
@@ -211,6 +218,12 @@ function Head({
             <PlayerText text={log.name} />
           </h2>
           {log.machine ? <p class="log-sub">{MACHINE_SAILOR}</p> : null}
+          {cert !== null ? (
+            <p class="log-sub log-cert" data-readout="log-certificate">
+              {cert[0]}
+              {cert[1] !== '' ? <span class="log-by-hand"> {cert[1]}</span> : null}
+            </p>
+          ) : null}
           {since !== '' || worlds > 0 ? (
             <p class="log-sub">
               {[since, worlds === 0 ? '' : worlds === 1 ? '1 world' : `${worlds} worlds`]
@@ -532,6 +545,68 @@ function RibbonRow({ r, maiden, spoonKey }: { r: LogRibbon; maiden: boolean; spo
   );
 }
 
+/**
+ * The head of one's own Ribbons: the next certificate and its count, its
+ * tasks, done ones ticked with their way, a course's task opening the
+ * Harbourmaster's course that counts for it; after the last, its name.
+ */
+function TowardBlock({ log }: { log: Log }) {
+  const t: LogToward | undefined = log.toward;
+  if (t === undefined) {
+    return log.own && log.certificate?.last === true ? (
+      <section class="log-toward" data-readout="log-toward">
+        <h3 class="log-toward-head">{log.certificate.name}</h3>
+      </section>
+    ) : null;
+  }
+  return (
+    <section class="log-toward" data-readout="log-toward">
+      <h3 class="log-toward-head">{towardHead(t)}</h3>
+      <ul class="log-toward-tasks">
+        {t.tasks.map((k) => {
+          const { mark, name, how } = towardTaskLine(k);
+          const words = (
+            <>
+              <span class="log-toward-mark" aria-hidden="true">
+                {mark}
+              </span>
+              <span class="log-toward-name">
+                {name}
+                {how !== '' ? <span class="log-faint"> · {how}</span> : null}
+              </span>
+            </>
+          );
+          const code = k.code ?? '';
+          return (
+            <li key={k.name} class={k.done === true ? 'log-toward-task done' : 'log-toward-task'}>
+              {code !== '' ? (
+                <a
+                  class="log-toward-course"
+                  href={raceLink(code)}
+                  aria-label={`${name}${k.done === true ? ', done' : ''}: ${SAIL_IT}`}
+                  data-race={code}
+                  onClick={(e) => {
+                    if (openRaceCard(code)) {
+                      e.preventDefault();
+                    }
+                  }}
+                >
+                  {words}
+                  <span class="log-toward-go" aria-hidden="true">
+                    ›
+                  </span>
+                </a>
+              ) : (
+                <span class="log-toward-line">{words}</span>
+              )}
+            </li>
+          );
+        })}
+      </ul>
+    </section>
+  );
+}
+
 /** The ribbons read so far: their pages, and whether one is being read, failed, or more follow. */
 interface RibbonsRead {
   races: LogRibbon[];
@@ -587,6 +662,7 @@ function Ribbons({ log, who, source }: { log: Log; who: LogWho; source: LogSourc
   if (rb === null || sailed === 0) {
     return (
       <div class="log-ribbons-part">
+        <TowardBlock log={log} />
         <p class="log-faint">{NO_RACES}</p>
         {rb !== null && rb.counts.ran > 0 ? <p>{ribbonCounts(rb.counts).at(-1)}</p> : null}
       </div>
@@ -606,6 +682,7 @@ function Ribbons({ log, who, source }: { log: Log; who: LogWho; source: LogSourc
   const oldest = read.races.at(-1);
   return (
     <div class="log-ribbons-part" data-readout="log-ribbons">
+      <TowardBlock log={log} />
       <div class="log-ribbon-counts">
         {ribbonCounts(rb.counts).map((l) => (
           <p key={l}>{l}</p>
@@ -684,16 +761,24 @@ export function LogSheet({
   const [again, setAgain] = useState(0);
   const sheet = useRef<HTMLElement | null>(null);
   const key = who.kind === 'own' ? 'own' : who.kind === 'sailor' ? `s:${who.name}` : `m:${who.id}`;
-  // Another log, or the reader's own again: from its newest world, at its top.
+  // Another log, or the reader's own again: from its newest world, at its
+  // top; on its Ribbons when asked (a certificate earned's See).
+  const asked = who.kind === 'own' ? who.tab : undefined;
   useEffect(() => {
     setWorld(0);
     setMore(false);
-    setTab('days');
+    setTab(asked ?? 'days');
     sheet.current?.scrollTo?.({ top: 0 });
     for (const el of sheet.current?.querySelectorAll('.log-side, .log-main') ?? []) {
       el.scrollTo?.({ top: 0 });
     }
   }, [key]);
+  // Asked again for its Ribbons, the log already open.
+  useEffect(() => {
+    if (asked !== undefined) {
+      setTab(asked);
+    }
+  }, [who]);
   useEffect(() => {
     let live = true;
     setReading({ kind: 'reading' });
@@ -705,7 +790,8 @@ export function LogSheet({
     return () => {
       live = false;
     };
-  }, [key, world, again]);
+    // Opened again (a certificate earned's See): read afresh.
+  }, [key, world, again, who]);
   // Watch, while the sailor whose log it is can be watched.
   useEffect(() => {
     setWatchable(false);

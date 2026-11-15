@@ -239,6 +239,15 @@
   font-size: 14px;
 }
 
+/* What the run counted toward the next certificate: one line, in the gold of a prize. */
+.rl-certified {
+  margin: 0;
+  color: var(--gold);
+  font-size: 14px;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+
 .rl-big {
   font-size: 22px;
   font-variant-numeric: tabular-nums;

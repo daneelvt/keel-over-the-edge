@@ -65,6 +65,7 @@ import type { GullTown } from '../life/gulls';
 import { nowUs, worldUs } from '../net/clock';
 import type {
   BumpTold,
+  CertifiedIn,
   ChartEntry,
   ChartSubject,
   KnockStateTold,
@@ -133,6 +134,7 @@ import { KNOT, type Sandbox, SEA_STATES } from '../sandbox/sandbox';
 import { startWakeScene, type WakeSceneName, wakeSceneHost } from '../sandbox/wakescenes';
 import { hourAt, moonAgeAt, skyPeriods } from '../sky/skytime';
 import type { Barometer } from '../ui/barometer';
+import { certifiedTold } from '../ui/certwords';
 import type { ShipsClock } from '../ui/clock';
 import type { Countdown } from '../ui/countdown';
 import type { DeckView } from '../ui/decklazy';
@@ -2227,6 +2229,38 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
         sail: () => {},
         unwatch: () => {},
       });
+    },
+    /**
+     * What the sailor's certificates came to, as the server tells it: a
+     * task done (the first certificate's first task by hand, unless told
+     * otherwise), a venture's run, a certificate earned; raised as the
+     * page online raises it. The bell's rings so far.
+     */
+    certified(c: Partial<CertifiedIn>): number {
+      const p = chartParts();
+      certifiedTold(
+        {
+          book: { certificates: catalog.certificates ?? [], boats: catalog.boats },
+          line: p.racing.certified,
+          shown: () => p.racing.finishOpen.peek() || p.racing.resultsOpen.peek(),
+          raise: (on, fill, action) => p.notices.raise(on, fill, performance.now(), action),
+          see: () => p.chart.showLog({ kind: 'own', tab: 'ribbons' }),
+          bell: (n) => game.bell(n),
+        },
+        {
+          certificate: 0,
+          task: 0,
+          done: 1,
+          of: 3,
+          way: 'hand',
+          runs: 0,
+          runsOf: 0,
+          earned: false,
+          byHand: false,
+          ...c,
+        },
+      );
+      return game.bellsRung;
     },
     /** The crowd's cheers gathered for a boat, as the server tells them. */
     raceCheered(c: Partial<RaceCheeredIn>): void {
