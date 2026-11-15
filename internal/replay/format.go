@@ -73,13 +73,13 @@ import (
 //	            certificate's and the task's places as varints, then the
 //	            tasks done, needed and the way, the venture's runs and
 //	            those it asks, a byte each, and a byte of flags (1: earned,
-//	            2: by hand)
+//	            2: by hand); a Lift its boat
 //	D digest    tick, sim.Digest of the world after it, 8 bytes
 //	X broken    the first tick whose records were lost: the segment holds
 //	            nothing reliable from that tick on
 const (
 	magic         = "KEELLOG\n"
-	formatVersion = 22
+	formatVersion = 23
 
 	kindHeader   = 'H'
 	kindSnapshot = 'S'
@@ -233,7 +233,7 @@ func appendEvent(dst []byte, e *bus.Event) []byte {
 		dst = append(dst, e.Account[:]...)
 		dst = binary.AppendUvarint(dst, uint64(e.BoatLook))
 		dst = appendString(dst, e.BoatName)
-	case bus.Leave:
+	case bus.Leave, bus.Lift:
 		dst = binary.AppendUvarint(dst, e.Boat)
 	case bus.Disconnect:
 		dst = binary.AppendUvarint(dst, e.Boat)
@@ -719,7 +719,7 @@ func (p *payload) event(e *bus.Event) {
 	case bus.SetBoatLook:
 		p.bytes(e.Account[:])
 		e.BoatLook, e.BoatName = p.boatLook()
-	case bus.Leave:
+	case bus.Leave, bus.Lift:
 		e.Boat = p.uvarint()
 	case bus.Disconnect:
 		e.Boat = p.uvarint()

@@ -144,10 +144,10 @@ func TestLogWritten(t *testing.T) {
 		t.Errorf("Tom's collection: %+v", tf)
 	}
 
-	// Another voyage of the same boat's kind counts it again, and adds no
-	// first find.
+	// Another voyage of the same boat's kind, lifted home, counts it
+	// again, and adds no first find.
 	again := voyage
-	again.Source, again.How, again.Crew, again.Finds, again.Survived = "v:1:4:900", store.LogReturned, nil, boats, false
+	again.Source, again.How, again.Crew, again.Finds, again.Survived = "v:1:4:900", store.LogLifted, nil, boats, false
 	if err := p.Write(ctx, store.Batch{World: world.ID, Epoch: epoch, Log: store.LogRows{Voyages: []store.LogVoyage{again}}}); err != nil {
 		t.Fatal(err)
 	}

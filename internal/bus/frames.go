@@ -316,6 +316,7 @@ const (
 	EndAboard              // its sailor went aboard another's boat
 	EndAshore              // one aboard went ashore, or was put ashore
 	EndLanded              // the boat they were aboard left the water
+	EndLifted              // its sailor lifted it home to the start
 )
 
 // VoyageEnded is a voyage ended: the boat, its sailor and its kind, how

@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"slices"
+	"time"
 
 	"github.com/daneelvt/keel-over-the-edge/internal/auth"
 	"github.com/daneelvt/keel-over-the-edge/internal/store"
@@ -119,4 +120,49 @@ func (a *api) setNotices(w http.ResponseWriter, r *http.Request) {
 	a.cfg.Sessions.ForgetAccount(acc.ID)
 	acc.NoticesOff = off
 	writeJSON(w, http.StatusOK, a.meOf(acc))
+}
+
+// TakingOut takes an account's boat out of the water at once, with no grace,
+// reporting whether it had one, once the world no longer holds it: the
+// game connection (edge.Edge). A connection sailing it on another screen
+// goes to its own start screen, told why; those aboard go ashore at the
+// nearest port.
+type TakingOut interface {
+	TakeOut(ctx context.Context, id store.AccountID) (bool, error)
+}
+
+// TakeOutWait is how long POST /api/me/ashore waits for the boat to leave
+// the water.
+const TakeOutWait = 5 * time.Second
+
+// takenOut is POST /api/me/ashore's answer: whether a boat was in the
+// water and is out of it now.
+type takenOut struct {
+	Out bool `json:"out"`
+}
+
+// takeOut answers POST /api/me/ashore, behind auth.Required: the human's
+// boat taken out of the water from the start screen, before a change of
+// boat or look, a watch, or a new start; answered once it is out, so that
+// GET /api/me then says it is not at sea. With no boat in the water,
+// nothing is done. A browser's request from another origin never reaches
+// it (Handler's cross-origin protection).
+//
+//	200 {"out": true|false}
+//	403 {"error":"ai-account"}
+//	503 {"error":"unavailable"}   the boat did not leave in time
+func (a *api) takeOut(w http.ResponseWriter, r *http.Request) {
+	acc, _ := auth.FromContext(r.Context())
+	if acc.Kind != store.Human {
+		writeError(w, http.StatusForbidden, "ai-account")
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), TakeOutWait)
+	defer cancel()
+	out, err := a.cfg.Ashore.TakeOut(ctx, acc.ID)
+	if err != nil {
+		a.unavailable(w, r, "taking a boat out of the water", err)
+		return
+	}
+	writeJSON(w, http.StatusOK, takenOut{Out: out})
 }

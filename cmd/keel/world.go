@@ -456,6 +456,7 @@ func (p *process) openWorld(ctx context.Context, rw *readyWorld) (*worldHalf, er
 		Origin:   cfg.PlayOrigin,
 		Deck:     h.game,
 		Chat:     chatting{p},
+		Ashore:   h.game,
 	}
 	if p.shipmates != nil {
 		playCfg.Shipmates = p.shipmates

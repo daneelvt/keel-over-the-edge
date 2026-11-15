@@ -120,6 +120,14 @@ func TestBookVoyages(t *testing.T) {
 		t.Errorf("Ann's finds: %v", fs)
 	}
 
+	// A voyage its sailor ended by lifting the boat home is in the log, lifted.
+	f = frameOf(9050, [2]float64{8000, 0})
+	f.VoyageEnds = append(f.VoyageEnds, bus.VoyageEnded{Tick: 9050, Slot: 0, Boat: 10, Owner: acc(1), Kind: 1, How: bus.EndLifted,
+		X: 8000, Y: 0, Log: bus.VoyageLog{Began: 9000, Run: 30}})
+	if rows := b.Rows(f, nil); rows == nil || len(rows.Voyages) != 1 || rows.Voyages[0].How != store.LogLifted {
+		t.Errorf("a voyage lifted home: %+v", rows)
+	}
+
 	// A voyage the owner's tools placed is not in the log.
 	f = frameOf(9100, [2]float64{0, 0})
 	f.VoyageEnds = append(f.VoyageEnds, bus.VoyageEnded{Tick: 9100, Slot: 0, Boat: 10, Owner: acc(1), How: bus.EndReturned, Placed: true,

@@ -101,6 +101,9 @@ type Config struct {
 	// watch, the card about one, following, and the choice that lets
 	// others watch a human for a voyage.
 	Watch Watching
+	// Ashore, if not nil, takes an account's boat out of the water at its
+	// player's word from the start screen: the game connection.
+	Ashore TakingOut
 	// Status, if not nil, is the game's status as last published, served
 	// at GET /api/status; Website is the origin whose pages may read it.
 	Status  func() *Status
@@ -224,6 +227,9 @@ func Handler(cfg Config) http.Handler {
 	}
 	if cfg.Notices != nil {
 		mux.Handle("POST /api/me/notices", required(a.setNotices))
+	}
+	if cfg.Ashore != nil {
+		mux.Handle("POST /api/me/ashore", required(a.takeOut))
 	}
 	if cfg.Sailing != nil {
 		a.registerSailing(mux, required)

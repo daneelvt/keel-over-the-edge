@@ -276,6 +276,8 @@ func how(h uint8) string {
 		return store.LogAboard
 	case bus.EndLanded:
 		return store.LogLanded
+	case bus.EndLifted:
+		return store.LogLifted
 	}
 	return store.LogAshore
 }
