@@ -541,8 +541,8 @@ test('a fleet’s link watches its machine sailor, nothing saying whose, This fl
   }
 });
 
-/** The jolly boat's length overall, m: a new sailor's boat, and a machine sailor's. */
-const BOAT_LENGTH = data.boats.find((b) => b.id === 'jolly-boat')?.lengthOverall ?? 4;
+/** A boat's length overall, m: the shortest boat's, the strictest. */
+const BOAT_LENGTH = Math.min(...data.boats.map((b) => b.lengthOverall));
 
 /**
  * Hides the page for ms as a tab put behind another is hidden, shows it

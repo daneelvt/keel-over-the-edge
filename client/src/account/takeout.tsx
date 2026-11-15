@@ -32,8 +32,12 @@ export class TakeOut {
   readonly busy = signal(false);
   /** Why it could not be, until the next try. */
   readonly problem = signal('');
-  /** Told once the boat is out: what else on the screen followed it in the water. */
-  out: () => void = () => {};
+  /**
+   * Told once the boat is out: what else on the screen followed it in the
+   * water. What waited on the answer runs once it is done, so a fleet read
+   * here never lands after a boat chosen there.
+   */
+  out: () => void | Promise<void> = () => {};
   readonly #fetch: Fetch;
 
   constructor(atSea: boolean, f: Fetch = (input, init) => fetch(input, init)) {
@@ -103,7 +107,7 @@ export class TakeOut {
       this.atSea.value = false;
       this.asking.value = null;
       this.#listen(false);
-      this.out();
+      await this.out();
       act();
       return true;
     } finally {

@@ -624,9 +624,9 @@ function Sailor({
   // and the fleet says where the boats are now.
   const out = useMemo(() => {
     const o = new TakeOut(given.atSea === true, fetcher);
-    o.out = () => {
+    o.out = async () => {
       v.ashore();
-      void boats?.load();
+      await boats?.load();
     };
     return o;
   }, []);

@@ -197,6 +197,28 @@ describe('a boat still in the water, on the start screen', () => {
     expect(v.going.value).toBe(true);
   });
 
+  test('what waited on the answer runs only once what followed the boat out is done: a fleet read never lands after a boat chosen', async () => {
+    const s = server();
+    const order: string[] = [];
+    let read = (): void => {};
+    const out = new TakeOut(true, s.f);
+    out.out = () =>
+      new Promise<void>((resolve) => {
+        order.push('reading');
+        read = () => {
+          order.push('read');
+          resolve();
+        };
+      });
+    out.guard(() => order.push('chosen'));
+    const taken = out.take();
+    await settle();
+    expect(order).toEqual(['reading']);
+    read();
+    expect(await taken).toBe(true);
+    expect(order).toEqual(['reading', 'read', 'chosen']);
+  });
+
   test('a boat that cannot be taken out stays, the question open, saying so', async () => {
     const s = server(503);
     let watched = 0;
