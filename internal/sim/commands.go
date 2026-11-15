@@ -119,6 +119,8 @@ func (w *World) apply(c *bus.Command) {
 	case bus.Certify:
 		// Nothing changes: the frame's event carries the news out.
 		r = bus.Reply{Result: bus.Done, Slot: -1}
+	case bus.Lift:
+		r = w.lift(c.Boat)
 	default:
 		return
 	}
@@ -176,6 +178,23 @@ func (w *World) teleport(f *bus.Frame, s int32, c *bus.Command) {
 	f.Course[s] = physics.Course{}
 	f.Voyage[s].Over = 0
 	f.Voyage[s].Placed = true
+}
+
+// lift lifts a boat home at its skipper's word: out of the race it sails
+// in, if any, its voyage ended, lifted, and started again at the start on
+// a new one, as after a fall over the lip: at rest, its course cleared,
+// those aboard still aboard. The new voyage earns as any other. A boat
+// falling over the lip is on its way home already, and is not lifted.
+func (w *World) lift(boat uint64) bus.Reply {
+	f := w.next
+	s := slotOf(f, boat)
+	if s < 0 || f.Voyage[s].Falling() {
+		return bus.Reply{Result: bus.NoBoat, Slot: -1, Boat: boat}
+	}
+	committee.Retire(f, f.Owner[s])
+	w.voyageEnds(f, s, bus.EndLifted)
+	w.startAgain(f, s)
+	return bus.Reply{Result: bus.Done, Slot: s, Boat: boat, Gen: f.Gen[s]}
 }
 
 // expire takes out the boats whose grace has ended, each recorded as an

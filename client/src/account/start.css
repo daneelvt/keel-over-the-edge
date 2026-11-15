@@ -648,3 +648,21 @@
     display: none;
   }
 }
+
+/* Held sideways, with the boat still in the water: the note that says so
+   under Set sail, so Set sail stays in view while the sailor's own and the
+   boat's keys are offered beside it ("at sea" under the name says it
+   first). Read aloud, it still comes before Set sail. */
+@media (max-height: 420px) {
+  .your-sailor > .start-warning {
+    order: 1;
+  }
+  .your-sailor > .your-sailor-go ~ * {
+    order: 2;
+  }
+}
+
+/* The question before a boat still in the water is taken out: its words centred under its head. */
+.take-out .start-text {
+  text-align: center;
+}

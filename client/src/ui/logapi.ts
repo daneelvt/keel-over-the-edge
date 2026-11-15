@@ -20,7 +20,15 @@ export interface LogPerson {
 }
 
 /** How a voyage ended, as the log keeps it. */
-export type LogHow = 'returned' | 'expired' | 'over' | 'taken' | 'aboard' | 'ashore' | 'landed';
+export type LogHow =
+  | 'returned'
+  | 'expired'
+  | 'over'
+  | 'taken'
+  | 'aboard'
+  | 'ashore'
+  | 'landed'
+  | 'lifted';
 
 /** A voyage of a log's day, or a time aboard another's boat (aboard, with its skipper). Times ms, distances m. */
 export interface LogVoyage {

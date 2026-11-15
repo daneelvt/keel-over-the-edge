@@ -369,10 +369,13 @@ export function BoatLookChooser({
   chooser: c,
   board = false,
   className = '',
+  guard = (act) => act(),
 }: {
   chooser: BoatChooser;
   board?: boolean;
   className?: string;
+  /** Asks first, with the boat still in the water, before a change is saved. */
+  guard?: (act: () => void) => void;
 }) {
   const b = c.yours;
   if (b === null) {
@@ -464,7 +467,12 @@ export function BoatLookChooser({
           <button type="button" class={k.cancel} disabled={busy} onClick={() => c.cancel()}>
             Cancel
           </button>
-          <button type="button" class={k.save} disabled={busy} onClick={() => void c.save()}>
+          <button
+            type="button"
+            class={k.save}
+            disabled={busy}
+            onClick={() => (c.changed() ? guard(() => void c.save()) : void c.save())}
+          >
             Save
           </button>
         </div>
@@ -487,11 +495,14 @@ export function ChangeBoat({
   chooser: c,
   board = false,
   className = '',
+  guard = (act) => act(),
 }: {
   chooser: BoatChooser;
   /** On the board, at sea in a port: only the available boats, and one chosen takes the place of the one sailed. */
   board?: boolean;
   className?: string;
+  /** Asks first, with the boat still in the water, before another boat is chosen. */
+  guard?: (act: () => void) => void;
 }) {
   const f = c.fleet.value;
   if (f === null) {
@@ -517,7 +528,9 @@ export function ChangeBoat({
               class="change-boat-choice"
               aria-current={b.id === f.boat ? 'true' : undefined}
               disabled={busy || taken(b) || closed(b)}
-              onClick={() => void c.choose(b.id)}
+              onClick={() =>
+                b.id === f.boat ? void c.choose(b.id) : guard(() => void c.choose(b.id))
+              }
             >
               <Picture cat={c.cat} b={b} width={56} />
               <span class="change-boat-words">

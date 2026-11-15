@@ -36,8 +36,20 @@ export const LEAVE_DETAIL = 'Your boat leaves the water now. Sailing again start
 export const LEAVE = 'Leave the water';
 export const STAY = 'Stay';
 
-/** The start screen's warning to a player whose boat is still at sea. */
-export const STILL_AT_SEA = 'Your boat is still in the water: watching takes it out';
+/** The start screen's note to a player whose boat is still at sea: in its grace, or sailing on another screen. */
+export const STILL_AT_SEA = 'Your boat is still in the water, where you left it.';
+
+/** The question before the start screen takes a boat still at sea out of the water, and its answers. */
+export const TAKE_OUT_QUESTION = 'Take your boat out of the water?';
+export const TAKE_OUT_DETAIL = 'It ends that voyage.';
+export const TAKE_IT_OUT = 'Take it out';
+export const KEEP_IT = 'Keep it';
+
+/** The start screen's link under Set sail that takes a boat still at sea out and sets sail at the start. */
+export const START_AGAIN = 'Start again at Port Royal';
+
+/** The start screen's line when the boat could not be taken out. */
+export const NOT_TAKEN_OUT = 'Your boat could not be taken out just now. Try again.';
 
 /** Who may watch the account's boat, as GET /api/me names it: no one, or anyone for the voyage. */
 export type Spectators = 'no' | 'voyage';

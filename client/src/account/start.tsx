@@ -50,6 +50,7 @@ import {
 import { chosen, Picker, type PickerState, StageFront, shuffled, undone } from './picker';
 import { lengthProblem, MAX_NAME, reasonText, TAKEN_SIGN_IN } from './reasons';
 import { AddPasskey, RecoveredNotice, RecoveryCode, SetSailOrMake } from './recovery';
+import { TakeOut } from './takeout';
 import { YourSailor } from './yoursailor';
 
 export interface StartProps {
@@ -580,6 +581,8 @@ let askedAge = false;
  * their panel; its look's chooser and the fleet's boats stand alone.
  * A sailor made before the game asked when its player was born is asked
  * first, once each time the game is opened; Not now sails as before.
+ * With the boat still in the water, a watch asks first whether to take it
+ * out, as the panel's changes do.
  */
 function Sailor({
   first,
@@ -617,8 +620,21 @@ function Sailor({
   useEffect(() => () => stage?.hide(), []);
   const boats = useMemo(() => (cat === undefined ? undefined : new BoatChooser(cat, fetcher)), []);
   useEffect(() => void boats?.load(), []);
-  const me = chooser === undefined ? given : chooser.applied(given);
-  const go = (watch?: string) => done(watch === undefined ? me : { ...me, watch });
+  // The boat still in the water: taken out, the box is for a new voyage,
+  // and the fleet says where the boats are now.
+  const out = useMemo(() => {
+    const o = new TakeOut(given.atSea === true, fetcher);
+    o.out = async () => {
+      v.ashore();
+      await boats?.load();
+    };
+    return o;
+  }, []);
+  const chosen = chooser === undefined ? given : chooser.applied(given);
+  const me = { ...chosen, atSea: out.atSea.value };
+  // A watch takes the boat out of the water: asked first.
+  const go = (watch?: string) =>
+    watch === undefined ? done(me) : out.guard(() => done({ ...me, atSea: false, watch }));
   const yours = (
     <YourSailor
       me={me}
@@ -629,6 +645,7 @@ function Sailor({
       {...(chooser === undefined ? {} : { chooser })}
       boats={boats}
       {...(races === undefined ? {} : { race: () => void openMakeRace(races) })}
+      out={out}
     />
   );
   const picking = chooser !== undefined && chooser.mode.value !== 'shown' && stage !== undefined;
@@ -661,6 +678,7 @@ function Sailor({
           voyage={v}
           {...(chooser === undefined ? {} : { chooser })}
           boats={boats}
+          out={out}
         />
       ) : listing ? (
         w !== null && (

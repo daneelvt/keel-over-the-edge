@@ -55,6 +55,7 @@ import type { ChartParts } from '../chart/make';
 import { placeWords, pointsOf, warningInForce } from '../chart/placeweather';
 import { formatPosition } from '../chart/position';
 import { type Layer, momentOf } from '../chart/weather';
+import { BAROMETER_LONGEST, BAROMETER_SHORTEST } from '../chart/words';
 import { STEPS_PER_SECOND } from '../game/clock';
 import type { BoatDriver } from '../game/driver';
 import { type DrawnBoat, newDrawnBoat } from '../game/fleet';
@@ -142,6 +143,7 @@ import { certifiedTold } from '../ui/certwords';
 import type { ShipsClock } from '../ui/clock';
 import type { Countdown } from '../ui/countdown';
 import type { DeckView } from '../ui/decklazy';
+import type { HomeView } from '../ui/home';
 import { setLogHost } from '../ui/loglazy';
 import { downwindLine, type SailState } from '../ui/model';
 import { openNews, setNewsHost } from '../ui/newslazy';
@@ -298,11 +300,12 @@ export type Sailing = (
   countdown?: Countdown;
   /** The full screen's switch and key. */
   fullScreen?: FullScreen;
-  /** The sandbox's screen drawn again, with a watch's parts or without, and sailing together's. */
+  /** The sandbox's screen drawn again, with a watch's parts or without, sailing together's, and the way home's. */
   remount?: (
     watch: WatchView | null,
     deck?: DeckView | null,
     statements?: StatementsView | null,
+    home?: HomeView | null,
   ) => void;
   /** What the page did from the tap to the world's reveal; null before it. */
   revealed?: () => Revealed | null;
@@ -701,6 +704,25 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
       stage.freeze(on);
       if (!on) {
         stage.resumed();
+      }
+    },
+
+    /**
+     * Hides the page, or shows it again, as a tab put behind another and
+     * brought back: the document says so and visibilitychange is fired,
+     * and no frame is drawn meanwhile, the first one back timed from the
+     * last one drawn, as a hidden tab's is.
+     */
+    hide(on: boolean): void {
+      const state: DocumentVisibilityState = on ? 'hidden' : 'visible';
+      Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => state });
+      Object.defineProperty(document, 'hidden', { configurable: true, get: () => on });
+      if (on) {
+        stage.freeze(true);
+      }
+      document.dispatchEvent(new Event('visibilitychange'));
+      if (!on) {
+        stage.freeze(false, true);
       }
     },
 
@@ -1789,6 +1811,24 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
       return [...deckCalls];
     },
     /**
+     * The sandbox's screen with the way home offered in its menu, and its
+     * question asked, racing and with shipmates aboard as given; null as it
+     * is offline, with neither.
+     */
+    homeScene(home: { asking: boolean; racing: boolean; shipmates: boolean } | null): void {
+      if (home === null) {
+        sailing.remount?.(null, null);
+        return;
+      }
+      sailing.remount?.(null, null, null, {
+        offered: () => true,
+        asking: signal(home.asking),
+        racing: () => home.racing,
+        shipmates: () => home.shipmates,
+        go: () => {},
+      });
+    },
+    /**
      * The question asked before the own boat leaves the water to watch, in
      * its window over the screen at sea, as the list shows it; false takes
      * it away. Resolves once it is drawn.
@@ -1861,12 +1901,15 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
       }
     },
     /**
-     * Holds the case's readouts at the shortest or the longest they say, or
-     * lets them follow the boat again (null).
+     * Holds the case's readouts and the barometer's words at the shortest
+     * or the longest they say, or lets them follow the boat again (null).
      */
     readouts(at: 'shortest' | 'longest' | null): void {
       const h = game.hud;
       h.held = at !== null;
+      sailing.barometer?.holdWords(
+        at === null ? null : at === 'longest' ? BAROMETER_LONGEST : BAROMETER_SHORTEST,
+      );
       if (at === null) {
         h.flush();
         return;
@@ -1967,6 +2010,12 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
         traffic: { ...o.traffic },
         tools: o.tools.value,
         stays: p.stays,
+        // The records waiting for a frame at most at once since the page
+        // was last hidden, the snaps seen through, and the boat in view's
+        // newest snapshot.
+        mostQueued: o.mostQueued,
+        snapped: o.snapped.value,
+        newest: o.newest(),
       };
     },
     /**

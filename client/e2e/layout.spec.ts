@@ -10,7 +10,9 @@
 // on the screen. One page, its viewport changed screen by screen, with
 // less motion asked for, so that nothing is measured mid-slide.
 //
-// The case is one size whatever its readouts say. Held sideways it is no
+// The case is one size whatever its readouts say, and its complications
+// one size and in one place whatever the barometer's words say, the
+// clock's dial level with the barometer's. Held sideways it is no
 // taller than its compass card, its pushers standing on three edges; held
 // upright the barometer's and the board's stand out of its bottom edge
 // beneath the readouts and the clock's out of its top edge over the
@@ -328,26 +330,49 @@ async function longestCaption(page: Page): Promise<string[]> {
   });
 }
 
-/** What is wrong with the case: its size as its readouts change, its height, its pushers. */
+/**
+ * What is wrong with the case: its size, and its complications' sizes and
+ * places, as its readouts and the barometer's words change; its height,
+ * its pushers.
+ */
 async function caseFaults(page: Page, upright: boolean): Promise<string[]> {
+  const boxes = {
+    'the case': '.case-top',
+    'the complications': '.complications',
+    'the barometer': '[data-complication=barometer]',
+    'the clock': '[data-complication=clock]',
+    'the barometer’s dial': '[data-complication=barometer] svg',
+    'the clock’s dial': '[data-complication=clock] svg',
+  };
   const size = (at: 'shortest' | 'longest') =>
-    page.evaluate(async (at) => {
-      globalThis.keel.readouts(at);
-      await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
-      const r = document.querySelector('.case-top')?.getBoundingClientRect();
-      return r === undefined ? null : [r.left, r.top, r.width, r.height];
-    }, at);
+    page.evaluate(
+      async ({ at, boxes }) => {
+        globalThis.keel.readouts(at);
+        await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+        return Object.fromEntries(
+          Object.entries(boxes).map(([name, sel]) => {
+            const r = document.querySelector(sel)?.getBoundingClientRect();
+            return [name, r === undefined ? null : [r.left, r.top, r.width, r.height]];
+          }),
+        );
+      },
+      { at, boxes },
+    );
   const found: string[] = [];
   const short = await size('shortest');
   const long = await size('longest');
-  if (
-    short === null ||
-    long === null ||
-    short.some((v, i) => Math.abs(v - (long[i] ?? 0)) > 0.01)
-  ) {
-    found.push(
-      `the case is ${short?.join(' ')} at its shortest, ${long?.join(' ')} at its longest`,
-    );
+  for (const name of Object.keys(boxes)) {
+    const s = short[name];
+    const l = long[name];
+    if (!s || !l || s.some((v, i) => Math.abs(v - (l[i] ?? 0)) > 0.01)) {
+      found.push(`${name} is ${s?.join(' ')} at its shortest, ${l?.join(' ')} at its longest`);
+    }
+  }
+  // Side by side, the two dials stand level.
+  const baro = long['the barometer’s dial'];
+  const clock = long['the clock’s dial'];
+  if (!upright && baro && clock && Math.abs((baro[1] ?? 0) - (clock[1] ?? 0)) > 0.5) {
+    found.push(`the clock’s dial is at ${clock[1]}, the barometer’s at ${baro[1]}`);
   }
   found.push(
     ...(await page.evaluate((upright) => {
@@ -2612,6 +2637,140 @@ test('the player’s own panel keeps Set sail in view with their boat, and the b
     ]);
     await page.getByRole('button', { name: 'Cancel', exact: true }).click();
   }
+  expect(found).toEqual([]);
+});
+
+/** A window's faults: off the screen, its keys out of it or of the screen, or a key under 40 px tall or a 44 px touch wide. */
+async function windowFaults(page: Page, where: string, sel: string): Promise<string[]> {
+  const out = await page.evaluate((sel) => {
+    const w = document.querySelector(sel);
+    if (w === null) {
+      return [`no ${sel}`];
+    }
+    const found: string[] = [];
+    const r = w.getBoundingClientRect();
+    if (
+      r.left < -0.5 ||
+      r.top < -0.5 ||
+      r.right > innerWidth + 0.5 ||
+      r.bottom > innerHeight + 0.5
+    ) {
+      found.push(
+        `${sel} is off the screen (${[r.left, r.top, r.right, r.bottom].map(Math.round)})`,
+      );
+    }
+    for (const b of w.querySelectorAll('button')) {
+      const k = b.getBoundingClientRect();
+      const name = `“${(b as HTMLElement).innerText}”`;
+      if (
+        k.left < r.left - 0.5 ||
+        k.right > r.right + 0.5 ||
+        k.top < r.top - 0.5 ||
+        k.bottom > r.bottom + 0.5
+      ) {
+        found.push(`${name} is outside ${sel}`);
+      }
+      if (k.bottom > innerHeight + 0.5 || k.right > innerWidth + 0.5) {
+        found.push(`${name} is off the screen`);
+      }
+      if (k.height < 39.5 || k.width < 43.5) {
+        found.push(`${name} is ${Math.round(k.width)} × ${Math.round(k.height)}`);
+      }
+    }
+    return found;
+  }, sel);
+  return out.map((f) => `${where}: ${f}`);
+}
+
+test('with the boat still in the water, the player’s own panel keeps Set sail in view and Start again at Port Royal within reach, and the question before the boat is taken out fits every screen', async ({
+  page,
+}) => {
+  test.skip(test.info().project.name === 'webgpu', 'the panels are the same on either back end');
+  test.setTimeout(120_000);
+  const o = data.sailorOptions;
+  await page.route(
+    (url) => url.pathname === '/api/me',
+    (r) =>
+      r.fulfill({
+        json: {
+          name: LONG,
+          look: data.sailors[0]?.id,
+          version: data.sailors[0]?.versions[0]?.id,
+          skin: o.skins[0]?.id,
+          hair: o.hairs[0]?.id,
+          colour: o.colours[0]?.id,
+          lookChosen: true,
+          kind: data.boats[0]?.id,
+          spectators: 'no',
+          atSea: true,
+        },
+      }),
+  );
+  await page.route(
+    (url) => url.pathname === '/api/fleet',
+    (r) => r.fulfill({ json: longFleet() }),
+  );
+  await page.setViewportSize({ width: SCREENS[0].width, height: SCREENS[0].height });
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await page.goto(GAME);
+  await expect(page.locator('.your-sailor [data-readout=boat]')).toBeVisible({ timeout: 90_000 });
+  await expect(page.locator('.your-sailor')).toContainText('still in the water');
+  const found: string[] = [];
+  for (const s of SCREENS) {
+    await page.setViewportSize({ width: s.width, height: s.height });
+    await page.waitForFunction(
+      ({ width, height }) => innerWidth === width && innerHeight === height,
+      { width: s.width, height: s.height },
+    );
+    await page.waitForTimeout(100);
+    if (!(await inView(page, '.your-sailor-go'))) {
+      found.push(`${s.name}: Set sail is out of view`);
+    }
+    // Start again under it, in view as the panel scrolls to it.
+    await page.locator('.your-sailor-again').scrollIntoViewIfNeeded();
+    if (!(await inView(page, '.your-sailor-again'))) {
+      found.push(`${s.name}: Start again at Port Royal is out of view`);
+    }
+    await page.getByRole('button', { name: 'Start again at Port Royal' }).click();
+    await expect(page.locator('.take-out')).toBeVisible();
+    found.push(...(await windowFaults(page, s.name, '.take-out')));
+    await page.getByRole('button', { name: 'Keep it' }).click();
+    await expect(page.locator('.take-out')).toHaveCount(0);
+  }
+  expect(found).toEqual([]);
+});
+
+test('the way home’s question, racing and with shipmates aboard, fits every screen over the sea, its keys the head keys’ size; Back to Port Royal in the menu', async ({
+  page,
+}) => {
+  test.skip(test.info().project.name === 'webgpu', 'the panels are the same on either back end');
+  test.setTimeout(120_000);
+  await page.setViewportSize({ width: SCREENS[0].width, height: SCREENS[0].height });
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await openScene(page, '', true);
+  const found: string[] = [];
+  for (const s of SCREENS) {
+    await page.setViewportSize({ width: s.width, height: s.height });
+    await page.waitForFunction(
+      ({ width, height }) => innerWidth === width && innerHeight === height,
+      { width: s.width, height: s.height },
+    );
+    await page.evaluate(() =>
+      globalThis.keel.homeScene({ asking: true, racing: true, shipmates: true }),
+    );
+    await expect(page.locator('.home-question')).toContainText('Your shipmates come too.');
+    found.push(...(await windowFaults(page, s.name, '.home-question')));
+    await page.getByRole('button', { name: 'Stay', exact: true }).click();
+    await expect(page.locator('.home-question')).toHaveCount(0);
+    await page.getByRole('button', { name: 'Menu' }).click();
+    const item = page.locator('.menu').getByRole('button', { name: 'Back to Port Royal' });
+    await item.scrollIntoViewIfNeeded();
+    if (!(await item.isVisible())) {
+      found.push(`${s.name}: no Back to Port Royal in the menu`);
+    }
+    await page.locator('.menu-x').click();
+  }
+  await page.evaluate(() => globalThis.keel.homeScene(null));
   expect(found).toEqual([]);
 });
 

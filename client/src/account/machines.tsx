@@ -78,6 +78,7 @@ import { call, confirmPasskey, type Outcome, reasonOf } from './passkeys';
 import { Portrait } from './portraits';
 import { lengthProblem, machineReasonText } from './reasons';
 import { dayOf } from './recovery';
+import type { TakeOut } from './takeout';
 import { YourSailor } from './yoursailor';
 
 /**
@@ -541,6 +542,7 @@ export function StartPair({
   children,
   chooser,
   boats,
+  out,
 }: {
   me: Me;
   voyage: Voyage;
@@ -550,6 +552,8 @@ export function StartPair({
   children: ComponentChildren;
   chooser?: LookChooser | undefined;
   boats?: BoatChooser | undefined;
+  /** The boat still in the water, and the question before it is taken out. */
+  out?: TakeOut | undefined;
 }) {
   return (
     <div class="start-pair">
@@ -561,6 +565,7 @@ export function StartPair({
         {...(watchName === undefined ? {} : { watchName })}
         {...(chooser === undefined ? {} : { chooser })}
         boats={boats}
+        out={out}
       />
       <div class="start-panel ai-panel">{children}</div>
     </div>
@@ -581,6 +586,7 @@ export function MachineStart({
   voyage,
   chooser,
   boats,
+  out,
 }: {
   first: boolean;
   done: (watch?: string) => void;
@@ -590,6 +596,8 @@ export function MachineStart({
   chooser?: LookChooser;
   /** The player's boat, chosen on their own panel, with the fleet it is read from. */
   boats?: BoatChooser | undefined;
+  /** The boat still in the water, and the question before it is taken out. */
+  out?: TakeOut | undefined;
 }) {
   const { page, setPage, problem, fleet } = usePage(boats?.fleet.value);
   const [listing, setListing] = useState(false);
@@ -605,6 +613,7 @@ export function MachineStart({
       watchName={(name) => done(name)}
       chooser={chooser}
       boats={boats}
+      out={out}
     >
       {page === null ? (
         <p class="start-text start-faint" aria-live="polite">

@@ -11,8 +11,12 @@
 // luffed in a gust with her sheet held and is righted, pitchpoles borne
 // away in a breeze with it held, and reefs. The yacht beats, tacks,
 // reaches, rounds up in a gust and reefs. The catamaran beats, tacks
-// through about a hundred degrees, reaches past 7.6 knots, is told her
-// hull is flying in a squall with her sheet held, and reefs.
+// through about a hundred degrees, reaches past 7.6 knots, flies a hull in
+// a squall with her sheet held, and reefs. Neither cat's flying hull or
+// burying bows puts a line on the screen or dims the controls. A boat left
+// in its grace keeps the start screen open: the note says so, Change boat
+// is offered, and choosing the beach cat asks first to take the boat out,
+// then sails her from the start.
 
 import { expect, type Page, test } from '@playwright/test';
 import data from '../src/catalog/catalog.gen.json' with { type: 'json' };
@@ -71,6 +75,40 @@ async function pilotTo(page: Page, degrees: number): Promise<void> {
     await page.keyboard.press(`${step}${degrees > d ? 'q' : 'e'}`);
   }
   expect(await held()).toBe(degrees);
+}
+
+/**
+ * Watches the screen for two seconds, a frame at a time, while the boat
+ * flies a hull or buries her bows, her sailor aboard: how many frames she
+ * did, and how many of those showed a sailor's line or the controls dimmed.
+ */
+function whileFlying(page: Page): Promise<{ flying: number; shown: number }> {
+  return page.evaluate(
+    () =>
+      new Promise<{ flying: number; shown: number }>((resolve) => {
+        let flying = 0;
+        let shown = 0;
+        const end = performance.now() + 2000;
+        const look = () => {
+          const b = globalThis.keel.boat();
+          if (b.state.sailorMode === 0 && (b.out.hullFlying > 0 || b.out.bowsBurying > 0)) {
+            flying++;
+            if (
+              document.querySelector('[data-readout=sailor]') !== null ||
+              document.querySelector('.control.dimmed') !== null
+            ) {
+              shown++;
+            }
+          }
+          if (performance.now() < end) {
+            requestAnimationFrame(look);
+          } else {
+            resolve({ flying, shown });
+          }
+        };
+        requestAnimationFrame(look);
+      }),
+  );
 }
 
 /** The boat's angle off the mean wind, degrees, positive with the wind over starboard. */
@@ -143,6 +181,57 @@ test('a boat chosen and its look set from the player’s own panel, then sailed'
   });
   expect(res.status()).toBe(409);
   expect(((await res.json()) as { error: string }).error).toBe('port');
+});
+
+test('a boat in its grace: the start screen says so and offers Change boat; the beach cat chosen, the boat taken out first, and sailed from the start', async ({
+  context,
+  page,
+}) => {
+  test.skip(cat === undefined, 'the catalog has no boat of two hulls');
+  const made = await sailor(context, 'Grace');
+  await everyBoat(context.request, made.name);
+  await page.goto(GAME);
+  await setSail(page);
+  await page.waitForFunction(() => globalThis.keel?.net().status === 'sailing', null, {
+    timeout: 60_000,
+  });
+  const start = (await page.evaluate(() => globalThis.keel.boat())).state;
+  const first = (await page.evaluate(() => globalThis.keel.net())).boat;
+  // The page closed: the boat sails on in its grace.
+  await page.close();
+  const again = await context.newPage();
+  await again.goto(GAME);
+  const yours = again.locator('.your-sailor');
+  await expect(yours).toContainText('Your boat is still in the water, where you left it.', {
+    timeout: 90_000,
+  });
+  await expect(again.getByRole('button', { name: 'Start again at Port Royal' })).toBeVisible();
+  await again.getByRole('button', { name: 'Change boat', exact: true }).click();
+  await again
+    .locator('.change-boat-choice', { hasText: cat?.name ?? '' })
+    .first()
+    .click();
+  const q = again.getByRole('alertdialog', { name: 'Take your boat out of the water?' });
+  await expect(q).toContainText('It ends that voyage.');
+  await q.getByRole('button', { name: 'Take it out' }).click();
+  const readout = again.locator('.your-sailor [data-readout=boat]');
+  await expect(readout).toContainText(cat?.name ?? '');
+  await expect(yours).not.toContainText('still in the water');
+  expect((await fleet(again)).boats.find((b) => b.yours)?.kind).toBe(cat?.id);
+  await setSail(again);
+  await again.waitForFunction(() => globalThis.keel?.net().status === 'sailing', null, {
+    timeout: 60_000,
+  });
+  expect((await again.evaluate(() => globalThis.keel.net())).boat).not.toBe(first);
+  await expect.poll(async () => (await fleet(again)).boats.find((b) => b.yours)?.atSea).toBe(true);
+  // A new boat, at the start: on the new boats' rows south of the centre,
+  // where the first was, 20 m apart and 64 to a row.
+  const s = (await again.evaluate(() => globalThis.keel.boat())).state;
+  for (const b of [start, s]) {
+    expect(Math.abs(b.x)).toBeLessThan(700);
+    expect(b.y).toBeLessThan(0);
+    expect(b.y).toBeGreaterThan(-400);
+  }
 });
 
 test('the tall ship chosen from the fleet and sailed, her yards braced', async ({
@@ -301,6 +390,8 @@ test('the beach cat chosen from the fleet: she flies a hull on a reach, capsizes
     await page.waitForFunction(() => globalThis.keel.boat().out.hullFlying > 0, null, {
       timeout: 40_000,
     });
+    // No line says so, and the controls stay as they are.
+    expect((await whileFlying(page)).shown).toBe(0);
     // Luffed hard in a gust, the sheet hauled in and held: over onto her side.
     await wind(30);
     await sheet('KeyW', 2.2);
@@ -444,7 +535,7 @@ test('the yacht chosen from the fleet: she beats in a breeze, tacks, reaches pas
   }
 });
 
-test('the catamaran chosen from the fleet: she beats in a breeze, tacks through about a hundred degrees, reaches past 7.6 knots, flies a hull in a squall with her sheet held, and reefs', {
+test('the catamaran chosen from the fleet: she beats in a breeze, tacks through about a hundred degrees, reaches past 7.6 knots, flies a hull in a squall with her sheet held, no line saying so, and reefs', {
   tag: '@world',
 }, async ({ context, page, request }) => {
   test.skip(catamaran === undefined, 'the catalog has no cruising catamaran');
@@ -515,7 +606,8 @@ test('the catamaran chosen from the fleet: she beats in a breeze, tacks through 
       timeout: 90_000,
     });
     // Held there in a squall, the sheet hauled in and held, the helm
-    // fixed: her windward hull lifts, and the case says so.
+    // fixed: her windward hull lifts, as she shows; no line says so, and
+    // the controls stay as they are.
     await page.keyboard.press('p');
     await expect.poll(() => page.evaluate(() => globalThis.keel.boat().pilot.mode)).toBe(0);
     await wind(42);
@@ -523,9 +615,9 @@ test('the catamaran chosen from the fleet: she beats in a breeze, tacks through 
     await page.waitForFunction(() => globalThis.keel.boat().out.hullFlying > 0, null, {
       timeout: 60_000,
     });
-    await expect(page.locator('[data-readout=sailor]')).toHaveText('Hull flying', {
-      timeout: 10_000,
-    });
+    const seen = await whileFlying(page);
+    expect(seen.flying).toBeGreaterThan(0);
+    expect(seen.shown).toBe(0);
     // Let fly, and one reef, as the Reef key says it.
     await wind(14);
     await sheet('KeyS', 2.2);

@@ -22,6 +22,13 @@
 // at the mouth: the Welcome says the boat is new and where the harbour is,
 // and its first snapshot where the boat lies. A boat rejoined, one back
 // from the edge and a watch open behind the boat.
+//
+// While the page is hidden the worker keeps only the newest snapshot. Shown
+// again after more than SNAP_AFTER, or welcomed on a connection made again,
+// the page snaps: it starts again from the newest snapshot, the boat
+// drawn where it is now and the world at its true pace, rather than play
+// through what it missed; the page covers it (onSnap). Hidden for less, the
+// render ticks' slew covers it.
 
 import { computed, signal } from '@preact/signals';
 import { catalog } from '../catalog';
@@ -45,6 +52,7 @@ import {
 } from '../predict/predictor';
 import { ChatLog } from '../ui/chatlog';
 import type { WorldEnd } from '../ui/countdown';
+import { LIFTED_SOON } from '../ui/homewords';
 import { queueLines } from '../ui/queue';
 import { ShipmateThreads } from '../ui/shipmatelog';
 import { BOAT_IN_THE_WATER, endedText, type WatchEndWhy } from '../ui/watchwords';
@@ -154,6 +162,8 @@ const FRAME_EVERY = 2_000_000;
 const NOTICE_FOR = 6_000_000;
 /** A new boat within this of the harbour's mouth, m, opens on the view past it at the mouth. */
 export const OPENING_RANGE = 1500;
+/** A page hidden longer than this, µs, snaps to the newest snapshot when it is shown again. */
+export const SNAP_AFTER = 2_000_000;
 
 export class Online {
   readonly status = signal<Status>('connecting');
@@ -303,6 +313,24 @@ export class Online {
   readonly arrived = signal(0);
   /** How many times the own boat has been returned to port. */
   readonly returned = signal(0);
+  /** Told of each snap, as it begins: the page covers it until the boat is drawn where it is now. */
+  onSnap: (() => void) | null = null;
+  /** How many snaps have been seen through: counted at the first snapshot taken after each. */
+  readonly snapped = signal(0);
+  /** The most records waiting for a frame at once since the page was last hidden (the tests). */
+  mostQueued = 0;
+  /** How many lifts home have arrived: counted at the first snapshot of each, the boat at the start from it. */
+  readonly lifted = signal(0);
+  /** How many lifts home asked for came to nothing: too soon, or no boat of the connection's own. */
+  readonly unlifted = signal(0);
+  /** Told of a lift home of the boat aboard, which its skipper asked for: the page covers its screen. */
+  onLift: (() => void) | null = null;
+  /** The tick of a lift home whose first snapshot has not been taken yet; 0 for none. */
+  #liftTick = 0;
+  /** The tick of the newest snapshot taken. */
+  #takenTick = 0;
+  /** Whether the page asked for the lift home now coming. */
+  #homing = false;
 
   readonly #port: Port;
   readonly #predictor: Predictor;
@@ -331,6 +359,12 @@ export class Online {
   #ready: () => void = () => {};
   /** A Welcome came, and its boat's first snapshot has not. */
   #arriving = false;
+  /** A snap began, and the first snapshot after it has not been taken. */
+  #snapping = false;
+  /** When the page was hidden, µs; NaN while it is shown. */
+  #hiddenAt = Number.NaN;
+  /** A Welcome has come: a later first Welcome is a connection made again. */
+  #welcomed = false;
   readonly #frames = new Float64Array(120);
   #frameN = 0;
   #frameSent = 0;
@@ -362,6 +396,51 @@ export class Online {
   /** The network is back, or the page shown again: stop waiting. */
   wake(): void {
     this.#port.postMessage({ type: 'wake' });
+  }
+
+  /**
+   * The page hidden, or shown again, at now (µs): the worker holds the
+   * newest snapshot while it is hidden, and shown after SNAP_AFTER, the page
+   * snaps to it. Whether it snapped.
+   */
+  shown(visible: boolean, now = nowUs()): boolean {
+    if (!visible) {
+      if (Number.isNaN(this.#hiddenAt)) {
+        this.#hiddenAt = now;
+        this.mostQueued = this.#queued.length;
+      }
+      this.#port.postMessage({ type: 'hidden', on: true });
+      return false;
+    }
+    const away = now - this.#hiddenAt;
+    this.#hiddenAt = Number.NaN;
+    const snap = away > SNAP_AFTER;
+    if (snap) {
+      this.#snap();
+    }
+    this.#port.postMessage({ type: 'hidden', on: false, settle: snap });
+    return snap;
+  }
+
+  /**
+   * Starts again from the next snapshot: none waiting for a frame, the boat
+   * drawn or predicted from it, the other boats, their render ticks and the
+   * lateness from it, no wakes; the page told, to cover it.
+   */
+  #snap(): void {
+    for (const data of this.#queued) {
+      this.#port.postMessage({ type: 'return', data }, [data]);
+    }
+    this.#queued.length = 0;
+    if (this.watched) {
+      this.#watcher.reset();
+    } else {
+      this.#predictor.started = false;
+    }
+    this.fleet.snap();
+    this.#predictor.wakes.reset();
+    this.#snapping = true;
+    this.onSnap?.();
   }
 
   /**
@@ -450,6 +529,57 @@ export class Online {
   /** Retires the boat from the race it sails in. */
   raceRetire(): void {
     this.#port.postMessage({ type: 'raceRetire' });
+  }
+
+  /** Lifts the own boat home to the start off Port Royal: lifted counts it in, or unlifted counts it refused. */
+  home(): void {
+    this.#homing = true;
+    this.#port.postMessage({ type: 'home' });
+  }
+
+  /**
+   * A lift home answered: refused, said so if too soon; lifted, from its
+   * tick's first snapshot on (at once if that has been taken already), and
+   * a page aboard that did not ask told to cover its screen.
+   */
+  #liftAnswered(tick: number, soon: boolean): void {
+    const asked = this.#homing;
+    this.#homing = false;
+    if (tick === 0) {
+      if (soon) {
+        this.say(LIFTED_SOON);
+      }
+      this.unlifted.value++;
+      return;
+    }
+    if (!asked) {
+      this.onLift?.();
+    }
+    this.#liftTick = tick;
+    if (this.#takenTick >= tick) {
+      this.#landedHome(this.#takenTick);
+    }
+  }
+
+  /**
+   * A snapshot of tick taken; the first of a lift home starts the boat's
+   * drawing afresh there, as a Welcome does, nothing of where it was
+   * carried over, and counts the lift in.
+   */
+  #landedHome(tick: number): void {
+    this.#takenTick = tick;
+    if (this.#liftTick === 0 || tick < this.#liftTick) {
+      return;
+    }
+    this.#liftTick = 0;
+    if (this.watched) {
+      this.#watcher.reset();
+    } else {
+      this.#predictor.started = false;
+    }
+    this.fleet.clear();
+    this.#predictor.wakes.reset();
+    this.lifted.value++;
   }
 
   /** The skipper's: closes the boat to knocks for this voyage, or opens it. */
@@ -632,6 +762,9 @@ export class Online {
       case 'shipmateCourse':
         this.onShipmateCourse?.(m.name);
         break;
+      case 'lifted':
+        this.#liftAnswered(m.tick, m.soon);
+        break;
       case 'chatState':
         this.chatState.value = m.state;
         break;
@@ -737,7 +870,9 @@ export class Online {
       case 'tools':
         this.tools.value = m.on;
         break;
-      case 'welcome':
+      case 'welcome': {
+        const again = m.first && this.#welcomed;
+        this.#welcomed = true;
         // A new boat in the water at the start, not one back from the edge.
         this.#opening =
           m.watching === null && m.aboard === null && !m.rejoined && (this.#away || !this.#hadBoat)
@@ -842,10 +977,19 @@ export class Online {
         this.fleet.clear();
         this.prizes.value = { prizes: 0, number: 0 };
         this.#predictor.wakes.reset();
+        if (again) {
+          // A connection made again: the own boat predicted afresh from its
+          // first snapshot, drawn where it is now, under the page's cover.
+          this.#predictor.started = false;
+          this.#snapping = true;
+          this.onSnap?.();
+        }
         break;
+      }
       case 'snapshot':
         if (this.watched ? this.#watcher.started : this.#predictor.started) {
           this.#queued.push(m.data);
+          this.mostQueued = Math.max(this.mostQueued, this.#queued.length);
         } else {
           // The first: it starts the prediction, and the sea can be shown.
           this.#take(m.data, nowUs());
@@ -978,6 +1122,7 @@ export class Online {
   /** Reads a snapshot's record: its own boat reconciled, its other boats to the fleet; then hands it back. */
   #take(data: ArrayBuffer, now: number): void {
     if (readSnapshot(new DataView(data), this.#scratch) === null) {
+      this.#landedHome(this.#scratch.tick);
       const f = fleetOf(data);
       // The other boats' samples first: the steps the reconciliation
       // replays sail in their shadow, and the watched boat's step.
@@ -992,6 +1137,10 @@ export class Online {
       }
       this.snapshotBytes = f[FLEET_META.bytes] ?? 0;
       this.fleet.add(f, worldUs(this.clock, f[FLEET_META.received] ?? now));
+      if (this.#snapping) {
+        this.#snapping = false;
+        this.snapped.value++;
+      }
     }
     this.#port.postMessage({ type: 'return', data }, [data]);
   }
@@ -1026,6 +1175,29 @@ export class Online {
       east: (o[lo * 4 + 1] ?? 0) + ((o[hi * 4 + 1] ?? 0) - (o[lo * 4 + 1] ?? 0)) * f,
       north: (o[lo * 4 + 2] ?? 0) + ((o[hi * 4 + 2] ?? 0) - (o[lo * 4 + 2] ?? 0)) * f,
       heading: h0 + turn * f,
+    };
+  }
+
+  /** The boat in view's newest snapshot, as the server had it: its tick, east and north; null before one (the tests). */
+  newest(): { tick: number; east: number; north: number } | null {
+    if (this.watched) {
+      const s = this.#watcher.newestState();
+      return s === null
+        ? null
+        : {
+            tick: this.#watcher.newest,
+            east: s[RECORDS.state.x] ?? 0,
+            north: s[RECORDS.state.y] ?? 0,
+          };
+    }
+    if (!this.#haveLatest) {
+      return null;
+    }
+    const s = this.#latest.state;
+    return {
+      tick: this.#latest.tick,
+      east: s[RECORDS.state.x] ?? 0,
+      north: s[RECORDS.state.y] ?? 0,
     };
   }
 
@@ -1094,14 +1266,22 @@ export class Online {
     const world = worldUs(c, now);
     const due = aheadTicks(world, c.rtt, this.ahead.m);
     const target = Math.ceil(due);
-    if (target - p.tick > BEHIND && this.#haveLatest && this.#latest.tick > p.tick) {
+    const h = this.#helmsman;
+    if (target - p.tick > BEHIND) {
+      if (!this.#haveLatest || this.#latest.tick <= p.tick) {
+        // Far behind with nothing newer from the server (a connection lost
+        // before its Welcome): the boat held where it was last, rather
+        // than sailed on alone at many times real time.
+        h.clock.steps = p.tick - 1;
+        h.clock.alpha = 1 - EPSILON;
+        return;
+      }
       p.reset(this.#latest);
     }
     // A step for a tick an input sent now would not reach with a tick to
     // spare, as when catching up after a slow frame, keeps the controls the
     // server holds; so do all until the clock knows the round trip.
     const reach = c.rough ? Number.POSITIVE_INFINITY : Math.ceil(aheadTicks(world, c.rtt, 0)) + 1;
-    const h = this.#helmsman;
     for (let n = Math.min(MAX_STEPS, target - p.tick); n > 0; n--) {
       if (p.tick + 1 < reach) {
         p.stepIndices(this.#sent[0] ?? 512, this.#sent[1] ?? 512, this.#sentPilot, this.#sentReef);

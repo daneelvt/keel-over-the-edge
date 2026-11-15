@@ -546,6 +546,9 @@ func (c *conn) handle(data []byte) bool {
 		if t := b.Command.GetCourseTo(); t != nil {
 			c.courseToCommand(t.GetSailor())
 		}
+		if b.Command.GetHome() != nil {
+			c.homeCommand(time.Now())
+		}
 	}
 	return true
 }

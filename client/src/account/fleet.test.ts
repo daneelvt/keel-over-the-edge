@@ -7,6 +7,7 @@ import { sandboxFleet } from '../boot/harbourboats';
 import { catalog } from '../catalog';
 import { BOAT_NAME_LEAST, BOAT_NAME_MOST } from '../catalog/boatlooks';
 import { BoatKeys, boatsHere, type HarbourView } from '../ui/board';
+import { KEEP_IT, TAKE_OUT_DETAIL, TAKE_OUT_QUESTION } from '../ui/watchwords';
 import { BoatChooser } from './boatchooser';
 import {
   BOAT_NOTE,
@@ -36,6 +37,7 @@ import { voyage } from './letwatch';
 import { machineBoat } from './machines';
 import type { Fetch, Me } from './me';
 import { REASONS } from './reasons';
+import { TakeOut } from './takeout';
 import { YourSailor } from './yoursailor';
 
 /** Expands function components, so a test can see the elements they make. */
@@ -521,15 +523,64 @@ describe('the player’s panel and the board', () => {
     expect(all.indexOf(YOUR_BOAT)).toBeGreaterThanOrEqual(0);
     expect(all.indexOf(YOUR_BOAT)).toBeLessThan(all.indexOf('Set sail as Anne Bonny'));
     expect(all.indexOf(CHANGE_BOAT)).toBeLessThan(all.indexOf('Set sail as Anne Bonny'));
-    // At sea the boat is shown, not changed.
+    // Still in the water, the boat may be changed too: saving asks first.
     const atSea = draw(true);
     expect(text(atSea)).toContain('Saltpeter');
-    expect(named(atSea, YOUR_BOAT)).toBeUndefined();
+    expect(named(atSea, CHANGE_BOAT)).toBeDefined();
     c.openLook();
     expect(findAll(draw(false), (n) => n.props.id === 'boat-look-title')).toHaveLength(1);
     expect(named(draw(false), 'Set sail as Anne Bonny')).toBeUndefined();
     c.openBoats();
     expect(findAll(draw(false), (n) => n.props.id === 'change-boat-title')).toHaveLength(1);
+  });
+
+  test('with the boat still in the water, another boat chosen asks first: Keep it changes nothing, Take it out takes it out and then changes', async () => {
+    const s = server(
+      () => answer(200, fleet()),
+      () => answer(200, { out: true }),
+      () => answer(200, { ...fleet(), boat: 'j2' }),
+    );
+    const c = new BoatChooser(catalog, s.f);
+    await c.load();
+    const out = new TakeOut(true, s.f);
+    const me = {
+      name: 'Anne Bonny',
+      look: '',
+      version: '',
+      colour: '',
+      kind: '',
+      atSea: true,
+    } as Me;
+    const draw = () =>
+      expand(
+        YourSailor({ me, voyage: voyage(me, s.f), sail: () => {}, watch: null, boats: c, out }),
+      );
+    c.openBoats();
+    const choose = (v: ComponentChildren, id: string) =>
+      (
+        findAll(v, (n) => n.props.class === 'change-boat-choice').find((r) =>
+          text(r).includes(id === 'j2' ? '40' : 'Saltpeter'),
+        )?.props.onClick as (() => void) | undefined
+      )?.();
+    // The player's own boat again: nothing to ask.
+    choose(draw(), 'k');
+    expect(out.asking.value).toBeNull();
+    c.openBoats();
+    choose(draw(), 'j2');
+    const asked = draw();
+    expect(text(asked)).toContain(TAKE_OUT_QUESTION);
+    expect(text(asked)).toContain(TAKE_OUT_DETAIL);
+    tap(asked, KEEP_IT);
+    expect(out.asking.value).toBeNull();
+    expect(s.sent.map((x) => x.path)).toEqual(['/api/fleet']);
+    expect(findAll(draw(), (n) => n.props.id === 'change-boat-title')).toHaveLength(1);
+    choose(draw(), 'j2');
+    expect(await out.take()).toBe(true);
+    await Promise.resolve();
+    await new Promise((r) => setTimeout(r, 0));
+    expect(s.sent.map((x) => x.path)).toEqual(['/api/fleet', '/api/me/ashore', '/api/boat']);
+    expect(out.atSea.value).toBe(false);
+    expect(c.fleet.value?.boat).toBe('j2');
   });
 
   test('ashore every boat is listed, one taken shown by whom and not chosen', async () => {

@@ -40,6 +40,7 @@ const (
 	LogAboard   = "aboard"   // its sailor went aboard another's boat
 	LogAshore   = "ashore"   // one aboard went ashore, or was put ashore
 	LogLanded   = "landed"   // the boat one was aboard left the water
+	LogLifted   = "lifted"   // its sailor lifted it home to the start
 )
 
 // Whose fault a bump in the log was.

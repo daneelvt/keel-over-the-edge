@@ -17,6 +17,14 @@
 // tick of the first sample that flags it (the edge's fallPose), until it
 // leaves the view.
 //
+// A page shown again after a while hidden starts again from the newest
+// snapshot (snap): every boat drawn where it is now, at its pace, with
+// nothing eased from where it was, no speed from the jump, and the render
+// ticks set at once. The lateness of the window before the page was hidden
+// stands for the window after it, as though it had come just before: the
+// network did not change while the page was away, so the delays stay as
+// they were and the render tick runs at real time from the first frame.
+//
 // Times are world ticks, as floats: 30 a second. Nothing here allocates
 // once made.
 
@@ -458,6 +466,12 @@ class Band {
     this.delay = base;
   }
 
+  /** Forgets the render tick and the delay: a new connection's data. */
+  reset(): void {
+    this.tick = Number.NaN;
+    this.delay = this.base;
+  }
+
   /** Moves the render tick dt ticks on, toward data − delay, never back. */
   advance(data: number, spread: number, dt: number): void {
     this.delay = this.base + Math.min(Math.max(spread, 0), (DELAY_CAP - 1) * this.base);
@@ -504,6 +518,8 @@ export class Fleet {
   readonly #sorted = new Float64Array(1024);
   #lateN = 0;
   #lateNext = 0;
+  /** A snap: the next snapshot's lateness comes just after the window's newest. */
+  #restamp = false;
   /** The least and the spread of the lateness, µs. */
   #least = 0;
   #spread = 0;
@@ -646,7 +662,7 @@ export class Fleet {
     }
   }
 
-  /** Forgets every boat, fading them out: a new connection. */
+  /** Forgets every boat, fading them out, and the render ticks and the lateness: a new connection. */
   clear(): void {
     this.#names.fill('');
     this.#crews.fill(null);
@@ -656,6 +672,40 @@ export class Fleet {
         this.#fadeOut(b);
       }
     }
+    this.near.reset();
+    this.far.reset();
+    this.#forgetLateness();
+  }
+
+  /**
+   * Starts again from the next snapshot, as after a while hidden: each
+   * boat keeps its slot, but none of its samples, nothing eased and no
+   * speed from the jump; none fades out where it was; the render ticks are
+   * set from the next data at once; the lateness's window is moved up to
+   * it, as though it had come just before.
+   */
+  snap(): void {
+    for (const b of this.#boats) {
+      b.count = 0;
+      b.next = 0;
+      b.ease = 0;
+      b.motion = MOTION.interpolated;
+      // Drawn at none, its first frame back measures no speed (update).
+      b.drawn.opacity = 0;
+      b.drawn.speed = 0;
+    }
+    this.#ghostCount = 0;
+    this.near.tick = Number.NaN;
+    this.far.tick = Number.NaN;
+    this.#restamp = this.#lateN > 0;
+  }
+
+  #forgetLateness(): void {
+    this.#lateN = 0;
+    this.#lateNext = 0;
+    this.#least = 0;
+    this.#spread = 0;
+    this.#restamp = false;
   }
 
   /**
@@ -782,6 +832,14 @@ export class Fleet {
   /** Notes a snapshot's lateness, µs, at a world tick; keeps the least and the spread up to date. */
   #lateness(late: number, at: number): void {
     const cap = this.#late.length;
+    if (this.#restamp) {
+      this.#restamp = false;
+      const newest = this.#lateAt[(this.#lateNext - 1 + cap) % cap] ?? at;
+      const by = at - 1 - newest;
+      for (let i = 0; i < this.#lateN; i++) {
+        this.#lateAt[i] = (this.#lateAt[i] ?? 0) + by;
+      }
+    }
     this.#late[this.#lateNext] = late;
     this.#lateAt[this.#lateNext] = at;
     this.#lateNext = (this.#lateNext + 1) % cap;

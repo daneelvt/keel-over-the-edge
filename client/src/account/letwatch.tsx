@@ -30,6 +30,8 @@ export interface Voyage {
   sail(go: () => void): Promise<void>;
   /** Set sail was tapped: the voyage is under way. */
   going: ReadonlySignal<boolean>;
+  /** The boat that was in the water was taken out: the box is for the next voyage now. */
+  ashore(): void;
 }
 
 /** POST /api/me/spectators: whether the server took it. */
@@ -38,7 +40,7 @@ const allow = async (f: Fetch, on: boolean) =>
 
 /** The box for me's next voyage, or for the one under way when its boat is in the water. */
 export function voyage(me: Me, f: Fetch = fetch): Voyage {
-  const atSea = me.atSea === true;
+  let atSea = me.atSea === true;
   const on = signal(atSea && me.spectators === 'voyage');
   const going = signal(false);
   let busy = false;
@@ -46,6 +48,10 @@ export function voyage(me: Me, f: Fetch = fetch): Voyage {
   return {
     on,
     going,
+    ashore() {
+      atSea = false;
+      on.value = false;
+    },
     set(v) {
       on.value = v;
       if (atSea) {

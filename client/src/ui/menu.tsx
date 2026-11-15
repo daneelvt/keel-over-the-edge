@@ -12,7 +12,8 @@
 // that asks others to sail with the player (while their own boat is in
 // the water), who may watch the player's own boat and their link to watch
 // them, shared with a picture of the view; Make a race, and the player's
-// races ahead, each a tap from its card. It stands over everything at
+// races ahead, each a tap from its card; Back to Port Royal, while the
+// player sails their own boat, which asks first. It stands over everything at
 // sea, within the screen held either way, its head and its close at the
 // top while the rest scrolls; a tap beside it closes it.
 
@@ -24,6 +25,8 @@ import { type ConnectionView, RoundTrip } from './connection';
 import type { Countdown } from './countdown';
 import { canShareLink, type DeckView, machineShared } from './decklazy';
 import { SAIL_WITH_ME, WHO_IS_ABOARD } from './deckwords';
+import type { HomeView } from './home';
+import { BACK_TO_PORT_ROYAL } from './homewords';
 import { sailWithMeFor } from './machinewords';
 import type { Notices } from './notices';
 import { PlayerText } from './player';
@@ -218,6 +221,7 @@ export function Menu({
   deck = null,
   fullScreen = null,
   races = null,
+  home = null,
 }: {
   settings: SettingsSignal;
   sailor: string | null;
@@ -243,6 +247,8 @@ export function Menu({
   fullScreen?: FullScreen | null;
   /** Races ashore; null in the offline sandbox. */
   races?: RacesView | null;
+  /** The way home; null in the offline sandbox. */
+  home?: HomeView | null;
 }) {
   const s = settings.value.value;
   return (
@@ -357,6 +363,19 @@ export function Menu({
                   {STOP_WATCHING}
                 </button>
               ) : null}
+            </div>
+          ) : null}
+          {home !== null && home.offered() ? (
+            <div class="menu-chart">
+              <button
+                type="button"
+                onClick={() => {
+                  home.asking.value = true;
+                  close();
+                }}
+              >
+                {BACK_TO_PORT_ROYAL}
+              </button>
             </div>
           ) : null}
           {races !== null ? <MenuRaces races={races} close={close} /> : null}

@@ -286,12 +286,13 @@ describe('the instruments', () => {
       model.frame(now, now / 1000, pose, out, w, 0, 0, 0, 0);
       expect(model.sailor.value).toBe(line);
     }
-    // A boat of two hulls flying her windward hull, then her bows burying,
-    // while her sailor sails; in the water, the sailor's line.
+    // A boat of two hulls flying her windward hull, or her bows burying,
+    // while her sailor sails: no line, as she shows it; in the water, the
+    // sailor's line; aground, Aground.
     for (const [flying, burying, mode, line] of [
-      [1, 0, 0, 'Hull flying'],
-      [1, 1, 0, 'Bows burying'],
-      [0, 1, 0, 'Bows burying'],
+      [1, 0, 0, ''],
+      [1, 1, 0, ''],
+      [0, 1, 0, ''],
       [1, 0, 1, 'In the water'],
       [0, 0, 0, ''],
     ] as const) {

@@ -13,6 +13,7 @@
 
 import { signal } from '@preact/signals';
 import type { WatchEnd } from '../net/online';
+import { AGROUND } from './model';
 
 export class ClearView {
   /** Whether the screen is cleared. */
@@ -53,6 +54,11 @@ export interface Needed {
   knocks?: number;
   /** The controls are offered to the player. */
   handed?: boolean;
+}
+
+/** Whether the sailor is out of the boat, or the boat over: the sailor's line says so, but for aground. */
+export function overboard(line: string): boolean {
+  return line !== '' && line !== AGROUND;
 }
 
 /** Whether, from was to now, something came that needs the player. */

@@ -275,6 +275,10 @@ func sailLive(t *testing.T, sailors, capacity, limit int, d time.Duration, stall
 					players.TrySend(bus.Command{Op: bus.RaceRetire, Account: boats[0].account})
 					w.Bus().Commands.Server().TrySend(bus.Command{Op: bus.RaceWritten, Race: &bus.RaceCall{ID: [16]byte{byte(n - 1)}}})
 				}
+				if len(boats) > 1 && n%11 == 8 {
+					// A skipper lifted home.
+					players.TrySend(bus.Command{Op: bus.Lift, Boat: boats[1].boat})
+				}
 				switch r := rng.IntN(18); {
 				case r < 5:
 					rep, ok := join(account(n))

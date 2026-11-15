@@ -112,8 +112,16 @@ message Command {
     RaceRetire race_retire = 18;
     Cheer cheer = 19;
     CourseTo course_to = 20;
+    Home home = 21;
   }
 }
+
+// Home lifts the boat the connection sails, its own, home to the start
+// off Port Royal: out of the race it sails in, if any, its voyage ended,
+// lifted, and a new one begun at the start, at rest, its course cleared,
+// those aboard still aboard. At most once a minute for an account. Lifted
+// answers it, to the connection and to everyone aboard.
+message Home {}
 
 // RaceRetire retires the connection's boat from the race it sails in, at
 // its skipper's word. The race's next messages say so (RaceCall retired).
@@ -384,7 +392,18 @@ message ServerMessage {
     ShipmateAt shipmate_at = 43;
     CourseEnded course_ended = 44;
     ShipmateCourse shipmate_course = 45;
+    Lifted lifted = 46;
   }
+}
+
+// Lifted answers Home: the boat was lifted home at tick, the first
+// snapshot of its new voyage that tick's or a later one's; told to its
+// skipper's connection and to everyone aboard. Or, with tick 0, it was
+// not: soon, the account's boat was lifted within the last minute; or
+// the connection sails no boat of its own in the water.
+message Lifted {
+  int64 tick = 1;
+  bool soon = 2;
 }
 
 // RaceTold tells a race under way: to its boats and those watching them,
