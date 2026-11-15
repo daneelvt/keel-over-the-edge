@@ -13,6 +13,7 @@ import (
 
 	"github.com/daneelvt/keel-over-the-edge/internal/bus"
 	"github.com/daneelvt/keel-over-the-edge/internal/catalog"
+	"github.com/daneelvt/keel-over-the-edge/internal/certs"
 	"github.com/daneelvt/keel-over-the-edge/internal/race/committee"
 	"github.com/daneelvt/keel-over-the-edge/internal/store"
 )
@@ -43,7 +44,14 @@ type ClerkConfig struct {
 	Fleet func(ctx context.Context, id store.AccountID, kind int) (uint32, string)
 	// Rules are the news's, for the races' stories.
 	Rules store.NewsRules
-	Log   *slog.Logger
+	// Examiner, if not nil, judges the certificates of those who sailed a
+	// trial's run alone, as its end is written; what it told goes into the
+	// world once written (bus.Certify).
+	Examiner store.Examiner
+	// MaySail, if not nil, reports whether a sailor may sail a kind of
+	// boat (its index in the catalog): one who may not is not placed.
+	MaySail func(ctx context.Context, id store.AccountID, kind int) (bool, error)
+	Log     *slog.Logger
 }
 
 // Clerk is the races' clerk of a world.
@@ -153,6 +161,12 @@ func (c *Clerk) hand(ctx context.Context) error {
 			continue
 		}
 		for _, e := range entrants {
+			if ok, err := c.maySail(ctx, e.Account, int(call.Kind)); err != nil {
+				return err
+			} else if !ok {
+				// Entered before the kind closed to them: not placed.
+				continue
+			}
 			look, name := c.boatOf(ctx, e.Account, int(call.Kind), e.BoatName)
 			call.Entrants = append(call.Entrants, bus.RaceEntrant{Account: bus.Account(e.Account), Number: int16(e.Number),
 				Machine: e.Machine, Crew: e.WithCrew, BoatLook: look, BoatName: name})
@@ -180,6 +194,17 @@ func (c *Clerk) hand(ctx context.Context) error {
 		}
 		call, ok := c.callOf(&r, int32(p.Run))
 		if !ok {
+			continue
+		}
+		if may, err := c.maySail(ctx, p.Account, int(call.Kind)); err != nil {
+			return err
+		} else if !may {
+			// The kind closed to them since they asked: the run is not
+			// sailed, and they are no longer asking for one.
+			st := &store.RaceStart{World: w.ID, Race: p.Race, Run: p.Run, Trial: true, At: now, Missed: []store.AccountID{p.Account}}
+			if err := c.s.cfg.Store.StartRace(ctx, c.cfg.Lease, st); err != nil {
+				return err
+			}
 			continue
 		}
 		look, name := c.boatOf(ctx, p.Account, int(call.Kind), "")
@@ -214,6 +239,15 @@ func (c *Clerk) callOf(r *store.Race, run int32) (*bus.RaceCall, bool) {
 		call.Start = c.cfg.TickAt(r.StartsAt)
 	}
 	return call, true
+}
+
+// maySail reports whether a sailor may sail a kind of boat: always,
+// without the config's question.
+func (c *Clerk) maySail(ctx context.Context, id store.AccountID, kind int) (bool, error) {
+	if c.cfg.MaySail == nil {
+		return true, nil
+	}
+	return c.cfg.MaySail(ctx, id, kind)
 }
 
 // boatOf is a skipper's boat of a kind from their fleet, or by name.
@@ -332,8 +366,14 @@ func (c *Clerk) end(ctx context.Context, r *run) error {
 	if err != nil {
 		return err
 	}
+	e.Examiner = c.cfg.Examiner
 	if err := c.s.cfg.Store.EndRace(ctx, c.cfg.Lease, c.cfg.Rules, e); err != nil {
 		return err
+	}
+	for i := range e.Certified {
+		if err := c.send.TrySend(certs.Command(&e.Certified[i])); err != nil {
+			c.cfg.Log.Warn("telling a sailor of a certificate", "err", err)
+		}
 	}
 	// Everyone the race wrote a record for shows its prizes afresh.
 	for i := range e.Records {
@@ -388,12 +428,14 @@ func (c *Clerk) endOf(ctx context.Context, row *store.Race, r *run) (*store.Race
 		rec := record(res.Account, store.RoleSkipper)
 		rec.BoatName, rec.Place, rec.How, rec.Medal, rec.Awards = r.names[i], res.Place, res.How, res.Medal, res.Awards
 		rec.Number, rec.Elapsed, rec.Added = int(rc.Number), max(res.Elapsed, 0), res.Added
+		rec.Piloted, rec.Alone, rec.Course = rc.Piloted, !rc.Company && len(r.crews[i]) == 0, recordCourse(row)
 		e.Records = append(e.Records, rec)
 		skipper := people[res.Account]
 		for _, a := range r.crews[i] {
 			cr := rec
 			cr.Account, cr.Role = a.Account, store.RoleCrew
 			cr.Skipper, cr.SkipperName, cr.SkipperMachine = res.Account, skipper.Name, rc.Machine
+			cr.Alone = false
 			e.Records = append(e.Records, cr)
 		}
 		if res.Place == 1 && rc.State == bus.RacerFinished {
@@ -415,6 +457,22 @@ func (c *Clerk) endOf(ctx context.Context, row *store.Race, r *run) (*store.Race
 		e.Stories = append(e.Stories, c.raceStory(row, course, winner, winnerCrew, winnerName, fleet, r.race.Course, at))
 	}
 	return e, nil
+}
+
+// recordCourse is race row's course as its records keep it: a buoy
+// course's shape and length, or an island course.
+func recordCourse(row *store.Race) string {
+	switch {
+	case row.CourseKind == CourseIsland:
+		return store.CourseIsland
+	case row.Shape == ShapeTriangle && row.Long:
+		return store.CourseLongTriangle
+	case row.Shape == ShapeTriangle:
+		return store.CourseTriangle
+	case row.Long:
+		return store.CourseLong
+	}
+	return store.CourseShort
 }
 
 // laidOf is race r as its committee laid it, for its replay: nil before

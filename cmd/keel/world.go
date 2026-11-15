@@ -19,6 +19,7 @@ import (
 	"github.com/daneelvt/keel-over-the-edge/internal/auth"
 	"github.com/daneelvt/keel-over-the-edge/internal/bus"
 	"github.com/daneelvt/keel-over-the-edge/internal/catalog"
+	"github.com/daneelvt/keel-over-the-edge/internal/certs"
 	"github.com/daneelvt/keel-over-the-edge/internal/chat"
 	"github.com/daneelvt/keel-over-the-edge/internal/config"
 	"github.com/daneelvt/keel-over-the-edge/internal/edge"
@@ -78,8 +79,10 @@ type process struct {
 	passkeys *auth.Passkeys
 	looks    *looks.Book
 	// fleet is the accounts' fleets: the boat each sailor takes to sea,
-	// swaps and changes the look of.
+	// swaps and changes the look of; ladder the certificates, which open
+	// kinds of boat to sailors.
 	fleet   *fleet.Fleet
+	ladder  *certs.Ladder
 	page    *api.Page
 	ownPage *api.Page
 	flight  *obs.Flight
@@ -407,7 +410,7 @@ func (p *process) openWorld(ctx context.Context, rw *readyWorld) (*worldHalf, er
 		Build: p.build, Catalog: catalog.Version, Layout: physics.LayoutVersion,
 		Hold: b.Commands.Server(), Log: p.log, Metrics: p.metrics,
 		Chart: rw.charts.model, Written: rw.charts.model.Add, News: newsRules(cat, cfg.Schedule.Zone), Boats: boatIDs(cat),
-		Logbook: bookOf(rw, cat),
+		Logbook: bookOf(rw, cat), Examiner: certs.Judge{L: p.ladder},
 	})
 	h.news = p.newsOf(row)
 	h.clerk = p.clerkOf(h)

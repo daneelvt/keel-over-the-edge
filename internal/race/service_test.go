@@ -495,7 +495,10 @@ func TestNamesOnTheCard(t *testing.T) {
 
 // TestHarbourJob: the harbour races of the hours ahead made once, each
 // named for its hour or the Greenhorn Cup, the week's newcomers' hours
-// set once; the board lists the next three.
+// set once, and the Harbourmaster's standing trials once, on three buoy
+// courses for each kind that races them and each island course open for
+// each kind it is offered to; the board lists the next three harbour
+// races and the trials in the sailor's boat.
 func TestHarbourJob(t *testing.T) {
 	s := newSea(t)
 	lease := s.lease
@@ -503,8 +506,18 @@ func TestHarbourJob(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if made != 3 {
-		t.Errorf("%d harbour races made for nine hours of every three", made)
+	courses := s.svc.cfg.Courses()
+	trials := 0
+	for i := range s.svc.cfg.Catalog.Boats {
+		if s.svc.inAreas(&s.svc.cfg.Catalog.Boats[i], &courses) {
+			trials += 3
+		}
+	}
+	for _, ic := range courses.Island {
+		trials += len(ic.Boats)
+	}
+	if made != 3+trials {
+		t.Errorf("%d made for nine hours of every three and %d standing trials", made, trials)
 	}
 	again, _, err := s.svc.Harbour(s.ctx, lease, s.now.Add(time.Hour))
 	if err != nil {
@@ -537,5 +550,16 @@ func TestHarbourJob(t *testing.T) {
 	}
 	if len(b.Make.Courses) != 5 || !b.Make.Can.OK {
 		t.Errorf("make: %d courses, %+v", len(b.Make.Courses), b.Make.Can)
+	}
+	var names []string
+	for _, tr := range b.Trials {
+		if tr.Kind != KindTrial || tr.Harbour || !tr.Enter.OK || tr.Phase != PhaseOpen || tr.Boat.ID != s.svc.sailorBoat() {
+			t.Errorf("a standing trial on the board: %+v", tr)
+		}
+		names = append(names, tr.Name)
+	}
+	if len(names) < 3 || names[0] != "the Harbourmaster's Short Course" || names[1] != "the Harbourmaster's Triangle" ||
+		names[2] != "the Harbourmaster's Long Course" {
+		t.Errorf("the standing trials on the board: %q", names)
 	}
 }

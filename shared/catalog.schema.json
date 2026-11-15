@@ -30,9 +30,79 @@
     "notices": { "$ref": "#/$defs/Notices" },
     "polars": { "$ref": "#/$defs/Polars" },
     "news": { "$ref": "#/$defs/News" },
-    "life": { "$ref": "#/$defs/Life" }
+    "life": { "$ref": "#/$defs/Life" },
+    "certificates": {
+      "description": "The certificates, in the order they are earned: each opens boats to the sailor who holds it or a later one.",
+      "type": "array",
+      "maxItems": 16,
+      "items": { "$ref": "#/$defs/Certificate" }
+    }
   },
   "$defs": {
+    "Certificate": {
+      "title": "Certificate",
+      "description": "A certificate: its name, its pendant, the boats it opens, and its tasks, of which it needs some. Every task counts only what the sailor sails alone, since the certificate before it was earned.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "name", "pendant", "opens", "needs", "tasks"],
+      "properties": {
+        "id": { "$ref": "#/$defs/Id" },
+        "name": { "description": "Its name: \"You're a Deckhand!\"", "type": "string", "minLength": 1, "maxLength": 40 },
+        "pendant": { "description": "The pendant worn by those who hold it, in words.", "type": "string", "minLength": 1, "maxLength": 60 },
+        "opens": {
+          "description": "The boats it opens, by their ids: each boat is opened by one certificate at most, and one opened by none is open to every sailor.",
+          "type": "array",
+          "items": { "$ref": "#/$defs/Id" }
+        },
+        "needs": { "description": "How many of its tasks earn it.", "type": "integer", "minimum": 1, "maximum": 20 },
+        "tasks": { "type": "array", "minItems": 1, "maxItems": 20, "items": { "$ref": "#/$defs/CertificateTask" } }
+      }
+    },
+    "CertificateTask": {
+      "title": "CertificateTask",
+      "description": "A task toward a certificate: a course, sailed as a time trial (courses, with what sailing it by hand asks and what the autopilot's longer way asks), or a measure of the sailor's log reaching a mark (measure and at).",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "name"],
+      "properties": {
+        "id": { "$ref": "#/$defs/Id" },
+        "name": { "description": "Its words, as the log and the tools list it.", "type": "string", "minLength": 1, "maxLength": 80 },
+        "courses": {
+          "description": "A course task's courses: a buoy course by its shape and length, or any island course.",
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 5,
+          "items": { "$ref": "#/$defs/CertificateCourse" }
+        },
+        "hand": { "$ref": "#/$defs/CertificateWay" },
+        "venture": { "$ref": "#/$defs/CertificateWay" },
+        "measure": {
+          "description": "A log task's measure: the distance sailed alone (NM), places seen, places charted first, kinds of the sea's life met, nights at sea, gales ridden out, storms ridden out or landfalls in fog, the closest approach to the lip survived (m, at most at), worlds sailed in, falls over the edge, and every weather met (a gale, a storm, fog and a night).",
+          "type": "string",
+          "enum": ["distance", "places-seen", "places-charted", "life-kinds", "nights", "gales", "storms-or-fogs", "lip", "worlds", "falls", "every-weather"]
+        },
+        "at": { "description": "The mark a log task's measure reaches: at least this, or for the lip at most this.", "type": "number", "exclusiveMinimum": 0, "maximum": 100000 }
+      }
+    },
+    "CertificateCourse": {
+      "title": "CertificateCourse",
+      "description": "A course a task is sailed on: the short windward-leeward, the long one, the short triangle, the long one, or an island course.",
+      "type": "string",
+      "enum": ["short", "long", "triangle", "long-triangle", "island"]
+    },
+    "CertificateWay": {
+      "title": "CertificateWay",
+      "description": "What a course task asks of runs sailed one way: the least medal (finish for any finish), how many runs, whether each on a different course of the world, and whether one on each of its courses.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["medal"],
+      "properties": {
+        "medal": { "type": "string", "enum": ["finish", "bronze", "silver", "gold"] },
+        "runs": { "type": "integer", "minimum": 1, "maximum": 20 },
+        "apart": { "type": "boolean" },
+        "each": { "type": "boolean" }
+      }
+    },
     "Weather": {
       "title": "Weather",
       "description": "The weather's numbers.",

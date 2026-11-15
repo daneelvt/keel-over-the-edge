@@ -166,6 +166,13 @@ export type LifeBody =
   | "booby"
   | "booby-asleep";
 /**
+ * A course a task is sailed on: the short windward-leeward, the long one, the short triangle, the long one, or an island course.
+ *
+ * This interface was referenced by `Catalog`'s JSON-Schema
+ * via the `definition` "CertificateCourse".
+ */
+export type CertificateCourse = "short" | "long" | "triangle" | "long-triangle" | "island";
+/**
  * A point on a boat, in m in its model's frame: x to starboard, y up, z aft.
  *
  * @minItems 3
@@ -235,6 +242,137 @@ export interface Catalog {
   polars?: Polars;
   news: News;
   life: Life;
+  /**
+   * The certificates, in the order they are earned: each opens boats to the sailor who holds it or a later one.
+   *
+   * @maxItems 16
+   */
+  certificates?:
+    | []
+    | [Certificate]
+    | [Certificate, Certificate]
+    | [Certificate, Certificate, Certificate]
+    | [Certificate, Certificate, Certificate, Certificate]
+    | [Certificate, Certificate, Certificate, Certificate, Certificate]
+    | [Certificate, Certificate, Certificate, Certificate, Certificate, Certificate]
+    | [Certificate, Certificate, Certificate, Certificate, Certificate, Certificate, Certificate]
+    | [Certificate, Certificate, Certificate, Certificate, Certificate, Certificate, Certificate, Certificate]
+    | [
+        Certificate,
+        Certificate,
+        Certificate,
+        Certificate,
+        Certificate,
+        Certificate,
+        Certificate,
+        Certificate,
+        Certificate
+      ]
+    | [
+        Certificate,
+        Certificate,
+        Certificate,
+        Certificate,
+        Certificate,
+        Certificate,
+        Certificate,
+        Certificate,
+        Certificate,
+        Certificate
+      ]
+    | [
+        Certificate,
+        Certificate,
+        Certificate,
+        Certificate,
+        Certificate,
+        Certificate,
+        Certificate,
+        Certificate,
+        Certificate,
+        Certificate,
+        Certificate
+      ]
+    | [
+        Certificate,
+        Certificate,
+        Certificate,
+        Certificate,
+        Certificate,
+        Certificate,
+        Certificate,
+        Certificate,
+        Certificate,
+        Certificate,
+        Certificate,
+        Certificate
+      ]
+    | [
+        Certificate,
+        Certificate,
+        Certificate,
+        Certificate,
+        Certificate,
+        Certificate,
+        Certificate,
+        Certificate,
+        Certificate,
+        Certificate,
+        Certificate,
+        Certificate,
+        Certificate
+      ]
+    | [
+        Certificate,
+        Certificate,
+        Certificate,
+        Certificate,
+        Certificate,
+        Certificate,
+        Certificate,
+        Certificate,
+        Certificate,
+        Certificate,
+        Certificate,
+        Certificate,
+        Certificate,
+        Certificate
+      ]
+    | [
+        Certificate,
+        Certificate,
+        Certificate,
+        Certificate,
+        Certificate,
+        Certificate,
+        Certificate,
+        Certificate,
+        Certificate,
+        Certificate,
+        Certificate,
+        Certificate,
+        Certificate,
+        Certificate,
+        Certificate
+      ]
+    | [
+        Certificate,
+        Certificate,
+        Certificate,
+        Certificate,
+        Certificate,
+        Certificate,
+        Certificate,
+        Certificate,
+        Certificate,
+        Certificate,
+        Certificate,
+        Certificate,
+        Certificate,
+        Certificate,
+        Certificate,
+        Certificate
+      ];
 }
 /**
  * This interface was referenced by `Catalog`'s JSON-Schema
@@ -9628,6 +9766,317 @@ export interface LifeGlow {
   colour: Colour3;
   moon: number;
 }
+/**
+ * A certificate: its name, its pendant, the boats it opens, and its tasks, of which it needs some. Every task counts only what the sailor sails alone, since the certificate before it was earned.
+ *
+ * This interface was referenced by `Catalog`'s JSON-Schema
+ * via the `definition` "Certificate".
+ */
+export interface Certificate {
+  id: Id;
+  /**
+   * Its name: "You're a Deckhand!"
+   */
+  name: string;
+  /**
+   * The pendant worn by those who hold it, in words.
+   */
+  pendant: string;
+  /**
+   * The boats it opens, by their ids: each boat is opened by one certificate at most, and one opened by none is open to every sailor.
+   */
+  opens: Id[];
+  /**
+   * How many of its tasks earn it.
+   */
+  needs: number;
+  /**
+   * @minItems 1
+   * @maxItems 20
+   */
+  tasks:
+    | [CertificateTask]
+    | [CertificateTask, CertificateTask]
+    | [CertificateTask, CertificateTask, CertificateTask]
+    | [CertificateTask, CertificateTask, CertificateTask, CertificateTask]
+    | [CertificateTask, CertificateTask, CertificateTask, CertificateTask, CertificateTask]
+    | [CertificateTask, CertificateTask, CertificateTask, CertificateTask, CertificateTask, CertificateTask]
+    | [
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask
+      ]
+    | [
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask
+      ]
+    | [
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask
+      ]
+    | [
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask
+      ]
+    | [
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask
+      ]
+    | [
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask
+      ]
+    | [
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask
+      ]
+    | [
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask
+      ]
+    | [
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask
+      ]
+    | [
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask
+      ]
+    | [
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask
+      ]
+    | [
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask
+      ]
+    | [
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask
+      ]
+    | [
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask,
+        CertificateTask
+      ];
+}
+/**
+ * A task toward a certificate: a course, sailed as a time trial (courses, with what sailing it by hand asks and what the autopilot's longer way asks), or a measure of the sailor's log reaching a mark (measure and at).
+ *
+ * This interface was referenced by `Catalog`'s JSON-Schema
+ * via the `definition` "CertificateTask".
+ */
+export interface CertificateTask {
+  id: Id;
+  /**
+   * Its words, as the log and the tools list it.
+   */
+  name: string;
+  /**
+   * A course task's courses: a buoy course by its shape and length, or any island course.
+   *
+   * @minItems 1
+   * @maxItems 5
+   */
+  courses?:
+    | [CertificateCourse]
+    | [CertificateCourse, CertificateCourse]
+    | [CertificateCourse, CertificateCourse, CertificateCourse]
+    | [CertificateCourse, CertificateCourse, CertificateCourse, CertificateCourse]
+    | [CertificateCourse, CertificateCourse, CertificateCourse, CertificateCourse, CertificateCourse];
+  hand?: CertificateWay;
+  venture?: CertificateWay;
+  /**
+   * A log task's measure: the distance sailed alone (NM), places seen, places charted first, kinds of the sea's life met, nights at sea, gales ridden out, storms ridden out or landfalls in fog, the closest approach to the lip survived (m, at most at), worlds sailed in, falls over the edge, and every weather met (a gale, a storm, fog and a night).
+   */
+  measure?:
+    | "distance"
+    | "places-seen"
+    | "places-charted"
+    | "life-kinds"
+    | "nights"
+    | "gales"
+    | "storms-or-fogs"
+    | "lip"
+    | "worlds"
+    | "falls"
+    | "every-weather";
+  /**
+   * The mark a log task's measure reaches: at least this, or for the lip at most this.
+   */
+  at?: number;
+}
+/**
+ * What a course task asks of runs sailed one way: the least medal (finish for any finish), how many runs, whether each on a different course of the world, and whether one on each of its courses.
+ *
+ * This interface was referenced by `Catalog`'s JSON-Schema
+ * via the `definition` "CertificateWay".
+ */
+export interface CertificateWay {
+  medal: "finish" | "bronze" | "silver" | "gold";
+  runs?: number;
+  apart?: boolean;
+  each?: boolean;
+}
 
 /** The catalog version (tools/catalog). */
-export const CATALOG_VERSION = 'f101d9dd4536388c';
+export const CATALOG_VERSION = '777aa2f5dab7fa9a';

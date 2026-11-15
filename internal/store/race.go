@@ -228,6 +228,37 @@ func (s *Store) MakeHarbourRaces(ctx context.Context, lease int64, races []NewRa
 	return made, err
 }
 
+// MakeStandingTrials makes the world's standing trials given that are not
+// made yet, one for each course and boat, owner none, fenced by the
+// lease's epoch: how many it made.
+func (s *Store) MakeStandingTrials(ctx context.Context, lease int64, trials []NewRace) (int, error) {
+	made := 0
+	err := s.fenced(ctx, lease, func(q *db.Queries) error {
+		made = 0
+		for _, r := range trials {
+			n, err := q.InsertStandingTrial(ctx, db.InsertStandingTrialParams{WorldID: pgtype.UUID{Bytes: r.World, Valid: true},
+				CourseKind: r.CourseKind, Course: int32(r.Course), Shape: textOf(r.Shape), Long: r.Long, Boat: r.Boat, Name: r.Name,
+				StartsAt: r.StartsAt, MadeAt: r.MadeAt})
+			if err != nil {
+				return err
+			}
+			made += int(n)
+		}
+		return nil
+	})
+	return made, err
+}
+
+// StandingTrials are a world's standing trials open for a kind of boat,
+// by the catalog's id: its buoy courses, then its island courses.
+func (s *Store) StandingTrials(ctx context.Context, world [16]byte, number int, boat string) ([]Race, error) {
+	ids, err := s.q.StandingTrialIDs(ctx, db.StandingTrialIDsParams{WorldID: pgtype.UUID{Bytes: world, Valid: true}, Boat: boat})
+	if err != nil {
+		return nil, err
+	}
+	return s.racesOf(ctx, world, number, ids)
+}
+
 // RaceByCode is the race of a code, in the newest world with one, or
 // ErrNotFound.
 func (s *Store) RaceByCode(ctx context.Context, code string) (Race, error) {

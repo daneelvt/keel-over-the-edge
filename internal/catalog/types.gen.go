@@ -471,6 +471,10 @@ type Catalog struct {
 	// Boat types.
 	Boats []Boat `json:"boats"`
 
+	// The certificates, in the order they are earned: each opens boats to the sailor
+	// who holds it or a later one.
+	Certificates []Certificate `json:"certificates,omitempty,omitzero"`
+
 	// Encounters corresponds to the JSON schema field "encounters".
 	Encounters Encounters `json:"encounters"`
 
@@ -504,6 +508,87 @@ type Catalog struct {
 
 	// World corresponds to the JSON schema field "world".
 	World World `json:"world"`
+}
+
+// A certificate: its name, its pendant, the boats it opens, and its tasks, of
+// which it needs some. Every task counts only what the sailor sails alone, since
+// the certificate before it was earned.
+type Certificate struct {
+	// ID corresponds to the JSON schema field "id".
+	ID ID `json:"id"`
+
+	// Its name: "You're a Deckhand!"
+	Name string `json:"name"`
+
+	// How many of its tasks earn it.
+	Needs int `json:"needs"`
+
+	// The boats it opens, by their ids: each boat is opened by one certificate at
+	// most, and one opened by none is open to every sailor.
+	Opens []ID `json:"opens"`
+
+	// The pendant worn by those who hold it, in words.
+	Pendant string `json:"pendant"`
+
+	// Tasks corresponds to the JSON schema field "tasks".
+	Tasks []CertificateTask `json:"tasks"`
+}
+
+type CertificateCourse string
+
+const CertificateCourseIsland CertificateCourse = "island"
+const CertificateCourseLong CertificateCourse = "long"
+const CertificateCourseLongTriangle CertificateCourse = "long-triangle"
+const CertificateCourseShort CertificateCourse = "short"
+const CertificateCourseTriangle CertificateCourse = "triangle"
+
+// A task toward a certificate: a course, sailed as a time trial (courses, with
+// what sailing it by hand asks and what the autopilot's longer way asks), or a
+// measure of the sailor's log reaching a mark (measure and at).
+type CertificateTask struct {
+	// The mark a log task's measure reaches: at least this, or for the lip at most
+	// this.
+	At *float64 `json:"at,omitempty,omitzero"`
+
+	// A course task's courses: a buoy course by its shape and length, or any island
+	// course.
+	Courses []CertificateCourse `json:"courses,omitempty,omitzero"`
+
+	// Hand corresponds to the JSON schema field "hand".
+	Hand *CertificateWay `json:"hand,omitempty,omitzero"`
+
+	// ID corresponds to the JSON schema field "id".
+	ID ID `json:"id"`
+
+	// A log task's measure: the distance sailed alone (NM), places seen, places
+	// charted first, kinds of the sea's life met, nights at sea, gales ridden out,
+	// storms ridden out or landfalls in fog, the closest approach to the lip survived
+	// (m, at most at), worlds sailed in, falls over the edge, and every weather met
+	// (a gale, a storm, fog and a night).
+	Measure *Measure `json:"measure,omitempty,omitzero"`
+
+	// Its words, as the log and the tools list it.
+	Name string `json:"name"`
+
+	// Venture corresponds to the JSON schema field "venture".
+	Venture *CertificateWay `json:"venture,omitempty,omitzero"`
+}
+
+// What a course task asks of runs sailed one way: the least medal (finish for any
+// finish), how many runs, whether each on a different course of the world, and
+// whether one on each of its courses.
+type CertificateWay struct {
+	// Apart corresponds to the JSON schema field "apart".
+	Apart *bool `json:"apart,omitempty,omitzero"`
+
+	// Each corresponds to the JSON schema field "each".
+	Each *bool `json:"each,omitempty,omitzero"`
+
+	// Medal corresponds to the JSON schema field "medal".
+	Medal Medal `json:"medal"`
+
+	// Runs corresponds to the JSON schema field "runs".
+	Runs *int `json:"runs,omitempty,omitzero"`
 }
 
 // The chart key's line for each of what the chart draws that is not a kind of
@@ -2073,6 +2158,27 @@ type Machine struct {
 	// The machine's versions, and their art.
 	Versions []SailorVersion `json:"versions"`
 }
+
+type Measure string
+
+const MeasureDistance Measure = "distance"
+const MeasureEveryWeather Measure = "every-weather"
+const MeasureFalls Measure = "falls"
+const MeasureGales Measure = "gales"
+const MeasureLifeKinds Measure = "life-kinds"
+const MeasureLip Measure = "lip"
+const MeasureNights Measure = "nights"
+const MeasurePlacesCharted Measure = "places-charted"
+const MeasurePlacesSeen Measure = "places-seen"
+const MeasureStormsOrFogs Measure = "storms-or-fogs"
+const MeasureWorlds Measure = "worlds"
+
+type Medal string
+
+const MedalBronze Medal = "bronze"
+const MedalFinish Medal = "finish"
+const MedalGold Medal = "gold"
+const MedalSilver Medal = "silver"
 
 // A feature a name may need, by its word, and what shows it: 0 or false for a test
 // it does not have; a feature with none is never shown.
@@ -6018,4 +6124,4 @@ type WorldZones struct {
 }
 
 // Version is the catalog version (tools/catalog).
-const Version = "f101d9dd4536388c"
+const Version = "777aa2f5dab7fa9a"

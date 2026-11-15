@@ -3,6 +3,7 @@
 package race
 
 import (
+	"context"
 	"errors"
 	"math"
 	"testing"
@@ -10,6 +11,7 @@ import (
 
 	"github.com/daneelvt/keel-over-the-edge/internal/bus"
 	"github.com/daneelvt/keel-over-the-edge/internal/catalog"
+	"github.com/daneelvt/keel-over-the-edge/internal/certs"
 	"github.com/daneelvt/keel-over-the-edge/internal/physics"
 	"github.com/daneelvt/keel-over-the-edge/internal/race/committee"
 	"github.com/daneelvt/keel-over-the-edge/internal/sim"
@@ -349,6 +351,7 @@ func (c *course) restart() {
 func TestATrialsRun(t *testing.T) {
 	s := newSea(t)
 	c := newCourse(s)
+	c.clerk.cfg.Examiner = certs.Judge{L: certs.New(s.cat)}
 	sl := s.human()
 	card, err := s.svc.Make(s.ctx, s.human(), Making{Kind: KindTrial, Course: "buoy:windward-leeward:short", Boat: s.jolly(), Who: WhoEveryone})
 	if err != nil {
@@ -392,12 +395,31 @@ func TestATrialsRun(t *testing.T) {
 		}
 		_ = dev.TrySend(bus.Command{Op: bus.Place, Boat: c.w.Latest().Boat[slot], State: st})
 	}
+	var told []bus.Certified
+	listen := func() {
+		for _, e := range c.w.Latest().Events {
+			if e.Op == bus.Certify && e.Account == bus.Account(sl.ID) {
+				told = append(told, e.Certified)
+			}
+		}
+	}
 	for range 10000 {
-		c.tick(30, sail)
+		c.tick(30, func() { listen(); sail() })
 		c.once()
 		if len(c.w.Latest().Races) == 0 {
 			break
 		}
+	}
+	c.tick(2, listen)
+	listen()
+	// Sailed alone by hand on the short windward–leeward: the first task
+	// of the first certificate, told through the world.
+	if len(told) != 1 || told[0].Certificate != 0 || told[0].Task != 0 || told[0].Way != bus.CertHand || told[0].Done != 1 {
+		t.Errorf("the run told %+v", told)
+	}
+	recs, err := s.db.RaceRecordsByCode(s.ctx, card.Code)
+	if err != nil || len(recs) != 1 || !recs[0].Alone || recs[0].Piloted || recs[0].Course != store.CourseShort {
+		t.Errorf("the run's record %+v %v", recs, err)
 	}
 	res, err := s.db.RaceResults(s.ctx, s.world.ID, card2ID(t, s, card.Code))
 	if err != nil || len(res) != 1 {
@@ -421,6 +443,17 @@ func TestATrialsRun(t *testing.T) {
 	}
 	if runs, err = s.db.PendingRuns(s.ctx, s.world.ID); err != nil || len(runs) != 1 || runs[0].Run != 2 {
 		t.Errorf("runs asked for: %+v %v", runs, err)
+	}
+	// The kind closes to them before the clerk hands the run: it is not
+	// sailed, and they no longer ask for one.
+	c.clerk.cfg.MaySail = func(context.Context, store.AccountID, int) (bool, error) { return false, nil }
+	c.once()
+	c.tick(1, nil)
+	if f := c.w.Latest(); len(f.Races) != 0 {
+		t.Errorf("a run handed in a closed kind: %+v", f.Races)
+	}
+	if runs, err = s.db.PendingRuns(s.ctx, s.world.ID); err != nil || len(runs) != 0 {
+		t.Errorf("runs asked for in a closed kind: %+v %v", runs, err)
 	}
 }
 

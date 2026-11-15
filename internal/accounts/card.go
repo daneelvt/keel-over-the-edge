@@ -27,10 +27,14 @@ type Card struct {
 	LastActiveAt int64      `json:"lastActiveAt"`
 	Tools        bool       `json:"tools"`
 	Priority     bool       `json:"priority"`
-	Stopped      *Stopped   `json:"stopped"`
-	Sea          *SeaCard   `json:"sea"`
-	Queue        *QueueCard `json:"queue"`
-	Own          bool       `json:"own"`
+	// EveryBoat: the owner opened every kind of boat to it; Certificate
+	// is the certificate it holds and its next one's count, in a line.
+	EveryBoat   bool       `json:"everyBoat"`
+	Certificate string     `json:"certificate"`
+	Stopped     *Stopped   `json:"stopped"`
+	Sea         *SeaCard   `json:"sea"`
+	Queue       *QueueCard `json:"queue"`
+	Own         bool       `json:"own"`
 	// Watching is the sailor whose boat the account watches, if it does.
 	Watching string `json:"watching,omitempty"`
 
@@ -164,6 +168,11 @@ func (a *Accounts) Card(ctx context.Context, id store.AccountID) (Card, error) {
 	if out.Actions, err = a.Actions(ctx, &id); err != nil {
 		return Card{}, err
 	}
+	if a.cfg.Certificates != nil {
+		if out.Certificate, err = a.cfg.Certificates(ctx, id); err != nil {
+			return Card{}, err
+		}
+	}
 	return out, nil
 }
 
@@ -174,7 +183,7 @@ func (a *Accounts) base(c *store.Card) Card {
 	out := Card{
 		ID: c.ID.String(), Kind: c.Kind, Name: c.Name, Made: ms(c.Created),
 		LastActive: LastActive(c.LastSeen, c.Created, machine, now), LastActiveAt: ms(c.LastSeen),
-		Tools: c.Tools, Priority: c.Priority, Own: c.Tools || c.OwnerTools,
+		Tools: c.Tools, Priority: c.Priority, Own: c.Tools || c.OwnerTools, EveryBoat: c.EveryBoat,
 	}
 	if b := a.cfg.Book; b != nil {
 		out.Look = b.Resolve(c.ID, c.Look)

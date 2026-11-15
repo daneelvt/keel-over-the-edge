@@ -157,6 +157,9 @@ func step(f, cur *bus.Frame, i int) {
 		if rc.State != bus.RacerPlaced && rc.State != bus.RacerRacing {
 			continue
 		}
+		if rc.State == bus.RacerRacing {
+			sailedWith(f, rc, s)
+		}
 		if second {
 			progress(f, r, rc, st.X, st.Y)
 			if rc.State != bus.RacerPlaced && rc.State != bus.RacerRacing {
@@ -169,6 +172,18 @@ func step(f, cur *bus.Frame, i int) {
 	}
 	if ends(f, r, lo, hi) {
 		end(f, i)
+	}
+}
+
+// sailedWith marks what racer rc's boat, in slot s, sails its run with
+// this tick: its autopilot on, or someone else aboard. A run sailed with
+// neither is one sailed alone by hand, the run a certificate counts so.
+func sailedWith(f *bus.Frame, rc *bus.Racer, s int32) {
+	if f.Pilot[s].Mode() != bus.PilotOff {
+		rc.Piloted = true
+	}
+	if lo, hi := f.CrewOf(s); hi > lo {
+		rc.Company = true
 	}
 }
 

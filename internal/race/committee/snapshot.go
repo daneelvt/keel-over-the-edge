@@ -36,7 +36,8 @@ import (
 //
 // A boat is its race's key as a uvarint, its skipper's 16 bytes, its
 // number as a varint, a uvarint of flags (1: a machine sailor's, 2: with
-// its crew, 4: over early), its slot as a varint, its boat as a uvarint,
+// its crew, 4: over early, 8: its autopilot on in a tick of its run, 16:
+// someone else aboard in a tick of its run), its slot as a varint, its boat as a uvarint,
 // its state as a uvarint, its next check and its crossings of it as
 // varints, the ticks it crossed the start line and came home and the
 // ticks added as varints, its way to go and the least of it as floats,
@@ -59,6 +60,8 @@ const (
 	racerMachine = 1
 	racerCrew    = 2
 	racerOver    = 4
+	racerPiloted = 8
+	racerCompany = 16
 )
 
 // The most a snapshot's races hold.
@@ -165,6 +168,12 @@ func appendRacer(dst []byte, rc *bus.Racer) []byte {
 	}
 	if rc.Over {
 		flags |= racerOver
+	}
+	if rc.Piloted {
+		flags |= racerPiloted
+	}
+	if rc.Company {
+		flags |= racerCompany
 	}
 	dst = binary.AppendUvarint(dst, flags)
 	dst = binary.AppendVarint(dst, int64(rc.Slot))
@@ -305,6 +314,7 @@ func (r *reader) racer(rc *bus.Racer) {
 	rc.Number = int16(r.varint())
 	flags := r.uvarint()
 	rc.Machine, rc.Crew, rc.Over = flags&racerMachine != 0, flags&racerCrew != 0, flags&racerOver != 0
+	rc.Piloted, rc.Company = flags&racerPiloted != 0, flags&racerCompany != 0
 	rc.Slot = int32(r.varint())
 	rc.Boat = r.uvarint()
 	rc.State = uint8(r.limited(math.MaxUint8))
@@ -325,7 +335,7 @@ func (r *reader) racer(rc *bus.Racer) {
 	for _, v := range [...]*int32{&rc.SX, &rc.SY, &rc.SH, &rc.SV} {
 		*v = int32(r.varint())
 	}
-	if r.err == nil && flags&^(racerMachine|racerCrew|racerOver) != 0 {
+	if r.err == nil && flags&^(racerMachine|racerCrew|racerOver|racerPiloted|racerCompany) != 0 {
 		r.err = fmt.Errorf("committee: snapshot: a boat with flags %d", flags)
 	}
 }

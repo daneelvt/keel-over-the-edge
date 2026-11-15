@@ -245,10 +245,10 @@ ON CONFLICT DO NOTHING;
 -- A race in a sailor's lasting record, once for its source, while the
 -- account is kept.
 INSERT INTO race_record (account_id, source, world, at, code, race_name, kind, course_name, boat, boat_name, fleet, harbour,
-  newcomers, role, place, how, medal, awards, skipper_id, skipper_name, skipper_machine, number, elapsed, added)
+  newcomers, role, place, how, medal, awards, skipper_id, skipper_name, skipper_machine, number, elapsed, added, piloted, alone, course)
 SELECT @account_id, @source, @world, @at, @code, @race_name, @kind, @course_name, @boat, sqlc.narg(boat_name), @fleet, @harbour,
   @newcomers, @role, sqlc.narg(place), sqlc.narg(how), sqlc.narg(medal), @awards, sqlc.narg(skipper_id), sqlc.narg(skipper_name),
-  @skipper_machine, sqlc.narg(number), sqlc.narg(elapsed), @added
+  @skipper_machine, sqlc.narg(number), sqlc.narg(elapsed), @added, @piloted, @alone, sqlc.narg(course)
 WHERE EXISTS (SELECT 1 FROM account WHERE id = @account_id)
 ON CONFLICT (account_id, source) DO NOTHING;
 
@@ -284,7 +284,7 @@ ORDER BY r.run, r.place NULLS LAST, r.account_id;
 SELECT source, world, at, code, race_name, kind, course_name, boat, coalesce(boat_name, '')::text AS boat_name, fleet, harbour,
   newcomers, role, coalesce(place, 0)::smallint AS place, coalesce(how, '')::text AS how, coalesce(medal, '')::text AS medal,
   awards, coalesce(skipper_id, '00000000-0000-0000-0000-000000000000')::uuid AS skipper_id,
-  coalesce(skipper_name, '')::text AS skipper_name, skipper_machine, hung
+  coalesce(skipper_name, '')::text AS skipper_name, skipper_machine, hung, piloted, alone, coalesce(course, '')::text AS course
 FROM race_record
 WHERE account_id = @account_id
 ORDER BY at DESC, id DESC
@@ -296,7 +296,7 @@ LIMIT @most;
 SELECT source, world, at, code, race_name, kind, course_name, boat, coalesce(boat_name, '')::text AS boat_name, fleet, harbour,
   newcomers, role, coalesce(place, 0)::smallint AS place, coalesce(how, '')::text AS how, coalesce(medal, '')::text AS medal,
   awards, coalesce(skipper_id, '00000000-0000-0000-0000-000000000000')::uuid AS skipper_id,
-  coalesce(skipper_name, '')::text AS skipper_name, skipper_machine, hung
+  coalesce(skipper_name, '')::text AS skipper_name, skipper_machine, hung, piloted, alone, coalesce(course, '')::text AS course
 FROM race_record
 WHERE account_id = @account_id AND role IN ('skipper', 'crew')
 ORDER BY at DESC, id DESC
@@ -311,7 +311,7 @@ SELECT r.account_id, r.source, r.world, r.at, r.code, r.race_name, r.kind, r.cou
   coalesce(r.how, '')::text AS how, coalesce(r.medal, '')::text AS medal, r.awards,
   coalesce(r.skipper_id, '00000000-0000-0000-0000-000000000000')::uuid AS skipper_id,
   coalesce(r.skipper_name, '')::text AS skipper_name, r.skipper_machine, coalesce(r.number, 0)::smallint AS number,
-  coalesce(r.elapsed, -1)::real AS elapsed, r.added
+  coalesce(r.elapsed, -1)::real AS elapsed, r.added, r.piloted, r.alone, coalesce(r.course, '')::text AS course
 FROM race_record r
 WHERE r.code = @code AND r.role IN ('skipper', 'crew') AND r.source LIKE 'race:%'
   AND r.world = (SELECT max(n.world) FROM race_record n WHERE n.code = @code AND n.role IN ('skipper', 'crew'))
@@ -363,3 +363,17 @@ SELECT account_id,
 FROM race_record
 WHERE account_id = ANY (@ids::uuid[]) AND world = @world
 GROUP BY account_id;
+
+-- name: InsertStandingTrial :execrows
+-- One of the world's standing trials, the Harbourmaster's, made once for
+-- its course and boat.
+INSERT INTO race (world_id, kind, course_kind, course, shape, long, boat, who, name, starts_at, made_at)
+VALUES (@world_id, 'trial', @course_kind, @course, sqlc.narg(shape), @long, @boat, 'everyone', @name, @starts_at, @made_at)
+ON CONFLICT (world_id, course_kind, course, shape, long, boat) WHERE owner_id IS NULL AND kind = 'trial' DO NOTHING;
+
+-- name: StandingTrialIDs :many
+-- A world's standing trials open for a kind of boat, the buoy courses
+-- first.
+SELECT id FROM race
+WHERE world_id = @world_id AND owner_id IS NULL AND kind = 'trial' AND state = 'open' AND boat = @boat
+ORDER BY course_kind, long, shape DESC, course;

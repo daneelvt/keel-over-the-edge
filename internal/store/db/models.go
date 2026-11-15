@@ -36,6 +36,7 @@ type Account struct {
 	WatchCode      string
 	FleetCode      pgtype.Text
 	LogShown       pgtype.Text
+	EveryBoat      bool
 }
 
 type AccountAction struct {
@@ -107,6 +108,22 @@ type Boat struct {
 	Cloth     int16
 	Number    int32
 	Name      pgtype.Text
+}
+
+type BoatKept struct {
+	AccountID pgtype.UUID
+	BoatKind  string
+}
+
+type Certificate struct {
+	ID          pgtype.UUID
+	AccountID   pgtype.UUID
+	Certificate string
+	ByHand      bool
+	EarnedAt    time.Time
+	World       int32
+	Tasks       []byte
+	Source      string
 }
 
 type Charting struct {
@@ -214,6 +231,7 @@ type LogEntry struct {
 	OtherBoat    pgtype.Text
 	Article      pgtype.Text
 	Fault        pgtype.Text
+	Alone        bool
 }
 
 type LogFind struct {
@@ -440,6 +458,9 @@ type RaceRecord struct {
 	Number         pgtype.Int2
 	Elapsed        pgtype.Float4
 	Added          float32
+	Piloted        bool
+	Alone          bool
+	Course         pgtype.Text
 }
 
 type RaceResult struct {

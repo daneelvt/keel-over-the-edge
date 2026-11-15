@@ -9,6 +9,8 @@ import (
 	"slices"
 	"time"
 
+	"github.com/daneelvt/keel-over-the-edge/internal/catalog"
+	"github.com/daneelvt/keel-over-the-edge/internal/certs"
 	"github.com/daneelvt/keel-over-the-edge/internal/logbook"
 	"github.com/daneelvt/keel-over-the-edge/internal/store"
 )
@@ -88,11 +90,13 @@ type Mine struct {
 }
 
 // Can is whether the reader may do something now, and if not, why and
-// until when.
+// until when; for a boat the reader may not sail, the certificate that
+// opens her.
 type Can struct {
 	OK     bool   `json:"ok"`
 	Reason string `json:"reason,omitempty"`
 	Until  int64  `json:"until,omitempty"`
+	Needs  string `json:"needs,omitempty"`
 }
 
 // canOf is what an error refusing something says of it.
@@ -101,7 +105,7 @@ func canOf(err error) Can {
 		return Can{OK: true}
 	}
 	if r, ok := RefusalOf(err); ok {
-		c := Can{Reason: r.Reason}
+		c := Can{Reason: r.Reason, Needs: r.Needs}
 		if !r.Until.IsZero() {
 			c.Until = r.Until.UnixMilli()
 		}
@@ -125,6 +129,9 @@ type Summary struct {
 	Most     int         `json:"most"`
 	Mine     SummaryMine `json:"mine"`
 	Enter    Can         `json:"enter"`
+	// Toward is the certificate a run of this trial sailed alone would
+	// count toward for the reader, by name; "" for none.
+	Toward string `json:"toward,omitempty"`
 }
 
 // SummaryMine is the reader's part in a race on a list.
@@ -134,11 +141,13 @@ type SummaryMine struct {
 }
 
 // Board is a sailor's races: the next harbour races, the week's
-// newcomers' harbour races' starts, their own races not over, and what
-// they may make.
+// newcomers' harbour races' starts, the Harbourmaster's standing trials
+// in the boat they sail, their own races not over, and what they may
+// make.
 type Board struct {
 	Harbour   []Summary   `json:"harbour"`
 	Greenhorn []int64     `json:"greenhorn"`
+	Trials    []Summary   `json:"trials"`
 	Mine      []Summary   `json:"mine"`
 	Make      MakeChoices `json:"make"`
 }
@@ -326,7 +335,7 @@ func (s *Service) Board(ctx context.Context, by Sailor) (Board, error) {
 	}
 	latest := s.latest(limits)
 	w := &s.cfg.World
-	out := Board{Harbour: []Summary{}, Greenhorn: []int64{}, Mine: []Summary{}}
+	out := Board{Harbour: []Summary{}, Greenhorn: []int64{}, Trials: []Summary{}, Mine: []Summary{}}
 	mine, err := s.cfg.Store.EntriesOf(ctx, by.ID, now.Add(-Day-time.Hour))
 	if err != nil {
 		return Board{}, err
@@ -341,6 +350,9 @@ func (s *Service) Board(ctx context.Context, by Sailor) (Board, error) {
 			return Board{}, err
 		}
 		out.Harbour = append(out.Harbour, sm)
+	}
+	if out.Trials, err = s.trials(ctx, by, now, latest, mine); err != nil {
+		return Board{}, err
 	}
 	days, err := s.cfg.Store.HarbourDays(ctx, w.ID)
 	if err != nil {
@@ -362,6 +374,70 @@ func (s *Service) Board(ctx context.Context, by Sailor) (Board, error) {
 	}
 	out.Make, err = s.choices(ctx, by, now, limits, latest)
 	return out, err
+}
+
+// trials are the Harbourmaster's standing trials for the sailor by, in
+// the boat they sail now (or the one each sailor brings), each with the
+// certificate it would count toward: the buoy courses, short then long,
+// and the island courses by number.
+func (s *Service) trials(ctx context.Context, by Sailor, now, latest time.Time, mine []store.EntryStart) ([]Summary, error) {
+	boat := ""
+	if s.cfg.BoatOf != nil {
+		boat = s.cfg.BoatOf(by.ID)
+	}
+	if s.boat(boat) == nil {
+		boat = s.sailorBoat()
+	}
+	w := &s.cfg.World
+	rows, err := s.cfg.Store.StandingTrials(ctx, w.ID, w.Number, boat)
+	if err != nil || len(rows) == 0 {
+		return []Summary{}, err
+	}
+	slices.SortStableFunc(rows, func(a, b store.Race) int { return standingOrder(&a) - standingOrder(&b) })
+	var st certs.Standing
+	if s.cfg.Standing != nil {
+		if st, err = s.cfg.Standing(ctx, by.ID); err != nil {
+			return nil, err
+		}
+	}
+	out := make([]Summary, 0, len(rows))
+	for i := range rows {
+		sm, err := s.summary(ctx, &rows[i], by, now, latest, mine)
+		if err != nil {
+			return nil, err
+		}
+		sm.Toward = st.Toward(recordCourse(&rows[i]))
+		out = append(out, sm)
+	}
+	return out, nil
+}
+
+// standingOrder is a standing trial's place on the board: the short
+// windward–leeward, the short triangle, the long windward–leeward, the
+// long triangle, then the island courses by number.
+func standingOrder(r *store.Race) int {
+	switch recordCourse(r) {
+	case store.CourseShort:
+		return 0
+	case store.CourseTriangle:
+		return 1
+	case store.CourseLong:
+		return 2
+	case store.CourseLongTriangle:
+		return 3
+	}
+	return 4 + r.Course
+}
+
+// sailorBoat is the catalog's id of the boat each sailor brings to the
+// fleet.
+func (s *Service) sailorBoat() string {
+	for i := range s.cfg.Catalog.Boats {
+		if s.cfg.Catalog.Boats[i].Fleet == catalog.FleetSailor {
+			return string(s.cfg.Catalog.Boats[i].ID)
+		}
+	}
+	return ""
 }
 
 // choices are what the sailor by may make a race of now.

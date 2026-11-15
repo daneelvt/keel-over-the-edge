@@ -30,6 +30,9 @@ type fleetBoat struct {
 	Machine bool   `json:"machine"`
 	AtSea   bool   `json:"atSea"`
 	Yours   bool   `json:"yours"`
+	// Needs is the certificate the player needs to take it, by name, ""
+	// for none.
+	Needs string `json:"needs"`
 }
 
 // fleetJSON is GET /api/fleet's answer: the boats, and the one the player
@@ -46,7 +49,7 @@ func (a *api) fleetOf(v fleet.View) fleetJSON {
 		b := &v.Boats[i]
 		out.Boats[i] = fleetBoat{ID: store.AccountID(b.ID).String(), Kind: b.Boat.Kind, Number: b.Number, Name: b.Name,
 			Paint: bl.PaintID(b.Paint), Cloth: bl.ClothID(b.Cloth), Sailor: b.SailorName, Machine: b.Machine && b.Held,
-			AtSea: b.AtSea, Yours: b.Yours}
+			AtSea: b.AtSea, Yours: b.Yours, Needs: b.Needs}
 		if !b.Held {
 			out.Boats[i].Sailor = ""
 		}
@@ -84,6 +87,7 @@ type takeRequest struct {
 //	400 {"error"}             malformed
 //	404 {"error":"boat"}      not a boat of the player's fleet
 //	409 {"error":"taken"}     at sea with another of the fleet's sailors
+//	409 {"error":"certificate"} a kind the player may not sail: the fleet's boat says what it needs
 //	409 {"error":"port"}      the player is at sea out of port
 //	409 {"error":"room"}      no room for that boat where theirs lies
 //	503                       the world or the database could not be asked
@@ -162,6 +166,7 @@ func (a *api) fleetRefused(w http.ResponseWriter, r *http.Request, err error, do
 	}{
 		{fleet.ErrNoBoat, http.StatusNotFound, "boat"},
 		{fleet.ErrTaken, http.StatusConflict, "taken"},
+		{fleet.ErrCertificate, http.StatusConflict, "certificate"},
 		{fleet.ErrPort, http.StatusConflict, "port"},
 		{fleet.ErrRoom, http.StatusConflict, "room"},
 		{fleet.ErrNumber, http.StatusConflict, "number"},

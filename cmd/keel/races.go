@@ -11,6 +11,7 @@ import (
 
 	"github.com/daneelvt/keel-over-the-edge/internal/bus"
 	"github.com/daneelvt/keel-over-the-edge/internal/catalog"
+	"github.com/daneelvt/keel-over-the-edge/internal/certs"
 	"github.com/daneelvt/keel-over-the-edge/internal/edge"
 	"github.com/daneelvt/keel-over-the-edge/internal/jobs"
 	"github.com/daneelvt/keel-over-the-edge/internal/race"
@@ -47,6 +48,20 @@ func (p *process) racesOf(h *worldHalf) *race.Service {
 		cfg.Blocks = func(a, b store.AccountID) bool { return t.Blocks(a, b) }
 	}
 	ids := boatIDs(p.cat)
+	cfg.MaySail = func(ctx context.Context, id store.AccountID, boat string) (string, error) {
+		if p.fleet == nil {
+			return "", nil
+		}
+		for k, b := range ids {
+			if b == boat {
+				return p.fleet.MaySail(ctx, id, k)
+			}
+		}
+		return "", nil
+	}
+	cfg.Standing = func(ctx context.Context, id store.AccountID) (certs.Standing, error) {
+		return p.ladder.Of(ctx, p.db.Exam(), id)
+	}
 	cfg.BoatOf = func(id store.AccountID) string {
 		f := h.bus.Frames.Acquire()
 		defer f.Release()
@@ -148,8 +163,16 @@ func (p *process) clerkOf(h *worldHalf) *race.Clerk {
 			}
 			return p.fleet.Racing(ctx, id, kind)
 		},
-		Rules: *newsRules(p.cat, p.cfg.Schedule.Zone),
-		Log:   p.log,
+		Rules:    *newsRules(p.cat, p.cfg.Schedule.Zone),
+		Examiner: certs.Judge{L: p.ladder},
+		MaySail: func(ctx context.Context, id store.AccountID, kind int) (bool, error) {
+			if p.fleet == nil {
+				return true, nil
+			}
+			needs, err := p.fleet.MaySail(ctx, id, kind)
+			return needs == "", err
+		},
+		Log: p.log,
 	})
 }
 

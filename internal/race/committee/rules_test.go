@@ -396,3 +396,44 @@ func TestSnapshotRoundTrip(t *testing.T) {
 		t.Error("a snapshot cut short read")
 	}
 }
+
+// TestWhatARunWasSailedWith: a trial's run with its autopilot on in one
+// tick is piloted, one with someone aboard in one tick had company, and
+// one with neither was sailed alone by hand.
+func TestWhatARunWasSailedWith(t *testing.T) {
+	for _, tc := range []struct {
+		name             string
+		pilot, crew      bool
+		piloted, company bool
+	}{
+		{name: "alone by hand"},
+		{name: "one tick of the autopilot", pilot: true, piloted: true},
+		{name: "a friend aboard a moment", crew: true, company: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			s := stage(t)
+			w := newWorld(t, 1)
+			c := w.begin(s, &bus.RaceCall{ID: [16]byte{11}, Run: 1, Trial: true, Entrants: entrants(1)})
+			b := &sailor{speed: 3 * c.Length / c.Expected, way: route(c)}
+			n := 0
+			w.until(func(_ int, st *physics.State) {
+				b.move(st)
+				f := w.nxt
+				f.Pilot[0], f.Crew = bus.PilotOffWord(0), f.Crew[:0]
+				if w.racer(1).State == bus.RacerRacing {
+					n++
+					if n == 20 && tc.pilot {
+						f.Pilot[0] = bus.PackPilot(0, bus.PilotWind, bus.WayHold, 0, 0, 0)
+					}
+					if n == 20 && tc.crew {
+						f.Crew = append(f.Crew, bus.Aboard{Slot: 0, Account: bus.Account{9}})
+					}
+				}
+			}, func() bool { return false })
+			rc := w.racer(1)
+			if rc.State != bus.RacerFinished || rc.Piloted != tc.piloted || rc.Company != tc.company {
+				t.Errorf("state %d, piloted %v, company %v; want finished, %v, %v", rc.State, rc.Piloted, rc.Company, tc.piloted, tc.company)
+			}
+		})
+	}
+}

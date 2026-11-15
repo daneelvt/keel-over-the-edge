@@ -86,6 +86,11 @@ type Batch struct {
 	News       *NewsRules
 	Log        LogRows
 	Checkpoint *Checkpoint
+	// Examiner, if not nil, judges the certificates of the sailors whose
+	// log's rows sailed alone; Told is told what it told, once the batch
+	// has committed.
+	Examiner Examiner
+	Told     func([]Certified)
 }
 
 // ErrFenced is a batch refused because the lease's epoch is no longer the
@@ -135,8 +140,10 @@ func (p *Persister) Write(ctx context.Context, b Batch) error {
 	ctx, cancel := context.WithTimeout(ctx, WriteLimit)
 	defer cancel()
 	world := pgtype.UUID{Bytes: b.World, Valid: true}
-	return pgx.BeginFunc(ctx, p.pool, func(tx pgx.Tx) error {
+	var told []Certified
+	err := pgx.BeginFunc(ctx, p.pool, func(tx pgx.Tx) error {
 		q := p.q.WithTx(tx)
+		told = nil
 		epoch, err := q.LeaseEpochForShare(ctx)
 		if err != nil {
 			return err
@@ -190,8 +197,12 @@ func (p *Persister) Write(ctx context.Context, b Batch) error {
 			if b.News != nil {
 				nw = &newsWrite{world: world, rules: b.News}
 			}
-			if err := writeLog(ctx, q, &b.Log, written, nw); err != nil {
+			j := newJudging(b.Examiner, q)
+			if err := writeLog(ctx, q, &b.Log, written, nw, j); err != nil {
 				return err
+			}
+			if j != nil {
+				told = j.told
 			}
 		}
 		if c := b.Checkpoint; c != nil {
@@ -205,6 +216,10 @@ func (p *Persister) Write(ctx context.Context, b Batch) error {
 		}
 		return nil
 	})
+	if err == nil && len(told) > 0 && b.Told != nil {
+		b.Told(told)
+	}
+	return err
 }
 
 // LatestCheckpoint is the world's checkpoint, or ErrNotFound.

@@ -34,6 +34,7 @@ import (
 	"github.com/daneelvt/keel-over-the-edge/internal/auth"
 	"github.com/daneelvt/keel-over-the-edge/internal/bus"
 	"github.com/daneelvt/keel-over-the-edge/internal/catalog"
+	"github.com/daneelvt/keel-over-the-edge/internal/certs"
 	"github.com/daneelvt/keel-over-the-edge/internal/chat"
 	"github.com/daneelvt/keel-over-the-edge/internal/config"
 	"github.com/daneelvt/keel-over-the-edge/internal/edge"
@@ -216,6 +217,10 @@ type database interface {
 	race.Store
 	RaceRecordsOf(ctx context.Context, id store.AccountID, most int) ([]store.RaceRecord, error)
 	owner.RacingSettings
+	// Certificates: what a sailor holds and has sailed toward the next,
+	// and the owner's every boat.
+	Exam() *store.Exam
+	SetEveryBoat(ctx context.Context, id store.AccountID, on bool) error
 	Stats() store.PoolStats
 	Close()
 }
@@ -470,7 +475,8 @@ func runServer(ctx context.Context, getenv func(string) string, stdout io.Writer
 		replayRoutes: replayHandler, devRoutes: weatherHandler, ownerRoutes: ownerHandler, playRoutes: &lateHandler{},
 		fail: make(chan error, 1), making: make(chan struct{}, 1),
 	}
-	p.fleet = fleet.New(fleet.Config{Store: db, Catalog: cat, World: p.worldBus, Log: log})
+	p.ladder = certs.New(cat)
+	p.fleet = fleet.New(fleet.Config{Store: db, Catalog: cat, World: p.worldBus, Ladder: p.ladder, Log: log})
 	// The owner's switches for sailing together, as the database has
 	// them: one set in memory for the routes, the owner's page and the
 	// game connection.
@@ -505,6 +511,13 @@ func runServer(ctx context.Context, getenv func(string) string, stdout io.Writer
 		Store: db, Sessions: p.sessions, Door: p.agents.grants, Agents: p.agents.core, World: p.accountsWorld,
 		Lifetime: p.agents.lifetime.Get, Looks: p.agents.looks, Book: p.looks, Stopped: stopped, Log: log, Metrics: metrics,
 		Fleet: p.fleet,
+		Certificates: func(ctx context.Context, id store.AccountID) (string, error) {
+			st, err := p.ladder.Of(ctx, db.Exam(), id)
+			if err != nil {
+				return "", err
+			}
+			return st.Line(), nil
+		},
 		Young: db.MakeYoungReport,
 		Forget: func(ids ...store.AccountID) {
 			for _, id := range ids {

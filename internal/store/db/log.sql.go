@@ -139,9 +139,9 @@ func (q *Queries) BackfillEvents(ctx context.Context, arg BackfillEventsParams) 
 
 const insertLogEntry = `-- name: InsertLogEntry :execrows
 INSERT INTO log_entry (account_id, source, world, at, kind, title, what, worth, grp, find, x, y, place,
-  other_id, other_name, other_machine, other_boat, article, fault)
+  other_id, other_name, other_machine, other_boat, article, fault, alone)
 SELECT $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13,
-  $14, $15, $16, $17, $18, $19
+  $14, $15, $16, $17, $18, $19, $20
 WHERE EXISTS (SELECT 1 FROM account a WHERE a.id = $1)
 ON CONFLICT (account_id, source) DO NOTHING
 `
@@ -166,6 +166,7 @@ type InsertLogEntryParams struct {
 	OtherBoat    pgtype.Text
 	Article      pgtype.Text
 	Fault        pgtype.Text
+	Alone        bool
 }
 
 // An entry, once by its source, while its account is.
@@ -190,6 +191,7 @@ func (q *Queries) InsertLogEntry(ctx context.Context, arg InsertLogEntryParams) 
 		arg.OtherBoat,
 		arg.Article,
 		arg.Fault,
+		arg.Alone,
 	)
 	if err != nil {
 		return 0, err
