@@ -2082,6 +2082,35 @@ test('on the chart the arrow shrinks as it zooms out, the notices stand clear of
         await button.click();
       }
     }
+    // The place's box on the screen, every key of it within it.
+    const box = await page.evaluate(() => {
+      const e = document.querySelector('.chart-box');
+      const r = e?.getBoundingClientRect();
+      if (e === null || r === undefined) {
+        return ['no box'];
+      }
+      const out: string[] = [];
+      if (
+        r.left < -0.5 ||
+        r.top < -0.5 ||
+        r.right > innerWidth + 0.5 ||
+        r.bottom > innerHeight + 0.5
+      ) {
+        out.push(
+          `the box is off the screen (${[r.left, r.top, r.right, r.bottom].map(Math.round)})`,
+        );
+      }
+      for (const k of e.querySelectorAll('button')) {
+        const b = k.getBoundingClientRect();
+        if (b.left < r.left - 0.5 || b.right > r.right + 0.5) {
+          out.push(`“${k.textContent}” sticks out of the box`);
+        }
+      }
+      return out;
+    });
+    for (const c of box) {
+      found.push(`${s.name}: ${c}`);
+    }
     await page.locator('.notice-dismiss').click();
     // The chart's clock: in the strip, or under it held upright, and swept
     // on by the slider.
@@ -2150,6 +2179,67 @@ async function lookFaults(page: Page, sel: string): Promise<string[]> {
     return out;
   }, sel);
 }
+
+// A long notice under the case wraps beside the pocket chart, on every
+// screen: on the screen, clear of the pocket chart, its × not under it.
+test('a long notice stands beside the pocket chart, not under it, its × in reach, on every screen', async ({
+  page,
+}) => {
+  test.skip(test.info().project.name === 'webgpu', 'the panels are the same on either back end');
+  await page.setViewportSize({ width: SCREENS[1].width, height: SCREENS[1].height });
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await openScene(page, '', true);
+  const found: string[] = [];
+  for (const s of SCREENS) {
+    await page.setViewportSize({ width: s.width, height: s.height });
+    await page.waitForFunction(
+      ({ width, height }) => innerWidth === width && innerHeight === height,
+      { width: s.width, height: s.height },
+    );
+    for (const [on, fill] of [
+      ['new-world', {}],
+      ['course-reached', { name: 'the start of Round Long Cay' }],
+    ] as const) {
+      await page.evaluate(([on, fill]) => globalThis.keel.raiseNotice(on, fill), [
+        on,
+        fill,
+      ] as const);
+      await expect(page.locator('.notice-line .notice')).toBeVisible();
+      const faults = await page.evaluate(() => {
+        const box = (sel: string) => document.querySelector(sel)?.getBoundingClientRect() ?? null;
+        const over = (a: DOMRect, b: DOMRect) =>
+          Math.min(a.right, b.right) - Math.max(a.left, b.left) > 0.5 &&
+          Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top) > 0.5;
+        const n = box('.notice-line .notice');
+        const x = box('.notice-line .notice-dismiss');
+        const pocket = box('.hud-right .pocket');
+        if (n === null || x === null) {
+          return ['no notice'];
+        }
+        const out: string[] = [];
+        if (n.left < -0.5 || n.right > innerWidth + 0.5 || n.top < -0.5) {
+          out.push(`it is off the screen (${[n.left, n.right].map(Math.round)})`);
+        }
+        if (pocket !== null && over(n, pocket)) {
+          out.push(
+            `it runs under the pocket chart (${Math.round(n.right)} past ${Math.round(pocket.left)})`,
+          );
+        }
+        const on = document.elementFromPoint((x.left + x.right) / 2, (x.top + x.bottom) / 2);
+        if (on === null || on.closest('.notice-dismiss') === null) {
+          out.push('its × is covered');
+        }
+        return out;
+      });
+      for (const f of faults) {
+        found.push(`${s.name}, ${on}: ${f}`);
+      }
+      await page.locator('.notice-line .notice-dismiss').click();
+      await expect(page.locator('.notice-line .notice')).toHaveCount(0);
+    }
+  }
+  expect(found).toEqual([]);
+});
 
 test('every panel and window on the screen at sea is in the plate’s brass and lacquer, its keys the head’s, the watch plate centred', async ({
   page,
