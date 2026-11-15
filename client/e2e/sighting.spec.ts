@@ -12,7 +12,9 @@
 // the sailor's, with a notice. A course set on a charted place from its
 // box puts its distance in the compass's window once the chart is shut; a
 // tap on open water drops a pin whose box sets the course, and past the
-// rim says it is beyond the edge.
+// rim says it is beyond the edge. A shipmate sailed to from their row's ⋯
+// is the course once the server says where their boat is, their distance
+// in the compass's window; ended, the notice says so and the course goes.
 
 import { existsSync, readFileSync } from 'node:fs';
 import { expect, type Page, test } from '@playwright/test';
@@ -392,5 +394,46 @@ test.describe('the chart', () => {
     await page.mouse.click(beyond?.x ?? 0, beyond?.y ?? 0);
     await expect(box).toHaveText(/^Beyond the edge\.Close$/);
     await expect(box.getByRole('button', { name: 'Set course' })).toHaveCount(0);
+  });
+
+  test('a shipmate sailed to from their row’s ⋯: their boat’s distance in the compass’s window; ended, said', async ({
+    page,
+  }) => {
+    await openScene(page, 'world=1', true);
+    await page.evaluate(() => globalThis.keel.deckScene('shipmates-more', 'Anne Bonny'));
+    const more = page.locator('.shipmates-panel .deck-row-more');
+    await more.getByRole('button', { name: 'Sail to: Anne Bonny' }).click();
+    await expect(page.locator('.shipmates-panel')).toHaveCount(0);
+    const set = await page.evaluate(() => globalThis.keel.course());
+    expect(set.course).toEqual({
+      kind: 'boat',
+      sailor: 'iron',
+      name: 'Anne Bonny',
+      machine: false,
+    });
+    // Nowhere until the server says where the boat is.
+    expect(set.aim).toBeNull();
+    const boat = await page.evaluate(() => globalThis.keel.boatAt());
+    await page.evaluate(
+      ({ east, north }) =>
+        globalThis.keel.courseBoatAt({ sailor: 'iron', name: 'Anne Bonny', east, north }),
+      { east: boat.east, north: boat.north + 1.5 * 1852 },
+    );
+    await expect
+      .poll(() =>
+        page.evaluate(() => {
+          globalThis.keel.render();
+          return document.querySelector('[data-readout=course-distance]')?.textContent ?? '';
+        }),
+      )
+      .toBe('1.5NM');
+    expect((await page.evaluate(() => globalThis.keel.course())).words).toMatch(
+      /^Course to Anne Bonny: \d{3}°, 1\.5 NM$/,
+    );
+    // Appearing offline, say: refused, never why.
+    await page.evaluate(() => globalThis.keel.courseBoatEnded('iron', 'refused'));
+    await expect(page.locator('.notice-line')).toHaveText(/You can't sail to Anne Bonny now/);
+    expect((await page.evaluate(() => globalThis.keel.course())).course).toBeNull();
+    await page.evaluate(() => globalThis.keel.deckScene(null));
   });
 });

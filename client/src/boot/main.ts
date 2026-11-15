@@ -154,6 +154,7 @@ import { loadRaces, pollRaces, type RacesView, racesOf } from '../ui/raceslazy';
 import { Racing } from '../ui/racestate';
 import { RaceWatch } from '../ui/racewatch';
 import { loadReplay } from '../ui/replayhost';
+import { setSailToHost } from '../ui/sailto';
 import { settingsSignal } from '../ui/settings';
 import { shipmatesOf } from '../ui/shipmatesview';
 import { checkStatements, statementsOf } from '../ui/statementlazy';
@@ -489,6 +490,8 @@ async function start(): Promise<void> {
     // The course is kept for the sandbox's world, by its seed.
     parts.chart.atWorld(`sandbox:${seed ?? 'sea'}`);
     courseOnCompass(game, parts.chart);
+    // Sail to in the sandbox's scenes: no server says where the boat is.
+    hostSailTo(parts.chart, () => true);
     sandboxForecast = new SandboxForecast(
       {
         physics: sandbox.physics,
@@ -1074,6 +1077,7 @@ async function start(): Promise<void> {
     worldBefore?.(id, sailed);
     parts.chart.atWorld(id);
   };
+  sailToBoats(online, parts);
   const gales = steerByChart(game, world, parts, forecasting);
   // A race's boat tapped on the charts or in the sea, by a page watching
   // the race, is watched.
@@ -1474,6 +1478,39 @@ function hostReplay(parts: ChartParts): void {
  */
 function courseOnCompass(game: Game, chart: Chart): void {
   game.hud.course = chart.compass();
+}
+
+/** Sail to on the panels sets a boat as the chart's course, while able says it may be offered. */
+function hostSailTo(chart: Chart, able: () => boolean): void {
+  setSailToHost({
+    able,
+    is: (sailor) => {
+      const c = chart.course.value;
+      return c?.kind === 'boat' && c.sailor === sailor;
+    },
+    sail: (sailor, name, machine) => chart.setCourse({ kind: 'boat', sailor, name, machine }),
+    clear: () => chart.clearCourse(),
+  });
+}
+
+/**
+ * A sailor's boat as the course: set by Sail to on the shipmates' and the
+ * machine sailors' panels, while the player's own compass is shown; the
+ * server asked where it is whenever the course is a boat (and again by
+ * each new connection), told to stop when it is not; where it is, and its
+ * end, told to the chart; and a shipmate sailing to the player, a notice.
+ */
+function sailToBoats(online: Online, parts: ChartParts): void {
+  const chart = parts.chart;
+  hostSailTo(chart, () => !online.spectating.value && online.status.value === 'sailing');
+  effect(() => {
+    const c = chart.course.value;
+    online.courseTo(c?.kind === 'boat' ? c.sailor : '');
+  });
+  online.onShipmateAt = (at) => chart.boatAt(at);
+  online.onCourseEnded = (sailor, why) => chart.boatEnded(sailor, why);
+  online.onShipmateCourse = (name) =>
+    parts.notices.raise('shipmate-course', { who: name }, performance.now());
 }
 
 /** Whether the sailor is out of the boat, or the boat over: the sailor's line says so, but for aground. */

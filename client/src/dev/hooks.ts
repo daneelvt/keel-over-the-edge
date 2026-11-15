@@ -68,6 +68,7 @@ import type {
   BumpTold,
   ChartEntry,
   ChartSubject,
+  CourseEndWhy,
   KnockStateTold,
   LifeSeen,
   RaceCallIn,
@@ -78,6 +79,7 @@ import type {
   RacerAtIn,
   RaceSignalIn,
   RaceToldIn,
+  ShipmateAtIn,
 } from '../net/messages';
 import type { Online } from '../net/online';
 import type { Cascade } from '../ocean/detail';
@@ -4781,6 +4783,16 @@ export function makeHooks(world: SeaScene, game: Game, sailing: Sailing) {
       } else {
         chart.setCourse(c);
       }
+    },
+
+    /** Where the boat the course is set to is, as the server tells it every two seconds. */
+    courseBoatAt(at: ShipmateAtIn): void {
+      chartParts().chart.boatAt(at);
+    },
+
+    /** A course to a sailor's boat ended, as the server tells it. */
+    courseBoatEnded(sailor: string, why: CourseEndWhy): void {
+      chartParts().chart.boatEnded(sailor, why);
     },
 
     /**

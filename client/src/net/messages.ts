@@ -602,6 +602,24 @@ export type ReportReasonTold =
   | 'cheating'
   | 'other';
 
+/**
+ * Where the boat of the sailor a course is set to is, every two seconds
+ * while it holds: the sailor's account as asked, their name, and the
+ * boat's place, m east and north.
+ */
+export interface ShipmateAtIn {
+  sailor: string;
+  name: string;
+  east: number;
+  north: number;
+}
+
+/**
+ * Why a course to a sailor's boat ended: come ashore, still in the game;
+ * no longer at sea; or refused, which never says why.
+ */
+export type CourseEndWhy = 'ashore' | 'gone' | 'refused';
+
 /** Why the connection left the boat it was aboard. */
 export type AshoreWhyTold = 'chose' | 'put' | 'left' | 'other';
 
@@ -657,6 +675,11 @@ export type ToWorker =
   | { type: 'knock'; token: string; machine: string; shipmate?: string }
   /** The skipper's answer to a knock. */
   | { type: 'answer'; knock: number; let: boolean }
+  /**
+   * Ask where a sailor's boat is, for a course to it: a shipmate, or one of
+   * the player's own machine sailors, by account; "" stops it.
+   */
+  | { type: 'courseTo'; sailor: string }
   /** Offer the controls to the person in that seat. */
   | { type: 'hand'; to: number }
   /** Take the controls offered; the skipper's, take them back at once. */
@@ -783,6 +806,12 @@ export type FromWorker =
   | { type: 'reported'; ok: boolean }
   /** The account's shipmates changed: the list is to be read again. Never what changed. */
   | { type: 'shipmates' }
+  /** Where the boat the course is set to is. */
+  | { type: 'shipmateAt'; at: ShipmateAtIn }
+  /** A course to a sailor's boat ended, or was refused. */
+  | { type: 'courseEnded'; sailor: string; why: CourseEndWhy }
+  /** A shipmate set a course to the player's boat: their name. */
+  | { type: 'shipmateCourse'; name: string }
   /** Whether the AI of the own machine sailor watched attends to it: at the helm, or quiet. */
   | { type: 'lamp'; state: LampState }
   /** The sailor of the boat sailed or watched changed their look, at Port Royal: its code. */

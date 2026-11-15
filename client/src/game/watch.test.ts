@@ -274,6 +274,39 @@ describe('watching online', () => {
     expect(helmsman.clock.steps + helmsman.clock.alpha).toBeCloseTo(o.fleet.near.tick, 6);
   });
 
+  test('a course to a boat: asked once, again of each new connection; only its answers handed on; ended, forgotten', async () => {
+    const { o, port } = await online();
+    const asked = () =>
+      port.sent.filter((m) => m.type === 'courseTo').map((m) => (m as { sailor: string }).sailor);
+    const at: string[] = [];
+    const ended: string[] = [];
+    o.onShipmateAt = (a) => at.push(`${a.sailor} ${a.east} ${a.north}`);
+    o.onCourseEnded = (s, why) => ended.push(`${s} ${why}`);
+    port.deliver(welcome(null, true));
+    o.courseTo('ann');
+    o.courseTo('ann');
+    expect(asked()).toEqual(['ann']);
+    // A later Welcome on the same connection: the server still has it.
+    port.deliver(welcome(null, false));
+    expect(asked()).toEqual(['ann']);
+    // A new connection knows nothing of it: asked again.
+    port.deliver(welcome(null, true));
+    expect(asked()).toEqual(['ann', 'ann']);
+    port.deliver({ type: 'shipmateAt', at: { sailor: 'bob', name: 'Bob', east: 1, north: 2 } });
+    port.deliver({ type: 'shipmateAt', at: { sailor: 'ann', name: 'Ann', east: 3, north: 4 } });
+    expect(at).toEqual(['ann 3 4']);
+    port.deliver({ type: 'courseEnded', sailor: 'bob', why: 'refused' });
+    port.deliver({ type: 'courseEnded', sailor: 'ann', why: 'ashore' });
+    expect(ended).toEqual(['ann ashore']);
+    // Ended, it is not asked of the next connection, and stopping asks nothing.
+    o.courseTo('');
+    port.deliver(welcome(null, true));
+    expect(asked()).toEqual(['ann', 'ann']);
+    o.courseTo('mary');
+    o.courseTo('');
+    expect(asked()).toEqual(['ann', 'ann', 'mary', '']);
+  });
+
   test('a later Welcome on the connection keeps what it was handed; a new connection’s does not', async () => {
     const { port, lights } = await online();
     port.deliver(welcome(null, true));

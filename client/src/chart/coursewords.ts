@@ -2,10 +2,11 @@
 
 // The words of a course set on the chart: its keys, its boxes, its names
 // on the chart and in the sea, the compass's window, and the line read out
-// for a reader who cannot see the compass. A course is a sailor's word, set
-// and cleared; a point on open water is a pin.
+// for a reader who cannot see the compass; a boat sailed to, and its
+// course's end. A course is a sailor's word, set and cleared; a point on
+// open water is a pin.
 
-import type { CourseOpen } from '../net/messages';
+import type { CourseEndWhy, CourseOpen } from '../net/messages';
 import { bearingText, distanceText } from './store';
 
 /** The keys. */
@@ -52,4 +53,26 @@ export function tagText(name: string, m: number): string {
 /** The course as read out beside the compass: "Course to Gull Rock: 045°, 1.2 NM". */
 export function courseLine(name: string, bearing: number, m: number): string {
   return `Course to ${name}: ${bearingText(bearing)}, ${distanceText(m)}`;
+}
+
+/** The key on a shipmate's row, and on each of the player's own machine sailors at sea, that makes their boat the course. */
+export const SAIL_TO = 'Sail to';
+
+/** A boat's box on the chart, as its kind: a shipmate's, or the player's own machine sailor's. */
+export const SHIPMATE_AT_SEA = 'Shipmate at sea';
+export const MACHINE_AT_SEA = 'Your machine sailor at sea';
+
+/**
+ * A course to a boat ended, as its notice says it: come ashore, no longer
+ * at sea, or anything else, which never says why.
+ */
+export function courseEndedText(why: CourseEndWhy, name: string): string {
+  switch (why) {
+    case 'ashore':
+      return `${name} has come ashore`;
+    case 'gone':
+      return `${name} is no longer at sea`;
+    case 'refused':
+      return `You can't sail to ${name} now`;
+  }
 }

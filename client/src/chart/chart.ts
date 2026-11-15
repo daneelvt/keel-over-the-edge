@@ -4,15 +4,17 @@
 // its list, the news or a log; what is picked on it, a charted thing, a
 // weather system, a race course's start or a pin dropped on open water;
 // the course steered for a system from its box; the course set, the one
-// point the sailor sails for, kept for the week's world and cleared on
-// arrival; and the notices its chartings raise: one for each place the
+// point the sailor sails for (or a shipmate's boat, or the player's own
+// machine sailor's, where the server says it is), kept for the week's
+// world and cleared on arrival; and the notices its chartings raise: one for each place the
 // player charts, and one for each great discovery anyone does.
 
 import { signal } from '@preact/signals';
-import type { ChartEntry, CourseOpen } from '../net/messages';
+import type { ChartEntry, CourseEndWhy, CourseOpen, ShipmateAtIn } from '../net/messages';
 import type { CompassCourse } from '../ui/model';
 import type { Notices } from '../ui/notices';
 import {
+  BoatFixes,
   type Course,
   type CourseAim,
   type CourseKeep,
@@ -23,7 +25,7 @@ import {
   sameCourse,
   saveCourse,
 } from './course';
-import { tagText } from './coursewords';
+import { courseEndedText, tagText } from './coursewords';
 import type { ChartStore } from './store';
 import { courseFrame, zoneWhere } from './store';
 import type { ChartView } from './view';
@@ -55,7 +57,11 @@ export type TappedWeather =
   | { kind: 'front'; sin: number; cos: number; at?: PaperPoint };
 
 /** A point on the paper whose box is open: a race course's start, or a pin dropped on open water. */
-export type Marked = { kind: 'start'; course: CourseOpen } | ({ kind: 'pin' } & PaperPoint);
+export type Marked =
+  | { kind: 'start'; course: CourseOpen }
+  | ({ kind: 'pin' } & PaperPoint)
+  /** The boat the course is set to, its box opened from its pin. */
+  | { kind: 'boat'; sailor: string; name: string; machine: boolean };
 
 /**
  * The course the sailor steered for a tapped system, from its box: the
@@ -84,6 +90,8 @@ export class Chart {
   readonly marked = signal<Marked | null>(null);
   /** The course set: the point sailed for, or null. */
   readonly course = signal<Course | null>(null);
+  /** Where the boat the course is set to was last told to be. */
+  readonly boats = new BoatFixes(() => this.now());
   /** Whether the boat drawn is another's, watched: the course is the sailor's own, and not shown. */
   watching: () => boolean = () => false;
   /** Whether the boat races: the race line points to its next mark, and the compass gives way to it. */
@@ -193,6 +201,9 @@ export class Chart {
 
   /** Sets the course, replacing the last, and keeps it for the world. */
   setCourse(c: Course): void {
+    if (!sameCourse(this.course.peek(), c)) {
+      this.boats.forget();
+    }
     this.course.value = c;
     if (this.#world !== '') {
       saveCourse(this.#world, c, this.keep);
@@ -201,6 +212,7 @@ export class Chart {
 
   /** Clears the course. */
   clearCourse(): void {
+    this.boats.forget();
     this.course.value = null;
     if (this.#world !== '') {
       saveCourse(this.#world, null, this.keep);
@@ -221,7 +233,32 @@ export class Chart {
     if (c === null || this.watching()) {
       return null;
     }
-    return courseAim(c, this.store, east, north);
+    return courseAim(c, this.store, east, north, this.boats);
+  }
+
+  /**
+   * Told where the boat of a sailor sailed to is: its pin moves there, and
+   * on between, and a name changed since is kept. Nothing for another's.
+   */
+  boatAt(at: ShipmateAtIn): void {
+    const c = this.course.peek();
+    if (c?.kind !== 'boat' || c.sailor !== at.sailor) {
+      return;
+    }
+    this.boats.take(at.sailor, at.east, at.north);
+    if (at.name !== '' && at.name !== c.name) {
+      this.setCourse({ ...c, name: at.name });
+    }
+  }
+
+  /** Told a course to a sailor's boat ended: cleared, and said why. */
+  boatEnded(sailor: string, why: CourseEndWhy): void {
+    const c = this.course.peek();
+    if (c?.kind !== 'boat' || c.sailor !== sailor) {
+      return;
+    }
+    this.clearCourse();
+    this.notices.raise('course-ended', { why: courseEndedText(why, c.name) }, this.now());
   }
 
   /**
@@ -237,8 +274,13 @@ export class Chart {
     if (a === null || !reached(a)) {
       return;
     }
+    const boat = this.course.peek()?.kind === 'boat';
     this.clearCourse();
-    this.notices.raise('course-reached', { name: a.reached }, this.now());
+    if (boat) {
+      this.notices.raise('course-alongside', { who: a.reached }, this.now());
+    } else {
+      this.notices.raise('course-reached', { name: a.reached }, this.now());
+    }
   }
 
   /**

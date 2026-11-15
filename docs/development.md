@@ -3826,9 +3826,32 @@ It is kept in `localStorage` (`keel.course`) with the ID of the world it
 was set in (`Chart.atWorld`, from the Welcome's world; the sandbox's is
 `sandbox:<seed>`): a reload or a new voyage in that world has it back,
 before the chart comes too (its point is unknown until then, and nothing
-shows); another world drops it. The catalog's notices also have
-`shipmate-course`, "Ann is sailing to you", for a shipmate told that
-someone sails to them.
+shows); another world drops it.
+
+**A sailor's boat** is a course too (`kind: 'boat'`, by the sailor's
+account, with their name and whether a machine sailor's), set by *Sail
+to* behind a shipmate's ⋯ on the shipmates' panel while they are at sea,
+and on the menu's machine sailors' panel for each of the player's own in
+the water (`client/src/ui/sailto.ts`, the chart its host while the
+player's own compass is shown; neither panel offers it while watching
+another's boat, nor on the start screen); for the one sailed to, the same
+key reads *Clear course*. While the course is a boat the page asks the
+server where it is (`Online.courseTo`, `CourseTo{sailor}`, again from
+each new connection's first Welcome, and `CourseTo{}` once it is not);
+`ShipmateAt` every two seconds is kept in `Chart.boats` (`BoatFixes`),
+whose last two fixes move the pin on between them, by the way the boat
+made, for up to 4 s. Until the first comes the boat is nowhere and
+nothing shows, as after a reload: a boat course kept for the world is
+asked of the server again, which may refuse it. Within 0.1 NM the
+`course-alongside` notice says "You're alongside Ann" and it clears. A
+`CourseEnded` clears it, with the `course-ended` notice in the words of
+`courseEndedText` (`chart/coursewords.ts`): "Ann has come ashore", "Ann
+is no longer at sea", or for every refusal "You can't sail to Ann now".
+Its pin on the chart opens a box with its name, kind, where it is and
+*Clear course*. `keel.courseBoatAt(at)` and `keel.courseBoatEnded(sailor,
+why)` stand in for the server in the sandbox, whose *Sail to* is always
+offered. A shipmate sailing to the player raises `shipmate-course`, "Ann
+is sailing to you" (*Shipmates* in the next section has the rules).
 
 ### Looking at it
 
@@ -6934,6 +6957,43 @@ offline, is not skippering a boat at sea, or is no shipmate reads as not
 at sea. `KnockCard.shipmate` and `Person.shipmate` mark shipmates (★) on
 the skipper's card and in who is aboard.
 
+**Sailing to a shipmate** (`internal/edge/course.go`): `Command.courseTo
+{sailor}`, a shipmate's account ID as the list names it, or one of the
+account's own machine sailors' (checked once by `WatchByID`), asks where
+their boat is; an empty one stops it. The encoder answers at its next
+frame and then every two seconds (the race picture's rate), from the
+frame: `ShipmateAt{sailor, name, east, north}` while it holds, or
+`CourseEnded{sailor, why}` once, after which nothing more is sent. For a
+shipmate it holds while `aboard.MayFind` does (shipmates, neither
+blocking the other, both of one age band by `MayBeShipmates`, so a teen
+turned 18 is no longer found by a teen shipmate, and the shipmate not
+appearing offline) and they are at sea, in a boat of their own or aboard
+another's, not kept unseen by the owner's tools. Being shipmates is the
+consent; appearing offline, or ending being shipmates, is the way out,
+and either ends it within two seconds. `why` is `ashore` (still in the
+game, out of the water), `gone` (out of the game) or `refused` for
+everything else, which never says which; a shipmate not to be found when
+first asked is always `refused`, so nothing tells whether one who appears
+offline is in the game. The shipmate is sent `ShipmateCourse{name}` the
+first time each shipmate sails to them on a voyage (by the boat they are
+in, `Edge.sailedTo`), never for a machine sailor; its notice switch,
+*Shipmates sailing to you*, stops their being told, not their being found. A player's own
+machine sailor is found whenever its boat is in the water, and is told
+nothing; out of the water it is `gone`. Nothing is sent to a connection
+while it watches another's boat (its compass shows no course), and the
+ask is the connection's alone: nothing of it is kept, and a new
+connection asks again. Counted in `keel_edge_messages_total{direction="out"}`
+as `course`.
+
+**What a shipmate's position gives away**: their boat's place, to the
+metre, every two seconds, to one shipmate who asked, while both are at
+sea and the rule holds; kept nowhere, neither on the server (in the
+connection's memory only while it asks) nor on the phone beyond the last
+two fixes in memory (the course kept in `localStorage` names the sailor,
+never a place). The watch list and its cards still never give a
+position: only a shipmate's course, or an owner's to their own machine
+sailor, does.
+
 **The routes** (`internal/api/shipmates.go`, people only): `GET
 /api/shipmates` is the account's shipmates by name with where each is
 (`game`, `sea`, or nothing for one not in the game or appearing offline;
@@ -6956,8 +7016,8 @@ thread, or the boat last sailed on with someone of recent crew), and `POST
 together's parts): the menu's *Shipmates* opens the list: offers first
 (*Accept*, ✕), then shipmates with where they are, then *Recent crew*.
 Each row shows its one key (*Message*; *Be shipmates* for recent crew)
-and keeps the rest behind ⋯ (*Ask to come aboard*, *Watch*, *No longer
-shipmates*, *Block*, *Report*); ending and blocking ask once in the row.
+and keeps the rest behind ⋯ (*Sail to*, *Ask to come aboard*, *Watch*,
+*No longer shipmates*, *Block*, *Report*); ending and blocking ask once in the row.
 *Appear offline* is at the list's foot and on the account panel. A thread
 (`ShipmateThreads`, `client/src/ui/shipmatelog.ts`) keeps each shipmate's
 newest 50 messages in the page's memory only, and closes silently when the
@@ -6982,8 +7042,14 @@ and no message's text in any column); `internal/edge/edgetest/shipmates_test.go`
 refused and kept nowhere, appearing offline, both switches, a report of a
 thread, ending it mid-conversation, knocks without a link and the marks,
 the tally's five minutes, and no text in the log or metrics);
+`internal/edge/edgetest/course_test.go` (a shipmate sailed to, told every
+two seconds and told once a voyage across a new connection; refused for
+a stranger, across the bands and for someone else's machine sailor; ended,
+refused, by appearing offline, no longer being shipmates and a block
+either way; `gone` out of the game and `ashore` watching, refused when
+asked so; the own machine sailor found and `gone` out of the water);
 `internal/api`'s `TestShipmatesRoutes`; `internal/aboard`'s
-`TestMayBeShipmates`.
+`TestMayBeShipmates` and `TestMayFind`; `client/src/chart/boatcourse.test.ts`.
 
 ## The local cluster
 

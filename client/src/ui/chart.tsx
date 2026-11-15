@@ -17,9 +17,11 @@ import type { Course, CourseAim } from '../chart/course';
 import {
   BEYOND_THE_EDGE,
   CLEAR_COURSE,
+  MACHINE_AT_SEA,
   PIN,
   PIN_HERE,
   SET_COURSE,
+  SHIPMATE_AT_SEA,
   START_KIND,
 } from '../chart/coursewords';
 import type { Forecasting } from '../chart/forecasting';
@@ -191,9 +193,44 @@ export function CourseKey({ sea, c }: { sea: ChartSea; c: Course }) {
  * kind and where it is from the boat; or a pin dropped on open water, its
  * latitude and longitude. Each can be the course. A pin past the rim, in
  * the falls, is no pin: its box says so. Close takes a pin away, unless it
- * is the course.
+ * is the course. And the boat the course is set to, opened from its pin: a
+ * shipmate's or the player's own machine sailor's, its name, where it is
+ * from the boat, and Clear course.
  */
 export function MarkedBox({ sea, m, close }: { sea: ChartSea; m: Marked; close: () => void }) {
+  if (m.kind === 'boat') {
+    const b = sea.boat();
+    const a = sea.chart.aim(b.east, b.north);
+    return (
+      <section
+        class="chart-panel chart-box chart-marked"
+        aria-label={m.name}
+        data-readout="boat-box"
+      >
+        <h2>
+          <PlayerText text={m.name} />
+        </h2>
+        <p class="chart-kind">{m.machine ? MACHINE_AT_SEA : SHIPMATE_AT_SEA}</p>
+        {a !== null ? (
+          <>
+            <p class="chart-place-position">{formatPosition(a.east, a.north)}</p>
+            <p class="chart-list-where">
+              {bearingText(a.bearing)} {distanceText(a.distance)}
+            </p>
+          </>
+        ) : null}
+        <div class="chart-buttons">
+          <CourseKey
+            sea={sea}
+            c={{ kind: 'boat', sailor: m.sailor, name: m.name, machine: m.machine }}
+          />
+          <button type="button" onClick={close}>
+            Close
+          </button>
+        </div>
+      </section>
+    );
+  }
   if (m.kind === 'start') {
     const k = m.course;
     const b = sea.boat();
@@ -265,6 +302,10 @@ export function openCourseBox(chart: Chart): void {
     case 'pin':
       chart.picked.value = null;
       chart.marked.value = { kind: 'pin', east: c.east, north: c.north };
+      return;
+    case 'boat':
+      chart.picked.value = null;
+      chart.marked.value = { kind: 'boat', sailor: c.sailor, name: c.name, machine: c.machine };
       return;
   }
 }
