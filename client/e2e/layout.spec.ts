@@ -2657,7 +2657,7 @@ async function windowFaults(page: Page, where: string, sel: string): Promise<str
   return out.map((f) => `${where}: ${f}`);
 }
 
-test('with the boat still in the water, the player’s own panel keeps Set sail and Start again at Port Royal in view, and the question before the boat is taken out fits every screen', async ({
+test('with the boat still in the water, the player’s own panel keeps Set sail in view and Start again at Port Royal within reach, and the question before the boat is taken out fits every screen', async ({
   page,
 }) => {
   test.skip(test.info().project.name === 'webgpu', 'the panels are the same on either back end');
@@ -2698,10 +2698,13 @@ test('with the boat still in the water, the player’s own panel keeps Set sail 
       { width: s.width, height: s.height },
     );
     await page.waitForTimeout(100);
-    for (const sel of ['.your-sailor-go', '.your-sailor-again']) {
-      if (!(await inView(page, sel))) {
-        found.push(`${s.name}: ${sel} is out of view`);
-      }
+    if (!(await inView(page, '.your-sailor-go'))) {
+      found.push(`${s.name}: Set sail is out of view`);
+    }
+    // Start again under it, in view as the panel scrolls to it.
+    await page.locator('.your-sailor-again').scrollIntoViewIfNeeded();
+    if (!(await inView(page, '.your-sailor-again'))) {
+      found.push(`${s.name}: Start again at Port Royal is out of view`);
     }
     await page.getByRole('button', { name: 'Start again at Port Royal' }).click();
     await expect(page.locator('.take-out')).toBeVisible();

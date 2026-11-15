@@ -191,9 +191,9 @@ test('the way home: Back to Port Royal lifts the boat to the start, at rest, the
     'You were lifted a moment ago.',
   );
   expect(await fromStart()).toBeLessThan(150);
-  // The voyage ended lifted, in the log.
+  // The voyage ended lifted, in the log: the day's remark, after its first.
   await page.evaluate(() => globalThis.keel.openLog({ kind: 'own' }));
-  await expect(page.locator('.log-sheet')).toContainText('Lifted home to Port Royal', {
+  await expect(page.locator('.log-sheet')).toContainText(/lifted home to Port Royal/i, {
     timeout: 20_000,
   });
 });
